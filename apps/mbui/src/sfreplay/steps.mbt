@@ -86,6 +86,10 @@ pub fn Flow::start(
     Some(text) => @ui.Tester::new(app, w~, h~, env=r.env() + env, text~)
     None => @ui.Tester::new(app, w~, h~, env=r.env() + env)
   }
+  // (which station this machine is, as the run's host said)
+  if r.local_station() != "" {
+    t.set_local_station(r.local_station())
+  }
   // (the time of day the run's: its first event that has happened here (the app's first ask, made as it started) at
   // the run's moment of it, going on with the frames' clock from there, @ui.wall_ms)
   match r.first_happened() {

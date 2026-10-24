@@ -166,6 +166,7 @@
       "src/webdemo/main.mbt": 12
     },
     "style-exact": {},
+    "style-text": {},
     "build-effect": {
       "src/kitdemo/gallery/markscheck.mbt": 3,
       "src/kitdemo/gallery/textcheck.mbt": 1,
@@ -210,9 +211,14 @@
     "builtin-hash": {},
     "hash-order": {},
     "globals": {},
-    "style-literal": {},
+    "style-literal": {
+      "src/ui/style_css.mbt": 4
+    },
     "box-loose": {},
-    "style-exact": {},
+    "style-exact": {
+      "src/ui/style_css.mbt": 4
+    },
+    "style-text": {},
     "build-effect": {},
     "unsettled-ok": {},
     "host-delay": {},

@@ -28,7 +28,7 @@ test "wide: the rail, the chats' list beside it and a page in the rest; below th
   assert_true(t.find("新建对话") is Some(_))
   assert_true(t.find("今天") is Some(_))
   let (x, _) = t.find("整理发布清单").unwrap()
-  assert_true(x < rail_w + 240.0)
+  assert_true(x < @sfdesk.rail_w + 240.0)
   // nothing open: a new chat beside the list (the fixture keeps no chat last open)
   assert_true(app.nav.top() == NewChat)
   // a phone's width: the phone's Home, the same stack
@@ -189,27 +189,29 @@ test "wide: ⌘F's bar in the chat's bar looks in all of it (chat.find), Enter t
   // the bar in place of the chat's buttons
   assert_true(t.query(Button, label="关闭查找") is Some(_))
   t.type_text("截图")
-  t.frame()
+  t.run_for(@sfdesk.find_typing_ms * 2.0)
   assert_true(named(calls, "chat.find").length() > 0)
-  let (at, total) = find_position()
+  let (at, total) = @sfdesk.find_position()
   assert_true(total >= 2)
   assert_true(t.find("\{at}/\{total}") is Some(_))
   // gone to: its words marked in it
-  let first = wide.find_at
+  let first = @sfdesk.find_at()
   t.enter()
+  // (where the reader goes is the core's: asked once the frame is built, answered the next)
   t.frame()
-  let (next, _) = find_position()
+  t.frame()
+  let (next, _) = @sfdesk.find_position()
   assert_eq(next, if at == total { 1 } else { at + 1 })
-  assert_true(wide.find_at != first || wide.find_k > 0 || total == 1)
+  assert_true(@sfdesk.find_at() != first || @sfdesk.find_k() > 0 || total == 1)
   assert_eq(find_marking.val, ["截图"])
   t.key(@ui.key_escape)
   t.frame()
   assert_true(t.find("在对话中查找") is None)
-  assert_eq(wide.find_chat, "")
+  assert_eq(@sfdesk.find_chat(), "")
   assert_true(find_marking.val.is_empty())
   // opened again: empty
   t.key(@ui.key_of_char('f'), mods=@ui.mod_cmd)
-  assert_eq(wide.find_query, "")
+  assert_eq(@sfdesk.find_query(), "")
 }
 
 ///|
@@ -228,10 +230,10 @@ test "wide: a new chat as the web's: its scene and the composer in the pane's mi
   assert_true(station is Some(_))
   t.click(Button, label="Studio")
   t.frame()
-  assert_true(wide.station_menu)
+  assert_true(t.query(MenuItemRadio, label="MBA") is Some(_))
   t.key(@ui.key_escape)
   t.frame()
-  assert_false(wide.station_menu)
+  assert_true(t.query(MenuItemRadio, label="MBA") is None)
 }
 
 ///|
@@ -240,7 +242,7 @@ fn composer_glass(t : @ui.Tester) -> (Double, Double, Double, Double) raise {
   let mut best : (Double, Double, Double, Double)? = None
   for g in t.drawn_glass() {
     let (x, y, w, h, _, _) = g
-    if x > rail_w + 240.0 && w > 400.0 {
+    if x > @sfdesk.rail_w + 240.0 && w > 400.0 {
       match best {
         Some((_, by, _, _)) if by >= y => ()
         _ => best = Some((x, y, w, h))
@@ -316,7 +318,7 @@ test "wide: a chat and a new chat switched by the sidebar as the web's: the comp
   assert_true(app.nav.top() == NewChat)
   let (_, y0, _, h0) = composer_glass(t)
   assert_true((y0 + h0 - (cy + ch)).abs() < 1.0, msg="from the chat's foot: \{(y0, h0)} \{(cy, ch)}")
-  t.run_for(page_cross_ms / 2.0)
+  t.run_for(@sfdesk.page_cross_ms / 2.0)
   match t.look_of("新对话") {
     Some((_, _, a)) => assert_true(a > 0.05 && a < 0.95, msg="coming in: \{a}")
     None => fail("no 新对话")
@@ -330,7 +332,7 @@ test "wide: a chat and a new chat switched by the sidebar as the web's: the comp
   t.draw()
   let back = t.time()
   assert_true(app.nav.top() is Chat(_))
-  t.run_for(page_cross_ms / 2.0)
+  t.run_for(@sfdesk.page_cross_ms / 2.0)
   match t.look_of("新对话") {
     Some((_, _, a)) => assert_true(a > 0.05 && a < 0.95, msg="fading: \{a}")
     None => fail("the new chat gone at once")
@@ -520,7 +522,10 @@ test "wide: settings' pages as the web's: 通知 (提醒方式, each kind), 权�
   assert_true(t.find("自动归档") is Some(_))
   assert_true(t.find("Studio") is Some(_))
   // a station's own (the settings' fixture's Studio: idle a day, Slack's three)
-  let t = settings_tester("archiving:ws1/st1")
+  let t = wide_tester([], mode="settings")
+  t.draw()
+  app.nav.push(Setting(@settings.Route::StationArchiving("ws1/st1")))
+  t.run_for(@ui.nav_push_ms)
   assert_true(t.find("怎么自动归档") is Some(_))
   assert_true(t.find("空闲多久") is Some(_))
   assert_true(t.find("只在 Slack 里的对话") is Some(_))
@@ -539,7 +544,7 @@ test "wide: Station and Profile a list of their own beside their page; 连接 an
   assert_true(t.find("添加 Profile") is Some(_))
   app.nav.replace(Place("usage"))
   // (the sidebar closing to the rail's bar as the web's: brand.tsx moveSidebar)
-  t.run_for(side_move_ms)
+  t.run_for(@sfdesk.side_move_ms)
   assert_true(t.find("添加 station") is None && t.find("添加 Profile") is None && t.find("新建对话") is None)
 }
 
@@ -562,7 +567,7 @@ test "wide: 文件 as the web's Finder: 个人收藏, each station, 团队共享
   t.frame()
   assert_eq(named(calls, "drive.folders").length(), 1)
   // a shared folder opens in the pane, in columns (the sidebar's 文档, not the pane's)
-  let (dx, dy) = t.locate("文档").filter(fn(p) { p.0 < rail_w + wide.side_w })[0]
+  let (dx, dy) = t.locate("文档").filter(fn(p) { p.0 < @sfdesk.rail_w + @sfdesk.wide.side_w })[0]
   t.tap(dx, dy)
   t.run_for(@ui.nav_push_ms)
   match app.nav.top() {
@@ -600,7 +605,7 @@ test "wide: 文件 as the web's Finder: 个人收藏, each station, 团队共享
 }
 
 ///|
-test "wide: 文件's tabs as Finder's: ⌘T a new one, the bar's split shows two folders side by side, a press in the other side puts it in front; kept (prefs.set filesTabs)" {
+test "wide: 文件's tabs as Finder's: ⌘T a new one, the bar's split shows two folders side by side, a press in the other side puts it in front; kept (files.tabs)" {
   let calls : Array[Made] = []
   let t = wide_tester(calls)
   app.nav.replace(Files)
@@ -611,8 +616,8 @@ test "wide: 文件's tabs as Finder's: ⌘T a new one, the bar's split shows two
   t.key(@ui.key_of_char('t'), mods=@ui.mod_cmd)
   t.frame()
   assert_true(t.query(Button, label="关闭标签") is Some(_), msg="two tabs shown")
-  let kept = named(calls, "prefs.set").filter(fn(m) { text(Some(m.params), "filesTabs") != "" || field(Some(m.params), "filesTabs") is Some(_) })
-  assert_true(kept.length() > 0)
+  let opened = named(calls, "files.tabs").filter(fn(m) { text(Some(m.params), "act") == "open" })
+  assert_eq(opened.length(), 1, msg="kept by the core")
   // split: the same folder on both sides, the right one in front
   t.click(Button, label="左右分栏")
   t.frame()
@@ -630,7 +635,9 @@ test "wide: 文件's tabs as Finder's: ⌘T a new one, the bar's split shows two
     Drive(at) => assert_eq(at.path, "会议记录")
     _ => fail("no folder open")
   }
-  // the other side still 文档
+  // the side pressed in front, gone into; the other still 文档
+  let shown = t.all(Tab).filter(fn(n) { n.selected == Some(true) })
+  assert_eq(shown.map(fn(n) { n.label }), ["Studio › 会议记录 | Studio › 文档"])
   assert_true(t.find("长篇小说.txt") is Some(_))
   // one again: the side in front kept
   t.click(Button, label="取消分栏")
@@ -734,7 +741,7 @@ test "wide: the rail's menu from its right click: a place taken out of it, one n
 }
 
 ///|
-test "wide: ⌘⇧G goes to a folder by its path (~ the home), its station's button to another station's same folder or home" {
+test "wide: ⌘⇧G goes to a folder by its path (~ the home: the core's files.go), its station's button to another station's same folder or home" {
   let calls : Array[Made] = []
   let t = wide_tester(calls)
   app.nav.replace(Files)
@@ -746,6 +753,8 @@ test "wide: ⌘⇧G goes to a folder by its path (~ the home), its station's but
   t.type_text("~/项目")
   t.frame()
   assert_true(t.find("Studio › /Users/lin/项目") is Some(_), msg="where it goes")
+  // (worked out by the core)
+  assert_true(named(calls, "files.go").length() > 0)
   t.enter()
   t.run_for(@ui.nav_push_ms)
   match app.nav.top() {
@@ -779,12 +788,24 @@ test "wide: files going up are rows of the folder (Drive.tsx UploadRow): how far
 }
 
 ///|
-test "wide: a place of the rail dragged up a place is kept there (prefs.set rails); pressed alone it opens its page" {
+test "wide: a place of the rail pressed with ⌘ held and dragged up a place is kept there (prefs.set rails), ⌘ let go of on the way or not; pressed without it, not moved (Rail.tsx drag)" {
   let calls : Array[Made] = []
   let t = wide_tester(calls)
   let (rx, ry, rw, rh) = t.query(Button, label="文件").unwrap().rect
   let (x, y) = (rx + rw / 2.0, ry + rh / 2.0)
-  t.drag(x, y, x, y - rail_pitch)
+  t.drag(x, y, x, y - @sfdesk.rail_pitch)
+  t.frame()
+  assert_false(
+    named(calls, "prefs.set").iter().any(fn(m) { field(Some(m.params), "rails") is Some(_) }),
+    msg="moved without ⌘",
+  )
+  t.hold_mods(@ui.mod_cmd)
+  t.press_at(x, y)
+  t.hold_mods(0)
+  for k in 1..=10 {
+    t.move(x, y - @sfdesk.rail_pitch * k.to_double() / 10.0)
+  }
+  t.release(x, y - @sfdesk.rail_pitch)
   t.frame()
   let kept = named(calls, "prefs.set")
   assert_true(kept.length() > 0, msg="kept")
@@ -1149,7 +1170,7 @@ test "wide: the rail as the web's: the stations their glyph and how they are; th
   let calls : Array[Made] = []
   let t = wide_tester(calls)
   // the stations' place says how they are (RailStations' label)
-  assert_true(t.query(Button, label="Station：" + rail_stations_label(fixture("home"), "ws1")) is Some(_))
+  assert_true(t.query(Button, label="Station：" + @sfdesk.rail_stations_label(fixture("home"), "ws1")) is Some(_))
   // the workspaces, one under another, 36 apart (30 and the 6 between)
   let ws : Array[(Double, Double, Double, Double)] = []
   for x in ["星火工作室", "个人"] {
@@ -1281,12 +1302,122 @@ test "wide: 连接 as the web's: one list of every station's, each its station's
 }
 
 ///|
+test "wide: a connect's page as the web's: back to the connects, who it is and how it is, how it runs in one card, its sessions; its ⋯; 更改 says what switching does before it is done" {
+  let calls : Array[Made] = []
+  let t = wide_tester(calls)
+  app.nav.replace(Place("connects"))
+  t.run_for(@ui.nav_push_ms)
+  let (rx, ry) = t.find("星火助手").unwrap()
+  t.tap(rx, ry)
+  t.run_for(@ui.nav_push_ms)
+  // its head: back over it, its name, how it is, where it is reached, its station, who owns it
+  assert_true(t.query(Link, label="连接") is Some(_), msg="back: " + t.words().map(fn(w) { w.0 }).join("|"))
+  for w in ["星火助手", "在线", "星火", "Studio", "所属"] {
+    assert_true(t.find(w) is Some(_), msg=w)
+  }
+  // how it runs, in the core's words; its latest sessions
+  for w in ["运行方式", "每个 thread 一个会话", "在 thread 中 @ 它即开启一个新会话", "最近会话", "Slack 里问的报销流程"] {
+    assert_true(t.find(w) is Some(_), msg=w)
+  }
+  assert_true(t.find("运行于 Claude Code") is Some(_), msg="its runtime its own")
+  // its ⋯: what is done to it less often
+  t.click(Button, label="更多")
+  t.frame()
+  for w in ["重新连接", "更换 token", "停用", "更改所属用户", "删除连接"] {
+    assert_true(t.find(w) is Some(_), msg="its menu: " + w)
+  }
+  t.key(@ui.key_escape)
+  t.run_for(@ui.nav_push_ms)
+  // 更改: the ways, what switching to all in one does (the core's), its button the core's words
+  t.click(Button, label="更改")
+  t.run_for(@ui.nav_push_ms)
+  assert_true(t.find("更改会话方式") is Some(_), msg="its dialog: " + t.words().map(fn(w) { w.0 }).join("|"))
+  assert_true(t.find("更改后") is None, msg="nothing said while nothing changes")
+  t.click(Radio, label="所有 thread 共用一个会话")
+  t.frame()
+  assert_true(t.find("更改后") is Some(_), msg="what it does: " + t.words().map(fn(w) { w.0 }).join("|"))
+  assert_true(t.find("下一条消息将开始新的单会话") is Some(_))
+  assert_true(t.find("仅在被 @ 时唤醒") is Some(_), msg="whether it waits for an @, in the chosen one")
+  t.click(Button, label="改为单会话")
+  t.run_for(@ui.nav_push_ms)
+  let put = named(calls, "connect.put")
+  assert_eq(put.length(), 1)
+  assert_eq(text(field(Some(put[0].params), "input"), "mode"), "single-session")
+  assert_true(t.find("更改会话方式") is None, msg="closed as it goes")
+  // back: the connects
+  t.click(Link, label="连接")
+  t.run_for(@ui.nav_push_ms)
+  assert_true(t.query(Button, label="添加连接") is Some(_), msg="the list again")
+}
+
+///|
+test "wide: a Slack connect's app folded on its page as the web's: its look and permissions; 应用 writes it with what it started from" {
+  let calls : Array[Made] = []
+  let t = wide_tester(calls, h=1400.0)
+  app.nav.replace(Place("connects"))
+  t.run_for(@ui.nav_push_ms)
+  let (rx, ry) = t.find("星火助手").unwrap()
+  t.tap(rx, ry)
+  t.run_for(@ui.nav_push_ms)
+  assert_true(t.find("名字、头像和权限") is Some(_), msg="its fold: " + t.words().map(fn(w) { w.0 }).join("|"))
+  assert_true(t.find("应用到 Slack") is None, msg="folded")
+  t.click(Button, label="Slack app")
+  t.run_for(@ui.nav_push_ms)
+  assert_true(t.find("权限 · 已开启 4 / 16") is Some(_), msg="its permissions counted: " + t.words().map(fn(w) { w.0 }).join("|"))
+  assert_true(t.find("在 Slack 中打开此 app") is Some(_))
+  // its permissions unfolded: by section, the one only admins allow marked
+  t.click(Button, label="权限 · 已开启 4 / 16 项")
+  t.frame()
+  for w in ["文件和文档", "主动发私信", "需管理员"] {
+    assert_true(t.find(w) is Some(_), msg=w + ": " + t.words().map(fn(w) { w.0 }).join("|"))
+  }
+  // all turned on: 应用 writes the draft with what it started from
+  let (ax, ay) = t.find("全部打开").unwrap()
+  t.tap(ax, ay)
+  t.frame()
+  t.click(Button, label="应用到 Slack")
+  t.frame()
+  let put = named(calls, "connect.putSlackApp")
+  assert_eq(put.length(), 1)
+  let p = Some(put[0].params)
+  assert_true(flag(field(field(p, "input"), "groups"), "connect"), msg="its draft")
+  assert_true(!flag(field(field(p, "from"), "groups"), "connect"), msg="what it started from")
+}
+
+///|
+test "wide: a new connect in a dialog as the web's: the core's wizard a step at a time, its title and count, the Slack workspaces to make its app in; 下一步 goes on as the core says" {
+  let calls : Array[Made] = []
+  let t = wide_tester(calls)
+  app.nav.replace(Place("connects"))
+  t.run_for(@ui.nav_push_ms)
+  t.click(Button, label="添加连接")
+  t.run_for(@ui.nav_push_ms)
+  // the wizard opened on the one station online, as the desktop's (not a phone's)
+  let opened = named(calls, "connect.flow.open")
+  assert_eq(opened.length(), 1)
+  assert_eq(text(Some(opened[0].params), "station"), "ws1/st1")
+  assert_true(!flag(field(Some(opened[0].params), "input"), "mobile"))
+  for w in ["Slack 工作区", "1 / 4", "星火", "实验室", "添加工作区的配置 token"] {
+    assert_true(t.find(w) is Some(_), msg=w + ": " + t.words().map(fn(w) { w.0 }).join("|"))
+  }
+  t.click(Button, label="下一步")
+  t.frame()
+  let go = named(calls, "connect.flow.go")
+  assert_eq(go.length(), 1)
+  assert_eq(text(field(Some(go[0].params), "input"), "to"), "app")
+  // closed: its wizard let go of
+  t.click(Button, label="关闭")
+  t.run_for(@ui.nav_push_ms)
+  assert_eq(named(calls, "connect.flow.drop").length(), 1)
+}
+
+///|
 test "wide: 用量 as the web's: what it counts beside its title, who spent it the list shown first, how it is counted at its foot" {
   let calls : Array[Made] = []
   let t = wide_tester(calls)
   app.nav.replace(Place("usage"))
   // (the chats' sidebar closing to the rail's bar meanwhile, as the web's)
-  t.run_for(side_move_ms)
+  t.run_for(@sfdesk.side_move_ms)
   assert_true(t.query(Button, label="说明") is Some(_), msg="what it counts")
   assert_true(t.find("整理发布清单") is None, msg="not the chats' list first: " + t.words().map(fn(w) { w.0 }).join("|"))
   let (bx, by) = t.find_last("按对话").unwrap()
@@ -1341,12 +1472,15 @@ test "wide: an agent's card over its picture beside its message (AgentCard.tsx),
   }
   assert_eq(word("Claude · Opus 5.5").length(), 0)
   t.move(last.1 - 20.0, last.2 + last.4 / 2.0)
-  t.run_for(hover_open_ms * 2.0)
+  t.run_for(@sfdesk.hover_open_ms * 2.0)
   // its label, where it stands under it, its latest lines, the figures side by side, its account, the quiet line
   let label = word("Claude · Opus 5.5")
   assert_eq(label.length(), 1, msg="its label in its card")
-  let status = word("做完了 · 5 分钟前")
   let lines = word("读了 src/ui/list.mbt")
+  // (where it stands alone: no clock while it neither waits nor works, as AgentCard.tsx)
+  let status = word("做完了").filter(fn(w) {
+    label.length() == 1 && lines.length() == 1 && w.2 > label[0].2 && w.2 < lines[0].2
+  })
   let cost = word("$4.20")
   let cache = word("91%")
   let names_of = word("费用估算")
@@ -1381,7 +1515,7 @@ test "wide: an agent's card over its picture beside its message (AgentCard.tsx),
   assert_true(left - 16.0 >= 0.0 && left + 288.0 + 16.0 <= 1280.0)
   // gone once the pointer has left it
   t.move(900.0, 300.0)
-  t.run_for(hover_close_ms * 2.0)
+  t.run_for(@sfdesk.hover_close_ms * 2.0)
   assert_eq(word("Claude · Opus 5.5").length(), 0)
 }
 
@@ -1424,7 +1558,7 @@ test "wide: an agent's card's latest lines run on as they change (AgentCard.tsx 
   })
   guard last is Some(name) else { fail("no agent's message") }
   t.move(name.1 - 20.0, name.2 + name.4 / 2.0)
-  t.run_for(hover_open_ms * 2.0)
+  t.run_for(@sfdesk.hover_open_ms * 2.0)
   // where the three are at rest: a line apart
   let near = fn(a : Double, b : Double) { (a - b).abs() < 0.01 }
   let y_of = fn(s : String) { word(s)[0].2 }
@@ -1443,7 +1577,7 @@ test "wide: an agent's card's latest lines run on as they change (AgentCard.tsx 
   let gone = word("读了 src/ui/list.mbt")
   assert_true(gone.length() == 1 && near(gone[0].2, y1) && gone[0].5 > 0.99, msg="\{gone}")
   // half way: on their way up together, the copy with them
-  t.run_for(lines_ms / 2.0)
+  t.run_for(@sfdesk.lines_ms / 2.0)
   let mid = y_of("跑了列表的测试")
   assert_true(mid < y2 - 1.0 && mid > y1 + 1.0, msg="\{mid}")
   let (m3, m4, m1) = (y_of("改了 src/ui/list.mbt"), y_of("提交了改动"), y_of("读了 src/ui/list.mbt"))
@@ -1452,7 +1586,7 @@ test "wide: an agent's card's latest lines run on as they change (AgentCard.tsx 
     msg="\{(mid, m3, m4, m1, pitch)}",
   )
   // there: a line up each, the new one whole, the copy gone
-  t.run_for(lines_ms / 2.0)
+  t.run_for(@sfdesk.lines_ms / 2.0)
   assert_true(near(y_of("跑了列表的测试"), y1) && near(y_of("改了 src/ui/list.mbt"), y2))
   let new = word("提交了改动")
   assert_true(near(new[0].2, y3) && new[0].5 > 0.99, msg="\{new}")
@@ -1546,4 +1680,142 @@ test "wide: 密钥's waiting request is its card as in its chat (Vault.tsx Reque
   assert_eq(made.length(), 1)
   assert_eq(field(Some(made[0].params), "request"), Some(Json::string("r1")))
   assert_eq(field(Some(made[0].params), "scope"), Some(Json::string("chat")))
+}
+
+///|
+test "wide: 文件's tabs as the core keeps them (filesTabs, files.tabs): the address arrives, a new tab, split and one again by ⌘⌥D, a tab closed" {
+  let calls : Array[Made] = []
+  let t = files_dragging(calls)
+  t.frame()
+  let acts = fn() { named(calls, "files.tabs").map(fn(m) { text(Some(m.params), "act") }) }
+  assert_eq(acts(), ["arrive"])
+  // one tab alone has none shown, only the bar's buttons
+  assert_eq(t.all(Tab).length(), 0)
+  t.click(Button, label="新标签")
+  t.frame()
+  t.frame()
+  assert_eq(acts().filter(fn(a) { a == "open" }).length(), 1)
+  assert_eq(t.all(Tab).length(), 2, msg="two tabs")
+  assert_eq(t.all(Tab).filter(fn(n) { n.selected == Some(true) }).length(), 1)
+  // split: two sides, the bar's button says it undoes it; ⌘⌥D one again
+  t.click(Button, label="左右分栏")
+  t.frame()
+  t.frame()
+  assert_true(t.query(Button, label="取消分栏") is Some(_), msg="split")
+  t.key(@ui.key_of_char('d'), mods=@ui.mod_cmd + @ui.mod_alt)
+  t.frame()
+  t.frame()
+  assert_true(t.query(Button, label="左右分栏") is Some(_), msg="one again")
+  // the tab shown closed: the other left alone, no tabs shown
+  let (x, y, w, h) = t.all(Button, label="关闭标签")[0].rect
+  t.tap(x + w / 2.0, y + h / 2.0)
+  t.frame()
+  t.frame()
+  assert_eq(acts().filter(fn(a) { a == "close" }).length(), 1)
+  assert_eq(t.all(Tab).length(), 0, msg="one tab left")
+}
+
+///|
+test "wide: 文件's Pin 文件夹 is the web's (Drive.tsx useAddFolder, PickerDialog): which station, then its folders from its home, pinned (drive.setRoots)" {
+  let calls : Array[Made] = []
+  let t = files_dragging(calls)
+  t.tap_text("Pin 文件夹")
+  t.frame()
+  // (two stations it can be done on: which first)
+  assert_true(t.find("选择一台 station，然后选择其中要 pin 的文件夹") is Some(_), msg="which station")
+  t.click(Button, label="Studio")
+  t.frame()
+  t.frame()
+  assert_true(t.find("从 station 的主目录开始，进入要 pin 的文件夹后选择它") is Some(_), msg="the picker")
+  assert_true(named(calls, "drive.folders").length() > 0, msg="its folders asked")
+  t.frame()
+  t.click(Button, label="Pin 这个文件夹")
+  t.frame()
+  let set = named(calls, "drive.setRoots")
+  assert_eq(set.length(), 1)
+  assert_eq(text(Some(set[0].params), "station"), "ws1/st1")
+}
+
+///|
+/// `v` with each row of chat `id` given `more` (wherever the view has it).
+fn with_row(v : Json, id : String, more : Map[String, Json]) -> Json {
+  match v {
+    Object(m) => {
+      let out : Map[String, Json] = {}
+      for k, x in m {
+        out[k] = with_row(x, id, more)
+      }
+      if m.get("id") == Some(Json::string(id)) {
+        for k, x in more {
+          out[k] = x
+        }
+      }
+      Json::object(out)
+    }
+    Array(a) => Json::array(a.map(fn(x) { with_row(x, id, more) }))
+    x => x
+  }
+}
+
+///|
+test "wide: a row pressed on its state line while the core says which message that is about opens its chat there, flashing it (ChatMark.tsx jumpFromLine); on its title, where it opens" {
+  reset()
+  let base = fixture("chat")
+  let src : Source = {
+    ..base,
+    topic: fn(name, params) {
+      let r = (base.topic)(name, params)
+      if name != "chats" {
+        return r
+      }
+      match r.value {
+        Some(v) =>
+          {
+            ..r,
+            value: Some(
+              with_row(v, "c1", {
+                "stateText": "等你回复：发布前要不要再跑一遍",
+                "stateAbout": 8,
+              }),
+            ),
+          }
+        None => r
+      }
+    },
+  }
+  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=1280.0, h=800.0, platform=0)
+  t.draw()
+  let rd = readings.get("ws1/st1\u{1}s-c1").unwrap()
+  // its title: the chat as it is
+  let (tx, ty) = t.find("整理发布清单").unwrap()
+  t.tap(tx, ty)
+  t.frame()
+  assert_eq(rd.flash, "")
+  // its state line: the message the state is about, flashing
+  let (lx, ly) = t.find("等你回复：发布前要不要再跑一遍").unwrap()
+  t.tap(lx, ly)
+  t.frame()
+  assert_eq(rd.flash, "ts8")
+}
+
+///|
+test "wide: Esc goes to what the frame opened first (a row's menu), then to the page's own (the chat's ⌘F bar)" {
+  let calls : Array[Made] = []
+  let t = wide_tester(calls, mode="chat")
+  t.key(@ui.key_of_char('f'), mods=@ui.mod_cmd)
+  t.frame()
+  assert_true(@sfdesk.find_chat() != "")
+  let (x, y) = t.find("夜里的构建又失败了").unwrap()
+  t.right_click(x, y)
+  assert_true(t.find("复制会话链接") is Some(_))
+  // the menu closed, the bar still open
+  t.key(@ui.key_escape)
+  t.frame()
+  assert_true(t.find("复制会话链接") is None)
+  assert_true(@sfdesk.find_chat() != "")
+  // then the bar
+  t.key(@ui.key_escape)
+  t.frame()
+  assert_eq(@sfdesk.find_chat(), "")
 }

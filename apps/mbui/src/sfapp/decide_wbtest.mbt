@@ -1,8 +1,9 @@
 // Slice 8 over a fake core: the fixture's topics (decide_fixture.mbt's modes), its calls kept for the test to look at.
 
 ///|
-/// The app over the fixture in `mode` (its pages opened as sffix opens them), its calls kept in `calls` and answered.
-fn decide_core(calls : Array[Made], mode : String) -> @ui.Tester {
+/// The app over the fixture in `mode` (its pages opened as sffix opens them), its calls kept in `calls` and answered;
+/// in a desktop's window when `wide`.
+fn decide_core(calls : Array[Made], mode : String, wide? : Bool = false) -> @ui.Tester {
   reset()
   let base = fixture(mode)
   let src : Source = {
@@ -10,7 +11,8 @@ fn decide_core(calls : Array[Made], mode : String) -> @ui.Tester {
     call: fn(name, params, done) {
       calls.push({ name, params, bytes: None, done, heard: None })
       // the 奏 page's taken by the made-up core (its queue as the core keeps it); a chat's answered, nothing more
-      if mode.has_prefix("decisions") {
+      // (and a call's parts as the core makes them, kept: history.tool)
+      if mode.has_prefix("decisions") || name == "history.tool" {
         (base.call)(name, params, done)
       } else {
         done(Ok(Json::object({})))
@@ -21,7 +23,11 @@ fn decide_core(calls : Array[Made], mode : String) -> @ui.Tester {
     open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
   }
   open_fixture(mode)
-  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0)
+  let t = if wide {
+    @ui.Tester::new(fn(c) { view(c, src) }, w=1280.0, h=800.0, platform=0)
+  } else {
+    @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0)
+  }
   // the pages opened slid in
   t.run_for(@ui.nav_push_ms)
   t
@@ -112,6 +118,24 @@ test "the history: a group opens to its steps, a step to its call and what came 
 }
 
 ///|
+test "the desk's history beside a chat: a group opens to its steps, a step to its call and what came back" {
+  let calls : Array[Made] = []
+  let t = decide_core(calls, "chat-history-side", wide=true)
+  assert_true(t.find("moon test -p ui -f list_test.mbt") is None)
+  t.tap_text("读了 src/ui/list.mbt 等 2 个文件，跑了测试")
+  t.tap_text("跑一遍列表的测试")
+  // what the core made of the call and what came back (history.tool, answered as it was asked after that frame): the
+  // next frame shows the command, its timeout, its output
+  t.frame()
+  assert_true(t.find("moon test -p ui -f list_test.mbt") is Some(_))
+  assert_true(t.find("120000") is Some(_))
+  assert_true(t.find("Total tests: 9, passed: 9, failed: 0.") is Some(_))
+  // a step closed again
+  t.tap_text("跑一遍列表的测试")
+  assert_true(t.find("Total tests: 9, passed: 9, failed: 0.") is None)
+}
+
+///|
 test "the 奏 page: an option answers the card in front, the next comes in" {
   let calls : Array[Made] = []
   let t = decide_core(calls, "decisions")
@@ -176,26 +200,8 @@ test "the 奏 page: the card turns as it is moved across, 4° a width about its 
 }
 
 ///|
-test "a call is drawn by what it is" {
-  assert_eq(command_of({ "command": ["bash", "-lc", "ls -la"] }), Some("ls -la"))
-  assert_eq(command_of({ "cmd": "git status" }), Some("git status"))
-  match parse_call("{\"a\": \"abc") {
-    Some(_) => fail("cut short without its marker")
-    None => ()
-  }
-  match parse_call("{\"a\": \"abc\n… (12 more characters)") {
-    Some(Object(m)) => assert_eq(m.get("a"), Some(Json::string("abc…")))
-    _ => fail("not closed")
-  }
-  assert_eq(read_lines("    12→one\n    13→two\nmore", false), Some("one\ntwo"))
+test "a step's brief, a chat's link" {
   assert_eq(plain_brief("## 标题\n- 一项 **重点**\n```sh\nls\n```"), "标题 一项 重点 ls")
-  match command_output("Wall time: 1.2s\nProcess exited with code 0\nOutput:\nok") {
-    Some((said, out)) => {
-      assert_eq(said.length(), 2)
-      assert_eq(out, "ok")
-    }
-    None => fail("no output read")
-  }
   assert_eq(chat_link("ws1/st1", "ember:c-1"), "https://app.still.fail/o/ws1/st1/ember%3Ac-1")
 }
 

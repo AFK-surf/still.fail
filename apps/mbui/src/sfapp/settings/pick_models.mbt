@@ -98,7 +98,7 @@ let pick_selected : @ui.TextStyle = @ui.text_style(size=Xs2, color=Muted, wrap=f
 ///|
 /// What the page is for: 13 muted, 24 in, 8 under it, the page's words 8 under its bar (Profiles.kt:787-788).
 // kept across runs: a value (no field of it changes)
-let pick_lead_room : @ui.Style = @ui.style(w=Full, px=S6, pt=S2, pb=S2)
+let pick_lead_room : @ui.Style = @ui.css("w=Full px=S6 pt=S2 pb=S2")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -107,17 +107,59 @@ let pick_lead : @ui.TextStyle = @ui.text_style(size=Sm, color=Muted, w=Full)
 ///|
 /// What is said in place of the list (its models being read; none listed): 24 in, 8 over and under.
 // kept across runs: a value (no field of it changes)
-let pick_said_room : @ui.Style = @ui.style(w=Full, px=S6, py=S2)
+let pick_said_room : @ui.Style = @ui.css("w=Full px=S6 py=S2")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let pick_body : @ui.Style = @ui.style(w=Full, h=Full)
+let pick_body : @ui.Style = @ui.css("w=Full h=Full")
 
 ///|
 /// 跳过 and 完成, as wide as each other, 10 apart, 16 in and 12 over and under (Profiles.kt:799).
 // kept across runs: a value (no field of it changes)
-let pick_foot : @ui.Style = @ui.style(row=true, w=Full, px=S4, py=S3, gap=S2_5)
+let pick_foot : @ui.Style = @ui.css("row w=Full px=S4 py=S3 gap=S2_5")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let pick_button : @ui.Style = @ui.style(w=Full)
+let pick_button : @ui.Style = @ui.css("w=Full")
+
+///|
+/// Which of a profile's models may be used, on a page of their own from its 运行's 模型 row (ProfileScreen's
+/// ModelsSection): how many are on under its title, then what they are for, reading them again, all / none, a filter
+/// where there are many, a row each to tick (models_section).
+fn profile_models_page(c : @ui.Ctx, core : Core, here : Here, address : String, id : String) -> Unit {
+  let topic = stations_of(core, here)
+  let sv = match topic.value {
+    Some(Array(a)) => a.iter().find_first(fn(x) { text(Some(x), "station") == address })
+    _ => None
+  }
+  let p = items(field(sv, "overview"), "profiles").iter().find_first(fn(x) { text(Some(x), "id") == id })
+  let title = tr("web-pages.profiles.models")
+  c.box(style=pick_body, fn() {
+    match p {
+      None => {
+        nav_bar(c, core, "Profile", title)
+        if field(sv, "overview") is Some(Object(_)) && topic.error is None {
+          place_empty(c, tr("android-settings.profile.none"))
+        } else {
+          waiting_cards(
+            c,
+            error=match topic.error {
+              Some(e) => error_text(e)
+              None => ""
+            },
+          )
+        }
+      }
+      Some(pj) => {
+        let pv = Some(pj)
+        let ticked = strings(pv, "models").length()
+        let sub = fn() {
+          c.text(fill("android-settings.profile.pickModels.selected", [("n", ticked.to_string())]), style=pick_selected) |> ignore
+        }
+        nav_bar(c, core, text(pv, "name"), title, sub?=if ticked > 0 { Some(sub) } else { None })
+        scroll_page(c, "profile-models/" + address + "/" + id, models_section(c, core, address, pv, page=true))
+      }
+    }
+  })
+  |> ignore
+}

@@ -101,8 +101,6 @@ export const drive = {
   rename: (at: At, entry: DriveEntry, to: string) => call("drive.rename", { station: at.station, root: at.root, from: joinPath(at.path, entry.name), to: joinPath(at.path, to) }),
   /** To the machine's trash, where there is one (`permanent`: for good). */
   remove: (at: At, entry: DriveEntry, permanent = false) => call("drive.remove", { station: at.station, root: at.root, path: joinPath(at.path, entry.name), ...(permanent ? { permanent: true } : {}) }),
-  /** A folder zipped on the station: where the zip is, to read as a file of the drive. */
-  zip: (at: At, entry: DriveEntry) => call("drive.zip", { station: at.station, root: at.root, path: joinPath(at.path, entry.name) }) as Promise<{ root: string; path: string; name: string; size: number }>,
 };
 
 /** A name a folder or file may have: not empty, no slash, not . or .. */

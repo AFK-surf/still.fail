@@ -114,6 +114,43 @@ fn PathReader::flag(self : PathReader) -> Bool {
 }
 
 ///|
+/// A cubic Bézier from (x, y) to (ex, ey) as the points after (x, y) that `svg_path` cuts it into (for an outline
+/// read from other than path data: @sf's packed math glyphs).
+pub fn cubic_points(
+  out : Array[Double],
+  x : Double,
+  y : Double,
+  c1x : Double,
+  c1y : Double,
+  c2x : Double,
+  c2y : Double,
+  ex : Double,
+  ey : Double,
+  scale : Double,
+) -> Unit {
+  let n = path_pieces(
+    path_dist(x, y, c1x, c1y) + path_dist(c1x, c1y, c2x, c2y) + path_dist(c2x, c2y, ex, ey),
+    scale,
+  )
+  for k in 1..=n {
+    let t = k.to_double() / n.to_double()
+    let mt = 1.0 - t
+    out.push(
+      mt * mt * mt * x +
+      3.0 * mt * mt * t * c1x +
+      3.0 * mt * t * t * c2x +
+      t * t * t * ex,
+    )
+    out.push(
+      mt * mt * mt * y +
+      3.0 * mt * mt * t * c1y +
+      3.0 * mt * t * t * c2y +
+      t * t * t * ey,
+    )
+  }
+}
+
+///|
 /// How many pieces a curve this long (in units) is cut into, drawn at
 /// `scale` pixels a unit.
 fn path_pieces(len : Double, scale : Double) -> Int {
@@ -300,29 +337,10 @@ pub fn svg_path(d : String, scale : Double) -> Array[(Array[Double], Bool)] {
         let c2y = r.number() + oy
         let ex = r.number() + ox
         let ey = r.number() + oy
-        let n = path_pieces(
-          path_dist(x, y, c1x, c1y) + path_dist(c1x, c1y, c2x, c2y) + path_dist(c2x, c2y, ex, ey),
-          scale,
-        )
         if cur.length() == 0 {
           cur = [x, y]
         }
-        for k in 1..=n {
-          let t = k.to_double() / n.to_double()
-          let mt = 1.0 - t
-          cur.push(
-            mt * mt * mt * x +
-            3.0 * mt * mt * t * c1x +
-            3.0 * mt * t * t * c2x +
-            t * t * t * ex,
-          )
-          cur.push(
-            mt * mt * mt * y +
-            3.0 * mt * mt * t * c1y +
-            3.0 * mt * t * t * c2y +
-            t * t * t * ey,
-          )
-        }
+        cubic_points(cur, x, y, c1x, c1y, c2x, c2y, ex, ey, scale)
         lcx = c2x
         lcy = c2y
         x = ex

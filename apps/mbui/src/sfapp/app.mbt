@@ -27,12 +27,10 @@ fn init {
 fn reset() -> Unit {
   reviewer_reset()
   @sf.set_language(None)
-  reveals.clear()
   files_cornered.val = false
   felt_menu.val = -1
   felt_past.clear()
   felt_holds.clear()
-  ran_lines.clear()
   image_quoted_at.val = -1
   attention.told = false
   picture_pick.val = None
@@ -46,22 +44,16 @@ fn reset() -> Unit {
   @sfbase.reset()
   // the desktop's own (src/sfdesk)
   @sfdesk.reset()
-  // what the desk's files and the drive's pages ask of the app: its drag (until it is the desk's), its file preview
-  @sfdesk.desk_drag.val = Some(files_desk_drag())
+  // what the drive's pages ask of the app: its file preview
   @sfbase.drive_viewer.val = open_file
+  // what the desktop's messages draw that is this package's: the file preview, visualizations, links (wide_panel.mbt)
+  @sfbase.chat_parts.val = desk_chat_parts()
   home_rows.val = []
   steadies.clear()
   sheet_host.kind = NoSheet
   sheet_host.shown = NoSheet
   sheet_host.accounts = false
   bar_reset()
-  fresh.became = None
-  fresh.made = ""
-  fresh.made_sig = ""
-  fresh.sent = false
-  fresh.starting = false
-  fresh.scene = None
-  fresh.room = 0.0
   composer_page_from.val = None
   new_fix.station = "st1"
   new_fix.model = "claude-opus-5-5"
@@ -82,9 +74,6 @@ fn reset() -> Unit {
   landing_reset()
   new_ws_reset()
   news_reset()
-  read_chats.clear()
-  readings.clear()
-  kept_places.clear()
   screens_open.clear()
   screens_made.val = 0
   screen_uis.clear()
@@ -141,23 +130,18 @@ fn reset() -> Unit {
   fix_unsaid.clear()
   fix_drafts.clear()
   fix_composers.clear()
+  fix_writes.clear()
   fix_xshared.clear()
   fix_decided.clear()
   fix_replied.clear()
-  emits.clear()
-  turns_by.clear()
   dv_reset()
   decide_reset()
   close_now()
   @settings.reset()
-  go_tos.clear()
-  ref_fields.clear()
-  go_to_words.clear()
   found_marking.val = ("", [], 0.0)
   find_marking.val = []
   search_reset()
   ask_turns.clear()
-  flash_held.val = false
   notices_reset()
   faces_reset()
   links_reset()
@@ -183,14 +167,11 @@ fn reset() -> Unit {
   marks_seen.clear()
   told_bars.val = None
   told_dark.val = None
-  send_flight.val = None
-  local_sent_n.val = 0
   flying.val = None
-  absolute_times.val = false
   opened_notices.clear()
+  tool_parts.clear()
   flashing.val = ("", 0.0)
   flash_row.val = None
-  at_end_env.val = -1
   bench_on.val = -1
   boxed_n.val = 0
   run_picker_opened.val = false
@@ -231,11 +212,8 @@ fn reset() -> Unit {
   viewer_awake_env.val = -1
   src_now.val = fn() { 0.0 }
   // a drive's files, a text read (keep.mbt, drive_reader.mbt)
-  // the wide frame's keys (wide_keys.mbt)
+  // the chat's keys (wide_keys.mbt)
   focus_composer.val = false
-  rename_for.val = ""
-  side_rename_field.set("")
-  rename_seen.val = false
   reset_by_hand.val = true
 }
 
@@ -287,8 +265,8 @@ pub fn view(c : @ui.Ctx, src : Source) -> Unit {
   faces(src)
   // pictures put up by their address come as the core gives them (a GIF among them moves)
   @sf.picture_of.val = fn(url, frame) { (src.picture)(url, frame) }
-  // a tip's keys, as the core's prefs set them (wide_tip.mbt)
-  @sf.set_shortcuts(tip_keys_of)
+  // a tip's keys, as the core's prefs set them (sfdesk's keys.mbt)
+  @sf.set_shortcuts(@sfdesk.tip_keys(src))
   // the library's words, the app's catalog's; what its viewers ask of the page (viewer_host.mbt)
   @sf.set_words(fill)
   @sf.set_viewer_host(viewer_host_of(c, src))
@@ -303,7 +281,7 @@ pub fn view(c : @ui.Ctx, src : Source) -> Unit {
   // iPad): the web app's wide frame (wide.mbt); one regular in width alone (a phone on its side) or half open on its
   // back half: Android's, the pages the whole width with the latest chats at a corner (corners.mbt); otherwise the
   // phone's pages
-  wide_on.val = is_wide(c) || is_touch_wide()
+  wide_on.val = @sfdesk.is_wide(c) || @sfdesk.is_touch_wide()
   // the wide frame's lines set as the desktop app's pages set them (a browser's way)
   @ui.set_web_lines(wide_on.val)
   corners_on.val = is_corners() && !wide_on.val
@@ -312,7 +290,7 @@ pub fn view(c : @ui.Ctx, src : Source) -> Unit {
   @settings.status_top.val = status_top()
   @settings.nav_foot.val = nav_foot()
   @settings.bar_room.val = if has_bar() { bar_room } else { 0.0 }
-  linger_tick(c, src)
+  linger_tick(c, src, in_front=app_in_front())
   // the screens live in their cards (screen_links.mbt): which are on the screen, their frames acknowledged
   peeks_frame(c, src)
   // pages left: where they were left told once the frame's builds are over (a later build would see them left too)
@@ -434,8 +412,10 @@ fn signed_in(c : @ui.Ctx, src : Source) -> Unit {
       // files being kept on the device, said once kept (keep.mbt)
       keeps_frame(c)
       if wide_on.val {
-        // the rail, the sidebar and the page beside it (wide.mbt); what opens over them after them
-        wide_frame(c, src, w, all, invited)
+        // the wide frame's keys (sfdesk's keys.mbt), then the rail, the sidebar and the page beside it (sfdesk's frame.mbt,
+        // this package's pages given to it: wide_pages.mbt); what opens over them after them
+        @sfdesk.keys(c, src, w, desk_pages())
+        @sfdesk.frame(c, src, w, all, invited, desk_pages())
         // a station's screen: over the whole window, as Android's ScreenActivity is over the app
         match app.nav.top() {
           Screen(at) =>
@@ -446,7 +426,8 @@ fn signed_in(c : @ui.Ctx, src : Source) -> Unit {
           DrivePlay(at) => c.layer(fn() { play_page(c, src, at) }) |> ignore
           _ => ()
         }
-        wide_overlays(c, src, w)
+        // what opens over them (sfdesk's overlays.mbt)
+        @sfdesk.overlays(c, src, w, desk_pages())
         pick_back(c)
         preview(c, src)
         viz_full_layer(c, src)
@@ -507,6 +488,8 @@ fn signed_in(c : @ui.Ctx, src : Source) -> Unit {
       // a new device waiting on this one's code, in any workspace of the person's, over whichever page is open
       // (App.kt LockPrompts): put up when no other sheet is
       @settings.lock_prompts(settings_core(src, w), !sheet_open() && dui.sheet is None)
+      // the desktop's settings pages' dialogs (src/sfdesk settings_page.mbt), under the settings' questions
+      @sfdesk.settings_overlay(c)
       @settings.overlay(c, settings_core(src, w))
       toast(c)
     }
@@ -667,9 +650,6 @@ let picture_pick : Ref[(@ui.Pick, (Bytes?) -> Unit)?] = Ref(None)
 /// A page of the settings (src/sfapp/settings), over the workspace in view.
 fn setting_page(c : @ui.Ctx, src : Source, w : Workspace, r : @settings.Route) -> Unit {
   let core = settings_core(src, w)
-  // in the wide frame, a page under another of them shows back (the sidebar is the way to the others)
-  let pages = app.nav.pages()
-  @settings.wide_deep.val = pages.length() >= 2 && pages[pages.length() - 2] is Setting(_)
   @settings.page(c, core, @settings.here_of(core, w.id, w.name), r)
 }
 
@@ -698,7 +678,7 @@ fn lock_gate(c : @ui.Ctx, src : Source, w : Workspace, bar? : Bool) -> Bool {
 ///|
 /// The waiting page and Home's top bar over it, the screen's whole.
 // kept across runs: a value (no field of it changes)
-let gate_fill : @ui.Style = @ui.style(w=Full, h=Full)
+let gate_fill : @ui.Style = @ui.css("w=Full h=Full")
 
 ///|
 /// What the settings' pages read and call, and how they move: the core as the app has it (Source), the app's stack.
@@ -745,7 +725,7 @@ fn settings_core(src : Source, w : Workspace) -> @settings.Core {
       app.nav.push(Chat({ station, session, title, station_name: name }))
     },
     open_drive: fn(station) { app.nav.push(Drive({ station, root: None, path: "" })) },
-    sign_in: fn() { login_adding.val = true },
+    sign_in: fn() { if @sf.theme().narrow { login_adding.val = true } else { (src.sign_in)() } },
     say: fn(words) {
       app.toast = words
       app.toast_n += 1
@@ -983,8 +963,107 @@ fn sign_in_page(c : @ui.Ctx, src : Source) -> Unit {
 }
 
 ///|
+let sign_in_wide_w : Double = 300.0
+
+///|
 fn sign_in_body(c : @ui.Ctx, src : Source) -> Unit {
-  login_view(c, src)
+  if !@sfdesk.is_wide(c) {
+    login_view(c, src)
+    return
+  }
+  let t = @sf.theme()
+  let busy = (src.signing_in)()
+  // a desktop's: the picture and 登录或注册 alone, no words around them (asked for, 2026-10-23)
+  let wide = @sfdesk.is_wide(c)
+  c.box(
+    w=Fill(1.0),
+    h=Fill(1.0),
+    padx=30.0,
+    pady=40.0,
+    gap=12.0,
+    align=ACenter,
+    justify=JCenter,
+    fn() {
+      @sf.drawable(
+        c,
+        if t.dark {
+          "illus_sign_in_dark"
+        } else {
+          "illus_sign_in"
+        },
+        dmin(300.0, c.width - 60.0),
+      )
+      |> ignore
+      if !wide {
+        c.box(pt=10.0, fn() {
+          c.text(
+            tr("android-settings.signIn.title"),
+            size=28.0,
+            weight=700,
+            color=t.p.text,
+            wrap=false,
+          )
+          |> ignore
+        })
+        |> ignore
+        c.text(
+          tr("android-settings.signIn.note"),
+          size=15.0,
+          color=t.p.muted,
+          center=true,
+          w=Fill(1.0),
+          line=21.0,
+        )
+        |> ignore
+      }
+      c.box(h=Px(6.0), fn() {  }) |> ignore
+      let id = c.id("sign-in")
+      if c.clicked(id) && !busy {
+        (src.sign_in)()
+      }
+      c.box(
+        dir=Row,
+        w=Fill(1.0),
+        // a desktop's no wider than the desktop app's (web cloud/gate.css.ts `ways`)
+        max_w=if wide { sign_in_wide_w } else { c.width },
+        h=Px(50.0),
+        radius=25.0,
+        bg=t.p.text,
+        align=ACenter,
+        justify=JCenter,
+        id~,
+        fn() {
+          c.text(
+            if busy {
+              tr("common.opening")
+            } else {
+              tr("android-settings.signIn.google")
+            },
+            size=16.0,
+            weight=600,
+            color=t.p.bg,
+            wrap=false,
+          )
+          |> ignore
+          // SignIn.kt: clip(CircleShape).clickable
+          if !busy {
+            @motion.ripple(c, id, 25.0)
+          }
+        },
+      )
+      |> ignore
+      if !wide {
+        c.text(
+          tr("android-settings.signIn.many"),
+          size=12.0,
+          color=t.p.muted,
+          wrap=false,
+        )
+        |> ignore
+      }
+    },
+  )
+  |> ignore
 }
 
 ///|

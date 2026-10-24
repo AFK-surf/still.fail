@@ -192,12 +192,12 @@ fn recent_strip(c : @ui.Ctx, tapped : (Int) -> Unit) -> Unit {
 /// The strip's row: 12 in from the sheet's sides, 4 under its top, 12 over its foot, its tiles 6 apart (Attach.kt
 /// RecentPhotos' contentPadding and spacing).
 // kept across runs: a value (no field of it changes)
-let recent_strip_row : @ui.Style = @ui.style(row=true, w=Full, pl=S3, pr=S3, pt=S1, pb=S3, gap=S1_5, clip=true)
+let recent_strip_row : @ui.Style = @ui.css("row w=Full pl=S3 pr=S3 pt=S1 pb=S3 gap=S1_5 clip")
 
 ///|
 /// Where a video's play mark sits on its tile: its lower start, 6 in.
 // kept across runs: a value (no field of it changes)
-let recent_video_room : @ui.Style = @ui.style(w=Full, h=Full, p=S1_5, justify=JEnd, align=AStart)
+let recent_video_room : @ui.Style = @ui.css("w=Full h=Full p=S1_5 justify=JEnd align=AStart")
 
 ///|
 /// A tile of the strip (92 × 122, the chip's grey under it).

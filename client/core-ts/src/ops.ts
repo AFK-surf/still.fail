@@ -98,7 +98,7 @@ export const PARAMS: Record<string, string> = {
   "connect.delete": "id:string",
   "connect.reconnect": "id:string",
   "connect.bindSession": "connect:string session?:string title?:string",
-  "connect.putSlackApp": "connect:string input?:json",
+  "connect.putSlackApp": "connect:string input?:json from?:json",
   "feishu.register": "domain?:string name?:string",
   "feishu.cancelRegistration": "id:string",
   "feishu.verify": "appId:string appSecret:string domain?:string",
@@ -401,8 +401,16 @@ function stationOp(name: string, params: unknown): Request | null {
       return op("POST", () => `/connects/${p.at("id")}/reconnect`, null, connect("id"));
     case "connect.bindSession":
       return op("POST", () => `/connects/${p.at("connect")}/session`, p.pick(["session", "title"]), connect("connect"));
-    case "connect.putSlackApp":
-      return op("PUT", () => `/connects/${p.at("connect")}/slack-app`, p.has("input") ? p.v.input : {}, connect("connect"));
+    // `from`: the app's settings the form started from; only what differs from them is written (and a new icon).
+    case "connect.putSlackApp": {
+      const input = p.has("input") ? p.v.input : {};
+      const from = p.has("from") ? p.v.from : null;
+      const changed =
+        from !== null && typeof from === "object" && input !== null && typeof input === "object"
+          ? Object.fromEntries(Object.entries(input as Record<string, unknown>).filter(([k, v]) => k === "icon" || JSON.stringify(v) !== JSON.stringify((from as Record<string, unknown>)[k])))
+          : input;
+      return op("PUT", () => `/connects/${p.at("connect")}/slack-app`, changed, connect("connect"));
+    }
     // Feishu (and Lark) bots (docs/feishu.md): made by scanning (the station follows it, the overview's
     // `feishuRegistrations` says how it goes), an app of one's own checked, a connect added with either.
     case "feishu.register":

@@ -511,11 +511,23 @@ fn input_came() -> Unit {
 
 ///|
 fn on_pointer(kind : Int, x : Double, y : Double, button : Int) -> Unit {
-  took_input("pointer", h_event_time(), [kind.to_double(), x, y, button.to_double()])
+  // the keys held as it goes down, read once and kept with it (a replay hands the same on)
+  pointer_in(kind, x, y, button, if kind == 0 { mods_held() } else { 0 })
+}
+
+///|
+/// A pointer's event, with the keys held as it went down (0 for an event other than a press).
+fn pointer_in(kind : Int, x : Double, y : Double, button : Int, mods : Int) -> Unit {
+  took_input("pointer", h_event_time(), [kind.to_double(), x, y, button.to_double(), mods.to_double()])
   let c = g()
   // a second finger (4 down, 5 moved, 6 up: hosts with touch screens), for a pinch (native.mbt `second_pointer`)
   if kind >= 4 && kind <= 6 {
     on_second(kind, x, y)
+    // one of two lifted (which, the host does not say): the moves from here may be the other's, its own track
+    if kind == 6 {
+      track_x.reset()
+      track_y.reset()
+    }
     return
   }
   // the pointer gone out of the window (7); a secondary button (a right click: its menu's, nothing pressed)
@@ -551,11 +563,14 @@ fn on_pointer(kind : Int, x : Double, y : Double, button : Int) -> Unit {
     // what lies over the page sees it (overlay.mbt); the focus goes as a press moves it (focus.mbt)
     c.press_down = Some((x, y))
     c.focus_on_press(target)
+    c.press_mods = mods
     c.down = true
     c.active = target
     c.press_x = x
     c.press_y = y
     c.press_at = t
+    // (not taken yet: one taken before at the same moment is not this one)
+    c.taken_at = -1.0
     c.last_y = y
     c.last_x = x
     c.vel_x = 0.0
@@ -624,26 +639,43 @@ fn on_pointer(kind : Int, x : Double, y : Double, button : Int) -> Unit {
       }
     }
     c.press_late = h_feel() == 2 && c.drag_scroll != 0
-    match c.lists.get(c.drag_scroll) {
-      // a list moving on its own (flung, springing back from an end) is
-      // caught: the finger drags it from there, and presses nothing in it
-      Some(st) if st.moving() => {
-        c.claimed = true
-        for other in c.press_chain {
-          if other != c.drag_scroll {
-            drag_cancel(other)
-          }
+    // a list moving on its own (flung, springing back from an end) is caught wherever on it the finger lands, and the
+    // press presses nothing in it: the finger drags it from there at once; on what scrolls or drags its own way in it
+    // (a table or a code block that scrolls sideways, a row swiped across), stopped, the press goes the finger's way
+    // as ever (claim.mbt)
+    let mut caught = 0
+    if desk.mouse_drags {
+      for id in c.press_chain {
+        if caught == 0 && c.lists.get(id) is Some(st) && st.moving() {
+          caught = id
         }
+      }
+    }
+    match c.lists.get(caught) {
+      Some(st) => {
         st.catch_up()
-        st.held = true
-        c.dragging = true
+        if caught == c.drag_scroll {
+          c.claimed = true
+          for other in c.press_chain {
+            if other != c.drag_scroll {
+              drag_cancel(other)
+            }
+          }
+          st.held = true
+          c.dragging = true
+        }
+        // (no tap of anything, of a row's drag area or anywhere, once lifted)
         c.active = 0
+        c.taken_at = c.press_at
         c.edge = 0
         h_request_frame()
         return
       }
-      Some(st) => st.stop()
-      None => ()
+      None =>
+        match c.lists.get(c.drag_scroll) {
+          Some(st) => st.stop()
+          None => ()
+        }
     }
     c.editor_tap = 0
     match c.editors.get(target) {
@@ -658,7 +690,10 @@ fn on_pointer(kind : Int, x : Double, y : Double, button : Int) -> Unit {
       None => if target == 0 { c.focus = 0 }
     }
   } else if kind == 1 {
-    c.hover = hit_in(c.hit_ids, c.hit_rects, x, y)
+    // (a finger hovers over nothing: Pointing)
+    if pointing() is Mouse {
+      c.hover = hit_in(c.hit_ids, c.hit_rects, x, y)
+    }
     if c.down {
       track_x.add(t, x)
       track_y.add(t, y)
@@ -773,7 +808,7 @@ fn on_pointer(kind : Int, x : Double, y : Double, button : Int) -> Unit {
         y,
         dclamp(track_x.velocity(), -max_fling, max_fling),
         dclamp(track_y.velocity(), -max_fling, max_fling),
-        false,
+        c.taken_at == c.press_at,
       )
     }
     if c.dragging {

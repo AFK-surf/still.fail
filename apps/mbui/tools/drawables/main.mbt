@@ -438,12 +438,14 @@ fn main {
     fail("Icons.kt StationIcons: \{found.length()} glyphs read of \{said}")
   }
   line("///|")
-  line("/// The station glyphs (StationIcons): each its emoji, its lines (1.75 strokes) and its dots (fills).")
-  line("let station_glyphs : Map[String, (String, Array[String], Array[String])] = {")
+  line("/// The station glyphs (StationIcons): each its emoji, its lines (1.75 strokes) and its dots (fills), as one text:")
+  line("/// \"emoji|line;line|dot;dot\", read when it is drawn (glyph_paths).")
+  // (text, not a tuple of arrays: as those, 570 KB of start-up code compiled on every build, 2026-10-24)
+  line("let station_glyphs : Map[String, String] = {")
   for m in found {
-    let ls = quoted.findall(m.get(3)).map(mbt_str)
-    let ds = quoted.findall(m.get(4)).map(mbt_str)
-    line("  \{mbt_str(m.get(1))}: (\{mbt_str(m.get(2))}, [\{ls.join(", ")}], [\{ds.join(", ")}]),")
+    let ls = quoted.findall(m.get(3))
+    let ds = quoted.findall(m.get(4))
+    line("  \{mbt_str(m.get(1))}: \{mbt_str(m.get(2) + "|" + ls.join(";") + "|" + ds.join(";"))},")
   }
   line("}")
   @sys.out(out.to_string())

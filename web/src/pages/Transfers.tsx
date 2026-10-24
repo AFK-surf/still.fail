@@ -1,15 +1,17 @@
-// What the files' page shows of copies between folders and stations (docs/drive.md "Copying between stations"): the
-// transfers' button on its bar (how many go, how far), its list (each copy's way, how it stands, stopped, tried again,
-// its folder shown once done), and the dialog that asks about a name already where files go (drive/transfer.ts).
+// What the files' page shows of copies between folders and stations (docs/drive.md "Copying between stations") and of
+// the drive's files downloaded to this device (chatDownloads.ts): the transfers' button on its bar (how many go, how
+// far), its list (each copy's way, how it stands, stopped, tried again, its folder shown once done; each download, how
+// far, stopped, tried again), and the dialog that asks about a name already where files go (drive/transfer.ts).
 import { useEffect, useState } from "react";
 import { Popover } from "radix-ui";
-import { useTopic, core } from "../core/react.ts";
-import type { DriveTransferShown, DriveTransfersView, StationView } from "../core/shapes.ts";
+import { useTopic, useTopicSelect, core } from "../core/react.ts";
+import type { DownloadShown, DownloadsView, DriveTransferShown, DriveTransfersView, StationView } from "../core/shapes.ts";
+import { DOWNLOADS, cancelDownload, retryDownload } from "../chatDownloads.ts";
 import { useStations } from "../api.ts";
 import { useGo } from "../go.ts";
 import { useAct } from "@stillfail/ui/toast.tsx";
 import { Button, IconButton } from "../ui.tsx";
-import { Check, ChevronRight, Close, Folder, Move, Retry, Server, Trash } from "@stillfail/ui/icons.tsx";
+import { Check, ChevronRight, Close, Download, Folder, Move, Retry, Server, Trash } from "@stillfail/ui/icons.tsx";
 import { fileSize } from "@stillfail/ui/fileSize.ts";
 import { transfer, useAsking, type Answer } from "../drive/transfer.ts";
 import type { Dragged } from "../drive/drag.ts";
@@ -26,26 +28,36 @@ export function useTransfers(scope: string): DriveTransferShown[] {
   return useTopic<DriveTransfersView>({ topic: "driveTransfers", workspace: scope }).value?.transfers ?? [];
 }
 
-/** On the files' page's bar: the transfers, how many go and how far they are; its list on a press. Nothing while there
- * has been none. */
+/** This device's downloads of the workspace's stations' drives (a file, a folder zipped), newest first. */
+function useDriveDownloads(scope: string): DownloadShown[] {
+  return useTopicSelect<DownloadsView, DownloadShown[]>(DOWNLOADS,
+    (s) => (s.value?.downloads ?? []).filter((d) => d.root !== undefined && d.station.startsWith(`${scope}/`)), sameDownloads);
+}
+const sameDownloads = (a: DownloadShown[], b: DownloadShown[]) => a.length === b.length && a.every((d, i) => d === b[i]);
+
+/** On the files' page's bar: the transfers and the drive's downloads, how many go and how far they are; their list on a
+ * press. Nothing while there has been none. */
 export function TransfersButton({ scope }: { scope: string }) {
   const all = useTransfers(scope);
+  const downloads = useDriveDownloads(scope);
   const [open, setOpen] = useState(false);
   const going = all.filter((x) => x.active);
-  if (all.length === 0) return null;
-  const total = going.reduce((n, x) => n + x.total, 0);
-  const copied = going.reduce((n, x) => n + x.copied, 0);
-  const label = going.length > 0 ? t("web-pages.files.transfersGoing", { n: going.length, percent: Math.floor((total > 0 ? copied / total : 0) * 100) }) : t("web-pages.files.transfers");
+  const coming = downloads.filter((d) => d.active);
+  if (all.length === 0 && downloads.length === 0) return null;
+  const total = going.reduce((n, x) => n + x.total, 0) + coming.reduce((n, d) => n + d.size, 0);
+  const copied = going.reduce((n, x) => n + x.copied, 0) + coming.reduce((n, d) => n + d.loaded, 0);
+  const label = going.length + coming.length > 0 ? t("web-pages.files.transfersGoing", { n: going.length + coming.length, percent: Math.floor((total > 0 ? copied / total : 0) * 100) }) : t("web-pages.files.transfers");
   return (
     <Popover.Root open={open} onOpenChange={setOpen}>
       <Popover.Trigger asChild>
-        <button type="button" className={css.transfersChip} data-going={going.length > 0 || undefined} data-failed={all.some((x) => x.state === "failed") || undefined}>
+        <button type="button" className={css.transfersChip} data-going={going.length + coming.length > 0 || undefined} data-failed={all.some((x) => x.state === "failed") || downloads.some((d) => d.state === "failed") || undefined}>
           <Move size={14} />{label}
         </button>
       </Popover.Trigger>
       <Popover.Portal>
         <Popover.Content className={`${controlsCss.popover} ${css.transfers}`} side="bottom" align="end" sideOffset={6} collisionPadding={8} onOpenAutoFocus={(e) => e.preventDefault()}>
           <div className={css.transfersHead}>{t("web-pages.files.transfers")}</div>
+          {downloads.map((d) => <DownloadRow key={d.id} d={d} />)}
           {all.map((x) => <TransferRow key={`${x.station}\n${x.id}`} x={x} onShown={() => setOpen(false)} />)}
         </Popover.Content>
       </Popover.Portal>
@@ -76,6 +88,26 @@ function TransferRow({ x, onShown }: { x: DriveTransferShown; onShown: () => voi
         {x.state === "done" && (
           <Button variant="ghost" onClick={() => { onShown(); go(drivePath(stationBase(x.station), x.toRoot, x.toPath)); }}>{t("web-pages.files.show")}</Button>
         )}
+      </span>
+    </div>
+  );
+}
+
+/** A file of the drive (a folder zipped) downloaded to this device: what, how far (a bar while it comes), how it stands;
+ * stopped while it comes, tried again once failed. */
+function DownloadRow({ d }: { d: DownloadShown }) {
+  const failed = d.state === "failed";
+  return (
+    <div className={css.transfer} data-state={failed ? "failed" : d.active ? "copying" : "done"}>
+      <span className={css.transferMark}>{failed ? <Retry size={14} /> : <Download size={14} />}</span>
+      <span className={css.transferText}>
+        <span className={css.transferTitle}><b>{d.name}</b> <span>{t("web-pages.files.toDevice")}</span></span>
+        {d.active && <span className={css.transferBar}><span style={{ transform: `scaleX(${d.progress})` }} /></span>}
+        <span className={css.transferStatus} data-failed={failed || undefined}>{d.statusText}</span>
+      </span>
+      <span className={css.transferActions}>
+        {d.active && <IconButton label={t("web-main.file.cancelDownload")} icon={Close} onClick={() => cancelDownload(d.id)} />}
+        {failed && <IconButton label={t("web-main.file.retryDownload")} icon={Retry} onClick={() => retryDownload(d.id)} />}
       </span>
     </div>
   );

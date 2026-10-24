@@ -2,9 +2,11 @@
 // and FaceFiles): the prefs' `faces` say each place's (ui, text, code); one still.fail keeps is had from the core, which
 // keeps its files for this app (client/core-ts/src/font-files.ts: `fonts.file`, fetched first where it has none,
 // `fonts.fetch`), each unzipped here and checked by its hash (and given back unzipped: `fonts.keep`), and given to the
-// host once all are here (@ui.face_add_bytes: @hostapi.face_ui, face_text, face_code). Until then, and where none is
-// chosen, the app's own stands in (code's: JetBrains Mono). The fonts page shows each face in its preview (`fonts.preview`:
-// its characters alone), given to a face of its own (4 on, by its place in the list).
+// host once all are here (@ui.face_add_bytes: @hostapi.face_ui, face_text, face_code). One kept here before (an earlier
+// run's) the prefs say where each of its files is (`path`), and the host reads them there (@ui.face_add) the frame the
+// prefs come, the first page set in it: nothing asked of the core, carried or checked again. Until then, and where none
+// is chosen, the app's own stands in (code's: JetBrains Mono). The fonts page shows each face in its preview
+// (`fonts.preview`: its characters alone), given to a face of its own (4 on, by its place in the list).
 
 ///|
 /// What of a chosen face is here: being asked for, being fetched, its files whole (each with the weight it is for),
@@ -12,8 +14,16 @@
 priv enum FaceHad {
   Asking
   Fetching
-  Whole(Array[(Bytes, Int)])
+  Whole(Array[(FaceFile, Int)])
   NotHad(String)
+}
+
+///|
+/// A face's file as it is had: where the core keeps it (the prefs say; the host reads it there), or its bytes, unzipped
+/// and checked here this run.
+priv enum FaceFile {
+  At(String)
+  Held(Bytes)
 }
 
 ///|
@@ -58,7 +68,7 @@ fn inter_face() -> Bytes? {
   match inter_bytes.val {
     Some(b) => Some(b)
     None =>
-      match @zip.gunzip(@codec.from_base64(inter_gz_b64)) {
+      match @zip.gunzip(inter_gz) {
         Some(b) => {
           inter_bytes.val = Some(b)
           Some(b)
@@ -131,7 +141,24 @@ fn faces(src : Source) -> Unit {
       }
     } else {
       match faces_had.get(now) {
-        Some(Whole(files)) => for f in files { ignore(@ui.face_add_bytes(host_face, f.0, weight=f.1)) }
+        Some(Whole(had)) => {
+          let mut read = true
+          for f in had {
+            match f.0 {
+              At(path) => if !@ui.face_add(host_face, path, weight=f.1) { read = false }
+              Held(b) => ignore(@ui.face_add_bytes(host_face, b, weight=f.1))
+            }
+          }
+          // a file the host could not read where it is (one kept as fetched, not unzipped yet): had through the core
+          // instead, the app's own standing in until then
+          if !read {
+            @ui.face_clear(host_face)
+            faces_had[now] = Asking
+            face_files(src, now, files, 0, [], false)
+            faces_in[host_face] = ""
+            continue
+          }
+        }
         _ => ()
       }
     }
@@ -146,11 +173,17 @@ fn faces(src : Source) -> Unit {
 }
 
 ///|
-/// Face `id`'s files when all are here; None while they come (asked for the first time it is wanted).
-fn face_had(src : Source, id : String, files : Array[Json]) -> Array[(Bytes, Int)]? {
+/// Face `id`'s files when all are here; None while they come (asked for the first time it is wanted, unless the prefs
+/// say where each is kept).
+fn face_had(src : Source, id : String, files : Array[Json]) -> Array[(FaceFile, Int)]? {
   match faces_had.get(id) {
     Some(Whole(b)) => Some(b)
     Some(_) => None
+    None if files.iter().all(fn(f) { text(Some(f), "path") != "" }) => {
+      let at = files.map(fn(f) { (At(text(Some(f), "path")), number(Some(f), "weight").to_int()) })
+      faces_had[id] = Whole(at)
+      Some(at)
+    }
     None => {
       faces_had[id] = Asking
       face_files(src, id, files, 0, [], false)
@@ -166,7 +199,7 @@ fn face_had(src : Source, id : String, files : Array[Json]) -> Array[(Bytes, Int
 ///|
 /// Face `id`'s files from the `at`th on, each from the core: unzipped and checked where it is as fetched; where the
 /// core has one not, the face fetched first (once).
-fn face_files(src : Source, id : String, files : Array[Json], at : Int, got : Array[(Bytes, Int)], fetched : Bool) -> Unit {
+fn face_files(src : Source, id : String, files : Array[Json], at : Int, got : Array[(FaceFile, Int)], fetched : Bool) -> Unit {
   if at >= files.length() {
     faces_had[id] = Whole(got)
     return
@@ -184,7 +217,7 @@ fn face_files(src : Source, id : String, files : Array[Json], at : Int, got : Ar
             if flag(Some(v), "zipped") {
               (src.call_bytes)("fonts.keep", Json::object({ "sha256": sha.to_json() }), b, fn(_) {  })
             }
-            got.push((b, weight))
+            got.push((Held(b), weight))
             face_files(src, id, files, at + 1, got, fetched)
           }
           _ => faces_had[id] = NotHad(tr("android-settings.fonts.damaged"))

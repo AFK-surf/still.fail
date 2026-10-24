@@ -163,12 +163,12 @@ let outside_top : Double = 25.0 + 37.8
 ///|
 /// What is under the head: 20 in from the sheet's sides (Composer.kt padding(horizontal = 20)).
 // kept across runs: a value (no field of it changes)
-let outside_body : @ui.Style = @ui.style(w=Full, px=S5)
+let outside_body : @ui.Style = @ui.css("w=Full px=S5")
 
 ///|
 /// What it says first: 14/20, muted, 8 over the chats.
 // kept across runs: a value (no field of it changes)
-let outside_lead_box : @ui.Style = @ui.style(w=Full, pb=S2)
+let outside_lead_box : @ui.Style = @ui.css("w=Full pb=S2")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -182,11 +182,11 @@ let outside_row : @ui.Style = @ui.style(w=Full, py=@sf.space_5)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let outside_line : @ui.Style = @ui.style(row=true, gap=S1_5, align=ACenter)
+let outside_line : @ui.Style = @ui.css("row gap=S1_5 align=ACenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let outside_title_box : @ui.Style = @ui.style(row=true)
+let outside_title_box : @ui.Style = @ui.css("row")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -198,7 +198,7 @@ let outside_title : @ui.TextStyle = @ui.text_style(size=Lg, leading=L7, color=Li
 
 ///|
 // kept across runs: a value (no field of it changes)
-let outside_cannot_box : @ui.Style = @ui.style(w=Full, pt=S0_5)
+let outside_cannot_box : @ui.Style = @ui.css("w=Full pt=S0_5")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -207,12 +207,12 @@ let outside_cannot : @ui.TextStyle = @ui.text_style(size=Sm, leading=L5, color=D
 ///|
 /// Why sharing failed: 13/18, red, 8 under the chats.
 // kept across runs: a value (no field of it changes)
-let outside_failed_box : @ui.Style = @ui.style(w=Full, pt=S2)
+let outside_failed_box : @ui.Style = @ui.css("w=Full pt=S2")
 
 ///|
 /// The buttons at its end, 8 apart: 16 under what is over them, 24 over the sheet's foot.
 // kept across runs: a value (no field of it changes)
-let outside_buttons : @ui.Style = @ui.style(row=true, w=Full, pt=S4, pb=S6, gap=S2, justify=JEnd)
+let outside_buttons : @ui.Style = @ui.css("row w=Full pt=S4 pb=S6 gap=S2 justify=JEnd")
 
 ///|
 /// Whose a chat is, in a small outlined pill (PageParts.kt StationTag with words alone: 104 at most, 8 and 2 in, its

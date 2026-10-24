@@ -138,7 +138,7 @@ pub fn media_key(
   if on {
     c.cursor(id, Hand)
   }
-  let hot = on && (c.hovered(id) || c.pressed(id))
+  let hot = on && (c.lit(id) || c.pressed(id))
   let ground = if lit { alpha(ink.text, media_lit_share) } else if hot { alpha(ink.text, media_hot_share) } else { no_ground }
   let b = c.box(style=media_key_box.then(@ui.style(bg=Data(ground))), disabled=!on, id=if on { id } else { 0 }, fn() {
     icon(c, icon_name, size=if small { viewer_tool_icon } else { viewer_back_icon }, color=if bright || hot || lit { ink.text } else { ink.muted })
@@ -173,15 +173,15 @@ pub let media_strong : Int = 600
 
 ///|
 // kept across runs: a value (no field of it changes)
-pub let media_bar_box : @ui.Style = @ui.style(pl=S1_5, pr=S1_5, pt=S0_5, pb=S1_5, radius=Xl1_5)
+pub let media_bar_box : @ui.Style = @ui.css("pl=S1_5 pr=S1_5 pt=S0_5 pb=S1_5 radius=Xl1_5")
 
 ///|
 // kept across runs: a value (no field of it changes)
-pub let media_row : @ui.Style = @ui.style(row=true, w=Full, gap=S3, align=ACenter)
+pub let media_row : @ui.Style = @ui.css("row w=Full gap=S3 align=ACenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
-pub let media_group : @ui.Style = @ui.style(row=true, gap=S0_5, align=ACenter)
+pub let media_group : @ui.Style = @ui.css("row gap=S0_5 align=ACenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -193,23 +193,23 @@ pub let media_timeline_box : @ui.Style = @ui.style(w=Full, h=Fixed(media_timelin
 
 ///|
 // kept across runs: a value (no field of it changes)
-pub let media_track : @ui.Style = @ui.style(w=Full, h=S1, radius=Full, clip=true)
+pub let media_track : @ui.Style = @ui.css("w=Full h=S1 radius=Full clip")
 
 ///|
 // kept across runs: a value (no field of it changes)
-pub let media_head_row : @ui.Style = @ui.style(row=true, w=Full, h=Full, align=ACenter)
+pub let media_head_row : @ui.Style = @ui.css("row w=Full h=Full align=ACenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let media_head_rail : @ui.Style = media_head_row.then(@ui.style(px=S2_5))
+let media_head_rail : @ui.Style = media_head_row.then(@ui.css("px=S2_5"))
 
 ///|
 // kept across runs: a value (no field of it changes)
-let media_head_room : @ui.Style = @ui.style(w=S0, h=S3)
+let media_head_room : @ui.Style = @ui.css("w=S0 h=S3")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let media_head_disc : @ui.Style = @ui.style(w=S3, h=S3, radius=Full, shadow=Sm)
+let media_head_disc : @ui.Style = @ui.css("w=S3 h=S3 radius=Full shadow=Sm")
 
 ///|
 /// A smaller head (the volume's, Player.css.ts volumeHead: 10 across).
@@ -217,11 +217,11 @@ let media_small_head_r : Double = 5.0
 
 ///|
 // kept across runs: a value (no field of it changes)
-let media_small_head_room : @ui.Style = @ui.style(w=S0, h=S2_5)
+let media_small_head_room : @ui.Style = @ui.css("w=S0 h=S2_5")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let media_small_head : @ui.Style = @ui.style(w=S2_5, h=S2_5, radius=Full, shadow=Sm)
+let media_small_head : @ui.Style = @ui.css("w=S2_5 h=S2_5 radius=Full shadow=Sm")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -236,11 +236,4 @@ let media_rate_words : @ui.TextStyle = @ui.text_style(size=Xs, color=Fg, wrap=fa
 
 ///|
 // kept across runs: a value (no field of it changes)
-let media_key_box : @ui.Style = @ui.style(
-  w=S8,
-  h=S8,
-  radius=Lg,
-  align=ACenter,
-  justify=JCenter,
-  disabled=@ui.patch(opacity=O35),
-)
+let media_key_box : @ui.Style = @ui.css("w=S8 h=S8 radius=Lg align=ACenter justify=JCenter disabled{opacity=O35}")

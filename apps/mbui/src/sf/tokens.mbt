@@ -366,7 +366,9 @@ pub fn set_dark(dark : Bool?) -> Unit {
 
 ///|
 /// Whether the system is a phone's or a tablet's (iOS, Android), whose app is still.fail's Android app at any width
-/// (an opened foldable, a phone on its side): its own theme and pages, never the desktop's.
+/// (an opened foldable, a phone on its side): what the layout and the theme go by, with the system's size classes (its
+/// own theme and pages; the wide frame only where the system calls the window regular both ways). How things answer
+/// the hand is not this: @ui.pointing.
 pub fn touch_system() -> Bool {
   let p = @ui.platform()
   p == 1 || p == 2
@@ -822,7 +824,7 @@ pub let face_ink : Int64 = 0xFFFFFFFFL
 /// A sheet's grabber (Sheet.kt SheetGrab): 38 × 5, round at its ends (its 3 capped at half its height, as every
 /// renderer draws it; its colour the palette's line, said where it is drawn).
 // kept across runs: a value (no field of it changes)
-pub let sheet_grabber : @ui.Style = @ui.style(w=Fixed(38.0), h=Fixed(5.0), radius=Full)
+pub let sheet_grabber : @ui.Style = @ui.css("w=Fixed(38.0) h=Fixed(5.0) radius=Full")
 
 ///|
 /// A tip's widest (the web's parts.css.ts tooltip: 300).
@@ -847,6 +849,10 @@ pub let file_sheet_w : @ui.Len = Fixed(30.0)
 
 ///|
 pub let file_sheet_h : @ui.Len = Fixed(36.0)
+
+///|
+/// A file card's own button (Chat.css.ts fileCardRemove: 22 round).
+pub let file_card_button : @ui.Len = Fixed(22.0)
 
 ///|
 /// A name over a message at its widest (Chat.css.ts msgHead msgName: 240).
@@ -1081,6 +1087,168 @@ pub let edge_tip_ms : Double = 300.0
 
 ///|
 pub let edge_tip_gap : Double = 14.0
+
+// ---------------------------------------------------------------------------
+// The desktop's sidebar and rail (sfdesk: ember web/src/Rail.css.ts, ChatMark.css.ts, styles/shell.css.ts)
+
+///|
+/// A chat's marks' colours, bright in both themes (ChatMark.css.ts: #3b82f6 done and waiting on the viewer, #e5484d to
+/// be seen now and its halo at 25%, #f2b01e at work).
+pub let mark_blue : @ui.Color = Exact(0x3B82F6FFL)
+
+///|
+pub let mark_red : @ui.Color = Exact(0xE5484DFFL)
+
+///|
+pub let mark_halo : @ui.Color = A(mark_red, O25)
+
+///|
+pub let mark_yellow : Int64 = 0xF2B01EFFL
+
+///|
+/// The rail's places 9 from its edges open, in its 56's middle (Rail.css.ts rail: 9 under the last, its 38s 9 in).
+pub let rail_in : @ui.Space = room(9.0)
+
+///|
+/// A square of the rail (a place's ground, a workspace's): its corner (Rail.css.ts item, workspaceItem: 9).
+pub let rail_corner : @ui.Radius = rounded(9.0)
+
+///|
+/// What sits in a small panel's corner (--panel-in: a menu's rows, a popover's), concentric with the panel's.
+pub let panel_in : @ui.Radius = rounded(small_panel_inner(r_menu))
+
+///|
+/// The `@` menu over the desktop's composer (ChatRef.css.ts refMenu: a small panel in the composer's corner, 32, padded
+/// panel_pad) and its rows' corner (refItem: concentric with it), its rows at their lowest (38).
+pub let ref_menu_corner : @ui.Radius = rounded(ref_menu_round)
+
+///|
+pub let ref_item_corner : @ui.Radius = rounded(ref_menu_round - panel_pad)
+
+///|
+pub let ref_item_min_h : @ui.Len = Fixed(38.0)
+
+///|
+let ref_menu_round : Double = 32.0
+
+///|
+/// The closed bar's corner (shell.css.ts dock, closed: calc(9px * scale + 6px)): concentric with the places' grounds
+/// 6 in.
+pub let closed_bar_corner : @ui.Radius = rounded(surface_corner(6.0, 9.0))
+
+///|
+/// The sidebar's edge's look 3 in its strip (Rail.css.ts edge: its line 6 in, its bar 4 in, the library's 7 wide).
+pub let edge_in : @ui.Space = room(3.0)
+
+///|
+/// A chat's row in the sidebar 7 in from its top and foot (Sidebar.css.ts navSession: padding 7 10).
+pub let row_in : @ui.Space = room(7.0)
+
+///|
+/// An agent's mark (the web's ui.css.ts agentMark): its corner .3 of its side, a 28 one's 8.4 (an agent's card).
+pub let agent_mark_28_corner : @ui.Radius = rounded(28.0 * 0.3)
+
+
+///|
+/// (a 16 one's, 4.8: a line of an agent's history's details)
+pub let agent_mark_16_corner : @ui.Radius = rounded(16.0 * 0.3)
+
+///|
+/// A chat's jobs (the web's Jobs.css.ts): a job's action 26 high, the popover's foot's rows 38, the 任务 tab's choice of
+/// what a job said or its output 120 wide.
+pub let job_action_h : @ui.Len = Fixed(26.0)
+
+///|
+pub let jobs_row_h : @ui.Len = Fixed(38.0)
+
+///|
+pub let job_choice_w : @ui.Len = Fixed(120.0)
+
+///|
+/// A tab of a chat's side panel (the web's ChatPage.css.ts sideTab: 30 high).
+pub let side_tab_h : @ui.Len = Fixed(30.0)
+
+///|
+/// A device's code read aloud, large (Security.css.ts bigCode): the web's display size, 28, its line 1.3 of it, off
+/// the scale; its letters 6 apart.
+pub let code_big_size : @ui.TextSize = Exact(28.0, 36.4)
+
+///|
+pub let code_big_tracking : @ui.Tracking = Exact(6.0)
+
+///|
+/// A chat's bar (the web's ChatPage.css.ts): its station's tag 160 wide at most, 7 in; an agent's station's part 140 at
+/// most, in by .19 of its 20 tile and 1.
+pub let chat_station_most : @ui.Len = Fixed(160.0)
+
+///|
+pub let chat_station_in : @ui.Space = room(7.0)
+
+///|
+pub let agent_station_most : @ui.Len = Fixed(140.0)
+
+///|
+pub let agent_station_in : @ui.Space = room(20.0 * 0.19 + 1.0)
+
+///|
+/// A person in a chat's stack of people (the web's later.css.ts peopleStack): 16 ringed 1.5.
+pub let person_ringed : @ui.Len = Fixed(19.0)
+
+///|
+/// The people a day's usage is split by, in the order the core's usage view ranks them (the web's Usage.css.ts, the
+/// phone's Usage.kt): four of their own in light and in dark, the first still.fail's accent.
+// kept across runs: a table, never written
+let usage_light : Array[Int64] = [0xEF6A3CFFL, 0x2A78D6FFL, 0x1BAF7AFFL, 0x4A3AA7FFL]
+
+///|
+// kept across runs: a table, never written
+let usage_dark : Array[Int64] = [0xE0602FFFL, 0x3987E5FFL, 0x199E70FFL, 0x9085E9FFL]
+
+///|
+/// The `i`th person's colour in the theme shown.
+pub fn usage_series(i : Int) -> Int64 {
+  (if theme().dark { usage_dark } else { usage_light })[i % 4]
+}
+
+///|
+/// An agent's history's steps (the web's History.css.ts, ToolStep.css.ts): the turn's rail 9.5 in, how much of a wait
+/// has gone a bar 3 high; a diff's line 22 in, its mark 9.
+pub let history_rail_in : @ui.Space = room(9.5)
+
+///|
+pub let wait_bar_h : @ui.Len = Fixed(3.0)
+
+///|
+pub let diff_line_in : @ui.Space = room(22.0)
+
+///|
+pub let diff_mark_in : @ui.Space = room(9.0)
+
+///|
+/// A message's picture out in the margin before its words (align.ts columns.avatar: 29), 3 down (Chat.css.ts msgRow >
+/// msgAvatar).
+pub let message_avatar_out : @ui.Space = room(-29.0)
+
+///|
+pub let message_avatar_down : @ui.Space = room(3.0)
+
+///|
+/// A message's head in past its picture where the picture is over its start (Chat.css.ts inlineHeads: 25).
+pub let message_head_in : @ui.Space = room(25.0)
+
+///|
+/// A message's video (Chat.css.ts msgVideo, msgVideoPlay, msgVideoName): black under its still, black at 65% under its
+/// play mark and its name, which are white.
+pub let video_ground : @ui.Color = Data(0x000000FFL)
+
+///|
+pub let video_shade : @ui.Color = Data(0x000000A6L)
+
+///|
+pub let white_ink : @ui.Color = Data(0xFFFFFFFFL)
+
+///|
+pub let white : Int64 = 0xFFFFFFFFL
 
 ///|
 /// Sign-in buttons and credential fields stay at least 52 high, including when their words wrap.

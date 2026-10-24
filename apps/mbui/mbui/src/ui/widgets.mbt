@@ -24,7 +24,7 @@ pub fn Ctx::button(
   let pressed = self.pressed(id)
   let fill = if pressed {
     shade(bg, 0.82)
-  } else if self.hovered(id) {
+  } else if self.lit(id) {
     shade(bg, 0.93)
   } else {
     bg

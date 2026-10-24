@@ -6,12 +6,12 @@
 ///|
 /// The cards under way: 12 from the page's sides, 10 under them, 2 apart.
 // kept across runs: a value (no field of it changes)
-let logins_active : @ui.Style = @ui.style(w=Full, px=S3, pb=S2_5, gap=S0_5)
+let logins_active : @ui.Style = @ui.css("w=Full px=S3 pb=S2_5 gap=S0_5")
 
 ///|
 /// What they are (13 on 19, muted), 24 in, 4 under.
 // kept across runs: a value (no field of it changes)
-let logins_lead_room : @ui.Style = @ui.style(w=Full, px=S6, pb=S1)
+let logins_lead_room : @ui.Style = @ui.css("w=Full px=S6 pb=S1")
 
 ///|
 // kept across runs: a value (no field of it changes)

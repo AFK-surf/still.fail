@@ -128,7 +128,7 @@ priv enum PKind {
 ///|
 /// What a file shows as by its name: its kind (None: look at its bytes), its type, its language (code).
 fn preview_kind(name : String) -> (PKind?, String, String) {
-  let lower = lower(name)
+  let lower = @sf.lower(name)
   match lower {
     "dockerfile" => return (Some(KCode), "text/plain", "docker")
     "makefile" => return (Some(KCode), "text/plain", "make")
@@ -313,6 +313,11 @@ priv struct Viewer {
   /// where the finger went down
   mut down_x : Double
   mut down_y : Double
+  /// zoomed in, its left and its right edge in the stage as the finger went down (a fling on past one goes beside it)
+  mut at_left : Bool
+  mut at_right : Bool
+  /// the finger came down on it flinging, and stopped it there: no tap
+  mut caught : Bool
   /// its flight from the chat's thumbnail (or back into it): whether it flies, how far (0 the thumbnail … 1 the
   /// stage, a motion), back or not, from where
   mut flies : Bool
@@ -432,16 +437,7 @@ fn first_frame(c : @ui.Ctx, src : Source, station : String, key : String, a : At
           "length": Json::number(length.to_double()),
         }
         chat_keep(p, a.size)
-        (src.read_bytes)("station.file.part", Json::object(p), fn(r) {
-          match r {
-            Ok((j, bytes)) =>
-              answer(bytes, match field(Some(j), "total") {
-                Some(Number(t, ..)) => t
-                _ => -1.0
-              })
-            Err(_) => answer(b"", -2.0)
-          }
-        })
+        stream_part(src, "station.file.part", p, a.size, answer)
       })
       if !n.here() {
         f.picture = "!"
@@ -627,6 +623,9 @@ fn new_viewer(station : String, key : String, a : Attachment, drive : DriveFile?
     swiping: false,
     down_x: 0.0,
     down_y: 0.0,
+    at_left: false,
+    at_right: false,
+    caught: false,
     flies: false,
     fly: @motion.Value::new(0.0),
     fly_back: false,
@@ -849,6 +848,12 @@ fn Viewer::read_part(
   keep : String,
   done : (Result[(Json, Bytes), Json]) -> Unit,
 ) -> Unit {
+  (src.read_bytes)(self.part_call(), Json::object(self.part_params(offset, length, keep)), done)
+}
+
+///|
+/// What a part of it is asked by: `length` bytes from `offset`, kept as `keep` (Viewer::read_part).
+fn Viewer::part_params(self : Viewer, offset : Double, length : Int, keep : String) -> Map[String, Json] {
   let p = match self.drive {
     Some(d) => {
       let p : Map[String, Json] = {
@@ -869,7 +874,69 @@ fn Viewer::read_part(
   }
   p["offset"] = Json::number(offset)
   p["length"] = Json::number(length.to_double())
-  (src.read_bytes)(self.part_call(), Json::object(p), done)
+  p
+}
+
+///|
+/// Its size as its message or its folder says it (0: not known).
+fn Viewer::listed_size(self : Viewer) -> Double {
+  match self.drive {
+    Some(d) => d.size
+    None => self.file.size
+  }
+}
+
+///|
+/// A part read for the player (`call` with `p`), its bytes handed on as they come (the core's part read with
+/// `stream`: each piece as it arrives, never the whole part waited for), as a player's read takes them:
+/// `answer(bytes, total, more)`, the whole's size as `size` says it (its message's, its folder's; 0 not known) until
+/// the core's answer says it. `ended` hears how it ended: the bytes it brought, or why it failed. What it gives back
+/// stops it (the core's read let go of: nothing more of it comes over the network).
+fn stream_part(
+  src : Source,
+  call : String,
+  p : Map[String, Json],
+  size : Double,
+  answer : (Bytes, Double, Bool) -> Unit,
+  ended? : (Result[Int, Json]) -> Unit = fn(_) {  },
+) -> () -> Unit {
+  p["stream"] = Json::boolean(true)
+  let known = if size > 0.0 { size } else { -1.0 }
+  let got = Ref(0)
+  let id = (src.stream)(
+    call,
+    Json::object(p),
+    None,
+    fn(_, bytes) {
+      match bytes {
+        Some(b) if b.length() > 0 => {
+          got.val += b.length()
+          answer(b, known, true)
+        }
+        _ => ()
+      }
+    },
+    fn(r) {
+      match r {
+        Ok(said) => {
+          ended(Ok(got.val))
+          answer(
+            b"",
+            match field(Some(said), "total") {
+              Some(Number(t, ..)) => t
+              _ => known
+            },
+            false,
+          )
+        }
+        Err(e) => {
+          ended(Err(e))
+          answer(b"", -2.0, false)
+        }
+      }
+    },
+  )
+  fn() { (src.cancel)(id) }
 }
 
 ///|
@@ -1009,25 +1076,15 @@ fn Viewer::fetch(self : Viewer, c : @ui.Ctx, src : Source) -> Unit {
             mime: v.mime,
             audio: v.shown_kind() == Some(KAudio),
             read: fn(offset, length, answer) {
-              v.read_part(src, offset, length, "played", fn(r) {
+              stream_part(src, v.part_call(), v.part_params(offset, length, "played"), v.listed_size(), answer, ended=fn(r) {
                 match r {
-                  Ok((answer_json, bytes)) => {
-                    let total = match field(Some(answer_json), "total") {
-                      Some(Number(t, ..)) => t
-                      _ => -1.0
-                    }
+                  Ok(bytes) => {
                     if v.reads < 3 {
-                      @ui.log(
-                        "preview: \{v.name} @\{offset.to_int()} \{bytes.length()} bytes through the core (\{v.part_call()}, total \{total.to_int()})",
-                      )
+                      @ui.log("preview: \{v.name} @\{offset.to_int()} \{bytes} bytes through the core (\{v.part_call()})")
                     }
                     v.reads += 1
-                    answer(bytes, total)
                   }
-                  Err(e) => {
-                    @ui.log("preview: \{v.name} @\{offset.to_int()} failed: \{e.stringify()}")
-                    answer(b"", -2.0)
-                  }
+                  Err(e) => @ui.log("preview: \{v.name} @\{offset.to_int()} failed: \{e.stringify()}")
                 }
               })
             },
@@ -1459,7 +1516,7 @@ fn Viewer::content(self : Viewer, c : @ui.Ctx, src : Source, stage : Int) -> Uni
         }
       } else if v.told_of() {
         let dl = v.download(src)
-        v.note(c, fn() { if wide_on.val { v.desk_facts(c, dl) } else { v.facts(c, dl) } })
+        v.note(c, fn() { if wide_on.val { v.desk_facts(c, src, dl) } else { v.facts(c, src, dl) } })
       } else if (v.kind is None && v.sniffed is None) || (v.bytes is None && v.error is None) {
         tap_stage(c, v, stage)
         v.note(c, fn() { if wide_on.val { v.desk_coming(c) } else { v.coming_note(c) } })
@@ -1511,7 +1568,7 @@ fn reading_pill(c : @ui.Ctx, words : String) -> Unit {
 
 ///|
 // kept across runs: a value (no field of it changes)
-let reading_pill_box : @ui.Style = @ui.style(row=true, px=S3, py=S1_5, gap=S2, align=ACenter, bg=Neutral, radius=Full)
+let reading_pill_box : @ui.Style = @ui.css("row px=S3 py=S1_5 gap=S2 align=ACenter bg=Neutral radius=Full")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -1590,7 +1647,7 @@ let surface2_dark : Int64 = 0x2C2D31FFL
 ///|
 /// A file told of, not shown (FilePreview.kt Facts and its buttons): its kind's mark, its name, its size and
 /// extension, why it is not shown; 下载.
-fn Viewer::facts(self : Viewer, c : @ui.Ctx, dl : Json?) -> Unit {
+fn Viewer::facts(self : Viewer, c : @ui.Ctx, src : Source, dl : Json?) -> Unit {
   let v = self
   let t = @sf.theme()
   let kind = v.shown_kind()
@@ -1602,7 +1659,7 @@ fn Viewer::facts(self : Viewer, c : @ui.Ctx, dl : Json?) -> Unit {
       |> ignore
     })
     |> ignore
-    let ext = match lower(v.file.name).rev_find(".") {
+    let ext = match @sf.lower(v.file.name).rev_find(".") {
       Some(i) if i > 0 && v.file.name.length() - i - 1 <= 12 =>
         upper(v.file.name.view(start_offset=i + 1).to_owned())
       _ => ""
@@ -1630,9 +1687,12 @@ fn Viewer::facts(self : Viewer, c : @ui.Ctx, dl : Json?) -> Unit {
     v.coming_note(c)
     return
   }
-  // downloaded by the core (downloads.mbt): how far it has come, on by itself as this closes
+  // downloaded by the core (downloads.mbt): how far it has come, on by itself as this closes; called off here
   if downloading(dl) {
     file_progress(c, (number(dl, "loaded"), Some(number(dl, "size"))), v.file.size, said=text(dl, "statusText"))
+    if note_button(c, "preview/note-cancel", "", tr("web-main.file.cancelDownload"), false) {
+      v.cancel_download(c, src, dl)
+    }
     return
   }
   c.box(w=Px(220.0), gap=8.0, fn() {
@@ -1646,7 +1706,7 @@ fn Viewer::facts(self : Viewer, c : @ui.Ctx, dl : Json?) -> Unit {
       None => ()
     }
     // an APK: 安装 first, handed to the system's installer (FilePreview.kt: NoteButton install, strong)
-    let apk = lower(v.file.name).has_suffix(".apk")
+    let apk = @sf.lower(v.file.name).has_suffix(".apk")
     if apk && note_button(c, "preview/note-install", "", pv("android-chat.file.install"), true) {
       v.ask_install(c)
     }
@@ -1679,24 +1739,15 @@ fn note_button(c : @ui.Ctx, key : String, icon : String, label : String, strong 
 
 ///|
 // kept across runs: a value (no field of it changes)
-let note_base : @ui.Style = @ui.style(
-  row=true,
-  w=Full,
-  px=S3_5,
-  py=S2_5,
-  gap=S1_5,
-  align=ACenter,
-  justify=JCenter,
-  radius=Xl,
-)
+let note_base : @ui.Style = @ui.css("row w=Full px=S3_5 py=S2_5 gap=S1_5 align=ACenter justify=JCenter radius=Xl")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let note_strong : @ui.Style = note_base.then(@ui.style(bg=Accent))
+let note_strong : @ui.Style = note_base.then(@ui.css("bg=Accent"))
 
 ///|
 // kept across runs: a value (no field of it changes)
-let note_plain : @ui.Style = note_base.then(@ui.style(bg=Faint))
+let note_plain : @ui.Style = note_base.then(@ui.css("bg=Faint"))
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -1753,9 +1804,18 @@ fn Viewer::download(self : Viewer, src : Source) -> Json? {
 }
 
 ///|
-/// Whether the core's download `dl` is under way.
+/// Whether the core has the download `dl` under way (going, waiting for its station, ready, being saved).
 fn downloading(dl : Json?) -> Bool {
-  text(dl, "state") == "going"
+  flag(dl, "active")
+}
+
+///|
+/// The core's download of the file this viewer shows called off (✕ under how far it has come).
+fn Viewer::cancel_download(self : Viewer, c : @ui.Ctx, src : Source, dl : Json?) -> Unit {
+  ignore(self)
+  let id = text(dl, "id")
+  // (told once the frame's builds are over, as the tap is the build's that took it)
+  c.tell("download-cancel/" + id, fn() { download_cancel(src, id) })
 }
 
 // ── an image ───────────────────────────────────────────────────────────
@@ -2232,8 +2292,8 @@ fn Viewer::go(self : Viewer, c : @ui.Ctx, src : Source, dir : Int, velocity : Do
 
 ///|
 /// The stage's gestures over a picture: a tap shows or hides the bars, a double tap zooms in (or back), a finger
-/// moves it when it is larger than the stage, the wheel (or a trackpad's two fingers with ⌘… any wheel) zooms round
-/// the pointer.
+/// moves it when it is larger than the stage (let go moving, it goes on, slowing; at its edge, on to the one beside
+/// it), the wheel (or a trackpad's two fingers with ⌘… any wheel) zooms round the pointer.
 fn Viewer::gestures(
   self : Viewer,
   c : @ui.Ctx,
@@ -2277,19 +2337,26 @@ fn Viewer::gestures(
         v.vx = v.vx * 0.5 + dx / (at - v.vt) * 0.5
       }
       v.vt = at
-      // fitted, one finger sideways moves the strip (FilePreview.kt swipe): past the first or the last it gives only
-      // a third as much
-      if !v.swiping && !z.zoomed() && v.moved > 8.0 && (px - v.down_x).abs() > (py - v.down_y).abs() &&
-        (has_before || has_after) && !v.pinched {
-        v.swiping = true
-        pv_strip.leaving = None
-      }
-      if v.swiping {
-        let next = strip.get() + dx
-        let none = if next > 0.0 { !has_before } else { !has_after }
-        strip.snap(if none { strip.get() + dx / 3.0 } else { next })
-      } else if v.moved > 8.0 && (dx != 0.0 || dy != 0.0) {
-        z.pan(dx, dy)
+      if z.zoomed() {
+        // zoomed in: it goes with the finger (at once after a pinch, the press moved already)
+        if (v.moved > 8.0 || v.pinched) && (dx != 0.0 || dy != 0.0) {
+          v.drag_zoomed(z, strip, dx, dy, has_before, has_after)
+        }
+      } else {
+        // fitted, one finger sideways moves the strip (FilePreview.kt swipe): past the first or the last it gives
+        // only a third as much
+        if !v.swiping && v.moved > 8.0 && (px - v.down_x).abs() > (py - v.down_y).abs() &&
+          (has_before || has_after) && !v.pinched {
+          v.swiping = true
+          pv_strip.leaving = None
+        }
+        if v.swiping {
+          let next = strip.get() + dx
+          let none = if next > 0.0 { !has_before } else { !has_after }
+          strip.snap(if none { strip.get() + dx / 3.0 } else { next })
+        } else if v.moved > 8.0 && (dx != 0.0 || dy != 0.0) {
+          z.pan(dx, dy)
+        }
       }
     } else {
       v.held = true
@@ -2299,7 +2366,12 @@ fn Viewer::gestures(
       v.down_y = py
       if !v.pinched {
         v.moved = 0.0
+        // flinging, it stops where it is, and the press taps nothing (as a list moving on its own)
+        v.caught = z.stop_fling()
       }
+      let (x, _, w, _) = z.rect().unwrap_or((0.0, 0.0, 0.0, 0.0))
+      v.at_left = x >= -0.5
+      v.at_right = x + w <= z.bw + 0.5
     }
     v.last_x = px
     v.last_y = py
@@ -2323,16 +2395,27 @@ fn Viewer::gestures(
         pv_strip.leaving = None
       }
     }
-    if v.held && v.swiping {
-      // let go: far enough (80, or a fifth of the stage) or flung that way, the one beside it; else back
+    if !v.held && c.clicked(stage) {
+      // (down and up between two frames, never seen held)
+      v.caught = z.stop_fling()
+    }
+    if v.held && v.swiping && (!z.zoomed() || strip.get() != 0.0) {
+      // let go: far enough (80, or a fifth of the stage) or flung that way, the one beside it; else back (zoomed in,
+      // flung only from an edge it was at as the finger went down: a quick move that came to its edge on the way goes
+      // as far as it pulled)
       let dx = strip.get()
       let far = dx.abs() > dmin(80.0, c.width / 5.0)
-      let flung = v.vx.abs() > 0.3 && (v.vx > 0.0) == (dx > 0.0) && dx.abs() > 10.0
+      let from_edge = !z.zoomed() || (if dx > 0.0 { v.at_left } else { v.at_right })
+      let flung = from_edge && v.vx.abs() > 0.3 && (v.vx > 0.0) == (dx > 0.0) && dx.abs() > 10.0
       if dx != 0.0 && (far || flung) {
         v.go(c, src, if dx > 0.0 { -1 } else { 1 }, v.vx * 1000.0)
       } else {
         strip.animate(0.0, @motion.spring(ratio=1.0, stiffness=400.0), velocity=v.vx * 1000.0)
       }
+    } else if v.held && z.zoomed() && (v.moved > 8.0 || v.pinched) {
+      // zoomed in, let go moving: on at the finger's speed, slowing, to a stop or its edge
+      let (fx, fy) = c.pointer_velocity()
+      z.fling(fx, fy)
     }
     v.swiping = false
     v.held = false
@@ -2349,7 +2432,7 @@ fn Viewer::gestures(
     Some((x, y, w, h)) => px >= x && px < x + w && py >= y && py < y + h
     None => false
   }
-  if c.clicked(stage) && v.moved <= 8.0 && !pinched {
+  if c.clicked(stage) && v.moved <= 8.0 && !pinched && !v.caught {
     if desk && !on_picture && !marking.on && v.shown_kind() == Some(KImage) {
       v.shut(c)
     } else if at - v.tap_at < double_tap_ms && (px - v.tap_x).abs() < 40.0 && (py - v.tap_y).abs() < 40.0 {
@@ -2385,6 +2468,45 @@ fn Viewer::gestures(
     }
   } else if !desk && wy != 0.0 && z.nw > 0.0 {
     z.zoom_to(z.scale * @dmath.pow(1.0015, -wy), px, py, false)
+  }
+}
+
+///|
+/// One finger moving a zoomed picture by (dx, dy): it goes with the finger; at its edge, what of the way across it
+/// cannot go pulls in the one beside it (the strip, as a swipe does it fitted: past the first or the last a third as
+/// far), and the finger going back takes the strip back first.
+fn Viewer::drag_zoomed(
+  self : Viewer,
+  z : @kit.Zoom,
+  strip : @motion.Anim,
+  dx : Double,
+  dy : Double,
+  has_before : Bool,
+  has_after : Bool,
+) -> Unit {
+  // how far the strip goes for a point of the finger's way toward the one before (> 0) or after
+  let give = fn(toward : Double) { if (if toward > 0.0 { has_before } else { has_after }) { 1.0 } else { 1.0 / 3.0 } }
+  let mut across = dx
+  let s = strip.get()
+  if s != 0.0 && across != 0.0 && (across > 0.0) != (s > 0.0) {
+    let back = -s / give(s)
+    if across.abs() <= back.abs() {
+      strip.snap(s + across * give(s))
+      across = 0.0
+    } else {
+      strip.snap(0.0)
+      across = across - back
+    }
+  }
+  let x0 = z.x
+  z.pan(across, dy)
+  let left = across - (z.x - x0)
+  if left.abs() > 0.001 && (has_before || has_after) {
+    if !self.swiping {
+      self.swiping = true
+      pv_strip.leaving = None
+    }
+    strip.snap(strip.get() + left * give(left))
   }
 }
 
@@ -2649,7 +2771,7 @@ fn Viewer::text_stage(self : Viewer, c : @ui.Ctx, kind : PKind, b : Bytes, stage
       Some(p) => p
       None => {
         let head = words.view(end_offset=if words.length() < 2048 { words.length() } else { 2048 }).to_owned()
-        let low = lower(head)
+        let low = @sf.lower(head)
         let html = if low.contains("<!doctype") || low.contains("<html") {
           words
         } else {
@@ -2678,7 +2800,7 @@ fn Viewer::text_stage(self : Viewer, c : @ui.Ctx, kind : PKind, b : Bytes, stage
   }
   tap_stage(c, v, stage)
   if kind == KCsv && !v.source {
-    csv_table(c, v, words, lower(v.name).has_suffix(".tsv"), cut)
+    csv_table(c, v, words, @sf.lower(v.name).has_suffix(".tsv"), cut)
     return
   }
   // in rows of 60 lines, so a long file lays out only what is in view
@@ -2989,9 +3111,17 @@ fn Viewer::bar(self : Viewer, c : @ui.Ctx, src : Source, shown : Double) -> Unit
           _ => ()
         }
         if !v.coming() && !marking.on {
-          let saving = v.bytes is Some(_) || (v.told_of() && !v.asked && !downloading(v.download(src)))
-          if picture_button(c, "preview/download", "download", tint, on && saving, said=pv("android-chat.file.download")) {
-            v.ask_save(c)
+          // what is here saved at once; one told of, or played as it comes, downloaded by the core: how far it has
+          // come in the button's place meanwhile
+          let dl = v.download(src)
+          let streamed = v.shown_kind() == Some(KVideo) || v.shown_kind() == Some(KAudio)
+          if downloading(dl) {
+            c.box(style=picture_ring_box, fn() { @sf.progress_ring(c, picture_ring, number(dl, "progress"), tint) |> ignore }) |> ignore
+          } else {
+            let saving = v.bytes is Some(_) || ((v.told_of() || streamed) && !v.asked)
+            if picture_button(c, "preview/download", "download", tint, on && saving, said=pv("android-chat.file.download")) {
+              v.ask_save(c)
+            }
           }
         }
         if picture_button(c, "preview/close", "close", tint, on || true, said=pv("common.close")) {
@@ -3003,6 +3133,14 @@ fn Viewer::bar(self : Viewer, c : @ui.Ctx, src : Source, shown : Double) -> Unit
   })
   |> ignore
 }
+
+///|
+/// How far the core has downloaded the file, in the bar's 下载's place: a ring of the bar's ink, 18 in its 32.
+// kept across runs: a value (no field of it changes)
+let picture_ring_box : @ui.Style = @ui.css("w=S8 h=S8 align=ACenter justify=JCenter")
+
+///|
+let picture_ring : Double = 18.0
 
 ///|
 /// Why the core's download of a file told of failed, over its 下载 again (14, red, centred).

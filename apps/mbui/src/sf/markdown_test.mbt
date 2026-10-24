@@ -81,6 +81,45 @@ test "a table's cell of only the message's images: them side by side, 160 wide a
 }
 
 ///|
+test "a table too wide for the message: its columns 14em, not squeezed; scrolled out over the page's margin to its end in line with the words" {
+  let long = "a long cell of words that would wrap to a word or two if squeezed into the message"
+  let t = @ui.Tester::new(
+    fn(c) {
+      @sf.begin(c) |> ignore
+      c.column(w=Fill(1.0), pad=16.0, fn() {
+        @sf.markdown(c, "| 一 | 二 | 三 |\n|---|---|---|\n| one \{long} | two \{long} | three \{long} |\n", bleed=16.0)
+        |> ignore
+      })
+      |> ignore
+    },
+    w=390.0,
+    h=844.0,
+  )
+  t.draw()
+  t.draw()
+  let column = 14.0 * 13.0 + 24.0
+  let (x1, y) = t.drawn_of("one a long").unwrap()
+  let (x2, _) = t.drawn_of("two a long").unwrap()
+  let (x3, _) = t.drawn_of("three a long").unwrap()
+  // at rest in line with the words (16 in), past the frame's line and the cell's 12; each column 14em of its words (13)
+  // and its cell's 24 either side, though the three are wider than the message
+  assert_eq(x1, 16.0 + 1.0 + 12.0)
+  assert_eq(x2 - x1, column)
+  assert_eq(x3 - x2, column)
+  // dragged to its end: the frame's right edge in line with the words' (16 in from the right)
+  for _ in 0..<4 {
+    t.drag(370.0, y + 5.0, 20.0, y + 5.0)
+    t.draw()
+  }
+  t.frame()
+  let (x3_end, _) = t.drawn_of("three a long").unwrap()
+  assert_eq(x3_end - 12.0 + column + 1.0, 390.0 - 16.0)
+  // what went left shows out to the screen's edge, not cut at the words' margin
+  let (shown, _, _, _) = t.shown_of("two a long").unwrap()
+  assert_eq(shown, 0.0)
+}
+
+///|
 test "an image the app cannot draw reads as its file's name, decoded" {
   let t = @ui.Tester::new(
     fn(c) {

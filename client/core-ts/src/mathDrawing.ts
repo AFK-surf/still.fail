@@ -1,5 +1,6 @@
-// The core's typeset formula, in 1000 units per em, from its top left (y down). Glyphs refer to client/math/font.json,
-// bundled once with each UI. Neither outlines nor a font are repeated in messages or across the local UI bridge.
+// The core's typeset formula, in 1000 units per em, from its top left (y down). Glyphs are named by id; their outlines
+// are in each UI once (client/math/font.json, mbui's math_glyphs.mbt), not in the core, which has the sizes alone
+// (math-font.ts). Neither outlines nor a font are repeated in messages or across the local UI bridge.
 export interface MathDrawing {
   font: "tex-4.1.3";
   width: number;
@@ -11,7 +12,8 @@ export interface MathDrawing {
   text: [words: string, sx: number, sy: number, x: number, y: number][];
 }
 
-// Content-addressed outlines: IDs are independent of font traversal order. The generator rejects collisions.
+// Content-addressed outlines: IDs are independent of font traversal order. The generator (scripts/math-font.ts) gives
+// each in the core's font in its outline's place, and rejects collisions.
 export function mathGlyphId(path: string): string {
   let h = 2166136261;
   for (let i = 0; i < path.length; i++) h = Math.imul(h ^ path.charCodeAt(i), 16777619);

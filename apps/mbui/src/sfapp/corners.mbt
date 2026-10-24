@@ -67,7 +67,7 @@ fn new_chat_column(c : @ui.Ctx, body : () -> Unit) -> Unit {
 
 ///|
 // kept across runs: a value (no field of it changes)
-let column_row : @ui.Style = @ui.style(row=true, w=Full, h=Full, justify=JCenter)
+let column_row : @ui.Style = @ui.css("row w=Full h=Full justify=JCenter")
 
 ///|
 /// What is at the screen's bottom corners over the page (Wide.kt WideCorners): on Home 奏 and the new-chat button;
@@ -116,11 +116,11 @@ fn home_corner(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
 
 ///|
 // kept across runs: a value (no field of it changes)
-let corner_end : @ui.Style = @ui.style(w=Full, h=Full, align=AEnd, justify=JEnd)
+let corner_end : @ui.Style = @ui.css("w=Full h=Full align=AEnd justify=JEnd")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let corner_row : @ui.Style = @ui.style(row=true, pr=S2_5, pb=S2_5, gap=S2_5, align=ACenter)
+let corner_row : @ui.Style = @ui.css("row pr=S2_5 pb=S2_5 gap=S2_5 align=ACenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -196,15 +196,15 @@ fn recent_corner(c : @ui.Ctx, src : Source, w : Workspace, top : Page) -> Unit {
 
 ///|
 // kept across runs: a value (no field of it changes)
-let recent_away : @ui.Style = @ui.style(w=Full, h=Full)
+let recent_away : @ui.Style = @ui.css("w=Full h=Full")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let recent_column : @ui.Style = @ui.style(w=Full, h=Full, pl=S2_5, pb=S2_5, align=AStart, justify=JEnd)
+let recent_column : @ui.Style = @ui.css("w=Full h=Full pl=S2_5 pb=S2_5 align=AStart justify=JEnd")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let recent_gap : @ui.Style = @ui.style(h=S2_5)
+let recent_gap : @ui.Style = @ui.css("h=S2_5")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -329,7 +329,7 @@ let recent_panel_box : @ui.Style = @ui.style(
 
 ///|
 // kept across runs: a value (no field of it changes)
-let recent_head : @ui.Style = @ui.style(row=true, w=Full, pl=S4_5, pr=S1_5, pt=S1_5, pb=S1_5, align=ACenter)
+let recent_head : @ui.Style = @ui.css("row w=Full pl=S4_5 pr=S1_5 pt=S1_5 pb=S1_5 align=ACenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -337,7 +337,7 @@ let recent_title : @ui.TextStyle = @ui.text_style(size=Lg, weight=Semibold, colo
 
 ///|
 // kept across runs: a value (no field of it changes)
-let recent_new_box : @ui.Style = @ui.style(w=S8, h=S8, radius=Full, bg=Accent, align=ACenter, justify=JCenter)
+let recent_new_box : @ui.Style = @ui.css("w=S8 h=S8 radius=Full bg=Accent align=ACenter justify=JCenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -345,15 +345,15 @@ let recent_empty : @ui.TextStyle = @ui.text_style(size=Base, color=Muted, w=Full
 
 ///|
 // kept across runs: a value (no field of it changes)
-let recent_rows : @ui.Style = @ui.style(w=Full, px=S1_5)
+let recent_rows : @ui.Style = @ui.css("w=Full px=S1_5")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let recent_row : @ui.Style = @ui.style(w=Full, radius=Inner, clip=true)
+let recent_row : @ui.Style = @ui.css("w=Full radius=Inner clip")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let recent_row_here : @ui.Style = recent_row.then(@ui.style(bg=AccentBg))
+let recent_row_here : @ui.Style = recent_row.then(@ui.css("bg=AccentBg"))
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -361,20 +361,11 @@ let recent_rule : @ui.Style = @ui.style(w=Full, h=@sf.hairline, bg=Line)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let recent_foot : @ui.Style = @ui.style(w=Full, p=S1_5)
+let recent_foot : @ui.Style = @ui.css("w=Full p=S1_5")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let recent_all : @ui.Style = @ui.style(
-  row=true,
-  w=Full,
-  pl=S3,
-  pr=S2_5,
-  pt=S1_5,
-  pb=S1_5,
-  radius=Inner,
-  align=ACenter,
-)
+let recent_all : @ui.Style = @ui.css("row w=Full pl=S3 pr=S2_5 pt=S1_5 pb=S1_5 radius=Inner align=ACenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -391,32 +382,6 @@ fn open_in_place(p : Page) -> Unit {
   } else {
     app.nav.push(p)
   }
-}
-
-///|
-/// The stations at a glance, as the core has them in workspace `ws` (StationGlyph.kt's counts: asleep while the core
-/// reaches nothing at all), and in words: asleep, what the core cannot reach says it; else the stations (the core's),
-/// and what is wrong with them.
-fn stations_at_glance(src : Source, ws : String) -> (@sf.GlyphCounts, String) {
-  let chats = (src.topic)("chats", { "scope": Json::string(ws), "mine": Json::boolean(false) })
-  let g = field(chats.value, "glyph")
-  let status = (src.topic)("status", { "workspace": Json::string(ws) }).value
-  let asleep = text(status, "state") == "trouble"
-  let glyph : @sf.GlyphCounts = {
-    online: count(g, "online"),
-    dim: count(g, "dim"),
-    failing: count(g, "failing"),
-    working: count(g, "working"),
-    connecting: count(g, "connecting"),
-    asleep,
-  }
-  let said = if asleep { text(status, "text") } else { text(g, "label") }
-  let words = match field(chats.value, "trouble") {
-    _ if said == "" => ""
-    Some(Object(_)) as trouble => fill("android-chat.home.stations.trouble", [("said", said), ("trouble", text(trouble, "text"))])
-    _ => fill("android-chat.home.stations", [("said", said)])
-  }
-  (glyph, words)
 }
 
 ///|

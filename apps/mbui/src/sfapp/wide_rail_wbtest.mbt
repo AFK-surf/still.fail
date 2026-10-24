@@ -23,27 +23,27 @@ test "wide: ⌘\\ folds the sidebar to the rail's bar of its own; the pointer on
   let t = wide_tester(calls)
   assert_true(t.find("新建对话") is Some(_))
   t.key(@ui.key_of_char('\\'), mods=@ui.mod_cmd)
-  t.run_for(side_move_ms)
+  t.run_for(@sfdesk.side_move_ms)
   assert_true(t.find("新建对话") is None, msg="folded")
   assert_eq(sidebar_kept(calls, "ws1\nchats"), Some(Json::string("closed")))
   // the bar's rail, 6 from the window's edge: its places 2 in
   let (rx, ry, rw, rh) = t.query(Button, label="文件").unwrap().rect
-  assert_eq(rx, closed_bar_in + 2.0)
+  assert_eq(rx, @sfdesk.closed_bar_in + 2.0)
   t.move(rx + rw / 2.0, ry + rh / 2.0)
-  t.run_for(side_move_ms)
+  t.run_for(@sfdesk.side_move_ms)
   assert_true(t.find("新建对话") is Some(_), msg="shown a while")
   // off it: still there for a moment, then folded again
   t.move(1000.0, 400.0)
   t.frame()
-  assert_true(rail_ws.peeking)
-  t.run_for(peek_leave_ms)
+  assert_true(@sfdesk.wide.peeking)
+  t.run_for(@sfdesk.peek_leave_ms)
   t.frame()
-  assert_false(rail_ws.peeking)
-  t.run_for(side_move_ms)
+  assert_false(@sfdesk.wide.peeking)
+  t.run_for(@sfdesk.side_move_ms)
   assert_true(t.find("新建对话") is None)
   // ⌘\ again: open, kept so
   t.key(@ui.key_of_char('\\'), mods=@ui.mod_cmd)
-  t.run_for(side_move_ms)
+  t.run_for(@sfdesk.side_move_ms)
   assert_true(t.find("新建对话") is Some(_))
   assert_eq(sidebar_kept(calls, "ws1\nchats"), Some(Json::null()))
 }
@@ -54,21 +54,21 @@ test "wide: the lit place pressed again folds its sidebar, shown a while (the po
   let t = wide_tester(calls)
   let (rx, ry, rw, rh) = t.query(Button, label="对话").unwrap().rect
   t.tap(rx + rw / 2.0, ry + rh / 2.0)
-  t.run_for(side_move_ms)
-  assert_true(wide.folded)
-  assert_true(rail_ws.peeking)
+  t.run_for(@sfdesk.side_move_ms)
+  assert_true(@sfdesk.wide.folded)
+  assert_true(@sfdesk.wide.peeking)
   // pressed in the bar: open again
   let (bx, by, bw, bh) = t.query(Button, label="对话").unwrap().rect
   t.tap(bx + bw / 2.0, by + bh / 2.0)
-  t.run_for(side_move_ms)
-  assert_false(wide.folded)
+  t.run_for(@sfdesk.side_move_ms)
+  assert_false(@sfdesk.wide.folded)
   // its edge dragged 60 to the right: 300, kept once let go
-  let edge = rail_w + 240.0
+  let edge = @sfdesk.rail_w + 240.0
   t.drag(edge, 400.0, edge + 60.0, 400.0)
   t.frame()
   // (as far as the pointer went from where it was pressed: the library's edge, @sf.handle_drag)
-  assert_eq(wide.side_w, 300.0)
-  assert_eq(sidebar_kept(calls, "ws1\nchats"), Some(Json::string(wide.side_w.round().to_int().to_string())))
+  assert_eq(@sfdesk.wide.side_w, 300.0)
+  assert_eq(sidebar_kept(calls, "ws1\nchats"), Some(Json::string(@sfdesk.wide.side_w.round().to_int().to_string())))
 }
 
 ///|
@@ -129,7 +129,7 @@ test "wide: 已归档 one of the sidebar's lists, slid to: its rows under its fi
   t.frame()
   app.nav.push(Archived)
   t.frame()
-  t.run_for(list_slide_ms)
+  t.run_for(@sfdesk.list_slide_ms)
   assert_true(t.find("搜索归档") is Some(_), msg=t.words().map(fn(w) { w.0 }).join("|"))
   assert_true(t.find("试一下新的图标尺寸") is Some(_))
   // the newest beside the list
@@ -161,7 +161,7 @@ test "wide: 自定义侧边条 from the rail's menu: what can be added beside th
   let (mx, my) = t.find("自定义侧边条").unwrap()
   t.tap(mx, my)
   t.frame()
-  assert_true(rail_ws.editing)
+  assert_true(@sfdesk.wide.editing)
   assert_true(t.find("对话列表") is Some(_), msg=t.words().map(fn(w) { w.0 }).join("|"))
   let (ax, ay) = t.find("我参与的").unwrap()
   t.tap(ax, ay)
@@ -172,7 +172,7 @@ test "wide: 自定义侧边条 from the rail's menu: what can be added beside th
   }
   t.key(@ui.key_escape)
   t.frame()
-  assert_false(rail_ws.editing)
+  assert_false(@sfdesk.wide.editing)
 }
 
 ///|
@@ -271,7 +271,7 @@ fn trouble_said(calls : Array[Made], key : String) -> Json? {
 }
 
 ///|
-test "wide: 待处理's panel lists a chat that waits on the viewer; 忽略 on its row pointed at lets it go (decision.dismiss), gone from the panel at once" {
+test "wide: 待处理's panel lists a chat that waits on the viewer; 忽略 on its row pointed at lets it go (decision.dismiss), gone from the panel at once; one gone wrong has none" {
   let calls : Array[Made] = []
   let marks : Json = {
     "badge": 1,
@@ -289,6 +289,17 @@ test "wide: 待处理's panel lists a chat that waits on the viewer; 忽略 on i
             "what": "选一个发布日期",
             "workspaceName": "Acme",
           },
+          {
+            "station": "ws1/st2",
+            "session": "s-c3",
+            "thread": 13,
+            "seq": 7,
+            "title": "夜里的构建又失败了",
+            "kind": "alert",
+            "text": "出问题：磁盘满了",
+            "what": "磁盘满了",
+            "workspaceName": "Acme",
+          },
         ],
       },
     },
@@ -298,6 +309,11 @@ test "wide: 待处理's panel lists a chat that waits on the viewer; 忽略 on i
   let (bx, by, bw, bh) = t.query(Button, label="待处理").unwrap().rect
   t.tap(bx + bw / 2.0, by + bh / 2.0)
   t.frame()
+  // one gone wrong is not let go from here (Attention.tsx: 忽略 for what waits on the viewer)
+  let (ax, ay) = t.find("磁盘满了").unwrap()
+  t.move(ax, ay)
+  t.frame()
+  assert_true(t.find("忽略") is None)
   let (x, y) = t.find("选一个发布日期").unwrap()
   t.move(x, y)
   t.frame()
@@ -329,7 +345,7 @@ test "wide: the rail's menu beside the place right clicked, 8 past it; a place's
     Some(Array(a)) => assert_true(a.contains(Json::string("mine")))
     _ => fail("not put in")
   }
-  assert_true(rail_ws.editing)
+  assert_true(@sfdesk.wide.editing)
 }
 
 ///|
@@ -339,7 +355,7 @@ test "wide: 已归档 from the lists' filter: its place at the rail's foot while
   assert_true(t.query(Button, label="已归档") is None)
   app.nav.push(Archived)
   t.frame()
-  t.run_for(list_slide_ms)
+  t.run_for(@sfdesk.list_slide_ms)
   assert_true(t.query(Button, label="已归档") is Some(_))
 }
 
@@ -349,26 +365,26 @@ test "wide: folding moves the block as the web's: the list where it was as the b
   let t = wide_tester(calls)
   let (x0, y0, _, _) = t.rect_of("新建对话").unwrap()
   let (ex, _, _, _) = t.query(Button, label="调整侧边栏宽度 · 收起侧边栏").unwrap().rect
-  assert_eq(ex, rail_w + wide.side_w - edge_half)
+  assert_eq(ex, @sfdesk.rail_w + @sfdesk.wide.side_w - @sfdesk.edge_half)
   t.key(@ui.key_of_char('\\'), mods=@ui.mod_cmd)
   // halfway: the edge on its way with the block, the list not moved across, the block's edges round it (its top row's
   // 8 giving way to the bar's 6 above)
-  t.run_for(side_move_ms / 2.0)
+  t.run_for(@sfdesk.side_move_ms / 2.0)
   let (hx, _, _, _) = t.query(Button, label="展开侧边栏").unwrap().rect
-  assert_true(hx > closed_edge && hx < ex, msg=hx.to_string())
+  assert_true(hx > @sfdesk.closed_edge && hx < ex, msg=hx.to_string())
   let (x1, y1, _, _) = t.rect_of("新建对话").unwrap()
   assert_eq(x1, x0)
   assert_true((y1 - y0).abs() <= 2.0, msg=y1.to_string())
-  t.run_for(side_move_ms)
+  t.run_for(@sfdesk.side_move_ms)
   let (fx, _, _, _) = t.query(Button, label="展开侧边栏").unwrap().rect
-  assert_eq(fx, closed_edge)
+  assert_eq(fx, @sfdesk.closed_edge)
   // the pointer on the bar: shown a while, its edge at the sidebar's
   let (rx, ry, rw, rh) = t.query(Button, label="文件").unwrap().rect
   t.move(rx + rw / 2.0, ry + rh / 2.0)
-  t.run_for(side_move_ms)
+  t.run_for(@sfdesk.side_move_ms)
   let (px, _, _, _) = t.query(Button, label="展开侧边栏").unwrap().rect
-  assert_eq(px, closed_edge + wide.side_w)
-  assert_true(rail_ws.bar_mr >= 0.0)
+  assert_eq(px, @sfdesk.closed_edge + @sfdesk.wide.side_w)
+  assert_true(@sfdesk.wide.bar_mr >= 0.0)
 }
 
 ///|
@@ -377,7 +393,7 @@ test "wide: shown a while, the page moves aside as far as what it shows is from 
   let t = wide_tester(calls, mode="chat")
   t.key(@ui.key_of_char('\\'), mods=@ui.mod_cmd)
   t.move(1000.0, 400.0)
-  t.run_for(side_move_ms)
+  t.run_for(@sfdesk.side_move_ms)
   // folded: what the page shows across (its bar left out), and where its field is
   let (left, right) = t.ctx().shown_across(t.ctx().id("main-page"), but="page-bar").unwrap()
   let (x0, _, _, _) = t.rect_of("按空格输入").unwrap()
@@ -385,10 +401,10 @@ test "wide: shown a while, the page moves aside as far as what it shows is from 
   // right or the sidebar's width
   let (rx, ry, rw, rh) = t.query(Button, label="文件").unwrap().rect
   t.move(rx + rw / 2.0, ry + rh / 2.0)
-  t.run_for(side_move_ms)
-  let reach = closed_bar_in + rail_closed_w + wide.side_w + peek_gap
-  let room = 1280.0 - 2.0 * peek_gap - right
-  let want = dmax(0.0, dmin(wide.side_w, dmin(room, reach - left))).round()
+  t.run_for(@sfdesk.side_move_ms)
+  let reach = @sfdesk.closed_bar_in + @sfdesk.rail_closed_w + @sfdesk.wide.side_w + @sfdesk.peek_gap
+  let room = 1280.0 - 2.0 * @sfdesk.peek_gap - right
+  let want = dmax(0.0, dmin(@sfdesk.wide.side_w, dmin(room, reach - left))).round()
   assert_true(want > 0.0, msg="\{left} \{right}")
   let (x1, _, _, _) = t.rect_of("按空格输入").unwrap()
   assert_eq(x1 - x0, want)
@@ -402,13 +418,39 @@ test "wide: a newer build of the desktop app: 更新 at the open sidebar's top r
   t.frame()
   t.frame()
   let (x, y, w, _) = t.query(Button, label="更新").unwrap().rect
-  assert_eq(x + w, rail_w + wide.side_w - bar_in)
+  assert_eq(x + w, @sfdesk.rail_w + @sfdesk.wide.side_w - @sfdesk.bar_in)
   assert_eq(y, update_top)
   // folded: 68 from the window's edge, the page bar's words clear of it (72 in)
   t.key(@ui.key_of_char('\\'), mods=@ui.mod_cmd)
   t.move(1000.0, 400.0)
-  t.run_for(side_move_ms)
+  t.run_for(@sfdesk.side_move_ms)
   let (fx, _, _, _) = t.query(Button, label="更新").unwrap().rect
   assert_eq(fx, update_closed_in)
-  assert_eq(rail_ws.bar_pl, bar_update_in)
+  assert_eq(@sfdesk.wide.bar_pl, @sfdesk.bar_update_in)
+}
+
+///|
+test "wide: the lists' filter (components.tsx MineFilter): its tip; its menu has the list shown checked, 奏 its page, a filter back to the chats from it" {
+  let calls : Array[Made] = []
+  let t = wide_tester(calls)
+  let open_filter = fn() {
+    let (fx, fy, fw, fh) = t.query(Button, label="筛选会话：全部").unwrap().rect
+    t.tap(fx + fw / 2.0, fy + fh / 2.0)
+    t.frame()
+  }
+  open_filter()
+  assert_true(t.find("全部会话") is Some(_), msg=t.words().map(fn(w) { w.0 }).join("|"))
+  // 奏: its page, the menu closed
+  t.tap_text("奏")
+  t.frame()
+  assert_true(app.nav.top() == Decisions)
+  assert_false(@sfdesk.wide.filter_open)
+  // from 奏, 我参与的: the chats, filtered (prefs.set listFilter)
+  let (fx, fy, fw, fh) = t.query(Button, label="筛选会话：奏").unwrap().rect
+  t.tap(fx + fw / 2.0, fy + fh / 2.0)
+  t.frame()
+  t.tap_text("我参与的")
+  t.frame()
+  assert_eq(@sfdesk.lit_place(), "chats")
+  assert_true(named(calls, "prefs.set").iter().any(fn(m) { field(field(Some(m.params), "listFilter"), "ws1") == Some(Json::string("mine")) }))
 }

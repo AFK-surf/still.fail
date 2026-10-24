@@ -33,10 +33,12 @@ pub fn drive_keep(p : Map[String, Json], keep : String, mtime : Double, size : D
 }
 
 ///|
-/// A keep the host has not answered yet, and its file's name.
+/// A keep the host has not answered yet, its file's name, and what is done once it has answered (a chat's download
+/// said done to the core, downloads.mbt).
 priv struct Keeping {
   keep : @ui.Keep
   name : String
+  then : (@hostapi.Kept) -> Unit
 }
 
 ///|
@@ -50,8 +52,9 @@ pub fn keeps_frame(c : @ui.Ctx) -> Unit {
     return
   }
   let left = []
-  for k in keepings {
-    match k.keep.kept() {
+  for i, k in keepings {
+    let kept = k.keep.kept()
+    match kept {
       Keeping => left.push(k)
       KeptAt(at) => {
         @hostapi.log("kept \{k.name}: \{at}")
@@ -66,6 +69,10 @@ pub fn keeps_frame(c : @ui.Ctx) -> Unit {
         say(c, @sf.t("android-chat.file.saveFailed"))
       }
     }
+    if !(kept is Keeping) {
+      // (told once the frame's builds are over, as the answer is the build's that took it)
+      c.tell("keep-then/\{i}/\{k.name}", fn() { (k.then)(kept) })
+    }
   }
   keepings.clear()
   keepings.push_iter(left.iter())
@@ -78,7 +85,7 @@ pub fn keep_bytes(c : @ui.Ctx, name : String, mime : String, bytes : Bytes) -> U
   // (asked of the host once the frame's builds are over: its callers' bytes, given once)
   c.tell("keep/" + name, fn() {
     match @ui.keep(name, mime, bytes) {
-      Some(k) => keepings.push({ keep: k, name })
+      Some(k) => keepings.push({ keep: k, name, then: fn(_) {  } })
       None => say(c, @sf.t("android-chat.file.saveFailed"))
     }
   })
@@ -146,8 +153,9 @@ pub fn drive_fetch(
 }
 
 ///|
-/// A drive's file downloaded to the device (DriveScreen.kt saveToDownloads): fetched into a keep, then kept. `listed`:
-/// the file as its folder lists it (its mtime, its size), what is read kept in the core as that (drive_keep).
+/// A drive's file downloaded to the device (DriveScreen.kt saveToDownloads): asked of the core (downloads.mbt), which
+/// fetches it whatever becomes of the page, how far on its row, kept once all of it is here. `listed`: the file as
+/// its folder lists it (its mtime, its size), what is fetched kept in the core as that.
 pub fn download_drive_file(
   c : @ui.Ctx,
   src : Source,
@@ -155,27 +163,16 @@ pub fn download_drive_file(
   root : String,
   path : String,
   name : String,
-  mime : String,
-  row? : String,
   listed? : (Double, Double)?,
 ) -> Unit {
-  match @ui.keep_begin(name, mime) {
-    None => say(c, @sf.t("android-chat.file.saveFailed"))
-    Some(k) =>
-      drive_fetch(src, station, root, path, row?=row, listed?, fn(b) { k.append(b) }, fn(err) {
-        match err {
-          None => {
-            k.finish()
-            keepings.push({ keep: k, name })
-          }
-          Some(e) => {
-            k.end()
-            app.toast = @sf.t("android-misc.drive.fetchFailed", args=[("name", name), ("error", dv_error(e))])
-            app.toast_n += 1
-          }
-        }
-      })
+  let (mtime, size) = match listed {
+    Some(Some(l)) => l
+    _ => (0.0, 0.0)
   }
+  // (told once the frame's builds are over: its pages call it under the press that asks for it)
+  c.tell("download/" + station + "/" + root + "/" + path, fn() {
+    download_start_drive(src, station, root, path, name, size, mtime)
+  })
 }
 
 ///|
@@ -189,37 +186,17 @@ pub fn download_drive_files(
   files : Array[DvEntry],
 ) -> Unit {
   for e in files {
-    download_drive_file(c, src, station, root, dv_join(dir, e.name), e.name, e.mime, listed=Some((e.mtime, e.size)))
+    download_drive_file(c, src, station, root, dv_join(dir, e.name), e.name, listed=Some((e.mtime, e.size)))
   }
 }
 
 ///|
-/// A folder zipped on the station and downloaded (DriveScreen.kt saveZip): `drive.zip` says where the zip is (a root
-/// of its own, its path, name and size), then it is fetched as any file is. The folder's row shows it under way
-/// meanwhile (0% while the station zips it, then how far the zip has come; the Android app shows nothing there).
+/// A folder zipped on the station and downloaded (DriveScreen.kt saveZip): asked of the core, which has the station zip
+/// it (`drive.zip`) and fetches the zip as any file; the folder's row shows how far meanwhile (正在打包 while the
+/// station zips it).
 pub fn download_drive_zip(c : @ui.Ctx, src : Source, station : String, root : String, path : String) -> Unit {
-  let p : Map[String, Json] = {
-    "station": Json::string(station),
-    "root": Json::string(root),
-    "path": Json::string(path),
-  }
-  // the folder's row shows it under way while the station zips it
-  let key = dv_fetch_key(station, root, path)
-  dv_fetches[key] = 0
-  // det-ok(build-effect): its pages call it only under the press that asks for it
-  (src.call)("drive.zip", Json::object(p), fn(r) {
-    dv_fetches.remove(key)
-    match r {
-      Ok(z) => {
-        let zv = Some(z)
-        // how far it comes shown on the folder's row (the zip is no row of the drive's)
-        download_drive_file(c, src, station, text(zv, "root"), text(zv, "path"), text(zv, "name"), "application/zip", row=key)
-      }
-      Err(e) => {
-        app.toast = @sf.t("android-misc.drive.fetchFailed", args=[("name", dv_name(path)), ("error", dv_error(e))])
-        app.toast_n += 1
-      }
-    }
+  c.tell("download-zip/" + station + "/" + root + "/" + path, fn() {
+    download_start_zip(src, station, root, path, dv_name(path) + ".zip")
   })
 }
 

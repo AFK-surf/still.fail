@@ -811,6 +811,12 @@ impl Inner {
     }
 
     fn run_sync(&self, op: &str, a: &Value) -> Result<Value, String> {
+        // The file a key's value is kept in, for what reads it there itself (a face's file: client/core-ts
+        // font-files.ts); null while none is kept.
+        if op == "storage.path" {
+            let path = storage_path(&self.dir, str_of(a, "key")?);
+            return Ok(if path.is_file() { json!(path.to_string_lossy()) } else { Value::Null });
+        }
         let handle = self.handle(id_of(a)?)?;
         match (op, handle) {
             ("iroh.endpointId", Handle::Endpoint(e, _)) => Ok(json!(hex::encode(e.id().as_bytes()))),
@@ -1076,6 +1082,10 @@ mod tests {
         assert_eq!(answer(2).2, Some(vec![1, 2, 3]));
         shell.call(3, "storage.get".into(), br#"{"key":"a/b"}"#, None);
         assert_eq!(answer(3).0, r#"{"none":true}"#);
+        // Where a value is kept, read there by the app itself: none while it is not.
+        let path = |key: &str| -> Value { serde_json::from_slice::<Value>(&shell.call_sync("storage.path", format!(r#"{{"key":"{key}"}}"#).as_bytes())).unwrap()["value"].clone() };
+        assert_eq!(path("device"), json!(dir.path().join("device").to_string_lossy()));
+        assert_eq!(path("a/b"), Value::Null);
         // The former records store, as client/ffi wrote it: read only.
         {
             let conn = rusqlite::Connection::open(dir.path().join("core.db")).unwrap();

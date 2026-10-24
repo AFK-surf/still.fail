@@ -597,19 +597,16 @@ pub fn open_fixture(mode : String) -> Unit {
       dui.sheet = Some(LettersOf(r, 7.0))
     }
     // the wide frame's (wide_panel.mbt): the chat's "…" open, its services' popover, what is opened beside it
-    "chat-letters-pop" => wide.info_open = true
-    "chat-jobs-pop" => wide.jobs_open = true
+    "chat-letters-pop" => @sfdesk.open_info_pop()
+    "chat-jobs-pop" => @sfdesk.open_jobs_pop()
     // (what is beside it: the made-up core keeps it so, fixture.mbt fixture_chat_tabs)
     "chat-letters-side" => {
       dui.letters_open = ""
       dui.letters_held[r.station + "\u{1}" + r.session] = 7.0
     }
-    "chat-model-pop" => wide.triple = r.station + "\u{1}session:s-c1"
+    "chat-model-pop" => @sfdesk.open_triple(r.station, "session:s-c1")
     // (what is typed is looked for as the bar is first drawn)
-    "chat-find" => {
-      wide.find_chat = side_key(r)
-      wide.find_field.set("截图")
-    }
+    "chat-find" => @sfdesk.find_preset(side_key(r), "截图")
     "chat-letters-open" => {
       dui.letters_open = fix_letters_link
       dui.letters_held[r.station + "\u{1}" + r.session] = 7.0

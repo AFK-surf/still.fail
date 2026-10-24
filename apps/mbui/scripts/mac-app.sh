@@ -17,9 +17,9 @@
 #                                           which holds the signing lock only for this)
 # The oldest macOS it runs on: still.fail's desktop app's (Electron's: 12.0), MACOSX_DEPLOYMENT_TARGET for clang and
 # cargo alike, and its Info.plist's LSMinimumSystemVersion; an object built for a newer one fails the build.
-# MBUI_BUILD: the build's number (default git rev-list --count HEAD of still.fail); MBUI_CORE_FRESH=1 makes the core's
-# shell again (cargo decides what is out of date), else only when missing; the engine and core.hbc are made when stale
-# (scripts/core.sh apple).
+# MBUI_BUILD: the build's number (default git rev-list --count HEAD of still.fail). The core's parts are scripts/core.sh
+# apple's: the shell as still.fail's natives have it for its sources (shell-apple), the engine and core.hbc made when
+# stale.
 set -eo pipefail
 D="$(cd "$(dirname "$0")" && pwd)"
 . "$D/env.sh"
@@ -76,8 +76,9 @@ if [ "${1:-build}" = sign ]; then
   exit 0
 fi
 
-# the core's parts: its Rust shell and its engine (linked in), Hermes and its bytecode (carried)
-if [ "${MBUI_CORE_FRESH:-}" = 1 ] || [ ! -f out/core/aarch64-apple-darwin/libstillfail_shell.a ]; then bash "$D/core.sh" shell > "$OUT/shell.log" 2>&1 || { tail -30 "$OUT/shell.log"; exit 1; }; fi
+# the core's parts: its Rust shell and its engine (linked in), Hermes and its bytecode (carried). (Not `core.sh shell`
+# first when the .a was missing, as before: that built the shell with cargo, past its prebuilt part, on every CI run
+# whose Actions cache of out/core missed: 253 s of 427, 2026-10-24, 40069429045.)
 bash "$D/core.sh" apple aarch64-apple-darwin > "$OUT/core.log" 2>&1 || { tail -30 "$OUT/core.log"; exit 1; }
 t1=$(now)
 APP=stillfail MODE=release bash "$D/mac.sh" build > "$OUT/build.log" 2>&1 || { tail -40 "$OUT/build.log"; exit 1; }

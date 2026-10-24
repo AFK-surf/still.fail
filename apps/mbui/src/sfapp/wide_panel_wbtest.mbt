@@ -19,7 +19,7 @@ test "wide: the chat's \"…\" opens under its button; agent 往来 from it open
   assert_true(t.find("参与") is Some(_), msg="its facts")
   t.tap_text("agent 往来")
   // (the popover goes as a popover does: gone once its going is over; the panel slid in)
-  t.run_for(dmax(@kit.presence_out_ms, side_in_ms))
+  t.run_for(dmax(@kit.presence_out_ms, @sfdesk.side_in_ms))
   // beside the chat, at its right: the chats written with
   let (x, _) = t.find("接手监督 mbui").unwrap()
   assert_true(x > 800.0, msg="at the pane's right")
@@ -27,10 +27,10 @@ test "wide: the chat's \"…\" opens under its button; agent 往来 from it open
   assert_true(t.find("参与") is None, msg="the popover gone")
   // its switch closes it; the bar's opens it again, at the first agent's history
   t.click(Button, label="收起侧栏")
-  t.run_for(side_out_ms)
+  t.run_for(@sfdesk.side_out_ms)
   assert_true(t.find("接手监督 mbui") is None)
   t.click(Button, label="打开侧栏")
-  t.run_for(side_in_ms)
+  t.run_for(@sfdesk.side_in_ms)
   assert_true(t.find("只看收发") is Some(_), msg="its history's head")
 }
 
@@ -44,7 +44,7 @@ test "wide: an agent's history's head as the web's: its control, 只看收发 le
   t.run_for(@ui.nav_push_ms)
   // the bar's switch: its first agent's history beside it
   t.click(Button, label="打开侧栏")
-  t.run_for(side_in_ms)
+  t.run_for(@sfdesk.side_in_ms)
   assert_eq(side_now(r), (["s-c1"], "s-c1"))
   // (where its transcript is: asked once the frame is built, answered at once)
   t.frame()
@@ -62,7 +62,7 @@ test "wide: an agent's history's head as the web's: its control, 只看收发 le
   if steps is Some(_) {
     assert_true(t.find("读了 src/ui/list.mbt 等 2 个文件，跑了测试") is None)
   }
-  assert_true(wide.history_io)
+  assert_true(@sfdesk.history_only_io())
 }
 
 ///|
@@ -85,7 +85,7 @@ test "wide: Station 文件 from the chat's \"…\" beside it (kept by the core: 
   t.frame()
   t.frame()
   t.tap_text("Station 文件")
-  t.run_for(dmax(@kit.presence_out_ms, side_in_ms))
+  t.run_for(dmax(@kit.presence_out_ms, @sfdesk.side_in_ms))
   let opened = named(calls, "chat.tabs.open")
   assert_eq(opened.length(), 1)
   assert_eq(text(Some(opened[0].params), "chat"), "ws1/st1:s-c1")
@@ -94,7 +94,7 @@ test "wide: Station 文件 from the chat's \"…\" beside it (kept by the core: 
   // its tab, and the station's home in it at the pane's right
   assert_true(t.find("主目录") is Some(_))
   // a file's menu: 添加到消息, into the chat's draft, named by its path
-  ftab.places["ws1"] = Some({ station: "ws1/st1", root: Some(fix_docs), path: "" })
+  @sfdesk.tab_place_set("ws1", Some({ station: "ws1/st1", root: Some(fix_docs), path: "" }))
   t.frame()
   let (x, y) = match t.find("发布清单.md") {
     Some(at) => at
@@ -130,16 +130,16 @@ test "wide: a new chat's Station 文件 beside it (NewChat.tsx): kept open, clos
   // kept open for the workspace's new chat: its tab, the station's home in it
   assert_true(t.find("主目录") is Some(_))
   t.click(Button, label="收起侧栏")
-  t.run_for(side_out_ms)
+  t.run_for(@sfdesk.side_out_ms)
   assert_true(t.find("主目录") is None)
   let closed = named(calls, "chat.tabs.close")
   assert_eq(closed.length(), 1)
   assert_eq(text(Some(closed[0].params), "chat"), "new:ws1")
   t.click(Button, label="Station 文件")
-  t.run_for(side_in_ms)
+  t.run_for(@sfdesk.side_in_ms)
   assert_true(t.find("主目录") is Some(_))
   // a file's 添加到消息: into the new chat's draft, named by its path
-  ftab.places["ws1"] = Some({ station: "ws1/st1", root: Some(fix_docs), path: "" })
+  @sfdesk.tab_place_set("ws1", Some({ station: "ws1/st1", root: Some(fix_docs), path: "" }))
   t.frame()
   let (x, y) = match t.find("发布清单.md") {
     Some(at) => at
@@ -170,7 +170,7 @@ test "wide: the side panel's tabs are the core's (chat.tabs.*): an agent's histo
   t.frame()
   // (the history after the histories open, before the other tabs; in front as it is opened)
   assert_eq(side_now(r), (["s-c1", "jobs"], "s-c1"))
-  t.run_for(side_in_ms)
+  t.run_for(@sfdesk.side_in_ms)
   assert_true(t.find("只看收发") is Some(_), msg="its history in front")
   side_change(r, "close", Some("s-c1"))
   t.frame()
@@ -192,24 +192,24 @@ test "wide: the side panel slides in from the pane's right edge over 280 ms and 
   t.click(Button, label="打开侧栏")
   t.frame()
   // on its way in: its head further right than it will rest, as the column it shows through has widened so far
-  t.run_for(side_in_ms / 2.0)
+  t.run_for(@sfdesk.side_in_ms / 2.0)
   let (mid, _) = t.find("只看收发").unwrap()
-  t.run_for(side_in_ms / 2.0)
+  t.run_for(@sfdesk.side_in_ms / 2.0)
   let (end, _) = t.find("只看收发").unwrap()
   assert_true(mid > end, msg="in from the right: \{mid} then \{end}")
   // as it rests, no further
-  t.run_for(side_in_ms)
+  t.run_for(@sfdesk.side_in_ms)
   assert_eq(t.find("只看收发").map(fn(at) { at.0 }), Some(end))
   // closed: still there on its way out (what it showed), gone at its end
   t.click(Button, label="收起侧栏")
   t.frame()
-  t.run_for(side_out_ms / 2.0)
+  t.run_for(@sfdesk.side_out_ms / 2.0)
   let (going, _) = t.find("只看收发").unwrap()
   assert_true(going > end, msg="out to the right: \{going}")
-  t.run_for(side_out_ms / 2.0)
+  t.run_for(@sfdesk.side_out_ms / 2.0)
   assert_true(t.find("只看收发") is None)
   // opened again: in again, to where it rested
   t.click(Button, label="打开侧栏")
-  t.run_for(side_in_ms)
+  t.run_for(@sfdesk.side_in_ms)
   assert_eq(t.find("只看收发").map(fn(at) { at.0 }), Some(end))
 }

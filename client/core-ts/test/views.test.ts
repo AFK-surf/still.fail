@@ -14,8 +14,8 @@ import { Runner } from "../src/runtime.ts";
 import { EVICT_AFTER_MS, Store, type Source, type Value } from "../src/store.ts";
 import { FakeHost } from "../src/testing.ts";
 import { attention, choices, runnableOn } from "../src/views/models.ts";
-import { Views, betaOffered, blockedUnder, chatDerive, down, shownMessage } from "../src/views/views.ts";
-import { installView } from "../src/present.ts";
+import { Views, betaOffered, blockedUnder, chatDerive, down, noticeOf, shownMessage } from "../src/views/views.ts";
+import { installView, profile as presentProfile } from "../src/present.ts";
 
 holdLanguage();
 // deno-lint-ignore no-explicit-any
@@ -210,7 +210,7 @@ function deciding(id: string, th: number, seq: number, at: number, dismissed: bo
 const ids = (v: J): string[] => v.days.flatMap((d: J) => d.items.map((i: J) => i.id));
 
 /// A value without what the clients show of it: what a view puts together, alone.
-const SHOWN = new Set(["trouble", "settled", "archivable", "stateText", "face", "line", "available", "offered", "connection", "glyph", "note", "time", "statusText", "tone", "badgeText", "titleText", "agentText", "maker", "runtimeText", "processText", "efforts", "modeText", "modeShort", "runText", "presence", "checkText", "checkTone", "preview", "makers", "mark", "order", "left", "level", "refills", "shown", "processesText", "by", "waiting", "since", "originText", "originKind", "summary", "modelsText"]);
+const SHOWN = new Set(["trouble", "settled", "archivable", "stateText", "face", "line", "available", "offered", "connection", "glyph", "note", "time", "statusText", "tone", "badgeText", "titleText", "agentText", "maker", "runtimeText", "processText", "efforts", "modeText", "modeShort", "runText", "presence", "checkText", "checkTone", "preview", "makers", "mark", "order", "left", "level", "refills", "shown", "processesText", "by", "waiting", "since", "originText", "originKind", "summary", "modelsText", "stateBusy", "problems", "changes", "modeWords", "modeLabel", "modeSentence", "placeText"]);
 function plain(v: J): J {
   if (Array.isArray(v)) return v.map(plain);
   if (v !== null && typeof v === "object") return Object.fromEntries(Object.entries(v).filter(([k, x]) => !SHOWN.has(k) && x !== null && x !== undefined).map(([k, x]) => [k, plain(x)]));
@@ -1128,6 +1128,13 @@ test("connects_lists_every_online_stations_connects", async () => {
   assert.deepEqual([v.wait.reading, v.wait.failing.map((f: J) => [f.station, f.message])], [false, [["ws/b", "连不上"]]]);
   assert.equal(v.items[0].connect.createdBy.shown.display, "你");
   assert.equal(v.items[0].connect.statusText, "未连接 Slack");
+  // where it is reached and how it runs, in words; the ways it could be switched to, each with what that does
+  assert.deepEqual([v.items[0].connect.placeText, v.items[0].connect.modeLabel], ["Slack", "每个 thread 一个会话"]);
+  assert.deepEqual(v.items[0].changes.map((c: J) => [c.mode, c.requireMention, c.changed, c.effects.length]), [
+    ["multi-session", true, false, 0],
+    ["single-session", true, true, 2],
+    ["single-session", false, true, 3],
+  ]);
   const mine = ui();
   t.subscribe(2, { topic: "connects", scope: "ws", mine: true });
   await t.read(mine, 2);
@@ -1959,4 +1966,59 @@ test("what_the_core_keeps_and_shares_is_never_written_on_whatever_a_chat_holds",
     });
     assert.equal(uis[0][0].value.messages.length, drawn.page.entries.filter((e: J) => e.kind === "message").length, said);
   }
+});
+
+test("a_station_says_how_it_is_and_what_is_wrong_with_it_in_the_cores_words", async () => {
+  // StationCards.tsx's state() and problems() were the web's own (and its 15 s silence a timer of the page's): the
+  // core's now, for the web's station page and the desktop app's alike.
+  const t = setup();
+  const list = ui();
+  t.subscribe(1, { topic: "stations", scope: "ws" });
+  t.set(workspace(), stations(t.nowS()));
+  await t.read(list, 1);
+  t.set(link("ws/a"), { state: "online" });
+  t.set(link("ws/b"), { state: "offline" });
+  t.set(link("ws/c"), { state: "offline" });
+  await t.read(list, 1);
+  const of = (st: string) => (list.value as J[]).find((s) => s.station === st);
+  // up, not read yet: connecting, nothing wrong yet
+  assert.deepEqual([of("ws/a").stateText, of("ws/a").stateBusy, of("ws/a").problems], ["正在连接", false, []]);
+  // away: when it was last online, red; never online, amber
+  assert.ok(of("ws/b").stateText.endsWith("在线"), of("ws/b").stateText);
+  assert.deepEqual(of("ws/b").problems.map((p: J) => [p.key, p.level]), [["away", "red"]]);
+  assert.deepEqual([of("ws/c").stateText, of("ws/c").problems.map((p: J) => [p.key, p.level])], ["尚未上线", [["away", "amber"]]]);
+  // up and no host reading for 15 s: silent
+  await t.host.time.pass(15_000);
+  await t.read(list, 1);
+  assert.deepEqual(of("ws/a").problems.map((p: J) => [p.key, p.level]), [["silent", "amber"]]);
+  // its host read and its agents at work: busy, nothing wrong
+  t.set(hostOf("ws/a"), hostInfo("studio"));
+  t.set(overview("ws/a"), { ...overviewOf([], []), counts: { sessions: 2, running: 2, warm: 0 } });
+  await t.read(list, 1);
+  assert.deepEqual([of("ws/a").stateText, of("ws/a").stateBusy, of("ws/a").problems], ["2 个 agent 正在运行", true, []]);
+});
+
+test("a_profile_says_what_it_is_who_signs_it_in_and_its_last_check_in_the_cores_words", () => {
+  // Accounts.tsx worked these out itself (ACCESS labels, signInProvider, the check's detail without 可用): the core's
+  // now, for the web's page and the desktop app's.
+  const sub = presentProfile(profile("p1", { check: { state: "ok", detail: "可用，Claude Max", models: [] } }));
+  assert.deepEqual([sub.kindText, sub.signInProvider, sub.checkLine], ["订阅账号", "Claude", "Claude Max"]);
+  const codex = presentProfile(profile("p2", { runtime: "codex", runtimes: ["codex"] }));
+  assert.deepEqual([codex.signInProvider, codex.checkLine], ["ChatGPT", "尚未检查"]);
+  const machine = presentProfile(profile("p3", { machine: true }));
+  assert.equal(machine.kindText, "终端里的登录");
+  const go = presentProfile(profile("p4", { access: { kind: "opencode-go", key: "" } }));
+  assert.deepEqual([go.kindText, go.signInProvider], ["OpenCode Go", "OpenCode"]);
+  // the station's detail in English starts with its Works, as the Chinese with 可用
+  const en = presentProfile(profile("p5", { check: { state: "ok", detail: "Works, 3 models", models: [] } }));
+  assert.equal(en.checkLine, "3 models");
+});
+
+test("still.fail's notice is shown as a line: a failure's mark taken off, no closing 。, a profile's link after its ：", () => {
+  assert.deepEqual(noticeOf("⚠️ 运行失败：额度用完了。", false), { failed: true, words: "运行失败：额度用完了" });
+  assert.deepEqual(noticeOf("已切换模型", false), { failed: false, words: "已切换模型" });
+  assert.deepEqual(noticeOf("⚠️ 登录 Work 失败：令牌过期。 ", true), { failed: true, words: "登录 Work 失败：令牌过期", linkAt: 11 });
+  assert.deepEqual(noticeOf("登录失败", true), { failed: false, words: "登录失败" });
+  const m = shownMessage({ authorKind: "stillfail", author: "stillfail", text: "⚠️ 出错了。", seq: 3 }, [], {}, [], [], [], null);
+  assert.deepEqual(m.notice, { failed: true, words: "出错了" });
 });

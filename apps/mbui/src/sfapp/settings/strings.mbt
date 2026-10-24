@@ -1119,6 +1119,7 @@ let zh : Map[String, String] = {
   "web-pages.profiles.share.stations": "可用的 station",
   "web-pages.profiles.share.switch": "分享给其他 station",
   "web-pages.profiles.share.title": "分享",
+  "web-pages.profiles.models": "模型",
   "web-pages.profiles.share.unshared": "已停止分享",
   "web-pages.profiles.share.users": "使用中：{stations}",
   "web-pages.profiles.step1": "打开授权页面，用 {name} 要使用的 Claude 账号登录并同意授权",
@@ -1589,4 +1590,15 @@ fn fill(key : String, args : Array[(String, String)]) -> String {
     s = s.replace_all(old="{" + a.0 + "}", new=a.1)
   }
   s
+}
+
+///|
+/// The words for `key` from these tables (`args` choosing a count's of one), None for a key they have none for: what
+/// the app's own words fall back to (src/sfapp/strings.mbt), so a key of these pages said elsewhere (the desktop's
+/// pages, src/sfdesk) is said once, here.
+pub fn said(key : String, args : Array[(String, String)]) -> String? {
+  match english(key, args~) {
+    Some(s) => Some(s)
+    None => zh.get(key)
+  }
 }

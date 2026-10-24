@@ -6,6 +6,7 @@ import data from "./station.json";
 import { CHEN, LIN, stamp, STATION, ZHOU, type Runs } from "./fixtures.ts";
 import type { ArchiveDay, ArchiveView, Connect, ConnectsView, DriveEntry, DriveFolder, DriveKind, Person } from "../core/shapes.ts";
 import { scale } from "../../../client/core-ts/src/views/scale.ts";
+import { resourcesView } from "../../../client/core-ts/src/views/resources.ts";
 
 const TIME = /^(at|checkedAt|resetsAt|startedAt|createdAt|endedAt|lastActiveAt|updatedAt)$/;
 
@@ -100,7 +101,8 @@ export function driveFolder(root: string, path: string): DriveFolder {
 }
 export const stationView = () => {
   const base = now(data.station);
-  return { ...base, station: STATION, host: withMeters(base.host), way: { path: NET.path, via: NET.via }, overview: overview() };
+  // (as the core says how it is: up, its agents idle, nothing wrong; views.ts stationState, stationProblems)
+  return { ...base, station: STATION, stateText: "空闲", stateBusy: false, problems: [], host: withMeters(base.host), way: { path: NET.path, via: NET.via }, overview: overview() };
 };
 /** What a Claude agent's model control offers and the account it runs on. */
 export const runs = (): Runs => ({ choices: stationView().models as Runs["choices"], profile: overview().profiles[0] as unknown as Runs["profile"] });
@@ -116,12 +118,22 @@ function slack(): Connect {
     connection: { state: "connected", botUserId: "U07EMBER", workspace: { team: "Acme", teamId: "T0ACME", url: "https://acme.slack.com/", botUserId: "U07EMBER", botName: "still.fail" } },
     createdBy: { id: LIN.id, name: LIN.name, shown: LIN.shown }, sessions: 14,
     statusText: "在线", presence: "online", modeText: "多会话", modeShort: "多会话", runtimeText: "Claude Code", runText: "Claude Code · Opus 5.5 · medium", modelName: "Opus 5.5",
+    modeWords: {
+      multi: { label: "每个 thread 一个会话", description: "在 thread 中 @ 它即开启一个新会话，该 thread 的后续消息都进入此会话" },
+      single: { label: "所有 thread 共用一个会话", description: "它看到的所有 thread 都进入同一个会话，适合长期值守的助手" },
+      mentionOn: "被 @ 的 thread 中，后续回复无需再 @。", mentionOff: "频道中它可见的每条消息都会进入会话。",
+    },
+    modeLabel: "每个 thread 一个会话", modeSentence: "在 thread 中 @ 它即开启一个新会话，该 thread 的后续消息都进入此会话", placeText: "Acme",
   };
 }
 
 export const connects = (): ConnectsView => ({
   me: { id: "local" }, wait: { reading: false, failing: [], empty: false },
-  items: [{ station: STATION, stationName: "Studio", connect: slack(), sessions: [], candidates: [], running: 0 }],
+  items: [{ station: STATION, stationName: "Studio", connect: slack(), sessions: [], candidates: [], running: 0, changes: [
+    { mode: "multi-session", requireMention: true, changed: false, effects: [], action: "确认更改" },
+    { mode: "single-session", requireMention: true, changed: true, effects: ["此后它收到的消息都将进入同一个会话；现有各 thread 的会话不再接收新消息，包括这些 thread 中的回复。记录会保留。", "下一条消息将开始新的单会话；也可在切换后选择已有会话。"], action: "改为单会话" },
+    { mode: "single-session", requireMention: false, changed: true, effects: ["此后它收到的消息都将进入同一个会话；现有各 thread 的会话不再接收新消息，包括这些 thread 中的回复。记录会保留。", "下一条消息将开始新的单会话；也可在切换后选择已有会话。", "无需 @：它可见的所有频道和私信中的每条消息都会发送给 agent，用量会明显增加。"], action: "改为单会话" },
+  ] }],
 });
 
 /**
@@ -192,6 +204,36 @@ export function profiles() {
       members: [{ station: STATION, stationId: "local", stationName: "Studio", online: true, profileId: p.id, role: "own", about: "自己登录", usable: true, checkText: p.checkText, checkTone: p.checkTone, usedBy: 1 }],
     }],
   };
+}
+
+/** What still.fail uses of the machine (the core's `resources`, client/core-ts/src/views/resources.ts, from what a
+ * station's GET /resources says), made up: a test run using most, the app and the station a little. */
+export function resources() {
+  const now = Date.now();
+  const proc = (pid: number, name: string, cpu: number, mb: number, watts: number, wakeups: number) => ({ pid, name, cpu, memory: mb * 1e6, watts, wakeups });
+  const group = (key: string, kind: string, session: string | null, processes: ReturnType<typeof proc>[]) => ({
+    key, kind, session, processes,
+    cpu: processes.reduce((n, p) => n + p.cpu, 0), memory: processes.reduce((n, p) => n + p.memory, 0),
+    watts: processes.reduce((n, p) => n + p.watts, 0), wakeups: processes.reduce((n, p) => n + p.wakeups, 0),
+  });
+  const groups = [
+    group("chat:p99", "chat", "p99", [proc(41130, "chrome-headless-shell", 61.2, 412, 2.4, 310), proc(41131, "chrome-headless-shell", 18.4, 96, 0.7, 120), proc(40634, "node", 13.4, 188, 0.5, 44), proc(40856, "claude", 6.9, 241, 0.3, 18)]),
+    group("app", "app", null, [proc(39480, "still.fail Helper (Renderer)", 12.8, 500, 0.41, 96), proc(39425, "still.fail Helper (GPU)", 7.9, 109, 0.19, 60), proc(39434, "still.fail Helper", 0.8, 238, 0.02, 3), proc(39394, "still.fail", 0.4, 230, 0.02, 4)]),
+    group("chat:csv", "chat", "csv", [proc(40631, "python3", 9.6, 322, 0.4, 12), proc(25080, "codex", 1.1, 88, 0.08, 6)]),
+    group("station", "station", null, [proc(37148, "node", 1.6, 310, 0.08, 20), proc(1947, "stillfail-station", 0.2, 42, 0.01, 2)]),
+  ];
+  const sum = (k: "cpu" | "memory" | "watts" | "wakeups") => groups.reduce((n, g) => n + g[k], 0);
+  const total = { cpu: sum("cpu"), memory: sum("memory"), watts: sum("watts"), wakeups: sum("wakeups") };
+  // The last ten minutes, a look every 5 s, wandering about now.
+  const history = Array.from({ length: 120 }, (_, i) => {
+    const f = 0.7 + 0.2 * Math.sin(i / 6) + 0.1 * Math.sin(i * 1.3) + (i > 100 ? 0.15 : 0);
+    return { at: now - (119 - i) * 5000, cpu: total.cpu * f, memory: total.memory * (0.9 + 0.1 * Math.sin(i / 20)), watts: total.watts * f, wakeups: total.wakeups * (0.6 + 0.4 * Math.abs(Math.sin(i / 4))) };
+  });
+  const hour = 3_600_000;
+  const hours = Array.from({ length: 24 }, (_, i) => ({ at: Math.floor(now / hour) * hour - (23 - i) * hour, joules: { "chat:p99": 3600 * 1.8, app: 3600 * 0.5, station: 3600 * 0.08 } }));
+  const chats = { p99: { thread: 4, title: "排查 API p99 变慢" }, csv: { thread: 5, title: "订单导出支持 CSV" } };
+  const value = { at: now, everyMs: 5000, counted: true, total, groups, history, hours, chats, machine: { cores: 10, memory: 32 * 1024 ** 3 } };
+  return resourcesView([{ address: STATION, name: "Studio", online: true, value: { ok: value } }], now, () => ({ reading: false, failing: [], empty: false }));
 }
 
 /** What the agents spent (the core's `usage`, client/core-ts/src/views/usage.ts), made up: the last `days`, each day's

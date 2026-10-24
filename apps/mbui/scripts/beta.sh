@@ -200,18 +200,15 @@ build() {
   summary "- $(grep '^android.sh: APP=' "$C/build.log" | sed 's/^android.sh: //'); $(grep '^core.hbc ' "$C/build.log" | head -1); build in $(secs $t0) s"
 }
 
-# The macOS app, built in WORK (warm as the APK's: moon's outputs, the compiler's, the Rust shell's target kept in
-# $C/cargo-target), signed under .github/mac_signing.py (still.fail's identity, its signing lock held for the signing only).
+# The macOS app, built in WORK (warm as the APK's: moon's outputs, the compiler's; the core's shell is
+# still.fail's natives, scripts/core.sh apple), signed under .github/mac_signing.py (still.fail's identity, its signing
+# lock held for the signing only).
 mac() {
   local t0=$(now) n zip name tb
   n=$(build_number)
   copy
   rm -rf "$RELEASE_DIR/mac" && mkdir -p "$RELEASE_DIR/mac/mac"
-  # the core's Rust shell, linked in: cargo decides what changed (its target kept; through the job's sccache)
-  # (fresh: the shell's .a as the Actions cache kept it by its sources, no cargo target to look at)
-  local fresh="CARGO_TARGET_DIR=$C/cargo-target MBUI_CORE_FRESH=1"
-  [ "${MBUI_FRESH:-}" != 1 ] || fresh=
-  env $fresh MBUI_BUILD=$n EMBER="$REPO" bash "$WORK/scripts/mac-app.sh" build 2>&1 \
+  env MBUI_BUILD=$n EMBER="$REPO" bash "$WORK/scripts/mac-app.sh" build 2>&1 \
     | tee "$C/mac-build.log"
   tb=$(secs $t0)
   MBUI_BUILD=$n EMBER="$REPO" python3 "$REPO/.github/mac_signing.py" run -- bash "$WORK/scripts/mac-app.sh" sign 2>&1 | tee "$C/mac-sign.log"

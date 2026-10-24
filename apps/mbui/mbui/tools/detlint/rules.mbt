@@ -5,7 +5,7 @@ let rule_names : Array[String] = [
   "frame-request", "settle", "flow-wait", "script-wait", "page-settle", "device-shot",
   "host-import", "frame-wait", "at-rest-wait", "frame-count", "literal-time", "stable-mode",
   "retired-api", "app-clock", "wall-clock", "engine-math", "poll", "host-read", "builtin-hash",
-  "hash-order", "globals", "style-literal", "box-loose", "style-exact", "build-effect",
+  "hash-order", "globals", "style-literal", "box-loose", "style-exact", "style-text", "build-effect",
   "unsettled-ok", "host-delay", "library-import",
 ]
 
@@ -35,6 +35,7 @@ let rule_words : Map[String, String] = {
   "style-literal": "a number where a style is said (a box's or words' look, @ui.style…), or an Exact(…) outside the token files: name it with a token (docs/style.md)",
   "box-loose": "a box or words said by their loose look (pad=, bg=, size=…): say it as a named style (style=)",
   "style-exact": "a value off the theme's scale (Exact(…)), in a token file too: only goes down",
+  "style-text": "a named style (a top-level let, a .then(…) of one) said as a call whose properties are all tokens and numbers: moonc makes each @ui.style(…) call ~5-10 KB of C run as the app starts; write it as its text, @ui.css(\"…\") (printed after `write:`). @ui.style(…) is for a style naming a variable or worked out, and inside functions (docs/style.md)",
   "build-effect": "a view tells outside while it builds (a core's call, a host's effect): a frame is built again while what it read changes, and a build let go of tells all the same; say it in Ctx::after_build (once the frame's builds are over, as the last says it), or in the event's own handler",
   "unsettled-ok": "a test leaves out its end's idle check (unsettled_ok=…: what still moves or asks, until it says its end): counted so the ones left only go",
   "library-import": "a package of the app's component library (detlint.json `library`) imports what is not the framework's nor said to be its own (the app's pages, its core, a station's, the cloud's): what it needs of the app, the app gives it as it starts (a function it sets: @sf.set_shortcuts)",

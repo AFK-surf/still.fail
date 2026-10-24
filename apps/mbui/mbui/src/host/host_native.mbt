@@ -978,7 +978,7 @@ extern "C" fn ffi_view_read_next(id : Int, out : FixedArray[Double]) -> Int = "m
 
 ///|
 #borrow(data)
-extern "C" fn ffi_view_read_answer(id : Int, req : Int, data : Bytes, total : Double) -> Unit = "mb_host_view_read_answer"
+extern "C" fn ffi_view_read_answer(id : Int, req : Int, data : Bytes, total : Double, more : Int) -> Unit = "mb_host_view_read_answer"
 
 ///|
 extern "C" fn ffi_view_site_next(id : Int) -> String = "mb_host_view_site_next"
@@ -1105,35 +1105,34 @@ fn view_close(id : Int) -> Unit {
 }
 
 ///|
-/// A player told: `op` 1 play, 2 pause, 3 to `value` ms (the frame there, exactly), 4 at `value` times its speed; a
-/// site: 5 back, 6 forward, 7 reload, 8 laid out at its rect over `value` and drawn at `value` times (a viewport's
-/// own size shown smaller).
+/// A player told: `op` 1 play, 2 pause, 3 to `value` ms (the frame there, exactly), 4 at `value` times its speed, 11
+/// to about `value` ms at once (the nearest key frame: nothing before it decoded); a site: 5 back, 6 forward, 7
+/// reload, 8 laid out at its rect over `value` and drawn at `value` times (a viewport's own size shown smaller).
 fn view_control(id : Int, op : Int, value : Double) -> Unit {
   ffi_view_control(id, op, value)
 }
 
 ///|
 /// How the view stands: -1 failed (a file the player cannot play, a page that cannot load), 0 opening, 1 ready.
-/// `out` (10): its length in ms (-1 not known), where it is (ms), playing (1), the picture's own width and height
-/// (pixels), the bytes it has been given, whether a frame has been drawn (a page: loaded), buffering (1), how far on it
-/// has what it needs to play (ms; 0 not said), played to its end (1).
+/// `out` (10): its length in ms (-1 not known), where it is (ms), playing (1; and while it seeks within what it has, if
+/// it is to play), the picture's own width and height (pixels), the bytes it has been given, whether a frame has been
+/// drawn (a page: loaded), buffering (1: waiting on bytes still to come through the app, not a seek within what it
+/// has), how far on it has what it needs to play (ms; 0 not said), played to its end (1).
 fn view_info(id : Int, out : FixedArray[Double]) -> Int {
   ffi_view_info(id, out)
 }
 
 ///|
-/// A read the player waits on: its id (0: none waiting), `out` [0] its offset, [1] how many bytes it wants. Each is
-/// answered once (`view_read_answer`); the host asks for a frame when one comes.
+/// A read the player waits on: its id (0: none waiting), `out` [0] its offset, [1] how many bytes it wants; or minus
+/// the id of one it let go of (@hostapi.view_read_next).
 fn view_read_next(id : Int, out : FixedArray[Double]) -> Int {
   ffi_view_read_next(id, out)
 }
 
 ///|
-/// Read `req`'s answer: the bytes from its offset (at most as many as it wanted; fewer is fine, none only at the
-/// file's end), `total` the file's whole size (-1 not known: Apple's player needs it, so give it); -2: it could not be
-/// read (the player fails).
-fn view_read_answer(id : Int, req : Int, data : Bytes, total : Double) -> Unit {
-  ffi_view_read_answer(id, req, data, total)
+/// Read `req`'s next bytes, as they come, `more` while more of it comes (@hostapi.view_read_answer).
+fn view_read_answer(id : Int, req : Int, data : Bytes, total : Double, more : Bool) -> Unit {
+  ffi_view_read_answer(id, req, data, total, if more { 1 } else { 0 })
 }
 
 // PDFs drawn by the system (Android's PdfRenderer, Core Graphics' CGPDF), page by page into images.

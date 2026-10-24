@@ -18,7 +18,10 @@ test "a native view shows where it is painted: a hole in the canvas, the host to
   let t = @ui.Tester::new(
     fn(c) {
       let v = once(cell, fn() {
-        @ui.NativeView::video("video/mp4", fn(_offset, _length, answer) { answer(b"", -1.0) })
+        @ui.NativeView::video("video/mp4", fn(_offset, _length, answer) {
+          answer(b"", -1.0, false)
+          fn() {  }
+        })
       })
       c.box(w=Fill(1.0), h=Fill(1.0), bg=0x000000FFL, fn() {
         c.box(h=Px(100.0), fn() { () }) |> ignore
@@ -144,7 +147,8 @@ test "a player's reads of the app's bytes come at the next frame, as the test sa
         asked.push((offset, length))
         let from = offset.to_int()
         let n = if from + length > file.length() { file.length() - from } else { length }
-        answer(Bytes::makei(n, fn(i) { file[from + i] }), file.length().to_double())
+        answer(Bytes::makei(n, fn(i) { file[from + i] }), file.length().to_double(), false)
+        fn() {  }
       })
     })
     c.native(v, h=Px(220.0)) |> ignore
@@ -159,10 +163,60 @@ test "a player's reads of the app's bytes come at the next frame, as the test sa
 }
 
 ///|
+test "a read's bytes go to the player as they come; one it lets go of, or the view's that closes, is stopped" {
+  let cell : Ref[@ui.NativeView?] = { val: None }
+  // the reads the app has under way: where from, how to answer it, whether it was stopped
+  let under : Array[(Double, (Bytes, Double, Bool) -> Unit, Ref[Bool])] = []
+  let t = @ui.Tester::new(fn(c) {
+    let v = once(cell, fn() {
+      @ui.NativeView::video("video/mp4", fn(offset, _length, answer) {
+        let stopped = Ref(false)
+        under.push((offset, answer, stopped))
+        fn() { stopped.val = true }
+      })
+    })
+    c.native(v, h=Px(220.0)) |> ignore
+  })
+  let v = cell.val.unwrap()
+  let a = t.view_reads(v.id(), 0.0, 8192)
+  let b = t.view_reads(v.id(), 65536.0, 8192)
+  t.draw()
+  assert_eq(under.length(), 2)
+  // the first's bytes in two pieces, the second's first piece: each handed on as it comes
+  (under[0].1)(Bytes::make(3000, b'\x01'), 100000.0, true)
+  assert_eq(t.view_given(v.id(), a), (3000, false))
+  (under[0].1)(Bytes::make(5192, b'\x02'), 100000.0, true)
+  (under[0].1)(b"", 100000.0, false)
+  assert_eq(t.view_given(v.id(), a), (8192, true))
+  assert_eq(t.view_answers(v.id()), [(a, 8192, 100000.0)])
+  (under[1].1)(Bytes::make(1000, b'\x03'), 100000.0, true)
+  assert_eq(t.view_given(v.id(), b), (1000, false))
+  // the player goes elsewhere: the second let go of, what comes of it after taken no more
+  t.view_lets_go(v.id(), b)
+  t.draw()
+  assert_eq(under[0].2.val, false)
+  assert_eq(under[1].2.val, true)
+  (under[1].1)(Bytes::make(1000, b'\x03'), 100000.0, true)
+  assert_eq(t.view_given(v.id(), b), (1000, false))
+  // one more under way when the view closes: stopped with it
+  let c = t.view_reads(v.id(), 16384.0, 8192)
+  t.draw()
+  assert_eq(under.length(), 3)
+  (under[2].1)(Bytes::make(10, b'\x04'), 100000.0, true)
+  v.close()
+  assert_eq(under[2].2.val, true)
+  (under[2].1)(Bytes::make(10, b'\x04'), 100000.0, false)
+  assert_eq(t.view_given(v.id(), c), (10, false))
+}
+
+///|
 test "a player stands as the test sets it: ready, its first frame shown, two seconds in, playing" {
   let cell : Ref[@ui.NativeView?] = { val: None }
   let t = @ui.Tester::new(fn(c) {
-    let v = once(cell, fn() { @ui.NativeView::video("video/mp4", fn(_o, _l, answer) { answer(b"", -1.0) }) })
+    let v = once(cell, fn() { @ui.NativeView::video("video/mp4", fn(_o, _l, answer) {
+          answer(b"", -1.0, false)
+          fn() {  }
+        }) })
     c.native(v, h=Px(220.0)) |> ignore
     c.text("\{(v.position() / 1000.0).to_int()} s of \{(v.duration() / 1000.0).to_int()} s", wrap=false) |> ignore
   })
@@ -276,7 +330,10 @@ test "marks drawn onto an image give the PNG the test says, the next one a clear
 test "a player's state is read before the frame is built: set, one frame shows it" {
   let cell : Ref[@ui.NativeView?] = { val: None }
   let t = @ui.Tester::new(fn(c) {
-    let v = once(cell, fn() { @ui.NativeView::video("video/mp4", fn(_o, _l, answer) { answer(b"", -1.0) }) })
+    let v = once(cell, fn() { @ui.NativeView::video("video/mp4", fn(_o, _l, answer) {
+          answer(b"", -1.0, false)
+          fn() {  }
+        }) })
     c.native(v, h=Px(220.0)) |> ignore
     c.text("at \{(v.position() / 1000.0).to_int()} s", wrap=false) |> ignore
   })
@@ -293,7 +350,10 @@ test "a video's frames' times and a frame grabbed are what the run said the host
   let cell : Ref[@ui.NativeView?] = { val: None }
   let t = @ui.Tester::new(fn(c) {
     let v = once(cell, fn() {
-      @ui.NativeView::video("video/mp4", fn(_offset, _length, answer) { answer(b"", -1.0) })
+      @ui.NativeView::video("video/mp4", fn(_offset, _length, answer) {
+          answer(b"", -1.0, false)
+          fn() {  }
+        })
     })
     c.native(v, h=Px(220.0)) |> ignore
   })
@@ -330,7 +390,10 @@ test "how a view stands is what the run said the host said: still opening, then 
   let cell : Ref[@ui.NativeView?] = { val: None }
   let t = @ui.Tester::new(fn(c) {
     let v = once(cell, fn() {
-      @ui.NativeView::video("video/mp4", fn(_offset, _length, answer) { answer(b"", -1.0) })
+      @ui.NativeView::video("video/mp4", fn(_offset, _length, answer) {
+          answer(b"", -1.0, false)
+          fn() {  }
+        })
     })
     c.native(v, h=Px(220.0)) |> ignore
   })
@@ -352,7 +415,10 @@ test "a native view between pixels is placed on whole device pixels, its hole an
     let t = @ui.Tester::new(
       fn(c) {
         let v = once(cell, fn() {
-          @ui.NativeView::video("video/mp4", fn(_offset, _length, answer) { answer(b"", -1.0) })
+          @ui.NativeView::video("video/mp4", fn(_offset, _length, answer) {
+          answer(b"", -1.0, false)
+          fn() {  }
+        })
         })
         c.box(w=Fill(1.0), h=Fill(1.0), fn() {
           c.box(h=Px(100.3), fn() { () }) |> ignore
@@ -392,7 +458,10 @@ test "a frame grab is waited on until its PNG is taken; then the view may grab a
   let cell : Ref[@ui.NativeView?] = { val: None }
   let t = @ui.Tester::new(fn(c) {
     let v = once(cell, fn() {
-      @ui.NativeView::video("video/mp4", fn(_offset, _length, answer) { answer(b"", -1.0) })
+      @ui.NativeView::video("video/mp4", fn(_offset, _length, answer) {
+          answer(b"", -1.0, false)
+          fn() {  }
+        })
     })
     c.native(v, h=Px(220.0)) |> ignore
   })
@@ -413,7 +482,10 @@ test "panic a second frame grab of a view before the first is taken" {
   let cell : Ref[@ui.NativeView?] = { val: None }
   let _ = @ui.Tester::new(fn(c) {
     let v = once(cell, fn() {
-      @ui.NativeView::video("video/mp4", fn(_offset, _length, answer) { answer(b"", -1.0) })
+      @ui.NativeView::video("video/mp4", fn(_offset, _length, answer) {
+          answer(b"", -1.0, false)
+          fn() {  }
+        })
     })
     c.native(v, h=Px(220.0)) |> ignore
   })

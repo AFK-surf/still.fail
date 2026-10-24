@@ -10,7 +10,7 @@ import { core, useCall, useTopic, useTopicSelect, useTopics, type TopicState } f
 import { CoreError } from "./core/client.ts";
 import { scopeOf, useOnlyMine, useStation, type Me } from "./station.tsx";
 import type { AgentCardView, ArchiveView, Attachment, ChatJobsView, ChatLettersView, ChatSearchView, ChatsView, Quote, SearchView, ChatView, ConnectsView, HistoryView, Host, JoinableView, Live, MembershipsView, Overview, ProfilesView, Session, Stamp, StationView, StatusView, ChatThread } from "./core/shapes.ts";
-import type { AccessKind, ConnectMode, Job, LoginJob, ProfileCheck, Quota, RuntimeKind, SlackAppLinks, SlackIdentity } from "./core/shapes.ts";
+import type { AccessKind, ConnectMode, Job, LoginJob, ProfileCheck, Quota, RuntimeKind, SlackAppLinks, SlackGroupSection, SlackIdentity } from "./core/shapes.ts";
 import type { ChatPublished, PublishPreview } from "./core/shapes.ts";
 import type { SlackPerson } from "./cloud/adding.ts";
 import { t } from "./i18n.ts";
@@ -69,11 +69,12 @@ export interface SlackAppSettings {
   groups: Record<SlackGroup, boolean>;
 }
 
-export type SlackAppView =
+/** `sections`: its permissions as its form shows them (the core's). */
+export type SlackAppView = { sections: SlackGroupSection[] } & (
   | { state: "no_app"; appId: null; links: null; settings: null; groups: SlackGroup[]; error?: string }
   | { state: "no_config_token"; appId: string; links: SlackAppLinks; settings: null; groups: SlackGroup[] }
   | { state: "ok"; appId: string; links: SlackAppLinks; settings: SlackAppSettings; groups: SlackGroup[] }
-  | { state: "error"; appId: string; links: SlackAppLinks; settings: null; groups: SlackGroup[]; error: string };
+  | { state: "error"; appId: string; links: SlackAppLinks; settings: null; groups: SlackGroup[]; error: string });
 
 // ── what the core gives: generated from client/core-ts/src/shapes/schema.ts (core/shapes.ts), nothing hand-written ──
 
@@ -265,9 +266,8 @@ export interface StationCall {
   upload(file: File, onProgress?: (sent: number) => void): Promise<Attachment>;
   /** A file sent to the session, as a blob for previews; `thumb`: an image as a chat shows it (its thumbnail, where the station keeps one). */
   /** `onProgress`: bytes so far and the whole size (null when the station does not say) as a whole file comes. `size`:
-   * the file's, as its message says: a big one comes a part at a time (`station.file.part`), never all through at once.
-   * `kept`: read as the core keeps it with its chat (`keep` with its size: a download's, off the device). */
-  file(key: string, name: string, thumb?: boolean, onProgress?: (got: FileProgress) => void, size?: number, kept?: boolean): Promise<Blob>;
+   * the file's, as its message says: a big one comes a part at a time (`station.file.part`), never all through at once. */
+  file(key: string, name: string, thumb?: boolean, onProgress?: (got: FileProgress) => void, size?: number): Promise<Blob>;
   /** A video's poster as the station makes it (a small JPEG of its first frame); null when it has none. */
   poster(key: string, name: string): Promise<Blob | null>;
   /** A file's first `length` bytes (`station.file.part`): enough to tell what it is without fetching all of it. Throws
@@ -338,11 +338,9 @@ export function stationCall(call: ReturnType<typeof useCall>, station: string): 
       }
       return saved;
     },
-    file: async (key, name, thumb = false, onProgress, size, kept = false) => {
-      // (as kept with its chat: read off the device, the station asked only for what is not there)
-      const keep = kept && size !== undefined && size > 0 ? { keep: true, size } : {};
+    file: async (key, name, thumb = false, onProgress, size) => {
       const whole = async () => {
-        const got = await core().callBytes("station.file", { station, key, name, ...(thumb ? { thumb } : {}), ...(onProgress ? { progress: true } : {}), ...keep }, undefined,
+        const got = await core().callBytes("station.file", { station, key, name, ...(thumb ? { thumb } : {}), ...(onProgress ? { progress: true } : {}) }, undefined,
           onProgress && ((p) => onProgress(p as FileProgress)));
         return blobOf(got.bytes, (got.value as { type: string }).type);
       };
@@ -357,7 +355,7 @@ export function stationCall(call: ReturnType<typeof useCall>, station: string): 
         let got: { value: unknown; bytes?: Uint8Array };
         const from = at;
         try {
-          got = await core().callBytes("station.file.part", { station, key, name, offset: at, length: FILE_PART, ...(onProgress ? { progress: true } : {}), ...keep }, undefined,
+          got = await core().callBytes("station.file.part", { station, key, name, offset: at, length: FILE_PART, ...(onProgress ? { progress: true } : {}) }, undefined,
             onProgress && ((p) => onProgress({ loaded: from + (p as { loaded: number }).loaded, total })));
         } catch (e) {
           // A station from before parts sends it whole, as long as it is not too big for that.
@@ -513,8 +511,9 @@ export function stationApi(t: StationCall) {
     useMachineLogin: (runtime: RuntimeKind) => ops.profileUseMachineLogin<{ id: string; overview: Overview }>({ runtime }),
     /** A keyed profile, made only once its key is checked. */
     addProfile: (input: { runtime?: RuntimeKind; access: { kind: AccessKind; key?: string; provider?: string; endpoint?: string } }) => ops.profileAdd<{ id: string; overview: Overview }>(input),
-    putSlackApp: (connect: string, input: Partial<SlackAppSettings> & { icon?: string }) =>
-      ops.connectPutSlackApp<{ permissionsUpdated: boolean; iconError: string | null; links: SlackAppLinks }>({ connect, input }),
+    /** `from`: the settings the form started from (only what differs from them is written). */
+    putSlackApp: (connect: string, input: Partial<SlackAppSettings> & { icon?: string }, from?: SlackAppSettings) =>
+      ops.connectPutSlackApp<{ permissionsUpdated: boolean; iconError: string | null; links: SlackAppLinks }>({ connect, input, ...(from ? { from } : {}) }),
     /** Makes a Slack app with the workspace's configuration token (still.fail's manifest, Socket Mode on), for a connect to come. */
     /** `install`: Slack's install link, when the app is installed through OAuth (a station in still.fail cloud); `state` names it. */
     /** The app is kept on the station, waiting for its connect (the overview's `slackApps`); this says which it is. */

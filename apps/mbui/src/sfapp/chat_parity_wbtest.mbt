@@ -107,7 +107,11 @@ test "a failure the viewer may report: 上报 asks first, then reports it and sa
     "chat",
     fn(name, v) {
       if name == "chat" {
-        with_chat_message(v, 9.0, [("text", "⚠️ 这一轮没跑完。"), ("reportable", true)])
+        with_chat_message(v, 9.0, [
+          ("text", "⚠️ 这一轮没跑完。"),
+          ("notice", { "failed": true, "words": "这一轮没跑完" }),
+          ("reportable", true),
+        ])
       } else {
         v
       }
@@ -146,6 +150,7 @@ test "a notice that a runtime is missing: its word installs it (software.update)
     if name == "chat" {
       with_chat_message(v, 9.0, [
         ("text", "Studio 上没有 codex。"),
+        ("notice", { "failed": false, "words": "Studio 上没有 codex" }),
         ("install", { "runtime": "codex", "state": "missing", "title": "codex", "action": "安装" }),
       ])
     } else {
@@ -170,7 +175,11 @@ test "a notice about a profile: what went wrong (after its ：) leads to the pro
   let calls : Array[Made] = []
   let t = edited_core(calls, "chat", fn(name, v) {
     if name == "chat" {
-      with_chat_message(v, 9.0, [("profile", "p1")])
+      // (the core says where the profile's link begins: after the ：)
+      with_chat_message(v, 9.0, [
+        ("profile", "p1"),
+        ("notice", { "failed": true, "words": "Studio 上 codex 的登录已失效：请在设置里重新登录", "linkAt": 22 }),
+      ])
     } else {
       v
     }

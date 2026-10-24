@@ -125,7 +125,7 @@ station 的逻辑在 macOS、Linux、Windows 上是同一份。各平台不同�
 
 ## 4. still.fail Helper（`station/native/helper`，`still.fail Helper.app`，只有 macOS）
 
-station 在 macOS 上要系统授权的事都放在这个 app 里：本机屏幕（[remote-screens.md](remote-screens.md)）和「文件」里 macOS 保护的文件夹（文稿、桌面、下载、外接和网络磁盘，[drive.md](drive.md)），以后摄像头这类也加在这里，共用一个授权身份（bundle id `fail.still.helper`）。为什么是单独的 app：屏幕录制、辅助功能这类授权要进程重启才生效，授权给 station 的启动器就得重启 station；给 helper，只重启 helper。
+station 在 macOS 上要系统授权的事都放在这个 app 里：本机屏幕（[remote-screens.md](remote-screens.md)）和「文件」里 macOS 保护的文件夹（文稿、桌面、下载、外接和网络磁盘，[drive.md](drive.md)），以后摄像头这类也加在这里，共用一个授权身份（bundle id `fail.still.helper`）。本机启动的 iOS 模拟器的画面和操作（`simulator.view`，不需要授权，用 `vendor/serve-sim` 的采集和注入）也在这里，和本机屏幕共用编码和消息格式。为什么是单独的 app：屏幕录制、辅助功能这类授权要进程重启才生效，授权给 station 的启动器就得重启 station；给 helper，只重启 helper。
 
 - Swift 写（ScreenCaptureKit、VideoToolbox、CGEvent、SwiftUI 授权窗口），授权窗口照搬 Cue 的 Computer Use，用 `vendor/PermissionFlow`（改动见 vendor/README.md）。`scripts/native.ts` 的 part `helper`（darwin-arm64）用这台 Mac 的 Xcode 编，装进 `still.fail Helper.app`（`Info.plist` 在包目录里，LSUIElement；图标由 `apps/desktop/icon.png` 生成 `AppIcon.icns`，授权窗口和系统设置里显示它）并 ad hoc 签名；发布时 `station-bundle.sh` 放在 `station/` 里 `mesh.node` 旁边，用 `fail.still.helper` 重签。TCC 按 bundle id 加签名要求记授权，同一证书签的新版本沿用授权。
 - station（`src/helper/app.ts`）先把它拷到 `<data>/helper/`（不在别的 app 里面：桌面 app 里 station 在 still.fail.app 内部；代码变了才重拷，并让旧的退出），再用 `open -n -g --env …` 交给 LaunchServices 启动，这样它自己就是 TCC 的“负责进程”。之后在 `<data>/helper/helper.sock` 上一个连接一个请求：先一行 `{token, op, …}`（token 在 `<data>/helper/token`，0600，station 交接后的新进程照样连得上），op 有 `hello`、`status`、`permissions.show`（`grants` 指定窗口里的几行）、`screen.view`（之后这个连接收发画面消息）、`files.*`（保护文件夹的列表、读写等，字节在连接上流式传，`Files.swift` 开头写协议）、`restart`、`quit`，协议写在 `main.swift` 开头。没人连 30 分钟它自己退出，station 停止时让它退出，要用时再起。

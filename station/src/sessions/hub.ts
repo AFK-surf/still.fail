@@ -135,6 +135,8 @@ export class Hub {
   private runtimeMissing: (runtime: RuntimeKind) => void = () => {};
   /// What running turns are doing, for the pages' live view.
   readonly live: LiveHub;
+  /// Stops following the store's sessions starting and stopping (live.ts `running`).
+  private unlistenRunning: () => void = () => {};
   readonly actors = new Map<string, SessionActor>();
   /// When each idle process is next looked at for eviction.
   private deadlines = new Map<string, Fiber.Fiber<void>>();
@@ -187,7 +189,20 @@ export class Hub {
       },
       this.clock,
     );
+    // The sessions at work are followed by the station itself (live.ts `running`): as the store says each starts and
+    // stops, and those at work now. Each transcript's length goes where its summary reads it.
+    this.live.lengths = (key, n) => this.store.setTranscriptLength(key, n);
+    this.unlistenRunning = this.store.subscribe((change) => {
+      if (change.type === "session") this.live.running(change.key, this.store.getSession(change.key)?.running === true);
+      else if (change.type === "sessionRemoved") this.live.running(change.key, false);
+    });
     this.deps = this.sessionDeps();
+  }
+
+  /// The sessions at work as the station starts are followed (live.ts `running`): once where their history is read
+  /// is set (agents.ts), so none is read on the main thread.
+  followRunning() {
+    for (const row of this.store.listSessions()) if (row.running) this.live.running(row.key, true);
   }
 
   config(): HubConfig {
@@ -813,6 +828,7 @@ export class Hub {
 
   async shutdown() {
     this.stopTimers();
+    this.unlistenRunning();
     this.live.close();
     await Promise.all([...this.actors.values()].map((a) => a.dispose()));
     await Promise.all([...this.drivers.values()].map((d) => d.shutdown()));

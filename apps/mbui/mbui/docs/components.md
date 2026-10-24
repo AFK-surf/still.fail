@@ -36,7 +36,17 @@ the gallery: every component in its states, light beside dark (`APP=kitdemo`, `M
    label="Save")`, `Tester::click`, `Tester::act`, `Tester::semantics_dump`), not by coordinates. A modal hides what
    is under it; `Ctx::hidden_from_semantics` hides decoration. The tree is made to be handed to VoiceOver, TalkBack
    and UI Automation later (roles and actions are theirs; an action comes to its widget as input does).
-7. **Each component is tested and shown**: behaviour with a Tester (pointer, touch, keys, its value given from
+7. **The hand is one thing, the layout another.** How a component answers the person's hand goes by
+   `@ui.pointing()` alone (a finger on a phone's or a tablet's system, a mouse or a trackpad on a desktop's): a
+   finger hovers over nothing (`Ctx::hovered` is a mouse's; a lifted finger is nowhere): what a hover lights, its press
+   lights (`Ctx::lit`, the web's `:active` with a coarse pointer: a style's `hovered` patch, a widget's hovered look);
+   a tooltip shows as it holds the trigger, a hover card opens so (or by a tap, `tap`), as Android's; it asks for a menu
+   by holding (`Ctx::menu_asked`), reaches what is smaller than a fingertip from round it (48 across, iOS's 44: the
+   target it touches keeps it, a row's small button wins over the row), and is shown what a mouse is shown only by
+   resting on it. The window's size and the
+   system's size classes decide the layout and nothing of this: a tablet drawn as a desktop's wide frame is still
+   pointed at with a finger, a narrow desktop window still with a mouse.
+8. **Each component is tested and shown**: behaviour with a Tester (pointer, touch, keys, its value given from
    outside, disabled), its semantics asserted, and its states in the gallery, light and dark, as screenshots
    (`scripts/shots.sh kit`, goldens `goldens/mac-kit-*.png`).
 
@@ -94,8 +104,8 @@ The gallery's page for each is `MBUI_SCREEN=<page>`.
 | Dialog | `@kit.dialog(c, key, open, title, description?, modal?) -> Changed[Bool]`: in the window's middle; Escape, the back, a press outside, its close button close it | overlays |
 | AlertDialog | `@kit.alert_dialog(c, key, open, title, action, cancel?, danger?) -> Alert`: opens on cancel; a press outside leaves it | overlays |
 | Popover | `@kit.popover(c, key, open, anchor, side?, along?) -> Changed[Bool]`: by its trigger, the focus in it | overlays |
-| HoverCard | `@kit.hover_card(c, key, trigger, open_delay?, close_delay?) -> Bool`: a mouse resting on its trigger | overlays |
-| Tooltip | `@kit.tooltip(c, key, trigger, text, delay?, skip?) -> Bool`: the pointer resting, or the keyboard's focus at once | overlays |
+| HoverCard | `@kit.hover_card(c, key, trigger, open_delay?, close_delay?, tap?) -> Bool`: a mouse resting on its trigger; a finger holding it (or tapping it, `tap`) | overlays |
+| Tooltip | `@kit.tooltip(c, key, trigger, text, delay?, skip?) -> Bool`: the pointer resting, the keyboard's focus at once, a finger holding the trigger | overlays |
 | Toast | `@kit.toaster(c, key, toasts, duration?) -> Toasts`: at the bottom of the window in its middle, paused under the pointer, swiped away (F8 waits for the hosts' function keys) | overlays |
 | DropdownMenu | `@kit.dropdown_menu(c, key, open, trigger, entries) -> Menu`: entries by `menu_item`, `menu_check`, `menu_radio`, `menu_sub`, `menu_separator`, `menu_label`; letters typed find an item | menus |
 | ContextMenu | `@kit.context_menu(c, key, area, entries) -> Menu`: a right click or a long press, at the pointer | menus |

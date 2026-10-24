@@ -385,6 +385,11 @@ fn fixture_days(f : Fixture) -> Array[Json] {
       "unread": true,
       "tone": "wait",
       "decision": { "seq": 3, "options": [], "text": "奏 · 分组的标题用相对日期还是具体日期？" },
+      // (its line, and what leads it, as the core says them: client/core-ts present.ts rowStateLine)
+      "stateText": "奏 · 分组的标题用相对日期还是具体日期？",
+      "stateLead": "decision",
+      "stateLeadText": "奏",
+      "stateRest": " · 分组的标题用相对日期还是具体日期？",
       "people": [me, ana],
       "creator": { "id": "lin@example.com", "name": "林", "via": "cloud" },
     }),
@@ -392,16 +397,22 @@ fn fixture_days(f : Fixture) -> Array[Json] {
       "state": "failed",
       "tone": "alert",
       "stateText": "要你帮忙：测试机的磁盘满了，要不要清理旧的缓存？",
+      "stateLead": "need",
+      "stateRest": "测试机的磁盘满了，要不要清理旧的缓存？",
       "unread": true,
     }),
     row("c4", "给设置页加一个深色模式开关", "ws1/st1", "40 分钟前", {
       "unread": true,
       "tone": "done",
       "stateText": "做完了：开关和三处颜色都改好了",
+      "stateLead": "done",
+      "stateRest": "开关和三处颜色都改好了",
       "agents": [agent("deepseek", "dsh")],
     }),
     row("c5", "盯着 CI，绿了告诉我", "ws1/st2", "1 小时前", {
       "stateText": "监控中：每 5 分钟看一次主干的构建",
+      "stateLead": "watch",
+      "stateRest": "监控中：每 5 分钟看一次主干的构建",
       "stateAbout": 12,
       "watch": { "text": "监控中：主干构建", "ask": "它会在归档里继续盯着。" },
     }),
@@ -422,6 +433,8 @@ fn fixture_days(f : Fixture) -> Array[Json] {
       "settled": true,
       "archivable": true,
       "stateText": "做完了",
+      "stateLead": "done",
+      "stateRest": "",
     }),
   ]
   let earlier = [
@@ -468,6 +481,8 @@ fn fixture_days(f : Fixture) -> Array[Json] {
         "unread": true,
         "tone": "alert",
         "stateText": "要你帮忙：深色模式下图标看不清，要不要换一套？",
+        "stateLead": "need",
+        "stateRest": "深色模式下图标看不清，要不要换一套？",
         "agents": [agent("deepseek", "dsh")],
       })
     }
@@ -483,13 +498,25 @@ fn fixture_days(f : Fixture) -> Array[Json] {
   if f.mode == "long" {
     // weeks more, six chats a day, every word made up
     let topics = ["例会的记录", "接口的命名", "图标的尺寸", "崩溃的日志", "发布的说明", "测试的清单"]
-    let states = ["做完了", "等你回复", "监控中：每小时看一次", "写到一半", "要你帮忙看一眼", "已经交给评审"]
+    // (each with what leads it, as the core would say: none for words of their own)
+    let states : Array[(String, String, String)] = [
+      ("做完了", "done", ""),
+      ("等你回复", "", ""),
+      ("监控中：每小时看一次", "watch", "监控中：每小时看一次"),
+      ("写到一半", "", ""),
+      ("要你帮忙看一眼", "", ""),
+      ("已经交给评审", "", ""),
+    ]
     for d in 0..<40 {
       let items = Array::makei(6, fn(k) {
         let n = d * 6 + k + 11
-        row("c\{n}", "第 \{n} 个：" + topics[k], if k % 2 == 0 { "ws1/st1" } else { "ws1/st2" }, "\{d + 5} 天前", {
-          "stateText": Json::string(states[(d + k) % 6]),
-        })
+        let (said, lead, rest) = states[(d + k) % 6]
+        let state : Map[String, Json] = { "stateText": Json::string(said) }
+        if lead != "" {
+          state["stateLead"] = Json::string(lead)
+          state["stateRest"] = Json::string(rest)
+        }
+        row("c\{n}", "第 \{n} 个：" + topics[k], if k % 2 == 0 { "ws1/st1" } else { "ws1/st2" }, "\{d + 5} 天前", state)
       })
       days.push({ "daysAgo": Json::number((d + 5).to_double()), "at": 0, "label": Json::string("\{d + 5} 天前"), "items": keep(items) })
     }
@@ -600,9 +627,8 @@ fn fixture_topic_inner(f : Fixture, name : String, params : Map[String, Json]) -
     "accounts" => if f.mode == "signin" { Some([]) } else { Some([account]) }
     // a chat's files downloaded (downloads_fixture.mbt)
     "downloads" => Some(fixture_downloads_topic())
-    // a draft's files going up in the core (composer.add): up at once
-    "composer" =>
-      Some({ "files": Json::array(fix_composers.get(text(Some(Json::object(params)), "key")).unwrap_or([])) })
+    // what is written, as the core's composers keep it (compose_fixture.mbt): its files up at once
+    "composer" => Some(fix_compose_view(f, text(Some(Json::object(params)), "key")))
     // signed in with no workspace yet (landing.mbt): landing, landing-invited (an invitation waiting), blocked (the
     // account not let into this app)
     "workspaces" if f.mode == "landing" || f.mode == "landing-invited" || f.mode == "blocked" => {
@@ -824,6 +850,40 @@ pub fn fixture(mode : String) -> Source {
       fix_later(at + (k - 1).to_double() * 1600.0, fn() { f.step = k })
     }
   }
+  let read_bytes = fn(name : String, params : Json, done : (Result[(Json, Bytes), Json]) -> Unit) {
+    match fixture_kept(name, params, None) {
+      Some(r) => {
+        done(r.map(fn(a) { (a.0, a.1.unwrap_or(Bytes::new(0))) }))
+        return
+      }
+      None => ()
+    }
+    // the faces' files (fonts_fixture.mbt)
+    match fixture_fonts_read(f, name) {
+      Some(r) => {
+        done(r)
+        return
+      }
+      None => ()
+    }
+    // a download's, as the made-up core keeps it (downloads_fixture.mbt)
+    if name == "download.read" && fixture_download_read(params, done) {
+      return
+    }
+    // a chat's made-up files (the preview's), else the made-up drive's
+    if name.has_prefix("station.file") {
+      fixture_fetch(name, params, done)
+      return
+    }
+    // the player's made-up films (play_fixture.mbt)
+    if name == "drive.read" && fixture_play_read(params, done) {
+      return
+    }
+    match fixture_drive_read(name, params) {
+      Some(r) => done(r)
+      None => done(Err({ "code": "unknown_call", "message": "这份假数据没有 " + name }))
+    }
+  }
   {
     topic: fn(name, params) { fixture_topic(f, name, params) },
     call: fn(name, params, done) {
@@ -945,39 +1005,23 @@ pub fn fixture(mode : String) -> Source {
           }
       }
     },
-    read_bytes: fn(name, params, done) {
-      match fixture_kept(name, params, None) {
-        Some(r) => {
-          done(r.map(fn(a) { (a.0, a.1.unwrap_or(Bytes::new(0))) }))
-          return
-        }
-        None => ()
-      }
-      // the faces' files (fonts_fixture.mbt)
-      match fixture_fonts_read(f, name) {
-        Some(r) => {
-          done(r)
-          return
-        }
-        None => ()
-      }
-      // a chat's made-up files (the preview's), else the made-up drive's
-      if name.has_prefix("station.file") {
-        fixture_fetch(name, params, done)
-        return
-      }
-      // the player's made-up films (play_fixture.mbt)
-      if name == "drive.read" && fixture_play_read(params, done) {
-        return
-      }
-      match fixture_drive_read(name, params) {
-        Some(r) => done(r)
-        None => done(Err({ "code": "unknown_call", "message": "这份假数据没有 " + name }))
-      }
-    },
+    read_bytes,
     // a chat's made-up files, whole: here at once, nothing said of how far they have got
     read_going: fn(name, params, _on_value, done) { fixture_fetch(name, params, done) },
     stream: fn(name, params, _bytes, on_value, done) {
+      // a player's part read (preview.mbt stream_part): as read_bytes answers it, its bytes in one piece
+      if name == "station.file.part" || name == "drive.read" {
+        read_bytes(name, params, fn(r) {
+          match r {
+            Ok((v, b)) => {
+              on_value({ "loaded": Json::number(b.length().to_double()) }, Some(b))
+              done(Ok(v))
+            }
+            Err(e) => done(Err(e))
+          }
+        })
+        return 0
+      }
       // a file's part going up (composer.mbt upload_part): as the station takes it, all of it at once
       if name == "station.upload.part" {
         match fixture_chat_call(f, name, params) {
@@ -1083,7 +1127,7 @@ pub fn open_fixture_mode(mode : String) -> Unit {
   }
   // ⌘/'s shortcuts at a glance (wide_keys.mbt keys_dialog)
   if mode == "keys-dialog" {
-    wide.keys_open = true
+    @sfdesk.wide.keys_open = true
   }
 }
 

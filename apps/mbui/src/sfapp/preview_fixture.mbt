@@ -112,7 +112,7 @@ fn fixture_fetch(
   match name {
     "station.file" => done(Ok(({ "type": "" }, bytes)))
     "station.file.part" => {
-      if lower(file).has_suffix(".mp4") || lower(file).has_suffix(".m4a") {
+      if @sf.lower(file).has_suffix(".mp4") || @sf.lower(file).has_suffix(".m4a") {
         // the player waits on the network
         return
       }

@@ -5,11 +5,6 @@
 
 ///|
 fn workspace_page(c : @ui.Ctx, core : Core, here : Here) -> Unit {
-  // (the wide frame's: the web's page, web_workspace.mbt)
-  if wide.val {
-    workspace_page_wide(c, core, here)
-    return
-  }
   let t = @sf.theme()
   let topic = workspace_view(core, here)
   let v = topic.value
@@ -451,4 +446,4 @@ fn member_sheet(core : Core, here : Here, v : Json?, m : Json) -> Unit {
 ///|
 /// A person's name and what marks them (你), in a line (Settings.kt:270: 6 apart).
 // kept across runs: a value (no field of it changes)
-let member_name_row : @ui.Style = @ui.style(row=true, gap=S1_5, align=ACenter)
+let member_name_row : @ui.Style = @ui.css("row gap=S1_5 align=ACenter")

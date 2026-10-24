@@ -10,10 +10,6 @@
 ///|
 /// The automatic decisions (AutomaticDecisionsScreen): its rules, each a row to its page (one: completion).
 fn decisions_page(c : @ui.Ctx, core : Core, here : Here) -> Unit {
-  // the desktop's: the web's (web_decisions.mbt)
-  if wide.val {
-    return decisions_page_wide(c, core, here)
-  }
   scroll_page(c, "auto-decisions", [
     fn() { top_back(c, core, tr("android-settings.title")) },
     fn() { large_title(c, tr("web-pages.automaticDecisions.title"), about=tr("web-pages.automaticDecisions.choosePoint")) },
@@ -46,10 +42,6 @@ fn note_wait(c : @ui.Ctx, words : String, error? : Bool = false) -> Unit {
 /// The completion rule's page (AutomaticDecisionCompletionScreen): each station's settings of it, or why there are
 /// none (offline, older, not read yet).
 fn completion_page(c : @ui.Ctx, core : Core, here : Here) -> Unit {
-  // the desktop's: the web's (web_decisions.mbt)
-  if wide.val {
-    return completion_page_wide(c, core, here)
-  }
   let topic = stations_of(core, here)
   let blocks : Array[() -> Unit] = [
     fn() { top_back(c, core, tr("web-pages.automaticDecisions.title")) },
@@ -263,17 +255,13 @@ fn decision_panel(c : @ui.Ctx, core : Core, station : String, name : String, vie
 
 ///|
 /// The drafts of the stations' archive policies open (`policyForm`), by station.
-let policy_forms : Map[String, String] = Map([])
+pub let policy_forms : Map[String, String] = Map([])
 
 ///|
 /// A station's archive policy (AutomaticDecisionPolicyScreen, ArchivePolicySection): its words and its options in two
 /// groups (to archive, to keep), each with how many chats the checks put there; a tap edits what it is on in a sheet
 /// (the core's draft `policyForm`): the words, an option (with the chats it got), a new option.
 fn policy_page(c : @ui.Ctx, core : Core, here : Here, station : String) -> Unit {
-  // the desktop's: the web's (web_decisions.mbt)
-  if wide.val {
-    return policy_page_wide(c, core, here, station)
-  }
   let t = @sf.theme()
   let s = station_of(core, here, station)
   let view = if flag(s, "online") { field(field(s, "overview"), "automaticDecisions") } else { None }
@@ -738,7 +726,7 @@ let place_lifted : @sf.Raised = @sf.raised(6.0, ambient=0.14, spot=0.14)
 ///|
 /// A place on its bar as it lies.
 // kept across runs: a value (no field of it changes)
-let place_slot : @ui.Style = @ui.style()
+let place_slot : @ui.Style = @ui.css("")
 
 ///|
 /// A place held: on the card's ground, raised (place_lifted).
@@ -1195,7 +1183,7 @@ fn kept_file_row(c : @ui.Ctx, core : Core, station : String, f : Json, piece : (
 ///|
 /// A kept file's bin (KeptFiles.kt: a 36 circle, its icon in its middle).
 // kept across runs: a value (no field of it changes)
-let kept_bin : @ui.Style = @ui.style(w=S9, h=S9, radius=Full, align=ACenter, justify=JCenter)
+let kept_bin : @ui.Style = @ui.css("w=S9 h=S9 radius=Full align=ACenter justify=JCenter")
 
 ///|
 /// A chat's (KeptChatScreen): what is kept of its messages, deleted when asked (`cache.clear`: read again from its
@@ -1382,15 +1370,18 @@ fn change_item(c : @ui.Ctx, e : Json?) -> Unit {
       if label == "" {
         c.text(text(lv, "text"), size=15.0, color=t.p.text, w=Fill(1.0), line=21.0) |> ignore
       } else {
+        // the label inline before the words, which wrap under it (Changelog.css.ts mKind, in ems of its 13: 6 either
+        // side, 19 high, 6 round, 6 before the words)
         let fresh = text(lv, "kind") == "new"
-        c.box(dir=Row, w=Fill(1.0), gap=6.0, fn() {
-          c.box(padx=6.0, radius=6.0, bg=if fresh { t.p.accent_bg } else { t.p.chip }, fn() {
-            c.text(label, size=13.0, color=if fresh { t.p.accent_text } else { t.p.muted }, wrap=false, line=19.0) |> ignore
-          })
-          |> ignore
-          c.text(text(lv, "text"), size=15.0, color=t.p.text, w=Fill(1.0), line=21.0) |> ignore
-        })
-        |> ignore
+        let ground : @ui.Ground = { room: 6.0 / 13.0, height: 19.0 / 13.0, corner: 6.0 / 13.0, after: 6.0 / 13.0 }
+        let kind = @ui.span(
+          label,
+          scale=13.0 / 15.0,
+          color=if fresh { t.p.accent_text } else { t.p.muted },
+          bg=if fresh { t.p.accent_bg } else { t.p.chip },
+          ground=Some(ground),
+        )
+        c.rich([kind, @ui.plain(text(lv, "text"))], size=15.0, color=t.p.text, w=Fill(1.0), line=21.0) |> ignore
       }
     }
     c.box(dir=Row, w=Fill(1.0), gap=10.0, fn() {
@@ -1479,4 +1470,23 @@ fn prices_page(c : @ui.Ctx, core : Core, here : Here, days : Int) -> Unit {
   }
   blocks.push(fn() { gap(c, 30.0) })
   scroll_page(c, "prices/" + days.to_string(), blocks)
+}
+
+///|
+/// A station's rule's draft (`decisionForm`), opened once (by the frame's builds' end) and kept by station: the
+/// phone's completion page's and the desktop's (src/sfdesk automatic_decisions.mbt).
+pub fn decision_form(c : @ui.Ctx, core : Core, station : String) -> String {
+  match decision_forms.get(station) {
+    Some(f) => f
+    None => {
+      profile_forms.val += 1
+      let f = "mbui-decision-" + profile_forms.val.to_string()
+      decision_forms[station] = f
+      // (opened once the frame's builds are over: the build that first comes to it alone)
+      c.tell("decision-open/" + f, fn() {
+        act(core, tr("web-pages.automaticDecisions.configAction"), "automaticDecisions.form.open", obj([("station", str(station)), ("form", str(f)), ("input", obj([]))]))
+      })
+      f
+    }
+  }
 }

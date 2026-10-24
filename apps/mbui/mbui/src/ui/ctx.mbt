@@ -131,6 +131,9 @@ struct EditorState {
   mut limit : Int
   /// Enter sends (the words go to `submitted`); else it is a new line
   mut enter_sends : Bool
+  /// the keys it leaves to the app, pressed with nothing held (a menu the field offers, chosen in by ↑ / ↓, picked
+  /// from by Enter: the web's preventDefault on them)
+  mut leaves : Array[Int]
   /// the input method's action key for it (@hostapi.ime_action_*: a search field's)
   mut ime_action : Int
   /// its look, as the last frame said it: the line's height (0: the font's), the words', the placeholder's, the
@@ -237,12 +240,17 @@ pub struct Ctx {
   /// when the pointer's latest event (down, moved, up) came, its own time (Ctx::pointer_at)
   mut pointer_t : Double
   mut held_told : Double
+  /// what a press told held long (Ctx::long_press) was on, and in which frame
+  mut held_on : Int
+  mut held_frame : Int
   /// the press as frames see it (Ctx::press, press.mbt): as the frame it was last worked out in saw it, whether a
   /// frame saw it down, when one first did
   mut press_seen : Press
   mut press_seen_frame : Int
   mut press_was_down : Bool
   mut press_seen_at : Double
+  /// the keys held as the pointer last went down (Press::mods)
+  mut press_mods : Int
   /// a tap this frame (a press let go without dragging, not taken by the app: Ctx::tapped_anywhere), and the press
   /// the app took (Ctx::take_press)
   mut tapped : (Double, Double)?
@@ -464,10 +472,13 @@ fn Ctx::new() -> Ctx {
     press_late: false,
     pointer_t: 0.0,
     held_told: -1.0,
+    held_on: 0,
+    held_frame: -1,
     press_seen: no_press,
     press_seen_frame: -1,
     press_was_down: false,
     press_seen_at: -1.0,
+    press_mods: 0,
     tapped: None,
     taken_at: -1.0,
     press_y: 0.0,
@@ -754,7 +765,7 @@ pub fn Ctx::box(
         self.narrow,
         self.theme.dark,
         selected,
-        id != 0 && self.hovered(id),
+        id != 0 && self.lit(id),
         id != 0 && self.focus_shown(id),
         id != 0 && self.pressed(id),
         disabled,
@@ -1164,8 +1175,20 @@ pub fn Ctx::set_clear(self : Ctx, color : Int64) -> Unit {
 }
 
 ///|
+/// Whether a mouse's pointer rests on `id` (a finger hovers over nothing: Pointing). For what only a resting pointer
+/// is shown; a look that answers the hand on it is Ctx::lit.
 pub fn Ctx::hovered(self : Ctx, id : Int) -> Bool {
   self.hover == id
+}
+
+///|
+/// Whether `id` is lit by the hand on it: a mouse's pointer resting on it, a finger pressing it (the web's `:hover`
+/// with a fine pointer, `:active` with a coarse one). What a style's `hovered` patch and a widget's hovered look go by.
+pub fn Ctx::lit(self : Ctx, id : Int) -> Bool {
+  match pointing() {
+    Mouse => self.hover == id
+    Finger => self.pressed(id)
+  }
 }
 
 ///|
@@ -1292,8 +1315,18 @@ pub fn Ctx::pointer_at(self : Ctx) -> Double {
 }
 
 ///|
+/// How fast the pointer went at its latest event (points per ms, across and down; at most a fling's fastest): what a
+/// list let go flings at (Compose's VelocityTracker over the press's events, by their own times), for what else a
+/// finger lets go of moving (a picture zoomed in).
+pub fn Ctx::pointer_velocity(self : Ctx) -> (Double, Double) {
+  ignore(self)
+  (dclamp(track_x.velocity(), -max_fling, max_fling), dclamp(track_y.velocity(), -max_fling, max_fling))
+}
+
+///|
 fn hit_in(ids : Array[Int], rects : Array[Double], x : Double, y : Double) -> Int {
-  let clips = if physical_equal(rects, g().hit_rects) { g().hit_clips } else { [] }
+  let targets = physical_equal(rects, g().hit_rects)
+  let clips = if targets { g().hit_clips } else { [] }
   let mut k = ids.length() - 1
   while k >= 0 {
     let r = k * 4
@@ -1302,11 +1335,84 @@ fn hit_in(ids : Array[Int], rects : Array[Double], x : Double, y : Double) -> In
       y >= rects[r + 1] &&
       y < rects[r + 3] &&
       in_round_clip(clips, k, x, y) {
-      return ids[k]
+      break
     }
     k = k - 1
   }
-  0
+  // a finger: what is smaller than a fingertip is reached from round it (Pointing)
+  if targets && pointing() is Finger {
+    match finger_reach(ids, rects, clips, k, x, y) {
+      Some(id) => return id
+      None => ()
+    }
+  }
+  if k >= 0 {
+    ids[k]
+  } else {
+    0
+  }
+}
+
+///|
+/// The least a finger's target is across, each way: the system's (Android's 48 dp, Compose's
+/// minimumInteractiveComponentSize; iOS's 44 pt).
+fn finger_target() -> Double {
+  if h_platform() == 1 {
+    44.0
+  } else {
+    48.0
+  }
+}
+
+///|
+/// What a finger at (x, y) reaches that it does not touch (Compose's minimum touch target): a target smaller than
+/// finger_target, grown to it round its middle (not drawn so, nor laid out), drawn over `top` (the target the finger
+/// is on, -1 none) and within it (a row's small button, not the row's neighbour: the one touched keeps it), within
+/// what cuts it; of several, the nearest.
+fn finger_reach(
+  ids : Array[Int],
+  rects : Array[Double],
+  clips : Array[Double],
+  top : Int,
+  x : Double,
+  y : Double,
+) -> Int? {
+  let least = finger_target()
+  let mut best : Int? = None
+  let mut best_d = 1.0e9
+  for k in (top + 1)..<ids.length() {
+    let r = k * 4
+    let (x0, y0, x1, y1) = (rects[r], rects[r + 1], rects[r + 2], rects[r + 3])
+    let (w, h) = (x1 - x0, y1 - y0)
+    if w <= 0.0 || h <= 0.0 || (w >= least && h >= least) {
+      continue
+    }
+    let gx = dmax(0.0, (least - w) / 2.0)
+    let gy = dmax(0.0, (least - h) / 2.0)
+    if x < x0 - gx || x >= x1 + gx || y < y0 - gy || y >= y1 + gy {
+      continue
+    }
+    // within what cuts it (a list's edge), and within what the finger is on
+    let b = k * clip_n
+    if b + clip_n <= clips.length() &&
+      (x < clips[b] || x >= clips[b + 2] || y < clips[b + 1] || y >= clips[b + 3]) {
+      continue
+    }
+    if top >= 0 {
+      let t = top * 4
+      if x0 < rects[t] || y0 < rects[t + 1] || x1 > rects[t + 2] || y1 > rects[t + 3] {
+        continue
+      }
+    }
+    let dx = dmax(0.0, dmax(x0 - x, x - x1))
+    let dy = dmax(0.0, dmax(y0 - y, y - y1))
+    let d = dx * dx + dy * dy
+    if d < best_d {
+      best_d = d
+      best = Some(ids[k])
+    }
+  }
+  best
 }
 
 ///|

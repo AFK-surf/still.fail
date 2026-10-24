@@ -177,5 +177,31 @@ pub fn reset() -> Unit {
   shown_days.clear()
   // the core's downloads being taken and kept (downloads.mbt)
   downloads_reset()
+  // the drafts as the core keeps them (compose.mbt)
+  writings_reset()
+  // what was sent from here, not in the core's view yet (sent.mbt)
+  sent_reset()
+  // what the composers' fields were seen as, their marks and `@` words (refs.mbt)
+  refs_reset()
+  // what was asked of the core from a button, under way or failed (act.mbt)
+  acting_reset()
+  // the messages chats are to go to (jump.mbt)
+  go_tos.clear()
+  go_to_words.clear()
+  // a new chat while it is made (fresh.mbt)
+  fresh_reset()
+  // how times are said (message_words.mbt)
+  absolute_times.val = false
+  // a chat's list's turns and its messages out of avatars (list_turns.mbt, emit.mbt)
+  turns_by.clear()
+  emits.clear()
+  // words sent flying (flight.mbt)
+  send_flight.val = None
+  // the chats' lists as kept while they show and where they were left (chat_list.mbt)
+  read_chats.clear()
+  readings.clear()
+  kept_places.clear()
+  flash_held.val = false
+  at_end_env.val = -1
 }
 

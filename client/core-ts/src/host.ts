@@ -103,6 +103,14 @@ export interface Host {
   storageGet(key: string): Effect.Effect<Uint8Array | null, HostError>;
   storageSet(key: string, value: Uint8Array): Effect.Effect<void, HostError>;
   storageDelete(key: string): Effect.Effect<void, HostError>;
+  /// Where the value kept under `key` is, as a file of this device's: for what the app reads there itself (a face's
+  /// file given to the system by its path, not carried whole). Null while none is kept; none on a host whose values are
+  /// not files (a web page).
+  storagePath?(key: string): string | null;
+  /// Bytes `start` to `end` of a file the app saved where the person keeps files (`at`, as the system named it once it
+  /// was saved: a path, a content address); null when it is no longer there or cannot be read. A host without one (the
+  /// web: what the browser saved is out of the page's reach) keeps the device's copy of a download in its cache.
+  savedRead?(at: string, start: number, end: number): Effect.Effect<Uint8Array | null, HostError>;
 
   /// Values the system keeps sealed (docs/vault.md, "设备上的钥匙"): an app's only (Android's Keystore; the desktop's
   /// Electron safeStorage, its key in the macOS keychain or Windows' DPAPI); a web page has none. `user: true`: reading

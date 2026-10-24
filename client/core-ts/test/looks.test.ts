@@ -79,6 +79,9 @@ test("the_memory_reads_in_parts_with_how_long_each_is", () => {
   const skill = memory.skills[0];
   assert.equal(skill.brief, "ember / still.fail。开发 ember 时使用。");
   assert.deepEqual([skill.files[0].label, skill.files[0].size, skill.size], ["design", "6 B", "12 B"]);
+  // what its page and row say, the core's: its kind, when it is read, its pages
+  assert.deepEqual([skill.kindText, skill.line], ["项目记忆", "ember / still.fail。开发 ember 时使用。"]);
+  assert.deepEqual(skill.pages.map((p: J) => [p.key, p.label, p.text]), [["", "总览", "总览"], ["design.md", "design", "设计"]]);
   assert.deepEqual(memorySections("开头的话\n## 一\n- a").map((s: J) => s.title), ["开头", "一"]);
   assert.deepEqual(memorySections("# 标题\n只有一段").map((s: J) => [s.title, s.text]), [["全文", "只有一段"]]);
   assert.deepEqual(memorySections(""), []);

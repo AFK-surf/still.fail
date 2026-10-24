@@ -41,6 +41,27 @@ pub fn platform() -> Int {
 }
 
 ///|
+/// What the person points with: a finger on the screen, or a mouse or a trackpad moving a pointer over it.
+pub(all) enum Pointing {
+  Finger
+  Mouse
+} derive(Eq, Show, Debug)
+
+///|
+/// What the person points with here (a Tester's: its `platform`'s): a finger on a phone's or a tablet's system (iOS,
+/// Android), a mouse or a trackpad on a desktop's. The one source of how things answer a person's hand: whether
+/// anything is hovered (a finger hovers over nothing: Ctx::hovered, a tooltip, a hover card), how a menu is asked for
+/// (Ctx::menu_asked), what shows only to a pointer resting on it, how a press, a drag and Enter work. Never what the
+/// window's size or the system's size classes decide (the layout: how many panes, how wide, how large the words);
+/// never these by them.
+pub fn pointing() -> Pointing {
+  match h_platform() {
+    1 | 2 => Finger
+    _ => Mouse
+  }
+}
+
+///|
 /// Whether the system is set to dark (a Tester's `dark`).
 pub fn system_dark() -> Bool {
   match fake.val {

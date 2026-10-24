@@ -1143,6 +1143,7 @@ let en : Map[String, String] = {
   "web-pages.profiles.share.stations": "Stations that can use it",
   "web-pages.profiles.share.switch": "Share with other stations",
   "web-pages.profiles.share.title": "Sharing",
+  "web-pages.profiles.models": "Models",
   "web-pages.profiles.share.unshared": "No longer shared",
   "web-pages.profiles.share.users": "In use on {stations}",
   "web-pages.profiles.step1": "Open the auth page, sign in with the Claude account for {name}, and approve",

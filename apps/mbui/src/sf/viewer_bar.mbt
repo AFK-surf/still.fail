@@ -105,7 +105,7 @@ pub fn viewer_tool(
   if live {
     c.cursor(id, Hand)
   }
-  let hot = live && (c.hovered(id) || c.pressed(id))
+  let hot = live && (c.lit(id) || c.pressed(id))
   let b = c.box(style=viewer_tool_box, selected=on, disabled~, id=if live { id } else { 0 }, fn() {
     icon(c, icon_name, size=viewer_tool_icon, color=if on || hot { ink.ink } else { ink.muted }) |> ignore
   })
@@ -117,9 +117,20 @@ pub fn viewer_tool(
 }
 
 ///|
-/// Download, as every bar has it last (ViewerDownload). True on the frame after it was pressed.
-pub fn viewer_download(c : @ui.Ctx, key : String, ink : ViewerInk, disabled? : Bool = false) -> Bool {
-  viewer_tool(c, key, "download", t("web-main.preview.download"), ink, disabled~)
+/// Download, as every bar has it last (ViewerDownload). True on the frame after it was pressed. `coming`: how far a
+/// download of it has come (0 to 1), a ring of the file's ink in its place meanwhile, not pressed again.
+pub fn viewer_download(c : @ui.Ctx, key : String, ink : ViewerInk, disabled? : Bool = false, coming? : Double) -> Bool {
+  match coming {
+    Some(part) => {
+      let label = t("web-main.preview.download")
+      let b = c.box(style=viewer_tool_box, disabled=true, fn() {
+        progress_ring(c, viewer_tool_icon, part, ink.ink) |> ignore
+      })
+      c.semantics(b, Button, label~, disabled=true)
+      false
+    }
+    None => viewer_tool(c, key, "download", t("web-main.preview.download"), ink, disabled~)
+  }
 }
 
 ///|
@@ -214,12 +225,12 @@ let viewer_buttons_w : Double = 72.0
 
 ///|
 // kept across runs: a value (no field of it changes)
-let viewer_bar_box : @ui.Style = @ui.style(w=Full)
+let viewer_bar_box : @ui.Style = @ui.css("w=Full")
 
 ///|
 /// Its row: 44 of its 45 (the line under it the last), 12 in, 16 between its three parts.
 // kept across runs: a value (no field of it changes)
-let viewer_bar_row : @ui.Style = @ui.style(row=true, w=Full, h=S11, px=S3, gap=S4, align=ACenter)
+let viewer_bar_row : @ui.Style = @ui.css("row w=Full h=S11 px=S3 gap=S4 align=ACenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -235,25 +246,16 @@ let viewer_bar_end : @ui.Style = @ui.style(row=true, w=grow, gap=S0_5, align=ACe
 
 ///|
 // kept across runs: a value (no field of it changes)
-let viewer_bar_middle : @ui.Style = @ui.style(align=ACenter, clip=true)
+let viewer_bar_middle : @ui.Style = @ui.css("align=ACenter clip")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let viewer_bar_rule : @ui.Style = @ui.style(w=Full, h=SPx)
+let viewer_bar_rule : @ui.Style = @ui.css("w=Full h=SPx")
 
 ///|
 /// The way back (ViewerBar.css.ts back): 32 high, 4 before the chevron and 10 after the words, the page's corner.
 // kept across runs: a value (no field of it changes)
-let viewer_back_box : @ui.Style = @ui.style(
-  row=true,
-  h=S8,
-  pl=S1,
-  pr=S2_5,
-  gap=S0_5,
-  align=ACenter,
-  radius=Xl,
-  hovered=@ui.patch(bg=Hover),
-)
+let viewer_back_box : @ui.Style = @ui.css("row h=S8 pl=S1 pr=S2_5 gap=S0_5 align=ACenter radius=Xl hovered{bg=Hover}")
 
 ///|
 /// Words in the bar: the way back's and the name 13 on 20 (the name in 600), what is said of it 11 on 16.
@@ -271,13 +273,6 @@ let viewer_meta_words : @ui.TextStyle = @ui.text_style(size=Xs2, leading=L4, wra
 ///|
 /// A tool (page.css.ts iconBtn): 32, the page's corner, the page's hover under the pointer, its chosen ground on.
 // kept across runs: a value (no field of it changes)
-let viewer_tool_box : @ui.Style = @ui.style(
-  w=S8,
-  h=S8,
-  radius=Xl,
-  align=ACenter,
-  justify=JCenter,
-  hovered=@ui.patch(bg=Hover),
-  selected=@ui.patch(bg=Selected),
-  disabled=@ui.patch(opacity=O35),
+let viewer_tool_box : @ui.Style = @ui.css(
+  #|w=S8 h=S8 radius=Xl align=ACenter justify=JCenter hovered{bg=Hover} selected{bg=Selected} disabled{opacity=O35}
 )

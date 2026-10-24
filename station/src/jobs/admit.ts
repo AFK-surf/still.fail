@@ -3,8 +3,10 @@
 // start at once. Nothing is estimated beforehand (a build takes more or less by its caches): what is measured decides.
 //
 // - With no task of the queue running, the first that waits starts, however busy the machine is: one always goes on.
-// - Another starts only once the last one started has had RAMP_MS to get going, and the CPUs were busy less than
-//   BUSY_MAX over the last BUSY_SPAN_MS: tasks come in one by one while there is room.
+// - Another starts only once the CPUs, looked at since the last one started (while that one still runs: one that
+//   ended has nothing more to show), were busy less than BUSY_MAX: tasks come in one by one while there is room.
+//   (A flat 30 s after each start held a task of an idle machine back minutes when several sessions each had one
+//   waiting, 2026-10-24: two a minute, the CPUs at 5%.)
 // - None starts while the system says its memory is under pressure (high or critical).
 // - A task that uses the screen (windows, a simulator, screenshots) starts only while no other such task runs.
 // - Which one: of the sessions that have tasks waiting, the one whose task last started longest ago (one never started
@@ -18,13 +20,13 @@ import type { Ticks } from "../read/host.ts";
 /// read.
 export type Pressure = "normal" | "high" | "critical";
 
-/// How long the last task started is left to get going before the CPUs are looked at for another.
-export const RAMP_MS = 30_000;
 /// The CPUs busy less than this over BUSY_SPAN_MS: there is room for another task.
 export const BUSY_MAX = 0.8;
 /// Over how long the CPUs are looked at, and how often.
 export const BUSY_SPAN_MS = 20_000;
 export const LOOK_MS = 5000;
+/// How long, at least, the CPUs are looked at after a task starts before another may (two looks: its load shows).
+export const RAMP_MS = 2 * LOOK_MS;
 
 export type Waiting = { id: string; session: string; screen: boolean; queuedAt: number };
 export type Started = { id: string; screen: boolean };
@@ -42,9 +44,10 @@ export class Busy {
     if (ticks !== null) this.seen.push({ at, ticks });
   }
 
-  /// The share (0–1) since the oldest ticks kept; null before they span half of BUSY_SPAN_MS.
-  share(): number | null {
-    const first = this.seen[0];
+  /// The share (0–1) since the oldest ticks kept, or the oldest noted at `since` or after; null before they span half
+  /// of BUSY_SPAN_MS.
+  share(since: number | null = null): number | null {
+    const first = since === null ? this.seen[0] : this.seen.find((s) => s.at >= since);
     const last = this.seen.at(-1);
     if (first === undefined || last === undefined || last.at - first.at < BUSY_SPAN_MS / 2) return null;
     const [b0, t0] = first.ticks;

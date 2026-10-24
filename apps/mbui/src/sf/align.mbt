@@ -181,17 +181,17 @@ pub fn into_column(offset : Double) -> @ui.Style {
 ///|
 /// What a layer holds centred in it, both ways (centred: the web's by translate, placed absolutely).
 // kept across runs: a value (no field of it changes)
-pub let centred : @ui.Style = @ui.style(w=Full, h=Full, align=ACenter, justify=JCenter)
+pub let centred : @ui.Style = @ui.css("w=Full h=Full align=ACenter justify=JCenter")
 
 ///|
 /// Centred across only (centredX).
 // kept across runs: a value (no field of it changes)
-pub let centred_x : @ui.Style = @ui.style(w=Full, align=ACenter)
+pub let centred_x : @ui.Style = @ui.css("w=Full align=ACenter")
 
 ///|
 /// Centred up and down only (centredY).
 // kept across runs: a value (no field of it changes)
-pub let centred_y : @ui.Style = @ui.style(h=Full, justify=JCenter)
+pub let centred_y : @ui.Style = @ui.css("h=Full justify=JCenter")
 
 ///|
 /// Each after the first laid `x` over the one before (faces in a stack): overlap.

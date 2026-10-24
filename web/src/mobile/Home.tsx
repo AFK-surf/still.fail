@@ -470,7 +470,7 @@ const ChatRow = memo(function ChatRow({ item, lead }: { item: ChatItem; lead: "a
       <span className={css.mChatLine2}>
         {/* Where it stands, when the core has words for it (奏 · …, 要你帮忙：…, 做完了), instead. */}
         <span className={css.mChatLast}>{stateLine(item)
-          ? <span className={css.mLast}><WaitingText slot alert={item.unsent === true} text={stateLine(item)!} className={css.mLastText} /></span>
+          ? <span className={css.mLast}><WaitingText slot alert={item.unsent === true} text={stateLine(item)!} lead={item.stateLead} leadText={item.stateLeadText} rest={item.stateRest} className={css.mLastText} /></span>
           : item.last && <LastMessage item={item} />}</span>
         <RowAside item={item} lead={lead} size={18} className={css.mRowAside} />
         <span className={css.mChatTime} data-shown={held || undefined}>{item.time?.lastActiveAt?.ago ?? ""}</span>

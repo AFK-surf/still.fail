@@ -36,42 +36,32 @@ pub(all) struct Shown {
 }
 
 ///|
-/// What is dragged on the files' page and where it can be let go, as the app has it (src/sfapp/wide_files_drag.mbt,
-/// drag.ts) until its drag is the desk's own: a row pressed (what it would carry), a place it can be let go this frame
-/// (its id, its key, the folder, its name, whether its station takes what is written there and copies from others, how
-/// deep it lies: what a drop there does while what is held is over it), whether a row is what is being dragged.
-pub(all) struct DeskDrag {
-  press : (@ui.Ctx, Source, DriveAt, DvEntry) -> Unit
-  target : (@ui.Ctx, Int, String, DriveAt, String, Bool, Bool, Int) -> String?
-  carried : (String, String, String) -> Bool
-}
-
-///|
-// kept across runs: given once as the app starts (src/sfapp/app.mbt)
-pub let desk_drag : Ref[DeskDrag?] = Ref(None)
-
-///|
+/// A row pressed: what it would carry (drag.mbt), as the web's draggedOf has it.
 fn drag_press(c : @ui.Ctx, src : Source, at : DriveAt, e : DvEntry) -> Unit {
-  match desk_drag.val {
-    Some(d) => (d.press)(c, src, at, e)
-    None => ()
-  }
+  let root = at.root.unwrap_or("")
+  let path = dv_join(at.path, e.name)
+  fdrag_press(c, {
+    station: at.station,
+    station_name: station_name(src, at.station),
+    root,
+    path,
+    abs: dv_absolute(root, path),
+    name: e.name,
+    size: e.size,
+    dir: e.dir,
+  })
 }
 
 ///|
+/// A place a row or a column can be let go this frame (drag.mbt fdrag_target), as its folder is shown.
 fn drag_target(c : @ui.Ctx, id : Int, key : String, into : DriveAt, name : String, s : Shown, depth : Int) -> String? {
-  match desk_drag.val {
-    Some(d) => (d.target)(c, id, key, into, name, s.write, s.transfers, depth)
-    None => None
-  }
+  fdrag_target(c, id, key, Some(into), name, s.write, s.transfers, depth)
 }
 
 ///|
+/// Whether the row `name` of the folder `at` is what is being dragged.
 fn drag_carried(at : DriveAt, name : String) -> Bool {
-  match desk_drag.val {
-    Some(d) => (d.carried)(at.station, at.root.unwrap_or(""), dv_join(at.path, name))
-    None => false
-  }
+  fdrag_carried(at.station, at.root.unwrap_or(""), dv_join(at.path, name))
 }
 
 ///|
@@ -106,7 +96,7 @@ pub fn view_switch(c : @ui.Ctx, key : String, value : String, on_change : (Strin
       if c.clicked(id) && !on {
         on_change(v)
       }
-      let hot = c.hovered(id)
+      let hot = c.lit(id)
       let x = c.box(style=if on { view_on } else { view_off }, id~, fn() {
         @sf.icon(c, icon, size=view_icon, color=if on || hot { t.p.text } else { t.p.muted }) |> ignore
       })
@@ -503,7 +493,7 @@ fn column_edge(c : @ui.Ctx, src : Source, s : Shown, path : String, column : Int
   }
   let words = @sf.t("web-pages.drive.resizeColumn")
   let b = c.box(style=column_edge_room, id~, fn() {
-    @sf.edge_look(c, key, over~, on=c.hovered(id) || c.focus_shown(id) || active, active~)
+    @sf.edge_look(c, key, over~, on=c.lit(id) || c.focus_shown(id) || active, active~)
   })
   c.semantics(b, Separator, id~, label=words)
   if !active {
@@ -537,11 +527,11 @@ let view_icon : Double = 16.0
 
 ///|
 // kept across runs: a value (no field of it changes)
-let tree_note : @ui.Style = @ui.style(row=true, w=Full, pt=S2, pb=S2, pr=S2_5)
+let tree_note : @ui.Style = @ui.css("row w=Full pt=S2 pb=S2 pr=S2_5")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let column_note : @ui.Style = tree_note.then(@ui.style(pl=S2_5))
+let column_note : @ui.Style = tree_note.then(@ui.css("pl=S2_5"))
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -554,30 +544,30 @@ let tree_error : @ui.TextStyle = @ui.text_style(size=Xs, color=Danger, w=Full)
 ///|
 /// The ways' track (Drive.css.ts views): 2 in, 2 apart, round, on the words' colour at 6%.
 // kept across runs: a value (no field of it changes)
-let views_track : @ui.Style = @ui.style(row=true, p=S0_5, gap=S0_5, radius=Full, bg=Tint, align=ACenter)
+let views_track : @ui.Style = @ui.css("row p=S0_5 gap=S0_5 radius=Full bg=Tint align=ACenter")
 
 ///|
 /// A way (viewButton): 28 round; the one shown on the page's ground, a hairline and a shadow round it.
 // kept across runs: a value (no field of it changes)
-let view_off : @ui.Style = @ui.style(w=S7, h=S7, radius=Full, align=ACenter, justify=JCenter)
+let view_off : @ui.Style = @ui.css("w=S7 h=S7 radius=Full align=ACenter justify=JCenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let view_on : @ui.Style = view_off.then(@ui.style(bg=Bg, border=B0_5, border_color=Line, shadow=Sm))
+let view_on : @ui.Style = view_off.then(@ui.css("bg=Bg border=B0_5 border_color=Line shadow=Sm"))
 
 ///|
 /// The columns side by side (Drive.css.ts columns), as tall as the list.
 // kept across runs: a value (no field of it changes)
-let columns_strip : @ui.Style = @ui.style(row=true, w=Full, h=Full)
+let columns_strip : @ui.Style = @ui.css("row w=Full h=Full")
 
 ///|
 /// A column (column): as tall as the strip, its rows 2 apart, its corner the field's; lit while a drop goes into it.
 // kept across runs: a value (no field of it changes)
-let column_box : @ui.Style = @ui.style(h=Full, radius=Xl, clip=true)
+let column_box : @ui.Style = @ui.css("h=Full radius=Xl clip")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let column_drop : @ui.Style = @ui.style(bg=AccentBg)
+let column_drop : @ui.Style = @ui.css("bg=AccentBg")
 
 ///|
 /// An edge: as wide as the gap between two columns (6), the library's look from its left.

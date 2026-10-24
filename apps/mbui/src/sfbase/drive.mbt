@@ -59,6 +59,12 @@ pub(all) struct DvStation {
   role : String
   /// whether it takes copies from another station (`drive.transfer`: one from before does not)
   transfers : Bool
+  /// its mark (StationMark: an emoji, or an icon's name), none set
+  emoji : String
+  icon : String
+  /// its disk's size and what is free on it (none known: 0)
+  disk_total : Double
+  disk_free : Double
 }
 
 ///|
@@ -102,6 +108,10 @@ pub fn dv_station(v : Json) -> DvStation {
     zip: flag(d, "zip") || flag(d, "anywhere"),
     role: text(field(ov, "viewer"), "role"),
     transfers: flag(d, "transfers"),
+    emoji: text(s, "emoji"),
+    icon: text(s, "icon"),
+    disk_total: number(field(ov, "disk"), "totalBytes"),
+    disk_free: number(field(ov, "disk"), "freeBytes"),
   }
 }
 
@@ -310,3 +320,18 @@ pub fn dv_free_name(name : String, taken : Array[String]) -> String {
 /// src/sfapp/open_file.mbt), the others of its folder to step to beside it; given as the app starts.
 // kept across runs: given once as the app starts (src/sfapp/app.mbt)
 pub let drive_viewer : Ref[(@ui.Ctx, Source, DriveFile, Array[DriveFile]) -> Unit] = Ref(fn(_, _, _, _) {  })
+
+///|
+/// A station's file or folder dragged out of a list of its drive (drag.ts Dragged: the files' page, a chat's 文件 tab):
+/// its station and that station's name, its root and its path under it, its absolute path, its name, its size,
+/// whether it is a folder. What a composer takes of it is named by its path on its station.
+pub(all) struct Dragged {
+  station : String
+  station_name : String
+  root : String
+  path : String
+  abs : String
+  name : String
+  size : Double
+  dir : Bool
+}

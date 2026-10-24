@@ -7,8 +7,9 @@ import { COMPOSER_INNER, composerBox } from "./styles/composer.css.ts";
 import { tokenStart } from "./pages/Connect.css.ts";
 import { msgAvatar, msgMine, msgWaiting } from "./styles/chat.css.ts";
 import { onboardingCard } from "./cloud/settings.css.ts";
+import { tableScroll } from "./Prose.css.ts";
 import { glass } from "@stillfail/ui/styles/glass.ts";
-import { columns, outsetStart } from "@stillfail/ui/styles/align.ts";
+import { bleedX, columns, outsetStart } from "@stillfail/ui/styles/align.ts";
 import { spinner } from "@stillfail/ui/styles/spinner.css.ts";
 import { STILL, stillAtOnce, stillLoop } from "@stillfail/ui/styles/still.ts";
 import { segments, spokesStep, wholeRing } from "@stillfail/ui/styles/spokes.ts";
@@ -242,6 +243,12 @@ export const msgMain = style({
     },
   },
 });
+/**
+ * A message's own table (not one in a list item or a quote) scrolls through the room its list leaves beside the words
+ * too, where that room is only the page's margin (`--list-gutter`, set by such a list: the phone's; the wide screen's
+ * holds the avatars): scrolled, it runs to the screen's edge, and at either end it lines up with the words.
+ */
+globalStyle(`${msgMain} > ${markdown} > ${tableScroll}`, { ...bleedX("var(--list-gutter, 0px)"), maxWidth: "calc(100% + 2 * var(--list-gutter, 0px))" });
 export const msgAvatarAgent = style({
   background: vars.neutralBg,
   // Slack's mark on its corner (msgAvatarSlack) is out past its round.
@@ -298,6 +305,15 @@ export const refInfoChat = style({ display: "flex", alignItems: "center", justif
 export const fileCardName = style({
   display: "flex", minWidth: "0", fontSize: vars.textUi, lineHeight: "20px", whiteSpace: "nowrap",
 });
+/**
+ * A message's file card with a button of its own beside the one that opens it (a download's ✕ or ↻): laid over the
+ * room the card keeps for it at its end (`fileCardSlot`, as wide as fileCardRemove), where the composer's card has its
+ * own.
+ */
+export const fileCardHold = style({ position: "relative", display: "inline-flex", maxWidth: "100%" });
+export const fileCardSlot = style({ width: "22px", height: "22px", flex: "none" });
+// (the card's right padding: later.css.ts fileCard)
+export const fileCardAction = style({ position: "absolute", top: "50%", right: "10px", transform: "translateY(-50%)" });
 export const fileCardRemove = style({
   display: "grid", placeItems: "center", width: "22px", height: "22px", padding: "0", border: "0", borderRadius: "50%",
   background: "none", color: vars.muted, cursor: "pointer", flex: "none",
@@ -674,6 +690,8 @@ export const msgVideoName = style({
   position: "absolute", bottom: "0", left: "0", right: "0", padding: "6px 8px",
   background: "rgba(0, 0, 0, 0.65)", fontSize: vars.textMeta, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
 });
+/** Under its words while the core downloads it (chatDownloads.ts): how far, 4 below them. */
+export const msgVideoBar = style({ display: "block", marginTop: "4px" });
 
 export const msgVideoUnavailable = style({
   position: "absolute", inset: "0 0 30px", display: "flex", flexDirection: "column",

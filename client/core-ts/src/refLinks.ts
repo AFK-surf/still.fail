@@ -94,3 +94,33 @@ export function adbOfLink(href: string): string | null {
     return null;
   }
 }
+
+/// The `@words` the caret is at the end of (`@` and a few letters ask for a chat to refer to), and where its `@` is;
+/// null when it is in none.
+export function refAt(text: string, caret: number): { start: number; query: string } | null {
+  const m = /(?:^|\s)@([^\s@[\]()]{0,40})$/.exec(text.slice(0, caret));
+  return m ? { start: caret - m[1]!.length - 1, query: m[1]! } : null;
+}
+
+/// Where the mark just before `caret` starts (a backspace there takes it whole), or null.
+export function markBefore(text: string, caret: number): number | null {
+  const m = /@\[[^\]\n]{1,120}\]$/.exec(text.slice(0, caret));
+  return m ? m.index : null;
+}
+
+/// The marks in what is written, each where it starts and ends and its title (drawn as a chip).
+export function marksIn(text: string): { start: number; end: number; title: string }[] {
+  return [...text.matchAll(new RegExp(REF_MARK.source, "g"))].map((m) => ({ start: m.index, end: m.index + m[0].length, title: m[1]! }));
+}
+
+/// The chats' links in what is pasted as a chat's link is copied (`[its title](its link)`) that name a chat of the
+/// workspace of the station `here` is (a station of no workspace: none): where each is in `pasted`, its title, its
+/// chat (its station, its key) and what follows its link when it is its agent's execution history.
+export function pastedRefs(pasted: string, here: string): { start: number; end: number; title: string; station: string; id: string; history: string }[] {
+  const scope = (station: string) => station.split("/")[0]!;
+  if (!here.includes("/")) return [];
+  return [...pasted.matchAll(/\[([^\]\n]{1,120})\]\((\S+?)\)/g)].flatMap((m) => {
+    const chat = chatOfLink(m[2]!);
+    return chat && scope(chat.station) === scope(here) ? [{ start: m.index, end: m.index + m[0].length, title: m[1]!, ...chat }] : [];
+  });
+}

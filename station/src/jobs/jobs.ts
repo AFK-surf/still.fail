@@ -207,6 +207,7 @@ export class Jobs {
   private busy = new Busy();
   private pressure: Pressure | null = null;
   private lastStart: number | null = null;
+  private lastStarted: string | null = null;
   private lastOf = new Map<string, number>();
   private why: Why | null = null;
   /// The queue looks at the machine (every LOOK_MS) while a task waits, on the jobs' clock.
@@ -361,7 +362,9 @@ export class Jobs {
   /// What the queue would start now, and why the first waiting waits else (kept for `queueOf`).
   private chosen(pressure: Pressure | null): ReturnType<typeof pick> {
     const { waiting, running } = this.line();
-    const chosen = pick(waiting, running, { busy: this.busy.share(), pressure }, this.queueNow(), this.lastStart, (s) => this.lastOf.get(s) ?? null);
+    // (the last started, while it runs: how busy since it started; one that ended holds nothing back)
+    const ramp = running.some((r) => r.id === this.lastStarted) ? this.lastStart : null;
+    const chosen = pick(waiting, running, { busy: this.busy.share(ramp), pressure }, this.queueNow(), ramp, (s) => this.lastOf.get(s) ?? null);
     this.why = chosen !== null && "wait" in chosen ? chosen.wait : null;
     return chosen;
   }
@@ -371,6 +374,7 @@ export class Jobs {
     const alone = this.line().running.length === 0;
     const now = this.queueNow();
     this.lastStart = now;
+    this.lastStarted = job.id;
     this.lastOf.set(job.sessionKey, now);
     return cpusFor(startEnv(), this.machine.cpus(), this.busy.share(), alone);
   }

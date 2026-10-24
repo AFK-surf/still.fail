@@ -169,9 +169,14 @@ fn Ctx::focus_frame_start(self : Ctx) -> Unit {
   // a layer's own keys first (Escape: overlay.mbt)
   self.layer_keys()
   let field = self.editors.contains(self.focus)
+  // (the keys a field focused leaves to the app: Tab there picks from what it offers, the focus stays)
+  let left = match self.editors.get(self.focus) {
+    Some(st) => st.leaves
+    None => []
+  }
   for k in 0..<desk.keys.length() {
     let (code, mods, taken) = desk.keys[k]
-    if taken {
+    if taken || (mods == 0 && left.contains(code)) {
       continue
     }
     let used = if code == key_tab && (mods | mod_shift_key) == mod_shift_key {

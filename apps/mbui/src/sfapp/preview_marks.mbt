@@ -910,7 +910,7 @@ let picture_key : Double = 12.0
 
 ///|
 // kept across runs: a value (no field of it changes)
-let marks_put_room : @ui.Style = @ui.style(pl=S1)
+let marks_put_room : @ui.Style = @ui.css("pl=S1")
 
 ///|
 /// The foot while marking (ImageMarks.kt MarksFoot, in the viewer's dark): the note being written in its box over the
@@ -1128,19 +1128,19 @@ fn note_card(c : @ui.Ctx, note : (Int, Int, String, Int64), id : Int) -> Unit {
 /// A note's box's head (its pin and what it is: 8 in, 6 apart), the row under it (the bin, the field, the tick: 2
 /// apart, at its foot), a card's head (6 apart); the room either side of a tools' gap (4).
 // kept across runs: a value (no field of it changes)
-let note_head : @ui.Style = @ui.style(row=true, px=S2, gap=S1_5, align=ACenter)
+let note_head : @ui.Style = @ui.css("row px=S2 gap=S1_5 align=ACenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let note_row : @ui.Style = @ui.style(row=true, w=Full, gap=S0_5, align=AEnd)
+let note_row : @ui.Style = @ui.css("row w=Full gap=S0_5 align=AEnd")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let card_head : @ui.Style = @ui.style(row=true, gap=S1_5, align=ACenter)
+let card_head : @ui.Style = @ui.css("row gap=S1_5 align=ACenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let mark_gap_room : @ui.Style = @ui.style(px=S1)
+let mark_gap_room : @ui.Style = @ui.css("px=S1")
 
 ///|
 /// The dark theme's colours the notes take (Theme.kt Dark): the page, its words, muted, subtle, the accent; their

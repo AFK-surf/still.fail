@@ -6,4 +6,8 @@ import {
   "mbui/pixels",
   "stillfail/sf",
   "stillfail/sfbase",
+  "stillfail/sfapp/settings",
+  "mbui/motion",
+  "mbui/codec",
+  "stillfail/gallery",
 }

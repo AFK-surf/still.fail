@@ -125,6 +125,7 @@ id mb_views_root(CGRect frame) {
 @interface MBRead : NSObject
 @property(nonatomic) int32_t rid;
 @property(nonatomic) long long off, len;
+@property(nonatomic) long long got;  // its bytes answered so far (it is answered as they come)
 @property(nonatomic, strong) MBLoad *load;
 @end
 @implementation MBRead
@@ -175,9 +176,11 @@ id mb_views_root(CGRect frame) {
 // a seek on its way (to seekMs), and the one asked meanwhile to go to once it is done (chaseMs), if any
 @property(nonatomic) BOOL seeking, chasing;
 @property(nonatomic) double seekMs, chaseMs;
+@property(nonatomic) BOOL chaseNear;  // the one asked meanwhile is to go about there (seekTo:near:)
 @property(nonatomic) BOOL observing, readyLogged, frameLogged;
 @property(nonatomic, strong) NSMutableArray<MBRead *> *pending;                  // not yet taken
-@property(nonatomic, strong) NSMutableDictionary<NSNumber *, MBRead *> *taken;  // taken, not answered
+@property(nonatomic, strong) NSMutableDictionary<NSNumber *, MBRead *> *taken;  // taken, not answered to its end
+@property(nonatomic, strong) NSMutableArray<NSNumber *> *lettingGo;  // taken, then let go of: not told yet
 @property(nonatomic, strong) NSMutableArray<MBLoad *> *loads;
 @property(nonatomic) CVPixelBufferRef lastFrame;
 // its frames' times (ms, comma between: nil not read yet) and a frame grabbed (PNG; stillState 1 grabbing, 2 here,
@@ -201,8 +204,10 @@ id mb_views_root(CGRect frame) {
 @property(nonatomic) double scale;
 // a page's and a site's: the scripts the app sent (view_tell 1), waiting for the page there (loaded, or said something
 // since it started); who takes a finger on it (view_tell 2: "all", "through", "pinch", "vertical") and the slop; how
-// long a site's request waits for its head before the app is told (view_tell 3)
+// long a site's request waits for its head before the app is told (view_tell 3); where the app draws what takes a press
+// over it (view_tell 4: x0 y0 x1 y1 …, points; a finger there is the canvas's)
 @property(nonatomic, strong) NSMutableArray<NSString *> *scripts;
+@property(nonatomic, copy) NSArray<NSNumber *> *covers;
 @property(nonatomic) BOOL there;
 @property(nonatomic, copy) NSString *touchMode;
 @property(nonatomic) double slop;
@@ -216,6 +221,7 @@ id mb_views_root(CGRect frame) {
 - (void)logState;
 - (void)refreshSnap;
 - (void)seekTo:(double)ms;
+- (void)seekTo:(double)ms near:(BOOL)near;
 - (CGImageRef)copyFrame;
 @end
 
@@ -275,23 +281,30 @@ static void fill_info(AVAssetResourceLoadingRequest *req, NSString *uti, long lo
 @end
 
 @implementation MBNative
-// To `ms`, exactly, one seek at a time (Apple's QA1820, chasing the time): asked again while one is on its way, the
-// last asked goes once it is done and those between are skipped, so a finger along the timeline sees each frame it
-// gets to (AVPlayer gives up a seek on its way for the next, and while the finger moves none would show).
+// To `ms`, exactly (or `near`: about there, the player's own choice of where it gets to at once), one seek at a time
+// (Apple's QA1820, chasing the time): asked again while one is on its way, the last asked goes once it is done and
+// those between are skipped, so a finger along the timeline sees each frame it gets to (AVPlayer gives up a seek on
+// its way for the next, and while the finger moves none would show).
 - (void)seekTo:(double)ms {
+  [self seekTo:ms near:NO];
+}
+
+- (void)seekTo:(double)ms near:(BOOL)near {
   // (one on its way, or the item not ready for one yet: this one next, once it is)
   if (self.seeking || self.item.status != AVPlayerItemStatusReadyToPlay) {
     self.chasing = YES;
     self.chaseMs = ms;
+    self.chaseNear = near;
     return;
   }
   self.seeking = YES;
   self.seekMs = ms;
   __weak MBNative *wv = self;
   // (to the µs: a frame's start, said with its fraction of a ms, is that frame's, not the one before)
+  CMTime slack = near ? kCMTimePositiveInfinity : kCMTimeZero;
   [self.player seekToTime:CMTimeMake((int64_t)llround(ms * 1000.0), 1000000)
-          toleranceBefore:kCMTimeZero
-           toleranceAfter:kCMTimeZero
+          toleranceBefore:slack
+           toleranceAfter:slack
         completionHandler:^(BOOL done) {
           dispatch_async(dispatch_get_main_queue(), ^{
             MBNative *v = wv;
@@ -299,7 +312,7 @@ static void fill_info(AVAssetResourceLoadingRequest *req, NSString *uti, long lo
             v.seeking = NO;
             if (v.chasing && !v.closed) {
               v.chasing = NO;
-              [v seekTo:v.chaseMs];
+              [v seekTo:v.chaseMs near:v.chaseNear];
             }
             mb_host_request_frame();
           });
@@ -500,7 +513,8 @@ static void fill_info(AVAssetResourceLoadingRequest *req, NSString *uti, long lo
   });
 }
 
-// The player gave the load up: its reads not asked any more, their answers dropped.
+// The player gave the load up: its reads not asked any more, those under way let go of (the app stops them), their
+// answers dropped.
 - (void)drop:(MBLoad *)l {
   l.gone = YES;
   [self.loads removeObject:l];
@@ -508,12 +522,21 @@ static void fill_info(AVAssetResourceLoadingRequest *req, NSString *uti, long lo
   for (MBRead *r in self.pending)
     if (r.load != l) [keep addObject:r];
   self.pending = keep;
+  for (NSNumber *rid in self.taken.allKeys) {
+    if (self.taken[rid].load != l) continue;
+    [self.taken removeObjectForKey:rid];
+    if (!self.lettingGo) self.lettingGo = [NSMutableArray new];
+    [self.lettingGo addObject:rid];
+  }
+  if (self.lettingGo.count) mb_host_request_frame();
 }
 
-- (void)answer:(int32_t)rid data:(const uint8_t *)bytes length:(long long)n total:(double)total {
+// Read `rid`'s next bytes (after those it was answered before), as the app has them: given to the load as they come,
+// its next read asked once it has had its last answer (`more` NO).
+- (void)answer:(int32_t)rid data:(const uint8_t *)bytes length:(long long)n total:(double)total more:(BOOL)more {
   MBRead *r = self.taken[@(rid)];
   if (!r) return;
-  [self.taken removeObjectForKey:@(rid)];
+  if (!more || total == -2) [self.taken removeObjectForKey:@(rid)];
   MBLoad *l = r.load;
   if (total == -2) {
     vlog(@"view %d: read at %lld failed", self.vid, r.off);
@@ -524,15 +547,20 @@ static void fill_info(AVAssetResourceLoadingRequest *req, NSString *uti, long lo
     return;
   }
   if (total >= 0) self.total = (long long)total;
+  long long at = r.off + r.got;  // where these bytes are in the file
+  r.got += n;
   self.answered += n;
-  self.nanswers++;
-  if (self.nanswers <= 4 || self.answered >= self.logNext) {
-    vlog(@"view %d: read at %lld: %lld bytes (%.0f in all, of %lld)", self.vid, r.off, n, self.answered,
-         self.total);
-    while (self.logNext <= self.answered) self.logNext += kMaxRead;
+  if (n > 0) {
+    self.nanswers++;
+    if (self.nanswers <= 4 || self.answered >= self.logNext) {
+      vlog(@"view %d: read at %lld: %lld of %lld bytes%s (%.0f in all, of %lld)", self.vid, r.off, r.got, r.len,
+           more ? "" : ", its last", self.answered, self.total);
+      while (self.logNext <= self.answered) self.logNext += kMaxRead;
+    }
   }
   if (l.gone) return;
   if (!l.hasData) {
+    if (more) return;
     if (self.total < 0) {
       vlog(@"view %d: the file's size not told", self.vid);
       [self end:l error:YES];
@@ -541,39 +569,32 @@ static void fill_info(AVAssetResourceLoadingRequest *req, NSString *uti, long lo
     [self advance:l];
     return;
   }
-  if (n == 0) {  // the file's end: none before it (else the load fails, not asked again forever)
+  long long end = l.end >= 0 ? l.end : LLONG_MAX;
+  if (self.total >= 0 && end > self.total) end = self.total;
+  long long skip = l.next - at;  // given on from where the load is: l.next
+  long long give = skip >= 0 && skip < n ? MIN(n - skip, end - l.next) : 0;
+  if (give > 0) {
+    NSData *d = [NSData dataWithBytes:bytes + skip length:(NSUInteger)give];
+    l.next += give;
+    BOOL info = l.wantsInfo && !l.infoSent && self.total >= 0;
+    if (info) l.infoSent = YES;
+    NSString *uti = self.uti;
+    long long tot = self.total;
+    dispatch_async(self.lq, ^{
+      if (l.cancelled) return;
+      if (info) fill_info(l.req, uti, tot);
+      [l.req.dataRequest respondWithData:d];
+    });
+  }
+  if (more) return;
+  if (r.got == 0) {  // the file's end: none before it (else the load fails, not asked again forever)
     if (self.total < 0) self.total = l.next;
     if (self.total > l.next) {
       vlog(@"view %d: no bytes at %lld, before the end (%lld)", self.vid, l.next, self.total);
       [self end:l error:YES];
       return;
     }
-    [self advance:l];
-    return;
   }
-  long long end = l.end >= 0 ? l.end : LLONG_MAX;
-  if (self.total >= 0 && end > self.total) end = self.total;
-  long long skip = l.next - r.off;  // answered from where it was asked: l.next
-  if (skip < 0 || skip >= n) {
-    [self advance:l];
-    return;
-  }
-  long long give = MIN(n - skip, end - l.next);
-  if (give <= 0) {
-    [self advance:l];
-    return;
-  }
-  NSData *d = [NSData dataWithBytes:bytes + skip length:(NSUInteger)give];
-  l.next += give;
-  BOOL info = l.wantsInfo && !l.infoSent && self.total >= 0;
-  if (info) l.infoSent = YES;
-  NSString *uti = self.uti;
-  long long tot = self.total;
-  dispatch_async(self.lq, ^{
-    if (l.cancelled) return;
-    if (info) fill_info(l.req, uti, tot);
-    [l.req.dataRequest respondWithData:d];
-  });
   [self advance:l];
 }
 
@@ -593,7 +614,7 @@ static void fill_info(AVAssetResourceLoadingRequest *req, NSString *uti, long lo
     // a seek asked before it was ready (where it was left, opened again): taken up now
     if (self.chasing && !self.seeking && self.item.status == AVPlayerItemStatusReadyToPlay) {
       self.chasing = NO;
-      [self seekTo:self.chaseMs];
+      [self seekTo:self.chaseMs near:self.chaseNear];
     }
     // a player is ready for the app once its first frame can be shown (a video), or once it can play at all with
     // no picture to show (a sound: its presentation size 0 × 0); or it failed
@@ -1150,6 +1171,7 @@ void mb_host_view_control(int32_t vid, int32_t op, double value) {
     }
     case 2: [v.player pause]; break;
     case 3: [v seekTo:value]; break;
+    case 11: [v seekTo:value near:YES]; break;
     case 4:
       if (value <= 0) break;
       v.speed = value;
@@ -1215,8 +1237,11 @@ int32_t mb_host_view_info(int32_t vid, double *out) {
   out[4] = s.height;
   out[5] = v.answered;
   out[6] = v.playerLayer.readyForDisplay ? 1 : 0;
+  // buffering only while a read of the app's bytes is under way: a seek within what the player has already (a finger
+  // along the timeline over what has played) waits on its own decoding, not on the network
   BOOL waiting = v.player.timeControlStatus == AVPlayerTimeControlStatusWaitingToPlayAtSpecifiedRate;
-  out[7] = (waiting || (v.player.rate > 0 && !it.playbackLikelyToKeepUp)) ? 1 : 0;
+  BOOL reading = v.pending.count > 0 || v.taken.count > 0;
+  out[7] = ((waiting || (v.player.rate > 0 && !it.playbackLikelyToKeepUp)) && reading) ? 1 : 0;
   // how far on it has what it needs: the end of the loaded range the playhead is in
   double now = out[1];
   for (NSValue *r in it.loadedTimeRanges) {
@@ -1232,6 +1257,11 @@ int32_t mb_host_view_info(int32_t vid, double *out) {
 
 int32_t mb_host_view_read_next(int32_t vid, double *out) {
   MBNative *v = views[@(vid)];
+  if (v.lettingGo.count) {
+    int32_t gone = v.lettingGo.firstObject.intValue;
+    [v.lettingGo removeObjectAtIndex:0];
+    return -gone;
+  }
   while (v.pending.count) {
     MBRead *r = v.pending.firstObject;
     [v.pending removeObjectAtIndex:0];
@@ -1244,10 +1274,10 @@ int32_t mb_host_view_read_next(int32_t vid, double *out) {
   return 0;
 }
 
-void mb_host_view_read_answer(int32_t vid, int32_t req, moonbit_bytes_t data, double total) {
+void mb_host_view_read_answer(int32_t vid, int32_t req, moonbit_bytes_t data, double total, int32_t more) {
   MBNative *v = views[@(vid)];
   if (!v) return;
-  [v answer:req data:(const uint8_t *)data length:Moonbit_array_length(data) total:total];
+  [v answer:req data:(const uint8_t *)data length:Moonbit_array_length(data) total:total more:more != 0];
 }
 
 // ---- a site's API ----
@@ -1361,6 +1391,11 @@ void mb_host_view_tell(int32_t vid, int32_t what, moonbit_string_t text) {
     NSArray<NSString *> *p = [t componentsSeparatedByString:@" "];
     v.touchMode = p.firstObject ?: @"all";
     v.slop = p.count > 1 ? p[1].doubleValue : 0;
+  } else if (what == 4) {
+    NSMutableArray<NSNumber *> *r = [NSMutableArray array];
+    if (t.length)
+      for (NSString *s in [t componentsSeparatedByString:@" "]) [r addObject:@(s.doubleValue)];
+    v.covers = r;
   } else if (what == 3) {
     NSDictionary *o = [NSJSONSerialization JSONObjectWithData:[t dataUsingEncoding:NSUTF8StringEncoding] options:0 error:nil];
     if ([o isKindOfClass:NSDictionary.class] && [o[@"head_wait_ms"] isKindOfClass:NSNumber.class])
@@ -1368,10 +1403,19 @@ void mb_host_view_tell(int32_t vid, int32_t what, moonbit_string_t text) {
   }
 }
 
-// The page's view a point is on (shown, placed), or nil.
+// Whether the app draws something that takes a press over the view at the point (view_tell 4).
+static BOOL covered_at(MBNative *v, double x, double y) {
+  NSArray<NSNumber *> *r = v.covers;
+  for (NSUInteger j = 0; j + 3 < r.count; j += 4)
+    if (x >= r[j].doubleValue && x < r[j + 2].doubleValue && y >= r[j + 1].doubleValue && y < r[j + 3].doubleValue)
+      return YES;
+  return NO;
+}
+
+// The page's view a point is on (shown, placed, not under what the app draws over it that takes a press), or nil.
 static MBNative *page_at(double x, double y) {
   for (MBNative *v in views.allValues) {
-    if (v.kind < 2 || !v.shown || !v.placed) continue;
+    if (v.kind < 2 || !v.shown || !v.placed || covered_at(v, x, y)) continue;
     double x0 = fmax(v.cx0, v.x), y0 = fmax(v.cy0, v.y);
     double x1 = fmin(v.cx1, v.x + v.w), y1 = fmin(v.cy1, v.y + v.h);
     if (x >= x0 && x < x1 && y >= y0 && y < y1) return v;
@@ -1392,7 +1436,7 @@ int mb_views_pass_through(double x, double y) {
   for (MBNative *v in views.allValues) {
     if (v.kind < 2 || !v.shown || !v.placed) continue;
     // (a page that takes no finger: the canvas's)
-    if ([v.touchMode isEqualToString:@"through"]) continue;
+    if ([v.touchMode isEqualToString:@"through"] || covered_at(v, x, y)) continue;
     double x0 = fmax(v.cx0, v.x), y0 = fmax(v.cy0, v.y);
     double x1 = fmin(v.cx1, v.x + v.w), y1 = fmin(v.cy1, v.y + v.h);
     if (x >= x0 && x < x1 && y >= y0 && y < y1) return 1;

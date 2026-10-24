@@ -269,12 +269,19 @@ export class FakeHost implements Host {
   storageGet(key: string): Effect.Effect<Uint8Array | null, HostError> {
     return Effect.sync(() => this.storage.get(key) ?? null);
   }
+  /// The files the app saved where the person keeps files, by where (savedRead).
+  readonly saved = new Map<string, Uint8Array>();
+  savedRead(at: string, start: number, end: number): Effect.Effect<Uint8Array | null, HostError> {
+    return Effect.sync(() => this.saved.get(at)?.slice(start, end) ?? null);
+  }
   storageSet(key: string, value: Uint8Array): Effect.Effect<void, HostError> {
     return Effect.sync(() => void this.storage.set(key, value));
   }
   storageDelete(key: string): Effect.Effect<void, HostError> {
     return Effect.sync(() => void this.storage.delete(key));
   }
+  /// Where a value is kept as a file: none unless a test sets it (as a web page has none).
+  storagePath?: (key: string) => string | null;
 
   /// The system's secure storage, in memory (an app's host has one; a test of a web page's sets these undefined):
   /// what was kept (and whether reading it asks the person), what was asked of the person, and whether they say no.

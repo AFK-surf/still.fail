@@ -25,7 +25,10 @@ pub fn view_check_run(c : @ui.Ctx) -> Unit {
   let v = match view_check_view.val {
     Some(v) => v
     None => {
-      let v = @ui.NativeView::video("video/mp4", fn(_offset, _length, answer) { answer(b"", -1.0) })
+      let v = @ui.NativeView::video("video/mp4", fn(_offset, _length, answer) {
+          answer(b"", -1.0, false)
+          fn() {  }
+        })
       view_check_view.val = Some(v)
       v
     }

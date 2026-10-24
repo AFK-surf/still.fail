@@ -205,6 +205,7 @@ pub fn Tester::new(
     local_acts: [],
     local_fonts: "",
     families_given: {},
+    unreadable_fonts: [],
     dock_on: false,
     dock_lines: [],
     dock_stops: 0,
@@ -255,6 +256,7 @@ pub fn Tester::new(
     reads: [],
     read_ids: 0,
     read_answers: [],
+    read_from: {},
     players: {},
     share: None,
     share_files: [],
@@ -271,6 +273,7 @@ pub fn Tester::new(
     view_kinds: {},
     view_at: {},
     view_touch: {},
+    view_covers: {},
     touch_view: 0,
     touch_down: (0.0, 0.0),
     touch_at: (0.0, 0.0),
@@ -746,6 +749,13 @@ pub fn Tester::set_local_station(self : Tester, json : String) -> Unit {
 /// The font families installed here from now on, as a JSON array of their names (@ui.local_font_families); "" none.
 pub fn Tester::set_local_fonts(self : Tester, json : String) -> Unit {
   self.fake.local_fonts = json
+}
+
+///|
+/// A font file (by where it is) its host cannot read as a font from now on (@ui.face_add says false): one damaged, or
+/// not a font.
+pub fn Tester::set_unreadable_font(self : Tester, path : String) -> Unit {
+  self.fake.unreadable_fonts.push(path)
 }
 
 ///|

@@ -386,12 +386,12 @@ pub fn open_mode(mode : String) -> Unit {
       "files-tree" => {
         fix_browse_prefs_set({ "driveViews": { "page": "tree" } }) |> ignore
         browse({ "act": "tree", "folder": "设计稿", "view": "tree" })
-        wide.files_open["station/ws1/st1"] = true
+        @sfdesk.nav_open("ws1/st1")
       }
       "files-list" => fix_browse_prefs_set({ "driveViews": { "page": "list" } }) |> ignore
       // a copy asked about a name there (wide_files_drag.mbt): 说明.txt into 会议记录, which has one
       "files-clash" =>
-        fdrag.asking = Some({
+        @sfdesk.drag_ask({
           into: { station: "ws1/st1", root: Some(fix_docs), path: "会议记录" },
           into_name: "会议记录",
           total: 1,
@@ -415,7 +415,7 @@ pub fn open_mode(mode : String) -> Unit {
           "to": { "station": "ws1/st2", "root": "/Users/lin/照片", "path": "" },
           "move": false,
         })
-        fgo.transfers = true
+        @sfdesk.transfers_open()
       }
       // the preview beside the list (wide_files_pane.mbt), 发布清单.md chosen
       "files-preview" => {
@@ -424,21 +424,7 @@ pub fn open_mode(mode : String) -> Unit {
       }
       // two tabs, the one shown split: 文档 in front, the home beside it
       "files-split" =>
-        wide.tabs_set["ws1"] = (
-          {
-            "tabs": [
-              {
-                "id": "t0",
-                "panes": [
-                  { "station": "ws1/st1", "root": Json::string(fix_docs), "path": "" },
-                  { "station": "ws1/st1", "root": Json::string(fix_home), "path": "" },
-                ],
-                "front": 0,
-              },
-              { "id": "t1", "panes": [{ "station": "ws1/st2", "root": "/Users/lin/照片", "path": "" }], "front": 0 },
-            ],
-            "current": "t0",
-          } : Json).stringify()
+        fix_browse_prefs_set({ "filesTabs": { "ws1": Json::string(fix_split_tabs().stringify()) } }) |> ignore
       _ => ()
     }
   } else if mode == "switcher" || mode == "switcher-found" {
@@ -446,5 +432,25 @@ pub fn open_mode(mode : String) -> Unit {
     @sfdesk.switcher_open_with(if mode == "switcher-found" { "签名" } else { "" })
   } else if mode == "home-sheet" {
     raise_sheet(Workspaces)
+  }
+}
+
+///|
+/// The files' page's tabs of files-split, as the core keeps them: two, the one shown split, 文档 in front and the home
+/// beside it; 照片 of MBA the other.
+fn fix_split_tabs() -> Json {
+  {
+    "tabs": [
+      {
+        "id": "t0",
+        "panes": [
+          { "station": "ws1/st1", "root": Json::string(fix_docs), "path": "" },
+          { "station": "ws1/st1", "root": Json::string(fix_home), "path": "" },
+        ],
+        "front": 0,
+      },
+      { "id": "t1", "panes": [{ "station": "ws1/st2", "root": "/Users/lin/照片", "path": "" }], "front": 0 },
+    ],
+    "current": "t0",
   }
 }

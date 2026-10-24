@@ -1,29 +1,33 @@
 #!/usr/bin/env python3
 """The fonts the app carries in itself, as the Android app packs them into its resources: src/sf/font_assets.mbt holds,
-in base64, apps/android/shared/src/main/res/font/jetbrains_mono.ttf (JetBrains Mono, variable: the code face, as
-Android's Theme.kt JetBrainsMono; SIL Open Font License), given to the hosts as the app starts (@sf.give_faces).
+as its bytes (a Bytes literal: kept as they are, not in base64 nor UTF-16), apps/android/shared/src/main/res/font/
+jetbrains_mono.ttf (JetBrains Mono, variable: the code face, as Android's Theme.kt JetBrainsMono; SIL Open Font
+License), given to the hosts as the app starts (@sf.give_faces).
 
   python3 scripts/fontassets.py          the file written
   python3 scripts/fontassets.py --check  fails (saying so) when it is not what the font makes (scripts/check.sh)"""
-import base64, os, sys
+import os, sys
 
 A = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ROOT = os.path.dirname(os.path.dirname(A))
-FONTS = [("code_face_b64", "apps/android/shared/src/main/res/font/jetbrains_mono.ttf")]
+FONTS = [("code_face_ttf", "apps/android/shared/src/main/res/font/jetbrains_mono.ttf")]
 OUT = os.path.join(A, "src/sf/font_assets.mbt")
+
+
+def literal(b):
+    """A MoonBit Bytes literal's inside: printable ASCII as it is, the rest escaped."""
+    return "".join(chr(c) if 0x20 <= c < 0x7F and c not in (0x22, 0x5C) else "\\x%02x" % c for c in b)
 
 
 def made():
     out = ["// Made by scripts/fontassets.py from the Android app's own fonts (do not edit: run it again when they change).", ""]
     for name, rel in FONTS:
         with open(os.path.join(ROOT, rel), "rb") as f:
-            b64 = base64.b64encode(f.read()).decode()
+            data = f.read()
         out.append("///|")
-        out.append(f"/// {rel}, in base64 (lines of 120).")
+        out.append(f"/// {rel}, its bytes.")
         out.append("// kept across runs: a file's bytes, never written")
-        out.append(f"let {name} : String =")
-        for i in range(0, len(b64), 120):
-            out.append("  #|" + b64[i:i + 120])
+        out.append(f'let {name} : Bytes = b"{literal(data)}"')
         out.append("")
     return "\n".join(out)
 

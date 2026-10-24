@@ -613,15 +613,92 @@ test "the run's 账号: what 自动分配 means, then 自动分配 and each acco
 }
 
 ///|
-test "a subscription's page: where it stands at the head of its sign-in's card, 重新登录 with 在机器上手动登录 beside it (Profiles.kt SignIn)" {
+/// A profile's page in a window tall enough for all of it (the order of what it holds read off at once).
+fn profile_whole(page : String) -> @ui.Tester {
+  reset()
+  let src = fixture("settings")
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=2400.0)
+  open_setting(page)
+  t.draw()
+  t.run_for(@ui.nav_push_ms)
+  t
+}
+
+///|
+test "a profile's page: whether the account works and how much is left first; then who uses it, how it runs, whom it is shared with" {
+  let t = profile_whole("profile:ws1/st1#cc")
+  let y = fn(words : String) { t.find(words).unwrap().1 }
+  // the account: what its check said, under it a dot and its words with when it was checked (no pill)
+  assert_true(y("可用 · 5 分钟前检查") > y("订阅有效"))
+  // its allowance under it with no title over it, when it was read under its windows; read again from the "…"
+  assert_true(y("5 小时") > y("可用 · 5 分钟前检查"))
+  assert_true(y("3 分钟前查询") > y("5 小时"))
+  assert_true(t.find("查询额度") is None)
+  // then who uses it, how it runs (its models a row: 2 of 3 on), whom it is shared with
+  assert_true(y("使用它的连接") > y("3 分钟前查询"))
+  assert_true(y("运行") > y("使用它的连接"))
+  assert_true(y("2 / 3") > y("运行") && y("默认 Fast") > y("2 / 3"))
+  assert_true(y("分享") > y("默认 Fast"))
+  assert_true(y("分享给其他 station") > y("分享"))
+  // the models themselves not on it
+  assert_true(t.find("筛选模型") is None && t.find("Haiku 5") is None)
+  // 2 / 3: their page, how many on under its title
+  t.tap_text("2 / 3")
+  nav_rested(t)
+  assert_true(t.find("已选 2 项") is Some(_))
+  assert_true(t.find("只有勾选的模型可在新对话和连接中选择。") is Some(_))
+  assert_true(t.find("Haiku 5") is Some(_))
+}
+
+///|
+test "a profile in trouble: what is wrong the first line of its card, why and its button under it, no section of its own" {
+  let t = profile_whole("profile:ws1/st1#k2")
+  let y = fn(words : String) { t.find(words).unwrap().1 }
+  assert_true(y("服务商拒绝了这个 key") > y("key 已失效"))
+  // (its words under the title, red: 没能使用)
+  assert_true(t.find("没能使用") is Some(_))
+  // a key's allowance none to read: no card for it
+  assert_true(t.find("暂无额度信息") is None)
+}
+
+///|
+test "a subscription's page signed in: where it stands alone on its card; 重新登录 and 在机器上手动登录 under its …" {
   let t = settings_tester("profile:ws1/st1#cc")
-  // one card for the account: its pill, then the button and the link beside it, no title over the card
+  // one card for the account: its pill, no title over the card, nothing to do on it while it is signed in and well
+  assert_true(t.find("可用") is Some(_))
+  assert_true(t.find("Claude 订阅") is None)
+  assert_true(t.find("重新登录") is None)
+  assert_true(t.find("在机器上手动登录") is None)
+  let more = fn() {
+    let (x, y) = t.locate("icon:more")[0]
+    t.tap(x, y)
+    sheet_rested(t, "settings-sheet")
+  }
+  // its …: the command to run by hand, in a sheet of its own
+  more()
+  t.tap_text("在机器上手动登录")
+  sheet_rested(t, "settings-sheet")
+  assert_true(t.find("claude setup-token") is Some(_))
+  // (put away by a tap beside it)
+  t.tap(195.0, 60.0)
+  sheet_rested(t, "settings-sheet")
+  // 重新登录: begun on the station, its steps on the card
+  more()
+  t.tap_text("重新登录")
+  sheet_rested(t, "settings-sheet")
+  t.draw()
+  assert_true(t.find("打开授权页面") is Some(_))
+}
+
+///|
+test "a subscription's sign-in that failed: why, then 重新登录 with 在机器上手动登录 beside it on its card (Profiles.kt SignIn)" {
+  let t = settings_tester("profile:ws1/st1#cc", shows="settings-profile-login-failed")
   let (_, pill_y) = t.find("可用").unwrap()
+  let (_, why_y) = t.find("上次登录失败：授权码已过期").unwrap()
   let (bx, by) = t.find("重新登录").unwrap()
   let (mx, my) = t.find("在机器上手动登录").unwrap()
-  assert_true(by > pill_y)
+  assert_true(why_y > pill_y && by > why_y)
   assert_true((my - by).abs() < 2.0 && mx > bx)
-  assert_true(t.find("Claude 订阅") is None)
   // the command to run by hand, under them once asked
   t.tap_text("在机器上手动登录")
   t.draw()

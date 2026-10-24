@@ -337,20 +337,20 @@ pub fn wait_more(c : @ui.Ctx, note : WaitNote?, dense? : Bool = false) -> Unit {
 
 ///|
 // kept across runs: a value (no field of it changes)
-let wait_box : @ui.Style = @ui.style(w=Full)
+let wait_box : @ui.Style = @ui.css("w=Full")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let wait_fill : @ui.Style = @ui.style(w=Full, h=Grow(1.0))
+let wait_fill : @ui.Style = @ui.css("w=Full h=Grow(1.0)")
 
 ///|
 /// The pills over the shapes: 14 under the top, 20 in, 4 over the shapes, 8 apart, in the middle.
 // kept across runs: a value (no field of it changes)
-let wait_pills : @ui.Style = @ui.style(w=Full, px=S5, pt=S3_5, pb=S1, gap=S2, align=ACenter)
+let wait_pills : @ui.Style = @ui.css("w=Full px=S5 pt=S3_5 pb=S1 gap=S2 align=ACenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let wait_rows_box : @ui.Style = @ui.style(w=Full)
+let wait_rows_box : @ui.Style = @ui.css("w=Full")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -358,36 +358,36 @@ let wait_row : @ui.Style = @ui.style(row=true, w=Full, h=Fixed(wait_row_h), pr=S
 
 ///|
 // kept across runs: a value (no field of it changes)
-let wait_row_dense : @ui.Style = @ui.style(row=true, w=Full, h=S10, pr=S2_5, gap=S3, align=ACenter)
+let wait_row_dense : @ui.Style = @ui.css("row w=Full h=S10 pr=S2_5 gap=S3 align=ACenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let wait_row_lines : @ui.Style = @ui.style(w=Grow(1.0), align=AStart)
+let wait_row_lines : @ui.Style = @ui.css("w=Grow(1.0) align=AStart")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let wait_row_lines_dense : @ui.Style = @ui.style(w=Grow(1.0), align=AStart)
+let wait_row_lines_dense : @ui.Style = @ui.css("w=Grow(1.0) align=AStart")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let wait_messages_box : @ui.Style = @ui.style(w=Full, pt=S2, gap=S3_5)
+let wait_messages_box : @ui.Style = @ui.css("w=Full pt=S2 gap=S3_5")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let wait_message : @ui.Style = @ui.style(row=true, w=Full, px=S4, gap=S2_5)
+let wait_message : @ui.Style = @ui.css("row w=Full px=S4 gap=S2_5")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let wait_message_mine : @ui.Style = wait_message.then(@ui.style(justify=JEnd))
+let wait_message_mine : @ui.Style = wait_message.then(@ui.css("justify=JEnd"))
 
 ///|
 // kept across runs: a value (no field of it changes)
-let wait_face : @ui.Style = @ui.style(w=S7, h=S7, radius=Full)
+let wait_face : @ui.Style = @ui.css("w=S7 h=S7 radius=Full")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let wait_cards_box : @ui.Style = @ui.style(w=Full, gap=S4)
+let wait_cards_box : @ui.Style = @ui.css("w=Full gap=S4")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let wait_card : @ui.Style = @ui.style(w=Full, radius=Xl3)
+let wait_card : @ui.Style = @ui.css("w=Full radius=Xl3")

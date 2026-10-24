@@ -21,13 +21,6 @@ pub(all) struct Offered {
 }
 
 ///|
-/// Where the frame opens a chat found: by its row (the list's), or at a message (its words marked there).
-pub(all) struct SwitcherOpens {
-  chat : (ChatItem) -> Unit
-  message : (ChatRef, Double, Array[String]) -> Unit
-}
-
-///|
 /// A command as the list shows it (Switcher.tsx Listed): its part, its part's heading, its name, as the core says.
 priv struct Listed {
   id : String
@@ -307,7 +300,7 @@ fn switcher_lines(
 ///|
 /// A line picked (Enter, a press): a command done once the list is closed, a chat opened (a message at it, its words
 /// marked), something else where the core says it opens; 查看更多 its kind alone, 全部结果 all again.
-fn switcher_go(c : @ui.Ctx, line : SwLine, opens : SwitcherOpens) -> Unit {
+fn switcher_go(c : @ui.Ctx, line : SwLine, pages : Pages) -> Unit {
   let words = match switching.kept {
     Some(v) => v.words
     None => []
@@ -333,11 +326,11 @@ fn switcher_go(c : @ui.Ctx, line : SwLine, opens : SwitcherOpens) -> Unit {
     }
     Chat(ch) => {
       close()
-      (opens.chat)(ch.item)
+      open_row(pages, ch.item)
     }
     Message(m) => {
       close()
-      (opens.message)(chat_ref_of(m.chat), m.seq, words)
+      open_chat_found(chat_ref_of(m.chat), m.seq, words)
     }
     Item(it) => {
       close()
@@ -350,11 +343,13 @@ fn switcher_go(c : @ui.Ctx, line : SwLine, opens : SwitcherOpens) -> Unit {
 /// ⌘K over the page (ChatSwitcher): over a scrim, 14% down the window, 560 wide at most (32 short of the window), 480
 /// high at most (72% of the window); its search, then the list of what is found and what can be done, the row the keys
 /// or the pointer chose lit. Drawn each frame; nothing while closed.
-pub fn switcher(c : @ui.Ctx, src : Source, scope : String, offered : Array[Offered], opens : SwitcherOpens) -> Unit {
+fn switcher(c : @ui.Ctx, src : Source, w : Workspace, pages : Pages) -> Unit {
   if !switching.open {
     switcher_closed()
     return
   }
+  let scope = w.id
+  let offered = switcher_offered(c, src, pages)
   let t = @sf.theme()
   let query = switching.query.trim(chars=" ").to_string()
   let typed = query != ""
@@ -440,7 +435,7 @@ pub fn switcher(c : @ui.Ctx, src : Source, scope : String, offered : Array[Offer
               switching.field.set(typed)
               typed_now.val = typed
               match picks.get(switching.chosen) {
-                Some(k) => switcher_go(c, lines[k], opens)
+                Some(k) => switcher_go(c, lines[k], pages)
                 None => ()
               }
             }
@@ -475,9 +470,9 @@ pub fn switcher(c : @ui.Ctx, src : Source, scope : String, offered : Array[Offer
               let id = c.id(key)
               c.cursor(id, Hand)
               if c.clicked(id) {
-                switcher_go(c, line, opens)
+                switcher_go(c, line, pages)
               }
-              if c.hovered(id) {
+              if c.lit(id) {
                 switching.chosen = k
               }
               switcher_line(c, key, id, line, k == switching.chosen)
@@ -702,7 +697,7 @@ let switcher_lead : Int = 3
 ///|
 /// The search (Switcher.css.ts search): 48 high, 12 in, the words a title's (16), the placeholder subtle.
 // kept across runs: a value (no field of it changes)
-let switcher_search_box : @ui.Style = @ui.style(row=true, w=Full, h=S12, px=S3, align=ACenter)
+let switcher_search_box : @ui.Style = @ui.css("row w=Full h=S12 px=S3 align=ACenter")
 
 ///|
 let switcher_search_size : Double = 16.0
@@ -713,7 +708,7 @@ let switcher_search_line : Double = 24.0
 ///|
 /// A heading (Switcher.css.ts section): 12, muted, 12 in, 10 over and 4 under.
 // kept across runs: a value (no field of it changes)
-let switcher_head : @ui.Style = @ui.style(w=Full, px=S3, pt=S2_5, pb=S1)
+let switcher_head : @ui.Style = @ui.css("w=Full px=S3 pt=S2_5 pb=S1")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -738,12 +733,12 @@ let switcher_row : @ui.Style = @ui.style(
 ///|
 /// A row of two lines (a message, a chat found by its words, something else: Switcher.css.ts said): from its top.
 // kept across runs: a value (no field of it changes)
-let switcher_row_said : @ui.Style = switcher_row.then(@ui.style(align=AStart))
+let switcher_row_said : @ui.Style = switcher_row.then(@ui.css("align=AStart"))
 
 ///|
 /// A picture's place (Switcher.css.ts picture): 20 square, what it holds in its middle.
 // kept across runs: a value (no field of it changes)
-let switcher_picture : @ui.Style = @ui.style(w=S5, h=S5, align=ACenter, justify=JCenter)
+let switcher_picture : @ui.Style = @ui.css("w=S5 h=S5 align=ACenter justify=JCenter")
 
 ///|
 let switcher_icon : Double = 16.0
@@ -774,7 +769,7 @@ let switcher_said : @ui.Style = @ui.style(w=@sf.grow, gap=S0_5)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let switcher_said_head : @ui.Style = @ui.style(row=true, w=Full, gap=S2_5, align=ACenter)
+let switcher_said_head : @ui.Style = @ui.css("row w=Full gap=S2_5 align=ACenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -792,7 +787,7 @@ let switcher_under_words : @ui.TextStyle = @ui.text_style(size=Sm, color=Muted, 
 ///|
 /// Nothing found (Switcher.css.ts none): 14 over and under, 12 in, the page's words muted.
 // kept across runs: a value (no field of it changes)
-let switcher_none_box : @ui.Style = @ui.style(w=Full, px=S3, py=S3_5)
+let switcher_none_box : @ui.Style = @ui.css("w=Full px=S3 py=S3_5")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -802,8 +797,87 @@ let switcher_none : @ui.TextStyle = @ui.text_style(size=Sm, color=Muted)
 /// What the list says under it (Switcher.css.ts note): the stations not answered yet, those offline or too old; 8 over,
 /// 10 under, 12 in, 12 muted.
 // kept across runs: a value (no field of it changes)
-let switcher_note_box : @ui.Style = @ui.style(w=Full, px=S3, pt=S2, pb=S2_5)
+let switcher_note_box : @ui.Style = @ui.css("w=Full px=S3 pt=S2 pb=S2_5")
 
 ///|
 // kept across runs: a value (no field of it changes)
 let switcher_note : @ui.TextStyle = @ui.text_style(size=Xs, color=Muted, w=Full)
+
+///|
+/// What ⌘K offers of what the frame can do now (Switcher.tsx offered: the keys' actions it answers, and its own): the
+/// open chat's (find, its services), the app's (a new chat, the sidebar, settings, the shortcuts), settings' pages (only
+/// found by typing). The core names the keys' actions and finds what was typed among them (sfdesk/switcher.mbt).
+fn switcher_offered(c : @ui.Ctx, src : Source, pages : Pages) -> Array[Offered] {
+  // an action's first keys as shown (as kept on this device: settings' 快捷键)
+  let prefs = (src.topic)("prefs", {}).value
+  let keys = fn(action : String) { @settings.key_label(prefs, action) }
+  // the page's own (the open chat's: find, its services)
+  let all : Array[Offered] = (pages.offered)(c, src)
+  all.push({
+    id: "chat.new",
+    group: "",
+    label: "",
+    words: "",
+    icon: "compose",
+    keys: keys("chat.new"),
+    typed: false,
+    run: fn() { new_chat(pages) },
+  })
+  all.push({
+    id: "sidebar.toggle",
+    group: "",
+    label: "",
+    words: "",
+    icon: "panel-open",
+    keys: keys("sidebar.toggle"),
+    typed: false,
+    run: fn() { wide.folded = !wide.folded },
+  })
+  all.push({
+    id: "settings",
+    group: "",
+    label: "",
+    words: "",
+    icon: "settings",
+    keys: keys("settings"),
+    typed: false,
+    run: fn() { open_settings(pages) },
+  })
+  all.push({
+    id: "shortcuts",
+    group: "",
+    label: "",
+    words: "",
+    icon: "command",
+    keys: keys("shortcuts"),
+    typed: false,
+    run: fn() { wide.keys_open = true },
+  })
+  let routes : Array[(String, @settings.Route, String)] = [
+    ("appearance", @settings.Route::Appearance, @sf.t("web-pages.settings.nav.appearance")),
+    ("notifications", @settings.Route::Notifications, @sf.t("web-pages.settings.nav.notifications")),
+    ("permissions", @settings.Route::Permissions, @sf.t("web-pages.settings.nav.permissions")),
+    ("archive", @settings.Route::Archiving, @sf.t("web-pages.archiving.title")),
+    ("memory", @settings.Route::Memories, @sf.t("web-pages.settings.nav.memory")),
+    ("security", @settings.Route::Security, @sf.t("web-pages.security.title")),
+    ("vault", @settings.Route::Vault, @sf.t("web-pages.vault.title")),
+    ("changelog", @settings.Route::Changelog, @sf.t("web-pages.settings.nav.changelog")),
+    ("about", @settings.Route::About, @sf.t("web-pages.settings.nav.about")),
+  ]
+  for p in routes {
+    let (key, route, label) = p
+    all.push({
+      id: "settings." + key,
+      group: "settings",
+      label,
+      words: "",
+      icon: "settings",
+      keys: "",
+      typed: true,
+      run: fn() {
+        open_settings_at(pages, route)
+      },
+    })
+  }
+  all
+}

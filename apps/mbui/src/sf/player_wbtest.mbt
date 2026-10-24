@@ -14,7 +14,7 @@ fn film(name : String, kind? : String = "video") -> ViewerFile {
     key: name,
     bytes: None,
     read: fn(_, _, done) { done(Err("")) },
-    stream: Some(fn(_, _, _) {  }),
+    stream: Some(fn(_, _, _) { fn() {  } }),
     beside: None,
     place: fn() { NeverLeft },
     keep_place: fn(_, _) {  },
@@ -63,8 +63,8 @@ fn player_tester(
 }
 
 ///|
-/// Whether the fake host was told `op` (1 play, 2 pause, 3 seek, 4 rate, 9 a finger along it, 10 how loud…) of a view, with `value` (as it
-/// prints it) when given.
+/// Whether the fake host was told `op` (1 play, 2 pause, 3 seek, 4 rate, 9 a finger along it, 10 how loud, 11 seek to
+/// about there…) of a view, with `value` (as it prints it) when given.
 fn told(t : @ui.Tester, op : Int, value? : String = "") -> Bool {
   t.views().iter().any(fn(s) { s.has_prefix("control") && s.contains(" \{op} " + value) })
 }
@@ -222,7 +222,7 @@ test "a desktop's keys: Space plays, paused ← → step a frame, J L 15 s, ↑ 
   t.key(@ui.key_code_right)
   assert_true(told(t, 3, value="16.6"))
   t.key(@ui.key_of_char('l'))
-  assert_true(told(t, 3, value="10000") || told(t, 3, value="9900"))
+  assert_true(told(t, 11, value="10000") || told(t, 11, value="9900"))
   t.key(@ui.key_code_down)
   assert_true(told(t, 10, value="0.95"))
   t.key(@ui.key_of_char('m'))

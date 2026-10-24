@@ -6,31 +6,7 @@
 
 ///|
 /// All the connects, or the viewer's (ConnectsScreen's filter), while the page is on the stack.
-let connects_mine : Ref[Bool] = Ref(false)
-
-///|
-/// How a connect's conversations become sessions, in words (Words.kt MODE_LABEL, MODE_TEXT).
-/// A Feishu connect's (`kind` feishu) in its groups' words (modeLabel, modeText).
-fn mode_label(mode : String, kind? : String = "") -> String {
-  match (mode, kind == "feishu") {
-    ("multi-session", false) => tr("android-misc.mode.multi")
-    ("single-session", false) => tr("android-misc.mode.single")
-    ("multi-session", true) => tr("web-main.mode.feishu.multi.label")
-    ("single-session", true) => tr("web-main.mode.feishu.single.label")
-    (m, _) => m
-  }
-}
-
-///|
-fn mode_text(mode : String, kind? : String = "") -> String {
-  match (mode, kind == "feishu") {
-    ("multi-session", false) => tr("android-misc.mode.multi.text")
-    ("single-session", false) => tr("android-misc.mode.single.text")
-    ("multi-session", true) => tr("web-main.mode.feishu.multi.description")
-    ("single-session", true) => tr("web-main.mode.feishu.single.description")
-    _ => ""
-  }
-}
+pub let connects_mine : Ref[Bool] = Ref(false)
 
 ///|
 /// A connect as its people see it in Slack (ConnectAvatar): its bot's picture; Slack's mark until Slack said it.
@@ -88,11 +64,6 @@ fn connect_row(c : @ui.Ctx, core : Core, station : String, cv : Json?) -> Unit {
 
 ///|
 fn connects_page(c : @ui.Ctx, core : Core, here : Here, only : String) -> Unit {
-  // the wide frame's place: every station's in one list, as the web's (web_connects.mbt)
-  if wide.val && only == "" {
-    connects_page_wide(c, core, here)
-    return
-  }
   let t = @sf.theme()
   let mine = connects_mine.val
   let topic = (core.topic)("connects", { "scope": str(here.workspace), "mine": Json::boolean(mine) })
@@ -352,17 +323,8 @@ fn connect_page(c : @ui.Ctx, core : Core, here : Here, station : String, id : St
                 label(tr("android-settings.connect.sessions"))
                 row_lines(
                   c,
-                  mode_label(mode, kind=text(cv, "kind")),
-                  mode_text(mode, kind=text(cv, "kind")) +
-                  (if mode == "single-session" {
-                    if flag(cv, "requireMention") {
-                      tr("android-settings.connect.mentionOnly")
-                    } else {
-                      tr("android-settings.connect.everyMessage")
-                    }
-                  } else {
-                    ""
-                  }),
+                  text(cv, "modeLabel"),
+                  text(cv, "modeSentence"),
                   wrap_sub=true,
                 )
                 chevron(c)

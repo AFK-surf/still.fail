@@ -124,7 +124,7 @@ const WORDS = new Set([
   "bar", "bots", "callback", "changelog", "chats", "codes", "completion", "connects", "decisions", "feedback", "files",
   "fonts", "footprint", "general", "global", "history", "installed", "invite", "language", "leave", "local-station",
   "login", "members", "memory", "messages", "models", "new", "notifications", "o", "open", "overview", "permissions",
-  "play", "prices", "profiles", "read", "relays", "run", "s", "screen", "security", "services", "sessions", "settings",
+  "play", "prices", "profiles", "read", "relays", "resources", "run", "s", "screen", "security", "services", "sessions", "settings",
   "share", "shortcuts", "skill", "slack", "stations", "usage", "users", "vault", "version", "w", "workspace", "workspaces",
 ]);
 

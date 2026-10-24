@@ -188,12 +188,27 @@ test "the list while it is read: no rows, the shapes" {
 }
 
 ///|
-test "state leads, in either language" {
-  assert_eq(lead_of("要你帮忙：看一下", ["要你帮忙"], ["：", ":"], true), Some(5))
-  assert_eq(lead_of("要你帮忙", ["要你帮忙"], ["：", ":"], true), Some(4))
-  assert_eq(lead_of("Needs you: look", ["Needs you"], ["：", ":"], true), Some(11))
-  assert_eq(lead_of("在等", ["在等"], ["："], false), None)
-  assert_eq(lead_of("做完了吗", ["做完了"], ["："], true), None)
+test "a state line's lead is the core's: an icon in its words' place with what follows; none, the words as they are" {
+  reset()
+  let t = @ui.Tester::new(
+    fn(c) {
+      c.box(w=Fill(1.0), fn() {
+        state_line(c, "要你帮忙：看一下", lead="need", rest="看一下")
+        // (words that look like a lead, said by none: as they are)
+        state_line(c, "要你帮忙看一眼")
+        state_line(c, "奏 · 用哪个？", lead="decision", lead_text="奏", rest=" · 用哪个？")
+      })
+      |> ignore
+    },
+    w=390.0,
+    h=120.0,
+  )
+  t.draw()
+  assert_true(t.find("看一下") is Some(_))
+  assert_true(t.find("要你帮忙：看一下") is None, msg="the lead said by its icon")
+  assert_true(t.find("要你帮忙看一眼") is Some(_))
+  assert_true(t.find("奏") is Some(_))
+  assert_true(t.find(" · 用哪个？") is Some(_))
 }
 
 ///|

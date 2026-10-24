@@ -5,24 +5,6 @@
 // downloads, a PNG at the video's own size, named by the frame it is.
 
 ///|
-/// The system's player of view `v` reads the clip as the run's did: its first two bytes, then `rest` from its start;
-/// each given through the core (station.file.part), the whole `total` long; then it is ready.
-fn clip_reads(f : @sfreplay.Flow, v : Int, rest : Int, total : Int) -> Unit raise {
-  let head = f.t.view_reads(v, 0.0, 2)
-  f.t.draw()
-  f.until(fn() { f.t.view_answers(v).iter().any(fn(a) { a.0 == head }) })
-  let all = f.t.view_reads(v, 0.0, rest)
-  f.t.draw()
-  f.until(fn() { f.t.view_answers(v).iter().any(fn(a) { a.0 == all }) })
-  let answers = f.t.view_answers(v)
-  f.check(answers.contains((head, 2, total.to_double())), "the clip's head: \{answers}")
-  f.check(answers.contains((all, rest, total.to_double())), "the clip read: \{answers}")
-  f.t.finish(2, v)
-  f.t.draw()
-  f.core()
-}
-
-///|
 test "97-video-frames" {
   @sfreplay.orders(fn(seed) raise {
     let f = @sfreplay.Flow::start(@sfreplay.trace("video-frames"), seed~, env=[("MBUI_VIEWER_AWAKE", "1")])
@@ -38,9 +20,10 @@ test "97-video-frames" {
     f.run_to(@sfapp.preview_rest())
     // the system's player reads it through the core, then says its frames' times
     let v = opened_view(f)
-    clip_reads(f, v, 423168, 423168)
+    player_opened(f, v)
     player_told(f)
     f.see("/ 0:04")
+    read_whole(f, v, 423168)
     // paused, as the player says (its button 播放 again): the frame showing of how many
     f.tap("icon:pause")
     player_told(f)

@@ -47,7 +47,7 @@ pub fn button(
   let p = t.p
   let id = c.id(if key == "" { "sf-btn/" + label } else { key })
   let live = !disabled && !busy
-  let h = ease_to(c, "sf-btn-h/\{id}", live && (c.hovered(id) || c.pressed(id)))
+  let h = ease_to(c, "sf-btn-h/\{id}", live && (c.lit(id) || c.pressed(id)))
   let (ground, line, ink) = if t.narrow {
     match tone {
       Primary => (p.text, p.text, p.bg)
@@ -136,7 +136,7 @@ pub fn icon_button(
   let ink = ink.unwrap_or(t.p.text)
   let quiet = quiet.unwrap_or(t.p.muted)
   let id = c.id(if key == "" { "sf-ib/" + icon } else { key })
-  let h = ease_to(c, "sf-ib-h/\{id}", !disabled && (c.hovered(id) || c.pressed(id)))
+  let h = ease_to(c, "sf-ib-h/\{id}", !disabled && (c.lit(id) || c.pressed(id)))
   let ground = if on {
     alpha(ink, 0.08)
   } else {
@@ -179,7 +179,7 @@ pub fn chip(
   let t = theme()
   let ink = ink.unwrap_or(t.p.text)
   let id = c.id(if key == "" { "sf-chip/" + label + icon } else { key })
-  let h = ease_to(c, "sf-chip-h/\{id}", !disabled && c.hovered(id))
+  let h = ease_to(c, "sf-chip-h/\{id}", !disabled && c.lit(id))
   c.box(
     dir=Row,
     h=Px(30.0),
@@ -208,7 +208,7 @@ pub fn chip(
 
 ///|
 // kept across runs: a value (no field of it changes)
-let chip_inner : @ui.Style = @ui.style(radius=Inner)
+let chip_inner : @ui.Style = @ui.css("radius=Inner")
 
 ///|
 /// A choice of a few (Segmented; the kit's sliding toggle group): a quiet
@@ -284,7 +284,7 @@ pub fn field_look(c : @ui.Ctx, s : @kit.FieldState, editor : () -> Unit) -> Unit
 ///|
 /// Controls.kt Field's frame: as wide as where it is, 12 by 10 in, 12 round, the card's ground, a line round it.
 // kept across runs: a value (no field of it changes)
-let field_frame : @ui.Style = @ui.style(w=Full, px=S3, py=S2_5, radius=Xl, bg=Card, border=B1, border_color=Line)
+let field_frame : @ui.Style = @ui.css("w=Full px=S3 py=S2_5 radius=Xl bg=Card border=B1 border_color=Line")
 
 // ---------------------------------------------------------------------------
 // Small panels (docs/ui-panels.md)
@@ -347,7 +347,7 @@ pub fn menu_item(
     pady=7.0,
     gap=if panel { panel_row_gap } else { menu_row_gap },
     align=ACenter,
-    bg=if c.hovered(id) { t.p.hover } else { 0L },
+    bg=if c.lit(id) { t.p.hover } else { 0L },
     radius=small_panel_inner(r_menu),
     id~,
     fn() {
@@ -402,7 +402,7 @@ let panel_end_icon : Double = 14.0
 ///|
 /// A panel row's icon's column (parts.css.ts panelRowIcon): 20 wide, the icon in its middle.
 // kept across runs: a value (no field of it changes)
-let panel_row_icon : @ui.Style = @ui.style(w=S5, align=ACenter)
+let panel_row_icon : @ui.Style = @ui.css("w=S5 align=ACenter")
 
 ///|
 /// A word for an icon in a panel's row (Rail.css.ts zouSmall: 14 on 18, 600).
@@ -530,11 +530,11 @@ pub fn slider(
 /// Round a sheet's grabber: 8 above and 4 under it, then 4 above and under it (Sheet.kt's two paddings, each a length
 /// of its own: on Android's whole pixels 21 + 11 above the grabber and 11 + 11 under it, not one 12 and one 8).
 // kept across runs: a value (no field of it changes)
-let sheet_grab_outer : @ui.Style = @ui.style(w=Full, pt=S2, pb=S1)
+let sheet_grab_outer : @ui.Style = @ui.css("w=Full pt=S2 pb=S1")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let sheet_grab_inner : @ui.Style = @ui.style(w=Full, py=S1, align=ACenter)
+let sheet_grab_inner : @ui.Style = @ui.css("w=Full py=S1 align=ACenter")
 
 ///|
 /// The grabber at a sheet's top (Sheet.kt SheetGrab): 38 × 5 in the line's colour, 12 above it and 8 under.
@@ -553,7 +553,8 @@ pub let tip_delay_ms : Double = 400.0
 ///|
 /// A tip over control `id` (parts.tsx Tip): `label` said beside it once the pointer has rested on it a moment (on
 /// `side`, under it by default), and with a `shortcut`, the keys that do the same after it, quieter (shortcuts.mbt).
-/// The only way anything explains itself on hover. With no label, none. `key` names it where it is asked.
+/// The only way anything explains itself on hover; to a finger, which rests on nothing, as it holds what it names
+/// (Android's tooltips: @kit.tooltip). With no label, none. `key` names it where it is asked.
 pub fn tip(
   c : @ui.Ctx,
   key : String,
@@ -561,12 +562,13 @@ pub fn tip(
   label : String,
   side? : @ui.Side = Bottom,
   shortcut? : String = "",
+  shown? : Bool = false,
 ) -> Unit {
   if label == "" || id == 0 {
     return
   }
   let keys = shortcut_keys(shortcut)
-  @kit.tooltip(c, "tip/" + key, id, label, delay=tip_delay_ms, side~, look=fn(c, _, words) {
+  @kit.tooltip(c, "tip/" + key, id, label, delay=tip_delay_ms, side~, shown~, look=fn(c, _, words) {
     tip_look(c, words, keys)
   })
   |> ignore
@@ -594,7 +596,7 @@ let tip_box : @ui.Style = @ui.style(px=S2_5, py=S1_25, bg=Primary, radius=Lg, ma
 
 ///|
 // kept across runs: a value (no field of it changes)
-let tip_line : @ui.Style = @ui.style(row=true, gap=S2, align=ACenter)
+let tip_line : @ui.Style = @ui.css("row gap=S2 align=ACenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -606,7 +608,7 @@ let tip_keys : @ui.TextStyle = @ui.text_style(size=Xs, color=OnPrimary, wrap=fal
 
 ///|
 // kept across runs: a value (no field of it changes)
-let tip_quiet : @ui.Style = @ui.style(opacity=O60)
+let tip_quiet : @ui.Style = @ui.css("opacity=O60")
 
 ///|
 /// A small panel's ground (glass.ts panel): the canvas in light, the raised grey in dark, a hairline round it.
@@ -695,7 +697,7 @@ let chooser_gap : Double = 6.0
 ///|
 /// A chooser's check's column (controls.css.ts chooserCheck): 14 wide, the check in its middle.
 // kept across runs: a value (no field of it changes)
-let menu_check : @ui.Style = @ui.style(w=S3_5, align=ACenter)
+let menu_check : @ui.Style = @ui.css("w=S3_5 align=ACenter")
 
 ///|
 /// A menu item's words: as long as they are (the menu as wide as its longest, controls.css.ts menuList).
@@ -709,7 +711,7 @@ let menu_words_danger : @ui.TextStyle = @ui.text_style(size=Sm, color=Danger, le
 ///|
 /// A heading among a menu's items (controls.css.ts menuLabel): 6 over, 4 under, 10 in; 12, muted.
 // kept across runs: a value (no field of it changes)
-let menu_heading : @ui.Style = @ui.style(w=Full, px=S2_5, pt=S1_5, pb=S1)
+let menu_heading : @ui.Style = @ui.css("w=Full px=S2_5 pt=S1_5 pb=S1")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -795,9 +797,10 @@ let menu_open : Ref[String] = Ref("")
 let menu_open_at : Ref[(Double, Double)] = Ref((0.0, 0.0))
 
 ///|
-/// No menu open (the app begun again).
+/// No menu open, no mark's words (the app begun again).
 pub fn parts_reset() -> Unit {
   menu_open.val = ""
+  about_open.val = ""
   menu_open_at.val = (0.0, 0.0)
 }
 
@@ -895,24 +898,35 @@ pub let chooser_menu_w : Double = 220.0
 
 ///|
 /// What a thing is, said when the pointer rests on a quiet mark beside it (parts.tsx About, own.css.ts about: a 20
-/// circle, its ⓘ 14 in the subtle ink, the words' under the pointer; what it says in a tip under it, or on `side`).
-/// `label`: what a screen reader calls the mark (the app's word for 关于).
+/// circle, its ⓘ 14 in the subtle ink, the words' under the pointer; what it says in a tip under it, or on `side`); to
+/// a finger, which rests on nothing, once it is tapped, until a tap anywhere. `label`: what a screen reader calls the
+/// mark (the app's word for 关于).
 pub fn about(c : @ui.Ctx, key : String, words : String, label~ : String, side? : @ui.Side = Bottom) -> Unit {
   let t = theme()
   let id = c.id(key)
+  let finger = @ui.pointing() is Finger
+  if finger && c.clicked(id) {
+    about_open.val = if about_open.val == key { "" } else { key }
+  } else if about_open.val == key && c.tapped_anywhere() is Some(_) {
+    about_open.val = ""
+  }
   let b = c.box(style=about_box, id~, fn() {
-    icon(c, "info", size=about_icon, color=if c.hovered(id) { t.p.text } else { t.p.subtle }) |> ignore
+    icon(c, "info", size=about_icon, color=if c.lit(id) { t.p.text } else { t.p.subtle }) |> ignore
   })
   c.semantics(b, Button, id~, label~)
-  tip(c, key + "/tip", id, words, side~)
+  tip(c, key + "/tip", id, words, side~, shown=finger && about_open.val == key)
 }
+
+///|
+/// The mark a finger tapped open (`about`'s key), "" none.
+let about_open : Ref[String] = Ref("")
 
 ///|
 let about_icon : Double = 14.0
 
 ///|
 // kept across runs: a value (no field of it changes)
-let about_box : @ui.Style = @ui.style(w=S5, h=S5, radius=Full, align=ACenter, justify=JCenter)
+let about_box : @ui.Style = @ui.css("w=S5 h=S5 radius=Full align=ACenter justify=JCenter")
 
 // ---------------------------------------------------------------------------
 // Switches, sections, pills, dots, the empty and the first one (parts.tsx Switch, SwitchRow, Section, Pill,
@@ -955,7 +969,7 @@ pub fn switch(
 
 ///|
 // kept across runs: a value (no field of it changes)
-let switch_at : @ui.Style = @ui.style(justify=JCenter, align=AStart)
+let switch_at : @ui.Style = @ui.css("justify=JCenter align=AStart")
 
 ///|
 /// A switch drawn in a row that takes the tap itself (the row turns it): its look alone, its thumb sliding as a
@@ -1007,11 +1021,11 @@ pub fn switch_row(
 
 ///|
 // kept across runs: a value (no field of it changes)
-let switch_row_box : @ui.Style = @ui.style(row=true, w=Full, align=ACenter, gap=S4)
+let switch_row_box : @ui.Style = @ui.css("row w=Full align=ACenter gap=S4")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let switch_row_words : @ui.Style = @ui.style(w=Grow(1.0), gap=S0_5)
+let switch_row_words : @ui.Style = @ui.css("w=Grow(1.0) gap=S0_5")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -1065,19 +1079,19 @@ pub fn section(
 
 ///|
 // kept across runs: a value (no field of it changes)
-let section_box : @ui.Style = @ui.style(w=Full, mb=S7)
+let section_box : @ui.Style = @ui.css("w=Full mb=S7")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let section_head : @ui.Style = @ui.style(row=true, w=Full, justify=JBetween, align=ACenter, gap=S3, mb=S2_5)
+let section_head : @ui.Style = @ui.css("row w=Full justify=JBetween align=ACenter gap=S3 mb=S2_5")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let section_words : @ui.Style = @ui.style(w=Grow(1.0))
+let section_words : @ui.Style = @ui.css("w=Grow(1.0)")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let section_title_line : @ui.Style = @ui.style(row=true, gap=S2, align=ACenter)
+let section_title_line : @ui.Style = @ui.css("row gap=S2 align=ACenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -1093,7 +1107,7 @@ let section_note_box : @ui.Style = @ui.style(max_w=section_note_most)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let section_actions : @ui.Style = @ui.style(row=true, gap=S2, align=ACenter)
+let section_actions : @ui.Style = @ui.css("row gap=S2 align=ACenter")
 
 ///|
 /// A pill's tone (parts.tsx Tone): its ground and its words' ink.
@@ -1108,8 +1122,9 @@ pub(all) enum PillTone {
 
 ///|
 /// A pill (parts.tsx Pill, parts.css.ts pill): words 12, 500, on one line, 22 high, 9 in, round; on the quiet grey in
-/// the muted ink, or in a tone (its pale ground, its ink).
-pub fn pill(c : @ui.Ctx, words : String, tone? : PillTone = Neutral) -> Unit {
+/// the muted ink, or in a tone (its pale ground, its ink). `icon`: what leads it, 14, in its ink (a status's check or
+/// wait: ui.tsx StatusText), 4 before its words.
+pub fn pill(c : @ui.Ctx, words : String, tone? : PillTone = Neutral, icon? : String = "") -> Unit {
   let p = theme().p
   let (ground, ink) = match tone {
     Neutral => (p.neutral_bg, p.muted)
@@ -1119,13 +1134,86 @@ pub fn pill(c : @ui.Ctx, words : String, tone? : PillTone = Neutral) -> Unit {
     Red => (p.red_bg, p.red)
     Accented => (p.accent_bg, p.accent_text)
   }
-  c.box(style=pill_box, padx=pill_in, bg=ground, fn() { c.text(words, style=pill_words, color=ink) |> ignore })
+  c.box(style=pill_box, padx=pill_in, bg=ground, fn() {
+    if icon != "" {
+      draw_icon(c, icon, pill_icon, ink)
+    }
+    if words != "" {
+      c.text(words, style=pill_words, color=ink) |> ignore
+    }
+  })
   |> ignore
 }
 
 ///|
+let pill_icon : Double = 14.0
+
+///|
+/// Steps to take in order (controls.css.ts steps: an ordered list, its numbers in the muted ink in 20 at its start,
+/// 8 apart, the ui's 13): each what `steps` draws for it (its words, a button after them), their parts 8 apart in a
+/// line, going on in the next where they do not fit.
+pub fn steps(c : @ui.Ctx, steps : Array[() -> Unit]) -> Unit {
+  c.box(style=steps_box, fn() {
+    for i, step in steps {
+      c.box(style=step_row, fn() {
+        c.box(style=step_number, fn() { c.text((i + 1).to_string() + ".", style=step_number_words) |> ignore }) |> ignore
+        c.box(style=step_body, flow=true, fn() { step() }) |> ignore
+      })
+      |> ignore
+    }
+  })
+  |> ignore
+}
+
+///|
+/// A step's words (the ui's 13 on 20).
+pub let step_words : @ui.TextStyle = @ui.text_style(size=Sm, leading=L6, color=Fg)
+
+///|
 // kept across runs: a value (no field of it changes)
-let pill_box : @ui.Style = @ui.style(row=true, h=Fixed(pill_h), radius=Full, align=ACenter)
+let steps_box : @ui.Style = @ui.css("w=Full gap=S2")
+
+///|
+// kept across runs: a value (no field of it changes)
+let step_row : @ui.Style = @ui.css("row w=Full align=AStart")
+
+///|
+// kept across runs: a value (no field of it changes)
+let step_number : @ui.Style = @ui.css("w=S5")
+
+///|
+// kept across runs: a value (no field of it changes)
+let step_number_words : @ui.TextStyle = @ui.text_style(size=Sm, leading=L6, color=Muted, wrap=false)
+
+///|
+// kept across runs: a value (no field of it changes)
+let step_body : @ui.Style = @ui.style(row=true, w=grow, gap=S2, align=ACenter)
+
+///|
+/// What was checked and found right (controls.css.ts verifyOk): a ticked circle 16 and its words, 6 apart, the ui's 13
+/// in green.
+pub fn verify_ok(c : @ui.Ctx, words : String) -> Unit {
+  c.box(style=verify_line, fn() {
+    draw_icon(c, "check-circle", verify_icon, theme().p.green_ink)
+    c.text(words, style=verify_words) |> ignore
+  })
+  |> ignore
+}
+
+///|
+let verify_icon : Double = 16.0
+
+///|
+// kept across runs: a value (no field of it changes)
+let verify_line : @ui.Style = @ui.css("row gap=S1_5 align=ACenter")
+
+///|
+// kept across runs: a value (no field of it changes)
+let verify_words : @ui.TextStyle = @ui.text_style(size=Sm, leading=L6, color=Positive)
+
+///|
+// kept across runs: a value (no field of it changes)
+let pill_box : @ui.Style = @ui.style(row=true, h=Fixed(pill_h), gap=S1, radius=Full, align=ACenter)
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -1160,7 +1248,7 @@ pub fn empty(c : @ui.Ctx, body : () -> Unit) -> Unit {
 
 ///|
 // kept across runs: a value (no field of it changes)
-let empty_box : @ui.Style = @ui.style(w=Full, h=Grow(1.0), p=S10, gap=S1_5, align=ACenter, justify=JCenter)
+let empty_box : @ui.Style = @ui.css("w=Full h=Grow(1.0) p=S10 gap=S1_5 align=ACenter justify=JCenter")
 
 ///|
 /// The first one to make (parts.tsx FirstOne, own.css.ts firstOne): a list with nothing in it yet, or a page whose first
@@ -1193,7 +1281,7 @@ pub fn first_one(
 
 ///|
 // kept across runs: a value (no field of it changes)
-let first_room : @ui.Style = @ui.style(w=Full, align=ACenter, py=S6)
+let first_room : @ui.Style = @ui.css("w=Full align=ACenter py=S6")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -1201,7 +1289,7 @@ let first_box : @ui.Style = @ui.style(w=Full, max_w=first_most, pt=S2, pb=S6, ga
 
 ///|
 // kept across runs: a value (no field of it changes)
-let first_title_at : @ui.Style = @ui.style(pt=S3)
+let first_title_at : @ui.Style = @ui.css("pt=S3")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -1217,7 +1305,7 @@ let first_lead_box : @ui.Style = @ui.style(max_w=first_lead_most, align=ACenter)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let first_actions : @ui.Style = @ui.style(row=true, w=Full, gap=S2, align=ACenter, justify=JCenter, pt=S3)
+let first_actions : @ui.Style = @ui.css("row w=Full gap=S2 align=ACenter justify=JCenter pt=S3")
 
 // ---------------------------------------------------------------------------
 // Dialogs (parts.tsx Dialog; parts.css.ts dialog, dialogHead, dialogLead, dialogBody, dialogFoot, overlay)
@@ -1241,6 +1329,7 @@ pub fn dialog(
   wide? : Bool = false,
   w? : Double,
   close_label? : String = "",
+  step? : String = "",
 ) -> Bool {
   let closed = Ref(false)
   let w = w.unwrap_or(if wide { dialog_wide_w } else { dialog_w })
@@ -1264,7 +1353,16 @@ pub fn dialog(
         shadow_color=theme().p.shadow,
         fn() {
         c.box(style=dialog_head, fn() {
-          c.text(s.title, style=dialog_title) |> ignore
+          // a step's count beside the title (Connect.css.ts dialogStep: the ui's 13 in 400 muted, 8 after it)
+          if step != "" {
+            c.box(style=dialog_title_line, fn() {
+              c.text(s.title, style=dialog_title_one) |> ignore
+              c.text(step, style=dialog_step) |> ignore
+            })
+            |> ignore
+          } else {
+            c.text(s.title, style=dialog_title) |> ignore
+          }
           if close_label != "" &&
             icon_button(c, "close", key=key + "/close", size=dialog_close, round=true, label=close_label) {
             closed.val = true
@@ -1298,13 +1396,13 @@ let dialog_room : Double = 48.0
 /// A dialog's frame: 24 in at its sides and over its title, a line round it (its corner, ground and shadow: dialog_r,
 /// panel_ground, dialog_shadow).
 // kept across runs: a value (no field of it changes)
-let dialog_box : @ui.Style = @ui.style(px=S6, pt=S6, border=B1, border_color=Line)
+let dialog_box : @ui.Style = @ui.css("px=S6 pt=S6 border=B1 border_color=Line")
 
 ///|
 /// Its title's row (dialogHead: 25 under the top, 26 from the right): the close button at its end, its middle on the
 /// title's.
 // kept across runs: a value (no field of it changes)
-let dialog_head : @ui.Style = @ui.style(row=true, w=Full, justify=JBetween, align=ACenter, gap=S3, min_h=S8, pt=SPx, pr=S0_5)
+let dialog_head : @ui.Style = @ui.css("row w=Full justify=JBetween align=ACenter gap=S3 min_h=S8 pt=SPx pr=S0_5")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -1312,7 +1410,7 @@ let dialog_title : @ui.TextStyle = @ui.text_style(size=Xl3, weight=Semibold, col
 
 ///|
 // kept across runs: a value (no field of it changes)
-let dialog_lead_at : @ui.Style = @ui.style(w=Full, pt=S1_5)
+let dialog_lead_at : @ui.Style = @ui.css("w=Full pt=S1_5")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -1321,17 +1419,17 @@ let dialog_lead : @ui.TextStyle = @ui.text_style(size=Sm, leading=L6, color=Mute
 ///|
 /// What it holds: 18 under the title (or its lead), its parts 16 apart.
 // kept across runs: a value (no field of it changes)
-let dialog_body : @ui.Style = @ui.style(w=Full, pt=S4_5, gap=S4)
+let dialog_body : @ui.Style = @ui.css("w=Full pt=S4_5 gap=S4")
 
 ///|
 /// Its buttons: at its end, 8 apart, 24 under what it holds and over its foot.
 // kept across runs: a value (no field of it changes)
-let dialog_foot : @ui.Style = @ui.style(row=true, w=Full, justify=JEnd, align=ACenter, gap=S2, py=S6)
+let dialog_foot : @ui.Style = @ui.css("row w=Full justify=JEnd align=ACenter gap=S2 py=S6")
 
 ///|
 /// With none, 24 under what it holds.
 // kept across runs: a value (no field of it changes)
-let dialog_end : @ui.Style = @ui.style(h=S6)
+let dialog_end : @ui.Style = @ui.css("h=S6")
 
 // ---------------------------------------------------------------------------
 // Fields, selects, choices (parts.tsx Field, Select, Choices; parts.css.ts field, select, choice, radio)
@@ -1368,11 +1466,11 @@ pub fn field(
 
 ///|
 // kept across runs: a value (no field of it changes)
-let field_box : @ui.Style = @ui.style(w=Full, gap=S1_5)
+let field_box : @ui.Style = @ui.css("w=Full gap=S1_5")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let field_top : @ui.Style = @ui.style(row=true, w=Full, justify=JBetween, align=AEnd, gap=S2)
+let field_top : @ui.Style = @ui.css("row w=Full justify=JBetween align=AEnd gap=S2")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -1418,7 +1516,7 @@ pub fn textarea(
 ) -> String {
   let t = theme()
   let box_id = c.id(key + "/frame")
-  let hot = c.hovered(box_id) || c.has_focus(c.id(key))
+  let hot = c.lit(box_id) || c.has_focus(c.id(key))
   let mut words = ""
   let tall = @ui.style(min_h=Fixed(rows.to_double() * textarea_line + textarea_in))
   c.box(id=box_id, style=(if hot { textarea_box_hot } else { textarea_box }).then(tall), fn() {
@@ -1450,19 +1548,11 @@ let textarea_in : Double = 16.0
 
 ///|
 // kept across runs: a value (no field of it changes)
-let textarea_box : @ui.Style = @ui.style(
-  w=Full,
-  px=S3,
-  py=S2,
-  radius=Xl,
-  bg=Surface,
-  border=B1,
-  border_color=Border,
-)
+let textarea_box : @ui.Style = @ui.css("w=Full px=S3 py=S2 radius=Xl bg=Surface border=B1 border_color=Border")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let textarea_box_hot : @ui.Style = textarea_box.then(@ui.style(border_color=FieldHover))
+let textarea_box_hot : @ui.Style = textarea_box.then(@ui.css("border_color=FieldHover"))
 
 ///|
 /// What is typed in: as what is read (global.css.ts --text-input), on the line of a list's words.
@@ -1473,24 +1563,15 @@ let input_line : Double = 20.0
 
 ///|
 // kept across runs: a value (no field of it changes)
-let input_box : @ui.Style = @ui.style(
-  row=true,
-  w=Full,
-  min_h=S9,
-  px=S4,
-  py=S1_5,
-  radius=Full,
-  bg=Surface,
-  border=B1,
-  border_color=Border,
-  align=ACenter,
-  disabled=@ui.patch(opacity=O55),
+let input_box : @ui.Style = @ui.css(
+  #|row w=Full min_h=S9 px=S4 py=S1_5 radius=Full bg=Surface border=B1 border_color=Border align=ACenter
+  #|disabled{opacity=O55}
 )
 
 ///|
 /// Pointed at or written in: the field's hover grey round it.
 // kept across runs: a value (no field of it changes)
-let input_box_hot : @ui.Style = input_box.then(@ui.style(border_color=FieldHover))
+let input_box_hot : @ui.Style = input_box.then(@ui.css("border_color=FieldHover"))
 
 ///|
 /// A dropdown of choices (parts.tsx Select: mbui's, @kit.select: its options under it, the arrows, letters and Enter
@@ -1544,26 +1625,15 @@ pub fn select(
 
 ///|
 // kept across runs: a value (no field of it changes)
-let select_box : @ui.Style = @ui.style(
-  row=true,
-  w=Full,
-  min_h=S9,
-  px=S4,
-  py=S1_5,
-  gap=S2,
-  radius=Full,
-  bg=Surface,
-  border=B1,
-  border_color=Border,
-  align=ACenter,
-  justify=JBetween,
-  disabled=@ui.patch(opacity=O55),
+let select_box : @ui.Style = @ui.css(
+  #|row w=Full min_h=S9 px=S4 py=S1_5 gap=S2 radius=Full bg=Surface border=B1 border_color=Border align=ACenter
+  #|justify=JBetween disabled{opacity=O55}
 )
 
 ///|
 /// Pointed at, open or focused: the field's hover grey round it.
 // kept across runs: a value (no field of it changes)
-let select_box_hot : @ui.Style = select_box.then(@ui.style(border_color=FieldHover))
+let select_box_hot : @ui.Style = select_box.then(@ui.css("border_color=FieldHover"))
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -1576,7 +1646,7 @@ let select_placeholder : @ui.TextStyle = select_words.then(@ui.text_style(color=
 ///|
 /// An option's row (parts.css.ts selectItem: a menu's item, its check at its end 10 in).
 // kept across runs: a value (no field of it changes)
-let select_item : @ui.Style = @ui.style(row=true, w=Full, px=S2_5, gap=S2, align=ACenter)
+let select_item : @ui.Style = @ui.css("row w=Full px=S2_5 gap=S2 align=ACenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -1584,33 +1654,62 @@ let select_hint : @ui.TextStyle = @ui.text_style(size=Xs, leading=L5, color=Mute
 
 ///|
 /// Exclusive options that need a sentence each (parts.tsx Choices: mbui's radio group, @kit.radio_group): bordered
-/// cards 8 apart, each its title (13, 600) and `description` (12, muted) beside a radio mark at its end; the chosen one
-/// edged in the ink. `options`: each value, title and description. What is chosen now.
+/// cards 8 apart, each its `icon` (by its value) before its title (13, 600) and `description` (12, muted), a radio mark
+/// at its end; the chosen one edged in the ink, what it holds more (`extra`, by its value: a switch of it) under a line
+/// in it; those `disabled` faded and not chosen; `note`: what draws a description of its own, by its value. `options`: each value, title and description. What is chosen now.
 pub fn choices(
   c : @ui.Ctx,
   key : String,
   value : String,
   options : Array[(String, String, String)],
   label? : String = "",
+  icon? : (String) -> Unit,
+  extra? : (String) -> Unit,
+  disabled? : Array[String] = [],
+  note? : (String) -> Unit,
 ) -> String {
-  let t = theme()
-  let items = options.map(fn(o) { @kit.item(o.0, label=o.1) })
+  let note_of = note
+  let items = options.map(fn(o) { @kit.item(o.0, label=o.1, disabled=disabled.contains(o.0)) })
   @kit.radio_group(c, key, items, value, label~, gap=choice_gap, look=fn(c, s) {
+      let at = options.search_by(fn(o) { o.1 == s.label })
+      let v = at.map(fn(i) { options[i].0 }).unwrap_or("")
+      let note = at.map(fn(i) { options[i].2 }).unwrap_or("")
       c.box(style=if s.on { choice_card_on } else if s.hovered { choice_card_hot } else { choice_card }, disabled=s.disabled, fn() {
-          c.box(style=choice_words, fn() {
-            c.text(s.label, style=choice_title) |> ignore
-            let note = options.search_by(fn(o) { o.1 == s.label }).map(fn(i) { options[i].2 }).unwrap_or("")
-            if note != "" {
-              c.text(note, style=choice_note) |> ignore
+          c.box(style=choice_hit, fn() {
+            match icon {
+              Some(f) => f(v)
+              None => ()
             }
+            c.box(style=choice_words, fn() {
+              c.text(s.label, style=choice_title) |> ignore
+              // (its description a part of its own, by its value: a Slack workspace's token's owner)
+              match note_of {
+                Some(f) => f(v)
+                None =>
+                  if note != "" {
+                    c.text(note, style=choice_note) |> ignore
+                  }
+              }
+            })
+            |> ignore
+            c.box(style=if s.on { radio_mark_on } else { radio_mark }, fn() {
+              if s.on {
+                c.box(style=radio_dot, fn() {  }) |> ignore
+              }
+            })
+            |> ignore
           })
           |> ignore
-          c.box(style=if s.on { radio_mark_on } else { radio_mark }, fn() {
-            if s.on {
-              c.box(style=radio_dot, fn() {  }) |> ignore
-            }
-          })
-          |> ignore
+          // (parts.css.ts choiceExtra: 14 in at its sides, under a line, 12 over and 14 under what it holds)
+          match extra {
+            Some(f) if s.on =>
+              c.box(style=choice_extra, fn() {
+                c.box(style=choice_rule, fn() {  }) |> ignore
+                c.box(style=choice_extra_in, fn() { f(v) }) |> ignore
+              })
+              |> ignore
+            _ => ()
+          }
       })
       |> ignore
     }).value
@@ -1618,32 +1717,39 @@ pub fn choices(
 
 ///|
 // kept across runs: a value (no field of it changes)
-let choice_card : @ui.Style = @ui.style(
-  row=true,
-  w=Full,
-  px=S3_5,
-  py=S3,
-  gap=S3,
-  radius=Xl1_5,
-  bg=Surface,
-  border=B1,
-  border_color=Border,
-  align=ACenter,
-  disabled=@ui.patch(opacity=O55),
+let choice_card : @ui.Style = @ui.css(
+  #|w=Full radius=Xl1_5 bg=Surface border=B1 border_color=Border disabled{opacity=O55}
 )
 
 ///|
 /// Pointed at: the field's hover grey round it; chosen: edged twice in the ink (its line and a ring of 1).
 // kept across runs: a value (no field of it changes)
-let choice_card_hot : @ui.Style = choice_card.then(@ui.style(border_color=FieldHover))
+let choice_card_hot : @ui.Style = choice_card.then(@ui.css("border_color=FieldHover"))
 
 ///|
 // kept across runs: a value (no field of it changes)
-let choice_card_on : @ui.Style = choice_card.then(@ui.style(border=B2, border_color=Fg))
+let choice_card_on : @ui.Style = choice_card.then(@ui.css("border=B2 border_color=Fg"))
+
+///|
+/// What is pressed of it (choiceHit): 12 by 14 in, its parts 12 apart.
+// kept across runs: a value (no field of it changes)
+let choice_hit : @ui.Style = @ui.css("row w=Full px=S3_5 py=S3 gap=S3 align=ACenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let choice_words : @ui.Style = @ui.style(w=Grow(1.0), gap=S0_5)
+let choice_extra : @ui.Style = @ui.css("w=Full px=S3_5")
+
+///|
+// kept across runs: a value (no field of it changes)
+let choice_rule : @ui.Style = @ui.css("w=Full h=SPx bg=Line")
+
+///|
+// kept across runs: a value (no field of it changes)
+let choice_extra_in : @ui.Style = @ui.css("w=Full pt=S3 pb=S3_5")
+
+///|
+// kept across runs: a value (no field of it changes)
+let choice_words : @ui.Style = @ui.css("w=Grow(1.0) gap=S0_5")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -1656,15 +1762,17 @@ let choice_note : @ui.TextStyle = @ui.text_style(size=Xs, leading=L5, color=Mute
 ///|
 /// The radio mark: 18 round, edged 1.5 (the strong grey; the ink chosen), its dot 8 in the ink.
 // kept across runs: a value (no field of it changes)
-let radio_mark : @ui.Style = @ui.style(w=S4_5, h=S4_5, radius=Full, border=B1, border_color=Border, align=ACenter, justify=JCenter)
+let radio_mark : @ui.Style = @ui.css(
+  #|w=S4_5 h=S4_5 radius=Full border=B1 border_color=Border align=ACenter justify=JCenter
+)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let radio_mark_on : @ui.Style = radio_mark.then(@ui.style(border_color=Fg))
+let radio_mark_on : @ui.Style = radio_mark.then(@ui.css("border_color=Fg"))
 
 ///|
 // kept across runs: a value (no field of it changes)
-let radio_dot : @ui.Style = @ui.style(w=S2, h=S2, radius=Full, bg=Fg)
+let radio_dot : @ui.Style = @ui.css("w=S2 h=S2 radius=Full bg=Fg")
 
 // ---------------------------------------------------------------------------
 // Asking before (parts.tsx Confirm; parts.css.ts dialogAlert, dialogError)
@@ -1741,11 +1849,11 @@ pub fn confirm(
 ///|
 /// Its frame (dialogAlert: 28 over, 24 in, 8 between its title, its lead and what follows).
 // kept across runs: a value (no field of it changes)
-let confirm_box : @ui.Style = @ui.style(px=S6, pt=S7, pb=S6, gap=S2, border=B1, border_color=Line)
+let confirm_box : @ui.Style = @ui.css("px=S6 pt=S7 pb=S6 gap=S2 border=B1 border_color=Line")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let confirm_error_at : @ui.Style = @ui.style(w=Full, pt=S1)
+let confirm_error_at : @ui.Style = @ui.css("w=Full pt=S1")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -1753,7 +1861,7 @@ let confirm_error : @ui.TextStyle = @ui.text_style(size=Sm, leading=L6, color=Da
 
 ///|
 // kept across runs: a value (no field of it changes)
-let confirm_foot : @ui.Style = @ui.style(row=true, w=Full, justify=JEnd, align=ACenter, gap=S2, pt=S2)
+let confirm_foot : @ui.Style = @ui.css("row w=Full justify=JEnd align=ACenter gap=S2 pt=S2")
 
 // ---------------------------------------------------------------------------
 // A small panel's parts (parts.tsx PanelHead, PanelGroup, PanelNote, PanelFoot, PanelText, PanelButton,
@@ -1824,7 +1932,7 @@ pub fn panel_button(
   disabled? : Bool = false,
 ) -> Bool {
   let id = c.id(key)
-  let hot = !disabled && c.hovered(id)
+  let hot = !disabled && c.lit(id)
   let b = c.box(
     style=if tone == Filled { panel_button_filled } else { panel_button_box },
     disabled~,
@@ -1848,7 +1956,7 @@ pub fn panel_button(
 pub fn panel_icon_button(c : @ui.Ctx, key : String, name : String, label : String, disabled? : Bool = false) -> Bool {
   let p = theme().p
   let id = c.id(key)
-  let hot = !disabled && c.hovered(id)
+  let hot = !disabled && c.lit(id)
   let b = c.box(style=panel_icon_box, disabled~, id=if disabled { 0 } else { id }, fn() {
     icon(c, name, size=panel_icon_size, color=if hot { p.text } else { p.muted }) |> ignore
   })
@@ -1859,7 +1967,7 @@ pub fn panel_icon_button(c : @ui.Ctx, key : String, name : String, label : Strin
 
 ///|
 // kept across runs: a value (no field of it changes)
-let panel_head_box : @ui.Style = @ui.style(w=Full, px=S2_5, pt=S1_5, pb=S1, gap=S0_5)
+let panel_head_box : @ui.Style = @ui.css("w=Full px=S2_5 pt=S1_5 pb=S1 gap=S0_5")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -1871,38 +1979,30 @@ let panel_note_words : @ui.TextStyle = @ui.text_style(size=Xs, leading=L5, color
 
 ///|
 // kept across runs: a value (no field of it changes)
-let panel_group_box : @ui.Style = @ui.style(w=Full, gap=S0_5)
+let panel_group_box : @ui.Style = @ui.css("w=Full gap=S0_5")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let panel_label_at : @ui.Style = @ui.style(w=Full, px=S2_5, pt=S1_5, pb=S0_5)
+let panel_label_at : @ui.Style = @ui.css("w=Full px=S2_5 pt=S1_5 pb=S0_5")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let panel_text_box : @ui.Style = @ui.style(w=Full, px=S2_5)
+let panel_text_box : @ui.Style = @ui.css("w=Full px=S2_5")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let panel_foot_box : @ui.Style = @ui.style(row=true, w=Full, justify=JEnd, gap=S1_5, pt=S1)
+let panel_foot_box : @ui.Style = @ui.css("row w=Full justify=JEnd gap=S1_5 pt=S1")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let panel_button_box : @ui.Style = @ui.style(
-  row=true,
-  h=S6,
-  px=S2_5,
-  gap=S1,
-  radius=Full,
-  align=ACenter,
-  justify=JCenter,
-  hovered=@ui.patch(bg=Hover),
-  disabled=@ui.patch(opacity=O50),
+let panel_button_box : @ui.Style = @ui.css(
+  #|row h=S6 px=S2_5 gap=S1 radius=Full align=ACenter justify=JCenter hovered{bg=Hover} disabled{opacity=O50}
 )
 
 ///|
 // kept across runs: a value (no field of it changes)
 let panel_button_filled : @ui.Style = panel_button_box.then(
-  @ui.style(bg=AccentBg, hovered=@ui.patch(bg=A(Accent, O20))),
+  @ui.css("bg=AccentBg hovered{bg=A(Accent,O20)}"),
 )
 
 ///|
@@ -1919,14 +2019,8 @@ let panel_button_quiet : @ui.TextStyle = panel_button_words.then(@ui.text_style(
 
 ///|
 // kept across runs: a value (no field of it changes)
-let panel_icon_box : @ui.Style = @ui.style(
-  w=S6,
-  h=S6,
-  radius=Full,
-  align=ACenter,
-  justify=JCenter,
-  hovered=@ui.patch(bg=Hover),
-  disabled=@ui.patch(opacity=O35),
+let panel_icon_box : @ui.Style = @ui.css(
+  #|w=S6 h=S6 radius=Full align=ACenter justify=JCenter hovered{bg=Hover} disabled{opacity=O35}
 )
 
 // ---------------------------------------------------------------------------
@@ -1952,11 +2046,11 @@ pub fn copy_command(c : @ui.Ctx, key : String, text : String, copy~ : String, co
 
 ///|
 // kept across runs: a value (no field of it changes)
-let command_box : @ui.Style = @ui.style(row=true, w=Full, pl=S3_5, pr=S1_5, py=S1_5, gap=S2, radius=Xl, align=ACenter)
+let command_box : @ui.Style = @ui.css("row w=Full pl=S3_5 pr=S1_5 py=S1_5 gap=S2 radius=Xl align=ACenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let command_words_at : @ui.Style = @ui.style(w=Grow(1.0))
+let command_words_at : @ui.Style = @ui.css("w=Grow(1.0)")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -1966,7 +2060,8 @@ let command_words : @ui.TextStyle = @ui.text_style(size=Xs, leading=L5, color=Fg
 /// A choice that opens a menu of what it can be (Chooser, controls.css.ts chooser): quiet words (12) and a small
 /// chevron, 28 high, 8 in, 8 round, the hover's ground and the ink pointed at or open; pressed, its menu (@sf.menu) of
 /// `entries` (a choice each: @kit.menu_radio) on `side`, 220 wide at least. `open`: whether its menu is open, the
-/// view's (what it is now comes back with what was chosen).
+/// view's (what it is now comes back with what was chosen). `lead`: what stands before its words (a station's mark),
+/// in the ink its words have.
 pub fn chooser(
   c : @ui.Ctx,
   key : String,
@@ -1974,12 +2069,17 @@ pub fn chooser(
   entries : Array[@kit.Entry],
   open : Bool,
   side? : @ui.Side = Bottom,
+  lead? : (Int64) -> Unit,
 ) -> @kit.Menu {
   let p = theme().p
   let id = c.id(key)
   let opened = if c.clicked(id) { !open } else { open }
-  let lit = c.hovered(id) || opened
+  let lit = c.lit(id) || opened
   let b = c.box(style=chooser_box, selected=opened, id~, fn() {
+    match lead {
+      Some(f) => f(if lit { p.text } else { p.muted })
+      None => ()
+    }
     c.text(words, style=if lit { chooser_words_lit } else { chooser_words }) |> ignore
     icon(c, "chevron-down", size=chooser_chevron, color=if lit { p.text } else { p.muted }) |> ignore
   })
@@ -1989,15 +2089,8 @@ pub fn chooser(
 
 ///|
 // kept across runs: a value (no field of it changes)
-let chooser_box : @ui.Style = @ui.style(
-  row=true,
-  h=S7,
-  px=S2,
-  gap=S1_25,
-  radius=Lg,
-  align=ACenter,
-  hovered=@ui.patch(bg=Hover),
-  selected=@ui.patch(bg=Hover),
+let chooser_box : @ui.Style = @ui.css(
+  #|row h=S7 px=S2 gap=S1_25 radius=Lg align=ACenter hovered{bg=Hover} selected{bg=Hover}
 )
 
 ///|
@@ -2185,15 +2278,15 @@ let edge_box : @ui.Style = @ui.style(row=true, w=Fixed(handle_w), h=Full, align=
 
 ///|
 // kept across runs: a value (no field of it changes)
-let edge_line_place : @ui.Style = @ui.style(row=true, w=Full, h=Full, py=S2, justify=JCenter)
+let edge_line_place : @ui.Style = @ui.css("row w=Full h=Full py=S2 justify=JCenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let edge_line : @ui.Style = @ui.style(w=SPx, h=Full, opacity=O0)
+let edge_line : @ui.Style = @ui.css("w=SPx h=Full opacity=O0")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let edge_line_on : @ui.Style = edge_line.then(@ui.style(opacity=O100))
+let edge_line_on : @ui.Style = edge_line.then(@ui.css("opacity=O100"))
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -2205,15 +2298,15 @@ let edge_bar : @ui.Style = @ui.style(w=Fixed(edge_bar_w), h=S6, radius=Full, bg=
 
 ///|
 // kept across runs: a value (no field of it changes)
-let edge_bar_shown : @ui.Style = edge_bar.then(@ui.style(opacity=O100))
+let edge_bar_shown : @ui.Style = edge_bar.then(@ui.css("opacity=O100"))
 
 ///|
 // kept across runs: a value (no field of it changes)
-let edge_bar_on : @ui.Style = edge_bar_shown.then(@ui.style(h=S12))
+let edge_bar_on : @ui.Style = edge_bar_shown.then(@ui.css("h=S12"))
 
 ///|
 // kept across runs: a value (no field of it changes)
-let edge_bar_active : @ui.Style = edge_bar_on.then(@ui.style(bg=FieldHover))
+let edge_bar_active : @ui.Style = edge_bar_on.then(@ui.css("bg=FieldHover"))
 
 ///|
 /// The edges whose tip is put away, by their keys, and the last frame each was pressed in: pressed since the pointer
@@ -2229,7 +2322,7 @@ pub fn edge_tip(c : @ui.Ctx, key : String, id : Int, words : String, side? : @ui
     return
   }
   let (px, py, down) = c.pointer()
-  let on = c.hovered(id) ||
+  let on = c.lit(id) ||
     (match c.rect_of(id) {
       Some((x, y, w, h)) => px >= x && px < x + w && py >= y && py < y + h
       None => false
@@ -2289,7 +2382,7 @@ pub fn resize_handle(
   c.cursor(id, ResizeX)
   let said = handle_drag(c, id, width, min~, max~, edge~)
   let held = active || (said is Dragging(_)) || c.pressed(id)
-  let on = c.hovered(id) || c.focus_shown(id) || held
+  let on = c.lit(id) || c.focus_shown(id) || held
   let words = if press == "" { label } else { label + " · " + press }
   let body = fn() { edge_look(c, key, over~, on~, active=held) }
   let b = if edge is Left {
@@ -2398,7 +2491,7 @@ pub fn options_card(
         if wide && free {
           c.cursor(id, Hand)
         }
-        let hot = wide && free && c.hovered(id)
+        let hot = wide && free && c.lit(id)
         c.box(
           dir=Row,
           w=Fill(1.0),
@@ -2455,3 +2548,15 @@ pub fn options_card(
   |> ignore
   picked
 }
+
+///|
+// kept across runs: a value (no field of it changes)
+let dialog_title_line : @ui.Style = @ui.style(row=true, w=grow, gap=S2, align=AEnd)
+
+///|
+// kept across runs: a value (no field of it changes)
+let dialog_step : @ui.TextStyle = @ui.text_style(size=Sm, leading=L6, color=Muted, wrap=false)
+
+///|
+// kept across runs: a value (no field of it changes)
+let dialog_title_one : @ui.TextStyle = dialog_title.then(one_line)

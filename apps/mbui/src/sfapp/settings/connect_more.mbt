@@ -6,7 +6,7 @@
 
 ///|
 /// The first of `keys` that `v` has, else `or_else`.
-fn first_text(v : Json?, keys : Array[String], or_else : String) -> String {
+pub fn first_text(v : Json?, keys : Array[String], or_else : String) -> String {
   for k in keys {
     match opt_text(v, k) {
       Some(x) => return x
@@ -162,42 +162,19 @@ fn open_owner(_core : Core, here : Here, station : String, cv : Json?) -> Unit {
 }
 
 ///|
-/// What switching a connect to `mode` does to its conversations, in plain words (consequences).
-fn consequences(cv : Json?, mode : String, mention : Bool, running : Int) -> Array[String] {
-  // a Feishu connect's groups in place of Slack's threads and channels
-  let feishu : Map[String, String] = {
-    "android-settings.mode.toSingle": "web-pages.connect.effects.toSingle.feishu",
-    "android-settings.mode.toMulti": "web-pages.connect.effects.toMulti.feishu",
-    "android-settings.mode.oldThreads": "web-pages.connect.effects.threadsRestart.feishu",
-    "android-settings.mode.mention": "web-pages.connect.effects.mentionOnly.feishu",
-    "android-settings.mode.noMention": "web-pages.connect.effects.noMention.feishu",
-  }
-  let say = fn(k : String) { tr(if text(cv, "kind") == "feishu" { feishu.get(k).unwrap_or(k) } else { k }) }
-  let out : Array[String] = []
-  let was = text(cv, "mode")
-  if was == "multi-session" && mode == "single-session" {
-    out.push(say("android-settings.mode.toSingle"))
-    out.push(say(if has(cv, "session") { "android-settings.mode.keepSession" } else { "android-settings.mode.newSession" }))
-    if !mention {
-      out.push(say("android-settings.mode.noMention"))
-    }
-  } else if was == "single-session" && mode == "multi-session" {
-    out.push(say("android-settings.mode.toMulti"))
-    out.push(say("android-settings.mode.oldThreads"))
-    out.push(say("android-settings.mode.back"))
-  } else if mention != flag(cv, "requireMention") {
-    out.push(say(if mention { "android-settings.mode.mention" } else { "android-settings.mode.noMention" }))
-  }
-  if running > 0 {
-    out.push(fill("android-settings.mode.running", [("n", running.to_string())]))
-  }
-  out
+/// What switching a connect to `mode` (and waiting for an @ or not) does, as the core says it (its ModeChange: whether
+/// it changes anything, what it does to its conversations, its button's words); one each takes no @ to choose from.
+fn mode_change(item : Json?, mode : String, mention : Bool) -> Json? {
+  items(item, "changes").iter().find_first(fn(ch) {
+    text(Some(ch), "mode") == mode && (mode == "multi-session" || flag(Some(ch), "requireMention") == mention)
+  })
 }
 
 ///|
 /// The ways a connect's conversations become sessions, each with what it means, and in single-session whether it
-/// waits for an @ (ModeChoices). Answers the choice tapped this frame.
-fn mode_choices(c : @ui.Ctx, key : String, mode : String, mention : Bool, kind? : String = "") -> (String, Bool) {
+/// waits for an @ (ModeChoices), in the core's words for its kind (`words`: ModeWords). Answers the choice tapped this
+/// frame.
+fn mode_choices(c : @ui.Ctx, key : String, mode : String, mention : Bool, words : Json?) -> (String, Bool) {
   let t = @sf.theme()
   let mut out = (mode, mention)
   c.box(w=Fill(1.0), gap=8.0, fn() {
@@ -217,8 +194,9 @@ fn mode_choices(c : @ui.Ctx, key : String, mode : String, mention : Bool, kind? 
         border_color=if on { t.p.accent } else { t.p.line },
         id~,
         fn() {
-          c.text(mode_label(m, kind~), size=15.0, weight=600, color=t.p.text, w=Fill(1.0), line=21.0) |> ignore
-          c.text(mode_text(m, kind~), size=13.0, color=t.p.muted, w=Fill(1.0), line=18.0) |> ignore
+          let way = field(words, if m == "multi-session" { "multi" } else { "single" })
+          c.text(text(way, "label"), size=15.0, weight=600, color=t.p.text, w=Fill(1.0), line=21.0) |> ignore
+          c.text(text(way, "description"), size=13.0, color=t.p.muted, w=Fill(1.0), line=18.0) |> ignore
         },
       )
       |> ignore
@@ -233,14 +211,7 @@ fn mode_choices(c : @ui.Ctx, key : String, mode : String, mention : Bool, kind? 
           c.text(tr("android-settings.mode.mentionTitle"), size=14.0, weight=600, color=t.p.text, w=Fill(1.0), line=20.0)
           |> ignore
           c.text(
-            tr(
-              match (mention, kind == "feishu") {
-                (true, true) => "web-mobile.connects.mentionOn.feishu"
-                (false, true) => "web-mobile.connects.mentionOff.feishu"
-                (true, false) => "android-settings.mode.mentionOn"
-                (false, false) => "android-settings.mode.mentionOff"
-              },
-            ),
+            text(words, if mention { "mentionOn" } else { "mentionOff" }),
             size=13.0,
             color=t.p.muted,
             w=Fill(1.0),
@@ -268,13 +239,14 @@ fn open_mode(_core : Core, station : String, item : Json?) -> Unit {
     let t = @sf.theme()
     let (mode, mention) = picked.val
     let busy = is_doing(core, ["connect.put"], [("station", station), ("id", id)])
-    let changed = mode != text(cv, "mode") || (mode == "single-session" && mention != flag(cv, "requireMention"))
-    let effects = if changed { consequences(cv, mode, mention, count(item, "running")) } else { [] }
+    let change = mode_change(item, mode, mention)
+    let changed = flag(change, "changed")
+    let effects = strings(change, "effects")
     sheet_head(c, tr("android-settings.mode.title"))
     c.box(w=Fill(1.0), h=Fill(1.0), fn() {
       scroll_page(c, "connect-mode", [
         fn() {
-          c.box(w=Fill(1.0), padx=20.0, pb=10.0, fn() { picked.val = mode_choices(c, "mode-sheet", mode, mention, kind=text(cv, "kind")) })
+          c.box(w=Fill(1.0), padx=20.0, pb=10.0, fn() { picked.val = mode_choices(c, "mode-sheet", mode, mention, field(cv, "modeWords")) })
           |> ignore
         },
         fn() {
@@ -297,13 +269,7 @@ fn open_mode(_core : Core, station : String, item : Json?) -> Unit {
             if button(c, "mode-cancel", tr("common.cancel"), false) {
               close_sheet()
             }
-            let label = if mode == text(cv, "mode") {
-              tr("android-settings.mode.confirm")
-            } else if mode == "single-session" {
-              tr("android-settings.mode.toSingleButton")
-            } else {
-              tr("android-settings.mode.toMultiButton")
-            }
+            let label = text(change, "action")
             if button(c, "mode-go", label, true, enabled=changed && !busy) {
               close_sheet()
               act(
@@ -856,7 +822,7 @@ let connect_forms : Ref[Int] = Ref(0)
 
 ///|
 /// A new connect on `station` (openNewConnect): from the start, or going on with a Slack app made before (`resuming`).
-fn open_new_connect(core : Core, station : String, resuming? : String = "") -> Unit {
+pub fn open_new_connect(core : Core, station : String, resuming? : String = "") -> Unit {
   connect_forms.val += 1
   new_connects[station] = { form: "mbui-connect-" + connect_forms.val.to_string(), resuming, opened: false, dropped: false }
   (core.push)(NewConnect(station))
@@ -1024,7 +990,7 @@ fn new_connect_page(c : @ui.Ctx, core : Core, here : Here, station : String) -> 
               c.text(tr("android-settings.mode.title"), size=13.0, color=t.p.muted, w=Fill(1.0), line=18.0) |> ignore
               let mode = text(view, "mode")
               let mention = flag(view, "requireMention")
-              let (m2, r2) = mode_choices(c, "flow-mode", mode, mention, kind=if step == "feishuBind" { "feishu" } else { "" })
+              let (m2, r2) = mode_choices(c, "flow-mode", mode, mention, field(view, "modeWords"))
               if m2 != mode || r2 != mention {
                 edit([("mode", str(m2)), ("requireMention", Json::boolean(r2))])
               }
@@ -1352,28 +1318,16 @@ fn waiting_app(c : @ui.Ctx, core : Core, station : String, a : Json, online : Bo
 // A connect's Slack app (SlackApp.kt)
 
 ///|
-/// Permission groups in their order (SLACK_GROUP_WORDS) and in the form's sections (SLACK_SECTIONS); those that work
-/// only as Slack's admins allow (SLACK_ADMIN_GROUPS).
-// kept across runs: a table of constants, never written
-let slack_groups : Array[String] = [
-  "base", "public", "dm", "customize", "files", "reactions", "channels", "people", "extras", "canvases", "lists", "topics",
-  "usergroups", "search", "connect", "more",
-]
-
-///|
-// kept across runs: a table of constants, never written
-let slack_sections : Array[(String, Array[String])] = [
-  ("android-settings.slack.section.messages", ["base", "public", "dm", "customize", "reactions"]),
-  ("android-settings.slack.section.channels", ["channels", "topics", "connect"]),
-  ("android-settings.slack.section.files", ["files", "canvases", "lists"]),
-  ("android-settings.slack.section.people", ["people", "usergroups", "search"]),
-  ("android-settings.slack.section.other", ["extras", "more"]),
-]
-
-///|
-/// (the groups' names: "android-settings.slack.group.base" "android-settings.slack.group.public" "android-settings.slack.group.dm" "android-settings.slack.group.customize" "android-settings.slack.group.files" "android-settings.slack.group.reactions" "android-settings.slack.group.channels" "android-settings.slack.group.people" "android-settings.slack.group.extras" "android-settings.slack.group.canvases" "android-settings.slack.group.lists" "android-settings.slack.group.topics" "android-settings.slack.group.usergroups" "android-settings.slack.group.search" "android-settings.slack.group.connect" "android-settings.slack.group.more")
-// kept across runs: a table of constants, never written
-let slack_admin_groups : Array[String] = ["connect", "usergroups"]
+/// The groups of a Slack app's permissions, in the order the core's sections give them.
+fn section_groups(sections : Array[Json]) -> Array[String] {
+  let out : Array[String] = []
+  for sec in sections {
+    for g in items(Some(sec), "groups") {
+      out.push(text(Some(g), "id"))
+    }
+  }
+  out
+}
 
 ///|
 /// A Slack app's settings being edited (AppDraft): what the form shows, by the connect, and what it started as (Slack's,
@@ -1479,7 +1433,7 @@ fn slack_app_page(c : @ui.Ctx, core : Core, station : String, connect : String) 
         Some(d) if d.start == key => d
         prev => {
           let groups : Map[String, Bool] = Map([])
-          for g in slack_groups {
+          for g in section_groups(items(view, "sections")) {
             groups[g] = flag(field(settings, "groups"), g)
           }
           let d = {
@@ -1504,7 +1458,7 @@ fn slack_app_page(c : @ui.Ctx, core : Core, station : String, connect : String) 
           d
         }
       }
-      blocks.push(fn() { pad(fn() { app_form(c, core, station, connect, d, settings, links) }) })
+      blocks.push(fn() { pad(fn() { app_form(c, core, station, connect, d, settings, links, items(view, "sections")) }) })
     }
     match opt_text(links, "settings") {
       Some(url) if url != "" && !adding =>
@@ -1530,7 +1484,17 @@ let slack_adding : Map[String, Bool] = Map([])
 
 ///|
 /// The Slack app's form (AppForm): its name, description, colour, its permissions folded; 应用 writes what changed.
-fn app_form(c : @ui.Ctx, core : Core, station : String, connect : String, d : AppDraft, settings : Json?, links : Json?) -> Unit {
+/// Its permissions are the core's sections (`sections`).
+fn app_form(
+  c : @ui.Ctx,
+  core : Core,
+  station : String,
+  connect : String,
+  d : AppDraft,
+  settings : Json?,
+  links : Json?,
+  sections : Array[Json],
+) -> Unit {
   let t = @sf.theme()
   let busy = is_doing(core, ["connect.putSlackApp"], [("station", station), ("connect", connect)])
   let k = "slack-form/" + station + "/" + connect
@@ -1580,6 +1544,7 @@ fn app_form(c : @ui.Ctx, core : Core, station : String, connect : String, d : Ap
     c.text(d.icon_error, style=look_error) |> ignore
   }
   // permissions, folded: changed now and then
+  let slack_groups = section_groups(sections)
   let on = slack_groups.iter().filter(fn(g) { d.groups.get(g).unwrap_or(false) }).count()
   c.box(dir=Row, w=Fill(1.0), pady=6.0, gap=6.0, align=ACenter, id=c.id(k + "/perms"), fn() {
     @sf.icon(c, if d.perms { "chevron-down" } else { "chevron-right" }, size=14.0, color=t.p.muted) |> ignore
@@ -1596,21 +1561,25 @@ fn app_form(c : @ui.Ctx, core : Core, station : String, connect : String, d : Ap
     d.perms = !d.perms
   }
   if d.perms {
-    for sec in slack_sections {
-      let (title, groups) = sec
+    for sec in sections {
+      let title = text(Some(sec), "title")
+      let words = items(Some(sec), "groups")
+      let groups = words.map(fn(w) { text(Some(w), "id") })
       let all = groups.iter().all(fn(g) { d.groups.get(g).unwrap_or(false) })
       c.box(dir=Row, w=Fill(1.0), pt=12.0, pb=2.0, gap=12.0, align=ACenter, fn() {
-        c.text(tr(title), size=13.0, color=t.p.muted, wrap=false) |> ignore
+        c.text(title, size=13.0, color=t.p.muted, wrap=false) |> ignore
         if tap_text(c, k + "/sec/" + title, tr(if all { "android-settings.none" } else { "android-settings.all" }), size=13.0) {
-          for g in groups {
-            d.groups[g] = g == "base" || !all
+          for w in words {
+            d.groups[text(Some(w), "id")] = flag(Some(w), "fixed") || !all
           }
         }
       })
       |> ignore
-      for g in groups {
+      for w in words {
+        let wv = Some(w)
+        let g = text(wv, "id")
         let checked = d.groups.get(g).unwrap_or(false)
-        let fixed = g == "base"
+        let fixed = flag(wv, "fixed")
         let gid = c.id(k + "/group/" + g)
         if !fixed && hit(c, gid) {
           d.groups[g] = !checked
@@ -1629,9 +1598,9 @@ fn app_form(c : @ui.Ctx, core : Core, station : String, connect : String, d : Ap
             })
             |> ignore
           }
-          c.text(tr("android-settings.slack.group." + g), size=14.0, color=if checked { t.p.text } else { t.p.muted }, wrap=false, w=Fill(1.0))
+          c.text(text(wv, "label"), size=14.0, color=if checked { t.p.text } else { t.p.muted }, wrap=false, w=Fill(1.0))
           |> ignore
-          if slack_admin_groups.contains(g) {
+          if opt_text(wv, "admin") is Some(_) {
             c.text(tr("android-settings.slack.admin"), size=12.0, color=t.p.muted, wrap=false) |> ignore
           }
         })
@@ -1642,7 +1611,7 @@ fn app_form(c : @ui.Ctx, core : Core, station : String, connect : String, d : Ap
   if d.error != "" {
     c.text(d.error, size=13.0, color=t.p.red, w=Fill(1.0), line=18.0) |> ignore
   }
-  // only what changed, for a write to an app that exists
+  // whether anything changed (what is written is the core's to work out)
   let changes : Array[(String, Json)] = []
   let name = d.name.trim(chars=" ").to_owned()
   if name != text(settings, "name") {
@@ -1670,7 +1639,24 @@ fn app_form(c : @ui.Ctx, core : Core, station : String, connect : String, d : Ap
     }
     if button(c, k + "/apply", tr("android-settings.slack.apply"), true, busy~, enabled=dirty) {
       d.error = ""
-      (core.call)("connect.putSlackApp", obj([("station", str(station)), ("connect", str(connect)), ("input", obj(changes))]), fn(r) {
+      // the whole draft, with what it started from: the core writes what differs
+      let input = [
+        ("name", str(name)),
+        ("displayName", str(name)),
+        ("description", str(description)),
+        ("backgroundColor", str(d.color)),
+        ("groups", Json::object(Map::from_array(slack_groups.map(fn(g) { (g, Json::boolean(d.groups.get(g).unwrap_or(false))) })))),
+      ]
+      match d.icon {
+        Some(icon) => input.push(("icon", str(icon)))
+        None => ()
+      }
+      let p = [("station", str(station)), ("connect", str(connect)), ("input", obj(input))]
+      match settings {
+        Some(from) => p.push(("from", from))
+        None => ()
+      }
+      (core.call)("connect.putSlackApp", obj(p), fn(r) {
         match r {
           Ok(v) => {
             // the icon gone with it: its look as it was, what Slack said of it kept
@@ -1691,29 +1677,6 @@ fn app_form(c : @ui.Ctx, core : Core, station : String, connect : String, d : Ap
     }
   })
   |> ignore
-}
-
-///|
-/// A colour written #RRGGBB, as a colour; None for anything else.
-fn hex_color(s : String) -> Int64? {
-  if s.length() != 7 || !s.has_prefix("#") {
-    return None
-  }
-  let mut v = 0L
-  for i in 1..<7 {
-    let ch = s.unsafe_get(i).to_int()
-    let d = if ch >= 48 && ch <= 57 {
-      ch - 48
-    } else if ch >= 65 && ch <= 70 {
-      ch - 55
-    } else if ch >= 97 && ch <= 102 {
-      ch - 87
-    } else {
-      return None
-    }
-    v = v * 16L + d.to_int64()
-  }
-  Some((v << 8) | 0xFFL)
 }
 
 ///|

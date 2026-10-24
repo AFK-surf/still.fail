@@ -162,7 +162,7 @@ pub fn save_entry(c : @ui.Ctx, src : Source, at : DriveAt, e : DvEntry) -> Unit 
       download_drive_zip(c, src, at.station, root, path)
     } else {
       say(c, @sf.t("android-misc.drive.downloading", args=[("name", e.name)]))
-      download_drive_file(c, src, at.station, root, path, e.name, e.mime, listed=Some((e.mtime, e.size)))
+      download_drive_file(c, src, at.station, root, path, e.name, listed=Some((e.mtime, e.size)))
     }
   })
 }
@@ -453,7 +453,7 @@ pub fn folder_view(c : @ui.Ctx, src : Source, f : FolderOf) -> Unit {
         if c.clicked(lid) {
           b.clear(c, src)
         }
-        match c.right_clicked(lid) {
+        match c.menu_asked(lid) {
           Some((x, y)) => @sf.menu_open_here(list_menu, x, y)
           None => ()
         }
@@ -751,8 +751,11 @@ pub fn drive_row(
     Some(into) => drag_target(c, id, "row/" + key, into, e.name, s, 2)
     None => None
   }
+  // (a finger: its ⋯ always there, as nothing is hovered; a tap opens it, as a double click does with a mouse)
+  let finger = @ui.pointing() is Finger
   if live {
-    match c.right_clicked(id) {
+    let asked = c.menu_asked(id)
+    match asked {
       Some((x, y)) => {
         held.row_frame = c.frame_number()
         (row.menu)()
@@ -763,11 +766,11 @@ pub fn drive_row(
     if c.clicked(id) || c.clicked(did) {
       held.row_frame = c.frame_number()
     }
-    if c.right_clicked(id) is Some(_) {
+    if asked is Some(_) {
       ()
     } else if depth is Some(_) && e.dir && c.clicked(did) {
       on_toggle()
-    } else if c.double_clicked(id) {
+    } else if c.double_clicked(id) || (finger && c.clicked(id)) {
       (row.open)()
     } else if c.clicked(id) {
       (row.press)()
@@ -836,12 +839,13 @@ pub fn drive_row(
         }
       })
       |> ignore
-      // at its end: › on the folder open beside (columns), the ⋯ on hover (a spinner while something is under way)
+      // at its end: › on the folder open beside (columns), the ⋯ on hover, always to a finger (Drive.css.ts more,
+      // next: `hover: none`; a spinner while something is under way)
       c.layer(fn() {
         c.box(style=more_place, fn() {
           if busy {
             @sf.spinner(c) |> ignore
-          } else if over || open {
+          } else if over || open || finger {
             @sf.menu_of(
               c,
               menu_key,
@@ -931,7 +935,7 @@ pub fn list_head(c : @ui.Ctx, a : Arrangement, on_sort : (String) -> Unit) -> Un
     }
     let on = a.by == by
     let b = c.box(style~, id~, fn() {
-      c.text(words, style=if on || c.hovered(id) { head_words_on } else { head_words }) |> ignore
+      c.text(words, style=if on || c.lit(id) { head_words_on } else { head_words }) |> ignore
       if on {
         @sf.icon(c, if a.down { "chevron-up" } else { "chevron-down" }, size=head_chevron, color=t.p.text) |> ignore
       }
@@ -1110,7 +1114,7 @@ let none : Double = 0.0
 ///|
 /// The list and the preview beside it (withPane).
 // kept across runs: a value (no field of it changes)
-let with_pane : @ui.Style = @ui.style(row=true, w=Full, h=Full)
+let with_pane : @ui.Style = @ui.css("row w=Full h=Full")
 
 ///|
 /// The entries (list): rows 2 apart, its corner the card's.
@@ -1120,53 +1124,53 @@ let list_box : @ui.Style = @ui.style(w=@sf.grow, h=Full, radius=Xl2, clip=true)
 ///|
 /// A row's room in the list (its 2 to the next: list's gap).
 // kept across runs: a value (no field of it changes)
-let entry_room : @ui.Style = @ui.style(w=Full, pb=S0_5)
+let entry_room : @ui.Style = @ui.css("w=Full pb=S0_5")
 
 ///|
 /// A row's ground (entry): the field's corner; the list's under the pointer, the selected's chosen, the accent's
 /// ringed where a drop goes in; faded while something is under way on it.
 // kept across runs: a value (no field of it changes)
-let entry_plain : @ui.Style = @ui.style(w=Full, radius=Xl)
+let entry_plain : @ui.Style = @ui.css("w=Full radius=Xl")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let entry_along : @ui.Style = entry_plain.then(@ui.style(bg=ListGround))
+let entry_along : @ui.Style = entry_plain.then(@ui.css("bg=ListGround"))
 
 ///|
 // kept across runs: a value (no field of it changes)
-let entry_chosen : @ui.Style = entry_plain.then(@ui.style(bg=Selected))
+let entry_chosen : @ui.Style = entry_plain.then(@ui.css("bg=Selected"))
 
 ///|
 // kept across runs: a value (no field of it changes)
-let entry_drop : @ui.Style = entry_plain.then(@ui.style(bg=AccentBg, border=B1, border_color=Accent))
+let entry_drop : @ui.Style = entry_plain.then(@ui.css("bg=AccentBg border=B1 border_color=Accent"))
 
 ///|
 // kept across runs: a value (no field of it changes)
-let entry_busy_look : @ui.Style = @ui.style(opacity=O60)
+let entry_busy_look : @ui.Style = @ui.css("opacity=O60")
 
 ///|
 /// A row (row): 44 high at least, 8 by 12 in, its parts 12 apart: its mark (20), its name, its size (96) and time
 /// (104) at their end, room for its ⋯ (36).
 // kept across runs: a value (no field of it changes)
-let row_style : @ui.Style = @ui.style(row=true, w=Full, min_h=S11, px=S3, py=S2, gap=S3, align=ACenter)
+let row_style : @ui.Style = @ui.css("row w=Full min_h=S11 px=S3 py=S2 gap=S3 align=ACenter")
 
 ///|
 /// A chat's 文件 tab's and a column's (compact): 36 high, 6 by 10 in, 10 apart, the size alone, room for its ⋯ (28).
 // kept across runs: a value (no field of it changes)
-let row_compact : @ui.Style = @ui.style(row=true, w=Full, min_h=S9, px=S2_5, py=S1_5, gap=S2_5, align=ACenter)
+let row_compact : @ui.Style = @ui.css("row w=Full min_h=S9 px=S2_5 py=S1_5 gap=S2_5 align=ACenter")
 
 ///|
 /// In a tree: 8 apart, its disclosure (12) before its mark, in by its depth.
 // kept across runs: a value (no field of it changes)
-let row_tree : @ui.Style = row_style.then(@ui.style(gap=S2, pl=S1_5))
+let row_tree : @ui.Style = row_style.then(@ui.css("gap=S2 pl=S1_5"))
 
 ///|
 // kept across runs: a value (no field of it changes)
-let row_tree_compact : @ui.Style = row_compact.then(@ui.style(gap=S2, pl=S1_5))
+let row_tree_compact : @ui.Style = row_compact.then(@ui.css("gap=S2 pl=S1_5"))
 
 ///|
 // kept across runs: a value (no field of it changes)
-let disclosure_box : @ui.Style = @ui.style(w=S3, h=S3, align=ACenter, justify=JCenter)
+let disclosure_box : @ui.Style = @ui.css("w=S3 h=S3 align=ACenter justify=JCenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -1178,7 +1182,7 @@ let row_meta : @ui.TextStyle = @ui.text_style(size=Xs, color=Muted, wrap=false)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let size_cell : @ui.Style = @ui.style(row=true, w=S24, justify=JEnd)
+let size_cell : @ui.Style = @ui.css("row w=S24 justify=JEnd")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -1186,20 +1190,20 @@ let time_cell : @ui.Style = @ui.style(row=true, w=Fixed(time_w), justify=JEnd)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let end_cell : @ui.Style = @ui.style(w=S9)
+let end_cell : @ui.Style = @ui.css("w=S9")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let end_compact : @ui.Style = @ui.style(w=S7)
+let end_compact : @ui.Style = @ui.css("w=S7")
 
 ///|
 /// Its ⋯ (more), and › in columns (next: 24), 6 in from its end, in its middle.
 // kept across runs: a value (no field of it changes)
-let more_place : @ui.Style = @ui.style(row=true, w=Full, h=Full, pr=S1_5, gap=SPx, align=ACenter, justify=JEnd)
+let more_place : @ui.Style = @ui.css("row w=Full h=Full pr=S1_5 gap=SPx align=ACenter justify=JEnd")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let next_box : @ui.Style = @ui.style(w=S6, h=S6, align=ACenter, justify=JCenter)
+let next_box : @ui.Style = @ui.css("w=S6 h=S6 align=ACenter justify=JCenter")
 
 ///|
 /// A name changed in place (nameField): a line of the accent round it, the option's corner, on the page's ground.
@@ -1209,11 +1213,11 @@ let name_field_box : @ui.Style = @ui.style(w=@sf.grow, px=S1_5, py=S0_5, radius=
 ///|
 /// The heads (listHead): 12 in and 4 under, over the row's columns, 12 apart, their words the meta's.
 // kept across runs: a value (no field of it changes)
-let list_head_row : @ui.Style = @ui.style(row=true, w=Full, px=S3, pb=S1, gap=S3, align=ACenter)
+let list_head_row : @ui.Style = @ui.css("row w=Full px=S3 pb=S1 gap=S3 align=ACenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let head_mark : @ui.Style = @ui.style(w=S5)
+let head_mark : @ui.Style = @ui.css("w=S5")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -1221,7 +1225,7 @@ let head_name : @ui.Style = @ui.style(row=true, w=@sf.grow, gap=S1, align=ACente
 
 ///|
 // kept across runs: a value (no field of it changes)
-let head_size : @ui.Style = @ui.style(row=true, w=S24, gap=S1, align=ACenter, justify=JEnd)
+let head_size : @ui.Style = @ui.css("row w=S24 gap=S1 align=ACenter justify=JEnd")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -1250,12 +1254,12 @@ let progress_track : @ui.Style = @ui.style(row=true, w=@sf.grow, h=S0_5, radius=
 
 ///|
 // kept across runs: a value (no field of it changes)
-let progress_done : @ui.Style = @ui.style(h=Full, bg=Accent)
+let progress_done : @ui.Style = @ui.css("h=Full bg=Accent")
 
 ///|
 /// Its name taken there, or why it failed: at its end, 64 short of it (ask, failed).
 // kept across runs: a value (no field of it changes)
-let upload_ask : @ui.Style = @ui.style(row=true, gap=S1, pr=S16, align=ACenter, justify=JEnd)
+let upload_ask : @ui.Style = @ui.css("row gap=S1 pr=S16 align=ACenter justify=JEnd")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -1264,7 +1268,7 @@ let upload_failed : @ui.TextStyle = @ui.text_style(size=Xs, color=Danger, wrap=f
 ///|
 /// Why the folder could not be read, and 重试 (problem: 12 in, 10 apart).
 // kept across runs: a value (no field of it changes)
-let problem_box : @ui.Style = @ui.style(w=Full, p=S3, gap=S2_5, align=AStart)
+let problem_box : @ui.Style = @ui.css("w=Full p=S3 gap=S2_5 align=AStart")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -1273,7 +1277,7 @@ let problem_words : @ui.TextStyle = @ui.text_style(size=Xs, color=Danger, w=Full
 ///|
 /// Nothing in it (empty): in the middle, 56 by 24 in, 12 apart, muted.
 // kept across runs: a value (no field of it changes)
-let empty_box : @ui.Style = @ui.style(w=Full, pt=S14, pb=S14, px=S6, gap=S3, align=ACenter)
+let empty_box : @ui.Style = @ui.css("w=Full pt=S14 pb=S14 px=S6 gap=S3 align=ACenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -1283,16 +1287,8 @@ let empty_words : @ui.TextStyle = @ui.text_style(size=Sm, color=Muted, center=tr
 /// What is held over the list (drop): over all of it, its words and mark in the middle, the page's ground at 82%
 /// under them, ringed in the accent.
 // kept across runs: a value (no field of it changes)
-let drop_box : @ui.Style = @ui.style(
-  w=Full,
-  h=Full,
-  gap=S2,
-  align=ACenter,
-  justify=JCenter,
-  radius=Xl2,
-  bg=A(Bg, O80),
-  border=B2,
-  border_color=A(Accent, O60),
+let drop_box : @ui.Style = @ui.css(
+  #|w=Full h=Full gap=S2 align=ACenter justify=JCenter radius=Xl2 bg=A(Bg,O80) border=B2 border_color=A(Accent,O60)
 )
 
 ///|
@@ -1302,4 +1298,79 @@ let drop_words : @ui.TextStyle = @ui.text_style(size=Sm, color=Fg, wrap=false)
 ///|
 /// What is done to the folder (actions): 6 apart.
 // kept across runs: a value (no field of it changes)
-let actions_row : @ui.Style = @ui.style(row=true, gap=S1_5, align=ACenter)
+let actions_row : @ui.Style = @ui.css("row gap=S1_5 align=ACenter")
+
+///|
+/// A folder's page's head (Drive.tsx FolderView's pageHead): its trail (its station's button, then the way down to it:
+/// its root, then each folder above it), its name (h1), its station and what it holds. `split`: a side of a split tab,
+/// in less; `front_it`: what is pressed in a side puts it in front first.
+pub fn folder_head(c : @ui.Ctx, src : Source, f : FolderOf, split : Bool, front_it : () -> Unit) -> Unit {
+  let t = @sf.theme()
+  let at = f.at
+  let root = at.root.unwrap_or("")
+  let stations = dv_stations(src, f.ws).0.unwrap_or([])
+  let topic = (src.topic)("drive", { "station": Json::string(at.station), "root": Json::string(root), "path": Json::string(at.path) })
+  let (name, _) = pane_parts(at, stations)
+  c.box(style=if split { head_half } else { head_one }, fn() {
+    c.box(style=head_trail, fn() {
+      station_switch(c, src, f, front_it)
+      let parts : Array[String] = if at.path == "" { [] } else { at.path.split("/").map(fn(p) { p.to_string() }).collect() }
+      let (root_name, _) = pane_parts({ ..at, path: "" }, stations)
+      let crumbs : Array[(String, String)] = if at.path == "" { [] } else { [(root_name, "")] }
+      let mut so_far = ""
+      for i in 0..<(parts.length() - 1) {
+        so_far = dv_join(so_far, parts[i])
+        crumbs.push((parts[i], so_far))
+      }
+      for x in crumbs {
+        let (word, path) = x
+        @sf.icon(c, "chevron-right", size=trail_chevron, color=t.p.subtle) |> ignore
+        let cid = c.id("files/crumb/" + at.station + "/" + root + "/" + path)
+        c.cursor(cid, Hand)
+        if c.clicked(cid) {
+          front_it()
+          (f.go)({ station: at.station, root: Some(root), path }, false)
+        }
+        c.box(style=head_crumb, id=cid, fn() { c.text(word, style=head_meta) |> ignore }) |> ignore
+      }
+    })
+    |> ignore
+    c.text(name, style=head_title) |> ignore
+    match text(topic.value, "countText") {
+      "" => ()
+      count => c.text(f.st.name + " · " + count, style=head_meta) |> ignore
+    }
+  })
+  |> ignore
+}
+
+///|
+/// The trail's chevrons (16).
+let trail_chevron : Double = 16.0
+
+///|
+/// The head (pageHead): 12 over and under, 6 between its lines; in from its side as the page is (40; split, 24).
+// kept across runs: a value (no field of it changes)
+let head_one : @ui.Style = @ui.css("w=Full px=S10 pt=S3 pb=S3 gap=S1_5")
+
+///|
+// kept across runs: a value (no field of it changes)
+let head_half : @ui.Style = @ui.css("w=Full px=S6 pt=S3 pb=S3 gap=S1_5")
+
+///|
+/// Its trail (crumbs): 4 between.
+// kept across runs: a value (no field of it changes)
+let head_trail : @ui.Style = @ui.css("row gap=S1 align=ACenter")
+
+///|
+// kept across runs: a value (no field of it changes)
+let head_crumb : @ui.Style = @ui.css("px=S0_5 radius=Sm hovered{bg=Hover}")
+
+///|
+// kept across runs: a value (no field of it changes)
+let head_meta : @ui.TextStyle = @ui.text_style(size=Xs, color=Muted, wrap=false)
+
+///|
+/// Its name (h1): 22, 600.
+// kept across runs: a value (no field of it changes)
+let head_title : @ui.TextStyle = @ui.text_style(size=Xl3, weight=Semibold, color=Fg, wrap=false)

@@ -307,7 +307,7 @@ export const CHAT_READ = {
 export const SESSION_SEND = {
   name: "session_send",
   description:
-    "Send a message to another session's agent: a chat on this station, on another station of the workspace, or one another workspace shares with this one to write to. It is posted in that chat for people to see, headed with a link to your chat, and its agent takes it like any message; it answers you the same way, so to wait for the answer end your turn waiting. Use chat_post for your own conversations.",
+    "Send a message to another session's agent: a chat on this station, on another station of the workspace, or one another workspace shares with this one to write to. Its agent takes it like any message, headed with a link to your chat; it stays out of that chat's conversation (people read agents' letters on a page of their own). It answers you the same way, so to wait for the answer end your turn waiting. Use chat_post for your own conversations.",
   inputSchema: {
     "type": "object",
     "properties": {

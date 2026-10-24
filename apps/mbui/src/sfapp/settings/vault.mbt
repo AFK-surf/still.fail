@@ -8,10 +8,10 @@
 ///|
 /// The kinds of item, in the editor's order (Vault.kt KINDS).
 // kept across runs: a table, never written
-let vault_kinds : Array[String] = ["token", "ssh_key", "login"]
+pub let vault_kinds : Array[String] = ["token", "ssh_key", "login"]
 
 ///|
-fn kind_icon(kind : String) -> String {
+pub fn kind_icon(kind : String) -> String {
   match kind {
     "ssh_key" => "server"
     "login" => "user"
@@ -20,7 +20,7 @@ fn kind_icon(kind : String) -> String {
 }
 
 ///|
-fn mode_name(mode : String) -> String {
+pub fn mode_name(mode : String) -> String {
   match mode {
     "proxy" | "env" | "ssh" => tr("android-settings.vault.mode." + mode)
     m => m
@@ -28,37 +28,7 @@ fn mode_name(mode : String) -> String {
 }
 
 ///|
-/// What agents may do with an item, in a line (Vault.kt agentLine).
-fn agent_line(listed : Bool, modes : Array[String], hosts : Array[String]) -> String {
-  if !listed {
-    return tr("android-settings.vault.selfOnly")
-  }
-  let parts = [tr("android-settings.vault.agentCan")]
-  parts.append(modes.map(mode_name))
-  // (no hosts, none said: an env's)
-  if hosts.length() > 0 {
-    parts.push(join(hosts, ", "))
-  }
-  join(parts, " · ")
-}
-
-///|
-/// How a request would be given (Vault.kt howLine).
-fn how_line(mode : String, hosts : Array[String]) -> String {
-  let only = if mode == "proxy" && hosts.length() > 0 {
-    fill("web-pages.vault.onlyTo", [("hosts", join(hosts, ", "))])
-  } else {
-    ""
-  }
-  join([mode_name(mode), only], " · ")
-}
-
-///|
 fn vault_page(c : @ui.Ctx, core : Core, here : Here) -> Unit {
-  // the desktop's: the web's (web_vault.mbt)
-  if wide.val {
-    return vault_page_wide(c, core, here)
-  }
   let ws = here.workspace
   let topic = (core.topic)("vaults", { "workspace": str(ws) })
   let v = topic.value
@@ -132,7 +102,7 @@ fn to_security(c : @ui.Ctx, core : Core, title : String, why : String) -> Unit {
 
 ///|
 /// Not set up on this device yet (Vault.kt Off): what it is and what agents do with it.
-fn vault_off(c : @ui.Ctx) -> Unit {
+pub fn vault_off(c : @ui.Ctx) -> Unit {
   let t = @sf.theme()
   list_card(c, fn() {
     body(c, fn() {
@@ -286,7 +256,7 @@ fn library(c : @ui.Ctx, core : Core, ws : String, v : Json?) -> Array[() -> Unit
 
 ///|
 /// The profiles' accounts by the kind they are listed under, in the core's order: (its title, its accounts).
-fn profile_groups(list : Array[Json]) -> Array[(String, Array[Json])] {
+pub fn profile_groups(list : Array[Json]) -> Array[(String, Array[Json])] {
   let out : Array[(String, String, Array[Json])] = []
   for e in list {
     let g = text(Some(e), "group")
@@ -347,7 +317,7 @@ fn request_card(c : @ui.Ctx, core : Core, ws : String, v : Json?, r : Json) -> U
         Some(cmd) => mono(c, cmd, size=13.0, line=19.0, wrap=true)
         None => ()
       }
-      c.text(how_line(text(rv, "mode"), strings(rv, "hosts")), size=13.0, color=t.p.muted, w=Fill(1.0), line=18.0)
+      c.text(text(rv, "howText"), size=13.0, color=t.p.muted, w=Fill(1.0), line=18.0)
       |> ignore
       if station != "" &&
         tap_text(c, "vault-chat/" + id, tr("android-settings.vault.request.openChat"), size=14.0) {
@@ -462,7 +432,7 @@ fn decision_options(c : @ui.Ctx, key : String, options : Array[(String, String, 
 
 ///|
 /// A vault known by its items' names only (Vault.kt VaultSection): a web page's, or one this device has no key to.
-fn vault_section(c : @ui.Ctx, core : Core, ws : String, row : Json) -> Array[() -> Unit] {
+pub fn vault_section(c : @ui.Ctx, core : Core, ws : String, row : Json) -> Array[() -> Unit] {
   let t = @sf.theme()
   let rv = Some(row)
   let topic = (core.topic)("vaultItems", { "workspace": str(ws), "vault": str(text(rv, "id")) })
@@ -517,7 +487,7 @@ fn vault_section(c : @ui.Ctx, core : Core, ws : String, row : Json) -> Array[() 
                 c.box(w=Px(6.0), h=Px(6.0), radius=3.0, bg=t.p.green, fn() {  }) |> ignore
               }
               c.text(
-                agent_line(flag(iv, "listed"), strings(iv, "modes"), strings(iv, "hosts")),
+                text(iv, "agentText"),
                 size=13.0,
                 color=t.p.muted,
                 wrap=false,
@@ -568,7 +538,7 @@ fn library_vault(c : @ui.Ctx, core : Core, ws : String, row : Json, plain : Bool
               let used = field(field(iv, "lastUse"), "at")
               let line = match used {
                 Some(Object(_)) => fill("web-pages.vault.uses.last", [("when", text(used, "ago"))])
-                _ => agent_line(flag(iv, "listed"), strings(iv, "modes"), strings(iv, "hosts"))
+                _ => text(iv, "agentText")
               }
               c.box(w=Fill(1.0), fn() {
                 c.text(text(iv, "name"), size=15.0, color=t.p.text, wrap=false, w=Fill(1.0), line=21.0) |> ignore
@@ -624,7 +594,7 @@ fn library_vault(c : @ui.Ctx, core : Core, ws : String, row : Json, plain : Bool
 ///|
 /// Whose service a profile runs on (Parts.kt ProviderMark): OpenCode's square, a listed provider's maker (the plug where
 /// there is none), Anthropic, xAI, Cursor, Devin or OpenAI by its runtime.
-fn provider_mark(c : @ui.Ctx, runtime : String, kind : String, size : Double, mark : String) -> Unit {
+pub fn provider_mark(c : @ui.Ctx, runtime : String, kind : String, size : Double, mark : String) -> Unit {
   let t = @sf.theme()
   if kind == "opencode-go" || mark == "opencode" {
     c.box(w=Px(size), h=Px(size), align=ACenter, justify=JCenter, fn() {
@@ -699,7 +669,7 @@ fn plain_left(c : @ui.Ctx, core : Core, ws : String, n : Int) -> Unit {
 ///|
 /// Its words, then its button, 12 apart (Vault.kt:493); the line under its title 13 on 19 in the muted.
 // kept across runs: a value (no field of it changes)
-let plain_left_column : @ui.Style = @ui.style(w=Full, gap=S3)
+let plain_left_column : @ui.Style = @ui.css("w=Full gap=S3")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -708,7 +678,7 @@ let plain_left_body : @ui.TextStyle = @ui.text_style(size=Sm, leading=L4_75, col
 ///|
 /// How long a grant lasts, shortest first: one use, an hour, the chat until it is archived (Vault.kt SCOPES).
 // kept across runs: a table, never written
-let vault_scopes : Array[String] = ["once", "hour", "chat"]
+pub let vault_scopes : Array[String] = ["once", "hour", "chat"]
 
 ///|
 /// The longest an item is granted for, in a word: 仅一次, 1 小时, 直到对话归档 (Vault.kt lastsName: the chat's when
@@ -721,11 +691,11 @@ fn lasts_name(lasts : String) -> String {
 /// An item's longest grant as its editor offers it: its vault's (`default`, the library's setting), or its own
 /// (Vault.kt LASTS).
 // kept across runs: a table, never written
-let vault_lasts : Array[String] = ["default", "once", "hour", "chat"]
+pub let vault_lasts : Array[String] = ["default", "once", "hour", "chat"]
 
 ///|
 /// An item's longest grant as its editor names it (Vault.kt lastsChoice).
-fn lasts_choice(lasts : String) -> String {
+pub fn lasts_choice(lasts : String) -> String {
   if lasts == "default" {
     tr("android-settings.vault.lasts.default")
   } else {
@@ -772,4 +742,4 @@ fn default_lasts(c : @ui.Ctx, core : Core, ws : String, row : Json) -> Array[() 
 ///|
 /// Under the note, 4 before the first choice (Vault.kt DefaultLasts).
 // kept across runs: a value (no field of it changes)
-let lasts_note_room : @ui.Style = @ui.style(w=Full, pb=S1)
+let lasts_note_room : @ui.Style = @ui.css("w=Full pb=S1")

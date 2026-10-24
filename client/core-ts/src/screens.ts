@@ -214,9 +214,14 @@ function listed(names: string[]): string {
   return names.length <= 2 ? names.join(t("core-views.screen.and")) : t("core-views.screen.many", { names: names.slice(0, 2).join(t("core-views.screen.and")), more: names.length - 2 });
 }
 
+/// The kinds of screen a station lists (one it names otherwise, from a newer station, is shown as its display).
+type Kind = "desktop" | "browser" | "simulator";
+const kindOf = (v: unknown): Kind => (v === "browser" || v === "simulator" ? v : "desktop");
+const kindWords = (kind: Kind) => t(`core-views.screen.kind.${kind}`);
+
 /// What a screen is, in words: its kind, its size, the chat that opened it, who is on it.
 function itemLine(item: J): string {
-  const parts = [item.kind === "browser" ? t("core-views.screen.kind.browser") : t("core-views.screen.kind.desktop")];
+  const parts = [kindWords(item.kind)];
   if (item.width > 0 && item.height > 0) parts.push(`${item.width}×${item.height}`);
   if (item.chat) parts.push(t("core-views.screen.openedBy", { title: item.chat.title }));
   const on = names(item.viewers);
@@ -252,11 +257,11 @@ export function screensView(inner: Inner, station: string, held: Held | undefine
   const screens = held.screens.flatMap((s) => {
     const id = get(s, "id");
     if (typeof id !== "string" || id === "") return [];
-    const kind = get(s, "kind") === "browser" ? "browser" : "desktop";
+    const kind = kindOf(get(s, "kind"));
     const size = (v: unknown) => (finite(v) ? Math.max(0, Math.round(v)) : 0);
     const width = size(get(s, "width"));
     const height = size(get(s, "height"));
-    const title = typeof get(s, "title") === "string" && get(s, "title") !== "" ? (get(s, "title") as string) : kind === "browser" ? t("core-views.screen.kind.browser") : t("core-views.screen.kind.desktop");
+    const title = typeof get(s, "title") === "string" && get(s, "title") !== "" ? (get(s, "title") as string) : kindWords(kind);
     const by = get(s, "openedBy");
     const chat = typeof by === "string" && by !== "" ? chatOf(inner, station, by) : null;
     const item = {
@@ -278,10 +283,10 @@ export function screensView(inner: Inner, station: string, held: Held | undefine
 export function screenCard(inner: Inner, station: string, id: string, held: Held | undefined, online: boolean): J {
   const listed = screensView(inner, station, held, online).screens.find((s: J) => s.id === id);
   if (listed) return { kind: listed.kind, title: listed.title, line: listed.line, link: listed.link, gone: false, peek: listed.peek === true, width: listed.width, height: listed.height };
-  const kind = id.startsWith("browser:") ? "browser" : "desktop";
+  const kind = kindOf(id.split(":")[0]);
   const gone = held !== undefined && !held.outdated && online;
   const line = gone ? t("core-views.screen.gone") : held?.outdated ? t("core-views.screen.outdated") : t("core-views.screen.remote");
-  return { kind, title: kind === "browser" ? t("core-views.screen.kind.browser") : t("core-views.screen.kind.desktop"), line, link: screenPath(station, id), gone, peek: false, width: 0, height: 0 };
+  return { kind, title: kindWords(kind), line, link: screenPath(station, id), gone, peek: false, width: 0, height: 0 };
 }
 
 /// The clipboard types a station says a screen carries (`clipboard`): ours only.

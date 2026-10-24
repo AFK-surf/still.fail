@@ -23,8 +23,8 @@ priv struct Ev {
   /// when what it was handed to took it here (a message in: the frame that takes what is posted, Replay::deliver's
   /// `taken_at`): `at` is when it was due
   mut given : Double
-  /// what the run's host said of its views (`{"view":…}`, `{"still":…}`, `{"info":…}`: mbui's trace_views), the line
-  /// whole: given in its place like a message in, to the Tester's host (Replay::host)
+  /// what the run's host said of its views (`{"view":…}`, `{"still":…}`, `{"info":…}`, a player's `{"read":…}`:
+  /// mbui's trace_views), the line whole: given in its place like a message in, to the Tester's host (Replay::host)
   host : Bool
 }
 
@@ -61,11 +61,15 @@ pub struct Replay {
   priv skipped : Array[String]
   /// reports the app made that the run did not (Replay::sent: its frames had them, the run's not)
   priv unasked_reports : Array[String]
+  /// the ids the app gave its watches of `ambient` topics the run did not have (let go of as well, unasked)
+  priv ambient_ids : Map[Int, Bool]
   /// what the run's app was started with (its trace's `{"env":…}`: src/stillfail's CORETRACE env)
   priv run_env : Array[(String, String)]
   /// what the run's host answered that its text recording kept (`{"textrec":…}`: TEXTREC lines, mbui's hostrec.mbt):
   /// a word's bounds, a picture's sizes; one a line
   priv run_text : Array[String]
+  /// this machine's station as the run's host said it (its trace's `{"host":{"localStation":…}}`: src/stillfail's CORETRACE host)
+  priv run_local : String
   /// where what the run's host said of its views goes (Replay::host)
   priv mut host_said : ((String) -> Unit)?
 }
@@ -90,12 +94,19 @@ pub(all) enum Pace {
 let reports : Array[String] = ["client.focus", "chat.place", "draft.put", "drive.place"]
 
 ///|
+/// Topics the app watches from its start whatever the person does (the device's downloads, sfbase/downloads.mbt): a
+/// run from before the app watched one has none of it, and that is not where the two went apart; it is answered
+/// nothing (the run had none of it), and let go of as it was watched.
+let ambient : Array[String] = ["downloads"]
+
+///|
 /// The conversation in `log`: a trace's lines (`{"out":…}`, `{"in":…}`), or a log with them after CORETRACE. Other
 /// lines are left out.
 pub fn Replay::parse(log : String) -> Replay {
   let evs : Array[Ev] = []
   let run_env : Array[(String, String)] = []
   let run_text : Array[String] = []
+  let run_local : Ref[String] = Ref("")
   for v in log.split("\n") {
     let line = v.to_owned()
     let start = match line.find("CORETRACE ") {
@@ -138,6 +149,11 @@ pub fn Replay::parse(log : String) -> Replay {
               run_env.push((k, s))
             }
           }
+        } else if m.get("host") is Some(Object(h)) {
+          match h.get("localStation") {
+            Some(Object(_) as v) => run_local.val = v.stringify()
+            _ => ()
+          }
         } else if m.get("textrec") is Some(rec) {
           run_text.push(rec.stringify())
         } else if m.contains("view") ||
@@ -145,7 +161,8 @@ pub fn Replay::parse(log : String) -> Replay {
           m.contains("info") ||
           m.contains("site") ||
           m.contains("sitebody") ||
-          m.contains("sitestate") {
+          m.contains("sitestate") ||
+          m.contains("read") {
           let (wall, has_wall) = match m.get("w") {
             Some(Number(d, ..)) => (d, true)
             _ => (0.0, false)
@@ -226,8 +243,10 @@ pub fn Replay::parse(log : String) -> Replay {
     host_said: None,
     skipped: [],
     unasked_reports: [],
+    ambient_ids: {},
     run_env,
     run_text,
+    run_local: run_local.val,
   }
   r.advance()
   r
@@ -892,6 +911,18 @@ fn Replay::out(self : Replay, text : String) -> Unit {
     }
   }
   if found < 0 {
+    // an ambient topic the run did not watch, watched or let go of
+    match id_of(m) {
+      Some(now) if kind == "subscribe" && ambient.contains(name_of(m)) => {
+        self.ambient_ids[now] = true
+        return
+      }
+      Some(now) if kind == "unsubscribe" && refers is None && self.ambient_ids.contains(now) => {
+        self.ambient_ids.remove(now)
+        return
+      }
+      _ => ()
+    }
     // a report the run did not make (where the list is, whether its end shows): the app makes those as its own
     // frames have it, the run's frames otherwise (a list gliding to rows that came: its end out of view for a frame
     // here, never in the run's), so not where the two went apart; nothing waits on its answer
@@ -1166,6 +1197,13 @@ pub fn Replay::first_happened(self : Replay) -> (Double, Double)? {
 /// What the run's app was started with, as its trace keeps it (`{"env":…}`): for a replay's to be started the same.
 pub fn Replay::env(self : Replay) -> Array[(String, String)] {
   self.run_env
+}
+
+///|
+/// This machine's station as the run's host said it (Tester::set_local_station: @ui.local_station's JSON); "" where
+/// its trace does not say.
+pub fn Replay::local_station(self : Replay) -> String {
+  self.run_local
 }
 
 ///|

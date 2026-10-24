@@ -9,10 +9,10 @@
 // 下载 as the page's primary button.
 
 ///|
-/// Whether the wide frame is a desktop's, with a mouse (a click and a move are its own), not a wide touch screen's (an
+/// Whether the wide frame is pointed at with a mouse (a click and a move are its own), not with a finger (an
 /// iPad's, a fold's inner screen: a finger's tap shows or hides the bars, as on a phone).
 fn desk_mouse() -> Bool {
-  wide_on.val && !@sf.touch_system()
+  wide_on.val && @ui.pointing() is Mouse
 }
 
 ///|
@@ -207,7 +207,7 @@ fn Viewer::desk_bar(self : Viewer, c : @ui.Ctx, src : Source, shown : Double) ->
   let hidden = kind == Some(KImage) && !v.bars_shown()
   let n = c.box(style=desk_layer, fn() {
     if @sf.viewer_bar(c, "preview/bar", v.desk_back(src), v.file.name, v.desk_meta(src), hidden, ink, fn() {
-        v.desk_tools(c, ink, downloading(v.download(src)))
+        v.desk_tools(c, ink, v.download(src))
       }) &&
       !v.closing {
       v.shut(c)
@@ -219,7 +219,7 @@ fn Viewer::desk_bar(self : Viewer, c : @ui.Ctx, src : Source, shown : Double) ->
 ///|
 /// The bar's tools by what it shows (FilePreview.tsx: its `controls`, then copy and download): an image's zoom and its
 /// marks, a page's or a table's 预览 / 源码, download last.
-fn Viewer::desk_tools(self : Viewer, c : @ui.Ctx, ink : @sf.ViewerInk, downloading : Bool) -> Unit {
+fn Viewer::desk_tools(self : Viewer, c : @ui.Ctx, ink : @sf.ViewerInk, dl : Json?) -> Unit {
   let v = self
   match v.shown_kind() {
     Some(KImage) if marking.on =>
@@ -282,9 +282,10 @@ fn Viewer::desk_tools(self : Viewer, c : @ui.Ctx, ink : @sf.ViewerInk, downloadi
   if !v.coming() && !marking.on {
     // what is here saved at once; one told of, or played as it comes, read whole first
     let streamed = v.shown_kind() == Some(KVideo) || v.shown_kind() == Some(KAudio)
-    // (not while the core downloads it: once it is all here it is kept by itself)
-    let saving = v.bytes is Some(_) || ((v.told_of() || streamed) && !v.asked && !downloading)
-    if @sf.viewer_download(c, "preview/download", ink, disabled=!saving) {
+    // (while the core downloads it, how far it has come in its place: once it is all here it is kept by itself)
+    let saving = v.bytes is Some(_) || ((v.told_of() || streamed) && !v.asked)
+    let coming = if downloading(dl) { Some(number(dl, "progress")) } else { None }
+    if @sf.viewer_download(c, "preview/download", ink, disabled=!saving, coming?=coming) {
       v.ask_save(c)
     }
   }
@@ -296,7 +297,7 @@ fn Viewer::desk_tools(self : Viewer, c : @ui.Ctx, ink : @sf.ViewerInk, downloadi
 fn desk_text_tool(c : @ui.Ctx, key : String, words : String, label : String, ink : @sf.ViewerInk, wide? : Bool = false) -> Bool {
   let id = c.id(key)
   c.cursor(id, Hand)
-  let hot = c.hovered(id) || c.pressed(id)
+  let hot = c.lit(id) || c.pressed(id)
   let b = c.box(style=if wide { desk_text_tool_wide } else { desk_text_tool_box }, id~, fn() {
     c.text(words, style=desk_text_tool_words.then(@ui.text_style(color=Data(if hot { ink.ink } else { ink.muted }))))
     |> ignore
@@ -328,7 +329,7 @@ fn Viewer::desk_steps(self : Viewer, c : @ui.Ctx, src : Source, shown : Double) 
       let id = c.id("preview/go/\{side.1}")
       match side.0 {
         Some(_) => {
-          let hot = c.hovered(id) || c.pressed(id)
+          let hot = c.lit(id) || c.pressed(id)
           let seen = @motion.animate(c, "preview/go-seen/\{side.1}", if awake || hot { 1.0 } else { 0.0 }, spec=@motion.tween(
               if awake || hot {
                 desk_wake_ms
@@ -358,12 +359,12 @@ fn Viewer::desk_steps(self : Viewer, c : @ui.Ctx, src : Source, shown : Double) 
 /// A file told of, not shown (FilePreview.tsx fpNote, toldOf): its kind's mark, its name, its size and extension,
 /// that it cannot be shown here; 下载 as the page's primary button, or how far it has come once asked for (`dl`: the
 /// core's download of it, downloads.mbt).
-fn Viewer::desk_facts(self : Viewer, c : @ui.Ctx, dl : Json?) -> Unit {
+fn Viewer::desk_facts(self : Viewer, c : @ui.Ctx, src : Source, dl : Json?) -> Unit {
   let v = self
   let p = @sf.theme().p
   @sf.icon(c, "file", size=desk_facts_icon, color=p.muted) |> ignore
   c.box(style=desk_facts_name_box, fn() { c.text(v.file.name, style=desk_facts_name) |> ignore }) |> ignore
-  let ext = match lower(v.file.name).rev_find(".") {
+  let ext = match @sf.lower(v.file.name).rev_find(".") {
     Some(i) if i > 0 && v.file.name.length() - i - 1 <= desk_ext_most =>
       upper(v.file.name.view(start_offset=i + 1).to_owned())
     _ => ""
@@ -383,9 +384,12 @@ fn Viewer::desk_facts(self : Viewer, c : @ui.Ctx, dl : Json?) -> Unit {
     v.desk_coming(c)
     return
   }
-  // downloaded by the core: how far it has come (on by itself as this closes), why it failed
+  // downloaded by the core: how far it has come (on by itself as this closes; called off here), why it failed
   if downloading(dl) {
     file_progress(c, (number(dl, "loaded"), Some(number(dl, "size"))), v.file.size, said=text(dl, "statusText"))
+    if @sf.button(c, tr("web-main.file.cancelDownload"), key="preview/note-cancel", tone=Ghost) {
+      v.cancel_download(c, src, dl)
+    }
     return
   }
   if text(dl, "state") == "failed" {
@@ -503,27 +507,21 @@ let desk_ext_most : Int = 12
 ///|
 /// What the bar is laid in: the window's width, at its top.
 // kept across runs: a value (no field of it changes)
-let desk_layer : @ui.Style = @ui.style(w=Full)
+let desk_layer : @ui.Style = @ui.css("w=Full")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let desk_zoom : @ui.Style = @ui.style(row=true, gap=S0_5, align=ACenter)
+let desk_zoom : @ui.Style = @ui.css("row gap=S0_5 align=ACenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let desk_text_tool_box : @ui.Style = @ui.style(
-  h=S8,
-  min_w=S9,
-  px=S2,
-  radius=Xl,
-  align=ACenter,
-  justify=JCenter,
-  hovered=@ui.patch(bg=Hover),
+let desk_text_tool_box : @ui.Style = @ui.css(
+  #|h=S8 min_w=S9 px=S2 radius=Xl align=ACenter justify=JCenter hovered{bg=Hover}
 )
 
 ///|
 // kept across runs: a value (no field of it changes)
-let desk_text_tool_wide : @ui.Style = desk_text_tool_box.then(@ui.style(min_w=S12))
+let desk_text_tool_wide : @ui.Style = desk_text_tool_box.then(@ui.css("min_w=S12"))
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -532,7 +530,7 @@ let desk_text_tool_words : @ui.TextStyle = @ui.text_style(size=Xs, wrap=false)
 ///|
 /// The ways beside, 16 in from the window's sides, in the middle of its height.
 // kept across runs: a value (no field of it changes)
-let desk_steps_row : @ui.Style = @ui.style(row=true, w=Full, h=Full, px=S4, align=ACenter)
+let desk_steps_row : @ui.Style = @ui.css("row w=Full h=Full px=S4 align=ACenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -540,23 +538,15 @@ let desk_steps_gap : @ui.Style = @ui.style(w=@sf.grow)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let desk_step : @ui.Style = @ui.style(
-  w=S10,
-  h=S10,
-  radius=Full,
-  align=ACenter,
-  justify=JCenter,
-  shadow=Base,
-  hovered=@ui.patch(bg=Bg),
-)
+let desk_step : @ui.Style = @ui.css("w=S10 h=S10 radius=Full align=ACenter justify=JCenter shadow=Base hovered{bg=Bg}")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let desk_step_none : @ui.Style = @ui.style(w=S10)
+let desk_step_none : @ui.Style = @ui.css("w=S10")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let desk_facts_name_box : @ui.Style = @ui.style(max_w=S96)
+let desk_facts_name_box : @ui.Style = @ui.css("max_w=S96")
 
 ///|
 /// A file told of (fpNote): its name 14 in 600, what is said of it 13 and quiet, 14 between them (the note's gap).
@@ -574,7 +564,7 @@ let desk_facts_failed : @ui.TextStyle = @ui.text_style(size=Sm, color=Danger, ce
 ///|
 /// Under an image (fpImage's box-shadow: 0 1px 3px at 8%, 0 8px 28px at 10%): the canvas, a soft shadow round it.
 // kept across runs: a value (no field of it changes)
-let desk_image_shadow : @ui.Style = @ui.style(bg=Bg, shadow=Lg)
+let desk_image_shadow : @ui.Style = @ui.css("bg=Bg shadow=Lg")
 
 ///|
 /// Code and plain text (fpCode, fpPlain): 12 on 1.6 (code) or 1.65, 32 in, 64 at the foot.

@@ -1,11 +1,10 @@
-// What is sent is on screen first (chat.mbt LocalSent, flight.mbt): in the list the frame it is sent, whatever the
-// core, the list or anything else in it is doing; the core's row goes on from it once it comes.
+// What is sent is on screen first (sfbase's sent.mbt LocalSent, flight.mbt): in the list the frame it is sent,
+// whatever the core, the list or anything else in it is doing; the core's row goes on from it once it comes.
 
 ///|
 /// The keys of chat s-c1's rows as last built.
 fn sent_rows() -> Array[String] {
-  let rd = reading_of("ws1/st1\u{1}s-c1")
-  rd.sending.map(fn(l) { "o:" + l.row.id })
+  sending_of("ws1/st1\u{1}s-c1").map(fn(l) { "o:" + l.row.id })
 }
 
 ///|
@@ -95,7 +94,7 @@ test "words sent while an answer comes out of its avatar fly at once; the answer
   // the answer to the first words taken: its agent's activity folding, the avatar on its way
   clock.val = clock.val + fix_answer_ms
   t.draw()
-  t.run_for(Fold.ms() + 200.0)
+  t.run_for(Pose::Fold.ms() + 200.0)
   let sent_at = t.time()
   tap_send(t)
   t.draw()
@@ -108,7 +107,7 @@ test "words sent while an answer comes out of its avatar fly at once; the answer
   }
   // the avatar there before the words have landed: the answer waits for them, the list not moved under them; the
   // avatar where the answer will come in, over the words sent (not yet the chat's: under the messages)
-  t.run_for(sent_at + Float.ms() - 200.0 + 60.0 - t.time())
+  t.run_for(sent_at + Pose::Float.ms() - 200.0 + 60.0 - t.time())
   assert_true(t.find("收到：「看一下列表」") is None)
   let em = emits_of("ws1/st1\u{1}s-c1")
   let agents = match em.current {

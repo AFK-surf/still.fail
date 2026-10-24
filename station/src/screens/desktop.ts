@@ -277,7 +277,7 @@ export class HelperView implements ScreenView {
           // What it encodes: as it says (H.264 where H.265 was asked and this Mac has no encoder of it; a helper from
           // before H.265 says nothing and makes H.264 of anything but JPEG).
           this.#codec = info.codec === "h265" || info.codec === "h264" || info.codec === "jpeg" ? info.codec : this.#codec === "jpeg" ? "jpeg" : "h264";
-          log.info("screens", "a view of the desktop opened", { width: info.width, height: info.height, encoder: info.encoder });
+          log.info("screens", "a view opened", { capture: this.#capture, width: info.width, height: info.height, encoder: info.encoder });
           if (typeof info.encoder === "string") this.#encoder = info.encoder.slice(0, 200);
           this.#settle.resolve({ width: info.width, height: info.height });
         }

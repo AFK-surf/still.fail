@@ -11,6 +11,9 @@
 //   stream.open {url, method, headers} + body → {status, headers, id}; stream.read {id} → bytes, or {end}; stream.close {id}
 //   ws.open {url, protocols} → {id}; ws.next {id} → {text} or {end}; ws.send {id, text}; ws.close {id}
 //   storage.get {key} → bytes or {none}; storage.set {key} + value; storage.delete {key}
+//   kept.read {at, start, end} → bytes or {none} — a file the app saved where the person keeps files, read back
+//     (`at` as the system named it: a path; on Android a content address), answered by the app (Apple: apple_core.mm;
+//     Android: CoreHost; Windows: win_core.c)
 //   secure.get {key, user, reason?} → bytes or {none}; secure.set {key, user} + value; secure.delete {key};
 //     secure.ask {reason} — answered by the app (Kotlin: the Keystore, and the prompt when `user` or asked), not the
 //     shell (docs/vault.md, "设备上的钥匙")
@@ -35,7 +38,8 @@
 //     istream.reset {id, code}
 // And at once (`callSync`, answering {value} or {error}): sql.open {name} → {id} (`:memory:` one in memory);
 //   sql.exec {id, sql}; sql.run {id, sql, params} → changes; sql.all {id, sql, params} → rows (arrays);
-//   sql.close {id}; sql.delete {name}; iroh.endpointId {id}; iroh.addAddr {id, addr};
+//   sql.close {id}; sql.delete {name}; storage.path {key} → the file it is kept in, or null while none is;
+//   iroh.endpointId {id}; iroh.addAddr {id, addr};
 //   iroh.relayStatus {id}; conn.remoteId {id};
 //   conn.closeReason {id}; conn.paths {id}; conn.stats {id}; release {id} (a handle let go); text.collate {names} →
 //   each one's place in the order people read them (the system's collation; a shell without it: an error, and the
@@ -245,8 +249,24 @@ export class BridgeHost implements Host {
   storageSet(key: string, value: Uint8Array): Effect.Effect<void, HostError> {
     return Effect.asVoid(this.#bridge.call("storage.set", { key }, value));
   }
+  savedRead(at: string, start: number, end: number): Effect.Effect<Uint8Array | null, HostError> {
+    return Effect.map(this.#bridge.call("kept.read", { at, start, end }), (a) => ((a.json as J)?.none === true ? null : (a.bytes ?? new Uint8Array(0))));
+  }
   storageDelete(key: string): Effect.Effect<void, HostError> {
     return Effect.asVoid(this.#bridge.call("storage.delete", { key }));
+  }
+  /// The shell's file for a key (`storage.path`), until it says it has none.
+  #paths = true;
+  storagePath(key: string): string | null {
+    if (!this.#paths) return null;
+    try {
+      const path = this.#bridge.sync("storage.path", { key });
+      return typeof path === "string" ? path : null;
+    } catch {
+      // A shell from before it.
+      this.#paths = false;
+      return null;
+    }
   }
 
   secureGet(key: string, opts: { user: boolean; reason?: string }): Effect.Effect<Uint8Array | null, HostError> {

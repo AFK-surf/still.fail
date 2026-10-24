@@ -134,7 +134,7 @@ case "${1:-build}" in
     T2=$(now)
     if [ -n "$LIBS" ]; then wait $LIBS || { cat $OUT/app-libs.log; exit 1; }; cat $OUT/app-libs.log; fi
     T3=$(now)
-    # (ThinLTO's backends run here: scripts/mbc's link flags), unless the same command made libmbui.so of the same
+    # (ThinLTO's backends run here when MBC_LTO asks for them: scripts/mbc's link flags), unless the same command made libmbui.so of the same
     # objects and the core's .so files already (scripts/mbc link: by content)
     "$D/mbc" link --out=$SO --dep=$jni -- $CC -shared -o $SO $(cat $OUT/objs.txt) $(cat $OUT/link-flags.txt) \
       $APP_LINK -lGLESv3 -llog -lz -lm -Wl,--no-undefined

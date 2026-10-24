@@ -22,6 +22,7 @@
 #include <math.h>
 #include <stdarg.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <deque>
 #include <map>
 #include <string>
@@ -196,6 +197,8 @@ struct View {
   std::vector<std::wstring> scripts;
   bool there = false;
   std::string touch = "all";
+  // where the app draws what takes a press over it (view_tell 4: x0 y0 x1 y1 …, points): the canvas's there
+  std::vector<double> covers;
   std::vector<uint8_t> still;
   int still_state = 0;
 };
@@ -863,8 +866,8 @@ extern "C" int32_t mb_host_view_info(int32_t vid, double *out) {
 
 // a player's: none here
 extern "C" int32_t mb_host_view_read_next(int32_t vid, double *out) { (void)vid; (void)out; return 0; }
-extern "C" void mb_host_view_read_answer(int32_t vid, int32_t req, moonbit_bytes_t data, double total) {
-  (void)vid; (void)req; (void)data; (void)total;
+extern "C" void mb_host_view_read_answer(int32_t vid, int32_t req, moonbit_bytes_t data, double total, int32_t more) {
+  (void)vid; (void)req; (void)data; (void)total; (void)more;
 }
 // a page's grab: how it stands (what 2), the PNG
 extern "C" moonbit_string_t mb_host_view_text(int32_t vid, int32_t what) {
@@ -898,6 +901,15 @@ extern "C" void mb_host_view_tell(int32_t vid, int32_t what, moonbit_string_t te
   } else if (what == 2) {
     std::string m = utf8(t.c_str());
     v->touch = m.substr(0, m.find(' '));
+  } else if (what == 4) {
+    v->covers.clear();
+    std::string m = utf8(t.c_str());
+    const char *s = m.c_str();
+    char *end = NULL;
+    for (double d = strtod(s, &end); end != s; d = strtod(s, &end)) {
+      v->covers.push_back(d);
+      s = end;
+    }
   }
 }
 
@@ -1008,11 +1020,20 @@ extern "C" void mb_host_view_site_load(int32_t vid, moonbit_string_t path) {
 
 extern "C" int mb_views_count(void) { return (int)views.size(); }
 
-// the view shown at (x, y), points from the client area's top left, the last stacked first
+// whether the app draws something that takes a press over `v` at (x, y) (view_tell 4)
+static bool covered_at(View *v, double x, double y) {
+  const std::vector<double> &r = v->covers;
+  for (size_t j = 0; j + 3 < r.size(); j += 4)
+    if (x >= r[j] && x < r[j + 2] && y >= r[j + 1] && y < r[j + 3]) return true;
+  return false;
+}
+
+// the view shown at (x, y), points from the client area's top left, the last stacked first (not where the app draws
+// what takes a press over it)
 static View *view_at(double x, double y) {
   for (auto it = views.rbegin(); it != views.rend(); ++it) {
     View *v = it->second;
-    if (!v->shown || !v->placed || !v->comp || v->touch == "through") continue;
+    if (!v->shown || !v->placed || !v->comp || v->touch == "through" || covered_at(v, x, y)) continue;
     double x0 = fmax(v->cx0, v->x), y0 = fmax(v->cy0, v->y);
     double x1 = fmin(v->cx1, v->x + v->w), y1 = fmin(v->cy1, v->y + v->h);
     if (x >= x0 && x < x1 && y >= y0 && y < y1) return v;

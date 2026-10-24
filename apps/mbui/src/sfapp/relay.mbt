@@ -237,7 +237,7 @@ priv enum RelayPart {
 ///|
 /// The sheet's body, 20 in from its sides (Relay.kt: padding(start = 20.dp, end = 20.dp)), as tall as the sheet.
 // kept across runs: a value (no field of it changes)
-let relay_body : @ui.Style = @ui.style(w=Full, h=Full, px=S5)
+let relay_body : @ui.Style = @ui.css("w=Full h=Full px=S5")
 
 ///|
 /// A part's height before it is laid out (a place's row, 40).
@@ -327,7 +327,7 @@ fn relay_sheet(c : @ui.Ctx, src : Source, r : ChatRef, thread : Double) -> Unit 
 ///|
 /// The relay sheet's parts, 10 apart (Relay.kt openRelay's column).
 // kept across runs: a value (no field of it changes)
-let relay_part_box : @ui.Style = @ui.style(w=Full, pb=S2_5)
+let relay_part_box : @ui.Style = @ui.css("w=Full pb=S2_5")
 
 ///|
 /// Its words of 13: its lead, what it says when it has nothing to show; in red, what went wrong.
@@ -341,7 +341,7 @@ let relay_words_red : @ui.TextStyle = relay_words.then(@ui.text_style(color=Dang
 ///|
 /// Its small words (12) in their own room, 8 in and 4 down: 最近接力过, nothing found, a workspace not read.
 // kept across runs: a value (no field of it changes)
-let relay_small_room : @ui.Style = @ui.style(px=S2, py=S1)
+let relay_small_room : @ui.Style = @ui.css("px=S2 py=S1")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -354,7 +354,7 @@ let relay_small_red : @ui.TextStyle = relay_small.then(@ui.text_style(color=Dang
 ///|
 /// 正在读取频道…: a spinner before it, 8 apart.
 // kept across runs: a value (no field of it changes)
-let relay_reading : @ui.Style = @ui.style(row=true, gap=S2, align=ACenter)
+let relay_reading : @ui.Style = @ui.css("row gap=S2 align=ACenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -363,17 +363,17 @@ let relay_reading_words : @ui.TextStyle = @ui.text_style(size=Sm, color=Muted, w
 ///|
 /// The bots to go on through, 6 apart.
 // kept across runs: a value (no field of it changes)
-let relay_scopes : @ui.Style = @ui.style(row=true, gap=S1_5, pb=S1_5)
+let relay_scopes : @ui.Style = @ui.css("row gap=S1_5 pb=S1_5")
 
 ///|
 /// A bot's chip (BotChip): 10 by 5 in, round at its ends (its corner 13 on its 26), its picture 5 before its name;
 /// chosen, in ink.
 // kept across runs: a value (no field of it changes)
-let relay_chip : @ui.Style = @ui.style(row=true, px=S2_5, py=S1_25, gap=S1_25, radius=Full, bg=Neutral, align=ACenter)
+let relay_chip : @ui.Style = @ui.css("row px=S2_5 py=S1_25 gap=S1_25 radius=Full bg=Neutral align=ACenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let relay_chip_on : @ui.Style = relay_chip.then(@ui.style(bg=Fg))
+let relay_chip_on : @ui.Style = relay_chip.then(@ui.css("bg=Fg"))
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -386,7 +386,7 @@ let relay_chip_words_on : @ui.TextStyle = relay_chip_words.then(@ui.text_style(c
 ///|
 /// 显示全部: in the link's ink, 8 by 6 in, its corner 8, rippled where it is pressed.
 // kept across runs: a value (no field of it changes)
-let relay_show_all : @ui.Style = @ui.style(px=S2, py=S1_5, radius=Lg)
+let relay_show_all : @ui.Style = @ui.css("px=S2 py=S1_5 radius=Lg")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -395,47 +395,38 @@ let relay_show_all_words : @ui.TextStyle = @ui.text_style(size=Sm, color=Link, w
 ///|
 /// 开头附一句（可选）, 4 under what is over it.
 // kept across runs: a value (no field of it changes)
-let relay_note_label : @ui.Style = @ui.style(pt=S1)
+let relay_note_label : @ui.Style = @ui.css("pt=S1")
 
 ///|
 /// 接力, the sheet's last, 24 over its foot.
 // kept across runs: a value (no field of it changes)
-let relay_go_room : @ui.Style = @ui.style(w=Full, pb=S6)
+let relay_go_room : @ui.Style = @ui.css("w=Full pb=S6")
 
 ///|
 /// A field (Controls.kt Field): on the card's ground, a hairline round it, 14 by 12 in, its corner 12.
 // kept across runs: a value (no field of it changes)
-let relay_field_box : @ui.Style = @ui.style(w=Full, px=S3_5, py=S3, radius=Xl, bg=Card, border=B1, border_color=Line)
+let relay_field_box : @ui.Style = @ui.css("w=Full px=S3_5 py=S3 radius=Xl bg=Card border=B1 border_color=Line")
 
 ///|
 /// A place's row (PlaceRow): 40 high at least, 10 by 8 in, its parts 8 apart, its corner the scale's nearest to
 /// Smooth(10.dp) (12); picked, on the accent's ground; rippled where it is pressed (clip(Smooth(10)).clickable).
 // kept across runs: a value (no field of it changes)
-let relay_place : @ui.Style = @ui.style(
-  row=true,
-  w=Full,
-  min_h=S10,
-  px=S2_5,
-  py=S2,
-  gap=S2,
-  radius=Xl,
-  align=ACenter,
-)
+let relay_place : @ui.Style = @ui.css("row w=Full min_h=S10 px=S2_5 py=S2 gap=S2 radius=Xl align=ACenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let relay_place_on : @ui.Style = relay_place.then(@ui.style(bg=AccentBg))
+let relay_place_on : @ui.Style = relay_place.then(@ui.css("bg=AccentBg"))
 
 ///|
 /// Which bot the agent speaks through there, under the place picked (Relay.kt): in line with the place's name (the
 /// row's 10 in, its mark's 16 and the 8 after it), the bot's picture before its name.
 // kept across runs: a value (no field of it changes)
-let relay_via : @ui.Style = @ui.style(row=true, w=Full, px=S2_5, pt=S0_5, align=ACenter)
+let relay_via : @ui.Style = @ui.css("row w=Full px=S2_5 pt=S0_5 align=ACenter")
 
 ///|
 /// As wide as the row's mark and the 8 after it.
 // kept across runs: a value (no field of it changes)
-let relay_via_indent : @ui.Style = @ui.style(w=S6)
+let relay_via_indent : @ui.Style = @ui.css("w=S6")
 
 ///|
 // kept across runs: a value (no field of it changes)

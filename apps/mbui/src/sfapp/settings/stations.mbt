@@ -215,26 +215,26 @@ fn seen(style : @ui.Style, known : Bool, faded : Bool) -> @ui.Style {
 
 ///|
 // kept across runs: a value (no field of it changes)
-let unseen : @ui.Style = @ui.style(opacity=O0)
+let unseen : @ui.Style = @ui.css("opacity=O0")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let faded_look : @ui.Style = @ui.style(opacity=O45)
+let faded_look : @ui.Style = @ui.css("opacity=O45")
 
 ///|
 /// Under a station's name, 10 down (StationBody's padding).
 // kept across runs: a value (no field of it changes)
-let station_body_box : @ui.Style = @ui.style(w=Full, pt=S2_5)
+let station_body_box : @ui.Style = @ui.css("w=Full pt=S2_5")
 
 ///|
 /// Its network, 10 under the boxes of what runs low.
 // kept across runs: a value (no field of it changes)
-let station_body_net : @ui.Style = @ui.style(w=Full, pt=S2_5)
+let station_body_net : @ui.Style = @ui.css("w=Full pt=S2_5")
 
 ///|
 /// Offline: its picture and a line saying so, centred across the room, 12 apart.
 // kept across runs: a value (no field of it changes)
-let offline_row : @ui.Style = @ui.style(row=true, w=Full, h=Full, gap=S3, align=ACenter)
+let offline_row : @ui.Style = @ui.css("row w=Full h=Full gap=S3 align=ACenter")
 
 ///|
 /// The offline picture's width in a station's card: the room's height (the load's 20, 10, the network's two lines of 18
@@ -304,6 +304,32 @@ fn fill_chip(
       |> ignore
     })
     |> ignore
+  })
+  |> ignore
+}
+
+///|
+/// A machine's CPU, memory and disk (components.tsx MeterChips), each a chip (MeterChip) with what it is in its tip;
+/// `alerts`: only those running low. 8 apart.
+pub fn meter_chips(c : @ui.Ctx, key : String, meters : Array[Json], alerts? : Bool = false) -> Unit {
+  c.box(style=peek_meters, fn() {
+    for m in meters {
+      let mv = Some(m)
+      if alerts && text(mv, "level") == "ok" {
+        continue
+      }
+      let id = c.id(key + "/meter/" + text(mv, "label"))
+      c.box(id~, taps=false, fn() {
+        fill_chip(c, 100 - clamp(count(mv, "left")), text(mv, "level"), text(mv, "short"), text(mv, "remaining"))
+      })
+      |> ignore
+      let note = text(mv, "note")
+      @sf.tip(c, key + "/meter/" + text(mv, "label"), id, text(mv, "label") + " " + text(mv, "value") + (if note != "" {
+        " · " + note
+      } else {
+        ""
+      }))
+    }
   })
   |> ignore
 }
@@ -488,12 +514,12 @@ fn station_figures(c : @ui.Ctx, core : Core, s : Json?) -> Unit {
 ///|
 /// What is left of it large, 4 down.
 // kept across runs: a value (no field of it changes)
-let figures_dials : @ui.Style = @ui.style(w=Full, pt=S1)
+let figures_dials : @ui.Style = @ui.css("w=Full pt=S1")
 
 ///|
 /// The dials' places before it is read, 16 apart (Bar 90 by 76, 6 round).
 // kept across runs: a value (no field of it changes)
-let figures_dials_unread : @ui.Style = @ui.style(row=true, w=Full, h=Full, gap=S4)
+let figures_dials_unread : @ui.Style = @ui.css("row w=Full h=Full gap=S4")
 
 ///|
 let unread_dial_w : Double = 90.0
@@ -507,17 +533,17 @@ let unread_dial_r : Double = 6.0
 ///|
 /// Its network 14 under the dials.
 // kept across runs: a value (no field of it changes)
-let figures_net : @ui.Style = @ui.style(w=Full, pt=S3_5)
+let figures_net : @ui.Style = @ui.css("w=Full pt=S3_5")
 
 ///|
 /// Its rows, 8 apart (HostDetails).
 // kept across runs: a value (no field of it changes)
-let figures_rows : @ui.Style = @ui.style(w=Full, gap=S2)
+let figures_rows : @ui.Style = @ui.css("w=Full gap=S2")
 
 ///|
 /// What lies evenly down a room (its spacers share what is left).
 // kept across runs: a value (no field of it changes)
-let figures_spread : @ui.Style = @ui.style(w=Full, h=Full)
+let figures_spread : @ui.Style = @ui.css("w=Full h=Full")
 
 ///|
 let unread_detail_w : Double = 180.0
@@ -525,12 +551,12 @@ let unread_detail_w : Double = 180.0
 ///|
 /// Its agents' processes, 14 under its network.
 // kept across runs: a value (no field of it changes)
-let figures_running : @ui.Style = @ui.style(w=Full, pt=S3_5)
+let figures_running : @ui.Style = @ui.css("w=Full pt=S3_5")
 
 ///|
 /// A line's room, as tall as a line in Chinese (18), what it says centred across it (Line).
 // kept across runs: a value (no field of it changes)
-let figures_line : @ui.Style = @ui.style(w=Full, h=S4_5, justify=JCenter)
+let figures_line : @ui.Style = @ui.css("w=Full h=S4_5 justify=JCenter")
 
 ///|
 let unread_running_w : Double = 120.0
@@ -617,7 +643,7 @@ let part_note : @ui.TextStyle = @ui.text_style(size=Sm, color=Muted, leading=L5,
 ///|
 /// The parts' choice under the bar (StationScreen's Seg): 12 in from the page's sides as its cards, 10 over the first.
 // kept across runs: a value (no field of it changes)
-let parts_room : @ui.Style = @ui.style(w=Full, px=S3, pb=S2_5)
+let parts_room : @ui.Style = @ui.css("w=Full px=S3 pb=S2_5")
 
 ///|
 /// The page's part shown, by station (StationScreen's `part`: 0 概览, 1 设置, 2 软件与设备); none, the overview. Kept

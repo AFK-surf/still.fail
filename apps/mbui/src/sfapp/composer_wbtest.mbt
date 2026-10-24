@@ -49,6 +49,8 @@ fn fake_core(
         "session.warm" | "client.focus" | "chat.place" => done(Ok(Json::object({})))
         // what still.fail's links open, as the core reads them (links_wbtest.mbt)
         "link.parse" => done(Ok(fixture_link_parse(text(Some(params), "url"))))
+        // what is written, read as the core reads it (refLinks.ts, pasted.ts: its answers kept)
+        "ref.at" | "ref.before" | "ref.marks" | "ref.pasted" | "paste.info" => (base.call)(name, params, done)
         _ => ()
       }
     },
@@ -560,11 +562,11 @@ test "the fixture's station: sending, then the message, then an answer; a failur
   clock.val = clock.val + fix_answer_ms
   t.draw()
   // said while its agent's activity shows: out of its avatar once it has folded and hopped (emit.mbt)
-  t.run_for(Fold.ms() + Float.ms())
+  t.run_for(Pose::Fold.ms() + Pose::Float.ms())
   assert_true(t.find("收到：「测试一下」") is Some(_))
   // (its avatar home: what comes out of avatars is over, its turn too (two frames on), the next words sent go in
   // their turn after it)
-  t.run_for(Spit.ms() + Return.ms() + turn_calm_ms)
+  t.run_for(Pose::Spit.ms() + Pose::Return.ms() + turn_calm_ms)
   // words with 失败 in them fail first
   t.tap_text("发消息")
   t.type_text("这条会失败")
@@ -629,7 +631,6 @@ test "image sizes from their bytes" {
   let gif = Bytes::from_array([0x47, 0x49, 0x46, 0x38, 0x39, 0x61, 3, 0, 2, 0, 0, 0].map(fn(i) { i.to_byte() }))
   assert_eq(@pixels.image_size(gif), Some((3, 2)))
   assert_eq(@pixels.image_size(b"plain words"), None)
-  assert_eq(paste_preview("\n  first line\r\nsecond"), "first line")
   assert_eq(uuid("0123456789abcdef0123456789abcdef"), "01234567-89ab-cdef-0123-456789abcdef")
 }
 
@@ -727,7 +728,7 @@ test "at its end, rows that come: the core told the end is not in view while the
   t.run_for(fix_answer_ms)
   clock.val = clock.val + fix_answer_ms
   t.draw()
-  t.run_for(Fold.ms() + Float.ms())
+  t.run_for(Pose::Fold.ms() + Pose::Float.ms())
   assert_true(t.find("收到：「测试一下」") is Some(_))
   let rest = t.rest_of("a list")
   if rest > t.time() && rest < @double.infinity {

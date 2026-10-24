@@ -583,6 +583,15 @@ test("the plain library: no security mode, items kept on the station as they are
   const shown = await r.watch(2, { topic: "vaultItems", workspace: "ws", vault: "plain" });
   assert.deepEqual(shown().items.map((i: any) => [i.name, i.kind, i.listed, i.env]), [["GitHub", "token", true, "GH_TOKEN"]]);
   assert.equal((await r.ask("vault.open", { item: put.id })).plain.fields.value, "ghp_x");
+  // What the pages say of it, the core's: its kind, how agents may ask for it and get it, its longest grant; opened, its
+  // fields as its page shows them; the library's at the settings' row.
+  assert.deepEqual(shown().items.map((i: any) => [i.kindText, i.agentText, i.lineText, i.howText, i.lastsText]), [
+    ["Token", "允许 agent 申请 · 代理 · api.github.com", "允许 agent 申请 · 代理 · api.github.com", "代理 · 限 api.github.com", "跟随默认 · 直到对话归档"],
+  ]);
+  const opened = await r.ask("vault.open", { item: put.id });
+  assert.deepEqual([opened.kindText, opened.shown], ["Token", [{ key: "value", label: "值", value: "ghp_x", secret: true, mono: true }]]);
+  assert.deepEqual(shown().items[0].shut.map((f: any) => [f.label, f.value.length]), [["值", 20]]);
+  assert.deepEqual([vaults().statusText, vaults().statusBad], ["1 条", false]);
 
   // An agent asks: its owner approves, with nothing signed; the use shown on the item.
   r.st.requests.push({ id: "r_p", ws: "ws", vault: "plain", item: put.id, session: "ember:s", chat: "", mode: "proxy", reason: "ci", hosts: ["api.github.com"], box: "", at: 1000, status: "pending" } as Request);
@@ -603,6 +612,9 @@ test("the plain library: no security mode, items kept on the station as they are
   r.take();
   assert.deepEqual(used().uses.map((u: any) => [u.chatTitle, u.command, u.station, typeof u.at.ago]), [["修 CI", "gh pr list", "st", "string"]]);
   assert.equal(shown().items[0].lastUse.command, "gh pr list");
+  // used: its line says when, its use how
+  assert.equal(used().uses[0].howText, "gh pr list · 代理");
+  assert.match(shown().items[0].lineText, /使用$/);
 
   // Security mode on: the vault is the library; what was plain is counted, kept from new writes, and moved.
   r.putLock();

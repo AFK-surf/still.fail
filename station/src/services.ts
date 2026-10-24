@@ -22,6 +22,7 @@ import { log } from "./ops/log.ts";
 import { platform } from "./platform/index.ts";
 import { ScreenHub } from "./screens/hub.ts";
 import { Desktop } from "./screens/desktop.ts";
+import { Simulators } from "./screens/simulator.ts";
 import { WindowsDesktop, screenBinary } from "./screens/win-desktop.ts";
 import { type Drive, dropFolder, stationDrive } from "./drive/drive.ts";
 import { ModuleSet } from "./modules/modules.ts";
@@ -164,6 +165,16 @@ export class ScreenRegistry extends Context.Service<ScreenRegistry, ScreenHub>()
           // Its size and grants are looked at as the screens are asked for (the helper started then, not before).
           const unrefresh = hub.refresher(() => desktop.refresh());
           return () => (unrefresh(), remove(), void desktop.close());
+        }),
+        (stop) => Effect.sync(stop),
+      );
+      // The iOS Simulators booted on this Mac, each a screen while it is (still.fail Helper's, as the desktop is).
+      yield* Effect.acquireRelease(
+        Effect.sync(() => {
+          const simulators = new Simulators({ screens: hub, helper });
+          void simulators.start();
+          const unrefresh = hub.refresher(() => simulators.refresh());
+          return () => (unrefresh(), simulators.close());
         }),
         (stop) => Effect.sync(stop),
       );

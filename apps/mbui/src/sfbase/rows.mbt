@@ -222,3 +222,64 @@ pub fn row_agent_groups(item : ChatItem) -> Array[RowAgent] {
   }
   groups
 }
+
+///|
+/// The stations at a glance, as the core has them in workspace `ws` (StationGlyph.kt's counts: asleep while the core
+/// reaches nothing at all), and in words: asleep, what the core cannot reach says it; else the stations (the core's),
+/// and what is wrong with them.
+pub fn stations_at_glance(src : Source, ws : String) -> (@sf.GlyphCounts, String) {
+  let chats = (src.topic)("chats", { "scope": Json::string(ws), "mine": Json::boolean(false) })
+  let g = field(chats.value, "glyph")
+  let status = (src.topic)("status", { "workspace": Json::string(ws) }).value
+  let asleep = text(status, "state") == "trouble"
+  let glyph : @sf.GlyphCounts = {
+    online: count(g, "online"),
+    dim: count(g, "dim"),
+    failing: count(g, "failing"),
+    working: count(g, "working"),
+    connecting: count(g, "connecting"),
+    asleep,
+  }
+  let said = if asleep { text(status, "text") } else { text(g, "label") }
+  let words = match field(chats.value, "trouble") {
+    _ if said == "" => ""
+    Some(Object(_)) as trouble => @sf.t("android-chat.home.stations.trouble", args=[("said", said), ("trouble", text(trouble, "text"))])
+    _ => @sf.t("android-chat.home.stations", args=[("said", said)])
+  }
+  (glyph, words)
+}
+
+///|
+/// A post's own key: its station, chat and place in it.
+pub fn seq_key(station : String, thread : Double, seq : Double) -> String {
+  station + "\t" + thread.to_int64().to_string() + "\t" + seq.to_int64().to_string()
+}
+
+///|
+/// A decision's own key: its station, chat and post.
+pub fn decision_key(item : Json) -> String {
+  let v = Some(item)
+  seq_key(text(v, "station"), number(v, "thread"), number(v, "seq"))
+}
+
+///|
+/// `d` the one the wide 奏 page shows from now on (`decision.show`: the core keeps it; DecisionDesk.tsx pick).
+pub fn decision_show(src : Source, w : Workspace, d : Json) -> Unit {
+  let v = Some(d)
+  let p : Map[String, Json] = {
+    "workspace": Json::string(w.id),
+    "station": Json::string(text(v, "station")),
+    "thread": Json::number(number(v, "thread")),
+    "seq": Json::number(number(v, "seq")),
+  }
+  (src.call)("decision.show", Json::object(p), fn(_) {  })
+}
+
+///|
+/// How many services are left up long in the workspace (the `longJobs` topic).
+pub fn long_jobs(src : Source, w : Workspace) -> Int {
+  items((src.topic)("longJobs", { "scope": Json::string(w.id) }).value, "groups").fold(init=0, fn(n, g) {
+    n + items(Some(g), "jobs").length()
+  })
+}
+

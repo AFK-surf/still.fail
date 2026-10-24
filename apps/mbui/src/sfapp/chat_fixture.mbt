@@ -134,7 +134,9 @@ fn rich_chat(older : Int) -> Json {
     }
   }
   let messages : Array[Json] = [
-    msg(1, "ember", { "name": "still.fail" }, "Studio 上的 claude 已启动。", "3 小时前", {}),
+    msg(1, "ember", { "name": "still.fail" }, "Studio 上的 claude 已启动。", "3 小时前", {
+      "notice": { "failed": false, "words": "Studio 上的 claude 已启动" },
+    }),
     msg(2, "person", by_person("林"), "帮我把聊天页的列表做成虚拟列表，几千条消息也要滚得顺。", "3 小时前", {
       "mine": true,
       "author": "lin@example.com",
@@ -201,7 +203,9 @@ fn rich_chat(older : Int) -> Json {
       "decision": { "resolved": false },
       "asked": true,
     }),
-    msg(9, "ember", { "name": "still.fail" }, "⚠️ Studio 上 codex 的登录已失效：请在设置里重新登录。", "20 分钟前", {}),
+    msg(9, "ember", { "name": "still.fail" }, "⚠️ Studio 上 codex 的登录已失效：请在设置里重新登录。", "20 分钟前", {
+      "notice": { "failed": true, "words": "Studio 上 codex 的登录已失效：请在设置里重新登录" },
+    }),
     msg(10, "agent", claude, "推送截图前要先登录 gh。", "15 分钟前", {
       "card": { "type": "login", "login": "login-1" },
       "decision": { "resolved": false },
@@ -444,13 +448,52 @@ fn fixture_chat_topic(f : Fixture, name : String, params : Map[String, Json]) ->
           "name": "Studio",
           "icon": "glyph:desktop",
           "summary": "Apple M2 Max · 2 个 agent 在工作",
+          // how it is, as the core says it (StationView stateText, problems)
+          "stateText": "2 个 agent 正在运行",
+          "stateBusy": true,
+          "problems": [],
+          "version": "0.1.4765",
           "online": true,
-          // its machine and network as its card (settings/station_peek.mbt) shows them
+          // its machine and network as its card (settings/station_peek.mbt) and its page (src/sfdesk
+          // station_page.mbt) show them
           "host": {
+            "identity": "Mac Studio · Apple M2 Max",
             "meters": [
-              { "short": "CPU", "left": 72, "level": "ok", "remaining": "空闲 72%" },
-              { "short": "内存", "left": 18, "level": "amber", "remaining": "剩 11.5 G" },
-              { "short": "磁盘", "left": 41, "level": "ok", "remaining": "剩 380 G" },
+              {
+                "short": "CPU",
+                "left": 72,
+                "level": "ok",
+                "remaining": "空闲 72%",
+                "big": "72",
+                "unit": "%",
+                "title": "CPU 空闲",
+                "total": "负载 3.1",
+              },
+              {
+                "short": "内存",
+                "left": 18,
+                "level": "amber",
+                "remaining": "剩 11.5 G",
+                "big": "11.5",
+                "unit": "GB",
+                "title": "内存剩",
+                "total": "共 64 GB",
+              },
+              {
+                "short": "磁盘",
+                "left": 41,
+                "level": "ok",
+                "remaining": "剩 380 G",
+                "big": "380",
+                "unit": "GB",
+                "title": "磁盘剩",
+                "total": "共 1 TB",
+              },
+            ],
+            "details": [
+              { "label": "主机名", "value": "studio.local" },
+              { "label": "系统", "value": "macOS 26.1 · arm64" },
+              { "label": "已运行", "value": "12 天" },
             ],
           },
           "net": {
@@ -462,13 +505,15 @@ fn fixture_chat_topic(f : Fixture, name : String, params : Map[String, Json]) ->
             "downTotal": "212 MB",
             "upTotal": "9.6 MB",
           },
-          "overview": fixture_station_drive(true),
+          "overview": fixture_station_overview(),
         },
         {
           "station": "ws1/st2",
           "id": "st2",
           "name": "MBA",
           "icon": "glyph:laptop:teal",
+          "stateText": "3 小时前在线",
+          "problems": [{ "key": "away", "level": "red", "text": "离线：在该机器上打开 still.fail 即可重新连接" }],
           "online": false,
           "overview": fixture_station_drive(false),
         },
@@ -775,7 +820,12 @@ fn fix_deliver(session : String, id : String) -> Unit {
   fix_later(fix_answer_ms, fn() {
     fix_serial.val += 1
     fix_later(fix_turn_end_ms, fn() { fix_chat(session).working = -1.0 })
-    let first = paste_preview(words)
+    // (its first line, as a made-up agent would take it up)
+    let lead = words.trim(chars=" \n\r\t").to_string()
+    let first = match lead.find("\n") {
+      Some(i) => lead.view(end_offset=i).to_string()
+      None => lead
+    }
     let said = if first == "" {
       "收到文件了，我看一下。"
     } else {
@@ -799,6 +849,11 @@ fn fix_deliver(session : String, id : String) -> Unit {
 /// The fixture's writes in a chat (`chat.send`, `chat.retry`, `chat.discard`, `draft.get`, `draft.put`,
 /// `station.upload.part`, `session.warm`), and what the page tells (`client.focus`, `chat.place`): None for any other.
 fn fixture_chat_call(f : Fixture, name : String, params : Json) -> Result[Json, Json]? {
+  // what is written, as the core's composers keep it (compose_fixture.mbt)
+  match fix_compose_call(f, name, params) {
+    Some(r) => return Some(r)
+    None => ()
+  }
   let p = Some(params)
   let session = match text(p, "session") {
     "" =>
@@ -863,7 +918,7 @@ fn fixture_chat_call(f : Fixture, name : String, params : Json) -> Result[Json, 
         let o = Some(one)
         let id = text(o, "id")
         let name = text(o, "name")
-        list.push({
+        let kept : Map[String, Json] = {
           "id": Json::string(id),
           "name": Json::string(name),
           "size": Json::number(number(o, "size")),
@@ -873,7 +928,13 @@ fn fixture_chat_call(f : Fixture, name : String, params : Json) -> Result[Json, 
             "path": Json::string("uploads/" + id + "/" + name),
             "size": Json::number(number(o, "size")),
           },
-        })
+        }
+        // (pasted words: what the core said of them, kept with the file as composer.ts keeps it)
+        match field(o, "pasted") {
+          Some(x) => kept["pasted"] = x
+          None => ()
+        }
+        list.push(Json::object(kept))
       }
       fix_composers[key] = list
       f.version += 1
@@ -1130,7 +1191,7 @@ fn fixture_card_call(f : Fixture, name : String, params : Json) -> Result[Json, 
 /// word picked, chat-link-menu's link held.
 pub fn open_cards_fixture(mode : String) -> Unit {
   match mode {
-    "chat-answering" => dui.doing["answer/" + seq_key("ws1/st1", 7.0, 8.0) + "/一起换"] = true
+    "chat-answering" => acting.doing["answer/" + seq_key("ws1/st1", 7.0, 8.0) + "/一起换"] = true
     // a word of the last post picked (its handles and its bar), once laid out (pick.mbt)
     "chat-pick" => {
       pk.ts = "ts11"
@@ -1372,4 +1433,53 @@ fn with_station_update(v : Json) -> Json {
     }
     _ => v
   }
+}
+
+///|
+/// Studio's overview (fixture_station_drive's), with its software as the core says it (its versions, a newer Claude
+/// Code out) and what its agents' processes take.
+fn fixture_station_overview() -> Json {
+  let o = match fixture_station_drive(true) {
+    Object(m) => m
+    _ => {}
+  }
+  o["processes"] = [{ "pid": 4021, "rssBytes": 1200000000.0 }]
+  o["processesText"] = "2 个 agent 进程 · 1.1 GB"
+  // its profiles, as the workspace's list has them (the settings' fixture's)
+  o["profiles"] = Json::array(@settings.fixture_profiles())
+  o["updates"] = [
+    {
+      "id": "station",
+      "name": "Station",
+      "installed": true,
+      "version": "0.1.4765",
+      "latest": "0.1.4765",
+      "newer": false,
+      "channel": "stable",
+      "auto": true,
+      "updatable": true,
+      "state": "idle",
+      "checkedAt": 1792300000000.0,
+      "shownText": "0.1.4765",
+      "tipText": "已是最新",
+      "updatingText": "正在更新",
+      "failedText": "更新失败",
+    },
+    {
+      "id": "claude",
+      "name": "Claude Code",
+      "installed": true,
+      "version": "2.1.4",
+      "latest": "2.1.9",
+      "newer": true,
+      "updatable": true,
+      "state": "idle",
+      "checkedAt": 1792300000000.0,
+      "shownText": "2.1.4",
+      "tipText": "",
+      "updatingText": "正在更新",
+      "failedText": "更新失败",
+    },
+  ]
+  Json::object(o)
 }

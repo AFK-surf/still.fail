@@ -636,7 +636,8 @@ FileData; Zoom.kt):
   meanwhile, fitted with a margin (12, or 32 on a wide screen), a double tap to 2.5× the fitted size (at least 100%)
   around it and back, the bar's − / % / + (×1.25, the % back to fitted), two fingers pinching it round the point
   between them (Android tells mbui of a second finger now: pointer kinds 4, 5, 6, `Ctx::second_pointer`), a finger
-  panning it when larger, the wheel zooming round the pointer; a video played by the system's player in a native view (below), its bytes read through
+  panning it when larger (let go moving, it goes on at the finger's speed, slowing, to its edge; dragged on past its edge,
+  the one beside it comes in as a fitted swipe brings it), the wheel zooming round the pointer; a video played by the system's player in a native view (below), its bytes read through
   the core a part at a time (`station.file.part`, as the drive's DriveSource reads `drive.read`: never the whole file
   first, where the Android app's chat viewer fetches it to the disk before playing), its controls over its foot (where
   it is, to tap or drag along; a frame back, play, a frame on; which frame of how many; 1× 0.5× 0.25× 0.1×); a PDF's
@@ -658,8 +659,11 @@ FileData; Zoom.kt):
   is on top of the window and translucent (setZOrderOnTop), the views in a layer over it in the view tree (a page
   takes its touches) under it on the screen; the video is Media3's ExoPlayer (1.8.0, as the Android app's) on a
   TextureView whose transform puts the picture in its rect, reading through ViewSource (DriveSource.kt's window: 256 KB
-  first, doubling to 4 MB while reads run on, served from the window around the extractor's reopenings), each read
-  asked of the app (`view_read_next`) and answered from the core (`view_read_answer`); the page is a WebView with the
+  first, doubling to 4 MB while reads run on, kept on the disk while the view is open), each read asked of the app
+  (`view_read_next`) and answered from the core as its bytes come (`view_read_answer` piece by piece: the core's part
+  read with `stream`), the player going on with the first of them while the rest is on its way (on a slow link it
+  waits for what it needs, not for the 4 MB around it); a read no reader is on any more (a seek elsewhere) is let go
+  of, the app stopping the core's read; the page is a WebView with the
   Android app's HtmlPage settings (JavaScript on, no file or content access, no DOM storage, shouldOverrideUrlLoading
   true). macOS and iOS (apple_views.m): the Metal layer non-opaque over a views root, AVPlayerLayer with an
   AVAssetResourceLoaderDelegate on a scheme of its own reading through the same calls, WKWebView with a
@@ -912,9 +916,10 @@ VideoViewer.kt frameStarts, saveFrame, landscape; ImageMarks.kt):
   @hostapi.draw_marks: Android's Canvas, Core Graphics), then it is kept with the downloads or put in the chat's draft with
   a quote per numbered mark (图片 … 标注 n: where it is, on which image, what was said), and the viewer closes to the
   chat (已添加到对话，返回对话发送). Back steps out of a note, the words, the colours, the pick, then marking.
-- A video's frames: their times read from the file as the system reads it (mbui's NativeView::frames: Android's
-  MediaExtractor over the same reads as the player, Apple's sample cursor), so ‹ › step to the very next frame the file
-  has whatever its rate, and n / N 帧 counts them (正在读取帧 meanwhile; a 60th of a second where none are read). 保存此帧
+- A video's frames: their times read from the file's index (mbui's NativeView::frames: Android's Mp4Extractor reading
+  an MP4's or a QuickTime file's moov over the same reads as the player, Apple's sample cursor; never the samples, which
+  would be the whole video track read beside the player), so ‹ › step to the very next frame the file has whatever its
+  rate, and n / N 帧 counts them (正在读取帧 meanwhile; a 60th of a second where none are read). 保存此帧
   (paused): the frame showing grabbed at its own size (MediaMetadataRetriever, AVAssetImageGenerator) and kept with the
   downloads as name-n.png. 横屏: the phone turned for it, upright again as the viewer closes.
 - `APP=sffix MBUI_FIXTURE=chat-preview-step | chat-preview-swipe` (a second picture beside the first: the ways to it;
@@ -1010,8 +1015,9 @@ tests, the screenshots' app, and tapes older than those calls) has the real core
 (`kept.mbt`, made by `client/core-ts/scripts/kept-answers.ts`): an answer asked and not kept is said on the run's output
 and fails `scripts/test.sh`; `scripts/kept` runs the tests and has the core work out what they asked (`FRESH=1`: only
 what they ask now). The check script verifies the kept answers are the core's own. This adds no backend messages or elapsed time
-to the recordings. Formula glyphs are packaged once from `client/math/font.json`; messages carry only glyph IDs,
-positions, rules and any native text (see `client/math/README.md`).
+to the recordings. Formula glyphs are packaged once, their outlines packed and gzipped (`src/sf/math_glyphs.mbt`,
+made with `client/math/font.json` by `client/core-ts/scripts/math-font.ts`), not in the core, which has the glyphs'
+sizes alone; messages carry only glyph IDs, positions, rules and any native text (see `client/math/README.md`).
 
 A run is also kept to be seen again without a backend: with MBUI_CORE_TRACE=1 (only on a local cloud) the app logs
 every message between it and its core (CORETRACE lines on the flow's log, src/core/trace.mbt), `scripts/trace make

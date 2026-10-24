@@ -106,6 +106,8 @@ pub(all) enum Route {
   Profile(String, String)
   /// the step right after a profile is added: its models chosen, or skipped (PickModelsScreen)
   PickModels(String, String)
+  /// which of a profile's models may be used, from its page: its station's address, its id
+  ProfileModels(String, String)
   /// the connects, of every station ("") or of one
   Connects(String)
   /// a connect's page: its station's address, its id
@@ -146,13 +148,13 @@ pub(all) enum Route {
   Changelog
   /// about this app, from settings' 关于 (SettingsHome.kt AboutScreen): this build, the changelog, the terms
   About
-  /// the desktop's own pages (keymap.mbt): 快捷键, each action's keys changed here; 版本, this build and a newer one
+  /// the desktop's own pages (src/sfdesk shortcuts.mbt, local_station.mbt): 快捷键, each action's keys changed here; 版本, this build and a newer one
   Shortcuts
   Version
   /// this machine's station (local_station.mbt)
   LocalStation
-  /// the wide frame's pages as the web's has them (web_pages.mbt): 通知, 权限, 归档 (whether a done chat suggests
-  /// archiving it, each station's own), a station's archiving
+  /// the wide frame's pages as the web's has them (src/sfdesk notifications.mbt, permissions.mbt): 通知, 权限, 归档
+  /// (whether a done chat suggests archiving it, each station's own), a station's archiving
   Notifications
   Permissions
   Archiving
@@ -194,7 +196,7 @@ fn text(v : Json?, key : String) -> String {
 }
 
 ///|
-fn opt_text(v : Json?, key : String) -> String? {
+pub fn opt_text(v : Json?, key : String) -> String? {
   match field(v, key) {
     Some(String(s)) => Some(s)
     _ => None
@@ -210,7 +212,7 @@ fn flag(v : Json?, key : String) -> Bool {
 }
 
 ///|
-fn has(v : Json?, key : String) -> Bool {
+pub fn has(v : Json?, key : String) -> Bool {
   match field(v, key) {
     Some(Null) | None => false
     _ => true
@@ -239,7 +241,7 @@ fn items(v : Json?, key : String) -> Array[Json] {
 }
 
 ///|
-fn strings(v : Json?, key : String) -> Array[String] {
+pub fn strings(v : Json?, key : String) -> Array[String] {
   items(v, key).filter_map(fn(x) {
     match x {
       String(s) => Some(s)
@@ -250,13 +252,13 @@ fn strings(v : Json?, key : String) -> Array[String] {
 
 ///|
 /// A time of `v` in words (`time.<key>.<how>`: ago, until, full), as the core puts them in.
-fn stamp(v : Json?, key : String, how : String) -> String {
+pub fn stamp(v : Json?, key : String, how : String) -> String {
   text(field(field(v, "time"), key), how)
 }
 
 ///|
 /// What a call's error says (errorText): its message, else its code.
-fn error_text(e : Json) -> String {
+pub fn error_text(e : Json) -> String {
   match text(Some(e), "message") {
     "" => text(Some(e), "code")
     m => m
@@ -264,7 +266,7 @@ fn error_text(e : Json) -> String {
 }
 
 ///|
-fn obj(pairs : Array[(String, Json)]) -> Json {
+pub fn obj(pairs : Array[(String, Json)]) -> Json {
   let m : Map[String, Json] = Map::new()
   for p in pairs {
     m[p.0] = p.1
@@ -273,12 +275,12 @@ fn obj(pairs : Array[(String, Json)]) -> Json {
 }
 
 ///|
-fn str(v : String) -> Json {
+pub fn str(v : String) -> Json {
   Json::string(v)
 }
 
 ///|
-fn join(parts : Array[String], sep : String) -> String {
+pub fn join(parts : Array[String], sep : String) -> String {
   let b = StringBuilder()
   let mut first = true
   for p in parts {
@@ -317,13 +319,13 @@ fn dmax(a : Double, b : Double) -> Double {
 
 ///|
 /// Whether one of `calls` about what `on` names is under way (the core's `doing` topic: its params as words).
-fn is_doing(core : Core, calls : Array[String], on : Array[(String, String)]) -> Bool {
+pub fn is_doing(core : Core, calls : Array[String], on : Array[(String, String)]) -> Bool {
   doing_items(core).iter().any(fn(d) { text(Some(d), "stage") != "failed" && doing_matches(d, calls, on) })
 }
 
 ///|
 /// Why one of `calls` about what `on` names failed a moment ago (the core keeps it a few seconds), if it did.
-fn failed_of(core : Core, calls : Array[String], on : Array[(String, String)]) -> String? {
+pub fn failed_of(core : Core, calls : Array[String], on : Array[(String, String)]) -> String? {
   let mut why : String? = None
   for d in doing_items(core) {
     if text(Some(d), "stage") == "failed" && doing_matches(d, calls, on) {
@@ -352,7 +354,7 @@ fn doing_matches(d : Json, calls : Array[String], on : Array[(String, String)]) 
 ///|
 /// What a person did, let go on by itself (AppState.act): the call made; failed, `没能<what>：<why>` said; gone
 /// through, `done` (when there is one) said and `then` run.
-fn act(
+pub fn act(
   core : Core,
   what : String,
   name : String,
@@ -385,13 +387,13 @@ fn act(
 
 ///|
 /// The workspace's view (`workspace`, still.fail cloud's: its role, members, stations, added, invitations, relays).
-fn workspace_view(core : Core, here : Here) -> Read {
+pub fn workspace_view(core : Core, here : Here) -> Read {
   (core.topic)("workspace", { "workspace": str(here.workspace) })
 }
 
 ///|
 /// The workspace's stations (`stations`: StationView).
-fn stations_of(core : Core, here : Here) -> Read {
+pub fn stations_of(core : Core, here : Here) -> Read {
   (core.topic)("stations", { "scope": str(here.workspace) })
 }
 
@@ -411,7 +413,7 @@ fn manager_of(core : Core, here : Here) -> Bool? {
 
 ///|
 /// A role in words (Accounts.kt ROLE_LABEL).
-fn role_label(role : String) -> String {
+pub fn role_label(role : String) -> String {
   match role {
     "owner" => "Owner"
     "admin" => tr("android-misc.role.admin")
@@ -422,7 +424,7 @@ fn role_label(role : String) -> String {
 
 ///|
 /// A station's name from its address (ChatInk.kt stationName): what is after the workspace.
-fn station_name(address : String) -> String {
+pub fn station_name(address : String) -> String {
   match address.find("/") {
     Some(i) => address.unsafe_substring(start=i + 1, end=address.length())
     None => address
@@ -535,24 +537,16 @@ pub fn reset() -> Unit {
   archive_reset()
   vault_ask_reset()
   keymap_reset()
-  notify_page_reset()
   login_marked.val = None
   station_parts.clear()
   lock_prompts_reset()
   fonts_at.val = 0
-  fonts_trying.val = ""
-  local_try_given.val = ""
-  local_open.val = false
-  local_filter.set("")
   adb_reset()
   keyed_fields.clear()
   notify_switched.val = None
   opening_lock.val = false
   memories.clear()
   connects_mine.val = false
-  waiting_menu.val = ""
-  ws_menu.val = ""
-  mine_filter_open.clear()
   usage_state.days = 7
   usage_state.day = ""
   usage_state.list = -1
@@ -562,11 +556,6 @@ pub fn reset() -> Unit {
   doc_picked.clear()
   close_sheet()
   asking.val = None
-  desk_dialog.val = None
-  desk_dialog_last.val = None
-  desk_dialogs.val = 0
-  fx_policy_up.val = ""
-  local_menu.val = false
   asked.val = None
   sheet.last = None
   sheet.was_up = false
@@ -716,6 +705,7 @@ pub fn route_of(name : String) -> Route? {
             "profiles" => Some(Profiles(arg))
             "profile" => Some(Profile(address, id))
             "pick-models" => Some(PickModels(address, id))
+            "profile-models" => Some(ProfileModels(address, id))
             "connects" => Some(Connects(arg))
             "connect" => Some(Connect(address, id))
             _ => None
@@ -728,7 +718,7 @@ pub fn route_of(name : String) -> Route? {
 
 ///|
 /// Whether the thing `id` was tapped (what it changed is drawn in the next frame, which a handled click asks for).
-fn hit(c : @ui.Ctx, id : Int) -> Bool {
+pub fn hit(c : @ui.Ctx, id : Int) -> Bool {
   c.clicked(id)
 }
 

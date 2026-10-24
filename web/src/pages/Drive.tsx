@@ -26,7 +26,7 @@ import { Check, ChevronLeft, ChevronRight, Close, Copy, Disk, Server, Download, 
 import { KindIcon } from "../drive/KindIcon.tsx";
 import { Reader } from "@stillfail/ui/viewer/Reader.tsx";
 import { Player } from "@stillfail/ui/viewer/Player.tsx";
-import { cancel, download, joinPath, nameOf, openerOf, parentOf, refresh, retry, rootLabel, settle, sizeOf, upload, useFolder, useUploads, type At, type Upload as Up } from "../drive/model.ts";
+import { cancel, download, downloadZip, joinPath, nameOf, openerOf, parentOf, refresh, retry, rootLabel, settle, sizeOf, upload, useFolder, useUploads, type At, type Upload as Up } from "../drive/model.ts";
 import { useDriveFile } from "../drive/viewerFile.ts";
 import { absoluteOf, childOf, drive, drivePath, filtered, folderName, rootTrouble, trailOf, useDrive, type DriveState, type PickFolder } from "../drive/useDrive.ts";
 import { carriesDrive, draggedNow, draggedOf, droppedOf, endDrag, startDrag } from "../drive/drag.ts";
@@ -310,7 +310,7 @@ export function FolderView({ d, root, path, front = true }: { d: DriveState; roo
   const oneItems = (in_: At, e: DriveEntry): MenuItem[] => [
     { label: t("web-pages.drive.open"), onSelect: () => openIn(in_, e) },
     ...(!e.dir ? [{ label: t("web-pages.drive.download"), icon: Download, onSelect: () => save(in_, e) }]
-      : d.zip ? [{ label: t("web-pages.drive.downloadZip"), icon: Download, onSelect: () => act(drive.zip(in_, e).then((z) => download({ station: in_.station, root: z.root, path: z.path }, { name: z.name, size: z.size, type: "application/zip" })), t("web-pages.drive.downloadWhat")) }]
+      : d.zip ? [{ label: t("web-pages.drive.downloadZip"), icon: Download, onSelect: () => act(downloadZip({ ...in_, path: joinPath(in_.path, e.name) }), t("web-pages.drive.downloadWhat")) }]
       : []),
     { label: t("web-pages.drive.copyPath"), icon: Copy, onSelect: () => copyPath(absoluteOf(root, joinPath(in_.path, e.name))) },
     ...(e.dir && filesPage ? [

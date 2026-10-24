@@ -8,6 +8,7 @@ import {
   "moonbitlang/core/math",
   "moonbitlang/core/json",
   "mbui/dmath",
+  "mbui/zip",
 }
 
 import {

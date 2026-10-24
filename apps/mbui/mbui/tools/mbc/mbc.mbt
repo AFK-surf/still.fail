@@ -134,13 +134,15 @@ fn compiler_kind(cc : Array[Bytes]) -> (Int, Bool) {
 }
 
 ///|
-/// ThinLTO (MBC_LTO=thin, the default with clang; 0 turns it off): the split loses the inlining across units that
-/// the whole file had, ThinLTO's link brings it back, its backends in parallel. The link's flags, or None.
+/// ThinLTO, or MSVC's /GL and /LTCG, only when asked (MBC_LTO=thin): the inlining across units the split loses,
+/// brought back at the link. Not by default: mbui's bench (scripts/bench.sh, Studio) drew its scenes in the same time
+/// with it and without (process CPU 107-111 µs a frame either way), while its link was most of a build of a changed
+/// app: 57 s of Android's, 66 s of Windows' (LTCG made 28% of the functions again for a 116-line change), 2026-10-24.
+/// The link's flags, or None.
 fn lto_for(cc : Array[Bytes], j : Int) -> Array[Bytes]? {
   match getenv("MBC_LTO") {
-    Some(v) if v == b"0" || v == b"off" || v == b"no" || v.length() == 0 =>
-      return None
-    _ => ()
+    Some(v) if v == b"thin" || v == b"1" || v == b"on" => ()
+    _ => return None
   }
   let (kind, apple) = compiler_kind(cc)
   if kind == 0 {
@@ -1720,24 +1722,36 @@ fn cmd_shim(args : Array[String]) -> Unit {
     }
     // moon takes MSVC's lib.exe and link.exe from beside the cl.exe it finds: the same forwarder for them, each
     // running the command line in its .txt (cl's: mbc wrap over the real cl; lib's and link's: the real ones)
+    //
+    // Made again only when what it is made of changed, by content (its source, the real cl's file): moon builds anew
+    // every C its compiler's mtime is newer than, and a checkout's mtimes are all new. By mtime, every CI run made it
+    // again (~7 s) and with it every stub and moon's runtime (35 cl runs, ahead of moonc on the runner's four cores)
+    // whose objects the cache had kept (still.fail's mbui.yml, 2026-10-24). /Brepro: the same source, the same .exe.
     let exe = path_join(d, b"mbc-cl.exe")
     let src = path_join(home(), b"mbc-cl.c")
-    let stale = match (stat(exe), stat(src)) {
-      (Some(e), Some(s)) => e.1 < s.1
-      _ => true
-    }
-    if stale {
+    let made_of = path_join(d, b"mbc-cl.exe.src")
+    let key = cat([
+      file_hash(src).unwrap_or(b"no source"),
+      b" ",
+      tool_identity([real]),
+    ])
+    if !is_file(exe) || read_file(made_of) != Some(key) {
       let (code, said) = run_capture([
         real,
         b"/nologo",
         b"/O1",
+        b"/Brepro",
         src,
         cat([b"/Fe", exe]),
         cat([b"/Fo", path_join(d, b"mbc-cl.obj")]),
+        b"/link",
+        b"/Brepro",
       ])
       if code != 0 {
         fatal("mbc-cl.c did not compile:\n\{str(said)}")
       }
+      let _ = write_file(made_of, key)
+
     }
     let lines_of : Array[(Bytes, Array[Bytes])] = [
       (b"cl", [self_exe.val, b"wrap", b"--real", real, b"--"]),

@@ -1,5 +1,6 @@
 // The core's answers to its pure calls (`markdown`, `code.ink`, `reader.book`, `reader.text`, `reader.search`,
-// `commands.find`, a chat's side panel's tabs: chat-tabs.ts, the 奏 page's queue: decisions.ts), and to each step of a device's browsing (drive-browse.ts
+// `commands.find`, a chat's side panel's tabs: chat-tabs.ts, the 奏 page's queue: decisions.ts, where a chat's find goes:
+// chat-find.ts), and to each step of a device's browsing (drive-browse.ts
 // `Browsing`: a topic of it or a call, given what it held before and what it reads, answering with what it holds
 // after; and the rail as drawn from the prefs kept, `railView`), worked
 // out by the real core and kept for the mbui app's runs without one (apps/mbui/src/sfkept: its Tester's tests, the
@@ -18,13 +19,18 @@ import { find } from "../src/commands.ts";
 import { railView } from "../src/rail.ts";
 import { changed, tabsOf, type Change } from "../src/chat-tabs.ts";
 import { order, picked, setAside, shownIn, type Shown } from "../src/decisions.ts";
+import { findGo, type FindAt, type FindHit } from "../src/chat-find.ts";
+import { toolCall, toolResult, type ToolPart } from "../src/tool-step.ts";
+import { wordsAnswer } from "../src/words.ts";
 import { tr, type Lang } from "../src/i18n.ts";
 import { Browsing, withDrive, type BrowsingState, type Ordered } from "../src/drive-browse.ts";
 
 const target = new URL("../../../apps/mbui/src/sfkept/kept.mbt", import.meta.url);
 // The browsing's steps asked, by their key (the made-up core's hash of the ask): what each is worked out from again.
 const browseAsks = new URL("../../../apps/mbui/src/sfkept/browse_asks.json", import.meta.url);
-const HEAD = "// Made by client/core-ts/scripts/kept-answers.ts with the real core, from what the app's runs asked (scripts/kept).\n///|\nlet kept_answers : String =\n  #|";
+// An answer a line (`[call, key, answer]` as JSON, by call and then by key), so that two branches keeping answers
+// of their own change lines of their own and git merges them, as it could not one line of all of them.
+const HEAD = "// Made by client/core-ts/scripts/kept-answers.ts with the real core, from what the app's runs asked (scripts/kept):\n// an answer a line, [call, key, answer].\n///|\nlet kept_answers : String =\n";
 
 const args = process.argv.slice(2);
 const check = args.includes("--check");
@@ -38,11 +44,14 @@ type Kept = {
   "commands.find": Record<string, unknown>;
   "chat.tabs": Record<string, unknown>;
   "decisions.queue": Record<string, unknown>;
+  "chat.find.go": Record<string, unknown>;
+  "history.tool": Record<string, unknown>;
+  words: Record<string, unknown>;
   browse: Record<string, unknown>;
   railView: Record<string, unknown>;
 };
 const before = readFileSync(target, "utf8");
-const was = (fresh ? {} : JSON.parse(before.slice(before.indexOf("#|") + 2))) as Partial<Kept>;
+const was = (fresh ? {} : keptOf(before)) as Partial<Kept>;
 
 // What is asked: the texts, the codes by their language, the books by whether they are Markdown, each book's searches.
 const texts = new Set(Object.keys(was.markdown ?? {}));
@@ -55,6 +64,13 @@ const finds = new Set(Object.keys(was["commands.find"] ?? {}));
 const tabs = new Set(Object.keys(was["chat.tabs"] ?? {}));
 // The 奏 page's queue: by what was asked (its items, the one shown as kept, a pick or a setting aside).
 const queues = new Set(Object.keys(was["decisions.queue"] ?? {}));
+// Where a chat's find goes: by what was asked (what was found, where the reader is, which way, what shows).
+const goes = new Set(Object.keys(was["chat.find.go"] ?? {}));
+// What a history step is: by what was asked (its name, call, result, whether it failed, whether its words show).
+const tools = new Set(Object.keys(was["history.tool"] ?? {}));
+// What is written, read (ref.at, ref.before, ref.marks, ref.pasted, paste.info): by what was asked (the call, the
+// words, the caret, the station it is written on).
+const words = new Set(Object.keys(was.words ?? {}));
 // the prefs a rail is drawn from, as JSON (the app's runs say them in Chinese, as its fixtures are)
 const rails = new Set(Object.keys(was.railView ?? {}));
 const bookKey = (md: unknown, text: unknown) => `${md === true ? "md" : "txt"}\u0001${String(text ?? "")}`;
@@ -76,6 +92,9 @@ for (const file of outputs) {
     } else if (ask.call === "commands.find") finds.add(String(ask.key ?? ""));
     else if (ask.call === "chat.tabs") tabs.add(String(ask.key ?? ""));
     else if (ask.call === "decisions.queue") queues.add(String(ask.key ?? ""));
+    else if (ask.call === "chat.find.go") goes.add(String(ask.key ?? ""));
+    else if (ask.call === "history.tool") tools.add(String(ask.key ?? ""));
+    else if (ask.call === "words") words.add(String(ask.key ?? ""));
     else if (ask.call === "railView") rails.add(JSON.stringify(ask.prefs ?? {}));
     else if (ask.call === "browse") {
       const { call: _call, key, ...step } = ask;
@@ -86,7 +105,7 @@ for (const file of outputs) {
 
 // Each worked out by the core as it is now.
 const sorted = (keys: Iterable<string>) => [...keys].sort();
-const kept: Kept = { markdown: {}, "code.ink": {}, "reader.book": {}, "commands.find": {}, "chat.tabs": {}, "decisions.queue": {}, browse: {}, railView: {} };
+const kept: Kept = { markdown: {}, "code.ink": {}, "reader.book": {}, "commands.find": {}, "chat.tabs": {}, "decisions.queue": {}, "chat.find.go": {}, "history.tool": {}, words: {}, browse: {}, railView: {} };
 for (const text of sorted(texts)) kept.markdown[text] = markdown(text);
 for (const key of sorted(rails)) kept.railView[key] = railView(JSON.parse(key) as { rail?: unknown; rails?: unknown }, "zh");
 for (const key of sorted(codes)) {
@@ -133,9 +152,27 @@ for (const key of sorted(queues)) {
     kept["decisions.queue"][key] = { order: keys, shown: at, was: next };
   }
 }
+for (const key of sorted(words)) {
+  const ask = JSON.parse(key) as { call?: unknown; text?: unknown; caret?: unknown; here?: unknown };
+  const text = String(ask.text ?? "");
+  kept.words[key] = wordsAnswer(String(ask.call ?? ""), text, typeof ask.caret === "number" ? ask.caret : text.length, String(ask.here ?? ""));
+}
+for (const key of sorted(goes)) {
+  const ask = JSON.parse(key) as { hits?: FindHit[]; at?: FindAt | null; by?: -1 | 0 | 1; from?: number | null; to?: number | null; drawn?: Record<string, number> };
+  kept["chat.find.go"][key] = findGo(ask.hits ?? [], ask.at ?? null, ask.by ?? 0, ask.from ?? null, ask.to ?? null, ask.drawn ?? {});
+}
+for (const key of sorted(tools)) {
+  const ask = JSON.parse(key) as { name?: string; call?: string; result?: string; failed?: boolean; said?: boolean };
+  const say = (k: string, a?: Record<string, string | number>) => tr("zh", k, a);
+  const withMd = (parts: ToolPart[]) => parts.map((p) => (p.kind === "markdown" ? { ...p, md: markdown(p.text) } : p));
+  kept["history.tool"][key] = {
+    call: withMd(toolCall(ask.name ?? "", ask.call ?? "", ask.said === true, say)),
+    result: typeof ask.result === "string" ? withMd(toolResult(ask.name ?? "", ask.call ?? "", ask.result, ask.failed === true, say)) : null,
+  };
+}
 const keys = sorted(steps.keys());
 for (const key of keys) kept.browse[key] = browseStep(steps.get(key)!);
-const content = HEAD + JSON.stringify(kept) + "\n";
+const content = HEAD + Object.entries(kept).flatMap(([call, answers]) => sorted(Object.keys(answers)).map((key) => `  #|${JSON.stringify([call, key, (answers as Record<string, unknown>)[key]])}\n`)).join("");
 // (a step a line: what changes of them reads as the steps that came or went)
 const askedSteps = `{\n${keys.map((k) => `${JSON.stringify(k)}: ${JSON.stringify(steps.get(k))}`).join(",\n")}\n}\n`;
 const counts = `${texts.size} texts, ${codes.size} codes, ${searches.size} books, ${finds.size} lists, ${tabs.size} tabs, ${queues.size} queues, ${steps.size} browsing steps, ${rails.size} rails`;
@@ -202,4 +239,20 @@ function browseStep(step: Step): unknown {
   }
   if (need.size) return { need: sorted(need) };
   return { ...(error !== null ? { error } : { value: value ?? null }), state: b.snapshot(), prefs: patches, id };
+}
+
+/// What kept.mbt keeps, by call: each `#|` line one answer (as written above). A file of before that (all of it as one
+/// object on one line) is read too, once, as it is written anew.
+function keptOf(text: string): Record<string, Record<string, unknown>> {
+  const out: Record<string, Record<string, unknown>> = {};
+  for (const line of text.split("\n")) {
+    const at = line.indexOf("#|");
+    if (at < 0) continue;
+    const v = JSON.parse(line.slice(at + 2)) as unknown;
+    if (Array.isArray(v)) {
+      const [call, key, answer] = v as [string, string, unknown];
+      (out[call] ??= {})[key] = answer;
+    } else Object.assign(out, v as Record<string, Record<string, unknown>>);
+  }
+  return out;
 }

@@ -375,7 +375,7 @@ fn sf_crumbs(c : @ui.Ctx) -> Unit {
 ///|
 /// The way's room: 8 over the list under it (StationFiles.kt:145).
 // kept across runs: a value (no field of it changes)
-let sf_way_room : @ui.Style = @ui.style(w=Full, pb=S2)
+let sf_way_room : @ui.Style = @ui.css("w=Full pb=S2")
 
 ///|
 /// Each station's places (StationFiles.kt Places): its home (for a member who browses every folder), then its folders
@@ -642,10 +642,10 @@ fn ref_sheet(c : @ui.Ctx, src : Source, key : String, station : String) -> Unit 
 }
 
 ///|
-/// A station's files from its 文件 tab (wide_files_tab.mbt: 添加到消息, or dragged onto the chat) into draft `key`, as
+/// A station's files from its 文件 tab (src/sfdesk/drive_tab.mbt: 添加到消息, or dragged onto the chat) into draft `key`, as
 /// the web's droppedFrom: each named by its path, or as a file where the chat says so (a folder only named); what is
 /// already in it not twice.
-fn refs_put(src : Source, key : String, items : Array[FDragged]) -> Unit {
+fn refs_put(src : Source, key : String, items : Array[Dragged]) -> Unit {
   if items.is_empty() {
     return
   }

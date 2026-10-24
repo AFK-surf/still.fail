@@ -14,7 +14,7 @@ import { driveFile } from "../src/drive/viewerFile.ts";
 import { DrivePreview } from "../src/mobile/Drive.tsx";
 import { FilePreview } from "../src/FilePreview.tsx";
 import { useToast } from "@stillfail/ui/toast.tsx";
-import { ComposerExtras, FileCard, MineBubble, MineMessage } from "../src/Chat.tsx";
+import { ComposerExtras, FileCard, MessageFileCard, MineBubble, MineMessage } from "../src/Chat.tsx";
 import type { Draft, Pending } from "../src/draft.ts";
 import * as composerCss from "../src/styles/composer.css.ts";
 import * as conversationCss from "../src/styles/conversation.css.ts";
@@ -61,7 +61,8 @@ import PICTURE_URL from "./assets/story-picture.png?url";
 
 /**
  * What takes a story to its state, as the tests do it (Playwright's selectors); shown beside it in the gallery. `hold`:
- * a finger held on the middle of it as long as a long press, then lifted.
+ * a finger held on the middle of it as long as a long press, then lifted. A step's `move` comes first: what the pointer
+ * wakes (a playing video's controls, gone again once it rests) is pressed before it has rested.
  */
 export interface Step { click?: string; rightClick?: string; hover?: string; key?: string; move?: [number, number]; text?: string; hold?: string }
 export interface Story {
@@ -642,12 +643,13 @@ function OutboxUpload() {
 function FileDownloads() {
   const size = 52_428_800;
   const of = (state: DownloadShown["state"], loaded: number, statusText: string): DownloadShown =>
-    ({ id: `s|k|${state}`, station: "s", key: "k", name: "dist.zip", size, loaded, progress: loaded / size, state, statusText, startedAt: 0 });
+    ({ id: `s|k|${state}`, station: "s", key: "k", name: "dist.zip", size, loaded, progress: loaded / size, state, active: state !== "failed", statusText, startedAt: 0 });
+  const file = { name: "dist.zip", size, path: "work/dist.zip" };
   return (
     <div style={{ padding: 40, maxWidth: 820, display: "grid", gap: 12, justifyItems: "start" }}>
-      <FileCard file={{ name: "dist.zip", size, path: "work/dist.zip" }} />
-      <FileCard file={{ name: "dist.zip", size, path: "work/dist.zip" }} download={of("going", 22_020_096, "正在下载 42% · 50 MB")} />
-      <FileCard file={{ name: "dist.zip", size, path: "work/dist.zip" }} download={of("failed", 0, "下载失败：没连上 station")} />
+      {[null, of("going", 22_020_096, "正在下载 42% · 50 MB"), of("waiting", 10_485_760, "等待连接 station · 20%"), of("failed", 0, "下载失败：无法连接 station")].map((d) => (
+        <MessageFileCard key={d?.state ?? "none"} file={file} download={d} onOpen={noop} onCancel={noop} onRetry={noop} />
+      ))}
     </div>
   );
 }
@@ -1092,12 +1094,12 @@ export const stories: Story[] = [
   { id: "reader-md", group: "文件", title: "阅读器 · Markdown", render: () => stage(<Reader file={driveFile(at(note.name), note)} markdown backLabel="下载" onBack={noop} />) },
   { id: "reader-phone", group: "文件", title: "阅读器 · 手机", phone: true, render: () => stage(<Reader file={driveFile(at(novel.name), novel)} markdown={false} backLabel="下载" onBack={noop} />) },
   { id: "player", group: "文件", title: "播放器", render: () => stage(<Player file={driveFile(at(clips[0]!.name), clips[0]!)} siblings={folder} backLabel="下载" onBack={noop} onGo={noop} />), steps: [{ move: [640, 400] }] },
-  { id: "player-list", group: "文件", title: "播放器 · 选集", render: () => stage(<Player file={driveFile(at(clips[0]!.name), clips[0]!)} siblings={folder} backLabel="下载" onBack={noop} onGo={noop} />), steps: [{ click: '[aria-label="选集"]' }, { move: [500, 400] }] },
+  { id: "player-list", group: "文件", title: "播放器 · 选集", render: () => stage(<Player file={driveFile(at(clips[0]!.name), clips[0]!)} siblings={folder} backLabel="下载" onBack={noop} onGo={noop} />), steps: [{ move: [640, 400], click: '[aria-label="选集"]' }, { move: [500, 400] }] },
   { id: "player-phone", group: "文件", title: "播放器 · 手机", phone: true, render: () => stage(<Player file={driveFile(at(clips[0]!.name), clips[0]!)} siblings={folder} backLabel="下载" onBack={noop} onGo={noop} />) },
   { id: "attachment-md", group: "文件", title: "附件 · Markdown", render: () => stage(<AttachmentDemo name="orders-慢查询.md" url={NOTE_URL} type="text/markdown" />) },
   { id: "attachment-video", group: "文件", title: "附件 · 视频", render: () => stage(<AttachmentDemo name="发版录屏 1014.mp4" url={CLIP_URL} type="video/mp4" />), steps: [{ move: [640, 400] }] },
   // Playing, the pointer on its timeline: its controls, the time where it points.
-  { id: "attachment-video-controls", group: "文件", title: "附件 · 视频 · 控件", render: () => stage(<AttachmentDemo name="发版录屏 1014.mp4" url={CLIP_URL} type="video/mp4" />), steps: [{ move: [640, 400] }, { hover: '[role=slider][aria-label="位置"]' }] },
+  { id: "attachment-video-controls", group: "文件", title: "附件 · 视频 · 控件", render: () => stage(<AttachmentDemo name="发版录屏 1014.mp4" url={CLIP_URL} type="video/mp4" />), steps: [{ move: [640, 400], hover: '[role=slider][aria-label="位置"]' }] },
   // Paused: looked at closely, its frames' keys, the frame's time to the millisecond, which of how many, the camera.
   { id: "attachment-video-paused", group: "文件", title: "附件 · 视频 · 暂停逐帧", render: () => stage(<AttachmentDemo name="发版录屏 1014.mp4" url={CLIP_URL} type="video/mp4" />), steps: [{ move: [640, 400] }, { key: "k" }, { click: '[aria-label="下一帧"]' }, { hover: 'canvas[aria-label^="第"]' }] },
   { id: "attachment-video-phone", group: "文件", title: "附件 · 视频 · 手机", phone: true, render: () => stage(<AttachmentDemo name="发版录屏 1014.mp4" url={CLIP_URL} type="video/mp4" />) },

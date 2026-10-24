@@ -17,15 +17,12 @@ pub fn page(
   root? : Bool = false,
   top? : Double = 0.0,
 ) -> Unit {
-  frame_core.val = Some(core)
-  at_root.val = root
-  root_top.val = if root { top } else { 0.0 }
-  left_core.val = Some(core)
-  fixture_sheet(core, here)
+  frame(core, here, root~, top~)
   // the wide frame's words as the web's settings pages size them (their rows 13, what is under them 12, a section's
   // title 14): the scale's body (Lg), secondary (Sm) and values (Base) taken down there, every page's words with them,
-  // and Xl2 (Android's back, 17, which these pages never say) the web's body for a section's title
-  if wide.val && !desk_ported(route) {
+  // and Xl2 (Android's back, 17, which these pages never say) the web's body for a section's title (the desktop's own
+  // pages, ported from the web's, are src/sfdesk's, in the library's sizes)
+  if wide.val {
     let t = c.theme()
     c.with_theme({ ..t, text: { ..t.text, lg: wide_body, sm: wide_small, base: wide_body, xl2: wide_heading } }, fn() {
       route_page(c, core, here, route)
@@ -36,13 +33,14 @@ pub fn page(
 }
 
 ///|
-/// The desktop's pages ported from the web's onto the library's parts (desk_page.mbt): their words in the library's
-/// sizes, as the web's, not the wide scale taken down for the pages still made of the phone's parts.
-fn desk_ported(route : Route) -> Bool {
-  match route {
-    Notifications | Permissions | Archiving | StationArchiving(_) | Connects("") | Workspace | Security | Shortcuts | AutoDecisions | AutoCompletion | AutoPolicy(_) | Memories | Memory(_) | Me | Vault | LocalStation | Version => true
-    _ => false
-  }
+/// What a page of the settings is drawn in (`page`'s, and the desktop's own pages', src/sfdesk): its core, where it
+/// stands, the sheet a fixture's mode puts up over it.
+pub fn frame(core : Core, here : Here, root? : Bool = false, top? : Double = 0.0) -> Unit {
+  frame_core.val = Some(core)
+  at_root.val = root
+  root_top.val = if root { top } else { 0.0 }
+  left_core.val = Some(core)
+  fixture_sheet(core, here)
 }
 
 ///|
@@ -71,6 +69,7 @@ fn route_page(c : @ui.Ctx, core : Core, here : Here, route : Route) -> Unit {
     Profiles(only) => profiles_page(c, core, here, only)
     Profile(a, id) => profile_page(c, core, here, a, id)
     PickModels(a, id) => pick_models_page(c, core, here, a, id)
+    ProfileModels(a, id) => profile_models_page(c, core, here, a, id)
     Connects(only) => connects_page(c, core, here, only)
     Connect(a, id) => connect_page(c, core, here, a, id)
     Memories => memories_page(c, core, here)
@@ -93,13 +92,9 @@ fn route_page(c : @ui.Ctx, core : Core, here : Here, route : Route) -> Unit {
     KeptChat(s, thread) => kept_chat_page(c, core, s, thread)
     Changelog => changelog_page(c, core)
     About => about_page(c, core)
-    Shortcuts => shortcuts_page(c, core)
-    Version => version_page(c, core)
     LocalStation => local_station_page(c, core)
-    Notifications => notify_page(c, core, here)
-    Permissions => permissions_page(c, core)
-    Archiving => archiving_page(c, core, here)
-    StationArchiving(s) => station_archiving_page(c, core, here, s)
+    // the desktop's own, drawn by its frame (src/sfdesk)
+    Shortcuts | Version | Notifications | Permissions | Archiving | StationArchiving(_) => ()
     UsagePrices(days) => prices_page(c, core, here, days)
     RunSettings(s, key) => run_settings_page(c, core, s, key)
   }
@@ -120,7 +115,7 @@ let chosen : Map[String, String] = Map::new()
 
 ///|
 /// A pref as the core keeps it (the `prefs` topic), or as it was chosen here a moment ago.
-fn pref(core : Core, name : String) -> String {
+pub fn pref(core : Core, name : String) -> String {
   let kept = text((core.topic)("prefs", Map::new()).value, name)
   match chosen.get(name) {
     Some(v) => {
@@ -136,7 +131,7 @@ fn pref(core : Core, name : String) -> String {
 
 ///|
 /// A pref set (prefs.set), shown as chosen at once; "" takes it away (null: the default).
-fn set_pref(core : Core, name : String, value : String) -> Unit {
+pub fn set_pref(core : Core, name : String, value : String) -> Unit {
   chosen[name] = value
   (core.call)(
     "prefs.set",
@@ -257,23 +252,9 @@ fn settings_home(c : @ui.Ctx, core : Core, here : Here) -> Unit {
             (core.push)(Security)
           }
         }
-        // the vault's row (Vault.kt VaultSettingsRow): what waits, else how many items, else off
-        let n = items(vaults, "requests").length()
-        let said = match vaults {
-          None => ""
-          Some(_) =>
-            if n > 0 {
-              fill("android-settings.vault.waiting", [("n", n.to_string())])
-            } else if items(vaults, "vaults").length() > 0 {
-              let mut total = 0
-              for x in items(vaults, "vaults") {
-                total += count(Some(x), "items")
-              }
-              fill("android-settings.vault.items", [("n", total.to_string())])
-            } else {
-              tr("android-settings.vault.off")
-            }
-        }
+        // the vault's row (Vault.kt VaultSettingsRow): what waits, else how many items, else off (the core's words)
+        let said = text(vaults, "statusText")
+        let n = if flag(vaults, "statusBad") { 1 } else { 0 }
         if go_row(c, "go-vault", tr("android-settings.vault.title"), value=said, bad=n > 0, icon="key") {
           (core.push)(Vault)
         }
@@ -438,7 +419,7 @@ fn identity_card(c : @ui.Ctx, key : String, lead : () -> Unit, name : String, li
 ///|
 /// A card's row (SettingsHome.kt): what it is by, its words, its chevron, 14 apart, centred across it.
 // kept across runs: a value (no field of it changes)
-let identity_row : @ui.Style = @ui.style(row=true, w=Full, gap=S3_5, align=ACenter)
+let identity_row : @ui.Style = @ui.css("row w=Full gap=S3_5 align=ACenter")
 
 ///|
 /// The name on the account's card and the workspace's: 16 bold on one line, its line the theme's (1.4em: 22.4), as
@@ -475,10 +456,6 @@ fn workspace_tile(c : @ui.Ctx, name : String, emoji : String, icon : String) -> 
 /// changelog; whether it reports; the terms and privacy policy on the web.
 fn about_page(c : @ui.Ctx, core : Core) -> Unit {
   let t = @sf.theme()
-  if wide.val {
-    about_page_wide(c, core)
-    return
-  }
   let blocks : Array[() -> Unit] = [
     fn() { top_back(c, core, tr("android-settings.title")) },
     fn() { large_title(c, tr("web-pages.settings.nav.about")) },
@@ -537,75 +514,14 @@ fn about_page(c : @ui.Ctx, core : Core) -> Unit {
 }
 
 ///|
-/// 关于 in the wide frame, as the web's (pages/About.tsx): 隐私, whether this device reports, on a card; 条款与政策,
-/// the terms and the privacy policy as a list's rows, the arrow out. (This build and the changelog have pages of their
-/// own in the sidebar: 版本, 更新日志.)
-fn about_page_wide(c : @ui.Ctx, core : Core) -> Unit {
-  let t = @sf.theme()
-  let blocks : Array[() -> Unit] = [
-    fn() { top_back(c, core, tr("android-settings.title")) },
-    fn() { large_title(c, tr("web-pages.settings.nav.about")) },
-  ]
-  match (core.reporting)() {
-    Some(on) => {
-      blocks.push(fn() { section_header(c, tr("web-pages.about.privacy")) })
-      blocks.push(fn() {
-        list_card(c, boxed=true, fn() {
-          if list_row(c, key="reporting", fn() {
-              c.box(style=about_switch_words, fn() {
-                c.text(tr("android-settings.telemetry.title"), style=about_row_title) |> ignore
-                c.text(fill("android-settings.telemetry.note", [("app", "still.fail")]), style=about_row_note) |> ignore
-              })
-              |> ignore
-              switch(c, "reporting", on)
-            }) {
-            (core.set_reporting)(!on)
-          }
-        })
-      })
-    }
-    None => ()
-  }
-  blocks.push(fn() { section_header(c, tr("web-pages.about.legal")) })
-  blocks.push(fn() {
-    list_card(c, fn() {
-      for l in [("terms", "android-settings.legal.terms"), ("privacy", "android-settings.legal.privacy")] {
-        if list_row(c, key="go-" + l.0, fn() {
-            c.text(tr(l.1), style=about_row_title) |> ignore
-            @sf.icon(c, "arrow-up-right", size=about_out_icon, color=t.p.muted) |> ignore
-          }) {
-          (core.open_link)(legal_url(l.0))
-        }
-      }
-    })
-  })
-  scroll_page(c, "about", blocks)
-}
-
-///|
-let about_out_icon : Double = 16.0
-
-///|
-// kept across runs: a value (no field of it changes)
-let about_switch_words : @ui.Style = @ui.style(w=@sf.grow, gap=S0_5)
-
-///|
-// kept across runs: a value (no field of it changes)
-let about_row_title : @ui.TextStyle = @ui.text_style(size=Lg, weight=Medium, color=Fg, wrap=false, w=Full)
-
-///|
-// kept across runs: a value (no field of it changes)
-let about_row_note : @ui.TextStyle = @ui.text_style(size=Sm, color=Muted, w=Full)
-
-///|
 /// Notifications as switched here, until the core has answered (AppState.useNotify's `notify` meanwhile).
-let notify_switched : Ref[Bool?] = Ref(None)
+pub let notify_switched : Ref[Bool?] = Ref(None)
 
 ///|
 /// Notifications turned on or off on this device (SettingsHome.kt Notify, AppState.useNotify): turned on, the system
 /// asked to allow them too; the core keeps it (`notify.set`), taking this device's pushes off the accounts when off,
 /// and the push registration follows what it answers (Push.sync). Not done: said in a toast, the switch back.
-fn use_notify(core : Core, on : Bool) -> Unit {
+pub fn use_notify(core : Core, on : Bool) -> Unit {
   if on {
     (core.notify_ask)()
   }
@@ -641,7 +557,7 @@ fn use_notify(core : Core, on : Bool) -> Unit {
 ///|
 /// This build's version, as the version row says it after the app's name (SettingsHome.kt Version: its versionName,
 /// 0.1.<build>): the build where the host knows it (Android's version code), the line alone where it does not.
-fn build_version() -> String {
+pub fn build_version() -> String {
   let v = @ui.app_version()
   if v > 0 {
     "0.1." + v.to_string()
@@ -691,7 +607,7 @@ fn appearance_page(c : @ui.Ctx, core : Core) -> Unit {
             set_pref(core, key, options[picked].0)
           }
         })
-        if note != "" && !wide.val {
+        if note != "" {
           seg_note(c, note)
         }
       },
@@ -713,20 +629,13 @@ fn appearance_page(c : @ui.Ctx, core : Core) -> Unit {
       themes,
       appearance(prefs),
       0,
-      if wide.val { tr("web-pages.appearance.theme.description") } else { "" },
+      "",
     ),
   )
   // SettingsHome.kt: 12 under the theme's switch, the faces' row on a card of its own
   blocks.push(fn() {
-    if wide.val {
-      // (the wide frame's chooses them here, as the web's FontSetting)
-      section_header(c, tr("web-pages.appearance.fonts.title"))
-      section_note(c, tr("web-pages.appearance.fonts.description"))
-      inset(c, fn() { font_setting_wide(c, core) })
-    } else {
-      gap(c, 12.0)
-      list_card(c, fn() { font_row(c, core) })
-    }
+    gap(c, 12.0)
+    list_card(c, fn() { font_row(c, core) })
   })
   blocks.append(
     choice(
@@ -749,24 +658,9 @@ fn appearance_page(c : @ui.Ctx, core : Core) -> Unit {
       [("", "common.language.system"), ("zh", "common.language.zh"), ("en", "common.language.en")],
       pref(core, "language"),
       0,
-      if wide.val { tr("web-pages.appearance.language.description") } else { "" },
+      "",
     ),
   )
-  // 拖入 chat 的文件 (Appearance.tsx DropSetting): named by their path, or sent as files (prefs `dropAs`)
-  if wide.val {
-    blocks.append(
-      choice(
-        "dropAs",
-        tr("web-pages.appearance.drop.title"),
-        [("", "web-pages.appearance.drop.path"), ("file", "web-pages.appearance.drop.file")],
-        pref(core, "dropAs"),
-        0,
-        tr("web-pages.appearance.drop.description"),
-      ),
-    )
-  }
-  // (the wide frame's is on 归档's page, as the web's: archiving_page)
-  if !wide.val {
   blocks.append(
     choice(
       "archiveHint",
@@ -781,7 +675,6 @@ fn appearance_page(c : @ui.Ctx, core : Core) -> Unit {
       tr("web-pages.appearance.archive." + hint_key + "Hint"),
     ),
   )
-  }
   blocks.push(fn() { gap(c, 30.0) })
   scroll_page(c, "appearance", blocks)
 }
@@ -790,10 +683,6 @@ fn appearance_page(c : @ui.Ctx, core : Core) -> Unit {
 /// The account (Me.kt MeScreen): who is signed in, the accounts on this device (signing each out, adding another), and
 /// where it is signed in (Devices).
 fn me_page(c : @ui.Ctx, core : Core, here : Here) -> Unit {
-  // the desktop's: the web's (web_account.mbt)
-  if wide.val {
-    return me_page_wide(c, core, here)
-  }
   let t = @sf.theme()
   let accounts = match (core.topic)("accounts", Map::new()).value {
     Some(Array(a)) => a
@@ -900,7 +789,7 @@ fn me_page(c : @ui.Ctx, core : Core, here : Here) -> Unit {
 
 ///|
 /// still.fail's terms or privacy policy on the web (SettingsHome.kt Legal; the app speaks Chinese: no /en).
-fn legal_url(page : String) -> String {
+pub fn legal_url(page : String) -> String {
   "https://still.fail/" + page
 }
 

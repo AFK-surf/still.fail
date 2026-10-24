@@ -1,0 +1,15 @@
+# A secret's page on the desktop (sfdesk vault_item.mbt, the web's cloud/VaultItem.tsx): MBUI_WIN=1280x800 over the
+# made-up chat. ⌘, then 密钥, down to its secrets, the first.
+timeout 30000
+until 按空格输入
+wait 600
+key cmd+,
+wait 1000
+tap 密钥
+wait 1500
+move 800 500
+wheel 900
+wait 900
+tap GitHub token
+wait 1800
+exit

@@ -47,11 +47,12 @@ shell() {
   local target=${1:-aarch64-apple-darwin}
   local t0=$(now)
   case $target in *-apple-ios*)
-    # blake3 disables cc-rs environment tracking, so Cargo alone misses this change.
-    if [ ! -f "$OUT/$target/shell-ios-deployment-target" ] ||
-        [ "$(cat "$OUT/$target/shell-ios-deployment-target")" != "v1:${IPHONEOS_DEPLOYMENT_TARGET:-}" ]; then
-      (cd $EMBER/client/shell && cargo clean --release --target "$target" -p blake3) || return 1
-    fi ;;
+    # The native.ts route already keys its iOS 17 floor. Keep a source-built fallback's dependencies
+    # separate too: cc-rs caches (notably blake3) may not notice a changed deployment environment.
+    export IPHONEOS_DEPLOYMENT_TARGET=17.0
+    local CARGO_TARGET_DIR="${CARGO_TARGET_DIR}-ios17"
+    export CARGO_TARGET_DIR
+    ;;
   esac
   (cd $EMBER/client/shell && cargo rustc --release --lib --crate-type staticlib --target $target \
       -- --print native-static-libs 2> >(tee $OUT/shell-$target.log >&2)) || return 1
@@ -60,8 +61,26 @@ shell() {
   [ -n "$libs" ] && echo "$libs" > $OUT/shell-$target.libs
   mkdir -p $OUT/$target || return 1
   cp $CARGO_TARGET_DIR/$target/release/libstillfail_shell.a $OUT/$target/ || return 1
-  printf 'v1:%s\n' "${IPHONEOS_DEPLOYMENT_TARGET:-}" > "$OUT/$target/shell-ios-deployment-target" || return 1
   echo "shell $target in $(since $t0) s: $(stat -f %z $OUT/$target/libstillfail_shell.a) bytes; links: $(libs $target)"
+}
+
+# The shell for TARGET as still.fail's natives have it for the shell's sources now (scripts/native.ts shell-apple, by
+# its key: built once on a Mac by CI's natives job, for macOS 11.0 and iOS 17.0; else as said by native.ts: built
+# there), copied only when it differs (an unchanged one keeps its mtime). Fails where native.ts cannot say (no node, a
+# checkout that is not git's).
+shell_prebuilt() {
+  local t dir
+  case $1 in
+    aarch64-apple-darwin) t=darwin-arm64 ;;
+    aarch64-apple-ios) t=ios-arm64 ;;
+    aarch64-apple-ios-sim) t=ios-sim-arm64 ;;
+    *) return 1 ;;
+  esac
+  dir=$(node "$EMBER/scripts/native.ts" path shell-apple $t) || return 1
+  mkdir -p $OUT/$1
+  cmp -s "$dir/libstillfail_shell.a" $OUT/$1/libstillfail_shell.a || cp "$dir/libstillfail_shell.a" $OUT/$1/ || return 1
+  cmp -s "$dir/libstillfail_shell.libs" $OUT/shell-$1.libs || cp "$dir/libstillfail_shell.libs" $OUT/shell-$1.libs || return 1
+  echo "shell $1: still.fail's natives, shell-apple $t ($dir)"
 }
 
 # The core for Hermes (every native host: src/host/apple_core.mm, src/host/android_core.c): out/core/core.hbc. Made as ember's
@@ -102,10 +121,35 @@ print(json.dumps({'entry': entry, 'hermesc': [hermesc, st(hermesc)], 'inputs': {
 PY
 }
 
+# HBC_CACHE (a directory: CI's, kept in the Actions cache by every job that makes the core): core.hbc kept there by
+# what it is made of, by content, and taken from there when that is the same. A checkout's mtimes are all new, so the
+# stamp above never holds on CI: each job made the core again, ~14 s of a CPU (Windows' 13.9 s beside cl compiling the
+# app, 2026-10-24, 40064767331). What it is made of: the trees of client/core-ts, media and web/public/avatars (the
+# buddies asks.ts imports) as committed, none of them changed in the checkout (else no key: made, not kept); this
+# module's core/; this script; the entry; hermesc itself (the bytecode is its Hermes's: Windows' is the engine's own).
+SHA=$(command -v sha256sum > /dev/null && echo sha256sum || echo "shasum -a 256")
+hbc_key() {
+  [ -n "${HBC_CACHE:-}" ] || return 1
+  local trees
+  trees=$(git -C "$EMBER" rev-parse HEAD:client/core-ts HEAD:media HEAD:web/public/avatars 2> /dev/null) || return 1
+  [ -z "$(git -C "$EMBER" status --porcelain -uno -- client/core-ts media web/public/avatars 2> /dev/null)" ] || return 1
+  { echo "$trees"
+    (cd "$ROOT/core" && find . -type f | LC_ALL=C sort | xargs $SHA)
+    $SHA < "$D/core.sh"
+    echo "${ENTRY#"$ROOT"/}"
+    $SHA < "$1"; } | $SHA | cut -c1-24
+}
+
 hermes() {
-  have_deps
   local t0=$(now)
-  local hc="$(hermesc)"
+  local hc="$(hermesc)" key=
+  ENTRY=${ENTRY:-$ROOT/core/hermes.ts}
+  if key=$(hbc_key "$hc") && [ -f "$HBC_CACHE/$key.hbc" ]; then
+    cp -p "$HBC_CACHE/$key.hbc" $OUT/core.hbc && rm -f $OUT/core.hbc.stamp
+    echo "hermes: core.hbc kept as $key (HBC_CACHE), $(wc -c < $OUT/core.hbc | tr -d ' ') bytes"
+    return 0
+  fi
+  have_deps
   # the same inputs as the last build's: that build's core.hbc
   if [ -f $OUT/core.hbc ] && [ -f $OUT/core.hbc.stamp ] && [ "$(hbc_stamp "$hc" 2>/dev/null)" = "$(cat $OUT/core.hbc.stamp)" ]; then
     echo "hermes: core.hbc as it was (its inputs unchanged)"
@@ -130,7 +174,11 @@ writeFileSync(f, out.code);" $OUT/core-hermes.js) || { echo "hermes: class trans
   "$hc" -emit-binary -O -block-scoping -out $OUT/core.hbc $OUT/core-hermes.js \
     || { echo "hermes: hermesc failed"; rm -f $OUT/core.hbc; return 1; }
   hbc_stamp "$hc" > $OUT/core.hbc.stamp || rm -f $OUT/core.hbc.stamp
-  echo "hermes in $(since $t0) s: $(wc -c < $OUT/core-hermes.js | tr -d ' ') bytes of script, $(wc -c < $OUT/core.hbc | tr -d ' ') of bytecode"
+  echo "hermes in $(since $t0) s: $(wc -c < $OUT/core-hermes.js | tr -d ' ') bytes of script, $(wc -c < $OUT/core.hbc | tr -d ' ') of bytecode${key:+ (kept as $key)}"
+  if [ -n "$key" ]; then
+    mkdir -p "$HBC_CACHE" && cp -p $OUT/core.hbc "$HBC_CACHE/$key.hbc.tmp" && mv "$HBC_CACHE/$key.hbc.tmp" "$HBC_CACHE/$key.hbc"
+    ls -t "$HBC_CACHE"/*.hbc | tail -n +9 | xargs rm -f  # the newest 8
+  fi
 }
 
 # A plain script (no bundle, no Babel) as bytecode, OUT (default out/core/core.hbc, the core's place: Android's
@@ -180,7 +228,7 @@ hermes_fw() {
 # The core's engine for TARGET: src/host/apple_core.mm (Objective-C++: the core's thread and loop, Hermes and its JSI,
 # the shell's C ABI, secure.* and listen.*) as out/core/<target>/libmbui_core.a, which the apps with the core link
 # beside the shell's .a and Hermes's framework (src/stillfail/moon.pkg; the iOS build's hook). Made again only when its
-# sources (or this script) are newer.
+# sources (or this script) are newer: 1-2 s (mini1, 2026-10-24), not worth a native part of its own as the shell is.
 engine() {
   local target=${1:-aarch64-apple-darwin} cc
   hermes_apple || return 1
@@ -191,7 +239,7 @@ engine() {
     *) echo "engine: no target $target"; return 1 ;;
   esac
   local lib=$OUT/$target/libmbui_core.a
-  if [ -f $lib ] && [ $lib -nt src/host/apple_core.mm ] && [ $lib -nt src/host/apple_collate.h ] && [ $lib -nt src/host/electron_sealed.h ] && [ $lib -nt src/host/core_api.h ] && [ $lib -nt src/host/mbui_ios_sessions.h ] && [ $lib -nt src/host/mbui_ios_sessions_apple.h ] && [ $lib -nt "$D/core.sh" ]; then
+  if [ -f $lib ] && [ $lib -nt src/host/apple_core.mm ] && [ $lib -nt src/host/apple_collate.h ] && [ $lib -nt src/host/electron_sealed.h ] && [ $lib -nt src/host/core_api.h ] && [ $lib -nt src/host/listen_api.h ] && [ $lib -nt src/host/mbui_ios_sessions.h ] && [ $lib -nt src/host/mbui_ios_sessions_apple.h ] && [ $lib -nt "$D/core.sh" ]; then
     return 0
   fi
   mkdir -p $OUT/$target
@@ -201,19 +249,13 @@ engine() {
   echo "engine $target: $lib ($(wc -c < $lib | tr -d ' ') bytes)"
 }
 
-# What an Apple app with the core needs for TARGET, each made when missing or stale: Hermes, the engine, the shell's .a
-# (built once: rebuild it with `shell`), the core's bytecode (ENTRY, by default the media app's entry, as Android's).
+# What an Apple app with the core needs for TARGET: Hermes, the engine (when stale), the shell's .a (still.fail's natives
+# by its key; where native.ts cannot say, the one here, else built by cargo: rebuild it with `shell`), the core's
+# bytecode (ENTRY, by default the media app's entry, as Android's).
 apple() {
   local target=${1:-aarch64-apple-darwin}
   engine $target || return 1
-  case $target in *-apple-ios*)
-    # A copied archive bypasses Cargo; invalidate it when the deployment floor changes.
-    if [ ! -f "$OUT/$target/shell-ios-deployment-target" ] ||
-        [ "$(cat "$OUT/$target/shell-ios-deployment-target")" != "v1:${IPHONEOS_DEPLOYMENT_TARGET:-}" ]; then
-      shell $target || return 1
-    fi ;;
-  esac
-  [ -f $OUT/$target/libstillfail_shell.a ] || shell $target || return 1
+  shell_prebuilt $target || [ -f $OUT/$target/libstillfail_shell.a ] || shell $target || return 1
   ENTRY=${ENTRY:-$ROOT/core/media-hermes.ts} hermes
 }
 

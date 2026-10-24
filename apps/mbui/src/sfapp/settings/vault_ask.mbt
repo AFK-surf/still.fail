@@ -240,7 +240,7 @@ fn vaults_of(core : Core, ws : String) -> Json? {
 ///|
 /// What is asked, over the answer: its lines 2 apart (VaultAsk.css.ts what).
 // kept across runs: a value (no field of it changes)
-let ask_what : @ui.Style = @ui.style(w=Full, gap=S0_5)
+let ask_what : @ui.Style = @ui.css("w=Full gap=S0_5")
 
 ///|
 /// Its title, 14 on 20 (the account after it quieter, its own run).
@@ -260,12 +260,12 @@ let ask_note : @ui.TextStyle = @ui.text_style(size=Xs, leading=L4_75, color=Mute
 ///|
 /// The answer's buttons, 10 apart (pages.css.ts cardFoot).
 // kept across runs: a value (no field of it changes)
-let ask_foot : @ui.Style = @ui.style(row=true, gap=S2_5, align=ACenter)
+let ask_foot : @ui.Style = @ui.css("row gap=S2_5 align=ACenter")
 
 ///|
 /// How it ended: a dot and its words, 8 apart.
 // kept across runs: a value (no field of it changes)
-let ask_ended : @ui.Style = @ui.style(row=true, gap=S2, align=ACenter, pt=S0_5)
+let ask_ended : @ui.Style = @ui.css("row gap=S2 align=ACenter pt=S0_5")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -274,8 +274,8 @@ let ask_ended_words : @ui.TextStyle = @ui.text_style(size=Base, leading=L5, colo
 ///|
 /// Its dot, 6 round: green once granted, else quiet.
 // kept across runs: a value (no field of it changes)
-let ask_dot : @ui.Style = @ui.style(w=S1_5, h=S1_5, radius=Full, bg=Subtle)
+let ask_dot : @ui.Style = @ui.css("w=S1_5 h=S1_5 radius=Full bg=Subtle")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let ask_dot_on : @ui.Style = @ui.style(w=S1_5, h=S1_5, radius=Full, bg=Positive)
+let ask_dot_on : @ui.Style = @ui.css("w=S1_5 h=S1_5 radius=Full bg=Positive")

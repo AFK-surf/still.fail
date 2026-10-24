@@ -45,7 +45,7 @@ test "a phone turned sideways for a film: the player the whole screen, no rail n
   assert_true(app.nav.top() is DrivePlay(_))
   // its back key at the screen's own left edge, not beside a rail and a list; nothing at its corners
   let (bx, _, _, _) = said_at(t, "返回").unwrap()
-  assert_true(bx < rail_w, msg="the player's back at \{bx}")
+  assert_true(bx < @sfdesk.rail_w, msg="the player's back at \{bx}")
   assert_true(said_at(t, "最近会话") is None)
   assert_true(said_at(t, "退出全屏") is Some(_))
   // back turns it upright first (Player.kt BackHandler(sideways)), the host turning the phone back

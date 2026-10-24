@@ -19,12 +19,12 @@ let peek_mark : Double = 17.0
 ///|
 /// The card's body: its words, then its rows, 10 apart, 24 over the sheet's foot.
 // kept across runs: a value (no field of it changes)
-let peek_body : @ui.Style = @ui.style(w=Full, pb=S6, gap=S2_5)
+let peek_body : @ui.Style = @ui.css("w=Full pb=S6 gap=S2_5")
 
 ///|
 /// Its words 20 in from the sheet's sides, 10 apart.
 // kept across runs: a value (no field of it changes)
-let peek_words : @ui.Style = @ui.style(w=Full, px=S5, gap=S2_5)
+let peek_words : @ui.Style = @ui.css("w=Full px=S5 gap=S2_5")
 
 ///|
 /// What it says of itself, and that it is offline (13 on 18, muted).
@@ -114,26 +114,26 @@ fn station_peek(c : @ui.Ctx, core : Core, address : String) -> Unit {
 ///|
 /// The machine in brief (StationFigures with `peek`), faded while it is reconnecting (as last heard).
 // kept across runs: a value (no field of it changes)
-let peek_figures_box : @ui.Style = @ui.style(w=Full)
+let peek_figures_box : @ui.Style = @ui.css("w=Full")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let peek_figures_faded : @ui.Style = @ui.style(w=Full, opacity=O45)
+let peek_figures_faded : @ui.Style = @ui.css("w=Full opacity=O45")
 
 ///|
 /// What is left of it in the allowance's boxes: 4 over and under them.
 // kept across runs: a value (no field of it changes)
-let peek_meters_room : @ui.Style = @ui.style(w=Full, py=S1)
+let peek_meters_room : @ui.Style = @ui.css("w=Full py=S1")
 
 ///|
 /// 20 high, 8 apart (MeterChips).
 // kept across runs: a value (no field of it changes)
-let peek_meters : @ui.Style = @ui.style(row=true, h=S5, gap=S2, align=ACenter)
+let peek_meters : @ui.Style = @ui.css("row h=S5 gap=S2 align=ACenter")
 
 ///|
 /// Its boxes' places before it is read, 4 apart (Bar 46, 52, 50 by 20, 6 round).
 // kept across runs: a value (no field of it changes)
-let peek_meters_unread : @ui.Style = @ui.style(row=true, h=S5, gap=S1, align=ACenter)
+let peek_meters_unread : @ui.Style = @ui.css("row h=S5 gap=S1 align=ACenter")
 
 ///|
 // kept across runs: a table, never written
@@ -149,29 +149,29 @@ let unread_meter_r : Double = @sf.fill_chip_corner
 ///|
 /// Its network 6 under the boxes; until it is read, as tall as a real one but unseen, grey bars over it.
 // kept across runs: a value (no field of it changes)
-let peek_net : @ui.Style = @ui.style(w=Full, pt=S1_5)
+let peek_net : @ui.Style = @ui.css("w=Full pt=S1_5")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let peek_net_unseen : @ui.Style = @ui.style(w=Full, opacity=O0)
+let peek_net_unseen : @ui.Style = @ui.css("w=Full opacity=O0")
 
 ///|
 /// The bars over it, centred across its height: two on its left, two on its right (Bar 34 and 96, 132 and 132).
 // kept across runs: a value (no field of it changes)
-let peek_net_bars : @ui.Style = @ui.style(row=true, w=Full, h=Full, align=ACenter)
+let peek_net_bars : @ui.Style = @ui.css("row w=Full h=Full align=ACenter")
 
 ///|
 /// Each side's two, 9 apart: 8, and a pixel more over the second (the scale has no 9).
 // kept across runs: a value (no field of it changes)
-let peek_net_side : @ui.Style = @ui.style(gap=S2)
+let peek_net_side : @ui.Style = @ui.css("gap=S2")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let peek_net_side_fill : @ui.Style = @ui.style(w=Full, gap=S2)
+let peek_net_side_fill : @ui.Style = @ui.css("w=Full gap=S2")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let peek_net_second : @ui.Style = @ui.style(pt=SPx)
+let peek_net_second : @ui.Style = @ui.css("pt=SPx")
 
 ///|
 let net_bar_h : Double = 10.0

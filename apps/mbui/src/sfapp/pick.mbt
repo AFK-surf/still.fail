@@ -106,9 +106,10 @@ fn pickable(
   } else if (down && pressed_in) || !found.is_empty() {
     c.words(box, key)
   }
-  // in the wide frame the mouse picks words as a browser's selection (Ctx::selectable, wide.mbt); what of this
-  // message is picked so is told the pick's pop (pick_pop: 引用), whose message it is with it; no long press there
-  if wide_on.val {
+  // in the wide frame a mouse picks words as a browser's selection (Ctx::selectable, sfdesk's frame.mbt); what of
+  // this message is picked so is told the pick's pop (pick_pop: 引用), whose message it is with it; no long press
+  // there. A finger picks them as on a phone, whatever the frame
+  if desk_picks() {
     match c.selection_box() {
       Some((sx, sy, sw, sh)) =>
         match c.rect_of(id) {
@@ -148,11 +149,19 @@ fn pickable(
 }
 
 ///|
+/// Whether words are picked as a desktop's (a mouse's selection over the wide frame's page, its pop) rather than as a
+/// phone's (held, the handles, the bar): by the hand, a finger's the phone's way in any frame (the phone's frame has
+/// no mouse's selection: a mouse there holds too).
+fn desk_picks() -> Bool {
+  wide_on.val && @ui.pointing() is Mouse
+}
+
+///|
 /// Over the list (MessagePick.kt PickLayer): the picked passage's handles and its bar (over it; under it when the bar
 /// over the list is too near), the bar gone while the list moves or the passage is being changed. A tap anywhere else
 /// lets go of it, as back does.
 fn pick_layer(c : @ui.Ctx, src : Source, r : ChatRef) -> Unit {
-  if wide_on.val {
+  if desk_picks() {
     pick_pop(c, src, r)
     return
   }
@@ -331,7 +340,7 @@ fn pick_pop(c : @ui.Ctx, src : Source, r : ChatRef) -> Unit {
     c.box(style=pick_pop_frame, id=frame, fn() {
       c.box(style=pick_pop_row, ty=dmax(0.0, y - fy), fn() {
         c.box(tx=x - fx - fw / 2.0, fn() {
-          let hot = c.hovered(pop)
+          let hot = c.lit(pop)
           c.box(style=if hot { pick_pop_hot } else { pick_pop_box }, id=pop, fn() {
             @sf.icon(c, "quote", size=12.0, color=@sf.theme().p.on_primary) |> ignore
             c.text(tr("web-main.chat.quote"), style=pick_pop_words) |> ignore
@@ -350,7 +359,7 @@ fn pick_pop(c : @ui.Ctx, src : Source, r : ChatRef) -> Unit {
 ///|
 /// What the pill is placed in: all of the layer.
 // kept across runs: a value (no field of it changes)
-let pick_pop_frame : @ui.Style = @ui.style(w=Full, h=Full)
+let pick_pop_frame : @ui.Style = @ui.css("w=Full h=Full")
 
 ///|
 /// The pill's height (quotePop: 26).
@@ -358,7 +367,7 @@ let pick_pop_h : Double = 26.0
 
 ///|
 // kept across runs: a value (no field of it changes)
-let pick_pop_row : @ui.Style = @ui.style(row=true, w=Full, justify=JCenter)
+let pick_pop_row : @ui.Style = @ui.css("row w=Full justify=JCenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -375,7 +384,7 @@ let pick_pop_box : @ui.Style = @ui.style(
 
 ///|
 // kept across runs: a value (no field of it changes)
-let pick_pop_hot : @ui.Style = pick_pop_box.then(@ui.style(bg=A(Primary, O80)))
+let pick_pop_hot : @ui.Style = pick_pop_box.then(@ui.css("bg=A(Primary,O80)"))
 
 ///|
 // kept across runs: a value (no field of it changes)

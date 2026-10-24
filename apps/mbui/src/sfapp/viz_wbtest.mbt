@@ -68,8 +68,8 @@ test "a placed HTML file is drawn in its message, 120 high, covered until it has
   assert_true(w > 300.0)
   // in a list: an upright drag on it moves the list
   assert_true(t.views().iter().any(fn(l) { l.has_prefix("touch \{page} vertical ") }))
-  // what it says of its height: taken (at most 1200), and the page shown (heard as a frame is painted: the next one
-  // has it)
+  // what it says of its height: taken, however tall (a long post's last part not cut off), and the page shown (heard
+  // as a frame is painted: the next one has it)
   t.view_says(page, "{\"emberViz\":true,\"type\":\"height\",\"height\":231.4}")
   t.frame()
   t.frame()
@@ -78,12 +78,34 @@ test "a placed HTML file is drawn in its message, 120 high, covered until it has
   t.view_says(page, "{\"emberViz\":true,\"type\":\"height\",\"height\":5000}")
   t.frame()
   t.frame()
-  assert_eq(view_rect(t, page).unwrap().3, 1200.0)
+  assert_eq(view_rect(t, page).unwrap().3, 5000.0)
   // what is not a message of the bridge's is let go
   t.view_says(page, "not json")
   t.view_says(page, "{\"type\":\"height\",\"height\":\"tall\"}")
   t.frame()
-  assert_eq(view_rect(t, page).unwrap().3, 1200.0)
+  assert_eq(view_rect(t, page).unwrap().3, 5000.0)
+}
+
+///|
+test "a page that grows a little with each height it is given (100vh) is held where it got to; shorter, it follows" {
+  let t = chat_tester("chat-viz")
+  t.frame()
+  let (page, _) = viz_views(t)
+  t.view_says(page, "{\"emberViz\":true,\"type\":\"height\",\"height\":300}")
+  for i in 1..=100 {
+    t.view_says(page, "{\"emberViz\":true,\"type\":\"height\",\"height\":\{300 + i * 10}}")
+  }
+  t.frame()
+  t.frame()
+  // 60 times running it followed, then held
+  assert_eq(view_rect(t, page).unwrap().3, 900.0)
+  t.view_says(page, "{\"emberViz\":true,\"type\":\"height\",\"height\":2000}")
+  t.frame()
+  assert_eq(view_rect(t, page).unwrap().3, 900.0)
+  t.view_says(page, "{\"emberViz\":true,\"type\":\"height\",\"height\":400}")
+  t.frame()
+  t.frame()
+  assert_eq(view_rect(t, page).unwrap().3, 400.0)
 }
 
 ///|
@@ -224,4 +246,38 @@ test "a visualization's document: a fragment in the stylesheet with its tokens a
   let page = viz_page_document("<!doctype html><html><head><title>t</title></head><body></body></html>")
   assert_true(page.has_prefix("<!doctype html><html><head><meta http-equiv=\"Content-Security-Policy\""))
   assert_true(page.contains("<title>t</title>"))
+}
+
+///|
+test "the latest chats raised over a visualization's page take the presses there, not the page under them" {
+  reset()
+  let src = fixture("chat-viz")
+  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=1024.0, h=768.0, platform=2)
+  say_room(t, "regular", "compact")
+  t.run_for(@ui.nav_push_ms)
+  assert_true(corners_on.val)
+  let (page, _) = viz_views(t)
+  // as tall as it may be: the chat's page under all of the list
+  t.view_says(page, "{\"emberViz\":true,\"type\":\"height\",\"height\":5000}")
+  t.frame()
+  t.frame()
+  let (x, y, w, h) = view_rect(t, page).unwrap()
+  tap_said(t, "最近会话")
+  t.frame()
+  assert_true(recent_open.val)
+  // the open chat's row in the panel, over the page
+  let row = t.words().iter().find_first(fn(wd) { wd.0 == "整理发布清单" && wd.1 < 360.0 && wd.2 > 100.0 })
+  let (_, rx, ry, _, _, _) = row.unwrap()
+  let (px, py) = (rx + 10.0, ry + 8.0)
+  assert_true(px > x && px < x + w && py > y && py < y + h, msg="the row at \{px},\{py}, the page \{x} \{y} \{w} \{h}")
+  // tapped: the panel's (put away, the chat open as it was), the page told nothing of it
+  t.tap(px, py)
+  t.frame()
+  assert_false(recent_open.val)
+  assert_false(t.views().iter().any(fn(l) { l.has_prefix("finger \{page} ") }))
+  // put away: the page takes a finger there again
+  t.frame()
+  t.tap(px, py)
+  assert_true(t.views().iter().any(fn(l) { l.has_prefix("finger \{page} down") }))
 }

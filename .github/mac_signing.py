@@ -127,9 +127,11 @@ def notarize(app, staple=True):
     # (staple validates what it stapled: "The staple and validate action worked!". Validating again asked Apple's
     # CloudKit once more, and a connection it dropped failed main's beta with the app notarized and stapled, run
     # 39682975188)
+    # (Gatekeeper's verdict only on what is stapled: unstapled, spctl asks Apple for a ticket it may not yet hand out
+    # seconds after Accepted, "Unnotarized Developer ID", which failed main's mbui beta, run 40053983329)
     if staple:
         run(['xcrun', 'stapler', 'staple', app])
-    run(['spctl', '--assess', '--type', 'execute', '-vv', app])
+        run(['spctl', '--assess', '--type', 'execute', '-vv', app])
 
 
 if __name__ == '__main__':

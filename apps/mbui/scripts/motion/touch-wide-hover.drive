@@ -1,0 +1,12 @@
+# A tablet's wide frame, a finger: an agent's picture tapped (its card), then the bar's icon at the top right held (its
+# tip), then the folded sidebar.
+system {"size_class":{"width":"regular","height":"regular"}}
+timeout 20000
+until 发消息
+wait 800
+tapxy 316 251
+wait 1200
+tapxy 700 900
+wait 600
+drag 798 22 0 0 700
+wait 200

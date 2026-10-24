@@ -69,7 +69,6 @@ fn ink() -> Ink {
 
 ///|
 /// Times in messages say how long ago; a tap on one says when, in all of them, until tapped again.
-let absolute_times : Ref[Bool] = { val: false }
 
 ///|
 /// The flight of words sent whose row is being built (flight.mbt), for its bubble and what is under it.
@@ -103,7 +102,9 @@ fn entry_view(c : @ui.Ctx, src : Source, here : Here, e : Entry, list : Array[En
       })
       |> ignore
     Line => unread_line(c)
-    Said(m) => said(c, src, here, m, list, quotes=true)
+    // (in the list's row: its tables scroll out over the row's margin to the list's edges, where the margin holds
+    // nothing: not in the wide frame, whose pictures are out in it, said_avatar)
+    Said(m) => said(c, src, here, m, list, quotes=true, bleed=if wide_on.val { 0.0 } else { row_side(c) })
     Sent(s) => sent_elsewhere(c, src, here, s)
     Out(o) => outgoing(c, src, here, o)
     Working(a) => activity(c, src, here, a)
@@ -126,11 +127,11 @@ fn unread_line(c : @ui.Ctx) -> Unit {
 /// The unread line's row, its rules each side (1, the accent at 50%), its words 13 in 500 (the wide screen's 12:
 /// Chat.css.ts chatUnreadLine) in the accent.
 // kept across runs: a value (no field of it changes)
-let unread_row : @ui.Style = @ui.style(row=true, w=Full, gap=S2_5, align=ACenter)
+let unread_row : @ui.Style = @ui.css("row w=Full gap=S2_5 align=ACenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let unread_rule : @ui.Style = @ui.style(w=Grow(1.0), h=SPx, bg=A(Accent, O50))
+let unread_rule : @ui.Style = @ui.css("w=Grow(1.0) h=SPx bg=A(Accent,O50)")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -151,7 +152,7 @@ fn message_time(c : @ui.Ctx, key : String, time : Stamp?) -> Unit {
         absolute_times.val = !absolute_times.val
       }
       // in the wide frame the other way of saying it, on hover (ui.tsx Time: its Tip)
-      wide_tip(c, "time/" + key, id, if absolute_times.val { s.ago } else { s.full })
+      @sf.tip(c, "time/" + key, id, if absolute_times.val { s.ago } else { s.full })
       c.box(id~, fn() {
         c.text(
           if absolute_times.val { s.full } else { s.ago },
@@ -235,7 +236,8 @@ fn agent_avatar(c : @ui.Ctx, maker : String, runtime : String) -> Unit {
 
 ///|
 /// A message (Chat.kt SaidRow): still.fail's own a notice across the chat; the viewer's on the right in a bubble;
-/// anyone else's under their picture, name and time, an agent's as Markdown with its files placed in it.
+/// anyone else's under their picture, name and time, an agent's as Markdown with its files placed in it, its tables
+/// scrolling out to `bleed` past it either side.
 fn said(
   c : @ui.Ctx,
   src : Source,
@@ -244,6 +246,7 @@ fn said(
   list : Array[Entry],
   decide? : Bool = true,
   quotes? : Bool = false,
+  bleed? : Double = 0.0,
 ) -> Unit {
   ignore(list)
   let k = ink()
@@ -322,7 +325,7 @@ fn said(
         }
         files(c, src, here, beside_quotes(m.quotes, m.attachments), false, quote~)
       } else {
-        pickable(c, m.ts, who, role, m.text, true, fn() { agent_words(c, src, here, m, quote~) })
+        pickable(c, m.ts, who, role, m.text, true, fn() { agent_words(c, src, here, m, quote~, bleed~) })
       }
       // what it asks, under it: not on the 奏 page, which has its options at its foot (Chat.kt SaidAlone)
       if !decide {
@@ -344,7 +347,7 @@ fn said(
     // coming out of its agent's avatar (emit.mbt): from 35% at its corner, unrolling from its top
     if emit_goes(em, m.seq) {
       @motion.measure(c, col, "emit-col/" + seq_s(m.seq))
-      emit_out(c, col, em, m.seq)
+      emit_out(c, col, em, m.seq, if wide_on.val { -16.0 } else { 12.0 })
     }
     // the picture over the name's start, or out in the margin before it in the wide frame, held at the list's top as a
     // long message scrolls past (where a message out of an avatar lands: hidden while the flying one is over it)
@@ -363,7 +366,15 @@ fn said(
         c.stick(av, wide_avatar_held)
       }
       if carded_agent is Some(a) {
-        wide_hover(c, "agent-hover/" + m.ts, hid, tile=true, fn() { agent_card(c, src, ref_of(here), a) }) |> ignore
+        let station = here.station
+        // (a finger taps the picture for it: it does nothing else)
+        @sfdesk.hover(c, "agent-hover/" + m.ts, hid, tile=true, tap=true, fn() {
+          match agent_json((src.topic)("chat", chat_params(ref_of(here))).value, a.key) {
+            Some(j) => @sfdesk.agent_card(c, src, station, j)
+            None => ()
+          }
+        })
+        |> ignore
       }
       if emit_goes(em, m.seq) {
         @motion.measure(c, av, "emit-landing/" + ek + "/" + seq_s(m.seq))
@@ -387,7 +398,7 @@ fn said_head(c : @ui.Ctx, name : String, id : Int, key : String, time : Stamp?) 
     c.box(max_w=240.0, id~, fn() {
       if wide_on.val {
         // one that opens something takes the accent under the pointer (Chat.css.ts msgAgent:hover)
-        c.text(name, style=if id != 0 && c.hovered(id) { wide_name_hot } else { wide_name }) |> ignore
+        c.text(name, style=if id != 0 && c.lit(id) { wide_name_hot } else { wide_name }) |> ignore
       } else {
         c.text(name, size=15.0, weight=650, color=k.name, wrap=false, line=21.0) |> ignore
       }
@@ -491,24 +502,17 @@ fn blocked_line(c : @ui.Ctx, src : Source, station : String, b : Install) -> Uni
 ///|
 /// The blocked line's mark and words, 4 apart.
 // kept across runs: a value (no field of it changes)
-let blocked_row : @ui.Style = @ui.style(row=true, gap=S1, align=ACenter)
+let blocked_row : @ui.Style = @ui.css("row gap=S1 align=ACenter")
 
 ///|
 /// What still.fail itself says (Chat.kt SystemNotice): a pill across the chat, one line cut short, no time; tapped,
 /// all its words and its time under them. A failure (⚠️ at its start) is the pill in red.
 fn system_notice(c : @ui.Ctx, src : Source, station : String, m : Message) -> Unit {
   let t = @sf.theme()
-  let failed = m.text.has_prefix("⚠️")
-  let mut said = if failed {
-    m.text.view(start_offset="⚠️".length()).to_string().trim_start(chars=" ").to_string()
-  } else {
-    m.text
-  }
-  // a line of the UI, not prose: no 。 at its end
-  let trimmed = said.trim_end(chars=" \n").to_string()
-  if trimmed.has_suffix("。") {
-    said = trimmed.view(end_offset=trimmed.length() - 1).to_string()
-  }
+  // as the core says it is shown (the chat view's `notice`): a failure (its ⚠️ taken for the red), its words as a line
+  // of the UI, where a profile's link begins
+  let failed = m.notice_failed
+  let said = m.notice_words
   let ground = if failed {
     if t.dark {
       0x442322FFL
@@ -537,13 +541,10 @@ fn system_notice(c : @ui.Ctx, src : Source, station : String, m : Message) -> Un
     None => said
   }
   // in one about a profile (its sign-in failed), what went wrong (after its ：) leads to that profile's page
-  let colon = if m.profile == "" {
-    None
+  let colon = if m.profile != "" && m.notice_link >= 0 && m.notice_link <= said.length() {
+    Some(m.notice_link)
   } else {
-    match said.find("：") {
-      Some(i) => Some(i + "：".length())
-      None => said.find(":").map(fn(i) { i + 1 })
-    }
+    None
   }
   let to_install = match m.install {
     Some(i) if i.action != "" => Some(i)
@@ -656,7 +657,7 @@ fn notice_ground(dark : Bool) -> Int64 {
 ///|
 /// A notice across the chat, in its middle, its time 4 under it once opened.
 // kept across runs: a value (no field of it changes)
-let notice_across : @ui.Style = @ui.style(w=Full, gap=S1, align=ACenter)
+let notice_across : @ui.Style = @ui.css("w=Full gap=S1 align=ACenter")
 
 ///|
 /// A word at a notice's end that acts on it (Chat.kt InstallAction, ReportAction): " · " fainter, then the word, semibold
@@ -719,91 +720,9 @@ fn plain_words(s : String) -> String {
 }
 
 ///|
-/// Plain words as a message draws them (Markdown.kt withRefs): `[title](…/chats/…)` a reference to that chat (`@`
-/// a little lighter, its title, in the accent), a web address written bare a link.
+/// Plain words as a message draws them (sfbase's message_runs), references to chats in the chat's accent.
 fn ref_runs(s : String) -> Array[@ui.Run] {
-  let accent = ink().accent
-  let out : Array[@ui.Run] = []
-  let words = StringBuilder()
-  let flush = fn() {
-    let w = words.to_string()
-    if w != "" {
-      bare_links(w, out)
-    }
-    words.reset()
-  }
-  let n = s.length()
-  let mut i = 0
-  while i < n {
-    let ch = s.at(i).to_int()
-    if ch == 91 {
-      // [title](href) with /chats/ in it
-      match s.view(start_offset=i + 1).find("](") {
-        Some(close) if close >= 1 && close <= 120 => {
-          let title = s.view(start_offset=i + 1, end_offset=i + 1 + close).to_string()
-          let rest = s.view(start_offset=i + 1 + close + 2).to_string()
-          match rest.find(")") {
-            Some(end) if !title.contains("\n") => {
-              let href = rest.view(end_offset=end).to_string()
-              if href.contains("/chats/") && !href.contains(" ") {
-                flush()
-                out.push(@ui.span("@", link=href, color=@sf.alpha(accent, 0.7)))
-                out.push(@ui.span(title, link=href, color=accent))
-                i = i + 1 + close + 2 + end + 1
-                continue
-              }
-            }
-            _ => ()
-          }
-        }
-        _ => ()
-      }
-    }
-    words.write_char(s.at(i).unsafe_to_char())
-    i = i + 1
-  }
-  flush()
-  out
-}
-
-///|
-/// Words with the web addresses in them as links (bareLinks.ts: one ends at a space or at Chinese).
-fn bare_links(s : String, out : Array[@ui.Run]) -> Unit {
-  let mut from = 0
-  let mut i = 0
-  let n = s.length()
-  while i < n {
-    let at_link = s.view(start_offset=i).has_prefix("https://") ||
-      s.view(start_offset=i).has_prefix("http://")
-    if at_link {
-      let mut j = i
-      while j < n {
-        let k = s.at(j).to_int()
-        if k <= 32 || k >= 0x2E80 || k == 0xFF0C || k == 0x3002 {
-          break
-        }
-        j = j + 1
-      }
-      // what ends a sentence is not the address's
-      while j > i && ".,;:!?)'\"".contains(s.at(j - 1).unsafe_to_char().to_string()) {
-        j = j - 1
-      }
-      if j - i > 8 {
-        if i > from {
-          out.push(@ui.plain(s.view(start_offset=from, end_offset=i).to_string()))
-        }
-        let href = s.view(start_offset=i, end_offset=j).to_string()
-        out.push(@ui.link(href, href))
-        from = j
-        i = j
-        continue
-      }
-    }
-    i = i + 1
-  }
-  if from < n {
-    out.push(@ui.plain(s.view(start_offset=from).to_string()))
-  }
+  message_runs(s, ink().accent)
 }
 
 ///|
@@ -884,13 +803,15 @@ fn open_link(href : String) -> Unit {
 
 ///|
 /// An agent's Markdown with its files (Prose.kt AgentWords): those its text names (`placed`) drawn there, the rest
-/// below it; its links to a station's screens as their cards (screen_links.mbt).
+/// below it; its links to a station's screens as their cards (screen_links.mbt); its tables scrolling out to `bleed`
+/// past it either side.
 fn agent_words(
   c : @ui.Ctx,
   src : Source,
   here : Here,
   m : Message,
   quote? : ((Attachment) -> Unit)? = None,
+  bleed? : Double = 0.0,
 ) -> Unit {
   // an agent's request about a vault item: its card in place of the words, answered on it (vault_approval.mbt)
   match m.card {
@@ -922,7 +843,7 @@ fn agent_words(
           // fileNameOf): a visualization opened over the whole screen, any other in the preview as a tap on it below
           // the text opens it (Prose.kt OpenedFile)
           match placed.get(@sf.file_name_of(h)) {
-            Some(a) if is_viz(a.name) => viz_open_full(a.name, here.station, owner_of(here, a), a.path, here, linked=true)
+            Some(a) if is_viz(a.name) => viz_open_full(a.name, here.station, owner_of(here, a), a.path, here.session, linked=true)
             Some(a) => open_preview(here.station, owner_of(here, a), a, steps=InChat(here.view.thread, here.session))
             None => open_link(h)
           }
@@ -961,6 +882,7 @@ fn agent_words(
         },
         // its links to a station's screens and 共享调试 as their cards (screen_links.mbt)
         screens=Some(screen_links(c, src, here.station + "/" + here.session + "/" + m.ts)),
+        bleed~,
       )
       |> ignore
     }
@@ -1028,7 +950,7 @@ fn quote_cards(
                   @ui.span(q.text),
                 ],
                 size~,
-                color=if jump != 0 && c.hovered(jump) { k.text } else { k.muted },
+                color=if jump != 0 && c.lit(jump) { k.text } else { k.muted },
                 line~,
               )
               |> ignore
@@ -1081,16 +1003,16 @@ fn quote_type() -> (Double, Double, Double) {
 ///|
 /// A message's quote cards, one under another 4 apart, at its end when it is the viewer's (Chat.kt QuoteCards).
 // kept across runs: a value (no field of it changes)
-let quote_cards_end : @ui.Style = @ui.style(w=Full, gap=S1, align=AEnd)
+let quote_cards_end : @ui.Style = @ui.css("w=Full gap=S1 align=AEnd")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let quote_cards_start : @ui.Style = @ui.style(w=Full, gap=S1, align=AStart)
+let quote_cards_start : @ui.Style = @ui.css("w=Full gap=S1 align=AStart")
 
 ///|
 /// A quote card's own picture, 6 under its words (Chat.kt QuoteCard).
 // kept across runs: a value (no field of it changes)
-let quote_picture_room : @ui.Style = @ui.style(pt=S1_5)
+let quote_picture_room : @ui.Style = @ui.css("pt=S1_5")
 
 ///|
 /// The file of a message's `files` that is a quote's own (Chat.kt fileOf): the one it names.
@@ -1157,7 +1079,7 @@ let image_quoted_at : Ref[Int] = { val: -1 }
 ///|
 /// The kind of a file by its name (FileKinds.kt kindOf): image, video, or anything else.
 fn kind_of(name : String) -> String {
-  let lower = lower(name)
+  let lower = @sf.lower(name)
   let ext = match lower.rev_find(".") {
     Some(i) if i > 0 => lower.view(start_offset=i + 1).to_string()
     _ => ""
@@ -1332,7 +1254,7 @@ fn file_item(
       c.box(w=Px(w), h=Px(h), radius=file_corner(), clip=true, bg=if wide_on.val { t.p.neutral_bg } else { t.p.chip }, id=open, opacity=thumb_shows(thumb), fn() {
         if key != "" && key != "!" && wide_on.val && sent is None {
           // brought in as the web's: brushed in from its top, blurred to sharp (image_reveal)
-          image_reveal(c, key, w, h, if letterbox { FitContain } else { FitCover }, a.thumbhash)
+          @sfdesk.image_reveal(c, key, w, h, if letterbox { FitContain } else { FitCover }, a.thumbhash)
         } else if key != "" && key != "!" {
           c.image(
             key,
@@ -1400,10 +1322,16 @@ fn file_item(
           |> ignore
         })
         |> ignore
+        // while the core downloads it (downloads.mbt), how far in its name's place, over a bar
+        let dl = download_of(src, here.station, owner_of(here, a), base_name(a.path))
         c.layer(fn() {
           c.spacer()
           c.box(w=Fill(1.0), padx=8.0, pady=6.0, bg=0x000000A6L, align=ACenter, fn() {
-            c.text(a.name, size=12.0, color=0xFFFFFFFFL, wrap=false) |> ignore
+            c.text(if flag(dl, "active") { text(dl, "statusText") } else { a.name }, size=12.0, color=0xFFFFFFFFL, wrap=false)
+            |> ignore
+            if flag(dl, "active") {
+              c.box(style=video_coming_bar, fn() { @sf.progress(c, Some(number(dl, "progress"))) }) |> ignore
+            }
           })
           |> ignore
         })
@@ -1411,18 +1339,28 @@ fn file_item(
       })
       |> ignore
     }
-    // (downloaded by the core: how far it has come, here too, downloads.mbt)
-    _ => file_card(c, a, w, id=open, dl=download_of(src, here.station, owner_of(here, a), base_name(a.path)))
+    // (downloaded by the core: how far it has come, here too; ✕ calls it off, ↻ asks it again: downloads.mbt)
+    _ => {
+      let (key, name) = (owner_of(here, a), base_name(a.path))
+      let dl = download_of(src, here.station, key, name)
+      let act = c.id("file-act/" + a.path)
+      if c.clicked(act) {
+        // (told once the frame's builds are over, as the tap is the build's that took it)
+        let (id, active) = (text(dl, "id"), flag(dl, "active"))
+        c.tell("file-act/" + a.path, fn() { if active { download_cancel(src, id) } else { download_retry(src, id) } })
+      }
+      file_card(c, a, w, id=open, dl~, act~)
+    }
   }
 }
 
 ///|
 /// A file as a card (ChatFiles.kt FileCard): its kind's mark, its name, its size, on the neutral ground. While the core
-/// downloads it (`dl`, downloads.mbt) how far it has come in its size's place and as a ring in its mark's; failed, why,
-/// in red.
-fn file_card(c : @ui.Ctx, a : Attachment, w : Double, id? : Int = 0, dl? : Json? = None) -> Unit {
+/// downloads it (`dl`, downloads.mbt) how far it has come in its size's place and as a ring in its mark's, ✕ (`act`)
+/// at its end to call it off; failed, why, in red, ↻ to ask it again.
+fn file_card(c : @ui.Ctx, a : Attachment, w : Double, id? : Int = 0, dl? : Json? = None, act? : Int = 0) -> Unit {
   if wide_on.val {
-    file_card_wide(c, a, w, id, dl)
+    file_card_wide(c, a, w, id, dl, act)
     return
   }
   let t = @sf.theme()
@@ -1448,6 +1386,10 @@ fn file_card(c : @ui.Ctx, a : Attachment, w : Double, id? : Int = 0, dl? : Json?
         |> ignore
       })
       |> ignore
+      match file_card_act(dl) {
+        Some((icon, label)) if act != 0 => card_close(c, act, icon~, label~)
+        _ => ()
+      }
     },
   )
   |> ignore
@@ -1458,38 +1400,93 @@ fn file_card(c : @ui.Ctx, a : Attachment, w : Double, id? : Int = 0, dl? : Json?
 /// what is cut its middle, never its extension) over its size (11, grey), 236 wide at most, 8 by 10 in and 7 at the
 /// sheet's side, rounded as the sheet stands in (13), on the neutral ground; under the pointer the pointer's, its path
 /// said (the web's Tip).
-fn file_card_wide(c : @ui.Ctx, a : Attachment, w : Double, id : Int, dl : Json?) -> Unit {
+fn file_card_wide(c : @ui.Ctx, a : Attachment, w : Double, id : Int, dl : Json?, act : Int) -> Unit {
   if id != 0 {
     c.cursor(id, Hand)
-    wide_tip(c, "file-card/" + a.path, id, if a.path != "" { a.path } else { a.name })
+    @sf.tip(c, "file-card/" + a.path, id, if a.path != "" { a.path } else { a.name })
   }
-  let hot = id != 0 && c.hovered(id)
+  let hot = id != 0 && c.lit(id)
   c.box(style=if hot { file_card_hot } else { file_card_box }, w=Px(w), radius=message_file_corner, id~, fn() {
     let (meta, failed) = file_card_said(a, dl)
-    file_sheet(c, a.name, filled=file_card_coming(dl), failed~)
+    @sf.file_tile(c, a.name, progress=file_card_coming(dl), error=failed)
     c.box(style=file_card_words, fn() {
-      file_name_line(c, a.name)
+      @sf.file_name(c, a.name)
       c.text(meta, style=if failed { file_card_failed } else { file_card_meta }) |> ignore
     })
     |> ignore
+    match file_card_act(dl) {
+      Some((icon, label)) if act != 0 => file_card_button(c, act, icon, label)
+      _ => ()
+    }
   })
   |> ignore
 }
 
 ///|
+/// A wide card's own button at its end (Chat.tsx FileCard's remove and retry, Chat.css.ts fileCardRemove): 22 round,
+/// nothing under it but under the pointer (the hover ground), its icon 13 in the muted ink (the text's under the
+/// pointer); named.
+fn file_card_button(c : @ui.Ctx, id : Int, icon : String, label : String) -> Unit {
+  let p = @sf.theme().p
+  c.cursor(id, Hand)
+  let hot = c.lit(id)
+  let b = c.box(style=if hot { file_card_button_hot } else { file_card_button_box }, id~, fn() {
+    @sf.icon(c, icon, size=file_card_button_icon, color=if hot { p.text } else { p.muted }) |> ignore
+  })
+  c.semantics(b, Button, id~, label~)
+}
+
+///|
+// kept across runs: a value (no field of it changes)
+let file_card_button_box : @ui.Style = @ui.style(
+  w=@sf.file_card_button,
+  h=@sf.file_card_button,
+  radius=Full,
+  align=ACenter,
+  justify=JCenter,
+)
+
+///|
+// kept across runs: a value (no field of it changes)
+let file_card_button_hot : @ui.Style = file_card_button_box.then(@ui.css("bg=Hover"))
+
+///|
+/// fileCardRemove's icons (Close 12, Retry 13: the larger of the two).
+let file_card_button_icon : Double = 13.0
+
+///|
+/// A card's own button while the core downloads its file (✕: call it off) or once that failed (↻: ask it again), its
+/// icon and its name; None otherwise.
+fn file_card_act(dl : Json?) -> (String, String)? {
+  if flag(dl, "active") {
+    Some(("close", tr("web-main.file.cancelDownload")))
+  } else if text(dl, "state") == "failed" {
+    Some(("retry", tr("web-main.file.retryDownload")))
+  } else {
+    None
+  }
+}
+
+///|
+/// A video's bar while the core downloads it: under its words, 4 below them.
+// kept across runs: a value (no field of it changes)
+let video_coming_bar : @ui.Style = @ui.css("w=Full pt=S1")
+
+///|
 /// What a file's card says under its name: its size, or while the core downloads it how far it has come (正在下载 42% ·
 /// 18.3 MB), failed why (the core's words); and whether that is a failure.
 fn file_card_said(a : Attachment, dl : Json?) -> (String, Bool) {
-  match text(dl, "state") {
-    "going" | "failed" as state => (text(dl, "statusText"), state == "failed")
-    _ => (@sf.file_size(a.size), false)
+  if flag(dl, "active") || text(dl, "state") == "failed" {
+    (text(dl, "statusText"), !flag(dl, "active"))
+  } else {
+    (@sf.file_size(a.size), false)
   }
 }
 
 ///|
 /// How far the core has downloaded a file (0 to 1) while it does; None while it does not.
 fn file_card_coming(dl : Json?) -> Double? {
-  if text(dl, "state") == "going" {
+  if flag(dl, "active") {
     Some(number(dl, "progress"))
   } else {
     None
@@ -1499,133 +1496,12 @@ fn file_card_coming(dl : Json?) -> Double? {
 ///|
 /// An image with no preview: its mark over its words, in its middle.
 // kept across runs: a value (no field of it changes)
-let no_preview_box : @ui.Style = @ui.style(w=Full, h=Full, gap=S1_5, align=ACenter, justify=JCenter)
+let no_preview_box : @ui.Style = @ui.css("w=Full h=Full gap=S1_5 align=ACenter justify=JCenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
 let no_preview_words : @ui.TextStyle = @ui.text_style(size=Xs, color=Muted, wrap=false)
 
-///|
-/// A message's image coming in at a desktop's width, as the web's (Chat.css.ts msgImageWait, msgImageReveal): until it
-/// is decoded what it waits on (its likeness, the ThumbHash sent with it, else the ground); once it is, brushed in from
-/// its top (an edge half its height deep going down it), blurred to sharp and from 1.04 its size to its own (1100 ms,
-/// the ease out), what it waited on fading out behind it (300 ms, from 800). One already decoded as it is first shown
-/// comes as it is.
-fn image_reveal(c : @ui.Ctx, key : String, w : Double, h : Double, fit : @ui.Fit, hash : String) -> Unit {
-  // (decoded at the size it is drawn at: Ctx::image's)
-  let px = dmin(dmax(w, h) * c.scale, 8192.0)
-  let ready = c.image_ready(key, px)
-  let way = match reveals.get(key) {
-    Some(a) => a
-    None => {
-      let a = if ready { None } else { Some(@motion.Anim::new(0.0)) }
-      reveals[key] = a
-      a
-    }
-  }
-  // its way in, said once as it is first seen decoded
-  let p = match way {
-    Some(a) if ready => {
-      if !a.moving() && a.get() == 0.0 {
-        a.animate(1.0, @motion.tween(reveal_ms, ease=Linear))
-      }
-      a.get()
-    }
-    Some(_) => 0.0
-    None => 1.0
-  }
-  let e = @motion.Out.at(p)
-  let img = c.image(key, w=Px(w), h=Px(h), fit~, radius=file_corner(), bg=0L, fade=false)
-  if p >= 1.0 {
-    return
-  }
-  c.look(img, @ui.look(alpha=if ready { 1.0 } else { 0.0 }, scale=1.0 + reveal_grow * (1.0 - e)))
-  // blurred to sharp: a frost over it and what it waits on (its edge's steps softened under it), its blur going
-  let frost = fn() {
-    let blur = reveal_blur * (1.0 - e)
-    if ready && blur > 0.25 {
-      c.layer(fn() {
-        c.box(w=Fill(1.0), h=Fill(1.0), glass=@ui.Glass::frosted(blur~, tint=0L, solid=0L), fn() {  }) |> ignore
-      })
-      |> ignore
-    }
-  }
-  // what it waits on, under the edge brushing down (its band in steps), fading out from 800 ms
-  let waited = if ready {
-    1.0 - dclamp((p * reveal_ms - reveal_wait_after_ms) / reveal_wait_out_ms, 0.0, 1.0)
-  } else {
-    1.0
-  }
-  if waited <= 0.0 {
-    frost()
-    return
-  }
-  let likeness = @gallery.thumbhash_image(hash)
-  // (each step on the screen's pixels: one meets the next with no seam)
-  let px_of = fn(y : Double) { (y * c.scale).round() / c.scale }
-  let wait = fn(y0 : Double, y1 : Double, alpha : Double) {
-    let y0 = px_of(dmax(0.0, y0))
-    let y1 = px_of(dmin(h, y1))
-    if y1 <= y0 || alpha <= 0.0 {
-      return
-    }
-    // (each laid out from the picture's top, as a layer is: not under the one before)
-    c.layer(fn() {
-      bar_room_box(c, y0)
-      let strip = c.box(style=@ui.style(w=Full, h=Fixed(y1 - y0), clip=true), fn() {
-        let inner = match likeness {
-          Some(l) => c.image(l, w=Px(w), h=Px(h), fit=FitCover, bg=0L, fade=false)
-          None => c.box(style=@ui.style(w=Fixed(w), h=Fixed(h), bg=Neutral), fn() {  })
-        }
-        c.look(inner, @ui.look(dy=-y0))
-      })
-      c.look(strip, @ui.look(alpha=alpha * waited))
-    })
-    |> ignore
-  }
-  c.layer(fn() {
-    if !ready {
-      // (not decoded yet: all of it)
-      wait(0.0, h, 1.0)
-    } else {
-      // the edge: half its height deep, from above it to past its foot
-      let band = h * 0.5
-      let top = -band + (h + band) * e
-      let step = band / reveal_steps.to_double()
-      for k in 0..<reveal_steps {
-        let y = top + k.to_double() * step
-        wait(y, y + step, (k.to_double() + 0.5) / reveal_steps.to_double())
-      }
-      wait(top + band, h, 1.0)
-    }
-  })
-  |> ignore
-  frost()
-}
-
-///|
-/// Each image's way in, by its source, while the run lasts (None: first shown decoded, as it is).
-let reveals : Map[String, @motion.Anim?] = {}
-
-///|
-/// How long it comes in, how blurred and how much larger it starts, and when and how fast what it waited on goes.
-let reveal_ms : Double = 1100.0
-
-///|
-let reveal_blur : Double = 14.0
-
-///|
-let reveal_grow : Double = 0.04
-
-///|
-let reveal_wait_after_ms : Double = 800.0
-
-///|
-let reveal_wait_out_ms : Double = 300.0
-
-///|
-/// The steps its edge is drawn in.
-let reveal_steps : Int = 16
 
 ///|
 /// A message's pictures' corner: 10 (ChatFiles.kt), the wide screen's as its file cards' (message_file_corner).
@@ -1656,15 +1532,11 @@ let file_card_box : @ui.Style = @ui.style(
 
 ///|
 // kept across runs: a value (no field of it changes)
-let file_card_hot : @ui.Style = file_card_box.then(@ui.style(bg=Hover))
+let file_card_hot : @ui.Style = file_card_box.then(@ui.css("bg=Hover"))
 
 ///|
 // kept across runs: a value (no field of it changes)
-let file_card_words : @ui.Style = @ui.style(w=Grow(1.0))
-
-///|
-// kept across runs: a value (no field of it changes)
-let file_card_name : @ui.TextStyle = @ui.text_style(size=Sm, color=Fg, leading=L6, wrap=false)
+let file_card_words : @ui.Style = @ui.css("w=Grow(1.0)")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -1674,136 +1546,6 @@ let file_card_meta : @ui.TextStyle = @ui.text_style(size=Xs2, color=Muted, leadi
 /// Why the core's download of it failed, in its size's place.
 // kept across runs: a value (no field of it changes)
 let file_card_failed : @ui.TextStyle = @ui.text_style(size=Xs2, color=Danger, leading=L4, wrap=false)
-
-///|
-// kept across runs: a value (no field of it changes)
-let file_name_row : @ui.Style = @ui.style(row=true, w=Full)
-
-///|
-/// As wide as it is, short of the room the extension leaves (Chat.css.ts fileCardStem: flex's 0 1 auto, cut with an
-/// ellipsis): the extension right after it, not at the card's end.
-// kept across runs: a value (no field of it changes)
-let file_name_stem : @ui.Style = @ui.style(w=Hug)
-
-///|
-/// A file's name on one line, what is cut short the middle of it, never its extension (Chat.tsx FileName: an extension
-/// of 7 at most, the dot with it).
-fn file_name_line(c : @ui.Ctx, name : String) -> Unit {
-  let (stem, ext) = match name.rev_find(".") {
-    Some(i) if i > 0 && name.length() - i <= 8 => (name.view(end_offset=i).to_string(), name.view(start_offset=i).to_string())
-    _ => (name, "")
-  }
-  c.box(style=file_name_row, fn() {
-    c.box(style=file_name_stem, fn() { c.text(stem, style=file_card_name) |> ignore }) |> ignore
-    if ext != "" {
-      c.text(ext, style=file_card_name) |> ignore
-    }
-  })
-  |> ignore
-}
-
-///|
-/// What a file is, at a glance (Chat.tsx FileTile): a sheet 30 by 36, its top corner folded, drawn in the muted ink
-/// 1.5 wide, its extension on it in the text's ink (six letters at most, upper case), or two lines where it has none.
-/// `filled`: how far it has come (one downloaded), the sheet filling from its foot with the accent at 22%; `failed`:
-/// its extension red.
-fn file_sheet(c : @ui.Ctx, name : String, filled? : Double? = None, failed? : Bool = false) -> Unit {
-  let t = @sf.theme()
-  let dot = name.rev_find(".")
-  let ext = match dot {
-    Some(i) if i > 0 && name.length() - i <= 6 => name.view(start_offset=i + 1).to_string().to_upper()
-    _ => ""
-  }
-  let lines = if ext == "" { file_sheet_lines } else { "" }
-  let shapes = match filled {
-    Some(part) => [file_sheet_fill(c.scale, part, @sf.alpha(t.p.accent, file_sheet_fill_share))]
-    None => []
-  }
-  shapes.push(
-    @ui.shape_of(@pixels.svg_path(file_sheet_outline + file_sheet_fold + lines, c.scale), stroke=t.p.muted, width=1.5),
-  )
-  c.box(style=file_sheet_box, fn() {
-    c.shapes(shapes, w=Px(file_sheet_side.0), h=Px(file_sheet_side.1), name="file-sheet") |> ignore
-    if ext != "" {
-      // on the sheet's lower part, its middle at 14.5 (FileTile's <text x=14.5 y=27>), .62 of the card's 14
-      c.layer(fn() {
-        c.box(style=file_sheet_ext_room, fn() {
-          c.text(ext, size=file_sheet_ext_size, weight=600, color=if failed { t.p.red } else { t.p.text }, wrap=false)
-          |> ignore
-        })
-        |> ignore
-      })
-      |> ignore
-    }
-  })
-  |> ignore
-}
-
-///|
-/// The sheet filled from its foot `part` of its height (FileTile's rect from y = 36 − 36 × part, cut to the sheet's
-/// outline): the outline's inside (a convex shape) cut below that line, in the sheet's points (its curves cut for
-/// `scale` pixels a point).
-fn file_sheet_fill(scale : Double, part : Double, color : Int64) -> @ui.Shape {
-  let share = if part < 0.0 { 0.0 } else if part > 1.0 { 1.0 } else { part }
-  let from = file_sheet_side.1 * (1.0 - share)
-  let cut = @pixels.svg_path(file_sheet_outline, scale).filter_map(fn(o) {
-    let (pts, closed) = o
-    let n = pts.length() / 2
-    let out : Array[Double] = []
-    for i in 0..<n {
-      let (ax, ay) = (pts[2 * i], pts[2 * i + 1])
-      let j = (i + 1) % n
-      let (bx, by) = (pts[2 * j], pts[2 * j + 1])
-      if ay >= from {
-        out.push(ax)
-        out.push(ay)
-      }
-      if (ay >= from) != (by >= from) {
-        let k = (from - ay) / (by - ay)
-        out.push(ax + (bx - ax) * k)
-        out.push(from)
-      }
-    }
-    // (nothing of it come yet: nothing filled)
-    if out.length() < 6 {
-      None
-    } else {
-      Some((out, closed))
-    }
-  })
-  @ui.shape_of(cut, fill=color)
-}
-
-///|
-/// How much of the accent fills a sheet as it comes (FileTile's color-mix 22%).
-let file_sheet_fill_share : Double = 0.22
-
-///|
-/// The sheet's outline, its fold, and its lines where it has no extension (FileTile's paths, in its 30 by 36).
-let file_sheet_outline : String = "M6 1.75H19L26.25 9V31Q26.25 34.25 23 34.25H6Q2.75 34.25 2.75 31V5Q2.75 1.75 6 1.75Z"
-
-///|
-let file_sheet_fold : String = "M19 1.75V6.5Q19 9 21.5 9H26.25"
-
-///|
-let file_sheet_lines : String = "M8.5 19H20.5M8.5 23.5H17"
-
-///|
-/// The sheet's box (FileTile's 30 by 36).
-let file_sheet_side : (Double, Double) = (30.0, 36.0)
-
-///|
-/// The extension's size on the sheet (.62 of the message's 14).
-let file_sheet_ext_size : Double = 14.0 * 0.62
-
-///|
-// kept across runs: a value (no field of it changes)
-let file_sheet_box : @ui.Style = @ui.style(w=@sf.file_sheet_w, h=@sf.file_sheet_h)
-
-///|
-/// The extension's room: the sheet's width, its words' baseline 27 down (FileTile's <text y=27>).
-// kept across runs: a value (no field of it changes)
-let file_sheet_ext_room : @ui.Style = @ui.style(w=Full, h=Full, pt=S4_5, align=ACenter)
 
 ///|
 /// Options answered fade out in this long (Decisions.kt DecisionUnder); how it went fades in after them as long.
@@ -1989,12 +1731,12 @@ fn decision_under(
 /// The room over a post's options in its chat (Decisions.kt DecisionUnder: padding(top = 6) on the options' card, or
 /// on the vault's request in their place).
 // kept across runs: a value (no field of it changes)
-let options_room : @ui.Style = @ui.style(w=Full, pt=S1_5)
+let options_room : @ui.Style = @ui.css("w=Full pt=S1_5")
 
 ///|
 /// In the wide frame 8 over them (Decisions.css.ts options: margin-top 8).
 // kept across runs: a value (no field of it changes)
-let options_room_wide : @ui.Style = @ui.style(w=Full, pt=S2, align=AStart)
+let options_room_wide : @ui.Style = @ui.css("w=Full pt=S2 align=AStart")
 
 ///|
 /// The quiet line over or in place of a post's options (who decides, how it went): 13 on 19 (Decisions.kt); the wide
@@ -2218,14 +1960,14 @@ fn sent_elsewhere_wide(c : @ui.Ctx, src : Source, here : Here, s : Elsewhere) ->
     c.box(style=elsewhere_main, fn() {
       c.box(style=elsewhere_head, fn() {
         c.box(style=elsewhere_name, id=if mine { name } else { 0 }, fn() {
-          c.text(s.by.name, style=if mine && c.hovered(name) { wide_name_hot } else { wide_name }) |> ignore
+          c.text(s.by.name, style=if mine && c.lit(name) { wide_name_hot } else { wide_name }) |> ignore
         })
         |> ignore
         c.box(style=elsewhere_route, fn() {
           @sf.icon(c, if s.received { "received" } else { "send" }, size=14.0, color=t.p.accent) |> ignore
           let words = tr(if s.received { "web-main.chat.fromSlack" } else { "web-main.history.sentTo" }).trim_end(chars=" ").to_string()
           c.text(words, style=elsewhere_words) |> ignore
-          c.box(style=if place != 0 && c.hovered(place) { elsewhere_place_hot } else { elsewhere_place }, id=place, fn() {
+          c.box(style=if place != 0 && c.lit(place) { elsewhere_place_hot } else { elsewhere_place }, id=place, fn() {
             let (mark, said) = match s.place {
               Some(p) => (p.surface, p.name)
               None => ("slack", "Slack")
@@ -2271,17 +2013,17 @@ fn sent_elsewhere_wide(c : @ui.Ctx, src : Source, here : Here, s : Elsewhere) ->
 
 ///|
 // kept across runs: a value (no field of it changes)
-let elsewhere_row : @ui.Style = @ui.style(w=Full)
+let elsewhere_row : @ui.Style = @ui.css("w=Full")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let elsewhere_main : @ui.Style = @ui.style(w=Full, gap=S1)
+let elsewhere_main : @ui.Style = @ui.css("w=Full gap=S1")
 
 ///|
 /// Its head (Chat.css.ts msgHead): 24 high at least, 6 apart; the route takes what room is left, its place cut short
 /// first (msgRoute).
 // kept across runs: a value (no field of it changes)
-let elsewhere_head : @ui.Style = @ui.style(row=true, w=Full, min_h=S6, gap=S1_5, align=ACenter)
+let elsewhere_head : @ui.Style = @ui.css("row w=Full min_h=S6 gap=S1_5 align=ACenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -2289,7 +2031,7 @@ let elsewhere_name : @ui.Style = @ui.style(max_w=@sf.name_max)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let elsewhere_route : @ui.Style = @ui.style(row=true, gap=S1_5, align=ACenter)
+let elsewhere_route : @ui.Style = @ui.css("row gap=S1_5 align=ACenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -2299,11 +2041,11 @@ let elsewhere_words : @ui.TextStyle = @ui.text_style(size=Xs, color=Muted, wrap=
 /// The place (later.css.ts hPlace): its mark and its name, 12 in 500, 1 by 6 in, 6 round on the neutral ground; a
 /// link's the pointer's ground under the pointer.
 // kept across runs: a value (no field of it changes)
-let elsewhere_place : @ui.Style = @ui.style(row=true, px=S1_5, py=SPx, gap=S1, radius=Md, bg=Neutral, align=ACenter)
+let elsewhere_place : @ui.Style = @ui.css("row px=S1_5 py=SPx gap=S1 radius=Md bg=Neutral align=ACenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let elsewhere_place_hot : @ui.Style = elsewhere_place.then(@ui.style(bg=Hover))
+let elsewhere_place_hot : @ui.Style = elsewhere_place.then(@ui.css("bg=Hover"))
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -2312,7 +2054,7 @@ let elsewhere_place_words : @ui.TextStyle = @ui.text_style(size=Xs, weight=Mediu
 ///|
 /// Sending it failed: a red pill (the web's Pill tone red).
 // kept across runs: a value (no field of it changes)
-let elsewhere_failed : @ui.Style = @ui.style(px=S1_5, py=SPx, radius=Md, bg=DangerBg)
+let elsewhere_failed : @ui.Style = @ui.css("px=S1_5 py=SPx radius=Md bg=DangerBg")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -2322,15 +2064,8 @@ let elsewhere_failed_words : @ui.TextStyle = @ui.text_style(size=Xs2, color=Dang
 /// The place's mark on the picture's corner: 14 round, 6 past its right and foot edges, on the list's ground, a line
 /// round it (Chat.css.ts msgAvatarSlack).
 // kept across runs: a value (no field of it changes)
-let elsewhere_mark : @ui.Style = @ui.style(
-  w=S3_5,
-  h=S3_5,
-  radius=Full,
-  bg=Bg,
-  border=B1,
-  border_color=Line,
-  align=ACenter,
-  justify=JCenter,
+let elsewhere_mark : @ui.Style = @ui.css(
+  #|w=S3_5 h=S3_5 radius=Full bg=Bg border=B1 border_color=Line align=ACenter justify=JCenter
 )
 
 ///|
@@ -2458,7 +2193,7 @@ fn unsent_button(
     }
   }
   // (in the wide frame the pointer's ground and the text's ink under it: Chat.css.ts msgUnsentBtn)
-  let hot = wide_on.val && enabled && !busy && c.hovered(id)
+  let hot = wide_on.val && enabled && !busy && c.lit(id)
   if wide_on.val && enabled && !busy {
     c.cursor(id, Hand)
   }
@@ -2503,25 +2238,6 @@ fn unsent_size() -> Double {
 /// A running clock's second.
 let clock_tick_ms : Double = 1000.0
 
-
-///|
-/// A running clock's reading in short (Chat.kt elapsed): 45s, 3m 20s, 1h 5m.
-fn elapsed(ms : Double) -> String {
-  let s = dmax(ms / 1000.0, 0.0).to_int()
-  if s < 60 {
-    "\{s}s"
-  } else if s < 3600 {
-    if s % 60 != 0 {
-      "\{s / 60}m \{s % 60}s"
-    } else {
-      "\{s / 60}m"
-    }
-  } else if s % 3600 / 60 != 0 {
-    "\{s / 3600}h \{s % 3600 / 60}m"
-  } else {
-    "\{s / 3600}h"
-  }
-}
 
 ///|
 /// What an activity shows, steadied (Chat.kt steady): another thing replaces the shown one once it has stayed 700 ms
@@ -2675,7 +2391,7 @@ fn activity(
   if wide {
     c.cursor(id, Hand)
   }
-  let words_ink = if wide && c.hovered(id) { k.text } else { k.muted }
+  let words_ink = if wide && c.lit(id) { k.text } else { k.muted }
   // one of several agents: stopped alone from its row, under the pointer (Chat.tsx Activity `stoppable`)
   let row = c.id("activity-row/" + a.key)
   c.box(dir=Row, w=Fill(1.0), align=ACenter, id=row, fn() {
@@ -2725,7 +2441,8 @@ fn activity(
     },
   )
   |> ignore
-  if wide && here.view.agents.length() > 1 && (c.hovered(row) || c.hovered(id)) {
+  // (always to a finger, which hovers over nothing: OpenJobs.css.ts openJobStop `hover: none`)
+  if wide && here.view.agents.length() > 1 && (c.lit(row) || c.lit(id) || @ui.pointing() is Finger) {
     activity_stop(c, src, here, a)
   }
   })
@@ -2784,9 +2501,9 @@ fn activity_stop(c : @ui.Ctx, src : Source, here : Here, a : Agent) -> Unit {
   }
   if id != 0 {
     c.cursor(id, Hand)
-    wide_tip(c, "activity-stop/" + a.key, id, fill("web-main.activity.stop", [("who", a.who)]))
+    @sf.tip(c, "activity-stop/" + a.key, id, fill("web-main.activity.stop", [("who", a.who)]))
   }
-  let hot = id != 0 && c.hovered(id)
+  let hot = id != 0 && c.lit(id)
   c.box(style=if hot { activity_stop_hot } else { activity_stop_box }, id~, fn() {
     if busy {
       @sf.spinner(c, size=12.0) |> ignore
@@ -2803,7 +2520,7 @@ let activity_stop_box : @ui.Style = @ui.style(w=@sf.small_button, h=@sf.small_bu
 
 ///|
 // kept across runs: a value (no field of it changes)
-let activity_stop_hot : @ui.Style = activity_stop_box.then(@ui.style(bg=Hover))
+let activity_stop_hot : @ui.Style = activity_stop_box.then(@ui.css("bg=Hover"))
 
 ///|
 /// How far an activity's ring reaches round its avatar (Chat.kt: the messages' 18dp avatar, its ring 3dp round it).

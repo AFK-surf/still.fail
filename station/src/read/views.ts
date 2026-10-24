@@ -346,20 +346,48 @@ function needView(api: Api, thread: number, agents: Json[], dismissed: Set<strin
 
 // ---- the sidebar ----
 
+/// What a change of some sessions and threads can touch of a sidebar (`chats`), and what reading it takes: `rows`, the
+/// ids of the items it can change (an item's id is its first agent's key: the sessions changed, and the agents of the
+/// threads changed or theirs); `sessions` and `threads`, what those items are made of (their chats' agents, and the
+/// threads those take part in, the Slack ones they came from among them).
+export type Scope = { rows: Set<string>; sessions: Set<string>; threads: number[] };
+
+export function scopeOf(s: Store, sessions: string[], threads: number[]): Scope {
+  const members = (ids: Iterable<number>) => {
+    const out = new Set<string>();
+    for (const id of ids) for (const m of store.threadSessions(s, id)) out.add(m.session);
+    return out;
+  };
+  const touched = new Set([...threads, ...store.threadsOfSessions(s, sessions)]);
+  const rows = new Set([...sessions, ...members(touched)]);
+  const theirs = store.threadsOfSessions(s, [...rows]);
+  const agents = new Set([...rows, ...members(theirs)]);
+  return { rows, sessions: agents, threads: [...new Set([...touched, ...theirs, ...store.threadsOfSessions(s, [...agents])])] };
+}
+
+/// The sidebar items of `viewer` a change of `sessions` and `threads` can touch (`scopeOf`), as the whole sidebar has
+/// them, and the ids of those that can be touched (one not among the items now is gone from the sidebar).
+export function chatRows(station: Store, viewer: Viewer, sessions: string[], threads: number[]): Json {
+  const scope = scopeOf(apiOf(station).store, sessions, threads);
+  return { rows: chats(station, viewer, false, scope), scope: [...scope.rows] };
+}
+
 /// The viewer's sidebar: one kind of item, an agent (a shown session) merged with its internal chat. An agent in an
 /// internal chat is that chat's item; one with none yet is an item without a chat. A Slack thread is no item: it lends
 /// its agent's item a title (while the chat has no words of its own), the connect and the origin. `archived`: the
 /// archive's items instead, each with `archived: {at, by, alone}`. Each says when the viewer pinned it (`pinned`).
-export function chats(station: Store, viewer: Viewer, archived: boolean): Json[] {
+///
+/// `scope` (`scopeOf`): only the items whose ids it names (what a change of some sessions and threads can touch), read
+/// from what they are made of alone, each as the whole list has it.
+export function chats(station: Store, viewer: Viewer, archived: boolean, scope: Scope | null = null): Json[] {
   useNames(station);
   const api = apiOf(station);
   const s = api.store;
   const mine = isMine(api, viewer);
-  const stats = store.sessionStats(s, null);
   // Only the chats of the viewer's workspace (docs/multi-workspace.md).
   const sessions = store.listSessions(s).filter((x) => sees(viewer, x.ws));
   const shown = new Map(sessions.filter((x) => (x.archivedAt !== null) === archived).map((x) => [x.key, x]));
-  const order = sessions.filter((x) => (x.archivedAt !== null) === archived).map((x) => x.key);
+  const order = sessions.filter((x) => (x.archivedAt !== null) === archived && (scope === null || scope.rows.has(x.key))).map((x) => x.key);
   // In the archive, a chat of its own shows its agents whatever they are doing elsewhere.
   const all = new Map(sessions.map((x) => [x.key, x]));
   const listed = (t: ThreadSummary) => (t.thread.hiddenAt !== null) === archived;
@@ -380,7 +408,8 @@ export function chats(station: Store, viewer: Viewer, archived: boolean): Json[]
     if (watch !== undefined) v.watch = watch;
     return v;
   };
-  const threads = store.listThreads(s, viewer.email, null, null).filter((t) => t.sessions.some((m) => all.has(m.session)));
+  const threads = store.listThreads(s, viewer.email, null, scope === null ? null : scope.threads).filter((t) => t.sessions.some((m) => all.has(m.session)));
+  const stats = store.sessionStats(s, scope === null ? null : [...new Set([...scope.sessions, ...threads.flatMap((t) => t.sessions.map((m) => m.session))])]);
   // Per agent: the Slack thread it came from (the latest one it is in), and whether it has an internal chat.
   const origins = new Map<string, ThreadSummary>();
   const chatted = new Set<string>();
@@ -517,7 +546,7 @@ export function chats(station: Store, viewer: Viewer, archived: boolean): Json[]
     const shared = typeof row.id === "string" ? shares.get(row.id) : undefined;
     if (shared) row.xshare = { to: shared.to.map((t) => t.workspace), write: shared.write };
   }
-  return rows;
+  return scope === null ? rows : rows.filter((row) => scope.rows.has(String(row.id)));
 }
 
 

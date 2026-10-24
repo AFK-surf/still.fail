@@ -21,7 +21,7 @@ function useCard(href: string): Card | null {
   return useTopic<Card>(of ? { topic: "screenCard", station: of.station, screen: of.screen } : null).value ?? null;
 }
 
-/** A screen's kind at a glance, as a file's sheet is drawn (Chat.tsx FileTile): a display, or the globe for a browser tab. */
+/** A screen's kind at a glance, as a file's sheet is drawn (Chat.tsx FileTile): a display, the globe for a browser tab, a phone for a simulator. */
 function ScreenTile({ kind }: { kind: string | undefined }) {
   return (
     <svg className={chatCss.fileTile} width="30" height="36" viewBox="0 0 30 36" aria-hidden="true">
@@ -34,6 +34,11 @@ function ScreenTile({ kind }: { kind: string | undefined }) {
         <>
           <rect x="3.75" y="8" width="22.5" height="15.5" rx="2.5" />
           <path d="M15 23.5V28.5M10.5 28.5H19.5" />
+        </>
+      ) : kind === "simulator" ? (
+        <>
+          <rect x="8.25" y="5.25" width="13.5" height="25.5" rx="3" />
+          <path d="M13.5 26.25H16.5" />
         </>
       ) : null}
     </svg>

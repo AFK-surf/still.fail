@@ -33,6 +33,7 @@ import { archive } from "./archive.ts";
 import { Local, PENDING_PREFIX, type LocalChange } from "./local.ts";
 import * as marks from "./marks.ts";
 import { usageView } from "./usage.ts";
+import { resourcesView } from "./resources.ts";
 import { workspaceProfiles } from "./profiles.ts";
 import { admin, sources as adminSources } from "./admin.ts";
 import { attention, choices, find, models, runnableOn, runtimes, servingIn } from "./models.ts";
@@ -55,7 +56,7 @@ const DAY_MS = 86_400_000;
 export const HEAD = 80;
 export const HEAD_FROM = 500;
 
-const VIEW_TOPICS = new Set(["chats", "chatSearch", "search", "stations", "profiles", "connects", "chat", "history", "agentCard", "stationNet", "archive", "workspaceMarks", "decisions", "chatJobs", "chatLetters", "imageNear", "longJobs", "usage", "adminList", "adminItem", "adminOverview", "adminRelays"]);
+const VIEW_TOPICS = new Set(["chats", "chatSearch", "search", "stations", "profiles", "connects", "chat", "history", "agentCard", "stationNet", "archive", "workspaceMarks", "decisions", "chatJobs", "chatLetters", "imageNear", "longJobs", "usage", "resources", "adminList", "adminItem", "adminOverview", "adminRelays"]);
 
 /// What a chat row's columns say that the views find rows by (db/account.ts): how urgent it is for its person
 /// (workspace marks), whether it asks something of them, whether the 奏 page lists it.
@@ -287,7 +288,10 @@ export function shownMessage(message: J, agents: J[], viewer: J, slackUsers: str
         runtime: get(session, "runtime") ?? str(m.authorRuntime) ?? null,
       };
     }
-  } else if (kind === "ember" || kind === "stillfail") m.by = { name: brandName() };
+  } else if (kind === "ember" || kind === "stillfail") {
+    m.by = { name: brandName() };
+    m.notice = noticeOf(str(m.text) ?? "", str(m.profile) !== null);
+  }
   else {
     const member = members_.find((x) => typeof get(x, "email") === "string" && x.email.toLowerCase() === author.toLowerCase());
     const name = present.memberName(members_, author) ?? saidName ?? (author === "local" ? t("core-views.local_author") : author);
@@ -300,6 +304,8 @@ export function shownMessage(message: J, agents: J[], viewer: J, slackUsers: str
 }
 
 import * as brand from "../brand.ts";
+import { noticeOf } from "../notice.ts";
+export { noticeOf };
 const brandName = () => brand.name();
 
 /// The Slack workspaces a station's connects are signed in to, by team: their names and links.
@@ -374,7 +380,7 @@ function connectSessions(connect: J, connects: J[], sessions: J[], threads: J[],
       return c;
     });
   const bound = sessions.find((s) => current !== null && strOf(s, "key") === current);
-  return { sessions: own, bound: bound !== undefined ? shown(bound) : null, candidates, running };
+  return { sessions: own, bound: bound !== undefined ? shown(bound) : null, candidates, running, changes: present.modeChanges(connect, running) };
 }
 
 /// What the views are put together with: the core's store and data, and what the accounts say of a workspace.
@@ -453,6 +459,8 @@ export class Views implements Owner {
   readonly #again = new Map<string, Fiber.Fiber<unknown, unknown>>();
   /// The scopes whose stations' rows are being loaded (the list showed its first screen meanwhile).
   readonly #loading = new Set<string>();
+  /// Since when each station up has had no host reading (by address): unanswered that long, it is said to be silent.
+  readonly #hostless = new Map<string, number>();
 
   constructor(core: ViewsEnv) {
     this.#core = core;
@@ -634,6 +642,10 @@ export class Views implements Owner {
       case "usage":
         scope = view.scope as string;
         perStation = (s) => [{ topic: "stationUsage", station: s }];
+        break;
+      case "resources":
+        scope = view.scope as string;
+        perStation = (s) => [{ topic: "stationResources", station: s }];
         break;
       case "connects":
         scope = view.scope as string;
@@ -914,7 +926,7 @@ export class Views implements Owner {
       }
       case "stations": {
         // Asked with `drive`: those with a drive, this machine's (`here`) first (drive-browse.ts withDrive).
-        const stations = this.#stationsView(view.scope as string);
+        const stations = this.#stationsView(view.scope as string, view);
         if (view.drive !== true || stations === undefined || !("ok" in stations)) return stations;
         return { ok: withDrive(stations.ok as J[], typeof view.here === "string" ? view.here : null) };
       }
@@ -998,6 +1010,12 @@ export class Views implements Owner {
         const members_ = arr(get(this.ok({ topic: "workspace", workspace: scope }), "members"));
         const now = this.#core.host.nowMs();
         return { ok: usageView(sources, typeof view.days === "number" ? view.days : 7, now, this.#core.host.utcOffsetMin(now), this.me(scope), members_) };
+      }
+      case "resources": {
+        const stations = this.#stationsOr(view.scope as string);
+        if (stations === undefined || !Array.isArray(stations)) return stations as Value | undefined;
+        const sources = stations.map((s) => ({ address: s.address, name: s.name, online: s.online, value: s.online ? this.value({ topic: "stationResources", station: s.address }) : undefined }));
+        return { ok: resourcesView(sources, this.#core.host.nowMs(), looks.waitNote) };
       }
       case "longJobs": {
         const stations = this.#stationsOr(view.scope as string);
@@ -1262,6 +1280,12 @@ export class Views implements Owner {
     if (line !== null) {
       row.stateText = line[0];
       if (line[1] !== null) row.stateAbout = line[1];
+      const lead = line[3];
+      if (lead !== null) {
+        row.stateLead = lead.kind;
+        if (lead.text !== undefined) row.stateLeadText = lead.text;
+        row.stateRest = lead.rest;
+      }
     }
     if (typeof raw.pinned === "number") pinnedAt.set(row, raw.pinned);
     return row;
@@ -1275,7 +1299,7 @@ export class Views implements Owner {
     const unsent = this.local.unsent(station, thread, row.pending === true && typeof row.clientKey === "string" ? row.clientKey : null);
     if (unsent === undefined) return row;
     const text = format.cleanText(format.plainText(str(unsent.text) ?? ""));
-    const { stateAbout: _stateAbout, ...rest } = row;
+    const { stateAbout: _stateAbout, stateLead: _stateLead, stateLeadText: _stateLeadText, stateRest: _stateRest, ...rest } = row;
     const marked: J = { ...rest, tone: "alert", unsent: true, stateText: t("core-views.unsent", { text: text === "" ? t("core-views.file") : text }) };
     deepFreeze(marked);
     const pinned = pinnedAt.get(row);
@@ -1312,10 +1336,12 @@ export class Views implements Owner {
 
   // ── stations and connects ──
 
-  #stationsView(scope: string): Value | undefined {
+  /// `view`: the topic asking, computed again when one of its stations has been silent long enough to say so.
+  #stationsView(scope: string, view?: Topic): Value | undefined {
     const stations = this.#stationsOr(scope);
     if (stations === undefined || !Array.isArray(stations)) return stations as Value | undefined;
     const c = this.#clock();
+    let silentNext = Infinity;
     const items = stations.map((s) => {
       const overview = this.ok({ topic: "overview", station: s.address });
       const hostRaw = this.ok({ topic: "host", station: s.address });
@@ -1337,6 +1363,16 @@ export class Views implements Owner {
       // How it is reached alone, not its figures (they change with each reading: the `stationNet` view has them).
       const way = this.ok({ topic: "way", station: s.address });
       const state = str(this.link(s.address).state);
+      // Up without a host reading for SILENT_MS: said to be silent (the cloud says it is up, nothing answers).
+      let silent = false;
+      if (s.online && host === null) {
+        const since = this.#hostless.get(s.address) ?? c.now;
+        this.#hostless.set(s.address, since);
+        silent = c.now - since >= SILENT_MS;
+        if (!silent) silentNext = Math.min(silentNext, since + SILENT_MS - c.now);
+      } else this.#hostless.delete(s.address);
+      const blocked = !s.online && cause === "lock" && typeof get(this.link(s.address), "message") === "string" ? (get(this.link(s.address), "message") as string) : null;
+      const running = u64(get(get(overview, "counts"), "running")) ?? 0;
       return {
         station: s.address,
         id: s.id,
@@ -1348,8 +1384,10 @@ export class Views implements Owner {
         line: !s.online && cause === "lock" ? t("core-views.station.lock_short") : looks.stationLine(s.online, host),
         online: s.online,
         reconnecting: s.online && state !== "online" && state !== "error",
+        ...stationState(s.online, blocked !== null, summary, typeof s.lastSeen === "number" ? s.lastSeen : null, overview !== undefined, running, c),
+        problems: stationProblems(s.online, silent, blocked, typeof s.lastSeen === "number"),
         // Down for a security mode: why, in place of the page's 离线 words.
-        ...(!s.online && cause === "lock" && typeof get(this.link(s.address), "message") === "string" ? { blocked: get(this.link(s.address), "message") } : {}),
+        ...(blocked !== null ? { blocked } : {}),
         lastSeen: s.lastSeen,
         version: s.version,
         link: this.link(s.address),
@@ -1363,6 +1401,7 @@ export class Views implements Owner {
         ...(s.joined ? { joined: true, home: this.#core.homeName?.(scope, s.id) ?? null } : {}),
       };
     });
+    if (view !== undefined) this.#againIn(view, silentNext);
     return { ok: items };
   }
 
@@ -2042,3 +2081,27 @@ function drawn<V extends Value | undefined>(out: V, uploadOf: (path: unknown) =>
 
 /// How far apart the viewer's messages sent one after another still go together, one time under the last.
 const FOLLOWED_MS = 5 * 60_000;
+
+/// How long a station up may go without a host reading before it is said to be silent (StationCards.tsx useLong's 15 s).
+const SILENT_MS = 15_000;
+
+/// How a station is in a few words, as its page's head and its card say it (StationCards.tsx state): down for a security
+/// mode, its line; away, when it was last online (or never); up, connecting until its overview is read, then its
+/// agents at work (`busy`) or idle.
+export function stationState(online: boolean, blocked: boolean, summary: string, lastSeen: number | null, read: boolean, running: number, c: present.Clock): { stateText: string; stateBusy: boolean } {
+  if (!online && blocked) return { stateText: summary, stateBusy: false };
+  if (!online) {
+    return { stateText: lastSeen !== null ? t("core-views.station.last_online", { time: format.relativeTime(lastSeen * 1000, c.now, c.offsetMin) }) : t("core-views.station.never_online"), stateBusy: false };
+  }
+  if (!read) return { stateText: t("core-views.station.connecting"), stateBusy: false };
+  return running > 0 ? { stateText: t("core-views.station.running_agents", { n: running }), stateBusy: true } : { stateText: t("core-views.station.idle"), stateBusy: false };
+}
+
+/// What may be wrong with a station, each in words, worst first (StationCards.tsx problems): silent though up, down for
+/// a security mode (why), away (red once it has been online, else amber: never connected).
+export function stationProblems(online: boolean, silent: boolean, blocked: string | null, seen: boolean): { key: string; level: string; text: string }[] {
+  if (online && silent) return [{ key: "silent", level: "amber", text: t("core-views.station.silent", { name: brand.name() }) }];
+  if (!online && blocked !== null) return [{ key: "blocked", level: "red", text: blocked }];
+  if (!online) return [{ key: "away", level: seen ? "red" : "amber", text: seen ? t("core-views.station.away", { name: brand.name() }) : t("core-views.station.never_connected", { name: brand.name() }) }];
+  return [];
+}

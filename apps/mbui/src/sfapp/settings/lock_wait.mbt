@@ -48,7 +48,7 @@ pub fn lock_wait_page(c : @ui.Ctx, core : Core, here : Here) -> Unit {
 ///|
 /// The waiting page's column: what it says one under another, centred, a little apart.
 // kept across runs: a value (no field of it changes)
-let lock_column : @ui.Style = @sf.phone_column.then(@ui.style(gap=S3_5, align=ACenter))
+let lock_column : @ui.Style = @sf.phone_column.then(@ui.css("gap=S3_5 align=ACenter"))
 
 ///|
 fn note_center(c : @ui.Ctx, words : String) -> Unit {
@@ -63,7 +63,7 @@ fn error_center(c : @ui.Ctx, words : String) -> Unit {
 ///|
 /// The page and the navigation bar's room under it.
 // kept across runs: a value (no field of it changes)
-let lock_room : @ui.Style = @ui.style(w=Full, h=Full)
+let lock_room : @ui.Style = @ui.css("w=Full h=Full")
 
 ///|
 /// The page: a phone's width, in the middle of what is over the navigation bar.
@@ -73,7 +73,7 @@ let lock_page : @ui.Style = @sf.phone_page.then(@ui.style(h=@sf.grow))
 ///|
 /// Asking to be confirmed (or, in the lock without signing, made a trusted device) and the code typed (Security.kt
 /// PairSteps): on the waiting page and on 设置 › 安全.
-fn pair_steps(c : @ui.Ctx, core : Core, ws : String) -> Unit {
+pub fn pair_steps(c : @ui.Ctx, core : Core, ws : String) -> Unit {
   let lock = (core.topic)("lock", { "workspace": str(ws) }).value
   let me = field(lock, "me")
   let pair = field(me, "pair")

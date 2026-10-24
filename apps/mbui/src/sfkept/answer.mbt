@@ -3,13 +3,13 @@
 // older than a call (src/sfreplay). `markdown` (a text's tree), `code.ink` (what each piece of a code is), `reader.book`,
 // `reader.text` and `reader.search` (a text as the drive's reader shows it), `commands.find` (what ⌘K lists of what is
 // offered), `chat.tabs` and `decisions.queue` (a chat's side panel's tabs and the 奏 page's queue, for a run's made-up
-// core: chat-tabs.ts, decisions.ts) answer the same for the same words, so the
+// core: chat-tabs.ts, decisions.ts), `chat.find.go` (where a chat's find goes: chat-find.ts) answer the same for the same words, so the
 // TypeScript core's answers are kept here (kept.mbt, made by client/core-ts/scripts/kept-answers.ts) and nothing in the
 // app reads Markdown or code itself. An answer asked and not kept is said on the run's output (`kept-answers-ask {…}`):
 // scripts/test.sh fails on it, and scripts/kept has the core work it out and keeps it.
 
 ///|
-/// The kept answers as kept.mbt has them: `markdown` by the text; `code.ink` by the language and the code (a \u{1}
+/// The kept answers as kept.mbt has them (an answer a line), by call: `markdown` by the text; `code.ink` by the language and the code (a \u{1}
 /// between); `reader.book` by "md" or "txt" and the text, each with its answer, its text as joined (where joining
 /// changed it) and its searches by their words.
 let table : Ref[Map[String, Json]?] = Ref(None)
@@ -19,9 +19,21 @@ fn kept(call : String) -> Map[String, Json] {
   let t = match table.val {
     Some(t) => t
     None => {
-      let t = match (@json.parse(kept_answers) catch { _ => Json::null() }) {
-        Object(m) => m
-        _ => {}
+      // an answer a line: [call, key, answer]
+      let t : Map[String, Json] = {}
+      for line in kept_answers.split("\n") {
+        match (@json.parse(line.to_string()) catch { _ => Json::null() }) {
+          Array([String(call), String(key), answer]) =>
+            match t.get(call) {
+              Some(Object(m)) => m[key] = answer
+              _ => {
+                let m : Map[String, Json] = {}
+                m[key] = answer
+                t[call] = Json::object(m)
+              }
+            }
+          _ => ()
+        }
       }
       table.val = Some(t)
       t
@@ -165,6 +177,39 @@ pub fn answer(name : String, params : Json, bytes : Bytes?) -> Result[(Json, Byt
       }
     }
     "browse" => browse_answer(params)
+    // what a history step's call and result are (tool-step.ts), by what is asked as said
+    "history.tool" => {
+      let key = params.stringify()
+      match kept("history.tool").get(key) {
+        Some(v) => Some(Ok((v, None)))
+        None => not_kept({ "call": "history.tool", "key": Json::string(key) })
+      }
+    }
+    // where a chat's find goes (chat-find.ts): from what was found and where the reader is, which way, what shows
+    // what is written, read (refLinks.ts refAt, markBefore, marksIn, pastedRefs; pasted.ts): by the call and its words
+    "ref.at" | "ref.before" | "ref.marks" | "ref.pasted" | "paste.info" => {
+      let ask : Map[String, Json] = { "call": Json::string(name), "text": Json::string(word(params, "text")) }
+      match param(params, "caret") {
+        Some(Number(_, ..) as n) => ask["caret"] = n
+        _ => ()
+      }
+      match word(params, "here") {
+        "" => ()
+        h => ask["here"] = Json::string(h)
+      }
+      let key = Json::object(ask).stringify()
+      match kept("words").get(key) {
+        Some(v) => Some(Ok((v, None)))
+        None => not_kept({ "call": "words", "key": Json::string(key) })
+      }
+    }
+    "chat.find.go" => {
+      let key = params.stringify()
+      match kept("chat.find.go").get(key) {
+        Some(v) => Some(Ok((v, None)))
+        None => not_kept({ "call": "chat.find.go", "key": Json::string(key) })
+      }
+    }
     // the 奏 page's queue (decisions.ts) for a made-up core that keeps one: its items in order and the one shown, or
     // what is kept after a pick or a setting aside, as asked
     "decisions.queue" => {

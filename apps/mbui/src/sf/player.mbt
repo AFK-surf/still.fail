@@ -9,8 +9,9 @@
 // picture, and is on the page's own colours. How it plays is mbui's player's (@kit.Media: the system's player in a
 // native view, its bytes asked a part at a time of the file's `stream`).
 //
-// With a mouse (`player_view` on a desktop): the bar every file opened has along the top (viewer_bar.mbt), the
-// controls floating over the foot (media.mbt), both gone as the pointer rests while it plays. A click plays or pauses,
+// On a desktop's layout (`player_view` in the wide frame): the bar every file opened has along the top
+// (viewer_bar.mbt), the controls floating over the foot (media.mbt), both gone as the pointer rests while it plays (a
+// finger there, a tablet's, taps them on and off and double taps as on a phone). A click plays or pauses,
 // a double click fills the screen; the wheel with ⌘ or ⌃ (a trackpad's pinch) zooms round the pointer, the wheel
 // alone moves what is zoomed in. Keys: Space or K plays or pauses; paused, ← → and , . step a frame, playing ← → jump
 // 15 s; J L jump 15 s; ↑ ↓ the sound; M mutes; F fills the screen; C the subtitle; ⇧N ⇧P the next one and the one
@@ -191,20 +192,28 @@ pub fn player_media(c : @ui.Ctx, key : String, file : ViewerFile, siblings : Arr
 
 ///|
 /// How the player reads `file` a part at a time: as it streams, or from its bytes here already, or (neither) read
-/// whole once and answered from that.
-fn player_read(file : ViewerFile) -> (Double, Int, (Bytes, Double) -> Unit) -> Unit {
+/// whole once and answered from that (a read let go of meanwhile answered no more).
+fn player_read(file : ViewerFile) -> (Double, Int, (Bytes, Double, Bool) -> Unit) -> () -> Unit {
   match (file.stream, file.bytes) {
     (Some(stream), _) => stream
-    (None, Some(b)) => fn(offset, length, answer) { answer(player_slice(b, offset, length), b.length().to_double()) }
+    (None, Some(b)) =>
+      fn(offset, length, answer) {
+        answer(player_slice(b, offset, length), b.length().to_double(), false)
+        fn() {  }
+      }
     (None, None) => {
       let whole : Ref[Bytes?] = Ref(None)
-      let waiting : Array[(Double, Int, (Bytes, Double) -> Unit)] = []
+      let waiting : Array[(Double, Int, (Bytes, Double, Bool) -> Unit, Ref[Bool])] = []
       let asked = Ref(false)
       fn(offset, length, answer) {
         match whole.val {
-          Some(b) => answer(player_slice(b, offset, length), b.length().to_double())
+          Some(b) => {
+            answer(player_slice(b, offset, length), b.length().to_double(), false)
+            fn() {  }
+          }
           None => {
-            waiting.push((offset, length, answer))
+            let gone = Ref(false)
+            waiting.push((offset, length, answer, gone))
             if !asked.val {
               asked.val = true
               (file.read)(-1, fn(_) {  }, fn(r) {
@@ -212,17 +221,22 @@ fn player_read(file : ViewerFile) -> (Double, Int, (Bytes, Double) -> Unit) -> U
                   Ok(b) => {
                     whole.val = Some(b)
                     for w in waiting {
-                      (w.2)(player_slice(b, w.0, w.1), b.length().to_double())
+                      if !w.3.val {
+                        (w.2)(player_slice(b, w.0, w.1), b.length().to_double(), false)
+                      }
                     }
                   }
                   Err(_) =>
                     for w in waiting {
-                      (w.2)(b"", -2.0)
+                      if !w.3.val {
+                        (w.2)(b"", -2.0, false)
+                      }
                     }
                 }
                 waiting.clear()
               })
             }
+            fn() { gone.val = true }
           }
         }
       }
@@ -317,6 +331,8 @@ priv struct PlayerView {
   mut last : (Double, Double)
   mut pinch : (Double, Double, Double)
   mut pinched : Bool
+  /// the finger came down on the picture flinging (zoomed in), and stopped it there: no tap
+  mut caught : Bool
   mut ended_off : String
   mut file : String
 }
@@ -357,6 +373,7 @@ fn view_for(key : String) -> PlayerView {
         last: (0.0, 0.0),
         pinch: (0.0, 0.0, 0.0),
         pinched: false,
+        caught: false,
         ended_off: "",
         file: "",
       }
@@ -692,7 +709,8 @@ fn player_cue(c : @ui.Ctx, words : String, up : Bool, right : Double) -> Unit {
 }
 
 ///|
-/// What it waits on, why it failed, in the stage's middle.
+/// What it waits on (with how fast its bytes come meanwhile, once a second of it has gone: moving, or not at all), why
+/// it failed, in the stage's middle.
 fn player_waits(c : @ui.Ctx, p : @kit.Media, f : @kit.MediaFrame, ink : MediaInk) -> Unit {
   c.layer(fn() {
     c.box(style=player_middle, fn() {
@@ -701,8 +719,9 @@ fn player_waits(c : @ui.Ctx, p : @kit.Media, f : @kit.MediaFrame, ink : MediaInk
           if f.waited {
             c.box(style=player_pill.then(@ui.style(bg=Data(ink.ground))), fn() {
               spinner(c, size=player_pill_spinner) |> ignore
+              let what = t(if f.phase == Opening { "common.opening" } else { "web-pages.drive.player.buffering" })
               c.text(
-                t(if f.phase == Opening { "common.opening" } else { "web-pages.drive.player.buffering" }),
+                if f.rate >= 0.0 { what + " · " + file_size(f.rate) + "/s" } else { what },
                 style=player_pill_words.then(@ui.text_style(color=Data(ink.text))),
               )
               |> ignore
@@ -779,7 +798,7 @@ pub fn player_view(
 // ── a desktop's ─────────────────────────────────────────────────────────
 
 ///|
-/// The player over the window with a mouse (see the file's head).
+/// The player over the window, a desktop's layout (see the file's head).
 fn desk_player(
   c : @ui.Ctx,
   p : @kit.Media,
@@ -813,9 +832,10 @@ fn desk_player(
   let fr = frames_of(p, s, p.scrubbing().unwrap_or(s.position))
   let mac = @ui.platform() == 0
   take_grab(v, p, name)
-  // the pointer's moves wake the controls, as a mouse's do
+  // a mouse's moves wake the controls; a finger (a tablet's screen) taps them on and off, as on a phone
+  let finger = @ui.pointing() is Finger
   let (px, py, _) = c.pointer()
-  if v.moves is Some((x, y)) && (x != px || y != py) {
+  if !finger && v.moves is Some((x, y)) && (x != px || y != py) {
     p.wake()
   }
   v.moves = Some((px, py))
@@ -921,11 +941,14 @@ fn desk_player(
     }
   }
   c.box(style=desk_play_ground.then(@ui.style(bg=Data(ink.stage))), fn() {
-    // the picture, in the window less the list beside it: a click plays or pauses, a double click fills the screen
+    // the picture, in the window less the list beside it: a click plays or pauses, a double click fills the screen; a
+    // finger's tap shows or hides the controls, its double tap nudges or plays (Media::stage, the phone's)
     let stage = c.id(key + "/desk-stage")
     @ui.capture(c, stage)
     c.cursor(stage, Hand)
-    if picture && mac && c.double_clicked(stage) {
+    if finger {
+      p.stage(c, stage, c.width - panel)
+    } else if picture && mac && c.double_clicked(stage) {
       full()
     } else if c.clicked(stage) {
       p.play_pause()
@@ -1195,7 +1218,7 @@ fn desk_play_timeline(c : @ui.Ctx, p : @kit.Media, s : @kit.MediaStatus, fr : Fr
     c.layer(fn() { media_head(c, shown, ink.text, rail=true) }) |> ignore
     // with a mouse over it (or dragging), the time where it points, over it
     match c.rect_of(id) {
-      Some((x, _, w, _)) if on && dur > 0.0 && (c.hovered(id) || c.pressed(id)) => {
+      Some((x, _, w, _)) if on && dur > 0.0 && (c.lit(id) || c.pressed(id)) => {
         let (px, _, _) = c.pointer()
         let track = dmax(desk_whole, w - 2.0 * player_track_inset)
         let at = dmin(desk_whole, dmax(desk_none, (px - x - player_track_inset) / track))
@@ -1259,7 +1282,7 @@ fn desk_play_list(
             if c.clicked(id) && !now {
               go(list[i])
             }
-            let hot = c.hovered(id) || c.pressed(id)
+            let hot = c.lit(id) || c.pressed(id)
             c.box(style=desk_list_row.then(@ui.style(bg=Data(if now { chosen } else if hot { alpha(words, media_hot_share) } else { no_ground }))), id~, fn() {
               c.box(style=desk_chapter_number, fn() {
                 c.text("\{i + 1}", style=desk_chapter_n_words.then(@ui.text_style(color=Data(quiet)))) |> ignore
@@ -1420,8 +1443,9 @@ fn phone_player(
 ///|
 /// What a finger does on the picture: two zoom it; one along it moves through the time (the picture going with it frame
 /// by frame, paused meanwhile: @kit.Media scrub_to), down it takes the picture down and closes it past player_close_dy (sideways: upright first), held still
-/// it plays at 2× until let go; zoomed in, one moves what is shown. A tap or a double tap is the player's own (@kit.Media
-/// stage: the controls; a side's 15 s; play or pause), not when the finger did any of these.
+/// it plays at 2× until let go; zoomed in, one moves what is shown (let go moving, it goes on, slowing). A tap or a
+/// double tap is the player's own (@kit.Media stage: the controls; a side's 15 s; play or pause), not when the finger
+/// did any of these, nor when it came down on the picture flinging (stopping it).
 fn phone_gestures(
   c : @ui.Ctx,
   v : PlayerView,
@@ -1451,6 +1475,9 @@ fn phone_gestures(
       return
     }
     _ => v.pinch = (0.0, 0.0, 0.0)
+  }
+  if press.fresh && (c.pressed(stage) || c.clicked(stage)) {
+    v.caught = z.stop_fling()
   }
   if down && c.pressed(stage) {
     let dx = px - press.x
@@ -1497,6 +1524,12 @@ fn phone_gestures(
     match was {
       AlongTime => p.scrub_done()
       DownClose => if v.drag_dy > player_close_dy { back() }
+      // let go moving: on at the finger's speed, slowing, to a stop or its edge
+      MoveZoom =>
+        if !v.pinched {
+          let (fx, fy) = c.pointer_velocity()
+          z.fling(fx, fy)
+        }
       _ => ()
     }
     if held {
@@ -1509,7 +1542,7 @@ fn phone_gestures(
       v.pinched = false
     }
     // a tap or a double tap (none of the above)
-    if was == NoDrag && !held && !press.long {
+    if was == NoDrag && !held && !press.long && !v.caught {
       p.stage(c, stage, c.width)
     }
   }
@@ -1824,7 +1857,7 @@ let player_next_w : Double = 280.0
 
 ///|
 // kept across runs: a value (no field of it changes)
-let player_fill : @ui.Style = @ui.style(w=Full, h=Full)
+let player_fill : @ui.Style = @ui.css("w=Full h=Full")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -1832,12 +1865,12 @@ let desk_grow_full_h : @ui.Style = @ui.style(w=Full, h=grow)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let player_middle : @ui.Style = @ui.style(w=Full, h=Full, align=ACenter, justify=JCenter)
+let player_middle : @ui.Style = @ui.css("w=Full h=Full align=ACenter justify=JCenter")
 
 ///|
 /// A pill in the middle (what it waits on, what a tap did): 12 and 6 in, 8 apart, round.
 // kept across runs: a value (no field of it changes)
-let player_pill : @ui.Style = @ui.style(row=true, px=S3, py=S1_5, gap=S2, radius=Xl1_5, align=ACenter)
+let player_pill : @ui.Style = @ui.css("row px=S3 py=S1_5 gap=S2 radius=Xl1_5 align=ACenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -1845,7 +1878,7 @@ let player_pill_words : @ui.TextStyle = @ui.text_style(size=Sm, wrap=false)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let player_failed_box : @ui.Style = @ui.style(p=S8, gap=S3, align=ACenter)
+let player_failed_box : @ui.Style = @ui.css("p=S8 gap=S3 align=ACenter")
 
 ///|
 /// The next one's card: 280 wide, 20 and 16 in, 12 between; its button 40 high.
@@ -1858,7 +1891,7 @@ let player_next_note : @ui.TextStyle = @ui.text_style(size=Xs, wrap=false)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let player_next_now : @ui.Style = @ui.style(w=Full, h=S10, px=S4, radius=Xl, align=ACenter, justify=JCenter, clip=true)
+let player_next_now : @ui.Style = @ui.css("w=Full h=S10 px=S4 radius=Xl align=ACenter justify=JCenter clip")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -1866,16 +1899,16 @@ let player_next_words : @ui.TextStyle = @ui.text_style(size=Sm, weight=Semibold,
 
 ///|
 // kept across runs: a value (no field of it changes)
-let player_next_off : @ui.Style = @ui.style(px=S3, py=S1)
+let player_next_off : @ui.Style = @ui.css("px=S3 py=S1")
 
 ///|
 /// A phone's bar at the top: 8 and 6 in, 48 high, its corner 16; the name 15 in 600, which of how many 12.
 // kept across runs: a value (no field of it changes)
-let phone_head_place : @ui.Style = @ui.style(w=Full, px=S2, py=S1_5)
+let phone_head_place : @ui.Style = @ui.css("w=Full px=S2 py=S1_5")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let phone_head_box : @ui.Style = @ui.style(row=true, w=Full, h=S12, px=S1, gap=S1, radius=Xl1_5, align=ACenter)
+let phone_head_box : @ui.Style = @ui.css("row w=Full h=S12 px=S1 gap=S1 radius=Xl1_5 align=ACenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -1892,7 +1925,7 @@ let phone_index_words : @ui.TextStyle = @ui.text_style(size=Xs, wrap=false)
 ///|
 /// A phone's controls: 8 round them, 720 wide at most, 6 in at the sides and foot and 8 over, their corner 24.
 // kept across runs: a value (no field of it changes)
-let phone_foot_place : @ui.Style = @ui.style(w=Full, p=S2, align=ACenter)
+let phone_foot_place : @ui.Style = @ui.css("w=Full p=S2 align=ACenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -1900,7 +1933,7 @@ let phone_controls_box : @ui.Style = @ui.style(w=Full, max_w=Fixed(phone_control
 
 ///|
 // kept across runs: a value (no field of it changes)
-let phone_time_box : @ui.Style = @ui.style(pl=S2_5)
+let phone_time_box : @ui.Style = @ui.css("pl=S2_5")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -1916,15 +1949,15 @@ let phone_timeline_box : @ui.Style = @ui.style(w=Full, h=Fixed(phone_timeline_h)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let phone_keys_row : @ui.Style = @ui.style(row=true, w=Full, align=ACenter)
+let phone_keys_row : @ui.Style = @ui.css("row w=Full align=ACenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let phone_key_box : @ui.Style = @ui.style(w=S10, h=S10, radius=Full, align=ACenter, justify=JCenter)
+let phone_key_box : @ui.Style = @ui.css("w=S10 h=S10 radius=Full align=ACenter justify=JCenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let phone_speed_box : @ui.Style = @ui.style(min_w=S10, h=S10, px=S2, radius=Full, align=ACenter, justify=JCenter)
+let phone_speed_box : @ui.Style = @ui.css("min_w=S10 h=S10 px=S2 radius=Full align=ACenter justify=JCenter")
 
 ///|
 /// A song's mark (72) in the middle; the cue's words (16 on 1.6) on black at 60%; above the controls while they show
@@ -1955,7 +1988,7 @@ let desk_volume_steps : Double = 20.0
 
 ///|
 // kept across runs: a value (no field of it changes)
-let desk_volume_row : @ui.Style = @ui.style(row=true, pr=S1_5, gap=S0_5, align=ACenter)
+let desk_volume_row : @ui.Style = @ui.css("row pr=S1_5 gap=S0_5 align=ACenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -1966,11 +1999,11 @@ let desk_volume_w : Double = 72.0
 
 ///|
 // kept across runs: a value (no field of it changes)
-let desk_play_ground : @ui.Style = @ui.style(w=Full, h=Full, bg=Bg)
+let desk_play_ground : @ui.Style = @ui.css("w=Full h=Full bg=Bg")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let desk_play_row : @ui.Style = @ui.style(row=true, w=Full, h=Full)
+let desk_play_row : @ui.Style = @ui.css("row w=Full h=Full")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -1978,7 +2011,7 @@ let desk_grow_full : @ui.Style = @ui.style(w=grow, h=Full)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let desk_play_cover : @ui.Style = @ui.style(w=Full, h=Full, px=S8, gap=S4, align=ACenter, justify=JCenter)
+let desk_play_cover : @ui.Style = @ui.css("w=Full h=Full px=S8 gap=S4 align=ACenter justify=JCenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -1986,26 +2019,26 @@ let desk_cover_name : @ui.TextStyle = @ui.text_style(size=Xl, weight=Semibold, c
 
 ///|
 // kept across runs: a value (no field of it changes)
-let desk_play_middle : @ui.Style = @ui.style(w=Full, h=Full, align=ACenter, justify=JCenter)
+let desk_play_middle : @ui.Style = @ui.css("w=Full h=Full align=ACenter justify=JCenter")
 
 // kept across runs: a value (no field of it changes)
 let desk_play_note : @ui.TextStyle = @ui.text_style(size=Xs, color=Muted, center=true)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let desk_cue_up : @ui.Style = @ui.style(w=Full, h=Full, pb=S28, justify=JEnd)
+let desk_cue_up : @ui.Style = @ui.css("w=Full h=Full pb=S28 justify=JEnd")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let desk_cue_down : @ui.Style = @ui.style(w=Full, h=Full, pb=S7, justify=JEnd)
+let desk_cue_down : @ui.Style = @ui.css("w=Full h=Full pb=S7 justify=JEnd")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let desk_cue_row : @ui.Style = @ui.style(row=true, w=Full, px=S4)
+let desk_cue_row : @ui.Style = @ui.css("row w=Full px=S4")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let desk_cue_box : @ui.Style = @ui.style(px=S2, py=S0_5, radius=Md, bg=Veil)
+let desk_cue_box : @ui.Style = @ui.css("px=S2 py=S0_5 radius=Md bg=Veil")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -2014,21 +2047,21 @@ let desk_cue_words : @ui.TextStyle = @ui.text_style(size=Xl, color=OnVeil, cente
 ///|
 /// The controls: 16 off the window's foot, in the middle of what the list leaves.
 // kept across runs: a value (no field of it changes)
-let desk_controls_place : @ui.Style = @ui.style(w=Full, h=Full, pb=S4, justify=JEnd)
+let desk_controls_place : @ui.Style = @ui.css("w=Full h=Full pb=S4 justify=JEnd")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let desk_play_row_end : @ui.Style = @ui.style(row=true, w=Full)
+let desk_play_row_end : @ui.Style = @ui.css("row w=Full")
 
 ///|
 /// 选集's head (listHead: 12 over, 10 right, 6 under, 18 at its start) and rows (listRow: 40 at least, 8 and 10 in, the
 /// page's corner; the one playing on the chosen ground, in 500).
 // kept across runs: a value (no field of it changes)
-let desk_list_head : @ui.Style = @ui.style(row=true, w=Full, pl=S4_5, pr=S2_5, pt=S3, pb=S1_5, gap=S2, align=ACenter)
+let desk_list_head : @ui.Style = @ui.css("row w=Full pl=S4_5 pr=S2_5 pt=S3 pb=S1_5 gap=S2 align=ACenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let desk_list_row : @ui.Style = @ui.style(row=true, w=Full, min_h=S10, px=S2_5, py=S2, gap=S1, align=ACenter, radius=Xl)
+let desk_list_row : @ui.Style = @ui.css("row w=Full min_h=S10 px=S2_5 py=S2 gap=S1 align=ACenter radius=Xl")
 
 ///|
 // kept across runs: a value (no field of it changes)

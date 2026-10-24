@@ -25,28 +25,20 @@ jobs:
   # into kept in the Actions cache by content (MBC_STORE: main's newest and a branch's own together): 667 tests,
   # ~170 s a part with them, ~390 s without (2026-10-22). A merge's evidence and main's, apart from the app's beta (mbui.yml),
   # which its tests do not hold back (as asked, 2026-10-19). The latest MoonBit (.github/actions/mbui-moonbit); mbui in
-  # apps/mbui/mbui. Its tests' two parts (scripts/test.sh's PARTS) on a runner each, the check with the app's. On main
-  # the same with ThinLTO too, as the apps are built (what only inlining across units shows, undefined behaviour), a
-  # runner a part: no macOS runner (a test's program is the same C on any system; the Apple toolchain builds the apps,
-  # mbui.yml).
+  # apps/mbui/mbui. Its tests' two parts (scripts/test.sh's PARTS) on a runner each, the check with the app's: no macOS
+  # runner (a test's program is the same C on any system; the Apple toolchain builds the apps, mbui.yml). No ThinLTO
+  # parts: the apps are not built with it (scripts/mbc's lto_for, 2026-10-24).
   native:
-    name: ${{ matrix.lto && format('native (ThinLTO, {0})', matrix.part) || format('native ({0})', matrix.part) }}
+    name: native (${{ matrix.part }})
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     strategy:
       fail-fast: false
       matrix:
         part: [app, replay]
-        lto: ${{ github.ref == 'refs/heads/main' && fromJSON('[false, true]') || fromJSON('[false]') }}
     env:
       MBC_STORE: ${{ github.workspace }}/apps/mbui/_build/native/release/mbc-store
-      MBC_LTO: ${{ matrix.lto && 'thin' || '0' }}
-      # ThinLTO's cache (lld's: each unit's code as the last links made it, taken again for a unit whose summary and
-      # imports are the same; lld prunes what was not used for a week): the ThinLTO replay part's links were 529 s of
-      # its 4 cores' ~240, five programs ~100 s each, each made again from nothing (2026-10-22, 39727676590); with it
-      # the part was 62 s, the app's ThinLTO part 75 s (39729537519; units and cache ~54 MB in the Actions cache)
-      MBC_LTO_CACHE: ${{ github.workspace }}/.ci/lto
-      CACHE_PREFIX: mbui-linux-store-${{ matrix.lto && 'lto-' || '' }}${{ matrix.part }}-
+      CACHE_PREFIX: mbui-linux-store-${{ matrix.part }}-
       # (main's units under m-, a branch's under b-: a branch takes main's newest and its own, below)
       OWN: ${{ github.ref == 'refs/heads/main' && 'm-' || 'b-' }}
     steps:
@@ -69,8 +61,8 @@ jobs:
             apps/mbui/_build
             !${{ env.MBC_STORE }}
             !apps/mbui/_build/**/*.mbc
-          key: mbui-moon-build-${{ matrix.lto && 'lto-' || '' }}${{ matrix.part }}-${{ github.sha }}
-          restore-keys: mbui-moon-build-${{ matrix.lto && 'lto-' || '' }}${{ matrix.part }}-
+          key: mbui-moon-build-${{ matrix.part }}-${{ github.sha }}
+          restore-keys: mbui-moon-build-${{ matrix.part }}-
       # The units main's newest run kept, and on a branch its own last run's beside them (a store by content: the two
       # together, nothing of one replaces the other's). A branch's own alone, after it took main's newer commits in
       # (a rebase), compiled again all main had changed since: 253 s of the app part where its push before was 82 s
@@ -78,32 +70,28 @@ jobs:
       - uses: actions/cache/restore@v4
         id: main
         with:
-          path: |
-            ${{ env.MBC_STORE }}
-            .ci/lto
+          path: ${{ env.MBC_STORE }}
           key: ${{ env.CACHE_PREFIX }}m-${{ github.sha }}
           # (m- only: GitHub looks through all the restore-keys on the branch before main's, and a fallback to any of the
           # kind took the branch's own here too, main's never: mbui-wide-workspace, 39995406305, 234 s)
           restore-keys: ${{ env.CACHE_PREFIX }}m-
       - if: github.ref != 'refs/heads/main'
         run: |
-          mkdir -p "$MBC_STORE" .ci/lto
-          mv "$MBC_STORE" "$RUNNER_TEMP/store-main" && mv .ci/lto "$RUNNER_TEMP/lto-main"
+          mkdir -p "$MBC_STORE"
+          mv "$MBC_STORE" "$RUNNER_TEMP/store-main"
       - uses: actions/cache/restore@v4
         id: own
         if: github.ref != 'refs/heads/main'
         with:
-          path: |
-            ${{ env.MBC_STORE }}
-            .ci/lto
+          path: ${{ env.MBC_STORE }}
           key: ${{ env.CACHE_PREFIX }}b-${{ github.sha }}
           restore-keys: ${{ env.CACHE_PREFIX }}b-
       - if: github.ref != 'refs/heads/main'
         run: |
-          mkdir -p "$MBC_STORE" .ci/lto
-          cp -a -n "$RUNNER_TEMP/store-main/." "$MBC_STORE/" && cp -a -n "$RUNNER_TEMP/lto-main/." .ci/lto/
+          mkdir -p "$MBC_STORE"
+          cp -a -n "$RUNNER_TEMP/store-main/." "$MBC_STORE/"
           echo "units: $(find "$MBC_STORE" -mindepth 2 -maxdepth 2 -type d | wc -l) (main's $(find "$RUNNER_TEMP/store-main" -mindepth 2 -maxdepth 2 -type d | wc -l))"
-      - name: The mbui app's tests and the flows seen again (native, ${{ matrix.part }}${{ matrix.lto && ', ThinLTO' || '' }})
+      - name: The mbui app's tests and the flows seen again (native, ${{ matrix.part }})
         run: |
           set -o pipefail
           touch "$RUNNER_TEMP/start"
@@ -112,8 +100,9 @@ jobs:
           export MBC_LOG="$RUNNER_TEMP/mbc.log"
           TIMES=1 MBC_REAL_CC=clang TARGETS=native PARTS=${{ matrix.part }} LINES_OUT=40 bash apps/mbui/scripts/test.sh 2>&1 | tee "$RUNNER_TEMP/mbui-test.log"
       - name: The mbui app's check (detlint, then native type-checked)
-        if: matrix.part == 'app' && !matrix.lto
-        # (after the tests: its type-check over the tests' build, not the build after it, 2026-10-23)
+        if: matrix.part == 'replay'
+        # (after the tests: its type-check over the tests' build, not the build after it, 2026-10-23. On the replay
+        # part's runner: the app part was 184-187 s with it, the replay part 77-100 s, 2026-10-24)
         run: moon version && bash apps/mbui/scripts/check.sh
       - name: Where the build's time went (mbc)
         if: always()
@@ -127,22 +116,12 @@ jobs:
         run: |
           S=$MBC_STORE
           [ ! -d $S ] || { find $S -name '*.lock' -delete; find $S -mindepth 2 -maxdepth 2 -type d ! -newer "$RUNNER_TEMP/start" -exec rm -rf {} +; }
-          # (and of ThinLTO's cache the entries this run's links read or wrote: lld reads one with its access time
-          # updated, and prunes only what a week left unread, so it grew to 1.3-1.5 GB a part, a minute to restore and
-          # another to save, 2026-10-23, 40006064839)
-          if [ -d .ci/lto ]; then
-            before=$(du -sm .ci/lto | cut -f1)
-            find .ci/lto -type f -name 'llvmcache-*' ! -anewer "$RUNNER_TEMP/start" -delete
-            echo "ThinLTO's cache: $before MB, $(du -sm .ci/lto | cut -f1) MB of it read by this run's links"
-          fi
-          c=$( { (cd $S 2>/dev/null && find . -mindepth 2 -maxdepth 2 -type d | sort); ls .ci/lto 2>/dev/null; } | sha256sum | cut -c1-16)
+          c=$( (cd $S 2>/dev/null && find . -mindepth 2 -maxdepth 2 -type d | sort) | sha256sum | cut -c1-16)
           echo "BUILD_KEY=$CACHE_PREFIX$OWN$c" >> "$GITHUB_ENV"
       - if: always() && env.BUILD_KEY != steps.main.outputs.cache-matched-key && env.BUILD_KEY != steps.own.outputs.cache-matched-key
         uses: actions/cache/save@v4
         with:
-          path: |
-            ${{ env.MBC_STORE }}
-            .ci/lto
+          path: ${{ env.MBC_STORE }}
           key: ${{ env.BUILD_KEY }}
       - if: always() && github.ref == 'refs/heads/main' && steps.moon.outputs.cache-hit != 'true'
         uses: actions/cache/save@v4
@@ -151,7 +130,7 @@ jobs:
             apps/mbui/_build
             !${{ env.MBC_STORE }}
             !apps/mbui/_build/**/*.mbc
-          key: mbui-moon-build-${{ matrix.lto && 'lto-' || '' }}${{ matrix.part }}-${{ github.sha }}
+          key: mbui-moon-build-${{ matrix.part }}-${{ github.sha }}
       # What failed, and in which commit, where everyone sees it (main is pushed to directly too: red, said whose)
       - name: What failed
         if: failure()
