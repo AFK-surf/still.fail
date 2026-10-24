@@ -17,6 +17,22 @@ fn status_top() -> Double {
 }
 
 ///|
+/// Whether the pages have the bottom bar under them: the phone's pages do (laid out Small), the wide frame's not.
+fn has_bar() -> Bool {
+  !wide_on.val
+}
+
+///|
+/// What the bottom bar takes at the pages' foot (over the navigation bar): its room with it, nothing without.
+fn bar_room_now() -> Double {
+  if has_bar() {
+    bar_room
+  } else {
+    0.0
+  }
+}
+
+///|
 /// The band a window's buttons take at the top of a phone's page in it (macOS's title bar: 28).
 let window_band : Double = 28.0
 

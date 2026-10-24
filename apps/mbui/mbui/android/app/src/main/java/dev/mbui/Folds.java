@@ -15,8 +15,9 @@ import androidx.window.layout.WindowMetricsCalculator;
 /**
  * What the system says of the window's room and of the device's pose, said to the app as it changes
  * (src/hostapi/system.mbt `size_class`, `fold`): what a layout is chosen by, never the view's width. The window's size
- * classes as Android defines them (Jetpack WindowManager's WindowSizeClass breakpoints: compact under 600 dp wide or 480
- * dp high; medium and expanded said as regular), from the window's bounds as WindowMetricsCalculator has them; the fold
+ * classes as Android defines them (Jetpack WindowManager's WindowSizeClass breakpoints: wide, compact under 600 dp,
+ * medium under 840, expanded from there; high, compact under 480 dp, medium under 900, expanded from there), from the
+ * window's bounds as WindowMetricsCalculator has them; the fold
  * WindowInfoTracker finds in the window (a FoldingFeature: HALF_OPENED said as `half`, FLAT as `open`, its bounds a
  * division while it separates the window, in the view's points), `none` once there is none in it (the outer screen of
  * a folded phone). A device that never had a fold in the window is said none of it.
@@ -62,14 +63,16 @@ final class Folds {
         Rect b = WindowMetricsCalculator.Companion.getOrCreate().computeCurrentWindowMetrics(activity).getBounds();
         float d = activity.getResources().getDisplayMetrics().density;
         if (b.isEmpty() || d <= 0) return;
-        boolean wide = b.width() / d >= WindowSizeClass.WIDTH_DP_MEDIUM_LOWER_BOUND;
-        boolean tall = b.height() / d >= WindowSizeClass.HEIGHT_DP_MEDIUM_LOWER_BOUND;
-        String said = "{\"size_class\":{\"width\":\"" + (wide ? "regular" : "compact") + "\",\"height\":\""
-                + (tall ? "regular" : "compact") + "\"}}";
+        float w = b.width() / d, h = b.height() / d;
+        String wide = w >= WindowSizeClass.WIDTH_DP_EXPANDED_LOWER_BOUND ? "expanded"
+                : w >= WindowSizeClass.WIDTH_DP_MEDIUM_LOWER_BOUND ? "medium" : "compact";
+        String tall = h >= WindowSizeClass.HEIGHT_DP_EXPANDED_LOWER_BOUND ? "expanded"
+                : h >= WindowSizeClass.HEIGHT_DP_MEDIUM_LOWER_BOUND ? "medium" : "compact";
+        String said = "{\"size_class\":{\"width\":\"" + wide + "\",\"height\":\"" + tall + "\"}}";
         if (said.equals(saidClasses)) return;
         saidClasses = said;
         Native.post("system", said);
-        Host.log("size classes " + (wide ? "regular" : "compact") + " wide, " + (tall ? "regular" : "compact") + " high");
+        Host.log("size classes " + wide + " wide, " + tall + " high");
         Host.requestFrame();
     }
 

@@ -568,14 +568,14 @@ fn rail_place(
   }
   if c.clicked(id) && !dragged && !wide.editing {
     // the lit place pressed again (not 待处理, a panel): its sidebar folded or opened, not gone to; folded so with the
-    // pointer on the rail, it is shown a while (Rail.tsx's rail onClickCapture)
+    // pointer on the rail, it is shown a while (Rail.tsx's rail onClickCapture); on the tape, the page brought over
     if on && place != "attention" && !place_bare(lit_place()) {
       // (folded for the page's room: shown over it, or folded again)
       if wide.crowded {
         wide.peeking = !wide.peeking
       } else {
-        wide.folded = !wide.folded
-        wide.peeking = wide.folded
+        sidebar_toggle()
+        wide.peeking = side_folded()
       }
     } else {
       rail_go(c, src, w, pages, place)

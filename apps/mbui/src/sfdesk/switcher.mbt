@@ -857,7 +857,7 @@ fn switcher_offered(c : @ui.Ctx, src : Source, pages : Pages) -> Array[Offered] 
     icon: "panel-open",
     keys: keys("sidebar.toggle"),
     typed: false,
-    run: fn() { wide.folded = !wide.folded },
+    run: fn() { sidebar_toggle() },
   })
   all.push({
     id: "settings",

@@ -4,7 +4,8 @@
 # the drive step `squeeze`) and its last frame kept as a picture: out/squeeze/<size>-<lang>/<mode>.png, the faults in
 # out/squeeze/faults.txt. For people looking at what does not fit; the checks are the Tester's (squeeze_wbtest.mbt).
 #   scripts/squeeze.sh [MODE…]            the modes given, else those of SQUEEZE_MODES (a few dozen of each page)
-#   SIZES="touch600 desk701 phone320"     which windows (touchW: a tablet's wide frame, a finger; deskW: a Mac's; phoneW)
+#   SIZES="touch600 desk600 phone320"     which windows (touchW: a tablet's, a finger, medium in width under 840 and
+#                                         expanded from there; deskW: a Mac's; phoneW)
 #   LANGS="zh en"                         in which of the app's languages
 D="$(cd "$(dirname "$0")" && pwd)"
 . "$D/env.sh"
@@ -15,10 +16,11 @@ EXE=./_build/native/release/build/stillfail/sffilm/sffilm.exe
 MODES=${*:-${SQUEEZE_MODES:-home chat newchat files drive settings-home settings-station settings-profiles}}
 mkdir -p out/squeeze
 : > out/squeeze/faults.txt
-for size in ${SIZES:-touch600 desk701 phone320}; do
+for size in ${SIZES:-touch600 desk600 phone320}; do
   w=${size//[a-z]/}
   case $size in
-    touch*) h=900; platform=2; system='system {"size_class":{"width":"regular","height":"regular"}}' ;;
+    touch*) h=900; platform=2; room=medium; [ "$w" -ge 840 ] && room=expanded
+      system="system {\"size_class\":{\"width\":\"$room\",\"height\":\"medium\"}}" ;;
     phone*) h=700; platform=2; system='' ;;
     *) h=760; platform=0; system='' ;;
   esac

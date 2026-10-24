@@ -17,7 +17,7 @@ pub fn keys(c : @ui.Ctx, src : Source, w : Workspace, pages : Pages) -> Unit {
     new_chat(pages)
   }
   if pressed("sidebar.toggle") {
-    wide.folded = !wide.folded
+    sidebar_toggle()
   }
   if pressed("settings") {
     open_settings(pages)

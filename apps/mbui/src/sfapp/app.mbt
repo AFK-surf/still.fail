@@ -264,19 +264,15 @@ pub fn view(c : @ui.Ctx, src : Source) -> Unit {
   // under it all, the app's ground (what shows under the keyboard as it moves, the frame before the page follows it)
   // (the palette's colours are 0xRRGGBBAA; what the host clears to is said as 0xAARRGGBB, a window's background)
   c.set_clear((t.p.bg >> 8) & 0xFFFFFFL)
-  // a desktop's width, or a phone's or a tablet's window the system calls regular both ways (an opened foldable, an
-  // iPad): the web app's wide frame (wide.mbt); one regular in width alone (a phone on its side) or half open on its
-  // back half: Android's, the pages the whole width with the latest chats at a corner (corners.mbt); otherwise the
-  // phone's pages
-  wide_on.val = @sfdesk.is_wide(c) || @sfdesk.is_touch_wide()
+  // laid out Medium or Large (@sf.layout: the screen's room and kind, never what it is pointed with): the web app's
+  // wide frame (sfdesk's frame.mbt: on a tape, Medium); Small, the phone's pages
+  wide_on.val = @sfdesk.is_wide(c)
   // the wide frame's lines set as the desktop app's pages set them (a browser's way)
   @ui.set_web_lines(wide_on.val)
-  corners_on.val = is_corners() && !wide_on.val
   @settings.wide.val = wide_on.val
-  @settings.no_bar.val = corners_on.val
   @settings.status_top.val = status_top()
   @settings.nav_foot.val = nav_foot()
-  @settings.bar_room.val = if has_bar() { bar_room } else { 0.0 }
+  @settings.bar_room.val = bar_room_now()
   linger_tick(c, src, in_front=app_in_front())
   // the screens live in their cards (screen_links.mbt): which are on the screen, their frames acknowledged
   peeks_frame(c, src)
@@ -407,6 +403,8 @@ fn signed_in(c : @ui.Ctx, src : Source) -> Unit {
         }
         // what opens over them (sfdesk's overlays.mbt)
         @sfdesk.overlays(c, src, w, desk_pages())
+        // the player sideways (a phone on its side for a film): back turns it upright first
+        play_back(c)
         pick_back(c)
         preview(c, src)
         viz_full_layer(c, src)
@@ -426,21 +424,16 @@ fn signed_in(c : @ui.Ctx, src : Source) -> Unit {
         play_back(c)
         // words picked in a chat, a link's menu: back lets go of them first (pick.mbt)
         pick_back(c)
-        if corners_on.val {
-          // wide, no bottom bar: the latest chats and the new-chat button at the corners (Wide.kt WideCorners)
-          wide_corners(c, src, w)
-        } else {
-          // the bottom bar: on a place's top page with nothing over it; none while this device waits to be confirmed
-          // in the workspace's safe mode (its Home is the wait: lock_gate; App.kt PlaceBar)
-          let waiting = root == Home && @settings.lock_waiting(settings_core(src, w), w.id)
-          bottom_bar(
-            c,
-            src,
-            w,
-            place_of(root),
-            app.nav.depth() == 1 && place_of(root) is Some(_) && !search_bar_away() && !waiting,
-          )
-        }
+        // the bottom bar: on a place's top page with nothing over it; none while this device waits to be confirmed in
+        // the workspace's safe mode (its Home is the wait: lock_gate; App.kt PlaceBar)
+        let waiting = root == Home && @settings.lock_waiting(settings_core(src, w), w.id)
+        bottom_bar(
+          c,
+          src,
+          w,
+          place_of(root),
+          app.nav.depth() == 1 && place_of(root) is Some(_) && !search_bar_away() && !waiting,
+        )
         // a file open over the pages (preview.mbt), under the menu, the sheet and the toasts
         preview(c, src)
         // a visualization over the whole screen (viz.mbt)
@@ -950,7 +943,7 @@ fn sign_in_body(c : @ui.Ctx, src : Source) -> Unit {
   let t = @sf.theme()
   let busy = (src.signing_in)()
   // a desktop's: the picture and 登录或注册 alone, no words around them (asked for, 2026-10-23)
-  let wide = @sfdesk.is_wide(c)
+  let wide = !@sf.touch_system() && @sfdesk.is_wide(c)
   c.box(
     w=Fill(1.0),
     h=Fill(1.0),

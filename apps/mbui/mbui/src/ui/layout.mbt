@@ -708,12 +708,16 @@ fn Ctx::flex_tree(self : Ctx, i : Int, pdir : Int) -> Int {
         if n.clip || n.sideways {
           0.0
         } else {
+          // (one said to keep what it holds: what its row's fit keeps of it, words cut short in it four of their size,
+          // so what is beside it gives way before they are cut further)
+          let kept = n.w is Fill(_) && n.keep
+          let (held, widest_held) = if kept { (fsum, fwidest) } else { (sum, widest) }
           let row = if more_need >= 0.0 && droppable {
-            sum + (if placed_in > 0 { gap } else { 0.0 }) + more_need
+            held + (if placed_in > 0 { gap } else { 0.0 }) + more_need
           } else {
-            sum
+            held
           }
-          dmax(row, widest) + pad_l + pad_r
+          dmax(row, widest_held) + pad_l + pad_r
         }
       } else if k == kind_text && pdir == 1 && !n.wrap {
         // (in a row; in a column, cut to the column's width)

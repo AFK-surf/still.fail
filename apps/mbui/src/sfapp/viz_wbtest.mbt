@@ -249,35 +249,36 @@ test "a visualization's document: a fragment in the stylesheet with its tokens a
 }
 
 ///|
-test "the latest chats raised over a visualization's page take the presses there, not the page under them" {
+test "on the tape what shows of a visualization's page beside the sidebar in use takes the presses there, not the page" {
   reset()
   let src = fixture("chat-viz")
   open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
-  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=1024.0, h=768.0, platform=2)
-  say_room(t, "regular", "compact")
+  // an opened fold's inner screen upright, a finger: laid out Medium
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=690.0, h=840.0, platform=2)
+  say_room(t, "medium", "medium")
   t.run_for(@ui.nav_push_ms)
-  assert_true(corners_on.val)
+  assert_true(@sfdesk.wide.tape)
   let (page, _) = viz_views(t)
-  // as tall as it may be: the chat's page under all of the list
+  // as tall as it may be: the chat's page under all of what shows of it
   t.view_says(page, "{\"emberViz\":true,\"type\":\"height\",\"height\":5000}")
   t.frame()
   t.frame()
+  // the sidebar brought over (back from the chat), the page beside it veiled
+  t.back()
+  t.run_for(@sfdesk.side_move_ms)
+  assert_true(@sfdesk.wide.on_side)
   let (x, y, w, h) = view_rect(t, page).unwrap()
-  tap_said(t, "最近会话")
-  t.frame()
-  assert_true(recent_open.val)
-  // the open chat's row in the panel, over the page
-  let row = t.words().iter().find_first(fn(wd) { wd.0 == "整理发布清单" && wd.1 < 360.0 && wd.2 > 100.0 })
-  let (_, rx, ry, _, _, _) = row.unwrap()
-  let (px, py) = (rx + 10.0, ry + 8.0)
-  assert_true(px > x && px < x + w && py > y && py < y + h, msg="the row at \{px},\{py}, the page \{x} \{y} \{w} \{h}")
-  // tapped: the panel's (put away, the chat open as it was), the page told nothing of it
+  let edge = @sfdesk.rail_w + 240.0
+  assert_true(x + w > edge + 20.0, msg="the page \{x} \{w}, the sidebar's edge \{edge}")
+  // (in the middle of what the window shows of it)
+  let (px, py) = (dmax(x, edge) + 10.0, (dmax(y, 0.0) + dmin(y + h, 840.0)) / 2.0)
+  // tapped: the veil's (the chat's page comes over), the page told nothing of it
   t.tap(px, py)
-  t.frame()
-  assert_false(recent_open.val)
+  assert_false(@sfdesk.wide.on_side)
   assert_false(t.views().iter().any(fn(l) { l.has_prefix("finger \{page} ") }))
-  // put away: the page takes a finger there again
-  t.frame()
-  t.tap(px, py)
+  // over and in use: the page takes a finger there again
+  t.run_for(@sfdesk.side_move_ms)
+  let (x, y, w, h) = view_rect(t, page).unwrap()
+  t.tap(x + w / 2.0, (dmax(y, 0.0) + dmin(y + h, 840.0)) / 2.0)
   assert_true(t.views().iter().any(fn(l) { l.has_prefix("finger \{page} down") }))
 }

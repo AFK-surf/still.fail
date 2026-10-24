@@ -13,8 +13,16 @@ fn update_shown() -> Bool {
 /// right, 12 in from its edge, or past the rail (and the window's buttons) when it is closed, moved with it; how far it
 /// has downloaded, 正在重启 while it is put in place, 更新失败，重试 when it failed (why, its tip). Pressed, the build is
 /// downloaded and the app restarts as it. `top`: the system's bars over the window (a phone's status bar), which take
-/// what is pressed under them: it goes below them.
-fn update_button(c : @ui.Ctx, src : Source, bar : Bool, s : Double, inset : Bool, top : Double) -> Unit {
+/// what is pressed under them: it goes below them. `x`: how far the tape is moved (laid out Medium).
+fn update_button(
+  c : @ui.Ctx,
+  src : Source,
+  bar : Bool,
+  s : Double,
+  inset : Bool,
+  top : Double,
+  x : Double,
+) -> Unit {
   // (its phase as the host says it, what went wrong said once: updates.mbt)
   update_progress() |> ignore
   let v = try Some(@json.parse(@ui.update_state())) catch { _ => None }
@@ -37,10 +45,11 @@ fn update_button(c : @ui.Ctx, src : Source, bar : Bool, s : Double, inset : Bool
     Some((w, _)) => w
     None => 0.0
   }
+  // (on the tape, moved with it: x)
   let (left, tx) = if bar {
     (if inset { update_closed_inset } else { update_closed_in }, 0.0)
   } else {
-    (rail_w + s - bar_in, -width)
+    (rail_w + s - bar_in, x - width)
   }
   c.cursor(id, Hand)
   c.layer(fn() {

@@ -100,7 +100,8 @@ nothing else gives way:
 - What may give way says so, and how:
   - words cut short with an ellipsis: `w=Cut` (as wide as they are, cut where the row has less), `w=Fill` (what the
     row leaves, cut where that is less), `min_w` the least of them kept;
-  - a box that takes what its row leaves, but never less than what it holds needs: `w=Fill` with `keep`;
+  - a box that takes what its row leaves, but never less than what it holds needs: `w=Fill` with `keep` (words cut
+    short in it counted at what they keep, four of their size: what is beside it gives way first);
   - a box as wide as it is said (`w=Px`) where its row has the room, less down to a least said below it (`min_w`)
     where it has not (CSS's width with its min-width in a flex row): a field 320 wide, 160 at least;
   - a part left out of its row: `Ctx::box drop=k`, there whole (as wide as what it holds) or not at all, the lowest k

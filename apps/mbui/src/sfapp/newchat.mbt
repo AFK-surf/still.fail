@@ -11,18 +11,13 @@
 // once (the core's row).
 
 ///|
-/// A new chat's page, rising over the page on top (Places.kt: 令 in the bar's notch); `in_place`, in the place of the
-/// page on top if it is not the stack's root (AppState.open: the latest chats' on a wide screen, corners.mbt).
-fn new_chat(c : @ui.Ctx, in_place? : Bool = false) -> Unit {
+/// A new chat's page, rising over the page on top (Places.kt: 令 in the bar's notch).
+fn new_chat(c : @ui.Ctx) -> Unit {
   ignore(c)
   fresh_reset()
   lower_sheet()
   app.menu = false
-  if in_place && app.nav.depth() > 1 {
-    app.nav.replace(NewChat)
-  } else {
-    app.nav.rise(NewChat)
-  }
+  app.nav.rise(NewChat)
 }
 
 ///|
@@ -59,8 +54,7 @@ fn new_chat_bar(c : @ui.Ctx) -> Unit {
 /// The new chat's page (NewChatScreen): its bar; while its stations are read, their first read; with none at all, the
 /// first station to add; with none up, said so; else the page on the station it starts on.
 fn new_chat_page(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
-  // on a wide screen in a column in the middle, its composer too (Wide.kt NewChatColumn)
-  new_chat_column(c, fn() { new_chat_in(c, src, w) })
+  new_chat_in(c, src, w)
   // the first words sent, where they were typed, while the chat is made (flight.mbt)
   flight_carry_waiting(c)
 }
@@ -626,11 +620,9 @@ fn new_chat_leaving(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef) -> Un
   }
   let v = fresh.scene
   c.layer(fn() {
-    new_chat_column(c, fn() {
-      // its bar gone at once (the chat has its own), its room kept
-      c.box(h=Px(48.0), fn() {  }) |> ignore
-      new_chat_on(c, src, w, v, field(v, "station"), true)
-    })
+    // its bar gone at once (the chat has its own), its room kept
+    c.box(h=Px(48.0), fn() {  }) |> ignore
+    new_chat_on(c, src, w, v, field(v, "station"), true)
   })
   |> ignore
 }

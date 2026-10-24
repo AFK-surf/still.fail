@@ -184,7 +184,7 @@ fn home_pane(c : @ui.Ctx, src : Source, w : Workspace, filter : String, current 
       }
       // room for the bottom bar over the navigation bar (Home.kt: navigationBars + LocalBarRoom); on a wide screen,
       // whose corners have 奏 and 令 over the list, a little
-      Foot => c.box(h=Px(if has_bar() { nav_foot() + bar_room } else { wide_foot }), fn() {  }) |> ignore
+      Foot => c.box(h=Px(nav_foot() + bar_room_now()), fn() {  }) |> ignore
     }
   })
   |> ignore
@@ -267,10 +267,6 @@ fn top_bar(
             app.menu = true
           }
         _ => ()
-      }
-      // the stations at a glance on a wide screen, which has no bottom bar to have them as a place (Home.kt)
-      if corners_on.val {
-        stations_button(c, src, w)
       }
     })
     |> ignore
@@ -652,7 +648,7 @@ fn row_opens_at(item : ChatItem, ry : Double, ty : Double) -> Double? {
 ///|
 /// A row (Home.kt ChatRow, ChatRowBody): 66 high, two lines; pressed, on the ground it has held (a found one rippled);
 /// tapped, its chat is pushed (at the message its state line names, tapped there), or given to `opened` (the latest
-/// chats' panel on a wide screen: corners.mbt).
+/// chats under a chat's composer on a device half open: tabletop.mbt).
 fn chat_row(
   c : @ui.Ctx,
   src : Source,
@@ -830,7 +826,7 @@ fn chat_row(
           |> ignore
         })
         |> ignore
-        // a chat the search found, or in the latest chats' panel: ChatRowBody's clickable (Search.kt, Wide.kt)
+        // a chat the search found, or in the latest chats: ChatRowBody's clickable (Search.kt)
         if found {
           @motion.ripple(c, id, 0.0)
         }

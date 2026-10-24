@@ -179,8 +179,13 @@ pub let r_option : Double = 12.0
 pub let dur_ms : Double = 140.0
 
 ///|
-/// Below this width the narrow screen's ground and type (the web's 700px).
-pub let narrow_below : Double = 700.0
+/// Where a desktop's window, which no system classes, goes from one layout to the next (layout): the widths at which
+/// Android's WindowSizeClass goes from compact to medium and from medium to expanded, so a window as wide is laid out
+/// alike whatever the system.
+pub let medium_from : Double = 600.0
+
+///|
+pub let large_from : Double = 840.0
 
 // ---------------------------------------------------------------------------
 
@@ -365,21 +370,81 @@ pub fn set_dark(dark : Bool?) -> Unit {
 }
 
 ///|
-/// Whether the system is a phone's or a tablet's (iOS, Android), whose app is still.fail's Android app at any width
-/// (an opened foldable, a phone on its side): what the layout and the theme go by, with the system's size classes (its
-/// own theme and pages; the wide frame only where the system calls the window regular both ways). How things answer
-/// the hand is not this: @ui.pointing.
+/// Whether the system is a phone's or a tablet's (iOS, Android): its own theme at any size, its window's layout by the
+/// system's size classes (layout). How things answer the hand is not this: @ui.pointing.
 pub fn touch_system() -> Bool {
   let p = @ui.platform()
   p == 1 || p == 2
 }
 
 ///|
-/// The theme for this frame, from the window's width (a phone's or a tablet's always its own): call at the top of a
-/// view.
+/// How the app's panes are laid out, by the screen alone: how much room its window has and what kind of screen it is.
+/// Never by what it is pointed with (@ui.pointing): each is pointed at with a mouse or a finger alike.
+pub(all) enum Layout {
+  /// one page at a time, the whole window (a phone held upright, a narrow window)
+  Small
+  /// the panes side by side as on a large screen, more of them than the window shows: the one in use whole, those
+  /// beside it showing past its edges, one tapped coming over before what it holds answers (sfdesk's frame.mbt)
+  Medium
+  /// the panes side by side, all of them shown: the rail and the sidebar, the page, the page's side panel
+  Large
+} derive(Eq, Show, Debug)
+
+///|
+/// The layout of a window `width` wide: a phone's or a tablet's by what its system says of the window (compact in
+/// width: Small; medium in width, or compact in height, a phone on its side: Medium; else Large), Small until it has
+/// said and while the device is half open on its back half (a chat across the window then, its composer under the
+/// fold: sfapp's tabletop.mbt); a desktop's, which no system classes, by its width (medium_from, large_from). While
+/// the app has the device turned sideways itself (a film, a station's screen over all of it: @hostapi.sideways), the
+/// one it had as it turned: the screen is the same, only what is over all of it turned.
+pub fn layout(width : Double) -> Layout {
+  let now = screen_layout(width)
+  if !@hostapi.sideways() {
+    layout_held.val = None
+    return now
+  }
+  match layout_held.val {
+    Some(held) => held
+    None => {
+      layout_held.val = Some(now)
+      now
+    }
+  }
+}
+
+///|
+/// The layout as the app turned the device sideways (layout), while it has it so.
+// kept across runs: let go as the device is upright again
+let layout_held : Ref[Layout?] = Ref(None)
+
+///|
+/// The layout by the screen alone (layout).
+fn screen_layout(width : Double) -> Layout {
+  if !touch_system() {
+    return if width < medium_from {
+      Small
+    } else if width < large_from {
+      Medium
+    } else {
+      Large
+    }
+  }
+  if @ui.system_tabletop() is Some(_) {
+    return Small
+  }
+  match @ui.system_size_class() {
+    None | Some({ width: Compact, .. }) => Small
+    Some({ width: Medium, .. }) | Some({ height: Compact, .. }) => Medium
+    Some(_) => Large
+  }
+}
+
+///|
+/// The theme for this frame: a phone's or a tablet's always its own, a desktop's the narrow screen's where its window
+/// shows one page at a time (layout): call at the top of a view.
 pub fn begin(c : @ui.Ctx) -> Theme {
   let dark = dark_set.val.unwrap_or(false)
-  let narrow = c.width < narrow_below || touch_system()
+  let narrow = touch_system() || layout(c.width) is Small
   let p = match (narrow, dark) {
     (false, false) => wide_light
     (false, true) => wide_dark
@@ -563,17 +628,6 @@ pub let code_edge : @ui.Color = A(Fg, Exact(0.18))
 ///|
 /// A column a phone's width at most, in the middle (phone_column): its widest.
 pub let phone_max : @ui.Len = Fixed(420.0)
-
-///|
-/// The latest chats raised on a wide screen (Wide.kt Recent): 340 wide, 560 tall at most.
-pub let recent_w : @ui.Len = Fixed(340.0)
-
-///|
-pub let recent_max_h : @ui.Len = Fixed(560.0)
-
-///|
-/// The button that raises them (Wide.kt Recent): 52 across, as tall as the composer on one line.
-pub let recent_button : @ui.Len = Fixed(52.0)
 
 ///|
 /// A bar's round button (Parts.kt NavButton): 34 across.

@@ -1189,10 +1189,13 @@ keyboard), and anything only a real agent runtime does.
 ## The PC (wide) frame (branch mbui-pc, 2026-10-19)
 
 On macOS and Windows the app is a desktop's window (@sfapp.host_setup: 1280×820 at first, as still.fail's desktop app
-opens, at least 360×560, its size not kept, the system's title bar). Above the web's breakpoint (701 wide) it is the web
-app's wide frame (web/src/cloud/workspace.tsx WorkspaceShell), src/sfapp/wide*.mbt; below it the phone's pages as
-before, live as the window is resized: both draw the same stack (app.nav) over the same topics, the wide frame its top
-page alone in its pane (@ui Ctx::nav_flat), the phone's sliding.
+opens, at least 360×560, its size not kept, the system's title bar). Laid out Medium or Large (@sf.layout, since
+2026-10-24: a desktop's window from 600 wide, Large from 840; a phone's or a tablet's by its size classes) it is the
+web app's wide frame (web/src/cloud/workspace.tsx WorkspaceShell), src/sfdesk/frame.mbt, Medium on a tape (the one in
+use whole, the other showing past its edge, a press there bringing it over); Small, the phone's pages as before, live
+as the window is resized: both draw the same stack (app.nav) over the same topics, the wide frame its top page alone in
+its pane (@ui Ctx::nav_flat), the phone's sliding. How things answer the hand goes by what points (@ui.pointing), never
+by the layout.
 
 - The rail (Rail.tsx: 56 wide; 待处理's panel, 对话, 文件, Station, Profile, 连接, 用量, as the prefs' `rails` keep them;
   the workspaces' squares, the one in view marked; settings), the sidebar beside it on the same ground (240, its edge
@@ -1282,9 +1285,9 @@ The app on iOS is Android's, as on an Android phone (2026-10-23):
   is (src/sfapp/bars.mbt); round it, and at launch, the page's paper (MBUIGround; the launch screen's Paper colour),
   the status bar's words to match (`@hostapi.set_dark`).
 - Its layout chosen by what the system says of the window, as on Android (src/hostapi/system.mbt `size_class`,
-  `fold`): regular both ways (an iPhone Duo's inner screen, however it is held) the web's wide frame in the phone's
-  theme (src/sfapp/wide.mbt is_touch_wide), its sidebar ending on a fold that stands upright; regular in width alone
-  (a phone on its side) the wide screen's pages (corners.mbt); the hinge (UIHingeInteraction) and where its fold
+  `fold`; @sf.layout): regular in width said as medium under 840 points and expanded from there, the web's wide frame
+  in the phone's theme, Medium on its tape, Large its sidebar ending on a fold that stands upright; the hinge
+  (UIHingeInteraction) and where its fold
   divides the view (the view's division regions), iOS 27.1 on and built with its SDK (mbui.yml's ios job, on Xcode
   27.1): half open with the fold across the view, a chat's page across it, its messages over the fold, its composer
   and the latest chats under it (src/sfapp/tabletop.mbt).

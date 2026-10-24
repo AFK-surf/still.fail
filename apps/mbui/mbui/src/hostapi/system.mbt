@@ -23,13 +23,15 @@
 //   under them too, from the screen's top to its foot, and `bars` says their `top` and `bottom` (Android keeps a cutout
 //   at a side out of the view: `left` and `right` 0; iOS's view runs from side to side too, and says them: an iPhone
 //   Duo's outer screen has its status bar down its right side, iOS 27.1), the keyboard up as over another app.
-// - `{"size_class": {"width": "compact"|"regular", "height": "compact"|"regular"}}`: how much room the app's window
-//   has, as the system classes it (not its size in points: what the platform says such a window is, the app's layout
-//   chosen by that and nothing it works out from a width of its own). iOS: the window's trait collection
-//   (horizontalSizeClass, verticalSizeClass; regular both ways on an opened iPhone Duo, an iPad's whole screen).
-//   Android: the window's WindowSizeClass as Jetpack's WindowManager has it (androidx.window.core.layout: compact under
-//   600 dp wide or 480 dp high, medium and expanded said as regular). Said as the window is first laid out and as
-//   either changes (a foldable opened or closed, the window split, the device turned).
+// - `{"size_class": {"width": "compact"|"medium"|"expanded"|"regular", "height": …}}`: how much room the app's
+//   window has, as the system classes it (not its size in points: what the platform says such a window is, the app's
+//   layout chosen by that and nothing it works out from a width of its own). iOS: the window's trait collection
+//   (horizontalSizeClass, verticalSizeClass: compact or regular, regular both ways on an opened iPhone Duo, an iPad's
+//   whole screen; its regular width, which iOS splits no further, said as medium in a window narrower than where
+//   Android's expanded starts, 840 points, and expanded from there; "regular" taken as expanded). Android: the
+//   window's WindowSizeClass as Jetpack's WindowManager has it (androidx.window.core.layout: compact under 600 dp
+//   wide, medium under 840, expanded from there; high, compact under 480 dp, medium under 900). Said as the window is
+//   first laid out and as either changes (a foldable opened or closed, the window split, the device turned).
 // - `{"fold": {"hinge": "none"|"closed"|"half"|"open", "divisions": [{"x": …, "y": …, "w": …, "h": …}, …]}}`: the
 //   device's hinge as the system says it, and where its fold divides the app's view now, in the view's points (a
 //   region content should not run across: the fold and the margins round it). iOS 27.1 on: UIHingeInteraction's
@@ -84,11 +86,12 @@ pub(all) enum SystemSaid {
 } derive(Eq, Show)
 
 ///|
-/// A window's room one way, as the system classes it (iOS's UIUserInterfaceSizeClass; Android's WindowSizeClass, its
-/// medium and expanded both regular).
+/// A window's room one way, as the system classes it (Android's WindowSizeClass; iOS's UIUserInterfaceSizeClass, whose
+/// regular is Expanded: it has nothing between).
 pub(all) enum SizeClass {
   Compact
-  Regular
+  Medium
+  Expanded
 } derive(Eq, Show)
 
 ///|
@@ -139,7 +142,13 @@ pub fn system_said(json : String) -> Array[SystemSaid] {
   }
   match m.get("size_class") {
     Some(Object(k)) => {
-      let kind = fn(w : String) { if text(k, w) == "regular" { Regular } else { Compact } }
+      let kind = fn(w : String) {
+        match text(k, w) {
+          "medium" => Medium
+          "expanded" | "regular" => Expanded
+          _ => Compact
+        }
+      }
       out.push(SizeClasses(width=kind("width"), height=kind("height")))
     }
     _ => ()

@@ -5,16 +5,15 @@
 // same screens in a Mac's text, as pictures.
 
 ///|
-/// The windows: the desktop's narrowest (its page 405 beside the rail and the list), an opened fold's inner screen
-/// pointed at with a finger (the wide frame by its size classes: 696 across), a tablet's with the least beside the
-/// list its page has there (656: 360, @sfdesk.page_beside_least), the narrowest tablet's the wide frame is drawn on
-/// (600 across: the list folded to the rail for the page's room), a phone's.
-let squeeze_windows : Array[(String, Double, Double, Int, Bool)] = [
-  ("desk", 701.0, 760.0, 0, false),
-  ("touch", 696.0, 768.0, 2, true),
-  ("least", 656.0, 900.0, 2, true),
-  ("tablet", 600.0, 900.0, 2, true),
-  ("phone", 360.0, 740.0, 2, false),
+/// The windows, each the narrowest of its layout (@sf.layout), and the size classes its host says ("" none): a desktop's
+/// laid out Medium (600 across: on the tape its page 480 past the sidebar's edge), a phone's or a tablet's laid out
+/// Medium (600, medium in width: an opened fold's inner screen upright) and Large (840, expanded: its page 544 beside
+/// the rail and the list), pointed at with a finger, in the phone's theme; a phone's.
+let squeeze_windows : Array[(String, Double, Double, Int, String)] = [
+  ("desk", 600.0, 760.0, 0, ""),
+  ("touch", 600.0, 900.0, 2, "medium"),
+  ("tablet", 840.0, 900.0, 2, "expanded"),
+  ("phone", 360.0, 740.0, 2, ""),
 ]
 
 ///|
@@ -36,8 +35,8 @@ let squeeze_modes : Array[String] = [
 
 ///|
 /// `mode` in window `win` in `lang`, a moment after it opens (what it opens with over): its squeeze faults.
-fn squeeze_of(mode : String, win : (String, Double, Double, Int, Bool), lang : String) -> Array[String] {
-  let (_, w, h, platform, touch) = win
+fn squeeze_of(mode : String, win : (String, Double, Double, Int, String), lang : String) -> Array[String] {
+  let (_, w, h, platform, width) = win
   let src : Ref[Source?] = Ref(None)
   let t = @ui.Tester::new(
     fn(c) {
@@ -57,8 +56,8 @@ fn squeeze_of(mode : String, win : (String, Double, Double, Int, Bool), lang : S
     // (the device's language: the fixture's prefs say none)
     env=[("MBUI_LOCALE", lang)],
   )
-  if touch {
-    t.drive("system {\"size_class\":{\"width\":\"regular\",\"height\":\"regular\"}}\n") |> ignore
+  if width != "" {
+    t.drive("system {\"size_class\":{\"width\":\"\{width}\",\"height\":\"medium\"}}\n") |> ignore
   }
   t.run_for(squeeze_opening)
   t.frame()
