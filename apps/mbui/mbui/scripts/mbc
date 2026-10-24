@@ -7,8 +7,8 @@ T=$D/../tools
 B=$T/_build/native/release/build/mbc/mbc.exe
 src=$(cd "$T" && find mbc moon.mod moon.work -type f | LC_ALL=C sort | xargs cat | cksum)
 if [ ! -x "$B" ] || [ "$(cat "$B.src" 2>/dev/null)" != "$src" ]; then
-  # (moon's own C compiler for it, never a shim of this tool's)
-  (cd "$T" && env -u MOON_CC moon build --target native --release >&2) || { echo "mbc: tools/mbc did not build" >&2; exit 1; }
+  # (moon's own C compiler for it, never a shim of this tool's; this tool alone, not the others of tools/)
+  (cd "$T" && env -u MOON_CC moon build --target native --release mbc >&2) || { echo "mbc: tools/mbc did not build" >&2; exit 1; }
   echo "$src" > "$B.src"
 fi
 MBC_HOME=$D exec "$B" "$@"

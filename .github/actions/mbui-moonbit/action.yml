@@ -63,8 +63,12 @@ runs:
     - shell: bash
       run: moon version --all
     # mbui's C tool (scripts/mbc builds tools/mbc when there is none built from its sources): built once for each change
-    # of them and kept here, not built again in every job
+    # of them and kept here, not built again in every job. A change to the tools' other sources (detlint's, chk's) restores
+    # the last one kept: each tool's script finds its own built from the sources it has (by content) and builds only
+    # itself when they changed. (Restored only by this very key, every change to detlint rebuilt the four tools and
+    # mbc came after them: main's windows job 181 s, 40122097582, its build waited on them, 2026-10-24.)
     - uses: actions/cache@v4
       with:
         path: apps/mbui/mbui/tools/_build
         key: mbc-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('apps/mbui/mbui/tools/**') }}
+        restore-keys: mbc-${{ runner.os }}-${{ runner.arch }}-
