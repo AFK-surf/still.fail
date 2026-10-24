@@ -108,3 +108,14 @@ int mb_seg_slot(int i) {
   int s = i - (i / 6) * 6;
   return s + (s >= 1 ? 1 : 0) + (s >= 4 ? 1 : 0);
 }
+// How far to move a smooth ground (glass's frost) at the pixel px (in pixels) before it is written to 8 bits a
+// channel, in steps of 1/255: Skia's ordered dither (GrDitherEffect, an 8x8 Bayer matrix by the pixel's place), never
+// half a step either way. Without it a slope of a few steps across a wide frost is written as flat bands, an edge where
+// each step is (contour lines); with it each pixel is the step above or below as often as the slope is near it, and
+// a value already on a step stays it.
+float mb_dither(float2 px) {
+  int x = int(floor(px.x)) & 7;
+  int y = (int(floor(px.y)) & 7) ^ x;
+  int m = ((y & 1) << 5) | ((x & 1) << 4) | ((y & 2) << 2) | ((x & 2) << 1) | ((y & 4) >> 1) | ((x & 4) >> 2);
+  return float(m) / 64.0 - 63.0 / 128.0;
+}

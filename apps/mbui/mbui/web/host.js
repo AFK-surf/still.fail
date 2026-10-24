@@ -173,7 +173,7 @@
   uniform sampler2D u_img;
   // glass (src/ui/glass.mbt): the blurred copy under it and where a point is in it (uv = p * u_map.xy + u_map.zw, kept
   // in u_uvc), a liquid group's shapes and corners, how many
-  uniform sampler2D u_bd;
+  uniform highp sampler2D u_bd;
   uniform vec4 u_map;
   uniform vec4 u_uvc;
   uniform vec4 u_shape[8];
@@ -296,6 +296,17 @@
     int s = i - (i / 6) * 6;
     return s + (s >= 1 ? 1 : 0) + (s >= 4 ? 1 : 0);
   }
+  // How far to move a smooth ground (glass's frost) at the pixel px (in pixels) before it is written to 8 bits a
+  // channel, in steps of 1/255: Skia's ordered dither (GrDitherEffect, an 8x8 Bayer matrix by the pixel's place), never
+  // half a step either way. Without it a slope of a few steps across a wide frost is written as flat bands, an edge where
+  // each step is (contour lines); with it each pixel is the step above or below as often as the slope is near it, and
+  // a value already on a step stays it.
+  float mb_dither(float2 px) {
+    int x = int(floor(px.x)) & 7;
+    int y = (int(floor(px.y)) & 7) ^ x;
+    int m = ((y & 1) << 5) | ((x & 1) << 4) | ((y & 2) << 2) | ((x & 2) << 1) | ((y & 4) >> 1) | ((x & 4) >> 2);
+    return float(m) / 64.0 - 63.0 / 128.0;
+  }
   // corner.sl end
   float sd_rr(vec2 p, vec4 r, float rad) {
     vec2 hs = r.zw * 0.5;
@@ -408,6 +419,7 @@
       // the edge shaded, more on the side away from the light, so the shape reads over a light ground too
       c *= 1.0 - v_c2.x * band * (0.1 + 0.25 * max(-ndl, 0.0));
       c = c + (1.0 - c) * clamp(spec, 0.0, 1.0);
+      c += mb_dither(p * u_scale) / 255.0;
       o = vec4(c, 1.0) * (a * v_c2.w);
       return;
     }
@@ -448,6 +460,8 @@
         g3 = mix(g3, vec3(1.0), v_c2.y * lit);
         g3 = mix(g3, vec3(1.0), v_c2.z * back);
       }
+      // dithered as it is written to 8 bits, so its slopes do not band (corner.sl mb_dither)
+      g3 += mb_dither(p * u_scale) / 255.0;
       o = vec4(g3, 1.0) * (a * v_c2.w);
       return;
     }
@@ -479,7 +493,7 @@
   precision highp float;
   // The backdrop's passes: u_a.xy the source's texel, u_a.z 1 halving (dual Kawase's down), 2 a Gaussian along u_b.zw
   // of deviation u_a.w (texels); u_b.xy the last texel's centre of what the source holds
-  uniform sampler2D u_src;
+  uniform highp sampler2D u_src;
   uniform vec4 u_a;
   uniform vec4 u_b;
   out vec4 o;
@@ -563,15 +577,18 @@
   // When the instances reach a run of glass (slot 20 negative: the capture it shares), what is drawn so far under it
   // (its rects with room for the blur round them) is copied out of the canvas, halved down to where the blur is a
   // few texels wide (dual Kawase's downsample, at most 1/8), blurred there by a Gaussian of what deviation is left,
-  // and drawn through. Level j is 1/2^j of the canvas, tmp a Gaussian's first half.
+  // and drawn through. Level j is 1/2^j of the canvas, tmp a Gaussian's first half. Level 0, the copy, has 8 bits a
+  // channel as the canvas has; what the passes write keeps 10 (RGB10_A2, in as many bytes): at 8 each pass rounds the
+  // frost's slow slopes into flat steps, a texel of the last level 8 pixels wide on the screen (a blur under 4 pixels,
+  // too narrow to halve, is written back into the copy: it leaves no slope that wide).
   let lv = null, lvW = 0, lvH = 0, bdTex = null;
   const gmap = new Float32Array(4), guvc = new Float32Array(4), ggb = new Float32Array(4);
   const gshape = new Float32Array(32), grad = new Float32Array(8);
   let gn = 0;
-  function levelTex(w, h) {
+  function levelTex(format, w, h) {
     const t = gl.createTexture();
     gl.bindTexture(gl.TEXTURE_2D, t);
-    gl.texStorage2D(gl.TEXTURE_2D, 1, gl.RGBA8, Math.max(1, w), Math.max(1, h));
+    gl.texStorage2D(gl.TEXTURE_2D, 1, format, Math.max(1, w), Math.max(1, h));
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
@@ -586,8 +603,8 @@
     if (lv) for (const l of lv) { gl.deleteTexture(l.t); gl.deleteFramebuffer(l.fb); }
     lvW = Math.max(w, lvW); lvH = Math.max(h, lvH);
     lv = [];
-    for (let j = 0; j < 4; j++) lv.push(levelTex((lvW + (1 << j) - 1) >> j, (lvH + (1 << j) - 1) >> j));
-    lv.push(levelTex(lvW, lvH));
+    for (let j = 0; j < 4; j++) lv.push(levelTex(j === 0 ? gl.RGBA8 : gl.RGB10_A2, (lvW + (1 << j) - 1) >> j, (lvH + (1 << j) - 1) >> j));
+    lv.push(levelTex(gl.RGB10_A2, lvW, lvH));
     gl.bindFramebuffer(gl.FRAMEBUFFER, null);
   }
   function postPass(src, sw, sh, dst, w, h, mode, sg, dx, dy) {
