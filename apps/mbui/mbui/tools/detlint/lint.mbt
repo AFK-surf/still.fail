@@ -27,6 +27,8 @@ priv struct Config {
   // an app's component library (web/ui's): its packages, and what they may import (prefixes); nothing else of the app
   library : Array[String]
   library_imports : Array[String]
+  // an app's pages: where the hand (@ui.pointing()) is never read (page-hand)
+  pages : Array[String]
 }
 
 ///|
@@ -67,6 +69,7 @@ fn Config::new(d : @rjson.Value) -> Config {
     effect_later: strs(be.get("later"), []),
     library: strs(sect(d, "library").get("roots"), []),
     library_imports: strs(sect(d, "library").get("imports"), ["mbui/", "moonbitlang/"]),
+    pages: strs(sect(d, "pages").get("roots"), []),
   }
 }
 
@@ -196,6 +199,10 @@ fn lint_mbt(
     // a target waited on until it holds still
     if hold_still.contains(c.name) && (c.kind == "method" || c.kind == "bare") {
       add("at-rest-wait", c.at, f.line_text(c.at))
+    }
+    // a page reading the hand (its tests may say which hand they are)
+    if c.name == "pointing" && c.kind == "pkg" && c.qual == "@ui" && !in_t && under(f.rel, cfg.pages) {
+      add("page-hand", c.at, f.line_text(c.at))
     }
     // the app as it is screenshotted is not the app
     if c.name == "stable" &&

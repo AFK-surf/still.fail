@@ -186,7 +186,8 @@
       "web/host.js": 1
     },
     "library-import": {},
-    "reset-wire": {}
+    "reset-wire": {},
+    "page-hand": {}
   },
   "excused": {
     "frame-request": {},
@@ -224,6 +225,7 @@
     "unsettled-ok": {},
     "host-delay": {},
     "library-import": {},
-    "reset-wire": {}
+    "reset-wire": {},
+    "page-hand": {}
   }
 }
