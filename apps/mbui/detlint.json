@@ -229,6 +229,29 @@
       "src/sfapp/app.mbt": 1,
       "src/sfdesk/frame.mbt": 2,
       "src/sfpages/composer.mbt": 1
+    },
+    "follow-layout": {
+      "src/sfbase/viewer.mbt": 1
+    },
+    "motion-read": {
+      "src/sf/marked.mbt": 1,
+      "src/sfapp/bar.mbt": 3,
+      "src/sfapp/composer.mbt": 1,
+      "src/sfapp/decisions.mbt": 2,
+      "src/sfapp/newchat.mbt": 2,
+      "src/sfbase/chat_list.mbt": 1,
+      "src/sfbase/emit.mbt": 3,
+      "src/sfbase/flight.mbt": 1,
+      "src/sfbase/under_post.mbt": 1,
+      "src/sfbase/viewer.mbt": 1,
+      "src/sfdesk/chat_talk.mbt": 1,
+      "src/sfdesk/decision_page.mbt": 1,
+      "src/sfdesk/newchat.mbt": 1,
+      "src/sfdesk/switch.mbt": 1,
+      "src/sfpages/chat_list.mbt": 3,
+      "src/sfpages/message_files.mbt": 1,
+      "src/sfpages/search.mbt": 1,
+      "src/sfreplay/steps.mbt": 1
     }
   },
   "excused": {
@@ -272,6 +295,8 @@
     "host-delay": {},
     "library-import": {},
     "reset-wire": {},
-    "page-hand": {}
+    "page-hand": {},
+    "follow-layout": {},
+    "motion-read": {}
   }
 }
