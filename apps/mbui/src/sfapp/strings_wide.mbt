@@ -492,6 +492,9 @@ let zh_wide : Map[String, String] = {
   "web-pages.stations.agentEnv": "Agent 环境变量",
   "web-pages.stations.agentEnvLead": "此 station 启动的 agent、登录和任务都会加载这些变量，常用于设置 HTTP 代理。每行一个「变量名=值」，可直接粘贴 .env 内容，打码的值保持原样即不修改。Profile 中的同名变量优先。保存后，空闲的 agent 进程会重新启动，运行中的在本轮结束后生效。",
   "web-pages.stations.deviceLoading": "正在读取设备信息",
+  // the library's presenters (src/sf presenters.mbt): a long pick's search, and when it finds nothing
+  "common.search": "搜索",
+  "common.noMatch": "没有匹配的结果",
   // a new connect (src/sfdesk new_connect.mbt)
   "web-pages.cloud.slackInstalled.done": "已安装到「{team}」",
   "web-pages.cloud.slackInstalled.workspace": "工作区",

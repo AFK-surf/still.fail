@@ -258,7 +258,7 @@ fn remove_confirm(c : @ui.Ctx, src : Source, key : String) -> Unit {
   } else {
     @sf.t("web-pages.drive.deleteText")
   }
-  let r = @sf.confirm(
+  let r = @sf.confirm_dialog(
     c,
     "files/remove/" + key,
     !asking.is_empty(),

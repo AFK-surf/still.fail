@@ -274,7 +274,7 @@ fn chat_bar(
   })
   |> ignore
   // a chat keeping watch, archived once asked (the core's words)
-  let asked = @sf.confirm(
+  let asked = @sf.confirm_dialog(
     c,
     "archive-confirm/" + chat_key(r),
     chat_own.archive_asking == chat_key(r),
@@ -502,7 +502,7 @@ fn bar_popovers(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef, v : ChatV
     c.id("chat-more"),
     side=Bottom,
     along=End,
-    look=fn(c, _, body) { @sf.panel(c, w=@ui.Size::Px(chat_info_w), body) |> ignore },
+    look=fn(c, _, body) { @sf.small_panel(c, w=@ui.Size::Px(chat_info_w), body) |> ignore },
     fn() { chat_info(c, src, w, r, v, chat) },
   )
   // (closed by what was pressed in it, or as a popover closes: Escape, a press outside)
@@ -514,7 +514,7 @@ fn bar_popovers(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef, v : ChatV
     c.id("chat-jobs"),
     side=Bottom,
     along=End,
-    look=fn(c, _, body) { @sf.panel(c, w=@ui.Size::Px(jobs_pop_w), body) |> ignore },
+    look=fn(c, _, body) { @sf.small_panel(c, w=@ui.Size::Px(jobs_pop_w), body) |> ignore },
     fn() {
       let open = fn(id : String) {
         chat_own.jobs_open = false

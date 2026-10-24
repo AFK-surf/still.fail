@@ -1,5 +1,7 @@
 {
   "common.cancel": "取消",
+  "common.search": "搜索",
+  "common.noMatch": "没有匹配的结果",
   "common.save": "保存",
   "common.close": "关闭",
   "common.delete": "删除",

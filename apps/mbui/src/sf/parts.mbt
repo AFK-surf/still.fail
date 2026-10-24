@@ -294,7 +294,7 @@ let field_frame : @ui.Style = @ui.css("w=Full px=S3 py=S2_5 radius=Xl bg=Card bo
 /// grey in dark), a line round it, its shadow; padded panel_pad, its corner
 /// the menu's. `min_w`: as wide as what it holds, at least that (a menu's,
 /// controls.css.ts menuList).
-pub fn panel(
+pub fn small_panel(
   c : @ui.Ctx,
   w? : @ui.Size = Auto,
   h? : @ui.Size = Auto,
@@ -727,7 +727,7 @@ let menu_zou : @ui.TextStyle = @ui.text_style(size=Base, weight=Semibold, color=
 /// its longest and `w` at least (controls.css.ts menuList 180; a menu of choices chooserMenu, 220), `offset` on `side`
 /// of `trigger` (under it) lined up `along` it, or at `at`; what was chosen. The arrows, letters, Enter and Escape as a
 /// menu's; a press outside closes it.
-pub fn menu(
+pub fn dropdown(
   c : @ui.Ctx,
   key : String,
   open : Bool,
@@ -757,7 +757,7 @@ pub fn menu(
     at?,
     enter=pop_in,
     exit=pop_out,
-    look=fn(c, w, body) { panel(c, min_w=w, body) |> ignore },
+    look=fn(c, w, body) { small_panel(c, min_w=w, body) |> ignore },
     item_look=fn(c, s) {
       menu_row(c, s, icons.get(s.entry.value).unwrap_or(""), chooser, row_end, danger=danger.contains(s.entry.value))
     },
@@ -799,6 +799,7 @@ let menu_open_at : Ref[(Double, Double)] = Ref((0.0, 0.0))
 ///|
 /// No menu open, no mark's words (the app begun again).
 pub fn parts_reset() -> Unit {
+  presenters_reset()
   menu_open.val = ""
   about_open.val = ""
   menu_open_at.val = (0.0, 0.0)
@@ -836,7 +837,7 @@ fn menu_items(
       }
     }
   }
-  let m = menu(c, key, open, trigger, entries, icons, menu_w, side~, along~, offset~, at?, danger~)
+  let m = dropdown(c, key, open, trigger, entries, icons, menu_w, side~, along~, offset~, at?, danger~)
   if open && !m.open {
     menu_open.val = ""
   }
@@ -1868,9 +1869,9 @@ pub(all) struct Confirmed {
 ///|
 /// Asks before something that cannot be undone (parts.tsx Confirm: an alert dialog, a press outside does not close
 /// it): 420 wide, 28 over its title, 24 in; its title (22, 600) and `description` (13, muted), what went wrong (`error`:
-/// 13 red, 12 over the buttons, it stays open), then `cancel` (its words alone) and `action` (solid red; a ring while
-/// `busy`) at its end, 16 under, 8 apart. Escape, the back and `cancel` close it.
-pub fn confirm(
+/// 13 red, 12 over the buttons, it stays open), then `cancel` (its words alone) and `action` (solid red, the primary's
+/// when not `danger`; a ring while `busy`) at its end, 16 under, 8 apart. Escape, the back and `cancel` close it.
+pub fn confirm_dialog(
   c : @ui.Ctx,
   key : String,
   open : Bool,
@@ -1880,6 +1881,7 @@ pub fn confirm(
   cancel~ : String,
   busy? : Bool = false,
   error? : String = "",
+  danger? : Bool = true,
 ) -> Confirmed {
   let mut confirmed = false
   let mut closed = false
@@ -1917,7 +1919,7 @@ pub fn confirm(
         if button(c, cancel, key=key + "/cancel", tone=Ghost) {
           closed = true
         }
-        if button(c, action, key=key + "/action", tone=DangerSolid, busy~) {
+        if button(c, action, key=key + "/action", tone=if danger { DangerSolid } else { Primary }, busy~) {
           confirmed = true
         }
       })
@@ -1946,7 +1948,7 @@ let confirm_foot : @ui.Style = @ui.css("row w=Full justify=JEnd align=ACenter ga
 
 // ---------------------------------------------------------------------------
 // A small panel's parts (parts.tsx PanelHead, PanelGroup, PanelNote, PanelFoot, PanelText, PanelButton,
-// PanelIconButton; parts.css.ts: inside a small panel, @sf.panel, its rows @sf.menu_item(panel=true))
+// PanelIconButton; parts.css.ts: inside a small panel, @sf.small_panel, its rows @sf.menu_item(panel=true))
 
 ///|
 /// A small panel's head (PanelHead): its title (13, 600) and `note` under it (12, muted), in by a row's padding, 6 over
@@ -2139,7 +2141,7 @@ let command_words : @ui.TextStyle = @ui.text_style(size=Xs, leading=L5, color=Fg
 
 ///|
 /// A choice that opens a menu of what it can be (Chooser, controls.css.ts chooser): quiet words (12) and a small
-/// chevron, 28 high, 8 in, 8 round, the hover's ground and the ink pointed at or open; pressed, its menu (@sf.menu) of
+/// chevron, 28 high, 8 in, 8 round, the hover's ground and the ink pointed at or open; pressed, its menu (@sf.dropdown) of
 /// `entries` (a choice each: @kit.menu_radio) on `side`, 220 wide at least. `open`: whether its menu is open, the
 /// view's (what it is now comes back with what was chosen). `lead`: what stands before its words (a station's mark),
 /// in the ink its words have.
@@ -2165,7 +2167,7 @@ pub fn chooser(
     icon(c, "chevron-down", size=chooser_chevron, color=if lit { p.text } else { p.muted }) |> ignore
   })
   c.semantics(b, Button, id~, label=words, expanded=opened)
-  menu(c, key + "/menu", opened, id, entries, {}, chooser_menu_w, side~)
+  dropdown(c, key + "/menu", opened, id, entries, {}, chooser_menu_w, side~)
 }
 
 ///|

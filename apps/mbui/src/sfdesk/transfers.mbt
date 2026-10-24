@@ -88,7 +88,7 @@ pub fn transfers_button(c : @ui.Ctx, src : Source, ws : String, go : (DriveAt) -
     id,
     side=Bottom,
     along=End,
-    look=fn(c, _, body) { @sf.panel(c, w=Px(ftransfers_w), body) |> ignore },
+    look=fn(c, _, body) { @sf.small_panel(c, w=Px(ftransfers_w), body) |> ignore },
     fn() {
       c.box(style=ftransfers_head, fn() { c.text(@sf.t("web-pages.files.transfers"), style=ftransfers_head_words) |> ignore })
       |> ignore

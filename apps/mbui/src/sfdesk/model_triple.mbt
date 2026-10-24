@@ -215,7 +215,7 @@ pub fn model_triple(
     id,
     side=if up { Top } else { Bottom },
     along=Start,
-    look=fn(c, _, body) { @sf.panel(c, body) |> ignore },
+    look=fn(c, _, body) { @sf.small_panel(c, body) |> ignore },
     fn() { triple_panel(c, src, station, of, v, saved) },
   )
   if open && !pop.value {
@@ -505,7 +505,7 @@ fn triple_accounts_pop(c : @ui.Ctx, src : Source, station : String, of : String,
     side=Right,
     along=End,
     offset=14.0,
-    look=fn(c, _, body) { @sf.panel(c, body) |> ignore },
+    look=fn(c, _, body) { @sf.small_panel(c, body) |> ignore },
     fn() {
       c.box(style=triple_accounts, fn() {
         triple_column_head(c, @sf.t("web-main.model.account"))

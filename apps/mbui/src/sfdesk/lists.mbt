@@ -122,7 +122,7 @@ fn lists_foot(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
           side=Top,
           along=End,
           offset=6.0,
-          look=fn(c, _, body) { @sf.panel(c, w=Px(open_jobs_pop_w), body) |> ignore },
+          look=fn(c, _, body) { @sf.small_panel(c, w=Px(open_jobs_pop_w), body) |> ignore },
           // (scrolling in itself past 420, or 60% of the window: openJobsPop)
           fn() { c.capped("side/open-jobs/list", dmin(open_jobs_pop_most, c.height * 0.6), fn() { open_jobs(c, src, w) }) |> ignore },
         )

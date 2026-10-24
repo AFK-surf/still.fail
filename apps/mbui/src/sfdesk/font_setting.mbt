@@ -364,7 +364,7 @@ fn local_tile(c : @ui.Ctx, core : Core, place : String, chosen : String) -> Unit
     side=Bottom,
     along=Start,
     label=@sf.t("web-pages.appearance.fonts.local"),
-    look=fn(c, _, body) { @sf.panel(c, w=Px(local_panel_w), body) |> ignore },
+    look=fn(c, _, body) { @sf.small_panel(c, w=Px(local_panel_w), body) |> ignore },
     fn() {
       // its field to find one (localSearch)
       c.box(style=local_search, fn() {

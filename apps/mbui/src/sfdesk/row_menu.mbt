@@ -1,6 +1,6 @@
 // A chat's row's menu and its title renamed in place (ember web/src/Sidebar.tsx ChatRow's ContextMenu, Rename.tsx
 // TitleInput, ChatRef.tsx useCopyChatLink and useCopyTranscripts): at the pointer where the row was right clicked,
-// the library's menu (@sf.menu: controls.css.ts popover, menuList, menuItem).
+// the library's menu (@sf.dropdown: controls.css.ts popover, menuList, menuItem).
 
 ///|
 /// What the row's menu and its rename keep: the row whose title the field holds, whether the field had the keyboard
@@ -30,7 +30,7 @@ fn row_menu(c : @ui.Ctx, src : Source) -> Unit {
     Some(m) => m
     // (closed: told so, for its going)
     None => {
-      @sf.menu(c, "row-menu", false, 0, [], {}, @sf.menu_w) |> ignore
+      @sf.dropdown(c, "row-menu", false, 0, [], {}, @sf.menu_w) |> ignore
       return
     }
   }
@@ -59,7 +59,7 @@ fn row_menu(c : @ui.Ctx, src : Source) -> Unit {
   entries.push(@kit.menu_item("transcript", label=@sf.t("web-main.chat.copyTranscript")))
   entries.push(@kit.menu_item("archive", label=@sf.t("web-main.chat.archive")))
   // (its top left at the pointer, as the web's context menu opens)
-  let m = @sf.menu(c, "row-menu", true, 0, entries, row_menu_icons, @sf.menu_w, offset=0.0, at=(x, y, 0.0, 0.0))
+  let m = @sf.dropdown(c, "row-menu", true, 0, entries, row_menu_icons, @sf.menu_w, offset=0.0, at=(x, y, 0.0, 0.0))
   if !m.open {
     wide.menu = None
   }

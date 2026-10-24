@@ -341,7 +341,7 @@ fn signed_in(c : @ui.Ctx, src : Source) -> Unit {
         // a place's top page other than the chats, with nothing over it or in it taking back: back goes to the chats,
         // in place
         let root = app.nav.top()
-        if app.nav.depth() == 1 && root != Home && !page_took && !app.menu && !sheet_open() {
+        if app.nav.depth() == 1 && root != Home && !page_took && !app.menu && !sheet_open() && !@sf.presenting() {
           c.on_back(fn() { go_place(c, "chats", [], -1) })
         }
         // the player sideways: back turns it upright first
@@ -387,6 +387,8 @@ fn signed_in(c : @ui.Ctx, src : Source) -> Unit {
       // the desktop's settings pages' dialogs (src/sfdesk settings_page.mbt), under the settings' questions
       @sfdesk.settings_overlay(c)
       @settings.overlay(c, settings_core(src, w))
+      // the library's menus, picks, panels, confirms and questions (src/sf presenters.mbt), over all of those
+      @sf.presented(c)
       toast(c)
     }
     None =>
