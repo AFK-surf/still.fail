@@ -224,9 +224,16 @@ pub fn chip(
 let chip_inner : @ui.Style = @ui.css("radius=Inner")
 
 ///|
+/// How far an option's words stand in from its column's sides (segmentedOption: 0 12).
+let segmented_in : Double = 12.0
+
+///|
 /// A choice of a few (Segmented; the kit's sliding toggle group): a quiet
-/// pill track, the chosen raised on the canvas and sliding to it. Returns the
-/// chosen index.
+/// pill track, the chosen raised on the canvas and sliding to it; its options
+/// equal columns, as wide as the widest in the chosen weight with 12 either
+/// side (segmented, segmentedOption, segmentedSizer), `item_w` at least,
+/// narrower alike where there is not the room.
+/// Returns the chosen index.
 pub fn segmented(
   c : @ui.Ctx,
   key : String,
@@ -239,8 +246,9 @@ pub fn segmented(
   let t = theme()
   let ink = ink.unwrap_or(t.p.text)
   let thumb = thumb.unwrap_or(t.p.canvas)
-  // as wide as the widest, each, unless told
-  let w = if item_w > 0.0 { item_w } else { 76.0 }
+  // as wide as the widest in the chosen weight (as wide unchosen as chosen: no column changes as the choice does)
+  let widest = labels.fold(init=0.0, fn(m, l) { dmax(m, @ui.text_advance(l, size=t.t.ui, weight=500)) })
+  let w = dmax(item_w, widest + 2.0 * segmented_in)
   let items = labels.mapi(fn(i, l) { @kit.item(i.to_string(), label=l) })
   let now = @kit.toggle_group(
     c,
@@ -249,7 +257,10 @@ pub fn segmented(
     [chosen.to_string()],
     slide=true,
     look=fn(c, s) {
-      c.box(w=Px(w), h=Px(30.0), align=ACenter, justify=JCenter, fn() {
+      // as wide as its column (`w`, held by what lies unseen across it: segmentedSizer), narrower alike where the row
+      // has less room, its words cut short then (minmax(0, 1fr))
+      c.box(w=Cut, h=Px(30.0), padx=segmented_in, align=ACenter, justify=JCenter, fn() {
+        c.box(w=Px(w - 2.0 * segmented_in), h=Px(0.0), fn() {  }) |> ignore
         c.text(
           s.label,
           size=t.t.ui,
@@ -277,7 +288,8 @@ pub fn segmented(
       |> ignore
     },
     ground=fn(c, _, items) {
-      c.box(dir=Row, pad=3.0, gap=2.0, bg=alpha(ink, 0.06), radius=18.0, items) |> ignore
+      // (never wider than where it is: its options narrower alike there)
+      c.box(dir=Row, w=Cut, pad=3.0, gap=2.0, bg=alpha(ink, 0.06), radius=18.0, items) |> ignore
     },
   ).value
   // the chosen one tapped again stays chosen
