@@ -5,6 +5,20 @@
 /// seen by the next).
 let the_ctx : Ref[Ctx] = Ref(Ctx::new())
 
+
+///|
+/// The builds made so far, over every Ctx the program has had (a Tester's each its own): a build's number is never
+/// another's, so what is kept of one outside its Ctx (an app's own Field, given to an editor in a Tester before; a
+/// native view, a sideways box) is never taken for this build's.
+// kept across runs: a build's number is never one a run before had
+let builds_made : Ref[Int] = Ref(0)
+
+///|
+/// The number of the build beginning now (builds_made).
+fn next_build() -> Int {
+  builds_made.val = builds_made.val + 1
+  builds_made.val
+}
 ///|
 fn g() -> Ctx {
   the_ctx.val
@@ -222,7 +236,7 @@ fn frame_body(c : Ctx, w : Double, h : Double, scale : Double, t : Double) -> Do
     pass = pass + 1
     c.read_back_moved = false
     building.val = true
-    c.build_no = c.build_no + 1
+    c.build_no = next_build()
     root = frame_build(c, w, h)
     let built_layers = c.layers.length()
     t1 = h_now()

@@ -186,8 +186,8 @@ pub struct Ctx {
   mut frame_no : Int
   /// the system's size of words this frame (font_scale): every word's size and line times it, as Compose's sp
   mut font_scale : Double
-  /// how many times a frame has been built (frame_body's passes, over every frame): what is said of a build, said
-  /// again by the next (motion's keyed nodes, by node: another pass's nodes are other nodes)
+  /// the build's number (frame_body's passes, over every frame, counted over the program: app.mbt builds_made): what is
+  /// said of a build, said again by the next (motion's keyed nodes, by node: another pass's nodes are other nodes)
   mut build_no : Int
   /// how many sideways boxes' content is being built now (Ctx::sideways): what is made in it is marked in_sideways
   mut sideways_depth : Int

@@ -4,7 +4,9 @@
 # again over their runs' cores (src/sfreplay/steps.mbt). UPDATE=1 refreshes snapshots. TARGETS: the targets they run
 # on (native by default, as the apps are built; CI's check-mbui: native on Linux, and on macOS on main). PARTS: which
 # of the two (app: the design system, the pages, the screens, gallery and player; replay: the core and the flows seen
-# again), both by default; check-mbui runs each on a runner of its own. mbui's own: its scripts/test.sh.
+# again), both by default; check-mbui runs each on a runner of its own, and `whole`: sfapp's tests in one process, as
+# the app part's shards (a process each) cannot (what one file leaves behind that a later one trips on shows only
+# there). mbui's own: its scripts/test.sh.
 D="$(cd "$(dirname "$0")" && pwd)"
 . "$D/env.sh"
 cd "$A"
@@ -50,6 +52,13 @@ for t in ${TARGETS:-native}; do
       code=1
     done
   fi
+  # (sfapp's tests in one process, every file run after the ones moon runs before it: a test that passes alone and
+  # fails after another's is a state left behind, which the app part's shards, a process each, hide, 2026-10-24)
+  whole=""
+  if [[ " ${PARTS:-app replay} " = *" whole "* ]]; then
+    pkgs="$pkgs -p stillfail/sfapp"
+    whole=1
+  fi
   # The kinds of test program a package has none of (internal: a test in its own files; blackbox: *_test.mbt;
   # whitebox: *_wbtest.mbt), which moon builds anyway, each the whole app, and never runs: scripts/mbc puts a stand-in
   # in their place (MBC_EMPTY_TESTS)
@@ -73,7 +82,7 @@ for t in ${TARGETS:-native}; do
   # moon tests side by side over the build made, the other packages in one more: two moon tests at once go as fast
   # as one, 7 s for 14 on Studio)
   runs=("$pkgs")
-  if [[ " $pkgs " = *" -p stillfail/sfapp "* ]]; then
+  if [ -z "$whole" ] && [[ " $pkgs " = *" -p stillfail/sfapp "* ]]; then
     files=(src/sfapp/*_wbtest.mbt)
     n=${SFAPP_SHARDS:-5}
     runs=("$(echo " $pkgs " | sed 's| -p stillfail/sfapp | |')")
@@ -85,11 +94,13 @@ for t in ${TARGETS:-native}; do
   fi
   pids=()
   for i in "${!runs[@]}"; do
+    # (a run of nothing is none: moon test of no package would be every package's)
+    [ -n "${runs[i]// /}" ] || continue
     moon test $mode ${runs[i]} ${UPDATE:+--update} > "$out.$i" 2>&1 &
     pids+=($!)
   done
   for p in "${pids[@]}"; do wait $p || code=1; done
-  for i in "${!runs[@]}"; do cat "$out.$i"; rm -f "$out.$i"; done > "$out"
+  for i in "${!runs[@]}"; do [ -f "$out.$i" ] && cat "$out.$i"; rm -f "$out.$i"; done > "$out"
   grep -v "$F" "$out" | grep -v '^Total tests' | tail -${LINES_OUT:-60}
   grep '^Total tests' "$out"
   [ -z "${TIMES:-}" ] || echo "test.sh: run in $(( $(date +%s) - s )) s"
