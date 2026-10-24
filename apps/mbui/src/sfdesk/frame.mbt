@@ -16,9 +16,6 @@ pub let wide_from : Double = 701.0
 /// What the frame draws that is not here yet, given by the app (sfapp): the pages in the pane, the sidebars of the
 /// places other than the chats', and what the frame asks of the app.
 pub(all) struct Pages {
-  /// 文件, and a folder of a station's drive
-  files : (@ui.Ctx, Source, Workspace) -> Unit
-  folder : (@ui.Ctx, Source, Workspace, DriveAt) -> Unit
   /// any other page: the phone's of it, its bar at its top (the workspaces, whether invitations wait)
   other : (@ui.Ctx, Source, Workspace, Array[Workspace], Bool, Page) -> Unit
   /// what the settings' pages read and call, and how they move (src/sfapp/settings: the core as the app has it)
@@ -710,8 +707,8 @@ fn main_page(
     // a place of the rail's other than the chats': its page, under its title
     Place(p) => place_page(c, src, w, pages, p)
     // 文件: a folder under its bar, as the web's
-    Files => (pages.files)(c, src, w)
-    Drive(at) => (pages.folder)(c, src, w, at)
+    Files => files_home(c, src, w, (pages.core)(src, w), files_room(c))
+    Drive(at) => files_station(c, src, w, (pages.core)(src, w), at, files_room(c))
     // a new chat (newchat.mbt)
     NewChat => new_chat_page(c, src, w, pages)
     // a station's screen, a drive's text read, a film played are over the whole window (sfapp's signed_in), not in
