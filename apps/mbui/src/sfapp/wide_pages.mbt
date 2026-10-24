@@ -59,6 +59,13 @@ fn desk_pages() -> @sfdesk.Pages {
       chat_drop(c, src, key, pane)
     },
     composer_moves: fn(c, chat) { composer_page_starts(c, chat) },
+    fly: fn(c, draft, rk, row, words, room) {
+      flight_start(c, draft, rk, row, words, room, [])
+      match rk.split("\u{1}").map(fn(x) { x.to_string() }).collect() {
+        [station, session] => c.list_to_end("chat/" + station + "/" + session, glide=flight_of(draft) is None)
+        _ => ()
+      }
+    },
     updating: fn() { side_update_shown() },
     update: fn(c, src, bar, s, inset) { side_update(c, src, bar, s, inset) },
     sheet: fn() { sheet_open() },

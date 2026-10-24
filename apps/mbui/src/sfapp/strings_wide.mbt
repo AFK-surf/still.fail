@@ -3,6 +3,10 @@
 
 ///|
 let zh_wide : Map[String, String] = {
+  "web-main.draft.notSent": "发送失败：{error}",
+  "web-main.composer.send": "发送",
+  "web-main.quote.commentPlaceholder": "添加说明（可选）",
+  "web-main.file.modePath": "路径",
   "web-main.file.uploadingPart": "正在上传 {percent}% · {size}",
   "web-main.file.remove": "移除 {name}",
   "web-main.quote.jump": "跳到原消息",

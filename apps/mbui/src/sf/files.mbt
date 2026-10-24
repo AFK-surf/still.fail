@@ -263,6 +263,13 @@ fn card_button(c : @ui.Ctx, id : Int, icon_name : String, label : String) -> Uni
 pub let message_file_corner : Double = 13.0
 
 ///|
+pub let message_file_radius : @ui.Radius = rounded(message_file_corner)
+
+///|
+/// The composer's box's corner: its buttons' pill's inner corner with its padding (COMPOSER_INNER + 12).
+pub let composer_corner : @ui.Radius = rounded(composer_inner + composer_pad)
+
+///|
 /// A file's card at its widest (fileCard: 236).
 pub let file_card_w : Double = 236.0
 
@@ -282,7 +289,7 @@ let card_box : @ui.Style = @ui.style(
   py=S2,
   gap=S2_5,
   bg=Neutral,
-  radius=rounded(message_file_corner),
+  radius=message_file_radius,
   align=ACenter,
 )
 

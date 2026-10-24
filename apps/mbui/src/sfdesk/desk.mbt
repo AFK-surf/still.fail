@@ -24,6 +24,7 @@ pub fn reset() -> Unit {
   row_menu_reset()
   attention_reset()
   newchat_reset()
+  composing_reset()
   page_switch_reset()
   hover_reset()
   triple_reset()
