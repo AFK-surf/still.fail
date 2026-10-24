@@ -53,3 +53,31 @@ pub fn open_detail(src : Source, r : ChatRef, tab : String) -> Unit {
 ///|
 /// The pages' last drawn.
 pub let shell : Ref[Shell] = Ref(bare_shell())
+
+///|
+/// A place's page at the stack's root: 对话 Home, 文件 Files, 奏 Decisions, another its own.
+pub fn place_page(place : String) -> Page {
+  match place {
+    "chats" => Home
+    "files" => Files
+    "decisions" => Decisions
+    p => Place(p)
+  }
+}
+
+///|
+/// A place gone to (the bottom bar's, the rail's, back to the chats from another place's top), in every tier: what is
+/// over the pages put down (Shell's `close_overlays`), the stack back to its root and the place's page that root, in
+/// place; `way` the side it comes in from (the bar's order: -1 its left, 1 its right, 0 none). The same place again
+/// changes nothing. Whether it went.
+pub fn go_place(place : String, way? : Int = 0) -> Bool {
+  let page = place_page(place)
+  if app.nav.depth() == 1 && app.nav.top() == page {
+    return false
+  }
+  (shell.val.close_overlays)()
+  app.switch_way = way
+  nav_home()
+  app.nav.replace(page)
+  true
+}

@@ -257,7 +257,7 @@ fn attention_rows(c : @ui.Ctx, src : Source, w : Workspace, railed : Bool, close
   c.box(style=att_foot, fn() {
     if attention_link(c, "attention/desk", @sf.t("web-main.attention.desk")) {
       close()
-      go_place("decisions")
+      @sfbase.go_place("decisions") |> ignore
     }
     if attention_link(c, "attention/settings", @sf.t("web-main.attention.settings")) {
       close()

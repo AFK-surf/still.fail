@@ -124,7 +124,7 @@ fn filter_button(
   if c.clicked(id) {
     @sfpages.filter_menu(Of(id), if shown == "chats" { "all" } else { shown }, fn(f) {
       match f {
-        "decisions" => go_place("decisions")
+        "decisions" => @sfbase.go_place("decisions") |> ignore
         "all" => rail_go(c, src, w, "chats")
         f => rail_go(c, src, w, f)
       }
