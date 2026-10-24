@@ -9,9 +9,9 @@ on:
   # a commit to the station's code as well)
   push:
     branches: [main]
-    paths: ["apps/mbui/mbui/**", ".github/workflows/mbui-windows.yml", ".github/actions/mbui-moonbit/**"]
+    paths: ["apps/mbui/mbui/**", ".github/workflows/mbui-windows.yml", ".github/actions/mbui-moonbit/**", ".github/actions/msvc/**"]
   pull_request:
-    paths: ["apps/mbui/mbui/**", ".github/workflows/mbui-windows.yml", ".github/actions/mbui-moonbit/**"]
+    paths: ["apps/mbui/mbui/**", ".github/workflows/mbui-windows.yml", ".github/actions/mbui-moonbit/**", ".github/actions/msvc/**"]
   workflow_dispatch:
     inputs:
       stillfail_ref:
@@ -36,7 +36,7 @@ jobs:
       - run: git config --global core.autocrlf false
         working-directory: ${{ github.workspace }}
       - uses: actions/checkout@v4
-      - uses: ilammy/msvc-dev-cmd@v1
+      - uses: ./.github/actions/msvc
       # MoonBit's latest release, kept in the Actions cache by the ETags of its two downloads (the binaries and the
       # core, a HEAD each): installed (~16 s, most of it bundling the core) only when either changed. No answer: no
       # key, installed as before.
@@ -110,7 +110,7 @@ jobs:
           ref: ${{ inputs.stillfail_ref }}
           path: apps/mbui/mbui/sf
           sparse-checkout: apps/mbui
-      - uses: ilammy/msvc-dev-cmd@v1
+      - uses: ./.github/actions/msvc
       # MoonBit's latest release, kept in the Actions cache by the ETags of its two downloads (the binaries and the
       # core, a HEAD each): installed (~16 s, most of it bundling the core) only when either changed. No answer: no
       # key, installed as before.
