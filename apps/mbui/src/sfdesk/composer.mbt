@@ -183,13 +183,19 @@ fn take_in(c : @ui.Ctx, src : Source, spec : ComposerSpec, w : Writing, no_files
   }
   let sent = tab_take_sent(w.key)
   if !sent.is_empty() && !no_files {
-    let prefs = (src.topic)("prefs", {}).value
-    let as_files = match field(field(prefs, "dropFiles"), w.key) {
-      Some(True) => true
-      Some(False) => false
-      _ => text(prefs, "dropAs") == "file"
-    }
-    writing_drop(src, w, spec.station, sent.map(dropped_of), as_files)
+    writing_drop(src, w, spec.station, sent.map(dropped_of), drops_as_files(src, w.key))
+  }
+}
+
+///|
+/// Whether what is carried into draft `key` goes as files (the chat's own choice, else the device's: prefs
+/// `dropFiles`, `dropAs`), not named by its path.
+fn drops_as_files(src : Source, key : String) -> Bool {
+  let prefs = (src.topic)("prefs", {}).value
+  match field(field(prefs, "dropFiles"), key) {
+    Some(True) => true
+    Some(False) => false
+    _ => text(prefs, "dropAs") == "file"
   }
 }
 

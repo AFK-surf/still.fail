@@ -50,5 +50,6 @@ pub fn reset() -> Unit {
   message_reset()
   rows_reset()
   login_cards_reset()
+  layers_reset()
   list_reset()
 }

@@ -16,10 +16,6 @@ pub let wide_from : Double = 701.0
 /// What the frame draws that is not here yet, given by the app (sfapp): the pages in the pane, the sidebars of the
 /// places other than the chats', and what the frame asks of the app.
 pub(all) struct Pages {
-  /// what is over a chat's list that is not here yet, the app's, round its composer (`composer`, sfdesk's: drawn among
-  /// them): a row of the 文件 tab carried over the pane (its box) frosted under it, let go there into its message; the
-  /// list's picking and a link's menu over it
-  chat_layers : (@ui.Ctx, Source, ChatRef, ChatView?, Int, () -> Unit) -> Unit
   /// a chat's sharing's and publishing's dialogs (its thread)
   share : (@ui.Ctx, ChatRef, Double?) -> Unit
   publish : (@ui.Ctx, String, Double) -> Unit
@@ -28,7 +24,7 @@ pub(all) struct Pages {
   folder : (@ui.Ctx, Source, Workspace, DriveAt) -> Unit
   /// any other page: the phone's of it, its bar at its top (the workspaces, whether invitations wait)
   other : (@ui.Ctx, Source, Workspace, Array[Workspace], Bool, Page) -> Unit
-  /// the pane's page's own keys (the open chat's, 奏's), after the frame's (`escape`: Esc pressed and not taken by
+  /// the pane's page's own keys (奏's), after the frame's and the open chat's (`escape`: Esc pressed and not taken by
   /// what the frame opened), and what it offers ⌘K now
   keys : (@ui.Ctx, Source, Workspace, Bool) -> Unit
   offered : (@ui.Ctx, Source) -> Array[Offered]
@@ -38,9 +34,6 @@ pub(all) struct Pages {
   core : (Source, Workspace) -> Core
   /// what this device sees while it waits to be confirmed in the workspace's safe mode
   gate : (@ui.Ctx, Source, Workspace) -> Unit
-  /// A row of the 文件 tab carried over box `pane` and let go there: into draft `key` (ChatSide.tsx DropHint,
-  /// useChatDrop), while a chat's page has the phone's (till it has the desk's)
-  drop : (@ui.Ctx, Source, String, Int) -> Unit
   /// whether a sheet is over the pages (back closes it first); what is over the pages put down (a sheet, the menu): a
   /// place gone to; and the stack back to its root with them, as another workspace is
   sheet : () -> Bool

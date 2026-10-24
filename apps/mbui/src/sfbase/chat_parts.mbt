@@ -23,15 +23,10 @@ pub(all) struct ChatParts {
   viz : (@ui.Ctx, Source, String, String, String, String, Attachment, () -> Unit) -> Unit
   viz_open : (String, String, String, Attachment) -> Unit
   mermaid : (@ui.Ctx, String, String) -> Unit
-  /// a link held or right-clicked in a message (its line's box), and a station's screens' links as their cards (by the
-  /// message's key)
-  link_held : (@ui.Ctx, String, (Double, Double, Double, Double)) -> Unit
+  /// a station's screens' links as their cards (by the message's key)
   screens : (@ui.Ctx, Source, String) -> @sf.Screens?
   /// a link pressed in a message: one of still.fail's opened here as the core says, any other by the system
   open_link : (String) -> Unit
-  /// a message's words picked with the pointer to be quoted into its chat's draft (by its ts, whose and of what role,
-  /// its words, whether it takes the column's width or only its own: the viewer's bubble), round what draws them
-  pick : (@ui.Ctx, String, String, String, String, Bool, () -> Unit) -> Unit
   /// whether the app is shown (what is said in a chat then is watched: its messages come in)
   in_front : () -> Bool
 }
@@ -47,9 +42,7 @@ pub let chat_parts : Ref[ChatParts] = Ref({
   viz: fn(_, _, _, _, _, _, _, failed) { failed() },
   viz_open: fn(_, _, _, _) {  },
   mermaid: fn(_, _, _) {  },
-  link_held: fn(_, _, _) {  },
   screens: fn(_, _, _) { None },
   open_link: fn(_) {  },
-  pick: fn(_, _, _, _, _, _, body) { body() },
   in_front: fn() { true },
 })

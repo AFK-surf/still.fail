@@ -36,7 +36,9 @@ pub fn keys(c : @ui.Ctx, src : Source, w : Workspace, pages : Pages) -> Unit {
   }
   let escape = c.key_pressed(@ui.key_escape) || c.key_pressed(@ui.key_escape, in_field=true)
   let left = escape && !frame_escape(c)
-  (pages.keys)(c, src, w, left)
+  // Esc in the open chat (chat_layers.mbt), then the page's
+  let took = chat_escape(c, src, left)
+  (pages.keys)(c, src, w, left && !took)
 }
 
 ///|

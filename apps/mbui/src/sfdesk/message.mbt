@@ -63,7 +63,7 @@ fn picking(
   fill? : Bool = true,
 ) -> Unit {
   match here.list {
-    Some(_) => (chat_parts.val.pick)(c, ts, author, role, words, fill, body)
+    Some(_) => @sfbase.pickable(c, ts, author, role, words, fill, @sfbase.mouse_picks(true), body)
     None => body()
   }
 }
@@ -379,7 +379,7 @@ fn person_words(c : @ui.Ctx, words : String, key : String, found? : Array[String
     style=msg_plain,
     link_color=p.blue,
     on_link=fn(h) { (chat_parts.val.open_link)(h) },
-    on_link_hold=Some(fn(href, line) { (chat_parts.val.link_held)(c, href, line) }),
+    on_link_hold=Some(fn(href, _) { context_link(c, href) }),
     words=true,
   )
   |> ignore
@@ -450,7 +450,7 @@ fn prose_with_files(c : @ui.Ctx, src : Source, here : MessageHere, m : Message, 
           None => (parts.open_link)(h)
         }
       },
-      on_link_hold=Some(fn(href, line) { (parts.link_held)(c, href, line) }),
+      on_link_hold=Some(fn(href, _) { context_link(c, href) }),
       files=fn(name) {
         match placed.get(name) {
           Some(a) if is_viz(a.name) =>

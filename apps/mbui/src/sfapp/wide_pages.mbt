@@ -22,10 +22,7 @@ fn wide_reset() -> Unit {
 /// What the wide frame (sfdesk) draws of this package's: the pages in its pane, and what it asks.
 fn desk_pages() -> @sfdesk.Pages {
   {
-    // the chat's page is sfdesk's (chat_page.mbt): its messages and composer this package's (wide_chat.mbt), what
-    // comes and goes with a new chat (sfdesk's newchat.mbt, switch.mbt), what its side panel shows of this package's,
-    // how ⌘F goes along its list, its sharing's and publishing's sheets
-    chat_layers: fn(c, src, r, v, pane, composer) { chat_layers(c, src, r, v, pane, composer) },
+    // the chat's page is sfdesk's (chat_page.mbt): its sharing's and publishing's sheets this package's
     share: fn(c, r, thread) { open_sheet(c, XShare(r, thread)) },
     publish: fn(c, station, thread) { open_sheet(c, Publish(station, thread)) },
     // 文件: a folder under its bar, as the web's (wide_files.mbt)
@@ -37,10 +34,6 @@ fn desk_pages() -> @sfdesk.Pages {
     jobs: fn(c, src, w) { open_jobs(c, src, w) },
     core: fn(src, w) { settings_core(src, w) },
     gate: fn(c, src, w) { lock_gate(c, src, w) |> ignore },
-    drop: fn(c, src, key, pane) {
-      drop_hint(c, pane)
-      chat_drop(c, src, key, pane)
-    },
     sheet: fn() { sheet_open() },
     lower: fn() { lower_sheet() },
     home: fn() { home() },

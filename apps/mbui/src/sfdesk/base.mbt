@@ -112,6 +112,7 @@ using @sfbase {
   writing_retry,
   writing_comment,
   writing_unquote,
+  writing_quote,
   writing_focused,
   writing_pictures,
   type Writing,

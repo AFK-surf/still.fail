@@ -3,6 +3,9 @@
 // pages), taken in here by name.
 
 pub using @sfbase {
+  pk,
+  pick_clear,
+  type ChatPick,
   list_frame,
   list_after,
   type ListFrame,

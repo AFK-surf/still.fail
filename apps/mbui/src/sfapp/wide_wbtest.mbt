@@ -492,9 +492,12 @@ test "wide: words picked in a message with the pointer: 引用 over them quotes 
   assert_true((qx - (px + pw / 2.0)).abs() < 60.0, msg="引用 at \{(qx, qy)}")
   t.tap(qx + 4.0, qy + 4.0)
   t.frame()
-  let d = drafts.get(draft_key({ station: "ws1/st1", session: "s-c1", title: "", station_name: "" })).unwrap()
-  assert_eq(d.quotes.length(), 1)
-  assert_eq(d.quotes[0].text, "高度先按 90 估")
+  // into the chat's draft as the core keeps it (composer.quote), whose words with them
+  let quoted = named(calls, "composer.quote")
+  assert_eq(quoted.length(), 1)
+  assert_eq(text(Some(quoted[0].params), "key"), "ws1/st1:s-c1")
+  assert_eq(text(field(Some(quoted[0].params), "quote"), "text"), "高度先按 90 估")
+  assert_eq(text(field(Some(quoted[0].params), "quote"), "author"), "Claude")
   assert_eq(t.ctx().selected_text(), "")
 }
 

@@ -142,7 +142,8 @@ fn new_page(
       }
       // a row of the 文件 tab carried over it, let go there: into its message (DropHint, useChatDrop)
       if going is None && address != "" {
-        (pages.drop)(c, src, "new:" + address, page)
+        drop_hint(c, page)
+        chat_drop(c, src, address, "new:" + address, page)
       }
     })
     |> ignore
