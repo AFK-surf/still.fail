@@ -1,4 +1,5 @@
-// Signed in with no workspace yet (ember apps/android settings/screens/Workspaces.kt Landing, Blocked): the invitations
+// Signed in with no workspace yet (the web's cloud/CloudApp.tsx Landing, InviteCodeForm; ember apps/android
+// settings/screens/Workspaces.kt Landing, Blocked): the invitations
 // waiting, each joined by its 加入 (`invitation.accept`); else said so, with 创建 workspace (`workspace.create`, the
 // invite code still.fail cloud wants once it asks for one), 用邀请链接加入 (the invitation's sheet, links_sheet.mbt) and
 // 切换账号. An account the app may not be used with (the core's `blocked`): why, its email, 退出此账号 or 切换账号.
@@ -36,7 +37,7 @@ let landing : LandingState = {
 
 ///|
 /// As at the start (tests).
-fn landing_reset() -> Unit {
+pub fn landing_reset() -> Unit {
   landing.creating = false
   landing.code_tried = ""
   landing.create_code = ""
@@ -51,7 +52,7 @@ fn landing_reset() -> Unit {
 
 ///|
 /// still.fail cloud's invite-code errors (Calls.kt INVITE_ERRORS) and limits (LIMIT_ERRORS), by their codes.
-fn invite_error_key(code : String) -> String? {
+pub fn invite_error_key(code : String) -> String? {
   match code {
     "invite_code_required" => Some("android-misc.invite.codeRequired")
     "invite_code_invalid" => Some("android-misc.invite.codeInvalid")
@@ -63,14 +64,14 @@ fn invite_error_key(code : String) -> String? {
 
 ///|
 /// An error in words (Calls.kt errorText): an invite code's or a limit's as still.fail says them, else the core's.
-fn landing_error_words(e : Json) -> String {
+pub fn landing_error_words(e : Json) -> String {
   let code = text(Some(e), "code")
   match invite_error_key(code) {
-    Some(k) => tr(k)
+    Some(k) => @sf.t(k)
     None =>
       match code {
-        "too_many_workspaces" => tr("android-misc.limit.workspaces")
-        "too_many_members" => tr("android-misc.limit.members")
+        "too_many_workspaces" => @sf.t("android-misc.limit.workspaces")
+        "too_many_members" => @sf.t("android-misc.limit.members")
         _ => error_words(e)
       }
   }
@@ -118,21 +119,21 @@ let code_row : @ui.Style = @ui.css("row w=Full gap=S2 align=ACenter")
 ///|
 /// The field (Controls.kt Field): on the surface, a hairline round it, 12 round, 12 and 10 in.
 // kept across runs: a value (no field of it changes)
-let code_field : @ui.Style = @ui.css("w=Full px=S3 py=S2_5 radius=Xl bg=Surface border=B1 border_color=Line")
+pub let code_field : @ui.Style = @ui.css("w=Full px=S3 py=S2_5 radius=Xl bg=Surface border=B1 border_color=Line")
 
 ///|
-/// Signed in with no workspace in view (App.kt): an account the app may not be used with first, else the landing.
-fn no_workspace(c : @ui.Ctx, src : Source, ws : Json?) -> Unit {
+/// Signed in with no workspace in view (CloudApp.tsx SignedIn, App.kt), in the box the frame gives it (inside the
+/// system's bars): an account the app may not be used with first, else the landing. `by_link` is 用邀请链接加入's:
+/// the frame's sheet of an invitation's link, one to paste.
+pub fn no_workspace(c : @ui.Ctx, src : Source, ws : Json?, by_link : () -> Unit) -> Unit {
   let entries = match ws {
     Some(Array(a)) => a
     _ => []
   }
   match entries.iter().find_first(fn(e) { text(Some(e), "blocked") != "" }) {
     Some(e) => blocked_page(c, src, Some(e))
-    None => landing_page_of(c, src, entries)
+    None => landing_page_of(c, src, entries, by_link)
   }
-  // an invitation's link pasted (用邀请链接加入): its sheet over the page
-  sheet_contents(fn(kind) { if kind == InviteLink { invite_sheet(c, src) } })
 }
 
 ///|
@@ -145,7 +146,7 @@ fn landing_picture(c : @ui.Ctx) -> Unit {
 ///|
 /// 切换账号: another account signed in (the system's browser).
 fn switch_account_button(c : @ui.Ctx, src : Source) -> Unit {
-  if @settings.button(c, "landing/switch", tr("android-misc.account.switch"), false, busy=(src.signing_in)()) {
+  if @settings.button(c, "landing/switch", @sf.t("android-misc.account.switch"), false, busy=(src.signing_in)()) {
     (src.sign_in)()
   }
 }
@@ -169,7 +170,7 @@ fn create_workspace(src : Source, account : Json?, code : String) -> Unit {
   }
   let params : Map[String, Json] = {
     "account": Json::string(sub),
-    "name": Json::string(fill("android-misc.workspace.defaultName", [("name", name)])),
+    "name": Json::string(@sf.t("android-misc.workspace.defaultName", args=[("name", name)])),
   }
   if code != "" {
     params["invite_code"] = Json::string(code)
@@ -181,7 +182,7 @@ fn create_workspace(src : Source, account : Json?, code : String) -> Unit {
   (src.call)("workspace.create", Json::object(params), fn(r) {
     landing.creating = false
     match r {
-      Ok(v) => pick_workspace(src, text(Some(v), "id"))
+      Ok(v) => @sfbase.pick_workspace(src, text(Some(v), "id"))
       Err(e) => {
         landing.create_code = text(Some(e), "code")
         landing.create_error = landing_error_words(e)
@@ -218,7 +219,7 @@ fn invite_code_form(c : @ui.Ctx, src : Source, account : Json?) -> Unit {
         code = r.text.trim(chars=" \n").to_string()
       })
       |> ignore
-      if @settings.button(c, "landing/create-code", tr("android-misc.workspace.create"), true, busy=landing.creating, enabled=code != "") {
+      if @settings.button(c, "landing/create-code", @sf.t("android-misc.workspace.create"), true, busy=landing.creating, enabled=code != "") {
         create_workspace(src, account, code)
       }
     })
@@ -233,7 +234,7 @@ fn invite_code_form(c : @ui.Ctx, src : Source, account : Json?) -> Unit {
 
 ///|
 /// The landing (Landing): the invitations waiting; else, asked for a code, why and its form; else said so.
-fn landing_page_of(c : @ui.Ctx, src : Source, entries : Array[Json]) -> Unit {
+fn landing_page_of(c : @ui.Ctx, src : Source, entries : Array[Json], by_link : () -> Unit) -> Unit {
   let first = match entries.get(0) {
     Some(e) => field(Some(e), "account")
     None => None
@@ -245,11 +246,10 @@ fn landing_page_of(c : @ui.Ctx, src : Source, entries : Array[Json]) -> Unit {
     }
   }
   let asking = landing.asked
-  // inside the bars (Workspaces.kt Landing: windowInsetsPadding(systemBars.union(keyboard)))
-  within_bars(c, fn() { c.box(style=landing_page, fn() {
+  c.box(style=landing_page, fn() {
     landing_picture(c)
     if pending.length() > 0 {
-      c.text(tr("android-misc.invite.received"), style=landing_title) |> ignore
+      c.text(@sf.t("android-misc.invite.received"), style=landing_title) |> ignore
       for p in pending {
         let (account, inv) = p
         let iv = Some(inv)
@@ -258,11 +258,11 @@ fn landing_page_of(c : @ui.Ctx, src : Source, entries : Array[Json]) -> Unit {
           c.box(style=@sf.full_width, fn() {
             c.text(text(iv, "name"), style=invitation_name) |> ignore
             c.text(
-              fill("android-misc.invite.invitedAs", [
+              @sf.t("android-misc.invite.invitedAs", args=[
                 (
                   "inviter",
                   match text(iv, "inviter") {
-                    "" => tr("android-misc.invite.someone")
+                    "" => @sf.t("android-misc.invite.someone")
                     w => w
                   },
                 ),
@@ -274,7 +274,7 @@ fn landing_page_of(c : @ui.Ctx, src : Source, entries : Array[Json]) -> Unit {
             |> ignore
           })
           |> ignore
-          if @settings.button(c, "landing/join/" + id, tr("android-misc.invite.join"), true, busy=landing.accepting == id) &&
+          if @settings.button(c, "landing/join/" + id, @sf.t("android-misc.invite.join"), true, busy=landing.accepting == id) &&
             landing.accepting == "" {
             accept_invitation(src, account, id)
           }
@@ -286,32 +286,32 @@ fn landing_page_of(c : @ui.Ctx, src : Source, entries : Array[Json]) -> Unit {
       }
       if asking {
         invite_code_form(c, src, first)
-      } else if @settings.button(c, "landing/decline-create", tr("android-misc.invite.declineCreate"), false, busy=landing.creating) {
+      } else if @settings.button(c, "landing/decline-create", @sf.t("android-misc.invite.declineCreate"), false, busy=landing.creating) {
         create_workspace(src, first, "")
       }
     } else if asking {
-      c.text(fill("android-misc.invite.onlyInvited", [("app", "still.fail")]), style=landing_title) |> ignore
-      c.text(fill("android-misc.invite.codeLead", [("app", "still.fail"), ("email", text(first, "email"))]), style=landing_lead)
+      c.text(@sf.t("android-misc.invite.onlyInvited", args=[("app", "still.fail")]), style=landing_title) |> ignore
+      c.text(@sf.t("android-misc.invite.codeLead", args=[("app", "still.fail"), ("email", text(first, "email"))]), style=landing_lead)
       |> ignore
       invite_code_form(c, src, first)
       switch_account_button(c, src)
     } else {
-      c.text(tr("android-misc.workspace.none"), style=landing_title) |> ignore
-      c.text(fill("android-misc.workspace.none.lead", [("app", "still.fail"), ("email", text(first, "email"))]), style=landing_lead)
+      c.text(@sf.t("android-misc.workspace.none"), style=landing_title) |> ignore
+      c.text(@sf.t("android-misc.workspace.none.lead", args=[("app", "still.fail"), ("email", text(first, "email"))]), style=landing_lead)
       |> ignore
-      if @settings.button(c, "landing/create", tr("android-misc.workspace.createOne"), true, busy=landing.creating) {
+      if @settings.button(c, "landing/create", @sf.t("android-misc.workspace.createOne"), true, busy=landing.creating) {
         create_workspace(src, first, "")
       }
       if landing.create_error != "" {
         c.text(landing.create_error, style=landing_error) |> ignore
       }
-      if @settings.button(c, "landing/by-link", tr("android-misc.invite.byLink"), false) {
-        open_invite_link()
+      if @settings.button(c, "landing/by-link", @sf.t("android-misc.invite.byLink"), false) {
+        by_link()
       }
       switch_account_button(c, src)
     }
   })
-  |> ignore })
+  |> ignore
 }
 
 ///|
@@ -327,8 +327,8 @@ fn accept_invitation(src : Source, account : Json?, id : String) -> Unit {
     landing.accepting = ""
     match r {
       Ok(v) => {
-        pick_workspace(src, text(Some(v), "id"))
-        home()
+        @sfbase.pick_workspace(src, text(Some(v), "id"))
+        @sfbase.nav_home()
       }
       Err(e) => landing.accept_error = error_words(e)
     }
@@ -336,22 +336,14 @@ fn accept_invitation(src : Source, account : Json?, id : String) -> Unit {
 }
 
 ///|
-/// The invitation's sheet with no link yet: one to paste (Workspaces.kt openInviteLink).
-fn open_invite_link() -> Unit {
-  invite_reset()
-  raise_sheet(InviteLink)
-}
-
-///|
 /// An account the app may not be used with (Blocked): why, its email; it signs out, or another signs in.
 fn blocked_page(c : @ui.Ctx, src : Source, entry : Json?) -> Unit {
   let account = field(entry, "account")
-  // inside the bars (Workspaces.kt Blocked: windowInsetsPadding(systemBars))
-  within_bars(c, fn() { c.box(style=landing_page, fn() {
+  c.box(style=landing_page, fn() {
     landing_picture(c)
     c.text(text(entry, "blocked"), style=landing_title) |> ignore
     c.text(text(account, "email"), style=landing_lead) |> ignore
-    if @settings.button(c, "landing/sign-out", tr("android-misc.account.signOut"), true, busy=landing.leaving) &&
+    if @settings.button(c, "landing/sign-out", @sf.t("android-misc.account.signOut"), true, busy=landing.leaving) &&
       !landing.leaving {
       landing.leaving = true
       landing.leave_error = ""
@@ -368,5 +360,16 @@ fn blocked_page(c : @ui.Ctx, src : Source, entry : Json?) -> Unit {
     }
     switch_account_button(c, src)
   })
-  |> ignore })
+  |> ignore
+}
+
+///|
+/// A role in words (Accounts.kt ROLE_LABEL).
+pub fn role_words(role : String) -> String {
+  match role {
+    "owner" => "Owner"
+    "admin" => @sf.t("android-misc.role.admin")
+    "member" => @sf.t("android-misc.role.member")
+    r => r
+  }
 }

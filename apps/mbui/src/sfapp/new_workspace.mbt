@@ -91,7 +91,7 @@ fn new_ws_field(c : @ui.Ctx, key : String, placeholder : String, field : @ui.Fie
     enter_sends=false,
     size=15.0,
     line=21.0,
-    look=fn(c, s, editor) { c.box(id=s.id, style=code_field, editor) |> ignore },
+    look=fn(c, s, editor) { c.box(id=s.id, style=@sfpages.code_field, editor) |> ignore },
     field~,
   ).text.trim(chars=" \n").to_string()
 }
@@ -129,13 +129,13 @@ fn new_workspace_sheet(c : @ui.Ctx, src : Source) -> Unit {
     if new_ws.asked {
       c.text(tr("android-misc.invite.code"), style=new_ws_label) |> ignore
       code = new_ws_field(c, "new-ws/code", "XXXX-XXXX-XXXX", new_ws.code)
-      if new_ws.error != "" && invite_error_key(new_ws.error_code) is Some(_) && code != "" {
+      if new_ws.error != "" && @sfpages.invite_error_key(new_ws.error_code) is Some(_) && code != "" {
         c.text(new_ws.error, style=new_ws_error) |> ignore
       } else {
         c.text(fill("android-misc.invite.codeNeeded", [("app", "still.fail")]), style=new_ws_note) |> ignore
       }
     }
-    if new_ws.error != "" && invite_error_key(new_ws.error_code) is None {
+    if new_ws.error != "" && @sfpages.invite_error_key(new_ws.error_code) is None {
       c.text(new_ws.error, style=new_ws_error) |> ignore
     }
     c.box(style=new_ws_buttons, fn() {
@@ -175,8 +175,8 @@ fn make_new_workspace(src : Source, sub : String, name : String, code : String) 
       }
       Err(e) => {
         new_ws.error_code = text(Some(e), "code")
-        new_ws.error = landing_error_words(e)
-        if invite_error_key(new_ws.error_code) is Some(_) {
+        new_ws.error = @sfpages.landing_error_words(e)
+        if @sfpages.invite_error_key(new_ws.error_code) is Some(_) {
           new_ws.asked = true
         }
       }
