@@ -57,12 +57,11 @@ shell() {
 }
 
 # The shell for TARGET as still.fail's natives have it (scripts/native.ts shell-apple: built once on a Mac by CI's
-# natives job, for macOS 12.0 and iOS 17.0), else as said by native.ts: built there; not when another oldest system is
-# asked for (MACOSX_DEPLOYMENT_TARGET), which shell then builds.
+# natives job, for macOS 11.0 and iOS 17.0), else as said by native.ts: built there.
 shell_prebuilt() {
   local t
   case $1 in
-    aarch64-apple-darwin) [ "${MACOSX_DEPLOYMENT_TARGET:-12.0}" = 12.0 ] || return 1; t=darwin-arm64 ;;
+    aarch64-apple-darwin) t=darwin-arm64 ;;
     aarch64-apple-ios) t=ios-arm64 ;;
     aarch64-apple-ios-sim) t=ios-sim-arm64 ;;
     *) return 1 ;;

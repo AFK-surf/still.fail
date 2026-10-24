@@ -230,7 +230,7 @@ const PARTS: Record<string, Part> = {
     },
   },
   // The core's shell for the mbui app on Apple (scripts/core.sh shell's): the crate as a static library, with what it
-  // needs of the system (rustc's native-static-libs), for macOS (from the desktop app's oldest, 12.0) and iOS (17.0, a
+  // needs of the system (rustc's native-static-libs), for macOS (rustc's oldest, 11.0, below the app's 12.0) and iOS (17.0, a
   // device's and the simulator's). Built on a Mac by CI's natives job, fetched by the mbui app's builds: built in each
   // build, it was 160-240 s of the macOS job's 440-580 s (its cache by the shell's sources never kept, 2026-10-23).
   "shell-apple": {
@@ -242,14 +242,12 @@ const PARTS: Record<string, Part> = {
       const triple = APPLE_TRIPLES[t]!;
       const target = targetDir(join(ROOT, "client/target"), "shell-apple");
       rustTarget(triple);
-      const env = rustEnv({ CARGO_TARGET_DIR: target, ...(t === "darwin-arm64" ? { MACOSX_DEPLOYMENT_TARGET: APPLE_MIN[t]! } : { IPHONEOS_DEPLOYMENT_TARGET: APPLE_MIN[t]! }) });
-      // (the crate itself built again, its dependencies kept: rustc says what it links only when it builds it. By its
-      // fingerprint gone, not cargo clean -p, which took zeroize_derive's too: E0463 on mini1, 2026-10-24)
-      const prints = join(target, triple, "release/.fingerprint");
-      for (const f of existsSync(prints) ? readdirSync(prints) : []) {
-        if (f.startsWith("stillfail-shell-")) rmSync(join(prints, f), { recursive: true });
-      }
-      const done = spawnSync("cargo", shellApple(t), { cwd: join(ROOT, "client/shell"), env, encoding: "utf8", stdio: ["ignore", "inherit", "pipe"] });
+      // (macOS's oldest is rustc's own, no MACOSX_DEPLOYMENT_TARGET: that is the host's too, and Xcode 27's ld links
+      // the build's proc-macros for 12.0 so that dyld refuses them, "mis-aligned LINKEDIT string pool": E0463 on mini1)
+      const env = rustEnv({ CARGO_TARGET_DIR: target, ...(t === "darwin-arm64" ? {} : { IPHONEOS_DEPLOYMENT_TARGET: APPLE_MIN[t]! }) });
+      // (the crate itself built again, its dependencies kept: rustc says what it links only when it builds it)
+      run("cargo", ["clean", "--release", "-p", "stillfail-shell", "--target", triple], { cwd: join(ROOT, "client"), env });
+      const done = spawnSync("cargo", shellApple(t), { cwd: join(ROOT, "client"), env, encoding: "utf8", stdio: ["ignore", "inherit", "pipe"] });
       process.stderr.write(done.stderr ?? "");
       if (done.status !== 0) throw new Error(`cargo ${shellApple(t).join(" ")}: exit ${done.status ?? done.signal}`);
       const libs = /native-static-libs: (.*)/.exec(done.stderr ?? "")?.[1];
@@ -366,13 +364,12 @@ const swiftProduct = (scratch: string, name: string) =>
     .sort((a, b) => statSync(b).mtimeMs - statSync(a).mtimeMs)[0] ?? join(scratch, "arm64-apple-macosx/release", name);
 const HELPER_APP = "still.fail Helper.app";
 const APPLE_TRIPLES: Partial<Record<Target, string>> = { "darwin-arm64": "aarch64-apple-darwin", "ios-arm64": "aarch64-apple-ios", "ios-sim-arm64": "aarch64-apple-ios-sim" };
-const APPLE_MIN: Partial<Record<Target, string>> = { "darwin-arm64": "12.0", "ios-arm64": "17.0", "ios-sim-arm64": "17.0" };
+/// (macOS: rustc's for aarch64-apple-darwin, below the app's 12.0)
+const APPLE_MIN: Partial<Record<Target, string>> = { "darwin-arm64": "11.0", "ios-arm64": "17.0", "ios-sim-arm64": "17.0" };
 /// The shell's static library for Apple, as scripts/core.sh shell makes it (the crate untouched: a staticlib by rustc),
-/// rebuilt so that rustc says what it links (--print native-static-libs, said only when it builds). In the crate's
-/// directory, as core.sh: from the workspace's with -p, a fresh build compiled zeroize before zeroize_derive was
-/// there (E0463 on mini1, 2026-10-24)
+/// rebuilt so that rustc says what it links (--print native-static-libs, said only when it builds)
 const shellApple = (t: Target) => [
-  "rustc", "--locked", "--release", "--lib", "--crate-type", "staticlib", "--target", APPLE_TRIPLES[t]!,
+  "rustc", "--locked", "--release", "-p", "stillfail-shell", "--lib", "--crate-type", "staticlib", "--target", APPLE_TRIPLES[t]!,
   "--", "--print", "native-static-libs",
 ];
 const SHELL_RUSTFLAGS = "-C link-arg=-Wl,-z,max-page-size=16384";
