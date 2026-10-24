@@ -90,6 +90,7 @@ fn drag_reset() -> Unit {
   fdrag.asking = None
   fdrag.later = []
   fdrag.frame = -1
+  fclash_shown.val = 0
 }
 
 ///|
@@ -484,10 +485,64 @@ fn fdrag_transfer(
 
 ///|
 /// What is asked about a name already where files go (Transfers.tsx TransferAsk): each name in turn (or all the rest
-/// the same way): 跳过, 保留两者, 替换; let go, nothing goes.
+/// the same way): 跳过, 保留两者, 替换; let go, nothing goes. The library's dialog (@sf.panel, opened by nothing), up
+/// while something is asked: its title and what it is about as the name asked about now says them.
 fn clash_dialog(c : @ui.Ctx) -> Unit {
-  let t = @sf.theme()
-  let (asking, now) = match fdrag.asking {
+  ignore(c)
+  match fdrag.asking {
+    Some(_) if fclash_shown.val == 0 => {
+      @sf.panel(
+        "",
+        fn(c, _) { clash_body(c) },
+        from=Unanchored,
+        foot=fn(c, _) { clash_foot(c) },
+        live=fn() {
+          match clash_now() {
+            (Some(a), Some(n)) =>
+              (
+                @sf.t(if n.dir { "web-pages.files.clashFolder" } else { "web-pages.files.clash" }, args=[
+                  ("folder", a.into_name),
+                  ("name", n.name),
+                ]),
+                "",
+                if a.clashes.length() > 1 {
+                  @sf.t("web-pages.files.clashCount", args=[
+                    ("n", a.total.to_string()),
+                    ("clashes", a.clashes.length().to_string()),
+                  ])
+                } else {
+                  ""
+                },
+              )
+            _ => ("", "", "")
+          }
+        },
+        // let go (Escape, ✕, a press outside): nothing goes
+        gone=fn() {
+          fdrag.asking = None
+          fclash_shown.val = 0
+        },
+      )
+      fclash_shown.val = @sf.last_presented()
+    }
+    None if fclash_shown.val > 0 => {
+      // (all answered: down)
+      @sf.close_presented_of(fclash_shown.val)
+      fclash_shown.val = 0
+    }
+    _ => ()
+  }
+}
+
+///|
+/// The asking's dialog as presented (@sf.last_presented; 0 none).
+// kept across runs: put back by drag_reset
+let fclash_shown : Ref[Int] = Ref(0)
+
+///|
+/// What is asked now, and the name asked about (the first not answered).
+fn clash_now() -> (Asking?, Clash?) {
+  match fdrag.asking {
     Some(a) =>
       match a.clashes.iter().find_first(fn(x) { !a.answers.contains(x.name) }) {
         Some(n) => (Some(a), Some(n))
@@ -495,90 +550,83 @@ fn clash_dialog(c : @ui.Ctx) -> Unit {
       }
     None => (None, None)
   }
-  let title = match (asking, now) {
-    (Some(a), Some(n)) =>
-      @sf.t(if n.dir { "web-pages.files.clashFolder" } else { "web-pages.files.clash" }, args=[("folder", a.into_name), ("name", n.name)])
-    _ => ""
-  }
-  let answer = fn(a : Asking, n : Clash, said : String) {
-    let left = a.clashes.filter(fn(x) { !a.answers.contains(x.name) })
-    if a.all {
-      for x in left {
-        a.answers[x.name] = said
-      }
-    } else {
-      a.answers[n.name] = said
+}
+
+///|
+/// `said` (skip, keep, replace) for the name asked about, or all the rest; all answered, what goes goes.
+fn clash_answer(a : Asking, n : Clash, said : String) -> Unit {
+  let left = a.clashes.filter(fn(x) { !a.answers.contains(x.name) })
+  if a.all {
+    for x in left {
+      a.answers[x.name] = said
     }
-    if a.clashes.iter().all(fn(x) { a.answers.contains(x.name) }) {
-      fdrag.asking = None
-      (a.done)(a.answers)
-    }
+  } else {
+    a.answers[n.name] = said
   }
-  let d = @sf.dialog(
-    c,
-    "files-clash",
-    now is Some(_),
-    title,
-    description=match asking {
-      Some(a) if a.clashes.length() > 1 =>
-        @sf.t("web-pages.files.clashCount", args=[("n", a.total.to_string()), ("clashes", a.clashes.length().to_string())])
-      _ => ""
-    },
-    w=dmin(fclash_w, c.width - fclash_margin),
-    close_label=@sf.t("common.close"),
-    fn() {
-      match (asking, now) {
-        (Some(a), Some(n)) => {
-          c.box(style=fclash_facts, fn() {
-            c.box(style=fclash_said_column, fn() {
-              c.text(@sf.t("web-pages.files.coming"), style=fclash_said) |> ignore
-              c.text(@sf.t("web-pages.files.there"), style=fclash_said) |> ignore
-            })
-            |> ignore
-            c.box(style=fclash_values_column, fn() {
-              let coming = if n.dir { @sf.t("web-pages.files.folder") } else { @sf.file_size(n.size) }
-              c.text(coming + " · " + n.station, style=fclash_value) |> ignore
-              let there = if n.there.dir { @sf.t("web-pages.files.folder") } else { n.there.size_text }
-              c.text(there + " · " + n.there.time_text, style=fclash_value) |> ignore
-            })
-            |> ignore
-          })
-          |> ignore
-          c.text(@sf.t("web-pages.files.replaceNote"), style=clash_note) |> ignore
-          let left = a.clashes.filter(fn(x) { !a.answers.contains(x.name) })
-          if left.length() > 1 {
-            let id = c.id("files-clash/all")
-            c.cursor(id, Hand)
-            if c.clicked(id) {
-              a.all = !a.all
-            }
-            c.box(style=fclash_all, id~, fn() {
-              @sf.icon(c, if a.all { "check-circle" } else { "square" }, size=drag_icon, color=if a.all { t.p.accent } else { t.p.muted })
-              |> ignore
-              c.text(@sf.t("web-pages.files.applyAll", args=[("n", (left.length() - 1).to_string())]), style=clash_note) |> ignore
-            })
-            |> ignore
-          }
-          c.box(style=fclash_foot, fn() {
-            if @sf.button(c, @sf.t("web-pages.files.skip"), key="files-clash/skip", tone=Ghost) {
-              answer(a, n, "skip")
-            }
-            if @sf.button(c, @sf.t("web-pages.drive.keepBoth"), key="files-clash/keep") {
-              answer(a, n, "keep")
-            }
-            if @sf.button(c, @sf.t("web-pages.drive.replace"), key="files-clash/replace", tone=Primary, icon="trash") {
-              answer(a, n, "replace")
-            }
-          })
-          |> ignore
-        }
-        _ => ()
-      }
-    },
-  )
-  if !d && now is Some(_) {
-    // let go (Escape, a press outside): nothing goes
+  if a.clashes.iter().all(fn(x) { a.answers.contains(x.name) }) {
     fdrag.asking = None
+    (a.done)(a.answers)
+  }
+}
+
+///|
+/// What the dialog holds: what comes and what is there (size or folder, where from, when), what replacing does, the
+/// rest the same way.
+fn clash_body(c : @ui.Ctx) -> Unit {
+  let t = @sf.theme()
+  match clash_now() {
+    (Some(a), Some(n)) => {
+      c.box(style=fclash_facts, fn() {
+        c.box(style=fclash_said_column, fn() {
+          c.text(@sf.t("web-pages.files.coming"), style=fclash_said) |> ignore
+          c.text(@sf.t("web-pages.files.there"), style=fclash_said) |> ignore
+        })
+        |> ignore
+        c.box(style=fclash_values_column, fn() {
+          let coming = if n.dir { @sf.t("web-pages.files.folder") } else { @sf.file_size(n.size) }
+          c.text(coming + " · " + n.station, style=fclash_value) |> ignore
+          let there = if n.there.dir { @sf.t("web-pages.files.folder") } else { n.there.size_text }
+          c.text(there + " · " + n.there.time_text, style=fclash_value) |> ignore
+        })
+        |> ignore
+      })
+      |> ignore
+      c.text(@sf.t("web-pages.files.replaceNote"), style=clash_note) |> ignore
+      let left = a.clashes.filter(fn(x) { !a.answers.contains(x.name) })
+      if left.length() > 1 {
+        let id = c.id("files-clash/all")
+        c.cursor(id, Hand)
+        if c.clicked(id) {
+          a.all = !a.all
+        }
+        c.box(style=fclash_all, id~, fn() {
+          @sf.icon(c, if a.all { "check-circle" } else { "square" }, size=drag_icon, color=if a.all { t.p.accent } else { t.p.muted })
+          |> ignore
+          c.text(@sf.t("web-pages.files.applyAll", args=[("n", (left.length() - 1).to_string())]), style=clash_note) |> ignore
+        })
+        |> ignore
+      }
+    }
+    _ => ()
+  }
+}
+
+///|
+/// 跳过, 保留两者, 替换.
+fn clash_foot(c : @ui.Ctx) -> Unit {
+  match clash_now() {
+    (Some(a), Some(n)) => {
+      if @sf.button(c, @sf.t("web-pages.files.skip"), key="files-clash/skip", tone=Ghost) {
+        clash_answer(a, n, "skip")
+      }
+      if @sf.button(c, @sf.t("web-pages.drive.keepBoth"), key="files-clash/keep") {
+        clash_answer(a, n, "keep")
+      }
+      if @sf.button(c, @sf.t("web-pages.drive.replace"), key="files-clash/replace", tone=Primary, icon="trash") {
+        clash_answer(a, n, "replace")
+      }
+    }
+    _ => ()
   }
 }
 
@@ -658,20 +706,8 @@ fn fdrag_side_row(
 }
 
 ///|
-/// The clash dialog (Dialog: 420 wide).
-let fclash_w : Double = 420.0
-
-///|
-/// How far in from the window's sides a dialog stays at least (16 each).
-let fclash_margin : Double = 32.0
-
-///|
 /// The drag's picture this far from the pointer (down and right of it).
 let fdrag_ghost_off : Double = 12.0
-
-///|
-// kept across runs: a value (no field of it changes)
-let fclash_foot : @ui.Style = @ui.css("row w=Full pt=S2 gap=S2 justify=JEnd")
 
 ///|
 /// What comes and what is there (clash: 10 by 12 in, the field's corner, the neutral ground).
