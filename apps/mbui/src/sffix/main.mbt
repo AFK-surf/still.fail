@@ -17,6 +17,13 @@ fn main {
   if @ui.env("MBUI_DARK") == "1" {
     @sf.set_dark(Some(true))
   }
+  // MBUI_POINTING=finger: pointed at as a phone is (its screens drawn on a Mac: scripts/screens.sh rec); mouse, as a
+  // desktop is
+  match @ui.env("MBUI_POINTING") {
+    "finger" => @ui.set_pointing(Some(Finger))
+    "mouse" => @ui.set_pointing(Some(Mouse))
+    _ => ()
+  }
   let mode = @ui.env("MBUI_FIXTURE")
   // json: a screen as the core's JSON gives it (MBUI_FIXTURE_JSON, or _B64: src/sfapp/fixture_json.mbt), its pages opened
   // as it says

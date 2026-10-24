@@ -5,10 +5,6 @@
 // its end, the way to the newest, telling the core what shows) is the same page's.
 
 ///|
-/// A page's bar in the wide frame (styles/sidebar.css.ts pageBar: 45, its 1 at the foot).
-let wide_bar_h : Double = 45.0
-
-///|
 /// What a chat's rows stand in from the pane's sides: 14.
 fn row_side(c : @ui.Ctx) -> Double {
   ignore(c)

@@ -32,7 +32,7 @@ fn desk_tool_x(from_end : Int) -> Double {
 ///|
 test "desk: an image on the canvas under the bar, back to its chat by name, which of two, its size and kind; → steps, Esc closes" {
   let t = desk_tester("chat-preview-step")
-  assert_true(wide_on.val)
+  assert_true(@sfdesk.is_wide(t.ctx()))
   assert_true(t.find("界面草图.png") is Some(_))
   assert_true(t.find("1 / 2 · 18 KB · 图片") is Some(_))
   // the zoom's tools in the bar, its close the way back (named by the chat)

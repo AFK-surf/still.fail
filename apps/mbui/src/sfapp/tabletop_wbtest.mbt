@@ -52,7 +52,7 @@ fn words_at(t : @ui.Tester, s : String) -> (Double, Double, Double, Double)? {
 ///|
 test "an iPhone Duo opened (regular both ways): the wide frame, the chats' list beside the chat, no bottom bar" {
   let t = duo_chat(890.0, 626.0, "regular", upright("open"))
-  assert_true(wide_on.val)
+  assert_true(@sfdesk.is_wide(t.ctx()))
   assert_false(bar_tabs(t))
   // the chats' list beside the chat: another chat's row, and the open one's messages and composer
   assert_true(t.find("首页的列表改成按天分组") is Some(_), msg="\{t.drawn_text()}")
@@ -75,7 +75,7 @@ test "opened as a book (the fold upright): the sidebar ends on the fold, the lis
 ///|
 test "turned and flat (regular both ways, the fold across): the wide frame, the composer at its foot" {
   let t = duo_chat(626.0, 890.0, "regular", across("open"))
-  assert_true(wide_on.val)
+  assert_true(@sfdesk.is_wide(t.ctx()))
   let (_, y) = t.find("发消息").unwrap()
   assert_true(y > 890.0 - 110.0, msg="the composer's words at \{y}")
 }
@@ -83,14 +83,14 @@ test "turned and flat (regular both ways, the fold across): the wide frame, the 
 ///|
 test "a window as wide the system calls compact (beside another app): the phone's pages" {
   let t = duo_chat(700.0, 890.0, "compact", "")
-  assert_false(wide_on.val)
+  assert_false(@sfdesk.is_wide(t.ctx()))
 }
 
 ///|
 test "half open on its back half: the messages over the fold, under it the composer and the latest chats" {
   let t = duo_chat(626.0, 890.0, "regular", across("half"))
   // the chat's page across the window, not the frame
-  assert_false(wide_on.val)
+  assert_false(@sfdesk.is_wide(t.ctx()))
   // the last message over the fold
   let (_, my, _, mh) = words_at(t, "做完了：列表").unwrap()
   assert_true(my + mh <= 430.0, msg="the last message ends at \{my + mh}")
@@ -110,7 +110,7 @@ test "half open on its back half: the messages over the fold, under it the compo
   // opened flat again: the wide frame, the composer at its foot
   t.post(@hostapi.system_channel, across("open"))
   t.draw()
-  assert_true(wide_on.val)
+  assert_true(@sfdesk.is_wide(t.ctx()))
 }
 
 ///|
@@ -122,7 +122,7 @@ test "its outer screen (compact, the status bar down its right side): the phone'
     "{\"fold\":{\"hinge\":\"closed\",\"divisions\":[]}}",
     bars="{\"bars\":{\"top\":0,\"bottom\":20,\"left\":0,\"right\":84}}",
   )
-  assert_false(wide_on.val)
+  assert_false(@sfdesk.is_wide(t.ctx()))
   // nothing of the page under the status bar's side
   for w in t.words() {
     let (s, x, _, ww, _, alpha) = w

@@ -79,7 +79,6 @@ test "desk: an agent's request to use a secret is its card in place of its words
   })
   let t = @ui.Tester::new(
     fn(c) {
-      wide_on.val = true
       let here : @sfpages.MessageHere = {
         station: "ws1/st1",
         session: "s-c1",
