@@ -194,3 +194,40 @@ test("a download called off while it comes stops there", async () => {
   assert.equal(await Effect.runPromise(t.core.inner.driveKept.has(id)), false);
   t.core.close();
 });
+
+test("saved where the app can read it back, that is the file's copy on the device: what was kept of it goes, it is read from there; gone from there, read from the station and kept again", async () => {
+  const zip = bytesOf(6 * MB, 11);
+  const r = await rig(new Map([["build.zip", zip]]));
+  const kept = () => [...r.host.storage.keys()].filter((k) => k.startsWith("drive-kept-")).length;
+  const id = (await r.ask("download.start", { station: ST, key: "k1", name: "build.zip", size: zip.length })).ok.download.id;
+  assert.equal((await r.view())[0].state, "ready");
+  assert.equal(kept(), 2);
+  await r.ask("download.take", { id });
+  const at = "/Users/lin/Downloads/build.zip";
+  r.host.saved.set(at, zip);
+  await r.ask("download.done", { id, at });
+  assert.deepEqual(await r.view(), []);
+  assert.equal(kept(), 0, "no second copy kept beside the one saved");
+  // opened again: read from where it was saved, not from the station
+  const before = r.parts("build.zip");
+  const read = await r.ask("station.file.part", { station: ST, key: "k1", name: "build.zip", offset: 4 * MB, length: 4 * MB, keep: true, size: zip.length });
+  assert.deepEqual([...read.bytes], [...zip.slice(4 * MB)]);
+  assert.equal(r.parts("build.zip"), before);
+  // deleted from there: read from the station again, and kept as any other
+  r.host.saved.delete(at);
+  await r.ask("station.file.part", { station: ST, key: "k1", name: "build.zip", offset: 0, length: 4 * MB, keep: true, size: zip.length });
+  assert.equal(r.parts("build.zip"), before + 1);
+  assert.equal(kept(), 1);
+  r.core.close();
+});
+
+test("saved where the app cannot read it back (the web's, iOS's): the device keeps what it kept before", async () => {
+  const zip = bytesOf(MB, 13);
+  const r = await rig(new Map([["notes.zip", zip]]));
+  const id = (await r.ask("download.start", { station: ST, key: "k1", name: "notes.zip", size: zip.length })).ok.download.id;
+  await r.view();
+  await r.ask("download.take", { id });
+  await r.ask("download.done", { id, at: "notes.zip" });
+  assert.equal(await Effect.runPromise(r.core.inner.driveKept.has(id)), false);
+  r.core.close();
+});

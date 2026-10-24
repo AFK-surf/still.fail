@@ -88,8 +88,10 @@ test "downloads: one the core has all here is taken once, read off the device a 
   assert_eq(kept[0].0, "dist.zip")
   assert_eq(kept[0].1, "application/zip")
   assert_eq(kept[0].2, bytes)
-  // the host has answered: done, once
-  assert_eq(calls.filter(fn(m) { m.0 == "download.done" }).map(fn(m) { text(Some(m.1), "id") }), ["ws1/st1|s-c1|dist.zip"])
+  // the host has answered: done, once, with where the host put it (read back from there: the core's `saved`)
+  let done = calls.filter(fn(m) { m.0 == "download.done" })
+  assert_eq(done.map(fn(m) { text(Some(m.1), "id") }), ["ws1/st1|s-c1|dist.zip"])
+  assert_eq(text(Some(done[0].1), "at"), "Download/dist.zip")
 }
 
 ///|

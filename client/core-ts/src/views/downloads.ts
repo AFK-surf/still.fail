@@ -5,8 +5,10 @@
 // download stopped by the app's end had fetched (each download is written down until it is saved, and goes on as the
 // core starts again). Every page shows how far each has come (a message's file, its preview); once all of it is here
 // the app takes it (`download.take`, once), reads it off the device a part at a time into the system's downloads
-// (`station.file.part` with `keep` and its size) and says it is done (`download.done`): then the device keeps of it
-// what it kept before it was asked (nothing, if it kept none of it), not a second copy beside the one saved.
+// (`station.file.part` with `keep` and its size) and says it is done (`download.done`, with where the system put it):
+// where the app can read it back (Host.savedRead), the file saved is its copy on the device, what was kept of it let
+// go (read from there until it is no longer there: drive-kept.ts `saved`); elsewhere (the web, iOS: out of reach) the
+// device keeps of it what it kept before it was asked (nothing, if it kept none of it), not a second copy.
 //
 // Topic:
 //   downloads {}                  this device's downloads, newest first: under way, waiting for their station, all
@@ -16,7 +18,8 @@
 //                                 the file a message names fetched to be saved: one of it under way or ready is that one
 //                                 (a failed one, or one waiting for its station, starts again); answers {download}
 //   download.take {id}            a ready one taken to be saved: {taken} true for the first to take it
-//   download.done {id}            saved (or the saving given up): out of the list, what was fetched for it let go
+//   download.done {id, at?}       saved (`at`: where the system put it), or the saving given up: out of the list, what
+//                                 was fetched for it let go (all of it, where it is read back from `at`)
 //   download.cancel {id}          stopped and out of the list, what was fetched for it let go
 import { Effect, Fiber } from "effect";
 import type { Inner } from "../core.ts";
@@ -264,7 +267,11 @@ export class Downloads {
       return Effect.succeed({ taken: true });
     }
     if (d === undefined) return Effect.succeed({});
-    if (c.action === "done") return Effect.as(this.#drop(d), {});
+    if (c.action === "done") {
+      const at = typeof p.at === "string" ? p.at : "";
+      // (where it can be read back from where it was saved, that is its copy: what was kept of it goes there)
+      return Effect.as(Effect.andThen(at === "" ? Effect.void : this.#inner.driveKept.saved(id, at, d.size), this.#drop(d)), {});
+    }
     // called off: stopped (its part being kept written whole first), then let go
     const fiber = d.fiber;
     d.fiber = null;

@@ -89,6 +89,8 @@ double timerMs() {
 /// Whether `op` is a call only the app can do (the host's app_call), not the shell's.
 bool appCall(const std::string& op) {
   if (op.rfind("secure.", 0) == 0 || op.rfind("listen.", 0) == 0) return true;
+  // a file the app saved where the person keeps files, read back (the core's downloads: hosts/bridge.ts kept.read)
+  if (op.rfind("kept.", 0) == 0) return true;
 #ifdef __ANDROID__
   // a picked file's parts as it goes up (the app reads them from the system's content)
   if (op.rfind("picked.", 0) == 0) return true;

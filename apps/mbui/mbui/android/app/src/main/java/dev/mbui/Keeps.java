@@ -3,10 +3,12 @@ package dev.mbui;
 import android.app.Activity;
 import android.content.ActivityNotFoundException;
 import android.content.ContentResolver;
+import android.content.ContentUris;
 import android.content.ContentValues;
 import android.content.Intent;
 import android.database.Cursor;
 import android.net.Uri;
+import android.os.Environment;
 import android.provider.MediaStore;
 import android.provider.OpenableColumns;
 
@@ -16,6 +18,7 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.util.Arrays;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
@@ -202,6 +205,44 @@ final class Keeps {
     static String where(int id) {
         Keep k = keeps.get(id);
         return k == null ? "" : k.where;
+    }
+
+    /**
+     * Bytes {@code start} to {@code end} of a file kept in Downloads, read back ({@code where} as a keep said it:
+     * "Download/" and its name as MediaStore made it, an entry of this app's): null when it is no longer there, or it
+     * was kept where the person chose (theirs, named only). The still.fail client core's downloads read a chat's file
+     * saved here from here (CoreHost's kept.read).
+     */
+    static byte[] read(String where, long start, long end) {
+        String in = Environment.DIRECTORY_DOWNLOADS + "/";
+        MainActivity a = Host.activity;
+        if (a == null || !where.startsWith(in) || end < start) return null;
+        ContentResolver cr = a.getContentResolver();
+        String[] id = {MediaStore.Downloads._ID};
+        String which = MediaStore.Downloads.DISPLAY_NAME + " = ? AND " + MediaStore.Downloads.RELATIVE_PATH + " = ?";
+        try (Cursor c = cr.query(MediaStore.Downloads.EXTERNAL_CONTENT_URI, id, which, new String[] {where.substring(in.length()), in}, null)) {
+            if (c == null || !c.moveToFirst()) return null;
+            Uri uri = ContentUris.withAppendedId(MediaStore.Downloads.EXTERNAL_CONTENT_URI, c.getLong(0));
+            try (InputStream s = cr.openInputStream(uri)) {
+                if (s == null) return null;
+                for (long skipped = 0; skipped < start;) {
+                    long n = s.skip(start - skipped);
+                    if (n <= 0) return null;
+                    skipped += n;
+                }
+                byte[] out = new byte[(int) (end - start)];
+                int got = 0;
+                while (got < out.length) {
+                    int n = s.read(out, got, out.length - got);
+                    if (n < 0) break;
+                    got += n;
+                }
+                return got == out.length ? out : Arrays.copyOf(out, got);
+            }
+        } catch (Exception e) {
+            Host.log("keep: " + where + " not read back: " + e);
+            return null;
+        }
     }
 
     /** Let go of; one still coming is called off, its part file removed (one being copied finishes on its own). */

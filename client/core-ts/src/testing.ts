@@ -269,6 +269,11 @@ export class FakeHost implements Host {
   storageGet(key: string): Effect.Effect<Uint8Array | null, HostError> {
     return Effect.sync(() => this.storage.get(key) ?? null);
   }
+  /// The files the app saved where the person keeps files, by where (savedRead).
+  readonly saved = new Map<string, Uint8Array>();
+  savedRead(at: string, start: number, end: number): Effect.Effect<Uint8Array | null, HostError> {
+    return Effect.sync(() => this.saved.get(at)?.slice(start, end) ?? null);
+  }
   storageSet(key: string, value: Uint8Array): Effect.Effect<void, HostError> {
     return Effect.sync(() => void this.storage.set(key, value));
   }

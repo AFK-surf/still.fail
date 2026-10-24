@@ -15,7 +15,10 @@
 // station keeps it under, its chat shows it and opens it from here, not read back from the station it went to; the
 // least lately read go past SENT_MAX, and it is counted and let go with the drives' files.
 // The downloads asked of this device and not yet saved are written down here too (views/downloads.ts), beside the
-// files they bring: one stopped by the app's end goes on as it starts again.
+// files they bring: one stopped by the app's end goes on as it starts again. A chat's file saved where the person
+// keeps files, where the app can read it back (Host.savedRead), is that file's copy on the device: what was kept of it
+// goes, and it is read from where it was saved (`saved`) until it is no longer there (moved, deleted, changed), then
+// read and kept as any other again.
 import { Effect } from "effect";
 import type { Host, Sql } from "./host.ts";
 
@@ -81,7 +84,8 @@ export class DriveKept {
           used INTEGER NOT NULL
         ); CREATE TABLE IF NOT EXISTS part (
           id TEXT NOT NULL, at INTEGER NOT NULL, length INTEGER NOT NULL, key TEXT NOT NULL, PRIMARY KEY (id, at, length)
-        ); CREATE TABLE IF NOT EXISTS download (id TEXT PRIMARY KEY, json TEXT NOT NULL);`);
+        ); CREATE TABLE IF NOT EXISTS download (id TEXT PRIMARY KEY, json TEXT NOT NULL);
+        CREATE TABLE IF NOT EXISTS saved (id TEXT PRIMARY KEY, at TEXT NOT NULL, size INTEGER NOT NULL, type TEXT NOT NULL);`);
         return (this.#sql = opened.success);
       } catch {
         return (this.#sql = null);
@@ -113,6 +117,8 @@ export class DriveKept {
     return Effect.gen({ self: this }, function* () {
       const sql = yield* this.#db();
       if (sql === null) return null;
+      const saved = yield* this.#savedRead(sql, id, size, offset, length);
+      if (saved !== null) return saved;
       const kept = this.#kept(sql, id);
       if (kept === null) return null;
       if (kept.mtime !== mtime || kept.size !== size) {
@@ -215,9 +221,40 @@ export class DriveKept {
     return Effect.flatMap(this.#db(), (sql) => (sql === null || this.#writing.has(id) ? Effect.void : this.#drop(sql, id)));
   }
 
-  /// Whether anything of the file `id` is kept.
+  /// Whether anything of the file `id` is kept (or it was saved where it can be read back).
   has(id: string): Effect.Effect<boolean> {
-    return Effect.map(this.#db(), (sql) => sql !== null && this.#kept(sql, id) !== null);
+    return Effect.map(this.#db(), (sql) => sql !== null && (this.#kept(sql, id) !== null || sql.all("SELECT 1 FROM saved WHERE id = ?", [id]).length > 0));
+  }
+
+  /// Bytes `offset` to `offset + length` of the file `id` read from where it was saved, when it was (at its `size`) and
+  /// they are all still there; else null, and once it is found gone or changed it is no longer taken as saved.
+  #savedRead(sql: Sql, id: string, size: number, offset: number, length: number): Effect.Effect<{ type: string; bytes: Uint8Array } | null> {
+    const r = sql.all("SELECT at, size, type FROM saved WHERE id = ?", [id])[0];
+    const read = this.#host.savedRead;
+    if (r === undefined || read === undefined) return Effect.succeed(null);
+    const [at, was, type] = [String(r[0]), Number(r[1]), String(r[2])];
+    const end = Math.min(offset + length, size);
+    const gone = () => { sql.run("DELETE FROM saved WHERE id = ?", [id]); return null; };
+    if (was !== size) return Effect.sync(gone);
+    return Effect.map(Effect.orElseSucceed(read.call(this.#host, at, offset, end), () => null), (bytes) =>
+      bytes !== null && bytes.length === Math.max(0, end - offset) ? { type, bytes } : gone());
+  }
+
+  /// The chat's file `id` saved where the person keeps files (`at`, as the system named it), its whole `size`: when it
+  /// can be read back there (its last byte read), that is its copy on the device and what was kept of it goes (true);
+  /// else nothing changes (false).
+  saved(id: string, at: string, size: number): Effect.Effect<boolean> {
+    return Effect.gen({ self: this }, function* () {
+      const sql = yield* this.#db();
+      const read = this.#host.savedRead;
+      if (sql === null || read === undefined || at === "" || size <= 0) return false;
+      const last = yield* Effect.orElseSucceed(read.call(this.#host, at, size - 1, size), () => null);
+      if (last === null || last.length !== 1) return false;
+      const type = this.#kept(sql, id)?.type ?? "";
+      sql.run("INSERT OR REPLACE INTO saved (id, at, size, type) VALUES (?, ?, ?, ?)", [id, at, size, type]);
+      if (!this.#writing.has(id)) yield* this.#drop(sql, id);
+      return true;
+    });
   }
 
   /// The downloads written down (views/downloads.ts), each as it was written: the oldest first.
