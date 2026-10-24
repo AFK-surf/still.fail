@@ -43,8 +43,8 @@ fn reset() -> Unit {
   @sfbase.reset()
   // the desktop's own (src/sfdesk)
   @sfdesk.reset()
-  // ＋'s Station 文件 (a composer's, sfpages): the phone's sheet of station files, drawn over the chat (station_files.mbt)
-  station_files_asked.val = station_files_open
+  // ＋'s Station 文件 (a composer's, sfpages): the station files' picker (sfdesk's station_pick.mbt)
+  station_files_asked.val = @sfdesk.station_files_pick
   steadies.clear()
   sheet_host.kind = NoSheet
   sheet_host.serial = 0

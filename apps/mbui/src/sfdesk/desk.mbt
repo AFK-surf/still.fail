@@ -22,6 +22,7 @@ pub fn reset() -> Unit {
   tab_reset()
   sv_reset()
   dialogs_reset()
+  station_pick_reset()
   drive_reset()
   shell_reset()
   nav_reset()

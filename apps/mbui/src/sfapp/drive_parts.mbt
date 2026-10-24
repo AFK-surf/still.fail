@@ -1,6 +1,6 @@
 // The small parts the phone's sheets are made of, as the Android app draws them (shared ui/Parts.kt NavBar, NavButton,
-// SectionHeader; ui/Controls.kt Button, PickRow; ui/Sheet.kt SheetHost, SheetGrab, SheetHead): Station 文件's and the
-// reader's panels (station_files.mbt, viewer_host.mbt) until they are the library's presenters, and 文件's bar.
+// SectionHeader; ui/Controls.kt Button, PickRow; ui/Sheet.kt SheetHost, SheetGrab, SheetHead): a station file's sheet and
+// the reader's panels (station_files.mbt, viewer_host.mbt) until they are the library's presenters, and 文件's bar.
 
 ///|
 /// As at the start (tests).
@@ -11,11 +11,6 @@ fn dv_reset() -> Unit {
   fix_transfers.clear()
   fix_reads.clear()
   draft_refs.clear()
-  sfs.open = false
-  sfs.closing = false
-  sfs.draft = ""
-  sfs.place = None
-  sfs.ticked.clear()
   sfs.ref = None
   sfs.ref_closing = false
 }
@@ -34,25 +29,6 @@ fn dv_nav_bar(c : @ui.Ctx, back : String, title : String, trailing : () -> Unit)
 fn dv_nav_button(c : @ui.Ctx, key : String, icon : String, size? : Double = 18.0, said? : String) -> Bool {
   nav_button(c, icon, size, key~, said?)
 }
-
-///|
-/// A heading over a group of rows (Parts.kt SectionHeader): 15 semibold, 20 in.
-fn dv_section(c : @ui.Ctx, label : String, trailing? : String = "") -> Unit {
-  let t = @sf.theme()
-  c.box(dir=Row, w=Fill(1.0), pl=20.0, pr=20.0, pt=14.0, pb=6.0, align=AEnd, fn() {
-    c.box(w=Fill(1.0), fn() {
-      c.text(label, size=15.0, weight=600, color=t.p.text, wrap=false, line=21.0)
-      |> ignore
-    })
-    |> ignore
-    if trailing != "" {
-      c.text(trailing, size=13.0, color=t.p.muted, wrap=false) |> ignore
-    }
-  })
-  |> ignore
-}
-
-// ── buttons and fields ───────────────────────────────────────────────────
 
 ///|
 /// A button (Controls.kt Button): 38 high, a pill; the primary one in ink (red when it is a danger), the other on the
@@ -110,66 +86,6 @@ fn dv_button(
   |> ignore
   on && c.clicked(id)
 }
-
-///|
-/// A row of a picking sheet (Controls.kt PickRow): an icon before it, what, a line under it, a check on the chosen one.
-/// True on the frame after it was tapped.
-fn dv_pick_row(
-  c : @ui.Ctx,
-  key : String,
-  label : String,
-  sub? : String = "",
-  icon? : String = "",
-  color? : Int64 = 0L,
-  icon_color? : Int64 = 0L,
-  checked? : Bool = false,
-  mark? : String = "",
-) -> Bool {
-  let t = @sf.theme()
-  let id = c.id(key)
-  let ink = if color == 0L { t.p.text } else { color }
-  // (its icon in its words' colour, or one of its own: a link's row's in the accent, PickRow `leading`)
-  let icon_ink = if icon_color == 0L { ink } else { icon_color }
-  c.box(w=Fill(1.0), pl=12.0, pr=12.0, fn() {
-    c.box(
-      dir=Row,
-      w=Fill(1.0),
-      padx=8.0,
-      pady=12.0,
-      gap=12.0,
-      align=ACenter,
-      id~,
-      fn() {
-        if icon != "" {
-          @sf.icon(c, icon, size=20.0, color=icon_ink) |> ignore
-        }
-        c.box(w=Fill(1.0), fn() {
-          c.box(dir=Row, gap=6.0, align=ACenter, fn() {
-            c.text(label, size=15.0, color=ink, wrap=false, line=21.0) |> ignore
-            if mark != "" {
-              c.text(mark, size=12.0, color=t.p.red, wrap=false) |> ignore
-            }
-          })
-          |> ignore
-          if sub != "" {
-            c.text(sub, size=12.0, color=t.p.muted, wrap=false, line=17.0) |> ignore
-          }
-        })
-        |> ignore
-        if checked {
-          @sf.icon(c, "check", size=14.0, color=t.p.accent) |> ignore
-        }
-        // Controls.kt PickRow: clip(Smooth(LIST_ROW_CORNER)).clickable
-        @motion.ripple(c, id, @sf.row_corner)
-      },
-    )
-    |> ignore
-  })
-  |> ignore
-  c.clicked(id)
-}
-
-// ── sheets ───────────────────────────────────────────────────────────────
 
 ///|
 /// A sheet's height for a title and `rows` rows (DriveScreen.kt fit).

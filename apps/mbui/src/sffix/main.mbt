@@ -37,6 +37,7 @@ fn main {
     }
     // what the mode opens over Home before the first frame (src/sfapp/fixture.mbt: screens_wbtest.mbt opens the same)
     @sfapp.open_fixture_mode(mode)
+    @sfapp.open_fixture_src(mode, src)
     src
   }
   // no machine of its own among the made-up stations (the files' places list this machine's first): as the Tester has

@@ -66,7 +66,7 @@ fn attach_body(c : @ui.Ctx, src : Source, key : String, close : () -> Unit) -> U
   }
   if c.clicked(station) {
     close()
-    (@sfbase.station_files_asked.val)(key)
+    (@sfbase.station_files_asked.val)(src, key)
   }
   recent_strip(c, tapped)
   c.box(style=attach_tiles, fn() {

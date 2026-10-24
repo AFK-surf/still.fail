@@ -260,10 +260,10 @@ pub fn writing_add_picked(src : Source, w : Writing, station : String, f : @host
 pub let shared_into : Map[String, Array[@hostapi.Picked]] = {}
 
 ///|
-/// The station files sheet (a phone's ＋ → Station 文件) put up for draft `key`, as the shell draws it; what is ticked
-/// there comes into the draft as files_into does.
+/// The station files' picker (＋ → Station 文件) put up for draft `key` (`src` what it reads the stations by): sfdesk's
+/// station_files_pick; what is ticked there comes into the draft as files_into does.
 // kept across runs: what the app says once as it starts
-pub let station_files_asked : Ref[(String) -> Unit] = Ref(fn(_) {  })
+pub let station_files_asked : Ref[(Source, String) -> Unit] = Ref(fn(_, _) {  })
 
 ///|
 /// Files and folders dragged in from where they are (a station's files: `ref` with its station, its name and path, a
