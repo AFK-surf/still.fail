@@ -16,8 +16,15 @@ pub let wide_from : Double = 701.0
 /// What the frame draws that is not here yet, given by the app (sfapp): the pages in the pane, the sidebars of the
 /// places other than the chats', and what the frame asks of the app.
 pub(all) struct Pages {
-  /// a chat (wide_chat.mbt), with what moves as it comes from a new chat or goes to one
-  chat : (@ui.Ctx, Source, Workspace, ChatRef) -> Unit
+  /// a chat's messages and composer (chat_page.mbt's: `over` drawn over the messages, under the composer), what moves
+  /// as it comes from a new chat or goes to one, what its side panel shows that is not here yet, its list as ⌘F goes
+  /// along it, its sharing's and publishing's dialogs (its thread)
+  talk : (@ui.Ctx, Source, Workspace, ChatRef, () -> Unit) -> Unit
+  chat_after : (@ui.Ctx, Source, Workspace, ChatRef) -> Unit
+  panel : (@ui.Ctx, Source, ChatRef) -> PanelParts
+  find_list : (ChatRef) -> FindList
+  share : (@ui.Ctx, ChatRef, Double?) -> Unit
+  publish : (@ui.Ctx, String, Double) -> Unit
   /// 文件, and a folder of a station's drive
   files : (@ui.Ctx, Source, Workspace) -> Unit
   folder : (@ui.Ctx, Source, Workspace, DriveAt) -> Unit
@@ -686,7 +693,7 @@ fn main_page(
   page : Page,
 ) -> Unit {
   match page {
-    Chat(r) => (pages.chat)(c, src, w, r)
+    Chat(r) => chat_page(c, src, w, r, pages)
     // the chats' list is the sidebar's: nothing open (yet), the page's ground
     Home => ()
     // settings' own home is its first page (the web goes to 外观)

@@ -32,4 +32,5 @@ pub fn reset() -> Unit {
   side_slide_reset()
   settings_reset()
   places_reset()
+  chat_page_reset()
 }

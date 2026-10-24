@@ -6,17 +6,12 @@
 /// What the wide frame's pages still here keep of their own (the frame's own is sfdesk's `shell`; the rest is the
 /// stack's and the core's).
 priv struct Wide {
-  /// the chat's "…" open (what is done with it), its services' popover open
-  mut info_open : Bool
-  mut jobs_open : Bool
   /// the new chat's station chooser open (wide_newchat.mbt)
   mut station_menu : Bool
 }
 
 ///|
 let wide : Wide = {
-  info_open: false,
-  jobs_open: false,
   station_menu: false,
 }
 
@@ -27,8 +22,6 @@ let wide_on : Ref[Bool] = Ref(false)
 
 ///|
 fn wide_reset() -> Unit {
-  wide.info_open = false
-  wide.jobs_open = false
   @sfdesk.side_slide_reset()
   find_forget()
   find_around.val = -1.0
@@ -44,12 +37,19 @@ fn wide_reset() -> Unit {
 /// What the wide frame (sfdesk) draws of this package's: the pages in its pane, and what it asks.
 fn desk_pages() -> @sfdesk.Pages {
   {
-    chat: fn(c, src, w, r) {
-      wide_chat_page(c, src, w, r)
+    // the chat's page is sfdesk's (chat_page.mbt): its messages and composer this package's (wide_chat.mbt), what
+    // comes and goes with a new chat (wide_newchat.mbt, wide_switch.mbt), what its side panel shows of this package's,
+    // how ⌘F goes along its list, its sharing's and publishing's sheets
+    talk: fn(c, src, _w, r, over) { chat_talk(c, src, r, over) },
+    chat_after: fn(c, src, w, r) {
       new_chat_leaving_wide(c, src, w, r)
       // (come to from a new chat by the sidebar: the new chat fading over it)
       switch_new_out(c, src, w)
     },
+    panel: fn(c, src, r) { panel_parts(c, src, r) },
+    find_list: fn(r) { find_list(r) },
+    share: fn(c, r, thread) { open_sheet(c, XShare(r, thread)) },
+    publish: fn(c, station, thread) { open_sheet(c, Publish(station, thread)) },
     // 文件: a folder under its bar, as the web's (wide_files.mbt)
     files: fn(c, src, w) { files_landing(c, src, w) },
     folder: fn(c, src, w, at) { wide_folder(c, src, w, at) },
