@@ -940,8 +940,9 @@ fn profile_sign_in(c : @ui.Ctx, core : Core, station : String, p : Json?, head :
   let waits = active && (state == "starting" || state == "verifying" || state == "done")
   [
     fn() {
-      // (the command last: the card's corner taken from its box's, CARD_PAD in: concentricOut(COMMAND_BOX_CORNER, CARD_PAD))
-      card(c, foot=!command_last && !waits && (active || asked), corner?=if command_last { Some(Around) } else { None }, fn() {
+      // (the command last: the card's corner taken from its box's, CARD_PAD in: concentricOut(COMMAND_BOX_CORNER, CARD_PAD);
+      // signed in and well, no button at its foot: a card's own corner)
+      card(c, foot=!command_last && !waits && asked, corner?=if command_last { Some(Around) } else { None }, fn() {
         c.box(style=sign_in_rows, fn() {
           c.box(dir=Row, w=Fill(1.0), fn() {
             c.box(w=Fill(1.0), fn() { head() }) |> ignore
