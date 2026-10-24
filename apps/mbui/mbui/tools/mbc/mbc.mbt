@@ -539,6 +539,27 @@ fn Job::to_store(self : Job, store : Bytes, deps : Array[Bytes]) -> Unit {
 }
 
 ///|
+/// An object already up to date here, said used in MBC_STORE as one taken from it is (put there when it is not):
+/// what the store keeps is what a run used (CI prunes the rest), and a build over a restored _build compiled only
+/// what changed and took nothing from the store, so main's store kept only those, 54 units of 376 (40125500788),
+/// and a branch restoring it compiled the other 250 again (240 s, 40125788155, 2026-10-24)
+fn Job::keep_in_store(self : Job, store : Bytes) -> Unit {
+  let d = self.store_dir(store)
+  if is_dir(d) {
+    let _ = c_touch(d)
+    return
+  }
+  match read_file(self.stamp()) {
+    Some(s) => {
+      let deps = lines(s)[2:].to_array().map(fn(l) { sub(l, 0, find_byte(l, b'\x1f', 0)) })
+      deps.push(self.src)
+      self.to_store(store, deps)
+    }
+    None => ()
+  }
+}
+
+///|
 /// The command compiling `src` to `obj`, and its depfile (none with MSVC)
 fn compile_args(
   cc : Array[Bytes],
@@ -590,6 +611,10 @@ fn run_jobs_c(jobs0 : Array[Job], j : Int, label : Bytes) -> Array[Bytes] {
   for x in jobs {
     if x.up_to_date() {
       x.cached = true
+      match store {
+        Some(s) => x.keep_in_store(s)
+        None => ()
+      }
       continue
     }
     let _ = c_remove(x.stamp())
