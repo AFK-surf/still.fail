@@ -37,7 +37,7 @@ fn link_held(c : @ui.Ctx, href : String, line : (Double, Double, Double, Double)
   // under the piece of line: where the finger held it; right clicked (a mouse, whose press is not the click's), its
   // middle
   let press = c.press()
-  let x = if @ui.pointing() is Mouse { line.0 + line.2 / 2.0 } else { press.x }
+  let x = @sf.menu_along(c, line.0 + line.2 / 2.0)
   link_menu_at(href, x, line.1, line.1 + line.3)
   link_menu.at = press.frame
 }

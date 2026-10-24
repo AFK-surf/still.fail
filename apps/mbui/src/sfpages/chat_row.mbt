@@ -125,7 +125,8 @@ pub fn chat_row(
   let t = @sf.theme()
   // (how it looks and what it offers by the screen; how it answers by the hand: docs/architecture.md)
   let touch = @sf.touch_system()
-  let finger = @ui.pointing() is Finger
+  // (a finger rests on nothing: a press reads ahead, a hold shows the time; a pointer's over it shows them)
+  let finger = !@sf.pointer_rests()
   let key = @sfbase.row_name(item)
   let id = c.id("row/" + key)
   // what in it has a tip of its own (the state line's icon, the station's mark, the unplugged one): pressed or pointed

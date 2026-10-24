@@ -866,7 +866,7 @@ pub fn drive_row(
     None => None
   }
   // (a finger: its ⋯ always there, as nothing is hovered; a tap opens it, as a double click does with a mouse)
-  let finger = @ui.pointing() is Finger
+  let finger = !@sf.pointer_rests()
   if live {
     let asked = c.menu_asked(id)
     match asked {
