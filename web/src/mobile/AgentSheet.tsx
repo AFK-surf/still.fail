@@ -53,6 +53,7 @@ function AgentSheet({ at, go }: { at: AgentAt; go: AgentGo }) {
   const station = useStationLook(at.station);
   if (!agent) return <SheetGrab />;
   const s = agent.session;
+  const entry: ContextEntry | undefined = s.canCompact || s.canClear ? { open: () => openContext(app, at), busy: handling, failed: handlingFailed, compacts: s.canCompact === true } : undefined;
   const account = agent.account ?? agent.profile;
   // Each row leaves the sheet for where it leads.
   const leave = (to: () => void) => () => { app.sheet(null); to(); };
@@ -74,7 +75,7 @@ function AgentSheet({ at, go }: { at: AgentAt; go: AgentGo }) {
           )}
         </div>
         <AgentLines card={card} />
-        <AgentTiles card={card} context={s.canCompact || s.canClear ? { open: () => openContext(app, at), busy: handling, failed: handlingFailed, compacts: s.canCompact === true } : undefined} />
+        <AgentTiles card={card} context={entry} />
         <AgentNotes card={card} />
         <div className={css.mAgentRows}>
           <InfoList>
@@ -102,6 +103,16 @@ function AgentSheet({ at, go }: { at: AgentAt; go: AgentGo }) {
               <InfoRow onClick={leave(go.jobs)}>
                 <span className={css.mAgentRowLabel}>{t("web-mobile.agent.jobs")}</span>
                 <span className={css.mAgentRowValue}>{card?.jobs ?? t("web-mobile.agent.jobsIdle")}</span>
+                <ChevronRight size={14} className={partsCss.mSubtle} />
+              </InfoRow>
+            )}
+            {/* What can be done to its context, where no figure of it is known to be its tile (a station from before
+                tells none of an agent at rest). */}
+            {entry && !card?.context && (
+              <InfoRow onClick={() => { if (!entry.busy) entry.open(); }}>
+                <span className={css.mAgentRowLabel}>{t("web-main.chat.agentCard.context")}</span>
+                <span className={css.mAgentRowValue} />
+                {entry.busy ? <Spinner inline /> : entry.failed !== undefined ? <FailedMark error={entry.failed} size={11} /> : null}
                 <ChevronRight size={14} className={partsCss.mSubtle} />
               </InfoRow>
             )}
@@ -180,7 +191,8 @@ export interface ContextEntry { open(): void; busy: boolean; failed: string | un
 
 export function AgentTiles({ card, context: entry }: { card: AgentCardView | undefined; context?: ContextEntry | undefined }) {
   const context = card?.context;
-  if (!card?.cost && !card?.cache && !context && !entry) return null;
+  // None known (a station from before tells none of an agent at rest): no figures, its context's entry a row instead.
+  if (!card?.cost && !card?.cache && !context) return null;
   const tile = (figure: string, name: string, level?: string) => (
     <span className={css.mAgentTile} data-level={level} data-long={figure.length > LONG ? "" : undefined}><b>{figure}</b><small>{name}</small></span>
   );
@@ -202,8 +214,8 @@ export function AgentTiles({ card, context: entry }: { card: AgentCardView | und
     <div className={css.mAgentTiles}>
       {card?.cost && tile(card.cost, t("web-main.chat.agentCard.cost"))}
       {card?.cache && tile(card.cache.text, t("web-main.chat.agentCard.cache"))}
-      {/* How full, of a window that is known; else how much it holds; not said yet, a dash (its entry all the same). */}
-      {context ? (context.unknown ? contextTile(context.text) : contextTile(`${Math.round(context.percent)}%`, context.level)) : entry && contextTile("—")}
+      {/* How full, of a window that is known; else how much it holds. */}
+      {context && (context.unknown ? contextTile(context.text) : contextTile(`${Math.round(context.percent)}%`, context.level))}
     </div>
   );
 }

@@ -746,7 +746,8 @@ fn agent_sheet(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef, key : Stri
       })
       |> ignore
       agent_lines(c, card)
-      agent_tiles(c, card, 14.0, entry=context_entry(c, r, key, s))
+      let entry = context_entry(c, r, key, s)
+      agent_tiles(c, card, 14.0, entry~)
       agent_notes(c, card, 10.0)
       c.box(h=Px(12.0), fn() {  }) |> ignore
       info_list(c, fn() {
@@ -800,6 +801,20 @@ fn agent_sheet(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef, key : Stri
           ) {
           close_sheet(c)
           app.nav.push(History(r, key, None))
+        }
+        // what can be done to its context, where no figure of it is known to be its tile (a station from before tells
+        // none of an agent at rest)
+        match entry {
+          Some(e) if !(field(card, "context") is Some(Object(_))) =>
+            if agent_row(c, "agent/context", tr("android-chat.agent.context"), "", fn() {
+                if e.busy || e.failed {
+                  @settings.doing_mark(c, e.busy, if e.failed { Some("") } else { None })
+                }
+              }) &&
+              !e.busy {
+              (e.open)()
+            }
+          _ => ()
         }
         if jobs.length() > 0 &&
           agent_row(
@@ -907,7 +922,8 @@ fn agent_tiles(c : @ui.Ctx, card : Json?, top : Double, entry? : ContextTile? = 
   let context = field(card, "context")
   let cost = text(card, "cost")
   let cache = field(card, "cache")
-  if cost == "" && cache is None && context is None && entry is None {
+  // none known (a station from before tells none of an agent at rest): no figures, its context's entry a row instead
+  if cost == "" && !(cache is Some(Object(_))) && !(context is Some(Object(_))) {
     return
   }
   let tile = fn(figure : String, name : String, color : Int64, open : ContextTile?) {
@@ -969,8 +985,7 @@ fn agent_tiles(c : @ui.Ctx, card : Json?, top : Double, entry? : ContextTile? = 
             entry,
           )
         }
-      // not said yet: a dash, its entry all the same
-      _ => if entry is Some(_) { tile("—", name, t.p.text, entry) }
+      _ => ()
     }
   })
   |> ignore
