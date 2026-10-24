@@ -48,7 +48,7 @@ pub fn icon(c : @ui.Ctx, name : String, size? : Double = 16.0, color? : Int64) -
   let shapes = match shapes_made.get(key) {
     Some(s) => s
     None => {
-      let s = match icon_data.get(name) {
+      let s = match icon_numbers(name) {
         Some(d) => icon_shapes(d, size / 24.0, color)
         None => []
       }
@@ -69,7 +69,7 @@ pub fn icon_parts(c : @ui.Ctx, name : String, parts : Array[Int], size? : Double
   let shapes = match shapes_made.get(key) {
     Some(s) => s
     None => {
-      let s = match icon_data.get(name) {
+      let s = match icon_numbers(name) {
         Some(d) => icon_shapes(icon_data_parts(d, parts), size / 24.0, color)
         None => []
       }
@@ -100,6 +100,63 @@ fn icon_data_parts(data : Array[Double], parts : Array[Int]) -> Array[Double] {
       }
     }
     i = end
+  }
+  out
+}
+
+///|
+/// Icon `name`'s numbers, read from icon_data.mbt's text the first time it is asked for (as an array literal each, they
+/// were the design system's start-up code: 670 KB of C compiled on every build, 2026-10-24).
+fn icon_numbers(name : String) -> Array[Double]? {
+  match icon_read.get(name) {
+    Some(d) => Some(d)
+    None =>
+      match icon_data.get(name) {
+        Some(text) => {
+          let d = read_numbers(text)
+          icon_read[name] = d
+          Some(d)
+        }
+        None => None
+      }
+  }
+}
+
+///|
+let icon_read : Map[String, Array[Double]] = {}
+
+///|
+/// The numbers in `text`, each a space from the next, as icons.py writes them ("-12", "0.562"): its digits read as one
+/// whole number then divided by the point's power of ten, one rounding, so the same as the literal would be.
+fn read_numbers(text : String) -> Array[Double] {
+  let out : Array[Double] = []
+  let mut m = 0L
+  let mut neg = false
+  let mut point = false
+  let mut div = 1.0
+  let mut digits = false
+  for c in text + " " {
+    if c == ' ' {
+      if digits {
+        let v = m.to_double() / div
+        out.push(if neg { -v } else { v })
+      }
+      m = 0L
+      neg = false
+      point = false
+      div = 1.0
+      digits = false
+    } else if c == '-' {
+      neg = true
+    } else if c == '.' {
+      point = true
+    } else {
+      m = m * 10L + (c.to_int() - '0'.to_int()).to_int64()
+      digits = true
+      if point {
+        div = div * 10.0
+      }
+    }
   }
   out
 }
