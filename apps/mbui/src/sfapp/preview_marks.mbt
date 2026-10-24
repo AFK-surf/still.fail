@@ -805,10 +805,6 @@ fn marks_json(nw : Double, nh : Double) -> String {
   Json::object({ "w": Json::number(nw), "h": Json::number(nh), "marks": Json::array(list) }).stringify()
 }
 
-///|
-/// Marked images waiting for their chat's composer: by its draft's key, the file and the quotes (title, what, comment),
-/// whose they are ("image": an image's marks; "page": a service's page's, each quote with its screenshot's name).
-let marked_into : Map[String, Array[(String, Bytes, Array[(String, String, String)], String)]] = Map([])
 
 ///|
 /// Back while marking (ImageMarks.kt back): closes a note, puts down the words being written, closes the colours,

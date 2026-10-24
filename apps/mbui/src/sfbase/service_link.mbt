@@ -8,11 +8,11 @@
 
 ///|
 /// The page's own script, served here (never asked of the service).
-let page_js_path : String = "/_stillfail/page.js"
+pub let page_js_path : String = "/_stillfail/page.js"
 
 ///|
 /// The header a request whose body the page left here carries: the id it was left under.
-let body_header : String = "x-stillfail-body"
+pub let body_header : String = "x-stillfail-body"
 
 ///|
 /// First in page.js as served here: StillFailPreviewNative made of the page's way to the app (`mbuiHost.post`), each
@@ -20,7 +20,7 @@ let body_header : String = "x-stillfail-body"
 /// goes to the app, what the app says back comes by `__mbuiPort`) and fetchBytes (false: bytes go as base64). The top
 /// page says first that it is a new page (`p: "page"`): what the page before had open goes with it.
 // kept across runs: a script's words, never written
-let page_bridge_js : String =
+pub let page_bridge_js : String =
   #|(() => {
   #|  if (window.StillFailPreviewNative || !window.mbuiHost) return;
   #|  const say = (m) => window.mbuiHost.post(JSON.stringify(m));
@@ -57,7 +57,7 @@ let page_bridge_js : String =
 /// page.js as served: the language said first (PreviewWeb.kt pageScript), behind the app's StillFailPreviewNative;
 /// `fetches` whether the top page's fetch() comes here on its port (not where the host keeps the cookies: the app has
 /// none of them to send along).
-fn page_script_served(fetches : Bool) -> String {
+pub fn page_script_served(fetches : Bool) -> String {
   "self.__stillfailLang = \"zh\";\n" +
   (if fetches { "window.__mbuiFetch = true;\n" } else { "" }) +
   page_bridge_js +
@@ -68,20 +68,20 @@ fn page_script_served(fetches : Bool) -> String {
 ///|
 /// What a service's page has open through the app: its WebSockets (the core's call for each, by the page's name for
 /// it), the bodies its requests left here (by the id they carry), its fetches under way (how each is stopped, by id).
-priv struct PageLink {
+pub(all) struct PageLink {
   sockets : Map[String, Int]
   bodies : Map[String, (Bytes, String)]
   fetches : Map[String, () -> Unit]
 }
 
 ///|
-fn page_link_new() -> PageLink {
+pub fn page_link_new() -> PageLink {
   { sockets: {}, bodies: {}, fetches: {} }
 }
 
 ///|
 /// A new page, or none: what the one before had open goes with it (PreviewLink.pageStarted).
-fn page_link_drop(src : Source, l : PageLink) -> Unit {
+pub fn page_link_drop(src : Source, l : PageLink) -> Unit {
   for _, id in l.sockets {
     (src.cancel)(id)
   }
@@ -99,7 +99,7 @@ fn page_link_drop(src : Source, l : PageLink) -> Unit {
 
 ///|
 /// A name the page gave a socket, a body or a fetch: 1 to 64 printable ASCII characters (else let go).
-fn link_name(s : String) -> Bool {
+pub fn link_name(s : String) -> Bool {
   if s.length() == 0 || s.length() > 64 {
     return false
   }
@@ -114,7 +114,7 @@ fn link_name(s : String) -> Bool {
 
 ///|
 /// What the page says to the app (its StillFailPreviewNative's calls, page_bridge_js), taken apart; anything else let go.
-fn link_said(src : Source, p : ServicePage, site : @ui.NativeView, words : String) -> Unit {
+pub fn link_said(src : Source, p : ServicePage, site : @ui.NativeView, words : String) -> Unit {
   let m = match (try Some(@json.parse(words)) catch { _ => None }) {
     Some(Object(m)) => Some(Json::object(m))
     _ => return
@@ -194,7 +194,7 @@ fn link_said(src : Source, p : ServicePage, site : @ui.NativeView, words : Strin
 
 ///|
 /// A path on the service as the page may ask it: from its root, no spaces or controls, 16 KB at most.
-fn link_path(path : String) -> Bool {
+pub fn link_path(path : String) -> Bool {
   if !path.has_prefix("/") || path.length() > 16384 {
     return false
   }
@@ -209,14 +209,14 @@ fn link_path(path : String) -> Bool {
 
 ///|
 /// A script for the page: `f`'s call with `args` (JSON, each a value of JS), if the page has it.
-fn link_js(f : String, args : Array[Json]) -> String {
+pub fn link_js(f : String, args : Array[Json]) -> String {
   "window." + f + "&&" + f + "(" + args.map(fn(a) { a.stringify() }).join(",") + ")"
 }
 
 ///|
 /// One of the page's WebSockets opened through the core (PreviewLink.open, not `ported`: what it hears goes into the
 /// page as script, a binary frame as base64).
-fn link_open(src : Source, p : ServicePage, site : @ui.NativeView, sid : String, path : String, protocols : String) -> Unit {
+pub fn link_open(src : Source, p : ServicePage, site : @ui.NativeView, sid : String, path : String, protocols : String) -> Unit {
   let l = p.link
   let event = fn(kind : String, args : Array[Json]) {
     site.script(link_js("__stillfailSocketEvent", [Json::string(sid), Json::string(kind)] + args))
@@ -270,7 +270,7 @@ fn link_open(src : Source, p : ServicePage, site : @ui.NativeView, sid : String,
 ///|
 /// What the page sends on a socket, in the order sent (a binary frame's bytes beside it); a close that does not get
 /// there stops the socket's call, so nothing is left open for a page that let it go.
-fn link_send(src : Source, l : PageLink, sid : String, message : Map[String, Json], bytes : Bytes?) -> Unit {
+pub fn link_send(src : Source, l : PageLink, sid : String, message : Map[String, Json], bytes : Bytes?) -> Unit {
   let closing = message.contains("close")
   let done = fn(r : Result[Json, Json]) {
     match r {
@@ -295,7 +295,7 @@ fn link_send(src : Source, l : PageLink, sid : String, message : Map[String, Jso
 /// What the page says on its port (PreviewWeb.kt fetchSaid): `go` (a fetch), `stop` (one it gave up); anything else let
 /// go. Each fetch asks the service at the page's port only, as the page's other requests do; its answer goes back on
 /// the port as it comes: its head, each piece of its body (base64), its end or why it broke off.
-fn link_port(src : Source, p : ServicePage, site : @ui.NativeView, m : Json) -> Unit {
+pub fn link_port(src : Source, p : ServicePage, site : @ui.NativeView, m : Json) -> Unit {
   let l = p.link
   let id = text(Some(m), "id")
   if !link_name(id) {
@@ -388,7 +388,7 @@ fn link_port(src : Source, p : ServicePage, site : @ui.NativeView, m : Json) -> 
 
 ///|
 /// A method as a fetch may say it: 1 to 16 capitals.
-fn link_method(m : String) -> Bool {
+pub fn link_method(m : String) -> Bool {
   if m.length() == 0 || m.length() > 16 {
     return false
   }
@@ -403,7 +403,7 @@ fn link_method(m : String) -> Bool {
 ///|
 /// A fetch's headers as the page says them (200 at most), each a token's name and a value on one line; the host's and
 /// the body's id left out. None: not headers.
-fn link_headers(v : Json?) -> Array[(String, String)]? {
+pub fn link_headers(v : Json?) -> Array[(String, String)]? {
   let all = match v {
     Some(Array(a)) => a
     None => []
@@ -431,7 +431,7 @@ fn link_headers(v : Json?) -> Array[(String, String)]? {
 
 ///|
 /// A header's name: 1 to 256 of a token's characters.
-fn link_token(k : String) -> Bool {
+pub fn link_token(k : String) -> Bool {
   if k.length() == 0 || k.length() > 256 {
     return false
   }
@@ -449,7 +449,7 @@ fn link_token(k : String) -> Bool {
 
 ///|
 /// The reason said with a status (PreviewLink.reason).
-fn status_reason(status : Int) -> String {
+pub fn status_reason(status : Int) -> String {
   if status >= 200 && status <= 299 {
     "OK"
   } else if status == 404 {
@@ -465,25 +465,25 @@ fn status_reason(status : Int) -> String {
 
 ///|
 /// The tag put in each of the service's HTML pages (PreviewWeb.kt WithTag.TAG).
-let page_js_tag : String = "<script src=\"/_stillfail/page.js\"></script>"
+pub let page_js_tag : String = "<script src=\"/_stillfail/page.js\"></script>"
 
 ///|
 /// A page's body on its way with page.js's tag in it (PreviewWeb.kt WithTag, as the web's service worker puts it):
 /// after the <head> tag, else after <html>, else after the doctype, else first; its first bytes wait until <head> or
 /// <html> is there (or 4 KB, or its end), so it never goes before a doctype cut in two.
-priv struct Tagging {
+pub(all) struct Tagging {
   start : @buffer.Buffer
   mut placed : Bool
 }
 
 ///|
-fn tagging_new() -> Tagging {
+pub fn tagging_new() -> Tagging {
   { start: @buffer.new(size_hint=4096), placed: false }
 }
 
 ///|
 /// The next piece of the body: what of it may go now (the start once the tag's place is known, with the tag in it).
-fn tagging_take(t : Tagging, b : Bytes, last : Bool) -> Bytes {
+pub fn tagging_take(t : Tagging, b : Bytes, last : Bool) -> Bytes {
   if t.placed {
     return b
   }
@@ -506,7 +506,7 @@ fn tagging_take(t : Tagging, b : Bytes, last : Bool) -> Bytes {
 ///|
 /// Where the tag goes in a page's first bytes (their first 4 KB, as Latin-1, any case): just after the <head> tag, else
 /// <html>; `last` (nothing more to wait for) else just after the doctype.
-fn tag_place(b : Bytes, last : Bool) -> Int? {
+pub fn tag_place(b : Bytes, last : Bool) -> Int? {
   let n = if b.length() < 4096 { b.length() } else { 4096 }
   let lower = Array::makei(n, fn(i) {
     let x = b[i].to_int()
@@ -528,7 +528,7 @@ fn tag_place(b : Bytes, last : Bool) -> Int? {
 
 ///|
 /// Just after the first `name` tag (its name followed by a space or `>`): after the `>` that ends it.
-fn tag_end(lower : Array[Int], name : String) -> Int? {
+pub fn tag_end(lower : Array[Int], name : String) -> Int? {
   let want = name.to_array().map(fn(ch) { ch.to_int() })
   let k = want.length()
   let mut i = 0

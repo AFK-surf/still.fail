@@ -179,6 +179,8 @@ pub fn reset() -> Unit {
   downloads_reset()
   // the drafts as the core keeps them (compose.mbt)
   writings_reset()
+  // services' pages kept, their sizes, what was marked on them (service_page.mbt)
+  service_pages_reset()
   // what was sent from here, not in the core's view yet (sent.mbt)
   sent_reset()
   // what the composers' fields were seen as, their marks and `@` words (refs.mbt)

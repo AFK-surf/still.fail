@@ -1447,18 +1447,7 @@ fn Viewer::finish_marks(self : Viewer, c : @ui.Ctx, to_draft : Bool) -> Unit {
   }
 }
 
-///|
-/// The time of day as HHmmss (what a marked image's name carries; UTC: the hosts tell no time zone yet).
-fn clock_stamp(ms : Double) -> String {
-  let s = (ms / 1000.0).to_int64()
-  let day = ((s % 86400L) + 86400L) % 86400L
-  let two = fn(n : Int64) { if n < 10L { "0\{n}" } else { "\{n}" } }
-  two(day / 3600L) + two(day % 3600L / 60L) + two(day % 60L)
-}
 
-///|
-/// The source's clock, for what the viewer names by the time (set each frame).
-let src_now : Ref[() -> Double] = { val: fn() { 0.0 } }
 
 ///|
 /// A marked image drawn by the host, come: kept, or into the chat's draft (the viewer closes back to it).
