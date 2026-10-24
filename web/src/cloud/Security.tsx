@@ -227,13 +227,15 @@ function ConfirmDevice({ entry, request, onClose }: { entry: WorkspaceEntry; req
 
 /** A new device met face to face, showing a code of this one's to type there (the core's `lockPrompts`): put up wherever
  * the person is, the workspaces it asks to be let into named first. Nothing here approves it: only the code typed on
- * the new device does. Closed or turned away (`lockPrompt.deny`), the code is worth nothing; done there, it goes. */
+ * the new device does. Turned away (`lockPrompt.deny`), the code is worth nothing; closed (`lockPrompt.hide`), it is
+ * no longer shown and the code still holds, read by then; done there, it goes. */
 export function SecurityPrompt() {
   const call = useCall();
   const r = useLockPrompts()?.pairing[0] ?? null;
   const deny = () => { if (r) void call("lockPrompt.deny", { device: r.device }); };
+  const hide = () => { if (r) void call("lockPrompt.hide", { device: r.device }); };
   return (
-    <Dialog open={r !== null} onClose={deny} title={r ? t("web-pages.security.pairTitle", { name: r.name || r.email }) : ""}
+    <Dialog open={r !== null} onClose={hide} title={r ? t("web-pages.security.pairTitle", { name: r.name || r.email }) : ""}
       description={r ? t("web-pages.security.pairBody", { device: r.deviceText }) : ""}
       footer={r && <Button variant="ghost" onClick={deny}>{t("web-pages.security.pairDeny")}</Button>}>
       {r && <>

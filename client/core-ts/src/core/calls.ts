@@ -272,7 +272,7 @@ export const VAULT_CALLS = ["state", "lock", "setup", "create", "addDevice", "pu
 export const LOCK_CALLS = ["state", "open", "toggle", "dismiss", "request", "confirm", "deny", "addStation", "joinStation", "renew", "removeDevice", "disable", "pair", "pairCode", "pairCancel"];
 
 /// The calls on a new device showing this one's code (views/pair.ts, `lockPrompts`).
-export const LOCK_PROMPT_CALLS = ["deny", "state"];
+export const LOCK_PROMPT_CALLS = ["deny", "hide", "state"];
 
 function form(name: string, params: unknown, prefix: string, actions: string[]): { topic: Topic; action: string; patch: unknown } | null {
   if (!name.startsWith(prefix)) return null;

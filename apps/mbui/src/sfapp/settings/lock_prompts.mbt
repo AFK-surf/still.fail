@@ -1,13 +1,14 @@
 // A new device showing this one's code (Security.kt LockPrompts, pairSheet; the core's `lockPrompts`, views/pair.ts):
 // put up over whichever page is open, in any workspace of the person's, and again after something else took its place,
-// until it is done or turned away. Nothing here approves it, only the code typed on the new device; turned away, or
-// closed by hand, it is denied (`lockPrompt.deny`) and its code is worth nothing.
+// until it is done or turned away. Nothing here approves it, only the code typed on the new device; turned away (拒绝),
+// it is denied (`lockPrompt.deny`) and its code is worth nothing; closed by hand (a tap beside it, back), it is no
+// longer shown (`lockPrompt.hide`) and its code still holds: read by then, it is typed on the new device next.
 
 ///|
-/// The asks turned away here (a device and the code it was shown, `ask_of`): not put up again while the core has yet to
-/// drop them. The same device asking again (a new code) is put up again: it was not until the app started again
-/// (2026-10-23, 弹窗不弹). What the core dropped is forgotten here too.
-let prompts_denied : Array[String] = []
+/// The asks turned away or closed here (a device and the code it was shown, `ask_of`): not put up again while the core
+/// has yet to drop them. The same device asking again (a new code) is put up again: it was not until the app started
+/// again (2026-10-23, 弹窗不弹). What the core dropped is forgotten here too.
+let prompts_closed : Array[String] = []
 
 ///|
 fn ask_of(r : Json) -> String {
@@ -16,7 +17,7 @@ fn ask_of(r : Json) -> String {
 
 ///|
 fn lock_prompts_reset() -> Unit {
-  prompts_denied.clear()
+  prompts_closed.clear()
 }
 
 ///|
@@ -26,9 +27,9 @@ pub fn lock_prompts(core : Core, free : Bool) -> Unit {
   let prompts = (core.topic)("lockPrompts", Map::new()).value
   let pairing = items(prompts, "pairing")
   if prompts is Some(_) {
-    prompts_denied.retain(fn(d) { pairing.iter().any(fn(r) { ask_of(r) == d }) })
+    prompts_closed.retain(fn(d) { pairing.iter().any(fn(r) { ask_of(r) == d }) })
   }
-  let waiting = pairing.iter().find_first(fn(r) { !prompts_denied.contains(ask_of(r)) })
+  let waiting = pairing.iter().find_first(fn(r) { !prompts_closed.contains(ask_of(r)) })
   match waiting {
     Some(r) if free && !sheet_up() => pair_sheet(core, r)
     _ => ()
@@ -42,14 +43,18 @@ fn pair_sheet(core : Core, r : Json) -> Unit {
   let rv = Some(r)
   let device = text(rv, "device")
   let deny = fn() {
-    prompts_denied.push(ask_of(r))
+    prompts_closed.push(ask_of(r))
     act(core, tr("web-pages.security.denyDevice"), "lockPrompt.deny", obj([("device", str(device))]))
+  }
+  let hide = fn() {
+    prompts_closed.push(ask_of(r))
+    (core.call)("lockPrompt.hide", obj([("device", str(device))]), fn(_) {  })
   }
   let who = match text(rv, "name") {
     "" => text(rv, "email")
     n => n
   }
-  open_sheet(0.55, on_close=deny, fn(c, _) {
+  open_sheet(0.55, on_close=hide, fn(c, _) {
     // done or turned away on another device: gone here too; asked in one more workspace meanwhile, named too
     let prompts = (core.topic)("lockPrompts", Map::new()).value
     let now = items(prompts, "pairing").iter().find_first(fn(x) { text(Some(x), "device") == device })

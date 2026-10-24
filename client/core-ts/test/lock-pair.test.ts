@@ -1,7 +1,8 @@
 // Approving a new device face to face (src/pair.ts, src/views/pair.ts): the exchange on its own, then a trusted device's
 // core met by a new device over a stream of its own: the code it shows, typed right, signs the new device in; typed
-// wrong, it says how many tries are left, and after PAIR_TRIES it signs nothing; turned away, nothing; a credential for
-// another device, nothing; a new device that dialled someone else (its idea of the other end not the trusted one's)
+// wrong, it says how many tries are left, and after PAIR_TRIES it signs nothing; turned away, nothing; its prompt
+// closed, the code still signs it in; ended there, the new device is told why (not that it typed wrong); a credential
+// for another device, nothing; a new device that dialled someone else (its idea of the other end not the trusted one's)
 // cannot prove even the right code. On the test clock, the trusted core's lock at a cloud that keeps chains.
 import assert from "node:assert/strict";
 import { randomBytes } from "node:crypto";
@@ -11,7 +12,7 @@ import { Effect, Queue } from "effect";
 import { PAIR_ALPN, PAIR_TRIES, pairCode, pairSession, pakeKeys, pakeStart, sameMac, typedCode } from "../src/pair.ts";
 import { base64url as toB64url, utf8 } from "../src/util.ts";
 import { loadAddon, nodeIroh } from "../src/hosts/node-iroh.ts";
-import { type Duplex, served, serveTrusted, streamDuplex, tryOne } from "../src/views/pair.ts";
+import { type Duplex, PAIR_WAIT_MS, served, serveTrusted, streamDuplex, tryOne } from "../src/views/pair.ts";
 import { run as runEffect } from "./run.ts";
 import { ME, PHONE, genesis, rig } from "./lock-rig.ts";
 
@@ -126,6 +127,41 @@ test("turned away on the trusted device, or a credential for another device: not
   const n = await met();
   assert.deepEqual(await n.hello(n.g.credential("ws", "ef".repeat(32), "s2")), { ok: { t: "no", error: "not_here" } });
   assert.deepEqual((await n.prompts()).pairing, []);
+});
+
+test("its prompt closed on the trusted device (the code read): no longer shown there, and the code typed still signs it in", async () => {
+  const m = await met();
+  await m.hello();
+  const code = (await m.prompts()).pairing[0].code;
+  await m.ask("lockPrompt.hide", { device: PHONE });
+  assert.deepEqual((await m.prompts()).pairing, [], "no longer shown");
+  const done = await m.prove(code);
+  assert.ok("ok" in done && "approved" in done.ok, JSON.stringify(done));
+  assert.deepEqual(m.cloud.posted.map((p) => [p.ws, p.kind, p.id]), [["ws", "device", PHONE]]);
+});
+
+test("ended on the trusted device, the new device is told why: turned away there, out of tries, the code too old", async () => {
+  const why = (r: { ok: unknown } | { err: any }) => ("err" in r ? r.err.code : JSON.stringify(r.ok));
+  const denied = await met();
+  await denied.hello();
+  const code = (await denied.prompts()).pairing[0].code;
+  await denied.ask("lockPrompt.deny", { device: PHONE });
+  assert.equal(why(await denied.prove(code)), "pair_denied", "turned away, the right code is no use");
+
+  const tried = await met();
+  await tried.hello();
+  const theirs = (await tried.prompts()).pairing[0].code;
+  const bad = theirs === "222222" ? "333333" : "222222";
+  for (let i = 1; i < PAIR_TRIES; i++) await tried.prove(bad);
+  assert.equal(why(await tried.prove(bad)), "pair_tries");
+
+  const late = await met();
+  await late.hello();
+  const old = (await late.prompts()).pairing[0].code;
+  await late.host.time.pass(PAIR_WAIT_MS + 1_000);
+  assert.deepEqual((await late.prompts()).pairing, [], "no longer shown");
+  assert.equal(why(await late.prove(old)), "pair_late");
+  assert.deepEqual([denied.cloud.posted, tried.cloud.posted, late.cloud.posted], [[], [], []]);
 });
 
 test("an app in the lock that does not sign (let in before it kept a key) is made one that signs, as a new one is approved", async () => {
