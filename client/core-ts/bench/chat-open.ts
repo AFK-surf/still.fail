@@ -9,12 +9,13 @@
 //   node --expose-gc bench/chat-open.ts run <dir>
 //
 // No network: still.fail cloud's origin answers nothing, so what shows is what the device holds.
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { mkdirSync, writeFileSync } from "node:fs";
 import { Session } from "node:inspector/promises";
 import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { Effect } from "effect";
 import { NodeHost, start } from "../src/hosts/node.ts";
+import { replies as parts } from "./replies.ts";
 
 const [, , mode, dir] = process.argv;
 if (!dir) throw new Error("usage: chat-open.ts seed|run <dir>");
@@ -28,33 +29,6 @@ const ST = `${WS}/s00`;
 const NOW = Date.UTC(2026, 9, 3, 12);
 const SEP = "\u0001";
 const pad = (n: number) => String(n).padStart(12, "0");
-
-/// Markdown as agents write it: this repository's docs cut at blank lines into parts of 600 to 3 000 characters.
-function parts(): string[] {
-  const root = join(import.meta.dirname, "..", "..", "..");
-  const files = ["docs/core-ts.md", "docs/station-ts.md", "docs/client-core.md", "docs/drive.md", "docs/core-db.md", "apps/mbui/docs/architecture.md"];
-  const out: string[] = [];
-  for (const f of files) {
-    let text: string;
-    try {
-      text = readFileSync(join(root, f), "utf8");
-    } catch {
-      continue;
-    }
-    let cur = "";
-    let fenced = false;
-    for (const line of text.split("\n")) {
-      if (line.startsWith("```")) fenced = !fenced;
-      cur += line + "\n";
-      if (!fenced && line.trim() === "" && cur.length >= 600 + (out.length % 5) * 500) {
-        out.push(cur.trim());
-        cur = "";
-      }
-    }
-    if (cur.trim()) out.push(cur.trim());
-  }
-  return out;
-}
 
 function row(i: number, last: number) {
   const key = `k${i}`;

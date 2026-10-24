@@ -228,3 +228,10 @@ kept (the core's own memory empty):
 
 Reading the agents' Markdown was the most of it (micromark in Hermes, which has no JIT: some 300 KB/s here, a phone
 slower); the rest is the view made and sent. Opened again within the minute the core keeps a view: ~2 ms either way.
+
+Markdown is read by markdown-it since (mdRead.ts; `apps/mbui/scripts/core.sh md-parse`, Hermes on Studio, the bench's
+59 replies, 186 466 characters): `parse` whole 2.11 M characters a second, a chat's page of 80 000 in 38 ms, where
+micromark read 0.35 M a second, 228 ms. Over this station's 2 098 agents' replies, the trees with their words read
+out are the same as micromark's; what differs, in the docs' hard-wrapped lines only: a code span broken over lines
+is one line (CommonMark's space for its line break), a table row has its header's cells (GFM's: missing ones empty,
+more dropped), a `\r\n` in words is a line break.

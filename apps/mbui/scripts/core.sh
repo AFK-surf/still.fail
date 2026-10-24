@@ -4,7 +4,7 @@
 # pieces from the checkout and runs a headless smoke test. See core/README.md.
 #   scripts/core.sh deps | shell [TARGET] | hermes | hermes-kept [apple] | hermes-script FILE [OUT] | hermes-apple | engine [TARGET] | apple [TARGET]
 #                   | smoke [build|run] | listen | exit | sealed | collate | login-test | vectors | sizes | clean | all
-#                   | chat-open
+#                   | chat-open | md-parse
 # EMBER: the still.fail checkout (default: this one, scripts/env.sh); out/core/ gets everything built.
 # TARGET: a Rust target (default aarch64-apple-darwin; aarch64-apple-ios, aarch64-apple-ios-sim for iOS).
 set -e
@@ -323,6 +323,26 @@ chat_open() {
   return $code
 }
 
+# Markdown read in Hermes as the core reads it (client/core-ts/bench/md-parse.ts over the bench's replies), bundled as the
+# core is, run by Hermes's own command: characters read a second, and a chat's page (80 000 of them) in ms.
+md_parse() {
+  have_deps
+  hermes_apple || return 1
+  local o=$OUT/md-parse
+  mkdir -p $o
+  (cd $CORE_TS && node --input-type=module -e 'import { replies } from "./bench/replies.ts"; import { writeFileSync } from "node:fs"; writeFileSync(process.argv[1], "var TEXTS = " + JSON.stringify(replies()) + ";\n");' $o/texts.js) || return 1
+  NODE_PATH=$CORE_TS/node_modules $CORE_TS/node_modules/.bin/esbuild $CORE_TS/bench/md-parse.ts --bundle --format=iife --platform=neutral \
+    --main-fields=module,main --target=es2020 --minify --legal-comments=none --resolve-extensions=.ts,.js,.mjs --log-level=warning --outfile=$o/bench.js || return 1
+  (cd $CORE_TS && node --input-type=module -e "
+import { readFileSync, writeFileSync } from 'node:fs';
+import { transformSync } from '@babel/core';
+const f = process.argv[1];
+writeFileSync(f, transformSync(readFileSync(f, 'utf8'), { babelrc: false, configFile: false, compact: true, plugins: ['@babel/plugin-transform-classes'] }).code);" $o/bench.js) || return 1
+  cat $o/texts.js $o/bench.js > $o/run.js
+  "$(hermesc)" -emit-binary -O -block-scoping -out $o/run.hbc $o/run.js 2>&1 | grep -a "error:" && return 1
+  $OUT/hermes/bin/hermes $o/run.hbc
+}
+
 # listen.* (apple_core.mm on apple_listen.m) with core/listen-test.js (as bytecode) in the core's place: core/listen_test.m.
 listen_test() {
   core_program listen_test || return 1
@@ -429,6 +449,7 @@ case "${1:-all}" in
   apple) apple "${2:-aarch64-apple-darwin}" ;;
   listen) listen_test ;;
   chat-open) chat_open ;;
+  md-parse) md_parse ;;
   exit) exit_test ;;
   collate) collate_test ;;
   sealed) sealed_test ;;
@@ -443,5 +464,5 @@ case "${1:-all}" in
   sizes) sizes ;;
   clean) rm -rf "$CARGO_TARGET_DIR"; echo "removed $CARGO_TARGET_DIR (out/core kept)" ;;
   all) deps; shell; smoke_build; smoke_run; sizes ;;
-  *) echo "usage: scripts/core.sh deps | shell [TARGET] | hermes | hermes-kept [apple] | hermes-script FILE [OUT] | hermes-apple | engine [TARGET] | apple [TARGET] | smoke [build|run] | listen | exit | collate | login-test | vectors | sizes | chat-open | clean | all"; exit 2 ;;
+  *) echo "usage: scripts/core.sh deps | shell [TARGET] | hermes | hermes-kept [apple] | hermes-script FILE [OUT] | hermes-apple | engine [TARGET] | apple [TARGET] | smoke [build|run] | listen | exit | collate | login-test | vectors | sizes | chat-open | md-parse | clean | all"; exit 2 ;;
 esac

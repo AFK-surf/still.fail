@@ -2,7 +2,6 @@ import react from "@vitejs/plugin-react";
 import { vanillaExtractPlugin } from "@vanilla-extract/vite-plugin";
 import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
-import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 import { uiAlias } from "./ui/alias.ts";
 import { defineConfig } from "vite";
@@ -83,9 +82,6 @@ export default defineConfig(({ mode }) => {
       alias: [
         uiAlias,
         { find: "@stillfail/core-ts/web", replacement: here("../client/core-ts/src/hosts/web.ts") },
-        // Markdown's character references (client/core-ts/src/markdown.ts, in the core's worker) by their table: the
-        // browser's build of it reads them through `document`, which a worker has not.
-        { find: /^decode-named-character-reference$/, replacement: createRequire(here("../client/core-ts/package.json")).resolve("decode-named-character-reference") },
         ...(profiling ? [{ find: /^react-dom\/client$/, replacement: "react-dom/profiling" }] : []),
       ],
     },
