@@ -565,6 +565,13 @@ static int32_t menu_can;  // what the menu offers (hostapi text_menu_*: 1 cut, 2
 
 // ---------------------------------------------------------------------------
 
+// Which way the app is held while it has not turned itself: a phone upright only (an iPhone: its short side under 600
+// points), a tablet as the person turns it.
+static UIInterfaceOrientationMask mb_upright(void) {
+  return UIDevice.currentDevice.userInterfaceIdiom == UIUserInterfaceIdiomPad ? UIInterfaceOrientationMaskAll
+                                                                                 : UIInterfaceOrientationMaskPortrait;
+}
+
 @interface MBController : UIViewController
 @property(nonatomic, strong) NSLayoutConstraint *bottom;
 @property(nonatomic) BOOL dark;
@@ -591,10 +598,10 @@ static MBController *the_controller;
 - (UIStatusBarStyle)preferredStatusBarStyle {
   return self.dark ? UIStatusBarStyleLightContent : UIStatusBarStyleDarkContent;
 }
-// upright, or on its side while a film asks (@hostapi.set_sideways), the status bar and the home indicator out of its
-// way then (as Android's system bars: a swipe brings them for a while)
+// on its side while a film asks (@hostapi.set_sideways), the status bar and the home indicator out of its way then (as
+// Android's system bars: a swipe brings them for a while); else upright on an iPhone, as turned on an iPad (mb_upright)
 - (UIInterfaceOrientationMask)supportedInterfaceOrientations {
-  return self.sideways ? UIInterfaceOrientationMaskLandscape : UIInterfaceOrientationMaskPortrait;
+  return self.sideways ? UIInterfaceOrientationMaskLandscape : mb_upright();
 }
 - (BOOL)prefersStatusBarHidden { return self.sideways; }
 - (BOOL)prefersHomeIndicatorAutoHidden { return self.sideways; }
@@ -1321,7 +1328,7 @@ void mb_host_set_sideways(int32_t on) {
   [c setNeedsUpdateOfHomeIndicatorAutoHidden];
   UIWindowScene *scene = c.view.window.windowScene;
   UIWindowSceneGeometryPreferencesIOS *g = [[UIWindowSceneGeometryPreferencesIOS alloc]
-      initWithInterfaceOrientations:on ? UIInterfaceOrientationMaskLandscape : UIInterfaceOrientationMaskPortrait];
+      initWithInterfaceOrientations:on ? UIInterfaceOrientationMaskLandscape : mb_upright()];
   [scene requestGeometryUpdateWithPreferences:g errorHandler:^(NSError *e) { say([NSString stringWithFormat:@"sideways: %@", e]); }];
 }
 

@@ -31,6 +31,12 @@
     <string>UIInterfaceOrientationLandscapeLeft</string>
     <string>UIInterfaceOrientationLandscapeRight</string>
   </array>
+  <key>UISupportedInterfaceOrientations~ipad</key><array>
+    <string>UIInterfaceOrientationPortrait</string>
+    <string>UIInterfaceOrientationPortraitUpsideDown</string>
+    <string>UIInterfaceOrientationLandscapeLeft</string>
+    <string>UIInterfaceOrientationLandscapeRight</string>
+  </array>
   <key>UIViewControllerBasedStatusBarAppearance</key><true/>
   <key>MBUIEdge</key><true/>
   <key>MBUIGround</key><string>#F5F3EF,#1B1C1F</string>

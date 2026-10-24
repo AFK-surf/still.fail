@@ -15,8 +15,13 @@ app, and `sfdesk`'s, ported from the web's desktop files). The way from here to 
 | What | Read by | What it is |
 |---|---|---|
 | The screen's kind | `@sf.touch_system()` (sf/tokens.mbt) | A touch device (a phone, a tablet: iOS, Android) or a computer (macOS, Windows). The platform's, the same for the whole run; a Tester's by its `platform`. |
-| The tier | `@sf.layout(width)` (sf/tokens.mbt) | `Small`, `Medium`, `Large`. A touch device by its system size classes (and its fold: half open, crease across, is `Small`'s chat); a computer's window by its width (600, 840). Held while the app holds the device sideways (`@hostapi.sideways()`). |
+| The tier | `@sf.layout(width)` (sf/tokens.mbt) | `Small`, `Medium`, `Large`, by the window's width in points on every screen (600, 840): which way up it is held, its height and its size say nothing of the panes, the height only how much of them shows. The one exception the crease: a fold half open, crease across, is `Small`'s chat. Held while the app holds the device sideways (`@hostapi.sideways()`). |
 | The input | `@ui.pointing()` | `Finger` or `Mouse`. It may change while the app runs. |
+
+A phone is used upright only (a touch device whose short side is under 600 points: a phone, a fold's outer screen):
+Android's activity asks for portrait there (`Host.upright`), an iPhone supports portrait alone (ios_app.m `mb_upright`).
+The app turning it itself is the exception (a film full screen, a station's screen: `@hostapi.set_sideways(true)`); back
+upright after. A tablet and an opened fold's inner screen turn as they are held.
 
 - **The layout is the screen's.** Its kind and its tier, and a page's own width (below), decide everything about what
   is shown, where and how big. Nothing else does: `wide_on`, `@settings.wide`, `t.narrow`, the viewer host's `narrow`
@@ -24,7 +29,9 @@ app, and `sfdesk`'s, ported from the web's desktop files). The way from here to 
   - **The tier:** how the shell arranges the panes, and where something opened goes (pushed, a pane, a side tab).
   - **The kind:**
     - the look: the theme's palette, type scale and row heights, and touch targets (44 at least on a touch device);
-      a touch device's is the phone's, a computer's the web's;
+      a touch device's is the phone's, a computer's the web's. The panes side by side are told apart by their grounds in
+      both, as the web's: the sidebar a step under the page's ground (touch: the page's beige `bg`, the sidebar a step
+      under it, what is chosen in it a step under that);
     - what a page offers to reach things: on a touch device the search field at the top of the chats' list, on a
       computer ⌘K;
     - the keyboard: on a computer Enter sends and the composer takes the focus as a chat opens; on a touch device Enter
