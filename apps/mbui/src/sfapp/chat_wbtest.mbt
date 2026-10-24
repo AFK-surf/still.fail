@@ -122,7 +122,9 @@ test "while the chat is read: its bar, the messages to come, the composer" {
   // (what it shows not come: it slid in once it had waited the most a page opening waits, App.kt LOCAL_MS)
   t.run_for(page_local_ms)
   assert_true(t.find("发消息") is Some(_))
-  assert_true(t.find("整理发布清单") is None)
+  // its bar with the title it was opened by (its row's), none of its messages
+  assert_true(t.find("整理发布清单") is Some(_))
+  assert_true(t.find("做完了：列表、跳到最新的按钮") is None)
 }
 
 ///|
