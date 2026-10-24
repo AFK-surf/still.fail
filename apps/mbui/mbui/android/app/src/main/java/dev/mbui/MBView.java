@@ -505,7 +505,7 @@ public class MBView extends GLSurfaceView implements GLSurfaceView.Renderer {
         }
         int k = keyCode(code);
         if (k != 0) {
-            int mods = e.isShiftPressed() ? 1 : 0;
+            int mods = Device.keyMods(e);
             toGL(() -> Native.key(k, mods));
             return true;
         }
@@ -651,7 +651,7 @@ public class MBView extends GLSurfaceView implements GLSurfaceView.Renderer {
             if (e.getKeyCode() == KeyEvent.KEYCODE_PASTE) { view.paste(); return true; }
             int k = keyCode(e.getKeyCode());
             if (k != 0) {
-                int mods = e.isShiftPressed() ? 1 : 0;
+                int mods = Device.keyMods(e);
                 view.toGL(() -> Native.key(k, mods));
                 return true;
             }
@@ -895,7 +895,7 @@ public class MBView extends GLSurfaceView implements GLSurfaceView.Renderer {
             }
             int k = keyCode(e.getKeyCode());
             if (k != 0) {
-                int mods = e.isShiftPressed() ? 1 : 0;
+                int mods = Device.keyMods(e);
                 view.toGL(() -> Native.key(k, mods));
                 return true;
             }

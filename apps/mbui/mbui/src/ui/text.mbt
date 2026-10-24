@@ -920,6 +920,61 @@ fn TextLayout::offset_at(self : TextLayout, x : Double, y : Double) -> Int {
 }
 
 ///|
+/// The line starting at offset `off` that the one before wraps into (no line break between them), or -1: where an
+/// offset is the end of one line and the start of the next.
+fn TextLayout::wrapped_into(self : TextLayout, off : Int) -> Int {
+  let s = self.shaped
+  for l in 1..<self.line_start.length() {
+    let c = self.line_start[l]
+    if c < s.starts.length() && s.starts[c] == off {
+      return if s.hard_end(c - 1) { -1 } else { l }
+    }
+  }
+  -1
+}
+
+///|
+/// The caret's place (x, line) at offset `off`, as TextLayout::caret; with `up`, where a line wraps into the next
+/// there, at the end of the line before instead of the next one's start (where a move to that line's end, or the
+/// pointer past it, put the caret).
+fn TextLayout::caret_side(self : TextLayout, off : Int, up : Bool) -> (Double, Int) {
+  let l = if up { self.wrapped_into(off) } else { -1 }
+  if l > 0 {
+    let s = self.shaped
+    return (caret_after(self.xs, s.adv, self.lv, self.line_end[l - 1] - 1), l - 1)
+  }
+  self.caret(off)
+}
+
+///|
+/// The offset nearest to `x` on line `line`, and whether a caret there shows on that line where the line wraps into
+/// the next at it (caret_side's `up`): past the line's end, where its words go on on the next.
+fn TextLayout::offset_on(self : TextLayout, x : Double, line : Int) -> (Int, Bool) {
+  let off = self.offset_at(x, (line.to_double() + 0.5) * self.line_h)
+  (off, line + 1 < self.line_start.length() && self.wrapped_into(off) == line + 1)
+}
+
+///|
+/// The start (`d` -1) or the end (1) of the line the caret at `off` shows on (`up`: caret_side's), and whether the
+/// caret there shows on it as caret_side's `up` says: its end before its line break, or where it wraps into the next,
+/// the next one's start shown at its own end.
+fn TextLayout::line_end_at(self : TextLayout, off : Int, up : Bool, d : Int) -> (Int, Bool) {
+  let (_, line) = self.caret_side(off, up)
+  let (a, b) = self.line_range(line)
+  let s = self.shaped
+  let e = self.line_end[line]
+  if d < 0 {
+    (a, false)
+  } else if line + 1 >= self.line_start.length() {
+    (b, false)
+  } else if e > 0 && s.hard_end(e - 1) {
+    (s.starts[e - 1], false)
+  } else {
+    (b, true)
+  }
+}
+
+///|
 /// The start and end offsets of a line.
 fn TextLayout::line_range(self : TextLayout, line : Int) -> (Int, Int) {
   let s = self.shaped

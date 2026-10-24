@@ -740,8 +740,7 @@ fn pointer_in(kind : Int, x : Double, y : Double, button : Int, mods : Int) -> U
         match c.editors.get(c.active) {
           Some(st) =>
             match st.tl {
-              Some(tl) =>
-                st.caret = imin(tl.offset_at(x - st.ox, y - st.oy), st.text.length())
+              Some(tl) => st.caret_to_point(tl, x, y)
               None => ()
             }
           None => ()
@@ -1101,7 +1100,7 @@ fn key_in(code : Int, mods : Int) -> Unit {
     return
   }
   // every key the app may read (Ctx::key_pressed), and whether the focused field takes it (the editor's own keys)
-  desk_key(code, mods, c.editors.contains(c.focus) && code < key_escape)
+  desk_key(code, mods, c.editors.contains(c.focus) && field_key(code))
   // ⌘V (Ctrl+V) as the app's key: the host saw a picture on the clipboard (mac_app.m, win_app.c), read for the field
   // focused (Ctx::editor: a picture where it takes pictures, its words where it does not)
   if code == key_of_char('v') && (mods & (mod_cmd | mod_ctrl)) != 0 && c.editors.contains(c.focus) {
@@ -1115,7 +1114,7 @@ fn key_in(code : Int, mods : Int) -> Unit {
     h_clipboard_set(selected_words())
     return
   }
-  if code >= key_escape {
+  if !field_key(code) {
     h_request_frame()
     return
   }
@@ -1187,7 +1186,7 @@ fn place_caret(st : EditorState, x : Double, y : Double, t : Double) -> Unit {
       if st.marked.length() > 0 {
         st.text_input(2, "", 0, 0, t)
       }
-      st.caret = imin(tl.offset_at(x - st.ox, y - st.oy), st.text.length())
+      st.caret_to_point(tl, x, y)
       st.anchor = st.caret
     }
     None => ()
@@ -1207,7 +1206,7 @@ fn handle_move(c : Ctx, x : Double, y : Double, t : Double) -> Unit {
       match st.tl {
         Some(tl) => {
           let tip = y - c.handle_dy
-          st.caret = imin(tl.offset_at(x - st.ox, tip - tl.line_h / 2.0 - st.oy), st.text.length())
+          st.caret_to_point(tl, x, tip - tl.line_h / 2.0)
           st.anchor = st.caret
           st.blink0 = t
           h_request_frame()

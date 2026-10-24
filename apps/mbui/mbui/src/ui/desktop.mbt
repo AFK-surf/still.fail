@@ -45,6 +45,12 @@ pub fn key_of_char(ch : Char) -> Int {
 pub let key_code_enter : Int = 7
 
 ///|
+pub let key_code_backspace : Int = 1
+
+///|
+pub let key_code_delete : Int = 2
+
+///|
 pub let key_code_up : Int = 5
 
 ///|
@@ -77,6 +83,70 @@ pub let key_code_copy : Int = 13
 
 ///|
 pub let key_code_cut : Int = 14
+
+///|
+/// A field's moves and deletions as a Mac's text system names what a key does (NSResponder's moveWordLeft:,
+/// moveToLeftEndOfLine:, deleteToBeginningOfLine:…, its host's doCommandBySelector), each a key of its own, Shift
+/// (mod_shift_key) widening what is picked; elsewhere they come as the keys themselves with what is held, which a field
+/// reads as that system's fields do (editor.mbt edit_of). By words, back and on:
+pub let key_code_word_back : Int = 20
+
+///|
+pub let key_code_word_on : Int = 21
+
+///|
+/// To the start and the end of the line the caret shows on.
+pub let key_code_line_start : Int = 22
+
+///|
+pub let key_code_line_end : Int = 23
+
+///|
+/// To the start and the end of its paragraph (what lies between line breaks).
+pub let key_code_paragraph_start : Int = 24
+
+///|
+pub let key_code_paragraph_end : Int = 25
+
+///|
+/// To the start and the end of all of it.
+pub let key_code_text_start : Int = 26
+
+///|
+pub let key_code_text_end : Int = 27
+
+///|
+/// To the paragraph's start or end, or the one before's or after's when there already (moveParagraphBackward:).
+pub let key_code_paragraph_back : Int = 28
+
+///|
+pub let key_code_paragraph_on : Int = 29
+
+///|
+/// Deleting a word back and on, to the line's start and end, to the paragraph's start and end.
+pub let key_code_delete_word_back : Int = 30
+
+///|
+pub let key_code_delete_word_on : Int = 31
+
+///|
+pub let key_code_delete_line_back : Int = 32
+
+///|
+pub let key_code_delete_line_on : Int = 33
+
+///|
+pub let key_code_delete_paragraph_back : Int = 34
+
+///|
+pub let key_code_delete_paragraph_on : Int = 35
+
+///|
+/// Whether a focused field takes key `code` as its own (its moves and deletions, Enter, select all, copy, cut), not
+/// Escape, Tab or a character's key.
+fn field_key(code : Int) -> Bool {
+  code < key_escape || (code >= key_code_word_back && code <= key_code_delete_paragraph_on)
+}
 
 ///|
 /// Modifiers in a key's `mods`: Shift, Ctrl, Alt (Option), ⌘ (the Windows key, Meta).

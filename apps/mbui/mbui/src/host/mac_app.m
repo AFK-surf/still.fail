@@ -448,13 +448,15 @@ static NSCursor *cursor_of(int kind) {
   NSEventModifierFlags m = e.modifierFlags;
   int mods = ((m & NSEventModifierFlagShift) ? 1 : 0) | ((m & NSEventModifierFlagControl) ? 2 : 0) |
              ((m & NSEventModifierFlagOption) ? 4 : 0) | ((m & NSEventModifierFlagCommand) ? 8 : 0);
-  // the arrows (with ⌘, ⌥ or none): a field's own moves while it has the keyboard; else the app's
+  // the arrows and the deleting keys (with ⌘, ⌥ or none): what the text system makes of them while a field has the
+  // keyboard (doCommandBySelector: ⌘← to the line's start, ⌘⌫ deleting to it); else the app's, as the keys they are
   int arrow = e.keyCode == 123 ? 3 : e.keyCode == 124 ? 4 : e.keyCode == 126 ? 5 : e.keyCode == 125 ? 6 : 0;
+  int editing = arrow ? arrow : e.keyCode == 51 ? 1 : e.keyCode == 117 ? 2 : 0;
   if (m & NSEventModifierFlagCommand) {
     NSString *c = e.charactersIgnoringModifiers.lowercaseString;
-    if (arrow) {
+    if (editing) {
       if (self.imeActive) [self interpretKeyEvents:@[ e ]];
-      else mb_cb.key(arrow, mods);
+      else mb_cb.key(editing, mods);
     } else if ([c isEqualToString:@"q"]) [NSApp terminate:nil];
     else if ([c isEqualToString:@"["]) go_back();
     else if ([c isEqualToString:@"a"]) mb_cb.key(12, mods);
@@ -495,6 +497,8 @@ static NSCursor *cursor_of(int kind) {
     case 125: mb_cb.key(6, mods); break;   // down
     case 123: mb_cb.key(3, mods); break;   // left
     case 124: mb_cb.key(4, mods); break;   // right
+    case 51: mb_cb.key(1, mods); break;    // Delete (Backspace)
+    case 117: mb_cb.key(2, mods); break;   // forward Delete
     case 36:
     case 76: mb_cb.key(7, mods); break;    // Return, Enter
     default: {
@@ -510,25 +514,41 @@ static int shift_down(void) {
   return ([NSEvent modifierFlags] & NSEventModifierFlagShift) ? 1 : 0;
 }
 
+// What the text system makes of a key (interpretKeyEvents: the system's key bindings, the person's own among them), as
+// the framework's keys: the editing keys and, for the moves and deletions the arrows don't name, its edit keys
+// (ui's key_code_word_back…); "…AndModifySelection" is the same with Shift. One the field does nothing with (a scroll,
+// transpose:) is no key.
 - (void)doCommandBySelector:(SEL)sel {
+  static NSDictionary<NSString *, NSNumber *> *codes;
+  static dispatch_once_t once;
+  dispatch_once(&once, ^{
+    codes = @{
+      @"deleteBackward:" : @1, @"deleteBackwardByDecomposingPreviousCharacter:" : @1, @"deleteForward:" : @2,
+      @"moveLeft:" : @3, @"moveBackward:" : @3, @"moveRight:" : @4, @"moveForward:" : @4,
+      @"moveUp:" : @5, @"moveDown:" : @6, @"insertNewline:" : @7,
+      @"scrollPageUp:" : @15, @"pageUp:" : @15, @"scrollPageDown:" : @16, @"pageDown:" : @16,
+      @"moveWordLeft:" : @20, @"moveWordBackward:" : @20, @"moveWordRight:" : @21, @"moveWordForward:" : @21,
+      @"moveToLeftEndOfLine:" : @22, @"moveToBeginningOfLine:" : @22,
+      @"moveToRightEndOfLine:" : @23, @"moveToEndOfLine:" : @23,
+      @"moveToBeginningOfParagraph:" : @24, @"moveToEndOfParagraph:" : @25,
+      @"moveToBeginningOfDocument:" : @26, @"moveToEndOfDocument:" : @27,
+      @"moveParagraphBackward:" : @28, @"moveParagraphForward:" : @29,
+      @"deleteWordBackward:" : @30, @"deleteWordForward:" : @31,
+      @"deleteToBeginningOfLine:" : @32, @"deleteToEndOfLine:" : @33,
+      @"deleteToBeginningOfParagraph:" : @34, @"deleteToEndOfParagraph:" : @35,
+    };
+  });
   NSString *s = NSStringFromSelector(sel);
-  int code = 0, mods = 0;
-  if ([s isEqualToString:@"deleteBackward:"]) code = 1;
-  else if ([s isEqualToString:@"deleteForward:"]) code = 2;
-  else if ([s hasPrefix:@"moveLeft"]) code = 3;
-  else if ([s hasPrefix:@"moveRight"]) code = 4;
-  else if ([s hasPrefix:@"moveUp"]) code = 5;
-  else if ([s hasPrefix:@"moveDown"]) code = 6;
-  else if ([s isEqualToString:@"insertNewline:"]) code = 7;
-  else if ([s isEqualToString:@"insertLineBreak:"] ||
-           [s isEqualToString:@"insertNewlineIgnoringFieldEditor:"]) {
+  int mods = 0;
+  if ([s hasSuffix:@"AndModifySelection:"]) {
+    s = [[s substringToIndex:s.length - @"AndModifySelection:".length] stringByAppendingString:@":"];
+    mods = 1;
+  }
+  int code = codes[s].intValue;
+  if ([s isEqualToString:@"insertLineBreak:"] || [s isEqualToString:@"insertNewlineIgnoringFieldEditor:"]) {
     code = 7;
     mods = 1;
-  } else if ([s hasPrefix:@"moveToBeginningOfLine"] || [s hasPrefix:@"moveToBeginningOfDocument"]) code = 8;
-  else if ([s hasPrefix:@"moveToEndOfLine"] || [s hasPrefix:@"moveToEndOfDocument"]) code = 9;
-  else if ([s hasPrefix:@"scrollPageUp"] || [s hasPrefix:@"pageUp"]) code = 15;
-  else if ([s hasPrefix:@"scrollPageDown"] || [s hasPrefix:@"pageDown"]) code = 16;
-  if ([s containsString:@"AndModifySelection"]) mods |= 1;
+  }
   if (code == 7 && shift_down()) mods |= 1;
   if (code) mb_cb.key(code, mods);
 }

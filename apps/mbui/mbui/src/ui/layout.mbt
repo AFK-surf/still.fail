@@ -897,7 +897,7 @@ fn Ctx::commit(self : Ctx, i : Int, px : Double, py : Double, gen : Int) -> Unit
         let tl = layout_text(st.shown(), n.font_size, n.weight, iw, true, line=n.line_h, trim=n.line_trim, style=faces_style(st.words, 0))
         st.tl = Some(tl)
         // taller than the field: scrolled so that the caret's line shows
-        let (_, cl) = tl.caret(st.caret + st.marked.length())
+        let (_, cl) = st.place_of(tl, st.caret + st.marked.length())
         let top = cl.to_double() * tl.line_h
         if top - st.scroll < 0.0 {
           st.scroll = top
