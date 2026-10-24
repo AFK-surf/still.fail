@@ -20,6 +20,7 @@ pub fn reset() -> Unit {
   drag_reset()
   transfers_reset()
   tab_reset()
+  sv_reset()
   dialogs_reset()
   drive_reset()
   shell_reset()

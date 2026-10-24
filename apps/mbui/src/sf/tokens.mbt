@@ -1307,6 +1307,10 @@ pub let idle_column_w : @ui.Len = Fixed(560.0)
 pub let elsewhere_h : @ui.Len = Fixed(38.0)
 
 ///|
+/// A service's address in its bar beside the chat (Preview.css.ts previewAddress: 30 high).
+pub let preview_address_h : @ui.Len = Fixed(30.0)
+
+///|
 /// A message's video (Chat.css.ts msgVideo, msgVideoPlay, msgVideoName): black under its still, black at 65% under its
 /// play mark and its name, which are white.
 pub let video_ground : @ui.Color = Data(0x000000FFL)

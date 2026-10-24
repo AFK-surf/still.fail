@@ -634,7 +634,6 @@ fn rail_place(
 ///|
 /// Back to the stack's root as another workspace comes into view: what is over the pages put down, the menu closed.
 fn desk_home(pages : Pages) -> Unit {
-  (pages.lower)()
   app.menu = false
   while app.nav.depth() > 1 {
     if !app.nav.pop() {
@@ -656,7 +655,6 @@ fn go_place(pages : Pages, place : String) -> Unit {
   if app.nav.depth() == 1 && app.nav.top() == page {
     return
   }
-  (pages.lower)()
   app.menu = false
   while app.nav.depth() > 1 {
     if !app.nav.pop() {
@@ -903,7 +901,6 @@ pub fn open_settings(pages : Pages) -> Unit {
 ///|
 /// Settings at one of its pages (快捷键 from the shortcuts' dialog), the sidebar its list.
 pub fn open_settings_at(pages : Pages, route : @settings.Route) -> Unit {
-  (pages.lower)()
   app.menu = false
   while app.nav.depth() > 1 {
     if !app.nav.pop() {

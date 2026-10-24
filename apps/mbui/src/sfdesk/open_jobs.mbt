@@ -143,7 +143,6 @@ fn open_chat_ref(pages : Pages, r : ChatRef) -> Unit {
     Chat(open) if open.station == r.station && open.session == r.session => return
     _ => ()
   }
-  (pages.lower)()
   wide.menu = None
   while app.nav.depth() > 1 {
     if !app.nav.pop() {
