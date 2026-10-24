@@ -523,6 +523,11 @@ fn pointer_in(kind : Int, x : Double, y : Double, button : Int, mods : Int) -> U
   // a second finger (4 down, 5 moved, 6 up: hosts with touch screens), for a pinch (native.mbt `second_pointer`)
   if kind >= 4 && kind <= 6 {
     on_second(kind, x, y)
+    // one of two lifted (which, the host does not say): the moves from here may be the other's, its own track
+    if kind == 6 {
+      track_x.reset()
+      track_y.reset()
+    }
     return
   }
   // the pointer gone out of the window (7); a secondary button (a right click: its menu's, nothing pressed)
@@ -564,6 +569,8 @@ fn pointer_in(kind : Int, x : Double, y : Double, button : Int, mods : Int) -> U
     c.press_x = x
     c.press_y = y
     c.press_at = t
+    // (not taken yet: one taken before at the same moment is not this one)
+    c.taken_at = -1.0
     c.last_y = y
     c.last_x = x
     c.vel_x = 0.0
@@ -632,26 +639,43 @@ fn pointer_in(kind : Int, x : Double, y : Double, button : Int, mods : Int) -> U
       }
     }
     c.press_late = h_feel() == 2 && c.drag_scroll != 0
-    match c.lists.get(c.drag_scroll) {
-      // a list moving on its own (flung, springing back from an end) is
-      // caught: the finger drags it from there, and presses nothing in it
-      Some(st) if st.moving() => {
-        c.claimed = true
-        for other in c.press_chain {
-          if other != c.drag_scroll {
-            drag_cancel(other)
-          }
+    // a list moving on its own (flung, springing back from an end) is caught wherever on it the finger lands, and the
+    // press presses nothing in it: the finger drags it from there at once; on what scrolls or drags its own way in it
+    // (a table or a code block that scrolls sideways, a row swiped across), stopped, the press goes the finger's way
+    // as ever (claim.mbt)
+    let mut caught = 0
+    if desk.mouse_drags {
+      for id in c.press_chain {
+        if caught == 0 && c.lists.get(id) is Some(st) && st.moving() {
+          caught = id
         }
+      }
+    }
+    match c.lists.get(caught) {
+      Some(st) => {
         st.catch_up()
-        st.held = true
-        c.dragging = true
+        if caught == c.drag_scroll {
+          c.claimed = true
+          for other in c.press_chain {
+            if other != c.drag_scroll {
+              drag_cancel(other)
+            }
+          }
+          st.held = true
+          c.dragging = true
+        }
+        // (no tap of anything, of a row's drag area or anywhere, once lifted)
         c.active = 0
+        c.taken_at = c.press_at
         c.edge = 0
         h_request_frame()
         return
       }
-      Some(st) => st.stop()
-      None => ()
+      None =>
+        match c.lists.get(c.drag_scroll) {
+          Some(st) => st.stop()
+          None => ()
+        }
     }
     c.editor_tap = 0
     match c.editors.get(target) {
@@ -784,7 +808,7 @@ fn pointer_in(kind : Int, x : Double, y : Double, button : Int, mods : Int) -> U
         y,
         dclamp(track_x.velocity(), -max_fling, max_fling),
         dclamp(track_y.velocity(), -max_fling, max_fling),
-        false,
+        c.taken_at == c.press_at,
       )
     }
     if c.dragging {

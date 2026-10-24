@@ -99,6 +99,42 @@ test "sideways: flung, it slows by a way solved once: at rest at a time of its o
 }
 
 ///|
+test "sideways: a finger landing on one stops the list flinging by under it, as anywhere else on the list (Android)" {
+  // every row a line that scrolls sideways (a chat's tables and code blocks)
+  let t = @ui.Tester::new(
+    fn(c) {
+      c.list("rows", 200, 40.0, fn(_) {
+        c.sideways("wide", fn() { c.rich([@ui.plain("x".repeat(120))], size=10.0, wrap=false) |> ignore })
+        |> ignore
+      })
+      |> ignore
+    },
+    w=300.0,
+    h=300.0,
+    platform=2,
+  )
+  t.draw()
+  // flung up: a quick move up the rows, let go
+  t.touch(0, 150.0, 280.0)
+  for k in 1..=12 {
+    t.advance(@ui.drag_step_ms / 2.0)
+    t.touch(1, 150.0, 280.0 - 20.0 * k.to_double())
+  }
+  t.touch(2, 150.0, 40.0)
+  t.run_for(5.0 * @ui.drag_step_ms)
+  assert_true(t.list_moving())
+  let at = t.list_offset()
+  // a finger down on a row (on its line) and up where it came down: the list stops there
+  t.touch(0, 150.0, 150.0)
+  t.frame()
+  t.touch(2, 150.0, 150.0)
+  t.frame()
+  t.draw()
+  assert_false(t.list_moving())
+  assert_eq(t.list_offset(), at)
+}
+
+///|
 test "a node drawn as its top only: its bottom cut, its taps whole" {
   let cut = Ref::new(-1.0)
   let t = @ui.Tester::new(
