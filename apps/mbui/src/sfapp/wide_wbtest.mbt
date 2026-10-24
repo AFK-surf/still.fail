@@ -1351,6 +1351,40 @@ test "wide: a connect's page as the web's: back to the connects, who it is and h
 }
 
 ///|
+test "wide: a Slack connect's app folded on its page as the web's: its look and permissions; 应用 writes it with what it started from" {
+  let calls : Array[Made] = []
+  let t = wide_tester(calls, h=1400.0)
+  app.nav.replace(Place("connects"))
+  t.run_for(@ui.nav_push_ms)
+  let (rx, ry) = t.find("星火助手").unwrap()
+  t.tap(rx, ry)
+  t.run_for(@ui.nav_push_ms)
+  assert_true(t.find("名字、头像和权限") is Some(_), msg="its fold: " + t.words().map(fn(w) { w.0 }).join("|"))
+  assert_true(t.find("应用到 Slack") is None, msg="folded")
+  t.click(Button, label="Slack app")
+  t.run_for(@ui.nav_push_ms)
+  assert_true(t.find("权限 · 已开启 4 / 5") is Some(_), msg="its permissions counted: " + t.words().map(fn(w) { w.0 }).join("|"))
+  assert_true(t.find("在 Slack 中打开此 app") is Some(_))
+  // its permissions unfolded: by section, the one only admins allow marked
+  t.click(Button, label="权限 · 已开启 4 / 5 项")
+  t.frame()
+  for w in ["文件和文档", "主动发私信", "需管理员"] {
+    assert_true(t.find(w) is Some(_), msg=w + ": " + t.words().map(fn(w) { w.0 }).join("|"))
+  }
+  // all turned on: 应用 writes the draft with what it started from
+  let (ax, ay) = t.find("全部打开").unwrap()
+  t.tap(ax, ay)
+  t.frame()
+  t.click(Button, label="应用到 Slack")
+  t.frame()
+  let put = named(calls, "connect.putSlackApp")
+  assert_eq(put.length(), 1)
+  let p = Some(put[0].params)
+  assert_true(flag(field(field(p, "input"), "groups"), "connect"), msg="its draft")
+  assert_true(!flag(field(field(p, "from"), "groups"), "connect"), msg="what it started from")
+}
+
+///|
 test "wide: 用量 as the web's: what it counts beside its title, who spent it the list shown first, how it is counted at its foot" {
   let calls : Array[Made] = []
   let t = wide_tester(calls)

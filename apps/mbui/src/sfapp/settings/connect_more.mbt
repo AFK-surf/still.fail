@@ -1694,29 +1694,6 @@ fn app_form(c : @ui.Ctx, core : Core, station : String, connect : String, d : Ap
 }
 
 ///|
-/// A colour written #RRGGBB, as a colour; None for anything else.
-fn hex_color(s : String) -> Int64? {
-  if s.length() != 7 || !s.has_prefix("#") {
-    return None
-  }
-  let mut v = 0L
-  for i in 1..<7 {
-    let ch = s.unsafe_get(i).to_int()
-    let d = if ch >= 48 && ch <= 57 {
-      ch - 48
-    } else if ch >= 65 && ch <= 70 {
-      ch - 55
-    } else if ch >= 97 && ch <= 102 {
-      ch - 87
-    } else {
-      return None
-    }
-    v = v * 16L + d.to_int64()
-  }
-  Some((v << 8) | 0xFFL)
-}
-
-///|
 /// A flow's step's button to go on, at its end: `run` as it is tapped.
 fn flow_next(c : @ui.Ctx, key : String, label : String, enabled : Bool, busy : Bool, run : () -> Unit) -> Unit {
   c.box(dir=Row, w=Fill(1.0), justify=JEnd, fn() {
