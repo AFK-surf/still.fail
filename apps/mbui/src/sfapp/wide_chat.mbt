@@ -55,7 +55,7 @@ fn wide_chat_page(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef) -> Unit
 ///|
 /// A row of the 文件 tab let go over the chat (box `pane`): into draft `key` (ChatSide.tsx useChatDrop).
 fn chat_drop(c : @ui.Ctx, src : Source, key : String, pane : Int) -> Unit {
-  match files_tab_take_drop(c) {
+  match @sfdesk.tab_take_drop(c) {
     Some((item, x, y)) if within(c.rect_of(pane), x, y) => refs_put(src, key, [item])
     _ => ()
   }
@@ -74,7 +74,7 @@ fn within(r : (Double, Double, Double, Double)?, x : Double, y : Double) -> Bool
 /// A row of the 文件 tab carried over the chat (box `pane`; ChatSide.tsx DropHint, ChatPage.css.ts dropHint): the chat
 /// frosted over under its composer, the row's mark twice a card's and 松开以添加到消息 in its middle.
 fn drop_hint(c : @ui.Ctx, pane : Int) -> Unit {
-  let item = match files_tab_dragging() {
+  let item = match @sfdesk.dragged() {
     Some(i) => i
     None => return
   }

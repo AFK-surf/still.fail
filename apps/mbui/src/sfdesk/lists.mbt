@@ -7,10 +7,11 @@
 
 ///|
 /// The sidebar `width` wide (its 8 at the left over the rail's empty side): the chats' lists (奏 and 已归档 among them)
-/// for the chats' places; a place's own (the app's: the settings', the files', the stations', the profiles').
+/// for the chats' places; the files' (files_nav.mbt); a place's own (the app's: the settings', the stations', the profiles').
 fn sidebar(c : @ui.Ctx, src : Source, w : Workspace, pages : Pages, width : Double) -> Unit {
   match lit_place() {
-    "settings" | "files" | "stations" | "profiles" => (pages.side)(c, src, w, width)
+    "files" => files_nav(c, src, w.id)
+    "settings" | "stations" | "profiles" => (pages.side)(c, src, w, width)
     _ => lists_side(c, src, w, pages, width)
   }
 }

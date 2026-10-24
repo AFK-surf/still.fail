@@ -15,6 +15,8 @@ pub fn reset() -> Unit {
   pane_reset()
   drag_reset()
   transfers_reset()
+  tab_reset()
+  dialogs_reset()
   drive_reset()
   shell_reset()
   nav_reset()

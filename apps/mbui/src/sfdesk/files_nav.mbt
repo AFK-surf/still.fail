@@ -2,18 +2,7 @@
 // hand (个人收藏, of any station: favorites.mbt), then every station of the workspace with a drive, a row each (online or
 // not, whether it is this machine, how full its disk is), opened to its places (its home, the home's own folders, its
 // disks), then the folders the stations pin for everyone (团队共享). A row opens its folder in the side in front;
-// something dragged onto one goes into it, and a folder dragged onto 个人收藏 is kept there (what is dragged: the app's,
-// DeskDrag).
-
-///|
-/// What the sidebar's page gives it: its band's first row (the window's buttons' or a margin: the sidebar's), where a
-/// row goes (the side in front moved there), and the picker of a folder to pin (Pin 文件夹, for one who browses
-/// everywhere on a station up: those given).
-pub(all) struct FilesNavAround {
-  top : (@ui.Ctx) -> Unit
-  go : (DriveAt) -> Unit
-  pin : (Array[DvStation]) -> Unit
-}
+// something dragged onto one goes into it, and a folder dragged onto 个人收藏 is kept there (drag.mbt).
 
 ///|
 /// What the sidebar holds: the stations opened (to their places), each station's places as read (asked once).
@@ -72,7 +61,7 @@ pub fn drive_start(s : DvStation) -> String? {
 
 ///|
 /// The files' sidebar of workspace `ws` (FilesNav).
-pub fn files_nav(c : @ui.Ctx, src : Source, ws : String, around : FilesNavAround) -> Unit {
+pub fn files_nav(c : @ui.Ctx, src : Source, ws : String) -> Unit {
   // what is dragged over it moved on or let go
   drag_frame(c, src, ws)
   let t = @sf.theme()
@@ -94,12 +83,12 @@ pub fn files_nav(c : @ui.Ctx, src : Source, ws : String, around : FilesNavAround
   }
   let writes = fn(s : DvStation) { dv_rights(src, ws, Some(s)).write }
   c.box(style=nav_side, fn() {
-    (around.top)(c)
+    side_top(c)
     c.box(style=nav_list, fn() {
-      // Pin 文件夹 (useAddFolder): on a station up whose viewer browses everywhere, its picker
-      let pins = stations.filter(fn(s) { s.anywhere && s.online })
+      // Pin 文件夹 (useAddFolder): the folders of the one station it can be done on, else which first
+      let pins = pin_stations(src, ws)
       if pins.length() > 0 {
-        nav_action(c, "files/pin", @sf.t("web-pages.drive.addRoot"), Some(fn() { (around.pin)(pins) }))
+        nav_action(c, "files/pin", @sf.t("web-pages.drive.addRoot"), Some(fn() { add_folder(pins) }))
       }
       match (known, error) {
         (None, Some(e)) => c.text(e, style=nav_trouble) |> ignore
@@ -140,7 +129,7 @@ pub fn files_nav(c : @ui.Ctx, src : Source, ws : String, around : FilesNavAround
                     })
                     c.semantics(ub, Button, id=rid, label=@sf.t("web-pages.files.unfavorite", args=[("name", f.name)]))
                   }) {
-                  (around.go)(into)
+                  files_go(into)
                 }
               })
             }
@@ -154,7 +143,7 @@ pub fn files_nav(c : @ui.Ctx, src : Source, ws : String, around : FilesNavAround
         nav_heading(c, "Station")
       }
       for s in stations {
-        station_row(c, src, s, s.station == here, writes(s), lit, around)
+        station_row(c, src, s, s.station == here, writes(s), lit)
       }
       // 团队共享: the folders each station pins
       let pinned : Array[(DvStation, DvRoot)] = []
@@ -176,7 +165,7 @@ pub fn files_nav(c : @ui.Ctx, src : Source, ws : String, around : FilesNavAround
               nav_words(c, name, color?=if s.online { None } else { Some(t.p.muted) })
               c.text(s.name, style=nav_meta) |> ignore
             }) {
-            (around.go)(into)
+            files_go(into)
           }
         })
       }
@@ -196,7 +185,6 @@ fn station_row(
   here : Bool,
   write : Bool,
   lit : (String, String, String) -> Bool,
-  around : FilesNavAround,
 ) -> Unit {
   let t = @sf.theme()
   let open = nav.open.contains(s.station)
@@ -242,7 +230,7 @@ fn station_row(
           },
         ) {
         match start {
-          Some(r) => (around.go)({ station: s.station, root: Some(r), path: "" })
+          Some(r) => files_go({ station: s.station, root: Some(r), path: "" })
           None => ()
         }
       }
@@ -290,7 +278,7 @@ fn station_row(
             @sf.icon(c, if disk { "disk" } else { "folder" }, size=nav_icon, color=t.p.muted) |> ignore
             nav_words(c, name, color?=if s.online { None } else { Some(t.p.muted) })
           }) {
-          (around.go)(into)
+          files_go(into)
         }
       })
     }

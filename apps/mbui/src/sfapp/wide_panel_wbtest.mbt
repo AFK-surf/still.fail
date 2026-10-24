@@ -94,7 +94,7 @@ test "wide: Station 文件 from the chat's \"…\" beside it (kept by the core: 
   // its tab, and the station's home in it at the pane's right
   assert_true(t.find("主目录") is Some(_))
   // a file's menu: 添加到消息, into the chat's draft, named by its path
-  ftab.places["ws1"] = Some({ station: "ws1/st1", root: Some(fix_docs), path: "" })
+  @sfdesk.tab_place_set("ws1", Some({ station: "ws1/st1", root: Some(fix_docs), path: "" }))
   t.frame()
   let (x, y) = match t.find("发布清单.md") {
     Some(at) => at
@@ -139,7 +139,7 @@ test "wide: a new chat's Station 文件 beside it (NewChat.tsx): kept open, clos
   t.run_for(side_in_ms)
   assert_true(t.find("主目录") is Some(_))
   // a file's 添加到消息: into the new chat's draft, named by its path
-  ftab.places["ws1"] = Some({ station: "ws1/st1", root: Some(fix_docs), path: "" })
+  @sfdesk.tab_place_set("ws1", Some({ station: "ws1/st1", root: Some(fix_docs), path: "" }))
   t.frame()
   let (x, y) = match t.find("发布清单.md") {
     Some(at) => at

@@ -1584,3 +1584,24 @@ test "wide: 文件's tabs as the core keeps them (filesTabs, files.tabs): the ad
   assert_eq(acts().filter(fn(a) { a == "close" }).length(), 1)
   assert_eq(t.all(Tab).length(), 0, msg="one tab left")
 }
+
+///|
+test "wide: 文件's Pin 文件夹 is the web's (Drive.tsx useAddFolder, PickerDialog): which station, then its folders from its home, pinned (drive.setRoots)" {
+  let calls : Array[Made] = []
+  let t = files_dragging(calls)
+  t.tap_text("Pin 文件夹")
+  t.frame()
+  // (two stations it can be done on: which first)
+  assert_true(t.find("选择一台 station，然后选择其中要 pin 的文件夹") is Some(_), msg="which station")
+  t.click(Button, label="Studio")
+  t.frame()
+  t.frame()
+  assert_true(t.find("从 station 的主目录开始，进入要 pin 的文件夹后选择它") is Some(_), msg="the picker")
+  assert_true(named(calls, "drive.folders").length() > 0, msg="its folders asked")
+  t.frame()
+  t.click(Button, label="Pin 这个文件夹")
+  t.frame()
+  let set = named(calls, "drive.setRoots")
+  assert_eq(set.length(), 1)
+  assert_eq(text(Some(set[0].params), "station"), "ws1/st1")
+}
