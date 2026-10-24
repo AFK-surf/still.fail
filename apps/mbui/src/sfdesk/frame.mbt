@@ -629,26 +629,31 @@ pub fn frame(
   // what the page or the sidebar takes back for (a sheet, a menu, a step of a page's) goes back before the stack does
   let took = c.took_back(fn() {
     if wide.tape {
-      // on the tape, on the ground its panels stand on, each put where the tape has got: the page's a panel of its own,
-      // apart from the sidebar's (6 in from the bars, its corner the sidebar's panel's, a line round it), and a chat's
-      // side panel open after it, 8 from it, as high
+      // on the tape, on the ground its panels stand on, each put where it is on the tape and drawn moved as far as the
+      // tape has got (tx: moved as a whole, nothing in it laid out again frame by frame as the tape moves): the page's a
+      // panel of its own, apart from the sidebar's (6 in from the bars, its corner the sidebar's panel's, a line round
+      // it), and a chat's side panel open after it, 8 from it, as high
       c.box(style=frame_tape, fn() {
         // a right click in it: what is picked copied (context_menu.mbt)
         context_page(c, page_id)
-        c.box(
+        let pane = c.box(
           style=page_apart.then(@ui.style(w=Fixed(main_w), h=Fixed(panel_h))),
-          left=tape_x + col,
+          left=col,
           top=panel_top,
+          tx=tape_x,
           id=page_id,
           fn() { page_in(panel_h) },
         )
-        |> ignore
+        // what moves in the page of its own (the composer) takes its place from the page's foot: the tape moving the
+        // page, a keyboard making it shorter, move none of it (it goes with the page, at once)
+        @motion.scope(c, pane, bottom=true)
         match panel_of {
           Some(r) =>
             c.box(
               style=page_apart.then(@ui.style(w=Fixed(panel_w), h=Fixed(panel_h))),
-              left=tape_x + col + main_w + closed_bar_gap,
+              left=col + main_w + closed_bar_gap,
               top=panel_top,
+              tx=tape_x,
               fn() { c.sized(panel_w, panel_h, fn() { tape_side(c, src, w, r) }) },
             )
             |> ignore
@@ -664,13 +669,15 @@ pub fn frame(
         // a right click in it: what is picked copied (context_menu.mbt)
         context_page(c, page_id)
         // (the window cutting what goes past its edge)
-        c.box(style=frame_main.then(@ui.style(w=Fixed(main_w))), id=page_id, fn() {
+        let pane = c.box(style=frame_main.then(@ui.style(w=Fixed(main_w))), id=page_id, fn() {
           if top > 0.0 {
             c.box(style=@ui.style(h=Fixed(top)), fn() {  }) |> ignore
           }
           page_in(page_h)
         })
-        |> ignore
+        // (what moves in the page of its own takes its place from the page's foot: a keyboard, the sidebar moving the
+        // page aside, move none of it)
+        @motion.scope(c, pane, bottom=true)
       })
       |> ignore
     }
@@ -852,8 +859,9 @@ fn tape_veils(
         style=tape_veil.then(
           @ui.style(w=Fixed(width), h=Fixed(h), bg=Data(@sf.alpha(t.p.overlay, tape_veil_share * k))),
         ),
-        left=x + left,
+        left~,
         top~,
+        tx=x,
         id~,
         fn() {  },
       )

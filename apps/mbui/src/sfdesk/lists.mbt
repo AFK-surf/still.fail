@@ -82,7 +82,8 @@ fn lists_foot(c : @ui.Ctx, src : Source, w : Workspace, pages : Pages) -> Unit {
     return
   }
   c.box(style=foot_fill, fn() {
-    c.box(style=foot_band, glass=@sf.glass_floating(tint=@sf.mix(closed_ground(), wide.band, t.p.sidebar)), fn() {
+    // (on the sidebar's own ground, whole, as the band over the lists: lists_band)
+    c.box(style=foot_band.then(@ui.style(bg=Data(@sf.mix(closed_ground(), wide.band, t.p.sidebar)))), fn() {
       match trouble {
         Some(Object(_)) => {
           let go = c.id("side/station-trouble")

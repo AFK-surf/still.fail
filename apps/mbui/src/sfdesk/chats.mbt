@@ -211,13 +211,13 @@ fn side_held(c : @ui.Ctx, key : String) -> Bool {
 
 ///|
 /// The band over the lists (SidebarList.tsx NavTop): its top row, then 新建对话 and the filter (SidebarActions.tsx),
-/// then 待处理 where the rail has no bell; the sidebar's own ground at 72% over a 20px blur (Sidebar.css.ts band), the
-/// closed bar's as it closes (moved with it).
+/// then 待处理 where the rail has no bell; on the sidebar's own ground, whole (no glass: asked, 2026-10-24), the closed
+/// bar's as it closes (moved with it).
 fn lists_band(c : @ui.Ctx, src : Source, w : Workspace, pages : Pages) -> Unit {
   let t = @sf.theme()
   let filter = filter_of(src, w.id)
   let (view, _) = chats_of(src, w.id, "all")
-  c.box(style=side_full, glass=@sf.glass_floating(tint=@sf.mix(closed_ground(), wide.band, t.p.sidebar)), fn() {
+  c.box(style=side_full.then(@ui.style(bg=Data(@sf.mix(closed_ground(), wide.band, t.p.sidebar)))), fn() {
     side_top(c)
     // in the closed bar, what stands in its top right corner (the filter) 6 from its top and side, the band ending 6
     // under it (Sidebar.css.ts navNew, closed)
