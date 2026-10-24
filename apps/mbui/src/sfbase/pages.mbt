@@ -46,12 +46,14 @@ pub(all) enum Page {
 ///|
 /// What the frame a page is shown in gives it (the stack's, the pane's): where back goes, said as its words (None:
 /// nowhere, the page at the stack's root or beside a list that is the way back), how far down the page starts under
-/// what stands over it (the status bar), and the room it keeps at its foot (the navigation bar, the bottom bar). The page
-/// draws its bar and what it shows within these and works none of them out itself.
+/// what stands over it (the status bar, a place's top bar), the room it keeps at its foot (the navigation bar, the
+/// bottom bar), and whether the frame's own bar names the page already (a place's top page under Home's top bar: no
+/// title of its own then). The page draws its bar and what it shows within these and works none of them out itself.
 pub(all) struct PageFrame {
   back : String?
   top : Double
   foot : Double
+  named : Bool
 }
 
 ///|

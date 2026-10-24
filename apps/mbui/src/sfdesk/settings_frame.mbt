@@ -24,6 +24,7 @@ fn setting_page(c : @ui.Ctx, src : Source, w : Workspace, route : Route) -> Unit
     },
     top: 0.0,
     foot: 0.0,
+    named: false,
   }
   if setting_route(c, src, w, route, frame) {
     return
@@ -40,14 +41,12 @@ fn setting_page(c : @ui.Ctx, src : Source, w : Workspace, route : Route) -> Unit
     VaultItem(v, item) => vault_item_page(c, core, here, v, item)
     Connects("") => connects_page(c, src, core, here)
     Connect(station, id) => connect_page(c, src, core, here, station, id)
-    Memories => memories_page(c, core, here)
     Usage => usage_page(c, core, here)
     UsagePrices(days) => usage_prices_page(c, core, here, days)
     Station(a) => station_page(c, core, here, a)
     Profile(a, id) => profile_page(c, core, here, a, id)
     NewProfile(a) => add_profile_page(c, core, here, a)
     PickModels(a, id) => pick_models_page(c, core, here, a, id)
-    Memory(a) => memory_page(c, core, here, a)
     MemoryDoc(a, skill, at) => memory_doc_page(c, core, a, skill, at)
     AutoDecisions => decisions_page(c, core, here)
     AutoCompletion => completion_page(c, core, here)
@@ -68,14 +67,17 @@ fn setting_page(c : @ui.Ctx, src : Source, w : Workspace, route : Route) -> Unit
 /// frame's pane: back, the room over and under it). False for a route whose pages are not one yet (its frame draws its
 /// own copy).
 pub fn setting_route(c : @ui.Ctx, src : Source, w : Workspace, route : Route, frame : PageFrame) -> Bool {
-  if !(route is (About | Changelog)) {
+  if !(route is (About | Changelog | Memories | Memory(_))) {
     return false
   }
   let core = settings_core(src, w)
-  @settings.frame(core, @settings.here_of(core, w.id, w.name))
+  let here = @settings.here_of(core, w.id, w.name)
+  @settings.frame(core, here)
   match route {
     About => about_page(c, core, frame)
     Changelog => changelog_page(c, core, frame)
+    Memories => memories_page(c, core, here, frame)
+    Memory(a) => memory_page(c, core, here, frame, a)
     _ => ()
   }
   true

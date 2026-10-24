@@ -72,8 +72,6 @@ fn route_page(c : @ui.Ctx, core : Core, here : Here, route : Route) -> Unit {
     ProfileModels(a, id) => profile_models_page(c, core, here, a, id)
     Connects(only) => connects_page(c, core, here, only)
     Connect(a, id) => connect_page(c, core, here, a, id)
-    Memories => memories_page(c, core, here)
-    Memory(a) => memory_page(c, core, here, a)
     MemoryDoc(a, skill, at) => memory_doc_page(c, core, a, skill, at)
     Usage => usage_page(c, core, here)
     Archive => archive_page(c, core, here)
@@ -91,7 +89,7 @@ fn route_page(c : @ui.Ctx, core : Core, here : Here, route : Route) -> Unit {
     KeptFiles => kept_page(c, core)
     KeptChat(s, thread) => kept_chat_page(c, core, s, thread)
     // one page for every frame (src/sfdesk about.mbt), drawn by the frame's setting_route
-    Changelog | About => ()
+    Changelog | About | Memories | Memory(_) => ()
     LocalStation => local_station_page(c, core)
     // the desktop's own, drawn by its frame (src/sfdesk)
     Shortcuts | Version | Notifications | Permissions | Archiving | StationArchiving(_) => ()

@@ -556,6 +556,7 @@ fn setting_page(c : @ui.Ctx, src : Source, w : Workspace, r : @settings.Route) -
     },
     top: status_top(),
     foot: nav_foot(),
+    named: false,
   }
   if !@sfdesk.setting_route(c, src, w, r, frame) {
     let core = settings_core(src, w)

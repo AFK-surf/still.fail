@@ -1206,6 +1206,7 @@ export const SHAPES: Record<string, Shape> = {
     ["files", vec("SkillDoc"), { default: true, doc: "Its other files (absent from a station before them)." }],
     ["share", opt("SkillShare"), { doc: "Shared with the workspace's other stations, or another station's (absent: neither)." }],
     ["kindText", "String", { default: true, doc: "What kind it is, in words: 项目记忆, station 内置, Skill." }],
+    ["group", "String", { default: true, doc: "Which part of the memory's list it is under: \"project\" (项目记忆), \"skill\" (其他 skill), \"builtin\"\n(the station's own, folded under them)." }],
     ["whenText", "String", { default: true, doc: "When it is read, for its page (`about`, else that it does not say)." }],
     ["line", "String", { default: true, doc: "Its row's line (`brief`, else that it does not say when it is used)." }],
     ["pages", vec("MemoryPage"), { default: true, doc: "Its pages to pick between: its SKILL.md (总览), then each other file." }],

@@ -22,14 +22,14 @@ import { t } from "./i18n.ts";
 export type { SkillFile, StationMemory as Memory } from "./api.ts";
 
 /** A station's memory as both screens list it: the global memory's parts (the core's), the projects', the team's
- * other skills and the station's own. */
+ * other skills and the station's own (each skill's `group`, the core's). */
 export function memoryParts(memory: Memory): { sections: MemorySection[]; projects: SkillFile[]; skills: SkillFile[]; builtin: SkillFile[] } {
   const sections = memory.global.sections ?? [];
   return {
     sections,
-    projects: memory.skills.filter((s) => s.project),
-    skills: memory.skills.filter((s) => !s.project && !s.builtin),
-    builtin: memory.skills.filter((s) => !s.project && s.builtin),
+    projects: memory.skills.filter((s) => s.group === "project"),
+    skills: memory.skills.filter((s) => s.group === "skill"),
+    builtin: memory.skills.filter((s) => s.group === "builtin"),
   };
 }
 
