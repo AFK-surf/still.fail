@@ -744,18 +744,25 @@ let sheet_ask : Double = 0.42
 /// at 28%) closing it when tapped, back, Escape, its top dragged down. Whether it is open, and whether it is drawn.
 fn present_sheet(c : @ui.Ctx, key : String, p : Presented) -> (Bool, Bool) {
   let (_, wh) = c.window_size()
+  let fit_key = "sf-present/fit/\{p.serial}"
+  // a panel taller than a sheet's most, as it was laid out: the sheet that tall, what it holds scrolling in it (as a
+  // dialog's body does), its foot in reach
+  let over = match @motion.measured(c, fit_key) {
+    Some(m) => m > wh * sheet_most
+    None => false
+  }
   let share = match p.shows {
     Pick(_, choices, _, _) if choices.length() >= pick_search_from => Some(sheet_long_pick)
     Confirm(_, _, _, _, _) => Some(sheet_confirm)
     Ask(_, _, _, _, _, _, _) => Some(sheet_ask)
     Panel(x) if x.tall > 0.0 => Some(x.tall)
+    Panel(_) if over => Some(sheet_most)
     _ => None
   }
   let grows = match p.shows {
     Panel(x) => x.grows
     _ => false
   }
-  let fit_key = "sf-present/fit/\{p.serial}"
   let h = match (share, @motion.measured(c, fit_key)) {
     (Some(s), _) => s * wh
     (None, Some(m)) => dmin(m, wh * sheet_most)
@@ -768,7 +775,7 @@ fn present_sheet(c : @ui.Ctx, key : String, p : Presented) -> (Bool, Bool) {
       Some(_) =>
         c.box(style=sheet_whole, fn() {
           sheet_grab(c)
-          sheet_body(c, key, p)
+          sheet_body(c, key, p, scrolls=over)
           sheet_foot(c)
         })
         |> ignore
@@ -807,8 +814,8 @@ fn sheet_foot(c : @ui.Ctx) -> Unit {
 }
 
 ///|
-/// What a sheet shows of `p`.
-fn sheet_body(c : @ui.Ctx, key : String, p : Presented) -> Unit {
+/// What a sheet shows of `p` (`scrolls`: a panel's body scrolling in the room left it, its foot under it in reach).
+fn sheet_body(c : @ui.Ctx, key : String, p : Presented, scrolls? : Bool = false) -> Unit {
   match p.shows {
     Menu(items, title, _) => {
       if title != "" {
@@ -893,7 +900,15 @@ fn sheet_body(c : @ui.Ctx, key : String, p : Presented) -> Unit {
       } else {
         sheet_panel
       }
-      c.box(style=room, fn() { (x.body)(c, close) }) |> ignore
+      if scrolls && x.tall <= 0.0 {
+        c.box(style=sheet_grows, fn() {
+          c.capped(key + "/panel", wh_of(c), shrinks=true, fn() { c.box(style=room, fn() { (x.body)(c, close) }) |> ignore })
+          |> ignore
+        })
+        |> ignore
+      } else {
+        c.box(style=room, fn() { (x.body)(c, close) }) |> ignore
+      }
       match x.foot {
         Some(f) => c.box(style=sheet_foot_at, fn() { f(c, close) }) |> ignore
         None => ()

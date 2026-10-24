@@ -29,13 +29,10 @@ fn setting_page(c : @ui.Ctx, src : Source, w : Workspace, route : Route) -> Unit
   if setting_route(c, src, w, route, frame) {
     return
   }
-  @settings.desk_vault.val = Some(desk_vault)
   @settings.frame(core, here)
   settings_fixture(core)
   match route {
     Appearance => appearance_page(c, core)
-    Vault => vault_page(c, core, here)
-    VaultItem(v, item) => vault_item_page(c, core, here, v, item)
     Connects("") => connects_page(c, src, core, here)
     Connect(station, id) => connect_page(c, src, core, here, station, id)
     Station(a) => station_page(c, core, here, a)
@@ -54,12 +51,13 @@ fn setting_page(c : @ui.Ctx, src : Source, w : Workspace, route : Route) -> Unit
 /// frame's pane: back, the room over and under it). False for a route whose pages are not one yet (its frame draws its
 /// own copy).
 pub fn setting_route(c : @ui.Ctx, src : Source, w : Workspace, route : Route, frame : PageFrame) -> Bool {
-  if !(route is (About | Changelog | Memories | Memory(_) | AutoDecisions | Permissions | Version | UsagePrices(_) | Usage | Archiving | StationArchiving(_) | Notifications | PickModels(_, _) | ProfileModels(_, _) | Shortcuts | Me | Workspace | Security | SecurityOpen)) {
+  if !(route is (About | Changelog | Memories | Memory(_) | AutoDecisions | Permissions | Version | UsagePrices(_) | Usage | Archiving | StationArchiving(_) | Notifications | PickModels(_, _) | ProfileModels(_, _) | Shortcuts | Me | Workspace | Security | SecurityOpen | Vault | VaultItem(_, _))) {
     return false
   }
   let core = settings_core(src, w)
   let here = @settings.here_of(core, w.id, w.name)
   @settings.frame(core, here)
+  settings_fixture(core)
   match route {
     About => about_page(c, core, frame)
     Changelog => changelog_page(c, core, frame)
@@ -80,20 +78,11 @@ pub fn setting_route(c : @ui.Ctx, src : Source, w : Workspace, route : Route, fr
     Workspace => workspace_page(c, core, here, frame)
     Security => security_page(c, core, here, frame)
     SecurityOpen => security_open_page(c, core, here, frame)
+    Vault => vault_page(c, core, here, frame)
+    VaultItem(v, item) => vault_item_page(c, core, here, frame, v, item)
     _ => ()
   }
   true
-}
-
-///|
-/// The vault's dialogs, for the settings' pages not ported yet (@settings.desk_vault).
-// kept across runs: a value (no field of it changes)
-let desk_vault : @settings.DeskVault = {
-  add: vault_add_dialog,
-  editor: fn(core, ws, vault, editing, kind, plain) {
-    vault_editor_dialog(core, ws, vault, editing, kind~, plain~, kinds=kind == "")
-  },
-  recover: vault_recover_dialog,
 }
 
 ///|
@@ -116,6 +105,9 @@ fn settings_fixture(core : Core) -> Unit {
     "lock-join" => join_dialog(core, "ws1", "st2", "MBA")
     "lock-off" => turn_off_dialog(core, "ws1", "星火工作室")
     "local-fonts" => local_open.val = true
+    "vault-add" => vault_add_dialog(core, @settings.here_of(core, "ws1", "星火工作室"))
+    "vault-editor" => vault_editor_dialog(core, "ws1", "v1", None, kind="token")
+    "vault-recover" => vault_recover_dialog(core, "ws1")
     _ => ()
   }
 }

@@ -342,6 +342,14 @@ pub fn Tester::locate(self : Tester, what : String) -> Array[(Double, Double)] {
 }
 
 ///|
+/// Where `what` is on screen that a finger reaches (not under what lies over it: a sheet, a scrim), as a scripted run's
+/// tap finds it (drive.mbt reachable): the same press in a test as in the run.
+pub fn Tester::reachable(self : Tester, what : String) -> Array[(Double, Double)] {
+  ignore(self)
+  reachable(g(), what)
+}
+
+///|
 /// The focused field's words ("" when none is focused).
 pub fn Tester::field_words(self : Tester) -> String {
   ignore(self)

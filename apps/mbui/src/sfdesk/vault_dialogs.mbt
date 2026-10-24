@@ -145,13 +145,13 @@ fn vault_editor_dialog(
       }
       input(c, "name", @sf.t("web-pages.vault.editor.name"), @sf.t("web-pages.vault.editor.namePlaceholder"), false, false, "")
       match k {
-        "token" => input(c, "value", @sf.t("web-pages.vault.editor.value"), "", true, false, "")
+        "token" => input(c, "value", @sf.t("web-pages.vault.editor.value"), "ghp_…", true, false, "")
         "ssh_key" => {
           input(c, "private_key", @sf.t("web-pages.vault.editor.privateKey"), "-----BEGIN OPENSSH PRIVATE KEY-----", false, true, "")
           input(c, "public_key", @sf.t("web-pages.vault.editor.publicKey"), "ssh-ed25519 AAAA…", false, false, "")
         }
         _ => {
-          input(c, "username", @sf.t("web-pages.vault.editor.username"), "", false, false, "")
+          input(c, "username", @sf.t("web-pages.vault.editor.username"), "name@example.com", false, false, "")
           input(c, "password", @sf.t("web-pages.vault.editor.password"), "", true, false, "")
           input(c, "totp", @sf.t("web-pages.vault.editor.totp"), "", true, false, "")
         }
