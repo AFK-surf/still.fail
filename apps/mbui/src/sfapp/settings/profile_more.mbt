@@ -897,18 +897,6 @@ fn open_pick_share(_core : Core, s : Json?, p : Json?, stations : Array[Json], a
 }
 
 ///|
-/// The provider a sign-in is with, by name (SignIn's provider).
-fn provider_of(p : Json?) -> String {
-  if text(field(p, "access"), "kind") == "opencode-go" {
-    return "OpenCode"
-  }
-  if text(field(p, "access"), "provider") == "kimi-code" {
-    return "Kimi"
-  }
-  provider_named(text(p, "runtime"))
-}
-
-///|
 /// What a sign-in's sheet keeps while it is up: the code typed (by the sign-in's id), whether its link was copied, the
 /// command to run by hand shown.
 priv struct LoginState {
@@ -982,7 +970,7 @@ fn profile_sign_in(c : @ui.Ctx, core : Core, station : String, p : Json?, head :
   let job = field(p, "login")
   let state = text(job, "state")
   let active = job is Some(Object(_)) && signing_in.contains(state)
-  let provider = provider_of(p)
+  let provider = text(p, "signInProvider")
   let k = station + "/" + id
   // signed in a moment ago (seen under way before): said so
   match login_state.seen.get(k) {

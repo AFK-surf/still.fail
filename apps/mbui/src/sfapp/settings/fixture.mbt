@@ -309,9 +309,7 @@ fn fx_profile(id : String, name : String, kind : String, tone : String, check : 
     "checkText": str(check),
     "checkTone": str(tone),
     // (the core's words of it: present.ts profile)
-    "kindText": str(if kind == "subscription" { "订阅账号" } else { "Anthropic API" }),
     "signInProvider": str(if group == "chatgpt" { "ChatGPT" } else { "Claude" }),
-    "checkLine": str("订阅有效"),
     "group": str(group),
     "groupTitle": str(title),
     "makers": obj([]),
@@ -341,6 +339,32 @@ fn fx_profile(id : String, name : String, kind : String, tone : String, check : 
   for kv in more {
     p[kv.0] = kv.1
   }
+  // (the core's words of it: present.ts profile, as it is after `more`)
+  let pv = Some(Json::object(p))
+  if !p.contains("kindText") {
+    p["kindText"] = str(
+      if flag(pv, "machine") {
+        "终端里的登录"
+      } else if text(pv, "providerName") != "" {
+        text(pv, "providerName")
+      } else {
+        match kind {
+          "subscription" => "订阅账号"
+          "anthropic-api" => "Anthropic API"
+          "opencode-go" => "OpenCode Go"
+          "api-provider" => "API 服务商"
+          "env" => "自定义环境变量"
+          _ => ""
+        }
+      },
+    )
+  }
+  p["checkLine"] = str(
+    match field(pv, "check") {
+      Some(Object(_)) => text(field(pv, "check"), "detail").replace(old="可用，", new="")
+      _ => "尚未检查"
+    },
+  )
   Json::object(p)
 }
 
@@ -665,6 +689,9 @@ fn fx_station(address : String) -> Json {
                 ("updatable", Json::boolean(true)),
                 ("state", str("idle")),
                 ("checkedAt", Json::number(1.0)),
+                // (the core's words of it: present.ts software)
+                ("shownText", str("0.1.1288")),
+                ("tipText", str("")),
               ]),
               obj([
                 ("id", str("claude")),
@@ -676,6 +703,8 @@ fn fx_station(address : String) -> Json {
                 ("updatable", Json::boolean(true)),
                 ("state", str("idle")),
                 ("checkedAt", Json::number(1.0)),
+                ("shownText", str("2.1.4")),
+                ("tipText", str("已是最新")),
               ]),
               obj([
                 ("id", str("codex")),
@@ -685,6 +714,8 @@ fn fx_station(address : String) -> Json {
                 ("updatable", Json::boolean(true)),
                 ("state", str("idle")),
                 ("checkedAt", Json::number(1.0)),
+                ("shownText", str("未安装")),
+                ("tipText", str("")),
               ]),
             ],
           ),

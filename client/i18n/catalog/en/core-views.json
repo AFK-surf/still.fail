@@ -560,7 +560,7 @@
   "core-views.software.unknown": "Unknown",
   "core-views.software.not_installed": "Not installed",
   "core-views.software.latest": "Up to date",
-  "core-views.software.check_failed_retry": "Update check failed. Click \"Check now\" to retry.",
+  "core-views.software.check_failed_retry": "Update check failed. Choose “Check for updates” to retry.",
   "core-views.software.updating": "Updating",
   "core-views.software.installing": "Installing",
   "core-views.software.update_failed": "Update failed",

@@ -14,19 +14,6 @@ fn quota_trouble(q : Json?) -> String {
 }
 
 ///|
-/// How a profile reaches its model service, in a word (Words.kt ACCESS_LABEL).
-fn access_label(kind : String) -> String {
-  match kind {
-    "subscription" => tr("android-misc.access.subscription")
-    "opencode-go" => "OpenCode Go"
-    "anthropic-api" => "Anthropic API"
-    "api-provider" => tr("common.provider.title")
-    "env" => tr("android-misc.access.env")
-    k => k
-  }
-}
-
-///|
 /// A profile's allowance in a line (Parts.kt QuotaChips): a box per window, what is left in it, its mark when there is
 /// more than one; `small`, a lower line (a chat's agents, an execution's notes); `gap` apart; `tip`: told each one's
 /// box (its id) and window, for words over it while it is pointed at (the web's Tip over each).
@@ -260,7 +247,7 @@ fn workspace_profiles(c : @ui.Ctx, core : Core, here : Here) -> Array[() -> Unit
                       [
                         text(p, "checkText"),
                         match text(p, "usesText") {
-                          "" => access_label(text(field(p, "access"), "kind"))
+                          "" => text(p, "kindText")
                           u => u
                         },
                       ],
@@ -320,16 +307,15 @@ fn profile_row(c : @ui.Ctx, core : Core, station : String, p : Json) -> Unit {
           c.text(text(pv, "name"), size=15.0, color=t.p.text, wrap=false, w=@sf.line_left, line=21.0) |> ignore
         })
         |> ignore
-        let kind = text(field(pv, "access"), "kind")
         c.text(
           join(
             [
               text(pv, "checkText"),
               if flag(pv, "machine") {
-                tr("android-settings.profile.machine")
+                text(pv, "kindText")
               } else {
                 match text(pv, "usesText") {
-                  "" => access_label(kind)
+                  "" => text(pv, "kindText")
                   u => u
                 }
               },
@@ -410,14 +396,7 @@ fn profile_page(c : @ui.Ctx, core : Core, here : Here, address : String, id : St
         }
         nav_bar(c, core, text(sv, "name"), text(pv, "name"), trailing?=if copy { None } else { Some(more) }, sub=fn() {
           c.text(
-            if flag(pv, "machine") {
-              tr("android-settings.profile.machine")
-            } else {
-              match opt_text(pv, "providerName") {
-                Some(n) => n
-                None => access_label(kind)
-              }
-            },
+            text(pv, "kindText"),
             size=11.0,
             color=t.p.muted,
             wrap=false,
@@ -537,10 +516,8 @@ fn account_status(c : @ui.Ctx, core : Core, sv : Json?, pv : Json?) -> Unit {
   let trouble = field(pv, "trouble")
   let words = text(pv, "checkText")
   let tone = text(pv, "checkTone")
-  let detail = match check {
-    Some(Object(_)) if opt_text(check, "detail") is Some(_) => strip_works(text(check, "detail"))
-    _ => tr("android-settings.profile.notChecked")
-  }
+  // its last check in a line (the core's: without the 可用 its words say)
+  let detail = text(pv, "checkLine")
   let first = match trouble {
     Some(Object(_)) if text(trouble, "title") != "" => text(trouble, "title")
     _ => if detail != "" && detail != words { detail } else { words }
@@ -622,17 +599,6 @@ let account_state_bad : @ui.TextStyle = @ui.text_style(size=Sm, leading=L5, colo
 /// Its words when it works but something is short (13, amber's ink).
 // kept across runs: a value (no field of it changes)
 let account_state_warn : @ui.TextStyle = @ui.text_style(size=Sm, leading=L5, color=Warn)
-
-///|
-/// A check's words without its leading 可用， (it is said by the pill already).
-fn strip_works(s : String) -> String {
-  for p in ["可用，", "可用,", "Works, ", "Works,"] {
-    if s.has_prefix(p) {
-      return s.unsafe_substring(start=p.length(), end=s.length()).trim(chars=" ").to_owned()
-    }
-  }
-  s
-}
 
 ///|
 /// The profile's allowance (Profiles.kt QuotaSection), the card under its account's, no title over it (its windows
