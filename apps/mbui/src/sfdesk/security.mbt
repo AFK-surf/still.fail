@@ -7,6 +7,11 @@
 
 ///|
 fn security_page(c : @ui.Ctx, core : Core, here : Here) -> Unit {
+  // turning it on (开启, the web's /settings/security/open): what it will sign, the stations and devices to choose
+  if opening_lock.val {
+    @settings.security_open_page(c, core, here)
+    return
+  }
   let topic = (core.topic)("lock", { "workspace": str(here.workspace) })
   let lock = topic.value
   let blocks : Array[() -> Unit] = []
