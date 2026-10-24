@@ -1,0 +1,15 @@
+# The chats' list on a desktop's window (old and new side by side): a row pointed at, right clicked for its menu, let
+# be; the filter's menu.
+timeout 20000
+until 新建对话
+wait 800
+hover 夜里的构建又失败了
+wait 900
+rightclick 夜里的构建又失败了
+wait 1200
+key escape
+wait 700
+tap icon:filter
+wait 1200
+key escape
+wait 800

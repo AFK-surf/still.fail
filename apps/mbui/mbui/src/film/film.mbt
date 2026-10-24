@@ -54,6 +54,12 @@ pub fn film(
     scale~,
     platform~,
     dark~,
+    // (what it is pointed with: MBUI_POINTING, finger or mouse, as a program's; else the platform's)
+    pointing?=match arg("MBUI_POINTING") {
+      "finger" => Some(@ui.Pointing::Finger)
+      "mouse" => Some(@ui.Pointing::Mouse)
+      _ => None
+    },
     // (the app's words in the language the film says: MBUI_LOCALE, as a device's)
     env=[("MBUI_TEXT_RECORD", "1"), ("MBUI_LOCALE", arg("MBUI_LOCALE"))],
     live={ host, turn: fn() { spin(1.0) } },
