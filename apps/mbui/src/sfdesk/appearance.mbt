@@ -1,40 +1,62 @@
-// 外观 on the desktop (ember web/src/pages/Appearance.tsx): what only this device keeps, how the pages look here, a
-// section each with what it is for under its title: 主题, 字体 (font_setting.mbt), 动画, 语言, files dragged into a chat,
-// and the rail changed in place. Each choice is the core's prefs (`prefs.set`), shown at once.
+// 外观, one page for every frame (web/src/pages/Appearance.tsx and mobile/Settings.tsx AppearanceScreen): how this
+// device shows still.fail, a section each: 主题, 字体, 动画, 语言; on a computer the files dragged into a chat too, and
+// laid out wide the rail changed in place (as the web's, `wideOnly`). Each choice is the core's prefs (`prefs.set`),
+// shown at once. Laid out narrow, the faces are a row that opens 字体's page (FontRow); wide, chosen here
+// (font_setting.mbt, FontSetting.tsx). When a done chat is offered to archive is 归档's (archiving.mbt), as the web's.
 
 ///|
-/// The page (AppearancePage).
-fn appearance_page(c : @ui.Ctx, core : Core) -> Unit {
+/// The page (AppearancePage, AppearanceScreen), in the frame it is given.
+fn appearance_page(c : @ui.Ctx, core : Core, frame : PageFrame) -> Unit {
+  let look = look_of(c)
   let prefs = (core.topic)("prefs", Map::new()).value
-  // a choice of a few, as a segmented switch (each its section's)
+  // a choice of a few (Segmented, Seg), its kept value or the one just chosen while the core takes it
   let choice = fn(key : String, options : Array[(String, String)], now : String) {
-    let at = match options.search_by(fn(o) { o.0 == now }) {
-      Some(i) => i
-      None => 0
+    let at = options.search_by(fn(o) { o.0 == now }).unwrap_or(0)
+    let picked = look_choice(c, look, "appearance/" + key, options.map(fn(o) { @sf.t(o.1) }), at)
+    if picked != at {
+      c.after_build("appearance/" + key, fn() { @settings.set_pref(core, key, options[picked].0) })
     }
-    // (as wide as its options, as the web's Segmented)
-    c.box(style=appearance_line, fn() {
-      let picked = @sf.segmented(c, "appearance/" + key, options.map(fn(o) { @sf.t(o.1) }), at)
-      if picked != at {
-        @settings.set_pref(core, key, options[picked].0)
+  }
+  // a section: its title over it; what it is for under its title (wide: the web's Section), under the choice (narrow:
+  // mSegNote, where the phone's says it)
+  let section = fn(title : String, note : String, narrow_note : Bool, body : () -> Unit) {
+    look_section(c, look, title, heads=true, note=if look == Wide { note } else { "" }, fn() {
+      body()
+      if look == Narrow && narrow_note && note != "" {
+        look_note(c, look, note)
       }
     })
-    |> ignore
   }
-  desk_page(c, core, "appearance", @sf.t("web-pages.appearance.title"), [
+  let blocks : Array[() -> Unit] = [
     fn() {
-      @sf.section(c, @sf.t("web-pages.appearance.theme.title"), note=@sf.t("web-pages.appearance.theme.description"), fn() {
-        // (its kept value, or the one just chosen while the core takes it)
-        choice("appearance", [("system", "web-main.appearance.system"), ("light", "web-main.appearance.light"), ("dark", "web-main.appearance.dark")], @settings.appearance(prefs))
+      section(@sf.t("web-pages.appearance.theme.title"), @sf.t("web-pages.appearance.theme.description"), false, fn() {
+        choice(
+          "appearance",
+          [("system", "web-main.appearance.system"), ("light", "web-main.appearance.light"), ("dark", "web-main.appearance.dark")],
+          @settings.appearance(prefs),
+        )
       })
     },
     fn() {
-      @sf.section(c, @sf.t("web-pages.appearance.fonts.title"), note=@sf.t("web-pages.appearance.fonts.description"), fn() {
-        font_setting(c, core)
-      })
+      match look {
+        Wide =>
+          section(@sf.t("web-pages.appearance.fonts.title"), @sf.t("web-pages.appearance.fonts.description"), false, fn() {
+            font_setting(c, core)
+          })
+        // (12 under the theme's switch, the faces' row on a card of its own: SettingsHome.kt, mobile FontRow)
+        Narrow =>
+          c.box(style=appearance_fonts_room, fn() {
+            look_group(c, look, fn() {
+              if look_link(c, look, "appearance/fonts", @sf.t("web-pages.appearance.fonts.title"), value=fonts_said(prefs)) {
+                (core.push)(Fonts)
+              }
+            })
+          })
+          |> ignore
+      }
     },
     fn() {
-      @sf.section(c, @sf.t("web-pages.appearance.motion.title"), note=@sf.t("web-pages.appearance.motion.description"), fn() {
+      section(@sf.t("web-pages.appearance.motion.title"), @sf.t("web-pages.appearance.motion.description"), true, fn() {
         choice(
           "motion",
           [("", "web-pages.appearance.motion.system"), ("reduce", "web-pages.appearance.motion.reduce"), ("full", "web-pages.appearance.motion.full")],
@@ -43,19 +65,23 @@ fn appearance_page(c : @ui.Ctx, core : Core) -> Unit {
       })
     },
     fn() {
-      @sf.section(c, @sf.t("common.language"), note=@sf.t("web-pages.appearance.language.description"), fn() {
+      section(@sf.t("common.language"), @sf.t("web-pages.appearance.language.description"), false, fn() {
         choice("language", [("", "common.language.system"), ("zh", "common.language.zh"), ("en", "common.language.en")], @settings.pref(core, "language"))
       })
     },
-    fn() {
-      // files dragged into a chat: named by their path (the default), or sent as files
-      @sf.section(c, @sf.t("web-pages.appearance.drop.title"), note=@sf.t("web-pages.appearance.drop.description"), fn() {
+  ]
+  // files dragged into a chat, a computer's: named by their path (the default), or sent as files
+  if !@sf.touch_system() {
+    blocks.push(fn() {
+      section(@sf.t("web-pages.appearance.drop.title"), @sf.t("web-pages.appearance.drop.description"), true, fn() {
         choice("dropAs", [("", "web-pages.appearance.drop.path"), ("file", "web-pages.appearance.drop.file")], @settings.pref(core, "dropAs"))
       })
-    },
-    fn() {
-      // the rail, changed where it is (rail.mbt)
-      @sf.section(c, @sf.t("web-main.rail.title"), note=@sf.t("web-main.rail.lead"), fn() {
+    })
+  }
+  // the rail, changed where it is (rail.mbt): laid out wide, where the rail is beside the page (the web's wideOnly)
+  if look == Wide {
+    blocks.push(fn() {
+      section(@sf.t("web-main.rail.title"), @sf.t("web-main.rail.lead"), false, fn() {
         c.box(style=appearance_line, fn() {
           if @sf.button(c, @sf.t("web-main.rail.customize"), key="appearance/rail") {
             wide.editing = true
@@ -63,11 +89,34 @@ fn appearance_page(c : @ui.Ctx, core : Core) -> Unit {
         })
         |> ignore
       })
-    },
-  ])
+    })
+  }
+  look_page(c, core, frame, look, "appearance", @sf.t("web-pages.appearance.title"), blocks)
+}
+
+///|
+/// The faces chosen at a glance (FontRow: their names, " · " between), or the app's own.
+fn fonts_said(prefs : Json?) -> String {
+  let faces = field(prefs, "faces")
+  let names = []
+  for place in @settings.font_places {
+    if text(field(prefs, "fonts"), place) != "" {
+      names.push(text(field(faces, place), "name"))
+    }
+  }
+  if names.is_empty() {
+    @sf.t("web-pages.appearance.fonts.default")
+  } else {
+    names.join(" · ")
+  }
 }
 
 ///|
 /// A choice's line: what it holds as wide as itself, at its start.
 // kept across runs: a value (no field of it changes)
 let appearance_line : @ui.Style = @ui.css("row w=Full align=ACenter")
+
+///|
+/// The faces' row, 12 under the theme's choice.
+// kept across runs: a value (no field of it changes)
+let appearance_fonts_room : @ui.Style = @ui.css("w=Full pt=S3")

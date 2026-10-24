@@ -58,7 +58,6 @@ let wide_heading : (Double, Double) = (14.0, 22.0)
 fn route_page(c : @ui.Ctx, core : Core, here : Here, route : Route) -> Unit {
   match route {
     Home => settings_home(c, core, here)
-    Appearance => appearance_page(c, core)
     Fonts => fonts_page(c, core)
     Stations => stations_page(c, core, here)
     Profiles(only) => profiles_page(c, core, here, only)
@@ -74,7 +73,7 @@ fn route_page(c : @ui.Ctx, core : Core, here : Here, route : Route) -> Unit {
     KeptFiles => kept_page(c, core)
     KeptChat(s, thread) => kept_chat_page(c, core, s, thread)
     // one page for every frame (src/sfdesk about.mbt), drawn by the frame's setting_route
-    Changelog | About | Memories | Memory(_) | AutoDecisions | UsagePrices(_) | Usage | PickModels(_, _) | ProfileModels(_, _) | Me | Workspace | Security | SecurityOpen | Vault | VaultItem(_, _) | Connects(_) | Connect(_, _) | Station(_) => ()
+    Appearance | Changelog | About | Memories | Memory(_) | AutoDecisions | UsagePrices(_) | Usage | PickModels(_, _) | ProfileModels(_, _) | Me | Workspace | Security | SecurityOpen | Vault | VaultItem(_, _) | Connects(_) | Connect(_, _) | Station(_) => ()
     LocalStation => local_station_page(c, core)
     // the desktop's own, drawn by its frame (src/sfdesk)
     Shortcuts | Version | Notifications | Permissions | Archiving | StationArchiving(_) => ()
@@ -499,109 +498,5 @@ fn seg_note(c : @ui.Ctx, note : String) -> Unit {
   let t = @sf.theme()
   c.box(w=Fill(1.0), pl=24.0, pr=24.0, pt=8.0, fn() { c.text(note, size=13.0, color=t.p.muted, w=Fill(1.0), line=19.5) |> ignore })
   |> ignore
-}
-
-///|
-/// How this device shows still.fail (AppearanceScreen): its theme, its motion, the language it speaks, when a done chat
-/// is offered to archive; each the core's prefs (`appearance`, `motion`, `language`, `archiveHint`).
-fn appearance_page(c : @ui.Ctx, core : Core) -> Unit {
-  let prefs = (core.topic)("prefs", Map::new()).value
-  let choice = fn(
-    key : String,
-    title : String,
-    options : Array[(String, String)],
-    now : String,
-    fallback : Int,
-    note : String,
-  ) {
-    [
-      fn() {
-        section_header(c, title, start=S6)
-        // (the wide frame's says what it is about under its head, as the web's; a phone's under its switch)
-        section_note(c, note)
-      },
-      fn() {
-        let mut at = fallback
-        for i, o in options {
-          if o.0 == now {
-            at = i
-          }
-        }
-        inset(c, fn() {
-          let picked = seg(c, key, options.map(fn(o) { tr(o.1) }), at, fill=true, height=34.0)
-          if picked != at {
-            set_pref(core, key, options[picked].0)
-          }
-        })
-        if note != "" {
-          seg_note(c, note)
-        }
-      },
-    ]
-  }
-  let hint_now = pref(core, "archiveHint")
-  let hint_key = match hint_now {
-    "off" | "reviewed" => hint_now
-    _ => "done"
-  }
-  let blocks : Array[() -> Unit] = [
-    fn() { top_back(c, core, tr("android-settings.title")) },
-    fn() { large_title(c, tr("android-settings.appearance.title")) },
-  ]
-  blocks.append(
-    choice(
-      "appearance",
-      tr("android-settings.appearance.theme"),
-      themes,
-      appearance(prefs),
-      0,
-      "",
-    ),
-  )
-  // SettingsHome.kt: 12 under the theme's switch, the faces' row on a card of its own
-  blocks.push(fn() {
-    gap(c, 12.0)
-    list_card(c, fn() { font_row(c, core) })
-  })
-  blocks.append(
-    choice(
-      "motion",
-      tr("web-pages.appearance.motion.title"),
-      [
-        ("", "web-pages.appearance.motion.system"),
-        ("reduce", "web-pages.appearance.motion.reduce"),
-        ("full", "web-pages.appearance.motion.full"),
-      ],
-      pref(core, "motion"),
-      0,
-      tr("web-pages.appearance.motion.description"),
-    ),
-  )
-  blocks.append(
-    choice(
-      "language",
-      tr("common.language"),
-      [("", "common.language.system"), ("zh", "common.language.zh"), ("en", "common.language.en")],
-      pref(core, "language"),
-      0,
-      "",
-    ),
-  )
-  blocks.append(
-    choice(
-      "archiveHint",
-      tr("web-pages.appearance.archive.title"),
-      [
-        ("off", "web-pages.appearance.archive.off"),
-        ("", "web-pages.appearance.archive.done"),
-        ("reviewed", "web-pages.appearance.archive.reviewed"),
-      ],
-      if hint_now == "done" { "" } else { hint_now },
-      1,
-      tr("web-pages.appearance.archive." + hint_key + "Hint"),
-    ),
-  )
-  blocks.push(fn() { gap(c, 30.0) })
-  scroll_page(c, "appearance", blocks)
 }
 
