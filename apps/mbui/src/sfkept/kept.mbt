@@ -242,6 +242,7 @@ let kept_answers : String =
   #|["chat.tabs","{\"kept\":null,\"agents\":[{\"session\":{\"key\":\"s-c7\"},\"jobs\":[]}],\"noChat\":false,\"session\":\"s-c7\"}",{"open":[]}]
   #|["chat.tabs","{\"kept\":null,\"agents\":[{\"session\":{\"key\":\"s-c8\"},\"jobs\":[]}],\"noChat\":false,\"session\":\"s-c8\"}",{"open":[]}]
   #|["chat.tabs","{\"kept\":null,\"agents\":[{\"session\":{\"key\":\"s-c9\"},\"jobs\":[]}],\"noChat\":false,\"session\":\"s-c9\"}",{"open":[]}]
+  #|["chat.tabs","{\"kept\":null,\"agents\":[{\"session\":{\"key\":\"s-k1\"},\"jobs\":[]}],\"noChat\":false,\"session\":\"s-k1\"}",{"open":[]}]
   #|["chat.tabs","{\"kept\":{\"tabs\":[\"file:[\\\"s-c1\\\",\\\"work/s-c1/release.html\\\",\\\"release.html\\\"]\"],\"active\":\"file:[\\\"s-c1\\\",\\\"work/s-c1/release.html\\\",\\\"release.html\\\"]\"},\"agents\":[{\"session\":{\"key\":\"s-c1\"},\"jobs\":[]}],\"noChat\":false,\"session\":\"s-c1\",\"change\":{\"action\":\"close\",\"tab\":\"file:[\\\"s-c1\\\",\\\"work/s-c1/release.html\\\",\\\"release.html\\\"]\",\"auto\":true}}",{"next":{"tabs":[]},"tabs":{"open":[]}}]
   #|["chat.tabs","{\"kept\":{\"tabs\":[\"files\"],\"active\":\"files\"},\"agents\":[],\"noChat\":false,\"session\":null,\"change\":{\"action\":\"close\",\"tab\":\"files\",\"auto\":true}}",{"next":{"tabs":[]},"tabs":{"open":[]}}]
   #|["chat.tabs","{\"kept\":{\"tabs\":[\"files\"],\"active\":\"files\"},\"agents\":[{\"session\":{\"key\":\"s-c1\"},\"jobs\":[]}],\"noChat\":false,\"session\":\"s-c1\"}",{"open":["files"],"shown":"files"}]

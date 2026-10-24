@@ -399,3 +399,55 @@ test "a page covered by one sliding in takes no press: one where its button stil
   t.run_for(nav.rest() - t.time())
   t.assert_idle()
 }
+
+///|
+/// A flat stack's view (Ctx::nav_flat), its pages put on top waiting for what they show (`ready`) at most `most` ms.
+fn flat_wait_view(nav : @ui.Nav[String], ready : Ref[Bool], most : Double) -> (@ui.Ctx) -> Unit {
+  fn(c) {
+    nav.shows_when(fn() { ready.val }, most)
+    c.nav_flat(nav, fn(p) { c.text(p, wrap=false) |> ignore }) |> ignore
+  }
+}
+
+///|
+test "nav_flat: a page put on top shows once it has what it shows, the page before staying as it was and told it left only then" {
+  let left : Array[String] = []
+  let nav = @ui.Nav::new("page one", on_leave=fn(p) { left.push(p) })
+  let ready = Ref::new(false)
+  let t = @ui.Tester::new(flat_wait_view(nav, ready, test_page_wait_ms))
+  t.draw()
+  nav.replace("page two")
+  t.draw()
+  assert_true(t.find("page one") is Some(_) && t.find("page two") is None)
+  assert_eq(left, [])
+  ready.val = true
+  t.draw()
+  assert_true(t.find("page two") is Some(_) && t.find("page one") is None)
+  assert_eq(left, ["page one"])
+  t.assert_idle()
+}
+
+///|
+test "nav_flat: a page put on top whose data never comes shows once it has waited the most" {
+  let nav = @ui.Nav::new("page one")
+  let ready = Ref::new(false)
+  let t = @ui.Tester::new(flat_wait_view(nav, ready, test_page_wait_ms))
+  t.draw()
+  nav.push("page two")
+  t.draw()
+  t.run_for(test_page_wait_ms / 2.0)
+  assert_true(t.find("page one") is Some(_) && t.find("page two") is None)
+  t.run_for(test_page_wait_ms)
+  assert_true(t.find("page two") is Some(_))
+  t.assert_idle()
+}
+
+///|
+test "nav_flat: not asked to wait (Nav::shows_when), a page put on top shows at once" {
+  let nav = @ui.Nav::new("page one")
+  let t = @ui.Tester::new(fn(c) { c.nav_flat(nav, fn(p) { c.text(p, wrap=false) |> ignore }) |> ignore })
+  t.draw()
+  nav.push("page two")
+  t.draw()
+  assert_true(t.find("page two") is Some(_))
+}

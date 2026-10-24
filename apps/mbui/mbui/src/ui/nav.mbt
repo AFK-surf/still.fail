@@ -100,6 +100,15 @@ struct Nav[P] {
   mut wait_from : Double
   mut waited : Bool
   mut held_most : Double
+  // drawn flat (Ctx::nav_flat): the page drawn there last (in frame `flat_frame`), and the page put on top since,
+  // waited for (Nav::shows_when, asked in frame `flat_asked`) from `flat_from`, `flat_most` ms at most
+  mut flat_shown : NavPage[P]?
+  mut flat_frame : Int
+  mut flat_ready : () -> Bool
+  mut flat_most : Double
+  mut flat_asked : Int
+  mut flat_for : Int
+  mut flat_from : Double
 }
 
 ///|
@@ -133,6 +142,13 @@ pub fn[P] Nav::new(
     wait_from: -1.0,
     waited: false,
     held_most: 0.0,
+    flat_shown: None,
+    flat_frame: -1,
+    flat_ready: fn() { true },
+    flat_most: 0.0,
+    flat_asked: -1,
+    flat_for: -1,
+    flat_from: -1.0,
   }
 }
 
@@ -292,6 +308,17 @@ pub fn[P] Nav::comes_when(self : Nav[P], ready : () -> Bool, most : Double) -> U
   self.t0 = nav_held
   self.held_most = most
   c.wake_at_time(self.wait_from + most)
+}
+
+///|
+/// Drawn flat (Ctx::nav_flat), the page put on top shows once it has what it shows (`ready`), `most` ms at most after
+/// it was put there (pushed, or in place of the one on top): till then the page that showed before stays, as it was,
+/// not the new one's loading look swapped for it a frame or two later (still.fail's LOCAL_MS, as Nav::comes_when holds
+/// a slide). Asked each frame its stack is drawn, before Ctx::nav_flat.
+pub fn[P] Nav::shows_when(self : Nav[P], ready : () -> Bool, most : Double) -> Unit {
+  self.flat_ready = ready
+  self.flat_most = most
+  self.flat_asked = g().frame_no
 }
 
 ///|
@@ -633,21 +660,54 @@ pub fn Ctx::take_back(self : Ctx, f : () -> Unit) -> Unit {
 /// whose pages are the same stack as a phone's (Ctx::nav draws it so on a narrow window). A page gone is forgotten
 /// (its widgets' state, `on_leave` told) as Ctx::nav forgets it; one moving is put where it was going.
 pub fn[P] Ctx::nav_flat(self : Ctx, nav : Nav[P], page : (P) -> Unit, bg? : Int64 = 0L) -> Int {
-  for e in nav.gone {
-    self.forget(e.serial)
-    (nav.on_leave)(e.page)
-  }
-  nav.gone.clear()
   if nav.mode != 0 || nav.leaving is Some(_) {
     nav.settle()
   }
   let top = nav.pages[nav.pages.length() - 1]
+  // the page put on top since the last frame drawn, waited for while that one stays (Nav::shows_when)
+  // (shown here as the last frame was drawn, or in this frame's build before: else no page shows to stay)
+  let held = match nav.flat_shown {
+    Some(shown) if shown.serial != top.serial &&
+      nav.flat_asked == self.frame_no &&
+      nav.flat_frame >= self.frame_no - 1 => {
+      if nav.flat_for != top.serial {
+        nav.flat_for = top.serial
+        nav.flat_from = self.now
+      }
+      if self.now < nav.flat_from + nav.flat_most && !(nav.flat_ready)() {
+        self.wake_at_time(nav.flat_from + nav.flat_most)
+        Some(shown)
+      } else {
+        None
+      }
+    }
+    _ => None
+  }
+  // what left the stack forgotten (and told), but the page that stays shown while the new one is waited for
+  let kept : Array[NavPage[P]] = []
+  for e in nav.gone {
+    match held {
+      Some(h) if h.serial == e.serial => kept.push(e)
+      _ => {
+        self.forget(e.serial)
+        (nav.on_leave)(e.page)
+      }
+    }
+  }
+  nav.gone.clear()
+  nav.gone.append(kept)
+  let drawn = held.unwrap_or(top)
+  nav.flat_frame = self.frame_no
+  if held is None {
+    nav.flat_shown = Some(top)
+    nav.flat_for = -1
+  }
   self.box(w=Fill(1.0), h=Fill(1.0), clip=true, bg~, fn() {
     let saved = self.owner
     let saved_stint = self.stint
-    self.owner = top.serial
-    self.stint = top.stint
-    self.scope(top.serial, fn() { page(top.page) })
+    self.owner = drawn.serial
+    self.stint = drawn.stint
+    self.scope(drawn.serial, fn() { page(drawn.page) })
     self.owner = saved
     self.stint = saved_stint
   })
