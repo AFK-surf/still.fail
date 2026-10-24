@@ -1239,6 +1239,8 @@ pub fn fixture_topic(mode : String, name : String, params : Map[String, Json]) -
           ("pending", Json::boolean(false)),
         ]),
       )
+    // what the settings say of the workspace (the core's views/settings.ts): Studio's completion rule on
+    "settings" => Some(obj([("decisionsOn", Json::number(1.0)), ("decisionsText", str("1 台 station 已启用"))]))
     "changelog" =>
       Some(
         obj([

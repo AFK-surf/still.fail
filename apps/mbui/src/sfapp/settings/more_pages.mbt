@@ -8,31 +8,6 @@
 // 自动决策
 
 ///|
-/// The automatic decisions (AutomaticDecisionsScreen): its rules, each a row to its page (one: completion).
-fn decisions_page(c : @ui.Ctx, core : Core, here : Here) -> Unit {
-  scroll_page(c, "auto-decisions", [
-    fn() { top_back(c, core, tr("android-settings.title")) },
-    fn() { large_title(c, tr("web-pages.automaticDecisions.title"), about=tr("web-pages.automaticDecisions.choosePoint")) },
-    fn() {
-      list_card(c, fn() {
-        if list_row(c, key="auto-completion", fn() {
-            c.box(w=Fill(1.0), gap=5.0, fn() {
-              c.text(tr("web-pages.automaticDecisions.completion"), size=15.0, color=@sf.theme().p.text, w=Fill(1.0), line=21.0)
-              |> ignore
-              c.text(tr("web-pages.automaticDecisions.completionShort"), size=13.0, color=@sf.theme().p.muted, w=Fill(1.0), line=18.0)
-              |> ignore
-            })
-            |> ignore
-            chevron(c)
-          }) {
-          (core.push)(AutoCompletion)
-        }
-      })
-    },
-  ])
-}
-
-///|
 /// A wait said in a line where a page's note goes.
 fn note_wait(c : @ui.Ctx, words : String, error? : Bool = false) -> Unit {
   c.box(w=Fill(1.0), pl=24.0, pr=24.0, pb=10.0, fn() { wait_line(c, words, error~) }) |> ignore

@@ -1,0 +1,8 @@
+# 自动决策 in a phone's window (sfdesk automatic_decisions.mbt, one page in every frame; the web's
+# mobile/AutomaticDecisions.tsx): MBUI_FIXTURE=settings, opened from settings' home.
+timeout 20000
+until 自动决策
+wait 1000
+tap 自动决策
+wait 1800
+exit

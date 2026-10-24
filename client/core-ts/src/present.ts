@@ -162,6 +162,7 @@ const SHAPED: Record<string, Ty> = {
   longJobs: "LongJobsView",
   profiles: "ProfilesView",
   usage: "UsageView",
+  settings: "SettingsView",
   job: "Job",
   drive: "DriveFolder",
   drivePlace: { opt: "DrivePlace" },

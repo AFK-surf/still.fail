@@ -1,0 +1,10 @@
+# 自动决策 on the desktop (sfdesk automatic_decisions.mbt; the web's AutomaticDecisions.tsx): MBUI_WIN=1280x800 over the
+# made-up chat. ⌘, then 自动决策.
+timeout 30000
+until 发消息
+wait 600
+key cmd+,
+wait 1000
+tap 自动决策
+wait 1800
+exit

@@ -1,46 +1,27 @@
-// The desktop's 自动决策 (web/src/AutomaticDecisions.tsx) on the library's parts: the decision points, each a row to
-// its page; the completion rule's page, a row for each station with its rule's controls at its end.
+// 自动决策 (web/src/AutomaticDecisions.tsx; the narrow app's mobile/AutomaticDecisions.tsx): the decision points, each
+// a row to its page, one page in every frame (page_look.mbt); the desktop's completion rule's page, a row for each
+// station with its rule's controls at its end.
 
 ///|
-/// 自动决策 (AutomaticDecisions): the point a decision is made at (the completion of a turn), what it does, how many
-/// stations have it on, a row to its page.
-fn decisions_page(c : @ui.Ctx, core : Core, here : Here) -> Unit {
-  let t = @sf.theme()
-  let stations = @settings.stations_of(core, here).value
-  desk_page(c, core, "auto-decisions", @sf.t("web-pages.automaticDecisions.title"), about=@sf.t("web-pages.automaticDecisions.choosePoint"), [
+/// 自动决策 (AutomaticDecisions; the narrow app's AutomaticDecisionsScreen): the point a decision is made at (the
+/// completion of a turn), what it does, how many stations have it on (the core's `settings`), a row to its page.
+fn decisions_page(c : @ui.Ctx, core : Core, here : Here, frame : PageFrame) -> Unit {
+  let look = look_of(c)
+  let said = (core.topic)("settings", { "scope": Json::string(here.workspace) }).value
+  look_page(c, core, frame, look, "auto-decisions", @sf.t("web-pages.automaticDecisions.title"), about=@sf.t("web-pages.automaticDecisions.choosePoint"), [
     fn() {
-      c.box(style=desk_list, fn() {
-        let id = c.id("auto-completion")
-        c.cursor(id, Hand)
-        if hit(c, id) {
+      look_group(c, look, fn() {
+        if look_link(
+            c,
+            look,
+            "auto-completion",
+            @sf.t("web-pages.automaticDecisions.completion"),
+            note=@sf.t(if look == Narrow { "web-pages.automaticDecisions.completionShort" } else { "web-pages.automaticDecisions.completionNote" }),
+            value=text(said, "decisionsText"),
+          ) {
           (core.push)(AutoCompletion)
         }
-        c.box(style=desk_list_link, id~, fn() {
-          c.box(style=desk_list_text, fn() {
-            c.text(@sf.t("web-pages.automaticDecisions.completion"), style=desk_list_title) |> ignore
-            c.text(@sf.t("web-pages.automaticDecisions.completionNote"), style=desk_note) |> ignore
-          })
-          |> ignore
-          match stations {
-            Some(Array(a)) => {
-              let on = a.filter(fn(s) { flag(field(field(field(field(Some(s), "overview"), "automaticDecisions"), "settings"), "completion"), "enabled") }).length()
-              c.text(
-                if on > 0 {
-                  @sf.t("web-pages.automaticDecisions.stationsOn", args=[("n", on.to_string())])
-                } else {
-                  @sf.t("web-pages.automaticDecisions.off")
-                },
-                style=dc_aside,
-              )
-              |> ignore
-            }
-            _ => ()
-          }
-          @sf.icon(c, "chevron-right", size=desk_chevron, color=t.p.muted) |> ignore
-        })
-        |> ignore
       })
-      |> ignore
     },
   ])
 }

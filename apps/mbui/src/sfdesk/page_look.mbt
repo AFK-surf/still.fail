@@ -232,7 +232,7 @@ let narrow_card_room : @ui.Style = @ui.css("w=Full px=S3 pb=S2_5")
 let narrow_card : @ui.Style = @ui.style(w=Full, p=S2, radius=@sf.list_card_radius, bg=Card, clip=true)
 
 ///|
-/// A row that goes somewhere: its title, what it says at its end (`value`, in the link's ink where `value_lit`), and
+/// A row that goes somewhere: its title (and `note` under it), what it says at its end (`value`, in the link's ink where `value_lit`), and
 /// a chevron (none where not `chevron`: what it does is done here), or an arrow out where it goes `out` of the app.
 /// True on the frame it is pressed.
 fn look_link(
@@ -244,6 +244,7 @@ fn look_link(
   value_lit? : Bool = false,
   out? : Bool = false,
   chevron? : Bool = true,
+  note? : String = "",
 ) -> Bool {
   let t = @sf.theme()
   let id = c.id(key)
@@ -252,7 +253,15 @@ fn look_link(
   let b = match look {
     Narrow =>
       c.box(style=narrow_row, id~, fn() {
-        c.text(title, style=narrow_row_title) |> ignore
+        if note == "" {
+          c.text(title, style=narrow_row_title) |> ignore
+        } else {
+          c.box(style=narrow_row_words, fn() {
+            c.text(title, style=narrow_row_title) |> ignore
+            c.text(note, style=narrow_link_note) |> ignore
+          })
+          |> ignore
+        }
         if value != "" {
           c.text(value, style=narrow_value, color?=if value_lit { Some(@sf.link_ink()) } else { None }) |> ignore
         }
@@ -263,7 +272,13 @@ fn look_link(
       })
     Wide =>
       c.box(style=desk_list_link, id~, fn() {
-        c.box(style=desk_list_text, fn() { c.text(title, style=desk_list_title) |> ignore }) |> ignore
+        c.box(style=desk_list_text, fn() {
+          c.text(title, style=desk_list_title) |> ignore
+          if note != "" {
+            c.text(note, style=desk_note) |> ignore
+          }
+        })
+        |> ignore
         if value != "" {
           c.text(value, style=wide_value, color?=if value_lit { Some(t.p.accent_text) } else { None }) |> ignore
         }
@@ -373,6 +388,11 @@ let narrow_value : @ui.TextStyle = @sf.value
 let narrow_chevron : Double = 14.0
 
 ///|
+/// The words under a row's title (the secondary's, in lines).
+// kept across runs: a value (no field of it changes)
+let narrow_link_note : @ui.TextStyle = @sf.secondary.then(@sf.full_words)
+
+///|
 /// What a wide row says at its end (the meta's 12, muted, on one line).
 // kept across runs: a value (no field of it changes)
 let wide_value : @ui.TextStyle = @ui.text_style(size=Xs, leading=L5, color=Muted, wrap=false)
@@ -385,6 +405,7 @@ pub fn back_label(p : Page) -> String {
     Settings | Setting(Route::Home) => @sf.t("android-settings.title")
     Setting(Route::About) => @sf.t("web-pages.settings.nav.about")
     Setting(Route::Memories) => @sf.t("web-pages.settings.memory.title")
+    Setting(Route::AutoDecisions) => @sf.t("web-pages.automaticDecisions.title")
     _ => @sf.t("common.back")
   }
 }

@@ -1848,6 +1848,10 @@ export const SHAPES: Record<string, Shape> = {
     ["station", "String"],
     ["key", "String"],
   ], { doc: "A chat to go back to: its station's address and the key its page goes by.", keepNone: true }),
+  SettingsView: struct([
+    ["decisionsOn", "u32", { doc: "How many of the workspace's stations have the automatic decisions' completion rule on." }],
+    ["decisionsText", "String", { doc: "That in words, for 自动决策's row: 2 台 station 已启用, 未启用." }],
+  ], { doc: "What the settings say of the workspace as a whole (the `settings` view), over its stations." }),
   WorkspaceMarksView: struct([
     ["workspaces", map("WorkspaceMark")],
     ["others", opt("String"), { doc: "alert | wait | done: the others' mark; none when nothing there wants anyone." }],

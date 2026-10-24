@@ -29,8 +29,6 @@ let en : Map[String, String] = {
   "web-pages.settings.memory.lead": "Memory shared by all chats on a station: global memory spans projects, and each project has its own. Each station keeps its own memory; nothing syncs between stations.",
   "web-pages.automaticDecisions.choosePoint": "Choose a decision point, then configure each station’s model",
   "web-pages.automaticDecisions.completionNote": "After an agent marks a chat done, check in the background whether anything remains, and suggest archiving if not",
-  "web-pages.automaticDecisions.stationsOn": "On for {n} stations",
-  "web-pages.automaticDecisions.off": "Off",
   "web-pages.about.legal": "Terms and policies",
   "web-pages.about.privacy": "Privacy",
   "web-pages.settings.usage.lead": "Tokens used by agents on each station, priced at API rates, by person, chat, account and model. Visible to everyone in the workspace.",
