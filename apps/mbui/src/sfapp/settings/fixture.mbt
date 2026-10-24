@@ -167,10 +167,7 @@ pub fn fixture_page(mode : String) -> String {
   match m {
     "settings-station-mark" => up("mark", "", 0)
     // the page's 设置 (its variables' sheet up over it), its 软件与设备
-    "settings-station-env" => {
-      station_parts["ws1/st1"] = 1
-      up("env", "", 0)
-    }
+    "settings-station-env" => station_parts["ws1/st1"] = 1
     "settings-station-lower" => {
       station_parts["ws1/st1"] = 1
       up("", "settings/station/ws1/st1", 0)
@@ -1903,7 +1900,6 @@ fn fixture_sheet(core : Core, here : Here) -> Unit {
       let s = Some(fx_station("ws1/st1"))
       open_mark_pick(core, text(s, "name"), text(s, "emoji"), text(s, "icon"), "", fn(_, _, _) {  })
     }
-    "env" => open_agent_env(core, "ws1/st1")
     "profile-menu" => {
       let p = fx_profiles()[0]
       open_profile_menu(core, "ws1/st1", Some(p))

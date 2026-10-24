@@ -98,7 +98,7 @@ fn place_split(c : @ui.Ctx, src : Source, w : Workspace, place : String) -> Unit
   c.box(style=place_pane, fn() {
     match place_route(src, w, place) {
       // a station's: the desktop's own (station_page.mbt)
-      Some(Station(a)) => station_page(c, core, @settings.here_of(core, w.id, w.name), a)
+      Some(Station(a)) => station_page(c, core, @settings.here_of(core, w.id, w.name), { back: None, top: 0.0, foot: 0.0, named: false }, a)
       // a profile's: the desktop's own (accounts.mbt)
       Some(Profile(a, id)) => profile_page(c, core, @settings.here_of(core, w.id, w.name), a, id)
       Some(r) => @settings.page(c, core, @settings.here_of(core, w.id, w.name), r, root=true)

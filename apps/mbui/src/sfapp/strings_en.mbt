@@ -524,6 +524,7 @@ let en : Map[String, String] = {
   "web-pages.settings.nav.usage": "Usage",
   "web-pages.settings.title": "Settings",
   "web-pages.security.title": "Security",
+  "web-pages.stations.page.more": "More",
   "web-pages.security.devicesWhich": "Signed in within the last 30 days",
   "web-pages.security.peopleCount": "{n} people",
   "web-pages.security.peopleCount.one": "{n} person",

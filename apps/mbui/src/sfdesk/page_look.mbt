@@ -46,6 +46,7 @@ fn look_page(
   about? : String = "",
   actions? : () -> Unit,
   head? : () -> Unit,
+  titled? : Bool = true,
 ) -> Unit {
   match look {
     Wide =>
@@ -89,7 +90,8 @@ fn look_page(
           None => ()
         }
       }
-      if !frame.named {
+      // (`titled` false: what it holds first says its name, a station's head)
+      if !frame.named && titled {
         blocks.push(fn() {
           c.box(style=narrow_title_box, fn() {
             c.box(style=narrow_title_line, fn() {

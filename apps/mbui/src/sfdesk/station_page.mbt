@@ -1,24 +1,14 @@
-// A station's own page on the desktop (ember web/src/cloud/StationPage.tsx StationSettings, Head, Body, Overview,
+// A station's own page, one in every frame, laid out by its width (page_look.mbt) (web/src/cloud/StationPage.tsx StationSettings, Head, Body, Overview,
 // Settings, Machine; StationPage.css.ts): its head (its mark and name, which its managers change where they are, how it
 // is and what it is, what is wrong with it, trying it again while away, its ⋯), then its parts one at a time: how it
 // is and what runs on it (what is left of the machine, its screens, profiles, connects and folders), what it is let do
 // and set to (macOS's grants, the tools logged in on it, its agents' variables, what its search finds, the workspaces
 // it is in), its software and the machine. Everything said is the core's (its station view, its topics).
 
-///|
-/// The part shown, by station ("" its overview).
-// kept across runs: said by the parts' choice; station_page_reset empties it
-let station_part : Map[String, String] = {}
 
-///|
-/// The station's ⋯ open (its address, "" none).
-// kept across runs: said by the head's ⋯; station_page_reset puts it back
-let station_menu_open : Ref[String] = Ref("")
 
 ///|
 fn station_page_reset() -> Unit {
-  station_part.clear()
-  station_menu_open.val = ""
   env_forms.clear()
   env_forms_made.val = 0
   env_fields.clear()
@@ -29,11 +19,14 @@ fn station_page_reset() -> Unit {
 ///|
 /// The page's parts (Body's PARTS), in order.
 // kept across runs: a table, never written
-let station_parts : Array[String] = ["overview", "settings", "machine"]
+let station_part_names : Array[String] = ["overview", "settings", "machine"]
 
 ///|
-/// A station's page (StationSettings), by its address: a wait until the stations are read; one gone, its list.
-fn station_page(c : @ui.Ctx, core : Core, here : Here, address : String) -> Unit {
+/// A station's page (StationSettings, StationScreen), by its address: a wait until the stations are read; one gone,
+/// its list. Its parts each as wide as the page's column (narrow, 12 from its sides, as its cards are); its head, with
+/// its name, first (narrow: in place of the large title).
+fn station_page(c : @ui.Ctx, core : Core, here : Here, frame : PageFrame, address : String) -> Unit {
+  let look = look_of(c)
   let topic = @settings.stations_of(core, here)
   let manager = { let r = role_of(core, here); r == "owner" || r == "admin" }
   let back = "Station"
@@ -44,21 +37,30 @@ fn station_page(c : @ui.Ctx, core : Core, here : Here, address : String) -> Unit
           let s = Some(list[i])
           let blocks : Array[() -> Unit] = [fn() { station_head(c, core, here, s, manager) }]
           blocks.push(fn() { station_parts_choice(c, address) })
-          let part = station_part.get(address).unwrap_or("overview")
+          // (the part shown, by station: the settings' own, which a login's card also moves to 设置)
+          let part = match @settings.station_parts.get(address) {
+            Some(i) if i >= 0 && i < station_part_names.length() => station_part_names[i]
+            _ => "overview"
+          }
           let body = match part {
             "settings" => station_settings(c, core, s, manager)
             "machine" => station_machine(c, core, s, manager)
             _ => station_overview(c, core, s)
           }
           blocks.append(body)
-          desk_page(c, core, "station/" + address, text(s, "name"), back~, head=fn() {  }, blocks)
+          let parts = blocks.map(fn(b) { fn() { cn_gutter(c, look, b) } })
+          look_page(c, core, frame, look, "station/" + address, text(s, "name"), parts, titled=look == Wide)
         }
         // (removed, or a link from before: its list)
-        None => desk_page(c, core, "station/" + address, back, back~, [fn() { @sf.waiting(c, shape=Cards) }])
+        None => look_page(c, core, frame, look, "station/" + address, back, [fn() { cn_gutter(c, look, fn() { @sf.waiting(c, shape=Cards) }) }])
       }
     _ =>
-      desk_page(c, core, "station/" + address, back, back~, [
-        fn() { @sf.waiting(c, shape=Cards, note={ reading: true, text: @sf.t("common.readingStations"), failing: [] }) },
+      look_page(c, core, frame, look, "station/" + address, back, [
+        fn() {
+          cn_gutter(c, look, fn() {
+            @sf.waiting(c, shape=Cards, note={ reading: true, text: @sf.t("common.readingStations"), failing: [] })
+          })
+        },
       ])
   }
 }
@@ -252,67 +254,50 @@ fn station_menu(c : @ui.Ctx, core : Core, here : Here, s : Json?) -> Unit {
   let address = text(s, "station")
   let mid = c.id("station-more/" + address)
   c.cursor(mid, Hand)
-  let open = station_menu_open.val == address
-  if c.clicked(mid) {
-    station_menu_open.val = if open { "" } else { address }
-  }
   let b = c.box(style=st_more, id=mid, fn() { @sf.icon(c, "more", size=st_more_icon, color=t.p.muted) |> ignore })
-  c.semantics(b, Button, id=mid, label=@sf.t("common.more"), expanded=open)
-  let m = @sf.dropdown(
-    c,
-    "station-menu/" + address,
-    open,
-    mid,
+  c.semantics(b, Button, id=mid, label=@sf.t("common.more"))
+  if !c.clicked(mid) {
+    return
+  }
+  let remove = fn() {
+    confirm(
+      @sf.t("web-pages.settings.stations.removeConfirm", args=[("name", text(s, "name"))]),
+      @sf.t("web-pages.settings.stations.removeConfirmBody", args=[("name", "still.fail")]),
+      @sf.t("web-pages.settings.stations.removeAction"),
+      danger=true,
+      fn() {
+        @settings.act(
+          core,
+          @sf.t("web-pages.settings.stations.remove"),
+          "workspace.removeStation",
+          obj([("workspace", str(here.workspace)), ("station", str(text(s, "id"))), ("account", str(here.sub))]),
+        )
+      },
+    )
+  }
+  @sf.menu(
     [
-      @kit.menu_item("rename", label=@sf.t("web-pages.settings.stations.rename")),
-      @kit.menu_item("remove", label=@sf.t("web-pages.settings.stations.remove")),
+      Some(@sf.menu_item_of(@sf.t("web-pages.settings.stations.rename"), icon="edit", fn() { station_rename(core, here, s) })),
+      Some(@sf.menu_item_of(@sf.t("web-pages.settings.stations.remove"), icon="trash", danger=true, remove)),
     ],
-    { "rename": "edit", "remove": "trash" },
-    @sf.menu_w,
+    from=Of(mid),
     along=End,
   )
-  if open && !m.open {
-    station_menu_open.val = ""
-  }
-  match m.chosen {
-    Some(v) => {
-      station_menu_open.val = ""
-      if v == "rename" {
-        station_rename(core, here, s)
-      } else {
-        confirm(
-          @sf.t("web-pages.settings.stations.removeConfirm", args=[("name", text(s, "name"))]),
-          @sf.t("web-pages.settings.stations.removeConfirmBody", args=[("name", "still.fail")]),
-          @sf.t("web-pages.settings.stations.removeAction"),
-          danger=true,
-          fn() {
-            @settings.act(
-              core,
-              @sf.t("web-pages.settings.stations.remove"),
-              "workspace.removeStation",
-              obj([("workspace", str(here.workspace)), ("station", str(text(s, "id"))), ("account", str(here.sub))]),
-            )
-          },
-        )
-      }
-    }
-    None => ()
-  }
 }
 
 ///|
 /// The parts to pick from (Body's Segmented): as wide as their names, at the column's start, 24 over what they show.
 fn station_parts_choice(c : @ui.Ctx, address : String) -> Unit {
-  let at = station_parts.search(station_part.get(address).unwrap_or("overview")).unwrap_or(0)
+  let at = @settings.station_parts.get(address).unwrap_or(0)
   c.box(style=st_parts, fn() {
     let picked = @sf.segmented(
       c,
       "station-parts/" + address,
-      station_parts.map(fn(p) { @sf.t("web-pages.stations.page.part." + p) }),
+      station_part_names.map(fn(p) { @sf.t("web-pages.stations.page.part." + p) }),
       at,
     )
     if picked != at {
-      station_part[address] = station_parts[picked]
+      @settings.station_parts[address] = picked
     }
   })
   |> ignore
@@ -388,7 +373,7 @@ fn station_overview(c : @ui.Ctx, core : Core, s : Json?) -> Array[() -> Unit] {
                 let id = c.id("station-screen/" + address + "/" + text(sv, "id"))
                 c.cursor(id, Hand)
                 if c.clicked(id) {
-                  app.nav.push(Screen({ station: address, screen: text(sv, "id"), title: text(sv, "title") }))
+                  @sfbase.open_page(Screen({ station: address, screen: text(sv, "id"), title: text(sv, "title") }))
                 }
                 c.box(style=desk_list_link, id~, fn() {
                   @sf.icon(c, if text(sv, "kind") == "browser" { "web" } else { "monitor" }, size=desk_chevron, color=t.p.muted)
@@ -474,7 +459,7 @@ fn station_overview(c : @ui.Ctx, core : Core, s : Json?) -> Array[() -> Unit] {
           count=roots.length(),
           actions=fn() {
             if @sf.button(c, @sf.t("web-pages.stations.page.openFiles"), key="station-files/" + address, tone=Ghost, icon="folder") {
-              app.nav.push(Drive({ station: address, root: None, path: "" }))
+              @sfbase.open_page(Drive({ station: address, root: None, path: "" }))
             }
           },
           fn() {
@@ -487,7 +472,7 @@ fn station_overview(c : @ui.Ctx, core : Core, s : Json?) -> Array[() -> Unit] {
                   let id = c.id("station-folder/" + address + "/" + text(rv, "path"))
                   c.cursor(id, Hand)
                   if c.clicked(id) {
-                    app.nav.push(Drive({ station: address, root: Some(text(rv, "path")), path: "" }))
+                    @sfbase.open_page(Drive({ station: address, root: Some(text(rv, "path")), path: "" }))
                   }
                   c.box(style=st_folder, id~, fn() {
                     @sf.icon(c, "folder", size=desk_chevron, color=t.p.muted) |> ignore
@@ -506,6 +491,27 @@ fn station_overview(c : @ui.Ctx, core : Core, s : Json?) -> Array[() -> Unit] {
     }
     _ => ()
   }
+  // what else of it has a page of its own: its memory, this device's adb lent to its agents (AdbShare)
+  out.push(fn() {
+    st_section(c, @sf.t("web-pages.stations.page.more"), fn() {
+      c.box(style=desk_list, fn() {
+        if look_link(c, Wide, "st-memory/" + address, @sf.t("android-settings.memory")) {
+          (core.push)(Memory(address))
+        }
+        let shared = (core.topic)("adbShare", Map([])).value
+        if look_link(
+            c,
+            Wide,
+            "st-adb/" + address,
+            @sf.t("android-misc.adb.title"),
+            value=if flag(shared, "sharing") && text(shared, "station") == address { @sf.t("android-misc.adb.sharing") } else { "" },
+          ) {
+          (core.push)(AdbShare(address))
+        }
+      })
+      |> ignore
+    })
+  })
   out
 }
 
@@ -675,7 +681,7 @@ fn open_screen_link(core : Core, link : String) -> Unit {
   (core.call)("link.parse", obj([("url", str(link))]), fn(r) {
     match r {
       Ok(Object(_) as v) if text(Some(v), "opens") == "screen" =>
-        app.nav.push(Screen({ station: text(Some(v), "station"), screen: text(Some(v), "screen"), title: "" }))
+        @sfbase.open_page(Screen({ station: text(Some(v), "station"), screen: text(Some(v), "screen"), title: "" }))
       _ => ()
     }
   })
@@ -751,10 +757,23 @@ fn station_env_editor(c : @ui.Ctx, core : Core, address : String) -> Unit {
       f
     }
   }
-  // what the core has, once it has it (again after 取消): what is typed from then on is the field's
-  if !env_seeded.contains(address) && d is Some(Object(_)) && !flag(d, "pending") {
-    env_seeded[address] = true
-    field_.set(text(d, "text"))
+  // what the core has, once it has it (again after 取消); after, what it comes to says the field too while nothing
+  // typed here since waits on it (a save elsewhere, the draft read again): what is typed is the field's
+  if d is Some(Object(_)) && !flag(d, "pending") {
+    let now = text(d, "text")
+    match env_seeded.get(address) {
+      None => {
+        env_seeded[address] = now
+        field_.set(now)
+      }
+      Some(was) if was != now => {
+        if field_.text() == was {
+          field_.set(now)
+        }
+        env_seeded[address] = now
+      }
+      _ => ()
+    }
   }
   let saving = is_doing(core, ["agentEnv.form.save"], [("station", address), ("form", form)])
   c.box(style=desk_card, fn() {
@@ -822,9 +841,10 @@ fn station_env_editor(c : @ui.Ctx, core : Core, address : String) -> Unit {
 }
 
 ///|
-/// Whether a station's field has what the core first said (or said again after 取消), and what was last sent of it.
+/// What of the core's a station's field last took (first, again after 取消, or as it changed with nothing typed since),
+/// and what was last sent of it.
 // kept across runs: said as the field is filled and typed in; station_page_reset empties them
-let env_seeded : Map[String, Bool] = {}
+let env_seeded : Map[String, String] = {}
 
 ///|
 // kept across runs: said as what is typed is sent; station_page_reset empties it

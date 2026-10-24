@@ -1059,6 +1059,7 @@
   "web-pages.stations.page.part.settings": "设置",
   "web-pages.stations.page.part.machine": "软件与设备",
   "web-pages.stations.page.openFiles": "打开文件",
+  "web-pages.stations.page.more": "更多",
   "web-pages.stations.page.resources": "资源",
   "web-pages.stations.processesFailed": "无法获取进程：{error}",
   "web-pages.stations.processesLead": "still.fail 的桌面 App、station 和 agent 跑的程序在这台电脑上用了多少 CPU、内存和网络流量，按对话分开看。只在打开这一页时统计，只有 macOS 能统计。",
