@@ -13,9 +13,6 @@ particular to this app:
   Corners,Parts}.kt` and each screen's file) stays as it is unless a change means to differ. Nothing in this
   repository compares mbui with itself (#881 took that out); do not bring it back.
 - A change people can see (timing, rhythm, what is shown) says so in its PR with old and new side by side.
-- The changelog puts this app's files on both the Android tab and the desktop's (docs/changelog.md). A change only
-  one of them shows, made in code both build (`src/sfapp`, `src/sfbase`, the core), says which in its trailers:
-  `Changelog-parts: desktop` (or `android`), or the desktop's work is listed as the phone's news.
 
 ## The component library
 

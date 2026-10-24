@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { partsOf, readMessage, saysNothing, unknownParts } from "../scripts/changelog.ts";
+import { partsOf, readMessage, refused, saysNothing } from "../scripts/changelog.ts";
 
 test("a commit's lines and fixes come from each paragraph of trailers, not only git's last one", () => {
   // As 4ae91923 and 36 others were written: the trailers git reads are only Co-Authored-By.
@@ -69,10 +69,19 @@ test("the mbui app reaches Android and the desktop; its desktop's own pages and 
   assert.deepEqual(partsOf(["apps/mbui/mbui/src/host/ios_app.m", "apps/mbui/ios/Info.plist"]), []);
 });
 
-test("a commit says the parts it reaches people in where its files cannot tell", () => {
+test("a commit's agent says the parts people see it in; one that does not, or names none of them, is refused", () => {
+  // The desktop's side panel's tabs (54186c3a), in code the Android app builds too: the agent says it is the desktop's.
   const desk = "mbui desktop: the chat's side panel's tabs\n\nChangelog: 桌面版（mbui）聊天侧栏的标签页改由 core 保存\nChangelog-parts: desktop\n\nCo-Authored-By: Claude <noreply@anthropic.com>\n";
   assert.deepEqual(readMessage(desk).parts, ["desktop"]);
+  assert.deepEqual(refused(desk), []);
   assert.deepEqual(readMessage("Subject\n\nChangelog: 修复：……\nChangelog-parts: Android, web\n").parts, ["android", "web"]);
-  assert.deepEqual(unknownParts(desk), []);
-  assert.deepEqual(unknownParts("Subject\n\nChangelog: 修复：……\nChangelog-parts: mac, desktop\n"), ["mac"]);
+  // The site's: no release.
+  assert.deepEqual(refused("Site: plainly\n\nChangelog: 官网首屏只留一句\nChangelog-parts: none\n"), []);
+  // Nothing to tell, nothing to say.
+  assert.deepEqual(refused("Refactor\n\nSession: ember:c-6\n"), []);
+  const unsaid = (m: string) => refused(m).filter((why) => why.startsWith("no Changelog-parts")).length;
+  assert.equal(unsaid("Subject\n\nChangelog: 修复：……\nSession: ember:c-7\n"), 1);
+  assert.equal(unsaid("Subject\n\nFixes: FB-9\n"), 1);
+  assert.equal(refused("Subject\n\nChangelog: 修复：……\nChangelog-parts: mac, desktop\n").length, 1);
+  assert.equal(refused("Subject\n\nChangelog: none\nChangelog-parts: web\n").length, 1);
 });
