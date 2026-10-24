@@ -4,6 +4,7 @@
 // the catalog's English: a word added here is run through it (lang_wbtest.mbt holds every key to have its English).
 
 ///|
+// kept across runs: a table, never written
 let zh : Map[String, String] = {
   "android-chat.archive.named": "归档「{title}」",
   "android-settings.changelog.dismiss": "知道了",

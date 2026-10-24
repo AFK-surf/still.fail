@@ -83,7 +83,7 @@ fn letters_tab(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView, thread : Do
             let nid = c.id("letters/name")
             c.cursor(nid, Hand)
             if c.clicked(nid) {
-              c.tell("letters/name", fn() { (chat_parts.val.open_link)(to) })
+              c.tell("letters/name", fn() { open_link(to) })
             }
             let b = c.box(style=letters_name_box, id=nid, fn() {
               // (underlined on hover)

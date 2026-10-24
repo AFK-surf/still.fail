@@ -3,6 +3,13 @@
 // pages), taken in here by name.
 
 pub using @sfbase {
+  open_link,
+  peek_ms,
+  peek_size,
+  peeks_frame,
+  peeks_reset,
+  peeks_stop_all,
+  screen_links,
   file_viewer,
   drive_player,
   drive_reader,

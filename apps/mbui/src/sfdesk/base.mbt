@@ -1,5 +1,8 @@
 // What the desktop's pages read of sfbase, by its own names (as sfapp/base.mbt takes them in).
 using @sfbase {
+  app_in_front,
+  open_link,
+  screen_links,
   file_viewer,
   type PKind,
   type Viewer,

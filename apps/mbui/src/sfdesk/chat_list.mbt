@@ -21,7 +21,6 @@ pub fn chat_list(
 ) -> Unit {
   let key = list_key(r)
   let draft = r.station + ":" + r.session
-  let parts = chat_parts.val
   let lf = list_frame(
     c,
     r,
@@ -32,7 +31,7 @@ pub fn chat_list(
     rise_ms=@sf.enter_ms,
     history_fade=true,
     top=list_top,
-    in_front=(parts.in_front)(),
+    in_front=app_in_front(),
   )
   let (rd, rk, em, turns, list, keys, flight) = (lf.rd, lf.rk, lf.em, lf.turns, lf.list, lf.keys, lf.flight)
   let n = list.length()

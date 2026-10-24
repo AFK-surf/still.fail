@@ -194,6 +194,8 @@ pub fn reset() -> Unit {
   service_pages_reset()
   // a file open over the pages, what it flew from and kept (viewer.mbt, viewer_marks.mbt)
   file_viewer_reset()
+  // a station's screens' cards live in a chat (screen_links.mbt)
+  peeks_reset()
   // what was sent from here, not in the core's view yet (sent.mbt)
   sent_reset()
   // what the composers' fields were seen as, their marks and `@` words (refs.mbt)
