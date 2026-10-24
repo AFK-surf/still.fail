@@ -169,6 +169,10 @@ fn EditorState::move_to(self : EditorState, off : Int, ext : Bool) -> Unit {
 
 ///|
 fn EditorState::key(self : EditorState, code : Int, mods : Int, now : Double) -> Unit {
+  // (one the app takes for itself: not the field's)
+  if mods == 0 && self.leaves.contains(code) {
+    return
+  }
   let shift = (mods & mod_shift) != 0
   self.blink0 = now
   self.handle = false
@@ -361,6 +365,7 @@ pub fn Ctx::editor(
   placeholder_color? : Int64 = 0x8E8E93FFL,
   caret_color? : Int64 = 0x0A84FFFFL,
   enter_sends? : Bool = true,
+  leaves? : Array[Int] = [],
   ime_action? : Int = 0,
   paste_limit? : Int = 0,
   secret? : Bool = false,
@@ -390,6 +395,7 @@ pub fn Ctx::editor(
   }
   st.limit = paste_limit
   st.enter_sends = enter_sends
+  st.leaves = leaves
   st.ime_action = ime_action
   st.secret = secret
   st.words = words
@@ -767,6 +773,7 @@ fn EditorState::fresh(text : String, now : Double) -> EditorState {
     pasted: None,
     limit: 0,
     enter_sends: true,
+    leaves: [],
     ime_action: 0,
     line: 0.0,
     color: 0L,

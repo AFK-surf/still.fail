@@ -9,13 +9,13 @@
 
 ///|
 /// What the composer writes to and how it shows (ComposerProps): its station (where its files go up), its draft's key,
-/// the agent's session typing warms ("" none), what its field says while empty, the page's choices in its row (a new
-/// chat's), laid out roomy (its text over its row even for one line), locked (it takes words, nothing goes), its
-/// station offline (no file taken in).
+/// its chat's session (typing warms its agent; the `@` menu leaves it out; "" none), what its field says while empty,
+/// the page's choices in its row (a new chat's), laid out roomy (its text over its row even for one line), locked (it
+/// takes words, nothing goes), its station offline (no file taken in).
 pub(all) struct ComposerSpec {
   station : String
   draft : String
-  warm : String
+  session : String
   placeholder : String
   toolbar : (() -> Unit)?
   roomy : Bool
@@ -100,7 +100,7 @@ pub fn composer(
     fn() {
       if multiline {
         composer_extras(c, src, spec, w)
-        composer_text(c, src, ws, pages, spec, w, multiline, submit)
+        composer_text(c, src, ws, pages, spec, w, cap, multiline, submit)
         c.box(style=tools_row, fn() {
           attach(c, spec, w, no_files)
           match spec.toolbar {
@@ -112,7 +112,7 @@ pub fn composer(
         |> ignore
       } else {
         attach(c, spec, w, no_files)
-        composer_text(c, src, ws, pages, spec, w, multiline, submit)
+        composer_text(c, src, ws, pages, spec, w, cap, multiline, submit)
         send_button(c, ready, w.starting, submit)
       }
     },
@@ -191,12 +191,16 @@ fn composer_text(
   pages : Pages,
   spec : ComposerSpec,
   w : Writing,
+  cap : Int,
   multiline : Bool,
   submit : () -> Unit,
 ) -> Unit {
   let p = @sf.theme().p
   let prefs = (src.topic)("prefs", {}).value
   let hint = space_hint(c, prefs, spec.locked)
+  let no_files = spec.locked || spec.offline
+  // what the field was given since the last frame, as the core reads it (a mark taken whole, a chat's link pasted)
+  @sfbase.refs_edits(c, src, w.key, w.field, spec.station, spec.locked)
   c.box(style=if multiline { text_open } else { text_shut }, fn() {
     let res = c.editor(
       composer_field_key,
@@ -211,9 +215,20 @@ fn composer_text(
       placeholder_color=p.subtle,
       caret_color=p.accent,
       enter_sends=@ui.pointing() is Mouse,
-      pictures=!(spec.locked || spec.offline),
+      // (the `@` menu open: ↑ / ↓ choose in it, Enter and Tab pick)
+      leaves=ref_leaves(src, spec, w, c.editor_focused(composer_field_key)),
+      pictures=!no_files,
+      // words pasted at once past the core's bound: a file of their own (Chat.tsx onPaste)
+      paste_limit=if no_files || w.starting { 0 } else { @sfbase.paste_threshold(c, src) },
+      look=@sfbase.refs_look(w.key, p.accent),
       field=w.field,
     )
+    match res.pasted {
+      Some(words) => @sfbase.writing_paste(src, w, spec.station, words)
+      None => ()
+    }
+    // `@` and a few letters: the chats they find over the composer (Enter picks one there)
+    let menu = ref_menu(c, src, spec, w, cap, res.focused)
     match res.submitted {
       // (the field gives its words up as sent: the draft keeps them until they go)
       Some(words) => {
@@ -230,7 +245,7 @@ fn composer_text(
         }
     }
     // nothing typed: the chat above or below, as the list shows them now
-    if res.focused && w.text == "" && !switcher_open() {
+    if res.focused && w.text == "" && !switcher_open() && !menu {
       if c.key_pressed(@ui.key_code_up, in_field=true) {
         neighbour(src, ws, pages, -1)
       } else if c.key_pressed(@ui.key_code_down, in_field=true) {
@@ -257,16 +272,16 @@ fn space_hint(c : @ui.Ctx, prefs : Json?, locked : Bool) -> String {
 ///|
 /// Typing starts the agent's runtime, so a cold start overlaps the writing: the first time, then a minute after the last.
 fn warm(c : @ui.Ctx, src : Source, spec : ComposerSpec) -> Unit {
-  if spec.warm == "" || spec.locked || spec.offline || src.read_only {
+  if spec.session == "" || spec.locked || spec.offline || src.read_only {
     return
   }
-  let n = composing.warmed.get(spec.warm).unwrap_or(0)
-  if n > 0 && !@kit.after(c, "composer/warm/" + spec.warm + "/\{n}", true, warm_every_ms, later=true) {
+  let n = composing.warmed.get(spec.session).unwrap_or(0)
+  if n > 0 && !@kit.after(c, "composer/warm/" + spec.session + "/\{n}", true, warm_every_ms, later=true) {
     return
   }
-  composing.warmed[spec.warm] = n + 1
+  composing.warmed[spec.session] = n + 1
   c.tell("composer/warm", fn() {
-    (src.call)("session.warm", { "station": Json::string(spec.station), "key": Json::string(spec.warm) }, fn(_) {  })
+    (src.call)("session.warm", { "station": Json::string(spec.station), "key": Json::string(spec.session) }, fn(_) {  })
   })
 }
 

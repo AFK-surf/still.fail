@@ -4,6 +4,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { pasted, PASTE_RESTORE_LIMIT, PASTE_THRESHOLD } from "../src/pasted.ts";
 import { markBefore, marksIn, pastedRefs, refAt } from "../src/refLinks.ts";
+import { wordsAnswer } from "../src/words.ts";
 
 test("long_words_pasted_go_as_a_file_that_says_how_they_begin_and_how_many", () => {
   assert.deepEqual(pasted("短的"), { file: false, info: null });
@@ -31,4 +32,10 @@ test("a_chats_link_pasted_as_copied_is_a_reference_when_it_is_of_this_workspace"
   assert.deepEqual(pastedRefs(text, "ws/st9"), [{ start: 2, end: 42, title: "修登录", station: "ws/st", id: "k1", history: "" }]);
   // A station of no workspace takes none.
   assert.deepEqual(pastedRefs(text, "st9"), []);
+});
+
+test("clients_without_the_js_ask_the_same_reading_and_the_bound_a_paste_goes_as_a_file_from", () => {
+  assert.deepEqual(wordsAnswer("paste.info", "", 0, ""), { file: false, info: null, threshold: PASTE_THRESHOLD });
+  assert.deepEqual(wordsAnswer("ref.at", "看 @首", 4, ""), { at: { start: 2, query: "首" } });
+  assert.deepEqual(wordsAnswer("ref.marks", "@[甲] 和 @[乙]", 0, ""), { marks: marksIn("@[甲] 和 @[乙]") });
 });
