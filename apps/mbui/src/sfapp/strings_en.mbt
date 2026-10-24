@@ -732,6 +732,7 @@ let en : Map[String, String] = {
   "web-main.preview.download": "Download",
   "web-main.file.cancelDownload": "Cancel download",
   "web-main.file.retryDownload": "Download again",
+  "web-pages.files.toDevice": "To this device",
   "web-main.preview.rendered": "Preview",
   "web-main.preview.source": "Source",
   "web-main.preview.zoomInKey": "Zoom in (+)",

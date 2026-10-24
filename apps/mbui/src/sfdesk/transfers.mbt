@@ -1,6 +1,6 @@
-// The files' page's copies between folders and stations (ember web/src/pages/Transfers.tsx, Files.css.ts transfers):
-// the bar's 传输 (how many go, how far), its list (each copy's way, how it stands, stopped, tried again, its folder shown
-// once done).
+// The files' page's copies between folders and stations and the drive's files downloaded to this device (ember
+// web/src/pages/Transfers.tsx, Files.css.ts transfers): the bar's 传输 (how many go, how far), its list (each copy's way,
+// how it stands, stopped, tried again, its folder shown once done; each download, how far, stopped, tried again).
 
 ///|
 /// Whether the bar's 传输 has its list open.
@@ -30,23 +30,38 @@ fn transfer_list(src : Source, ws : String) -> Array[Json] {
 }
 
 ///|
-/// On the bar: the transfers, how many go and how far they are (in the accent while they go, red when one failed);
-/// pressed, their list. Nothing while there has been none.
+/// This device's downloads of the workspace's stations' drives (the `downloads` topic's with a root: a file, a folder
+/// zipped), newest first.
+fn download_list(src : Source, ws : String) -> Array[Json] {
+  items((src.topic)("downloads", {}).value, "downloads").filter(fn(d) {
+    field(Some(d), "root") is Some(_) && text(Some(d), "station").has_prefix(ws + "/")
+  })
+}
+
+///|
+/// On the bar: the transfers and the drive's downloads, how many go and how far they are (in the accent while they go,
+/// red when one failed); pressed, their list. Nothing while there has been none.
 pub fn transfers_button(c : @ui.Ctx, src : Source, ws : String, go : (DriveAt) -> Unit) -> Unit {
   let t = @sf.theme()
   let all = transfer_list(src, ws)
+  let downloads = download_list(src, ws)
   let id = c.id("files/transfers")
-  if all.length() == 0 {
+  if all.length() == 0 && downloads.length() == 0 {
     ftransfers.open = false
     return
   }
   let going = all.filter(fn(x) { flag(Some(x), "active") })
-  let failed = all.iter().any(fn(x) { text(Some(x), "state") == "failed" })
-  let total = going.fold(init=0.0, fn(a, x) { a + number(Some(x), "total") })
-  let copied = going.fold(init=0.0, fn(a, x) { a + number(Some(x), "copied") })
-  let label = if going.length() > 0 {
+  let coming = downloads.filter(fn(d) { flag(Some(d), "active") })
+  let failed = all.iter().any(fn(x) { text(Some(x), "state") == "failed" }) ||
+    downloads.iter().any(fn(d) { text(Some(d), "state") == "failed" })
+  let total = going.fold(init=0.0, fn(a, x) { a + number(Some(x), "total") }) +
+    coming.fold(init=0.0, fn(a, d) { a + number(Some(d), "size") })
+  let copied = going.fold(init=0.0, fn(a, x) { a + number(Some(x), "copied") }) +
+    coming.fold(init=0.0, fn(a, d) { a + number(Some(d), "loaded") })
+  let n = going.length() + coming.length()
+  let label = if n > 0 {
     let percent = if total > 0.0 { (copied / total * 100.0).floor().to_int() } else { 0 }
-    @sf.t("web-pages.files.transfersGoing", args=[("n", going.length().to_string()), ("percent", percent.to_string())])
+    @sf.t("web-pages.files.transfersGoing", args=[("n", n.to_string()), ("percent", percent.to_string())])
   } else {
     @sf.t("web-pages.files.transfers")
   }
@@ -56,7 +71,7 @@ pub fn transfers_button(c : @ui.Ctx, src : Source, ws : String, go : (DriveAt) -
   }
   let (style, words, ink) = if failed {
     (ftransfers_chip_failed, ftransfers_chip_failed_words, t.p.red)
-  } else if going.length() > 0 {
+  } else if n > 0 {
     (ftransfers_chip_going, ftransfers_chip_going_words, t.p.accent_text)
   } else {
     (ftransfers_chip, ftransfers_chip_words, t.p.muted)
@@ -77,6 +92,9 @@ pub fn transfers_button(c : @ui.Ctx, src : Source, ws : String, go : (DriveAt) -
     fn() {
       c.box(style=ftransfers_head, fn() { c.text(@sf.t("web-pages.files.transfers"), style=ftransfers_head_words) |> ignore })
       |> ignore
+      for d in downloads {
+        download_row(c, src, d)
+      }
       for x in all {
         transfer_row(c, src, x, go)
       }
@@ -140,6 +158,46 @@ fn transfer_row(c : @ui.Ctx, src : Source, x : Json, go : (DriveAt) -> Unit) -> 
       if state == "done" && @sf.button(c, @sf.t("web-pages.files.show"), key="files/transfer/show/" + tid, tone=Ghost) {
         ftransfers.open = false
         go({ station, root: Some(text(j, "toRoot")), path: text(j, "toPath") })
+      }
+    })
+    |> ignore
+  })
+  |> ignore
+}
+
+///|
+/// A file of the drive (a folder zipped) downloaded to this device (Transfers.tsx DownloadRow): what, how far (a bar
+/// while it comes), how it stands; stopped while it comes, tried again once failed.
+fn download_row(c : @ui.Ctx, src : Source, d : Json) -> Unit {
+  let t = @sf.theme()
+  let j = Some(d)
+  let failed = text(j, "state") == "failed"
+  let did = text(j, "id")
+  c.box(style=transfer_rule, fn() {  }) |> ignore
+  c.box(style=ftransfer_row, fn() {
+    c.box(style=ftransfer_mark, fn() {
+      @sf.icon(c, if failed { "retry" } else { "download" }, size=transfer_icon, color=if failed { t.p.red } else { t.p.muted })
+      |> ignore
+    })
+    |> ignore
+    c.box(style=ftransfer_text, fn() {
+      c.box(style=ftransfer_title, fn() {
+        c.text(text(j, "name"), style=ftransfer_title_words) |> ignore
+        c.text(@sf.t("web-pages.files.toDevice"), style=ftransfer_way) |> ignore
+      })
+      |> ignore
+      if flag(j, "active") {
+        @sf.progress(c, Some(number(j, "progress")))
+      }
+      c.text(text(j, "statusText"), style=if failed { ftransfer_failed } else { ftransfer_status }) |> ignore
+    })
+    |> ignore
+    c.box(style=ftransfer_actions, fn() {
+      if flag(j, "active") && @sf.icon_button(c, "close", key="files/download/cancel/" + did, label=@sf.t("web-main.file.cancelDownload")) {
+        c.tell("files/download/cancel/" + did, fn() { download_cancel(src, did) })
+      }
+      if failed && @sf.icon_button(c, "retry", key="files/download/retry/" + did, label=@sf.t("web-main.file.retryDownload")) {
+        c.tell("files/download/retry/" + did, fn() { download_retry(src, did) })
       }
     })
     |> ignore

@@ -113,7 +113,7 @@ fn drive_viewer_file(c : @ui.Ctx, src : Source, at : DriveAt) -> @sf.ViewerFile 
     },
     save: fn() {
       say(c, fill("android-misc.drive.downloading", [("name", name)]))
-      download_drive_file(c, src, at.station, root, at.path, name, "", listed=listed)
+      download_drive_file(c, src, at.station, root, at.path, name, listed=listed)
     },
   }
 }

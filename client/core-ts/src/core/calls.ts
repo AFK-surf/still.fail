@@ -145,7 +145,7 @@ export type Call =
   /// with what each takes.
   | { kind: "browse"; name: string; params: Record<string, unknown> }
   /// A chat's file downloaded to this device (views/downloads.ts): its params read there.
-  | { kind: "download"; action: "start" | "take" | "done" | "cancel"; params: Record<string, unknown> }
+  | { kind: "download"; action: "start" | "retry" | "take" | "read" | "done" | "cancel"; params: Record<string, unknown> }
   /// An app's module's call (module.ts): `<module>.<name>`, its params as the module checked them.
   | { kind: "module"; name: string; call: HeldCall };
 
@@ -337,8 +337,8 @@ export function parseCall(name: string, params: unknown, bytes?: Uint8Array, mod
   // A station's files as they are browsed (views/browse.ts): their params read there.
   if (BROWSE_CALLS.includes(name)) return { kind: "browse", name, params: isObject(params) ? (params as Record<string, unknown>) : {} };
   // A chat's file downloaded to this device (views/downloads.ts): its params read there.
-  if (name === "download.start" || name === "download.take" || name === "download.done" || name === "download.cancel") {
-    return { kind: "download", action: name.slice(9) as "start" | "take" | "done" | "cancel", params: isObject(params) ? (params as Record<string, unknown>) : {} };
+  if (name === "download.start" || name === "download.retry" || name === "download.take" || name === "download.read" || name === "download.done" || name === "download.cancel") {
+    return { kind: "download", action: name.slice(9) as "start" | "retry" | "take" | "read" | "done" | "cancel", params: isObject(params) ? (params as Record<string, unknown>) : {} };
   }
   if (name.startsWith("vault.") && VAULT_CALLS.includes(name.slice(6))) {
     const p = read(params, [["workspace", S, "req"]]);

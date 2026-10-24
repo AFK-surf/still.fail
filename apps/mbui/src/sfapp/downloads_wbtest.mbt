@@ -5,8 +5,7 @@
 
 ///|
 /// The fixture `mode` with the core's `downloads` as `list` says, its calls kept in `calls`; `download.take` answered
-/// as taken, `station.file.part` read with `keep` (the saving's) answered with `bytes` (of `type`) a part at a time,
-/// `part` at most.
+/// as taken, `download.read` (the saving's) answered with `bytes` (of `type`) a part at a time, `part` at most.
 fn downloads_src(
   mode : String,
   list : Array[Json],
@@ -28,14 +27,14 @@ fn downloads_src(
       calls.push((name, params))
       match name {
         "download.take" => done(Ok({ "taken": true }))
-        "download.start" | "download.done" | "download.cancel" => done(Ok({}))
+        "download.start" | "download.retry" | "download.done" | "download.cancel" => done(Ok({}))
         _ => (base.call)(name, params, done)
       }
     },
     read_bytes: fn(name, params, done) {
       calls.push((name, params))
       // (the saving's reads, off the device: a preview's own go to the fixture)
-      if name == "station.file.part" && flag(Some(params), "keep") {
+      if name == "download.read" {
         let from = number(Some(params), "offset").to_int()
         let to = if from + part > bytes.length() { bytes.length() } else { from + part }
         let got = Bytes::makei(to - from, fn(i) { bytes[from + i] })
@@ -77,10 +76,9 @@ test "downloads: one the core has all here is taken once, read off the device a 
   t.frame()
   assert_eq(calls.filter(fn(m) { m.0 == "download.take" }).length(), 1)
   // read off the device, as the core keeps it with its chat (not asked of the station again), 4 at a time
-  let reads = calls.filter(fn(m) { m.0 == "station.file.part" })
+  let reads = calls.filter(fn(m) { m.0 == "download.read" })
   assert_eq(reads.map(fn(r) { number(Some(r.1), "offset") }), [0.0, 4.0, 8.0])
-  assert_eq(field(Some(reads[0].1), "keep"), Some(Json::boolean(true)))
-  assert_eq(field(Some(reads[0].1), "size"), Some(Json::number(10.0)))
+  assert_eq(text(Some(reads[0].1), "id"), "ws1/st1|s-c1|dist.zip")
   // nothing of it read whole
   assert_eq(calls.filter(fn(m) { m.0 == "station.file" }).length(), 0)
   let kept = t.kept()
@@ -121,10 +119,8 @@ test "downloads: a file's card says how far the core has downloaded it in its si
   assert_true(t.find("下载失败：无法连接 station") is Some(_), msg=t.words().map(fn(w) { w.0 }).join("|"))
   t.click(Button, label=tr("web-main.file.retryDownload"))
   t.frame()
-  let again = calls.filter(fn(m) { m.0 == "download.start" })
-  assert_eq(again.length(), 1)
-  assert_eq(field(Some(again[0].1), "name"), Some(Json::string("发布包.zip")))
-  assert_eq(field(Some(again[0].1), "size"), Some(Json::number(52428800.0)))
+  let again = calls.filter(fn(m) { m.0 == "download.retry" })
+  assert_eq(again.map(fn(m) { text(Some(m.1), "id") }), ["ws1/st1|s-c1|发布包.zip"])
 }
 
 ///|
@@ -219,4 +215,44 @@ test "desk: a file's card has its name's extension right after its stem, not at 
   // right after three characters of 13 (not some 180 on, where the card's words end)
   assert_true((ext[0].1 - (stem[0].1 + stem[0].3)).abs() < 0.5, msg="\{stem[0]} \{ext[0]}")
   assert_true(ext[0].1 - stem[0].1 < 3.0 * 13.0 + 1.0, msg="\{stem[0]} \{ext[0]}")
+}
+
+///|
+test "downloads: a drive's file downloading shows how far on its row; a folder being zipped for it, 0 while the station zips it" {
+  reset()
+  let src = fixture("drive-download")
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0)
+  open_fixture_mode("drive-download")
+  t.run_for(@ui.nav_push_ms + 600.0)
+  assert_true(t.find("40%") is Some(_), msg=t.words().map(fn(w) { w.0 }).join("|"))
+  assert_true(t.find("0%") is Some(_))
+}
+
+///|
+test "downloads: the desk's files page lists the drive's downloads among its transfers: how far, 正在打包, ✕ calls one off" {
+  reset()
+  let calls : Array[(String, Json)] = []
+  let base = fixture("drive-download")
+  let src : Source = {
+    ..base,
+    call: fn(name, params, done) {
+      calls.push((name, params))
+      (base.call)(name, params, done)
+    },
+  }
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=1280.0, h=800.0, platform=0)
+  open_fixture_mode("drive-download")
+  t.run_for(@ui.nav_push_ms)
+  t.tap_text("2 个传输")
+  t.run_for(@ui.nav_push_ms)
+  assert_true(t.find("到此设备") is Some(_), msg=t.words().map(fn(w) { w.0 }).join("|"))
+  assert_true(t.find("正在打包") is Some(_))
+  assert_true(t.find("正在下载 40%") is Some(_))
+  // (the file's, the first: the folder's is being zipped)
+  let cancels = t.all(Button, label=tr("web-main.file.cancelDownload"))
+  assert_eq(cancels.length(), 2)
+  let (x, y, w, h) = cancels[0].rect
+  t.tap(x + w / 2.0, y + h / 2.0)
+  t.frame()
+  assert_eq(calls.filter(fn(m) { m.0 == "download.cancel" }).length(), 1)
 }

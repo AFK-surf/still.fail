@@ -30,6 +30,11 @@ export function startDownload(station: string, key: string, name: string, size: 
   core().call("download.start", { station, key, name, size }).catch(() => {});
 }
 
+/** The core's download `id`, failed (or waiting for its station), tried again now. */
+export function retryDownload(id: string): void {
+  core().call("download.retry", { id }).catch(() => {});
+}
+
 /** The core's download `id` called off: stopped, what was fetched of it let go. */
 export function cancelDownload(id: string): void {
   core().call("download.cancel", { id }).catch(() => {});

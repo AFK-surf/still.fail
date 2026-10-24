@@ -1424,14 +1424,8 @@ fn file_item(
       let act = c.id("file-act/" + a.path)
       if c.clicked(act) {
         // (told once the frame's builds are over, as the tap is the build's that took it)
-        let (station, id, active, size) = (here.station, text(dl, "id"), flag(dl, "active"), a.size)
-        c.tell("file-act/" + a.path, fn() {
-          if active {
-            download_cancel(src, id)
-          } else {
-            download_start(src, station, key, name, size)
-          }
-        })
+        let (id, active) = (text(dl, "id"), flag(dl, "active"))
+        c.tell("file-act/" + a.path, fn() { if active { download_cancel(src, id) } else { download_retry(src, id) } })
       }
       file_card(c, a, w, id=open, dl~, act~)
     }

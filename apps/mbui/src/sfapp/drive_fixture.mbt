@@ -420,10 +420,10 @@ pub fn open_drive_fixture(mode : String) -> Unit {
       app.nav.push(Files)
       app.nav.push(Drive(docs))
       let key = folder_key("ws1/st1", fix_docs, "")
-      // a file being downloaded, a folder being zipped for it (keep.mbt): their rows' progress
+      // a file being downloaded, a folder being zipped for it (the core's downloads, downloads_fixture.mbt): their rows'
+      // progress (keep.mbt)
       if mode == "drive-download" {
-        dv_fetches[dv_fetch_key("ws1/st1", fix_docs, "首页截图.png")] = 40
-        dv_fetches[dv_fetch_key("ws1/st1", fix_docs, "设计稿")] = 0
+        fix_drive_downloads("ws1/st1", fix_docs)
       }
       if mode == "drive-chosen" {
         dv.chosen[key] = ["长篇小说.txt", "首页截图.png"]

@@ -857,8 +857,11 @@ export const SHAPES: Record<string, Shape> = {
   DownloadShown: struct([
     ["id", "String", { doc: "Its own (`download.take`, `download.cancel`)." }],
     ["station", "String"],
-    ["key", "String", { doc: "The session that keeps the file." }],
-    ["name", "String", { doc: "The file's name as the station keeps it (the last part of its path)." }],
+    ["key", opt("String"), { doc: "A chat's file's: the session that keeps it." }],
+    ["root", opt("String"), { doc: "A drive's file's or folder's: the root it is in." }],
+    ["path", opt("String"), { doc: "A drive's file's or folder's: where it is in its root." }],
+    ["zip", opt("bool"), { doc: "A folder, zipped on the station to be downloaded." }],
+    ["name", "String", { doc: "A chat's file's name as the station keeps it (the last part of its path); a drive's file's name, a folder's zip's." }],
     ["size", "i64", { client: "I54" }],
     ["loaded", "i64", { client: "I54", doc: "How much of it is here." }],
     ["progress", "f64", { doc: "How much of it is here, 0 to 1." }],
@@ -867,10 +870,10 @@ export const SHAPES: Record<string, Shape> = {
     ["statusText", "String", { doc: "How it stands, in a line: 正在下载 42% · 18.3 MB · 等待连接 station · 正在保存 · 下载失败：… ." }],
     ["error", opt("String")],
     ["startedAt", "i64", { client: "I54" }],
-  ], { doc: "A chat's file being downloaded to this device, as the pages show it." }),
+  ], { doc: "A chat's file, a drive's file or a folder of it being downloaded to this device, as the pages show it." }),
   DownloadsView: struct([
     ["downloads", vec("DownloadShown"), { doc: "This device's, newest first." }],
-  ], { doc: "A chat's files being downloaded to this device (the `downloads` topic): under way, ready to be saved, or failed." }),
+  ], { doc: "The files being downloaded to this device (the `downloads` topic): under way, ready to be saved, or failed." }),
   DrivePlace: struct([
     ["at", "f64", { doc: "Where: a text's offset (UTF-16 units), a video's or a song's time (ms)." }],
     ["of", opt("f64"), { doc: "Of how much, when told (its length, its duration): for a fraction read." }],

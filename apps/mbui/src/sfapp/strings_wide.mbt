@@ -333,6 +333,7 @@ let zh_wide : Map[String, String] = {
   "web-main.preview.download": "下载",
   "web-main.file.cancelDownload": "取消下载",
   "web-main.file.retryDownload": "重新下载",
+  "web-pages.files.toDevice": "到此设备",
   "web-main.preview.rendered": "预览",
   "web-main.preview.source": "源码",
   "web-main.preview.zoomInKey": "放大（+）",

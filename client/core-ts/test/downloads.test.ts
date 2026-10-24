@@ -19,11 +19,29 @@ const ST = "ws/st";
 const MB = 1024 * 1024;
 const bytesOf = (n: number, from = 0) => Uint8Array.from({ length: n }, (_, i) => (from + i) % 251);
 
+/// A station's drive as the tests have it: its files by root and path (`root\npath`), each as it is now (its mtime);
+/// its folders zipped, where each zip is (a file of `drive` too).
+type Drive = { files: Map<string, { bytes: Uint8Array; mtime: number }>; zips: Map<string, { root: string; path: string; name: string }> };
+
 /// The session `k1`'s files (by name): their parts answered with the whole size; `broken` names answer 500, `away`
-/// ones are not reached.
-function files(host: FakeHost, all: Map<string, Uint8Array>, broken: Set<string> = new Set(), away: Set<string> = new Set()): void {
+/// ones are not reached. `drive`: the station's drive, read a part at a time (`/drive/read`), a folder zipped
+/// (`/drive/zip`).
+function files(host: FakeHost, all: Map<string, Uint8Array>, broken: Set<string> = new Set(), away: Set<string> = new Set(), drive?: Drive): void {
   stationReplies(host, (req) => {
     const u = new URL(req.url);
+    if (drive && u.pathname.endsWith("/drive/read")) {
+      const f = drive.files.get(`${u.searchParams.get("root")}\n${u.searchParams.get("path")}`);
+      if (f === undefined) return status(404, { error: "文件不存在" });
+      const offset = Number(u.searchParams.get("offset"));
+      const body = f.bytes.slice(offset, offset + Number(u.searchParams.get("length")));
+      return new Raw({ status: 200, headers: [["content-type", "application/octet-stream"], ["stillfail-total", String(f.bytes.length)], ["stillfail-mtime", String(f.mtime)]], body });
+    }
+    if (drive && u.pathname.endsWith("/drive/zip")) {
+      const asked = JSON.parse(new TextDecoder().decode(req.body ?? new Uint8Array())) as { root: string; path: string };
+      const z = drive.zips.get(`${asked.root}\n${asked.path}`);
+      const f = z && drive.files.get(`${z.root}\n${z.path}`);
+      return z && f ? status(200, { ...z, size: f.bytes.length }) : status(404, { error: "文件夹不存在" });
+    }
     if (!u.pathname.endsWith("/sessions/k1/parts")) return undefined;
     const name = u.searchParams.get("name") ?? "";
     if (away.has(name)) throw new HostError("没连上");
@@ -232,5 +250,56 @@ test("saved where the app cannot read it back (the web's, iOS's): the device kee
   await r.ask("download.take", { id });
   await r.ask("download.done", { id, at: "notes.zip" });
   assert.equal(await Effect.runPromise(r.core.inner.driveKept.has(id)), false);
+  r.core.close();
+});
+
+test("a drive's file downloaded as its folder lists it, read off the device to be saved; changed on the station since, fetched as it is now", async () => {
+  const doc = bytesOf(5 * MB, 17);
+  const drive: Drive = { files: new Map([["docs\n报告/年报.pdf", { bytes: doc, mtime: 1700 }]]), zips: new Map() };
+  const t = await started();
+  files(t.host, new Map(), new Set(), new Set(), drive);
+  const r = await watch(t);
+  const reads = () => t.host.requests.filter((q) => q.url.includes("/drive/read")).length;
+  const id = (await r.ask("download.start", { station: ST, root: "docs", path: "报告/年报.pdf", name: "年报.pdf", size: doc.length, mtime: 1700 })).ok.download.id;
+  const [d] = await r.view();
+  assert.deepEqual([d.root, d.path, d.name, d.state, d.key], ["docs", "报告/年报.pdf", "年报.pdf", "ready", undefined]);
+  assert.equal(reads(), 2);
+  await r.ask("download.take", { id });
+  const part = await r.ask("download.read", { id, offset: 4 * MB, length: 4 * MB });
+  assert.deepEqual([...part.bytes], [...doc.slice(4 * MB)]);
+  assert.equal(reads(), 2, "off the device");
+  await r.ask("download.done", { id });
+  // changed on the station since its folder was read: fetched as it is now, from its start
+  const now = bytesOf(3 * MB, 19);
+  drive.files.set("docs\n报告/年报.pdf", { bytes: now, mtime: 1800 });
+  const again = (await r.ask("download.start", { station: ST, root: "docs", path: "报告/年报.pdf", name: "年报.pdf", size: doc.length, mtime: 1700 })).ok.download.id;
+  const [d2] = await r.view();
+  assert.deepEqual([d2.state, d2.size], ["ready", now.length]);
+  await r.ask("download.take", { id: again });
+  const whole = await r.ask("download.read", { id: again, offset: 0, length: 4 * MB });
+  assert.deepEqual([...whole.bytes], [...now]);
+  r.core.close();
+});
+
+test("a folder downloaded: zipped on the station first (正在打包), then fetched as a file of the drive", async () => {
+  const zip = bytesOf(2 * MB, 23);
+  const drive: Drive = {
+    files: new Map([[".stillfail-zips\n设计稿.zip", { bytes: zip, mtime: 99 }]]),
+    zips: new Map([["docs\n设计稿", { root: ".stillfail-zips", path: "设计稿.zip", name: "设计稿.zip" }]]),
+  };
+  const t = await started();
+  files(t.host, new Map(), new Set(), new Set(), drive);
+  const r = await watch(t);
+  const held = t.host.hold("/drive/zip");
+  const id = (await r.ask("download.start", { station: ST, root: "docs", path: "设计稿", name: "设计稿.zip", zip: true })).ok.download.id;
+  const [zipping] = await r.view();
+  assert.deepEqual([zipping.root, zipping.path, zipping.zip, zipping.state], ["docs", "设计稿", true, "going"]);
+  assert.ok(zipping.statusText.length > 0);
+  held();
+  const [d] = await r.view();
+  assert.deepEqual([d.id, d.state, d.size, d.name], [id, "ready", zip.length, "设计稿.zip"]);
+  await r.ask("download.take", { id });
+  const part = await r.ask("download.read", { id, offset: 0, length: 4 * MB });
+  assert.deepEqual([...part.bytes], [...zip]);
   r.core.close();
 });

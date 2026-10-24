@@ -1,8 +1,9 @@
-// A chat's files downloaded to this device by the core (client/core-ts views/downloads.ts): asked of it from whatever
-// page (a preview's 下载, a card's ↻), fetched by it whatever becomes of that page and of the app (written down until
-// saved, going on as the app starts again); how far each has come said by its `downloads` topic, which every page reads
-// (the preview, the message's file). Once all of one is here, the app takes it (`download.take`, once) whatever page
-// shows, reads it off the device a part at a time (`station.file.part` with `keep`: not from the station again) into
+// Files downloaded to this device by the core (client/core-ts views/downloads.ts): a chat's, a drive's, a folder of it
+// zipped, asked of it from whatever page (a preview's 下载, a card's ↻, a drive's row), fetched by it whatever becomes
+// of that page and of the app (written down until saved, going on as the app starts again); how far each has come said
+// by its `downloads` topic, which every page reads (the preview, the message's file, the drive's row). Once all of one
+// is here, the app takes it (`download.take`, once) whatever page shows, reads it a part at a time (`download.read`:
+// off the device, not from the station again) into
 // the system's downloads (@ui.keep_begin: never whole in memory), and once the host has answered says it is done, with
 // where the system put it (`download.done`: read back from there, that is the file's copy on the device).
 
@@ -35,6 +36,62 @@ pub fn download_start(src : Source, station : String, key : String, name : Strin
     "size": Json::number(size),
   }
   (src.call)("download.start", Json::object(p), fn(_) {  })
+}
+
+///|
+/// A file of a station's drive (`root`, `path`; its `name`, its `size` and `mtime` as its folder lists it, 0 where not
+/// known) downloaded by the core: one under way or ready is that one, a failed one starts again.
+pub fn download_start_drive(
+  src : Source,
+  station : String,
+  root : String,
+  path : String,
+  name : String,
+  size : Double,
+  mtime : Double,
+) -> Unit {
+  let p : Map[String, Json] = {
+    "station": Json::string(station),
+    "root": Json::string(root),
+    "path": Json::string(path),
+    "name": Json::string(name),
+    "size": Json::number(size),
+    "mtime": Json::number(mtime),
+  }
+  (src.call)("download.start", Json::object(p), fn(_) {  })
+}
+
+///|
+/// A folder of a station's drive downloaded by the core, zipped on the station first (`name`: what the zip is called
+/// until the station says).
+pub fn download_start_zip(src : Source, station : String, root : String, path : String, name : String) -> Unit {
+  let p : Map[String, Json] = {
+    "station": Json::string(station),
+    "root": Json::string(root),
+    "path": Json::string(path),
+    "name": Json::string(name),
+    "zip": Json::boolean(true),
+  }
+  (src.call)("download.start", Json::object(p), fn(_) {  })
+}
+
+///|
+/// The core's download of a file or folder of a station's drive while it is listed; None when there is none.
+pub fn download_of_drive(src : Source, station : String, root : String, path : String) -> Json? {
+  let v = (src.topic)("downloads", {}).value
+  for d in items(v, "downloads") {
+    let d = Some(d)
+    if text(d, "station") == station && text(d, "root") == root && text(d, "path") == path && field(d, "root") is Some(_) {
+      return d
+    }
+  }
+  None
+}
+
+///|
+/// The core's download `id`, failed (or waiting for its station), tried again now.
+pub fn download_retry(src : Source, id : String) -> Unit {
+  (src.call)("download.retry", { "id": Json::string(id) }, fn(_) {  })
 }
 
 ///|
@@ -96,10 +153,10 @@ fn take_ready(src : Source, listed : Array[Json]) -> Unit {
       continue
     }
     downloads.saving[id] = true
-    let (station, key, name, size) = (text(d, "station"), text(d, "key"), text(d, "name"), number(d, "size"))
+    let (name, size) = (text(d, "name"), number(d, "size"))
     (src.call)("download.take", { "id": Json::string(id) }, fn(r) {
       match r {
-        Ok(a) if flag(Some(a), "taken") => save_download(src, id, station, key, name, size)
+        Ok(a) if flag(Some(a), "taken") => save_download(src, id, name, size)
         // taken by another page: being saved by it
         Ok(_) => ()
         // (asked again as the list next says it is ready)
@@ -112,7 +169,7 @@ fn take_ready(src : Source, listed : Array[Json]) -> Unit {
 ///|
 /// A download taken, read off the device a part at a time into the host's keep; done once the host has answered (or
 /// when it could not be read: 下载失败).
-fn save_download(src : Source, id : String, station : String, key : String, name : String, size : Double) -> Unit {
+fn save_download(src : Source, id : String, name : String, size : Double) -> Unit {
   let done = fn(at : String) {
     let p : Map[String, Json] = { "id": Json::string(id) }
     if at != "" {
@@ -131,15 +188,11 @@ fn save_download(src : Source, id : String, station : String, key : String, name
   }
   fn next(at : Double) {
     let p : Map[String, Json] = {
-      "station": Json::string(station),
-      "key": Json::string(key),
-      "name": Json::string(name),
+      "id": Json::string(id),
       "offset": Json::number(at),
       "length": Json::number(drive_part.to_double()),
-      "keep": Json::boolean(true),
-      "size": Json::number(size),
     }
-    (src.read_bytes)("station.file.part", Json::object(p), fn(r) {
+    (src.read_bytes)("download.read", Json::object(p), fn(r) {
       match r {
         Ok((head, bytes)) => {
           let k = match keep.val {

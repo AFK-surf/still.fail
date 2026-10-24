@@ -988,6 +988,10 @@ pub fn fixture(mode : String) -> Source {
         }
         None => ()
       }
+      // a download's, as the made-up core keeps it (downloads_fixture.mbt)
+      if name == "download.read" && fixture_download_read(params, done) {
+        return
+      }
       // a chat's made-up files (the preview's), else the made-up drive's
       if name.has_prefix("station.file") {
         fixture_fetch(name, params, done)

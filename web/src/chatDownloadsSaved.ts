@@ -1,18 +1,20 @@
-// The chats' files the core downloaded (chatDownloads.ts), saved: each all here taken once, whatever page shows, read
-// off the device a part at a time (each a blob of its own, which the browser keeps on its disk), handed to the browser
-// to save, then said done (`download.done`: the device keeps of it what it kept before). The signed-in app's
-// (CloudApp.tsx), not the preview's: the share page shows previews and has no core.
+// The files the core downloaded (chatDownloads.ts: a chat's, a drive's, a folder zipped), saved: each all here taken
+// once, whatever page shows, read off the device a part at a time (`download.read`: each a blob of its own, which the
+// browser keeps on its disk), handed to the browser to save, then said done (`download.done`: the device keeps of it
+// what it kept before). The signed-in app's (CloudApp.tsx), not the preview's: the share page shows previews and has
+// no core.
 import { useEffect, useRef } from "react";
-import { core, useCall, useTopic } from "./core/react.ts";
+import { core, useTopic } from "./core/react.ts";
 import type { DownloadsView } from "./core/shapes.ts";
-import { stationCall } from "./api.ts";
 import { failure, useToast } from "@stillfail/ui/toast.tsx";
 import { t } from "./i18n.ts";
 import { DOWNLOADS, saveBlob } from "./chatDownloads.ts";
 
+/** What is read at a time (the core reads its parts 4 MB at a time). */
+const PART = 4 * 1024 * 1024;
+
 /** Mounted once while signed in: each download all here taken (once) and saved. */
 export function useDownloadsSaved(): void {
-  const call = useCall();
   const toast = useToast();
   const list = useTopic<DownloadsView>(DOWNLOADS).value?.downloads;
   const taking = useRef(new Set<string>());
@@ -36,8 +38,17 @@ export function useDownloadsSaved(): void {
         // (taken by another page: saved by it)
         if (!taken) return;
         try {
-          const blob = await stationCall(call, d.station).file(d.key, d.name, false, undefined, d.size, true);
-          const url = URL.createObjectURL(blob);
+          const parts: Blob[] = [];
+          let type = "";
+          for (let at = 0; at < d.size;) {
+            const got = await core().callBytes("download.read", { id: d.id, offset: at, length: PART });
+            const bytes = got.bytes ?? new Uint8Array();
+            if (bytes.length === 0) break;
+            parts.push(new Blob([bytes as BlobPart]));
+            type = (got.value as { type?: string }).type ?? type;
+            at += bytes.length;
+          }
+          const url = URL.createObjectURL(new Blob(parts, { type }));
           saveBlob(url, d.name);
           setTimeout(() => URL.revokeObjectURL(url), 60_000);
         } catch (e) {
@@ -46,5 +57,5 @@ export function useDownloadsSaved(): void {
         await core().call("download.done", { id: d.id });
       })().catch(() => {});
     }
-  }, [list, call, toast]);
+  }, [list, toast]);
 }
