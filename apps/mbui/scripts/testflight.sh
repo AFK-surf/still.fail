@@ -2,6 +2,7 @@
 # Manual release on an ephemeral GitHub-hosted macOS runner only. Never invoke locally.
 set -euo pipefail
 D=$(cd "$(dirname "$0")" && pwd)
+. "$D/testflight-sign.sh"
 fail() { echo "testflight: $*" >&2; exit 1; }
 bash "$D/testflight-guard.sh" checkout
 [ "${RUNNER_ENVIRONMENT:-}" = github-hosted ] && [ "${RUNNER_OS:-}" = macOS ] || fail 'requires disposable GitHub macOS runner'
@@ -16,8 +17,8 @@ done
 umask 077
 T=$(mktemp -d "$RUNNER_TEMP/mbui-testflight.XXXXXX")
 KEYCHAIN=$T/signing.keychain-db
-cleanup() { security delete-keychain "$KEYCHAIN" >/dev/null 2>&1 || true; rm -rf "$T"; }
-trap cleanup EXIT
+TESTFLIGHT_UPLOADED=no
+trap testflight_cleanup EXIT
 trap 'exit 130' INT
 trap 'exit 143' TERM
 export API_PRIVATE_KEYS_DIR=$T/private_keys
@@ -83,14 +84,7 @@ security find-identity -v -p codesigning "$KEYCHAIN" | grep -i "$IOS_SIGNING_SHA
 [ "$(find "$APPDIR" -type d -name '*.appex' | wc -l | tr -d ' ')" = 1 ] || fail 'unexpected extensions'
 [ "$(find "$APPDIR" -type d -name '*.framework' | wc -l | tr -d ' ')" = 1 ] || fail 'unexpected frameworks'
 [ -d "$APPDIR/Frameworks/hermes.framework" ] || fail 'missing Hermes'
-for bundle in "$APPDIR/Frameworks/hermes.framework" "$SHARE" "$APPDIR"; do
-  ent=()
-  [ "$bundle" != "$SHARE" ] || ent=(--entitlements "$T/share.entitlements")
-  [ "$bundle" != "$APPDIR" ] || ent=(--entitlements "$T/app.entitlements")
-  codesign --force --sign "$IOS_SIGNING_SHA1" --keychain "$KEYCHAIN" --generate-entitlement-der "${ent[@]}" "$bundle"
-  codesign --verify --strict "$bundle"
-done
-codesign --verify --deep --strict "$APPDIR"
+testflight_sign_bundles
 mkdir "$T/Payload"
 cp -R "$APPDIR" "$T/Payload/"
 (cd "$T" && zip -qry app.ipa Payload)
@@ -110,3 +104,5 @@ else
   fail 'unsupported altool authentication syntax'
 fi
 echo "Upload accepted for 6818750243: $RELEASE_VERSION ($RELEASE_BUILD), $RELEASE_SHA. Processing/tester availability is NOT confirmed." >> "$GITHUB_STEP_SUMMARY"
+printf '%s\n' "$RELEASE_SHA" > "$RUNNER_TEMP/mbui-testflight-uploaded"
+TESTFLIGHT_UPLOADED=yes

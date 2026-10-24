@@ -31,6 +31,7 @@ jobs:
         with:
           ref: ${{ github.sha }}
       - run: bash apps/mbui/scripts/testflight-guard-test.sh
+      - run: bash apps/mbui/scripts/testflight-sign-test.sh
       - run: bash apps/mbui/scripts/testflight-guard.sh checkout
         env:
           RELEASE_SHA: ${{ inputs.sha }}
@@ -81,7 +82,9 @@ jobs:
           ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
           ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
           ASC_PRIVATE_KEY_B64: ${{ secrets.ASC_PRIVATE_KEY_B64 }}
-        run: bash apps/mbui/scripts/testflight.sh
+        run: |
+          bash apps/mbui/scripts/testflight.sh
+          [ "$(cat "$RUNNER_TEMP/mbui-testflight-uploaded")" = "$RELEASE_SHA" ] || { echo 'Missing upload completion receipt' >&2; exit 1; }
       - name: Clean temporary signing material (also on failure/cancellation)
         if: always()
         shell: bash
