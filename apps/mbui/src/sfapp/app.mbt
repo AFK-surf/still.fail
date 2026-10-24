@@ -383,6 +383,9 @@ fn signed_in(c : @ui.Ctx, src : Source) -> Unit {
       // the app's keys, in every tier (sfdesk's keys.mbt): what is the wide frame's alone does nothing laid out Small
       @sfdesk.keys(c, src, w)
       if @sfdesk.is_wide(c) {
+        // a page opened in the pane shows once the core has given what it shows, the one before staying till then
+        // (LOCAL_MS at most), as a page pushed on a phone slides in then
+        app.nav.shows_when(fn() { pane_ready(src, app.nav.top()) }, page_local_ms)
         // the wide frame's keys (sfdesk's keys.mbt), then the rail, the sidebar and the page beside it (sfdesk's
         // frame.mbt); what opens over them after them
         @sfdesk.frame(c, src, w, all, invited)
@@ -829,6 +832,20 @@ fn page_ready(src : Source, p : Page) -> Bool {
   match p {
     Chat(r) => answered((src.topic)("chat", chat_params(r)))
     History(r, key, _) => answered((src.topic)("chat", chat_params(r))) && answered((src.topic)("history", history_params(r, key)))
+    _ => true
+  }
+}
+
+///|
+/// Whether the core has answered for what the wide frame's pane shows of page `p`: a chat; an agent's history, a
+/// service and a file asked as pages are their chat's with them beside it (sfdesk's frame.mbt main_page), the chat
+/// shown already, what is beside it waited for in its tab; any other page is not waited for.
+fn pane_ready(src : Source, p : Page) -> Bool {
+  match p {
+    Chat(r) => {
+      let t = (src.topic)("chat", chat_params(r))
+      t.value is Some(_) || t.error is Some(_)
+    }
     _ => true
   }
 }
