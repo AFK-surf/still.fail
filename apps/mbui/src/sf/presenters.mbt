@@ -732,9 +732,10 @@ let panel_empty : @ui.TextStyle = @ui.text_style(size=Sm, leading=L5, color=Mute
 // The phone's: a sheet from the window's foot (Sheet.kt SheetHost, mbui's @kit.sheet)
 
 ///|
-/// How much of the window a sheet takes at most (Sheet.kt: 90%), and a long pick's (the run picker's: 66%), a
-/// confirm's (36%) and a question's (42%: PageParts.kt confirm, ask).
-let sheet_most : Double = 0.9
+/// How much of the window a sheet takes at most: nearly all of it, up to just under the status bar (Sheet.kt's
+/// largest detent), what it holds past that scrolling in it; and a long pick's (the run picker's: 66%), a confirm's
+/// (36%) and a question's (42%: PageParts.kt confirm, ask).
+pub let sheet_most : Double = 0.94
 
 ///|
 let sheet_long_pick : Double = 0.66
@@ -808,7 +809,7 @@ fn present_sheet(c : @ui.Ctx, key : String, p : Presented) -> (Bool, Bool) {
 ///|
 /// Where a long list's sheet settles as it is dragged (Sheet.kt SheetHost: half, and nearly all of the window).
 // kept across runs: a table, never written
-let sheet_grows_to : Array[Double] = [0.55, 0.94]
+let sheet_grows_to : Array[Double] = [0.55, sheet_most]
 
 ///|
 /// Under what a sheet shows, the navigation bar's room (Sheet.kt: windowInsetsPadding(navigationBars)).

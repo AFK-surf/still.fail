@@ -220,38 +220,19 @@ test "a chat's link" {
 }
 
 ///|
-test "the chat's sheet and an agent's card as tall as Android reckons what they show (ChatInfo.kt, AgentSheet.kt fit)" {
-  // an agent with turns, a job, a note besides a quota's: its head 22 + 52, its lines and figures 72 + 76, the note 8 +
-  // 20, 12, four rows of 40, the foot 24
-  let a : Json = {
-    "jobs": [{ "id": "j" }],
-    "turns": [{ "text": "3 步" }],
-    "attention": [{ "kind": "quota" }, { "kind": "failed" }],
-  }
-  assert_eq(agent_sheet_fit(Some(a)), 446.0)
-  // two agents (56 each), 置顶 and Slack and archive and the two always (40 each), its public links (may, two: 40 each
-  // and 10), the head 22 + 84 and the foot 10 + 30
-  let chat : Json = {
-    "agents": [{ "id": 1 }, { "id": 2 }],
-    "pinned": true,
-    "slackUrl": "https://slack.example/x",
-    "publish": { "may": true, "links": [{ "id": "a" }, { "id": "b" }] },
-  }
-  assert_eq(chat_info_fit(Some(chat), None), 588.0)
-  // the sheets drawn that tall over the navigation bar, at rest
+test "the chat's sheet and an agent's card as tall as what they show: their last row in it, no room under it to spare" {
   let calls : Array[Made] = []
-  for mode in ["chat-info", "chat-agent"] {
+  // (the chat's last: its public links' last, Bob's)
+  for case in [("chat-info", "2 天前 · Bob", chat_info_foot), ("chat-agent", "后台", agent_sheet_foot)] {
+    let (mode, last, foot) = case
     let t = decide_core(calls, mode)
     sheet_rested(t, "decide-sheet")
-    let (_, _, _, sh) = t.get(@ui.Dialog).rect
-    let chat = (fixture(mode).topic)("chat", chat_params({ station: "ws1/st1", session: "s-c1", title: "", station_name: "" })).value
-    let want = if mode == "chat-info" {
-      let (view, _, _) = view_of_chat(fixture(mode), { station: "ws1/st1", session: "s-c1", title: "", station_name: "" })
-      chat_info_fit(chat, view)
-    } else {
-      agent_sheet_fit(agent_json(chat, "s-c1"))
-    }
-    assert_true((sh - want - nav_foot()).abs() < 0.5, msg="\{mode}: \{sh} for \{want}")
+    let (_, sy, _, sh) = t.get(@ui.Dialog).rect
+    let (_, ly, _, lh) = t.rect_of(last).unwrap()
+    // under its last row's words: the rest of its row (and its card's padding), the sheet's foot, the bar's
+    let under = sy + sh - (ly + lh)
+    assert_true(under >= foot + nav_foot() && under < foot + nav_foot() + 40.0, msg="\{mode}: \{under} under \{last}")
+    assert_true(sh < 844.0 * @sf.sheet_most, msg="\{mode}: \{sh}")
   }
 }
 

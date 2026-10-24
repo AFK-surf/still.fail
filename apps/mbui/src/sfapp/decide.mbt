@@ -273,55 +273,52 @@ fn sheet_foot(c : @ui.Ctx) -> Unit {
 
 ///|
 /// A sheet from the bottom (Sheet.kt SheetHost, mbui's @kit.sheet): the scrim (black at 28%) closing it when tapped;
-/// the sheet `tall` high (its share of the screen), or with `fit` as tall as what it shows, or with `fit_to` that
-/// tall over the navigation bar (SheetSpec fit: Android's own reckoning of what it shows, what is more scrolling in it),
-/// at most 90%; its top corners 26 round, frosted over the page and the scrim (@sf.sheet_look); it rises and sinks on the
-/// sheet's spring, drawn only as it goes (a tap meanwhile is what is under it's). The decisions' sheets are one sheet:
-/// one asked in place of another goes to its height.
+/// the sheet `tall` high (its share of the screen), or with `fit` as tall as what it shows (measured as it is laid
+/// out: `tall` until it is), at most nearly all of the screen (@sf.sheet_most, as the library's presenters), what is
+/// more scrolling in it; its top corners 26 round, frosted over the page and the scrim (@sf.sheet_look); it rises and
+/// sinks on the sheet's spring, drawn only as it goes (a tap meanwhile is what is under it's), and goes on it to the
+/// height what it shows asks for as that changes. The decisions' sheets are one sheet: one asked in place of another
+/// goes to its height.
 fn sheet_frame(
   c : @ui.Ctx,
   key : String,
   tall : Double,
   body : () -> Unit,
   fit? : Bool = false,
-  fit_to? : Double = 0.0,
   draggable? : Bool = false,
 ) -> Unit {
   let leaving = dui.sheet is None
-  // fitted: what it shows as laid out (the frame before); `tall`, its share, until that is known
   let fit_key = "sheet-fit/" + key
+  let grab_key = fit_key + "/grab"
   let h = match (fit, @motion.measured(c, fit_key)) {
-    _ if fit_to > 0.0 => fit_to + nav_foot()
-    (true, Some(m)) => m
+    (true, Some(m)) => @motion.measured(c, grab_key).unwrap_or(0.0) + m + nav_foot()
     _ => tall
   }
   let r = @kit.sheet(
     c,
     "decide-sheet",
     !leaving,
-    h=dmin(h, c.height * 0.9),
-    // a draggable one between half (55%) and nearly all (94%) of the screen, a tap on its grabber to the other (Sheet.kt)
+    h=dmin(h, c.height * @sf.sheet_most),
+    // a draggable one between half (55%) and nearly all of the screen, a tap on its grabber to the other (Sheet.kt)
     detents=if draggable { sheet_detents } else { [] },
     scrim=@sf.sheet_scrim,
     look=@sf.sheet_look(),
     fn() {
-      if fit_to > 0.0 {
-        // the grabber, then what it shows scrolling in the room left over the navigation bar (Sheet.kt: the content's
+      if fit {
+        // the grabber, then what it shows laid out at what it needs (both kept for the next frame's height), in the
+        // room left over the navigation bar: all of it, or past the most it scrolls (Sheet.kt: the content's
         // Column(weight(1f).verticalScroll))
-        @sf.sheet_grab(c)
+        let grab = c.box(style=sheet_fitted, fn() { @sf.sheet_grab(c) })
+        @motion.measure(c, grab, grab_key)
         c.box(style=sheet_scrolled, fn() {
-          c.list("sheet-scroll/" + key, 1, fit_to, fn(_) { body() }) |> ignore
+          c.list("sheet-scroll/" + key, 1, tall, fn(_) {
+            let shown = c.box(style=sheet_fitted, fn() { body() })
+            @motion.measure(c, shown, fit_key)
+          })
+          |> ignore
         })
         |> ignore
         sheet_foot(c)
-      } else if fit {
-        // laid out at what it needs, kept for the next frame's height
-        let shown = c.box(style=sheet_fitted, fn() {
-          @sf.sheet_grab(c)
-          body()
-          sheet_foot(c)
-        })
-        @motion.measure(c, shown, fit_key)
       } else {
         // its share: what it shows may fill it (a list scrolling in it)
         @sf.sheet_grab(c)
@@ -339,14 +336,14 @@ fn sheet_frame(
 }
 
 ///|
-/// What a sheet reckoned by `fit_to` shows: the room between its grabber and its foot.
+/// What a fitted sheet shows between its grabber and its foot: the room left there.
 // kept across runs: a value (no field of it changes)
 let sheet_scrolled : @ui.Style = @ui.style(w=Full, h=@sf.grow)
 
 ///|
 /// Where a draggable sheet settles: half the screen and nearly all of it (Sheet.kt SheetHost: 0.55, 0.94).
 // kept across runs: a table, never written
-let sheet_detents : Array[Double] = [0.55, 0.94]
+let sheet_detents : Array[Double] = [0.55, @sf.sheet_most]
 
 ///|
 /// A sheet's head (Sheet.kt SheetHead): its title, 17 bold.
