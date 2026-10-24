@@ -337,7 +337,9 @@ test "下方栏: a screen reader moves a place one slot along" {
 ///|
 test "添加成员: what is typed counts at once, 添加 lit by it" {
   let t = settings_tester("workspace")
-  t.tap(362.0, 22.0)
+  // (the ＋ at the title's end)
+  let (x, y, w, h) = t.query(Button, label="添加成员").unwrap().rect
+  t.tap(x + w / 2.0, y + h / 2.0)
   assert_true(t.find("添加成员") is Some(_))
   t.tap_text("name@example.com")
   t.type_text("he2@example.com")

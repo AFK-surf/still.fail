@@ -34,7 +34,6 @@ fn setting_page(c : @ui.Ctx, src : Source, w : Workspace, route : Route) -> Unit
   settings_fixture(core)
   match route {
     Appearance => appearance_page(c, core)
-    Workspace => workspace_page(c, core, here)
     Security => security_page(c, core, here)
     Vault => vault_page(c, core, here)
     VaultItem(v, item) => vault_item_page(c, core, here, v, item)
@@ -56,7 +55,7 @@ fn setting_page(c : @ui.Ctx, src : Source, w : Workspace, route : Route) -> Unit
 /// frame's pane: back, the room over and under it). False for a route whose pages are not one yet (its frame draws its
 /// own copy).
 pub fn setting_route(c : @ui.Ctx, src : Source, w : Workspace, route : Route, frame : PageFrame) -> Bool {
-  if !(route is (About | Changelog | Memories | Memory(_) | AutoDecisions | Permissions | Version | UsagePrices(_) | Usage | Archiving | StationArchiving(_) | Notifications | PickModels(_, _) | ProfileModels(_, _) | Shortcuts | Me)) {
+  if !(route is (About | Changelog | Memories | Memory(_) | AutoDecisions | Permissions | Version | UsagePrices(_) | Usage | Archiving | StationArchiving(_) | Notifications | PickModels(_, _) | ProfileModels(_, _) | Shortcuts | Me | Workspace)) {
     return false
   }
   let core = settings_core(src, w)
@@ -79,6 +78,7 @@ pub fn setting_route(c : @ui.Ctx, src : Source, w : Workspace, route : Route, fr
     ProfileModels(a, id) => profile_models_page(c, core, here, frame, a, id)
     Shortcuts => shortcuts_page(c, core, frame)
     Me => me_page(c, core, here, frame)
+    Workspace => workspace_page(c, core, here, frame)
     _ => ()
   }
   true

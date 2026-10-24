@@ -1,0 +1,8 @@
+# The workspace's page (sfdesk workspace.mbt, one page in every frame): MBUI_FIXTURE=settings-workspace, a phone's
+# window or a desktop's; a person pressed.
+timeout 20000
+until ana@example.com
+wait 1200
+tap ana@example.com
+wait 1500
+exit

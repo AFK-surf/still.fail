@@ -542,6 +542,7 @@
   "android-settings.waiting.remove": "从这里移除",
   "android-settings.waiting.removeText": "仅从 {app} 中移除；该 app 仍保留在 Slack 中，不再需要时可在 Slack 的 app 设置页删除。",
   "android-settings.waiting.removeWhat": "移除 app",
+  "android-settings.workspace.title": "Workspace",
   "android-settings.workspace.about": "你是{role} · {people} · {stations}",
   "android-settings.workspace.aboutRename": "你是{role} · {people} · {stations} · 点击名称可重命名",
   "android-settings.workspace.delete": "删除 workspace",
