@@ -16,7 +16,7 @@ import { Mark } from "./brand.tsx";
 import { scopeOf, stationBase, usePerson, useStation } from "./station.tsx";
 import { chatOfLink } from "./chatRefs.ts";
 import { Hover, PathSession } from "./Peeks.tsx";
-import { Avatar, Button, Dialog, ElsewhereLogo, ICON, ModelLogo, Pill, Segmented, Spinner, Switch, SlackLogo, Time, Tip, transitionTo } from "./ui.tsx";
+import { Avatar, Button, Dialog, ElsewhereLogo, ICON, ModelLogo, Pill, Progress, Segmented, Spinner, Switch, SlackLogo, Time, Tip, transitionTo } from "./ui.tsx";
 import { ComposerSlot, useComposerHeight } from "./dock.tsx";
 import { chatPage } from "./chatPage.ts";
 import { Prose, withBareLinks } from "./Prose.tsx";
@@ -24,7 +24,7 @@ import type { Md } from "./core/md.ts";
 import { placeFiles } from "../../client/core-ts/src/placed.ts";
 import { shortcutOf, useKeymap, usePageKeysAvailable, useShortcut } from "./keymap.ts";
 import { FileLink, FilePreview, fileHere, fileSize, Gallery, isImage, kindOf, storedName, useFileShown, useNear, useVideoStill } from "./FilePreview.tsx";
-import { useDownload } from "./chatDownloads.ts";
+import { cancelDownload, startDownload, useDownload } from "./chatDownloads.ts";
 import { imageBox } from "./imageBox.ts";
 import { thumbhashUrl } from "./thumbhash.ts";
 import { OpenFile, VizFile } from "./Viz.tsx";
@@ -1453,8 +1453,9 @@ function FileItem({ sessionKey, file }: { sessionKey: string | null; file: Attac
   const url = local ?? fetched.url;
   const failed = !local && fetched.failed;
   const [open, setOpen] = useState(false);
-  // Downloaded by the core (asked from its preview, chatDownloads.ts): how far, on its card.
-  const download = useDownload(station.address, image || video ? null : sessionKey, storedName(file));
+  // Downloaded by the core (asked from its preview, chatDownloads.ts): how far, on its card (✕ calls it off, ↻ asks a
+  // failed one again) or a video's block.
+  const download = useDownload(station.address, image ? null : sessionKey, storedName(file));
   // An image seen before, or that comes at once, just shows; one that takes a while is brushed in from the top.
   const born = useRef(performance.now());
   const key = `${sessionKey}\n${file.path}`;
@@ -1482,7 +1483,9 @@ function FileItem({ sessionKey, file }: { sessionKey: string | null; file: Attac
           <span className={videoFailed ? css.msgVideoUnavailable : css.msgVideoPlay} aria-hidden="true">
             {videoFailed ? <><Read size={24} /><span>{t("web-main.file.noPreview")}</span><small>{fileSize(file.size)}</small></> : "▶"}
           </span>
-          <span className={css.msgVideoName}>{file.name}</span>
+          <span className={css.msgVideoName}>{download?.active
+            ? <>{download.statusText}<Progress part={download.progress} label={download.statusText} className={css.msgVideoBar} /></>
+            : file.name}</span>
         </button></Tip>
         {preview}
       </>
@@ -1517,9 +1520,30 @@ function FileItem({ sessionKey, file }: { sessionKey: string | null; file: Attac
   if (sessionKey === null) return look.card(file);
   return (
     <>
-      <button type="button" className={look.open} onClick={() => setOpen(true)} aria-label={t("web-main.file.view", { name: file.name })}>{look.card(file, download)}</button>
+      <MessageFileCard file={file} download={download} onOpen={() => setOpen(true)}
+        onCancel={(id) => cancelDownload(id)} onRetry={() => startDownload(station.address, sessionKey, storedName(file), file.size)} />
       {preview}
     </>
+  );
+}
+
+/**
+ * A message's file as a card, opened by a press; while the core downloads it (`download`, chatDownloads.ts) a button
+ * of its own at its end calls that off (✕), once that failed asks it again (↻): beside the button that opens it, laid
+ * over the room the card keeps for it (a button holds no button).
+ */
+export function MessageFileCard({ file, download, onOpen, onCancel, onRetry }: {
+  file: Pick<Attachment, "name" | "size" | "path">; download: DownloadShown | null; onOpen: () => void; onCancel: (id: string) => void; onRetry: () => void;
+}) {
+  const act = download === null ? null
+    : download.active ? { label: t("web-main.file.cancelDownload"), icon: <Close size={12} />, run: () => onCancel(download.id) }
+    : download.state === "failed" ? { label: t("web-main.file.retryDownload"), icon: <Retry size={13} />, run: onRetry }
+    : null;
+  return (
+    <span className={css.fileCardHold}>
+      <button type="button" className={look.open} onClick={onOpen} aria-label={t("web-main.file.view", { name: file.name })}>{look.card(file, download, act !== null)}</button>
+      {act && <Tip label={act.label}><button type="button" className={`${css.fileCardRemove} ${css.fileCardAction}`} aria-label={act.label} onClick={act.run}>{act.icon}</button></Tip>}
+    </span>
   );
 }
 
@@ -1558,7 +1582,7 @@ function Waiting({ hash, fit }: { hash: string | undefined; fit?: { width: strin
 }
 
 /** How the chat draws a file: an image's button, the box it takes before it loads and what shows until then; a file's card and its button. */
-const look = { image: css.msgImage, wait: css.msgImageWait, box: (f: Attachment, least?: number) => imageBox(f, least), open: css.fileCardOpen, card: (f: Attachment, download?: DownloadShown | null) => <FileCard file={f} download={download} /> };
+const look = { image: css.msgImage, wait: css.msgImageWait, box: (f: Attachment, least?: number) => imageBox(f, least), open: css.fileCardOpen, card: (f: Pick<Attachment, "name" | "size" | "path">, download?: DownloadShown | null, slot?: boolean) => <FileCard file={f} download={download} slot={slot} /> };
 
 const NO_MARK = { current: null };
 
@@ -1607,13 +1631,14 @@ export function FileTile({ name, dir = false, progress, error = false, land = fa
 }
 
 /** `download`: the core's of it (chatDownloads.ts), how far in its size's place and filling its sheet as an upload does;
- * failed, why, as an upload's failure. */
-export function FileCard({ file, onRemove, onRetry, pending, sent, error, download }: { file: Pick<Attachment, "name" | "size"> & { path?: string }; onRemove?: () => void; onRetry?: (() => void) | undefined; pending?: boolean; sent?: number | undefined; error?: string | null; download?: DownloadShown | null | undefined }) {
+ * failed, why, as an upload's failure. `slot`: room at its end for a button of its own laid over it (a message's
+ * ✕ or ↻, beside the button that opens it). */
+export function FileCard({ file, onRemove, onRetry, pending, sent, error, download, slot }: { file: Pick<Attachment, "name" | "size"> & { path?: string }; onRemove?: () => void; onRetry?: (() => void) | undefined; pending?: boolean; sent?: number | undefined; error?: string | null; download?: DownloadShown | null | undefined; slot?: boolean | undefined }) {
   // How far it has gone, once that is known.
   const going = pending && sent !== undefined && file.size > 0
     ? t("web-main.file.uploadingPart", { percent: Math.floor((sent / file.size) * 100), size: fileSize(file.size) })
     : t("common.uploading");
-  const coming = download?.state === "going" ? download : null;
+  const coming = download?.active ? download : null;
   const failed = error ?? (download?.state === "failed" ? download.statusText : null);
   return (
     <Tip label={file.path ?? file.name} cut={!file.path}><span className={css.fileCard} data-card="" data-error={failed ? true : undefined}>
@@ -1624,6 +1649,7 @@ export function FileCard({ file, onRemove, onRetry, pending, sent, error, downlo
       </span>
       {onRetry && <Tip label={t("web-main.composer.retryUpload")}><button type="button" className={css.fileCardRemove} aria-label={t("web-main.composer.retryUpload")} onClick={(e) => { e.stopPropagation(); onRetry(); }}><Retry size={13} /></button></Tip>}
       {onRemove && <button type="button" className={css.fileCardRemove} aria-label={t("web-main.file.remove", { name: file.name })} onClick={(e) => { e.stopPropagation(); onRemove(); }}><Close size={12} /></button>}
+      {slot && <span className={css.fileCardSlot} aria-hidden="true" />}
     </span></Tip>
   );
 }

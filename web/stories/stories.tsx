@@ -14,7 +14,7 @@ import { driveFile } from "../src/drive/viewerFile.ts";
 import { DrivePreview } from "../src/mobile/Drive.tsx";
 import { FilePreview } from "../src/FilePreview.tsx";
 import { useToast } from "@stillfail/ui/toast.tsx";
-import { ComposerExtras, FileCard, MineBubble, MineMessage } from "../src/Chat.tsx";
+import { ComposerExtras, FileCard, MessageFileCard, MineBubble, MineMessage } from "../src/Chat.tsx";
 import type { Draft, Pending } from "../src/draft.ts";
 import * as composerCss from "../src/styles/composer.css.ts";
 import * as conversationCss from "../src/styles/conversation.css.ts";
@@ -642,12 +642,13 @@ function OutboxUpload() {
 function FileDownloads() {
   const size = 52_428_800;
   const of = (state: DownloadShown["state"], loaded: number, statusText: string): DownloadShown =>
-    ({ id: `s|k|${state}`, station: "s", key: "k", name: "dist.zip", size, loaded, progress: loaded / size, state, statusText, startedAt: 0 });
+    ({ id: `s|k|${state}`, station: "s", key: "k", name: "dist.zip", size, loaded, progress: loaded / size, state, active: state !== "failed", statusText, startedAt: 0 });
+  const file = { name: "dist.zip", size, path: "work/dist.zip" };
   return (
     <div style={{ padding: 40, maxWidth: 820, display: "grid", gap: 12, justifyItems: "start" }}>
-      <FileCard file={{ name: "dist.zip", size, path: "work/dist.zip" }} />
-      <FileCard file={{ name: "dist.zip", size, path: "work/dist.zip" }} download={of("going", 22_020_096, "正在下载 42% · 50 MB")} />
-      <FileCard file={{ name: "dist.zip", size, path: "work/dist.zip" }} download={of("failed", 0, "下载失败：没连上 station")} />
+      {[null, of("going", 22_020_096, "正在下载 42% · 50 MB"), of("waiting", 10_485_760, "等待连接 station · 20%"), of("failed", 0, "下载失败：无法连接 station")].map((d) => (
+        <MessageFileCard key={d?.state ?? "none"} file={file} download={d} onOpen={noop} onCancel={noop} onRetry={noop} />
+      ))}
     </div>
   );
 }

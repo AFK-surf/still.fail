@@ -33,10 +33,12 @@ pub fn drive_keep(p : Map[String, Json], keep : String, mtime : Double, size : D
 }
 
 ///|
-/// A keep the host has not answered yet, and its file's name.
+/// A keep the host has not answered yet, its file's name, and what is done once it has answered (a chat's download
+/// said done to the core, downloads.mbt).
 priv struct Keeping {
   keep : @ui.Keep
   name : String
+  then : (@hostapi.Kept) -> Unit
 }
 
 ///|
@@ -50,8 +52,9 @@ pub fn keeps_frame(c : @ui.Ctx) -> Unit {
     return
   }
   let left = []
-  for k in keepings {
-    match k.keep.kept() {
+  for i, k in keepings {
+    let kept = k.keep.kept()
+    match kept {
       Keeping => left.push(k)
       KeptAt(at) => {
         @hostapi.log("kept \{k.name}: \{at}")
@@ -66,6 +69,10 @@ pub fn keeps_frame(c : @ui.Ctx) -> Unit {
         say(c, @sf.t("android-chat.file.saveFailed"))
       }
     }
+    if !(kept is Keeping) {
+      // (told once the frame's builds are over, as the answer is the build's that took it)
+      c.tell("keep-then/\{i}/\{k.name}", fn() { (k.then)(kept) })
+    }
   }
   keepings.clear()
   keepings.push_iter(left.iter())
@@ -78,7 +85,7 @@ pub fn keep_bytes(c : @ui.Ctx, name : String, mime : String, bytes : Bytes) -> U
   // (asked of the host once the frame's builds are over: its callers' bytes, given once)
   c.tell("keep/" + name, fn() {
     match @ui.keep(name, mime, bytes) {
-      Some(k) => keepings.push({ keep: k, name })
+      Some(k) => keepings.push({ keep: k, name, then: fn(_) {  } })
       None => say(c, @sf.t("android-chat.file.saveFailed"))
     }
   })
@@ -166,7 +173,7 @@ pub fn download_drive_file(
         match err {
           None => {
             k.finish()
-            keepings.push({ keep: k, name })
+            keepings.push({ keep: k, name, then: fn(_) {  } })
           }
           Some(e) => {
             k.end()

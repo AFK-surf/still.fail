@@ -1,7 +1,7 @@
 // The core's downloads made up (sfbase/downloads.mbt, client/core-ts views/downloads.ts): one asked comes in a
-// twentieth at a time, `fix_download_step_ms` apart, then waits to be taken; taken, it leaves the list. MBUI_FIXTURE=
-// chat-download: the chat with 发布包.zip from its agent last (scripts/motion/download.drive films it asked from the
-// preview, on as the preview closes, on its card).
+// twentieth at a time, `fix_download_step_ms` apart, then waits to be taken; taken, it is being saved; done or called
+// off, it leaves the list. MBUI_FIXTURE=chat-download: the chat with 发布包.zip and a recording from its agent last
+// (scripts/motion/download.drive films one asked from the preview, on as the preview closes, on its card).
 
 ///|
 /// A download made up: its file (`station`, its session, its name), how big, how much is here, how it stands.
@@ -36,7 +36,14 @@ fn fix_download_shown(d : FixDownload) -> Json {
     "loaded": Json::number(d.loaded),
     "progress": Json::number(if d.size > 0.0 { d.loaded / d.size } else { 1.0 }),
     "state": Json::string(d.state),
-    "statusText": Json::string(if d.state == "going" { "正在下载 \{percent}% · \{total}" } else { "已下载 · \{total}" }),
+    "active": Json::boolean(d.state != "failed"),
+    "statusText": Json::string(
+      match d.state {
+        "going" => "正在下载 \{percent}% · \{total}"
+        "saving" => "正在保存 · \{total}"
+        _ => "已下载 · \{total}"
+      },
+    ),
     "startedAt": 0.0,
   }
 }
@@ -48,7 +55,7 @@ fn fixture_downloads_topic() -> Json {
 }
 
 ///|
-/// `download.start` and `download.take` made up; None for any other call.
+/// `download.start`, `download.take`, `download.done` and `download.cancel` made up; None for any other call.
 fn fixture_downloads_call(f : Fixture, name : String, params : Json) -> Result[Json, Json]? {
   let p = Some(params)
   match name {
@@ -74,17 +81,28 @@ fn fixture_downloads_call(f : Fixture, name : String, params : Json) -> Result[J
     }
     "download.take" => {
       let id = text(p, "id")
-      let before = fix_downloads.length()
-      fix_downloads.retain(fn(d) { d.state != "ready" || d.station + "|" + d.key + "|" + d.name != id })
+      let mut taken = false
+      for d in fix_downloads {
+        if d.state == "ready" && d.station + "|" + d.key + "|" + d.name == id {
+          d.state = "saving"
+          taken = true
+        }
+      }
       f.version += 1
-      Some(Ok({ "taken": Json::boolean(fix_downloads.length() < before) }))
+      Some(Ok({ "taken": Json::boolean(taken) }))
+    }
+    "download.done" | "download.cancel" => {
+      let id = text(p, "id")
+      fix_downloads.retain(fn(d) { d.station + "|" + d.key + "|" + d.name != id })
+      f.version += 1
+      Some(Ok({}))
     }
     _ => None
   }
 }
 
 ///|
-/// MBUI_FIXTURE=chat-download: the chat with its agent's 发布包.zip last, to be downloaded.
+/// MBUI_FIXTURE=chat-download: the chat with its agent's 发布包.zip and a recording last, to be downloaded.
 fn with_download_message(v : Json) -> Json {
   match v {
     Object(m) => {
@@ -96,7 +114,7 @@ fn with_download_message(v : Json) -> Json {
       all.push(
         msg(12, "agent", by_agent("anthropic", "claude", "s-c1"), "打好的发布包在这里，下载下来装一下看看。", "1 分钟前", {
           "ending": "all_done",
-          "attachments": [file("发布包.zip", 0, 0, 52428800)],
+          "attachments": [file("发布包.zip", 0, 0, 52428800), file("演示录屏.mp4", 1280, 720, 5242880)],
         }),
       )
       o["messages"] = Json::array(all)

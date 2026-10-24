@@ -72,6 +72,21 @@ test "where the app goes apart from the run is said, and what waits on it stays"
 }
 
 ///|
+test "a topic the app watches from its start (the device's downloads) that a run from before had not: not where they went apart" {
+  let r = @core.Replay::parse(run)
+  let c = r.client()
+  let d = c.subscribe("downloads")
+  let s = c.subscribe("accounts")
+  assert_eq(r.diverged().length(), 0)
+  // the run's own go on as it had them; the downloads have nothing
+  assert_eq(r.deliver(), 1)
+  assert_eq(s.value.unwrap().stringify(), "[]")
+  assert_true(d.value is None)
+  c.unsubscribe(d)
+  assert_eq(r.diverged().length(), 0)
+}
+
+///|
 test "an unsubscription matched by what it names" {
   let r = @core.Replay::parse((
     #|{"out":{"id":3,"subscribe":{"topic":"threads","station":"a"},"keyed":true}}

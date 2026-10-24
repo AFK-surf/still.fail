@@ -718,6 +718,8 @@ let en : Map[String, String] = {
   "web-main.preview.kind.text": "Text",
   "web-main.preview.unsupported": "Can't preview this file type",
   "web-main.preview.download": "Download",
+  "web-main.file.cancelDownload": "Cancel download",
+  "web-main.file.retryDownload": "Download again",
   "web-main.preview.rendered": "Preview",
   "web-main.preview.source": "Source",
   "web-main.preview.zoomInKey": "Zoom in (+)",

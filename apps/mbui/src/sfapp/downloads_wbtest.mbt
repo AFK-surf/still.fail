@@ -1,11 +1,19 @@
 // A chat's files downloaded to this device by the core (sfbase/downloads.mbt, client/core-ts views/downloads.ts):
-// asked from the preview, on by themselves whatever page shows, how far each has come on its message's card, and kept
-// where the system keeps downloads once all of each is here.
+// asked from the preview, on by themselves whatever page shows, how far each has come on its message's card (✕ calls
+// one off, ↻ asks a failed one again), and saved a part at a time where the system keeps downloads once all of each is
+// here, then said done.
 
 ///|
 /// The fixture `mode` with the core's `downloads` as `list` says, its calls kept in `calls`; `download.take` answered
-/// as taken, `station.file` read with `keep` answered with `bytes` of `type`.
-fn downloads_src(mode : String, list : Array[Json], calls : Array[(String, Json)], bytes? : Bytes = b"PK\x03\x04") -> Source {
+/// as taken, `station.file.part` read with `keep` (the saving's) answered with `bytes` (of `type`) a part at a time,
+/// `part` at most.
+fn downloads_src(
+  mode : String,
+  list : Array[Json],
+  calls : Array[(String, Json)],
+  bytes? : Bytes = b"PK\x03\x04",
+  part? : Int = 4 * 1024 * 1024,
+) -> Source {
   let base = fixture(mode)
   {
     ..base,
@@ -20,14 +28,18 @@ fn downloads_src(mode : String, list : Array[Json], calls : Array[(String, Json)
       calls.push((name, params))
       match name {
         "download.take" => done(Ok({ "taken": true }))
-        "download.start" => done(Ok({}))
+        "download.start" | "download.done" | "download.cancel" => done(Ok({}))
         _ => (base.call)(name, params, done)
       }
     },
     read_bytes: fn(name, params, done) {
       calls.push((name, params))
-      if name == "station.file" {
-        done(Ok(({ "type": "application/zip" }, bytes)))
+      // (the saving's reads, off the device: a preview's own go to the fixture)
+      if name == "station.file.part" && flag(Some(params), "keep") {
+        let from = number(Some(params), "offset").to_int()
+        let to = if from + part > bytes.length() { bytes.length() } else { from + part }
+        let got = Bytes::makei(to - from, fn(i) { bytes[from + i] })
+        done(Ok(({ "type": "application/zip", "total": Json::number(bytes.length().to_double()) }, got)))
       } else {
         (base.read_bytes)(name, params, done)
       }
@@ -47,57 +59,82 @@ fn listed(name : String, state : String, loaded : Double, size : Double, said : 
     "loaded": Json::number(loaded),
     "progress": Json::number(if size > 0.0 { loaded / size } else { 0.0 }),
     "state": Json::string(state),
+    "active": Json::boolean(state != "failed"),
     "statusText": Json::string(said),
     "startedAt": 1.0,
   }
 }
 
 ///|
-test "downloads: one the core has all here is taken once and read as it keeps it, then kept where the system keeps downloads, whatever page shows" {
+test "downloads: one the core has all here is taken once, read off the device a part at a time into the host's keep, then said done once the host has kept it, whatever page shows" {
   reset()
   let calls : Array[(String, Json)] = []
-  let src = downloads_src("home", [listed("dist.zip", "ready", 2048.0, 2048.0, "已下载 · 2 KB")], calls)
-  // (asked in this run, as a preview's 下载 asks it)
-  download_start(src, "ws1/st1", "s-c1", "dist.zip", 2048.0)
+  let bytes = Bytes::makei(10, fn(i) { (i * 7).to_byte() })
+  let src = downloads_src("home", [listed("dist.zip", "ready", 10.0, 10.0, "已下载 · 10 B")], calls, bytes~, part=4)
   let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0)
   t.frame()
   t.frame()
   t.frame()
-  let takes = calls.filter(fn(m) { m.0 == "download.take" })
-  assert_eq(takes.length(), 1)
-  let reads = calls.filter(fn(m) { m.0 == "station.file" })
-  assert_eq(reads.length(), 1)
-  // read off the device, as the core keeps it with its chat: not asked of the station again
+  assert_eq(calls.filter(fn(m) { m.0 == "download.take" }).length(), 1)
+  // read off the device, as the core keeps it with its chat (not asked of the station again), 4 at a time
+  let reads = calls.filter(fn(m) { m.0 == "station.file.part" })
+  assert_eq(reads.map(fn(r) { number(Some(r.1), "offset") }), [0.0, 4.0, 8.0])
   assert_eq(field(Some(reads[0].1), "keep"), Some(Json::boolean(true)))
-  assert_eq(field(Some(reads[0].1), "size"), Some(Json::number(2048.0)))
+  assert_eq(field(Some(reads[0].1), "size"), Some(Json::number(10.0)))
+  // nothing of it read whole
+  assert_eq(calls.filter(fn(m) { m.0 == "station.file" }).length(), 0)
   let kept = t.kept()
   assert_eq(kept.length(), 1)
   assert_eq(kept[0].0, "dist.zip")
   assert_eq(kept[0].1, "application/zip")
+  assert_eq(kept[0].2, bytes)
+  // the host has answered: done, once
+  assert_eq(calls.filter(fn(m) { m.0 == "download.done" }).map(fn(m) { text(Some(m.1), "id") }), ["ws1/st1|s-c1|dist.zip"])
 }
 
 ///|
-test "downloads: a file's card says how far the core has downloaded it in its size's place; failed, why" {
+test "downloads: a file's card says how far the core has downloaded it in its size's place, ✕ calls it off; failed, why, ↻ asks it again" {
   reset()
   let calls : Array[(String, Json)] = []
   let going = listed("发布包.zip", "going", 22020096.0, 52428800.0, "正在下载 42% · 50 MB")
   let src = downloads_src("chat-download", [going], calls)
-  download_start(src, "ws1/st1", "s-c1", "发布包.zip", 52428800.0)
   open_fixture_mode("chat-download")
   let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0)
   t.run_for(@ui.nav_push_ms)
   assert_true(t.find("正在下载 42% · 50 MB") is Some(_), msg=t.words().map(fn(w) { w.0 }).join("|"))
   // (in its size's place)
   assert_true(!t.words().iter().any(fn(w) { w.0 == "50 MB" }))
-  // the desk's: failed, why, in its size's place
+  t.click(Button, label=tr("web-main.file.cancelDownload"))
+  t.frame()
+  assert_eq(calls.filter(fn(m) { m.0 == "download.cancel" }).map(fn(m) { text(Some(m.1), "id") }), ["ws1/st1|s-c1|发布包.zip"])
+  // nothing opened by it
+  assert_true(viewer.val is None)
+  // the desk's: failed, why, in its size's place; ↻ asks it again
   reset()
-  let failed = listed("发布包.zip", "failed", 0.0, 52428800.0, "下载失败：没连上 station")
+  let failed = listed("发布包.zip", "failed", 0.0, 52428800.0, "下载失败：无法连接 station")
   let src = downloads_src("chat-download", [failed], calls)
-  download_start(src, "ws1/st1", "s-c1", "发布包.zip", 52428800.0)
   let t = @ui.Tester::new(fn(c) { view(c, src) }, w=1280.0, h=800.0, platform=0)
   open_fixture_mode("chat-download")
   t.run_for(@ui.nav_push_ms)
-  assert_true(t.find("下载失败：没连上 station") is Some(_), msg=t.words().map(fn(w) { w.0 }).join("|"))
+  assert_true(t.find("下载失败：无法连接 station") is Some(_), msg=t.words().map(fn(w) { w.0 }).join("|"))
+  t.click(Button, label=tr("web-main.file.retryDownload"))
+  t.frame()
+  let again = calls.filter(fn(m) { m.0 == "download.start" })
+  assert_eq(again.length(), 1)
+  assert_eq(field(Some(again[0].1), "name"), Some(Json::string("发布包.zip")))
+  assert_eq(field(Some(again[0].1), "size"), Some(Json::number(52428800.0)))
+}
+
+///|
+test "downloads: a video's block in the chat says how far the core has downloaded it in its name's place" {
+  reset()
+  let calls : Array[(String, Json)] = []
+  let going = listed("演示录屏.mp4", "waiting", 1048576.0, 5242880.0, "等待连接 station · 20%")
+  let src = downloads_src("chat-download", [going], calls)
+  open_fixture_mode("chat-download")
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0)
+  t.run_for(@ui.nav_push_ms)
+  assert_true(t.find("等待连接 station · 20%") is Some(_), msg=t.words().map(fn(w) { w.0 }).join("|"))
 }
 
 ///|
@@ -148,6 +185,21 @@ test "downloads: 下载 on a file told of asks the core to download it, which go
   assert_eq(field(Some(starts[0].1), "size"), Some(Json::number(52428800.0)))
   // not read whole by the preview itself: the core's download is the one
   assert_eq(calls.filter(fn(m) { m.0 == "station.file" }).length(), 0)
+}
+
+///|
+test "downloads: while the core downloads a file told of, the preview says how far over a bar, and calls it off" {
+  reset()
+  let calls : Array[(String, Json)] = []
+  let src = downloads_src("home", [listed("dist.zip", "going", 1048576.0, 52428800.0, "正在下载 2% · 50 MB")], calls)
+  let file : Json = { "name": "dist.zip", "path": "work/s-c1/dist.zip", "size": 52428800.0, "owner": "s-c1" }
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0)
+  open_preview("ws1/st1", "s-c1", attachment_of(file))
+  t.run_for(@ui.nav_push_ms)
+  assert_true(t.find("正在下载 2% · 50 MB") is Some(_), msg=t.words().map(fn(w) { w.0 }).join("|"))
+  t.tap_text(tr("web-main.file.cancelDownload"))
+  t.frame()
+  assert_eq(calls.filter(fn(m) { m.0 == "download.cancel" }).length(), 1)
 }
 
 ///|

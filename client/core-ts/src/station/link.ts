@@ -341,7 +341,10 @@ export class Links {
     link.state = value;
     this.#told.changed(address, "link");
     // Reached again: what was to go to it while it was not goes now.
-    if (state === "online" && was !== "online") this.#core.viewCalls?.stationBack(address);
+    if (state === "online" && was !== "online") {
+      this.#core.viewCalls?.stationBack(address);
+      this.#core.downloads?.stationBack(address);
+    }
   }
 
   /// Down, and tried again now, until the try ends: one found offline is still taken for down (views.ts `down`), what

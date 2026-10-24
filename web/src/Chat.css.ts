@@ -298,6 +298,15 @@ export const refInfoChat = style({ display: "flex", alignItems: "center", justif
 export const fileCardName = style({
   display: "flex", minWidth: "0", fontSize: vars.textUi, lineHeight: "20px", whiteSpace: "nowrap",
 });
+/**
+ * A message's file card with a button of its own beside the one that opens it (a download's ✕ or ↻): laid over the
+ * room the card keeps for it at its end (`fileCardSlot`, as wide as fileCardRemove), where the composer's card has its
+ * own.
+ */
+export const fileCardHold = style({ position: "relative", display: "inline-flex", maxWidth: "100%" });
+export const fileCardSlot = style({ width: "22px", height: "22px", flex: "none" });
+// (the card's right padding: later.css.ts fileCard)
+export const fileCardAction = style({ position: "absolute", top: "50%", right: "10px", transform: "translateY(-50%)" });
 export const fileCardRemove = style({
   display: "grid", placeItems: "center", width: "22px", height: "22px", padding: "0", border: "0", borderRadius: "50%",
   background: "none", color: vars.muted, cursor: "pointer", flex: "none",
@@ -674,6 +683,8 @@ export const msgVideoName = style({
   position: "absolute", bottom: "0", left: "0", right: "0", padding: "6px 8px",
   background: "rgba(0, 0, 0, 0.65)", fontSize: vars.textMeta, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
 });
+/** Under its words while the core downloads it (chatDownloads.ts): how far, 4 below them. */
+export const msgVideoBar = style({ display: "block", marginTop: "4px" });
 
 export const msgVideoUnavailable = style({
   position: "absolute", inset: "0 0 30px", display: "flex", flexDirection: "column",

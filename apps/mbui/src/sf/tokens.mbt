@@ -849,6 +849,10 @@ pub let file_sheet_w : @ui.Len = Fixed(30.0)
 pub let file_sheet_h : @ui.Len = Fixed(36.0)
 
 ///|
+/// A file card's own button (Chat.css.ts fileCardRemove: 22 round).
+pub let file_card_button : @ui.Len = Fixed(22.0)
+
+///|
 /// A name over a message at its widest (Chat.css.ts msgHead msgName: 240).
 pub let name_max : @ui.Len = Fixed(240.0)
 

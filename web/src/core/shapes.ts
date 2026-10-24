@@ -2777,8 +2777,8 @@ export interface DoingView {
 	doing: DoingItem[];
 }
 
-/** How a download stands: coming, all here to be saved, or failed. */
-export type DownloadState = "going" | "ready" | "failed";
+/** How a download stands: coming, waiting for its station to be reached (it goes on once it is), all here to be saved, being saved, or failed. */
+export type DownloadState = "going" | "waiting" | "ready" | "saving" | "failed";
 
 /** A chat's file being downloaded to this device, as the pages show it. */
 export interface DownloadShown {
@@ -2795,7 +2795,9 @@ export interface DownloadShown {
 	/** How much of it is here, 0 to 1. */
 	progress: number;
 	state: DownloadState;
-	/** How it stands, in a line: 正在下载 42% · 18.3 MB · 已下载 · 下载失败：… . */
+	/** Not failed: its progress shown, and it can be called off (`download.cancel`). */
+	active: boolean;
+	/** How it stands, in a line: 正在下载 42% · 18.3 MB · 等待连接 station · 正在保存 · 下载失败：… . */
 	statusText: string;
 	error?: string;
 	startedAt: number;

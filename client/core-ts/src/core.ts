@@ -125,6 +125,8 @@ export class Inner {
   forms!: Forms;
   adb!: Adb;
   viewCalls!: ViewCalls;
+  /// This device's downloads of chats' files (views/downloads.ts).
+  downloads!: downloads.Downloads;
   router!: Router;
   /// The calls of the app's modules, by full name (module.ts), and the modules' names (their topics are `<name>.…`).
   moduleCalls = new Map<string, ModuleCall<any>>();
@@ -292,6 +294,7 @@ export class Core {
       inner.stations.reconcile();
       // What was on its way when the core last stopped goes on.
       inner.viewCalls.resume();
+      inner.downloads.resume();
       // What changed in still.fail: read now, and again each time an account's events socket opens.
       inner.scheduler.enqueue("cloud", "changelog", Priority.background, inner.changelog.read());
       inner.cloudSync.onOpen = () => inner.scheduler.enqueue("cloud", "changelog", Priority.background, inner.changelog.read());
