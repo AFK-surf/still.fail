@@ -993,3 +993,64 @@ test "a chain with motion reduced: each there at once, its end the moment it was
   }
   t.assert_idle()
 }
+
+///|
+/// The rect drawn in `color`: x, y, w, h.
+fn drawn_box(t : @ui.Tester, color : Int64) -> (Double, Double, Double, Double) {
+  let rs = t.drawn_rects().filter(fn(r) { r.4 == color })
+  if rs.is_empty() {
+    (-1.0, -1.0, -1.0, -1.0)
+  } else {
+    (rs[0].0, rs[0].1, rs[0].2, rs[0].3)
+  }
+}
+
+///|
+/// A shape changed for its cause (its tween's length), and a moment within it.
+let reshape_ms : Double = 200.0
+
+///|
+let reshape_midway_ms : Double = 100.0
+
+///|
+test "a box reshaped for its cause: what it holds there at once, its ground from the shape it had to the new one" {
+  let lines = Ref::new(1)
+  let t = @ui.Tester::new(fn(c) {
+    c.column(fn() {
+      let b = c.box(w=Px(100.0), h=Px(20.0 * lines.val.to_double()), bg=0xFF0000FFL, fn() {
+        c.box(w=Px(10.0), h=Px(10.0), bg=0x00FF00FFL, fn() {  }) |> ignore
+      })
+      @motion.reshape(c, b, "box", by="\{lines.val} lines", spec=@motion.tween(reshape_ms, ease=Linear))
+    })
+    |> ignore
+  })
+  assert_eq(drawn_box(t, 0xFF0000FFL), (0.0, 0.0, 100.0, 20.0))
+  // a second line: laid out 40 high at once (what it holds where it now is), its ground still 20 as the move sets out
+  lines.val = 2
+  t.frame()
+  assert_eq(drawn_box(t, 0xFF0000FFL).3, 20.0)
+  assert_eq(drawn_box(t, 0x00FF00FFL), (0.0, 0.0, 10.0, 10.0))
+  t.run_for(reshape_midway_ms)
+  let mid = drawn_box(t, 0xFF0000FFL).3
+  assert_true(mid > 20.0 && mid < 40.0, msg="\{mid}")
+  t.run_for(@motion.layout_rest("box") - t.time())
+  assert_eq(drawn_box(t, 0xFF0000FFL).3, 40.0)
+  t.assert_idle()
+}
+
+///|
+test "a box resized by what holds it, its cause the same, has its ground its new shape at once" {
+  let w = Ref::new(100.0)
+  let t = @ui.Tester::new(fn(c) {
+    c.column(fn() {
+      let b = c.box(w=Px(w.val), h=Px(20.0), bg=0xFF0000FFL, fn() {  })
+      @motion.reshape(c, b, "box", by="one line", spec=@motion.tween(reshape_ms, ease=Linear))
+    })
+    |> ignore
+  })
+  w.val = 60.0
+  t.frame()
+  assert_eq(drawn_box(t, 0xFF0000FFL), (0.0, 0.0, 60.0, 20.0))
+  assert_eq(@motion.layout_rest("box"), -1.0)
+  t.assert_idle()
+}
