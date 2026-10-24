@@ -179,8 +179,9 @@ pub fn fixture_page(mode : String) -> String {
       fx.login = "failed"
       up("", "settings/profile/ws1/st1/cc", 0)
     }
-    "settings-connect-menu" => up("connect-menu", "", 0)
-    "settings-connect-mode" => up("connect-mode", "", 0)
+    // a connect's page; its way of making sessions asked (src/sfdesk connect.mbt's dialog)
+    "settings-connect-menu" => ()
+    "settings-connect-mode" => fixture_open.desk = "connect-mode"
     "settings-vault-off" => fx.vault_off = true
     "settings-vault-plain" => fx.plain_left = 2
     "settings-lock-prompt" => fx.pairing = true
@@ -216,6 +217,10 @@ pub fn fixture_page(mode : String) -> String {
     "settings-new-connect-app" => fx_connect_step.val = "app"
     _ => fx_connect_step.val = "team"
   }
+  // a new connect's dialog over 连接 (src/sfdesk new_connect.mbt), at the step said above
+  if m.has_prefix("settings-new-connect") {
+    fixture_open.desk = "new-connect"
+  }
   match m {
     "settings" => "home"
     "settings-station-mark" | "settings-station-env" | "settings-station-lower" | "settings-station-versions" =>
@@ -226,10 +231,9 @@ pub fn fixture_page(mode : String) -> String {
     "settings-profile-menu" | "settings-profile-lower" | "settings-profile-login" => "profile:ws1/st1#cc"
     "settings-new-profile" => "new-profile:ws1/st1"
     "settings-connect-menu" | "settings-connect-mode" => "connect:ws1/st1#k1"
-    "settings-connect-run" => "connect-run:ws1/st1#k1"
+    "settings-connect-run" | "settings-slack-app" => "connect:ws1/st1#k1"
     "settings-new-connect" | "settings-new-connect-platform" | "settings-new-connect-scan" | "settings-new-connect-app" =>
-      "new-connect:ws1/st1"
-    "settings-slack-app" => "slack-app:ws1/st1#k1"
+      "connects"
     "settings-vault-off" | "settings-vault-words" | "settings-vault-add" | "settings-vault-editor" => "vault"
     "settings-vault-recover" | "settings-vault-plain" => "vault"
     "settings-vault-item" => "vault-item:v1#it1"
@@ -1844,19 +1848,6 @@ fn fixture_sheet(core : Core, here : Here) -> Unit {
     "profile-menu" => {
       let p = fx_profiles()[0]
       open_profile_menu(core, "ws1/st1", Some(p))
-    }
-    "connect-menu" | "connect-mode" => {
-      let item = obj([
-        ("station", str("ws1/st1")),
-        ("connect", fx_connect("k1", "星火助手", "online", "在线", "multi-session")),
-        ("candidates", []),
-        ("running", Json::number(2.0)),
-      ])
-      if what == "connect-menu" {
-        open_connect_menu(core, here, "ws1/st1", Some(item))
-      } else {
-        open_mode(core, "ws1/st1", Some(item))
-      }
     }
     "add-people" => open_add_people(core, here, workspace_view(core, here).value)
     "workspace-mark" => open_mark_pick(core, "星火工作室", "", "glyph:rocket:orange", "", fn(_, _, _) {  })
