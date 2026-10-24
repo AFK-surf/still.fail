@@ -171,5 +171,9 @@ pub fn reset() -> Unit {
   ups_reset()
   dv_fetches.clear()
   keepings.clear()
+  // the chats' list (rows.mbt)
+  read_views.clear()
+  open_titled.val = ""
+  shown_days.clear()
 }
 
