@@ -43,6 +43,8 @@ pub(open) trait Host {
   face_add(Self, Int, String, Int) -> Bool = _
   face_add_bytes(Self, Int, Bytes, Int) -> Bool = _
   face_clear(Self, Int) -> Unit = _
+  face_add_family(Self, Int, String) -> Bool = _
+  local_font_families(Self) -> String = _
   atlas_generation(Self) -> Int = _
   present(Self, FixedArray[Double], Int, Double, Double, Double) -> Unit = _
   set_ime(Self, Bool, Double, Double, Double, Double, String, Int, Int) -> Unit = _
@@ -339,6 +341,16 @@ impl Host with face_add_bytes(_, _, _, _) {
 ///|
 impl Host with face_clear(_, _) {
   ()
+}
+
+///|
+impl Host with face_add_family(_, _, _) {
+  false
+}
+
+///|
+impl Host with local_font_families(_) {
+  ""
 }
 
 ///|
@@ -1275,6 +1287,20 @@ pub fn glyphs_ahead(keys : FixedArray[Int], n : Int) -> Unit {
 /// or 4 to 15 for what names it), for `weight` (0: a variable file, every weight from it). False when the host could
 /// not read it as a font (the face as it was). What was shaped or drawn before is the host's to forget
 /// (atlas_generation moves on).
+/// Face `face` set in a family installed on this machine (`family`, as local_font_families names it): its every style
+/// the system's. False where the host has none of that name (or no way to it).
+pub fn face_add_family(face : Int, family : String) -> Bool {
+  current.val.face_add_family(face, family)
+}
+
+///|
+/// The font families installed on this machine, as a JSON array of their names, in the order of the user's
+/// language (the system's hidden ones left out); "" where the host has no way to them (a phone, a browser).
+pub fn local_font_families() -> String {
+  current.val.local_font_families()
+}
+
+///|
 pub fn face_add(face : Int, path : String, weight : Int) -> Bool {
   current.val.face_add(face, path, weight)
 }

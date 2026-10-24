@@ -171,6 +171,16 @@ impl @hostapi.Host for Native with face_clear(_, face) {
 }
 
 ///|
+impl @hostapi.Host for Native with face_add_family(_, face, family) {
+  face_add_family(face, family)
+}
+
+///|
+impl @hostapi.Host for Native with local_font_families(_) {
+  local_font_families()
+}
+
+///|
 impl @hostapi.Host for Native with atlas_generation(_) {
   atlas_generation()
 }

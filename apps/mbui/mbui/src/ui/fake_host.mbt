@@ -94,6 +94,16 @@ impl @hostapi.Host for FakeHost with face_clear(_, a0) {
 }
 
 ///|
+impl @hostapi.Host for FakeHost with face_add_family(_, a0, a1) {
+  h_face_add_family(a0, a1)
+}
+
+///|
+impl @hostapi.Host for FakeHost with local_font_families(_) {
+  local_font_families()
+}
+
+///|
 impl @hostapi.Host for FakeHost with atlas_generation(_) {
   h_atlas_generation()
 }

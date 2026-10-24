@@ -182,6 +182,8 @@ pub fn fixture_page(mode : String) -> String {
     "settings-vault-recover" => up("vault-recover", "", 0)
     "settings-add-people" => up("add-people", "", 0)
     "settings-workspace-mark" => up("workspace-mark", "", 0)
+    // 外观's 本机字体 open (fonts.mbt local_tile: the families the host lists)
+    "settings-local-fonts" => local_open.val = true
     // the desktop's archive policy with a dialog up (web_decisions.mbt): its words, an option of the station's
     "settings-policy-text" => fx_policy_up.val = "text"
     "settings-policy-option" => fx_policy_up.val = "option"
@@ -233,6 +235,7 @@ pub fn fixture_page(mode : String) -> String {
     "settings-prices" => "prices:7"
     "settings-run" | "settings-run-models" | "settings-run-accounts" => "run:ws1/st1#s-c1"
     "settings-add-people" | "settings-workspace-mark" => "workspace"
+    "settings-local-fonts" => "appearance"
     "settings-security-confirm" | "settings-security-join" | "settings-security-off" => "security"
     "settings-notify-off" | "settings-lock-prompt" => "home"
     "settings-station" => "station:ws1/st1"

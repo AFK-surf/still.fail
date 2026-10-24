@@ -60,6 +60,13 @@ extern "C" fn ffi_face_clear(face : Int) -> Unit = "mb_host_face_clear"
 #borrow(data)
 extern "C" fn ffi_face_add_bytes(face : Int, data : Bytes, weight : Int) -> Int = "mb_host_face_add_bytes"
 
+///|
+#borrow(family)
+extern "C" fn ffi_face_add_family(face : Int, family : String) -> Int = "mb_host_face_add_family"
+
+///|
+extern "C" fn ffi_local_font_families() -> String = "mb_host_local_font_families"
+
 extern "C" fn ffi_atlas_generation() -> Int = "mb_host_atlas_generation"
 
 #borrow(buf)
@@ -470,6 +477,16 @@ fn face_add_bytes(face : Int, data : Bytes, weight : Int) -> Bool {
 /// Face `face` given up: what was in it is in the system's face again.
 fn face_clear(face : Int) -> Unit {
   ffi_face_clear(face)
+}
+
+///|
+fn face_add_family(face : Int, family : String) -> Bool {
+  ffi_face_add_family(face, family) != 0
+}
+
+///|
+fn local_font_families() -> String {
+  ffi_local_font_families()
 }
 
 ///|

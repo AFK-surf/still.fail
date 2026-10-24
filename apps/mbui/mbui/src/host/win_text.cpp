@@ -95,19 +95,22 @@ static struct {
   int n;
   IDWriteFontCollection1 *fc;
   WCHAR family[128];
+  bool system;  // a family installed here (mb_host_face_add_family): the system's collection, no files of its own
 } faces[MB_FACES];
 // fonts given as bytes: DirectWrite's in-memory loader (it keeps a copy of each)
 static IDWriteInMemoryFontFileLoader *mem_loader;
 
 // The face a style is set in: the one it names; else code's (style & 2), what people wrote's (style & 16), the app's
 // words' (not the serif face's); 0 none given.
+static bool face_has(int f) { return faces[f].fc || faces[f].system; }
+
 static int face_id(int style) {
   int f = (style >> 8) & 15;
-  if (f > 0) return faces[f].fc ? f : 0;
-  if (style & 2) return faces[3].fc ? 3 : 0;
-  if ((style & 16) && faces[2].fc) return 2;
+  if (f > 0) return face_has(f) ? f : 0;
+  if (style & 2) return face_has(3) ? 3 : 0;
+  if ((style & 16) && face_has(2)) return 2;
   if (style & 4) return 0;
-  return faces[1].fc ? 1 : 0;
+  return face_has(1) ? 1 : 0;
 }
 
 // Face `f`'s files as a collection, its family's name from it (false: not fonts DirectWrite reads).
@@ -137,6 +140,7 @@ static bool face_build(int f) {
   if (ok) {
     if (faces[f].fc) faces[f].fc->Release();
     faces[f].fc = fc;
+    faces[f].system = false;
     fc = NULL;
   }
   if (names) names->Release();
@@ -194,15 +198,115 @@ extern "C" int32_t mb_host_face_add_bytes(int32_t f, moonbit_bytes_t data, int32
 }
 
 extern "C" void mb_host_face_clear(int32_t f) {
-  if (f <= 0 || f >= MB_FACES || !faces[f].fc) return;
+  if (f <= 0 || f >= MB_FACES || !face_has(f)) return;
   for (int i = 0; i < faces[f].n; i++) {
     free(faces[f].paths[i]);
     free(faces[f].data[i]);
   }
   faces[f].n = 0;
-  faces[f].fc->Release();
+  if (faces[f].fc) faces[f].fc->Release();
   faces[f].fc = NULL;
+  faces[f].system = false;
   faces_changed();
+}
+
+// The system's font collection's family named `name` (its index), if there is one.
+static bool system_family(const WCHAR *name) {
+  IDWriteFontCollection *fc = NULL;
+  if (FAILED(dw->GetSystemFontCollection(&fc, FALSE))) return false;
+  UINT32 at = 0;
+  BOOL there = FALSE;
+  fc->FindFamilyName(name, &at, &there);
+  fc->Release();
+  return there;
+}
+
+// Face `f` set in the family installed here named `family`: the system's collection, by its name.
+extern "C" int32_t mb_host_face_add_family(int32_t f, moonbit_string_t family) {
+  init();
+  int len = Moonbit_array_length(family);
+  if (f <= 0 || f >= MB_FACES || len <= 0 || len >= 128) return 0;
+  WCHAR name[128];
+  memcpy(name, family, sizeof(WCHAR) * len);
+  name[len] = 0;
+  if (!system_family(name)) return 0;
+  for (int i = 0; i < faces[f].n; i++) {
+    free(faces[f].paths[i]);
+    free(faces[f].data[i]);
+  }
+  faces[f].n = 0;
+  if (faces[f].fc) faces[f].fc->Release();
+  faces[f].fc = NULL;
+  memcpy(faces[f].family, name, sizeof(name));
+  faces[f].system = true;
+  faces_changed();
+  return 1;
+}
+
+// The font families installed here, as a JSON array of their names (each its name in the user's language, else its
+// first), sorted as the collection has them.
+// the user's locale, the families' names are shown and sorted in
+static WCHAR names_locale[LOCALE_NAME_MAX_LENGTH];
+
+static int name_order(const void *a, const void *b) {
+  return CompareStringEx(names_locale[0] ? names_locale : NULL, LINGUISTIC_IGNORECASE, *(const WCHAR *const *)a, -1,
+                         *(const WCHAR *const *)b, -1, NULL, NULL, 0) - CSTR_EQUAL;
+}
+
+extern "C" moonbit_string_t mb_host_local_font_families(void) {
+  init();
+  IDWriteFontCollection *fc = NULL;
+  if (FAILED(dw->GetSystemFontCollection(&fc, FALSE))) return moonbit_make_string_raw(0);
+  if (!GetUserDefaultLocaleName(names_locale, LOCALE_NAME_MAX_LENGTH)) names_locale[0] = 0;
+  UINT32 count = fc->GetFontFamilyCount();
+  WCHAR **all = (WCHAR **)calloc(count ? count : 1, sizeof(WCHAR *));
+  UINT32 had = 0;
+  for (UINT32 i = 0; i < count; i++) {
+    IDWriteFontFamily *fam = NULL;
+    IDWriteLocalizedStrings *names = NULL;
+    WCHAR name[256];
+    name[0] = 0;
+    if (SUCCEEDED(fc->GetFontFamily(i, &fam)) && SUCCEEDED(fam->GetFamilyNames(&names))) {
+      UINT32 at = 0;
+      BOOL there = FALSE;
+      if (names_locale[0]) names->FindLocaleName(names_locale, &at, &there);
+      if (!there) at = 0;
+      UINT32 len = 0;
+      if (SUCCEEDED(names->GetStringLength(at, &len)) && len < 255) names->GetString(at, name, 256);
+    }
+    if (names) names->Release();
+    if (fam) fam->Release();
+    if (name[0]) all[had++] = _wcsdup(name);
+  }
+  fc->Release();
+  // in the order of the user's language, as the web's localeCompare
+  qsort(all, had, sizeof(WCHAR *), name_order);
+  size_t cap = 4096, n = 0;
+  WCHAR *out = (WCHAR *)malloc(sizeof(WCHAR) * cap);
+  out[n++] = L'[';
+  for (UINT32 i = 0; i < had; i++) {
+    const WCHAR *name = all[i];
+    size_t len = wcslen(name);
+    // its name as a JSON string: a quote and a backslash escaped, the rest as it is
+    if (n + 2 * len + 4 >= cap) {
+      cap = (n + 2 * len + 4) * 2;
+      out = (WCHAR *)realloc(out, sizeof(WCHAR) * cap);
+    }
+    if (n > 1) out[n++] = L',';
+    out[n++] = L'"';
+    for (size_t k = 0; k < len; k++) {
+      if (name[k] == L'"' || name[k] == L'\\') out[n++] = L'\\';
+      out[n++] = name[k] < 0x20 ? L' ' : name[k];
+    }
+    out[n++] = L'"';
+    free(all[i]);
+  }
+  free(all);
+  out[n++] = L']';
+  moonbit_string_t s = moonbit_make_string_raw((int32_t)n);
+  memcpy(s, out, sizeof(WCHAR) * n);
+  free(out);
+  return s;
 }
 
 static IDWriteTextFormat *format_for(double size, int weight, int style) {
@@ -211,7 +315,7 @@ static IDWriteTextFormat *format_for(double size, int weight, int style) {
   IDWriteTextFormat *f = NULL;
   int face = face_id(style);
   dw->CreateTextFormat(face ? faces[face].family : (style & 2) ? MONO : (style & 4) ? SERIF : FAMILY,
-                       face ? faces[face].fc : NULL, (DWRITE_FONT_WEIGHT)weight,
+                       face && faces[face].fc ? faces[face].fc : NULL, (DWRITE_FONT_WEIGHT)weight,
                        (style & 1) ? DWRITE_FONT_STYLE_ITALIC : DWRITE_FONT_STYLE_NORMAL,
                        DWRITE_FONT_STRETCH_NORMAL, (FLOAT)size, L"zh-cn", &f);
   f->SetWordWrapping(DWRITE_WORD_WRAPPING_NO_WRAP);

@@ -246,6 +246,19 @@ fn face_clear(face : Int) -> Unit {
 }
 
 ///|
+/// (a browser's faces are the files given: no family of the machine's)
+fn face_add_family(face : Int, family : String) -> Bool {
+  ignore(face)
+  ignore(family)
+  false
+}
+
+///|
+fn local_font_families() -> String {
+  ""
+}
+
+///|
 fn atlas_generation() -> Int {
   js_atlas_generation()
 }
