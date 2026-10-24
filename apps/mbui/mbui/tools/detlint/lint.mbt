@@ -875,12 +875,13 @@ fn lint_globals(files : Array[MbtFile], cfg : Config, out : Array[Finding]) -> U
             value.push(v.text)
             k += 1
           }
-          // (a wire: what does the work, a function named or given; a value put back is state, not a wire)
+          // (a wire: what does the work, a function named (f, @pkg.f) or given (fn …); a value put back, made by a
+          // call or said, is state, not a wire)
           let wire = value.length() > 0 &&
             (
               value[0] == "fn" ||
-              (body[i + 4].kind == "ident" && !["true", "false", "None", "Some"].contains(value[0])) ||
-              body[i + 4].kind == "at"
+              (value.length() == 1 && body[i + 4].kind == "ident" && !["true", "false", "None"].contains(value[0])) ||
+              (value.length() == 3 && body[i + 4].kind == "at" && value[1] == ".")
             )
           match owner {
             Some(o) if wire => sets.push((o, t.text, value.join(" ")))
