@@ -70,6 +70,17 @@ test("how busy the CPUs were is over the last seconds only, and unknown until th
   assert.equal(busy.share(), 0.9);
 });
 
+test("since a task started, how busy the CPUs were is over the ticks noted from then on", () => {
+  const busy = new Busy();
+  busy.note(0, [0, 0]);
+  busy.note(LOOK_MS, [10, 10]);
+  busy.note(2 * LOOK_MS, [11, 20]);
+  busy.note(3 * LOOK_MS, [12, 30]);
+  assert.equal(busy.share(), 0.4);
+  assert.equal(busy.share(LOOK_MS), 0.1, "the busy first look before the start left out");
+  assert.equal(busy.share(2 * LOOK_MS), null, "less than two looks since");
+});
+
 test("a task started beside others is told how many CPUs are free, unless its environment says already", () => {
   assert.deepEqual(cpusFor({}, 12, 0.5, true), {}, "alone: the machine is its");
   assert.deepEqual(cpusFor({}, 12, 0.5, false), { STILLFAIL_CPUS: "6", MAKEFLAGS: "-j6", CARGO_BUILD_JOBS: "6", CMAKE_BUILD_PARALLEL_LEVEL: "6" });
@@ -182,6 +193,22 @@ describe("the queue", { skip: WINDOWS && "jobs' groups and sh" }, () => {
     await looks(r.clock, () => r.store.getJob(second.id)!.queued !== true);
     await until("it ends", () => r.store.getJob(second.id)!.state === "exited");
     assert.equal(readFileSync(join(r.dir, "work", "cpus"), "utf8"), "6");
+  });
+
+  test("one started that has ended holds nothing back: the next starts at once, or at the next look", async () => {
+    const state = { busy: 0.05, pressure: "normal" as Pressure };
+    const r = rig(state);
+    r.start("one", "a", FOREVER);
+    const quick = r.start("two", "b", "true");
+    await looks(r.clock, () => r.store.getJob(quick.id)!.queued !== true);
+    await until("it ends", () => r.store.getJob(quick.id)!.state === "exited");
+    // (the first still runs: under the old flat ramp this one waited for the ended one's)
+    const next = r.start("three", "c", "true");
+    if (next.queued === true) {
+      await r.clock.move(LOOK_MS);
+      await sleep(5);
+    }
+    assert.notEqual(r.store.getJob(next.id)!.queued, true, "not held for the ended one's ramp");
   });
 
   test("while the memory is under pressure nothing starts; once it eases the waiting one does", async () => {
