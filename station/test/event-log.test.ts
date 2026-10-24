@@ -81,3 +81,45 @@ test("let go of whole, nothing before can be gone on from, and it goes on number
   assert.deepEqual(ids(log, "1f2e3d4c.3"), [4]);
   assert.equal(log.state().bytes, next.text.length);
 });
+
+test("what a log keeps goes on in the next process: the same run, numbered on, a thing said whole said again in its place", () => {
+  const log = new EventLog<string>("1f2e3d4c");
+  log.append("thread", { id: 1 }, "all", 0);
+  log.append("overview", { running: 1 }, "a", 0, "overview\0a");
+  log.append("overview", { running: 2 }, "a", 0, "overview\0a");
+  log.append("thread", { id: 2 }, "all", 0);
+  // As it is written and read back: what was said again since is left out.
+  const kept = JSON.parse(JSON.stringify(log.kept()));
+  assert.deepEqual(kept.events.map((e: { n: number }) => e.n), [1, 3, 4]);
+  const next = EventLog.from<string>(kept, 1_000);
+  assert.equal(next.run, "1f2e3d4c");
+  for (const since of ["1f2e3d4c.0", "1f2e3d4c.2", "1f2e3d4c.4"]) assert.deepEqual(ids(next, since), ids(log, since), since);
+  assert.deepEqual(next.after("1f2e3d4c.2").map((e) => e.to), ["a", "all"]);
+  // Numbered on from where it was; the overview said again takes the place of the one handed over.
+  assert.equal(next.append("overview", { running: 3 }, "a", 1_000, "overview\0a").n, 5);
+  assert.deepEqual(ids(next, "1f2e3d4c.0"), [1, 4, 5]);
+  assert.equal(next.state().bytes, next.after("1f2e3d4c.0").reduce((sum, e) => sum + e.text.length, 0));
+});
+
+test("what is handed over is kept as what is appended is, and what is no log is not taken up", () => {
+  // By age, at the time it is taken up.
+  const log = new EventLog<string>("1f2e3d4c");
+  log.append("thread", { id: 1 }, "all", 0);
+  log.append("thread", { id: 2 }, "all", 1_000);
+  const next = EventLog.from<string>(log.kept(), KEPT_MS + 500);
+  assert.equal(next.has("1f2e3d4c.0"), false);
+  assert.deepEqual(ids(next, "1f2e3d4c.1"), [2]);
+  // By number.
+  const events = Array.from({ length: KEPT_MOST + 10 }, (_, i) => ({ n: i + 1, to: "all", text: "x", at: 0 }));
+  const many = EventLog.from<string>({ run: "1f2e3d4c", seq: KEPT_MOST + 10, forgotten: 0, events }, 0);
+  assert.equal(many.state().kept, KEPT_MOST);
+  assert.equal(many.has("1f2e3d4c.9"), false);
+  assert.ok(many.has("1f2e3d4c.10"));
+  // Let go of whole before: nothing before can be gone on from there either.
+  log.clear();
+  const cleared = EventLog.from<string>(log.kept(), 0);
+  assert.equal(cleared.has("1f2e3d4c.2"), false);
+  assert.equal(cleared.append("thread", {}, "all", 0).n, 4);
+  const bad = [{}, { ...log.kept(), run: "../x" }, { ...log.kept(), seq: 1 }, { run: "1f", seq: 2, forgotten: 0, events: [{ n: 3, to: "all", text: "", at: 0 }] }];
+  for (const kept of bad) assert.throws(() => EventLog.from(kept as never, 0), /not a log/, JSON.stringify(kept));
+});

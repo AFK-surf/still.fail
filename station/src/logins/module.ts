@@ -6,7 +6,6 @@
 import { Effect, Layer } from "effect";
 import { routes } from "../api/routes/logins.ts";
 import { Refused } from "../mesh/bus.ts";
-import { readOnly } from "../mesh/credential.ts";
 import { nameOf, peerNamed } from "../mesh/peer-http.ts";
 import { log } from "../ops/log.ts";
 import { Agents } from "../sessions/agents.ts";
@@ -52,7 +51,7 @@ export const LoginsLive = Layer.effectDiscard(
       logins.changes((change) => {
         const login = logins.get(change.login);
         if (!login) return;
-        events.machineLogins({ login }, { login: Logins.limited(login) }, readOnly, `login\0${login.id}`);
+        events.machineLogins({ login }, { login: Logins.limited(login) }, `login\0${login.id}`);
         // Asking something again after its person's browser step (az picking a subscription, say): its agent answers. An
         // agent whose call waits on it is told by that call.
         const asks = login.waiting && login.paste !== true && login.endedAt === undefined && logins.hadBrowserStep(login.id);

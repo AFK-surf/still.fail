@@ -11,7 +11,7 @@ import type { Viewer } from "../../mesh/credential.ts";
 import { type BoxCert, type Item, type Vault, certOk, itemOk, vaultOk } from "../../vault/crypto.ts";
 import type { VaultStore } from "../../vault/store.ts";
 import type { Route } from "../admin.ts";
-import type { Events } from "../events.ts";
+import type { Events, To } from "../events.ts";
 import { type Answer, type Request, json, param } from "../request.ts";
 
 export type VaultDeps = {
@@ -38,12 +38,14 @@ function body(r: Request): unknown {
 }
 
 const sees = (vault: Vault, viewer: Viewer) => vault.ws === viewer.workspace && vault.members.includes(viewer.sub);
+/// Whom a vault's changes are told to: its members.
+const members = (vault: Vault): To => ({ workspace: vault.ws, subs: vault.members });
 
 export const routes = ({ vaults, lock, events, boxed }: VaultDeps): Route[] => {
   /// The lock of the viewer's workspace, or the refusal.
   const locked = (r: Request): LockState | Answer => lock(r.viewer.workspace) ?? NEEDS_LOCK();
   const isAnswer = (v: LockState | Answer): v is Answer => "status" in v;
-  const tell = (event: string, data: unknown, of: string, to: (viewer: Viewer) => boolean) => events?.tell(event, data, of, to);
+  const tell = (event: string, data: unknown, of: string, to: To) => events?.tell(event, data, of, to);
   return [
     {
       method: "GET",
@@ -74,9 +76,9 @@ export const routes = ({ vaults, lock, events, boxed }: VaultDeps): Route[] => {
         const why = vaultOk(l, prev, next, copy);
         if (why !== null) return refuse(400, "vault_invalid", why);
         vaults.putVault(next);
-        tell("vault", next, `vault\0${next.id}`, (v) => sees(next, v));
+        tell("vault", next, `vault\0${next.id}`, members(next));
         const gone = (prev?.members ?? []).filter((m) => !next.members.includes(m));
-        if (gone.length > 0) tell("vault-gone", { id: next.id }, `vault-gone\0${next.id}`, (v) => v.workspace === next.ws && gone.includes(v.sub));
+        if (gone.length > 0) tell("vault-gone", { id: next.id }, `vault-gone\0${next.id}`, { workspace: next.ws, subs: gone });
         return json(200, JSON.stringify({ vault: next }));
       },
     },
@@ -112,7 +114,7 @@ export const routes = ({ vaults, lock, events, boxed }: VaultDeps): Route[] => {
         const why = itemOk(l, vault, prev, next, copy);
         if (why !== null) return refuse(400, "vault_invalid", why);
         vaults.putItem(next);
-        tell("vault-item", next, `vault-item\0${vault.id}\0${next.id}`, (v) => sees(vault, v));
+        tell("vault-item", next, `vault-item\0${vault.id}\0${next.id}`, members(vault));
         return json(200, JSON.stringify({ item: next }));
       },
     },
@@ -139,7 +141,7 @@ export const routes = ({ vaults, lock, events, boxed }: VaultDeps): Route[] => {
         // An older one than held changes nothing.
         if (had !== null && had.at > cert.at) return json(200, JSON.stringify({ box: had }));
         vaults.putBox(cert);
-        tell("vault-box", cert, `vault-box\0${cert.device}`, (v) => v.workspace === cert.ws);
+        tell("vault-box", cert, `vault-box\0${cert.device}`, { workspace: cert.ws });
         boxed?.(l, cert);
         return json(200, JSON.stringify({ box: cert }));
       },

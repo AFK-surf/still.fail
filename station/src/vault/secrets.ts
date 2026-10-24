@@ -13,6 +13,7 @@ import { randomBytes } from "node:crypto";
 import { mkdirSync } from "node:fs";
 import type { DatabaseSync } from "node:sqlite";
 import type { LockState } from "../cloud/lock.ts";
+import type { To } from "../api/events.ts";
 import { threadAddress } from "../agents/instructions.ts";
 import { wall } from "../ops/fibers.ts";
 import { log } from "../ops/log.ts";
@@ -263,9 +264,17 @@ export class Secrets {
     return lock !== null && this.#d.vaults.vault(lock.ws, r.vault)?.members.includes(viewer.sub) === true;
   }
 
-  /// Whether request `r`'s changes are told to `viewer` (the members' event streams).
-  tells(r: Request, viewer: { sub: string; email: string; workspace: string }): boolean {
-    return viewer.workspace === r.ws && (r.vault === PLAIN || r.save ? r.owner === viewer.email.toLowerCase() : this.#d.vaults.vault(r.ws, r.vault)?.members.includes(viewer.sub) === true);
+  /// Whom request `r`'s changes are told to (the event streams, api/events.ts `To`): in its workspace, its owner for the
+  /// plain library or a secret to keep (none without one: null), else the members of its vault as each is told
+  /// (`inVault`).
+  tells(r: Request): To | null {
+    if (r.vault !== PLAIN && !r.save) return { workspace: r.ws, vault: r.vault };
+    return r.owner === undefined ? null : { workspace: r.ws, email: r.owner };
+  }
+
+  /// Whether `viewer` is a member of that vault of their workspace now: whom its requests are told to (`tells`).
+  inVault(viewer: { sub: string; workspace: string }, vault: string): boolean {
+    return this.#d.vaults.vault(viewer.workspace, vault)?.members.includes(viewer.sub) === true;
   }
 
   /// The requests `viewer` may decide in workspace `ws`, still waiting.

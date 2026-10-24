@@ -129,7 +129,7 @@ export const routes = ({ secrets, plain, lock, events }: VaultRequestsDeps): Rou
         if (why !== null) return refuse(400, "vault_invalid", why);
         plain.put(next);
         const kept = plain.item(ws, next.id)!;
-        events?.tell("vault-plain", shown(kept), `vault-plain\0${kept.id}`, (v) => v.workspace === ws && v.email.toLowerCase() === kept.owner);
+        events?.tell("vault-plain", shown(kept), `vault-plain\0${kept.id}`, { workspace: ws, email: kept.owner });
         return json(200, JSON.stringify({ item: shown(kept) }));
       },
     },
@@ -143,7 +143,7 @@ export const routes = ({ secrets, plain, lock, events }: VaultRequestsDeps): Rou
         decide(r, (o) => {
           const kept = secrets.savedPlain(r.viewer.workspace, locked(r), r.viewer.email, o);
           if (typeof kept === "string") return kept;
-          events?.tell("vault-plain", shown(kept), `vault-plain\0${kept.id}`, (v) => v.workspace === kept.ws && v.email.toLowerCase() === kept.owner);
+          events?.tell("vault-plain", shown(kept), `vault-plain\0${kept.id}`, { workspace: kept.ws, email: kept.owner });
           return null;
         }),
     },

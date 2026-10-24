@@ -15,6 +15,7 @@ import { PLAIN, PlainStore } from "../src/vault/plain.ts";
 import { Secrets } from "../src/vault/secrets.ts";
 import { VaultStore } from "../src/vault/store.ts";
 import { STILLFAIL_SURFACE } from "../src/store/store.ts";
+import { isFor } from "../src/api/events.ts";
 
 const WS = "01HZZZZZZZZZZZZZZZZZZZZZZZ";
 const VAULT = "v_01HZZZZZZZZZZZZZZZZZZZZZZZ";
@@ -236,6 +237,35 @@ test("a secret to keep without security mode: written into the owner's plain lib
     await tick();
     const after = h.make();
     assert.deepEqual(pendingOf(after, null, "bob@x.com"), []);
+  } finally {
+    rmSync(h.dir, { recursive: true, force: true });
+  }
+});
+
+test("a request's changes are told to whom decides it: its owner, nobody without one, its vault's members as they are as each is told", () => {
+  const w = world();
+  const h = harness(() => w.state);
+  try {
+    h.vaults.putVault(w.vault);
+    const request = (over: Partial<Request>): Request => ({ id: "r_1", ws: WS, vault: VAULT, item: "i_1", session: "s1", chat: "", mode: "env", reason: "", box: "", at: 1000, status: "pending", ...over });
+    const viewer = (sub: string) => ({ sub, email: `${sub}@x.com`, name: sub, role: "member", workspace: WS, device: "d" });
+    /// Whose streams are told of `r`, of alice's and bob's.
+    const told = (r: Request) => {
+      const to = h.secrets.tells(r);
+      return to === null ? [] : ["alice", "bob"].filter((sub) => isFor(to, { viewer: viewer(sub), lang: "en" }, { inVault: (v, vault) => h.secrets.inVault(v, vault) }));
+    };
+    // The plain library's, and a secret to keep: its owner's; without one, nobody's (not the whole workspace's).
+    assert.deepEqual(told(request({ vault: PLAIN, owner: "bob@x.com" })), ["bob"]);
+    assert.deepEqual(told(request({ vault: PLAIN })), []);
+    assert.deepEqual(told(request({ save: { kind: "login", name: "UX7", modes: ["env"], hosts: [] }, owner: "alice@x.com" })), ["alice"]);
+    assert.deepEqual(told(request({ save: { kind: "login", name: "UX7", modes: ["env"], hosts: [] } })), []);
+    // A vault's: its members as they are when it is told (again, to a stream that comes back), as written over to the
+    // next process.
+    const to = h.secrets.tells(request({}));
+    assert.deepEqual(JSON.parse(JSON.stringify(to)), to);
+    assert.deepEqual(told(request({})), ["alice"]);
+    h.vaults.putVault({ ...w.vault, seq: 1, members: ["alice", "bob"] });
+    assert.deepEqual(told(request({})), ["alice", "bob"]);
   } finally {
     rmSync(h.dir, { recursive: true, force: true });
   }

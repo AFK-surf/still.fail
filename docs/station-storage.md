@@ -460,6 +460,26 @@ their streams, kept like the rest); a stream that starts afresh reads their
 sidebar before it answers, and is what their changes are told against from
 then on.
 
+A run is not one process: a station process that stops (a handover at an
+update, or a stop before the next start) writes what it keeps — the run, its
+numbers, the events kept, what each viewer's streams were told of their
+sidebar and overview, who followed last — and its pid to `run/events.json`
+(whole: a temporary file renamed), after the last it tells; keeping nothing
+(nobody followed for an hour), it removes any file there. The next process
+answers no stream before the one before it is gone; then it takes the file up
+and removes it, and goes on with the same run and numbers, making and keeping
+what it tells from then on as while nobody follows. What it was to tell before
+(a read mark, a message, a vault's request, while the one before still
+stopped) waits, and is told then, numbered on from what it took up. A stream
+that comes back to it is resumed as the old process would have resumed it. A
+crash leaves no file; a file older than an hour, one that does not read, or
+one by another process than the one `run/hub.json` named as it started (one
+that a process before it stopped waiting for after 40 s, written once that
+process had begun a run of its own) is not taken up but removed: a run of its
+own, and `missed`. (On ccvm, updated 32 times on 2026-10-24, every stream was told
+`missed` at each update, and every device read the whole station at once
+while the new process was starting.)
+
 Over the mesh, an answer is compressed for a client that asks
 (`accept-encoding: zstd`; station/src/mesh/compress.ts): JSON and text from
 512 bytes, zstd at its fast level, an event stream flushed after each event

@@ -9,6 +9,7 @@ import { test } from "node:test";
 import { type Entry, entryHash, genesis, signedBytes as lockBytes } from "../src/cloud/lock.ts";
 import type { Viewer } from "../src/mesh/credential.ts";
 import { routes } from "../src/api/routes/vault.ts";
+import { type To, isFor } from "../src/api/events.ts";
 import { routes as requestRoutes } from "../src/api/routes/vault-requests.ts";
 import { PlainStore } from "../src/vault/plain.ts";
 import type { Request } from "../src/api/request.ts";
@@ -232,7 +233,7 @@ test("an ES256 key signs as an Ed25519 one does", () => {
 function station(w: ReturnType<typeof lock> | null) {
   const told: { event: string; data: any; to: string[] }[] = [];
   const viewers = ["alice", "bob", "carol"].map((sub) => viewer(sub));
-  const events = { tell: (event: string, data: unknown, _of: string, to: (v: Viewer) => boolean) => told.push({ event, data, to: viewers.filter(to).map((v) => v.sub) }) };
+  const events = { tell: (event: string, data: unknown, _of: string, to: To) => told.push({ event, data, to: viewers.filter((viewer) => isFor(to, { viewer, lang: "en" })).map((v) => v.sub) }) };
   const all = routes({ vaults: new VaultStore(new DatabaseSync(":memory:")), lock: (ws) => (w !== null && ws === WS ? w.state : null), events: events as any });
   const ask = async (method: string, path: string, sub: string, body?: unknown) => {
     const [p, q] = path.split("?");
@@ -388,7 +389,7 @@ test("routes: the plain library (no security mode) is each person's own, version
   let w: ReturnType<typeof lock> | null = null;
   const told: { event: string; data: any; to: string[] }[] = [];
   const viewers = ["alice", "bob"].map((sub) => viewer(sub));
-  const events = { tell: (event: string, data: unknown, _of: string, to: (v: Viewer) => boolean) => told.push({ event, data, to: viewers.filter(to).map((v) => v.sub) }) };
+  const events = { tell: (event: string, data: unknown, _of: string, to: To) => told.push({ event, data, to: viewers.filter((viewer) => isFor(to, { viewer, lang: "en" })).map((v) => v.sub) }) };
   const granted: unknown[] = [];
   const secrets = { pending: () => [], uses: () => [], grantPlain: (...a: unknown[]) => (granted.push(a), null), denyPlain: () => null };
   const all = requestRoutes({ secrets: secrets as never, plain: new PlainStore(new DatabaseSync(":memory:")), lock: (ws) => (w !== null && ws === WS ? w.state : null), events: events as any });

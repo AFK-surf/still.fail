@@ -23,10 +23,19 @@
 // telling for all their streams, kept like the rest), and the one that comes back is told how they stand now. Its answer
 // says it was (`stillfail-resumed: 1`). Past KEPT_MS with nobody, nothing more is made, and nothing before can be resumed.
 //
+// The same again when the station process is replaced (an update: on ccvm 32 a day, each with every device's streams
+// cut): what is kept, and what each viewer's streams were told of their sidebar and overview, go over to the next
+// process (`handOver`, `takeUp`), which goes on with the same run and numbers, made and kept as while nobody follows,
+// so a stream that comes back to it is resumed as the old one would have. What it is to tell before then waits, and is
+// told after what it goes on from. Not resumed there, each device read all the station holds at once, while the new
+// process was starting (it stopped answering up to 13 s). A crash hands nothing over: its streams are told they missed
+// it; nor does one the next stopped waiting for (what it hands over late is older than what the next told since).
+//
 // Where the Rust re-read a job's log every second, a log is watched (fs.watch); the sidebar rows of a viewer are read
 // once per round for all their streams, off the main thread (the readers).
-import { type FSWatcher, existsSync, statSync, watch } from "node:fs";
-import type { Viewer } from "../mesh/credential.ts";
+import { type FSWatcher, existsSync, mkdirSync, readFileSync, renameSync, rmSync, statSync, watch, writeFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { type Viewer, readOnly } from "../mesh/credential.ts";
 import type { Lang } from "../ops/i18n.ts";
 import { log } from "../ops/log.ts";
 import type { Readers } from "../read/pool.ts";
@@ -34,7 +43,7 @@ import { type StoreChange, sees } from "../store/rows.ts";
 import type { Answer } from "./request.ts";
 import type { Clock } from "effect";
 import { Fibers } from "../ops/fibers.ts";
-import { EventLog, KEPT_MS } from "./event-log.ts";
+import { EventLog, KEPT_MS, type Kept } from "./event-log.ts";
 
 const PING_MS = 25_000;
 const HOST_MS = 10_000;
@@ -48,6 +57,10 @@ export const RESUMED = "stillfail-resumed";
 /// does it, without asking for any (`live` events, from where each stood as it was opened; nothing of before): the
 /// client then follows no session by name, and reads what it lacks of a transcript as it reads anything it lacks.
 export const FOLLOWS = "stillfail-follows";
+
+/// Where what is told goes over to the next process at a handover (`handOver`), in the data directory: beside the hub's
+/// sessions (sessions/hub.ts `handoverFile`).
+export const eventsHandoverFile = (dataDir: string) => join(dataDir, "run", "events.json");
 
 /// What the events need of the rest of the station.
 export type EventsDeps = {
@@ -82,13 +95,65 @@ export type EventsDeps = {
   /// A login's terminal (docs/remote-login.md): `send` given its screen now and as it changes, until the returned
   /// function is called.
   loginScreen?(id: string, send: (screen: { rows: string[]; cursor: { x: number; y: number }; echo: boolean; live: boolean }) => void): () => void;
+  /// Whether `viewer` is a member of that vault of their workspace now (vault/secrets.ts `inVault`): whom its requests
+  /// are told to. None: of none.
+  inVault?(viewer: Viewer, vault: string): boolean;
+  /// Where what is told goes over to the next process (`eventsHandoverFile`), and the process before this one
+  /// (ops/previous.ts: its pid, none when none held the station, and its end): what that one handed over is taken up
+  /// once it is gone, and only what it did. None: nothing goes over.
+  handover?: { file: string; previous: { pid: number | null; gone: Promise<void> } };
 };
 
 /// A viewer's streams in one language: what their sidebar and overview are told by. A person in two of the station's
 /// workspaces is two viewers (docs/multi-workspace.md).
 const viewerKey = (viewer: Viewer, lang: Lang) => `${viewer.email}\0${viewer.workspace}\0${lang}`;
-/// Whether a stream is that viewer's in that language.
-const theirs = (c: { viewer: Viewer; lang: Lang }, viewer: Viewer, lang: Lang) => c.viewer.email === viewer.email && c.viewer.workspace === viewer.workspace && c.lang === lang;
+
+/// Whom an event is for, as data (what is kept goes over to the next process with it): the streams all it says holds
+/// of; nothing said, every one.
+export type To = {
+  /// Asked in that language.
+  lang?: Lang;
+  /// That viewer's in that language (`viewerKey`): their sidebar, their overview, a thread as they have it.
+  viewer?: string;
+  /// Whose viewer has that email (in any case), is in that workspace, is one of those people (`sub`), may only read or
+  /// not (`readOnly`).
+  email?: string;
+  workspace?: string;
+  subs?: string[];
+  readOnly?: boolean;
+  /// Whose viewer is a member of that vault of their workspace (`inVault`) as it is told: one who left it is not told
+  /// of it again.
+  vault?: string;
+  /// Whose viewer sees that session, thread or job (`seen`), or the chats of that workspace (store/rows.ts `sees`; null:
+  /// the home one).
+  sees?: { session: string } | { thread: number } | { job: string } | { ws: string | null };
+};
+
+/// Whether `to` is for a stream of `viewer`'s in `lang`. `whose`: whether its viewer sees a session, a thread or a job
+/// (none: every one), and is a member of a vault (none: of none).
+export const isFor = (to: To, { viewer, lang }: { viewer: Viewer; lang: Lang }, whose: Pick<EventsDeps, "seen" | "inVault"> = {}): boolean =>
+  (to.lang === undefined || to.lang === lang) &&
+  (to.viewer === undefined || to.viewer === viewerKey(viewer, lang)) &&
+  (to.email === undefined || to.email.toLowerCase() === viewer.email.toLowerCase()) &&
+  (to.workspace === undefined || to.workspace === viewer.workspace) &&
+  (to.subs === undefined || to.subs.includes(viewer.sub)) &&
+  (to.readOnly === undefined || to.readOnly === readOnly(viewer)) &&
+  (to.vault === undefined || whose.inVault?.(viewer, to.vault) === true) &&
+  (to.sees === undefined || ("ws" in to.sees ? sees(viewer, to.sees.ws) : (whose.seen?.(viewer, to.sees) ?? true)));
+
+/// What goes over to the next process (`eventsHandoverFile`), by whom (`pid`) and when it was written: what the log
+/// keeps, what each viewer's streams were told last of their sidebar (row id → JSON) and overview, by `viewerKey`, and
+/// who followed last.
+type Handed = { pid: number; at: number; log: Kept<To>; rows: [string, [string, string][]][]; overviews: [string, string][]; last: { viewer: Viewer; lang: Lang } | null };
+
+/// Removes what was handed over (taken up, or not to be): never a throw, as a stream waits on the taking up.
+function removeHanded(file: string) {
+  try {
+    rmSync(file, { force: true });
+  } catch (error) {
+    log.warn("events", "what was handed over is not removed", { error: (error as Error).message });
+  }
+}
 
 type Client = {
   id: number;
@@ -108,8 +173,9 @@ type Client = {
 export class Events {
   private clients: Client[] = [];
   private next = 1;
-  /// What is told to everyone, kept for a stream that takes over from another or comes back (event-log.ts).
-  private readonly log = new EventLog<(c: Client) => boolean>();
+  /// What is told to everyone, kept for a stream that takes over from another or comes back (event-log.ts), or the
+  /// process before this one's, gone on with (`takeUp`).
+  private log = new EventLog<To>();
   /// With nobody following, the end of the while one may come back (KEPT_MS): what is told is still made until then.
   private lingering: (() => void) | null = null;
   /// Who followed last: whose names a thread's entries are read with while nobody does.
@@ -137,35 +203,131 @@ export class Events {
   /// When usage was last told, and the telling waiting for the end of the while (USAGE_EVERY_MS).
   private usageTold = -Infinity;
   private usageLater: (() => void) | null = null;
+  /// What is read to be told once read (a thread's entries, a job): waited for before what is told goes over.
+  private reading = new Set<Promise<void>>();
+  /// Until what the process before this one handed over is taken up (`takeUp`): no stream is answered before, and what
+  /// is to be told waits (`early`, in order), to be told after what it goes on from.
+  private taking: Promise<void> | null = null;
+  private early: (() => void)[] = [];
+  /// Handed over to the next process: nothing more is told.
+  private handed = false;
 
   constructor(deps: EventsDeps) {
     this.deps = deps;
     this.time = new Fibers("events", deps.clock);
     deps.subscribe((change) => this.storeChanged(change));
+    const handover = deps.handover;
+    if (handover) {
+      const take = () => this.takeUp(handover.file, handover.previous.pid);
+      // Never fails: every stream waits on it, and a failure nobody waits on would end the process.
+      this.taking = handover.previous.gone.then(take, take).catch((error) => log.warn("events", "what the process before told is not taken up", { error: (error as Error).message }));
+    }
   }
 
-  /// Where `live` sessions are followed from, the overview and process states (the agents' side, once it is made).
-  follow(more: Partial<Pick<EventsDeps, "live" | "held" | "heldNow" | "overview" | "processState" | "followed" | "loginScreen">>) {
+  /// Takes up what the process before this one handed over (`handOver`), once it is gone: the log goes on from it, the
+  /// same run and numbers, each viewer's sidebar and overview told against what it told them, and what is told is made
+  /// and kept from now as while nobody follows; so a stream that comes back here is resumed as it would have been there.
+  /// None (a crash), another's than the process before (`from`), older than KEPT_MS, or not read: a run of its own, as
+  /// before. What was to be told meanwhile is told then, after it.
+  private takeUp(file: string, from: number | null) {
+    this.taking = null;
+    const early = this.early;
+    this.early = [];
+    // Stopped before it was its turn: what is there is the next one's, and nothing more is told.
+    if (this.handed) return;
+    if (existsSync(file)) {
+      try {
+        const handed: Handed = JSON.parse(readFileSync(file, "utf8"));
+        const now = this.time.now();
+        // From the one that held the station before, or, none holding it, the one that let go of it last as it stopped.
+        // Another's was written by one waited for in vain, after a process since went on with a run of its own: what
+        // that run told is not in it.
+        if (from !== null && handed.pid !== from) log.info("events", "what another process than the one before told is not gone on from", { pid: handed.pid, before: from });
+        else if (!(now - handed.at <= KEPT_MS)) log.info("events", "what the process before told is too old to go on from", { at: handed.at });
+        else {
+          const taken = EventLog.from(handed.log, now);
+          const rows = new Map<string, Map<string, string>>(handed.rows.map(([k, told]) => [k, new Map(told)]));
+          const overviews = new Map<string, string>(handed.overviews);
+          this.log = taken;
+          this.rowsTold = rows;
+          this.overviewTold = overviews;
+          this.last = handed.last;
+          this.linger();
+          log.info("events", "what the process before told goes on here", { ...this.log.state(), viewers: rows.size });
+        }
+      } catch (error) {
+        log.warn("events", "what the process before told does not read; its streams are not resumed", { error: (error as Error).message });
+      }
+      removeHanded(file);
+    }
+    // What was to be told meanwhile, as it came: numbered on from what is gone on from (no stream heard any of it).
+    for (const tell of early) tell();
+  }
+
+  /// Hands what is told over to the next process, as this one stops (after its sessions are handed over): all being
+  /// told is told first (a round, what is read to be told, usage waiting for the end of its while), then nothing more
+  /// is; what the log keeps, and what each viewer's streams were told of their sidebar and overview, are written whole
+  /// for the next to go on from (`takeUp`). Nothing while nobody follows or may come back, and what is there is removed
+  /// (the one before this one, waited for in vain, wrote it after this one went on without it). Stopped before what the
+  /// one before handed over was taken up, it is left for the next.
+  async handOver(): Promise<void> {
+    const file = this.deps.handover?.file;
+    if (file === undefined || this.handed) return;
+    if (this.usageLater !== null) {
+      this.usageLater();
+      this.usageLater = null;
+      this.emit("usage", {}, {}, "usage");
+    }
+    for (;;) {
+      const telling = [...this.reading, ...(this.flushing ? [this.flushing] : [])];
+      if (telling.length === 0) break;
+      await Promise.allSettled(telling);
+    }
+    const listening = this.listening();
+    const turn = this.taking === null;
+    const at = this.time.now();
+    this.handed = true;
+    this.stopTimers();
+    await this.time.close();
+    if (!turn) return;
+    if (!listening) return removeHanded(file);
+    // Who followed last, to read a thread's entries with: not their device's lock proof.
+    const last = this.last && { viewer: { ...this.last.viewer, lockDevice: undefined }, lang: this.last.lang };
+    const handed: Handed = { pid: process.pid, at, log: this.log.kept(), rows: [...this.rowsTold].map(([k, told]) => [k, [...told]]), overviews: [...this.overviewTold], last };
+    try {
+      mkdirSync(dirname(file), { recursive: true });
+      const tmp = `${file}.tmp-${process.pid}`;
+      writeFileSync(tmp, JSON.stringify(handed), { mode: 0o600 });
+      renameSync(tmp, file);
+      log.info("events", "what was told is handed over", { ...this.log.state(), viewers: this.rowsTold.size });
+    } catch (error) {
+      log.warn("events", "what was told is not handed over; its streams are not resumed", { error: (error as Error).message });
+    }
+  }
+
+  /// Where `live` sessions are followed from, the overview and process states (the agents' side, once it is made), and
+  /// a vault's members (the vault's part).
+  follow(more: Partial<Pick<EventsDeps, "live" | "held" | "heldNow" | "overview" | "processState" | "followed" | "loginScreen" | "inVault">>) {
     Object.assign(this.deps, more);
   }
 
   /// The station's screens changed (docs/remote-screens.md): `screens` as GET /screens answers it, in each stream's
   /// language (`listed`), the latest alone kept for one coming back.
   screens(listed: (lang: Lang) => unknown) {
-    for (const lang of new Set(this.clients.map((c) => c.lang))) this.emit("screens", listed(lang), (c) => c.lang === lang, `screens\0${lang}`);
+    for (const lang of new Set(this.clients.map((c) => c.lang))) this.emit("screens", listed(lang), { lang }, `screens\0${lang}`);
   }
 
-  /// A record changed that only some viewers see (a vault's, routes/vault.ts): `data` told to the streams of viewers
-  /// `to` takes, the latest under `of` kept for one coming back.
-  tell(event: string, data: unknown, of: string, to: (viewer: Viewer) => boolean) {
-    this.emit(event, data, (c) => to(c.viewer), of);
+  /// A record changed that only some viewers see (a vault's, routes/vault.ts): `data` told to the streams `to` says, the
+  /// latest under `of` kept for one coming back.
+  tell(event: string, data: unknown, of: string, to: To) {
+    this.emit(event, data, to, of);
   }
 
   /// A login changed (docs/remote-login.md): told to everyone as `machine-logins`, a read-only member given `limited`
   /// (how it stands only).
-  machineLogins(data: { login: unknown }, limited: { login: unknown }, readOnly: (viewer: Viewer) => boolean, of: string) {
-    this.emit("machine-logins", data, (c) => !readOnly(c.viewer), `machine-logins\0${of}`);
-    this.emit("machine-logins", limited, (c) => readOnly(c.viewer), `machine-logins-limited\0${of}`);
+  machineLogins(data: { login: unknown }, limited: { login: unknown }, of: string) {
+    this.emit("machine-logins", data, { readOnly: false }, `machine-logins\0${of}`);
+    this.emit("machine-logins", limited, { readOnly: true }, `machine-logins-limited\0${of}`);
   }
 
   /// Something the overview shows changed (config, accounts, connects, cloud, updates).
@@ -187,7 +349,17 @@ export class Events {
 
   /// Whether what is told is made and kept: someone follows, or may come back to what they missed.
   private listening(): boolean {
-    return this.clients.length > 0 || this.lingering !== null;
+    return !this.handed && (this.clients.length > 0 || this.lingering !== null);
+  }
+
+  /// Nobody follows: what is told is still made a while, for one coming back; past it, nothing before can be.
+  private linger() {
+    this.lingering = this.time.after(KEPT_MS, () => {
+      this.lingering = null;
+      this.log.clear();
+      this.rowsTold.clear();
+      this.overviewTold.clear();
+    });
   }
 
   /// The sidebar rows of `viewer` (everyone's when null) may have changed.
@@ -221,6 +393,8 @@ export class Events {
     // yet whether this station does (an older one follows those it names).
     const follows = running && this.deps.held !== undefined;
     if (follows) live = [];
+    // What the process before this one told goes on here, ids and all: not before it is taken up.
+    if (this.taking !== null) await this.taking;
     const queue: string[] = [];
     let wakeReader: (() => void) | null = null;
     let closed = false;
@@ -298,7 +472,7 @@ export class Events {
     this.lingering?.();
     this.lingering = null;
     // In the same turn as it joins: what was told since is told again, and what is told from now comes as to the rest.
-    if (resumes) for (const told of this.log.after(since!)) if (told.to(client)) client.raw(told.text);
+    if (resumes) for (const told of this.log.after(since!)) if (this.reaches(client, told.to)) client.raw(told.text);
     // Coming back: their sidebar and overview as they are now, against what their streams were told of them last (what
     // changed while none of theirs was there to be told).
     if (resumes) {
@@ -317,13 +491,7 @@ export class Events {
       client.stops.forEach((stop) => stop());
       if (this.clients.length > 0) return;
       this.stopTimers();
-      // Nobody follows: what is told is still made a while, for one coming back; past it, nothing before can be.
-      this.lingering = this.time.after(KEPT_MS, () => {
-        this.lingering = null;
-        this.log.clear();
-        this.rowsTold.clear();
-        this.overviewTold.clear();
-      });
+      this.linger();
     };
     // The stream lasts as long as its reader: when it goes (the mesh stream closed), the client does, at once (an
     // async generator would end only once its pending wait woke up).
@@ -420,12 +588,18 @@ export class Events {
     this.lastHost = "";
   }
 
-  /// Tells everyone `to` chooses: one id for all of them, kept for a stream that takes over from one of them or comes
-  /// back. Nothing while nobody follows or may come back.
-  private emit(event: string, data: unknown, to: (c: Client) => boolean = () => true, of?: string) {
+  /// Tells everyone `to` says: one id for all of them, kept for a stream that takes over from one of them or comes
+  /// back. Nothing while nobody follows or may come back; before what the process before told is taken up, once it is.
+  private emit(event: string, data: unknown, to: To = {}, of?: string) {
+    if (this.taking !== null) return void this.early.push(() => this.emit(event, data, to, of));
     if (!this.listening()) return;
     const { text } = this.log.append(event, data, to, this.time.now(), of);
-    for (const c of this.clients) if (to(c)) c.raw(text);
+    for (const c of this.clients) if (this.reaches(c, to)) c.raw(text);
+  }
+
+  /// Whether a stream is one `to` says (`isFor`).
+  private reaches(c: Client, to: To): boolean {
+    return isFor(to, c, this.deps);
   }
 
   /// Whether a stream's viewer sees that session, thread or job (`seen`).
@@ -433,7 +607,17 @@ export class Events {
     return this.deps.seen?.(c.viewer, of) ?? true;
   }
 
+  /// `told`, a read and the telling of what it reads: among what is being told until it is done.
+  private whenRead(told: Promise<void>) {
+    this.reading.add(told);
+    const done = () => void this.reading.delete(told);
+    told.then(done, done);
+  }
+
   private storeChanged(change: StoreChange) {
+    // Before what the process before told is taken up, as if it came then: what it tells numbered on from that, a
+    // thread's entries read as the one who followed last there has them.
+    if (this.taking !== null) return void this.early.push(() => this.storeChanged(change));
     switch (change.type) {
       case "session":
         this.dirty.sessions.add(change.key);
@@ -443,7 +627,7 @@ export class Events {
         this.dirty.sessions.delete(change.key);
         this.states.delete(change.key);
         this.overviewChanged();
-        this.emit("session-removed", { key: change.key }, (c) => sees(c.viewer, change.ws ?? null), `session\0${change.key}`);
+        this.emit("session-removed", { key: change.key }, { sees: { ws: change.ws ?? null } }, `session\0${change.key}`);
         this.itemsChanged({ sessions: [change.key] });
         break;
       case "thread": {
@@ -453,27 +637,27 @@ export class Events {
           const first = change.entries[0].n;
           const last = change.entries.at(-1)!.n;
           // Entries as the pages show them (with their authors' names), read off the main thread.
-          void this.deps.readers
-            .read("entries", { viewer: who.viewer, thread: change.id, params: [["from", String(first)], ["to", String(last)]] }, who.lang)
-            .then((text) => this.emit("thread", { id: change.id, entries: JSON.parse(text).entries }, (c) => this.sees(c, { thread: change.id })), (e) => log.warn("events", "thread event not sent", { error: (e as Error).message }));
+          this.whenRead(
+            this.deps.readers
+              .read("entries", { viewer: who.viewer, thread: change.id, params: [["from", String(first)], ["to", String(last)]] }, who.lang)
+              .then((text) => this.emit("thread", { id: change.id, entries: JSON.parse(text).entries }, { sees: { thread: change.id } }), (e) => log.warn("events", "thread event not sent", { error: (e as Error).message })),
+          );
           // And to each viewer, the thread as GET /threads/:id has it for them (their read position, their unread count):
           // a client puts it in place rather than read it again after every message (a phone did some two a minute).
           for (const { viewer, lang } of this.viewers(who).filter((v) => this.deps.seen?.(v.viewer, { thread: change.id }) ?? true)) {
-            void this.deps.readers.read("thread", { viewer, id: change.id, lang }, lang).then(
-              (text) => this.emit("thread-view", JSON.parse(text), (c) => theirs(c, viewer, lang), `thread-view\0${change.id}\0${viewerKey(viewer, lang)}`),
-              () => {},
-            );
+            const k = viewerKey(viewer, lang);
+            this.whenRead(this.deps.readers.read("thread", { viewer, id: change.id, lang }, lang).then((text) => this.emit("thread-view", JSON.parse(text), { viewer: k }, `thread-view\0${change.id}\0${k}`), () => {}));
           }
         }
         this.itemsChanged({ threads: [change.id] });
         break;
       }
       case "threadRemoved":
-        this.emit("thread-removed", { id: change.id }, (c) => sees(c.viewer, change.ws ?? null));
+        this.emit("thread-removed", { id: change.id }, { sees: { ws: change.ws ?? null } });
         this.rowsChanged(null);
         break;
       case "read":
-        this.emit("read", { viewer: change.viewer, thread: change.thread, n: change.n }, (c) => c.viewer.email === change.viewer && this.sees(c, { thread: change.thread }));
+        this.emit("read", { viewer: change.viewer, thread: change.thread, n: change.n }, { email: change.viewer, sees: { thread: change.thread } });
         this.itemsChanged({ threads: [change.thread] }, change.viewer);
         break;
       case "identities":
@@ -487,10 +671,10 @@ export class Events {
         break;
       case "job":
         // A job as GET /jobs/:id answers it, so a client holding it puts it in place without reading anything again.
-        void this.deps.readers.read("job", { id: change.id }, "zh").then((text) => this.emit("job", JSON.parse(text), (c) => this.sees(c, { job: change.id }), `job\0${change.id}`), () => {});
+        this.whenRead(this.deps.readers.read("job", { id: change.id }, "zh").then((text) => this.emit("job", JSON.parse(text), { sees: { job: change.id } }, `job\0${change.id}`), () => {}));
         break;
       case "jobRemoved":
-        this.emit("job-removed", { id: change.id, session: change.session }, (c) => this.sees(c, { session: change.session }), `job\0${change.id}`);
+        this.emit("job-removed", { id: change.id, session: change.session }, { sees: { session: change.session } }, `job\0${change.id}`);
         break;
       case "usage":
         // Model calls were recorded: a page showing usage reads it again (it is too big to send to everyone).
@@ -509,7 +693,7 @@ export class Events {
     const tell = () => {
       this.usageLater = null;
       this.usageTold = this.time.now();
-      this.emit("usage", {}, undefined, "usage");
+      this.emit("usage", {}, {}, "usage");
     };
     const wait = this.usageTold + USAGE_EVERY_MS - this.time.now();
     if (wait <= 0) tell();
@@ -551,7 +735,7 @@ export class Events {
     for (const key of dirty.sessions) {
       if (!this.deps.sessionExists(key)) continue;
       try {
-        this.emit("session", JSON.parse(await this.deps.readers.read("summary", { key }, "zh")), (c) => this.sees(c, { session: key }), `session\0${key}`);
+        this.emit("session", JSON.parse(await this.deps.readers.read("summary", { key }, "zh")), { sees: { session: key } }, `session\0${key}`);
       } catch (error) {
         log.warn("events", "session event not sent", { session: key, error: (error as Error).message });
       }
@@ -569,7 +753,7 @@ export class Events {
             const text = JSON.stringify(value);
             if (this.overviewTold.get(k) === text) return;
             this.overviewTold.set(k, text);
-            this.emit("overview", value, (c) => theirs(c, viewer, lang), `overview\0${k}`);
+            this.emit("overview", value, { viewer: k }, `overview\0${k}`);
           } catch (error) {
             log.warn("events", "overview not told", { error: (error as Error).message });
           }
@@ -613,8 +797,9 @@ export class Events {
         // Their streams opened while it could not be read (nothing it changes by is told against), and what their
         // clients read of the station then failed as it did: now that it reads, those streams are ended. Each comes
         // back to one that is not resumed, and reads the station again.
-        if (!this.rowsTold.has(viewerKey(viewer, lang))) {
-          const streams = this.clients.filter((c) => theirs(c, viewer, lang));
+        const k = viewerKey(viewer, lang);
+        if (!this.rowsTold.has(k)) {
+          const streams = this.clients.filter((c) => viewerKey(c.viewer, c.lang) === k);
           log.info("events", "the sidebar reads again: its streams are ended, to read the station again", { streams: streams.length });
           for (const c of streams) c.end();
           return;
@@ -631,7 +816,7 @@ export class Events {
     const k = viewerKey(viewer, lang);
     const told = this.rowsTold.get(k);
     if (!told) return;
-    const to = (c: Client) => theirs(c, viewer, lang);
+    const to: To = { viewer: k };
     const now = new Set<string>();
     for (const row of rows) {
       const id = String(row.id ?? "");
@@ -656,7 +841,7 @@ export class Events {
     const before = this.rowsTold.get(k);
     this.rowsTold.set(k, now);
     if (!before) return;
-    const to = (c: Client) => theirs(c, viewer, lang);
+    const to: To = { viewer: k };
     for (const row of rows) {
       const id = String(row.id ?? "");
       if (before.get(id) !== now.get(id)) this.emit("chat", row, to, `chat\0${k}\0${id}`);

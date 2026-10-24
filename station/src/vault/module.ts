@@ -41,7 +41,11 @@ export const VaultLive = Layer.effectDiscard(
       workOf: (ws, peer, session) => remote.work(ws, peer, session),
     });
     remote.bus.on("vault.", (peer, request, workspace) => secrets.heard(peer, workspace ?? cloud.home() ?? "", request));
-    secrets.listen((r) => events.tell("vault-request", r, `vault-request\0${r.id}`, (viewer) => secrets.tells(r, viewer)));
+    secrets.listen((r) => {
+      const to = secrets.tells(r);
+      if (to !== null) events.tell("vault-request", r, `vault-request\0${r.id}`, to);
+    });
+    events.follow({ inVault: (viewer, vault) => secrets.inVault(viewer, vault) });
     parts.routes([
       ...vaultRoutes({ vaults, lock: (ws) => lock(ws), events, boxed: (l, cert) => secrets.boxed(l, cert) }),
       ...requestRoutes({ secrets, plain: secrets.plain, lock: (ws) => lock(ws), events }),
