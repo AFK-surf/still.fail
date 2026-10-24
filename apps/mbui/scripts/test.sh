@@ -92,11 +92,23 @@ for t in ${TARGETS:-native}; do
     runs=("$(echo " $pkgs " | sed 's| -p stillfail/sfapp | |')")
     # (the files that sweep every screen, each a Tester from scratch per screen (screens, squeeze: 10.7 and 7.8 of the
     # 39 s on Studio, 2026-10-25; corners, every screen in five windows and both languages: 64), a process each beside
-    # the pages', so the run takes the longest of them, not their sum)
-    sweeps=(src/sfapp/screens_wbtest.mbt src/sfapp/squeeze_wbtest.mbt src/sfapp/corners_wbtest.mbt)
+    # the pages', so the run takes the longest of them, not their sum. corners' tests, one a language, a process each:
+    # the one file was the run's longest, 39 s on Studio beside the pages' 34, 2026-10-25; on CI's four cores the app
+    # part's run went from 44 s to 67 with it)
+    sweeps=(src/sfapp/screens_wbtest.mbt:1 src/sfapp/squeeze_wbtest.mbt:1 src/sfapp/corners_wbtest.mbt:2)
     pages=()
-    for f in "${files[@]}"; do [[ " ${sweeps[*]} " = *" $f "* ]] || pages+=("$f"); done
-    for f in "${sweeps[@]}"; do [ -f "$f" ] && runs+=("$f"); done
+    for f in "${files[@]}"; do [[ " ${sweeps[*]} " = *" $f:"* ]] || pages+=("$f"); done
+    for w in "${sweeps[@]}"; do
+      f=${w%:*} k=${w##*:}
+      [ -f "$f" ] || continue
+      # (in k runs of its tests by their index: moon test FILE --index FROM-TO, the tests in the file's order)
+      m=$(grep -c '^test "' "$f")
+      if [ "$k" -le 1 ] || [ "$m" -le 1 ]; then runs+=("$f"); continue; fi
+      for ((j = 0; j < k; j++)); do
+        a=$((j * m / k)) b=$(((j + 1) * m / k))
+        [ $b -gt $a ] && runs+=("$f --index $a-$b")
+      done
+    done
     if [ "$n" = 1 ]; then
       # (one: the files that test the pages in one process, every one after the ones moon runs before it, so what one
       # leaves behind that a later one trips on shows (shards, a process each, hide it))
@@ -109,17 +121,29 @@ for t in ${TARGETS:-native}; do
       done
     fi
   fi
+  run_name() {
+    case " $* " in
+      *" -p "*) echo "the packages$(echo " $* " | sed 's| -p stillfail/| |g')" ;;
+      *" --index "*) echo "$(basename "$1") (tests $3)" ;;
+      *) [ $# -le 2 ] && echo $(basename -a "$@") || echo "$# files ($(basename "$1") ...)" ;;
+    esac
+  }
   pids=()
   for i in "${!runs[@]}"; do
     # (a run of nothing is none: moon test of no package would be every package's)
     [ -n "${runs[i]// /}" ] || continue
-    moon test $mode ${runs[i]} ${UPDATE:+--update} > "$out.$i" 2>&1 &
+    # (each run's time with TIMES: the part's run is the longest of them, and which one it is is said)
+    { moon test $mode ${runs[i]} ${UPDATE:+--update} > "$out.$i" 2>&1; c=$?
+      echo "$(( $(date +%s) - s )) s: $(run_name ${runs[i]})" > "$out.time.$i"
+      exit $c; } &
     pids+=($!)
   done
   for p in "${pids[@]}"; do wait $p || code=1; done
   for i in "${!runs[@]}"; do [ -f "$out.$i" ] && cat "$out.$i"; rm -f "$out.$i"; done > "$out"
   grep -v "$F" "$out" | grep -v '^Total tests' | tail -${LINES_OUT:-60}
   grep '^Total tests' "$out"
+  [ -z "${TIMES:-}" ] || cat "$out".time.* 2>/dev/null | sort -rn | sed 's/^/test.sh: a run of /'
+  rm -f "$out".time.*
   [ -z "${TIMES:-}" ] || echo "test.sh: run in $(( $(date +%s) - s )) s"
   # (the core's answers a test asked and found not kept, src/sfkept: scripts/kept has the core work them out; KEPT_ASKS:
   # where it takes them from)
