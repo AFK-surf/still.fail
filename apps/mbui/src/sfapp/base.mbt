@@ -3,6 +3,9 @@
 // pages), taken in here by name.
 
 pub using @sfbase {
+  chat_params,
+  term_color,
+  term_lines,
   agent_json,
   each_second,
   elapsed,

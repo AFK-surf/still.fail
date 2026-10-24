@@ -1,5 +1,10 @@
 // What the desktop's pages read of sfbase, by its own names (as sfapp/base.mbt takes them in).
 using @sfbase {
+  agent_json,
+  chat_params,
+  chat_view,
+  term_lines,
+  type ChatView,
   core_doing,
   core_failed,
   stations_of,

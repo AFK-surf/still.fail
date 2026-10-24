@@ -27,4 +27,7 @@ pub fn reset() -> Unit {
   triple_reset()
   history_reset()
   find_close()
+  jobs_reset()
+  letters_reset()
+  side_slide_reset()
 }

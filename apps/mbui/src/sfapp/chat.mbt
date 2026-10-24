@@ -300,10 +300,6 @@ priv struct KeptPlace {
 ///|
 let kept_places : Map[String, KeptPlace] = {}
 
-///|
-fn chat_params(r : ChatRef) -> Map[String, Json] {
-  { "station": Json::string(r.station), "session": Json::string(r.session) }
-}
 
 ///|
 /// The list's entries (Chat.kt Messages → all): the page before's spinner, the messages with the unread line over the

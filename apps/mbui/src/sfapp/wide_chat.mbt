@@ -45,7 +45,7 @@ fn wide_chat_page(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef) -> Unit
   ignore(t)
   c.box(style=wide_pane_ground, fn() {
     // what is opened beside it, at its right (wide_panel.mbt)
-    with_side(c, src, w, r, view, fn() { wide_chat_pane(c, src, w, r, view, list, error) })
+    @sfdesk.with_side(c, src, w, r, view, panel_parts(c, src, r), fn() { wide_chat_pane(c, src, w, r, view, list, error) })
   })
   |> ignore
   // a row of the 文件 tab let go over the chat: into its message (once the tab has said so, this frame)
@@ -177,7 +177,7 @@ fn wide_chat_pane(
   error : Json?,
 ) -> Unit {
   let pane = c.id("chat/pane")
-  c.box(style=side_panel_style, id=pane, fn() {
+  c.box(style=@sfdesk.side_panel_style, id=pane, fn() {
     match view {
       None => {
         wide_chat_bar(c, src, w, r, None)
