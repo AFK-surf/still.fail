@@ -20,10 +20,6 @@ fn relay_focus_reset() -> Unit {
 }
 
 ///|
-/// The share of the window the picking fills (the phone's sheet: height 0.9), as a sheet or beside what opened it.
-let relay_tall : Double = 0.9
-
-///|
 /// Relays chat `thread` of `r`'s station: its places asked for (sfbase relay.mbt), the picking presented from `from`.
 pub fn open_relay(src : Source, r : ChatRef, thread : Double, from~ : @sf.Anchor) -> Unit {
   relay_open(src, r.station, thread)
@@ -37,7 +33,6 @@ pub fn open_relay(src : Source, r : ChatRef, thread : Double, from~ : @sf.Anchor
     from~,
     description=@sf.t("web-main.relay.lead"),
     live=fn() { (@sf.t("web-main.relay.title"), "", @sf.t("web-main.relay.lead")) },
-    tall=relay_tall,
     foot=fn(c, close) {
       let view = relay_view(c, src)
       let picked = relaying.picked
