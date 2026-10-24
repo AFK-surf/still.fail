@@ -64,7 +64,7 @@ function startup(t: TestContext, bindAddr: string | undefined) {
   return { previous, built, binding, accepting, running, calls: () => calls, presence: () => presence };
 }
 
-test("a station takes its members' connections before its relay link is up, and goes online at the cloud only after", async (t) => {
+test("a station takes its members' connections before its relay link is up, and goes online at the cloud only after", { timeout: 10_000 }, async (t) => {
   const s = startup(t, "0.0.0.0:0");
   try {
     await s.built.promise;
