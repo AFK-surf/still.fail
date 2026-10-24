@@ -80,10 +80,6 @@ priv struct Wide {
   /// the files' page (wide_files.mbt): what is opened in its sidebar, each station's places
   files_open : Map[String, Bool]
   files_places : Map[String, Array[Json]]
-  /// the sides the pointer is down in (a press there puts it in front once)
-  files_down : Map[String, Bool]
-  /// the files' tabs kept here (by workspace), until the prefs say
-  tabs_set : Map[String, String]
 }
 
 ///|
@@ -124,8 +120,6 @@ let wide : Wide = {
   place_pick: {},
   files_open: {},
   files_places: {},
-  files_down: {},
-  tabs_set: {},
 }
 
 ///|
@@ -202,10 +196,8 @@ fn wide_reset() -> Unit {
   wide.place_pick.clear()
   wide.files_open.clear()
   wide.files_places.clear()
-  wide.files_down.clear()
   fdrag_reset()
   ftab_reset()
-  wide.tabs_set.clear()
   fgo_reset()
   wide_switch_reset()
   wide_on.val = false

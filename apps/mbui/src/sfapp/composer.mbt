@@ -1684,13 +1684,17 @@ fn composer(
     None => ()
   }
   keep_draft_soon(c, src, d)
-  // a finger down outside the composer lets go of the keyboard once lifted or moved on (reading on)
+  // a finger down outside the composer (its capsule, the `@` menu over it) lets go of the keyboard once lifted or moved
+  // on (reading on)
   let press = c.press()
   if press.fresh {
-    let off_capsule = match c.rect_of(cap) {
-      Some((x, y, w, h)) => !(press.x >= x && press.x < x + w && press.y >= y && press.y < y + h)
-      None => true
+    let within = fn(id : Int) {
+      match c.rect_of(id) {
+        Some((x, y, w, h)) => press.x >= x && press.x < x + w && press.y >= y && press.y < y + h
+        None => false
+      }
     }
+    let off_capsule = !within(cap) && !within(ref_menu_id(c, d.key))
     cui.outside = off_capsule && !cui.attach
   }
   // (lifted after a long press: not a tap, the keyboard stays: Keyboard.kt letsGoOfKeyboard)

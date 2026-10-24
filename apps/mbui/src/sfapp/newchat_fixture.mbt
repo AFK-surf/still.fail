@@ -424,21 +424,7 @@ pub fn open_mode(mode : String) -> Unit {
       }
       // two tabs, the one shown split: 文档 in front, the home beside it
       "files-split" =>
-        wide.tabs_set["ws1"] = (
-          {
-            "tabs": [
-              {
-                "id": "t0",
-                "panes": [
-                  { "station": "ws1/st1", "root": Json::string(fix_docs), "path": "" },
-                  { "station": "ws1/st1", "root": Json::string(fix_home), "path": "" },
-                ],
-                "front": 0,
-              },
-              { "id": "t1", "panes": [{ "station": "ws1/st2", "root": "/Users/lin/照片", "path": "" }], "front": 0 },
-            ],
-            "current": "t0",
-          } : Json).stringify()
+        fix_browse_prefs_set({ "filesTabs": { "ws1": Json::string(fix_split_tabs().stringify()) } }) |> ignore
       _ => ()
     }
   } else if mode == "switcher" || mode == "switcher-found" {
@@ -446,5 +432,25 @@ pub fn open_mode(mode : String) -> Unit {
     @sfdesk.switcher_open_with(if mode == "switcher-found" { "签名" } else { "" })
   } else if mode == "home-sheet" {
     raise_sheet(Workspaces)
+  }
+}
+
+///|
+/// The files' page's tabs of files-split, as the core keeps them: two, the one shown split, 文档 in front and the home
+/// beside it; 照片 of MBA the other.
+fn fix_split_tabs() -> Json {
+  {
+    "tabs": [
+      {
+        "id": "t0",
+        "panes": [
+          { "station": "ws1/st1", "root": Json::string(fix_docs), "path": "" },
+          { "station": "ws1/st1", "root": Json::string(fix_home), "path": "" },
+        ],
+        "front": 0,
+      },
+      { "id": "t1", "panes": [{ "station": "ws1/st2", "root": "/Users/lin/照片", "path": "" }], "front": 0 },
+    ],
+    "current": "t0",
   }
 }

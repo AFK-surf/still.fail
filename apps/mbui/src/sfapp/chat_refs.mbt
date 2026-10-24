@@ -499,7 +499,7 @@ fn chat_ref_menu(c : @ui.Ctx, src : Source, d : Draft, station : String, here : 
     None => []
   }
   c.box(style=ref_menu_outer, fn() {
-    c.box(style=ref_menu_card, fn() {
+    c.box(style=ref_menu_card, id=ref_menu_id(c, d.key), fn() {
       let g = c.layer(fn() { floating_ground(c, Fill(1.0)) |> ignore })
       c.draw_only(g)
       c.capped("chat-ref/" + d.key, ref_menu_max - 24.0, fn() {
@@ -616,4 +616,10 @@ fn ref_pick(
       }
     },
   )
+}
+
+///|
+/// The menu's box (a draft's): the composer's own, as its capsule is, for what a press outside the composer lets go of.
+fn ref_menu_id(c : @ui.Ctx, key : String) -> Int {
+  c.id("chat-ref-menu/" + key)
 }
