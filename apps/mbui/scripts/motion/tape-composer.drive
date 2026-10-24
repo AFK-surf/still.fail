@@ -1,0 +1,17 @@
+# Laid out Medium on an opened fold's inner screen (MBUI_WIN=690x840 MBUI_FILM_PLATFORM=2): the page brought over, its
+# messages scrolled up and down, the sidebar brought over and the page again: the composer goes with its page.
+system {"size_class":{"width":"medium","height":"medium"}}
+timeout 20000
+until 发消息
+wait 600
+tapxy -80 420
+wait 900
+wheel -300
+wait 500
+wheel 300
+wait 500
+back
+wait 900
+tapxy -80 420
+wait 900
+exit

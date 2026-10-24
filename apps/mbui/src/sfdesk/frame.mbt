@@ -404,6 +404,9 @@ fn dock(
   } else {
     dock_open
   }
+  // (a panel of its own, the closed bar or on the tape: on the closed bar's ground, as the lists' bands on it are: one
+  // ground under all of it, whatever the theme's surface is on this system)
+  let look = if bar || apart { look.then(@ui.style(bg=Data(closed_ground()))) } else { look }
   let dock_w = dmax(0.0, col - ml - mr)
   let dock_h = dmax(0.0, c.height - top - foot - mt - mb)
   c.layer(fn() {

@@ -99,8 +99,9 @@ priv struct Moving {
   mut exit : Trans?
   /// `enter` asked by the app (entering): it comes in the first frame it is built, whatever its list says
   mut fresh : Bool
-  /// a height to keep (reveal's content, measure)
-  mut measure : Bool
+  /// what its size and place in the window are kept as (reveal's content, measure; 0: nothing), apart from `key`, so
+  /// that a node measured can move by its layout too, in its list or scope
+  mut kept : Int
   /// a frame its keyed nodes' places are taken in (scope): 1 from its top left, 2 from its bottom left
   mut scope : Int
   /// flown from (x, y, scale), how far across, down and grown
@@ -346,7 +347,7 @@ fn moving_of(c : @ui.Ctx, i : Int) -> Moving {
     enter: None,
     exit: None,
     fresh: false,
-    measure: false,
+    kept: 0,
     scope: 0,
     fly: None,
   }
@@ -460,8 +461,7 @@ pub fn scope(c : @ui.Ctx, i : Int, bottom? : Bool = false) -> Unit {
 /// Node `i`'s height is kept as `key`'s (measured reads it).
 pub fn measure(c : @ui.Ctx, i : Int, key : String) -> Unit {
   let e = moving_of(c, i)
-  e.key = motion_key("measure\u{1}" + key)
-  e.measure = true
+  e.kept = motion_key("measure\u{1}" + key)
 }
 
 ///|
@@ -801,8 +801,7 @@ pub fn reveal(
     fn() {
       let inner = c.box(w=Fill(1.0), align~, body)
       let e = moving_of(c, inner)
-      e.key = k
-      e.measure = true
+      e.kept = k
     },
   )
   ignore(outer)
@@ -833,8 +832,23 @@ fn after_layout(c : @ui.Ctx) -> Unit {
     let mut look = app_look
     // its own move (for the log: what it is drawn from beside its scope's)
     let mut flip_dy = 0.0
+    if e.kept != 0 {
+      let r = match mo.recs.get(e.kept) {
+        Some(r) => r
+        None => {
+          let r = Rec::new()
+          mo.recs[e.kept] = r
+          r
+        }
+      }
+      r.x = nx
+      r.y = ny
+      r.w = nw
+      r.h = nh
+      r.seen = frame
+    }
     if e.key != 0 {
-      let li = if e.measure { -1 } else { c.list_above(e.node) }
+      let li = c.list_above(e.node)
       let (ref, rx, ry) = if li >= 0 {
         let (lx, ly, _, _) = c.node_rect(li)
         let (pl, pt, _, _) = c.node_pad(li)
@@ -848,7 +862,7 @@ fn after_layout(c : @ui.Ctx) -> Unit {
         }
         (c.node_id(li), nx - lx - pl, ny - ly - pt + s)
       } else {
-        match (if e.measure { None } else { scope_above(c, e.node) }) {
+        match scope_above(c, e.node) {
           Some(sc) => {
             let (sx, sy, _, sh) = c.node_rect(sc.node)
             let oy = if sc.scope == 2 { sy + sh } else { sy }
