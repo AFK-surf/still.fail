@@ -181,6 +181,8 @@ pub fn reset() -> Unit {
   writings_reset()
   // what was sent from here, not in the core's view yet (sent.mbt)
   sent_reset()
+  // what the composers' fields were seen as, their marks and `@` words (refs.mbt)
+  refs_reset()
   // what was asked of the core from a button, under way or failed (act.mbt)
   acting_reset()
   // the messages chats are to go to (jump.mbt)

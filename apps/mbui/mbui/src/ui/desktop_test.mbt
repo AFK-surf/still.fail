@@ -491,3 +491,46 @@ test "desktop: lit by the hand on it: a mouse resting on it, a finger pressing i
   t.draw()
   assert_true(lit.val)
 }
+
+///|
+test "a field leaving keys to the app: ↑ keeps its caret, Enter sends nothing; the app still reads them" {
+  let f = @ui.Field::new(text="one\ntwo")
+  let leaves : Ref[Array[Int]] = Ref::new([])
+  let up = Ref::new(false)
+  let enter = Ref::new(false)
+  let sent : Ref[String?] = Ref::new(None)
+  let t = @ui.Tester::new(fn(c) {
+    let r = c.editor("e", field=f, leaves=leaves.val)
+    if r.submitted is Some(_) {
+      sent.val = r.submitted
+    }
+    if c.key_pressed(@ui.key_code_up, in_field=true) {
+      up.val = true
+    }
+    if c.key_pressed(@ui.key_code_enter, in_field=true) {
+      enter.val = true
+    }
+  })
+  t.draw()
+  t.tap(100.0, 20.0)
+  f.set("one\ntwo", caret=7)
+  leaves.val = [@ui.key_code_up, @ui.key_code_down, @ui.key_code_enter]
+  t.draw()
+  t.key(@ui.key_code_up)
+  assert_eq(f.selection(), (7, 7))
+  assert_true(up.val)
+  t.key(@ui.key_code_enter)
+  assert_true(enter.val)
+  assert_eq(sent.val, None)
+  assert_eq(f.text(), "one\ntwo")
+  // Tab too: the focus stays in the field
+  leaves.val = [@ui.key_tab]
+  t.draw()
+  t.key(@ui.key_tab)
+  assert_true(t.ctx().editor_focused("e"))
+  // given back: ↑ goes up a line
+  leaves.val = []
+  t.draw()
+  t.key(@ui.key_code_up)
+  assert_true(f.selection().1 < 4)
+}

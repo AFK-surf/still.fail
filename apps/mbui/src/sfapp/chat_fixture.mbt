@@ -913,7 +913,7 @@ fn fixture_chat_call(f : Fixture, name : String, params : Json) -> Result[Json, 
         let o = Some(one)
         let id = text(o, "id")
         let name = text(o, "name")
-        list.push({
+        let kept : Map[String, Json] = {
           "id": Json::string(id),
           "name": Json::string(name),
           "size": Json::number(number(o, "size")),
@@ -923,7 +923,13 @@ fn fixture_chat_call(f : Fixture, name : String, params : Json) -> Result[Json, 
             "path": Json::string("uploads/" + id + "/" + name),
             "size": Json::number(number(o, "size")),
           },
-        })
+        }
+        // (pasted words: what the core said of them, kept with the file as composer.ts keeps it)
+        match field(o, "pasted") {
+          Some(x) => kept["pasted"] = x
+          None => ()
+        }
+        list.push(Json::object(kept))
       }
       fix_composers[key] = list
       f.version += 1

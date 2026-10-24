@@ -109,6 +109,28 @@ test "popover: beside its trigger, the focus in it; its trigger toggles it, a pr
 }
 
 ///|
+test "popover: not taking the focus, it stays where it was (a field typed in keeps it), Escape still closes it" {
+  let open = Ref(false)
+  let t = @ui.Tester::new(fn(c) {
+    let tr = button(c, "Filters", key="filters")
+    if tr.clicked {
+      open.val = true
+    }
+    open.val = popover(c, "pop", open.val, tr.id, label="Filters", focus=false, fn() { button(c, "Apply") |> ignore })
+      .value
+  })
+  t.click(@ui.Button, label="Filters")
+  let before = t.focused().map(fn(s) { s.label })
+  t.draw()
+  assert_true(open.val)
+  assert_true(t.query(@ui.Dialog, label="Filters") is Some(_))
+  assert_eq(t.focused().map(fn(s) { s.label }), before)
+  assert_true(before != Some("Apply"))
+  t.key(@ui.key_escape)
+  assert_false(open.val)
+}
+
+///|
 test "tooltip: shown once the pointer has rested on its trigger; at once by the keyboard; shut by a press" {
   let shown = Ref(false)
   let t = @ui.Tester::new(fn(c) {

@@ -1118,6 +1118,20 @@ pub let rail_corner : @ui.Radius = rounded(9.0)
 pub let panel_in : @ui.Radius = rounded(small_panel_inner(r_menu))
 
 ///|
+/// The `@` menu over the desktop's composer (ChatRef.css.ts refMenu: a small panel in the composer's corner, 32, padded
+/// panel_pad) and its rows' corner (refItem: concentric with it), its rows at their lowest (38).
+pub let ref_menu_corner : @ui.Radius = rounded(ref_menu_round)
+
+///|
+pub let ref_item_corner : @ui.Radius = rounded(ref_menu_round - panel_pad)
+
+///|
+pub let ref_item_min_h : @ui.Len = Fixed(38.0)
+
+///|
+let ref_menu_round : Double = 32.0
+
+///|
 /// The closed bar's corner (shell.css.ts dock, closed: calc(9px * scale + 6px)): concentric with the places' grounds
 /// 6 in.
 pub let closed_bar_corner : @ui.Radius = rounded(surface_corner(6.0, 9.0))

@@ -50,7 +50,7 @@ fn default_spec(f : ComposerFor) -> @sfdesk.ComposerSpec {
   {
     station: f.station,
     draft: f.key,
-    warm: "",
+    session: "",
     placeholder: "发消息",
     toolbar: None,
     roomy: false,
@@ -92,4 +92,107 @@ test "desk composer: a quote waiting is its card over the words, its comment tol
   t.tap(x + bw / 2.0, y + bh / 2.0)
   t.frame()
   assert_true(named(calls, "composer.unquote").length() > 0)
+}
+
+///|
+/// What draft s-c1's field holds now.
+fn desk_words(src : Source) -> String {
+  @sfbase.writing(src, "ws1/st1:s-c1").field.text()
+}
+
+///|
+/// The desk's composer focused (tapped in its middle).
+fn desk_focus(t : @ui.Tester) -> Unit raise {
+  t.draw()
+  t.tap(450.0, 500.0 - 16.0 - 22.0)
+  assert_true(t.ctx().editor_focused(@sfdesk.composer_field_key))
+}
+
+///|
+test "desk composer: `@` and words offer the chats they find over it (ChatRefMenu); ↓ and Enter put the one chosen in as its mark, not sending; a Backspace after it takes it whole" {
+  let calls : Array[Made] = []
+  let (t, src) = desk_composer_tester(calls)
+  desk_focus(t)
+  t.type_text("看 @首页")
+  t.frame()
+  assert_true(t.find("引用对话") is Some(_), msg=t.words().map(fn(x) { x.0 }).join("|"))
+  assert_true(t.find("首页的列表改成按天分组") is Some(_))
+  // (↓ goes round the chats found, not the field's lines)
+  t.key(@ui.key_code_down)
+  t.key(@ui.key_code_up)
+  assert_eq(@sfbase.writing(src, "ws1/st1:s-c1").field.selection(), (5, 5))
+  assert_true(t.ctx().editor_focused(@sfdesk.composer_field_key))
+  assert_true(t.find("引用对话") is Some(_))
+  t.enter()
+  t.frame()
+  assert_eq(named(calls, "chat.send").length(), 0)
+  let made = named(calls, "chat.ref")
+  assert_eq(made.length(), 1)
+  assert_eq(text(Some(made[0].params), "into"), "ws1")
+  assert_eq(desk_words(src), "看 @[首页的列表改成按天分组] ")
+  assert_true(t.find("引用对话") is None)
+  // drawn as the mark: `[@…]`, its brackets clear
+  t.backspace()
+  t.frame()
+  assert_eq(desk_words(src), "看 @[首页的列表改成按天分组]")
+  t.backspace()
+  t.frame()
+  assert_eq(desk_words(src), "看 ")
+}
+
+///|
+test "desk composer: Escape closes the `@` menu for that `@`; the words stay, Enter sends them" {
+  let calls : Array[Made] = []
+  let (t, _) = desk_composer_tester(calls)
+  desk_focus(t)
+  t.type_text("问 @发版")
+  t.frame()
+  assert_true(t.find("引用对话") is Some(_))
+  t.key(@ui.key_escape)
+  t.frame()
+  assert_true(t.find("引用对话") is None)
+  t.enter()
+  t.frame()
+  let sends = named(calls, "chat.send")
+  assert_eq(sends.length(), 1)
+  assert_eq(text(Some(sends[0].params), "text"), "问 @发版")
+}
+
+///|
+test "desk composer: a chat's link pasted as it is copied goes in as its mark" {
+  let calls : Array[Made] = []
+  let (t, src) = desk_composer_tester(calls)
+  desk_focus(t)
+  t.paste("先看 [首页](https://app.still.fail/w/ws1/s/st1/chats/s-c2) 再说")
+  t.frame()
+  t.frame()
+  let made = named(calls, "chat.ref")
+  assert_eq(made.length(), 1)
+  assert_eq(text(Some(made[0].params), "id"), "s-c2")
+  assert_eq(desk_words(src), "先看 @[首页] 再说")
+}
+
+///|
+test "desk composer: words pasted at once past the core's bound go as a file of their own, what they begin with kept with it" {
+  let calls : Array[Made] = []
+  let (t, src) = desk_composer_tester(calls)
+  desk_focus(t)
+  // (the bound asked of the core once the field is drawn)
+  t.frame()
+  let long = StringBuilder()
+  long.write_string("发布前要核对的条目\n")
+  for i in 0..<1000 {
+    long.write_string("第\{i}条，")
+  }
+  assert_true(long.to_string().length() >= 5000)
+  t.paste(long.to_string())
+  t.frame()
+  t.frame()
+  assert_eq(desk_words(src), "")
+  // (waiting with the draft: composer.add, its bytes beside it)
+  let files = @sfbase.writing(src, "ws1/st1:s-c1").files
+  assert_eq(files.length(), 1)
+  let one = files[0]
+  assert_true(text(Some(one), "name").has_prefix("pasted-text-"))
+  assert_eq(text(field(Some(one), "pasted"), "preview"), "发布前要核对的条目")
 }

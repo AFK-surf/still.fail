@@ -131,6 +131,9 @@ struct EditorState {
   mut limit : Int
   /// Enter sends (the words go to `submitted`); else it is a new line
   mut enter_sends : Bool
+  /// the keys it leaves to the app, pressed with nothing held (a menu the field offers, chosen in by ↑ / ↓, picked
+  /// from by Enter: the web's preventDefault on them)
+  mut leaves : Array[Int]
   /// the input method's action key for it (@hostapi.ime_action_*: a search field's)
   mut ime_action : Int
   /// its look, as the last frame said it: the line's height (0: the font's), the words', the placeholder's, the
