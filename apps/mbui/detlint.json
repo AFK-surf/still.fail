@@ -221,7 +221,8 @@
     "build-effect": {},
     "unsettled-ok": {},
     "host-delay": {},
-    "library-import": {}
+    "library-import": {},
+    "reset-wire": {}
   },
   "excused": {
     "frame-request": {},
@@ -262,6 +263,7 @@
     },
     "unsettled-ok": {},
     "host-delay": {},
-    "library-import": {}
+    "library-import": {},
+    "reset-wire": {}
   }
 }

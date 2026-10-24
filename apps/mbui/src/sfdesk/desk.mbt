@@ -3,6 +3,16 @@
 // (sfapp imports this package, so this one cannot import it); what both need is the library's or sfbase's.
 
 ///|
+/// The wires the app's pages are given as the app starts.
+fn init {
+  // what the pages ask of the frame: what a row dragged carries, the chats either side of the one open. Said once, as
+  // the app starts (reset runs only as a Tester starts: a wire set there is never set in the app)
+  @sfbase.drag_carried.val = dragged
+  @sfbase.neighbour_go.val = neighbour
+  @sfbase.neighbour_held.val = switcher_open
+}
+
+///|
 /// What this package keeps put back as the app begins anew (its reset).
 pub fn reset() -> Unit {
   @sfpages.reset()
@@ -30,10 +40,6 @@ pub fn reset() -> Unit {
   attention_reset()
   newchat_reset()
   page_switch_reset()
-  // what the pages ask of the frame: what a row dragged carries, the chats either side of the one open
-  @sfbase.drag_carried.val = dragged
-  @sfbase.neighbour_go.val = neighbour
-  @sfbase.neighbour_held.val = switcher_open
   history_reset()
   find_close()
   jobs_reset()
