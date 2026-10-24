@@ -1,5 +1,5 @@
 // What opens over the wide frame, drawn after it (the web's Radix portals): a right click's menu, a chat's row's menu,
-// the rail's, the lists' filter, 待处理's panel, ⌘K's switcher and ⌘/'s shortcuts over a scrim. Each is the library's (@sf.menu, @sf.panel: web/ui parts.tsx Menu,
+// the rail's, the lists' filter, 待处理's panel, ⌘K's switcher and ⌘/'s shortcuts over a scrim, the relay's dialog. Each is the library's (@sf.menu, @sf.panel: web/ui parts.tsx Menu,
 // controls.css.ts popover and menuList) over mbui's (@kit's menus and popover, the layer under them: the keys a
 // menu's, the focus kept in what is open, a screen reader told what it is). A press outside one, or Esc, closes it.
 
@@ -16,4 +16,6 @@ pub fn overlays(c : @ui.Ctx, src : Source, w : Workspace, pages : Pages) -> Unit
   // ⌘K (switcher.mbt): what the frame and its page can do now offered to it
   switcher(c, src, w, pages)
   keys_dialog(c, src, pages)
+  // a chat relayed to a channel (relay.mbt)
+  relay_dialog(c, src)
 }

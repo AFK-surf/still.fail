@@ -102,12 +102,7 @@ fn row_menu(c : @ui.Ctx, src : Source, pages : Pages) -> Unit {
     Some("relay") =>
       match item.thread {
         Some(th) =>
-          (pages.relay)(
-            c,
-            src,
-            { station: item.station, session: item.session, title: item.title, station_name: item.station_name },
-            th,
-          )
+          open_relay(src, { station: item.station, session: item.session, title: item.title, station_name: item.station_name }, th)
         None => ()
       }
     Some("transcript") =>

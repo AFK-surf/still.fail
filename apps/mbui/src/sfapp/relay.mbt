@@ -1,215 +1,19 @@
 // A chat relayed to a channel (docs/relay.md; ember apps/android chat/screens/Relay.kt), from its sheet (ChatInfo.kt):
-// the sheet that picks where. The bot to go on through when there are several (the chat's own as it opens), the search
+// the sheet that picks where; what it offers, and in what order, is the core's (sfbase relay.mbt, relay-pick.ts). The bot to go on through when there are several (the chat's own as it opens), the search
 // (or a pasted Slack message link, which offers that message's thread), its places relayed to before as it opens (all of them asked for or
 // searched), the one picked with the note, 「接力到 …」. Done, the sheet goes at once and a toast says where it went.
 
 ///|
-/// The places as asked (`chat.relayPlaces`), for the chat they are of, and what was chosen in the sheet.
-priv struct Relaying {
-  /// the thread the places were asked for (-1: none yet)
-  mut thread : Double
-  /// 0 being read, 1 read, 2 not (`error` says why)
-  mut read : Int
-  mut connects : Array[Json]
-  mut error : String
-  /// the bot picked to go on through (a connect's id), "" the chat's own (`relay_bot`)
-  mut bot : String
-  /// all the places shown, not only those relayed to before
-  mut all : Bool
-  /// the place picked: its connect and the place
-  mut picked : (Json, Json)?
-}
-
-///|
-let relaying : Relaying = {
-  thread: -1.0,
-  read: 0,
-  connects: [],
-  error: "",
-  bot: "",
-  all: false,
-  picked: None,
-}
-
-///|
-/// What is typed to find a place (or a Slack message's link), and the note said with the chat where it goes.
-let relay_query : @ui.Field = @ui.Field::new()
-
-///|
-let relay_note : @ui.Field = @ui.Field::new()
-
-///|
-/// As the sheet was before it was ever opened (app.mbt reset).
-fn relay_reset() -> Unit {
-  relaying.thread = -1.0
-  relaying.read = 0
-  relaying.connects = []
-  relaying.error = ""
-  relaying.bot = ""
-  relaying.all = false
-  relaying.picked = None
-  relay_query.set("")
-  relay_note.set("")
-}
-
-///|
-/// How many places relayed to before are offered as the sheet opens, before 显示全部; with no more than this many places
-/// in all, all of them are (Relay.kt RECENT, FEW).
-let relay_recent : Int = 5
-
-///|
-let relay_few : Int = 8
-
-///|
-/// The sheet opened for the chat's `thread`: its places asked for (a tap's: Relay.kt LaunchedEffect(thread)).
+/// The sheet opened for the chat's `thread`: its places asked for (sfbase relay.mbt).
 fn open_relay(c : @ui.Ctx, src : Source, r : ChatRef, thread : Double) -> Unit {
-  relay_reset()
-  relaying.thread = thread
-  (src.call)("chat.relayPlaces", { "station": Json::string(r.station), "thread": Json::number(thread) }, fn(res) {
-    if relaying.thread != thread {
-      return
-    }
-    match res {
-      Ok(v) => {
-        relaying.connects = items(Some(v), "connects")
-        relaying.read = 1
-      }
-      Err(e) => {
-        relaying.error = text(Some(e), "message")
-        relaying.read = 2
-      }
-    }
-  })
+  relay_open(src, r.station, thread)
   open_sheet(c, Relay(r, thread))
 }
 
 ///|
-/// Whether `s` is a link to a Slack message (https://…/archives/<channel>/p<16 digits>): the station finds its
-/// workspace among its connects' (Relay.kt SLACK_LINK).
-fn slack_link(s : String) -> Bool {
-  let rest = if s.has_prefix("https://") {
-    s.view(start_offset=8)
-  } else if s.has_prefix("http://") {
-    s.view(start_offset=7)
-  } else {
-    return false
-  }
-  let rest = rest.to_owned()
-  match rest.find("/archives/") {
-    Some(i) if i > 0 && !rest.view(end_offset=i).contains("/") && !rest.view(end_offset=i).contains(" ") => {
-      let after = rest.view(start_offset=i + 10).to_owned()
-      let mut k = 0
-      while k < after.length() {
-        let ch = after.code_unit_at(k).to_int()
-        if (ch >= 65 && ch <= 90) || (ch >= 48 && ch <= 57) {
-          k = k + 1
-        } else {
-          break
-        }
-      }
-      if k == 0 || k + 18 > after.length() || after.code_unit_at(k).to_int() != 47 ||
-        after.code_unit_at(k + 1).to_int() != 112 {
-        return false
-      }
-      for j in (k + 2)..<(k + 18) {
-        let ch = after.code_unit_at(j).to_int()
-        if ch < 48 || ch > 57 {
-          return false
-        }
-      }
-      true
-    }
-    _ => false
-  }
-}
-
-///|
-/// The bot the chat goes on through (Relay.kt `bot`): the one picked, else the chat's own (the station's preferred),
-/// else the first; none without connects.
-fn relay_bot() -> Json? {
-  let cs = relaying.connects
-  match cs.iter().find_first(fn(c) { relaying.bot != "" && text(Some(c), "id") == relaying.bot }) {
-    Some(c) => Some(c)
-    None =>
-      match cs.iter().find_first(fn(c) { flag(Some(c), "preferred") }) {
-        Some(c) => Some(c)
-        None => if cs.length() > 0 { Some(cs[0]) } else { None }
-      }
-  }
-}
-
-///|
-/// A bot as people know it (Relay.kt botLabel): its name, with its workspace (Slack) or tenant (Feishu) when the
-/// connects read are in several.
-fn relay_bot_label(conn : Json) -> String {
-  let teams : Map[String, Bool] = {}
-  for c in relaying.connects {
-    teams[opt_text(Some(c), "team").unwrap_or("")] = true
-  }
-  match opt_text(Some(conn), "team") {
-    Some(t) if t != "" && teams.length() > 1 => text(Some(conn), "name") + " · " + t
-    _ => text(Some(conn), "name")
-  }
-}
-
-///|
-fn relay_place_name(p : Json) -> String {
-  if text(Some(p), "kind") == "channel" {
-    (if flag(Some(p), "private") { "🔒 " } else { "" }) + "#" + text(Some(p), "name")
-  } else {
-    text(Some(p), "name")
-  }
-}
-
-///|
-/// What relaying to a place does: a new thread, a new topic, or the group's conversation taken over.
-fn relay_kind_note(p : Json) -> String {
-  tr(
-    match text(Some(p), "kind") {
-      "channel" => "web-main.relay.kind.channel"
-      "topics" => "web-main.relay.kind.topics"
-      _ => "web-main.relay.kind.group"
-    },
-  )
-}
-
-///|
-/// The places offered (Relay.kt arrange): those matching what was typed (starting with it first), relayed to before
-/// (latest first), by name; nothing typed, only the recent ones of many unless all were asked for. With whether they
-/// are the recent ones, and how many there are in all.
-fn relay_arrange(connects : Array[Json], query : String, all : Bool) -> (Array[(Json, Json)], Bool, Int) {
-  let q = query.trim(chars=" \n\t").to_owned().to_lower()
-  let rows : Array[(Json, Json)] = []
-  for conn in connects {
-    for p in items(Some(conn), "places") {
-      rows.push((conn, p))
-    }
-  }
-  let name = fn(r : (Json, Json)) { text(Some(r.1), "name").to_lower() }
-  let used = fn(r : (Json, Json)) {
-    match field(Some(r.1), "used") {
-      Some(Number(n, ..)) => n
-      _ => -1.0
-    }
-  }
-  let shown = rows.filter(fn(r) { q == "" || name(r).contains(q) })
-  shown.sort_by(fn(a, b) {
-    let sa = if q != "" && name(a).has_prefix(q) { 0 } else { 1 }
-    let sb = if q != "" && name(b).has_prefix(q) { 0 } else { 1 }
-    if sa != sb {
-      sa.compare(sb)
-    } else if used(a) != used(b) {
-      used(b).compare(used(a))
-    } else {
-      name(a).compare(name(b))
-    }
-  })
-  let before = shown.filter(fn(r) { used(r) >= 0.0 })
-  if q == "" && !all && rows.length() > relay_few && before.length() > 0 {
-    (before.iter().take(relay_recent).collect(), true, rows.length())
-  } else {
-    (shown, false, rows.length())
-  }
+/// The kind of a row's connect, for its mark ("slack", "feishu", "lark").
+fn relay_kind(row : Json) -> String {
+  text(Some(row), "kind")
 }
 
 ///|
@@ -223,9 +27,10 @@ priv enum RelayPart {
   Reading
   Failed(String)
   Note(String)
-  Bots
+  Bots(Array[Json], String)
   Recent
-  Place(Json, Json)
+  /// a place offered: a row of the core's view
+  Place(Json)
   NoRows(String)
   ShowAll(Int)
   Unread(String)
@@ -250,50 +55,57 @@ let relay_share : Double = 0.9
 ///|
 /// The relay sheet (Relay.kt openRelay): 90% of the screen.
 fn relay_sheet(c : @ui.Ctx, src : Source, r : ChatRef, thread : Double) -> Unit {
-  let query = relay_query.text()
-  let link = if slack_link(query.trim(chars=" \n\t").to_owned()) { Some(query.trim(chars=" \n\t").to_owned()) } else { None }
+  let view = relay_view(c, src)
+  let link = opt_text(view, "link")
   let parts : Array[RelayPart] = [Lead]
   let chosen = relaying.picked
-  let bot = relay_bot()
-  let via = fn(conn) { Some((fill("web-main.relay.via", [("bot", "\u{E000}")]), conn)) }
-  if relaying.connects.length() > 1 && chosen is None && link is None {
-    parts.push(Bots)
+  let via = fn(id : String) {
+    relay_connect(id).map(fn(conn) { (fill("web-main.relay.via", [("bot", "\u{E000}")]), conn) })
+  }
+  let bots = items(view, "bots")
+  if bots.length() > 0 && chosen is None && link is None {
+    parts.push(Bots(bots, text(view, "bot")))
   }
   if chosen is None {
     parts.push(Search)
   }
   match (link, chosen) {
-    (Some(_), _) => parts.push(Picked("", tr("web-main.relay.kind.thread"), false, bot.bind(via)))
-    (None, Some((conn, p))) =>
-      parts.push(Picked(relay_place_name(p), relay_kind_note(p) + " · " + tr("web-main.relay.change"), true, via(conn)))
+    (Some(_), _) => parts.push(Picked("", tr("web-main.relay.kind.thread"), false, via(text(view, "bot"))))
+    (None, Some(row)) =>
+      parts.push(
+        Picked(text(Some(row), "name"), text(Some(row), "note") + " · " + tr("web-main.relay.change"), true, via(text(Some(row), "connect"))),
+      )
     (None, None) =>
       match relaying.read {
         0 => parts.push(Reading)
         2 => parts.push(Failed(relaying.error))
+        _ if relaying.connects.length() == 0 => parts.push(Note(tr("web-main.relay.noConnects")))
         _ =>
-          match bot {
-            None => parts.push(Note(tr("web-main.relay.noConnects")))
-            Some(conn) => {
-              let (rows, recent, total) = relay_arrange([conn], query, relaying.all)
+          match view {
+            None => parts.push(Reading)
+            Some(_) => {
+              let rows = items(view, "rows")
+              let recent = flag(view, "recent")
               if recent {
                 parts.push(Recent)
               }
               for row in rows {
-                parts.push(Place(row.0, row.1))
+                parts.push(Place(row))
               }
-              if rows.length() == 0 {
-                parts.push(
-                  NoRows(
-                    tr(if query.trim(chars=" \n\t").to_owned() == "" { "web-main.relay.noPlaces" } else { "web-main.relay.noMatch" }),
-                  ),
-                )
+              match text(view, "empty") {
+                "noPlaces" => parts.push(NoRows(tr("web-main.relay.noPlaces")))
+                "noMatch" => parts.push(NoRows(tr("web-main.relay.noMatch")))
+                _ => ()
               }
+              let total = number(view, "total").to_int()
               if recent && total > rows.length() {
                 parts.push(ShowAll(total))
               }
-              match opt_text(Some(conn), "error") {
-                Some(e) => parts.push(Unread(fill("web-main.relay.unread", [("error", e)])))
-                None => ()
+              for e in items(view, "unread") {
+                match e {
+                  String(e) => parts.push(Unread(fill("web-main.relay.unread", [("error", e)])))
+                  _ => ()
+                }
               }
             }
           }
@@ -306,7 +118,7 @@ fn relay_sheet(c : @ui.Ctx, src : Source, r : ChatRef, thread : Double) -> Unit 
   parts.push(
     Go(
       match chosen {
-        Some((_, p)) => fill("web-main.relay.goTo", [("place", relay_place_name(p))])
+        Some(row) => fill("web-main.relay.goTo", [("place", text(Some(row), "name"))])
         None => tr("web-main.relay.go")
       },
       link is Some(_) || chosen is Some(_),
@@ -316,7 +128,7 @@ fn relay_sheet(c : @ui.Ctx, src : Source, r : ChatRef, thread : Double) -> Unit 
     sheet_head(c, tr("web-main.relay.title"))
     c.box(style=relay_body, fn() {
       c.list("relay/" + r.station + "/" + thread.to_string(), parts.length(), relay_row_est, fn(i) {
-        relay_part(c, src, r, thread, parts[i], link)
+        relay_part(c, src, parts[i], view)
       })
       |> ignore
     })
@@ -454,11 +266,11 @@ let relay_place_aside_on : @ui.TextStyle = relay_place_aside.then(@ui.text_style
 
 ///|
 /// A part of the relay sheet (Relay.kt openRelay's column, 10 apart).
-fn relay_part(c : @ui.Ctx, src : Source, r : ChatRef, thread : Double, part : RelayPart, link : String?) -> Unit {
+fn relay_part(c : @ui.Ctx, src : Source, part : RelayPart, view : Json?) -> Unit {
   c.box(style=relay_part_box, fn() {
     match part {
       Lead => c.text(tr("web-main.relay.lead"), style=relay_words) |> ignore
-      Search => relay_field(c, "relay/search", relay_query, tr("web-main.relay.searchOrLink"))
+      Search => relay_field(c, "relay/search", relaying.query, tr("web-main.relay.searchOrLink"))
       Picked(name, note, change, via) => {
         if relay_place_row(c, "relay/picked", None, if name == "" { tr("web-main.relay.thread") } else { name }, Some(note), true) &&
           change {
@@ -486,31 +298,29 @@ fn relay_part(c : @ui.Ctx, src : Source, r : ChatRef, thread : Double, part : Re
         |> ignore
       Failed(e) => c.text(e, style=relay_words_red) |> ignore
       Note(words) => c.text(words, style=relay_words) |> ignore
-      Bots => {
-        let on = relay_bot().map(fn(b) { text(Some(b), "id") }).unwrap_or("")
+      Bots(bots, on) =>
         c.box(style=relay_scopes, fn() {
-          for conn in relaying.connects {
-            let id = text(Some(conn), "id")
-            if relay_bot_chip(c, src, conn, id == on) {
+          for b in bots {
+            let id = text(Some(b), "id")
+            if relay_bot_chip(c, src, id, text(Some(b), "label"), id == on) {
               relaying.bot = id
               relaying.all = false
             }
           }
         })
         |> ignore
-      }
       Recent =>
         c.box(style=relay_small_room, fn() { c.text(tr("web-main.relay.recent"), style=relay_small) |> ignore }) |> ignore
-      Place(conn, p) =>
+      Place(row) =>
         if relay_place_row(
             c,
-            "relay/place/" + text(Some(conn), "id") + "/" + text(Some(p), "id"),
-            Some(text(Some(conn), "kind")),
-            relay_place_name(p),
-            if text(Some(p), "kind") == "channel" { None } else { Some(relay_kind_note(p)) },
+            "relay/place/" + text(Some(row), "connect") + "/" + text(field(Some(row), "place"), "id"),
+            Some(relay_kind(row)),
+            text(Some(row), "name"),
+            opt_text(Some(row), "aside"),
             false,
           ) {
-          relaying.picked = Some((conn, p))
+          relaying.picked = Some(row)
         }
       NoRows(words) => c.box(style=relay_small_room, fn() { c.text(words, style=relay_small) |> ignore }) |> ignore
       Unread(words) => c.box(style=relay_small_room, fn() { c.text(words, style=relay_small_red) |> ignore }) |> ignore
@@ -528,35 +338,12 @@ fn relay_part(c : @ui.Ctx, src : Source, r : ChatRef, thread : Double, part : Re
       }
       NoteLabel =>
         c.box(style=relay_note_label, fn() { c.text(tr("web-main.relay.note"), style=relay_small) |> ignore }) |> ignore
-      NoteField => relay_field(c, "relay/note", relay_note, tr("web-main.relay.notePlaceholder"))
+      NoteField => relay_field(c, "relay/note", relaying.note, tr("web-main.relay.notePlaceholder"))
       Go(label, enabled) =>
         c.box(style=relay_go_room, fn() {
           if sheet_button(c, "relay/go", label, true, enabled) {
-            let to = relaying.picked
-            let note = relay_note.text()
             close_sheet(c)
-            let p : Map[String, Json] = {
-              "station": Json::string(r.station),
-              "thread": Json::number(thread),
-              "note": Json::string(note),
-            }
-            match (link, to) {
-              (Some(l), _) => {
-                p["link"] = Json::string(l)
-                if relay_bot() is Some(b) {
-                  p["connect"] = Json::string(text(Some(b), "id"))
-                }
-              }
-              (None, Some((conn, place))) => {
-                p["connect"] = Json::string(text(Some(conn), "id"))
-                p["channel"] = Json::string(text(Some(place), "id"))
-              }
-              (None, None) => ()
-            }
-            act(src, tr("web-main.relay.verb"), "", "chat.relay", Json::object(p), ok=fn(v) {
-              toast_later(fill("web-main.relay.done", [("place", text(Some(v), "place"))]))
-            })
-            relay_reset()
+            relay_go(src, view)
           }
         })
         |> ignore
@@ -583,11 +370,14 @@ fn relay_field(c : @ui.Ctx, key : String, field : @ui.Field, placeholder : Strin
 
 ///|
 /// A bot to go on through: its picture and name; chosen, filled (Relay.kt BotChip).
-fn relay_bot_chip(c : @ui.Ctx, src : Source, conn : Json, on : Bool) -> Bool {
-  let id = c.id("relay/bot/" + text(Some(conn), "id"))
+fn relay_bot_chip(c : @ui.Ctx, src : Source, bot : String, label : String, on : Bool) -> Bool {
+  let id = c.id("relay/bot/" + bot)
   c.box(style=if on { relay_chip_on } else { relay_chip }, id~, fn() {
-    relay_bot_picture(c, src, conn)
-    c.text(relay_bot_label(conn), style=if on { relay_chip_words_on } else { relay_chip_words }) |> ignore
+    match relay_connect(bot) {
+      Some(conn) => relay_bot_picture(c, src, conn)
+      None => ()
+    }
+    c.text(label, style=if on { relay_chip_words_on } else { relay_chip_words }) |> ignore
     // Relay.kt BotChip: clip(Smooth(13)).clickable
     @motion.ripple(c, id, 13.0)
   })

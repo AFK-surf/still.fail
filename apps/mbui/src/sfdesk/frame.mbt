@@ -32,10 +32,8 @@ pub(all) struct Pages {
   /// what the frame opened), and what it offers ⌘K now
   keys : (@ui.Ctx, Source, Workspace, Bool) -> Unit
   offered : (@ui.Ctx, Source) -> Array[Offered]
-  /// the services left up long (OpenJobs.tsx, over the lists' foot and in 待处理's panel); a chat relayed to a channel
-  /// (Relay.tsx, from a row's menu: the chat, its thread)
+  /// the services left up long (OpenJobs.tsx, over the lists' foot and in 待处理's panel)
   jobs : (@ui.Ctx, Source, Workspace) -> Unit
-  relay : (@ui.Ctx, Source, ChatRef, Double) -> Unit
   /// what the settings' pages read and call, and how they move (src/sfapp/settings: the core as the app has it)
   core : (Source, Workspace) -> Core
   /// what this device sees while it waits to be confirmed in the workspace's safe mode
