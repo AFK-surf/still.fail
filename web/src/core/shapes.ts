@@ -5093,15 +5093,24 @@ export interface ResourceUse {
 	netOut: number;
 	/** In and out together. */
 	net: number;
+	/** Bytes read from disk, a second. */
+	diskRead: number;
+	/** Bytes written, a second. */
+	diskWrite: number;
+	/** Read and written together. */
+	disk: number;
 	cpuText: string;
 	memoryText: string;
 	netText: string;
+	diskText: string;
 }
 
 export interface ResourceProcess {
 	key: string;
 	pid: number;
 	name: string;
+	/** A chat's, not its agent's own: the page may end it (`process.end`). */
+	endable: boolean;
 	use: ResourceUse;
 }
 
@@ -5118,6 +5127,10 @@ export interface ResourceGroup {
 	kindText: string;
 	/** A chat's page. */
 	chat?: UsageChat;
+	/** Its station's address. */
+	station: string;
+	/** A chat's session: what ending one of its processes names (`process.end`). */
+	session?: string;
 	use: ResourceUse;
 	/** The most CPU first. */
 	processes: ResourceProcess[];
@@ -5159,6 +5172,8 @@ export interface ResourcesView {
 	empty: boolean;
 	/** Some station reads their network traffic: the page has its column. */
 	net: boolean;
+	/** Some station reads what they read from and write to disk: the page has its column. */
+	disk: boolean;
 	/** How often it is read again while shown, for the page to say. */
 	everyMs: number;
 	tiles: ResourceTile[];

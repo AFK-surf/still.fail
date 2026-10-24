@@ -43,16 +43,21 @@ export function rate(bytes: number): string {
   return `${i === 0 || n >= 10 ? Math.round(n) : n.toFixed(1)} ${units[i]}/s`;
 }
 
-/// `net`: in and out together, what the page sorts by.
-type Use = { cpu: number; memory: number; netIn: number; netOut: number; net: number };
+/// `net`: in and out together, `disk` read and written together: what the page sorts by.
+type Use = { cpu: number; memory: number; netIn: number; netOut: number; net: number; diskRead: number; diskWrite: number; disk: number };
 const useOf = (v: unknown): Use => {
   const netIn = num(get(v, "netIn"));
   const netOut = num(get(v, "netOut"));
-  return { cpu: num(get(v, "cpu")), memory: num(get(v, "memory")), netIn, netOut, net: netIn + netOut };
+  const diskRead = num(get(v, "diskRead"));
+  const diskWrite = num(get(v, "diskWrite"));
+  return { cpu: num(get(v, "cpu")), memory: num(get(v, "memory")), netIn, netOut, net: netIn + netOut, diskRead, diskWrite, disk: diskRead + diskWrite };
 };
-const said = (u: Use) => ({ ...u, cpuText: cpu(u.cpu), memoryText: memory(u.memory), netText: rate(u.net) });
-const plus = (a: Use, b: Use): Use => ({ cpu: a.cpu + b.cpu, memory: a.memory + b.memory, netIn: a.netIn + b.netIn, netOut: a.netOut + b.netOut, net: a.net + b.net });
-const ZERO: Use = { cpu: 0, memory: 0, netIn: 0, netOut: 0, net: 0 };
+const said = (u: Use) => ({ ...u, cpuText: cpu(u.cpu), memoryText: memory(u.memory), netText: rate(u.net), diskText: rate(u.disk) });
+const plus = (a: Use, b: Use): Use => ({
+  cpu: a.cpu + b.cpu, memory: a.memory + b.memory, netIn: a.netIn + b.netIn, netOut: a.netOut + b.netOut, net: a.net + b.net,
+  diskRead: a.diskRead + b.diskRead, diskWrite: a.diskWrite + b.diskWrite, disk: a.disk + b.disk,
+});
+const ZERO: Use = { cpu: 0, memory: 0, netIn: 0, netOut: 0, net: 0, diskRead: 0, diskWrite: 0, disk: 0 };
 
 function percent(part: number, whole: number): string {
   if (whole <= 0) return "0%";
@@ -73,6 +78,7 @@ export function resourcesView(sources: Source[], _now: number, waitNote: Wait): 
   let counted = false;
   // Some station read the network (one from before does not).
   let net = false;
+  let disk = false;
   let everyMs = 0;
   let cores = 0;
   let machineMemory = 0;
@@ -103,6 +109,7 @@ export function resourcesView(sources: Source[], _now: number, waitNote: Wait): 
     }
     counted = true;
     if (get(v, "net") === true) net = true;
+    if (get(v, "disk") === true) disk = true;
     everyMs = Math.max(everyMs, num(get(v, "everyMs")));
     cores += num(get(get(v, "machine"), "cores"));
     machineMemory += num(get(get(v, "machine"), "memory"));
@@ -129,8 +136,10 @@ export function resourcesView(sources: Source[], _now: number, waitNote: Wait): 
         // What it is, where its title does not say it already (a chat's: 对话; the app's and the station's say it).
         kindText: [...(several ? [s.name] : []), ...(kind === "chats" ? [t(`core-views.resources.kind.${kind}`)] : [])].join(" · "),
         ...(session !== null && key !== "agents" ? { chat: { station: s.address, ...(thread !== null ? { thread } : { session }) } } : {}),
+        station: s.address,
+        session: key !== "agents" ? session : null,
         use: said(useOf(g)),
-        processes: procs.map((p) => ({ key: `${s.address}\n${num(get(p, "pid"))}`, pid: num(get(p, "pid")), name: String(get(p, "name") ?? "?"), use: said(useOf(p)) })),
+        processes: procs.map((p) => ({ key: `${s.address}\n${num(get(p, "pid"))}`, pid: num(get(p, "pid")), name: String(get(p, "name") ?? "?"), endable: get(p, "endable") === true, use: said(useOf(p)) })),
       });
     }
   }
@@ -139,12 +148,14 @@ export function resourcesView(sources: Source[], _now: number, waitNote: Wait): 
   const tiles = [
     { key: "cpu", label: t("core-views.resources.tile.cpu"), value: cpu(total.cpu), sub: cores > 0 ? t("core-views.resources.tile.cpu_sub", { cores, percent: percent(total.cpu, cores * 100) }) : "", points: line("cpu") },
     { key: "memory", label: t("core-views.resources.tile.memory"), value: memory(total.memory), sub: machineMemory > 0 ? t("core-views.resources.tile.memory_sub", { total: memory(machineMemory), percent: percent(total.memory, machineMemory) }) : "", points: line("memory") },
+    ...(disk ? [{ key: "disk", label: t("core-views.resources.tile.disk"), value: `↓ ${rate(total.diskRead)}`, sub: `↑ ${rate(total.diskWrite)}`, points: line("disk") }] : []),
     ...(net ? [{ key: "net", label: t("core-views.resources.tile.net"), value: `↓ ${rate(total.netIn)}`, sub: `↑ ${rate(total.netOut)}`, points: line("net") }] : []),
   ];
   return {
     wait: waitNote(waiting, failing, !counted),
     empty: !counted,
     net,
+    disk,
     everyMs,
     tiles,
     kinds: KINDS.map((k) => ({ key: k, label: t(`core-views.resources.kind.${k}`) })),

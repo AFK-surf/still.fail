@@ -136,6 +136,7 @@ export const PARAMS: Record<string, string> = {
   "screen.close": "screen:string",
   "job.clearEnded": "session:string",
   "memory.get": "",
+  "process.end": "pid:number session:string",
   "footprint.scan": "",
   "footprint.rebuild": "keys?:strings",
   "footprint.delete": "keys?:strings",
@@ -491,6 +492,9 @@ function stationOp(name: string, params: unknown): Request | null {
       return op("DELETE", () => `/sessions/${p.at("session")}/jobs`, null, session("session"));
     case "memory.get":
       return op("GET", () => "/memory", null, NONE);
+    // A chat's process ended from its station's 进程 (resources/watch.ts `end`): the page reads it again in a moment.
+    case "process.end":
+      return op("POST", () => `/resources/processes/${p.u64("pid")}/end`, p.pick(["session"]), NONE);
     case "footprint.scan":
       return op("POST", () => "/footprint/scan", null, FOOTPRINT);
     case "footprint.rebuild":

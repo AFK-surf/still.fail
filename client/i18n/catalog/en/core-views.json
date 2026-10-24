@@ -397,6 +397,7 @@
   "core-views.resources.note.uncounted": "{name} is not on macOS, where per-process resources can be read",
   "core-views.resources.tile.cpu": "CPU",
   "core-views.resources.tile.cpu_sub": "{percent} of {cores} cores",
+  "core-views.resources.tile.disk": "Disk",
   "core-views.resources.tile.memory": "Memory",
   "core-views.resources.tile.memory_sub": "{percent} of {total}",
   "core-views.resources.tile.net": "Network",

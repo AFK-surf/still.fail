@@ -50,6 +50,10 @@ export const toggle = style({ display: "inline-flex", color: vars.subtle, flex: 
 export const open = style({ transform: "rotate(90deg)" });
 export const meta = style({ color: vars.subtle, fontSize: vars.textMeta, whiteSpace: "nowrap" });
 export const process = style({ color: vars.muted });
+/** A process's row: its end shown as it is pointed at (or reached by the keyboard). */
+export const row = style({});
+export const endCell = style({ width: "32px", padding: "2px 4px", textAlign: "right" });
+export const end = style({ opacity: 0, selectors: { [`${row}:hover &, &:focus-visible`]: { opacity: 1 } } });
 export const processName = style({ paddingLeft: "30px" });
 export const whose = style({ color: vars.muted, maxWidth: "200px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" });
 /** How much of the most this row uses, before the sorted column's figure. */
@@ -58,5 +62,5 @@ export const shareFill = style({ display: "block", height: "100%", background: v
 
 export const foot = style({ display: "grid", gap: "4px", margin: "0", padding: "0", listStyle: "none", fontSize: vars.textMeta, color: vars.subtle });
 export const empty = style({ margin: "0", padding: "28px 0", textAlign: "center", color: vars.muted });
-export const tone = styleVariants({ cpu: { color: vars.accent }, memory: { color: vars.blue }, net: { color: vars.green } });
+export const tone = styleVariants({ cpu: { color: vars.accent }, memory: { color: vars.blue }, net: { color: vars.green }, disk: { color: vars.amber } });
 export const scroll = style({ overflowX: "auto" });

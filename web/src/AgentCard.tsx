@@ -1,11 +1,13 @@
 // An agent of the chat in brief, over its avatar while it is pointed at (Hover, Peeks.tsx), the same card wherever the
 // avatar is (beside its messages, in the chat's bar): what it runs, where it stands and for how long, what it does now
 // (with a stop for it alone), and what the core says of it (the `agentCard` view, views/brief.ts): what it has done,
-// cost and used, its account and what is left of it, its jobs, what is wrong.
+// cost and used, its account and what is left of it, its jobs, what is wrong; what its processes use of the machine now
+// (its station's 进程, Resources.tsx).
 import { createContext, memo, useContext, useLayoutEffect, useRef, type ReactElement, type RefObject } from "react";
 import { useAgentCard, useApi, type ChatAgent } from "./api.ts";
 import type { AgentCardView } from "./core/shapes.ts";
-import { useStation } from "./station.tsx";
+import { useStation, useWorkspaceId } from "./station.tsx";
+import { useResources } from "./Resources.tsx";
 import { Hover } from "./Peeks.tsx";
 import { AgentMark, Menu, Tip, type MenuItem } from "./ui.tsx";
 import { ChevronRight, Stop } from "@stillfail/ui/icons.tsx";
@@ -160,6 +162,7 @@ export function AgentCard({ agent }: { agent: ChatAgent }) {
         </div>
       )}
       {quiet && <p className={css.quiet}>{quiet}</p>}
+      <AgentUses station={station} agent={s.key} />
       {(card?.jobs || (card?.attention.length ?? 0) > 0) && (
         <div className={css.notes}>
           {card?.jobs && <span>{card.jobs}</span>}
@@ -168,6 +171,15 @@ export function AgentCard({ agent }: { agent: ChatAgent }) {
       )}
     </div>
   );
+}
+
+/** What its processes use of the machine now, in a quiet line: none where its station does not read them (not macOS). */
+function AgentUses({ station, agent }: { station: string; agent: string }) {
+  const view = useResources(useWorkspaceId(), station).value;
+  const g = view?.groups.find((x) => x.session === agent);
+  if (!view || !g) return null;
+  const parts = [`CPU ${g.use.cpuText}`, `${t("web-main.resources.column.memory")} ${g.use.memoryText}`, ...(view.net && g.use.net > 0 ? [`${t("web-main.resources.column.net")} ${g.use.netText}`] : [])];
+  return <p className={css.quiet}>{t("web-main.chat.agentCard.uses", { uses: parts.join(" · "), n: g.processes.length })}</p>;
 }
 
 /** What can be done to its context from its tile (its execution history's details): the menu's items, under way. */

@@ -337,6 +337,7 @@
   "core-views.resources.note.uncounted": "{name} 不是 macOS，读不到各进程的资源",
   "core-views.resources.tile.cpu": "CPU",
   "core-views.resources.tile.cpu_sub": "占 {cores} 核的 {percent}",
+  "core-views.resources.tile.disk": "磁盘",
   "core-views.resources.tile.memory": "内存",
   "core-views.resources.tile.memory_sub": "占 {total} 的 {percent}",
   "core-views.resources.tile.net": "网络",

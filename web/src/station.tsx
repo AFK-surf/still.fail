@@ -70,7 +70,7 @@ export function useLink(): (path: string) => string {
 export interface Me { id: string; email: string | null }
 
 /** The workspace the page is in, from its path (/w/<workspace>/…). */
-function useWorkspaceId(): string {
+export function useWorkspaceId(): string {
   return useParams().ws ?? "";
 }
 

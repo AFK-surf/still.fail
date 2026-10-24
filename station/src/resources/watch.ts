@@ -1,7 +1,7 @@
 // What of this machine still.fail uses (a station's 进程), as Activity Monitor says it: each look, every process's CPU
-// time and memory footprint (macOS counts them, native/mesh/src/usage.rs) and the bytes it took in and sent out over the
-// network so far (nettop: what Activity Monitor's Network tab says), what each used since the last look put to whose
-// it is:
+// time, memory footprint and bytes read from and written to disk (macOS counts them, native/mesh/src/usage.rs) and the
+// bytes it took in and sent out over the network so far (nettop: what Activity Monitor's Network tab says), what each
+// used since the last look put to whose it is:
 // - a chat's: its agent's runner and all under it, its jobs' groups and all under them, and what runs in its directory
 //   on its own (a script its agent left running with nohup, under launchd now: its arguments name the directory);
 // - the agents': a runner no one session has (a profile's, codex) and all under it;
@@ -10,7 +10,7 @@
 // The rest of the machine is no one's here and not read. A process that began since the last look counts whole; one
 // that ended meanwhile loses what it used after the last look (a command of a few seconds may not show at all).
 // Looked at only while a page asks (within WANTED_MS), every LOOK_MS; nothing read otherwise. Kept: the last look by
-// process and the totals of the last HISTORY_MS.
+// process and the totals of the last HISTORY_MS. A chat's process (not its agent's own) can be ended from the page.
 import { basename } from "node:path";
 import type { Clock } from "effect";
 import { Fibers } from "../ops/fibers.ts";
@@ -24,20 +24,23 @@ export const HISTORY_MS = 10 * 60_000;
 export const FIRST_MS = 1000;
 
 export type Whose = { key: string; kind: "chat" | "agents" | "app" | "station"; session: string | null };
-/// What a process used now: CPU (100 a whole core), memory (bytes), bytes in and out a second.
-export type Use = { cpu: number; memory: number; netIn: number; netOut: number };
-export type Process = Use & { pid: number; name: string };
+/// What a process used now: CPU (100 a whole core), memory (bytes), bytes in and out a second, bytes read and written
+/// a second.
+export type Use = { cpu: number; memory: number; netIn: number; netOut: number; diskRead: number; diskWrite: number };
+/// `endable`: a chat's, not its agent's own (its runner, the runtime it runs): one the page may end.
+export type Process = Use & { pid: number; name: string; endable: boolean };
 export type Group = Whose & Use & { processes: Process[] };
 export type Point = Use & { at: number };
 /// `net`: whether the network was read (its figures 0 else).
-export type Snapshot = { at: number | null; everyMs: number; counted: boolean; net: boolean; total: Use; groups: Group[]; history: Point[] };
+/// `disk`: whether what they read and wrote was (a mesh.node from before has none).
+export type Snapshot = { at: number | null; everyMs: number; counted: boolean; net: boolean; disk: boolean; total: Use; groups: Group[]; history: Point[] };
 
 export type Runner = { runner: number; pid: number; session: string | null };
 export type Job = { session: string; pgid: number };
 /// A chat's directory: what names it in its arguments is the chat's.
 export type Place = { dir: string; session: string };
 /// What a process has used so far (native/mesh/src/usage.rs).
-export type Usage = { cpuNs: number; footprint: number };
+export type Usage = { cpuNs: number; footprint: number; diskRead?: number | undefined; diskWritten?: number | undefined };
 /// What a process has taken in and sent out over the network so far, in bytes.
 export type Traffic = { in: number; out: number };
 
@@ -98,15 +101,26 @@ export function whoseOf(table: readonly ProcessInfo[], o: Pick<ResourceOptions, 
   return out;
 }
 
+/// The agents' own processes: each runner and the runtime it runs (ending one is stopping the agent, not this page's).
+const agentsOwn = (o: Pick<ResourceOptions, "runners">) => new Set(o.runners().flatMap((r) => [r.runner, r.pid]));
+
 /// A program as people know it: its executable's name.
 const programOf = (command: string) => basename(command) || "?";
-const zero = (): Use => ({ cpu: 0, memory: 0, netIn: 0, netOut: 0 });
+const zero = (): Use => ({ cpu: 0, memory: 0, netIn: 0, netOut: 0, diskRead: 0, diskWrite: 0 });
 const add = (to: Use, u: Use) => {
   to.cpu += u.cpu;
   to.memory += u.memory;
   to.netIn += u.netIn;
   to.netOut += u.netOut;
+  to.diskRead += u.diskRead;
+  to.diskWrite += u.diskWrite;
 };
+
+/// Why a process was not ended: gone (or another now), or not one the page may end.
+export class NotEndable extends Error {}
+
+/// How long after SIGTERM one still there (the same) is sent SIGKILL.
+export const KILL_AFTER_MS = 5000;
 
 export class ResourceWatch {
   readonly #o: ResourceOptions;
@@ -125,6 +139,8 @@ export class ResourceWatch {
   #counted = false;
   /// Whether the network was read at the last look.
   #net = false;
+  /// Whether disk reads and writes were.
+  #disk = false;
 
   constructor(options: ResourceOptions) {
     this.#o = options;
@@ -173,6 +189,7 @@ export class ResourceWatch {
     const args = this.#o.args ? await this.#o.args().catch(() => null) : null;
     const whose = whoseOf(table, this.#o, args, this.#o.places?.() ?? []);
     const mine = table.filter((p) => whose.has(p.pid));
+    const agent = agentsOwn(this.#o);
     const used = this.#o.usage(mine.map((p) => p.pid));
     const traffic = this.#o.traffic ? await this.#o.traffic().catch(() => null) : null;
     this.#net = traffic !== null;
@@ -187,6 +204,7 @@ export class ResourceWatch {
       const had = this.#last.get(p.pid);
       const u = { ...read, ...(traffic?.get(p.pid) ?? (had?.command === p.command ? { in: had.in, out: had.out } : { in: 0, out: 0 })) };
       this.#counted = true;
+      if (read.diskRead !== undefined) this.#disk = true;
       last.set(p.pid, { ...u, command: p.command });
       if (since === null || seconds <= 0) return;
       const w = whose.get(p.pid)!;
@@ -201,10 +219,12 @@ export class ResourceWatch {
         memory: u.footprint,
         netIn: Math.max(0, (u.in - (was?.in ?? 0)) / seconds),
         netOut: Math.max(0, (u.out - (was?.out ?? 0)) / seconds),
+        diskRead: Math.max(0, ((u.diskRead ?? 0) - (was?.diskRead ?? 0)) / seconds),
+        diskWrite: Math.max(0, ((u.diskWritten ?? 0) - (was?.diskWritten ?? 0)) / seconds),
       };
       const g = groups.get(w.key) ?? { ...w, ...zero(), processes: [] };
       add(g, use);
-      g.processes.push({ pid: p.pid, name: programOf(p.command), ...use });
+      g.processes.push({ pid: p.pid, name: programOf(p.command), ...use, endable: w.kind === "chat" && !agent.has(p.pid) });
       groups.set(w.key, g);
     });
     this.#last = last;
@@ -219,6 +239,27 @@ export class ResourceWatch {
     this.#history = this.#history.filter((p) => p.at > at - HISTORY_MS);
   }
 
+  /// Ends a chat's process (`session`'s, not its agent's own), as it is now: SIGTERM, then SIGKILL if it is still there
+  /// KILL_AFTER_MS later. `kill`: the signal sent (process.kill, a test's).
+  async end(pid: number, session: string, kill: (pid: number, signal: NodeJS.Signals) => void = process.kill): Promise<{ name: string }> {
+    const table = await this.#o.table();
+    const now = table?.find((p) => p.pid === pid);
+    if (!table || !now) throw new NotEndable("gone");
+    const args = this.#o.args ? await this.#o.args().catch(() => null) : null;
+    const w = whoseOf(table, this.#o, args, this.#o.places?.() ?? []).get(pid);
+    if (w?.kind !== "chat" || w.session !== session || agentsOwn(this.#o).has(pid)) throw new NotEndable("not a chat's");
+    kill(pid, "SIGTERM");
+    this.#fibers.after(KILL_AFTER_MS, async () => {
+      const still = (await this.#o.table().catch(() => null))?.find((p) => p.pid === pid);
+      if (still?.command === now.command) {
+        try {
+          kill(pid, "SIGKILL");
+        } catch {}
+      }
+    });
+    return { name: programOf(now.command) };
+  }
+
   /// The last look and the history, the oldest first.
   snapshot(): Snapshot {
     return {
@@ -226,6 +267,7 @@ export class ResourceWatch {
       everyMs: LOOK_MS,
       counted: this.#counted,
       net: this.#net,
+      disk: this.#disk,
       total: this.#now?.total ?? zero(),
       groups: this.#now?.groups ?? [],
       history: [...this.#history],

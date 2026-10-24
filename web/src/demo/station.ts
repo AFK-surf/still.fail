@@ -210,27 +210,31 @@ export function profiles() {
  * station's GET /resources says), made up: a test run using most, the app and the station a little. */
 export function resources() {
   const now = Date.now();
-  const proc = (pid: number, name: string, cpu: number, mb: number, kbIn = 0, kbOut = 0) => ({ pid, name, cpu, memory: mb * 1e6, netIn: kbIn * 1024, netOut: kbOut * 1024 });
+  // `endable`: a chat's, not its agent's own (resources/watch.ts).
+  const proc = (pid: number, name: string, cpu: number, mb: number, kbIn = 0, kbOut = 0, mbRead = 0, mbWritten = 0, endable = false) =>
+    ({ pid, name, cpu, memory: mb * 1e6, netIn: kbIn * 1024, netOut: kbOut * 1024, diskRead: mbRead * 1024 ** 2, diskWrite: mbWritten * 1024 ** 2, endable });
   const group = (key: string, kind: string, session: string | null, processes: ReturnType<typeof proc>[]) => ({
     key, kind, session, processes,
     cpu: processes.reduce((n, p) => n + p.cpu, 0), memory: processes.reduce((n, p) => n + p.memory, 0),
     netIn: processes.reduce((n, p) => n + p.netIn, 0), netOut: processes.reduce((n, p) => n + p.netOut, 0),
+    diskRead: processes.reduce((n, p) => n + p.diskRead, 0), diskWrite: processes.reduce((n, p) => n + p.diskWrite, 0),
   });
   const groups = [
-    group("chat:p99", "chat", "p99", [proc(41130, "chrome-headless-shell", 61.2, 412, 840, 36), proc(41131, "chrome-headless-shell", 18.4, 96), proc(40634, "node", 13.4, 188), proc(40856, "claude", 6.9, 241, 12, 4.2)]),
+    group("chat:ember:c-demo-p99", "chat", "ember:c-demo-p99", [proc(41130, "chrome-headless-shell", 61.2, 412, 840, 36, 0.2, 3.1, true), proc(41131, "chrome-headless-shell", 18.4, 96, 0, 0, 0, 0.4, true), proc(40634, "node", 13.4, 188, 0, 0, 1.2, 0.8, true), proc(40856, "claude", 6.9, 241, 12, 4.2)]),
     group("app", "app", null, [proc(39480, "still.fail Helper (Renderer)", 12.8, 500, 1.4, 0.6), proc(39425, "still.fail Helper (GPU)", 7.9, 109), proc(39434, "still.fail Helper", 0.8, 238), proc(39394, "still.fail", 0.4, 230)]),
-    group("chat:csv", "chat", "csv", [proc(40631, "python3", 9.6, 322), proc(25080, "codex", 1.1, 88, 3.1, 1.2)]),
+    group("chat:ember:c-demo-csv", "chat", "ember:c-demo-csv", [proc(40631, "python3", 9.6, 322, 0, 0, 12, 24, true), proc(25080, "codex", 1.1, 88, 3.1, 1.2)]),
     group("station", "station", null, [proc(37148, "node", 1.6, 310, 2.2, 1.8), proc(1947, "stillfail-station", 0.2, 42)]),
   ];
-  const sum = (k: "cpu" | "memory" | "netIn" | "netOut") => groups.reduce((n, g) => n + g[k], 0);
-  const total = { cpu: sum("cpu"), memory: sum("memory"), netIn: sum("netIn"), netOut: sum("netOut") };
+  const sum = (k: "cpu" | "memory" | "netIn" | "netOut" | "diskRead" | "diskWrite") => groups.reduce((n, g) => n + g[k], 0);
+  const total = { cpu: sum("cpu"), memory: sum("memory"), netIn: sum("netIn"), netOut: sum("netOut"), diskRead: sum("diskRead"), diskWrite: sum("diskWrite") };
   // The last ten minutes, a look every 5 s, wandering about now.
   const history = Array.from({ length: 120 }, (_, i) => {
     const f = 0.7 + 0.2 * Math.sin(i / 6) + 0.1 * Math.sin(i * 1.3) + (i > 100 ? 0.15 : 0);
-    return { at: now - (119 - i) * 5000, cpu: total.cpu * f, memory: total.memory * (0.9 + 0.1 * Math.sin(i / 20)), netIn: total.netIn * f * f, netOut: total.netOut * f };
+    return { at: now - (119 - i) * 5000, cpu: total.cpu * f, memory: total.memory * (0.9 + 0.1 * Math.sin(i / 20)), netIn: total.netIn * f * f, netOut: total.netOut * f, diskRead: total.diskRead * f, diskWrite: total.diskWrite * (0.5 + 0.5 * Math.abs(Math.sin(i / 3))) };
   });
-  const chats = { p99: { thread: 4, title: "排查 API p99 变慢" }, csv: { thread: 5, title: "订单导出支持 CSV" } };
-  const value = { at: now, everyMs: 5000, counted: true, net: true, total, groups, history, chats, machine: { cores: 10, memory: 32 * 1024 ** 3 } };
+  // Their sessions as the demo's chats have them (fixtures.ts chatOf), for the agents' cards.
+  const chats = { "ember:c-demo-p99": { thread: 4, title: "排查 API p99 变慢" }, "ember:c-demo-csv": { thread: 5, title: "订单导出支持 CSV" } };
+  const value = { at: now, everyMs: 5000, counted: true, net: true, disk: true, total, groups, history, chats, machine: { cores: 10, memory: 32 * 1024 ** 3 } };
   return resourcesView([{ address: STATION, name: "Studio", online: true, value: { ok: value } }], now, () => ({ reading: false, failing: [], empty: false }));
 }
 

@@ -4,7 +4,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { resourceRoutes } from "../src/api/routes/usage.ts";
 import { parseNettop } from "../src/resources/module.ts";
-import { FIRST_MS, LOOK_MS, ResourceWatch, type Traffic, type Usage, WANTED_MS, whoseOf } from "../src/resources/watch.ts";
+import { FIRST_MS, KILL_AFTER_MS, LOOK_MS, NotEndable, ResourceWatch, type Traffic, type Usage, WANTED_MS, whoseOf } from "../src/resources/watch.ts";
 import { testClock } from "./hub-fakes.ts";
 import type { ProcessInfo } from "../src/platform/index.ts";
 
@@ -190,6 +190,65 @@ test("network: bytes a second since the last look; one missing from nettop's lis
   assert.equal(later["chat:s1"]!.netIn, 1000);
   assert.equal(later.app!.netIn, 0);
   await watch.close();
+});
+
+test("disk: bytes read and written a second; endable: a chat's processes, not its agent's own nor anyone else's", async () => {
+  let now = 0;
+  let disk = 0;
+  const watch = new ResourceWatch({
+    clock: { currentTimeMillisUnsafe: () => now } as never,
+    table: async () => table,
+    usage: (pids) => pids.map(() => ({ ...used(1, 1), diskRead: disk, diskWritten: disk * 2 })),
+    ...options,
+  });
+  await watch.look();
+  now += 10_000;
+  disk = 10_000;
+  await watch.look();
+  const shot = watch.snapshot();
+  const by = Object.fromEntries(shot.groups.map((g) => [g.key, g]));
+  assert.equal(shot.disk, true);
+  assert.equal(by["chat:s1"]!.processes.find((x) => x.pid === 22)!.diskRead, 1000);
+  assert.equal(by["chat:s1"]!.processes.find((x) => x.pid === 22)!.diskWrite, 2000);
+  const endable = shot.groups.flatMap((g) => g.processes.filter((x) => x.endable).map((x) => x.pid)).sort((a, b) => a - b);
+  assert.deepEqual(endable, [22, 40, 41], "the browser and the job's; not the runner, claude, the app or the station");
+  await watch.close();
+});
+
+test("end: SIGTERM to a chat's process, SIGKILL if the same is there a while later; refused for another's", async () => {
+  const t = testClock();
+  let rows = table;
+  const sent: [number, string][] = [];
+  const watch = new ResourceWatch({ clock: t.clock, table: async () => rows, usage: (pids) => pids.map(() => used(1, 1)), ...options });
+  const kill = (pid: number, signal: NodeJS.Signals) => void sent.push([pid, signal]);
+  assert.deepEqual(await watch.end(22, "s1", kill), { name: "chrome-headless-shell" });
+  assert.deepEqual(sent, [[22, "SIGTERM"]]);
+  await t.adjust(KILL_AFTER_MS);
+  assert.deepEqual(sent, [[22, "SIGTERM"], [22, "SIGKILL"]]);
+  // Gone by then: no SIGKILL (its pid may be another's).
+  sent.length = 0;
+  await watch.end(41, "s2", kill);
+  rows = table.filter((r) => r.pid !== 41);
+  await t.adjust(KILL_AFTER_MS);
+  assert.deepEqual(sent, [[41, "SIGTERM"]]);
+  rows = table;
+  for (const [pid, session] of [[21, "s1"], [20, "s1"], [22, "s2"], [51, "s1"], [10, "s1"], [60, "s1"], [999, "s1"]] as const) {
+    await assert.rejects(watch.end(pid, session, kill), NotEndable, `${pid} for ${session}`);
+  }
+  await watch.close();
+});
+
+test("POST /resources/processes/:pid/end: a process of a chat the asker sees", async () => {
+  const ended: [number, string][] = [];
+  const watch = { end: async (pid: number, session: string) => (ended.push([pid, session]), { name: "chrome" }) } as unknown as ResourceWatch;
+  const read = async (_r: unknown, _op: string, args: { sessions: string[] }) =>
+    ({ status: 200, headers: {}, body: Buffer.from(JSON.stringify(Object.fromEntries(args.sessions.map((s) => [s, s === "mine" ? { thread: 1, title: "x" } : null])))) });
+  const route = resourceRoutes({ read } as never, watch).find((x) => x.method === "POST")!;
+  const ask = (session: string) => route.handle({ viewer: { email: "a@b" }, body: Buffer.from(JSON.stringify({ session })) } as never, ["22"]);
+  assert.equal((await ask("mine")).status, 200);
+  assert.deepEqual(ended, [[22, "mine"]]);
+  assert.equal((await ask("theirs")).status, 404, "another workspace's chat: none for them");
+  assert.equal(ended.length, 1);
 });
 
 test("GET /resources: the chats named; one the asker does not see counted as the agents'", async () => {

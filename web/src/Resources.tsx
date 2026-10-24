@@ -1,14 +1,16 @@
 // What of the stations' machines still.fail uses (the core's `resources` view, client/core-ts/src/views/resources.ts),
 // as Activity Monitor says it: its totals (CPU, memory, network) with the last minutes' line, then one table, grouped by whose (a chat, the
 // agents, the desktop app, the station; each opens to its processes) or every process flat with its whose, filtered by
-// kind and sorted by a column. A station's page draws it, its 进程 (cloud/StationPage.tsx).
+// kind and sorted by a column; a chat's process (not its agent's own) ended from its row, asked first. A station's page
+// draws it, its 进程 (cloud/StationPage.tsx).
 import { Fragment, useState } from "react";
 import { Link } from "react-router";
-import { ChevronRight } from "@stillfail/ui/icons.tsx";
-import { useTopic } from "./core/react.ts";
-import type { ResourceGroup, ResourceTile, ResourceUse, ResourcesView } from "./core/shapes.ts";
+import { ChevronRight, Stop } from "@stillfail/ui/icons.tsx";
+import { failure, useToast } from "@stillfail/ui/toast.tsx";
+import { useCall, useTopic } from "./core/react.ts";
+import type { ResourceGroup, ResourceProcess, ResourceTile, ResourceUse, ResourcesView } from "./core/shapes.ts";
 import { stationBase } from "./station.tsx";
-import { Segmented, Waiting } from "./ui.tsx";
+import { Confirm, IconButton, Segmented, Waiting } from "./ui.tsx";
 import * as css from "./Resources.css.ts";
 import { t } from "./i18n.ts";
 
@@ -17,12 +19,14 @@ export function useResources(scope: string, station?: string) {
   return useTopic<ResourcesView>(station === undefined ? { topic: "resources", scope } : { topic: "resources", scope, station });
 }
 
-type Column = "cpu" | "memory" | "net";
+type Column = "cpu" | "memory" | "net" | "disk";
 const ALL: { key: Column; text: keyof ResourceUse }[] = [
-  { key: "cpu", text: "cpuText" }, { key: "memory", text: "memoryText" }, { key: "net", text: "netText" },
+  { key: "cpu", text: "cpuText" }, { key: "memory", text: "memoryText" }, { key: "net", text: "netText" }, { key: "disk", text: "diskText" },
 ];
-/// The network's column only where some station reads it.
-const columnsOf = (net: boolean) => ALL.filter((c) => net || c.key !== "net");
+/// The network's and the disk's columns only where some station reads them.
+const columnsOf = (net: boolean, disk: boolean) => ALL.filter((c) => (c.key !== "net" || net) && (c.key !== "disk" || disk));
+/// A process to end, with its chat's.
+type Ending = { process: ResourceProcess; group: ResourceGroup };
 type Columns = typeof ALL;
 const columnLabel = (c: Column) => t(`web-main.resources.column.${c}`);
 
@@ -31,6 +35,16 @@ export function ResourcesBody({ view }: { view: ResourcesView }) {
   const [kind, setKind] = useState("all");
   const [flat, setFlat] = useState<"grouped" | "flat">("grouped");
   const [by, setBy] = useState<Column>("cpu");
+  const [ending, setEnding] = useState<Ending | null>(null);
+  const call = useCall();
+  const toast = useToast();
+  const end = (e: Ending) => {
+    setEnding(null);
+    if (!e.group.session) return;
+    void (call("process.end", { station: e.group.station, pid: e.process.pid, session: e.group.session }) as Promise<unknown>)
+      .then(() => toast(t("web-main.resources.ended", { name: e.process.name })))
+      .catch((err: unknown) => toast(t("web-main.resources.endFailed", { name: e.process.name, error: failure(err) })));
+  };
   if (view.empty) {
     return (
       <div className={css.page}>
@@ -40,7 +54,7 @@ export function ResourcesBody({ view }: { view: ResourcesView }) {
     );
   }
   const groups = view.groups.filter((g) => kind === "all" || g.kind === kind);
-  const columns = columnsOf(view.net);
+  const columns = columnsOf(view.net, view.disk);
   return (
     <div className={css.page}>
       <div className={css.tiles}>{view.tiles.map((tile) => <Tile key={tile.key} tile={tile} />)}</div>
@@ -51,9 +65,12 @@ export function ResourcesBody({ view }: { view: ResourcesView }) {
           options={[{ value: "grouped", label: t("web-main.resources.grouped") }, { value: "flat", label: t("web-main.resources.flat") }]} />
       </div>
       <div className={css.scroll}>
-        {flat === "flat" ? <Flat groups={groups} columns={columns} by={by} setBy={setBy} /> : <Grouped groups={groups} columns={columns} by={by} setBy={setBy} />}
+        {flat === "flat" ? <Flat groups={groups} columns={columns} by={by} setBy={setBy} onEnd={setEnding} /> : <Grouped groups={groups} columns={columns} by={by} setBy={setBy} onEnd={setEnding} />}
       </div>
       <Foot view={view} />
+      <Confirm open={ending !== null} onClose={() => setEnding(null)} onConfirm={() => { if (ending) end(ending); }}
+        title={t("web-main.resources.endTitle", { name: ending?.process.name ?? "", pid: ending?.process.pid ?? 0 })}
+        description={t("web-main.resources.endBody", { chat: ending?.group.title ?? "" })} action={t("web-main.resources.end")} />
     </div>
   );
 }
@@ -83,6 +100,7 @@ function Spark({ points, tone }: { points: number[]; tone: string }) {
 
 /** The columns' heads: each sorts by itself (the most first). */
 function Heads({ first, columns, by, setBy }: { first: string[]; columns: Columns; by: Column; setBy(c: Column): void }) {
+  // The last column: the way to end a row's process.
   return (
     <thead>
       <tr>
@@ -94,6 +112,7 @@ function Heads({ first, columns, by, setBy }: { first: string[]; columns: Column
             </button>
           </th>
         ))}
+        <th className={css.head} aria-hidden="true" />
       </tr>
     </thead>
   );
@@ -117,7 +136,7 @@ function chatPath(group: ResourceGroup): string | null {
 }
 
 /** Whose uses what, each opening to its processes. */
-function Grouped({ groups, columns, by, setBy }: { groups: ResourceGroup[]; columns: Columns; by: Column; setBy(c: Column): void }) {
+function Grouped({ groups, columns, by, setBy, onEnd }: { groups: ResourceGroup[]; columns: Columns; by: Column; setBy(c: Column): void; onEnd(e: Ending): void }) {
   const [open, setOpen] = useState<Set<string>>(() => new Set(groups[0] ? [groups[0].key] : []));
   const sorted = [...groups].sort((a, b) => b.use[by] - a.use[by]);
   const max = Math.max(0, ...sorted.map((g) => g.use[by]));
@@ -140,11 +159,13 @@ function Grouped({ groups, columns, by, setBy }: { groups: ResourceGroup[]; colu
                   </span>
                 </td>
                 <Figures columns={columns} use={g.use} by={by} max={max} />
+                <td className={css.cell} />
               </tr>
               {on && [...g.processes].sort((a, b) => b.use[by] - a.use[by]).map((p) => (
-                <tr key={p.key} className={css.process}>
+                <tr key={p.key} className={`${css.process} ${css.row}`}>
                   <td className={`${css.cell} ${css.processName}`}>{p.name} <span className={css.meta}>{p.pid}</span></td>
                   <Figures columns={columns} use={p.use} by={by} max={max} plain />
+                  <EndCell process={p} onEnd={() => onEnd({ process: p, group: g })} />
                 </tr>
               ))}
             </Fragment>
@@ -156,7 +177,7 @@ function Grouped({ groups, columns, by, setBy }: { groups: ResourceGroup[]; colu
 }
 
 /** Every process, with whose it is. */
-function Flat({ groups, columns, by, setBy }: { groups: ResourceGroup[]; columns: Columns; by: Column; setBy(c: Column): void }) {
+function Flat({ groups, columns, by, setBy, onEnd }: { groups: ResourceGroup[]; columns: Columns; by: Column; setBy(c: Column): void; onEnd(e: Ending): void }) {
   const rows = groups.flatMap((g) => g.processes.map((p) => ({ ...p, group: g }))).sort((a, b) => b.use[by] - a.use[by]);
   const max = Math.max(0, ...rows.map((r) => r.use[by]));
   return (
@@ -166,15 +187,26 @@ function Flat({ groups, columns, by, setBy }: { groups: ResourceGroup[]; columns
         {rows.map((r) => {
           const to = chatPath(r.group);
           return (
-            <tr key={r.key}>
+            <tr key={r.key} className={css.row}>
               <td className={css.cell}>{r.name} <span className={css.meta}>{r.pid}</span></td>
               <td className={`${css.cell} ${css.whose}`}>{to ? <Link className={css.chatLink} to={to}>{r.group.title}</Link> : r.group.title}</td>
               <Figures columns={columns} use={r.use} by={by} max={max} />
+              <EndCell process={r} onEnd={() => onEnd({ process: r, group: r.group })} />
             </tr>
           );
         })}
       </tbody>
     </table>
+  );
+}
+
+/** Its row's end: a way to end the process, where it may be ended (a chat's, not its agent's own), seen as the row is
+ * pointed at. */
+function EndCell({ process: p, onEnd }: { process: ResourceProcess; onEnd(): void }) {
+  return (
+    <td className={`${css.cell} ${css.endCell}`}>
+      {p.endable && <IconButton className={css.end} icon={Stop} label={t("web-main.resources.endLabel", { name: p.name })} onClick={onEnd} />}
+    </td>
   );
 }
 
