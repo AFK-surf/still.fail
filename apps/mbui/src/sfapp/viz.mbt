@@ -41,8 +41,10 @@ fn viz_tr(key : String, args? : Array[(String, String)] = []) -> String {
 }
 
 ///|
-/// Past this the page scrolls within itself.
-let viz_max_height : Int = 1200
+/// A fragment's frame is as tall as its content, however tall (web Viz.tsx RUNAWAY): content sized to its window
+/// (100vh, min-height:100%) grows with each height it is given; grown a little each time this many times running, it
+/// is held where it got to.
+let viz_runaway : Int = 60
 
 ///|
 /// What a widget may keep, as Codex's Visualize allows.
@@ -433,6 +435,9 @@ priv struct VizFrame {
   html : String
   page : Bool
   mut height : Int
+  /// the height it last said, and how many times running it grew a little to it (viz_runaway)
+  mut said_height : Int
+  mut grown : Int
   mut shown : Bool
   mut dark : Bool
   mut ground : Int64
@@ -466,11 +471,26 @@ fn viz_said(f : VizFrame, hears : VizHears, words : String) -> Unit {
     Some(String("height")) =>
       if !f.page {
         match m.get("height") {
-          Some(Number(h, ..)) if h == h && h < 1.0e9 && h > -1.0e9 => {
+          Some(Number(h, ..)) if h == h && h < 1.0e9 && h > 0.0 => {
             let tall = h.ceil().to_int()
-            let shown = if tall > viz_max_height { viz_max_height } else { tall }
-            viz_heights[f.html] = shown
-            f.height = shown
+            // held, it stays so until its content is shorter than where it was held
+            if f.grown > viz_runaway && tall >= f.said_height {
+              return
+            }
+            f.grown = if f.said_height > 0 && tall > f.said_height && tall - f.said_height <= 64 {
+              f.grown + 1
+            } else {
+              0
+            }
+            if f.grown > viz_runaway {
+              return
+            }
+            f.said_height = tall
+            // only a height it did not creep to is kept: one kept mid-run would start the next load's run further on
+            if f.grown == 0 {
+              viz_heights[f.html] = tall
+            }
+            f.height = tall
             f.shown = true
           }
           _ => ()
@@ -545,6 +565,8 @@ fn viz_frame(
         html,
         page,
         height: viz_heights.get(html).unwrap_or(0),
+        said_height: 0,
+        grown: 0,
         shown: false,
         dark,
         ground,
