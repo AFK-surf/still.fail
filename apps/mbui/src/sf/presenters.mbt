@@ -63,6 +63,8 @@ priv struct PanelOf {
   w : Double
   wide : Bool
   live : (() -> (String, String, String))?
+  tall : Double
+  grows : Bool
 }
 
 ///|
@@ -100,6 +102,11 @@ let presented_now : Array[Presented] = []
 let presented_count : Ref[Int] = Ref(0)
 
 ///|
+/// Whether the host draws over nothing of the app's this frame (presented's `alone`).
+// kept across runs: said by the host each frame; put back by presenters_reset (parts_reset)
+let presented_alone : Ref[Bool] = Ref(false)
+
+///|
 /// How each one open was drawn in the last frame, the lowest first.
 // kept across runs: put back by presenters_reset (parts_reset)
 let presented_how : Array[How] = []
@@ -109,6 +116,7 @@ let presented_how : Array[How] = []
 pub fn presenters_reset() -> Unit {
   presented_now.clear()
   presented_count.val = 0
+  presented_alone.val = false
   presented_how.clear()
 }
 
@@ -148,7 +156,9 @@ pub fn pick(title : String, choices : Array[Choice], chosen : String, choose : (
 /// (Unanchored), a dialog in the middle of the window (parts.tsx Dialog: `description` under its title, `foot`'s
 /// buttons at its foot, given what closes it, `wide` 640 wide in place of 520; `live`: its title, its step's count and
 /// what it is about as they are now, a wizard's). `gone`: what is let go of as it closes unsaid (back, Escape, a press
-/// outside, its close button), not by what `close` was given to.
+/// outside, its close button), not by what `close` was given to. `tall`: what it holds fills the room it is given, this
+/// share of the window (as a sheet that tall, beside what opened it at most that tall; 0: as tall as what it holds);
+/// `grows`: a long list's, a sheet of it is dragged between half and nearly all of the window.
 pub fn panel(
   title : String,
   body : (@ui.Ctx, () -> Unit) -> Unit,
@@ -159,8 +169,28 @@ pub fn panel(
   wide? : Bool = false,
   live? : () -> (String, String, String),
   gone? : () -> Unit = fn() {  },
+  tall? : Double = 0.0,
+  grows? : Bool = false,
 ) -> Unit {
-  present(Panel({ title, description, body, foot, w, wide, live }), from, gone~)
+  present(Panel({ title, description, body, foot, w, wide, live, tall, grows }), from, gone~)
+}
+
+///|
+/// The one presented last (what `close_presented_of` is given to close it).
+pub fn last_presented() -> Int {
+  presented_count.val
+}
+
+///|
+/// Closes the one presented as `serial` (last_presented), and what is over it, as back does; nothing when it is gone.
+pub fn close_presented_of(serial : Int) -> Unit {
+  close_from_serial(serial)
+}
+
+///|
+/// Whether anything presented is still drawn (open, or going).
+pub fn presented_drawn() -> Bool {
+  !presented_now.is_empty()
 }
 
 ///|
@@ -223,7 +253,9 @@ fn close_from(i : Int) -> Unit {
 /// The host (see the file's head): what is presented, drawn over everything the app shows. Called by the shell once a
 /// frame, at the window's top level, after the pages: it is sized by the window (a sheet spans it whichever pane
 /// opened it), and anchored to what opened it wherever that is.
-pub fn presented(c : @ui.Ctx) -> Unit {
+/// `alone`: nothing of the app's is under it (a share over another app): a sheet on the page's paper, not frosted.
+pub fn presented(c : @ui.Ctx, alone? : Bool = false) -> Unit {
+  presented_alone.val = alone
   presented_how.clear()
   let (ww, _) = c.window_size()
   // a sheet with a finger short of the Large tier, the web's otherwise (docs/architecture.md)
@@ -238,7 +270,9 @@ pub fn presented(c : @ui.Ctx) -> Unit {
       open = o
       built = b
     })
-    if was && !open {
+    // closed by the hand as it was drawn (back, Escape, a press outside, dragged down): it and what is over it go (one
+    // closed by the app meanwhile, and what is over it then, went as it was closed: what was opened since stays)
+    if p.open && !open {
       close_from(i)
     }
     // closed unsaid: what it holds let go of, once
@@ -281,7 +315,7 @@ fn draw_presented(c : @ui.Ctx, p : Presented, sheet : Bool) -> (Bool, Bool) {
     Menu(items, title, along) => menu_popover(c, key, p, items, title, along)
     Pick(title, choices, chosen, choose) => pick_popover(c, key, p, title, choices, chosen, choose)
     Panel(x) if p.from == Unanchored => panel_centred(c, key, p, x)
-    Panel(x) => panel_popover(c, key, p, x.title, x.body, x.w)
+    Panel(x) => panel_popover(c, key, p, x.title, x.body, x.w, x.tall)
     Confirm(title, words, action, danger, run) => confirm_centred(c, key, p, title, words, action, danger, run)
     Ask(title, value, placeholder, action, hint, secret, run) =>
       ask_centred(c, key, p, title, value, placeholder, action, hint, secret, run)
@@ -480,8 +514,10 @@ fn panel_popover(
   title : String,
   body : (@ui.Ctx, () -> Unit) -> Unit,
   w : Double,
+  tall : Double,
 ) -> (Bool, Bool) {
   let (anchor, at) = anchor_of(c, p.from)
+  let h : @ui.Size = if tall > 0.0 { Px(tall * wh_of(c)) } else { Auto }
   let r = @kit.popover(
     c,
     key,
@@ -491,7 +527,7 @@ fn panel_popover(
     at?,
     label=title,
     modal=true,
-    look=fn(c, _, inner) { small_panel(c, w=Px(w), inner) |> ignore },
+    look=fn(c, _, inner) { small_panel(c, w=Px(w), h~, inner) |> ignore },
     fn() {
       if title != "" {
         panel_head(c, title)
@@ -515,7 +551,15 @@ fn panel_centred(c : @ui.Ctx, key : String, p : Presented, x : PanelOf) -> (Bool
     key,
     p.open,
     title,
-    fn() { (x.body)(c, close) },
+    fn() {
+      // a tall one's body fills its share of the window (what it holds lays itself out in the room it is given)
+      if x.tall > 0.0 {
+        let room = x.tall * wh_of(c)
+        c.box(style=@ui.style(w=Full, h=Fixed(room)), fn() { (x.body)(c, close) }) |> ignore
+      } else {
+        (x.body)(c, close)
+      }
+    },
     description~,
     footer?=match x.foot {
       Some(f) => Some(fn() { f(c, close) })
@@ -692,7 +736,12 @@ fn present_sheet(c : @ui.Ctx, key : String, p : Presented) -> (Bool, Bool) {
     Pick(_, choices, _, _) if choices.length() >= pick_search_from => Some(sheet_long_pick)
     Confirm(_, _, _, _, _) => Some(sheet_confirm)
     Ask(_, _, _, _, _, _, _) => Some(sheet_ask)
+    Panel(x) if x.tall > 0.0 => Some(x.tall)
     _ => None
+  }
+  let grows = match p.shows {
+    Panel(x) => x.grows
+    _ => false
   }
   let fit_key = "sf-present/fit/\{p.serial}"
   let h = match (share, @motion.measured(c, fit_key)) {
@@ -701,7 +750,8 @@ fn present_sheet(c : @ui.Ctx, key : String, p : Presented) -> (Bool, Bool) {
     // (until it is laid out: half the window)
     (None, None) => wh * 0.5
   }
-  let r = @kit.sheet(c, key, p.open, h~, scrim=sheet_scrim, look=sheet_look(), fn() {
+  let look = if presented_alone.val { sheet_look(ground=theme().p.bg) } else { sheet_look() }
+  let r = @kit.sheet(c, key, p.open, h~, detents=if grows { sheet_grows_to } else { [] }, scrim=sheet_scrim, look~, fn() {
     match share {
       Some(_) =>
         c.box(style=sheet_whole, fn() {
@@ -720,8 +770,20 @@ fn present_sheet(c : @ui.Ctx, key : String, p : Presented) -> (Bool, Bool) {
       }
     }
   })
+  // what it comes to, for scripted runs (e2e: a sheet opened and closed by dragging)
+  match r.dragged {
+    Some(DraggedClosed) => @hostapi.log("SHEET dragged closed")
+    Some(DraggedBack) => @hostapi.log("SHEET dragged back")
+    Some(DraggedTo(f)) => @hostapi.log(if f > 0.72 { "SHEET dragged to 94%" } else { "SHEET dragged to 55%" })
+    None => ()
+  }
   (r.open && p.open, r.shown)
 }
+
+///|
+/// Where a long list's sheet settles as it is dragged (Sheet.kt SheetHost: half, and nearly all of the window).
+// kept across runs: a table, never written
+let sheet_grows_to : Array[Double] = [0.55, 0.94]
 
 ///|
 /// Under what a sheet shows, the navigation bar's room (Sheet.kt: windowInsetsPadding(navigationBars)).
@@ -810,7 +872,8 @@ fn sheet_body(c : @ui.Ctx, key : String, p : Presented) -> Unit {
       if description != "" {
         c.box(style=sheet_words_at, fn() { c.text(description, style=sheet_lead) |> ignore }) |> ignore
       }
-      c.box(style=sheet_panel, fn() { (x.body)(c, close) }) |> ignore
+      // (filling its room, a tall one lays out its own sides)
+      c.box(style=if x.tall > 0.0 { sheet_grows } else { sheet_panel }, fn() { (x.body)(c, close) }) |> ignore
       match x.foot {
         Some(f) => c.box(style=sheet_foot_at, fn() { f(c, close) }) |> ignore
         None => ()

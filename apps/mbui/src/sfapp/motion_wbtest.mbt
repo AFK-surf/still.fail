@@ -345,7 +345,7 @@ test "the workspaces' sheet sinking takes no tap: the bar's 文件 tapped under 
   t.frame()
   assert_true(!sheet_open())
   // sinking, drawn over the bar
-  assert_true(sheet_host.shown != NoSheet)
+  assert_true(@sf.presented_drawn())
   let (xs, y) = bar_places_at()
   t.tap_once(xs[1], y)
   assert_true(app.nav.top() == Files)

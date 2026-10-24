@@ -217,7 +217,7 @@ fn service_page_bar(
       Some(Object(_)) => {
         let ring = c.id("service/load")
         if c.clicked(ring) {
-          raise_sheet(LoadOf(station, port))
+          raise_sheet(LoadOf(station, port), from=Of(ring))
         }
         let color = if number(load, "failed") > 0.0 { t.p.red } else { t.p.muted }
         // (PreviewLoad.kt: how far, in words, to a screen reader)
@@ -692,7 +692,7 @@ fn service_toolbar(c : @ui.Ctx, p : ServicePage) -> Unit {
             _ => svc("android-chat.preview.custom")
           }
           if size_chip(c, "service/custom", label, custom) {
-            raise_sheet(PageSizes(key))
+            raise_sheet(PageSizes(key), from=Of(c.id("service/custom")))
           }
           })
           |> ignore
@@ -839,8 +839,6 @@ fn page_sizes_sheet(c : @ui.Ctx, key : String) -> Unit {
     None => None
   }
   let preset = preset_of(current)
-  @sf.sheet_grab(c)
-  sheet_head(c, svc("android-chat.preview.size.title"))
   c.box(w=Fill(1.0), pl=10.0, pr=10.0, pb=24.0, fn() {
     let option = fn(k : String, checked : Bool, name : String, note : String, v : Viewport?) {
       let id = c.id("service/size/" + k)

@@ -113,7 +113,9 @@ let open_app_box : @ui.Style = @ui.css("px=S5 py=S2 pb=S6")
 /// Over another app (ShareActivity): what is shared taken, its sheet over that app and nothing else; the toasts.
 fn over_view(c : @ui.Ctx, src : Source) -> Unit {
   share_in_frame(c)
-  sheet_layer(c, fn(kind) { if kind == ShareSheet { share_over_sheet(c, src) } })
+  sheet_contents(fn(kind) { if kind == ShareSheet { share_over_sheet(c, src) } })
+  // (nothing of the app's under it: on the page's paper)
+  @sf.presented(c, alone=true)
   toast(c)
 }
 
@@ -127,7 +129,6 @@ fn share_over_sheet(c : @ui.Ctx, src : Source) -> Unit {
     None => return
   }
   let head = fn() {
-    @sf.sheet_grab(c)
     if share_in.files.length() > 0 {
       shared_files_head(c, share_in.files, source, title)
     } else {
@@ -249,7 +250,7 @@ fn share_in_frame(c : @ui.Ctx) -> Unit {
       share_closing.val = true
     }
   }
-  if share_closing.val && share_over.val && sheet_host.shown == NoSheet {
+  if share_closing.val && share_over.val && !@sf.presented_drawn() {
     share_closing.val = false
     @ui.over_done(open_app=false)
   }
@@ -263,7 +264,6 @@ fn share_in_sheet(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
     Some(s) => s
     None => return
   }
-  @sf.sheet_grab(c)
   if share_in.files.length() > 0 {
     shared_files_head(c, share_in.files, source, title)
   } else {

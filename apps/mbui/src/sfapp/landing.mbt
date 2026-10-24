@@ -132,7 +132,7 @@ fn no_workspace(c : @ui.Ctx, src : Source, ws : Json?) -> Unit {
     None => landing_page_of(c, src, entries)
   }
   // an invitation's link pasted (用邀请链接加入): its sheet over the page
-  sheet_layer(c, fn(kind) { if kind == InviteLink { invite_sheet(c, src) } })
+  sheet_contents(fn(kind) { if kind == InviteLink { invite_sheet(c, src) } })
 }
 
 ///|

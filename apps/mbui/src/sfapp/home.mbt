@@ -219,7 +219,7 @@ fn top_bar(
       }
       let wid = c.id("home-workspace")
       if c.clicked(wid) {
-        raise_sheet(Workspaces)
+        raise_sheet(Workspaces, from=Of(wid))
       }
       c.box(dir=Row, w=Fill(1.0), h=Px(34.0), gap=6.0, align=ACenter, id=wid, fn() {
         // the name as long as there is room for it

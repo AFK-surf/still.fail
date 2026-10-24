@@ -40,7 +40,7 @@ fn reset() -> Unit {
   home_rows.val = []
   steadies.clear()
   sheet_host.kind = NoSheet
-  sheet_host.shown = NoSheet
+  sheet_host.serial = 0
   sheet_host.accounts = false
   bar_reset()
   composer_page_from.val = None
@@ -255,7 +255,9 @@ fn view_in(c : @ui.Ctx, src : Source, t : @sf.Theme) -> Unit {
         if !link_later.is_empty() {
           c.tell("links", fn() { signed_out_links(src) })
         }
-        sheet_layer(c, fn(kind) { if kind == InviteLink { invite_sheet(c, src) } })
+        sheet_contents(fn(kind) { if kind == InviteLink { invite_sheet(c, src) } })
+        // the library's menus, sheets and dialogs (src/sf presenters.mbt), over the page
+        @sf.presented(c)
       }
       (Some(Array(_)), _) => signed_in(c, src)
       (_, _) =>
@@ -370,7 +372,7 @@ fn signed_in(c : @ui.Ctx, src : Source) -> Unit {
         // a row's menu, held long (home_menu.mbt)
         home_row_menu(c, src)
       }
-      sheet_layer(c, fn(kind) {
+      sheet_contents(fn(kind) {
         match kind {
           Workspaces => workspaces_sheet(c, src, w, all)
           PickStation(scope) => pick_station_sheet(c, src, scope)
