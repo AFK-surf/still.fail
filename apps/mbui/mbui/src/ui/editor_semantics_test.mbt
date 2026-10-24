@@ -50,3 +50,25 @@ test "editor semantics: the actual label survives placeholder changes and Focus 
   assert_eq(field.text(), "person@example.com")
   assert_eq(t.get(@ui.TextField, label="Account").value, "person@example.com")
 }
+
+///|
+test "private editor values are opt-in and never change rendering or ordinary semantics" {
+  let private_field = @ui.Field::new(text="synthetic-private@example.com")
+  let ordinary = @ui.Field::new(text="ordinary@example.com")
+  let t = @ui.Tester::new(fn(c) {
+    c.column(fn() {
+      c.editor("private", field=private_field, accessible_label="Reviewer email", private_value=true) |> ignore
+      c.editor("ordinary", field=ordinary, accessible_label="Ordinary email") |> ignore
+    }) |> ignore
+  })
+  t.set_a11y(true)
+  t.frame()
+  assert_eq(t.get(@ui.TextField, label="Reviewer email").value, "")
+  assert_eq(t.get(@ui.TextField, label="Ordinary email").value, "ordinary@example.com")
+  assert_false(t.a11y_said().contains("synthetic-private@example.com"))
+  assert_true(t.a11y_said().contains("Reviewer email"))
+  t.act(@ui.TextField, @ui.Focus, label="Reviewer email")
+  t.type_text(".test")
+  assert_eq(private_field.text(), "synthetic-private@example.com.test")
+  assert_eq(t.get(@ui.TextField, label="Reviewer email").value, "")
+}

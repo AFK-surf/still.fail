@@ -129,6 +129,7 @@ static void send_text(int kind, NSString *s, int a, int b) {
 #include "apple_device.h"
 
 static void run_script_step(int step);
+static void mb_review_voiceover_changed(void);
 
 @implementation MBView
 
@@ -142,6 +143,8 @@ static void run_script_step(int step);
   self.tok = [[UITextInputStringTokenizer alloc] initWithTextInput:self];
   // a second finger told too (a pinch: 4 down, 5 moved, 6 up), as Android's MBView tells it
   self.multipleTouchEnabled = YES;
+  [NSNotificationCenter.defaultCenter addObserverForName:UIAccessibilityVoiceOverStatusDidChangeNotification
+    object:nil queue:NSOperationQueue.mainQueue usingBlock:^(NSNotification *note) { mb_review_voiceover_changed(); }];
   self.editMenu = [[UIEditMenuInteraction alloc] initWithDelegate:self];
   [self addInteraction:self.editMenu];
   self.link = [CADisplayLink displayLinkWithTarget:self selector:@selector(tick:)];
@@ -478,27 +481,7 @@ static int32_t menu_can;  // what the menu offers (hostapi text_menu_*: 1 cut, 2
 
 @end
 
-// Review errors get a single native accessibility status target even while the general custom-renderer tree
-// remains unsupported. It exposes no credential value and does not claim to make the rest of the form accessible.
-static void mb_review_accessibility(NSDictionary *params) {
-  MBView *v = the_view;
-  if (!v) return;
-  NSString *words = params[@"text"];
-  if (!words.length) {
-    v.accessibilityElements = nil;
-    return;
-  }
-  UIAccessibilityElement *error = [[UIAccessibilityElement alloc] initWithAccessibilityContainer:v];
-  error.isAccessibilityElement = YES;
-  error.accessibilityLabel = words;
-  error.accessibilityTraits = UIAccessibilityTraitStaticText;
-  CGRect rect = CGRectMake([params[@"x"] doubleValue], [params[@"y"] doubleValue],
-                           MAX(1, [params[@"w"] doubleValue]), MAX(1, [params[@"h"] doubleValue]));
-  error.accessibilityFrameInContainerSpace = rect;
-  v.accessibilityElements = @[error];
-  // The focused element's label is announced by this event; do not also post an announcement and speak it twice.
-  UIAccessibilityPostNotification(UIAccessibilityLayoutChangedNotification, error);
-}
+#include "ios_reviewer_a11y.h"
 
 // ---- a finger on a page under the canvas ----
 
@@ -989,8 +972,9 @@ void mb_host_set_ime(int32_t active, double x, double y, double w, double h, moo
       [v.inputDelegate selectionDidChange:v];
     }
   }
-  if (v.imeActive && !was) [v becomeFirstResponder];
+  if (v.imeActive && !was && !review_editing) [v becomeFirstResponder];
   if (!v.imeActive && was) [v resignFirstResponder];
+  mb_review_sync_editor();
 }
 
 // The system's floating edit menu over a field's words (@hostapi.text_menu, as Android's ActionMode.TYPE_FLOATING):
@@ -1220,9 +1204,9 @@ void mb_host_set_app_state(void (*f)(int32_t)) {
 // Whether the system is set to dark (@hostapi.system_dark): the screen's interface style.
 // Words as the app sizes them (@hostapi.font_scale): the system's own size of words not followed here yet.
 double mb_host_font_scale(void) { return 1.0; }
-// The app's widgets for the system's accessibility (@hostapi.a11y_on, a11y_tree): not told here yet.
-int32_t mb_host_a11y_on(void) { return 0; }
-void mb_host_a11y_tree(moonbit_string_t s) { (void)s; }
+// Only the explicitly marked reviewer subtree is bridged; other screens retain their existing host behavior.
+int32_t mb_host_a11y_on(void) { return mb_review_a11y_on(); }
+void mb_host_a11y_tree(moonbit_string_t s) { mb_review_tree(mb_ns_from_string(s)); }
 
 int32_t mb_host_system_dark(void) {
   return UIScreen.mainScreen.traitCollection.userInterfaceStyle == UIUserInterfaceStyleDark ? 1 : 0;

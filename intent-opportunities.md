@@ -10,7 +10,7 @@
 
 ## 项目与范围
 
-- 分析日期：2026-10-24；导入项目 still.fail / mbui。当前实现基于 `main` / `7cb11d1cabfb35a59b8f0391f91da39fe939c4bb`，并包含本轮审核登录、取消/保存协议、安全存储及原生输入修改；本报告按该实现快照复核，不代表已完成真实账号验收的版本。
+- 分析日期：2026-10-24；导入项目 still.fail / mbui。当前实现基于 `main` / `b7f495c45a61fb094205091955152142698e4754`，并包含本轮审核页原生无障碍、凭据语义隐藏和键盘遮挡下的滚动修改；业务动作、服务契约、权限与部署目标未因此变化，复用本报告的机会评估，仅更新验证边界。
 - 目的：本次登录和会话存储契约改变后重跑评估。保留上一版 A1/A2 动作身份及首批零项结论；审核密码与原生输入接入不产生新的系统业务动作。原生 Apple 登录第二阶段未实现，不计入现有能力。
 - 已读 find-intent 技能及报告模板、普通 App Intents 参考；参考中的 starter 配置和示例不作为本项目或具体 Apple API 可用性证据。
 - 范围：mbui UI、C bridge 声明、Hermes 架构说明、构建入口及 plist，定向追踪“打开已有对话”“新建对话并发送首条消息”至 `client/core-ts`。未全量扫描大型仓库。
@@ -57,7 +57,7 @@
 
 `apps/mbui/src/host/core_api.h` 实际声明仅有 `mb_core_start` / `mb_core_send` / `mb_core_stop`：一个 core、一个 UI client；异步消息回调在 core 线程，宿主自行复制并切 UI 线程。`mb_core_start` 的 data_dir 保存账户、登录与数据库，返回时脚本仍可能加载，致命启动错误异步返回。已有低层通信基础不等于原生 Intent 可直接可靠调用。
 
-`apps/mbui/core/README.md` 说明 `apple_core.mm` 承载 Hermes、Keychain secure 操作和 shell；该说明是架构证据，不是本次实际运行证明。`client/core-ts/src/core/execute.ts:45–54` 显示 `authBegin`、`authPassword`、`authComplete` 委托 `inner.accounts`。本次已追 Accounts.load 的错误传播、password prepare/accept/cancel 及持久化互斥；当前 iOS 主应用 accounts 操作经 apple_core.mm 路由至 mbui_ios_sessions.h/_apple.h 的系统 Keychain，稳定安装 UUID 区分重装/包身份。隔离状态机测试与设备/模拟器桥接编译通过，但未验证真实系统安全存储行为。最终保存的不可取消边界已获产品确认；进度事件、核心和 UI 各自 15 秒预算、同一尝试重新核对与失败终态保留已实现并通过隔离回归，但仍未完成真实账号与原生安全存储的联动验收，不是可供原生系统动作直接复用的完成态服务。账户登录成功本身也不能证明工作区/站点/会话 ACL；完整数据所有权和站点 RPC 授权链仍待验证。
+`apps/mbui/core/README.md` 说明 `apple_core.mm` 承载 Hermes、Keychain secure 操作和 shell；该说明是架构证据，不是本次实际运行证明。`client/core-ts/src/core/execute.ts:45–54` 显示 `authBegin`、`authPassword`、`authComplete` 委托 `inner.accounts`。本次已追 Accounts.load 的错误传播、password prepare/accept/cancel 及持久化互斥；当前 iOS 主应用 accounts 操作经 apple_core.mm 路由至 mbui_ios_sessions.h/_apple.h 的系统 Keychain，稳定安装 UUID 区分重装/包身份。隔离状态机测试与设备/模拟器桥接编译通过；另已在独立 iOS 17 测试程序中使用生产适配器执行真实安全存储创建、读取、更新、删除及实际进程结束后重启恢复，数据限于独立合成测试条目。该证据不等于完整应用的真实账号迁移、卸载重装或权限验收。最终保存的不可取消边界已获产品确认；进度事件、核心和 UI 各自 15 秒预算、同一尝试重新核对与失败终态保留已实现并通过隔离回归，但仍未完成真实账号与原生安全存储的联动验收，不是可供原生系统动作直接复用的完成态服务。账户登录成功本身也不能证明工作区/站点/会话 ACL；完整数据所有权和站点 RPC 授权链仍待验证。
 
 ## API 与可用性证据
 

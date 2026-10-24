@@ -79,6 +79,18 @@ let reviewer_password : @ui.Field = @ui.Field::new()
 let reviewer_show : Ref[Bool] = Ref(false)
 
 ///|
+let reviewer_reveal_id : Ref[Int] = Ref(0)
+
+///|
+fn init {
+  // Passive VoiceOver traversal reveals a widget without changing the active editor or keyboard.
+  @ui.on_message("still.fail.reviewer.reveal", fn(json, _) {
+    let value = @json.parse(json) catch { _ => return }
+    reviewer_reveal_id.val = number(Some(value), "id").to_int()
+  })
+}
+
+///|
 let reviewer_busy : Ref[Bool] = Ref(false)
 
 ///|
@@ -114,6 +126,7 @@ fn reviewer_reset() -> Unit {
   reviewer_open.val = false
   reviewer_email.set("")
   reviewer_password.set("")
+  reviewer_reveal_id.val = 0
   reviewer_show.val = false
   reviewer_busy.val = false
   reviewer_error.val = ""
@@ -176,6 +189,7 @@ fn reviewer_leave(c : @ui.Ctx, src : Source) -> Unit {
   reviewer_attempt.val = ""
   reviewer_password.set("")
   reviewer_email.set("")
+  reviewer_reveal_id.val = 0
   reviewer_show.val = false
   reviewer_busy.val = false
   reviewer_cancelling.val = false
@@ -354,7 +368,7 @@ fn login_action(c : @ui.Ctx, key : String, words : String, primary : Bool, disab
     style=if primary { @sf.login_primary_action } else { @sf.login_action }, fn() {
       c.text(words, style=if primary { @sf.login_primary_words } else { @sf.login_action_words }) |> ignore
     })
-  c.semantics(node, Button, id~, label=words, disabled~, actions=if disabled { [] } else { [Activate] })
+  c.semantics(node, Button, id~, label=words, disabled~, actions=if disabled { [Focus] } else { [Activate, Focus] })
   !disabled && c.clicked(id)
 }
 
@@ -368,15 +382,48 @@ fn login_view(c : @ui.Ctx, src : Source) -> Unit {
 }
 
 ///|
+fn login_reveal(c : @ui.Ctx, key : String, review : Bool) -> Unit {
+  let viewport = c.laid_rect(c.id(key))
+  let mut dy = 0.0
+  // A list's row 0 has its own id scope. Read unclipped layout, never the clipped hit rect.
+  c.scope(0, fn() {
+    let keys = if review {
+      ["review/back", "review/email", "review/password", "review/show", "review/error",
+        "review/submit", "review/recover", "review/checking", "review/finishing"]
+    } else { ["login/back", "sign-in", "login/reviewer"] }
+    for target in keys {
+      let id = c.id(target)
+      if c.action_asked(id, Focus) || reviewer_reveal_id.val == id {
+        match (viewport, c.laid_rect(id)) {
+          (Some((_, top, _, height)), Some((_, y, _, h))) if height > 0.0 => {
+            dy = if h > height || y < top { y - top } else if y + h > top + height { y + h - top - height } else { 0.0 }
+          }
+          _ => ()
+        }
+      }
+    }
+  })
+  if dy != 0.0 { c.list_scroll_by(key, dy) }
+  let requested = reviewer_reveal_id.val
+  if requested != 0 {
+    c.tell("review-reveal-consumed", fn() {
+      if reviewer_reveal_id.val == requested { reviewer_reveal_id.val = 0 }
+    })
+  }
+}
+
+///|
 fn login_page(c : @ui.Ctx, src : Source, review : Bool) -> Unit {
   let t = @sf.theme()
   let busy = reviewer_busy.val || (src.signing_in)()
   if !review && login_adding.val {
     c.on_back(fn() { if !busy { login_adding.val = false } })
   }
-  c.list(if review { "login/review-scroll" } else { "login/welcome-scroll" }, 1, 720.0, fn(_) {
+  let scroll_key = if review { "login/review-scroll" } else { "login/welcome-scroll" }
+  login_reveal(c, scroll_key, review)
+  c.list(scroll_key, 1, 720.0, fn(_) {
     c.box(style=@sf.login_page, fn() {
-      c.box(style=@sf.login_column, fn() {
+      let column = c.box(style=@sf.login_column, fn() {
         if review {
           reviewer_form(c, src)
         } else {
@@ -406,7 +453,9 @@ fn login_page(c : @ui.Ctx, src : Source, review : Bool) -> Unit {
           }
           c.text(tr("login.reviewHint"), style=@sf.login_hint) |> ignore
         }
-      }) |> ignore
+      })
+      // Native accessibility is scoped to these login trees, never other editors or account pages.
+      c.semantics(column, Group, description=if review { "still.fail.reviewer" } else { "still.fail.reviewer.welcome" })
     }) |> ignore
   }, h=Px(dmax(0.0, c.height - status_top() - nav_foot() - c.ime_inset()))) |> ignore
 }
@@ -417,7 +466,7 @@ fn reviewer_field(c : @ui.Ctx, key : String, label : String, placeholder : Strin
   c.text(tr(label), style=@sf.login_field_label) |> ignore
   let mut result : @ui.EditorResult? = None
   c.box(style=@sf.login_field, fn() {
-    result = Some(c.editor(key, field~, placeholder=tr(placeholder), accessible_label=tr(label), secret~, plain=true, max_lines=1,
+    result = Some(c.editor(key, field~, placeholder=tr(placeholder), accessible_label=tr(label), private_value=true, secret~, plain=true, max_lines=1,
       font_size=@sf.login_editor_size, line=@sf.login_editor_line, trim=false, color=t.p.text, placeholder_color=t.p.muted,
       ime_action~))
   }) |> ignore
@@ -437,12 +486,16 @@ fn reviewer_form(c : @ui.Ctx, src : Source) -> Unit {
   c.text(tr("review.title"), style=@sf.login_title) |> ignore
   c.text(tr("review.body"), style=@sf.login_explanation) |> ignore
   let email = reviewer_field(c, "review/email", "review.emailLabel", "review.emailPlaceholder", reviewer_email, false, @hostapi.ime_action_email)
+  // Editors consume submitted text like a composer. A form's Next must retain the address for validation/auth.
+  if email.submitted is Some(words) { reviewer_email.set(words) }
   if reviewer_email_focused.val && !email.focused && !reviewer_busy.val && !reviewer_recovery.val {
     reviewer_error.val = if reviewer_email.text().trim() == "" { "review.emailRequired" } else if !reviewer_email_valid(reviewer_email.text()) { "review.emailInvalid" } else { "" }
   }
   reviewer_email_focused.val = email.focused
   if email.submitted is Some(_) { c.focus_editor("review/password") }
   let password = reviewer_field(c, "review/password", "review.passwordLabel", "review.passwordPlaceholder", reviewer_password, !reviewer_show.val, @hostapi.ime_action_password)
+  // Keep Done's consumed text only until reviewer_submit builds the attempt and immediately erases it.
+  if password.submitted is Some(words) { reviewer_password.set(words) }
   if reviewer_password_focused.val && !password.focused && !reviewer_busy.val && !reviewer_recovery.val && reviewer_password.text() == "" {
     reviewer_error.val = "review.passwordRequired"
   }
@@ -457,7 +510,10 @@ fn reviewer_form(c : @ui.Ctx, src : Source) -> Unit {
       c.wake_in(dmin(reviewer_countdown_tick_ms, remaining * 1000.0))
       fill("login.rateLimitedSeconds", [("seconds", seconds.to_string())])
     } else { tr(reviewer_error.val) }
-    let error_node = c.text(words, style=@sf.login_error)
+    let error_id = c.id("review/error")
+    let error_node = c.box(id=error_id, fn() { c.text(words, style=@sf.login_error) |> ignore })
+    // Rebuilds and countdown wording retain one semantic identity; only safe localized text reaches the host.
+    c.semantics(error_node, Status, id=error_id, label=words, actions=[Focus])
     // A countdown changes its words, not its error identity: focus/announce once, not on every tick or rebuild.
     if reviewer_a11y_sent.val != reviewer_error.val {
       let error_key = reviewer_error.val

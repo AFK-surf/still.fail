@@ -28,15 +28,36 @@ test "review form: empty fields, show-hide and back erase credentials without si
   assert_eq(reviewer_email.text(), "")
   assert_eq(reviewer_password.text(), "")
   assert_false(reviewer_show.val)
-  reviewer_email.set("review@example.com")
-  reviewer_password.set(" synthetic secret ")
-  t.frame()
+  assert_true(t.get(@ui.TextField, label=tr("review.emailLabel")).actions.contains(@ui.Focus))
+  assert_true(t.get(@ui.TextField, label=tr("review.passwordLabel")).actions.contains(@ui.Focus))
+  let submit = t.get(@ui.Button, label=tr("review.submit"))
+  assert_true(submit.disabled)
+  assert_false(submit.actions.contains(@ui.Activate))
+  // A stale native Activate must not bypass the disabled contract.
+  t.act(@ui.Button, @ui.Activate, label=tr("review.submit"))
+  assert_false(reviewer_busy.val)
+  assert_eq(reviewer_attempt.val, "")
+  t.act(@ui.TextField, @ui.Focus, label=tr("review.emailLabel"))
+  assert_true(t.get(@ui.TextField, label=tr("review.emailLabel")).focused)
+  assert_eq(t.ime_action(), @hostapi.ime_action_email)
+  t.type_text("review@example.com")
+  // The email keyboard's Next action is delivered as Enter, not a pointer hit on the password.
+  t.press("Enter")
+  assert_eq(reviewer_email.text(), "review@example.com")
+  assert_true(t.get(@ui.TextField, label=tr("review.passwordLabel")).focused)
+  assert_eq(t.ime_action(), @hostapi.ime_action_password)
+  t.type_text(" synthetic secret ")
+  assert_false(t.get(@ui.Button, label=tr("review.submit")).disabled)
+  assert_true(t.get(@ui.Button, label=tr("review.submit")).actions.contains(@ui.Activate))
   assert_eq(t.get(@ui.TextField, label=tr("review.passwordLabel")).value, "")
-  t.tap_text("显示密码")
+  t.act(@ui.Button, @ui.Activate, label=tr("review.showPassword"))
   assert_true(reviewer_show.val)
   assert_eq(t.get(@ui.TextField, label=tr("review.passwordLabel")).value, "")
   assert_false(t.semantics_dump().contains(" synthetic secret "))
-  t.back()
+  t.act(@ui.Button, @ui.Activate, label=tr("review.hidePassword"))
+  assert_false(reviewer_show.val)
+  assert_eq(t.get(@ui.TextField, label=tr("review.passwordLabel")).value, "")
+  t.act(@ui.Button, @ui.Activate, label=tr("common.back"))
   assert_false(reviewer_open.val)
   assert_eq(reviewer_password.text(), "")
   assert_eq(reviewer_email.text(), "")
@@ -68,8 +89,8 @@ test "review leaving an account addition keeps the original account and invalida
   reviewer_password.set("synthetic secret")
   t.frame()
   t.run_for(@ui.nav_push_ms)
-  let (submit_x, submit_y) = t.find_last("登录").unwrap()
-  t.tap(submit_x, submit_y)
+  t.act(@ui.TextField, @ui.Focus, label=tr("review.passwordLabel"))
+  t.press("Enter")
   assert_eq(calls.length(), 1)
   assert_eq(calls[0], "auth.password")
   assert_true(reviewer_busy.val)
@@ -117,8 +138,7 @@ test "review final save is phase-bound, bounded, and recovery retries only the o
   reviewer_password.set("synthetic secret")
   t.frame()
   t.run_for(@ui.nav_push_ms)
-  let (x, y) = t.find_last("登录").unwrap()
-  t.tap(x, y)
+  t.act(@ui.Button, @ui.Activate, label=tr("review.submit"))
   assert_eq(names, ["auth.password", "auth.password.accept"])
   // Acceptance still includes cancellable profile work; only this explicit packet marks the durable boundary.
   assert_false(reviewer_saving.val)
@@ -127,6 +147,11 @@ test "review final save is phase-bound, bounded, and recovery retries only the o
   t.frame()
   assert_true(reviewer_saving.val)
   assert_true(t.find("正在完成登录…") is Some(_))
+  assert_true(t.get(@ui.Button, label=tr("login.finishing")).disabled)
+  assert_false(t.get(@ui.Button, label=tr("login.finishing")).actions.contains(@ui.Activate))
+  assert_true(t.get(@ui.Button, label=tr("common.back")).disabled)
+  assert_true(t.get(@ui.Button, label=tr("review.showPassword")).disabled)
+  t.act(@ui.Button, @ui.Activate, label=tr("common.back"))
   t.back()
   assert_true(reviewer_open.val)
   assert_eq(reviewer_nav.val.depth(), 2)
@@ -140,12 +165,17 @@ test "review final save is phase-bound, bounded, and recovery retries only the o
   t.frame()
   assert_true(reviewer_open.val)
   assert_eq(reviewer_attempt.val, attempt)
-  // tap_text uses the first substring match, which is the inline error ending in “请重试。” here.
-  // Select the last matching node: the actual Retry action below the error, as for Sign in above.
-  let (retry_x, retry_y) = t.find_last("重试").unwrap()
-  t.tap(retry_x, retry_y)
+  let recovery_error = t.get(@ui.Status, label=tr("login.savedStateUnavailable"))
+  assert_true(recovery_error.id != 0)
+  assert_false(recovery_error.actions.contains(@ui.Activate))
+  assert_true(t.get(@ui.Button, label=tr("common.back")).disabled)
+  // Semantic selection cannot confuse the error's “retry” wording with the real Retry button.
+  t.act(@ui.Button, @ui.Activate, label=tr("common.retry"))
   assert_eq(names, ["auth.password", "auth.password.accept", "auth.password.recover"])
   assert_true(reviewer_checking.val)
+  assert_true(t.get(@ui.Button, label=tr("login.checkingSavedState")).disabled)
+  assert_false(t.get(@ui.Button, label=tr("login.checkingSavedState")).actions.contains(@ui.Activate))
+  assert_true(t.get(@ui.Button, label=tr("common.back")).disabled)
   check.val.unwrap()(Ok((Json::null(), Bytes::new(0))))
   t.frame()
   assert_false(reviewer_open.val)
@@ -154,21 +184,136 @@ test "review final save is phase-bound, bounded, and recovery retries only the o
 
 ///|
 test "review error focus is requested once per error, not each countdown tick or rebuild" {
-  let t = tester("signin")
+  reset()
+  let now = Ref(0.0)
+  let source : Source = { ..fixture("signin"), now: fn() { now.val } }
+  let t = @ui.Tester::new(fn(c) { view(c, source) }, w=390.0, h=844.0)
   t.native_answers("accessibility.reviewError", fn(_) { Json::null() })
   reviewer_open.val = true
   t.frame()
   t.run_for(@ui.nav_push_ms)
   reviewer_error.val = "login.rateLimited"
-  reviewer_retry_at.val = (fixture("signin").now)() + 5000.0
+  reviewer_retry_at.val = now.val + 5000.0
   t.frame()
   t.frame()
+  let error = t.get(@ui.Status)
+  assert_eq(error.label, fill("login.rateLimitedSeconds", [("seconds", "5")]))
+  assert_true(error.id != 0)
+  assert_false(error.actions.contains(@ui.Activate))
   let requests = t.native_asked().filter(fn(call) { call.0 == "accessibility.reviewError" })
   assert_eq(requests.length(), 1)
+  now.val += reviewer_countdown_tick_ms
   t.run_for(reviewer_countdown_tick_ms)
   t.frame()
+  assert_eq(t.get(@ui.Status).id, error.id)
+  assert_eq(t.get(@ui.Status).label, fill("login.rateLimitedSeconds", [("seconds", "4")]))
   assert_eq(t.native_asked().filter(fn(call) { call.0 == "accessibility.reviewError" }).length(), 1)
   t.back()
   t.frame()
   t.frame()
+}
+
+///|
+test "review semantic blur and Next validate email with a stable localized error node" {
+  let t = tester("signin")
+  t.native_answers("accessibility.reviewError", fn(_) { Json::null() })
+  reviewer_open.val = true
+  t.frame()
+  t.run_for(@ui.nav_push_ms)
+  t.act(@ui.TextField, @ui.Focus, label=tr("review.emailLabel"))
+  t.act(@ui.TextField, @ui.Focus, label=tr("review.passwordLabel"))
+  assert_true(t.get(@ui.TextField, label=tr("review.passwordLabel")).focused)
+  let required = t.get(@ui.Status, label=tr("review.emailRequired"))
+  assert_true(required.id != 0)
+  t.act(@ui.TextField, @ui.Focus, label=tr("review.emailLabel"))
+  t.type_text("not-an-email")
+  t.press("Enter")
+  let invalid = t.get(@ui.Status, label=tr("review.emailInvalid"))
+  assert_eq(invalid.id, required.id)
+  assert_eq(invalid.value, "")
+  assert_false(invalid.actions.contains(@ui.Activate))
+  t.frame()
+  assert_eq(t.get(@ui.Status, label=tr("review.emailInvalid")).id, invalid.id)
+  assert_true(t.get(@ui.Button, label=tr("review.submit")).disabled)
+  t.act(@ui.Button, @ui.Activate, label=tr("review.submit"))
+  assert_false(reviewer_busy.val)
+  assert_eq(reviewer_attempt.val, "")
+  t.act(@ui.Button, @ui.Activate, label=tr("common.back"))
+  assert_false(reviewer_open.val)
+}
+
+///|
+test "review native bridge markers scope welcome and two credential fields without semantic secrets" {
+  let t = tester("signin")
+  t.set_a11y(true)
+  t.frame()
+  assert_true(t.a11y_said().contains("\u{1F}still.fail.reviewer.welcome\u{1F}"))
+  t.act(@ui.Button, @ui.Activate, label=tr("login.reviewAction"))
+  t.run_for(@ui.nav_push_ms)
+  let roots = t.semantics().filter(fn(node) { node.role == @ui.Group && node.description == "still.fail.reviewer" })
+  assert_eq(roots.length(), 1)
+  assert_eq(roots[0].value, "")
+  assert_eq(t.semantics().filter(fn(node) { !node.hidden && node.role == @ui.TextField }).length(), 2)
+  reviewer_email.set("review@example.com")
+  reviewer_password.set("synthetic shown credential")
+  t.frame()
+  t.act(@ui.Button, @ui.Activate, label=tr("review.showPassword"))
+  let password = t.get(@ui.TextField, label=tr("review.passwordLabel"))
+  let lines = t.a11y_said()
+  assert_true(lines.contains("\u{1F}still.fail.reviewer\u{1F}"))
+  assert_false(lines.contains("synthetic shown credential"))
+  assert_false(lines.contains("review@example.com"))
+  assert_true(lines.contains(tr("review.emailLabel")))
+  assert_eq(t.get(@ui.TextField, label=tr("review.emailLabel")).value, "")
+  let mut password_rows = 0
+  for line in lines.split("\n") {
+    if line == "" { continue }
+    let fields = line.split("\u{1F}").map(fn(field) { field.to_string() }).to_array()
+    assert_eq(fields.length(), 16)
+    if fields[3] == "TextField" && fields[9] == tr("review.passwordLabel") {
+      password_rows += 1
+      // Native actions address widget field 2, never the serialized node identity in field 0.
+      assert_eq(fields[2], password.id.to_string())
+      assert_eq(fields[10], "")
+      assert_eq(fields[15], "f")
+    }
+  }
+  assert_eq(password_rows, 1)
+  t.act(@ui.Button, @ui.Activate, label=tr("common.back"))
+  t.run_for(@ui.nav_push_ms)
+  assert_false(t.a11y_said().contains("\u{1F}still.fail.reviewer\u{1F}"))
+  assert_true(t.a11y_said().contains("\u{1F}still.fail.reviewer.welcome\u{1F}"))
+}
+
+///|
+test "review passive native reveal preserves editor focus in a keyboard-constrained viewport" {
+  reset()
+  let source = fixture("signin")
+  reviewer_open.val = true
+  let t = @ui.Tester::new(fn(c) { login_page(c, source, true) }, w=320.0, h=560.0)
+  t.native_answers("accessibility.reviewError", fn(_) { Json::null() })
+  t.set_ime_inset(220.0)
+  t.frame()
+  let bottom = 560.0 - status_top() - nav_foot() - 220.0
+  t.act(@ui.TextField, @ui.Focus, label=tr("review.emailLabel"))
+  // Passive native traversal must not activate disabled Submit, unfocus email, or dismiss its IME.
+  for label in [tr("review.showPassword"), tr("review.submit"), tr("common.back")] {
+    let target = t.get(@ui.Button, label~)
+    t.post("still.fail.reviewer.reveal", "{\"id\":" + target.id.to_string() + "}")
+    t.frame()
+    let (_, y, _, h) = t.get(@ui.Button, label~).rect
+    assert_true(y >= 0.0)
+    assert_true(y + h <= bottom)
+    assert_true(t.get(@ui.TextField, label=tr("review.emailLabel")).focused)
+  }
+  assert_false(reviewer_busy.val)
+  reviewer_error.val = "review.invalidCredentials"
+  t.frame()
+  let status = t.get(@ui.Status, label=tr("review.invalidCredentials"))
+  t.post("still.fail.reviewer.reveal", "{\"id\":" + status.id.to_string() + "}")
+  t.frame()
+  let (_, y, _, h) = t.get(@ui.Status, label=tr("review.invalidCredentials")).rect
+  assert_true(y >= 0.0)
+  assert_true(y + h <= bottom)
+  assert_eq(reviewer_attempt.val, "")
 }

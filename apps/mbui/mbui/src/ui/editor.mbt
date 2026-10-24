@@ -348,12 +348,14 @@ fn EditorState::text_set(self : EditorState, s : String, a : Int, b : Int) -> Un
 
 ///|
 /// `accessible_label` names the field for assistive technology (the placeholder by default). Password values stay
-/// out of semantics even when their custom rendering is revealed with `secret=false`.
+/// out of semantics even when their custom rendering is revealed with `secret=false`. `private_value` also
+/// withholds sensitive non-password values (opt-in; ordinary editors retain their semantic value).
 pub fn Ctx::editor(
   self : Ctx,
   key : String,
   placeholder? : String = "",
   accessible_label? : String,
+  private_value? : Bool = false,
   w? : Size = Fill(1.0),
   font_size? : Double = 15.0,
   max_lines? : Int = 5,
@@ -468,7 +470,7 @@ pub fn Ctx::editor(
     TextField,
     id~,
     label=accessible_label.unwrap_or(placeholder),
-    value=if secret || ime_action == @hostapi.ime_action_password { "" } else { st.text },
+    value=if private_value || secret || ime_action == @hostapi.ime_action_password { "" } else { st.text },
     actions=[Focus],
   )
   let n = self.nodes[i]
