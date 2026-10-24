@@ -3,8 +3,8 @@
 # GitHub's own runners (no machine of ours: 2026-10-21, a push to four packages in three minutes): its Android app
 # signed with every still.fail Android release's key (/releases/latest/android-mbui, its feed android/mbui/latest.json,
 # still.fail's AppRelease), its macOS app signed with still.fail's Developer ID (/releases/latest/mac-mbui), its
-# Windows app zipped (/releases/latest/win-mbui), side by side; its iOS app built for a device (signed and put once
-# the team's App Store Connect key is in production's secrets). A branch's push builds them (no key, nothing put).
+# Windows app zipped (/releases/latest/win-mbui), side by side; its iOS app built for a device and retained as an
+# UNSIGNED Actions artifact (not installable or ready for TestFlight; signing/upload are not implemented here).
 # A workflow of its own, not a job of pipeline.yml: nothing of the pipeline waits for it or fails with it. As asked
 # (2026-10-19), its tests do not hold it back: it is a test app (Windows' e2e runs after its zip is out). A feed moves
 # only once its file is fetched back from where it is served, the same bytes.
@@ -226,6 +226,7 @@ jobs:
           echo "iOS SDK $v ($(xcodebuild -version | head -1))"
           case "$v" in 2[0-6].*|27.0*) echo "::error::iOS SDK $v: an iPhone Duo letterboxes an app built before 27.1"; exit 1 ;; esac
       - uses: actions/checkout@v5
+        with: { fetch-depth: 0 } # MBUI_IOS_BUILD counts the commits in the history
       - uses: ./.github/actions/setup
       - uses: ./.github/actions/mbui-moonbit
       # (restored on every run; saved by main's alone: a branch's would be its own, and the cache has 10 GB)
@@ -247,12 +248,18 @@ jobs:
         run: |
           rustup target add aarch64-apple-ios > /dev/null
           (cd client/core-ts && pnpm install --frozen-lockfile --prefer-offline > /dev/null)
-      # (unsigned until the team's App Store Connect key is in production's secrets: then signed ad hoc and put)
-      - name: The iOS app for a device, as an .ipa
+      # Device compilation only: no distribution signing or App Store Connect upload.
+      - name: The UNSIGNED iOS app for a device, as an .ipa
         run: |
           APP=stillfail MBUI_IOS_SDK=iphoneos MBUI_IOS_ID=fail.still.mbui EMBER=$PWD bash apps/mbui/scripts/ios.sh build
           cd apps/mbui/out/ios-device && rm -rf Payload *.ipa && mkdir Payload && cp -R MBUI.app Payload/
-          zip -qry stillfail-mbui.ipa Payload && ls -la stillfail-mbui.ipa
+          zip -qry stillfail-mbui-unsigned.ipa Payload && ls -la stillfail-mbui-unsigned.ipa
+      - name: Retain UNSIGNED IPA (not installable or TestFlight-ready)
+        uses: actions/upload-artifact@v4
+        with:
+          name: mbui-ios-UNSIGNED-${{ github.sha }}
+          path: apps/mbui/out/ios-device/stillfail-mbui-unsigned.ipa
+          if-no-files-found: error
       # (by what it holds, as the android job's)
       - name: The cache's key, by what it holds
         if: github.ref == 'refs/heads/main'
