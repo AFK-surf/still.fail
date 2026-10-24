@@ -87,8 +87,11 @@ test("a simulator, seen and driven through still.fail Helper", { skip: !hasSimct
         await sleep(16);
       }
       await view.input({ t: "pointer", kind: "up", x: to, y: 0.5, buttons: 0 });
-      const first = frames.slice(before)[0];
-      if (first) after.push(Math.round(first.at - down));
+      // (the drag's picture, whenever it comes: how soon is said, not held to a time. Taken right at the finger's lift,
+      // a picture the simulator drew a moment later counted as none, "every drag showed 3 !== 4", 2026-10-24)
+      while (frames.length === before) await sleep(20);
+      const first = frames[before]!;
+      after.push(Math.round(first.at - down));
       moving += frames.length - before;
       await sleep(1000);
     }
