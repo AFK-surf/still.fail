@@ -45,6 +45,7 @@ fn look_page(
   lead? : String = "",
   about? : String = "",
   actions? : () -> Unit,
+  head? : () -> Unit,
 ) -> Unit {
   match look {
     Wide =>
@@ -59,6 +60,7 @@ fn look_page(
         back=frame.back.unwrap_or(""),
         deep=frame.back is Some(_),
         actions?,
+        head?,
         top=frame.top,
         foot=frame.foot,
       )
