@@ -389,7 +389,7 @@ fn rail_workspaces(c : @ui.Ctx, src : Source, w : Workspace, all : Array[Workspa
   let switch_to = fn(x : Workspace) {
     app.picked = x.id
     (src.call)("prefs.set", Json::object({ "workspace": Json::string(x.id) }), fn(_) {  })
-    (pages.home)()
+    desk_home(pages)
   }
   // ⌃1 … ⌃9 on a Mac (Alt elsewhere): the workspace at that place, as the web's keys (keymap.ts workspaceIndexOf)
   let held = if @ui.platform() == 0 { @ui.mod_ctrl } else { @ui.mod_alt }
@@ -629,6 +629,18 @@ fn rail_place(
       |> ignore
     }
   })
+}
+
+///|
+/// Back to the stack's root as another workspace comes into view: what is over the pages put down, the menu closed.
+fn desk_home(pages : Pages) -> Unit {
+  (pages.lower)()
+  app.menu = false
+  while app.nav.depth() > 1 {
+    if !app.nav.pop() {
+      break
+    }
+  }
 }
 
 ///|

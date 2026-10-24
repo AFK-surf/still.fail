@@ -30,8 +30,11 @@ fn desk_pages() -> @sfdesk.Pages {
     other: fn(c, src, w, all, invited, page) { page_view(c, src, w, all, invited, page) },
     core: fn(src, w) { settings_core(src, w) },
     sheet: fn() { sheet_open() },
-    lower: fn() { lower_sheet() },
-    home: fn() { home() },
+    lower: fn() {
+      lower_sheet()
+      dui.sheet = None
+      dui.leaving = None
+    },
   }
 }
 
