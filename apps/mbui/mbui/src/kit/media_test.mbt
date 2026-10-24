@@ -25,11 +25,11 @@ test "a player: a double tap on the right third jumps on, said a moment; the spe
   m.open({ name: "a.mp4", mime: "video/mp4", audio: false, read: fn(_, _, _) { fn() {  } } })
   t.draw()
   assert_true(m.started())
-  // the right third, twice: 15 s on (the fake is 10 s long: to its end)
+  // the right third, twice: 15 s on (the fake is 10 s long: to its end), about there at once (the nearest key frame)
   t.tap(350.0, 400.0)
   t.tap(350.0, 400.0)
   assert_eq(last.val.unwrap().note, Some(Ahead(15000.0)))
-  assert_true(t.views().iter().any(fn(s) { s.has_prefix("control") && s.contains(" 3 10000") }))
+  assert_true(t.views().iter().any(fn(s) { s.has_prefix("control") && s.contains(" 11 10000") }))
   t.run_for(@kit.media_note_ms)
   assert_eq(last.val.unwrap().note, None)
   // the speed after 1×

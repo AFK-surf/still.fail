@@ -176,6 +176,7 @@ id mb_views_root(CGRect frame) {
 // a seek on its way (to seekMs), and the one asked meanwhile to go to once it is done (chaseMs), if any
 @property(nonatomic) BOOL seeking, chasing;
 @property(nonatomic) double seekMs, chaseMs;
+@property(nonatomic) BOOL chaseNear;  // the one asked meanwhile is to go about there (seekTo:near:)
 @property(nonatomic) BOOL observing, readyLogged, frameLogged;
 @property(nonatomic, strong) NSMutableArray<MBRead *> *pending;                  // not yet taken
 @property(nonatomic, strong) NSMutableDictionary<NSNumber *, MBRead *> *taken;  // taken, not answered to its end
@@ -220,6 +221,7 @@ id mb_views_root(CGRect frame) {
 - (void)logState;
 - (void)refreshSnap;
 - (void)seekTo:(double)ms;
+- (void)seekTo:(double)ms near:(BOOL)near;
 - (CGImageRef)copyFrame;
 @end
 
@@ -279,23 +281,30 @@ static void fill_info(AVAssetResourceLoadingRequest *req, NSString *uti, long lo
 @end
 
 @implementation MBNative
-// To `ms`, exactly, one seek at a time (Apple's QA1820, chasing the time): asked again while one is on its way, the
-// last asked goes once it is done and those between are skipped, so a finger along the timeline sees each frame it
-// gets to (AVPlayer gives up a seek on its way for the next, and while the finger moves none would show).
+// To `ms`, exactly (or `near`: about there, the player's own choice of where it gets to at once), one seek at a time
+// (Apple's QA1820, chasing the time): asked again while one is on its way, the last asked goes once it is done and
+// those between are skipped, so a finger along the timeline sees each frame it gets to (AVPlayer gives up a seek on
+// its way for the next, and while the finger moves none would show).
 - (void)seekTo:(double)ms {
+  [self seekTo:ms near:NO];
+}
+
+- (void)seekTo:(double)ms near:(BOOL)near {
   // (one on its way, or the item not ready for one yet: this one next, once it is)
   if (self.seeking || self.item.status != AVPlayerItemStatusReadyToPlay) {
     self.chasing = YES;
     self.chaseMs = ms;
+    self.chaseNear = near;
     return;
   }
   self.seeking = YES;
   self.seekMs = ms;
   __weak MBNative *wv = self;
   // (to the µs: a frame's start, said with its fraction of a ms, is that frame's, not the one before)
+  CMTime slack = near ? kCMTimePositiveInfinity : kCMTimeZero;
   [self.player seekToTime:CMTimeMake((int64_t)llround(ms * 1000.0), 1000000)
-          toleranceBefore:kCMTimeZero
-           toleranceAfter:kCMTimeZero
+          toleranceBefore:slack
+           toleranceAfter:slack
         completionHandler:^(BOOL done) {
           dispatch_async(dispatch_get_main_queue(), ^{
             MBNative *v = wv;
@@ -303,7 +312,7 @@ static void fill_info(AVAssetResourceLoadingRequest *req, NSString *uti, long lo
             v.seeking = NO;
             if (v.chasing && !v.closed) {
               v.chasing = NO;
-              [v seekTo:v.chaseMs];
+              [v seekTo:v.chaseMs near:v.chaseNear];
             }
             mb_host_request_frame();
           });
@@ -605,7 +614,7 @@ static void fill_info(AVAssetResourceLoadingRequest *req, NSString *uti, long lo
     // a seek asked before it was ready (where it was left, opened again): taken up now
     if (self.chasing && !self.seeking && self.item.status == AVPlayerItemStatusReadyToPlay) {
       self.chasing = NO;
-      [self seekTo:self.chaseMs];
+      [self seekTo:self.chaseMs near:self.chaseNear];
     }
     // a player is ready for the app once its first frame can be shown (a video), or once it can play at all with
     // no picture to show (a sound: its presentation size 0 × 0); or it failed
@@ -1162,6 +1171,7 @@ void mb_host_view_control(int32_t vid, int32_t op, double value) {
     }
     case 2: [v.player pause]; break;
     case 3: [v seekTo:value]; break;
+    case 11: [v seekTo:value near:YES]; break;
     case 4:
       if (value <= 0) break;
       v.speed = value;
@@ -1227,8 +1237,11 @@ int32_t mb_host_view_info(int32_t vid, double *out) {
   out[4] = s.height;
   out[5] = v.answered;
   out[6] = v.playerLayer.readyForDisplay ? 1 : 0;
+  // buffering only while a read of the app's bytes is under way: a seek within what the player has already (a finger
+  // along the timeline over what has played) waits on its own decoding, not on the network
   BOOL waiting = v.player.timeControlStatus == AVPlayerTimeControlStatusWaitingToPlayAtSpecifiedRate;
-  out[7] = (waiting || (v.player.rate > 0 && !it.playbackLikelyToKeepUp)) ? 1 : 0;
+  BOOL reading = v.pending.count > 0 || v.taken.count > 0;
+  out[7] = ((waiting || (v.player.rate > 0 && !it.playbackLikelyToKeepUp)) && reading) ? 1 : 0;
   // how far on it has what it needs: the end of the loaded range the playhead is in
   double now = out[1];
   for (NSValue *r in it.loadedTimeRanges) {

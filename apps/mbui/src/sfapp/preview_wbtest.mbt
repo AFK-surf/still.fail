@@ -188,10 +188,11 @@ test "a video's timeline dragged: paused, the player told a finger is on it, a s
 }
 
 ///|
-test "a video's timeline tapped: to the start of the frame there, played on as it was, no finger along it told" {
+test "a video's timeline tapped: to about the frame there at once (the nearest key frame), played on as it was, no finger along it told" {
   let (t, x0, span, mid) = ten_frames()
   t.tap(x0 + span * 0.55, mid)
-  assert_true(t.views().contains("control 1 3 500"))
+  assert_true(t.views().contains("control 1 11 500"))
+  assert_true(!t.views().iter().any(fn(l) { l.has_prefix("control 1 3 ") }))
   assert_true(!t.views().contains("control 1 2 0"))
   assert_true(!t.views().iter().any(fn(l) { l.has_prefix("control 1 9 ") }))
 }

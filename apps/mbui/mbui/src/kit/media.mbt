@@ -442,7 +442,16 @@ pub fn Media::seek(self : Media, ms : Double) -> Unit {
 }
 
 ///|
-/// `delta` ms on (back, below 0), within its length.
+/// To about `ms` in, at once (NativeView::seek_near: a jump, the very frame not waited for).
+pub fn Media::seek_near(self : Media, ms : Double) -> Unit {
+  match self.view {
+    Some(n) => n.seek_near(ms)
+    None => ()
+  }
+}
+
+///|
+/// About `delta` ms on (back, below 0), within its length, at once (Media::seek_near).
 pub fn Media::seek_by(self : Media, delta : Double) -> Unit {
   let s = self.status()
   let mut to = s.position + delta
@@ -452,7 +461,7 @@ pub fn Media::seek_by(self : Media, delta : Double) -> Unit {
   if s.duration > 0.0 && to > s.duration {
     to = s.duration
   }
-  self.seek(to)
+  self.seek_near(to)
 }
 
 ///|
@@ -713,7 +722,7 @@ pub fn Media::timeline(
   } else if on && c.clicked(id) {
     match under() {
       Some(ms) => {
-        self.seek(ms)
+        self.seek_near(ms)
         self.wake()
       }
       None => ()
