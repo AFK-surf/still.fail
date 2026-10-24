@@ -1245,6 +1245,14 @@ pub let activity_out : @ui.Space = room(-35.0)
 pub let notice_w : @ui.Len = Fixed(760.0)
 
 ///|
+/// 奏 with none left: its column (DecisionsIdle.css.ts column: 560 at most); a card's way to its chat (Decisions.css.ts
+/// elsewhere: 38 high).
+pub let idle_column_w : @ui.Len = Fixed(560.0)
+
+///|
+pub let elsewhere_h : @ui.Len = Fixed(38.0)
+
+///|
 /// A message's video (Chat.css.ts msgVideo, msgVideoPlay, msgVideoName): black under its still, black at 65% under its
 /// play mark and its name, which are white.
 pub let video_ground : @ui.Color = Data(0x000000FFL)

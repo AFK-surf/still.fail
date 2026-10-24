@@ -52,33 +52,6 @@ fn decisions_capsule(c : @ui.Ctx, src : Source, w : Workspace, ground : Int64) -
 }
 
 ///|
-/// Which of the 奏 page's `shown` decisions is in front: on the phone the first, in the wide frame the one the core
-/// shows (`shown`: the one picked, else the one now in its place; DecisionDesk.tsx).
-fn decision_front(view : Json?, shown : Array[Json]) -> Int {
-  if !wide_on.val {
-    return 0
-  }
-  let at = number(view, "shown").to_int()
-  if at >= 0 && at < shown.length() {
-    at
-  } else {
-    0
-  }
-}
-
-///|
-/// The decision before (-1) or after (1) the one the wide 奏 page shows, shown in its place (DecisionDesk.tsx step:
-/// ⌥↑ ⌥↓, the chats' keys); none past either end.
-fn decision_step(src : Source, w : Workspace, way : Int) -> Unit {
-  let view = (src.topic)("decisions", { "workspace": Json::string(w.id) }).value
-  let shown = items(view, "items")
-  let next = decision_front(view, shown) + way
-  if next >= 0 && next < shown.length() {
-    decision_show(src, w, shown[next])
-  }
-}
-
-///|
 /// The page (DecisionsScreen): pushed, its bar's back to the chats; the deck, or none left, or what is being read.
 fn decisions_page(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
   let t = @sf.theme()
@@ -116,7 +89,7 @@ fn decisions_page(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
           deck_out(c, src, c.width, c.height)
           return
         }
-        deck(c, src, shown, decision_front(view, shown))
+        deck(c, src, shown, 0)
       })
       |> ignore
     })

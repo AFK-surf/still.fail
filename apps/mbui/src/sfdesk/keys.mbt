@@ -25,20 +25,30 @@ pub fn keys(c : @ui.Ctx, src : Source, w : Workspace, pages : Pages) -> Unit {
   if pressed("shortcuts") {
     wide.keys_open = !wide.keys_open
   }
-  // (奏's page steps its own decisions: DecisionDesk.tsx)
-  if app.nav.top() != Decisions {
-    if @settings.action_pressed(c, prefs, "chat.prev", in_field=true) {
-      neighbour(src, w, pages, -1)
-    }
-    if @settings.action_pressed(c, prefs, "chat.next", in_field=true) {
-      neighbour(src, w, pages, 1)
+  // (奏's page steps its own decisions: DecisionDesk.tsx step, the one before or after the one it shows)
+  let way = if @settings.action_pressed(c, prefs, "chat.prev", in_field=true) {
+    -1
+  } else if @settings.action_pressed(c, prefs, "chat.next", in_field=true) {
+    1
+  } else {
+    0
+  }
+  if way != 0 {
+    if app.nav.top() == Decisions {
+      let view = (src.topic)("decisions", { "workspace": Json::string(w.id) }).value
+      let shown = items(view, "items")
+      match shown.get(decision_front(view, shown) + way) {
+        Some(d) => c.tell("zou/step", fn() { decision_show(src, w, d) })
+        None => ()
+      }
+    } else {
+      neighbour(src, w, pages, way)
     }
   }
   let escape = c.key_pressed(@ui.key_escape) || c.key_pressed(@ui.key_escape, in_field=true)
   let left = escape && !frame_escape(c)
-  // Esc in the open chat (chat_layers.mbt), then the page's
-  let took = chat_escape(c, src, left)
-  (pages.keys)(c, src, w, left && !took)
+  // Esc in the open chat (chat_layers.mbt)
+  chat_escape(c, src, left) |> ignore
 }
 
 ///|
