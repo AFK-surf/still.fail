@@ -79,7 +79,5 @@ fn desk_chat_parts() -> @sfbase.ChatParts {
     open_link,
     pick: fn(c, ts, author, role, words, fill, body) { pickable(c, ts, author, role, words, fill, body) },
     in_front: app_in_front,
-    login_card: fn(c, src, station, id) { login_card(c, src, station, id) },
-    vault_core,
   }
 }

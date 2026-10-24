@@ -51,6 +51,8 @@ using @sfbase {
   chat_parts,
   type Attachment,
   type Message,
+  type Card,
+  type VaultAsk,
   type Elsewhere,
   type Quote,
   type Install,

@@ -831,9 +831,10 @@ pub let sheet_grabber : @ui.Style = @ui.css("w=Fixed(38.0) h=Fixed(5.0) radius=F
 pub let tip_max : @ui.Len = Fixed(300.0)
 
 ///|
-/// A login card's on a desktop's width (the web's MachineLogins.css.ts card): 360 at least, and its corner its padding
-/// and its × pill's half (8 + 12: the web's card's 20, as a visualization's).
-pub let login_card_least : @ui.Len = Fixed(360.0)
+/// A login card's on a desktop's width (the web's MachineLogins.css.ts card): 360 at least where there is the room
+/// (min(100%, 360px)), and its corner its padding and its × pill's half (8 + 12: the web's card's 20, as a
+/// visualization's).
+pub let login_card_least : Double = 360.0
 
 ///|
 pub let login_card_corner : @ui.Radius = viz_card_radius

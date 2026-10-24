@@ -10,7 +10,15 @@
 
 ///|
 /// Chat `r`'s list (its view `v`, `read` its entries), in its pane; `room` what the composer takes of the pane's foot.
-pub fn chat_list(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView, read : Array[Entry], room : Double) -> Unit {
+pub fn chat_list(
+  c : @ui.Ctx,
+  src : Source,
+  r : ChatRef,
+  v : ChatView,
+  read : Array[Entry],
+  room : Double,
+  core : Core,
+) -> Unit {
   let key = list_key(r)
   let draft = r.station + ":" + r.session
   let parts = chat_parts.val
@@ -75,7 +83,7 @@ pub fn chat_list(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView, read : Ar
             let fade = @motion.animate(c, "fade/" + mk, if leaving { 0.0 } else { 1.0 }, spec=@motion.tween(linger_out_ms))
             let p = open.get()
             rd.act_whole[keys[i]] = p >= 1.0 && !open.moving()
-            let here = here_of(r, v, rk, turns, em, None)
+            let here = here_of(r, v, rk, turns, em, None, core)
             @motion.reveal(c, mk, p, fn() {
               let ri = row_box(c, side, top, fn() { activity_row(c, src, here, a, em, rk, leaving) })
               @motion.keyed(c, ri, mk, exit=@motion.trans(fade=0.0, spec=@motion.tween(leave_ms)))
@@ -93,7 +101,7 @@ pub fn chat_list(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView, read : Ar
               Some(f) if flies => flight_placed(c, f)
               _ => ()
             }
-            let here = here_of(r, v, rk, turns, em, if flies { flight } else { None })
+            let here = here_of(r, v, rk, turns, em, if flies { flight } else { None }, core)
             let ri = row_box(c, side, top, fn() {
               // (where a message out of a picture comes in over it: emit.mbt)
               if keys[i] == em.out_key {
@@ -199,7 +207,15 @@ pub fn chat_list(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView, read : Ar
 
 ///|
 /// Where a row of chat `r`'s list is, and how it moves there.
-fn here_of(r : ChatRef, v : ChatView, rk : String, turns : Turns, em : Emits, flight : SendFlight?) -> MessageHere {
+fn here_of(
+  r : ChatRef,
+  v : ChatView,
+  rk : String,
+  turns : Turns,
+  em : Emits,
+  flight : SendFlight?,
+  core : Core,
+) -> MessageHere {
   {
     station: r.station,
     session: r.session,
@@ -207,6 +223,7 @@ fn here_of(r : ChatRef, v : ChatView, rk : String, turns : Turns, em : Emits, fl
     go: Some(fn(seq) { @sfbase.go_to(r, seq) }),
     inline: false,
     list: Some({ rk, turns, emits: em, flight }),
+    core: Some(core),
   }
 }
 
@@ -363,7 +380,7 @@ fn emit_flyer(c : @ui.Ctx, rk : String, em : Emits, v : ChatView, src : Source, 
     Some(a) => (a.maker, a.runtime, a.wait is Some(_))
     None => ("", "", false)
   }
-  let here = { station: r.station, session: r.session, view: v, go: None, inline: false, list: None }
+  let here = { station: r.station, session: r.session, view: v, go: None, inline: false, list: None, core: None }
   c.layer(fn() {
     let b = c.box(style=activity_face, fn() {
       agent_avatar(c, src, here, "flyer", maker, runtime, "", "")
@@ -581,7 +598,7 @@ pub fn chat_talk(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef, pages : 
   match view {
     Some(v) => {
       latest_key(c, src, r, v)
-      chat_list(c, src, r, v, read, room)
+      chat_list(c, src, r, v, read, room, (pages.core)(src, w))
     }
     None => {
       // (a chat just made from a new chat is the core's own: nothing breathing while its first view comes)

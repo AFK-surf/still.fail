@@ -67,6 +67,12 @@ pub fn vault_ask(
 }
 
 ///|
+/// What is asked as its card alone, with no answer at its foot (AskCard without children: where nothing is answered).
+pub fn vault_ask_words(c : @ui.Ctx, ask : Asked) -> Unit {
+  @sf.card(c, fn() { vault_asked(c, ask) }) |> ignore
+}
+
+///|
 /// What is asked (AskCard's what): its title (使用「…」, 存入密码「…」 and the account), the command, and only what is
 /// out of the ordinary: a command that reads the secret itself, one run on another station.
 fn vault_asked(c : @ui.Ctx, ask : Asked) -> Unit {

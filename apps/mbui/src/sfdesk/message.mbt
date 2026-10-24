@@ -18,6 +18,9 @@ pub(all) struct MessageHere {
   go : ((Double) -> Unit)?
   inline : Bool
   list : ListMotion?
+  /// the core as the settings' pages have it, over the chat's workspace (a login's card, a vault request's answer);
+  /// None where nothing is answered (a letter's)
+  core : Core?
 }
 
 ///|
@@ -415,6 +418,14 @@ fn mine_bubble(c : @ui.Ctx, here : MessageHere, words : String, key : String, fo
 /// drawn there, an HTML one as a visualization (PlacedFile), the rest under it; a link within a sentence to one it
 /// places opens that file; Mermaid drawn; a station's screens' links as their cards.
 fn prose_with_files(c : @ui.Ctx, src : Source, here : MessageHere, m : Message, files : Array[Attachment]) -> Unit {
+  // an agent's request about a vault item: its card in place of the words, answered on it (decision.mbt)
+  match m.card {
+    Some({ ask: Some(ask), .. } as card) => {
+      vault_ask_card(c, here, card, ask)
+      return
+    }
+    _ => ()
+  }
   let parts = chat_parts.val
   let placed : Map[String, Attachment] = {}
   for n in m.placed {
