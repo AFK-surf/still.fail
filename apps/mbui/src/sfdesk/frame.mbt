@@ -397,7 +397,13 @@ fn dock(
   let shown = !bar || peek || showing > 0.0
   // the sidebar beside the rail: open its own width and 8 more, reaching 8 into the rail's; the group's in the bar
   let side_w = if bar { s } else { s + side_into_rail }
-  let look = if bar || apart { dock_closed } else { dock_open }
+  let look = if apart {
+    dock_apart
+  } else if bar {
+    dock_closed
+  } else {
+    dock_open
+  }
   let dock_w = dmax(0.0, col - ml - mr)
   let dock_h = dmax(0.0, c.height - top - foot - mt - mb)
   c.layer(fn() {
@@ -449,6 +455,12 @@ let dock_open : @ui.Style = @ui.css("row bg=Sidebar border=B1 clip")
 ///|
 // kept across runs: a value (no field of it changes)
 let dock_closed : @ui.Style = @ui.style(row=true, bg=Surface, radius=@sf.closed_bar_corner, border=B1, clip=true)
+
+///|
+/// On the tape, a panel of its own as the closed bar is, its corner the page's panel's: all the tape's panels alike
+/// (asked, 2026-10-24).
+// kept across runs: a value (no field of it changes)
+let dock_apart : @ui.Style = @ui.style(row=true, bg=Surface, radius=@sf.page_panel_corner, border=B1, clip=true)
 
 ///|
 /// The sidebar in the block: its width, the block's height.
@@ -852,9 +864,7 @@ fn tape_veils(
       // (only one not in use takes presses: the one in use, its veil going, lets them through)
       let id = if p == wide.tape_at { 0 } else { c.id("tape/" + p.to_string()) }
       let b = c.box(
-        style=tape_veil.then(
-          @ui.style(w=Fixed(width), h=Fixed(h), bg=Data(@sf.alpha(t.p.overlay, tape_veil_share * k))),
-        ),
+        style=tape_veil.then(@ui.style(w=Fixed(width), h=Fixed(h), bg=Data(@sf.alpha(t.p.overlay, tape_veil_share * k)))),
         left~,
         top~,
         tx=x,
@@ -886,7 +896,7 @@ let tape_veil_share : Double = 0.4
 
 ///|
 // kept across runs: a value (no field of it changes)
-let tape_veil : @ui.Style = @ui.style(radius=@sf.closed_bar_corner)
+let tape_veil : @ui.Style = @ui.style(radius=@sf.page_panel_corner)
 
 ///|
 /// On the tape what keeps the sidebar's panel apart: 6 from the window's edge before it, 8 from the page's panel after
@@ -899,10 +909,10 @@ let tape_apart : Double = closed_bar_in + closed_bar_gap
 let frame_tape : @ui.Style = @ui.css("w=Full h=Full bg=Sidebar")
 
 ///|
-/// The page's panel on the tape: the page's ground, the sidebar's panel's corner, a line round it, what goes past its
-/// edges cut.
+/// The page's panel on the tape: the page's ground, its corner concentric with its composer's capsule (@sf.page_panel_corner),
+/// a line round it, what goes past its edges cut.
 // kept across runs: a value (no field of it changes)
-let page_apart : @ui.Style = @ui.style(bg=Bg, radius=@sf.closed_bar_corner, border=B1, border_color=Line, clip=true)
+let page_apart : @ui.Style = @ui.style(bg=Bg, radius=@sf.page_panel_corner, border=B1, border_color=Line, clip=true)
 
 ///|
 /// The frame's row: the page's ground under all of it.
