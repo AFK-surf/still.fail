@@ -1851,6 +1851,8 @@ export const SHAPES: Record<string, Shape> = {
   SettingsView: struct([
     ["decisionsOn", "u32", { doc: "How many of the workspace's stations have the automatic decisions' completion rule on." }],
     ["decisionsText", "String", { doc: "That in words, for 自动决策's row: 2 台 station 已启用, 未启用." }],
+    ["hintNoReview", "bool", { default: true, doc: "No station known has its archive review on: the hint 按模型判断 can suggest nothing." }],
+    ["hintReviewText", "String", { default: true, doc: "What the stations' archive reviews mean for 按模型判断 (none on, or whose are off); \"\"\nwhile none is known or every one has it on." }],
   ], { doc: "What the settings say of the workspace as a whole (the `settings` view), over its stations." }),
   WorkspaceMarksView: struct([
     ["workspaces", map("WorkspaceMark")],
@@ -3214,7 +3216,22 @@ export const SHAPES: Record<string, Shape> = {
     ["summaryText", "String", { default: true, doc: "That in a line with Slack's, as its row in 设置 › 归档 says it (core)." }],
     ["daysOffered", vec("f64"), { default: true, doc: "The days idle offered to choose from, the one kept among them when it is none of them (core)." }],
     ["slackDaysOffered", vec("f64"), { default: true, doc: "The same of `slackDays` (core)." }],
+    ["daysOfferedText", vec("String"), { default: true, doc: "Each of `daysOffered` in words: 1 天, 从不 (core)." }],
+    ["slackDaysOfferedText", vec("String"), { default: true, doc: "Each of `slackDaysOffered` in words (core)." }],
+    ["reviewOn", "bool", { default: true, doc: "Its archive review (自动决策 › 归档建议) is on (core)." }],
+    ["reviewText", "String", { default: true, doc: "That said alone, by which model (core)." }],
+    ["stalled", "bool", { default: true, doc: "Set to go by its review, which is off: nothing goes (core)." }],
+    ["lineText", "String", { default: true, doc: "Its row's line: `summaryText`, or that it is `stalled` (core)." }],
+    ["modes", vec("ArchiveModeChoice"), { default: true, doc: "Each way to choose, in its order (core)." }],
+    ["modeNote", "String", { default: true, doc: "What the way chosen does, and where its review is off what that means (core)." }],
   ], { keepNone: true }),
+  ArchiveModeChoice: struct([
+    ["mode", "String", { doc: "off | idle | reviewed" }],
+    ["label", "String"],
+    ["days", "f64", { doc: "What choosing it saves: its days (off: 0; else those kept, or one)." }],
+    ["reviewed", "bool", { doc: "What choosing it saves: whether only the reviewed go." }],
+    ["allowed", "bool", { doc: "Whether it may be chosen: not to go by a review that is off (unless already so)." }],
+  ], { doc: "A way a station may archive on its own, as 设置 › 归档 offers it (core: present.ts archiving)." }),
   ArchivePolicyView: struct([
     ["text", "String", { doc: "The policy in words: what the decision model is told." }],
     ["options", vec("ArchiveOptionView")],

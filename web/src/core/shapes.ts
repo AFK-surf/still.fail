@@ -249,6 +249,19 @@ export interface ArchiveError {
 	text: string;
 }
 
+/** A way a station may archive on its own, as 设置 › 归档 offers it (core: present.ts archiving). */
+export interface ArchiveModeChoice {
+	/** off | idle | reviewed */
+	mode: string;
+	label: string;
+	/** What choosing it saves: its days (off: 0; else those kept, or one). */
+	days: number;
+	/** What choosing it saves: whether only the reviewed go. */
+	reviewed: boolean;
+	/** Whether it may be chosen: not to go by a review that is off (unless already so). */
+	allowed: boolean;
+}
+
 export interface ArchiveOptionChat {
 	session: string;
 	title: string;
@@ -375,6 +388,22 @@ export interface ArchivingView {
 	daysOffered?: number[];
 	/** The same of `slackDays` (core). */
 	slackDaysOffered?: number[];
+	/** Each of `daysOffered` in words: 1 天, 从不 (core). */
+	daysOfferedText?: string[];
+	/** Each of `slackDaysOffered` in words (core). */
+	slackDaysOfferedText?: string[];
+	/** Its archive review (自动决策 › 归档建议) is on (core). */
+	reviewOn?: boolean;
+	/** That said alone, by which model (core). */
+	reviewText?: string;
+	/** Set to go by its review, which is off: nothing goes (core). */
+	stalled?: boolean;
+	/** Its row's line: `summaryText`, or that it is `stalled` (core). */
+	lineText?: string;
+	/** Each way to choose, in its order (core). */
+	modes?: ArchiveModeChoice[];
+	/** What the way chosen does, and where its review is off what that means (core). */
+	modeNote?: string;
 }
 
 export interface Attachment {
@@ -5499,6 +5528,13 @@ export interface SettingsView {
 	decisionsOn: number;
 	/** That in words, for 自动决策's row: 2 台 station 已启用, 未启用. */
 	decisionsText: string;
+	/** No station known has its archive review on: the hint 按模型判断 can suggest nothing. */
+	hintNoReview?: boolean;
+	/**
+	 * What the stations' archive reviews mean for 按模型判断 (none on, or whose are off); ""
+	 * while none is known or every one has it on.
+	 */
+	hintReviewText?: string;
 }
 
 export interface ShareInKept {
