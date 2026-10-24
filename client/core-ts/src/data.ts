@@ -48,6 +48,16 @@ export function holds(topic: Topic): boolean {
   return HELD.has(topic.topic);
 }
 
+/// Where a station's overview has a sign-in for a new profile (`logins`): its job's state ("" with none); null, not
+/// listed.
+function loginAt(overview: unknown, id: string): string | null {
+  const logins = get(overview, "logins");
+  const login = Array.isArray(logins) ? logins.find((l) => isObject(l) && l.id === id) : undefined;
+  if (!isObject(login)) return null;
+  const state = get(login.job, "state");
+  return typeof state === "string" ? state : "";
+}
+
 /// The workspace a station's address is in.
 function workspaceOf(station: string): string {
   const at = station.indexOf("/");
@@ -262,6 +272,11 @@ export class Data {
   readonly #logChanged: ((table: string, station: string, id: string) => void)[] = [];
   readonly #chatsChanged: ((station: string, changes: RowChange[], first: boolean) => void)[] = [];
   readonly #modelEdits = new Map<string, [unknown, unknown]>();
+  /// Sign-ins for new profiles as their station answered a step of them (`login.new`, `login.code`), by station and
+  /// login: shown in its overview's `logins` while the overview still has the login where the step found it (`from`: the
+  /// state it moved on from; null, not listed yet). A code sent showed its field again, empty, until the station's next
+  /// overview came, most of a minute while the link came back (2026-10-25).
+  readonly #loginSteps = new Map<string, { id: string; job: unknown; from: string | null }>();
   /// How far sessions' transcripts go as streams and reads said, past what their summaries say (`transcriptHead`).
   readonly #transcriptHeads = new Map<string, number>();
   /// Values as typed, there at once and written a moment after their last change (drafts).
@@ -546,7 +561,7 @@ export class Data {
     if (kind) return db.list(station, kind);
     switch (topic.topic) {
       case "overview":
-        if ([...this.#modelEdits.keys()].some((k) => k.startsWith(station + SEP))) return this.shown(topic);
+        if ([...this.#modelEdits.keys(), ...this.#loginSteps.keys()].some((k) => k.startsWith(station + SEP))) return this.shown(topic);
         return db.stationDoc(station, "overview");
       case "footprint":
         return db.stationDoc(station, "footprint");
@@ -605,7 +620,31 @@ export class Data {
         }
       }
     }
+    if (topic.topic === "overview" && isObject(value)) {
+      const station = String(topic.station);
+      for (const [key, step] of this.#loginSteps) {
+        if (!key.startsWith(station + SEP) || loginAt(value, step.id) !== step.from) continue;
+        const logins: unknown[] = Array.isArray(value.logins) ? value.logins : (value.logins = []);
+        const i = logins.findIndex((l) => isObject(l) && l.id === step.id);
+        if (i < 0) logins.push({ id: step.id, runtime: get(step.job, "runtime"), job: step.job, created: null, error: null });
+        else logins[i] = { ...(logins[i] as object), job: step.job };
+      }
+    }
     return value;
+  }
+
+  /// A step of a sign-in for a new profile as its station answered it (`job`), taken from the state `from` (null: the
+  /// login not listed yet): shown while the overview still has it there. No job (dropped): let go.
+  stepLogin(station: string, id: string, job: unknown, from: string | null): void {
+    const key = join([station, id]);
+    this.#loginSteps.delete(key);
+    if (isObject(job) && loginAt(this.#rawOverview({ topic: "overview", station }), id) === from) this.#loginSteps.set(key, { id, job, from });
+    this.#tell({ topic: "overview", station });
+  }
+
+  /// The steps an overview of the station has gone past (or that it no longer has where they were): let go.
+  #loginsMoved(station: string, overview: unknown): void {
+    for (const [key, step] of [...this.#loginSteps]) if (key.startsWith(station + SEP) && loginAt(overview, step.id) !== step.from) this.#loginSteps.delete(key);
   }
 
   beginModels(station: string, id: string, models: unknown): boolean {
@@ -666,6 +705,7 @@ export class Data {
       case "jobs":
         return db.setJobs(station, list, at);
       case "overview":
+        this.#loginsMoved(station, value);
         return db.putStationDoc(station, "overview", value, at, topic);
       case "footprint":
         return db.putStationDoc(station, "footprint", value, at, topic);

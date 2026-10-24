@@ -639,7 +639,10 @@ events change; warmed (`session.warm`, as a person types) and
 `widget.setState` → nothing (its station tells the first, a page reads the
 other); a thread answered → `chatRows` as well; connects → `overview` and
 `sessions`; profiles, Slack → `overview`; `slack.identity` → `overview` (its
-answer) and `chatRows`). A write to still.fail cloud reads the account topics
+answer) and `chatRows`; a sign-in for a new profile started or given its code
+(`login.new`, `login.code`) → the overview's `logins` as the station answered,
+while the overview still has it where the call found it: not over what the
+station told since). A write to still.fail cloud reads the account topics
 again. The station's events bring the same a moment later.
 
 ## Layout
