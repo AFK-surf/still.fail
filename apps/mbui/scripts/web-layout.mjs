@@ -143,7 +143,9 @@ function elements() {
     }
     // (an icon's drawing is one thing: its paths not listed)
     if (svg) return;
-    const clips = cs.overflowX !== 'visible' || cs.overflowY !== 'visible';
+    // (the body's overflow is the window's, not a box's: a dialog's scroll lock hides it with the body 0 high, which
+    // would cut everything)
+    const clips = el !== document.body && el !== document.documentElement && (cs.overflowX !== 'visible' || cs.overflowY !== 'visible');
     const inner = clips ? [Math.max(cut[0], r.left), Math.max(cut[1], r.top), Math.min(cut[2], r.right), Math.min(cut[3], r.bottom)] : cut;
     for (const c of el.children) walk(c, me, depth + 1, inner, a, inPara || para);
   };
@@ -192,6 +194,9 @@ try {
         // where what it acts on is, as it acts (for mbui's app, where it has no such label or words)
         const on = step.text ? page.getByText(step.text, { exact: true }).filter({ visible: true }).first() : step.click || step.rightClick || step.hover ? at(step.click || step.rightClick || step.hover) : null;
         const box = on ? await on.boundingBox({ timeout: 5000 }) : null;
+        // what it is called (its aria-label, else its first line of words): for mbui's app, where the selector says
+        // what the page's DOM is (a link by its href) rather than anything mbui has
+        const name = on ? await on.evaluate((el) => el.getAttribute('aria-label') || (el.innerText || '').trim().split('\n')[0] || '') : '';
         if (step.click) await at(step.click).click({ timeout: 5000 });
         if (step.rightClick) await at(step.rightClick).click({ button: 'right', timeout: 5000 });
         if (step.hover) await at(step.hover).hover({ timeout: 5000 });
@@ -202,7 +207,7 @@ try {
         // pointer has left it: Rail.tsx PEEK_LEAVE, and moves as it folds), then its CSS animations ended
         await page.clock.runFor(PAGE_TIMERS);
         await settled(page);
-        taken.push(box ? { ...step, at: [box.x + box.width / 2, box.y + box.height / 2] } : step);
+        taken.push(box ? { ...step, at: [box.x + box.width / 2, box.y + box.height / 2], ...(name ? { name } : {}) } : step);
       } catch (e) {
         console.log(`${story.id}: step ${JSON.stringify(step)} not taken (${e.message.split('\n')[0]})`);
       }
@@ -223,7 +228,7 @@ try {
       const [r, g, b, a = 1] = c.match(/[\d.]+/g).map(Number);
       return [r, g, b, Math.round(a * 255)];
     });
-    await writeFile(`${out}/${story.id}.web.json`, JSON.stringify({ story: story.id, title: story.title, width, height, ground, steps: taken, tape, elements: els }));
+    await writeFile(`${out}/${story.id}.web.json`, JSON.stringify({ story: story.id, title: story.title, width, height, ground, steps: taken, share: story.share ?? null, tape, elements: els }));
     console.log(`took ${out}/${story.id}.web.json: ${els.length} elements, ${tape.length} topics`);
     await page.close();
   }
