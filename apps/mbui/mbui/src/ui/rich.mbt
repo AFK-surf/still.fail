@@ -154,7 +154,8 @@ struct Rich {
   select : Bool
   // wrapped words cut after that many lines, ending in an ellipsis (0: all of them)
   max_lines : Int
-  // what every run's style has besides its own (faces.mbt faces_style: the face named, what people wrote)
+  // what every run's style has besides its own (faces.mbt faces_style: the face named, what people wrote; digits all one
+  // width, @hostapi.style_tabular)
   faces : Int
   // the faces as they were given when it was built (faces.mbt words_shaped_in): laid out again once they change
   shaped_in : Int
@@ -701,6 +702,8 @@ fn RichLayout::pieces(self : RichLayout, k : Int) -> Array[(Int, Int, Int)] {
 /// style of the run it follows (as Ctx::text's, Android's maxLines with TextOverflow.Ellipsis). `words`: what people
 /// and agents wrote (a message, a composer's words), set in the face given for them (faces.mbt, @hostapi.face_text) where
 /// there is one. `face`: every run in that face (4 to 15, face_add), where it is given (a face shown in itself).
+/// `tabular`: digits all one width (as Ctx::text's; where unsaid, the theme's for the app's own words, none for what
+/// people wrote or a face shown in itself).
 pub fn Ctx::rich(
   self : Ctx,
   runs : Array[Run],
@@ -724,6 +727,7 @@ pub fn Ctx::rich(
   on_link_hold? : ((String, (Double, Double, Double, Double)) -> Unit)? = None,
   words? : Bool = false,
   face? : Int = 0,
+  tabular? : Bool,
 ) -> Int {
   // its style (style.mbt) under what is said here, as Ctx::text's
   let st = self.text_patch(style)
@@ -821,7 +825,14 @@ pub fn Ctx::rich(
     base,
     select: desk.selecting,
     max_lines: first(max_lines, st.max_lines).unwrap_or(0),
-    faces: faces_style(words, face),
+    faces: faces_style(words, face) |
+    (
+      if first(tabular, st.tabular).unwrap_or(self.theme.tabular && !words && face == 0) {
+        @hostapi.style_tabular
+      } else {
+        0
+      }
+    ),
     shaped_in: words_shaped_in.val,
   })
   i

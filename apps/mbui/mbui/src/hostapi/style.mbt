@@ -24,6 +24,12 @@ pub let style_no_ligatures : Int = 8
 pub let style_words : Int = 16
 
 ///|
+/// Digits all one width (the font's tabular figures, OpenType tnum), for a number that changes where it stands (a
+/// percentage, a time running): Core Text's kNumberSpacingType kMonospacedNumbersSelector, DirectWrite's tnum, Android's
+/// font feature settings "'tnum' 1", a canvas's digits each as wide as the widest of them. The font is the same.
+pub let style_tabular : Int = 32
+
+///|
 /// The faces a host is given (face_add) for the app's three places: its own words (every font a style says nothing
 /// else of), what people wrote (style_words), code (style_mono). Faces 4 to 15 are drawn only where a style names them
 /// (style_face). A place with no face registered is in the system's.

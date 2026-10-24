@@ -107,6 +107,11 @@ pub(all) struct Theme {
   /// the height of a line of words that say none, a size of words (1.4: CSS's `line-height: 1.4`, still.fail's
   /// apps'); 0: the host's own (its system's, about 1.42)
   text_line : Double
+  /// the app's own words with their digits all one width (@hostapi.style_tabular: a number keeps its width as it
+  /// changes, CSS's `font-variant-numeric: tabular-nums` on a page's root) where they say nothing of it; what people
+  /// wrote (`words`), a face shown in itself and a book's pages keep the font's own figures. false: the font's own
+  /// everywhere, the system's way (San Francisco's figures are proportional, Roboto's and Segoe UI's tabular)
+  tabular : Bool
 }
 
 ///|
@@ -237,6 +242,7 @@ pub fn Theme::light() -> Theme {
     text_line: 0.0,
     radii: RadiusScale::tailwind(),
     corner_ladder: [],
+    tabular: false,
   }
 }
 
@@ -389,6 +395,7 @@ pub fn Theme::ios_light() -> Theme {
     text_line: 0.0,
     radii: RadiusScale::tailwind(),
     corner_ladder: [],
+    tabular: false,
   }
 }
 

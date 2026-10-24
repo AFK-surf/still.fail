@@ -36,6 +36,7 @@ fn Node::text_layout(self : Node, max_w : Double) -> TextLayout {
     line=self.line_h,
     trim=self.line_trim,
     spacing=self.spacing,
+    style=self.words_style(),
   )
   let tl = if self.wrap && self.max_lines > 0 && tl.line_start.length() > self.max_lines {
     cut_to_lines(self, tl, max_w)
@@ -48,10 +49,20 @@ fn Node::text_layout(self : Node, max_w : Double) -> TextLayout {
 }
 
 ///|
+/// The style bits a text's words are shaped in: its digits all one width where it says so (Ctx::text `tabular`).
+fn Node::words_style(self : Node) -> Int {
+  if self.tabular {
+    @hostapi.style_tabular
+  } else {
+    0
+  }
+}
+
+///|
 /// One-line text cut to fit `w`, ending in an ellipsis.
 fn ellipsized(n : Node, tl : TextLayout, w : Double) -> TextLayout {
   let s = tl.shaped
-  let dots = layout_text("…", n.font_size, n.weight, 1.0e9, false, line=n.line_h, trim=n.line_trim, spacing=n.spacing)
+  let dots = layout_text("…", n.font_size, n.weight, 1.0e9, false, line=n.line_h, trim=n.line_trim, spacing=n.spacing, style=n.words_style())
   let room = w - dots.w
   let mut end = 0
   while end < s.starts.length() && tl.xs[end] + s.adv[end] <= room {
@@ -63,7 +74,7 @@ fn ellipsized(n : Node, tl : TextLayout, w : Double) -> TextLayout {
   }
   let cut = if end < s.starts.length() { s.starts[end] } else { s.len }
   let text = n.text.view(end_offset=cut).to_string() + "…"
-  layout_text(text, n.font_size, n.weight, 1.0e9, false, line=n.line_h, trim=n.line_trim, spacing=n.spacing)
+  layout_text(text, n.font_size, n.weight, 1.0e9, false, line=n.line_h, trim=n.line_trim, spacing=n.spacing, style=n.words_style())
 }
 
 ///|
@@ -76,7 +87,7 @@ fn cut_to_lines(n : Node, tl : TextLayout, w : Double) -> TextLayout {
   let s = tl.shaped
   let count = s.starts.length()
   let a = tl.line_start[n.max_lines - 1]
-  let dots = layout_text("…", n.font_size, n.weight, 1.0e9, false, line=n.line_h, trim=n.line_trim, spacing=n.spacing)
+  let dots = layout_text("…", n.font_size, n.weight, 1.0e9, false, line=n.line_h, trim=n.line_trim, spacing=n.spacing, style=n.words_style())
   let room = w - dots.w
   let mut x = 0.0
   let mut end = a
@@ -90,7 +101,7 @@ fn cut_to_lines(n : Node, tl : TextLayout, w : Double) -> TextLayout {
   }
   let cut = if end < count { s.starts[end] } else { s.len }
   let text = n.text.view(end_offset=cut).to_string() + "…"
-  layout_text(text, n.font_size, n.weight, w, true, line=n.line_h, trim=n.line_trim, spacing=n.spacing)
+  layout_text(text, n.font_size, n.weight, w, true, line=n.line_h, trim=n.line_trim, spacing=n.spacing, style=n.words_style())
 }
 
 ///|
@@ -575,6 +586,7 @@ fn Ctx::flex_tree(self : Ctx, i : Int, pdir : Int) -> Int {
         n.lk_trim != n.line_trim ||
         n.lk_wrap != n.wrap ||
         n.lk_spacing != n.spacing ||
+        n.lk_tabular != n.tabular ||
         n.lk_max_lines != n.max_lines ||
         n.lk_shaped != words_shaped_in.val {
         n.lk_text = n.text
@@ -584,6 +596,7 @@ fn Ctx::flex_tree(self : Ctx, i : Int, pdir : Int) -> Int {
         n.lk_trim = n.line_trim
         n.lk_wrap = n.wrap
         n.lk_spacing = n.spacing
+        n.lk_tabular = n.tabular
         n.lk_max_lines = n.max_lines
         n.lk_shaped = words_shaped_in.val
         n.full = None

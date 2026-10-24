@@ -187,9 +187,12 @@ globalStyle("html, body, #app", { height: "100%", margin: "0" });
 /**
  * Lines break the usual way, not `text-wrap: pretty`: Safari's (iOS's every browser) breaks Chinese in a narrow box
  * after every character (a 64px label: 缓/存/命/中/率), and a line of 5 to 30 characters in one a character wide.
+ * The app's own words have their digits all one width (`tabular-nums`, after `font`, which resets it): a percentage, a
+ * time running, a count keep their width as they change. What people wrote (where `vars.fontText` is set) and a book's
+ * column keep the font's own figures (`fontVariantNumeric: "normal"` there).
  */
 globalStyle("body", {
-  background: vars.canvas, color: vars.text, font: `400 ${vars.textBody}/1.55 ${vars.fontBody}`,
+  background: vars.canvas, color: vars.text, font: `400 ${vars.textBody}/1.55 ${vars.fontBody}`, fontVariantNumeric: "tabular-nums",
   fontFeatureSettings: "\"cv11\", \"ss01\"", WebkitFontSmoothing: "antialiased", lineBreak: "strict",
 });
 /**

@@ -338,7 +338,8 @@ fn Style::resolve(
 ///|
 /// What words look like, every property optional. `wrap=false`: one line, cut with an ellipsis; `max_lines`: wrapped
 /// words cut after that many lines, the last ending in an ellipsis; `tracking`: letter spacing; `leading`: the line's
-/// height in place of the size's own.
+/// height in place of the size's own; `tabular`: digits all one width, for a number that changes where it stands (a
+/// percentage, a time running: CSS's font-variant-numeric tabular-nums).
 pub(all) struct TextPatch {
   size : TextSize?
   weight : Weight?
@@ -349,6 +350,7 @@ pub(all) struct TextPatch {
   tracking : Tracking?
   max_lines : Int?
   leading : Leading?
+  tabular : Bool?
 }
 
 ///|
@@ -370,8 +372,9 @@ pub fn text_patch(
   tracking? : Tracking,
   max_lines? : Int,
   leading? : Leading,
+  tabular? : Bool,
 ) -> TextPatch {
-  { size, weight, color, w, center, wrap, tracking, max_lines, leading }
+  { size, weight, color, w, center, wrap, tracking, max_lines, leading, tabular }
 }
 
 ///|
@@ -385,10 +388,11 @@ pub fn text_style(
   tracking? : Tracking,
   max_lines? : Int,
   leading? : Leading,
+  tabular? : Bool,
   narrow? : TextPatch,
   dark? : TextPatch,
 ) -> TextStyle {
-  { base: { size, weight, color, w, center, wrap, tracking, max_lines, leading }, narrow, dark }
+  { base: { size, weight, color, w, center, wrap, tracking, max_lines, leading, tabular }, narrow, dark }
 }
 
 ///|
@@ -403,6 +407,7 @@ pub fn TextPatch::then(self : TextPatch, o : TextPatch) -> TextPatch {
     tracking: or_else(o.tracking, self.tracking),
     max_lines: or_else(o.max_lines, self.max_lines),
     leading: or_else(o.leading, self.leading),
+    tabular: or_else(o.tabular, self.tabular),
   }
 }
 

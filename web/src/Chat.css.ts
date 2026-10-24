@@ -120,7 +120,7 @@ export const reportSends = style({ margin: "0", fontSize: vars.textUi, color: va
  */
 export const composerText = style({
   flex: "1", minHeight: "20px", maxHeight: "min(480px, 40dvh)", padding: "6px 8px 4px", border: "0", outline: "none",
-  resize: "none", background: "transparent", font: "inherit", fontFamily: vars.fontText, fontSize: vars.textInput, lineHeight: "1.5",
+  resize: "none", background: "transparent", font: "inherit", fontFamily: vars.fontText, fontVariantNumeric: "normal", fontSize: vars.textInput, lineHeight: "1.5",
   color: vars.text, textWrap: "wrap",
   vars: { "--more-above": "0px", "--more-below": "0px" },
   selectors: {

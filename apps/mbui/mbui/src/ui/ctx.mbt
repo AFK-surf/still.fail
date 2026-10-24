@@ -1092,7 +1092,8 @@ pub fn Ctx::spacer(self : Ctx) -> Unit {
 ///|
 /// Words, in the theme's colour unless `color`. `style` (style.mbt) says how they look, its dark and narrow blocks by
 /// the theme; what is said here besides wins over the style's same property (a size said here keeps the style's line).
-/// `tracking`: letter spacing in pixels; `max_lines`: wrapped words cut after that many lines, ending in an ellipsis.
+/// `tracking`: letter spacing in pixels; `max_lines`: wrapped words cut after that many lines, ending in an ellipsis;
+/// `tabular`: digits all one width, a number keeping its width as it changes (the theme's `tabular` where unsaid).
 /// `trim`: a font taller than the line not padded beyond its own reach where a host sets lines on whole pixels (as
 /// Compose sets words in a TextStyle of their own; else as a theme's words: set_line).
 pub fn Ctx::text(
@@ -1109,6 +1110,7 @@ pub fn Ctx::text(
   center? : Bool,
   tracking? : Double,
   max_lines? : Int,
+  tabular? : Bool,
 ) -> Int {
   let st = self.text_patch(style)
   let (s_size, s_line) = self.text_sizes(st)
@@ -1130,6 +1132,7 @@ pub fn Ctx::text(
     (None, None) => 0.0
   }
   n.max_lines = first(max_lines, st.max_lines).unwrap_or(0)
+  n.tabular = first(tabular, st.tabular).unwrap_or(self.theme.tabular)
   i
 }
 

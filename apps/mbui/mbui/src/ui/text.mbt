@@ -187,6 +187,8 @@ fn whole_pixel_lines(size : Double, weight : Int, style? : Int = 0) -> Bool {
 
 ///|
 fn all_metrics(size : Double, weight : Int, style : Int) -> (Double, Double, Double, Double, Double, Bool) {
+  // (the font's figures change no line of it: its metrics are the same either way)
+  let style = style & @hostapi.style_tabular.lnot()
   // (the size in tenths, the weight, the style's bits: faces and all, each in a field of its own)
   let key = (((size * 10.0).to_int() * 1000 + weight).to_int64() << 12) | (style & 4095).to_int64()
   match text_cache.metrics.get(key) {
@@ -301,10 +303,31 @@ fn clear_shapes() -> Unit {
 }
 
 ///|
+/// Whether `text` has a digit in it: words with none are shaped the same with their digits all one width
+/// (@hostapi.style_tabular) as without, in the same font, their glyphs the same (shape asks it of the host only where
+/// it changes something, the glyphs of the rest kept once).
+fn has_digit(text : String) -> Bool {
+  for i in 0..<text.length() {
+    let c = text.at(i).to_int()
+    if c >= 48 && c <= 57 {
+      return true
+    }
+  }
+  false
+}
+
+///|
 /// With `spacing` (letter spacing, as Android's: each cluster's advance has it, half before its piece and half
 /// after), shaped with no ligatures (@hostapi.style_no_ligatures): a ligature's letters would not be spaced.
 fn shape(text : String, size : Double, weight : Int, style? : Int = 0, spacing? : Double = 0.0) -> Shaped {
   let style = if spacing != 0.0 { style | @hostapi.style_no_ligatures } else { style }
+  // (digits all one width only where they would not be: the code face's are, and words with none have none)
+  let style = if (style & @hostapi.style_tabular) != 0 &&
+    ((style & @hostapi.style_mono) != 0 || !has_digit(text)) {
+    style & @hostapi.style_tabular.lnot()
+  } else {
+    style
+  }
   let shapes = font_shapes(size, weight, style, spacing)
   match shapes.get(text) {
     Some(s) => s

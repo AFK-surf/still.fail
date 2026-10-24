@@ -129,6 +129,8 @@ struct Node {
   mut line_trim : Bool
   // added to each cluster's advance, half before and half after it (Android's letter spacing), in pixels
   mut spacing : Double
+  // digits all one width (@hostapi.style_tabular: Ctx::text `tabular`, the theme's where it says nothing)
+  mut tabular : Bool
   // wrapped words cut after this many lines, the last ending in an ellipsis (0: no limit)
   mut max_lines : Int
   mut fit : Fit
@@ -239,6 +241,7 @@ struct Node {
   mut lk_trim : Bool
   mut lk_wrap : Bool
   mut lk_spacing : Double
+  mut lk_tabular : Bool
   mut lk_max_lines : Int
   // the faces as they were given when its words were laid out (faces.mbt words_shaped_in)
   mut lk_shaped : Int
@@ -307,6 +310,7 @@ fn Node::new() -> Node {
     line_h: 0.0,
     line_trim: false,
     spacing: 0.0,
+    tabular: false,
     max_lines: 0,
     fit: FitCover,
     fade: true,
@@ -365,6 +369,7 @@ fn Node::new() -> Node {
     lk_trim: false,
     lk_wrap: false,
     lk_spacing: 0.0,
+    lk_tabular: false,
     lk_max_lines: 0,
     lk_shaped: -1,
     lk_rich: None,
@@ -476,6 +481,7 @@ fn Node::reset_words(self : Node) -> Unit {
   self.line_h = 0.0
   self.line_trim = false
   self.spacing = 0.0
+  self.tabular = false
   self.max_lines = 0
 }
 

@@ -1341,6 +1341,11 @@
     return w;
   };
 
+  // digits all one width (style & 32, style.mbt style_tabular): a canvas has no font-variant-numeric, so each digit
+  // advances as the widest of the ten and is drawn centred in it (rasterize)
+  const isDigit = (c) => c.length === 1 && c >= '0' && c <= '9';
+  const tabWidth = (f) => Math.max(...'0123456789'.split('').map((d) => width(f, d)));
+
   H.shape = (text, size, weight, style, out) => {
     const f = font(size, weight, style);
     mctx.font = f;
@@ -1379,6 +1384,7 @@
         adv = Math.max(0, end - xs[i]);
       }
       if (blank(c)) word = i + 1;
+      if (style & 32 && isDigit(c)) adv = tabWidth(f);
       let key = -1;
       if (c === '\n') adv = 0;
       else if (c !== ' ' && c !== '\t') key = textKey(c, size, weight, style);
@@ -1437,6 +1443,10 @@
     e.w = pw / sc;
     e.h = ph / sc;
     e.ox = -(l + pad) / sc;
+    if (e.style & 32 && isDigit(e.c)) {
+      const f = font(e.size, e.weight, e.style);
+      e.ox += (tabWidth(f) - width(f, e.c)) / 2;
+    }
     e.oy = -(a + pad) / sc;
     e.color = color;
     packX += pw + 1;
