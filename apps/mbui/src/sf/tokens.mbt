@@ -1209,3 +1209,29 @@ pub let diff_line_in : @ui.Space = room(22.0)
 
 ///|
 pub let diff_mark_in : @ui.Space = room(9.0)
+
+///|
+/// A message's picture out in the margin before its words (align.ts columns.avatar: 29), 3 down (Chat.css.ts msgRow >
+/// msgAvatar).
+pub let message_avatar_out : @ui.Space = room(-29.0)
+
+///|
+pub let message_avatar_down : @ui.Space = room(3.0)
+
+///|
+/// A message's head in past its picture where the picture is over its start (Chat.css.ts inlineHeads: 25).
+pub let message_head_in : @ui.Space = room(25.0)
+
+///|
+/// A message's video (Chat.css.ts msgVideo, msgVideoPlay, msgVideoName): black under its still, black at 65% under its
+/// play mark and its name, which are white.
+pub let video_ground : @ui.Color = Data(0x000000FFL)
+
+///|
+pub let video_shade : @ui.Color = Data(0x000000A6L)
+
+///|
+pub let white_ink : @ui.Color = Data(0xFFFFFFFFL)
+
+///|
+pub let white : Int64 = 0xFFFFFFFFL

@@ -164,10 +164,11 @@ pub fn file_name(c : @ui.Ctx, name : String) -> Unit {
 }
 
 ///|
-/// What was done with a file's card this frame: its ✕ or its ↻ pressed.
+/// What was done with a file's card this frame: its ✕ or its ↻ pressed, or (one that opens) the card itself.
 pub(all) struct FileCardDone {
   removed : Bool
   retried : Bool
+  opened : Bool
 }
 
 ///|
@@ -175,7 +176,8 @@ pub(all) struct FileCardDone {
 /// `pending`, `sent` of it; or what the core's `download` says while it comes down, its share filling the sheet; or why
 /// it failed, `error`, in red), 236 wide at most, 8 by 10 in and 7 at the sheet's side, rounded as the sheet stands in
 /// (13), on the neutral ground; its path (or its name) its tip. `remove` and `retry` its own ✕ and ↻ at its end, `slot`
-/// room there for a button laid over it (a message's). `key` names it.
+/// room there for a button laid over it (a message's). `open`: pressing it opens the file (a message's: fileCardOpen),
+/// the hover ground under the pointer. `key` names it.
 pub fn file_card(
   c : @ui.Ctx,
   key : String,
@@ -189,8 +191,12 @@ pub fn file_card(
   remove? : Bool = false,
   retry? : Bool = false,
   slot? : Bool = false,
+  open? : Bool = false,
 ) -> FileCardDone {
   let id = c.id(key)
+  if open {
+    c.cursor(id, Hand)
+  }
   let x = c.id(key + "/remove")
   let again = c.id(key + "/retry")
   let going = match sent {
@@ -216,7 +222,7 @@ pub fn file_card(
   } else {
     download.map(fn(d) { d.0 })
   }
-  let b = c.box(style=card_box, id~, fn() {
+  let b = c.box(style=if open && c.hovered(id) { card_box_hot } else { card_box }, id~, fn() {
     file_tile(c, name, progress~, error=error != "")
     c.box(style=card_words, fn() {
       file_name(c, name)
@@ -236,7 +242,9 @@ pub fn file_card(
   })
   c.semantics(b, Group, id~, label=name)
   tip(c, key + "/tip", id, if path != "" { path } else { name })
-  { removed: remove && c.clicked(x), retried: retry && c.clicked(again) }
+  let removed = remove && c.clicked(x)
+  let retried = retry && c.clicked(again)
+  { removed, retried, opened: open && !removed && !retried && c.clicked(id) }
 }
 
 ///|
@@ -292,6 +300,10 @@ let card_box : @ui.Style = @ui.style(
   radius=message_file_radius,
   align=ACenter,
 )
+
+///|
+// kept across runs: a value (no field of it changes)
+let card_box_hot : @ui.Style = card_box.then(@ui.css("bg=Hover"))
 
 ///|
 // kept across runs: a value (no field of it changes)

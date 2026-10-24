@@ -228,6 +228,8 @@ pub(all) struct Install {
   note : String
   action : String
   percent : Double?
+  /// why installing it failed
+  detail : String
 }
 
 ///|
@@ -241,6 +243,7 @@ pub fn install_of(v : Json?, key : String) -> Install? {
         note: text(i, "note"),
         action: text(i, "action"),
         percent: opt_number(i, "percent"),
+        detail: text(i, "detail"),
       })
     _ => None
   }
@@ -283,6 +286,11 @@ pub(all) struct Message {
   outgoing : String
   /// a failure still.fail says that the viewer may send to the still.fail team (`chat.report`)
   reportable : Bool
+  /// still.fail's notice as the core says it is shown (NoticeShown): a failure (red), its words as a line, where its
+  /// link to `profile` begins (-1: none)
+  notice_failed : Bool
+  notice_words : String
+  notice_link : Int
 }
 
 ///|
@@ -359,6 +367,12 @@ pub fn message_of(m : Json) -> Message {
     said: flag(s, "said"),
     outgoing: text(s, "outgoing"),
     reportable: flag(s, "reportable"),
+    notice_failed: flag(field(s, "notice"), "failed"),
+    notice_words: text(field(s, "notice"), "words"),
+    notice_link: match opt_number(field(s, "notice"), "linkAt") {
+      Some(n) => n.to_int()
+      None => -1
+    },
   }
 }
 

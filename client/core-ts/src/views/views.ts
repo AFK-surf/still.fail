@@ -288,7 +288,10 @@ export function shownMessage(message: J, agents: J[], viewer: J, slackUsers: str
         runtime: get(session, "runtime") ?? str(m.authorRuntime) ?? null,
       };
     }
-  } else if (kind === "ember" || kind === "stillfail") m.by = { name: brandName() };
+  } else if (kind === "ember" || kind === "stillfail") {
+    m.by = { name: brandName() };
+    m.notice = noticeOf(str(m.text) ?? "", str(m.profile) !== null);
+  }
   else {
     const member = members_.find((x) => typeof get(x, "email") === "string" && x.email.toLowerCase() === author.toLowerCase());
     const name = present.memberName(members_, author) ?? saidName ?? (author === "local" ? t("core-views.local_author") : author);
@@ -301,6 +304,8 @@ export function shownMessage(message: J, agents: J[], viewer: J, slackUsers: str
 }
 
 import * as brand from "../brand.ts";
+import { noticeOf } from "../notice.ts";
+export { noticeOf };
 const brandName = () => brand.name();
 
 /// The Slack workspaces a station's connects are signed in to, by team: their names and links.

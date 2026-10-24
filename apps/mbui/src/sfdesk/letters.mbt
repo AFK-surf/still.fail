@@ -1,7 +1,7 @@
 // What a chat's agents and other chats' agents wrote each other (session_send), in a tab beside the chat (ember
 // web/src/Letters.tsx, Letters.css.ts; the core's `chatLetters` view): first the chats it wrote with, a row each, the
 // last written with first; one opened, its letters both ways in the order written, each drawn as the chat draws a
-// message (the page's).
+// message out of its list (StaticMessage: message.mbt).
 
 ///|
 /// The chat opened in each chat's letters (by the chat's key; none: the list).
@@ -19,16 +19,9 @@ pub fn letters_to_list(r : ChatRef) -> Unit {
 }
 
 ///|
-/// Chat `r`'s letters (its thread `thread`): its list, or the chat opened in it, its messages each drawn by `message`;
-/// a chat's title pressed opened by `link`.
-fn letters_tab(
-  c : @ui.Ctx,
-  src : Source,
-  r : ChatRef,
-  thread : Double,
-  message : (Json) -> Unit,
-  link : (String) -> Unit,
-) -> Unit {
+/// Chat `r`'s letters (its view `v`, its thread `thread`): its list, or the chat opened in it, its messages each drawn
+/// as the chat draws one, its files kept by the chat's sessions; a chat's title pressed opened as a link in it is.
+fn letters_tab(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView, thread : Double) -> Unit {
   let key = chat_key(r)
   let view = (src.topic)("chatLetters", { "station": Json::string(r.station), "thread": Json::number(thread) }).value
   let chats = items(view, "chats")
@@ -90,7 +83,7 @@ fn letters_tab(
             let nid = c.id("letters/name")
             c.cursor(nid, Hand)
             if c.clicked(nid) {
-              link(to)
+              c.tell("letters/name", fn() { (chat_parts.val.open_link)(to) })
             }
             let b = c.box(style=letters_name_box, id=nid, fn() {
               // (underlined on hover)
@@ -102,7 +95,8 @@ fn letters_tab(
         |> ignore
       })
       for m in items(cv, "letters") {
-        rows.push(fn() { c.box(style=letters_message, fn() { message(m) }) |> ignore })
+        let here = { station: r.station, session: r.session, view: v, go: None, inline: true }
+        rows.push(fn() { c.box(style=letters_message, fn() { message_row(c, src, here, message_of(m)) }) |> ignore })
       }
       rows.push(fn() { c.box(style=letters_foot, fn() {  }) |> ignore })
     }

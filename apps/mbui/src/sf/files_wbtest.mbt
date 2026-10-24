@@ -1,6 +1,6 @@
 ///|
 test "a file's card (FileCard): its name and size, how far it has gone up while it goes, why it failed; its ✕ and ↻ pressed" {
-  let done : Ref[FileCardDone] = Ref({ removed: false, retried: false })
+  let done : Ref[FileCardDone] = Ref({ removed: false, retried: false, opened: false })
   let pending = Ref(true)
   let failed = Ref("")
   let t = @ui.Tester::new(
@@ -19,7 +19,7 @@ test "a file's card (FileCard): its name and size, how far it has gone up while 
           retry=failed.val != "",
         )
         // (kept once pressed: the frames after it say no more)
-        done.val = { removed: done.val.removed || d.removed, retried: done.val.retried || d.retried }
+        done.val = { removed: done.val.removed || d.removed, retried: done.val.retried || d.retried, opened: done.val.opened || d.opened }
       })
       |> ignore
     },

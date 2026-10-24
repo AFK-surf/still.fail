@@ -20,7 +20,6 @@ pub(all) struct Pages {
   /// side panel shows that is not here yet, its list as ⌘F goes along it, its sharing's and publishing's dialogs (its
   /// thread)
   talk : (@ui.Ctx, Source, Workspace, ChatRef, () -> Unit) -> Unit
-  panel : (@ui.Ctx, Source, ChatRef) -> PanelParts
   find_list : (ChatRef) -> FindList
   share : (@ui.Ctx, ChatRef, Double?) -> Unit
   publish : (@ui.Ctx, String, Double) -> Unit

@@ -38,4 +38,5 @@ pub fn reset() -> Unit {
   chat_page_reset()
   usage_reset()
   steps_reset()
+  message_reset()
 }

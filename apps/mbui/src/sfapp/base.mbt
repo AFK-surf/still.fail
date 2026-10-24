@@ -3,6 +3,8 @@
 // pages), taken in here by name.
 
 pub using @sfbase {
+  absolute_times,
+  message_runs,
   chat_params,
   term_color,
   term_lines,
