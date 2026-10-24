@@ -555,7 +555,7 @@ export function useMessageList(list: RefObject<HTMLDivElement | null>, chat: Cha
   emissions.take(messages, saidHere, new Set(shown.map((s) => s.agent.key)));
 
   const emptyWindow = messages.length === 0 && !chat.elsewhere?.length;
-  const { older: canOlder, newer: canNewer } = usePagingEdges(emptyWindow, !!chat.more, short);
+  const { older: canOlder, newer: canNewer } = usePagingEdges(emptyWindow, !!chat.more, short, place);
 
   // The list's items, in order: each a row of its own.
   const items: Item[] = [];

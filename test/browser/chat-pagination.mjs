@@ -6,7 +6,8 @@ import { createServer } from 'vite';
 import react from '@vitejs/plugin-react';
 import { vanillaExtractPlugin } from '@vanilla-extract/vite-plugin';
 import { uiAlias } from '../../web/ui/alias.ts';
-const { chromium } = await import(process.env.PLAYWRIGHT_MODULE || 'playwright');
+const playwright = await import(process.env.PLAYWRIGHT_MODULE || 'playwright');
+const engine = process.env.BROWSER || 'chromium';
 const fixture = new URL('../../web/chat-pagination-check.tsx', import.meta.url);
 const html = new URL('../../web/chat-pagination-check.html', import.meta.url);
 let server, browser;
@@ -43,10 +44,12 @@ function List() {
 }
 function EmptyWindow() {
   const pane = useRef<HTMLDivElement>(null);
+  const switching = new URLSearchParams(location.search).get('mode') === 'switch';
+  const [place, setPlace] = useState('empty-window');
   const [range, setRange] = useState({ first: 101, last: 250 });
-  const found = range.first === 1;
-  const edges = usePagingEdges(!found, range.first > 1, range.last < 450);
-  const made = useVirtualModel('empty-window', 20);
+  const found = switching ? place === 'next-chat' && range.last === 450 : range.first === 1;
+  const edges = usePagingEdges(!found, range.first > 1, range.last < 450, place);
+  const made = useVirtualModel(place, 20);
   const items = [...(edges.older ? [{ key: 'older', estimate: 30 }] : []), ...(found ? [{ key: 'reply', estimate: 2400 }] : []), ...(edges.newer ? [{ key: 'newer', estimate: 30 }] : [])];
   const list = useVirtualList(pane, made, items, { short: range.last < 450 });
   useLoadNear(list, 'top', edges.older, range.first, async () => {
@@ -57,7 +60,11 @@ function EmptyWindow() {
     window.loads.push('newer:' + range.last);
     setRange(({ first, last }) => ({ first: first + 50, last: last + 50 }));
   });
-  Object.assign(window, { model: list.model, last: range.first });
+  Object.assign(window, { model: list.model, last: range.first, found, place, committed: list.committed, switchChat: () => {
+    window.loads = [];
+    setPlace('next-chat');
+    setRange({ first: 1, last: 150 });
+  } });
   return <div id="pane" ref={pane} style={{ height: 650, width: 390, overflow: 'auto', overflowAnchor: 'none', display: 'flex', flexDirection: 'column', gap: 20 }}>
     {list.layout.rows.map((row, i) => <React.Fragment key={row.key}>{list.above(row, i === 0)}<div data-vk={row.key} style={{ flex: 'none', height: row.key === 'reply' ? 2400 : 30 }}>{row.key === 'reply' ? '正文已找到' : '加载中…'}</div></React.Fragment>)}{list.after()}
   </div>;
@@ -78,12 +85,13 @@ function LongList() {
   </div>;
 }
 window.loads = [];
-createRoot(document.getElementById('root')!).render(new URLSearchParams(location.search).get('mode') === 'long' ? <LongList /> : new URLSearchParams(location.search).get('mode') === 'window' ? <EmptyWindow /> : <List />);
+const mode = new URLSearchParams(location.search).get('mode');
+createRoot(document.getElementById('root')!).render(mode === 'long' ? <LongList /> : mode === 'window' || mode === 'switch' ? <EmptyWindow /> : <List />);
 `, { flag: 'wx' });
   writeFileSync(html, '<meta name="viewport" content="width=device-width, initial-scale=1"><div id="root"></div><script type="module" src="/chat-pagination-check.tsx"></script>', { flag: 'wx' });
   server = await createServer({ configFile: false, cacheDir: fileURLToPath(new URL("../../node_modules/.vite-chat-pagination", import.meta.url)), optimizeDeps: { entries: [fileURLToPath(html)] }, root: fileURLToPath(new URL('../../web', import.meta.url)), plugins: [react(), vanillaExtractPlugin()], resolve: { alias: [uiAlias] }, server: { host: '127.0.0.1', port: 0 } });
   await server.listen();
-  browser = await chromium.launch({ headless: true, ...(process.env.PLAYWRIGHT_CHANNEL ? { channel: process.env.PLAYWRIGHT_CHANNEL } : {}), ...(process.env.CHROMIUM_EXECUTABLE ? { executablePath: process.env.CHROMIUM_EXECUTABLE } : {}) });
+  browser = await playwright[engine].launch({ headless: true, ...(process.env.PLAYWRIGHT_CHANNEL ? { channel: process.env.PLAYWRIGHT_CHANNEL } : {}), ...(engine === 'chromium' && process.env.CHROMIUM_EXECUTABLE ? { executablePath: process.env.CHROMIUM_EXECUTABLE } : {}) });
   const page = await browser.newPage({ viewport: { width: 390, height: 844 }, isMobile: true, deviceScaleFactor: 2 });
   const time = new Date('2026-01-01T00:00:00Z');
   await page.clock.install({ time });
@@ -108,6 +116,15 @@ createRoot(document.getElementById('root')!).render(new URLSearchParams(location
   await page.clock.runFor(3000);
   await page.waitForFunction(() => window.last === 1, null, { polling: 50, timeout: 5000 });
   assert.deepEqual((await state()).loads, ['newer:250', 'newer:300', 'newer:350', 'newer:400', 'older:301', 'older:251', 'older:201', 'older:151', 'older:101', 'older:51'], 'empty bounded window searches forward then backward without oscillating');
+  await open('switch');
+  await page.clock.runFor(3000);
+  await page.waitForFunction(() => window.last === 1 && window.committed(), null, { polling: 50 });
+  assert.equal(await page.evaluate(() => window.found), false, 'a letter-only chat exhausts both directions');
+  await page.evaluate(() => window.switchChat());
+  await page.clock.runFor(3000);
+  await page.waitForFunction(() => window.place === 'next-chat' && window.committed(), null, { polling: 50 });
+  assert.deepEqual((await state()).loads, ['newer:150', 'newer:200', 'newer:250', 'newer:300', 'newer:350', 'newer:400'], 'switching chats starts a fresh empty-window search');
+  assert.equal(await page.evaluate(() => window.found), true, 'the next chat finds its visible message');
   await open('failure');
   await page.clock.runFor(10000);
   assert.deepEqual(await state(), { loads: [50], last: 50 }, 'failure does not retry itself');

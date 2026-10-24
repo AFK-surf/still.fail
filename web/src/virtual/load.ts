@@ -71,10 +71,12 @@ export function useLoadNear(virtual: VirtualList, edge: "top" | "bottom", can: b
 
 /** Empty entry windows can contain only letters or edits. Search one way at a time
  * so opposite requests cannot shuttle a bounded window over the same records. */
-export function usePagingEdges(empty: boolean, more: boolean, newer: boolean): { older: boolean; newer: boolean } {
-  const held = useRef<"top" | "bottom" | null>(null);
-  let direction = empty ? held.current ?? (newer ? "bottom" : "top") : null;
+export function usePagingEdges(empty: boolean, more: boolean, newer: boolean, place: string): { older: boolean; newer: boolean } {
+  // A reused chat page starts its search anew when it shows another chat.
+  const held = useRef<{ place: string; direction: "top" | "bottom" | null } | null>(null);
+  const previous = held.current?.place === place ? held.current.direction : null;
+  let direction = empty ? previous ?? (newer ? "bottom" : "top") : null;
   if (direction === "bottom" && !newer) direction = "top";
-  useLayoutEffect(() => { held.current = direction; });
+  useLayoutEffect(() => { held.current = { place, direction }; });
   return { older: more && direction !== "bottom", newer: newer && direction !== "top" };
 }
