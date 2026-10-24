@@ -340,8 +340,8 @@ pub(all) struct Viewer {
   mut media : @kit.Media?
   /// a desktop's image put on the clipboard: how many times (its check shown a while after each)
   mut copied : Int
-  /// the frame drawing it (the phone's, the desktop's), as it was last drawn
-  mut frame : ViewerFrame
+  /// how wide the floating bar has been (it never narrows once open: viewer_frame.mbt vf_head)
+  mut head_w : Double
 }
 
 ///|
@@ -568,36 +568,6 @@ pub fn open_preview(
 }
 
 ///|
-/// What draws round a viewer (the phone's frame, sfapp/preview.mbt; the desktop's, sfdesk/viewer.mbt): whether it is
-/// the desktop's (its stages laid out as the web's: viewer_desk.mbt), the canvas under what it shows, its bar, the ways
-/// to the files before and after, what it says of a file it does not show and while one comes, what goes back to where
-/// it was opened, and a text it reads itself (true: drawn).
-pub(all) struct ViewerFrame {
-  desk : Bool
-  canvas : () -> Int64
-  bar : (Viewer, @ui.Ctx, Source, Double) -> Unit
-  steps : (Viewer, @ui.Ctx, Source, Double) -> Unit
-  facts : (Viewer, @ui.Ctx, Source, Json?) -> Unit
-  coming : (Viewer, @ui.Ctx) -> Unit
-  back : (Viewer, Source) -> String
-  read : (Viewer, @ui.Ctx, Source) -> Bool
-}
-
-///|
-/// A frame of none (a viewer not drawn yet).
-// kept across runs: a value (no field of it changes)
-pub let viewer_no_frame : ViewerFrame = {
-  desk: false,
-  canvas: fn() { @sf.theme().p.canvas },
-  bar: fn(_, _, _, _) {  },
-  steps: fn(_, _, _, _) {  },
-  facts: fn(_, _, _, _) {  },
-  coming: fn(_, _) {  },
-  back: fn(_, _) { @sf.t("common.back") },
-  read: fn(_, _, _) { false },
-}
-
-///|
 /// A viewer of `a` (what it read before, kept, taken at once).
 pub fn new_viewer(station : String, key : String, a : Attachment, drive : DriveFile?, steps : Stepping) -> Viewer {
   let (kind, mime, _) = preview_kind(a.name)
@@ -674,7 +644,7 @@ pub fn new_viewer(station : String, key : String, a : Attachment, drive : DriveF
     mouse_seen: false,
     media: None,
     copied: 0,
-    frame: viewer_no_frame,
+    head_w: 0.0,
   }
   v.bytes = kept_read(v.id())
   v
@@ -838,14 +808,9 @@ pub fn Viewer::told_of(self : Viewer) -> Bool {
 
 ///|
 pub fn Viewer::dark(self : Viewer) -> Bool {
-  // a desktop's: on the page's own canvas whatever it shows (FilePreview.css.ts fp)
-  if self.frame.desk {
-    return false
-  }
-  match self.shown_kind() {
-    Some(KImage) | Some(KVideo) => true
-    _ => false
-  }
+  // on the page's own canvas whatever it shows (FilePreview.css.ts fp); a film and a song in their player, dark as
+  // the player is
+  self.shown_kind() == Some(KVideo) || self.shown_kind() == Some(KAudio)
 }
 
 // ── reading it through the core ────────────────────────────────────────
@@ -1174,9 +1139,8 @@ pub fn upper(s : String) -> String {
 // ── the viewer ─────────────────────────────────────────────────────────
 
 ///|
-/// The viewer over the pages, if one is open, in `frame` (the phone's, sfapp/preview.mbt; the desktop's,
-/// sfdesk/viewer.mbt): call after the pages are drawn.
-pub fn viewer_layer(c : @ui.Ctx, src : Source, frame : ViewerFrame) -> Unit {
+/// The viewer over the pages, if one is open, in its frame (viewer_frame.mbt): call after the pages are drawn.
+pub fn viewer_layer(c : @ui.Ctx, src : Source) -> Unit {
   let v = match viewer.val {
     Some(v) => v
     None =>
@@ -1185,7 +1149,6 @@ pub fn viewer_layer(c : @ui.Ctx, src : Source, frame : ViewerFrame) -> Unit {
         None => return
       }
   }
-  v.frame = frame
   if !v.started {
     v.started = true
     v.rest_n += 1
@@ -1270,7 +1233,7 @@ pub fn viewer_layer(c : @ui.Ctx, src : Source, frame : ViewerFrame) -> Unit {
   } else if kind == Some(KPdf) {
     @sf.mix(t.p.text, 0.05, t.p.bg)
   } else {
-    (frame.canvas)()
+    t.p.canvas
   }
   // a film or a song: the player's own page (its bars, its controls, what a finger does on it)
   let media = kind == Some(KVideo) || kind == Some(KAudio)
@@ -1284,7 +1247,7 @@ pub fn viewer_layer(c : @ui.Ctx, src : Source, frame : ViewerFrame) -> Unit {
     })
     |> ignore
     if !marking.on {
-      c.layer(fn() { (frame.steps)(v, c, src, shown) }) |> ignore
+      c.layer(fn() { vf_steps(v, c, src, shown) }) |> ignore
     } else {
       c.layer(fn() {
         c.spacer()
@@ -1298,7 +1261,7 @@ pub fn viewer_layer(c : @ui.Ctx, src : Source, frame : ViewerFrame) -> Unit {
       |> ignore
     }
     if !media {
-      c.layer(fn() { (frame.bar)(v, c, src, shown) }) |> ignore
+      c.layer(fn() { vf_bar(v, c, src, shown) }) |> ignore
     }
   })
   |> ignore
@@ -1533,15 +1496,18 @@ pub fn Viewer::content(self : Viewer, c : @ui.Ctx, src : Source, stage : Int) ->
     Some(KImage) if v.file.size <= big_file => v.image_stage(c, src, stage)
     Some(KVideo) | Some(KAudio) => v.player_stage(c, src, stage)
     _ =>
-      if (v.frame.read)(v, c, src) {
-        // (read by the frame: a desktop's text and Markdown in the reader, as a drive's are)
-        ()
+      if vf_reads(v) {
+        // a text and Markdown read in the reader, as a drive's are (FilePreview.tsx hands them to the same Reader)
+        match v.bytes {
+          Some(b) => vf_read(v, c, src, b)
+          None => ()
+        }
       } else if v.told_of() {
         let dl = v.download(src)
-        v.note(c, fn() { (v.frame.facts)(v, c, src, dl) })
+        v.note(c, fn() { vf_facts(v, c, src, dl) })
       } else if (v.kind is None && v.sniffed is None) || (v.bytes is None && v.error is None) {
         tap_stage(c, v, stage)
-        v.note(c, fn() { (v.frame.coming)(v, c) })
+        v.note(c, fn() { vf_coming(v, c) })
       } else {
         match v.error {
           Some(e) => {
@@ -1919,9 +1885,7 @@ pub fn Viewer::image_stage(self : Viewer, c : @ui.Ctx, src : Source, stage : Int
     }
     Some((x, y, w, h)) if picture != "" => {
       // a desktop's: on the canvas with the web's shadow round it (preview_desk.mbt)
-      if v.frame.desk {
-        desk_image_ground(c, x + sx, y, w, h)
-      }
+      desk_image_ground(c, x + sx, y, w, h)
       c.picture(picture, x=x + sx, y~, w~, h~, max_px=4096) |> ignore
     }
     // its size not sent with it: a small decode, out of sight, says it
@@ -2285,7 +2249,7 @@ pub fn Viewer::gestures(
   // a desktop's mouse: a click round an image (not on it) closes it, one on it does nothing until a second makes it a
   // double click (FilePreview.tsx ImageViewer onClick, useZoom onDoubleClick); the bars are the mouse's moves' (a
   // finger's tap, on a wide touch screen too, shows or hides them)
-  let desk = v.frame.desk && @ui.pointing() is Mouse
+  let desk = @ui.pointing() is Mouse
   let on_picture = match z.rect() {
     Some((x, y, w, h)) => px >= x && px < x + w && py >= y && py < y + h
     None => false
@@ -2469,7 +2433,7 @@ pub fn Viewer::player_stage(self : Viewer, c : @ui.Ctx, src : Source, stage : In
     m,
     file,
     [],
-    back_label=(v.frame.back)(v, src),
+    back_label=v.desk_back(src),
     on_back=fn() { v.shut(c) },
     on_go=fn(_) {  },
     // (the chat's still where its picture will be, until its first frame shows)
@@ -2571,15 +2535,14 @@ pub fn Viewer::pdf_stage(self : Viewer, c : @ui.Ctx, b : Bytes, stage : Int) -> 
     return
   }
   tap_stage(c, v, stage)
-  // 60 under the status bar, 12 over the navigation bar, round them and between them (FilePreview.kt
-  // contentPadding); a desktop's as the web's (preview_desk.mbt: 76 down, as wide as 1000 less 56 allows, 20 apart)
-  let desk = v.frame.desk
-  let w = if desk { desk_pdf_width(c.width) } else { c.width - 24.0 }
+  // as the web's (FilePreview.css.ts fpPdf): 76 down, as wide as 1000 less 56 allows, 20 apart; under 640, 60 down,
+  // 12 round them and between them
+  let small = c.width <= vf_small_w
+  let w = if small { c.width - 2.0 * pdf_small_in } else { desk_pdf_width(c.width) }
   let side = (c.width - w) / 2.0
-  let gap = if desk { desk_pdf_gap } else { 12.0 }
-  let (status, nav) = (@sf.viewer_host().room)()
-  let top = if desk { desk_page_top } else { 60.0 + status }
-  let foot = if desk { desk_pdf_foot } else { 12.0 + nav }
+  let gap = if small { pdf_small_in } else { desk_pdf_gap }
+  let top = if small { page_small_top } else { desk_page_top }
+  let foot = if small { pdf_small_in } else { desk_pdf_foot }
   let none = 0.0
   c.list("preview/pdf/" + v.file.path, pdf.pages + 2, 400.0, fn(i) {
     if i == 0 {
@@ -2637,7 +2600,7 @@ pub fn Viewer::text_stage(self : Viewer, c : @ui.Ctx, kind : PKind, b : Bytes, s
       }
     }
     // under the bar: 60 under the status bar, a desktop's 76 (FilePreview.css.ts fpPageFrame)
-    let top = if v.frame.desk { desk_page_top } else { 60.0 + (@sf.viewer_host().room)().0 }
+    let top = if c.width <= vf_small_w { page_small_top } else { desk_page_top }
     c.box(w=Fill(1.0), h=Fill(1.0), pt=top, fn() {
       if page.here() && !v.closing {
         c.native(page) |> ignore
@@ -2688,14 +2651,14 @@ pub fn Viewer::text_stage(self : Viewer, c : @ui.Ctx, kind : PKind, b : Bytes, s
   let markdown = kind == KMarkdown && !v.source
   let code = !markdown && (kind != KText && kind != KCsv)
   let count = if markdown { 1 } else { chunks }
-  // a desktop's as the web's (FilePreview.css.ts fpCode 64 and the block's 16 down, 32 in, 12 on 1.6; fpPlain 76 down,
-  // 32 in, 12 on 1.65), a phone's as the Android app's
-  let desk = v.frame.desk
-  let top = (@sf.viewer_host().room)().0 + (if markdown { 64.0 } else if code { 80.0 } else if desk { desk_page_top } else { 60.0 })
-  let foot = if markdown { 64.0 } else if desk { desk_text_foot } else { 48.0 }
-  let size = if desk { desk_code_size } else { 12.5 }
-  let line = if desk && code { desk_code_line } else if desk { desk_plain_line } else if code { 20.0 } else { 20.6 }
-  let side = if desk { desk_text_side } else { 16.0 }
+  // as the web's (FilePreview.css.ts fpCode 64 and the block's 16 down, 32 in, 12 on 1.6; fpPlain 76 down, 32 in, 12
+  // on 1.65; under 640, 60 down, 16 in, 48 under)
+  let small = c.width <= vf_small_w && !code && !markdown
+  let top = if markdown { 64.0 } else if code { 80.0 } else if small { page_small_top } else { desk_page_top }
+  let foot = if markdown { 64.0 } else if small { plain_small_foot } else { desk_text_foot }
+  let size = desk_code_size
+  let line = if code { desk_code_line } else { desk_plain_line }
+  let side = if small { plain_small_side } else { desk_text_side }
   c.list("preview/text/" + v.file.path + (if v.source { "/source" } else { "" }), count + 3, 400.0, fn(i) {
     if i == 0 {
       if cut {
@@ -2815,8 +2778,8 @@ pub fn csv_table(c : @ui.Ctx, v : Viewer, words : String, tab : Bool, cut : Bool
   })
   let number = "\{body_n}".length().to_double() * 8.4 + 36.0
   // a desktop's in the page's 13 (FilePreview.css.ts fpTable), 68 down to its head; a phone's in 15
-  let size = if v.frame.desk { desk_cell_size } else { 15.0 }
-  let top = if v.frame.desk { desk_table_top } else { 60.0 + (@sf.viewer_host().room)().0 }
+  let size = desk_cell_size
+  let top = desk_table_top
   let cell = fn(s : String, w : Double, weight : Int, color : Int64) {
     c.box(w=Px(w), padx=16.0, pady=8.0, clip=true, fn() {
       c.text(s, size~, weight~, color~, wrap=false) |> ignore
@@ -2827,7 +2790,7 @@ pub fn csv_table(c : @ui.Ctx, v : Viewer, words : String, tab : Bool, cut : Bool
     if i == 0 {
       c.box(w=Fill(1.0), h=Px(top), fn() {  }) |> ignore
     } else if i == 1 {
-      c.box(dir=Row, bg=(v.frame.canvas)(), border=0.0, fn() {
+      c.box(dir=Row, bg=t.p.canvas, border=0.0, fn() {
         c.box(w=Px(number), fn() {  }) |> ignore
         for j, h in head {
           cell(h, widths[j], 600, t.p.text)

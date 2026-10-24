@@ -3,6 +3,7 @@
 // pages), taken in here by name.
 
 pub using @sfbase {
+  file_viewer,
   drive_player,
   drive_reader,
   play_left,
@@ -10,7 +11,6 @@ pub using @sfbase {
   reader_left,
   type Mark,
   type Viewer,
-  type ViewerFrame,
   base_name,
   big_file,
   dark_glass,
@@ -63,7 +63,6 @@ pub using @sfbase {
   upper,
   viewer,
   viewer_folder_label,
-  viewer_layer,
   zoom_glide_ms,
   service_site,
   file_said,

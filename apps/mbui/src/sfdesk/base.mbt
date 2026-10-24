@@ -1,8 +1,8 @@
 // What the desktop's pages read of sfbase, by its own names (as sfapp/base.mbt takes them in).
 using @sfbase {
+  file_viewer,
   type PKind,
   type Viewer,
-  type ViewerFrame,
   desk_whole,
   downloading,
   file_progress,
@@ -20,7 +20,6 @@ using @sfbase {
   upper,
   video_still,
   viewer,
-  viewer_layer,
   flight_carried,
   flight_frame,
   act_rooms,
