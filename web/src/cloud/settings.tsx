@@ -12,7 +12,7 @@ import { Archive, ArrowLeft, Bell, Boxes, Brain, Key, Chart, Check, ChevronRight
 import { SecurityNotice } from "./Security.tsx";
 import { VaultWaiting } from "./Vault.tsx";
 import { useCommands } from "../commands.ts";
-import { Fragment, useCallback, useEffect, useRef, useState, type ComponentType, type ReactNode } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type ComponentType, type ReactNode } from "react";
 import { Link, Navigate, NavLink, useNavigate, useParams, useSearchParams } from "react-router";
 import { useJoinable, useProfiles, useStations, type Profile, type StationView } from "../api.ts";
 import { same, type Mark } from "../stationPick.ts";
@@ -30,7 +30,7 @@ import { useGo } from "../go.ts";
 import { ProfileCard } from "../ProfileCard.tsx";
 import { StationList } from "./StationCards.tsx";
 import { MemoryDoc, MemoryView } from "../Memory.tsx";
-import { ResourcesBody, useResources } from "../Resources.tsx";
+import { useResources } from "../Resources.tsx";
 import { DAYS, PriceTables, UsageBody, usageCss, useUsage, type UsageDays } from "../Usage.tsx";
 import { MachineLoginOffers, PROFILE_LEAD, type Choice } from "../pages/Accounts.tsx";
 import { addProfilePath } from "../pages/AddProfile.tsx";
@@ -99,7 +99,6 @@ function settingsPages(entry: WorkspaceEntry, some: boolean): SettingsPage[] {
     ...page("station", "automatic-decisions", t("web-pages.automaticDecisions.title"), Check, "automatic decisions", some),
     ...page("station", "memory", t("web-pages.settings.nav.memory"), Brain, "memory", some),
     ...page("station", "usage", t("web-pages.settings.nav.usage"), Chart, "usage", some),
-    ...page("station", "resources", t("web-pages.settings.nav.resources"), Boxes, "resources cpu memory energy power activity", some),
     ...page("cloud", "workspace", `Workspace · ${entry.name}`, Users, "workspace members"),
     ...page("cloud", "security", t("web-pages.security.title"), ShieldCheck, "security lock devices"),
     ...page("cloud", "vault", t("web-pages.vault.title"), Key, "vault secrets keys tokens"),
@@ -114,6 +113,7 @@ export function useSettingsCommands(entry: WorkspaceEntry): void {
   const some = (stations?.length ?? 0) > 0;
   const settings = t("web-pages.settings.title");
   const files = t("web-pages.drive.title");
+  const processes = t("web-pages.stations.page.part.processes");
   useCommands([
     ...settingsPages(entry, some).map((p) => ({
       id: `settings/${p.path}`, group: "settings" as const, label: p.label, icon: p.icon, words: `${settings} settings ${p.words}`, typed: true,
@@ -123,6 +123,11 @@ export function useSettingsCommands(entry: WorkspaceEntry): void {
     ...(stations ?? []).filter((s) => s.overview?.drive).map((s) => ({
       id: `drive/${s.id}`, group: "settings" as const, label: `${files} · ${s.name}`, icon: Folder, words: `${files} files drive ${s.name}`, typed: true,
       run: () => navigate(`${stationBase(s.station)}/files`),
+    })),
+    // Each station's 进程: what still.fail uses of its machine (StationPage.tsx).
+    ...(stations ?? []).map((s) => ({
+      id: `processes/${s.id}`, group: "settings" as const, label: `${processes} · ${s.name}`, icon: Boxes, words: `${processes} processes resources cpu memory energy power network activity ${s.name}`, typed: true,
+      run: () => navigate(`/w/${entry.id}/settings/stations/${s.id}?part=processes`),
     })),
   ]);
 }
@@ -388,19 +393,6 @@ export function UsageSettings({ entry }: { entry: WorkspaceEntry }) {
   );
 }
 
-/** What still.fail uses of the machines of the workspace's stations (../Resources.tsx). */
-export function ResourcesSettings({ entry }: { entry: WorkspaceEntry }) {
-  const listed = useStations(entry.id).value;
-  const resources = useResources(entry.id);
-  if (listed?.length === 0) return <Navigate to={`/w/${entry.id}/settings/stations`} replace />;
-  return (
-    <Page title={t("web-pages.settings.resources.title")} lead={t("web-pages.settings.resources.lead")} back={`/w/${entry.id}/settings`}>
-      {resources.value ? <ResourcesBody view={resources.value} />
-        : resources.error ? <p className={controlsCss.fieldError}>{t("web-pages.settings.resources.failed", { error: resources.error.message })}</p> : <Waiting shape="cards" />}
-    </Page>
-  );
-}
-
 export function UsagePricesSettings({ entry }: { entry: WorkspaceEntry }) {
   const [params] = useSearchParams();
   const usage = useUsage(entry.id, params.get("days") === "30" ? "30" : "7");
@@ -636,9 +628,13 @@ export function useStationEdits(view: WorkspaceView | undefined, account: Accoun
 function Stations({ view, account, manager, stations }: { view: WorkspaceView; account: Account; manager: boolean; stations: StationView[] }) {
   const [adding, setAdding] = useState(false);
   const edits = useStationEdits(view, account, stations);
+  // What still.fail uses of each machine, on its card: read (and the stations look often) while the page is shown.
+  const resources = useResources(view.id).value;
+  const uses = useMemo(() => new Map(resources?.stations.map((r) => [r.station, r])), [resources]);
   return (
     <Section title={t("web-pages.settings.stations.count", { n: stations.length })} actions={manager && <Button icon={Plus} onClick={() => setAdding(true)}>{t("web-pages.settings.stations.add")}</Button>}>
       <StationList stations={stations.map(edits.shown)} manager={manager} page={(s) => `/w/${view.id}/settings/stations/${s.id}`}
+        resources={uses} resourcesPage={(s) => `/w/${view.id}/settings/stations/${s.id}?part=processes`}
         onMark={manager ? edits.setMark : undefined} markBusy={edits.picking} menu={(s) => (manager || s.overview?.drive) && <>
         {manager && edits.busy(s)}
         <Menu items={edits.menu(s, manager)} />

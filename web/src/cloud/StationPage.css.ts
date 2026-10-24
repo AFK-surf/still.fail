@@ -24,6 +24,8 @@ export const parts = style({ display: "flex", marginBottom: 24 });
 /** What is left of the machine large, then this device's connection to it. */
 export const machine = style({ display: "grid", gap: 18, justifyItems: "start", minWidth: 0 });
 /** What its agents' processes take, under how this device reaches it: quiet, as the network's labels. */
+/** Its 进程: a line on what is counted over the page. */
+export const processes = style({ display: "grid", gap: 16, minWidth: 0 });
 export const memory = style({ margin: 0, fontSize: vars.textUi, color: vars.muted });
 export const note = style({ margin: "10px 0 0", fontSize: vars.textUi, color: vars.muted });
 /** A folder lent: its name, then where it is, quiet, cut at the end (the chevron stays). */

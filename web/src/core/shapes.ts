@@ -5087,19 +5087,30 @@ export interface ResourceUse {
 	cpu: number;
 	/** Its footprint, in bytes. */
 	memory: number;
-	watts: number;
-	/** A second. */
-	wakeups: number;
+	/** Bytes taken in over the network, a second. */
+	netIn: number;
+	/** Bytes sent out, a second. */
+	netOut: number;
+	/** In and out together. */
+	net: number;
+	/** Bytes read from disk, a second. */
+	diskRead: number;
+	/** Bytes written, a second. */
+	diskWrite: number;
+	/** Read and written together. */
+	disk: number;
 	cpuText: string;
 	memoryText: string;
-	wattsText: string;
-	wakeupsText: string;
+	netText: string;
+	diskText: string;
 }
 
 export interface ResourceProcess {
 	key: string;
 	pid: number;
 	name: string;
+	/** A chat's, not its agent's own: the page may end it (`process.end`). */
+	endable: boolean;
 	use: ResourceUse;
 }
 
@@ -5116,6 +5127,10 @@ export interface ResourceGroup {
 	kindText: string;
 	/** A chat's page. */
 	chat?: UsageChat;
+	/** Its station's address. */
+	station: string;
+	/** A chat's session: what ending one of its processes names (`process.end`). */
+	session?: string;
 	use: ResourceUse;
 	/** The most CPU first. */
 	processes: ResourceProcess[];
@@ -5125,6 +5140,14 @@ export interface ResourceGroup {
 export interface ResourceKind {
 	key: string;
 	label: string;
+}
+
+/** What still.fail uses of one station's machine now. */
+export interface ResourceStation {
+	station: string;
+	/** Whether it reads the network. */
+	net: boolean;
+	use: ResourceUse;
 }
 
 /** A total now (CPU, memory, power, wakeups), said, and how it went. */
@@ -5139,7 +5162,7 @@ export interface ResourceTile {
 
 /**
  * What of the machines of a workspace's stations still.fail uses now, as Activity Monitor says it (the `resources` view,
- * client/core-ts/src/views/resources.ts): CPU, memory, power and wakeups in total, with the last minutes' line, and by
+ * client/core-ts/src/views/resources.ts): CPU, memory and network in total, with the last minutes' line, and by
  * whose (a chat, the agents, the desktop app, the station), each with its processes.
  */
 export interface ResourcesView {
@@ -5147,6 +5170,10 @@ export interface ResourcesView {
 	wait: ListNote;
 	/** No station reads what its processes use (none answered yet, none on macOS, all from before). */
 	empty: boolean;
+	/** Some station reads their network traffic: the page has its column. */
+	net: boolean;
+	/** Some station reads what they read from and write to disk: the page has its column. */
+	disk: boolean;
 	/** How often it is read again while shown, for the page to say. */
 	everyMs: number;
 	tiles: ResourceTile[];
@@ -5154,6 +5181,8 @@ export interface ResourcesView {
 	kinds: ResourceKind[];
 	/** Whose uses what, the most CPU first. */
 	groups: ResourceGroup[];
+	/** Each station's total, for its card (the stations' settings page); the stations not read left out. */
+	stations: ResourceStation[];
 	notes: string[];
 	basis: string;
 }

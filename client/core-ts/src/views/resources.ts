@@ -1,4 +1,4 @@
-// What of the stations' machines still.fail uses (the resources page), as Activity Monitor says it: every online
+// What of the stations' machines still.fail uses (a station's 进程), as Activity Monitor says it: every online
 // station's GET /resources put together for a scope. A few totals with the last minutes' line, and what uses them by
 // whose (a chat, the agents, the desktop app, the station), each with its processes; the page sorts, filters and
 // flattens them. Imports only i18n.ts and what imports nothing: the web's demo draws its made-up station with it.
@@ -10,8 +10,6 @@ const arr = (v: unknown): J[] => (Array.isArray(v) ? v : []);
 const get = (v: unknown, k: string): J => (v !== null && typeof v === "object" ? (v as Record<string, unknown>)[k] : undefined);
 const num = (v: unknown): number => (typeof v === "number" && Number.isFinite(v) ? v : 0);
 
-const HOUR_MS = 3_600_000;
-const HOURS = 24;
 
 /// A station's GET /resources as read (the store's Value: what it answered, or why not), for the view.
 export type Source = { address: string; name: string; online: boolean; value: { ok: unknown } | { err: { status?: number | undefined; message: string } } | undefined };
@@ -35,22 +33,31 @@ export function memory(bytes: number): string {
   return `${mb.toFixed(1)} MB`;
 }
 
-/// Watts: 12 W · 4.9 W · 0.42 W · <0.01 W.
-export function watts(w: number): string {
-  if (w <= 0) return "0 W";
-  if (w < 0.01) return "<0.01 W";
-  if (w < 1) return `${w.toFixed(2)} W`;
-  if (w < 10) return `${w.toFixed(1)} W`;
-  return `${Math.round(w)} W`;
+/// Bytes a second, in units of 1024 as Activity Monitor says them: 0 B/s · 812 B/s · 4.2 KB/s · 18 MB/s.
+export function rate(bytes: number): string {
+  if (bytes < 1) return "0 B/s";
+  const units = ["B", "KB", "MB", "GB"];
+  let n = bytes;
+  let i = 0;
+  for (; n >= 1024 && i < units.length - 1; i++) n /= 1024;
+  return `${i === 0 || n >= 10 ? Math.round(n) : n.toFixed(1)} ${units[i]}/s`;
 }
 
-const wakeups = (n: number) => String(Math.round(n));
-
-type Use = { cpu: number; memory: number; watts: number; wakeups: number };
-const useOf = (v: unknown): Use => ({ cpu: num(get(v, "cpu")), memory: num(get(v, "memory")), watts: num(get(v, "watts")), wakeups: num(get(v, "wakeups")) });
-const said = (u: Use) => ({ ...u, cpuText: cpu(u.cpu), memoryText: memory(u.memory), wattsText: watts(u.watts), wakeupsText: wakeups(u.wakeups) });
-const plus = (a: Use, b: Use): Use => ({ cpu: a.cpu + b.cpu, memory: a.memory + b.memory, watts: a.watts + b.watts, wakeups: a.wakeups + b.wakeups });
-const ZERO: Use = { cpu: 0, memory: 0, watts: 0, wakeups: 0 };
+/// `net`: in and out together, `disk` read and written together: what the page sorts by.
+type Use = { cpu: number; memory: number; netIn: number; netOut: number; net: number; diskRead: number; diskWrite: number; disk: number };
+const useOf = (v: unknown): Use => {
+  const netIn = num(get(v, "netIn"));
+  const netOut = num(get(v, "netOut"));
+  const diskRead = num(get(v, "diskRead"));
+  const diskWrite = num(get(v, "diskWrite"));
+  return { cpu: num(get(v, "cpu")), memory: num(get(v, "memory")), netIn, netOut, net: netIn + netOut, diskRead, diskWrite, disk: diskRead + diskWrite };
+};
+const said = (u: Use) => ({ ...u, cpuText: cpu(u.cpu), memoryText: memory(u.memory), netText: rate(u.net), diskText: rate(u.disk) });
+const plus = (a: Use, b: Use): Use => ({
+  cpu: a.cpu + b.cpu, memory: a.memory + b.memory, netIn: a.netIn + b.netIn, netOut: a.netOut + b.netOut, net: a.net + b.net,
+  diskRead: a.diskRead + b.diskRead, diskWrite: a.diskWrite + b.diskWrite, disk: a.disk + b.disk,
+});
+const ZERO: Use = { cpu: 0, memory: 0, netIn: 0, netOut: 0, net: 0, diskRead: 0, diskWrite: 0, disk: 0 };
 
 function percent(part: number, whole: number): string {
   if (whole <= 0) return "0%";
@@ -62,22 +69,24 @@ function percent(part: number, whole: number): string {
 const KINDS = ["chats", "app", "station"] as const;
 const kindOf = (key: string): (typeof KINDS)[number] => (key === "app" ? "app" : key === "station" ? "station" : "chats");
 
-/// The view at `now`.
-export function resourcesView(sources: Source[], now: number, waitNote: Wait): J {
+/// The view (`_now`: when, for callers from before the hours went).
+export function resourcesView(sources: Source[], _now: number, waitNote: Wait): J {
   const several = sources.filter((s) => s.online).length > 1;
   const waiting: string[] = [];
   const failing: { station: string; name: string; message: string }[] = [];
   const notes: string[] = [];
   let counted = false;
+  // Some station read the network (one from before does not).
+  let net = false;
+  let disk = false;
   let everyMs = 0;
   let cores = 0;
   let machineMemory = 0;
   let total = ZERO;
-  let processes = 0;
-  let day = 0;
   // The last minutes' totals, each station's points summed by when (a look of each is some seconds apart).
   const lines: Map<number, Use>[] = [];
   const groups: J[] = [];
+  const each: J[] = [];
   for (const s of sources) {
     if (!s.online) {
       notes.push(t("core-views.resources.note.offline", { name: s.name }));
@@ -99,15 +108,14 @@ export function resourcesView(sources: Source[], now: number, waitNote: Wait): J
       continue;
     }
     counted = true;
+    if (get(v, "net") === true) net = true;
+    if (get(v, "disk") === true) disk = true;
     everyMs = Math.max(everyMs, num(get(v, "everyMs")));
     cores += num(get(get(v, "machine"), "cores"));
     machineMemory += num(get(get(v, "machine"), "memory"));
     total = plus(total, useOf(get(v, "total")));
+    each.push({ station: s.address, net: get(v, "net") === true, use: said(useOf(get(v, "total"))) });
     lines.push(new Map(arr(get(v, "history")).map((p) => [Math.round(num(get(p, "at")) / 5000), useOf(p)])));
-    for (const h of arr(get(v, "hours"))) {
-      if (num(get(h, "at")) <= now - HOURS * HOUR_MS) continue;
-      for (const j of Object.values(get(h, "joules") ?? {})) day += num(j) / 3600;
-    }
     const named = get(v, "chats") ?? {};
     for (const g of arr(get(v, "groups"))) {
       const key = String(get(g, "key") ?? "");
@@ -121,7 +129,6 @@ export function resourcesView(sources: Source[], now: number, waitNote: Wait): J
         : key === "agents" || session === null ? t("core-views.resources.whose.agents")
         : typeof get(c, "title") === "string" && get(c, "title") !== "" ? get(c, "title") : t("core-views.resources.whose.chat");
       const procs = arr(get(g, "processes"));
-      processes += procs.length;
       groups.push({
         key: `${s.address}\n${key}`,
         kind,
@@ -129,8 +136,10 @@ export function resourcesView(sources: Source[], now: number, waitNote: Wait): J
         // What it is, where its title does not say it already (a chat's: 对话; the app's and the station's say it).
         kindText: [...(several ? [s.name] : []), ...(kind === "chats" ? [t(`core-views.resources.kind.${kind}`)] : [])].join(" · "),
         ...(session !== null && key !== "agents" ? { chat: { station: s.address, ...(thread !== null ? { thread } : { session }) } } : {}),
+        station: s.address,
+        session: key !== "agents" ? session : null,
         use: said(useOf(g)),
-        processes: procs.map((p) => ({ key: `${s.address}\n${num(get(p, "pid"))}`, pid: num(get(p, "pid")), name: String(get(p, "name") ?? "?"), use: said(useOf(p)) })),
+        processes: procs.map((p) => ({ key: `${s.address}\n${num(get(p, "pid"))}`, pid: num(get(p, "pid")), name: String(get(p, "name") ?? "?"), endable: get(p, "endable") === true, use: said(useOf(p)) })),
       });
     }
   }
@@ -139,16 +148,19 @@ export function resourcesView(sources: Source[], now: number, waitNote: Wait): J
   const tiles = [
     { key: "cpu", label: t("core-views.resources.tile.cpu"), value: cpu(total.cpu), sub: cores > 0 ? t("core-views.resources.tile.cpu_sub", { cores, percent: percent(total.cpu, cores * 100) }) : "", points: line("cpu") },
     { key: "memory", label: t("core-views.resources.tile.memory"), value: memory(total.memory), sub: machineMemory > 0 ? t("core-views.resources.tile.memory_sub", { total: memory(machineMemory), percent: percent(total.memory, machineMemory) }) : "", points: line("memory") },
-    { key: "watts", label: t("core-views.resources.tile.watts"), value: watts(total.watts), sub: t("core-views.resources.tile.watts_sub", { wh: watts(day).replace(/ W$/, " Wh") }), points: line("watts") },
-    { key: "wakeups", label: t("core-views.resources.tile.wakeups"), value: t("core-views.resources.tile.wakeups_value", { n: wakeups(total.wakeups) }), sub: t("core-views.resources.tile.wakeups_sub", { n: processes }), points: line("wakeups") },
+    ...(disk ? [{ key: "disk", label: t("core-views.resources.tile.disk"), value: `↓ ${rate(total.diskRead)}`, sub: `↑ ${rate(total.diskWrite)}`, points: line("disk") }] : []),
+    ...(net ? [{ key: "net", label: t("core-views.resources.tile.net"), value: `↓ ${rate(total.netIn)}`, sub: `↑ ${rate(total.netOut)}`, points: line("net") }] : []),
   ];
   return {
     wait: waitNote(waiting, failing, !counted),
     empty: !counted,
+    net,
+    disk,
     everyMs,
     tiles,
     kinds: KINDS.map((k) => ({ key: k, label: t(`core-views.resources.kind.${k}`) })),
     groups: groups.sort((a, b) => b.use.cpu - a.use.cpu),
+    stations: each,
     notes,
     basis: t("core-views.resources.basis"),
   };

@@ -1,5 +1,5 @@
 //! What processes have used so far (station/src/resources): macOS counts each one's CPU time, memory footprint, idle
-//! wakeups and energy (`proc_pid_rusage`, RUSAGE_INFO_V6, what Activity Monitor's columns come from), readable for the
+//! wakeups, energy and bytes read from and written to disk (`proc_pid_rusage`, RUSAGE_INFO_V6, what Activity Monitor's columns come from), readable for the
 //! user's own processes without root. Elsewhere nothing is read.
 
 use napi_derive::napi;
@@ -15,6 +15,10 @@ pub struct ProcessUsage {
     pub wakeups: f64,
     /// Energy, in nanojoules (exact up to some 100 days at 1 kW).
     pub energy_nj: f64,
+    /// Bytes read from disk (Activity Monitor's Disk: Bytes Read).
+    pub disk_read: f64,
+    /// Bytes written to disk.
+    pub disk_written: f64,
 }
 
 /// Each of `pids`' usage so far; none for one not read (gone, another user's, not macOS).
@@ -25,8 +29,8 @@ pub fn process_usage(pids: Vec<u32>) -> Vec<Option<ProcessUsage>> {
 
 #[cfg(target_os = "macos")]
 fn read(pid: u32) -> Option<ProcessUsage> {
-    /// rusage_info_v6 (<sys/resource.h>): user and system time, …, the wakeups (the 4th), …, the footprint (the 8th), …, the
-    /// energy (the 41st), and room for the rest.
+    /// rusage_info_v6 (<sys/resource.h>): user and system time, …, the wakeups (the 4th), …, the footprint (the 8th), …,
+    /// the bytes read and written (the 17th and 18th), …, the energy (the 41st), and room for the rest.
     #[repr(C)]
     struct RusageInfoV6 {
         uuid: [u8; 16],
@@ -61,6 +65,8 @@ fn read(pid: u32) -> Option<ProcessUsage> {
         footprint: info.before[7] as f64,
         wakeups: info.before[3] as f64,
         energy_nj: info.energy_nj as f64,
+        disk_read: info.before[16] as f64,
+        disk_written: info.before[17] as f64,
     })
 }
 

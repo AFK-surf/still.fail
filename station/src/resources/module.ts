@@ -1,9 +1,10 @@
-// What of this machine still.fail uses (resources/watch.ts), as a part of the station (parts.ts): looked at while the
-// station runs, often while a page asks; GET /resources.
+// What of this machine still.fail uses (resources/watch.ts), as a part of the station (parts.ts): looked at while a
+// page asks; GET /resources.
 import { execFile, execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
+import { rm } from "node:fs/promises";
 import { homedir } from "node:os";
-import { basename } from "node:path";
+import { basename, join } from "node:path";
 import { promisify } from "node:util";
 import { Effect, Layer } from "effect";
 import { resourceRoutes } from "../api/routes/usage.ts";
@@ -12,7 +13,7 @@ import { loadMesh } from "../mesh/native.ts";
 import { platform } from "../platform/index.ts";
 import { Agents } from "../sessions/agents.ts";
 import { Parts, Paths, Store } from "../services.ts";
-import { ResourceWatch, hoursFile } from "./watch.ts";
+import { ResourceWatch } from "./watch.ts";
 
 /// The desktop app's bundle ids begin so (apps/desktop: fail.still.desktop, fail.still.desktop.beta, …).
 const APP_ID = "fail.still.desktop";
@@ -50,6 +51,17 @@ function parseArgs(text: string): Map<number, string> {
   return out;
 }
 
+/// `nettop -P -L 1 -x -J bytes_in,bytes_out -n`: each process's bytes in and out so far, as `name.pid,in,out,` (its
+/// name may have dots of its own).
+export function parseNettop(text: string): Map<number, { in: number; out: number }> {
+  const out = new Map<number, { in: number; out: number }>();
+  for (const line of text.split("\n")) {
+    const m = line.match(/\.(\d+),(\d+),(\d+),?$/);
+    if (m) out.set(Number(m[1]), { in: Number(m[2]), out: Number(m[3]) });
+  }
+  return out;
+}
+
 /// Whether this process's parent is its launcher (stillfail-station), not a shell or launchd, whose all under it is not
 /// the station's.
 function launcher(): boolean {
@@ -81,15 +93,17 @@ export const ResourcesLive = Layer.effectDiscard(
         // A chat's own directory, not where it works (a repository people also work in).
         places: () => store.listSessions().flatMap((s) => (s.workspace && s.workspace !== "/" && s.workspace !== homedir() ? [{ dir: s.workspace, session: s.key }] : [])),
         usage: (pids) => (typeof mesh.processUsage === "function" ? mesh.processUsage(pids) : pids.map(() => null)),
+        // Every process's, once: some 20 ms.
+        traffic: async () => parseNettop((await run("nettop", ["-P", "-L", "1", "-x", "-J", "bytes_in,bytes_out", "-n"], { maxBuffer: 16 << 20, timeout: 5000 })).stdout),
         runners: () => runnersWithSessions(data, store),
         jobs: () => watchedJobs(store),
         isApp,
         self: [process.pid, ...(launcher() ? [process.ppid] : [])],
-        file: hoursFile(data),
       })),
       (w) => Effect.promise(() => w.close()),
     );
-    watch.start();
+    // What was kept of the hours' energy before (no longer counted).
+    void rm(join(data, "resources", "hours.json"), { force: true }).catch(() => {});
     (yield* Parts).routes((tools) => resourceRoutes(tools, watch));
   }),
 );
