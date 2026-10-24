@@ -16,8 +16,7 @@ pub let wide_from : Double = 701.0
 /// What the frame draws that is not here yet, given by the app (sfapp): the pages in the pane, the sidebars of the
 /// places other than the chats', and what the frame asks of the app.
 pub(all) struct Pages {
-  /// a chat's sharing's and publishing's dialogs (its thread)
-  share : (@ui.Ctx, ChatRef, Double?) -> Unit
+  /// a chat's publishing's dialog (its thread)
   publish : (@ui.Ctx, String, Double) -> Unit
   /// 文件, and a folder of a station's drive
   files : (@ui.Ctx, Source, Workspace) -> Unit

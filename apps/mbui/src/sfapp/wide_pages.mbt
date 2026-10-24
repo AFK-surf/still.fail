@@ -23,7 +23,6 @@ fn wide_reset() -> Unit {
 fn desk_pages() -> @sfdesk.Pages {
   {
     // the chat's page is sfdesk's (chat_page.mbt): its sharing's and publishing's sheets this package's
-    share: fn(c, r, thread) { open_sheet(c, XShare(r, thread)) },
     publish: fn(c, station, thread) { open_sheet(c, Publish(station, thread)) },
     // 文件: a folder under its bar, as the web's (wide_files.mbt)
     files: fn(c, src, w) { files_landing(c, src, w) },
