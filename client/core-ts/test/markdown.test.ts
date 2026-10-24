@@ -27,6 +27,19 @@ test("markdown_a_tight_list_holds_its_words_a_loose_one_its_paragraphs", () => {
   assert.deepEqual(read("- 外\n  - 内"), [["list", [["li", ["外", ["list", [["li", ["内"]]]]]]]]]);
 });
 
+test("markdown_strikes_through_with_one_tilde_or_two_as_github_does_and_not_three", () => {
+  assert.deepEqual(read("~一~ 和 ~~二~~ 和 ~~~三~~~"), [["p", [["s", ["一"]], " 和 ", ["s", ["二"]], " 和 ~~~三~~~"]]]);
+  // a run closes one of as many
+  assert.deepEqual(read("~~不~ 配"), [["p", ["~~不~ 配"]]]);
+  assert.deepEqual(read("3~5 天"), [["p", ["3~5 天"]]]);
+});
+
+test("markdown_a_task_is_a_list_item_whose_words_begin_with_its_box", () => {
+  assert.deepEqual(read("- [x] 好了\n- [ ]\n  下一行\n- [ ]\n- [x]没空格"), [
+    ["list", [["li", ["好了"], { checked: true }], ["li", ["下一行"], { checked: false }], ["li", ["[ ]"]], ["li", ["[x]没空格"]]]],
+  ]);
+});
+
 test("markdown_a_table_its_header_cells_then_its_rows", () => {
   assert.deepEqual(read("| 项 | 数 |\n|:--|--:|\n| 打开 | 1ms |"), [
     ["table", [["tr", [["th", ["项"]], ["th", ["数"]]]], ["tr", [["td", ["打开"]], ["td", ["1ms"]]]]], { align: ["left", "right"] }],
@@ -96,7 +109,7 @@ test("markdown_kept_on_the_device_is_read_as_this_reading_reads_it_or_its_readin
     "<b>不要</b> 原样\n第二行  \n硬换行 &amp; &lt; &#x4e2d;\n\n![图](a.png \"标题\") [引用][r]\n\n[r]: https://r.dev",
   ];
   const digest = createHash("sha256").update(JSON.stringify(texts.map(parse))).digest("hex").slice(0, 16);
-  assert.equal(`${MD_READING}:${digest}`, "1:6f88cfdd05180b40", "what Markdown is read as changed: MD_READING one more (markdown.ts) and this digest with it");
+  assert.equal(`${MD_READING}:${digest}`, "2:69f4de047e713edc", "what Markdown is read as changed: MD_READING one more (markdown.ts) and this digest with it");
 });
 
 test("math_is_code_with_a_rendering_hint_and_keeps_its_source_runs", () => {
