@@ -1032,3 +1032,378 @@ pub fn tell_place(src : Source, r : ChatRef, v : ChatView, rd : Reading) -> Unit
 ///|
 /// How long what was there as it came into a chat's list fades in (Chat.css.ts data-history-fade).
 pub let history_fade_ms : Double = 180.0
+
+///|
+/// What a chat's list is made of this frame, as both frames make it, before they draw it (sfapp's messages, sfdesk's
+/// chat_list): its rows and their keys (`read`, its entries; those coming out of an avatar held out of it till their
+/// turn), its turns and its messages out of avatars played on, the list following its newest, words sent flying from
+/// the composer of draft `draft`, whether what comes at its end may glide, and the page before come in above what is
+/// in view keeping it where it is. `rise_ms`, `history_fade`, `top`, `in_front`: as row_keys', follow_newest's,
+/// chat_tick's.
+pub fn list_frame(
+  c : @ui.Ctx,
+  r : ChatRef,
+  v : ChatView,
+  read : Array[Entry],
+  key~ : String,
+  draft~ : String,
+  rise_ms~ : Double,
+  history_fade~ : Bool,
+  top~ : Double,
+  in_front~ : Bool,
+) -> ListFrame {
+  let rd = reading_of(r.station + "\u{1}" + r.session)
+  // an agent's messages said while its activity shows come out of its avatar, one at a time; until their turn they
+  // wait out of the list (emit.mbt, ChatMotion.kt)
+  // (taken and played on, before the page is built, by linger_tick)
+  let ek = r.station + "\u{1}" + r.session
+  let em = emits_of(ek)
+  rd.shown_frame = c.frame_number()
+  chat_tick(c, ek, rd, v, shown=true, in_front~)
+  let read = if em.queue.length() > 0 || em.current is Some(_) {
+    read.filter(fn(e) {
+      match e {
+        Said(m) => !emit_held(em, m.seq)
+        _ => true
+      }
+    })
+  } else {
+    read
+  }
+  let turns = turns_of(ek)
+  let (list, keys) = row_keys(
+    c,
+    rd,
+    ek,
+    v,
+    with_lingering(rd, read),
+    key,
+    turns,
+    em,
+    flight_of(draft),
+    rise_ms~,
+    history_fade~,
+  )
+  follow_newest(c, rd, list, keys, key, top~)
+  flight_frame(c, draft)
+  let flight = flight_of(draft)
+  // (the first of what was sent from here not in the chat yet: a message out of an avatar comes in over it, emit.mbt)
+  em.out_key = match list.search_by(fn(e) { e is Out(_) }) {
+    Some(i) => keys[i]
+    None => ""
+  }
+  // half a second after it was put in place (shown), what comes at its end may glide: asked each frame it is drawn
+  // (later: nothing shown waits for it)
+  let glides = @kit.after(c, "glide/" + key, rd.placed, glide_after_place_ms, later=true)
+  @motion.list_keys(c, key, keys.map(fn(k) { key + "\u{1}" + k })) |> ignore
+  // the first message's row: the page before come in above it, it stays where it is (Chat.kt: the list keeps its
+  // first item in view by its key, or the first row after the spinner)
+  let mut head = ""
+  let mut head_at = -1
+  for i, e in list {
+    if e is Said(_) {
+      head = e.id()
+      head_at = i
+      break
+    }
+  }
+  // rows came at the top (the page before): what is in view stays where it is, and nothing glides for it
+  let older_came = rd.head != "" && head != rd.head && rd.placed
+  if older_came {
+    for i, e in list {
+      if e.id() == rd.head {
+        if i != rd.head_at {
+          c.list_moved(key, rd.head_at, i - rd.head_at)
+        }
+        break
+      }
+    }
+  }
+  rd.head = head
+  rd.head_at = head_at
+  { key, rk: ek, rd, em, turns, list, keys, flight, glides, older_came }
+}
+
+///|
+/// A chat's list as list_frame made it this frame (its key, its chat's key, what the page keeps of it, its messages
+/// out of avatars, its turns, its rows and their keys, the words sent flying to it, whether what comes at its end
+/// glides, whether the page before came in above it).
+pub(all) struct ListFrame {
+  key : String
+  rk : String
+  rd : Reading
+  em : Emits
+  turns : Turns
+  list : Array[Entry]
+  keys : Array[String]
+  flight : SendFlight?
+  glides : Bool
+  older_came : Bool
+}
+
+///|
+/// How long after a chat is put in place what comes at its end glides after it (Follow.kt).
+pub let glide_after_place_ms : Double = 500.0
+
+///|
+/// What a chat's list does once drawn this frame, as both frames do it (sfapp's messages, sfdesk's chat_list): put in
+/// place once (at the unread line `lead` under its `top`, where it was left here, else where the core opened it); a
+/// message gone to (a notification's, a search's: `on_found` told of one with its words; ⌘F's, `finding`: the window
+/// moved about it once, `find_around` the one asked) brought into view; the page before near its top and the page
+/// after near the end of a window short of the chat's asked; what is read and where the reader is (between the bar's
+/// foot `bar` and the composer's `room`) told the core. Says what the list is as laid out, the rows of the posts that
+/// ask, and whether it is away from its end.
+pub fn list_after(
+  c : @ui.Ctx,
+  src : Source,
+  r : ChatRef,
+  v : ChatView,
+  f : ListFrame,
+  top~ : Double,
+  lead~ : Double,
+  bar~ : Double,
+  room~ : Double,
+  finding~ : Bool,
+  on_found~ : (Reading) -> Unit,
+  find_around~ : Ref[Double],
+) -> ListAfter {
+  let (key, rd, list) = (f.key, f.rd, f.list)
+  let n = list.length()
+    // put in place once: at the unread line (a few lines of what came before it in view), else where the core opened
+    // it, else at its end (where the list starts)
+    if !rd.placed && v.messages.length() > 0 && !v.unread_above {
+      rd.placed = true
+    }
+    // put in place this build: the list scrolled there is laid out again in this frame (mbui's same-frame rebuild: a
+    // list scrolled is a read changed), and what goes by where it is waits for that build
+    let mut put_now = false
+    if rd.placed && !rd.put && !at_end_asked() {
+      rd.put = true
+      // where it was left here this run (Chat.kt kept): unless at its end with nothing new since, then at its end
+      let newest = match v.messages.last() {
+        Some(m) => m.seq
+        None => -1.0
+      }
+      let kept = kept_places.get(r.station + "\u{1}" + r.session)
+      let left_at_end = match kept {
+        Some(p) => p.bottom >= 0.0 && p.bottom == newest
+        None => false
+      }
+      let opened_at = if left_at_end { None } else { v.at }
+      let mut line = -1
+      let mut at = -1
+      let mut was = -1
+      for i, e in list {
+        match e {
+          Line => line = i
+          Said(m) => {
+            match opened_at {
+              Some(a) if at < 0 && m.seq >= a => at = i
+              _ => ()
+            }
+            match kept {
+              Some(p) if !left_at_end && m.seq == p.top => was = i
+              _ => ()
+            }
+          }
+          _ => ()
+        }
+      }
+      put_now = line >= 0 || was >= 0 || at >= 0
+      if line >= 0 {
+        c.list_scroll_to(key, line, offset=-(top + lead))
+      } else if was >= 0 {
+        c.list_scroll_to(key, was, offset=-kept.unwrap().offset)
+      } else if at >= 0 {
+        // where it was left: that message's top as far below the list's as it was (atOffset, the screen's pixels);
+        // else its top under the bar
+        c.list_scroll_to(key, at, offset=match v.at_offset {
+          Some(px) => -(px / c.scale)
+          None => -top
+        })
+      }
+    }
+    // opened at a message (a notification's), once the list is in place (the build after it was put there, in the same
+    // frame): there, its top under the bar,
+    // flashing; the pages before brought in until it is (none left, or it is gone: where the chat opened). Chat.kt
+    // LaunchedEffect(host.goTo)
+    let gk = r.station + "\u{1}" + r.session
+    match go_tos.get(gk) {
+      Some(target) if rd.placed && !put_now => {
+        let mut at = -1
+        let mut first = -1.0
+        let mut found = false
+        for i, e in list {
+          match e {
+            Said(m) => {
+              if first < 0.0 {
+                first = m.seq
+              }
+              if m.seq == target {
+                at = i
+                // opened from a search: its words marked in it, nothing flashing (Chat.kt markWords, FOUND)
+                match go_to_words.get(gk) {
+                  Some(words) => {
+                    go_to_words.remove(gk)
+                    rd.found_at = m.ts
+                    rd.found_words = words
+                    found = true
+                  }
+                  None => rd.flash = m.ts
+                }
+                break
+              }
+            }
+            _ => ()
+          }
+        }
+        if at >= 0 {
+          go_tos.remove(gk)
+          if found {
+            on_found(rd)
+          } else {
+            flash_start(rd)
+          }
+          c.list_scroll_to(key, at, offset=-top)
+          @hostapi.log("chat: gone to message \{target.to_int()}")
+        } else {
+          match v.thread {
+            // what ⌘F found, not in the chat's window: the window moved about it (chat.around), once
+            Some(thread) if finding =>
+              if find_around.val != target {
+                find_around.val = target
+                c.tell("chat.around/" + gk, fn() {
+                  (src.call)(
+                    "chat.around",
+                    {
+                      "station": Json::string(r.station),
+                      "thread": Json::number(thread),
+                      "seq": Json::number(target),
+                    },
+                    fn(res) { if res is Err(_) { go_tos.remove(gk) } },
+                  )
+                })
+              }
+            Some(thread) if v.more && first > target =>
+              if rd.asked != first {
+                rd.asked = first
+                // (asked once the frame's builds are over)
+                c.tell("chat.older/" + gk, fn() {
+                  (src.call)(
+                    "chat.older",
+                    { "station": Json::string(r.station), "thread": Json::number(thread) },
+                    fn(res) { if res is Err(_) { go_tos.remove(gk) } },
+                  )
+                })
+              }
+            _ => go_tos.remove(gk)
+          }
+        }
+      }
+      _ => ()
+    }
+    // (read back by what the page builds from it: not at every step of a scroll, which changes none of that)
+    let ask_rows = ask_rows_of(v, list)
+    let info = c.list_info_as(key, fn(i) { list_made(i, n, ask_rows) })
+    // near the top: the page before comes in, once per page
+    match (info, v.thread) {
+      (Some(i), Some(thread)) if v.more && rd.placed && i.first >= 0 && i.first <= 3 => {
+        // by entries, not messages: a page of what the chat does not show (letters, edits) moves it too
+        let first = match v.first_entry {
+          Some(f) => f
+          None =>
+            match list.iter().find_first(fn(e) { e is Said(_) }) {
+              Some(Said(m)) => m.seq
+              _ => -1.0
+            }
+        }
+        // (asked once the frame's builds are over, from where the last laid the list out)
+        if rd.asked != first {
+          c.after_build("older", fn() {
+            if rd.asked == first {
+              return
+            }
+            rd.asked = first
+            (src.call)(
+              "chat.older",
+              { "station": Json::string(r.station), "thread": Json::number(thread) },
+              fn(res) {
+                match res {
+                  Err(e) => {
+                    rd.asked = -1.0
+                    @hostapi.log("chat.older failed: " + text(Some(e), "message"))
+                  }
+                  _ => ()
+                }
+              },
+            )
+          })
+        }
+      }
+      _ => ()
+    }
+    // near the end of a window short of the chat's: the page after
+    match (info, v.thread) {
+      (Some(i), Some(thread)) if v.newer && rd.placed && i.last >= n - 4 => {
+        let last = match v.last_entry {
+          Some(l) => l
+          None =>
+            match v.messages.last() {
+              Some(m) => m.seq
+              None => -1.0
+            }
+        }
+        if rd.asked_newer != last {
+          c.after_build("newer", fn() {
+            if rd.asked_newer == last {
+              return
+            }
+            rd.asked_newer = last
+            (src.call)(
+              "chat.newer",
+              { "station": Json::string(r.station), "thread": Json::number(thread) },
+              fn(res) { if res is Err(_) { rd.asked_newer = -1.0 } },
+            )
+          })
+        }
+      }
+      _ => ()
+    }
+    // the core told the chat shows, and whether its end does (what is read follows): not on a read-only run
+    // (its end in view: not while it glides to rows that came, as Android's Chat.kt has it (endInView, lastLaidOut):
+    // rows not in view yet are not read)
+    let seen = match info {
+      Some(i) => !v.newer && i.at_end
+      None => false
+    }
+    rd.at_end = seen
+    // where the reader is, worked out once the frame's builds are over from where its last layout left the list, never
+    // read back: told the core (what was seen whole, the place), not drawn (tell_place, tell_focus, after it)
+    let lr = c.list_reader(key)
+    c.after_build("reading", fn() { read_place(rd, v, list, lr, bar, room) })
+    // where it is told the core as the reader comes to rest, not only as the chat is left (Chat.kt leave: an app gone
+    // from memory never leaves the page)
+    rd.scale = c.scale
+    if rd.placed && !c.list_moving(key) {
+      c.after_build("place", fn() { tell_place(src, r, v, rd) })
+    }
+    // (told once the frame's builds are over, as the last says it: a build let go of, the frame built again, read the
+    // list from before its layout)
+    c.after_build("focus", fn() { tell_focus(src, r, v, rd, seen, rd.seen_whole) })
+    // the way to the newest: away from the end by more than a corner of the screen, or short of the chat's end (not
+    // before the list is first laid out: until then nothing is in view, and the end is not far, only not known)
+    let away = match info {
+      Some(i) => i.first >= 0 && i.below > 120.0 && !i.gliding
+      None => false
+    }
+  { info, ask_rows, away }
+}
+
+///|
+/// A chat's list as list_after left it: as laid out, the rows of the posts that ask, whether it is away from its end
+/// (by more than a corner of the screen, not gliding).
+pub(all) struct ListAfter {
+  info : @ui.ListInfo?
+  ask_rows : Array[Int]
+  away : Bool
+}
