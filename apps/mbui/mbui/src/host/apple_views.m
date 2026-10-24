@@ -203,8 +203,10 @@ id mb_views_root(CGRect frame) {
 @property(nonatomic) double scale;
 // a page's and a site's: the scripts the app sent (view_tell 1), waiting for the page there (loaded, or said something
 // since it started); who takes a finger on it (view_tell 2: "all", "through", "pinch", "vertical") and the slop; how
-// long a site's request waits for its head before the app is told (view_tell 3)
+// long a site's request waits for its head before the app is told (view_tell 3); where the app draws what takes a press
+// over it (view_tell 4: x0 y0 x1 y1 …, points; a finger there is the canvas's)
 @property(nonatomic, strong) NSMutableArray<NSString *> *scripts;
+@property(nonatomic, copy) NSArray<NSNumber *> *covers;
 @property(nonatomic) BOOL there;
 @property(nonatomic, copy) NSString *touchMode;
 @property(nonatomic) double slop;
@@ -1376,6 +1378,11 @@ void mb_host_view_tell(int32_t vid, int32_t what, moonbit_string_t text) {
     NSArray<NSString *> *p = [t componentsSeparatedByString:@" "];
     v.touchMode = p.firstObject ?: @"all";
     v.slop = p.count > 1 ? p[1].doubleValue : 0;
+  } else if (what == 4) {
+    NSMutableArray<NSNumber *> *r = [NSMutableArray array];
+    if (t.length)
+      for (NSString *s in [t componentsSeparatedByString:@" "]) [r addObject:@(s.doubleValue)];
+    v.covers = r;
   } else if (what == 3) {
     NSDictionary *o = [NSJSONSerialization JSONObjectWithData:[t dataUsingEncoding:NSUTF8StringEncoding] options:0 error:nil];
     if ([o isKindOfClass:NSDictionary.class] && [o[@"head_wait_ms"] isKindOfClass:NSNumber.class])
@@ -1383,10 +1390,19 @@ void mb_host_view_tell(int32_t vid, int32_t what, moonbit_string_t text) {
   }
 }
 
-// The page's view a point is on (shown, placed), or nil.
+// Whether the app draws something that takes a press over the view at the point (view_tell 4).
+static BOOL covered_at(MBNative *v, double x, double y) {
+  NSArray<NSNumber *> *r = v.covers;
+  for (NSUInteger j = 0; j + 3 < r.count; j += 4)
+    if (x >= r[j].doubleValue && x < r[j + 2].doubleValue && y >= r[j + 1].doubleValue && y < r[j + 3].doubleValue)
+      return YES;
+  return NO;
+}
+
+// The page's view a point is on (shown, placed, not under what the app draws over it that takes a press), or nil.
 static MBNative *page_at(double x, double y) {
   for (MBNative *v in views.allValues) {
-    if (v.kind < 2 || !v.shown || !v.placed) continue;
+    if (v.kind < 2 || !v.shown || !v.placed || covered_at(v, x, y)) continue;
     double x0 = fmax(v.cx0, v.x), y0 = fmax(v.cy0, v.y);
     double x1 = fmin(v.cx1, v.x + v.w), y1 = fmin(v.cy1, v.y + v.h);
     if (x >= x0 && x < x1 && y >= y0 && y < y1) return v;
@@ -1407,7 +1423,7 @@ int mb_views_pass_through(double x, double y) {
   for (MBNative *v in views.allValues) {
     if (v.kind < 2 || !v.shown || !v.placed) continue;
     // (a page that takes no finger: the canvas's)
-    if ([v.touchMode isEqualToString:@"through"]) continue;
+    if ([v.touchMode isEqualToString:@"through"] || covered_at(v, x, y)) continue;
     double x0 = fmax(v.cx0, v.x), y0 = fmax(v.cy0, v.y);
     double x1 = fmin(v.cx1, v.x + v.w), y1 = fmin(v.cy1, v.y + v.h);
     if (x >= x0 && x < x1 && y >= y0 && y < y1) return 1;

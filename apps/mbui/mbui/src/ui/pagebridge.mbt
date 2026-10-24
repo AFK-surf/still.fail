@@ -52,18 +52,38 @@ pub fn Tester::view_scripts(self : Tester, id : Int) -> Array[String] {
 }
 
 ///|
-/// The page's view a point is on (shown, the last placed of those it is on), with who takes a finger on it; 0 none.
+/// The page's view a point is on (shown, the last placed of those it is on, not where a press of the app's is drawn
+/// over it), with who takes a finger on it; 0 none.
 fn fake_view_under(f : FakeHost, x : Double, y : Double) -> (Int, String, Double) {
   let mut out = (0, "", 0.0)
   for id, at in f.view_at {
     let (x0, y0, x1, y1, shown) = at
     let kind = f.view_kinds.get(id).unwrap_or(0)
-    if shown && (kind == 2 || kind == 3) && x >= x0 && x < x1 && y >= y0 && y < y1 && id > out.0 {
+    if shown &&
+      (kind == 2 || kind == 3) &&
+      x >= x0 &&
+      x < x1 &&
+      y >= y0 &&
+      y < y1 &&
+      id > out.0 &&
+      !fake_covered(f, id, x, y) {
       let (mode, slop) = f.view_touch.get(id).unwrap_or(("all", 0.0))
       out = (id, mode, slop)
     }
   }
   out
+}
+
+///|
+/// Whether a press of the app's is drawn over view `id` at the point (view_tell 4).
+fn fake_covered(f : FakeHost, id : Int, x : Double, y : Double) -> Bool {
+  let r = f.view_covers.get(id).unwrap_or([])
+  for j = 0; j + 3 < r.length(); j = j + 4 {
+    if x >= r[j] && x < r[j + 2] && y >= r[j + 1] && y < r[j + 3] {
+      return true
+    }
+  }
+  false
 }
 
 ///|

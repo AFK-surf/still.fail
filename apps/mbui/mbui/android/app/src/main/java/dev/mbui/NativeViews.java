@@ -335,10 +335,13 @@ final class NativeViews {
      * NativeView::touch): its view's ("all"); the canvas's (MBView: "through", none of it to the view); the view's
      * until a second finger comes down ("pinch") or the finger has gone further up or down than across past the slop
      * ("vertical"; a finger that went sideways past it first stays the view's to its end), the canvas's from there: the
-     * view told the touch is called off, the canvas given it from where it went down.
+     * view told the touch is called off, the canvas given it from where it went down. A finger that goes down where the
+     * app draws something that takes a press over the view (view_tell 4: `covers`) is the canvas's.
      */
     static final class TouchFrame extends FrameLayout {
         String mode = "all";
+        /** Where the app draws what takes a press over the view: x0 y0 x1 y1 …, the canvas's pixels. */
+        float[] covers = new float[0];
         float slop;
         float downX, downY;
         boolean taken;
@@ -358,6 +361,8 @@ final class NativeViews {
                 android.graphics.Rect r = getClipBounds();
                 if (r != null && !r.contains((int) e.getX(), (int) e.getY())) return false;
             }
+            // (down under what the app draws over the view: the canvas's, the rest of the touch with it)
+            if (e.getActionMasked() == MotionEvent.ACTION_DOWN && covered(e)) return false;
             return super.dispatchTouchEvent(e);
         }
 
@@ -384,6 +389,16 @@ final class NativeViews {
                 default:
                     return false;
             }
+        }
+
+        /** Whether the finger is where the app draws something that takes a press over the view. */
+        private boolean covered(MotionEvent e) {
+            MBView v = Host.view;
+            if (v == null || covers.length < 4) return false;
+            float x = e.getX() + getLeft() + getTranslationX() - v.getLeft(), y = e.getY() + getTop() + getTranslationY() - v.getTop();
+            for (int j = 0; j + 3 < covers.length; j += 4)
+                if (x >= covers[j] && x < covers[j + 2] && y >= covers[j + 1] && y < covers[j + 3]) return true;
+            return false;
         }
 
         /** The touch the canvas's from now on: it is given it from where it went down (then as it is now). */
@@ -672,7 +687,8 @@ final class NativeViews {
 
     /**
      * What the app tells a view beyond its controls (host_native.mbt view_tell): 1 a script for its page, 2 who takes
-     * a finger on it ("MODE SLOP", the slop in points), 3 a site's settings (JSON: head_wait_ms, backlog).
+     * a finger on it ("MODE SLOP", the slop in points), 3 a site's settings (JSON: head_wait_ms, backlog), 4 where the
+     * app draws what takes a press over it ("X0 Y0 X1 Y1 …", points from the canvas's top left; "" none).
      */
     static void tell(int id, int what, String text) {
         NView v = views.get(id);
@@ -692,6 +708,19 @@ final class NativeViews {
                 if (v.clip == null) return;
                 v.clip.mode = p[0];
                 v.clip.slop = px;
+            });
+        } else if (what == 4) {
+            String[] p = text.isEmpty() ? new String[0] : text.split(" ");
+            float d = Host.view.density;
+            float[] covers = new float[p.length - p.length % 4];
+            try {
+                for (int j = 0; j < covers.length; j++) covers[j] = Float.parseFloat(p[j]) * d;
+            } catch (NumberFormatException e) {
+                covers = new float[0];
+            }
+            float[] c = covers;
+            Host.main.post(() -> {
+                if (v.clip != null) v.clip.covers = c;
             });
         } else if (what == 3 && v instanceof Site) {
             try {

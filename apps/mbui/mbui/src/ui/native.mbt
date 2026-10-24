@@ -52,6 +52,10 @@ pub struct NativeView {
   priv too_slow : String
   priv mut touch : Touch
   priv mut keeps_cookies : Bool
+  /// how many presses' rects the frame had when it was painted (those after it are drawn over it), and the rects of
+  /// those over it the host was last told (`covers`)
+  priv mut hits_before : Int
+  priv mut told_covers : String
 }
 
 ///|
@@ -184,6 +188,8 @@ fn NativeView::make(
     too_slow,
     touch: All,
     keeps_cookies: false,
+    hits_before: 0,
+    told_covers: "",
     read,
     reading: {},
     serve,
@@ -677,6 +683,7 @@ fn Ctx::paint_native(self : Ctx, i : Int, n : Node) -> Unit {
   }
   // (by build: a frame built again paints again, and what the last build did not paint is not shown)
   v.painted = self.build_no
+  v.hits_before = self.next_hit_ids.length()
   // (its content on whole device pixels too, as its hole is: placed between pixels, the row its edge half covers
   // shows what is under the canvas, a line along the picture's edge)
   let cx0 = snap(x)
@@ -731,6 +738,9 @@ fn Ctx::sync_views(self : Ctx) -> Unit {
           moved = true
         }
       }
+    }
+    if shown {
+      v.tell_covers(self)
     }
     if moved {
       for j in 0..<9 {
@@ -815,6 +825,44 @@ fn Ctx::sync_views(self : Ctx) -> Unit {
         }
       None => ()
     }
+  }
+}
+
+///|
+/// The most rects of presses over a view the host is told (`covers`).
+let covers_most : Int = 32
+
+///|
+/// Where what takes a press is drawn over the view (painted after it: a menu, a panel raised over the page, its
+/// ground that puts it away, a bar's button over a page scrolled under it): a finger there is the canvas's, not the
+/// page's, as the app's own presses go to what is on top. The host is told them as they change (view_tell 4: "x0 y0
+/// x1 y1 …" in points, the window's; "" none), each cut to where the view is seen.
+fn NativeView::tell_covers(self : NativeView, c : Ctx) -> Unit {
+  let v = self
+  let (vx0, vy0, vx1, vy1) = (v.at[4], v.at[5], v.at[6], v.at[7])
+  let out = StringBuilder()
+  let mut n = 0
+  let rects = c.next_hit_rects
+  for j in v.hits_before..<c.next_hit_ids.length() {
+    if n >= covers_most {
+      break
+    }
+    let x0 = dmax(rects[j * 4], vx0)
+    let y0 = dmax(rects[j * 4 + 1], vy0)
+    let x1 = dmin(rects[j * 4 + 2], vx1)
+    let y1 = dmin(rects[j * 4 + 3], vy1)
+    if x1 > x0 && y1 > y0 {
+      if n > 0 {
+        out.write_string(" ")
+      }
+      out.write_string("\{x0} \{y0} \{x1} \{y1}")
+      n += 1
+    }
+  }
+  let said = out.to_string()
+  if said != v.told_covers {
+    v.told_covers = said
+    h_view_tell(v.id, 4, said)
   }
 }
 
