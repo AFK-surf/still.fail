@@ -1856,6 +1856,7 @@ fn composer_bar(
     } else {
       cui.attach = true
       c.blur()
+      attach_open(plus)
     }
   }
   // sent once what it refers to can be read in this workspace (outside.mbt send_sharing): at once when it refers to
@@ -2622,12 +2623,8 @@ fn with_link_words(words : String, d : Draft) -> String {
 // ── ＋'s sheet (Attach.kt) ──────────────────────────────────────────────
 
 ///|
-/// How tall ＋'s sheet is (over the foot's 26 it is drawn past): its grabber and head, the strip, the three tiles.
-let attach_h : Double = 25.0 + 4.0 + 122.0 + 12.0 + 70.0 + 18.0
-
-///|
 /// ＋'s sheet: the recent photos across the top (the camera first, recent.mbt), then 照片, 文件 and Station 文件
-/// (station_files.mbt). As tall as those two rows.
+/// (station_files.mbt), as tall as those two rows: the library's panel (attach_open); this frame's part of it.
 fn attach_sheet(
   c : @ui.Ctx,
   src : Source,
@@ -2680,71 +2677,83 @@ fn attach_sheet(
       }
     }
   }
-  let photos = c.id("attach/photos")
-  let files = c.id("attach/files")
-  let station = c.id("attach/station")
-  if c.clicked(photos) {
-    ask(Photos)
-  }
-  if c.clicked(files) {
-    ask(Files)
-  }
-  if c.clicked(station) {
-    cui.attach = false
-    station_files_open(c, d.key)
-  }
-  let sheet = @kit.sheet(
-    c,
-    "attach-sheet",
-    cui.attach,
-    h=attach_h,
-    scrim=@sf.sheet_scrim,
-    look=@sf.sheet_look(),
-    fn() {
-      c.box(
-      fn() {
-        // the grabber
-        c.box(w=Fill(1.0), pt=12.0, pb=8.0, align=ACenter, fn() {
-          c.box(w=Px(38.0), h=Px(5.0), radius=3.0, bg=t.p.line, fn() {  }) |> ignore
-        })
+  // what it shows, as this frame has it, drawn by the library's host (attach_open)
+  attach_drawer.val = fn(c) {
+    let photos = c.id("attach/photos")
+    let files = c.id("attach/files")
+    let station = c.id("attach/station")
+    if c.clicked(photos) {
+      ask(Photos)
+    }
+    if c.clicked(files) {
+      ask(Files)
+    }
+    if c.clicked(station) {
+      cui.attach = false
+      station_files_open(c, d.key)
+    }
+    // the camera, the gallery's recent photos, the tile that asks for them (recent.mbt)
+    recent_strip(c, tapped_tile)
+    c.box(dir=Row, w=Fill(1.0), pl=12.0, pr=12.0, pb=18.0, gap=8.0, fn() {
+      for item in [
+        (photos, tr("android-chat.attach.photos"), "photo"),
+        (files, tr("android-chat.attach.files"), "file"),
+        (station, tr("web-pages.chat.files"), "server"),
+      ] {
+        let (id, label, icon) = item
+        c.box(
+          w=Fill(1.0),
+          h=Px(70.0),
+          padx=4.0,
+          gap=6.0,
+          radius=14.0,
+          bg=t.p.chip,
+          align=ACenter,
+          justify=JCenter,
+          id~,
+          fn() {
+            @sf.icon(c, icon, size=22.0, color=t.p.text) |> ignore
+            c.text(label, size=13.0, color=t.p.text, wrap=false, line=18.0) |> ignore
+            // Attach.kt: clip(Smooth(14)).clickable
+            @motion.ripple(c, id, 14.0)
+          },
+        )
         |> ignore
-        // the camera, the gallery's recent photos, the tile that asks for them (recent.mbt)
-        recent_strip(c, tapped_tile)
-        c.box(dir=Row, w=Fill(1.0), pl=12.0, pr=12.0, pb=18.0, gap=8.0, fn() {
-          for item in [
-            (photos, tr("android-chat.attach.photos"), "photo"),
-            (files, tr("android-chat.attach.files"), "file"),
-            (station, tr("web-pages.chat.files"), "server"),
-          ] {
-            let (id, label, icon) = item
-            c.box(
-              w=Fill(1.0),
-              h=Px(70.0),
-              padx=4.0,
-              gap=6.0,
-              radius=14.0,
-              bg=t.p.chip,
-              align=ACenter,
-              justify=JCenter,
-              id~,
-              fn() {
-                @sf.icon(c, icon, size=22.0, color=t.p.text) |> ignore
-                c.text(label, size=13.0, color=t.p.text, wrap=false, line=18.0) |> ignore
-                // Attach.kt: clip(Smooth(14)).clickable
-                @motion.ripple(c, id, 14.0)
-              },
-            )
-            |> ignore
-          }
-        })
-        |> ignore
-      })
-      |> ignore
-    },
-  )
-  if cui.attach && !sheet.open {
-    cui.attach = false
+      }
+    })
+    |> ignore
   }
+  // let go of (a tile picked, the chat left): down
+  if !cui.attach && attach_shown.val > 0 {
+    if @sf.presented_drawn_of(attach_shown.val) {
+      @sf.close_presented_of(attach_shown.val)
+    } else {
+      attach_shown.val = 0
+    }
+  }
+}
+
+///|
+/// ＋'s sheet up (@sf.last_presented; 0 none), and what it shows as the composer's frame has it.
+// kept across runs: put back by attach_reset
+let attach_shown : Ref[Int] = Ref(0)
+
+///|
+// kept across runs: told anew by each frame of the composer before it is read
+let attach_drawer : Ref[(@ui.Ctx) -> Unit] = Ref(fn(_) {  })
+
+///|
+/// No ＋ sheet (the app begun again).
+fn attach_reset() -> Unit {
+  attach_shown.val = 0
+}
+
+///|
+/// ＋'s sheet put up by ＋ (`plus`): the library's panel, with a finger the phone's sheet from the foot (the grabber, the
+/// recent photos, the three tiles), with a mouse beside ＋; closed by its scrim, back or a press outside.
+fn attach_open(plus : Int) -> Unit {
+  @sf.panel("", fn(c, _) { (attach_drawer.val)(c) }, from=Of(plus), gone=fn() { cui.attach = false })
+  attach_shown.val = @sf.last_presented()
 }
 
 ///|

@@ -4,7 +4,7 @@
 ///|
 /// On the frames' clock to where the sharing sheet rests (its spring and its scrim's fade, as @kit.sheet_rest says).
 fn run_to_outside_rest(t : @ui.Tester) -> Unit raise {
-  let end = @kit.sheet_rest("outside-sheet")
+  let end = @kit.sheet_rest("sf-present")
   if end < 0.0 || end > 1.0e300 {
     fail("the sharing sheet does not move (its rest: \{end})")
   }

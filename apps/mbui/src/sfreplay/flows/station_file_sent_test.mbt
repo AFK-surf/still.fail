@@ -12,11 +12,11 @@ test "94-station-file-sent" {
     f.see("=studio")
     f.see("发消息")
     f.tap("icon:plus")
-    f.run_to(@kit.sheet_rest("attach-sheet"))
+    f.run_to(@kit.sheet_rest("sf-present"))
     f.tap("Station 文件")
     // the ＋ sheet going down as the places' comes up (the drive's sheets over a page of their own: dv_sheet_frame's
     // "dv-reader-sheet"): on to the later's rest
-    let down = @kit.sheet_rest("attach-sheet")
+    let down = @kit.sheet_rest("sf-present")
     let up = @kit.sheet_rest("dv-reader-sheet")
     f.run_to(if up > down { up } else { down })
     f.tap("=e2e-082940")

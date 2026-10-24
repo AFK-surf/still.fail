@@ -20,27 +20,6 @@ fn sharing_go(key : String) -> Unit {
 // ── the sheet (Composer.kt askToShare) ────────────────────────────────
 
 ///|
-/// How tall the sheet is (Composer.kt: SheetSpec fit, 22 + 48 + 30, each chat's row (34; 54 with the line saying it
-/// may not be shared), 16 + 38 + 24), at most 90% of the window (Sheet.kt).
-fn outside_sheet_h(chats : Array[@sfbase.OutsideRef]) -> Double {
-  let mut rows = 0.0
-  for c in chats {
-    rows += if c.may { 34.0 } else { 54.0 }
-  }
-  22.0 + 48.0 + 30.0 + rows + 16.0 + 38.0 + 24.0
-}
-
-///|
-/// The sheet's grabber and head as sheet_grab and sheet_head draw them (25, then 4 + 23.8 + 10): what is under them
-/// has the rest.
-let outside_top : Double = 25.0 + 37.8
-
-///|
-/// What is under the head: 20 in from the sheet's sides (Composer.kt padding(horizontal = 20)).
-// kept across runs: a value (no field of it changes)
-let outside_body : @ui.Style = @ui.css("w=Full px=S5")
-
-///|
 /// What it says first: 14/20, muted, 8 over the chats.
 // kept across runs: a value (no field of it changes)
 let outside_lead_box : @ui.Style = @ui.css("w=Full pb=S2")
@@ -85,11 +64,6 @@ let outside_cannot : @ui.TextStyle = @ui.text_style(size=Sm, leading=L5, color=D
 let outside_failed_box : @ui.Style = @ui.css("w=Full pt=S2")
 
 ///|
-/// The buttons at its end, 8 apart: 16 under what is over them, 24 over the sheet's foot.
-// kept across runs: a value (no field of it changes)
-let outside_buttons : @ui.Style = @ui.css("row w=Full pt=S4 pb=S6 gap=S2 justify=JEnd")
-
-///|
 /// Whose a chat is, in a small outlined pill (PageParts.kt StationTag with words alone: 104 at most, 8 and 2 in, its
 /// words 12/16 muted on one line).
 // kept across runs: a value (no field of it changes)
@@ -109,81 +83,97 @@ let words_tag : @ui.Style = @ui.style(
 let words_tag_words : @ui.TextStyle = @ui.text_style(size=Xs, leading=L4, color=Muted, wrap=false)
 
 ///|
-/// The sheet asking to share what draft `key` refers to, while it is open or sinking away.
+/// The presenter asking for each draft's sharing (@sf.last_presented), while it is drawn.
+// kept across runs: emptied as each goes (outside_sheet); reset by the app with the presenters (outside_reset)
+let outside_shown : Map[String, Int] = {}
+
+///|
+/// No sheet asking (the app begun again).
+fn outside_reset() -> Unit {
+  outside_shown.clear()
+}
+
+///|
+/// The sheet asking to share what draft `key` refers to (the library's panel opened by nothing: with a finger the
+/// phone's sheet, with a mouse the web's dialog), put up as the core asks, taken down as it is answered; its scrim,
+/// back or a press outside is 取消.
 fn outside_sheet(c : @ui.Ctx, src : Source, key : String) -> Unit {
+  ignore(c)
+  match (@sfbase.outside_asking(key), outside_shown.get(key)) {
+    (Some(s), None) if s.open => {
+      @sf.panel(
+        tr("web-main.outside.title"),
+        fn(c, _) { outside_body_of(c, key) },
+        from=Unanchored,
+        foot=fn(c, _) { outside_foot(c, src, key) },
+        gone=fn() {
+          match @sfbase.outside_asking(key) {
+            Some(s) if s.open => @sfbase.outside_no(s)
+            _ => ()
+          }
+        },
+      )
+      outside_shown[key] = @sf.last_presented()
+    }
+    (Some(s), Some(serial)) if !s.open =>
+      if @sf.presented_drawn_of(serial) {
+        // answered (shared and sent, or 取消): down
+        @sf.close_presented_of(serial)
+      } else {
+        outside_shown.remove(key)
+        @sfbase.outside_gone(s)
+      }
+    (None, Some(serial)) => {
+      @sf.close_presented_of(serial)
+      outside_shown.remove(key)
+    }
+    _ => ()
+  }
+}
+
+///|
+/// What it says: the chats, each as a reference shows (its title after `@`, in the link's ink), whose after it as the
+/// `@` menu says it, and why one may not be shared; why sharing failed.
+fn outside_body_of(c : @ui.Ctx, key : String) -> Unit {
   guard @sfbase.outside_asking(key) is Some(s) else { return }
-  let sharable = @sfbase.outside_sharable(s)
-  let h = dmin(outside_sheet_h(s.chats), c.height * 0.9)
-  let cancel_key = "outside/cancel"
-  let go_key = "outside/go"
-  let r = @kit.sheet(
-    c,
-    "outside-sheet",
-    s.open,
-    h~,
-    scrim=@sf.sheet_scrim,
-    look=@sf.sheet_look(),
-    fn() {
-      @sf.sheet_grab(c)
-      sheet_head(c, tr("web-main.outside.title"))
-      c.capped("outside/" + key, h - outside_top, fn() {
-        c.box(style=outside_body, fn() {
-          c.box(style=outside_lead_box, fn() {
-            c.text(tr("web-main.outside.lead"), style=outside_lead) |> ignore
-          })
-          |> ignore
-          // each as a reference shows (its title after `@`, in the link's ink), whose after it as the `@` menu says it
-          for x in s.chats {
-            c.box(style=outside_row, fn() {
-              c.box(style=outside_line, fn() {
-                c.box(style=outside_title_box, fn() {
-                  c.text("@", style=outside_at) |> ignore
-                  c.text(x.title, style=outside_title) |> ignore
-                })
-                |> ignore
-                c.box(style=words_tag, fn() {
-                  c.text(fill("web-main.outside.from", [("name", x.workspace_name)]), style=words_tag_words)
-                  |> ignore
-                })
-                |> ignore
-              })
-              |> ignore
-              if !x.may {
-                c.box(style=outside_cannot_box, fn() {
-                  c.text(tr("web-main.outside.cannot"), style=outside_cannot) |> ignore
-                })
-                |> ignore
-              }
-            })
-            |> ignore
-          }
-          if s.error != "" {
-            c.box(style=outside_failed_box, fn() { c.text(s.error, style=outside_cannot) |> ignore })
-            |> ignore
-          }
-          c.box(style=outside_buttons, fn() {
-            if dv_button(c, cancel_key, tr("common.cancel"), primary=false) {
-              @sfbase.outside_no(s)
-            }
-            let label = tr(if sharable { "web-main.outside.share" } else { "web-main.outside.anyway" })
-            if dv_button(c, go_key, label, primary=true, busy=s.busy) {
-              @sfbase.outside_yes(src, s)
-              // (a core that answers at once has cleared it to go already)
-              sharing_go(s.key)
-            }
-          })
-          |> ignore
+  c.box(style=outside_lead_box, fn() { c.text(tr("web-main.outside.lead"), style=outside_lead) |> ignore }) |> ignore
+  for x in s.chats {
+    c.box(style=outside_row, fn() {
+      c.box(style=outside_line, fn() {
+        c.box(style=outside_title_box, fn() {
+          c.text("@", style=outside_at) |> ignore
+          c.text(x.title, style=outside_title) |> ignore
+        })
+        |> ignore
+        c.box(style=words_tag, fn() {
+          c.text(fill("web-main.outside.from", [("name", x.workspace_name)]), style=words_tag_words) |> ignore
         })
         |> ignore
       })
       |> ignore
-    },
-  )
-  // closed by its scrim or dragged down: as 取消
-  if s.open && !r.open {
+      if !x.may {
+        c.box(style=outside_cannot_box, fn() { c.text(tr("web-main.outside.cannot"), style=outside_cannot) |> ignore })
+        |> ignore
+      }
+    })
+    |> ignore
+  }
+  if s.error != "" {
+    c.box(style=outside_failed_box, fn() { c.text(s.error, style=outside_cannot) |> ignore }) |> ignore
+  }
+}
+
+///|
+/// Its buttons: 取消, and 分享并发送 (仍然发送 with none that may be shared), turning while it shares.
+fn outside_foot(c : @ui.Ctx, src : Source, key : String) -> Unit {
+  guard @sfbase.outside_asking(key) is Some(s) else { return }
+  if dv_button(c, "outside/cancel", tr("common.cancel"), primary=false) {
     @sfbase.outside_no(s)
   }
-  if !s.open && !r.shown {
-    @sfbase.outside_gone(s)
+  let label = tr(if @sfbase.outside_sharable(s) { "web-main.outside.share" } else { "web-main.outside.anyway" })
+  if dv_button(c, "outside/go", label, primary=true, busy=s.busy) {
+    @sfbase.outside_yes(src, s)
+    // (a core that answers at once has cleared it to go already)
+    sharing_go(s.key)
   }
 }

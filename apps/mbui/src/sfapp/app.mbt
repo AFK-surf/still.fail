@@ -115,6 +115,8 @@ fn reset() -> Unit {
   @sf.viewer_reset()
   // the menu open (@sf.menu_of, context_items)
   @sf.parts_reset()
+  outside_reset()
+  attach_reset()
   // the menu bar given (menu_bar.mbt)
   // the made-up chats and their station (chat_fixture.mbt, service_fixture.mbt, drive_fixture.mbt)
   kept_chats.clear()

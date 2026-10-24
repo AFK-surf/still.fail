@@ -10,7 +10,7 @@ test "21-station-files" {
     f.see("=studio")
     f.tap("icon:plus")
     // ＋'s sheet up
-    f.run_to(@kit.sheet_rest("attach-sheet"))
+    f.run_to(@kit.sheet_rest("sf-present"))
     f.tap("Station 文件")
     // ＋'s sheet down, the places' up
     f.run_to(@kit.sheet_rest("dv-reader-sheet"))

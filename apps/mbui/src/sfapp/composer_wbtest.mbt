@@ -756,7 +756,7 @@ fn plus_opened() -> @ui.Tester raise {
   assert_eq(app.nav.depth(), 2)
   t.tap(10.0 + 8.0 + 18.0, 844.0 - 10.0 - 8.0 - 18.0)
   assert_true(cui.attach)
-  t.run_for(@kit.sheet_rest("attach-sheet") - t.time())
+  t.run_for(@kit.sheet_rest("sf-present") - t.time())
   t
 }
 
@@ -768,7 +768,7 @@ test "back with ＋'s sheet up puts the sheet away, the chat stays; back again l
   t.back()
   assert_true(!cui.attach)
   assert_eq(app.nav.depth(), 2)
-  t.run_for(@kit.sheet_rest("attach-sheet") - t.time())
+  t.run_for(@kit.sheet_rest("sf-present") - t.time())
   assert_true(t.find("整理发布清单") is Some(_))
   t.back()
   t.run_for(@ui.nav_rest() - t.time())
@@ -785,7 +785,7 @@ test "the system's back gesture with ＋'s sheet up puts the sheet away, the cha
   t.back_gesture(200.0, true)
   assert_true(!cui.attach)
   assert_eq(app.nav.depth(), 2)
-  t.run_for(@kit.sheet_rest("attach-sheet") - t.time())
+  t.run_for(@kit.sheet_rest("sf-present") - t.time())
   assert_true(t.find("整理发布清单") is Some(_))
 }
 
