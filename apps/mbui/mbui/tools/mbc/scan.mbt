@@ -367,10 +367,14 @@ fn idents(t : BytesView) -> BSet {
 }
 
 ///|
-let local_not : Array[Bytes] = [b"moonbit", b"Moonbit", b"MOONBIT"]
+/// Never a local: the runtime's names, and moonc's own but _M0L's (a global named like a temporary, sf's `space_5` as
+/// _M0FP29stillfail2sf8space__5, was taken for a local, and moonbit_init's pieces from its first use to its last
+/// one, 437 runs of 478, were one piece: a 3.4 MB function compiled again whatever changed in it, 14-23 s of every
+/// Windows build on the runner, 2026-10-24)
+let local_not : Array[Bytes] = [b"moonbit", b"Moonbit", b"MOONBIT", b"_M0"]
 
 ///|
-/// LOCAL: _M0L[A-Za-z0-9_$]*\d$|(?!moonbit|Moonbit|MOONBIT)[A-Za-z_][A-Za-z0-9_$]*_\d+$  (re.match on a name)
+/// LOCAL: _M0L[A-Za-z0-9_$]*\d$|(?!moonbit|Moonbit|MOONBIT|_M0)[A-Za-z_][A-Za-z0-9_$]*_\d+$  (re.match on a name)
 fn is_local(t : BytesView) -> Bool {
   let n = t.length()
   if n == 0 {

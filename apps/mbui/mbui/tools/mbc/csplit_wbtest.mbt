@@ -489,6 +489,23 @@ test "init jumps stay after the values they use" {
 }
 
 ///|
+test "a global named like a temporary is not a local: the pieces between its uses stay apart" {
+  // (sf's space_5: _M0FP11a7space__5 ends as moonc's temporaries do, _\d+; read as a local, every piece from its
+  // set to its last use was one)
+  let src =
+    #|void moonbit_init() {
+    #|  _M0FP11a7space__5 = 4;
+    #|  _M0FP11b1x = 1;
+    #|  _M0FP11c1y = _M0FP11a7space__5;
+    #|}
+  let pieces = init_pieces(utf8(src)).unwrap()
+  assert_eq(pieces.map(fn(p) { str(p.0) }), ["a", "b", "c"])
+  assert_false(is_local(b"_M0FP11a7space__5"))
+  assert_true(is_local(b"_M0L6_2atmpS10"))
+  assert_true(is_local(b"_tmp_610671"))
+}
+
+///|
 test "init pieces" {
   // moonbit_init in its packages' pieces: a global's temporaries and what lets them go with it, a local two share
   // keeping them one, blocks whole; package b changed, package a's unit the same
