@@ -34,6 +34,7 @@ pub let frame_period_default : Double = 1000.0 / 60.0
 /// forgotten here fails the next Tester at once rather than a test somewhere else.
 fn reset_globals() -> Unit {
   the_ctx.val = Ctx::new()
+  corners_hold.val = true
   text_runs.on = false
   text_runs.runs.clear()
   desk_reset()
@@ -167,6 +168,8 @@ fn leaked_state() -> Array[String] {
 /// `copy_shown`: the system says itself that something was put on the clipboard (Android 13 and later: @ui.copy_shown).
 /// `live`: a real host asked in place of the fake for what is drawn by, its text and its pictures (Live: a film's,
 /// mbui/src/film; never a test's), recorded as a host's are (MBUI_TEXT_RECORD=1 in `env`); `text` is then not read.
+/// `corners_held`: whether every frame it draws with nothing moving is held to the corner rule where the theme says
+/// its ladder (Tester::hold_corners); false for a test that draws a fault on purpose, to find it.
 pub fn Tester::new(
   view : (Ctx) -> Unit,
   w? : Double = 390.0,
@@ -188,6 +191,7 @@ pub fn Tester::new(
   h264? : Bool = false,
   copy_shown? : Bool = false,
   live? : Live,
+  corners_held? : Bool = true,
 ) -> Tester {
   let f = {
     time,
@@ -307,6 +311,7 @@ pub fn Tester::new(
   // (what the app asks of its host directly, the fake's too: fake_host.mbt)
   @hostapi.set_host(f)
   reset_globals()
+  corners_hold.val = corners_held
   // (after the globals are put back: what came from outside before the run's first frame, posted here, would be lost
   // with them, and the first frame drawn without it: the system's bars round an edge-to-edge window)
   if run is Some(r) {
@@ -566,6 +571,7 @@ pub fn Tester::frame_at(self : Tester, at : Double) -> Unit {
   }
   on_frame(self.w, self.h, self.fake.scale, self.fake.time)
   self.frames = self.frames + 1
+  self.hold_corners()
   // what the outside the test stands for has said meanwhile, posted for the next frame (messages.mbt)
   frame_ended_outside()
 }
@@ -1812,4 +1818,30 @@ pub fn Tester::focused(self : Tester) -> SemNode? {
     }
   }
   None
+}
+
+///|
+/// Whether every frame a test draws at rest is held to the corner rule (Tester::hold_corners): as the Tester was made
+/// (its `corners_held`).
+// kept across runs: set again by each Tester (Tester::new)
+let corners_hold : Ref[Bool] = Ref(true)
+
+///|
+/// The corner rule (corners.mbt), held on the frame just drawn when nothing on it moves (a motion between its ends
+/// stands anywhere): where the theme says its ladder (an app's: Theme::corner_ladder), any fault fails the test at
+/// once, with what and where. So what a test reaches, every state of every screen it walks through, keeps to it, not
+/// only the screens a test of corners looks at.
+fn Tester::hold_corners(self : Tester) -> Unit {
+  let c = g()
+  if !corners_hold.val || c.corner_ladder.is_empty() || c.frame_by is Some(_) || c.motion_left {
+    return
+  }
+  let faults = c.corner_faults()
+  if faults.is_empty() {
+    return
+  }
+  let said = "the corner rule broken on a frame drawn \{self.w}×\{self.h} at \{self.fake.time} (the theme's ladder \{c.corner_ladder}; still.fail's docs/ui-panels.md 圆角阶梯, mbui's docs/style.md):\n" +
+    faults.join("\n")
+  println(said)
+  abort(said)
 }

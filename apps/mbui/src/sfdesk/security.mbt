@@ -135,8 +135,10 @@ fn sec_line(
           }
         })
         |> ignore
+        // (at the row's top: at a card's first row's end in its corner as far from its top as from its side, and clear
+        // of its last's foot corner)
         match end {
-          Some(f) => f()
+          Some(f) => c.box(style=sec_end_top, f) |> ignore
           None => ()
         }
       })
@@ -793,6 +795,11 @@ let sec_point_rest : @ui.TextStyle = @ui.text_style(size=Base, leading=L7, color
 let sec_rows : @ui.Style = @ui.css("w=Full gap=S3")
 
 ///|
+/// What a narrow row has at its end, at its top.
+// kept across runs: a value (no field of it changes)
+let sec_end_top : @ui.Style = @ui.css("row h=Full gap=S2 align=AStart")
+
+///|
 // kept across runs: a value (no field of it changes)
 let sec_row : @ui.Style = @ui.style(row=true, w=Full, min_h=Fixed(sec_row_least), gap=S3, align=ACenter)
 
@@ -838,10 +845,11 @@ let sec_warn_state : @ui.TextStyle = @ui.text_style(size=Xs, leading=L5, color=W
 let sec_devices : @ui.Style = @ui.css("w=Full pl=S10 gap=S2")
 
 ///|
-/// A short code as the device shows it (code: the code face 14 in 600, 3 by 9 in, 8 round, the words at 6%); the
-/// count of those waiting (count: the meta's 12 in 500 on the accent's ground, 7 in, round).
+/// A short code as the device shows it (code: the code face 14 in 600, 9 in, as tall as a row (so at a card's first or
+/// last row's end, in its corner, as far from its top or foot as from its side), 8 round, the words at 6%); the count of
+/// those waiting (count: the meta's 12 in 500 on the accent's ground, 7 in, round).
 // kept across runs: a value (no field of it changes)
-let sec_code : @ui.Style = @ui.css("py=S0_5 px=S2 radius=Lg bg=Tint")
+let sec_code : @ui.Style = @ui.css("px=S2 radius=Lg bg=Tint justify=JCenter").then(@ui.style(h=Fixed(sec_row_least)))
 
 ///|
 // kept across runs: a value (no field of it changes)

@@ -18,6 +18,9 @@ priv struct SettingsFixture {
   /// the subscription's sign-in: "" none, "needs_code" under way (settings-profile-login), "failed"
   /// (settings-profile-login-failed)
   mut login : String
+  /// Claude 主账号's trouble: "" none, "quota" its allowance unreadable (settings-profile-quota-failed), "blocked"
+  /// its allowance used up (settings-profile-blocked), "login" to be signed in to again (settings-profile-signin)
+  mut trouble : String
   /// the vault not set up on this device (settings-vault-off)
   mut vault_off : Bool
   /// secrets of lin's still in plain text from before security mode (settings-vault-plain), until encrypted
@@ -45,6 +48,7 @@ let fx : SettingsFixture = {
   auto: false,
   none: false,
   login: "",
+  trouble: "",
   vault_off: false,
   plain_left: 0,
   skills_shared: {},
@@ -116,6 +120,7 @@ fn fixture_reset() -> Unit {
   fx.auto = false
   fx.none = false
   fx.login = ""
+  fx.trouble = ""
   fx.vault_off = false
   fx.plain_left = 0
   fx.pairing = false
@@ -179,6 +184,9 @@ pub fn fixture_page(mode : String) -> String {
       fx.login = "failed"
       up("", "settings/profile/ws1/st1/cc", 0)
     }
+    "settings-profile-quota-failed" => fx.trouble = "quota"
+    "settings-profile-blocked" => fx.trouble = "blocked"
+    "settings-profile-signin" => fx.trouble = "login"
     // a connect's page; its way of making sessions asked (src/sfdesk connect.mbt's dialog)
     "settings-connect-menu" => ()
     "settings-connect-mode" => fixture_open.desk = "connect-mode"
@@ -254,7 +262,9 @@ pub fn fixture_page(mode : String) -> String {
     "settings-station-offline" => "station:ws1/st2"
     "settings-memory" => "memory:ws1/st1"
     "settings-memory-doc" => "memory-doc:ws1/st1#发布流程"
-    "settings-profile" => "profile:ws1/st1#cc"
+    "settings-profile" | "settings-profile-quota-failed" | "settings-profile-blocked" | "settings-profile-signin" =>
+      "profile:ws1/st1#cc"
+    "settings-profile-key" => "profile:ws1/st1#k2"
     "settings-profile-quota" => "profile:ws1/st1#cx"
     "settings-profile-models" => "profile-models:ws1/st1#cx"
     "settings-me-reading" => "me"
@@ -381,7 +391,7 @@ pub fn fixture_profiles() -> Array[Json] {
 ///|
 fn fx_profiles() -> Array[Json] {
   [
-    fx_profile("cc", "Claude 主账号", "subscription", "green", "可用", "claude", "Claude 订阅", [
+    fx_profile("cc", "Claude 主账号", "subscription", fx_cc_tone(), "可用", "claude", "Claude 订阅", fx_cc_with([
       ("share", obj([("id", str("sh1")), ("role", str("host")), ("host", str("st1")), ("users", ["st2"])])),
       ("fast", Json::boolean(false)),
       ("backgroundOnMessage", Json::boolean(true)),
@@ -411,7 +421,7 @@ fn fx_profiles() -> Array[Json] {
             ])
         },
       ),
-    ]),
+    ])),
     fx_profile("cx", "ChatGPT 团队", "subscription", "green", "可用", "chatgpt", "ChatGPT 订阅", fx_cx_more()),
     fx_profile("k2", "备用 key", "anthropic-api", "red", "没能使用", "key", "API key", [
       ("trouble", obj([("title", str("key 已失效")), ("detail", str("服务商拒绝了这个 key")), ("next", str("")), ("action", str("key")), ("label", str(""))])),
@@ -419,6 +429,43 @@ fn fx_profiles() -> Array[Json] {
       ("usedBy", []),
     ]),
   ]
+}
+
+///|
+/// Claude 主账号's dot as its trouble has it (fx.trouble).
+fn fx_cc_tone() -> String {
+  match fx.trouble {
+    "login" | "blocked" => "red"
+    _ => "green"
+  }
+}
+
+///|
+/// Claude 主账号's own (`more`) and its trouble (fx.trouble) as the core says it (present.ts profileTrouble), with what
+/// its check and its allowance say then.
+fn fx_cc_with(more : Array[(String, Json)]) -> Array[(String, Json)] {
+  let issue = fn(title : String, detail : String, next : String, action : String, label : String) {
+    ("trouble", obj([("title", str(title)), ("detail", str(detail)), ("next", str(next)), ("action", str(action)), ("label", str(label))]))
+  }
+  more..append(match fx.trouble {
+    "quota" =>
+      [
+        issue("额度查询失败", "请求超时，已中止", "查不到额度不代表账号不能用。先重新查询；还是失败，再按返回的原因检查登录或网络。", "quota", "重新查询额度"),
+        ("quota", obj([("state", str("unavailable")), ("detail", str("请求超时，已中止")), ("windows", []), ("checkedAt", Json::number(0.0))])),
+      ]
+    "blocked" =>
+      [
+        issue("额度已用完", "本周额度已用完", "等额度恢复，或换一个账号。", "quota", "重新查询额度"),
+        ("quota", obj([("state", str("blocked")), ("detail", str("本周额度已用完")), ("windows", []), ("checkedAt", Json::number(0.0))])),
+      ]
+    "login" =>
+      [
+        issue("需要重新登录", "登录已过期", "", "login", "登录"),
+        ("check", obj([("state", str("login")), ("detail", str("登录已过期")), ("checkedAt", Json::number(0.0)), ("time", obj([("checkedAt", stamp_of("5 分钟前"))]))])),
+        ("checkText", str("需要登录")),
+      ]
+    _ => []
+  })
 }
 
 ///|

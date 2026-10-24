@@ -619,6 +619,7 @@ fn todo_shown(src : Source, w : Workspace) -> Bool {
 fn band_h(src : Source, w : Workspace) -> Double {
   side_top_h() +
   side_new_h +
+  (if wide.tape && !wide.in_bar { band_new_tape_over } else { 0.0 }) +
   (if wide.in_bar { bar_band_in - side_new_under } else { 0.0 }) +
   (if todo_shown(src, w) { side_todo_h } else { 0.0 })
 }

@@ -398,6 +398,7 @@ fn frame_build(c : Ctx, w : Double, h : Double) -> Int {
   c.inners_or.clear()
   c.moves_build_start()
   c.arounds.clear()
+  c.corner_ladder = c.theme.corner_ladder
   // (what an earlier build of this frame said to tell outside is let go: this one says it again, or not)
   c.tells.clear()
   drawing_begin()

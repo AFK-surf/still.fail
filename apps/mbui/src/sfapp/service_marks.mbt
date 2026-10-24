@@ -35,8 +35,8 @@ let mark_key_on : @ui.Style = mark_key.then(@ui.style(bg=@sf.mark_key_on))
 let mark_mode_place : @ui.Style = @ui.css("w=Full px=S1")
 
 ///|
-/// MarkMode's capsule: 30 high, round, the chip's ground a tenth of the way to the accent, 12 in at its start and 3 at
-/// its end, 8 apart.
+/// MarkMode's capsule: 30 high, round, the chip's ground a tenth of the way to the accent, what is in its ends
+/// concentric with them (the dot's ring at its start, 添加到对话 at its end), 8 apart.
 // kept across runs: a value (no field of it changes)
 let mark_mode_bar : @ui.Style = @ui.style(
   row=true,
@@ -44,7 +44,7 @@ let mark_mode_bar : @ui.Style = @ui.style(
   h=@sf.mark_bar_h,
   radius=Full,
   bg=Over(A(Accent, O10), Faint),
-  pl=S3,
+  pl=@sf.mark_bar_start,
   pr=@sf.mark_bar_end,
   gap=S2,
   align=ACenter,
@@ -52,13 +52,14 @@ let mark_mode_bar : @ui.Style = @ui.style(
 )
 
 ///|
-/// Its dot (7, the accent while picking, else muted), in a 13 ring of the accent's 22% while picking.
+/// Its dot (7, the accent while picking, else muted), in the middle of a 13 ring's room, the ring the accent's 22% while
+/// picking (so the dot stands where the ring's middle is, concentric with the bar's end, either way).
 // kept across runs: a value (no field of it changes)
-let mark_dot_box : @ui.Style = @ui.style(w=@sf.dot_size, h=@sf.dot_size, radius=Full, align=ACenter, justify=JCenter)
+let mark_dot_box : @ui.Style = @ui.style(w=@sf.mark_ring, h=@sf.mark_ring, radius=Full, align=ACenter, justify=JCenter)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let mark_dot_ring : @ui.Style = mark_dot_box.then(@ui.style(w=@sf.mark_ring, h=@sf.mark_ring, bg=@sf.mark_ring_bg))
+let mark_dot_ring : @ui.Style = mark_dot_box.then(@ui.style(bg=@sf.mark_ring_bg))
 
 ///|
 // kept across runs: a value (no field of it changes)

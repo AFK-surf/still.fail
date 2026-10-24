@@ -1,18 +1,20 @@
 // What the person does in the browser for a profile's sign-in under way (Profiles.kt LoginSteps): open the page and
 // paste the code back (Claude, Devin), copy the code and open the page (Codex, Grok), or only open the page and confirm
 // there (Cursor). Each step's button solid until it is pressed (LoginCards.kt StepButton), the code's field with 完成 in
-// its end once a code is in (CodeField); all of them reaching the card's corners, concentric with it (Profiles.kt
-// CODE_BOX_CORNER: concentric(card_pad + 38 / 2, card_pad), 23, the scale's 22; 完成 6 in, 17, the scale's 16).
+// its end once a code is in (CodeField); the last of them in the card's foot corners, so all of them capsules a
+// settings button high, reaching past the card's words to its foot's inset (parts.mbt Foot's Capsule: foot_across),
+// 完成 a capsule concentric in the field's end.
 
 ///|
-/// A step's button (StepButton): the card's width, 8 under what is over it, 44 high, solid (the ink, the page's colour
-/// on it) until pressed, else the ink at 6%; its words 15 semibold, ↗ after them when it opens a page.
+/// A step's button (StepButton): the card's foot's width, 8 under what is over it, a settings button high, solid (the
+/// ink, the page's colour on it) until pressed, else the ink at 6%; its words 15 semibold, ↗ after them when it opens
+/// a page.
 // kept across runs: a value (no field of it changes)
-let step_room : @ui.Style = @ui.css("w=Full pt=S2")
+let step_room : @ui.Style = @ui.css("w=Full pt=S2").then(foot_across)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let step_button : @ui.Style = @ui.css("row w=Full h=S11 gap=S1_5 radius=Xl3 bg=Tint align=ACenter justify=JCenter")
+let step_button : @ui.Style = @ui.css("row w=Full gap=S1_5 radius=Full bg=Tint align=ACenter justify=JCenter").then(@ui.style(h=Fixed(settings_button_h)))
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -32,28 +34,32 @@ let step_words_solid : @ui.TextStyle = step_words.then(@ui.text_style(color=Bg))
 let step_note : @ui.TextStyle = @ui.text_style(size=Sm, leading=L4_75, color=Muted, w=Full)
 
 ///|
-/// The device code's box: the card's width, on the chips' grey, 14 by 10 in, the code in its middle.
+/// The device code's box: the card's foot's width (as its buttons), on the chips' grey, 10 in, the code in its middle;
+/// a block of the ladder's.
 // kept across runs: a value (no field of it changes)
-let code_box : @ui.Style = @ui.css("w=Full px=S3_5 py=S2_5 radius=Xl3 bg=Neutral align=ACenter")
+let code_box : @ui.Style = @ui.css("w=Full py=S2_5 bg=Neutral align=ACenter").then(@ui.style(radius=@sf.row_radius)).then(foot_across)
 
 ///|
-/// The code pasted back (CodeField): the card's width, 6 under the step over it, 44 high, on the chips' grey (on the
-/// card's white), 14 in on the left and 6 on the right.
+/// The code pasted back (CodeField): the card's foot's width, 6 under the step over it, a capsule a settings button
+/// high, on the chips' grey (on the card's white), 14 in on the left, 完成 concentric in its end.
 // kept across runs: a value (no field of it changes)
-let code_field_room : @ui.Style = @ui.css("w=Full pt=S1_5")
+let code_field_room : @ui.Style = @ui.css("w=Full pt=S1_5").then(foot_across)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let code_field : @ui.Style = @ui.css("row w=Full h=S11 pl=S3_5 pr=S1_5 gap=S1_5 radius=Xl3 bg=Neutral align=ACenter")
+let code_field : @ui.Style = @ui.css("row w=Full pl=S3_5 gap=S1_5 radius=Full bg=Neutral align=ACenter").then(@ui.style(h=Fixed(settings_button_h), pr=@sf.capsule_end_room(settings_button_h, code_finish_h)))
 
 ///|
 // kept across runs: a value (no field of it changes)
 let code_field_words : @ui.Style = @ui.css("w=Full")
 
 ///|
-/// 完成 in the field's end: 32 high, solid, 14 in each side.
+/// 完成 in the field's end: a capsule 30 high, solid, 14 in each side.
 // kept across runs: a value (no field of it changes)
-let code_finish : @ui.Style = @ui.css("row h=S8 px=S3_5 radius=Xl1_5 bg=Fg align=ACenter justify=JCenter")
+let code_finish : @ui.Style = @ui.css("row px=S3_5 radius=Full bg=Fg align=ACenter justify=JCenter").then(@ui.style(h=Fixed(code_finish_h)))
+
+///|
+let code_finish_h : Double = 30.0
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -71,7 +77,7 @@ fn step_button_of(c : @ui.Ctx, key : String, label : String, solid : Bool, exter
         @sf.icon(c, "arrow-up-right", size=step_icon, color=if solid { t.p.bg } else { t.p.text }) |> ignore
       }
       // LoginCards.kt StepButton: its ripple in its words' colour (ripple(color = ink))
-      @motion.ripple(c, id, 23.0, ink=@sf.alpha(if solid { t.p.bg } else { t.p.text }, 0.1))
+      @motion.ripple(c, id, settings_button_h / 2.0, ink=@sf.alpha(if solid { t.p.bg } else { t.p.text }, 0.1))
     })
     |> ignore
   })
@@ -208,7 +214,7 @@ fn login_steps(c : @ui.Ctx, core : Core, k : String, job : Json?, provider : Str
           c.box(style=code_finish, id=go, fn() {
             c.text(tr("android-settings.login.finishShort"), style=code_finish_words) |> ignore
             // LoginCards.kt: its ripple in the page's colour (ripple(color = C.bg))
-            @motion.ripple(c, go, 17.0, ink=@sf.alpha(@sf.theme().p.bg, 0.1))
+            @motion.ripple(c, go, code_finish_h / 2.0, ink=@sf.alpha(@sf.theme().p.bg, 0.1))
           })
           |> ignore
         }

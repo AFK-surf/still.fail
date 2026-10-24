@@ -173,7 +173,19 @@ let publish_inset : @ui.Style = @ui.css("w=Full px=S5")
 ///|
 /// The snapshot's messages on a card, as the chat draws others' (22 round, the ink at 4%, 16 and 14 in, 16 apart).
 // kept across runs: a value (no field of it changes)
-let publish_card : @ui.Style = @ui.style(w=Full, px=S4, py=S3_5, radius=Xl3, bg=@sf.faint_ground, gap=S4)
+let publish_card : @ui.Style = @ui.style(
+  w=Full,
+  px=@sf.capsule_room(@sf.card_corner, publish_face),
+  py=S3_5,
+  radius=Xl3,
+  bg=@sf.faint_ground,
+  gap=S4,
+)
+
+///|
+/// A message's face in the preview (18 round): its card's sides as far in as makes the first one in its top left
+/// corner concentric with it (its name's line 3 under the card's 14).
+let publish_face : Double = 18.0
 
 ///|
 /// The link made, on the card's ground (22 round, 14 and 10 in).
@@ -472,9 +484,9 @@ fn file_toggle(c : @ui.Ctx, src : Source, station : String, f : Json?, w : Doubl
 }
 
 ///|
-/// An attachment's box: its corner 8 (a file's card's), what is in it clipped to it; unticked, faded.
+/// An attachment's box: a small block of the ladder's, what is in it clipped to it; unticked, faded.
 // kept across runs: a value (no field of it changes)
-let toggle_on : @ui.Style = @ui.css("radius=Lg clip")
+let toggle_on : @ui.Style = @ui.css("clip").then(@ui.style(radius=@sf.small_radius))
 
 ///|
 // kept across runs: a value (no field of it changes)

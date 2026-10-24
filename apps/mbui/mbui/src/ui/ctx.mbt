@@ -384,6 +384,9 @@ pub struct Ctx {
   // the boxes built this frame whose corner is `Around`: worked out from what lies in their corner (corners.mbt)
   arounds : Array[Int]
   inner_faults : Array[String]
+  // the corner ladder of the theme the view was built under (Theme::corner_ladder: the frame's, or one put in force
+  // over it with with_theme that says one), what corner_faults holds corners to
+  mut corner_ladder : Array[Double]
   mut direction : Direction
   // what the widgets built this frame say they are (semantics.mbt), and how deep in a part hidden from it the view
   // builds; the actions asked of them (by the host's accessibility, a test) for the next frame, and this frame's
@@ -573,6 +576,7 @@ fn Ctx::new() -> Ctx {
     shown_last: {},
     move_seen: {},
     arounds: [],
+    corner_ladder: [],
     inner_faults: [],
     direction: Ltr,
     sems: [],

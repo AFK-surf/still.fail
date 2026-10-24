@@ -631,5 +631,5 @@ pub fn composer_width(pane : Double) -> Double {
 let composer_most : Double = 804.0
 
 ///|
-pub let composer_side : Double = 12.0
+pub let composer_side : Double = @sf.corner_inset
 

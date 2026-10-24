@@ -36,6 +36,13 @@ let squeeze_modes : Array[String] = [
 ///|
 /// `mode` in window `win` in `lang`, a moment after it opens (what it opens with over): its squeeze faults.
 fn squeeze_of(mode : String, win : (String, Double, Double, Int, String), lang : String) -> Array[String] {
+  screen_in(mode, win, lang).squeeze_faults()
+}
+
+///|
+/// `mode` in window `win` (its name, size, platform and the size class its host says, "" none) in `lang`, a moment
+/// after it opens (what it opens with over), drawn: the squeeze and corner tests' (corners_wbtest.mbt).
+fn screen_in(mode : String, win : (String, Double, Double, Int, String), lang : String) -> @ui.Tester {
   let (_, w, h, platform, width) = win
   let src : Ref[Source?] = Ref(None)
   let t = @ui.Tester::new(
@@ -63,7 +70,7 @@ fn squeeze_of(mode : String, win : (String, Double, Double, Int, String), lang :
   }
   t.run_for(squeeze_opening)
   t.frame()
-  t.squeeze_faults()
+  t
 }
 
 ///|

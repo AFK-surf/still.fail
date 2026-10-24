@@ -542,8 +542,12 @@ pub fn frame(
   wide.moved_as = Some(state)
   // the column the page starts after (shell.css.ts shell: the rail's 56 and the sidebar open, the rail's folded) where
   // its move has got to: the page laid out as wide as it leaves
-  // (on the tape apart from the page: its panel 6 in from the window's edge, 8 from the page's: tape_apart)
-  let col = c.moved("--side-col", rail_w + (if bar { 0.0 } else { s }) + (if wide.tape { tape_apart } else { 0.0 }))
+  // (on the tape apart from the page: its panel 6 in from the window's edge, 8 from the page's: tape_apart; as much
+  // wider as its rail shows more there, its places in the panel's corners concentric with it: rail_open_tape)
+  let col = c.moved(
+    "--side-col",
+    rail_w + (if bar { 0.0 } else { s }) + (if wide.tape { tape_apart + rail_tape_more } else { 0.0 }),
+  )
   wide.page_from = col
   // on the tape: a chat's side panel open beside it, a panel of its own after the page's; the page's panel as wide as
   // the window leaves past what shows of the sidebar with the page in use and of the side panel after it, else 6 in
@@ -640,7 +644,11 @@ pub fn frame(
           top=panel_top,
           tx=tape_x,
           id=page_id,
-          fn() { page_in(panel_h) },
+          fn() {
+            @sf.pane_round.val = Some(@sf.pane_corner)
+            page_in(panel_h)
+            @sf.pane_round.val = None
+          },
         )
         // what moves in the page of its own (the composer) takes its place from the page's foot: the tape moving the
         // page, a keyboard making it shorter, move none of it (it goes with the page, at once)
@@ -943,7 +951,7 @@ let frame_gate : @ui.Style = @ui.css("bg=Bg")
 /// sidebar is shown a while (from its edge to the window's): the box named "page-bar", moved with the block
 /// (side_moves).
 pub fn page_bar_room() -> (Double, Double, Double, Double) {
-  (wide.bar_pl, bar_in, wide.bar_ml, wide.bar_mr)
+  (wide.bar_pl, if wide.tape { @sf.tape_bar_end } else { bar_in }, wide.bar_ml, wide.bar_mr)
 }
 
 ///|

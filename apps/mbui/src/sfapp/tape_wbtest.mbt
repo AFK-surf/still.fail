@@ -297,20 +297,20 @@ test "on the tape the page panel's corner is its own: the composer and its butto
     Exact(r) => r
     _ => abort("the panels' corner is a number")
   }
-  // one line: as round as the panel's corner leaves it at 12 in (a capsule at most), its button as round as the box's
-  // leaves it at 6 in
-  let box = dmin(@ui.concentric(panel, @sf.page_panel_in), 22.0)
+  // one line: a capsule the ladder's inset in, as round as the panel's corner less that (its half), its buttons round
+  // in its ends
   guard composer_corners(t) is Some((k, s)) else { fail("no composer") }
-  assert_eq(k, box)
-  assert_eq(s, dmin(@ui.concentric(box, 6.0), 16.0))
+  assert_eq(k, panel - @sfpages.composer_side)
+  assert_eq(s, 16.0)
   assert_eq(t.corner_faults(), [])
   // lines more: the box concentric with the panel, the send button with the box, 12 in
   t.tap_text("发消息")
   t.type_text("第一行\n第二行\n第三行")
   t.run_for(@sfpages.morph_ms)
   guard composer_corners(t) is Some((k, s)) else { fail("no composer") }
-  let open = @ui.concentric(panel, @sf.page_panel_in)
-  assert_eq(k, open)
-  assert_eq(s, dmin(@ui.concentric(open, 12.0), 16.0))
+  // (the ladder's: the panel's corner a step in, a card's; its buttons round in its corners, the inset in)
+  assert_eq(k, @ui.concentric(panel, @sfpages.composer_side))
+  assert_eq(k, @sf.card_corner)
+  assert_eq(s, 16.0)
   assert_eq(t.corner_faults(), [])
 }

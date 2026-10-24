@@ -307,13 +307,18 @@ let find_field_least : Double = 160.0
 let find_button_w : Double = 26.0
 
 ///|
+/// The field's height (32: S8): a capsule.
+let find_field_h : Double = 32.0
+
+///|
 /// How light the strokes under the words in the messages other than the one the reader is at are (ChatFind.css.ts: .45).
 pub let find_faint : Double = 0.45
 
 ///|
 /// The bar (ChatFind.css.ts bar): before the field what it did not look in, said while it is so; the field 320 wide, 32
-/// high, a line round it on the raised ground, the corner 10; the words typed in 14, which of how many in 12, the one
-/// before, the next, close: 26 square, their corner 8 (concentric 2 in), the ground on hover.
+/// high, a line round it on the raised ground, a capsule (so in a panel's corner where its shape is concentric); the
+/// words typed in 14, which of how many in 12, the one before, the next, close: 26 round, concentric in its end, the
+/// ground on hover.
 pub fn find_bar(c : @ui.Ctx, src : Source, r : ChatRef, thread : Double, list : FindList) -> Unit {
   let t = @sf.theme()
   let key = chat_key(r)
@@ -426,11 +431,11 @@ let find_field_style : @ui.Style = @ui.style(
   w=Fixed(find_field_w),
   min_w=Fixed(find_field_least),
   h=S8,
-  pl=S1_5,
-  pr=S0_5,
+  pl=S3,
+  pr=@sf.capsule_end_room(find_field_h, find_button_w),
   gap=S0_5,
   align=ACenter,
-  radius=@sf.custom_field_r,
+  radius=Full,
   border=B1,
   border_color=Line,
   bg=Raised,
@@ -449,7 +454,7 @@ let find_meta : @ui.TextStyle = @ui.text_style(size=Xs, color=Muted, wrap=false)
 let find_button_style : @ui.Style = @ui.style(
   w=Fixed(find_button_w),
   h=Fixed(find_button_w),
-  radius=Lg,
+  radius=Full,
   align=ACenter,
   justify=JCenter,
   hovered=@ui.patch(bg=Hover),
@@ -460,7 +465,7 @@ let find_button_style : @ui.Style = @ui.style(
 let find_button_off : @ui.Style = @ui.style(
   w=Fixed(find_button_w),
   h=Fixed(find_button_w),
-  radius=Lg,
+  radius=Full,
   align=ACenter,
   justify=JCenter,
   opacity=O50,

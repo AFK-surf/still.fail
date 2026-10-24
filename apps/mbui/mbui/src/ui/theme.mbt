@@ -99,6 +99,11 @@ pub(all) struct Theme {
   text : TextScale
   leading : LeadingScale
   radii : RadiusScale
+  /// the corners nested things keep to, outermost first (still.fail's ladder: each a step in from the one before,
+  /// what lies in a container's corner as far in as makes it the next): a rounded container with something in its
+  /// corner, and a smooth one there, each round by one of them; a capsule or a circle round by its shape. None said:
+  /// any (Tester::corner_faults)
+  corner_ladder : Array[Double]
   /// the height of a line of words that say none, a size of words (1.4: CSS's `line-height: 1.4`, still.fail's
   /// apps'); 0: the host's own (its system's, about 1.42)
   text_line : Double
@@ -231,6 +236,7 @@ pub fn Theme::light() -> Theme {
     leading: LeadingScale::tailwind(),
     text_line: 0.0,
     radii: RadiusScale::tailwind(),
+    corner_ladder: [],
   }
 }
 
@@ -382,6 +388,7 @@ pub fn Theme::ios_light() -> Theme {
     leading: LeadingScale::tailwind(),
     text_line: 0.0,
     radii: RadiusScale::tailwind(),
+    corner_ladder: [],
   }
 }
 
@@ -587,6 +594,9 @@ pub fn Theme::corner(self : Theme, r : Radius) -> Double {
 pub fn Ctx::with_theme(self : Ctx, t : Theme, body : () -> Unit) -> Unit {
   let saved = self.theme
   self.theme = t
+  if t.corner_ladder.length() > 0 {
+    self.corner_ladder = t.corner_ladder
+  }
   body()
   self.theme = saved
 }

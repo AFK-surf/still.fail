@@ -95,18 +95,17 @@ let chat_info_foot : Double = 30.0
 let agent_sheet_foot : Double = 24.0
 
 ///|
-/// A row of an info card, its ground under the finger: Android ChatInfo.kt INFO_ROW (14.dp).
-let info_row_radius : Double = 14.0
+/// A row of an info card, its ground under the finger: a row of the ladder's.
+let info_row_radius : Double = @sf.row_corner
 
 ///|
-/// An info card round its rows, INFO_PAD (6.dp) in: Android ChatInfo.kt InfoList, Smooth(concentricOut(INFO_ROW,
-/// INFO_PAD)).
-let info_list_radius : Double = @sf.surface_corner(6.0, info_row_radius)
+/// An info card round its rows: a card of the ladder's, its rows the ladder's inset in.
+let info_list_radius : Double = @sf.card_corner
 
 ///|
-/// Rows on one quiet card (Android ChatInfo.kt InfoList): its rows INFO_PAD (6) in, the ink at 5%.
+/// Rows on one quiet card (Android ChatInfo.kt InfoList): its rows the ladder's inset in, the ink at 5%.
 // kept across runs: a value (no field of it changes)
-let info_list_style : @ui.Style = @ui.css("w=Full p=S1_5 bg=A(Fg,O5) clip")
+let info_list_style : @ui.Style = @ui.css("w=Full p=S2_5 bg=A(Fg,O5) clip")
 
 ///|
 fn info_list(c : @ui.Ctx, body : () -> Unit) -> Unit {
@@ -120,19 +119,52 @@ fn info_list(c : @ui.Ctx, body : () -> Unit) -> Unit {
 let info_row_style : @ui.Style = @ui.css("row w=Full min_h=S11 px=S2_5 py=S1 gap=S3")
 
 ///|
-/// A row that leads with a tile (a model's mark, 36 and 11 round): INFO_IN (4) in all round, so the tile is
-/// concentric with the row and the card.
+/// A row that leads with a tile (a model's mark, 36): its tile the ladder's inset in from the row's top and start, so
+/// in the card's corner it is twice that in, round by the ladder's step after the row's (mbui works it out).
 // kept across runs: a value (no field of it changes)
-let info_row_tile : @ui.Style = @ui.css("px=S1")
+let info_row_tile : @ui.Style = @ui.css("p=S2_5 align=AStart")
+
+///|
+/// An agent's tile leading its row (a model's mark): as tall as its row's two lines (15 and 12 on the app's 1.4).
+let info_tile : Double = 38.0
+
+///|
+/// A row that leads with a dot (a job's: 8 round, `job_dot_over` under its top): in the card's corner as far from both
+/// its edges as makes it concentric with it (@sf.capsule_in), its words on the dot's line.
+// kept across runs: a value (no field of it changes)
+let info_row_dot : @ui.Style = @ui.style(
+  pl=@sf.capsule_room(@sf.card_corner, job_dot_side, less=@sf.corner_inset),
+  pt=@sf.capsule_room(@sf.card_corner, job_dot_side, less=@sf.corner_inset + job_dot_over),
+)
+
+///|
+/// A job's dot (job_dot: 8), and how far under its row's words' top it stands, on its name's line (7).
+let job_dot_side : Double = 8.0
+
+///|
+let job_dot_over : Double = 7.0
 
 ///|
 /// Its ground rounded INFO_ROW, pressed a shade. True on the frame after it was tapped (never when `key` is "": a row
 /// that leads nowhere).
-fn info_row(c : @ui.Ctx, key : String, body : () -> Unit, align? : @ui.Align = ACenter, tile? : Bool = false) -> Bool {
+fn info_row(
+  c : @ui.Ctx,
+  key : String,
+  body : () -> Unit,
+  align? : @ui.Align = ACenter,
+  tile? : Bool = false,
+  dot? : Bool = false,
+) -> Bool {
   let t = @sf.theme()
   let id = if key == "" { 0 } else { c.id(key) }
-  let look = if tile { info_row_style.then(info_row_tile) } else { info_row_style }
-  c.box(style=look.then(@ui.style(align~)), radius=info_row_radius, id~, fn() {
+  let look = if tile {
+    info_row_style.then(info_row_tile)
+  } else if dot {
+    info_row_style.then(info_row_dot).then(@ui.style(align~))
+  } else {
+    info_row_style.then(@ui.style(align~))
+  }
+  c.box(style=look, radius=info_row_radius, id~, fn() {
     body()
     // ChatInfo.kt InfoRow: clip(Smooth(INFO_ROW)).clickable
     if id != 0 {
@@ -403,11 +435,12 @@ fn chat_info_sheet(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef) -> Uni
             let s = field(av, "session")
             let key = text(s, "key")
             if info_row(c, "info/agent/" + key, fn() {
+                // (as tall as its two lines: in the card's corners as far from its top as from its foot)
                 model_mark_big(
                   c,
                   text(field(s, "maker"), "id"),
                   text(s, "runtime"),
-                  36.0,
+                  info_tile,
                   state_of_badge(text(av, "badge")),
                   @sf.over(t.p.bg, @sf.alpha(t.p.card, 0.8)),
                 )
@@ -1043,7 +1076,7 @@ fn job_row(c : @ui.Ctx, key : String, job : Json?) -> Bool {
     c,
     key,
     fn() {
-      c.box(pt=7.0, opacity=if off { 0.55 } else { 1.0 }, fn() { job_dot(c, text(job, "tone")) })
+      c.box(pt=job_dot_over, opacity=if off { 0.55 } else { 1.0 }, fn() { job_dot(c, text(job, "tone")) })
       |> ignore
       c.box(w=Fill(1.0), gap=1.0, opacity=if off { 0.55 } else { 1.0 }, fn() {
         c.text(text(job, "name"), size=15.0, weight=500, color=t.p.text, wrap=false) |> ignore
@@ -1053,6 +1086,7 @@ fn job_row(c : @ui.Ctx, key : String, job : Json?) -> Bool {
       c.box(pt=4.0, fn() { chevron(c) }) |> ignore
     },
     align=AStart,
+    dot=true,
   )
 }
 

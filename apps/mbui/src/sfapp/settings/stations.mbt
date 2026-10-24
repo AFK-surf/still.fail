@@ -265,6 +265,11 @@ fn level_color(level : String) -> Int64 {
 }
 
 ///|
+/// A fill chip's height: tall enough that the ladder's small corner leaves it no capsule (in a card's corner, 20 in, as
+/// concentric with it as a block is).
+pub let fill_chip_h : Double = 22.0
+
+///|
 /// A rounded box with a figure in it, its mark before it, its ground filled from the left as far as `fill` (0–100):
 /// grey while it is ok, faintly the level's colour once it is not, the figure then in that colour (Parts.kt FillChip).
 fn fill_chip(
@@ -282,7 +287,7 @@ fn fill_chip(
   let fs = if small { 10.0 } else { 11.0 }
   // (its fill a plain rectangle the chip's clip cuts along its corners, FillChip's drawRect in its clip; its end square
   // where it stops)
-  c.box(h=Px(if small { 16.0 } else { 20.0 }), radius=@sf.fill_chip_corner, bg=t.p.chip, clip=true, justify=JCenter, fn() {
+  c.box(h=Px(if small { 16.0 } else { fill_chip_h }), radius=@sf.fill_chip_corner, bg=t.p.chip, clip=true, justify=JCenter, fn() {
     if fill > 0 {
       c.layer(fn() {
         c.box(dir=Row, w=Fill(1.0), h=Fill(1.0), fn() {
@@ -467,7 +472,7 @@ fn station_figures(c : @ui.Ctx, core : Core, s : Json?) -> Unit {
   c.box(style=if flag(s, "reconnecting") { peek_figures_faded } else { peek_figures_box }, fn() {
     c.box(style=figures_dials, fn() {
       c.box(style=@sf.full_width, fn() {
-        c.box(style=seen(@sf.full_width, read, false), fn() {
+        c.box(style=seen(figures_dials_in, read, false), fn() {
           meter_dials(c, if read { items(host, "meters") } else { unread_dials() })
         })
         |> ignore
@@ -513,9 +518,14 @@ fn station_figures(c : @ui.Ctx, core : Core, s : Json?) -> Unit {
 }
 
 ///|
-/// What is left of it large, 4 down.
+/// What is left of it large, 4 down; the grey bars over it before it is read from the top of its room (in its card's
+/// corner as far from both its edges: round by the ladder's there).
 // kept across runs: a value (no field of it changes)
-let figures_dials : @ui.Style = @ui.css("w=Full pt=S1")
+let figures_dials : @ui.Style = @ui.css("w=Full")
+
+///|
+// kept across runs: a value (no field of it changes)
+let figures_dials_in : @ui.Style = @ui.css("w=Full pt=S1")
 
 ///|
 /// The dials' places before it is read, 16 apart (Bar 90 by 76, 6 round).

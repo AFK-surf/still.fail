@@ -3,6 +3,9 @@
 // until the bar is lowered here). A screen not listed has none.
 
 ///|
-// (chat-publish's: the first message's picture in the snapshot's card, 17 from its top and 16 from its side, as
-// Android's Publish.kt PreviewMessage has it: the card's 14 and the picture's 3 under the name's line)
-let corners_known : Map[String, Int] = { "chat-info": 2, "chat-jobs": 2, "chat-publish": 1 }
+let corners_known : Map[String, Int] = Map::new()
+
+///|
+/// Every screen in every window (corners_wbtest.mbt), by window, language and screen: the bar it may only fall from. A
+/// screen not listed has none; none is listed now.
+let corners_everywhere_known : Map[String, Int] = Map::new()

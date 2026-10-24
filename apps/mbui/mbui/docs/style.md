@@ -77,12 +77,32 @@ Rich text (`Ctx::rich`) has both: letter spacing in every run, and `max_lines` (
 follows). Behaviour is not a style (`id`, `glass`, `notch_*`,
 `aspect`, `tx`/`ty`, a place in the parent: `left` `top` `right` `bottom`, `moves`).
 
-`radius=Inner`: the corner of the container the corner rule measures against (`Tester::corner_faults`: the nearest
-rounded one round it that shows, through boxes with no corner, or a ground laid beside it as a layer) less how far the
-box lies from that container's edges it is near, as laid out. What lies in a rounded container's corner is concentric
-with it by how it is written. Where it cannot be (in no rounded container, near none of its edges, nearer one edge than
-another: the window narrowed, a `max_w` came into force) it is drawn square and `corner_faults` says so: a test fails,
-a person's screen does not stop.
+A box's corner is the one it has standing alone. Where the layout puts it in the corner of a rounded container that
+shows (the nearest round it with a ground, an edge, glass or a cut: `Tester::corner_faults`'s), near both edges that
+meet there and as far from both, its corner is worked out after layout, concentric with the container's (smooth.mbt
+`concentric`: corners.mbt `corners_in_corners`), so no page writes a corner relative to its container and one the
+window narrows into a corner, or out of one, is right in both. Not a capsule or a circle (its corner half its shorter
+side): its shape is its height's, and where it stands is what makes it concentric (the container's corner its distance
+and its half), which the page lays out and `corner_faults` checks; nor one too small for the corner it would have there,
+nor one at different distances from the two edges: each keeps its own and `corner_faults` says so.
+
+`radius=Inner`: the corner of the container the corner rule measures against, as above, for a box near only one pair
+of its edges too (a row across a card, near its sides), drawn square where it cannot be (in no rounded container, near
+none of its edges, nearer one edge than another) and said so by `corner_faults`: a test fails, a person's screen does not
+stop. `InnerOr(own)`: the same, its own corner where it stands alone. `Around`: the other way, the container's corner
+round what lies in its corner.
+
+A theme may say its corner ladder (`Theme::corner_ladder`, outermost first): the corners nested things are round by,
+each the next in at one inset. `corner_faults` then holds a rounded container with something in its corner, and a
+smooth box there, to its steps (a capsule or a circle round by its shape; a control's own parts hugging its edge and
+what is in the last step only concentric). Under such a theme the Tester holds every frame a test draws with nothing
+moving to the rule: a fault fails the test there, with what and where (`Tester::new(corners_held=false)` for one that
+draws a fault on purpose, to find it). So every state a test walks through keeps to it, not only the screens a test of
+corners looks at.
+
+Not the rule's: what scrolls in the container (a list, a box kept to a height, a strip scrolled sideways: where it is
+from the container's corner is not fixed; `Inner` in one is near only the edges it does not scroll past), and what is
+in a picture (said to be one: Role `Image`, a drawing of another system's screen, whose corners are what it draws).
 
 ## Short of room
 

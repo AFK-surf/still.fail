@@ -52,22 +52,22 @@ fn font_setting_preview(c : @ui.Ctx, ui_face : Int, text_face : Int) -> Unit {
 let fp_sample_code : String = "```ts\nform.onsubmit = (e) => {\n  e.preventDefault(); // 0O 1lI\n};\n```"
 
 ///|
-/// The preview's two messages 12 apart: theirs at the end in a bubble (18 round on the page's ground, 14 by 8 in), the
+/// The preview's two messages 12 apart: theirs at the end in a bubble (18 round on the page's ground, 14 by 10 in), the
 /// agent's name (14 semibold in the accent's ink) and when (12 subtle) over its words, 4 apart.
 // kept across runs: a value (no field of it changes)
 let fp_column : @ui.Style = @ui.css("w=Full gap=S3")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let fp_mine_room : @ui.Style = @ui.css("w=Full align=AEnd")
+let fp_mine_room : @ui.Style = @ui.css("w=Full align=AEnd").then(@ui.style(pl=@sf.corner_clear_room))
 
 ///|
 // kept across runs: a value (no field of it changes)
-let fp_bubble : @ui.Style = @ui.css("radius=Xl2 bg=Bg px=S3_5 py=S2")
+let fp_bubble : @ui.Style = @ui.css("radius=Xl2 bg=Bg px=S3_5 py=S2_5")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let fp_agent : @ui.Style = @ui.css("w=Full gap=S1")
+let fp_agent : @ui.Style = @ui.css("w=Full pr=S2_5 gap=S1")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -268,9 +268,11 @@ let font_tile_check_place : @ui.Style = @ui.css("w=Full h=Full p=S2_5 align=AEnd
 let font_tile_w : Double = (font_setting_most - 50.0) / 6.0
 
 ///|
-/// The wide frame's preview (preview: a settings card, 20 in, as wide as the setting).
+/// The wide frame's preview (preview: a settings card, its words 20 in, as wide as the setting): their bubble in its
+/// top right corner the ladder's inset in (a block of the ladder's, tall enough not to be a capsule), the agent's words
+/// 20 in.
 // kept across runs: a value (no field of it changes)
-let font_preview_card : @ui.Style = @ui.css("w=Full p=S5 radius=Xl3 bg=Card")
+let font_preview_card : @ui.Style = @ui.css("w=Full pt=S2_5 pr=S2_5 pl=S5 pb=S5 radius=Xl3 bg=Card")
 
 ///|
 /// What a face of this machine's own is said as in the prefs' `fonts` (client/core-ts/src/fonts.ts LOCAL).

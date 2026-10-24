@@ -6,6 +6,12 @@
 // container's fault when not). A
 // container's corner is its own ground's, or a ground of its size laid under it as a layer. A test asks the frame it
 // drew (Tester::corner_faults); the gallery's components keep to it.
+//
+// What a page writes is a box's corner standing alone: in a container's corner, a smooth one's is worked out here
+// (corners_in_corners), so the concentric part holds by itself wherever the window or what it holds puts a box. What
+// is left to a page is where things stand, and which corners there are: the theme's ladder (Theme::corner_ladder), the
+// few corners nested things are round by, each the next one in at the ladder's step, and capsules' heights; the
+// check holds both to it.
 
 ///|
 /// Whether node `n` shows a ground of its own (a fill or an edge) and is drawn.
@@ -28,10 +34,19 @@ fn Node::corner(self : Node) -> Double {
 /// container's corner that is not as far from both edges, or not concentric (within half a pixel).
 pub fn Tester::corner_faults(self : Tester) -> Array[String] {
   ignore(self)
-  let c = g()
+  g().corner_faults()
+}
+
+///|
+/// Where the frame just built breaks the corner rule (Tester::corner_faults; a scripted run's `corners`).
+fn Ctx::corner_faults(self : Ctx) -> Array[String] {
+  let c = self
   // the corners said `Inner` that could not be worked out (corners_after_layout), first
   let out : Array[String] = c.inner_faults.copy()
   let grounds = c.layer_grounds()
+  let pictures = c.pictures()
+  let ladder = c.corner_ladder
+  let off_ladder : Set[Int] = Set::new()
   for i in 0..<c.count {
     let b = c.nodes[i]
     if !b.grounded() || b.layer {
@@ -41,15 +56,7 @@ pub fn Tester::corner_faults(self : Tester) -> Array[String] {
       Some(found) => found
       None => continue
     }
-    // in a list that lies in the container: the list's rows scroll under its edges, so where one is from the
-    // container's corner is not fixed (a sheet's content scrolling in it, cut by its foot)
-    if c.list_between(i, p) {
-      continue
-    }
-    // the container's own ground drawn on (the same fill, no edge: a grouped row's square patch over its rounded
-    // corners): its shape, not something in its corner
-    let gn = c.nodes[ground]
-    if b.bg == gn.bg && b.border_w <= 0.0 && gn.glass is None {
+    if c.corner_exempt(i, p, ra, ground, pictures) {
       continue
     }
     let a = c.nodes[p]
@@ -73,6 +80,12 @@ pub fn Tester::corner_faults(self : Tester) -> Array[String] {
       if dx < -0.5 || dy < -0.5 || dx >= ra || dy >= ra {
         continue
       }
+      // a corner that never shows: past the window's foot or head (a sheet held past the bottom so its foot's corners
+      // are under it). Not past its sides: a pane beside the one in use comes over whole
+      let cy = if k < 2 { a.y } else { a.y + a.fh }
+      if cy > c.height + 0.5 || cy < -0.5 || c.corner_cut_off(i, p, k) {
+        continue
+      }
       // flush in the corner of something between it and the container that cuts with a rounded corner (a clip=true
       // box with a corner, cut along it since mbui#42): what shows of it there is the cut's corner, not its own
       if c.cut_round_at(i, p, k) {
@@ -86,8 +99,31 @@ pub fn Tester::corner_faults(self : Tester) -> Array[String] {
       } else {
         (rb - concentric(ra, dmax(dx, dy))).abs() <= 0.5
       }
+      let corner = ["top left", "top right", "bottom left", "bottom right"][k]
+      // the ladder's corners (Theme::corner_ladder): the container's, unless round by its shape, said once; what lies
+      // in it, when it is as it should be by the rule above, unless round by its shape. Not a control's own parts
+      // hugging its edge (under half the ladder's step in: a segmented control's thumb in its track, a table's head
+      // inside its line), nor what is in the ladder's last (a small block's own marks): concentric with it and nothing
+      // more
+      if ladder.length() > 0 &&
+        even &&
+        in_step &&
+        dmax(dx, dy) >= ladder_hug(ladder) &&
+        ra > ladder[ladder.length() - 1] + 0.5 {
+        let round_a = ra >= dmin(a.fw, a.fh) / 2.0 - 0.5
+        if !round_a && !on_ladder(ladder, ra) && !off_ladder.contains(p) {
+          off_ladder.add(p)
+          out.push(
+            "\{c.named(p)} (corner \{ra}): something lies in its \{corner}, and its corner is not one of the ladder's \{ladder}",
+          )
+        }
+        if !round && on_ladder(ladder, ra) && !on_ladder(ladder, rb) {
+          out.push(
+            "\{c.named(i)} (corner \{rb}) in the \{corner} of \{c.named(p)} (corner \{ra}): \{dx} from its edges, so a corner not one of the ladder's \{ladder} (\{ladder_in(ladder, ra)})",
+          )
+        }
+      }
       if !(even && in_step) {
-        let corner = ["top left", "top right", "bottom left", "bottom right"][k]
         out.push(
           if round && even {
             "\{c.named(p)} (corner \{ra}): wants corner \{dmax(dx, dy) + rb}, for \{c.named(i)} (round, corner \{rb}) in its \{corner}, \{dx} from both edges"
@@ -101,6 +137,79 @@ pub fn Tester::corner_faults(self : Tester) -> Array[String] {
   }
   out
 }
+
+///|
+/// Whether corner `r` is one of the ladder's (within half a pixel).
+fn on_ladder(ladder : Array[Double], r : Double) -> Bool {
+  ladder.iter().any(fn(x) { (x - r).abs() <= 0.5 })
+}
+
+///|
+/// How far in a control's own parts hug its edge, the ladder's rule not theirs (corner_faults): under half the
+/// ladder's inset (its step over smooth.mbt's 1.25).
+fn ladder_hug(ladder : Array[Double]) -> Double {
+  if ladder.length() < 2 {
+    return 0.0
+  }
+  (ladder[0] - ladder[1]) * smooth_scale / 2.0
+}
+
+///|
+/// How far in from a corner of `ra` (one of the ladder's) a smooth box stands to be round by the next of the ladder's,
+/// said for a fault.
+fn ladder_in(ladder : Array[Double], ra : Double) -> String {
+  match ladder.iter().find_first(fn(x) { x < ra - 0.5 }) {
+    Some(next) => "the next, \{next}, \{(ra - next) * smooth_scale} in"
+    None => "none in from it"
+  }
+}
+
+///|
+/// Whether box `i`, in the corner of container `p` (corner `ra`, its ground `ground`'s), is none of the rule's: in
+/// what scrolls in the container (a list, a box kept to a height, a strip scrolled sideways, each with more than it
+/// shows: what it holds scrolls under its edges, so where one is from the container's corner is not fixed: a sheet's
+/// content scrolling in it, cut by its foot; a composer's quotes, its files' strip, once more than fit); the container's own ground drawn on (the same fill, no
+/// edge: a grouped row's square patch over its rounded corners: its shape, not something in its corner); a line (under
+/// corner_line across: a bar's track, a rule), which has no corner to keep; a mark hung on
+/// something small in it (laid over it as a layer, moved off its place by an offset, or placed out of the flow in it: a
+/// badge on an icon, a remove button on a picture, a dot's halo, its place that thing's, not the corner's).
+fn Ctx::corner_exempt(self : Ctx, i : Int, p : Int, ra : Double, ground : Int, pictures : Set[Int]) -> Bool {
+  let (up_down, across) = self.scrolls_between(i, p)
+  if up_down || across || self.in_picture(p, pictures) {
+    return true
+  }
+  let b = self.nodes[i]
+  if dmin(b.fw, b.fh) < corner_line {
+    return true
+  }
+  let gn = self.nodes[ground]
+  if b.bg == gn.bg && b.border_w <= 0.0 && gn.glass is None {
+    return true
+  }
+  let mut q = i
+  while q >= 0 && q != p {
+    let n = self.nodes[q]
+    let placed = n.layer ||
+      n.tx != 0.0 ||
+      n.ty != 0.0 ||
+      !n.at_l.is_nan() ||
+      !n.at_t.is_nan() ||
+      !n.at_r.is_nan() ||
+      !n.at_b.is_nan()
+    if placed && n.parent >= 0 && n.parent != p {
+      let host = self.nodes[n.parent]
+      if host.fw < 2.0 * ra && host.fh < 2.0 * ra {
+        return true
+      }
+    }
+    q = n.parent
+  }
+  false
+}
+
+///|
+/// How thin a box is a line, not a ground with corners (a progress bar's track, 4; a rule).
+let corner_line : Double = 6.0
 
 ///|
 /// Node `i` as a fault names it: the words built in it, else its nearest container's that has any (said so), where
@@ -173,11 +282,82 @@ fn Ctx::centred_in(self : Ctx, i : Int, p : Int) -> (Bool, Bool) {
   (y, x)
 }
 ///|
-/// Whether a list lies between node `i` and its ancestor `p` (`i` one of its rows' or in one).
-fn Ctx::list_between(self : Ctx, i : Int, p : Int) -> Bool {
+/// What scrolls between node `i` and its ancestor `p` (`i` in what it holds): whether something scrolls up and down (a
+/// list, a box kept to a height: Ctx::capped), and whether something scrolls sideways (Ctx::sideways). A box kept to
+/// a height or scrolled sideways that has nothing to scroll (Ctx::scroll_still) does not: what it holds stays where it
+/// is, as in any box.
+fn Ctx::scrolls_between(self : Ctx, i : Int, p : Int) -> (Bool, Bool) {
+  let mut up_down = false
+  let mut across = false
   let mut q = self.nodes[i].parent
   while q >= 0 && q != p {
-    if self.nodes[q].kind == kind_list {
+    let n = self.nodes[q]
+    if n.kind == kind_list {
+      up_down = true
+    } else if n.sideways {
+      match sideways.get(n.id) {
+        Some(st) if self.scroll_still(q, st) => ()
+        Some(st) if st.vertical => up_down = true
+        _ => across = true
+      }
+    }
+    q = n.parent
+  }
+  (up_down, across)
+}
+
+///|
+/// Whether the box `q` kept to a height or scrolled sideways (its state `st`) has nothing to scroll this frame: at its
+/// start, and what it holds as long (or as wide) as it at most, so it does not move. What lies in it then lies where it
+/// is for good, in a container's corner as anything else does (a table as narrow as its column on a card: the card's
+/// ladder rounds it there); one that holds more moves it under its edges, so where it is from a corner is not fixed.
+fn Ctx::scroll_still(self : Ctx, q : Int, st : Sideways) -> Bool {
+  if st.x > 0.5 || st.max > 0.5 || st.frame != self.build_no {
+    return false
+  }
+  let inner = if st.box == q {
+    st.inner
+  } else {
+    match st.others.iter().find_first(fn(bi) { bi.0 == q }) {
+      Some(bi) => bi.1
+      None => -1
+    }
+  }
+  if inner < 0 || inner >= self.count {
+    return false
+  }
+  let o = self.nodes[q]
+  let n = self.nodes[inner]
+  if st.vertical {
+    n.fh <= o.fh + 0.5
+  } else {
+    n.fw <= o.fw + 0.5
+  }
+}
+
+///|
+/// The nodes said to be pictures (Role Image) this frame (in_picture).
+fn Ctx::pictures(self : Ctx) -> Set[Int] {
+  let out : Set[Int] = Set::new()
+  for s in self.sems {
+    if s.role == Image {
+      out.add(s.node)
+    }
+  }
+  out
+}
+
+///|
+/// Whether node `i` is in a picture (said to be one: Role Image, itself or what holds it): a drawing of something else
+/// (another system's screen, its banner and its dock, as a setting's preview shows them), whose corners, and what is
+/// in them, are what it draws, not the theme's. (A picture in a container's corner is the rule's as any box.)
+fn Ctx::in_picture(self : Ctx, i : Int, pictures : Set[Int]) -> Bool {
+  if pictures.is_empty() {
+    return false
+  }
+  let mut q = i
+  while q >= 0 {
+    if pictures.contains(q) {
       return true
     }
     q = self.nodes[q].parent
@@ -258,10 +438,15 @@ fn Ctx::corners_after_layout(self : Ctx) -> Unit {
   self.inner_faults.clear()
   // the containers whose corner is what lies in it (`Around`), before the boxes worked out from their containers
   self.arounds_after_layout()
-  if self.inners.is_empty() {
-    return
-  }
   let grounds = self.layer_grounds()
+  self.inners_after_layout(grounds)
+  // then every other box in a container's corner, outermost first (a container worked out before what is in it)
+  self.corners_in_corners(grounds)
+}
+
+///|
+/// The corners said `Inner` and `InnerOr` (corners_after_layout).
+fn Ctx::inners_after_layout(self : Ctx, grounds : Map[Int, Int]) -> Unit {
   for i in self.inners {
     let n = self.nodes[i]
     // (`InnerOr`: its own corner where it lies in no container's corner, as built)
@@ -284,8 +469,16 @@ fn Ctx::corners_after_layout(self : Ctx) -> Unit {
       ("right", a.x + a.fw - (n.x + n.fw)),
       ("bottom", a.y + a.fh - (n.y + n.fh)),
     ]
-    // (an edge it reaches past is no edge of its: it is cut there, as corner_faults leaves out a corner it overhangs)
-    let near = sides.filter(fn(s) { s.1 >= -inner_even && s.1 < ra })
+    // (an edge it reaches past is no edge of its: it is cut there, as corner_faults leaves out a corner it overhangs; a
+    // row of a list in it scrolls past its top and foot, so what it is near is the sides it lies between; a card of a
+    // strip scrolled sideways, past its sides, so what it is near is its top and foot)
+    let (up_down, across) = self.scrolls_between(i, p)
+    let near = sides.filter(fn(s) {
+      s.1 >= -inner_even &&
+      s.1 < ra &&
+      !(up_down && (s.0 == "top" || s.0 == "bottom")) &&
+      !(across && (s.0 == "left" || s.0 == "right"))
+    })
     if near.is_empty() {
       match own {
         Some(r) => n.radius = r
@@ -314,6 +507,99 @@ fn Ctx::corners_after_layout(self : Ctx) -> Unit {
       _ => k
     }
   }
+}
+
+///|
+/// Every other box with a corner of its own (not `Inner`, `InnerOr` or `Around`: worked out before it), whose shape is
+/// not round by its size: the corner it is given is the one it has standing alone; lying in the corner of a rounded
+/// container (corner_container: near two of its edges that meet, nearer than the container's corner is round, as far
+/// from both), concentric with it, as corner_faults asks. So no page says it, and a box the window or what it holds
+/// moves into a corner or out of one is right in both. In the order built, a container before what it holds. A capsule
+/// or a circle (its corner half its shorter side) is round by its shape: where it stands is what makes it concentric
+/// (ui-panels.md: 外圆角 = 距离 + 半高), which corner_faults checks; so is one too small for the corner it would have
+/// there, and one at different distances from the two edges: each keeps its own.
+fn Ctx::corners_in_corners(self : Ctx, grounds : Map[Int, Int]) -> Unit {
+  let said : Set[Int] = Set::new()
+  for i in self.inners {
+    said.add(i)
+  }
+  for i in self.arounds {
+    said.add(i)
+  }
+  let pictures = self.pictures()
+  for i in 0..<self.count {
+    let b = self.nodes[i]
+    if b.kind != kind_box ||
+      b.layer ||
+      b.radius < 0.5 ||
+      b.fw <= 0.0 ||
+      b.fh <= 0.0 ||
+      said.contains(i) ||
+      b.radius >= dmin(b.fw, b.fh) / 2.0 - 0.5 {
+      continue
+    }
+    let (p, ra, ground) = match self.corner_container(i, grounds) {
+      Some(found) => found
+      None => continue
+    }
+    if self.corner_exempt(i, p, ra, ground, pictures) {
+      continue
+    }
+    // (not where that would round it whole: a box too small for the corner it would have keeps its shape, and stands
+    // where its shape is concentric, as a capsule would, or corner_faults says so)
+    match self.corner_inset(i, p, ra) {
+      Some(d) if concentric(ra, d) < dmin(b.fw, b.fh) / 2.0 - 0.5 => b.radius = concentric(ra, d)
+      _ => ()
+    }
+  }
+}
+
+///|
+/// How far box `i` stands from the two edges of each corner of container `p` (corner `ra`) it lies in (nearer to both
+/// than `ra`, not past either; not where a cut between them bounds it: cut_round_at), when that is the same for each
+/// and for both its edges; None when it lies in none, or not as far from each.
+fn Ctx::corner_inset(self : Ctx, i : Int, p : Int, ra : Double) -> Double? {
+  let a = self.nodes[p]
+  let b = self.nodes[i]
+  let l = b.x - a.x
+  let t = b.y - a.y
+  let r = a.x + a.fw - (b.x + b.fw)
+  let d = a.y + a.fh - (b.y + b.fh)
+  let mut found : Double? = None
+  for k, (dx, dy) in [(l, t), (r, t), (l, d), (r, d)] {
+    if dx < -0.5 || dy < -0.5 || dx >= ra || dy >= ra || self.cut_round_at(i, p, k) || self.corner_cut_off(i, p, k) {
+      continue
+    }
+    if (dx - dy).abs() > 0.5 {
+      return None
+    }
+    let e = dmax(dx, dy)
+    match found {
+      Some(f) if (f - e).abs() > 0.5 => return None
+      _ => found = Some(e)
+    }
+  }
+  found
+}
+
+///|
+/// Whether node `i`'s corner `k` (0 top left, 1 top right, 2 bottom left, 3 bottom right) is cut off by something
+/// between it and its container `p` that cuts what it holds (clip, or what scrolls sideways in it): past its edge, it
+/// does not show (a table wider than its column, scrolled sideways in it).
+fn Ctx::corner_cut_off(self : Ctx, i : Int, p : Int, k : Int) -> Bool {
+  let b = self.nodes[i]
+  let x = if k == 0 || k == 2 { b.x } else { b.x + b.fw }
+  let y = if k < 2 { b.y } else { b.y + b.fh }
+  let mut q = b.parent
+  while q >= 0 && q != p {
+    let n = self.nodes[q]
+    if (n.clip || n.sideways) &&
+      (x < n.x - 0.5 || x > n.x + n.fw + 0.5 || y < n.y - 0.5 || y > n.y + n.fh + 0.5) {
+      return true
+    }
+    q = n.parent
+  }
+  false
 }
 
 ///|

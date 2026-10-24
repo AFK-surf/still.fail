@@ -1137,6 +1137,13 @@ fn drive_steps(c : Ctx) -> Unit {
         }
         next()
       }
+      // what the frame shows breaking the corner rule (corners.mbt), a line each
+      "corners" => {
+        for f in c.corner_faults() {
+          h_log("DRIVE CORNER " + f)
+        }
+        next()
+      }
       "exit" => {
         drive_end(0)
         return

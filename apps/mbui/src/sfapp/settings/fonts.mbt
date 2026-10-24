@@ -161,9 +161,12 @@ let font_sample_code : String = "```ts\nform.onsubmit = (e) => {\n  e.preventDef
 
 ///|
 /// A chat as the faces set it (Fonts.kt FontPreview, the web's): their message in its bubble, an agent's under its
-/// name. `ui_face`, `text_face`: host faces the faces coming are shown in meanwhile (0: as the app is set now).
+/// name; on a card, their bubble in its top right corner the ladder's inset in (a block of the ladder's, tall enough not
+/// to be a capsule), the agent's words 20 in. `ui_face`, `text_face`: host faces the faces coming are shown in
+/// meanwhile (0: as the app is set now).
 fn font_preview(c : @ui.Ctx, ui_face : Int, text_face : Int) -> Unit {
-  card(c, fn() {
+  c.box(style=if wide.val { wide_card_room } else { card_room }, fn() {
+    c.box(style=preview_ground, fn() {
     c.box(style=preview_column, fn() {
       c.box(style=preview_mine_room, fn() {
         c.box(style=preview_bubble, fn() {
@@ -191,9 +194,16 @@ fn font_preview(c : @ui.Ctx, ui_face : Int, text_face : Int) -> Unit {
       |> ignore
     })
     |> ignore
+    })
+    |> ignore
   })
   |> ignore
 }
+
+///|
+/// The preview's card: its top and end the ladder's inset in, for their bubble in its corner.
+// kept across runs: a value (no field of it changes)
+let preview_ground : @ui.Style = card_ground.then(@ui.css("pt=S2_5 pr=S2_5"))
 
 ///|
 /// The places' switch's room: 12 in from the page's sides (Fonts.kt:93).
@@ -230,15 +240,17 @@ let preview_column : @ui.Style = @ui.css("w=Full gap=S3")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let preview_mine_room : @ui.Style = @ui.css("w=Full align=AEnd")
+/// (wrapped as wide as it may be, their bubble out of the card's other top corner: the card's corner less its words'
+/// 20 in)
+let preview_mine_room : @ui.Style = @ui.css("w=Full align=AEnd").then(@ui.style(pl=@sf.corner_clear_room))
 
 ///|
 // kept across runs: a value (no field of it changes)
-let preview_bubble : @ui.Style = @ui.css("radius=Xl2 bg=Bg px=S3_5 py=S2")
+let preview_bubble : @ui.Style = @ui.css("radius=Xl2 bg=Bg px=S3_5 py=S2_5")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let preview_agent : @ui.Style = @ui.css("w=Full gap=S1")
+let preview_agent : @ui.Style = @ui.css("w=Full pr=S2_5 gap=S1")
 
 ///|
 // kept across runs: a value (no field of it changes)

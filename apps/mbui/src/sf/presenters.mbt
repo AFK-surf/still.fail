@@ -498,7 +498,7 @@ fn pick_popover(
     look=fn(c, _, body) { small_panel(c, w=Px(chooser_menu_w), body) |> ignore },
     fn() {
       let found = {
-        let f = input(c, key + "/search", placeholder=t("common.search"), field=p.line)
+        let f = input(c, key + "/search", placeholder=t("common.search"), small=true, field=p.line)
         focus_once(c, p, key + "/search")
         let found = pick_found(choices, line_of(p, f))
         if f.submitted && !found.is_empty() {

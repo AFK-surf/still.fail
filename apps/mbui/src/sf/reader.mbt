@@ -1860,13 +1860,14 @@ let narrow_title_words : @ui.TextStyle = @ui.text_style(size=Sm, weight=Semibold
 let narrow_title_small : @ui.TextStyle = @ui.text_style(size=Xs2, wrap=false, narrow=@ui.text_patch(size=Xs))
 
 ///|
-/// The foot (bottom): 12 over, 14 either side, 8 under, 8 between its rows, its corner 16; at its foot the page's.
+/// The foot (bottom): a card of the ladder's, what it holds the ladder's inset in (its chips in its corners concentric
+/// with it), 8 between its rows; at its foot the page's.
 // kept across runs: a value (no field of it changes)
 let narrow_foot_place : @ui.Style = @ui.css("w=Full h=Full justify=JEnd")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let narrow_foot_box : @ui.Style = @ui.css("p=S3 gap=S2 radius=Xl1_5")
+let narrow_foot_box : @ui.Style = @ui.css("p=S2_5 gap=S2 radius=Xl3")
 
 ///|
 /// The chapter's row (chapterRow): 上一章, its name, 下一章, 10 apart.

@@ -418,7 +418,7 @@ fn chip_fill(t : @ui.Tester, words : String) -> (Double, Double) {
   let rects = t.drawn_rects()
   let mut chip = (0.0, 0.0, 0.0, 0.0)
   for r in rects {
-    if (r.3 == 20.0 || r.3 == 16.0) && r.0 <= x && x <= r.0 + r.2 && r.1 <= y && y <= r.1 + r.3 && r.2 > chip.2 {
+    if (r.3 == @settings.fill_chip_h || r.3 == 16.0) && r.0 <= x && x <= r.0 + r.2 && r.1 <= y && y <= r.1 + r.3 && r.2 > chip.2 {
       chip = (r.0, r.1, r.2, r.3)
     }
   }

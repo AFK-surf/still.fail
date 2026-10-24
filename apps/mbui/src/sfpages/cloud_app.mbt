@@ -95,9 +95,12 @@ let landing_lead : @ui.TextStyle = @ui.text_style(size=Base, color=Muted, center
 let landing_error : @ui.TextStyle = @ui.text_style(size=Sm, color=Danger, w=Full)
 
 ///|
-/// An invitation: on the surface, 12 in all round, its button at the end in the bottom corner, the corner round it.
+/// An invitation: a card of the ladder's on the surface, its words 20 in, its button under them in its foot corners
+/// (concentric with its corner: @sf.card_foot_in), 12 apart.
 // kept across runs: a value (no field of it changes)
-let invitation_row : @ui.Style = @ui.css("row w=Full p=S3 gap=S3 radius=Around bg=Surface align=AEnd")
+let invitation_row : @ui.Style = @ui.css("w=Full pt=S5 px=S5 gap=S3 radius=Xl3 bg=Surface").then(
+  @sf.foot_pad(@settings.settings_button_h),
+)
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -274,7 +277,14 @@ fn landing_page_of(c : @ui.Ctx, src : Source, entries : Array[Json], by_link : (
             |> ignore
           })
           |> ignore
-          if @settings.button(c, "landing/join/" + id, @sf.t("android-misc.invite.join"), true, busy=landing.accepting == id) &&
+          if @settings.button(
+              c,
+              "landing/join/" + id,
+              @sf.t("android-misc.invite.join"),
+              true,
+              busy=landing.accepting == id,
+              reach=@settings.foot_across,
+            ) &&
             landing.accepting == "" {
             accept_invitation(src, account, id)
           }

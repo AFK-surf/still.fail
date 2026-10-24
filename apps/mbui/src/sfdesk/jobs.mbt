@@ -889,18 +889,18 @@ let jobs_tab_list_room : @ui.Style = @ui.css("w=Full")
 let jobs_tab_list : @ui.Style = @ui.css("w=Full pt=S1 px=S2 pb=S2")
 
 ///|
-/// The job picked (jobDetail): 8 from the tab's sides and foot, 10 over, 6 at its end, 14 at its start, round as a
-/// field, on the paper.
+/// The job picked (jobDetail): the ladder's inset from the tab's sides and foot (in a panel's foot corners, round by
+/// the ladder's next step there), 10 over, 6 at its end, 14 at its start, a card of the ladder's, on the paper.
 // kept across runs: a value (no field of it changes)
 let job_detail_box : @ui.Style = @ui.style(
   w=Full,
   h=@sf.grow,
-  mx=S2,
-  mb=S2,
+  mx=S2_5,
+  mb=S2_5,
   pt=S2_5,
   pr=S1_5,
   pl=S3_5,
-  radius=Xl,
+  radius=@sf.card_radius,
   bg=Card,
 )
 
