@@ -31,8 +31,8 @@ function view(story: LockStory): LockView {
     },
     signers: 1,
     members: [{
-      sub: "demo-you", email: "you@acme.dev", name: "你", role: "owner", you: true,
-      devices: [{ id: "d_demo", kind: "app", label: "MacBook Pro", signs: true, older: false, mine: true, renewSoon: false, recent: false }],
+      sub: "demo-you", email: "you@acme.dev", name: "你", role: "owner", you: true, nameText: "你", roleText: "Owner",
+      devices: [{ id: "d_demo", kind: "app", label: "MacBook Pro", signs: true, older: false, mine: true, renewSoon: false, recent: false, nameText: "MacBook Pro", metaText: "客户端 · 受信任 · 此设备" }],
     }],
     stations, protected: stations.filter((s) => s.protected).length, requests: [], renew: [], attention: 0,
   };
@@ -43,7 +43,7 @@ function prompts(story: LockStory): LockPromptsView {
   if (story !== "prompt") return { pairing: [] };
   return {
     pairing: [{
-      device: "d_phone", email: "li@acme.dev", name: "李二", kind: "app", label: "still.fail 安卓版 · Pixel 8", code: "482913",
+      device: "d_phone", email: "li@acme.dev", name: "李二", kind: "app", label: "still.fail 安卓版 · Pixel 8", code: "482913", deviceText: "still.fail 安卓版 · Pixel 8",
       created_at: 1_760_000_000, workspaces: [{ id: "w_acme", name: "Acme" }, { id: "w_daily", name: "日常", emoji: "☀️" }],
     }],
   };

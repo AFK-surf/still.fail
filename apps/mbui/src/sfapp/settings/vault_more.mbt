@@ -1079,3 +1079,29 @@ pub(all) struct DeskVault {
 ///|
 // kept across runs: given again by the desktop's settings as they are drawn, the same each time
 pub let desk_vault : Ref[DeskVault?] = Ref(None)
+
+///|
+/// The page's main action along the screen's foot, as wide as it (Security.kt Foot); a note over it.
+fn foot(c : @ui.Ctx, f : () -> Unit, words? : String = "") -> Unit {
+  // over the navigation bar, on the page's ground (Foot: windowInsetsPadding(navigationBars), then 10)
+  c.box(style=foot_ground, fn() {
+    c.box(style=foot_line, fn() {
+      if words != "" {
+        note(c, words)
+      }
+      f()
+    })
+    |> ignore
+    bar_room_gap(c, nav_foot.val)
+  })
+  |> ignore
+}
+
+///|
+// kept across runs: a value (no field of it changes)
+let foot_ground : @ui.Style = @ui.css("w=Full bg=Bg")
+
+///|
+/// Foot's line: 16 in, 10 over and under, what it holds 8 apart in the middle.
+// kept across runs: a value (no field of it changes)
+let foot_line : @ui.Style = @ui.css("w=Full px=S4 py=S2_5 gap=S2 align=ACenter")

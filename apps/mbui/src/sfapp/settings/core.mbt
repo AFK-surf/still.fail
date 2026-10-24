@@ -96,6 +96,8 @@ pub(all) enum Route {
   Workspace
   /// security mode (Security.kt)
   Security
+  /// 安全 › 开启安全模式: what turning it on would sign (Security.tsx SecurityOpen)
+  SecurityOpen
   Vault
   Stations
   /// a station's page, by its address (ws/st)
@@ -475,7 +477,6 @@ let left_core : Ref[Core?] = Ref(None)
 pub fn left(route : Route) -> Unit {
   match route {
     Archive => archive_reset()
-    Security => opening_lock.val = false
     Memory(a) | MemoryDoc(a, _, _) =>
       match memories.get(a) {
         Some(m) => m.asked = false
@@ -538,7 +539,6 @@ pub fn reset() -> Unit {
   adb_reset()
   keyed_fields.clear()
   notify_switched.val = None
-  opening_lock.val = false
   memories.clear()
   connects_mine.val = false
   chosen.clear()
@@ -638,6 +638,7 @@ pub fn route_of(name : String) -> Route? {
     "fonts" => Some(Fonts)
     "workspace" => Some(Workspace)
     "security" => Some(Security)
+    "security-open" => Some(SecurityOpen)
     "vault" => Some(Vault)
     "stations" => Some(Stations)
     "profiles" => Some(Profiles(""))

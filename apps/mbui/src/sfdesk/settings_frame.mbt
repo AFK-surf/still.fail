@@ -34,7 +34,6 @@ fn setting_page(c : @ui.Ctx, src : Source, w : Workspace, route : Route) -> Unit
   settings_fixture(core)
   match route {
     Appearance => appearance_page(c, core)
-    Security => security_page(c, core, here)
     Vault => vault_page(c, core, here)
     VaultItem(v, item) => vault_item_page(c, core, here, v, item)
     Connects("") => connects_page(c, src, core, here)
@@ -55,7 +54,7 @@ fn setting_page(c : @ui.Ctx, src : Source, w : Workspace, route : Route) -> Unit
 /// frame's pane: back, the room over and under it). False for a route whose pages are not one yet (its frame draws its
 /// own copy).
 pub fn setting_route(c : @ui.Ctx, src : Source, w : Workspace, route : Route, frame : PageFrame) -> Bool {
-  if !(route is (About | Changelog | Memories | Memory(_) | AutoDecisions | Permissions | Version | UsagePrices(_) | Usage | Archiving | StationArchiving(_) | Notifications | PickModels(_, _) | ProfileModels(_, _) | Shortcuts | Me | Workspace)) {
+  if !(route is (About | Changelog | Memories | Memory(_) | AutoDecisions | Permissions | Version | UsagePrices(_) | Usage | Archiving | StationArchiving(_) | Notifications | PickModels(_, _) | ProfileModels(_, _) | Shortcuts | Me | Workspace | Security | SecurityOpen)) {
     return false
   }
   let core = settings_core(src, w)
@@ -79,6 +78,8 @@ pub fn setting_route(c : @ui.Ctx, src : Source, w : Workspace, route : Route, fr
     Shortcuts => shortcuts_page(c, core, frame)
     Me => me_page(c, core, here, frame)
     Workspace => workspace_page(c, core, here, frame)
+    Security => security_page(c, core, here, frame)
+    SecurityOpen => security_open_page(c, core, here, frame)
     _ => ()
   }
   true
@@ -143,6 +144,7 @@ fn settings_side(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
   let here = match app.nav.top() {
     // (a page under one of them: that one lit)
     Setting(Route::StationArchiving(_)) => Some(Route::Archiving)
+    Setting(Route::SecurityOpen) => Some(Route::Security)
     Setting(Route::AutoCompletion) | Setting(Route::AutoPolicy(_)) =>
       Some(Route::AutoDecisions)
     Setting(r) => Some(r)

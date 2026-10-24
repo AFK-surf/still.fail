@@ -365,6 +365,18 @@ function askPerson(inner: Inner, reason: string): Effect.Effect<void, CoreError>
     e.message === "no_device_lock" ? Effect.void : Effect.fail(new CoreError(/^[a-z][a-z_]*$/.test(e.message) ? e.message : "lock_refused", e.message)));
 }
 
+/// A device's name as people know it: its label, or what kind of client it is (an older client's, said so).
+export function deviceText(d: { kind: string; label: string; older?: boolean }): string {
+  if (d.older) return d.label || t("web-pages.security.olderClient");
+  return d.label || (d.kind === "web" ? t("web-pages.security.webDevice") : t("web-pages.security.appDevice"));
+}
+
+/// A member's role as the security pages name it.
+export function roleText(role: string): string {
+  const key = ({ owner: "web-pages.roles.owner", admin: "web-pages.roles.admin", member: "web-pages.roles.member", viewer: "web-pages.security.viewer" } as Record<string, string>)[role];
+  return key ? t(key) : role;
+}
+
 /// The `lock` topic.
 export function lockView(inner: Inner, ws: string): J {
   const p = part(inner, ws);
@@ -375,30 +387,48 @@ export function lockView(inner: Inner, ws: string): J {
   const f = fold(h?.entries ?? []);
   const locked = h?.head != null && !f.disabled;
   const sub = inner.workspaces.owner(ws);
-  const t = now(inner);
+  const at = now(inner);
   const signer = signers.get(inner) ?? null;
   const people = new Map<string, J>(arr(get(v, "members")).map((m) => [m.sub, m]));
   const mine = base ? f.devices.get(base) : undefined;
   const role = str(get(v, "role")) ?? "member";
   const manages = role === "owner" || role === "admin";
-  const device = (d: J) => ({
-    id: d.id, kind: d.kind === "web" ? "web" : "app", label: d.label || "", signs: typeof d.sign_key === "string", older: Array.isArray(d.endpoints),
-    mine: d.id === base, daysLeft: typeof d.exp === "number" ? daysLeft(d.exp - t) : null,
-    renewSoon: typeof d.exp === "number" && d.exp - t < RENEW_SECS,
+  const device = (d: J) => {
+    const kind = d.kind === "web" ? "web" : "app";
+    const older = Array.isArray(d.endpoints);
+    const signs = typeof d.sign_key === "string";
+    const mine = d.id === base;
+    const left = typeof d.exp === "number" ? daysLeft(d.exp - at) : null;
     // A device of the viewer's own added lately, shown on their other devices.
-    recent: d.sub === sub && d.id !== base && t - (f.added.get(d.id) ?? 0) < RECENT_SECS,
-  });
+    const recent = d.sub === sub && d.id !== base && at - (f.added.get(d.id) ?? 0) < RECENT_SECS;
+    return {
+      id: d.id, kind, label: d.label || "", signs, older, mine, daysLeft: left,
+      renewSoon: typeof d.exp === "number" && d.exp - at < RENEW_SECS,
+      recent,
+      nameText: deviceText({ kind, label: d.label || "", older }),
+      // what it is in a line: a web page or an app, whether it signs, this device, the days a web page has left, new
+      metaText: [
+        t(kind === "web" ? "web-pages.security.web" : "web-pages.security.app"),
+        signs ? t("web-pages.security.signs") : null,
+        mine ? t("web-pages.security.thisDevice") : null,
+        left !== null ? t("web-pages.security.daysLeft", { n: left }) : null,
+        recent ? t("web-pages.security.recent") : null,
+      ].filter((x) => x !== null).join(" · "),
+    };
+  };
   const stations = arr(get(v, "stations")).map((s) => ({
     id: s.id, name: s.name, version: s.version ?? null, online: s.online !== false, protected: f.stations.has(s.id),
   }));
   const members = [...f.members].map(([s, m]) => ({
     sub: s, email: m.email, name: str(get(people.get(s), "name")) ?? "", role: m.role, you: s === sub,
+    nameText: str(get(people.get(s), "name")) || m.email, roleText: roleText(m.role),
     devices: [...f.devices.values()].filter((d) => d.sub === s).map(device),
   }));
   const requests = (h?.requests ?? [])
     .map((r) => ({
       device: r.base, sub: r.sub, email: r.email, name: str(get(people.get(r.sub), "name")) ?? "", kind: r.kind === "app" ? "app" : "web",
       label: r.label || "", code: r.code ?? shortCode(r.base), created_at: r.created_at ?? 0, yours: r.sub === sub,
+      whoText: str(get(people.get(r.sub), "name")) || r.email, deviceText: deviceText({ kind: r.kind === "app" ? "app" : "web", label: r.label || "" }),
     }))
     .filter((r) => r.device !== base && (manages || r.yours));
   const renew = members.flatMap((m) => (m.you ? m.devices.filter((d) => d.renewSoon) : []));
@@ -420,7 +450,7 @@ export function lockView(inner: Inner, ws: string): J {
     signs,
     me: {
       device: base, code: base ? shortCode(base) : null, kind: inner.host.appKeys ? "app" : "web",
-      confirmed: mine !== undefined, daysLeft: typeof mine?.exp === "number" ? daysLeft(mine.exp - t) : null,
+      confirmed: mine !== undefined, daysLeft: typeof mine?.exp === "number" ? daysLeft(mine.exp - at) : null,
       // A station refused this device, or it asked, and the lock has not moved on since: it waits to be confirmed.
       // Its request waits at the cloud, or is on its way there; not when turned down (asked again by hand then).
       asked: (h?.requests ?? []).some((r) => r.base === base),
@@ -510,15 +540,28 @@ function draftDevices(inner: Inner, ws: string): J[] {
 function draftView(inner: Inner, ws: string): J {
   const p = part(inner, ws);
   const v = view(inner, ws);
-  const members = arr(get(v, "members")).map((m) => ({ sub: m.sub, email: m.email, name: m.name ?? "", role: m.role }));
+  const members = arr(get(v, "members")).map((m) => ({ sub: m.sub, email: m.email, name: m.name ?? "", role: m.role, nameText: m.name || m.email, roleText: roleText(m.role) }));
   const bySub = new Map(members.map((m) => [m.sub, m]));
-  const devices = draftDevices(inner, ws).map((d) => ({
-    id: d.id, person: bySub.get(d.sub)?.name || bySub.get(d.sub)?.email || "", kind: d.kind, label: d.label, older: d.older === true, current: d.this,
-    last_seen: d.seen, on: d.this || !p.excluded.has(d.id), fixed: d.this,
-  }));
+  const devices = draftDevices(inner, ws).map((d) => {
+    const person = bySub.get(d.sub)?.name || bySub.get(d.sub)?.email || "";
+    const older = d.older === true;
+    return {
+      id: d.id, person, kind: d.kind, label: d.label, older, current: d.this,
+      last_seen: d.seen, on: d.this || !p.excluded.has(d.id), fixed: d.this,
+      // whose and which (this one said so), then what it is: an older client's way in, a web page or an app (this app signs)
+      nameText: `${person} · ${d.this ? t("web-pages.security.thisDevice") : deviceText({ kind: d.kind, label: d.label, older })}`,
+      howText: (older ? t("web-pages.security.olderHow") : t(d.kind === "web" ? "web-pages.security.web" : "web-pages.security.app")) +
+        (d.this && d.kind === "app" ? ` · ${t("web-pages.security.signs")}` : ""),
+    };
+  });
   const stations = arr(get(v, "stations")).map((s) => {
     const probe = p.probes.get(s.id) ?? null;
-    return { id: s.id, name: s.name, version: s.version ?? null, state: probe ?? "asking", on: probe === "ok" && !p.excluded.has(s.id), fixed: probe !== "ok" };
+    const state = probe ?? "asking";
+    return {
+      id: s.id, name: s.name, version: s.version ?? null, state, on: probe === "ok" && !p.excluded.has(s.id), fixed: probe !== "ok",
+      // why it cannot be signed yet (none when it can)
+      stateText: state === "ok" ? null : t(state === "asking" ? "web-pages.security.asking" : state === "old" ? "web-pages.security.tooOld" : "web-pages.security.offline"),
+    };
   });
   return {
     available: true,

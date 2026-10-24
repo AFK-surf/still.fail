@@ -3866,6 +3866,10 @@ export interface LockDevice {
 	renewSoon: boolean;
 	/** One of the viewer's own, added lately (shown on their other devices). */
 	recent: boolean;
+	/** Its name as people know it: its label, or what kind of client it is. */
+	nameText: string;
+	/** What it is in a line: a web page or an app, whether it signs, this device, days left, new. */
+	metaText: string;
 }
 
 /** A device turning the lock on would sign. */
@@ -3880,6 +3884,10 @@ export interface LockDraftDevice {
 	last_seen: number;
 	on: boolean;
 	fixed: boolean;
+	/** Whose and which, in a line (this device said so). */
+	nameText: string;
+	/** What it is: an older client's way in, a web page or an app (this app: it signs). */
+	howText: string;
 	time?: Record<string, Stamp>;
 }
 
@@ -3888,6 +3896,10 @@ export interface LockDraftMember {
 	email: string;
 	name: string;
 	role: string;
+	/** Their name, or their email. */
+	nameText: string;
+	/** Their role as the security pages name it. */
+	roleText: string;
 }
 
 /** A station turning the lock on would sign, or why not. */
@@ -3899,6 +3911,8 @@ export interface LockDraftStation {
 	state: string;
 	on: boolean;
 	fixed: boolean;
+	/** Why it cannot be signed yet, in words (none when `ok`). */
+	stateText?: string;
 }
 
 /** What turning the workspace's lock on would sign (the `lockDraft` topic): what is left out is `on: false`. */
@@ -3970,6 +3984,8 @@ export interface LockPairing {
 	label: string;
 	/** The code to type on the new device: shown here only, never sent. */
 	code: string;
+	/** Its name as people know it (LockDevice `nameText`). */
+	deviceText: string;
 	/** Where it asks to be let in and this device approves it. */
 	workspaces: LockPromptWorkspace[];
 	/** When it asked. */
@@ -3985,6 +4001,10 @@ export interface LockPerson {
 	name: string;
 	role: string;
 	you: boolean;
+	/** Their name, or their email. */
+	nameText: string;
+	/** Their role as the security pages name it. */
+	roleText: string;
 	devices: LockDevice[];
 }
 
@@ -4006,6 +4026,10 @@ export interface LockRequest {
 	code: string;
 	created_at: number;
 	yours: boolean;
+	/** Whose it is: their name, or their email. */
+	whoText: string;
+	/** Its name as people know it (LockDevice `nameText`). */
+	deviceText: string;
 	/** Its times in words (`created_at`). */
 	time?: Record<string, Stamp>;
 }

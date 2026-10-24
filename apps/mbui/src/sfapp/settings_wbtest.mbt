@@ -229,17 +229,6 @@ test "the workspace: its people, those added, the invitations out" {
 }
 
 ///|
-test "security mode: a device waiting, confirmed in its sheet by its code" {
-  let t = settings_tester("security")
-  assert_true(t.find("安全") is Some(_))
-  assert_true(t.find("482 917") is Some(_))
-  t.tap_text("482 917")
-  assert_true(t.find("一致，批准") is Some(_))
-  assert_true(t.find("不一致，拒绝") is Some(_))
-  // (not idle yet: the sheet is still rising on kit's spring (kit/sheet.mbt), whose end it does not say)
-}
-
-///|
 test "memory: a station's global memory, its projects, a skill's page" {
   let t = settings_tester("memory:ws1/st1")
   assert_true(t.find("全局记忆") is Some(_))

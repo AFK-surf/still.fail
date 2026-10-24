@@ -63,7 +63,7 @@ fn pair_sheet(core : Core, r : Json) -> Unit {
     }
     sheet_head(c, fill("web-pages.security.pairTitle", [("name", who)]))
     c.box(style=pair_column, fn() {
-      c.text(fill("web-pages.security.pairBody", [("device", device_name(text(rv, "kind"), text(rv, "label")))]), style=pair_body)
+      c.text(fill("web-pages.security.pairBody", [("device", text(rv, "deviceText"))]), style=pair_body)
       |> ignore
       c.box(style=pair_places, fn() {
         c.text(tr("web-pages.security.promptFor"), style=pair_places_head) |> ignore
@@ -113,3 +113,18 @@ let pair_place : @ui.TextStyle = @ui.text_style(size=Xl, weight=Semibold, color=
 /// 拒绝, as wide as the sheet, 4 under the note and 16 over the sheet's foot (Security.kt:381).
 // kept across runs: a value (no field of it changes)
 let pair_deny_room : @ui.Style = @ui.css("w=Full pt=S1 pb=S4")
+
+///|
+/// A code's letters a little apart (letterSpacing 5): a thin space between each two.
+fn spaced(code : String) -> String {
+  let b = StringBuilder()
+  let mut first = true
+  for ch in code {
+    if !first {
+      b.write_char('\u{2009}')
+    }
+    b.write_char(ch)
+    first = false
+  }
+  b.to_string()
+}
