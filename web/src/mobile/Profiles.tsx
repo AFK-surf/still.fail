@@ -432,11 +432,10 @@ function ProfilePage({ p }: { p: Profile }) {
   const refreshing = useDoing("profile.quota", { station: station.address, id: p.id });
   const checkFailed = useDoingFailed("profile.check", { station: station.address, id: p.id });
   const quotaFailed = useDoingFailed("profile.quota", { station: station.address, id: p.id });
-  const signingIn = !!p.login && ["starting", "needs_code", "needs_approval", "verifying"].includes(p.login.state);
   const keyed = KEYED.has(p.access.kind) && !p.access.login;
   // A copy of another station's: shown, used, changed only there.
   const copy = p.share?.role === "user";
-  const signs = !copy && (p.access.kind === "subscription" || !!p.access.login) && !p.machine;
+  const signs = !copy && signsIn(p);
   const detail = p.check ? p.check.detail.replace(/^可用[，,]\s*/, "") : t("web-mobile.profiles.notChecked");
   const checked = p.check?.time?.checkedAt ? t("web-mobile.profiles.checkedAgo", { ago: p.check.time.checkedAt.ago }) : "";
   const line = detail !== p.checkText ? detail + checked : checked.replace(/^ · /, "");
@@ -459,7 +458,7 @@ function ProfilePage({ p }: { p: Profile }) {
         trailing={copy ? undefined : <NavButton icon={More} label={t("common.more")} onClick={() => sheet({ height: 0.5, content: () => <ProfileMenu p={p} /> })} />} />
       <div className={`${pagesCss.mScroll} ${settingsCss.mStationPage}`}>
         {/* Where it stands, on the account's one card: a subscription's heads its sign-in, a key's its key. */}
-        {signs ? <SignIn p={p} needed={p.check?.state === "login" || signingIn} head={head} />
+        {signs ? <SignIn p={p} head={head} />
           : keyed && !copy ? (
             <ListCard>
               <div className={`${settingsCss.mProfileHead} ${css.mHeadRow}`}>{head}</div>
@@ -562,11 +561,16 @@ function ProfileRecovery({ p }: { p: Profile }) {
   </>;
 }
 
-/** Renaming, checking, refreshing its allowance, deleting it (stopping one on the machine's login); not while a connect uses it. */
+/**
+ * Renaming, checking, refreshing its allowance, signing its account in again or by hand on the machine while its card
+ * asks for neither (signed in and well), deleting it (stopping one on the machine's login); not while a connect uses it.
+ */
 function ProfileMenu({ p }: { p: Profile }) {
   const app = useApp();
   const api = useApi();
+  const start = useStartSignIn(p);
   const station = useStation().address;
+  const signing = useDoing("profile.login", { station, id: p.id });
   const failed = (key: string) => (e: Error) => app.toast(t(key, { error: e.message }));
   // The sheet closes at once; the profile's card says it is under way (ProfilePage), and these rows if opened again.
   const checking = useDoing("profile.check", { station, id: p.id });
@@ -581,6 +585,11 @@ function ProfileMenu({ p }: { p: Profile }) {
         {!p.machine && <PickRow label={t("web-mobile.stations.rename")} onClick={() => ask(app, { title: t("web-mobile.profiles.renameTitle"), value: p.name, placeholder: t("web-mobile.workspaces.name"), action: t("common.save"), atOnce: "web-main.rename.failed", run: (name) => api.putProfile(p.id, { name }).then(() => app.toast(t("web-mobile.workspace.renamed"))) })} />}
         <PickRow label={t("web-mobile.profiles.recheck")} busy={checking} failed={checkFailed} onClick={() => { app.sheet(null); api.checkProfile(p.id).then(() => app.toast(t("web-mobile.profiles.checked")), failed("web-mobile.profiles.checkFailed")); }} />
         <PickRow label={t("web-mobile.profiles.refreshQuota")} busy={refreshing} failed={quotaFailed} onClick={() => { app.sheet(null); api.refreshQuota(p.id).then(() => app.toast(t("web-mobile.profiles.quotaRefreshed")), failed("web-mobile.profiles.quotaFailed")); }} />
+        {signsIn(p) && !signInAsked(p) && <>
+          <PickRow label={t("web-mobile.profiles.relogin")} busy={signing} onClick={() => { app.sheet(null); start(); }} />
+          {/* OpenCode's has no command to run by hand. */}
+          {p.loginCommand && <PickRow label={t("web-mobile.profiles.manualShort")} onClick={() => app.sheet({ height: 0.36, content: () => <ManualSignIn command={p.loginCommand} /> })} />}
+        </>}
         <PickRow label={p.machine ? t("web-mobile.connects.disable") : t("web-mobile.profiles.delete")} accent onClick={() => confirm(app, p.machine ? {
           title: t("web-mobile.profiles.disableAsk", { name: p.name }), text: t("web-mobile.profiles.disableText", { name: NAME }), action: t("web-mobile.connects.disable"), danger: true, atOnce: "web-mobile.connects.disableFailed",
           run: () => { app.pop(); return api.deleteProfile(p.id).then(() => app.toast(t("web-mobile.profiles.disabled"))); },
@@ -589,6 +598,17 @@ function ProfileMenu({ p }: { p: Profile }) {
           run: () => { app.pop(); return api.deleteProfile(p.id).then(() => app.toast(t("web-mobile.profiles.deleted"))); },
         })} />
       </div>
+    </>
+  );
+}
+
+/** The command to sign a profile's account in on the machine by hand, in a sheet of its own (from its "…"). */
+function ManualSignIn({ command }: { command: string }) {
+  return (
+    <>
+      <SheetGrab />
+      <SheetHead title={t("web-mobile.profiles.manualShort")} />
+      <div className={`${sheetsCss.mSheetScroll} ${sheetsCss.mForm}`}><CommandBox text={command} /></div>
     </>
   );
 }
@@ -810,12 +830,35 @@ function Models({ p, put, bare = false }: { p: Profile; put: (models: string[]) 
   );
 }
 
-/** A subscription's sign-in: run on the station's machine, the browser steps relayed here. */
-function SignIn({ p, needed, head }: { p: Profile; needed: boolean; head: ReactNode }) {
+const SIGNING_IN = ["starting", "needs_code", "needs_approval", "verifying"];
+/** Whether a profile is signed in to its account from here (a subscription's, or one on an account: OpenCode Go's,
+ *  Kimi Code's), not on the machine's own login. */
+const signsIn = (p: Profile) => (p.access.kind === "subscription" || !!p.access.login) && !p.machine;
+/** Whether its account is to be signed in to: its check says so, or a sign-in is under way. */
+const signInNeeded = (p: Profile) => p.check?.state === "login" || (!!p.login && SIGNING_IN.includes(p.login.state));
+/** Whether its sign-in's card asks for one (its buttons): needed, or the last one failed. Signed in and well, it is
+ *  asked for from its "…" (ProfileMenu) instead. */
+const signInAsked = (p: Profile) => signInNeeded(p) || p.login?.state === "failed";
+
+/** Its sign-in begun on the station; one that could not begin, said so. */
+function useStartSignIn(p: Profile) {
   const app = useApp();
   const api = useApi();
+  return () => { api.startLogin(p.id).catch((e: Error) => app.toast(t("web-mobile.profiles.startLoginFailed", { error: e.message }))); };
+}
+
+/**
+ * A subscription's sign-in: run on the station's machine, the browser steps relayed here. Signed in and well, the
+ * card only says where it stands (signing in again is in its "…"), and while one asked from there starts, the wait for
+ * its link.
+ */
+function SignIn({ p, head }: { p: Profile; head: ReactNode }) {
+  const app = useApp();
+  const api = useApi();
+  const start = useStartSignIn(p);
   const job = p.login;
-  const active = !!job && ["starting", "needs_code", "needs_approval", "verifying"].includes(job.state);
+  const active = !!job && SIGNING_IN.includes(job.state);
+  const needed = signInNeeded(p);
   const provider = p.access.kind === "opencode-go" ? "OpenCode" : p.access.provider === "kimi-code" ? "Kimi" : p.runtime === "claude" ? "Claude" : p.runtime === "grok" ? "Grok" : p.runtime === "cursor" ? "Cursor" : p.runtime === "devin" ? "Devin" : "ChatGPT";
   const busy = useDoing("profile.login", { station: useStation().address, id: p.id });
   const cancelling = useDoing("profile.cancelLogin", { station: useStation().address, id: p.id });
@@ -838,20 +881,19 @@ function SignIn({ p, needed, head }: { p: Profile; needed: boolean; head: ReactN
           </button>
         )}
       </div>
-      {active ? <LoginSteps job={job} provider={provider} send={(code) => api.loginCode(p.id, code)} /> : (
+      {active ? <LoginSteps job={job} provider={provider} send={(code) => api.loginCode(p.id, code)} /> : signInAsked(p) ? (
         <>
-          {/* Signed in: the pill above says so; only what was off, or how it is done, in words. */}
+          {/* What was off, or how it is done, in words. */}
           {job?.state === "failed" ? <p className={`${partsCss.mError} ${partsCss.mSmall}`}>{t("web-mobile.profiles.loginFailed", { error: job.error ?? "" })}</p>
             : needed ? <p className={`${partsCss.mMuted} ${partsCss.mSmall}`}>{t("web-mobile.profiles.loginWhere", { name: NAME })}</p> : null}
           <div className={css.mSignInActions}>
-            <Button label={job?.state === "done" || !needed ? t("web-mobile.profiles.relogin") : t("web-mobile.workspaces.signIn")} primary={needed && job?.state !== "done"} busy={busy}
-              onClick={() => { api.startLogin(p.id).catch((e: Error) => app.toast(t("web-mobile.profiles.startLoginFailed", { error: e.message }))); }} />
+            <Button label={job?.state === "done" || !needed ? t("web-mobile.profiles.relogin") : t("web-mobile.workspaces.signIn")} primary={needed && job?.state !== "done"} busy={busy} onClick={start} />
             {/* OpenCode's has no command to run by hand. */}
             {p.loginCommand && <LinkButton label={t("web-mobile.profiles.manualShort")} onClick={() => setManual(!manual)} />}
           </div>
           {manual && p.loginCommand && <CommandBox text={p.loginCommand} />}
         </>
-      )}
+      ) : busy ? <WaitLine text={t("web-mobile.profiles.loginLink", { provider })} /> : null}
     </div>
   );
 }
