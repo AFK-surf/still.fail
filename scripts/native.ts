@@ -74,7 +74,7 @@ const HERMES_CMAKE = ["-G", "Ninja", "-DCMAKE_C_COMPILER=clang-cl", "-DCMAKE_CXX
 /// The bsdtar Windows has (Git Bash's GNU tar takes C:\… for a remote host).
 const TAR = osPlatform() === "win32" ? join(process.env.SystemRoot ?? "C:\\Windows", "System32", "tar.exe") : "tar";
 
-type Target = "darwin-arm64" | "linux-x64" | "linux-arm64" | "win32-x64" | "wasm32" | "android-arm64";
+type Target = "darwin-arm64" | "linux-x64" | "linux-arm64" | "win32-x64" | "wasm32" | "android-arm64" | "ios-arm64" | "ios-sim-arm64";
 type Part = {
   /// What the artifact holds.
   files: (target: Target) => string[];
@@ -229,6 +229,33 @@ const PARTS: Record<string, Part> = {
       copyFileSync(join(target, "aarch64-linux-android/release/libstillfail_shell.so"), join(out, "libstillfail_shell.so"));
     },
   },
+  // The core's shell for the mbui app on Apple (scripts/core.sh shell's): the crate as a static library, with what it
+  // needs of the system (rustc's native-static-libs), for macOS (rustc's oldest, 11.0, below the app's 12.0) and iOS (17.0, a
+  // device's and the simulator's). Built on a Mac by CI's natives job, fetched by the mbui app's builds: built in each
+  // build, it was 160-240 s of the macOS job's 440-580 s (its cache by the shell's sources never kept, 2026-10-23).
+  "shell-apple": {
+    files: () => ["libstillfail_shell.a", "libstillfail_shell.libs"],
+    targets: ["darwin-arm64", "ios-arm64", "ios-sim-arm64"],
+    inputs: ["client/shell", "client/Cargo.toml", "client/Cargo.lock", ...VENDORED],
+    recipe: (t) => ({ cargo: shellApple(t), min: APPLE_MIN[t] }),
+    build(t, out) {
+      const triple = APPLE_TRIPLES[t]!;
+      const target = targetDir(join(ROOT, "client/target"), "shell-apple");
+      rustTarget(triple);
+      // (macOS's oldest is rustc's own, no MACOSX_DEPLOYMENT_TARGET: that is the host's too, and Xcode 27's ld links
+      // the build's proc-macros for 12.0 so that dyld refuses them, "mis-aligned LINKEDIT string pool": E0463 on mini1)
+      const env = rustEnv({ CARGO_TARGET_DIR: target, ...(t === "darwin-arm64" ? {} : { IPHONEOS_DEPLOYMENT_TARGET: APPLE_MIN[t]! }) });
+      // (the crate itself built again, its dependencies kept: rustc says what it links only when it builds it)
+      run("cargo", ["clean", "--release", "-p", "stillfail-shell", "--target", triple], { cwd: join(ROOT, "client"), env });
+      const done = spawnSync("cargo", shellApple(t), { cwd: join(ROOT, "client"), env, encoding: "utf8", stdio: ["ignore", "inherit", "pipe"] });
+      process.stderr.write(done.stderr ?? "");
+      if (done.status !== 0) throw new Error(`cargo ${shellApple(t).join(" ")}: exit ${done.status ?? done.signal}`);
+      const libs = /native-static-libs: (.*)/.exec(done.stderr ?? "")?.[1];
+      if (!libs) throw new Error("shell-apple: rustc said no native-static-libs");
+      copyFileSync(join(target, triple, "release/libstillfail_shell.a"), join(out, "libstillfail_shell.a"));
+      writeFileSync(join(out, "libstillfail_shell.libs"), libs.trim() + "\n");
+    },
+  },
   // The core's engine (apps/mbui/engine: one source, its C API engine.h the mbui app calls): Hermes and the core's loop
   // on it, linked to the shell. Android's: hermes-android's libhermes.so (HERMES.rn) with the JSI built beside it, the
   // NDK's CMake (apps/mbui/engine/android). Windows': Hermes built from its source (HERMES) with clang-cl, static, in one
@@ -336,6 +363,15 @@ const swiftProduct = (scratch: string, name: string) =>
     .filter((p) => existsSync(p))
     .sort((a, b) => statSync(b).mtimeMs - statSync(a).mtimeMs)[0] ?? join(scratch, "arm64-apple-macosx/release", name);
 const HELPER_APP = "still.fail Helper.app";
+const APPLE_TRIPLES: Partial<Record<Target, string>> = { "darwin-arm64": "aarch64-apple-darwin", "ios-arm64": "aarch64-apple-ios", "ios-sim-arm64": "aarch64-apple-ios-sim" };
+/// (macOS: rustc's for aarch64-apple-darwin, below the app's 12.0)
+const APPLE_MIN: Partial<Record<Target, string>> = { "darwin-arm64": "11.0", "ios-arm64": "17.0", "ios-sim-arm64": "17.0" };
+/// The shell's static library for Apple, as scripts/core.sh shell makes it (the crate untouched: a staticlib by rustc),
+/// rebuilt so that rustc says what it links (--print native-static-libs, said only when it builds)
+const shellApple = (t: Target) => [
+  "rustc", "--locked", "--release", "-p", "stillfail-shell", "--lib", "--crate-type", "staticlib", "--target", APPLE_TRIPLES[t]!,
+  "--", "--print", "native-static-libs",
+];
 const SHELL_RUSTFLAGS = "-C link-arg=-Wl,-z,max-page-size=16384";
 const shellCommand = () => [
   "rustc", "--locked", "-p", "stillfail-shell", "--lib", "--crate-type", "cdylib", "--target", "aarch64-linux-android", "--release",

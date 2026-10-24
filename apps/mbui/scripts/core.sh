@@ -56,6 +56,23 @@ shell() {
   echo "shell $target in $(since $t0) s: $(stat -f %z $OUT/$target/libstillfail_shell.a) bytes; links: $(libs $target)"
 }
 
+# The shell for TARGET as still.fail's natives have it (scripts/native.ts shell-apple: built once on a Mac by CI's
+# natives job, for macOS 11.0 and iOS 17.0), else as said by native.ts: built there.
+shell_prebuilt() {
+  local t
+  case $1 in
+    aarch64-apple-darwin) t=darwin-arm64 ;;
+    aarch64-apple-ios) t=ios-arm64 ;;
+    aarch64-apple-ios-sim) t=ios-sim-arm64 ;;
+    *) return 1 ;;
+  esac
+  local dir
+  dir=$(node "$EMBER/scripts/native.ts" path shell-apple $t) || return 1
+  mkdir -p $OUT/$1
+  cp "$dir/libstillfail_shell.a" $OUT/$1/ && cp "$dir/libstillfail_shell.libs" $OUT/shell-$1.libs
+  echo "shell $1: still.fail's natives, shell-apple $t ($dir)"
+}
+
 # The core for Hermes (every native host: src/host/apple_core.mm, src/host/android_core.c): out/core/core.hbc. Made as ember's
 # client/core-ts/scripts/hermes-bundle.ts makes it (esbuild to ES2020; Babel's class transform, as Hermes 0.81 has no
 # classes; then React Native 0.81.4's hermesc, the engine's Hermes, to bytecode), but from an entry of ours (ENTRY,
@@ -198,7 +215,7 @@ engine() {
 apple() {
   local target=${1:-aarch64-apple-darwin}
   engine $target || return 1
-  [ -f $OUT/$target/libstillfail_shell.a ] || shell $target || return 1
+  [ -f $OUT/$target/libstillfail_shell.a ] || shell_prebuilt $target || shell $target || return 1
   ENTRY=${ENTRY:-$ROOT/core/media-hermes.ts} hermes
 }
 
