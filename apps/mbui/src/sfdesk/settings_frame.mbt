@@ -26,6 +26,7 @@ fn setting_page(c : @ui.Ctx, src : Source, w : Workspace, pages : Pages, route :
     Connects("") => connects_page(c, core, here)
     Memories => memories_page(c, core, here)
     Usage => usage_page(c, core, here)
+    Station(a) => station_page(c, core, here, a)
     Memory(a) => memory_page(c, core, here, a)
     AutoDecisions => decisions_page(c, core, here)
     AutoCompletion => completion_page(c, core, here)

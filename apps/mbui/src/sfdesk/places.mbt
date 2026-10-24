@@ -100,6 +100,8 @@ fn place_split(c : @ui.Ctx, src : Source, w : Workspace, pages : Pages, place : 
   let core = (pages.core)(src, w)
   c.box(style=place_pane, fn() {
     match place_route(src, w, place) {
+      // a station's: the desktop's own (station_page.mbt)
+      Some(Station(a)) => station_page(c, core, @settings.here_of(core, w.id, w.name), a)
       Some(r) => @settings.page(c, core, @settings.here_of(core, w.id, w.name), r, root=true)
       None => @settings.page(c, core, @settings.here_of(core, w.id, w.name), Route::Stations, root=true)
     }

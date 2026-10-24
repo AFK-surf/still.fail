@@ -693,6 +693,10 @@ export const SHAPES: Record<string, Shape> = {
     ["done", opt("String"), { doc: "The station's, for a while after an update ended well: how it went (已更新到 0.1.1300，agent 没有中断)." }],
     ["message", opt("String"), { doc: "What the last update that failed said." }],
     ["checkedAt", opt("i64"), { client: opt("I54"), doc: "When what is out was last read." }],
+    ["shownText", "String", { default: true, doc: "Its version as shown: not installed, a clone's (开发版), or one not read." }],
+    ["tipText", "String", { default: true, doc: "What is said of it on hover: up to date, or that the last check failed (\"\" nothing)." }],
+    ["updatingText", "String", { default: true, doc: "While it updates, where that is (its `progress`, else 正在更新/正在安装)." }],
+    ["failedText", "String", { default: true, doc: "Its last update or install failed, in words." }],
   ], { doc: "A piece of software on a station and whether a newer one is out (the station's updates): the station itself (`station`) or a\nruntime (`claude`, `codex`, `dsh`, `grok`, `cursor`, `devin`)." }),
   ApiProvider: struct([
     ["id", "String"],
