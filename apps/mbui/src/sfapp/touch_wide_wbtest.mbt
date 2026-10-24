@@ -118,3 +118,27 @@ test "touch wide, a small tablet held upright: another place tapped (设置) is 
   t.run_for(@sfdesk.side_move_ms)
   assert_false(@sfdesk.wide.peeking)
 }
+
+///|
+test "touch wide: a message's words held, the passage's handles at its ends in the pane beside the sidebar, the bar over it" {
+  let t = touch_wide_tester()
+  hold_on(t, "做完了：列表、跳到最新的按钮") |> ignore
+  t.draw()
+  assert_true(pk.ts != "")
+  let accent = @sf.theme().p.accent
+  let ground = @sf.alpha(accent, 0.26)
+  let passage = t.drawn_rects().filter(fn(r) { r.4 == ground })
+  assert_true(passage.length() > 0, msg=t.drawn_text())
+  let (px, py, pw, ph, _) = passage[0]
+  let (ex, ey, ew, eh, _) = passage[passage.length() - 1]
+  // the handles' lines (2 wide, the accent): down the passage's first line's start and its last line's end
+  let lines = t.drawn_rects().filter(fn(r) { r.4 == accent && r.2 < 3.0 })
+  assert_eq(lines.length(), 2)
+  let (sx, sy, sw, _, _) = lines[0]
+  let (lx, ly, lw, _, _) = lines[1]
+  assert_true((sx + sw / 2.0 - px).abs() < 1.5 && (sy - py).abs() < 1.5, msg="start at \{sx},\{sy}, passage at \{px},\{py},\{pw},\{ph}")
+  assert_true((lx + lw / 2.0 - (ex + ew)).abs() < 1.5 && (ly - ey).abs() < 1.5, msg="end at \{lx},\{ly}, passage's end at \{ex + ew},\{ey},\{eh}")
+  // the bar over the passage
+  let (_, quote_y) = t.find("引用").unwrap()
+  assert_true(quote_y < py && quote_y > py - 60.0, msg="引用 at \{quote_y}, passage at \{py}")
+}
