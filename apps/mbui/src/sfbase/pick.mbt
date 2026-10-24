@@ -48,7 +48,7 @@ pub fn pick_reset() -> Unit {
 /// Whether words are picked as a desktop's (a mouse's selection over the page, its pill) rather than as a phone's
 /// (held, the handles, the bar): by the hand alone, in any layout (@ui.pointing).
 pub fn mouse_picks() -> Bool {
-  @ui.pointing() is Mouse
+  @sf.pointer_rests()
 }
 
 ///|

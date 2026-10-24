@@ -2,6 +2,15 @@
 // where): what a pointer over a thing shows, a press's ripple, a menu held. The pages ask these, never @ui.pointing().
 
 ///|
+/// Whether the hand rests over things (a mouse's pointer: its moves are seen, a press is a click, words are picked by
+/// a drag) rather than on nothing (a finger: what a press does is what it presses; it is never over anything): what
+/// an answer of the hand's turns on where the library has no part of its own for it. What is shown, where and how big
+/// never asks it (detlint's page-hand).
+pub fn pointer_rests() -> Bool {
+  @ui.pointing() is Mouse
+}
+
+///|
 /// What a pointer over a thing shows (a row's time, its ✕, a dismiss): while `pointed` (it is pointed at, or what it
 /// belongs to is), and always to a finger, which hovers over nothing.
 pub fn pointed_or_finger(pointed : Bool) -> Bool {
@@ -37,3 +46,14 @@ pub fn menu_held(c : @ui.Ctx, key : String) -> Bool {
 /// The press each menu held was last felt for (menu_held), by what it is of.
 // kept across runs: let go as the app begins anew (parts_reset)
 let held_felt : Map[String, Int] = {}
+
+///|
+/// Where a menu asked of a thing on a line opens along it (`mid`: the line's middle): under the finger that held it,
+/// or, right clicked (a pointer, whose press is not the click's), at the line's middle.
+pub fn menu_along(c : @ui.Ctx, mid : Double) -> Double {
+  if pointer_rests() {
+    mid
+  } else {
+    c.press().x
+  }
+}

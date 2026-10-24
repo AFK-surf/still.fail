@@ -124,10 +124,10 @@ pub fn vf_bar(vw : Viewer, c : @ui.Ctx, src : Source, shown : Double) -> Unit {
   let kind = v.shown_kind()
   // a mouse moving over it wakes what fades; resting on the bar, it stays
   let (px, py, _) = c.pointer()
-  if @ui.pointing() is Mouse && v.mouse_seen && (px != v.mouse_x || py != v.mouse_y) {
+  if @sf.pointer_rests() && v.mouse_seen && (px != v.mouse_x || py != v.mouse_y) {
     v.wake(rest_ms)
   }
-  if @ui.pointing() is Mouse && !v.awake && py >= 0.0 && py < @sf.viewer_bar_h && v.mouse_seen {
+  if @sf.pointer_rests() && !v.awake && py >= 0.0 && py < @sf.viewer_bar_h && v.mouse_seen {
     v.wake(rest_ms)
   }
   v.mouse_x = px

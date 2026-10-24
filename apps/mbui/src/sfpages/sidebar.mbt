@@ -316,7 +316,7 @@ fn list_held(c : @ui.Ctx, key : String, pane : Int) -> Bool {
     Some((x, y, w, h)) => px >= x && px < x + w && py >= y && py < y + h
     None => false
   }
-  over && (down || @ui.pointing() is Mouse)
+  over && (down || @sf.pointer_rests())
 }
 
 ///|

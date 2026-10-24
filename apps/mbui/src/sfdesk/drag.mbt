@@ -102,7 +102,7 @@ let fdrag_slop : Double = 4.0
 fn fdrag_press(c : @ui.Ctx, item : Dragged) -> Unit {
   // (a mouse's: a finger moving on a row moves the list, as the web's rows, which a touch drags nothing of; a file is
   // moved there by its menu)
-  if @ui.pointing() is Finger {
+  if !@sf.pointer_rests() {
     return
   }
   if fdrag.press is None && fdrag.item is None {
