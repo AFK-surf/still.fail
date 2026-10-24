@@ -761,6 +761,48 @@ test "an Anim's start is the frame it is told in, whoever asks its end then or b
 }
 
 ///|
+/// A moment just after a list's rows changed (within what was once a window of 150 ms in which any move counted).
+let just_after_ms : Double = 50.0
+
+///|
+test "a list's row moved by something else just after its rows changed is in its new place at once" {
+  let keys = Ref::new(["a", "b", "c"])
+  let tall_a = Ref::new(false)
+  let t = @ui.Tester::new(
+    fn(c) {
+      let ks = keys.val
+      @motion.list_keys(c, "rows", ks.map(fn(k) { "row/" + k })) |> ignore
+      c.list("rows", ks.length(), 40.0, fn(i) {
+        let k = ks[i]
+        let h = if k == "a" && tall_a.val { 80.0 } else { 40.0 }
+        let n = c.box(w=Fill(1.0), h=Px(h), bg=if k == "c" { 0xFF0000FFL } else { 0x202020FFL }, fn() {
+          c.text(k) |> ignore
+        })
+        @motion.layout(c, n, "row/" + k)
+      })
+      |> ignore
+    },
+    w=200.0,
+    h=400.0,
+  )
+  assert_eq(drawn_y(t, 0xFF0000FFL), 80.0)
+  // b goes: c closes over it, on its way for the list's change
+  keys.val = ["a", "c"]
+  t.draw()
+  t.run_for(@motion.layout_rest("row/c") - t.time())
+  assert_eq(drawn_y(t, 0xFF0000FFL), 40.0)
+  // the rows change again, and just after a row over c grows (its words came, not the list's change): c is pushed
+  // down by those 40 at once
+  keys.val = ["a", "c", "d"]
+  t.draw()
+  t.run_for(just_after_ms)
+  tall_a.val = true
+  t.frame()
+  assert_eq(drawn_y(t, 0xFF0000FFL), 80.0)
+  assert_eq(@motion.layout_rest("row/c"), -1.0)
+}
+
+///|
 test "layout_rest: a list's row gone, when its copy has left; its copy said to move by its key" {
   let keys = Ref::new(["a", "b", "c"])
   let t = @ui.Tester::new(
