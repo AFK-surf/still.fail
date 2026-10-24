@@ -411,6 +411,8 @@ fn fixture_chat_topic(f : Fixture, name : String, params : Map[String, Json]) ->
             with_message(rich_chat(f.older), screens_answer)
           } else if f.mode == "chat-need" {
             with_need(rich_chat(f.older))
+          } else if f.mode == "chat-working" {
+            with_working(rich_chat(f.older))
           } else if f.mode == "chat-update" {
             with_station_update(rich_chat(f.older))
           } else if f.mode == "chat-download" {
@@ -591,6 +593,9 @@ fn fixture_chat_topic(f : Fixture, name : String, params : Map[String, Json]) ->
         "active": true,
         "statusText": "等你在浏览器里登录",
       })
+    // chat-working: its agent's step, said in more words than a phone's line has room for
+    "live" if f.mode == "chat-working" && text(Some(Json::object(params)), "key") == "s-c1" =>
+      Some({ "loaded": true, "activity": { "now": { "key": "call:1", "text": working_step } } })
     _ => fixture_drive_topic(f, name, params)
   }
 }
@@ -1387,6 +1392,37 @@ fn with_need(v : Json) -> Json {
         }),
       )
       o["messages"] = Json::array(all)
+      Json::object(o)
+    }
+    _ => v
+  }
+}
+
+// ── an agent at work on a long step (MBUI_FIXTURE=chat-working) ──────────
+
+///|
+/// What the agent of the first row's chat does now, as long as an agent's step may say it (its call's description).
+let working_step : String = "在 Studio 上跑整套检查：先编译 mbui 的原生测试，再逐个对比手机、平板和桌面三种宽度下的截图"
+
+///|
+/// The first row's chat with its agent at work on that step, three minutes in: there as the chat opens.
+fn with_working(v : Json) -> Json {
+  match v {
+    Object(m) => {
+      let o = m.copy()
+      o["agents"] = Json::array(
+        items(Some(v), "agents").map(fn(a) {
+          match a {
+            Object(am) => {
+              let w = am.copy()
+              w["status"] = Json::string("running")
+              w["since"] = Json::number(-200000.0)
+              Json::object(w)
+            }
+            _ => a
+          }
+        }),
+      )
       Json::object(o)
     }
     _ => v
