@@ -161,7 +161,14 @@ describe("the Claude Code driver", { concurrency: true }, () => {
       "-p", "--input-format", "stream-json", "--output-format", "stream-json", "--verbose", "--include-partial-messages",
       "--dangerously-skip-permissions", "--session-id", session.id(), "--model", "m1", "--effort", "high",
       "--append-system-prompt", "be brief", "--mcp-config", mcp,
+      "--disallowedTools", "ScheduleWakeup,CronCreate,CronDelete,CronList,RemoteTrigger", "--settings", started.argv.at(-1),
     ]);
+    // Claude Code's own that a chat agent here cannot use stays out of its context.
+    const settings = JSON.parse(started.argv.at(-1));
+    assert.equal(settings.disableClaudeAiConnectors, true);
+    assert.equal(settings.skillOverrides.loop, "off");
+    assert.equal(settings.skillOverrides["anthropic-skills:computer-use"], "off");
+    assert.equal(settings.skillOverrides["anthropic-skills:docx"], "name-only");
     const env = started.env;
     assert.equal(env.CLAUDE_CONFIG_DIR, o.profile.home);
     assert.equal(env.STILLFAIL_MCP_TOKEN, "tok");
@@ -198,7 +205,7 @@ describe("the Claude Code driver", { concurrency: true }, () => {
     await until(ended(1));
     const started = JSON.parse(readFileSync(o.dump, "utf8").trim());
     const at = started.argv.indexOf("--settings");
-    assert.deepEqual(JSON.parse(started.argv[at + 1]), { apiKeyHelper: `cat '${join(data, "kimi'\\''s home", "kimi-code.token")}'` });
+    assert.equal(JSON.parse(started.argv[at + 1]).apiKeyHelper, `cat '${join(data, "kimi'\\''s home", "kimi-code.token")}'`);
     assert.equal(started.env.ANTHROPIC_BASE_URL, "https://api.kimi.com/coding");
     assert.deepEqual([started.env.ANTHROPIC_AUTH_TOKEN, started.env.ANTHROPIC_API_KEY, started.env.CLAUDE_CODE_API_KEY_HELPER_TTL_MS], [undefined, undefined, "60000"]);
     await session.dispose();
