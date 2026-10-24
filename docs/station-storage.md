@@ -214,7 +214,10 @@ The archive and hide columns (`archived_by`, `shown_at`, `cwd`, `home`,
   (`transcriptLength`). So is what its calls used (`session_usage`, the
   summary's `usage`): as the live view tells it, then as the usage counter
   counts each session anew over what the live view last said of the rest (its
-  model, its context; before it said any, its last call's). A change of a
+  model, its context; before it said any, its last call's). The counted part
+  is read from `usage_totals`, which the database keeps added up per session,
+  runtime, model and speed as calls are recorded (triggers on `usage`): a few
+  rows each time it is told, not every call the session made. A change of a
   session at rest (its last turn's count comes in after it ended) is told as
   the session's; one at work is on its stream. A client from before follows a session by name, on
   `/events?live=<key>&from=N&last=200` (entries from index N, no more than the
