@@ -285,6 +285,7 @@ fn Css::len(self : Css) -> Len {
   let n = self.name()
   match n {
     "Hug" => Hug
+    "Cut" => Cut
     "Full" => Full
     "Grow" => Grow(self.arg())
     "Fixed" => Fixed(self.arg())

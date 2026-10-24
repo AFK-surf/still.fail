@@ -189,12 +189,13 @@ fn cn_row(c : @ui.Ctx, core : Core, station : String, station_name : String, s :
   }
   c.box(style=desk_list_link, id=rid, fn() {
       cn_avatar(c, core, cv)
-      c.box(style=cn_text, fn() {
+      // (short of room, its name kept: its team leaves its line, where it runs and who made it the row)
+      c.box(style=cn_text, keep=true, fn() {
         c.box(style=cn_title_line, fn() {
           c.text(text(cv, "name"), style=cn_title) |> ignore
           match opt_text(cv, "team") {
             Some(team) =>
-              c.box(style=cn_team, fn() {
+              c.box(style=cn_team, drop=cn_drop_team, fn() {
                 cn_kind(c, text(cv, "kind"), cn_team_icon)
                 c.text(team, style=cn_meta) |> ignore
               })
@@ -211,7 +212,7 @@ fn cn_row(c : @ui.Ctx, core : Core, station : String, station_name : String, s :
         c.text(text(cv, "modeText") + " · " + text(cv, "runtimeText") + model, style=cn_sub) |> ignore
       })
       |> ignore
-      c.box(style=cn_facts, fn() {
+      c.box(style=cn_facts, drop=cn_drop_facts, fn() {
         cn_station_tag(c, station_name, s)
         cn_owner(c, core, field(cv, "createdBy"))
       })
@@ -295,12 +296,12 @@ fn cn_waiting_app(c : @ui.Ctx, src : Source, core : Core, here : Here, a : Json,
   }
   c.box(style=desk_list_row, fn() {
     c.box(style=cn_kind_box, fn() { @sf.slack_mark(c, cn_waiting_mark) |> ignore }) |> ignore
-    c.box(style=cn_text, fn() {
+    c.box(style=cn_text, keep=true, fn() {
       c.box(style=cn_title_line, fn() {
         c.text(text(av, "name"), style=cn_title) |> ignore
         match opt_text(av, "team") {
           Some(team) =>
-            c.box(style=cn_team, fn() {
+            c.box(style=cn_team, drop=cn_drop_team, fn() {
               @sf.slack_mark(c, cn_team_icon) |> ignore
               c.text(team, style=cn_meta) |> ignore
             })
@@ -312,7 +313,7 @@ fn cn_waiting_app(c : @ui.Ctx, src : Source, core : Core, here : Here, a : Json,
       c.text(where_, style=cn_sub) |> ignore
     })
     |> ignore
-    c.box(style=cn_facts, fn() { cn_station_tag(c, text(sv, "name"), sv) }) |> ignore
+    c.box(style=cn_facts, drop=cn_drop_facts, fn() { cn_station_tag(c, text(sv, "name"), sv) }) |> ignore
     let on = [("station", station), ("appId", app_id)]
     let dropping = is_doing(core, ["slack.dropApp"], on)
     if online {
@@ -448,6 +449,14 @@ let cn_team : @ui.Style = @ui.css("row gap=S1 align=ACenter")
 ///|
 // kept across runs: a value (no field of it changes)
 let cn_meta : @ui.TextStyle = @ui.text_style(size=Xs, leading=L5, color=Muted, wrap=false)
+
+///|
+/// Its team after its name, whole or not at all where its line has not the room.
+let cn_drop_team : Int = 1
+
+///|
+/// What leaves a connect's row first, short of room: where it runs and who made it.
+let cn_drop_facts : Int = 1
 
 ///|
 /// Its station and who added it (connectFacts: 10 apart).

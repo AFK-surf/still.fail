@@ -239,12 +239,12 @@ test "a rounded clip inside another: the inner's corners, and the outer's where 
 
 ///|
 test "what a box that does not cut holds past its own rect is drawn where it shows, the box laid out outside the clip" {
-  // ten tiles 100 wide in a row squeezed to the 200 of a box that cuts, moved 650 to the left (as ＋'s recent photos
-  // are dragged): the row itself lies wholly left of the cut, its 7th, 8th and 9th tiles (each red as its number) in it
+  // ten tiles 100 wide in a row 200 wide in a box that cuts, moved 650 to the left (as ＋'s recent photos are
+  // dragged): the row itself lies wholly left of the cut, its 7th, 8th and 9th tiles (each red as its number) in it
   let t = Tester::new(
     fn(c) {
       c.box(dir=Row, w=Px(200.0), h=Px(100.0), clip=true, fn() {
-        c.box(dir=Row, tx=-650.0, fn() {
+        c.box(dir=Row, w=Px(200.0), tx=-650.0, fn() {
           for k in 0..<10 {
             c.box(w=Px(100.0), h=Px(100.0), bg=(k.to_int64() << 24) | 0xFFL, fn() { () }) |> ignore
           }

@@ -88,17 +88,21 @@ fn workspace_page(c : @ui.Ctx, core : Core, here : Here) -> Unit {
           }
         }
         c.box(style=ws_name_box, id=if manager { nid } else { 0 }, fn() { c.text(name, style=ws_name) |> ignore }) |> ignore
-        c.box(style=ws_facts, fn() {
+        // (on as many lines as they take, each with the dot before it: workspaceFacts' flex-wrap)
+        c.box(style=ws_facts, flow=true, line_gap=ws_facts_line, fn() {
           let facts = [
             @sf.t("web-pages.settings.workspace.youAreShort", args=[("role", role_label(role)), ("email", here.email)]),
             @sf.t("web-pages.settings.members.count", args=[("n", members.length().to_string())]),
             @sf.t("web-pages.settings.workspace.stationsCount", args=[("n", items(v, "stations").length().to_string())]),
           ]
           for i, f in facts {
-            if i > 0 {
-              c.text("·", style=ws_fact_dot) |> ignore
-            }
-            c.text(f, style=ws_fact) |> ignore
+            c.box(style=ws_fact_part, fn() {
+              if i > 0 {
+                c.text("·", style=ws_fact_dot) |> ignore
+              }
+              c.text(f, style=ws_fact_wrap) |> ignore
+            })
+            |> ignore
           }
         })
         |> ignore
@@ -365,7 +369,7 @@ fn ws_lines(c : @ui.Ctx, title : String, sub : String, badge? : String = "") -> 
 fn ws_group(c : @ui.Ctx, title : String, note : String) -> Unit {
   c.box(style=ws_group_box, fn() {
     c.text(title, style=ws_group_title) |> ignore
-    c.text(note, style=ws_row_sub) |> ignore
+    c.text(note, style=ws_group_note) |> ignore
   })
   |> ignore
 }
@@ -520,8 +524,27 @@ let ws_name : @ui.TextStyle = @ui.text_style(size=Xl3, weight=Semibold, color=Fg
 let ws_facts : @ui.Style = @ui.css("row px=S2 gap=S2 align=ACenter")
 
 ///|
+/// A fact with the dot before it, 8 apart, kept together; its words on more lines where one has not the room; 4
+/// between the facts' lines.
+// kept across runs: a value (no field of it changes)
+let ws_fact_part : @ui.Style = @ui.css("row gap=S2 align=AStart")
+
+///|
+let ws_facts_line : Double = 4.0
+
+///|
+/// How many in a group and what becomes of them, after its name: cut short where its line has not the room.
+// kept across runs: a value (no field of it changes)
+let ws_group_note : @ui.TextStyle = @ui.text_style(size=Sm, leading=L6, color=Muted, wrap=false, w=Cut)
+
+///|
 // kept across runs: a value (no field of it changes)
 let ws_fact : @ui.TextStyle = @ui.text_style(size=Sm, leading=L6, color=Muted, wrap=false)
+
+///|
+/// A fact after its dot, on more lines where one has not the room.
+// kept across runs: a value (no field of it changes)
+let ws_fact_wrap : @ui.TextStyle = @ui.text_style(size=Sm, leading=L6, color=Muted)
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -545,11 +568,11 @@ let ws_section_count : @ui.TextStyle = @ui.text_style(size=Base, leading=L7, wei
 
 ///|
 // kept across runs: a value (no field of it changes)
-let ws_row_text : @ui.Style = @ui.style(w=@sf.grow, gap=S0_5)
+let ws_row_text : @ui.Style = @ui.style(w=@sf.grow, min_w=S20, gap=S0_5)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let ws_row_title : @ui.TextStyle = @ui.text_style(size=Sm, leading=L6, weight=Medium, color=Fg, wrap=false)
+let ws_row_title : @ui.TextStyle = @ui.text_style(size=Sm, leading=L6, weight=Medium, color=Fg, wrap=false, w=Cut)
 
 ///|
 // kept across runs: a value (no field of it changes)

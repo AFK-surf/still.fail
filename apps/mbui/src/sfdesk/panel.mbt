@@ -98,6 +98,30 @@ pub fn side_width(pane : Double) -> Double {
 let panel_row : @ui.Style = @ui.css("row w=Full h=Full")
 
 ///|
+/// The least the chat and the panel are side by side (ChatSide.tsx panelWidth: the chat 360, the panel 360 at least, the
+/// rule between): on a page narrower, the panel over the page.
+let side_both_least : Double = 721.0
+
+///|
+/// How wide the panel is over the page (ChatPage.css.ts sidePanel on a narrow page: min(460px, 100vw)).
+let side_over_w : Double = 460.0
+
+///|
+/// Whether the panel being built is over the page (side_beside), its edge not dragged then.
+// kept across runs: said by side_beside as each panel is built, before it is read
+let side_over : Ref[Bool] = Ref(false)
+
+///|
+/// The page under the panel over it: as wide as it is.
+// kept across runs: a value (no field of it changes)
+let panel_page_whole : @ui.Style = @ui.css("w=Full h=Full")
+
+///|
+/// The panel over the page (sidePanel, narrow): the page's ground, its shadow at its side (-12 0 32).
+// kept across runs: a value (no field of it changes)
+let side_over_box : @ui.Style = @ui.css("bg=Bg shadow=Xl")
+
+///|
 /// The panel (sidePanel): its ground the canvas, a hairline at its left.
 // kept across runs: a value (no field of it changes)
 pub let side_panel_style : @ui.Style = @ui.css("w=Full h=Full bg=Bg")
@@ -220,6 +244,12 @@ fn side_leaving(key : String) -> (Array[String], String)? {
 /// on its way, it goes on from where it is. Open or closed otherwise (a page opened with its tabs as they were left),
 /// it is so at once.
 pub fn side_beside(c : @ui.Ctx, key : String, open : Bool, whole : Double, page : () -> Unit, panel : () -> Unit) -> Unit {
+  // where the page has not the room for the chat and the panel at their least side by side, the panel comes in over
+  // the page from its right edge (ChatPage.css.ts sidePanel on a narrow page: 460 at most, a shadow at its side), the
+  // page as wide as it was, the panel's edge not dragged
+  let over = c.width < side_both_least
+  side_over.val = over
+  let whole = if over { dmin(side_over_w, c.width) } else { whole }
   let name = "--side-panel/" + key
   match panel_own.was {
     Some((k, was)) if k == key && was != open && panel_own.asked == key => {
@@ -230,12 +260,23 @@ pub fn side_beside(c : @ui.Ctx, key : String, open : Bool, whole : Double, page 
   }
   panel_own.was = Some((key, open))
   // its column (the rule, then the panel) as wide as it has got
-  let col = c.moved(name, if open { whole + side_rule_w } else { 0.0 })
+  let col = c.moved(name, if open { whole + (if over { 0.0 } else { side_rule_w }) } else { 0.0 })
   if col <= 0.0 {
     if !open && side_leaving(key) is Some(_) {
       panel_own.leaving = None
     }
     page()
+    return
+  }
+  if over {
+    c.box(style=panel_row, fn() {
+      c.box(style=panel_page_whole, fn() { page() }) |> ignore
+      c.box(style=side_over_box.then(@ui.style(w=Fixed(whole))), right=0.0, top=0.0, bottom=0.0, tx=whole - col, fn() {
+        c.sized(whole, c.height, panel)
+      })
+      |> ignore
+    })
+    |> ignore
     return
   }
   let left = c.width - col
@@ -329,7 +370,10 @@ fn side_panel(
     })
     |> ignore
     // its edge (ResizeHandle): dragged, its width (kept while the app runs); pressed, the panel closed; pressed
-    // twice, its own width again
+    // twice, its own width again; over the page, none
+    if side_over.val {
+      return
+    }
     match
       @sf.resize_handle(
         c,

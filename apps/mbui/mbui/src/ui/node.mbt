@@ -7,6 +7,9 @@ pub(all) enum Size {
   Auto
   Px(Double)
   Fill(Double)
+  /// as wide as what it holds, cut short where its row has less room (words on one line end in an ellipsis: CSS's
+  /// min-width: 0 with text-overflow), not grown past that
+  Cut
   /// a share of the parent's room inside its padding, in percent (CSS's `width: 50%`)
   Pct(Double)
 } derive(Eq)
@@ -170,6 +173,12 @@ struct Node {
   mut shrinks : Bool
   // as wide as its content in a row, not squeezed where the row is short (Ctx::box `keep`): only its siblings shrink
   mut keep : Bool
+  // left out of its row when the row has not the room (Ctx::box `drop`): k > 0 the k-th to go, -1 the row's ⋯ (there
+  // only while something of it is left out), 0 always there
+  mut drop : Int
+  // the least it is laid out across in a row, as worked out from what it holds (Ctx::flex_tree): narrower, what it
+  // holds would lie over what is beside it
+  mut least : Double
   // a row that goes on in lines when what it holds does not fit (Ctx::box `flow`: Compose's FlowRow), what it holds
   // as wide as it is
   mut flow : Bool
@@ -320,6 +329,8 @@ fn Node::new() -> Node {
     in_sideways: false,
     shrinks: false,
     keep: false,
+    drop: 0,
+    least: 0.0,
     flow: false,
     line_gap: -1.0,
     label: "",
@@ -399,6 +410,7 @@ fn Node::reset_rest(self : Node) -> Unit {
   self.in_sideways = false
   self.shrinks = false
   self.keep = false
+  self.drop = 0
   self.flow = false
   self.line_gap = -1.0
   self.label = ""

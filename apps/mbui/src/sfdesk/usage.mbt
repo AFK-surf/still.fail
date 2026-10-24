@@ -100,28 +100,39 @@ fn usage_body(c : @ui.Ctx, core : Core, v : Json?) -> Unit {
 /// The totals, four in a row (Tiles): what each is, its figure large, a line under it; the first's the way to the
 /// prices (查看价目表 under it, the hover's ground under the pointer).
 fn usage_totals(c : @ui.Ctx, core : Core, v : Json?) -> Unit {
-  c.box(style=ug_tiles, fn() {
-    for i, tile in items(v, "tiles") {
-      let tv = Some(tile)
-      let prices = i == 0
-      let id = if prices { c.id("usage-prices") } else { 0 }
-      if prices {
-        c.cursor(id, Hand)
-        if c.clicked(id) {
-          (core.push)(UsagePrices(usage_pick.days))
-        }
-      }
-      let b = c.box(style=if prices { ug_tile_link } else { ug_tile }, id~, fn() {
-        c.text(text(tv, "label"), style=ug_tile_label) |> ignore
-        c.text(text(tv, "value"), style=ug_tile_value) |> ignore
-        c.text(if prices { @sf.t("web-main.usage.seePrices") } else { text(tv, "sub") }, style=ug_tile_sub) |> ignore
-      })
-      if prices {
-        c.semantics(b, Link, id~, label=@sf.t("web-main.usage.costPrices"))
-      }
+  // (four in a row, or two over two where four have not the room: in pairs that go on in lines, never three and one,
+  // as the web's narrow page has them)
+  let tiles = items(v, "tiles")
+  c.box(style=ug_tiles, flow=true, fn() {
+    for k in 0..<((tiles.length() + 1) / 2) {
+      c.box(style=ug_pair, keep=true, fn() { usage_tile_pair(c, core, tiles, k * 2) }) |> ignore
     }
   })
   |> ignore
+}
+
+///|
+/// The two tiles from `from` (one where it is the last).
+fn usage_tile_pair(c : @ui.Ctx, core : Core, tiles : Array[Json], from : Int) -> Unit {
+  for i in from..<@cmp.minimum(from + 2, tiles.length()) {
+    let tv = Some(tiles[i])
+    let prices = i == 0
+    let id = if prices { c.id("usage-prices") } else { 0 }
+    if prices {
+      c.cursor(id, Hand)
+      if c.clicked(id) {
+        (core.push)(UsagePrices(usage_pick.days))
+      }
+    }
+    let b = c.box(style=if prices { ug_tile_link } else { ug_tile }, id~, fn() {
+      c.text(text(tv, "label"), style=ug_tile_label) |> ignore
+      c.text(text(tv, "value"), style=ug_tile_value) |> ignore
+      c.text(if prices { @sf.t("web-main.usage.seePrices") } else { text(tv, "sub") }, style=ug_tile_sub) |> ignore
+    })
+    if prices {
+      c.semantics(b, Link, id~, label=@sf.t("web-main.usage.costPrices"))
+    }
+  }
 }
 
 ///|
@@ -487,7 +498,12 @@ let ug_tiles : @ui.Style = @ui.css("row w=Full gap=S2_5")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let ug_tile : @ui.Style = @ui.style(w=@sf.grow, px=S4, py=S3_5, gap=S0_5, radius=Xl3, bg=Card)
+let ug_tile : @ui.Style = @ui.style(w=@sf.grow, min_w=S28, px=S4, py=S3_5, gap=S0_5, radius=Xl3, bg=Card)
+
+///|
+/// Two of the totals side by side, sharing what their line has (each 112 at least).
+// kept across runs: a value (no field of it changes)
+let ug_pair : @ui.Style = @ui.style(row=true, w=@sf.grow, gap=S2_5)
 
 ///|
 // kept across runs: a value (no field of it changes)

@@ -110,12 +110,14 @@ pub fn Space::margin_px(self : Space) -> Double {
 }
 
 ///|
-/// A width or a height: what it holds (`Hug`, the default), all of the parent's (`Full`), a share of what is left
+/// A width or a height: what it holds (`Hug`, the default; `Cut` cut short where its row has less), all of the parent's (`Full`), a share of what is left
 /// along the parent's main axis (`Grow(k)`), a share of the parent's room in percent (`Pct(p)`, CSS's 50%; a size only,
 /// not a bound), a spacing token, or `Fixed(v)` (a value worked out as the view builds: a list's width; in a token
 /// file, a value off the scale).
 pub(all) enum Len {
   Hug
+  /// as wide as what it holds, cut short where its row has less (words on one line in an ellipsis)
+  Cut
   Full
   Grow(Double)
   Fixed(Double)
@@ -209,6 +211,7 @@ fn Len::space(self : Len) -> Space? {
 fn Len::size(self : Len) -> Size {
   match self {
     Hug => Auto
+    Cut => Cut
     Full => Fill(1.0)
     Grow(k) => Fill(k)
     Pct(p) => Pct(exact_ok(p, "Len Pct"))
@@ -221,7 +224,7 @@ fn Len::size(self : Len) -> Size {
 /// A length as a bound (min_w, max_w…): `Hug` none (`none_is`), `Full` none as well.
 fn Len::bound(self : Len, none_is : Double) -> Double {
   match self {
-    Hug | Full | Grow(_) => none_is
+    Hug | Cut | Full | Grow(_) => none_is
     Pct(p) => abort("style: a bound is not a share (Pct(\{p}))")
     Fixed(v) => exact_ok(v, "Len")
     l => l.space().unwrap().px()

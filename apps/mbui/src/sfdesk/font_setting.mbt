@@ -146,7 +146,8 @@ fn font_setting(c : @ui.Ctx, core : Core) -> Unit {
     if picked != @settings.fonts_at.val {
       @settings.fonts_at.val = picked
     }
-    c.box(style=font_tiles, fn() {
+    // (on as many lines as they take: FontSetting.css.ts tiles' auto-fill)
+    c.box(style=font_tiles, flow=true, fn() {
       let tile = fn(key : String, id : String, name : String, face : Int, status : String) {
         let tid = c.id("fonts/tile/" + place + "/" + key)
         c.cursor(tid, Hand)

@@ -40,7 +40,7 @@ node is built, so one style is a constant and right in light and dark, wide and 
 | token | names | values |
 |---|---|---|
 | `Space` (padding, gaps) | `S0` `SPx` `S0_5` `S1` `S1_25` `S1_5` … `S4` `S4_5` `S5` … `S12` `S14` `S16` `S20` … `S96` | Tailwind v3.4's: a step 4 px; v4's quarter steps where still.fail says them (5, 18) |
-| `Len` (sizes) | `Hug` (what it holds), `Full`, `Grow(k)`, `Pct(p)` (a share of the parent's room, CSS's `50%`), `Fixed(v)`, and every `Space` name | |
+| `Len` (sizes) | `Hug` (what it holds), `Cut` (what it holds, cut short where its row has less), `Full`, `Grow(k)`, `Pct(p)` (a share of the parent's room, CSS's `50%`), `Fixed(v)`, and every `Space` name | |
 | `Radius` | `Sharp` `Sm` `Base` `Md` `Lg` `Xl` `Xl1_5` `Xl2` `Xl3` `Xl4` `Full` (a pill) `Inner` | `Theme.radii` (Tailwind's by default; `Xl1_5` 14, `Xl4` 32) |
 | `TextSize` (size and line) | `Xs3` `Xs2` `Xs` `Sm` `Base` `Lg` `Xl` `Xl2` `Xl3` `Xl4` | `Theme.text` (Tailwind's by default; `Xs2` 11 on 16, `Xs3` 10 on 14) |
 | `Leading` (a line's height said apart from the size's) | `L3` `L4` `L4_75` `L5` … `L10`, `Font` (the font's own) | `Theme.leading` (Tailwind's leading-3 … leading-10 by default: 12, 16 … 40 px; `L4_75` 19) |
@@ -83,6 +83,29 @@ box lies from that container's edges it is near, as laid out. What lies in a rou
 with it by how it is written. Where it cannot be (in no rounded container, near none of its edges, nearer one edge than
 another: the window narrowed, a `max_w` came into force) it is drawn square and `corner_faults` says so: a test fails,
 a person's screen does not stop.
+
+## Short of room
+
+A box has the room its parent gives it. When that is less than what it holds, these rules decide what happens, and
+nothing else gives way:
+
+- A box sized by what it holds (in a row, with no width of its own) is never laid narrower than what it holds needs at
+  least (CSS's `min-width: auto`): words on one line, icons, boxes of a fixed size, side by side; the widest of what is
+  under each other. Worked out as it is laid out (Node's `least`), it is what its row may squeeze it to. A box sized by
+  its room (`Fill`, `Pct`) takes what it is given, and what it holds is squeezed in it where that is too little: a
+  fault, which `Tester::squeeze_faults` says (two things drawn over each other, something cut off by what clips it or
+  by the window, words cut down to nothing).
+- Words on one line are never laid wider than a column they are in, whatever its alignment: cut with an ellipsis
+  there. In a row they are as wide as they are, unless they say otherwise.
+- What may give way says so, and how:
+  - words cut short with an ellipsis: `w=Cut` (as wide as they are, cut where the row has less), `w=Fill` (what the
+    row leaves, cut where that is less), `min_w` the least of them kept;
+  - a box that takes what its row leaves, but never less than what it holds needs: `w=Fill` with `keep`;
+  - a part left out of its row: `Ctx::box drop=k`, there whole (as wide as what it holds) or not at all, the lowest k
+    first, of the same k the last in the row first; left out, laid out nowhere, drawn and pressed nowhere; `more` is the row's ⋯, there only while something of it is left out, and
+    `Ctx::left_out(id)` says what a row left out, for its ⋯ to offer instead (read back: the frame is built again
+    when it changes as it is laid out). The library's `@sf.tools_row` is a row of tools whose ⋯ does that;
+  - what is cut or scrolled by its own box: `clip`, `sideways`.
 
 ## The three rules
 

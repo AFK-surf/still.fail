@@ -908,7 +908,8 @@ fn upload_row(
         match u.state {
           "taken" =>
             c.box(dir=Row, gap=12.0, align=ACenter, fn() {
-              c.text(tr("android-misc.drive.exists.title"), size=12.0, color=t.p.muted, wrap=false, line=16.0)
+              // (short of room, what is asked is cut short, its two answers kept whole)
+              c.text(tr("android-misc.drive.exists.title"), size=12.0, color=t.p.muted, wrap=false, line=16.0, w=Cut)
               |> ignore
               let rid = c.id(k + "/replace")
               let bid = c.id(k + "/both")
@@ -924,12 +925,12 @@ fn upload_row(
                 u.state = "waiting"
                 dv_pump(src)
               }
-              c.box(id=rid, fn() {
+              c.box(style=drive_answer, id=rid, fn() {
                 c.text(tr("android-misc.drive.exists.replace"), size=12.0, weight=600, color=@sf.link_ink(), wrap=false, line=16.0)
                 |> ignore
               })
               |> ignore
-              c.box(id=bid, fn() {
+              c.box(style=drive_answer, id=bid, fn() {
                 c.text(tr("android-misc.drive.exists.both"), size=12.0, weight=600, color=@sf.link_ink(), wrap=false, line=16.0)
                 |> ignore
               })
@@ -1014,3 +1015,8 @@ fn dv_row_key(c : @ui.Ctx, key : String, icon : String, said : String) -> Bool {
   |> ignore
   c.clicked(id)
 }
+
+///|
+/// An answer to what is asked of an upload (替换, 保留两者): its words whole on their line.
+// kept across runs: a value (no field of it changes)
+let drive_answer : @ui.Style = @ui.css("row")

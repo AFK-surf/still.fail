@@ -9,6 +9,7 @@
 // An app's film program gives its view to `run` (still.fail's src/sffilm, scripts/film.sh), which reads:
 //   MBUI_FILM=<out.mp4> MBUI_FILM_DRIVE=<script> [MBUI_WIN=390x844] [MBUI_FILM_SCALE=2] [MBUI_FILM_PLATFORM=0]
 //   [MBUI_DARK=1] [MBUI_FILM_INSET=1: the window's buttons in the app's top row, a Mac's] [MBUI_FILM_FRAMES=3000]
+//   [MBUI_LOCALE=en-US: the app's language, as a device's]
 // What it cannot show: what is not drawn by mbui (the system's keyboard and dialogs, a native view's content: a
 // video playing, a web page), and a stream's frames (none decoded under a Tester).
 
@@ -53,7 +54,8 @@ pub fn film(
     scale~,
     platform~,
     dark~,
-    env=[("MBUI_TEXT_RECORD", "1")],
+    // (the app's words in the language the film says: MBUI_LOCALE, as a device's)
+    env=[("MBUI_TEXT_RECORD", "1"), ("MBUI_LOCALE", arg("MBUI_LOCALE"))],
     live={ host, turn: fn() { spin(1.0) } },
   )
   // (the window's buttons in the app's top row, as a Mac's window has them: Tester::set_window_inset)

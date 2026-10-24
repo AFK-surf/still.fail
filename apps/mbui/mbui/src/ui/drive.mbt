@@ -1130,6 +1130,13 @@ fn drive_steps(c : Ctx) -> Unit {
         h_log("DRIVE LOG " + arg)
         next()
       }
+      // what the frame shows squeezed (squeeze.mbt), a line each
+      "squeeze" => {
+        for f in c.squeeze_faults() {
+          h_log("DRIVE SQUEEZE " + f)
+        }
+        next()
+      }
       "exit" => {
         drive_end(0)
         return

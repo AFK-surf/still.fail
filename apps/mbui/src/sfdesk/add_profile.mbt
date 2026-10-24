@@ -448,17 +448,22 @@ fn machine_offers(c : @ui.Ctx, core : Core, s : Json?, sign_in : (String) -> Uni
       let blocked = text(quota, "state") == "blocked"
       c.box(style=ap_offer, fn() {
         c.box(style=ap_offer_mark, fn() { @settings.provider_mark(c, rt, "subscription", ap_offer_glyph, "") }) |> ignore
-        c.box(style=desk_list_text, fn() {
+        // (short of room, its name kept: whether it is signed in leaves its line first, then its plan)
+        c.box(style=desk_list_text, keep=true, fn() {
           c.box(style=pf_name_line, fn() {
             c.text(@settings.runtime_label(rt), style=desk_list_title) |> ignore
             if text(lv, "planText") != "" {
-              c.box(style=pf_tag, fn() { c.text(text(lv, "planText"), style=pf_tag_words) |> ignore }) |> ignore
+              c.box(style=pf_tag, drop=ap_drop_plan, fn() { c.text(text(lv, "planText"), style=pf_tag_words) |> ignore })
+              |> ignore
             }
-            @sf.pill(
-              c,
-              if blocked { @sf.t("web-main.profile.blocked") } else { @sf.t("web-main.profile.machineSignedIn") },
-              tone=if blocked { Red } else { Green },
-            )
+            c.box(style=ap_pill_slot, drop=ap_drop_state, fn() {
+              @sf.pill(
+                c,
+                if blocked { @sf.t("web-main.profile.blocked") } else { @sf.t("web-main.profile.machineSignedIn") },
+                tone=if blocked { Red } else { Green },
+              )
+            })
+            |> ignore
           })
           |> ignore
           c.text(if text(lv, "email") != "" { text(lv, "email") } else { @sf.t("web-main.profile.signedIn") }, style=desk_note) |> ignore
@@ -579,3 +584,15 @@ let ap_offer : @ui.Style = @ui.css("row w=Full p=S3 gap=S3 align=ACenter radius=
 ///|
 // kept across runs: a value (no field of it changes)
 let ap_offer_mark : @ui.Style = @ui.css("w=S8 h=S8 radius=Lg bg=Neutral align=ACenter justify=JCenter")
+
+///|
+/// What leaves a machine's login's line first, short of room: whether it is signed in, then its plan.
+let ap_drop_state : Int = 1
+
+///|
+let ap_drop_plan : Int = 2
+
+///|
+/// Its state's pill, whole on the line.
+// kept across runs: a value (no field of it changes)
+let ap_pill_slot : @ui.Style = @ui.css("row")

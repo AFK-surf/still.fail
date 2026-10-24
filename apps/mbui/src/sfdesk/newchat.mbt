@@ -594,7 +594,7 @@ let new_link_box : @ui.Style = @ui.css("row h=S7 px=S2 radius=Lg align=ACenter h
 
 ///|
 // kept across runs: a value (no field of it changes)
-let new_link : @ui.TextStyle = @ui.text_style(size=Xs, leading=L5, color=Link, wrap=false)
+let new_link : @ui.TextStyle = @ui.text_style(size=Xs, leading=L5, color=Link, wrap=false, w=Cut)
 
 ///|
 /// FrequentCombos.css.ts frequent: its name over them, 8 apart, 12 over and under; label: 12, muted.

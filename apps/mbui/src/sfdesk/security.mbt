@@ -149,7 +149,7 @@ fn lock_on(c : @ui.Ctx, core : Core, here : Here, lock : Json?) -> Array[() -> U
               for r in requests {
                 let rv = Some(r)
                 c.box(style=sec_row, fn() {
-                  c.box(style=sec_row_text, fn() {
+                  c.box(style=sec_row_text, keep=true, fn() {
                     c.text(
                       @sf.t("web-pages.security.newDeviceOf", args=[
                         (
@@ -163,7 +163,11 @@ fn lock_on(c : @ui.Ctx, core : Core, here : Here, lock : Json?) -> Array[() -> U
                       style=sec_row_name,
                     )
                     |> ignore
-                    c.text(device_name(text(rv, "kind"), text(rv, "label")) + " · " + stamp(rv, "created_at", "ago"), style=sec_row_meta)
+                    // (which device and when, whole or not at all where the row has not the room)
+                    c.box(style=sec_meta_slot, drop=sec_drop_meta, fn() {
+                      c.text(device_name(text(rv, "kind"), text(rv, "label")) + " · " + stamp(rv, "created_at", "ago"), style=sec_row_state)
+                      |> ignore
+                    })
                     |> ignore
                   })
                   |> ignore
@@ -191,7 +195,7 @@ fn lock_on(c : @ui.Ctx, core : Core, here : Here, lock : Json?) -> Array[() -> U
             let mv = Some(m)
             c.box(style=sec_rows, fn() {
               c.box(style=sec_row, fn() {
-                c.box(style=sec_row_text, fn() {
+                c.box(style=sec_row_text, keep=true, fn() {
                   c.text(
                     match text(mv, "name") {
                       "" => text(mv, "email")
@@ -297,7 +301,7 @@ fn sec_device_row(c : @ui.Ctx, core : Core, ws : String, d : Json, can_renew : B
   c.box(style=sec_row, fn() {
     @sf.icon(c, if text(dv, "kind") == "web" { "web" } else { "monitor" }, size=sec_device_glyph, color=t.p.muted)
     |> ignore
-    c.box(style=sec_row_text, fn() {
+    c.box(style=sec_row_text, keep=true, fn() {
       c.text(device_name(text(dv, "kind"), text(dv, "label"), older=flag(dv, "older")), style=sec_row_words) |> ignore
       c.text(meta, style=if flag(dv, "renewSoon") { sec_warn } else { sec_row_meta }) |> ignore
     })
@@ -320,7 +324,7 @@ fn sec_station_row(c : @ui.Ctx, core : Core, ws : String, sv : Json?, can : Bool
   let joining = is_doing(core, ["lock.joinStation"], [("workspace", ws), ("station", id)])
   c.box(style=sec_row, fn() {
     c.box(style=if guarded { sec_dot_on } else { sec_dot_amber }, fn() {  }) |> ignore
-    c.box(style=sec_row_text, fn() {
+    c.box(style=sec_row_text, keep=true, fn() {
       c.box(style=desk_named, fn() {
         if @sf.has_station_mark(text(sv, "emoji"), text(sv, "icon")) {
           @sf.station_mark(c, text(sv, "emoji"), text(sv, "icon"), desk_mark, t.p.text)
@@ -334,13 +338,13 @@ fn sec_station_row(c : @ui.Ctx, core : Core, ws : String, sv : Json?, can : Bool
     })
     |> ignore
     if guarded {
-      c.text(@sf.t("web-pages.security.protected"), style=sec_row_meta) |> ignore
+      c.text(@sf.t("web-pages.security.protected"), style=sec_row_state) |> ignore
     } else if can {
       if @sf.button(c, @sf.t("web-pages.security.join"), key="lock-station/" + id, tone=Ghost, busy=joining) {
         join_dialog(core, ws, id, text(sv, "name"))
       }
     } else {
-      c.text(@sf.t("web-pages.security.unprotected"), style=sec_warn) |> ignore
+      c.text(@sf.t("web-pages.security.unprotected"), style=sec_warn_state) |> ignore
     }
   })
   |> ignore
@@ -529,7 +533,7 @@ let sec_state_line : @ui.Style = @ui.css("row gap=S2 align=ACenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let sec_state_meta : @ui.TextStyle = @ui.text_style(size=Sm, leading=L6, color=Muted, wrap=false)
+let sec_state_meta : @ui.TextStyle = @ui.text_style(size=Sm, leading=L6, color=Muted, wrap=false, w=Cut)
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -588,11 +592,28 @@ let sec_row_words : @ui.TextStyle = @ui.text_style(size=Sm, leading=L6, color=Fg
 
 ///|
 // kept across runs: a value (no field of it changes)
-let sec_row_meta : @ui.TextStyle = @ui.text_style(size=Xs, leading=L5, color=Muted, wrap=false)
+let sec_row_meta : @ui.TextStyle = @ui.text_style(size=Xs, leading=L5, color=Muted, wrap=false, w=Cut)
+
+///|
+/// What leaves a waiting device's row first, short of room: which device it is and when it asked; whole on its line.
+let sec_drop_meta : Int = 1
 
 ///|
 // kept across runs: a value (no field of it changes)
-let sec_warn : @ui.TextStyle = @ui.text_style(size=Xs, leading=L5, color=Warn, wrap=false)
+let sec_meta_slot : @ui.Style = @ui.css("row")
+
+///|
+/// What a row says of itself at its end (受保护): the meta's words, never cut.
+// kept across runs: a value (no field of it changes)
+let sec_row_state : @ui.TextStyle = @ui.text_style(size=Xs, leading=L5, color=Muted, wrap=false)
+
+///|
+// kept across runs: a value (no field of it changes)
+let sec_warn : @ui.TextStyle = @ui.text_style(size=Xs, leading=L5, color=Warn, wrap=false, w=Cut)
+
+///|
+// kept across runs: a value (no field of it changes)
+let sec_warn_state : @ui.TextStyle = @ui.text_style(size=Xs, leading=L5, color=Warn, wrap=false)
 
 ///|
 // kept across runs: a value (no field of it changes)

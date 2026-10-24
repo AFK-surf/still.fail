@@ -866,6 +866,87 @@ pub fn menu_of(c : @ui.Ctx, key : String, items : Array[MenuItem?], label~ : Str
 }
 
 ///|
+/// One of a row's tools (tools_row): what it draws in the row, and what the row's ⋯ offers in its place once the row
+/// has not the room for it (Ctx::box `drop`: the k-th to go; 0 never).
+pub(all) struct Tool {
+  key : String
+  drop : Int
+  draw : () -> Unit
+  instead : Array[MenuItem]
+}
+
+///|
+/// A tool drawn by `draw`, offering `instead` in the ⋯ when it goes (the `drop`-th).
+pub fn tool_of(key : String, draw : () -> Unit, drop? : Int = 0, instead? : Array[MenuItem] = []) -> Tool {
+  { key, drop, draw, instead }
+}
+
+///|
+/// An icon button as a tool (icon_button: `label` its tip, `lit` its ink and quiet, as one that is on): pressed,
+/// `on_press`; gone (the `drop`-th), the ⋯'s line of the same icon and words.
+pub fn tool_button(
+  c : @ui.Ctx,
+  key : String,
+  icon : String,
+  label : String,
+  on_press~ : () -> Unit,
+  drop? : Int = 0,
+  lit? : Int64,
+  disabled? : Bool = false,
+) -> Tool {
+  {
+    key,
+    drop,
+    draw: fn() { if icon_button(c, icon, key~, ink?=lit, quiet?=lit, disabled~, label~) { on_press() } },
+    instead: [menu_item_of(label, on_press, icon~, disabled~)],
+  }
+}
+
+///|
+/// `tools` in a row (`style`: a row's), then its ⋯ (`label`, the app's word for 更多): what the row has not the room
+/// for leaves it, the lowest `drop` first, and is offered in the ⋯ instead, over its own `more` (a line between); with
+/// none of its own, the ⋯ is there only while something went into it. Nothing in it is squeezed.
+pub fn tools_row(
+  c : @ui.Ctx,
+  key : String,
+  tools : Array[Tool],
+  more? : Array[MenuItem?] = [],
+  label~ : String,
+  style? : @ui.Style = tools_line,
+) -> Unit {
+  c.box(style~, fn() {
+    let gone : Array[MenuItem?] = []
+    for x in tools {
+      let slot = c.id(key + "/tool/" + x.key)
+      c.box(id=slot, taps=false, drop=x.drop, fn() { (x.draw)() }) |> ignore
+      if x.drop > 0 && c.left_out(slot) {
+        for m in x.instead {
+          gone.push(Some(m))
+        }
+      }
+    }
+    let items = if gone.is_empty() {
+      more
+    } else if more.is_empty() {
+      gone
+    } else {
+      gone + [None] + more
+    }
+    if more.is_empty() {
+      c.box(more=true, fn() { menu_of(c, key, items, label~) |> ignore }) |> ignore
+    } else {
+      menu_of(c, key, items, label~) |> ignore
+    }
+  })
+  |> ignore
+}
+
+///|
+/// A row of tools (tools_row): 6 apart, on a line.
+// kept across runs: a value (no field of it changes)
+pub let tools_line : @ui.Style = @ui.css("row gap=S1_5 align=ACenter")
+
+///|
 /// A right click's menu (Radix's ContextMenu, Drive.tsx MenuContent): opened at the pointer by `menu_open_here`, then
 /// drawn there while it is open. Whether it is open.
 pub fn context_items(c : @ui.Ctx, key : String, items : Array[MenuItem?]) -> Bool {

@@ -353,8 +353,9 @@ fn net_line(c : @ui.Ctx, net : Json?) -> Unit {
   }
   c.box(dir=Row, w=Fill(1.0), gap=10.0, align=ACenter, fn() {
     c.box(w=Fill(1.0), gap=2.0, fn() {
+      // (short of room, how it is reached and what its latency is called are cut short; the figures are not)
       c.box(dir=Row, gap=8.0, align=ACenter, fn() {
-        c.text(text(n, "path"), size=13.0, color=t.p.muted, wrap=false, line=18.0) |> ignore
+        c.text(text(n, "path"), size=13.0, color=t.p.muted, wrap=false, line=18.0, w=Cut) |> ignore
         match field(n, "loss") {
           Some(Object(_)) as l =>
             c.text(text(l, "text"), size=13.0, weight=500, color=tone(l), wrap=false, line=18.0) |> ignore
@@ -365,7 +366,7 @@ fn net_line(c : @ui.Ctx, net : Json?) -> Unit {
       match field(n, "rtt") {
         Some(Object(_)) as r =>
           c.box(dir=Row, align=ACenter, fn() {
-            c.text(tr("android-settings.stations.rtt"), size=13.0, color=t.p.muted, wrap=false, line=18.0) |> ignore
+            c.text(tr("android-settings.stations.rtt"), size=13.0, color=t.p.muted, wrap=false, line=18.0, w=Cut) |> ignore
             c.text(text(r, "text"), size=13.0, weight=500, color=tone(r), wrap=false, line=18.0) |> ignore
           })
           |> ignore

@@ -1154,15 +1154,12 @@ pub let agent_mark_28_corner : @ui.Radius = rounded(28.0 * 0.3)
 pub let agent_mark_16_corner : @ui.Radius = rounded(16.0 * 0.3)
 
 ///|
-/// A chat's jobs (the web's Jobs.css.ts): a job's action 26 high, the popover's foot's rows 38, the 任务 tab's choice of
-/// what a job said or its output 120 wide.
+/// A chat's jobs (the web's Jobs.css.ts): a job's action 26 high, the popover's foot's rows 38.
 pub let job_action_h : @ui.Len = Fixed(26.0)
 
 ///|
 pub let jobs_row_h : @ui.Len = Fixed(38.0)
 
-///|
-pub let job_choice_w : @ui.Len = Fixed(120.0)
 
 ///|
 /// A tab of a chat's side panel (the web's ChatPage.css.ts sideTab: 30 high).

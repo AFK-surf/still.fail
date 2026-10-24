@@ -129,22 +129,41 @@ fn station_head(c : @ui.Ctx, core : Core, here : Here, s : Json?, manager : Bool
         c.text(name, style=st_name) |> ignore
       })
       |> ignore
-      c.box(style=st_facts, fn() {
-        c.box(style=st_status, fn() {
-          @sf.status_dot(c, if online { "online" } else { "offline" })
-          c.text(text(s, "stateText"), style=if flag(s, "stateBusy") { st_fact_busy } else { st_fact }) |> ignore
-        })
-        |> ignore
+      // (on as many lines as they take, each with the dot before it: workspaceFacts' flex-wrap)
+      c.box(style=st_facts, flow=true, line_gap=st_facts_line, fn() {
+        // (its dot before how it is, or with nothing to say of that, before its first fact)
+        let state = text(s, "stateText")
+        let dot = fn() { @sf.status_dot(c, if online { "online" } else { "offline" }) }
+        if state != "" {
+          c.box(style=st_status, fn() {
+            dot()
+            c.text(state, style=if flag(s, "stateBusy") { st_fact_busy } else { st_fact }) |> ignore
+          })
+          |> ignore
+        }
         let facts = [text(field(s, "host"), "identity")]
         if text(s, "version") != "" {
           facts.push("Station " + text(s, "version"))
         }
         facts.push(joined_text(s))
+        let mut first = state == ""
         for f in facts {
           if f != "" {
-            c.text("·", style=st_fact_dot) |> ignore
-            c.text(f, style=st_fact) |> ignore
+            let lead = first
+            first = false
+            c.box(style=if lead { st_status } else { st_fact_part }, fn() {
+              if lead {
+                dot()
+              } else {
+                c.text("·", style=st_fact_dot) |> ignore
+              }
+              c.text(f, style=st_fact_wrap) |> ignore
+            })
+            |> ignore
           }
+        }
+        if first {
+          dot()
         }
       })
       |> ignore
@@ -987,6 +1006,20 @@ let st_status : @ui.Style = @ui.css("row gap=S1_5 align=ACenter")
 ///|
 // kept across runs: a value (no field of it changes)
 let st_fact : @ui.TextStyle = @ui.text_style(size=Sm, leading=L6, color=Muted, wrap=false)
+
+///|
+/// A fact after its dot: on more lines where one has not the room.
+// kept across runs: a value (no field of it changes)
+let st_fact_wrap : @ui.TextStyle = @ui.text_style(size=Sm, leading=L6, color=Muted)
+
+///|
+/// A fact with the dot before it, 8 apart, kept together.
+// kept across runs: a value (no field of it changes)
+let st_fact_part : @ui.Style = @ui.css("row gap=S2 align=AStart")
+
+///|
+/// Between the facts' lines (workspaceFacts: 4).
+let st_facts_line : Double = 4.0
 
 ///|
 // kept across runs: a value (no field of it changes)
