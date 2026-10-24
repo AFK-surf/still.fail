@@ -81,7 +81,7 @@ export class Readers {
     if (this.closed) return Promise.reject(new HttpError(502, "station stopping"));
     // A session's history read where it was read before: that reader keeps it read (read/transcripts.ts), another would
     // read the whole of it again.
-    const session = op === "timeline" && typeof (args as { key?: unknown })?.key === "string" ? (args as { key: string }).key : null;
+    const session = (op === "timeline" || op === "transcriptState") && typeof (args as { key?: unknown })?.key === "string" ? (args as { key: string }).key : null;
     const home = session !== null ? this.homes.get(session) : undefined;
     const free = this.slots.find((s) => s.busy === 0);
     const slot = home !== undefined && this.slots.includes(home) ? home : (free ?? (this.slots.length < this.size ? this.start() : this.slots.reduce((a, b) => (b.busy < a.busy ? b : a))));

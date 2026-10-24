@@ -4,7 +4,7 @@
 // each session's (read/pool.ts sends its reads there). At most KEPT_ENTRIES entries are kept, the least recently read
 // transcripts let go first (a reader's heap is small); a stretch read whole (a step opened) is read from the file.
 import type { RuntimeKind } from "../agents/runtime.ts";
-import { ChainTail } from "./tail.ts";
+import { ChainTail, type TailState } from "./tail.ts";
 import { type TimelineEntry, brief } from "./transcript.ts";
 
 export const KEPT_ENTRIES = 40_000;
@@ -14,13 +14,23 @@ const kept = new Map<string, { chain: ChainTail; entries: number }>();
 
 /// A chain of transcripts in brief as it is now: what was kept of it, and what was written since.
 export function inBrief(runtime: RuntimeKind, paths: string[]): TimelineEntry[] {
+  return chainOf(runtime, paths).entries;
+}
+
+/// Where the reading of a chain of transcripts stands now (read/tail.ts `snapshot`): what the live view of a session
+/// goes on from on the main thread, which then reads none of what came before (sessions/live.ts).
+export function stateOf(runtime: RuntimeKind, paths: string[]): TailState[] {
+  return chainOf(runtime, paths).snapshot();
+}
+
+/// The chain kept, read on to where it is written now.
+function chainOf(runtime: RuntimeKind, paths: string[]): ChainTail {
   const key = `${runtime}\u0000${paths.join("\u0000")}`;
   const had = kept.get(key);
   kept.delete(key);
   const chain = had?.chain ?? new ChainTail(runtime, paths, brief);
   chain.read();
-  const entries = chain.entries;
-  kept.set(key, { chain, entries: entries.length });
+  kept.set(key, { chain, entries: chain.length });
   let total = 0;
   for (const k of kept.values()) total += k.entries;
   for (const [k, v] of kept) {
@@ -28,7 +38,7 @@ export function inBrief(runtime: RuntimeKind, paths: string[]): TimelineEntry[] 
     kept.delete(k);
     total -= v.entries;
   }
-  return entries;
+  return chain;
 }
 
 /// How many entries are kept, and of how many chains (for tests).

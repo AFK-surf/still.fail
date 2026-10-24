@@ -56,7 +56,7 @@ import type { Viewer } from "../mesh/credential.ts";
 import type { Lang } from "../ops/i18n.ts";
 import { type Updates, makeUpdates } from "../updates/updates.ts";
 import { hubConfig } from "./config.ts";
-import { inBrief } from "./live.ts";
+import type { TailState } from "../read/tail.ts";
 import { ColdRooms } from "./cold.ts";
 import { Hub } from "./hub.ts";
 import { InternalChat } from "./internal.ts";
@@ -439,13 +439,20 @@ export const AgentsLive = (control: Control) =>
       // And the fields the station's parts add (parts.ts).
       const view = async (viewer: Viewer, lang: Lang) => ({ ...((await platformView(viewer, lang)) as object), ...(await parts.overviewOf(viewer, lang)) });
 
-      hub.live.heldTold = (key, message) => inBrief((told) => events.heldTold(key, told))(message);
+      hub.live.heldTold = (key, message) => events.heldTold(key, message);
+      // A transcript's past is read by the readers, which keep it read (read/transcripts.ts): the live view goes on from
+      // where they stand, and gives a listener what it lacks from there, none of it read on the main thread.
+      hub.live.history = {
+        state: async (key) => (JSON.parse(await readers.read("transcriptState", { key }, "zh")) as { states: TailState[] | null }).states,
+        page: async (key, before, limit, brief) => JSON.parse(await readers.read("timeline", { key, before: String(before), limit: String(limit), lang: "zh", ...(brief ? { brief: "1" } : {}) }, "zh")),
+      };
+      hub.followRunning();
       // The readers say what runs, and which chats clients made: the hub's.
       readers.processes = () => hub.processes();
       readers.clientKeys = () => hub.clientKeys();
       events.follow({
         live: (key, from, last, send, brief) => {
-          const id = hub.live.subscribe(key, from, last, brief ? inBrief(send) : send);
+          const id = hub.live.subscribe(key, from, last, send, brief);
           return () => hub.live.unsubscribe(key, id);
         },
         // The sessions at work, followed by the station itself: told to the streams that follow them, in brief.

@@ -192,7 +192,7 @@ export async function forPeer(hub: Hub, peer: string, request: Json, ws: string 
     const text = await chatRead(hub, `${peer}/${from}`, args, seen, ws);
     return { text, files: seen.map(({ path, name, size }) => ({ path, name, size })) };
   }
-  if (tool === "session_history") return { text: sessionHistory(hub, args, ws) };
+  if (tool === "session_history") return { text: await sessionHistory(hub, args, ws) };
   throw new Error(`cannot read with ${JSON.stringify(tool)}`);
 }
 
@@ -372,8 +372,9 @@ export async function chatRead(hub: Hub, key: string, args: Args, seen: Attachme
 }
 
 /// session_history: what a session's agent did (its execution history, as the pages show it), from its transcript; of
-/// the sessions workspace `ws` reaches (`named`).
-export function sessionHistory(hub: Hub, args: Args, ws: string | null): string {
+/// the sessions workspace `ws` reaches (`named`). Read where the station reads histories (live.ts `page`: the readers),
+/// only the page asked for.
+export async function sessionHistory(hub: Hub, args: Args, ws: string | null): Promise<string> {
   const reference = args.chat === undefined ? "" : jsString(args.chat);
   const what = named(hub, reference, ws);
   let session: string;
@@ -396,14 +397,9 @@ export function sessionHistory(hub: Hub, args: Args, ws: string | null): string 
   const before = given !== null ? (Number.isNaN(given) ? 0 : Math.trunc(Math.max(0, given))) : entry !== null ? entry + 1 + Math.floor(limit / 2) : Number.MAX_SAFE_INTEGER;
   const row = hub.store.getSession(session);
   if (!row) throw new Error(`unknown session ${session}`);
-  const read = hub.live.before(session, Number.MAX_SAFE_INTEGER, Number.MAX_SAFE_INTEGER);
-  if (!read) return `Session ${session} has no execution history yet.`;
-  const all = read[1];
-  const total = all.length;
-  const end = Math.min(before, total);
-  const start = Math.max(0, end - limit);
-  const entries = all.slice(start, end);
-  if (total === 0) return `Session ${session} has no execution history yet.`;
+  const read = await hub.live.page(session, before, limit);
+  if (!read || read.end === 0) return `Session ${session} has no execution history yet.`;
+  const { start, entries, end: total } = read;
   if (entries.length === 0) return `Session ${session} has ${total} entries of execution history; none before #${before}.`;
   const model = row.model !== null ? `, ${row.model}` : "";
   const older = start > 0 ? ` Older ones: before=${start}.` : "";
