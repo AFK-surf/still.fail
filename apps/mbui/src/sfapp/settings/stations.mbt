@@ -470,6 +470,7 @@ let part_note : @ui.TextStyle = @ui.text_style(size=Sm, color=Muted, leading=L5,
 let parts_room : @ui.Style = @ui.css("w=Full px=S3 pb=S2_5")
 
 ///|
-/// The page's part shown, by station (StationScreen's `part`: 0 概览, 1 设置, 2 软件与设备); none, the overview. Kept
-/// while the page is in the stack; a login's link opens the settings (mark_login).
-pub let station_parts : Map[String, Int] = {}
+/// The page's part shown, by station, by its name (StationPage.tsx Part: overview 概览, processes 进程, settings 设置,
+/// machine 软件与设备); none, the overview. Kept while the page is in the stack; a login's link opens the settings
+/// (mark_login).
+pub let station_parts : Map[String, String] = {}

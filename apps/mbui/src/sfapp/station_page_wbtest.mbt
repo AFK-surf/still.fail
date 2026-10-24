@@ -3,8 +3,8 @@
 // window tall enough for all of a part.
 
 ///|
-/// Station `address`'s page, its part `part` (0 概览, 1 设置, 2 软件与设备) shown.
-fn station_tester(address : String, part? : Int = 0) -> @ui.Tester {
+/// Station `address`'s page, its part `part` (overview 概览, processes 进程, settings 设置, machine 软件与设备) shown.
+fn station_tester(address : String, part? : String = "overview") -> @ui.Tester {
   reset()
   let src = fixture("settings")
   @settings.station_parts[address] = part
@@ -25,13 +25,13 @@ test "a station's page in three parts: 概览 what runs on it, 设置 what it is
   assert_true(t.find("更多") is Some(_), msg=t.words().map(fn(w) { w.0 }).join("|"))
   assert_true(t.find("设备信息") is None)
   // 设置: what macOS lets it do; its agents' variables
-  @settings.station_parts["ws1/st1"] = 1
+  @settings.station_parts["ws1/st1"] = "settings"
   t.draw()
   assert_true(t.find("权限") is Some(_), msg="its grants")
   assert_true(t.find("Agent 环境变量") is Some(_), msg="its variables")
   assert_true(t.find("更多") is None, msg="the overview gone")
   // 软件与设备: its software, then what the machine is
-  @settings.station_parts["ws1/st1"] = 2
+  @settings.station_parts["ws1/st1"] = "machine"
   t.draw()
   assert_true(t.find("软件与更新") is Some(_))
   assert_true(t.find("设备信息") is Some(_), msg="the machine's rows")
@@ -45,7 +45,7 @@ test "a station's page, its parts chosen by its choice: 设置 pressed shows it"
     None => fail("no 设置")
   }
   t.draw()
-  assert_eq(@settings.station_parts.get("ws1/st1"), Some(1))
+  assert_eq(@settings.station_parts.get("ws1/st1"), Some("settings"))
   assert_true(t.find("Agent 环境变量") is Some(_))
 }
 
@@ -66,8 +66,28 @@ test "a login's link opens its station's page at 设置, where its card is" {
 
 ///|
 test "a station's page opened again begins at its overview" {
-  let t = station_tester("ws1/st1", part=2)
+  let t = station_tester("ws1/st1", part="machine")
   @settings.left(@settings.Route::Station("ws1/st1"))
   t.draw()
   assert_true(t.find("更多") is Some(_))
+}
+
+///|
+test "a station's 进程: what still.fail uses of it, whose by whose, the overview's line opening it" {
+  let t = station_tester("ws1/st1")
+  // the overview's line: what still.fail uses, opening its 进程
+  assert_true(t.find("still.fail 占用") is Some(_), msg=t.words().map(fn(w) { w.0 }).join("|"))
+  t.tap_text("still.fail 占用")
+  t.draw()
+  assert_eq(@settings.station_parts.get("ws1/st1"), Some("processes"))
+  // its totals, its table by whose, the first open to its processes (a chat's own one to end)
+  assert_true(t.find("508 MB") is Some(_), msg="the memory's total")
+  assert_true(t.find("修一下登录") is Some(_), msg="a chat's group")
+  assert_true(t.find("node") is Some(_), msg="the first group open")
+  assert_true(t.locate("icon:stop").length() == 1, msg="the chat's process to end, the agent's not")
+  // flat: every process, whose it is beside it
+  t.tap_text("平铺")
+  t.draw()
+  assert_true(t.find("stillfail") is Some(_))
+  assert_true(t.find("归属") is Some(_))
 }

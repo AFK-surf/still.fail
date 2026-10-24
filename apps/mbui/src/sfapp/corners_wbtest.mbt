@@ -44,7 +44,7 @@ let corner_modes : Array[String] = [
   "screen-full-tools", "screen-gone", "screen-live", "screen-not-drivable", "screen-outdated", "screen-read-only",
   "screen-reconnecting", "screen-trackpad", "screen-trackpad-command", "settings-home", "settings-appearance",
   "settings-me", "settings-me-reading", "settings-workspace", "settings-security", "settings-vault",
-  "settings-vault-item", "settings-stations", "settings-station", "settings-station-offline", "settings-station-env",
+  "settings-vault-item", "settings-stations", "settings-station", "settings-station-offline", "settings-station-env", "settings-station-processes",
   "settings-station-mark", "settings-station-lower", "settings-station-versions", "settings-stations-add",
   "settings-stations-existing", "settings-stations-command", "settings-first-station", "settings-adb",
   "settings-profiles", "settings-profile", "settings-profile-quota", "settings-profile-models", "settings-profile-menu",

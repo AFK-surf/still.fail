@@ -167,13 +167,15 @@ pub fn fixture_page(mode : String) -> String {
   match m {
     "settings-station-mark" => up("mark", "", 0)
     // the page's 设置 (its variables' sheet up over it), its 软件与设备
-    "settings-station-env" => station_parts["ws1/st1"] = 1
+    "settings-station-env" => station_parts["ws1/st1"] = "settings"
+    // its 进程: what still.fail uses of the machine
+    "settings-station-processes" => station_parts["ws1/st1"] = "processes"
     "settings-station-lower" => {
-      station_parts["ws1/st1"] = 1
+      station_parts["ws1/st1"] = "settings"
       up("", "settings/station/ws1/st1", 0)
     }
     "settings-station-versions" => {
-      station_parts["ws1/st1"] = 2
+      station_parts["ws1/st1"] = "machine"
       up("", "settings/station/ws1/st1", 0)
     }
     "settings-stations-add" => up("add", "", 0)
@@ -239,7 +241,7 @@ pub fn fixture_page(mode : String) -> String {
   }
   match m {
     "settings" => "home"
-    "settings-station-mark" | "settings-station-env" | "settings-station-lower" | "settings-station-versions" =>
+    "settings-station-mark" | "settings-station-env" | "settings-station-processes" | "settings-station-lower" | "settings-station-versions" =>
       "station:ws1/st1"
     "settings-stations-add" | "settings-stations-existing" | "settings-stations-command" | "settings-first-station" =>
       "stations"
@@ -1194,6 +1196,8 @@ pub fn fixture_topic(mode : String, name : String, params : Map[String, Json]) -
           ("known", Json::boolean(true)),
         ]),
       )
+    // what still.fail uses of Studio's machine (the `resources` view): a chat's agent and the station
+    "resources" => Some(fx_resources())
     "adbShare" =>
       Some(obj([("sharing", Json::boolean(false)), ("phase", str("idle")), ("tunnels", Json::number(0.0))]))
     "joinable" =>
@@ -2155,4 +2159,87 @@ fn fx_qr(n : Int) -> Json {
     rows.push(str(row.to_string()))
   }
   obj([("size", Json::number(n.to_double())), ("rows", Json::array(rows))])
+}
+
+///|
+/// A use, its figures and each said (ResourceUse).
+fn fx_use(cpu : Double, memory : Double, net : Double, cpu_text : String, memory_text : String, net_text : String) -> Json {
+  obj([
+    ("cpu", Json::number(cpu)),
+    ("memory", Json::number(memory)),
+    ("netIn", Json::number(net / 2.0)),
+    ("netOut", Json::number(net / 2.0)),
+    ("net", Json::number(net)),
+    ("diskRead", Json::number(0.0)),
+    ("diskWrite", Json::number(0.0)),
+    ("disk", Json::number(0.0)),
+    ("cpuText", str(cpu_text)),
+    ("memoryText", str(memory_text)),
+    ("netText", str(net_text)),
+    ("diskText", str("")),
+  ])
+}
+
+///|
+/// What still.fail uses of Studio's machine now (ResourcesView): its totals, a chat's agent and the station, each with
+/// its processes.
+fn fx_resources() -> Json {
+  let process = fn(key : String, pid : Double, name : String, endable : Bool, u : Json) {
+    obj([("key", str(key)), ("pid", Json::number(pid)), ("name", str(name)), ("endable", Json::boolean(endable)), ("use", u)])
+  }
+  let tile = fn(key : String, label : String, value : String, sub : String, points : Array[Double]) {
+    obj([("key", str(key)), ("label", str(label)), ("value", str(value)), ("sub", str(sub)), ("points", Json::array(points.map(Json::number(_))))])
+  }
+  let chat = fx_use(18.4, 412.0e6, 1.2e3, "18.4%", "412 MB", "1.2 KB/s")
+  let station = fx_use(2.1, 96.0e6, 0.4e3, "2.1%", "96 MB", "0.4 KB/s")
+  obj([
+    ("wait", obj([("reading", Json::boolean(false)), ("text", str("")), ("failing", [])])),
+    ("empty", Json::boolean(false)),
+    ("net", Json::boolean(true)),
+    ("disk", Json::boolean(false)),
+    ("everyMs", Json::number(2000.0)),
+    (
+      "tiles",
+      [
+        tile("cpu", "CPU", "20.5%", "", [12.0, 18.0, 15.0, 22.0, 20.5]),
+        tile("memory", "内存", "508 MB", "", [480.0, 495.0, 500.0, 504.0, 508.0]),
+        tile("net", "网络", "1.6 KB/s", "", [0.8, 2.4, 1.1, 1.9, 1.6]),
+      ],
+    ),
+    ("kinds", [obj([("key", str("chat")), ("label", str("对话"))]), obj([("key", str("station")), ("label", str("Station"))])]),
+    (
+      "groups",
+      [
+        obj([
+          ("key", str("chat:c1")),
+          ("kind", str("chat")),
+          ("title", str("修一下登录")),
+          ("kindText", str("对话")),
+          ("chat", obj([("station", str("ws1/st1")), ("session", str("s1"))])),
+          ("station", str("ws1/st1")),
+          ("session", str("s1")),
+          ("use", chat),
+          (
+            "processes",
+            [
+              process("p1", 4211.0, "claude", false, fx_use(12.0, 300.0e6, 1.0e3, "12.0%", "300 MB", "1.0 KB/s")),
+              process("p2", 4290.0, "node", true, fx_use(6.4, 112.0e6, 0.2e3, "6.4%", "112 MB", "0.2 KB/s")),
+            ],
+          ),
+        ]),
+        obj([
+          ("key", str("station")),
+          ("kind", str("station")),
+          ("title", str("Station")),
+          ("kindText", str("")),
+          ("station", str("ws1/st1")),
+          ("use", station),
+          ("processes", [process("p3", 812.0, "stillfail", false, station)]),
+        ]),
+      ],
+    ),
+    ("stations", [obj([("station", str("ws1/st1")), ("net", Json::boolean(true)), ("use", fx_use(20.5, 508.0e6, 1.6e3, "20.5%", "508 MB", "1.6 KB/s"))])]),
+    ("notes", []),
+    ("basis", str("按 Activity Monitor 的口径：CPU 100% 是一个核")),
+  ])
 }

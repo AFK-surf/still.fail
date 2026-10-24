@@ -14,12 +14,13 @@ fn station_page_reset() -> Unit {
   env_fields.clear()
   env_seeded.clear()
   env_sent.clear()
+  rs_shown.clear()
 }
 
 ///|
 /// The page's parts (Body's PARTS), in order.
 // kept across runs: a table, never written
-let station_part_names : Array[String] = ["overview", "settings", "machine"]
+let station_part_names : Array[String] = ["overview", "processes", "settings", "machine"]
 
 ///|
 /// A station's page (StationSettings, StationScreen), by its address: a wait until the stations are read; one gone,
@@ -38,13 +39,14 @@ fn station_page(c : @ui.Ctx, core : Core, here : Here, frame : PageFrame, addres
           let blocks : Array[() -> Unit] = [fn() { station_parts_choice(c, address) }]
           // (the part shown, by station: the settings' own, which a login's card also moves to 设置)
           let part = match @settings.station_parts.get(address) {
-            Some(i) if i >= 0 && i < station_part_names.length() => station_part_names[i]
+            Some(p) if station_part_names.contains(p) => p
             _ => "overview"
           }
           let body = match part {
+            "processes" => station_processes(c, core, here, s)
             "settings" => station_settings(c, core, s, manager)
             "machine" => station_machine(c, core, s, manager)
-            _ => station_overview(c, core, s)
+            _ => station_overview(c, core, here, s)
           }
           blocks.append(body)
           let parts = blocks.map(fn(b) { fn() { cn_gutter(c, look, b) } })
@@ -295,7 +297,10 @@ fn station_menu(c : @ui.Ctx, core : Core, here : Here, s : Json?) -> Unit {
 ///|
 /// The parts to pick from (Body's Segmented): as wide as their names, at the column's start, 24 over what they show.
 fn station_parts_choice(c : @ui.Ctx, address : String) -> Unit {
-  let at = @settings.station_parts.get(address).unwrap_or(0)
+  let at = match @settings.station_parts.get(address) {
+    Some(p) => station_part_names.search(p).unwrap_or(0)
+    None => 0
+  }
   c.box(style=st_parts, fn() {
     let picked = @sf.segmented(
       c,
@@ -304,7 +309,7 @@ fn station_parts_choice(c : @ui.Ctx, address : String) -> Unit {
       at,
     )
     if picked != at {
-      @settings.station_parts[address] = picked
+      @settings.station_parts[address] = station_part_names[picked]
     }
   })
   |> ignore
@@ -339,7 +344,7 @@ fn st_section(
 ///|
 /// How it is and what runs on it (Overview): what is left of the machine (and what its agents take of it), its
 /// screens, profiles, connects and folders.
-fn station_overview(c : @ui.Ctx, core : Core, s : Json?) -> Array[() -> Unit] {
+fn station_overview(c : @ui.Ctx, core : Core, here : Here, s : Json?) -> Array[() -> Unit] {
   let t = @sf.theme()
   let address = text(s, "station")
   let o = field(s, "overview")
@@ -360,6 +365,11 @@ fn station_overview(c : @ui.Ctx, core : Core, s : Json?) -> Array[() -> Unit] {
           }
           if items(o, "processes").length() > 0 {
             c.text(text(o, "processesText"), style=st_memory) |> ignore
+          }
+          // what still.fail itself uses of the machine, opening its 进程 (Uses: read while shown)
+          match items(resources_of(core, here, address), "stations") {
+            [u, ..] => station_uses(c, address, Some(u))
+            [] => ()
           }
         })
         |> ignore

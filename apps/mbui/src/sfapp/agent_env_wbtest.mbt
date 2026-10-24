@@ -30,7 +30,7 @@ test "the variables' field follows the core's text that comes after the page ope
     },
   }
   // in the page's 设置, its variables' editor in it (a manager's), the page tall enough for all of it
-  @settings.station_parts["ws1/st1"] = 1
+  @settings.station_parts["ws1/st1"] = "settings"
   let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=2400.0, platform=2)
   t.draw()
   app.nav.push(Settings)

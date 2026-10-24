@@ -3,7 +3,7 @@
 
 ///|
 test "a station's 登录: the login under way its card, the one done a row saying who started it and how it ended" {
-  let t = station_tester("ws1/st1", part=1)
+  let t = station_tester("ws1/st1", part="settings")
   assert_true(t.find("登录") is Some(_))
   // under way: its card
   assert_true(t.find("在 Studio 上登录 codex") is Some(_))
@@ -13,7 +13,7 @@ test "a station's 登录: the login under way its card, the one done a row sayin
 
 ///|
 test "a station with no logins says nothing of them" {
-  let t = station_tester("ws1/st2", part=1)
+  let t = station_tester("ws1/st2", part="settings")
   assert_true(t.find("gh auth login") is None)
   assert_true(t.find("在 Studio 上登录 codex") is None)
 }
