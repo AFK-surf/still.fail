@@ -379,7 +379,10 @@
       return;
     }
     if (kind == 1 || kind == 3 || kind == 7) {
-      vec2 uv = (v_c2.xy + (p - v_rect.xy) / v_rect.zw * v_c2.zw) / ${ATLAS}.0;
+      // within its own cell (c2: where in the atlas, in texels), however its rect is stretched or turned: a sample
+      // past the cell's edge texels would blend in what lies beside it (another glyph, one left from before the
+      // atlas started over)
+      vec2 uv = clamp(v_c2.xy + (p - v_rect.xy) / v_rect.zw * v_c2.zw, v_c2.xy + 0.5, v_c2.xy + v_c2.zw - 0.5) / ${ATLAS}.0;
       vec4 t = texture(u_atlas, uv);
       if (kind == 7) {
         // inked by how light what is under its glass is, looked at round the glass's middle
