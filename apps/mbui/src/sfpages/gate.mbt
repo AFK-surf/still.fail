@@ -18,23 +18,37 @@ let sign_in_button_h : Double = 50.0
 let sign_in_picture_w : Double = 300.0
 
 ///|
-/// The page: its picture, words and button in a column in its middle, 28 in from its sides and 40 from its top and
+/// The page: its picture, words and button in a column in its middle, 30 in from its sides and 40 from its top and
 /// foot, 12 apart (SignIn.kt: padding(horizontal = 30.dp, vertical = 40.dp), spacedBy(12.dp)).
 // kept across runs: a value (no field of it changes)
-let sign_in_box : @ui.Style = @ui.css("w=Full h=Full px=S7 py=S10 gap=S3 align=ACenter justify=JCenter")
+let sign_in_box : @ui.Style = @ui.style(
+  w=Full,
+  h=Full,
+  px=@sf.sign_in_side,
+  py=S10,
+  gap=S3,
+  align=ACenter,
+  justify=JCenter,
+)
 
 ///|
 /// What the page leaves either side of the picture (its sides: sign_in_box's px).
-let sign_in_side : Double = 28.0
+let sign_in_side_w : Double = 30.0
 
 ///|
-/// The title 10 under the picture, a large one, bold (SignIn.kt: 28.sp, Bold).
+/// The title 10 under the picture, 28, bold, on the font's own line (SignIn.kt: 28.sp, Bold).
 // kept across runs: a value (no field of it changes)
 let sign_in_title_box : @ui.Style = @ui.css("pt=S2_5")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let sign_in_title : @ui.TextStyle = @ui.text_style(size=Xl4, weight=Bold, color=Fg, wrap=false)
+let sign_in_title : @ui.TextStyle = @ui.text_style(
+  size=@sf.sign_in_title_size,
+  weight=Bold,
+  color=Fg,
+  wrap=false,
+  leading=Font,
+)
 
 ///|
 /// What still.fail is for: the body's size, muted, centred (SignIn.kt: 15.sp, lineHeight 21.sp).
@@ -71,12 +85,12 @@ let sign_in_button_touch : @ui.Style = sign_in_button(sign_in_touch_w)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let sign_in_words : @ui.TextStyle = @ui.text_style(size=Xl, weight=Semibold, color=Bg, wrap=false)
+let sign_in_words : @ui.TextStyle = @ui.text_style(size=Xl, weight=Semibold, color=Bg, wrap=false, leading=Font)
 
 ///|
 /// 可同时登录多个账号: small, muted.
 // kept across runs: a value (no field of it changes)
-let sign_in_many : @ui.TextStyle = @ui.text_style(size=Xs, color=Muted, wrap=false)
+let sign_in_many : @ui.TextStyle = @ui.text_style(size=Xs, color=Muted, wrap=false, leading=Font)
 
 ///|
 /// The page: the picture, the words (none on a desktop), the button.
@@ -94,7 +108,7 @@ pub fn sign_in_page(c : @ui.Ctx, src : Source) -> Unit {
       } else {
         "illus_sign_in"
       },
-      dmin(sign_in_picture_w, c.width - sign_in_side - sign_in_side),
+      dmin(sign_in_picture_w, c.width - sign_in_side_w - sign_in_side_w),
     )
     |> ignore
     if !bare {
