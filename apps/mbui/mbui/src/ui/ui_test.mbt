@@ -63,6 +63,21 @@ test "the composer takes compositions, commits, deletes and submits" {
 }
 
 ///|
+test "Enter in an empty field hands it on too: whether there is anything to send (a picture with no words) is the app's" {
+  let sent : Array[String] = []
+  let t = @ui.Tester::new(fn(c) {
+    let r = c.editor("composer", placeholder="type here")
+    match r.submitted {
+      Some(s) => sent.push(s)
+      None => ()
+    }
+  })
+  t.tap_text("type here")
+  t.enter()
+  assert_eq(sent, [""])
+}
+
+///|
 fn chat_view(items : Array[String]) -> (@ui.Ctx) -> Unit {
   fn(c) {
     c.list(
