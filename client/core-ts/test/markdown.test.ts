@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { markdown, parse, plainOf } from "../src/markdown.ts";
+import { createHash } from "node:crypto";
+import { MD_READING, type MdStore, markdown, mdKey, parse, plainOf } from "../src/markdown.ts";
 import { wordsIn } from "./md-words.ts";
 
 /// The tree of `text` with its runs read out of it, as a client draws it.
@@ -57,6 +58,45 @@ test("markdown_is_read_once_while_it_is_kept", () => {
   const text = `只读一次 ${Math.random()}`;
   assert.equal(markdown(text), markdown(text));
   assert.deepEqual(markdown(text), parse(text));
+});
+
+test("markdown_is_read_once_on_the_device_where_its_tree_is_kept", () => {
+  const kept = new Map<string, string>();
+  const puts: string[] = [];
+  const store: MdStore = { has: (k) => kept.has(k), get: (k) => kept.get(k) ?? null, put: (k, json) => (puts.push(k), kept.set(k, json)) };
+  // Read the first time: kept.
+  const text = `第一次 **读** ${Math.random()}`;
+  assert.deepEqual(markdown(text, store), parse(text));
+  assert.deepEqual(puts, [mdKey(text)]);
+  assert.equal(kept.get(mdKey(text)), JSON.stringify(parse(text)));
+  // One kept on the device (read by a core before) is what it shows, not read again; nothing kept again.
+  const other = `读过了 ${Math.random()}`;
+  kept.set(mdKey(other), JSON.stringify([["p", ["已读的树"]]]));
+  assert.deepEqual(markdown(other, store), [["p", ["已读的树"]]]);
+  assert.equal(puts.length, 1);
+  // One that is no tree: read afresh, kept again.
+  const broken = `坏的 ${Math.random()}`;
+  kept.set(mdKey(broken), "{");
+  assert.deepEqual(markdown(broken, store), parse(broken));
+  assert.equal(kept.get(mdKey(broken)), JSON.stringify(parse(broken)));
+  // The key: the reading, the length, then the text's hashes.
+  assert.ok(mdKey("ab").startsWith(`${MD_READING}.2.`));
+  assert.notEqual(mdKey("ab"), mdKey("ba"));
+});
+
+test("markdown_kept_on_the_device_is_read_as_this_reading_reads_it_or_its_reading_says_otherwise", () => {
+  // What these are read as, as a digest: changed, the trees kept on devices by cores before are not this reading's
+  // (MD_READING one more in markdown.ts, so they are read afresh), and this with it.
+  const texts = [
+    "# 标题\n\n一段 **粗** *斜* ~~删~~ `code`，[链接](https://x.dev \"它\") 和 https://y.dev/a?b=1。\n\n---\n\n> 引用\n> - 列表",
+    "- 一\n- 二\n  - 内\n\n1. 一\n\n2. 二\n\n- [x] 好了\n- [ ] 没好",
+    "| 项 | 数 |\n|:--|--:|\n| 打开 | 1ms |\n| 读 | \\| 竖线 |",
+    "```ts\nconst a: number = 1; // 注释\nexport function f() { return `x${a}`; }\n```\n\n```sh\necho \"$HOME\" && ls -la\n```\n\n```\nplain\n```",
+    "行内 $x^2 + y_1$ 和 \\(\\frac{a}{b}\\)，\n\n$$\n\\sum_{i=0}^{n} i = \\frac{n(n+1)}{2}\n$$\n\n\\[ e^{i\\pi} + 1 = 0 \\]\n\n价格 $5 和 $10",
+    "<b>不要</b> 原样\n第二行  \n硬换行 &amp; &lt; &#x4e2d;\n\n![图](a.png \"标题\") [引用][r]\n\n[r]: https://r.dev",
+  ];
+  const digest = createHash("sha256").update(JSON.stringify(texts.map(parse))).digest("hex").slice(0, 16);
+  assert.equal(`${MD_READING}:${digest}`, "1:6f88cfdd05180b40", "what Markdown is read as changed: MD_READING one more (markdown.ts) and this digest with it");
 });
 
 test("math_is_code_with_a_rendering_hint_and_keeps_its_source_runs", () => {

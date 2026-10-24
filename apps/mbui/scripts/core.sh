@@ -4,6 +4,7 @@
 # pieces from the checkout and runs a headless smoke test. See core/README.md.
 #   scripts/core.sh deps | shell [TARGET] | hermes | hermes-kept [apple] | hermes-script FILE [OUT] | hermes-apple | engine [TARGET] | apple [TARGET]
 #                   | smoke [build|run] | listen | exit | sealed | collate | login-test | vectors | sizes | clean | all
+#                   | chat-open
 # EMBER: the still.fail checkout (default: this one, scripts/env.sh); out/core/ gets everything built.
 # TARGET: a Rust target (default aarch64-apple-darwin; aarch64-apple-ios, aarch64-apple-ios-sim for iOS).
 set -e
@@ -306,6 +307,22 @@ smoke_run() {
   return $code
 }
 
+# Chats opened from what the device holds, in Hermes (core/chatopen.m; client/core-ts/bench/chat-open.ts seeds the data):
+# from `subscribe` to each chat's first value, the first time, a moment after, after the core let its view go; run twice
+# on one data directory, the second as the app started anew.
+chat_open() {
+  core_program chatopen || return 1
+  local dir=$(mktemp -d /tmp/mbui-chat-open.XXXXXX) code=0
+  (cd $CORE_TS && node bench/chat-open.ts seed "$dir") || code=1
+  for run in first again; do
+    [ $code = 0 ] || break
+    echo "== $run run =="
+    MB_CORE_BUNDLE=$OUT/core.hbc $OUT/chatopen "$dir" || code=1
+  done
+  rm -rf "$dir"
+  return $code
+}
+
 # listen.* (apple_core.mm on apple_listen.m) with core/listen-test.js (as bytecode) in the core's place: core/listen_test.m.
 listen_test() {
   core_program listen_test || return 1
@@ -411,6 +428,7 @@ case "${1:-all}" in
   engine) engine "${2:-aarch64-apple-darwin}" ;;
   apple) apple "${2:-aarch64-apple-darwin}" ;;
   listen) listen_test ;;
+  chat-open) chat_open ;;
   exit) exit_test ;;
   collate) collate_test ;;
   sealed) sealed_test ;;
@@ -425,5 +443,5 @@ case "${1:-all}" in
   sizes) sizes ;;
   clean) rm -rf "$CARGO_TARGET_DIR"; echo "removed $CARGO_TARGET_DIR (out/core kept)" ;;
   all) deps; shell; smoke_build; smoke_run; sizes ;;
-  *) echo "usage: scripts/core.sh deps | shell [TARGET] | hermes | hermes-kept [apple] | hermes-script FILE [OUT] | hermes-apple | engine [TARGET] | apple [TARGET] | smoke [build|run] | listen | exit | collate | login-test | vectors | sizes | clean | all"; exit 2 ;;
+  *) echo "usage: scripts/core.sh deps | shell [TARGET] | hermes | hermes-kept [apple] | hermes-script FILE [OUT] | hermes-apple | engine [TARGET] | apple [TARGET] | smoke [build|run] | listen | exit | collate | login-test | vectors | sizes | chat-open | clean | all"; exit 2 ;;
 esac

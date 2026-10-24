@@ -5,7 +5,7 @@ import { args, doing, epochMs, kindOf, type Known, tasksOf, told, toolName } fro
 import * as format from "./format.ts";
 import * as brand from "./brand.ts";
 import { t } from "./i18n.ts";
-import { markdown } from "./markdown.ts";
+import { markdown, type MdStore } from "./markdown.ts";
 import * as present from "./present.ts";
 import { money } from "./views/usage.ts";
 
@@ -29,6 +29,8 @@ export type Context = {
   now?: number;
   /// The workspace's stations' names by id, for the calls that work on one (station_task); absent: none known.
   stations?: ReadonlyMap<string, string>;
+  /// Where the trees of its Markdown are kept on the device (markdown.ts); absent: read here only.
+  md?: MdStore;
 };
 
 function kindKey(kind: string): string {
@@ -349,14 +351,14 @@ export function presentHistory(live: J, cx: Context): J {
             agent: task.agent,
             failed: task.status === "failed" || task.status === "killed",
             result: task.result,
-            md: task.result !== null ? markdown(task.result) : null,
+            md: task.result !== null ? markdown(task.result, cx.md) : null,
           })).concat(events.map((n) => ({
             text: n.line,
             agent: n.chat,
             failed: n.failed,
             result: n.more,
             // A job's output is a block of code, all of it.
-            md: n.more === null ? null : n.output ? (n.more === "" ? [] : [["pre", { code: [0, n.more.length] }]]) : markdown(n.more),
+            md: n.more === null ? null : n.output ? (n.more === "" ? [] : [["pre", { code: [0, n.more.length] }]]) : markdown(n.more, cx.md),
           }))),
           messages: messages.flatMap((m, k) => {
             // A job's own words, as it wrote them (drawn in a monospaced font); still.fail's of any other kind, as they are.
@@ -379,14 +381,14 @@ export function presentHistory(live: J, cx: Context): J {
         break;
       }
       case "text":
-        v = { kind: "text", text: s(timeline[item.i], "text"), md: markdown(s(timeline[item.i], "text")), subagent: flag(timeline[item.i], "subagent") };
+        v = { kind: "text", text: s(timeline[item.i], "text"), md: markdown(s(timeline[item.i], "text"), cx.md), subagent: flag(timeline[item.i], "subagent") };
         break;
       case "post": {
         const a = args(s(timeline[steps[item.step].call], "text")) ?? {};
         const text = (k: string): string | null => (typeof a[k] === "string" ? a[k] : null);
         const kind = text("kind");
         const said = mentions(text("text") ?? "", cx);
-        v = { kind: "post", text: said, md: markdown(said), place: place(text("to")), block: kind === "block" || kind === "need_help" || kind === "need_decision", failed: failedOf(steps[item.step]) };
+        v = { kind: "post", text: said, md: markdown(said, cx.md), place: place(text("to")), block: kind === "block" || kind === "need_help" || kind === "need_decision", failed: failedOf(steps[item.step]) };
         const ends = endsOf(kind);
         if (ends !== null && ends !== "waiting") v.ends = ends;
         break;

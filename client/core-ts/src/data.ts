@@ -9,6 +9,7 @@ import { Effect, Fiber, Queue } from "effect";
 import { AccountDb, LIST_OF, type Changes, type Derive, type ListKind, type RowChange, frozen } from "./db/account.ts";
 import type { Host, Sql, SqlRow, SqlValue } from "./host.ts";
 import { HostError, SqlError, sqlError } from "./host.ts";
+import type { MdStore } from "./markdown.ts";
 import type { Topic } from "./protocol.ts";
 import type { Runner } from "./runtime.ts";
 import { equal, get, isObject, parseJson, toJsonBytes } from "./util.ts";
@@ -1136,6 +1137,23 @@ export class Data {
   /// Keeps what a chat shows small (AccountDb.keepFile).
   keepFile(station: string, session: string, name: string, kind: string, type: string, bytes: string): void {
     this.of(station)?.keepFile(station, session, name, kind, type, bytes, this.#host.nowMs());
+  }
+
+  /// Where the trees of the Markdown `station`'s agents said for `of` (a chat, `t:<thread>`; an agent, `s:<session>`) are
+  /// kept on the device (AccountDb.keptMd): none without its account's database.
+  mdStore(station: string, of: string): MdStore | undefined {
+    const db = this.of(station);
+    if (db === undefined) return undefined;
+    return {
+      has: (key) => db.hasMd(station, key),
+      get: (key) => db.keptMd(station, key, this.#host.nowMs()),
+      put: (key, json) => db.keepMd(station, of, key, json, Math.floor(this.#host.nowMs())),
+    };
+  }
+
+  /// The chats `station`'s agents last spoke in (AccountDb.recentThreads).
+  recentThreads(station: string, since: number, most: number): number[] {
+    return this.of(station)?.recentThreads(station, since, most) ?? [];
   }
 
   /// What a host error is, as a note's detail.

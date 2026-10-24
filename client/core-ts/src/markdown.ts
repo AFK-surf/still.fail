@@ -37,16 +37,60 @@ export type Md = MdNode[];
 // mdast as far as it is read here.
 type Node = { type: string; position?: { start: { offset?: number }; end: { offset?: number } }; children?: Node[]; value?: string; depth?: number; lang?: string | null; ordered?: boolean | null; start?: number | null; spread?: boolean | null; checked?: boolean | null; align?: (string | null)[] | null; url?: string; title?: string | null; alt?: string | null; identifier?: string; label?: string | null; referenceType?: string };
 
-/// The tree of `text`: read once while it is kept (the latest texts, up to `KEPT_CHARS` of them).
-export function markdown(text: string): Md {
+/// Where trees are kept past this run (an account's database: `md_kept`), by their text's key (`mdKey`), as JSON.
+export type MdStore = { has(key: string): boolean; get(key: string): string | null; put(key: string, json: string): void };
+
+/// How the trees kept are read: another number whenever what `parse` makes of a text changes (a test holds it to the
+/// trees of a set of texts: markdown.test.ts), so a tree kept by a core before is read afresh, not shown.
+export const MD_READING = 1;
+
+/// A text's key among the trees kept: the reading, its length and two FNV-1a hashes of it (64 bits).
+export function mdKey(text: string): string {
+  let a = 0x811c9dc5;
+  let b = 0x01000193 ^ text.length;
+  for (let i = 0; i < text.length; i++) {
+    const c = text.charCodeAt(i);
+    a = Math.imul(a ^ c, 0x01000193);
+    b = Math.imul(b ^ c, 0x0100019d);
+  }
+  return `${MD_READING}.${text.length}.${(a >>> 0).toString(36)}.${(b >>> 0).toString(36)}`;
+}
+
+/// The tree of `text`: read once while it is kept here (the latest texts, up to `KEPT_CHARS` of them), and, given
+/// `store`, once on the device: read from it where it was kept, else kept in it. In Hermes (the phones' engine) a
+/// chat's page of agents' Markdown took ~0.3 s to read on a Mac Studio's core, the most of opening the chat
+/// (bench/chat-open.ts): a chat opened the first time since the app started read it all again.
+export function markdown(text: string, store?: MdStore): Md {
   const hit = kept.get(text);
   if (hit) {
     kept.delete(text);
     kept.set(text, hit);
     return hit.md;
   }
-  const md = parse(text);
-  const cost = text.length + JSON.stringify(md).length;
+  const key = store ? mdKey(text) : "";
+  const stored = store?.get(key) ?? null;
+  let md: Md | null = null;
+  if (stored !== null) {
+    try {
+      md = JSON.parse(stored) as Md;
+    } catch {
+      // Not a tree after all: read afresh, kept again.
+    }
+  }
+  const fresh = md === null;
+  md ??= parse(text);
+  const json = fresh || store === undefined ? JSON.stringify(md) : stored!;
+  if (fresh && store) store.put(key, json);
+  remember(text, md, text.length + json.length);
+  return md;
+}
+
+/// Whether `text`'s tree is read and kept here this run.
+export function markdownHere(text: string): boolean {
+  return kept.has(text);
+}
+
+function remember(text: string, md: Md, cost: number): void {
   kept.set(text, { md, cost });
   keptChars += cost;
   for (const [old, entry] of kept) {
@@ -54,7 +98,6 @@ export function markdown(text: string): Md {
     kept.delete(old);
     keptChars -= entry.cost;
   }
-  return md;
 }
 
 /// Bound the trees as well as their source: a short formula may have many placed glyphs.

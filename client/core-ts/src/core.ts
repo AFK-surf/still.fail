@@ -23,9 +23,10 @@ import { CoreError, asCoreError } from "./error.ts";
 import type { Host } from "./host.ts";
 import { t } from "./i18n.ts";
 import { markdown } from "./markdown.ts";
+import { AHEAD_AFTER_MS, MdAhead } from "./md-ahead.ts";
 import * as prefs from "./prefs.ts";
 import { Beside, parseClientMessage, type ClientId, type ClientMessage, type CoreMessage, type RequestId } from "./protocol.ts";
-import { Runner } from "./runtime.ts";
+import { laterSleep, Runner } from "./runtime.ts";
 import { stationId } from "./station/addr.ts";
 import { Status } from "./status.ts";
 import { Store } from "./store.ts";
@@ -229,6 +230,11 @@ export class Core {
       inner.router.owners.push(inner.views);
       inner.viewCalls = new ViewCalls(inner, inner.views);
       inner.viewCalls.install();
+      // What agents said lately read ahead, kept on the device: a chat opens with its Markdown read (md-ahead.ts).
+      const ahead = new MdAhead(inner.data, inner.runner, () => inner.host.nowMs());
+      inner.data.onLogChange((table, station, id) => {
+        if (table === "entry") ahead.thread(station, Number(id));
+      });
       xshare.install(inner);
       memberships.install(inner);
       publish.install(inner);
@@ -319,6 +325,8 @@ export class Core {
       inner.provider.start();
       inner.cloudSync.start();
       inner.stations.reconcile();
+      // The chats spoken in latest, read ahead once what the first views ask has gone.
+      inner.runner.fork(Effect.andThen(laterSleep(AHEAD_AFTER_MS), Effect.sync(() => ahead.seed())));
       // What was on its way when the core last stopped goes on.
       inner.viewCalls.resume();
       inner.downloads.resume();

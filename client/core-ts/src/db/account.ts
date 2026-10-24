@@ -17,7 +17,7 @@ import { SqlError, sqlError } from "../host.ts";
 import { topicKey, type Topic } from "../protocol.ts";
 import type { Runner } from "../runtime.ts";
 import { equal, isObject } from "../util.ts";
-import { ensureFilesKept, ensureKept, ensureSaid, ensureSlackSaid, migrate, versionOf } from "./schema.ts";
+import { ensureFilesKept, ensureKept, ensureMdKept, ensureSaid, ensureSlackSaid, migrate, versionOf } from "./schema.ts";
 import { readItem, type Said } from "../elsewhere.ts";
 
 // deno-lint-ignore no-explicit-any
@@ -209,6 +209,11 @@ const FILES_KEPT = 64 * 1024 * 1024;
 const FILES_KEPT_TO = 0.8;
 const FILE_KEPT_MOST = 1024 * 1024;
 const FILE_SHOWN_EVERY = 86_400_000;
+/// The trees of agents' words kept (`md_kept`, in characters of their JSON), as file_kept's: at most this much, let go
+/// to MD_KEPT_TO of it past that, when one was shown noted at most once in MD_SHOWN_EVERY.
+const MD_KEPT = 32 * 1024 * 1024;
+const MD_KEPT_TO = 0.8;
+const MD_SHOWN_EVERY = 86_400_000;
 
 /// The tables of what this device did itself: written again on their own when a burst could not be (a full disk).
 const PRECIOUS = /^(INSERT|DELETE|UPDATE)[^(]*\b(outbox|pending|first|changing|draft|workspace_pref)\b/i;
@@ -280,6 +285,7 @@ export class AccountDb {
       }
       // Made as the first file is kept: a database that keeps none has no room taken for it.
       this.#filesKept = sql.all("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'file_kept'").length > 0;
+      this.#mdKept = sql.all("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'md_kept'").length > 0;
     } else if (this.sql.all("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'said'").length > 0) {
       this.#said = "scan";
     }
@@ -1614,6 +1620,67 @@ export class AccountDb {
     });
   }
 
+  // ── the trees of what agents said (markdown.ts) ──
+
+  /// Whether `md_kept` is there (made as the first tree is kept), and what its trees take (counted at the first kept).
+  #mdKept = false;
+  #mdSize: number | null = null;
+
+  /// Whether the tree of the text keyed `key` is kept here.
+  hasMd(station: string, key: string): boolean {
+    if (!this.#mdKept) return false;
+    try {
+      return this.sql.all("SELECT 1 FROM md_kept WHERE station = ? AND key = ?", [station, key]).length > 0;
+    } catch {
+      this.#mdKept = false;
+      return false;
+    }
+  }
+
+  /// The tree of the text keyed `key` (its JSON), noted as shown `at`; null when it is not kept.
+  keptMd(station: string, key: string, at: number): string | null {
+    if (!this.#mdKept) return null;
+    let r: SqlRow | undefined;
+    try {
+      r = this.sql.all("SELECT used, json FROM md_kept WHERE station = ? AND key = ?", [station, key])[0];
+    } catch {
+      // Not made after all (the write that made it could not be kept): made again with the next one kept.
+      this.#mdKept = false;
+      return null;
+    }
+    if (r === undefined) return null;
+    if (at - Number(r[0]) >= MD_SHOWN_EVERY) this.#write(() => this.sql.run("UPDATE md_kept SET used = ? WHERE station = ? AND key = ?", [at, station, key]));
+    return String(r[1]);
+  }
+
+  /// Keeps the tree of the text keyed `key`, read for `of` (a chat, `t:<thread>`; an agent, `s:<session>`); past
+  /// MD_KEPT, the least lately shown go.
+  keepMd(station: string, of: string, key: string, json: string, at: number): void {
+    if (this.readOnly) return;
+    this.#write(() => {
+      if (!this.#mdKept) {
+        ensureMdKept(this.sql);
+        this.#mdKept = true;
+      }
+      // (what all of them take, counted once and then kept count of: a tree is kept with each reply read)
+      this.#mdSize ??= Number(this.sql.all("SELECT coalesce(sum(size), 0) FROM md_kept")[0]?.[0] ?? 0);
+      const was = Number(this.sql.all("SELECT size FROM md_kept WHERE station = ? AND key = ?", [station, key])[0]?.[0] ?? 0);
+      this.sql.run("INSERT OR REPLACE INTO md_kept (station, key, of, size, used, json) VALUES (?, ?, ?, ?, ?, ?)", [station, key, of, json.length, at, json]);
+      this.#mdSize += json.length - was;
+      if (this.#mdSize <= MD_KEPT) return;
+      for (const r of this.sql.all("SELECT station, key, size FROM md_kept ORDER BY used")) {
+        if (this.#mdSize <= MD_KEPT * MD_KEPT_TO) break;
+        this.sql.run("DELETE FROM md_kept WHERE station = ? AND key = ?", [r[0], r[1]]);
+        this.#mdSize -= Number(r[2] ?? 0);
+      }
+    });
+  }
+
+  /// The chats a station's agents last spoke in, the latest first, from `since` on: at most `most`.
+  recentThreads(station: string, since: number, most: number): number[] {
+    return this.sql.all("SELECT thread FROM chat WHERE station = ? AND archived = 0 AND thread IS NOT NULL AND last_active >= ? ORDER BY last_active DESC LIMIT ?", [station, since, most]).map((r) => r[0] as number);
+  }
+
   /// What this database keeps of each chat (a thread): its entries, its sessions' transcripts and what it shows small, in
   /// characters of their JSON (near enough their bytes), with its title and sessions; what a session has counted with
   /// its first thread. For the device's page of what it keeps (`cache.usage`).
@@ -1642,6 +1709,13 @@ export class AccountDb {
         if (thread !== undefined) of(r[0] as string, thread).bytes += Number(r[2] ?? 0);
       }
     }
+    if (this.#mdKept) {
+      for (const r of this.sql.all("SELECT station, of, sum(size) FROM md_kept GROUP BY station, of")) {
+        const [station, at] = [r[0] as string, r[1] as string];
+        const thread = at.startsWith("t:") ? Number(at.slice(2)) : firstThread.get(`${station}\0${at.slice(2)}`);
+        if (thread !== undefined && Number.isInteger(thread)) of(station, thread).bytes += Number(r[2] ?? 0);
+      }
+    }
     for (const row of out.values()) {
       const json = this.sql.all("SELECT json FROM thread WHERE station = ? AND id = ?", [row.station, row.thread])[0]?.[0];
       const title = json === undefined ? undefined : (parse(json) as { title?: unknown })?.title;
@@ -1659,6 +1733,10 @@ export class AccountDb {
       this.#forgetEntries(station, thread);
       for (const session of sessions) if (this.sql.run("DELETE FROM transcript WHERE station = ? AND session = ?", [station, session]) > 0) this.#tellLog("transcript", station, session);
       if (this.#filesKept) for (const session of sessions) this.sql.run("DELETE FROM file_kept WHERE station = ? AND session = ?", [station, session]);
+      if (this.#mdKept) {
+        for (const of of [`t:${thread}`, ...sessions.map((s) => `s:${s}`)]) this.sql.run("DELETE FROM md_kept WHERE station = ? AND of = ?", [station, of]);
+        this.#mdSize = null;
+      }
     });
   }
 
@@ -1683,6 +1761,10 @@ export class AccountDb {
       if (this.#hasSlackSaid()) this.sql.run("DELETE FROM slack_said WHERE station = ?", [station]);
       this.#slackNames.delete(station);
       if (this.#filesKept) this.sql.run("DELETE FROM file_kept WHERE station = ?", [station]);
+      if (this.#mdKept) {
+        this.sql.run("DELETE FROM md_kept WHERE station = ?", [station]);
+        this.#mdSize = null;
+      }
       for (const key of [...this.#evicted]) if (key.split("\u0001")[1] === station) this.#evicted.delete(key);
       this.#cache.clear();
       this.#logCache.clear();
