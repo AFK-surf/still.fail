@@ -455,7 +455,11 @@ fn pick_popover(
   // short: a menu of choices (controls.css.ts chooserMenu: the one chosen checked before its words, the arrows,
   // letters and Enter a menu's), a choice's note at its end
   if choices.length() < pick_search_from {
-    let entries = choices.map(fn(x) { @kit.menu_radio(x.key, x.key == chosen, label=x.label) })
+    // (its title over the choices, as a menu's is)
+    let entries : Array[@kit.Entry] = if title != "" { [@kit.menu_label(title)] } else { [] }
+    for x in choices {
+      entries.push(@kit.menu_radio(x.key, x.key == chosen, label=x.label))
+    }
     let icons : Map[String, String] = {}
     let notes : Map[String, String] = {}
     for x in choices {
