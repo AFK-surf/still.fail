@@ -190,11 +190,11 @@ pub fn open_found(it : FoundItem) -> Unit {
     None => None
   }
   match o.to {
-    "station" => app.nav.push(Setting(@settings.Station(o.station)))
-    "members" => app.nav.push(Setting(@settings.Workspace))
+    "station" => open_page(Setting(@settings.Station(o.station)))
+    "members" => open_page(Setting(@settings.Workspace))
     "files" => {
       let at : DriveAt = { station: o.station, root: o.root, path: o.path }
-      app.nav.push(
+      open_page(
         match o.how {
           "read" => DriveRead(at)
           "play" => DrivePlay(at)
@@ -205,9 +205,9 @@ pub fn open_found(it : FoundItem) -> Unit {
     _ =>
       match chat {
         Some(r) => {
-          app.nav.push(Chat(r))
+          open_page(Chat(r))
           match o.job {
-            Some(job) if o.to == "service" => app.nav.push(Service(o.station, job))
+            Some(job) if o.to == "service" => open_page(Service(o.station, job))
             _ => ()
           }
         }

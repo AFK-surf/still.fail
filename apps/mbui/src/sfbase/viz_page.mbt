@@ -342,7 +342,7 @@ pub fn viz_file_of(
           viz_icon(c, full, "expand", viz_tr("android-misc.viz.fullscreen"), subtle)
           let aside = c.id("viz/aside/" + place)
           if c.clicked(aside) {
-            app.nav.push(PreviewFile(station, key, a.path, a.name))
+            open_page(PreviewFile(station, key, a.path, a.name))
           }
           viz_icon(c, aside, "panel-open", viz_tr("android-misc.viz.openAside"), subtle)
         })

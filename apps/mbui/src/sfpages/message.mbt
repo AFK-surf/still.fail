@@ -337,7 +337,7 @@ fn message_name(
     c.cursor(id, Hand)
     if c.clicked(id) {
       if agent != "" {
-        (detail_asked.val)(src, here_ref(here), agent)
+        open_detail(src, here_ref(here), agent)
       } else {
         let to = from
         c.tell("msg-name/" + key, fn() { open_link(to) })
@@ -537,7 +537,7 @@ fn system_notice(c : @ui.Ctx, src : Source, station : String, m : Message) -> Un
               key="notice-profile/" + m.ts,
               style=(if open { notice_words_open } else { notice_words }).then(@ui.text_style(color=ink)),
               link_color=if failed { p.red } else { p.text },
-              on_link=fn(_) { app.nav.push(Setting(@settings.Route::Profile(station, m.profile))) },
+              on_link=fn(_) { open_page(Setting(@settings.Route::Profile(station, m.profile))) },
             )
             |> ignore
           } else if open {

@@ -48,6 +48,8 @@ particular to this app:
   - Something both need moves down into `sfbase` or the library, once.
   - Logic is the core's, never a page's.
   - Words are `@sf.t` (the app's tables).
+  - A page opens what it opens with `@sfbase.open_page(page)` and a chat's detail with `@sfbase.open_detail(src, chat,
+    tab)`: the shell's (sfbase's `Shell`) decides where it goes per layout. It never pushes onto `app.nav` itself.
   - Don't add a branch on the tier inside a page. A page that needs another arrangement asks its own
     width.
 

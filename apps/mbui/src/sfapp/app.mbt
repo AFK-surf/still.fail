@@ -160,7 +160,30 @@ fn reset() -> Unit {
 /// What the app's own doings ask of the pages (sfbase shell.mbt): home and what is over the pages put their sheets
 /// down too, an invitation's link shows its sheet, the screens live in their cards stop as the app goes behind.
 fn pages_shell() -> Shell {
-  { home, close_overlays, open_invite, behind: peeks_stop_all }
+  { home, close_overlays, open_invite, behind: peeks_stop_all, open: open_where, detail: detail_where }
+}
+
+///|
+/// Page `p` opened where the layout has it (the pane table, docs/architecture.md): on the wide frame the page pushed,
+/// a chat's detail asked as a page (its history, a service, a file) laid beside its chat by the frame (sfdesk's
+/// main_page); laid out Small on the phone's stack (a new chat risen from the foot).
+fn open_where(p : Page) -> Unit {
+  if @sfdesk.is_wide(@ui.current()) {
+    app.nav.push(p)
+  } else {
+    stack_open(p)
+  }
+}
+
+///|
+/// Chat `r`'s detail `tab` opened where the layout has it: on the wide frame its side panel's tab, toggled; laid out
+/// Small the page it is (an agent's history, what the pages' message rows ask).
+fn detail_where(src : Source, r : ChatRef, tab : String) -> Unit {
+  if @sfdesk.is_wide(@ui.current()) {
+    @sfdesk.side_toggle(src, r, tab)
+  } else {
+    app.nav.push(History(r, tab, None))
+  }
 }
 
 ///|
@@ -308,13 +331,6 @@ fn signed_in(c : @ui.Ctx, src : Source) -> Unit {
       share_in_frame(c)
       // files being kept on the device, said once kept (keep.mbt)
       keeps_frame(c)
-      // what a page asks to open beside its chat (an agent's history, what the pages' message rows ask): the wide
-      // frame's side panel's tab, Small's page pushed
-      detail_asked.val = if @sfdesk.is_wide(c) {
-        fn(src, r, tab) { @sfdesk.side_toggle(src, r, tab) }
-      } else {
-        fn(_, r, tab) { app.nav.push(History(r, tab, None)) }
-      }
       if @sfdesk.is_wide(c) {
         // the wide frame's keys (sfdesk's keys.mbt), then the rail, the sidebar and the page beside it (sfdesk's
         // frame.mbt); what opens over them after them
