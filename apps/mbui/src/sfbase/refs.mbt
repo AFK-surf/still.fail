@@ -456,3 +456,16 @@ pub fn writing_paste(src : Source, w : Writing, station : String, words : String
     }
   })
 }
+
+///|
+/// Pasted words of draft `w` that failed going up (file `id`) made a file again from them (Chat.tsx: removed, and added
+/// again with what the core said of them).
+pub fn writing_paste_again(src : Source, w : Writing, id : String) -> Unit {
+  guard writing_went.get(id) is Some((station, name, bytes)) else { return }
+  let info = w.files.iter().find_first(fn(f) { text(Some(f), "id") == id }).map(fn(f) { field(Some(f), "pasted") })
+  writing_remove(src, w, id)
+  match info {
+    Some(Some(p)) => writing_add(src, w, station, name, bytes, pasted=p)
+    _ => ()
+  }
+}

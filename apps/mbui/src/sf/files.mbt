@@ -164,10 +164,11 @@ pub fn file_name(c : @ui.Ctx, name : String) -> Unit {
 }
 
 ///|
-/// What was done with a file's card this frame: its ✕ or its ↻ pressed, or (one that opens) the card itself.
+/// What was done with a file's card this frame: its ✕, its ↻ or its ✎ pressed, or (one that opens) the card itself.
 pub(all) struct FileCardDone {
   removed : Bool
   retried : Bool
+  restored : Bool
   opened : Bool
 }
 
@@ -177,7 +178,9 @@ pub(all) struct FileCardDone {
 /// it failed, `error`, in red), 236 wide at most, 8 by 10 in and 7 at the sheet's side, rounded as the sheet stands in
 /// (13), on the neutral ground; its path (or its name) its tip. `remove` and `retry` its own ✕ and ↻ at its end, `slot`
 /// room there for a button laid over it (a message's). `open`: pressing it opens the file (a message's: fileCardOpen),
-/// the hover ground under the pointer. `key` names it.
+/// the hover ground under the pointer. `key` names it. Pasted words kept as a file (Chat.tsx PendingFile's pasted
+/// card): `title` in place of its name (what they begin with), `meta` in place of its size (how many characters), their
+/// own ✕'s `remove_label`, `restore` its ✎ putting them back as words.
 pub fn file_card(
   c : @ui.Ctx,
   key : String,
@@ -192,6 +195,10 @@ pub fn file_card(
   retry? : Bool = false,
   slot? : Bool = false,
   open? : Bool = false,
+  title? : String = "",
+  meta? : String = "",
+  restore? : Bool = false,
+  remove_label? : String = "",
 ) -> FileCardDone {
   let id = c.id(key)
   if open {
@@ -199,6 +206,8 @@ pub fn file_card(
   }
   let x = c.id(key + "/remove")
   let again = c.id(key + "/retry")
+  let back = c.id(key + "/restore")
+  let said = meta
   let going = match sent {
     Some(s) if pending && size > 0.0 =>
       t(
@@ -211,6 +220,8 @@ pub fn file_card(
     error
   } else if pending {
     going
+  } else if said != "" {
+    said
   } else {
     match download {
       Some((_, words)) => words
@@ -225,7 +236,12 @@ pub fn file_card(
   let b = c.box(style=if open && c.hovered(id) { card_box_hot } else { card_box }, id~, fn() {
     file_tile(c, name, progress~, error=error != "")
     c.box(style=card_words, fn() {
-      file_name(c, name)
+      if title != "" {
+        c.box(style=name_row, fn() { c.box(style=name_stem, fn() { c.text(title, style=card_name) |> ignore }) |> ignore })
+        |> ignore
+      } else {
+        file_name(c, name)
+      }
       c.text(meta, style=if error != "" { card_failed } else { card_meta }) |> ignore
     })
     |> ignore
@@ -233,18 +249,28 @@ pub fn file_card(
       card_button(c, again, "refresh", t("web-main.composer.retryUpload"))
       tip(c, key + "/retry-tip", again, t("web-main.composer.retryUpload"))
     }
+    if restore {
+      card_button(c, back, "edit", t("web-main.composer.expandPaste"))
+      tip(c, key + "/restore-tip", back, t("web-main.composer.expandPaste"))
+    }
     if remove {
-      card_button(c, x, "close", t("web-main.file.remove", args=[("name", name)]))
+      card_button(c, x, "close", if remove_label != "" {
+        remove_label
+      } else {
+        t("web-main.file.remove", args=[("name", name)])
+      })
     }
     if slot {
       c.box(style=card_slot, fn() {  }) |> ignore
     }
   })
-  c.semantics(b, Group, id~, label=name)
-  tip(c, key + "/tip", id, if path != "" { path } else { name })
+  c.semantics(b, Group, id~, label=if title != "" { title } else { name })
+  // (pasted words: all of what is said of them, a failure at length)
+  tip(c, key + "/tip", id, if path != "" { path } else if title != "" { meta } else { name })
   let removed = remove && c.clicked(x)
   let retried = retry && c.clicked(again)
-  { removed, retried, opened: open && !removed && !retried && c.clicked(id) }
+  let restored = restore && c.clicked(back)
+  { removed, retried, restored, opened: open && !removed && !retried && !restored && c.clicked(id) }
 }
 
 ///|
