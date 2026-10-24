@@ -102,7 +102,9 @@ fn station_head(c : @ui.Ctx, core : Core, here : Here, s : Json?, manager : Bool
         })
       }
     }
-    let mb = c.box(style=st_mark, id=if manager { mid } else { 0 }, fn() {
+    // (called what it is for: its name to a screen reader and to a scripted run's tap)
+    let mark_label = if manager { @sf.t("android-settings.station.emoji") } else { "" }
+    let mb = c.box(style=st_mark, id=if manager { mid } else { 0 }, label=mark_label, fn() {
       let emoji = text(s, "emoji")
       let icon = text(s, "icon")
       if @sf.has_station_mark(emoji, icon) {
@@ -116,7 +118,7 @@ fn station_head(c : @ui.Ctx, core : Core, here : Here, s : Json?, manager : Bool
       }
     })
     if manager {
-      c.semantics(mb, Button, id=mid, label=@sf.t("android-settings.station.emoji"))
+      c.semantics(mb, Button, id=mid)
     }
     c.box(style=st_identity, fn() {
       // its name: its managers rename it where it is
@@ -265,12 +267,15 @@ fn station_menu(c : @ui.Ctx, core : Core, here : Here, s : Json?) -> Unit {
       @sf.t("web-pages.settings.stations.removeConfirmBody", args=[("name", "still.fail")]),
       @sf.t("web-pages.settings.stations.removeAction"),
       danger=true,
+      // back to the list at once (the page of a station going has nothing to show), its answer said there
       fn() {
+        (core.pop)()
         @settings.act(
           core,
           @sf.t("web-pages.settings.stations.remove"),
           "workspace.removeStation",
           obj([("workspace", str(here.workspace)), ("station", str(text(s, "id"))), ("account", str(here.sub))]),
+          done=@sf.t("android-settings.station.removed"),
         )
       },
     )

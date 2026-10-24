@@ -1,21 +1,18 @@
-// 81-station-mark (e2e/traces/settings-station-mark.trace): the test station → "…" → 图标: robot found and picked
-// (workspace.renameStation, icon glyph:robot); Emoji, one pasted; then 不使用图标.
+// 81-station-mark (e2e/traces/settings-station-mark.trace): the test station's page → its mark (图标): robot found and
+// picked (workspace.renameStation, icon glyph:robot); Emoji, one pasted; then 不使用图标.
 
 ///|
 test "81-station-mark" {
   @sfreplay.orders(fn(seed) raise {
-    // (the station's page asked for its logins and its workspaces as the run had it, all in one page; they are its
-    // 设置's now, which this flow does not open: those asks dropped, with what came for them)
-    let f = @sfreplay.Flow::start(@sfreplay.trace("settings-station-mark"), seed~, drop=["machineLogins", "memberships"])
+    let f = @sfreplay.Flow::start(@sfreplay.trace("settings-station-mark"), seed~)
     f.tap("icon:settings")
     f.run_to(@ui.nav_rest())
     f.tap("=Station")
     f.run_to(@ui.nav_rest())
     f.tap("=studio")
     f.run_to(@ui.nav_rest())
-    f.see("在此 station 上")
-    f.tap("icon:more")
-    f.run_to(@kit.sheet_rest("settings-sheet"))
+    f.see("概览")
+    // its mark, by what it is called: its managers pick it where it is (the picker a settings sheet)
     f.tap("=图标")
     f.run_to(@kit.sheet_rest("settings-sheet"))
     f.see("为 studio 选择图标")
@@ -25,8 +22,6 @@ test "81-station-mark" {
     // said as the cloud answers, the sheet still going down (its toast's time its own: looked at as it shows)
     f.see("已设置图标")
     f.run_to(@kit.sheet_rest("settings-sheet"))
-    f.tap("icon:more")
-    f.run_to(@kit.sheet_rest("settings-sheet"))
     f.tap("=图标")
     f.run_to(@kit.sheet_rest("settings-sheet"))
     f.tap("=Emoji")
@@ -34,8 +29,6 @@ test "81-station-mark" {
     f.paste("🚀")
     // said as the cloud answers, the sheet still going down (its toast's time its own: looked at as it shows)
     f.see("已设置图标")
-    f.run_to(@kit.sheet_rest("settings-sheet"))
-    f.tap("icon:more")
     f.run_to(@kit.sheet_rest("settings-sheet"))
     f.tap("=图标")
     f.run_to(@kit.sheet_rest("settings-sheet"))
