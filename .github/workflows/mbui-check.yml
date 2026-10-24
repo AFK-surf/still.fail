@@ -98,9 +98,9 @@ jobs:
           # (mbc's account of each program's build, its units compiled and its link, said after: moon shows a
           # compiler's output only when it fails, and where a part's time went was not to be seen)
           export MBC_LOG="$RUNNER_TEMP/mbc.log"
-          # (sfapp's tests in one process, SFAPP_SHARDS=1, beside the app part's other packages: what one file leaves
-          # behind that a later one trips on shows here, which shards, a process each, hide. Over the part's own build,
-          # its run ~70 s on one core against the shards' ~38 s: the part under 180 s, 2026-10-24)
+          # (sfapp's page tests in one process, SFAPP_SHARDS=1, the two screen sweeps a process each beside them and
+          # the part's other packages: what one file leaves behind that a later one trips on shows here, which shards,
+          # a process each, hide; the run the longest of them, not their sum, so the part stays under 180 s, 2026-10-25)
           TIMES=1 MBC_REAL_CC=clang TARGETS=native PARTS=${{ matrix.part }} SFAPP_SHARDS=1 LINES_OUT=40 bash apps/mbui/scripts/test.sh 2>&1 | tee "$RUNNER_TEMP/mbui-test.log"
       - name: The mbui app's check (detlint, then native type-checked)
         if: matrix.part == 'replay'
