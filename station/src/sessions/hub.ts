@@ -396,19 +396,22 @@ export class Hub {
       log.warn("hub", "session handed over could not be taken up; it resumes the usual way", { session: row.key, error: (error as Error).message });
       return;
     }
+    // Its process runs on the profile it was started on (the one its runtime session last ran on), which the session may
+    // have been moved off since: taken up there, not moved, it moves before its next turn (actor.ts `ensureAgent`).
+    const ranOn = (row.runtimeSessionId ? this.store.ranOn(row.key, row.runtimeSessionId) : null) ?? row.profile;
     let agent: AgentSession | null = null;
     if (withProcess) {
       try {
         const driver = this.sessionDriver(snap.runtime);
         const generation = actor.nextGeneration();
-        agent = await driver.adopt(openOptions(row, this.accounts.runOn(row.key), this.deps), snap.agent, actor.listener(generation));
+        agent = await driver.adopt(openOptions(row, this.accounts.profile(ranOn) ?? this.accounts.runOn(row.key), this.deps), snap.agent, actor.listener(generation));
       } catch (error) {
         log.warn("hub", "a session's runtime could not be taken up; it resumes the usual way", { session: row.key, error: (error as Error).message });
       }
     }
     // Its runtime not taken up: a turn it had is resumed the usual way (recover).
     if (withProcess && !agent) return;
-    actor.adopt(snap, agent);
+    actor.adopt(snap, agent, ranOn);
     log.info("hub", "session taken up from the previous station", { session: row.key, withAgent: agent !== null });
     if (agent) {
       this.adopted.add(row.key);
@@ -991,7 +994,7 @@ export class Hub {
       chat: (connect) => this.chatOf(connect),
       driver: (runtime) => this.sessionDriver(runtime),
       runOn: (key, holding) => this.accounts.runOn(key, holding),
-      spend: (key) => this.accounts.spend(key),
+      spend: (key, ranOn) => this.accounts.spend(key, ranOn),
       refillsAt: (key) => this.accounts.refillsAt(key),
       mcpUrl: () => (typeof this.options.mcpUrl === "string" ? this.options.mcpUrl : this.options.mcpUrl()),
       toSandbox: async (key) => {

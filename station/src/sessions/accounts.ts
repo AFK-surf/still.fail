@@ -24,6 +24,8 @@ export type SessionChange = { profile?: string | null; model?: string | null; ef
 /// A profile as a session's runtime starts on it, with its spelling of the session's model.
 export type RunOn = Profile & { spelling(model: string): string | null };
 
+const withSpelling = (p: Profile): RunOn => ({ ...p, spelling: (model: string) => spelling(p, model) });
+
 export type AccountsDeps = {
   config(): HubConfig;
   store: Store;
@@ -94,7 +96,6 @@ export class Accounts {
     const candidates = all.filter((p) => this.allows(key, p));
     // Profiles there are, none of them for its workspace: said so, for people to allow one.
     if (candidates.length === 0 && all.length > 0) throw new Error(tr(stationLang(), "station.session.noProfileHere", { runtime: runtimeTitle(runtime) }));
-    const withSpelling = (p: Profile): RunOn => ({ ...p, spelling: (model: string) => spelling(p, model) });
     // Kept to it by hand: that one, whatever it says. Otherwise its own while it can run it: usable, and with its model
     // enabled.
     const current = candidates.find((p) => p.id === row.profile);
@@ -124,29 +125,39 @@ export class Accounts {
     return cheapToLeave(store.lastContexts(key, CALLS_LOOKED_AT), this.compactions[1]);
   }
 
-  /// A turn of the session ran into its profile's allowance: that profile is passed over for now, and a session left to
-  /// the station moves to another of its runtime's that can run it now. The names of the one left and the one taken
-  /// when it moved; null when it is kept to its profile or none other can.
-  spend(key: string): [string, string] | null {
+  /// Profile `id` as a session's runtime runs on it; null when the station no longer has it.
+  profile(id: string): RunOn | null {
+    const profile = this.deps.config().profiles.find((p) => p.id === id);
+    return profile ? withSpelling(profile) : null;
+  }
+
+  /// A turn of the session ran into the allowance of `ranOn`, the profile its process was started on (null: the
+  /// session's own): that profile is passed over for now, and a session left to the station moves to another of its
+  /// runtime's that can run it now; one moved off it while the turn ran (changed by hand, its profile deleted) goes on
+  /// where it was moved. The names of the one left and the one taken when it moved; null when it is kept to its profile
+  /// or none other can.
+  spend(key: string, ranOn: string | null): [string, string] | null {
     const { store } = this.deps;
     const row = store.getSession(key);
     if (!row) throw new Error(`unknown session ${key}`);
-    this.spent.set(row.profile, this.deps.clock.currentTimeMillisUnsafe());
+    const left = ranOn ?? row.profile;
+    this.spent.set(left, this.deps.clock.currentTimeMillisUnsafe());
+    const config = this.deps.config();
+    const name = (id: string) => config.profiles.find((p) => p.id === id)?.name ?? id;
+    if (row.profile !== left) return [name(left), name(row.profile)];
     if (row.profilePinned) return null;
     const runtime = runtimeNamed(row.runtime);
     if (!runtime) return null;
-    const config = this.deps.config();
     // As the pool: those with its model enabled, or, when none has (a connect's binding from before models were
     // enabled), all of its runtime's.
     const all = config.profiles.filter((p) => p.runtimes.includes(runtime) && this.allows(key, p));
     const strict = all.some((p) => serves(p, row.model));
-    const candidates = all.filter((p) => p.id !== row.profile && (!strict || serves(p, row.model)) && usable(this.healthOf(p.id)));
+    const candidates = all.filter((p) => p.id !== left && (!strict || serves(p, row.model)) && usable(this.healthOf(p.id)));
     if (candidates.length === 0) return null;
     const next = this.pick(candidates, row.model, false);
     store.setSessionProfile(key, next.id, false);
-    log.info("hub", "allowance ran out; session taken on by another profile", { session: key, from: row.profile, to: next.id });
-    const from = config.profiles.find((p) => p.id === row.profile)?.name ?? row.profile;
-    return [from, next.name];
+    log.info("hub", "allowance ran out; session taken on by another profile", { session: key, from: left, to: next.id });
+    return [name(left), next.name];
   }
 
   /// When the profile of session `key`, which ran into its allowance, is expected to run again: the last refill of its
