@@ -754,3 +754,73 @@ let ug_empty_box : @ui.Style = @ui.css("w=Full py=S7 align=ACenter")
 ///|
 // kept across runs: a value (no field of it changes)
 let ug_empty : @ui.TextStyle = @ui.text_style(size=Sm, leading=L6, color=Muted, wrap=false)
+
+///|
+/// The prices the usage is counted at (UsagePricesSettings, Usage.tsx PriceTables): each station's, on a card of its own,
+/// its name, what its prices are, and a table of its models and their rates (as a message's table is drawn); none, said.
+/// The prices are each station's, through the core; no table of the app's own.
+fn usage_prices_page(c : @ui.Ctx, core : Core, here : Here, days : Int) -> Unit {
+  let topic = (core.topic)("usage", { "scope": str(here.workspace), "days": Json::number(days.to_double()) })
+  let v = topic.value
+  let blocks : Array[() -> Unit] = []
+  match v {
+    None =>
+      blocks.push(fn() {
+        @sf.waiting(
+          c,
+          shape=Cards,
+          count=2,
+          error=match topic.error {
+            Some(e) => @sf.t("web-pages.settings.prices.failed", args=[("error", @settings.error_text(e))])
+            None => ""
+          },
+        )
+      })
+    Some(_) => {
+      let tables = items(v, "prices")
+      if tables.length() == 0 {
+        blocks.push(fn() { c.text(@sf.t("web-main.usage.noPrices"), style=desk_muted) |> ignore })
+      }
+      for table in tables {
+        let tv = Some(table)
+        blocks.push(fn() {
+          c.box(style=desk_card, fn() {
+            c.text(text(tv, "station"), style=up_station) |> ignore
+            c.text(text(tv, "note"), style=desk_note) |> ignore
+            let rows = items(tv, "rows")
+            if rows.length() == 0 {
+              c.text(@sf.t("web-main.usage.noModelUsage"), style=desk_note) |> ignore
+            } else {
+              // a table as a message's (its model, then each rate)
+              let head = [@sf.t("web-main.model.models")]
+              head.append(items(Some(rows[0]), "rates").map(fn(r) { text(Some(r), "label") }))
+              let line = fn(cells : Array[String]) { "| " + cells.map(fn(x) { x.replace_all(old="|", new="\\|") }).join(" | ") + " |" }
+              let md = [line(head), line(head.map(fn(_) { "---" }))]
+              for r in rows {
+                let cells = [text(Some(r), "model")]
+                cells.append(items(Some(r), "rates").map(fn(x) { text(Some(x), "value") }))
+                md.push(line(cells))
+              }
+              @sf.markdown(c, md.join("\n"), key="prices/" + text(tv, "station"), size=@sf.text_scale.base.0) |> ignore
+            }
+          })
+          |> ignore
+        })
+      }
+    }
+  }
+  desk_page(
+    c,
+    core,
+    "usage-prices/" + days.to_string(),
+    @sf.t("web-pages.settings.prices.title"),
+    lead=@sf.t("web-pages.settings.prices.lead"),
+    back=@sf.t("web-pages.settings.nav.usage"),
+    blocks,
+  )
+}
+
+///|
+/// A station's name over its prices (priceStation: the title's size, semibold).
+// kept across runs: a value (no field of it changes)
+let up_station : @ui.TextStyle = @ui.text_style(size=Lg, leading=L7, weight=Semibold, color=Fg, w=Full)
