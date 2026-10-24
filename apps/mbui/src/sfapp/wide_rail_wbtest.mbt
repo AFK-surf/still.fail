@@ -430,6 +430,27 @@ test "wide: a newer build of the desktop app: 更新 at the open sidebar's top r
 }
 
 ///|
+test "wide: under a phone's status bar, 更新 below it (the bar takes what is pressed on it), its own row over the sidebar's first" {
+  let calls : Array[Made] = []
+  let t = wide_tester(calls, mode="chat")
+  t.post(@hostapi.system_channel, "{\"bars\":{\"top\":32,\"bottom\":0,\"left\":0,\"right\":0}}")
+  update.available = Some({ "versionName": "0.1.9999" })
+  t.frame()
+  t.run_for(@sfdesk.side_move_ms)
+  let (_, y, _, h) = t.query(Button, label="更新").unwrap().rect
+  assert_eq(y, 32.0 + @sfdesk.update_top)
+  // the sidebar's first row (新建对话) under it, not beside it
+  let (_, ny, _, _) = t.rect_of("新建对话").unwrap()
+  assert_true(ny >= y + h, msg="\{ny} \{y + h}")
+  // pressed, the newer build asked for (update_install: asked again first)
+  update.source = Some({ check: fn(_, _, done) { done(Ok(Json::null())) }, url: fn(f) { f } })
+  update_version.val = 1
+  let (x, _, w, _) = t.query(Button, label="更新").unwrap().rect
+  t.tap(x + w / 2.0, y + h / 2.0)
+  assert_eq(update.available, None)
+}
+
+///|
 test "wide: the lists' filter (components.tsx MineFilter): its tip; its menu has the list shown checked, 奏 its page, a filter back to the chats from it" {
   let calls : Array[Made] = []
   let t = wide_tester(calls)

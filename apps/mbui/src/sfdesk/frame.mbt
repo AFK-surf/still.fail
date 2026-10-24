@@ -512,7 +512,8 @@ pub fn frame(
   // what the sidebar's parts work out from, where the move has got to: its top row (Sidebar.css.ts brand: none in the
   // closed bar), its frosted bands' ground (the block's), the lists' marks on the rail (Rail.css.ts listMark: in as it
   // folds)
-  wide.brand_h = c.moved("--brand", if bar { 0.0 } else if inset { side_top_inset } else { side_top_web })
+  // (with 更新 over it and no window's buttons, as on a phone's wide screen: their row, its room, not over the first row)
+  wide.brand_h = c.moved("--brand", if bar { 0.0 } else if inset || updating { side_top_inset } else { side_top_web })
   wide.band = c.moved("--band", if bar { 1.0 } else { 0.0 })
   wide.mark = c.moved("--mark", if bar { 1.0 } else { 0.0 })
   // the core's chat last open, else a new chat: there is always a page beside the list (workspace.tsx WorkspaceHome)
@@ -560,7 +561,7 @@ pub fn frame(
     |> ignore
     dock(c, src, w, all, pages, bar, peek, s, col, top, foot)
     if updating {
-      update_button(c, src, bar, s, inset)
+      update_button(c, src, bar, s, inset, top)
     }
   })
   // (the sidebar's edge: on its right edge open, between the bar and the page folded, at the edge of the sidebar shown
