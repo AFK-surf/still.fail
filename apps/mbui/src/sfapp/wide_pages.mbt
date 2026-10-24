@@ -34,8 +34,6 @@ fn desk_pages() -> @sfdesk.Pages {
     sheet: fn() { sheet_open() },
     lower: fn() { lower_sheet() },
     home: fn() { home() },
-    new_workspace: fn() { open_new_workspace() },
-    answer: fn(src, account, id, join, name) { respond_invitation(src, account, id, join, name) },
   }
 }
 

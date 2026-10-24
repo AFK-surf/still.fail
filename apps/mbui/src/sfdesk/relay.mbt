@@ -50,11 +50,16 @@ fn relay_dialog(c : @ui.Ctx, src : Source) -> Unit {
   if !shown && !relaying.busy {
     relay_reset()
   }
-  match relay_focus.val {
-    "" => ()
-    key => {
-      c.focus_editor(key)
+}
+
+///|
+/// Editor `key` given the focus as it is drawn where it is asked to be (autoFocus: in the dialog, whose ids its are).
+fn relay_focused(c : @ui.Ctx, key : String) -> Unit {
+  if relay_focus.val == key {
+    if c.has_focus(c.id(key)) {
       relay_focus.val = ""
+    } else {
+      c.focus_editor(key)
     }
   }
 }
@@ -80,6 +85,7 @@ fn relay_body(c : @ui.Ctx, src : Source, view : Json?, link : String?, picked : 
     }
     if picked is None {
       @sf.input(c, "relay/search", placeholder=@sf.t("web-main.relay.searchOrLink"), field=relaying.query) |> ignore
+      relay_focused(c, "relay/search")
     }
     match (link, picked) {
       (Some(_), _) =>
@@ -112,6 +118,7 @@ fn relay_body(c : @ui.Ctx, src : Source, view : Json?, link : String?, picked : 
       c.box(style=relay_note_field, fn() {
         c.text(@sf.t("web-main.relay.note"), style=relay_note_label) |> ignore
         @sf.input(c, "relay/note", placeholder=@sf.t("web-main.relay.notePlaceholder"), field=relaying.note) |> ignore
+        relay_focused(c, "relay/note")
       })
       |> ignore
     }

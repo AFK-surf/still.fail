@@ -1230,11 +1230,22 @@ test "wide: the rail as the web's: the stations their glyph and how they are; th
   t.frame()
   assert_true(t.find("新建 workspace") is Some(_), msg=t.words().map(fn(w) { w.0 }).join("|"))
   assert_true(t.find("添加另一个账号") is Some(_))
-  // 新建 workspace: its sheet
+  // 新建 workspace: its dialog (NewWorkspaceDialog), its name typed and made
   let (mx, my) = t.find("新建 workspace").unwrap()
   t.tap(mx, my)
   t.frame()
-  assert_true(sheet_host.kind == NewWorkspace)
+  assert_true(sheet_host.kind == NoSheet)
+  assert_true(t.find("workspace 是一组人和他们共用的 station。你会成为它的 owner。") is Some(_))
+  t.frame()
+  // (its name's field has the keys as it opens)
+  t.type_text("产品团队")
+  t.frame()
+  let (bx2, by2, bw2, bh2) = t.query(Button, label="新建").unwrap().rect
+  t.tap(bx2 + bw2 / 2.0, by2 + bh2 / 2.0)
+  t.frame()
+  let made = named(calls, "workspace.create")
+  assert_eq(made.length(), 1)
+  assert_eq(text(Some(made[0].params), "name"), "产品团队")
 }
 
 ///|
