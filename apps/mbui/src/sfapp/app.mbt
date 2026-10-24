@@ -676,11 +676,22 @@ fn lock_gate(c : @ui.Ctx, src : Source, w : Workspace, bar? : Bool) -> Bool {
   if !@settings.lock_waiting(core, w.id) {
     return true
   }
+  // (sfpages' page, in the box the frame gives it: over the navigation bar)
+  let page = fn() {
+    c.box(style=gate_fill, fn() {
+      c.box(style=@ui.style(w=Full, h=@sf.grow), fn() {
+        @sfpages.lock_wait_page(c, core, @settings.here_of(core, w.id, w.name))
+      })
+      |> ignore
+      c.box(style=@ui.style(w=Full, h=Fixed(nav_foot())), fn() {  }) |> ignore
+    })
+    |> ignore
+  }
   match bar {
-    None => @settings.lock_wait_page(c, core, @settings.here_of(core, w.id, w.name))
+    None => page()
     Some(invited) =>
       c.box(style=gate_fill, fn() {
-        c.layer(fn() { @settings.lock_wait_page(c, core, @settings.here_of(core, w.id, w.name)) }) |> ignore
+        c.layer(page) |> ignore
         c.layer(fn() { top_bar(c, src, w, None, "all", invited) }) |> ignore
       })
       |> ignore

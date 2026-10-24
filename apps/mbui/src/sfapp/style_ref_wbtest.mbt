@@ -53,41 +53,41 @@ test "styles: the lock's waiting page, every state, drawn as before" {
     }
   }
   inspect(out.to_string(), content=(
-    #|waiting narrow 29605:e17bf923
+    #|waiting narrow 27724:91366517
     #|waiting wide 57504:6bd00d55
-    #|waiting-dark narrow 29433:42533946
+    #|waiting-dark narrow 27570:a09e4fe3
     #|waiting-dark wide 57750:3155287
-    #|finding narrow 23493:903a5afb
+    #|finding narrow 30308:22e7073e
     #|finding wide 60370:955375b1
-    #|finding-dark narrow 23385:9802e5df
+    #|finding-dark narrow 30296:16bb1614
     #|finding-dark wide 60417:2c64412d
-    #|code narrow 26646:665b6f49
+    #|code narrow 24614:aa88264a
     #|code wide 54648:59fb9605
-    #|code-dark narrow 26494:2465df7
+    #|code-dark narrow 24482:c7bb0fb0
     #|code-dark wide 54586:d12d327
-    #|wrong narrow 28067:fdbb9ee6
+    #|wrong narrow 26035:36754569
     #|wrong wide 56153:329e8a6
-    #|wrong-dark narrow 27963:44e53e06
+    #|wrong-dark narrow 25951:fe40cd39
     #|wrong-dark wide 56085:f237a1b6
-    #|checking narrow 26663:2136f700
+    #|checking narrow 32453:e091291f
     #|checking wide 62530:44566708
-    #|checking-dark narrow 26511:6b1d8240
+    #|checking-dark narrow 32411:6defb1e0
     #|checking-dark wide 62556:4c6fc953
-    #|none narrow 29087:1becf067
+    #|none narrow 27190:3bcb3c3c
     #|none wide 56968:53bb3ac4
-    #|none-dark narrow 28923:36bd82b0
+    #|none-dark narrow 27044:fcfc9e4e
     #|none-dark wide 57218:d479fbce
-    #|failed narrow 24919:35145563
+    #|failed narrow 23075:226acefd
     #|failed wide 52764:7c17502b
-    #|failed-dark narrow 24835:49180586
+    #|failed-dark narrow 23009:273775f1
     #|failed-dark wide 53046:1e0185d3
-    #|refused narrow 27203:2923ffca
+    #|refused narrow 25395:f783c79a
     #|refused wide 55122:dd5f8fc
-    #|refused-dark narrow 27155:491dad75
+    #|refused-dark narrow 25365:1aa74470
     #|refused-dark wide 55386:dcfb1a56
-    #|nocode narrow 28291:d4c2328d
+    #|nocode narrow 27724:91366517
     #|nocode wide 57504:6bd00d55
-    #|nocode-dark narrow 28139:df21ec9e
+    #|nocode-dark narrow 27570:a09e4fe3
     #|nocode-dark wide 57750:3155287
     #|
 
