@@ -1350,6 +1350,9 @@ test("input as an iOS Simulator takes it: the left button a finger (from an edge
   assert.deepEqual(sim.ops(key("up", "KeyH", 12)), []);
   assert.deepEqual(sim.ops(key("down", "KeyL", 4)), [{ op: "button", name: "lock" }]);
   assert.deepEqual(sim.ops(key("down", "KeyK", 4)), [{ op: "button", name: "keyboard" }]);
+  assert.deepEqual(sim.ops(key("down", "KeyH", 14)), [{ op: "button", name: "app_switcher" }]);
+  // ⌃⌘ with another key is that key, ⌃⌘ round it.
+  assert.deepEqual(sim.ops(key("down", "KeyL", 6))[0], { op: "key", type: "down", usage: 0xe0 });
   // Text: a US keyboard's keys, shift round what needs it; anything one does not type, pasted whole.
   assert.deepEqual(sim.ops({ t: "text", text: "a!" }), [
     { op: "key", type: "down", usage: 0x04 }, { op: "key", type: "up", usage: 0x04 },

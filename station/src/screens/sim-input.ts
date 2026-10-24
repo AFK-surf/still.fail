@@ -1,14 +1,14 @@
 // A person's input (source.ts `ScreenInput`) as an iOS Simulator takes it (simulator.ts; still.fail Helper's
 // SimulatorView.swift posts it): the left button held is a finger on the screen, a wheel a finger dragging, a key its USB
 // HID usage, typed text keys of a US keyboard (anything else pasted). Simulator.app's own shortcuts press the device's
-// buttons: ⌘⇧H home, ⌘L lock, ⌘K the software keyboard.
+// buttons: ⌘⇧H home, ⌃⌘⇧H the app switcher, ⌘L lock, ⌘K the software keyboard (the app's buttons send them).
 import type { ScreenInput } from "./source.ts";
 
 export type SimOp =
   | { op: "touch"; type: "begin" | "move" | "end"; x: number; y: number; edge?: number }
   | { op: "scroll"; x: number; y: number; dx: number; dy: number }
   | { op: "key"; type: "down" | "up"; usage: number }
-  | { op: "button"; name: "home" | "lock" | "keyboard" }
+  | { op: "button"; name: "home" | "app_switcher" | "lock" | "keyboard" }
   | { op: "paste"; text: string };
 
 /// A page's KeyboardEvent.code → the USB HID keyboard usage (page 7).
@@ -90,9 +90,10 @@ export class SimInput {
       return [{ op: "key", type: down ? "down" : "up", usage }];
     }
     // Simulator.app's shortcuts for the device's buttons.
-    const meta = (mods & 4) !== 0, shift = (mods & 8) !== 0, others = (mods & 3) !== 0;
-    if (meta && !others) {
-      const button = shift && code === "KeyH" ? "home" : !shift && code === "KeyL" ? "lock" : !shift && code === "KeyK" ? "keyboard" : null;
+    const meta = (mods & 4) !== 0, shift = (mods & 8) !== 0, ctrl = (mods & 2) !== 0, alt = (mods & 1) !== 0;
+    if (meta && !alt) {
+      const button = ctrl ? (shift && code === "KeyH" ? "app_switcher" : null)
+        : shift && code === "KeyH" ? "home" : !shift && code === "KeyL" ? "lock" : !shift && code === "KeyK" ? "keyboard" : null;
       if (button !== null) return down ? [{ op: "button", name: button }] : [];
     }
     // A key that comes with modifiers not held before it (a phone's keys row) has them pressed round it.

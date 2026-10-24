@@ -277,3 +277,5 @@ globalStyle(`${dropMarks} > svg`, {
 });
 // A sheet hides the one under it.
 globalStyle(`${dropMarks} > svg > path:first-of-type`, { fill: `light-dark(${vars.canvas}, ${vars.raised})` });
+/** A station's screen in its tab (screen/ScreenViewer.tsx `panel`): the viewer over the whole of the pane. */
+export const sideScreen = style({ position: "relative", flex: "1", minHeight: "0", overflow: "hidden" });

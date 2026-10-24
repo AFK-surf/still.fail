@@ -7,14 +7,18 @@
 // With a mouse it is a file opened's page: the bar along the top (the way back, the screen's name, what the core says
 // of the view and of the connection, 只看/控制, a window of its own), always there, the picture below it: what is at
 // the top of the screen (its windows' title bars) is never under it. On a phone: frosted bars above and below the
-// picture (the way back and the name; 只看/控制 and the keyboard), always there.
+// picture (the way back and the name; 只看/控制 and the keyboard), always there. Beside a chat (a tab of its side panel,
+// `panel`) its tab names it: its bar has only the tools, and a way to its own page.
+//
+// A simulator's device buttons (主屏幕, 多任务, 锁屏, the software keyboard) and a picture of it: with a mouse a column
+// beside the device, on a phone the row over the foot (where a desktop's keys row is).
 //
 // While driving it, its clipboard goes both ways and files go to its machine (Transfer.tsx): a copy made on it comes
 // onto this device's clipboard, a paste here is pasted there, a file dropped on it (or picked) is put where it says.
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { core } from "../core/react.ts";
 import type { ScreenViewState } from "../core/shapes.ts";
-import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, Chat, ChevronLeft, Close, Cursor, Eye, Keyboard, Landscape, More, Paste, Trackpad, Trash, Upload } from "@stillfail/ui/icons.tsx";
+import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, Camera, Chat, ChevronLeft, Close, Cursor, Expand, Eye, Keyboard, Landscape, More, Paste, Power, Trackpad, Trash, Upload } from "@stillfail/ui/icons.tsx";
 import { useAct, useToast } from "@stillfail/ui/toast.tsx";
 import { ViewerBar } from "@stillfail/ui/viewer/ViewerBar.tsx";
 import { panelEdge } from "@stillfail/ui/styles/controls.css.ts";
@@ -43,7 +47,7 @@ const tell = (name: string, params: Record<string, unknown>) => { core().call(na
 
 const newName = () => (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function" ? crypto.randomUUID() : `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`);
 
-export function ScreenViewer({ station, screen, backLabel, onBack, onWindow, phone = false }: {
+export function ScreenViewer({ station, screen, backLabel, onBack, onWindow, phone = false, panel }: {
   /** The station's address (`<workspace>/<id>`). */
   station: string;
   /** The screen's id on it (`desktop`, `browser:<target>`). */
@@ -54,11 +58,15 @@ export function ScreenViewer({ station, screen, backLabel, onBack, onWindow, pho
   onWindow?: (() => void) | undefined;
   /** The phone's way: bars above and below, fingers, the keyboard on asking. */
   phone?: boolean;
+  /** Beside a chat, in a tab of its side panel (named there): its page opened instead (`onExpand`). */
+  panel?: { onExpand: () => void } | undefined;
 }) {
   const stage = useRef<HTMLDivElement>(null);
   const picture = useRef<HTMLDivElement>(null);
   const canvas = useRef<HTMLCanvasElement>(null);
   const pointer = useRef<HTMLSpanElement>(null);
+  /** A simulator's buttons beside the device, with a mouse (placed with the picture). */
+  const device = useRef<HTMLDivElement>(null);
   const keys = useRef<HTMLTextAreaElement>(null);
   /** This page's name for the view open now (each opening its own). */
   const view = useRef("");
@@ -147,7 +155,8 @@ export function ScreenViewer({ station, screen, backLabel, onBack, onWindow, pho
   const drop = driving ? shown?.drop : undefined;
 
   /** The stage's size, and the picture fitted in it, whole, in the middle (letterboxed). */
-  const room = useCallback(() => ({ width: stage.current?.clientWidth ?? 0, height: stage.current?.clientHeight ?? 0 }), []);
+  // A simulator's buttons beside the device take their column on both sides, the device staying in the middle.
+  const room = useCallback(() => ({ width: Math.max(0, (stage.current?.clientWidth ?? 0) - (device.current ? 2 * DEVICE_ROOM : 0)), height: stage.current?.clientHeight ?? 0 }), []);
   const fit = useCallback(() => fitIn(room(), size.current.width, size.current.height), [room]);
   /** The picture where it is drawn: fitted, and zoomed on a phone. */
   const place = useCallback(() => {
@@ -159,8 +168,15 @@ export function ScreenViewer({ station, screen, backLabel, onBack, onWindow, pho
     const shown = zoom.current.shown(f);
     p.style.width = `${Math.round(shown.width)}px`;
     p.style.height = `${Math.round(shown.height)}px`;
-    p.style.left = `${Math.round(shown.left)}px`;
+    const left = shown.left + (device.current ? DEVICE_ROOM : 0);
+    p.style.left = `${Math.round(left)}px`;
     p.style.top = `${Math.round(shown.top)}px`;
+    // The buttons by the device's right edge, at its top (the stage's place in the viewer added).
+    const d = device.current, s = stage.current;
+    if (d && s) {
+      d.style.left = `${Math.round(s.offsetLeft + left + shown.width + DEVICE_GAP)}px`;
+      d.style.top = `${Math.round(s.offsetTop + shown.top)}px`;
+    }
   }, [fit, room]);
   useLayoutEffect(() => {
     const s = stage.current;
@@ -169,6 +185,9 @@ export function ScreenViewer({ station, screen, backLabel, onBack, onWindow, pho
     watch.observe(s);
     return () => watch.disconnect();
   }, [place]);
+
+  // A simulator's buttons come (or go) beside the device: it is fitted again.
+  useLayoutEffect(place, [place, touchscreen, phone, phase]);
 
   /** The station's pointer where it says, and the mouse's own in its shape while it drives here. */
   const drawPointer = useCallback(() => {
@@ -367,6 +386,39 @@ export function ScreenViewer({ station, screen, backLabel, onBack, onWindow, pho
   const sendCombo = (c: Combo) => {
     for (const kind of ["down", "up"] as const) tell("screen.input", { view: view.current, input: { t: "key", kind, key: c.key, code: c.code, mods: c.mods } });
   };
+  // A simulator's button: Simulator.app's shortcut for it, as the station takes it (sim-input.ts).
+  const press = (b: DeviceButton) => {
+    for (const kind of ["down", "up"] as const) tell("screen.input", { view: view.current, input: { t: "key", kind, key: b.key, code: b.code, mods: b.mods } });
+  };
+  // A picture of it: the one shown, as drawn (as large as the view is asked), saved as a PNG.
+  const shoot = () => {
+    canvas.current?.toBlob((blob) => {
+      if (!blob) return;
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      const at = new Date();
+      const pad = (n: number) => String(n).padStart(2, "0");
+      a.download = `${title} ${at.getFullYear()}-${pad(at.getMonth() + 1)}-${pad(at.getDate())} ${pad(at.getHours())}.${pad(at.getMinutes())}.${pad(at.getSeconds())}.png`;
+      a.click();
+      setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+      toast(t("web-pages.screen.device.shotSaved"));
+    }, "image/png");
+  };
+  const deviceButtons = (className: string) => (
+    <>
+      {/* On a phone its own keyboard types (the device's hardware keyboard, which puts its software one away): not this. */}
+      {DEVICE_BUTTONS.filter((b) => !phone || b.name !== "keyboard").map((b) => (
+        <Tip key={b.name} label={`${t(`web-pages.screen.device.${b.name}`)}  ${b.shortcut}`}>
+          <button type="button" className={className} aria-label={t(`web-pages.screen.device.${b.name}`)} disabled={!driving}
+            // A phone's keyboard stays up: the field keeps the focus.
+            onPointerDown={(e) => e.preventDefault()} onClick={() => press(b)}>{b.icon}</button>
+        </Tip>
+      ))}
+      <Tip label={t("web-pages.screen.device.shot")}>
+        <button type="button" className={className} aria-label={t("web-pages.screen.device.shot")} disabled={!drawn} onClick={shoot}><Camera size={18} /></button>
+      </Tip>
+    </>
+  );
   // The screen's display scale, while driving one whose station changes it (Windows): set there, said back.
   const scale = driving ? shown?.scale : undefined;
   const setScale = (percent: number) => tell("screen.input", { view: view.current, input: { t: "scale", percent } });
@@ -390,7 +442,7 @@ export function ScreenViewer({ station, screen, backLabel, onBack, onWindow, pho
 
   return (
     <div ref={viewerEl} className={css.viewer} data-phone={phone || undefined} data-full={(phone && full) || undefined}
-      data-keys={(phone && !over && driving && (!full || typing)) || undefined} data-phase={phase}
+      data-keys={(phone && !over && (touchscreen ? !full : driving && (!full || typing))) || undefined} data-phase={phase}
       onDragOver={(e) => { if (drop && e.dataTransfer.types.includes("Files")) { e.preventDefault(); e.dataTransfer.dropEffect = "copy"; setDragging(true); } }}
       onDragLeave={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setDragging(false); }}
       onDrop={(e) => { if (!drop || !e.dataTransfer.files.length) return; e.preventDefault(); setDragging(false); sendFiles([...e.dataTransfer.files]); }}>
@@ -403,6 +455,9 @@ export function ScreenViewer({ station, screen, backLabel, onBack, onWindow, pho
           autoCapitalize="off" autoCorrect="off" autoComplete="off" spellCheck={false}
           onFocus={() => setTyping(true)} onBlur={() => setTyping(false)} />
       </div>
+      {touchscreen && !phone && !over && (
+        <div ref={device} className={css.device} role="toolbar" aria-orientation="vertical" aria-label={t("web-pages.screen.device")}>{deviceButtons(css.deviceButton)}</div>
+      )}
       {dragging && drop && <DropVeil title={title} drop={drop} />}
       {copied && driving && <CopiedNote clip={copied} onDone={(put) => { setCopied(null); if (put) toast(t("web-pages.screen.copied")); }} />}
       {sendsShown && drop && (
@@ -432,7 +487,10 @@ export function ScreenViewer({ station, screen, backLabel, onBack, onWindow, pho
             {tab.chat && <button type="button" className={css.back} aria-label={t("web-pages.screen.openChat", { title: tab.chat.title })} onClick={tab.chat.open}><Chat size={18} /></button>}
             {tab.close && <button type="button" className={css.back} aria-label={t("web-pages.screen.close")} disabled={tab.closing} onClick={tab.close}><Trash size={18} /></button>}
           </header>
-          {!over && driving && (!full || typing) && (
+          {!over && touchscreen && !full && (
+            <div className={css.keysRow} role="toolbar" aria-label={t("web-pages.screen.device")}>{deviceButtons(css.rowKey)}</div>
+          )}
+          {!over && driving && !touchscreen && (!full || typing) && (
             <div className={css.keysRow} role="toolbar" aria-label={t("web-pages.screen.keysRow")}>
               {ROW_KEYS.map((k) => {
                 const on = k.mod !== undefined && (held & k.mod) !== 0;
@@ -518,6 +576,16 @@ export function ScreenViewer({ station, screen, backLabel, onBack, onWindow, pho
             </div>
           )}
         </>
+      ) : panel ? (
+        <header className={css.panelBar}>
+          {over ? <span /> : takeOver ? <span className={css.takeOverTools}>{others}{takeOverButton}</span> : modes}
+          <span className={css.panelTools}>
+            {viewTools}
+            <Tip label={t("web-pages.screen.expand")}>
+              <button type="button" className={css.panelExpand} aria-label={t("web-pages.screen.expand")} onClick={panel.onExpand}><Expand size={16} /></button>
+            </Tip>
+          </span>
+        </header>
       ) : (
         <ViewerBar back={{ label: backLabel, onClick: onBack }} name={title} meta={meta}
           tools={over ? undefined : takeOver ? <span className={css.takeOverTools}>{others}{takeOverButton}</span> : <>{viewTools}{modes}</>} />
@@ -539,6 +607,37 @@ const ROW_KEYS: { label: string; name?: string; key?: string; code?: string; mod
   { label: "", name: "web-pages.screen.key.down", key: "ArrowDown", code: "ArrowDown", icon: <ArrowDown size={16} /> },
   { label: "", name: "web-pages.screen.key.right", key: "ArrowRight", code: "ArrowRight", icon: <ArrowRight size={16} /> },
 ];
+
+/** How far a simulator's buttons are from the device, and the column they take (theirs and the gap). */
+const DEVICE_GAP = 12;
+const DEVICE_ROOM = 40 + 2 * DEVICE_GAP;
+
+type DeviceButton = { name: "home" | "appSwitcher" | "lock" | "keyboard"; key: string; code: string; mods: number; shortcut: string; icon: React.ReactNode };
+/** A simulator's buttons, each as Simulator.app's shortcut presses it (mods: 2 ⌃, 4 ⌘, 8 ⇧). */
+const DEVICE_BUTTONS: DeviceButton[] = [
+  { name: "home", key: "h", code: "KeyH", mods: 4 | 8, shortcut: "⇧⌘H", icon: <HomeIcon /> },
+  { name: "appSwitcher", key: "h", code: "KeyH", mods: 2 | 4 | 8, shortcut: "⌃⇧⌘H", icon: <AppsIcon /> },
+  { name: "lock", key: "l", code: "KeyL", mods: 4, shortcut: "⌘L", icon: <Power size={18} /> },
+  { name: "keyboard", key: "k", code: "KeyK", mods: 4, shortcut: "⌘K", icon: <Keyboard size={18} /> },
+];
+
+/** 主屏幕: a house, drawn as the icons are (24 box, round 1.75 lines). */
+function HomeIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M4 10.5L12 4L20 10.5V18Q20 20 18 20H14.5V14.5H9.5V20H6Q4 20 4 18Z" />
+    </svg>
+  );
+}
+/** 多任务: the apps' cards side by side, the middle one in front. */
+function AppsIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <rect x="8" y="4" width="8" height="16" rx="2" />
+      <path d="M5 6.5V17.5 M19 6.5V17.5" />
+    </svg>
+  );
+}
 
 /** The station's pointer: an arrow, its tip at the point. */
 function Arrow() {

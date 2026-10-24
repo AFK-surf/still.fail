@@ -37,7 +37,7 @@ import { stamp } from "../src/demo/fixtures.ts";
 import { markdown } from "../../client/core-ts/src/markdown.ts";
 import type { Shared } from "../src/shareIn.ts";
 import { ScreenViewer } from "../src/screen/ScreenViewer.tsx";
-import { OUTDATED, SCREENS_LACKING, adbLinksDemo, screenLinksDemo, screensDemo, type ViewStory } from "./screens.ts";
+import { OUTDATED, SCREENS_LACKING, adbLinksDemo, screenLinksDemo, screensDemo, simulatorLinkDemo, type ViewStory } from "./screens.ts";
 import { LONG_COMMAND, libraryDemo, vaultDemo } from "./vault.ts";
 import { filesDemo, TRANSFERS } from "./files.ts";
 import { cursorPickDemo, installDemo, installFlowDemo, kimiMethodDemo } from "./install.ts";
@@ -349,10 +349,12 @@ const fullStation = (): DemoExtension => together(
 );
 /** One of the demo station's screens seen, its view going as `story` says (screens.ts), alone on the window; `h264`: in
  * H.264 where the browser encodes it. */
-const screenView = (story: ViewStory, phone = false, h264 = false): Pick<Story, "render" | "demo"> => ({
+const screenView = (story: ViewStory, phone = false, h264 = false, screen = "desktop"): Pick<Story, "render" | "demo"> => ({
   demo: screensDemo(story, undefined, h264),
-  render: () => stage(<ScreenViewer station="demo/local" screen="desktop" backLabel="返回" onBack={noop} onWindow={phone ? undefined : noop} phone={phone} />),
+  render: () => stage(<ScreenViewer station="demo/local" screen={screen} backLabel="返回" onBack={noop} onWindow={phone ? undefined : noop} phone={phone} />),
 });
+/** A simulator booted on the demo station (an iPhone's home screen), seen as `screenView`'s. */
+const SIMULATOR = "simulator:8A1704F6-57D2-40B0-A330-B98038CB17C3";
 /** With a mouse, the pointer brought to the bar at the top. */
 const toTheBar: Step[] = [{ move: [640, 20] }];
 /** A chat row of the demo's, the made-up ones copied from (kept from its first view, whatever is typed later). */
@@ -1126,6 +1128,8 @@ export const stories: Story[] = [
   { id: "screen-denied", group: "屏幕", title: "屏幕 · 没有权限", ...screenView("denied") },
   { id: "screen-failed", group: "屏幕", title: "屏幕 · 没连上", ...screenView("failed") },
   { id: "screen-phone", group: "屏幕", title: "屏幕 · 手机", phone: true, ...screenView("live", true) },
+  { id: "screen-simulator", group: "屏幕", title: "屏幕 · iOS 模拟器", ...screenView("live", false, false, SIMULATOR), steps: [{ hover: '[aria-label="多任务"]' }] },
+  { id: "screen-simulator-phone", group: "屏幕", title: "屏幕 · iOS 模拟器 · 手机", phone: true, ...screenView("live", true, false, SIMULATOR) },
   { id: "screen-stats", group: "屏幕", title: "屏幕 · 连接统计（采集方式、硬编）", ...screenView("live", false, true), steps: [...toTheBar, { click: '[aria-label="连接"]' }] },
   { id: "screen-scale", group: "屏幕", title: "屏幕 · Windows · 控制中心 › 缩放", ...screenView("windows"), steps: [...toTheBar, { click: 'button:has-text("控制中心")' }, { click: '[role="menuitem"]:has-text("缩放")' }] },
   { id: "screen-phone-scale", group: "屏幕", title: "屏幕 · Windows · 手机 · 缩放", phone: true, ...screenView("windows", true), steps: [{ click: '[aria-label="缩放"]' }] },
@@ -1145,6 +1149,8 @@ export const stories: Story[] = [
   { id: "app-screen-tab-menu", group: "屏幕", title: "station · 浏览器标签页 · 控制中心", app: true, demo: screensDemo(), steps: [{ click: '[aria-label^="Station"]' }, { click: 'a[href$="/screen/browser%3A7F3A9C"]' }, { click: 'button:has-text("控制中心")' }] },
   { id: "app-chat-screen-links", group: "屏幕", title: "对话里的屏幕链接", app: true, demo: screenLinksDemo },
   { id: "phone-chat-screen-links", group: "屏幕", title: "手机 · 对话里的屏幕链接", app: true, phone: true, demo: screenLinksDemo },
+  { id: "app-chat-simulator-link", group: "屏幕", title: "对话里的模拟器链接 · 在侧边打开", app: true, demo: simulatorLinkDemo, steps: [{ hover: 'text=iOS 模拟器 · 1179×2556' }] },
+  { id: "app-chat-simulator-side", group: "屏幕", title: "模拟器在对话侧边", app: true, demo: simulatorLinkDemo, steps: [{ hover: 'a[href*="simulator"]' }, { click: '[aria-label="在侧边打开"]' }] },
   { id: "app-chat-adb-link", group: "屏幕", title: "对话里的共享调试链接", app: true, demo: adbLinksDemo(false) },
   { id: "phone-chat-adb-link", group: "屏幕", title: "手机 · 对话里的共享调试链接（已共享）", app: true, phone: true, demo: adbLinksDemo(true) },
   { id: "phone-station-screens", group: "屏幕", title: "手机 · station 的屏幕", app: true, phone: true, demo: screensDemo(), steps: [{ click: '[aria-label="返回"]' }, { click: '[aria-label="设置"]' }, { text: "Station" }, { text: "Studio" }] },

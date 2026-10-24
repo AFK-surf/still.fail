@@ -211,7 +211,10 @@ The device is a touchscreen (sim-input.ts): the left button held is a finger (on
 the top 2% of the screen is a system gesture: the home indicator's swipe, the pull down), a wheel a finger dragging,
 a key its USB HID usage by its `code` (modifiers only named in `mods`, as a phone's keys row sends them, pressed round
 it), typed text a US keyboard's keys and anything else pasted (the device's pasteboard set with `simctl pbcopy`, then
-⌘V). Simulator.app's shortcuts press its buttons: ⌘⇧H home, ⌘L lock, ⌘K the software keyboard. The web client touches
+⌘V). Simulator.app's shortcuts press its buttons: ⌘⇧H home, ⌃⌘⇧H the app switcher, ⌘L lock, ⌘K the software
+keyboard. The web viewer has them as buttons too (a column beside the device with a mouse, a row over the foot on a
+phone), and one more that saves the picture shown as a PNG (as large as the view is, not the device's own pixels).
+The device is not turned: SimulatorKit takes an orientation only through Simulator.app. The web client touches
 a simulator directly on a phone (no trackpad to choose), a finger held being the device's long press; the mbui app
 drives it as any screen for now (its 触控板 switched off for direct touch). No clipboard,
 cursor or dropped files yet. `station/side/screen-simulator.test.ts` makes and boots a simulator of its own, views it
@@ -332,6 +335,11 @@ the list, `gone` once the list has it no more); within a sentence, its title. A 
 in its card: a preview view (JPEG, about the card's width in device pixels) while the card is on the screen and the
 app shown, each frame acknowledged half a second after the one before, so about two pictures a second; its mark until
 the first comes.
+
+On a chat's page (web: pages/ChatPage.tsx) a card not `gone` also opens its screen beside the chat, from a button at
+the end of its words: a tab of the side panel (`screen:["<station>","<id>"]`, client/core-ts/src/chat-tabs.ts), named
+as the card is, its viewer's bar only 只看/控制 and its tools, and a way to the screen's own page. Its view is open
+while its tab is in front, so someone debugging an app sees and drives its simulator while the chat goes on.
 
 ### Agents on a screen (station/src/tools/computer.ts)
 
