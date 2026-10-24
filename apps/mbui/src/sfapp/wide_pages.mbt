@@ -32,7 +32,6 @@ fn desk_pages() -> @sfdesk.Pages {
     keys: fn(c, src, w, escape) { page_keys(c, src, w, escape) },
     offered: fn(c, src) { chat_offered(c, src) },
     core: fn(src, w) { settings_core(src, w) },
-    gate: fn(c, src, w) { lock_gate(c, src, w) |> ignore },
     sheet: fn() { sheet_open() },
     lower: fn() { lower_sheet() },
     home: fn() { home() },

@@ -36,7 +36,6 @@ using @settings {
   open_add_people,
   open_mark_pick,
   opening_lock,
-  pair_steps,
   place_action,
   policy_forms,
   pref,
