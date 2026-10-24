@@ -9,6 +9,7 @@ import { fileURLToPath } from 'node:url';
 import { createServer } from 'vite';
 const playwright = await import(process.env.PLAYWRIGHT_MODULE || 'playwright');
 const out = process.env.SHOTS;
+const engine = process.env.BROWSER || 'chromium';
 const fixture = new URL('../../web/pick-quote-check.tsx', import.meta.url);
 const html = new URL('../../web/pick-quote-check.html', import.meta.url);
 let server, browser, madeFixture = false, madeHtml = false;
@@ -30,15 +31,26 @@ createRoot(root).render(<DemoApp phone />);
   await server.listen();
   const base = `http://127.0.0.1:${server.httpServer.address().port}`;
   if (out) await mkdir(out, { recursive: true });
-  browser = await playwright.chromium.launch();
+  browser = await playwright[engine].launch({ executablePath: process.env.BROWSER_EXECUTABLE });
   const context = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true, locale: 'zh-CN' });
-  await context.grantPermissions(['clipboard-read', 'clipboard-write'], { origin: base });
+  if (engine === 'chromium') await context.grantPermissions(['clipboard-read', 'clipboard-write'], { origin: base });
   const page = await context.newPage();
   const errors = [];
   page.on('pageerror', (e) => { errors.push(e.message); console.error(e.message); });
   await page.goto(base + '/pick-quote-check.html');
-  const cdp = await context.newCDPSession(page);
-  const touch = (type, x, y) => cdp.send('Input.dispatchTouchEvent', { type, touchPoints: type === 'touchEnd' ? [] : [{ x, y }] });
+  const cdp = engine === 'chromium' ? await context.newCDPSession(page) : null;
+  // WebKit has no CDP touch injection. Dispatch the long-press events to exercise the same picking code;
+  // use actual mouse input for its handles below. This does not replace an iPhone gesture check.
+  const touch = (type, x, y) => cdp
+    ? cdp.send('Input.dispatchTouchEvent', { type, touchPoints: type === 'touchEnd' ? [] : [{ x, y }] })
+    : page.evaluate(({ type, x, y }) => {
+      if (type === 'touchStart') window.checkTouchTarget = document.elementFromPoint(x, y);
+      const target = window.checkTouchTarget;
+      const points = type === 'touchEnd' ? [] : [{ identifier: 1, target, clientX: x, clientY: y }];
+      const event = new Event(type.toLowerCase(), { bubbles: true, cancelable: true });
+      Object.defineProperty(event, 'touches', { value: points });
+      target.dispatchEvent(event);
+    }, { type, x, y });
   const shot = async (name) => {
     if (!out) return;
     for (const theme of ['light', 'dark']) {
@@ -104,13 +116,59 @@ createRoot(root).render(<DemoApp phone />);
   assert.equal(lifted.text, widened.text, 'lifting keeps it');
   assert.equal(lifted.handles, 2, 'both handles show');
   assert.deepEqual(lifted.bar, ['引用', '复制', '全选'], 'the bar offers 引用, 复制, 全选');
+  // Drag both knobs: a small movement keeps the endpoint on its line rather than jumping to a hit-tested handle.
+  for (const which of ['start', 'end']) {
+    const handle = page.locator(`span[data-pick][data-end="${which}"]`);
+    const box = await handle.boundingBox();
+    const x = box.x + box.width / 2, y = which === 'start' ? box.y - 5 : box.y + box.height + 5;
+    const prior = (await state()).text;
+    const down = async () => { if (cdp) await touch('touchStart', x, y); else { await page.mouse.move(x, y); await page.mouse.down(); } };
+    const move = (to) => cdp ? touch('touchMove', to, y) : page.mouse.move(to, y);
+    const up = () => cdp ? touch('touchEnd') : page.mouse.up();
+    await down();
+    await move(x + 1);
+    await up();
+    await page.waitForTimeout(100);
+    assert.equal((await state()).text, prior, 'a slight knob movement does not change the passage');
+    await down();
+    await move(x + (which === 'start' ? -16 : 16));
+    await up();
+    await page.waitForTimeout(100);
+    assert.ok((await state()).text.length > prior.length, `${which} knob extends the passage`);
+  }
+  assert.ok(await page.locator('[data-pick-paint] > span').count() > 0, 'selection rectangles paint independently of CSS highlights');
+  // Move the end back across lines to the first selected line, keeping the knob's grab offset.
+  const target = await page.evaluate(() => {
+    const range = [...CSS.highlights.get('chat-picked')][0];
+    const r = [...range.getClientRects()].find((r) => r.width > 20);
+    return { x: r.right - 8, y: r.top + r.height / 2, bottom: r.bottom };
+  });
+  const endHandle = page.locator('span[data-pick][data-end="end"]');
+  const endBox = await endHandle.boundingBox();
+  const knob = { x: endBox.x + endBox.width / 2, y: endBox.y + endBox.height + 5 };
+  if (cdp) {
+    await touch('touchStart', knob.x, knob.y);
+    await touch('touchMove', target.x, target.y + endBox.height / 2 + 5);
+    await touch('touchEnd');
+  } else {
+    await page.mouse.move(knob.x, knob.y);
+    await page.mouse.down();
+    await page.mouse.move(target.x, target.y + endBox.height / 2 + 5);
+    await page.mouse.up();
+  }
+  await page.waitForTimeout(100);
+  const movedEnd = await endHandle.boundingBox();
+  assert.ok(Math.abs(movedEnd.y + movedEnd.height - target.bottom) < 2, 'dragging across lines lands on the requested line');
+  const extended = await state();
+  assert.equal(await page.locator('div[data-pick]').evaluate((el) => getComputedStyle(el).webkitUserSelect), 'none', 'the toolbar cannot become a native text selection');
+  assert.equal(await page.locator('div[data-pick] button').first().evaluate((el) => getComputedStyle(el).webkitUserSelect), 'none', 'toolbar buttons cannot become native selections either');
   await shot('web-pick');
 
   // Scrolled: kept, the handles moving with the words.
   await page.evaluate(() => { const list = document.querySelector('[data-check-list]'); list.scrollTop -= 40; list.dispatchEvent(new Event('scroll')); });
   await page.waitForTimeout(300);
   const scrolled = await state();
-  assert.equal(scrolled.text, lifted.text, 'scrolling keeps it');
+  assert.equal(scrolled.text, extended.text, 'scrolling keeps the extended passage');
   assert.ok(Math.abs(scrolled.handleTops[0] - lifted.handleTops[0] - (lifted.scroll - scrolled.scroll)) < 2, `the handles follow (${lifted.handleTops[0]} → ${scrolled.handleTops[0]}, scrolled ${lifted.scroll - scrolled.scroll})`);
   await page.evaluate(() => { const list = document.querySelector('[data-check-list]'); list.scrollTop += 40; list.dispatchEvent(new Event('scroll')); });
   await page.waitForTimeout(300);
