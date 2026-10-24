@@ -487,6 +487,7 @@ fn Ctx::drawn_paint(self : Ctx, i : Int, alpha : Double) -> Bool {
   let i0 = self.ninst
   let h0 = self.next_hit_ids.length()
   let s0 = self.next_scroll_ids.length()
+  let b0 = self.next_bars.length()
   let sc = self.scale
   let ox = n.x + look.ox * n.fw
   let oy = n.y + look.oy * n.fh
@@ -542,6 +543,7 @@ fn Ctx::drawn_paint(self : Ctx, i : Int, alpha : Double) -> Bool {
     self.next_hit_clips.truncate(h0 * clip_n)
     self.next_scroll_ids.truncate(s0)
     self.next_scroll_rects.truncate(s0 * 4)
+    self.next_bars.truncate(b0)
   }
   if !look.is_still() {
     self.transform_insts(i0, self.ninst, ox, oy, look.sx, look.sy, dx, dy, outer, outer_r, outer_s)

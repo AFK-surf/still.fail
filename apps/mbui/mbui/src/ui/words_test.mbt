@@ -200,6 +200,8 @@ test "a press taken by the app scrolls nothing under it: not a box that scrolls 
   slide(250.0, y + 5.0, 50.0, y + 5.0)
   assert_eq(at.val, 0.0)
   assert_eq(t.list_offset(), 0.0)
+  // (the pointer let go along the box's foot: its scroll bar out, scroll_bar.mbt)
+  t.run_for(@ui.scrollbar_fade_ms)
   t.assert_idle()
 }
 

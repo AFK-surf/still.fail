@@ -144,6 +144,8 @@ pub fn composer(
       }
     },
   )
+  // over a chat's messages: their scroll bar keeps clear of it
+  c.floats_over(box)
   // capsule ⇄ box in one motion (useMorph), its height following what it holds; laid out for the other page (a new
   // chat's in the page, a chat's at its foot: dock.tsx), from where it was there to here, one composer changing
   let moved = match composing.roomy {
@@ -1111,7 +1113,7 @@ fn chat_notices(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView) -> Unit {
         })
       }
     }
-    c.box(style=composer_notice_box.then(@ui.style(w=Fixed(width))), fn() {
+    let archived_box = c.box(style=composer_notice_box.then(@ui.style(w=Fixed(width))), fn() {
       c.box(style=composer_notice_line, flow=true, fn() {
         c.text(@sf.t("web-main.archived.notice"), style=composer_notice_words) |> ignore
         let b = c.box(id=restore, fn() {
@@ -1129,7 +1131,7 @@ fn chat_notices(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView) -> Unit {
         None => ()
       }
     })
-    |> ignore
+    c.floats_over(archived_box)
   }
   if v.offline {
     let said = match v.offline_note {
@@ -1141,8 +1143,10 @@ fn chat_notices(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView) -> Unit {
           @sf.t("web-main.chat.offline")
         }
     }
-    c.box(style=composer_notice_box.then(@ui.style(w=Fixed(width))), fn() { c.text(said, style=composer_notice_words) |> ignore })
-    |> ignore
+    let offline_box = c.box(style=composer_notice_box.then(@ui.style(w=Fixed(width))), fn() {
+      c.text(said, style=composer_notice_words) |> ignore
+    })
+    c.floats_over(offline_box)
   }
 }
 

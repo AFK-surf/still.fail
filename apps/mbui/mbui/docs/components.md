@@ -66,6 +66,29 @@ the gallery: every component in its states, light beside dark (`APP=kitdemo`, `M
 - `Ctx::with_direction(Rtl)` (DirectionProvider): rows run from the right, start padding is the right, the arrows
   that move along a row swap, a popover's start is its right.
 
+## Scroll bars (src/ui/scroll_bar.mbt)
+
+Everything that scrolls has the same bar, drawn by mbui, with no call of its own: a list (`Ctx::list`), a box kept
+to a height (`Ctx::capped`), a box scrolled sideways (`Ctx::sideways`; boxes scrolled as one, `across`, one bar along
+the foot of the list they are in). It is still.fail's web's (`web/src/scrollbars.ts`), for every hand:
+
+- **Look.** A thumb 3 wide, round, 2 in from the edge it runs along (the right, or the foot of what scrolls
+  sideways), the theme's words' colour at 26%, 45% while the pointer is on it or holds it; at least 28 long. Over
+  what scrolls, taking no room from it, drawn in its clip after what it holds: what lies over what scrolls lies over
+  its bar too.
+- **Where.** Along what of its edge shows: clear of what floats over its top and its foot and 8 more
+  (`Ctx::floats_over(box)`, said by the box that floats: a page's bar, a composer, a sidebar's bands; and the system's
+  bars over the window's edges), and of the rounding of the corners it is cut by. Where that leaves less than two
+  thumbs, along all of the edge.
+- **When.** While what it is for scrolls, whatever moves it (a finger, the wheel, the keys, a fling, its thumb, the
+  app sending it to a row or gliding it to its end, rows come at the end it follows), and `scrollbar_hold_ms` (900)
+  after; it comes in and fades out over `scrollbar_fade_ms` (200, ease-out). Not where it is first put: sent
+  somewhere before its bar was ever drawn (just shown, its rows just come), it shows none. With a mouse also while
+  the pointer is along its edge (12 in from it) or holds its thumb, and as long after it leaves or lets go.
+- **The hand.** With a mouse its thumb (and 4 round it) is a target as any (what lies over it takes the press): held,
+  dragged, it scrolls what it is for as far as the thumb moves along its track; nothing under it is pressed, no words
+  are picked, the focus stays. A finger sees the bar only as what it is for scrolls, and presses what is under it.
+
 ## Time and motion (src/kit/time.mbt)
 
 Everything in a component that waits or moves goes through one small interface, on the Ctx's clock, so that a Tester

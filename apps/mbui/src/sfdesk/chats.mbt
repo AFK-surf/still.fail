@@ -9,7 +9,7 @@ fn lists_band(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
   let t = @sf.theme()
   let filter = filter_of(src, w.id)
   let (view, _) = chats_of(src, w.id, "all")
-  c.box(style=side_full.then(@ui.style(bg=Data(@sf.mix(closed_ground(), wide.band, t.p.sidebar)))), fn() {
+  let band = c.box(style=side_full.then(@ui.style(bg=Data(@sf.mix(closed_ground(), wide.band, t.p.sidebar)))), fn() {
     side_top(c)
     // in the closed bar, what stands in its top right corner (the filter) 6 from its top and side, the band ending 6
     // under it (Sidebar.css.ts navNew, closed)
@@ -35,7 +35,8 @@ fn lists_band(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
     // with no bell in the rail: 待处理 under 新建对话 (cloud/workspace.tsx SidebarTodo)
     side_todo(c, src, w)
   })
-  |> ignore
+  // over the lists: their scroll bar keeps clear of it (the web's --nav-top)
+  c.floats_over(band)
 }
 
 ///|

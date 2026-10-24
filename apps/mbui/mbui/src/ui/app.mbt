@@ -307,6 +307,8 @@ fn frame_body(c : Ctx, w : Double, h : Double, scale : Double, t : Double) -> Do
   c.next_hit_clips.clear()
   c.next_scroll_ids.clear()
   c.next_scroll_rects.clear()
+  c.next_bars.clear()
+  c.across_seen.clear()
   c.glass_frame()
   c.paint(root, 1.0)
   c.paint_overlays()
@@ -347,9 +349,13 @@ fn frame_body(c : Ctx, w : Double, h : Double, scale : Double, t : Double) -> Do
   let sr = c.scroll_rects
   c.scroll_rects = c.next_scroll_rects
   c.next_scroll_rects = sr
+  let bs = c.bars
+  c.bars = c.next_bars
+  c.next_bars = bs
   c.layers_frame_end()
   c.focus_frame_end()
   c.desk_frame_end()
+  c.bars_frame_end()
   c.sync_ime()
   c.sync_text_menu()
   fx_frame_end(c)
@@ -414,6 +420,7 @@ fn frame_build(c : Ctx, w : Double, h : Double) -> Int {
   c.cur = -1
   c.stuck.clear()
   c.press_owners.clear()
+  c.floating.clear()
   c.back_next = None
   c.back_node_next = -1
   let root = c.alloc(kind_box)
@@ -551,6 +558,7 @@ fn pointer_in(kind : Int, x : Double, y : Double, button : Int, mods : Int) -> U
   // the pointer gone out of the window (7); a secondary button (a right click: its menu's, nothing pressed)
   if kind == 7 {
     c.pointer_left()
+    c.bar_pointer(-1.0, -1.0)
     return
   }
   if button == 2 {
@@ -569,6 +577,27 @@ fn pointer_in(kind : Int, x : Double, y : Double, button : Int, mods : Int) -> U
   }
   if kind == 0 {
     let target = hit_in(c.hit_ids, c.hit_rects, x, y)
+    // a scroll bar's thumb (a mouse's, scroll_bar.mbt): held from here, the press nothing else's (no tap, no words
+    // picked, the focus where it is)
+    if c.bar_press(target) {
+      c.press_down = Some((x, y))
+      c.down = true
+      c.active = 0
+      c.press_x = x
+      c.press_y = y
+      c.press_at = t
+      c.taken_at = t
+      c.last_x = x
+      c.last_y = y
+      c.last_t = t
+      c.press_chain.clear()
+      c.drag_scroll = 0
+      c.claimed = true
+      c.dragging = false
+      c.edge = 0
+      h_request_frame()
+      return
+    }
     // the app's own top row: the window is the host's to move from here (it takes the rest of the press)
     if desk_drags(target) {
       h_window_drag()
@@ -708,10 +737,20 @@ fn pointer_in(kind : Int, x : Double, y : Double, button : Int, mods : Int) -> U
       None => if target == 0 { c.focus = 0 }
     }
   } else if kind == 1 {
+    // a bar's thumb held: what it is for follows the pointer, nothing else sees it move
+    if c.bar_drag != 0 {
+      c.bar_drag_move(x, y)
+      c.last_x = x
+      c.last_y = y
+      c.last_t = t
+      h_request_frame()
+      return
+    }
     // (a finger hovers over nothing: Pointing)
     if pointing() is Mouse {
       c.hover = hit_in(c.hit_ids, c.hit_rects, x, y)
     }
+    c.bar_pointer(x, y)
     if c.down {
       track_x.add(t, x)
       track_y.add(t, y)
@@ -786,7 +825,16 @@ fn pointer_in(kind : Int, x : Double, y : Double, button : Int, mods : Int) -> U
       c.last_x = x
       c.last_t = t
     }
-  } else if kind == 2 {
+  } else if kind == 2 || c.bar_drag != 0 {
+    // a bar's thumb let go (or the press cancelled): its bar shows a while more
+    if c.bar_drag != 0 {
+      c.bar_let_go()
+      c.down = false
+      c.dragging = false
+      c.active = 0
+      h_request_frame()
+      return
+    }
     if c.down {
       track_x.add(t, x)
       track_y.add(t, y)

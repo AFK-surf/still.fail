@@ -70,7 +70,7 @@ fn under_page() -> Page? {
 /// 文件's top bar as a place's (PlacePage.kt TopGlassBar): settings, its name.
 fn files_top_bar(c : @ui.Ctx) -> Unit {
   let t = @sf.theme()
-  c.box(w=Fill(1.0), glass=@sf.glass_bar(), fn() {
+  let glass_top = c.box(w=Fill(1.0), glass=@sf.glass_bar(), fn() {
     // under the status bar (TopGlassBar: windowInsetsPadding(statusBars), then TopBarHeight)
     c.box(dir=Row, w=Fill(1.0), pl=16.0, pr=16.0, pt=status_top(), min_h=top_bar_h(), gap=10.0, align=ACenter, fn() {
       if nav_button(c, "settings", 22.0, key="files-settings") {
@@ -83,7 +83,8 @@ fn files_top_bar(c : @ui.Ctx) -> Unit {
     })
     |> ignore
   })
-  |> ignore
+  // over what runs under it: the scroll bar there keeps clear of it
+  c.floats_over(glass_top)
 }
 
 // ── a drive's page ───────────────────────────────────────────────────────

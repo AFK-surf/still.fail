@@ -34,6 +34,8 @@ test "words sent are in the list the frame they are sent, the core not answering
   assert_eq(sent_rows(), ["o:local:1"])
   assert_true(t.find("先上屏") is Some(_))
   t.run_for(composer_morph_ms)
+  // (and the list's scroll bar, out as it glided to what was sent, gone)
+  t.run_for(@ui.scrollbar_hold_ms + @ui.scrollbar_fade_ms)
   t.assert_idle()
 }
 

@@ -77,7 +77,7 @@ fn top_bar(
 ) -> Unit {
   let t = @sf.theme()
   // frosted glass over the list (the page's paper at 70% over a 24px blur), no line under it
-  c.box(w=Fill(1.0), glass=@sf.glass_bar(), fn() {
+  let glass_top = c.box(w=Fill(1.0), glass=@sf.glass_bar(), fn() {
     // under the status bar (PlacePage.kt TopGlassBar: windowInsetsPadding(statusBars), then TopBarHeight)
     c.box(dir=Row, w=Fill(1.0), pl=16.0, pr=16.0, pt=status_top(), min_h=top_bar_h(), gap=10.0, align=ACenter, fn() {
       if nav_button(c, "settings", 22.0, key="home-settings", said=tr("android-chat.home.settings")) {
@@ -139,7 +139,8 @@ fn top_bar(
     })
     |> ignore
   })
-  |> ignore
+  // over what runs under it: the scroll bar there keeps clear of it
+  c.floats_over(glass_top)
 }
 
 ///|

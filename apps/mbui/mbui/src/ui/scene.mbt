@@ -588,6 +588,10 @@ fn Ctx::paint(self : Ctx, i : Int, alpha_in : Double) -> Unit {
   if clipped {
     push_round_clip(n.x, n.y, n.fw, n.fh, n.radius)
   }
+  // its scroll bar, where what it holds scrolls past it (scroll_bar.mbt): drawn over what it holds, in its clip;
+  // the bars of the boxes in its rows scrolled as one, along its foot
+  let bar = if n.kind == kind_list || (n.sideways && n.id != 0) { self.bar_at(n) } else { None }
+  let across_from = self.across_seen.length()
   let first_inst = self.ninst
   // liquid glass in a group: all of it first, so it merges; text in
   // adaptive liquid glass inked by what is under it
@@ -633,14 +637,18 @@ fn Ctx::paint(self : Ctx, i : Int, alpha_in : Double) -> Unit {
       _ => ()
     }
   }
+  match bar {
+    Some(b) => self.paint_bar(b, alpha)
+    None => ()
+  }
+  if n.kind == kind_list {
+    self.across_bars(n, across_from, alpha)
+  }
   if clipped {
     pop_clip()
   }
   if border_over {
     self.emit_rect(n.x, n.y, n.fw, n.fh, n.radius, 0L, n.border_w, n.border_c, alpha)
     self.notch_last(n)
-  }
-  if n.kind == kind_list {
-    self.paint_scrollbar(n, alpha)
   }
 }

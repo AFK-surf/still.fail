@@ -349,7 +349,7 @@ fn h_feel() -> Int {
 
 ///|
 /// The system whose touches and fields the app has from now on (as @hostapi.platform numbers them: 1 iOS's, 2
-/// Android's), whatever it runs on: a list's fling, its edges' give and its scroll bar, a field's tap, caret, handles
+/// Android's), whatever it runs on: a list's fling and its edges' give, a field's tap, caret, handles
 /// and words picked by a finger. For an app held to one system's original on another (still.fail's Android app on
 /// iOS: 2). Its keys stay the system's own (⌘ on Apple's).
 pub fn feel_as(platform : Int) -> Unit {
