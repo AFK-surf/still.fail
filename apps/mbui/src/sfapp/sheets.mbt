@@ -572,7 +572,7 @@ fn chat_info_sheet(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef) -> Uni
               (Some(v), "") => archive_chat(src, r, v)
               (Some(v), ask) => {
                 close_sheet(c)
-                @settings.confirm(fill("android-chat.archive.ask", [("title", title)]), ask, tr("android-chat.archive"), fn() {
+                @sf.confirm(fill("android-chat.archive.ask", [("title", title)]), ask, tr("android-chat.archive"), fn() {
                   archive_chat(src, r, v)
                 })
               }

@@ -21,6 +21,9 @@ priv struct Config {
   effect_fields : Array[String]
   effect_calls : Array[String]
   effect_methods : Array[String]
+  // package functions that keep what they are given and run it later, never as they are called (an app's presenters:
+  // @sf.confirm(…, fn() { … })): a closure given to one is a callback
+  effect_later : Array[String]
   // an app's component library (web/ui's): its packages, and what they may import (prefixes); nothing else of the app
   library : Array[String]
   library_imports : Array[String]
@@ -61,6 +64,7 @@ fn Config::new(d : @rjson.Value) -> Config {
     effect_fields: strs(be.get("fields"), ["call", "subscribe"]),
     effect_calls: strs(be.get("calls"), build_effect_calls),
     effect_methods: strs(be.get("methods"), build_effect_methods),
+    effect_later: strs(be.get("later"), []),
     library: strs(sect(d, "library").get("roots"), []),
     library_imports: strs(sect(d, "library").get("imports"), ["mbui/", "moonbitlang/"]),
   }

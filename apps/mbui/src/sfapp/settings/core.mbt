@@ -528,7 +528,6 @@ pub fn left(route : Route) -> Unit {
     _ => ()
   }
   close_sheet()
-  menu.up = false
 }
 
 ///|
@@ -555,19 +554,11 @@ pub fn reset() -> Unit {
   builtin_open.clear()
   doc_picked.clear()
   close_sheet()
-  asking.val = None
-  asked.val = None
   sheet.last = None
   sheet.was_up = false
   sheet.height = 0.5
   sheet.on_close = fn() {  }
   sheet.serial = 0
-  menu.items = []
-  menu.selected = -1
-  menu.x = 0.0
-  menu.y = 0.0
-  menu.pick = fn(_) {  }
-  menu.up = false
   frame_core.val = None
   at_root.val = false
   root_top.val = 0.0

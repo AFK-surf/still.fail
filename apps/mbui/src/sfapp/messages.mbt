@@ -535,7 +535,7 @@ fn system_notice(c : @ui.Ctx, src : Source, station : String, m : Message) -> Un
                   let key = "chat.report/" + station + "/" + m.thread.to_string() + "/" + m.seq.to_string()
                   let action = tr("common.report.action")
                   notice_action(c, "notice-report/" + m.ts, action, color, doing(key), fn() {
-                    @settings.confirm(tr("common.report.title"), tr("common.report.lead") + "\n\n" + tr("common.report.sends"), action, fn() {
+                    @sf.confirm(tr("common.report.title"), tr("common.report.lead") + "\n\n" + tr("common.report.sends"), action, fn() {
                       act(
                         src,
                         action,

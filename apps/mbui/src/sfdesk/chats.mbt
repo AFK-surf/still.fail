@@ -934,7 +934,7 @@ pub fn archive_row(c : @ui.Ctx, src : Source, item : ChatItem) -> Unit {
   }
   match item.watch_ask {
     Some(ask) =>
-      @settings.confirm(@sf.t("android-chat.archive.ask", args=[("title", item.title)]), ask, @sf.t("android-chat.archive"), run)
+      @sf.confirm(@sf.t("android-chat.archive.ask", args=[("title", item.title)]), ask, @sf.t("android-chat.archive"), run)
     None => run()
   }
 }

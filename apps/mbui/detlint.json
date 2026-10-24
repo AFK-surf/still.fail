@@ -57,6 +57,15 @@
       "stillfail/sfkept"
     ]
   },
+  "build_effect": {
+    "later": [
+      "@sf.menu",
+      "@sf.pick",
+      "@sf.panel",
+      "@sf.confirm",
+      "@sf.ask"
+    ]
+  },
   "counts": {
     "frame-request": {},
     "settle": {},
@@ -129,7 +138,7 @@
       "src/sfapp/settings/profiles.mbt": 110,
       "src/sfapp/settings/run_more.mbt": 187,
       "src/sfapp/settings/security.mbt": 67,
-      "src/sfapp/settings/sheet.mbt": 44,
+      "src/sfapp/settings/sheet.mbt": 15,
       "src/sfapp/settings/station_add.mbt": 107,
       "src/sfapp/settings/station_mark.mbt": 36,
       "src/sfapp/settings/station_parts.mbt": 134,
@@ -195,7 +204,7 @@
       "src/sfapp/settings/profiles.mbt": 47,
       "src/sfapp/settings/run_more.mbt": 70,
       "src/sfapp/settings/security.mbt": 33,
-      "src/sfapp/settings/sheet.mbt": 15,
+      "src/sfapp/settings/sheet.mbt": 4,
       "src/sfapp/settings/station_add.mbt": 33,
       "src/sfapp/settings/station_mark.mbt": 12,
       "src/sfapp/settings/station_parts.mbt": 53,

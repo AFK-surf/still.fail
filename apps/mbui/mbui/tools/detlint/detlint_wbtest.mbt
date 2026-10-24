@@ -1138,6 +1138,32 @@ test "build-effect: inputs it knows by shape" {
 }
 
 ///|
+test "build-effect: what a presenter keeps runs later, and so does what is handed on to one" {
+  let files = [
+    (
+      "src/app/view.mbt",
+      (
+        #|
+        #|fn ask_first(title : String, run : () -> Unit) -> Unit {
+        #|  @sf.confirm(title, "", "go", run)
+        #|}
+        #|fn view(c : @ui.Ctx, src : Source, n : Int) -> Unit {
+        #|  if n > 0 {
+        #|    @sf.confirm("go?", "", "go", fn() { (src.call)("go", Json::null(), fn(_) {  }) })
+        #|    ask_first("go?", fn() { (src.call)("go", Json::null(), fn(_) {  }) })
+        #|    @sf.toast(fn() { (src.call)("built", Json::null(), fn(_) {  }) })
+        #|  }
+        #|}
+        #|
+      ),
+    ),
+  ]
+  let cfg = Config::new(@rjson.parse("{\"build_effect\": {\"later\": [\"@sf.confirm\"]}}"))
+  // a presenter's action, and one handed on to it whole: told once it is said; given to what is not one: as it builds
+  assert_eq(lines(found(files, "build-effect", 1, cfg~)), [9])
+}
+
+///|
 test "build-effect: a stream's callbacks are its events" {
   let files = [
     (

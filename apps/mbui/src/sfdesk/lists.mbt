@@ -378,7 +378,7 @@ fn archive_side_row(c : @ui.Ctx, src : Source, it : Json, more : Bool) -> Unit {
           if flag(v, "deletable") {
             c.cursor(drop, Hand)
             if c.clicked(drop) && !busy {
-              @settings.confirm(
+              @sf.confirm(
                 @sf.t("web-pages.archive.deleteConfirm", args=[("title", title)]),
                 @sf.t("web-pages.archive.deleteText"),
                 @sf.t("common.delete"),
