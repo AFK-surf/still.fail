@@ -331,6 +331,8 @@ priv struct PlayerView {
   mut last : (Double, Double)
   mut pinch : (Double, Double, Double)
   mut pinched : Bool
+  /// the finger came down on the picture flinging (zoomed in), and stopped it there: no tap
+  mut caught : Bool
   mut ended_off : String
   mut file : String
 }
@@ -371,6 +373,7 @@ fn view_for(key : String) -> PlayerView {
         last: (0.0, 0.0),
         pinch: (0.0, 0.0, 0.0),
         pinched: false,
+        caught: false,
         ended_off: "",
         file: "",
       }
@@ -1440,8 +1443,9 @@ fn phone_player(
 ///|
 /// What a finger does on the picture: two zoom it; one along it moves through the time (the picture going with it frame
 /// by frame, paused meanwhile: @kit.Media scrub_to), down it takes the picture down and closes it past player_close_dy (sideways: upright first), held still
-/// it plays at 2× until let go; zoomed in, one moves what is shown. A tap or a double tap is the player's own (@kit.Media
-/// stage: the controls; a side's 15 s; play or pause), not when the finger did any of these.
+/// it plays at 2× until let go; zoomed in, one moves what is shown (let go moving, it goes on, slowing). A tap or a
+/// double tap is the player's own (@kit.Media stage: the controls; a side's 15 s; play or pause), not when the finger
+/// did any of these, nor when it came down on the picture flinging (stopping it).
 fn phone_gestures(
   c : @ui.Ctx,
   v : PlayerView,
@@ -1471,6 +1475,9 @@ fn phone_gestures(
       return
     }
     _ => v.pinch = (0.0, 0.0, 0.0)
+  }
+  if press.fresh && (c.pressed(stage) || c.clicked(stage)) {
+    v.caught = z.stop_fling()
   }
   if down && c.pressed(stage) {
     let dx = px - press.x
@@ -1517,6 +1524,12 @@ fn phone_gestures(
     match was {
       AlongTime => p.scrub_done()
       DownClose => if v.drag_dy > player_close_dy { back() }
+      // let go moving: on at the finger's speed, slowing, to a stop or its edge
+      MoveZoom =>
+        if !v.pinched {
+          let (fx, fy) = c.pointer_velocity()
+          z.fling(fx, fy)
+        }
       _ => ()
     }
     if held {
@@ -1529,7 +1542,7 @@ fn phone_gestures(
       v.pinched = false
     }
     // a tap or a double tap (none of the above)
-    if was == NoDrag && !held && !press.long {
+    if was == NoDrag && !held && !press.long && !v.caught {
       p.stage(c, stage, c.width)
     }
   }

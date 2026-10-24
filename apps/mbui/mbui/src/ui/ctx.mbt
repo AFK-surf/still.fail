@@ -1312,6 +1312,15 @@ pub fn Ctx::pointer_at(self : Ctx) -> Double {
 }
 
 ///|
+/// How fast the pointer went at its latest event (points per ms, across and down; at most a fling's fastest): what a
+/// list let go flings at (Compose's VelocityTracker over the press's events, by their own times), for what else a
+/// finger lets go of moving (a picture zoomed in).
+pub fn Ctx::pointer_velocity(self : Ctx) -> (Double, Double) {
+  ignore(self)
+  (dclamp(track_x.velocity(), -max_fling, max_fling), dclamp(track_y.velocity(), -max_fling, max_fling))
+}
+
+///|
 fn hit_in(ids : Array[Int], rects : Array[Double], x : Double, y : Double) -> Int {
   let targets = physical_equal(rects, g().hit_rects)
   let clips = if targets { g().hit_clips } else { [] }

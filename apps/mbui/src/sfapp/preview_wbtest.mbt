@@ -511,6 +511,73 @@ test "a swipe past a fifth of the stage goes to the next; a short one comes back
 }
 
 ///|
+/// The viewer's image zoomed in by a double tap in its middle (2.5 times fitted: 915 × 610 on the 390 × 844 stage, 262.5
+/// to go either way across), the next taps a double tap of their own.
+fn zoom_in_middle(t : @ui.Tester) -> @kit.Zoom raise {
+  t.tap(195.0, 422.0)
+  t.advance(double_tap_ms / 2.0)
+  t.tap(195.0, 422.0)
+  t.run_for(zoom_glide_ms)
+  t.run_for(double_tap_ms)
+  let z = viewer.val.unwrap().zoom
+  assert_true(z.zoomed())
+  z
+}
+
+///|
+test "zoomed in, let go moving it goes on that way, slowing, to its edge; a finger on it stops it and taps nothing" {
+  let t = preview_tester("image")
+  let v = viewer.val.unwrap()
+  let z = zoom_in_middle(t)
+  // a quick move left (60 in 50 ms), let go: on after the finger, three of its moves' time later well on
+  t.drag(250.0, 422.0, 190.0, 422.0, steps=3)
+  let let_go = z.x
+  assert_true(let_go < 0.0)
+  t.run_for(3.0 * @ui.input_step_ms)
+  assert_true(z.x < let_go - 20.0)
+  // a finger down on it: it stops there, and the bars stay as they were
+  let awake = v.awake
+  t.touch(0, 195.0, 422.0)
+  t.draw()
+  let held = z.x
+  t.touch(2, 195.0, 422.0)
+  t.draw()
+  t.run_for(@kit.zoom_fling_ms)
+  assert_eq(z.x, held)
+  assert_eq(v.awake, awake)
+  // flung harder: it stops at its edge (its right edge at the stage's), when its way said it ends
+  t.drag(250.0, 422.0, 130.0, 422.0, steps=3)
+  t.run_for(z.fling_x.ends_at() - t.time())
+  let (x, _, w, _) = z.rect().unwrap()
+  assert_true((x + w - 390.0).abs() < 0.001)
+  t.run_for(@kit.zoom_fling_ms)
+  assert_true((z.rect().unwrap().0 - x).abs() < 0.001)
+}
+
+///|
+test "zoomed in, dragged on past its edge the next comes in; a quick move that came to its edge on the way comes back" {
+  let t = preview_tester("step")
+  let z = zoom_in_middle(t)
+  // quick (95 a move), from its middle: to its edge and 22.5 past, let go there: back, and it stays at its edge
+  t.drag(385.0, 422.0, 5.0, 422.0, steps=4)
+  t.run_for(t.rest_of("preview/strip") - t.time())
+  assert_eq(viewer.val.unwrap().file.name, "界面草图.png")
+  let (x, _, w, _) = z.rect().unwrap()
+  assert_true((x + w - 390.0).abs() < 0.001)
+  // from its edge, a short quick move on: the next
+  t.drag(300.0, 422.0, 260.0, 422.0, steps=2)
+  assert_eq(viewer.val.unwrap().file.name, "第二版.png")
+}
+
+///|
+test "zoomed in, dragged slowly far past its edge: the next" {
+  let t = preview_tester("step")
+  zoom_in_middle(t) |> ignore
+  t.drag(385.0, 422.0, 5.0, 422.0, steps=20)
+  assert_eq(viewer.val.unwrap().file.name, "第二版.png")
+}
+
+///|
 test "marking: a box drawn on the picture is numbered, its note kept, its quote says where it is" {
   let t = preview_tester("image")
   marks_start()

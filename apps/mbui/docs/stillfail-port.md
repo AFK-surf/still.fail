@@ -636,7 +636,8 @@ FileData; Zoom.kt):
   meanwhile, fitted with a margin (12, or 32 on a wide screen), a double tap to 2.5× the fitted size (at least 100%)
   around it and back, the bar's − / % / + (×1.25, the % back to fitted), two fingers pinching it round the point
   between them (Android tells mbui of a second finger now: pointer kinds 4, 5, 6, `Ctx::second_pointer`), a finger
-  panning it when larger, the wheel zooming round the pointer; a video played by the system's player in a native view (below), its bytes read through
+  panning it when larger (let go moving, it goes on at the finger's speed, slowing, to its edge; dragged on past its edge,
+  the one beside it comes in as a fitted swipe brings it), the wheel zooming round the pointer; a video played by the system's player in a native view (below), its bytes read through
   the core a part at a time (`station.file.part`, as the drive's DriveSource reads `drive.read`: never the whole file
   first, where the Android app's chat viewer fetches it to the disk before playing), its controls over its foot (where
   it is, to tap or drag along; a frame back, play, a frame on; which frame of how many; 1× 0.5× 0.25× 0.1×); a PDF's
