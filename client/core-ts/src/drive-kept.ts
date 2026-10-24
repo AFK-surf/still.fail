@@ -14,6 +14,8 @@
 // An image sent up from this device is kept too, as it went (`sent`, composer.ts): by its station and the name the
 // station keeps it under, its chat shows it and opens it from here, not read back from the station it went to; the
 // least lately read go past SENT_MAX, and it is counted and let go with the drives' files.
+// The downloads asked of this device and not yet saved are written down here too (views/downloads.ts), beside the
+// files they bring: one stopped by the app's end goes on as it starts again.
 import { Effect } from "effect";
 import type { Host, Sql } from "./host.ts";
 
@@ -79,7 +81,7 @@ export class DriveKept {
           used INTEGER NOT NULL
         ); CREATE TABLE IF NOT EXISTS part (
           id TEXT NOT NULL, at INTEGER NOT NULL, length INTEGER NOT NULL, key TEXT NOT NULL, PRIMARY KEY (id, at, length)
-        );`);
+        ); CREATE TABLE IF NOT EXISTS download (id TEXT PRIMARY KEY, json TEXT NOT NULL);`);
         return (this.#sql = opened.success);
       } catch {
         return (this.#sql = null);
@@ -211,6 +213,37 @@ export class DriveKept {
   /// What is kept of the file `id` let go (found changed on the station), unless a part of it is being written.
   forget(id: string): Effect.Effect<void> {
     return Effect.flatMap(this.#db(), (sql) => (sql === null || this.#writing.has(id) ? Effect.void : this.#drop(sql, id)));
+  }
+
+  /// Whether anything of the file `id` is kept.
+  has(id: string): Effect.Effect<boolean> {
+    return Effect.map(this.#db(), (sql) => sql !== null && this.#kept(sql, id) !== null);
+  }
+
+  /// The downloads written down (views/downloads.ts), each as it was written: the oldest first.
+  downloads(): Effect.Effect<unknown[]> {
+    return Effect.map(this.#db(), (sql) => {
+      if (sql === null) return [];
+      const out: unknown[] = [];
+      for (const r of sql.all("SELECT json FROM download ORDER BY rowid")) {
+        try {
+          out.push(JSON.parse(String(r[0])));
+        } catch {
+          // (not one this core can read: left out)
+        }
+      }
+      return out;
+    });
+  }
+
+  /// A download written down (again), by its id.
+  noteDownload(id: string, value: unknown): Effect.Effect<void> {
+    return Effect.map(this.#db(), (sql) => { sql?.run("INSERT OR REPLACE INTO download (id, json) VALUES (?, ?)", [id, JSON.stringify(value)]); });
+  }
+
+  /// A download no longer written down (saved, or called off).
+  dropDownload(id: string): Effect.Effect<void> {
+    return Effect.map(this.#db(), (sql) => { sql?.run("DELETE FROM download WHERE id = ?", [id]); });
   }
 
   /// The bytes kept of the drives' files and of those sent from here (not the chats').

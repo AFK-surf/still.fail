@@ -1400,10 +1400,16 @@ fn file_item(
           |> ignore
         })
         |> ignore
+        // while the core downloads it (downloads.mbt), how far in its name's place, over a bar
+        let dl = download_of(src, here.station, owner_of(here, a), base_name(a.path))
         c.layer(fn() {
           c.spacer()
           c.box(w=Fill(1.0), padx=8.0, pady=6.0, bg=0x000000A6L, align=ACenter, fn() {
-            c.text(a.name, size=12.0, color=0xFFFFFFFFL, wrap=false) |> ignore
+            c.text(if flag(dl, "active") { text(dl, "statusText") } else { a.name }, size=12.0, color=0xFFFFFFFFL, wrap=false)
+            |> ignore
+            if flag(dl, "active") {
+              c.box(style=video_coming_bar, fn() { @sf.progress(c, Some(number(dl, "progress"))) }) |> ignore
+            }
           })
           |> ignore
         })
@@ -1411,18 +1417,34 @@ fn file_item(
       })
       |> ignore
     }
-    // (downloaded by the core: how far it has come, here too, downloads.mbt)
-    _ => file_card(c, a, w, id=open, dl=download_of(src, here.station, owner_of(here, a), base_name(a.path)))
+    // (downloaded by the core: how far it has come, here too; ✕ calls it off, ↻ asks it again: downloads.mbt)
+    _ => {
+      let (key, name) = (owner_of(here, a), base_name(a.path))
+      let dl = download_of(src, here.station, key, name)
+      let act = c.id("file-act/" + a.path)
+      if c.clicked(act) {
+        // (told once the frame's builds are over, as the tap is the build's that took it)
+        let (station, id, active, size) = (here.station, text(dl, "id"), flag(dl, "active"), a.size)
+        c.tell("file-act/" + a.path, fn() {
+          if active {
+            download_cancel(src, id)
+          } else {
+            download_start(src, station, key, name, size)
+          }
+        })
+      }
+      file_card(c, a, w, id=open, dl~, act~)
+    }
   }
 }
 
 ///|
 /// A file as a card (ChatFiles.kt FileCard): its kind's mark, its name, its size, on the neutral ground. While the core
-/// downloads it (`dl`, downloads.mbt) how far it has come in its size's place and as a ring in its mark's; failed, why,
-/// in red.
-fn file_card(c : @ui.Ctx, a : Attachment, w : Double, id? : Int = 0, dl? : Json? = None) -> Unit {
+/// downloads it (`dl`, downloads.mbt) how far it has come in its size's place and as a ring in its mark's, ✕ (`act`)
+/// at its end to call it off; failed, why, in red, ↻ to ask it again.
+fn file_card(c : @ui.Ctx, a : Attachment, w : Double, id? : Int = 0, dl? : Json? = None, act? : Int = 0) -> Unit {
   if wide_on.val {
-    file_card_wide(c, a, w, id, dl)
+    file_card_wide(c, a, w, id, dl, act)
     return
   }
   let t = @sf.theme()
@@ -1448,6 +1470,10 @@ fn file_card(c : @ui.Ctx, a : Attachment, w : Double, id? : Int = 0, dl? : Json?
         |> ignore
       })
       |> ignore
+      match file_card_act(dl) {
+        Some((icon, label)) if act != 0 => card_close(c, act, icon~, label~)
+        _ => ()
+      }
     },
   )
   |> ignore
@@ -1458,7 +1484,7 @@ fn file_card(c : @ui.Ctx, a : Attachment, w : Double, id? : Int = 0, dl? : Json?
 /// what is cut its middle, never its extension) over its size (11, grey), 236 wide at most, 8 by 10 in and 7 at the
 /// sheet's side, rounded as the sheet stands in (13), on the neutral ground; under the pointer the pointer's, its path
 /// said (the web's Tip).
-fn file_card_wide(c : @ui.Ctx, a : Attachment, w : Double, id : Int, dl : Json?) -> Unit {
+fn file_card_wide(c : @ui.Ctx, a : Attachment, w : Double, id : Int, dl : Json?, act : Int) -> Unit {
   if id != 0 {
     c.cursor(id, Hand)
     wide_tip(c, "file-card/" + a.path, id, if a.path != "" { a.path } else { a.name })
@@ -1472,24 +1498,79 @@ fn file_card_wide(c : @ui.Ctx, a : Attachment, w : Double, id : Int, dl : Json?)
       c.text(meta, style=if failed { file_card_failed } else { file_card_meta }) |> ignore
     })
     |> ignore
+    match file_card_act(dl) {
+      Some((icon, label)) if act != 0 => file_card_button(c, act, icon, label)
+      _ => ()
+    }
   })
   |> ignore
 }
 
 ///|
+/// A wide card's own button at its end (Chat.tsx FileCard's remove and retry, Chat.css.ts fileCardRemove): 22 round,
+/// nothing under it but under the pointer (the hover ground), its icon 13 in the muted ink (the text's under the
+/// pointer); named.
+fn file_card_button(c : @ui.Ctx, id : Int, icon : String, label : String) -> Unit {
+  let p = @sf.theme().p
+  c.cursor(id, Hand)
+  let hot = c.hovered(id)
+  let b = c.box(style=if hot { file_card_button_hot } else { file_card_button_box }, id~, fn() {
+    @sf.icon(c, icon, size=file_card_button_icon, color=if hot { p.text } else { p.muted }) |> ignore
+  })
+  c.semantics(b, Button, id~, label~)
+}
+
+///|
+// kept across runs: a value (no field of it changes)
+let file_card_button_box : @ui.Style = @ui.style(
+  w=@sf.file_card_button,
+  h=@sf.file_card_button,
+  radius=Full,
+  align=ACenter,
+  justify=JCenter,
+)
+
+///|
+// kept across runs: a value (no field of it changes)
+let file_card_button_hot : @ui.Style = file_card_button_box.then(@ui.style(bg=Hover))
+
+///|
+/// fileCardRemove's icons (Close 12, Retry 13: the larger of the two).
+let file_card_button_icon : Double = 13.0
+
+///|
+/// A card's own button while the core downloads its file (✕: call it off) or once that failed (↻: ask it again), its
+/// icon and its name; None otherwise.
+fn file_card_act(dl : Json?) -> (String, String)? {
+  if flag(dl, "active") {
+    Some(("close", tr("web-main.file.cancelDownload")))
+  } else if text(dl, "state") == "failed" {
+    Some(("retry", tr("web-main.file.retryDownload")))
+  } else {
+    None
+  }
+}
+
+///|
+/// A video's bar while the core downloads it: under its words, 4 below them.
+// kept across runs: a value (no field of it changes)
+let video_coming_bar : @ui.Style = @ui.style(w=Full, pt=S1)
+
+///|
 /// What a file's card says under its name: its size, or while the core downloads it how far it has come (正在下载 42% ·
 /// 18.3 MB), failed why (the core's words); and whether that is a failure.
 fn file_card_said(a : Attachment, dl : Json?) -> (String, Bool) {
-  match text(dl, "state") {
-    "going" | "failed" as state => (text(dl, "statusText"), state == "failed")
-    _ => (@sf.file_size(a.size), false)
+  if flag(dl, "active") || text(dl, "state") == "failed" {
+    (text(dl, "statusText"), !flag(dl, "active"))
+  } else {
+    (@sf.file_size(a.size), false)
   }
 }
 
 ///|
 /// How far the core has downloaded a file (0 to 1) while it does; None while it does not.
 fn file_card_coming(dl : Json?) -> Double? {
-  if text(dl, "state") == "going" {
+  if flag(dl, "active") {
     Some(number(dl, "progress"))
   } else {
     None

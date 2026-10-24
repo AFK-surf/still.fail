@@ -61,6 +61,8 @@ pub struct Replay {
   priv skipped : Array[String]
   /// reports the app made that the run did not (Replay::sent: its frames had them, the run's not)
   priv unasked_reports : Array[String]
+  /// the ids the app gave its watches of `ambient` topics the run did not have (let go of as well, unasked)
+  priv ambient_ids : Map[Int, Bool]
   /// what the run's app was started with (its trace's `{"env":…}`: src/stillfail's CORETRACE env)
   priv run_env : Array[(String, String)]
   /// what the run's host answered that its text recording kept (`{"textrec":…}`: TEXTREC lines, mbui's hostrec.mbt):
@@ -88,6 +90,12 @@ pub(all) enum Pace {
 /// nothing, none is required and one the run did not make is not where the two went apart; one made again with other
 /// params is the run's next of its name, not said to differ.
 let reports : Array[String] = ["client.focus", "chat.place", "draft.put", "drive.place"]
+
+///|
+/// Topics the app watches from its start whatever the person does (the device's downloads, sfbase/downloads.mbt): a
+/// run from before the app watched one has none of it, and that is not where the two went apart; it is answered
+/// nothing (the run had none of it), and let go of as it was watched.
+let ambient : Array[String] = ["downloads"]
 
 ///|
 /// The conversation in `log`: a trace's lines (`{"out":…}`, `{"in":…}`), or a log with them after CORETRACE. Other
@@ -226,6 +234,7 @@ pub fn Replay::parse(log : String) -> Replay {
     host_said: None,
     skipped: [],
     unasked_reports: [],
+    ambient_ids: {},
     run_env,
     run_text,
   }
@@ -892,6 +901,18 @@ fn Replay::out(self : Replay, text : String) -> Unit {
     }
   }
   if found < 0 {
+    // an ambient topic the run did not watch, watched or let go of
+    match id_of(m) {
+      Some(now) if kind == "subscribe" && ambient.contains(name_of(m)) => {
+        self.ambient_ids[now] = true
+        return
+      }
+      Some(now) if kind == "unsubscribe" && refers is None && self.ambient_ids.contains(now) => {
+        self.ambient_ids.remove(now)
+        return
+      }
+      _ => ()
+    }
     // a report the run did not make (where the list is, whether its end shows): the app makes those as its own
     // frames have it, the run's frames otherwise (a list gliding to rows that came: its end out of view for a frame
     // here, never in the run's), so not where the two went apart; nothing waits on its answer

@@ -117,9 +117,20 @@ pub fn viewer_tool(
 }
 
 ///|
-/// Download, as every bar has it last (ViewerDownload). True on the frame after it was pressed.
-pub fn viewer_download(c : @ui.Ctx, key : String, ink : ViewerInk, disabled? : Bool = false) -> Bool {
-  viewer_tool(c, key, "download", t("web-main.preview.download"), ink, disabled~)
+/// Download, as every bar has it last (ViewerDownload). True on the frame after it was pressed. `coming`: how far a
+/// download of it has come (0 to 1), a ring of the file's ink in its place meanwhile, not pressed again.
+pub fn viewer_download(c : @ui.Ctx, key : String, ink : ViewerInk, disabled? : Bool = false, coming? : Double) -> Bool {
+  match coming {
+    Some(part) => {
+      let label = t("web-main.preview.download")
+      let b = c.box(style=viewer_tool_box, disabled=true, fn() {
+        progress_ring(c, viewer_tool_icon, part, ink.ink) |> ignore
+      })
+      c.semantics(b, Button, label~, disabled=true)
+      false
+    }
+    None => viewer_tool(c, key, "download", t("web-main.preview.download"), ink, disabled~)
+  }
 }
 
 ///|

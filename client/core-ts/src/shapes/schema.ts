@@ -853,7 +853,7 @@ export const SHAPES: Record<string, Shape> = {
     ["loaded", "bool", { doc: "What the station has was read (or told) at least once." }],
     ["transfers", vec("DriveTransferShown"), { doc: "The viewer's own, newest first." }],
   ], { doc: "The copies into a station's drive the viewer asked (the `driveTransfers` topic)." }),
-  DownloadState: words(["going","ready","failed"], { doc: "How a download stands: coming, all here to be saved, or failed." }),
+  DownloadState: words(["going","waiting","ready","saving","failed"], { doc: "How a download stands: coming, waiting for its station to be reached (it goes on once it is), all here to be saved, being saved, or failed." }),
   DownloadShown: struct([
     ["id", "String", { doc: "Its own (`download.take`, `download.cancel`)." }],
     ["station", "String"],
@@ -863,7 +863,8 @@ export const SHAPES: Record<string, Shape> = {
     ["loaded", "i64", { client: "I54", doc: "How much of it is here." }],
     ["progress", "f64", { doc: "How much of it is here, 0 to 1." }],
     ["state", "DownloadState"],
-    ["statusText", "String", { doc: "How it stands, in a line: 正在下载 42% · 18.3 MB · 已下载 · 下载失败：… ." }],
+    ["active", "bool", { doc: "Not failed: its progress shown, and it can be called off (`download.cancel`)." }],
+    ["statusText", "String", { doc: "How it stands, in a line: 正在下载 42% · 18.3 MB · 等待连接 station · 正在保存 · 下载失败：… ." }],
     ["error", opt("String")],
     ["startedAt", "i64", { client: "I54" }],
   ], { doc: "A chat's file being downloaded to this device, as the pages show it." }),

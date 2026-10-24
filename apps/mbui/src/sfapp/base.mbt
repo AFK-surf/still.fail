@@ -24,6 +24,7 @@ pub using @sfbase {
   download_drive_file,
   download_of,
   download_start,
+  download_cancel,
   downloads_frame,
   download_drive_files,
   download_drive_zip,

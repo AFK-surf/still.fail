@@ -1459,7 +1459,7 @@ fn Viewer::content(self : Viewer, c : @ui.Ctx, src : Source, stage : Int) -> Uni
         }
       } else if v.told_of() {
         let dl = v.download(src)
-        v.note(c, fn() { if wide_on.val { v.desk_facts(c, dl) } else { v.facts(c, dl) } })
+        v.note(c, fn() { if wide_on.val { v.desk_facts(c, src, dl) } else { v.facts(c, src, dl) } })
       } else if (v.kind is None && v.sniffed is None) || (v.bytes is None && v.error is None) {
         tap_stage(c, v, stage)
         v.note(c, fn() { if wide_on.val { v.desk_coming(c) } else { v.coming_note(c) } })
@@ -1590,7 +1590,7 @@ let surface2_dark : Int64 = 0x2C2D31FFL
 ///|
 /// A file told of, not shown (FilePreview.kt Facts and its buttons): its kind's mark, its name, its size and
 /// extension, why it is not shown; 下载.
-fn Viewer::facts(self : Viewer, c : @ui.Ctx, dl : Json?) -> Unit {
+fn Viewer::facts(self : Viewer, c : @ui.Ctx, src : Source, dl : Json?) -> Unit {
   let v = self
   let t = @sf.theme()
   let kind = v.shown_kind()
@@ -1630,9 +1630,12 @@ fn Viewer::facts(self : Viewer, c : @ui.Ctx, dl : Json?) -> Unit {
     v.coming_note(c)
     return
   }
-  // downloaded by the core (downloads.mbt): how far it has come, on by itself as this closes
+  // downloaded by the core (downloads.mbt): how far it has come, on by itself as this closes; called off here
   if downloading(dl) {
     file_progress(c, (number(dl, "loaded"), Some(number(dl, "size"))), v.file.size, said=text(dl, "statusText"))
+    if note_button(c, "preview/note-cancel", "", tr("web-main.file.cancelDownload"), false) {
+      v.cancel_download(c, src, dl)
+    }
     return
   }
   c.box(w=Px(220.0), gap=8.0, fn() {
@@ -1753,9 +1756,18 @@ fn Viewer::download(self : Viewer, src : Source) -> Json? {
 }
 
 ///|
-/// Whether the core's download `dl` is under way.
+/// Whether the core has the download `dl` under way (going, waiting for its station, ready, being saved).
 fn downloading(dl : Json?) -> Bool {
-  text(dl, "state") == "going"
+  flag(dl, "active")
+}
+
+///|
+/// The core's download of the file this viewer shows called off (✕ under how far it has come).
+fn Viewer::cancel_download(self : Viewer, c : @ui.Ctx, src : Source, dl : Json?) -> Unit {
+  ignore(self)
+  let id = text(dl, "id")
+  // (told once the frame's builds are over, as the tap is the build's that took it)
+  c.tell("download-cancel/" + id, fn() { download_cancel(src, id) })
 }
 
 // ── an image ───────────────────────────────────────────────────────────
@@ -2989,9 +3001,17 @@ fn Viewer::bar(self : Viewer, c : @ui.Ctx, src : Source, shown : Double) -> Unit
           _ => ()
         }
         if !v.coming() && !marking.on {
-          let saving = v.bytes is Some(_) || (v.told_of() && !v.asked && !downloading(v.download(src)))
-          if picture_button(c, "preview/download", "download", tint, on && saving, said=pv("android-chat.file.download")) {
-            v.ask_save(c)
+          // what is here saved at once; one told of, or played as it comes, downloaded by the core: how far it has
+          // come in the button's place meanwhile
+          let dl = v.download(src)
+          let streamed = v.shown_kind() == Some(KVideo) || v.shown_kind() == Some(KAudio)
+          if downloading(dl) {
+            c.box(style=picture_ring_box, fn() { @sf.progress_ring(c, picture_ring, number(dl, "progress"), tint) |> ignore }) |> ignore
+          } else {
+            let saving = v.bytes is Some(_) || ((v.told_of() || streamed) && !v.asked)
+            if picture_button(c, "preview/download", "download", tint, on && saving, said=pv("android-chat.file.download")) {
+              v.ask_save(c)
+            }
           }
         }
         if picture_button(c, "preview/close", "close", tint, on || true, said=pv("common.close")) {
@@ -3003,6 +3023,14 @@ fn Viewer::bar(self : Viewer, c : @ui.Ctx, src : Source, shown : Double) -> Unit
   })
   |> ignore
 }
+
+///|
+/// How far the core has downloaded the file, in the bar's 下载's place: a ring of the bar's ink, 18 in its 32.
+// kept across runs: a value (no field of it changes)
+let picture_ring_box : @ui.Style = @ui.style(w=S8, h=S8, align=ACenter, justify=JCenter)
+
+///|
+let picture_ring : Double = 18.0
 
 ///|
 /// Why the core's download of a file told of failed, over its 下载 again (14, red, centred).
