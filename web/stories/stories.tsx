@@ -1080,6 +1080,11 @@ export const stories: Story[] = [
   { id: "player-phone", group: "文件", title: "播放器 · 手机", phone: true, render: () => stage(<Player file={driveFile(at(clips[0]!.name), clips[0]!)} siblings={folder} backLabel="下载" onBack={noop} onGo={noop} />) },
   { id: "attachment-md", group: "文件", title: "附件 · Markdown", render: () => stage(<AttachmentDemo name="orders-慢查询.md" url={NOTE_URL} type="text/markdown" />) },
   { id: "attachment-video", group: "文件", title: "附件 · 视频", render: () => stage(<AttachmentDemo name="发版录屏 1014.mp4" url={CLIP_URL} type="video/mp4" />), steps: [{ move: [640, 400] }] },
+  // Playing, the pointer on its timeline: its controls, the time where it points.
+  { id: "attachment-video-controls", group: "文件", title: "附件 · 视频 · 控件", render: () => stage(<AttachmentDemo name="发版录屏 1014.mp4" url={CLIP_URL} type="video/mp4" />), steps: [{ move: [640, 400] }, { hover: '[role=slider][aria-label="位置"]' }] },
+  // Paused: looked at closely, its frames' keys, the frame's time to the millisecond, which of how many, the camera.
+  { id: "attachment-video-paused", group: "文件", title: "附件 · 视频 · 暂停逐帧", render: () => stage(<AttachmentDemo name="发版录屏 1014.mp4" url={CLIP_URL} type="video/mp4" />), steps: [{ move: [640, 400] }, { key: "k" }, { click: '[aria-label="下一帧"]' }, { hover: 'canvas[aria-label^="第"]' }] },
+  { id: "attachment-video-phone", group: "文件", title: "附件 · 视频 · 手机", phone: true, render: () => stage(<AttachmentDemo name="发版录屏 1014.mp4" url={CLIP_URL} type="video/mp4" />) },
   // A phone's recording, taller than the window is: all of it in the window, not cut off at the top and the bottom.
   { id: "attachment-video-tall", group: "文件", title: "附件 · 竖屏视频", render: () => stage(<AttachmentDemo name="手机录屏 1017.mp4" url={TALL_CLIP_URL} type="video/mp4" />), steps: [{ move: [640, 400] }] },
   { id: "attachment-picture", group: "文件", title: "附件 · 图片", render: () => stage(<AttachmentDemo name="login-375.png" url={PICTURE_URL} type="image/png" />), steps: [{ move: [640, 400] }] },

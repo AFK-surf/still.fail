@@ -15,7 +15,6 @@ import { FrameHost, isFragment, vizDocument } from "./Viz.tsx";
 import { fileLink } from "./Prose.css.ts";
 import { useStation } from "./station.tsx";
 import { Segmented, Tip, Progress, Spinner, WaitLine } from "./ui.tsx";
-import { VideoViewer } from "./VideoViewer.tsx";
 import { useImageMarks } from "./annotate/ImageMarks.tsx";
 import { useBackClose } from "@stillfail/ui/backClose.ts";
 import { thumbId, viewerFlight } from "./viewerFlight.ts";
@@ -33,12 +32,10 @@ import * as pageCss from "@stillfail/ui/styles/page.css.ts";
 export { fileSize };
 import { REST_MS, TAP_REST_MS } from "@stillfail/ui/viewer/rest.ts";
 import { blobFile } from "@stillfail/ui/viewer/file.ts";
+import { MAX_SCALE, useZoom, type Swipe } from "@stillfail/ui/viewer/zoom.ts";
 import type { Reader as ReaderOf } from "@stillfail/ui/viewer/Reader.tsx";
 import type { Player as PlayerOf } from "@stillfail/ui/viewer/Player.tsx";
 
-/** The bars over a file (and a video's controls) fade out after the pointer has rested this long; after a tap, longer
- * (a finger has no hover to keep them): @stillfail/ui's viewers' own. */
-export { REST_MS, TAP_REST_MS };
 
 // ── what a file is ─────────────────────────────────────────────────────
 
@@ -542,8 +539,6 @@ function Viewer({ onClose, closing, local, ...opened }: { onClose(): void; closi
   const thumb = useFileUrl(sessionKey, file, known.kind === "image" && loaded.state === "loading", true);
   const [sniffed, setSniffed] = useState<PreviewKind | "binary" | null>(null);
   const [controls, setControls] = useState<ReactNode>(null);
-  // A video's own facts (VideoViewer: its size in pixels, how long, its rate), after the file's in the bar.
-  const [videoMeta, setVideoMeta] = useState<string | null>(null);
   const blob = loaded.state === "ready" ? loaded.blob : null;
   useEffect(() => {
     if (known.kind || !blob) return;
@@ -607,7 +602,7 @@ function Viewer({ onClose, closing, local, ...opened }: { onClose(): void; closi
     const { url, blob } = loaded;
     switch (kind) {
       case "image": body = <ImageViewer key={file.path} url={url} file={file} setControls={setControls} swipe={swipe} onMarking={setMarking} onClose={onClose} />; break;
-      case "video": body = <VideoViewer key={file.path} url={url} blob={blob} name={file.name} onMeta={setVideoMeta} />; break;
+      case "video": body = <video className={css2.fpImage} src={url} controls autoPlay playsInline data-viewer-picture="" />; break;
       case "audio": body = <div className={css2.fpAudio}><span className={css2.fpAudioName}>{file.name}</span><audio src={url} controls autoPlay /></div>; break;
       case "pdf": body = <PdfViewer blob={blob} />; break;
       case "markdown": case "csv": case "html": case "code": case "text":
@@ -617,9 +612,9 @@ function Viewer({ onClose, closing, local, ...opened }: { onClose(): void; closi
         : <a className={controlsCss.btn} href={url} download={file.name}><Download size={16} />{t("web-main.preview.download")}</a>}</div>;
     }
   }
-  // A text and a sound open in the reader and the player, as a station's file does (viewer/Reader.tsx, viewer/Player.tsx),
-  // each with the same bar; here they read what this has fetched. A video stays in VideoViewer: a chat's video is looked
-  // at closely (frame by frame, zoomed, a pixel's colour, a frame saved), which the player made to watch a film has not.
+  // A text, a film and a song open in the reader and the player, as a station's file does (viewer/Reader.tsx,
+  // viewer/Player.tsx), each with the same bar; here they read what this has fetched. The one player is made both to
+  // watch and to look closely (a chat's recording of a screen: frame by frame, zoomed, a pixel's colour, a frame saved).
   const saveShown = useRef<(() => void) | undefined>(undefined);
   saveShown.current = loaded.state === "ready" ? () => save(loaded) : undefined;
   const shownFile = useMemo(() => blob && blobFile(blob, { name: file.name, size: file.size, type: blob.type, kind: kind ?? "" }, () => saveShown.current?.()), [blob, file.name, file.size, kind]);
@@ -627,12 +622,12 @@ function Viewer({ onClose, closing, local, ...opened }: { onClose(): void; closi
   const viewer = loaded.state !== "ready" || !shownFile ? null
     : (kind === "markdown" || kind === "text") && Reader
       ? <Reader key={file.path} file={shownFile} markdown={kind === "markdown"} backLabel={backLabel} onBack={onClose} />
-      : kind === "audio" && Player
+      : (kind === "audio" || kind === "video") && Player
         ? <Player key={file.path} file={shownFile} backLabel={backLabel} onBack={onClose} />
         : null;
   if (viewer) {
     return (
-      <RDialog.Content ref={content} className={css2.fp} data-kind={kind ?? undefined} aria-describedby={undefined}
+      <RDialog.Content ref={content} className={css2.fp} data-kind={kind ?? undefined} data-zoom-root="" aria-describedby={undefined}
         onOpenAutoFocus={(e) => { e.preventDefault(); (e.currentTarget as HTMLElement | null)?.focus(); }}>
         <RDialog.Title className={css2.fpHiddenTitle}>{file.name}</RDialog.Title>
         {viewer}
@@ -640,7 +635,7 @@ function Viewer({ onClose, closing, local, ...opened }: { onClose(): void; closi
     );
   }
   return (
-    <RDialog.Content ref={content} className={css2.fp} data-kind={kind ?? undefined} data-docked={docked || undefined} aria-describedby={undefined} data-awake={awake || coming !== undefined || marking || undefined}
+    <RDialog.Content ref={content} className={css2.fp} data-kind={kind ?? undefined} data-docked={docked || undefined} data-zoom-root="" aria-describedby={undefined} data-awake={awake || coming !== undefined || marking || undefined}
       // A mouse wakes the bars by moving; a finger has no hover, and a tap on the file shows or hides them.
       onPointerMove={(e) => { if (e.pointerType === "mouse") wake(); barOnScroll.onPointerMove(e); }}
       onScrollCapture={barOnScroll.onScroll}
@@ -659,7 +654,7 @@ function Viewer({ onClose, closing, local, ...opened }: { onClose(): void; closi
           // A picture: gone with the rest as the pointer rests (back as it moves); what is read down: as it is read down.
           hidden={kind === "image" ? !(awake || coming !== undefined || marking) : barOnScroll.hidden}
           name={<RDialog.Title asChild><span>{file.name}</span></RDialog.Title>}
-          meta={`${count > 1 && at >= 0 ? `${at + 1} / ${count} · ` : ""}${fileSize(file.size)}${kind && KIND_LABEL[kind as PreviewKind] ? ` · ${kindLabel(kind as PreviewKind)}` : ""}${kind === "video" && videoMeta ? ` · ${videoMeta}` : ""}`}
+          meta={`${count > 1 && at >= 0 ? `${at + 1} / ${count} · ` : ""}${fileSize(file.size)}${kind && KIND_LABEL[kind as PreviewKind] ? ` · ${kindLabel(kind as PreviewKind)}` : ""}`}
           tools={<>
             {coming !== undefined && <FileComing got={coming} size={file.size} inBar />}
             {controls}
@@ -673,7 +668,7 @@ function Viewer({ onClose, closing, local, ...opened }: { onClose(): void; closi
         onPointerLeave={(e) => { if (e.pointerType !== "mouse") return; onBar.current = false; wake(); }}>
         <div className={css2.fpTitle}>
           <Tip label={file.path}><RDialog.Title className={css2.fpName}>{file.name}</RDialog.Title></Tip>
-          <span className={css2.fpMeta}>{count > 1 && at >= 0 ? `${at + 1} / ${count} · ` : ""}{fileSize(file.size)}{kind && KIND_LABEL[kind as PreviewKind] ? ` · ${kindLabel(kind as PreviewKind)}` : ""}{kind === "video" && videoMeta ? ` · ${videoMeta}` : ""}</span>
+          <span className={css2.fpMeta}>{count > 1 && at >= 0 ? `${at + 1} / ${count} · ` : ""}{fileSize(file.size)}{kind && KIND_LABEL[kind as PreviewKind] ? ` · ${kindLabel(kind as PreviewKind)}` : ""}</span>
         </div>
         {coming !== undefined && <FileComing got={coming} size={file.size} inBar />}
         {controls}
@@ -738,14 +733,10 @@ const kindLabel = (kind: PreviewKind) => { const k = KIND_LABEL[kind] ?? ""; ret
 
 // ── images: zoom and pan ───────────────────────────────────────────────
 
-/** A sideways drag of a fitted image: where it has got to (px from where it started), then where and how fast (px/ms) it was let go. */
-export interface Swipe { drag(dx: number): void; end(dx: number, vx: number): void }
 /** Images stepped through slide this far apart, on this spring. */
 const GAP = 24;
 const SLIDE = { type: "spring", visualDuration: 0.32, bounce: 0 } as const;
 
-interface View { scale: number; x: number; y: number }
-const MAX_SCALE = 16;
 
 /**
  * An image fitted to the window, to zoom (pinch, ctrl/⌘ + wheel, double-click,
@@ -762,7 +753,8 @@ function ImageViewer({ url, file, setControls, swipe, waiting = false, onMarking
   const [natural, setNatural] = useState<{ w: number; h: number } | null>(file.width && file.height ? { w: file.width, h: file.height } : null);
   const [zoomControls, setZoomControls] = useState<ReactNode>(null);
   const [marksOn, setMarksOn] = useState(false);
-  const zoom = useZoom(natural, setZoomControls, marksOn ? undefined : swipe);
+  const zoom = useZoom(natural, { swipe: marksOn ? undefined : swipe });
+  useZoomTools(zoom, setZoomControls);
   const marks = useImageMarks({ url: waiting ? null : url, name: file.name, natural, scale: zoom.scale, pass: zoom.stageProps, onDone: onClose });
   useEffect(() => { setMarksOn(marks.on); onMarking(marks.on); }, [marks.on, onMarking]);
   useEffect(() => () => onMarking(false), [onMarking]);
@@ -796,7 +788,7 @@ function ImageViewer({ url, file, setControls, swipe, waiting = false, onMarking
 function Peek({ shown: { sessionKey, file }, side }: { shown: Shown; side: -1 | 1 }) {
   const url = useFileUrl(sessionKey, file, true, false);
   const [natural, setNatural] = useState<{ w: number; h: number } | null>(file.width && file.height ? { w: file.width, h: file.height } : null);
-  const zoom = useZoom(natural, noControls, undefined, false);
+  const zoom = useZoom(natural, { keys: false });
   return (
     <div className={css2.fpPeek} data-peek="" aria-hidden="true" style={{ transform: `translateX(calc(${side} * (100% + ${GAP}px)))` }}>
       <div ref={zoom.stage} className={css2.fpStage}>
@@ -807,7 +799,6 @@ function Peek({ shown: { sessionKey, file }, side }: { shown: Shown; side: -1 | 
     </div>
   );
 }
-const noControls = () => {};
 
 /** How much of a file has come, out of its size (the station's, else the one sent with it); a bar that sweeps when neither is known. */
 function FileComing({ got, size, inBar = false }: { got: FileProgress | null | undefined; size: number; inBar?: boolean }) {
@@ -821,200 +812,9 @@ function FileComing({ got, size, inBar = false }: { got: FileProgress | null | u
   );
 }
 
-/**
- * Zooming and panning a picture of `natural` size in a stage (an image, a video's frames): fitted to the window, to
- * zoom (pinch, ctrl/⌘ + wheel, double-click, the bar's buttons, + − 0 1) around the pointer and pan (drag, wheel) when
- * larger than the window. Fitted, one pointer dragging sideways is a `swipe`'s. `place` positions the picture (absolutely, in the stage's centre).
- */
-export function useZoom(natural: { w: number; h: number } | null, setControls: (c: ReactNode) => void, swipe?: Swipe, keys = true) {
-  const stage = useRef<HTMLDivElement>(null);
-  const [box, setBox] = useState<{ w: number; h: number; top: number; bottom: number } | null>(null);
-  const [view, setView] = useState<View | null>(null);
-  const viewRef = useRef<View | null>(null);
-  viewRef.current = view;
-
-  useLayoutEffect(() => {
-    const el = stage.current;
-    if (!el) return;
-    // The bars floating over it (`data-floats`: the preview's head, a video's controls, the marking tools) take their
-    // height off its top and bottom: faded or not, the picture stays clear of them.
-    const root = el.closest(`.${css2.fp}`) ?? el;
-    const measure = () => {
-      // Its parent's box, which it fills: its own may be moved and scaled (opening out of a thumbnail, viewerFlight.ts).
-      const r = (el.parentElement ?? el).getBoundingClientRect();
-      // Where it is in place: stepping through images moves it sideways (the strip; the one beside, a peek's place).
-      let slid = 0;
-      for (let n = el.parentElement; n && n !== root; n = n.parentElement) {
-        const t = getComputedStyle(n).transform;
-        if (t !== "none") slid += new DOMMatrixReadOnly(t).m41;
-      }
-      let top = 0, bottom = 0;
-      for (const bar of root.querySelectorAll("[data-floats]")) {
-        const b = bar.getBoundingClientRect();
-        if (!b.height || b.right <= r.left - slid || b.left >= r.right - slid) continue;
-        if (b.top + b.bottom < r.top + r.bottom) top = Math.max(top, b.bottom - r.top);
-        else bottom = Math.max(bottom, r.bottom - b.top);
-      }
-      setBox((was) => {
-        const next = { w: el.clientWidth, h: el.clientHeight, top: Math.max(0, Math.round(top)), bottom: Math.max(0, Math.round(bottom)) };
-        return was && was.w === next.w && was.h === next.h && was.top === next.top && was.bottom === next.bottom ? was : next;
-      });
-    };
-    measure();
-    const observer = new ResizeObserver(measure);
-    observer.observe(el);
-    // Bars come and go (the marking tools) and change their size: each is watched as it comes.
-    const watch = () => { for (const bar of root.querySelectorAll("[data-floats]")) observer.observe(bar); measure(); };
-    watch();
-    const coming = new MutationObserver(watch);
-    coming.observe(root, { childList: true, subtree: true });
-    return () => { observer.disconnect(); coming.disconnect(); };
-  }, []);
-
-  // Fitted, it keeps a margin from the window's edges, and a smaller one from the bars.
-  const MARGIN = box && box.w < 640 ? 12 : 32;
-  const padTop = box?.top ? box.top + MARGIN / 2 : MARGIN, padBottom = box?.bottom ? box.bottom + MARGIN / 2 : MARGIN;
-  /** Where a picture smaller than the room between the bars sits: in the middle of it. */
-  const centreY = (padTop - padBottom) / 2;
-  const fit = natural && box ? Math.min(1, (box.w - 2 * MARGIN) / natural.w, (box.h - padTop - padBottom) / natural.h) : 1;
-  const minScale = Math.min(fit, 1) / 2;
-
-  /** Keeps a larger-than-window image covering the window between the bars, a smaller one centred there. */
-  const clamp = useCallback((v: View): View => {
-    if (!natural || !box) return v;
-    const scale = Math.min(MAX_SCALE, Math.max(minScale, v.scale));
-    const spareX = Math.max(0, (natural.w * scale - box.w) / 2);
-    const h = natural.h * scale, room = box.h - box.top - box.bottom;
-    const y = h <= room ? centreY : Math.min(h / 2 - box.h / 2 + box.top, Math.max(box.h / 2 - box.bottom - h / 2, v.y));
-    return { scale, x: Math.min(spareX, Math.max(-spareX, v.x)), y };
-  }, [natural, box, minScale, centreY]);
-
-  // Fitted when it first shows and whenever the window changes while still fitted.
-  const fitted = useRef(true);
-  useEffect(() => {
-    if (!natural || !box) return;
-    if (fitted.current || !viewRef.current) setView({ scale: fit, x: 0, y: centreY });
-    else setView((v) => (v ? clamp(v) : v));
-  }, [natural, box, fit, centreY, clamp]);
-
-  /** To `scale`, the image's point under (px, py) — relative to the stage's centre — staying put. */
-  const zoomTo = useCallback((scale: number, px = 0, py = 0) => {
-    const v = viewRef.current;
-    if (!v) return;
-    const next = Math.min(MAX_SCALE, Math.max(minScale, scale));
-    const k = next / v.scale;
-    fitted.current = false;
-    setView(clamp({ scale: next, x: px - (px - v.x) * k, y: py - (py - v.y) * k }));
-  }, [clamp, minScale]);
-  const reset = useCallback(() => { fitted.current = true; setView({ scale: fit, x: 0, y: centreY }); }, [fit, centreY]);
-
-  const fromCentre = (clientX: number, clientY: number) => {
-    const r = stage.current!.getBoundingClientRect();
-    return [clientX - r.left - r.width / 2, clientY - r.top - r.height / 2] as const;
-  };
-
-  // The wheel pans (with shift, sideways); only a trackpad's pinch, or the wheel with ctrl or ⌘, zooms. A listener that
-  // can stop the page scrolling.
-  useEffect(() => {
-    const el = stage.current;
-    if (!el) return;
-    const onWheel = (e: WheelEvent) => {
-      e.preventDefault();
-      const v = viewRef.current;
-      if (!v) return;
-      const unit = e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? el.clientHeight : 1;
-      if (e.ctrlKey || e.metaKey) {
-        // A trackpad's pinch comes as a wheel with ctrl, in small steps; a mouse wheel's notches are much larger.
-        const step = e.deltaY * unit;
-        const factor = Math.exp(-step * (e.ctrlKey && Math.abs(step) < 50 ? 0.01 : 0.002));
-        zoomTo(v.scale * factor, ...fromCentre(e.clientX, e.clientY));
-        return;
-      }
-      const dx = (e.shiftKey && !e.deltaX ? e.deltaY : e.deltaX) * unit, dy = (e.shiftKey && !e.deltaX ? 0 : e.deltaY) * unit;
-      const next = clamp({ ...v, x: v.x - dx, y: v.y - dy });
-      if (next.x === v.x && next.y === v.y) return;
-      fitted.current = false;
-      setView(next);
-    };
-    el.addEventListener("wheel", onWheel, { passive: false });
-    return () => el.removeEventListener("wheel", onWheel);
-  }, [zoomTo, clamp]);
-
-  // Drag to pan; two fingers pinch.
-  const pointers = useRef(new Map<number, { x: number; y: number }>());
-  const gesture = useRef<{ view: View; x: number; y: number; distance: number } | null>(null);
-  // A swipe going on: how far it has gone and how fast (px/ms, of its last moves); let go when a second finger comes.
-  const swiping = useRef<{ dx: number; at: number; vx: number } | null>(null);
-  const letGo = (dx: number, vx: number) => { if (swiping.current) { swiping.current = null; swipe?.end(dx, vx); } };
-  const start = () => {
-    const points = [...pointers.current.values()];
-    const v = viewRef.current;
-    if (!v || !points.length) { gesture.current = null; return; }
-    const x = points.reduce((s, p) => s + p.x, 0) / points.length, y = points.reduce((s, p) => s + p.y, 0) / points.length;
-    const distance = points.length > 1 ? Math.hypot(points[0]!.x - points[1]!.x, points[0]!.y - points[1]!.y) : 0;
-    gesture.current = { view: v, x, y, distance };
-  };
-  const onPointerDown = (e: React.PointerEvent) => {
-    if (e.button !== 0) return;
-    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
-    pointers.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
-    letGo(0, 0);
-    start();
-  };
-  const onPointerMove = (e: React.PointerEvent) => {
-    if (!pointers.current.has(e.pointerId) || !gesture.current) return;
-    pointers.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
-    const points = [...pointers.current.values()];
-    const g = gesture.current;
-    const x = points.reduce((s, p) => s + p.x, 0) / points.length, y = points.reduce((s, p) => s + p.y, 0) / points.length;
-    let scale = g.view.scale;
-    if (points.length > 1 && g.distance > 0) scale = Math.min(MAX_SCALE, Math.max(minScale, g.view.scale * Math.hypot(points[0]!.x - points[1]!.x, points[0]!.y - points[1]!.y) / g.distance));
-    // The point under the gesture's start stays under its centre now.
-    const [sx, sy] = fromCentre(g.x, g.y);
-    const k = scale / g.view.scale;
-    // Fitted, one pointer moves the image sideways to the one before or after it.
-    if (swipe && points.length === 1 && g.distance === 0 && g.view.scale <= fit * 1.01) {
-      const dx = x - g.x, s = swiping.current;
-      if (!s && Math.abs(dx) < 4) return;
-      const at = e.timeStamp;
-      swiping.current = { dx, at, vx: s && at > s.at ? 0.6 * ((dx - s.dx) / (at - s.at)) + 0.4 * s.vx : 0 };
-      swipe.drag(dx);
-      return;
-    }
-    fitted.current = false;
-    setView(clamp({ scale, x: sx - (sx - g.view.x) * k + (x - g.x), y: sy - (sy - g.view.y) * k + (y - g.y) }));
-  };
-  const onPointerUp = (e: React.PointerEvent) => {
-    const g = gesture.current, s = swiping.current;
-    pointers.current.delete(e.pointerId);
-    start();
-    // A move that stopped a while ago is no flick.
-    if (s && g) letGo(e.type === "pointerup" ? e.clientX - g.x : 0, e.timeStamp - s.at < 80 ? s.vx : 0);
-  };
-  const onDoubleClick = (e: React.MouseEvent) => {
-    const v = viewRef.current;
-    if (!v) return;
-    if (v.scale > fit * 1.01) reset();
-    else zoomTo(Math.max(fit * 2.5, 1), ...fromCentre(e.clientX, e.clientY));
-  };
-
-  useEffect(() => {
-    if (!keys) return;
-    const onKey = (e: KeyboardEvent) => {
-      const v = viewRef.current;
-      if (!v || e.metaKey || e.ctrlKey || e.altKey) return;
-      if (e.key === "+" || e.key === "=") zoomTo(v.scale * 1.25);
-      else if (e.key === "-" || e.key === "_") zoomTo(v.scale / 1.25);
-      else if (e.key === "0") reset();
-      else if (e.key === "1") zoomTo(1);
-      else return;
-      e.preventDefault();
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [zoomTo, reset, keys]);
-
-  const scale = view?.scale ?? fit;
+/** A zoom's tools in the bar: out, how large (to fit), in, its own size. */
+function useZoomTools(zoom: ReturnType<typeof useZoom>, setControls: (c: ReactNode) => void) {
+  const { scale, minScale, zoomTo, reset } = zoom;
   useEffect(() => {
     setControls(
       <span className={css2.fpZoom}>
@@ -1026,16 +826,6 @@ export function useZoom(natural: { w: number; h: number } | null, setControls: (
     );
   }, [scale, minScale, zoomTo, reset, setControls]);
   useEffect(() => () => setControls(null), [setControls]);
-
-  const larger = !!natural && !!box && !!view && (natural.w * view.scale > box.w + 1 || natural.h * view.scale > box.h - box.top - box.bottom + 1);
-  return {
-    stage, scale,
-    stageProps: {
-      "data-pan": larger || undefined, "data-zoomed": (view && view.scale > fit * 1.01) || undefined,
-      onPointerDown, onPointerMove, onPointerUp, onPointerCancel: onPointerUp, onDoubleClick,
-    },
-    place: natural && view ? { width: natural.w, height: natural.h, transform: `translate(-50%, -50%) translate(${view.x}px, ${view.y}px) scale(${view.scale})` } : null,
-  };
 }
 
 // ── PDFs ───────────────────────────────────────────────────────────────

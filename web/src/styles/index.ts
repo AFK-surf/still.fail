@@ -62,7 +62,6 @@ import "../ToolStep.css.ts";
 import "../scrollbars.css.ts";
 import "../FilePreview.css.ts";
 import "@stillfail/ui/viewer/media.css.ts";
-import "../VideoViewer.css.ts";
 import "@stillfail/ui/viewer/Reader.css.ts";
 import "@stillfail/ui/viewer/Player.css.ts";
 import "../dock.css.ts";

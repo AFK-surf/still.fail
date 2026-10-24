@@ -660,7 +660,6 @@
     "one": "1 frame",
     "other": "{n} frames"
   },
-  "web-main.video.guessed": "Couldn't decode frames; assuming 60 fps",
   "web-main.video.next": "Next frame",
   "web-main.video.nextKey": "Next frame (→ or .; Shift ×10)",
   "web-main.video.pause": "Pause",
@@ -670,8 +669,6 @@
   "web-main.video.position": "Position",
   "web-main.video.prev": "Previous frame",
   "web-main.video.prevKey": "Previous frame (← or ,; Shift ×10)",
-  "web-main.video.rate": "Playback speed (click to cycle)",
-  "web-main.video.readingFrames": "Loading frames",
   "web-main.video.save": "Save frame",
   "web-main.video.saveTip": "Save frame as PNG",
   "web-main.video.turn": "Landscape",
