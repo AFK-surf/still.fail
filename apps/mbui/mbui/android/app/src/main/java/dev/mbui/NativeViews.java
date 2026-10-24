@@ -59,7 +59,8 @@ import java.util.concurrent.atomic.AtomicInteger;
  * FrameLayout over the MBView in the view tree (so a WebView takes the touches on it) but under its surface on the
  * screen: the MBView's surface is on top of the window and translucent, and the app paints a hole (kind 9,
  * transparent) where a view shows, so what it paints after the hole draws over the view and what it paints around it
- * clips it. Each view sits in a clipping frame at its clip rect, itself at its content rect within it.
+ * clips it. Each view sits in a clipping frame, moved by its translation: a page's or a site's frame is its content's
+ * rect cut to its clip rect by its clip bounds; a video's is its clip rect, the picture at its content rect within it.
  *
  * Kind 1, a video: Media3's ExoPlayer on a TextureView, reading the file through the app (ViewSource: ranged reads
  * the app answers through the core, `station.file.part` or `drive.read`), never from a file or a URL of its own.
@@ -305,6 +306,11 @@ final class NativeViews {
         public boolean dispatchTouchEvent(MotionEvent e) {
             // (through: none of it is the view's; MBView, under this layer, is given it by the window)
             if (mode.equals("through")) return false;
+            // (a finger down on what its clip bounds cut away is not the view's: the window gives it to MBView)
+            if (e.getActionMasked() == MotionEvent.ACTION_DOWN) {
+                android.graphics.Rect r = getClipBounds();
+                if (r != null && !r.contains((int) e.getX(), (int) e.getY())) return false;
+            }
             return super.dispatchTouchEvent(e);
         }
 
@@ -362,7 +368,7 @@ final class NativeViews {
             MBView v = Host.view;
             if (v == null) return;
             MotionEvent m = MotionEvent.obtain(e);
-            m.offsetLocation(getLeft() - v.getLeft(), getTop() - v.getTop());
+            m.offsetLocation(getLeft() + getTranslationX() - v.getLeft(), getTop() + getTranslationY() - v.getTop());
             v.dispatchTouchEvent(m);
             m.recycle();
         }
@@ -478,14 +484,24 @@ final class NativeViews {
             v.shown = shown;
             int l = Math.round(to[4]), t = Math.round(to[5]);
             int cw = Math.max(0, Math.round(to[6]) - l), ch = Math.max(0, Math.round(to[7]) - t);
+            // The frame moved by its translation, never by its margins: a layout each frame a list scrolls (a page
+            // in a message) dropped frames. A page's or a site's frame is its content's rect, cut to the clip by its
+            // clip bounds, so only a new size lays it out again; a video's is the clip's (its picture moved by the
+            // texture's transform).
+            boolean whole = v.kind != 1;
+            int fx = whole ? Math.round(to[0]) : l, fy = whole ? Math.round(to[1]) : t;
+            int fw = whole ? Math.max(0, Math.round(to[2])) : cw, fh = whole ? Math.max(0, Math.round(to[3])) : ch;
             FrameLayout.LayoutParams p = (FrameLayout.LayoutParams) v.clip.getLayoutParams();
-            if (p.leftMargin != l || p.topMargin != t || p.width != cw || p.height != ch) {
-                p.leftMargin = l;
-                p.topMargin = t;
-                p.width = cw;
-                p.height = ch;
+            if (p.leftMargin != 0 || p.topMargin != 0 || p.width != fw || p.height != fh) {
+                p.leftMargin = 0;
+                p.topMargin = 0;
+                p.width = fw;
+                p.height = fh;
                 v.clip.setLayoutParams(p);
             }
+            v.clip.setTranslationX(fx);
+            v.clip.setTranslationY(fy);
+            if (whole) v.clip.setClipBounds(new android.graphics.Rect(l - fx, t - fy, l - fx + cw, t - fy + ch));
             v.clip.setVisibility(shown && cw > 0 && ch > 0 ? View.VISIBLE : View.GONE);
             v.moved();
             round(v);
@@ -510,7 +526,9 @@ final class NativeViews {
             v.clip.setOutlineProvider(new android.view.ViewOutlineProvider() {
                 @Override
                 public void getOutline(View view, android.graphics.Outline o) {
-                    int l = Math.round(v.at[0] - v.at[4]), t = Math.round(v.at[1] - v.at[5]);
+                    // (a page's or a site's frame is its content's rect: the content at its top left)
+                    boolean whole = v.kind != 1;
+                    int l = whole ? 0 : Math.round(v.at[0] - v.at[4]), t = whole ? 0 : Math.round(v.at[1] - v.at[5]);
                     o.setRoundRect(l, t, l + Math.round(v.at[2]), t + Math.round(v.at[3]), v.at[8]);
                 }
             });
@@ -1342,23 +1360,9 @@ final class NativeViews {
                 }
             });
             bytes = html.getBytes(java.nio.charset.StandardCharsets.UTF_8).length;
-            clip.addView(web, new FrameLayout.LayoutParams(0, 0));
+            // (its frame is its rect: put moves and sizes it, nothing here)
+            clip.addView(web, new FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT));
             web.loadDataWithBaseURL(null, html, "text/html", "utf-8", null);
-        }
-
-        @Override
-        void moved() {
-            if (web == null) return;
-            FrameLayout.LayoutParams p = (FrameLayout.LayoutParams) web.getLayoutParams();
-            int l = Math.round(at[0] - at[4]), t = Math.round(at[1] - at[5]);
-            int w = Math.round(at[2]), h = Math.round(at[3]);
-            if (p.leftMargin != l || p.topMargin != t || p.width != w || p.height != h) {
-                p.leftMargin = l;
-                p.topMargin = t;
-                p.width = w;
-                p.height = h;
-                web.setLayoutParams(p);
-            }
         }
 
         @Override
@@ -1652,12 +1656,12 @@ final class NativeViews {
         void moved() {
             if (web == null) return;
             FrameLayout.LayoutParams p = (FrameLayout.LayoutParams) web.getLayoutParams();
-            int l = Math.round(at[0] - at[4]), t = Math.round(at[1] - at[5]);
-            // laid out at its rect over its scale, drawn at its scale from its top left
+            // laid out at its rect over its scale, drawn at its scale from its top left (its frame's: the frame is its
+            // rect, put moves it)
             int w = Math.round(at[2] / scale), h = Math.round(at[3] / scale);
-            if (p.leftMargin != l || p.topMargin != t || p.width != w || p.height != h) {
-                p.leftMargin = l;
-                p.topMargin = t;
+            if (p.leftMargin != 0 || p.topMargin != 0 || p.width != w || p.height != h) {
+                p.leftMargin = 0;
+                p.topMargin = 0;
                 p.width = w;
                 p.height = h;
                 web.setLayoutParams(p);
