@@ -1195,3 +1195,17 @@ let usage_dark : Array[Int64] = [0xE0602FFFL, 0x3987E5FFL, 0x199E70FFL, 0x9085E9
 pub fn usage_series(i : Int) -> Int64 {
   (if theme().dark { usage_dark } else { usage_light })[i % 4]
 }
+
+///|
+/// An agent's history's steps (the web's History.css.ts, ToolStep.css.ts): the turn's rail 9.5 in, how much of a wait
+/// has gone a bar 3 high; a diff's line 22 in, its mark 9.
+pub let history_rail_in : @ui.Space = room(9.5)
+
+///|
+pub let wait_bar_h : @ui.Len = Fixed(3.0)
+
+///|
+pub let diff_line_in : @ui.Space = room(22.0)
+
+///|
+pub let diff_mark_in : @ui.Space = room(9.0)

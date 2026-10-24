@@ -6,10 +6,9 @@
 // is the core's (the chat view's `tabs`), as are the changes (`chat.tabs.*`). Each chat keeps its own tabs.
 
 ///|
-/// What the panel shows that is not here yet, given by the page (sfapp's for now): an agent's history's steps (its
-/// session's key), a letter drawn as the chat draws a message, a link opened as the chat opens one.
+/// What the panel shows that is not here yet, given by the page (sfapp's for now): a letter drawn as the chat draws a
+/// message, a link opened as the chat opens one.
 pub(all) struct PanelParts {
-  steps : (String) -> Unit
   message : (Json) -> Unit
   link : (String) -> Unit
 }
@@ -335,14 +334,7 @@ fn side_panel(
         }
       } else if front != "" {
         // one of its agents' execution histories
-        agent_history(
-          c,
-          src,
-          r.station,
-          front,
-          agent_json((src.topic)("chat", chat_params(r)).value, front),
-          fn() { (parts.steps)(front) },
-        )
+        agent_history(c, src, r.station, front, agent_json((src.topic)("chat", chat_params(r)).value, front))
       }
     })
     |> ignore

@@ -55,7 +55,6 @@ fn side_toggle(r : ChatRef, tab : String) -> Unit {
 /// the chat draws a message, a link opened as the chat opens one.
 fn panel_parts(c : @ui.Ctx, src : Source, r : ChatRef) -> @sfdesk.PanelParts {
   {
-    steps: fn(key) { history_steps(c, src, r, key, None) },
     message: fn(m) {
       match view_of_chat(src, r) {
         (Some(v), _, _) =>

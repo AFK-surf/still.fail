@@ -39,10 +39,10 @@ pub fn history_only_io() -> Bool {
 
 ///|
 /// Agent `key`'s history on `station` (`a` as its chat's view has it): its head and, unfolded, its details, a line
-/// under them; its steps (`steps`) in the rest.
-pub fn agent_history(c : @ui.Ctx, src : Source, station : String, key : String, a : Json?, steps : () -> Unit) -> Unit {
+/// under them; its steps in the rest (history_list.mbt).
+pub fn agent_history(c : @ui.Ctx, src : Source, station : String, key : String, a : Json?) -> Unit {
   history_head(c, src, station, key, a)
-  c.box(style=wh_fill, steps) |> ignore
+  c.box(style=wh_fill, fn() { history_list(c, src, station, key) }) |> ignore
 }
 
 ///|
