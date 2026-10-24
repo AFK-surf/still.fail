@@ -452,7 +452,7 @@ function ProfilePage({ p }: { p: Profile }) {
   // A copy of another station's: shown, used, changed only there.
   const copy = p.share?.role === "user";
   const signs = !copy && signsIn(p);
-  const detail = p.check ? p.check.detail.replace(/^可用[，,]\s*/, "") : t("web-mobile.profiles.notChecked");
+  const detail = p.check ? p.checkLine ?? "" : t("web-mobile.profiles.notChecked");
   const checked = p.check?.time?.checkedAt ? t("web-mobile.profiles.checkedAgo", { ago: p.check.time.checkedAt.ago }) : "";
   // What it is now in a line: what is wrong (its trouble's title), else what its check said beyond its words, else they;
   // under it a dot of its tone, its words (when that line is not they) and when it was checked, coloured only when off.

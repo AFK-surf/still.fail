@@ -1191,6 +1191,12 @@ export interface Profile {
 	 * only), as its home's managers set it (`profile.put` `input.workspaces`); to a member of a joined one, that one.
 	 */
 	workspaces?: string[];
+	/** What it is, in a word: the machine's own login (终端里的登录), its provider, else its kind of account. */
+	kindText?: string;
+	/** Who signing it in goes to: OpenCode, Kimi, Claude, Grok, Cursor, Devin, ChatGPT. */
+	signInProvider?: string;
+	/** Its last check in a line: its detail (without the 可用 a working one starts with), or that it has none yet. */
+	checkLine?: string;
 }
 
 export interface TurnRecord {
