@@ -290,16 +290,28 @@ test "review passive native reveal preserves editor focus in a keyboard-constrai
   reset()
   let source = fixture("signin")
   reviewer_open.val = true
-  let t = @ui.Tester::new(fn(c) { login_page(c, source, true) }, w=320.0, h=560.0)
+  let viewport : Ref[(Double, Double, Double, Double)?] = Ref(None)
+  let t = @ui.Tester::new(fn(c) {
+    login_page(c, source, true)
+    viewport.val = c.laid_rect(c.id("login/review-scroll"))
+  }, w=320.0, h=560.0)
   t.native_answers("accessibility.reviewError", fn(_) { Json::null() })
-  t.set_ime_inset(220.0)
   t.frame()
-  let bottom = 560.0 - status_top() - nav_foot() - 220.0
+  // Like ios_app.m: resize the app frame AND report the declared IME inset.
+  // set_ime_inset alone never resizes a Tester's frame.
+  t.set_ime_inset(220.0)
+  t.resize(320.0, 340.0)
+  let bottom = 340.0 - status_top() - nav_foot()
+  let (_, top, _, height) = viewport.val.unwrap()
+  assert_eq(height, bottom)
+  assert_eq(top + height, bottom)
   t.act(@ui.TextField, @ui.Focus, label=tr("review.emailLabel"))
   // Passive native traversal must not activate disabled Submit, unfocus email, or dismiss its IME.
   for label in [tr("review.showPassword"), tr("review.submit"), tr("common.back")] {
     let target = t.get(@ui.Button, label~)
     t.post("still.fail.reviewer.reveal", "{\"id\":" + target.id.to_string() + "}")
+    t.frame()
+    // Another ordinary rebuild must not snap back to the active email editor.
     t.frame()
     let (_, y, _, h) = t.get(@ui.Button, label~).rect
     assert_true(y >= 0.0)
@@ -316,4 +328,53 @@ test "review passive native reveal preserves editor focus in a keyboard-constrai
   assert_true(y >= 0.0)
   assert_true(y + h <= bottom)
   assert_eq(reviewer_attempt.val, "")
+}
+
+///|
+test "review native tap and Next reveal focused editors after host keyboard resize exactly once" {
+  reset()
+  let calls : Array[String] = []
+  let source : Source = {
+    ..fixture("signin"),
+    call: fn(name, _, _) { calls.push(name) },
+  }
+  reviewer_open.val = true
+  let viewport : Ref[(Double, Double, Double, Double)?] = Ref(None)
+  let t = @ui.Tester::new(fn(c) {
+    login_page(c, source, true)
+    viewport.val = c.laid_rect(c.id("login/review-scroll"))
+  }, w=320.0, h=780.0)
+  t.frame()
+  let (_, _, _, full_height) = viewport.val.unwrap()
+  assert_eq(full_height, 780.0 - status_top() - nav_foot())
+  // An ordinary pointer tap, not a semantic Focus request or passive reveal packet.
+  let (x, y, w, h) = t.get(@ui.TextField, label=tr("review.emailLabel")).rect
+  t.tap(x + w / 2.0, y + h / 2.0)
+  assert_true(t.get(@ui.TextField, label=tr("review.emailLabel")).focused)
+  t.type_text("review@example.com")
+  // The native host owns keyboard avoidance: both values describe the SAME occlusion.
+  t.set_ime_inset(440.0)
+  t.resize(320.0, 340.0)
+  let bottom = 340.0 - status_top() - nav_foot()
+  let (_, top, _, height) = viewport.val.unwrap()
+  assert_eq(height, bottom)
+  assert_eq(top + height, bottom)
+  let (_, ey, _, eh) = t.get(@ui.TextField, label=tr("review.emailLabel")).rect
+  assert_true(eh > 0.0)
+  assert_true(ey >= top)
+  assert_true(ey + eh <= bottom)
+  t.press("Enter")
+  let password = t.get(@ui.TextField, label=tr("review.passwordLabel"))
+  assert_true(password.focused)
+  let (_, py, _, ph) = password.rect
+  assert_true(ph > 0.0)
+  assert_true(py >= top)
+  assert_true(py + ph <= bottom)
+  assert_eq(t.ime_action(), @hostapi.ime_action_password)
+  assert_eq(reviewer_email.text(), "review@example.com")
+  assert_true(reviewer_email_valid(reviewer_email.text()))
+  assert_eq(reviewer_error.val, "")
+  assert_false(reviewer_busy.val)
+  assert_eq(reviewer_attempt.val, "")
+  assert_eq(calls.length(), 0)
 }

@@ -82,6 +82,12 @@ let reviewer_show : Ref[Bool] = Ref(false)
 let reviewer_reveal_id : Ref[Int] = Ref(0)
 
 ///|
+let reviewer_reveal_focus : Ref[Int] = Ref(0)
+
+///|
+let reviewer_reveal_height : Ref[Double] = Ref(0.0)
+
+///|
 fn init {
   // Passive VoiceOver traversal reveals a widget without changing the active editor or keyboard.
   @ui.on_message("still.fail.reviewer.reveal", fn(json, _) {
@@ -127,6 +133,8 @@ fn reviewer_reset() -> Unit {
   reviewer_email.set("")
   reviewer_password.set("")
   reviewer_reveal_id.val = 0
+  reviewer_reveal_focus.val = 0
+  reviewer_reveal_height.val = 0.0
   reviewer_show.val = false
   reviewer_busy.val = false
   reviewer_error.val = ""
@@ -190,6 +198,8 @@ fn reviewer_leave(c : @ui.Ctx, src : Source) -> Unit {
   reviewer_password.set("")
   reviewer_email.set("")
   reviewer_reveal_id.val = 0
+  reviewer_reveal_focus.val = 0
+  reviewer_reveal_height.val = 0.0
   reviewer_show.val = false
   reviewer_busy.val = false
   reviewer_cancelling.val = false
@@ -384,6 +394,18 @@ fn login_view(c : @ui.Ctx, src : Source) -> Unit {
 ///|
 fn login_reveal(c : @ui.Ctx, key : String, review : Bool) -> Unit {
   let viewport = c.laid_rect(c.id(key))
+  let focus = c.focused_id()
+  // Native taps/Next do not ask for semantic Focus. Follow editor changes and the host's
+  // keyboard-reduced frame, but not every rebuild: passive VO traversal must stay revealed.
+  let follow_editor = review && reviewer_reveal_id.val == 0 &&
+    (focus != reviewer_reveal_focus.val || c.height < reviewer_reveal_height.val)
+  if review {
+    let height = c.height
+    c.after_build("review-reveal-frame", fn() {
+      reviewer_reveal_focus.val = focus
+      reviewer_reveal_height.val = height
+    })
+  }
   let mut dy = 0.0
   // A list's row 0 has its own id scope. Read unclipped layout, never the clipped hit rect.
   c.scope(0, fn() {
@@ -393,7 +415,8 @@ fn login_reveal(c : @ui.Ctx, key : String, review : Bool) -> Unit {
     } else { ["login/back", "sign-in", "login/reviewer"] }
     for target in keys {
       let id = c.id(target)
-      if c.action_asked(id, Focus) || reviewer_reveal_id.val == id {
+      let focused_editor = follow_editor && (target == "review/email" || target == "review/password") && id == focus
+      if c.action_asked(id, Focus) || reviewer_reveal_id.val == id || focused_editor {
         match (viewport, c.laid_rect(id)) {
           (Some((_, top, _, height)), Some((_, y, _, h))) if height > 0.0 => {
             dy = if h > height || y < top { y - top } else if y + h > top + height { y + h - top - height } else { 0.0 }
@@ -420,7 +443,8 @@ fn login_page(c : @ui.Ctx, src : Source, review : Bool) -> Unit {
     c.on_back(fn() { if !busy { login_adding.val = false } })
   }
   let scroll_key = if review { "login/review-scroll" } else { "login/welcome-scroll" }
-  login_reveal(c, scroll_key, review)
+  // The host already removes keyboard occlusion from c.height (ios_app.m's on_frame).
+  // Only system-bar padding is ours; subtracting ime_inset here clips the form twice.
   c.list(scroll_key, 1, 720.0, fn(_) {
     c.box(style=@sf.login_page, fn() {
       let column = c.box(style=@sf.login_column, fn() {
@@ -457,7 +481,9 @@ fn login_page(c : @ui.Ctx, src : Source, review : Bool) -> Unit {
       // Native accessibility is scoped to these login trees, never other editors or account pages.
       c.semantics(column, Group, description=if review { "still.fail.reviewer" } else { "still.fail.reviewer.welcome" })
     }) |> ignore
-  }, h=Px(dmax(0.0, c.height - status_top() - nav_foot() - c.ime_inset()))) |> ignore
+  }, h=Px(dmax(0.0, c.height - status_top() - nav_foot()))) |> ignore
+  // After the form so email's normal Next/focus_editor is observed in this build too.
+  login_reveal(c, scroll_key, review)
 }
 
 ///|
