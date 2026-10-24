@@ -2750,6 +2750,9 @@ export const SHAPES: Record<string, Shape> = {
     ["online", "bool"],
     ["reconnecting", "bool", { default: true, doc: "Up, but not reached just now (connecting or coming back): its figures are from before." }],
     ["blocked", opt("String"), { doc: "Down for a security mode (it refused this device, or takes none of this workspace's members yet): why, in\nwords, in place of the page's 离线 note. Absent otherwise." }],
+    ["stateText", "String", { doc: "How it is in a few words, as its page's head and its card say it: down for a security mode, its line;\naway, when it was last online (or never); up, connecting until its overview is read, then its agents at work or idle." }],
+    ["stateBusy", "bool", { default: true, doc: "Its agents are at work (`stateText` says how many): said in the accent." }],
+    ["problems", vec("StationProblem"), { doc: "What may be wrong with it, worst first: silent though up (no host reading for 15 s), down for a\nsecurity mode (why), away (red once it has been online, else amber: never connected). None while all is well." }],
     ["lastSeen", opt("i64"), { client: opt("I54"), doc: "Seconds, from still.fail cloud." }],
     ["version", opt("String")],
     ["link", "Link"],
@@ -2763,6 +2766,11 @@ export const SHAPES: Record<string, Shape> = {
     ["joined", "bool", { default: true, doc: "Its home is another workspace (docs/multi-workspace.md): this one it joined, and only the owners and\nadmins of that one manage the machine." }],
     ["home", opt("String"), { doc: "With `joined`: its home workspace's name, when the viewer is in that one too." }],
   ]),
+  StationProblem: struct([
+    ["key", "String", { doc: "silent | blocked | away" }],
+    ["level", "String", { doc: "amber | red" }],
+    ["text", "String"],
+  ], { doc: "Something wrong with a station, in words (StationView `problems`)." }),
   JoinableView: struct([
     ["offered", "bool", { doc: "The viewer is an owner or admin of another workspace: picking a station of one of those is offered." }],
     ["loading", "bool", { doc: "This workspace or one of those has not been read yet: more may come." }],

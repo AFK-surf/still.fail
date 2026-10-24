@@ -4165,6 +4165,15 @@ export interface NetMeasured {
 	moved?: string;
 }
 
+/** Something wrong with a station, in words (StationView `problems`). */
+export interface StationProblem {
+	/** silent | blocked | away */
+	key: string;
+	/** amber | red */
+	level: string;
+	text: string;
+}
+
 export interface RuntimeModels {
 	runtime: RuntimeKind;
 	models: string[];
@@ -4386,6 +4395,18 @@ export interface StationView {
 	 * words, in place of the page's 离线 note. Absent otherwise.
 	 */
 	blocked?: string;
+	/**
+	 * How it is in a few words, as its page's head and its card say it: down for a security mode, its line;
+	 * away, when it was last online (or never); up, connecting until its overview is read, then its agents at work or idle.
+	 */
+	stateText: string;
+	/** Its agents are at work (`stateText` says how many): said in the accent. */
+	stateBusy?: boolean;
+	/**
+	 * What may be wrong with it, worst first: silent though up (no host reading for 15 s), down for a
+	 * security mode (why), away (red once it has been online, else amber: never connected). None while all is well.
+	 */
+	problems: StationProblem[];
 	/** Seconds, from still.fail cloud. */
 	lastSeen?: number;
 	version?: string;

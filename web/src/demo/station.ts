@@ -101,7 +101,8 @@ export function driveFolder(root: string, path: string): DriveFolder {
 }
 export const stationView = () => {
   const base = now(data.station);
-  return { ...base, station: STATION, host: withMeters(base.host), way: { path: NET.path, via: NET.via }, overview: overview() };
+  // (as the core says how it is: up, its agents idle, nothing wrong; views.ts stationState, stationProblems)
+  return { ...base, station: STATION, stateText: "空闲", stateBusy: false, problems: [], host: withMeters(base.host), way: { path: NET.path, via: NET.via }, overview: overview() };
 };
 /** What a Claude agent's model control offers and the account it runs on. */
 export const runs = (): Runs => ({ choices: stationView().models as Runs["choices"], profile: overview().profiles[0] as unknown as Runs["profile"] });

@@ -1,8 +1,8 @@
 // Station overview: only alerts and available updates. Its name opens its own page (StationPage.tsx), where the rest is.
-import { Fragment, useEffect, useState, type ReactNode } from "react";
-import { stamp, type StationView } from "../api.ts";
-import type { Level, NetFigure, NetRelay, StationNet } from "../core/shapes.ts";
-import { Button, StatusDot, Time, Tip } from "../ui.tsx";
+import { Fragment, type ReactNode } from "react";
+import type { StationView } from "../api.ts";
+import type { NetFigure, NetRelay, StationNet } from "../core/shapes.ts";
+import { Button, StatusDot, Tip } from "../ui.tsx";
 import { useTopic } from "../core/react.ts";
 import { openLocalNetwork, useLanKept } from "../localNetwork.ts";
 import { UpdateSummary } from "../Versions.tsx";
@@ -97,25 +97,14 @@ export function joinedText(s: StationView): string | null {
   return s.home ? t("web-pages.stations.joinedFrom", { name: s.home }) : t("web-pages.stations.joinedElsewhere");
 }
 
-/** Whether its agents are at work, or when it was last seen. */
+/** How it is in a few words (the core's `stateText`): its agents at work in the accent. */
 export function state(s: StationView): ReactNode {
-  // Down for a security mode: that, not when it was last seen (it is up; it refused).
-  if (!s.online && s.blocked) return s.summary;
-  if (!s.online) return s.lastSeen ? tx("web-pages.stations.lastSeen", { time: <Time stamp={stamp(s, "lastSeen")} /> }) : t("web-pages.stations.neverOnline");
-  if (!s.overview) return t("common.connecting");
-  const running = s.overview.counts.running;
-  return running > 0 ? <span className={css.busy}>{t("web-pages.stations.running", { n: running })}</span> : t("web-pages.stations.idle");
+  return s.stateBusy ? <span className={css.busy}>{s.stateText}</span> : s.stateText;
 }
 
-/** What may be wrong with it, each in words, worst first. */
-export function problems(s: StationView, silent: boolean): { key: string; level: Level; text: string }[] {
-  if (s.online && silent) return [{ key: "silent", level: "amber", text: t("web-pages.stations.silent", { name: NAME }) }];
-  // Down for a security mode: why (the core's `blocked`), not how to bring it back.
-  if (!s.online && s.blocked) return [{ key: "blocked", level: "red", text: s.blocked }];
-  if (!s.online) {
-    return [{ key: "away", level: s.lastSeen ? "red" : "amber", text: s.lastSeen ? t("web-pages.stations.away", { name: NAME }) : t("web-pages.stations.neverConnected", { name: NAME }) }];
-  }
-  return [];
+/** Whether it is silent though up: no host reading for a while (the core's `problems`). */
+export function silentOf(s: StationView): boolean {
+  return s.problems.some((p) => p.key === "silent");
 }
 
 /**
@@ -205,21 +194,9 @@ function Ways({ relays }: { relays: NetRelay[] }) {
   );
 }
 
-/** Whether `waiting` has held for `ms`: a station that says it is online but has not answered for a while. */
-export function useLong(waiting: boolean, ms: number): boolean {
-  const [long, setLong] = useState(false);
-  useEffect(() => {
-    setLong(false);
-    if (!waiting) return;
-    const t = setTimeout(() => setLong(true), ms);
-    return () => clearTimeout(t);
-  }, [waiting, ms]);
-  return waiting && long;
-}
-
 function StationCard({ s, menu, page, manager, onMark, markBusy }: { s: StationView; menu: ReactNode; page: string; manager: boolean; onMark: ((s: StationView, mark: Mark) => void) | undefined; markBusy: boolean }) {
-  const silent = useLong(s.online && !s.host, 15_000);
-  const wrong = problems(s, silent);
+  const silent = silentOf(s);
+  const wrong = s.problems;
   const foot = [s.host?.identity, joinedText(s)].filter(Boolean).join(" · ");
   const net = useStationNet(s.online ? s.station : null);
   return (
