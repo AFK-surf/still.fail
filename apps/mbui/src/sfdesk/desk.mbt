@@ -37,6 +37,7 @@ pub fn reset() -> Unit {
   station_page_reset()
   profile_page_reset()
   font_setting_reset()
+  changelog_reset()
   station_cards_reset()
   places_reset()
   chat_page_reset()
