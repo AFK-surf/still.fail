@@ -1710,10 +1710,30 @@ fn cmd_wrap(args : Array[String]) -> Unit {
   let c_file = wargs[cs[0]]
   let objdir = cat([sub(out, 0, out.length() - 4), b".mbc"])
   makedirs(objdir)
-  let flags = if msvc {
+  let flags0 = if msvc {
     msvc_compile_flags(wargs[:])
   } else {
     gnu_compile_flags(wargs[:])
+  }
+  // a test program of a few tests compiled less optimised (MBC_LIGHT_TESTS: "pkg/name.kind …", its level
+  // MBC_LIGHT_OPT, -O0 by default, apps/mbui/scripts/test.sh): what it tests is the code, not how fast it runs. (The
+  // library's and the settings' three, against -O2 on Studio: compiled in 9 s for 13, run as fast, 2026-10-25; -O1 12 s)
+  let mut light = false
+  match getenv("MBC_LIGHT_TESTS") {
+    Some(list) if !msvc =>
+      for e in split_words(list) {
+        if ends(out, cat([b"/", e, b".exe"])) {
+          light = true
+        }
+      }
+    _ => ()
+  }
+  let flags = if light {
+    let f = flags0.filter(fn(x) { !starts(x, b"-O") })
+    f.push(getenv("MBC_LIGHT_OPT").unwrap_or(b"-O0"))
+    f
+  } else {
+    flags0
   }
   let init_flags = default_init_flags(msvc)
   let j = match getenv("MBC_JOBS") {
