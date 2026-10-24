@@ -785,10 +785,6 @@ fn entry_row(
 
   let id = c.id("entry/" + path)
   if !busy {
-    // right clicked (a desktop's): its sheet, as ⋯ on it chosen opens (Drive.tsx's row menu)
-    if wide_on.val && c.right_clicked(id) is Some(_) {
-      dv_open(c, Entry({ station: at.station, root: Some(root), path: at.path }, e, shown.map(fn(x) { x.name })))
-    }
     if dv_held(c, id) {
       toggle()
     }

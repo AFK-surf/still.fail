@@ -300,16 +300,10 @@ fn ask_dismiss(
     exit=@motion.trans(fade=0.0, scale=archive_scale, ox=0.0, oy=0.0, spec=archive_tween),
     start_at?=if at >= 0.0 { Some(at) } else { None },
     fn() {
-      // (in the wide frame quieter, the text's under the pointer: Chat.css.ts askDismiss)
-      if shown && wide_on.val {
-        c.cursor(id, Hand)
-      }
-      let hot = wide_on.val && shown && c.lit(id)
-      let ink = if !wide_on.val { t.p.muted } else if hot { t.p.text } else { t.p.subtle }
-      // (6 under the options: the message's own gap of 4 taken in the wide frame, the web's 忽略 in their box)
-      c.box(pt=if wide_on.val { dismiss_wide_pt } else { 6.0 }, fn() {
+      // (6 under the options)
+      c.box(pt=6.0, fn() {
         c.box(id=if shown { id } else { 0 }, fn() {
-          c.rich([@ui.span(tr("android-chat.asks.dismiss"), underline=hot)], size=12.0, color=ink, line=18.0) |> ignore
+          c.rich([@ui.span(tr("android-chat.asks.dismiss"))], size=12.0, color=t.p.muted, line=18.0) |> ignore
         })
         |> ignore
       })
@@ -317,9 +311,6 @@ fn ask_dismiss(
     },
   )
 }
-
-///|
-let dismiss_wide_pt : Double = 2.0
 
 ///|
 /// The chat into the archive (Chat.kt archiveChat; its bar's 归档, the one under its last 做完了, its sheet's): Home at

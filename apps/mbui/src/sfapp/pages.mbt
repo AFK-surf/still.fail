@@ -18,16 +18,6 @@ fn nav_bar(c : @ui.Ctx, title : String) -> Unit {
 }
 
 ///|
-/// A page this slice does not fill yet: its bar.
-fn placeholder_page(c : @ui.Ctx, title : String) -> Unit {
-  c.box(w=Fill(1.0), h=Fill(1.0), fn() {
-    nav_bar(c, title)
-    c.box(w=Fill(1.0), h=Fill(1.0), fn() {  }) |> ignore
-  })
-  |> ignore
-}
-
-///|
 /// A list card on a sheet (Parts.kt RowsCard): its rows list_pad in, its corner concentric round theirs; its ground the
 /// caller's (the workspace in use: the chips' grey).
 // kept across runs: a value (no field of it changes)
