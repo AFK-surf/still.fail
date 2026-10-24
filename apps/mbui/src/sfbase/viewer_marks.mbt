@@ -11,7 +11,7 @@
 
 ///|
 /// The tools (ImageMarks.kt MarkTool).
-priv enum MarkTool {
+pub(all) enum MarkTool {
   Select
   Rect
   Arrow
@@ -22,7 +22,7 @@ priv enum MarkTool {
 ///|
 /// still.fail's accent, what is drawn by default; the colours to draw in, each with the halo that edges its words.
 // kept across runs: a table, never written
-let mark_colors : Array[(Int64, Int64)] = [
+pub let mark_colors : Array[(Int64, Int64)] = [
   (0xE5704AFFL, 0xFFFFFFFFL),
   (0xE5484DFFL, 0xFFFFFFFFL),
   (0xF5C518FFL, 0x111111FFL),
@@ -33,7 +33,7 @@ let mark_colors : Array[(Int64, Int64)] = [
 ]
 
 ///|
-fn halo_of(color : Int64) -> Int64 {
+pub fn halo_of(color : Int64) -> Int64 {
   for c in mark_colors {
     if c.0 == color {
       return c.1
@@ -44,19 +44,19 @@ fn halo_of(color : Int64) -> Int64 {
 
 ///|
 /// On the screen whatever the zoom: a line's width, words' size, how near a finger picks a mark.
-let mark_line : Double = 3.0
+pub let mark_line : Double = 3.0
 
 ///|
-let mark_text : Double = 18.0
+pub let mark_text : Double = 18.0
 
 ///|
-let mark_reach : Double = 12.0
+pub let mark_reach : Double = 12.0
 
 ///|
 /// A mark, in the image's own pixels (as shown: the zoom's natural size). `w`: its line (words' size), set by the zoom
 /// as it is drawn, so it looks the same on the screen. `pts`: a box's corners, an arrow's tail and point, a line's
 /// points, words' top left.
-priv struct Mark {
+pub(all) struct Mark {
   id : Int
   kind : String
   color : Int64
@@ -66,13 +66,13 @@ priv struct Mark {
 }
 
 ///|
-fn Mark::numbered(self : Mark) -> Bool {
+pub fn Mark::numbered(self : Mark) -> Bool {
   self.kind == "box" || self.kind == "arrow"
 }
 
 ///|
 /// Its box (x, y, w, h).
-fn Mark::bounds(self : Mark) -> (Double, Double, Double, Double) {
+pub fn Mark::bounds(self : Mark) -> (Double, Double, Double, Double) {
   if self.kind == "words" {
     (self.pts[0], self.pts[1], self.w * 0.62 * self.text.length().to_double(), self.w * 1.3)
   } else {
@@ -92,13 +92,13 @@ fn Mark::bounds(self : Mark) -> (Double, Double, Double, Double) {
 }
 
 ///|
-fn Mark::moved(self : Mark, dx : Double, dy : Double) -> Mark {
+pub fn Mark::moved(self : Mark, dx : Double, dy : Double) -> Mark {
   { ..self, pts: self.pts.mapi(fn(i, v) { if i % 2 == 0 { v + dx } else { v + dy } }) }
 }
 
 ///|
 /// An arrow's barbs (ImageMarks.kt barbs): back from its point, a half its size apart.
-fn arrow_barbs(ax : Double, ay : Double, bx : Double, by : Double, w : Double) -> (Double, Double, Double, Double) {
+pub fn arrow_barbs(ax : Double, ay : Double, bx : Double, by : Double, w : Double) -> (Double, Double, Double, Double) {
   let dx = bx - ax
   let dy = by - ay
   let len = dmax(1.0e-6, (dx * dx + dy * dy).sqrt())
@@ -111,7 +111,7 @@ fn arrow_barbs(ax : Double, ay : Double, bx : Double, by : Double, w : Double) -
 }
 
 ///|
-fn seg_distance(px : Double, py : Double, ax : Double, ay : Double, bx : Double, by : Double) -> Double {
+pub fn seg_distance(px : Double, py : Double, ax : Double, ay : Double, bx : Double, by : Double) -> Double {
   let dx = bx - ax
   let dy = by - ay
   let l2 = dx * dx + dy * dy
@@ -123,7 +123,7 @@ fn seg_distance(px : Double, py : Double, ax : Double, ay : Double, bx : Double,
 
 ///|
 /// How far (x, y) is from the mark's line (words: 0 inside their box).
-fn Mark::distance(self : Mark, x : Double, y : Double) -> Double {
+pub fn Mark::distance(self : Mark, x : Double, y : Double) -> Double {
   let p = self.pts
   match self.kind {
     "words" => {
@@ -165,14 +165,14 @@ fn Mark::distance(self : Mark, x : Double, y : Double) -> Double {
 ///|
 /// A finger on the image while marking: drawing a mark, or moving the one picked (its tail or point when an arrow's end
 /// was taken: `end` 0 the tail, 1 the point; -1 the whole), from where (in the image's pixels).
-priv enum MarkDrag {
+pub(all) enum MarkDrag {
   Drawing(Mark)
   Moving(Int, Double, Double, Mark, Int, Array[Mark], Bool)
 }
 
 ///|
 /// Marking, while the viewer marks one image.
-priv struct Marking {
+pub(all) struct Marking {
   mut on : Bool
   mut tool : MarkTool
   mut color : Int64
@@ -202,7 +202,7 @@ priv struct Marking {
 }
 
 ///|
-let marking : Marking = {
+pub let marking : Marking = {
   on: false,
   tool: Rect,
   color: 0xE5704AFFL,
@@ -227,13 +227,13 @@ let marking : Marking = {
 }
 
 ///|
-fn marks_start() -> Unit {
+pub fn marks_start() -> Unit {
   marks_leave()
   marking.on = true
 }
 
 ///|
-fn marks_leave() -> Unit {
+pub fn marks_leave() -> Unit {
   marking.on = false
   marking.tool = Rect
   marking.palette = false
@@ -252,14 +252,14 @@ fn marks_leave() -> Unit {
 }
 
 ///|
-fn marks_commit(next : Array[Mark], before? : Array[Mark]) -> Unit {
+pub fn marks_commit(next : Array[Mark], before? : Array[Mark]) -> Unit {
   marking.past.push(before.unwrap_or(marking.shapes))
   marking.future = []
   marking.shapes = next
 }
 
 ///|
-fn marks_undo() -> Unit {
+pub fn marks_undo() -> Unit {
   match marking.past.pop() {
     Some(p) => {
       marking.future.insert(0, marking.shapes)
@@ -272,7 +272,7 @@ fn marks_undo() -> Unit {
 }
 
 ///|
-fn marks_redo() -> Unit {
+pub fn marks_redo() -> Unit {
   if marking.future.length() > 0 {
     let f = marking.future.remove(0)
     marking.past.push(marking.shapes)
@@ -283,7 +283,7 @@ fn marks_redo() -> Unit {
 }
 
 ///|
-fn marks_remove(id : Int) -> Unit {
+pub fn marks_remove(id : Int) -> Unit {
   marks_commit(marking.shapes.filter(fn(s) { s.id != id }))
   marking.picked = -1
   marking.note = -1
@@ -291,7 +291,7 @@ fn marks_remove(id : Int) -> Unit {
 
 ///|
 /// The words being written, put down (all of them gone: the words they were, removed).
-fn marks_put_down(c : @ui.Ctx) -> Unit {
+pub fn marks_put_down(c : @ui.Ctx) -> Unit {
   let (id, x, y, w, color) = match marking.writing {
     Some(x) => x
     None => return
@@ -322,7 +322,7 @@ fn marks_put_down(c : @ui.Ctx) -> Unit {
 
 ///|
 /// The numbered marks' numbers, in the order they were drawn.
-fn mark_numbers(shapes : Array[Mark]) -> Map[Int, Int] {
+pub fn mark_numbers(shapes : Array[Mark]) -> Map[Int, Int] {
   let out : Map[Int, Int] = Map([])
   for s in shapes {
     if s.numbered() {
@@ -334,7 +334,7 @@ fn mark_numbers(shapes : Array[Mark]) -> Map[Int, Int] {
 
 ///|
 /// What is drawn now: the marks and the one being drawn, not the words being written again.
-fn marks_drawn() -> Array[Mark] {
+pub fn marks_drawn() -> Array[Mark] {
   let list = match marking.drag {
     Some(Drawing(m)) => marking.shapes + [m]
     _ => marking.shapes
@@ -348,7 +348,7 @@ fn marks_drawn() -> Array[Mark] {
 ///|
 /// A finger on the image while marking (ImageMarks.kt down, move, up): `px`, `py` on the stage, `r` the picture's
 /// place (x, y, w, h) on it, `nw` its natural width; what `phase` is: 0 down, 1 moved, 2 up.
-fn marks_finger(c : @ui.Ctx, phase : Int, px : Double, py : Double, r : (Double, Double, Double, Double), nw : Double) -> Unit {
+pub fn marks_finger(c : @ui.Ctx, phase : Int, px : Double, py : Double, r : (Double, Double, Double, Double), nw : Double) -> Unit {
   let (rx, ry, rw, _) = r
   let k = rw / dmax(1.0, nw)
   let x = (px - rx) / k
@@ -490,7 +490,7 @@ fn marks_finger(c : @ui.Ctx, phase : Int, px : Double, py : Double, r : (Double,
 /// hand smoothed through its midpoints) in one drawing over the stage; words with their halo; the picked mark's
 /// dashed frame and its handles; the numbered marks' pins; the words being written. Each placed where it is on the
 /// stage, a layer of its own (nothing in it flows after what came before).
-fn marks_draw(c : @ui.Ctx, r : (Double, Double, Double, Double), nw : Double, nh : Double) -> Unit {
+pub fn marks_draw(c : @ui.Ctx, r : (Double, Double, Double, Double), nw : Double, nh : Double) -> Unit {
   let (rx, ry, rw, _) = r
   let k = rw / dmax(1.0, nw)
   let numbers = mark_numbers(marking.shapes)
@@ -633,7 +633,7 @@ fn marks_draw(c : @ui.Ctx, r : (Double, Double, Double, Double), nw : Double, nh
 /// A pin's number (ImageMarks.kt Pins; Notes.kt Pin): the mark's colour edged 2 in its halo (`size` 24), or no edge
 /// (`size` 16, a note's), round but for its corner at the foot towards the mark (3; 2 the small one), the number in
 /// the halo. Its node.
-fn picture_pin(c : @ui.Ctx, n : Int, color : Int64, size : Double, id? : Int = 0) -> Int {
+pub fn picture_pin(c : @ui.Ctx, n : Int, color : Int64, size : Double, id? : Int = 0) -> Int {
   let halo = halo_of(color)
   let small = size < 20.0
   let edge = if small { 0.0 } else { 2.0 }
@@ -671,11 +671,11 @@ fn picture_pin(c : @ui.Ctx, n : Int, color : Int64, size : Double, id? : Int = 0
 
 ///|
 /// How much bigger an open note's pin is (ImageMarks.kt Pins: 1.12, from its point).
-let pin_open_scale : Double = 1.12
+pub let pin_open_scale : Double = 1.12
 
 ///|
 /// The points of a rectangle at (x, y), `w` × `h`, its corners round by `r`, all the way round.
-fn round_rect(x : Double, y : Double, w : Double, h : Double, r : Double) -> Array[(Double, Double)] {
+pub fn round_rect(x : Double, y : Double, w : Double, h : Double, r : Double) -> Array[(Double, Double)] {
   let pi = @math.PI
   let out : Array[(Double, Double)] = [(x + r, y)]
   out.append(@ui.arc(x + w - r, y + r, r, from=-pi / 2.0, sweep=pi / 2.0))
@@ -689,7 +689,7 @@ fn round_rect(x : Double, y : Double, w : Double, h : Double, r : Double) -> Arr
 ///|
 /// A line drawn by hand through its `n` points (`at`), smoothed as ImageMarks.kt pathOf has it: through the midpoints,
 /// each point bending the line (quadratics, each in pieces a few pixels long).
-fn smoothed(n : Int, at : (Int) -> (Double, Double)) -> Array[(Double, Double)] {
+pub fn smoothed(n : Int, at : (Int) -> (Double, Double)) -> Array[(Double, Double)] {
   let out : Array[(Double, Double)] = [at(0)]
   if n < 3 {
     for i in 1..<n {
@@ -716,7 +716,7 @@ fn smoothed(n : Int, at : (Int) -> (Double, Double)) -> Array[(Double, Double)] 
 
 ///|
 /// A path's dashes (4 on, 3 off) as lines in white at 85%, 1 wide.
-fn dashes(path : Array[(Double, Double)], out : Array[@ui.Line]) -> Unit {
+pub fn dashes(path : Array[(Double, Double)], out : Array[@ui.Line]) -> Unit {
   let mut on = true
   let mut left = 4.0
   for i in 0..<(path.length() - 1) {
@@ -748,7 +748,7 @@ fn dashes(path : Array[(Double, Double)], out : Array[@ui.Line]) -> Unit {
 ///|
 /// The words the marked image's quotes say (ImageMarks.kt quotes): a quote per numbered mark, where it is (for the
 /// agent), on which image, what was said of it.
-fn marks_quotes(made : String, original : String, nw : Double, nh : Double) -> Array[(String, String, String)] {
+pub fn marks_quotes(made : String, original : String, nw : Double, nh : Double) -> Array[(String, String, String)] {
   let numbers = mark_numbers(marking.shapes)
   let out = []
   for s in marking.shapes {
@@ -789,7 +789,7 @@ fn marks_quotes(made : String, original : String, nw : Double, nh : Double) -> A
 
 ///|
 /// The marks as the host draws them (marks.mbt's JSON), in the picture's size as shown.
-fn marks_json(nw : Double, nh : Double) -> String {
+pub fn marks_json(nw : Double, nh : Double) -> String {
   let numbers = mark_numbers(marking.shapes)
   let list = marking.shapes.map(fn(s) {
     Json::object({
@@ -809,7 +809,7 @@ fn marks_json(nw : Double, nh : Double) -> String {
 ///|
 /// Back while marking (ImageMarks.kt back): closes a note, puts down the words being written, closes the colours,
 /// lets go of the picked mark, else stops marking.
-fn marks_back(c : @ui.Ctx) -> Unit {
+pub fn marks_back(c : @ui.Ctx) -> Unit {
   if marking.note >= 0 {
     marks_note_done(c)
   } else if marking.writing is Some(_) {
@@ -824,7 +824,7 @@ fn marks_back(c : @ui.Ctx) -> Unit {
 }
 
 ///|
-fn marks_note_done(c : @ui.Ctx) -> Unit {
+pub fn marks_note_done(c : @ui.Ctx) -> Unit {
   if marking.note >= 0 {
     marking.comments[marking.note] = marking.note_field.text()
   }
@@ -834,7 +834,7 @@ fn marks_note_done(c : @ui.Ctx) -> Unit {
 
 ///|
 /// Something drawn (or being written) to be kept.
-fn marks_any() -> Bool {
+pub fn marks_any() -> Bool {
   marking.shapes.length() > 0 || (marking.writing is Some(_) && marking.write_field.text().trim(chars=" \n\t") != "")
 }
 
@@ -842,7 +842,7 @@ fn marks_any() -> Bool {
 /// In the top bar while marking (ImageMarks.kt MarksActions): why it failed, 取消, 下载标注后的图片, 添加到对话 (when
 /// there is a chat's draft to put it in). True on the frame one of them is tapped: `go(draft)`.
 /// `ink`: what its words and icons are drawn in (a desktop's bar is the page's, preview_desk.mbt).
-fn marks_actions(c : @ui.Ctx, can_draft : Bool, go : (Bool) -> Unit, ink? : Int64 = dark_muted) -> Unit {
+pub fn marks_actions(c : @ui.Ctx, can_draft : Bool, go : (Bool) -> Unit, ink? : Int64 = dark_muted) -> Unit {
   let ready = !marking.busy && marks_any()
   // as wide as they are: the file's name before them cut short instead
   c.box(dir=Row, gap=4.0, align=ACenter, keep=true, fn() {
@@ -902,18 +902,18 @@ fn marks_actions(c : @ui.Ctx, can_draft : Bool, go : (Bool) -> Unit, ink? : Int6
 
 ///|
 /// The corner of what is on the viewer's bars (ImageMarks.kt PICTURE_KEY).
-let picture_key : Double = 12.0
+pub let picture_key : Double = 12.0
 
 ///|
 // kept across runs: a value (no field of it changes)
-let marks_put_room : @ui.Style = @ui.css("pl=S1")
+pub let marks_put_room : @ui.Style = @ui.css("pl=S1")
 
 ///|
 /// The foot while marking (ImageMarks.kt MarksFoot, in the viewer's dark): the note being written in its box over the
 /// keyboard (Notes.kt NoteBox), else the notes as cards (a tap opens one again; Notes.kt Card) over the tools
 /// (ImageMarks.kt MarksTools: 选择, 框, 箭头, 画笔, 文字 · the colour · 删除 the picked · 撤销, 重做), the colours in a row
 /// over them when asked for.
-fn marks_foot(c : @ui.Ctx) -> Unit {
+pub fn marks_foot(c : @ui.Ctx) -> Unit {
   if marking.note >= 0 {
     match mark_notes().iter().find_first(fn(x) { x.0 == marking.note }) {
       Some(note) => {
@@ -1010,7 +1010,7 @@ fn marks_foot(c : @ui.Ctx) -> Unit {
 ///|
 /// The numbered marks' notes in their numbers' order (ImageMarks.kt notes): the mark's id, its number, what it is (框,
 /// 箭头), its colour.
-fn mark_notes() -> Array[(Int, Int, String, Int64)] {
+pub fn mark_notes() -> Array[(Int, Int, String, Int64)] {
   let numbers = mark_numbers(marking.shapes)
   let out = []
   for s in marking.shapes {
@@ -1024,7 +1024,7 @@ fn mark_notes() -> Array[(Int, Int, String, Int64)] {
 
 ///|
 /// The note of the mark `id` opened (ImageMarks.kt open): what was being written put down, nothing picked.
-fn marks_open_note(c : @ui.Ctx, id : Int) -> Unit {
+pub fn marks_open_note(c : @ui.Ctx, id : Int) -> Unit {
   marks_put_down(c)
   marking.picked = -1
   marking.note = id
@@ -1034,13 +1034,13 @@ fn marks_open_note(c : @ui.Ctx, id : Int) -> Unit {
 
 ///|
 /// How a note's box comes in (Notes.kt pop: from nothing and 97% of its size, 140 ms on Arrive).
-let note_pop_ms : Double = 140.0
+pub let note_pop_ms : Double = 140.0
 
 ///|
 /// The note being written (Notes.kt NoteBox, in the dark): a frosted card floating over the keyboard (26 round, 8 in at
 /// its sides, 10 over, 8 under, 6 between): its pin and what it is, muted; then 删除批注 (a bin, 36 round), the field
 /// (16 on 21, 添加批注（可选） till something is written, 8 lines at most), 完成 (a tick on the ink, 36 round).
-fn note_box(c : @ui.Ctx, note : (Int, Int, String, Int64)) -> Unit {
+pub fn note_box(c : @ui.Ctx, note : (Int, Int, String, Int64)) -> Unit {
   let (id, n, what, color) = note
   let pop = @motion.anim(c, "marks/note-pop", 1.0, global=true)
   if marking.popped != id {
@@ -1102,7 +1102,7 @@ fn note_box(c : @ui.Ctx, note : (Int, Int, String, Int64)) -> Unit {
 ///|
 /// A note's card in the tray (Notes.kt Card, in the dark): 160 wide, frosted, 16 round, 12 and 9 in: its pin and what
 /// is said of it (只引用, muted, while nothing is), over what it is, muted.
-fn note_card(c : @ui.Ctx, note : (Int, Int, String, Int64), id : Int) -> Unit {
+pub fn note_card(c : @ui.Ctx, note : (Int, Int, String, Int64), id : Int) -> Unit {
   let (mid, n, what, color) = note
   let said = marking.comments.get(mid).unwrap_or("").trim(chars=" \n\t").to_string()
   c.box(w=Px(160.0), padx=12.0, pady=9.0, gap=3.0, radius=16.0, bg=note_ground, shadow=@sf.floating.sigma, shadow_y=@sf.floating.dy, shadow_color=@sf.floating.color, id~, fn() {
@@ -1124,63 +1124,63 @@ fn note_card(c : @ui.Ctx, note : (Int, Int, String, Int64), id : Int) -> Unit {
 /// A note's box's head (its pin and what it is: 8 in, 6 apart), the row under it (the bin, the field, the tick: 2
 /// apart, at its foot), a card's head (6 apart); the room either side of a tools' gap (4).
 // kept across runs: a value (no field of it changes)
-let note_head : @ui.Style = @ui.css("row px=S2 gap=S1_5 align=ACenter")
+pub let note_head : @ui.Style = @ui.css("row px=S2 gap=S1_5 align=ACenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let note_row : @ui.Style = @ui.css("row w=Full gap=S0_5 align=AEnd")
+pub let note_row : @ui.Style = @ui.css("row w=Full gap=S0_5 align=AEnd")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let card_head : @ui.Style = @ui.css("row gap=S1_5 align=ACenter")
+pub let card_head : @ui.Style = @ui.css("row gap=S1_5 align=ACenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let mark_gap_room : @ui.Style = @ui.css("px=S1")
+pub let mark_gap_room : @ui.Style = @ui.css("px=S1")
 
 ///|
 /// The dark theme's colours the notes take (Theme.kt Dark): the page, its words, muted, subtle, the accent; their
 /// ground the raised grey at 72% over the page (Glass.kt floatingStill).
-let note_bg : Int64 = 0x1B1C1FFFL
+pub let note_bg : Int64 = 0x1B1C1FFFL
 
 ///|
-let note_ink : Int64 = 0xECECEDFFL
+pub let note_ink : Int64 = 0xECECEDFFL
 
 ///|
-let note_muted : Int64 = 0x9A9DA3FFL
+pub let note_muted : Int64 = 0x9A9DA3FFL
 
 ///|
-let note_subtle : Int64 = 0x84888FFFL
+pub let note_subtle : Int64 = 0x84888FFFL
 
 ///|
-let note_accent : Int64 = 0xEF7A55FFL
+pub let note_accent : Int64 = 0xEF7A55FFL
 
 ///|
-let note_ground : Int64 = @sf.over(note_bg, @sf.alpha(0x2A2C31FFL, 0.72))
+pub let note_ground : Int64 = @sf.over(note_bg, @sf.alpha(0x2A2C31FFL, 0.72))
 
 ///|
 /// The note's box's corner (Notes.kt NoteBox: Smooth(26), the composer's).
-let note_box_corner : Double = 26.0
+pub let note_box_corner : Double = 26.0
 
 ///|
 /// The bars' corner over a picture (ImageMarks.kt PictureBar: concentric out of a key's 12 by the bar's 6).
-let picture_bar_corner : Double = @sf.surface_corner(6.0, picture_key)
+pub let picture_bar_corner : Double = @sf.surface_corner(6.0, picture_key)
 
 ///|
 /// Between the tools' groups (ImageMarks.kt Gap): a line 1 by 18, white at 10%, 4 either side.
-fn mark_gap(c : @ui.Ctx) -> Unit {
+pub fn mark_gap(c : @ui.Ctx) -> Unit {
   c.box(style=mark_gap_room, fn() { c.box(w=Px(1.0), h=Px(18.0), bg=0xFFFFFF1AL, fn() {  }) |> ignore }) |> ignore
 }
 
 ///|
 /// A colour's swatch (ImageMarks.kt Swatch): a disc of it 16 across, ringed 1.5 inside its edge in white at 50%.
-fn mark_swatch(c : @ui.Ctx, color : Int64) -> Unit {
+pub fn mark_swatch(c : @ui.Ctx, color : Int64) -> Unit {
   c.box(w=Px(16.0), h=Px(16.0), radius=8.0, bg=color, border=1.5, border_color=0xFFFFFF80L, fn() {  }) |> ignore
 }
 
 ///|
 /// The colour shown: the words being written's, the picked mark's, else the one to draw in.
-fn marks_shown_color() -> Int64 {
+pub fn marks_shown_color() -> Int64 {
   match marking.writing {
     Some((_, _, _, _, col)) => col
     None =>
@@ -1193,7 +1193,7 @@ fn marks_shown_color() -> Int64 {
 
 ///|
 /// A colour to draw in next; the picked mark (or the words being written) takes it at once.
-fn marks_pick_color(col : Int64) -> Unit {
+pub fn marks_pick_color(col : Int64) -> Unit {
   marking.color = col
   marking.palette = false
   match marking.writing {
@@ -1209,7 +1209,7 @@ fn marks_pick_color(col : Int64) -> Unit {
 ///|
 /// Where what is being written ends on the stage (ImageMarks.kt writingBottom): the words being written's foot; the
 /// open note's pin's point and the note's box under it (NOTE_BOX, 140); None while neither is.
-fn marks_writing_bottom(z : @kit.Zoom) -> Double? {
+pub fn marks_writing_bottom(z : @kit.Zoom) -> Double? {
   if !marking.on {
     return None
   }
@@ -1236,8 +1236,8 @@ fn marks_writing_bottom(z : @kit.Zoom) -> Double? {
 
 ///|
 /// The room the open note's box takes under its pin (ImageMarks.kt NOTE_BOX).
-let note_box_room : Double = 140.0
+pub let note_box_room : Double = 140.0
 
 ///|
 /// How far what is being written stays over the keyboard (FilePreview.kt: 24).
-let marks_keyboard_gap : Double = 24.0
+pub let marks_keyboard_gap : Double = 24.0

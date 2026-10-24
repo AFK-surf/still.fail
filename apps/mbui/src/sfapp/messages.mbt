@@ -1128,15 +1128,6 @@ fn owner_of(here : Here, a : Attachment) -> String {
 }
 
 ///|
-/// The last part of a path.
-fn base_name(path : String) -> String {
-  match path.rev_find("/") {
-    Some(i) => path.view(start_offset=i + 1).to_string()
-    None => path
-  }
-}
-
-///|
 /// A file of a message (ChatFiles.kt FileItem): an image in its box (its likeness until it is here), a video's box
 /// on black with the play mark and its name, anything else a card. `quote`: where the list quotes, an image held long
 /// is quoted (ChatFiles.kt ChatImage: felt as it is).

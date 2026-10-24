@@ -193,7 +193,7 @@ pub fn open_entry(
       } else {
         []
       }
-      (drive_viewer.val)(c, src, dv_file(in_.station, root, in_.path, e), pictures)
+      open_drive_file(dv_file(in_.station, root, in_.path, e), pictures)
     }
     _ => save_entry(c, src, in_, e)
   }

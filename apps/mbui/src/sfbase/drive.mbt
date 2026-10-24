@@ -316,12 +316,6 @@ pub fn dv_free_name(name : String, taken : Array[String]) -> String {
 
 
 ///|
-/// What opens a drive's file over the app to be looked at (a picture, a PDF, code: the app's file preview,
-/// src/sfapp/open_file.mbt), the others of its folder to step to beside it; given as the app starts.
-// kept across runs: given once as the app starts (src/sfapp/app.mbt)
-pub let drive_viewer : Ref[(@ui.Ctx, Source, DriveFile, Array[DriveFile]) -> Unit] = Ref(fn(_, _, _, _) {  })
-
-///|
 /// A station's file or folder dragged out of a list of its drive (drag.ts Dragged: the files' page, a chat's 文件 tab):
 /// its station and that station's name, its root and its path under it, its absolute path, its name, its size,
 /// whether it is a folder. What a composer takes of it is named by its path on its station.

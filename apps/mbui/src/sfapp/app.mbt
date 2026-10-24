@@ -44,7 +44,6 @@ fn reset() -> Unit {
   // the desktop's own (src/sfdesk)
   @sfdesk.reset()
   // what the drive's pages ask of the app: its file preview
-  @sfbase.drive_viewer.val = open_file
   // what the desktop's messages draw that is this package's: the file preview, visualizations, links (wide_panel.mbt)
   @sfbase.chat_parts.val = desk_chat_parts()
   home_rows.val = []
@@ -97,7 +96,6 @@ fn reset() -> Unit {
   share_closing.val = false
   splash_waited.val = false
   drafts.clear()
-  sent_pictures.clear()
   cui.attach = false
   cui.picking = None
   cui.picking_for = ""
@@ -121,7 +119,6 @@ fn reset() -> Unit {
   fix_replied.clear()
   dv_reset()
   decide_reset()
-  close_now()
   @settings.reset()
   found_marking.val = ("", [], 0.0)
   find_marking.val = []
@@ -174,25 +171,7 @@ fn reset() -> Unit {
   recent.access = NoGallery
   recent.reading = None
   recent.photos = []
-  // the viewer (preview.mbt, preview_marks.mbt: marks_leave above)
-  marking.color = 0xE5704AFFL
-  marking.next_id = 1
-  marking.to_draft = false
-  marking.job_name = ""
-  marking.write_field.set("")
-  marking.note_field.set("")
-  pv_thumbs.clear()
-  pv_frames.clear()
   fix_fetches.clear()
-  pv_frames_n.val = 0
-  pv_first.clear()
-  pv_hidden.val = ""
-  pv_read.clear()
-  pv_strip.leaving = None
-  pv_strip.pinned = None
-  pv_strip.near.clear()
-  near_asked.clear()
-  viewer_awake_env.val = -1
   // a drive's files, a text read (keep.mbt, drive_reader.mbt)
   reset_by_hand.val = true
 }
@@ -398,7 +377,6 @@ fn signed_in(c : @ui.Ctx, src : Source) -> Unit {
         // the player sideways (a phone on its side for a film): back turns it upright first
         play_back(c)
         pick_back(c)
-        preview(c, src)
         viz_full_layer(c, src)
       } else {
         // a page opened slides in once the core has given what it shows (App.kt Pages: LOCAL_MS at most)

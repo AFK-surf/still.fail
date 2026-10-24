@@ -181,6 +181,8 @@ pub fn reset() -> Unit {
   writings_reset()
   // services' pages kept, their sizes, what was marked on them (service_page.mbt)
   service_pages_reset()
+  // a file open over the pages, what it flew from and kept (viewer.mbt, viewer_marks.mbt)
+  file_viewer_reset()
   // what was sent from here, not in the core's view yet (sent.mbt)
   sent_reset()
   // what the composers' fields were seen as, their marks and `@` words (refs.mbt)

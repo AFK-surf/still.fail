@@ -754,7 +754,7 @@ fn drive_open(c : @ui.Ctx, src : Source, at : DriveAt, root : String, e : DvEntr
       } else {
         []
       }
-      open_file(c, src, dv_file(at.station, root, at.path, e), near)
+      open_drive_file(dv_file(at.station, root, at.path, e), near)
     }
   }
 }

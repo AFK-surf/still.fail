@@ -6,65 +6,56 @@
 // it rests (REST_MS) unless it is on them; a click round the image (not on it) closes it, as Esc does; ← and → step.
 // What it shows is laid out as the web's: an image fitted 32 in with the web's shadow under it; a PDF's pages as wide
 // as 1000 less 56 allows, 20 apart, 76 down; a table 68 down in 13; a page 76 down; a file not shown told of with
-// 下载 as the page's primary button.
+// 下载 as the page's primary button. The viewer itself (what it reads, its stages, the flight) is sfbase's
+// (viewer.mbt); this is its frame.
 
 ///|
-/// Whether the wide frame is pointed at with a mouse (a click and a move are its own), not with a finger (an
-/// iPad's, a fold's inner screen: a finger's tap shows or hides the bars, as on a phone).
-fn desk_mouse() -> Bool {
-  wide_on.val && @ui.pointing() is Mouse
+/// The viewer over the window, if one is open, in the desktop's frame: drawn after what is under it.
+pub fn desk_viewer(c : @ui.Ctx, src : Source) -> Unit {
+  viewer_layer(c, src, desk_frame)
 }
 
 ///|
-/// Back to where it was opened from, by name (FilePreview.tsx backLabel): a drive's file its folder (mobile/Drive.tsx
-/// DrivePreview), a chat's its chat's title; 关闭 when neither is known.
-fn Viewer::desk_back(self : Viewer, src : Source) -> String {
-  match self.drive {
-    Some(d) => viewer_folder_label(src, d.station, d.root, dv_parent(d.path))
-    None => {
-      let title = text((src.topic)("chat", { "station": Json::string(self.station), "session": Json::string(self.key) }).value, "title")
-      if title != "" {
-        title
-      } else {
-        tr("common.close")
+/// The desktop's frame (FilePreview.tsx docked): on the page's canvas, its bar across the top, the ways as discs, a
+/// text and Markdown read in the reader.
+// kept across runs: a value (no field of it changes)
+let desk_frame : ViewerFrame = {
+  desk: true,
+  canvas: fn() { @sf.theme().p.canvas },
+  bar: fn(v, c, src, shown) { desk_bar(v, c, src, shown) },
+  steps: fn(v, c, src, shown) { desk_steps(v, c, src, shown) },
+  facts: fn(v, c, src, dl) { desk_facts(v, c, src, dl) },
+  coming: fn(v, c) { desk_coming(v, c) },
+  back: fn(v, src) { v.desk_back(src) },
+  read: fn(v, c, src) {
+    match v.bytes {
+      Some(b) if desk_reads(v) => {
+        desk_read(v, c, src, b)
+        true
       }
+      _ => false
     }
-  }
+  },
 }
 
 ///|
-/// A folder of a station's drive by name (drive/Drive.tsx useOpened `back`): its last part, the folder lent by its
-/// name at its root.
-fn viewer_folder_label(src : Source, station : String, root : String, folder : String) -> String {
-  if folder != "" {
-    return dv_name(folder)
-  }
-  let ws = match station.find("/") {
-    Some(i) => station.view(end_offset=i).to_owned()
-    None => station
-  }
-  let roots = match dv_stations(src, ws).0 {
-    Some(list) =>
-      match list.iter().find_first(fn(s) { s.station == station }) {
-        Some(s) => s.roots
-        None => []
-      }
-    None => []
-  }
-  dv_root_label(roots, root)
+/// Whether the window is pointed at with a mouse (a click and a move are its own), not with a finger (an iPad's, a
+/// fold's inner screen: a finger's tap shows or hides the bars, as on a phone).
+fn desk_mouse() -> Bool {
+  @ui.pointing() is Mouse
 }
 
 ///|
 /// Where it is among those it steps through and how many they are (an image's: its chat's, as the core tells them,
 /// imageNear's index and count; a folder's); (-1, 0) when it steps through none.
-fn Viewer::place(self : Viewer, src : Source) -> (Int, Int) {
-  if self.shown_kind() != Some(KImage) {
+fn viewer_place(vw : Viewer, src : Source) -> (Int, Int) {
+  if vw.shown_kind() != Some(KImage) {
     return (-1, 0)
   }
-  match self.steps {
+  match vw.steps {
     NoSteps => (-1, 0)
     InChat(thread, session) => {
-      let p : Map[String, Json] = { "station": Json::string(self.station), "path": Json::string(self.file.path) }
+      let p : Map[String, Json] = { "station": Json::string(vw.station), "path": Json::string(vw.file.path) }
       match thread {
         Some(th) => p["thread"] = Json::number(th)
         None => p["session"] = Json::string(session)
@@ -79,7 +70,7 @@ fn Viewer::place(self : Viewer, src : Source) -> (Int, Int) {
     InFolder(files) => {
       let mut at = -1
       for i, f in files {
-        if Some(f.path) == self.drive.map(fn(d) { d.path }) {
+        if Some(f.path) == vw.drive.map(fn(d) { d.path }) {
           at = i
         }
       }
@@ -92,15 +83,15 @@ fn Viewer::place(self : Viewer, src : Source) -> (Int, Int) {
 /// A kind's name, as the bar says it after the size (FilePreview.tsx KIND_LABEL: PDF and Markdown their own names).
 fn desk_kind_label(kind : PKind?) -> String {
   match kind {
-    Some(KImage) => tr("web-main.preview.kind.image")
-    Some(KVideo) => tr("web-main.preview.kind.video")
-    Some(KAudio) => tr("web-main.preview.kind.audio")
+    Some(KImage) => @sf.t("web-main.preview.kind.image")
+    Some(KVideo) => @sf.t("web-main.preview.kind.video")
+    Some(KAudio) => @sf.t("web-main.preview.kind.audio")
     Some(KPdf) => "PDF"
     Some(KMarkdown) => "Markdown"
-    Some(KCsv) => tr("web-main.preview.kind.csv")
-    Some(KHtml) => tr("web-main.preview.kind.html")
-    Some(KCode) => tr("web-main.preview.kind.code")
-    Some(KText) => tr("web-main.preview.kind.text")
+    Some(KCsv) => @sf.t("web-main.preview.kind.csv")
+    Some(KHtml) => @sf.t("web-main.preview.kind.html")
+    Some(KCode) => @sf.t("web-main.preview.kind.code")
+    Some(KText) => @sf.t("web-main.preview.kind.text")
     None => ""
   }
 }
@@ -108,17 +99,17 @@ fn desk_kind_label(kind : PKind?) -> String {
 ///|
 /// The line under the name (FilePreview.tsx meta): which of how many, its size, its kind; a video's own facts after
 /// them (the web player's bar: its size in pixels, how long, its rate).
-fn Viewer::desk_meta(self : Viewer, src : Source) -> String {
-  let (at, count) = self.place(src)
+fn desk_meta(vw : Viewer, src : Source) -> String {
+  let (at, count) = viewer_place(vw, src)
   let parts : Array[String] = []
   let first = if count > 1 && at >= 0 { "\{at + 1} / \{count} · " } else { "" }
-  parts.push(first + @sf.file_size(self.file.size))
-  let kind = desk_kind_label(self.shown_kind())
+  parts.push(first + @sf.file_size(vw.file.size))
+  let kind = desk_kind_label(vw.shown_kind())
   if kind != "" {
     parts.push(kind)
   }
-  match self.view() {
-    Some(n) if self.shown_kind() == Some(KVideo) => {
+  match vw.view() {
+    Some(n) if vw.shown_kind() == Some(KVideo) => {
       let (w, h) = n.natural()
       if w > 0.0 && h > 0.0 {
         parts.push("\{w.to_int()}×\{h.to_int()}")
@@ -153,10 +144,10 @@ fn desk_clock(ms : Double) -> String {
 ///|
 /// The bar across the window's top, in its place in the preview's layer: gone with the rest of the preview as it
 /// fades (`shown`), and as the pointer rests over an image; its tools by what it shows. The pointer's moves wake it.
-fn Viewer::desk_bar(self : Viewer, c : @ui.Ctx, src : Source, shown : Double) -> Unit {
-  let v = self
+fn desk_bar(vw : Viewer, c : @ui.Ctx, src : Source, shown : Double) -> Unit {
+  let v = vw
   // read in the reader, played in the player: their own bars
-  if v.desk_reads() || v.shown_kind() == Some(KAudio) || v.shown_kind() == Some(KVideo) {
+  if desk_reads(v) || v.shown_kind() == Some(KAudio) || v.shown_kind() == Some(KVideo) {
     return
   }
   let ink = @sf.page_viewer_ink()
@@ -210,8 +201,8 @@ fn Viewer::desk_bar(self : Viewer, c : @ui.Ctx, src : Source, shown : Double) ->
   // a picture's bar goes as the pointer rests (not while it comes, nor marking); what is read stays
   let hidden = kind == Some(KImage) && !v.bars_shown()
   let n = c.box(style=desk_layer, fn() {
-    if @sf.viewer_bar(c, "preview/bar", v.desk_back(src), v.file.name, v.desk_meta(src), hidden, ink, fn() {
-        v.desk_tools(c, ink, v.download(src))
+    if @sf.viewer_bar(c, "preview/bar", v.desk_back(src), v.file.name, desk_meta(v, src), hidden, ink, fn() {
+        desk_tools(v, c, ink, v.download(src))
       }) &&
       !v.closing {
       v.shut(c)
@@ -223,37 +214,37 @@ fn Viewer::desk_bar(self : Viewer, c : @ui.Ctx, src : Source, shown : Double) ->
 ///|
 /// The bar's tools by what it shows (FilePreview.tsx: its `controls`, then copy and download): an image's zoom and its
 /// marks, a page's or a table's 预览 / 源码, download last.
-fn Viewer::desk_tools(self : Viewer, c : @ui.Ctx, ink : @sf.ViewerInk, dl : Json?) -> Unit {
-  let v = self
+fn desk_tools(vw : Viewer, c : @ui.Ctx, ink : @sf.ViewerInk, dl : Json?) -> Unit {
+  let v = vw
   match v.shown_kind() {
     Some(KImage) if marking.on =>
       marks_actions(c, v.draft_key() != "", fn(draft) { v.finish_marks(c, draft) }, ink=ink.muted)
     Some(KImage) if !v.coming() => {
       let z = v.zoom
       c.box(style=desk_zoom, fn() {
-        if @sf.viewer_tool(c, "preview/zoom-out", "minus", tr("web-main.preview.zoomOutKey"), ink, disabled=z.scale <= z.min_scale() + desk_zoom_slack) {
+        if @sf.viewer_tool(c, "preview/zoom-out", "minus", @sf.t("web-main.preview.zoomOutKey"), ink, disabled=z.scale <= z.min_scale() + desk_zoom_slack) {
           z.zoom_to(z.scale / desk_zoom_step, z.bw / 2.0, z.bh / 2.0, true)
         }
-        if desk_text_tool(c, "preview/zoom-reset", "\{(z.scale * 100.0).round().to_int()}%", tr("web-main.preview.fitKey"), ink, wide=true) {
+        if desk_text_tool(c, "preview/zoom-reset", "\{(z.scale * 100.0).round().to_int()}%", @sf.t("web-main.preview.fitKey"), ink, wide=true) {
           z.reset()
         }
-        if @sf.viewer_tool(c, "preview/zoom-in", "plus", tr("web-main.preview.zoomInKey"), ink, disabled=z.scale >= z.max_scale() - desk_zoom_slack) {
+        if @sf.viewer_tool(c, "preview/zoom-in", "plus", @sf.t("web-main.preview.zoomInKey"), ink, disabled=z.scale >= z.max_scale() - desk_zoom_slack) {
           z.zoom_to(z.scale * desk_zoom_step, z.bw / 2.0, z.bh / 2.0, true)
         }
-        if desk_text_tool(c, "preview/zoom-actual", "1:1", tr("web-main.preview.actualKey"), ink) {
+        if desk_text_tool(c, "preview/zoom-actual", "1:1", @sf.t("web-main.preview.actualKey"), ink) {
           z.zoom_to(1.0, z.bw / 2.0, z.bh / 2.0, true)
         }
       })
       |> ignore
       // 标注图片: once its whole picture is here (annotate/ImageMarks.tsx)
-      if v.bytes is Some(_) && @sf.viewer_tool(c, "preview/mark", "edit", tr("web-main.annotate.image"), ink) {
+      if v.bytes is Some(_) && @sf.viewer_tool(c, "preview/mark", "edit", @sf.t("web-main.annotate.image"), ink) {
         marks_start()
       }
       // 复制: the whole picture on the clipboard, a check a moment after (FilePreview.tsx CopyImage)
       match v.bytes {
         Some(b) => {
           let shown = v.copied > 0 && !@kit.after(c, "preview/copied/\{v.copied}", true, desk_copied_ms)
-          if @sf.viewer_tool(c, "preview/copy", if shown { "check" } else { "copy" }, tr(if shown { "common.copied" } else { "common.copy" }), ink) {
+          if @sf.viewer_tool(c, "preview/copy", if shown { "check" } else { "copy" }, @sf.t(if shown { "common.copied" } else { "common.copy" }), ink) {
             c.copy_image(b)
             v.copied += 1
           }
@@ -265,7 +256,7 @@ fn Viewer::desk_tools(self : Viewer, c : @ui.Ctx, ink : @sf.ViewerInk, dl : Json
       let chosen = @sf.segmented(
         c,
         "preview/tabs",
-        [tr("web-main.preview.rendered"), tr("web-main.preview.source")],
+        [@sf.t("web-main.preview.rendered"), @sf.t("web-main.preview.source")],
         if v.source { 1 } else { 0 },
         item_w=desk_tabs_item,
       )
@@ -314,16 +305,16 @@ fn desk_text_tool(c : @ui.Ctx, key : String, words : String, label : String, ink
 ///|
 /// The ways to the image before and after (FilePreview.css.ts fpStep): 40 discs of the canvas at 80% over a 12 blur,
 /// 16 in from the sides, in the middle; there while the bar is (or the pointer is on one), none where there is none.
-fn Viewer::desk_steps(self : Viewer, c : @ui.Ctx, src : Source, shown : Double) -> Unit {
-  if self.shown_kind() != Some(KImage) || marking.on {
+fn desk_steps(vw : Viewer, c : @ui.Ctx, src : Source, shown : Double) -> Unit {
+  if vw.shown_kind() != Some(KImage) || marking.on {
     return
   }
-  let (before, after) = self.near(src)
+  let (before, after) = vw.near(src)
   if before is None && after is None {
     return
   }
   let p = @sf.theme().p
-  let awake = self.bars_shown()
+  let awake = vw.bars_shown()
   let glass = @ui.Glass::frosted(blur=desk_step_blur, tint=@sf.alpha(p.canvas, desk_step_share), solid=p.canvas)
   c.box(style=desk_steps_row, fn() {
     for side in [(before, -1, "chevron-left", "web-main.preview.prevKey"), (after, 1, "chevron-right", "web-main.preview.nextKey")] {
@@ -344,12 +335,12 @@ fn Viewer::desk_steps(self : Viewer, c : @ui.Ctx, src : Source, shown : Double) 
             ))
           c.cursor(id, Hand)
           if seen > 0.0 && c.clicked(id) {
-            self.go(c, src, side.1, 0.0)
+            vw.go(c, src, side.1, 0.0)
           }
           let b = c.box(style=desk_step, glass~, id=if seen > 0.0 { id } else { 0 }, fn() {
             @sf.icon(c, side.2, size=desk_step_icon, color=p.text) |> ignore
           })
-          c.semantics(b, Button, id~, label=tr(side.3))
+          c.semantics(b, Button, id~, label=@sf.t(side.3))
           c.look(b, @ui.look(alpha=seen * shown))
         }
         None => c.box(style=desk_step_none, fn() {  }) |> ignore
@@ -363,8 +354,8 @@ fn Viewer::desk_steps(self : Viewer, c : @ui.Ctx, src : Source, shown : Double) 
 /// A file told of, not shown (FilePreview.tsx fpNote, toldOf): its kind's mark, its name, its size and extension,
 /// that it cannot be shown here; 下载 as the page's primary button, or how far it has come once asked for (`dl`: the
 /// core's download of it, downloads.mbt).
-fn Viewer::desk_facts(self : Viewer, c : @ui.Ctx, src : Source, dl : Json?) -> Unit {
-  let v = self
+fn desk_facts(vw : Viewer, c : @ui.Ctx, src : Source, dl : Json?) -> Unit {
+  let v = vw
   let p = @sf.theme().p
   @sf.icon(c, "file", size=desk_facts_icon, color=p.muted) |> ignore
   c.box(style=desk_facts_name_box, fn() { c.text(v.file.name, style=desk_facts_name) |> ignore }) |> ignore
@@ -377,7 +368,7 @@ fn Viewer::desk_facts(self : Viewer, c : @ui.Ctx, src : Source, dl : Json?) -> U
   |> ignore
   c.text(
     if v.shown_kind() is None {
-      tr("web-main.preview.unsupported")
+      @sf.t("web-main.preview.unsupported")
     } else {
       pv("android-chat.file.tooBigToShow")
     },
@@ -385,13 +376,13 @@ fn Viewer::desk_facts(self : Viewer, c : @ui.Ctx, src : Source, dl : Json?) -> U
   )
   |> ignore
   if v.asked && v.bytes is None && v.error is None {
-    v.desk_coming(c)
+    desk_coming(v, c)
     return
   }
   // downloaded by the core: how far it has come (on by itself as this closes; called off here), why it failed
   if downloading(dl) {
     file_progress(c, (number(dl, "loaded"), Some(number(dl, "size"))), v.file.size, said=text(dl, "statusText"))
-    if @sf.button(c, tr("web-main.file.cancelDownload"), key="preview/note-cancel", tone=Ghost) {
+    if @sf.button(c, @sf.t("web-main.file.cancelDownload"), key="preview/note-cancel", tone=Ghost) {
       v.cancel_download(c, src, dl)
     }
     return
@@ -400,10 +391,10 @@ fn Viewer::desk_facts(self : Viewer, c : @ui.Ctx, src : Source, dl : Json?) -> U
     c.text(text(dl, "statusText"), style=desk_facts_failed) |> ignore
   }
   match v.error {
-    Some(e) => c.text(fill("web-main.preview.loadFailed", [("error", e)]), style=desk_facts_failed) |> ignore
+    Some(e) => c.text(@sf.t("web-main.preview.loadFailed", args=[("error", e)]), style=desk_facts_failed) |> ignore
     None => ()
   }
-  if @sf.button(c, tr("web-main.preview.download"), key="preview/note-download", tone=Primary, icon="download") {
+  if @sf.button(c, @sf.t("web-main.preview.download"), key="preview/note-download", tone=Primary, icon="download") {
     v.ask_save(c)
   }
 }
@@ -411,63 +402,12 @@ fn Viewer::desk_facts(self : Viewer, c : @ui.Ctx, src : Source, dl : Json?) -> U
 ///|
 /// What shows while it comes (FilePreview.tsx FileComing, WaitLine): how much has come out of its size once the core
 /// has said, else 正在打开.
-fn Viewer::desk_coming(self : Viewer, c : @ui.Ctx) -> Unit {
-  match self.got {
-    Some(got) => file_progress(c, got, self.file.size)
-    None => @sf.wait_line(c, tr("common.opening"), key="preview")
+fn desk_coming(vw : Viewer, c : @ui.Ctx) -> Unit {
+  match vw.got {
+    Some(got) => file_progress(c, got, vw.file.size)
+    None => @sf.wait_line(c, @sf.t("common.opening"), key="preview")
   }
 }
-
-///|
-/// Under an image, where it is drawn (FilePreview.css.ts fpImage): the canvas with the web's shadow round it, so a
-/// picture with clear parts shows them on the page's own ground.
-fn desk_image_ground(c : @ui.Ctx, x : Double, y : Double, w : Double, h : Double) -> Unit {
-  c.layer(fn() {
-    c.box(style=desk_image_shadow.then(@ui.style(w=Fixed(w), h=Fixed(h))), tx=x, ty=y, fn() {  }) |> ignore
-  })
-  |> ignore
-}
-
-///|
-/// How a PDF's pages lie on a desktop (FilePreview.css.ts fpPdf): as wide as 1000 allows less 28 either side, 76 under
-/// the window's top, 20 apart, 28 at the foot.
-fn desk_pdf_width(window : Double) -> Double {
-  dmax(0.0, dmin(desk_pdf_most, window) - 2.0 * desk_pdf_side)
-}
-
-///|
-let desk_pdf_most : Double = 1000.0
-
-///|
-let desk_pdf_side : Double = 28.0
-
-///|
-/// Down to where a document starts under the bar (fpPdf, fpPlain, fpPageFrame: 76; a table's head, fpTableWrap: 68).
-let desk_page_top : Double = 76.0
-
-///|
-let desk_table_top : Double = 68.0
-
-///|
-let desk_pdf_gap : Double = 20.0
-
-///|
-let desk_pdf_foot : Double = 28.0
-
-///|
-/// A table's words (fpTable: --text-ui, 13).
-let desk_cell_size : Double = 13.0
-
-///|
-/// The wheel's zoom (useZoom onWheel): a pinch's small steps (under 50) by a hundredth of each, a wheel's notches by a
-/// five-hundredth.
-let desk_pinch_step : Double = 50.0
-
-///|
-let desk_pinch_rate : Double = 0.01
-
-///|
-let desk_wheel_rate : Double = 0.002
 
 ///|
 /// A copy's check shown this long (CopyImage: 1.6 s).
@@ -566,35 +506,10 @@ let desk_facts_words : @ui.TextStyle = @ui.text_style(size=Sm, color=Muted, cent
 let desk_facts_failed : @ui.TextStyle = @ui.text_style(size=Sm, color=Danger, center=true)
 
 ///|
-/// Under an image (fpImage's box-shadow: 0 1px 3px at 8%, 0 8px 28px at 10%): the canvas, a soft shadow round it.
-// kept across runs: a value (no field of it changes)
-let desk_image_shadow : @ui.Style = @ui.css("bg=Bg shadow=Lg")
-
-///|
-/// Code and plain text (fpCode, fpPlain): 12 on 1.6 (code) or 1.65, 32 in, 64 at the foot.
-let desk_code_size : Double = 12.0
-
-///|
-let desk_code_line : Double = 19.2
-
-///|
-let desk_plain_line : Double = 19.8
-
-///|
-let desk_text_side : Double = 32.0
-
-///|
-let desk_text_foot : Double = 64.0
-
-///|
-/// As it is (a zoom of 1).
-let desk_whole : Double = 1.0
-
-///|
 /// A chat's text or Markdown open in its preview, read in the desktop's reader (FilePreview.tsx hands it to the same
 /// Reader): what the preview read of it given to the reader (its place not kept: a chat's file is no drive's).
-fn Viewer::desk_read(self : Viewer, c : @ui.Ctx, src : Source, b : Bytes) -> Unit {
-  let v = self
+fn desk_read(vw : Viewer, c : @ui.Ctx, src : Source, b : Bytes) -> Unit {
+  let v = vw
   let file = @sf.blob_file(b, v.file.name, v.file.size, mime=v.mime, save=fn() { v.ask_save(c) })
   @sf.reader(
     c,
@@ -608,9 +523,8 @@ fn Viewer::desk_read(self : Viewer, c : @ui.Ctx, src : Source, b : Bytes) -> Uni
 
 ///|
 /// Whether a preview reads as a text on a desktop (FilePreview.tsx: a text and Markdown open in the reader).
-fn Viewer::desk_reads(self : Viewer) -> Bool {
-  wide_on.val &&
-  self.bytes is Some(_) &&
-  (self.shown_kind() == Some(KMarkdown) || self.shown_kind() == Some(KText)) &&
-  !self.told_of()
+fn desk_reads(vw : Viewer) -> Bool {
+  vw.bytes is Some(_) &&
+  (vw.shown_kind() == Some(KMarkdown) || vw.shown_kind() == Some(KText)) &&
+  !vw.told_of()
 }

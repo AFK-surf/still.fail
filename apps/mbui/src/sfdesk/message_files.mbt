@@ -1,9 +1,9 @@
 // A message's files on the desktop (ember web/src/Chat.tsx Files, FileItem, MessageFileCard, imageBox.ts; Chat.css.ts
 // msgFiles, msgImage, msgImageWait, msgVideo, fileCardOpen; styles/later.css.ts): side by side, wrapping 6 apart; an
 // image in a box of its own proportions (known before it loads), brushed in from its top once decoded; a video's
-// still on black with its play mark and its name; anything else a card. Pressed, each opens in the file preview (the
-// app's, as chat_parts gives it). While the core downloads one (downloads.mbt), how far on its card, ✕ to call it off,
-// ↻ to ask it again.
+// still on black with its play mark and its name; anything else a card. Pressed, each opens in the file viewer
+// (viewer.mbt). While the core downloads one (downloads.mbt), how far on its card, ✕ to call it off, ↻ to ask it
+// again.
 
 ///|
 /// A message's files (Files), at the column's end when it is the viewer's (`mine`).
@@ -79,7 +79,7 @@ fn stored_name(path : String) -> String {
 ///|
 /// A message's file opened in the preview (FilePreview): an image steps through the chat's.
 fn open_file(here : MessageHere, a : Attachment) -> Unit {
-  (chat_parts.val.open_file)(here.station, owner_of(here, a), a, here.view.thread, here.session)
+  open_preview(here.station, owner_of(here, a), a, steps=InChat(here.view.thread, here.session))
 }
 
 ///|
@@ -143,7 +143,7 @@ fn file_item(c : @ui.Ctx, src : Source, here : MessageHere, a : Attachment, w : 
 /// likeness), then brushed in from its top; one sent from here the picture it was picked as, there at once; one that
 /// cannot be had says so. Pressed, the preview; right-clicked, 复制图片.
 fn image_item(c : @ui.Ctx, src : Source, here : MessageHere, a : Attachment, w : Double) -> Unit {
-  let parts = chat_parts.val
+
   let open = c.id("msg-file/" + a.path)
   let owner = owner_of(here, a)
   if c.clicked(open) {
@@ -152,14 +152,14 @@ fn image_item(c : @ui.Ctx, src : Source, here : MessageHere, a : Attachment, w :
   c.cursor(open, Hand)
   let (bw, bh, letterbox) = image_box(a, image_least)
   let h = bh * w / bw
-  let sent = (parts.sent_picture)(here.station, a)
+  let sent = sent_picture(here.station, a)
   let key = match sent {
     Some(k) => k
     None => (src.file)(here.station, owner, stored_name(a.path))
   }
   // where it is, for the preview to fly from and back into; hidden while the preview is its picture
   let thumb = here.station + "/" + owner + "/" + a.path
-  (parts.thumb)(c, thumb, open, @sf.message_file_corner, letterbox)
+  note_thumb(c, thumb, open, @sf.message_file_corner, letterbox~)
   context_image(c, open, key)
   let fit : @ui.Fit = if letterbox { FitContain } else { FitCover }
   let b = c.box(style=image_box_style(w, h, key != "" && key != "!" || letterbox), id=open, fn() {
@@ -180,7 +180,7 @@ fn image_item(c : @ui.Ctx, src : Source, here : MessageHere, a : Attachment, w :
       }
     }
   })
-  c.look(b, @ui.look(alpha=(parts.thumb_shows)(thumb)))
+  c.look(b, @ui.look(alpha=thumb_shows(thumb)))
   c.semantics(b, Button, id=open, label=@sf.t("web-main.file.view", args=[("name", a.name)]))
 }
 
@@ -195,7 +195,7 @@ fn image_box_style(w : Double, h : Double, shown : Bool) -> @ui.Style {
 /// A video (FileItem's video): its still on black (the frame the preview was left at, else the station's), its play
 /// mark in its middle, its name at its foot over a dark band; while the core downloads it, how far there over a bar.
 fn video_item(c : @ui.Ctx, src : Source, here : MessageHere, a : Attachment, w : Double) -> Unit {
-  let parts = chat_parts.val
+
   let open = c.id("msg-file/" + a.path)
   let owner = owner_of(here, a)
   if c.clicked(open) {
@@ -206,8 +206,8 @@ fn video_item(c : @ui.Ctx, src : Source, here : MessageHere, a : Attachment, w :
   let (bw, bh, letterbox) = image_box(a, video_least)
   let h = bh * w / bw
   let thumb = here.station + "/" + owner + "/" + a.path
-  (parts.thumb)(c, thumb, open, @sf.message_file_corner, letterbox)
-  let still = (parts.video_still)(c, src, here.station, owner, a, thumb)
+  note_thumb(c, thumb, open, @sf.message_file_corner, letterbox~)
+  let still = video_still(c, src, here.station, owner, a, thumb)
   let dl = download_of(src, here.station, owner, stored_name(a.path))
   let b = c.box(style=video_frame.then(@ui.style(w=Fixed(w), h=Fixed(h))), id=open, fn() {
     if still != "" && still != "!" {
@@ -236,7 +236,7 @@ fn video_item(c : @ui.Ctx, src : Source, here : MessageHere, a : Attachment, w :
     })
     |> ignore
   })
-  c.look(b, @ui.look(alpha=(parts.thumb_shows)(thumb)))
+  c.look(b, @ui.look(alpha=thumb_shows(thumb)))
   c.semantics(b, Button, id=open, label=@sf.t("web-main.file.play", args=[("name", a.name)]))
 }
 

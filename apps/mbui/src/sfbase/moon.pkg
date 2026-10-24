@@ -9,5 +9,6 @@ import {
   "mbui/pixels",
   "mbui/dmath",
   "stillfail/sf",
+  "stillfail/gallery",
   "stillfail/sfapp/settings",
 }
