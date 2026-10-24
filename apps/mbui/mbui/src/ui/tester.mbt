@@ -273,6 +273,7 @@ pub fn Tester::new(
     view_kinds: {},
     view_at: {},
     view_touch: {},
+    view_covers: {},
     touch_view: 0,
     touch_down: (0.0, 0.0),
     touch_at: (0.0, 0.0),

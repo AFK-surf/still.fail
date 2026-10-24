@@ -148,10 +148,12 @@ struct FakeHost {
   /// record of it): taken before the views' common queue (`site`)
   site_of : Map[Int, Array[String]]
   /// the native views: their kind, where each was last placed (its clip rect: x0 y0 x1 y1) and whether shown, and who
-  /// takes a finger on it (NativeView::touch: its mode, the slop)
+  /// takes a finger on it (NativeView::touch: its mode, the slop), and where what takes a press is drawn over it (its
+  /// rects: a finger there is the canvas's)
   view_kinds : Map[Int, Int]
   view_at : Map[Int, (Double, Double, Double, Double, Bool)]
   view_touch : Map[Int, (String, Double)]
+  view_covers : Map[Int, Array[Double]]
   /// a finger's press as the views take it (Tester's own presses): the view it is on, (0: the canvas's), where it went
   /// down, where it is
   mut touch_view : Int
@@ -1367,7 +1369,8 @@ let sites_told_state : Map[Int, String] = {}
 ///|
 /// What the app tells a view's host beyond its controls (native.mbt): `what` 1 a script to run in its page
 /// (NativeView::script), 2 who takes a finger on it (NativeView::touch: "all|through|pinch|vertical SLOP"), 3 a site's
-/// settings (`{"head_wait_ms":…,"backlog":…}`). The fake host notes each ("script 1 42 9a0b…", "touch 1 vertical 8",
+/// settings (`{"head_wait_ms":…,"backlog":…}`), 4 where what takes a press is drawn over it ("x0 y0 x1 y1 …": a
+/// finger there is the canvas's). The fake host notes each ("script 1 42 9a0b…", "touch 1 vertical 8",
 /// "settings 1 …") and runs a page's scripts as a host does: once its page is there (ready and not loading, or said
 /// something since it started), in the order sent.
 fn h_view_tell(id : Int, what : Int, text : String) -> Unit {
@@ -1388,6 +1391,15 @@ fn h_view_tell(id : Int, what : Int, text : String) -> Unit {
         }
         f.view_touch[id] = (parts.get(0).unwrap_or("all"), slop)
         f.views.push("touch \{id} \{text}")
+      } else if what == 4 {
+        let rects : Array[Double] = []
+        for p in text.split(" ") {
+          match (try Some(@json.parse(p.to_owned())) catch { _ => None }) {
+            Some(Number(n, ..)) => rects.push(n)
+            _ => ()
+          }
+        }
+        f.view_covers[id] = rects
       } else {
         f.views.push("settings \{id} \{text}")
       }

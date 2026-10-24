@@ -247,3 +247,37 @@ test "a visualization's document: a fragment in the stylesheet with its tokens a
   assert_true(page.has_prefix("<!doctype html><html><head><meta http-equiv=\"Content-Security-Policy\""))
   assert_true(page.contains("<title>t</title>"))
 }
+
+///|
+test "the latest chats raised over a visualization's page take the presses there, not the page under them" {
+  reset()
+  let src = fixture("chat-viz")
+  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=1024.0, h=768.0, platform=2)
+  say_room(t, "regular", "compact")
+  t.run_for(@ui.nav_push_ms)
+  assert_true(corners_on.val)
+  let (page, _) = viz_views(t)
+  // as tall as it may be: the chat's page under all of the list
+  t.view_says(page, "{\"emberViz\":true,\"type\":\"height\",\"height\":5000}")
+  t.frame()
+  t.frame()
+  let (x, y, w, h) = view_rect(t, page).unwrap()
+  tap_said(t, "最近会话")
+  t.frame()
+  assert_true(recent_open.val)
+  // the open chat's row in the panel, over the page
+  let row = t.words().iter().find_first(fn(wd) { wd.0 == "整理发布清单" && wd.1 < 360.0 && wd.2 > 100.0 })
+  let (_, rx, ry, _, _, _) = row.unwrap()
+  let (px, py) = (rx + 10.0, ry + 8.0)
+  assert_true(px > x && px < x + w && py > y && py < y + h, msg="the row at \{px},\{py}, the page \{x} \{y} \{w} \{h}")
+  // tapped: the panel's (put away, the chat open as it was), the page told nothing of it
+  t.tap(px, py)
+  t.frame()
+  assert_false(recent_open.val)
+  assert_false(t.views().iter().any(fn(l) { l.has_prefix("finger \{page} ") }))
+  // put away: the page takes a finger there again
+  t.frame()
+  t.tap(px, py)
+  assert_true(t.views().iter().any(fn(l) { l.has_prefix("finger \{page} down") }))
+}
