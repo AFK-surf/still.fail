@@ -165,6 +165,14 @@ pub fn answer(name : String, params : Json, bytes : Bytes?) -> Result[(Json, Byt
       }
     }
     "browse" => browse_answer(params)
+    // what a history step's call and result are (tool-step.ts), by what is asked as said
+    "history.tool" => {
+      let key = params.stringify()
+      match kept("history.tool").get(key) {
+        Some(v) => Some(Ok((v, None)))
+        None => not_kept({ "call": "history.tool", "key": Json::string(key) })
+      }
+    }
     // where a chat's find goes (chat-find.ts): from what was found and where the reader is, which way, what shows
     "chat.find.go" => {
       let key = params.stringify()

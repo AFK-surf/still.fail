@@ -78,7 +78,7 @@ fn history_body(c : @ui.Ctx, src : Source, r : ChatRef, key : String, entry : In
   }
   // in the wide frame, the web's head (wide_history.mbt)
   if wide_on.val {
-    @sfdesk.agent_history(c, src, r.station, key, a, fn() { history_steps(c, src, r, key, entry) })
+    @sfdesk.agent_history(c, src, r.station, key, a)
     return
   }
   let s = field(a, "session")
