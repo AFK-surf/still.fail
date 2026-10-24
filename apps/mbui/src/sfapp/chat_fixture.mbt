@@ -820,7 +820,12 @@ fn fix_deliver(session : String, id : String) -> Unit {
   fix_later(fix_answer_ms, fn() {
     fix_serial.val += 1
     fix_later(fix_turn_end_ms, fn() { fix_chat(session).working = -1.0 })
-    let first = paste_preview(words)
+    // (its first line, as a made-up agent would take it up)
+    let lead = words.trim(chars=" \n\r\t").to_string()
+    let first = match lead.find("\n") {
+      Some(i) => lead.view(end_offset=i).to_string()
+      None => lead
+    }
     let said = if first == "" {
       "收到文件了，我看一下。"
     } else {

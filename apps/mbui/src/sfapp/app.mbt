@@ -142,7 +142,6 @@ fn reset() -> Unit {
   decide_reset()
   close_now()
   @settings.reset()
-  ref_fields.clear()
   found_marking.val = ("", [], 0.0)
   find_marking.val = []
   search_reset()

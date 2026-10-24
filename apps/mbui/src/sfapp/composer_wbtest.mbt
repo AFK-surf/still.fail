@@ -49,6 +49,8 @@ fn fake_core(
         "session.warm" | "client.focus" | "chat.place" => done(Ok(Json::object({})))
         // what still.fail's links open, as the core reads them (links_wbtest.mbt)
         "link.parse" => done(Ok(fixture_link_parse(text(Some(params), "url"))))
+        // what is written, read as the core reads it (refLinks.ts, pasted.ts: its answers kept)
+        "ref.at" | "ref.before" | "ref.marks" | "ref.pasted" | "paste.info" => (base.call)(name, params, done)
         _ => ()
       }
     },
@@ -629,7 +631,6 @@ test "image sizes from their bytes" {
   let gif = Bytes::from_array([0x47, 0x49, 0x46, 0x38, 0x39, 0x61, 3, 0, 2, 0, 0, 0].map(fn(i) { i.to_byte() }))
   assert_eq(@pixels.image_size(gif), Some((3, 2)))
   assert_eq(@pixels.image_size(b"plain words"), None)
-  assert_eq(paste_preview("\n  first line\r\nsecond"), "first line")
   assert_eq(uuid("0123456789abcdef0123456789abcdef"), "01234567-89ab-cdef-0123-456789abcdef")
 }
 
