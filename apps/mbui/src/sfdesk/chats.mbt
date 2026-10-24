@@ -206,7 +206,7 @@ fn side_held(c : @ui.Ctx, key : String) -> Bool {
   let (px, _, _) = c.pointer()
   c.list_moving(key) ||
   (wide.peeking && px >= closed_bar_in + rail_closed_w && px < closed_bar_in + rail_closed_w + wide.side_w) ||
-  (!wide.folded && px >= rail_w - side_into_rail && px < rail_w + wide.side_w)
+  (!side_folded() && px >= rail_w - side_into_rail && px < rail_w + wide.side_w)
 }
 
 ///|
@@ -751,7 +751,7 @@ fn side_aside(c : @ui.Ctx, src : Source, item : ChatItem, lead : String, on : Bo
   // (the row's ground round each face: the folded bar's, a floating panel's, when the list is in it)
   let ground = if on {
     side_face_on
-  } else if wide.folded {
+  } else if side_folded() {
     side_face_bar
   } else {
     side_face_ground

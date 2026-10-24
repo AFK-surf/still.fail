@@ -135,9 +135,11 @@ pub(all) struct Style {
   // Not CSS's: what a row leaves out when it has not the room for all it holds at least (each item's width, else its
   // min-width, with its margins). `drop` k > 0: the k-th to be left out (the last in the row first of the same k);
   // -1: there only while something of its row is left out (its ⋯); 0: always there. `fits`: a row holding some of
-  // either. Left out, an item is laid out nowhere (Node::left_out).
+  // either. Left out, an item is laid out nowhere (Node::left_out). `fit_need`: what such a row keeps of an item
+  // that stays, more than its min-width (NaN: its min-width), before one that may leave does.
   mut drop : Int
   mut fits : Bool
+  mut fit_need : Double
   // bumped by every change to what the box comes from (its lengths and box
   // sizing): a node's box stands while it is the same (Node's box_ver)
   priv mut ver : Int
@@ -211,6 +213,7 @@ pub fn Style::new() -> Style {
     overflow: Visible,
     drop: 0,
     fits: false,
+    fit_need: 0.0 / 0.0,
     ver: 0,
     basis_v: 0.0,
     basis_k: LEN_AUTO,
@@ -283,6 +286,7 @@ pub fn Style::reset(self : Style) -> Unit {
   self.overflow = Visible
   self.drop = 0
   self.fits = false
+  self.fit_need = 0.0 / 0.0
   self.ver = self.ver + 1
   self.basis_v = 0.0
   self.basis_k = LEN_AUTO

@@ -48,3 +48,73 @@ test "touch wide: a row held shows its time while its menu is open, its 归档 i
   let (_, menu_y) = t.find("重命名").unwrap()
   assert_true(menu_y > time_y && time_y > row_y)
 }
+
+///|
+/// The fixture's chat on the narrowest tablet held upright (600 × 900, regular both ways): beside the sidebar less than a
+/// phone's width (@sfdesk.page_beside_least).
+fn touch_narrow_tester() -> @ui.Tester raise {
+  reset()
+  let src = fixture("chat")
+  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=600.0, h=900.0, platform=2)
+  let log = t.drive("system {\"size_class\":{\"width\":\"regular\",\"height\":\"regular\"}}\nuntil 发消息\n")
+  assert_true(log.contains("EXIT 0"), msg=log.join("\n"))
+  t.run_for(@sfdesk.side_move_ms)
+  t
+}
+
+///|
+/// The rail's place `label` tapped, the sidebar's move run.
+fn tap_place(t : @ui.Tester, label : String) -> Unit raise {
+  let (x, y, w, h) = t.query(Button, label~).unwrap().rect
+  t.tap(x + w / 2.0, y + h / 2.0)
+  t.run_for(@sfdesk.side_move_ms)
+}
+
+///|
+test "touch wide, a small tablet held upright: the chats' list folded to the rail for the page's room, what was chosen kept; its place tapped shows it over the page, a chat chosen there opens and folds it, a tap on the page folds it" {
+  let t = touch_narrow_tester()
+  assert_true(wide_on.val)
+  assert_true(@sfdesk.wide.crowded)
+  assert_false(@sfdesk.wide.folded)
+  // the page from the rail's bar on: no row of the list, the chat's words where the list would be
+  assert_true(t.find("夜里的构建又失败了") is None, msg=t.drawn_text())
+  let (cx, _, _, _) = words_at(t, "做完了：列表").unwrap()
+  assert_true(cx < @sfdesk.rail_w + 240.0, msg="the chat's words at \{cx}")
+  // its place tapped: shown over the page
+  tap_place(t, "对话")
+  assert_true(@sfdesk.wide.peeking)
+  assert_true(t.find("夜里的构建又失败了") is Some(_), msg=t.drawn_text())
+  // a chat chosen there: opened, the list folded again
+  t.tap_text("首页的列表改成按天分组")
+  t.run_for(@sfdesk.side_move_ms)
+  match app.nav.top() {
+    Chat(r) => assert_true(r.session != "s-c1", msg="still \{r.session}")
+    _ => fail("not a chat")
+  }
+  assert_false(@sfdesk.wide.peeking)
+  // (another chat's row: the one chosen is the page's title now)
+  assert_true(t.find("夜里的构建又失败了") is None)
+  // shown again, its place tapped again: folded; shown, a tap on the page: folded
+  tap_place(t, "对话")
+  assert_true(@sfdesk.wide.peeking)
+  tap_place(t, "对话")
+  assert_false(@sfdesk.wide.peeking)
+  tap_place(t, "对话")
+  t.tap(560.0, 450.0)
+  t.run_for(@sfdesk.side_move_ms)
+  assert_false(@sfdesk.wide.peeking)
+  // nothing of it kept as the person's (prefs.set sidebars): turned, the list beside the page again
+  assert_false(@sfdesk.wide.folded)
+}
+
+///|
+test "touch wide, a small tablet held upright: another place tapped (设置) is gone to with its list shown over the page; a page of it chosen there folds it" {
+  let t = touch_narrow_tester()
+  tap_place(t, "设置")
+  assert_true(@sfdesk.wide.crowded)
+  assert_true(@sfdesk.wide.peeking, msg=t.drawn_text())
+  t.tap_text("关于")
+  t.run_for(@sfdesk.side_move_ms)
+  assert_false(@sfdesk.wide.peeking)
+}

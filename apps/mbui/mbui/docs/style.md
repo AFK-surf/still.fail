@@ -94,13 +94,15 @@ nothing else gives way:
   under each other. Worked out as it is laid out (Node's `least`), it is what its row may squeeze it to. A box sized by
   its room (`Fill`, `Pct`) takes what it is given, and what it holds is squeezed in it where that is too little: a
   fault, which `Tester::squeeze_faults` says (two things drawn over each other, something cut off by what clips it or
-  by the window, words cut down to nothing).
+  by the window, words cut down to nothing, words wrapped narrower than a word of them or four characters).
 - Words on one line are never laid wider than a column they are in, whatever its alignment: cut with an ellipsis
   there. In a row they are as wide as they are, unless they say otherwise.
 - What may give way says so, and how:
   - words cut short with an ellipsis: `w=Cut` (as wide as they are, cut where the row has less), `w=Fill` (what the
     row leaves, cut where that is less), `min_w` the least of them kept;
   - a box that takes what its row leaves, but never less than what it holds needs: `w=Fill` with `keep`;
+  - a box as wide as it is said (`w=Px`) where its row has the room, less down to a least said below it (`min_w`)
+    where it has not (CSS's width with its min-width in a flex row): a field 320 wide, 160 at least;
   - a part left out of its row: `Ctx::box drop=k`, there whole (as wide as what it holds) or not at all, the lowest k
     first, of the same k the last in the row first; left out, laid out nowhere, drawn and pressed nowhere; `more` is the row's ⋯, there only while something of it is left out, and
     `Ctx::left_out(id)` says what a row left out, for its ⋯ to offer instead (read back: the frame is built again

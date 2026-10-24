@@ -1,5 +1,6 @@
 // What the last frame laid out in less room than it needs, as it shows (Tester::squeeze_faults): two things side by
-// side drawn over each other, something cut off by the window's edge, words cut down to nothing. Room runs short by
+// side drawn over each other, something cut off by the window's edge, words cut down to nothing or wrapped a letter
+// or two a line. Room runs short by
 // design in three ways only, none of them a fault: words cut short with an ellipsis (keeping some of them), what a
 // row says may go left out of it (Ctx::box `drop`, into its ⋯ where it has one), what scrolls or is cut by its own box
 // (a list, a scroll, `sideways`, `clip`). What overlaps on purpose says so: a margin below 0 (faces in a stack), a
@@ -14,9 +15,15 @@ let squeeze_slack : Double = 1.0
 let squeeze_kept_chars : Int = 2
 
 ///|
+/// How narrow words wrapped onto lines may be laid where they may break anywhere (Chinese), in their size: four of them
+/// a line at least (or all of them, fewer).
+let squeeze_wrap_ems : Double = 4.0
+
+///|
 /// Where the last frame shows something squeezed (see the file's head), a line each: two things beside each other in
 /// a box drawn over each other (by how far), the outermost box that runs past the window's edge, words cut down to
-/// less than `squeeze_kept_chars` characters before their ellipsis.
+/// less than `squeeze_kept_chars` characters before their ellipsis, words wrapped narrower than a word of them (broken
+/// inside it) or than `squeeze_wrap_ems` of their size.
 pub fn Tester::squeeze_faults(self : Tester) -> Array[String] {
   ignore(self)
   g().squeeze_faults()
@@ -121,6 +128,13 @@ fn Ctx::squeeze_faults(self : Ctx) -> Array[String] {
         _ => ()
       }
     }
+    // words wrapped narrower than they break: a word broken inside it, a letter or two a line
+    if b.kind == kind_text && b.wrap && b.fw > 0.0 && b.text != "" {
+      let need = b.squeeze_wrap_w()
+      if need > b.fw + squeeze_slack {
+        out.push("\{self.named(i)}: its words wrapped \{b.fw.round()} across (they need \{need.round()})")
+      }
+    }
     // the outermost box that runs past the window's edge, partly in it, where nothing it is in cuts it
     if !cut[i] && b.fw > 0.0 && b.x < w && b.x + b.fw > 0.0 {
       let past = b.squeeze_past(w)
@@ -179,6 +193,29 @@ fn Ctx::squeeze_faults(self : Ctx) -> Array[String] {
     }
   }
   out
+}
+
+///|
+/// The least words wrapped onto lines are laid across without being squeezed: their longest word (between spaces),
+/// `squeeze_wrap_ems` of their size where they break anywhere (a wide character: Chinese, Japanese, Korean), all of
+/// them where that is less.
+fn Node::squeeze_wrap_w(self : Node) -> Double {
+  let mut widest = 0.0
+  let mut word = StringBuilder::new()
+  let mut in_word = false
+  for ch in self.text + " " {
+    if ch == ' ' || ch == '\n' || ch == '\t' || ch.to_int() >= 0x2E80 {
+      if in_word {
+        widest = dmax(widest, text_advance(word.to_string(), size=self.font_size, weight=self.weight))
+        word = StringBuilder::new()
+        in_word = false
+      }
+    } else {
+      word.write_char(ch)
+      in_word = true
+    }
+  }
+  dmin(self.text_layout(1.0e9).w, dmax(widest, squeeze_wrap_ems * self.font_size))
 }
 
 ///|

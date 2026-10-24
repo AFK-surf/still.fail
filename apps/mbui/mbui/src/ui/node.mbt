@@ -179,6 +179,9 @@ struct Node {
   // the least it is laid out across in a row, as worked out from what it holds (Ctx::flex_tree): narrower, what it
   // holds would lie over what is beside it
   mut least : Double
+  // what its row's fit keeps of it before a part of the row leaves (Ctx::box `drop`): its least, but words cut short
+  // keep four of their size, and what holds them so (layout.mbt cut_kept_ems)
+  mut fit_least : Double
   // a row that goes on in lines when what it holds does not fit (Ctx::box `flow`: Compose's FlowRow), what it holds
   // as wide as it is
   mut flow : Bool
@@ -331,6 +334,7 @@ fn Node::new() -> Node {
     keep: false,
     drop: 0,
     least: 0.0,
+    fit_least: 0.0,
     flow: false,
     line_gap: -1.0,
     label: "",

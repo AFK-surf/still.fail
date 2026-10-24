@@ -78,7 +78,8 @@ pub fn viewer_bar(
         }
       })
       |> ignore
-      c.box(style=viewer_bar_end, tools) |> ignore
+      // (short of room, the tools kept whole: the way back and the name give way)
+      c.box(style=viewer_bar_end, keep=true, tools) |> ignore
     })
     |> ignore
     c.box(style=viewer_bar_rule.then(@ui.style(bg=Data(alpha(ink.line, viewer_line_share)))), fn() {  })

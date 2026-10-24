@@ -174,8 +174,11 @@ fn rail(c : @ui.Ctx, src : Source, w : Workspace, all : Array[Workspace], pages 
     let gear = c.id("rail/settings")
     c.cursor(gear, Hand)
     if c.clicked(gear) {
-      // lit (in the settings): back out of them, to the chat last open (Rail.tsx: the settings' NavLink, in them)
-      if lit == "settings" {
+      // lit (in the settings): back out of them, to the chat last open (Rail.tsx: the settings' NavLink, in them); their
+      // list folded for the page's room: shown over the page, or folded again (返回会话 at its top goes back)
+      if lit == "settings" && wide.crowded {
+        wide.peeking = !wide.peeking
+      } else if lit == "settings" {
         while app.nav.depth() > 1 {
           if !app.nav.pop() {
             break
@@ -184,11 +187,17 @@ fn rail(c : @ui.Ctx, src : Source, w : Workspace, all : Array[Workspace], pages 
         wide.landed = ""
       } else {
         open_settings(pages)
+        wide.peek_next = wide.crowded
       }
     }
-    rail_ground(c, gear, lit == "settings", fn(color) {
-      @sf.icon(c, "settings", size=rail_icon_size, color~) |> ignore
-    })
+    rail_ground(
+      c,
+      gear,
+      lit == "settings",
+      fn(color) { @sf.icon(c, "settings", size=rail_icon_size, color~) |> ignore },
+      label=@sf.t("web-pages.settings.title"),
+      tipped=false,
+    )
   })
   |> ignore
 }
@@ -247,7 +256,14 @@ let rail_icon_size : Double = 20.0
 
 ///|
 /// A place's 38 to press, its ground (hovered, lit) 30 square under the icon (Rail.css.ts item).
-fn rail_ground(c : @ui.Ctx, id : Int, on : Bool, body : (Int64) -> Unit, label? : String = "") -> Unit {
+fn rail_ground(
+  c : @ui.Ctx,
+  id : Int,
+  on : Bool,
+  body : (Int64) -> Unit,
+  label? : String = "",
+  tipped? : Bool = true,
+) -> Unit {
   let t = @sf.theme()
   let hover = c.lit(id)
   // its ground and its icon's colour moved over 140 ms (Rail.css.ts item: transition background, color)
@@ -260,10 +276,13 @@ fn rail_ground(c : @ui.Ctx, id : Int, on : Bool, body : (Int64) -> Unit, label? 
     rail_square(c, nav_ground(c, key, hover, on, lit~), fn() { body(@sf.mix(t.p.text, ink, t.p.muted)) })
     |> ignore
   })
-  // named for a screen reader (Rail.tsx's aria-label), and on hover beside it (its Tip, side right)
+  // named for a screen reader (Rail.tsx's aria-label), and on hover beside it (its Tip, side right; not the
+  // settings')
   if label != "" {
     c.semantics(b, Button, id~, label~)
-    @sf.tip(c, "rail/tip/" + id.to_string(), id, label, side=Right)
+    if tipped {
+      @sf.tip(c, "rail/tip/" + id.to_string(), id, label, side=Right)
+    }
   }
 }
 
@@ -294,7 +313,7 @@ let rail_sq_side : Double = 30.0
 /// list's) or the workspace's square's 4 out (4); a list's `shown` of the way in as the sidebar folds (listMark: from
 /// clear at 40%, moved with it).
 fn rail_corner_mark(c : @ui.Ctx, tone : String, at? : Double = 4.0, shown? : Double = 1.0) -> Unit {
-  let ground = if wide.in_bar || wide.folded { rail_mark_bar } else { rail_mark_side }
+  let ground = if wide.in_bar || side_folded() { rail_mark_bar } else { rail_mark_side }
   c.layer(fn() {
     c.box(style=corner_end, fn() {
       let i = c.box(style=ground, tx=at, ty=-at, fn() {
@@ -551,10 +570,18 @@ fn rail_place(
     // the lit place pressed again (not 待处理, a panel): its sidebar folded or opened, not gone to; folded so with the
     // pointer on the rail, it is shown a while (Rail.tsx's rail onClickCapture)
     if on && place != "attention" && !place_bare(lit_place()) {
-      wide.folded = !wide.folded
-      wide.peeking = wide.folded
+      // (folded for the page's room: shown over it, or folded again)
+      if wide.crowded {
+        wide.peeking = !wide.peeking
+      } else {
+        wide.folded = !wide.folded
+        wide.peeking = wide.folded
+      }
     } else {
       rail_go(c, src, w, pages, place)
+      // (pressed into a place whose sidebar is folded for the page's room: shown a while from the start, as the web's
+      // pressed into a folded one)
+      wide.peek_next = wide.crowded && !place_bare(place) && place != "attention"
     }
   }
   let marks = (src.topic)("workspaceMarks", { "workspace": Json::string(w.id) })

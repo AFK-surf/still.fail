@@ -140,3 +140,43 @@ test "squeeze_faults: what a box that takes its room squeezes lies over what is 
   assert_eq(faults.length(), 1, msg=faults.join("\n"))
   assert_true(faults[0].contains("overlap by 30"), msg=faults[0])
 }
+
+///|
+test "squeeze_faults: words wrapped narrower than a word of them (broken inside it) are squeezed; wrapped between words they are not" {
+  let narrow = Ref(30.0)
+  let t = Tester::new(
+    fn(c) { c.box(w=Px(narrow.val), fn() { c.text("Studio settings", size=14.0) |> ignore }) |> ignore },
+    w=400.0,
+    h=200.0,
+  )
+  t.draw()
+  let faults = t.squeeze_faults()
+  assert_eq(faults.length(), 1, msg=faults.join("\n"))
+  assert_true(faults[0].contains("wrapped"), msg=faults[0])
+  narrow.val = 80.0
+  t.frame()
+  assert_true(t.squeeze_faults().is_empty(), msg=t.squeeze_faults().join("\n"))
+}
+
+///|
+test "a row leaves out what it may before words cut short in it go under four of their size; then they take its room" {
+  let ids = Ref((0, 0))
+  let t = Tester::new(
+    fn(c) {
+      let d = c.id("d")
+      c.box(dir=Row, w=Px(100.0), h=Px(20.0), fn() {
+        let i = c.text("words much longer than the row", size=10.0, w=Cut, wrap=false)
+        c.box(w=Px(70.0), h=Px(20.0), id=d, taps=false, drop=1, fn() {  }) |> ignore
+        ids.val = (i, d)
+      })
+      |> ignore
+    },
+    w=400.0,
+    h=100.0,
+  )
+  t.draw()
+  let (i, d) = ids.val
+  // (70 beside them would leave the words 30, less than four of their 10)
+  assert_eq(laid_box(d).4, 0.0)
+  assert_eq(g().nodes[i].fw, 100.0)
+}

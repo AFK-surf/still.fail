@@ -6,11 +6,13 @@
 
 ///|
 /// The windows: the desktop's narrowest (its page 405 beside the rail and the list), an opened fold's inner screen
-/// pointed at with a finger (the wide frame by its size classes: 696 across), the narrowest tablet's the wide frame is
-/// drawn on (600 across: its page 304), a phone's.
+/// pointed at with a finger (the wide frame by its size classes: 696 across), a tablet's with the least beside the
+/// list its page has there (656: 360, @sfdesk.page_beside_least), the narrowest tablet's the wide frame is drawn on
+/// (600 across: the list folded to the rail for the page's room), a phone's.
 let squeeze_windows : Array[(String, Double, Double, Int, Bool)] = [
   ("desk", 701.0, 760.0, 0, false),
   ("touch", 696.0, 768.0, 2, true),
+  ("least", 656.0, 900.0, 2, true),
   ("tablet", 600.0, 900.0, 2, true),
   ("phone", 360.0, 740.0, 2, false),
 ]
