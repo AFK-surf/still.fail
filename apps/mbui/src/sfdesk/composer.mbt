@@ -644,13 +644,6 @@ fn composer_picture(
 }
 
 ///|
-/// The composer's width on a chat's page (dock.css.ts, the chat's: the column and the capsule's curve each side, 760
-/// and 22 each side at most, 12 clear of the pane's edges).
-pub fn composer_width(pane : Double) -> Double {
-  dmin(pane - 2.0 * composer_side, composer_most)
-}
-
-///|
 /// How long it stays a box after it loses the cursor (LET_GO_MS); how long its change of shape takes (morph.ts).
 let let_go_ms : Double = 300.0
 
@@ -734,13 +727,6 @@ let thumb_side : Double = 56.0
 
 ///|
 let on_veil : Int64 = 0xFFFFFFFFL
-
-///|
-/// The composer's widest (dock.css.ts: 760 and its curve each side), its clearance from the pane's sides.
-let composer_most : Double = 804.0
-
-///|
-let composer_side : Double = 12.0
 
 ///|
 /// The capsule (composerBox, one line): its parts on its centre line, 2 apart, 6 in at its start, a pill.

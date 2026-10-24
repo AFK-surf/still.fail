@@ -7,7 +7,7 @@
 
 ///|
 /// A message's files (Files), at the column's end when it is the viewer's (`mine`).
-fn message_files(c : @ui.Ctx, src : Source, here : MessageHere, list : Array[Attachment], mine : Bool) -> Unit {
+pub fn message_files(c : @ui.Ctx, src : Source, here : MessageHere, list : Array[Attachment], mine : Bool) -> Unit {
   if list.length() == 0 {
     return
   }
@@ -84,7 +84,7 @@ fn open_file(here : MessageHere, a : Attachment) -> Unit {
 
 ///|
 /// What a file is by its name (FilePreview.tsx kindOf, as the chat tells them apart): image, video, or anything else.
-fn file_kind(name : String) -> String {
+pub fn file_kind(name : String) -> String {
   let lower = @sf.lower(name)
   let ext = match lower.rev_find(".") {
     Some(i) if i > 0 => lower.view(start_offset=i + 1).to_string()
@@ -101,7 +101,7 @@ fn file_kind(name : String) -> String {
 /// The box an image takes in the chat, known before it loads (imageBox.ts): its own proportions (sent with it, or its
 /// ThumbHash's) within 360×300, a tiny one drawn to 40 on its longer side; a strip thinner than `least` letterboxed in
 /// a box that thick; 240×160 for one sent before sizes were kept. (width, height, letterboxed)
-fn image_box(a : Attachment, least : Double) -> (Double, Double, Bool) {
+pub fn image_box(a : Attachment, least : Double) -> (Double, Double, Bool) {
   let (w, h) = if a.width > 0.0 && a.height > 0.0 {
     (a.width, a.height)
   } else {
@@ -160,7 +160,7 @@ fn image_item(c : @ui.Ctx, src : Source, here : MessageHere, a : Attachment, w :
   // where it is, for the preview to fly from and back into; hidden while the preview is its picture
   let thumb = here.station + "/" + owner + "/" + a.path
   note_thumb(c, thumb, open, @sf.message_file_corner, letterbox~)
-  context_image(c, open, key)
+  image_menu(c, open, key)
   let fit : @ui.Fit = if letterbox { FitContain } else { FitCover }
   let b = c.box(style=image_box_style(w, h, key != "" && key != "!" || letterbox), id=open, fn() {
     if key == "!" {
@@ -411,10 +411,10 @@ let image_px_most : Double = 8192.0
 ///|
 /// The least an image's box is across (16) and a video's (96: its play mark and its name); the box of one sent before
 /// sizes were kept (240×160); the most (360×300); a tiny one drawn to 40 on its longer side (imageBox.ts).
-let image_least : Double = 16.0
+pub let image_least : Double = 16.0
 
 ///|
-let video_least : Double = 96.0
+pub let video_least : Double = 96.0
 
 ///|
 let box_unknown_w : Double = 240.0

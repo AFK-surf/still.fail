@@ -52,7 +52,7 @@ fn marked_of(here : MessageHere, ts : String) -> Array[String] {
 ///|
 /// A message's words in a chat's list, picked with the pointer to be quoted (useSelectionQuote: sfbase's picking);
 /// out of a list, as they are.
-fn picking(
+pub fn picking(
   here : MessageHere,
   c : @ui.Ctx,
   ts : String,
@@ -179,7 +179,7 @@ fn mine_message(c : @ui.Ctx, src : Source, here : MessageHere, m : Message) -> U
 /// as a long one scrolls past; its name, where it went or came from (`route`, when not here) and its time over what
 /// it says. `inline` (inlineHeads): its picture over its head's start, the head in past it, where it went on a line
 /// of its own under them from the row's start.
-fn others_message(
+pub fn others_message(
   c : @ui.Ctx,
   inline : Bool,
   key : String,
@@ -256,7 +256,7 @@ fn message_avatar(c : @ui.Ctx, src : Source, here : MessageHere, m : Message, ag
 
 ///|
 /// A person's picture in a chat (msgAvatar: 18 round), their face where they have one.
-fn person_avatar(c : @ui.Ctx, src : Source, id : String, name : String, picture : String) -> Unit {
+pub fn person_avatar(c : @ui.Ctx, src : Source, id : String, name : String, picture : String) -> Unit {
   @sf.avatar(c, id, name, if picture != "" { (src.picture)(picture, c.page_stint()) } else { "" }, avatar_side)
 }
 
@@ -264,7 +264,7 @@ fn person_avatar(c : @ui.Ctx, src : Source, id : String, name : String, picture 
 /// An agent's picture in a chat (AgentAvatar): its model's maker (still.fail's mark without one) on the neutral
 /// ground; what it said went elsewhere (`slack`: slack | feishu), that place's mark on its corner. One of the chat's
 /// (`agent`, its session's key) has its card while the pointer rests on it (AgentHover).
-fn agent_avatar(
+pub fn agent_avatar(
   c : @ui.Ctx,
   src : Source,
   here : MessageHere,
@@ -337,7 +337,7 @@ fn message_name(
     c.cursor(id, Hand)
     if c.clicked(id) {
       if agent != "" {
-        side_toggle(src, here_ref(here), agent)
+        (detail_asked.val)(src, here_ref(here), agent)
       } else {
         let to = from
         c.tell("msg-name/" + key, fn() { open_link(to) })
@@ -371,7 +371,7 @@ fn message_time(c : @ui.Ctx, key : String, time : Stamp?) -> Unit {
 ///|
 /// What a person wrote (PersonWords): plain, as they wrote it, references to chats as their chips and web addresses
 /// as links.
-fn person_words(c : @ui.Ctx, words : String, key : String, found? : Array[String] = []) -> Unit {
+pub fn person_words(c : @ui.Ctx, words : String, key : String, found? : Array[String] = []) -> Unit {
   let p = @sf.theme().p
   c.rich(
     @sf.found_weight(message_runs(words, p.accent), found),
@@ -379,7 +379,7 @@ fn person_words(c : @ui.Ctx, words : String, key : String, found? : Array[String
     style=msg_plain,
     link_color=p.blue,
     on_link=fn(h) { open_link(h) },
-    on_link_hold=Some(fn(href, _) { context_link(c, href) }),
+    on_link_hold=Some(fn(href, _) { link_held(c, href) }),
     words=true,
   )
   |> ignore
@@ -449,7 +449,7 @@ fn prose_with_files(c : @ui.Ctx, src : Source, here : MessageHere, m : Message, 
           None => open_link(h)
         }
       },
-      on_link_hold=Some(fn(href, _) { context_link(c, href) }),
+      on_link_hold=Some(fn(href, _) { link_held(c, href) }),
       files=fn(name) {
         match placed.get(name) {
           Some(a) if is_viz(a.name) =>
@@ -684,7 +684,7 @@ fn blocked_line(c : @ui.Ctx, src : Source, station : String, key : String, b : I
 ///|
 /// Quotes as sent (Quotes): each a card of its own ahead of the message, its own picture in it (a preview mark's
 /// screenshot: the file of `files` it names); pressed, the list goes to the message it quotes.
-fn quotes(
+pub fn quotes(
   c : @ui.Ctx,
   src : Source,
   here : MessageHere,
@@ -827,7 +827,7 @@ fn elsewhere_route(c : @ui.Ctx, key : String, s : Elsewhere) -> Unit {
 ///|
 /// A message's words (styles/conversation.css.ts msg, markdown): 14, on lines 1.65 (a person's plain words 1.55: both
 /// the scale's 22 here; a time's 11 its 18).
-let body_size : Double = 14.0
+pub let body_size : Double = 14.0
 
 ///|
 /// A picture in a chat (msgAvatar): 18 round; an agent's mark 12 in it.
@@ -902,11 +902,11 @@ let avatar_held_at : Double = 53.0
 ///|
 /// A name (msgHead msgName): 13 in 600, the accent's ink, 240 at most; the accent itself under the pointer.
 // kept across runs: a value (no field of it changes)
-let msg_name_room : @ui.Style = @ui.style(max_w=@sf.name_max)
+pub let msg_name_room : @ui.Style = @ui.style(max_w=@sf.name_max)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let msg_name : @ui.TextStyle = @ui.text_style(size=Sm, weight=Semibold, leading=L5, color=AccentText, wrap=false)
+pub let msg_name : @ui.TextStyle = @ui.text_style(size=Sm, weight=Semibold, leading=L5, color=AccentText, wrap=false)
 
 ///|
 // kept across runs: a value (no field of it changes)

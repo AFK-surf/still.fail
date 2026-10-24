@@ -1,5 +1,9 @@
 // What the desktop's pages read of sfbase, by its own names (as sfapp/base.mbt takes them in).
 using @sfbase {
+  workspace_of,
+  first_line,
+  detail_asked,
+  this_machine,
   app_in_front,
   open_link,
   screen_links,
@@ -250,3 +254,48 @@ fn dmax(a : Double, b : Double) -> Double {
   }
 }
 
+
+///|
+using @sfpages {
+  type ContextEntry,
+  type FindList,
+  type MessageHere,
+  agent_avatar,
+  agent_card,
+  agent_mark,
+  bar_foot,
+  body_size,
+  chat_find_list,
+  chat_key,
+  chat_list,
+  composer_width,
+  context_tile_id,
+  decision_options,
+  file_kind,
+  find_bar,
+  find_chat,
+  find_close,
+  find_forget,
+  find_open,
+  finding,
+  here_of,
+  hover,
+  image_box,
+  image_copy_px,
+  image_least,
+  list_key,
+  login_card,
+  message_files,
+  message_row,
+  mine_to,
+  msg_name,
+  msg_name_room,
+  others_message,
+  person_avatar,
+  person_words,
+  picking,
+  quotes,
+  unpremultiplied,
+  usage_tiles,
+  video_least,
+}

@@ -310,3 +310,51 @@ pub fn java_hash(s : String) -> Int {
   }
   h
 }
+
+///|
+/// The first line of some words that has any: what a one-line event shows of them.
+pub fn first_line(words : String) -> String {
+  for l in words.split("\n") {
+    let s = l.trim(chars=" \t").to_string()
+    if s != "" {
+      return s
+    }
+  }
+  ""
+}
+
+
+///|
+/// The workspace a station (`<workspace>/<station>`) is of.
+pub fn workspace_of(station : String) -> String {
+  match station.find("/") {
+    Some(k) => station.view(end_offset=k).to_string()
+    None => station
+  }
+}
+
+
+///|
+/// The station this machine is (thisMachine.ts: "<workspace>/<station>"), as its host says (its station's cloud.json),
+/// read once; "" where it is none.
+pub fn this_machine() -> String {
+  match machine_here.val {
+    Some(h) => h
+    None => {
+      let v = @json.parse(@ui.local_station()) catch { _ => Json::null() }
+      let ws = field(Some(v), "workspace")
+      let h = if text(ws, "id") != "" && text(ws, "station") != "" {
+        text(ws, "id") + "/" + text(ws, "station")
+      } else {
+        ""
+      }
+      machine_here.val = Some(h)
+      h
+    }
+  }
+}
+
+
+///|
+/// The station this machine is, as read once ("" none: this_machine).
+pub let machine_here : Ref[String?] = Ref(None)

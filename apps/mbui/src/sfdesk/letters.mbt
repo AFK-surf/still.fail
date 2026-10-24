@@ -95,7 +95,7 @@ fn letters_tab(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView, thread : Do
         |> ignore
       })
       for m in items(cv, "letters") {
-        let here = { station: r.station, session: r.session, view: v, go: None, inline: true, list: None, core: None }
+        let here : MessageHere = { station: r.station, session: r.session, view: v, go: None, inline: true, list: None, core: None }
         rows.push(fn() { c.box(style=letters_message, fn() { message_row(c, src, here, message_of(m)) }) |> ignore })
       }
       rows.push(fn() { c.box(style=letters_foot, fn() {  }) |> ignore })

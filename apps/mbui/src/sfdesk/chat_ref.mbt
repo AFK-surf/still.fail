@@ -192,15 +192,6 @@ fn ref_menu_body(
 }
 
 ///|
-/// The workspace a station (`<workspace>/<station>`) is of.
-fn workspace_of(station : String) -> String {
-  match station.find("/") {
-    Some(k) => station.view(end_offset=k).to_string()
-    None => station
-  }
-}
-
-///|
 /// 8 over the composer (refMenu: bottom 8).
 let ref_menu_off : Double = 8.0
 

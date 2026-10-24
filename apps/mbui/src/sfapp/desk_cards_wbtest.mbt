@@ -80,7 +80,7 @@ test "desk: an agent's request to use a secret is its card in place of its words
   let t = @ui.Tester::new(
     fn(c) {
       wide_on.val = true
-      let here : @sfdesk.MessageHere = {
+      let here : @sfpages.MessageHere = {
         station: "ws1/st1",
         session: "s-c1",
         view: chat_view(viewer),
@@ -89,7 +89,7 @@ test "desk: an agent's request to use a secret is its card in place of its words
         list: None,
         core: Some(settings_core(src, w)),
       }
-      @sfdesk.message_row(c, src, here, m)
+      @sfpages.message_row(c, src, here, m)
     },
     w=760.0,
     h=600.0,

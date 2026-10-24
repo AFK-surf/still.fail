@@ -863,7 +863,7 @@ let wide_on : Ref[Bool] = Ref(false)
 ///|
 fn wide_reset() -> Unit {
   @sfdesk.side_slide_reset()
-  @sfdesk.find_forget()
+  @sfpages.find_forget()
   find_around.val = -1.0
   wide_on.val = false
 }

@@ -10,39 +10,17 @@ priv struct Nav {
   open : Map[String, Bool]
   places : Map[String, Array[(String, String, Bool)]]
   asked : Map[String, Bool]
-  mut here : String?
 }
 
 ///|
 // kept across runs: the sidebar's state (nav_reset puts it back)
-let nav : Nav = { open: {}, places: {}, asked: {}, here: None }
+let nav : Nav = { open: {}, places: {}, asked: {} }
 
 ///|
 fn nav_reset() -> Unit {
   nav.open.clear()
   nav.places.clear()
   nav.asked.clear()
-  nav.here = None
-}
-
-///|
-/// The station this machine is (thisMachine.ts: "<workspace>/<station>"), as its host says (its station's cloud.json),
-/// read once; "" where it is none.
-pub fn this_machine() -> String {
-  match nav.here {
-    Some(h) => h
-    None => {
-      let v = @json.parse(@ui.local_station()) catch { _ => Json::null() }
-      let ws = field(Some(v), "workspace")
-      let h = if text(ws, "id") != "" && text(ws, "station") != "" {
-        text(ws, "id") + "/" + text(ws, "station")
-      } else {
-        ""
-      }
-      nav.here = Some(h)
-      h
-    }
-  }
 }
 
 ///|

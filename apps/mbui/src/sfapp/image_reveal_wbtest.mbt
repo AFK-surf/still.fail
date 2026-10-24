@@ -9,7 +9,7 @@ let reveal_ms : Double = 1100.0
 test "a message's image as the web's: what it waits on until decoded; then brushed in from its top and sharpened over 1100 ms" {
   reset()
   let t = @ui.Tester::new(
-    fn(c) { @sfdesk.image_reveal(c, "pic", 300.0, 200.0, FitCover, "") },
+    fn(c) { @sfpages.image_reveal(c, "pic", 300.0, 200.0, FitCover, "") },
     w=400.0,
     h=300.0,
     platform=0,
@@ -35,7 +35,7 @@ test "a message's image already decoded as it is first shown comes as it is" {
     fn(c) {
       // (decoded first, drawn once it is)
       if shown.val {
-        @sfdesk.image_reveal(c, "pic", 300.0, 200.0, FitCover, "")
+        @sfpages.image_reveal(c, "pic", 300.0, 200.0, FitCover, "")
       } else {
         c.image("pic", w=Px(300.0), h=Px(200.0), fade=false) |> ignore
       }

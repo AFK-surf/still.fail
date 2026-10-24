@@ -130,7 +130,7 @@ fn vault_ask_card(c : @ui.Ctx, here : MessageHere, card : Card, ask : VaultAsk) 
 
 ///|
 /// Whether what is asked of `assignee` is the viewer's to answer (anyone's where it names no one).
-fn mine_to(here : MessageHere, assignee : String) -> Bool {
+pub fn mine_to(here : MessageHere, assignee : String) -> Bool {
   let me = here.view.me
   assignee == "" || me == "" || assignee.to_lower() == me.to_lower()
 }
@@ -139,7 +139,7 @@ fn mine_to(here : MessageHere, assignee : String) -> Bool {
 /// A post's options in one card, numbered (DecisionOptions: the library's options card, as wide as what it says);
 /// pressing one answers with it (`decision.answer`), the one being sent turning; settled, none pressed any more, the
 /// one picked as it was.
-fn decision_options(
+pub fn decision_options(
   c : @ui.Ctx,
   src : Source,
   here : MessageHere,

@@ -19,7 +19,8 @@
     "roots": [
       "src/sfapp",
       "src/sfbase",
-      "src/sfdesk"
+      "src/sfdesk",
+      "src/sfpages"
     ]
   },
   "flows": [
