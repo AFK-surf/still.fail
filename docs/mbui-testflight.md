@@ -60,6 +60,7 @@ Run without credentials/network/builds:
 ```sh
 bash -n apps/mbui/scripts/testflight{,-guard,-asc,-guard-test}.sh
 bash apps/mbui/scripts/testflight-guard-test.sh
+bash apps/mbui/scripts/testflight-sign-test.sh
 ```
 
-Also lint both workflow YAML files with the repository's available workflow validator. The manual workflow runs these guard cases and the existing reusable native suite before any release. These offline checks do not establish real signing, profile compatibility, Apple API availability or upload acceptance.
+Also lint both workflow YAML files with the repository's available workflow validator. The manual workflow runs the input guards, offline signing/cleanup contracts and the existing reusable native suite before any release. The signing contracts cover macOS Bash 3.2, target order, entitlements, and early/nounset exits. A run succeeds only after the upload script writes its completion receipt; an EXIT cleanup cannot turn a premature exit into a successful upload. These offline checks do not establish real signing, profile compatibility, Apple API availability or upload acceptance.
