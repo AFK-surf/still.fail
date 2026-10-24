@@ -643,6 +643,9 @@
   "core-logic.transfer.moved": "Moved · {total}",
   "core-logic.transfer.cancelled": "Cancelled",
   "core-logic.transfer.failed": "Failed: {error}",
+  "core-logic.download.going": "Downloading {percent}% · {total}",
+  "core-logic.download.ready": "Downloaded · {total}",
+  "core-logic.download.failed": "Download failed: {error}",
   "core-logic.transfer.many": {
     "one": "{name} and others ({n} item)",
     "other": "{name} and others ({n} items)"

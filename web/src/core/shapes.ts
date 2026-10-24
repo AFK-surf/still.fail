@@ -2753,6 +2753,36 @@ export interface DoingView {
 	doing: DoingItem[];
 }
 
+/** How a download stands: coming, all here to be saved, or failed. */
+export type DownloadState = "going" | "ready" | "failed";
+
+/** A chat's file being downloaded to this device, as the pages show it. */
+export interface DownloadShown {
+	/** Its own (`download.take`, `download.cancel`). */
+	id: string;
+	station: string;
+	/** The session that keeps the file. */
+	key: string;
+	/** The file's name as the station keeps it (the last part of its path). */
+	name: string;
+	size: number;
+	/** How much of it is here. */
+	loaded: number;
+	/** How much of it is here, 0 to 1. */
+	progress: number;
+	state: DownloadState;
+	/** How it stands, in a line: 正在下载 42% · 18.3 MB · 已下载 · 下载失败：… . */
+	statusText: string;
+	error?: string;
+	startedAt: number;
+}
+
+/** A chat's files being downloaded to this device (the `downloads` topic): under way, ready to be saved, or failed. */
+export interface DownloadsView {
+	/** This device's, newest first. */
+	downloads: DownloadShown[];
+}
+
 /**
  * What is being written to a chat on this device (the `draft` topic, `draft.put`): its text as typed, the passages
  * it quotes with what is said about them, and the files already up (the station keeps them in no chat until a

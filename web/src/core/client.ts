@@ -153,6 +153,8 @@ export type Topic =
   | { topic: "vaults"; workspace: string }
   | { topic: "vaultItems"; workspace: string; vault: string }
   | { topic: "driveTransfers"; workspace: string }
+  // A chat's files being downloaded to this device (client/core-ts views/downloads.ts), how far each has come.
+  | { topic: "downloads" }
   | { topic: "vaultUses"; workspace: string; vault: string; item: string };
 
 /** A chat as a page shows it (`client.focus`): by its thread, or its key before it has one; `end`: its end in view. */

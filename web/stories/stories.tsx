@@ -32,7 +32,7 @@ import { LoginCard, LoginsSection } from "../src/MachineLogins.tsx";
 import * as pagesCss from "../src/styles/pages.css.ts";
 import type { DemoExtension } from "../src/demo/mount.tsx";
 import { shown as fontsShown } from "../../client/core-ts/src/fonts.ts";
-import type { ChatMessage, ChatView, ShareInView, StationView } from "../src/core/shapes.ts";
+import type { ChatMessage, ChatView, DownloadShown, ShareInView, StationView } from "../src/core/shapes.ts";
 import { stamp } from "../src/demo/fixtures.ts";
 import { markdown } from "../../client/core-ts/src/markdown.ts";
 import type { Shared } from "../src/shareIn.ts";
@@ -637,6 +637,21 @@ function OutboxUpload() {
   );
 }
 
+/** A chat's file the core downloads (chatDownloads.ts): how far on its card, its sheet filling as an upload's does; one
+ * that failed, why. */
+function FileDownloads() {
+  const size = 52_428_800;
+  const of = (state: DownloadShown["state"], loaded: number, statusText: string): DownloadShown =>
+    ({ id: `s|k|${state}`, station: "s", key: "k", name: "dist.zip", size, loaded, progress: loaded / size, state, statusText, startedAt: 0 });
+  return (
+    <div style={{ padding: 40, maxWidth: 820, display: "grid", gap: 12, justifyItems: "start" }}>
+      <FileCard file={{ name: "dist.zip", size, path: "work/dist.zip" }} />
+      <FileCard file={{ name: "dist.zip", size, path: "work/dist.zip" }} download={of("going", 22_020_096, "正在下载 42% · 50 MB")} />
+      <FileCard file={{ name: "dist.zip", size, path: "work/dist.zip" }} download={of("failed", 0, "下载失败：没连上 station")} />
+    </div>
+  );
+}
+
 /** A chat's file opened (its preview), from what is here already: it opens in the viewer of its kind. */
 function AttachmentDemo({ name, url, type }: { name: string; url: string; type: string }) {
   const [local, setLocal] = useState<{ blob: Blob; url: string } | null>(null);
@@ -736,6 +751,7 @@ export const stories: Story[] = [
   { id: "math", group: "对话", title: "数学公式 · 行内与独立", render: () => stage(<div className={conversationCss.markdown} style={{ maxWidth: 720, width: "100%", padding: 24 }}><Prose>{MATH}</Prose></div>) },
   { id: "code-colours", group: "对话", title: "代码块 · 各语言的颜色", render: () => stage(<div className={conversationCss.markdown} style={{ maxWidth: 720, padding: 24 }}><MdView md={CODE_COLOURS.md} source={CODE_COLOURS.text} /></div>) },
   { id: "outbox-upload", group: "对话", title: "发出后还在上传的附件", render: () => stage(<OutboxUpload />) },
+  { id: "file-downloads", group: "对话", title: "下载中的附件", render: () => stage(<FileDownloads />) },
   { id: "runtime-missing", group: "对话", title: "缺少运行时 · 安装", app: true, demo: installDemo("missing") },
   { id: "runtime-installing", group: "对话", title: "缺少运行时 · 正在安装", app: true, demo: installDemo("installing") },
   { id: "runtime-install-failed", group: "对话", title: "缺少运行时 · 安装失败", app: true, demo: installDemo("failed") },

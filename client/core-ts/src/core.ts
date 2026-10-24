@@ -60,6 +60,7 @@ import * as pairing from "./views/pair.ts";
 import * as vaultCalls from "./views/vault.ts";
 import * as transferCalls from "./views/transfers.ts";
 import * as browseCalls from "./views/browse.ts";
+import * as downloads from "./views/downloads.ts";
 import { get, isObject } from "./util.ts";
 import { type CoreModule, type ModuleCall, installModules } from "./module.ts";
 
@@ -229,6 +230,7 @@ export class Core {
       vaultCalls.install(inner);
       transferCalls.install(inner);
       browseCalls.install(inner);
+      downloads.install(inner);
       inner.attention = new Attention(inner, yield* Attend.load(inner.host));
       inner.router.owners.push(inner.attention);
       inner.router.after = (topic, value) => inner.attention.attended(topic, value);
