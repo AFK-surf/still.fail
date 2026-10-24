@@ -1203,7 +1203,17 @@ export const SHAPES: Record<string, Shape> = {
     ["size", opt("String"), { doc: "Its text and files together: 51 KB (the core's)." }],
     ["files", vec("SkillDoc"), { default: true, doc: "Its other files (absent from a station before them)." }],
     ["share", opt("SkillShare"), { doc: "Shared with the workspace's other stations, or another station's (absent: neither)." }],
+    ["kindText", "String", { default: true, doc: "What kind it is, in words: 项目记忆, station 内置, Skill." }],
+    ["whenText", "String", { default: true, doc: "When it is read, for its page (`about`, else that it does not say)." }],
+    ["line", "String", { default: true, doc: "Its row's line (`brief`, else that it does not say when it is used)." }],
+    ["pages", vec("MemoryPage"), { default: true, doc: "Its pages to pick between: its SKILL.md (总览), then each other file." }],
   ], { doc: "A skill: `body` its text as people read it (no frontmatter), `about` when it applies (a project's without its\n项目记忆：); both absent from a core before them." }),
+  MemoryPage: struct([
+    ["key", "String", { doc: "\"\" its SKILL.md; else the file's name." }],
+    ["label", "String"],
+    ["size", opt("String")],
+    ["text", "String", { doc: "What it says (（空） when nothing)." }],
+  ], { doc: "A page of a skill, as its page picks between them." }),
   SkillShare: struct([
     ["id", "String"],
     ["role", "String", { doc: "host: shared from this station; user: a copy of another station's." }],

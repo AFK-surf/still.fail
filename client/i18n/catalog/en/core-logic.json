@@ -573,6 +573,12 @@
   "core-logic.drive.empty": "Empty folder",
   "core-logic.memory.lead": "Beginning",
   "core-logic.memory.whole": "All of it",
+  "core-logic.memory.kind.project": "Project memory",
+  "core-logic.memory.kind.builtin": "Built-in",
+  "core-logic.memory.kind.skill": "Skill",
+  "core-logic.memory.no_when": "(When to use not specified)",
+  "core-logic.memory.overview": "Overview",
+  "core-logic.memory.empty": "(Empty)",
   "core-logic.memory.points": {
     "one": "1 point",
     "other": "{n} points"

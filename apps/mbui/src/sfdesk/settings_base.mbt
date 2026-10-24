@@ -47,7 +47,6 @@ using @settings {
   role_label,
   sections_of,
   set_pref,
-  skill_line,
   skill_tag,
   spinner,
   stamp,
