@@ -1102,8 +1102,8 @@ fn key_in(code : Int, mods : Int) -> Unit {
   }
   // every key the app may read (Ctx::key_pressed), and whether the focused field takes it (the editor's own keys)
   desk_key(code, mods, c.editors.contains(c.focus) && field_key(code))
-  // ⌘V (Ctrl+V) as the app's key: the host saw a picture on the clipboard (mac_app.m, win_app.c), read for the field
-  // focused (Ctx::editor: a picture where it takes pictures, its words where it does not)
+  // ⌘V (Ctrl+V) as the app's key: the host saw files or a picture on the clipboard (mac_app.m, win_app.c), read for
+  // the field focused (Ctx::editor: them where it takes files, its words where it does not)
   if code == key_of_char('v') && (mods & (mod_cmd | mod_ctrl)) != 0 && c.editors.contains(c.focus) {
     match clipboard_read() {
       Some(r) => desk.pasting = Some((c.focus, r))

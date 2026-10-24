@@ -1494,7 +1494,7 @@ test "wide: 用量 as the web's: what it counts beside its title, who spent it t
 }
 
 ///|
-test "wide: ⌘V with a picture on the clipboard puts it in as a file (as a page's paste takes one); its words where it has none" {
+test "wide: ⌘V with a picture or files on the clipboard puts them in as files (as a page's paste takes them); its words where it has none" {
   let calls : Array[Made] = []
   let t = wide_tester(calls, mode="chat")
   let r : ChatRef = { station: "ws1/st1", session: "s-c1", title: "", station_name: "" }
@@ -1518,6 +1518,18 @@ test "wide: ⌘V with a picture on the clipboard puts it in as a file (as a page
   t.frame()
   t.frame()
   assert_eq(@sfbase.writings.get(draft_key(r)).map(fn(d) { d.text }), Some("再看一眼签名"))
+  // files copied in Finder (their names beside them as words): the files themselves, by their names, not the words
+  t.clipboard_gives_files([("发布清单.pdf", b"%PDF-1.7"), ("截图.jpg", b"\xff\xd8\xff")], text="发布清单.pdf\n截图.jpg")
+  t.key(@ui.key_of_char('v'), mods=@ui.mod_cmd)
+  t.frame()
+  t.frame()
+  match @sfbase.writings.get(draft_key(r)) {
+    Some(d) => {
+      assert_eq(d.files.map(fn(f) { text(Some(f), "name") }), ["image.png", "发布清单.pdf", "截图.jpg"])
+      assert_eq(d.text, "再看一眼签名")
+    }
+    None => fail("no draft")
+  }
 }
 
 ///|

@@ -107,7 +107,7 @@ int32_t mb_host_copy_shown(void) { return 0; }
 // ---- the clipboard read ----
 
 enum { CLIP_NONE = 0, CLIP_PNG = 1, CLIP_TOO_LARGE = 2, CLIP_UNREADABLE = 3 };
-static const NSUInteger clip_png_max = 8u << 20, clip_source_max = 32u << 20;
+static const NSUInteger clip_png_max = 8u << 20, clip_source_max = 32u << 20, clip_file_max = 1u << 30;
 static const double clip_pixels_max = 16.0 * 1024 * 1024;
 static NSMutableDictionary<NSNumber *, NSDictionary *> *clip_reads;
 static int32_t clip_next = 1;
@@ -160,8 +160,8 @@ static int clip_make_png(NSData *src, NSData **out) {
   return kind;
 }
 
-// The pasteboard read now (its words, its picture's bytes as they are there), the picture made a PNG off the main
-// thread, then told (MB_OUTSIDE_CLIP).
+// The pasteboard read now (its words, its picture's bytes as they are there, its files' URLs), the picture made a PNG
+// and the files read off the main thread, then told (MB_OUTSIDE_CLIP).
 int32_t mb_host_clip_read(void) {
   if (!clip_reads) clip_reads = [NSMutableDictionary new];
   int32_t id = clip_next++;
@@ -177,19 +177,48 @@ int32_t mb_host_clip_read(void) {
       pic = im ? UIImagePNGRepresentation(im) : [NSData data];
     }
   }
+  NSArray<NSURL *> *urls = @[];
 #else
   NSPasteboard *pb = NSPasteboard.generalPasteboard;
   NSString *text = [pb stringForType:NSPasteboardTypeString] ?: @"";
-  NSData *pic = [pb dataForType:NSPasteboardTypePNG];
-  if (!pic) pic = [pb dataForType:NSPasteboardTypeTIFF];
-  if (!pic && [pb canReadObjectForClasses:@[ NSImage.class ] options:nil]) pic = [NSData data];
+  // files (copied in Finder, or by an app that copies a picture as its file): those, not the icon Finder puts beside
+  NSArray<NSURL *> *urls = [pb readObjectsForClasses:@[ NSURL.class ]
+                                             options:@{NSPasteboardURLReadingFileURLsOnlyKey : @YES}] ?: @[];
+  NSData *pic = nil;
+  if (urls.count == 0) {
+    pic = [pb dataForType:NSPasteboardTypePNG];
+    if (!pic) pic = [pb dataForType:NSPasteboardTypeTIFF];
+    // a picture of another kind (JPEG, HEIC, GIF…): its bytes as they are, made a PNG below
+    if (!pic) {
+      NSPasteboardType kind = [pb availableTypeFromArray:NSImage.imageTypes];
+      if (kind) pic = [pb dataForType:kind] ?: [NSData data];
+    }
+  }
 #endif
   dispatch_async(dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0), ^{
     NSData *png = nil;
     int kind = pic ? clip_make_png(pic, &png) : CLIP_NONE;
+    // each file read whole (a folder, one unreadable or past clip_file_max left out)
+    NSMutableArray *names = [NSMutableArray new], *datas = [NSMutableArray new];
+    for (NSURL *u in urls) {
+      NSNumber *dir = nil;
+      [u getResourceValue:&dir forKey:NSURLIsDirectoryKey error:nil];
+      if (dir.boolValue) continue;
+      NSData *d = [NSData dataWithContentsOfURL:u options:NSDataReadingMappedIfSafe error:nil];
+      if (!d || d.length > clip_file_max) continue;
+      [names addObject:u.lastPathComponent ?: @"file"];
+      [datas addObject:d];
+    }
     dispatch_async(dispatch_get_main_queue(), ^{
       if (!clip_reads[@(id)]) return;
-      clip_reads[@(id)] = @{@"state" : @1, @"text" : text, @"picture" : @(kind), @"png" : png ?: [NSData data]};
+      clip_reads[@(id)] = @{
+        @"state" : @1,
+        @"text" : text,
+        @"picture" : @(kind),
+        @"png" : png ?: [NSData data],
+        @"names" : names,
+        @"datas" : datas,
+      };
       mb_host_outside(MB_OUTSIDE_CLIP, id, 1);
       mb_host_request_frame();
     });
@@ -208,6 +237,21 @@ moonbit_string_t mb_host_clip_text(int32_t id) { return mb_string_from_ns(clip_r
 
 moonbit_bytes_t mb_host_clip_png(int32_t id) {
   NSData *d = clip_reads[@(id)][@"png"];
+  moonbit_bytes_t out = moonbit_make_bytes((int32_t)d.length, 0);
+  if (d.length) memcpy(out, d.bytes, d.length);
+  return out;
+}
+
+int32_t mb_host_clip_files(int32_t id) { return (int32_t)[clip_reads[@(id)][@"names"] count]; }
+
+moonbit_string_t mb_host_clip_file_name(int32_t id, int32_t i) {
+  NSArray *names = clip_reads[@(id)][@"names"];
+  return mb_string_from_ns(i >= 0 && i < (int32_t)names.count ? names[i] : @"");
+}
+
+moonbit_bytes_t mb_host_clip_file(int32_t id, int32_t i) {
+  NSArray *datas = clip_reads[@(id)][@"datas"];
+  NSData *d = i >= 0 && i < (int32_t)datas.count ? datas[i] : nil;
   moonbit_bytes_t out = moonbit_make_bytes((int32_t)d.length, 0);
   if (d.length) memcpy(out, d.bytes, d.length);
   return out;

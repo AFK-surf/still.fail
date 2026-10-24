@@ -1768,6 +1768,10 @@
   H.clipPicture = (id) => (clips.get(id) || {}).picture || 0;
   H.clipText = (id) => (clips.get(id) || {}).text || '';
   H.clipPng = (id) => (clips.get(id) || {}).png || new Uint8Array(0);
+  // (a page reads no files off the clipboard: the browser's paste event has them, not navigator.clipboard)
+  H.clipFiles = () => 0;
+  H.clipFileName = () => '';
+  H.clipFile = () => new Uint8Array(0);
   H.clipEnd = (id) => { clips.delete(id); };
   H.clipSet = (text, png, label) => {
     const cl = navigator.clipboard;

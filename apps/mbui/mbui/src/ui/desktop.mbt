@@ -184,10 +184,11 @@ priv struct Desk {
   /// targets a press on keeps what is picked with the pointer (Ctx::keeps_selection), this frame's and the last one's
   next_keeps : Array[Int]
   mut keeps : Array[Int]
-  /// ⌘V (Ctrl+V) with a picture on the clipboard, the host's app key: the read under way and the field it is for; a
-  /// picture read for a field that takes pictures (Ctx::editor `pictures`), by its id, until the app takes it
+  /// ⌘V (Ctrl+V) with files or a picture on the clipboard, the host's app key: the read under way and the field it is
+  /// for; the files read (the picture as one) for a field that takes files (Ctx::editor `files`), by its id, until the
+  /// app takes them
   mut pasting : (Int, ClipboardRead)?
-  pictures : Map[Int, Bytes]
+  pasted : Map[Int, Array[(String, Bytes)]]
   /// lists dragged by the mouse as a finger drags them (true unless the app says not), as this frame's build says and
   /// as the last one's said
   mut next_mouse_drags : Bool
@@ -245,7 +246,7 @@ let desk : Desk = {
   next_keeps: [],
   keeps: [],
   pasting: None,
-  pictures: {},
+  pasted: {},
   next_mouse_drags: true,
   mouse_drags: true,
   selecting: false,
@@ -270,7 +271,7 @@ fn desk_reset() -> Unit {
   desk.next_keeps.clear()
   desk.keeps.clear()
   desk.pasting = None
-  desk.pictures.clear()
+  desk.pasted.clear()
   desk.next_mouse_drags = true
   desk.mouse_drags = true
   desk.selecting = false

@@ -99,13 +99,13 @@ static void send_text(int kind, NSString *s, int a, int b) {
   mb_cb.text(kind, mb_string_from_ns(s ?: @""), a, b);
 }
 
-// ⌘V (the key, or the menu bar's 粘贴): a picture on the clipboard (not a file's icon beside its name, as the Finder
-// copies one) is the app's ⌘V (1000 + v), which reads the clipboard for it (@hostapi.clip_read), as a page's paste takes
-// a picture as a file; else its words, typed
+// ⌘V (the key, or the menu bar's 粘贴): files on the clipboard (copied in Finder, or by an app that copies a picture as
+// its file) or a picture are the app's ⌘V (1000 + v), which reads the clipboard for them (@hostapi.clip_read), as a
+// page's paste takes the clipboard's files; else its words, typed
 static void paste_now(int mods) {
   NSPasteboard *pb = [NSPasteboard generalPasteboard];
   BOOL files = [pb canReadObjectForClasses:@[ NSURL.class ] options:@{NSPasteboardURLReadingFileURLsOnlyKey : @YES}];
-  if (!files && [pb canReadItemWithDataConformingToTypes:@[ NSPasteboardTypePNG, NSPasteboardTypeTIFF, @"public.image" ]]) {
+  if (files || [pb canReadItemWithDataConformingToTypes:@[ NSPasteboardTypePNG, NSPasteboardTypeTIFF, @"public.image" ]]) {
     mb_cb.key(1000 + 'v', mods);
   } else {
     NSString *s = [pb stringForType:NSPasteboardTypeString];

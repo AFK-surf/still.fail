@@ -672,7 +672,7 @@ test "the device's picture pasted as PNG; past 8 MB said, not sent; a text-only 
   assert_eq(sent.length(), 1)
   assert_eq(field(Some(sent[0].1), "png"), Some(Json::boolean(true)))
   assert_eq(sent[0].2, Some(png))
-  r.t.clipboard_gives_clip({ text: "", picture: TooLarge })
+  r.t.clipboard_gives_clip({ text: "", picture: TooLarge, files: [] })
   r.tap_label("粘贴手机剪贴板")
   r.t.draw()
   assert_true(r.t.find("图片过大，上限 8 MB") is Some(_))

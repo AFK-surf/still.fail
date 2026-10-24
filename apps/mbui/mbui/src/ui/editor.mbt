@@ -687,7 +687,7 @@ pub fn Ctx::editor(
   words? : Bool = false,
   look? : (String) -> (String, Array[(Int, Int, Int64)]),
   field? : Field,
-  pictures? : Bool = false,
+  files? : Bool = false,
 ) -> EditorResult {
   let id = self.id(key)
   let st = match (self.editors.get(id), field) {
@@ -727,16 +727,20 @@ pub fn Ctx::editor(
   st.built_frame = self.build_no
   st.built_key = key
   st.built_id = id
-  // ⌘V with a picture on the clipboard, read for it: the picture where it takes pictures (Ctx::field_picture), else
-  // the words with it put in as a paste's
+  // ⌘V with files or a picture on the clipboard, read for it: where it takes files (Ctx::field_files) the files, else
+  // the picture as one; else the words with them put in as a paste's
   match desk.pasting {
     Some((pid, r)) if pid == id =>
       match r.got() {
         Some(got) => {
           desk.pasting = None
-          match got.picture {
-            Png(png) if pictures => {
-              desk.pictures[id] = png
+          match (got.files, got.picture) {
+            ([_, ..] as fs, _) if files => {
+              desk.pasted[id] = fs
+              self.read_changed("files pasted")
+            }
+            ([], Png(png)) if files => {
+              desk.pasted[id] = [(pasted_picture_name, png)]
               self.read_changed("a picture pasted")
             }
             _ => if got.text != "" { st.text_input(0, got.text, 0, 0, self.now) }
@@ -1215,8 +1219,9 @@ fn Ctx::put_editor_text(self : Ctx, key : String, text : String) -> Unit {
 }
 
 ///|
-/// Pastes what the clipboard holds into the field `id` (an edit menu's 粘贴), as ⌘V (Ctrl+V) with a picture on it
-/// does: read first, then the picture where the field takes pictures (Ctx::field_picture), else its words.
+/// Pastes what the clipboard holds into the field `id` (an edit menu's 粘贴), as ⌘V (Ctrl+V) with files or a picture
+/// on it does: read first, then its files or its picture where the field takes files (Ctx::field_files), else its
+/// words.
 pub fn Ctx::field_paste(self : Ctx, id : Int) -> Unit {
   match clipboard_read() {
     Some(r) => {
@@ -1228,12 +1233,17 @@ pub fn Ctx::field_paste(self : Ctx, id : Int) -> Unit {
 }
 
 ///|
-/// A picture pasted into the field `key` (one that takes pictures: Ctx::editor `pictures`) with ⌘V (Ctrl+V), as PNG:
-/// taken once, for the app to put in as a file (a page's paste takes a picture as one).
-pub fn Ctx::field_picture(self : Ctx, key : String) -> Bytes? {
+/// What a pasted picture is named as a file (as a browser names a page's pasted one).
+pub let pasted_picture_name : String = "image.png"
+
+///|
+/// The files pasted into the field `key` (one that takes files: Ctx::editor `files`) with ⌘V (Ctrl+V) or its menu's
+/// 粘贴, each its name and bytes: those on the clipboard (copied in Finder), else its picture as PNG
+/// (`pasted_picture_name`), as a page's paste takes the clipboard's files. Taken once, for the app to put in.
+pub fn Ctx::field_files(self : Ctx, key : String) -> Array[(String, Bytes)]? {
   let id = self.id(key)
-  let got = desk.pictures.get(id)
-  desk.pictures.remove(id)
+  let got = desk.pasted.get(id)
+  desk.pasted.remove(id)
   got
 }
 

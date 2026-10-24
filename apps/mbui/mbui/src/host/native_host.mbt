@@ -801,6 +801,21 @@ impl @hostapi.Host for Native with cl_png(_, id) {
 }
 
 ///|
+impl @hostapi.Host for Native with cl_files(_, id) {
+  cl_files(id)
+}
+
+///|
+impl @hostapi.Host for Native with cl_file_name(_, id, i) {
+  cl_file_name(id, i)
+}
+
+///|
+impl @hostapi.Host for Native with cl_file(_, id, i) {
+  cl_file(id, i)
+}
+
+///|
 impl @hostapi.Host for Native with cl_end(_, id) {
   cl_end(id)
 }

@@ -158,6 +158,22 @@ moonbit_bytes_t mb_host_clip_png(int32_t id) {
   return b;
 }
 
+// No files read off the clipboard here yet (Explorer's copied files, CF_HDROP: Ctrl+V types their words).
+int32_t mb_host_clip_files(int32_t id) {
+  (void)id;
+  return 0;
+}
+
+moonbit_string_t mb_host_clip_file_name(int32_t id, int32_t i) {
+  (void)id, (void)i;
+  return moonbit_make_string_raw(0);
+}
+
+moonbit_bytes_t mb_host_clip_file(int32_t id, int32_t i) {
+  (void)id, (void)i;
+  return moonbit_make_bytes(0, 0);
+}
+
 // ---- the clipboard written: words (as @hostapi.clipboard_set), or a PNG under "PNG" (no label on Windows) ----
 
 void mb_host_clip_set(moonbit_string_t text, moonbit_bytes_t png, moonbit_string_t label) {
