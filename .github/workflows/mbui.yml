@@ -9,9 +9,11 @@
 # (2026-10-19), its tests do not hold it back: it is a test app (Windows' e2e runs after its zip is out). A feed moves
 # only once its file is fetched back from where it is served, the same bytes.
 # What stays between runs, by content, in the Actions cache: MoonBit (by its release's ETags), mbc's compiled units
-# (MBC_STORE), core.hbc by its inputs (HBC_CACHE), the core's Rust shell and engine for
-# Apple (out/core, by the shell's sources), the APK's dependencies, its dex (R8's: by its classes, dependencies and
-# rules) and its stripped native libraries (APK_CACHE: mbui's scripts/apk, the APK built without Gradle).
+# (MBC_STORE), core.hbc by its inputs (HBC_CACHE), React Native's Hermes for Apple and its hermesc (by the versions
+# core.sh pins), the APK's dependencies, its dex (R8's: by its classes, dependencies and rules) and its stripped native
+# libraries (APK_CACHE: mbui's scripts/apk, the APK built without Gradle). The core's shell is still.fail's natives
+# (scripts/native.ts shell, shell-apple; Android's and Windows' engine too), fetched by its key, never built here;
+# Apple's engine, one file compiled in 1-2 s, is made in each run.
 name: mbui
 on:
   push:
@@ -162,19 +164,23 @@ jobs:
             .ci/hbc
           key: mbui-mac-${{ github.sha }}
           restore-keys: mbui-mac-
-      # the core's parts for macOS (its Rust shell, the engine, Hermes): by what they are made of; _build/.macos-min is
-      # mac-app.sh's word that they are for this macOS (else it starts over)
+      # React Native's Hermes for Apple (its framework and headers) and its hermesc, downloads of what core.sh pins: kept
+      # by those lines alone. (Not the core's parts, out/core, by a hash of the shell's sources, core.sh and the engine's,
+      # with nothing to fall back on, as before: any change to core.sh missed it, and mac-app.sh then built the shell with
+      # cargo, 253 s of the job's 427, 2026-10-24, 40069429045. The shell is shell-apple, fetched by its key; the engine
+      # is compiled in seconds, and a restored one was compiled again anyway, older than the checkout's sources.)
+      - id: hermes
+        run: echo "key=$(grep -E '^HERMES_(RN|APPLE_URL|APPLE_SHA256)=' apps/mbui/scripts/core.sh | shasum -a 256 | cut -c1-16)" >> "$GITHUB_OUTPUT"
       - uses: actions/cache@v4
         with:
           path: |
-            apps/mbui/out/core
-            apps/mbui/_build/.macos-min
             ~/Library/Caches/stillfail-build
-          key: mbui-core-mac-${{ hashFiles('client/shell/**', 'client/Cargo.lock', 'client/Cargo.toml', 'apps/mbui/scripts/core.sh', 'apps/mbui/src/host/apple_core.mm', 'apps/mbui/src/host/apple_collate.h', 'apps/mbui/src/host/electron_sealed.h', 'apps/mbui/src/host/core_api.h') }}
-      - name: Tools (Rust's target, the core's packages)
+            apps/mbui/out/core/hermesc
+          key: mbui-hermes-apple-${{ steps.hermes.outputs.key }}
+      # (no Rust target: nothing is built with cargo here; native.ts adds one itself if a part must be built)
+      - name: Tools (the core's packages)
         run: |
           sh apps/mbui/scripts/mbui.sh > /dev/null
-          rustup target add aarch64-apple-darwin > /dev/null
           (cd client/core-ts && pnpm install --frozen-lockfile --prefer-offline > /dev/null)
           touch "$RUNNER_TEMP/start"
       - name: The macOS app, built (and signed with still.fail's identity, on main)
@@ -236,15 +242,17 @@ jobs:
             .ci/hbc
           key: mbui-ios-${{ github.sha }}
           restore-keys: mbui-ios-
+      # (Hermes for Apple and its hermesc by the versions core.sh pins, as the mac job's)
+      - id: hermes
+        run: echo "key=$(grep -E '^HERMES_(RN|APPLE_URL|APPLE_SHA256)=' apps/mbui/scripts/core.sh | shasum -a 256 | cut -c1-16)" >> "$GITHUB_OUTPUT"
       - uses: actions/cache@v4
         with:
           path: |
-            apps/mbui/out/core
             ~/Library/Caches/stillfail-build
-          key: mbui-core-ios-${{ hashFiles('client/shell/**', 'client/Cargo.lock', 'client/Cargo.toml', 'apps/mbui/scripts/core.sh', 'apps/mbui/src/host/apple_core.mm', 'apps/mbui/src/host/apple_collate.h', 'apps/mbui/src/host/electron_sealed.h', 'apps/mbui/src/host/core_api.h') }}
-      - name: Tools (Rust's target, the core's packages)
+            apps/mbui/out/core/hermesc
+          key: mbui-hermes-apple-${{ steps.hermes.outputs.key }}
+      - name: Tools (the core's packages)
         run: |
-          rustup target add aarch64-apple-ios > /dev/null
           (cd client/core-ts && pnpm install --frozen-lockfile --prefer-offline > /dev/null)
           touch "$RUNNER_TEMP/start"
       # (unsigned until the team's App Store Connect key is in production's secrets: then signed ad hoc and put)

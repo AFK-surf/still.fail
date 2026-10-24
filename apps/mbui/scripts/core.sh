@@ -56,20 +56,22 @@ shell() {
   echo "shell $target in $(since $t0) s: $(stat -f %z $OUT/$target/libstillfail_shell.a) bytes; links: $(libs $target)"
 }
 
-# The shell for TARGET as still.fail's natives have it (scripts/native.ts shell-apple: built once on a Mac by CI's
-# natives job, for macOS 11.0 and iOS 17.0), else as said by native.ts: built there.
+# The shell for TARGET as still.fail's natives have it for the shell's sources now (scripts/native.ts shell-apple, by
+# its key: built once on a Mac by CI's natives job, for macOS 11.0 and iOS 17.0; else as said by native.ts: built
+# there), copied only when it differs (an unchanged one keeps its mtime). Fails where native.ts cannot say (no node, a
+# checkout that is not git's).
 shell_prebuilt() {
-  local t
+  local t dir
   case $1 in
     aarch64-apple-darwin) t=darwin-arm64 ;;
     aarch64-apple-ios) t=ios-arm64 ;;
     aarch64-apple-ios-sim) t=ios-sim-arm64 ;;
     *) return 1 ;;
   esac
-  local dir
   dir=$(node "$EMBER/scripts/native.ts" path shell-apple $t) || return 1
   mkdir -p $OUT/$1
-  cp "$dir/libstillfail_shell.a" $OUT/$1/ && cp "$dir/libstillfail_shell.libs" $OUT/shell-$1.libs
+  cmp -s "$dir/libstillfail_shell.a" $OUT/$1/libstillfail_shell.a || cp "$dir/libstillfail_shell.a" $OUT/$1/ || return 1
+  cmp -s "$dir/libstillfail_shell.libs" $OUT/shell-$1.libs || cp "$dir/libstillfail_shell.libs" $OUT/shell-$1.libs || return 1
   echo "shell $1: still.fail's natives, shell-apple $t ($dir)"
 }
 
@@ -218,7 +220,7 @@ hermes_fw() {
 # The core's engine for TARGET: src/host/apple_core.mm (Objective-C++: the core's thread and loop, Hermes and its JSI,
 # the shell's C ABI, secure.* and listen.*) as out/core/<target>/libmbui_core.a, which the apps with the core link
 # beside the shell's .a and Hermes's framework (src/stillfail/moon.pkg; the iOS build's hook). Made again only when its
-# sources (or this script) are newer.
+# sources (or this script) are newer: 1-2 s (mini1, 2026-10-24), not worth a native part of its own as the shell is.
 engine() {
   local target=${1:-aarch64-apple-darwin} cc
   hermes_apple || return 1
@@ -229,7 +231,7 @@ engine() {
     *) echo "engine: no target $target"; return 1 ;;
   esac
   local lib=$OUT/$target/libmbui_core.a
-  if [ -f $lib ] && [ $lib -nt src/host/apple_core.mm ] && [ $lib -nt src/host/apple_collate.h ] && [ $lib -nt src/host/electron_sealed.h ] && [ $lib -nt src/host/core_api.h ] && [ $lib -nt "$D/core.sh" ]; then
+  if [ -f $lib ] && [ $lib -nt src/host/apple_core.mm ] && [ $lib -nt src/host/apple_collate.h ] && [ $lib -nt src/host/electron_sealed.h ] && [ $lib -nt src/host/core_api.h ] && [ $lib -nt src/host/listen_api.h ] && [ $lib -nt "$D/core.sh" ]; then
     return 0
   fi
   mkdir -p $OUT/$target
@@ -239,12 +241,13 @@ engine() {
   echo "engine $target: $lib ($(wc -c < $lib | tr -d ' ') bytes)"
 }
 
-# What an Apple app with the core needs for TARGET, each made when missing or stale: Hermes, the engine, the shell's .a
-# (built once: rebuild it with `shell`), the core's bytecode (ENTRY, by default the media app's entry, as Android's).
+# What an Apple app with the core needs for TARGET: Hermes, the engine (when stale), the shell's .a (still.fail's natives
+# by its key; where native.ts cannot say, the one here, else built by cargo: rebuild it with `shell`), the core's
+# bytecode (ENTRY, by default the media app's entry, as Android's).
 apple() {
   local target=${1:-aarch64-apple-darwin}
   engine $target || return 1
-  [ -f $OUT/$target/libstillfail_shell.a ] || shell_prebuilt $target || shell $target || return 1
+  shell_prebuilt $target || [ -f $OUT/$target/libstillfail_shell.a ] || shell $target || return 1
   ENTRY=${ENTRY:-$ROOT/core/media-hermes.ts} hermes
 }
 
