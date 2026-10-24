@@ -318,7 +318,7 @@ fn rail_corner_mark(c : @ui.Ctx, tone : String, at? : Double = 4.0, shown? : Dou
     c.box(style=corner_end, fn() {
       let i = c.box(style=ground, tx=at, ty=-at, fn() {
         if tone == "invite" {
-          c.box(style=invite_dot, fn() {  }) |> ignore
+          @sfpages.invite_dot(c, "")
         } else {
           chat_mark(c, tone) |> ignore
         }
@@ -345,9 +345,6 @@ let rail_mark_bar : @ui.Style = @ui.css("p=S0_5 radius=Full bg=Surface")
 // kept across runs: a value (no field of it changes)
 let corner_end : @ui.Style = @ui.css("w=Full align=AEnd")
 
-///|
-// kept across runs: a value (no field of it changes)
-let invite_dot : @ui.Style = @ui.css("w=S2 h=S2 radius=Full bg=Accent")
 
 ///|
 let mark_folded_from : Double = 0.4
@@ -425,14 +422,9 @@ fn rail_workspaces(c : @ui.Ctx, src : Source, w : Workspace, all : Array[Workspa
       }
       let on = x.id == w.id
       let hot = c.lit(id)
-      let marked = @sf.has_station_mark(x.emoji, x.icon)
+      let marked = @sfpages.workspace_marked(x)
       let square = rail_square(c, if !marked || hot { t.p.hover } else { 0L }, fn() {
-        if marked {
-          @sf.station_mark(c, x.emoji, x.icon, rail_ws_mark, t.p.text)
-        } else {
-          let ink = if on || hot { rail_letter_on } else { rail_letter }
-          c.text(@sf.initial(x.name), style=ink) |> ignore
-        }
+        @sfpages.workspace_mark(c, x, rail_ws_mark, t.p.text, if on || hot { rail_letter_on } else { rail_letter })
         // the one in view: a short bar in the margin at its left
         if on {
           c.layer(fn() {

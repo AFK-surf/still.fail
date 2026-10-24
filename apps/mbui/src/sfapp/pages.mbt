@@ -106,18 +106,15 @@ fn sheet_label(c : @ui.Ctx, label : String) -> Unit {
 }
 
 ///|
-/// A row of a picking sheet (Controls.kt PickRow, Workspaces.kt WorkspaceRow): what, a line under it, a check on
-/// the chosen one; before it a workspace's mark (or its letter) or an icon; after it what a workspace has waiting
-/// (`mark`: its WorkspaceMark). True on the frame after it was tapped.
+/// A row of a picking sheet (Controls.kt PickRow): what, a line under it, a check on the chosen one; before it an
+/// icon. True on the frame after it was tapped.
 fn pick_row(
   c : @ui.Ctx,
   key : String,
   label : String,
   sub : String,
   checked : Bool,
-  lead : Workspace?,
   icon : String,
-  mark : Json,
   on_card? : Bool = false,
 ) -> Bool {
   let t = @sf.theme()
@@ -134,20 +131,6 @@ fn pick_row(
       align=ACenter,
       id~,
       fn() {
-        match lead {
-          Some(w) =>
-            c.box(w=Px(24.0), h=Px(24.0), align=ACenter, justify=JCenter, fn() {
-              if @sf.has_station_mark(w.emoji, w.icon) {
-                // a GIF moving only for the workspace in use (Workspaces.kt: still for the others)
-                @sf.station_mark(c, w.emoji, w.icon, 22.0, t.p.text, still=!checked)
-              } else {
-                c.text(@sf.initial(w.name), size=15.0, weight=600, color=t.p.muted, wrap=false)
-                |> ignore
-              }
-            })
-            |> ignore
-          None => ()
-        }
         if icon != "" {
           @sf.icon(c, icon, size=20.0, color=t.p.text) |> ignore
         }
@@ -158,7 +141,6 @@ fn pick_row(
           }
         })
         |> ignore
-        mark_counts(c, mark)
         if checked {
           @sf.icon(c, "check", size=14.0, color=t.p.accent) |> ignore
         }
@@ -172,27 +154,3 @@ fn pick_row(
   c.clicked(id)
 }
 
-///|
-/// What a workspace has waiting, after its name (SettingParts.kt MarkCounts): a red dot and how many of the chats
-/// its person takes part in want them, a blue ring and how many wait on them, a blue dot and how many are unread.
-fn mark_counts(c : @ui.Ctx, mark : Json) -> Unit {
-  let m = Some(mark)
-  if text(m, "tone") == "" {
-    return
-  }
-  let t = @sf.theme()
-  // (read out as what it says: MarkCounts' contentDescription)
-  c.box(dir=Row, gap=8.0, align=ACenter, label=text(m, "label"), fn() {
-    for k in [("alert", "alert"), ("wait", "wait"), ("done", "unread")] {
-      let n = count(m, k.1)
-      if n > 0 {
-        c.box(dir=Row, gap=4.0, align=ACenter, fn() {
-          workspace_mark(c, k.0, "")
-          c.text("\{n}", size=12.0, color=t.p.muted, wrap=false) |> ignore
-        })
-        |> ignore
-      }
-    }
-  })
-  |> ignore
-}
