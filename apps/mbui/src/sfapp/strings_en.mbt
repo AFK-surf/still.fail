@@ -1662,6 +1662,7 @@ let en : Map[String, String] = {
   "web-pages.chat.publish.go": "Publish",
   "web-pages.chat.publish.verb": "share the chat publicly",
   "web-pages.chat.publish.made": "Published",
+  "web-pages.chat.publish.copyLink": "Copy link",
   "web-pages.chat.publish.revoke": "Revoke",
   "web-pages.chat.publish.revokeAsk": "Revoke this link?",
   "web-pages.chat.publish.revokeNote": "People with the link can no longer open it",

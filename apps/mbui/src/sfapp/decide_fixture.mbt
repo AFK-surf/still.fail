@@ -656,10 +656,7 @@ pub fn open_fixture(mode : String) -> Unit {
     }
     // the sheet that publishes the chat, what a snapshot would hold read (Publish.kt openPublish)
     "chat-publish" => {
-      publish_reset()
-      publishing.of = publish_key(r.station, 7.0)
-      publishing.preview = Some(fix_preview())
-      dui.sheet = Some(Publish(r.station, 7.0))
+      @sfpages.publish_set(r, 7.0, fix_preview())
     }
     "chat-agent" | "chat-agent-unsaid" => dui.sheet = Some(AgentOf(r, "s-c1"))
     // its station's card, from the agent's (Stations.kt openStationPeek)

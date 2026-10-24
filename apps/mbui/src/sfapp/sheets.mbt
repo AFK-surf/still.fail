@@ -587,7 +587,7 @@ fn chat_info_sheet(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef) -> Uni
       }
       // making it public, a card of its own (publish.mbt)
       match shown_publish(chat) {
-        Some(_) as p => publish_list(c, src, r.station, number(thread, "id"), p)
+        Some(_) as p => publish_list(c, src, r, number(thread, "id"), p)
         None => ()
       }
     })

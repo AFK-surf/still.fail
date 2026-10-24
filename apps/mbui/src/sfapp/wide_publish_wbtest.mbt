@@ -1,5 +1,5 @@
-// The desktop's publishing (sfdesk publish.mbt, Publish.tsx PublishDialog): from the chat's info, over the whole
-// window, what a snapshot would hold; 发布 publishes it (chat.publish), the link in a small dialog after.
+// The publishing on a computer (sfpages publish.mbt, Publish.tsx PublishDialog): from the chat's info, over the whole
+// window, what a snapshot would hold; 发布 publishes it (chat.publish), the link in the presenters' dialog after.
 
 ///|
 test "wide: 公开分享 from the chat's info: the snapshot's messages over the window under its bar; 发布 publishes it, its link to copy after" {

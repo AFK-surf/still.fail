@@ -215,6 +215,7 @@ let zh_decide : Map[String, String] = {
   "web-pages.chat.publish.go": "发布",
   "web-pages.chat.publish.verb": "公开分享",
   "web-pages.chat.publish.made": "已发布",
+  "web-pages.chat.publish.copyLink": "复制链接",
   "web-pages.chat.publish.revoke": "撤销",
   "web-pages.chat.publish.revokeAsk": "撤销此链接？",
   "web-pages.chat.publish.revokeNote": "撤销后，持有链接的人将无法打开",

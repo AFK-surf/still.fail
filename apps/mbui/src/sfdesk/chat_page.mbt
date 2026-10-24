@@ -681,7 +681,7 @@ fn chat_info(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef, v : ChatView
       }
       if publish is Some(_) && info_row(c, "info-pop/publish", "web", @sf.t("web-pages.chat.publish"), "") && flag(publish, "may") {
         chat_own.info_open = false
-        open_publish(src, r, id)
+        @sfpages.open_publish(src, r, id)
       }
     })
     |> ignore
