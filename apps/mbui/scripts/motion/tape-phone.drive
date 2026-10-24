@@ -1,14 +1,13 @@
 # Laid out Medium on a phone on its side (sfdesk frame.mbt's tape): MBUI_WIN=844x390 MBUI_FILM_PLATFORM=2, its size
-# classes expanded in width and compact in height, a finger. The same steps as tape.drive: the sidebar's edge tapped
-# (it comes over), a chat tapped in it (it comes over), back (the sidebar over again), the chat's edge tapped.
+# classes expanded in width and compact in height, a finger. The same steps as tape.drive.
 system {"size_class":{"width":"expanded","height":"compact"}}
 timeout 20000
 until 发消息
 wait 1000
-tapxy 80 200
-wait 1300
 tap 首页的列表改成按天分组
-wait 1500
+wait 1300
+tapxy -90 200
+wait 1300
 back
 wait 1300
 tapxy -90 200

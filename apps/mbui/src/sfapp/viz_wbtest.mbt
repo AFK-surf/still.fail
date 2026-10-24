@@ -263,10 +263,8 @@ test "on the tape what shows of a visualization's page beside the sidebar in use
   t.view_says(page, "{\"emberViz\":true,\"type\":\"height\",\"height\":5000}")
   t.frame()
   t.frame()
-  // the sidebar brought over (back from the chat), the page beside it veiled
-  t.back()
-  t.run_for(@sfdesk.side_move_ms)
-  assert_true(@sfdesk.wide.on_side)
+  // the sidebar in use at first, the page beside it veiled
+  assert_eq(@sfdesk.wide.tape_at, @sfdesk.TapePane::Side)
   let (x, y, w, h) = view_rect(t, page).unwrap()
   let edge = @sfdesk.rail_w + 240.0
   assert_true(x + w > edge + 20.0, msg="the page \{x} \{w}, the sidebar's edge \{edge}")
@@ -274,7 +272,7 @@ test "on the tape what shows of a visualization's page beside the sidebar in use
   let (px, py) = (dmax(x, edge) + 10.0, (dmax(y, 0.0) + dmin(y + h, 840.0)) / 2.0)
   // tapped: the veil's (the chat's page comes over), the page told nothing of it
   t.tap(px, py)
-  assert_false(@sfdesk.wide.on_side)
+  assert_eq(@sfdesk.wide.tape_at, @sfdesk.TapePane::Page)
   assert_false(t.views().iter().any(fn(l) { l.has_prefix("finger \{page} ") }))
   // over and in use: the page takes a finger there again
   t.run_for(@sfdesk.side_move_ms)

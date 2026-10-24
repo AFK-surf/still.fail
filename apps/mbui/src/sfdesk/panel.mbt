@@ -305,6 +305,11 @@ pub fn with_side(
   v : ChatView?,
   chat : () -> Unit,
 ) -> Unit {
+  // (on the tape, laid out Medium, the panel is a panel of its own beside the page's: the frame's, tape_side)
+  if wide.tape {
+    chat()
+    return
+  }
   let key = chat_key(r)
   let (tabs, front) = match v {
     Some(view) => side_of(view)
@@ -320,6 +325,49 @@ pub fn with_side(
       None => ()
     }
   })
+}
+
+///|
+/// The chat whose side panel is open on page `p` (a chat's, or an agent's history asked as a page: its chat's), as its
+/// view has it; None with none open.
+pub fn side_open_for(src : Source, p : Page) -> ChatRef? {
+  let r = match p {
+    Chat(r) => r
+    History(r, _, _) => r
+    _ => return None
+  }
+  if side_now(src, r).0.length() > 0 {
+    Some(r)
+  } else {
+    None
+  }
+}
+
+///|
+/// How wide a chat's side panel is on the tape (laid out Medium), a window `window` wide: its own (the width dragged,
+/// else 38% of the window and 360 at least, as side_width's), at most what the window leaves past what shows of the
+/// page beside it (`peek`) and the gaps round it (`apart`).
+pub fn tape_side_width(window : Double, peek : Double, apart : Double) -> Double {
+  let wanted = match panel_own.width {
+    Some(w) => w
+    None => dmax(360.0, (window * 0.38).floor())
+  }
+  dmax(0.0, dmin(wanted, window - peek - apart))
+}
+
+///|
+/// Chat `r`'s side panel on the tape, a panel of its own beside the page's: its tabs as its view has them, its edge not
+/// dragged (its width the tape's: tape_side_width).
+pub fn tape_side(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef) -> Unit {
+  match (src.topic)("chat", chat_params(r)).value {
+    Some(v) => {
+      let view = chat_view(v)
+      let (tabs, front) = side_of(view)
+      side_over.val = true
+      side_panel(c, src, w, r, view, tabs, front)
+    }
+    None => ()
+  }
 }
 
 ///|

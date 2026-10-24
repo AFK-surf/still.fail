@@ -1,0 +1,21 @@
+# Laid out Medium, a chat's side panel a panel of its own on the tape (sfdesk frame.mbt): MBUI_WIN=690x840
+# MBUI_FILM_PLATFORM=2, an opened fold's inner screen upright, a finger. The page brought over from the sidebar, the
+# panel opened from the chat's bar (it comes over, the page's edge showing at its left), back (the page over, the
+# panel's edge at its right), the panel's edge tapped (over again), back twice (the page, then the sidebar).
+system {"size_class":{"width":"medium","height":"medium"}}
+timeout 20000
+until 发消息
+wait 1000
+tapxy -80 420
+wait 1300
+tap icon:panel-open
+wait 1500
+back
+wait 1300
+tapxy -60 420
+wait 1300
+back
+wait 1300
+back
+wait 1300
+exit
