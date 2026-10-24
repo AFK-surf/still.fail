@@ -12,24 +12,10 @@ pub let font_places : Array[String] = ["ui", "text", "code"]
 pub let fonts_at : Ref[Int] = Ref(0)
 
 ///|
-/// 外观's row: the faces chosen at a glance (their names, "·" between), opening the page.
-fn font_row(c : @ui.Ctx, core : Core) -> Unit {
-  let prefs = (core.topic)("prefs", Map::new()).value
-  let faces = field(prefs, "faces")
-  let names = []
-  for place in font_places {
-    if text(field(prefs, "fonts"), place) != "" {
-      names.push(text(field(faces, place), "name"))
-    }
-  }
-  let value = if names.is_empty() { tr("web-pages.appearance.fonts.default") } else { names.join(" · ") }
-  if go_row(c, "appearance/fonts", tr("web-pages.appearance.fonts.title"), value~) {
-    (core.push)(Fonts)
-  }
-}
-
-///|
-fn fonts_page(c : @ui.Ctx, core : Core) -> Unit {
+/// 字体's page as the narrow app has it, a block at a time (FontScreen): the places' switch, a chat as their faces set it,
+/// the faces of the place in view, what they are for. The page and its frame are sfdesk's fonts.mbt (one page for every
+/// frame); wide, it is FontSetting there.
+pub fn fonts_blocks(c : @ui.Ctx, core : Core) -> Array[() -> Unit] {
   let prefs = (core.topic)("prefs", Map::new()).value
   let chosen_of = fn(place : String) { text(field(prefs, "fonts"), place) }
   let faces = field(prefs, "faces")
@@ -59,9 +45,7 @@ fn fonts_page(c : @ui.Ctx, core : Core) -> Unit {
   }
   let ui_face = as_chosen("ui")
   let text_face = if chosen_of("text") == "" { ui_face } else { as_chosen("text") }
-  scroll_page(c, "fonts", [
-    fn() { top_back(c, core, tr("android-settings.appearance.title")) },
-    fn() { large_title(c, tr("web-pages.appearance.fonts.title")) },
+  [
     fn() {
       c.box(style=fonts_seg_room, fn() {
         let picked = seg(c, "fonts/place", font_places.map(fn(p) { tr("web-pages.appearance.fonts." + p) }), fonts_at.val, fill=true, height=34.0)
@@ -115,8 +99,7 @@ fn fonts_page(c : @ui.Ctx, core : Core) -> Unit {
       })
     },
     fn() { seg_note(c, tr("web-pages.appearance.fonts.description")) },
-    fn() { gap(c, 30.0) },
-  ])
+  ]
 }
 
 ///|

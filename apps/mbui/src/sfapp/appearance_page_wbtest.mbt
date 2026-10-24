@@ -36,3 +36,20 @@ test "外观, at each width on either screen: 主题, 字体, 动画, 语言; �
     }
   }
 }
+
+///|
+test "字体, at each width on either screen: narrow the places' switch over the faces a row each, one chosen kept; wide the desktop's tiles" {
+  for case in one_page_cases {
+    let (w, platform, regular, narrow) = case
+    let t = one_page_tester(@settings.Route::Fonts, w, platform~, regular~)
+    let at = "\{w} platform \{platform}"
+    for words in ["界面", "正文", "代码"] {
+      assert_true(t.find(words) is Some(_), msg="\{at}: \{words}")
+    }
+    assert_true(t.find("默认") is Some(_), msg=at)
+    if narrow {
+      // back to 外观 (the page under it: settings here), the faces a row each
+      assert_true(t.find("字体") is Some(_), msg=at)
+    }
+  }
+}
