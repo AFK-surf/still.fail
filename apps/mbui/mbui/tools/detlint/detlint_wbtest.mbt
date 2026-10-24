@@ -1042,6 +1042,72 @@ test "globals" {
 }
 
 ///|
+test "reset-wire" {
+  // a hook set by reset to what does the work (reset runs only as a Tester starts): one; put back as its let has it
+  // (false, Ref(false), Ref::new(false)), none
+  let got = found(
+    [
+      (
+        "src/app/state.mbt",
+        (
+          #|
+          #|///|
+          #|let open : Ref[Bool] = { val: false }
+          #|
+          #|///|
+          #|let asked : Ref[(String) -> Unit] = Ref(fn(_) {  })
+          #|
+          #|///|
+          #|let shown : Ref[Int] = Ref::new(0)
+          #|
+          #|///|
+          #|fn reset() -> Unit {
+          #|  open.val = false
+          #|  shown.val = 0
+          #|  asked.val = pick_open
+          #|}
+          #|
+          #|///|
+          #|fn pick_open(key : String) -> Unit {
+          #|  ignore(key)
+          #|}
+          #|
+        ),
+      ),
+    ],
+    "reset-wire",
+    1,
+  )
+  assert_true(got[0].what.contains("asked"))
+  found(
+    [
+      (
+        "src/app/state.mbt",
+        (
+          #|
+          #|///|
+          #|let shown : Ref[Int] = Ref::new(0)
+          #|
+          #|///|
+          #|let by_hand : Ref[Bool] = Ref(false)
+          #|
+          #|///|
+          #|fn reset() -> Unit {
+          #|  shown.val = 0
+          #|  // (state it marks, not a wire)
+          #|  by_hand.val = true
+          #|}
+          #|
+        ),
+      ),
+    ],
+    "reset-wire",
+    0,
+  )
+  |> ignore
+}
+
+///|
 test "build-effect" {
   let files = [
     (

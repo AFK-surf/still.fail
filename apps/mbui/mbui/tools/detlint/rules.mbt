@@ -6,7 +6,7 @@ let rule_names : Array[String] = [
   "host-import", "frame-wait", "at-rest-wait", "frame-count", "literal-time", "stable-mode",
   "retired-api", "app-clock", "wall-clock", "engine-math", "poll", "host-read", "builtin-hash",
   "hash-order", "globals", "style-literal", "box-loose", "style-exact", "style-text", "build-effect",
-  "unsettled-ok", "host-delay", "library-import",
+  "unsettled-ok", "host-delay", "library-import", "reset-wire",
 ]
 
 ///|
@@ -32,6 +32,7 @@ let rule_words : Map[String, String] = {
   "builtin-hash": "a value made from MoonBit's own hash (seeded anew in each process, not the same on js and native): @ui.stable_hash",
   "hash-order": "a @hashmap / @hashset, its order the process's hash's: a Map (in the order put), or sort it",
   "globals": "a mutable global its package's reset does not put back, nor says `// kept across runs: why`",
+  "reset-wire": "a global its package's reset sets to something other than its `let`'s value: a wire (a hook given what does the work), which reset sets only as a Tester starts, never in the app; set it once in the package's `fn init`, and keep it across runs",
   "style-literal": "a number where a style is said (a box's or words' look, @ui.style…), or an Exact(…) outside the token files: name it with a token (docs/style.md)",
   "box-loose": "a box or words said by their loose look (pad=, bg=, size=…): say it as a named style (style=)",
   "style-exact": "a value off the theme's scale (Exact(…)), in a token file too: only goes down",

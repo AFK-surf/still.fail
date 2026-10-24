@@ -824,6 +824,8 @@ fn lint_globals(files : Array[MbtFile], cfg : Config, out : Array[Finding]) -> U
     said[p] = Map::new()
   }
   let seen : Map[String, Unit] = Map::new()
+  // what reset sets a global's value to (NAME.val = …, its package's, or @pkg.NAME.val = …): (pkg, name, value)
+  let sets : Array[(String, String, String)] = []
   let todo = roots.copy()
   while true {
     let (pkg, name) = match todo.pop() {
@@ -842,6 +844,48 @@ fn lint_globals(files : Array[MbtFile], cfg : Config, out : Array[Finding]) -> U
         }
         if !(i > 0 && body[i - 1].text == ".") { // a field of the same name is not the global
           said[pkg][t.text] = ()
+        }
+        // NAME.val = VALUE (@pkg.NAME.val = VALUE): what reset sets it to, to its line's end at its own depth
+        if i + 3 < body.length() &&
+          body[i + 1].text == "." &&
+          body[i + 2].text == "val" &&
+          body[i + 3].text == "=" &&
+          (i == 0 || body[i - 1].text != "." || (i >= 2 && body[i - 2].kind == "at")) {
+          let owner = if i >= 2 && body[i - 1].text == "." && body[i - 2].kind == "at" {
+            alias.get(body[i - 2].text.view(start_offset=1).to_string())
+          } else {
+            Some(pkg)
+          }
+          let value : Array[String] = []
+          let mut depth = 0
+          let mut k = i + 4
+          while k < body.length() {
+            let v = body[k]
+            if depth == 0 && value.length() > 0 && v.line > body[k - 1].line {
+              break
+            }
+            if v.text == "(" || v.text == "[" || v.text == "{" {
+              depth += 1
+            } else if v.text == ")" || v.text == "]" || v.text == "}" {
+              if depth == 0 {
+                break
+              }
+              depth -= 1
+            }
+            value.push(v.text)
+            k += 1
+          }
+          // (a wire: what does the work, a function named or given; a value put back is state, not a wire)
+          let wire = value.length() > 0 &&
+            (
+              value[0] == "fn" ||
+              (body[i + 4].kind == "ident" && !["true", "false", "None", "Some"].contains(value[0])) ||
+              body[i + 4].kind == "at"
+            )
+          match owner {
+            Some(o) if wire => sets.push((o, t.text, value.join(" ")))
+            _ => ()
+          }
         }
         if i + 1 < body.length() && body[i + 1].text == "(" {
           let q = if i >= 2 && body[i - 1].text == "." && body[i - 2].kind == "at" {
@@ -864,6 +908,62 @@ fn lint_globals(files : Array[MbtFile], cfg : Config, out : Array[Finding]) -> U
           }
         }
       }
+    }
+  }
+  // a Ref's value as its let gives it (Ref(V), Ref::new(V), { val: V }), by (pkg, name)
+  let firsts : Map[String, (MbtFile, Int, String)] = Map::new()
+  for l in lets {
+    let (pkg, f, it) = l
+    let ts = f.toks[it.start:@cmp.minimum(it.end + 1, f.toks.length())].to_array()
+    match ts.search_by(fn(t) { t.text == "=" }) {
+      Some(e) => {
+        let v = ts[e + 1:].to_array()
+        let inner = if v.length() >= 3 && v[0].text == "Ref" && v[1].text == "(" {
+          Some(2)
+        } else if v.length() >= 5 && v[0].text == "Ref" && v[1].text == "::" && v[2].text == "new" && v[3].text == "(" {
+          Some(4)
+        } else if v.length() >= 4 && v[0].text == "{" && v[1].text == "val" && v[2].text == ":" {
+          Some(3)
+        } else {
+          None
+        }
+        match inner {
+          Some(s) => {
+            let out : Array[String] = []
+            let mut depth = 0
+            for t in v[s:] {
+              if t.text == "(" || t.text == "[" || t.text == "{" {
+                depth += 1
+              } else if t.text == ")" || t.text == "]" || t.text == "}" {
+                if depth == 0 {
+                  break
+                }
+                depth -= 1
+              }
+              out.push(t.text)
+            }
+            let name = match ts.search_by(fn(t) { t.text == "let" }) {
+              Some(k) if k + 1 < ts.length() => ts[k + 1].text
+              _ => ""
+            }
+            firsts[reader_key(pkg, name)] = (f, it.line, out.join(" "))
+          }
+          None => ()
+        }
+      }
+      None => ()
+    }
+  }
+  let wired : Map[String, Unit] = Map::new()
+  for s in sets {
+    let (pkg, name, value) = s
+    let key = reader_key(pkg, name)
+    match firsts.get(key) {
+      Some((f, line, first)) if first != value && !wired.contains(key) => {
+        wired[key] = ()
+        out.push(finding("reset-wire", f.rel, line, "\{name}: reset sets `\{value}`, its let `\{first}`"))
+      }
+      _ => ()
     }
   }
   for l in lets {
