@@ -30,8 +30,6 @@ pub(all) struct Pages {
   offered : (@ui.Ctx, Source) -> Array[Offered]
   /// what the settings' pages read and call, and how they move (src/sfapp/settings: the core as the app has it)
   core : (Source, Workspace) -> Core
-  /// what this device sees while it waits to be confirmed in the workspace's safe mode
-  gate : (@ui.Ctx, Source, Workspace) -> Unit
   /// whether a sheet is over the pages (back closes it first); what is over the pages put down (a sheet, the menu): a
   /// place gone to; and the stack back to its root with them, as another workspace is
   sheet : () -> Bool
@@ -537,7 +535,8 @@ pub fn frame(
           let page = fn() {
             if gated {
               c.box(style=frame_gate.then(@ui.style(w=Fixed(main_w), h=Fixed(c.height))), fn() {
-                (pages.gate)(c, src, w)
+                let core = (pages.core)(src, w)
+                security_waiting(c, core, @settings.here_of(core, w.id, w.name))
               })
               |> ignore
             } else {

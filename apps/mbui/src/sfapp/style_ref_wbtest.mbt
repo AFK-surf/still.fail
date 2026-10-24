@@ -43,42 +43,45 @@ test "styles: the lock's waiting page, every state, drawn as before" {
   }
   inspect(out.to_string(), content=(
     #|waiting narrow 29599:bfe98887
-    #|waiting wide 59836:759b70af
+    #|waiting wide 57486:dfcb140d
     #|waiting-dark narrow 29427:29f8e062
-    #|waiting-dark wide 59936:bc4c46bc
+    #|waiting-dark wide 57732:c2eda497
     #|finding narrow 23487:6f4a19bf
-    #|finding wide 53548:46979f06
+    #|finding wide 60352:e266dea9
     #|finding-dark narrow 23379:6bb9808b
-    #|finding-dark wide 53446:f2f32f5b
+    #|finding-dark wide 60399:ff737e0d
     #|code narrow 26640:49184c39
-    #|code wide 56799:2be775ab
+    #|code wide 54630:803898fd
     #|code-dark narrow 26488:5afce163
-    #|code-dark wide 56637:657011e0
+    #|code-dark wide 54568:53279637
     #|wrong narrow 28061:25d40192
-    #|wrong wide 58239:12a17be8
+    #|wrong wide 56135:e7059966
     #|wrong-dark narrow 27957:a5f59222
-    #|wrong-dark wide 58071:42c8445b
+    #|wrong-dark wide 56067:88bbb94e
     #|checking narrow 26657:72a8a4b0
-    #|checking wide 56751:956b7a20
+    #|checking wide 62512:ca303ae8
     #|checking-dark narrow 26505:d4765730
-    #|checking-dark wide 56589:d3c8c157
+    #|checking-dark wide 62538:6e92d4e3
     #|none narrow 29081:a68cf483
-    #|none wide 59035:7da6d155
+    #|none wide 56950:48a84144
     #|none-dark narrow 28917:239c3fa0
-    #|none-dark wide 59147:16b73efc
+    #|none-dark wide 57200:606be9b6
     #|failed narrow 24913:807e0fc7
-    #|failed wide 54707:779b8183
+    #|failed wide 52746:6ed37dc3
     #|failed-dark narrow 24829:6e3375a2
-    #|failed-dark wide 54923:b5d0574e
+    #|failed-dark wide 53028:b46fd63
     #|refused narrow 27197:6b3f38fe
-    #|refused wide 57101:9984ce52
+    #|refused wide 55104:f2d0a9ac
     #|refused-dark narrow 27149:e668b0dd
-    #|refused-dark wide 57299:581f6e61
+    #|refused-dark wide 55368:8cd47fee
     #|nocode narrow 28285:2bf94585
-    #|nocode wide 58241:5ce8e3a6
+    #|nocode wide 57486:dfcb140d
     #|nocode-dark narrow 28133:34ef053a
-    #|nocode-dark wide 58351:b00d9b57
+    #|nocode-dark wide 57732:c2eda497
     #|
+
+
+
 
 
 
