@@ -97,6 +97,86 @@ test "a handle moves its end: the passage's end follows the finger" {
 }
 
 ///|
+/// The last message's paragraphs in long_answer_core: one that runs over several lines, a short one, one more.
+let long_answer : Array[String] = [
+  "列表的每一行先按估计的高度占位，滚到附近时再量出真实的高度记下来，下次打开直接用量过的值。这样往上翻早先的消息不会跳，往下拉到最新也不会抖。跳到最新的按钮只在离底部超过一屏时出现，点一下就滚回去。",
+  "截图也换了。",
+  "深色模式一起看过了，颜色都对。",
+]
+
+///|
+/// The made-up chat with its last message (ts11) as long_answer's paragraphs, its Markdown tree with it.
+fn long_answer_core(calls : Array[Made]) -> @ui.Tester {
+  let sb = StringBuilder()
+  let tree : Array[Json] = []
+  for k, p in long_answer {
+    if k > 0 {
+      sb.write_string("\n\n")
+    }
+    let start = sb.to_string().length()
+    sb.write_string(p)
+    tree.push(["p", [[Json::number(start.to_double()), Json::number((start + p.length()).to_double())]]])
+  }
+  let text = sb.to_string()
+  fake_core(calls, over=fn(name, tp) {
+    match (name, tp.value) {
+      ("chat", Some(Object(o))) => {
+        let all = match o.get("messages") {
+          Some(Array(a)) => a.copy()
+          _ => []
+        }
+        match all.last() {
+          Some(Object(m)) => {
+            let m2 = m.copy()
+            m2["text"] = Json::string(text)
+            m2["md"] = Json::array(tree)
+            all[all.length() - 1] = Json::object(m2)
+          }
+          _ => ()
+        }
+        let o2 = o.copy()
+        o2["messages"] = Json::array(all)
+        { ..tp, value: Some(Json::object(o2)) }
+      }
+      _ => tp
+    }
+  })
+}
+
+///|
+test "a handle moved down lines to a short line and let go past its end: still picked, to that line's end" {
+  let calls : Array[Made] = []
+  let t = long_answer_core(calls)
+  hold_on(t, "列表的每一行先按估计的高度占位") |> ignore
+  assert_true(pk.ts == "ts11")
+  let w = t.ctx().words_of(pk.sel.key).unwrap()
+  let lines = w.rects(pk.sel.a, pk.sel.b)
+  let last = lines[0]
+  // the first paragraph runs over several lines
+  let first = w.pieces[0]
+  assert_true(first.h > 3.0 * last.3)
+  // the short one: its line ends well short of the screen's right
+  let short = w.pieces[1]
+  let short_end = short.start + long_answer[1].length()
+  let line = w.rects(short.start, short_end)[0]
+  assert_true(line.0 + line.2 + 60.0 < 390.0)
+  // the end's knob (under the line's end) taken down to the short line, the finger past its end: the end at the line's
+  // end, its handle there, away from the finger
+  let (kx, ky) = (last.0 + last.2, last.1 + last.3 + 6.0)
+  let (tx, ty) = (line.0 + line.2 + 60.0, line.1 + line.3 / 2.0 + last.3 / 2.0 + 6.0)
+  t.press_at(kx, ky)
+  slide(t, kx, ky, tx, ty, 8)
+  assert_eq(pk.sel.b, short_end)
+  t.release(tx, ty)
+  // let go: no tap away from it, the passage kept and its bar back over it
+  assert_eq(pk.ts, "ts11")
+  assert_eq(pk.sel.b, short_end)
+  t.frame()
+  assert_true(t.find("复制") is Some(_))
+  t.assert_idle()
+}
+
+///|
 test "a tap anywhere else lets go of it, as back does" {
   let calls : Array[Made] = []
   let t = fake_core(calls)

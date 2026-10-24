@@ -122,8 +122,9 @@ fn pick_in(c : @ui.Ctx, id : Int, x : Double, y : Double) -> Bool {
 
 ///|
 /// The handles, `ends` (the start's and the end's: what takes a finger round each): a press that went down this frame
-/// (Ctx::press) on one takes it, the end's place off the finger kept; while the finger is down the end follows it,
-/// never past the other end; lifted, let go. `words` as laid out.
+/// (Ctx::press) on one is its (the view takes it, Ctx::take_press: lifted wherever the end and its handle have gone,
+/// it taps nothing), the end's place off the finger kept; while the finger is down the end follows it, never past the
+/// other end; lifted, let go. `words` as laid out.
 pub fn Pick::handles(self : Pick, c : @ui.Ctx, words : @ui.Words, ends : Array[Int]) -> Unit {
   let press = c.press()
   let (x, y, down) = c.pointer()
@@ -147,6 +148,9 @@ pub fn Pick::handles(self : Pick, c : @ui.Ctx, words : @ui.Words, ends : Array[I
         self.grab_y = ey - down_y
       }
     }
+    if self.handle != 0 {
+      c.take_press()
+    }
   }
   if self.handle != 0 {
     if !down {
@@ -163,10 +167,10 @@ pub fn Pick::handles(self : Pick, c : @ui.Ctx, words : @ui.Words, ends : Array[I
 }
 
 ///|
-/// A tap anywhere but on `keep` (the passage's bar, its handles) lets go of it (not the lifting of the press that
-/// picked it: that press was the pick's). True when it did.
+/// A tap anywhere but on `keep` (the passage's bar, its handles) lets go of it (not the lifting of a press the pick
+/// took: the one that picked it, one a handle moved). True when it did.
 pub fn Pick::tapped_away(self : Pick, c : @ui.Ctx, keep : Array[Int]) -> Bool {
-  if self.key == "" || self.handle != 0 {
+  if self.key == "" {
     return false
   }
   match c.tapped_anywhere() {

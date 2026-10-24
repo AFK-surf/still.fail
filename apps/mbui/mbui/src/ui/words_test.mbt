@@ -154,6 +154,56 @@ test "a press taken by the app is no tap of what it went down on, and scrolls no
 }
 
 ///|
+test "a press taken by the app scrolls nothing under it: not a box that scrolls sideways, nor the list round it" {
+  let take = Ref::new(false)
+  let at = Ref::new(0.0)
+  let t = @ui.Tester::new(
+    fn(c) {
+      // (the press the app's from the frame that first sees it down: a hold on a code block's words)
+      if take.val && c.press().down {
+        c.take_press()
+      }
+      c.list("rows", 30, 40.0, fn(i) {
+        if i == 1 {
+          at.val = c.sideways_at("wide")
+          c.sideways("wide", fn() {
+            c.rich([@ui.plain("x".repeat(120))], size=10.0, wrap=false) |> ignore
+          })
+          |> ignore
+        } else {
+          c.box(h=Px(40.0), fn() { c.text("row \{i}", size=10.0) |> ignore }) |> ignore
+        }
+      })
+      |> ignore
+    },
+    w=300.0,
+    h=300.0,
+  )
+  t.draw()
+  let (_, y, _, _) = t.rect_of("xxxx").unwrap()
+  take.val = true
+  // (down, a frame sees it and takes it, then the finger moves on: from (x0, y0) to (x1, y1), let go there)
+  let slide = fn(x0 : Double, y0 : Double, x1 : Double, y1 : Double) {
+    t.press_at(x0, y0)
+    for k in 1..=10 {
+      let f = k.to_double() / 10.0
+      t.move(x0 + (x1 - x0) * f, y0 + (y1 - y0) * f)
+    }
+    t.release(x1, y1)
+    t.draw()
+  }
+  // up the screen, as a finger widening what it picked to the lines above
+  slide(250.0, y + 5.0, 250.0, y - 115.0)
+  assert_eq(t.list_offset(), 0.0)
+  assert_eq(at.val, 0.0)
+  // across
+  slide(250.0, y + 5.0, 50.0, y + 5.0)
+  assert_eq(at.val, 0.0)
+  assert_eq(t.list_offset(), 0.0)
+  t.assert_idle()
+}
+
+///|
 test "a link held still a long press's time: its hold told once, with where it leads and its piece of line; no tap" {
   let held : Array[(String, (Double, Double, Double, Double))] = []
   let tapped : Array[String] = []
