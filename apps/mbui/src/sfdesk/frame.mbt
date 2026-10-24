@@ -52,6 +52,9 @@ pub(all) struct Pages {
   new_composer : (@ui.Ctx, Source, Workspace, Json?, String, String, Bool, () -> Unit, (ChatRef) -> Unit) -> Unit
   drop : (@ui.Ctx, Source, String, Int) -> Unit
   composer_moves : (@ui.Ctx, String) -> Unit
+  /// what was sent flying from the composer of draft `draft` into chat `rk`'s list (its row `row`: sent_local's), its
+  /// words from where they were typed, the composer's room `room` held meanwhile, the list to its end (flight.mbt)
+  fly : (@ui.Ctx, String, String, String, String, Double) -> Unit
   /// whether the desktop app has a newer build to offer (brand.tsx UpdateButton), and its 更新 over the sidebar's top
   /// (closed, the sidebar's width, the window's buttons in the app's top row)
   updating : () -> Bool
