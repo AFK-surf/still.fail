@@ -247,7 +247,7 @@ function Processes({ s, workspace }: { s: StationView; workspace: string }) {
 function Overview({ s, workspace }: { s: StationView; workspace: string }) {
   const navigate = useGo();
   // What still.fail itself uses of the machine, opening the resources page: read (the station looking often) while shown.
-  const uses = useResources(workspace, s.station).value?.stations[0]?.use;
+  const uses = useResources(workspace, s.station).value?.stations[0];
   const o = s.overview;
   const base = stationBase(s.station);
   const folders = o?.drive?.roots ?? [];
@@ -262,7 +262,7 @@ function Overview({ s, workspace }: { s: StationView; workspace: string }) {
             {net && <LanKept lan={net.lan} />}
             {/* What its agents' processes take of the memory. */}
             {o && o.processes.length > 0 && <p className={css.memory}>{o.processesText}</p>}
-            {uses && <Uses use={uses} to={stationProcesses(workspace, s.id)} flush />}
+            {uses && <Uses use={uses.use} net={uses.net} to={stationProcesses(workspace, s.id)} flush />}
           </div>
         </Section>
       )}

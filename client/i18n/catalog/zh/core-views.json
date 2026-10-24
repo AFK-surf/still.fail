@@ -339,6 +339,7 @@
   "core-views.resources.tile.cpu_sub": "占 {cores} 核的 {percent}",
   "core-views.resources.tile.memory": "内存",
   "core-views.resources.tile.memory_sub": "占 {total} 的 {percent}",
+  "core-views.resources.tile.net": "网络",
   "core-views.resources.tile.wakeups": "唤醒",
   "core-views.resources.tile.wakeups_sub": "{n} 个进程",
   "core-views.resources.tile.wakeups_value": "{n}/s",

@@ -1132,7 +1132,7 @@
   "web-pages.stations.page.openFiles": "Open files",
   "web-pages.stations.page.resources": "Resources",
   "web-pages.stations.processesFailed": "Couldn't load processes: {error}",
-  "web-pages.stations.processesLead": "How much CPU, memory and power still.fail's desktop app, the station and the programs agents run use on this computer, by chat. Counted on macOS only.",
+  "web-pages.stations.processesLead": "How much CPU, memory, power and network still.fail's desktop app, the station and the programs agents run use on this computer, by chat. Counted on macOS only.",
   "web-pages.stations.processesOffline": "The station is offline, so its processes can't be read",
   "web-pages.stations.page.runningShort": "{n} running",
   "web-pages.stations.page.footprint": "Data on disk",

@@ -108,7 +108,7 @@ export const resourceRoutes = ({ read }: Tools, watch: ResourceWatch | null): Ro
     pattern: /^\/resources$/,
     handle: async (r: Request): Promise<Answer> => {
       await watch?.want();
-      const shot = watch?.snapshot() ?? { at: null, everyMs: 0, counted: false, total: { cpu: 0, memory: 0, watts: 0, wakeups: 0 }, groups: [], history: [], hours: [] };
+      const shot = watch?.snapshot() ?? { at: null, everyMs: 0, counted: false, net: false, total: { cpu: 0, memory: 0, watts: 0, wakeups: 0, netIn: 0, netOut: 0 }, groups: [], history: [], hours: [] };
       const sessions = [...new Set([...shot.groups.flatMap((g) => (g.session ? [g.session] : [])), ...shot.hours.flatMap((h) => Object.keys(h.joules).filter((k) => k.startsWith("chat:")).map((k) => k.slice(5)))])];
       const named = await read(r, "resourceChats", { sessions, viewer: r.viewer });
       if (named.status !== 200) return named;
@@ -127,6 +127,8 @@ export const resourceRoutes = ({ read }: Tools, watch: ResourceWatch | null): Ro
           agents.memory += g.memory;
           agents.watts += g.watts;
           agents.wakeups += g.wakeups;
+          agents.netIn += g.netIn;
+          agents.netOut += g.netOut;
           agents.processes = [...agents.processes, ...g.processes];
         } else groups.push({ ...g, key: "agents", kind: "agents", session: null });
       }

@@ -5090,10 +5090,17 @@ export interface ResourceUse {
 	watts: number;
 	/** A second. */
 	wakeups: number;
+	/** Bytes taken in over the network, a second. */
+	netIn: number;
+	/** Bytes sent out, a second. */
+	netOut: number;
+	/** In and out together. */
+	net: number;
 	cpuText: string;
 	memoryText: string;
 	wattsText: string;
 	wakeupsText: string;
+	netText: string;
 }
 
 export interface ResourceProcess {
@@ -5130,6 +5137,8 @@ export interface ResourceKind {
 /** What still.fail uses of one station's machine now. */
 export interface ResourceStation {
 	station: string;
+	/** Whether it reads the network. */
+	net: boolean;
 	use: ResourceUse;
 }
 
@@ -5153,6 +5162,8 @@ export interface ResourcesView {
 	wait: ListNote;
 	/** No station reads what its processes use (none answered yet, none on macOS, all from before). */
 	empty: boolean;
+	/** Some station reads their network traffic: the page has its column. */
+	net: boolean;
 	/** How often it is read again while shown, for the page to say. */
 	everyMs: number;
 	tiles: ResourceTile[];

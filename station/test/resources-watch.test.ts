@@ -3,7 +3,8 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { resourceRoutes } from "../src/api/routes/usage.ts";
-import { ResourceWatch, type Usage, whoseOf } from "../src/resources/watch.ts";
+import { parseNettop } from "../src/resources/module.ts";
+import { ResourceWatch, type Traffic, type Usage, whoseOf } from "../src/resources/watch.ts";
 import type { ProcessInfo } from "../src/platform/index.ts";
 
 const p = (pid: number, ppid: number, pgid: number, command: string): ProcessInfo => ({ pid, ppid, pgid, bytes: 0, command });
@@ -121,9 +122,47 @@ test("a process there before but no one's (its chat begun since) counts from the
   await watch.close();
 });
 
+test("nettop's lines: each pid's bytes in and out, a name with dots of its own", () => {
+  const text = ",bytes_in,bytes_out,\nkernel_task.0,416873364,63472132,\ncom.apple.WebKit.Networking.812,1200,34,\n2.1.306.89240,158485,1694820,\n";
+  assert.deepEqual([...parseNettop(text)], [[0, { in: 416873364, out: 63472132 }], [812, { in: 1200, out: 34 }], [89240, { in: 158485, out: 1694820 }]]);
+});
+
+test("network: bytes a second since the last look; one missing from nettop's list keeps what it had", async () => {
+  let now = 0;
+  let traffic: Map<number, Traffic> | null = new Map([[22, { in: 1000, out: 100 }], [51, { in: 5000, out: 0 }]]);
+  const watch = new ResourceWatch({
+    clock: { currentTimeMillisUnsafe: () => now } as never,
+    table: async () => table,
+    usage: (pids) => pids.map(() => used(1, 1, 0, 0)),
+    traffic: async () => traffic,
+    ...options,
+  });
+  await watch.look();
+  now += 10_000;
+  traffic = new Map([[22, { in: 21_000, out: 2100 }]]);
+  await watch.look();
+  const by = Object.fromEntries(watch.snapshot().groups.map((g) => [g.key, g]));
+  assert.equal(by["chat:s1"]!.netIn, 2000);
+  assert.equal(by["chat:s1"]!.netOut, 200);
+  assert.equal(by.app!.netIn, 0, "the helper left the list: nothing since, not all it had again");
+  assert.equal(watch.snapshot().net, true);
+  // Not read this time: what each had kept, so the next look is not counted whole.
+  now += 10_000;
+  traffic = null;
+  await watch.look();
+  assert.equal(watch.snapshot().net, false);
+  now += 10_000;
+  traffic = new Map([[22, { in: 31_000, out: 2100 }], [51, { in: 5000, out: 0 }]]);
+  await watch.look();
+  const later = Object.fromEntries(watch.snapshot().groups.map((g) => [g.key, g]));
+  assert.equal(later["chat:s1"]!.netIn, 1000);
+  assert.equal(later.app!.netIn, 0);
+  await watch.close();
+});
+
 test("GET /resources: the chats named; one the asker does not see counted as the agents'", async () => {
   let wanted = 0;
-  const use = (cpu: number) => ({ cpu, memory: 1, watts: cpu / 10, wakeups: 1 });
+  const use = (cpu: number) => ({ cpu, memory: 1, watts: cpu / 10, wakeups: 1, netIn: cpu, netOut: 0 });
   const watch = {
     want: async () => void wanted++,
     snapshot: () => ({

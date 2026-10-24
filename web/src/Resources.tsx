@@ -17,10 +17,13 @@ export function useResources(scope: string, station?: string) {
   return useTopic<ResourcesView>(station === undefined ? { topic: "resources", scope } : { topic: "resources", scope, station });
 }
 
-type Column = "cpu" | "memory" | "watts" | "wakeups";
-const COLUMNS: { key: Column; text: keyof ResourceUse }[] = [
-  { key: "cpu", text: "cpuText" }, { key: "memory", text: "memoryText" }, { key: "watts", text: "wattsText" }, { key: "wakeups", text: "wakeupsText" },
+type Column = "cpu" | "memory" | "watts" | "net" | "wakeups";
+const ALL: { key: Column; text: keyof ResourceUse }[] = [
+  { key: "cpu", text: "cpuText" }, { key: "memory", text: "memoryText" }, { key: "watts", text: "wattsText" }, { key: "net", text: "netText" }, { key: "wakeups", text: "wakeupsText" },
 ];
+/// The network's column only where some station reads it.
+const columnsOf = (net: boolean) => ALL.filter((c) => net || c.key !== "net");
+type Columns = typeof ALL;
 const columnLabel = (c: Column) => t(`web-main.resources.column.${c}`);
 
 /** The whole page's body, below its title. */
@@ -37,6 +40,7 @@ export function ResourcesBody({ view }: { view: ResourcesView }) {
     );
   }
   const groups = view.groups.filter((g) => kind === "all" || g.kind === kind);
+  const columns = columnsOf(view.net);
   return (
     <div className={css.page}>
       <div className={css.tiles}>{view.tiles.map((tile) => <Tile key={tile.key} tile={tile} />)}</div>
@@ -47,7 +51,7 @@ export function ResourcesBody({ view }: { view: ResourcesView }) {
           options={[{ value: "grouped", label: t("web-main.resources.grouped") }, { value: "flat", label: t("web-main.resources.flat") }]} />
       </div>
       <div className={css.scroll}>
-        {flat === "flat" ? <Flat groups={groups} by={by} setBy={setBy} /> : <Grouped groups={groups} by={by} setBy={setBy} />}
+        {flat === "flat" ? <Flat groups={groups} columns={columns} by={by} setBy={setBy} /> : <Grouped groups={groups} columns={columns} by={by} setBy={setBy} />}
       </div>
       <Foot view={view} />
     </div>
@@ -78,12 +82,12 @@ function Spark({ points, tone }: { points: number[]; tone: string }) {
 }
 
 /** The columns' heads: each sorts by itself (the most first). */
-function Heads({ first, by, setBy }: { first: string[]; by: Column; setBy(c: Column): void }) {
+function Heads({ first, columns, by, setBy }: { first: string[]; columns: Columns; by: Column; setBy(c: Column): void }) {
   return (
     <thead>
       <tr>
         {first.map((h) => <th key={h} className={css.head}>{h}</th>)}
-        {COLUMNS.map((c) => (
+        {columns.map((c) => (
           <th key={c.key} className={`${css.head} ${css.number}`} aria-sort={c.key === by ? "descending" : "none"}>
             <button type="button" className={`${css.sortable} ${c.key === by ? css.sorted : ""}`} onClick={() => setBy(c.key)} aria-label={t("web-main.resources.by", { column: columnLabel(c.key) })}>
               {columnLabel(c.key)}{c.key === by ? " ↓" : ""}
@@ -96,8 +100,8 @@ function Heads({ first, by, setBy }: { first: string[]; by: Column; setBy(c: Col
 }
 
 /** A row's figures: the sorted column's bold, with how much of the most it is. */
-function Figures({ use, by, max, plain = false }: { use: ResourceUse; by: Column; max: number; plain?: boolean }) {
-  return COLUMNS.map((c) => (
+function Figures({ use, columns, by, max, plain = false }: { use: ResourceUse; columns: Columns; by: Column; max: number; plain?: boolean }) {
+  return columns.map((c) => (
     <td key={c.key} className={`${css.cell} ${css.number} ${!plain && c.key === by ? css.strong : ""}`}>
       {!plain && c.key === by && <span className={css.share}><span className={css.shareFill} style={{ width: `${max > 0 ? Math.min(100, (use[by] / max) * 100) : 0}%` }} /></span>}
       {use[c.text]}
@@ -113,14 +117,14 @@ function chatPath(group: ResourceGroup): string | null {
 }
 
 /** Whose uses what, each opening to its processes. */
-function Grouped({ groups, by, setBy }: { groups: ResourceGroup[]; by: Column; setBy(c: Column): void }) {
+function Grouped({ groups, columns, by, setBy }: { groups: ResourceGroup[]; columns: Columns; by: Column; setBy(c: Column): void }) {
   const [open, setOpen] = useState<Set<string>>(() => new Set(groups[0] ? [groups[0].key] : []));
   const sorted = [...groups].sort((a, b) => b.use[by] - a.use[by]);
   const max = Math.max(0, ...sorted.map((g) => g.use[by]));
   const flip = (key: string) => setOpen((was) => { const now = new Set(was); if (now.has(key)) now.delete(key); else now.add(key); return now; });
   return (
     <table className={css.table}>
-      <Heads first={[t("web-main.resources.column.name")]} by={by} setBy={setBy} />
+      <Heads first={[t("web-main.resources.column.name")]} columns={columns} by={by} setBy={setBy} />
       <tbody>
         {sorted.map((g) => {
           const on = open.has(g.key);
@@ -135,12 +139,12 @@ function Grouped({ groups, by, setBy }: { groups: ResourceGroup[]; by: Column; s
                     <span className={css.meta}>{[g.kindText, String(g.processes.length)].filter(Boolean).join(" · ")}</span>
                   </span>
                 </td>
-                <Figures use={g.use} by={by} max={max} />
+                <Figures columns={columns} use={g.use} by={by} max={max} />
               </tr>
               {on && [...g.processes].sort((a, b) => b.use[by] - a.use[by]).map((p) => (
                 <tr key={p.key} className={css.process}>
                   <td className={`${css.cell} ${css.processName}`}>{p.name} <span className={css.meta}>{p.pid}</span></td>
-                  <Figures use={p.use} by={by} max={max} plain />
+                  <Figures columns={columns} use={p.use} by={by} max={max} plain />
                 </tr>
               ))}
             </Fragment>
@@ -152,12 +156,12 @@ function Grouped({ groups, by, setBy }: { groups: ResourceGroup[]; by: Column; s
 }
 
 /** Every process, with whose it is. */
-function Flat({ groups, by, setBy }: { groups: ResourceGroup[]; by: Column; setBy(c: Column): void }) {
+function Flat({ groups, columns, by, setBy }: { groups: ResourceGroup[]; columns: Columns; by: Column; setBy(c: Column): void }) {
   const rows = groups.flatMap((g) => g.processes.map((p) => ({ ...p, group: g }))).sort((a, b) => b.use[by] - a.use[by]);
   const max = Math.max(0, ...rows.map((r) => r.use[by]));
   return (
     <table className={css.table}>
-      <Heads first={[t("web-main.resources.column.process"), t("web-main.resources.column.whose")]} by={by} setBy={setBy} />
+      <Heads first={[t("web-main.resources.column.process"), t("web-main.resources.column.whose")]} columns={columns} by={by} setBy={setBy} />
       <tbody>
         {rows.map((r) => {
           const to = chatPath(r.group);
@@ -165,7 +169,7 @@ function Flat({ groups, by, setBy }: { groups: ResourceGroup[]; by: Column; setB
             <tr key={r.key}>
               <td className={css.cell}>{r.name} <span className={css.meta}>{r.pid}</span></td>
               <td className={`${css.cell} ${css.whose}`}>{to ? <Link className={css.chatLink} to={to}>{r.group.title}</Link> : r.group.title}</td>
-              <Figures use={r.use} by={by} max={max} />
+              <Figures columns={columns} use={r.use} by={by} max={max} />
             </tr>
           );
         })}

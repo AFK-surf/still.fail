@@ -1,5 +1,6 @@
 // What of this machine still.fail uses (the resources page), as Activity Monitor says it: each look, every process's
-// CPU time, memory footprint, wakeups and energy so far (macOS counts them, native/mesh/src/usage.rs), what each used
+// CPU time, memory footprint, wakeups and energy so far (macOS counts them, native/mesh/src/usage.rs) and the bytes it
+// took in and sent out over the network (nettop: what Activity Monitor's Network tab says), what each used
 // since the last look put to whose it is:
 // - a chat's: its agent's runner and all under it, its jobs' groups and all under them, and what runs in its directory
 //   on its own (a script its agent left running with nohup, under launchd now: its arguments name the directory);
@@ -29,13 +30,14 @@ const HOUR_MS = 3_600_000;
 const SAVE_MS = 60_000;
 
 export type Whose = { key: string; kind: "chat" | "agents" | "app" | "station"; session: string | null };
-/// What a process used now: CPU (100 a whole core), memory (bytes), watts, wakeups a second.
-export type Use = { cpu: number; memory: number; watts: number; wakeups: number };
+/// What a process used now: CPU (100 a whole core), memory (bytes), watts, wakeups a second, bytes in and out a second.
+export type Use = { cpu: number; memory: number; watts: number; wakeups: number; netIn: number; netOut: number };
 export type Process = Use & { pid: number; name: string };
 export type Group = Whose & Use & { processes: Process[] };
 export type Point = Use & { at: number };
 export type Hour = { at: number; joules: Record<string, number> };
-export type Snapshot = { at: number | null; everyMs: number; counted: boolean; total: Use; groups: Group[]; history: Point[]; hours: Hour[] };
+/// `net`: whether the network was read (its figures 0 else).
+export type Snapshot = { at: number | null; everyMs: number; counted: boolean; net: boolean; total: Use; groups: Group[]; history: Point[]; hours: Hour[] };
 
 export type Runner = { runner: number; pid: number; session: string | null };
 export type Job = { session: string; pgid: number };
@@ -43,6 +45,8 @@ export type Job = { session: string; pgid: number };
 export type Place = { dir: string; session: string };
 /// What a process has used so far (native/mesh/src/usage.rs).
 export type Usage = { cpuNs: number; footprint: number; wakeups: number; energyNj: number };
+/// What a process has taken in and sent out over the network so far, in bytes.
+export type Traffic = { in: number; out: number };
 
 export type ResourceOptions = {
   clock?: Clock.Clock;
@@ -53,6 +57,8 @@ export type ResourceOptions = {
   places?(): Place[];
   /// Each pid's usage so far, null where not read.
   usage(pids: number[]): (Usage | null)[];
+  /// Each pid's traffic so far (those with none left out); null: not read.
+  traffic?(): Promise<Map<number, Traffic> | null>;
   runners(): Runner[];
   jobs(): Job[];
   /// Whether the process of this executable is the desktop app's.
@@ -103,19 +109,21 @@ export function whoseOf(table: readonly ProcessInfo[], o: Pick<ResourceOptions, 
 
 /// A program as people know it: its executable's name.
 const programOf = (command: string) => basename(command) || "?";
-const zero = (): Use => ({ cpu: 0, memory: 0, watts: 0, wakeups: 0 });
+const zero = (): Use => ({ cpu: 0, memory: 0, watts: 0, wakeups: 0, netIn: 0, netOut: 0 });
 const add = (to: Use, u: Use) => {
   to.cpu += u.cpu;
   to.memory += u.memory;
   to.watts += u.watts;
   to.wakeups += u.wakeups;
+  to.netIn += u.netIn;
+  to.netOut += u.netOut;
 };
 
 export class ResourceWatch {
   readonly #o: ResourceOptions;
   readonly #fibers: Fibers;
   /// Each process's usage at the last look, by pid and executable (a pid taken again is another process).
-  #last = new Map<number, Usage & { command: string }>();
+  #last = new Map<number, Usage & Traffic & { command: string }>();
   #lastAt: number | null = null;
   /// Every pid of the last look's table (whosever), with its executable.
   #seen = new Map<number, string>();
@@ -126,6 +134,8 @@ export class ResourceWatch {
   #savedAt = 0;
   /// Whether anything was read: none, not macOS.
   #counted = false;
+  /// Whether the network was read at the last look.
+  #net = false;
 
   constructor(options: ResourceOptions) {
     this.#o = options;
@@ -172,13 +182,18 @@ export class ResourceWatch {
     const whose = whoseOf(table, this.#o, args, this.#o.places?.() ?? []);
     const mine = table.filter((p) => whose.has(p.pid));
     const used = this.#o.usage(mine.map((p) => p.pid));
+    const traffic = this.#o.traffic ? await this.#o.traffic().catch(() => null) : null;
+    this.#net = traffic !== null;
     const since = this.#lastAt;
     const seconds = since === null ? 0 : (at - since) / 1000;
     const groups = new Map<string, Group>();
-    const last = new Map<number, Usage & { command: string }>();
+    const last = new Map<number, Usage & Traffic & { command: string }>();
     mine.forEach((p, i) => {
-      const u = used[i];
-      if (!u) return;
+      const read = used[i];
+      if (!read) return;
+      // Not in nettop's list this time (no socket open now, or not read): what it had, its counts only growing.
+      const had = this.#last.get(p.pid);
+      const u = { ...read, ...(traffic?.get(p.pid) ?? (had?.command === p.command ? { in: had.in, out: had.out } : { in: 0, out: 0 })) };
       this.#counted = true;
       last.set(p.pid, { ...u, command: p.command });
       if (since === null || seconds <= 0) return;
@@ -194,6 +209,8 @@ export class ResourceWatch {
         memory: u.footprint,
         watts: Math.max(0, (u.energyNj - (was?.energyNj ?? 0)) / 1e9 / seconds),
         wakeups: Math.max(0, (u.wakeups - (was?.wakeups ?? 0)) / seconds),
+        netIn: Math.max(0, (u.in - (was?.in ?? 0)) / seconds),
+        netOut: Math.max(0, (u.out - (was?.out ?? 0)) / seconds),
       };
       const g = groups.get(w.key) ?? { ...w, ...zero(), processes: [] };
       add(g, use);
@@ -227,6 +244,7 @@ export class ResourceWatch {
       at: this.#now?.at ?? null,
       everyMs: LOOK_MS,
       counted: this.#counted,
+      net: this.#net,
       total: this.#now?.total ?? zero(),
       groups: this.#now?.groups ?? [],
       history: [...this.#history],

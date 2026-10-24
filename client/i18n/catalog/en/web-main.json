@@ -626,6 +626,7 @@
   "web-main.resources.column.cpu": "CPU",
   "web-main.resources.column.memory": "Memory",
   "web-main.resources.column.name": "Name",
+  "web-main.resources.column.net": "Network",
   "web-main.resources.column.process": "Process",
   "web-main.resources.column.wakeups": "Wakeups/s",
   "web-main.resources.column.watts": "Power",

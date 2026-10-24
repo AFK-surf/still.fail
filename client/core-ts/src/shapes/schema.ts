@@ -2458,6 +2458,7 @@ export const SHAPES: Record<string, Shape> = {
   ResourcesView: struct([
     ["wait", "ListNote", { doc: "What it still waits on (looks.ts waitNote): the stations not read yet, those that could not be." }],
     ["empty", "bool", { doc: "No station reads what its processes use (none answered yet, none on macOS, all from before)." }],
+    ["net", "bool", { doc: "Some station reads their network traffic: the page has its column." }],
     ["everyMs", "u32", { doc: "How often it is read again while shown, for the page to say." }],
     ["tiles", vec("ResourceTile")],
     ["kinds", vec("ResourceKind"), { doc: "What the page filters the groups by, in its order." }],
@@ -2475,6 +2476,7 @@ export const SHAPES: Record<string, Shape> = {
   ], { doc: "A total now (CPU, memory, power, wakeups), said, and how it went." }),
   ResourceStation: struct([
     ["station", "String"],
+    ["net", "bool", { doc: "Whether it reads the network." }],
     ["use", "ResourceUse"],
   ], { doc: "What still.fail uses of one station's machine now." }),
   ResourceKind: struct([
@@ -2486,10 +2488,14 @@ export const SHAPES: Record<string, Shape> = {
     ["memory", "f64", { doc: "Its footprint, in bytes." }],
     ["watts", "f64"],
     ["wakeups", "f64", { doc: "A second." }],
+    ["netIn", "f64", { doc: "Bytes taken in over the network, a second." }],
+    ["netOut", "f64", { doc: "Bytes sent out, a second." }],
+    ["net", "f64", { doc: "In and out together." }],
     ["cpuText", "String"],
     ["memoryText", "String"],
     ["wattsText", "String"],
     ["wakeupsText", "String"],
+    ["netText", "String"],
   ], { doc: "What a process, or a whose's processes together, use now, and each said." }),
   ResourceGroup: struct([
     ["key", "String"],

@@ -1063,7 +1063,7 @@
   "web-pages.stations.page.openFiles": "打开文件",
   "web-pages.stations.page.resources": "资源",
   "web-pages.stations.processesFailed": "无法获取进程：{error}",
-  "web-pages.stations.processesLead": "still.fail 的桌面 App、station 和 agent 跑的程序在这台电脑上用了多少 CPU、内存和电，按对话分开看。只有 macOS 能统计。",
+  "web-pages.stations.processesLead": "still.fail 的桌面 App、station 和 agent 跑的程序在这台电脑上用了多少 CPU、内存、电和网络流量，按对话分开看。只有 macOS 能统计。",
   "web-pages.stations.processesOffline": "station 离线，看不到进程",
   "web-pages.stations.page.runningShort": "{n} 个运行中",
   "web-pages.stations.page.footprint": "数据占用",

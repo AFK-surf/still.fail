@@ -50,6 +50,17 @@ function parseArgs(text: string): Map<number, string> {
   return out;
 }
 
+/// `nettop -P -L 1 -x -J bytes_in,bytes_out -n`: each process's bytes in and out so far, as `name.pid,in,out,` (its
+/// name may have dots of its own).
+export function parseNettop(text: string): Map<number, { in: number; out: number }> {
+  const out = new Map<number, { in: number; out: number }>();
+  for (const line of text.split("\n")) {
+    const m = line.match(/\.(\d+),(\d+),(\d+),?$/);
+    if (m) out.set(Number(m[1]), { in: Number(m[2]), out: Number(m[3]) });
+  }
+  return out;
+}
+
 /// Whether this process's parent is its launcher (stillfail-station), not a shell or launchd, whose all under it is not
 /// the station's.
 function launcher(): boolean {
@@ -81,6 +92,8 @@ export const ResourcesLive = Layer.effectDiscard(
         // A chat's own directory, not where it works (a repository people also work in).
         places: () => store.listSessions().flatMap((s) => (s.workspace && s.workspace !== "/" && s.workspace !== homedir() ? [{ dir: s.workspace, session: s.key }] : [])),
         usage: (pids) => (typeof mesh.processUsage === "function" ? mesh.processUsage(pids) : pids.map(() => null)),
+        // Every process's, once: some 20 ms.
+        traffic: async () => parseNettop((await run("nettop", ["-P", "-L", "1", "-x", "-J", "bytes_in,bytes_out", "-n"], { maxBuffer: 16 << 20, timeout: 5000 })).stdout),
         runners: () => runnersWithSessions(data, store),
         jobs: () => watchedJobs(store),
         isApp,

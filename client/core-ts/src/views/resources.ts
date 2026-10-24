@@ -46,11 +46,26 @@ export function watts(w: number): string {
 
 const wakeups = (n: number) => String(Math.round(n));
 
-type Use = { cpu: number; memory: number; watts: number; wakeups: number };
-const useOf = (v: unknown): Use => ({ cpu: num(get(v, "cpu")), memory: num(get(v, "memory")), watts: num(get(v, "watts")), wakeups: num(get(v, "wakeups")) });
-const said = (u: Use) => ({ ...u, cpuText: cpu(u.cpu), memoryText: memory(u.memory), wattsText: watts(u.watts), wakeupsText: wakeups(u.wakeups) });
-const plus = (a: Use, b: Use): Use => ({ cpu: a.cpu + b.cpu, memory: a.memory + b.memory, watts: a.watts + b.watts, wakeups: a.wakeups + b.wakeups });
-const ZERO: Use = { cpu: 0, memory: 0, watts: 0, wakeups: 0 };
+/// Bytes a second, in units of 1024 as Activity Monitor says them: 0 B/s · 812 B/s · 4.2 KB/s · 18 MB/s.
+export function rate(bytes: number): string {
+  if (bytes < 1) return "0 B/s";
+  const units = ["B", "KB", "MB", "GB"];
+  let n = bytes;
+  let i = 0;
+  for (; n >= 1024 && i < units.length - 1; i++) n /= 1024;
+  return `${i === 0 || n >= 10 ? Math.round(n) : n.toFixed(1)} ${units[i]}/s`;
+}
+
+/// `net`: in and out together, what the page sorts by.
+type Use = { cpu: number; memory: number; watts: number; wakeups: number; netIn: number; netOut: number; net: number };
+const useOf = (v: unknown): Use => {
+  const netIn = num(get(v, "netIn"));
+  const netOut = num(get(v, "netOut"));
+  return { cpu: num(get(v, "cpu")), memory: num(get(v, "memory")), watts: num(get(v, "watts")), wakeups: num(get(v, "wakeups")), netIn, netOut, net: netIn + netOut };
+};
+const said = (u: Use) => ({ ...u, cpuText: cpu(u.cpu), memoryText: memory(u.memory), wattsText: watts(u.watts), wakeupsText: wakeups(u.wakeups), netText: rate(u.net) });
+const plus = (a: Use, b: Use): Use => ({ cpu: a.cpu + b.cpu, memory: a.memory + b.memory, watts: a.watts + b.watts, wakeups: a.wakeups + b.wakeups, netIn: a.netIn + b.netIn, netOut: a.netOut + b.netOut, net: a.net + b.net });
+const ZERO: Use = { cpu: 0, memory: 0, watts: 0, wakeups: 0, netIn: 0, netOut: 0, net: 0 };
 
 function percent(part: number, whole: number): string {
   if (whole <= 0) return "0%";
@@ -69,6 +84,8 @@ export function resourcesView(sources: Source[], now: number, waitNote: Wait): J
   const failing: { station: string; name: string; message: string }[] = [];
   const notes: string[] = [];
   let counted = false;
+  // Some station read the network (one from before does not).
+  let net = false;
   let everyMs = 0;
   let cores = 0;
   let machineMemory = 0;
@@ -100,11 +117,12 @@ export function resourcesView(sources: Source[], now: number, waitNote: Wait): J
       continue;
     }
     counted = true;
+    if (get(v, "net") === true) net = true;
     everyMs = Math.max(everyMs, num(get(v, "everyMs")));
     cores += num(get(get(v, "machine"), "cores"));
     machineMemory += num(get(get(v, "machine"), "memory"));
     total = plus(total, useOf(get(v, "total")));
-    each.push({ station: s.address, use: said(useOf(get(v, "total"))) });
+    each.push({ station: s.address, net: get(v, "net") === true, use: said(useOf(get(v, "total"))) });
     lines.push(new Map(arr(get(v, "history")).map((p) => [Math.round(num(get(p, "at")) / 5000), useOf(p)])));
     for (const h of arr(get(v, "hours"))) {
       if (num(get(h, "at")) <= now - HOURS * HOUR_MS) continue;
@@ -142,11 +160,13 @@ export function resourcesView(sources: Source[], now: number, waitNote: Wait): J
     { key: "cpu", label: t("core-views.resources.tile.cpu"), value: cpu(total.cpu), sub: cores > 0 ? t("core-views.resources.tile.cpu_sub", { cores, percent: percent(total.cpu, cores * 100) }) : "", points: line("cpu") },
     { key: "memory", label: t("core-views.resources.tile.memory"), value: memory(total.memory), sub: machineMemory > 0 ? t("core-views.resources.tile.memory_sub", { total: memory(machineMemory), percent: percent(total.memory, machineMemory) }) : "", points: line("memory") },
     { key: "watts", label: t("core-views.resources.tile.watts"), value: watts(total.watts), sub: t("core-views.resources.tile.watts_sub", { wh: watts(day).replace(/ W$/, " Wh") }), points: line("watts") },
+    ...(net ? [{ key: "net", label: t("core-views.resources.tile.net"), value: `↓ ${rate(total.netIn)}`, sub: `↑ ${rate(total.netOut)}`, points: line("net") }] : []),
     { key: "wakeups", label: t("core-views.resources.tile.wakeups"), value: t("core-views.resources.tile.wakeups_value", { n: wakeups(total.wakeups) }), sub: t("core-views.resources.tile.wakeups_sub", { n: processes }), points: line("wakeups") },
   ];
   return {
     wait: waitNote(waiting, failing, !counted),
     empty: !counted,
+    net,
     everyMs,
     tiles,
     kinds: KINDS.map((k) => ({ key: k, label: t(`core-views.resources.kind.${k}`) })),

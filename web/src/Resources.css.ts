@@ -7,14 +7,14 @@ export const page = style({ display: "grid", gap: "14px" });
 // ── totals ────────────────────────────────────────────────────────────────
 
 export const tiles = style({
-  display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", gap: "8px",
-  "@media": { "(max-width: 700px)": { gridTemplateColumns: "repeat(2, minmax(0, 1fr))" } },
+  display: "grid", gridAutoFlow: "column", gridAutoColumns: "minmax(0, 1fr)", gap: "8px",
+  "@media": { "(max-width: 700px)": { gridAutoFlow: "row", gridTemplateColumns: "repeat(2, minmax(0, 1fr))" } },
 });
 export const tile = style({
   display: "grid", gap: "2px", padding: "10px 12px 8px", borderRadius: vars.rCard, background: cardGround, cornerShape: vars.cornerShape, minWidth: "0",
 });
 export const tileHead = style({ display: "flex", justifyContent: "space-between", gap: "8px", fontSize: vars.textMeta, color: vars.muted, whiteSpace: "nowrap" });
-export const tileSub = style({ color: vars.subtle, overflow: "hidden", textOverflow: "ellipsis" });
+export const tileSub = style({ color: vars.subtle, overflow: "hidden", textOverflow: "ellipsis", minWidth: "0" });
 export const tileValue = style({ fontSize: vars.textTitle, fontWeight: "600", fontVariantNumeric: "tabular-nums" });
 /** The last minutes' line, under the value. */
 export const spark = style({ display: "block", width: "100%", height: "26px", marginTop: "2px" });
@@ -58,5 +58,5 @@ export const shareFill = style({ display: "block", height: "100%", background: v
 
 export const foot = style({ display: "grid", gap: "4px", margin: "0", padding: "0", listStyle: "none", fontSize: vars.textMeta, color: vars.subtle });
 export const empty = style({ margin: "0", padding: "28px 0", textAlign: "center", color: vars.muted });
-export const tone = styleVariants({ cpu: { color: vars.accent }, memory: { color: vars.blue }, watts: { color: vars.amber }, wakeups: { color: vars.green } });
+export const tone = styleVariants({ cpu: { color: vars.accent }, memory: { color: vars.blue }, watts: { color: vars.amber }, net: { color: vars.muted }, wakeups: { color: vars.green } });
 export const scroll = style({ overflowX: "auto" });

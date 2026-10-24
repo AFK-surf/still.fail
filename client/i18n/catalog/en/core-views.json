@@ -399,6 +399,7 @@
   "core-views.resources.tile.cpu_sub": "{percent} of {cores} cores",
   "core-views.resources.tile.memory": "Memory",
   "core-views.resources.tile.memory_sub": "{percent} of {total}",
+  "core-views.resources.tile.net": "Network",
   "core-views.resources.tile.wakeups": "Wakeups",
   "core-views.resources.tile.wakeups_sub": "{n} processes",
   "core-views.resources.tile.wakeups_value": "{n}/s",

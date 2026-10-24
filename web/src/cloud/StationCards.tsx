@@ -1,7 +1,7 @@
 // Station overview: only alerts and available updates. Its name opens its own page (StationPage.tsx), where the rest is.
 import { Fragment, type ReactNode } from "react";
 import type { StationView } from "../api.ts";
-import type { NetFigure, NetRelay, ResourceUse, StationNet } from "../core/shapes.ts";
+import type { NetFigure, NetRelay, ResourceStation, ResourceUse, StationNet } from "../core/shapes.ts";
 import { Button, StatusDot, Tip } from "../ui.tsx";
 import { useTopic } from "../core/react.ts";
 import { openLocalNetwork, useLanKept } from "../localNetwork.ts";
@@ -26,7 +26,7 @@ import * as controlsCss from "@stillfail/ui/styles/controls.css.ts";
  * a line on its card opening its 进程 (`resourcesPage`). */
 export function StationList({ stations, menu, page, manager = false, onMark, markBusy, resources, resourcesPage }: {
   stations: StationView[]; menu(s: StationView): ReactNode; page(s: StationView): string; manager?: boolean; onMark?: ((s: StationView, mark: Mark) => void) | undefined; markBusy?: ((s: StationView) => boolean) | undefined;
-  resources?: ReadonlyMap<string, ResourceUse> | undefined; resourcesPage?: ((s: StationView) => string) | undefined;
+  resources?: ReadonlyMap<string, ResourceStation> | undefined; resourcesPage?: ((s: StationView) => string) | undefined;
 }) {
   return <div className={css.cards}>{stations.map((s) => <StationCard key={s.id} s={s} menu={menu(s)} page={page(s)} manager={manager} onMark={onMark} markBusy={markBusy?.(s) ?? false}
     uses={s.online ? resources?.get(s.station) : undefined} usesPage={resourcesPage?.(s)} />)}</div>;
@@ -34,7 +34,7 @@ export function StationList({ stations, menu, page, manager = false, onMark, mar
 
 /** What still.fail uses of the machine now, in a line opening its 进程. `flush`: at its section's edge (its
  * own page), not in by a card's dot. */
-export function Uses({ use, to, flush = false }: { use: ResourceUse; to: string; flush?: boolean }) {
+export function Uses({ use, net, to, flush = false }: { use: ResourceUse; net: boolean; to: string; flush?: boolean }) {
   return (
     <Link className={css.uses} to={to} data-flush={flush || undefined}>
       <span>{t("web-pages.stations.uses", { name: NAME })}</span>
@@ -42,6 +42,7 @@ export function Uses({ use, to, flush = false }: { use: ResourceUse; to: string;
         <span>CPU <b>{use.cpuText}</b></span>
         <span>{t("web-main.resources.column.memory")} <b>{use.memoryText}</b></span>
         <span>{t("web-main.resources.column.watts")} <b>{use.wattsText}</b></span>
+        {net && <span>{t("web-main.resources.column.net")} <b>{use.netText}</b></span>}
       </span>
       <ChevronRight size={14} />
     </Link>
@@ -214,7 +215,7 @@ function Ways({ relays }: { relays: NetRelay[] }) {
 }
 
 function StationCard({ s, menu, page, manager, onMark, markBusy, uses, usesPage }: {
-  s: StationView; menu: ReactNode; page: string; manager: boolean; onMark: ((s: StationView, mark: Mark) => void) | undefined; markBusy: boolean; uses: ResourceUse | undefined; usesPage: string | undefined;
+  s: StationView; menu: ReactNode; page: string; manager: boolean; onMark: ((s: StationView, mark: Mark) => void) | undefined; markBusy: boolean; uses: ResourceStation | undefined; usesPage: string | undefined;
 }) {
   const silent = silentOf(s);
   const wrong = s.problems;
@@ -237,7 +238,7 @@ function StationCard({ s, menu, page, manager, onMark, markBusy, uses, usesPage 
       {foot && <div className={css.cardFoot}>{foot}</div>}
       {wrong.length > 0 && <div className={css.warn}>{wrong.map((p) => <span key={p.key} data-level={p.level}>{p.text}</span>)}</div>}
       {net && <Net net={net} />}
-      {uses && usesPage && <Uses use={uses} to={usesPage} />}
+      {uses && usesPage && <Uses use={uses.use} net={uses.net} to={usesPage} />}
       {s.online && <div className={css.cardVersions}><UpdateSummary station={s.station} updates={s.overview?.updates} manager={manager} /></div>}
     </div>
   );

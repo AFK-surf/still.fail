@@ -8,7 +8,7 @@ import { CHANGEABLE } from "../keymap.ts";
 import { CAN_NOTIFY } from "../notify.ts";
 import { HAS_VERSION } from "../pages/AppVersion.tsx";
 import { HAS_LOCAL_STATION } from "../pages/LocalStation.tsx";
-import { Archive, ArrowLeft, Bell, Brain, Key, Chart, Check, ChevronRight, Edit, Folder, Im, Info, LogOut, Monitor, Plus, Quota, Refresh, Server, Settings, ShieldCheck, Sliders, Sparks, Command, Trash, User, UserPlus, Users, type IconProps } from "@stillfail/ui/icons.tsx";
+import { Archive, ArrowLeft, Bell, Boxes, Brain, Key, Chart, Check, ChevronRight, Edit, Folder, Im, Info, LogOut, Monitor, Plus, Quota, Refresh, Server, Settings, ShieldCheck, Sliders, Sparks, Command, Trash, User, UserPlus, Users, type IconProps } from "@stillfail/ui/icons.tsx";
 import { SecurityNotice } from "./Security.tsx";
 import { VaultWaiting } from "./Vault.tsx";
 import { useCommands } from "../commands.ts";
@@ -113,6 +113,7 @@ export function useSettingsCommands(entry: WorkspaceEntry): void {
   const some = (stations?.length ?? 0) > 0;
   const settings = t("web-pages.settings.title");
   const files = t("web-pages.drive.title");
+  const processes = t("web-pages.stations.page.part.processes");
   useCommands([
     ...settingsPages(entry, some).map((p) => ({
       id: `settings/${p.path}`, group: "settings" as const, label: p.label, icon: p.icon, words: `${settings} settings ${p.words}`, typed: true,
@@ -122,6 +123,11 @@ export function useSettingsCommands(entry: WorkspaceEntry): void {
     ...(stations ?? []).filter((s) => s.overview?.drive).map((s) => ({
       id: `drive/${s.id}`, group: "settings" as const, label: `${files} · ${s.name}`, icon: Folder, words: `${files} files drive ${s.name}`, typed: true,
       run: () => navigate(`${stationBase(s.station)}/files`),
+    })),
+    // Each station's 进程: what still.fail uses of its machine (StationPage.tsx).
+    ...(stations ?? []).map((s) => ({
+      id: `processes/${s.id}`, group: "settings" as const, label: `${processes} · ${s.name}`, icon: Boxes, words: `${processes} processes resources cpu memory energy power network activity ${s.name}`, typed: true,
+      run: () => navigate(`/w/${entry.id}/settings/stations/${s.id}?part=processes`),
     })),
   ]);
 }
@@ -624,7 +630,7 @@ function Stations({ view, account, manager, stations }: { view: WorkspaceView; a
   const edits = useStationEdits(view, account, stations);
   // What still.fail uses of each machine, on its card: read (and the stations look often) while the page is shown.
   const resources = useResources(view.id).value;
-  const uses = useMemo(() => new Map(resources?.stations.map((r) => [r.station, r.use])), [resources]);
+  const uses = useMemo(() => new Map(resources?.stations.map((r) => [r.station, r])), [resources]);
   return (
     <Section title={t("web-pages.settings.stations.count", { n: stations.length })} actions={manager && <Button icon={Plus} onClick={() => setAdding(true)}>{t("web-pages.settings.stations.add")}</Button>}>
       <StationList stations={stations.map(edits.shown)} manager={manager} page={(s) => `/w/${view.id}/settings/stations/${s.id}`}
