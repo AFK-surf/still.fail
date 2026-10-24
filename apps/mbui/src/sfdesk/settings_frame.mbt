@@ -51,10 +51,8 @@ fn setting_page(c : @ui.Ctx, src : Source, w : Workspace, route : Route) -> Unit
     AutoCompletion => completion_page(c, core, here)
     AutoPolicy(s) => policy_page(c, core, here, s)
     Shortcuts => shortcuts_page(c, core)
-    Version => version_page(c, core)
     LocalStation => local_station_page(c, core)
     Notifications => notify_page(c, core, here)
-    Permissions => permissions_page(c, core)
     Archiving => archiving_page(c, core, here)
     StationArchiving(s) => station_archiving_page(c, core, here, s)
     _ => @settings.page(c, core, here, route)
@@ -66,7 +64,7 @@ fn setting_page(c : @ui.Ctx, src : Source, w : Workspace, route : Route) -> Unit
 /// frame's pane: back, the room over and under it). False for a route whose pages are not one yet (its frame draws its
 /// own copy).
 pub fn setting_route(c : @ui.Ctx, src : Source, w : Workspace, route : Route, frame : PageFrame) -> Bool {
-  if !(route is (About | Changelog | Memories | Memory(_) | AutoDecisions)) {
+  if !(route is (About | Changelog | Memories | Memory(_) | AutoDecisions | Permissions | Version)) {
     return false
   }
   let core = settings_core(src, w)
@@ -78,6 +76,8 @@ pub fn setting_route(c : @ui.Ctx, src : Source, w : Workspace, route : Route, fr
     Memories => memories_page(c, core, here, frame)
     Memory(a) => memory_page(c, core, here, frame, a)
     AutoDecisions => decisions_page(c, core, here, frame)
+    Permissions => permissions_page(c, core, frame)
+    Version => version_page(c, core, frame)
     _ => ()
   }
   true
