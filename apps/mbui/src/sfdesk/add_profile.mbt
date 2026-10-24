@@ -4,6 +4,17 @@
 // station it is added on is chosen at its head; the machine's own logins not used yet are offered first.
 
 ///|
+/// Where the add page of a station begins, when it is come to with a provider and how (the web's addProfilePath with
+/// its provider and `method`), until its draft is opened.
+// kept across runs: said by the pages that lead to it; add_profile_reset empties it
+let add_profile_start : Map[String, Array[(String, Json)]] = {}
+
+///|
+fn add_profile_reset() -> Unit {
+  add_profile_start.clear()
+}
+
+///|
 /// The add page (AddProfile), on station `address` (another online one where it is not: the first).
 fn add_profile_page(c : @ui.Ctx, core : Core, here : Here, address : String) -> Unit {
   let back = "Profile"
@@ -39,6 +50,19 @@ fn add_profile_flow(c : @ui.Ctx, core : Core, s : Json?, online : Array[Json]) -
     // (once the frame's builds are over: the build that first comes to it alone)
     c.tell("add-profile-open/" + form, fn() {
       @settings.act(core, @sf.t("web-pages.addProfile.openAction"), "profile.flow.open", obj([("station", str(station)), ("form", str(form))]))
+      // come from elsewhere to a provider and how (a machine's login signed in again as its plan): said at once
+      match add_profile_start.get(station) {
+        Some(input) => {
+          add_profile_start.remove(station)
+          @settings.act(
+            core,
+            @sf.t("web-pages.addProfile.editAction"),
+            "profile.flow.edit",
+            obj([("station", str(station)), ("form", str(form)), ("input", obj(input))]),
+          )
+        }
+        None => ()
+      }
     })
   }
   let topic = (core.topic)("profileFlow", { "station": str(station), "form": str(form) })
