@@ -23,7 +23,7 @@ fn page_keys(c : @ui.Ctx, src : Source, w : Workspace, escape : Bool) -> Unit {
   }
   if escape {
     if @sfdesk.find_chat() != "" {
-      find_forget()
+      @sfdesk.find_forget()
       c.blur()
     } else if pk.ts != "" {
       pick_clear()

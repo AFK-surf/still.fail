@@ -10,7 +10,7 @@ let wide_on : Ref[Bool] = Ref(false)
 ///|
 fn wide_reset() -> Unit {
   @sfdesk.side_slide_reset()
-  find_forget()
+  @sfdesk.find_forget()
   find_around.val = -1.0
   wide_on.val = false
   corners_on.val = false
@@ -25,8 +25,7 @@ fn desk_pages() -> @sfdesk.Pages {
     // the chat's page is sfdesk's (chat_page.mbt): its messages and composer this package's (wide_chat.mbt), what
     // comes and goes with a new chat (sfdesk's newchat.mbt, switch.mbt), what its side panel shows of this package's,
     // how ⌘F goes along its list, its sharing's and publishing's sheets
-    talk: fn(c, src, _w, r, over) { chat_talk(c, src, r, over) },
-    find_list: fn(r) { find_list(r) },
+    composer: fn(c, src, _w, r, v, pane) { chat_composer(c, src, r, v, pane) },
     share: fn(c, r, thread) { open_sheet(c, XShare(r, thread)) },
     publish: fn(c, station, thread) { open_sheet(c, Publish(station, thread)) },
     // 文件: a folder under its bar, as the web's (wide_files.mbt)
@@ -58,26 +57,6 @@ fn desk_pages() -> @sfdesk.Pages {
       chat_drop(c, src, key, pane)
     },
     composer_moves: fn(c, chat) { composer_page_starts(c, chat) },
-    fly: fn(c, draft, rk, row, words, room) {
-      flight_start(
-        c,
-        draft,
-        rk,
-        row,
-        words,
-        room,
-        [],
-        field=field_key,
-        hold=fn(ms) { composer_hold(draft, room, ms) },
-        font=ct().font,
-        line=ct().line,
-        desk=true,
-      )
-      match rk.split("\u{1}").map(fn(x) { x.to_string() }).collect() {
-        [station, session] => c.list_to_end("chat/" + station + "/" + session, glide=flight_of(draft) is None)
-        _ => ()
-      }
-    },
     updating: fn() { side_update_shown() },
     update: fn(c, src, bar, s, inset) { side_update(c, src, bar, s, inset) },
     sheet: fn() { sheet_open() },

@@ -190,9 +190,7 @@ fn messages(
   find_marking.val = @sfdesk.find_words_in(side_key(r))
   found_centre(c, rd, key)
   flash_row.val = None
-  // a new chat's list comes up out of the composer with its first words (flight.mbt flight_carry_shift); not drawn
-  // the build their row is first laid out, where it is not known yet
-  let carry = flight_carry_shift(c, dkey)
+  let carry = lf.carry
   // the room agents' lines left, less what has come in since (under the rows, over the composer's room)
   act_rooms(c, rd, key, keys)
   let floor = floor_of(c, rd, key, keys)

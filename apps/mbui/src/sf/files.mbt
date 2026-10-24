@@ -180,7 +180,8 @@ pub(all) struct FileCardDone {
 /// room there for a button laid over it (a message's). `open`: pressing it opens the file (a message's: fileCardOpen),
 /// the hover ground under the pointer. `key` names it. Pasted words kept as a file (Chat.tsx PendingFile's pasted
 /// card): `title` in place of its name (what they begin with), `meta` in place of its size (how many characters), their
-/// own ✕'s `remove_label`, `restore` its ✎ putting them back as words.
+/// own ✕'s `remove_label`, `restore` its ✎ putting them back as words. A message's file the core downloads: its ✕ and ↻
+/// said as calling that off and asking it again (`remove_label`, `retry_label`).
 pub fn file_card(
   c : @ui.Ctx,
   key : String,
@@ -199,6 +200,7 @@ pub fn file_card(
   meta? : String = "",
   restore? : Bool = false,
   remove_label? : String = "",
+  retry_label? : String = "",
 ) -> FileCardDone {
   let id = c.id(key)
   if open {
@@ -246,8 +248,9 @@ pub fn file_card(
     })
     |> ignore
     if retry {
-      card_button(c, again, "refresh", t("web-main.composer.retryUpload"))
-      tip(c, key + "/retry-tip", again, t("web-main.composer.retryUpload"))
+      let label = if retry_label != "" { retry_label } else { t("web-main.composer.retryUpload") }
+      card_button(c, again, "refresh", label)
+      tip(c, key + "/retry-tip", again, label)
     }
     if restore {
       card_button(c, back, "edit", t("web-main.composer.expandPaste"))

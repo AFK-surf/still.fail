@@ -8,13 +8,70 @@
 ///|
 /// Where a message is shown: its chat (its station, its session, its view), and, in a list, how that list goes to a
 /// message (by its seq: a quote's card pressed); None out of one (a letter, a decision's). `inline`: no margin for
-/// the pictures (a side panel's, the 奏 page's: Chat.css.ts inlineHeads), each over its head's start.
+/// the pictures (a side panel's, the 奏 page's: Chat.css.ts inlineHeads), each over its head's start. In its chat's
+/// list (`list`), how it moves there: its list's turns (what it asks closes in one), its messages out of avatars (by
+/// the chat's key), the words sent flying to this row.
 pub(all) struct MessageHere {
   station : String
   session : String
   view : ChatView
   go : ((Double) -> Unit)?
   inline : Bool
+  list : ListMotion?
+}
+
+///|
+/// How a row moves in its chat's list (MessageHere's `list`).
+pub(all) struct ListMotion {
+  rk : String
+  turns : Turns
+  emits : Emits
+  flight : SendFlight?
+}
+
+///|
+/// The words to mark in message `ts` where it is shown: a search's that opened the chat at it, else what ⌘F found in
+/// the chat (find.mbt); none out of a chat's list.
+fn marked_of(here : MessageHere, ts : String) -> Array[String] {
+  match here.list {
+    Some(l) => {
+      let rd = reading_of(l.rk)
+      if rd.found_at != "" && rd.found_at == ts {
+        rd.found_words
+      } else {
+        find_words_in(l.rk)
+      }
+    }
+    None => []
+  }
+}
+
+///|
+/// A message's words in a chat's list, picked with the pointer to be quoted (useSelectionQuote: the app's picking,
+/// chat_parts' `pick`); out of a list, as they are.
+fn picking(
+  here : MessageHere,
+  c : @ui.Ctx,
+  ts : String,
+  author : String,
+  role : String,
+  words : String,
+  body : () -> Unit,
+  fill? : Bool = true,
+) -> Unit {
+  match here.list {
+    Some(_) => (chat_parts.val.pick)(c, ts, author, role, words, fill, body)
+    None => body()
+  }
+}
+
+///|
+/// Words sent flying to this row, while they are on their way.
+fn flight_here(here : MessageHere) -> SendFlight? {
+  match here.list {
+    Some(l) => l.flight
+    None => None
+  }
 }
 
 ///|
@@ -29,6 +86,10 @@ pub fn message_row(c : @ui.Ctx, src : Source, here : MessageHere, m : Message) -
   if m.mine {
     mine_message(c, src, here, m)
     return
+  }
+  let emits = match here.list {
+    Some(l) if emit_goes(l.emits, m.seq) => Some(l)
+    _ => None
   }
   // what still.fail itself says (a limit hit, a failure): a notice across the chat, not someone's message
   if m.system {
@@ -45,6 +106,7 @@ pub fn message_row(c : @ui.Ctx, src : Source, here : MessageHere, m : Message) -
     here.inline,
     "m:" + m.ts,
     m.time,
+    emits=emits.map(fn(l) { (l.emits, l.rk, m.seq) }),
     fn() { message_avatar(c, src, here, m, agent) },
     fn() { message_name(c, src, here, "m:" + m.ts, m.by.name, agent, m.by.from) },
     None,
@@ -53,11 +115,20 @@ pub fn message_row(c : @ui.Ctx, src : Source, here : MessageHere, m : Message) -
       let files = beside_quotes(m.quotes, m.attachments)
       if m.author_kind == "person" {
         if m.text != "" {
-          person_words(c, m.text, "m:" + m.ts)
+          picking(here, c, m.ts, m.by.name, "person", m.text, fn() {
+            person_words(c, m.text, "m:" + m.ts, found=marked_of(here, m.ts))
+          })
         }
         message_files(c, src, here, files, false)
       } else {
-        prose_with_files(c, src, here, m, files)
+        picking(here, c, m.ts, m.by.name, if m.author_kind == "agent" { "agent" } else { "person" }, m.text, fn() {
+          prose_with_files(c, src, here, m, files)
+        })
+      }
+      // what it asks, under it (in its chat's list: not a letter's, nor the 奏 page's, which has them at its foot)
+      match here.list {
+        Some(l) => message_decision(c, src, here, m, Some(l.turns))
+        None => ()
       }
     },
   )
@@ -71,7 +142,9 @@ fn mine_message(c : @ui.Ctx, src : Source, here : MessageHere, m : Message) -> U
   c.box(style=mine_column, fn() {
     quotes(c, src, here, m.quotes, m.attachments, mine=true)
     if m.text != "" {
-      mine_bubble(c, m.text, "m:" + m.ts)
+      picking(here, c, m.ts, @sf.t("web-main.chat.you"), "person", m.text, fn() {
+        mine_bubble(c, here, m.text, "m:" + m.ts, found=marked_of(here, m.ts))
+      }, fill=false)
     }
     message_files(c, src, here, beside_quotes(m.quotes, m.attachments), true)
     if !m.followed {
@@ -85,7 +158,12 @@ fn mine_message(c : @ui.Ctx, src : Source, here : MessageHere, m : Message) -> U
             })
             |> ignore
           } else {
-            message_time(c, "m:" + m.ts, m.time)
+            // coming in with the words, when they fly here from the composer
+            let at = c.box(fn() { message_time(c, "m:" + m.ts, m.time) })
+            match flight_here(here) {
+              Some(f) if f.text != "" => c.look(at, @ui.look(alpha=flight_settled_of(c, f)))
+              _ => ()
+            }
           }
       }
     }
@@ -103,13 +181,14 @@ fn others_message(
   inline : Bool,
   key : String,
   time : Stamp?,
+  emits? : (Emits, String, Double)? = None,
   avatar : () -> Unit,
   name : () -> Unit,
   route : (() -> Unit)?,
   body : () -> Unit,
 ) -> Unit {
   c.box(style=msg_row, fn() {
-    c.box(style=msg_main, fn() {
+    let col = c.box(style=msg_main, fn() {
       c.box(style=if inline { msg_head_inline } else { msg_head }, fn() {
         name()
         if !inline {
@@ -129,15 +208,32 @@ fn others_message(
       }
       body()
     })
-    |> ignore
+    // coming out of its agent's picture (sfbase's emit.mbt): from 35% at its corner, unrolling from its top
+    match emits {
+      Some((em, _, seq)) => {
+        @motion.measure(c, col, "emit-col/" + seq_s(seq))
+        emit_out(c, col, em, seq, emit_from_x)
+      }
+      None => ()
+    }
     // (out in the margin, as far from the name as from the margin's edge: msgRow > msgAvatar; inline at the row's
-    // start, 3 down)
+    // start, 3 down; where a message out of a picture lands, hidden while the flying one is over it)
     c.layer(fn() {
-      if inline {
-        c.box(style=msg_avatar_inline, fn() { avatar() }) |> ignore
+      let av = if inline {
+        c.box(style=msg_avatar_inline, fn() { avatar() })
       } else {
         let av = c.box(style=msg_avatar_room, fn() { avatar() })
         c.stick(av, avatar_held_at)
+        av
+      }
+      match emits {
+        Some((em, rk, seq)) => {
+          @motion.measure(c, av, "emit-landing/" + rk + "/" + seq_s(seq))
+          if emit_emitting(em, seq) {
+            c.look(av, @ui.look(alpha=0.0))
+          }
+        }
+        None => ()
       }
     })
     |> ignore
@@ -272,10 +368,10 @@ fn message_time(c : @ui.Ctx, key : String, time : Stamp?) -> Unit {
 ///|
 /// What a person wrote (PersonWords): plain, as they wrote it, references to chats as their chips and web addresses
 /// as links.
-fn person_words(c : @ui.Ctx, words : String, key : String) -> Unit {
+fn person_words(c : @ui.Ctx, words : String, key : String, found? : Array[String] = []) -> Unit {
   let p = @sf.theme().p
   c.rich(
-    message_runs(words, p.accent),
+    @sf.found_weight(message_runs(words, p.accent), found),
     key="msg-words/" + key,
     style=msg_plain,
     link_color=p.blue,
@@ -289,11 +385,29 @@ fn person_words(c : @ui.Ctx, words : String, key : String) -> Unit {
 ///|
 /// The viewer's words in their bubble (MineBubble: 78% of the column and 560 at most, 8 by 14 in, 18 round, on the
 /// neutral ground).
-fn mine_bubble(c : @ui.Ctx, words : String, key : String) -> Unit {
-  c.box(style=bubble.then(@ui.style(max_w=Fixed(dmin(c.width * bubble_share, bubble_most)))), fn() {
-    person_words(c, words, key)
-  })
-  |> ignore
+fn mine_bubble(c : @ui.Ctx, here : MessageHere, words : String, key : String, found? : Array[String] = []) -> Unit {
+  // words sent flying here: the bubble's ground comes in round them on their way (sfbase's flight.mbt)
+  let flight = flight_here(here)
+  let ground = match flight {
+    Some(f) if f.placed => flight_ground_of(c, f)
+    _ => 1.0
+  }
+  let b = c.box(
+    style=(if ground < 1.0 { bubble_bare } else { bubble }).then(
+      @ui.style(max_w=Fixed(dmin(c.width * bubble_share, bubble_most))),
+    ),
+    fn() {
+      if ground < 1.0 {
+        let g = c.layer(fn() { c.box(style=bubble_ground, fn() {  }) |> ignore })
+        c.look(g, @ui.look(alpha=ground))
+      }
+      person_words(c, words, key, found~)
+    },
+  )
+  match flight {
+    Some(f) => flight_bubble(c, f, b)
+    None => ()
+  }
 }
 
 ///|
@@ -317,6 +431,7 @@ fn prose_with_files(c : @ui.Ctx, src : Source, here : MessageHere, m : Message, 
       tree=m.md,
       key="msg-md/" + m.ts,
       size=body_size,
+      found=marked_of(here, m.ts),
       on_link=fn(h) {
         match placed.get(@sf.file_name_of(h)) {
           Some(a) if is_viz(a.name) => (parts.viz_open)(here.station, here.session, owner_of(here, a), a)
@@ -798,6 +913,20 @@ let mine_column : @ui.Style = @ui.css("w=Full gap=S1 align=AEnd")
 /// Its bubble (msgMine msgBubble): 8 by 14 in, 18 round, the neutral ground.
 // kept across runs: a value (no field of it changes)
 let bubble : @ui.Style = @ui.css("px=S3_5 py=S2 radius=Xl2 bg=Neutral")
+
+///|
+/// Its ground on its own (coming in round words sent flying here), and the bubble without it meanwhile.
+// kept across runs: a value (no field of it changes)
+let bubble_ground : @ui.Style = @ui.css("w=Full h=Full radius=Xl2 bg=Neutral")
+
+///|
+// kept across runs: a value (no field of it changes)
+let bubble_bare : @ui.Style = @ui.css("px=S3_5 py=S2 radius=Xl2")
+
+///|
+/// Where a message comes out of its agent's picture, across its column: out in the margin before it (Chat.css.ts
+/// msgRow[data-emitting] > msgMain: -16).
+let emit_from_x : Double = -16.0
 
 ///|
 /// That its agents have yet to take it (msgWaiting): a spinner and the words 5 apart.

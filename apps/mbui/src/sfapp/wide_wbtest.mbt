@@ -203,7 +203,7 @@ test "wide: ⌘F's bar in the chat's bar looks in all of it (chat.find), Enter t
   let (next, _) = @sfdesk.find_position()
   assert_eq(next, if at == total { 1 } else { at + 1 })
   assert_true(@sfdesk.find_at() != first || @sfdesk.find_k() > 0 || total == 1)
-  assert_eq(find_marking.val, ["截图"])
+  assert_eq(@sfdesk.find_words_in("ws1/st1\u{1}s-c1"), ["截图"])
   t.key(@ui.key_escape)
   t.frame()
   assert_true(t.find("在对话中查找") is None)

@@ -29,6 +29,15 @@ pub(all) struct ChatParts {
   screens : (@ui.Ctx, Source, String) -> @sf.Screens?
   /// a link pressed in a message: one of still.fail's opened here as the core says, any other by the system
   open_link : (String) -> Unit
+  /// a message's words picked with the pointer to be quoted into its chat's draft (by its ts, whose and of what role,
+  /// its words, whether it takes the column's width or only its own: the viewer's bubble), round what draws them
+  pick : (@ui.Ctx, String, String, String, String, Bool, () -> Unit) -> Unit
+  /// whether the app is shown (what is said in a chat then is watched: its messages come in)
+  in_front : () -> Bool
+  /// a login card's login (on a station, by its id), and the core as the settings' pages have it for a workspace (a
+  /// vault request answered under a post)
+  login_card : (@ui.Ctx, Source, String, String) -> Unit
+  vault_core : (Source, String) -> @settings.Core
 }
 
 ///|
@@ -45,4 +54,8 @@ pub let chat_parts : Ref[ChatParts] = Ref({
   link_held: fn(_, _, _) {  },
   screens: fn(_, _, _) { None },
   open_link: fn(_) {  },
+  pick: fn(_, _, _, _, _, _, body) { body() },
+  in_front: fn() { true },
+  login_card: fn(_, _, _, _) {  },
+  vault_core: fn(_, _) { abort("no core for the vault: chat_parts not given") },
 })
