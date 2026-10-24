@@ -271,8 +271,9 @@ pub fn presented(c : @ui.Ctx, alone? : Bool = false) -> Unit {
   presented_alone.val = alone
   presented_how.clear()
   let (ww, _) = c.window_size()
-  // a sheet with a finger short of the Large tier, the web's otherwise (docs/architecture.md)
-  let sheet = @ui.pointing() is Finger && layout(ww) != Large
+  // a sheet on a touch device short of the Large tier, the web's otherwise (docs/architecture.md): by the screen, never
+  // the hand
+  let sheet = touch_system() && layout(ww) != Large
   let gone : Array[Int] = []
   for i, p in presented_now.copy() {
     let was = p.open

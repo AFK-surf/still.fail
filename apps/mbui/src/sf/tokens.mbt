@@ -443,6 +443,11 @@ let narrow_light : Palette = {
   // Android's C.chip (Theme.kt), what the app on a phone matches, not the narrow web's EFECE6
   chip: 0xE8E4DCFFL,
   hover: 0x24272B0FL,
+  // the sidebar beside the page (a tablet's Medium and Large): a step under the page's ground as the web's is under
+  // its canvas (FFFFFF → F6F5F1), the panes told apart by their grounds; what is chosen in it a step under that, as
+  // the web's (F6F5F1 → EBE7E1). The web's own, over this page's beige, were the page's colour
+  sidebar: 0xECE9E1FFL,
+  selected: 0xE1DBD1FFL,
 }
 
 ///|
@@ -466,6 +471,8 @@ let narrow_dark : Palette = {
   neutral_bg: 0x313237FFL,
   card: 0x26272BFFL,
   chip: 0x313237FFL,
+  // the sidebar a step under the page's ground, as the web's dark one under its canvas (1F2023 → 19191B)
+  sidebar: 0x151517FFL,
   hover: 0xECECED14L,
 }
 
@@ -536,10 +543,10 @@ pub(all) enum Layout {
 } derive(Eq, Show, Debug)
 
 ///|
-/// The layout of a window `width` wide: a phone's or a tablet's by what its system says of the window (compact in
-/// width: Small; medium in width, or compact in height, a phone on its side: Medium; else Large), Small until it has
-/// said and while the device is half open on its back half (a chat across the window then, its composer under the
-/// fold: sfapp's tabletop.mbt); a desktop's, which no system classes, by its width (medium_from, large_from). While
+/// The layout of a window `width` wide, in points, on every screen alike (medium_from, large_from): neither which way up
+/// it is held, nor its height, nor how large it is says how many panes there are (the user, 2026-10-25); the height
+/// only how much of them shows. One thing else: a fold half open on its back half is Small (a chat across the window,
+/// its composer under the fold: sfapp's tabletop.mbt). While
 /// the app has the device turned sideways itself (a film, a station's screen over all of it: @hostapi.sideways), the
 /// one it had as it turned: the screen is the same, only what is over all of it turned.
 pub fn layout(width : Double) -> Layout {
@@ -565,33 +572,27 @@ let layout_held : Ref[Layout?] = Ref(None)
 ///|
 /// The layout by the screen alone (layout).
 fn screen_layout(width : Double) -> Layout {
-  if !touch_system() {
-    return if width < medium_from {
-      Small
-    } else if width < large_from {
-      Medium
-    } else {
-      Large
-    }
-  }
-  if @ui.system_tabletop() is Some(_) {
+  // a fold half open, its crease across: a chat over the crease, whatever its width (the one thing other than the width)
+  if touch_system() && @ui.system_tabletop() is Some(_) {
     return Small
   }
-  match @ui.system_size_class() {
-    None | Some({ width: Compact, .. }) => Small
-    Some({ width: Medium, .. }) | Some({ height: Compact, .. }) => Medium
-    Some(_) => Large
+  if width < medium_from {
+    Small
+  } else if width < large_from {
+    Medium
+  } else {
+    Large
   }
 }
 
 ///|
-/// The theme for this frame, by the hand (@ui.pointing), never what the system is: pointed at with a finger the phone's
-/// (its palette, its type a finger's size: Android's app, a tablet's too), with a mouse the web's. Laid out Small the
-/// phone's whatever the hand, as its pages are the phone's, which carry its palette in places (sfapp messages.mbt
-/// `ink`) until they and the web's are one (docs/architecture.md, the way there 4): call at the top of a view.
+/// The theme for this frame, by the screen (docs/architecture.md: the layout follows the screen, never the hand): on a
+/// touch device the phone's (its palette, its type a finger's size: Android's app, a tablet's too), on a computer the
+/// web's. Laid out Small the phone's on a computer too, as its pages are the phone's, which carry its palette in places
+/// (sfapp messages.mbt `ink`) until they and the web's are one (the way there 4): call at the top of a view.
 pub fn begin(c : @ui.Ctx) -> Theme {
   let dark = dark_set.val.unwrap_or(false)
-  let narrow = @ui.pointing() is Finger || layout(c.width) is Small
+  let narrow = touch_system() || layout(c.width) is Small
   let p = match (narrow, dark) {
     (false, false) => wide_light
     (false, true) => wide_dark

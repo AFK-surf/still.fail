@@ -26,6 +26,8 @@ public class MainActivity extends Activity {
         ReadAhead.start(this);
         Host.log("activity onCreate " + (saved != null ? "(restored)" : ""));
         Host.activity = this;
+        // a phone upright only (Host.upright), but while the app turns it for a film
+        Host.holdUpright(this);
         // `--es env K=V;K2=V2`: environment variables for the app's MoonBit (as a desktop run has them: the core
         // demo's MBUI_AUTH_BEGIN, MBUI_CORE_DUMP…), set before it starts.
         // The test hooks (env, script, bench) come in an intent any app on the device may send this exported
@@ -383,6 +385,8 @@ public class MainActivity extends Activity {
     @Override
     public void onConfigurationChanged(android.content.res.Configuration c) {
         super.onConfigurationChanged(c);
+        // a fold opened or closed: a phone's screen upright only, a tablet's as turned (Host.upright)
+        Host.holdUpright(this);
         // the system's size of words changed (configChanges has fontScale): the next frame draws words at it
         if (c.fontScale != Host.fontScale) {
             Host.fontScale = c.fontScale;

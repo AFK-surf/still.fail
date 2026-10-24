@@ -57,22 +57,21 @@ fn on_first_chat() -> Bool {
 }
 
 ///|
-test "the layout by the screen alone: a desktop's by its width, a phone's or a tablet's by its size classes" {
+test "the layout by the window's width alone, on every screen: what a phone's or a tablet's system says of it not read" {
   // (platform, the window, the size classes its host says ("": none), the layout)
   for p in [
     (0, 500.0, 800.0, "", "", @sf.Layout::Small),
     (0, 720.0, 800.0, "", "", Medium),
     (0, 1024.0, 768.0, "", "", Large),
     (3, 720.0, 800.0, "", "", Medium),
-    // a phone upright, on its side; an opened fold's inner screen upright; a tablet
+    // a phone upright; an opened fold's inner screen upright; a tablet
     (2, 390.0, 844.0, "compact", "medium", Small),
-    (2, 844.0, 390.0, "expanded", "compact", Medium),
     (2, 690.0, 840.0, "medium", "medium", Medium),
     (2, 1024.0, 768.0, "expanded", "medium", Large),
-    // an iPhone upright, a large one on its side, an iPad
+    // an iPhone upright; an iPad upright (820 wide: its system says regular), a large one upright
     (1, 390.0, 844.0, "compact", "regular", Small),
-    (1, 932.0, 430.0, "regular", "compact", Medium),
-    (1, 1024.0, 768.0, "regular", "regular", Large),
+    (1, 820.0, 1180.0, "regular", "regular", Medium),
+    (1, 1024.0, 1366.0, "regular", "regular", Large),
   ] {
     let (platform, w, h, width, height, layout) = p
     let t = tape_chat(platform, w, h, width~, height~)

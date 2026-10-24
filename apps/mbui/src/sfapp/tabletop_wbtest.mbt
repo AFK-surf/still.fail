@@ -81,9 +81,10 @@ test "turned and flat (regular both ways, the fold across): the wide frame, the 
 }
 
 ///|
-test "a window as wide the system calls compact (beside another app): the phone's pages" {
+test "a window 700 wide the system calls compact (beside another app): by its width, the tape, not the phone's pages" {
   let t = duo_chat(700.0, 890.0, "compact", "")
-  assert_false(@sfdesk.is_wide(t.ctx()))
+  assert_true(@sfdesk.is_wide(t.ctx()))
+  assert_true(@sfdesk.wide.tape)
 }
 
 ///|
