@@ -44,7 +44,6 @@ fn setting_page(c : @ui.Ctx, src : Source, w : Workspace, route : Route) -> Unit
     Station(a) => station_page(c, core, here, a)
     Profile(a, id) => profile_page(c, core, here, a, id)
     NewProfile(a) => add_profile_page(c, core, here, a)
-    PickModels(a, id) => pick_models_page(c, core, here, a, id)
     MemoryDoc(a, skill, at) => memory_doc_page(c, core, a, skill, at)
     AutoCompletion => completion_page(c, core, here)
     AutoPolicy(s) => policy_page(c, core, here, s)
@@ -59,7 +58,7 @@ fn setting_page(c : @ui.Ctx, src : Source, w : Workspace, route : Route) -> Unit
 /// frame's pane: back, the room over and under it). False for a route whose pages are not one yet (its frame draws its
 /// own copy).
 pub fn setting_route(c : @ui.Ctx, src : Source, w : Workspace, route : Route, frame : PageFrame) -> Bool {
-  if !(route is (About | Changelog | Memories | Memory(_) | AutoDecisions | Permissions | Version | UsagePrices(_) | Usage | Archiving | StationArchiving(_) | Notifications)) {
+  if !(route is (About | Changelog | Memories | Memory(_) | AutoDecisions | Permissions | Version | UsagePrices(_) | Usage | Archiving | StationArchiving(_) | Notifications | PickModels(_, _) | ProfileModels(_, _))) {
     return false
   }
   let core = settings_core(src, w)
@@ -78,6 +77,8 @@ pub fn setting_route(c : @ui.Ctx, src : Source, w : Workspace, route : Route, fr
     Archiving => archiving_page(c, core, here, frame)
     StationArchiving(st) => station_archiving_page(c, core, here, frame, st)
     Notifications => notify_page(c, core, here, frame)
+    PickModels(a, id) => pick_models_page(c, core, here, frame, a, id)
+    ProfileModels(a, id) => profile_models_page(c, core, here, frame, a, id)
     _ => ()
   }
   true

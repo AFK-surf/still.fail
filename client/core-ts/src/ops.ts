@@ -448,7 +448,7 @@ function stationOp(name: string, params: unknown): Request | null {
     case "profile.useMachineLogin":
       return op("POST", () => "/profiles/machine", p.pick(["runtime"]), OVERVIEW);
     case "profile.put":
-      return op("PUT", () => `/profiles/${p.at("id")}`, p.has("input") ? p.v.input : {}, OVERVIEW);
+      return op("PUT", () => `/profiles/${p.at("id")}`, profileInput(p.has("input") ? p.v.input : {}), OVERVIEW);
     case "profile.addModel":
       return op("PUT", () => `/profiles/${p.at("id")}`, { addModel: p.word("model") ?? "" }, OVERVIEW);
     case "profile.delete":
@@ -619,4 +619,13 @@ function cloudOp(name: string, params: unknown): Request | null {
     default:
       return null;
   }
+}
+
+/// A profile's change as the station takes it: the models it may use (`models`) each once, in order, however they were
+/// ticked.
+export function profileInput(input: unknown): unknown {
+  if (input === null || typeof input !== "object" || !Array.isArray((input as { models?: unknown }).models)) return input;
+  const given = (input as { models: unknown[] }).models;
+  const models = [...new Set(given.filter((m): m is string => typeof m === "string"))].sort();
+  return { ...(input as object), models };
 }
