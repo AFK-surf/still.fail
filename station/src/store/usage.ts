@@ -63,7 +63,21 @@ export function recordUsage(db: DatabaseSync, path: string, file: UsageFile, run
 
 /// usage_active_sessions: sessions whose transcripts may have grown since `since`: a turn running, or ended since then.
 export function usageActiveSessions(db: DatabaseSync, since: number): string[] {
-  return (db.prepare("SELECT DISTINCT session_key FROM turns WHERE ended_at IS NULL OR ended_at >= ?").all(since) as Json[]).map((r) => r.session_key);
+  // (Each by the index on when turns ended: as one OR, SQLite scans them all.)
+  return (db.prepare("SELECT session_key FROM turns WHERE ended_at IS NULL UNION SELECT session_key FROM turns WHERE ended_at >= ?").all(since) as Json[]).map((r) => r.session_key);
+}
+
+/// What `usageTurns` makes a session's turns of, said short: its turns (how many, the latest's start), the messages it
+/// took (how many, the latest's delivery) and whose it is. Equal, `usageTurns` gives the same.
+export function usageTurnsStamp(db: DatabaseSync, session: string): string {
+  const r = db
+    .prepare(
+      `SELECT (SELECT COUNT(*) || ':' || IFNULL(MAX(started_at), '') FROM turns WHERE session_key = ?1)
+         || '/' || (SELECT COUNT(*) || ':' || IFNULL(MAX(delivered_at), '') FROM deliveries WHERE session = ?1 AND delivered_at IS NOT NULL)
+         || '/' || IFNULL((SELECT IFNULL(created_by, '') || ':' || profile FROM sessions WHERE key = ?1), '') AS stamp`,
+    )
+    .get(session) as Json;
+  return String(r.stamp);
 }
 
 /// usage_turns: a session's turns, oldest first, each with whom it worked for. Turns from before stations said so are

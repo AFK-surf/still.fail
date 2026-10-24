@@ -1074,8 +1074,8 @@ export class Accounts {
 
   /// What the session's chat is called in the chat list; its key only where it has no chat.
   private chatTitleOf(session: string): string {
-    const summary = this.deps.store.listThreads("", session, null)[0];
-    if (summary) return titleOf(summary.thread, summary.firstText, null);
+    const chat = this.deps.store.sessionChat(session);
+    if (chat) return titleOf(chat.thread, chat.firstText, null);
     return this.deps.store.getSession(session)?.title ?? session;
   }
 

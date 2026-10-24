@@ -737,6 +737,20 @@ export class Store {
 
   /// Threads with their sessions, last entry, latest message and the viewer's unread count, most recently said in
   /// first: those of one session, one thread, or all.
+  /// What a session's chat is called by: its thread said in last (as `listThreads` orders them) and, for one whose title may
+  /// come from them (not a still.fail chat's: read/views.ts `titleOf`), its first person's words. Null when it has none.
+  /// A row's lookups, not a list's: titles are asked of every chat a list of checks names.
+  sessionChat(session: string): { thread: ThreadRow; firstText: string | null } | null {
+    const r = this.#one(
+      `SELECT t.* FROM thread_sessions m JOIN threads t ON t.id = m.thread WHERE m.session = ?
+       ORDER BY (SELECT e.at FROM entries e WHERE e.thread = t.id ORDER BY e.n DESC LIMIT 1) DESC, t.created_at DESC, t.id DESC LIMIT 1`,
+      session,
+    );
+    if (!r) return null;
+    const thread = toThread(r);
+    return { thread, firstText: thread.surface === STILLFAIL_SURFACE ? null : this.#firstText(thread.id) };
+  }
+
   listThreads(viewer: string, session: string | null, thread: number | null): ThreadSummary[] {
     const base = "SELECT t.*, COALESCE(r.n, 0) AS read_n FROM threads t LEFT JOIN reads r ON r.thread = t.id AND r.viewer = ?1";
     const rows =
@@ -1677,6 +1691,11 @@ export class Store {
   /// A session's turns, oldest first, each with whom it worked for (store/usage.ts says how).
   usageTurns(session: string): usage.UsageTurn[] {
     return usage.usageTurns(this.db, session);
+  }
+
+  /// What a session's turns are made of, said short: equal, `usageTurns` gives the same (store/usage.ts).
+  usageTurnsStamp(session: string): string {
+    return usage.usageTurnsStamp(this.db, session);
   }
 
   /// The calls from `from` until `to` (ms), added up by day in the asker's time zone and by thread, person, profile and
