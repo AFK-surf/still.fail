@@ -46,13 +46,21 @@ have_deps() {
 shell() {
   local target=${1:-aarch64-apple-darwin}
   local t0=$(now)
+  case $target in *-apple-ios*)
+    # blake3 disables cc-rs environment tracking, so Cargo alone misses this change.
+    if [ ! -f "$OUT/$target/shell-ios-deployment-target" ] ||
+        [ "$(cat "$OUT/$target/shell-ios-deployment-target")" != "v1:${IPHONEOS_DEPLOYMENT_TARGET:-}" ]; then
+      (cd $EMBER/client/shell && cargo clean --release --target "$target" -p blake3) || return 1
+    fi ;;
+  esac
   (cd $EMBER/client/shell && cargo rustc --release --lib --crate-type staticlib --target $target \
-      -- --print native-static-libs 2> >(tee $OUT/shell-$target.log >&2))
+      -- --print native-static-libs 2> >(tee $OUT/shell-$target.log >&2)) || return 1
   # (rustc prints it only when it builds: a fresh build keeps the last one)
   local libs=$(grep -o 'native-static-libs: .*' $OUT/shell-$target.log | tail -1 | sed 's/native-static-libs: //')
   [ -n "$libs" ] && echo "$libs" > $OUT/shell-$target.libs
-  mkdir -p $OUT/$target
-  cp $CARGO_TARGET_DIR/$target/release/libstillfail_shell.a $OUT/$target/
+  mkdir -p $OUT/$target || return 1
+  cp $CARGO_TARGET_DIR/$target/release/libstillfail_shell.a $OUT/$target/ || return 1
+  printf 'v1:%s\n' "${IPHONEOS_DEPLOYMENT_TARGET:-}" > "$OUT/$target/shell-ios-deployment-target" || return 1
   echo "shell $target in $(since $t0) s: $(stat -f %z $OUT/$target/libstillfail_shell.a) bytes; links: $(libs $target)"
 }
 
@@ -198,6 +206,13 @@ engine() {
 apple() {
   local target=${1:-aarch64-apple-darwin}
   engine $target || return 1
+  case $target in *-apple-ios*)
+    # A copied archive bypasses Cargo; invalidate it when the deployment floor changes.
+    if [ ! -f "$OUT/$target/shell-ios-deployment-target" ] ||
+        [ "$(cat "$OUT/$target/shell-ios-deployment-target")" != "v1:${IPHONEOS_DEPLOYMENT_TARGET:-}" ]; then
+      shell $target || return 1
+    fi ;;
+  esac
   [ -f $OUT/$target/libstillfail_shell.a ] || shell $target || return 1
   ENTRY=${ENTRY:-$ROOT/core/media-hermes.ts} hermes
 }
