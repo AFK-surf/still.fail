@@ -573,8 +573,9 @@ fn EditorState::key(self : EditorState, code : Int, mods : Int, now : Double) ->
             self.text_input(2, "", 0, 0, now)
           }
           self.insert("\n")
-        } else if self.text.length() > 0 {
-          // (the words stay: what is done with them, a message sent and its field emptied, is the app's)
+        } else {
+          // (the words stay: what is done with them, a message sent and its field emptied, is the app's; empty too,
+          // whether there is anything to send is the app's: a picture waiting with no words, the web's form submitted)
           self.submitted = Some(self.text)
         }
       }
