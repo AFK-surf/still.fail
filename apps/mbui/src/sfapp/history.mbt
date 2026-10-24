@@ -1129,19 +1129,8 @@ fn whole(c : @ui.Ctx, src : Source, r : ChatRef, key : String, content : Json?, 
 }
 
 ///|
-/// A second: what a clock shown in whole seconds goes on by.
-let second_ms : Double = 1000.0
-
-///|
 /// How long a step's details read show 读取中 after the read answered, for the history to take what it read.
 let detail_settle_ms : Double = 1000.0
-
-///|
-/// A clock showing `ms` gone by in whole seconds, drawn again as it shows the next (Ctx::every by how far it is: a
-/// frame where its second changes, said as what comes again, none between).
-fn each_second(c : @ui.Ctx, ms : Double) -> Unit {
-  c.every(second_ms, elapsed=dmax(ms, 0.0)) |> ignore
-}
 
 ///|
 /// The turn's state with the model (History.kt PhaseLine): a dot in the accent, its words, a clock running.

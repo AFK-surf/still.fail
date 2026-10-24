@@ -1,13 +1,12 @@
-// A card over what the pointer rests on, in the wide frame, as the web's (ember web/src/Peeks.tsx Hover, Hover.css.ts
-// card, cardTile): opened once the pointer has rested on it 320 ms, closed 120 ms after it has left both it and the
-// card; under it and at its start, 6 away, kept in the window; a small panel (the popover's: 6 in, what it holds 10 in
-// more), 320 wide (`tile`: as wide as what it holds, 220 at least); it grows out of its edge from .96 as it comes. And
-// what an agent's card holds (AgentCard.tsx, AgentCard.css.ts), the same over its picture beside its messages and over
-// its mark in the chat's bar.
+// A card over what the pointer rests on, as the web's (ember web/src/Peeks.tsx Hover, Hover.css.ts card, cardTile):
+// opened once the pointer has rested on it 320 ms, closed 120 ms after it has left both it and the card; under it and
+// at its start, 6 away, kept in the window; a small panel (the popover's: 6 in, what it holds 10 in more), 320 wide
+// (`tile`: as wide as what it holds, 220 at least); it grows out of its edge from .96 as it comes. And an agent's card
+// (AgentCard.tsx, AgentCard.css.ts), the same over its picture beside its messages and over its mark in the chat's bar.
 
 ///|
 /// `key`'s card over the trigger `trigger` (its id) while the pointer rests on it, holding `body`. Whether it is open.
-fn wide_hover(c : @ui.Ctx, key : String, trigger : Int, tile? : Bool = false, body : () -> Unit) -> Bool {
+pub fn hover(c : @ui.Ctx, key : String, trigger : Int, tile? : Bool = false, body : () -> Unit) -> Bool {
   @kit.hover_card(
     c,
     key,
@@ -27,7 +26,8 @@ fn wide_hover(c : @ui.Ctx, key : String, trigger : Int, tile? : Bool = false, bo
           Top => 1.0
           _ => 0.0
         }
-        c.look(card, @ui.look(scale=hover_from + (1.0 - hover_from) * dmax(0.0, st.t), ox=0.0, oy~))
+        let t = if st.t > 0.0 { st.t } else { 0.0 }
+        c.look(card, @ui.look(scale=hover_from + (1.0 - hover_from) * t, ox=0.0, oy~))
       }
     },
     body,
@@ -36,10 +36,10 @@ fn wide_hover(c : @ui.Ctx, key : String, trigger : Int, tile? : Bool = false, bo
 
 ///|
 /// Its delays (Radix's HoverCard as Peeks.tsx sets it), how far from what it is over, how small it starts.
-let hover_open_ms : Double = 320.0
+pub let hover_open_ms : Double = 320.0
 
 ///|
-let hover_close_ms : Double = 120.0
+pub let hover_close_ms : Double = 120.0
 
 ///|
 let hover_offset : Double = 6.0
@@ -64,26 +64,33 @@ let hover_inner : @ui.Style = @ui.style(w=Full, p=S2_5, gap=S2)
 // ── an agent's card ──────────────────────────────────────────────────────
 
 ///|
-/// One of the chat's agents in brief (AgentCard.tsx): its mark and label, a stop for it alone while it works; where it
-/// stands and for how long; its latest three lines; the figures that say most (cost, the cache's hit rate, how full its
-/// context is); its account with what is left of it; the rest in a quiet line; its jobs and what is wrong. What the
-/// core says of it (the `agentCard` view) as it comes; the rest from the chat's agent at once.
-fn agent_card(c : @ui.Ctx, src : Source, r : ChatRef, agent : Agent) -> Unit {
+/// One of the chat's agents in brief (AgentCard.tsx), `a` as its chat's view has it, of station `station`: its mark
+/// and label, a stop for it alone while it works; where it stands and for how long; its latest three lines; the
+/// figures that say most (UsageTiles); its account with what is left of it; the rest in a quiet line; its jobs and
+/// what is wrong. What the core says of it (the `agentCard` view) as it comes; the rest from the chat's agent at once.
+pub fn agent_card(c : @ui.Ctx, src : Source, station : String, a : Json) -> Unit {
   let t = @sf.theme()
-  let key = agent.key
-  let a = agent_json((src.topic)("chat", chat_params(r)).value, key)
-  guard a is Some(_) else { return }
-  let card = (src.topic)("agentCard", { "station": Json::string(r.station), "key": Json::string(key) }).value
-  let s = field(a, "session")
-  let status = text(a, "status")
+  let av = Some(a)
+  let s = field(av, "session")
+  let key = text(s, "key")
+  let card = (src.topic)("agentCard", { "station": Json::string(station), "key": Json::string(key) }).value
+  let status = text(av, "status")
   let working = status == "running" || status == "queued"
   c.box(style=agent_card_box, fn() {
     // its mark (28) and label, a stop while it works
     c.box(style=agent_card_head, fn() {
-      model_mark(c, agent, agent_card_mark)
-      c.box(style=letters_grow, fn() { c.text(text(s, "agentText"), style=agent_card_name) |> ignore }) |> ignore
+      agent_mark(
+        c,
+        text(field(s, "maker"), "id"),
+        text(s, "runtime"),
+        text(av, "badge"),
+        side=agent_card_mark,
+        said=text(s, "badgeText"),
+      )
+      c.box(style=agent_card_name_room, fn() { c.text(text(s, "agentText"), style=agent_card_name) |> ignore })
+      |> ignore
       if working {
-        agent_card_stop(c, src, r.station, key)
+        agent_card_stop(c, src, station, key)
       }
     })
     |> ignore
@@ -93,7 +100,7 @@ fn agent_card(c : @ui.Ctx, src : Source, r : ChatRef, agent : Agent) -> Unit {
         c.box(style=agent_card_dot.then(@ui.style(bg=tone_token(text(s, "tone")))), fn() {  }) |> ignore
       })
       |> ignore
-      let since = agent_since(c, src, a)
+      let since = agent_waited(c, src, av)
       let runs = [@ui.span(text(s, "statusText"))]
       if since != "" {
         runs.push(@ui.span(" · " + since, color=t.p.muted))
@@ -106,29 +113,33 @@ fn agent_card(c : @ui.Ctx, src : Source, r : ChatRef, agent : Agent) -> Unit {
     if latest.length() > 0 {
       agent_card_latest(c, latest)
     }
-    agent_card_tiles(c, card)
-    // its account, what is left of it to its right
-    let account = match field(a, "account") {
-      Some(Object(_)) as x => x
-      _ => field(a, "profile")
+    if card is Some(Object(_)) {
+      usage_tiles(c, card)
     }
-    let quota = field(field(a, "account"), "quota")
+    // its account, what is left of it to its right
+    let account = match field(av, "account") {
+      Some(Object(_)) as x => x
+      _ => field(av, "profile")
+    }
+    let quota = field(field(av, "account"), "quota")
     let windows = if text(quota, "state") == "ok" { items(quota, "windows") } else { [] }
     if account is Some(_) || windows.length() > 0 {
       c.box(style=agent_card_account, fn() {
-        c.box(style=letters_grow, fn() { c.text(text(account, "name"), style=agent_card_line) |> ignore }) |> ignore
+        c.box(style=agent_card_name_room, fn() { c.text(text(account, "name"), style=agent_card_line) |> ignore })
+        |> ignore
         // each with what is left of it over it while it is pointed at, 4 apart
         if windows.length() > 0 {
-          quota_chips(c, quota, small=true, gap=agent_card_chips_gap.px(), tip=fn(id, w) {
-            let left = count(Some(w), "left").to_string()
-            let label = text(Some(w), "label")
-            let said = if label == "" {
-              fill("web-main.quota.leftAlone", [("left", left)])
-            } else {
-              fill("web-main.quota.left", [("label", label), ("left", left)])
-            }
+          @settings.quota_chips(c, quota, small=true, gap=agent_card_chips_gap.px(), tip=fn(id, w) {
+            let said = @sf.t("web-main.quota.left", args=[
+              ("label", text(Some(w), "label")),
+              ("left", count(Some(w), "left").to_string()),
+            ])
             let refills = text(Some(w), "refills")
-            wide_tip(c, "agent-card/quota/" + text(Some(w), "mark"), id, if refills == "" { said } else { said + "\n" + refills })
+            @sf.tip(c, "agent-card/quota/" + text(Some(w), "mark"), id, if refills == "" {
+              said
+            } else {
+              said + "\n" + refills
+            })
           })
         }
       })
@@ -161,6 +172,41 @@ fn agent_card(c : @ui.Ctx, src : Source, r : ChatRef, agent : Agent) -> Unit {
     }
   })
   |> ignore
+}
+
+///|
+/// For how long it has stood where it does (AgentCard.tsx: Waited, Elapsed): waiting as long as it has (of at most),
+/// else at work since its turn began; nothing else.
+fn agent_waited(c : @ui.Ctx, src : Source, a : Json?) -> String {
+  let now = (src.now)()
+  let wait = field(a, "wait")
+  match wait {
+    Some(Object(_)) => {
+      let from = number(wait, "since")
+      match opt_number(wait, "seconds") {
+        Some(sec) if sec > 0.0 => {
+          // at its most it stands still
+          if now - from < sec * second_ms {
+            each_second(c, now - from)
+          }
+          let ran = if now < from + sec * second_ms { now - from } else { sec * second_ms }
+          elapsed(ran) + " / " + elapsed(sec * second_ms)
+        }
+        _ => {
+          each_second(c, now - from)
+          elapsed(now - from)
+        }
+      }
+    }
+    _ =>
+      match opt_number(a, "since") {
+        Some(from) if from > 0.0 => {
+          each_second(c, now - from)
+          elapsed(now - from)
+        }
+        _ => ""
+      }
+  }
 }
 
 ///|
@@ -287,8 +333,13 @@ priv struct GoneLine {
 let ran_lines : Map[Int, RanLines] = {}
 
 ///|
+fn hover_reset() -> Unit {
+  ran_lines.clear()
+}
+
+///|
 /// How long they take to run on, and how (AgentCard.tsx LINES_MS, LINES_EASE).
-let lines_ms : Double = 240.0
+pub let lines_ms : Double = 240.0
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -335,7 +386,6 @@ fn tone_token(tone : String) -> @ui.Color {
 ///|
 /// Stopping its turn, for it alone (AgentCard.css.ts stop): a pill 24 high, 10 in, the red's ground, its words 12.
 fn agent_card_stop(c : @ui.Ctx, src : Source, station : String, key : String) -> Unit {
-  let t = @sf.theme()
   let skey = "stop/" + station + "/" + key
   let busy = doing(skey)
   let id = c.id("agent-card/stop")
@@ -343,36 +393,53 @@ fn agent_card_stop(c : @ui.Ctx, src : Source, station : String, key : String) ->
   if c.clicked(id) && !busy {
     act(
       src,
-      tr("web-pages.chat.stop"),
+      @sf.t("web-pages.chat.stop"),
       skey,
       "session.stop",
       { "station": Json::string(station), "key": Json::string(key) },
-      done=tr("web-pages.chat.stopAsked"),
+      done=@sf.t("web-pages.chat.stopAsked"),
     )
   }
   c.box(style=agent_card_stop_pill, id~, fn() {
     if busy {
       @sf.spinner(c, size=11.0) |> ignore
     } else {
-      @sf.icon(c, "stop", size=11.0, color=t.p.red) |> ignore
+      @sf.icon(c, "stop", size=11.0, color=@sf.theme().p.red) |> ignore
     }
-    c.text(tr("web-pages.chat.stopTurn"), style=agent_card_stop_words) |> ignore
+    c.text(@sf.t("web-pages.chat.stopTurn"), style=agent_card_stop_words) |> ignore
   })
   |> ignore
 }
 
 ///|
-/// The figures that say most (AgentCard.tsx UsageTiles), each large over its name, side by side: what it cost, the
-/// cache's hit rate, how full its context is (in its level's colour). None before it has made a call.
-fn agent_card_tiles(c : @ui.Ctx, card : Json?) -> Unit {
+/// What can be done to an agent's context from its tile (AgentCard.tsx ContextEntry: its execution history's details):
+/// its menu opened, something under way, whether it can be compacted.
+pub(all) struct ContextEntry {
+  open : () -> Unit
+  busy : Bool
+  compacts : Bool
+}
+
+///|
+/// The id of the context's tile that opens what can be done to it (its menu's anchor).
+pub fn context_tile_id(c : @ui.Ctx) -> Int {
+  c.id("agent/context-tile")
+}
+
+///|
+/// The figures that say most of what an agent used (AgentCard.tsx UsageTiles), each large over its name, side by
+/// side: what it cost, the cache's hit rate, how full its context is (in its level's colour, how much of how much on
+/// hover). With `entry`, its context's tile opens what can be done to it, its name ending in › (that it can be
+/// compacted said once it is filling up), a spinner while something is under way. None before it has made a call.
+pub fn usage_tiles(c : @ui.Ctx, card : Json?, entry? : ContextEntry) -> Unit {
   let cost = text(card, "cost")
   let cache = field(card, "cache")
   let context = field(card, "context")
   if cost == "" && cache is None && context is None {
     return
   }
-  let tile = fn(figure : String, name : String, level : String) {
-    c.box(style=agent_card_tile, fn() {
+  let tile = fn(id : Int, figure : String, name : () -> Unit, level : String) -> Int {
+    c.box(style=if id != 0 { agent_card_tile_button } else { agent_card_tile }, id~, fn() {
       c.text(figure, style=if level == "red" {
         agent_card_figure_red
       } else if level == "amber" {
@@ -381,16 +448,16 @@ fn agent_card_tiles(c : @ui.Ctx, card : Json?) -> Unit {
         agent_card_figure
       })
       |> ignore
-      c.text(name, style=agent_card_tile_name) |> ignore
+      name()
     })
-    |> ignore
   }
+  let named = fn(words : String) { fn() { c.text(words, style=agent_card_tile_name) |> ignore } }
   c.box(style=agent_card_tiles_row, fn() {
     if cost != "" {
-      tile(cost, tr("web-main.chat.agentCard.cost"), "")
+      tile(0, cost, named(@sf.t("web-main.chat.agentCard.cost")), "") |> ignore
     }
     match cache {
-      Some(Object(_)) => tile(text(cache, "text"), tr("web-main.chat.agentCard.cache"), "")
+      Some(Object(_)) => tile(0, text(cache, "text"), named(@sf.t("web-main.chat.agentCard.cache")), "") |> ignore
       _ => ()
     }
     match context {
@@ -401,7 +468,54 @@ fn agent_card_tiles(c : @ui.Ctx, card : Json?) -> Unit {
         } else {
           number(context, "percent").round().to_int().to_string() + "%"
         }
-        tile(figure, tr("web-main.chat.agentCard.context"), if unknown { "" } else { text(context, "level") })
+        let level = if unknown { "" } else { text(context, "level") }
+        match entry {
+          Some(e) => {
+            let id = context_tile_id(c)
+            c.cursor(id, Hand)
+            if c.clicked(id) && !e.busy {
+              (e.open)()
+            }
+            let filling = e.compacts && (level == "amber" || level == "red")
+            let b = tile(
+              id,
+              figure,
+              fn() {
+                c.box(style=agent_card_tile_more, fn() {
+                  c.text(
+                    if filling {
+                      @sf.t("web-mobile.agent.contextCompactable")
+                    } else {
+                      @sf.t("web-main.chat.agentCard.context")
+                    },
+                    style=agent_card_tile_name,
+                  )
+                  |> ignore
+                  if e.busy {
+                    @sf.spinner(c, size=11.0) |> ignore
+                  } else {
+                    @sf.icon(c, "chevron-right", size=11.0, color=@sf.theme().p.muted) |> ignore
+                  }
+                })
+                |> ignore
+              },
+              level,
+            )
+            c.semantics(b, Button, id~, label=@sf.t("web-pages.chat.contextActions"))
+          }
+          None => {
+            let id = if unknown { 0 } else { c.id("agent-card/context") }
+            if unknown {
+              tile(0, figure, named(@sf.t("web-main.chat.agentCard.context")), level) |> ignore
+            } else {
+              c.box(style=agent_card_tile_room, id~, fn() {
+                tile(0, figure, named(@sf.t("web-main.chat.agentCard.context")), level) |> ignore
+              })
+              |> ignore
+              @sf.tip(c, "agent-card/context", id, text(context, "text"))
+            }
+          }
+        }
       }
       _ => ()
     }
@@ -417,6 +531,11 @@ let agent_card_box : @ui.Style = @ui.style(w=@sf.agent_card_w, gap=S2)
 ///|
 // kept across runs: a value (no field of it changes)
 let agent_card_head : @ui.Style = @ui.style(row=true, w=Full, gap=S2_5, align=ACenter)
+
+///|
+/// Its name and its account's room: what is left of the row.
+// kept across runs: a value (no field of it changes)
+let agent_card_name_room : @ui.Style = @ui.style(w=@sf.grow)
 
 ///|
 /// Its name: the card's words (13), 500, cut at its end.
@@ -483,6 +602,20 @@ let agent_card_tiles_row : @ui.Style = @ui.style(row=true, w=Full, gap=S1_5)
 ///|
 // kept across runs: a value (no field of it changes)
 let agent_card_tile : @ui.Style = @ui.style(w=@sf.grow, py=@sf.files_row_end, px=S2, gap=SPx, radius=Lg, bg=Hover)
+
+///|
+/// The context's tile when something can be done to it: the selected ground on hover, its name ending in › 2 after.
+// kept across runs: a value (no field of it changes)
+let agent_card_tile_button : @ui.Style = agent_card_tile.then(@ui.style(hovered=@ui.patch(bg=Selected)))
+
+///|
+// kept across runs: a value (no field of it changes)
+let agent_card_tile_more : @ui.Style = @ui.style(row=true, gap=SPx, align=ACenter)
+
+///|
+/// The context's tile with its tip, sharing the row as the others do.
+// kept across runs: a value (no field of it changes)
+let agent_card_tile_room : @ui.Style = @ui.style(w=@sf.grow)
 
 ///|
 // kept across runs: a value (no field of it changes)

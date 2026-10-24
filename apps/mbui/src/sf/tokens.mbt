@@ -1123,3 +1123,8 @@ pub let edge_in : @ui.Space = room(3.0)
 ///|
 /// A chat's row in the sidebar 7 in from its top and foot (Sidebar.css.ts navSession: padding 7 10).
 pub let row_in : @ui.Space = room(7.0)
+
+///|
+/// An agent's mark (the web's ui.css.ts agentMark): its corner .3 of its side, a 28 one's 8.4 (an agent's card).
+pub let agent_mark_28_corner : @ui.Radius = rounded(28.0 * 0.3)
+

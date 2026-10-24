@@ -1130,7 +1130,7 @@ fn fixture_card_call(f : Fixture, name : String, params : Json) -> Result[Json, 
 /// word picked, chat-link-menu's link held.
 pub fn open_cards_fixture(mode : String) -> Unit {
   match mode {
-    "chat-answering" => dui.doing["answer/" + seq_key("ws1/st1", 7.0, 8.0) + "/一起换"] = true
+    "chat-answering" => acting.doing["answer/" + seq_key("ws1/st1", 7.0, 8.0) + "/一起换"] = true
     // a word of the last post picked (its handles and its bar), once laid out (pick.mbt)
     "chat-pick" => {
       pk.ts = "ts11"
