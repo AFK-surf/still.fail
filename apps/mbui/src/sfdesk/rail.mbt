@@ -217,15 +217,15 @@ let rail_shown_w : Double = 48.0
 ///|
 /// The rail's top row and its places (the top row's 6 under it its own: in the closed bar it has none).
 // kept across runs: a value (no field of it changes)
-let rail_head : @ui.Style = @ui.style(align=AStart)
+let rail_head : @ui.Style = @ui.css("align=AStart")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let rail_top : @ui.Style = @ui.style(w=Full)
+let rail_top : @ui.Style = @ui.css("w=Full")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let rail_places_col : @ui.Style = @ui.style(gap=S1_5, align=AStart)
+let rail_places_col : @ui.Style = @ui.css("gap=S1_5 align=AStart")
 
 ///|
 /// A place lit in the closed bar: the words' colour at 12% (Rail.css.ts item, closed: color-mix(text 12%)).
@@ -315,20 +315,20 @@ fn rail_corner_mark(c : @ui.Ctx, tone : String, at? : Double = 4.0, shown? : Dou
 
 ///|
 // kept across runs: a value (no field of it changes)
-let rail_mark_side : @ui.Style = @ui.style(p=S0_5, radius=Full, bg=Sidebar)
+let rail_mark_side : @ui.Style = @ui.css("p=S0_5 radius=Full bg=Sidebar")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let rail_mark_bar : @ui.Style = @ui.style(p=S0_5, radius=Full, bg=Surface)
+let rail_mark_bar : @ui.Style = @ui.css("p=S0_5 radius=Full bg=Surface")
 
 ///|
 /// What stands at a square's top right (a layer's whole, its end).
 // kept across runs: a value (no field of it changes)
-let corner_end : @ui.Style = @ui.style(w=Full, align=AEnd)
+let corner_end : @ui.Style = @ui.css("w=Full align=AEnd")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let invite_dot : @ui.Style = @ui.style(w=S2, h=S2, radius=Full, bg=Accent)
+let invite_dot : @ui.Style = @ui.css("w=S2 h=S2 radius=Full bg=Accent")
 
 ///|
 let mark_folded_from : Double = 0.4
@@ -461,12 +461,12 @@ let rail_letter_on : @ui.TextStyle = @ui.text_style(size=Sm, weight=Semibold, co
 /// The workspaces' column: 4 in from the rail's 38 (its squares where the places' grounds are), 4 above and under, 6
 /// between.
 // kept across runs: a value (no field of it changes)
-let rail_ws_list : @ui.Style = @ui.style(pl=S1, pt=S1, pb=S1, gap=S1_5)
+let rail_ws_list : @ui.Style = @ui.css("pl=S1 pt=S1 pb=S1 gap=S1_5")
 
 ///|
 /// The bar at the left of the workspace in view: 8 down its square, 6 out past it, 3 by 14, its corner 2.
 // kept across runs: a value (no field of it changes)
-let rail_bar_at : @ui.Style = @ui.style(pt=S2)
+let rail_bar_at : @ui.Style = @ui.css("pt=S2")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -482,15 +482,15 @@ let rail_bar_out : Double = 6.0
 /// What waits on a place: its dot 4 in from its 38's top right (Rail.css.ts count: 6 from the 38's corner, 2 of it the
 /// ring cut out of the rail's ground).
 // kept across runs: a value (no field of it changes)
-let rail_dot_at : @ui.Style = @ui.style(w=Full, pt=S1, pr=S1, align=AEnd)
+let rail_dot_at : @ui.Style = @ui.css("w=Full pt=S1 pr=S1 align=AEnd")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let rail_dot_ring : @ui.Style = @ui.style(w=S3, h=S3, p=S0_5, radius=Full, bg=Sidebar)
+let rail_dot_ring : @ui.Style = @ui.css("w=S3 h=S3 p=S0_5 radius=Full bg=Sidebar")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let rail_dot : @ui.Style = @ui.style(w=Full, h=Full, radius=Full, bg=Danger)
+let rail_dot : @ui.Style = @ui.css("w=Full h=Full radius=Full bg=Danger")
 
 ///|
 /// 奏, the word, its size the icons' (Rail.css.ts zou: textTitle, 20 high, 600).
@@ -805,11 +805,11 @@ fn rail_menu_add(c : @ui.Ctx, place : String, label : String, hot : Bool) -> Boo
 ///|
 /// A ＋ in the rail's menu: 24 round, at its row's end, its icon 14.
 // kept across runs: a value (no field of it changes)
-let rail_menu_plus : @ui.Style = @ui.style(w=S6, h=S6, radius=Full, align=ACenter, justify=JCenter)
+let rail_menu_plus : @ui.Style = @ui.css("w=S6 h=S6 radius=Full align=ACenter justify=JCenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let rail_menu_plus_on : @ui.Style = @ui.style(w=S6, h=S6, radius=Full, align=ACenter, justify=JCenter, bg=Hover)
+let rail_menu_plus_on : @ui.Style = @ui.css("w=S6 h=S6 radius=Full align=ACenter justify=JCenter bg=Hover")
 
 ///|
 let rail_menu_plus_icon : Double = 14.0
@@ -987,7 +987,7 @@ fn adder_row(c : @ui.Ctx, place : String, label : String) -> Bool {
 ///|
 /// A kind's label and its rows, 2 apart (parts.css.ts panelGroup).
 // kept across runs: a value (no field of it changes)
-let adder_kind : @ui.Style = @ui.style(w=Full, gap=S0_5)
+let adder_kind : @ui.Style = @ui.css("w=Full gap=S0_5")
 
 ///|
 /// The adder's panel: 248 wide, 8 past the rail (Rail.css.ts adder).
@@ -1020,29 +1020,29 @@ let rail_dash_at : Double = -0.5
 ///|
 /// A place while the rail is changed: outlined, its corner the editing frame's (Rail.css.ts editing: 12).
 // kept across runs: a value (no field of it changes)
-let rail_editing : @ui.Style = @ui.style(radius=Xl)
+let rail_editing : @ui.Style = @ui.css("radius=Xl")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let rail_remove_at : @ui.Style = @ui.style(w=Full)
+let rail_remove_at : @ui.Style = @ui.css("w=Full")
 
 ///|
 /// The −: 18 round in the words' colour, the rail's ground round it (Rail.css.ts remove).
 // kept across runs: a value (no field of it changes)
-let rail_remove : @ui.Style = @ui.style(w=S4_5, h=S4_5, align=ACenter, justify=JCenter, bg=Fg, radius=Full)
+let rail_remove : @ui.Style = @ui.css("w=S4_5 h=S4_5 align=ACenter justify=JCenter bg=Fg radius=Full")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let adder_head : @ui.Style = @ui.style(w=Full, px=S2_5, pt=S1_5, pb=S1, gap=S0_5)
+let adder_head : @ui.Style = @ui.css("w=Full px=S2_5 pt=S1_5 pb=S1 gap=S0_5")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let adder_group : @ui.Style = @ui.style(w=Full, px=S2_5, pt=S1_5, pb=S0_5)
+let adder_group : @ui.Style = @ui.css("w=Full px=S2_5 pt=S1_5 pb=S0_5")
 
 ///|
 /// The adder's head and its kinds 8 apart (Rail.css.ts adder: a grid, gap 8).
 // kept across runs: a value (no field of it changes)
-let adder_body : @ui.Style = @ui.style(w=Full, gap=S2)
+let adder_body : @ui.Style = @ui.css("w=Full gap=S2")
 
 ///|
 // kept across runs: a value (no field of it changes)

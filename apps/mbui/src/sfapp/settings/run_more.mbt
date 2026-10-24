@@ -738,7 +738,7 @@ pub fn open_add_people(_core : Core, here : Here, view : Json?) -> Unit {
 ///|
 /// The run's chips in lines (History.kt EffortChips), and a chip.
 // kept across runs: a value (no field of it changes)
-let run_chips : @ui.Style = @ui.style(row=true, w=Full, gap=S2)
+let run_chips : @ui.Style = @ui.css("row w=Full gap=S2")
 
 ///|
 /// A chip of a choice (History.kt EffortChips): 16 either side of its words, 9 over and under, round by 18.
@@ -787,12 +787,12 @@ fn account_list(c : @ui.Ctx, key : String, accounts : Array[Json], runtime : Str
 ///|
 /// The accounts' list, 18 from the sides (AccountList: padding(horizontal = 18)).
 // kept across runs: a value (no field of it changes)
-let account_list_room : @ui.Style = @ui.style(w=Full, px=S4_5)
+let account_list_room : @ui.Style = @ui.css("w=Full px=S4_5")
 
 ///|
 /// What 自动分配 means, over the list: 8 above it, 4 below (padding(top = 8, bottom = 4)).
 // kept across runs: a value (no field of it changes)
-let account_note_room : @ui.Style = @ui.style(w=Full, pt=S2, pb=S1)
+let account_note_room : @ui.Style = @ui.css("w=Full pt=S2 pb=S1")
 
 ///|
 /// 12sp, muted.

@@ -507,27 +507,21 @@ let desk_ext_most : Int = 12
 ///|
 /// What the bar is laid in: the window's width, at its top.
 // kept across runs: a value (no field of it changes)
-let desk_layer : @ui.Style = @ui.style(w=Full)
+let desk_layer : @ui.Style = @ui.css("w=Full")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let desk_zoom : @ui.Style = @ui.style(row=true, gap=S0_5, align=ACenter)
+let desk_zoom : @ui.Style = @ui.css("row gap=S0_5 align=ACenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let desk_text_tool_box : @ui.Style = @ui.style(
-  h=S8,
-  min_w=S9,
-  px=S2,
-  radius=Xl,
-  align=ACenter,
-  justify=JCenter,
-  hovered=@ui.patch(bg=Hover),
+let desk_text_tool_box : @ui.Style = @ui.css(
+  #|h=S8 min_w=S9 px=S2 radius=Xl align=ACenter justify=JCenter hovered{bg=Hover}
 )
 
 ///|
 // kept across runs: a value (no field of it changes)
-let desk_text_tool_wide : @ui.Style = desk_text_tool_box.then(@ui.style(min_w=S12))
+let desk_text_tool_wide : @ui.Style = desk_text_tool_box.then(@ui.css("min_w=S12"))
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -536,7 +530,7 @@ let desk_text_tool_words : @ui.TextStyle = @ui.text_style(size=Xs, wrap=false)
 ///|
 /// The ways beside, 16 in from the window's sides, in the middle of its height.
 // kept across runs: a value (no field of it changes)
-let desk_steps_row : @ui.Style = @ui.style(row=true, w=Full, h=Full, px=S4, align=ACenter)
+let desk_steps_row : @ui.Style = @ui.css("row w=Full h=Full px=S4 align=ACenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -544,23 +538,15 @@ let desk_steps_gap : @ui.Style = @ui.style(w=@sf.grow)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let desk_step : @ui.Style = @ui.style(
-  w=S10,
-  h=S10,
-  radius=Full,
-  align=ACenter,
-  justify=JCenter,
-  shadow=Base,
-  hovered=@ui.patch(bg=Bg),
-)
+let desk_step : @ui.Style = @ui.css("w=S10 h=S10 radius=Full align=ACenter justify=JCenter shadow=Base hovered{bg=Bg}")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let desk_step_none : @ui.Style = @ui.style(w=S10)
+let desk_step_none : @ui.Style = @ui.css("w=S10")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let desk_facts_name_box : @ui.Style = @ui.style(max_w=S96)
+let desk_facts_name_box : @ui.Style = @ui.css("max_w=S96")
 
 ///|
 /// A file told of (fpNote): its name 14 in 600, what is said of it 13 and quiet, 14 between them (the note's gap).
@@ -578,7 +564,7 @@ let desk_facts_failed : @ui.TextStyle = @ui.text_style(size=Sm, color=Danger, ce
 ///|
 /// Under an image (fpImage's box-shadow: 0 1px 3px at 8%, 0 8px 28px at 10%): the canvas, a soft shadow round it.
 // kept across runs: a value (no field of it changes)
-let desk_image_shadow : @ui.Style = @ui.style(bg=Bg, shadow=Lg)
+let desk_image_shadow : @ui.Style = @ui.css("bg=Bg shadow=Lg")
 
 ///|
 /// Code and plain text (fpCode, fpPlain): 12 on 1.6 (code) or 1.65, 32 in, 64 at the foot.

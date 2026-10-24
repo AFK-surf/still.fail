@@ -520,11 +520,11 @@ let new_tab_close : Double = 12.0
 ///|
 /// The page's ground, its whole pane.
 // kept across runs: a value (no field of it changes)
-let new_ground : @ui.Style = @ui.style(w=Full, h=Full, bg=Bg)
+let new_ground : @ui.Style = @ui.css("w=Full h=Full bg=Bg")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let new_frame : @ui.Style = @ui.style(w=Full, h=Full)
+let new_frame : @ui.Style = @ui.css("w=Full h=Full")
 
 ///|
 /// Where 文件 is: the chat's bar's end, over the page.
@@ -534,17 +534,17 @@ let new_files_bar : @ui.Style = @ui.style(row=true, w=Full, h=@sf.wide_bar_h_siz
 ///|
 /// newChat: what it holds in the middle of the pane.
 // kept across runs: a value (no field of it changes)
-let new_page_box : @ui.Style = @ui.style(w=Full, h=Full, align=ACenter, justify=JCenter)
+let new_page_box : @ui.Style = @ui.css("w=Full h=Full align=ACenter justify=JCenter")
 
 ///|
 /// newChatInner: its parts 10 apart, centred.
 // kept across runs: a value (no field of it changes)
-let new_inner : @ui.Style = @ui.style(gap=S2_5, align=ACenter)
+let new_inner : @ui.Style = @ui.css("gap=S2_5 align=ACenter")
 
 ///|
 /// 新对话 (newChatTitle: the heading's 22, 600).
 // kept across runs: a value (no field of it changes)
-let new_title_box : @ui.Style = @ui.style(w=Full)
+let new_title_box : @ui.Style = @ui.css("w=Full")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -553,7 +553,7 @@ let new_title : @ui.TextStyle = @ui.text_style(size=Xl3, weight=Semibold, color=
 ///|
 /// What it does (newChatSub: 13 on 20, muted, 8 under it).
 // kept across runs: a value (no field of it changes)
-let new_sub_box : @ui.Style = @ui.style(w=Full, pb=S2)
+let new_sub_box : @ui.Style = @ui.css("w=Full pb=S2")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -562,7 +562,7 @@ let new_sub : @ui.TextStyle = @ui.text_style(size=Sm, leading=L6, color=Muted, c
 ///|
 /// The composer: the column's whole width, its words from the left.
 // kept across runs: a value (no field of it changes)
-let new_composer_box : @ui.Style = @ui.style(w=Full)
+let new_composer_box : @ui.Style = @ui.css("w=Full")
 
 ///|
 /// What it waits for (newChatStatus), why its stations could not be read (fieldError).
@@ -576,12 +576,12 @@ let new_error : @ui.TextStyle = @ui.text_style(size=Sm, leading=L6, color=Danger
 ///|
 /// Where the offer of the machine's sessions hangs, under the status line (newChatOffer).
 // kept across runs: a value (no field of it changes)
-let new_offer : @ui.Style = @ui.style(w=Full, align=ACenter)
+let new_offer : @ui.Style = @ui.css("w=Full align=ACenter")
 
 ///|
 /// spentNotice: the amber's 12% under 13's words, 8 by 12 in, 10 round, 8 under it.
 // kept across runs: a value (no field of it changes)
-let new_notice_box : @ui.Style = @ui.style(w=Full, px=S3, py=S2, radius=Lg, bg=A(Warn, O10))
+let new_notice_box : @ui.Style = @ui.css("w=Full px=S3 py=S2 radius=Lg bg=A(Warn,O10)")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -590,7 +590,7 @@ let new_notice_words : @ui.TextStyle = @ui.text_style(size=Sm, leading=L5, color
 ///|
 /// The way to where models are chosen (controls.css.ts chooser as a link): 28 high, 8 in, the link's ink.
 // kept across runs: a value (no field of it changes)
-let new_link_box : @ui.Style = @ui.style(row=true, h=S7, px=S2, radius=Lg, align=ACenter, hovered=@ui.patch(bg=Hover))
+let new_link_box : @ui.Style = @ui.css("row h=S7 px=S2 radius=Lg align=ACenter hovered{bg=Hover}")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -599,7 +599,7 @@ let new_link : @ui.TextStyle = @ui.text_style(size=Xs, leading=L5, color=Link, w
 ///|
 /// FrequentCombos.css.ts frequent: its name over them, 8 apart, 12 over and under; label: 12, muted.
 // kept across runs: a value (no field of it changes)
-let combos_box : @ui.Style = @ui.style(w=Full, py=S3, gap=S2, align=ACenter)
+let combos_box : @ui.Style = @ui.css("w=Full py=S3 gap=S2 align=ACenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -608,17 +608,17 @@ let combos_label : @ui.TextStyle = @ui.text_style(size=Xs, color=Muted, wrap=fal
 ///|
 /// choices: wrapped, centred, 6 apart.
 // kept across runs: a value (no field of it changes)
-let combos_choices : @ui.Style = @ui.style(row=true, w=Full, gap=S1_5, justify=JCenter)
+let combos_choices : @ui.Style = @ui.css("row w=Full gap=S1_5 justify=JCenter")
 
 ///|
 /// combo: 8 by 10 in, the field's corner, on the pointer's ground; pressed in, on the chosen's; its words 13 on 18, muted
 /// (the ink pointed at or pressed in).
 // kept across runs: a value (no field of it changes)
-let combo_off : @ui.Style = @ui.style(px=S2_5, py=S2, radius=Xl, bg=Hover)
+let combo_off : @ui.Style = @ui.css("px=S2_5 py=S2 radius=Xl bg=Hover")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let combo_on : @ui.Style = combo_off.then(@ui.style(bg=Selected))
+let combo_on : @ui.Style = combo_off.then(@ui.css("bg=Selected"))
 
 ///|
 // kept across runs: a value (no field of it changes)

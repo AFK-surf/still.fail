@@ -24,4 +24,4 @@ fn beside_sides(c : @ui.Ctx, body : () -> Unit) -> Unit {
 
 ///|
 // kept across runs: a value (no field of it changes)
-let sides_row : @ui.Style = @ui.style(row=true, w=Full, h=Full, bg=Bg)
+let sides_row : @ui.Style = @ui.css("row w=Full h=Full bg=Bg")

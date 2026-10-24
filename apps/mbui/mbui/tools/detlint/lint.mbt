@@ -510,6 +510,30 @@ fn lint_style(f : MbtFile, cfg : Config, out : Array[Finding]) -> Unit {
       }
     }
   }
+  // a style said as text (@ui.css("w=Grow(1.0) radius=Exact(9.0)")): what is in it counts as it does in style(…),
+  // each Exact(…) once (its numbers not again), each other number once
+  for c in f.calls {
+    if c.is_def ||
+      f.in_test(c.at) ||
+      c.name != "css" ||
+      !((c.kind == "pkg" && c.qual == "@ui") || c.kind == "bare") {
+      continue
+    }
+    for a in c.args {
+      for i in a.1 {
+        if toks[i].kind == "str" {
+          for what in css_literals(toks[i].text) {
+            if what == "Exact" {
+              add("style-exact", i, f.line_text(c.at))
+            }
+            if !tokens_file {
+              add("style-literal", i, f.line_text(c.at))
+            }
+          }
+        }
+      }
+    }
+  }
   if tokens_file {
     return
   }
@@ -544,6 +568,57 @@ fn lint_style(f : MbtFile, cfg : Config, out : Array[Finding]) -> Unit {
       }
     }
   }
+}
+
+///|
+/// What a style's text says off the scale: "Exact" for each Exact(…) (what is in its parentheses not again), "num"
+/// for each other number (one that starts after no name's letter or digit: not S1_25's, O35's).
+fn css_literals(text : String) -> Array[String] {
+  let out = []
+  let s = text.to_array()
+  let n = s.length()
+  fn word(c : Char) -> Bool {
+    (c >= 'a' && c <= 'z') ||
+    (c >= 'A' && c <= 'Z') ||
+    (c >= '0' && c <= '9') ||
+    c == '_' ||
+    c == '.'
+  }
+  let mut i = 0
+  while i < n {
+    let c = s[i]
+    let after_word = i > 0 && word(s[i - 1])
+    if c == 'E' &&
+      !after_word &&
+      i + 5 < n &&
+      s[i + 1] == 'x' &&
+      s[i + 2] == 'a' &&
+      s[i + 3] == 'c' &&
+      s[i + 4] == 't' &&
+      s[i + 5] == '(' {
+      out.push("Exact")
+      let mut depth = 0
+      i += 5
+      while i < n {
+        if s[i] == '(' {
+          depth += 1
+        } else if s[i] == ')' {
+          depth -= 1
+          if depth == 0 {
+            break
+          }
+        }
+        i += 1
+      }
+    } else if c >= '0' && c <= '9' && !after_word {
+      out.push("num")
+      while i + 1 < n && word(s[i + 1]) {
+        i += 1
+      }
+    }
+    i += 1
+  }
+  out
 }
 
 ///|

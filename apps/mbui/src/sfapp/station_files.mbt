@@ -375,7 +375,7 @@ fn sf_crumbs(c : @ui.Ctx) -> Unit {
 ///|
 /// The way's room: 8 over the list under it (StationFiles.kt:145).
 // kept across runs: a value (no field of it changes)
-let sf_way_room : @ui.Style = @ui.style(w=Full, pb=S2)
+let sf_way_room : @ui.Style = @ui.css("w=Full pb=S2")
 
 ///|
 /// Each station's places (StationFiles.kt Places): its home (for a member who browses every folder), then its folders

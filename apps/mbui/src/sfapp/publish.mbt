@@ -127,7 +127,7 @@ fn text_action(c : @ui.Ctx, key : String, label : String) -> Bool {
 
 ///|
 // kept across runs: a value (no field of it changes)
-let text_action_box : @ui.Style = @ui.style(px=S1, py=S0_5, radius=Md)
+let text_action_box : @ui.Style = @ui.css("px=S1 py=S0_5 radius=Md")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -168,7 +168,7 @@ fn ask_preview(src : Source, station : String, thread : Double) -> Unit {
 ///|
 /// Its words 20 in from the sheet's edges (Publish.kt `inset`).
 // kept across runs: a value (no field of it changes)
-let publish_inset : @ui.Style = @ui.style(w=Full, px=S5)
+let publish_inset : @ui.Style = @ui.css("w=Full px=S5")
 
 ///|
 /// The snapshot's messages on a card, as the chat draws others' (22 round, the ink at 4%, 16 and 14 in, 16 apart).
@@ -183,7 +183,7 @@ let publish_link_box : @ui.Style = @ui.style(w=Full, px=S3_5, py=S2_5, radius=Xl
 ///|
 /// Buttons at the sheet's end, 8 apart.
 // kept across runs: a value (no field of it changes)
-let publish_buttons : @ui.Style = @ui.style(row=true, w=Full, gap=S2, justify=JEnd)
+let publish_buttons : @ui.Style = @ui.css("row w=Full gap=S2 justify=JEnd")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -319,17 +319,17 @@ let publish_row_est : Double = 60.0
 ///|
 /// The sheet's rows 12 apart.
 // kept across runs: a value (no field of it changes)
-let publish_row : @ui.Style = @ui.style(w=Full, pb=S3)
+let publish_row : @ui.Style = @ui.css("w=Full pb=S3")
 
 ///|
 /// The first, 4 under the sheet's head.
 // kept across runs: a value (no field of it changes)
-let publish_first_row : @ui.Style = publish_row.then(@ui.style(pt=S1))
+let publish_first_row : @ui.Style = publish_row.then(@ui.css("pt=S1"))
 
 ///|
 /// What is left under the last row, with its 12: 30 (Publish.kt's bottom padding).
 // kept across runs: a value (no field of it changes)
-let publish_foot : @ui.Style = @ui.style(h=S4_5)
+let publish_foot : @ui.Style = @ui.css("h=S4_5")
 
 ///|
 /// A message as the snapshot would hold it, drawn as the chat draws someone else's (Publish.kt PreviewMessage;
@@ -386,7 +386,7 @@ let avatar_size : Double = 18.0
 ///|
 /// A message's head over what it says, 4 apart (Publish.kt PreviewMessage's Column).
 // kept across runs: a value (no field of it changes)
-let preview_column : @ui.Style = @ui.style(w=Full, gap=S1)
+let preview_column : @ui.Style = @ui.css("w=Full gap=S1")
 
 ///|
 /// Its attachments in rows as wide as the card (FlowRow: 6 apart each way), 2 under its words.
@@ -409,7 +409,7 @@ let toggle_image_w : Double = 160.0
 ///|
 /// The attachments in lines, 6 apart each way, 2 under the words (Publish.kt: a FlowRow).
 // kept across runs: a value (no field of it changes)
-let preview_file_flow : @ui.Style = @ui.style(row=true, w=Full, pt=S0_5, gap=S1_5)
+let preview_file_flow : @ui.Style = @ui.css("row w=Full pt=S0_5 gap=S1_5")
 
 ///|
 /// Whether an attachment is drawn as its picture: an image its station keeps (its owner known).
@@ -474,38 +474,40 @@ fn file_toggle(c : @ui.Ctx, src : Source, station : String, f : Json?, w : Doubl
 ///|
 /// An attachment's box: its corner 8 (a file's card's), what is in it clipped to it; unticked, faded.
 // kept across runs: a value (no field of it changes)
-let toggle_on : @ui.Style = @ui.style(radius=Lg, clip=true)
+let toggle_on : @ui.Style = @ui.css("radius=Lg clip")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let toggle_off : @ui.Style = toggle_on.then(@ui.style(opacity=O45))
+let toggle_off : @ui.Style = toggle_on.then(@ui.css("opacity=O45"))
 
 ///|
 /// An image's box in the preview, 160 wide (its height its proportions'), on the chip's grey until it is here.
 // kept across runs: a value (no field of it changes)
-let toggle_picture : @ui.Style = @ui.style(w=S40, bg=Neutral)
+let toggle_picture : @ui.Style = @ui.css("w=S40 bg=Neutral")
 
 ///|
 /// Where the checkbox sits: the box's top right, 4 in.
 // kept across runs: a value (no field of it changes)
-let tick_place : @ui.Style = @ui.style(row=true, w=Full, p=S1, justify=JEnd)
+let tick_place : @ui.Style = @ui.css("row w=Full p=S1 justify=JEnd")
 
 ///|
 /// The checkbox, 18 square, concentric with the box's corner; the ink when ticked, the page's ground with a line when
 /// not.
 // kept across runs: a value (no field of it changes)
-let tick_on : @ui.Style = @ui.style(w=S4_5, h=S4_5, radius=Inner, bg=Fg, border=B1, border_color=Fg, align=ACenter, justify=JCenter)
+let tick_on : @ui.Style = @ui.css(
+  #|w=S4_5 h=S4_5 radius=Inner bg=Fg border=B1 border_color=Fg align=ACenter justify=JCenter
+)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let tick_off : @ui.Style = tick_on.then(@ui.style(bg=Bg, border_color=Line))
+let tick_off : @ui.Style = tick_on.then(@ui.css("bg=Bg border_color=Line"))
 
 ///|
 /// What was hidden, in a line: the shield and its words, 6 apart.
 // kept across runs: a value (no field of it changes)
-let hidden_line : @ui.Style = @ui.style(row=true, gap=S1_5, align=ACenter)
+let hidden_line : @ui.Style = @ui.css("row gap=S1_5 align=ACenter")
 
 ///|
 /// The publishing card 10 under the chat's actions (ChatInfo.kt: Spacer 10).
 // kept across runs: a value (no field of it changes)
-let publish_card_top : @ui.Style = @ui.style(w=Full, pt=S2_5)
+let publish_card_top : @ui.Style = @ui.css("w=Full pt=S2_5")

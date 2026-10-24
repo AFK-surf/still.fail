@@ -556,7 +556,7 @@ fn flight_files(c : @ui.Ctx, chat : String) -> Unit {
 ///|
 /// A flying picture's box: its ground the chip's, what it holds cut to its corner.
 // kept across runs: a value (no field of it changes)
-let flying_picture : @ui.Style = @ui.style(bg=Neutral, clip=true)
+let flying_picture : @ui.Style = @ui.css("bg=Neutral clip")
 
 ///|
 /// A file of the message words were sent to (node `i`, the box it is laid out in), while a file flies there

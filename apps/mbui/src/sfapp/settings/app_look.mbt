@@ -470,7 +470,7 @@ let thumb_scale : Double = 1.18
 ///|
 /// The look, its parts 10 apart (SlackApp.kt AppLook).
 // kept across runs: a value (no field of it changes)
-let look_column : @ui.Style = @ui.style(w=Full, gap=S2_5)
+let look_column : @ui.Style = @ui.css("w=Full gap=S2_5")
 
 ///|
 /// A label over a part (FormLabel: 13, semibold, ink).
@@ -480,7 +480,7 @@ let look_label : @ui.TextStyle = @ui.text_style(size=Sm, weight=Semibold, color=
 ///|
 /// The icon and what to do with it, 14 apart.
 // kept across runs: a value (no field of it changes)
-let look_row : @ui.Style = @ui.style(row=true, w=Full, gap=S3_5, align=ACenter)
+let look_row : @ui.Style = @ui.css("row w=Full gap=S3_5 align=ACenter")
 
 ///|
 /// The icon as it is: 72 square, rounded 18, on its colour (a tap: a picture of their own).
@@ -516,11 +516,11 @@ let look_error : @ui.TextStyle = @ui.text_style(size=Sm, color=Danger, w=Full)
 ///|
 /// The colour: its swatch (44, rounded 12), its field, back to what was picked's own, 10 apart.
 // kept across runs: a value (no field of it changes)
-let look_colour_row : @ui.Style = @ui.style(row=true, w=Full, gap=S2_5, align=ACenter)
+let look_colour_row : @ui.Style = @ui.css("row w=Full gap=S2_5 align=ACenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let look_swatch : @ui.Style = @ui.style(w=S11, h=S11, radius=Xl)
+let look_swatch : @ui.Style = @ui.css("w=S11 h=S11 radius=Xl")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -529,23 +529,23 @@ let look_colour_field : @ui.Style = @ui.style(w=@sf.grow)
 ///|
 /// The grid's rows and tiles, 10 apart.
 // kept across runs: a value (no field of it changes)
-let grid_column : @ui.Style = @ui.style(w=Full, gap=S2_5)
+let grid_column : @ui.Style = @ui.css("w=Full gap=S2_5")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let grid_row : @ui.Style = @ui.style(row=true, gap=S2_5)
+let grid_row : @ui.Style = @ui.css("row gap=S2_5")
 
 ///|
 /// A tile, rounded 12, what is on it in its middle.
 // kept across runs: a value (no field of it changes)
-let avatar_tile : @ui.Style = @ui.style(radius=Xl, clip=true, align=ACenter, justify=JCenter)
+let avatar_tile : @ui.Style = @ui.css("radius=Xl clip align=ACenter justify=JCenter")
 
 ///|
 /// The picked one: a ring 2 wide in the accent, the tile 4 in, the two concentric (Android's 14 and 9 are off this
 /// scale: 8 inside, the ring round it).
 // kept across runs: a value (no field of it changes)
-let avatar_ring : @ui.Style = @ui.style(p=S1, border=B2, border_color=Accent, radius=Around)
+let avatar_ring : @ui.Style = @ui.css("p=S1 border=B2 border_color=Accent radius=Around")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let avatar_in_ring : @ui.Style = @ui.style(w=Full, h=Full, radius=Lg, clip=true, align=ACenter, justify=JCenter)
+let avatar_in_ring : @ui.Style = @ui.css("w=Full h=Full radius=Lg clip align=ACenter justify=JCenter")

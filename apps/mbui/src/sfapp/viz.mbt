@@ -622,12 +622,12 @@ let viz_page_most : Double = 0.8
 ///|
 /// All the room it is given (a page of its own).
 // kept across runs: a value (no field of it changes)
-let viz_fill : @ui.Style = @ui.style(w=Full, h=Full)
+let viz_fill : @ui.Style = @ui.css("w=Full h=Full")
 
 ///|
 /// What shows under a page not drawn yet: the chat's ground.
 // kept across runs: a value (no field of it changes)
-let viz_ground : @ui.Style = @ui.style(w=Full, h=Full, bg=Bg)
+let viz_ground : @ui.Style = @ui.css("w=Full h=Full bg=Bg")
 
 ///|
 /// A whole page in a message: its corners the card's (Smooth 20), on the paper (Viz.kt: #F6F2EA, dark #26272B).
@@ -737,7 +737,7 @@ fn viz_icon(c : @ui.Ctx, id : Int, icon : String, label : String) -> Unit {
 ///|
 /// Its place while it comes: 120 high, its corners Smooth 12, the bubble's grey, 8 under it.
 // kept across runs: a value (no field of it changes)
-let viz_wait_under : @ui.Style = @ui.style(w=Full, pb=S2)
+let viz_wait_under : @ui.Style = @ui.css("w=Full pb=S2")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -746,12 +746,12 @@ let viz_wait : @ui.Style = @ui.style(w=Full, h=@sf.viz_wait_h, radius=Xl, bg=Neu
 ///|
 /// The page and the ways under it, 4 under them.
 // kept across runs: a value (no field of it changes)
-let viz_file_box : @ui.Style = @ui.style(w=Full, pb=S1)
+let viz_file_box : @ui.Style = @ui.css("w=Full pb=S1")
 
 ///|
 /// The ways under the page: 2 under it, 22 high, at its end, 2 apart.
 // kept across runs: a value (no field of it changes)
-let viz_ways : @ui.Style = @ui.style(row=true, w=Full, pt=S0_5, h=S6, gap=S0_5, justify=JEnd)
+let viz_ways : @ui.Style = @ui.css("row w=Full pt=S0_5 h=S6 gap=S0_5 justify=JEnd")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -883,7 +883,7 @@ let viz_full_bar : @ui.Style = @ui.style(row=true, w=Full, h=S12, pl=@sf.viz_ful
 
 ///|
 // kept across runs: a value (no field of it changes)
-let viz_full_name_box : @ui.Style = @ui.style(w=Full, clip=true)
+let viz_full_name_box : @ui.Style = @ui.css("w=Full clip")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -891,22 +891,16 @@ let viz_full_name : @ui.TextStyle = @ui.text_style(size=Lg, color=Fg, wrap=false
 
 ///|
 // kept across runs: a value (no field of it changes)
-let viz_full_close : @ui.Style = @ui.style(
-  w=S9,
-  h=S9,
-  radius=Full,
-  align=ACenter,
-  justify=JCenter,
-)
+let viz_full_close : @ui.Style = @ui.css("w=S9 h=S9 radius=Full align=ACenter justify=JCenter")
 
 ///|
 /// The page under it, 12 in at its sides.
 // kept across runs: a value (no field of it changes)
-let viz_full_page : @ui.Style = @ui.style(w=Full, h=Full, px=S3)
+let viz_full_page : @ui.Style = @ui.css("w=Full h=Full px=S3")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let viz_opening_box : @ui.Style = @ui.style(pt=S1_5, pb=S1_5)
+let viz_opening_box : @ui.Style = @ui.css("pt=S1_5 pb=S1_5")
 
 ///|
 /// Under the words whose link opened a visualization, while it is fetched (VizFiles.kt VizOpen: 正在打开).
@@ -1106,4 +1100,4 @@ fn viz_mermaid_block(c : @ui.Ctx, place : String, code : String) -> Unit {
 
 ///|
 // kept across runs: a value (no field of it changes)
-let viz_mermaid_box : @ui.Style = @ui.style(w=Full)
+let viz_mermaid_box : @ui.Style = @ui.css("w=Full")

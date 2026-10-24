@@ -368,7 +368,7 @@ fn close_sheet(c : @ui.Ctx) -> Unit {
 ///|
 /// What a fitted sheet shows, as wide as it and as tall as what it holds (measured for the sheet's height).
 // kept across runs: a value (no field of it changes)
-let sheet_fitted : @ui.Style = @ui.style(w=Full)
+let sheet_fitted : @ui.Style = @ui.css("w=Full")
 
 ///|
 /// Under what a sheet shows, the navigation bar's room: what it shows kept above the bar, its ground going on down to

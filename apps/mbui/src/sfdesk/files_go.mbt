@@ -431,7 +431,7 @@ let switch_chevron : Double = 12.0
 ///|
 /// Its field (goInput): the controls' input, in the mono face's place.
 // kept across runs: a value (no field of it changes)
-let go_field_box : @ui.Style = @ui.style(row=true, w=Full, h=S9, px=S3, align=ACenter, radius=Lg, bg=Tint)
+let go_field_box : @ui.Style = @ui.css("row w=Full h=S9 px=S3 align=ACenter radius=Lg bg=Tint")
 
 ///|
 /// Where it goes (goWhere): 8 under the field, muted, small.
@@ -440,21 +440,21 @@ let go_where : @ui.TextStyle = @ui.text_style(size=Xs, color=Muted, w=Full)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let go_where_box : @ui.Style = @ui.style(w=Full, pt=S2)
+let go_where_box : @ui.Style = @ui.css("w=Full pt=S2")
 
 ///|
 /// Its lines (goList: 2 apart, 10 under), each (goRow) 7 by 10 in, 8 between its parts, the one chosen on the selected
 /// ground.
 // kept across runs: a value (no field of it changes)
-let go_list : @ui.Style = @ui.style(w=Full, gap=S0_5, pt=S2_5)
+let go_list : @ui.Style = @ui.css("w=Full gap=S0_5 pt=S2_5")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let go_row : @ui.Style = @ui.style(row=true, w=Full, h=S8, px=S2_5, gap=S2, align=ACenter, radius=Lg)
+let go_row : @ui.Style = @ui.css("row w=Full h=S8 px=S2_5 gap=S2 align=ACenter radius=Lg")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let go_row_on : @ui.Style = go_row.then(@ui.style(bg=Selected))
+let go_row_on : @ui.Style = go_row.then(@ui.css("bg=Selected"))
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -463,7 +463,7 @@ let go_row_words : @ui.TextStyle = @ui.text_style(size=Sm, color=Fg, wrap=false,
 ///|
 /// The key (kbd): 5 in at its sides, a hairline round it, its corner 4.
 // kept across runs: a value (no field of it changes)
-let go_key_box : @ui.Style = @ui.style(px=S1_25, radius=Base, border=B1, border_color=Line)
+let go_key_box : @ui.Style = @ui.css("px=S1_25 radius=Base border=B1 border_color=Line")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -476,23 +476,14 @@ let go_keys : @ui.TextStyle = @ui.text_style(size=Xs2, color=Subtle, w=Full)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let go_keys_box : @ui.Style = @ui.style(w=Full, pt=S2_5)
+let go_keys_box : @ui.Style = @ui.css("w=Full pt=S2_5")
 
 ///|
 /// The station's button (switchButton): 22 high, 7 in, 5 between, a hairline round it on the raised ground, its corner
 /// the options'.
 // kept across runs: a value (no field of it changes)
-let switch_button : @ui.Style = @ui.style(
-  row=true,
-  h=S6,
-  px=S2,
-  gap=S1_25,
-  align=ACenter,
-  radius=Lg,
-  bg=Raised,
-  border=B1,
-  border_color=Line,
-  hovered=@ui.patch(bg=Hover),
+let switch_button : @ui.Style = @ui.css(
+  #|row h=S6 px=S2 gap=S1_25 align=ACenter radius=Lg bg=Raised border=B1 border_color=Line hovered{bg=Hover}
 )
 
 ///|

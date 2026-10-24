@@ -321,11 +321,11 @@ let disk_full : Double = 0.9
 ///|
 /// The sidebar (its band's row over its list), the list 8 in at its sides, 4 under the band (Sidebar.css.ts navList).
 // kept across runs: a value (no field of it changes)
-let nav_side : @ui.Style = @ui.style(w=Full, h=Full)
+let nav_side : @ui.Style = @ui.css("w=Full h=Full")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let nav_list : @ui.Style = @ui.style(w=Full, h=Full, px=S2, pt=S1)
+let nav_list : @ui.Style = @ui.css("w=Full h=Full px=S2 pt=S1")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -338,35 +338,35 @@ let nav_trouble : @ui.TextStyle = @ui.text_style(size=Xs, color=Danger, wrap=fal
 ///|
 /// The list's words in place of rows (empty, reading), 8 by 10 in.
 // kept across runs: a value (no field of it changes)
-let nav_note : @ui.Style = @ui.style(w=Full, px=S2_5, py=S2)
+let nav_note : @ui.Style = @ui.css("w=Full px=S2_5 py=S2")
 
 ///|
 /// Where favourites go while there are none (hint): a row of the list, its mark then its words, faint.
 // kept across runs: a value (no field of it changes)
-let nav_hint : @ui.Style = @ui.style(row=true, w=Full, px=S2_5, py=S1_5, gap=S2, align=ACenter)
+let nav_hint : @ui.Style = @ui.css("row w=Full px=S2_5 py=S1_5 gap=S2 align=ACenter")
 
 ///|
 /// 个人收藏 (keep): ringed while a folder dragged over it would be kept there.
 // kept across runs: a value (no field of it changes)
-let keep_off : @ui.Style = @ui.style(w=Full, radius=Xl)
+let keep_off : @ui.Style = @ui.css("w=Full radius=Xl")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let keep_on : @ui.Style = keep_off.then(@ui.style(border=B1, border_color=Accent))
+let keep_on : @ui.Style = keep_off.then(@ui.css("border=B1 border_color=Accent"))
 
 ///|
 /// A favourite's remove (unkeep): 20 across.
 // kept across runs: a value (no field of it changes)
-let unkeep : @ui.Style = @ui.style(w=S5, h=S5, align=ACenter, justify=JCenter, radius=Base, hovered=@ui.patch(bg=Hover))
+let unkeep : @ui.Style = @ui.css("w=S5 h=S5 align=ACenter justify=JCenter radius=Base hovered{bg=Hover}")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let disclosure : @ui.Style = @ui.style(w=S4, h=S4, align=ACenter, justify=JCenter)
+let disclosure : @ui.Style = @ui.css("w=S4 h=S4 align=ACenter justify=JCenter")
 
 ///|
 /// This machine (here): a pill on the accent's ground, its words small.
 // kept across runs: a value (no field of it changes)
-let here_chip : @ui.Style = @ui.style(px=S1_25, radius=Full, bg=AccentBg)
+let here_chip : @ui.Style = @ui.css("px=S1_25 radius=Full bg=AccentBg")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -375,7 +375,7 @@ let here_words : @ui.TextStyle = @ui.text_style(size=Xs2, color=AccentText, wrap
 ///|
 /// A station's places, in under it (places: 14; and a row's own 6).
 // kept across runs: a value (no field of it changes)
-let places_in : @ui.Style = @ui.style(w=Full, pl=S5)
+let places_in : @ui.Style = @ui.css("w=Full pl=S5")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -383,11 +383,11 @@ let disk_track : @ui.Style = @ui.style(w=Fixed(disk_w), h=Fixed(disk_h), radius=
 
 ///|
 // kept across runs: a value (no field of it changes)
-let disk_used : @ui.Style = @ui.style(h=Full, bg=Muted)
+let disk_used : @ui.Style = @ui.css("h=Full bg=Muted")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let disk_warn : @ui.Style = @ui.style(h=Full, bg=Warn)
+let disk_warn : @ui.Style = @ui.css("h=Full bg=Warn")
 
 ///|
 /// A station's row opened to its places (as a press on its disclosure does).

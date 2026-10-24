@@ -483,7 +483,7 @@ fn sec_off_point(c : @ui.Ctx, icon : String, words : String) -> Unit {
 ///|
 /// A device's code large (Security.css.ts bigCode: the display size, a line 1.3 of it, 6 apart, 600, 6 over and under).
 // kept across runs: a value (no field of it changes)
-let sec_big_code_box : @ui.Style = @ui.style(w=Full, my=S1_5)
+let sec_big_code_box : @ui.Style = @ui.css("w=Full my=S1_5")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -516,7 +516,7 @@ let sec_row_least : Double = 30.0
 ///|
 /// The state's card, first on the page, as far from what follows as a section is (lead: a card, 28 under it).
 // kept across runs: a value (no field of it changes)
-let sec_lead : @ui.Style = desk_card.then(@ui.style(mb=S7))
+let sec_lead : @ui.Style = desk_card.then(@ui.css("mb=S7"))
 
 ///|
 /// The state (state: the body's 14 in 500; its meta the ui's 13 muted).
@@ -525,7 +525,7 @@ let sec_state : @ui.TextStyle = @ui.text_style(size=Base, leading=L7, weight=Med
 
 ///|
 // kept across runs: a value (no field of it changes)
-let sec_state_line : @ui.Style = @ui.style(row=true, gap=S2, align=ACenter)
+let sec_state_line : @ui.Style = @ui.css("row gap=S2 align=ACenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -537,20 +537,20 @@ let sec_note : @ui.TextStyle = @ui.text_style(size=Xs, leading=L5, color=Muted, 
 
 ///|
 // kept across runs: a value (no field of it changes)
-let sec_actions : @ui.Style = @ui.style(row=true, gap=S2_5, align=ACenter)
+let sec_actions : @ui.Style = @ui.css("row gap=S2_5 align=ACenter")
 
 ///|
 /// What it changes (points: 10 apart; each its mark in a 20 column, 8 from its words, the body's 14).
 // kept across runs: a value (no field of it changes)
-let sec_points : @ui.Style = @ui.style(w=Full, gap=S2_5)
+let sec_points : @ui.Style = @ui.css("w=Full gap=S2_5")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let sec_point_line : @ui.Style = @ui.style(row=true, w=Full, gap=S2, align=AStart)
+let sec_point_line : @ui.Style = @ui.css("row w=Full gap=S2 align=AStart")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let sec_point_icon : @ui.Style = @ui.style(w=S5, pt=SPx, align=ACenter)
+let sec_point_icon : @ui.Style = @ui.css("w=S5 pt=SPx align=ACenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -568,7 +568,7 @@ let sec_point_rest : @ui.TextStyle = @ui.text_style(size=Base, leading=L7, color
 /// A card's rows (rows: 12 apart; a row 30 high at least, 12 apart, the ui's 13; its words in a line, the name in 500,
 /// what it is the meta's 12 muted 6 after it); a person's devices 42 in, 8 apart.
 // kept across runs: a value (no field of it changes)
-let sec_rows : @ui.Style = @ui.style(w=Full, gap=S3)
+let sec_rows : @ui.Style = @ui.css("w=Full gap=S3")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -596,13 +596,13 @@ let sec_warn : @ui.TextStyle = @ui.text_style(size=Xs, leading=L5, color=Warn, w
 
 ///|
 // kept across runs: a value (no field of it changes)
-let sec_devices : @ui.Style = @ui.style(w=Full, pl=S10, gap=S2)
+let sec_devices : @ui.Style = @ui.css("w=Full pl=S10 gap=S2")
 
 ///|
 /// A short code as the device shows it (code: the code face 14 in 600, 3 by 9 in, 8 round, the words at 6%); the
 /// count of those waiting (count: the meta's 12 in 500 on the accent's ground, 7 in, round).
 // kept across runs: a value (no field of it changes)
-let sec_code : @ui.Style = @ui.style(py=S0_5, px=S2, radius=Lg, bg=Tint)
+let sec_code : @ui.Style = @ui.css("py=S0_5 px=S2 radius=Lg bg=Tint")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -610,7 +610,7 @@ let sec_code_words : @ui.TextStyle = @ui.text_style(size=Base, weight=Semibold, 
 
 ///|
 // kept across runs: a value (no field of it changes)
-let sec_count : @ui.Style = @ui.style(px=S1_5, radius=Full, bg=AccentBg)
+let sec_count : @ui.Style = @ui.css("px=S1_5 radius=Full bg=AccentBg")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -623,4 +623,4 @@ let sec_dot_on : @ui.Style = @ui.style(w=Fixed(sec_dot_side), h=Fixed(sec_dot_si
 
 ///|
 // kept across runs: a value (no field of it changes)
-let sec_dot_amber : @ui.Style = sec_dot_on.then(@ui.style(bg=Warn))
+let sec_dot_amber : @ui.Style = sec_dot_on.then(@ui.css("bg=Warn"))

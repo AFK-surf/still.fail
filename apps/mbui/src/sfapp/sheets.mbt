@@ -106,7 +106,7 @@ let info_list_radius : Double = @sf.surface_corner(6.0, info_row_radius)
 ///|
 /// Rows on one quiet card (Android ChatInfo.kt InfoList): its rows INFO_PAD (6) in, the ink at 5%.
 // kept across runs: a value (no field of it changes)
-let info_list_style : @ui.Style = @ui.style(w=Full, p=S1_5, bg=A(Fg, O5), clip=true)
+let info_list_style : @ui.Style = @ui.css("w=Full p=S1_5 bg=A(Fg,O5) clip")
 
 ///|
 fn info_list(c : @ui.Ctx, body : () -> Unit) -> Unit {
@@ -117,13 +117,13 @@ fn info_list(c : @ui.Ctx, body : () -> Unit) -> Unit {
 /// A row of it (Android InfoRow): 44 high at least, its words INFO_TEXT (10) in from its sides and INFO_IN (4) from
 /// top and bottom, what it holds 12 apart.
 // kept across runs: a value (no field of it changes)
-let info_row_style : @ui.Style = @ui.style(row=true, w=Full, min_h=S11, px=S2_5, py=S1, gap=S3)
+let info_row_style : @ui.Style = @ui.css("row w=Full min_h=S11 px=S2_5 py=S1 gap=S3")
 
 ///|
 /// A row that leads with a tile (a model's mark, 36 and 11 round): INFO_IN (4) in all round, so the tile is
 /// concentric with the row and the card.
 // kept across runs: a value (no field of it changes)
-let info_row_tile : @ui.Style = @ui.style(px=S1)
+let info_row_tile : @ui.Style = @ui.css("px=S1")
 
 ///|
 /// Its ground rounded INFO_ROW, pressed a shade. True on the frame after it was tapped (never when `key` is "": a row
@@ -1636,12 +1636,12 @@ fn letters_params(r : ChatRef, thread : Double) -> Map[String, Json] {
 /// A chat written with, its row in the letters' sheet (Letters.kt): 18 in, 10 over and under, its two lines 2 apart;
 /// pressed a shade.
 // kept across runs: a value (no field of it changes)
-let letters_row : @ui.Style = @ui.style(w=Full, px=S4_5, py=S2_5, gap=S0_5, pressed=@ui.patch(bg=A(Fg, O5)))
+let letters_row : @ui.Style = @ui.css("w=Full px=S4_5 py=S2_5 gap=S0_5 pressed{bg=A(Fg,O5)}")
 
 ///|
 /// Its first line: its title as wide as there is room, how many and when at its end, 8 apart.
 // kept across runs: a value (no field of it changes)
-let letters_row_head : @ui.Style = @ui.style(row=true, w=Full, gap=S2, align=ACenter)
+let letters_row_head : @ui.Style = @ui.css("row w=Full gap=S2 align=ACenter")
 
 ///|
 /// What fills a line's room (its title, beside what is at its end).
@@ -1660,7 +1660,7 @@ let letters_meta : @ui.TextStyle = @ui.text_style(size=Sm, color=Muted, wrap=fal
 ///|
 /// None: said 18 in, 12 over and under, 15 muted.
 // kept across runs: a value (no field of it changes)
-let letters_none_box : @ui.Style = @ui.style(px=S4_5, py=S3)
+let letters_none_box : @ui.Style = @ui.css("px=S4_5 py=S3")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -1669,33 +1669,26 @@ let letters_none : @ui.TextStyle = @ui.text_style(size=Lg, color=Muted)
 ///|
 /// One opened, its head: back (a round 36, pressed a shade), then its title; 6 in at the start, 18 at the end.
 // kept across runs: a value (no field of it changes)
-let letters_head : @ui.Style = @ui.style(row=true, w=Full, pl=S1_5, pr=S4_5, pb=S1_5, gap=S1, align=ACenter)
+let letters_head : @ui.Style = @ui.css("row w=Full pl=S1_5 pr=S4_5 pb=S1_5 gap=S1 align=ACenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let letters_back : @ui.Style = @ui.style(
-  w=S9,
-  h=S9,
-  radius=Full,
-  align=ACenter,
-  justify=JCenter,
-  pressed=@ui.patch(bg=A(Fg, O5)),
-)
+let letters_back : @ui.Style = @ui.css("w=S9 h=S9 radius=Full align=ACenter justify=JCenter pressed{bg=A(Fg,O5)}")
 
 ///|
 /// A letter, as the chat draws a message: 14 in, 20 under the one before.
 // kept across runs: a value (no field of it changes)
-let letters_said : @ui.Style = @ui.style(w=Full, px=S3_5, pt=S1, pb=S4)
+let letters_said : @ui.Style = @ui.css("w=Full px=S3_5 pt=S1 pb=S4")
 
 ///|
 /// Older ones on their way: a spinner, 8 under the last.
 // kept across runs: a value (no field of it changes)
-let letters_more : @ui.Style = @ui.style(w=Full, pt=S2, align=ACenter)
+let letters_more : @ui.Style = @ui.css("w=Full pt=S2 align=ACenter")
 
 ///|
 /// Room under the last row, over the sheet's foot (Letters.kt bottom = 30).
 // kept across runs: a value (no field of it changes)
-let letters_foot : @ui.Style = @ui.style(h=S8)
+let letters_foot : @ui.Style = @ui.css("h=S8")
 
 ///|
 /// What the chat's agents and other chats' wrote each other, not said in it (Letters.kt openLetters): the chats it

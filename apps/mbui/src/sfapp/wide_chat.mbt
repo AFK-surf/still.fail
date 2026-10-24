@@ -74,7 +74,7 @@ fn drop_hint(c : @ui.Ctx, pane : Int) -> Unit {
 ///|
 /// What is said in its middle: its mark over its words, 16 apart less what the mark grows by (a card's, twice).
 // kept across runs: a value (no field of it changes)
-let drop_hint_box : @ui.Style = @ui.style(w=Full, h=Full, gap=S4, align=ACenter, justify=JCenter)
+let drop_hint_box : @ui.Style = @ui.css("w=Full h=Full gap=S4 align=ACenter justify=JCenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -196,16 +196,16 @@ let bar_title : @ui.TextStyle = @ui.text_style(size=Base, weight=Semibold, color
 
 ///|
 // kept across runs: a value (no field of it changes)
-let bar_title_room : @ui.Style = @ui.style(w=Full)
+let bar_title_room : @ui.Style = @ui.css("w=Full")
 
 ///|
 /// What is done in a page's bar, at its end, 2 apart (ChatPage.css.ts pageBarActions).
 // kept across runs: a value (no field of it changes)
-let bar_buttons : @ui.Style = @ui.style(row=true, gap=S0_5, align=ACenter)
+let bar_buttons : @ui.Style = @ui.css("row gap=S0_5 align=ACenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let wide_centred : @ui.Style = @ui.style(row=true, w=Full, justify=JCenter)
+let wide_centred : @ui.Style = @ui.css("row w=Full justify=JCenter")
 
 ///|
 /// An icon button of a page's bar (page.css.ts iconBtn): 32 square, the nav's corner, the pointer's ground and ink

@@ -128,7 +128,7 @@ fn decisions_page(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
 ///|
 /// What the page shows, 4 under its bar (Decisions.kt: Spacer(top), PlacePage.kt's `top` for a page pushed).
 // kept across runs: a value (no field of it changes)
-let decisions_body : @ui.Style = @ui.style(w=Full, h=Full, pt=S1)
+let decisions_body : @ui.Style = @ui.css("w=Full h=Full pt=S1")
 
 ///|
 /// Cards to come, breathing (Waiting.kt Waiting, WaitShape.Cards): what went wrong over them in red.

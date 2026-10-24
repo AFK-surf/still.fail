@@ -183,16 +183,16 @@ fn mem_row(c : @ui.Ctx, key : String, title : String, sub : String, value : Stri
 ///|
 /// (memoryStation + memoryStation: 36 between two stations)
 // kept across runs: a value (no field of it changes)
-let mem_station_first : @ui.Style = @ui.style(w=Full)
+let mem_station_first : @ui.Style = @ui.css("w=Full")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let mem_station : @ui.Style = @ui.style(w=Full, pt=S9)
+let mem_station : @ui.Style = @ui.css("w=Full pt=S9")
 
 ///|
 /// (memoryStationName: the title's size, 600, 8 over what follows)
 // kept across runs: a value (no field of it changes)
-let mem_station_head : @ui.Style = @ui.style(w=Full, pb=S2)
+let mem_station_head : @ui.Style = @ui.css("w=Full pb=S2")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -201,7 +201,7 @@ let mem_station_name : @ui.TextStyle = @ui.text_style(size=Xl, leading=L7, weigh
 ///|
 /// (memoryRowTitle: its name and its tags in a line, 8 apart)
 // kept across runs: a value (no field of it changes)
-let mem_title_line : @ui.Style = @ui.style(row=true, gap=S2, align=AEnd)
+let mem_title_line : @ui.Style = @ui.css("row gap=S2 align=AEnd")
 
 ///|
 /// (memoryTag: the meta's size, subtle)

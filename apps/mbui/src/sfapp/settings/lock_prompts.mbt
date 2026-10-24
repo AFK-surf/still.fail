@@ -89,7 +89,7 @@ fn pair_sheet(core : Core, r : Json) -> Unit {
 ///|
 /// What the sheet holds, 20 in from its sides, 12 apart (Security.kt:372).
 // kept across runs: a value (no field of it changes)
-let pair_column : @ui.Style = @ui.style(w=Full, px=S5, gap=S3)
+let pair_column : @ui.Style = @ui.css("w=Full px=S5 gap=S3")
 
 ///|
 /// Whose device it is and what (14 in the muted: Security.kt:373).
@@ -99,7 +99,7 @@ let pair_body : @ui.TextStyle = @ui.text_style(size=Base, color=Muted, w=Full)
 ///|
 /// Where it asks to be let in: 申请访问 (13 muted), each workspace's name under it (16 semibold), 4 apart.
 // kept across runs: a value (no field of it changes)
-let pair_places : @ui.Style = @ui.style(w=Full, gap=S1)
+let pair_places : @ui.Style = @ui.css("w=Full gap=S1")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -112,4 +112,4 @@ let pair_place : @ui.TextStyle = @ui.text_style(size=Xl, weight=Semibold, color=
 ///|
 /// 拒绝, as wide as the sheet, 4 under the note and 16 over the sheet's foot (Security.kt:381).
 // kept across runs: a value (no field of it changes)
-let pair_deny_room : @ui.Style = @ui.style(w=Full, pt=S1, pb=S4)
+let pair_deny_room : @ui.Style = @ui.css("w=Full pt=S1 pb=S4")

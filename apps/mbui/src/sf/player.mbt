@@ -1829,7 +1829,7 @@ let player_next_w : Double = 280.0
 
 ///|
 // kept across runs: a value (no field of it changes)
-let player_fill : @ui.Style = @ui.style(w=Full, h=Full)
+let player_fill : @ui.Style = @ui.css("w=Full h=Full")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -1837,12 +1837,12 @@ let desk_grow_full_h : @ui.Style = @ui.style(w=Full, h=grow)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let player_middle : @ui.Style = @ui.style(w=Full, h=Full, align=ACenter, justify=JCenter)
+let player_middle : @ui.Style = @ui.css("w=Full h=Full align=ACenter justify=JCenter")
 
 ///|
 /// A pill in the middle (what it waits on, what a tap did): 12 and 6 in, 8 apart, round.
 // kept across runs: a value (no field of it changes)
-let player_pill : @ui.Style = @ui.style(row=true, px=S3, py=S1_5, gap=S2, radius=Xl1_5, align=ACenter)
+let player_pill : @ui.Style = @ui.css("row px=S3 py=S1_5 gap=S2 radius=Xl1_5 align=ACenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -1850,7 +1850,7 @@ let player_pill_words : @ui.TextStyle = @ui.text_style(size=Sm, wrap=false)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let player_failed_box : @ui.Style = @ui.style(p=S8, gap=S3, align=ACenter)
+let player_failed_box : @ui.Style = @ui.css("p=S8 gap=S3 align=ACenter")
 
 ///|
 /// The next one's card: 280 wide, 20 and 16 in, 12 between; its button 40 high.
@@ -1863,7 +1863,7 @@ let player_next_note : @ui.TextStyle = @ui.text_style(size=Xs, wrap=false)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let player_next_now : @ui.Style = @ui.style(w=Full, h=S10, px=S4, radius=Xl, align=ACenter, justify=JCenter, clip=true)
+let player_next_now : @ui.Style = @ui.css("w=Full h=S10 px=S4 radius=Xl align=ACenter justify=JCenter clip")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -1871,16 +1871,16 @@ let player_next_words : @ui.TextStyle = @ui.text_style(size=Sm, weight=Semibold,
 
 ///|
 // kept across runs: a value (no field of it changes)
-let player_next_off : @ui.Style = @ui.style(px=S3, py=S1)
+let player_next_off : @ui.Style = @ui.css("px=S3 py=S1")
 
 ///|
 /// A phone's bar at the top: 8 and 6 in, 48 high, its corner 16; the name 15 in 600, which of how many 12.
 // kept across runs: a value (no field of it changes)
-let phone_head_place : @ui.Style = @ui.style(w=Full, px=S2, py=S1_5)
+let phone_head_place : @ui.Style = @ui.css("w=Full px=S2 py=S1_5")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let phone_head_box : @ui.Style = @ui.style(row=true, w=Full, h=S12, px=S1, gap=S1, radius=Xl1_5, align=ACenter)
+let phone_head_box : @ui.Style = @ui.css("row w=Full h=S12 px=S1 gap=S1 radius=Xl1_5 align=ACenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -1897,7 +1897,7 @@ let phone_index_words : @ui.TextStyle = @ui.text_style(size=Xs, wrap=false)
 ///|
 /// A phone's controls: 8 round them, 720 wide at most, 6 in at the sides and foot and 8 over, their corner 24.
 // kept across runs: a value (no field of it changes)
-let phone_foot_place : @ui.Style = @ui.style(w=Full, p=S2, align=ACenter)
+let phone_foot_place : @ui.Style = @ui.css("w=Full p=S2 align=ACenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -1905,7 +1905,7 @@ let phone_controls_box : @ui.Style = @ui.style(w=Full, max_w=Fixed(phone_control
 
 ///|
 // kept across runs: a value (no field of it changes)
-let phone_time_box : @ui.Style = @ui.style(pl=S2_5)
+let phone_time_box : @ui.Style = @ui.css("pl=S2_5")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -1921,15 +1921,15 @@ let phone_timeline_box : @ui.Style = @ui.style(w=Full, h=Fixed(phone_timeline_h)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let phone_keys_row : @ui.Style = @ui.style(row=true, w=Full, align=ACenter)
+let phone_keys_row : @ui.Style = @ui.css("row w=Full align=ACenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let phone_key_box : @ui.Style = @ui.style(w=S10, h=S10, radius=Full, align=ACenter, justify=JCenter)
+let phone_key_box : @ui.Style = @ui.css("w=S10 h=S10 radius=Full align=ACenter justify=JCenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let phone_speed_box : @ui.Style = @ui.style(min_w=S10, h=S10, px=S2, radius=Full, align=ACenter, justify=JCenter)
+let phone_speed_box : @ui.Style = @ui.css("min_w=S10 h=S10 px=S2 radius=Full align=ACenter justify=JCenter")
 
 ///|
 /// A song's mark (72) in the middle; the cue's words (16 on 1.6) on black at 60%; above the controls while they show
@@ -1960,7 +1960,7 @@ let desk_volume_steps : Double = 20.0
 
 ///|
 // kept across runs: a value (no field of it changes)
-let desk_volume_row : @ui.Style = @ui.style(row=true, pr=S1_5, gap=S0_5, align=ACenter)
+let desk_volume_row : @ui.Style = @ui.css("row pr=S1_5 gap=S0_5 align=ACenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -1971,11 +1971,11 @@ let desk_volume_w : Double = 72.0
 
 ///|
 // kept across runs: a value (no field of it changes)
-let desk_play_ground : @ui.Style = @ui.style(w=Full, h=Full, bg=Bg)
+let desk_play_ground : @ui.Style = @ui.css("w=Full h=Full bg=Bg")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let desk_play_row : @ui.Style = @ui.style(row=true, w=Full, h=Full)
+let desk_play_row : @ui.Style = @ui.css("row w=Full h=Full")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -1983,7 +1983,7 @@ let desk_grow_full : @ui.Style = @ui.style(w=grow, h=Full)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let desk_play_cover : @ui.Style = @ui.style(w=Full, h=Full, px=S8, gap=S4, align=ACenter, justify=JCenter)
+let desk_play_cover : @ui.Style = @ui.css("w=Full h=Full px=S8 gap=S4 align=ACenter justify=JCenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -1991,26 +1991,26 @@ let desk_cover_name : @ui.TextStyle = @ui.text_style(size=Xl, weight=Semibold, c
 
 ///|
 // kept across runs: a value (no field of it changes)
-let desk_play_middle : @ui.Style = @ui.style(w=Full, h=Full, align=ACenter, justify=JCenter)
+let desk_play_middle : @ui.Style = @ui.css("w=Full h=Full align=ACenter justify=JCenter")
 
 // kept across runs: a value (no field of it changes)
 let desk_play_note : @ui.TextStyle = @ui.text_style(size=Xs, color=Muted, center=true)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let desk_cue_up : @ui.Style = @ui.style(w=Full, h=Full, pb=S28, justify=JEnd)
+let desk_cue_up : @ui.Style = @ui.css("w=Full h=Full pb=S28 justify=JEnd")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let desk_cue_down : @ui.Style = @ui.style(w=Full, h=Full, pb=S7, justify=JEnd)
+let desk_cue_down : @ui.Style = @ui.css("w=Full h=Full pb=S7 justify=JEnd")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let desk_cue_row : @ui.Style = @ui.style(row=true, w=Full, px=S4)
+let desk_cue_row : @ui.Style = @ui.css("row w=Full px=S4")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let desk_cue_box : @ui.Style = @ui.style(px=S2, py=S0_5, radius=Md, bg=Veil)
+let desk_cue_box : @ui.Style = @ui.css("px=S2 py=S0_5 radius=Md bg=Veil")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -2019,21 +2019,21 @@ let desk_cue_words : @ui.TextStyle = @ui.text_style(size=Xl, color=OnVeil, cente
 ///|
 /// The controls: 16 off the window's foot, in the middle of what the list leaves.
 // kept across runs: a value (no field of it changes)
-let desk_controls_place : @ui.Style = @ui.style(w=Full, h=Full, pb=S4, justify=JEnd)
+let desk_controls_place : @ui.Style = @ui.css("w=Full h=Full pb=S4 justify=JEnd")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let desk_play_row_end : @ui.Style = @ui.style(row=true, w=Full)
+let desk_play_row_end : @ui.Style = @ui.css("row w=Full")
 
 ///|
 /// 选集's head (listHead: 12 over, 10 right, 6 under, 18 at its start) and rows (listRow: 40 at least, 8 and 10 in, the
 /// page's corner; the one playing on the chosen ground, in 500).
 // kept across runs: a value (no field of it changes)
-let desk_list_head : @ui.Style = @ui.style(row=true, w=Full, pl=S4_5, pr=S2_5, pt=S3, pb=S1_5, gap=S2, align=ACenter)
+let desk_list_head : @ui.Style = @ui.css("row w=Full pl=S4_5 pr=S2_5 pt=S3 pb=S1_5 gap=S2 align=ACenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let desk_list_row : @ui.Style = @ui.style(row=true, w=Full, min_h=S10, px=S2_5, py=S2, gap=S1, align=ACenter, radius=Xl)
+let desk_list_row : @ui.Style = @ui.css("row w=Full min_h=S10 px=S2_5 py=S2 gap=S1 align=ACenter radius=Xl")
 
 ///|
 // kept across runs: a value (no field of it changes)

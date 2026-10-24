@@ -49,7 +49,7 @@ fn places_reset() -> Unit {
 ///|
 /// A page across the pane (连接, 用量: no sidebar), on the page's ground.
 // kept across runs: a value (no field of it changes)
-let place_across : @ui.Style = @ui.style(w=Full, h=Full, bg=Bg)
+let place_across : @ui.Style = @ui.css("w=Full h=Full bg=Bg")
 
 ///|
 /// The page picked in a place (the stations' or the profiles' list), by place; none: the first.
@@ -296,21 +296,21 @@ fn profiles_side(c : @ui.Ctx, src : Source, w : Workspace, pages : Pages) -> Uni
 
 ///|
 // kept across runs: a value (no field of it changes)
-let place_pane : @ui.Style = @ui.style(w=Full, h=Full, bg=Bg)
+let place_pane : @ui.Style = @ui.css("w=Full h=Full bg=Bg")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let place_side : @ui.Style = @ui.style(w=Full, h=Full)
+let place_side : @ui.Style = @ui.css("w=Full h=Full")
 
 ///|
 /// The list under the band: 8 in at its sides, 4 under the band (Sidebar.css.ts navList).
 // kept across runs: a value (no field of it changes)
-let place_list : @ui.Style = @ui.style(w=Full, h=Full, px=S2, pt=S1)
+let place_list : @ui.Style = @ui.css("w=Full h=Full px=S2 pt=S1")
 
 ///|
 /// A row's mark (NavItem's): 16, on its first line's middle.
 // kept across runs: a value (no field of it changes)
-let place_mark : @ui.Style = @ui.style(w=S4, h=S5, align=ACenter, justify=JCenter)
+let place_mark : @ui.Style = @ui.css("w=S4 h=S5 align=ACenter justify=JCenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -318,15 +318,15 @@ let place_row_words : @ui.Style = @ui.style(w=@sf.grow, gap=S1)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let place_row_head : @ui.Style = @ui.style(row=true, w=Full, gap=S1_5, align=ACenter)
+let place_row_head : @ui.Style = @ui.css("row w=Full gap=S1_5 align=ACenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let place_end : @ui.Style = @ui.style(row=true, gap=S1, align=ACenter)
+let place_end : @ui.Style = @ui.css("row gap=S1 align=ACenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let place_end_line : @ui.Style = @ui.style(row=true, w=Full, gap=S1_5, align=ACenter)
+let place_end_line : @ui.Style = @ui.css("row w=Full gap=S1_5 align=ACenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -361,25 +361,25 @@ let place_use : @ui.TextStyle = @ui.text_style(size=Xs, color=AccentText, wrap=f
 ///|
 /// Up or away: the rail's dot (railCss.dot: 6).
 // kept across runs: a value (no field of it changes)
-let place_dot_on : @ui.Style = @ui.style(w=S1_5, h=S1_5, radius=Full, bg=Positive)
+let place_dot_on : @ui.Style = @ui.css("w=S1_5 h=S1_5 radius=Full bg=Positive")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let place_dot_off : @ui.Style = @ui.style(w=S1_5, h=S1_5, radius=Full, bg=Faint)
+let place_dot_off : @ui.Style = @ui.css("w=S1_5 h=S1_5 radius=Full bg=Faint")
 
 ///|
 /// Its meters in a line (rowMeters), a chip each (MeterChip brief bare): its name muted and what is left, on a ground;
 /// one running low with its level's edge.
 // kept across runs: a value (no field of it changes)
-let place_meters : @ui.Style = @ui.style(row=true, w=Full, gap=S1, align=ACenter, clip=true)
+let place_meters : @ui.Style = @ui.css("row w=Full gap=S1 align=ACenter clip")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let meter_chip : @ui.Style = @ui.style(row=true, px=S1, py=SPx, gap=S1, align=ACenter, radius=Base, bg=Hover)
+let meter_chip : @ui.Style = @ui.css("row px=S1 py=SPx gap=S1 align=ACenter radius=Base bg=Hover")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let meter_chip_low : @ui.Style = meter_chip.then(@ui.style(border=B1, border_color=Warn))
+let meter_chip_low : @ui.Style = meter_chip.then(@ui.css("border=B1 border_color=Warn"))
 
 ///|
 // kept across runs: a value (no field of it changes)

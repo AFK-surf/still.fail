@@ -489,36 +489,28 @@ fn doc_chips(c : @ui.Ctx, key : String, pages : Array[(String, String, String)],
 ///|
 /// The pills' room: 10 over what is under them; 12 in from the page's sides as they scroll (Memory.kt:243).
 // kept across runs: a value (no field of it changes)
-let doc_chips_room : @ui.Style = @ui.style(w=Full, pb=S2_5)
+let doc_chips_room : @ui.Style = @ui.css("w=Full pb=S2_5")
 
 ///|
 /// The card a skill's when and sharing are on: a card (20 down, 22 round) whose rows reach 8 from its sides, as
 /// MemoryDocScreen's ShareRow bleeds out of it (CARD_PAD less LIST_PAD).
 // kept across runs: a value (no field of it changes)
-let skill_card : @ui.Style = card_ground.then(@ui.style(px=S2))
+let skill_card : @ui.Style = card_ground.then(@ui.css("px=S2"))
 
 ///|
 /// Its words 12 further in: 20 from its sides, as a card's.
 // kept across runs: a value (no field of it changes)
-let skill_card_words : @ui.Style = @ui.style(w=Full, px=S3)
+let skill_card_words : @ui.Style = @ui.css("w=Full px=S3")
 
 ///|
 /// The sharing row, 12 under the words: its ground under the finger rounded as the card's less its room
 /// (LIST_ROW_CORNER), its words 12 in, 6 over and under.
 // kept across runs: a value (no field of it changes)
-let skill_share_room : @ui.Style = @ui.style(w=Full, pt=S3)
+let skill_share_room : @ui.Style = @ui.css("w=Full pt=S3")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let skill_share_line : @ui.Style = @ui.style(
-  row=true,
-  w=Full,
-  px=S3,
-  py=S1_5,
-  gap=S2_5,
-  radius=Inner,
-  align=ACenter,
-)
+let skill_share_line : @ui.Style = @ui.css("row w=Full px=S3 py=S1_5 gap=S2_5 radius=Inner align=ACenter")
 
 ///|
 /// Its words (14, the ink, as wide as the row lets them).
@@ -528,7 +520,7 @@ let skill_share_words : @ui.TextStyle = @ui.text_style(size=Base, color=Fg, w=Fu
 ///|
 /// The edits two stations made at once (12, the warning's ink), 6 under it, 12 in.
 // kept across runs: a value (no field of it changes)
-let skill_conflicts_room : @ui.Style = @ui.style(w=Full, px=S3, pt=S1_5)
+let skill_conflicts_room : @ui.Style = @ui.css("w=Full px=S3 pt=S1_5")
 
 ///|
 // kept across runs: a value (no field of it changes)

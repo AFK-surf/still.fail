@@ -337,20 +337,20 @@ fn attention_link(c : @ui.Ctx, key : String, label : String) -> Bool {
 ///|
 /// The panel's rows 2 apart (Attention.css.ts panel); a group's 1, the next group 6 further (group + group).
 // kept across runs: a value (no field of it changes)
-let att_list : @ui.Style = @ui.style(w=Full, gap=S0_5)
+let att_list : @ui.Style = @ui.css("w=Full gap=S0_5")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let att_group : @ui.Style = @ui.style(w=Full, gap=SPx)
+let att_group : @ui.Style = @ui.css("w=Full gap=SPx")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let att_group_next : @ui.Style = @ui.style(w=Full, gap=SPx, pt=S1_5)
+let att_group_next : @ui.Style = @ui.css("w=Full gap=SPx pt=S1_5")
 
 ///|
 /// A group's name (groupName): 4 above, 2 under, 10 in; 12, muted.
 // kept across runs: a value (no field of it changes)
-let att_group_name : @ui.Style = @ui.style(w=Full, px=S2_5, pt=S1, pb=S0_5)
+let att_group_name : @ui.Style = @ui.css("w=Full px=S2_5 pt=S1 pb=S0_5")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -359,7 +359,7 @@ let att_group_words : @ui.TextStyle = @ui.text_style(size=Xs, color=Muted, leadi
 ///|
 /// Nothing waiting (empty): 10 round, 13, muted.
 // kept across runs: a value (no field of it changes)
-let att_empty : @ui.Style = @ui.style(w=Full, p=S2_5)
+let att_empty : @ui.Style = @ui.css("w=Full p=S2_5")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -373,7 +373,7 @@ let att_item : @ui.Style = @ui.style(row=true, w=Full, px=S2_5, py=S1_5, gap=S2,
 
 ///|
 // kept across runs: a value (no field of it changes)
-let att_item_on : @ui.Style = att_item.then(@ui.style(bg=Hover))
+let att_item_on : @ui.Style = att_item.then(@ui.css("bg=Hover"))
 
 ///|
 /// Its dot, 7 round, in the amber's ink (red gone wrong); once looked at, a ring 1.5 wide in the muted grey.
@@ -382,11 +382,11 @@ let att_dot : @ui.Style = @ui.style(w=@sf.attention_dot, h=@sf.attention_dot, ra
 
 ///|
 // kept across runs: a value (no field of it changes)
-let att_dot_seen : @ui.Style = att_dot.then(@ui.style(bg=Clear, border=B1_5, border_color=Muted))
+let att_dot_seen : @ui.Style = att_dot.then(@ui.css("bg=Clear border=B1_5 border_color=Muted"))
 
 ///|
 // kept across runs: a value (no field of it changes)
-let att_text : @ui.Style = @ui.style(w=Full)
+let att_text : @ui.Style = @ui.css("w=Full")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -403,11 +403,11 @@ let att_line : @ui.TextStyle = @ui.text_style(size=Xs, color=Muted, leading=L4_7
 ///|
 /// 忽略 (dismiss): a small pill, 1 by 6 in, 12, muted; in ink on the pointer's ground pointed at.
 // kept across runs: a value (no field of it changes)
-let att_dismiss : @ui.Style = @ui.style(px=S1_5, py=SPx, radius=Full)
+let att_dismiss : @ui.Style = @ui.css("px=S1_5 py=SPx radius=Full")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let att_dismiss_on : @ui.Style = @ui.style(px=S1_5, py=SPx, radius=Full, bg=Hover)
+let att_dismiss_on : @ui.Style = @ui.css("px=S1_5 py=SPx radius=Full bg=Hover")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -420,7 +420,7 @@ let att_dismiss_on_words : @ui.TextStyle = @ui.text_style(size=Xs, color=Fg, lea
 ///|
 /// The foot (foot): its words 12 apart, 8 by 10 in and 4 under, 4 more over it.
 // kept across runs: a value (no field of it changes)
-let att_foot : @ui.Style = @ui.style(row=true, w=Full, gap=S3, px=S2_5, pt=S3, pb=S1)
+let att_foot : @ui.Style = @ui.css("row w=Full gap=S3 px=S2_5 pt=S3 pb=S1")
 
 ///|
 // kept across runs: a value (no field of it changes)

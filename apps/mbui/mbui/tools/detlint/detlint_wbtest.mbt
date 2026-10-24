@@ -77,6 +77,7 @@ test "style" {
         #|  c.text("c", style=title, max_lines=2, tracking=0.5) |> ignore
         #|}
         #|let clamp : @ui.TextStyle = @ui.text_style(max_lines=2, tracking=Tight)
+        #|let pill : @ui.Style = @ui.css("w=Grow(1.0) px=S1_25 bg=A(Fg,O35) radius=Exact(9.0)")
         #|
       ),
     ),
@@ -86,6 +87,7 @@ test "style" {
         #|
         #|pub let title : @ui.TextStyle = @ui.text_style(size=Exact(15.0, 21.0))
         #|pub let column_max : @ui.Len = Fixed(420.0)
+        #|pub let wide : @ui.Style = @ui.css("w=Fixed(420.0) radius=Exact(2.0)")
         #|
       ),
     ),
@@ -102,15 +104,17 @@ test "style" {
   ]
   // Exact(22.0) once (its number not again), Fixed's 14.0, pad 12.0, size 13.0, the colour: not the token file's,
   // nor the test's, nor aspect (not a look) nor id; tracking's 0.5; not max_lines (a count, not a look's value) in
-  // either
-  assert_eq(lines(lint_of(files, rule="style-literal", cfg~)), [2, 2, 4, 5, 5, 9])
+  // either; in a style's text Grow's 1.0 and the Exact (not S1_25's digits nor O35's), not the token file's
+  assert_eq(lines(lint_of(files, rule="style-literal", cfg~)), [2, 2, 4, 5, 5, 9, 12, 12])
   // the calls said loosely (pad=, size=, max_lines= and tracking=); a box with a style and behaviour alone (id,
   // aspect) is not
   assert_eq(lines(lint_of(files, rule="box-loose", cfg~)), [4, 5, 9])
   // every Exact made, in the token file too
   let exact = lint_of(files, rule="style-exact", cfg~).map(fn(f) { "\{f.file}:\{f.line}" })
   exact.sort_by(@rjson.str_cmp)
-  assert_eq(exact, ["src/app/tokens.mbt:2", "src/app/view.mbt:2"])
+  assert_eq(exact, [
+    "src/app/tokens.mbt:2", "src/app/tokens.mbt:4", "src/app/view.mbt:12", "src/app/view.mbt:2",
+  ])
   // the enum's declaration and a match's patterns are not values made
   let decl = [
     (

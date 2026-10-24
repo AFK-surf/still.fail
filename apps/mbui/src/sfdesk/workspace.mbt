@@ -491,11 +491,11 @@ let ws_more_icon : Double = 16.0
 ///|
 /// Its head (workspaceHead: 8 under the page's 40 top, 36 under it, 16 between its mark and its words).
 // kept across runs: a value (no field of it changes)
-let ws_head : @ui.Style = @ui.style(row=true, w=Full, px=S4, pt=S12, pb=S9, gap=S4, align=ACenter)
+let ws_head : @ui.Style = @ui.css("row w=Full px=S4 pt=S12 pb=S9 gap=S4 align=ACenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let ws_mark : @ui.Style = @ui.style(w=S14, h=S14, radius=Xl, bg=Neutral, align=ACenter, justify=JCenter)
+let ws_mark : @ui.Style = @ui.css("w=S14 h=S14 radius=Xl bg=Neutral align=ACenter justify=JCenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -508,7 +508,7 @@ let ws_identity : @ui.Style = @ui.style(w=@sf.grow, gap=SPx)
 ///|
 /// Its name (titleField: the heading's 22 on 40, 600; a field's ground under the pointer).
 // kept across runs: a value (no field of it changes)
-let ws_name_box : @ui.Style = @ui.style(h=S10, px=S2, align=AStart, justify=JCenter, radius=Xl, hovered=@ui.patch(bg=Hover))
+let ws_name_box : @ui.Style = @ui.css("h=S10 px=S2 align=AStart justify=JCenter radius=Xl hovered{bg=Hover}")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -517,7 +517,7 @@ let ws_name : @ui.TextStyle = @ui.text_style(size=Xl3, weight=Semibold, color=Fg
 ///|
 /// Who the viewer is, how many (workspaceFacts: the ui's 13 on 20, muted, a subtle · 8 from each between).
 // kept across runs: a value (no field of it changes)
-let ws_facts : @ui.Style = @ui.style(row=true, px=S2, gap=S2, align=ACenter)
+let ws_facts : @ui.Style = @ui.css("row px=S2 gap=S2 align=ACenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -532,7 +532,7 @@ let ws_fact_dot : @ui.TextStyle = @ui.text_style(size=Sm, leading=L6, color=Subt
 
 ///|
 // kept across runs: a value (no field of it changes)
-let ws_title_line : @ui.Style = @ui.style(row=true, gap=S2, align=ACenter)
+let ws_title_line : @ui.Style = @ui.css("row gap=S2 align=ACenter")
 
 
 ///|
@@ -562,7 +562,7 @@ let ws_row_sub_wrap : @ui.TextStyle = @ui.text_style(size=Xs, leading=L5, color=
 ///|
 /// 你 by the viewer (choiceBadge: 1 by 7 in, a capsule on the accent's ground, the meta's 12 in 500).
 // kept across runs: a value (no field of it changes)
-let ws_badge : @ui.Style = @ui.style(px=S1_5, py=SPx, radius=Full, bg=AccentBg)
+let ws_badge : @ui.Style = @ui.css("px=S1_5 py=SPx radius=Full bg=AccentBg")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -574,12 +574,12 @@ let ws_badge_words : @ui.TextStyle = @ui.text_style(size=Xs, leading=L5, weight=
 ///|
 /// ⋯ (an icon button: 32, its corner 12).
 // kept across runs: a value (no field of it changes)
-let ws_more : @ui.Style = @ui.style(w=S8, h=S8, radius=Xl, align=ACenter, justify=JCenter, hovered=@ui.patch(bg=Hover))
+let ws_more : @ui.Style = @ui.css("w=S8 h=S8 radius=Xl align=ACenter justify=JCenter hovered{bg=Hover}")
 
 ///|
 /// A group's head among the people (memberGroup: 18 over, 12 in, 2 under, 8 apart).
 // kept across runs: a value (no field of it changes)
-let ws_group_box : @ui.Style = @ui.style(row=true, w=Full, px=S6, pt=S4_5, pb=S0_5, gap=S2, align=AEnd)
+let ws_group_box : @ui.Style = @ui.css("row w=Full px=S6 pt=S4_5 pb=S0_5 gap=S2 align=AEnd")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -588,11 +588,11 @@ let ws_group_title : @ui.TextStyle = @ui.text_style(size=Sm, leading=L6, weight=
 ///|
 /// A card (pages.css.ts card: 20 in, its corner the card's, the card's ground; its rows 14 apart).
 // kept across runs: a value (no field of it changes)
-let ws_card : @ui.Style = @ui.style(w=Full, p=S5, gap=S3_5, radius=Xl3, bg=Card)
+let ws_card : @ui.Style = @ui.css("w=Full p=S5 gap=S3_5 radius=Xl3 bg=Card")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let ws_card_row : @ui.Style = @ui.style(row=true, w=Full, gap=S3, align=ACenter)
+let ws_card_row : @ui.Style = @ui.css("row w=Full gap=S3 align=ACenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -601,7 +601,7 @@ let ws_card_title : @ui.TextStyle = @ui.text_style(size=Sm, leading=L6, weight=S
 ///|
 /// 退出与删除 (dangerList: 18 apart, 4 over and under).
 // kept across runs: a value (no field of it changes)
-let ws_danger_list : @ui.Style = @ui.style(w=Full, py=S1, gap=S4)
+let ws_danger_list : @ui.Style = @ui.css("w=Full py=S1 gap=S4")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -610,7 +610,7 @@ let ws_danger_title : @ui.TextStyle = @ui.text_style(size=Sm, leading=L6, weight
 ///|
 /// A section at the column's edges (the library's Section in it).
 // kept across runs: a value (no field of it changes)
-let ws_section_room : @ui.Style = @ui.style(w=Full, px=S4)
+let ws_section_room : @ui.Style = @ui.css("w=Full px=S4")
 
 ///|
 /// The owner's role choice (roleSelect: 120 wide).

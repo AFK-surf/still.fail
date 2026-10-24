@@ -208,7 +208,7 @@ pub fn chip(
 
 ///|
 // kept across runs: a value (no field of it changes)
-let chip_inner : @ui.Style = @ui.style(radius=Inner)
+let chip_inner : @ui.Style = @ui.css("radius=Inner")
 
 ///|
 /// A choice of a few (Segmented; the kit's sliding toggle group): a quiet
@@ -284,7 +284,7 @@ pub fn field_look(c : @ui.Ctx, s : @kit.FieldState, editor : () -> Unit) -> Unit
 ///|
 /// Controls.kt Field's frame: as wide as where it is, 12 by 10 in, 12 round, the card's ground, a line round it.
 // kept across runs: a value (no field of it changes)
-let field_frame : @ui.Style = @ui.style(w=Full, px=S3, py=S2_5, radius=Xl, bg=Card, border=B1, border_color=Line)
+let field_frame : @ui.Style = @ui.css("w=Full px=S3 py=S2_5 radius=Xl bg=Card border=B1 border_color=Line")
 
 // ---------------------------------------------------------------------------
 // Small panels (docs/ui-panels.md)
@@ -402,7 +402,7 @@ let panel_end_icon : Double = 14.0
 ///|
 /// A panel row's icon's column (parts.css.ts panelRowIcon): 20 wide, the icon in its middle.
 // kept across runs: a value (no field of it changes)
-let panel_row_icon : @ui.Style = @ui.style(w=S5, align=ACenter)
+let panel_row_icon : @ui.Style = @ui.css("w=S5 align=ACenter")
 
 ///|
 /// A word for an icon in a panel's row (Rail.css.ts zouSmall: 14 on 18, 600).
@@ -530,11 +530,11 @@ pub fn slider(
 /// Round a sheet's grabber: 8 above and 4 under it, then 4 above and under it (Sheet.kt's two paddings, each a length
 /// of its own: on Android's whole pixels 21 + 11 above the grabber and 11 + 11 under it, not one 12 and one 8).
 // kept across runs: a value (no field of it changes)
-let sheet_grab_outer : @ui.Style = @ui.style(w=Full, pt=S2, pb=S1)
+let sheet_grab_outer : @ui.Style = @ui.css("w=Full pt=S2 pb=S1")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let sheet_grab_inner : @ui.Style = @ui.style(w=Full, py=S1, align=ACenter)
+let sheet_grab_inner : @ui.Style = @ui.css("w=Full py=S1 align=ACenter")
 
 ///|
 /// The grabber at a sheet's top (Sheet.kt SheetGrab): 38 × 5 in the line's colour, 12 above it and 8 under.
@@ -597,7 +597,7 @@ let tip_box : @ui.Style = @ui.style(px=S2_5, py=S1_25, bg=Primary, radius=Lg, ma
 
 ///|
 // kept across runs: a value (no field of it changes)
-let tip_line : @ui.Style = @ui.style(row=true, gap=S2, align=ACenter)
+let tip_line : @ui.Style = @ui.css("row gap=S2 align=ACenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -609,7 +609,7 @@ let tip_keys : @ui.TextStyle = @ui.text_style(size=Xs, color=OnPrimary, wrap=fal
 
 ///|
 // kept across runs: a value (no field of it changes)
-let tip_quiet : @ui.Style = @ui.style(opacity=O60)
+let tip_quiet : @ui.Style = @ui.css("opacity=O60")
 
 ///|
 /// A small panel's ground (glass.ts panel): the canvas in light, the raised grey in dark, a hairline round it.
@@ -698,7 +698,7 @@ let chooser_gap : Double = 6.0
 ///|
 /// A chooser's check's column (controls.css.ts chooserCheck): 14 wide, the check in its middle.
 // kept across runs: a value (no field of it changes)
-let menu_check : @ui.Style = @ui.style(w=S3_5, align=ACenter)
+let menu_check : @ui.Style = @ui.css("w=S3_5 align=ACenter")
 
 ///|
 /// A menu item's words: as long as they are (the menu as wide as its longest, controls.css.ts menuList).
@@ -712,7 +712,7 @@ let menu_words_danger : @ui.TextStyle = @ui.text_style(size=Sm, color=Danger, le
 ///|
 /// A heading among a menu's items (controls.css.ts menuLabel): 6 over, 4 under, 10 in; 12, muted.
 // kept across runs: a value (no field of it changes)
-let menu_heading : @ui.Style = @ui.style(w=Full, px=S2_5, pt=S1_5, pb=S1)
+let menu_heading : @ui.Style = @ui.css("w=Full px=S2_5 pt=S1_5 pb=S1")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -927,7 +927,7 @@ let about_icon : Double = 14.0
 
 ///|
 // kept across runs: a value (no field of it changes)
-let about_box : @ui.Style = @ui.style(w=S5, h=S5, radius=Full, align=ACenter, justify=JCenter)
+let about_box : @ui.Style = @ui.css("w=S5 h=S5 radius=Full align=ACenter justify=JCenter")
 
 // ---------------------------------------------------------------------------
 // Switches, sections, pills, dots, the empty and the first one (parts.tsx Switch, SwitchRow, Section, Pill,
@@ -970,7 +970,7 @@ pub fn switch(
 
 ///|
 // kept across runs: a value (no field of it changes)
-let switch_at : @ui.Style = @ui.style(justify=JCenter, align=AStart)
+let switch_at : @ui.Style = @ui.css("justify=JCenter align=AStart")
 
 ///|
 /// A switch drawn in a row that takes the tap itself (the row turns it): its look alone, its thumb sliding as a
@@ -1022,11 +1022,11 @@ pub fn switch_row(
 
 ///|
 // kept across runs: a value (no field of it changes)
-let switch_row_box : @ui.Style = @ui.style(row=true, w=Full, align=ACenter, gap=S4)
+let switch_row_box : @ui.Style = @ui.css("row w=Full align=ACenter gap=S4")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let switch_row_words : @ui.Style = @ui.style(w=Grow(1.0), gap=S0_5)
+let switch_row_words : @ui.Style = @ui.css("w=Grow(1.0) gap=S0_5")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -1080,19 +1080,19 @@ pub fn section(
 
 ///|
 // kept across runs: a value (no field of it changes)
-let section_box : @ui.Style = @ui.style(w=Full, mb=S7)
+let section_box : @ui.Style = @ui.css("w=Full mb=S7")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let section_head : @ui.Style = @ui.style(row=true, w=Full, justify=JBetween, align=ACenter, gap=S3, mb=S2_5)
+let section_head : @ui.Style = @ui.css("row w=Full justify=JBetween align=ACenter gap=S3 mb=S2_5")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let section_words : @ui.Style = @ui.style(w=Grow(1.0))
+let section_words : @ui.Style = @ui.css("w=Grow(1.0)")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let section_title_line : @ui.Style = @ui.style(row=true, gap=S2, align=ACenter)
+let section_title_line : @ui.Style = @ui.css("row gap=S2 align=ACenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -1108,7 +1108,7 @@ let section_note_box : @ui.Style = @ui.style(max_w=section_note_most)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let section_actions : @ui.Style = @ui.style(row=true, gap=S2, align=ACenter)
+let section_actions : @ui.Style = @ui.css("row gap=S2 align=ACenter")
 
 ///|
 /// A pill's tone (parts.tsx Tone): its ground and its words' ink.
@@ -1175,7 +1175,7 @@ pub fn empty(c : @ui.Ctx, body : () -> Unit) -> Unit {
 
 ///|
 // kept across runs: a value (no field of it changes)
-let empty_box : @ui.Style = @ui.style(w=Full, h=Grow(1.0), p=S10, gap=S1_5, align=ACenter, justify=JCenter)
+let empty_box : @ui.Style = @ui.css("w=Full h=Grow(1.0) p=S10 gap=S1_5 align=ACenter justify=JCenter")
 
 ///|
 /// The first one to make (parts.tsx FirstOne, own.css.ts firstOne): a list with nothing in it yet, or a page whose first
@@ -1208,7 +1208,7 @@ pub fn first_one(
 
 ///|
 // kept across runs: a value (no field of it changes)
-let first_room : @ui.Style = @ui.style(w=Full, align=ACenter, py=S6)
+let first_room : @ui.Style = @ui.css("w=Full align=ACenter py=S6")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -1216,7 +1216,7 @@ let first_box : @ui.Style = @ui.style(w=Full, max_w=first_most, pt=S2, pb=S6, ga
 
 ///|
 // kept across runs: a value (no field of it changes)
-let first_title_at : @ui.Style = @ui.style(pt=S3)
+let first_title_at : @ui.Style = @ui.css("pt=S3")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -1232,7 +1232,7 @@ let first_lead_box : @ui.Style = @ui.style(max_w=first_lead_most, align=ACenter)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let first_actions : @ui.Style = @ui.style(row=true, w=Full, gap=S2, align=ACenter, justify=JCenter, pt=S3)
+let first_actions : @ui.Style = @ui.css("row w=Full gap=S2 align=ACenter justify=JCenter pt=S3")
 
 // ---------------------------------------------------------------------------
 // Dialogs (parts.tsx Dialog; parts.css.ts dialog, dialogHead, dialogLead, dialogBody, dialogFoot, overlay)
@@ -1313,13 +1313,13 @@ let dialog_room : Double = 48.0
 /// A dialog's frame: 24 in at its sides and over its title, a line round it (its corner, ground and shadow: dialog_r,
 /// panel_ground, dialog_shadow).
 // kept across runs: a value (no field of it changes)
-let dialog_box : @ui.Style = @ui.style(px=S6, pt=S6, border=B1, border_color=Line)
+let dialog_box : @ui.Style = @ui.css("px=S6 pt=S6 border=B1 border_color=Line")
 
 ///|
 /// Its title's row (dialogHead: 25 under the top, 26 from the right): the close button at its end, its middle on the
 /// title's.
 // kept across runs: a value (no field of it changes)
-let dialog_head : @ui.Style = @ui.style(row=true, w=Full, justify=JBetween, align=ACenter, gap=S3, min_h=S8, pt=SPx, pr=S0_5)
+let dialog_head : @ui.Style = @ui.css("row w=Full justify=JBetween align=ACenter gap=S3 min_h=S8 pt=SPx pr=S0_5")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -1327,7 +1327,7 @@ let dialog_title : @ui.TextStyle = @ui.text_style(size=Xl3, weight=Semibold, col
 
 ///|
 // kept across runs: a value (no field of it changes)
-let dialog_lead_at : @ui.Style = @ui.style(w=Full, pt=S1_5)
+let dialog_lead_at : @ui.Style = @ui.css("w=Full pt=S1_5")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -1336,17 +1336,17 @@ let dialog_lead : @ui.TextStyle = @ui.text_style(size=Sm, leading=L6, color=Mute
 ///|
 /// What it holds: 18 under the title (or its lead), its parts 16 apart.
 // kept across runs: a value (no field of it changes)
-let dialog_body : @ui.Style = @ui.style(w=Full, pt=S4_5, gap=S4)
+let dialog_body : @ui.Style = @ui.css("w=Full pt=S4_5 gap=S4")
 
 ///|
 /// Its buttons: at its end, 8 apart, 24 under what it holds and over its foot.
 // kept across runs: a value (no field of it changes)
-let dialog_foot : @ui.Style = @ui.style(row=true, w=Full, justify=JEnd, align=ACenter, gap=S2, py=S6)
+let dialog_foot : @ui.Style = @ui.css("row w=Full justify=JEnd align=ACenter gap=S2 py=S6")
 
 ///|
 /// With none, 24 under what it holds.
 // kept across runs: a value (no field of it changes)
-let dialog_end : @ui.Style = @ui.style(h=S6)
+let dialog_end : @ui.Style = @ui.css("h=S6")
 
 // ---------------------------------------------------------------------------
 // Fields, selects, choices (parts.tsx Field, Select, Choices; parts.css.ts field, select, choice, radio)
@@ -1383,11 +1383,11 @@ pub fn field(
 
 ///|
 // kept across runs: a value (no field of it changes)
-let field_box : @ui.Style = @ui.style(w=Full, gap=S1_5)
+let field_box : @ui.Style = @ui.css("w=Full gap=S1_5")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let field_top : @ui.Style = @ui.style(row=true, w=Full, justify=JBetween, align=AEnd, gap=S2)
+let field_top : @ui.Style = @ui.css("row w=Full justify=JBetween align=AEnd gap=S2")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -1465,19 +1465,11 @@ let textarea_in : Double = 16.0
 
 ///|
 // kept across runs: a value (no field of it changes)
-let textarea_box : @ui.Style = @ui.style(
-  w=Full,
-  px=S3,
-  py=S2,
-  radius=Xl,
-  bg=Surface,
-  border=B1,
-  border_color=Border,
-)
+let textarea_box : @ui.Style = @ui.css("w=Full px=S3 py=S2 radius=Xl bg=Surface border=B1 border_color=Border")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let textarea_box_hot : @ui.Style = textarea_box.then(@ui.style(border_color=FieldHover))
+let textarea_box_hot : @ui.Style = textarea_box.then(@ui.css("border_color=FieldHover"))
 
 ///|
 /// What is typed in: as what is read (global.css.ts --text-input), on the line of a list's words.
@@ -1488,24 +1480,15 @@ let input_line : Double = 20.0
 
 ///|
 // kept across runs: a value (no field of it changes)
-let input_box : @ui.Style = @ui.style(
-  row=true,
-  w=Full,
-  min_h=S9,
-  px=S4,
-  py=S1_5,
-  radius=Full,
-  bg=Surface,
-  border=B1,
-  border_color=Border,
-  align=ACenter,
-  disabled=@ui.patch(opacity=O55),
+let input_box : @ui.Style = @ui.css(
+  #|row w=Full min_h=S9 px=S4 py=S1_5 radius=Full bg=Surface border=B1 border_color=Border align=ACenter
+  #|disabled{opacity=O55}
 )
 
 ///|
 /// Pointed at or written in: the field's hover grey round it.
 // kept across runs: a value (no field of it changes)
-let input_box_hot : @ui.Style = input_box.then(@ui.style(border_color=FieldHover))
+let input_box_hot : @ui.Style = input_box.then(@ui.css("border_color=FieldHover"))
 
 ///|
 /// A dropdown of choices (parts.tsx Select: mbui's, @kit.select: its options under it, the arrows, letters and Enter
@@ -1559,26 +1542,15 @@ pub fn select(
 
 ///|
 // kept across runs: a value (no field of it changes)
-let select_box : @ui.Style = @ui.style(
-  row=true,
-  w=Full,
-  min_h=S9,
-  px=S4,
-  py=S1_5,
-  gap=S2,
-  radius=Full,
-  bg=Surface,
-  border=B1,
-  border_color=Border,
-  align=ACenter,
-  justify=JBetween,
-  disabled=@ui.patch(opacity=O55),
+let select_box : @ui.Style = @ui.css(
+  #|row w=Full min_h=S9 px=S4 py=S1_5 gap=S2 radius=Full bg=Surface border=B1 border_color=Border align=ACenter
+  #|justify=JBetween disabled{opacity=O55}
 )
 
 ///|
 /// Pointed at, open or focused: the field's hover grey round it.
 // kept across runs: a value (no field of it changes)
-let select_box_hot : @ui.Style = select_box.then(@ui.style(border_color=FieldHover))
+let select_box_hot : @ui.Style = select_box.then(@ui.css("border_color=FieldHover"))
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -1591,7 +1563,7 @@ let select_placeholder : @ui.TextStyle = select_words.then(@ui.text_style(color=
 ///|
 /// An option's row (parts.css.ts selectItem: a menu's item, its check at its end 10 in).
 // kept across runs: a value (no field of it changes)
-let select_item : @ui.Style = @ui.style(row=true, w=Full, px=S2_5, gap=S2, align=ACenter)
+let select_item : @ui.Style = @ui.css("row w=Full px=S2_5 gap=S2 align=ACenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -1633,32 +1605,23 @@ pub fn choices(
 
 ///|
 // kept across runs: a value (no field of it changes)
-let choice_card : @ui.Style = @ui.style(
-  row=true,
-  w=Full,
-  px=S3_5,
-  py=S3,
-  gap=S3,
-  radius=Xl1_5,
-  bg=Surface,
-  border=B1,
-  border_color=Border,
-  align=ACenter,
-  disabled=@ui.patch(opacity=O55),
+let choice_card : @ui.Style = @ui.css(
+  #|row w=Full px=S3_5 py=S3 gap=S3 radius=Xl1_5 bg=Surface border=B1 border_color=Border align=ACenter
+  #|disabled{opacity=O55}
 )
 
 ///|
 /// Pointed at: the field's hover grey round it; chosen: edged twice in the ink (its line and a ring of 1).
 // kept across runs: a value (no field of it changes)
-let choice_card_hot : @ui.Style = choice_card.then(@ui.style(border_color=FieldHover))
+let choice_card_hot : @ui.Style = choice_card.then(@ui.css("border_color=FieldHover"))
 
 ///|
 // kept across runs: a value (no field of it changes)
-let choice_card_on : @ui.Style = choice_card.then(@ui.style(border=B2, border_color=Fg))
+let choice_card_on : @ui.Style = choice_card.then(@ui.css("border=B2 border_color=Fg"))
 
 ///|
 // kept across runs: a value (no field of it changes)
-let choice_words : @ui.Style = @ui.style(w=Grow(1.0), gap=S0_5)
+let choice_words : @ui.Style = @ui.css("w=Grow(1.0) gap=S0_5")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -1671,15 +1634,17 @@ let choice_note : @ui.TextStyle = @ui.text_style(size=Xs, leading=L5, color=Mute
 ///|
 /// The radio mark: 18 round, edged 1.5 (the strong grey; the ink chosen), its dot 8 in the ink.
 // kept across runs: a value (no field of it changes)
-let radio_mark : @ui.Style = @ui.style(w=S4_5, h=S4_5, radius=Full, border=B1, border_color=Border, align=ACenter, justify=JCenter)
+let radio_mark : @ui.Style = @ui.css(
+  #|w=S4_5 h=S4_5 radius=Full border=B1 border_color=Border align=ACenter justify=JCenter
+)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let radio_mark_on : @ui.Style = radio_mark.then(@ui.style(border_color=Fg))
+let radio_mark_on : @ui.Style = radio_mark.then(@ui.css("border_color=Fg"))
 
 ///|
 // kept across runs: a value (no field of it changes)
-let radio_dot : @ui.Style = @ui.style(w=S2, h=S2, radius=Full, bg=Fg)
+let radio_dot : @ui.Style = @ui.css("w=S2 h=S2 radius=Full bg=Fg")
 
 // ---------------------------------------------------------------------------
 // Asking before (parts.tsx Confirm; parts.css.ts dialogAlert, dialogError)
@@ -1756,11 +1721,11 @@ pub fn confirm(
 ///|
 /// Its frame (dialogAlert: 28 over, 24 in, 8 between its title, its lead and what follows).
 // kept across runs: a value (no field of it changes)
-let confirm_box : @ui.Style = @ui.style(px=S6, pt=S7, pb=S6, gap=S2, border=B1, border_color=Line)
+let confirm_box : @ui.Style = @ui.css("px=S6 pt=S7 pb=S6 gap=S2 border=B1 border_color=Line")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let confirm_error_at : @ui.Style = @ui.style(w=Full, pt=S1)
+let confirm_error_at : @ui.Style = @ui.css("w=Full pt=S1")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -1768,7 +1733,7 @@ let confirm_error : @ui.TextStyle = @ui.text_style(size=Sm, leading=L6, color=Da
 
 ///|
 // kept across runs: a value (no field of it changes)
-let confirm_foot : @ui.Style = @ui.style(row=true, w=Full, justify=JEnd, align=ACenter, gap=S2, pt=S2)
+let confirm_foot : @ui.Style = @ui.css("row w=Full justify=JEnd align=ACenter gap=S2 pt=S2")
 
 // ---------------------------------------------------------------------------
 // A small panel's parts (parts.tsx PanelHead, PanelGroup, PanelNote, PanelFoot, PanelText, PanelButton,
@@ -1874,7 +1839,7 @@ pub fn panel_icon_button(c : @ui.Ctx, key : String, name : String, label : Strin
 
 ///|
 // kept across runs: a value (no field of it changes)
-let panel_head_box : @ui.Style = @ui.style(w=Full, px=S2_5, pt=S1_5, pb=S1, gap=S0_5)
+let panel_head_box : @ui.Style = @ui.css("w=Full px=S2_5 pt=S1_5 pb=S1 gap=S0_5")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -1886,38 +1851,30 @@ let panel_note_words : @ui.TextStyle = @ui.text_style(size=Xs, leading=L5, color
 
 ///|
 // kept across runs: a value (no field of it changes)
-let panel_group_box : @ui.Style = @ui.style(w=Full, gap=S0_5)
+let panel_group_box : @ui.Style = @ui.css("w=Full gap=S0_5")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let panel_label_at : @ui.Style = @ui.style(w=Full, px=S2_5, pt=S1_5, pb=S0_5)
+let panel_label_at : @ui.Style = @ui.css("w=Full px=S2_5 pt=S1_5 pb=S0_5")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let panel_text_box : @ui.Style = @ui.style(w=Full, px=S2_5)
+let panel_text_box : @ui.Style = @ui.css("w=Full px=S2_5")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let panel_foot_box : @ui.Style = @ui.style(row=true, w=Full, justify=JEnd, gap=S1_5, pt=S1)
+let panel_foot_box : @ui.Style = @ui.css("row w=Full justify=JEnd gap=S1_5 pt=S1")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let panel_button_box : @ui.Style = @ui.style(
-  row=true,
-  h=S6,
-  px=S2_5,
-  gap=S1,
-  radius=Full,
-  align=ACenter,
-  justify=JCenter,
-  hovered=@ui.patch(bg=Hover),
-  disabled=@ui.patch(opacity=O50),
+let panel_button_box : @ui.Style = @ui.css(
+  #|row h=S6 px=S2_5 gap=S1 radius=Full align=ACenter justify=JCenter hovered{bg=Hover} disabled{opacity=O50}
 )
 
 ///|
 // kept across runs: a value (no field of it changes)
 let panel_button_filled : @ui.Style = panel_button_box.then(
-  @ui.style(bg=AccentBg, hovered=@ui.patch(bg=A(Accent, O20))),
+  @ui.css("bg=AccentBg hovered{bg=A(Accent,O20)}"),
 )
 
 ///|
@@ -1934,14 +1891,8 @@ let panel_button_quiet : @ui.TextStyle = panel_button_words.then(@ui.text_style(
 
 ///|
 // kept across runs: a value (no field of it changes)
-let panel_icon_box : @ui.Style = @ui.style(
-  w=S6,
-  h=S6,
-  radius=Full,
-  align=ACenter,
-  justify=JCenter,
-  hovered=@ui.patch(bg=Hover),
-  disabled=@ui.patch(opacity=O35),
+let panel_icon_box : @ui.Style = @ui.css(
+  #|w=S6 h=S6 radius=Full align=ACenter justify=JCenter hovered{bg=Hover} disabled{opacity=O35}
 )
 
 // ---------------------------------------------------------------------------
@@ -1967,11 +1918,11 @@ pub fn copy_command(c : @ui.Ctx, key : String, text : String, copy~ : String, co
 
 ///|
 // kept across runs: a value (no field of it changes)
-let command_box : @ui.Style = @ui.style(row=true, w=Full, pl=S3_5, pr=S1_5, py=S1_5, gap=S2, radius=Xl, align=ACenter)
+let command_box : @ui.Style = @ui.css("row w=Full pl=S3_5 pr=S1_5 py=S1_5 gap=S2 radius=Xl align=ACenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let command_words_at : @ui.Style = @ui.style(w=Grow(1.0))
+let command_words_at : @ui.Style = @ui.css("w=Grow(1.0)")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -2010,15 +1961,8 @@ pub fn chooser(
 
 ///|
 // kept across runs: a value (no field of it changes)
-let chooser_box : @ui.Style = @ui.style(
-  row=true,
-  h=S7,
-  px=S2,
-  gap=S1_25,
-  radius=Lg,
-  align=ACenter,
-  hovered=@ui.patch(bg=Hover),
-  selected=@ui.patch(bg=Hover),
+let chooser_box : @ui.Style = @ui.css(
+  #|row h=S7 px=S2 gap=S1_25 radius=Lg align=ACenter hovered{bg=Hover} selected{bg=Hover}
 )
 
 ///|
@@ -2206,15 +2150,15 @@ let edge_box : @ui.Style = @ui.style(row=true, w=Fixed(handle_w), h=Full, align=
 
 ///|
 // kept across runs: a value (no field of it changes)
-let edge_line_place : @ui.Style = @ui.style(row=true, w=Full, h=Full, py=S2, justify=JCenter)
+let edge_line_place : @ui.Style = @ui.css("row w=Full h=Full py=S2 justify=JCenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let edge_line : @ui.Style = @ui.style(w=SPx, h=Full, opacity=O0)
+let edge_line : @ui.Style = @ui.css("w=SPx h=Full opacity=O0")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let edge_line_on : @ui.Style = edge_line.then(@ui.style(opacity=O100))
+let edge_line_on : @ui.Style = edge_line.then(@ui.css("opacity=O100"))
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -2226,15 +2170,15 @@ let edge_bar : @ui.Style = @ui.style(w=Fixed(edge_bar_w), h=S6, radius=Full, bg=
 
 ///|
 // kept across runs: a value (no field of it changes)
-let edge_bar_shown : @ui.Style = edge_bar.then(@ui.style(opacity=O100))
+let edge_bar_shown : @ui.Style = edge_bar.then(@ui.css("opacity=O100"))
 
 ///|
 // kept across runs: a value (no field of it changes)
-let edge_bar_on : @ui.Style = edge_bar_shown.then(@ui.style(h=S12))
+let edge_bar_on : @ui.Style = edge_bar_shown.then(@ui.css("h=S12"))
 
 ///|
 // kept across runs: a value (no field of it changes)
-let edge_bar_active : @ui.Style = edge_bar_on.then(@ui.style(bg=FieldHover))
+let edge_bar_active : @ui.Style = edge_bar_on.then(@ui.css("bg=FieldHover"))
 
 ///|
 /// The edges whose tip is put away, by their keys, and the last frame each was pressed in: pressed since the pointer

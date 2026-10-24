@@ -231,7 +231,7 @@ fn side_rename(c : @ui.Ctx, src : Source, item : ChatItem) -> Unit {
 // kept across runs: a value (no field of it changes)
 let rename_box : @ui.Style = @sf.bleed_x(rename_bleed)
   .then(@sf.in_line(rename_taller))
-  .then(@ui.style(w=Full, h=S6, radius=Md, bg=Bg, border=B1, justify=JCenter))
+  .then(@ui.css("w=Full h=S6 radius=Md bg=Bg border=B1 justify=JCenter"))
 
 ///|
 let rename_bleed : Double = 6.0

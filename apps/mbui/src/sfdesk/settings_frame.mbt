@@ -186,9 +186,9 @@ let settings_nav_icon : Double = 16.0
 
 ///|
 // kept across runs: a value (no field of it changes)
-let settings_side_fill : @ui.Style = @ui.style(w=Full, h=Full)
+let settings_side_fill : @ui.Style = @ui.css("w=Full h=Full")
 
 ///|
 /// Its pages under the band, 8 in at its sides, 4 under it (Sidebar.css.ts navList).
 // kept across runs: a value (no field of it changes)
-let settings_nav_list : @ui.Style = @ui.style(w=Full, h=Full, px=S2, pt=S1)
+let settings_nav_list : @ui.Style = @ui.css("w=Full h=Full px=S2 pt=S1")

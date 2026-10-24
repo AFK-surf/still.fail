@@ -202,7 +202,7 @@ fn trouble_button(p : Json?) -> Bool {
 ///|
 /// What a trouble says and its button, 10 apart.
 // kept across runs: a value (no field of it changes)
-let trouble_rows : @ui.Style = @ui.style(w=Full, gap=S2_5)
+let trouble_rows : @ui.Style = @ui.css("w=Full gap=S2_5")
 
 ///|
 /// Why it is in trouble (13, the text's ink).
@@ -308,17 +308,17 @@ fn profile_key(c : @ui.Ctx, core : Core, station : String, p : Json?, head : () 
 ///|
 /// A sign-in's card: what it holds 12 apart (SignIn: spacedBy(12)).
 // kept across runs: a value (no field of it changes)
-let sign_in_rows : @ui.Style = @ui.style(w=Full, gap=S3)
+let sign_in_rows : @ui.Style = @ui.css("w=Full gap=S3")
 
 ///|
 /// 取消登录 at the end of its head while signing in: 2 down, its mark 6 before it.
 // kept across runs: a value (no field of it changes)
-let sign_in_cancel : @ui.Style = @ui.style(row=true, pt=S0_5, gap=S1_5, align=ACenter)
+let sign_in_cancel : @ui.Style = @ui.css("row pt=S0_5 gap=S1_5 align=ACenter")
 
 ///|
 /// 登录 and 在机器上手动登录 beside it, 16 apart.
 // kept across runs: a value (no field of it changes)
-let sign_in_buttons : @ui.Style = @ui.style(row=true, gap=S4, align=ACenter)
+let sign_in_buttons : @ui.Style = @ui.css("row gap=S4 align=ACenter")
 
 ///|
 /// Why a sign-in failed (13, red).
@@ -328,7 +328,7 @@ let sign_in_failed_words : @ui.TextStyle = @ui.text_style(size=Sm, leading=L5, c
 ///|
 /// Where a key's account stands, at the top of its card: its words CARD_PAD from the card's edge, 12 above and below.
 // kept across runs: a value (no field of it changes)
-let key_card_head : @ui.Style = @ui.style(w=Full, px=S3, py=S3)
+let key_card_head : @ui.Style = @ui.css("w=Full px=S3 py=S3")
 
 ///|
 /// A variable being edited (EnvRow): its row, the name and value typed, what a secret saved before shows masked, and
@@ -965,7 +965,7 @@ fn open_manual_sign_in(command : String) -> Unit {
 ///|
 /// Its command's room in its sheet: 20 in from the sheet's sides, 24 over its foot.
 // kept across runs: a value (no field of it changes)
-let manual_sign_in_room : @ui.Style = @ui.style(w=Full, px=S5, pb=S6)
+let manual_sign_in_room : @ui.Style = @ui.css("w=Full px=S5 pb=S6")
 
 ///|
 /// A subscription's sign-in (SignIn): one card, `head` (where it stands: its pill says it once, no title over the

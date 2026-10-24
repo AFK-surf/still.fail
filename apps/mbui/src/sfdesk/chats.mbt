@@ -250,11 +250,11 @@ fn lists_band(c : @ui.Ctx, src : Source, w : Workspace, pages : Pages) -> Unit {
 /// 新建对话's row and the filter beside it (Sidebar.css.ts navNew: 6 8 2, 4 apart; in the closed bar 6 from its side
 /// and 6 under).
 // kept across runs: a value (no field of it changes)
-let band_new : @ui.Style = @ui.style(row=true, w=Full, pl=S2, pr=S2, pt=S1_5, pb=S0_5, gap=S1, align=ACenter)
+let band_new : @ui.Style = @ui.css("row w=Full pl=S2 pr=S2 pt=S1_5 pb=S0_5 gap=S1 align=ACenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let band_new_bar : @ui.Style = @ui.style(row=true, w=Full, pl=S2, pr=S1_5, pt=S1_5, pb=S1_5, gap=S1, align=ACenter)
+let band_new_bar : @ui.Style = @ui.css("row w=Full pl=S2 pr=S1_5 pt=S1_5 pb=S1_5 gap=S1 align=ACenter")
 
 ///|
 /// A row's icon (16), 新建对话's a pixel in (Sidebar.css.ts navCompose: aligned with the 14px check under it).
@@ -350,7 +350,7 @@ fn side_said(c : @ui.Ctx, words : String, bad : Bool, stations? : (() -> Unit)? 
 ///|
 /// What a list says in place of its rows (Sidebar.css.ts navEmpty: 16 by 10 in, 13 on 20, muted; navError red).
 // kept across runs: a value (no field of it changes)
-let side_said_box : @ui.Style = @ui.style(w=Full, px=S2_5, py=S4)
+let side_said_box : @ui.Style = @ui.css("w=Full px=S2_5 py=S4")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -423,7 +423,7 @@ fn filter_menu(c : @ui.Ctx, src : Source, w : Workspace, pages : Pages) -> Unit 
 
 ///|
 // kept across runs: a value (no field of it changes)
-let filter_box : @ui.Style = @ui.style(w=S8, h=S8, radius=Xl, align=ACenter, justify=JCenter)
+let filter_box : @ui.Style = @ui.css("w=S8 h=S8 radius=Xl align=ACenter justify=JCenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -640,25 +640,25 @@ let side_row : @ui.Style = @ui.style(
 ///|
 /// Its two lines, 2 apart; faded with all its work over (navSessionText, the core's `settled`).
 // kept across runs: a value (no field of it changes)
-let side_text : @ui.Style = @ui.style(w=Full, gap=S0_5)
+let side_text : @ui.Style = @ui.css("w=Full gap=S0_5")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let side_text_settled : @ui.Style = @ui.style(w=Full, gap=S0_5, opacity=O45)
+let side_text_settled : @ui.Style = @ui.css("w=Full gap=S0_5 opacity=O45")
 
 ///|
 /// Its title's line (navSessionHead: 20 high, 6 apart); pointed at, room at its end for 归档 (24).
 // kept across runs: a value (no field of it changes)
-let side_head : @ui.Style = @ui.style(row=true, w=Full, h=S5, gap=S1_5, align=ACenter)
+let side_head : @ui.Style = @ui.css("row w=Full h=S5 gap=S1_5 align=ACenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let side_head_room : @ui.Style = @ui.style(row=true, w=Full, h=S5, pr=S6, gap=S1_5, align=ACenter)
+let side_head_room : @ui.Style = @ui.css("row w=Full h=S5 pr=S6 gap=S1_5 align=ACenter")
 
 ///|
 /// The title's mark's column (navMarkSlot: 10, the mark in its middle).
 // kept across runs: a value (no field of it changes)
-let side_mark_slot : @ui.Style = @ui.style(w=S2_5, align=ACenter)
+let side_mark_slot : @ui.Style = @ui.css("w=S2_5 align=ACenter")
 
 ///|
 /// The title (navSessionTitle: 13 on 20, as long as there is room; 500 while something in it is unread; offline at
@@ -677,16 +677,16 @@ let side_dim : @ui.TextStyle = @ui.text_style(color=A(Fg, O50))
 ///|
 /// (its state line where the core says one: the words pressed for the message it is about)
 // kept across runs: a value (no field of it changes)
-let side_state : @ui.Style = @ui.style(row=true, w=Full, align=ACenter)
+let side_state : @ui.Style = @ui.css("row w=Full align=ACenter")
 
 ///|
 /// The second line (navSessionMeta: 18 high, 6 apart; offline at half).
 // kept across runs: a value (no field of it changes)
-let side_meta : @ui.Style = @ui.style(row=true, w=Full, h=S4_5, gap=S1_5, align=ACenter)
+let side_meta : @ui.Style = @ui.css("row w=Full h=S4_5 gap=S1_5 align=ACenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let side_meta_dim : @ui.Style = @ui.style(opacity=O50)
+let side_meta_dim : @ui.Style = @ui.css("opacity=O50")
 
 ///|
 /// When, in the aside's place while pointed at (navTime: 11, subtle).
@@ -696,7 +696,7 @@ let side_time : @ui.TextStyle = @ui.text_style(size=Xs2, color=Subtle, leading=L
 ///|
 /// What stands at a row's title's end (Sidebar.css.ts sessionKind): a column 16 wide, its mark (12) in the middle.
 // kept across runs: a value (no field of it changes)
-let side_kind : @ui.Style = @ui.style(w=S4, align=ACenter)
+let side_kind : @ui.Style = @ui.css("w=S4 align=ACenter")
 
 ///|
 let side_kind_mark : Double = 12.0
@@ -704,28 +704,21 @@ let side_kind_mark : Double = 12.0
 ///|
 /// A chat's row in the list, 2 over the row under it (Sidebar.css.ts navSessionWrap + navSessionWrap: margin-top 2).
 // kept across runs: a value (no field of it changes)
-let side_row_more : @ui.Style = @ui.style(w=Full, pb=S0_5)
+let side_row_more : @ui.Style = @ui.css("w=Full pb=S0_5")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let side_row_last : @ui.Style = @ui.style(w=Full)
+let side_row_last : @ui.Style = @ui.css("w=Full")
 
 ///|
 /// 归档 at the row's top right (rowArchive: 5 down, 6 in, 24 square; page.css.ts iconBtn's corner, the pointer's
 /// ground on it).
 // kept across runs: a value (no field of it changes)
-let side_archive_at : @ui.Style = @ui.style(w=Full, pt=S1_25, pr=S1_5, align=AEnd)
+let side_archive_at : @ui.Style = @ui.css("w=Full pt=S1_25 pr=S1_5 align=AEnd")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let side_archive : @ui.Style = @ui.style(
-  w=S6,
-  h=S6,
-  radius=Lg,
-  align=ACenter,
-  justify=JCenter,
-  hovered=@ui.patch(bg=Hover),
-)
+let side_archive : @ui.Style = @ui.css("w=S6 h=S6 radius=Lg align=ACenter justify=JCenter hovered{bg=Hover}")
 
 ///|
 /// Who is in a chat at its row's second line's end, as the web's sidebar draws them (RowPicture.tsx RowAside, 16): its
@@ -836,20 +829,20 @@ let side_agent_mark : Double = 12.0
 /// What stands at a row's second line's end (RowPicture.css.ts aside, Sidebar.css.ts navSessionMeta): the agents and
 /// the people 6 apart, each 2 in.
 // kept across runs: a value (no field of it changes)
-let side_aside_row : @ui.Style = @ui.style(row=true, gap=S1_5, align=ACenter)
+let side_aside_row : @ui.Style = @ui.css("row gap=S1_5 align=ACenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let side_aside_agents : @ui.Style = @ui.style(row=true, pl=S0_5, gap=S1, align=ACenter)
+let side_aside_agents : @ui.Style = @ui.css("row pl=S0_5 gap=S1 align=ACenter")
 
 ///|
 /// An agent's mark in a column 16 wide and high (RowPicture.css.ts asideAgent).
 // kept across runs: a value (no field of it changes)
-let side_aside_agent : @ui.Style = @ui.style(w=S4, h=S4, align=ACenter, justify=JCenter)
+let side_aside_agent : @ui.Style = @ui.css("w=S4 h=S4 align=ACenter justify=JCenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let side_aside_faces : @ui.Style = @ui.style(row=true, pl=S0_5, align=ACenter)
+let side_aside_faces : @ui.Style = @ui.css("row pl=S0_5 align=ACenter")
 
 ///|
 /// How many more than are shown (RowPicture.css.ts asideMore): 12, muted.
@@ -859,7 +852,7 @@ let side_aside_more : @ui.TextStyle = @ui.text_style(size=Xs, color=Muted, wrap=
 ///|
 /// A face, 16 round; one after the first takes 13 (3 of it over the one before).
 // kept across runs: a value (no field of it changes)
-let side_face : @ui.Style = @ui.style(w=S4, h=S4)
+let side_face : @ui.Style = @ui.css("w=S4 h=S4")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -868,27 +861,27 @@ let side_face_after : @ui.Style = @ui.style(w=@sf.side_face_step, h=S4)
 ///|
 /// The pixel after who started it (RowPicture.css.ts: marginRight 1).
 // kept across runs: a value (no field of it changes)
-let side_face_gap : @ui.Style = @ui.style(w=SPx, h=S4)
+let side_face_gap : @ui.Style = @ui.css("w=SPx h=S4")
 
 ///|
 /// A pixel of the row's ground round a face (RowPicture.css.ts face: box-shadow 1px of --mark-around): the sidebar's,
 /// the row in view's, the folded bar's (a floating panel's: shell.css.ts dock).
 // kept across runs: a value (no field of it changes)
-let side_face_ground : @ui.Style = @ui.style(w=S4_5, h=S4_5, radius=Full, bg=Sidebar)
+let side_face_ground : @ui.Style = @ui.css("w=S4_5 h=S4_5 radius=Full bg=Sidebar")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let side_face_on : @ui.Style = @ui.style(w=S4_5, h=S4_5, radius=Full, bg=Selected)
+let side_face_on : @ui.Style = @ui.css("w=S4_5 h=S4_5 radius=Full bg=Selected")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let side_face_bar : @ui.Style = @ui.style(w=S4_5, h=S4_5, radius=Full, bg=Surface)
+let side_face_bar : @ui.Style = @ui.css("w=S4_5 h=S4_5 radius=Full bg=Surface")
 
 ///|
 /// Who started it ringed in ink, a pixel of ground between: a line 1 wide from 1 to 2 out (RowPicture.css.ts
 /// face[data-starter]::after).
 // kept across runs: a value (no field of it changes)
-let side_face_ring : @ui.Style = @ui.style(w=S5, h=S5, radius=Full, border=B1, border_color=Fg)
+let side_face_ring : @ui.Style = @ui.css("w=S5 h=S5 radius=Full border=B1 border_color=Fg")
 
 ///|
 /// What its station has not answered yet of a chat's pin, rename or archive asked here (the core's `doing`, as

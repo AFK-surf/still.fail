@@ -237,7 +237,7 @@ let history_shade_ms : Double = 900.0
 ///|
 /// The shade under an item gone to: the accent at 10%, its corners Smooth(8)'s.
 // kept across runs: a value (no field of it changes)
-let history_mark_ground : @ui.Style = @ui.style(w=Full, h=Full, radius=Lg, bg=A(Accent, O10))
+let history_mark_ground : @ui.Style = @ui.css("w=Full h=Full radius=Lg bg=A(Accent,O10)")
 
 ///|
 /// The item marked (its list's key, its item's key).
@@ -704,12 +704,12 @@ fn slack_name(c : @ui.Ctx, src : Source, station : String, user : String, name :
 
 ///|
 // kept across runs: a value (no field of it changes)
-let slack_name_row : @ui.Style = @ui.style(row=true, gap=S1, align=ACenter)
+let slack_name_row : @ui.Style = @ui.css("row gap=S1 align=ACenter")
 
 ///|
 /// Its ground under the finger rounded 4 (Smooth(4)).
 // kept across runs: a value (no field of it changes)
-let slack_name_ground : @ui.Style = @ui.style(radius=Base)
+let slack_name_ground : @ui.Style = @ui.css("radius=Base")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -762,20 +762,20 @@ let history_place_words : @ui.TextStyle = @ui.text_style(size=Sm, weight=Semibol
 ///|
 /// A mark's row: what it waits for, 6 apart.
 // kept across runs: a value (no field of it changes)
-let mark_row : @ui.Style = @ui.style(row=true, gap=S1_5, align=ACenter)
+let mark_row : @ui.Style = @ui.css("row gap=S1_5 align=ACenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let history_slack_row : @ui.Style = @ui.style(row=true, align=ACenter)
+let history_slack_row : @ui.Style = @ui.css("row align=ACenter")
 
 ///|
 /// A pill's room after the label (6) and its tinted ground: 6 by 1 round its word, Smooth(6)'s corners.
 // kept across runs: a value (no field of it changes)
-let pill_after : @ui.Style = @ui.style(pl=S1_5)
+let pill_after : @ui.Style = @ui.css("pl=S1_5")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let pill_ground : @ui.Style = @ui.style(px=S1_5, py=SPx, radius=Md)
+let pill_ground : @ui.Style = @ui.css("px=S1_5 py=SPx radius=Md")
 
 ///|
 /// A small tinted word after a label (History.kt Pill).

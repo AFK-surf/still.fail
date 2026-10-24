@@ -67,7 +67,7 @@ let agent_mark_16 : @ui.Style = @ui.style(
 
 ///|
 // kept across runs: a value (no field of it changes)
-let agent_mark_20 : @ui.Style = @ui.style(w=S5, h=S5, radius=Md, bg=Neutral, align=ACenter, justify=JCenter)
+let agent_mark_20 : @ui.Style = @ui.css("w=S5 h=S5 radius=Md bg=Neutral align=ACenter justify=JCenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -87,4 +87,4 @@ let agent_badge_red : @ui.Style = @ui.style(w=S3, h=S3, radius=Full, bg=@sf.mark
 
 ///|
 // kept across runs: a value (no field of it changes)
-let agent_badge_run : @ui.Style = @ui.style(w=S2_5, h=S2_5)
+let agent_badge_run : @ui.Style = @ui.css("w=S2_5 h=S2_5")

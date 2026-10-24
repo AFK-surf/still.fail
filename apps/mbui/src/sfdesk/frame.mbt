@@ -416,14 +416,14 @@ fn dock(
 ///|
 /// The block's column, the window's height.
 // kept across runs: a value (no field of it changes)
-let dock_column : @ui.Style = @ui.style(h=Full)
+let dock_column : @ui.Style = @ui.css("h=Full")
 
 ///|
 /// The block open (the sidebar's ground, its line and shadow there but clear) and closed to the bar (a floating
 /// panel's ground, its corner concentric with the places' grounds 6 in: shell.css.ts dock, closed); both cut what goes
 /// past their edges.
 // kept across runs: a value (no field of it changes)
-let dock_open : @ui.Style = @ui.style(row=true, bg=Sidebar, border=B1, clip=true)
+let dock_open : @ui.Style = @ui.css("row bg=Sidebar border=B1 clip")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -432,7 +432,7 @@ let dock_closed : @ui.Style = @ui.style(row=true, bg=Surface, radius=@sf.closed_
 ///|
 /// The sidebar in the block: its width, the block's height.
 // kept across runs: a value (no field of it changes)
-let dock_side : @ui.Style = @ui.style(h=Full)
+let dock_side : @ui.Style = @ui.css("h=Full")
 
 ///|
 /// How far the page moves aside for the folded sidebar shown a while (Rail.tsx peekShift, shell.css.ts main's
@@ -609,20 +609,20 @@ pub fn frame(
 ///|
 /// The frame's row: the page's ground under all of it.
 // kept across runs: a value (no field of it changes)
-let frame_row : @ui.Style = @ui.style(row=true, w=Full, h=Full, bg=Bg)
+let frame_row : @ui.Style = @ui.css("row w=Full h=Full bg=Bg")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let frame_col : @ui.Style = @ui.style(h=Full)
+let frame_col : @ui.Style = @ui.css("h=Full")
 
 ///|
 /// The pane: its page laid out as wide as the column leaves, what goes past the window cut.
 // kept across runs: a value (no field of it changes)
-let frame_main : @ui.Style = @ui.style(h=Full, clip=true)
+let frame_main : @ui.Style = @ui.css("h=Full clip")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let frame_gate : @ui.Style = @ui.style(bg=Bg)
+let frame_gate : @ui.Style = @ui.css("bg=Bg")
 
 ///|
 /// A page's bar's padding at its left and its right (styles/sidebar.css.ts pageBar: 12; brand.css.ts, railed, closed:

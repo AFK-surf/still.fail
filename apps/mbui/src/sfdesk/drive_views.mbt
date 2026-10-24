@@ -527,11 +527,11 @@ let view_icon : Double = 16.0
 
 ///|
 // kept across runs: a value (no field of it changes)
-let tree_note : @ui.Style = @ui.style(row=true, w=Full, pt=S2, pb=S2, pr=S2_5)
+let tree_note : @ui.Style = @ui.css("row w=Full pt=S2 pb=S2 pr=S2_5")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let column_note : @ui.Style = tree_note.then(@ui.style(pl=S2_5))
+let column_note : @ui.Style = tree_note.then(@ui.css("pl=S2_5"))
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -544,30 +544,30 @@ let tree_error : @ui.TextStyle = @ui.text_style(size=Xs, color=Danger, w=Full)
 ///|
 /// The ways' track (Drive.css.ts views): 2 in, 2 apart, round, on the words' colour at 6%.
 // kept across runs: a value (no field of it changes)
-let views_track : @ui.Style = @ui.style(row=true, p=S0_5, gap=S0_5, radius=Full, bg=Tint, align=ACenter)
+let views_track : @ui.Style = @ui.css("row p=S0_5 gap=S0_5 radius=Full bg=Tint align=ACenter")
 
 ///|
 /// A way (viewButton): 28 round; the one shown on the page's ground, a hairline and a shadow round it.
 // kept across runs: a value (no field of it changes)
-let view_off : @ui.Style = @ui.style(w=S7, h=S7, radius=Full, align=ACenter, justify=JCenter)
+let view_off : @ui.Style = @ui.css("w=S7 h=S7 radius=Full align=ACenter justify=JCenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let view_on : @ui.Style = view_off.then(@ui.style(bg=Bg, border=B0_5, border_color=Line, shadow=Sm))
+let view_on : @ui.Style = view_off.then(@ui.css("bg=Bg border=B0_5 border_color=Line shadow=Sm"))
 
 ///|
 /// The columns side by side (Drive.css.ts columns), as tall as the list.
 // kept across runs: a value (no field of it changes)
-let columns_strip : @ui.Style = @ui.style(row=true, w=Full, h=Full)
+let columns_strip : @ui.Style = @ui.css("row w=Full h=Full")
 
 ///|
 /// A column (column): as tall as the strip, its rows 2 apart, its corner the field's; lit while a drop goes into it.
 // kept across runs: a value (no field of it changes)
-let column_box : @ui.Style = @ui.style(h=Full, radius=Xl, clip=true)
+let column_box : @ui.Style = @ui.css("h=Full radius=Xl clip")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let column_drop : @ui.Style = @ui.style(bg=AccentBg)
+let column_drop : @ui.Style = @ui.css("bg=AccentBg")
 
 ///|
 /// An edge: as wide as the gap between two columns (6), the library's look from its left.

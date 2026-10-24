@@ -6,21 +6,21 @@
 ///|
 /// The list: all of the page under its bar, the filter over what scrolls.
 // kept across runs: a value (no field of it changes)
-let model_list_page : @ui.Style = @ui.style(w=Full, h=Full)
+let model_list_page : @ui.Style = @ui.css("w=Full h=Full")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let model_from_seen : @ui.Style = @ui.style(opacity=O100)
+let model_from_seen : @ui.Style = @ui.css("opacity=O100")
 
 ///|
 /// The filter's room: 18 from the sides, 8 over it and 4 under.
 // kept across runs: a value (no field of it changes)
-let model_filter_room : @ui.Style = @ui.style(w=Full, px=S4_5, pt=S2, pb=S1)
+let model_filter_room : @ui.Style = @ui.css("w=Full px=S4_5 pt=S2 pb=S1")
 
 ///|
 /// A series' name (Controls.kt GroupLabel: 13, muted, 14 over it and 4 under), at the rows' words.
 // kept across runs: a value (no field of it changes)
-let model_group_room : @ui.Style = @ui.style(w=Full, px=S5, pt=S3_5, pb=S1)
+let model_group_room : @ui.Style = @ui.css("w=Full px=S5 pt=S3_5 pb=S1")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -29,7 +29,7 @@ let model_group_words : @ui.TextStyle = @ui.text_style(size=Sm, color=Muted)
 ///|
 /// None matching (14, muted, 16 over and under).
 // kept across runs: a value (no field of it changes)
-let model_none_room : @ui.Style = @ui.style(w=Full, px=S5, py=S4)
+let model_none_room : @ui.Style = @ui.css("w=Full px=S5 py=S4")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -38,7 +38,7 @@ let model_none_words : @ui.TextStyle = @ui.text_style(size=Base, color=Muted, w=
 ///|
 /// Where a model comes from, small: half seen while it is not usable here yet.
 // kept across runs: a value (no field of it changes)
-let model_from_faint : @ui.Style = @ui.style(opacity=O50)
+let model_from_faint : @ui.Style = @ui.css("opacity=O50")
 
 ///|
 // kept across runs: a value (no field of it changes)

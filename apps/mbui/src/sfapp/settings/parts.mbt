@@ -120,7 +120,7 @@ pub fn wide_head(
 
 ///|
 // kept across runs: a value (no field of it changes)
-let wide_head_lead_box : @ui.Style = @ui.style(w=Full, pt=S1_5)
+let wide_head_lead_box : @ui.Style = @ui.css("w=Full pt=S1_5")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -139,26 +139,26 @@ let head_block : Ref[Int] = Ref(-1)
 ///|
 /// The wide frame's head: on a page under another (back over its title) 20 down, else 40; 12 under it.
 // kept across runs: a value (no field of it changes)
-let wide_head_top : @ui.Style = @ui.style(w=Full, pt=S10, pb=S3, bg=Bg)
+let wide_head_top : @ui.Style = @ui.css("w=Full pt=S10 pb=S3 bg=Bg")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let wide_head_deep : @ui.Style = wide_head_top.then(@ui.style(pt=S5))
+let wide_head_deep : @ui.Style = wide_head_top.then(@ui.css("pt=S5"))
 
 ///|
 /// The wide frame's back, over the head's title.
 // kept across runs: a value (no field of it changes)
-let wide_back : @ui.Style = @ui.style(row=true, pb=S2, gap=S1, align=ACenter)
+let wide_back : @ui.Style = @ui.css("row pb=S2 gap=S1 align=ACenter")
 
 ///|
 /// A title and what is at its end, in a line (LargeTitle's lead and big word too).
 // kept across runs: a value (no field of it changes)
-let title_line : @ui.Style = @ui.style(row=true, w=Full, gap=S2_5, align=ACenter)
+let title_line : @ui.Style = @ui.css("row w=Full gap=S2_5 align=ACenter")
 
 ///|
 /// A title with what it is for beside it.
 // kept across runs: a value (no field of it changes)
-let title_about : @ui.Style = title_words.then(@ui.style(row=true, gap=S1_5, align=ACenter))
+let title_about : @ui.Style = title_words.then(@ui.css("row gap=S1_5 align=ACenter"))
 
 ///|
 /// The title's words, the room its line has left beside what follows them (pageHead: the title grows, its actions at
@@ -211,15 +211,7 @@ fn top_back(c : @ui.Ctx, core : Core, label : String, trailing? : () -> Unit, on
 ///|
 /// Back's line at the top of a large-title page (Stations.kt TopBack): 10 in, 6 over, 4 under.
 // kept across runs: a value (no field of it changes)
-let top_back_line : @ui.Style = @ui.style(
-  row=true,
-  w=Full,
-  px=S2_5,
-  pt=S1_5,
-  pb=S1,
-  align=ACenter,
-  justify=JBetween,
-)
+let top_back_line : @ui.Style = @ui.css("row w=Full px=S2_5 pt=S1_5 pb=S1 align=ACenter justify=JBetween")
 
 ///|
 /// What a large-title page's top had (top_back), for its head in the wide frame (large_title).
@@ -419,26 +411,26 @@ fn place_page(
 ///|
 /// All of where it is.
 // kept across runs: a value (no field of it changes)
-let page_fill : @ui.Style = @ui.style(w=Full, h=Full)
+let page_fill : @ui.Style = @ui.css("w=Full h=Full")
 
 ///|
 /// A place's page's actions, 10 apart: in the bar, or at the root at the end of a line of their own, 16 in, 8 down.
 // kept across runs: a value (no field of it changes)
-let bar_actions : @ui.Style = @ui.style(row=true, gap=S2_5, align=ACenter)
+let bar_actions : @ui.Style = @ui.css("row gap=S2_5 align=ACenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let root_actions : @ui.Style = bar_actions.then(@ui.style(w=Full, px=S4, pt=S2, justify=JEnd))
+let root_actions : @ui.Style = bar_actions.then(@ui.css("w=Full px=S4 pt=S2 justify=JEnd"))
 
 ///|
 /// What a place's page shows, 4 under its bar.
 // kept across runs: a value (no field of it changes)
-let place_body : @ui.Style = page_fill.then(@ui.style(pt=S1))
+let place_body : @ui.Style = page_fill.then(@ui.css("pt=S1"))
 
 ///|
 /// What a place's page shows at the bar's top in the wide frame, 8 under its page bar (PlacePage.kt: `bar + 8.dp`).
 // kept across runs: a value (no field of it changes)
-let root_body : @ui.Style = page_fill.then(@ui.style(pt=S2))
+let root_body : @ui.Style = page_fill.then(@ui.css("pt=S2"))
 
 ///|
 /// A page's large title (Parts.kt LargeTitle): `small`'s line over the big word when it is said, the word after `lead`
@@ -489,7 +481,7 @@ fn large_title(
 ///|
 /// LargeTitle: 16 in, 6 under it; its small line over its word's.
 // kept across runs: a value (no field of it changes)
-let large_title_box : @ui.Style = @ui.style(w=Full, px=S4, pb=S1_5)
+let large_title_box : @ui.Style = @ui.css("w=Full px=S4 pb=S1_5")
 
 ///|
 /// A section's heading (Parts.kt SectionHeader): its title, what it holds at its end; `start` its room at its start
@@ -559,34 +551,34 @@ fn section_header(
 /// SectionHeader's line (its start said where it is used, 20 unless said): 20 in at its end, 14 over, 6 under, its
 /// words on the line's foot.
 // kept across runs: a value (no field of it changes)
-let section_line : @ui.Style = @ui.style(row=true, w=Full, pl=S5, pr=S5, pt=S3_5, pb=S1_5, align=AEnd, gap=S2)
+let section_line : @ui.Style = @ui.css("row w=Full pl=S5 pr=S5 pt=S3_5 pb=S1_5 align=AEnd gap=S2")
 
 ///|
 /// A marked SectionHeader's mark and title, 6 apart, on the middle of its words.
 // kept across runs: a value (no field of it changes)
-let section_marked : @ui.Style = @ui.style(row=true, gap=S1_5, align=ACenter)
+let section_marked : @ui.Style = @ui.css("row gap=S1_5 align=ACenter")
 
 ///|
 /// The wide frame's section head: 16 in as the title is, 28 over it, 2 under (its note, or what it holds, 10 under it
 /// then); its mark and title in a line, what it holds 2 under them.
 // kept across runs: a value (no field of it changes)
-let wide_section_box : @ui.Style = @ui.style(w=Full, px=S4, pt=S7, pb=S0_5, gap=S0_5)
+let wide_section_box : @ui.Style = @ui.css("w=Full px=S4 pt=S7 pb=S0_5 gap=S0_5")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let wide_section_first : @ui.Style = wide_section_box.then(@ui.style(pt=S4))
+let wide_section_first : @ui.Style = wide_section_box.then(@ui.css("pt=S4"))
 
 ///|
 // kept across runs: a value (no field of it changes)
-let wide_section_said : @ui.Style = wide_section_box.then(@ui.style(pb=S2_5))
+let wide_section_said : @ui.Style = wide_section_box.then(@ui.css("pb=S2_5"))
 
 ///|
 // kept across runs: a value (no field of it changes)
-let wide_section_first_said : @ui.Style = wide_section_first.then(@ui.style(pb=S2_5))
+let wide_section_first_said : @ui.Style = wide_section_first.then(@ui.css("pb=S2_5"))
 
 ///|
 // kept across runs: a value (no field of it changes)
-let wide_section_line : @ui.Style = @ui.style(row=true, w=Full, gap=S2, align=ACenter)
+let wide_section_line : @ui.Style = @ui.css("row w=Full gap=S2 align=ACenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -612,7 +604,7 @@ fn section_note(c : @ui.Ctx, words : String) -> Unit {
 
 ///|
 // kept across runs: a value (no field of it changes)
-let wide_section_note : @ui.Style = @ui.style(w=Full, px=S4, pt=S0_5, pb=S2_5)
+let wide_section_note : @ui.Style = @ui.css("w=Full px=S4 pt=S0_5 pb=S2_5")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -626,11 +618,11 @@ fn inset(c : @ui.Ctx, body : () -> Unit) -> Unit {
 
 ///|
 // kept across runs: a value (no field of it changes)
-let wide_inset : @ui.Style = @ui.style(w=Full, px=S4)
+let wide_inset : @ui.Style = @ui.css("w=Full px=S4")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let phone_inset : @ui.Style = @ui.style(w=Full, px=S3)
+let phone_inset : @ui.Style = @ui.css("w=Full px=S3")
 
 ///|
 /// A page's note under its title, in a line or two (SettingParts.kt PageNote).
@@ -649,7 +641,7 @@ fn page_note(c : @ui.Ctx, words : String) -> Unit {
 ///|
 /// The wide frame's lead under the title (pages.css.ts pageHead p: 13, muted).
 // kept across runs: a value (no field of it changes)
-let wide_page_note : @ui.Style = @ui.style(w=Full, px=S4, pb=S2)
+let wide_page_note : @ui.Style = @ui.css("w=Full px=S4 pb=S2")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -658,7 +650,7 @@ let wide_lead : @ui.TextStyle = @ui.text_style(size=Lg, color=Muted, w=Full)
 ///|
 /// PageNote's room: 24 in, 10 under it.
 // kept across runs: a value (no field of it changes)
-let page_note_box : @ui.Style = @ui.style(w=Full, px=S6, pb=S2_5)
+let page_note_box : @ui.Style = @ui.css("w=Full px=S6 pb=S2_5")
 
 ///|
 /// A card on the page (Parts.kt Card): 12 in from the sides, 10 under it, its words 20 in; its corner 22, or concentric
@@ -688,16 +680,16 @@ fn card(c : @ui.Ctx, body : () -> Unit, key? : String = "", foot? : Bool = false
 /// A card's room on the page: 12 from its sides, 10 under it; in the wide frame its edge at the column's, where the
 /// title stands (16 in).
 // kept across runs: a value (no field of it changes)
-let card_room : @ui.Style = @ui.style(w=Full, px=S3, pb=S2_5)
+let card_room : @ui.Style = @ui.css("w=Full px=S3 pb=S2_5")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let wide_card_room : @ui.Style = @ui.style(w=Full, px=S4, pb=S2_5)
+let wide_card_room : @ui.Style = @ui.css("w=Full px=S4 pb=S2_5")
 
 ///|
 /// A card: 20 in (CARD_PAD), 22 round (CARD_CORNER); rippled where it is tapped (an id).
 // kept across runs: a value (no field of it changes)
-let card_ground : @ui.Style = @ui.style(w=Full, p=S5, radius=Xl3, bg=Card, clip=true)
+let card_ground : @ui.Style = @ui.css("w=Full p=S5 radius=Xl3 bg=Card clip")
 
 ///|
 /// A card with a button in its corner: 20 + 19 round.
@@ -738,11 +730,11 @@ fn rows_card(c : @ui.Ctx, body : () -> Unit) -> Unit {
 ///|
 /// The wide frame's list on the page: its rows' words 16 in (the row's own 12), as the title's.
 // kept across runs: a value (no field of it changes)
-let wide_list_room : @ui.Style = @ui.style(w=Full, px=S1, pb=S2_5)
+let wide_list_room : @ui.Style = @ui.css("w=Full px=S1 pb=S2_5")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let wide_list_ground : @ui.Style = @ui.style(w=Full, gap=SPx)
+let wide_list_ground : @ui.Style = @ui.css("w=Full gap=SPx")
 
 ///|
 /// Whether what is being drawn is on a list card (Parts.kt LocalOnCard): a PickRow's ground is then the card's
@@ -821,24 +813,24 @@ fn card_piece(c : @ui.Ctx, first : Bool, last : Bool, body : () -> Unit) -> Unit
 ///|
 /// A card's piece's room on the page but its last: 12 from its sides, nothing under it.
 // kept across runs: a value (no field of it changes)
-let card_piece_room : @ui.Style = @ui.style(w=Full, px=S3)
+let card_piece_room : @ui.Style = @ui.css("w=Full px=S3")
 
 ///|
 /// A list card's piece: its rows 8 in from its sides (LIST_PAD); 8 above the card's first, under its last.
 // kept across runs: a value (no field of it changes)
-let list_piece_ground : @ui.Style = @ui.style(w=Full, px=S2)
+let list_piece_ground : @ui.Style = @ui.css("w=Full px=S2")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let list_piece_first : @ui.Style = @ui.style(w=Full, px=S2, pt=S2)
+let list_piece_first : @ui.Style = @ui.css("w=Full px=S2 pt=S2")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let list_piece_last : @ui.Style = @ui.style(w=Full, px=S2, pb=S2)
+let list_piece_last : @ui.Style = @ui.css("w=Full px=S2 pb=S2")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let list_ground_open : @ui.Style = @ui.style(w=Full, p=S2)
+let list_ground_open : @ui.Style = @ui.css("w=Full p=S2")
 
 ///|
 /// A list card's piece's ground: the card's, its corners (LIST_CARD_CORNER).
@@ -848,33 +840,25 @@ let list_piece_fill : @ui.Style = @ui.style(w=Full, h=Full, radius=@sf.list_card
 ///|
 /// Half of a card's piece squared again (Full: as the spacer beside it grows), the card's ground.
 // kept across runs: a value (no field of it changes)
-let list_piece_patch : @ui.Style = @ui.style(w=Full, h=Full, bg=Card)
+let list_piece_patch : @ui.Style = @ui.css("w=Full h=Full bg=Card")
 
 ///|
 /// A row of a card's piece: ListRow's line, its corner the card's less 8 said (LIST_ROW_CORNER 18, Xl2 on the scale:
 /// what `Inner` works out on a whole card; a piece's ground is no container of it, squared where it is no end of it).
 // kept across runs: a value (no field of it changes)
-let list_piece_line : @ui.Style = list_line.then(@ui.style(radius=Xl2))
+let list_piece_line : @ui.Style = list_line.then(@ui.css("radius=Xl2"))
 
 ///|
 /// The wide frame's row (pages.css.ts listRow): 52 high at least, 10 by 12 in, the field's corner under the pointer.
 // kept across runs: a value (no field of it changes)
-let wide_list_line : @ui.Style = @ui.style(
-  row=true,
-  w=Full,
-  min_h=S12,
-  px=S3,
-  py=S2_5,
-  gap=S3,
-  radius=Xl,
-  align=ACenter,
-  hovered=@ui.patch(bg=Hover),
+let wide_list_line : @ui.Style = @ui.css(
+  #|row w=Full min_h=S12 px=S3 py=S2_5 gap=S3 radius=Xl align=ACenter hovered{bg=Hover}
 )
 
 ///|
 /// ListRow's line: 12 and 12 in, 12 apart, rounded concentric with its card.
 // kept across runs: a value (no field of it changes)
-let list_line : @ui.Style = @ui.style(row=true, w=Full, px=S3, py=S3, gap=S3, radius=Inner, align=ACenter)
+let list_line : @ui.Style = @ui.css("row w=Full px=S3 py=S3 gap=S3 radius=Inner align=ACenter")
 
 ///|
 /// A row's main words, as wide as the row lets them, cut to one line.
@@ -1026,7 +1010,7 @@ fn row_icon(c : @ui.Ctx, name : String) -> Unit {
 ///|
 /// Things in a line, centred across it, 6 apart (a dot and its words, a mark and a word).
 // kept across runs: a value (no field of it changes)
-let near_beside : @ui.Style = @ui.style(row=true, gap=S1_5, align=ACenter)
+let near_beside : @ui.Style = @ui.css("row gap=S1_5 align=ACenter")
 
 ///|
 /// A switch (PageParts.kt Switch): 44 by 26, green when on, its knob white: mbui's switch's look (@kit.switch_look_of)
@@ -1068,19 +1052,19 @@ let dot_shape : @ui.Style = @ui.style(w=@sf.dot_size, h=@sf.dot_size, radius=Ful
 
 ///|
 // kept across runs: a value (no field of it changes)
-let dot_online : @ui.Style = dot_shape.then(@ui.style(bg=Positive))
+let dot_online : @ui.Style = dot_shape.then(@ui.css("bg=Positive"))
 
 ///|
 // kept across runs: a value (no field of it changes)
-let dot_busy : @ui.Style = dot_shape.then(@ui.style(bg=Accent))
+let dot_busy : @ui.Style = dot_shape.then(@ui.css("bg=Accent"))
 
 ///|
 // kept across runs: a value (no field of it changes)
-let dot_error : @ui.Style = dot_shape.then(@ui.style(bg=Danger))
+let dot_error : @ui.Style = dot_shape.then(@ui.css("bg=Danger"))
 
 ///|
 // kept across runs: a value (no field of it changes)
-let dot_ring : @ui.Style = dot_shape.then(@ui.style(border_color=Subtle))
+let dot_ring : @ui.Style = dot_shape.then(@ui.css("border_color=Subtle"))
 
 ///|
 /// A check's tone as a presence dot (Stations.kt toneDot).
@@ -1190,21 +1174,21 @@ fn seg(
 /// Seg's track (its height and corner said where it is used): its options in a line, 2 in; as wide as where it is
 /// (`fill`) or as they are.
 // kept across runs: a value (no field of it changes)
-let seg_track : @ui.Style = @ui.style(row=true, p=S0_5)
+let seg_track : @ui.Style = @ui.css("row p=S0_5")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let seg_track_full : @ui.Style = seg_track.then(@ui.style(w=Full))
+let seg_track_full : @ui.Style = seg_track.then(@ui.css("w=Full"))
 
 ///|
 /// An option: its words in its middle, 10 in; 12 in and an equal share where the track fills; the wide frame's pill,
 /// 101 at least.
 // kept across runs: a value (no field of it changes)
-let seg_option : @ui.Style = @ui.style(h=Full, px=S2_5, align=ACenter, justify=JCenter)
+let seg_option : @ui.Style = @ui.css("h=Full px=S2_5 align=ACenter justify=JCenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let seg_full_option : @ui.Style = seg_option.then(@ui.style(w=Full, px=S3))
+let seg_full_option : @ui.Style = seg_option.then(@ui.css("w=Full px=S3"))
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -1213,7 +1197,7 @@ let seg_pill_option : @ui.Style = seg_option.then(@ui.style(min_w=@sf.seg_pill_m
 ///|
 /// The wide frame's pill in a line of its own, not stretched to its width.
 // kept across runs: a value (no field of it changes)
-let seg_pill_line : @ui.Style = @ui.style(row=true, w=Full)
+let seg_pill_line : @ui.Style = @ui.css("row w=Full")
 
 ///|
 /// A person's picture (Parts.kt Avatar): theirs once it is here, else their initial on their colour.
@@ -1234,7 +1218,7 @@ pub fn you(c : @ui.Ctx, words : String) -> Unit {
 ///|
 /// You's wash: 6 in at its sides, 6 round.
 // kept across runs: a value (no field of it changes)
-let you_ground : @ui.Style = @ui.style(px=S1_5, radius=Md, bg=AccentBg)
+let you_ground : @ui.Style = @ui.css("px=S1_5 radius=Md bg=AccentBg")
 
 ///|
 /// Small words in the accent's ink (in lines where there is no room: Settings.kt:294 has no maxLines).
@@ -1273,7 +1257,7 @@ pub fn wait_line(c : @ui.Ctx, words : String, error? : Bool = false, pad? : Bool
 ///|
 /// A wait's line in a page's flow: in from its sides as a card's words.
 // kept across runs: a value (no field of it changes)
-let wait_line_padded : @ui.Style = @ui.style(w=Full, px=S5, py=S2)
+let wait_line_padded : @ui.Style = @ui.css("w=Full px=S5 py=S2")
 
 ///|
 /// The shapes of a settings page's cards to come (the library's Waiting: @sf.waiting, its cards), 12 in from the page's
@@ -1287,7 +1271,7 @@ pub fn waiting_cards(c : @ui.Ctx, count? : Int = 3, error? : String = "", failin
 
 ///|
 // kept across runs: a value (no field of it changes)
-let wait_cards_in : @ui.Style = @ui.style(w=Full, px=S3)
+let wait_cards_in : @ui.Style = @ui.css("w=Full px=S3")
 
 ///|
 /// A list's rows to come (the library's Waiting: @sf.waiting, its rows); what could not be read over them in red.
@@ -1324,7 +1308,7 @@ fn place_empty(c : @ui.Ctx, words : String, note? : String = "") -> Unit {
 ///|
 /// PlaceEmpty's room: 32 in, 40 over and under, its lines 8 apart in its middle.
 // kept across runs: a value (no field of it changes)
-let place_empty_box : @ui.Style = @ui.style(w=Full, px=S8, py=S10, gap=S2, align=ACenter)
+let place_empty_box : @ui.Style = @ui.css("w=Full px=S8 py=S10 gap=S2 align=ACenter")
 
 ///|
 /// A button (Controls.kt Button): 38 high, round; primary in ink (red when `danger`; off: the line's grey, its words
@@ -1381,7 +1365,7 @@ pub fn button(
 ///|
 /// A button: a capsule, 16 in, a spinner 8 before its words, they in its middle (where it is made wider).
 // kept across runs: a value (no field of it changes)
-let button_box : @ui.Style = @ui.style(row=true, px=S4, gap=S2, radius=Full, align=ACenter, justify=JCenter)
+let button_box : @ui.Style = @ui.css("row px=S4 gap=S2 radius=Full align=ACenter justify=JCenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -1441,7 +1425,7 @@ fn wide_button(
 /// WideButton: a capsule as wide as where it is, its words in its middle, 20 from its ends however narrow it is
 /// (Security.kt WideButton: padding(horizontal = 20.dp)).
 // kept across runs: a value (no field of it changes)
-let wide_button_box : @ui.Style = @ui.style(row=true, w=Full, px=S5, radius=Full, gap=S2, align=ACenter, justify=JCenter)
+let wide_button_box : @ui.Style = @ui.css("row w=Full px=S5 radius=Full gap=S2 align=ACenter justify=JCenter")
 
 ///|
 /// A row of a picking sheet (Controls.kt PickRow): what, a line under it, a check on the one chosen; `mark` before
@@ -1516,11 +1500,11 @@ pub fn pick_row(
 /// its label after its mark, 6 apart. On a list card (Controls.kt:62 onCard) to the card's padding, its line
 /// 12 in and rounded concentric with the card, as a ListRow.
 // kept across runs: a value (no field of it changes)
-let pick_room : @ui.Style = @ui.style(w=Full, px=S3)
+let pick_room : @ui.Style = @ui.css("w=Full px=S3")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let pick_line_off : @ui.Style = @ui.style(row=true, w=Full, px=S2, py=S3, gap=S3, align=ACenter)
+let pick_line_off : @ui.Style = @ui.css("row w=Full px=S2 py=S3 gap=S3 align=ACenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -1528,11 +1512,11 @@ let pick_line : @ui.Style = pick_line_off
 
 ///|
 // kept across runs: a value (no field of it changes)
-let pick_card_line_off : @ui.Style = pick_line_off.then(@ui.style(px=S3, radius=Inner))
+let pick_card_line_off : @ui.Style = pick_line_off.then(@ui.css("px=S3 radius=Inner"))
 
 ///|
 // kept across runs: a value (no field of it changes)
-let pick_card_line : @ui.Style = pick_line.then(@ui.style(px=S3, radius=Inner))
+let pick_card_line : @ui.Style = pick_line.then(@ui.css("px=S3 radius=Inner"))
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -1572,7 +1556,7 @@ let press_corner : Double = 8.0
 ///|
 /// Words to tap with room round them, what is tapped (BarSettings.kt 设为当前, 删除: padding(4) inside its clickable).
 // kept across runs: a value (no field of it changes)
-let press_room : @ui.Style = @ui.style(p=S1)
+let press_room : @ui.Style = @ui.css("p=S1")
 
 ///|
 /// Words that do something when tapped (a link's look: Theme.kt link). True on the frame after a tap.
@@ -1624,7 +1608,7 @@ fn nav_button(c : @ui.Ctx, key : String, icon : String, size? : Double = 18.0, s
 ///|
 /// NavButton: round, its icon in its middle.
 // kept across runs: a value (no field of it changes)
-let round_button : @ui.Style = @ui.style(radius=Full, align=ACenter, justify=JCenter)
+let round_button : @ui.Style = @ui.css("radius=Full align=ACenter justify=JCenter")
 
 ///|
 /// A body of words (PageParts.kt Body): on a list card 12 and 12 in (its words 20 from the card's edge, as its rows'),
@@ -1635,11 +1619,11 @@ fn body(c : @ui.Ctx, f : () -> Unit) -> Unit {
 
 ///|
 // kept across runs: a value (no field of it changes)
-let body_box : @ui.Style = @ui.style(w=Full, px=S4, py=S3_5, gap=S3)
+let body_box : @ui.Style = @ui.css("w=Full px=S4 py=S3_5 gap=S3")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let body_on_card : @ui.Style = body_box.then(@ui.style(px=S3, py=S3))
+let body_on_card : @ui.Style = body_box.then(@ui.css("px=S3 py=S3"))
 
 ///|
 /// A paragraph and a quieter one under it (Security.kt Para).
@@ -1709,7 +1693,7 @@ fn tone_pill(c : @ui.Ctx, words : String, tone : String) -> Unit {
 ///|
 /// TonePill: 6 in at its sides, 1 over and under, 6 round.
 // kept across runs: a value (no field of it changes)
-let tone_pill_box : @ui.Style = @ui.style(px=S1_5, py=SPx, radius=Md)
+let tone_pill_box : @ui.Style = @ui.css("px=S1_5 py=SPx radius=Md")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -1763,7 +1747,7 @@ pub fn mono(
 ///|
 /// What it holds in the middle of where it is, across.
 // kept across runs: a value (no field of it changes)
-let centre_column : @ui.Style = @ui.style(w=Full, align=ACenter)
+let centre_column : @ui.Style = @ui.css("w=Full align=ACenter")
 
 ///|
 /// The core's done or waiting lead at the start of `s` (ui/StatusText.kt doneLead, waitLead; present.ts: 做完了,
@@ -1821,7 +1805,7 @@ fn status_text(c : @ui.Ctx, s : String, style~ : @ui.TextStyle) -> Unit {
 
 ///|
 // kept across runs: a value (no field of it changes)
-let status_line : @ui.Style = @ui.style(row=true, align=ACenter)
+let status_line : @ui.Style = @ui.css("row align=ACenter")
 
 ///|
 /// A state's words, as small as where they stand has them: 11, 12, 13 (Connects.kt), muted, on one line.

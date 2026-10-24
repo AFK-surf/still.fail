@@ -149,11 +149,11 @@ let zou_row_h : Double = 58.0
 
 ///|
 // kept across runs: a value (no field of it changes)
-let zou_row_look : @ui.Style = @ui.style(w=Full, px=S2_5, py=S2, gap=S1, radius=Xl)
+let zou_row_look : @ui.Style = @ui.css("w=Full px=S2_5 py=S2 gap=S1 radius=Xl")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let zou_aside : @ui.Style = @ui.style(opacity=O55)
+let zou_aside : @ui.Style = @ui.css("opacity=O55")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -161,11 +161,11 @@ let zou_question : @ui.TextStyle = @ui.text_style(size=Sm, weight=Medium, color=
 
 ///|
 // kept across runs: a value (no field of it changes)
-let zou_meta : @ui.Style = @ui.style(row=true, w=Full, gap=S1_5, align=ACenter)
+let zou_meta : @ui.Style = @ui.css("row w=Full gap=S1_5 align=ACenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let zou_where : @ui.Style = @ui.style(row=true, w=Full, align=ACenter)
+let zou_where : @ui.Style = @ui.css("row w=Full align=ACenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -178,7 +178,7 @@ let zou_time : @ui.TextStyle = @ui.text_style(size=Xs, color=Subtle, leading=L5,
 ///|
 /// 待定 over the ones set aside (DecisionDesk.css.ts group: 14 10 4, 12 on 18, subtle).
 // kept across runs: a value (no field of it changes)
-let zou_group : @ui.Style = @ui.style(w=Full, px=S2_5, pt=S3_5, pb=S1)
+let zou_group : @ui.Style = @ui.css("w=Full px=S2_5 pt=S3_5 pb=S1")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -187,7 +187,7 @@ let zou_group_words : @ui.TextStyle = @ui.text_style(size=Xs, color=Subtle, lead
 ///|
 /// None waiting (emptyList: 20 by 10 in, 12 on 20, subtle).
 // kept across runs: a value (no field of it changes)
-let zou_empty : @ui.Style = @ui.style(w=Full, px=S2_5, py=S5)
+let zou_empty : @ui.Style = @ui.css("w=Full px=S2_5 py=S5")
 
 ///|
 // kept across runs: a value (no field of it changes)

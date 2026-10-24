@@ -228,12 +228,12 @@ let local_menu : Ref[Bool] = Ref(false)
 ///|
 /// (card: its parts 10 apart, the card's padding and ground)
 // kept across runs: a value (no field of it changes)
-let ls_card : @ui.Style = desk_card.then(@ui.style(gap=S2_5))
+let ls_card : @ui.Style = desk_card.then(@ui.css("gap=S2_5"))
 
 ///|
 /// (cardHead: its dot, its title, its buttons, 10 apart)
 // kept across runs: a value (no field of it changes)
-let ls_head : @ui.Style = @ui.style(row=true, w=Full, gap=S2_5, align=ACenter)
+let ls_head : @ui.Style = @ui.css("row w=Full gap=S2_5 align=ACenter")
 
 ///|
 /// (cardTitle: its name and how it is on a line, 10 apart)
@@ -253,11 +253,11 @@ let ls_state : @ui.TextStyle = @ui.text_style(size=Sm, leading=L6, color=Muted, 
 ///|
 /// (cardFoot: its facts 12 apart in lines, past its dot: 17 in)
 // kept across runs: a value (no field of it changes)
-let ls_foot : @ui.Style = @ui.style(row=true, w=Full, gap=S3)
+let ls_foot : @ui.Style = @ui.css("row w=Full gap=S3")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let ls_past : @ui.Style = @ui.style(row=true, w=Full, gap=S2_5)
+let ls_past : @ui.Style = @ui.css("row w=Full gap=S2_5")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -270,7 +270,7 @@ let ls_under : @ui.Style = @ui.style(w=@sf.grow, gap=S1_5)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let ls_bar : @ui.Style = @ui.style(w=Full, py=S1)
+let ls_bar : @ui.Style = @ui.css("w=Full py=S1")
 
 ///|
 /// (warn: red, the list's size, 500)
@@ -309,7 +309,7 @@ fn version_page(c : @ui.Ctx, core : Core) -> Unit {
 ///|
 /// (row: the version and what the last look found on the left, its button on the right, 16 apart)
 // kept across runs: a value (no field of it changes)
-let ver_row : @ui.Style = @ui.style(row=true, w=Full, gap=S4, align=ACenter)
+let ver_row : @ui.Style = @ui.css("row w=Full gap=S4 align=ACenter")
 
 ///|
 // kept across runs: a value (no field of it changes)

@@ -30,7 +30,7 @@ fn login_cards_reset() -> Unit {
 ///|
 /// Ended: one quiet line (13 on 19), failed in red, 2 under what is above it.
 // kept across runs: a value (no field of it changes)
-let login_ended_room : @ui.Style = @ui.style(pt=SPx)
+let login_ended_room : @ui.Style = @ui.css("pt=SPx")
 
 
 ///|
@@ -39,20 +39,20 @@ let login_ended_room : @ui.Style = @ui.style(pt=SPx)
 /// under, 280 at least (LoginCard's widthIn: its step buttons fill that), on the chip's grey, its corner 22 (its × the
 /// phone's 28). The accent at 12% when it is the one a link pointed to.
 // kept across runs: a value (no field of it changes)
-let login_card_room : @ui.Style = @ui.style(w=Full, pt=S1_5, align=AStart)
+let login_card_room : @ui.Style = @ui.css("w=Full pt=S1_5 align=AStart")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let login_card_room_wide : @ui.Style = @ui.style(w=Full, pt=S2, align=AStart)
+let login_card_room_wide : @ui.Style = @ui.css("w=Full pt=S2 align=AStart")
 
 ///|
 /// `fill`: as wide as where it is (a station page's 登录: StationLogins' Modifier.fillMaxWidth()).
 // kept across runs: a value (no field of it changes)
-let login_card_room_fill : @ui.Style = @ui.style(w=Full, pt=S1_5)
+let login_card_room_fill : @ui.Style = @ui.css("w=Full pt=S1_5")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let login_card_room_fill_wide : @ui.Style = @ui.style(w=Full, pt=S2)
+let login_card_room_fill_wide : @ui.Style = @ui.css("w=Full pt=S2")
 
 ///|
 /// The card's least width (LoginCard: widthIn(min = 280.dp)).
@@ -75,22 +75,22 @@ let login_card_box_wide : @ui.Style = @ui.style(
 
 ///|
 // kept across runs: a value (no field of it changes)
-let login_card_marked : @ui.Style = login_card_box.then(@ui.style(bg=A(Accent, O10)))
+let login_card_marked : @ui.Style = login_card_box.then(@ui.css("bg=A(Accent,O10)"))
 
 ///|
 // kept across runs: a value (no field of it changes)
-let login_card_marked_wide : @ui.Style = login_card_box_wide.then(@ui.style(bg=A(Accent, O10)))
+let login_card_marked_wide : @ui.Style = login_card_box_wide.then(@ui.css("bg=A(Accent,O10)"))
 
 ///|
 /// Its title and its × in a row, the × in the card's top corner.
 // kept across runs: a value (no field of it changes)
-let login_head : @ui.Style = @ui.style(row=true, w=Full, align=AStart)
+let login_head : @ui.Style = @ui.css("row w=Full align=AStart")
 
 ///|
 /// Its title (13 on 20, medium, the ink; a phone's 15 on 21), 10 in from the card's padding and 10 down: as wide as
 /// its words (a card hugging what it holds measures them so).
 // kept across runs: a value (no field of it changes)
-let login_title_room : @ui.Style = @ui.style(px=S2_5, pt=S2_5)
+let login_title_room : @ui.Style = @ui.css("px=S2_5 pt=S2_5")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -104,23 +104,17 @@ let login_title_wide : @ui.TextStyle = @ui.text_style(size=Sm, weight=Medium, co
 /// 取消 as the card's ×: a small panel's pill (24; a phone's 28), round, its ground under the pointer (the web's
 /// panelIcon), rippled in the ink on a phone (LoginCards.kt CancelLogin: ripple(color = C.ink)).
 // kept across runs: a value (no field of it changes)
-let login_cancel : @ui.Style = @ui.style(
-  w=S7,
-  h=S7,
-  radius=Full,
-  align=ACenter,
-  justify=JCenter,
-)
+let login_cancel : @ui.Style = @ui.css("w=S7 h=S7 radius=Full align=ACenter justify=JCenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let login_cancel_wide : @ui.Style = @ui.style(w=S6, h=S6, radius=Full, align=ACenter, justify=JCenter, hovered=@ui.patch(bg=Hover))
+let login_cancel_wide : @ui.Style = @ui.css("w=S6 h=S6 radius=Full align=ACenter justify=JCenter hovered{bg=Hover}")
 
 ///|
 /// A line of how it stands or what to do (12 on 18, grey; red what is off; a phone's 13 on 19), 10 in, a spinner 6
 /// before it.
 // kept across runs: a value (no field of it changes)
-let login_said : @ui.Style = @ui.style(row=true, px=S2_5, gap=S1_5, align=ACenter)
+let login_said : @ui.Style = @ui.css("row px=S2_5 gap=S1_5 align=ACenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -140,12 +134,12 @@ let login_said_red_wide : @ui.TextStyle = login_said_wide.then(@ui.text_style(co
 
 ///|
 // kept across runs: a value (no field of it changes)
-let login_said_under : @ui.Style = login_said.then(@ui.style(pb=S2_5))
+let login_said_under : @ui.Style = login_said.then(@ui.css("pb=S2_5"))
 
 ///|
 /// The device code (22 on 29, semibold, the code face's), 10 in, 4 over and under; pressed, copied.
 // kept across runs: a value (no field of it changes)
-let login_code_room : @ui.Style = @ui.style(px=S2_5, py=S1)
+let login_code_room : @ui.Style = @ui.css("px=S2_5 py=S1")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -156,32 +150,23 @@ let login_code_words : @ui.TextStyle = @ui.text_style(size=Xl3, weight=Semibold,
 /// corner the card's less its padding; solid (the ink, its words the paper's) while it is the next thing to do, else
 /// the ink at 5%; its words 13 medium (a phone's 15 semibold), a spinner or ↗ 6 beside them.
 // kept across runs: a value (no field of it changes)
-let login_step_room : @ui.Style = @ui.style(w=Full, pt=S2)
+let login_step_room : @ui.Style = @ui.css("w=Full pt=S2")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let login_step : @ui.Style = @ui.style(
-  row=true,
-  w=Full,
-  h=S11,
-  gap=S1_5,
-  radius=Inner,
-  bg=A(Fg, O5),
-  align=ACenter,
-  justify=JCenter,
-)
+let login_step : @ui.Style = @ui.css("row w=Full h=S11 gap=S1_5 radius=Inner bg=A(Fg,O5) align=ACenter justify=JCenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let login_step_wide : @ui.Style = login_step.then(@ui.style(h=S8, hovered=@ui.patch(bg=A(Fg, O10))))
+let login_step_wide : @ui.Style = login_step.then(@ui.css("h=S8 hovered{bg=A(Fg,O10)}"))
 
 ///|
 // kept across runs: a value (no field of it changes)
-let login_step_solid : @ui.Style = login_step.then(@ui.style(bg=Fg))
+let login_step_solid : @ui.Style = login_step.then(@ui.css("bg=Fg"))
 
 ///|
 // kept across runs: a value (no field of it changes)
-let login_step_solid_wide : @ui.Style = login_step_wide.then(@ui.style(bg=Fg, hovered=@ui.patch(bg=A(Fg, O80))))
+let login_step_solid_wide : @ui.Style = login_step_wide.then(@ui.css("bg=Fg hovered{bg=A(Fg,O80)}"))
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -203,27 +188,19 @@ let login_step_words_solid_wide : @ui.TextStyle = login_step_words_wide.then(@ui
 /// The code pasted back (CodeField): the card's width, 6 under the step above, 44 high, on the surface, 14 in on the
 /// left and 6 on the right; 完成 at its end once a code is in, 32 high, solid, its corner the field's less 6.
 // kept across runs: a value (no field of it changes)
-let login_field_room : @ui.Style = @ui.style(w=Full, pt=S1_5)
+let login_field_room : @ui.Style = @ui.css("w=Full pt=S1_5")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let login_field : @ui.Style = @ui.style(row=true, w=Full, h=S11, pl=S3_5, pr=S1_5, gap=S1_5, radius=Inner, bg=Surface, align=ACenter)
+let login_field : @ui.Style = @ui.css("row w=Full h=S11 pl=S3_5 pr=S1_5 gap=S1_5 radius=Inner bg=Surface align=ACenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let login_field_words : @ui.Style = @ui.style(w=Full)
+let login_field_words : @ui.Style = @ui.css("w=Full")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let login_finish : @ui.Style = @ui.style(
-  row=true,
-  h=S8,
-  px=S3_5,
-  radius=Inner,
-  bg=Fg,
-  align=ACenter,
-  justify=JCenter,
-)
+let login_finish : @ui.Style = @ui.css("row h=S8 px=S3_5 radius=Inner bg=Fg align=ACenter justify=JCenter")
 
 ///|
 // kept across runs: a value (no field of it changes)

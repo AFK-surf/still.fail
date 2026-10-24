@@ -142,15 +142,15 @@ let update_pop_w : Double = 288.0
 ///|
 /// The control (trigger): its dot (6) and word 5 apart, 6 over and under, 12 on 18, in the accent's ink; red in trouble.
 // kept across runs: a value (no field of it changes)
-let update_trigger : @ui.Style = @ui.style(row=true, py=S1_5, gap=S1_25, align=ACenter)
+let update_trigger : @ui.Style = @ui.css("row py=S1_5 gap=S1_25 align=ACenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let update_dot : @ui.Style = @ui.style(w=S1_5, h=S1_5, radius=Full, bg=AccentText)
+let update_dot : @ui.Style = @ui.css("w=S1_5 h=S1_5 radius=Full bg=AccentText")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let update_dot_trouble : @ui.Style = @ui.style(w=S1_5, h=S1_5, radius=Full, bg=Danger)
+let update_dot_trouble : @ui.Style = @ui.css("w=S1_5 h=S1_5 radius=Full bg=Danger")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -163,7 +163,7 @@ let update_label_trouble : @ui.TextStyle = @ui.text_style(size=Xs, leading=L5, c
 ///|
 /// Its head (head): its words 10 in and 10 down, 2 apart; its close in the corner, 8 after them.
 // kept across runs: a value (no field of it changes)
-let update_head : @ui.Style = @ui.style(row=true, w=Full, pl=S2_5, gap=S2, align=AStart)
+let update_head : @ui.Style = @ui.css("row w=Full pl=S2_5 gap=S2 align=AStart")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -171,7 +171,7 @@ let update_words : @ui.Style = @ui.style(w=@sf.grow, pt=S2_5, gap=S0_5)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let update_title : @ui.Style = @ui.style(row=true, gap=S2, align=AEnd)
+let update_title : @ui.Style = @ui.css("row gap=S2 align=AEnd")
 
 ///|
 /// The name (13 in 500), its state (12, the accent's ink; red in trouble), the detail (12, muted).
@@ -193,13 +193,13 @@ let update_detail : @ui.TextStyle = @ui.text_style(size=Xs, color=Muted, w=Full)
 ///|
 /// How far it is (bar): on the words' line, 10 in.
 // kept across runs: a value (no field of it changes)
-let update_bar : @ui.Style = @ui.style(w=Full, px=S2_5, pt=S2)
+let update_bar : @ui.Style = @ui.css("w=Full px=S2_5 pt=S2")
 
 ///|
 /// Its foot (foot): 8 under what is over it, 24 high at least, 10 in; the versions (11 mono, muted) and its button
 /// 12 apart.
 // kept across runs: a value (no field of it changes)
-let update_foot : @ui.Style = @ui.style(row=true, w=Full, min_h=S6, pt=S2, pl=S2_5, gap=S3, align=ACenter)
+let update_foot : @ui.Style = @ui.css("row w=Full min_h=S6 pt=S2 pl=S2_5 gap=S3 align=ACenter")
 
 ///|
 // kept across runs: a value (no field of it changes)

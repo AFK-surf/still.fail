@@ -676,7 +676,7 @@ fn lock_gate(c : @ui.Ctx, src : Source, w : Workspace, bar? : Bool) -> Bool {
 ///|
 /// The waiting page and Home's top bar over it, the screen's whole.
 // kept across runs: a value (no field of it changes)
-let gate_fill : @ui.Style = @ui.style(w=Full, h=Full)
+let gate_fill : @ui.Style = @ui.css("w=Full h=Full")
 
 ///|
 /// What the settings' pages read and call, and how they move: the core as the app has it (Source), the app's stack.

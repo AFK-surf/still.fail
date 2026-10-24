@@ -633,20 +633,11 @@ let confirm_w : Double = 420.0
 
 ///|
 // kept across runs: a value (no field of it changes)
-let triple_style : @ui.Style = @ui.style(
-  row=true,
-  h=S7,
-  px=S2_5,
-  gap=S1_5,
-  align=ACenter,
-  radius=Lg,
-  clip=true,
-  hovered=@ui.patch(bg=Hover),
-)
+let triple_style : @ui.Style = @ui.css("row h=S7 px=S2_5 gap=S1_5 align=ACenter radius=Lg clip hovered{bg=Hover}")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let triple_on : @ui.Style = @ui.style(row=true, h=S7, px=S2_5, gap=S1_5, align=ACenter, radius=Lg, clip=true, bg=Hover)
+let triple_on : @ui.Style = @ui.css("row h=S7 px=S2_5 gap=S1_5 align=ACenter radius=Lg clip bg=Hover")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -687,72 +678,56 @@ let triple_head : @ui.TextStyle = @ui.text_style(size=Xs, weight=Medium, color=M
 
 ///|
 // kept across runs: a value (no field of it changes)
-let triple_search : @ui.Style = @ui.style(row=true, w=Full, px=S2_5, py=S2_5, gap=S2, align=ACenter)
+let triple_search : @ui.Style = @ui.css("row w=Full px=S2_5 py=S2_5 gap=S2 align=ACenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let triple_rule_h : @ui.Style = @ui.style(w=Full, h=SPx, bg=Line)
+let triple_rule_h : @ui.Style = @ui.css("w=Full h=SPx bg=Line")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let triple_rule_v : @ui.Style = @ui.style(w=SPx, h=Full, bg=Line)
+let triple_rule_v : @ui.Style = @ui.css("w=SPx h=Full bg=Line")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let triple_columns : @ui.Style = @ui.style(row=true, max_h=S80, gap=S1)
+let triple_columns : @ui.Style = @ui.css("row max_h=S80 gap=S1")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let triple_column : @ui.Style = @ui.style(min_w=S28, gap=SPx)
+let triple_column : @ui.Style = @ui.css("min_w=S28 gap=SPx")
 
 ///|
 // kept across runs: a value (no field of it changes)
 // kept across runs: a value (no field of it changes)
-let triple_efforts : @ui.Style = @ui.style(min_w=S32, gap=SPx)
+let triple_efforts : @ui.Style = @ui.css("min_w=S32 gap=SPx")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let triple_option_style : @ui.Style = @ui.style(
-  row=true,
-  w=Full,
-  min_h=S7,
-  px=S2_5,
-  py=S1,
-  gap=S1_5,
-  align=ACenter,
-  radius=Xl,
-  hovered=@ui.patch(bg=Hover),
+let triple_option_style : @ui.Style = @ui.css(
+  #|row w=Full min_h=S7 px=S2_5 py=S1 gap=S1_5 align=ACenter radius=Xl hovered{bg=Hover}
 )
 
 ///|
 // kept across runs: a value (no field of it changes)
-let triple_option_on : @ui.Style = @ui.style(
-  row=true,
-  w=Full,
-  min_h=S7,
-  px=S2_5,
-  py=S1,
-  gap=S1_5,
-  align=ACenter,
-  radius=Xl,
-  bg=Hover,
+let triple_option_on : @ui.Style = @ui.css(
+  #|row w=Full min_h=S7 px=S2_5 py=S1 gap=S1_5 align=ACenter radius=Xl bg=Hover
 )
 
 ///|
 // kept across runs: a value (no field of it changes)
-let triple_option_text : @ui.Style = @ui.style(gap=SPx)
+let triple_option_text : @ui.Style = @ui.css("gap=SPx")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let triple_empty : @ui.Style = @ui.style(px=S2_5, py=S2)
+let triple_empty : @ui.Style = @ui.css("px=S2_5 py=S2")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let triple_borrow : @ui.Style = @ui.style(w=Full, px=S2_5, py=S1_5)
+let triple_borrow : @ui.Style = @ui.css("w=Full px=S2_5 py=S1_5")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let triple_foot : @ui.Style = @ui.style(row=true, w=Full, pt=S1_5, gap=S2, align=ACenter)
+let triple_foot : @ui.Style = @ui.css("row w=Full pt=S1_5 gap=S2 align=ACenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -760,19 +735,11 @@ let triple_who_room : @ui.Style = @ui.style(row=true, w=@sf.grow, clip=true)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let triple_who : @ui.Style = @ui.style(
-  row=true,
-  h=S6,
-  px=S2_5,
-  gap=S1,
-  align=ACenter,
-  radius=Full,
-  hovered=@ui.patch(bg=Hover),
-)
+let triple_who : @ui.Style = @ui.css("row h=S6 px=S2_5 gap=S1 align=ACenter radius=Full hovered{bg=Hover}")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let triple_who_on : @ui.Style = @ui.style(row=true, h=S6, px=S2_5, gap=S1, align=ACenter, radius=Full, bg=Hover)
+let triple_who_on : @ui.Style = @ui.css("row h=S6 px=S2_5 gap=S1 align=ACenter radius=Full bg=Hover")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -784,34 +751,21 @@ let triple_who_name : @ui.TextStyle = @ui.text_style(size=Xs, weight=Medium, col
 
 ///|
 // kept across runs: a value (no field of it changes)
-let triple_accounts : @ui.Style = @ui.style(min_w=S56, max_w=S80, gap=SPx)
+let triple_accounts : @ui.Style = @ui.css("min_w=S56 max_w=S80 gap=SPx")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let small_primary : @ui.Style = @ui.style(h=S6, px=S2_5, align=ACenter, justify=JCenter, radius=Full, bg=Primary)
+let small_primary : @ui.Style = @ui.css("h=S6 px=S2_5 align=ACenter justify=JCenter radius=Full bg=Primary")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let small_primary_off : @ui.Style = @ui.style(
-  h=S6,
-  px=S2_5,
-  align=ACenter,
-  justify=JCenter,
-  radius=Full,
-  bg=Primary,
-  opacity=O50,
+let small_primary_off : @ui.Style = @ui.css(
+  #|h=S6 px=S2_5 align=ACenter justify=JCenter radius=Full bg=Primary opacity=O50
 )
 
 ///|
 // kept across runs: a value (no field of it changes)
-let small_quiet : @ui.Style = @ui.style(
-  h=S6,
-  px=S2_5,
-  align=ACenter,
-  justify=JCenter,
-  radius=Full,
-  hovered=@ui.patch(bg=Hover),
-)
+let small_quiet : @ui.Style = @ui.css("h=S6 px=S2_5 align=ACenter justify=JCenter radius=Full hovered{bg=Hover}")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -827,7 +781,7 @@ let confirm_line : @ui.TextStyle = @ui.text_style(size=Sm, color=Muted)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let confirm_foot : @ui.Style = @ui.style(row=true, w=Full, pt=S3, gap=S2, align=ACenter, justify=JEnd)
+let confirm_foot : @ui.Style = @ui.css("row w=Full pt=S3 gap=S2 align=ACenter justify=JEnd")
 
 ///|
 /// The models' column: 360 high at most (runPicker), a row about 31 (30 at least, 1 apart), 200 wide.
@@ -841,25 +795,16 @@ let triple_models_w : Double = 200.0
 
 ///|
 // kept across runs: a value (no field of it changes)
-let triple_head_box : @ui.Style = @ui.style(px=S2_5, pt=S1, pb=S1_5)
+let triple_head_box : @ui.Style = @ui.css("px=S2_5 pt=S1 pb=S1_5")
 
 ///|
 /// In a composer's row (newChat's): 28 high, 8 in, its words 12.
 // kept across runs: a value (no field of it changes)
-let triple_small : @ui.Style = @ui.style(
-  row=true,
-  h=S7,
-  px=S2,
-  gap=S1_5,
-  align=ACenter,
-  radius=Lg,
-  clip=true,
-  hovered=@ui.patch(bg=Hover),
-)
+let triple_small : @ui.Style = @ui.css("row h=S7 px=S2 gap=S1_5 align=ACenter radius=Lg clip hovered{bg=Hover}")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let triple_small_on : @ui.Style = @ui.style(row=true, h=S7, px=S2, gap=S1_5, align=ACenter, radius=Lg, clip=true, bg=Hover)
+let triple_small_on : @ui.Style = @ui.css("row h=S7 px=S2 gap=S1_5 align=ACenter radius=Lg clip bg=Hover")
 
 ///|
 // kept across runs: a value (no field of it changes)

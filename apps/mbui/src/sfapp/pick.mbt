@@ -359,7 +359,7 @@ fn pick_pop(c : @ui.Ctx, src : Source, r : ChatRef) -> Unit {
 ///|
 /// What the pill is placed in: all of the layer.
 // kept across runs: a value (no field of it changes)
-let pick_pop_frame : @ui.Style = @ui.style(w=Full, h=Full)
+let pick_pop_frame : @ui.Style = @ui.css("w=Full h=Full")
 
 ///|
 /// The pill's height (quotePop: 26).
@@ -367,7 +367,7 @@ let pick_pop_h : Double = 26.0
 
 ///|
 // kept across runs: a value (no field of it changes)
-let pick_pop_row : @ui.Style = @ui.style(row=true, w=Full, justify=JCenter)
+let pick_pop_row : @ui.Style = @ui.css("row w=Full justify=JCenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -384,7 +384,7 @@ let pick_pop_box : @ui.Style = @ui.style(
 
 ///|
 // kept across runs: a value (no field of it changes)
-let pick_pop_hot : @ui.Style = pick_pop_box.then(@ui.style(bg=A(Primary, O80)))
+let pick_pop_hot : @ui.Style = pick_pop_box.then(@ui.css("bg=A(Primary,O80)"))
 
 ///|
 // kept across runs: a value (no field of it changes)

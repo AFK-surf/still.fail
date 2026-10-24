@@ -355,18 +355,18 @@ let cn_more_icon : Double = 16.0
 
 ///|
 // kept across runs: a value (no field of it changes)
-let cn_kind_box : @ui.Style = @ui.style(w=S5, h=S5, align=ACenter, justify=JCenter)
+let cn_kind_box : @ui.Style = @ui.css("w=S5 h=S5 align=ACenter justify=JCenter")
 
 ///|
 /// The filter, as wide as what it says, 8 further under the head than the head's own room, where the web's is
 /// (pageHead: 28 under it), and 12 over the list; the waiting apps' title (sectionTitleQuiet: the meta's 12 in 500 muted, 6 under).
 // kept across runs: a value (no field of it changes)
-let cn_filter_room : @ui.Style = @ui.style(w=Full, px=S4, pt=S2, pb=S3, align=AStart)
+let cn_filter_room : @ui.Style = @ui.css("w=Full px=S4 pt=S2 pb=S3 align=AStart")
 
 ///|
 /// The lists at the column's edges (their rows reaching 12 past them: desk_list).
 // kept across runs: a value (no field of it changes)
-let cn_list_room : @ui.Style = @ui.style(w=Full, px=S4)
+let cn_list_room : @ui.Style = @ui.css("w=Full px=S4")
 
 ///|
 /// The ⋯ menu open, by the waiting app's id ("" none).
@@ -375,7 +375,7 @@ let waiting_menu : Ref[String] = Ref("")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let cn_quiet_room : @ui.Style = @ui.style(w=Full, px=S4, pb=S1_5)
+let cn_quiet_room : @ui.Style = @ui.css("w=Full px=S4 pb=S1_5")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -383,7 +383,7 @@ let cn_quiet : @ui.TextStyle = @ui.text_style(size=Xs, leading=L5, weight=Medium
 
 ///|
 // kept across runs: a value (no field of it changes)
-let cn_none_room : @ui.Style = @ui.style(w=Full, px=S4)
+let cn_none_room : @ui.Style = @ui.css("w=Full px=S4")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -400,7 +400,7 @@ let cn_text : @ui.Style = @ui.style(w=@sf.grow, gap=S0_5)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let cn_title_line : @ui.Style = @ui.style(row=true, gap=S2, align=ACenter)
+let cn_title_line : @ui.Style = @ui.css("row gap=S2 align=ACenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -413,7 +413,7 @@ let cn_sub : @ui.TextStyle = @ui.text_style(size=Sm, leading=L6, color=Muted, wr
 ///|
 /// Its Slack workspace after its name (connectTeam: 8 after it, its mark 4 from its name, the meta's 12 muted).
 // kept across runs: a value (no field of it changes)
-let cn_team : @ui.Style = @ui.style(row=true, gap=S1, align=ACenter)
+let cn_team : @ui.Style = @ui.css("row gap=S1 align=ACenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -422,11 +422,11 @@ let cn_meta : @ui.TextStyle = @ui.text_style(size=Xs, leading=L5, color=Muted, w
 ///|
 /// Its station and who added it (connectFacts: 10 apart).
 // kept across runs: a value (no field of it changes)
-let cn_facts : @ui.Style = @ui.style(row=true, gap=S2_5, align=ACenter)
+let cn_facts : @ui.Style = @ui.css("row gap=S2_5 align=ACenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let cn_tag : @ui.Style = @ui.style(row=true, px=S2, py=SPx, gap=S1, align=ACenter, radius=Md, bg=Neutral)
+let cn_tag : @ui.Style = @ui.css("row px=S2 py=SPx gap=S1 align=ACenter radius=Md bg=Neutral")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -434,7 +434,7 @@ let cn_tag_words : @ui.TextStyle = @ui.text_style(size=Xs, leading=L5, weight=Me
 
 ///|
 // kept across runs: a value (no field of it changes)
-let cn_owner_box : @ui.Style = @ui.style(row=true, gap=S1_5, align=ACenter)
+let cn_owner_box : @ui.Style = @ui.css("row gap=S1_5 align=ACenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -447,5 +447,5 @@ let cn_owner_none : @ui.TextStyle = @ui.text_style(size=Xs, leading=L5, color=Su
 ///|
 /// ⋯ (an icon button: 32, its corner 12).
 // kept across runs: a value (no field of it changes)
-let cn_more : @ui.Style = @ui.style(w=S8, h=S8, radius=Xl, align=ACenter, justify=JCenter, hovered=@ui.patch(bg=Hover))
+let cn_more : @ui.Style = @ui.css("w=S8 h=S8 radius=Xl align=ACenter justify=JCenter hovered{bg=Hover}")
 

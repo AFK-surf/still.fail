@@ -164,4 +164,4 @@ fn local_progress(c : @ui.Ctx, s : Json?, doing : String) -> Unit {
 ///|
 // kept across runs: a value (no field of it changes)
 /// The installer's bar, in from the page's sides as its words are.
-let local_bar_box : @ui.Style = @ui.style(w=Full, px=S4, py=S2)
+let local_bar_box : @ui.Style = @ui.css("w=Full px=S4 py=S2")

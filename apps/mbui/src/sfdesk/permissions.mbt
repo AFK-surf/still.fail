@@ -414,11 +414,11 @@ let permission_check : Double = 14.0
 
 ///|
 // kept across runs: a value (no field of it changes)
-let permission_icon : @ui.Style = @ui.style(w=S9, h=S9, radius=Full, align=ACenter, justify=JCenter, bg=Bg)
+let permission_icon : @ui.Style = @ui.css("w=S9 h=S9 radius=Full align=ACenter justify=JCenter bg=Bg")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let permission_state : @ui.Style = @ui.style(row=true, gap=S1, align=ACenter)
+let permission_state : @ui.Style = @ui.css("row gap=S1 align=ACenter")
 
 ///|
 // kept across runs: a value (no field of it changes)

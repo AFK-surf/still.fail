@@ -79,7 +79,7 @@ fn landing_error_words(e : Json) -> String {
 ///|
 /// The page: its illustration, then what it says and offers, 12 apart, 24 in from the sides and 40 from the top.
 // kept across runs: a value (no field of it changes)
-let landing_page : @ui.Style = @ui.style(w=Full, h=Full, px=S6, py=S10, gap=S3, align=ACenter)
+let landing_page : @ui.Style = @ui.css("w=Full h=Full px=S6 py=S10 gap=S3 align=ACenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -96,7 +96,7 @@ let landing_error : @ui.TextStyle = @ui.text_style(size=Sm, color=Danger, w=Full
 ///|
 /// An invitation: on the surface, 12 in all round, its button at the end in the bottom corner, the corner round it.
 // kept across runs: a value (no field of it changes)
-let invitation_row : @ui.Style = @ui.style(row=true, w=Full, p=S3, gap=S3, radius=Around, bg=Surface, align=AEnd)
+let invitation_row : @ui.Style = @ui.css("row w=Full p=S3 gap=S3 radius=Around bg=Surface align=AEnd")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -109,24 +109,16 @@ let invitation_who : @ui.TextStyle = @ui.text_style(size=Sm, color=Muted, w=Full
 ///|
 /// The invite code's form: its field and 创建 workspace in a row, 8 apart, why it failed under them.
 // kept across runs: a value (no field of it changes)
-let code_form : @ui.Style = @ui.style(w=Full, gap=S2)
+let code_form : @ui.Style = @ui.css("w=Full gap=S2")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let code_row : @ui.Style = @ui.style(row=true, w=Full, gap=S2, align=ACenter)
+let code_row : @ui.Style = @ui.css("row w=Full gap=S2 align=ACenter")
 
 ///|
 /// The field (Controls.kt Field): on the surface, a hairline round it, 12 round, 12 and 10 in.
 // kept across runs: a value (no field of it changes)
-let code_field : @ui.Style = @ui.style(
-  w=Full,
-  px=S3,
-  py=S2_5,
-  radius=Xl,
-  bg=Surface,
-  border=B1,
-  border_color=Line,
-)
+let code_field : @ui.Style = @ui.css("w=Full px=S3 py=S2_5 radius=Xl bg=Surface border=B1 border_color=Line")
 
 ///|
 /// Signed in with no workspace in view (App.kt): an account the app may not be used with first, else the landing.

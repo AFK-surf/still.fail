@@ -596,22 +596,22 @@ fn account_status(c : @ui.Ctx, core : Core, sv : Json?, pv : Json?) -> Unit {
 ///|
 /// The account's head and what its trouble says under it, 12 apart.
 // kept across runs: a value (no field of it changes)
-let account_rows : @ui.Style = @ui.style(w=Full, gap=S3)
+let account_rows : @ui.Style = @ui.css("w=Full gap=S3")
 
 ///|
 /// Its mark, then its words beside it, 12 apart.
 // kept across runs: a value (no field of it changes)
-let account_head : @ui.Style = @ui.style(row=true, w=Full, gap=S3)
+let account_head : @ui.Style = @ui.css("row w=Full gap=S3")
 
 ///|
 /// Its line, then its state under it, 4 apart.
 // kept across runs: a value (no field of it changes)
-let account_head_words : @ui.Style = @ui.style(w=Full, gap=S1)
+let account_head_words : @ui.Style = @ui.css("w=Full gap=S1")
 
 ///|
 /// Its state: a dot, then its words, 6 apart.
 // kept across runs: a value (no field of it changes)
-let account_state : @ui.Style = @ui.style(row=true, gap=S1_5, align=ACenter)
+let account_state : @ui.Style = @ui.css("row gap=S1_5 align=ACenter")
 
 ///|
 /// Its words when it does not work (13, red).
@@ -742,7 +742,7 @@ fn quota_section(c : @ui.Ctx, core : Core, station : String, pv : Json?) -> Arra
 ///|
 /// When an allowance was read: 12 under its windows.
 // kept across runs: a value (no field of it changes)
-let quota_read_room : @ui.Style = @ui.style(w=Full, pt=S3)
+let quota_read_room : @ui.Style = @ui.css("w=Full pt=S3")
 
 ///|
 /// An allowance on its own page (Parts.kt QuotaDials): each window's number large, ten cells lit as far as is left,
@@ -1049,19 +1049,19 @@ let models_filter_from : Int = 10
 ///|
 /// The filter's room: at the rows' words (24 in), 8 under it.
 // kept across runs: a value (no field of it changes)
-let models_filter_room : @ui.Style = @ui.style(w=Full, px=S6, pb=S2)
+let models_filter_room : @ui.Style = @ui.css("w=Full px=S6 pb=S2")
 
 ///|
 /// A model named by hand: its field and 添加 beside it, 12 apart, at the rows' words, 8 under them.
 // kept across runs: a value (no field of it changes)
-let models_add_row : @ui.Style = @ui.style(row=true, w=Full, px=S6, pb=S2, gap=S3, align=ACenter)
+let models_add_row : @ui.Style = @ui.css("row w=Full px=S6 pb=S2 gap=S3 align=ACenter")
 
 ///|
 /// A grouped profile's allowance, a line under its words (Profiles.kt: padding top 6).
 // kept across runs: a value (no field of it changes)
-let quota_line : @ui.Style = @ui.style(pt=S1_5)
+let quota_line : @ui.Style = @ui.css("pt=S1_5")
 
 ///|
 /// Whose the machine's own login is, 14 under where it stands (Profiles.kt: padding(top = 14)).
 // kept across runs: a value (no field of it changes)
-let machine_login_room : @ui.Style = @ui.style(w=Full, pt=S3_5)
+let machine_login_room : @ui.Style = @ui.css("w=Full pt=S3_5")

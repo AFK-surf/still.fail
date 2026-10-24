@@ -283,7 +283,7 @@ let dc_aside : @ui.TextStyle = @ui.text_style(size=Xs, leading=L5, color=Muted, 
 ///|
 /// (controls: at the row's end, 16 apart)
 // kept across runs: a value (no field of it changes)
-let dc_controls : @ui.Style = @ui.style(row=true, gap=S4, align=ACenter, justify=JEnd)
+let dc_controls : @ui.Style = @ui.css("row gap=S4 align=ACenter justify=JEnd")
 
 ///|
 /// (error: red, 12, broken anywhere), under the row it is of, past its dot
@@ -297,7 +297,7 @@ let dc_error_line : @ui.TextStyle = dc_aside.then(@ui.text_style(color=Danger))
 ///|
 /// (policyRow: 40 high at least, its words past the station's dot, lined up with its name)
 // kept across runs: a value (no field of it changes)
-let dc_policy_row : @ui.Style = desk_list_link.then(@ui.style(min_h=S10))
+let dc_policy_row : @ui.Style = desk_list_link.then(@ui.css("min_h=S10"))
 
 ///|
 /// Where a station's row has its dot (the dot's width, the row's gap after it).
@@ -306,7 +306,7 @@ let dc_dot_room : @ui.Style = @ui.style(w=@sf.dot_size)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let dc_spin : @ui.Style = @ui.style(pr=S1)
+let dc_spin : @ui.Style = @ui.css("pr=S1")
 
 ///|
 /// A station's archive policy (AutomaticDecisionPolicy, ArchivePolicy): its words (pressed, edited in a dialog), its
@@ -648,25 +648,25 @@ fn policy_dialog(core : Core, station : String, form : String, policy : Json?, i
 ///|
 /// (policy: its parts 12 apart)
 // kept across runs: a value (no field of it changes)
-let pol_box : @ui.Style = @ui.style(w=Full, gap=S3)
+let pol_box : @ui.Style = @ui.css("w=Full gap=S3")
 
 ///|
 /// (policyHead: a spinner, or what went wrong, 28 high at least)
 // kept across runs: a value (no field of it changes)
-let pol_head : @ui.Style = @ui.style(row=true, w=Full, min_h=S7, gap=S2, align=ACenter)
+let pol_head : @ui.Style = @ui.css("row w=Full min_h=S7 gap=S2 align=ACenter")
 
 ///|
 /// (policyWords: 8 above and under, 10 out to each side with its ground, the field's corner, the list's ground pointed
 /// at)
 // kept across runs: a value (no field of it changes)
-let pol_words_box : @ui.Style = @sf.outset(pol_out).then(@ui.style(px=S2_5, py=S2, radius=Xl))
+let pol_words_box : @ui.Style = @sf.outset(pol_out).then(@ui.css("px=S2_5 py=S2 radius=Xl"))
 
 ///|
 let pol_out : Double = 10.0
 
 ///|
 // kept across runs: a value (no field of it changes)
-let pol_words_live : @ui.Style = pol_words_box.then(@ui.style(hovered=@ui.patch(bg=ListGround)))
+let pol_words_live : @ui.Style = pol_words_box.then(@ui.css("hovered{bg=ListGround}"))
 
 ///|
 /// (its words: the list's size, lines 1.6 of it, as they were written)
@@ -676,7 +676,7 @@ let pol_words : @ui.TextStyle = @ui.text_style(size=Sm, leading=L6, color=Fg, w=
 ///|
 /// (policyGroup: its rows 2 apart; policyGroupName: 12, 600, muted, 4 above and under)
 // kept across runs: a value (no field of it changes)
-let pol_group : @ui.Style = @ui.style(w=Full, gap=S0_5)
+let pol_group : @ui.Style = @ui.css("w=Full gap=S0_5")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -684,16 +684,16 @@ let pol_group_name : @ui.TextStyle = @ui.text_style(size=Xs, leading=L5, weight=
 
 ///|
 // kept across runs: a value (no field of it changes)
-let pol_group_head : @ui.Style = @ui.style(py=S1)
+let pol_group_head : @ui.Style = @ui.css("py=S1")
 
 ///|
 /// (option: its name, what it means, its count in a line, 12 apart, 8 above and under, 10 out to each side)
 // kept across runs: a value (no field of it changes)
-let pol_option : @ui.Style = pol_words_box.then(@ui.style(row=true, gap=S3, align=AStart))
+let pol_option : @ui.Style = pol_words_box.then(@ui.css("row gap=S3 align=AStart"))
 
 ///|
 // kept across runs: a value (no field of it changes)
-let pol_option_live : @ui.Style = pol_option.then(@ui.style(hovered=@ui.patch(bg=ListGround)))
+let pol_option_live : @ui.Style = pol_option.then(@ui.css("hovered{bg=ListGround}"))
 
 ///|
 /// (optionName: 120 wide, the list's words)
@@ -719,7 +719,7 @@ let pol_option_rubric : @ui.TextStyle = @ui.text_style(size=Xs, leading=L5, colo
 ///|
 /// (optionCount: 2 of its digits wide at least, at its end)
 // kept across runs: a value (no field of it changes)
-let pol_option_count_box : @ui.Style = @ui.style(min_w=S6, align=AEnd)
+let pol_option_count_box : @ui.Style = @ui.css("min_w=S6 align=AEnd")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -728,11 +728,11 @@ let pol_option_count : @ui.TextStyle = @ui.text_style(size=Xs, leading=L5, color
 ///|
 /// (addOption: a plus 14 and its words, muted, 6 apart)
 // kept across runs: a value (no field of it changes)
-let pol_add : @ui.Style = pol_words_box.then(@ui.style(row=true, gap=S1_5, align=ACenter))
+let pol_add : @ui.Style = pol_words_box.then(@ui.css("row gap=S1_5 align=ACenter"))
 
 ///|
 // kept across runs: a value (no field of it changes)
-let pol_add_live : @ui.Style = pol_add.then(@ui.style(hovered=@ui.patch(bg=ListGround)))
+let pol_add_live : @ui.Style = pol_add.then(@ui.css("hovered{bg=ListGround}"))
 
 ///|
 let pol_plus : Double = 14.0
@@ -744,11 +744,11 @@ let pol_add_words : @ui.TextStyle = @ui.text_style(size=Sm, leading=L6, color=Mu
 ///|
 /// (optionChats: 6 apart, 8 over them)
 // kept across runs: a value (no field of it changes)
-let pol_chats : @ui.Style = @ui.style(w=Full, pt=S2, gap=S1_5)
+let pol_chats : @ui.Style = @ui.css("w=Full pt=S2 gap=S1_5")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let pol_chat_box : @ui.Style = @ui.style(w=Full)
+let pol_chat_box : @ui.Style = @ui.css("w=Full")
 
 ///|
 /// (optionChat: the list's words, cut short, underlined pointed at)

@@ -264,12 +264,12 @@ fn search_rows(view : SearchView?, failed : Bool) -> Array[SearchRow] {
 ///|
 /// The page over Home: all of it, nothing under it touched through it.
 // kept across runs: a value (no field of it changes)
-let search_page_box : @ui.Style = @ui.style(w=Full, h=Full)
+let search_page_box : @ui.Style = @ui.css("w=Full h=Full")
 
 ///|
 /// Its bar: under the status bar 8 (the home bar's top), 16 either side, 8 under; 取消 12 after the field.
 // kept across runs: a value (no field of it changes)
-let search_bar_row : @ui.Style = @ui.style(row=true, w=Full, pl=S4, pr=S4, pt=S2, pb=S2, gap=S3, align=ACenter)
+let search_bar_row : @ui.Style = @ui.css("row w=Full pl=S4 pr=S4 pt=S2 pb=S2 gap=S3 align=ACenter")
 
 ///|
 /// Where the field rests at the top: the room 取消 leaves it.
@@ -294,7 +294,7 @@ let search_field_box : @ui.Style = @ui.style(
 ///|
 /// The field at the list's top: 16 either side, 6 under it.
 // kept across runs: a value (no field of it changes)
-let search_field_line : @ui.Style = @ui.style(w=Full, pl=S4, pr=S4, pb=S1_5)
+let search_field_line : @ui.Style = @ui.css("w=Full pl=S4 pr=S4 pb=S1_5")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -330,16 +330,7 @@ let search_link_words : @ui.TextStyle = @ui.text_style(size=Base, color=Link, wr
 ///|
 /// 全部结果 (BackRow): 16 in, 10 over, 4 under; its chevron 4 before the words.
 // kept across runs: a value (no field of it changes)
-let search_back_row : @ui.Style = @ui.style(
-  row=true,
-  w=Full,
-  pl=S4,
-  pr=S4,
-  pt=S2_5,
-  pb=S1,
-  gap=S1,
-  align=ACenter,
-)
+let search_back_row : @ui.Style = @ui.css("row w=Full pl=S4 pr=S4 pt=S2_5 pb=S1 gap=S1 align=ACenter")
 
 ///|
 /// A line of grey words (SearchNote): 22 in, 16 over and under.
@@ -394,7 +385,7 @@ let found_item_row_short : @ui.Style = found_item_row.then(@ui.style(h=@sf.found
 
 ///|
 // kept across runs: a value (no field of it changes)
-let found_icon_box : @ui.Style = @ui.style(w=S5, h=S5, align=ACenter, justify=JCenter)
+let found_icon_box : @ui.Style = @ui.css("w=S5 h=S5 align=ACenter justify=JCenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -407,7 +398,7 @@ let found_line_22 : @ui.Style = @ui.style(row=true, w=Full, h=@sf.found_line_h, 
 
 ///|
 // kept across runs: a value (no field of it changes)
-let found_line_20 : @ui.Style = @ui.style(row=true, w=Full, h=S5, gap=S2, align=ACenter)
+let found_line_20 : @ui.Style = @ui.css("row w=Full h=S5 gap=S2 align=ACenter")
 
 
 ///|

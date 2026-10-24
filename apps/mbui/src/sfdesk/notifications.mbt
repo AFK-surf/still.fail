@@ -572,7 +572,7 @@ let banner_text : @ui.Style = @ui.style(w=@sf.grow, gap=S0_5)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let banner_head : @ui.Style = @ui.style(row=true, w=Full, gap=S2, justify=JBetween)
+let banner_head : @ui.Style = @ui.css("row w=Full gap=S2 justify=JBetween")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -589,17 +589,17 @@ let banner_body : @ui.TextStyle = @ui.text_style(size=Xs, leading=L5, color=Fg, 
 ///|
 /// The app's icon (22% round: Md on a 28 or 30 square).
 // kept across runs: a value (no field of it changes)
-let app_icon_box : @ui.Style = @ui.style(radius=Md, clip=true)
+let app_icon_box : @ui.Style = @ui.css("radius=Md clip")
 
 ///|
 /// The dock on the right edge (edge: its kinds 4 apart, at their end; its middle at 60% of the screen's height, 40
 /// under its own middle), each half a capsule against the edge (2, 10 and 12 in; the caption's 11).
 // kept across runs: a value (no field of it changes)
-let edge_at : @ui.Style = @ui.style(pt=S10, gap=S1, align=AEnd, justify=JCenter)
+let edge_at : @ui.Style = @ui.css("pt=S10 gap=S1 align=AEnd justify=JCenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let edge_item : @ui.Style = @ui.style(pl=S3, pr=S2_5, py=S0_5, radius=Full, bg=Raised)
+let edge_item : @ui.Style = @ui.css("pl=S3 pr=S2_5 py=S0_5 radius=Full bg=Raised")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -616,11 +616,11 @@ let edge_wait : @ui.TextStyle = edge_words.then(@ui.text_style(color=AccentText)
 ///|
 /// The Dock (dockBar: 7 in, its icons 10 apart, on what floats at 70%; the others the line's grey, 8 round).
 // kept across runs: a value (no field of it changes)
-let dock_at : @ui.Style = @ui.style(row=true, justify=JCenter)
+let dock_at : @ui.Style = @ui.css("row justify=JCenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let dock_bar : @ui.Style = @ui.style(row=true, p=S1_5, gap=S2_5, radius=Xl1_5, bg=A(Raised, O70))
+let dock_bar : @ui.Style = @ui.css("row p=S1_5 gap=S2_5 radius=Xl1_5 bg=A(Raised,O70)")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -650,7 +650,7 @@ let dock_badge_words : @ui.TextStyle = @ui.text_style(size=Xs2, color=OnPrimary,
 ///|
 /// The ways' tiles side by side, 10 apart, as wide as they share.
 // kept across runs: a value (no field of it changes)
-let way_tiles : @ui.Style = @ui.style(row=true, w=Full, gap=S2_5)
+let way_tiles : @ui.Style = @ui.css("row w=Full gap=S2_5")
 
 ///|
 /// A tile (tile: a card's ground and corner, 14 over, 10 at the sides, 12 under, its parts 4 apart in its middle; a
@@ -671,11 +671,11 @@ let tile : @ui.Style = @ui.style(
 
 ///|
 // kept across runs: a value (no field of it changes)
-let tile_on : @ui.Style = tile.then(@ui.style(border_color=Accent))
+let tile_on : @ui.Style = tile.then(@ui.css("border_color=Accent"))
 
 ///|
 // kept across runs: a value (no field of it changes)
-let tile_action : @ui.Style = tile.then(@ui.style(border_color=A(Danger, O55), hovered=@ui.patch(bg=DangerBg)))
+let tile_action : @ui.Style = tile.then(@ui.css("border_color=A(Danger,O55) hovered{bg=DangerBg}"))
 
 ///|
 /// A tile's picture (tilePicture: a screen drawn small, 72 by 46, 4 over its name, 8 round, the canvas on a line):
@@ -751,7 +751,7 @@ let pic_edge : @ui.Style = @ui.style(w=Fixed(pic_app_side), h=Fixed(pic_edge_h),
 ///|
 /// The mark that the system has to allow it first (picAlert: 18 round, red, its "!" white, a little under the middle).
 // kept across runs: a value (no field of it changes)
-let pic_alert_at : @ui.Style = @ui.style(pt=S2, align=ACenter, justify=JCenter)
+let pic_alert_at : @ui.Style = @ui.css("pt=S2 align=ACenter justify=JCenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -782,16 +782,8 @@ let tile_action_chevron : Double = 14.0
 
 ///|
 // kept across runs: a value (no field of it changes)
-let tile_action_button : @ui.Style = @ui.style(
-  row=true,
-  mt=S1,
-  pl=S3,
-  pr=S2_5,
-  py=S1,
-  gap=SPx,
-  align=ACenter,
-  radius=Full,
-  bg=Danger,
+let tile_action_button : @ui.Style = @ui.css(
+  #|row mt=S1 pl=S3 pr=S2_5 py=S1 gap=SPx align=ACenter radius=Full bg=Danger
 )
 
 ///|
@@ -807,7 +799,7 @@ let rule_w : Double = 1.0
 
 ///|
 // kept across runs: a value (no field of it changes)
-let kinds_card : @ui.Style = @ui.style(w=Full, px=S5, py=S1_5, radius=Xl3, bg=Card)
+let kinds_card : @ui.Style = @ui.css("w=Full px=S5 py=S1_5 radius=Xl3 bg=Card")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -817,7 +809,7 @@ let kind_rule : @ui.Style = @ui.style(w=Full, h=Fixed(rule_w), bg=Line)
 /// A kind's head (kindHead: 12 over and under, 12 apart; its words the ui's 13, what it is muted 2 under; what tells of
 /// it the meta's 12 muted).
 // kept across runs: a value (no field of it changes)
-let kind_head : @ui.Style = @ui.style(row=true, w=Full, py=S3, gap=S3, align=ACenter)
+let kind_head : @ui.Style = @ui.css("row w=Full py=S3 gap=S3 align=ACenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -838,12 +830,12 @@ let kind_sum : @ui.TextStyle = @ui.text_style(size=Xs, leading=L5, color=Muted, 
 ///|
 /// Its ways, opened (kindWays: 4 apart, 14 in and under, ending as far from the card's edge as from its side).
 // kept across runs: a value (no field of it changes)
-let kind_ways : @ui.Style = @ui.style(w=Full, pl=S3_5, pb=S3_5, gap=S1)
+let kind_ways : @ui.Style = @ui.css("w=Full pl=S3_5 pb=S3_5 gap=S1")
 
 ///|
 /// A way (wayRow: 32 high at least, its name and its switch at the two ends, 12 apart; the ui's 13).
 // kept across runs: a value (no field of it changes)
-let way_row : @ui.Style = @ui.style(row=true, w=Full, min_h=S8, gap=S3, align=ACenter, justify=JBetween)
+let way_row : @ui.Style = @ui.css("row w=Full min_h=S8 gap=S3 align=ACenter justify=JBetween")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -852,7 +844,7 @@ let way_words : @ui.TextStyle = @ui.text_style(size=Sm, leading=L6, color=Fg, w=
 ///|
 /// 其他's card (card: 20 in, its rows 14 apart); the sound's note (sound: the meta's 12 muted).
 // kept across runs: a value (no field of it changes)
-let more_card : @ui.Style = @ui.style(w=Full, p=S5, gap=S3_5, radius=Xl3, bg=Card)
+let more_card : @ui.Style = @ui.css("w=Full p=S5 gap=S3_5 radius=Xl3 bg=Card")
 
 ///|
 // kept across runs: a value (no field of it changes)

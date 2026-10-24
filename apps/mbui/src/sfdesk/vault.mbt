@@ -396,7 +396,7 @@ fn vt_row(c : @ui.Ctx, key : String, name : String, line : String, risk? : Bool 
 ///|
 /// (the page, its foot over it)
 // kept across runs: a value (no field of it changes)
-let vt_fill : @ui.Style = @ui.style(w=Full, h=Full)
+let vt_fill : @ui.Style = @ui.css("w=Full h=Full")
 
 ///|
 let vt_glyph : Double = 16.0
@@ -412,22 +412,22 @@ let vt_state_risk : @ui.TextStyle = vt_state.then(@ui.text_style(color=Warn))
 
 ///|
 // kept across runs: a value (no field of it changes)
-let vt_state_line : @ui.Style = @ui.style(row=true, gap=S2, align=ACenter)
+let vt_state_line : @ui.Style = @ui.css("row gap=S2 align=ACenter")
 
 ///|
 /// (lead: the first card as far from what follows as a section is)
 // kept across runs: a value (no field of it changes)
-let vt_lead : @ui.Style = @ui.style(mb=S7)
+let vt_lead : @ui.Style = @ui.css("mb=S7")
 
 ///|
 /// (actions: a card's buttons at its foot, 8 apart, its words before them)
 // kept across runs: a value (no field of it changes)
-let vt_actions : @ui.Style = @ui.style(row=true, w=Full, gap=S2, pt=S1, align=ACenter)
+let vt_actions : @ui.Style = @ui.css("row w=Full gap=S2 pt=S1 align=ACenter")
 
 ///|
 /// (count: the red's ground, the meta's size, 7 in)
 // kept across runs: a value (no field of it changes)
-let vt_count : @ui.Style = @ui.style(px=S1_5, radius=Full, bg=DangerBg)
+let vt_count : @ui.Style = @ui.css("px=S1_5 radius=Full bg=DangerBg")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -436,12 +436,12 @@ let vt_count_words : @ui.TextStyle = @ui.text_style(size=Xs, leading=L5, weight=
 ///|
 /// (requests: each one's card, 10 apart as the page's cards: pagesCss.card)
 // kept across runs: a value (no field of it changes)
-let vt_requests : @ui.Style = @ui.style(w=Full, gap=S2_5)
+let vt_requests : @ui.Style = @ui.css("w=Full gap=S2_5")
 
 ///|
 /// (a request's card, as wide as the page: AskCard fill)
 // kept across runs: a value (no field of it changes)
-let vt_request : @ui.Style = @ui.style(w=Full)
+let vt_request : @ui.Style = @ui.css("w=Full")
 
 ///|
 /// (link: the accent's ink, the list's size)
@@ -456,7 +456,7 @@ let vt_warn : @ui.TextStyle = @ui.text_style(size=Xs, leading=L5, color=Warn, wr
 ///|
 /// (rowIcon: 16 wide, the muted, at the name's line)
 // kept across runs: a value (no field of it changes)
-let vt_row_icon : @ui.Style = @ui.style(w=S4, pt=S0_5, align=ACenter)
+let vt_row_icon : @ui.Style = @ui.css("w=S4 pt=S0_5 align=ACenter")
 
 ///|
 /// (row: the devices' line, 30 high at least, its button at its end)

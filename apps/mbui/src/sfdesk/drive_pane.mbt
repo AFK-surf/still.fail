@@ -308,7 +308,7 @@ let fpane_below_tall : Double = 0.25
 
 ///|
 // kept across runs: a value (no field of it changes)
-let fpane_below : @ui.Style = @ui.style(w=Full, p=S3, gap=S3)
+let fpane_below : @ui.Style = @ui.css("w=Full p=S3 gap=S3")
 
 ///|
 /// A picture or a text no taller than this much of the window (body: 60vh); a text as tall as the pane has room for
@@ -336,16 +336,16 @@ let fpane_box : @ui.Style = @ui.style(w=Fixed(fpane_w), h=Full, p=S3, gap=S3)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let fpane_none_at : @ui.Style = @ui.style(w=Full, py=S6)
+let fpane_none_at : @ui.Style = @ui.css("w=Full py=S6")
 
 ///|
 /// The line between it and the list (its left edge's; under a list, its top's).
 // kept across runs: a value (no field of it changes)
-let fpane_rule : @ui.Style = @ui.style(w=SPx, h=Full, bg=Line)
+let fpane_rule : @ui.Style = @ui.css("w=SPx h=Full bg=Line")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let fpane_rule_below : @ui.Style = @ui.style(w=Full, h=SPx, bg=Line)
+let fpane_rule_below : @ui.Style = @ui.css("w=Full h=SPx bg=Line")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -363,7 +363,7 @@ let fpane_picture_box : @ui.Style = @ui.style(w=Full, min_h=Fixed(fpane_least), 
 ///|
 /// While it is read (waiting: 160 of nothing).
 // kept across runs: a value (no field of it changes)
-let fpane_waiting : @ui.Style = @ui.style(w=Full, h=S40)
+let fpane_waiting : @ui.Style = @ui.css("w=Full h=S40")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -372,7 +372,7 @@ let fpane_text_box : @ui.Style = @ui.style(w=Full, h=@sf.grow, radius=Xl, bg=Neu
 ///|
 /// A text's lines (textBox: 10 by 12), Markdown's (prose: 4 by 12).
 // kept across runs: a value (no field of it changes)
-let fpane_code : @ui.Style = @ui.style(w=Full, px=S3, py=S2_5)
+let fpane_code : @ui.Style = @ui.css("w=Full px=S3 py=S2_5")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -380,7 +380,7 @@ let fpane_code_words : @ui.TextStyle = @ui.text_style(size=Xs2, color=Fg, w=Full
 
 ///|
 // kept across runs: a value (no field of it changes)
-let fpane_prose : @ui.Style = @ui.style(w=Full, px=S3, py=S1)
+let fpane_prose : @ui.Style = @ui.css("w=Full px=S3 py=S1")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -398,7 +398,7 @@ let fpane_mark_words : @ui.TextStyle = @ui.text_style(size=Xs, color=Muted, wrap
 ///|
 /// What the file is (about: 8 between), its name (the ui's words, bold).
 // kept across runs: a value (no field of it changes)
-let fpane_about : @ui.Style = @ui.style(w=Full, gap=S2)
+let fpane_about : @ui.Style = @ui.css("w=Full gap=S2")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -407,11 +407,11 @@ let fpane_name : @ui.TextStyle = @ui.text_style(size=Sm, weight=Semibold, color=
 ///|
 /// Its facts (facts: two columns, 4 by 12 between).
 // kept across runs: a value (no field of it changes)
-let fpane_facts : @ui.Style = @ui.style(row=true, w=Full, gap=S3)
+let fpane_facts : @ui.Style = @ui.css("row w=Full gap=S3")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let fpane_facts_column : @ui.Style = @ui.style(gap=S1)
+let fpane_facts_column : @ui.Style = @ui.css("gap=S1")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -433,4 +433,4 @@ let fpane_path : @ui.TextStyle = @ui.text_style(size=Xs2, color=Fg, wrap=false, 
 ///|
 /// 打开, 下载, 复制路径 (actions: 6 apart, wrapped).
 // kept across runs: a value (no field of it changes)
-let fpane_actions : @ui.Style = @ui.style(row=true, w=Full, gap=S1_5)
+let fpane_actions : @ui.Style = @ui.css("row w=Full gap=S1_5")

@@ -112,4 +112,4 @@ fn switch_appear(c : @ui.Ctx, i : Int) -> Unit {
 ///|
 /// The page's ground, over what comes in while it fades in.
 // kept across runs: a value (no field of it changes)
-let switch_veil_box : @ui.Style = @ui.style(w=Full, h=Full, bg=Bg)
+let switch_veil_box : @ui.Style = @ui.css("w=Full h=Full bg=Bg")

@@ -56,7 +56,7 @@ fn open_new_workspace() -> Unit {
 ///|
 /// Its body: 20 in from the sheet's sides, its parts 10 apart.
 // kept across runs: a value (no field of it changes)
-let new_ws_body : @ui.Style = @ui.style(w=Full, px=S5, gap=S2_5)
+let new_ws_body : @ui.Style = @ui.css("w=Full px=S5 gap=S2_5")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -79,7 +79,7 @@ let new_ws_error : @ui.TextStyle = @ui.text_style(size=Sm, color=Danger, w=Full)
 ///|
 /// Its buttons at the row's end, 8 apart, 6 over them and 24 under.
 // kept across runs: a value (no field of it changes)
-let new_ws_buttons : @ui.Style = @ui.style(row=true, w=Full, pt=S1_5, pb=S6, gap=S2, justify=JEnd)
+let new_ws_buttons : @ui.Style = @ui.css("row w=Full pt=S1_5 pb=S6 gap=S2 justify=JEnd")
 
 ///|
 /// A field (Controls.kt Field), as the landing's code's: mbui's field in that look, one line, its words 15 on 21.
@@ -190,7 +190,7 @@ fn make_new_workspace(src : Source, sub : String, name : String, code : String) 
 /// An invitation in the workspaces' sheet: who invited the viewer where, the account it is for, 加入 and 忽略; 20 in,
 /// 8 over and under, 8 apart.
 // kept across runs: a value (no field of it changes)
-let invite_line : @ui.Style = @ui.style(row=true, w=Full, px=S5, py=S2, gap=S2, align=ACenter)
+let invite_line : @ui.Style = @ui.css("row w=Full px=S5 py=S2 gap=S2 align=ACenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -202,7 +202,7 @@ let invite_line_email : @ui.TextStyle = @ui.text_style(size=Xs, color=Muted, w=F
 
 ///|
 // kept across runs: a value (no field of it changes)
-let invite_line_error : @ui.Style = @ui.style(w=Full, px=S5)
+let invite_line_error : @ui.Style = @ui.css("w=Full px=S5")
 
 ///|
 /// The invitations waiting for any account signed in (WorkspacesSheet), under 邀请.

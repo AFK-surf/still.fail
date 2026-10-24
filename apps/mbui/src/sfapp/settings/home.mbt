@@ -433,7 +433,7 @@ fn identity_card(c : @ui.Ctx, key : String, lead : () -> Unit, name : String, li
 ///|
 /// A card's row (SettingsHome.kt): what it is by, its words, its chevron, 14 apart, centred across it.
 // kept across runs: a value (no field of it changes)
-let identity_row : @ui.Style = @ui.style(row=true, w=Full, gap=S3_5, align=ACenter)
+let identity_row : @ui.Style = @ui.css("row w=Full gap=S3_5 align=ACenter")
 
 ///|
 /// The name on the account's card and the workspace's: 16 bold on one line, its line the theme's (1.4em: 22.4), as

@@ -118,17 +118,17 @@ fn letters_tab(
 ///|
 /// The chats it wrote with (lettersList): 6 over, 8 at the sides, 16 under, 2 apart.
 // kept across runs: a value (no field of it changes)
-let letters_list : @ui.Style = @ui.style(w=Full, pt=S1_5, px=S2, pb=S4, gap=S0_5)
+let letters_list : @ui.Style = @ui.css("w=Full pt=S1_5 px=S2 pb=S4 gap=S0_5")
 
 ///|
 /// A chat it wrote with (lettersRow): 8 by 12 in, round as an option, the pointer's ground on it; its title (13 in
 /// 500 on 20) and how many and when (12, muted) on a line, the last letter in brief under them (12, muted).
 // kept across runs: a value (no field of it changes)
-let letters_row : @ui.Style = @ui.style(w=Full, py=S2, px=S3, gap=S0_5, radius=Xl, hovered=@ui.patch(bg=Hover))
+let letters_row : @ui.Style = @ui.css("w=Full py=S2 px=S3 gap=S0_5 radius=Xl hovered{bg=Hover}")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let letters_row_head : @ui.Style = @ui.style(row=true, w=Full, gap=S2, align=AEnd)
+let letters_row_head : @ui.Style = @ui.css("row w=Full gap=S2 align=AEnd")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -150,7 +150,7 @@ let letters_row_last : @ui.TextStyle = @ui.text_style(size=Xs, color=Muted, wrap
 /// One opened (lettersHead): back and its title 4 apart, 6 over and under, 6 in at its start, 12 at its end; its title
 /// 13 in 500, underlined on hover where it opens that chat.
 // kept across runs: a value (no field of it changes)
-let letters_head : @ui.Style = @ui.style(row=true, w=Full, py=S1_5, pl=S1_5, pr=S3, gap=S1, align=ACenter)
+let letters_head : @ui.Style = @ui.css("row w=Full py=S1_5 pl=S1_5 pr=S3 gap=S1 align=ACenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -164,16 +164,16 @@ let letters_name : @ui.TextStyle = @ui.text_style(size=Sm, weight=Medium, color=
 ///|
 /// Its letters (lettersMessages): 20 apart, 10 over, 16 at the sides, 24 under the last.
 // kept across runs: a value (no field of it changes)
-let letters_message : @ui.Style = @ui.style(w=Full, pt=S2_5, px=S4, pb=S2_5)
+let letters_message : @ui.Style = @ui.css("w=Full pt=S2_5 px=S4 pb=S2_5")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let letters_foot : @ui.Style = @ui.style(w=Full, h=S6)
+let letters_foot : @ui.Style = @ui.css("w=Full h=S6")
 
 ///|
 /// More to come (lettersMore): a spinner in the middle, 4 over and under.
 // kept across runs: a value (no field of it changes)
-let letters_more : @ui.Style = @ui.style(row=true, w=Full, py=S1, justify=JCenter)
+let letters_more : @ui.Style = @ui.css("row w=Full py=S1 justify=JCenter")
 
 ///|
 // kept across runs: a value (no field of it changes)

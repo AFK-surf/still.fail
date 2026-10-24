@@ -1055,7 +1055,7 @@ let hosts_needed_words : @ui.TextStyle = @ui.text_style(size=Xs, color=Danger, w
 ///|
 /// A field's note under it, 4 below (Vault.kt Labeled's: 12/18, muted).
 // kept across runs: a value (no field of it changes)
-let vault_note_room : @ui.Style = @ui.style(w=Full, pt=S1)
+let vault_note_room : @ui.Style = @ui.css("w=Full pt=S1")
 
 ///|
 // kept across runs: a value (no field of it changes)

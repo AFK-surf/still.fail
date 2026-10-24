@@ -99,18 +99,12 @@ let peek_card : @ui.Style = @ui.style(w=@sf.peek_card_w, radius=Lg, bg=Neutral, 
 ///|
 /// The words under a preview: 10 in across, 8 down.
 // kept across runs: a value (no field of it changes)
-let peek_card_words : @ui.Style = @ui.style(w=Full, px=S2_5, py=S2)
+let peek_card_words : @ui.Style = @ui.css("w=Full px=S2_5 py=S2")
 
 ///|
 /// The preview: on its ground, its mark in its middle until a picture comes.
 // kept across runs: a value (no field of it changes)
-let peek_frame : @ui.Style = @ui.style(
-  w=Full,
-  align=ACenter,
-  justify=JCenter,
-  bg=Wash,
-  clip=true,
-)
+let peek_frame : @ui.Style = @ui.css("w=Full align=ACenter justify=JCenter bg=Wash clip")
 
 ///|
 /// A mark's room: 30 by 36.
@@ -120,16 +114,16 @@ let link_mark_box : @ui.Style = @ui.style(w=@sf.link_mark_w, h=S9)
 ///|
 /// The words beside the mark (or under the preview): what is left across.
 // kept across runs: a value (no field of it changes)
-let link_words : @ui.Style = @ui.style(w=Full)
+let link_words : @ui.Style = @ui.css("w=Full")
 
 ///|
 /// Each of the two lines a line high, words or none (minLines = maxLines = 1): the title's 20, the line's 16.
 // kept across runs: a value (no field of it changes)
-let link_title_line : @ui.Style = @ui.style(w=Full, h=S5)
+let link_title_line : @ui.Style = @ui.css("w=Full h=S5")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let link_line_line : @ui.Style = @ui.style(w=Full, h=S4)
+let link_line_line : @ui.Style = @ui.css("w=Full h=S4")
 
 ///|
 /// The title (15/20, on one line); quieter for a screen its station no longer has.

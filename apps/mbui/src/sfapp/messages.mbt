@@ -126,11 +126,11 @@ fn unread_line(c : @ui.Ctx) -> Unit {
 /// The unread line's row, its rules each side (1, the accent at 50%), its words 13 in 500 (the wide screen's 12:
 /// Chat.css.ts chatUnreadLine) in the accent.
 // kept across runs: a value (no field of it changes)
-let unread_row : @ui.Style = @ui.style(row=true, w=Full, gap=S2_5, align=ACenter)
+let unread_row : @ui.Style = @ui.css("row w=Full gap=S2_5 align=ACenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let unread_rule : @ui.Style = @ui.style(w=Grow(1.0), h=SPx, bg=A(Accent, O50))
+let unread_rule : @ui.Style = @ui.css("w=Grow(1.0) h=SPx bg=A(Accent,O50)")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -498,7 +498,7 @@ fn blocked_line(c : @ui.Ctx, src : Source, station : String, b : Install) -> Uni
 ///|
 /// The blocked line's mark and words, 4 apart.
 // kept across runs: a value (no field of it changes)
-let blocked_row : @ui.Style = @ui.style(row=true, gap=S1, align=ACenter)
+let blocked_row : @ui.Style = @ui.css("row gap=S1 align=ACenter")
 
 ///|
 /// What still.fail itself says (Chat.kt SystemNotice): a pill across the chat, one line cut short, no time; tapped,
@@ -663,7 +663,7 @@ fn notice_ground(dark : Bool) -> Int64 {
 ///|
 /// A notice across the chat, in its middle, its time 4 under it once opened.
 // kept across runs: a value (no field of it changes)
-let notice_across : @ui.Style = @ui.style(w=Full, gap=S1, align=ACenter)
+let notice_across : @ui.Style = @ui.css("w=Full gap=S1 align=ACenter")
 
 ///|
 /// A word at a notice's end that acts on it (Chat.kt InstallAction, ReportAction): " · " fainter, then the word, semibold
@@ -1088,16 +1088,16 @@ fn quote_type() -> (Double, Double, Double) {
 ///|
 /// A message's quote cards, one under another 4 apart, at its end when it is the viewer's (Chat.kt QuoteCards).
 // kept across runs: a value (no field of it changes)
-let quote_cards_end : @ui.Style = @ui.style(w=Full, gap=S1, align=AEnd)
+let quote_cards_end : @ui.Style = @ui.css("w=Full gap=S1 align=AEnd")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let quote_cards_start : @ui.Style = @ui.style(w=Full, gap=S1, align=AStart)
+let quote_cards_start : @ui.Style = @ui.css("w=Full gap=S1 align=AStart")
 
 ///|
 /// A quote card's own picture, 6 under its words (Chat.kt QuoteCard).
 // kept across runs: a value (no field of it changes)
-let quote_picture_room : @ui.Style = @ui.style(pt=S1_5)
+let quote_picture_room : @ui.Style = @ui.css("pt=S1_5")
 
 ///|
 /// The file of a message's `files` that is a quote's own (Chat.kt fileOf): the one it names.
@@ -1533,7 +1533,7 @@ let file_card_button_box : @ui.Style = @ui.style(
 
 ///|
 // kept across runs: a value (no field of it changes)
-let file_card_button_hot : @ui.Style = file_card_button_box.then(@ui.style(bg=Hover))
+let file_card_button_hot : @ui.Style = file_card_button_box.then(@ui.css("bg=Hover"))
 
 ///|
 /// fileCardRemove's icons (Close 12, Retry 13: the larger of the two).
@@ -1555,7 +1555,7 @@ fn file_card_act(dl : Json?) -> (String, String)? {
 ///|
 /// A video's bar while the core downloads it: under its words, 4 below them.
 // kept across runs: a value (no field of it changes)
-let video_coming_bar : @ui.Style = @ui.style(w=Full, pt=S1)
+let video_coming_bar : @ui.Style = @ui.css("w=Full pt=S1")
 
 ///|
 /// What a file's card says under its name: its size, or while the core downloads it how far it has come (正在下载 42% ·
@@ -1581,7 +1581,7 @@ fn file_card_coming(dl : Json?) -> Double? {
 ///|
 /// An image with no preview: its mark over its words, in its middle.
 // kept across runs: a value (no field of it changes)
-let no_preview_box : @ui.Style = @ui.style(w=Full, h=Full, gap=S1_5, align=ACenter, justify=JCenter)
+let no_preview_box : @ui.Style = @ui.css("w=Full h=Full gap=S1_5 align=ACenter justify=JCenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -1738,11 +1738,11 @@ let file_card_box : @ui.Style = @ui.style(
 
 ///|
 // kept across runs: a value (no field of it changes)
-let file_card_hot : @ui.Style = file_card_box.then(@ui.style(bg=Hover))
+let file_card_hot : @ui.Style = file_card_box.then(@ui.css("bg=Hover"))
 
 ///|
 // kept across runs: a value (no field of it changes)
-let file_card_words : @ui.Style = @ui.style(w=Grow(1.0))
+let file_card_words : @ui.Style = @ui.css("w=Grow(1.0)")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -1759,13 +1759,13 @@ let file_card_failed : @ui.TextStyle = @ui.text_style(size=Xs2, color=Danger, le
 
 ///|
 // kept across runs: a value (no field of it changes)
-let file_name_row : @ui.Style = @ui.style(row=true, w=Full)
+let file_name_row : @ui.Style = @ui.css("row w=Full")
 
 ///|
 /// As wide as it is, short of the room the extension leaves (Chat.css.ts fileCardStem: flex's 0 1 auto, cut with an
 /// ellipsis): the extension right after it, not at the card's end.
 // kept across runs: a value (no field of it changes)
-let file_name_stem : @ui.Style = @ui.style(w=Hug)
+let file_name_stem : @ui.Style = @ui.css("w=Hug")
 
 ///|
 /// A file's name on one line, what is cut short the middle of it, never its extension (Chat.tsx FileName: an extension
@@ -1885,7 +1885,7 @@ let file_sheet_box : @ui.Style = @ui.style(w=@sf.file_sheet_w, h=@sf.file_sheet_
 ///|
 /// The extension's room: the sheet's width, its words' baseline 27 down (FileTile's <text y=27>).
 // kept across runs: a value (no field of it changes)
-let file_sheet_ext_room : @ui.Style = @ui.style(w=Full, h=Full, pt=S4_5, align=ACenter)
+let file_sheet_ext_room : @ui.Style = @ui.css("w=Full h=Full pt=S4_5 align=ACenter")
 
 ///|
 /// Options answered fade out in this long (Decisions.kt DecisionUnder); how it went fades in after them as long.
@@ -2071,12 +2071,12 @@ fn decision_under(
 /// The room over a post's options in its chat (Decisions.kt DecisionUnder: padding(top = 6) on the options' card, or
 /// on the vault's request in their place).
 // kept across runs: a value (no field of it changes)
-let options_room : @ui.Style = @ui.style(w=Full, pt=S1_5)
+let options_room : @ui.Style = @ui.css("w=Full pt=S1_5")
 
 ///|
 /// In the wide frame 8 over them (Decisions.css.ts options: margin-top 8).
 // kept across runs: a value (no field of it changes)
-let options_room_wide : @ui.Style = @ui.style(w=Full, pt=S2, align=AStart)
+let options_room_wide : @ui.Style = @ui.css("w=Full pt=S2 align=AStart")
 
 ///|
 /// The quiet line over or in place of a post's options (who decides, how it went): 13 on 19 (Decisions.kt); the wide
@@ -2353,17 +2353,17 @@ fn sent_elsewhere_wide(c : @ui.Ctx, src : Source, here : Here, s : Elsewhere) ->
 
 ///|
 // kept across runs: a value (no field of it changes)
-let elsewhere_row : @ui.Style = @ui.style(w=Full)
+let elsewhere_row : @ui.Style = @ui.css("w=Full")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let elsewhere_main : @ui.Style = @ui.style(w=Full, gap=S1)
+let elsewhere_main : @ui.Style = @ui.css("w=Full gap=S1")
 
 ///|
 /// Its head (Chat.css.ts msgHead): 24 high at least, 6 apart; the route takes what room is left, its place cut short
 /// first (msgRoute).
 // kept across runs: a value (no field of it changes)
-let elsewhere_head : @ui.Style = @ui.style(row=true, w=Full, min_h=S6, gap=S1_5, align=ACenter)
+let elsewhere_head : @ui.Style = @ui.css("row w=Full min_h=S6 gap=S1_5 align=ACenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -2371,7 +2371,7 @@ let elsewhere_name : @ui.Style = @ui.style(max_w=@sf.name_max)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let elsewhere_route : @ui.Style = @ui.style(row=true, gap=S1_5, align=ACenter)
+let elsewhere_route : @ui.Style = @ui.css("row gap=S1_5 align=ACenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -2381,11 +2381,11 @@ let elsewhere_words : @ui.TextStyle = @ui.text_style(size=Xs, color=Muted, wrap=
 /// The place (later.css.ts hPlace): its mark and its name, 12 in 500, 1 by 6 in, 6 round on the neutral ground; a
 /// link's the pointer's ground under the pointer.
 // kept across runs: a value (no field of it changes)
-let elsewhere_place : @ui.Style = @ui.style(row=true, px=S1_5, py=SPx, gap=S1, radius=Md, bg=Neutral, align=ACenter)
+let elsewhere_place : @ui.Style = @ui.css("row px=S1_5 py=SPx gap=S1 radius=Md bg=Neutral align=ACenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let elsewhere_place_hot : @ui.Style = elsewhere_place.then(@ui.style(bg=Hover))
+let elsewhere_place_hot : @ui.Style = elsewhere_place.then(@ui.css("bg=Hover"))
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -2394,7 +2394,7 @@ let elsewhere_place_words : @ui.TextStyle = @ui.text_style(size=Xs, weight=Mediu
 ///|
 /// Sending it failed: a red pill (the web's Pill tone red).
 // kept across runs: a value (no field of it changes)
-let elsewhere_failed : @ui.Style = @ui.style(px=S1_5, py=SPx, radius=Md, bg=DangerBg)
+let elsewhere_failed : @ui.Style = @ui.css("px=S1_5 py=SPx radius=Md bg=DangerBg")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -2404,15 +2404,8 @@ let elsewhere_failed_words : @ui.TextStyle = @ui.text_style(size=Xs2, color=Dang
 /// The place's mark on the picture's corner: 14 round, 6 past its right and foot edges, on the list's ground, a line
 /// round it (Chat.css.ts msgAvatarSlack).
 // kept across runs: a value (no field of it changes)
-let elsewhere_mark : @ui.Style = @ui.style(
-  w=S3_5,
-  h=S3_5,
-  radius=Full,
-  bg=Bg,
-  border=B1,
-  border_color=Line,
-  align=ACenter,
-  justify=JCenter,
+let elsewhere_mark : @ui.Style = @ui.css(
+  #|w=S3_5 h=S3_5 radius=Full bg=Bg border=B1 border_color=Line align=ACenter justify=JCenter
 )
 
 ///|
@@ -2867,7 +2860,7 @@ let activity_stop_box : @ui.Style = @ui.style(w=@sf.small_button, h=@sf.small_bu
 
 ///|
 // kept across runs: a value (no field of it changes)
-let activity_stop_hot : @ui.Style = activity_stop_box.then(@ui.style(bg=Hover))
+let activity_stop_hot : @ui.Style = activity_stop_box.then(@ui.css("bg=Hover"))
 
 ///|
 /// How far an activity's ring reaches round its avatar (Chat.kt: the messages' 18dp avatar, its ring 3dp round it).

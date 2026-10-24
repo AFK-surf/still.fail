@@ -671,43 +671,45 @@ let fdrag_ghost_off : Double = 12.0
 
 ///|
 // kept across runs: a value (no field of it changes)
-let fclash_foot : @ui.Style = @ui.style(row=true, w=Full, pt=S2, gap=S2, justify=JEnd)
+let fclash_foot : @ui.Style = @ui.css("row w=Full pt=S2 gap=S2 justify=JEnd")
 
 ///|
 /// What comes and what is there (clash: 10 by 12 in, the field's corner, the neutral ground).
 // kept across runs: a value (no field of it changes)
-let fclash_facts : @ui.Style = @ui.style(row=true, w=Full, px=S3, py=S2_5, gap=S3, radius=Xl, bg=Neutral)
+let fclash_facts : @ui.Style = @ui.css("row w=Full px=S3 py=S2_5 gap=S3 radius=Xl bg=Neutral")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let fclash_all : @ui.Style = @ui.style(row=true, gap=S2, align=ACenter)
+let fclash_all : @ui.Style = @ui.css("row gap=S2 align=ACenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let fdrag_ghost_place : @ui.Style = @ui.style(w=Full, h=Full, align=AStart)
+let fdrag_ghost_place : @ui.Style = @ui.css("w=Full h=Full align=AStart")
 
 ///|
 /// The picture carried: a chip on the raised ground, its shadow under it.
 // kept across runs: a value (no field of it changes)
-let fdrag_ghost_chip : @ui.Style = @ui.style(row=true, h=S8, px=S3, gap=S2, align=ACenter, radius=Lg, bg=Raised, shadow=Lg, opacity=O90)
+let fdrag_ghost_chip : @ui.Style = @ui.css(
+  #|row h=S8 px=S3 gap=S2 align=ACenter radius=Lg bg=Raised shadow=Lg opacity=O90
+)
 
 ///|
 /// A folder's row of the sidebar (drop: the nav row's corner), ringed in the accent on its ground while over it.
 // kept across runs: a value (no field of it changes)
-let fdrag_side : @ui.Style = @ui.style(w=Full, radius=Xl)
+let fdrag_side : @ui.Style = @ui.css("w=Full radius=Xl")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let fdrag_side_on : @ui.Style = fdrag_side.then(@ui.style(bg=AccentBg, border=B1, border_color=Accent))
+let fdrag_side_on : @ui.Style = fdrag_side.then(@ui.css("bg=AccentBg border=B1 border_color=Accent"))
 
 ///|
 // kept across runs: a value (no field of it changes)
-let fdrag_says_place : @ui.Style = @ui.style(row=true, w=Full, h=Full, pr=S2, align=ACenter, justify=JEnd)
+let fdrag_says_place : @ui.Style = @ui.css("row w=Full h=Full pr=S2 align=ACenter justify=JEnd")
 
 ///|
 /// What a drop there does (dropSays: a capsule in the accent, 7 in, its words 11 bold on it).
 // kept across runs: a value (no field of it changes)
-let fdrag_says : @ui.Style = @ui.style(px=S1_5, py=SPx, radius=Full, bg=Accent)
+let fdrag_says : @ui.Style = @ui.css("px=S1_5 py=SPx radius=Full bg=Accent")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -716,11 +718,11 @@ let fdrag_says_words : @ui.TextStyle = @ui.text_style(size=Xs2, weight=Semibold,
 ///|
 /// 个人收藏 while a folder dragged over it would be kept there (keep: ringed in the accent).
 // kept across runs: a value (no field of it changes)
-let fdrag_keep : @ui.Style = @ui.style(w=Full, radius=Xl)
+let fdrag_keep : @ui.Style = @ui.css("w=Full radius=Xl")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let fdrag_keep_on : @ui.Style = fdrag_keep.then(@ui.style(border=B1, border_color=Accent))
+let fdrag_keep_on : @ui.Style = fdrag_keep.then(@ui.css("border=B1 border_color=Accent"))
 
 
 ///|
@@ -737,7 +739,7 @@ pub fn drag_ask(a : Asking) -> Unit {
 ///|
 /// The clash's facts (DrivePane.css.ts facts: two columns, 4 by 12 between; what is said muted).
 // kept across runs: a value (no field of it changes)
-let fclash_said_column : @ui.Style = @ui.style(gap=S1)
+let fclash_said_column : @ui.Style = @ui.css("gap=S1")
 
 ///|
 // kept across runs: a value (no field of it changes)

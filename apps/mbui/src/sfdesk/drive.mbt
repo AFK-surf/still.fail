@@ -1114,7 +1114,7 @@ let none : Double = 0.0
 ///|
 /// The list and the preview beside it (withPane).
 // kept across runs: a value (no field of it changes)
-let with_pane : @ui.Style = @ui.style(row=true, w=Full, h=Full)
+let with_pane : @ui.Style = @ui.css("row w=Full h=Full")
 
 ///|
 /// The entries (list): rows 2 apart, its corner the card's.
@@ -1124,53 +1124,53 @@ let list_box : @ui.Style = @ui.style(w=@sf.grow, h=Full, radius=Xl2, clip=true)
 ///|
 /// A row's room in the list (its 2 to the next: list's gap).
 // kept across runs: a value (no field of it changes)
-let entry_room : @ui.Style = @ui.style(w=Full, pb=S0_5)
+let entry_room : @ui.Style = @ui.css("w=Full pb=S0_5")
 
 ///|
 /// A row's ground (entry): the field's corner; the list's under the pointer, the selected's chosen, the accent's
 /// ringed where a drop goes in; faded while something is under way on it.
 // kept across runs: a value (no field of it changes)
-let entry_plain : @ui.Style = @ui.style(w=Full, radius=Xl)
+let entry_plain : @ui.Style = @ui.css("w=Full radius=Xl")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let entry_along : @ui.Style = entry_plain.then(@ui.style(bg=ListGround))
+let entry_along : @ui.Style = entry_plain.then(@ui.css("bg=ListGround"))
 
 ///|
 // kept across runs: a value (no field of it changes)
-let entry_chosen : @ui.Style = entry_plain.then(@ui.style(bg=Selected))
+let entry_chosen : @ui.Style = entry_plain.then(@ui.css("bg=Selected"))
 
 ///|
 // kept across runs: a value (no field of it changes)
-let entry_drop : @ui.Style = entry_plain.then(@ui.style(bg=AccentBg, border=B1, border_color=Accent))
+let entry_drop : @ui.Style = entry_plain.then(@ui.css("bg=AccentBg border=B1 border_color=Accent"))
 
 ///|
 // kept across runs: a value (no field of it changes)
-let entry_busy_look : @ui.Style = @ui.style(opacity=O60)
+let entry_busy_look : @ui.Style = @ui.css("opacity=O60")
 
 ///|
 /// A row (row): 44 high at least, 8 by 12 in, its parts 12 apart: its mark (20), its name, its size (96) and time
 /// (104) at their end, room for its ⋯ (36).
 // kept across runs: a value (no field of it changes)
-let row_style : @ui.Style = @ui.style(row=true, w=Full, min_h=S11, px=S3, py=S2, gap=S3, align=ACenter)
+let row_style : @ui.Style = @ui.css("row w=Full min_h=S11 px=S3 py=S2 gap=S3 align=ACenter")
 
 ///|
 /// A chat's 文件 tab's and a column's (compact): 36 high, 6 by 10 in, 10 apart, the size alone, room for its ⋯ (28).
 // kept across runs: a value (no field of it changes)
-let row_compact : @ui.Style = @ui.style(row=true, w=Full, min_h=S9, px=S2_5, py=S1_5, gap=S2_5, align=ACenter)
+let row_compact : @ui.Style = @ui.css("row w=Full min_h=S9 px=S2_5 py=S1_5 gap=S2_5 align=ACenter")
 
 ///|
 /// In a tree: 8 apart, its disclosure (12) before its mark, in by its depth.
 // kept across runs: a value (no field of it changes)
-let row_tree : @ui.Style = row_style.then(@ui.style(gap=S2, pl=S1_5))
+let row_tree : @ui.Style = row_style.then(@ui.css("gap=S2 pl=S1_5"))
 
 ///|
 // kept across runs: a value (no field of it changes)
-let row_tree_compact : @ui.Style = row_compact.then(@ui.style(gap=S2, pl=S1_5))
+let row_tree_compact : @ui.Style = row_compact.then(@ui.css("gap=S2 pl=S1_5"))
 
 ///|
 // kept across runs: a value (no field of it changes)
-let disclosure_box : @ui.Style = @ui.style(w=S3, h=S3, align=ACenter, justify=JCenter)
+let disclosure_box : @ui.Style = @ui.css("w=S3 h=S3 align=ACenter justify=JCenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -1182,7 +1182,7 @@ let row_meta : @ui.TextStyle = @ui.text_style(size=Xs, color=Muted, wrap=false)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let size_cell : @ui.Style = @ui.style(row=true, w=S24, justify=JEnd)
+let size_cell : @ui.Style = @ui.css("row w=S24 justify=JEnd")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -1190,20 +1190,20 @@ let time_cell : @ui.Style = @ui.style(row=true, w=Fixed(time_w), justify=JEnd)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let end_cell : @ui.Style = @ui.style(w=S9)
+let end_cell : @ui.Style = @ui.css("w=S9")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let end_compact : @ui.Style = @ui.style(w=S7)
+let end_compact : @ui.Style = @ui.css("w=S7")
 
 ///|
 /// Its ⋯ (more), and › in columns (next: 24), 6 in from its end, in its middle.
 // kept across runs: a value (no field of it changes)
-let more_place : @ui.Style = @ui.style(row=true, w=Full, h=Full, pr=S1_5, gap=SPx, align=ACenter, justify=JEnd)
+let more_place : @ui.Style = @ui.css("row w=Full h=Full pr=S1_5 gap=SPx align=ACenter justify=JEnd")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let next_box : @ui.Style = @ui.style(w=S6, h=S6, align=ACenter, justify=JCenter)
+let next_box : @ui.Style = @ui.css("w=S6 h=S6 align=ACenter justify=JCenter")
 
 ///|
 /// A name changed in place (nameField): a line of the accent round it, the option's corner, on the page's ground.
@@ -1213,11 +1213,11 @@ let name_field_box : @ui.Style = @ui.style(w=@sf.grow, px=S1_5, py=S0_5, radius=
 ///|
 /// The heads (listHead): 12 in and 4 under, over the row's columns, 12 apart, their words the meta's.
 // kept across runs: a value (no field of it changes)
-let list_head_row : @ui.Style = @ui.style(row=true, w=Full, px=S3, pb=S1, gap=S3, align=ACenter)
+let list_head_row : @ui.Style = @ui.css("row w=Full px=S3 pb=S1 gap=S3 align=ACenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let head_mark : @ui.Style = @ui.style(w=S5)
+let head_mark : @ui.Style = @ui.css("w=S5")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -1225,7 +1225,7 @@ let head_name : @ui.Style = @ui.style(row=true, w=@sf.grow, gap=S1, align=ACente
 
 ///|
 // kept across runs: a value (no field of it changes)
-let head_size : @ui.Style = @ui.style(row=true, w=S24, gap=S1, align=ACenter, justify=JEnd)
+let head_size : @ui.Style = @ui.css("row w=S24 gap=S1 align=ACenter justify=JEnd")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -1254,12 +1254,12 @@ let progress_track : @ui.Style = @ui.style(row=true, w=@sf.grow, h=S0_5, radius=
 
 ///|
 // kept across runs: a value (no field of it changes)
-let progress_done : @ui.Style = @ui.style(h=Full, bg=Accent)
+let progress_done : @ui.Style = @ui.css("h=Full bg=Accent")
 
 ///|
 /// Its name taken there, or why it failed: at its end, 64 short of it (ask, failed).
 // kept across runs: a value (no field of it changes)
-let upload_ask : @ui.Style = @ui.style(row=true, gap=S1, pr=S16, align=ACenter, justify=JEnd)
+let upload_ask : @ui.Style = @ui.css("row gap=S1 pr=S16 align=ACenter justify=JEnd")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -1268,7 +1268,7 @@ let upload_failed : @ui.TextStyle = @ui.text_style(size=Xs, color=Danger, wrap=f
 ///|
 /// Why the folder could not be read, and 重试 (problem: 12 in, 10 apart).
 // kept across runs: a value (no field of it changes)
-let problem_box : @ui.Style = @ui.style(w=Full, p=S3, gap=S2_5, align=AStart)
+let problem_box : @ui.Style = @ui.css("w=Full p=S3 gap=S2_5 align=AStart")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -1277,7 +1277,7 @@ let problem_words : @ui.TextStyle = @ui.text_style(size=Xs, color=Danger, w=Full
 ///|
 /// Nothing in it (empty): in the middle, 56 by 24 in, 12 apart, muted.
 // kept across runs: a value (no field of it changes)
-let empty_box : @ui.Style = @ui.style(w=Full, pt=S14, pb=S14, px=S6, gap=S3, align=ACenter)
+let empty_box : @ui.Style = @ui.css("w=Full pt=S14 pb=S14 px=S6 gap=S3 align=ACenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -1287,16 +1287,8 @@ let empty_words : @ui.TextStyle = @ui.text_style(size=Sm, color=Muted, center=tr
 /// What is held over the list (drop): over all of it, its words and mark in the middle, the page's ground at 82%
 /// under them, ringed in the accent.
 // kept across runs: a value (no field of it changes)
-let drop_box : @ui.Style = @ui.style(
-  w=Full,
-  h=Full,
-  gap=S2,
-  align=ACenter,
-  justify=JCenter,
-  radius=Xl2,
-  bg=A(Bg, O80),
-  border=B2,
-  border_color=A(Accent, O60),
+let drop_box : @ui.Style = @ui.css(
+  #|w=Full h=Full gap=S2 align=ACenter justify=JCenter radius=Xl2 bg=A(Bg,O80) border=B2 border_color=A(Accent,O60)
 )
 
 ///|
@@ -1306,7 +1298,7 @@ let drop_words : @ui.TextStyle = @ui.text_style(size=Sm, color=Fg, wrap=false)
 ///|
 /// What is done to the folder (actions): 6 apart.
 // kept across runs: a value (no field of it changes)
-let actions_row : @ui.Style = @ui.style(row=true, gap=S1_5, align=ACenter)
+let actions_row : @ui.Style = @ui.css("row gap=S1_5 align=ACenter")
 
 ///|
 /// A folder's page's head (Drive.tsx FolderView's pageHead): its trail (its station's button, then the way down to it:
@@ -1359,20 +1351,20 @@ let trail_chevron : Double = 16.0
 ///|
 /// The head (pageHead): 12 over and under, 6 between its lines; in from its side as the page is (40; split, 24).
 // kept across runs: a value (no field of it changes)
-let head_one : @ui.Style = @ui.style(w=Full, px=S10, pt=S3, pb=S3, gap=S1_5)
+let head_one : @ui.Style = @ui.css("w=Full px=S10 pt=S3 pb=S3 gap=S1_5")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let head_half : @ui.Style = @ui.style(w=Full, px=S6, pt=S3, pb=S3, gap=S1_5)
+let head_half : @ui.Style = @ui.css("w=Full px=S6 pt=S3 pb=S3 gap=S1_5")
 
 ///|
 /// Its trail (crumbs): 4 between.
 // kept across runs: a value (no field of it changes)
-let head_trail : @ui.Style = @ui.style(row=true, gap=S1, align=ACenter)
+let head_trail : @ui.Style = @ui.css("row gap=S1 align=ACenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let head_crumb : @ui.Style = @ui.style(px=S0_5, radius=Sm, hovered=@ui.patch(bg=Hover))
+let head_crumb : @ui.Style = @ui.css("px=S0_5 radius=Sm hovered{bg=Hover}")
 
 ///|
 // kept across runs: a value (no field of it changes)

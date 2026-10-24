@@ -66,7 +66,7 @@ fn bar_room_box(c : @ui.Ctx, h : Double) -> Unit {
 ///|
 /// What is inside the bars: all of the window.
 // kept across runs: a value (no field of it changes)
-let bars_fill : @ui.Style = @ui.style(w=Full, h=Full)
+let bars_fill : @ui.Style = @ui.css("w=Full h=Full")
 
 ///|
 /// What is between them: the room they leave.

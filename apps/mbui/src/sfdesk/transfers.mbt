@@ -213,15 +213,15 @@ let ftransfers_w : Double = 360.0
 ///|
 /// The chip (transfersChip: 28 high, 10 in, the neutral ground, its words muted; going: the accent's; failed: red's).
 // kept across runs: a value (no field of it changes)
-let ftransfers_chip : @ui.Style = @ui.style(row=true, h=S7, px=S2_5, gap=S1_5, align=ACenter, radius=Full, bg=Neutral)
+let ftransfers_chip : @ui.Style = @ui.css("row h=S7 px=S2_5 gap=S1_5 align=ACenter radius=Full bg=Neutral")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let ftransfers_chip_going : @ui.Style = ftransfers_chip.then(@ui.style(bg=AccentBg))
+let ftransfers_chip_going : @ui.Style = ftransfers_chip.then(@ui.css("bg=AccentBg"))
 
 ///|
 // kept across runs: a value (no field of it changes)
-let ftransfers_chip_failed : @ui.Style = ftransfers_chip.then(@ui.style(bg=DangerBg))
+let ftransfers_chip_failed : @ui.Style = ftransfers_chip.then(@ui.css("bg=DangerBg"))
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -237,7 +237,7 @@ let ftransfers_chip_failed_words : @ui.TextStyle = @ui.text_style(size=Xs, color
 
 ///|
 // kept across runs: a value (no field of it changes)
-let ftransfers_head : @ui.Style = @ui.style(w=Full, px=S2, pt=S1, pb=S2)
+let ftransfers_head : @ui.Style = @ui.css("w=Full px=S2 pt=S1 pb=S2")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -246,11 +246,11 @@ let ftransfers_head_words : @ui.TextStyle = @ui.text_style(size=Xs, weight=Semib
 ///|
 /// A transfer (transfer: its mark 18, its words, its keys; 8 in, 8 apart, a line over it).
 // kept across runs: a value (no field of it changes)
-let ftransfer_row : @ui.Style = @ui.style(row=true, w=Full, p=S2, gap=S2, align=AStart)
+let ftransfer_row : @ui.Style = @ui.css("row w=Full p=S2 gap=S2 align=AStart")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let ftransfer_mark : @ui.Style = @ui.style(w=S4_5, h=S4_5, align=ACenter, justify=JCenter)
+let ftransfer_mark : @ui.Style = @ui.css("w=S4_5 h=S4_5 align=ACenter justify=JCenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -258,7 +258,7 @@ let ftransfer_text : @ui.Style = @ui.style(w=@sf.grow, gap=S1, clip=true)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let ftransfer_title : @ui.Style = @ui.style(row=true, gap=S1, clip=true)
+let ftransfer_title : @ui.Style = @ui.css("row gap=S1 clip")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -278,7 +278,7 @@ let ftransfer_failed : @ui.TextStyle = @ui.text_style(size=Xs, color=Danger, wra
 
 ///|
 // kept across runs: a value (no field of it changes)
-let ftransfer_actions : @ui.Style = @ui.style(row=true, gap=SPx, align=ACenter)
+let ftransfer_actions : @ui.Style = @ui.css("row gap=SPx align=ACenter")
 
 
 
@@ -292,4 +292,4 @@ let transfer_icon : Double = 14.0
 
 ///|
 // kept across runs: a value (no field of it changes)
-let transfer_rule : @ui.Style = @ui.style(w=Full, h=SPx, bg=Line)
+let transfer_rule : @ui.Style = @ui.css("w=Full h=SPx bg=Line")

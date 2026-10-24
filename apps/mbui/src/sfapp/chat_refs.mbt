@@ -397,16 +397,16 @@ fn mark_pasted(
 /// The menu over the composer (ChatRefMenu): 10 in from its sides, 8 over the capsule; its card 12 in, as round as the
 /// capsule, at most 320 high.
 // kept across runs: a value (no field of it changes)
-let ref_menu_outer : @ui.Style = @ui.style(w=Full, px=S2_5, pb=S2)
+let ref_menu_outer : @ui.Style = @ui.css("w=Full px=S2_5 pb=S2")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let ref_menu_card : @ui.Style = @ui.style(w=Full, p=S3)
+let ref_menu_card : @ui.Style = @ui.css("w=Full p=S3")
 
 ///|
 /// Its heading: 引用对话 and the words typed, 13, 12 in, 6 under.
 // kept across runs: a value (no field of it changes)
-let ref_menu_head : @ui.Style = @ui.style(row=true, w=Full, pl=S3, pr=S3, pb=S1_5, gap=S1_5)
+let ref_menu_head : @ui.Style = @ui.css("row w=Full pl=S3 pr=S3 pb=S1_5 gap=S1_5")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -419,7 +419,7 @@ let ref_menu_head_query : @ui.TextStyle = @ui.text_style(size=Sm, color=Fg, wrap
 ///|
 /// What it says in place of chats: 15, muted, 12 in, 6 over, 4 under.
 // kept across runs: a value (no field of it changes)
-let ref_menu_note_box : @ui.Style = @ui.style(w=Full, pl=S3, pr=S3, pt=S1_5, pb=S1)
+let ref_menu_note_box : @ui.Style = @ui.css("w=Full pl=S3 pr=S3 pt=S1_5 pb=S1")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -442,16 +442,16 @@ let ref_menu_row : @ui.Style = @ui.style(
 
 ///|
 // kept across runs: a value (no field of it changes)
-let ref_menu_mark : @ui.Style = @ui.style(w=S4, align=ACenter)
+let ref_menu_mark : @ui.Style = @ui.css("w=S4 align=ACenter")
 
 ///|
 /// Its title and whose it is (another workspace's: its name right after the title, as a tag), 6 apart.
 // kept across runs: a value (no field of it changes)
-let ref_menu_title_line : @ui.Style = @ui.style(row=true, w=Full, gap=S1_5, align=ACenter)
+let ref_menu_title_line : @ui.Style = @ui.css("row w=Full gap=S1_5 align=ACenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let ref_menu_title_box : @ui.Style = @ui.style()
+let ref_menu_title_box : @ui.Style = @ui.css("")
 
 ///|
 /// (weight(1f, fill = false): the title as wide as it is, cut short first, with an ellipsis)
