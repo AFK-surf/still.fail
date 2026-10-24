@@ -74,11 +74,14 @@ async function watch<T extends { host: FakeHost; core: Core }>(t: T) {
 test("a chat's file downloaded a part at a time, ready for the page that takes it, then read from the device", async () => {
   const zip = bytesOf(10 * MB, 3);
   const r = await rig(new Map([["build.zip", zip]]));
+  // (a device's clock says fractions of a millisecond: the list says when in whole ones, as its shape has it)
+  r.host.advance(0.387);
   const started = await r.ask("download.start", { station: ST, key: "k1", name: "build.zip", size: zip.length });
   const id = started.ok.download.id as string;
   assert.equal(started.ok.download.state, "going");
   const [d] = await r.view();
   assert.deepEqual([d.id, d.name, d.state, d.loaded, d.progress], [id, "build.zip", "ready", zip.length, 1]);
+  assert.ok(Number.isSafeInteger(d.startedAt), String(d.startedAt));
   assert.equal(r.parts("build.zip"), 3, "three parts of 4 MB");
   // asked again while ready: the same one, nothing fetched again
   assert.equal((await r.ask("download.start", { station: ST, key: "k1", name: "build.zip", size: zip.length })).ok.download.id, id);
