@@ -133,11 +133,6 @@ pub fn vf_bar(vw : Viewer, c : @ui.Ctx, src : Source, shown : Double) -> Unit {
   v.mouse_x = px
   v.mouse_y = py
   v.mouse_seen = true
-  // over the page (holding no field of its own), the keys its own: the page's composer under it gives them up
-  // (a mark's note being written holds its own field)
-  if !v.closing && !marking.on && c.field_focused() {
-    c.blur()
-  }
   // Esc closes it (marking: leaves the marks first), ← and → step
   if !v.closing && c.key_pressed(@ui.key_escape) {
     if marking.on {

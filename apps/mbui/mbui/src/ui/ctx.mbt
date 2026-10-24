@@ -91,6 +91,9 @@ struct ListState {
   // as it is laid out, are built in them, as what is built beside the list is
   mut theme : Theme
   mut direction : Direction
+  // the layer it was built in (Ctx::overlay, 0 the page): its rows, built as it is laid out, are of it as what is built
+  // beside the list is (the keys they read, the focus they take)
+  mut layer : Int
 }
 
 ///|

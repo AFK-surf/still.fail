@@ -329,3 +329,142 @@ test "an open layer the focus is in has the keys: the page under it reads none (
   t.frame()
   assert_eq(log, ["menu a", "dismissed Escape", "page key \{key_of_char('a')}"])
 }
+
+///|
+test "a modal layer Escape does not dismiss (a file over the window) has the keys and its own Escape; a toast over it has neither" {
+  let toast = Ref(false)
+  let log : Array[String] = []
+  let t = Tester::new(fn(c) {
+    // a page with its shortcuts: Space (a chat's 回到输入框), Escape (a panel of it closed)
+    if c.key_pressed(key_space) {
+      log.push("page space")
+    }
+    if c.key_pressed(key_escape) || c.key_pressed(key_escape, in_field=true) {
+      log.push("page escape")
+    }
+    let o = c.overlay("over", modal=true, escape=false, outside=false, initial_focus=0, fn() {
+      if c.key_pressed(key_space) {
+        log.push("over space")
+      }
+      if c.key_pressed(key_escape) {
+        log.push("over escape")
+      }
+    })
+    if o.dismissed is Some(d) {
+      log.push("dismissed \{d}")
+    }
+    // (as kit's toast is: no keys, not dismissed by Escape, over everything built before it)
+    if toast.val {
+      c.overlay("toast", escape=false, outside=false, initial_focus=0, fn() {  }) |> ignore
+    }
+  })
+  t.draw()
+  t.key(key_space)
+  t.frame()
+  t.key(key_escape)
+  t.frame()
+  assert_eq(log, ["over space", "over escape"])
+  toast.val = true
+  t.frame()
+  t.key(key_space)
+  t.frame()
+  t.key(key_escape)
+  t.frame()
+  assert_eq(log, ["over space", "over escape", "over space", "over escape"])
+}
+
+///|
+test "a toast over a dialog leaves it the keys: Escape dismisses the dialog, the page under reads none" {
+  let open = Ref(true)
+  let log : Array[String] = []
+  let t = Tester::new(fn(c) {
+    for k in c.keys() {
+      log.push("page key \{k.0}")
+    }
+    if open.val {
+      let o = c.overlay("dialog", modal=true, fn() { btn(c, "inside") |> ignore })
+      if o.dismissed is Some(d) {
+        log.push("dismissed \{d}")
+        open.val = false
+      }
+    }
+    c.overlay("toast", escape=false, outside=false, initial_focus=0, fn() {  }) |> ignore
+  })
+  t.draw()
+  t.key(key_of_char('a'))
+  t.frame()
+  assert_eq(log, [])
+  t.key(key_escape)
+  t.frame()
+  assert_eq(log, ["dismissed Escape"])
+  assert_false(open.val)
+  // closed: the page's again, the toast still over it
+  t.key(key_of_char('a'))
+  t.frame()
+  assert_eq(log, ["dismissed Escape", "page key \{key_of_char('a')}"])
+}
+
+///|
+test "a field given the focus under a modal layer as it is built does not keep it; one in the layer does, and the one under once it is gone" {
+  let ask = Ref("")
+  let open = Ref(true)
+  let t = Tester::new(fn(c) {
+    // (as a chat's composer takes the cursor as its chat is first drawn)
+    c.editor("under") |> ignore
+    if ask.val == "under" {
+      c.focus_editor("under")
+    }
+    if open.val {
+      c.overlay("over", modal=true, escape=false, outside=false, initial_focus=0, fn() {
+        c.editor("in") |> ignore
+        if ask.val == "in" {
+          c.focus_editor("in")
+        }
+      })
+      |> ignore
+    }
+  })
+  t.draw()
+  ask.val = "under"
+  t.frame()
+  assert_false(t.ctx().field_focused())
+  ask.val = "in"
+  t.frame()
+  assert_true(t.ctx().editor_focused("in"))
+  ask.val = ""
+  open.val = false
+  t.frame()
+  ask.val = "under"
+  t.frame()
+  assert_true(t.ctx().editor_focused("under"))
+}
+
+///|
+test "a list's rows in a layer are of it, built as the list is laid out: a field in one takes the focus, the keys are theirs" {
+  let ask = Ref(false)
+  let log : Array[String] = []
+  let t = Tester::new(fn(c) {
+    c.overlay("sheet", modal=true, fn() {
+      c.box(h=Px(300.0), fn() {
+        c.list("rows", 1, 40.0, fn(_) {
+          c.editor("in-row") |> ignore
+          if ask.val {
+            c.focus_editor("in-row")
+          }
+          if c.key_pressed(key_space) {
+            log.push("row space")
+          }
+        })
+        |> ignore
+      })
+      |> ignore
+    })
+    |> ignore
+  })
+  t.draw()
+  t.key(key_space)
+  assert_eq(log, ["row space"])
+  ask.val = true
+  t.frame()
+  assert_true(t.ctx().field_focused())
+}

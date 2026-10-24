@@ -360,6 +360,7 @@ pub fn Ctx::list(
         sel: false,
         theme: self.theme,
         direction: self.direction,
+        layer: self.layer_cur,
       }
       self.lists[id] = s
       self.own(id)
@@ -381,6 +382,7 @@ pub fn Ctx::list(
   st.sel = desk.selecting
   st.theme = self.theme
   st.direction = self.direction
+  st.layer = self.layer_cur
   // shown again (not built the frame before): what of it still moves says so again
   let back = st.built >= 0 && st.built < self.frame_no - 1
   // (built again in the same frame: its motion stepped once a frame, at the first)
@@ -418,10 +420,11 @@ fn Ctx::build_row(self : Ctx, li : Int, st : ListState, k : Int) -> Int {
   let saved_owner = self.owner
   let (saved_w, saved_h) = (self.width, self.height)
   let saved_sel = desk.selecting
-  let (saved_theme, saved_dir) = (self.theme, self.direction)
+  let (saved_theme, saved_dir, saved_layer) = (self.theme, self.direction, self.layer_cur)
   desk.selecting = st.sel
   self.theme = st.theme
   self.direction = st.direction
+  self.layer_cur = st.layer
   self.cur = li
   self.id_seed = st.seed
   self.owner = st.owner
@@ -442,6 +445,7 @@ fn Ctx::build_row(self : Ctx, li : Int, st : ListState, k : Int) -> Int {
   desk.selecting = saved_sel
   self.theme = saved_theme
   self.direction = saved_dir
+  self.layer_cur = saved_layer
   r
 }
 
