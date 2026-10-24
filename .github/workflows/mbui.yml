@@ -278,6 +278,7 @@ jobs:
         shell: bash
     env:
       MSYS: winsymlinks:nativestrict
+      HBC_CACHE: ${{ github.workspace }}/.ci/hbc
     steps:
       # the natives' keys are git's blobs: the checkout as git has it
       - run: git config --global core.autocrlf false
@@ -328,6 +329,15 @@ jobs:
           B=$RUNNER_TEMP/build; mkdir -p "$B"
           nohup bash -c 'MBUI_WIN_CORE=0 bash apps/mbui/scripts/win.sh build > "$0/log" 2>&1; echo $? > "$0/status"' "$B" > /dev/null 2>&1 &
       - uses: ./.github/actions/setup
+      # core.hbc by its inputs (HBC_CACHE, scripts/core.sh hermes), as the other jobs keep it: the core's step was 12-17 s
+      # of every run (~14 s of a CPU, beside cl), the core unchanged in most of them (restored on every run, saved by
+      # main's when it made one: the names in it are their contents' keys)
+      - uses: actions/cache/restore@v4
+        id: hbc
+        with:
+          path: .ci/hbc
+          key: mbui-win-hbc-${{ github.sha }}
+          restore-keys: mbui-win-hbc-
       - name: Packages (the core's, the cloud's; the test station built)
         run: |
           # (the packages' scripts in bash, not cmd: the station's build is sh)
@@ -337,10 +347,26 @@ jobs:
           (cd cloud && pnpm install --frozen-lockfile --prefer-offline > /dev/null)
           (cd station && pnpm install --frozen-lockfile --prefer-offline > /dev/null && pnpm run build > /dev/null)
       - name: The core's bytecode (Hermes)
-        run: bash apps/mbui/scripts/win.sh core
+        run: |
+          bash apps/mbui/scripts/win.sh core
+          [ ! -d .ci/hbc ] || echo "HBC_KEY=mbui-win-hbc-$(ls .ci/hbc | sha256sum | cut -c1-16)" >> "$GITHUB_ENV"
+      - if: github.ref == 'refs/heads/main' && env.HBC_KEY != '' && env.HBC_KEY != steps.hbc.outputs.cache-matched-key
+        uses: actions/cache/save@v4
+        with:
+          path: .ci/hbc
+          key: ${{ env.HBC_KEY }}
+      # The still.fail the e2e flow signs in against (its cloud, relay, station and chat: ~13 s of the flow's ~18, none
+      # of it the app's) made while cl compiles the app; the flow waits for the app (E2E_APP: "Build (APP=stillfail)"
+      # says it is whole), then runs it. Waited for at the end, with the zip's put (main's) and the cache's save beside it.
+      - name: The e2e flow started (e2e/win.sh, the app waited for)
+        run: |
+          E=$RUNNER_TEMP/e2e; mkdir -p "$E"
+          nohup bash -c 'E2E_APP="$0/app" bash apps/mbui/e2e/win.sh > "$0/log" 2>&1; echo $? > "$0/status"' "$E" > /dev/null 2>&1 &
       - name: Build (APP=stillfail)
         run: |
-          B=$RUNNER_TEMP/build
+          B=$RUNNER_TEMP/build E=$RUNNER_TEMP/e2e
+          # (the e2e flow told the app is not coming, else it would wait its 10 minutes)
+          trap '[ -s "$E/app" ] || echo failed > "$E/app"' EXIT
           t0=$SECONDS
           while [ ! -s "$B/status" ]; do
             [ $((SECONDS - t0)) -lt 420 ] || { echo "the build took over 7 minutes"; cat "$B/log"; exit 1; }
@@ -350,20 +376,15 @@ jobs:
           cat "$B/log"
           [ "$(cat "$B/status")" = 0 ] || exit 1
           bash apps/mbui/scripts/win.sh put
+          echo ok > "$E/app"
           # the cache's key: the app's C by its content (a C as the restored one was is not saved again)
           d=$(sh apps/mbui/scripts/mbui.sh)
           c=$(sha256sum "$d/out/win/app/_build/native/release/build/stillfail/stillfail/stillfail.c" | cut -c1-16)
           echo "BUILD_KEY=mbui-win-build-mono-$c" >> "$GITHUB_ENV"
-      # main's, saved when its C is new (a branch reads main's: its own would be its alone)
-      - if: github.ref == 'refs/heads/main' && env.BUILD_KEY != steps.build-cache.outputs.cache-matched-key
-        uses: actions/cache/save@v4
-        with:
-          path: |
-            apps/mbui/mbui/_build
-            apps/mbui/mbui/out
-          key: ${{ env.BUILD_KEY }}
-      # out before the e2e flow (its tests hold nothing back): zipped, put, checked, then its feed
-      - name: The Windows app zipped, put, checked, then its feed
+      # out before the e2e flow ends (its tests hold nothing back): zipped, put, checked, then its feed, beside the
+      # cache's save and the e2e flow (one after another they were ~6 + 13 + 17 s after the build, 2026-10-24,
+      # 40064767331; the put mostly waiting on the network)
+      - name: The Windows app zipped, put, checked, then its feed, started
         if: github.ref == 'refs/heads/main'
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
@@ -380,10 +401,32 @@ jobs:
           EOF
           chmod +x "$RUNNER_TEMP/bin/shasum"
           export PATH="$RUNNER_TEMP/bin:$PATH" PYTHONUTF8=1
-          bash apps/mbui/scripts/beta.sh win
-          bash apps/mbui/scripts/beta.sh publish win
+          # (its summary lines kept beside it: this step's own summary file is done with before they come)
+          Z=$RUNNER_TEMP/zip; mkdir -p "$Z"
+          export GITHUB_STEP_SUMMARY="$Z/summary"
+          nohup bash -c 'bash apps/mbui/scripts/beta.sh win > "$0/log" 2>&1 && bash apps/mbui/scripts/beta.sh publish win >> "$0/log" 2>&1; echo $? > "$0/status"' "$Z" > /dev/null 2>&1 &
+      # main's, saved when its C is new (a branch reads main's: its own would be its alone)
+      - if: github.ref == 'refs/heads/main' && env.BUILD_KEY != steps.build-cache.outputs.cache-matched-key
+        uses: actions/cache/save@v4
+        with:
+          path: |
+            apps/mbui/mbui/_build
+            apps/mbui/mbui/out
+          key: ${{ env.BUILD_KEY }}
+      - name: The Windows app zipped, put, checked, then its feed
+        if: github.ref == 'refs/heads/main'
+        run: |
+          Z=$RUNNER_TEMP/zip
+          node apps/mbui/scripts/waitfor.mjs --deadline 300 --what "the zip's put" --exists "$(cygpath -w "$Z/status")" > /dev/null || { cat "$Z/log"; exit 1; }
+          cat "$Z/log"
+          cat "$Z/summary" >> "$GITHUB_STEP_SUMMARY" 2>/dev/null || true
+          [ "$(cat "$Z/status")" = 0 ]
       - name: Signed in against a local still.fail, then Home (e2e/win.sh)
-        run: bash apps/mbui/e2e/win.sh
+        run: |
+          E=$RUNNER_TEMP/e2e
+          node apps/mbui/scripts/waitfor.mjs --deadline 600 --what "the e2e flow" --exists "$(cygpath -w "$E/status")" > /dev/null || { cat "$E/log"; exit 1; }
+          cat "$E/log"
+          [ "$(cat "$E/status")" = 0 ]
       - if: always()
         uses: actions/upload-artifact@v4
         with:

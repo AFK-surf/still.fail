@@ -1722,24 +1722,36 @@ fn cmd_shim(args : Array[String]) -> Unit {
     }
     // moon takes MSVC's lib.exe and link.exe from beside the cl.exe it finds: the same forwarder for them, each
     // running the command line in its .txt (cl's: mbc wrap over the real cl; lib's and link's: the real ones)
+    //
+    // Made again only when what it is made of changed, by content (its source, the real cl's file): moon builds anew
+    // every C its compiler's mtime is newer than, and a checkout's mtimes are all new. By mtime, every CI run made it
+    // again (~7 s) and with it every stub and moon's runtime (35 cl runs, ahead of moonc on the runner's four cores)
+    // whose objects the cache had kept (still.fail's mbui.yml, 2026-10-24). /Brepro: the same source, the same .exe.
     let exe = path_join(d, b"mbc-cl.exe")
     let src = path_join(home(), b"mbc-cl.c")
-    let stale = match (stat(exe), stat(src)) {
-      (Some(e), Some(s)) => e.1 < s.1
-      _ => true
-    }
-    if stale {
+    let made_of = path_join(d, b"mbc-cl.exe.src")
+    let key = cat([
+      file_hash(src).unwrap_or(b"no source"),
+      b" ",
+      tool_identity([real]),
+    ])
+    if !is_file(exe) || read_file(made_of) != Some(key) {
       let (code, said) = run_capture([
         real,
         b"/nologo",
         b"/O1",
+        b"/Brepro",
         src,
         cat([b"/Fe", exe]),
         cat([b"/Fo", path_join(d, b"mbc-cl.obj")]),
+        b"/link",
+        b"/Brepro",
       ])
       if code != 0 {
         fatal("mbc-cl.c did not compile:\n\{str(said)}")
       }
+      let _ = write_file(made_of, key)
+
     }
     let lines_of : Array[(Bytes, Array[Bytes])] = [
       (b"cl", [self_exe.val, b"wrap", b"--real", real, b"--"]),

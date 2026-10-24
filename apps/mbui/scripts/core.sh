@@ -111,10 +111,35 @@ print(json.dumps({'entry': entry, 'hermesc': [hermesc, st(hermesc)], 'inputs': {
 PY
 }
 
+# HBC_CACHE (a directory: CI's, kept in the Actions cache by every job that makes the core): core.hbc kept there by
+# what it is made of, by content, and taken from there when that is the same. A checkout's mtimes are all new, so the
+# stamp above never holds on CI: each job made the core again, ~14 s of a CPU (Windows' 13.9 s beside cl compiling the
+# app, 2026-10-24, 40064767331). What it is made of: the trees of client/core-ts, media and web/public/avatars (the
+# buddies asks.ts imports) as committed, none of them changed in the checkout (else no key: made, not kept); this
+# module's core/; this script; the entry; hermesc itself (the bytecode is its Hermes's: Windows' is the engine's own).
+SHA=$(command -v sha256sum > /dev/null && echo sha256sum || echo "shasum -a 256")
+hbc_key() {
+  [ -n "${HBC_CACHE:-}" ] || return 1
+  local trees
+  trees=$(git -C "$EMBER" rev-parse HEAD:client/core-ts HEAD:media HEAD:web/public/avatars 2> /dev/null) || return 1
+  [ -z "$(git -C "$EMBER" status --porcelain -uno -- client/core-ts media web/public/avatars 2> /dev/null)" ] || return 1
+  { echo "$trees"
+    (cd "$ROOT/core" && find . -type f | LC_ALL=C sort | xargs $SHA)
+    $SHA < "$D/core.sh"
+    echo "${ENTRY#"$ROOT"/}"
+    $SHA < "$1"; } | $SHA | cut -c1-24
+}
+
 hermes() {
-  have_deps
   local t0=$(now)
-  local hc="$(hermesc)"
+  local hc="$(hermesc)" key=
+  ENTRY=${ENTRY:-$ROOT/core/hermes.ts}
+  if key=$(hbc_key "$hc") && [ -f "$HBC_CACHE/$key.hbc" ]; then
+    cp -p "$HBC_CACHE/$key.hbc" $OUT/core.hbc && rm -f $OUT/core.hbc.stamp
+    echo "hermes: core.hbc kept as $key (HBC_CACHE), $(wc -c < $OUT/core.hbc | tr -d ' ') bytes"
+    return 0
+  fi
+  have_deps
   # the same inputs as the last build's: that build's core.hbc
   if [ -f $OUT/core.hbc ] && [ -f $OUT/core.hbc.stamp ] && [ "$(hbc_stamp "$hc" 2>/dev/null)" = "$(cat $OUT/core.hbc.stamp)" ]; then
     echo "hermes: core.hbc as it was (its inputs unchanged)"
@@ -139,7 +164,11 @@ writeFileSync(f, out.code);" $OUT/core-hermes.js) || { echo "hermes: class trans
   "$hc" -emit-binary -O -block-scoping -out $OUT/core.hbc $OUT/core-hermes.js \
     || { echo "hermes: hermesc failed"; rm -f $OUT/core.hbc; return 1; }
   hbc_stamp "$hc" > $OUT/core.hbc.stamp || rm -f $OUT/core.hbc.stamp
-  echo "hermes in $(since $t0) s: $(wc -c < $OUT/core-hermes.js | tr -d ' ') bytes of script, $(wc -c < $OUT/core.hbc | tr -d ' ') of bytecode"
+  echo "hermes in $(since $t0) s: $(wc -c < $OUT/core-hermes.js | tr -d ' ') bytes of script, $(wc -c < $OUT/core.hbc | tr -d ' ') of bytecode${key:+ (kept as $key)}"
+  if [ -n "$key" ]; then
+    mkdir -p "$HBC_CACHE" && cp -p $OUT/core.hbc "$HBC_CACHE/$key.hbc.tmp" && mv "$HBC_CACHE/$key.hbc.tmp" "$HBC_CACHE/$key.hbc"
+    ls -t "$HBC_CACHE"/*.hbc | tail -n +9 | xargs rm -f  # the newest 8
+  fi
 }
 
 # A plain script (no bundle, no Babel) as bytecode, OUT (default out/core/core.hbc, the core's place: Android's

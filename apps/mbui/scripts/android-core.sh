@@ -5,8 +5,7 @@
 # libhermes.so from React Native's hermes-android (the Hermes the engine is built against: Gradle's cache, else Maven
 # Central), and the core as Hermes bytecode (scripts/core.sh hermes; ENTRY picks the core's entry, by default the one
 # with the media module).
-#   HBC_CACHE (a directory: CI's): core.hbc kept there by what it is made of (still.fail's client/core-ts and media,
-#   this module's core/ and scripts/core.sh, the entry), taken from there when that is the same and both are clean.
+#   HBC_CACHE (a directory: CI's): core.hbc kept there by what it is made of (scripts/core.sh hermes).
 #   CORE_SCRIPT: a script in the core's place (listen-test).
 H="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 EMBER=${EMBER:-$(cd "$TOOLS/.." 2>/dev/null && pwd)/ember-src}
@@ -40,24 +39,8 @@ app_libs() {
   echo "core parts: $(cd $jni && for f in *.so; do printf '%s %s, ' $f $(size $f); done)"
 }
 
-hbc_key() {
-  [ -n "${HBC_CACHE:-}" ] && [ -z "${CORE_SCRIPT:-}" ] || return 1
-  git -C "$EMBER" rev-parse -q --verify HEAD:client/core-ts >/dev/null 2>&1 || return 1
-  [ -z "$(git -C "$EMBER" status --porcelain -uno -- client/core-ts media 2>/dev/null)" ] || return 1
-  { git -C "$EMBER" rev-parse HEAD:client/core-ts HEAD:media
-    (cd core && find . -type f | LC_ALL=C sort | xargs shasum -a 256)
-    shasum -a 256 < "$H/core.sh"
-    echo "${ENTRY:-media-hermes}"; } | shasum -a 256 | cut -c1-24
-}
-
-# the core's bytecode, which only Gradle needs
+# the core's bytecode, which only Gradle needs (HBC_CACHE: scripts/core.sh hermes keeps it there by its inputs)
 app_assets() {
-  local key
-  if key=$(hbc_key) && [ -f "$HBC_CACHE/$key.hbc" ]; then
-    cp -p "$HBC_CACHE/$key.hbc" $apk/assets/core.hbc
-    echo "core.hbc $(size $apk/assets/core.hbc) (cached: $key)"
-    return
-  fi
   if [ -n "${CORE_SCRIPT:-}" ]; then
     # a script in the core's place (listen-test: core/listen-test.js)
     EMBER=$EMBER "$H/core.sh" hermes-script "$CORE_SCRIPT" || { echo "android.sh: $CORE_SCRIPT did not compile" >&2; exit 1; }
@@ -66,11 +49,7 @@ app_assets() {
       || { echo "android.sh: no core for the app (scripts/core.sh hermes failed)" >&2; exit 1; }  # with media, as on macOS
   fi
   cp -p out/core/core.hbc $apk/assets/
-  if [ -n "$key" ]; then
-    mkdir -p "$HBC_CACHE" && cp -p out/core/core.hbc "$HBC_CACHE/$key.hbc.tmp" && mv "$HBC_CACHE/$key.hbc.tmp" "$HBC_CACHE/$key.hbc"
-    ls -t "$HBC_CACHE"/*.hbc | tail -n +9 | xargs rm -f  # the newest 8
-  fi
-  echo "core.hbc $(size $apk/assets/core.hbc)${key:+ (made, kept as $key)}"
+  echo "core.hbc $(size $apk/assets/core.hbc)"
 }
 
 app_cmd() {
