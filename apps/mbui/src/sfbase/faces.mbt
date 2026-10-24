@@ -31,7 +31,7 @@ let faces_had : Map[String, FaceHad] = {}
 
 ///|
 /// The face each place's host face holds now, by its id ("": the app's own); index 1 ui, 2 text, 3 code.
-let faces_in : Array[String] = ["", "", "", ""]
+pub let faces_in : Array[String] = ["", "", "", ""]
 
 ///|
 /// A face's preview, by its id: the host face it is given to (> 0), being asked for (0), not had (-1).
@@ -39,11 +39,11 @@ let previews : Map[String, Int] = {}
 
 ///|
 /// The host face the app's own code face is given to for the fonts page's 默认 (code's own may be another's then).
-let own_code_face : Int = 15
+pub let own_code_face : Int = 15
 
 ///|
 /// The first host face of the previews (each face's by its place in the list, faces_most - 1 the last).
-let preview_faces_from : Int = 4
+pub let preview_faces_from : Int = 4
 
 ///|
 fn faces_reset() -> Unit {
@@ -57,7 +57,7 @@ fn faces_reset() -> Unit {
 ///|
 /// The app's words' own face in the wide frame (a computer's window, as the desktop app's pages: Inter, inter_face.mbt),
 /// where none is chosen: its id in `faces_in`, its file unzipped once.
-let desktop_face : String = "\u{1}inter"
+pub let desktop_face : String = "\u{1}inter"
 
 ///|
 // kept across runs: the same bytes once made
@@ -84,8 +84,9 @@ fn inter_face() -> Bytes? {
 let local_face : String = "local:"
 
 ///|
-/// The places' faces as the prefs say them, given to the host as each is here (call each frame, before the pages).
-fn faces(src : Source) -> Unit {
+/// The places' faces as the prefs say them, given to the host as each is here (call each frame, before the pages):
+/// with none chosen for the app's words, the desktop app's in the wide frame (`wide`).
+pub fn faces(src : Source, wide : Bool) -> Unit {
   let prefs = (src.topic)("prefs", {}).value
   guard prefs is Some(_) else { return }
   let shown = field(prefs, "faces")
@@ -110,7 +111,7 @@ fn faces(src : Source) -> Unit {
     }
     // the app's words with none chosen, in the wide frame: the desktop app's face (what people wrote follows them)
     let now = if id == "" {
-      if host_face == @hostapi.face_ui && wide_on.val { desktop_face } else { "" }
+      if host_face == @hostapi.face_ui && wide { desktop_face } else { "" }
     } else if id.has_prefix(local_face) {
       id
     } else {
@@ -220,7 +221,7 @@ fn face_files(src : Source, id : String, files : Array[Json], at : Int, got : Ar
             got.push((Held(b), weight))
             face_files(src, id, files, at + 1, got, fetched)
           }
-          _ => faces_had[id] = NotHad(tr("android-settings.fonts.damaged"))
+          _ => faces_had[id] = NotHad(@sf.t("android-settings.fonts.damaged"))
         }
       }
       Err(e) if text(Some(e), "code") == "not_found" && !fetched => {
@@ -239,7 +240,7 @@ fn face_files(src : Source, id : String, files : Array[Json], at : Int, got : Ar
 
 ///|
 /// Whether face `id` is what a place is set in now (all its files here).
-fn face_here(id : String) -> Bool {
+pub fn face_here(id : String) -> Bool {
   id != "" && faces_in.contains(id)
 }
 

@@ -7,14 +7,14 @@
 ///|
 /// A place of the rail's in the pane: Station's and Profile's the page picked in their list, 连接's its page, the
 /// others (用量) the settings' page of it across the pane.
-fn place_page(c : @ui.Ctx, src : Source, w : Workspace, pages : Pages, place : String) -> Unit {
-  let core = (pages.core)(src, w)
+fn place_page(c : @ui.Ctx, src : Source, w : Workspace, place : String) -> Unit {
+  let core = settings_core(src, w)
   let here = @settings.here_of(core, w.id, w.name)
   // (at the stack's root: no back over its head)
   @settings.wide_deep.val = false
   @settings.frame(core, here, root=true)
   match place {
-    "stations" | "profiles" => place_split(c, src, w, pages, place)
+    "stations" | "profiles" => place_split(c, src, w, place)
     "connects" => c.box(style=place_across, fn() { connects_page(c, src, core, here) }) |> ignore
     "usage" => c.box(style=place_across, fn() { usage_page(c, core, here) }) |> ignore
     _ =>
@@ -30,10 +30,10 @@ fn place_page(c : @ui.Ctx, src : Source, w : Workspace, pages : Pages, place : S
 
 ///|
 /// A place's sidebar, the stations' or the profiles'.
-fn place_sidebar(c : @ui.Ctx, src : Source, w : Workspace, pages : Pages) -> Unit {
+fn place_sidebar(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
   match lit_place() {
-    "stations" => stations_side(c, src, w, pages)
-    _ => profiles_side(c, src, w, pages)
+    "stations" => stations_side(c, src, w)
+    _ => profiles_side(c, src, w)
   }
 }
 
@@ -92,8 +92,8 @@ fn profile_route(e : Json?) -> @settings.Route {
 
 ///|
 /// The page in the pane for a place with a list of its own: the one picked, as the settings draw it.
-fn place_split(c : @ui.Ctx, src : Source, w : Workspace, pages : Pages, place : String) -> Unit {
-  let core = (pages.core)(src, w)
+fn place_split(c : @ui.Ctx, src : Source, w : Workspace, place : String) -> Unit {
+  let core = settings_core(src, w)
   c.box(style=place_pane, fn() {
     match place_route(src, w, place) {
       // a station's: the desktop's own (station_page.mbt)
@@ -115,8 +115,8 @@ fn place_split(c : @ui.Ctx, src : Source, w : Workspace, pages : Pages, place : 
 
 ///|
 /// The stations' sidebar (StationsNav): 添加 station, then a row each.
-fn stations_side(c : @ui.Ctx, src : Source, w : Workspace, pages : Pages) -> Unit {
-  let core = (pages.core)(src, w)
+fn stations_side(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
+  let core = settings_core(src, w)
   let here = @settings.here_of(core, w.id, w.name)
   let picked = place_route(src, w, "stations")
   c.box(style=place_side, fn() {
@@ -207,9 +207,9 @@ fn station_side_row(c : @ui.Ctx, src : Source, s : Json?, on : Bool, pick : () -
 ///|
 /// The profiles' sidebar (ProfilesNav): 添加 Profile, a section each kind of account, a row an account; then each
 /// station's own logins not made profiles yet.
-fn profiles_side(c : @ui.Ctx, src : Source, w : Workspace, pages : Pages) -> Unit {
+fn profiles_side(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
   let t = @sf.theme()
-  let core = (pages.core)(src, w)
+  let core = settings_core(src, w)
   let here = @settings.here_of(core, w.id, w.name)
   let picked = place_route(src, w, "profiles")
   let list = items((src.topic)("profiles", { "scope": Json::string(w.id) }).value, "items")

@@ -19,7 +19,7 @@ let open_jobs_shown : Int = 3
 
 ///|
 /// The workspace's long jobs (OpenJobs): each group under its heading; nothing while there are none.
-fn open_jobs(c : @ui.Ctx, src : Source, w : Workspace, pages : Pages) -> Unit {
+fn open_jobs(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
   let groups = items((src.topic)("longJobs", { "scope": Json::string(w.id) }).value, "groups")
   if groups.length() == 0 {
     return
@@ -40,7 +40,7 @@ fn open_jobs(c : @ui.Ctx, src : Source, w : Workspace, pages : Pages) -> Unit {
       c.box(style=open_jobs_group, fn() {
         c.box(style=open_jobs_head_box, fn() { c.text(text(gv, "head"), style=open_jobs_head) |> ignore }) |> ignore
         for j in shown {
-          open_job(c, src, pages, Some(j))
+          open_job(c, src, Some(j))
         }
         if shown.length() < list.length() {
           let id = c.id("open-jobs/more/" + key)
@@ -65,7 +65,7 @@ fn open_jobs(c : @ui.Ctx, src : Source, w : Workspace, pages : Pages) -> Unit {
 /// A job (openJob): its dot in the icons' 16 column, its name over where it is, how long it has been up at its end;
 /// pointed at (or to a finger, always), its stop over the time. The row leads to its chat, a service to its 任务 tab
 /// there.
-fn open_job(c : @ui.Ctx, src : Source, pages : Pages, job : Json?) -> Unit {
+fn open_job(c : @ui.Ctx, src : Source, job : Json?) -> Unit {
   let station = text(job, "station")
   let id = text(job, "id")
   let row = c.id("open-job/" + station + "/" + id)
@@ -80,7 +80,7 @@ fn open_job(c : @ui.Ctx, src : Source, pages : Pages, job : Json?) -> Unit {
   }
   if leads && c.clicked(row) {
     let r : ChatRef = { station: chat_station, session: text(chat, "id"), title: text(chat, "title"), station_name: "" }
-    open_chat_ref(pages, r)
+    open_chat_ref(r)
     if flag(job, "service") {
       pick_job(id)
       side_change(src, r, "open", Some("jobs"))
@@ -138,7 +138,7 @@ fn open_job(c : @ui.Ctx, src : Source, pages : Pages, job : Json?) -> Unit {
 
 ///|
 /// A chat gone to from beside the list (a job's row): its page the one open, the chats' place under it.
-fn open_chat_ref(pages : Pages, r : ChatRef) -> Unit {
+fn open_chat_ref(r : ChatRef) -> Unit {
   match app.nav.top() {
     Chat(open) if open.station == r.station && open.session == r.session => return
     _ => ()

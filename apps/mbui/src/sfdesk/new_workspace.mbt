@@ -68,7 +68,7 @@ fn invite_code_words(code : String) -> String? {
 ///|
 /// The dialog (NewWorkspaceDialog), while it is open: 名称 (Enter makes it), 所属账号 among several accounts, 邀请码
 /// once asked for (what is wrong with it under it, else what it is for), what else went wrong; 取消 and 新建.
-fn new_workspace_dialog(c : @ui.Ctx, src : Source, pages : Pages) -> Unit {
+fn new_workspace_dialog(c : @ui.Ctx, src : Source) -> Unit {
   if !new_ws.open {
     return
   }
@@ -90,7 +90,7 @@ fn new_workspace_dialog(c : @ui.Ctx, src : Source, pages : Pages) -> Unit {
   let asking = new_ws.asked || wants_code
   let create = fn() {
     if name != "" && owner != "" && !new_ws.creating {
-      make_workspace(src, pages, owner, name, code)
+      make_workspace(src, owner, name, code)
     }
   }
   let shown = @sf.dialog(
@@ -168,7 +168,7 @@ fn new_workspace_dialog(c : @ui.Ctx, src : Source, pages : Pages) -> Unit {
 ///|
 /// Makes it (`workspace.create`): the one in view once made, the dialog gone; else why, and the code's field once one
 /// is wanted (sent every time: still.fail cloud looks at it only for an account not let in yet).
-fn make_workspace(src : Source, pages : Pages, owner : String, name : String, code : String) -> Unit {
+fn make_workspace(src : Source, owner : String, name : String, code : String) -> Unit {
   if src.read_only {
     toast_later(read_only_words)
     return
@@ -185,7 +185,7 @@ fn make_workspace(src : Source, pages : Pages, owner : String, name : String, co
     match r {
       Ok(v) => {
         new_ws_reset()
-        to_workspace(src, pages, text(Some(v), "id"))
+        to_workspace(src, text(Some(v), "id"))
       }
       Err(e) => {
         new_ws.error_code = text(Some(e), "code")
@@ -204,7 +204,7 @@ fn make_workspace(src : Source, pages : Pages, owner : String, name : String, co
 ///|
 /// An invitation joined or ignored (WorkspaceSwitcher's respond): joined, its workspace the one in view, 已加入; ignored,
 /// 已忽略邀请; why not, said so.
-fn answer_invitation(src : Source, pages : Pages, account : Json?, id : String, join : Bool, name : String) -> Unit {
+fn answer_invitation(src : Source, account : Json?, id : String, join : Bool, name : String) -> Unit {
   if src.read_only {
     toast_later(read_only_words)
     return
@@ -215,7 +215,7 @@ fn answer_invitation(src : Source, pages : Pages, account : Json?, id : String, 
       Ok(v) =>
         if join {
           toast_later(@sf.t("web-pages.workspace.joined", args=[("name", name)]))
-          to_workspace(src, pages, text(Some(v), "id"))
+          to_workspace(src, text(Some(v), "id"))
         } else {
           toast_later(@sf.t("web-pages.workspace.ignored"))
         }
@@ -231,13 +231,13 @@ fn answer_invitation(src : Source, pages : Pages, account : Json?, id : String, 
 
 ///|
 /// Workspace `ws` the one in view (its page as it was left: the rail's switch).
-fn to_workspace(src : Source, pages : Pages, ws : String) -> Unit {
+fn to_workspace(src : Source, ws : String) -> Unit {
   if ws == "" {
     return
   }
   app.picked = ws
   (src.call)("prefs.set", Json::object({ "workspace": Json::string(ws) }), fn(_) {  })
-  desk_home(pages)
+  desk_home()
 }
 
 ///|

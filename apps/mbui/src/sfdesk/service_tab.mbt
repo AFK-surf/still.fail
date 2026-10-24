@@ -426,7 +426,7 @@ let sv_path_size : Double = 13.0
 ///|
 /// A web service asked as a page (a link's `?service=<job>`, OpenJobs' open): on the desktop its chat (the one of the
 /// agent that runs it, as the station says) with it beside it, the page the chat's; not found, said so.
-fn service_beside(c : @ui.Ctx, src : Source, w : Workspace, pages : Pages, station : String, job : String) -> Unit {
+fn service_beside(c : @ui.Ctx, src : Source, w : Workspace, station : String, job : String) -> Unit {
   let found = (src.topic)("job", { "station": Json::string(station), "id": Json::string(job) })
   match text(found.value, "session") {
     "" =>
@@ -434,7 +434,7 @@ fn service_beside(c : @ui.Ctx, src : Source, w : Workspace, pages : Pages, stati
         Some(e) => sv_said(c, svc("android-chat.preview.notFound", args=[("error", text(Some(e), "message"))]))
         None => ()
       }
-    session => tab_beside(c, src, w, pages, station, session, "service:" + job)
+    session => tab_beside(c, src, w, station, session, "service:" + job)
   }
 }
 
@@ -446,7 +446,6 @@ fn tab_beside(
   c : @ui.Ctx,
   src : Source,
   w : Workspace,
-  pages : Pages,
   station : String,
   session : String,
   tab : String,
@@ -464,5 +463,5 @@ fn tab_beside(
     }
     side_change(src, r, "open", Some(tab))
   })
-  chat_page(c, src, w, r, pages)
+  chat_page(c, src, w, r)
 }

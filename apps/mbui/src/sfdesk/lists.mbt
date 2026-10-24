@@ -8,12 +8,12 @@
 ///|
 /// The sidebar `width` wide (its 8 at the left over the rail's empty side): the chats' lists (奏 and 已归档 among them)
 /// for the chats' places; the files' (files_nav.mbt); a place's own (the app's: the settings', the stations', the profiles').
-fn sidebar(c : @ui.Ctx, src : Source, w : Workspace, pages : Pages, width : Double) -> Unit {
+fn sidebar(c : @ui.Ctx, src : Source, w : Workspace, width : Double) -> Unit {
   match lit_place() {
     "files" => files_nav(c, src, w.id)
-    "settings" => settings_side(c, src, w, pages)
-    "stations" | "profiles" => place_sidebar(c, src, w, pages)
-    _ => lists_side(c, src, w, pages, width)
+    "settings" => settings_side(c, src, w)
+    "stations" | "profiles" => place_sidebar(c, src, w)
+    _ => lists_side(c, src, w, width)
   }
 }
 
@@ -27,7 +27,7 @@ pub let list_slide_ms : Double = 240.0
 
 ///|
 /// The chats' sidebar `width` wide: the band over the track of lists.
-fn lists_side(c : @ui.Ctx, src : Source, w : Workspace, pages : Pages, width : Double) -> Unit {
+fn lists_side(c : @ui.Ctx, src : Source, w : Workspace, width : Double) -> Unit {
   let mode = list_mode(src, w)
   if mode != 4 {
     archive_side.landed = false
@@ -43,22 +43,22 @@ fn lists_side(c : @ui.Ctx, src : Source, w : Workspace, pages : Pages, width : D
       c.layer(fn() {
         c.box(style=lists_fill, tx=(p.to_double() - x) * width, fn() {
           match p {
-            0 => chats_pane(c, src, w, pages, "all")
-            1 => chats_pane(c, src, w, pages, "mine")
-            2 => chats_pane(c, src, w, pages, "watching")
+            0 => chats_pane(c, src, w, "all")
+            1 => chats_pane(c, src, w, "mine")
+            2 => chats_pane(c, src, w, "watching")
             3 => decisions_pane(c, src, w)
-            _ => archive_pane(c, src, w, pages)
+            _ => archive_pane(c, src, w)
           }
         })
         |> ignore
       })
       |> ignore
     }
-    c.layer(fn() { lists_band(c, src, w, pages) }) |> ignore
+    c.layer(fn() { lists_band(c, src, w) }) |> ignore
     // with no bell in the rail: the stations' trouble and the services up long, at the foot (the rail's bell has them
     // where it is: cloud/workspace.tsx WorkspaceSidebarFooter)
     if !rail_items(src, w.id).contains("attention") {
-      c.layer(fn() { lists_foot(c, src, w, pages) }) |> ignore
+      c.layer(fn() { lists_foot(c, src, w) }) |> ignore
     }
   })
   |> ignore
@@ -69,7 +69,7 @@ fn lists_side(c : @ui.Ctx, src : Source, w : Workspace, pages : Pages, width : D
 /// glyph and its words, red while one fails, leading to them; beside the rail only then), and 运行中 N (OpenJobsChip:
 /// the services left up long, their panel over it). Nothing when neither is, nor with the bell in the rail (they are in
 /// its panel).
-fn lists_foot(c : @ui.Ctx, src : Source, w : Workspace, pages : Pages) -> Unit {
+fn lists_foot(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
   let t = @sf.theme()
   // with the bell in the rail, they are in its panel (workspace.tsx WorkspaceSidebarFooter)
   if rail_items(src, w.id).contains("attention") {
@@ -89,7 +89,7 @@ fn lists_foot(c : @ui.Ctx, src : Source, w : Workspace, pages : Pages) -> Unit {
           let go = c.id("side/station-trouble")
           c.cursor(go, Hand)
           if c.clicked(go) {
-            rail_go(c, src, w, pages, "stations")
+            rail_go(c, src, w, "stations")
           }
           c.box(style=foot_trouble, id=go, fn() {
             @sf.station_glyph(c, stations_at_glance(src, w.id).0, foot_glyph, t.p.text, t.p.red) |> ignore
@@ -124,7 +124,7 @@ fn lists_foot(c : @ui.Ctx, src : Source, w : Workspace, pages : Pages) -> Unit {
           offset=6.0,
           look=fn(c, _, body) { @sf.panel(c, w=Px(open_jobs_pop_w), body) |> ignore },
           // (scrolling in itself past 420, or 60% of the window: openJobsPop)
-          fn() { c.capped("side/open-jobs/list", dmin(open_jobs_pop_most, c.height * 0.6), fn() { open_jobs(c, src, w, pages) }) |> ignore },
+          fn() { c.capped("side/open-jobs/list", dmin(open_jobs_pop_most, c.height * 0.6), fn() { open_jobs(c, src, w) }) |> ignore },
         )
         wide.jobs_open = p.value
       }
@@ -186,7 +186,7 @@ priv enum ArchiveLine {
 ///|
 /// 已归档 as one of the lists (ArchiveRows): what to look for, its days, a row each; the newest open beside it as it
 /// opens.
-fn archive_pane(c : @ui.Ctx, src : Source, w : Workspace, pages : Pages) -> Unit {
+fn archive_pane(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
   let params : Map[String, Json] = { "scope": Json::string(w.id), "limit": Json::number(archive_side.limit.to_double()) }
   if archive_side.q != "" {
     params["q"] = Json::string(archive_side.q)
@@ -254,7 +254,7 @@ fn archive_pane(c : @ui.Ctx, src : Source, w : Workspace, pages : Pages) -> Unit
         Waiting => side_breathing(c)
         Said(words) => side_said(c, words, false)
         Day(label) => nav_heading(c, label)
-        Row(it) => archive_side_row(c, src, pages, it, i + 1 < lines.length() && lines[i + 1] is Row(_))
+        Row(it) => archive_side_row(c, src, it, i + 1 < lines.length() && lines[i + 1] is Row(_))
       }
     })
     |> ignore
@@ -312,7 +312,7 @@ fn archive_search_side(c : @ui.Ctx, gap : Bool) -> Unit {
 /// An archived chat's row (ArchiveRow): its title (its station's mark at its end, with several), the last thing said
 /// under it, when it was archived there while pointed at (how, on hover); over the title's end then, putting it back
 /// and deleting it (one under way: turning). Pressed, its chat beside the list.
-fn archive_side_row(c : @ui.Ctx, src : Source, pages : Pages, it : Json, more : Bool) -> Unit {
+fn archive_side_row(c : @ui.Ctx, src : Source, it : Json, more : Bool) -> Unit {
   let t = @sf.theme()
   let v = Some(it)
   let station = text(v, "station")
@@ -364,7 +364,7 @@ fn archive_side_row(c : @ui.Ctx, src : Source, pages : Pages, it : Json, more : 
         c.box(style=arch_actions, fn() {
           c.cursor(back, Hand)
           if c.clicked(back) && !busy {
-            archive_restore(src, pages, it)
+            archive_restore(src, it)
           }
           let b = c.box(style=arch_action, id=back, fn() {
             if busy {
@@ -411,7 +411,7 @@ fn archive_side_row(c : @ui.Ctx, src : Source, pages : Pages, it : Json, more : 
 
 ///|
 /// Put back in the list (`chat.archive` with archived false), said once done.
-fn archive_restore(src : Source, pages : Pages, it : Json) -> Unit {
+fn archive_restore(src : Source, it : Json) -> Unit {
   let v = Some(it)
   let p : Map[String, Json] = {
     "station": Json::string(text(v, "station")),

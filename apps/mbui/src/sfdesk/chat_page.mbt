@@ -51,7 +51,7 @@ pub fn chat_find_open(c : @ui.Ctx, r : ChatRef) -> Unit {
 
 ///|
 /// The chat `r` in the pane (ChatPage.tsx ChatScreen).
-fn chat_page(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef, pages : Pages) -> Unit {
+fn chat_page(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef) -> Unit {
   let chat = (src.topic)("chat", chat_params(r)).value
   let view = match chat {
     Some(v) => Some(chat_view(v))
@@ -69,7 +69,7 @@ fn chat_page(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef, pages : Page
       if @settings.action_pressed(c, prefs, "chat.find") && v.thread is Some(_) {
         chat_find_open(c, r)
       }
-      chat_keys(c, src, w, r, v, chat, pages)
+      chat_keys(c, src, w, r, v, chat)
     }
     None => ()
   }
@@ -77,10 +77,10 @@ fn chat_page(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef, pages : Page
     with_side(c, src, w, r, view, fn() {
       let pane = c.id("chat/pane")
       c.box(style=side_panel_style, id=pane, fn() {
-        chat_talk(c, src, w, r, pages, pane, fn() {
-          c.layer(fn() { chat_bar(c, src, w, r, view, chat, list, pages) }) |> ignore
+        chat_talk(c, src, w, r, pane, fn() {
+          c.layer(fn() { chat_bar(c, src, w, r, view, chat, list) }) |> ignore
           match view {
-            Some(v) => bar_popovers(c, src, w, r, v, chat, pages)
+            Some(v) => bar_popovers(c, src, w, r, v, chat)
             None => ()
           }
         })
@@ -90,7 +90,7 @@ fn chat_page(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef, pages : Page
   })
   |> ignore
   // the new chat it became leaving over it, or one left for it fading over it (newchat.mbt)
-  new_chat_after(c, src, w, pages, r)
+  new_chat_after(c, src, w, r)
 }
 
 ///|
@@ -102,7 +102,7 @@ let chat_ground : @ui.Style = @ui.css("w=Full h=Full bg=Bg")
 /// The chat's own keys (keymap.ts, ChatPage.tsx useShortcut): ⌘⇧E into the archive while nothing is left in it, ⌘⇧H
 /// its first agent's history beside it (one in front: the panel closed), ⌘. its agents at work stopped, its services
 /// and jobs (chat.jobs); Space with no field focused, the composer (composer.focus).
-fn chat_keys(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef, v : ChatView, chat : Json?, pages : Pages) -> Unit {
+fn chat_keys(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef, v : ChatView, chat : Json?) -> Unit {
   let prefs = (src.topic)("prefs", {}).value
   if @settings.action_pressed(c, prefs, "chat.jobs") {
     toggle_jobs_pop()
@@ -111,7 +111,7 @@ fn chat_keys(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef, v : ChatView
     composer_focus()
   }
   if @settings.action_pressed(c, prefs, "chat.archive", in_field=true) && !v.archived && !v.offline {
-    c.tell("chat/archive", fn() { archive_asked(src, w, r, v, chat, pages) })
+    c.tell("chat/archive", fn() { archive_asked(src, w, r, v, chat) })
   }
   // an agent's history in front: the panel closed; else the first agent's open, or the first agent's opened
   if @settings.action_pressed(c, prefs, "chat.history", in_field=true) && v.agents.length() > 0 {
@@ -141,27 +141,27 @@ fn chat_keys(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef, v : ChatView
 
 ///|
 /// Into the archive, asked first where the chat keeps watch (its watch runs on in the archive: the core's words).
-fn archive_asked(src : Source, w : Workspace, r : ChatRef, v : ChatView, chat : Json?, pages : Pages) -> Unit {
+fn archive_asked(src : Source, w : Workspace, r : ChatRef, v : ChatView, chat : Json?) -> Unit {
   if field(chat, "watch") is Some(Object(_)) {
     chat_own.archive_asking = chat_key(r)
   } else {
-    archive(src, w, r, v, pages)
+    archive(src, w, r, v)
   }
 }
 
 ///|
 /// The chat into the archive (ChatPage.tsx archive): on to the chat below it in the list (or above, at the end), so
 /// the keys go on working, the list if none; said once it is done, or why not.
-fn archive(src : Source, w : Workspace, r : ChatRef, v : ChatView, pages : Pages) -> Unit {
+fn archive(src : Source, w : Workspace, r : ChatRef, v : ChatView) -> Unit {
   let here = fn() {
     match app.nav.top() {
       Chat(t) => t.station == r.station && t.session == r.session
       _ => false
     }
   }
-  neighbour(src, w, pages, 1)
+  neighbour(src, w, 1)
   if here() {
-    neighbour(src, w, pages, -1)
+    neighbour(src, w, -1)
   }
   if here() {
     app.nav.pop() |> ignore
@@ -195,7 +195,6 @@ fn chat_bar(
   v : ChatView?,
   chat : Json?,
   list : FindList,
-  pages : Pages,
 ) -> Unit {
   // the workspace's stations, as the bar shows the chat's (its tag, its first agent's tile)
   let station = stations_of((src.topic)("stations", { "scope": Json::string(w.id) }).value)
@@ -251,7 +250,7 @@ fn chat_bar(
             // nothing left in it (the core's `archivable`): archived with one press
             if view.archivable && !view.archived {
               if icon_button(c, "chat-archive", "archive", label=@sf.t("web-pages.chat.archive"), action="chat.archive") {
-                c.tell("chat/archive", fn() { archive_asked(src, w, r, view, chat, pages) })
+                c.tell("chat/archive", fn() { archive_asked(src, w, r, view, chat) })
               }
             }
             jobs_trigger(c, src, r)
@@ -288,7 +287,7 @@ fn chat_bar(
     chat_own.archive_asking = ""
     match v {
       // (once the frame's builds are over)
-      Some(view) => c.tell("chat/archive", fn() { archive(src, w, r, view, pages) })
+      Some(view) => c.tell("chat/archive", fn() { archive(src, w, r, view) })
       None => ()
     }
   } else if chat_own.archive_asking == chat_key(r) && !asked.open {
@@ -495,7 +494,7 @@ fn jobs_trigger(c : @ui.Ctx, src : Source, r : ChatRef) -> Unit {
 
 ///|
 /// What opens under the chat's bar: its info's popover (ChatInfo) and its services' (JobsPanel), each by its button.
-fn bar_popovers(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef, v : ChatView, chat : Json?, pages : Pages) -> Unit {
+fn bar_popovers(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef, v : ChatView, chat : Json?) -> Unit {
   let info = @kit.popover(
     c,
     "chat-info-pop",
@@ -504,7 +503,7 @@ fn bar_popovers(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef, v : ChatV
     side=Bottom,
     along=End,
     look=fn(c, _, body) { @sf.panel(c, w=@ui.Size::Px(chat_info_w), body) |> ignore },
-    fn() { chat_info(c, src, w, r, v, chat, pages) },
+    fn() { chat_info(c, src, w, r, v, chat) },
   )
   // (closed by what was pressed in it, or as a popover closes: Escape, a press outside)
   chat_own.info_open = chat_own.info_open && info.value
@@ -542,7 +541,7 @@ let jobs_pop_w : Double = 360.0
 /// What the chat's info says (ChatInfoBody): where it came from, who started it, who takes part, when it was made and
 /// last written in; its agents (AgentLine); then what is done with it: the stations' files beside it, what its agents
 /// and other chats' wrote each other, relaying it, it in Slack or Feishu; sharing it, publishing it.
-fn chat_info(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef, v : ChatView, chat : Json?, pages : Pages) -> Unit {
+fn chat_info(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef, v : ChatView, chat : Json?) -> Unit {
   let thread = field(chat, "thread")
   let th = opt_number(thread, "id")
   guard th is Some(id) else { return }

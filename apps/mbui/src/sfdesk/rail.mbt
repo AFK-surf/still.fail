@@ -123,7 +123,7 @@ fn list_place(mode : Int) -> String {
 /// The rail: its top (in a window with its buttons in the app's top row, their row, dragging the window), the places,
 /// then the workspaces and settings at its foot. In the closed bar (`bar`) as narrow as it (42), its places 2 from its
 /// every edge (their grounds 6), no top row: the bar starts under it.
-fn rail(c : @ui.Ctx, src : Source, w : Workspace, all : Array[Workspace], pages : Pages, bar : Bool) -> Unit {
+fn rail(c : @ui.Ctx, src : Source, w : Workspace, all : Array[Workspace], bar : Bool) -> Unit {
   let lit = lit_place()
   let rail_id = c.id("rail")
   match c.menu_asked(rail_id) {
@@ -162,14 +162,14 @@ fn rail(c : @ui.Ctx, src : Source, w : Workspace, all : Array[Workspace], pages 
             "chats" | "mine" | "watching" | "decisions" | "archive" => listy && shown_list == place
             _ => lit == place
           }
-          rail_place(c, src, w, pages, place, on, places)
+          rail_place(c, src, w, place, on, places)
         }
       })
       |> ignore
     })
     |> ignore
     c.spacer()
-    rail_workspaces(c, src, w, all, pages)
+    rail_workspaces(c, src, w, all)
     // settings
     let gear = c.id("rail/settings")
     c.cursor(gear, Hand)
@@ -186,7 +186,7 @@ fn rail(c : @ui.Ctx, src : Source, w : Workspace, all : Array[Workspace], pages 
         }
         wide.landed = ""
       } else {
-        open_settings(pages)
+        open_settings()
         wide.peek_next = wide.crowded
       }
     }
@@ -373,7 +373,7 @@ pub fn closed_ground() -> Int64 {
 /// the pointer; the one in view a short bar at its left; another with what waits in it (the core's marks' tone) its
 /// mark at its corner. Over them the ＋ (making one, another account, invitations), seen as the pointer comes over them
 /// or while an invitation waits. Pressed, that workspace.
-fn rail_workspaces(c : @ui.Ctx, src : Source, w : Workspace, all : Array[Workspace], pages : Pages) -> Unit {
+fn rail_workspaces(c : @ui.Ctx, src : Source, w : Workspace, all : Array[Workspace]) -> Unit {
   let t = @sf.theme()
   let marks = field((src.topic)("workspaceMarks", { "workspace": Json::string(w.id) }).value, "workspaces")
   let area = c.id("rail/workspaces")
@@ -389,7 +389,7 @@ fn rail_workspaces(c : @ui.Ctx, src : Source, w : Workspace, all : Array[Workspa
   let switch_to = fn(x : Workspace) {
     app.picked = x.id
     (src.call)("prefs.set", Json::object({ "workspace": Json::string(x.id) }), fn(_) {  })
-    desk_home(pages)
+    desk_home()
   }
   // ⌃1 … ⌃9 on a Mac (Alt elsewhere): the workspace at that place, as the web's keys (keymap.ts workspaceIndexOf)
   let held = if @ui.platform() == 0 { @ui.mod_ctrl } else { @ui.mod_alt }
@@ -457,7 +457,7 @@ fn rail_workspaces(c : @ui.Ctx, src : Source, w : Workspace, all : Array[Workspa
     }
   })
   |> ignore
-  rail_ws_menu(c, src, pages, add)
+  rail_ws_menu(c, src, add)
 }
 
 ///|
@@ -522,7 +522,6 @@ fn rail_place(
   c : @ui.Ctx,
   src : Source,
   w : Workspace,
-  pages : Pages,
   place : String,
   on : Bool,
   places : Array[String],
@@ -578,7 +577,7 @@ fn rail_place(
         wide.peeking = side_folded()
       }
     } else {
-      rail_go(c, src, w, pages, place)
+      rail_go(c, src, w, place)
       // (pressed into a place whose sidebar is folded for the page's room: shown a while from the start, as the web's
       // pressed into a folded one)
       wide.peek_next = wide.crowded && !place_bare(place) && place != "attention"
@@ -633,7 +632,7 @@ fn rail_place(
 
 ///|
 /// Back to the stack's root as another workspace comes into view: what is over the pages put down, the menu closed.
-fn desk_home(pages : Pages) -> Unit {
+fn desk_home() -> Unit {
   app.menu = false
   while app.nav.depth() > 1 {
     if !app.nav.pop() {
@@ -645,7 +644,7 @@ fn desk_home(pages : Pages) -> Unit {
 ///|
 /// A place gone to (sfapp's go_place, as the web's NavLink: no switch of its own): its page the stack's root, in place;
 /// the same place again changes nothing.
-fn go_place(pages : Pages, place : String) -> Unit {
+fn go_place(place : String) -> Unit {
   let page : Page = match place {
     "chats" => Home
     "files" => Files
@@ -667,7 +666,7 @@ fn go_place(pages : Pages, place : String) -> Unit {
 ///|
 /// A place gone to, from the rail or its menu (Rail.tsx `drawn`'s presses and `go`): 待处理 its panel; a list of chats
 /// its list in the sidebar, the chat last open beside it; 已归档 the archive; the others their page.
-pub fn rail_go(c : @ui.Ctx, src : Source, w : Workspace, pages : Pages, place : String) -> Unit {
+pub fn rail_go(c : @ui.Ctx, src : Source, w : Workspace, place : String) -> Unit {
   ignore(c)
   match place {
     "attention" => {
@@ -685,7 +684,7 @@ pub fn rail_go(c : @ui.Ctx, src : Source, w : Workspace, pages : Pages, place : 
       if app.nav.pages()[0] == Home && lit_place() == "chats" && !app.nav.pages().contains(Archived) {
         ()
       } else {
-        go_place(pages, "chats")
+        go_place("chats")
         wide.landed = ""
       }
     }
@@ -698,7 +697,7 @@ pub fn rail_go(c : @ui.Ctx, src : Source, w : Workspace, pages : Pages, place : 
       archive_side.landed = false
       app.nav.push(Archived)
     }
-    p => go_place(pages, p)
+    p => go_place(p)
   }
 }
 
@@ -734,8 +733,8 @@ fn rail_in_view(src : Source, w : Workspace) -> String {
 ///|
 /// What opens from the rail, over the frame (drawn after it, with the app's: sfapp's wide_overlays): its menu and,
 /// while it is changed, what can be added beside it.
-pub fn rail_overlays(c : @ui.Ctx, src : Source, w : Workspace, pages : Pages) -> Unit {
-  rail_menu(c, src, w, pages)
+pub fn rail_overlays(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
+  rail_menu(c, src, w)
   rail_adder(c, src, w)
 }
 
@@ -744,7 +743,7 @@ pub fn rail_overlays(c : @ui.Ctx, src : Source, w : Workspace, pages : Pages) ->
 /// first), 8 past it, clear of the window's buttons' row: the places not in it (pressed, their page; their ＋, shown on
 /// the row pointed at, puts one in it and the rail is changed from there), 从侧边条移除 the place right clicked,
 /// 自定义侧边条, 侧边条恢复默认 when it was changed.
-fn rail_menu(c : @ui.Ctx, src : Source, w : Workspace, pages : Pages) -> Unit {
+fn rail_menu(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
   let (place, _, _) = match wide.rail_menu {
     Some(m) => m
     None => {
@@ -814,7 +813,7 @@ fn rail_menu(c : @ui.Ctx, src : Source, w : Workspace, pages : Pages) -> Unit {
     Some("remove") => rail_keep(src, w.id, kept.filter(fn(i) { i != place }))
     Some("reset") => rail_keep(src, w.id, words_in(items(rail_view(src), "default")))
     Some("customize") => wide.editing = true
-    Some(v) if v.has_prefix("go:") => rail_go(c, src, w, pages, v.view(start_offset=3).to_string())
+    Some(v) if v.has_prefix("go:") => rail_go(c, src, w, v.view(start_offset=3).to_string())
     _ => ()
   }
 }
@@ -894,13 +893,13 @@ fn rail_icon(place : String) -> String {
 
 ///|
 /// Settings from the rail's gear (or ⌘,): its first page, 外观, the sidebar its list.
-pub fn open_settings(pages : Pages) -> Unit {
-  open_settings_at(pages, @settings.Route::Appearance)
+pub fn open_settings() -> Unit {
+  open_settings_at(@settings.Route::Appearance)
 }
 
 ///|
 /// Settings at one of its pages (快捷键 from the shortcuts' dialog), the sidebar its list.
-pub fn open_settings_at(pages : Pages, route : @settings.Route) -> Unit {
+pub fn open_settings_at(route : @settings.Route) -> Unit {
   app.menu = false
   while app.nav.depth() > 1 {
     if !app.nav.pop() {
@@ -1122,7 +1121,7 @@ pub fn invitations_waiting(src : Source) -> Array[(Json?, Json)] {
 ///|
 /// The ＋'s menu, beside it, its foot level with the ＋'s (WorkspaceSwitcher `adder`): 新建 workspace, 添加另一个账号,
 /// then the invitations waiting, each joined or ignored.
-fn rail_ws_menu(c : @ui.Ctx, src : Source, pages : Pages, add : Int) -> Unit {
+fn rail_ws_menu(c : @ui.Ctx, src : Source, add : Int) -> Unit {
   let entries : Array[@kit.Entry] = [
     @kit.menu_item("create", label=@sf.t("web-pages.workspace.create")),
     @kit.menu_item("account", label=@sf.t("web-pages.workspace.addAccount")),
@@ -1157,7 +1156,7 @@ fn rail_ws_menu(c : @ui.Ctx, src : Source, pages : Pages, add : Int) -> Unit {
       let id = v.view(start_offset=if join { 5 } else { 7 }).to_string()
       for p in pending {
         if text(Some(p.1), "id") == id {
-          answer_invitation(src, pages, p.0, id, join, text(Some(p.1), "name"))
+          answer_invitation(src, p.0, id, join, text(Some(p.1), "name"))
         }
       }
     }

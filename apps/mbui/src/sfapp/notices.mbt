@@ -19,85 +19,6 @@
 // Nothing of it with Source.read_only (a run on a real account changes nothing in it).
 
 ///|
-/// What the system is asked through (@ui's, the host's on a device and a Tester's own under one; tests put their own).
-priv struct NoticeHost {
-  show : (String, String, String, String) -> Unit
-  cancel : (String) -> Unit
-  permission : () -> String
-  ask : () -> Bool
-  answer : () -> Bool?
-  opened : () -> String
-  token : () -> String
-}
-
-///|
-fn host_notices() -> NoticeHost {
-  {
-    show: fn(tag, title, body, opens) {
-      @ui.notice_show(channel=tr("android-misc.notify.channel"), tag~, title~, body~, opens~)
-    },
-    cancel: fn(tag) { @ui.notice_cancel(tag) },
-    permission: fn() { @ui.notice_permission() },
-    ask: fn() { @ui.notice_ask() },
-    answer: fn() { @ui.notice_answer() },
-    opened: fn() { @ui.notice_opened() },
-    token: fn() { @hostapi.push_token() },
-  }
-}
-
-///|
-let notice_host : Ref[NoticeHost] = Ref(host_notices())
-
-///|
-priv struct NoticeState {
-  /// the notices of `notify.show` taken already, by id
-  taken : Map[String, Bool]
-  /// the workspace whose `notify` is followed ("" none)
-  mut following : String
-  /// what the system allows was told since the app was last shown
-  mut told : Bool
-  /// the system asked once (the first time signed in with notifications on)
-  mut asked_once : Bool
-  /// an ask from settings' switch is under way: refused, a toast says where to allow them
-  mut from_switch : Bool
-  /// the push registration held as the core says, once at the start
-  mut synced : Bool
-  /// the push token last seen (a new one, or the first come after the start, registered: PushService.onNewToken)
-  mut token : String
-  /// the chat whose notification was taken off as it came on top ("" none on top)
-  mut cancelled : String
-  /// the source last seen, for the system's say between frames
-  mut src : Source?
-}
-
-///|
-let nt : NoticeState = {
-  taken: {},
-  following: "",
-  told: false,
-  asked_once: false,
-  from_switch: false,
-  synced: false,
-  token: "",
-  cancelled: "",
-  src: None,
-}
-
-///|
-fn notices_reset() -> Unit {
-  nt.taken.clear()
-  nt.following = ""
-  nt.told = false
-  nt.asked_once = false
-  nt.from_switch = false
-  nt.synced = false
-  nt.token = ""
-  nt.cancelled = ""
-  nt.src = None
-  notice_host.val = host_notices()
-}
-
-///|
 fn notify_params(workspace : String) -> Map[String, Json] {
   { "workspace": Json::string(workspace) }
 }
@@ -108,34 +29,34 @@ fn notices_frame(src : Source, w : Workspace) -> Unit {
   if src.read_only {
     return
   }
-  nt.src = Some(src)
+  notice_state.src = Some(src)
   let h = notice_host.val
   let shown = @ui.app_visible()
   let notify = (src.topic)("notify", Map::new()).value
   match notify {
     Some(_) => {
       // what the system allows, as the app starts and each time it is shown again (MainActivity onStart)
-      if shown && !nt.told {
-        nt.told = true
+      if shown && !notice_state.told {
+        notice_state.told = true
         tell_permission(src, notify)
       }
       // asked once, the first time signed in with notifications on (App.kt rememberNotificationAsk(once))
-      if !nt.asked_once && flag(notify, "on") && field(notify, "asked") is Some(False) {
-        nt.asked_once = true
+      if !notice_state.asked_once && flag(notify, "on") && field(notify, "asked") is Some(False) {
+        notice_state.asked_once = true
         (src.call)("notify.set", { "asked": Json::boolean(true) }, fn(_) {  })
         (h.ask)() |> ignore
       }
       // the registration for pushes, once at the start (MainActivity: Push.sync)
-      if !nt.synced {
-        nt.synced = true
-        nt.token = (h.token)()
+      if !notice_state.synced {
+        notice_state.synced = true
+        notice_state.token = (h.token)()
         push_sync(src, None)
       }
       // a token come since (the push service's first, given after the start, or a new one): registered as the core
       // says (PushService.onNewToken)
       let token = (h.token)()
-      if token != "" && token != nt.token {
-        nt.token = token
+      if token != "" && token != notice_state.token {
+        notice_state.token = token
         push_sync(src, None)
       }
     }
@@ -144,11 +65,11 @@ fn notices_frame(src : Source, w : Workspace) -> Unit {
   // the system's answer to an ask
   match (h.answer)() {
     Some(granted) => {
-      if !granted && nt.from_switch {
+      if !granted && notice_state.from_switch {
         app.toast = fill("android-misc.notify.allowInSettings", [("app", "still.fail")])
         app.toast_n += 1
       }
-      nt.from_switch = false
+      notice_state.from_switch = false
       (src.call)(
         "notify.permission",
         { "state": Json::string(if granted { "granted" } else { "denied" }) },
@@ -172,12 +93,12 @@ fn notices_frame(src : Source, w : Workspace) -> Unit {
   match app.nav.top() {
     Chat(r) => {
       let tag = r.station + "/" + r.session
-      if nt.cancelled != tag {
-        nt.cancelled = tag
+      if notice_state.cancelled != tag {
+        notice_state.cancelled = tag
         (h.cancel)(tag)
       }
     }
-    _ => nt.cancelled = ""
+    _ => notice_state.cancelled = ""
   }
 }
 
@@ -188,8 +109,8 @@ fn notices_app_change(shown : Bool) -> Unit {
   if shown {
     return
   }
-  nt.told = false
-  match nt.src {
+  notice_state.told = false
+  match notice_state.src {
     Some(src) => leave_notices(src)
     None => ()
   }
@@ -199,17 +120,17 @@ fn notices_app_change(shown : Bool) -> Unit {
 /// The core's `notify {workspace}`: each notice it says to show now taken (`notice.claim`), and shown when this page
 /// is the one that took it.
 fn follow_notices(src : Source, workspace : String) -> Unit {
-  if nt.following != workspace {
+  if notice_state.following != workspace {
     leave_notices(src)
-    nt.following = workspace
+    notice_state.following = workspace
   }
   let v = (src.topic)("notify", notify_params(workspace)).value
   for n in items(v, "show") {
     let id = text(Some(n), "id")
-    if id == "" || nt.taken.contains(id) {
+    if id == "" || notice_state.taken.contains(id) {
       continue
     }
-    nt.taken[id] = true
+    notice_state.taken[id] = true
     (src.call)("notice.claim", { "id": Json::string(id) }, fn(r) {
       match r {
         Ok(a) if flag(Some(a), "show") => show_notice(n)
@@ -221,9 +142,9 @@ fn follow_notices(src : Source, workspace : String) -> Unit {
 
 ///|
 fn leave_notices(src : Source) -> Unit {
-  if nt.following != "" {
-    (src.leave)("notify", notify_params(nt.following))
-    nt.following = ""
+  if notice_state.following != "" {
+    (src.leave)("notify", notify_params(notice_state.following))
+    notice_state.following = ""
   }
 }
 
@@ -251,44 +172,6 @@ fn tell_permission(src : Source, notify : Json?) -> Unit {
     s => s
   }
   (src.call)("notify.permission", { "state": Json::string(state) }, fn(_) {  })
-}
-
-///|
-/// The system asked to allow notifications as they are turned on in settings (rememberNotificationAsk, not once).
-fn ask_from_switch() -> Unit {
-  if (notice_host.val.ask)() {
-    nt.from_switch = true
-  }
-}
-
-///|
-/// This device's push registration as the core wants it (Push.sync): taken off every account when its `notify`
-/// says no pushes, else registered with the host's token (none where the build links no push service). `wanted`: what the core has just
-/// answered, else what its `notify` says.
-fn push_sync(src : Source, wanted : Bool?) -> Unit {
-  let push = match wanted {
-    Some(b) => Some(b)
-    None =>
-      match field((src.topic)("notify", Map::new()).value, "push") {
-        Some(True) => Some(true)
-        Some(False) => Some(false)
-        _ => None
-      }
-  }
-  match push {
-    Some(false) => (src.call)("push.unregister", Json::object(Map::new()), fn(_) {  })
-    Some(true) =>
-      match (notice_host.val.token)() {
-        "" => ()
-        token =>
-          (src.call)(
-            "push.register",
-            { "kind": Json::string("fcm"), "token": Json::string(token) },
-            fn(_) {  },
-          )
-      }
-    None => ()
-  }
 }
 
 ///|

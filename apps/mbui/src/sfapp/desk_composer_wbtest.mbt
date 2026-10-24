@@ -26,7 +26,7 @@ fn desk_composer_tester(
       let _ = @sf.begin(c)
       let ws : Workspace = { id: "ws1", name: "Acme", emoji: "", icon: "", email: "" }
       c.box(style=@ui.css("w=Full h=Full p=S4 justify=JEnd"), fn() {
-        @sfdesk.composer(c, src, ws, desk_pages(), spec_of({ station: r.station, key: "ws1/st1:s-c1" }), fn(w) {
+        @sfdesk.composer(c, src, ws, spec_of({ station: r.station, key: "ws1/st1:s-c1" }), fn(w) {
           match (src.topic)("chat", chat_params(r)).value {
             Some(v) => @sfdesk.send_in_chat(c, src, r, chat_view(v), w)
             None => ()

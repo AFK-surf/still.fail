@@ -1,7 +1,7 @@
-// The phone's offers of a newer build (ember apps/android app/Updates.kt; Home.kt's update button, SettingsHome.kt
-// Version): Home offers a build that brings something the changelog says (a download key with its dot; how far while
-// it downloads), the settings' version row any (更新到 …; 检查更新 asks now, 已是最新 said when none). How an update
-// stands, and where a build comes from, are both frames' (sfbase updates.mbt).
+// The phone's offers of a newer build (ember apps/android app/Updates.kt; Home.kt's update button): Home offers a build
+// that brings something the changelog says (a download key with its dot; how far while it downloads); the words of
+// updates, both frames'. How an update stands, where a build comes from and the settings' version row (更新到 …;
+// 检查更新 asks now, 已是最新 said when none) are both frames' (sfbase updates.mbt).
 
 ///|
 // kept across runs: a table, never written
@@ -70,41 +70,6 @@ fn update_button(c : @ui.Ctx, src : Source) -> Unit {
       })
       |> ignore
     _ => ()
-  }
-}
-
-///|
-/// The settings' version row's words at its end (SettingsHome.kt Version), and whether they are the accent's: how an
-/// update goes, 正在检查, 更新到 <version>, or 检查更新.
-fn update_row_words() -> (String, Bool) {
-  let progress = update_progress()
-  if progress != "" {
-    return (progress, false)
-  }
-  if update.checking {
-    return (up("android-settings.version.checking"), false)
-  }
-  match update.available {
-    Some(v) => (up("android-settings.version.update", args=[("version", text(Some(v), "versionName"))]), true)
-    None => (up("android-settings.version.check"), false)
-  }
-}
-
-///|
-/// The version row tapped: with a newer build known, installed; with none, still.fail cloud asked now.
-fn update_row_tapped(src : Source) -> Unit {
-  if update.checking || update.installing || update_busy() {
-    return
-  }
-  match update.available {
-    Some(_) => update_install(src)
-    None => {
-      update.checking = true
-      update_check(src, true, done=fn(said) {
-        update.checking = false
-        update_say(said)
-      })
-    }
   }
 }
 

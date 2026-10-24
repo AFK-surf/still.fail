@@ -25,14 +25,14 @@ fn newchat_reset() -> Unit {
 ///|
 /// A new chat in the workspace (NewChat): while its stations are read, the page as it will be with the composer of the
 /// station it last started on, locked; with none up, said so; else the page on the station it starts on.
-pub fn new_chat_page(c : @ui.Ctx, src : Source, w : Workspace, pages : Pages) -> Unit {
+pub fn new_chat_page(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
   let topic = (src.topic)("newChat", { "scope": Json::string(w.id) })
   let v = topic.value
   c.box(style=new_ground, fn() {
     match field(v, "stations") {
       Some(Array(_)) =>
         match field(v, "station") {
-          Some(Object(_)) as station => new_chat_on(c, src, w, pages, v, station)
+          Some(Object(_)) as station => new_chat_on(c, src, w, v, station)
           _ => new_offline(c)
         }
       _ => {
@@ -44,7 +44,7 @@ pub fn new_chat_page(c : @ui.Ctx, src : Source, w : Workspace, pages : Pages) ->
             }
           e => e
         }
-        new_held(c, src, w, pages, v, error)
+        new_held(c, src, w, v, error)
       }
     }
   })
@@ -55,7 +55,7 @@ pub fn new_chat_page(c : @ui.Ctx, src : Source, w : Workspace, pages : Pages) ->
 /// Its stations not read yet: laid out as the page will be (the composer's place held, the words under it), so nothing
 /// moves when it comes; the composer the draft of the station it last started on (the core's `kept`), locked until
 /// there is a station to write to; what is read, or why it could not be, under it.
-fn new_held(c : @ui.Ctx, src : Source, w : Workspace, pages : Pages, v : Json?, error : String) -> Unit {
+fn new_held(c : @ui.Ctx, src : Source, w : Workspace, v : Json?, error : String) -> Unit {
   let address = match text(v, "kept") {
     "" => ""
     kept => w.id + "/" + kept
@@ -67,7 +67,7 @@ fn new_held(c : @ui.Ctx, src : Source, w : Workspace, pages : Pages, v : Json?, 
     // (none to hold it on, its first value not come yet: no draft asked for)
     if address != "" {
       c.box(style=new_composer_box, fn() {
-        c.sized(col, c.height, fn() { new_composer(c, src, w, pages, v, address, "", true, None) })
+        c.sized(col, c.height, fn() { new_composer(c, src, w, v, address, "", true, None) })
       })
       |> ignore
     }
@@ -93,7 +93,7 @@ fn new_offline(c : @ui.Ctx) -> Unit {
 ///|
 /// The page on a station (NewChatOn): nothing to run a chat with yet, its first step (blocked); else the scene and the
 /// composer, the 文件 tab beside them where the stations lend their files.
-fn new_chat_on(c : @ui.Ctx, src : Source, w : Workspace, pages : Pages, v : Json?, station : Json?) -> Unit {
+fn new_chat_on(c : @ui.Ctx, src : Source, w : Workspace, v : Json?, station : Json?) -> Unit {
   // (what is picked now: a chat made with other picks, nothing sent to it, let go)
   fresh_picked(v)
   // (what fades as it is left for a chat by the sidebar: switch.mbt)
@@ -102,7 +102,7 @@ fn new_chat_on(c : @ui.Ctx, src : Source, w : Workspace, pages : Pages, v : Json
     new_blocked(c, src, w, v, station)
     return
   }
-  new_page(c, src, w, pages, v, station, None)
+  new_page(c, src, w, v, station, None)
 }
 
 ///|
@@ -112,7 +112,6 @@ fn new_page(
   c : @ui.Ctx,
   src : Source,
   w : Workspace,
-  pages : Pages,
   v : Json?,
   station : Json?,
   going : (Double, Double)?,
@@ -125,7 +124,7 @@ fn new_page(
   let page = c.id("new/page")
   let scene = fn() {
     c.box(style=new_frame, id=page, fn() {
-      new_body(c, src, w, pages, v, station, going)
+      new_body(c, src, w, v, station, going)
       // its bar (newChatBar): 文件 where a chat's bar has it, over the page, what is in its middle where it is
       if drive && going is None {
         c.layer(fn() {
@@ -163,7 +162,6 @@ fn new_body(
   c : @ui.Ctx,
   src : Source,
   w : Workspace,
-  pages : Pages,
   v : Json?,
   station : Json?,
   going : (Double, Double)?,
@@ -202,7 +200,7 @@ fn new_body(
       None => {
         let place = c.box(style=new_composer_box, fn() {
           c.sized(col, c.height, fn() {
-            new_composer(c, src, w, pages, v, address, name, false, Some(fn() { new_tools(c, src, w, v, station) }))
+            new_composer(c, src, w, v, address, name, false, Some(fn() { new_tools(c, src, w, v, station) }))
           })
         })
         // (how tall it is, kept clear as the page leaves: new_chat_after)
@@ -224,7 +222,7 @@ fn new_body(
     // the machine's own sessions to go on with, where it kept any (MachineSessions)
     if field(station, "overview") is Some(Object(_)) && !src.read_only {
       let offer = c.box(style=new_offer, fn() {
-        @settings.machine_sessions_offer(c, (pages.core)(src, w), address, name)
+        @settings.machine_sessions_offer(c, settings_core(src, w), address, name)
       })
       new_going(c, offer, going, false)
     }
@@ -251,7 +249,6 @@ fn new_composer(
   c : @ui.Ctx,
   src : Source,
   w : Workspace,
-  pages : Pages,
   v : Json?,
   address : String,
   name : String,
@@ -268,7 +265,7 @@ fn new_composer(
     locked: held || text(v, "runtime") == "" || field(v, "model") is None,
     offline: false,
   }
-  composer(c, src, w, pages, spec, fn(d) { new_send(c, src, w, v, address, name, d) })
+  composer(c, src, w, spec, fn(d) { new_send(c, src, w, v, address, name, d) })
   @sfbase.flight_carry_waiting(c)
 }
 
@@ -539,19 +536,19 @@ fn new_going(c : @ui.Ctx, i : Int, going : (Double, Double)?, up : Bool) -> Unit
 /// (gone to the chat's foot, its place kept): its scene going up out of view as it fades (140 ms), what is under the
 /// composer fading where it is (80 ms); then nothing. And a new chat left for a chat by the sidebar, fading over it
 /// (switch.mbt). Drawn over the chat's page, after it.
-pub fn new_chat_after(c : @ui.Ctx, src : Source, w : Workspace, pages : Pages, r : ChatRef) -> Unit {
+pub fn new_chat_after(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef) -> Unit {
   match fresh.became {
     Some(b) if b == r && new_leave(c).moving() => {
       let v = fresh.scene
       let l = c.layer(fn() {
-        new_page(c, src, w, pages, v, field(v, "station"), Some((new_leave(c).get(), new_fade(c).get())))
+        new_page(c, src, w, v, field(v, "station"), Some((new_leave(c).get(), new_fade(c).get())))
       })
       // (drawn only, while it leaves)
       c.draw_only(l)
     }
     _ => ()
   }
-  switch_new_out(c, src, w, pages)
+  switch_new_out(c, src, w)
 }
 
 ///|

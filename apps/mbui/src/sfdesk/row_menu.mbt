@@ -25,7 +25,7 @@ fn row_menu_reset() -> Unit {
 /// A chat's row's menu (Sidebar.tsx ContextMenu): 固定 / 取消固定 (a station from before pins says nothing: none),
 /// 重命名, 保留 / 取消保留 (a chat of its own: a thread), 复制会话链接, 转到频道 (a thread with an agent), 复制 session 文件
 /// 路径, 归档; its top left at where the row was right clicked.
-fn row_menu(c : @ui.Ctx, src : Source, pages : Pages) -> Unit {
+fn row_menu(c : @ui.Ctx, src : Source) -> Unit {
   let (key, item, x, y) = match wide.menu {
     Some(m) => m
     // (closed: told so, for its going)

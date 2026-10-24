@@ -6,8 +6,8 @@
 
 ///|
 /// The settings page `route` in the pane.
-fn setting_page(c : @ui.Ctx, src : Source, w : Workspace, pages : Pages, route : Route) -> Unit {
-  let core = (pages.core)(src, w)
+fn setting_page(c : @ui.Ctx, src : Source, w : Workspace, route : Route) -> Unit {
+  let core = settings_core(src, w)
   let here = @settings.here_of(core, w.id, w.name)
   // a page under another of them shows back (the sidebar is the way to the others)
   let stack = app.nav.pages()
@@ -114,7 +114,7 @@ fn settings_reset() -> Unit {
 ///|
 /// The settings' sidebar: back to the chats, then its pages by where they act (this device, the stations, the cloud);
 /// those in the rail (Station, Profile, 连接, 用量) are reached there.
-fn settings_side(c : @ui.Ctx, src : Source, w : Workspace, pages : Pages) -> Unit {
+fn settings_side(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
   let t = @sf.theme()
   let here = match app.nav.top() {
     // (a page under one of them: that one lit)
@@ -140,7 +140,7 @@ fn settings_side(c : @ui.Ctx, src : Source, w : Workspace, pages : Pages) -> Uni
       app.nav.push(Setting(r))
     }
   }
-  let here_of = @settings.here_of((pages.core)(src, w), w.id, w.name)
+  let here_of = @settings.here_of(settings_core(src, w), w.id, w.name)
   c.box(style=settings_side_fill, fn() {
     side_top(c)
     c.box(style=settings_nav_list, fn() {
