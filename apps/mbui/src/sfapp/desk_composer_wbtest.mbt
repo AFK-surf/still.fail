@@ -6,6 +6,7 @@
 fn desk_composer_tester(
   calls : Array[Made],
   spec_of? : (ComposerFor) -> @sfpages.ComposerSpec = default_spec,
+  pointing? : @ui.Pointing = Mouse,
 ) -> (@ui.Tester, Source) {
   reset()
   let base = fixture("chat")
@@ -14,6 +15,10 @@ fn desk_composer_tester(
     call: fn(name, params, done) {
       calls.push({ name, params, bytes: None, done, heard: None })
       (base.call)(name, params, done)
+    },
+    call_bytes: fn(name, params, bytes, done) {
+      calls.push({ name, params, bytes: Some(bytes), done, heard: None })
+      (base.call_bytes)(name, params, bytes, done)
     },
   }
   let r : ChatRef = { station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" }
@@ -33,10 +38,13 @@ fn desk_composer_tester(
         })
       })
       |> ignore
+      // what the presenters show (＋'s sheet with a finger), over it as the shell has it
+      @sf.presented(c)
     },
     w=900.0,
     h=500.0,
     platform=0,
+    pointing~,
   )
   (t, src)
 }
@@ -241,4 +249,39 @@ test "desk composer: words with no reference go at once, the core not asked what
   t.frame()
   assert_eq(named(calls, "chat.outsideRefs").length(), 0)
   assert_eq(named(calls, "chat.send").length(), 1)
+}
+
+///|
+test "a finger's ＋: the sheet of what can go in (Attach.kt); 照片 asks the system, held, and what it picks goes up (composer.add)" {
+  let calls : Array[Made] = []
+  let (t, _) = desk_composer_tester(calls, pointing=Finger)
+  t.draw()
+  t.click(Button, label=@sf.t("web-main.composer.attach"))
+  t.run_for(@kit.sheet_rest("sf-present") - t.time())
+  assert_true(t.find("照片") is Some(_))
+  assert_true(t.find("Station 文件") is Some(_))
+  // (what the system's picker answers, said before it is asked; the tile, not the strip's last, which asks for the
+  // gallery's 最近照片)
+  t.picks([("photo.jpg", b"abcd")])
+  let (x, y) = t.locate("=照片")[0]
+  t.tap(x, y)
+  assert_eq(t.pick_asks().length(), 1)
+  assert_true(t.pick_asks()[0] == Photos)
+  t.draw()
+  t.draw()
+  let added = named(calls, "composer.add")
+  assert_eq(added.length(), 1)
+  assert_eq(text(Some(items(Some(added[0].params), "files")[0]), "name"), "photo.jpg")
+}
+
+///|
+test "a finger down outside the composer lets go of the keyboard once lifted (Keyboard.kt letsGoOfKeyboard)" {
+  let calls : Array[Made] = []
+  let (t, _) = desk_composer_tester(calls, pointing=Finger)
+  t.draw()
+  t.tap(450.0, 500.0 - 16.0 - 22.0)
+  assert_true(t.ctx().editor_focused(@sfpages.composer_field_key))
+  t.tap(450.0, 60.0)
+  t.draw()
+  assert_true(!t.ctx().editor_focused(@sfpages.composer_field_key))
 }

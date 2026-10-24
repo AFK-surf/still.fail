@@ -13,4 +13,6 @@ pub fn reset() -> Unit {
   steps_reset()
   composing_reset()
   triple_reset()
+  recent_reset()
+  attach_reset()
 }

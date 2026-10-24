@@ -38,10 +38,12 @@ priv struct Composing {
   mut draft : String
   restoring : Map[String, Bool]
   restore_errors : Map[String, String]
+  /// a finger went down outside it (keyboard_let_go)
+  mut outside : Bool
 }
 
 ///|
-let composing : Composing = { picking: None, let_go: false, warmed: {}, comments: {}, roomy: None, draft: "", restoring: {}, restore_errors: {} }
+let composing : Composing = { picking: None, let_go: false, warmed: {}, comments: {}, roomy: None, draft: "", restoring: {}, restore_errors: {}, outside: false }
 
 ///|
 fn composing_reset() -> Unit {
@@ -53,6 +55,7 @@ fn composing_reset() -> Unit {
   composing.draft = ""
   composing.restoring.clear()
   composing.restore_errors.clear()
+  composing.outside = false
 }
 
 ///|
@@ -126,7 +129,7 @@ pub fn composer(
         composer_extras(c, src, spec, w)
         composer_text(c, src, ws, spec, w, cap, multiline, submit)
         c.box(style=tools_row, fn() {
-          attach(c, spec, w, no_files)
+          attach(c, src, spec, w, no_files)
           match spec.toolbar {
             Some(f) => c.box(style=choices, f) |> ignore
             None => c.box(style=tools_gap, fn() {  }) |> ignore
@@ -135,7 +138,7 @@ pub fn composer(
         })
         |> ignore
       } else {
-        attach(c, spec, w, no_files)
+        attach(c, src, spec, w, no_files)
         composer_text(c, src, ws, spec, w, cap, multiline, submit)
         send_button(c, ready, w.starting, submit)
       }
@@ -149,9 +152,35 @@ pub fn composer(
   }
   composing.roomy = Some(spec.roomy)
   @motion.layout(c, box, "composer/box", spec=@motion.tween(if moved { page_move_ms } else { morph_ms }, ease=Out), listed=false)
+  // with a finger: a press outside it lets go of the keyboard once lifted or moved on (reading on)
+  if @ui.pointing() is Finger {
+    keyboard_let_go(c, cap)
+  }
   @motion.measure(c, box, "composer/content")
   if w.error != "" {
     c.box(style=error_box, fn() { c.text(w.error, style=composer_error_words) |> ignore }) |> ignore
+  }
+}
+
+///|
+/// A finger down outside the composer (`cap`), nothing over it presented (its `@` menu, a sheet), lets go of the
+/// keyboard once lifted or moved on; lifted after a long press (not a tap) the keyboard stays (still.fail's Android
+/// app's Keyboard.kt letsGoOfKeyboard).
+fn keyboard_let_go(c : @ui.Ctx, cap : Int) -> Unit {
+  let press = c.press()
+  if press.fresh {
+    let within = match c.rect_of(cap) {
+      Some((x, y, w, h)) => press.x >= x && press.x < x + w && press.y >= y && press.y < y + h
+      None => false
+    }
+    composing.outside = !within && !@sf.presenting()
+  }
+  if composing.outside && c.editor_focused(composer_field_key) && (press.moved || (press.lifted && !press.long)) {
+    composing.outside = false
+    c.blur()
+  }
+  if press.lifted {
+    composing.outside = false
   }
 }
 
@@ -168,13 +197,25 @@ fn take_in(c : @ui.Ctx, src : Source, spec : ComposerSpec, w : Writing, no_files
           composing.picking = None
           if key == w.key && !no_files {
             for f in files {
-              writing_add(src, w, spec.station, f.name, f.bytes)
+              writing_add_picked(src, w, spec.station, f)
             }
           }
         }
         None => ()
       }
     None => ()
+  }
+  // files shared into the app from another, for this draft (share.mbt)
+  match shared_into.get(w.key) {
+    Some(list) if !no_files => {
+      shared_into.remove(w.key)
+      c.tell("composer/shared/" + w.key, fn() {
+        for f in list {
+          writing_add_picked(src, w, spec.station, f)
+        }
+      })
+    }
+    _ => ()
   }
   match c.field_picture(composer_field_key) {
     Some(png) if !no_files => writing_add(src, w, spec.station, pasted_picture_name, png)
@@ -383,15 +424,20 @@ fn warm(c : @ui.Ctx, src : Source, spec : ComposerSpec) -> Unit {
 ///|
 /// ＋ (ComposerTools' attach, Chat.css.ts attachBtn: 32 round, the muted ink, the hover's ground and the text's ink
 /// pointed at, faint where no file is taken in): the system's file picker; its tip with its keys (composer.file).
-fn attach(c : @ui.Ctx, spec : ComposerSpec, w : Writing, no_files : Bool) -> Unit {
+fn attach(c : @ui.Ctx, src : Source, spec : ComposerSpec, w : Writing, no_files : Bool) -> Unit {
   let p = @sf.theme().p
   let id = c.id("composer/plus")
   let hot = !no_files && c.lit(id)
   if !no_files {
     c.cursor(id, Hand)
     @sf.tip(c, "composer/plus", id, @sf.t("web-main.composer.attach"), shortcut="composer.file")
+    // with a finger the phone's sheet of what can go in (attach.mbt), with a mouse the system's picker at once
     if c.clicked(id) {
-      pick_files(w)
+      if @ui.pointing() is Finger {
+        attach_open(id, src, w.key)
+      } else {
+        pick_files(w)
+      }
     }
   }
   ignore(spec)
@@ -407,6 +453,11 @@ fn attach(c : @ui.Ctx, spec : ComposerSpec, w : Writing, no_files : Bool) -> Uni
   })
   c.semantics(b, Button, id~, label=@sf.t("web-main.composer.attach"), disabled=no_files)
 }
+
+///|
+/// A file's place in the files' row, measured.
+// kept across runs: a value (no field of it changes)
+let file_tile : @ui.Style = @ui.css("")
 
 ///|
 /// The system's file picker for draft `w`: what is picked comes in as the composer is next drawn (take_in).
@@ -518,7 +569,9 @@ fn composer_extras(c : @ui.Ctx, src : Source, spec : ComposerSpec, w : Writing) 
   if rest.length() > 0 {
     c.box(style=files_flow, flow=true, fn() {
       for f in rest {
-        composer_file(c, src, spec, w, f)
+        // (where it is, for the file to fly from as the message goes: send_in_chat)
+        let tile = c.box(style=file_tile, fn() { composer_file(c, src, spec, w, f) })
+        @motion.measure(c, tile, "composer/tile/" + text(Some(f), "id"))
       }
     })
     |> ignore
@@ -863,6 +916,26 @@ pub fn send_in_chat(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView, w : Wr
   let row = sent_local(rk, Some(v), words, up)
   // its words take off from the field as they are (before it is emptied), its room held till they let go of it
   let room = @motion.measured(c, "composer/foot").unwrap_or(0.0)
+  // its files that are up fly too, each from its tile (ChatHost.kt sending)
+  let flying : Array[FlyingFile] = w.files.filter_map(fn(f) {
+    let v = Some(f)
+    let id = text(v, "id")
+    match (field(v, "done"), @motion.measured_rect(c, "composer/tile/" + id)) {
+      (Some(done), Some(from)) if text(Some(done), "path") != "" => {
+        let picture = writing_pictures.get(id).unwrap_or("")
+        Some({
+          path: text(Some(done), "path"),
+          from,
+          picture,
+          face: fn() {
+            let c = @ui.current()
+            @sf.file_card(c, "flying/" + id, text(v, "name"), number(v, "size")) |> ignore
+          },
+        })
+      }
+      _ => None
+    }
+  })
   @sfbase.flight_start(
     c,
     w.key,
@@ -870,7 +943,7 @@ pub fn send_in_chat(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView, w : Wr
     row,
     words,
     room,
-    [],
+    flying,
     field=composer_field_key,
     hold=fn(ms) { composer_hold(w.key, room, ms) },
     font=text_size,

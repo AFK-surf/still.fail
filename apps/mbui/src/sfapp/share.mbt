@@ -666,9 +666,6 @@ fn share_opened(
   }
 }
 
-///|
-/// Files shared in waiting for their chat's composer to take them, by its draft's key (composer.mbt).
-let shared_into : Map[String, Array[@hostapi.Picked]] = Map([])
 
 ///|
 /// How many pictures shared in have been added as images (their keys' numbers).

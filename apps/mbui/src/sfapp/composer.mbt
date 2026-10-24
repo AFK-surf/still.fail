@@ -2591,13 +2591,13 @@ fn attach_sheet(
   }
   ignore(r)
   // the gallery's recent photos (recent.mbt), read again as the sheet opens
-  recent_frame(src, cui.attach)
+  @sfpages.recent_frame(src, cui.attach)
   let tapped_tile = fn(i : Int) {
     if i == 0 {
       ask(Camera)
     } else if i > 0 {
       cui.attach = false
-      let pick = match recent.photos.get(i - 1) {
+      let pick = match @sfpages.recent_photo(i - 1) {
         Some(photo) => @ui.pick_photo(photo.src)
         None => None
       }
@@ -2609,7 +2609,7 @@ fn attach_sheet(
         None => ()
       }
     } else {
-      match recent.access {
+      match @sfpages.recent_access() {
         // no gallery on this host: said so
         NoGallery => {
           cui.attach = false
@@ -2632,10 +2632,10 @@ fn attach_sheet(
     }
     if c.clicked(station) {
       cui.attach = false
-      station_files_open(c, d.key)
+      station_files_open(d.key)
     }
     // the camera, the gallery's recent photos, the tile that asks for them (recent.mbt)
-    recent_strip(c, tapped_tile)
+    @sfpages.recent_strip(c, tapped_tile)
     c.box(dir=Row, w=Fill(1.0), pl=12.0, pr=12.0, pb=18.0, gap=8.0, fn() {
       for item in [
         (photos, tr("android-chat.attach.photos"), "photo"),
