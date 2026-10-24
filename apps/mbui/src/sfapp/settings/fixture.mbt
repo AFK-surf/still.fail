@@ -761,6 +761,21 @@ fn fx_station(address : String) -> Json {
               ("summaryText", str("空闲就归档 · 1 天 · Slack：3 天")),
               ("daysOffered", [Json::number(1.0), Json::number(3.0), Json::number(7.0), Json::number(30.0)]),
               ("slackDaysOffered", [Json::number(0.0), Json::number(3.0), Json::number(7.0), Json::number(30.0)]),
+              ("daysOfferedText", [str("1 天"), str("3 天"), str("7 天"), str("30 天")]),
+              ("slackDaysOfferedText", [str("不归档"), str("3 天"), str("7 天"), str("30 天")]),
+              ("reviewOn", Json::boolean(true)),
+              ("reviewText", str("已开启 · GPT-6 mini")),
+              ("stalled", Json::boolean(false)),
+              ("lineText", str("空闲就归档 · 1 天 · Slack：3 天")),
+              (
+                "modes",
+                [
+                  obj([("mode", str("off")), ("label", str("不自动归档")), ("days", Json::number(0.0)), ("reviewed", Json::boolean(false)), ("allowed", Json::boolean(true))]),
+                  obj([("mode", str("idle")), ("label", str("空闲就归档")), ("days", Json::number(1.0)), ("reviewed", Json::boolean(false)), ("allowed", Json::boolean(true))]),
+                  obj([("mode", str("reviewed")), ("label", str("按模型判断")), ("days", Json::number(1.0)), ("reviewed", Json::boolean(true)), ("allowed", Json::boolean(true))]),
+                ],
+              ),
+              ("modeNote", str("空闲超过下面的天数就归档。只看状态，不读内容：chat 里提到但没做完的事，它看不出来。")),
             ]),
           ),
           (
@@ -1245,7 +1260,16 @@ pub fn fixture_topic(mode : String, name : String, params : Map[String, Json]) -
         ]),
       )
     // what the settings say of the workspace (the core's views/settings.ts): Studio's completion rule on
-    "settings" => Some(obj([("decisionsOn", Json::number(1.0)), ("decisionsText", str("1 台 station 已启用"))]))
+    "settings" =>
+      Some(
+        obj([
+          ("decisionsOn", Json::number(1.0)),
+          ("decisionsText", str("1 台 station 已启用")),
+          // (Studio reviews, MBA is offline: nothing to say of the hint)
+          ("hintNoReview", Json::boolean(false)),
+          ("hintReviewText", str("")),
+        ]),
+      )
     "changelog" =>
       Some(
         obj([

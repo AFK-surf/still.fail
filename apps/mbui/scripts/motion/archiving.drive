@@ -1,0 +1,8 @@
+# 归档 then a station's own (sfdesk permissions.mbt, one page each in every frame): MBUI_FIXTURE=settings-archiving, a
+# phone's window or a desktop's.
+timeout 20000
+until 提示归档
+wait 1200
+tap Studio
+wait 1500
+exit
