@@ -370,7 +370,7 @@ fn bar_people(c : @ui.Ctx, src : Source, people : Array[Person]) -> Unit {
   let n = shown.length()
   let step = person_side + 2.0 * person_ring
   let id = c.id("bar-people")
-  wide_tip(
+  @sf.tip(
     c,
     "bar-people",
     id,
@@ -500,7 +500,7 @@ fn icon_button(c : @ui.Ctx, key : String, icon : String, label? : String = "", a
   // named for a screen reader (the web's aria-label), and said under it on hover with its keys (the web's IconButton)
   if label != "" {
     c.semantics(b, Button, id~, label~)
-    wide_tip(c, key, id, label, action~)
+    @sf.tip(c, key, id, label, shortcut=action)
   }
   c.clicked(id)
 }

@@ -12,3 +12,19 @@ pub let go_tos : Map[String, Double] = {}
 pub fn go_to(r : ChatRef, seq : Double) -> Unit {
   go_tos[r.station + "\u{1}" + r.session] = seq
 }
+
+///|
+/// The words a search opened each chat at its message with (Screen.Chat.words, jumpTo.ts `words`), by chat: marked in
+/// that message rather than it flashing (Chat.kt host.goToWords).
+pub let go_to_words : Map[String, Array[String]] = {}
+
+///|
+/// The chat `r` opened from a search at its message `seq`, the search's `words` marked there (Search.kt FoundRow,
+/// Switcher.tsx's found message).
+pub fn open_chat_found(r : ChatRef, seq : Double, words : Array[String]) -> Unit {
+  go_to(r, seq)
+  if words.length() > 0 {
+    go_to_words[r.station + "\u{1}" + r.session] = words
+  }
+  app.nav.push(Chat(r))
+}

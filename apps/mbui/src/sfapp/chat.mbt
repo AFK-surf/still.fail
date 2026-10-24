@@ -1616,21 +1616,6 @@ pub fn open_chat_at(r : ChatRef, seq : Double, held? : Bool = false) -> Unit {
 let flash_held : Ref[Bool] = Ref(false)
 
 ///|
-/// The words a search opened each chat at its message with (Screen.Chat.words), by chat: marked in that message
-/// rather than it flashing (Chat.kt host.goToWords).
-let go_to_words : Map[String, Array[String]] = {}
-
-///|
-/// The chat `r` opened from the search at its message `seq`, the search's `words` marked there (Search.kt FoundRow).
-fn open_chat_found(r : ChatRef, seq : Double, words : Array[String]) -> Unit {
-  go_to(r, seq)
-  if words.length() > 0 {
-    go_to_words[r.station + "\u{1}" + r.session] = words
-  }
-  app.nav.push(Chat(r))
-}
-
-///|
 /// A message gone to flashes (ChatMotion.kt flash): the accent's ground in over `flash_in_ms` on Ease.Out, held to
 /// `flash_held_ms`, gone by `flash_ms` on the standard curve.
 let flash_in_ms : Double = 160.0
@@ -1860,7 +1845,7 @@ fn jump_to_latest(
     }
   }
   // (in the wide frame its tip, with its keys: the web's Tip over it)
-  wide_tip(c, "chat-jump", id, tr("android-chat.chat.latest"), action="chat.latest")
+  @sf.tip(c, "chat-jump", id, tr("android-chat.chat.latest"), shortcut="chat.latest")
   let (side, ends) = float_side()
   c.layer(align=AEnd, fn() {
     c.spacer()
@@ -2007,7 +1992,7 @@ fn jump_to_ask(
     go_to(r, asks[turn % asks.length()])
     ask_turns[k] = turn + 1
   }
-  wide_tip(c, "chat-ask", id, tr("android-chat.asks.go"))
+  @sf.tip(c, "chat-ask", id, tr("android-chat.asks.go"))
   c.layer(align=AEnd, fn() {
     c.spacer()
     c.box(pr=float_right(c), pb=float_foot(c, r, v) + lift, fn() {

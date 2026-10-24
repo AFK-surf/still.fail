@@ -1683,3 +1683,24 @@ test "wide: a row pressed on its state line while the core says which message th
   t.frame()
   assert_eq(rd.flash, "ts8")
 }
+
+///|
+test "wide: Esc goes to what the frame opened first (a row's menu), then to the page's own (the chat's ⌘F bar)" {
+  let calls : Array[Made] = []
+  let t = wide_tester(calls, mode="chat")
+  t.key(@ui.key_of_char('f'), mods=@ui.mod_cmd)
+  t.frame()
+  assert_true(@sfdesk.find_chat() != "")
+  let (x, y) = t.find("夜里的构建又失败了").unwrap()
+  t.right_click(x, y)
+  assert_true(t.find("复制会话链接") is Some(_))
+  // the menu closed, the bar still open
+  t.key(@ui.key_escape)
+  t.frame()
+  assert_true(t.find("复制会话链接") is None)
+  assert_true(@sfdesk.find_chat() != "")
+  // then the bar
+  t.key(@ui.key_escape)
+  t.frame()
+  assert_eq(@sfdesk.find_chat(), "")
+}

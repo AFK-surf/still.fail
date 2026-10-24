@@ -24,6 +24,7 @@ using @sfbase {
   decision_key,
   chats_of,
   app,
+  open_chat_found,
   chat_link,
   copy_chat_link,
   arrangement_none,

@@ -553,7 +553,9 @@ pub let tip_delay_ms : Double = 400.0
 ///|
 /// A tip over control `id` (parts.tsx Tip): `label` said beside it once the pointer has rested on it a moment (on
 /// `side`, under it by default), and with a `shortcut`, the keys that do the same after it, quieter (shortcuts.mbt).
-/// The only way anything explains itself on hover. With no label, none. `key` names it where it is asked.
+/// The only way anything explains itself on hover: none on a touch screen, where nothing is pointed at (a phone's, a
+/// tablet's, as the web's Radix tooltip opens for none of a finger's). With no label, none. `key` names it where it is
+/// asked.
 pub fn tip(
   c : @ui.Ctx,
   key : String,
@@ -562,7 +564,7 @@ pub fn tip(
   side? : @ui.Side = Bottom,
   shortcut? : String = "",
 ) -> Unit {
-  if label == "" || id == 0 {
+  if label == "" || id == 0 || touch_system() {
     return
   }
   let keys = shortcut_keys(shortcut)

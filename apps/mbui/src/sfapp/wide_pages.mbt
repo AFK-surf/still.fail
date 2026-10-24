@@ -7,8 +7,6 @@
 /// What the wide frame's pages still here keep of their own (the frame's own is sfdesk's `shell`; the rest is the
 /// stack's and the core's).
 priv struct Wide {
-  /// 快捷键一览 (⌘/) open
-  mut keys_open : Bool
   /// the chat's "…" open (what is done with it), its services' popover open
   mut info_open : Bool
   mut jobs_open : Bool
@@ -22,7 +20,6 @@ priv struct Wide {
 
 ///|
 let wide : Wide = {
-  keys_open: false,
   info_open: false,
   jobs_open: false,
   job_picked: "",
@@ -37,7 +34,6 @@ let wide_on : Ref[Bool] = Ref(false)
 
 ///|
 fn wide_reset() -> Unit {
-  wide.keys_open = false
   wide.info_open = false
   wide.jobs_open = false
   wide.job_picked = ""
@@ -77,6 +73,8 @@ fn desk_pages() -> @sfdesk.Pages {
     other: fn(c, src, w, all, invited, page) { page_view(c, src, w, all, invited, page) },
     // the settings', the files', the stations', the profiles' (wide_place_side.mbt)
     side: fn(c, src, w, width) { sidebar(c, src, w, width) },
+    keys: fn(c, src, w, escape) { page_keys(c, src, w, escape) },
+    offered: fn(c, src) { chat_offered(c, src) },
     jobs: fn(c, src, w) { open_jobs(c, src, w) },
     relay: fn(c, src, r, thread) { open_relay(c, src, r, thread) },
     act: fn(src, what, call, params, done) { act(src, what, "", call, params, done~) },
