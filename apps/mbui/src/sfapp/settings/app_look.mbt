@@ -6,39 +6,6 @@
 // The colour follows what is picked until it is set by hand (and can go back to it).
 
 ///|
-/// A picture to start from: a buddy (`mark` empty) or a model maker's mark (its drawable), on a colour of its own.
-priv struct Avatar {
-  id : String
-  /// what it is called (a screen reader's), a catalog's key where it is said in words of the app's
-  label : String
-  bg : String
-  mark : String
-  mono : Bool
-}
-
-///|
-/// The model makers' marks, each on its own colour (SlackApp.kt MAKER_AVATARS).
-// kept across runs: a table of constants, never written
-let maker_avatars : Array[Avatar] = [
-  { id: "anthropic", label: "Anthropic", bg: "#D97757", mark: "maker_anthropic", mono: true },
-  { id: "openai", label: "OpenAI", bg: "#0D0D0D", mark: "maker_openai", mono: true },
-  { id: "gemini", label: "Gemini", bg: "#FFFFFF", mark: "maker_gemini", mono: false },
-  { id: "deepseek", label: "DeepSeek", bg: "#FFFFFF", mark: "maker_deepseek", mono: false },
-  { id: "qwen", label: "Qwen", bg: "#FFFFFF", mark: "maker_qwen", mono: false },
-  { id: "zhipu", label: "android-settings.slack.zhipu", bg: "#FFFFFF", mark: "maker_zhipu", mono: false },
-  { id: "kimi", label: "Kimi", bg: "#0D0D0D", mark: "maker_kimi", mono: true },
-  { id: "minimax", label: "MiniMax", bg: "#FFFFFF", mark: "maker_minimax", mono: false },
-  { id: "xai", label: "xAI", bg: "#0D0D0D", mark: "maker_xai", mono: true },
-]
-
-///|
-/// The buddies as the core lists them (asked once), None until it has answered.
-let buddy_list : Ref[Array[Avatar]?] = Ref(None)
-
-///|
-let buddies_asked : Ref[Bool] = Ref(false)
-
-///|
 /// A look being picked, by its form.
 priv struct AppLook {
   /// what was picked: an avatar's id, or a picture of the person's own (its key, mem:…), "" neither
@@ -73,125 +40,19 @@ let icons_made : Ref[Int] = Ref(0)
 ///|
 fn app_looks_reset() -> Unit {
   app_looks.clear()
-  buddy_list.val = None
-  buddies_asked.val = false
+  @sf.app_icons_reset()
   icons_made.val = 0
 }
 
 ///|
-/// The cloud's address (the app's MBUI_CLOUD, else still.fail's own): where the buddies' pictures are.
-fn cloud_base() -> String {
-  match @ui.env("MBUI_CLOUD") {
-    "" => "https://app.still.fail"
-    o =>
-      if o.has_suffix("/") {
-        o.unsafe_substring(start=0, end=o.length() - 1)
-      } else {
-        o
-      }
-  }
-}
-
-///|
-/// The buddies, asked of the core once (`buddies`: id, label, bg each) once the frame is built; none where it has
-/// none.
-fn buddies(c : @ui.Ctx, core : Core) -> Array[Avatar] {
-  // (said by each build until it is asked: a build let go of asks nothing)
-  if !buddies_asked.val {
-    c.after_build("settings/buddies", fn() {
-      if !buddies_asked.val {
-        buddies_asked.val = true
-        ask_buddies(core)
-      }
-    })
-  }
-  buddy_list.val.unwrap_or([])
-}
-
-///|
-fn ask_buddies(core : Core) -> Unit {
-  (core.call)("buddies", obj([]), fn(r) {
-      buddy_list.val = Some(
-        match r {
-          Ok(Array(a)) =>
-            a.map(fn(b) {
-              { id: text(Some(b), "id"), label: text(Some(b), "label"), bg: text(Some(b), "bg"), mark: "", mono: false }
-            })
-          _ => []
-        },
-      )
-  })
-}
-
-///|
-/// The icon of `a` on `bg` (#RRGGBB; else its own colour) drawn from its picture's pixels (a buddy's: `w` × `h` of
-/// `px`, premultiplied): None where a maker's mark is not known here.
-fn avatar_icon(a : Avatar, bg : String, w : Int, h : Int, px : FixedArray[Byte]) -> @pixels.Canvas? {
-  let icon = @pixels.Canvas::new(icon_px, icon_px)
-  icon.fill(
-    match hex_color(bg) {
-      Some(v) => v
-      None => hex_color(a.bg).unwrap_or(icon_fallback)
-    },
-  )
-  let side = icon_px.to_double()
-  if a.mark != "" {
-    let white = 0xFFFFFFFFL
-    match @sf.drawable_pixels(a.mark, mark_px, tint?=if a.mono { Some(white) } else { None }) {
-      Some((mw, mh, mp)) => {
-        let x = (side - mw.to_double()) / 2.0
-        let y = (side - mh.to_double()) / 2.0
-        icon.draw(mw, mh, mp, (0, 0, mw, mh), (x, y, x + mw.to_double(), y + mh.to_double()), premultiplied=false)
-      }
-      None => return None
-    }
-  } else {
-    // as large as fits, what of it is drawn
-    let (x0, y0, x1, y1) = @pixels.drawn_box(w, h, px)
-    let bw = (x1 - x0).to_double()
-    let bh = (y1 - y0).to_double()
-    let k = side * buddy_share / (if bw > bh { bw } else { bh })
-    let (dw, dh) = (bw * k, bh * k)
-    icon.draw(w, h, px, (x0, y0, x1, y1), ((side - dw) / 2.0, (side - dh) / 2.0, (side + dw) / 2.0, (side + dh) / 2.0))
-  }
-  Some(icon)
-}
-
-///|
-/// A picture of the person's own as an icon: its middle square, on white where it is clear.
-fn own_icon(w : Int, h : Int, px : FixedArray[Byte]) -> @pixels.Canvas {
-  let icon = @pixels.Canvas::new(icon_px, icon_px)
-  icon.fill(0xFFFFFFFFL)
-  let s = if w < h { w } else { h }
-  let x = (w - s) / 2
-  let y = (h - s) / 2
-  icon.draw(w, h, px, (x, y, x + s, y + s), (0.0, 0.0, icon_px.to_double(), icon_px.to_double()))
-  icon
-}
-
-///|
-/// The ground where neither colour is one (SlackApp.kt parseColor's fallback).
-let icon_fallback : Int64 = 0x7A2E0EFFL
-
-///|
-/// How large an icon is made (Slack wants 512 to 2000), a maker's mark in it, and how much of it a buddy takes.
-let icon_px : Int = 1024
-
-///|
-let mark_px : Int = 560
-
-///|
-let buddy_share : Double = 0.92
-
-///|
 /// An icon made: its picture shown in the look, and as it goes to Slack (`on_icon`).
 fn icon_made(l : AppLook, icon : @pixels.Canvas, on_icon : (String?, String) -> Unit) -> Unit {
-  let jpeg = @pixels.jpeg(icon_px, icon_px, icon.pixels(), quality=90)
+  let (jpeg, url) = @sf.app_icon_jpeg(icon)
   icons_made.val += 1
   l.shown = "mem:slack-icon/\{icons_made.val}"
   @ui.add_image(l.shown, jpeg)
   l.error = ""
-  on_icon(Some("data:image/jpeg;base64," + @codec.base64(jpeg)), "")
+  on_icon(Some(url), "")
 }
 
 ///|
@@ -238,27 +99,27 @@ fn app_look(
       l
     }
   }
-  let all = buddies(c, core) + maker_avatars
+  let all = @sf.app_buddies(c, fn(done) { (core.call)("buddies", obj([]), done) }) + @sf.app_makers
   let colour = fn(bg : String) {
     l.color = bg
     field_of(key + "/color").set(bg)
     set_color(bg)
   }
   // an avatar drawn on `bg`: a mark at once, a buddy once its picture is read
-  let draw = fn(a : Avatar, bg : String) {
+  let draw = fn(a : @sf.AppAvatar, bg : String) {
     if a.mark != "" {
       l.reading = ""
-      match avatar_icon(a, bg, 0, 0, FixedArray::make(0, b'\x00')) {
+      match @sf.app_avatar_icon(a, bg, 0, 0, FixedArray::make(0, b'\x00')) {
         Some(icon) => icon_made(l, icon, on_icon)
         None => icon_failed(l, tr("android-settings.slack.drawFailed"), on_icon)
       }
     } else {
-      l.reading = cloud_base() + "/avatars/" + a.id + ".webp"
-      l.reading_px = icon_px
+      l.reading = @sf.avatars_base() + "/avatars/" + a.id + ".webp"
+      l.reading_px = @sf.app_icon_px
       l.reading_bg = bg
     }
   }
-  let pick = fn(a : Avatar) {
+  let pick = fn(a : @sf.AppAvatar) {
     l.picked = a.id
     l.upload = ""
     let bg = if l.colour_set { l.color } else { a.bg }
@@ -266,7 +127,7 @@ fn app_look(
     draw(a, bg)
   }
   // a new app starts as the general helper, else the first, on its colour
-  if fresh && !l.started && all.length() > maker_avatars.length() {
+  if fresh && !l.started && all.length() > @sf.app_makers.length() {
     l.started = true
     pick(all.iter().find_first(fn(a) { a.id == "general-helper" }).unwrap_or(all[0]))
   }
@@ -283,8 +144,8 @@ fn app_look(
       PixelsRead(w, h, px) => {
         l.reading = ""
         if l.upload != "" {
-          let icon = own_icon(w, h, px)
-          l.upload_bg = @pixels.edge_colour(icon_px, icon_px, icon.pixels())
+          let icon = @sf.app_own_icon(w, h, px)
+          l.upload_bg = @pixels.edge_colour(@sf.app_icon_px, @sf.app_icon_px, icon.pixels())
           icon_made(l, icon, on_icon)
           if !l.colour_set {
             colour(l.upload_bg)
@@ -292,7 +153,7 @@ fn app_look(
         } else {
           match all.iter().find_first(fn(a) { a.id == l.picked }) {
             Some(a) =>
-              match avatar_icon(a, l.reading_bg, w, h, px) {
+              match @sf.app_avatar_icon(a, l.reading_bg, w, h, px) {
                 Some(icon) => icon_made(l, icon, on_icon)
                 None => icon_failed(l, tr("android-settings.slack.drawFailed"), on_icon)
               }
@@ -316,7 +177,7 @@ fn app_look(
           @ui.add_image(l.upload, b)
           l.picked = ""
           l.reading = l.upload
-          l.reading_px = own_px
+          l.reading_px = @sf.app_own_px
         }
         None => ()
       }
@@ -332,7 +193,7 @@ fn app_look(
     l.color = typed
     l.colour_set = true
     set_color(typed)
-    if hex_color(typed) is Some(_) {
+    if @sf.hex_color(typed) is Some(_) {
       match all.iter().find_first(fn(a) { a.id == l.picked }) {
         Some(a) => draw(a, typed)
         None => ()
@@ -343,7 +204,7 @@ fn app_look(
     c.text(tr("android-settings.slack.icon"), style=look_label) |> ignore
     c.box(style=look_row, fn() {
       let preview = c.id(key + "/preview")
-      let ground = look_preview.then(@ui.style(bg=Data(hex_color(l.color).unwrap_or(t.p.chip))))
+      let ground = look_preview.then(@ui.style(bg=Data(@sf.hex_color(l.color).unwrap_or(t.p.chip))))
       let shown = c.box(style=ground, id=preview, fn() {
         if l.shown != "" {
           c.image(l.shown, w=Fill(1.0), h=Fill(1.0), fit=FitCover, bg=0L, fade=false) |> ignore
@@ -369,7 +230,7 @@ fn app_look(
     avatar_grid(c, key, all, l.picked, pick)
     c.text(tr("android-settings.slack.background"), style=look_label) |> ignore
     c.box(style=look_colour_row, fn() {
-      c.box(style=look_swatch.then(@ui.style(bg=Data(hex_color(l.color).unwrap_or(t.p.chip)))), fn() {  }) |> ignore
+      c.box(style=look_swatch.then(@ui.style(bg=Data(@sf.hex_color(l.color).unwrap_or(t.p.chip)))), fn() {  }) |> ignore
       c.box(style=look_colour_field, fn() { field_box(c, key + "/color", "#RRGGBB", mono=true) |> ignore }) |> ignore
       // what was picked's own colour, after one set by hand
       let recommended = if l.picked != "" {
@@ -398,14 +259,9 @@ fn app_look(
 }
 
 ///|
-/// How large a picture of the person's own is read, before its middle is made the icon (Android reads it at least
-/// 1024 on its shorter side).
-let own_px : Int = 2048
-
-///|
 /// The avatars in a full grid, tiles at least 48 across, 10 apart; the picked one ringed in the accent
 /// (SlackApp.kt AvatarGrid).
-fn avatar_grid(c : @ui.Ctx, key : String, all : Array[Avatar], picked : String, pick : (Avatar) -> Unit) -> Unit {
+fn avatar_grid(c : @ui.Ctx, key : String, all : Array[@sf.AppAvatar], picked : String, pick : (@sf.AppAvatar) -> Unit) -> Unit {
   let gid = c.id(key + "/grid")
   // (as wide as it was laid out last; the window before it has been)
   let width = match c.rect_of(gid) {
@@ -425,18 +281,18 @@ fn avatar_grid(c : @ui.Ctx, key : String, all : Array[Avatar], picked : String, 
         for a in row {
           let on = a.id == picked
           let tile = c.id(key + "/avatar/" + a.id)
-          let ground = @ui.style(bg=Data(hex_color(a.bg).unwrap_or(icon_fallback)), w=Fixed(side), h=Fixed(side))
+          let ground = @ui.style(bg=Data(@sf.hex_color(a.bg).unwrap_or(@sf.icon_fallback)), w=Fixed(side), h=Fixed(side))
           let face = fn() {
             if a.mark != "" {
               @sf.drawable(c, a.mark, side * mark_share, tint?=if a.mono { Some(0xFFFFFFFFL) } else { None }) |> ignore
             } else {
-              let thumb = c.image(cloud_base() + "/avatars/" + a.id + ".thumb.webp", w=Fill(1.0), h=Fill(1.0), fit=FitCover, bg=0L)
+              let thumb = c.image(@sf.avatars_base() + "/avatars/" + a.id + ".thumb.webp", w=Fill(1.0), h=Fill(1.0), fit=FitCover, bg=0L)
               c.look(thumb, @ui.look(scale=thumb_scale))
             }
           }
           let node = if on {
             c.box(style=avatar_ring.then(@ui.style(w=Fixed(side), h=Fixed(side))), id=tile, fn() {
-              c.box(style=avatar_in_ring.then(@ui.style(bg=Data(hex_color(a.bg).unwrap_or(icon_fallback)))), face) |> ignore
+              c.box(style=avatar_in_ring.then(@ui.style(bg=Data(@sf.hex_color(a.bg).unwrap_or(@sf.icon_fallback)))), face) |> ignore
             })
           } else {
             c.box(style=avatar_tile.then(ground), id=tile, face)

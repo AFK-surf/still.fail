@@ -470,6 +470,19 @@ fn fx_connect(id : String, name : String, presence : String, status : String, mo
 }
 
 ///|
+/// A group of a Slack app's permissions, as the core says it (`admin`: what only Slack's admins allow, "" none).
+fn fx_group(id : String, label : String, admin : String, fixed? : Bool = false) -> Json {
+  obj([
+    ("id", str(id)),
+    ("label", str(label)),
+    ("description", str(label)),
+    ("admin", if admin == "" { Json::null() } else { str(admin) }),
+    ("tip", str(if admin == "" { label } else { label + " " + admin })),
+    ("fixed", Json::boolean(fixed)),
+  ])
+}
+
+///|
 /// The ways a multi-session connect could be switched to, as the core says them (present.ts modeChanges).
 fn fx_mode_changes() -> Json {
   let change = fn(mode : String, mention : Bool, changed : Bool, effects : Array[String], action : String) {
@@ -1069,6 +1082,27 @@ pub fn fixture_topic(mode : String, name : String, params : Map[String, Json]) -
               ("backgroundColor", str("#F3E3D3")),
               ("groups", obj([("base", Json::boolean(true)), ("public", Json::boolean(true)), ("dm", Json::boolean(true)), ("files", Json::boolean(true))])),
             ]),
+          ),
+          // its permissions as the core says them (present.ts slackSections), two of its sections
+          (
+            "sections",
+            [
+              obj([
+                ("title", str("消息")),
+                (
+                  "groups",
+                  [
+                    fx_group("base", "读取和回复消息", "", fixed=true),
+                    fx_group("public", "在未加入的公开频道发言", ""),
+                    fx_group("dm", "主动发私信", ""),
+                  ],
+                ),
+              ]),
+              obj([
+                ("title", str("文件和文档")),
+                ("groups", [fx_group("files", "读写文件", ""), fx_group("connect", "Slack Connect 跨组织频道", "接受邀请需要管理员安装 app")]),
+              ]),
+            ],
           ),
         ]),
       )

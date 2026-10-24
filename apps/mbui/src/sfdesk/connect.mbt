@@ -64,8 +64,13 @@ fn connect_detail(c : @ui.Ctx, src : Source, core : Core, here : Here, item : Js
     blocks.push(fn() { cd_callout(c, cd_trouble(cv)) })
   }
   blocks.push(fn() { cd_run_section(c, src, core, here, station, item) })
-  if feishu && field(cv, "feishu") is Some(Object(_)) {
-    blocks.push(fn() { cd_feishu_section(c, core, station, cv) })
+  // its app: a Feishu one's App ID and secret, a Slack one's look and permissions (folded)
+  if feishu {
+    if field(cv, "feishu") is Some(Object(_)) {
+      blocks.push(fn() { cd_feishu_section(c, core, station, cv) })
+    }
+  } else {
+    blocks.push(fn() { slack_app_section(c, core, station, cv) })
   }
   blocks.push(fn() { cd_sessions(c, core, station, item) })
   desk_page(c, core, "connect/" + station + "/" + id, text(cv, "name"), back~, head=fn() {
@@ -186,6 +191,7 @@ fn connect_reset() -> Unit {
   cd_menu_open.val = ""
   cd_all_sessions.clear()
   slack_reset()
+  slack_app_reset()
 }
 
 ///|
