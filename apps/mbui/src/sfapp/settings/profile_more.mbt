@@ -899,9 +899,14 @@ fn start_sign_in(core : Core, station : String, id : String) -> Unit {
 fn open_manual_sign_in(command : String) -> Unit {
   open_sheet(0.36, fn(c, core) {
     sheet_head(c, tr("android-settings.login.manualShort"))
-    c.box(w=Fill(1.0), padx=20.0, pb=24.0, fn() { command_box(c, core, command) }) |> ignore
+    c.box(style=manual_sign_in_room, fn() { command_box(c, core, command) }) |> ignore
   })
 }
+
+///|
+/// Its command's room in its sheet: 20 in from the sheet's sides, 24 over its foot.
+// kept across runs: a value (no field of it changes)
+let manual_sign_in_room : @ui.Style = @ui.style(w=Full, px=S5, pb=S6)
 
 ///|
 /// A subscription's sign-in (SignIn): one card, `head` (where it stands: its pill says it once, no title over the
