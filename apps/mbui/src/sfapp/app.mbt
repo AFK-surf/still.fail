@@ -78,14 +78,11 @@ fn reset() -> Unit {
   screen_uis.clear()
   screen_fix_mode.val = ""
   peeks_reset()
-  service_pages.clear()
-  svc_viewports.clear()
   viz_loads.clear()
   viz_frames.clear()
   viz_heights.clear()
   viz_full.val = None
   viz_unmade.clear()
-  service_files.clear()
   share_in.shared = None
   share_in.files = []
   share_in.raised = false
@@ -99,8 +96,6 @@ fn reset() -> Unit {
   share_in.find.set("")
   share_over.val = false
   share_closing.val = false
-  svc_folded.val = None
-  svc_keep.val = fn(_) {  }
   splash_waited.val = false
   drafts.clear()
   sent_pictures.clear()
@@ -173,7 +168,6 @@ fn reset() -> Unit {
   quote_fields.clear()
   rename_field.set("")
   rename_given.val = ""
-  marked_into.clear()
   shared_into.clear()
   share_files_made.val = 0
   recent.open = false
@@ -200,7 +194,6 @@ fn reset() -> Unit {
   pv_strip.near.clear()
   near_asked.clear()
   viewer_awake_env.val = -1
-  src_now.val = fn() { 0.0 }
   // a drive's files, a text read (keep.mbt, drive_reader.mbt)
   reset_by_hand.val = true
 }

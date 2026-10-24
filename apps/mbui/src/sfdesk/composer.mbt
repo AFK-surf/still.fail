@@ -181,6 +181,29 @@ fn take_in(c : @ui.Ctx, src : Source, spec : ComposerSpec, w : Writing, no_files
     Some(png) if !no_files => writing_add(src, w, spec.station, pasted_picture_name, png)
     _ => ()
   }
+  // pictures marked for this chat (a service's page, an image viewed: sfbase's marked_into), each going up as a file
+  // with a quote per mark (what is said of it its comment); taken once, whichever build takes them
+  match marked_into.get(w.key) {
+    Some(list) if !no_files => {
+      marked_into.remove(w.key)
+      c.tell("composer/marked/" + w.key, fn() {
+        for x in list {
+          let (name, bytes, quotes, kind) = x
+          writing_add(src, w, spec.station, name, bytes)
+          for q in quotes {
+            writing_quote(src, w, {
+              "author": Json::string(q.0),
+              "text": Json::string(q.1),
+              "comment": Json::string(q.2),
+              "role": Json::string(kind),
+              "file": Json::string(if kind == "page" { name } else { "" }),
+            })
+          }
+        }
+      })
+    }
+    _ => ()
+  }
   let sent = tab_take_sent(w.key)
   if !sent.is_empty() && !no_files {
     writing_drop(src, w, spec.station, sent.map(dropped_of), drops_as_files(src, w.key))

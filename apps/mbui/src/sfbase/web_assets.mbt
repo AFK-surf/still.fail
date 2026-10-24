@@ -3,7 +3,7 @@
 ///|
 /// web/src/viz/ember-viz.css, as it is.
 // kept across runs: a file's words, never written
-let viz_css : String =
+pub let viz_css : String =
   #|/*
   #| * The stylesheet of an inline visualization (Viz.tsx): an HTML file placed in a message, drawn in a sandboxed frame.
   #| * Two layers, after Codex's Visualize: the page hands in ember's own tokens as --e-* (its palette, type, corners, for
@@ -237,7 +237,7 @@ let viz_css : String =
 ///|
 /// web/src/viz/bridge.js, as it is.
 // kept across runs: a file's words, never written
-let viz_bridge : String =
+pub let viz_bridge : String =
   #|// Runs first inside an inline visualization's frame (Viz.tsx). The frame is sandboxed without its page's origin, so
   #|// the two only talk by messages: the frame says how tall its content is, the page says when its theme changes (the
   #|// --e-* tokens ember-viz.css maps), and the frame draws the tooltip of any element with data-tooltip.
@@ -328,7 +328,7 @@ let viz_bridge : String =
 ///|
 /// apps/android/app/src/main/assets/preview/page.js, as it is.
 // kept across runs: a file's words, never written
-let page_js : String =
+pub let page_js : String =
   #|// First in each of a web service's pages in the app's preview (screens/Preview.kt puts it there, after <head>): what a
   #|// preview's frame and its service worker do on the web (cloud/src/preview.ts, web/src/annotate/frame.ts), for a
   #|// WebView that is the page itself. Three parts: the page's WebSockets through the app (socketScript() of

@@ -40,7 +40,7 @@
     "scripts/detlint*.py",
     "mbui",
     "out",
-    "src/sfapp/web_assets.mbt"
+    "src/sfbase/web_assets.mbt"
   ],
   "style": {
     "tokens": [

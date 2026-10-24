@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
-"""The web's own files a page of the app's carries, as the Android app packs them into its assets:
-src/sfapp/web_assets.mbt holds, as strings,
+"""The web's own files a page of the app's carries (both frames'), as the Android app packs them into its assets:
+src/sfbase/web_assets.mbt holds, as strings,
   viz_css     web/src/viz/ember-viz.css   (a visualization's stylesheet: ui/Viz.kt documentOf)
   viz_bridge  web/src/viz/bridge.js       (its bridge: its height, what its widget keeps, words to send)
   page_js     apps/android/app/src/main/assets/preview/page.js (first in each page of a service's preview:
@@ -17,7 +17,7 @@ FILES = [
     ("viz_bridge", "web/src/viz/bridge.js"),
     ("page_js", "apps/android/app/src/main/assets/preview/page.js"),
 ]
-OUT = os.path.join(A, "src/sfapp/web_assets.mbt")
+OUT = os.path.join(A, "src/sfbase/web_assets.mbt")
 
 
 def made():
@@ -30,7 +30,7 @@ def made():
         out.append("///|")
         out.append(f"/// {rel}, as it is.")
         out.append("// kept across runs: a file's words, never written")
-        out.append(f"let {name} : String =")
+        out.append(f"pub let {name} : String =")
         for line in text.split("\n"):
             out.append("  #|" + line)
         out.append("")
@@ -41,7 +41,7 @@ text = made()
 if "--check" in sys.argv:
     have = open(OUT, encoding="utf-8").read() if os.path.exists(OUT) else ""
     if have != text:
-        print("src/sfapp/web_assets.mbt is not what the web's files make: python3 apps/mbui/scripts/webassets.py")
+        print("src/sfbase/web_assets.mbt is not what the web's files make: python3 apps/mbui/scripts/webassets.py")
         sys.exit(1)
 else:
     with open(OUT, "w", encoding="utf-8") as f:
