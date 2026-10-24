@@ -86,3 +86,19 @@ test "wide: adding a profile picks its provider from the core's groups, the mach
     msg="the provider told to the core",
   )
 }
+
+///|
+test "wide: a new profile's models chosen on a page of their own, then on to its page" {
+  let calls : Array[Made] = []
+  let t = wide_tester(calls, mode="settings")
+  t.draw()
+  app.nav.push(Setting(@settings.Route::PickModels("ws1/st1", "cc")))
+  t.run_for(@ui.nav_push_ms)
+  assert_true(t.find("Opus 5.5") is Some(_) && t.find("Haiku 5") is Some(_), msg="its whole list to tick")
+  match t.find("完成") {
+    Some((x, y)) => t.tap(x, y)
+    None => abort("no 完成")
+  }
+  t.run_for(@ui.nav_push_ms)
+  assert_true(app.nav.top() is Setting(@settings.Route::Profile("ws1/st1", "cc")), msg="on to its page")
+}
