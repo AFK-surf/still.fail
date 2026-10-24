@@ -1,0 +1,6 @@
+# 开启安全模式 (sfdesk security.mbt, a page of its own in every frame): MBUI_FIXTURE=settings-security-open, a phone's
+# window or a desktop's.
+timeout 20000
+until Studio
+wait 1500
+exit

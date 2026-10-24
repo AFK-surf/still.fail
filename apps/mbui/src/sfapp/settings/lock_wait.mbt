@@ -127,3 +127,20 @@ pub fn pair_steps(c : @ui.Ctx, core : Core, ws : String) -> Unit {
     }
   }
 }
+
+///|
+/// `lock.<name>` on this workspace, let go on by itself and said how it ended (AppState.lockCall).
+pub fn lock_call(
+  core : Core,
+  ws : String,
+  name : String,
+  what : String,
+  params : Array[(String, String)],
+  done? : String = "",
+) -> Unit {
+  let p : Array[(String, Json)] = [("workspace", str(ws))]
+  for kv in params {
+    p.push((kv.0, str(kv.1)))
+  }
+  act(core, what, "lock." + name, obj(p), done~)
+}

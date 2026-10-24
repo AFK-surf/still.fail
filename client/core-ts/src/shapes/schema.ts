@@ -1367,6 +1367,8 @@ export const SHAPES: Record<string, Shape> = {
     ["daysLeft", opt("u32"), { doc: "A web page's: days until it runs out." }],
     ["renewSoon", "bool"],
     ["recent", "bool", { doc: "One of the viewer's own, added lately (shown on their other devices)." }],
+    ["nameText", "String", { doc: "Its name as people know it: its label, or what kind of client it is." }],
+    ["metaText", "String", { doc: "What it is in a line: a web page or an app, whether it signs, this device, days left, new." }],
   ], { doc: "A device in the workspace's lock." }),
   LockPerson: struct([
     ["sub", "String"],
@@ -1374,6 +1376,8 @@ export const SHAPES: Record<string, Shape> = {
     ["name", "String"],
     ["role", "String"],
     ["you", "bool"],
+    ["nameText", "String", { doc: "Their name, or their email." }],
+    ["roleText", "String", { doc: "Their role as the security pages name it." }],
     ["devices", vec("LockDevice")],
   ], { doc: "A member in the workspace's lock, with their devices." }),
   LockStation: struct([
@@ -1393,6 +1397,8 @@ export const SHAPES: Record<string, Shape> = {
     ["code", "String", { doc: "The code the device shows: compared before it is confirmed." }],
     ["created_at", "i64", { client: "I54" }],
     ["yours", "bool"],
+    ["whoText", "String", { doc: "Whose it is: their name, or their email." }],
+    ["deviceText", "String", { doc: "Its name as people know it (LockDevice `nameText`)." }],
     ["time", opt(map("Stamp")), { doc: "Its times in words (`created_at`)." }],
   ], { doc: "A device waiting to be confirmed." }),
   LockMe: struct([
@@ -1438,6 +1444,7 @@ export const SHAPES: Record<string, Shape> = {
     ["kind", "String"],
     ["label", "String"],
     ["code", "String", { doc: "The code to type on the new device: shown here only, never sent." }],
+    ["deviceText", "String", { doc: "Its name as people know it (LockDevice `nameText`)." }],
     ["workspaces", vec("LockPromptWorkspace"), { doc: "Where it asks to be let in and this device approves it." }],
     ["created_at", "i64", { client: "I54", doc: "When it asked." }],
     ["time", opt(map("Stamp")), { doc: "Its times in words (`created_at`)." }],
@@ -1461,6 +1468,8 @@ export const SHAPES: Record<string, Shape> = {
     ["last_seen", "i64", { client: "I54" }],
     ["on", "bool"],
     ["fixed", "bool"],
+    ["nameText", "String", { doc: "Whose and which, in a line (this device said so)." }],
+    ["howText", "String", { doc: "What it is: an older client's way in, a web page or an app (this app: it signs)." }],
     ["time", opt(map("Stamp"))],
   ], { doc: "A device turning the lock on would sign." }),
   LockDraftStation: struct([
@@ -1470,12 +1479,15 @@ export const SHAPES: Record<string, Shape> = {
     ["state", "String", { doc: "`ok` (it understands a lock), `old` (too old), `offline`, `asking`." }],
     ["on", "bool"],
     ["fixed", "bool"],
+    ["stateText", opt("String"), { doc: "Why it cannot be signed yet, in words (none when `ok`)." }],
   ], { doc: "A station turning the lock on would sign, or why not." }),
   LockDraftMember: struct([
     ["sub", "String"],
     ["email", "String"],
     ["name", "String"],
     ["role", "String"],
+    ["nameText", "String", { doc: "Their name, or their email." }],
+    ["roleText", "String", { doc: "Their role as the security pages name it." }],
   ]),
   LockDraftView: struct([
     ["available", "bool"],

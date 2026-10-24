@@ -1109,6 +1109,7 @@ pub fn fixture_topic(mode : String, name : String, params : Map[String, Json]) -
                   ("kind", str("android")),
                   ("label", str("Pixel 9")),
                   ("code", str("482915")),
+                  ("deviceText", str("Pixel 9")),
                   ("created_at", Json::number(0.0)),
                   ("workspaces", [obj([("id", str("ws1")), ("name", str("星火工作室"))]), obj([("id", str("ws2")), ("name", str("个人"))])]),
                 ]),
@@ -1381,6 +1382,8 @@ pub fn fixture_topic(mode : String, name : String, params : Map[String, Json]) -
                 ("code", str("482 917")),
                 ("created_at", Json::number(0.0)),
                 ("yours", Json::boolean(false)),
+                ("whoText", str("Ana")),
+                ("deviceText", str("Pixel 9")),
                 ("time", obj([("created_at", stamp_of("2 分钟前"))])),
               ]),
             ],
@@ -1394,11 +1397,13 @@ pub fn fixture_topic(mode : String, name : String, params : Map[String, Json]) -
                 ("name", str("林")),
                 ("role", str("owner")),
                 ("you", Json::boolean(true)),
+                ("nameText", str("林")),
+                ("roleText", str("Owner")),
                 (
                   "devices",
                   [
-                    obj([("id", str("d1")), ("kind", str("app")), ("label", str("这台手机")), ("signs", Json::boolean(true)), ("older", Json::boolean(false)), ("mine", Json::boolean(true)), ("renewSoon", Json::boolean(false)), ("recent", Json::boolean(false))]),
-                    obj([("id", str("d2")), ("kind", str("web")), ("label", str("")), ("signs", Json::boolean(false)), ("older", Json::boolean(false)), ("mine", Json::boolean(false)), ("daysLeft", Json::number(4.0)), ("renewSoon", Json::boolean(true)), ("recent", Json::boolean(false))]),
+                    obj([("id", str("d1")), ("kind", str("app")), ("label", str("这台手机")), ("signs", Json::boolean(true)), ("older", Json::boolean(false)), ("mine", Json::boolean(true)), ("renewSoon", Json::boolean(false)), ("recent", Json::boolean(false)), ("nameText", str("这台手机")), ("metaText", str("客户端 · 受信任 · 此设备"))]),
+                    obj([("id", str("d2")), ("kind", str("web")), ("label", str("")), ("signs", Json::boolean(false)), ("older", Json::boolean(false)), ("mine", Json::boolean(false)), ("daysLeft", Json::number(4.0)), ("renewSoon", Json::boolean(true)), ("recent", Json::boolean(false)), ("nameText", str("网页版")), ("metaText", str("网页版 · 剩余 4 天"))]),
                   ],
                 ),
               ]),
@@ -1408,7 +1413,9 @@ pub fn fixture_topic(mode : String, name : String, params : Map[String, Json]) -
                 ("name", str("Ana")),
                 ("role", str("admin")),
                 ("you", Json::boolean(false)),
-                ("devices", [obj([("id", str("d3")), ("kind", str("app")), ("label", str("MacBook")), ("signs", Json::boolean(true)), ("older", Json::boolean(false)), ("mine", Json::boolean(false)), ("renewSoon", Json::boolean(false)), ("recent", Json::boolean(false))])]),
+                ("nameText", str("Ana")),
+                ("roleText", str("管理员")),
+                ("devices", [obj([("id", str("d3")), ("kind", str("app")), ("label", str("MacBook")), ("signs", Json::boolean(true)), ("older", Json::boolean(false)), ("mine", Json::boolean(false)), ("renewSoon", Json::boolean(false)), ("recent", Json::boolean(false)), ("nameText", str("MacBook")), ("metaText", str("客户端 · 受信任"))])]),
               ]),
             ],
           ),
@@ -1570,9 +1577,27 @@ pub fn fixture_topic(mode : String, name : String, params : Map[String, Json]) -
           ("canSign", Json::boolean(true)),
           ("owner", Json::boolean(true)),
           ("ready", Json::boolean(true)),
-          ("members", [me]),
-          ("devices", []),
-          ("stations", []),
+          (
+            "members",
+            [
+              obj([("sub", str("u1")), ("email", str("lin@example.com")), ("name", str("林")), ("role", str("owner")), ("nameText", str("林")), ("roleText", str("Owner"))]),
+              obj([("sub", str("u2")), ("email", str("ana@example.com")), ("name", str("Ana")), ("role", str("admin")), ("nameText", str("Ana")), ("roleText", str("管理员"))]),
+            ],
+          ),
+          (
+            "devices",
+            [
+              obj([("id", str("d1")), ("person", str("林")), ("kind", str("app")), ("label", str("这台手机")), ("older", Json::boolean(false)), ("current", Json::boolean(true)), ("on", Json::boolean(true)), ("fixed", Json::boolean(true)), ("nameText", str("林 · 此设备")), ("howText", str("客户端 · 受信任"))]),
+              obj([("id", str("d3")), ("person", str("Ana")), ("kind", str("app")), ("label", str("MacBook")), ("older", Json::boolean(false)), ("current", Json::boolean(false)), ("on", Json::boolean(true)), ("fixed", Json::boolean(false)), ("nameText", str("Ana · MacBook")), ("howText", str("客户端"))]),
+            ],
+          ),
+          (
+            "stations",
+            [
+              obj([("id", str("st1")), ("name", str("Studio")), ("version", str("0.1.4600")), ("state", str("ok")), ("on", Json::boolean(true)), ("fixed", Json::boolean(false))]),
+              obj([("id", str("st2")), ("name", str("MBA")), ("state", str("offline")), ("on", Json::boolean(false)), ("fixed", Json::boolean(true)), ("stateText", str("离线 · 上线后可在此保护"))]),
+            ],
+          ),
         ]),
       )
     _ => None
@@ -1769,8 +1794,8 @@ fn waiting_lock(mode : String) -> Json {
     (
       "requests",
       [
-        obj([("device", str("d-me")), ("sub", str("u1")), ("email", str("lin@example.com")), ("name", str("林")), ("kind", str("app")), ("label", str("still.fail mbui Android · OPPO PLP110")), ("code", str("Q4K-7PM")), ("created_at", Json::number(0.0)), ("yours", Json::boolean(true)), ("time", obj([("created_at", stamp_of("1 分钟前"))]))]),
-        obj([("device", str("d9")), ("sub", str("u2")), ("email", str("ana@example.com")), ("name", str("Ana")), ("kind", str("app")), ("label", str("Pixel 9")), ("code", str("482 917")), ("created_at", Json::number(0.0)), ("yours", Json::boolean(false)), ("time", obj([("created_at", stamp_of("2 分钟前"))]))]),
+        obj([("device", str("d-me")), ("sub", str("u1")), ("email", str("lin@example.com")), ("name", str("林")), ("kind", str("app")), ("label", str("still.fail mbui Android · OPPO PLP110")), ("code", str("Q4K-7PM")), ("created_at", Json::number(0.0)), ("yours", Json::boolean(true)), ("whoText", str("林")), ("deviceText", str("still.fail mbui Android · OPPO PLP110")), ("time", obj([("created_at", stamp_of("1 分钟前"))]))]),
+        obj([("device", str("d9")), ("sub", str("u2")), ("email", str("ana@example.com")), ("name", str("Ana")), ("kind", str("app")), ("label", str("Pixel 9")), ("code", str("482 917")), ("created_at", Json::number(0.0)), ("yours", Json::boolean(false)), ("whoText", str("Ana")), ("deviceText", str("Pixel 9")), ("time", obj([("created_at", stamp_of("2 分钟前"))]))]),
       ],
     ),
     (
@@ -1782,7 +1807,9 @@ fn waiting_lock(mode : String) -> Json {
           ("name", str("林")),
           ("role", str("owner")),
           ("you", Json::boolean(true)),
-          ("devices", [obj([("id", str("d1")), ("kind", str("app")), ("label", str("still.fail Android · OPPO PLP110")), ("signs", Json::boolean(true)), ("older", Json::boolean(false)), ("mine", Json::boolean(false)), ("renewSoon", Json::boolean(false)), ("recent", Json::boolean(false))])]),
+          ("nameText", str("林")),
+          ("roleText", str("Owner")),
+          ("devices", [obj([("id", str("d1")), ("kind", str("app")), ("label", str("still.fail Android · OPPO PLP110")), ("signs", Json::boolean(true)), ("older", Json::boolean(false)), ("mine", Json::boolean(false)), ("renewSoon", Json::boolean(false)), ("recent", Json::boolean(false)), ("nameText", str("still.fail Android · OPPO PLP110")), ("metaText", str("客户端 · 受信任"))])]),
         ]),
       ],
     ),

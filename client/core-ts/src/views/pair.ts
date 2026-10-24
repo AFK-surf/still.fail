@@ -29,7 +29,7 @@ import * as prefs from "../prefs.ts";
 import { get, hex, isObject, parseJson, utf8 } from "../util.ts";
 import { fromB64url } from "../vault/crypto.ts";
 import { checkLock } from "../vault/lock-check.ts";
-import { Lock, baseOf, fold, held, nameOf, pairs, read, signerKnown, signerOf, view } from "./lock.ts";
+import { Lock, baseOf, deviceText, fold, held, nameOf, pairs, read, signerKnown, signerOf, view } from "./lock.ts";
 
 // deno-lint-ignore no-explicit-any
 type J = any;
@@ -226,6 +226,7 @@ function shown(inner: Inner): J[] {
     .sort((a, b) => a.at - b.at)
     .map((a) => ({
       device: a.device, name: a.name, email: a.email, kind: a.kind, label: a.label, code: a.code, created_at: a.at,
+      deviceText: deviceText(a),
       workspaces: a.places.map((p) => {
         const v = view(inner, p.ws);
         return { id: p.ws, name: nameOf(inner, p.ws), emoji: str(get(v, "emoji")), icon: str(get(v, "icon")) };
