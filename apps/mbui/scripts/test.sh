@@ -94,8 +94,9 @@ for t in ${TARGETS:-native}; do
     # 39 s on Studio, 2026-10-25; corners, every screen in five windows and both languages: 64), a process each beside
     # the pages', so the run takes the longest of them, not their sum. corners' tests, one a language, a process each:
     # the one file was the run's longest, 39 s on Studio beside the pages' 34, 2026-10-25; on CI's four cores the app
-    # part's run went from 44 s to 67 with it)
-    sweeps=(src/sfapp/screens_wbtest.mbt:1 src/sfapp/squeeze_wbtest.mbt:1 src/sfapp/corners_wbtest.mbt:2)
+    # part's run went from 44 s to 67 with it. squeeze's screens measured in corners' sweep, on the frames it opens
+    # (all of them among its own): squeeze's 32 s process on CI, the same screens opened again, gone, 2026-10-25)
+    sweeps=(src/sfapp/screens_wbtest.mbt:1 src/sfapp/corners_wbtest.mbt:2)
     pages=()
     for f in "${files[@]}"; do [[ " ${sweeps[*]} " = *" $f:"* ]] || pages+=("$f"); done
     for w in "${sweeps[@]}"; do

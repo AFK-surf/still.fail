@@ -4,11 +4,12 @@
 // app's languages, over the Tester's own text (the faults a screen has its own, the same on every machine). Each keeps
 // to the bar corners_everywhere_known says (the faults it still has): one more fails, and one less until the bar is
 // lowered there. A screen not listed has none. scripts/corners.sh shows the same screens in a Mac's text, as
-// pictures, what breaks the rule outlined. (The screens' own tests, screens_wbtest.mbt, hold the phone's screens in
+// pictures, what breaks the rule outlined. The same frame of each screen in squeeze_windows and squeeze_modes is held to
+// its squeeze bar too (squeeze_wbtest.mbt): a screen is opened once for both. (The screens' own tests, screens_wbtest.mbt, hold the phone's screens in
 // the Mac's text to corners_known.)
 
 ///|
-/// The windows: the narrowest of each layout (squeeze_windows': a phone's, a finger's Medium, a desktop's Medium, a
+/// The windows: the narrowest of each layout (squeeze_windows: a phone's, a finger's Medium, a desktop's Medium, a
 /// tablet's Large) and a wide desktop's (Large, its dialogs and pages at their widest); the desktop's on a Mac (its
 /// window's corners 16: what lies in them follows them) and on Windows 11 (8: too square to follow, so standing as
 /// alone, as in a square window) (test_window_corner).
@@ -27,7 +28,7 @@ let corner_windows : Array[(String, Double, Double, Int, String)] = [
 let corner_modes : Array[String] = [
   "home", "home-bars", "home-jobs", "home-sheet", "home-news", "landing", "landing-invited", "blocked", "place",
   "switcher", "switcher-found", "keys-dialog", "search", "search-jobs", "search-results", "chat", "chat-agent",
-  "chat-answering", "chat-attach", "chat-attach-row", "chat-cards", "chat-compose", "chat-download", "chat-failed",
+  "chat-agent-unsaid", "chat-answering", "chat-attach", "chat-attach-row", "chat-cards", "chat-compose", "chat-download", "chat-failed",
   "chat-file-links", "chat-find", "chat-flash", "chat-flash-mine", "chat-history-side", "chat-info", "chat-job",
   "chat-jobs", "chat-jobs-pop", "chat-jobs-side", "chat-letters", "chat-letters-info", "chat-letters-open",
   "chat-letters-pop", "chat-letters-side", "chat-link-menu", "chat-loading", "chat-login", "chat-long", "chat-md",
@@ -67,13 +68,15 @@ let corner_modes : Array[String] = [
 ]
 
 ///|
-/// `lang`'s screens in every window, each against its bar.
+/// `lang`'s screens in every window, each against its bars: the corners' and, the squeeze's ones, the squeeze's.
 fn corners_check(lang : String) -> Unit raise {
   let wrong : Array[String] = []
   for win in corner_windows {
+    let squeezed = squeeze_windows.contains(win.0)
     for mode in corner_modes {
       let at = "\{win.0}-\{lang} \{mode}"
-      let faults = screen_in(mode, win, lang).corner_faults()
+      let t = screen_in(mode, win, lang)
+      let faults = t.corner_faults()
       let known = corners_everywhere_known.get(at).unwrap_or(0)
       if faults.length() != known {
         wrong.push(
@@ -87,6 +90,11 @@ fn corners_check(lang : String) -> Unit raise {
           faults.join("\n  "),
         )
       }
+      if squeezed && squeeze_modes.contains(mode) {
+        if squeeze_wrong(at, t.squeeze_faults()) is Some(w) {
+          wrong.push(w)
+        }
+      }
     }
   }
   if wrong.length() > 0 {
@@ -95,11 +103,11 @@ fn corners_check(lang : String) -> Unit raise {
 }
 
 ///|
-test "corners: every screen in every window keeps the corner rule, in Chinese" {
+test "corners and squeeze: every screen in every window keeps the corner rule and fits, in Chinese" {
   corners_check("zh")
 }
 
 ///|
-test "corners: every screen in every window keeps the corner rule, in English" {
+test "corners and squeeze: every screen in every window keeps the corner rule and fits, in English" {
   corners_check("en")
 }
