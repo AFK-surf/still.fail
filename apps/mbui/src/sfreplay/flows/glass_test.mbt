@@ -55,7 +55,11 @@ test "29-glass" {
     // the first ran on under the top bar's glass
     assert_true(under_glass(f, top=true))
     f.wheel(-500.0)
-    f.run_to(f.t.rest_of("wheel ease"))
+    // (eased where its lists have it: a phone's, Android's, go there at once)
+    let eased = f.t.rest_of("wheel ease")
+    if eased > f.t.time() && eased < @double.infinity {
+      f.run_to(eased)
+    }
     // scrolled up: what was above runs under the composer's
     assert_true(under_glass(f, top=false))
     f.end()

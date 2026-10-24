@@ -343,7 +343,7 @@ let host_platform : Ref[Int] = { val: -1 }
 fn h_feel() -> Int {
   match fake.val {
     Some(f) => f.platform
-    None => if feel_over.val >= 0 { feel_over.val } else { h_platform() }
+    None => if feel_over.val >= 0 { feel_over.val } else { platform() }
   }
 }
 

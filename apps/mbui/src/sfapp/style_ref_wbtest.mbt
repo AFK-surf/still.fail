@@ -12,13 +12,13 @@ fn fnv(s : String) -> String {
 }
 
 ///|
-/// The hand a screen this wide is drawn for: a phone's width a finger's (the phone the screens are of), a desktop's
-/// a mouse's.
-fn hand_of(w : Double) -> @ui.Pointing {
+/// The system a screen this wide is drawn on: a phone's width a phone's (Android: the phone the screens are of), a
+/// desktop's the Mac's.
+fn platform_of(w : Double) -> Int {
   if w < @sf.medium_from {
-    Finger
+    2
   } else {
-    Mouse
+    0
   }
 }
 
@@ -28,7 +28,7 @@ fn screen_drawlist(mode : String, w : Double, h : Double, page? : String = "") -
   reset()
   @settings.reset()
   let src = fixture(mode)
-  let t = @ui.Tester::new(fn(c) { view(c, src) }, w~, h~, pointing=hand_of(w))
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, w~, h~, platform=platform_of(w))
   if page != "" {
     open_setting(page)
   }
@@ -53,43 +53,45 @@ test "styles: the lock's waiting page, every state, drawn as before" {
     }
   }
   inspect(out.to_string(), content=(
-    #|waiting narrow 27724:91366517
+    #|waiting narrow 28327:4fcde68e
     #|waiting wide 57504:6bd00d55
-    #|waiting-dark narrow 27570:a09e4fe3
+    #|waiting-dark narrow 28173:ef227a1e
     #|waiting-dark wide 57750:3155287
-    #|finding narrow 30308:22e7073e
+    #|finding narrow 30827:ede8d6da
     #|finding wide 60370:955375b1
-    #|finding-dark narrow 30296:16bb1614
+    #|finding-dark narrow 30815:b27bd604
     #|finding-dark wide 60417:2c64412d
-    #|code narrow 24614:aa88264a
+    #|code narrow 25135:a0ddba66
     #|code wide 54648:59fb9605
-    #|code-dark narrow 24482:c7bb0fb0
+    #|code-dark narrow 25003:845ca720
     #|code-dark wide 54586:d12d327
-    #|wrong narrow 26035:36754569
+    #|wrong narrow 26580:b2c7ae56
     #|wrong wide 56153:329e8a6
-    #|wrong-dark narrow 25951:fe40cd39
+    #|wrong-dark narrow 26496:d4ba3524
     #|wrong-dark wide 56085:f237a1b6
-    #|checking narrow 32453:e091291f
+    #|checking narrow 33055:750bbf11
     #|checking wide 62530:44566708
-    #|checking-dark narrow 32411:6defb1e0
+    #|checking-dark narrow 33013:ad5d8ec8
     #|checking-dark wide 62556:4c6fc953
-    #|none narrow 27190:3bcb3c3c
+    #|none narrow 27805:c53b9e
     #|none wide 56968:53bb3ac4
-    #|none-dark narrow 27044:fcfc9e4e
+    #|none-dark narrow 27659:7c5eb898
     #|none-dark wide 57218:d479fbce
-    #|failed narrow 23075:226acefd
+    #|failed narrow 23669:39ac6a87
     #|failed wide 52764:7c17502b
-    #|failed-dark narrow 23009:273775f1
+    #|failed-dark narrow 23603:b6ad240b
     #|failed-dark wide 53046:1e0185d3
-    #|refused narrow 25395:f783c79a
+    #|refused narrow 25953:cba9ce20
     #|refused wide 55122:dd5f8fc
-    #|refused-dark narrow 25365:1aa74470
+    #|refused-dark narrow 25923:e63dde
     #|refused-dark wide 55386:dcfb1a56
-    #|nocode narrow 27724:91366517
+    #|nocode narrow 28327:4fcde68e
     #|nocode wide 57504:6bd00d55
-    #|nocode-dark narrow 27570:a09e4fe3
+    #|nocode-dark narrow 28173:ef227a1e
     #|nocode-dark wide 57750:3155287
     #|
+
+
 
 
 

@@ -322,8 +322,16 @@ fn local_cloud(url : String) -> Bool {
 
 ///|
 fn main {
-  // MBUI_POINTING=finger: pointed at as a phone is (a test's trace recorded again on a Mac by the hand its Tester
-  // plays: scripts/rerecord.sh); mouse, as a desktop is
+  // MBUI_PLATFORM=android: run as a phone's system has it (a test's trace recorded again on a Mac on the system its
+  // Tester plays: scripts/rerecord.sh), and pointed at by a finger as a phone is; MBUI_POINTING=finger or mouse: pointed
+  // at so, whatever the system
+  match @ui.env("MBUI_PLATFORM") {
+    "android" => @ui.set_platform(Some(2))
+    "ios" => @ui.set_platform(Some(1))
+    "mac" => @ui.set_platform(Some(0))
+    "windows" => @ui.set_platform(Some(3))
+    _ => ()
+  }
   match @ui.env("MBUI_POINTING") {
     "finger" => @ui.set_pointing(Some(Finger))
     "mouse" => @ui.set_pointing(Some(Mouse))

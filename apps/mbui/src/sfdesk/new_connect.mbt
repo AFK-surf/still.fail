@@ -89,7 +89,9 @@ fn new_connect_dialog(src : Source, core : Core, here : Here, station : String, 
             obj([
               ("station", str(station)),
               ("form", str(f.form)),
-              ("input", obj([("mobile", Json::boolean(@sf.touch_system())), ("resume", if resume == "" { Json::null() } else { str(resume) })])),
+              // (no `mobile`: one page draws the one flow, the web desktop's, on every screen; told it, the core's phone flow
+              // asked for a step of its own (token) this page has not)
+              ("input", obj([("resume", if resume == "" { Json::null() } else { str(resume) })])),
             ]),
             fn(r) {
               match r {

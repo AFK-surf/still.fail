@@ -47,7 +47,8 @@ fn pace_of(seed : UInt) -> @core.Pace {
 /// The app over `trace` in a w × h window (a phone's by default; the wide flows' 1280 × 800), in the pass `seed`
 /// names (0: the strict one, as the run had it; else what is due at once in the order drawn from it, at that pass's
 /// pace: pace_of). `drop`: asks of the run's its timing made, by words in them
-/// (Replay::drop), each with what came for it.
+/// (Replay::drop), each with what came for it. `platform`: the system it is on (Tester::new's), by default by its width:
+/// a phone's (Android) narrower than medium_from, else the Mac.
 pub fn Flow::start(
   trace : String,
   seed? : UInt = 0,
@@ -55,6 +56,7 @@ pub fn Flow::start(
   w? : Double = 390.0,
   h? : Double = 844.0,
   env? : Array[(String, String)] = [],
+  platform? : Int,
 ) -> Flow {
   let r = @core.Replay::parse(trace)
   // (asks the run's timing made, with what came for them: each test says which and why)
@@ -71,10 +73,14 @@ pub fn Flow::start(
   // do not hang on the run's pace, and an older trace's asks have no wall clock to keep it by)
   r.pace(if seed == 0 && emit_path() != "" { @core.AtOnce } else { pace_of(seed) }, strict=seed == 0)
   r.attach()
-  // (by the hand it was made with: a phone's window's runs, the phone's layout's, a finger's; the live run recording
-  // it again pointed so too)
-  let pointing : @ui.Pointing = if w < @sf.medium_from { Finger } else { Mouse }
-  emit_start(seed, w, h, if pointing is Finger { env + [("MBUI_POINTING", "finger")] } else { env })
+  // (on the screen it was made on: a phone's window's runs a phone's, Android's, pointed at by a finger; a wider one's
+  // the Mac's, by a mouse, and a computer's window made narrow (`platform` 0); the live run recording it again on a Mac
+  // plays that system too)
+  let platform = match platform {
+    Some(p) => p
+    None => if w < @sf.medium_from { 2 } else { 0 }
+  }
+  emit_start(seed, w, h, if platform == 2 { env + [("MBUI_PLATFORM", "android")] } else { env })
   // what the core says comes through mbui's queue, as the app's does (src/stillfail: sfcore.start)
   @ui.on_message("core", @core.receive)
   // (the app started with what the run's was: its trace's env, then what the test says of its own; a trace that does
@@ -85,10 +91,10 @@ pub fn Flow::start(
     )
   }
   // (and its host's answers as the run's gave them, where it kept them: a word's bounds as the system splits words)
-  // (on the system the run was on, its core told so; by the hand above)
+  // (on the system the run was on, its core told so: above)
   let t = match r.text() {
-    Some(text) => @ui.Tester::new(app, w~, h~, env=r.env() + env, text~, pointing~)
-    None => @ui.Tester::new(app, w~, h~, env=r.env() + env, pointing~)
+    Some(text) => @ui.Tester::new(app, w~, h~, env=r.env() + env, text~, platform~)
+    None => @ui.Tester::new(app, w~, h~, env=r.env() + env, platform~)
   }
   // (which station this machine is, as the run's host said)
   if r.local_station() != "" {
@@ -791,8 +797,11 @@ pub fn Flow::wheel_at(self : Flow, what : String, dy : Double) -> Unit {
   guard self.spot(what) is Some((x, y)) else { return }
   self.t.wheel(x, y, dy)
   self.core()
-  // the list's wheel eased to where it goes
-  self.run_to(self.t.rest_of("wheel ease"))
+  // the list's wheel eased to where it goes (a phone's lists, Android's, go there at once)
+  let eased = self.t.rest_of("wheel ease")
+  if eased > self.t.time() && eased < @double.infinity {
+    self.run_to(eased)
+  }
 }
 
 ///|

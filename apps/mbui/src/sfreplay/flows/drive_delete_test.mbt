@@ -1,5 +1,5 @@
-// 20-drive-delete (e2e/traces/drive-delete.trace: Studio against the local still.fail): the file 19 renamed right
-// clicked: what can be done to it beside the pointer; the bin: the test station has no trash for the drive, so it asks
+// 20-drive-delete (e2e/traces/drive-delete.trace: Studio against the local still.fail): the file 19 renamed held
+// (a phone's): what can be done to it; the bin: the test station has no trash for the drive, so it asks
 // first (删除「…」？) and deletes it for good (drive.remove with permanent: Flow::end has it asked as the run asked it).
 
 ///|
@@ -9,7 +9,7 @@ test "20-drive-delete" {
     f.open_page(@sfapp.Page::Files)
     f.tap("=e2e-082940")
     f.run_to(@ui.nav_rest())
-    f.right_click("照片-082940.jpg")
+    f.hold("照片-082940.jpg", @ui.long_press_ms)
     f.run_for(@kit.presence_in_ms)
     f.see("复制路径")
     f.tap("icon:trash")

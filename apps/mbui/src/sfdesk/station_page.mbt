@@ -769,7 +769,10 @@ fn station_env_editor(c : @ui.Ctx, core : Core, address : String) -> Unit {
     match env_seeded.get(address) {
       None => {
         env_seeded[address] = now
-        field_.set(now)
+        // (what was typed before it came is kept, and goes to the draft as typed: never wiped by it)
+        if field_.text() == "" {
+          field_.set(now)
+        }
       }
       Some(was) if was != now => {
         if field_.text() == was {

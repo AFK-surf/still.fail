@@ -90,7 +90,8 @@ fn book_key(markdown : Bool, text : String) -> String {
 /// Whether the core's answer to `name` with its `params` is kept (a call answered here, not asked of a core): Markdown
 /// read and code coloured; a text's book and what is asked of it (`reader.*`: always answered here, its text beside the
 /// call where params cannot say it; one not kept is said on the output and kept by scripts/kept); what is written, read
-/// (`ref.*`, `paste.info`: always answered here). Nothing is said on the output of one that is not.
+/// (`ref.*`, `paste.info`: always answered here); one asked as said whose answer is kept (a history step's call, a
+/// chat's tabs). Nothing is said on the output of one that is not.
 pub fn has(name : String, params : Json) -> Bool {
   match name {
     "markdown" => kept("markdown").contains(word(params, "text"))
@@ -101,6 +102,10 @@ pub fn has(name : String, params : Json) -> Bool {
     "ref.at" | "ref.before" | "ref.marks" | "ref.pasted" | "paste.info" => true
     // a name typed for a file or folder (drive.ts nameProblem): a pure function of it
     "drive.check" => true
+    // answered here once kept, by what is asked as said (answer): never the run's core's to give then, so never
+    // waited for in its tape either (⌘K's `commands.find` is the tape's: src/sfreplay source.mbt asks it of the run)
+    "railView" | "chat.tabs" | "history.tool" | "chat.find.go" | "chat.relayView" | "decisions.queue" =>
+      kept(name).contains(params.stringify())
     _ => false
   }
 }

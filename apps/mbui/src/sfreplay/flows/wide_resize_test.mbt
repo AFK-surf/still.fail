@@ -1,11 +1,11 @@
-// 66-wide-resize (e2e/traces/wide-resize.trace: 390 × 844, resized): the window across the breakpoint: a phone's Home
-// at 390, the wide frame at 1280 (the list in the sidebar, the chat pressed there beside it), then 390 again: the same
+// 66-wide-resize (e2e/traces/wide-resize.trace: 390 × 844, resized): a computer's window across the breakpoint (the
+// Mac's, pointed at by a mouse): the phone's Home at 390, the wide frame at 1280 (the list in the sidebar, the chat pressed there beside it), then 390 again: the same
 // chat as the phone's page, words sent from it.
 
 ///|
 test "66-wide-resize" {
   @sfreplay.orders(fn(seed) raise {
-    let f = @sfreplay.Flow::start(@sfreplay.trace("wide-resize"), seed~)
+    let f = @sfreplay.Flow::start(@sfreplay.trace("wide-resize"), seed~, platform=0)
     f.see("端到端测试")
     f.resize(1280.0, 800.0)
     f.see("新建对话")

@@ -17,8 +17,15 @@ fn main {
   if @ui.env("MBUI_DARK") == "1" {
     @sf.set_dark(Some(true))
   }
-  // MBUI_POINTING=finger: pointed at as a phone is (its screens drawn on a Mac: scripts/screens.sh rec); mouse, as a
-  // desktop is
+  // MBUI_PLATFORM=android: a phone's screen, as a phone's system has it (its screens drawn on a Mac: scripts/screens.sh
+  // rec), and pointed at by a finger as a phone is; MBUI_POINTING=finger or mouse: pointed at so, whatever the system
+  match @ui.env("MBUI_PLATFORM") {
+    "android" => @ui.set_platform(Some(2))
+    "ios" => @ui.set_platform(Some(1))
+    "mac" => @ui.set_platform(Some(0))
+    "windows" => @ui.set_platform(Some(3))
+    _ => ()
+  }
   match @ui.env("MBUI_POINTING") {
     "finger" => @ui.set_pointing(Some(Finger))
     "mouse" => @ui.set_pointing(Some(Mouse))
