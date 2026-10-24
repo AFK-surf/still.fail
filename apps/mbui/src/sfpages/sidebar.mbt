@@ -60,7 +60,7 @@ pub let list_slide_ms : Double = 240.0
 /// The chats' lists of workspace `w` in the box they are given, as `frame` says (ListsFrame).
 pub fn chats_lists(c : @ui.Ctx, src : Source, w : Workspace, frame : ListsFrame) -> Unit {
   rows_frame(c, src)
-  let finger = @ui.pointing() is Finger
+  let finger = @sf.touch_system()
   let last = list_filters.length() + frame.others.length() - 1
   let x = @motion.animate(c, "lists/" + w.id, frame.shown.to_double(), spec=@motion.tween(list_slide_ms, ease=if finger {
     Standard
@@ -159,7 +159,7 @@ fn sidebar_reset() -> Unit {
 /// One of the lists (ChatPane): its states (being read, failing, empty) and its days under the bar's room; `current`,
 /// the one shown (its rows the ones an archived chat's neighbour is looked for in).
 fn chats_pane(c : @ui.Ctx, src : Source, w : Workspace, filter : String, frame : ListsFrame, current : Bool) -> Unit {
-  let finger = @ui.pointing() is Finger
+  let finger = @sf.touch_system()
   let key = "chats/" + w.id + "/" + filter
   let pane = c.id(key + "/pane")
   let (view, error) = @sfbase.chats_of(src, w.id, filter)
@@ -351,7 +351,7 @@ pub fn row_moving(c : @ui.Ctx, lid : Int, list : String, key : String, i : Int) 
     c,
     i,
     list + "\u{1}" + key,
-    spec=if @ui.pointing() is Finger { @motion.row_spring } else { @motion.move_spring },
+    spec=if @sf.touch_system() { @motion.row_spring } else { @motion.move_spring },
     enter=@motion.trans(fade=0.0, scale=row_from, spec=row_enter),
     exit=@motion.trans(fade=0.0, scale=row_from, spec=row_leave),
   )
@@ -391,7 +391,7 @@ fn list_space(c : @ui.Ctx, h : Double) -> Unit {
 /// navHeading); a finger's the phone's, 15 bold in ink, 20 in, 14 above and 6 under (SidebarList.css.ts
 /// phoneHeading, Parts.kt SectionHeader).
 pub fn list_heading(c : @ui.Ctx, label : String) -> Unit {
-  if @ui.pointing() is Finger {
+  if @sf.touch_system() {
     c.box(style=heading_touch, fn() { c.text(label, style=heading_touch_words) |> ignore }) |> ignore
   } else {
     c.box(style=heading_mouse, fn() { c.text(label, style=heading_mouse_words) |> ignore }) |> ignore
@@ -418,7 +418,7 @@ let heading_touch_words : @ui.TextStyle = @ui.text_style(size=Lg, weight=Semibol
 /// The list read the first time, or no rows to show while it waits on a station or cannot read one (the library's
 /// Waiting, Status.tsx: the rows to come breathing, what is wrong over them in red), dense with a mouse.
 fn list_waiting(c : @ui.Ctx, note : ListNote?, error : String?) -> Unit {
-  let finger = @ui.pointing() is Finger
+  let finger = @sf.touch_system()
   let reading = match note {
     Some(n) => n.reading
     None => true

@@ -412,7 +412,7 @@ pub fn finder_list(
   idle_chats? : Bool = false,
   most? : Double,
 ) -> Unit {
-  let finger = @ui.pointing() is Finger
+  let finger = @sf.touch_system()
   let query = finder.query.trim(chars=" \t\n\r\u{3000}").to_string()
   let typed = query != ""
   let commands = commands_of(c, src, query, offered)
@@ -558,7 +558,7 @@ let found_short_h : Double = 50.0
 /// What is not chosen: a heading (a mouse's small and muted, a finger's the phone's section), none found, the stations
 /// still answering, what the core says.
 fn quiet_line(c : @ui.Ctx, line : FindLine) -> Unit {
-  let finger = @ui.pointing() is Finger
+  let finger = @sf.touch_system()
   match line {
     Head(words) =>
       if finger {

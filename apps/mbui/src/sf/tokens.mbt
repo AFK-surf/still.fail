@@ -802,6 +802,10 @@ pub fn ui_theme() -> @ui.Theme {
     // lighter ones: what a style's Muted and Subtle say there
     muted: if t.narrow { t.p.muted } else { base.muted },
     subtle: if t.narrow { t.p.subtle } else { base.subtle },
+    // the panes' grounds the palette's (a touch device's sidebar a step under its beige page, what is chosen a step
+    // under that): what a style's Sidebar and Selected say, not mbui's narrow theme's, which has the web's
+    sidebar: t.p.sidebar,
+    selected: t.p.selected,
     // a line of words that say none 1.4 of their size, as the web's root (`line-height: 1.4`) and Android's (Theme.kt
     // WebType: 1.4.em)
     text_line: 1.4,

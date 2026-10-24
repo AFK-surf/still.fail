@@ -232,7 +232,7 @@ fn tab_row(
         show("show", x.id)
       }
       // (its ✕ always to a finger, which hovers over nothing)
-      let hot = c.lit(id) || c.lit(cid) || @ui.pointing() is Finger
+      let hot = @sf.pointed_or_finger(c.lit(id) || c.lit(cid))
       let panes = Array::makei(x.panes.length(), fn(i) { pane_at(x, i) })
       let words = panes
         .map(fn(p) {

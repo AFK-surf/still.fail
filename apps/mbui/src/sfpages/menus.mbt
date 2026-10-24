@@ -35,11 +35,10 @@ fn link_held(c : @ui.Ctx, href : String) -> Unit {
   // (the press is the link's menu's, not a passage's pick)
   pk.taken_at = c.press().frame
   let (x, y, _) = c.pointer()
-  // with a finger the phone's words (Links.kt), felt as it opens; with a mouse the desktop's (its context menu's)
-  let finger = @ui.pointing() is Finger
-  if finger {
-    c.after_build("haptic/hold/link", fn() { @ui.haptic(LongPress) })
-  }
+  // on a touch device the phone's words (Links.kt), on a computer the desktop's (its context menu's); held by a finger,
+  // felt as it opens
+  let finger = @sf.touch_system()
+  @sf.menu_held(c, "link") |> ignore
   let items : Array[@sf.MenuItem?] = []
   if href.has_prefix("https://") || href.has_prefix("http://") {
     items.push(
@@ -72,11 +71,9 @@ fn image_menu(c : @ui.Ctx, id : Int, src : String, quote? : (() -> Unit)? = None
     Some((x, y)) => {
       menu_doing.offered = src
       // held with a finger: the press is the menu's (lifting it opens nothing), felt
-      if @ui.pointing() is Finger {
+      if @sf.menu_held(c, "image") {
         // (the press is the picture's menu's, not a passage's pick)
         pk.taken_at = c.press().frame
-        c.take_press()
-        c.after_build("haptic/hold/image", fn() { @ui.haptic(LongPress) })
       }
       let items : Array[@sf.MenuItem?] = []
       match quote {

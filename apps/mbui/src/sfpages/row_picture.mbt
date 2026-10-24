@@ -15,7 +15,7 @@ pub fn row_aside(c : @ui.Ctx, src : Source, item : ChatItem, lead : String, grou
   if groups.length() == 0 && !with_people {
     return
   }
-  let finger = @ui.pointing() is Finger
+  let finger = @sf.touch_system()
   let agents = fn() {
     let said = item.agents.map(fn(a) { a.text }).filter(fn(s) { s != "" })
     c.box(style=aside_agents, label=said.join(@sf.t("web-main.list.separator")), fn() {

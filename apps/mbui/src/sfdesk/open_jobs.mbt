@@ -89,7 +89,7 @@ fn open_job(c : @ui.Ctx, src : Source, job : Json?) -> Unit {
   let stop = c.id("open-job-stop/" + station + "/" + id)
   let (stopping, failed) = job_stopping(src, station, job)
   // (no hover to tell: the stop shows over the time)
-  let over = @ui.pointing() is Finger || c.lit(row) || c.lit(stop) || stopping || c.has_focus(stop)
+  let over = @sf.pointed_or_finger(c.lit(row) || c.lit(stop) || stopping || c.has_focus(stop))
   c.box(style=open_job_box, fn() {
     let b = c.box(style=open_job_row, id=row, fn() {
       c.box(style=open_job_mark, fn() { job_dot(c, text(job, "tone")) }) |> ignore

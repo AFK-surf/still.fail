@@ -92,7 +92,7 @@ pub fn files_places(
 ) -> Unit {
   drag_frame(c, src, ws)
   let here = this_machine()
-  let phone = @ui.pointing() is Finger
+  let phone = @sf.touch_system()
   // those with a drive, this machine's first, then as the workspace lists them
   let (known, error) = drive_stations(src, ws)
   let stations = known.unwrap_or([])

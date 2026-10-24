@@ -696,8 +696,8 @@ fn card_row(c : @ui.Ctx, first : Bool, last : Bool, id : Int, body : () -> Unit)
       c.box(style=room, fn() {
         c.box(style=if first || last { card_row_ground_end } else { card_row_ground }, bg?=ground, id~, fn() {
           body()
-          if id != 0 && @ui.pointing() is Finger {
-            @motion.ripple(c, id, if first || last { @sf.inner_corner(@sf.drive_card_corner, @sf.list_pad) } else { @sf.row_corner })
+          if id != 0 {
+            @sf.press_ripple(c, id, if first || last { @sf.inner_corner(@sf.drive_card_corner, @sf.list_pad) } else { @sf.row_corner })
           }
         })
         |> ignore

@@ -836,6 +836,7 @@ let menu_open_at : Ref[(Double, Double)] = Ref((0.0, 0.0))
 ///|
 /// No menu open, no mark's words (the app begun again).
 pub fn parts_reset() -> Unit {
+  held_felt.clear()
   presenters_reset()
   menu_open.val = ""
   about_open.val = ""

@@ -714,7 +714,7 @@ fn rail_menu_add(c : @ui.Ctx, place : String, label : String, hot : Bool) -> Boo
   let shown = @kit.animate(
     c,
     "rail-menu/add-shown/" + place,
-    if hot || over || @ui.pointing() is Finger { 1.0 } else { 0.0 },
+    if @sf.pointed_or_finger(hot || over) { 1.0 } else { 0.0 },
     transition=nav_fade,
   )
   let b = c.box(style=if over { rail_menu_plus_on } else { rail_menu_plus }, id~, fn() {
