@@ -100,8 +100,9 @@ jobs:
           export MBC_LOG="$RUNNER_TEMP/mbc.log"
           TIMES=1 MBC_REAL_CC=clang TARGETS=native PARTS=${{ matrix.part }} LINES_OUT=40 bash apps/mbui/scripts/test.sh 2>&1 | tee "$RUNNER_TEMP/mbui-test.log"
       - name: The mbui app's check (detlint, then native type-checked)
-        if: matrix.part == 'app'
-        # (after the tests: its type-check over the tests' build, not the build after it, 2026-10-23)
+        if: matrix.part == 'replay'
+        # (after the tests: its type-check over the tests' build, not the build after it, 2026-10-23. On the replay
+        # part's runner: the app part was 184-187 s with it, the replay part 77-100 s, 2026-10-24)
         run: moon version && bash apps/mbui/scripts/check.sh
       - name: Where the build's time went (mbc)
         if: always()
