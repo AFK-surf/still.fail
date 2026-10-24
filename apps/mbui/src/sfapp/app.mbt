@@ -157,7 +157,33 @@ fn reset() -> Unit {
 /// What the app's own doings ask of the pages (sfbase shell.mbt): home and what is over the pages put their sheets
 /// down too, an invitation's link shows its sheet, the screens live in their cards stop as the app goes behind.
 fn pages_shell() -> Shell {
-  { home, close_overlays, open_invite, behind: peeks_stop_all, open: open_where, detail: detail_where }
+  {
+    home,
+    close_overlays,
+    open_invite,
+    behind: peeks_stop_all,
+    open: open_where,
+    detail: detail_where,
+    back: back_where,
+  }
+}
+
+///|
+/// What back does where the layout has it (the tiers' table, docs/architecture.md): the wide frame's (sfdesk's
+/// wide_back); laid out Small, a page of the stack popped, a place's top page other than the chats back to the chats
+/// in place (from no side), none at the chats' (the system's: the app left).
+fn back_where() -> (() -> Unit)? {
+  let c = @ui.current()
+  if @sfdesk.is_wide(c) {
+    return @sfdesk.wide_back()
+  }
+  if app.nav.depth() > 1 {
+    Some(fn() { app.nav.pop() |> ignore })
+  } else if app.nav.top() != Home {
+    Some(fn() { go_place(c, "chats", [], -1) })
+  } else {
+    None
+  }
 }
 
 ///|
@@ -424,11 +450,15 @@ fn signed_in(c : @ui.Ctx, src : Source) -> Unit {
             c.selectable(color=@sf.alpha(t.p.blue, 0.28), pages)
           }
         })
-        // a place's top page other than the chats, with nothing over it or in it taking back: back goes to the chats,
-        // in place
+        // at the stack's root, with nothing over it or in it taking back: the shell's back (back_where: a place's
+        // top page other than the chats back to the chats, in place); above it the stack's own (Ctx::nav: swiped from
+        // the edge, the back key), which pops as back_where does
         let root = app.nav.top()
-        if app.nav.depth() == 1 && root != Home && !page_took && !app.menu && !sheet_open() && !@sf.presenting() {
-          c.on_back(fn() { go_place(c, "chats", [], -1) })
+        if app.nav.depth() == 1 && !page_took && !app.menu && !sheet_open() && !@sf.presenting() {
+          match @sfbase.back_step() {
+            Some(f) => c.on_back(f)
+            None => ()
+          }
         }
         // the player sideways: back turns it upright first
         play_back(c)

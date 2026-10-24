@@ -166,6 +166,12 @@ One shell. It arranges the same panes in every tier:
    - A chat opened on the wide frame (`open_chat_beside`, from a list's row, a search, ⌘K, a link) is the page pane's
      in place of what was there, never over it; from another place the chats come first; the chat open already,
      nothing.
+   - A place gone to is sfbase's `go_place`, for the bottom bar and the rail alike.
+   - Back is sfbase's `back_step` / `go_back` (`Shell`'s `back`), by the tiers' table: Small (sfapp's `back_where`)
+     a page popped, a place's top page back to the chats; Medium and Large sfdesk's `wide_back` (Large: none from the
+     new chat beside the chats alone, the page there never empty). Both frames take the
+     system's back, the back key and ⌘[ through it; the Small stack's swipe is the stack's own and pops as it does.
+     The pages that pop the stack themselves are next.
 4. **The pages merge, by area, in parallel,** once 2 has landed:
    - the settings and the places;
    - the files and the viewer;

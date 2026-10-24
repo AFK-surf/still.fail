@@ -17,6 +17,9 @@ pub(all) struct Shell {
   /// a detail of a chat opened where the layout has it (an agent's history by its key, jobs, letters, files, a
   /// service: the side panel's tabs on the wide frame, toggled): what a page asks of its chat (open_detail)
   detail : (Source, ChatRef, String) -> Unit
+  /// what back does where the layout has it (docs/architecture.md, the tiers' table), none where back is the
+  /// system's: what the keys, the frames and the pages' back call (back_step, go_back), never the stack themselves
+  back : () -> (() -> Unit)?
 }
 
 ///|
@@ -30,6 +33,35 @@ pub fn bare_shell() -> Shell {
     behind: fn(_) {  },
     open: stack_open,
     detail: fn(_, _, _) {  },
+    back: stack_back,
+  }
+}
+
+///|
+/// Back on the stack alone: its top page popped, none at its root.
+fn stack_back() -> (() -> Unit)? {
+  if app.nav.depth() > 1 {
+    Some(fn() { app.nav.pop() |> ignore })
+  } else {
+    None
+  }
+}
+
+///|
+/// What back does here, in every tier (Shell's `back`); none where it is the system's (a phone's list: the app left).
+pub fn back_step() -> (() -> Unit)? {
+  (shell.val.back)()
+}
+
+///|
+/// Back, where there is one to go to (Shell's `back`). Whether it went.
+pub fn go_back() -> Bool {
+  match back_step() {
+    Some(f) => {
+      f()
+      true
+    }
+    None => false
   }
 }
 
