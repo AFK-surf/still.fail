@@ -231,13 +231,10 @@ test "a history's link with an entry: its page over the chat, that entry's item 
     _ => fail("not the history")
   }
   t.run_for(@ui.nav_push_ms)
-  // entries 11–15: the third item (h3), marked
-  assert_eq(history_marked.val.1, "h3")
-  assert_eq(history_placed.get("history/ws1/st1/s-c1"), Some(false))
-  t.run_for(history_shade_ms)
-  assert_true(history_mark(t.ctx(), "history/ws1/st1/s-c1").get() > 0.99)
-  t.run_for(history_mark_ms)
-  assert_true(history_mark(t.ctx(), "history/ws1/st1/s-c1").get() < 0.01)
+  // entries 11–15: the third item (h3), marked (sfpages' history_steps.mbt), its mark gone after
+  assert_eq(@sfpages.history_marked().1, "h3")
+  t.run_for(@sfpages.steps_marked_ms)
+  t.assert_idle()
 }
 
 ///|
@@ -249,7 +246,8 @@ test "an entry before what is loaded: the page before asked for first" {
   app.nav.push(History(chat_ref("ws1/st1", "s-c1"), "s-c1", Some(0)))
   t.run_for(@ui.nav_push_ms)
   assert_eq(named(calls, "history.older").length(), 1)
-  assert_true(!history_placed.contains("history/ws1/st1/s-c1"))
+  // (nothing gone to yet: what it goes to comes with the page before)
+  assert_eq(@sfpages.history_marked().1, "")
 }
 
 ///|

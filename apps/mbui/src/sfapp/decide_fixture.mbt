@@ -584,10 +584,7 @@ pub fn open_fixture(mode : String) -> Unit {
       if mode == "history-details" {
         dui.history_tab = 1
       } else {
-        dui.opened["group/h2"] = true
-        dui.opened["step/h2/1"] = true
-        dui.opened["group/h4"] = true
-        dui.opened["step/h4/0"] = true
+        @sfpages.history_open(["h2/group", "h2/group/1", "h4/group", "h4/group/0"])
       }
     }
     "chat-info" | "chat-letters-info" => dui.sheet = Some(Info(r))

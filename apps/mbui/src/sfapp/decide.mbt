@@ -52,10 +52,6 @@ priv struct Decide {
   mut history_tab : Int
   /// groups and steps of a history opened, by their key
   opened : Map[String, Bool]
-  /// a history's page before asked for, by its first item (once a page)
-  mut history_asked : String
-  /// the steps asked to be read whole (`history.detail`), and when the answer came, by their entries
-  detail_at : Map[String, Double]
   /// the 奏 page's front decision: its key, how far across it is dragged, whether a finger has it (its moves and speed the
   /// framework's drag's: decisions.mbt)
   mut front : String
@@ -84,8 +80,6 @@ let dui : Decide = {
   job_tab: 0,
   history_tab: 0,
   opened: {},
-  history_asked: "",
-  detail_at: {},
   front: "",
   drag: 0.0,
   held: false,
@@ -110,11 +104,8 @@ fn decide_reset() -> Unit {
   dui.job_tab = 0
   dui.history_tab = 0
   dui.opened.clear()
-  dui.history_asked = ""
   history_placed.clear()
   history_short.clear()
-  history_marked.val = ("", "")
-  dui.detail_at.clear()
   dui.front = ""
   dui.drag = 0.0
   dui.held = false

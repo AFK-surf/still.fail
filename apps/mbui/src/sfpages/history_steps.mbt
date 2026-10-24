@@ -1,11 +1,11 @@
-// An agent's execution history's steps on the desktop (ember web/src/History.tsx, History.css.ts; ToolStep.tsx,
+// An agent's execution history's steps, in any pane (ember web/src/History.tsx, History.css.ts; ToolStep.tsx,
 // ToolStep.css.ts): what the core put together (its `history` view) drawn turn by turn, each prompt that woke the agent
 // beginning one under a rule saying when and what it did; each event a mark in the gutter on the turn's rail and what it
 // is beside it. What people were sent leads, on a card; the agent's own words are a grey line; the calls and thoughts
 // between fold into a group, a call opening to what it asked for and what came back (the core's reading of them:
 // `history.tool`). Long words fold to a few lines. A call or thought in brief is read whole as it is opened
-// (`history.detail`), the pages before as the reader nears the top (`history.older`). 只看收发 (history.mbt) leaves out
-// what the core calls `work`.
+// (`history.detail`), the pages before as the reader nears the top (`history.older`). 只看收发 leaves out what the
+// core calls `work`.
 
 ///|
 /// What the steps keep of their own (the rest is the core's): what the reader opened (folds, lines, groups, calls), by
@@ -21,6 +21,8 @@ priv struct StepsOwn {
   focus : Map[String, Int]
   mut marked : (String, String)
   went : Map[String, Bool]
+  /// 只看收发, for every history (as the web keeps it)
+  mut only_io : Bool
 }
 
 ///|
@@ -32,6 +34,7 @@ let steps_own : StepsOwn = {
   focus: {},
   marked: ("", ""),
   went: {},
+  only_io: false,
 }
 
 ///|
@@ -43,6 +46,19 @@ fn steps_reset() -> Unit {
   steps_own.focus.clear()
   steps_own.marked = ("", "")
   steps_own.went.clear()
+  steps_own.only_io = false
+}
+
+///|
+/// Whether a history shows only what came in and went out (History.tsx onlyIo: what the core calls `work` left out).
+pub fn history_only_io() -> Bool {
+  steps_own.only_io
+}
+
+///|
+/// 只看收发 turned on or off.
+pub fn history_only_io_flip() -> Unit {
+  steps_own.only_io = !steps_own.only_io
 }
 
 ///|
@@ -73,7 +89,7 @@ priv enum StepsRow {
 
 ///|
 /// Agent `key`'s history on `station`: its steps under its head (history.mbt agent_history).
-fn history_list(c : @ui.Ctx, src : Source, station : String, key : String) -> Unit {
+pub fn history_steps(c : @ui.Ctx, src : Source, station : String, key : String) -> Unit {
   let params : Map[String, Json] = { "station": Json::string(station), "key": Json::string(key) }
   let topic = (src.topic)("history", params)
   let h = topic.value
@@ -102,8 +118,8 @@ fn history_list(c : @ui.Ctx, src : Source, station : String, key : String) -> Un
     Some(e) =>
       match loaded.search_by(fn(i) { entries_of(Some(i)).map(fn(x) { x.0 <= e && e <= x.1 }).unwrap_or(false) }) {
         Some(at) => {
-          if history_own.only_io && flag(loaded.get(at), "work") {
-            history_own.only_io = false
+          if steps_own.only_io && flag(loaded.get(at), "work") {
+            steps_own.only_io = false
           }
           steps_own.focus.remove(fk)
           steps_own.went[lkey] = true
@@ -596,12 +612,26 @@ fn slack_name(c : @ui.Ctx, src : Source, station : String, key : String, user : 
   let on = [("station", station), ("user", user)]
   let saying = core_doing(src, ["slack.identity"], on)
   let id = c.id("history-slack/" + key)
-  let menu_key = "history-slack-menu/" + key
-  let open = steps_own.opened.contains(menu_key)
   if !saying {
     c.cursor(id, Hand)
+    // its menu, the presenters' (a sheet with a finger short of Large, else at the name)
     if c.clicked(id) {
-      steps_own.opened[menu_key] = true
+      let words = if bound { @sf.t("web-main.history.notMe") } else { @sf.t("web-main.history.isMe") }
+      @sf.menu(
+        [
+          Some(
+            @sf.menu_item_of(words, fn() {
+              act(src, words, "", "slack.identity", {
+                "station": Json::string(station),
+                "user": Json::string(user),
+                // (the core's `bound`: bound to the viewer, or let go)
+                "bound": Json::boolean(!bound),
+              })
+            }),
+          ),
+        ],
+        from=Of(id),
+      )
     }
   }
   c.box(style=h_person, id~, fn() {
@@ -609,21 +639,6 @@ fn slack_name(c : @ui.Ctx, src : Source, station : String, key : String, user : 
     @settings.doing_mark(c, saying, core_failed(src, ["slack.identity"], on), inline=true)
   })
   |> ignore
-  let words = if bound { @sf.t("web-main.history.notMe") } else { @sf.t("web-main.history.isMe") }
-  let m = @sf.dropdown(c, menu_key, open, id, [@kit.menu_item("say", label=words)], {}, 140.0)
-  if open && !m.open {
-    steps_own.opened.remove(menu_key)
-  }
-  if m.chosen is Some("say") {
-    steps_own.opened.remove(menu_key)
-    c.tell("history-slack/" + key, fn() {
-      act(src, words, "", "slack.identity", {
-        "station": Json::string(station),
-        "user": Json::string(user),
-        "mine": Json::boolean(!bound),
-      })
-    })
-  }
 }
 
 ///|
@@ -1126,8 +1141,22 @@ let h_item : @ui.Style = @ui.css("w=Full gap=S2")
 let h_item_marked : @ui.Style = h_item.then(@ui.css("bg=A(Accent,O10)"))
 
 ///|
+/// Groups and calls opened as a screen opens (a fixture's), by their keys (an item's key, `/group`, `/<its row>`).
+pub fn history_open(keys : Array[String]) -> Unit {
+  for k in keys {
+    steps_own.opened[k] = true
+  }
+}
+
+///|
+/// The item last gone to (a link's entry), its history's list and its key.
+pub fn history_marked() -> (String, String) {
+  steps_own.marked
+}
+
+///|
 /// How long an item gone to stays marked (History.tsx: 1.6 s).
-let steps_marked_ms : Double = 1600.0
+pub let steps_marked_ms : Double = 1600.0
 
 ///|
 /// A turn's rule (hTurn): 8 over it, 11 muted, a line on to the edge 8 after the words.

@@ -62,7 +62,7 @@ test "wide: an agent's history's head as the web's: its control, 只看收发 le
   if steps is Some(_) {
     assert_true(t.find("读了 src/ui/list.mbt 等 2 个文件，跑了测试") is None)
   }
-  assert_true(@sfdesk.history_only_io())
+  assert_true(@sfpages.history_only_io())
 }
 
 ///|
