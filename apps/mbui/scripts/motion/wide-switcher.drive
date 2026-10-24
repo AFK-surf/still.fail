@@ -2,7 +2,7 @@
 # typed (the latest chats, what can be done), 发布 typed (the chats it finds), ↓; cleared, 设置 typed (the commands and
 # pages named so), ↓ twice; Esc.
 timeout 20000
-until 按空格输入
+until 发消息
 wait 600
 key cmd+k
 wait 1200

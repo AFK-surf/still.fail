@@ -1,7 +1,7 @@
 # A new connect on the desktop (sfdesk new_connect.mbt, the web's pages/Connect.tsx NewConnectDialog): MBUI_WIN=1280x800
 # over the made-up chat. 连接 from the rail, 添加连接: the core's wizard in a dialog, at its Slack workspace step.
 timeout 30000
-until 按空格输入
+until 发消息
 wait 600
 tap icon:im
 wait 1500

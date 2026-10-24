@@ -25,7 +25,7 @@ fn desk_pages() -> @sfdesk.Pages {
     // the chat's page is sfdesk's (chat_page.mbt): its messages and composer this package's (wide_chat.mbt), what
     // comes and goes with a new chat (sfdesk's newchat.mbt, switch.mbt), what its side panel shows of this package's,
     // how ⌘F goes along its list, its sharing's and publishing's sheets
-    composer: fn(c, src, _w, r, v, pane) { chat_composer(c, src, r, v, pane) },
+    chat_layers: fn(c, src, r, v, pane, composer) { chat_layers(c, src, r, v, pane, composer) },
     share: fn(c, r, thread) { open_sheet(c, XShare(r, thread)) },
     publish: fn(c, station, thread) { open_sheet(c, Publish(station, thread)) },
     // 文件: a folder under its bar, as the web's (wide_files.mbt)
@@ -38,24 +38,10 @@ fn desk_pages() -> @sfdesk.Pages {
     relay: fn(c, src, r, thread) { open_relay(c, src, r, thread) },
     core: fn(src, w) { settings_core(src, w) },
     gate: fn(c, src, w) { lock_gate(c, src, w) |> ignore },
-    // the new chat's composer, the chat's (composer.mbt), its first message making the chat (newchat.mbt send_first)
-    new_composer: fn(c, src, w, v, address, name, held, tools, sent) {
-      let r : ChatRef = { station: address, session: "", title: "", station_name: name }
-      composer(c, src, r, None, fresh=Some({
-        key: "new:" + address,
-        placeholder: tr("web-main.newChat.placeholder"),
-        send: fn(d) { send_first(c, src, w, v, address, name, d, wide=true, sent~) },
-        tools: Some(tools),
-        held,
-      }))
-      // the first words sent, where they were typed, while the chat is made (flight.mbt)
-      flight_carry_waiting(c)
-    },
     drop: fn(c, src, key, pane) {
       drop_hint(c, pane)
       chat_drop(c, src, key, pane)
     },
-    composer_moves: fn(c, chat) { composer_page_starts(c, chat) },
     sheet: fn() { sheet_open() },
     lower: fn() { lower_sheet() },
     home: fn() { home() },

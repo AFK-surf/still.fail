@@ -1,6 +1,6 @@
 // Between a chat and a new chat in the wide frame, by the sidebar's 新建对话 or a chat's row (ember web/src/dock.tsx
 // useComposerMove, styles/global.css.ts's view transition): the composer goes from its place on the one to its place
-// on the other (340 ms, the ease out: composer_page) and the rest crossfades (260 ms, CSS's ease): the new chat's scene
+// on the other (340 ms, the ease out: its own layout motion, composer.mbt) and the rest crossfades (260 ms, CSS's ease): the new chat's scene
 // fading as a chat comes in, or a new chat's coming in. Between two chats nothing moves (the web leaves those to the
 // link); a new chat become its chat has its own (newchat.mbt new_chat_after).
 
@@ -51,7 +51,6 @@ fn page_switch_frame(c : @ui.Ctx, pages : Pages) -> Unit {
     if page_switch.from_new {
       fresh.room = @motion.measured(c, "new/composer").unwrap_or(0.0)
     }
-    (pages.composer_moves)(c, "*")
     let a = switch_anim(c)
     a.snap(0.0)
     a.animate(1.0, @motion.tween(page_cross_ms, ease=Css))

@@ -86,38 +86,23 @@ let drop_folder : Double = 30.0
 
 
 ///|
-/// The desktop's chat's composer (sfdesk's chat_talk: Pages.composer), this package's for now: the room it takes at the
-/// pane's foot, and what draws it there over the list (a row of the 文件 tab carried over the pane frosted under it, let
-/// go there into its message; the list's picking and a link's menu, over it).
-fn chat_composer(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView?, pane : Int) -> (Double, () -> Unit) {
+/// What the desktop's chat's pane (sfdesk's chat_talk: Pages.chat_layers) still has of this package's, round its
+/// composer (sfdesk's, `composer`): a row of the 文件 tab carried over the pane frosted under it, let go there into its
+/// message; the list's picking and a link's menu, over it; the composer's key (⌘L) putting the cursor in it.
+fn chat_layers(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView?, pane : Int, composer : () -> Unit) -> Unit {
   if focus_composer.val {
     focus_composer.val = false
-    c.focus_editor(field_key)
+    c.focus_editor(@sfdesk.composer_field_key)
   }
-  (
-    chat_foot_room(c, r, v),
-    fn() {
-      if v is Some(_) {
-        drop_hint(c, pane)
-      }
-      c.layer(fn() {
-        c.spacer()
-        wide_composer(c, src, r, v)
-      })
-      |> ignore
-      if v is Some(_) {
-        pick_layer(c, src, r)
-        link_menu_layer(c)
-      }
-      chat_drop(c, src, draft_key(r), pane)
-    },
-  )
-}
-
-///|
-/// The composer at the pane's foot (dock.css.ts): 12 from its sides, 804 wide at most, in the middle.
-fn wide_composer(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView?) -> Unit {
-  wide_center(c, fn() { composer(c, src, r, v) })
+  if v is Some(_) {
+    drop_hint(c, pane)
+  }
+  composer()
+  if v is Some(_) {
+    pick_layer(c, src, r)
+    link_menu_layer(c)
+  }
+  chat_drop(c, src, draft_key(r), pane)
 }
 
 ///|

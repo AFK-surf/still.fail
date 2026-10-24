@@ -16,9 +16,10 @@ pub let wide_from : Double = 701.0
 /// What the frame draws that is not here yet, given by the app (sfapp): the pages in the pane, the sidebars of the
 /// places other than the chats', and what the frame asks of the app.
 pub(all) struct Pages {
-  /// a chat's composer (the app's for now: its words fly into chat_list.mbt's list): the room it takes at the pane's
-  /// foot and what draws it there over the list, with what is let go over the pane (its box: a row of the 文件 tab)
-  composer : (@ui.Ctx, Source, Workspace, ChatRef, ChatView?, Int) -> (Double, () -> Unit)
+  /// what is over a chat's list that is not here yet, the app's, round its composer (`composer`, sfdesk's: drawn among
+  /// them): a row of the 文件 tab carried over the pane (its box) frosted under it, let go there into its message; the
+  /// list's picking and a link's menu over it
+  chat_layers : (@ui.Ctx, Source, ChatRef, ChatView?, Int, () -> Unit) -> Unit
   /// a chat's sharing's and publishing's dialogs (its thread)
   share : (@ui.Ctx, ChatRef, Double?) -> Unit
   publish : (@ui.Ctx, String, Double) -> Unit
@@ -39,15 +40,9 @@ pub(all) struct Pages {
   core : (Source, Workspace) -> Core
   /// what this device sees while it waits to be confirmed in the workspace's safe mode
   gate : (@ui.Ctx, Source, Workspace) -> Unit
-  /// the new chat's composer (the app's: Chat.tsx's Composer in dock.tsx's ComposerSlot "new"): on station `address`
-  /// (named `name`), its draft `new:<address>`; `held` (its stations not read yet), taking words but sending nothing;
-  /// its choices (`tools`) in the row under the words; `sent`, told as the page becomes its chat (NewChat.tsx onSent).
   /// A row of the 文件 tab carried over box `pane` and let go there: into draft `key` (ChatSide.tsx DropHint,
-  /// useChatDrop). The composer going to another page from where it is now (dock.tsx useComposerMove): to the chat's
-  /// whose draft is `key` ("*": the next page's)
-  new_composer : (@ui.Ctx, Source, Workspace, Json?, String, String, Bool, () -> Unit, (ChatRef) -> Unit) -> Unit
+  /// useChatDrop), while a chat's page has the phone's (till it has the desk's)
   drop : (@ui.Ctx, Source, String, Int) -> Unit
-  composer_moves : (@ui.Ctx, String) -> Unit
   /// whether a sheet is over the pages (back closes it first); what is over the pages put down (a sheet, the menu): a
   /// place gone to; and the stack back to its root with them, as another workspace is
   sheet : () -> Bool

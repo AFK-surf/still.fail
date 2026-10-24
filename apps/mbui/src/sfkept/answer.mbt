@@ -88,13 +88,16 @@ fn book_key(markdown : Bool, text : String) -> String {
 ///|
 /// Whether the core's answer to `name` with its `params` is kept (a call answered here, not asked of a core): Markdown
 /// read and code coloured; a text's book and what is asked of it (`reader.*`: always answered here, its text beside the
-/// call where params cannot say it; one not kept is said on the output and kept by scripts/kept). Nothing is said on
-/// the output of one that is not.
+/// call where params cannot say it; one not kept is said on the output and kept by scripts/kept); what is written, read
+/// (`ref.*`, `paste.info`: always answered here). Nothing is said on the output of one that is not.
 pub fn has(name : String, params : Json) -> Bool {
   match name {
     "markdown" => kept("markdown").contains(word(params, "text"))
     "code.ink" => kept("code.ink").contains(word(params, "lang") + "\u{1}" + word(params, "code"))
     "reader.book" | "reader.text" | "reader.search" => true
+    // what is written, read (refLinks.ts, pasted.ts): a pure function of the words, answered here whatever a run's
+    // tape has of it (a field's edits ask it as they come, in an order of their own)
+    "ref.at" | "ref.before" | "ref.marks" | "ref.pasted" | "paste.info" => true
     _ => false
   }
 }

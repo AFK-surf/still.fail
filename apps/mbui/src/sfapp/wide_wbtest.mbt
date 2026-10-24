@@ -169,7 +169,7 @@ test "wide: settings from the rail's gear, its list in the sidebar; back to the 
 test "wide: Enter sends the composer's words, ⇧Enter is a new line" {
   let calls : Array[Made] = []
   let t = wide_tester(calls, mode="chat")
-  t.tap_text("按空格输入")
+  t.tap_text("发消息")
   t.type_text("第一行")
   t.key(@ui.key_code_enter, mods=1)
   t.type_text("第二行")
@@ -397,7 +397,7 @@ test "wide: a right click on the composer's words as the desktop app's: 剪切, 
   let t = wide_tester(calls, mode="chat")
   t.run_for(history_fade_ms)
   let r : ChatRef = { station: "ws1/st1", session: "s-c1", title: "", station_name: "" }
-  let (fx, fy) = match t.find("按空格输入") {
+  let (fx, fy) = match t.find("发消息") {
     Some(at) => at
     None => fail("no composer")
   }
@@ -421,7 +421,7 @@ test "wide: a right click on the composer's words as the desktop app's: 剪切, 
   t.tap_text("剪切")
   t.frame()
   assert_eq(t.clipboard(), "发布前再看一眼")
-  assert_eq(drafts.get(draft_key(r)).map(fn(d) { d.text }), Some(""))
+  assert_eq(@sfbase.writings.get(draft_key(r)).map(fn(d) { d.text }), Some(""))
   // 粘贴: the clipboard read, its words put in
   t.clipboard_gives("再看一眼签名")
   let (fx, fy) = field_at()
@@ -430,7 +430,7 @@ test "wide: a right click on the composer's words as the desktop app's: 剪切, 
   t.tap_text("粘贴")
   t.frame()
   t.frame()
-  assert_eq(drafts.get(draft_key(r)).map(fn(d) { d.text }), Some("再看一眼签名"))
+  assert_eq(@sfbase.writings.get(draft_key(r)).map(fn(d) { d.text }), Some("再看一眼签名"))
   // a picture on the clipboard: put in as a file, as ⌘V puts one
   t.clipboard_gives_png(@pixels.png(2, 2, FixedArray::make(16, b'\xff')))
   let (fx, fy) = field_at()
@@ -439,7 +439,7 @@ test "wide: a right click on the composer's words as the desktop app's: 剪切, 
   t.tap_text("粘贴")
   t.frame()
   t.frame()
-  assert_eq(drafts.get(draft_key(r)).map(fn(d) { d.files.map(fn(f) { f.name }) }), Some(["image.png"]))
+  assert_eq(@sfbase.writings.get(draft_key(r)).map(fn(d) { d.files.map(fn(f) { text(Some(f), "name") }) }), Some(["image.png"]))
 }
 
 ///|
@@ -1431,16 +1431,16 @@ test "wide: ⌘V with a picture on the clipboard puts it in as a file (as a page
   let calls : Array[Made] = []
   let t = wide_tester(calls, mode="chat")
   let r : ChatRef = { station: "ws1/st1", session: "s-c1", title: "", station_name: "" }
-  t.tap_text("按空格输入")
+  t.tap_text("发消息")
   // (the host's ⌘V with a picture on the clipboard: the app's key, mac_app.m)
   t.clipboard_gives_png(@pixels.png(2, 2, FixedArray::make(16, b'\xff')))
   t.key(@ui.key_of_char('v'), mods=@ui.mod_cmd)
   t.frame()
   t.frame()
-  match drafts.get(draft_key(r)) {
+  match @sfbase.writings.get(draft_key(r)) {
     Some(d) => {
       assert_eq(d.files.length(), 1)
-      assert_eq(d.files[0].name, "image.png")
+      assert_eq(text(Some(d.files[0]), "name"), "image.png")
       assert_eq(d.text, "")
     }
     None => fail("no draft")
@@ -1450,7 +1450,7 @@ test "wide: ⌘V with a picture on the clipboard puts it in as a file (as a page
   t.key(@ui.key_of_char('v'), mods=@ui.mod_cmd)
   t.frame()
   t.frame()
-  assert_eq(drafts.get(draft_key(r)).map(fn(d) { d.text }), Some("再看一眼签名"))
+  assert_eq(@sfbase.writings.get(draft_key(r)).map(fn(d) { d.text }), Some("再看一眼签名"))
 }
 
 ///|

@@ -8,8 +8,8 @@ test "60-wide-send" {
     let f = @sfreplay.Flow::start(@sfreplay.trace("wide-send"), seed~, w=1280.0, h=800.0)
     f.see("新建对话")
     f.tap("端到端测试")
-    f.see("按空格输入")
-    f.tap("按空格输入")
+    f.see("发消息")
+    f.tap("发消息")
     f.type_text("宽屏里发出的消息 082939")
     f.enter()
     // the words flown to their bubble

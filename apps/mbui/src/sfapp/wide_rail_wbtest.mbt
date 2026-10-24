@@ -396,7 +396,7 @@ test "wide: shown a while, the page moves aside as far as what it shows is from 
   t.run_for(@sfdesk.side_move_ms)
   // folded: what the page shows across (its bar left out), and where its field is
   let (left, right) = t.ctx().shown_across(t.ctx().id("main-page"), but="page-bar").unwrap()
-  let (x0, _, _, _) = t.rect_of("按空格输入").unwrap()
+  let (x0, _, _, _) = t.rect_of("发消息").unwrap()
   // the pointer on the bar: shown a while, the page moved aside as far as that needs, no further than the room on its
   // right or the sidebar's width
   let (rx, ry, rw, rh) = t.query(Button, label="文件").unwrap().rect
@@ -406,7 +406,7 @@ test "wide: shown a while, the page moves aside as far as what it shows is from 
   let room = 1280.0 - 2.0 * @sfdesk.peek_gap - right
   let want = dmax(0.0, dmin(@sfdesk.wide.side_w, dmin(room, reach - left))).round()
   assert_true(want > 0.0, msg="\{left} \{right}")
-  let (x1, _, _, _) = t.rect_of("按空格输入").unwrap()
+  let (x1, _, _, _) = t.rect_of("发消息").unwrap()
   assert_eq(x1 - x0, want)
 }
 

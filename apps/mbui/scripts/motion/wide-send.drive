@@ -1,9 +1,9 @@
 # The wide frame: words typed in the made-up chat's composer and sent (flight.mbt, the web's madeChat.ts sendingHere):
 # they fly from the field into their bubble.
 timeout 20000
-until 按空格输入
+until 发消息
 wait 600
-tap 按空格输入
+tap 发消息
 wait 500
 type 发布前再看一眼签名
 wait 700

@@ -115,6 +115,8 @@ using @sfbase {
   new_fade,
   new_leave,
   pick_new,
+  picked_sig,
+  became_starts,
   open_chat_found,
   chat_link,
   copy_chat_link,

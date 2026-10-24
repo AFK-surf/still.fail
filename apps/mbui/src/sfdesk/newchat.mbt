@@ -3,9 +3,10 @@
 // (the `newChat` topic, `newChat.pick`). All of it in a column 720 wide at most in the middle of the pane: the scene,
 // 新对话, what it does and where; the composer, roomy, its choices in the row under the words; the frequent
 // combinations under it, what it waits for, and the machine's own sessions to go on with. The composer is the
-// app's (Pages.new_composer): the first message makes the chat, and the page becomes it, its scene going up out of
-// view as it fades and what is under the composer fading where it is (madeChat.ts), the composer going to the chat's
-// foot (switch.mbt). The workspace's stations' files beside it, as beside a chat.
+// desk's (composer.mbt), its draft the station's new chat's: the first message makes the chat (useEnsureChat, draft.ts
+// send's first), and the page becomes it, its scene going up out of view as it fades and what is under the composer
+// fading where it is (madeChat.ts), the composer going to the chat's foot by its own move (dock.tsx). The workspace's
+// stations' files beside it, as beside a chat.
 
 ///|
 /// What the page keeps of its own: its station chooser's menu open.
@@ -66,7 +67,7 @@ fn new_held(c : @ui.Ctx, src : Source, w : Workspace, pages : Pages, v : Json?, 
     // (none to hold it on, its first value not come yet: no draft asked for)
     if address != "" {
       c.box(style=new_composer_box, fn() {
-        c.sized(col, c.height, fn() { (pages.new_composer)(c, src, w, v, address, "", true, fn() {  }, fn(_) {  }) })
+        c.sized(col, c.height, fn() { new_composer(c, src, w, pages, v, address, "", true, None) })
       })
       |> ignore
     }
@@ -200,17 +201,7 @@ fn new_body(
       None => {
         let place = c.box(style=new_composer_box, fn() {
           c.sized(col, c.height, fn() {
-            (pages.new_composer)(
-              c,
-              src,
-              w,
-              v,
-              address,
-              name,
-              false,
-              fn() { new_tools(c, src, w, v, station) },
-              fn(r) { new_sent(c, src, w, pages, r) },
-            )
+            new_composer(c, src, w, pages, v, address, name, false, Some(fn() { new_tools(c, src, w, v, station) }))
           })
         })
         // (how tall it is, kept clear as the page leaves: new_chat_after)
@@ -242,14 +233,141 @@ fn new_body(
 ///|
 /// The page as it becomes its chat (NewChat.tsx onSent): the composer going to the chat's foot from its place here,
 /// the chat opening without its agent's history beside it, the files open beside the page open beside the chat.
-fn new_sent(c : @ui.Ctx, src : Source, w : Workspace, pages : Pages, r : ChatRef) -> Unit {
+fn new_sent(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef) -> Unit {
   fresh.room = @motion.measured(c, "new/composer").unwrap_or(0.0)
-  (pages.composer_moves)(c, r.station + ":" + r.session)
   let files = new_files_open(src, w.id)
   side_ask(src, r, "clear", None)
   if files {
     side_ask(src, r, "open", Some("files"))
   }
+}
+
+///|
+/// The page's composer (NewChat.tsx's ComposerSlot): the station's new chat's draft, roomy, the page's choices in its
+/// row (`tools`), locked while nothing can run it (no model, no runtime) or while the page waits for its stations
+/// (`held`); its first words, while the chat is made for them, drawn where they were typed (madeChat.ts sendingFirst).
+fn new_composer(
+  c : @ui.Ctx,
+  src : Source,
+  w : Workspace,
+  pages : Pages,
+  v : Json?,
+  address : String,
+  name : String,
+  held : Bool,
+  tools : (() -> Unit)?,
+) -> Unit {
+  let spec : ComposerSpec = {
+    station: address,
+    draft: "new:" + address,
+    session: "",
+    placeholder: @sf.t("web-main.newChat.placeholder"),
+    toolbar: tools,
+    roomy: true,
+    locked: held || text(v, "runtime") == "" || field(v, "model") is None,
+    offline: false,
+  }
+  composer(c, src, w, pages, spec, fn(d) { new_send(c, src, w, v, address, name, d) })
+  @sfbase.flight_carry_waiting(c)
+}
+
+///|
+/// The new chat's first message (draft.ts send with `first`, NewChat.tsx useEnsureChat, onSending, onSent): its words
+/// and files taken off the composer where they were typed, carried there while the chat is made (once a page:
+/// `newChat.create`, made anew when the picks changed), then sent into it (`chat.send`); the page becomes the chat, its
+/// first words in its list from now and going on there, what is written meanwhile going on into the chat's draft
+/// (`composer.carry`). The chat not made, or the message never taken in: what was taken back in the composer, saying
+/// why.
+fn new_send(c : @ui.Ctx, src : Source, w : Workspace, v : Json?, station : String, name : String, d : Writing) -> Unit {
+  if src.read_only {
+    toast_later(read_only_words)
+    return
+  }
+  if fresh.starting {
+    return
+  }
+  let words = d.text.trim(chars=" \n\t").to_string()
+  let up = d.files.filter_map(fn(f) { field(Some(f), "done") })
+  let going = going_up(d)
+  // (its words where they were typed while the chat is made: carried; the desktop's flight, the web's)
+  @sfbase.flight_carry_start(
+    c,
+    d.key,
+    words,
+    [],
+    field=composer_field_key,
+    font=text_size,
+    line=text_line,
+    desk=true,
+  )
+  fresh.starting = true
+  @sfbase.writing_starting(src, d, true)
+  let sig = picked_sig(v)
+  let give_back = fn(e : Json) {
+    fresh.starting = false
+    @sfbase.flight_carry_gone(d.key)
+    @sfbase.writing_starting(src, d, false)
+    @sfbase.writing_restore(src, d, text(Some(e), "message"))
+  }
+  @sfbase.writing_take(src, d, fn(taken) {
+    guard taken is Some(_) else {
+      fresh.starting = false
+      @sfbase.flight_carry_gone(d.key)
+      @sfbase.writing_starting(src, d, false)
+      return
+    }
+    let send = fn(key : String) {
+      let params : Map[String, Json] = {
+        "station": Json::string(station),
+        "session": Json::string(key),
+        "text": Json::string(text(taken, "text")),
+        "attachments": Json::array(items(taken, "attachments")),
+        "quotes": Json::array(items(taken, "quotes")),
+      }
+      if going.length() > 0 {
+        params["uploads"] = Json::array(going)
+      }
+      (src.call)("chat.send", Json::object(params), fn(res) {
+        match res {
+          Err(e) => give_back(e)
+          Ok(_) => {
+            fresh.sent = true
+            fresh.starting = false
+            @sfbase.writing_starting(src, d, false)
+            // the page becomes the chat, in place, its first words in its list from now and going on there
+            let r : ChatRef = { station, session: key, title: "", station_name: name }
+            let rk = station + "\u{1}" + key
+            @sfbase.flight_carry_into(d.key, station + ":" + key, rk, sent_local(rk, None, words, up))
+            // what is written meanwhile goes on in the chat's draft (dock.tsx carryTo)
+            @sfbase.writing_carry(src, d.key, station + ":" + key)
+            fresh.scene = v
+            fresh.became = Some(r)
+            became_starts(wide=true)
+            new_sent(c, src, w, r)
+            app.nav.become(Chat(r))
+          }
+        }
+      })
+    }
+    if fresh.made != "" {
+      send(fresh.made)
+    } else {
+      (src.call)("newChat.create", { "station": Json::string(station) }, fn(res) {
+        match res {
+          Ok(made) =>
+            match text(Some(made), "key") {
+              "" => give_back({ "message": Json::string("newChat.create: no key") })
+              key => {
+                fresh.made = key
+                fresh.made_sig = sig
+                send(key)
+              }
+            }
+          Err(e) => give_back(e)
+        }
+      })
+    }
+  })
 }
 
 ///|

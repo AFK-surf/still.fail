@@ -1,7 +1,7 @@
 # The wide frame: the made-up chat scrolled up to its pictures, each brought in as it is decoded (messages.mbt
 # image_reveal, the web's msgImageReveal): brushed in from its top, blurred to sharp.
 timeout 20000
-until 按空格输入
+until 发消息
 wait 400
 wheel -900
 wait 1800
