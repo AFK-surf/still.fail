@@ -1,7 +1,7 @@
 // The app's own marks and links among the shared parts (ui.tsx): what made an agent's model, a connect's kind, a time,
 // the way back; and where the app's pages put @stillfail/ui's parts (its parts.css.ts, just before this in the cascade).
 import { globalStyle, style } from "@vanilla-extract/css";
-import { spokesBox } from "@stillfail/ui/styles/spokes.ts";
+import { spokesBox, spokesTurn } from "@stillfail/ui/styles/spokes.ts";
 import { vars } from "@stillfail/ui/styles/tokens.css.ts";
 import { appearKeyframes } from "@stillfail/ui/styles/keyframes.css.ts";
 import { outsetStart } from "@stillfail/ui/styles/align.ts";
@@ -42,6 +42,7 @@ export const agentMark = style({
     [`${STILL} &[data-badge="run"]::before`]: stillLoop(),
   },
 });
+spokesTurn(`${agentMark}[data-badge="run"]::before`);
 /**
  * With the station it runs on: one tile, as tall, the maker's part square, the station's (its icon or its name) after it,
  * centred in its own part. The agent's badge stays on the maker's corner: the station's corner is the station's own.
