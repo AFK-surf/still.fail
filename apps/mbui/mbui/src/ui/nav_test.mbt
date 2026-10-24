@@ -159,6 +159,8 @@ test "a press on the edge that moves up and down scrolls the list, and a tap the
   let nav = @ui.Nav::new(0)
   let t = @ui.Tester::new(nav_view(nav))
   t.tap_text("open 1")
+  // (on page 1, slid in: the page it covers takes no press while it comes)
+  t.run_for(nav.rest() - t.time())
   t.drag(10.0, 600.0, 12.0, 300.0)
   t.draw()
   assert_eq(nav.depth(), 2)
@@ -341,5 +343,59 @@ test "a page pushed whose data never comes slides in once it has waited the most
   assert_eq(@ui.nav_rest(), pushed + test_page_wait_ms + @ui.nav_push_ms)
   t.run_for(test_page_wait_ms + @ui.nav_push_ms)
   assert_eq(t.rect_of("title 1").unwrap().0, 0.0)
+  t.assert_idle()
+}
+
+///|
+test "a page covered by one sliding in takes no press: one where its button still shows goes to the page coming or to nothing; going back, the page leaving takes none" {
+  let nav = @ui.Nav::new(0)
+  let pressed : Array[Int] = []
+  let t = @ui.Tester::new(fn(c) {
+    c.nav(
+      nav,
+      fn(i) {
+        c.column(w=Fill(1.0), h=Fill(1.0), fn() {
+          c.text("title \{i}", wrap=false) |> ignore
+          if c.button("press \{i}") {
+            pressed.push(i)
+          }
+        })
+        |> ignore
+      },
+      bg=0xFFFFFFFFL,
+    )
+    |> ignore
+  })
+  // pushed: a little way in, page 0's button still showing to the left of page 1's
+  nav.push(1)
+  t.draw()
+  t.run_for(@ui.nav_push_ms / 10.0)
+  let (x, y, w, h) = t.rect_of("press 0").unwrap()
+  assert_true(x + w > 0.0)
+  t.tap((if x > 0.0 { x } else { 0.0 }) + 2.0, y + h / 2.0)
+  assert_eq(pressed, [])
+  // (and from the moment it is pushed: its first frame, before anything has moved)
+  nav.pop() |> ignore
+  t.draw()
+  t.run_for(nav.rest() - t.time())
+  nav.push(1)
+  t.draw()
+  let (x, y, w, h) = t.rect_of("press 0").unwrap()
+  t.tap(x + w / 2.0, y + h / 2.0)
+  assert_eq(pressed, [])
+  t.run_for(nav.rest() - t.time())
+  // at rest, the page on top takes its presses
+  let (x, y, w, h) = t.rect_of("press 1").unwrap()
+  t.tap(x + w / 2.0, y + h / 2.0)
+  assert_eq(pressed, [1])
+  // going back: halfway, page 1 leaving takes nothing where its button still shows
+  nav.pop() |> ignore
+  t.draw()
+  t.run_for(@ui.nav_push_ms / 2.0)
+  let (x, y, _, h) = t.rect_of("press 1").unwrap()
+  t.tap(x + 2.0, y + h / 2.0)
+  // (page 0 coming may be under it: its own press is its)
+  assert_eq(pressed.filter(fn(i) { i == 1 }).length(), 1)
+  t.run_for(nav.rest() - t.time())
   t.assert_idle()
 }
