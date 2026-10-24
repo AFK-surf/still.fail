@@ -58,7 +58,7 @@ fn history_page(c : @ui.Ctx, src : Source, r : ChatRef, key : String, entry : In
 }
 
 ///|
-/// What the history's page shows under its bar, and the wide frame's tab for it beside the chat (wide_panel.mbt): the
+/// What the history's page shows under its bar: the
 /// agent at its head with what can be done to it and the tabs, then its steps or its details.
 fn history_body(c : @ui.Ctx, src : Source, r : ChatRef, key : String, entry : Int?, chat : Topic) -> Unit {
   let t = @sf.theme()
@@ -75,11 +75,6 @@ fn history_body(c : @ui.Ctx, src : Source, r : ChatRef, key : String, entry : In
       return
     }
     Some(_) => ()
-  }
-  // in the wide frame, the web's head (wide_history.mbt)
-  if wide_on.val {
-    @sfdesk.agent_history(c, src, r.station, key, a)
-    return
   }
   let s = field(a, "session")
   c.box(dir=Row, w=Fill(1.0), pl=18.0, pr=18.0, pt=4.0, gap=6.0, align=ACenter, fn() {

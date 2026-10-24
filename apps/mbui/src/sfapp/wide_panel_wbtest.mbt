@@ -213,3 +213,21 @@ test "wide: the side panel slides in from the pane's right edge over 280 ms and 
   t.run_for(@sfdesk.side_in_ms)
   assert_eq(t.find("只看收发").map(fn(at) { at.0 }), Some(end))
 }
+
+///|
+test "wide: an agent's history asked as a page (a link's ?history=…&entry=…) is its chat with the history beside it (ChatPage.tsx history)" {
+  reset()
+  let src = fixture("chat")
+  let r : ChatRef = { station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" }
+  open_chat(r)
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=1280.0, h=800.0, platform=0)
+  t.run_for(@ui.nav_push_ms)
+  app.nav.push(History(r, "s-c1", Some(3)))
+  t.frame()
+  t.frame()
+  // the chat's page, in place of the page asked; the history in front beside it
+  assert_true(app.nav.top() == Chat(r), msg="the chat's page")
+  assert_eq(side_now(r), (["s-c1"], "s-c1"))
+  t.run_for(@sfdesk.side_in_ms)
+  assert_true(t.find("只看收发") is Some(_))
+}

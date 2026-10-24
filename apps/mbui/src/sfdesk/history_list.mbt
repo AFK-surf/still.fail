@@ -16,10 +16,23 @@ priv struct StepsOwn {
   detail : Map[String, (Double, String)]
   tools : Map[String, Json]
   mut older : String
+  /// an entry asked to be brought into view, by history (`<station>\u{1}<key>`); the item gone to, marked a moment
+  /// (its history's list, its key), and the histories gone to an entry, not following their newest since
+  focus : Map[String, Int]
+  mut marked : (String, String)
+  went : Map[String, Bool]
 }
 
 ///|
-let steps_own : StepsOwn = { opened: {}, detail: {}, tools: {}, older: "" }
+let steps_own : StepsOwn = {
+  opened: {},
+  detail: {},
+  tools: {},
+  older: "",
+  focus: {},
+  marked: ("", ""),
+  went: {},
+}
 
 ///|
 fn steps_reset() -> Unit {
@@ -27,6 +40,25 @@ fn steps_reset() -> Unit {
   steps_own.detail.clear()
   steps_own.tools.clear()
   steps_own.older = ""
+  steps_own.focus.clear()
+  steps_own.marked = ("", "")
+  steps_own.went.clear()
+}
+
+///|
+/// Agent `key`'s history on `station` to bring transcript entry `entry` into view as it next shows (a link's
+/// `?history=…&entry=…`, History.tsx focusEntry): the item that draws it in the pane's middle, marked a moment.
+pub fn history_focus(station : String, key : String, entry : Int) -> Unit {
+  steps_own.focus[station + "\u{1}" + key] = entry
+}
+
+///|
+/// The transcript entries an item spans (HistoryItem.entries: its first and last), if it says.
+fn entries_of(item : Json?) -> (Int, Int)? {
+  match field(item, "entries") {
+    Some(Array([Number(a, ..), Number(b, ..)])) => Some((a.to_int(), b.to_int()))
+    _ => None
+  }
 }
 
 ///|
@@ -59,8 +91,37 @@ fn history_list(c : @ui.Ctx, src : Source, station : String, key : String) -> Un
     c.box(style=steps_box, fn() { c.text(text(h, "edge"), style=steps_edge) |> ignore }) |> ignore
     return
   }
+  let lkey = "history-steps/" + station + "/" + key
+  let more = flag(h, "more")
+  let loaded = items(h, "items")
+  // opened at an entry: the item that draws it to the pane's middle, marked a moment; one before what is loaded, the
+  // pages before first; one 只看收发 leaves out, all of it shown again first
+  let fk = station + "\u{1}" + key
+  let mut go_to = -1
+  match steps_own.focus.get(fk) {
+    Some(e) =>
+      match loaded.search_by(fn(i) { entries_of(Some(i)).map(fn(x) { x.0 <= e && e <= x.1 }).unwrap_or(false) }) {
+        Some(at) => {
+          if history_own.only_io && flag(loaded.get(at), "work") {
+            history_own.only_io = false
+          }
+          steps_own.focus.remove(fk)
+          steps_own.went[lkey] = true
+          steps_own.marked = (lkey, text(loaded.get(at), "key"))
+          go_to = at
+        }
+        None =>
+          match loaded.get(0) {
+            // (the pages before asked below, as near its top)
+            Some(i) if more && e < entries_of(Some(i)).map(fn(x) { x.0 }).unwrap_or(0) => ()
+            // not there: where it opens
+            _ => steps_own.focus.remove(fk)
+          }
+      }
+    None => ()
+  }
   let io = history_only_io()
-  let all = items(h, "items").filter(fn(i) { !io || !flag(Some(i), "work") })
+  let all = loaded.filter(fn(i) { !io || !flag(Some(i), "work") })
   let live = if io { [] } else { items(h, "live") }
   let phase = field(h, "phase")
   let going = live.length() > 0 || phase is Some(Object(_))
@@ -81,23 +142,45 @@ fn history_list(c : @ui.Ctx, src : Source, station : String, key : String) -> Un
     Some(Object(_)) as p => rows.push(Phase(p.unwrap()))
     _ => ()
   }
-  let lkey = "history-steps/" + station + "/" + key
-  let more = flag(h, "more")
   let first = match all.get(0) {
     Some(i) => text(Some(i), "key")
     None => ""
   }
-  // the pages before as it nears its top (useLoadNear), once each
-  match c.list_info(lkey) {
-    Some(info) if more && info.first >= 0 && info.first <= 2 && steps_own.older != first =>
+  // the pages before as it nears its top (useLoadNear), or for an entry before what is loaded, once each
+  let near = match c.list_info(lkey) {
+    Some(info) => info.first >= 0 && info.first <= 2
+    None => false
+  }
+  match (more && (near || steps_own.focus.contains(fk)), steps_own.older != first) {
+    (true, true) =>
       c.after_build("history-older/" + lkey, fn() {
         if steps_own.older == first {
           return
         }
         steps_own.older = first
-        (src.call)("history.older", Json::object(params), fn(res) { if res is Err(_) { steps_own.older = "" } })
+        (src.call)("history.older", Json::object(params), fn(res) {
+          if res is Err(_) {
+            steps_own.older = ""
+            // (an entry asked for before what could be had: where it opens)
+            steps_own.focus.remove(fk)
+          }
+        })
       })
     _ => ()
+  }
+  // gone to an entry: its item in the pane's middle (the edge's row before the items)
+  if go_to >= 0 {
+    let gk = text(loaded.get(go_to), "key")
+    match all.search_by(fn(i) { text(Some(i), "key") == gk }) {
+      Some(at) => {
+        let half = match c.list_info(lkey) {
+          Some(info) => info.height / 2.0
+          None => 0.0
+        }
+        c.list_scroll_to(lkey, at + 1, offset=steps_est / 2.0 - half)
+      }
+      None => ()
+    }
   }
   c.box(style=steps_box, fn() {
     c.list(
@@ -118,7 +201,11 @@ fn history_list(c : @ui.Ctx, src : Source, station : String, key : String) -> Un
               } else {
                 c.text(text(h, "edge"), style=steps_edge) |> ignore
               }
-            Item(item, rail) => history_row(c, src, station, key, Some(item), rail)
+            Item(item, rail) => {
+              let marked = steps_own.marked == (lkey, text(Some(item), "key")) &&
+                !@kit.after(c, "history-marked/" + lkey, true, steps_marked_ms)
+              history_row(c, src, station, key, Some(item), rail, marked~)
+            }
             Live(l, rail) =>
               steps_main(c, rail, fn() {
                 ev(c, "think", "", "", rail_last=true, fn() { c.text(text(Some(l), "text"), style=live_words) |> ignore })
@@ -128,7 +215,8 @@ fn history_list(c : @ui.Ctx, src : Source, station : String, key : String) -> Un
         })
         |> ignore
       },
-      stick_end=true,
+      // (followed at its newest; not once gone to an entry)
+      stick_end=!steps_own.went.contains(lkey),
     )
     |> ignore
   })
@@ -141,9 +229,18 @@ let steps_est : Double = 48.0
 
 ///|
 /// An item (hItem): the rule of the turn it begins (if it does), then its events.
-fn history_row(c : @ui.Ctx, src : Source, station : String, key : String, item : Json?, rail : Bool) -> Unit {
+fn history_row(
+  c : @ui.Ctx,
+  src : Source,
+  station : String,
+  key : String,
+  item : Json?,
+  rail : Bool,
+  marked? : Bool = false,
+) -> Unit {
   let ik = text(item, "key")
-  c.box(style=h_item, fn() {
+  // gone to (an entry's): on the accent's faint ground a moment (hItem[data-focus])
+  c.box(style=if marked { h_item_marked } else { h_item }, fn() {
     match field(item, "turn") {
       Some(Object(_)) as turn =>
         // when it began and what it did, a line on to the edge (hTurn)
@@ -1035,6 +1132,14 @@ let steps_edge_wait : @ui.Style = @ui.css("row w=Full py=S1 justify=JCenter")
 /// An item (hItem): its turn's rule and its events, 8 apart.
 // kept across runs: a value (no field of it changes)
 let h_item : @ui.Style = @ui.css("w=Full gap=S2")
+
+///|
+// kept across runs: a value (no field of it changes)
+let h_item_marked : @ui.Style = h_item.then(@ui.css("bg=A(Accent,O10)"))
+
+///|
+/// How long an item gone to stays marked (History.tsx: 1.6 s).
+let steps_marked_ms : Double = 1600.0
 
 ///|
 /// A turn's rule (hTurn): 8 over it, 11 muted, a line on to the edge 8 after the words.
