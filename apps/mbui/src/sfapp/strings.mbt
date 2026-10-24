@@ -269,8 +269,12 @@ pub fn tr(key : String, args? : Array[(String, String)] = []) -> String {
                         None =>
                           match pv_zh.get(key) {
                             Some(s) => s
-                            // (the settings' own words: the desktop's settings pages say them too)
-                            None => @settings.said(key, args).unwrap_or(key)
+                            None =>
+                              match up_zh.get(key) {
+                                Some(s) => s
+                                // (the settings' own words: the desktop's settings pages say them too)
+                                None => @settings.said(key, args).unwrap_or(key)
+                              }
                           }
                       }
                   }

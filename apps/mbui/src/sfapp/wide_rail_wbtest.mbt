@@ -419,13 +419,13 @@ test "wide: a newer build of the desktop app: 更新 at the open sidebar's top r
   t.frame()
   let (x, y, w, _) = t.query(Button, label="更新").unwrap().rect
   assert_eq(x + w, @sfdesk.rail_w + @sfdesk.wide.side_w - @sfdesk.bar_in)
-  assert_eq(y, update_top)
+  assert_eq(y, @sfdesk.update_top)
   // folded: 68 from the window's edge, the page bar's words clear of it (72 in)
   t.key(@ui.key_of_char('\\'), mods=@ui.mod_cmd)
   t.move(1000.0, 400.0)
   t.run_for(@sfdesk.side_move_ms)
   let (fx, _, _, _) = t.query(Button, label="更新").unwrap().rect
-  assert_eq(fx, update_closed_in)
+  assert_eq(fx, @sfdesk.update_closed_in)
   assert_eq(@sfdesk.wide.bar_pl, @sfdesk.bar_update_in)
 }
 

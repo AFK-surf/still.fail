@@ -35,8 +35,6 @@ pub(all) struct Pages {
   /// (Relay.tsx, from a row's menu: the chat, its thread)
   jobs : (@ui.Ctx, Source, Workspace) -> Unit
   relay : (@ui.Ctx, Source, ChatRef, Double) -> Unit
-  /// the core asked to do something, said once done (`what` it is, the call, its params, what is said then)
-  act : (Source, String, String, Json, String) -> Unit
   /// what the settings' pages read and call, and how they move (src/sfapp/settings: the core as the app has it)
   core : (Source, Workspace) -> Core
   /// what this device sees while it waits to be confirmed in the workspace's safe mode
@@ -50,10 +48,6 @@ pub(all) struct Pages {
   new_composer : (@ui.Ctx, Source, Workspace, Json?, String, String, Bool, () -> Unit, (ChatRef) -> Unit) -> Unit
   drop : (@ui.Ctx, Source, String, Int) -> Unit
   composer_moves : (@ui.Ctx, String) -> Unit
-  /// whether the desktop app has a newer build to offer (brand.tsx UpdateButton), and its 更新 over the sidebar's top
-  /// (closed, the sidebar's width, the window's buttons in the app's top row)
-  updating : () -> Bool
-  update : (@ui.Ctx, Source, Bool, Double, Bool) -> Unit
   /// whether a sheet is over the pages (back closes it first); what is over the pages put down (a sheet, the menu): a
   /// place gone to; and the stack back to its root with them, as another workspace is
   sheet : () -> Bool
@@ -517,7 +511,7 @@ pub fn frame(
   let shift = if peek { wide.peek_shift } else { 0.0 }
   // (closed, with 更新 over their start: clear of it too, brand.css.ts)
   wide.closed = bar
-  let updating = !gated && (pages.updating)()
+  let updating = !gated && update_shown()
   wide.bar_pl = if !bar {
     bar_in
   } else if updating {
@@ -583,7 +577,7 @@ pub fn frame(
     |> ignore
     dock(c, src, w, all, pages, bar, peek, s, col, top, foot)
     if updating {
-      (pages.update)(c, src, bar, s, inset)
+      update_button(c, src, bar, s, inset)
     }
   })
   // (the sidebar's edge: on its right edge open, between the bar and the page folded, at the edge of the sidebar shown
