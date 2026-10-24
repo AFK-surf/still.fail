@@ -9,10 +9,10 @@
 // 下载 as the page's primary button.
 
 ///|
-/// Whether the wide frame is a desktop's, with a mouse (a click and a move are its own), not a wide touch screen's (an
+/// Whether the wide frame is pointed at with a mouse (a click and a move are its own), not with a finger (an
 /// iPad's, a fold's inner screen: a finger's tap shows or hides the bars, as on a phone).
 fn desk_mouse() -> Bool {
-  wide_on.val && !@sf.touch_system()
+  wide_on.val && @ui.pointing() is Mouse
 }
 
 ///|

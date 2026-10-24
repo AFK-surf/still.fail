@@ -1997,8 +1997,9 @@ fn composer_bar(
   let placeholder = match (fresh, v) {
     (Some(f), _) => f.placeholder
     (_, Some(view)) if view.archived => tr("android-chat.composer.archived.placeholder")
-    // with a mouse and nothing focused, the web's says Space takes the keyboard there (Chat.tsx)
-    _ if wide_on.val && !@sf.touch_system() && !c.field_focused() =>
+    // with a mouse and nothing focused, the web's says Space takes the keyboard there (Chat.tsx useSpaceHint
+    // `pointer: fine`; the wide frame's keys take it: wide_keys.mbt)
+    _ if wide_on.val && @ui.pointing() is Mouse && !c.field_focused() =>
       fill("web-main.composer.pressToTypeCjk", [("key", tr("web-main.keymap.space"))])
     _ => tr("android-chat.chat.placeholder")
   }
@@ -2035,8 +2036,11 @@ fn composer_bar(
           color=t.p.text,
           placeholder_color=@sf.alpha(t.p.subtle, hint.get()),
           caret_color=t.p.accent,
-          // at a desktop's width Enter sends and ⇧Enter is a new line (the web's); on a phone Enter is a new line
-          enter_sends=wide_on.val,
+          // pointed at with a mouse (a keyboard at hand) Enter sends and ⇧Enter is a new line; with a finger (the
+          // screen's keyboard) Enter is a new line, whatever the frame (the web's `hover: hover`, mobile/Chat.tsx).
+          // (The phone's layout keeps its new line, a mouse in a narrow desktop window too: its pages are the
+          // phone's, the phone's tests a desktop's system.)
+          enter_sends=wide_on.val && @ui.pointing() is Mouse,
           paste_limit=if no_files { 0 } else { paste_threshold },
           // ⌘V with a picture on the clipboard: it, as a file (Chat.tsx onPaste: the clipboard's files)
           pictures=!no_files,

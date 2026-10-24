@@ -466,9 +466,10 @@ fn side_chat_row(
     open_row(pages, item)
   }
   let menu = item.offline is None && !item.pending
-  match parts.iter().find_first(fn(p) { c.right_clicked(p) is Some(_) }) {
-    Some(p) if menu => {
-      let (x, y) = c.right_clicked(p).unwrap()
+  // (right clicked, or held by a finger: Ctx::menu_asked, each part asked once)
+  let asked = parts.fold(init=None, fn(at, p) { if at is Some(_) { at } else { c.menu_asked(p) } })
+  match asked {
+    Some((x, y)) if menu => {
       wide.menu = Some((key, item, x, y))
       wide.filter_open = false
       wide.attention_open = false
@@ -476,8 +477,9 @@ fn side_chat_row(
     _ => ()
   }
   // its menu open (beside the pointer, not over the page: ContextMenu modal false), still pointed at while the pointer
-  // stays on it
+  // stays on it; held open by a finger, lit while it is open (a lifted finger is nowhere)
   let menu_on = match wide.menu {
+    Some((k, _, _, _)) if k == key && @ui.pointing() is Finger => true
     Some((k, _, _, _)) if k == key =>
       match c.rect_of(id) {
         Some((rx, ry, rw, rh)) => {

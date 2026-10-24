@@ -9,8 +9,9 @@
 // picture, and is on the page's own colours. How it plays is mbui's player's (@kit.Media: the system's player in a
 // native view, its bytes asked a part at a time of the file's `stream`).
 //
-// With a mouse (`player_view` on a desktop): the bar every file opened has along the top (viewer_bar.mbt), the
-// controls floating over the foot (media.mbt), both gone as the pointer rests while it plays. A click plays or pauses,
+// On a desktop's layout (`player_view` in the wide frame): the bar every file opened has along the top
+// (viewer_bar.mbt), the controls floating over the foot (media.mbt), both gone as the pointer rests while it plays (a
+// finger there, a tablet's, taps them on and off and double taps as on a phone). A click plays or pauses,
 // a double click fills the screen; the wheel with ⌘ or ⌃ (a trackpad's pinch) zooms round the pointer, the wheel
 // alone moves what is zoomed in. Keys: Space or K plays or pauses; paused, ← → and , . step a frame, playing ← → jump
 // 15 s; J L jump 15 s; ↑ ↓ the sound; M mutes; F fills the screen; C the subtitle; ⇧N ⇧P the next one and the one
@@ -779,7 +780,7 @@ pub fn player_view(
 // ── a desktop's ─────────────────────────────────────────────────────────
 
 ///|
-/// The player over the window with a mouse (see the file's head).
+/// The player over the window, a desktop's layout (see the file's head).
 fn desk_player(
   c : @ui.Ctx,
   p : @kit.Media,
@@ -813,9 +814,10 @@ fn desk_player(
   let fr = frames_of(p, s, p.scrubbing().unwrap_or(s.position))
   let mac = @ui.platform() == 0
   take_grab(v, p, name)
-  // the pointer's moves wake the controls, as a mouse's do
+  // a mouse's moves wake the controls; a finger (a tablet's screen) taps them on and off, as on a phone
+  let finger = @ui.pointing() is Finger
   let (px, py, _) = c.pointer()
-  if v.moves is Some((x, y)) && (x != px || y != py) {
+  if !finger && v.moves is Some((x, y)) && (x != px || y != py) {
     p.wake()
   }
   v.moves = Some((px, py))
@@ -921,11 +923,14 @@ fn desk_player(
     }
   }
   c.box(style=desk_play_ground.then(@ui.style(bg=Data(ink.stage))), fn() {
-    // the picture, in the window less the list beside it: a click plays or pauses, a double click fills the screen
+    // the picture, in the window less the list beside it: a click plays or pauses, a double click fills the screen; a
+    // finger's tap shows or hides the controls, its double tap nudges or plays (Media::stage, the phone's)
     let stage = c.id(key + "/desk-stage")
     @ui.capture(c, stage)
     c.cursor(stage, Hand)
-    if picture && mac && c.double_clicked(stage) {
+    if finger {
+      p.stage(c, stage, c.width - panel)
+    } else if picture && mac && c.double_clicked(stage) {
       full()
     } else if c.clicked(stage) {
       p.play_pause()

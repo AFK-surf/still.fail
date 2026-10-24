@@ -453,10 +453,10 @@ pub fn frame(
   invited : Bool,
   pages : Pages,
 ) -> Unit {
-  // a desktop's page: the wheel and the trackpad scroll, a drag is the pointer's own; a phone's or a tablet's: a
-  // finger drags the lists
-  let touch = @sf.touch_system()
-  c.mouse_drags_lists(touch)
+  // pointed at with a mouse: the wheel and the trackpad scroll, a drag is the pointer's own; with a finger (a tablet's
+  // screen, whatever the frame): it drags the lists
+  let finger = @ui.pointing() is Finger
+  c.mouse_drags_lists(finger)
   // a device waiting to be confirmed in the workspace's safe mode: beside the rail (the workspaces, settings) only
   // what it waits on, no chats' list (its stations refuse it), unless a settings page is open
   let gated = lit_place() != "settings" && @settings.lock_waiting((pages.core)(src, w), w.id)
@@ -560,7 +560,7 @@ pub fn frame(
           }
           // the page's words are picked with the pointer and copied, as the web's (the sidebar's are not); a finger
           // picks them as on a phone (pick.mbt)
-          if touch {
+          if finger {
             page()
           } else {
             c.selectable(color=@sf.alpha(@sf.theme().p.blue, 0.28), page)

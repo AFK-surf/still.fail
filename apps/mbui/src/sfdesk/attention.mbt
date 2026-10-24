@@ -303,7 +303,8 @@ fn attention_item(
     })
     |> ignore
     match dismiss {
-      Some(d) if hover => {
+      // (always to a finger, which hovers over nothing)
+      Some(d) if hover || @ui.pointing() is Finger => {
         c.cursor(drop, Hand)
         if c.clicked(drop) {
           d()

@@ -366,7 +366,9 @@ pub fn set_dark(dark : Bool?) -> Unit {
 
 ///|
 /// Whether the system is a phone's or a tablet's (iOS, Android), whose app is still.fail's Android app at any width
-/// (an opened foldable, a phone on its side): its own theme and pages, never the desktop's.
+/// (an opened foldable, a phone on its side): what the layout and the theme go by, with the system's size classes (its
+/// own theme and pages; the wide frame only where the system calls the window regular both ways). How things answer
+/// the hand is not this: @ui.pointing.
 pub fn touch_system() -> Bool {
   let p = @ui.platform()
   p == 1 || p == 2
