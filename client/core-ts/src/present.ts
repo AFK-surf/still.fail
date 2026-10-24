@@ -720,7 +720,31 @@ export function profile(p: J): J {
   o.modelsText = modelsText;
   o.available = available;
   o.modelsReading = !isObject(o.check) && !decisionOnly;
+  // What it is, in a word (a page's facts): the machine's own login, its provider, else its kind of account.
+  o.kindText = o.machine === true ? t("core-views.present.profile.machine") : (o.providerName ?? accessLabel(str(kind) ?? ""));
+  // Who a sign-in goes to: OpenCode for OpenCode Go, Kimi for Kimi Code, else its runtime's vendor.
+  o.signInProvider = kind === "opencode-go" ? "OpenCode" : get(o.access, "provider") === "kimi-code" ? "Kimi"
+    : (SIGN_IN[str(o.runtime) ?? ""] ?? "ChatGPT");
+  // Its last check in a line (its detail, without the 可用 a working one starts with: its state says that), or that it
+  // has none yet.
+  const detailOf = str(get(o.check, "detail"));
+  o.checkLine = isObject(o.check) ? (detailOf ?? "").replace(/^可用[，,]\s*/, "") : t("core-views.present.profile.never_checked");
   return o;
+}
+
+/// Who a runtime's subscription signs in to.
+const SIGN_IN: Record<string, string> = { claude: "Claude", grok: "Grok", cursor: "Cursor", devin: "Devin" };
+
+/// A kind of account in words.
+function accessLabel(kind: string): string {
+  switch (kind) {
+    case "subscription": return t("core-views.present.access.subscription");
+    case "opencode-go": return "OpenCode Go";
+    case "anthropic-api": return "Anthropic API";
+    case "api-provider": return t("core-views.present.access.provider");
+    case "env": return t("core-views.present.access.env");
+    default: return "";
+  }
 }
 
 const KINDS = new Set(["subscription", "anthropic-api", "opencode-go", "api-provider", "env"]);

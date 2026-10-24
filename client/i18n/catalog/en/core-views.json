@@ -550,5 +550,10 @@
   },
   "core-views.station.silent": "Not responding: {name} cloud reports it online, but its status can't be read. The machine may be offline or asleep.",
   "core-views.station.away": "Offline: open {name} on that machine to reconnect",
-  "core-views.station.never_connected": "Never connected: open {name} on that machine"
+  "core-views.station.never_connected": "Never connected: open {name} on that machine",
+  "core-views.present.profile.machine": "Terminal sign-in",
+  "core-views.present.access.subscription": "Subscription",
+  "core-views.present.access.provider": "API provider",
+  "core-views.present.access.env": "Custom environment variables",
+  "core-views.present.profile.never_checked": "Not checked yet"
 }

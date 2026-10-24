@@ -472,5 +472,10 @@
   "core-views.station.running_agents": "{n} 个 agent 正在运行",
   "core-views.station.silent": "无响应：{name} cloud 显示其在线，但始终无法读取其状态，该机器可能已断网或处于睡眠状态",
   "core-views.station.away": "离线：在该机器上打开 {name} 即可重新连接",
-  "core-views.station.never_connected": "尚未连接：在该机器上打开 {name}"
+  "core-views.station.never_connected": "尚未连接：在该机器上打开 {name}",
+  "core-views.present.profile.machine": "终端里的登录",
+  "core-views.present.access.subscription": "订阅账号",
+  "core-views.present.access.provider": "API 服务商",
+  "core-views.present.access.env": "自定义环境变量",
+  "core-views.present.profile.never_checked": "尚未检查"
 }

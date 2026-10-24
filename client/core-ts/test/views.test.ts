@@ -15,7 +15,7 @@ import { EVICT_AFTER_MS, Store, type Source, type Value } from "../src/store.ts"
 import { FakeHost } from "../src/testing.ts";
 import { attention, choices, runnableOn } from "../src/views/models.ts";
 import { Views, betaOffered, blockedUnder, chatDerive, down, shownMessage } from "../src/views/views.ts";
-import { installView } from "../src/present.ts";
+import { installView, profile as presentProfile } from "../src/present.ts";
 
 holdLanguage();
 // deno-lint-ignore no-explicit-any
@@ -1989,4 +1989,17 @@ test("a_station_says_how_it_is_and_what_is_wrong_with_it_in_the_cores_words", as
   t.set(overview("ws/a"), { ...overviewOf([], []), counts: { sessions: 2, running: 2, warm: 0 } });
   await t.read(list, 1);
   assert.deepEqual([of("ws/a").stateText, of("ws/a").stateBusy, of("ws/a").problems], ["2 个 agent 正在运行", true, []]);
+});
+
+test("a_profile_says_what_it_is_who_signs_it_in_and_its_last_check_in_the_cores_words", () => {
+  // Accounts.tsx worked these out itself (ACCESS labels, signInProvider, the check's detail without 可用): the core's
+  // now, for the web's page and the desktop app's.
+  const sub = presentProfile(profile("p1", { check: { state: "ok", detail: "可用，Claude Max", models: [] } }));
+  assert.deepEqual([sub.kindText, sub.signInProvider, sub.checkLine], ["订阅账号", "Claude", "Claude Max"]);
+  const codex = presentProfile(profile("p2", { runtime: "codex", runtimes: ["codex"] }));
+  assert.deepEqual([codex.signInProvider, codex.checkLine], ["ChatGPT", "尚未检查"]);
+  const machine = presentProfile(profile("p3", { machine: true }));
+  assert.equal(machine.kindText, "终端里的登录");
+  const go = presentProfile(profile("p4", { access: { kind: "opencode-go", key: "" } }));
+  assert.deepEqual([go.kindText, go.signInProvider], ["OpenCode Go", "OpenCode"]);
 });

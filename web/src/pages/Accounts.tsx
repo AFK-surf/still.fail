@@ -4,7 +4,7 @@ import { Chart, ChevronRight, Edit, External, LogIn, Plus, Refresh, Trash } from
 import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router";
 import { useAction, useApi, useMemberships, useOverview, useProfiles, type AccessKind, type LoginJob, type Overview, type ProfileInput, type Profile } from "../api.ts";
-import { ACCESS, KEYED, RUNTIME_LABEL } from "../format.ts";
+import { KEYED, RUNTIME_LABEL } from "../format.ts";
 import { useUsage, usageCss } from "../Usage.tsx";
 import { pickModelsPath, useProfilesSidebar } from "../ProfilesNav.tsx";
 import { hosts } from "../cloud/settings.tsx";
@@ -120,7 +120,7 @@ function AccountView({ profile, overview }: { profile: Profile; overview: Overvi
   const entry = useProfiles(workspace).value?.items.find((e) => e.members?.some((m) => m.station === station.address && m.profileId === profile.id));
   // What it is, in a line: its kind, the address signed in (when not its name), where it is.
   const facts = [
-    profile.machine ? t("web-main.profile.machine") : profile.providerName ?? ACCESS[profile.access.kind].label,
+    profile.kindText,
     profile.email && profile.email !== profile.name ? profile.email : null,
     entry?.where,
   ].filter(Boolean).join(" · ");
@@ -142,7 +142,7 @@ function AccountView({ profile, overview }: { profile: Profile; overview: Overvi
           <p className={`${pagesCss.identitySub} ${css.profileState}`}>
             {profile.checkTone !== "green" && <Pill tone={profile.checkTone}>{profile.checkText}</Pill>}
             {/* Keep check details without repeating the healthy status. */}
-            <span>{latest ? latest.detail.replace(/^可用[，,]\s*/, "") : t("web-pages.profiles.neverChecked")}</span>
+            <span>{profile.checkLine}</span>
             {latest && <span className={shellCss.muted}>{tx("web-pages.profiles.checkedAt", { time: <Time stamp={latest.time?.checkedAt} /> })}</span>}
             <IconButton label={check.busy ? t("web-pages.version.checking") : t("web-pages.profiles.recheck")} icon={Refresh} busy={check.busy} onClick={() => void check.run()} />
           </p>
@@ -505,7 +505,7 @@ function SignIn({ profile, needed }: { profile: Profile; needed: boolean }) {
   const cancel = useAction(() => api.cancelLogin(profile.id));
   const send = useAction(() => api.loginCode(profile.id, code), () => setCode(""));
   const active = job && ["starting", "needs_code", "needs_approval", "verifying"].includes(job.state);
-  const provider = signInProvider(profile);
+  const provider = profile.signInProvider ?? "";
   // Announce a sign-in finishing while the page is open, not one that finished earlier.
   const previous = useRef(job?.state);
   useEffect(() => {
@@ -547,8 +547,6 @@ function SignIn({ profile, needed }: { profile: Profile; needed: boolean }) {
   );
 }
 
-/** Who a profile signs in to: OpenCode for OpenCode Go, Kimi for Kimi Code, else its runtime's vendor. */
-const signInProvider = (profile: Profile) => (profile.access.kind === "opencode-go" ? "OpenCode" : profile.access.provider === "kimi-code" ? "Kimi" : profile.runtime === "claude" ? "Claude" : profile.runtime === "grok" ? "Grok" : profile.runtime === "cursor" ? "Cursor" : profile.runtime === "devin" ? "Devin" : "ChatGPT");
 
 /**
  * A device sign-in (Codex's, Grok's, OpenCode's, Kimi's): the code comes first and is copied as the login page opens, so it is
