@@ -1,27 +1,66 @@
-// The rail's places beyond the chats in the wide frame, as the web's (ember web/src/cloud/workspace.tsx
-// StationsSidebar, ProfilesSidebar; cloud/StationPage.tsx StationsNav, StationRow; ProfilesNav.tsx): Station and Profile
-// each a list of their own in the sidebar (添加 in the band over it), the one picked its page beside it (the first to
-// begin with); 连接 and 用量 a page across the pane, no sidebar.
+// The rail's places beyond the chats and the files, as the web's (ember web/src/cloud/workspace.tsx StationsSidebar,
+// ProfilesSidebar; cloud/StationPage.tsx StationsNav, StationRow; ProfilesNav.tsx): Station and Profile each a list of
+// their own in the sidebar (添加 in the band over it), the one picked its page beside it (the first to begin with); 连接
+// and 用量 a page across the pane, no sidebar. The pages themselves are still the settings' package's
+// (@settings.page) but for 连接's (connects.mbt).
 
 ///|
-/// A place's sidebar, the stations' or the profiles' (`desk_pages().side`).
-fn sidebar(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
-  match @sfdesk.lit_place() {
-    "stations" => stations_side(c, src, w)
-    _ => profiles_side(c, src, w)
+/// A place of the rail's in the pane: Station's and Profile's the page picked in their list, 连接's its page, the
+/// others (用量) the settings' page of it across the pane.
+fn place_page(c : @ui.Ctx, src : Source, w : Workspace, pages : Pages, place : String) -> Unit {
+  let core = (pages.core)(src, w)
+  let here = @settings.here_of(core, w.id, w.name)
+  // (at the stack's root: no back over its head)
+  @settings.wide_deep.val = false
+  @settings.frame(core, here, root=true)
+  match place {
+    "stations" | "profiles" => place_split(c, src, w, pages, place)
+    "connects" => c.box(style=place_across, fn() { connects_page(c, core, here) }) |> ignore
+    _ =>
+      c.box(style=place_across, fn() {
+        match @settings.route_of(place) {
+          Some(r) => @settings.page(c, core, here, r, root=true)
+          None => ()
+        }
+      })
+      |> ignore
   }
 }
 
 ///|
+/// A place's sidebar, the stations' or the profiles'.
+fn place_sidebar(c : @ui.Ctx, src : Source, w : Workspace, pages : Pages) -> Unit {
+  match lit_place() {
+    "stations" => stations_side(c, src, w, pages)
+    _ => profiles_side(c, src, w, pages)
+  }
+}
+
+///|
+/// The page picked in a place with a list of its own (Station's, Profile's), by place; none: the first.
+// kept across runs: said by a row pressed; places_reset empties it
+let place_pick : Map[String, Route] = {}
+
+///|
+fn places_reset() -> Unit {
+  place_pick.clear()
+}
+
+///|
+/// A page across the pane (连接, 用量: no sidebar), on the page's ground.
+// kept across runs: a value (no field of it changes)
+let place_across : @ui.Style = @ui.style(w=Full, h=Full, bg=Bg)
+
+///|
 /// The page picked in a place (the stations' or the profiles' list), by place; none: the first.
 fn place_route(src : Source, w : Workspace, place : String) -> @settings.Route? {
-  match wide.place_pick.get(place) {
+  match place_pick.get(place) {
     Some(r) => Some(r)
     None =>
       match place {
         "stations" =>
           match stations_listed(src, w).get(0) {
-            Some(s) => Some(@settings.Route::Station(text(Some(s), "station")))
+            Some(s) => Some(Route::Station(text(Some(s), "station")))
             None => None
           }
         "profiles" =>
@@ -48,20 +87,20 @@ fn stations_listed(src : Source, w : Workspace) -> Array[Json] {
 fn profile_route(e : Json?) -> @settings.Route {
   let signed = items(e, "members").filter(fn(m) { text(Some(m), "role") != "user" }).length()
   if signed > 1 {
-    @settings.Route::ProfileAccount(text(e, "key"))
+    Route::ProfileAccount(text(e, "key"))
   } else {
-    @settings.Route::Profile(text(e, "station"), text(field(e, "profile"), "id"))
+    Route::Profile(text(e, "station"), text(field(e, "profile"), "id"))
   }
 }
 
 ///|
 /// The page in the pane for a place with a list of its own: the one picked, as the settings draw it.
-fn place_page_wide(c : @ui.Ctx, src : Source, w : Workspace, place : String) -> Unit {
-  let core = settings_core(src, w)
+fn place_split(c : @ui.Ctx, src : Source, w : Workspace, pages : Pages, place : String) -> Unit {
+  let core = (pages.core)(src, w)
   c.box(style=place_pane, fn() {
     match place_route(src, w, place) {
       Some(r) => @settings.page(c, core, @settings.here_of(core, w.id, w.name), r, root=true)
-      None => @settings.page(c, core, @settings.here_of(core, w.id, w.name), @settings.Route::Stations, root=true)
+      None => @settings.page(c, core, @settings.here_of(core, w.id, w.name), Route::Stations, root=true)
     }
   })
   |> ignore
@@ -69,19 +108,19 @@ fn place_page_wide(c : @ui.Ctx, src : Source, w : Workspace, place : String) -> 
 
 ///|
 /// The stations' sidebar (StationsNav): 添加 station, then a row each.
-fn stations_side(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
-  let core = settings_core(src, w)
+fn stations_side(c : @ui.Ctx, src : Source, w : Workspace, pages : Pages) -> Unit {
+  let core = (pages.core)(src, w)
   let here = @settings.here_of(core, w.id, w.name)
   let picked = place_route(src, w, "stations")
   c.box(style=place_side, fn() {
-    @sfdesk.side_top(c)
+    side_top(c)
     c.box(style=place_list, fn() {
-      @sfdesk.nav_action(c, "stations/add", tr("web-pages.settings.stations.add"), @settings.place_action(core, here, "stations"))
+      nav_action(c, "stations/add", @sf.t("web-pages.settings.stations.add"), @settings.place_action(core, here, "stations"))
       for s in stations_listed(src, w) {
         let s = Some(s)
         let address = text(s, "station")
-        let on = picked == Some(@settings.Route::Station(address))
-        station_side_row(c, src, s, on, fn() { wide.place_pick["stations"] = @settings.Route::Station(address) })
+        let on = picked == Some(Route::Station(address))
+        station_side_row(c, src, s, on, fn() { place_pick["stations"] = Route::Station(address) })
       }
     })
     |> ignore
@@ -99,20 +138,20 @@ fn station_side_row(c : @ui.Ctx, src : Source, s : Json?, on : Bool, pick : () -
   let meters = if online { items(field(s, "host"), "meters") } else { [] }
   let net = if online { (src.topic)("stationNet", { "station": Json::string(address) }).value } else { None }
   let running = number(field(field(s, "overview"), "counts"), "running")
-  if @sfdesk.nav_row(c, "stations/" + address, on, align=AStart, fn() {
+  if nav_row(c, "stations/" + address, on, align=AStart, fn() {
       c.box(style=place_mark, fn() {
         @sf.station_icon(c, text(s, "emoji"), text(s, "icon"), @sf.row_icon, t.p.text)
       })
       |> ignore
       c.box(style=place_row_words, fn() {
         c.box(style=place_row_head, fn() {
-          c.text(text(s, "name"), style=place_name) |> ignore
+          c.text(text(s, "name"), style=place_row_name) |> ignore
           c.box(style=place_end, fn() {
             c.box(style=if online { place_dot_on } else { place_dot_off }, fn() {  }) |> ignore
             if !online {
               c.text(text(s, "summary"), style=place_meta) |> ignore
             } else if running > 0.0 {
-              c.text(fill("web-pages.stations.page.runningShort", [("n", running.to_int().to_string())]), style=place_busy)
+              c.text(@sf.t("web-pages.stations.page.runningShort", args=[("n", running.to_int().to_string())]), style=place_busy)
               |> ignore
             }
           })
@@ -161,47 +200,47 @@ fn station_side_row(c : @ui.Ctx, src : Source, s : Json?, on : Bool, pick : () -
 ///|
 /// The profiles' sidebar (ProfilesNav): 添加 Profile, a section each kind of account, a row an account; then each
 /// station's own logins not made profiles yet.
-fn profiles_side(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
+fn profiles_side(c : @ui.Ctx, src : Source, w : Workspace, pages : Pages) -> Unit {
   let t = @sf.theme()
-  let core = settings_core(src, w)
+  let core = (pages.core)(src, w)
   let here = @settings.here_of(core, w.id, w.name)
   let picked = place_route(src, w, "profiles")
   let list = items((src.topic)("profiles", { "scope": Json::string(w.id) }).value, "items")
   c.box(style=place_side, fn() {
-    @sfdesk.side_top(c)
+    side_top(c)
     c.box(style=place_list, fn() {
-      @sfdesk.nav_action(c, "profiles/add", tr("web-pages.settings.profiles.add"), @settings.place_action(core, here, "profiles"))
+      nav_action(c, "profiles/add", @sf.t("web-pages.settings.profiles.add"), @settings.place_action(core, here, "profiles"))
       let mut group = ""
       for e in list {
         let e = Some(e)
         if text(e, "group") != group {
           group = text(e, "group")
-          @sfdesk.nav_heading(c, text(e, "groupTitle"))
+          nav_heading(c, text(e, "groupTitle"))
         }
         let p = field(e, "profile")
         let route = profile_route(e)
         let usable = flag(e, "usable")
         let trouble = if !usable {
-          fill("web-pages.settings.profiles.hostAway", [("station", text(e, "hostName"))])
+          @sf.t("web-pages.settings.profiles.hostAway", args=[("station", text(e, "hostName"))])
         } else if text(p, "checkTone") != "green" {
           text(p, "checkText")
         } else {
           ""
         }
-        if @sfdesk.nav_row(c, "profiles/" + text(e, "key"), picked == Some(route), align=AStart, fn() {
+        if nav_row(c, "profiles/" + text(e, "key"), picked == Some(route), align=AStart, fn() {
             c.box(style=place_mark, fn() {
               @sf.maker_mark(c, text(p, "providerMark"), text(p, "runtime"), @sf.row_icon) |> ignore
             })
             |> ignore
             c.box(style=place_row_words, fn() {
-              c.text(text(p, "name"), style=if usable { place_name } else { place_name_away }) |> ignore
+              c.text(text(p, "name"), style=if usable { place_row_name } else { place_name_away }) |> ignore
               c.box(style=place_end_line, fn() {
                 if trouble != "" {
                   c.text(trouble, style=place_trouble) |> ignore
                 }
                 let quota = field(p, "quota")
                 if text(quota, "state") == "ok" && items(quota, "windows").length() > 0 {
-                  quota_chips(c, quota, small=true)
+                  @settings.quota_chips(c, quota, small=true)
                 } else if trouble == "" {
                   c.text(text(e, "where"), style=place_meta) |> ignore
                 }
@@ -210,7 +249,7 @@ fn profiles_side(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
             })
             |> ignore
           }) {
-          wide.place_pick["profiles"] = route
+          place_pick["profiles"] = route
         }
       }
       // each station's own logins, not profiles yet
@@ -226,25 +265,25 @@ fn profiles_side(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
         if offers.length() == 0 {
           continue
         }
-        @sfdesk.nav_heading(c, fill("web-pages.profiles.machineSignedIn", [("station", text(s, "name"))]))
+        nav_heading(c, @sf.t("web-pages.profiles.machineSignedIn", args=[("station", text(s, "name"))]))
         for l in offers {
           let l = Some(l)
-          if @sfdesk.nav_row(c, "profiles/machine/" + station + "/" + text(l, "runtime"), false, align=AStart, fn() {
+          if nav_row(c, "profiles/machine/" + station + "/" + text(l, "runtime"), false, align=AStart, fn() {
               c.box(style=place_mark, fn() {
                 @sf.maker_mark(c, "", text(l, "runtime"), @sf.row_icon) |> ignore
               })
               |> ignore
               c.box(style=place_row_words, fn() {
-                c.text(runtime_label(text(l, "runtime")), style=place_name) |> ignore
+                c.text(@settings.runtime_label(text(l, "runtime")), style=place_row_name) |> ignore
                 c.box(style=place_end_line, fn() {
                   c.box(style=place_grow, fn() { c.text(text(l, "email"), style=place_meta) |> ignore }) |> ignore
-                  c.text(tr("android-settings.machine.use"), style=place_use) |> ignore
+                  c.text(@sf.t("android-settings.machine.use"), style=place_use) |> ignore
                 })
                 |> ignore
               })
               |> ignore
             }) {
-            app.nav.push(Setting(@settings.Route::NewProfile(station)))
+            app.nav.push(Setting(Route::NewProfile(station)))
           }
         }
       }
@@ -295,7 +334,7 @@ let place_grow : @ui.Style = @ui.style(w=@sf.grow, clip=true)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let place_name : @ui.TextStyle = @ui.text_style(size=Sm, color=Fg, wrap=false, w=@sf.grow)
+let place_row_name : @ui.TextStyle = @ui.text_style(size=Sm, color=Fg, wrap=false, w=@sf.grow)
 
 ///|
 // kept across runs: a value (no field of it changes)
