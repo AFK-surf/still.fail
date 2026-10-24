@@ -35,9 +35,28 @@ pub fn request_frame() -> Unit {
 }
 
 ///|
-/// The system: 0 macOS, 1 iOS, 2 Android, 3 Windows, 4 a browser (a Tester's `platform`).
+/// The system: 0 macOS, 1 iOS, 2 Android, 3 Windows, 4 a browser (a Tester's `platform`; a program's over its host's:
+/// set_platform).
 pub fn platform() -> Int {
-  h_platform()
+  match fake.val {
+    Some(_) => h_platform()
+    None => if said_platform.val >= 0 { said_platform.val } else { h_platform() }
+  }
+}
+
+///|
+/// The system a program says it plays, over its host's (set_platform); -1: its host's.
+// kept across runs: what the program says once as it starts, before any frame
+let said_platform : Ref[Int] = Ref(-1)
+
+///|
+/// The system this program plays from now on, over its host's (None: its host's again), as a Tester plays its
+/// `platform`: a run on one system made as another's (a phone's screens and flows recorded on a Mac: sffix's and the
+/// app's MBUI_PLATFORM). What the app reads of the system (platform, and by it the hand's default: pointing) and how its
+/// touches and fields feel (feel_as) are that system's; the host's own keys and window stay its own. A Tester's own is
+/// over it.
+pub fn set_platform(p : Int?) -> Unit {
+  said_platform.val = p.unwrap_or(-1)
 }
 
 ///|
@@ -60,7 +79,7 @@ pub fn pointing() -> Pointing {
     None =>
       match said_pointing.val {
         Some(p) => p
-        None => platform_pointing(h_platform())
+        None => platform_pointing(platform())
       }
   }
 }

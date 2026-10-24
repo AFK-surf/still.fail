@@ -787,10 +787,11 @@ fn bar_card(c : @ui.Ctx, core : Core, i : Int, set : Array[String], only : Bool,
                 }
                 // at the icon's top right: 8 over the top of what the slot holds, 12 under the slot's own top
                 // (BarSettings.kt: TopCenter of the slot's padded content, offset 16, -8)
-                let minus = c.box(w=Px(20.0), h=Px(20.0), radius=10.0, bg=t.p.chip, tx=16.0, ty=4.0, align=ACenter, justify=JCenter, id=rid, fn() {
+                let said = fill("android-misc.bar.remove", [("name", tr("android-misc.bar.place." + key))])
+                let minus = c.box(w=Px(20.0), h=Px(20.0), radius=10.0, bg=t.p.chip, tx=16.0, ty=4.0, align=ACenter, justify=JCenter, id=rid, label=said, fn() {
                   @sf.icon(c, "minus", size=12.0, color=t.p.muted) |> ignore
                 })
-                c.semantics(minus, Button, id=rid, label=fill("android-misc.bar.remove", [("name", tr("android-misc.bar.place." + key))]))
+                c.semantics(minus, Button, id=rid, label=said)
               })
               |> ignore
             }

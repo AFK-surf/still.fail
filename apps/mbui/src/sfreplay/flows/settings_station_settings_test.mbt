@@ -38,7 +38,7 @@ test "82-station-settings" {
     f.wheel_at("=Agent 环境变量", -1200.0)
     f.tap("=软件与设备")
     // (under its software, a row each: past the window's foot)
-    f.wheel_at("=软件与更新", 600.0)
+    f.wheel_at("=软件与更新", 2000.0)
     f.tap("=检查更新")
     f.end()
   })

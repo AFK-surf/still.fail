@@ -24,8 +24,8 @@ case "${1:-test}" in
     shot_ms=3000
     for m in $modes; do
       log=out/screens/$m.log
-      # (a phone's screens: pointed at as a phone is, a finger, as screens_wbtest.mbt draws them)
-      MBUI_POINTING=finger MBUI_TEXT_RECORD=1 MBUI_DRAW_LOG=1 MBUI_BENCH=-1 MBUI_WIN=390x844 MBUI_FIXTURE=$m MBUI_SCRIPT=shot MBUI_SHOT_MS=$shot_ms \
+      # (a phone's screens: on a phone's system, pointed at by a finger, as screens_wbtest.mbt draws them)
+      MBUI_PLATFORM=android MBUI_TEXT_RECORD=1 MBUI_DRAW_LOG=1 MBUI_BENCH=-1 MBUI_WIN=390x844 MBUI_FIXTURE=$m MBUI_SCRIPT=shot MBUI_SHOT_MS=$shot_ms \
         MBUI_SHOT_NAME=$m MBUI_SHOT_DIR=$PWD/out/screens ./_build/native/release/build/stillfail/sffix/sffix.exe > $log 2>&1 \
         || { echo "$m: sffix failed ($?): $log"; fail=1; continue; }
       python3 scripts/screens.py keep $m $log || fail=1

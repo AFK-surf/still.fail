@@ -93,8 +93,8 @@ fn screen(mode : String, opening : Double) -> @ui.Tester raise {
     },
     w=window_w,
     h=window_h,
-    // (a phone's screens, pointed at as a phone is, on the system the Mac's run was on)
-    pointing=hand_of(window_w),
+    // (a phone's screens, on the phone's system the Mac's run played: screens.sh rec's MBUI_PLATFORM)
+    platform=platform_of(window_w),
     text~,
     // (what its host said of its views before its first frame, said before the Tester's: Tester::new's `run`)
     run=text,
