@@ -25,9 +25,7 @@ jobs:
   # into kept in the Actions cache by content (MBC_STORE: main's newest and a branch's own together): 667 tests,
   # ~170 s a part with them, ~390 s without (2026-10-22). A merge's evidence and main's, apart from the app's beta (mbui.yml),
   # which its tests do not hold back (as asked, 2026-10-19). The latest MoonBit (.github/actions/mbui-moonbit); mbui in
-  # apps/mbui/mbui. Its tests' two parts (scripts/test.sh's PARTS) on a runner each, the check with the app's, and sfapp's
-  # tests in one process on a third (`whole`: what one file leaves behind that a later one trips on, which the app
-  # part's shards hide, 2026-10-24): no macOS
+  # apps/mbui/mbui. Its tests' two parts (scripts/test.sh's PARTS) on a runner each, the check with the app's: no macOS
   # runner (a test's program is the same C on any system; the Apple toolchain builds the apps, mbui.yml). No ThinLTO
   # parts: the apps are not built with it (scripts/mbc's lto_for, 2026-10-24).
   native:
@@ -37,7 +35,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        part: [app, replay, whole]
+        part: [app, replay]
     env:
       MBC_STORE: ${{ github.workspace }}/apps/mbui/_build/native/release/mbc-store
       CACHE_PREFIX: mbui-linux-store-${{ matrix.part }}-
@@ -100,7 +98,10 @@ jobs:
           # (mbc's account of each program's build, its units compiled and its link, said after: moon shows a
           # compiler's output only when it fails, and where a part's time went was not to be seen)
           export MBC_LOG="$RUNNER_TEMP/mbc.log"
-          TIMES=1 MBC_REAL_CC=clang TARGETS=native PARTS=${{ matrix.part }} LINES_OUT=40 bash apps/mbui/scripts/test.sh 2>&1 | tee "$RUNNER_TEMP/mbui-test.log"
+          # (sfapp's tests in one process, SFAPP_SHARDS=1, beside the app part's other packages: what one file leaves
+          # behind that a later one trips on shows here, which shards, a process each, hide. Over the part's own build,
+          # its run ~70 s on one core against the shards' ~38 s: the part under 180 s, 2026-10-24)
+          TIMES=1 MBC_REAL_CC=clang TARGETS=native PARTS=${{ matrix.part }} SFAPP_SHARDS=1 LINES_OUT=40 bash apps/mbui/scripts/test.sh 2>&1 | tee "$RUNNER_TEMP/mbui-test.log"
       - name: The mbui app's check (detlint, then native type-checked)
         if: matrix.part == 'replay'
         # (after the tests: its type-check over the tests' build, not the build after it, 2026-10-23. On the replay
