@@ -16,6 +16,15 @@ extern "C" fn cl_text(id : Int) -> String = "mb_host_clip_text"
 extern "C" fn cl_png(id : Int) -> Bytes = "mb_host_clip_png"
 
 ///|
+extern "C" fn cl_files(id : Int) -> Int = "mb_host_clip_files"
+
+///|
+extern "C" fn cl_file_name(id : Int, i : Int) -> String = "mb_host_clip_file_name"
+
+///|
+extern "C" fn cl_file(id : Int, i : Int) -> Bytes = "mb_host_clip_file"
+
+///|
 extern "C" fn cl_end(id : Int) -> Unit = "mb_host_clip_end"
 
 ///|

@@ -76,7 +76,7 @@ pub fn composer(
   let w = writing(src, spec.draft)
   let no_files = spec.locked || spec.offline
   // what the system's picker answered, taken in before the box is laid out (the host's word that it answered brings
-  // this frame); a picture pasted into the field; what 文件's 添加到消息 put in for this draft
+  // this frame); the files pasted into the field; what 文件's 添加到消息 put in for this draft
   take_in(c, src, spec, w, no_files)
   // switched to another chat (Chat.tsx: its thread another; a new chat's has none, whichever station): the cursor in
   // it, with a mouse, before it is first drawn; not taken from a field in use (the switcher's, a dialog's)
@@ -186,8 +186,8 @@ fn keyboard_let_go(c : @ui.Ctx, cap : Int) -> Unit {
 
 ///|
 /// What comes into the draft from outside the field before the box is laid out: the files the system's picker
-/// answered (for this draft), a picture pasted into the field (⌘V with one on the clipboard, as the web's paste takes
-/// the clipboard's files), the rows the 文件 tab's 添加到消息 put in (named by their path, or as files where this chat
+/// answered (for this draft), the files pasted into the field (⌘V with files or a picture on the clipboard, as the
+/// web's paste takes the clipboard's files), the rows the 文件 tab's 添加到消息 put in (named by their path, or as files where this chat
 /// takes what is dragged in so).
 fn take_in(c : @ui.Ctx, src : Source, spec : ComposerSpec, w : Writing, no_files : Bool) -> Unit {
   match composing.picking {
@@ -217,8 +217,11 @@ fn take_in(c : @ui.Ctx, src : Source, spec : ComposerSpec, w : Writing, no_files
     }
     _ => ()
   }
-  match c.field_picture(composer_field_key) {
-    Some(png) if !no_files => writing_add(src, w, spec.station, pasted_picture_name, png)
+  match c.field_files(composer_field_key) {
+    Some(files) if !no_files =>
+      for f in files {
+        writing_add(src, w, spec.station, f.0, f.1)
+      }
     _ => ()
   }
   // a message's files quoted from their menus (sfpages menus.mbt): each a quote with its file in its card
@@ -352,7 +355,7 @@ fn composer_text(
       enter_sends=@ui.pointing() is Mouse,
       // (the `@` menu open: ↑ / ↓ choose in it, Enter and Tab pick)
       leaves=ref_leaves(src, spec, w, c.editor_focused(composer_field_key)),
-      pictures=!no_files,
+      files=!no_files,
       // words pasted at once past the core's bound: a file of their own (Chat.tsx onPaste)
       paste_limit=if no_files || w.starting { 0 } else { @sfbase.paste_threshold(c, src) },
       look=@sfbase.refs_look(w.key, p.accent),
@@ -735,10 +738,6 @@ let page_move_ms : Double = 340.0
 ///|
 /// Typing warms the agent's runtime at most once a minute.
 let warm_every_ms : Double = 60000.0
-
-///|
-/// A picture pasted is called so (a browser's paste names one so).
-let pasted_picture_name : String = "image.png"
 
 ///|
 /// The words' size and line (composerText: 14 on 1.5), the most it grows to (480, or 40% of the window).

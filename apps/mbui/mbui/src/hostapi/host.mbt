@@ -169,6 +169,9 @@ pub(open) trait Host {
   cl_picture(Self, Int) -> Int = _
   cl_text(Self, Int) -> String = _
   cl_png(Self, Int) -> Bytes = _
+  cl_files(Self, Int) -> Int = _
+  cl_file_name(Self, Int, Int) -> String = _
+  cl_file(Self, Int, Int) -> Bytes = _
   cl_end(Self, Int) -> Unit = _
   cl_set(Self, String, Bytes, String) -> Unit = _
   dv_copy_shown(Self) -> Int = _
@@ -970,6 +973,21 @@ impl Host with cl_text(_, _) {
 
 ///|
 impl Host with cl_png(_, _) {
+  b""
+}
+
+///|
+impl Host with cl_files(_, _) {
+  0
+}
+
+///|
+impl Host with cl_file_name(_, _, _) {
+  ""
+}
+
+///|
+impl Host with cl_file(_, _, _) {
   b""
 }
 
@@ -2165,6 +2183,21 @@ fn cl_text(id : Int) -> String {
 ///|
 fn cl_png(id : Int) -> Bytes {
   current.val.cl_png(id)
+}
+
+///|
+fn cl_files(id : Int) -> Int {
+  current.val.cl_files(id)
+}
+
+///|
+fn cl_file_name(id : Int, i : Int) -> String {
+  current.val.cl_file_name(id, i)
+}
+
+///|
+fn cl_file(id : Int, i : Int) -> Bytes {
+  current.val.cl_file(id, i)
 }
 
 ///|

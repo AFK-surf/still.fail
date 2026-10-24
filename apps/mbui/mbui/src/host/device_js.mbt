@@ -21,6 +21,18 @@ extern "js" fn cl_png(id : Int) -> Bytes =
   #|(id) => globalThis.__mbhost.clipPng(id)
 
 ///|
+extern "js" fn cl_files(id : Int) -> Int =
+  #|(id) => (globalThis.__mbhost.clipFiles ? globalThis.__mbhost.clipFiles(id) : 0)
+
+///|
+extern "js" fn cl_file_name(id : Int, i : Int) -> String =
+  #|(id, i) => globalThis.__mbhost.clipFileName(id, i)
+
+///|
+extern "js" fn cl_file(id : Int, i : Int) -> Bytes =
+  #|(id, i) => globalThis.__mbhost.clipFile(id, i)
+
+///|
 extern "js" fn cl_end(id : Int) -> Unit =
   #|(id) => globalThis.__mbhost.clipEnd(id)
 

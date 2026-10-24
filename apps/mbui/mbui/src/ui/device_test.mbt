@@ -234,7 +234,7 @@ test "the clipboard read is waited on until the test gives it, taken the frame a
   assert_true(t.awaited().iter().any(fn(a) { a.contains("the clipboard read") }))
   t.clipboard_gives("hello")
   t.draw()
-  assert_eq(took.val, Some({ text: "hello", picture: NoPicture }))
+  assert_eq(took.val, Some({ text: "hello", picture: NoPicture, files: [] }))
   assert_true(t.find("pasted hello") is Some(_))
   assert_true(t.at_rest())
   // a picture (with words beside it), given before the app asks: its next read's
@@ -242,14 +242,21 @@ test "the clipboard read is waited on until the test gives it, taken the frame a
   t.clipboard_gives_png(b"\x89PNG\r\n\x1a\nxx", text="caption")
   ask.val = true
   t.draw()
-  assert_eq(took.val, Some({ text: "caption", picture: Png(b"\x89PNG\r\n\x1a\nxx") }))
+  assert_eq(took.val, Some({ text: "caption", picture: Png(b"\x89PNG\r\n\x1a\nxx"), files: [] }))
   // one too large
   took.val = None
   ask.val = true
   t.draw()
-  t.clipboard_gives_clip({ text: "", picture: TooLarge })
+  t.clipboard_gives_clip({ text: "", picture: TooLarge, files: [] })
   t.draw()
-  assert_eq(took.val, Some({ text: "", picture: TooLarge }))
+  assert_eq(took.val, Some({ text: "", picture: TooLarge, files: [] }))
+  // files (as Finder copies them: their names beside)
+  took.val = None
+  ask.val = true
+  t.draw()
+  t.clipboard_gives_files([("plan.pdf", b"%PDF-1.7")], text="plan.pdf")
+  t.draw()
+  assert_eq(took.val, Some({ text: "plan.pdf", picture: NoPicture, files: [("plan.pdf", b"%PDF-1.7")] }))
   t.assert_idle()
 }
 
@@ -263,7 +270,11 @@ test "the clipboard as the app took it is kept on the tape and given again to a 
   t.frame()
   ask.val = true
   t.draw()
-  t.clipboard_gives_png(b"\x89PNG\r\n\x1a\n01", text="a\nb")
+  t.clipboard_gives_clip({
+    text: "a\nb",
+    picture: Png(b"\x89PNG\r\n\x1a\n01"),
+    files: [("plan.pdf", b"%PDF-1.7"), ("a b.txt", b"")],
+  })
   t.draw()
   t.frame()
   let tape = t.tape()
@@ -278,7 +289,14 @@ test "the clipboard as the app took it is kept on the tape and given again to a 
   for f in frames {
     assert_eq(f.1, f.2, msg="frame \{f.0}")
   }
-  assert_eq(took2.val, Some({ text: "a\nb", picture: Png(b"\x89PNG\r\n\x1a\n01") }))
+  assert_eq(
+    took2.val,
+    Some({
+      text: "a\nb",
+      picture: Png(b"\x89PNG\r\n\x1a\n01"),
+      files: [("plan.pdf", b"%PDF-1.7"), ("a b.txt", b"")],
+    }),
+  )
 }
 
 ///|

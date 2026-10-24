@@ -1514,9 +1514,12 @@ fn composer(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView?, fresh? : Fres
       }
     None => ()
   }
-  // a picture pasted into the field (⌘V with one on the clipboard), as a file, as the web's paste takes one
-  match c.field_picture(field_key) {
-    Some(png) => add_file(src, d, r.station, pasted_picture_name, png, None)
+  // files pasted into the field (⌘V with files or a picture on the clipboard), as the web's paste takes them
+  match c.field_files(field_key) {
+    Some(files) =>
+      for f in files {
+        add_file(src, d, r.station, f.0, f.1, None)
+      }
     None => ()
   }
   // what the 文件 tab's 添加到消息 put in for this chat (src/sfdesk/drive_tab.mbt), named by their paths or as files
@@ -1655,10 +1658,6 @@ fn composer(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView?, fresh? : Fres
   // ＋'s Station 文件 (station_files.mbt)
   ref_sheet(c, src, d.key, r.station)
 }
-
-///|
-/// What a picture pasted is called (a browser's paste names one so).
-let pasted_picture_name : String = "image.png"
 
 ///|
 /// The roomy composer's choices beside ＋ (the web's composer toolbar): 4 apart, on ＋'s line.
@@ -1948,7 +1947,7 @@ fn composer_bar(
           enter_sends=@ui.pointing() is Mouse,
           paste_limit=if no_files { 0 } else { @sfbase.paste_threshold(c, src) },
           // ⌘V with a picture on the clipboard: it, as a file (Chat.tsx onPaste: the clipboard's files)
-          pictures=!no_files,
+          files=!no_files,
           // references to other chats drawn as marks (chat_refs.mbt RefMarks)
           look=@sfbase.refs_look(d.key, t.p.accent),
           // the draft's words, its own (another chat's draft: another field)
