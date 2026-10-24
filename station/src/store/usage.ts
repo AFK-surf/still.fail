@@ -155,14 +155,14 @@ export function usageGroups(db: DatabaseSync, from: number, to: number, utcOffse
 }
 
 /// A session's calls, added up by model (its day, thread, person and profile left empty): what its execution details
-/// show of it.
+/// show of it. As the database keeps them added up (schema.ts USAGE_TOTALS): asked each time the live view of a session
+/// at work tells its usage.
 export function usageOfSession(db: DatabaseSync, session: string): UsageGroup[] {
   return (
     db
       .prepare(
-        `SELECT runtime, model, fast, COUNT(*) AS calls, SUM(input) AS input, SUM(cache_read) AS cache_read,
-           SUM(cache_write) AS cache_write, SUM(cache_write_long) AS cache_write_long, SUM(output) AS output
-         FROM usage WHERE session = ?1 GROUP BY runtime, model, fast`,
+        `SELECT runtime, NULLIF(model, '') AS model, fast, calls, input, cache_read, cache_write, cache_write_long, output
+         FROM usage_totals WHERE session = ?1 AND calls > 0 ORDER BY runtime, model, fast`,
       )
       .all(session) as Json[]
   ).map((r) => ({

@@ -480,6 +480,60 @@ export function addSizeColumn(db: DatabaseSync): void {
   if (!has(db, "jobs", "size")) db.exec("ALTER TABLE jobs ADD COLUMN size TEXT");
 }
 
+/// What each session's calls add up to, by runtime, model ('' for none) and speed (store/usage.ts `usageOfSession`): kept
+/// by the database itself as calls are recorded (or their output grows), whatever station process records them. A
+/// session's usage is a few rows, where adding up its calls read every one of them, scattered over the table: some
+/// 20,000 for a long chat, seconds of reading on a machine short of memory, on the main thread, each time the live view
+/// of a session at work told its usage (ccvm, 2026-10-24: the station stopped answering for up to a minute).
+const USAGE_TOTALS = `
+CREATE TABLE usage_totals (
+  session TEXT NOT NULL,
+  runtime TEXT NOT NULL,
+  model TEXT NOT NULL,
+  fast INTEGER NOT NULL,
+  calls INTEGER NOT NULL,
+  input INTEGER NOT NULL,
+  cache_read INTEGER NOT NULL,
+  cache_write INTEGER NOT NULL,
+  cache_write_long INTEGER NOT NULL,
+  output INTEGER NOT NULL,
+  PRIMARY KEY (session, runtime, model, fast)
+) WITHOUT ROWID;
+INSERT INTO usage_totals
+  SELECT session, runtime, COALESCE(model, ''), fast, COUNT(*), SUM(input), SUM(cache_read), SUM(cache_write), SUM(cache_write_long), SUM(output)
+  FROM usage NOT INDEXED GROUP BY session, runtime, COALESCE(model, ''), fast;
+CREATE TRIGGER usage_totals_add AFTER INSERT ON usage BEGIN
+  INSERT INTO usage_totals VALUES (NEW.session, NEW.runtime, COALESCE(NEW.model, ''), NEW.fast, 1, NEW.input, NEW.cache_read, NEW.cache_write, NEW.cache_write_long, NEW.output)
+  ON CONFLICT (session, runtime, model, fast) DO UPDATE SET calls = calls + 1, input = input + excluded.input, cache_read = cache_read + excluded.cache_read,
+    cache_write = cache_write + excluded.cache_write, cache_write_long = cache_write_long + excluded.cache_write_long, output = output + excluded.output;
+END;
+CREATE TRIGGER usage_totals_grow AFTER UPDATE OF output ON usage WHEN NEW.output <> OLD.output BEGIN
+  UPDATE usage_totals SET output = output + NEW.output - OLD.output
+  WHERE session = NEW.session AND runtime = NEW.runtime AND model = COALESCE(NEW.model, '') AND fast = NEW.fast;
+END;
+CREATE TRIGGER usage_totals_drop AFTER DELETE ON usage BEGIN
+  UPDATE usage_totals SET calls = calls - 1, input = input - OLD.input, cache_read = cache_read - OLD.cache_read, cache_write = cache_write - OLD.cache_write,
+    cache_write_long = cache_write_long - OLD.cache_write_long, output = output - OLD.output
+  WHERE session = OLD.session AND runtime = OLD.runtime AND model = COALESCE(OLD.model, '') AND fast = OLD.fast;
+END;
+`;
+
+/// The usage totals (USAGE_TOTALS), made once from the calls recorded before them, in the same transaction as the
+/// triggers that keep them from then on: no call is counted twice or missed. The making reads the table through once, in
+/// order (a second or two for 300,000 calls).
+export function addUsageTotals(db: DatabaseSync): void {
+  const made = () => db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'usage_totals'").get() !== undefined;
+  if (made()) return;
+  db.exec("BEGIN IMMEDIATE");
+  try {
+    if (!made()) db.exec(USAGE_TOTALS);
+    db.exec("COMMIT");
+  } catch (e) {
+    db.exec("ROLLBACK");
+    throw e;
+  }
+}
+
 /// The columns a station in several workspaces came with (docs/multi-workspace.md): which workspace a session's chat
 /// is in (sessions.ws) and whose archive policy a row is (archive_policy.ws); NULL is the station's home workspace.
 export function addWorkspaceColumns(db: DatabaseSync): void {

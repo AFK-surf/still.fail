@@ -47,6 +47,10 @@ const ADDED: [string, string][] = [["sessions", "ws"], ["archive_policy", "ws"],
 /// What those columns bring with them: an index of its own, and the `merged` view saying the column (letters).
 const ADDED_INDEXES = ["entries_letters"];
 const MERGED_ADDS = [", m.letter"];
+/// Tables the TS station makes as it opens (schema.ts `addUsageTotals`): each with its columns and the triggers that keep
+/// it (named after it).
+const MADE = ["usage_totals"];
+const made = (l: string) => MADE.some((t) => l.startsWith(`table ${t}:`) || l.startsWith(`  ${t}.`) || l.startsWith(`trigger ${t}_`));
 
 const noToken = <T extends { token: string }>(r: T) => {
   const { token: _, ...rest } = r;
@@ -79,7 +83,7 @@ test("a copy of a real station's data opens, reads the same, and takes a write c
     // Ignore only newly added columns; columns already present must still survive opening.
     const now = opened.filter((l) => !mine(l) || before.includes(l)).map(plain);
     assert.deepEqual(was.filter((l) => !now.includes(l)), [], "nothing changed or gone");
-    const added = now.filter((l) => !was.includes(l));
+    const added = now.filter((l) => !was.includes(l) && !made(l));
     for (const line of added) {
       const name = /^(?:table|index) (\w+):/.exec(line)?.[1] ?? /^  (\w+)\./.exec(line)?.[1];
       assert.ok(name && new RegExp(`CREATE (TABLE|INDEX) IF NOT EXISTS ${name} `).test(SCHEMA), `only the Rust SCHEMA's own: ${line.split("\n")[0]}`);

@@ -793,6 +793,31 @@ test("usage: a call is recorded once, its output grown; turns tell whom they wer
   h.stop();
 });
 
+test("usage: a session's calls added up by the database, those from before the totals and those an older station records too", () => {
+  const path = join(tempdir(), "usage.db");
+  const of = { turn: null, person: null, thread: null, profile: null };
+  const call = (id: string, model: string | null, output: number) => ({ id, at: 1000, model, subagent: false, fast: false, input: 1, cacheRead: 2, cacheWrite: 3, cacheWriteLong: 4, output });
+  const first = open(path);
+  session(first, "a");
+  first.recordUsage("/a.jsonl", { session: "a", offset: 1, model: "m" }, "claude", [[call("c1", "m", 5), of], [call("c2", null, 1), of]]);
+  first.close();
+  // A database from before the totals: what was recorded is added up as it is opened.
+  const before = new DatabaseSync(path);
+  before.exec("DROP TRIGGER usage_totals_add; DROP TRIGGER usage_totals_grow; DROP TRIGGER usage_totals_drop; DROP TABLE usage_totals;");
+  before.close();
+  const store = open(path);
+  // A call's output grown, a new call, and one recorded by a station process from before the totals.
+  store.recordUsage("/a.jsonl", { session: "a", offset: 2, model: "m" }, "claude", [[call("c1", "m", 9), of], [call("c3", "m", 2), of]]);
+  const older = new DatabaseSync(path);
+  older.exec("INSERT INTO usage (id, at, session, runtime, model, input, cache_read, cache_write, cache_write_long, output) VALUES ('c4', 1000, 'a', 'claude', 'm', 1, 2, 3, 4, 7)");
+  older.close();
+  assert.deepEqual(
+    store.usageOfSession("a").map((g) => [g.runtime, g.model, g.calls, g.input, g.cacheRead, g.cacheWrite, g.cacheWriteLong, g.output]),
+    [["claude", null, 1, 1, 2, 3, 4, 1], ["claude", "m", 3, 3, 6, 9, 12, 18]],
+  );
+  assert.deepEqual(store.usageOfSession("b"), []);
+});
+
 test("a session's usage as its summary says it: kept as told, a change told as the session's only once it rests", () => {
   const data = tempdir();
   const store = open(join(data, "stillfail.db"));
