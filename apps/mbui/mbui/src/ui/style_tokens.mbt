@@ -461,11 +461,13 @@ pub(all) enum Color {
 } derive(Eq, Show, Debug)
 
 ///|
-/// An edge's width (Tailwind's border widths, and a hairline: B0_5).
+/// An edge's width (Tailwind's border widths, and a hairline: B0_5; B1_5 a ring a little firmer than a line, as a dot
+/// looked at is drawn round).
 pub(all) enum Stroke {
   B0
   B0_5
   B1
+  B1_5
   B2
   B4
   B8
@@ -477,6 +479,7 @@ fn Stroke::px(self : Stroke) -> Double {
     B0 => 0.0
     B0_5 => 0.5
     B1 => 1.0
+    B1_5 => 1.5
     B2 => 2.0
     B4 => 4.0
     B8 => 8.0

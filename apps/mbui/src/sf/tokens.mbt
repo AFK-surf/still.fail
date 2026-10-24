@@ -1112,6 +1112,10 @@ pub let rail_in : @ui.Space = room(9.0)
 pub let rail_corner : @ui.Radius = rounded(9.0)
 
 ///|
+/// What sits in a small panel's corner (--panel-in: a menu's rows, a popover's), concentric with the panel's.
+pub let panel_in : @ui.Radius = rounded(small_panel_inner(r_menu))
+
+///|
 /// The closed bar's corner (shell.css.ts dock, closed: calc(9px * scale + 6px)): concentric with the places' grounds
 /// 6 in.
 pub let closed_bar_corner : @ui.Radius = rounded(surface_corner(6.0, 9.0))

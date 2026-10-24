@@ -558,7 +558,7 @@ fn rail_place(
   let marks = (src.topic)("workspaceMarks", { "workspace": Json::string(w.id) })
   let here = field(field(marks.value, "workspaces"), w.id)
   let dot = match place {
-    "attention" => (pages.bell)(src, w)
+    "attention" => bell_lit(src, w)
     "decisions" => count(here, "decisions") > 0
     _ => false
   }

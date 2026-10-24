@@ -291,62 +291,6 @@ fn agent_status(c : @ui.Ctx, src : Source, a : Json?) -> Unit {
 // ── the chat's own sheet (ChatInfo.kt) ──────────────────────────────────
 
 ///|
-/// The cloud's address, for a chat's link (the app's MBUI_CLOUD, else still.fail's own).
-fn cloud_origin() -> String {
-  match @ui.env("MBUI_CLOUD") {
-    "" => "https://app.still.fail"
-    o => o
-  }
-}
-
-///|
-/// A chat's still.fail link (ChatLink.kt chatLink): <cloud>/o/<workspace>/<station>/<session>; "" for a station of no
-/// workspace or a chat with no session yet.
-fn chat_link(station : String, session : String) -> String {
-  match station.find("/") {
-    Some(at) if at > 0 && at < station.length() - 1 && session != "" => {
-      let cloud = cloud_origin()
-      let base = if cloud.has_suffix("/") {
-        cloud.view(end_offset=cloud.length() - 1).to_owned()
-      } else {
-        cloud
-      }
-      base +
-      "/o/" +
-      station.view(end_offset=at).to_owned() +
-      "/" +
-      station.view(start_offset=at + 1).to_owned() +
-      "/" +
-      @codec.encode_uri_component(session)
-    }
-    _ => ""
-  }
-}
-
-///|
-/// Copies a chat's link as a reference is sent (ChatLink.kt copyChatLink, chatLinkText): `[title](link)`.
-fn copy_chat_link(c : @ui.Ctx, title : String, link : String) -> Unit {
-  let shown = title.replace_all(old="[", new=" ").replace_all(old="]", new=" ").replace_all(old="\n", new=" ").trim(chars=" ").to_string()
-  let shown = if shown == "" { link } else { shown }
-  // (its first 120 characters, as Android's chatLinkText cuts it)
-  let cut = StringBuilder()
-  let mut n = 0
-  for ch in shown {
-    if n < chat_link_most {
-      cut.write_char(ch)
-    }
-    n += 1
-  }
-  let shown = cut.to_string()
-  c.copy_text("[" + shown + "](" + link + ")")
-  say(c, tr("web-main.chat.linkCopied"))
-}
-
-///|
-/// How much of a chat's title its copied link carries (ChatLink.kt chatLinkText: 120 characters).
-let chat_link_most : Int = 120
-
-///|
 /// How tall the chat's sheet is over the navigation bar (ChatInfo.kt openChatInfo's fit, Android's reckoning of what it
 /// shows): its head, 56 an agent, 40 a thing to do (pin, Slack, Feishu, its sharing, archive, and two always), its
 /// public links' rows, the foot.

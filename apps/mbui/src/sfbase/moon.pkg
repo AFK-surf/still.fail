@@ -3,6 +3,7 @@ import {
   "mbui/ui",
   "mbui/hostapi",
   "mbui/kit",
+  "mbui/codec",
   "stillfail/sf",
   "stillfail/sfapp/settings",
 }

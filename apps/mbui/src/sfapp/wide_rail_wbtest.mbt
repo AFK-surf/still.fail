@@ -271,7 +271,7 @@ fn trouble_said(calls : Array[Made], key : String) -> Json? {
 }
 
 ///|
-test "wide: 待处理's panel lists a chat that waits on the viewer; 忽略 on its row pointed at lets it go (decision.dismiss), gone from the panel at once" {
+test "wide: 待处理's panel lists a chat that waits on the viewer; 忽略 on its row pointed at lets it go (decision.dismiss), gone from the panel at once; one gone wrong has none" {
   let calls : Array[Made] = []
   let marks : Json = {
     "badge": 1,
@@ -289,6 +289,17 @@ test "wide: 待处理's panel lists a chat that waits on the viewer; 忽略 on i
             "what": "选一个发布日期",
             "workspaceName": "Acme",
           },
+          {
+            "station": "ws1/st2",
+            "session": "s-c3",
+            "thread": 13,
+            "seq": 7,
+            "title": "夜里的构建又失败了",
+            "kind": "alert",
+            "text": "出问题：磁盘满了",
+            "what": "磁盘满了",
+            "workspaceName": "Acme",
+          },
         ],
       },
     },
@@ -298,6 +309,11 @@ test "wide: 待处理's panel lists a chat that waits on the viewer; 忽略 on i
   let (bx, by, bw, bh) = t.query(Button, label="待处理").unwrap().rect
   t.tap(bx + bw / 2.0, by + bh / 2.0)
   t.frame()
+  // one gone wrong is not let go from here (Attention.tsx: 忽略 for what waits on the viewer)
+  let (ax, ay) = t.find("磁盘满了").unwrap()
+  t.move(ax, ay)
+  t.frame()
+  assert_true(t.find("忽略") is None)
   let (x, y) = t.find("选一个发布日期").unwrap()
   t.move(x, y)
   t.frame()
@@ -411,4 +427,30 @@ test "wide: a newer build of the desktop app: 更新 at the open sidebar's top r
   let (fx, _, _, _) = t.query(Button, label="更新").unwrap().rect
   assert_eq(fx, update_closed_in)
   assert_eq(@sfdesk.wide.bar_pl, @sfdesk.bar_update_in)
+}
+
+///|
+test "wide: the lists' filter (components.tsx MineFilter): its tip; its menu has the list shown checked, 奏 its page, a filter back to the chats from it" {
+  let calls : Array[Made] = []
+  let t = wide_tester(calls)
+  let open_filter = fn() {
+    let (fx, fy, fw, fh) = t.query(Button, label="筛选会话：全部").unwrap().rect
+    t.tap(fx + fw / 2.0, fy + fh / 2.0)
+    t.frame()
+  }
+  open_filter()
+  assert_true(t.find("全部会话") is Some(_), msg=t.words().map(fn(w) { w.0 }).join("|"))
+  // 奏: its page, the menu closed
+  t.tap_text("奏")
+  t.frame()
+  assert_true(app.nav.top() == Decisions)
+  assert_false(@sfdesk.wide.filter_open)
+  // from 奏, 我参与的: the chats, filtered (prefs.set listFilter)
+  let (fx, fy, fw, fh) = t.query(Button, label="筛选会话：奏").unwrap().rect
+  t.tap(fx + fw / 2.0, fy + fh / 2.0)
+  t.frame()
+  t.tap_text("我参与的")
+  t.frame()
+  assert_eq(@sfdesk.lit_place(), "chats")
+  assert_true(named(calls, "prefs.set").iter().any(fn(m) { field(field(Some(m.params), "listFilter"), "ws1") == Some(Json::string("mine")) }))
 }

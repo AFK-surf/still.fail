@@ -21,6 +21,8 @@ pub fn reset() -> Unit {
   shell_reset()
   nav_reset()
   go_reset()
+  row_menu_reset()
+  attention_reset()
   hover_reset()
   triple_reset()
   history_reset()
