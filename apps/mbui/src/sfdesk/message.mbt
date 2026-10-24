@@ -603,7 +603,7 @@ fn report_action(c : @ui.Ctx, src : Source, station : String, m : Message, ink :
   let busy = core_doing(src, ["chat.report"], on)
   let action = @sf.t("common.report.action")
   notice_action(c, "notice-report/" + m.ts, action, ink, busy, fn() {
-    @settings.confirm(
+    @sf.confirm(
       @sf.t("common.report.title"),
       @sf.t("common.report.lead") + "\n\n" + @sf.t("common.report.sends"),
       action,

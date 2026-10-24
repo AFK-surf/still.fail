@@ -93,7 +93,7 @@ fn published_row(c : @ui.Ctx, src : Source, station : String, thread : Double, l
     }
     if flag(l, "mayRevoke") && text_action(c, "publish/revoke/" + id, tr("web-pages.chat.publish.revoke")) {
       close_sheet(c)
-      @settings.confirm(
+      @sf.confirm(
         tr("web-pages.chat.publish.revokeAsk"),
         tr("web-pages.chat.publish.revokeNote"),
         tr("web-pages.chat.publish.revoke"),

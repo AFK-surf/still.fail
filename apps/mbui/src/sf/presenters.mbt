@@ -116,7 +116,7 @@ pub fn menu(items : Array[MenuItem?], from~ : Anchor, title? : String = "", alon
 }
 
 ///|
-/// A pick of one of `choices` (`chosen` the one now), titled `title`, opened by `from`: chosen, it closes and `choose`
+/// A pick of one of `choices` (`chosen` the one now), titled `title` ("" none), opened by `from`: chosen, it closes and `choose`
 /// goes on with its key. Longer than pick_search_from, a line to search them by is over them.
 pub fn pick(title : String, choices : Array[Choice], chosen : String, choose : (String) -> Unit, from~ : Anchor) -> Unit {
   present(Pick(title, choices, chosen, choose), from)
@@ -376,10 +376,7 @@ fn pick_popover(
     fn() {
       let found = if choices.length() >= pick_search_from {
         let f = input(c, key + "/search", placeholder=t("common.search"), field=p.line)
-        if !p.focused {
-          p.focused = true
-          c.focus_editor(key + "/search")
-        }
+        focus_once(c, p, key + "/search")
         let found = pick_found(choices, line_of(p, f))
         if f.submitted && !found.is_empty() {
           done_with(c, p, fn() { choose(found[0].key) })
@@ -479,10 +476,7 @@ fn ask_centred(
     fn() {
       let f = input(c, key + "/line", placeholder~, secret~, field=p.line)
       words.val = line_of(p, f).trim(chars=" \t\n").to_string()
-      if !p.focused {
-        p.focused = true
-        c.focus_editor(key + "/line")
-      }
+      focus_once(c, p, key + "/line")
       if hint != "" {
         c.text(hint, style=field_hint) |> ignore
       }
@@ -516,6 +510,36 @@ fn line_of(p : Presented, f : @kit.Field) -> String {
     p.typed = f.text
   }
   p.typed
+}
+
+///|
+/// `p`'s field (`key`'s editor) given the keyboard's focus as it opens, until it has it once (what it opened over
+/// letting go of the focus as it goes, a frame later, does not take it away); after that the person's. Closed, the
+/// field lets go of it (the keyboard goes down as `p` goes).
+fn focus_once(c : @ui.Ctx, p : Presented, key : String) -> Unit {
+  if let_go(c, p, key) {
+    return
+  }
+  if p.focused {
+    return
+  }
+  if c.has_focus(c.id(key)) {
+    p.focused = true
+  } else {
+    c.focus_editor(key)
+  }
+}
+
+///|
+/// `p` closed: its field (`key`'s editor) lets go of the keyboard's focus if it has it. Whether it is closed.
+fn let_go(c : @ui.Ctx, p : Presented, key : String) -> Bool {
+  if p.open {
+    return false
+  }
+  if c.has_focus(c.id(key)) {
+    c.blur()
+  }
+  true
 }
 
 ///|
@@ -595,10 +619,6 @@ fn present_sheet(c : @ui.Ctx, key : String, p : Presented) -> (Bool, Bool) {
       }
     }
   })
-  if !r.open && p.open {
-    // let go of: a field in it is no longer typed into as it goes down
-    c.blur()
-  }
   (r.open && p.open, r.shown)
 }
 
@@ -633,7 +653,9 @@ fn sheet_body(c : @ui.Ctx, key : String, p : Presented) -> Unit {
       |> ignore
     }
     Pick(title, choices, chosen, choose) => {
-      sheet_title(c, title)
+      if title != "" {
+        sheet_title(c, title)
+      }
       let long = choices.length() >= pick_search_from
       let found = if long {
         let mut text = ""
@@ -647,6 +669,7 @@ fn sheet_body(c : @ui.Ctx, key : String, p : Presented) -> Unit {
             look=field_look,
             field=p.line,
           )
+          let_go(c, p, key + "/search") |> ignore
           text = line_of(p, f)
         })
         |> ignore
@@ -709,10 +732,7 @@ fn sheet_body(c : @ui.Ctx, key : String, p : Presented) -> Unit {
           look=field_look,
           field=p.line,
         )
-        if !p.focused {
-          p.focused = true
-          c.focus_editor(key + "/line")
-        }
+        focus_once(c, p, key + "/line")
         let words = line_of(p, f).trim(chars=" \t\n").to_string()
         if hint != "" {
           c.text(hint, style=sheet_hint) |> ignore

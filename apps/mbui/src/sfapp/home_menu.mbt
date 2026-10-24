@@ -235,7 +235,7 @@ fn archive_from_row(
   }
   match item.watch_ask {
     Some(ask) =>
-      @settings.confirm(fill("android-chat.archive.ask", [("title", item.title)]), ask, tr("android-chat.archive"), run)
+      @sf.confirm(fill("android-chat.archive.ask", [("title", item.title)]), ask, tr("android-chat.archive"), run)
     None => run()
   }
 }

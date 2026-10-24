@@ -4,10 +4,10 @@
 test "the account: 注销账号 at its foot asks first, saying what goes" {
   let t = settings_tester("me")
   shown_on_page(t, "注销账号")
-  assert_true(!@settings.sheet_up())
+  assert_true(!@sf.presenting())
   t.tap_text("注销账号")
   t.frame()
-  assert_true(@settings.sheet_up(), msg="asked first")
+  assert_true(@sf.presenting(), msg="asked first")
   assert_true(t.find("注销后无法恢复") is Some(_))
 }
 
