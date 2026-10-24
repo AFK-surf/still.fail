@@ -1,0 +1,9 @@
+# The wide frame's 待处理 (the bell at the rail's top) with a service left up long (sfdesk/open_jobs.mbt, OpenJobs.tsx):
+# its row, how long it has been up, its stop over the time when pointed at.
+timeout 20000
+until 整理发布清单
+wait 400
+tapxy 28 30
+wait 1000
+hover web
+wait 1200

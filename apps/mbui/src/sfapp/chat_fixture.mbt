@@ -864,6 +864,9 @@ fn fixture_chat_call(f : Fixture, name : String, params : Json) -> Result[Json, 
     s => s
   }
   match name {
+    // the places the station's bots are in, for a chat relayed (relay.mbt, sfdesk relay.mbt)
+    "chat.relayPlaces" => Some(Ok(fix_relay_places()))
+    "chat.relay" => Some(Ok({ "place": "#dev" }))
     "chat.send" => {
       fix_serial.val += 1
       let id = "out\{fix_serial.val}"
@@ -1498,4 +1501,23 @@ fn fixture_station_overview() -> Json {
     },
   ]
   Json::object(o)
+}
+
+///|
+/// The places the made-up station's one bot is in (`chat.relayPlaces`): one relayed to before, a private one.
+fn fix_relay_places() -> Json {
+  {
+    "connects": [
+      {
+        "id": "slack-1",
+        "kind": "slack",
+        "name": "星火助手",
+        "team": "星火",
+        "places": [
+          { "id": "C1", "name": "dev", "kind": "channel", "used": 20 },
+          { "id": "C2", "name": "ops", "kind": "channel", "private": true },
+        ],
+      },
+    ],
+  }
 }
