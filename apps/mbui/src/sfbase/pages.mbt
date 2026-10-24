@@ -183,6 +183,8 @@ pub fn reset() -> Unit {
   sent_reset()
   // what the composers' fields were seen as, their marks and `@` words (refs.mbt)
   refs_reset()
+  // a send asking about what it refers to (outside.mbt)
+  outside_reset()
   // what was asked of the core from a button, under way or failed (act.mbt)
   acting_reset()
   // how an update stands (updates.mbt)

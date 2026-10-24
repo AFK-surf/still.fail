@@ -22,6 +22,9 @@ priv struct RefField {
   mut marks : Array[(Int, Int)]
   mut marks_of : String
   mut marks_asked : String
+  /// the words before the last edit, with their marks and the words the core read them in (put back as they were:
+  /// a field giving its words up as sent, the app putting them back, knows them still)
+  mut before : (String, Array[(Int, Int)], String)
 }
 
 ///|
@@ -57,6 +60,7 @@ fn ref_field(key : String) -> RefField {
         marks: [],
         marks_of: "",
         marks_asked: "",
+        before: ("", [], ""),
       }
       ref_fields[key] = f
       f
@@ -103,6 +107,7 @@ pub fn refs_edits(c : @ui.Ctx, src : Source, key : String, input : @ui.Field, he
   let was = f.text
   let (wa, wc) = (f.anchor, f.caret)
   if now != was {
+    f.before = (was, f.marks, f.marks_of)
     let (start, took, put) = edit_of(was, now)
     // one character taken just before the caret: a mark ending there goes whole
     let one_back = wa == wc && anchor == caret && caret == wc - 1 && start == wc - 1 && took == wc && put == start
@@ -200,8 +205,12 @@ pub fn refs_put(key : String, input : @ui.Field, words : String, caret? : Int) -
   let was = f.text
   input.set(words, caret?)
   let (anchor, at) = input.selection()
-  // its marks where they are now, those the change took gone
-  if words != was {
+  // its marks where they are now, those the change took gone; the words before the last edit put back, theirs
+  let (back, back_marks, back_of) = f.before
+  if words != was && words == back {
+    f.marks = back_marks
+    f.marks_of = back_of
+  } else if words != was {
     let (start, took, put) = edit_of(was, words)
     let moved = put - took
     f.marks = f.marks.filter_map(fn(m) {
@@ -247,6 +256,18 @@ pub fn refs_look(key : String, accent : Int64) -> (String) -> (String, Array[(In
     }
     sb.write_string(s.view(start_offset=at).to_string())
     (sb.to_string(), spans)
+  }
+}
+
+///|
+/// Whether draft `key`'s field holds a mark, as the core read its words now; None while it has not read them (the words
+/// changed since it was asked).
+pub fn refs_marked(key : String) -> Bool? {
+  let f = ref_field(key)
+  if f.marks_of == f.text {
+    Some(!f.marks.is_empty())
+  } else {
+    None
   }
 }
 

@@ -975,19 +975,19 @@ function ShareSheet({ here, thread, share }: { here: Here; thread: ChatThread; s
 export function sendSharing(app: MobileApp, station: string, text: string, go: () => void) {
   void outsideOf(station, text).catch((): Outside[] => []).then((chats) => {
     if (chats.length === 0) go();
-    else openOutside(app, chats, station, go);
+    else openOutside(app, chats, station, text, go);
   });
 }
 
 /** Asks to share the chats of other workspaces a message refers to with this one; shared (or sent anyway), `go` sends it. */
-function openOutside(app: MobileApp, chats: Outside[], station: string, go: () => void) {
-  app.sheet({ height: Math.min(0.9, (25 + 48 + 44 + chats.length * 52 + 12 + 66 + 24) / window.innerHeight), content: () => <OutsideSheet chats={chats} station={station} go={go} /> });
+function openOutside(app: MobileApp, chats: Outside[], station: string, text: string, go: () => void) {
+  app.sheet({ height: Math.min(0.9, (25 + 48 + 44 + chats.length * 52 + 12 + 66 + 24) / window.innerHeight), content: () => <OutsideSheet chats={chats} station={station} text={text} go={go} /> });
 }
 
-function OutsideSheet({ chats, station, go }: { chats: Outside[]; station: string; go: () => void }) {
+function OutsideSheet({ chats, station, text, go }: { chats: Outside[]; station: string; text: string; go: () => void }) {
   const app = useApp();
   const sharable = chats.some((c) => c.may);
-  const operation = useAction(() => (sharable ? shareOutside(chats, station) : Promise.resolve()), () => { app.sheet(null); go(); });
+  const operation = useAction(() => (sharable ? shareOutside(station, text) : Promise.resolve()), () => { app.sheet(null); go(); });
   const error = operation.error ? t("web-main.outside.failed", { error: operation.error.message }) : null;
   return (
     <>
