@@ -1077,10 +1077,9 @@ fn machine_login_offers(c : @ui.Ctx, core : Core, station : String, overview : J
               c.box(w=Fill(1.0), gap=2.0, fn() {
                 c.box(dir=Row, gap=6.0, align=ACenter, fn() {
                   c.text(runtime_label(rt), size=15.0, color=t.p.text, wrap=false, line=21.0) |> ignore
-                  let plan = text(lv, "plan")
+                  let plan = text(lv, "planText")
                   if plan != "" {
-                    c.text(plan.unsafe_substring(start=0, end=1).to_upper() + plan.unsafe_substring(start=1, end=plan.length()), size=13.0, color=t.p.muted, wrap=false)
-                    |> ignore
+                    c.text(plan, size=13.0, color=t.p.muted, wrap=false) |> ignore
                   }
                 })
                 |> ignore
@@ -1148,16 +1147,4 @@ fn machine_login_offers(c : @ui.Ctx, core : Core, station : String, overview : J
       |> ignore
     },
   ]
-}
-
-///|
-/// The provider a runtime's subscription is with (Profiles.kt SignIn's provider; Cursor's and Devin's their own).
-fn provider_named(runtime : String) -> String {
-  match runtime {
-    "claude" => "Claude"
-    "grok" => "Grok"
-    "cursor" => "Cursor"
-    "devin" => "Devin"
-    _ => "ChatGPT"
-  }
 }

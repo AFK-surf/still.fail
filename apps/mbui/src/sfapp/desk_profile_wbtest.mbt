@@ -61,3 +61,28 @@ test "wide: a profile one of the station's lists no more says so" {
   t.run_for(@ui.nav_push_ms)
   assert_true(t.find("找不到 ID 为 gone 的 Profile") is Some(_))
 }
+
+///|
+test "wide: adding a profile picks its provider from the core's groups, the machine's own login offered first" {
+  let calls : Array[Made] = []
+  let t = wide_tester(calls, mode="settings")
+  t.draw()
+  app.nav.push(Setting(@settings.Route::NewProfile("ws1/st1")))
+  t.run_for(@ui.nav_push_ms)
+  // the core's step: its title and hint, its groups and their providers
+  assert_true(t.find("选择服务商") is Some(_))
+  assert_true(t.find("模型厂商") is Some(_) && t.find("中转站") is Some(_))
+  assert_true(t.find("OpenRouter") is Some(_))
+  // Studio's own Codex login, used as it is
+  assert_true(t.find("使用此账号") is Some(_), msg="the machine's login offered")
+  // a provider picked: told to the core
+  match t.find("DeepSeek") {
+    Some((x, y)) => t.tap(x, y)
+    None => abort("no DeepSeek")
+  }
+  t.draw()
+  assert_true(
+    calls.iter().any(fn(m) { m.name == "profile.flow.edit" && text(field(Some(m.params), "input"), "provider") == "deepseek" }),
+    msg="the provider told to the core",
+  )
+}

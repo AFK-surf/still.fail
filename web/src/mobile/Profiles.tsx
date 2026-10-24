@@ -1269,7 +1269,7 @@ export function MachineLoginOffers({ logins, onSignIn, inForm = false }: { login
         {offers.map((l) => {
           const blocked = l.quota?.state === "blocked";
           const trouble = quotaTrouble(l.quota);
-          const plan = l.plan ? `${l.plan[0]!.toUpperCase()}${l.plan.slice(1)}` : null;
+          const plan = l.planText || null;
           return (
             <ListRow key={l.runtime}>
               <ProviderMark runtime={l.runtime} kind="subscription" size={18} />

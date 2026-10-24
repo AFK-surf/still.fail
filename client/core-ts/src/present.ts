@@ -1178,7 +1178,9 @@ function overview(value: J, c: Clock, station: string | null): J {
         plan !== "" &&
         !(get(l, "runtime") !== undefined && taken.some((r) => equal(r, get(l, "runtime")))) &&
         !(email !== undefined && subscriptions.some(([runtime, bound]) => equal(get(l, "runtime"), runtime) && email.trim().toLowerCase() === bound));
-      return isObject(l) ? { ...l, offered } : l;
+      // Its plan as a name (pro: Pro), for its tag.
+      const planText = typeof plan === "string" && plan !== "" ? `${plan[0]!.toUpperCase()}${plan.slice(1)}` : "";
+      return isObject(l) ? { ...l, offered, planText } : l;
     });
   }
   return v;

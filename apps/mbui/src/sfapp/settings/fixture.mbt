@@ -746,7 +746,7 @@ fn fx_station(address : String) -> Json {
           (
             "machineLogins",
             [
-              obj([("runtime", str("codex")), ("installed", Json::boolean(true)), ("loggedIn", Json::boolean(true)), ("email", str("lin@example.com")), ("plan", str("plus")), ("usable", Json::boolean(true)), ("text", str("")), ("offered", Json::boolean(true))]),
+              obj([("runtime", str("codex")), ("installed", Json::boolean(true)), ("loggedIn", Json::boolean(true)), ("email", str("lin@example.com")), ("plan", str("plus")), ("planText", str("Plus")), ("usable", Json::boolean(true)), ("text", str("")), ("offered", Json::boolean(true))]),
             ],
           ),
           (

@@ -395,7 +395,15 @@ fn profile_sign_in(c : @ui.Ctx, core : Core, address : String, p : Json?, needed
       c.text(@sf.t("web-pages.profiles.signingInNote"), style=desk_muted) |> ignore
     })
     |> ignore
-    login_steps(c, core, address, id, job, provider)
+    login_steps(c, core, address + "/" + id, job, provider, is_doing(core, ["profile.loginCode"], on), fn(code, sent) {
+      @settings.act(
+        core,
+        @sf.t("web-pages.profiles.finish"),
+        "profile.loginCode",
+        obj([("station", str(address)), ("id", str(id)), ("code", str(code))]),
+        then=fn(_) { sent() },
+      )
+    })
     c.box(style=pf_card_foot, fn() {
       let cancelling = is_doing(core, ["profile.cancelLogin"], on)
       if @sf.button(c, @sf.t("common.cancel"), key="profile-login-cancel/" + key, tone=Ghost, busy=cancelling) {
@@ -411,10 +419,18 @@ fn profile_sign_in(c : @ui.Ctx, core : Core, address : String, p : Json?, needed
 /// What the person does in the browser for a sign-in under way (LoginSteps): the link and the code to paste back
 /// (Claude, Devin), the code to enter on the page that opens (DeviceCode: Codex, Grok, OpenCode, Kimi, Cursor's page
 /// alone); while it is checked or added, said so.
-fn login_steps(c : @ui.Ctx, core : Core, address : String, id : String, job : Json?, provider : String) -> Unit {
+/// `key`: whose steps they are; `send`: a code pasted back sent, then `sent` (its field emptied); `sending` while it is.
+fn login_steps(
+  c : @ui.Ctx,
+  core : Core,
+  key : String,
+  job : Json?,
+  provider : String,
+  sending : Bool,
+  send : (String, () -> Unit) -> Unit,
+) -> Unit {
   let state = text(job, "state")
   let url = text(job, "url")
-  let key = address + "/" + id
   let waiting = fn(words : String) {
     c.box(style=pf_wait_line, fn() {
       @sf.spinner(c, size=pf_spin) |> ignore
@@ -443,17 +459,10 @@ fn login_steps(c : @ui.Ctx, core : Core, address : String, id : String, job : Js
         c.text(if provider == "Devin" { @sf.t("web-pages.profiles.step2Devin") } else { @sf.t("web-pages.profiles.step2") }, style=desk_words)
         |> ignore
         let f = profile_field("code/" + key)
-        let sending = is_doing(core, ["profile.loginCode"], [("station", address), ("id", id)])
         let send = fn() {
           let code = f.text().trim(chars=" \t\n").to_owned()
           if code != "" && !sending {
-            @settings.act(
-              core,
-              @sf.t("web-pages.profiles.finish"),
-              "profile.loginCode",
-              obj([("station", str(address)), ("id", str(id)), ("code", str(code))]),
-              then=fn(_) { f.set("") },
-            )
+            send(code, fn() { f.set("") })
           }
         }
         c.box(style=pf_input_row, fn() {
