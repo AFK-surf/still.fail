@@ -372,11 +372,11 @@ priv struct RowLook {
 }
 
 ///|
-/// A mouse's (Sidebar.css.ts navRow, navSession: 54 high, 7 by 10 in, its words from the top, its corner the nav's;
+/// A mouse's (Sidebar.css.ts navRow, navSession: 54 high, 7 by 10 in, its words from the top, its corner a sidebar row's;
 /// two lines 2 apart, its title 13 on 20, 500 while something in it is unread; its second line 12 on 18).
 // kept across runs: a value (no field of it changes)
 let mouse_look : RowLook = {
-  row: @ui.style(row=true, w=Full, h=@sf.side_row_h, px=S2_5, py=@sf.row_in, gap=S2, align=AStart, radius=Xl),
+  row: @ui.style(row=true, w=Full, h=@sf.side_row_h, px=S2_5, py=@sf.row_in, gap=S2, align=AStart, radius=@sf.side_row_radius),
   text: @ui.css("w=Full gap=S0_5"),
   text_settled: @ui.css("w=Full gap=S0_5 opacity=O45"),
   head: @ui.css("row w=Full h=S5 gap=S1_5 align=ACenter"),

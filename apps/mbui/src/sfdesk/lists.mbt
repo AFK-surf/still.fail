@@ -138,7 +138,9 @@ let foot_band : @ui.Style = @ui.css("row w=Full p=S2 gap=S1_5 align=ACenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let foot_trouble : @ui.Style = @ui.css("row w=Full min_h=S8 px=S2_5 gap=S2 align=ACenter radius=Xl hovered{bg=Hover}")
+let foot_trouble : @ui.Style = @ui.css("row w=Full min_h=S8 px=S2_5 gap=S2 align=ACenter hovered{bg=Hover}").then(
+  @ui.style(radius=@sf.side_row_radius),
+)
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -476,7 +478,7 @@ let arch_wrap : @ui.Style = @ui.css("w=Full pb=S0_5")
 let arch_wrap_last : @ui.Style = @ui.css("w=Full")
 
 ///|
-/// A chat's row's shape (Sidebar.css.ts navRow, navSession): 54 high, 10 in, its corner the nav's; the pointer's ground
+/// A chat's row's shape (Sidebar.css.ts navRow, navSession): 54 high, 10 in, its corner a sidebar row's; the pointer's ground
 /// on hover, the selected one's when its chat is beside the list.
 // kept across runs: a value (no field of it changes)
 let arch_row : @ui.Style = @ui.style(
@@ -485,7 +487,7 @@ let arch_row : @ui.Style = @ui.style(
   h=@sf.side_row_h,
   px=S2_5,
   align=ACenter,
-  radius=Xl,
+  radius=@sf.side_row_radius,
   hovered=@ui.patch(bg=Hover),
   selected=@ui.patch(bg=Selected),
 )

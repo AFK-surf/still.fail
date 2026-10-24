@@ -123,8 +123,8 @@ fn stations_side(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
   let picked = place_route(src, w, "stations")
   c.box(style=place_side, fn() {
     side_top(c)
-    c.box(style=place_list, fn() {
-      nav_action(c, "stations/add", @sf.t("web-pages.settings.stations.add"), @settings.place_action(core, here, "stations"))
+    nav_action(c, "stations/add", @sf.t("web-pages.settings.stations.add"), @settings.place_action(core, here, "stations"))
+    c.box(style=side_list, fn() {
       for s in stations_listed(src, w) {
         let s = Some(s)
         let address = text(s, "station")
@@ -147,59 +147,46 @@ fn station_side_row(c : @ui.Ctx, src : Source, s : Json?, on : Bool, pick : () -
   let meters = if online { items(field(s, "host"), "meters") } else { [] }
   let net = if online { (src.topic)("stationNet", { "station": Json::string(address) }).value } else { None }
   let running = number(field(field(s, "overview"), "counts"), "running")
-  if nav_row(c, "stations/" + address, on, align=AStart, fn() {
-      c.box(style=place_mark, fn() {
-        @sf.station_icon(c, text(s, "emoji"), text(s, "icon"), @sf.row_icon, t.p.text)
-      })
-      |> ignore
-      c.box(style=place_row_words, fn() {
-        c.box(style=place_row_head, fn() {
-          c.text(text(s, "name"), style=place_row_name) |> ignore
-          c.box(style=place_end, fn() {
-            c.box(style=if online { place_dot_on } else { place_dot_off }, fn() {  }) |> ignore
-            if !online {
-              c.text(text(s, "summary"), style=place_meta) |> ignore
-            } else if running > 0.0 {
-              c.text(@sf.t("web-pages.stations.page.runningShort", args=[("n", running.to_int().to_string())]), style=place_busy)
-              |> ignore
-            }
-          })
+  if nav_item(
+      c,
+      "stations/" + address,
+      on,
+      fn() { @sf.station_icon(c, text(s, "emoji"), text(s, "icon"), nav_mark_side, t.p.text) },
+      fn() { nav_title(c, text(s, "name")) },
+      end=fn() {
+        c.box(style=if online { place_dot_on } else { place_dot_off }, fn() {  }) |> ignore
+        if !online {
+          c.text(text(s, "summary"), style=nav_meta) |> ignore
+        } else if running > 0.0 {
+          c.text(@sf.t("web-pages.stations.page.runningShort", args=[("n", running.to_int().to_string())]), style=place_busy)
           |> ignore
-        })
-        |> ignore
+        }
+      },
+      lines=fn() {
         if meters.length() > 0 {
-          c.box(style=place_meters, fn() {
+          c.box(style=place_meters, flow=true, line_gap=4.0, fn() {
             for m in meters {
-              let m = Some(m)
-              let level = text(m, "level")
-              c.box(style=if level == "" || level == "ok" { meter_chip } else { meter_chip_low }, fn() {
-                // (MeterChip brief: what is left, its unit's first letter)
-                let unit = text(m, "unit")
-                let brief = text(m, "big") +
-                  (if unit == "%" || unit == "" { unit } else { unit.view(end_offset=1).to_string() })
-                c.text(text(m, "short"), style=place_meta) |> ignore
-                c.text(if text(m, "big") == "" { text(m, "remaining") } else { brief }, style=meter_value) |> ignore
-              })
-              |> ignore
+              @settings.meter_chip(c, Some(m), brief=true)
             }
           })
           |> ignore
         }
         match net {
           Some(Object(_)) =>
-            c.text(
-              match text(field(net, "rtt"), "text") {
-                "" => text(net, "path")
-                rtt => text(net, "path") + " · " + rtt
-              },
-              style=place_meta,
-            )
-            |> ignore
+            nav_line(c, fn() {
+              c.text(
+                match text(field(net, "rtt"), "text") {
+                  "" => text(net, "path")
+                  rtt => text(net, "path") + " · " + rtt
+                },
+                style=nav_meta,
+              )
+              |> ignore
+            })
           _ => ()
         }
-      })
-      |> ignore
-    }) {
+      },
+    ) {
     pick()
   }
 }
@@ -217,8 +204,8 @@ fn profiles_side(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
   let list = items((src.topic)("profiles", { "scope": Json::string(w.id) }).value, "items")
   c.box(style=place_side, fn() {
     side_top(c)
-    c.box(style=place_list, fn() {
-      nav_action(c, "profiles/add", @sf.t("web-pages.settings.profiles.add"), @settings.place_action(core, here, "profiles"))
+    nav_action(c, "profiles/add", @sf.t("web-pages.settings.profiles.add"), @settings.place_action(core, here, "profiles"))
+    c.box(style=side_list, fn() {
       let mut group = ""
       for e in list {
         let e = Some(e)
@@ -236,28 +223,26 @@ fn profiles_side(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
         } else {
           ""
         }
-        if nav_row(c, "profiles/" + text(e, "key"), picked == Some(route), align=AStart, fn() {
-            c.box(style=place_mark, fn() {
-              @sf.maker_mark(c, text(p, "providerMark"), text(p, "runtime"), @sf.row_icon) |> ignore
-            })
-            |> ignore
-            c.box(style=place_row_words, fn() {
-              c.text(text(p, "name"), style=if usable { place_row_name } else { place_name_away }) |> ignore
-              c.box(style=place_end_line, fn() {
+        if nav_item(
+            c,
+            "profiles/" + text(e, "key"),
+            picked == Some(route),
+            fn() { @sf.maker_mark(c, text(p, "providerMark"), text(p, "runtime"), nav_mark_side) |> ignore },
+            fn() { nav_title(c, text(p, "name"), away=!usable) },
+            lines=fn() {
+              nav_line(c, fn() {
                 if trouble != "" {
                   c.text(trouble, style=place_trouble) |> ignore
                 }
                 let quota = field(p, "quota")
                 if text(quota, "state") == "ok" && items(quota, "windows").length() > 0 {
-                  @settings.quota_chips(c, quota, small=true)
+                  @settings.quota_chips(c, quota, small=true, gap=4.0)
                 } else if trouble == "" {
-                  c.text(text(e, "where"), style=place_meta) |> ignore
+                  c.text(text(e, "where"), style=nav_meta) |> ignore
                 }
               })
-              |> ignore
-            })
-            |> ignore
-          }) {
+            },
+          ) {
           place_pick["profiles"] = route
         }
       }
@@ -277,21 +262,19 @@ fn profiles_side(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
         nav_heading(c, @sf.t("web-pages.profiles.machineSignedIn", args=[("station", text(s, "name"))]))
         for l in offers {
           let l = Some(l)
-          if nav_row(c, "profiles/machine/" + station + "/" + text(l, "runtime"), false, align=AStart, fn() {
-              c.box(style=place_mark, fn() {
-                @sf.maker_mark(c, "", text(l, "runtime"), @sf.row_icon) |> ignore
-              })
-              |> ignore
-              c.box(style=place_row_words, fn() {
-                c.text(@settings.runtime_label(text(l, "runtime")), style=place_row_name) |> ignore
-                c.box(style=place_end_line, fn() {
-                  c.box(style=place_grow, fn() { c.text(text(l, "email"), style=place_meta) |> ignore }) |> ignore
+          if nav_item(
+              c,
+              "profiles/machine/" + station + "/" + text(l, "runtime"),
+              false,
+              fn() { @sf.maker_mark(c, "", text(l, "runtime"), nav_mark_side) |> ignore },
+              fn() { nav_title(c, @settings.runtime_label(text(l, "runtime"))) },
+              lines=fn() {
+                nav_line(c, fn() {
+                  c.box(style=place_grow, fn() { c.text(text(l, "email"), style=nav_meta) |> ignore }) |> ignore
                   c.text(@sf.t("android-settings.machine.use"), style=place_use) |> ignore
                 })
-                |> ignore
-              })
-              |> ignore
-            }) {
+              },
+            ) {
             app.nav.push(Setting(Route::NewProfile(station)))
           }
         }
@@ -312,46 +295,8 @@ let place_pane : @ui.Style = @ui.css("w=Full h=Full bg=Bg")
 let place_side : @ui.Style = @ui.css("w=Full h=Full")
 
 ///|
-/// The list under the band: 8 in at its sides, 4 under the band (Sidebar.css.ts navList).
-// kept across runs: a value (no field of it changes)
-let place_list : @ui.Style = @ui.css("w=Full h=Full px=S2 pt=S1")
-
-///|
-/// A row's mark (NavItem's): 16, on its first line's middle.
-// kept across runs: a value (no field of it changes)
-let place_mark : @ui.Style = @ui.css("w=S4 h=S5 align=ACenter justify=JCenter")
-
-///|
-// kept across runs: a value (no field of it changes)
-let place_row_words : @ui.Style = @ui.style(w=@sf.grow, gap=S1)
-
-///|
-// kept across runs: a value (no field of it changes)
-let place_row_head : @ui.Style = @ui.css("row w=Full gap=S1_5 align=ACenter")
-
-///|
-// kept across runs: a value (no field of it changes)
-let place_end : @ui.Style = @ui.css("row gap=S1 align=ACenter")
-
-///|
-// kept across runs: a value (no field of it changes)
-let place_end_line : @ui.Style = @ui.css("row w=Full gap=S1_5 align=ACenter")
-
-///|
 // kept across runs: a value (no field of it changes)
 let place_grow : @ui.Style = @ui.style(w=@sf.grow, clip=true)
-
-///|
-// kept across runs: a value (no field of it changes)
-let place_row_name : @ui.TextStyle = @ui.text_style(size=Sm, color=Fg, wrap=false, w=@sf.grow)
-
-///|
-// kept across runs: a value (no field of it changes)
-let place_name_away : @ui.TextStyle = @ui.text_style(size=Sm, color=Muted, wrap=false, w=@sf.grow)
-
-///|
-// kept across runs: a value (no field of it changes)
-let place_meta : @ui.TextStyle = @ui.text_style(size=Xs, color=Muted, wrap=false)
 
 ///|
 /// Its agents at work (StationPage.css.ts busy): the accent's words.
@@ -377,22 +322,10 @@ let place_dot_on : @ui.Style = @ui.css("w=S1_5 h=S1_5 radius=Full bg=Positive")
 let place_dot_off : @ui.Style = @ui.css("w=S1_5 h=S1_5 radius=Full bg=Faint")
 
 ///|
-/// Its meters in a line (rowMeters), a chip each (MeterChip brief bare): its name muted and what is left, on a ground;
-/// one running low with its level's edge.
+/// Its meters in a line (rowMeters), a chip each (MeterChip brief bare, @settings.meter_chip), 4 apart, onto another
+/// line where the row is narrow; 4 under its name, 2 over what is under.
 // kept across runs: a value (no field of it changes)
-let place_meters : @ui.Style = @ui.css("row w=Full gap=S1 align=ACenter clip")
-
-///|
-// kept across runs: a value (no field of it changes)
-let meter_chip : @ui.Style = @ui.css("row px=S1 py=SPx gap=S1 align=ACenter radius=Base bg=Hover")
-
-///|
-// kept across runs: a value (no field of it changes)
-let meter_chip_low : @ui.Style = meter_chip.then(@ui.css("border=B1 border_color=Warn"))
-
-///|
-// kept across runs: a value (no field of it changes)
-let meter_value : @ui.TextStyle = @ui.text_style(size=Xs, weight=Semibold, color=Fg, wrap=false)
+let place_meters : @ui.Style = @ui.css("row w=Full gap=S1 mt=S1 mb=S0_5 align=ACenter")
 
 ///|
 /// No station picked: while they are read, said so; none in the workspace, the first to add (its scene, 添加 station).

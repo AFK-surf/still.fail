@@ -285,13 +285,23 @@ fn from_laid(b : @ui.Laid) -> El {
     box: { x: b.x, y: b.y, w: b.w, h: b.h },
     cut: { x: cx, y: cy, w: cw, h: ch },
     words: None,
-    radius: corner(b.radius, { x: b.x, y: b.y, w: b.w, h: b.h }),
+    radius: corner(drawn_corner(b.radius, { x: b.x, y: b.y, w: b.w, h: b.h }), { x: b.x, y: b.y, w: b.w, h: b.h }),
     bg: rgba_int(b.bg),
     border_w: b.border_w,
     font_size: b.font_size,
     color: rgba_int(b.color),
     opacity: b.opacity,
   }
+}
+
+///|
+/// An mbui corner in the page's measure: mbui is given a smooth corner's radius as the tokens say it (the web's before
+/// its --corner-scale) and draws it a quarter longer where the box has room (@ui.smooth_scale, @ui.smoothness), as the
+/// page's computed radius already is (its tokens times --corner-scale). Compared unscaled, every corner read a quarter
+/// short (a sidebar row's 12 against the page's 15, the same corner).
+fn drawn_corner(r : Double, box : Rect) -> Double {
+  let s = @ui.smoothness(r, dmin(box.w, box.h) / 2.0)
+  r * (1.0 + (@ui.smooth_scale - 1.0) * s)
 }
 
 ///|
