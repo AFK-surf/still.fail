@@ -14,17 +14,6 @@ priv struct Wide {
   mut jobs_open : Bool
   /// the job picked in the 任务 tab ("" the first)
   mut job_picked : String
-  /// ⌘F's bar (wide_find.mbt): the chat it is open in ("" closed), its field, what is typed, what the core found
-  /// (None nothing asked yet), the time the reader is at (which of its messages, which time in it), whether what is
-  /// not on the device is being read, the message the chat's window was last moved about for it
-  mut find_chat : String
-  find_field : @ui.Field
-  mut find_query : String
-  mut found : Found?
-  mut find_at : Int
-  mut find_k : Int
-  mut bringing : Bool
-  mut find_around : Double
   /// the new chat's station chooser open (wide_newchat.mbt)
   mut station_menu : Bool
   /// the page picked in a place with a list of its own (Station's, Profile's: wide_places.mbt), by place
@@ -41,14 +30,6 @@ let wide : Wide = {
   info_open: false,
   jobs_open: false,
   job_picked: "",
-  find_chat: "",
-  find_field: @ui.Field::new(),
-  find_query: "",
-  found: None,
-  find_at: -1,
-  find_k: 0,
-  bringing: false,
-  find_around: -1.0,
   station_menu: false,
   place_pick: {},
   gone: [],
@@ -68,6 +49,7 @@ fn wide_reset() -> Unit {
   wide.job_picked = ""
   side_slide_reset()
   find_forget()
+  find_around.val = -1.0
   wide.station_menu = false
   wide.place_pick.clear()
   wide_switch_reset()

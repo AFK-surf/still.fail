@@ -41,7 +41,7 @@ fn wide_keys(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
     } else if @sfdesk.switcher_escape(c) {
       // ⌘K's: one kind's list back to all of them, else closed
       ()
-    } else if wide.find_chat != "" {
+    } else if @sfdesk.find_chat() != "" {
       find_forget()
       c.blur()
     } else if wide.keys_open {

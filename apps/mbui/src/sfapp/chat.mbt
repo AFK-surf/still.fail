@@ -503,7 +503,7 @@ fn messages(
   flashing.val = (rd.flash, flash_of(c, rd, rd.flash))
   // a search's words marked in the message it opened the chat at (search_marks.mbt)
   found_marking.val = (rd.found_at, rd.found_words, rd.found_drawn.get())
-  find_marking.val = find_words_in(r)
+  find_marking.val = @sfdesk.find_words_in(side_key(r))
   found_centre(c, rd, key)
   flash_row.val = None
   // a new chat's list comes up out of the composer with its first words (flight.mbt flight_carry_shift); not drawn
@@ -766,9 +766,9 @@ fn messages(
         } else {
           match v.thread {
             // what ⌘F found, not in the chat's window: the window moved about it (chat.around), once
-            Some(thread) if wide.find_chat == gk =>
-              if wide.find_around != target {
-                wide.find_around = target
+            Some(thread) if @sfdesk.find_chat() == gk =>
+              if find_around.val != target {
+                find_around.val = target
                 c.tell("chat.around/" + gk, fn() {
                   (src.call)(
                     "chat.around",
