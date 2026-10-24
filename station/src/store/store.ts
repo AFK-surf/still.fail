@@ -1556,6 +1556,12 @@ export class Store {
     return this.#all("SELECT * FROM jobs WHERE ?1 IS NULL OR session_key = ?1 ORDER BY started_at DESC", session).map(toJob);
   }
 
+  /// The jobs running now, as listJobs gives them (by the index on their state: the queue reads them at each look, and
+  /// each second a command waits for the screen, jobs/jobs.ts `line`).
+  jobsRunning(): JobRow[] {
+    return this.#all("SELECT * FROM jobs WHERE state = 'running' ORDER BY started_at DESC").map(toJob);
+  }
+
   /// How many jobs are running now: other stations' tasks here (`remote_…`, jobs/remote.ts), web services (a port) and
   /// the other jobs, for what other stations are told of this one's load (jobs/load.ts).
   runningJobs(): { remote: number; jobs: number; services: number } {

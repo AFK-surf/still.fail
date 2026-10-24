@@ -20,7 +20,7 @@ for p in $PLATFORMS; do
     mac)
       MODE=release bash scripts/mac.sh build >/dev/null
       rm -rf out/shot-mac; mkdir -p out/shot-mac
-      MBUI_BENCH=-1 MBUI_SCRIPT=shot MBUI_SHOT_DIR=$PWD/out/shot-mac ./_build/native/release/build/demo/demo.exe >/dev/null
+      MBUI_BENCH=-1 MBUI_SCRIPT=shot MBUI_SHOT_DIR=$PWD/out/shot-mac on_screen ./_build/native/release/build/demo/demo.exe >/dev/null
       cp out/shot-mac/main.png out/shots/mac.png ;;
     kit)  # not part of the default set
       APP=kitdemo MODE=release bash scripts/mac.sh build >/dev/null
@@ -28,7 +28,7 @@ for p in $PLATFORMS; do
       names=""
       for s in ${KIT_PAGES:-foundation controls overlays menus disclosure}; do
         MBUI_BENCH=-1 MBUI_SCREEN=$s MBUI_WIN=960x720 MBUI_SCRIPT=shot MBUI_SHOT_NAME=$s MBUI_SHOT_DIR=$PWD/out/shot-kit \
-          ./_build/native/release/build/kitdemo/kitdemo.exe >/dev/null
+          on_screen ./_build/native/release/build/kitdemo/kitdemo.exe >/dev/null
         cp out/shot-kit/$s.png out/shots/mac-kit-$s.png
         names="$names mac-kit-$s"
       done ;;

@@ -1,5 +1,6 @@
 // The agents' door (server.rs `serve_mcp`): loopback only. /mcp is the MCP endpoint, /jobs/notify what a job says
-// (`stillfail-job notify`), /health that the station answers, /peer/<station>/<port>/… a web service on another station
+// (`stillfail-job notify`), /jobs/screen a job's command asking for the screen (`stillfail-job screen`), /health that
+// the station answers, /peer/<station>/<port>/… a web service on another station
 // of the workspace (mesh/peer-http.ts), and the parts' own (parts.ts `door`: /browser/…, the station's browser). Its socket is the launcher's (fd 3), so a handover has no gap: the old station
 // stops taking connections and finishes the calls it has; the new one takes the next.
 import { type IncomingMessage, type Server, type ServerResponse, STATUS_CODES, createServer } from "node:http";
@@ -12,11 +13,14 @@ import type { McpEndpoint } from "./mcp.ts";
 import type { DoorRoute } from "../parts.ts";
 import { wall } from "../ops/fibers.ts";
 
-/// What /jobs/notify does with a job's words: a status and a body (jobs.ts `notifyEndpoint`).
+/// What /jobs/notify does with a job's words, or /jobs/screen with its command's ask: a status and a body (jobs.ts
+/// `notifyEndpoint`, `screenEndpoint`).
 export type Notified = (authorization: string | undefined, body: Buffer) => { status: number; body: unknown };
 
 /// A job's words: no more than this is read.
 const NOTIFY_LIMIT = 64 * 1024;
+/// A command's ask for the screen (`take <pid>`): no more than this.
+const SCREEN_LIMIT = 64;
 
 export type AgentsDoor = {
   /// Where agents reach it: `http://127.0.0.1:<port>/mcp` (the launcher's entrance's port when it has one).
@@ -98,7 +102,11 @@ function bodyOf(req: IncomingMessage, limit: number): Promise<Buffer | null> {
 /// Opens the door on the launcher's fd, or on `port` at 127.0.0.1 (0: any free one): with no launcher, or behind a
 /// launcher's entrance (`shown`, its port, is then the one agents are told: launcher.ts `ports`). `peers`: where /peer
 /// requests go, once there is a way (the mesh's). `parts`: the parts' routes (parts.ts `door`), as they are now.
-export function openAgentsDoor(at: { fd: number } | { port: number; shown?: number }, mcp: McpEndpoint, notified: Notified, peers: () => PeerRoute | null = () => null, parts: () => readonly DoorRoute[] = () => []): Promise<AgentsDoor> {
+/// `screened`: what /jobs/screen does (none: not here).
+export function openAgentsDoor(
+  at: { fd: number } | { port: number; shown?: number }, mcp: McpEndpoint, notified: Notified, peers: () => PeerRoute | null = () => null,
+  parts: () => readonly DoorRoute[] = () => [], screened: Notified = () => ({ status: 404, body: { error: "no screen here" } }),
+): Promise<AgentsDoor> {
   let busy = 0;
   let idle: (() => void) | null = null;
   // The ports it is reached on (the entrance's first): known once it listens, before any request.
@@ -150,6 +158,10 @@ export function openAgentsDoor(at: { fd: number } | { port: number; shown?: numb
           const answer = notified(req.headers.authorization, body);
           send(answer.status, answer.body);
         }
+      } else if (path === "/jobs/screen" && req.method === "POST") {
+        const body = await bodyOf(req, SCREEN_LIMIT);
+        const answer = body === null ? { status: 400, body: { error: "length limit exceeded" } } : screened(req.headers.authorization, body);
+        send(answer.status, answer.body);
       } else if (path === "/mcp") {
         const body = (await bodyOf(req, Number.MAX_SAFE_INTEGER))!;
         const reply = await mcp.handle(req.method ?? "GET", req.headers.authorization, body);

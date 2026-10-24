@@ -24,13 +24,13 @@ case "${1:-build}" in
     cat out/mbc.log 2>/dev/null || true
     ls -la $EXE ;;
   run)
-    ./$EXE ;;
+    on_screen ./$EXE ;;
   script)
     mkdir -p out/$2
-    MBUI_SCRIPT=$2 MBUI_SHOT_DIR=$PWD/out/$2 ./$EXE ;;
+    MBUI_SCRIPT=$2 MBUI_SHOT_DIR=$PWD/out/$2 on_screen ./$EXE ;;
   shot)
     mkdir -p out/shot
-    MBUI_SCRIPT=shot MBUI_SHOT_DIR=$PWD/out/shot ./$EXE ;;
+    MBUI_SCRIPT=shot MBUI_SHOT_DIR=$PWD/out/shot on_screen ./$EXE ;;
   bench)
-    MBUI_BENCH=1 ./$EXE ;;
+    MBUI_BENCH=1 on_screen ./$EXE ;;
 esac

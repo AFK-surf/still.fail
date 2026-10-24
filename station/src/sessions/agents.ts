@@ -15,7 +15,7 @@ import { DshDriver } from "../agents/dsh.ts";
 import { GrokDriver } from "../agents/grok.ts";
 import { CursorDriver } from "../agents/cursor.ts";
 import { DevinDriver } from "../agents/devin.ts";
-import { Jobs, notifyEndpoint } from "../jobs/jobs.ts";
+import { Jobs, notifyEndpoint, screenEndpoint } from "../jobs/jobs.ts";
 import { liveMemory } from "../jobs/memory.ts";
 import { Remote, followRoster } from "../jobs/remote.ts";
 import { ConfigFile } from "../ops/config.ts";
@@ -561,15 +561,16 @@ export const AgentsLive = (control: Control) =>
         // remembered (the agents left running know it), 4750 on the machine's own data directory, any free one.
         const named = config.raw()?.http?.port;
         const notified = (authorization: string | undefined, body: Buffer) => notifyEndpoint(jobs, authorization, body);
-        if (control.mcpFd !== undefined) door = await openAgentsDoor({ fd: control.mcpFd }, mcp, notified, peerRoute, partRoutes);
+        const screened = (authorization: string | undefined, body: Buffer) => screenEndpoint(jobs, authorization, body);
+        if (control.mcpFd !== undefined) door = await openAgentsDoor({ fd: control.mcpFd }, mcp, notified, peerRoute, partRoutes, screened);
         // Behind the launcher's entrance (launcher.ts `ports`): any port here, its port the one agents are told.
-        else if (control.ports) door = await openAgentsDoor({ port: 0, shown: control.ports.mcp }, mcp, notified, peerRoute, partRoutes);
+        else if (control.ports) door = await openAgentsDoor({ port: 0, shown: control.ports.mcp }, mcp, notified, peerRoute, partRoutes, screened);
         else {
           const remembered = rememberedMcpPort(data);
           const tries = portsToTry(named === undefined ? undefined : Number(named), remembered, 4750, ownData(data));
           for (const [i, port] of tries.entries()) {
             try {
-              door = await openAgentsDoor({ port }, mcp, notified, peerRoute, partRoutes);
+              door = await openAgentsDoor({ port }, mcp, notified, peerRoute, partRoutes, screened);
               break;
             } catch (error) {
               // The one remembered is passed over whatever keeps it; the usual one only when it is taken.

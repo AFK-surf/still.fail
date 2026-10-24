@@ -15,7 +15,8 @@ Other stations' tasks (`remote_…` jobs) go through it; an agent's own jobs and
   were busy less than 80% (over the last 20 s when it has ended). Tasks come in one by one while there is room.
 - None starts while the system says its memory is under pressure (macOS's `kern.memorystatus_vm_pressure_level` warn
   or critical; elsewhere under a tenth of the memory available).
-- A task prepared with `screen: true` (windows, a simulator, screenshots) starts only while no other such task runs.
+- A task prepared with `screen: true` starts only while no other task has the screen (below), and no command that
+  asked for it before the task came still waits for it.
 - Of the sessions with tasks waiting, the one whose task last started longest ago goes first, its oldest task.
 - A task started beside others gets `STILLFAIL_CPUS`, and `MAKEFLAGS`, `CARGO_BUILD_JOBS`, `CMAKE_BUILD_PARALLEL_LEVEL`
   where its environment has none, with how many CPUs were free (at least 1). One started alone gets none of them.
@@ -25,6 +26,28 @@ running as far as its agent and an older source station are concerned, with no p
 `get` answer `queue: {place, why, note}` while it waits. Stopped while waiting, it never runs. A station that restarts
 takes up what still waits, as it never ran (unlike a lost running task, which is failed rather than run again). The
 queue looks at the machine every 5 s while a task waits, and when a task of its own ends.
+
+## The screen (jobs/admit.ts `served`, in jobs/jobs.ts)
+
+Windows, a simulator, screenshots of what is on the screen: one task's at a time, for as long as it uses it. A task
+has the screen while a command of its runs as `stillfail-job screen <command>…` (any job of the station, the queue's
+or an agent's own), or, prepared with `screen: true`, for as long as it runs. A task that takes pictures between
+builds and tests has it only for the pictures; the rest runs beside the others'. (With the whole task having it, one
+that had drawn its pictures in 40 s held the screen minutes more for its tests while the others with pictures to take
+waited 20 minutes and more in line, the CPUs a third busy, 2026-10-25.)
+
+- `stillfail-job screen` asks the door (`POST /jobs/screen`, the job's token, `take <pid>`: its shell's process) and
+  again each second while it waits; with the screen, it runs the command and says `give <pid>` when it ends.
+- The screen goes to the first command that asked while no task has it, and at once to a command of a task that has
+  it already (one inside another, or inside a `screen: true` task: it does not wait for itself).
+- A claim whose process is gone (the command killed before it gave the screen back) or whose job is over is dropped
+  whenever the queue looks. Those that hold the screen are written to `jobs/screen.json`, so a station that starts
+  while their commands go on knows who has it.
+- A job in a sandbox has no `STILLFAIL_JOB_SCREEN` (it has none of this machine's screen); nor has one a station from
+  before it started. Without it, `stillfail-job screen` runs the command as it is. A station that has not answered
+  for a minute is not waited for: the command runs, and the log says so.
+- Scripts that open windows ask for it themselves: apps/mbui's (`on_screen`, scripts/env.sh), around each app they
+  run in a window; what they draw offscreen (scripts/film.sh, corners.sh, squeeze.sh) and the Tester's tests do not.
 
 ## Memory (jobs/memory.ts)
 
