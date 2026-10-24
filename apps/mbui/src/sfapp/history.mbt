@@ -956,16 +956,7 @@ fn history_group(c : @ui.Ctx, src : Source, r : ChatRef, key : String, ik : Stri
                 text(content, "meta"),
                 flag(content, "failed"),
                 fn() {
-                  whole(c, src, r, key, content, fn() {
-                    tool_step_body(
-                      c,
-                      text(content, "name"),
-                      text(content, "call"),
-                      said is Some(_),
-                      opt_text(content, "result"),
-                      flag(content, "failed"),
-                    )
-                  })
+                  whole(c, src, r, key, content, fn() { tool_step_body(c, src, content) })
                 },
               )
             }
@@ -1313,135 +1304,6 @@ fn words_page(c : @ui.Ctx, src : Source, head : String, words : String) -> Unit 
 // ── a call, drawn by what it is (ui/ToolStep.kt) ────────────────────────
 
 ///|
-/// A call's arguments, when they are JSON (cut short by the station: closed where it stops).
-fn parse_call(s : String) -> Json? {
-  let t = s.trim(chars=" \n\t").to_string()
-  if !t.has_prefix("{") && !t.has_prefix("[") {
-    return None
-  }
-  // (what starts so is never null: null says it did not parse)
-  let whole = @json.parse(t) catch { _ => Json::null() }
-  if !(whole is Null) {
-    return Some(whole)
-  }
-  // the station keeps a long call to its first 4000 characters, then `… (n more characters)`
-  match t.rev_find("\n… (") {
-    Some(i) => {
-      let closed = @json.parse(close_json(t.view(end_offset=i).to_owned())) catch {
-        _ => Json::null()
-      }
-      if closed is Null {
-        None
-      } else {
-        Some(closed)
-      }
-    }
-    None => None
-  }
-}
-
-///|
-/// JSON the station cut short, closed where it stops (ToolStep.kt close): the string it was in ends with an ellipsis,
-/// what was open is closed.
-fn close_json(json : String) -> String {
-  let open : Array[Char] = []
-  let mut quoted = false
-  let mut escaped = false
-  for ch in json {
-    if escaped {
-      escaped = false
-    } else if quoted {
-      if ch == '\\' {
-        escaped = true
-      } else if ch == '"' {
-        quoted = false
-      }
-    } else if ch == '"' {
-      quoted = true
-    } else if ch == '{' {
-      open.push('}')
-    } else if ch == '[' {
-      open.push(']')
-    } else if ch == '}' || ch == ']' {
-      open.pop() |> ignore
-    }
-  }
-  let mut out = json
-  if quoted {
-    out = (if escaped { out.view(end_offset=out.length() - 1).to_owned() } else { out }) + "…\""
-  }
-  out = out.trim_end(chars=" \n\t").to_string()
-  if out.has_suffix(":") {
-    out = out + "null"
-  } else if out.has_suffix(",") {
-    out = out.view(end_offset=out.length() - 1).to_owned()
-  }
-  let sb = StringBuilder()
-  sb.write_string(out)
-  let mut i = open.length() - 1
-  while i >= 0 {
-    sb.write_char(open[i])
-    i = i - 1
-  }
-  sb.to_string()
-}
-
-///|
-fn jstr(v : Json?) -> String? {
-  match v {
-    Some(String(s)) => Some(s)
-    _ => None
-  }
-}
-
-///|
-/// A scalar as JSON writes it.
-fn scalar_text(v : Json) -> String {
-  match v {
-    String(s) => s
-    Number(n, ..) =>
-      if n == n.floor() && n < 1.0e15 && n > -1.0e15 {
-        n.to_int64().to_string()
-      } else {
-        n.to_string()
-      }
-    True => "true"
-    False => "false"
-    Null => "null"
-    _ => v.stringify()
-  }
-}
-
-///|
-/// A command as it would be typed: `["bash", "-lc", "ls"]` is `ls`.
-fn command_of(a : Map[String, Json]) -> String? {
-  let c = match a.get("command") {
-    Some(x) => Some(x)
-    None => a.get("cmd")
-  }
-  match c {
-    Some(String(s)) => Some(s)
-    Some(Array(parts)) if parts.iter().all(fn(p) { p is String(_) }) => {
-      let words = parts.map(fn(p) { scalar_text(p) })
-      let first = match words.get(0) {
-        Some(f) =>
-          match f.rev_find("/") {
-            Some(i) => f.view(start_offset=i + 1).to_owned()
-            None => f
-          }
-        None => ""
-      }
-      if (first == "sh" || first == "bash" || first == "zsh") && words.get(1) == Some("-lc") {
-        Some(words[2:].to_array().join(" "))
-      } else {
-        Some(words.join(" "))
-      }
-    }
-    _ => None
-  }
-}
-
-///|
 /// The quiet tinted box code and output sit in (ToolStep.kt Boxed), kept to `max` high: what is taller scrolls within
 /// it (mbui's Ctx::capped: a finger up or down on it moves it while it can go that way, else the page).
 fn boxed(c : @ui.Ctx, ground : Int64, max : Double, padx : Double, pady : Double, body : () -> Unit) -> Unit {
@@ -1453,39 +1315,6 @@ fn boxed(c : @ui.Ctx, ground : Int64, max : Double, padx : Double, pady : Double
 ///|
 /// The boxes of a step drawn so far, numbered for where each is scrolled to (within the step's scope).
 let boxed_n : Ref[Int] = { val: 0 }
-
-///|
-/// The language a file is in, by its extension (ToolStep.kt languageOf).
-fn language_of(path : String?) -> String {
-  let p = match path {
-    Some(p) => p
-    None => return ""
-  }
-  let mut i = p.length()
-  while i > 0 {
-    let u = p.at(i - 1).to_int()
-    if u == 46 {
-      break
-    }
-    if !((u >= 48 && u <= 57) || (u >= 65 && u <= 90) || (u >= 97 && u <= 122) || u == 95) {
-      return ""
-    }
-    i = i - 1
-  }
-  if i == 0 || i == p.length() {
-    return ""
-  }
-  let ext = p.view(start_offset=i).to_string().to_lower()
-  match ext {
-    "mjs" | "cjs" => "js"
-    "mts" => "ts"
-    "yml" => "yaml"
-    "zsh" | "bash" => "sh"
-    "h" => "c"
-    "hpp" => "cpp"
-    e => e
-  }
-}
 
 ///|
 fn code_ground() -> Int64 {
@@ -1514,23 +1343,6 @@ fn code_lines(c : @ui.Ctx, words : String, language? : String = "") -> Unit {
     |> ignore
   })
   |> ignore
-}
-
-///|
-/// The small facts beside the main thing (ToolStep.kt Facts): `key value`, the scalars not shown otherwise.
-fn facts(c : @ui.Ctx, a : Map[String, Json], skip : Array[String]) -> Unit {
-  let rest = []
-  for k, v in a {
-    if skip.contains(k) {
-      continue
-    }
-    match v {
-      False | Null | Object(_) | Array(_) => ()
-      True => rest.push((k, None))
-      _ => rest.push((k, Some(scalar_text(v))))
-    }
-  }
-  fact_row(c, rest)
 }
 
 ///|
@@ -1580,37 +1392,6 @@ fn diff_colors() -> (Int64, Int64, Int64, Int64) {
   } else {
     (0xA12F35FFL, 0xFFF0EFFFL, 0x006A3FFFL, 0xE7F6EDFFL)
   }
-}
-
-///|
-/// Lines taken out and put in, with the lines both share at the ends as context (ToolStep.kt Diff).
-fn diff(c : @ui.Ctx, from : String, to : String) -> Unit {
-  let a = from.split("\n").map(fn(l) { l.to_owned() }).to_array()
-  let b = to.split("\n").map(fn(l) { l.to_owned() }).to_array()
-  let mut head = 0
-  while head < a.length() && head < b.length() && a[head] == b[head] {
-    head = head + 1
-  }
-  let mut tail = 0
-  while tail < a.length() - head &&
-        tail < b.length() - head &&
-        a[a.length() - 1 - tail] == b[b.length() - 1 - tail] {
-    tail = tail + 1
-  }
-  let rows : Array[(Char, String)] = []
-  for i in 0..<head {
-    rows.push((' ', a[i]))
-  }
-  for i in head..<(a.length() - tail) {
-    rows.push(('-', a[i]))
-  }
-  for i in head..<(b.length() - tail) {
-    rows.push(('+', b[i]))
-  }
-  for i in (a.length() - tail)..<a.length() {
-    rows.push((' ', a[i]))
-  }
-  diff_lines(c, rows)
 }
 
 ///|
@@ -1665,45 +1446,124 @@ fn diff_lines(c : @ui.Ctx, rows : Array[(Char, String)]) -> Unit {
 }
 
 ///|
-/// A patch as apply_patch takes it (ToolStep.kt Patch): file headers, lines put in and taken out.
-fn patch(c : @ui.Ctx, words : String) -> Unit {
-  let rows : Array[(Char, String)] = []
-  let body = if words.has_suffix("\n") { words.view(end_offset=words.length() - 1).to_owned() } else { words }
-  for l in body.split("\n") {
-    let line = l.to_owned()
-    if line.has_prefix("*** Add File:") ||
-      line.has_prefix("*** Update File:") ||
-      line.has_prefix("*** Delete File:") ||
-      line.has_prefix("*** Move to:") ||
-      line.has_prefix("@@") {
-      rows.push(('@', line))
-    } else if line.has_prefix("*** Begin Patch") || line.has_prefix("*** End Patch") {
-      ()
-    } else if line.has_prefix("+") {
-      rows.push(('+', line.view(start_offset=1).to_owned()))
-    } else if line.has_prefix("-") {
-      rows.push(('-', line.view(start_offset=1).to_owned()))
-    } else if line.has_prefix(" ") {
-      rows.push((' ', line.view(start_offset=1).to_owned()))
-    } else {
-      rows.push((' ', line))
-    }
-  }
-  diff_lines(c, rows)
+fn none_line(c : @ui.Ctx, words : String) -> Unit {
+  c.box(padx=2.0, fn() {
+    c.text(words, size=11.0, color=@sf.theme().p.subtle) |> ignore
+  })
+  |> ignore
 }
 
 ///|
-/// A list of things to do, as TodoWrite and update_plan give it (ToolStep.kt Plan).
+/// A step opened (ToolStep.kt ToolStepBody): what the call asked for, then what came back, as the core reads them
+/// (`history.tool`, tool-step.ts: the parts each is drawn as), asked once a step is opened and kept.
+fn tool_step_body(c : @ui.Ctx, src : Source, content : Json?) -> Unit {
+  let ask : Map[String, Json] = {
+    "name": Json::string(text(content, "name")),
+    "call": Json::string(text(content, "call")),
+    "failed": Json::boolean(flag(content, "failed")),
+    "said": Json::boolean(opt_text(content, "said") is Some(_)),
+  }
+  match field(content, "result") {
+    Some(String(r)) => ask["result"] = Json::string(r)
+    _ => ()
+  }
+  let key = Json::object(ask).stringify()
+  match tool_parts.get(key) {
+    Some(parts) =>
+      c.box(w=Fill(1.0), pl=6.0, pr=6.0, pt=4.0, pb=10.0, gap=8.0, fn() {
+        // its boxes numbered within it (where each is scrolled to)
+        c.scope(c.id("step/" + key), fn() {
+          boxed_n.val = 0
+          c.box(w=Fill(1.0), gap=6.0, fn() { for p in items(Some(parts), "call") { tool_part(c, Some(p)) } }) |> ignore
+          match field(Some(parts), "result") {
+            Some(Array(list)) =>
+              c.box(w=Fill(1.0), gap=4.0, fn() { for p in list { tool_part(c, Some(p)) } }) |> ignore
+            _ => ()
+          }
+        })
+      })
+      |> ignore
+    None =>
+      c.after_build("history-tool/" + key, fn() {
+        if tool_parts.contains(key) {
+          return
+        }
+        (src.call)("history.tool", Json::object(ask), fn(res) {
+          match res {
+            Ok(v) => tool_parts[key] = v
+            Err(_) => ()
+          }
+        })
+      })
+  }
+}
+
+///|
+/// The steps' parts as the core read them (`history.tool`), by what was asked.
+let tool_parts : Map[String, Json] = {}
+
+///|
+/// One part of a call or of what came back, as the core says it is drawn (tool-step.ts ToolPart).
+fn tool_part(c : @ui.Ctx, part : Json?) -> Unit {
+  let t = @sf.theme()
+  match text(part, "kind") {
+    "code" => code_lines(c, text(part, "text"), language=text(part, "lang"))
+    "facts" =>
+      fact_row(
+        c,
+        items(part, "items").map(fn(f) {
+          let fv = Some(f)
+          (text(fv, "key"), if flag(fv, "plain") { None } else { opt_text(fv, "value") })
+        }),
+      )
+    "path" => path_line(c, text(part, "path"), text(part, "extra"))
+    "diff" =>
+      diff_lines(
+        c,
+        items(part, "rows").map(fn(r) {
+          match r {
+            Array([String(mark), String(words)]) =>
+              (
+                match mark {
+                  "-" => '-'
+                  "+" => '+'
+                  "@" => '@'
+                  _ => ' '
+                },
+                words,
+              )
+            _ => (' ', "")
+          }
+        }),
+      )
+    "markdown" =>
+      boxed(c, code_ground(), 100000.0, 12.0, 8.0, fn() {
+        @sf.markdown(c, text(part, "text"), tree=field(part, "md")) |> ignore
+      })
+    "plan" => plan(c, items(part, "items"))
+    "fields" => fields(c, items(part, "rows"))
+    "lead" =>
+      c.box(padx=2.0, fn() {
+        c.rich([@ui.span(text(part, "text"), mono=true)], size=12.0, line=18.0, color=t.p.text, w=Fill(1.0)) |> ignore
+      })
+      |> ignore
+    "none" => none_line(c, text(part, "text"))
+    "output" => output_box(c, text(part, "text"), flag(part, "failed"))
+    "json" => json_block(c, text(part, "text"))
+    _ => ()
+  }
+}
+
+///|
+/// A list of things to do, as TodoWrite and update_plan give it (ToolStep.kt Plan): done struck through and ticked in
+/// green, under way in bold after ›.
 fn plan(c : @ui.Ctx, list : Array[Json]) -> Unit {
   let t = @sf.theme()
   let (_, _, green, _) = diff_colors()
   c.box(w=Fill(1.0), padx=2.0, gap=2.0, fn() {
     for item in list {
       let iv = Some(item)
-      let words = match jstr(field(iv, "content")) {
-        Some(s) => s
-        None => text(iv, "step")
-      }
+      let words = text(iv, "text")
       let status = text(iv, "status")
       c.box(dir=Row, w=Fill(1.0), fn() {
         c.box(w=Px(16.0), fn() {
@@ -1745,37 +1605,23 @@ fn plan(c : @ui.Ctx, list : Array[Json]) -> Unit {
 
 ///|
 /// Fields one to a row (ToolStep.kt Fields): short ones inline, long text as a block, nested data as JSON.
-fn fields(c : @ui.Ctx, a : Map[String, Json], skip : Array[String]) -> Unit {
+fn fields(c : @ui.Ctx, rows : Array[Json]) -> Unit {
   let t = @sf.theme()
-  let rows = []
-  for k, v in a {
-    if skip.contains(k) || v is Null || v == Json::string("") {
-      continue
-    }
-    rows.push((k, v))
-  }
-  if rows.length() == 0 {
-    none_line(c, tr("android-misc.tool.noArgs"))
-    return
-  }
   c.box(w=Fill(1.0), padx=2.0, gap=4.0, fn() {
     for row in rows {
-      let (k, v) = row
+      let rv = Some(row)
+      let v = text(rv, "value")
       c.box(dir=Row, w=Fill(1.0), gap=12.0, fn() {
-        c.box(min_w=64.0, max_w=120.0, fn() {
-          c.text(k, size=11.0, color=t.p.subtle, line=18.0) |> ignore
-        })
+        c.box(min_w=64.0, max_w=120.0, fn() { c.text(text(rv, "key"), size=11.0, color=t.p.subtle, line=18.0) |> ignore })
         |> ignore
         c.box(w=Fill(1.0), fn() {
-          match v {
-            String(s) if s.contains("\n") || s.length() > 120 =>
+          match text(rv, "form") {
+            "long" =>
               boxed(c, code_ground(), 240.0, 12.0, 8.0, fn() {
-                c.text(s, size=12.0, line=19.2, color=t.p.text, w=Fill(1.0)) |> ignore
+                c.text(v, size=12.0, line=19.2, color=t.p.text, w=Fill(1.0)) |> ignore
               })
-            Object(_) | Array(_) => json_block(c, v)
-            _ =>
-              c.rich([@ui.span(scalar_text(v), mono=true)], size=12.0, line=18.0, color=t.p.text, w=Fill(1.0))
-              |> ignore
+            "json" => json_block(c, v)
+            _ => c.rich([@ui.span(v, mono=true)], size=12.0, line=18.0, color=t.p.text, w=Fill(1.0)) |> ignore
           }
         })
         |> ignore
@@ -1787,347 +1633,12 @@ fn fields(c : @ui.Ctx, a : Map[String, Json], skip : Array[String]) -> Unit {
 }
 
 ///|
-fn json_block(c : @ui.Ctx, v : Json) -> Unit {
+/// Data as JSON, as the core wrote it out.
+fn json_block(c : @ui.Ctx, words : String) -> Unit {
   let t = @sf.theme()
   boxed(c, code_ground(), 240.0, 12.0, 8.0, fn() {
-    c.rich([@ui.span(@codec.pretty_json(v), mono=true)], size=12.0, line=18.6, color=t.p.text, w=Fill(1.0))
-    |> ignore
+    c.rich([@ui.span(words, mono=true)], size=12.0, line=18.6, color=t.p.text, w=Fill(1.0)) |> ignore
   })
-}
-
-///|
-fn none_line(c : @ui.Ctx, words : String) -> Unit {
-  c.box(padx=2.0, fn() {
-    c.text(words, size=11.0, color=@sf.theme().p.subtle) |> ignore
-  })
-  |> ignore
-}
-
-///|
-/// A step opened (ToolStep.kt ToolStepBody): what the call asked for, then what came back.
-fn tool_step_body(
-  c : @ui.Ctx,
-  name : String,
-  call : String,
-  said : Bool,
-  result : String?,
-  failed : Bool,
-) -> Unit {
-  c.box(w=Fill(1.0), pl=6.0, pr=6.0, pt=4.0, pb=10.0, gap=8.0, fn() {
-    // its boxes numbered within it (where each is scrolled to)
-    c.scope(c.id("step/" + name + "/" + call), fn() {
-      boxed_n.val = 0
-      c.box(w=Fill(1.0), gap=6.0, fn() { tool_call(c, name, call, said) }) |> ignore
-      match result {
-        Some(r) => tool_result(c, name, call, r, failed)
-        None => ()
-      }
-    })
-  })
-  |> ignore
-}
-
-///|
-/// The file a call is about (its `file_path`, `notebook_path` or `path`): its extension says the language its code is
-/// highlighted in.
-fn file_of(a : Map[String, Json]) -> String? {
-  match jstr(a.get("file_path")) {
-    Some(f) => Some(f)
-    None =>
-      match jstr(a.get("notebook_path")) {
-        Some(f) => Some(f)
-        None => jstr(a.get("path"))
-      }
-  }
-}
-
-///|
-/// What a call asked for (ToolStep.kt ToolCall). `said`: its description already shows as the step's name.
-fn tool_call(c : @ui.Ctx, name : String, call : String, said : Bool) -> Unit {
-  let a = match parse_call(call) {
-    Some(Object(m)) => m
-    _ => {
-      let trimmed = call.trim(chars=" \n\t").to_string()
-      if trimmed.has_prefix("*** Begin Patch") {
-        patch(c, trimmed)
-      } else if trimmed != "" {
-        code_lines(c, call, language=if name == "exec" { "js" } else { "" })
-      }
-      return
-    }
-  }
-  let skip = if said { ["description"] } else { [] }
-  let file = file_of(a)
-  let get = fn(k : String) { jstr(a.get(k)) }
-  let list = match a.get("todos") {
-    Some(Array(l)) => Some(l)
-    _ =>
-      match a.get("plan") {
-        Some(Array(l)) => Some(l)
-        _ => None
-      }
-  }
-  let queries = match a.get("queries") {
-    Some(Array(q)) if q.length() > 0 && q.iter().all(fn(x) { x is String(_) }) => Some(q.map(scalar_text))
-    _ => None
-  }
-  let long_fields = a.values().filter(fn(v) {
-    match v {
-      String(s) => s.length() > 120
-      _ => false
-    }
-  }).count()
-  match command_of(a) {
-    Some(cmd) => {
-      code_lines(c, cmd, language="sh")
-      facts(c, a, skip + ["command", "cmd"])
-      return
-    }
-    None => ()
-  }
-  match (file, get("old_string"), get("new_string")) {
-    (Some(f), Some(old), Some(new)) => {
-      path_line(c, f, if a.get("replace_all") == Some(Json::boolean(true)) {
-        tr("android-misc.tool.replaceAll")
-      } else {
-        ""
-      })
-      diff(c, old, new)
-      return
-    }
-    _ => ()
-  }
-  match (file, a.get("edits")) {
-    (Some(f), Some(Array(edits))) => {
-      path_line(c, f, "")
-      for e in edits {
-        diff(c, text(Some(e), "old_string"), text(Some(e), "new_string"))
-      }
-      return
-    }
-    _ => ()
-  }
-  match (file, get("content")) {
-    (Some(f), Some(body)) => {
-      path_line(c, f, "")
-      code_lines(c, body, language=language_of(Some(f)))
-      return
-    }
-    _ => ()
-  }
-  match list {
-    Some(l) => {
-      match get("explanation") {
-        Some(x) => boxed(c, code_ground(), 100000.0, 12.0, 8.0, fn() { @sf.markdown(c, x) |> ignore })
-        None => ()
-      }
-      plan(c, l)
-      return
-    }
-    None => ()
-  }
-  match get("prompt") {
-    Some(p) if name == "Agent" || name == "Task" || name == "subagent" || p.length() > 200 => {
-      facts(c, a, skip + ["prompt"])
-      boxed(c, code_ground(), 100000.0, 12.0, 8.0, fn() { @sf.markdown(c, p) |> ignore })
-      return
-    }
-    _ => ()
-  }
-  match get("text") {
-    Some(x) if x != "" && long_fields <= 1 => {
-      facts(c, a, skip + ["text"])
-      boxed(c, code_ground(), 100000.0, 12.0, 8.0, fn() { @sf.markdown(c, x) |> ignore })
-      return
-    }
-    _ => ()
-  }
-  match file {
-    Some(f) if a
-      .keys()
-      .all(fn(k) {
-        ["file_path", "path", "notebook_path", "offset", "limit"].contains(k) || skip.contains(k)
-      }) => {
-      let from = match a.get("offset") {
-        Some(Number(n, ..)) => Some(n.to_int64())
-        _ => None
-      }
-      let n = match a.get("limit") {
-        Some(Number(x, ..)) => Some(x.to_int64())
-        _ => None
-      }
-      let range = match (from, n) {
-        (Some(f), Some(k)) =>
-          fill("android-misc.tool.linesFrom", [("from", f.to_string()), ("n", k.to_string())])
-        (Some(f), None) => fill("android-misc.tool.from", [("from", f.to_string())])
-        (None, Some(k)) => fill("android-misc.tool.lines", [("n", k.to_string())])
-        _ => ""
-      }
-      path_line(c, f, range)
-      return
-    }
-    _ => ()
-  }
-  match queries {
-    Some(q) => {
-      let t = @sf.theme()
-      for x in q {
-        c.box(padx=2.0, fn() {
-          c.rich([@ui.span(x, mono=true)], size=12.0, line=18.0, color=t.p.text, w=Fill(1.0)) |> ignore
-        })
-        |> ignore
-      }
-      facts(c, a, skip + ["queries"])
-      return
-    }
-    None => ()
-  }
-  for k in ["pattern", "query", "url"] {
-    match get(k) {
-      Some(x) => {
-        let t = @sf.theme()
-        c.box(padx=2.0, fn() {
-          c.rich([@ui.span(x, mono=true)], size=12.0, line=18.0, color=t.p.text, w=Fill(1.0)) |> ignore
-        })
-        |> ignore
-        fields(c, a, skip + [k])
-        return
-      }
-      None => ()
-    }
-  }
-  fields(c, a, skip)
-}
-
-///|
-/// Codex's command output (ToolStep.kt commandOutput): how it ended in a header, then the output.
-fn command_output(words : String) -> (Array[String], String)? {
-  let lines = words.split("\n").map(fn(l) { l.to_owned() }).to_array()
-  let mut i = 0
-  if i < lines.length() && lines[i].has_prefix("Chunk ID: ") {
-    i = i + 1
-  }
-  let mut wall = ""
-  if i < lines.length() && lines[i].has_prefix("Wall time: ") {
-    wall = lines[i].view(start_offset=11).to_owned()
-    i = i + 1
-  }
-  let mut code = ""
-  if i < lines.length() && lines[i].has_prefix("Process exited with code ") {
-    code = lines[i].view(start_offset=25).to_owned()
-    i = i + 1
-  }
-  if i < lines.length() && lines[i].has_prefix("Original token count: ") {
-    i = i + 1
-  }
-  if i >= lines.length() || !lines[i].has_prefix("Output:") || (wall == "" && code == "") {
-    return None
-  }
-  let first = lines[i].view(start_offset=7).to_owned()
-  let rest = lines[i + 1:].to_array()
-  let out = if first == "" { rest.join("\n") } else { ([first] + rest).join("\n") }
-  let said = []
-  if code != "" {
-    said.push(fill("android-misc.tool.exitCode", [("code", code)]))
-  }
-  if wall != "" {
-    said.push(fill("android-misc.tool.took", [("time", wall)]))
-  }
-  Some((said, out))
-}
-
-///|
-/// DeepSeek Harness's bash: its output, then how it ended where that was not well (`[exit code: 1]`).
-fn exit_marker(words : String) -> (Array[String], String)? {
-  let trimmed = words.trim_end(chars=" \n\t").to_string()
-  guard trimmed.has_suffix("]") else { return None }
-  match trimmed.rev_find("[exit code: ") {
-    Some(i) => {
-      let code = trimmed.view(start_offset=i + 12, end_offset=trimmed.length() - 1).to_owned()
-      let before = trimmed.view(end_offset=i).to_owned()
-      let before = if before.has_suffix("\n") {
-        before.view(end_offset=before.length() - 1).to_owned()
-      } else {
-        before
-      }
-      Some(([fill("android-misc.tool.exitCode", [("code", code)])], before))
-    }
-    None => None
-  }
-}
-
-///|
-/// Claude Code's Read (ToolStep.kt readLines): `cat -n` lines (`   12→text` or `   12\ttext`) without their numbers;
-/// what follows them left out.
-fn read_lines(words : String, colon : Bool) -> String? {
-  let out = []
-  for l in words.split("\n") {
-    let line = l.to_owned()
-    let mut i = 0
-    if !colon {
-      while i < line.length() && line.get_char(i) == Some(' ') {
-        i = i + 1
-      }
-    }
-    let start = i
-    while i < line.length() && digit_at(line, i) {
-      i = i + 1
-    }
-    if i == start {
-      break
-    }
-    let sep = line.get_char(i)
-    if colon {
-      if sep != Some(':') {
-        break
-      }
-      i = i + 1
-      if line.get_char(i) == Some(' ') {
-        i = i + 1
-      }
-    } else if sep == Some('→') || sep == Some('\t') {
-      i = i + 1
-    } else {
-      break
-    }
-    out.push(line.view(start_offset=i).to_owned())
-  }
-  if out.length() == 0 {
-    None
-  } else {
-    Some(out.join("\n"))
-  }
-}
-
-///|
-fn digit_at(s : String, i : Int) -> Bool {
-  match s.get_char(i) {
-    Some(ch) => ch >= '0' && ch <= '9'
-    None => false
-  }
-}
-
-///|
-/// DeepSeek Harness's read and write (ToolStep.kt unwrap): the file's path and kind, then what is in it, in tags.
-fn unwrap_tags(words : String) -> String? {
-  guard words.has_prefix("<path>") else { return None }
-  match words.find("<content>") {
-    Some(i) => {
-      let mut body = words.view(start_offset=i + 9).to_owned()
-      if body.has_prefix("\n") {
-        body = body.view(start_offset=1).to_owned()
-      }
-      let trimmed = body.trim_end(chars=" \n\t").to_string()
-      if trimmed.has_suffix("</content>") {
-        body = trimmed.view(end_offset=trimmed.length() - 10).to_owned()
-      }
-      if body.has_suffix("\n") {
-        body = body.view(end_offset=body.length() - 1).to_owned()
-      }
-      Some(body)
-    }
-    None => None
-  }
 }
 
 ///|
@@ -2145,63 +1656,6 @@ fn output_box(c : @ui.Ctx, words : String, failed : Bool) -> Unit {
     )
     |> ignore
   })
-}
-
-///|
-/// The file a call names (its path), if it is one.
-fn call_file(call : String) -> String? {
-  match parse_call(call) {
-    Some(Object(m)) => file_of(m)
-    _ => None
-  }
-}
-
-///|
-/// What a call gave back (ToolStep.kt ToolResult).
-fn tool_result(c : @ui.Ctx, name : String, call : String, result : String, failed : Bool) -> Unit {
-  if result.trim(chars=" \n\t").to_string() == "" {
-    none_line(c, tr("android-misc.tool.noOutput"))
-    return
-  }
-  c.box(w=Fill(1.0), gap=4.0, fn() {
-    let codex = match command_output(result) {
-      Some(x) => Some(x)
-      None => if name == "bash" { exit_marker(result) } else { None }
-    }
-    let read = if !failed && (name == "Read" || name == "NotebookRead") { read_lines(result, false) } else { None }
-    let inner = if !failed && codex is None && read is None && (name == "read" || name == "write") {
-      unwrap_tags(result)
-    } else {
-      None
-    }
-    let inner_lines = match inner {
-      Some(x) if name == "read" => read_lines(x, true)
-      _ => None
-    }
-    match (codex, read, inner_lines, inner) {
-      (Some((said, out)), _, _, _) => {
-        if said.length() > 0 {
-          fact_row(c, said.map(fn(s) { (s, None) }))
-        }
-        if out.trim(chars=" \n\t").to_string() != "" {
-          output_box(c, out, failed)
-        } else {
-          none_line(c, tr("android-misc.tool.noOutput"))
-        }
-      }
-      (_, Some(r), _, _) => code_lines(c, r, language=language_of(call_file(call)))
-      (_, _, Some(r), _) => code_lines(c, r, language=language_of(call_file(call)))
-      (_, _, _, Some(x)) => output_box(c, x, false)
-      _ =>
-        match (if failed { None } else { parse_call(result) }) {
-          Some(Object(m)) => fields(c, m, [])
-          Some(v) => json_block(c, v)
-          None => output_box(c, result, failed)
-        }
-    }
-  })
-  |> ignore
-  ignore(call)
 }
 
 ///|

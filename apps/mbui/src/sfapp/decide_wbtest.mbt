@@ -200,26 +200,8 @@ test "the 奏 page: the card turns as it is moved across, 4° a width about its 
 }
 
 ///|
-test "a call is drawn by what it is" {
-  assert_eq(command_of({ "command": ["bash", "-lc", "ls -la"] }), Some("ls -la"))
-  assert_eq(command_of({ "cmd": "git status" }), Some("git status"))
-  match parse_call("{\"a\": \"abc") {
-    Some(_) => fail("cut short without its marker")
-    None => ()
-  }
-  match parse_call("{\"a\": \"abc\n… (12 more characters)") {
-    Some(Object(m)) => assert_eq(m.get("a"), Some(Json::string("abc…")))
-    _ => fail("not closed")
-  }
-  assert_eq(read_lines("    12→one\n    13→two\nmore", false), Some("one\ntwo"))
+test "a step's brief, a chat's link" {
   assert_eq(plain_brief("## 标题\n- 一项 **重点**\n```sh\nls\n```"), "标题 一项 重点 ls")
-  match command_output("Wall time: 1.2s\nProcess exited with code 0\nOutput:\nok") {
-    Some((said, out)) => {
-      assert_eq(said.length(), 2)
-      assert_eq(out, "ok")
-    }
-    None => fail("no output read")
-  }
   assert_eq(chat_link("ws1/st1", "ember:c-1"), "https://app.still.fail/o/ws1/st1/ember%3Ac-1")
 }
 
