@@ -1843,7 +1843,7 @@ fn composer_bar(
   let k = ct()
   // pointed at with a mouse, its ground and the text's ink under the pointer,
   // its tip with its keys (Chat.tsx ComposerTools, Chat.css.ts attachBtn)
-  let mouse = @ui.pointing() is Mouse
+  let mouse = !@sf.touch_system()
   if mouse && !no_files {
     c.cursor(plus, Hand)
     @sf.tip(c, "composer/plus", plus, tr("web-main.composer.attach"), shortcut="composer.file")
@@ -1949,7 +1949,7 @@ fn composer_bar(
           caret_color=t.p.accent,
           // pointed at with a mouse (a keyboard at hand) Enter sends and ⇧Enter is a new line; with a finger (the
           // screen's keyboard) Enter is a new line, whatever the layout (the web's `hover: hover`, mobile/Chat.tsx)
-          enter_sends=@ui.pointing() is Mouse,
+          enter_sends=!@sf.touch_system(),
           paste_limit=if no_files { 0 } else { @sfbase.paste_threshold(c, src) },
           // ⌘V with a picture on the clipboard: it, as a file (Chat.tsx onPaste: the clipboard's files)
           files=!no_files,

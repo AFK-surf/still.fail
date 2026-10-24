@@ -417,6 +417,8 @@ pub(all) struct Agent {
   wait : (Double, Double?, String)?
   /// seen starting while the chat shows: its activity comes in
   started : Bool
+  /// its last turn's id (its session's lastTurn), "" before it has had one
+  last_turn : String
 }
 
 ///|
@@ -436,6 +438,7 @@ pub fn agent_of(a : Json) -> Agent {
       _ => None
     },
     started: flag(s, "started"),
+    last_turn: text(field(session, "lastTurn"), "id"),
   }
 }
 

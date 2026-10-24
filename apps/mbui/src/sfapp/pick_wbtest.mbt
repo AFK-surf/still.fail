@@ -70,6 +70,8 @@ test "复制 puts the passage on the clipboard and lets go; 全选 takes all of 
   assert_eq(t.clipboard(), one)
   assert_eq(pk.ts, "")
   assert_true(t.find("已复制") is Some(_))
+  // (its toast gone: it says 已复制 over the composer, where the bar of the next passage picked stands)
+  t.run_for(@sf.toast_ms)
   hold_on(t, "做完了：列表、跳到最新的按钮") |> ignore
   t.tap_text("全选")
   assert_true(t.find("全选") is None)

@@ -53,7 +53,7 @@ test "Android composer: a tap on the capsule beside the words takes it" {
 ///|
 test "Android composer: a tap anywhere on the capsule nothing in it takes puts the caret in the field (ChatHost.kt)" {
   let probe = composer_tap_tester()
-  let (px, py, pw, ph) = probe.query(Button, label="添加到消息").unwrap().rect
+  let (px, py, pw, ph) = probe.query(Button, label=@sf.t("web-main.composer.attach")).unwrap().rect
   let (wx, wy, ww, wh) = probe.rect_of("发消息").unwrap()
   // in the bar's row over the words' line and under it (the room of what the capsule holds, which no part of it
   // takes). (Round ＋, within a fingertip of it, is ＋'s, the gap between it and the words too: a finger reaches what

@@ -1,0 +1,15 @@
+# Words left in a chat's field and the app left there: what 07-draft-restart (sfreplay) starts the app again over, the
+# draft the core kept (composer.text) back in the field. Run just before it (its `// before it:`), so it leans on no
+# other run. The chat left and opened again before the run ends: leaving it is what has the core write the draft
+# down at once (client.focus `left`), not a moment after its last change, when the app may be gone.
+#env MBUI_PLATFORM=android
+timeout 60000
+tap 端到端测试
+until =studio
+tap 发消息
+type 还没发出去的草稿 {T}
+answered composer.text
+tap icon:chevron-left
+until 端到端测试
+tap 端到端测试
+until =studio

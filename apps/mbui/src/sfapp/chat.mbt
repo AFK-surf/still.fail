@@ -157,7 +157,7 @@ fn chat_left(src : Source, r : ChatRef) -> Unit {
     }
     _ => ()
   }
-  composer_left(src, r)
+  pick_clear()
   readings.remove(k)
   // what holds the chat's thread at the core with it (its jobs in the bar and their sheets, the images beside one
   // opened from it): while any is held the core keeps the thread's window as first read, and the chat opened again

@@ -282,6 +282,11 @@ fn pages_left(src : Source) -> Unit {
 }
 
 ///|
+/// A page of the stack, all of what it is given.
+// kept across runs: a value (no field of it changes)
+let page_whole : @ui.Style = @ui.css("w=Full h=Full")
+
+///|
 /// The app over `src`: call each frame.
 pub fn view(c : @ui.Ctx, src : Source) -> Unit {
   fix_ctx.val = Some(c)
@@ -431,7 +436,18 @@ fn signed_in(c : @ui.Ctx, src : Source) -> Unit {
         c.mouse_drags_lists(finger)
         let page_took = c.took_back(fn() {
           let pages = fn() {
-            c.nav(app.nav, fn(page) { page_view(c, src, w, all, invited, page) }, bg=t.p.bg) |> ignore
+            c.nav(
+              app.nav,
+              fn(page) {
+                // what moves in the page of its own (the composer) takes its place from the page's foot, as the wide
+                // frame's pane says (sfdesk's frame.mbt): the page sliding in or out, a keyboard making it shorter,
+                // move none of it (it goes with the page, at once)
+                let whole = c.box(style=page_whole, fn() { page_view(c, src, w, all, invited, page) })
+                @motion.scope(c, whole, bottom=true)
+              },
+              bg=t.p.bg,
+            )
+            |> ignore
             // ⌘K's search over a page other than the lists (sfdesk's keys.mbt, sfpages' search.mbt), under the bars
             @sfpages.search_over(c, src, w, status_top())
           }

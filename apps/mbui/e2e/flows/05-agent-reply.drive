@@ -3,7 +3,6 @@ timeout 60000
 tap 端到端测试
 until =studio
 until 发消息
-answered draft.get
 tap 发消息
 type 请回答一句 {T} post:收到，这是 agent 的回复 {T}
 tap icon:arrow-up

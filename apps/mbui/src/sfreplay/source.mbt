@@ -110,7 +110,11 @@ pub fn source() -> @sfapp.Source {
         return
       }
       match @sfkept.answer(name, params, None) {
-        Some(Ok((v, _))) => done(Ok(v))
+        Some(Ok((v, _))) => {
+          // (the tape told it was asked, its answer to it let go: the run's ask of it, if the run asked, is had)
+          @core.call(name, params~, on_done=fn(_) {  })
+          done(Ok(v))
+        }
         // (one always answered here, not kept yet: said on the output for scripts/kept, never the run's to give)
         Some(Err(e)) if @sfkept.has(name, params) => done(Err(e))
         _ => @core.call(name, params~, on_done=done)

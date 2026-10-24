@@ -21,8 +21,9 @@ test "30-new-chat" {
     f.tap("icon:chevron-left")
     // the chat off, Home's bar back up (longer than the page's going)
     f.run_for(@sfapp.bar_show_ms)
-    // (named by no one: 新对话, #1570)
+    // its row: no one named it (新对话), how its agent's turn ended under it
     f.see("=新对话")
+    f.see("answered the question that was asked")
     f.see("端到端测试")
     // the bottom bar's springs and tweens to their declared end
     f.run_to(@sfapp.bar_rest())

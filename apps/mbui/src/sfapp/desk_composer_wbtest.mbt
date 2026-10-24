@@ -7,6 +7,7 @@ fn desk_composer_tester(
   calls : Array[Made],
   spec_of? : (ComposerFor) -> @sfpages.ComposerSpec = default_spec,
   pointing? : @ui.Pointing = Mouse,
+  platform? : Int = 0,
 ) -> (@ui.Tester, Source) {
   reset()
   let base = fixture("chat")
@@ -43,7 +44,7 @@ fn desk_composer_tester(
     },
     w=900.0,
     h=500.0,
-    platform=0,
+    platform~,
     pointing~,
   )
   (t, src)
@@ -296,9 +297,9 @@ test "desk composer: words with no reference go at once, the core not asked what
 }
 
 ///|
-test "a finger's ＋: the sheet of what can go in (Attach.kt); 照片 asks the system, held, and what it picks goes up (composer.add)" {
+test "a phone's ＋: the sheet of what can go in (Attach.kt); 照片 asks the system, held, and what it picks goes up (composer.add)" {
   let calls : Array[Made] = []
-  let (t, _) = desk_composer_tester(calls, pointing=Finger)
+  let (t, _) = desk_composer_tester(calls, pointing=Finger, platform=2)
   t.draw()
   t.click(Button, label=@sf.t("web-main.composer.attach"))
   t.run_for(@kit.sheet_rest("sf-present") - t.time())
@@ -319,9 +320,9 @@ test "a finger's ＋: the sheet of what can go in (Attach.kt); 照片 asks the s
 }
 
 ///|
-test "a finger down outside the composer lets go of the keyboard once lifted (Keyboard.kt letsGoOfKeyboard)" {
+test "on a phone, a finger down outside the composer lets go of the keyboard once lifted (Keyboard.kt letsGoOfKeyboard)" {
   let calls : Array[Made] = []
-  let (t, _) = desk_composer_tester(calls, pointing=Finger)
+  let (t, _) = desk_composer_tester(calls, pointing=Finger, platform=2)
   t.draw()
   t.tap(450.0, 500.0 - 16.0 - 22.0)
   assert_true(t.ctx().editor_focused(@sfpages.composer_field_key))

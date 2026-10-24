@@ -42,6 +42,14 @@ for n in "$@"; do
   fi
   test=$(ls src/sfreplay/flows/"${n}_test.mbt" 2> /dev/null | head -1)
   [ -n "$test" ] || die "no test src/sfreplay/flows/${n}_test.mbt, nor flow e2e/flows/$n.drive"
+  # what the test's run stands on, run just before it whatever was run before (its `// before it: FLOW…` line: a
+  # folder lent, a draft left before the app starts again), so it never leans on another test's run
+  for b in $(sed -n 's|^// before it: ||p' "$test"); do
+    [ -f "e2e/flows/$b.drive" ] || die "$test runs $b before it: no e2e/flows/$b.drive"
+    cp "e2e/flows/$b.drive" "$TMP/$idx-$b.drive"
+    [ -f "e2e/flows/$b.check" ] && cp "e2e/flows/$b.check" "$TMP/$idx-$b.check"
+    i=$((i + 1)); idx=$(printf %02d $i)
+  done
   tn=$(grep -o '@sfreplay\.trace("[^"]*")' "$test" | head -1 | sed 's/.*trace("//; s/")//')
   [ -n "$tn" ] || die "$test names no @sfreplay.trace(…)"
   trace=e2e/traces/$tn.trace
@@ -103,7 +111,20 @@ for x in $tests; do
   cp "$trace" "$TMP/$(basename "$trace").old"
   "$D/trace" make "out/e2e/mac/$name.log" "$(basename "$trace" .trace)"
   "$D/trace" diff "$TMP/$(basename "$trace").old" "$trace" | sed "s|^|  $(basename "$trace" .trace): |"
-  if moon_test_native "$test" > "$TMP/$name.after.log" 2>&1; then echo "  $test: passes"; else
+  # (what the new trace has the app ask of the core's pure calls that is not kept yet (src/sfkept: a text the run typed,
+  # read by the core): worked out by the core and kept, as scripts/kept does, for this test alone, then run again)
+  moon_test_native "$test" > "$TMP/$name.after.log" 2>&1
+  ok=$?
+  for _ in 1 2 3 4 5 6 7 8; do
+    [ $ok = 0 ] && break
+    grep -aq 'kept-answers-ask' "$TMP/$name.after.log" || break
+    grep -a 'kept-answers-ask {' "$TMP/$name.after.log" > "$TMP/$name.asks"
+    [ -s "$TMP/$name.asks" ] || break
+    node "$A/../../client/core-ts/scripts/kept-answers.ts" "$TMP/$name.asks" > /dev/null || break
+    moon_test_native "$test" > "$TMP/$name.after.log" 2>&1
+    ok=$?
+  done
+  if [ $ok = 0 ]; then echo "  $test: passes"; else
     echo "  $test: fails over the new trace ($TMP/$name.after.log):"; grep -a '^flow:\|assert_idle' "$TMP/$name.after.log" | head -5 | cut -c1-300; code=1
     # (the new trace is the run's; the test does not hold over it: the old one back, said; KEEP_NEW=1 keeps the new
     # one, as when what fails is a core answer not yet kept: scripts/kept, then the test again)

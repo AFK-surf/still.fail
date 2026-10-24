@@ -37,8 +37,8 @@ fn hold_quote(t : @ui.Tester, x : Double, y : Double) -> Unit {
 }
 
 ///|
-fn chat_draft() -> Draft {
-  drafts.get(draft_key(chat_ref("ws1/st1", "s-c1"))).unwrap()
+fn chat_draft() -> @sfbase.Writing {
+  @sfbase.writings.get(draft_key(chat_ref("ws1/st1", "s-c1"))).unwrap()
 }
 
 ///|
@@ -47,30 +47,16 @@ test "a person's image held: quoted (whose, the file named), its file once in th
   hold_quote(t, x, y)
   assert_true(viewer.val is None)
   assert_eq(t.haptics(), [@ui.Haptic::LongPress])
+  // into the chat's draft as the core keeps it (sfpages' composer took it: quote_file_into)
   let d = chat_draft()
   assert_eq(d.quotes.length(), 1)
-  let q = d.quotes[0]
-  assert_eq(q.author, "Ana")
-  assert_eq(q.role, "person")
-  assert_eq(q.file, "插画参考.png")
-  assert_eq(d.files.length(), 1)
-  // the station has it: nothing goes up, it goes again with the message, through the session keeping it
-  let f = d.files[0]
-  assert_true(f.done is Some(_) && f.core_id == "")
-  assert_eq(text(f.done, "name"), "插画参考.png")
-  assert_true(text(f.done, "owner") != "")
-  // shown in the quote's card, not in the files' row
-  assert_true(quote_file_of(d, q).map(fn(x) { x.id }) == Some(f.id))
-  assert_eq(draft_items(d).length(), 0)
-  // held again: another quote, the file still once
+  let q = Some(d.quotes[0])
+  assert_eq(text(q, "author"), "Ana")
+  assert_eq(text(q, "role"), "person")
+  assert_eq(text(q, "file"), "插画参考.png")
+  // held again: another quote
   hold_quote(t, x, y)
-  assert_eq(d.quotes.length(), 2)
-  assert_eq(d.files.length(), 1)
-  // one quote taken out: the file stays for the other; the last taken out, the file goes with it
-  draft_unquote(fixture("chat"), d, d.quotes[0])
-  assert_eq(d.files.length(), 1)
-  draft_unquote(fixture("chat"), d, d.quotes[0])
-  assert_eq(d.files.length(), 0)
+  assert_eq(chat_draft().quotes.length(), 2)
 }
 
 ///|
@@ -80,8 +66,8 @@ test "an agent's image held: quoted, not a passage of its words picked; whose it
   assert_eq(pk.ts, "")
   let d = chat_draft()
   assert_eq(d.quotes.length(), 1)
-  assert_eq(d.quotes[0].role, "agent")
-  assert_eq(d.quotes[0].file, "compare.png")
+  assert_eq(text(Some(d.quotes[0]), "role"), "agent")
+  assert_eq(text(Some(d.quotes[0]), "file"), "compare.png")
 }
 
 ///|

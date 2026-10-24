@@ -1,5 +1,7 @@
 // 21-station-files (e2e/traces/station-files.trace): ＋ → Station 文件 in a chat: the station's lent folder
 // (e2e-084051), a file ticked, 添加: its card in the draft; sent with words, the message names it by its path.
+// (its folder lent first: e2e/flows/15-drive-lend)
+// before it: 15-drive-lend
 
 ///|
 test "21-station-files" {

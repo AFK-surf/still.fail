@@ -17,8 +17,11 @@ test "23-dismiss" {
     f.tap("=忽略")
     f.gone("=忽略")
     f.gone("=先合 B 083209")
-    // 忽略 and the options gone, their room closed
-    f.run_to(@sfapp.under_rest())
+    // 忽略 and the options gone, their room closed (closed already where waiting for them gone took the time there)
+    let rest = @sfapp.under_rest()
+    if rest > f.t.time() && rest < @double.infinity {
+      f.run_to(rest)
+    }
     f.end()
   })
 }

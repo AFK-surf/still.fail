@@ -1,8 +1,8 @@
-// ＋ pressed with a finger (still.fail's Android app, chat/screens/Attach.kt): the library's panel, a sheet from the foot,
+// ＋ pressed on a touch system (still.fail's Android app, chat/screens/Attach.kt): the library's panel, a sheet from the foot,
 // of the gallery's recent photos across its top (the camera first: recent.mbt), then 照片, 文件 and Station 文件. A tile
 // picked asks the system (held by the host where it is big: writing_add_held), what it answers coming into the draft as
-// the composer is next drawn (take_in); Station 文件 puts up the shell's sheet of station files for the draft. With a
-// mouse ＋ is the system's picker at once (composer.mbt attach).
+// the composer is next drawn (take_in); Station 文件 puts up the shell's sheet of station files for the draft. On a
+// computer ＋ is the system's picker at once (composer.mbt attach).
 
 ///|
 /// The panel up for draft `key` (its id: @sf.last_presented, 0 none), read again as it opens.

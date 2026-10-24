@@ -1,6 +1,6 @@
 // 63-wide-switcher (e2e/traces/wide-switcher.trace: 1280 × 800): ⌘K (Switcher.tsx): the switcher over the frame; words
-// typed narrow it to the test chat, Enter opens it beside the list; Esc closes it when opened again; words sent from
-// the chat it opened.
+// typed narrow it to the test chat, Enter opens it beside the list; Esc closes it when opened again, the keys nowhere;
+// Space, and words sent from the chat it opened.
 
 ///|
 test "63-wide-switcher" {
@@ -17,7 +17,8 @@ test "63-wide-switcher" {
     f.see("搜索全部内容和操作")
     f.key("esc")
     f.gone("搜索全部内容和操作")
-    f.tap("发消息")
+    // its field let go, the keys nowhere (switcher.mbt): Space puts the cursor in the composer (composer.focus)
+    f.key("space")
     f.type_text("从切换器打开后发出 082939")
     f.enter()
     f.run_for(@sfapp.flight_ms)

@@ -19,7 +19,10 @@ fn tabletop_clear(c : @ui.Ctx) -> Double {
 /// What a chat keeps clear at its page's foot (over the navigation bar) for its composer (composer_room_for), and on a
 /// device half open for the fold and all under it.
 fn chat_foot_room(c : @ui.Ctx, r : ChatRef, v : ChatView?) -> Double {
-  dmax(composer_room_for(c, draft_key(r), v), tabletop_clear(c))
+  ignore(v)
+  // (never less than an opened composer with one line: a touch on the list lets go of the field, the composer closes
+  // to its capsule, and the list's words stay where they were: the page does not jump)
+  dmax(dmax(@sfpages.composer_open_room, @sfpages.composer_room(c, draft_key(r))), tabletop_clear(c))
 }
 
 ///|
@@ -27,21 +30,31 @@ fn chat_foot_room(c : @ui.Ctx, r : ChatRef, v : ChatView?) -> Double {
 /// at the top of the half under the fold (as far down as the keyboard, up, leaves it room) and the latest chats under
 /// it.
 fn chat_foot(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef, v : ChatView?) -> Unit {
-  match @ui.system_tabletop() {
-    Some((_, foot)) => {
-      let room = composer_own_room(c, draft_key(r), v)
-      bar_room_box(c, dmax(0.0, dmin(foot, c.height - nav_foot() - room)))
-      composer(c, src, r, v)
-      c.box(style=tabletop_recent, fn() { recent_list(c, src, w, app.nav.top()) }) |> ignore
+  // the composer takes its place from the foot's bottom (over the keyboard, the page's padding): the keyboard coming up
+  // or going moves none of it, it goes with the foot at once (what moves in it of its own: its morph)
+  let foot = c.box(style=chat_foot_whole, fn() {
+    match @ui.system_tabletop() {
+      Some((_, foot)) => {
+        let room = @sfpages.composer_room(c, draft_key(r))
+        bar_room_box(c, dmax(0.0, dmin(foot, c.height - nav_foot() - room)))
+        @sfpages.chat_composer(c, src, w, r, v)
+        c.box(style=tabletop_recent, fn() { recent_list(c, src, w, app.nav.top()) }) |> ignore
+      }
+      None => {
+        c.spacer()
+        @sfpages.chat_composer(c, src, w, r, v)
+      }
     }
-    None => {
-      c.spacer()
-      composer(c, src, r, v)
-    }
-  }
-  // over the navigation bar (a layer goes on under the page's padding)
-  bar_room_box(c, nav_foot())
+    // over the navigation bar (a layer goes on under the page's padding)
+    bar_room_box(c, nav_foot())
+  })
+  @motion.scope(c, foot, bottom=true)
 }
+
+///|
+/// A chat's foot, all of the layer it is in.
+// kept across runs: a value (no field of it changes)
+let chat_foot_whole : @ui.Style = @ui.css("w=Full h=Full")
 
 ///|
 /// Under a chat's composer on a device half open: the latest chats, as much of them as the half has room for.

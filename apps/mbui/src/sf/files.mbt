@@ -327,7 +327,8 @@ let card_box : @ui.Style = @ui.style(
   py=S2,
   gap=S2_5,
   bg=Neutral,
-  radius=message_file_radius,
+  // (in a corner of what holds it, a composer's box: as far in as from its edges, its corner concentric)
+  radius=InnerOr(message_file_radius),
   align=ACenter,
 )
 
@@ -501,7 +502,7 @@ let quote_corner : Double = row_corner
 
 ///|
 // kept across runs: a value (no field of it changes)
-let quote_box_composer : @ui.Style = quote_box.then(@ui.style(radius=rounded(composer_inner)))
+let quote_box_composer : @ui.Style = quote_box.then(@ui.style(radius=InnerOr(rounded(composer_inner))))
 
 ///|
 /// What sits in the composer's corners is rounded concentric with it, the ladder's next step in.

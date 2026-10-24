@@ -115,6 +115,9 @@ export class Attention implements Owner {
             const chat = c.focus.chat;
             if (chat && chat.session !== null && chat.session !== "" && !chat.session.startsWith("new:")) prefs.chatOpened(core.data, chat.station, chat.session);
             attend.focus(at[0], c.focus);
+            // (what was typed written now, not a moment after its last change: the app leaving a chat or the front may
+            // be gone before that moment)
+            core.data.flushSoon();
             store.invalidateAll((t) => t.topic === "chat");
             store.invalidateAll((t) => t.topic === "notify");
             return null;

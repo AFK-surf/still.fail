@@ -17,6 +17,8 @@ test "70-card-motion" {
     f.gone("正在发送")
     f.see("=灰色 083209")
     f.tap_now("=橙色 083209") |> ignore
+    // (the options go once the answer has been taken: decision.answer answered)
+    f.answered("decision.answer", 1)
     // answered (decision.answer): the options fade and shrink to 90% on their 200 ms from when their turn to close
     // comes (turns.mbt, ListTurns.kt: after what came with the answer, the list at rest after it), their room closing
     // on the rows' spring after them; how it went comes in their place, its room opening
@@ -58,8 +60,19 @@ test "70-card-motion" {
     f.tap_now("=忽略") |> ignore
     // let go (decision.dismiss): 忽略 goes in its turn (decide.mbt ask_dismiss, turns.mbt), on ArchiveEase's 280 ms, to
     // 85% from its top left, its room closing
-    let end = f.until_moving("under/dismiss/")
-    let after = @sfapp.under_turn("dismiss/")
+    // (its start as declared once its turn is set: what goes before it (the list at rest after what came) can put it
+    // later; run to it again until it has come, as the options' above)
+    f.until(fn() { @sfapp.under_turn("dismiss/") >= 0.0 && @sfapp.under_turn("dismiss/") < @double.infinity })
+    let mut after = @sfapp.under_turn("dismiss/")
+    while after > f.t.time() {
+      f.run_to(after)
+      after = @sfapp.under_turn("dismiss/")
+    }
+    // (its start the frame's to draw: until then nothing of it moves)
+    if f.t.rest_of("under/dismiss/") < 0.0 || f.t.rest_of("under/dismiss/") == @double.infinity {
+      f.t.draw()
+    }
+    let end = f.t.rest_of("under/dismiss/")
     f.check(end == after + @sfapp.archive_ms, "忽略 at rest at \{end}, not \{after + @sfapp.archive_ms}")
     f.gone("=忽略")
     // to 85% on ArchiveEase, its room closing with it: gone at rest (while a script is written over a trace the app

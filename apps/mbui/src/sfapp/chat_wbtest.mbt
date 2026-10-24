@@ -19,7 +19,8 @@ test "a chat opens at its end: its bar, its last messages, the composer's room u
   assert_true(!bar.contains("林"))
   let (_, y) = t.find("做完了：列表、跳到最新的按钮").unwrap()
   // the last message over the composer's capsule
-  assert_true(y < 844.0 - 110.0 && y > 500.0)
+  let (_, field_y) = t.find("发消息").unwrap()
+  assert_true(y < field_y && y > 500.0)
   assert_true(t.find("发消息") is Some(_))
   // an options card, a login card, a failing notice
   assert_true(t.find("一起换") is Some(_))

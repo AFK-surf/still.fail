@@ -1270,9 +1270,13 @@ pub fn Ctx::editor_focused(self : Ctx, key : String) -> Bool {
 }
 
 ///|
-/// Lets go of the focus: no field takes keys, the keyboard goes.
+/// Lets go of the focus: no field takes keys, the keyboard goes; no layer that closes later gives it back to what had
+/// it as the layer opened (it was let go of, not taken by the layer: a tip, a toast, a menu over the field).
 pub fn Ctx::blur(self : Ctx) -> Unit {
   self.focus = 0
+  for k in self.layer_return.keys().collect() {
+    self.layer_return[k] = 0
+  }
 }
 
 // ── words picked by a finger (Android's: Compose's text field selection) ──────────────────────────────────────
