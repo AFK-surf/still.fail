@@ -150,31 +150,29 @@ test "a station renamed from its page's …: the new name is the station's" {
   assert_true(t.find("MBA") is Some(_))
   t.tap_text("Studio")
   t.run_for(@ui.nav_push_ms)
-  // its machine, large
-  assert_true(t.find("内存剩") is Some(_))
-  assert_true(t.find("在此 station 上") is Some(_))
-  // "…" at the bar's end
-  t.tap(357.0, 22.0)
-  t.tap_text("重命名")
-  assert_true(t.find("station 名称") is Some(_))
-  for _ in 0..<6 {
-    t.backspace()
-  }
-  t.type_text("工作室")
-  t.tap_text("保存")
+  // its page (src/sfdesk station_page.mbt), its overview first
+  assert_true(t.find("概览") is Some(_))
+  // its ⋯ (the presenters' menu, a sheet on a phone) → 重命名, the name asked
+  let log = t.drive(
+    "tap icon:more\nuntil 重命名\ntap =重命名\nuntil station 名称\nclear\ntype 工作室\ntap =保存\ngone 保存\n",
+  )
+  assert_true(log.contains("EXIT 0"), msg=log.join("\n"))
+  sheet_rested(t, "sf-present")
+  t.draw()
   assert_true(t.find("工作室") is Some(_))
-  // (not idle yet: the sheet is still sinking on its spring (kit/sheet.mbt), till mbui#25 declares its end)
 }
 
 ///|
 test "a settings sheet goes down on the sheet's spring, only drawn: its 保存 tapped meanwhile renames nothing" {
-  let t = settings_tester("stations")
-  // the station as the tests before left it
-  let name = if t.find("Studio") is Some(_) { "Studio" } else { "工作室" }
-  t.tap_text(name)
-  t.run_for(@ui.nav_push_ms)
-  t.tap(357.0, 22.0)
+  let t = settings_tester("profile:ws1/st1#cx")
+  let name = "ChatGPT 团队"
+  assert_true(t.find(name) is Some(_))
+  // its … → 重命名: the name asked in a settings sheet (profile_more.mbt open_profile_menu)
+  let (x, y) = t.locate("icon:more")[0]
+  t.tap(x, y)
+  sheet_rested(t, "settings-sheet")
   t.tap_text("重命名")
+  sheet_rested(t, "settings-sheet")
   for _ in 0..<name.length() {
     t.backspace()
   }
@@ -188,7 +186,7 @@ test "a settings sheet goes down on the sheet's spring, only drawn: its 保存 t
   let (active, _, _, _) = t.ime()
   assert_true(!active)
   t.tap_once(sx, sy)
-  // down at once (only drawn as it sinks), the station's name as it was
+  // down at once (only drawn as it sinks), the profile's name as it was
   assert_true(!@settings.sheet_up())
   assert_true(t.find(name) is Some(_))
   // (not idle yet: the sheet is still sinking on its spring (kit/sheet.mbt), till mbui#25 declares its end)

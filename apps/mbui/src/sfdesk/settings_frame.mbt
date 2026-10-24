@@ -34,7 +34,6 @@ fn setting_page(c : @ui.Ctx, src : Source, w : Workspace, route : Route) -> Unit
   settings_fixture(src, core)
   match route {
     Appearance => appearance_page(c, core)
-    Station(a) => station_page(c, core, here, a)
     Profile(a, id) => profile_page(c, core, here, a, id)
     NewProfile(a) => add_profile_page(c, core, here, a)
     MemoryDoc(a, skill, at) => memory_doc_page(c, core, a, skill, at)
@@ -50,7 +49,7 @@ fn setting_page(c : @ui.Ctx, src : Source, w : Workspace, route : Route) -> Unit
 /// frame's pane: back, the room over and under it). False for a route whose pages are not one yet (its frame draws its
 /// own copy).
 pub fn setting_route(c : @ui.Ctx, src : Source, w : Workspace, route : Route, frame : PageFrame) -> Bool {
-  if !(route is (About | Changelog | Memories | Memory(_) | AutoDecisions | Permissions | Version | UsagePrices(_) | Usage | Archiving | StationArchiving(_) | Notifications | PickModels(_, _) | ProfileModels(_, _) | Shortcuts | Me | Workspace | Security | SecurityOpen | Vault | VaultItem(_, _) | Connects(_) | Connect(_, _))) {
+  if !(route is (About | Changelog | Memories | Memory(_) | AutoDecisions | Permissions | Version | UsagePrices(_) | Usage | Archiving | StationArchiving(_) | Notifications | PickModels(_, _) | ProfileModels(_, _) | Shortcuts | Me | Workspace | Security | SecurityOpen | Vault | VaultItem(_, _) | Connects(_) | Connect(_, _) | Station(_))) {
     return false
   }
   let core = settings_core(src, w)
@@ -81,6 +80,7 @@ pub fn setting_route(c : @ui.Ctx, src : Source, w : Workspace, route : Route, fr
     VaultItem(v, item) => vault_item_page(c, core, here, frame, v, item)
     Connects(only) => connects_page(c, src, core, here, frame, only)
     Connect(station, id) => connect_page(c, src, core, here, frame, station, id)
+    Station(a) => station_page(c, core, here, frame, a)
     _ => ()
   }
   true

@@ -1,0 +1,8 @@
+# A station's page (sfdesk station_page.mbt, one page in every frame): MBUI_FIXTURE=settings-station, a phone's window
+# or a desktop's; its overview, then down it.
+timeout 20000
+until Studio
+wait 1200
+wheel 500
+wait 1200
+exit
