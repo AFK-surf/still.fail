@@ -324,3 +324,13 @@ fn dmin(a : Double, b : Double) -> Double {
     b
   }
 }
+
+///|
+/// A station's mark (StationMark), or where it has none a computer's: this machine's a monitor, another's a server.
+pub fn station_icon(c : @ui.Ctx, emoji : String, icon_name : String, size : Double, tint : Int64, here? : Bool = false) -> Unit {
+  if has_station_mark(emoji, icon_name) {
+    station_mark(c, emoji, icon_name, size, tint)
+  } else {
+    icon(c, if here { "monitor" } else { "server" }, size~, color=tint) |> ignore
+  }
+}

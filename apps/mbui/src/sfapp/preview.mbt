@@ -128,7 +128,7 @@ priv enum PKind {
 ///|
 /// What a file shows as by its name: its kind (None: look at its bytes), its type, its language (code).
 fn preview_kind(name : String) -> (PKind?, String, String) {
-  let lower = lower(name)
+  let lower = @sf.lower(name)
   match lower {
     "dockerfile" => return (Some(KCode), "text/plain", "docker")
     "makefile" => return (Some(KCode), "text/plain", "make")
@@ -1602,7 +1602,7 @@ fn Viewer::facts(self : Viewer, c : @ui.Ctx, src : Source, dl : Json?) -> Unit {
       |> ignore
     })
     |> ignore
-    let ext = match lower(v.file.name).rev_find(".") {
+    let ext = match @sf.lower(v.file.name).rev_find(".") {
       Some(i) if i > 0 && v.file.name.length() - i - 1 <= 12 =>
         upper(v.file.name.view(start_offset=i + 1).to_owned())
       _ => ""
@@ -1649,7 +1649,7 @@ fn Viewer::facts(self : Viewer, c : @ui.Ctx, src : Source, dl : Json?) -> Unit {
       None => ()
     }
     // an APK: 安装 first, handed to the system's installer (FilePreview.kt: NoteButton install, strong)
-    let apk = lower(v.file.name).has_suffix(".apk")
+    let apk = @sf.lower(v.file.name).has_suffix(".apk")
     if apk && note_button(c, "preview/note-install", "", pv("android-chat.file.install"), true) {
       v.ask_install(c)
     }
@@ -2661,7 +2661,7 @@ fn Viewer::text_stage(self : Viewer, c : @ui.Ctx, kind : PKind, b : Bytes, stage
       Some(p) => p
       None => {
         let head = words.view(end_offset=if words.length() < 2048 { words.length() } else { 2048 }).to_owned()
-        let low = lower(head)
+        let low = @sf.lower(head)
         let html = if low.contains("<!doctype") || low.contains("<html") {
           words
         } else {
@@ -2690,7 +2690,7 @@ fn Viewer::text_stage(self : Viewer, c : @ui.Ctx, kind : PKind, b : Bytes, stage
   }
   tap_stage(c, v, stage)
   if kind == KCsv && !v.source {
-    csv_table(c, v, words, lower(v.name).has_suffix(".tsv"), cut)
+    csv_table(c, v, words, @sf.lower(v.name).has_suffix(".tsv"), cut)
     return
   }
   // in rows of 60 lines, so a long file lays out only what is in view

@@ -1157,7 +1157,7 @@ let image_quoted_at : Ref[Int] = { val: -1 }
 ///|
 /// The kind of a file by its name (FileKinds.kt kindOf): image, video, or anything else.
 fn kind_of(name : String) -> String {
-  let lower = lower(name)
+  let lower = @sf.lower(name)
   let ext = match lower.rev_find(".") {
     Some(i) if i > 0 => lower.view(start_offset=i + 1).to_string()
     _ => ""

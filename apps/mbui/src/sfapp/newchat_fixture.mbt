@@ -386,7 +386,7 @@ pub fn open_mode(mode : String) -> Unit {
       "files-tree" => {
         fix_browse_prefs_set({ "driveViews": { "page": "tree" } }) |> ignore
         browse({ "act": "tree", "folder": "设计稿", "view": "tree" })
-        wide.files_open["station/ws1/st1"] = true
+        @sfdesk.nav_open("ws1/st1")
       }
       "files-list" => fix_browse_prefs_set({ "driveViews": { "page": "list" } }) |> ignore
       // a copy asked about a name there (wide_files_drag.mbt): 说明.txt into 会议记录, which has one
@@ -415,7 +415,7 @@ pub fn open_mode(mode : String) -> Unit {
           "to": { "station": "ws1/st2", "root": "/Users/lin/照片", "path": "" },
           "move": false,
         })
-        fgo.transfers = true
+        ftransfers.open = true
       }
       // the preview beside the list (wide_files_pane.mbt), 发布清单.md chosen
       "files-preview" => {

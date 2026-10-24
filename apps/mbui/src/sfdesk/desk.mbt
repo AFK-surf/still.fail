@@ -14,4 +14,6 @@ pub fn reset() -> Unit {
   pane_reset()
   drive_reset()
   shell_reset()
+  nav_reset()
+  go_reset()
 }

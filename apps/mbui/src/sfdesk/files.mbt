@@ -5,14 +5,11 @@
 // in front. Each side is a folder's page (its head, then FolderView) under its own station.
 
 ///|
-/// What the files' page around the shell gives it, until each is the desk's own (FilesNav, FilesGo, Transfers, drag):
-/// the address moved (`replace`: in place of where it was), a side's head (its station's chip, the way down to it, its
-/// name: `front_it` puts the side in front), ⌘⇧G's dialog opened, the bar's 传输, a station's folders managed, and what
-/// the page draws over itself (its sheets, GoTo, a name asked about, what is dragged: given the page's box).
+/// What the files' page around the shell gives it, until each is the desk's own (Transfers, drag): the address moved
+/// (`replace`: in place of where it was), the bar's 传输, a station's folders managed, and what the page draws over
+/// itself (its sheets, a name asked about, what is dragged: given the page's box).
 pub(all) struct FilesAround {
   go : (DriveAt, Bool) -> Unit
-  head : (@ui.Ctx, FolderOf, Bool, () -> Unit) -> Unit
-  go_to : () -> Unit
   transfers : (@ui.Ctx) -> Unit
   manage : (DriveAt) -> Unit
   over : (@ui.Ctx, Int) -> Unit
@@ -120,7 +117,7 @@ pub fn files_shell(
   } else if c.key_pressed(@ui.key_of_char('d'), mods=@ui.mod_cmd + @ui.mod_alt) {
     show("split", None, None, None)
   } else if c.key_pressed(@ui.key_of_char('g'), mods=@ui.mod_cmd + @ui.mod_shift_key) {
-    (around.go_to)()
+    go_to_open()
   }
   // a side's folder, as the folder's own parts take it (drive.mbt); a folder opened in a new tab or on the other side
   let folder_of = fn(i : Int, p : DriveAt) -> FolderOf? {
@@ -136,7 +133,7 @@ pub fn files_shell(
           room: 0.0,
           go: fn(to, replace) { (around.go)(to, replace) },
           open_in: Some(fn(to, beside) { show(if beside { "besides" } else { "open" }, Some(to), None, None) }),
-          go_to: Some(around.go_to),
+          go_to: Some(go_to_open),
           manage: Some(fn() { (around.manage)(p) }),
         })
       None => None
@@ -188,7 +185,7 @@ pub fn files_shell(
         }
         // (each side's ids its own: the same folder can be on both)
         c.scope(i, fn() {
-          pane_frame(c, src, folder_of(i, pane_at(tab, i)), "page/\{i}", split_on, front, room, around, fn() {
+          pane_frame(c, src, folder_of(i, pane_at(tab, i)), "page/\{i}", split_on, front, room, fn() {
             if !front {
               show("front", None, None, Some(i))
             }
@@ -197,6 +194,7 @@ pub fn files_shell(
       }
     })
     |> ignore
+    go_to(c, src, ws, here, fn(p) { (around.go)(p, false) })
     (around.over)(c, page)
   })
   |> ignore
@@ -274,7 +272,6 @@ fn pane_frame(
   split_on : Bool,
   front : Bool,
   room : Double,
-  around : FilesAround,
   front_it : () -> Unit,
 ) -> Unit {
   c.box(style=if split_on { side_half } else { side_one }, fn() {
@@ -289,7 +286,7 @@ fn pane_frame(
         return
       }
     }
-    (around.head)(c, f, split_on, front_it)
+    folder_head(c, src, f, split_on, front_it)
     let room = if split_on { room / 2.0 - body_in_half } else { room - body_in }
     c.box(style=if split_on { body_half } else { body_one }, fn() {
       let pid = c.id("files/side/" + key)

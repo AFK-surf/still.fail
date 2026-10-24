@@ -151,3 +151,20 @@ let breathing_title_long : @ui.Style = @ui.style(w=Fixed(breath_title_long_w), h
 ///|
 // kept across runs: a value (no field of it changes)
 let breathing_line : @ui.Style = @ui.style(w=Fixed(breath_line_w), h=S2_5, radius=Full, bg=Neutral)
+
+///|
+/// The action at the top of a list (SidebarList.tsx NavTop's NavAction): its ＋ and words, a row of its own; none where
+/// it cannot be done.
+pub fn nav_action(c : @ui.Ctx, key : String, label : String, run : (() -> Unit)?) -> Unit {
+  let t = @sf.theme()
+  match run {
+    Some(go) =>
+      if nav_row(c, key, false, fn() {
+          @sf.icon(c, "plus", size=@sf.row_icon, color=t.p.muted) |> ignore
+          nav_words(c, label)
+        }) {
+        go()
+      }
+    None => ()
+  }
+}

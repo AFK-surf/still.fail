@@ -44,9 +44,6 @@ priv struct Wide {
   mut station_menu : Bool
   /// the page picked in a place with a list of its own (Station's, Profile's: wide_places.mbt), by place
   place_pick : Map[String, @settings.Route]
-  /// the files' page (wide_files.mbt): what is opened in its sidebar, each station's places
-  files_open : Map[String, Bool]
-  files_places : Map[String, Array[Json]]
   /// 待处理's panel: what was let go in it (忽略, `decision.dismiss`) until the core no longer lists it, by station and
   /// chat; the stations' trouble as looked at when it opened, as it shows it while open (None: closed)
   gone : Array[String]
@@ -79,8 +76,6 @@ let wide : Wide = {
   clear_asking: "",
   station_menu: false,
   place_pick: {},
-  files_open: {},
-  files_places: {},
   gone: [],
   trouble_seen: None,
 }
@@ -110,11 +105,9 @@ fn wide_reset() -> Unit {
   wide.clear_asking = ""
   wide.station_menu = false
   wide.place_pick.clear()
-  wide.files_open.clear()
-  wide.files_places.clear()
   fdrag_reset()
   ftab_reset()
-  fgo_reset()
+  ftransfers.open = false
   wide_switch_reset()
   wide.gone.clear()
   wide.trouble_seen = None

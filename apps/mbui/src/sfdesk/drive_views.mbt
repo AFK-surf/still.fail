@@ -39,11 +39,32 @@ pub(all) struct Shown {
 /// What is dragged on the files' page and where it can be let go, as the app has it (src/sfapp/wide_files_drag.mbt,
 /// drag.ts) until its drag is the desk's own: a row pressed (what it would carry), a place it can be let go this frame
 /// (its id, its key, the folder, its name, whether its station takes what is written there and copies from others, how
-/// deep it lies: what a drop there does while what is held is over it), whether a row is what is being dragged.
+/// deep it lies: what a drop there does while what is held is over it), whether a row is what is being dragged; a
+/// sidebar's row that takes a drop (its key, the folder, its name, whether its station takes what is written and copies,
+/// the row: ringed and saying what a drop does while something it takes is over it), and whether a folder dragged is over
+/// 个人收藏 (its box's id).
 pub(all) struct DeskDrag {
   press : (@ui.Ctx, Source, DriveAt, DvEntry) -> Unit
   target : (@ui.Ctx, Int, String, DriveAt, String, Bool, Bool, Int) -> String?
   carried : (String, String, String) -> Bool
+  side : (@ui.Ctx, String, DriveAt, String, Bool, Bool, () -> Unit) -> Unit
+  keep : (@ui.Ctx, Int) -> Bool
+}
+
+///|
+fn drag_side(c : @ui.Ctx, key : String, into : DriveAt, name : String, write : Bool, transfers : Bool, row : () -> Unit) -> Unit {
+  match desk_drag.val {
+    Some(d) => (d.side)(c, key, into, name, write, transfers, row)
+    None => row()
+  }
+}
+
+///|
+fn drag_keep(c : @ui.Ctx, id : Int) -> Bool {
+  match desk_drag.val {
+    Some(d) => (d.keep)(c, id)
+    None => false
+  }
 }
 
 ///|

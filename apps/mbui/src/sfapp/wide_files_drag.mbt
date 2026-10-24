@@ -77,8 +77,6 @@ priv struct FDrag {
   mut later : Array[() -> Bool]
   /// the frame this was last moved on in (the sidebar and the folder both ask; the first does it)
   mut frame : Int
-  /// the station this machine is (its address; "" none), read once
-  mut here : String?
 }
 
 ///|
@@ -92,7 +90,6 @@ let fdrag : FDrag = {
   asking: None,
   later: [],
   frame: -1,
-  here: None,
 }
 
 ///|
@@ -106,33 +103,6 @@ fn fdrag_reset() -> Unit {
   fdrag.asking = None
   fdrag.later = []
   fdrag.frame = -1
-  fdrag.here = None
-}
-
-///|
-/// The station this machine is (thisMachine.ts: "<workspace>/<station>"), as its host says (its station's cloud.json),
-/// read once; "" where it is none.
-fn files_this_machine() -> String {
-  match fdrag.here {
-    Some(h) => h
-    None => {
-      let v = @json.parse(@ui.local_station()) catch { _ => Json::null() }
-      let ws = field(Some(v), "workspace")
-      let h = if text(ws, "id") != "" && text(ws, "station") != "" {
-        text(ws, "id") + "/" + text(ws, "station")
-      } else {
-        ""
-      }
-      fdrag.here = Some(h)
-      h
-    }
-  }
-}
-
-///|
-/// Whether the viewer writes to `s`'s drive (a read-only member does not).
-fn files_writes(src : Source, w : Workspace, s : DvStation) -> Bool {
-  dv_rights(src, w.id, Some(s)).write
 }
 
 ///|
@@ -599,7 +569,7 @@ fn files_clash_dialog(c : @ui.Ctx) -> Unit {
         fill("web-pages.files.clashCount", [("n", a.total.to_string()), ("clashes", a.clashes.length().to_string())])
       _ => ""
     },
-    w=dmin(fclash_w, c.width - fgo_margin),
+    w=dmin(fclash_w, c.width - fclash_margin),
     close_label=tr("common.close"),
     fn() {
       match (asking, now) {
@@ -737,6 +707,10 @@ fn fdrag_side_row(
 let fclash_w : Double = 420.0
 
 ///|
+/// How far in from the window's sides a dialog stays at least (16 each).
+let fclash_margin : Double = 32.0
+
+///|
 /// The drag's picture this far from the pointer (down and right of it).
 let fdrag_ghost_off : Double = 12.0
 
@@ -807,7 +781,7 @@ fn files_transfers(c : @ui.Ctx, src : Source, ws : String) -> Unit {
   let all = files_transfer_list(src, ws)
   let id = c.id("files/transfers")
   if all.length() == 0 {
-    fgo.transfers = false
+    ftransfers.open = false
     return
   }
   let going = all.filter(fn(x) { flag(Some(x), "active") })
@@ -822,7 +796,7 @@ fn files_transfers(c : @ui.Ctx, src : Source, ws : String) -> Unit {
   }
   c.cursor(id, Hand)
   if c.clicked(id) {
-    fgo.transfers = !fgo.transfers
+    ftransfers.open = !ftransfers.open
   }
   let (style, words, ink) = if failed {
     (ftransfers_chip_failed, ftransfers_chip_failed_words, t.p.red)
@@ -839,7 +813,7 @@ fn files_transfers(c : @ui.Ctx, src : Source, ws : String) -> Unit {
   let p = @kit.popover(
     c,
     "files/transfers-pop",
-    fgo.transfers,
+    ftransfers.open,
     id,
     side=Bottom,
     along=End,
@@ -852,7 +826,7 @@ fn files_transfers(c : @ui.Ctx, src : Source, ws : String) -> Unit {
       }
     },
   )
-  fgo.transfers = fgo.transfers && p.value
+  ftransfers.open = ftransfers.open && p.value
 }
 
 ///|
@@ -908,7 +882,7 @@ fn files_transfer_row(c : @ui.Ctx, src : Source, x : Json) -> Unit {
         call("drive.transfer.retry")
       }
       if state == "done" && @sf.button(c, tr("web-pages.files.show"), key="files/transfer/show/" + tid, tone=Ghost) {
-        fgo.transfers = false
+        ftransfers.open = false
         files_go({ station, root: Some(text(j, "toRoot")), path: text(j, "toPath") })
       }
     })
@@ -1055,6 +1029,8 @@ fn files_desk_drag() -> @sfdesk.DeskDrag {
       fdrag_target(c, id, key, Some(into), name, write, transfers, depth)
     },
     carried: fn(station, root, path) { fdrag_carried(station, root, path) },
+    side: fn(c, key, into, name, write, transfers, row) { fdrag_side_row(c, key, into, name, write, transfers, row) },
+    keep: fn(c, id) { fdrag_target(c, id, "keep", None, "", true, true, 0, outside=false) is Some(_) },
   }
 }
 
@@ -1069,3 +1045,13 @@ fn fdrag_bar(c : @ui.Ctx, bar : @ui.Style, done : @ui.Style, part : Double) -> U
   })
   |> ignore
 }
+
+///|
+/// Whether the bar's 传输 has its list open.
+priv struct FTransfers {
+  mut open : Bool
+}
+
+///|
+// kept across runs: the list's state (put back as the wide frame is: wide.mbt)
+let ftransfers : FTransfers = { open: false }
