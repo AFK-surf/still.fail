@@ -1,4 +1,4 @@
-// A login's card (login_card.mbt; LoginCards.kt) over the fixture's chat, its login as each case has it, the calls kept.
+// A login's card (sfpages' login_card.mbt, the one card on every screen) over the fixture's chat, its login as each case has it, the calls kept.
 
 ///|
 /// The fixture's chat, its login `login` and the station's logins letting the viewer finish it.

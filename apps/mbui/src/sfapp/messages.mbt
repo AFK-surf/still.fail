@@ -1257,7 +1257,10 @@ fn decision_under(
           None => card.station
         }
       }
-      login_card(c, src, station, card.login)
+      match workspace_in_view(src).0 {
+        Some(w) => @sfpages.login_card(c, settings_core(src, w), station, card.login)
+        None => ()
+      }
       return
     }
     _ => ()
@@ -1426,12 +1429,6 @@ fn decision_options(
     Some(i) => Some(options[i])
     None => None
   }
-}
-
-///|
-/// An ended login's line (LoginCards.kt LoginCard, ended: 13 on 19), in the chat's subtle ink, failed in red.
-fn login_ended_line(c : @ui.Ctx, words : String, failed : Bool) -> Unit {
-  c.text(words, size=13.0, color=if failed { @sf.theme().p.red } else { ink().subtle }, line=19.0) |> ignore
 }
 
 ///|

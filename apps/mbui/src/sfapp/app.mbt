@@ -64,7 +64,6 @@ fn reset() -> Unit {
   new_fix.reading = 0
   bar_timing.val = None
   bar_timed.val = None
-  login_cards_reset()
   home_sheet_at_start.val = false
   update_anchor_reset()
   screens_open.clear()
@@ -709,7 +708,7 @@ let gate_fill : @ui.Style = @ui.css("w=Full h=Full")
 /// stack, its own way home (its sheets put down) and a station's login as its card.
 fn settings_core(src : Source, w : Workspace) -> @settings.Core {
   settings_core_of(src, w, home~, login_card=fn(c, station, id, marked) {
-    login_card(c, src, station, id, marked~, fill=true)
+    @sfpages.login_card(c, settings_core(src, w), station, id, marked~)
   })
 }
 
