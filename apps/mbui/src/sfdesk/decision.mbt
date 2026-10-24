@@ -9,9 +9,8 @@
 /// Under post `m` of chat `here` (thread `thread`; None while nothing can be sent there), what it asks; `turns`: its
 /// list's, what closes takes its turn there.
 fn message_decision(c : @ui.Ctx, src : Source, here : MessageHere, m : Message, turns : Turns?) -> Unit {
-  let parts = chat_parts.val
-  match m.card {
-    Some(card) if card.kind == "login" && card.login != "" => {
+  match (m.card, here.core) {
+    (Some(card), Some(core)) if card.kind == "login" && card.login != "" => {
       let open = match m.decision {
         Some(d) => !d.resolved && !d.dismissed
         None => true
@@ -30,7 +29,7 @@ fn message_decision(c : @ui.Ctx, src : Source, here : MessageHere, m : Message, 
             None => card.station
           }
         }
-        (parts.login_card)(c, src, station, card.login)
+        login_card(c, core, station, card.login)
       })
       |> ignore
       return
@@ -67,15 +66,11 @@ fn message_decision(c : @ui.Ctx, src : Source, here : MessageHere, m : Message, 
       }
       match m.card {
         // an agent's request for a vault item: approved here (VaultApproval.tsx), not answered in words
-        Some({ vault, assignee, .. }) if vault != "" => {
-          let ws = match here.station.find("/") {
-            Some(i) => here.station.view(end_offset=i).to_string()
-            None => here.station
+        Some({ vault, assignee, .. }) if vault != "" =>
+          match here.core {
+            Some(core) => @settings.vault_actions(c, core, workspace_of(here.station), vault, mine_to(here, assignee))
+            None => ()
           }
-          let me = here.view.me
-          let mine = assignee == "" || me == "" || assignee.to_lower() == me.to_lower()
-          @settings.vault_actions(c, (parts.vault_core)(src, ws), ws, vault, mine)
-        }
         _ =>
           match (options, thread) {
             (Some(list), Some(th)) if list.length() > 0 => decision_options(c, src, here, m, th, list, resolved)
@@ -92,6 +87,45 @@ fn message_decision(c : @ui.Ctx, src : Source, here : MessageHere, m : Message, 
   })
   |> ignore
   ignore(key)
+}
+
+///|
+/// An agent's request about a vault item, in place of its post's words (VaultAsk.tsx VaultAsk): what is asked as a card,
+/// its answer at its foot (VaultApproval.tsx VaultCard: the settings' vault_ask, the vault page's too); once decided,
+/// one line saying how it ended. Where nothing is answered (no core: a letter's), the card without its answer.
+fn vault_ask_card(c : @ui.Ctx, here : MessageHere, card : Card, ask : VaultAsk) -> Unit {
+  let asked : Asked = {
+    name: ask.name,
+    mode: ask.mode,
+    command: ask.command,
+    save_kind: ask.save_kind,
+    username: ask.username,
+    station: ask.station,
+  }
+  if ask.status != "" {
+    @settings.vault_outcome(c, asked, ask.status, ask.scope)
+    return
+  }
+  match here.core {
+    Some(core) =>
+      @settings.vault_ask(
+        c,
+        core,
+        workspace_of(here.station),
+        card.vault,
+        asked,
+        mine_to(here, card.assignee),
+        who=card.assignee_text,
+      )
+    None => @settings.vault_ask_words(c, asked)
+  }
+}
+
+///|
+/// Whether what is asked of `assignee` is the viewer's to answer (anyone's where it names no one).
+fn mine_to(here : MessageHere, assignee : String) -> Bool {
+  let me = here.view.me
+  assignee == "" || me == "" || assignee.to_lower() == me.to_lower()
 }
 
 ///|
@@ -131,7 +165,13 @@ fn decision_options(
   } else {
     None
   }
-  c.box(style=options_room, fn() {
+  // as wide as what it says, as wide as where it is at most
+  let at = c.id("options-room/" + m.ts)
+  let room = match c.laid_size(at) {
+    Some((w, _)) => w
+    None => 0.0
+  }
+  c.box(style=options_room, id=at, fn() {
     match
       @sf.options_card(
         c,
@@ -141,7 +181,7 @@ fn decision_options(
         busy,
         chosen~,
         wide=true,
-        room=c.width,
+        room~,
       ) {
       Some(i) if !resolved => {
         let label = options[i].label
