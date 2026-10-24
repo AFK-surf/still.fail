@@ -109,14 +109,10 @@ let invite_label : @ui.TextStyle = @ui.text_style(size=Sm, weight=Semibold, colo
 let invite_error : @ui.TextStyle = @ui.text_style(size=Sm, color=Danger)
 
 ///|
-/// A role in words (Accounts.kt ROLE_LABEL).
-fn role_words(role : String) -> String {
-  match role {
-    "owner" => "Owner"
-    "admin" => tr("android-misc.role.admin")
-    "member" => tr("android-misc.role.member")
-    r => r
-  }
+/// The invitation's sheet with no link yet: one to paste (Workspaces.kt openInviteLink): the landing's 用邀请链接加入.
+fn open_invite_link() -> Unit {
+  invite_reset()
+  raise_sheet(InviteLink)
 }
 
 ///|
@@ -265,7 +261,7 @@ fn invite_sheet(c : @ui.Ctx, src : Source) -> Unit {
             } else {
               "android-misc.invite.invitedYouAs"
             },
-            [("inviter", inviter), ("role", role_words(text(Some(p), "role"))), ("email", email)],
+            [("inviter", inviter), ("role", @sfpages.role_words(text(Some(p), "role"))), ("email", email)],
           ),
         )
         if list.length() > 1 {

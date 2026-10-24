@@ -21,4 +21,5 @@ pub fn reset() -> Unit {
   search_reset()
   marks_reset()
   news_reset()
+  landing_reset()
 }

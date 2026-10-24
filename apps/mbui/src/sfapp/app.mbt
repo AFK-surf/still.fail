@@ -65,7 +65,6 @@ fn reset() -> Unit {
   bar_timed.val = None
   login_cards_reset()
   update_anchor_reset()
-  landing_reset()
   new_ws_reset()
   screens_open.clear()
   screens_made.val = 0
@@ -323,7 +322,8 @@ fn view_in(c : @ui.Ctx, src : Source, t : @sf.Theme) -> Unit {
     match (accounts.value, (src.fatal)()) {
       (_, Some(why)) => splash(c, Some(why), true)
       (Some(Array(list)), _) if list.length() == 0 => {
-        sign_in_page(c, src)
+        // the sign-in page inside the bars (SignIn.kt: windowInsetsPadding(systemBars)) (sfpages' gate.mbt)
+        within_bars(c, fn() { @sfpages.sign_in_page(c, src) })
         // an invitation's link opened signed out: its sheet over the page, saying to sign in first (links.mbt)
         if !link_later.is_empty() {
           c.tell("links", fn() { signed_out_links(src) })
@@ -472,7 +472,13 @@ fn signed_in(c : @ui.Ctx, src : Source) -> Unit {
     }
     None =>
       if ws.value is Some(_) && answered {
-        no_workspace(c, src, ws.value)
+        // the landing inside the bars (Workspaces.kt Landing: windowInsetsPadding(systemBars.union(keyboard)))
+        // (sfpages' cloud_app.mbt); an invitation's link pasted (用邀请链接加入): its sheet over the page
+        within_bars(c, fn() { @sfpages.no_workspace(c, src, ws.value, open_invite_link) })
+        sheet_contents(fn(kind) { if kind == InviteLink { invite_sheet(c, src) } })
+        // the library's presenters over it (the sheet among them: src/sf presenters.mbt), then the toasts
+        @sf.presented(c)
+        toast(c)
       } else {
         let failed = match ws.error {
           Some(e) => Some(text(Some(e), "message"))
@@ -788,114 +794,6 @@ let splash_float_ms : Double = 1800.0
 ///|
 /// Whether the app's first splash has waited its second (splash_label_ms): what it waits for said from then on.
 let splash_waited : Ref[Bool] = { val: false }
-
-///|
-/// The sign-in button's width at most in a desktop's window, as the desktop app's.
-let sign_in_wide_w : Double = 300.0
-
-///|
-/// Signed out (SignIn.kt SignInScreen): the illustration, what still.fail is for, and 登录或注册.
-fn sign_in_page(c : @ui.Ctx, src : Source) -> Unit {
-  // inside the bars (SignIn.kt: windowInsetsPadding(systemBars))
-  within_bars(c, fn() { sign_in_body(c, src) })
-}
-
-///|
-fn sign_in_body(c : @ui.Ctx, src : Source) -> Unit {
-  let t = @sf.theme()
-  let busy = (src.signing_in)()
-  // a desktop's: the picture and 登录或注册 alone, no words around them (asked for, 2026-10-23)
-  let wide = !@sf.touch_system() && @sfdesk.is_wide(c)
-  c.box(
-    w=Fill(1.0),
-    h=Fill(1.0),
-    padx=30.0,
-    pady=40.0,
-    gap=12.0,
-    align=ACenter,
-    justify=JCenter,
-    fn() {
-      @sf.drawable(
-        c,
-        if t.dark {
-          "illus_sign_in_dark"
-        } else {
-          "illus_sign_in"
-        },
-        dmin(300.0, c.width - 60.0),
-      )
-      |> ignore
-      if !wide {
-        c.box(pt=10.0, fn() {
-          c.text(
-            tr("android-settings.signIn.title"),
-            size=28.0,
-            weight=700,
-            color=t.p.text,
-            wrap=false,
-          )
-          |> ignore
-        })
-        |> ignore
-        c.text(
-          tr("android-settings.signIn.note"),
-          size=15.0,
-          color=t.p.muted,
-          center=true,
-          w=Fill(1.0),
-          line=21.0,
-        )
-        |> ignore
-      }
-      c.box(h=Px(6.0), fn() {  }) |> ignore
-      let id = c.id("sign-in")
-      if c.clicked(id) && !busy {
-        (src.sign_in)()
-      }
-      c.box(
-        dir=Row,
-        w=Fill(1.0),
-        // a desktop's no wider than the desktop app's (web cloud/gate.css.ts `ways`)
-        max_w=if wide { sign_in_wide_w } else { c.width },
-        h=Px(50.0),
-        radius=25.0,
-        bg=t.p.text,
-        align=ACenter,
-        justify=JCenter,
-        id~,
-        fn() {
-          c.text(
-            if busy {
-              tr("common.opening")
-            } else {
-              tr("android-settings.signIn.google")
-            },
-            size=16.0,
-            weight=600,
-            color=t.p.bg,
-            wrap=false,
-          )
-          |> ignore
-          // SignIn.kt: clip(CircleShape).clickable
-          if !busy {
-            @motion.ripple(c, id, 25.0)
-          }
-        },
-      )
-      |> ignore
-      if !wide {
-        c.text(
-          tr("android-settings.signIn.many"),
-          size=12.0,
-          color=t.p.muted,
-          wrap=false,
-        )
-        |> ignore
-      }
-    },
-  )
-  |> ignore
-}
 
 ///|
 fn dmin(a : Double, b : Double) -> Double {
