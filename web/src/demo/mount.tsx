@@ -133,6 +133,7 @@ function demoValueOf(topic: Topic): unknown {
     case "archive": return station.archive(topic.q, topic.limit);
     case "profiles": return station.profiles();
     case "usage": return station.usage(topic.days ?? 7);
+    case "resources": return station.resources();
     case "decisions": return station.decisions(chats);
     case "drive": return station.driveFolder(topic.root, topic.path);
     case "drivePlace": return null;

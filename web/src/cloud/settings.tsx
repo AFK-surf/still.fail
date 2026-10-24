@@ -8,7 +8,7 @@ import { CHANGEABLE } from "../keymap.ts";
 import { CAN_NOTIFY } from "../notify.ts";
 import { HAS_VERSION } from "../pages/AppVersion.tsx";
 import { HAS_LOCAL_STATION } from "../pages/LocalStation.tsx";
-import { Archive, ArrowLeft, Bell, Brain, Key, Chart, Check, ChevronRight, Edit, Folder, Im, Info, LogOut, Monitor, Plus, Quota, Refresh, Server, Settings, ShieldCheck, Sliders, Sparks, Command, Trash, User, UserPlus, Users, type IconProps } from "@stillfail/ui/icons.tsx";
+import { Archive, ArrowLeft, Bell, Boxes, Brain, Key, Chart, Check, ChevronRight, Edit, Folder, Im, Info, LogOut, Monitor, Plus, Quota, Refresh, Server, Settings, ShieldCheck, Sliders, Sparks, Command, Trash, User, UserPlus, Users, type IconProps } from "@stillfail/ui/icons.tsx";
 import { SecurityNotice } from "./Security.tsx";
 import { VaultWaiting } from "./Vault.tsx";
 import { useCommands } from "../commands.ts";
@@ -30,6 +30,7 @@ import { useGo } from "../go.ts";
 import { ProfileCard } from "../ProfileCard.tsx";
 import { StationList } from "./StationCards.tsx";
 import { MemoryDoc, MemoryView } from "../Memory.tsx";
+import { ResourcesBody, useResources } from "../Resources.tsx";
 import { DAYS, PriceTables, UsageBody, usageCss, useUsage, type UsageDays } from "../Usage.tsx";
 import { MachineLoginOffers, PROFILE_LEAD, type Choice } from "../pages/Accounts.tsx";
 import { addProfilePath } from "../pages/AddProfile.tsx";
@@ -98,6 +99,7 @@ function settingsPages(entry: WorkspaceEntry, some: boolean): SettingsPage[] {
     ...page("station", "automatic-decisions", t("web-pages.automaticDecisions.title"), Check, "automatic decisions", some),
     ...page("station", "memory", t("web-pages.settings.nav.memory"), Brain, "memory", some),
     ...page("station", "usage", t("web-pages.settings.nav.usage"), Chart, "usage", some),
+    ...page("station", "resources", t("web-pages.settings.nav.resources"), Boxes, "resources cpu memory energy power activity", some),
     ...page("cloud", "workspace", `Workspace · ${entry.name}`, Users, "workspace members"),
     ...page("cloud", "security", t("web-pages.security.title"), ShieldCheck, "security lock devices"),
     ...page("cloud", "vault", t("web-pages.vault.title"), Key, "vault secrets keys tokens"),
@@ -382,6 +384,19 @@ export function UsageSettings({ entry }: { entry: WorkspaceEntry }) {
       actions={<Segmented<UsageDays> className={usageCss.pick} label={t("web-pages.settings.usage.days")} value={days} onChange={setDays} options={DAYS} />}>
       {usage.value ? <UsageBody view={usage.value} pricesPath={`/w/${entry.id}/settings/usage/prices?days=${days}`} />
         : usage.error ? <p className={controlsCss.fieldError}>{t("web-pages.settings.usage.failed", { error: usage.error.message })}</p> : <Waiting shape="cards" />}
+    </Page>
+  );
+}
+
+/** What still.fail uses of the machines of the workspace's stations (../Resources.tsx). */
+export function ResourcesSettings({ entry }: { entry: WorkspaceEntry }) {
+  const listed = useStations(entry.id).value;
+  const resources = useResources(entry.id);
+  if (listed?.length === 0) return <Navigate to={`/w/${entry.id}/settings/stations`} replace />;
+  return (
+    <Page title={t("web-pages.settings.resources.title")} lead={t("web-pages.settings.resources.lead")} back={`/w/${entry.id}/settings`}>
+      {resources.value ? <ResourcesBody view={resources.value} />
+        : resources.error ? <p className={controlsCss.fieldError}>{t("web-pages.settings.resources.failed", { error: resources.error.message })}</p> : <Waiting shape="cards" />}
     </Page>
   );
 }

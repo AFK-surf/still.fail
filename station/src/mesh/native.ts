@@ -72,6 +72,8 @@ export type Mesh = {
   fileLock(path: string): Promise<{ release(): void }>;
   /// local_links.rs `prepare`: the text with local links made attachments, and the attachments' paths; throws its refusal.
   prepareLocalLinks(text: string, paths: string[], workspace: string): { text: string; paths: string[] };
+  /// usage.rs `process_usage`: what each pid has used so far, null where not read. Absent from an addon from before.
+  processUsage?(pids: number[]): ({ cpuNs: number; footprint: number; wakeups: number; energyNj: number } | null)[];
 };
 
 /// Loaded once: the mesh (services.ts) and the thumbnails (drive/thumbs.ts) share it.
