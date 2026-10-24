@@ -1635,3 +1635,56 @@ test "page-hand" {
   )
   |> ignore
 }
+
+///|
+test "follow-layout" {
+  // a follow of a measured size, through a name bound to one, an animate of the keyboard's; a follow of a state, a
+  // layout told its cause and a test's, not counted
+  let fs = found(
+    [
+      (
+        "src/app/composer.mbt",
+        "fn v(c : @ui.Ctx, a : @motion.Anim) -> Unit {\n" +
+        "  a.follow(@motion.measured(c, \"box\").unwrap_or(0.0), @motion.tween(260.0))\n" +
+        "  let h = c.laid_size(1).unwrap().1\n" +
+        "  a.follow(h, @motion.tween(260.0))\n" +
+        "  let lift = @motion.animate(c, \"lift\", c.ime_inset())\n" +
+        "  let on = @motion.animate(c, \"on\", if open { 1.0 } else { 0.0 })\n" +
+        "  a.follow(if open { 1.0 } else { 0.0 }, @motion.tween(140.0))\n" +
+        "  @motion.layout(c, 3, \"box\", by=words)\n" +
+        "}\n",
+      ),
+      (
+        "src/app/composer_wbtest.mbt",
+        "test \"t\" {\n  a.follow(@motion.measured(c, \"box\").unwrap_or(0.0), @motion.tween(260.0))\n}\n",
+      ),
+    ],
+    "follow-layout",
+    3,
+  )
+  assert_eq(lines(fs), [2, 4, 5])
+}
+
+///|
+test "motion-read" {
+  // the app reading whether a motion runs; a Tester's list of what moves, a test's and the framework's not counted
+  let cfg = Config::new(@rjson.parse("{\"mbt\": {\"framework\": [\"src/motion\"]}}"))
+  let fs = found(
+    [
+      (
+        "src/app/search.mbt",
+        "fn v(up : @motion.Anim, t : @ui.Tester) -> Unit {\n" +
+        "  if leaving && !up.moving() {\n    close()\n  }\n" +
+        "  for m in t.moving() {\n    println(m)\n  }\n" +
+        "  let told = self.t.moving().iter().any(fn(l) { l.contains(\"a\") })\n" +
+        "}\n",
+      ),
+      ("src/app/search_wbtest.mbt", "test \"t\" {\n  assert_true(up.moving())\n}\n"),
+      ("src/motion/anim.mbt", "pub fn Anim::running(self : Anim) -> Bool {\n  self.moving()\n}\n"),
+    ],
+    "motion-read",
+    1,
+    cfg~,
+  )
+  assert_eq(lines(fs), [2])
+}
