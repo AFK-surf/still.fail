@@ -708,6 +708,7 @@ export const SHAPES: Record<string, Shape> = {
     ["loggedIn", "bool"],
     ["email", opt("String")],
     ["plan", opt("String")],
+    ["planText", "String", { default: true, doc: "Its plan as a name, for its tag (pro: Pro; none: \"\")." }],
     ["usable", "bool", { default: true, doc: "A profile can use it as it is (kept in a file, not only in the keychain)." }],
     ["quota", opt("Quota"), { doc: "Its allowance, as a profile on it would show (none until read, or when it cannot be)." }],
     ["text", "String", { doc: "In a line, as the pages show it." }],

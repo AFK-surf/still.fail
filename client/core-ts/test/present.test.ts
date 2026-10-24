@@ -374,6 +374,8 @@ test("what_a_profile_can_enable_and_which_machine_logins_are_offered", () => {
   };
   o = p.decorate({ topic: "overview", station: "w/s" }, o, c);
   assert.deepEqual(o.machineLogins.map((l: J) => l.offered === true), [false, true, false, false]);
+  // its plan as a name for its tag (the web's and the apps' alike)
+  assert.deepEqual(o.machineLogins.map((l: J) => l.planText), ["Max", "Plus", "", "Plus"]);
 });
 
 test("a_stations_profiles_come_by_kind_of_account_those_in_trouble_first_in_each", () => {

@@ -17,6 +17,7 @@ fn desk_page(
   back? : String = @sf.t("android-settings.title"),
   actions? : () -> Unit,
   head? : () -> Unit,
+  on_back? : () -> Unit,
 ) -> Unit {
   let blocks : Array[() -> Unit] = []
   // a head of its own in place of the title (an account's: who it is), as the page's first block
@@ -25,7 +26,8 @@ fn desk_page(
     Some(h) => blocks.push(fn() { c.box(style=desk_own_head, fn() { h() }) |> ignore })
     None =>
       blocks.push(fn() {
-        @settings.wide_head(c, core, back, title, trailing?=actions, inside=true, about~, lead~, deep=settings_deep.val)
+        // (a step of the page's own: its back goes to the step before)
+        @settings.wide_head(c, core, back, title, trailing?=actions, inside=true, about~, lead~, on_back?, deep=settings_deep.val || on_back is Some(_))
       })
   }
   for i, b in content {

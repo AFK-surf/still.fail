@@ -26,7 +26,7 @@ pub let profile_forms : Ref[Int] = Ref(0)
 
 ///|
 /// The draft of a new profile's page, made the first time it is drawn.
-fn new_profile_of(station : String) -> NewProfile {
+pub fn new_profile_of(station : String) -> NewProfile {
   match new_profiles.get(station) {
     Some(n) if !n.dropped => n
     _ => {
@@ -64,7 +64,7 @@ fn new_profile_left(core : Core, station : String) -> Unit {
 
 ///|
 /// The sign-in a new profile's page started let go, unless it made its profile.
-fn drop_login(core : Core, station : String, n : NewProfile) -> Unit {
+pub fn drop_login(core : Core, station : String, n : NewProfile) -> Unit {
   if n.login != "" {
     let made = match pending_login(core, station, n.login) {
       Some(l) => has(Some(l), "created")
@@ -80,7 +80,7 @@ fn drop_login(core : Core, station : String, n : NewProfile) -> Unit {
 
 ///|
 /// A sign-in under way on a station, by its id (its overview's `logins`).
-fn pending_login(core : Core, station : String, id : String) -> Json? {
+pub fn pending_login(core : Core, station : String, id : String) -> Json? {
   let all = (core.topic)("stations", { "scope": str(workspace_of(station)) }).value
   match all {
     Some(Array(a)) =>
@@ -94,7 +94,7 @@ fn pending_login(core : Core, station : String, id : String) -> Json? {
 
 ///|
 /// A plan's sign-in started for the page (`login.new` with what it signs in to).
-fn start_login(core : Core, station : String, n : NewProfile, runtime : String, access : String) -> Unit {
+pub fn start_login(core : Core, station : String, n : NewProfile, runtime : String, access : String) -> Unit {
   n.asked = true
   n.error = ""
   let p = [("station", str(station)), ("runtime", str(runtime))]
@@ -135,21 +135,12 @@ fn new_profile_page(c : @ui.Ctx, core : Core, here : Here, station : String) -> 
   let step = text(d, "step")
   let sign = field(d, "signIn")
   let tile = field(d, "tile")
-  let runtime = match opt_text(sign, "runtime") {
-    Some(r) => r
-    None =>
-      match text(tile, "runtime") {
-        "codex" | "grok" | "cursor" | "devin" as r => r
-        _ => "claude"
-      }
-  }
-  let provider = match opt_text(sign, "provider") {
-    Some(p) => p
-    None => provider_named(runtime)
-  }
+  // what the plan signs in to (the core's, at a plan's connect step): a runtime's subscription, or another account
+  let runtime = text(sign, "runtime")
+  let provider = text(sign, "provider")
   // a station without the runtime the plan signs in with installs it first (`install`): the sign-in starts after
   let install = field(d, "install")
-  let planning = step == "connect" && text(d, "method") == "plan" && !(install is Some(Object(_)))
+  let planning = step == "connect" && text(d, "method") == "plan" && !(install is Some(Object(_))) && sign is Some(Object(_))
   // a plan's sign-in starts when it is chosen
   if planning && !n.asked {
     // (once the frame's builds are over; start_login says it asked)
@@ -552,7 +543,7 @@ fn profile_account_page(c : @ui.Ctx, core : Core, here : Here, key : String) -> 
 ///|
 /// A plan's sign-in on a station without the runtime it signs in with (InstallStep, core `install`): installing it
 /// first, how that stands, its button where the viewer may (`software.update`).
-fn install_step(c : @ui.Ctx, core : Core, station : String, install : Json?) -> Unit {
+pub fn install_step(c : @ui.Ctx, core : Core, station : String, install : Json?) -> Unit {
   let t = @sf.theme()
   let runtime = text(install, "runtime")
   let busy = is_doing(core, ["software.update"], [("station", station), ("id", runtime)])
