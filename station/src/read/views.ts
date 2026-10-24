@@ -406,8 +406,10 @@ export function chats(station: Store, viewer: Viewer, archived: boolean, scope: 
     if (watch !== undefined) v.watch = watch;
     return v;
   };
-  const threads = store.listThreads(s, viewer.email, null, scope === null ? null : scope.threads).filter((t) => t.sessions.some((m) => all.has(m.session)));
-  const stats = store.sessionStats(s, scope === null ? null : [...new Set([...scope.sessions, ...threads.flatMap((t) => t.sessions.map((m) => m.session))])]);
+  // The sidebar's own threads alone; the archive's, all of them.
+  const of = scope !== null ? scope.threads : archived ? null : store.threadsOfShown(s);
+  const threads = store.listThreads(s, viewer.email, null, of).filter((t) => t.sessions.some((m) => all.has(m.session)));
+  const stats = store.sessionStats(s, of === null ? null : [...new Set([...(scope?.sessions ?? shown.keys()), ...threads.flatMap((t) => t.sessions.map((m) => m.session))])]);
   // Per agent: the Slack thread it came from (the latest one it is in), and whether it has an internal chat.
   const origins = new Map<string, ThreadSummary>();
   const chatted = new Set<string>();

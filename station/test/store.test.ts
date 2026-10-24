@@ -12,6 +12,7 @@ import {
 } from "../src/store/store.ts";
 import { MERGED, SCHEMA } from "../src/store/schema.ts";
 import * as read from "../src/read/store.ts";
+import { fileAway } from "./archived-before.ts";
 
 const dirs: string[] = [];
 const stores: Store[] = [];
@@ -182,7 +183,7 @@ test("reads move forward only and unread counts skip the viewer's own", () => {
   assert.deepEqual(store.listThreads("me@x", null, null).map((t) => t.thread.id), [slack.id, thread.id], "the latest said first");
 });
 
-test("archiving writes a thread out to a zstd file and back", () => {
+test("an archived thread keeps its entries in the database; one a station before wrote out to its file is read from it, and brought back", () => {
   const archive = tempdir();
   const store = open(":memory:", archive);
   session(store, "a");
@@ -201,8 +202,12 @@ test("archiving writes a thread out to a zstd file and back", () => {
   const file = join(archive, "threads", `${own.id}.jsonl.zst`);
 
   store.setArchived("a", true, MANUAL);
-  assert.ok(existsSync(file), "every session of it is archived");
-  assert.ok(!existsSync(join(archive, "threads", `${shared.id}.jsonl.zst`)), "b still takes part");
+  assert.ok(!existsSync(file), "archived, its entries stay where they are");
+  assert.deepEqual(store.entriesAfter(own.id, 0), entries);
+  assert.deepEqual(store.listThreads("local", null, own.id)[0], before);
+
+  // As a station before archived it: written out to its file, out of the database.
+  assert.equal(fileAway(store, own.id), file);
   const text = zstdDecompressSync(readFileSync(file)).toString("utf8");
   // The shape the Rust station writes (serde's EntryRow): its archives read here, and back.
   assert.ok(text.split("\n")[0]!.startsWith(`{"thread":${own.id},"n":1,"kind":"message","target":null,"ts":"2.2","authorKind":"person"`), text);
@@ -219,8 +224,9 @@ test("archiving writes a thread out to a zstd file and back", () => {
   assert.ok(!existsSync(file), "shown again: back in the database");
   assert.deepEqual(store.entriesAfter(own.id, 0), entries);
 
-  // Someone writing in an archived thread brings it back first.
+  // Someone writing in one written out brings it back first.
   store.setArchived("a", true, MANUAL);
+  fileAway(store, own.id);
   const h = heard(store);
   assert.deepEqual(say(store, own.id, "2.4", "person", "local", "还在吗"), [3, true]);
   assert.ok(!existsSync(file));
@@ -229,10 +235,21 @@ test("archiving writes a thread out to a zstd file and back", () => {
   assert.deepEqual(appended, [[3]]);
   h.stop();
 
-  // Deleting the session removes an archived thread's file with it.
+  // Those written out are brought back a few at a time, the oldest first, as they read from their files.
   store.setArchived("a", true, MANUAL);
   store.setArchived("b", true, MANUAL);
-  assert.ok(existsSync(join(archive, "threads", `${shared.id}.jsonl.zst`)));
+  const sharedEntries = store.entriesAfter(shared.id, 0);
+  fileAway(store, shared.id);
+  fileAway(store, own.id);
+  assert.deepEqual(store.bringInArchived(1), { brought: 1, left: 1 });
+  assert.ok(!existsSync(join(archive, "threads", `${shared.id}.jsonl.zst`)) && existsSync(file));
+  assert.deepEqual(store.bringInArchived(5), { brought: 1, left: 0 });
+  assert.deepEqual(store.bringInArchived(5), { brought: 0, left: 0 });
+  assert.ok(!existsSync(file));
+  assert.deepEqual([store.entriesAfter(shared.id, 0), store.entriesAfter(own.id, 0).length], [sharedEntries, 3]);
+
+  // Deleting the session removes an archived thread's file with it.
+  fileAway(store, own.id);
   const removed = heard(store);
   store.deleteSession("a");
   assert.deepEqual(removed.changes.flatMap((c) => (c.type === "threadRemoved" ? [c.id] : [])), [own.id]);
@@ -262,8 +279,10 @@ test("what two chats' agents wrote each other is neither a chat's unread nor wha
   // This chat's own agent quoting one in the chat says it in the chat.
   say(store, thread.id, "1.7", "agent", "a", "来自 [备份](https://x/o/w/s/b)：\n\n照它说的改了");
   for (const threads of lists()) assert.deepEqual(threads.map((t) => [t.lastMessage?.ts, t.unread, t.letters]), [["1.7", 3, 3]]);
-  // Archived, read from its file: the same.
+  // Archived: the same; written out to its file by a station before, read from it: the same.
   store.setArchived("a", true, MANUAL);
+  for (const threads of lists()) assert.deepEqual(threads.map((t) => [t.lastMessage?.ts, t.unread, t.letters]), [["1.7", 3, 3]]);
+  fileAway(store, thread.id);
   for (const threads of lists()) assert.deepEqual(threads.map((t) => [t.lastMessage?.ts, t.unread, t.letters]), [["1.7", 3, 3]]);
   reader.db.close();
 });
@@ -312,6 +331,7 @@ test("an archived thread whose file is lost reads as empty, and is counted on fr
   say(store, kept.id, "2.2", "person", "local", "还有这个");
   store.setRead("local", lost.id, 3);
   store.setArchived("a", true, MANUAL);
+  fileAway(store, lost.id);
   assert.deepEqual(store.lostArchives(), []);
   rmSync(archiveFile(store, lost.id));
   assert.deepEqual(store.lostArchives(), [lost.id]);
@@ -428,7 +448,7 @@ test("a session's own chat is archived with it, a chat of its own alone; anythin
   store.setThreadHidden(other.id, true, AUTO);
   assert.ok(thread(other.id).hiddenAt !== null);
   assert.equal(row().archivedAt, null, "its sessions stay");
-  assert.ok(existsSync(archiveFile(store, other.id)), "out of lists: in its archive file");
+  assert.ok(!existsSync(archiveFile(store, other.id)), "out of lists, its entries stay in the database");
   assert.deepEqual(store.entriesAfter(other.id, 0).map((e) => e.text), ["hi", "done"]);
   // Someone writes in it: shown again.
   say(store, other.id, "2.4", "person", "local", "again");
@@ -507,7 +527,7 @@ test("a database made before clients gains the column and a message keeps its ap
   assert.deepEqual(clients(), [null, "android 0.1.1123"]);
   assert.equal(store.pendingMessages("a")[0]!.message.client, "android 0.1.1123");
   store.setArchived("a", true, MANUAL);
-  assert.ok(existsSync(archiveFile(store, thread.id)));
+  fileAway(store, thread.id);
   assert.deepEqual(clients(), [null, "android 0.1.1123"]);
   store.setArchived("a", false, MANUAL);
   assert.deepEqual(clients(), [null, "android 0.1.1123"]);

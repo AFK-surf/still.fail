@@ -402,6 +402,17 @@ export function threadsOfSessions(s: Store, keys: string[]): number[] {
   return all(s, `SELECT DISTINCT thread FROM thread_sessions WHERE session IN (${keys.map(() => "?").join(", ")})`, ...keys).map((r) => r.thread as number);
 }
 
+/// The threads the sidebar is made of (views.ts `chats`): those of the sessions in lists, and every thread of a session
+/// in one of those (the Slack threads their agents came from among them). The archive's others, most of a station's
+/// threads, are none of it.
+export function threadsOfShown(s: Store): number[] {
+  return all(
+    s,
+    `SELECT DISTINCT thread FROM thread_sessions WHERE session IN (SELECT session FROM thread_sessions WHERE thread IN (
+       SELECT ts.thread FROM thread_sessions ts JOIN sessions x ON x.key = ts.session WHERE x.archived_at IS NULL))`,
+  ).map((r) => r.thread as number);
+}
+
 /// Threads with their sessions, last entry, latest message and the viewer's unread count, most recently said in
 /// first: those of one session, one thread (or those named), or all.
 export function listThreads(s: Store, viewer: string, session: string | null, thread: number | number[] | null): ThreadSummary[] {
@@ -439,10 +450,10 @@ export function listThreads(s: Store, viewer: string, session: string | null, th
   return summaries;
 }
 
-/// What lists show of an archived thread (its last entry, latest message, messages' authors, the first thing a person
-/// said), read from its file once: it does not change while archived, and archived again it is another file
-/// (`fileVersion`). Every list of chats, of sessions and of threads read each archived thread's file, some 400 on a busy
-/// station, past what ARCHIVE_CACHE keeps.
+/// What lists show of a thread a station before wrote out to its archive file (its last entry, latest message, messages'
+/// authors, the first thing a person said), read from its file once: it does not change while there, and written out
+/// again it is another file (`fileVersion`). Such files are read until the station brings each back into the database
+/// (store.ts `bringInArchived`); archiving writes none any more.
 export type ArchivedSummary = {
   version: string;
   last: number;

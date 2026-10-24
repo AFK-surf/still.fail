@@ -57,7 +57,7 @@ CREATE TABLE threads (
   title TEXT,
   created_by TEXT,
   created_at INTEGER NOT NULL,
-  archived_at INTEGER,                -- its entries are in its archive file (see Archiving)
+  archived_at INTEGER,                -- a station before wrote its entries out to its archive file (see Archiving)
   home TEXT,                          -- a page chat made for a session (its first there): archived and shown with it
   hidden_at INTEGER, hidden_by TEXT,  -- a chat archived from lists: with its home session, or alone
   shown_at INTEGER,                   -- as a session's shown_at
@@ -364,20 +364,24 @@ their whole thread (deleting a session removes threads left without one):
 
 ### Archiving
 
-When a thread goes out of every list (archived itself, or every session of it
-archived), its entries go to
-`<data>/archive/threads/<id>.jsonl.zst` (one entry per line, zstd) in one step with deleting their rows, and
-the thread row is marked archived (`archived_at`). Since entries never change,
-the file is the thread as it was, and clients' kept copies stay valid.
-Reading an archived thread reads the file (the same API and summaries,
-answered from the decompressed entries; the last 32 threads read are kept
-decompressed in memory). What lists show of each (its last entry, latest
-message, who wrote and when first, the first thing a person said, each
-message's author for unread counts) is read from its file once a reader
-and kept, by the file as it is (its size and when it was written: one
-archived again is another file): every list of chats, sessions and threads
-read each archived thread's file, some 400 on a busy station. A new entry — someone writing in it (an edit too), or a session of it shown again — loads it back into the
-database first and removes the file. Archiving a session also writes its
+A thread out of every list (archived itself, or every session of it archived)
+keeps its entries in the database, as one in a list does: entries are small
+(all of ccvm's 26,000 come to some 20 MB), and every list reads what it shows
+of every thread by an index, some 10 ms for all of a station's (2026-10-25).
+
+Stations before wrote such a thread's entries out to
+`<data>/archive/threads/<id>.jsonl.zst` (one entry per line, zstd) in one step
+with deleting their rows, and marked the thread row (`archived_at`). Then every
+list of chats, sessions and threads read each archived thread's file (some 850
+on ccvm), decompressed again whenever a reader had let go of what it kept of
+them. Those files are read as they are (the same API and summaries, answered
+from the decompressed entries; what lists show of each read from its file once
+a reader and kept by the file as it is) until the station brings each back
+into the database: a few at a time, two minutes after it starts
+(`Store.bringInArchived`, 20 a second), and at once when one is said in (an
+edit too) or a session of it is shown again. Since entries never change, they
+are the same either way, and clients' kept copies stay valid. Bringing one back
+writes its entries into the database first and removes the file. Archiving a session also writes its
 transcript copy, `<data>/archive/transcripts/<session>.jsonl.zst` (the
 runtime's file, compressed); the runtime's own file in the profile's home is
 left as it is. Showing the session again or deleting it removes the copy.
