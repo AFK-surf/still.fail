@@ -12,7 +12,7 @@ fn sidebar(c : @ui.Ctx, src : Source, w : Workspace, pages : Pages, width : Doub
   match lit_place() {
     "files" => files_nav(c, src, w.id)
     "settings" => settings_side(c, src, w, pages)
-    "stations" | "profiles" => (pages.side)(c, src, w)
+    "stations" | "profiles" => place_sidebar(c, src, w, pages)
     _ => lists_side(c, src, w, pages, width)
   }
 }

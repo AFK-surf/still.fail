@@ -18,15 +18,11 @@ pub let wide_from : Double = 701.0
 pub(all) struct Pages {
   /// a chat (wide_chat.mbt), with what moves as it comes from a new chat or goes to one
   chat : (@ui.Ctx, Source, Workspace, ChatRef) -> Unit
-  /// a place of the rail's other than the chats' (Station, Profile, 连接, 用量)
-  place : (@ui.Ctx, Source, Workspace, String) -> Unit
   /// 文件, and a folder of a station's drive
   files : (@ui.Ctx, Source, Workspace) -> Unit
   folder : (@ui.Ctx, Source, Workspace, DriveAt) -> Unit
   /// any other page: the phone's of it, its bar at its top (the workspaces, whether invitations wait)
   other : (@ui.Ctx, Source, Workspace, Array[Workspace], Bool, Page) -> Unit
-  /// the sidebar of a place other than the chats', the files' and the settings' (the stations', the profiles')
-  side : (@ui.Ctx, Source, Workspace) -> Unit
   /// the pane's page's own keys (the open chat's, 奏's), after the frame's (`escape`: Esc pressed and not taken by
   /// what the frame opened), and what it offers ⌘K now
   keys : (@ui.Ctx, Source, Workspace, Bool) -> Unit
@@ -697,8 +693,7 @@ fn main_page(
     Settings => setting_page(c, src, w, pages, Route::Appearance)
     Setting(r) => setting_page(c, src, w, pages, r)
     // a place of the rail's other than the chats': its page, under its title
-    Place("connects") => connects_place(c, src, w, pages)
-    Place(p) => (pages.place)(c, src, w, p)
+    Place(p) => place_page(c, src, w, pages, p)
     // 文件: a folder under its bar, as the web's
     Files => (pages.files)(c, src, w)
     Drive(at) => (pages.folder)(c, src, w, at)

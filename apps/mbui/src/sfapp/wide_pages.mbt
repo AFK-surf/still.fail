@@ -1,7 +1,6 @@
-// The wide frame's pages still in this package (the frame itself, the rail and their parts are sfdesk's: frame.mbt,
-// rail.mbt), given to it as it is drawn (desk_pages): the chat, a settings page, a place's, the files', the phone's page
-// of the rest, the stations' and the profiles' sidebars (wide_places.mbt), and what the frame asks
-// of the app.
+// The wide frame's pages still in this package (the frame itself, the rail, the settings, the places and their parts
+// are sfdesk's: frame.mbt, rail.mbt, settings_frame.mbt, places.mbt), given to it as it is drawn (desk_pages): the
+// chat, the files', the phone's page of the rest, and what the frame asks of the app.
 
 ///|
 /// What the wide frame's pages still here keep of their own (the frame's own is sfdesk's `shell`; the rest is the
@@ -12,8 +11,6 @@ priv struct Wide {
   mut jobs_open : Bool
   /// the new chat's station chooser open (wide_newchat.mbt)
   mut station_menu : Bool
-  /// the page picked in a place with a list of its own (Station's, Profile's: wide_places.mbt), by place
-  place_pick : Map[String, @settings.Route]
 }
 
 ///|
@@ -21,7 +18,6 @@ let wide : Wide = {
   info_open: false,
   jobs_open: false,
   station_menu: false,
-  place_pick: {},
 }
 
 ///|
@@ -37,7 +33,6 @@ fn wide_reset() -> Unit {
   find_forget()
   find_around.val = -1.0
   wide.station_menu = false
-  wide.place_pick.clear()
   wide_switch_reset()
   wide_on.val = false
   corners_on.val = false
@@ -46,7 +41,7 @@ fn wide_reset() -> Unit {
 }
 
 ///|
-/// What the wide frame (sfdesk) draws of this package's: the pages in its pane, the sidebars, and what it asks.
+/// What the wide frame (sfdesk) draws of this package's: the pages in its pane, and what it asks.
 fn desk_pages() -> @sfdesk.Pages {
   {
     chat: fn(c, src, w, r) {
@@ -55,19 +50,10 @@ fn desk_pages() -> @sfdesk.Pages {
       // (come to from a new chat by the sidebar: the new chat fading over it)
       switch_new_out(c, src, w)
     },
-    // Station and Profile a list of their own beside their page (wide_places.mbt); the others under their title
-    place: fn(c, src, w, p) {
-      match p {
-        "stations" | "profiles" => place_page_wide(c, src, w, p)
-        _ => wide_place(c, src, w, p)
-      }
-    },
     // 文件: a folder under its bar, as the web's (wide_files.mbt)
     files: fn(c, src, w) { files_landing(c, src, w) },
     folder: fn(c, src, w, at) { wide_folder(c, src, w, at) },
     other: fn(c, src, w, all, invited, page) { page_view(c, src, w, all, invited, page) },
-    // the stations', the profiles' (wide_places.mbt)
-    side: fn(c, src, w) { sidebar(c, src, w) },
     keys: fn(c, src, w, escape) { page_keys(c, src, w, escape) },
     offered: fn(c, src) { chat_offered(c, src) },
     jobs: fn(c, src, w) { open_jobs(c, src, w) },
@@ -172,38 +158,6 @@ let bar_update_inset : Double = 84.0
 /// 更新's box: its pill's size.
 // kept across runs: a value (no field of it changes)
 let update_at : @ui.Style = @ui.style(row=true)
-
-///|
-/// A place of the rail's (Station, Profile, 连接, 用量) in the pane: its title as a page's head (pages.css.ts), what
-/// the settings' page of it shows under it.
-fn wide_place(c : @ui.Ctx, src : Source, w : Workspace, place : String) -> Unit {
-  let t = @sf.theme()
-  let side = dmax(24.0, (c.width - 792.0) / 2.0) + 16.0
-  c.box(w=Fill(1.0), h=Fill(1.0), bg=t.p.bg, fn() {
-    let head = c.id("place-head")
-    if @ui.window_inset() {
-      c.window_drag(head)
-    }
-    // (a place across the pane has its page's own head, its title and what it does: settings' place_page)
-    if !@sfdesk.place_bare(place) {
-      c.box(w=Fill(1.0), pl=side, pr=side, pt=40.0, pb=12.0, id=head, fn() {
-        c.text(place_label(place), size=22.0, weight=600, color=t.p.text, wrap=false, line=34.0) |> ignore
-      })
-      |> ignore
-    }
-    c.box(w=Fill(1.0), h=Fill(1.0), fn() {
-      match @settings.route_of(place) {
-        Some(r) => {
-          let core = settings_core(src, w)
-          @settings.page(c, core, @settings.here_of(core, w.id, w.name), r, root=true)
-        }
-        None => ()
-      }
-    })
-    |> ignore
-  })
-  |> ignore
-}
 
 ///|
 /// The system's side of still.fail (before @ui.run). The desktop's window: 1280 by 820 at first, as still.fail's

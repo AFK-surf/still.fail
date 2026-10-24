@@ -192,16 +192,3 @@ let settings_side_fill : @ui.Style = @ui.style(w=Full, h=Full)
 /// Its pages under the band, 8 in at its sides, 4 under it (Sidebar.css.ts navList).
 // kept across runs: a value (no field of it changes)
 let settings_nav_list : @ui.Style = @ui.style(w=Full, h=Full, px=S2, pt=S1)
-
-///|
-/// 连接 as a place of the rail's: every station's connects, a page across the pane (Connects.tsx).
-fn connects_place(c : @ui.Ctx, src : Source, w : Workspace, pages : Pages) -> Unit {
-  let core = (pages.core)(src, w)
-  let here = @settings.here_of(core, w.id, w.name)
-  @settings.frame(core, here, root=true)
-  c.box(style=connects_place_fill, fn() { connects_page(c, core, here) }) |> ignore
-}
-
-///|
-// kept across runs: a value (no field of it changes)
-let connects_place_fill : @ui.Style = @ui.style(w=Full, h=Full, bg=Bg)
