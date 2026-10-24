@@ -212,14 +212,6 @@ fn field_lines(c : @ui.Ctx) -> Int {
 }
 
 ///|
-/// Pasted at once, this many characters or more go as a file; a file of pasted words this long at most can be put
-/// back (PastedText.kt).
-let paste_threshold : Int = 5000
-
-///|
-let paste_restore_limit : Int = 25000
-
-///|
 /// A file's part going up (web/src/api.ts UPLOAD_PART), the biggest file taken (1 GB).
 let part_size : Int = 4 * 1024 * 1024
 
@@ -228,7 +220,8 @@ let max_file : Int = 1024 * 1024 * 1024
 
 ///|
 /// A file on its way to the station: going up, up (`done`, the station's Attachment), or failed. `image`: the picture
-/// picked, shown from its bytes (an image's key, "" for any other file); `pasted`: the words it was made of.
+/// picked, shown from its bytes (an image's key, "" for any other file); `pasted`: the words it was made of and what
+/// the core says of them (`paste.info`: their first line, how many characters, the words while they can be put back).
 priv struct Pending {
   id : Int
   name : String
@@ -236,7 +229,7 @@ priv struct Pending {
   image : String
   width : Int
   height : Int
-  pasted : String?
+  pasted : (String, Json)?
   /// a picture's bytes as picked (Composer.kt Pending.local): what the viewer shows it from before it is sent; None
   /// for any other file, and for one of a kept draft (only the file it went up as is kept)
   local : Bytes?
@@ -879,7 +872,14 @@ fn add_held_file(src : Source, d : Draft, station : String, f : @hostapi.Picked)
 ///|
 /// A file picked or pasted, into the draft and up to the station at once (Composer.kt upload): over 1 GB it is
 /// refused where it shows; on a read-only run it goes nowhere.
-fn add_file(src : Source, d : Draft, station : String, name : String, bytes : Bytes, pasted : String?) -> Unit {
+fn add_file(
+  src : Source,
+  d : Draft,
+  station : String,
+  name : String,
+  bytes : Bytes,
+  pasted : (String, Json)?,
+) -> Unit {
   let id = next_pending.val
   next_pending.val += 1
   let (w, h) = match @pixels.image_size(bytes) {
@@ -1156,10 +1156,20 @@ fn uploading_text(f : Pending) -> String {
 }
 
 ///|
-/// A long paste: the text file it goes as (`pasted-text-<id>.txt`, UTF-8, as the web names it; paste_name).
+/// A long paste: the text file it goes as (`pasted-text-<id>.txt`, UTF-8, as the web names it; paste_name), with what
+/// the core says of the words (`paste.info`).
 fn paste_as_file(src : Source, d : Draft, station : String, words : String) -> Unit {
   let name = paste_name(d.key + "\u{1}" + d.id, words, d.files.length())
-  add_file(src, d, station, name, @utf8.encode(words), Some(words))
+  (src.call)("paste.info", { "text": Json::string(words) }, fn(r) {
+    match r {
+      Ok(v) =>
+        match field(Some(v), "info") {
+          Some(Object(_) as info) => add_file(src, d, station, name, @utf8.encode(words), Some((words, info)))
+          _ => ()
+        }
+      Err(_) => ()
+    }
+  })
 }
 
 ///|
@@ -1182,23 +1192,6 @@ fn uuid(h : String) -> String {
   "-" +
   h.view(start_offset=20).to_string()
 }
-
-///|
-/// A pasted file's first line (of its first 200 characters).
-fn paste_preview(words : String) -> String {
-  let head = if words.length() > 200 {
-    words.view(end_offset=200).to_string()
-  } else {
-    words
-  }
-  let t = head.trim(chars=" \n\r\t").to_string()
-  match t.find("\n") {
-    Some(i) => t.view(end_offset=i).to_string().trim_end(chars="\r").to_string()
-    None => t
-  }
-}
-
-// ── the composer's state on the page ──────────────────────────────────────
 
 ///|
 /// What the page keeps of its composer: ＋'s sheet (open), the system's picker under way, a finger down
@@ -2003,7 +1996,7 @@ fn composer_bar(
           hint.follow(1.0, @motion.tween(200.0, ease=Arrive))
         }
         // what the input did since the last frame: a mark backspaced whole, a chat's link pasted (chat_refs.mbt)
-        ref_field_edits(src, d, r.station, locked)
+        @sfbase.refs_edits(c, src, d.key, d.field, r.station, locked)
         let res = c.editor(
           field_key,
           placeholder~,
@@ -2023,11 +2016,11 @@ fn composer_bar(
           // (The phone's layout keeps its new line, a mouse in a narrow desktop window too: its pages are the
           // phone's, the phone's tests a desktop's system.)
           enter_sends=wide_on.val && @ui.pointing() is Mouse,
-          paste_limit=if no_files { 0 } else { paste_threshold },
+          paste_limit=if no_files { 0 } else { @sfbase.paste_threshold(c, src) },
           // ⌘V with a picture on the clipboard: it, as a file (Chat.tsx onPaste: the clipboard's files)
           pictures=!no_files,
           // references to other chats drawn as marks (chat_refs.mbt RefMarks)
-          look=ref_look(t.p.accent),
+          look=@sfbase.refs_look(d.key, t.p.accent),
           // the draft's words, its own (another chat's draft: another field)
           field=d.field,
         )
@@ -2301,7 +2294,7 @@ fn draft_file(c : @ui.Ctx, src : Source, r : ChatRef, d : Draft, f : Pending, lo
     // never squeezed by a row too narrow for all of them)
     c.box(w=Px(if f.pasted is Some(_) { pasted_card_w } else { file_card_w }), pt=picture_remove_out, fn() {
       let card = match f.pasted {
-        Some(words) => pasted_card(c, src, r, d, f, words, remove, locked)
+        Some((words, info)) => pasted_card(c, src, r, d, f, words, info, remove, locked)
         None => file_tile(c, f, remove, again~)
       }
       @motion.measure(c, card, "composer/tile/\{f.id}")
@@ -2321,7 +2314,7 @@ fn draft_face(c : @ui.Ctx, src : Source, r : ChatRef, d : Draft, f : Pending) ->
       picture_face(c, f, picture, 0) |> ignore
     } else {
       match f.pasted {
-        Some(words) => pasted_card(c, src, r, d, f, words, 0, false) |> ignore
+        Some((words, info)) => pasted_card(c, src, r, d, f, words, info, 0, false) |> ignore
         None => file_tile(c, f, 0) |> ignore
       }
     }
@@ -2467,6 +2460,7 @@ fn pasted_card(
   d : Draft,
   f : Pending,
   words : String,
+  info : Json,
   remove : Int,
   locked : Bool,
 ) -> Int {
@@ -2475,7 +2469,8 @@ fn pasted_card(
   let busy = f.done is None && f.error is None
   let action = c.id("composer/paste-action/\{f.id}")
   let can_retry = f.error is Some(_) && !src.read_only
-  let can_restore = words.length() <= paste_restore_limit && !locked
+  // (words not too long to put back: the core keeps them in what it says of them)
+  let can_restore = field(Some(info), "text") is Some(String(_)) && !locked
   if c.clicked(action) {
     if can_retry {
       take_out(src, d, f)
@@ -2506,7 +2501,7 @@ fn pasted_card(
         @sf.icon(c, "read", size=16.0, color=t.p.muted) |> ignore
       }
       c.box(w=Fill(1.0), fn() {
-        let first = paste_preview(words)
+        let first = text(Some(info), "preview")
         c.text(
           if first == "" { tr("web-main.composer.pastedText") } else { first },
           size=15.0,
@@ -2522,7 +2517,7 @@ fn pasted_card(
               if busy {
                 tr("web-main.composer.pasteUploading")
               } else {
-                fill("web-main.composer.pasteAttachment", [("count", "\{words.length()}")])
+                fill("web-main.composer.pasteAttachment", [("count", "\{number(Some(info), "characters").to_int()}")])
               }
           },
           size=11.0,
