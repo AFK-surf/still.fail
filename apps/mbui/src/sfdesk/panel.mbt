@@ -6,14 +6,6 @@
 // is the core's (the chat view's `tabs`), as are the changes (`chat.tabs.*`). Each chat keeps its own tabs.
 
 ///|
-/// What the panel shows that is not here yet, given by the page (sfapp's for now): a letter drawn as the chat draws a
-/// message, a link opened as the chat opens one.
-pub(all) struct PanelParts {
-  message : (Json) -> Unit
-  link : (String) -> Unit
-}
-
-///|
 /// A chat's tabs' key as the core keeps them (the prefs' `chatTabs`: `<station>:<session>`, as its page names it).
 fn tabs_key(r : ChatRef) -> String {
   r.station + ":" + r.session
@@ -263,14 +255,13 @@ pub fn side_beside(c : @ui.Ctx, key : String, open : Bool, whole : Double, page 
 
 ///|
 /// Chat `r`'s page (`chat`) with its side panel beside it (in workspace `w`): its tabs, or while the panel slides out
-/// the ones it had; what the panel shows that is the page's, `parts`.
+/// the ones it had.
 pub fn with_side(
   c : @ui.Ctx,
   src : Source,
   w : Workspace,
   r : ChatRef,
   v : ChatView?,
-  parts : PanelParts,
   chat : () -> Unit,
 ) -> Unit {
   let key = chat_key(r)
@@ -283,7 +274,7 @@ pub fn with_side(
     match v {
       Some(view) => {
         let (tabs, front) = if open { (tabs, front) } else { side_leaving(key).unwrap_or(([], "")) }
-        side_panel(c, src, w, r, view, tabs, front, parts)
+        side_panel(c, src, w, r, view, tabs, front)
       }
       None => ()
     }
@@ -300,7 +291,6 @@ fn side_panel(
   v : ChatView,
   tabs : Array[String],
   front : String,
-  parts : PanelParts,
 ) -> Unit {
   c.box(style=side_panel_style, fn() {
     // (the desktop app has no title bar: the panel's bar drags the window as the page's does)
@@ -329,7 +319,7 @@ fn side_panel(
         files_tab(c, src, w.id, tabs_key(r), r.station)
       } else if front == "letters" {
         match v.thread {
-          Some(th) => letters_tab(c, src, r, th, parts.message, parts.link)
+          Some(th) => letters_tab(c, src, r, v, th)
           None => ()
         }
       } else if front != "" {

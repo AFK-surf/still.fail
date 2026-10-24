@@ -26,7 +26,6 @@ fn init {
 /// (scripts/check.sh checks).
 fn reset() -> Unit {
   @sf.set_language(None)
-  reveals.clear()
   files_cornered.val = false
   felt_menu.val = -1
   felt_past.clear()
@@ -46,6 +45,8 @@ fn reset() -> Unit {
   @sfdesk.reset()
   // what the drive's pages ask of the app: its file preview
   @sfbase.drive_viewer.val = open_file
+  // what the desktop's messages draw that is this package's: the file preview, visualizations, links (wide_panel.mbt)
+  @sfbase.chat_parts.val = desk_chat_parts()
   home_rows.val = []
   steadies.clear()
   sheet_host.kind = NoSheet
@@ -174,7 +175,6 @@ fn reset() -> Unit {
   told_dark.val = None
   send_flight.val = None
   flying.val = None
-  absolute_times.val = false
   opened_notices.clear()
   flashing.val = ("", 0.0)
   flash_row.val = None

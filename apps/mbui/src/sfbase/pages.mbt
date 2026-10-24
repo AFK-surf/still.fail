@@ -188,5 +188,7 @@ pub fn reset() -> Unit {
   go_to_words.clear()
   // a new chat while it is made (fresh.mbt)
   fresh_reset()
+  // how times are said (message_words.mbt)
+  absolute_times.val = false
 }
 

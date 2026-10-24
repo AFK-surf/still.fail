@@ -1758,6 +1758,19 @@ export interface RuntimeInstall {
 	percent?: number;
 }
 
+/** still.fail's notice as a chat shows it (core views.ts noticeOf). */
+export interface NoticeShown {
+	/** It says something failed (the station began it with ⚠️): drawn in red. */
+	failed: boolean;
+	/** What it says, ⚠️ and a closing 。 left out. */
+	words: string;
+	/**
+	 * One about a profile: where in `words` (UTF-16 units) what went wrong begins, after its ：: the link to that
+	 * profile's page. Absent otherwise.
+	 */
+	linkAt?: number;
+}
+
 /** Who said a message, as its line shows them: an agent by its label and mark, a person by name and picture. */
 export interface MessageBy {
 	name: string;
@@ -1873,6 +1886,11 @@ export interface ChatMessage {
 	 * than it.
 	 */
 	install?: RuntimeInstall;
+	/**
+	 * still.fail's own notice as the chat shows it (views.ts noticeOf): whether it says a failure, its words as a line
+	 * of the UI, where its link to `profile` begins. Absent for every other message.
+	 */
+	notice?: NoticeShown;
 	/**
 	 * still.fail's notice of a failure, on a station that takes bug reports: sending it to the still.fail team
 	 * (`chat.report` {station, thread, seq}) is offered with it. Absent otherwise.

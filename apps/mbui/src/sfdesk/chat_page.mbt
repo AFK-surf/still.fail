@@ -74,7 +74,7 @@ fn chat_page(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef, pages : Page
     None => ()
   }
   c.box(style=chat_ground, fn() {
-    with_side(c, src, w, r, view, (pages.panel)(c, src, r), fn() {
+    with_side(c, src, w, r, view, fn() {
       c.box(style=side_panel_style, id=c.id("chat/pane"), fn() {
         (pages.talk)(c, src, w, r, fn() {
           c.layer(fn() { chat_bar(c, src, w, r, view, chat, list, pages) }) |> ignore

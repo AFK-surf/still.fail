@@ -26,7 +26,6 @@ fn desk_pages() -> @sfdesk.Pages {
     // comes and goes with a new chat (sfdesk's newchat.mbt, switch.mbt), what its side panel shows of this package's,
     // how ⌘F goes along its list, its sharing's and publishing's sheets
     talk: fn(c, src, _w, r, over) { chat_talk(c, src, r, over) },
-    panel: fn(c, src, r) { panel_parts(c, src, r) },
     find_list: fn(r) { find_list(r) },
     share: fn(c, r, thread) { open_sheet(c, XShare(r, thread)) },
     publish: fn(c, station, thread) { open_sheet(c, Publish(station, thread)) },

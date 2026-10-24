@@ -14,7 +14,7 @@ import { Runner } from "../src/runtime.ts";
 import { EVICT_AFTER_MS, Store, type Source, type Value } from "../src/store.ts";
 import { FakeHost } from "../src/testing.ts";
 import { attention, choices, runnableOn } from "../src/views/models.ts";
-import { Views, betaOffered, blockedUnder, chatDerive, down, shownMessage } from "../src/views/views.ts";
+import { Views, betaOffered, blockedUnder, chatDerive, down, noticeOf, shownMessage } from "../src/views/views.ts";
 import { installView, profile as presentProfile } from "../src/present.ts";
 
 holdLanguage();
@@ -2002,4 +2002,13 @@ test("a_profile_says_what_it_is_who_signs_it_in_and_its_last_check_in_the_cores_
   assert.equal(machine.kindText, "终端里的登录");
   const go = presentProfile(profile("p4", { access: { kind: "opencode-go", key: "" } }));
   assert.deepEqual([go.kindText, go.signInProvider], ["OpenCode Go", "OpenCode"]);
+});
+
+test("still.fail's notice is shown as a line: a failure's mark taken off, no closing 。, a profile's link after its ：", () => {
+  assert.deepEqual(noticeOf("⚠️ 运行失败：额度用完了。", false), { failed: true, words: "运行失败：额度用完了" });
+  assert.deepEqual(noticeOf("已切换模型", false), { failed: false, words: "已切换模型" });
+  assert.deepEqual(noticeOf("⚠️ 登录 Work 失败：令牌过期。 ", true), { failed: true, words: "登录 Work 失败：令牌过期", linkAt: 11 });
+  assert.deepEqual(noticeOf("登录失败", true), { failed: false, words: "登录失败" });
+  const m = shownMessage({ authorKind: "stillfail", author: "stillfail", text: "⚠️ 出错了。", seq: 3 }, [], {}, [], [], [], null);
+  assert.deepEqual(m.notice, { failed: true, words: "出错了" });
 });

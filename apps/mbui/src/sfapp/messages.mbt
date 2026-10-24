@@ -69,7 +69,6 @@ fn ink() -> Ink {
 
 ///|
 /// Times in messages say how long ago; a tap on one says when, in all of them, until tapped again.
-let absolute_times : Ref[Bool] = { val: false }
 
 ///|
 /// The flight of words sent whose row is being built (flight.mbt), for its bubble and what is under it.
@@ -726,91 +725,9 @@ fn plain_words(s : String) -> String {
 }
 
 ///|
-/// Plain words as a message draws them (Markdown.kt withRefs): `[title](…/chats/…)` a reference to that chat (`@`
-/// a little lighter, its title, in the accent), a web address written bare a link.
+/// Plain words as a message draws them (sfbase's message_runs), references to chats in the chat's accent.
 fn ref_runs(s : String) -> Array[@ui.Run] {
-  let accent = ink().accent
-  let out : Array[@ui.Run] = []
-  let words = StringBuilder()
-  let flush = fn() {
-    let w = words.to_string()
-    if w != "" {
-      bare_links(w, out)
-    }
-    words.reset()
-  }
-  let n = s.length()
-  let mut i = 0
-  while i < n {
-    let ch = s.at(i).to_int()
-    if ch == 91 {
-      // [title](href) with /chats/ in it
-      match s.view(start_offset=i + 1).find("](") {
-        Some(close) if close >= 1 && close <= 120 => {
-          let title = s.view(start_offset=i + 1, end_offset=i + 1 + close).to_string()
-          let rest = s.view(start_offset=i + 1 + close + 2).to_string()
-          match rest.find(")") {
-            Some(end) if !title.contains("\n") => {
-              let href = rest.view(end_offset=end).to_string()
-              if href.contains("/chats/") && !href.contains(" ") {
-                flush()
-                out.push(@ui.span("@", link=href, color=@sf.alpha(accent, 0.7)))
-                out.push(@ui.span(title, link=href, color=accent))
-                i = i + 1 + close + 2 + end + 1
-                continue
-              }
-            }
-            _ => ()
-          }
-        }
-        _ => ()
-      }
-    }
-    words.write_char(s.at(i).unsafe_to_char())
-    i = i + 1
-  }
-  flush()
-  out
-}
-
-///|
-/// Words with the web addresses in them as links (bareLinks.ts: one ends at a space or at Chinese).
-fn bare_links(s : String, out : Array[@ui.Run]) -> Unit {
-  let mut from = 0
-  let mut i = 0
-  let n = s.length()
-  while i < n {
-    let at_link = s.view(start_offset=i).has_prefix("https://") ||
-      s.view(start_offset=i).has_prefix("http://")
-    if at_link {
-      let mut j = i
-      while j < n {
-        let k = s.at(j).to_int()
-        if k <= 32 || k >= 0x2E80 || k == 0xFF0C || k == 0x3002 {
-          break
-        }
-        j = j + 1
-      }
-      // what ends a sentence is not the address's
-      while j > i && ".,;:!?)'\"".contains(s.at(j - 1).unsafe_to_char().to_string()) {
-        j = j - 1
-      }
-      if j - i > 8 {
-        if i > from {
-          out.push(@ui.plain(s.view(start_offset=from, end_offset=i).to_string()))
-        }
-        let href = s.view(start_offset=i, end_offset=j).to_string()
-        out.push(@ui.link(href, href))
-        from = j
-        i = j
-        continue
-      }
-    }
-    i = i + 1
-  }
-  if from < n {
-    out.push(@ui.plain(s.view(start_offset=from).to_string()))
-  }
+  message_runs(s, ink().accent)
 }
 
 ///|
@@ -929,7 +846,7 @@ fn agent_words(
           // fileNameOf): a visualization opened over the whole screen, any other in the preview as a tap on it below
           // the text opens it (Prose.kt OpenedFile)
           match placed.get(@sf.file_name_of(h)) {
-            Some(a) if is_viz(a.name) => viz_open_full(a.name, here.station, owner_of(here, a), a.path, here, linked=true)
+            Some(a) if is_viz(a.name) => viz_open_full(a.name, here.station, owner_of(here, a), a.path, here.session, linked=true)
             Some(a) => open_preview(here.station, owner_of(here, a), a, steps=InChat(here.view.thread, here.session))
             None => open_link(h)
           }
@@ -1339,7 +1256,7 @@ fn file_item(
       c.box(w=Px(w), h=Px(h), radius=file_corner(), clip=true, bg=if wide_on.val { t.p.neutral_bg } else { t.p.chip }, id=open, opacity=thumb_shows(thumb), fn() {
         if key != "" && key != "!" && wide_on.val && sent is None {
           // brought in as the web's: brushed in from its top, blurred to sharp (image_reveal)
-          image_reveal(c, key, w, h, if letterbox { FitContain } else { FitCover }, a.thumbhash)
+          @sfdesk.image_reveal(c, key, w, h, if letterbox { FitContain } else { FitCover }, a.thumbhash)
         } else if key != "" && key != "!" {
           c.image(
             key,
@@ -1587,127 +1504,6 @@ let no_preview_box : @ui.Style = @ui.css("w=Full h=Full gap=S1_5 align=ACenter j
 // kept across runs: a value (no field of it changes)
 let no_preview_words : @ui.TextStyle = @ui.text_style(size=Xs, color=Muted, wrap=false)
 
-///|
-/// A message's image coming in at a desktop's width, as the web's (Chat.css.ts msgImageWait, msgImageReveal): until it
-/// is decoded what it waits on (its likeness, the ThumbHash sent with it, else the ground); once it is, brushed in from
-/// its top (an edge half its height deep going down it), blurred to sharp and from 1.04 its size to its own (1100 ms,
-/// the ease out), what it waited on fading out behind it (300 ms, from 800). One already decoded as it is first shown
-/// comes as it is.
-fn image_reveal(c : @ui.Ctx, key : String, w : Double, h : Double, fit : @ui.Fit, hash : String) -> Unit {
-  // (decoded at the size it is drawn at: Ctx::image's)
-  let px = dmin(dmax(w, h) * c.scale, 8192.0)
-  let ready = c.image_ready(key, px)
-  let way = match reveals.get(key) {
-    Some(a) => a
-    None => {
-      let a = if ready { None } else { Some(@motion.Anim::new(0.0)) }
-      reveals[key] = a
-      a
-    }
-  }
-  // its way in, said once as it is first seen decoded
-  let p = match way {
-    Some(a) if ready => {
-      if !a.moving() && a.get() == 0.0 {
-        a.animate(1.0, @motion.tween(reveal_ms, ease=Linear))
-      }
-      a.get()
-    }
-    Some(_) => 0.0
-    None => 1.0
-  }
-  let e = @motion.Out.at(p)
-  let img = c.image(key, w=Px(w), h=Px(h), fit~, radius=file_corner(), bg=0L, fade=false)
-  if p >= 1.0 {
-    return
-  }
-  c.look(img, @ui.look(alpha=if ready { 1.0 } else { 0.0 }, scale=1.0 + reveal_grow * (1.0 - e)))
-  // blurred to sharp: a frost over it and what it waits on (its edge's steps softened under it), its blur going
-  let frost = fn() {
-    let blur = reveal_blur * (1.0 - e)
-    if ready && blur > 0.25 {
-      c.layer(fn() {
-        c.box(w=Fill(1.0), h=Fill(1.0), glass=@ui.Glass::frosted(blur~, tint=0L, solid=0L), fn() {  }) |> ignore
-      })
-      |> ignore
-    }
-  }
-  // what it waits on, under the edge brushing down (its band in steps), fading out from 800 ms
-  let waited = if ready {
-    1.0 - dclamp((p * reveal_ms - reveal_wait_after_ms) / reveal_wait_out_ms, 0.0, 1.0)
-  } else {
-    1.0
-  }
-  if waited <= 0.0 {
-    frost()
-    return
-  }
-  let likeness = @gallery.thumbhash_image(hash)
-  // (each step on the screen's pixels: one meets the next with no seam)
-  let px_of = fn(y : Double) { (y * c.scale).round() / c.scale }
-  let wait = fn(y0 : Double, y1 : Double, alpha : Double) {
-    let y0 = px_of(dmax(0.0, y0))
-    let y1 = px_of(dmin(h, y1))
-    if y1 <= y0 || alpha <= 0.0 {
-      return
-    }
-    // (each laid out from the picture's top, as a layer is: not under the one before)
-    c.layer(fn() {
-      bar_room_box(c, y0)
-      let strip = c.box(style=@ui.style(w=Full, h=Fixed(y1 - y0), clip=true), fn() {
-        let inner = match likeness {
-          Some(l) => c.image(l, w=Px(w), h=Px(h), fit=FitCover, bg=0L, fade=false)
-          None => c.box(style=@ui.style(w=Fixed(w), h=Fixed(h), bg=Neutral), fn() {  })
-        }
-        c.look(inner, @ui.look(dy=-y0))
-      })
-      c.look(strip, @ui.look(alpha=alpha * waited))
-    })
-    |> ignore
-  }
-  c.layer(fn() {
-    if !ready {
-      // (not decoded yet: all of it)
-      wait(0.0, h, 1.0)
-    } else {
-      // the edge: half its height deep, from above it to past its foot
-      let band = h * 0.5
-      let top = -band + (h + band) * e
-      let step = band / reveal_steps.to_double()
-      for k in 0..<reveal_steps {
-        let y = top + k.to_double() * step
-        wait(y, y + step, (k.to_double() + 0.5) / reveal_steps.to_double())
-      }
-      wait(top + band, h, 1.0)
-    }
-  })
-  |> ignore
-  frost()
-}
-
-///|
-/// Each image's way in, by its source, while the run lasts (None: first shown decoded, as it is).
-let reveals : Map[String, @motion.Anim?] = {}
-
-///|
-/// How long it comes in, how blurred and how much larger it starts, and when and how fast what it waited on goes.
-let reveal_ms : Double = 1100.0
-
-///|
-let reveal_blur : Double = 14.0
-
-///|
-let reveal_grow : Double = 0.04
-
-///|
-let reveal_wait_after_ms : Double = 800.0
-
-///|
-let reveal_wait_out_ms : Double = 300.0
-
-///|
-/// The steps its edge is drawn in.
-let reveal_steps : Int = 16
 
 ///|
 /// A message's pictures' corner: 10 (ChatFiles.kt), the wide screen's as its file cards' (message_file_corner).

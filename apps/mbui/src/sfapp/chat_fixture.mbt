@@ -134,7 +134,9 @@ fn rich_chat(older : Int) -> Json {
     }
   }
   let messages : Array[Json] = [
-    msg(1, "ember", { "name": "still.fail" }, "Studio 上的 claude 已启动。", "3 小时前", {}),
+    msg(1, "ember", { "name": "still.fail" }, "Studio 上的 claude 已启动。", "3 小时前", {
+      "notice": { "failed": false, "words": "Studio 上的 claude 已启动" },
+    }),
     msg(2, "person", by_person("林"), "帮我把聊天页的列表做成虚拟列表，几千条消息也要滚得顺。", "3 小时前", {
       "mine": true,
       "author": "lin@example.com",
@@ -201,7 +203,9 @@ fn rich_chat(older : Int) -> Json {
       "decision": { "resolved": false },
       "asked": true,
     }),
-    msg(9, "ember", { "name": "still.fail" }, "⚠️ Studio 上 codex 的登录已失效：请在设置里重新登录。", "20 分钟前", {}),
+    msg(9, "ember", { "name": "still.fail" }, "⚠️ Studio 上 codex 的登录已失效：请在设置里重新登录。", "20 分钟前", {
+      "notice": { "failed": true, "words": "Studio 上 codex 的登录已失效：请在设置里重新登录" },
+    }),
     msg(10, "agent", claude, "推送截图前要先登录 gh。", "15 分钟前", {
       "card": { "type": "login", "login": "login-1" },
       "decision": { "resolved": false },

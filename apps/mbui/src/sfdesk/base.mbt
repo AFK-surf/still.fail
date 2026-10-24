@@ -1,5 +1,17 @@
 // What the desktop's pages read of sfbase, by its own names (as sfapp/base.mbt takes them in).
 using @sfbase {
+  message_runs,
+  message_of,
+  download_of,
+  absolute_times,
+  type ChatParts,
+  chat_parts,
+  type Attachment,
+  type Message,
+  type Elsewhere,
+  type Quote,
+  type Install,
+  type Stamp,
   type Agent,
   type Person,
   agent_json,

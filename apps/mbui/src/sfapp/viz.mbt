@@ -703,8 +703,22 @@ fn viz_follow_up(station : String, session : String) -> (String) -> Bool {
 /// A placed HTML file `a` of the message `ts`, drawn there, with the ways to open it on its own under it (the whole
 /// screen, or a page of its own: 在侧边打开); `failed`: what shows instead when the file cannot be read (its card).
 fn viz_file(c : @ui.Ctx, src : Source, here : Here, ts : String, a : Attachment, failed : () -> Unit) -> Unit {
-  let station = here.station
-  let key = owner_of(here, a)
+  viz_file_of(c, src, here.station, here.session, owner_of(here, a), ts, a, failed)
+}
+
+///|
+/// The visualization a message of chat `session` on `station` places (viz_file), kept by session `key`: the
+/// desktop's messages' too (sfbase's chat_parts).
+fn viz_file_of(
+  c : @ui.Ctx,
+  src : Source,
+  station : String,
+  session : String,
+  key : String,
+  ts : String,
+  a : Attachment,
+  failed : () -> Unit,
+) -> Unit {
   let t = @sf.theme()
   match viz_load(c, src, station, key, a.path) {
     Some(Err(_)) => failed()
@@ -716,18 +730,18 @@ fn viz_file(c : @ui.Ctx, src : Source, here : Here, ts : String, a : Attachment,
       })
       |> ignore
     Some(Ok((html, state))) => {
-      let place = "chat/" + here.station + ":" + here.session + "/" + ts + "/" + a.path
+      let place = "chat/" + station + ":" + session + "/" + ts + "/" + a.path
       c.box(style=viz_file_box, fn() {
         viz_frame(c, place, html, state, {
           keep: Some(fn(s) { viz_keep(src, station, key, a.path, s) }),
           failed: None,
-          follow_up: Some(viz_follow_up(here.station, here.session)),
+          follow_up: Some(viz_follow_up(station, session)),
         })
         // under the page, out of its way: the ways to open it on its own, icons in the chat's grey
         c.box(style=viz_ways, fn() {
           let full = c.id("viz/full/" + place)
           if c.clicked(full) {
-            viz_open_full(a.name, station, key, a.path, here)
+            viz_open_full(a.name, station, key, a.path, session)
           }
           viz_icon(c, full, "expand", viz_tr("android-misc.viz.fullscreen"))
           let aside = c.id("viz/aside/" + place)
@@ -806,9 +820,9 @@ priv struct VizFull {
 let viz_full : Ref[VizFull?] = Ref(None)
 
 ///|
-fn viz_open_full(name : String, station : String, key : String, path : String, here : Here, linked? : Bool = false) -> Unit {
+fn viz_open_full(name : String, station : String, key : String, path : String, session : String, linked? : Bool = false) -> Unit {
   viz_close("full/")
-  viz_full.val = Some({ name, station, key, path, session: here.session, linked, mermaid: None })
+  viz_full.val = Some({ name, station, key, path, session, linked, mermaid: None })
 }
 
 ///|

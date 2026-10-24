@@ -204,6 +204,7 @@ export const SHAPES: Record<string, Shape> = {
     ["profile", opt("String"), { doc: "still.fail's notice about one of the station's profiles (its sign-in failed): that profile's id, for a link to it." }],
     ["runtime", opt("String"), { doc: "still.fail's notice that the station does not have a chat's runtime installed: its id (claude | codex | dsh | grok | cursor | devin)." }],
     ["install", opt("RuntimeInstall"), { doc: "With `runtime`: installing it from the chat, as it stands now (the station's updates). Absent from a station older\nthan it." }],
+    ["notice", opt("NoticeShown"), { doc: "still.fail's own notice as the chat shows it (views.ts noticeOf): whether it says a failure, its words as a line\nof the UI, where its link to `profile` begins. Absent for every other message." }],
     ["reportable", opt("bool"), { doc: "still.fail's notice of a failure, on a station that takes bug reports: sending it to the still.fail team\n(`chat.report` {station, thread, seq}) is offered with it. Absent otherwise." }],
     ["blocked", opt("RuntimeInstall"), { doc: "In a chat's page: the viewer's message waiting for a runtime the station does not have (the notices saying so,\nfolded into it): said under it in place of its waiting, with installing it. Absent otherwise." }],
     ["by", "MessageBy"],
@@ -234,6 +235,11 @@ export const SHAPES: Record<string, Shape> = {
     ["time", opt(map("Stamp")), { doc: "`lastActiveAt` in words." }],
     ["letters", vec("ChatMessage"), { doc: "Both ways, in the order written (`way`): one coming in by that chat's agent, named by the chat; one going out by\nthis chat's agent." }],
   ], { doc: "The letters between a chat and another: a row of the page's list, its letters once it is opened." }),
+  NoticeShown: struct([
+    ["failed", "bool", { doc: "It says something failed (the station began it with ⚠️): drawn in red." }],
+    ["words", "String", { doc: "What it says, ⚠️ and a closing 。 left out." }],
+    ["linkAt", opt("i64"), { client: opt("I54"), doc: "One about a profile: where in `words` (UTF-16 units) what went wrong begins, after its ：: the link to that\nprofile's page. Absent otherwise." }],
+  ], { doc: "still.fail's notice as a chat shows it (core views.ts noticeOf)." }),
   RuntimeInstall: struct([
     ["runtime", "String", { doc: "claude | codex | dsh | grok | cursor | devin: what `software.update` installs ({station, id: runtime})." }],
     ["state", "String", { doc: "missing | installing | failed | installed" }],

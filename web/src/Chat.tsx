@@ -42,7 +42,7 @@ import * as nav from "./Sidebar.css.ts";
 import * as sessionCss from "./styles/session.css.ts";
 import * as chatCss2 from "./styles/chat.css.ts";
 import * as conversationCss from "./styles/conversation.css.ts";
-import type { ChatAsk, ChatSentElsewhere, DownloadShown, RuntimeInstall } from "./core/shapes.ts";
+import type { ChatAsk, ChatSentElsewhere, DownloadShown, NoticeShown, RuntimeInstall } from "./core/shapes.ts";
 import * as partsCss from "@stillfail/ui/parts.css.ts";
 import * as historyCss from "./History.css.ts";
 import * as css from "./Chat.css.ts";
@@ -1012,7 +1012,7 @@ const MessageRow = memo(function MessageRow({ message: m, enter, emitted, caught
     );
   }
   // What still.fail itself says (a limit hit, a failure): a notice across the chat, not someone's message.
-  if (m.system) return <SystemNotice vk={`m:${m.seq}`} text={m.text} profile={m.profile} install={m.install} report={m.reportable ? { thread: m.thread, seq: m.seq } : undefined} time={m.time?.createdAt} ts={m.ts} enter={enter} caught={caught} />;
+  if (m.system) return <SystemNotice vk={`m:${m.seq}`} notice={m.notice ?? { failed: false, words: m.text }} profile={m.profile} install={m.install} report={m.reportable ? { thread: m.thread, seq: m.seq } : undefined} time={m.time?.createdAt} ts={m.ts} enter={enter} caught={caught} />;
   const who = m.by.name;
   const agent = m.by.here ? m.by.agent : undefined;
   const ask = m.card?.vaultAsk;
@@ -1127,13 +1127,10 @@ export function PersonWords({ text }: { text: string }) {
  * One saying the station does not have the chat's runtime, with none of the viewer's messages waiting for it (those say
  * it under them: BlockedLine), ends in installing it.
  */
-function SystemNotice({ text, profile, install, report, time, ts, enter, caught, vk }: { text: string; profile: string | undefined; install: RuntimeInstall | undefined; /** A failure the viewer may report (core `reportable`): its entry. */ report?: { thread: number; seq: number } | undefined; time: Stamp | undefined; ts: string | undefined; enter: true | undefined; caught: true | undefined; /** Its item's key in a list (virtual/list.tsx). */ vk?: string }) {
+function SystemNotice({ notice, profile, install, report, time, ts, enter, caught, vk }: { notice: NoticeShown; profile: string | undefined; install: RuntimeInstall | undefined; /** A failure the viewer may report (core `reportable`): its entry. */ report?: { thread: number; seq: number } | undefined; time: Stamp | undefined; ts: string | undefined; enter: true | undefined; caught: true | undefined; /** Its item's key in a list (virtual/list.tsx). */ vk?: string }) {
   const station = useStation();
-  const failed = /^⚠️\s*/u.exec(text);
-  const words = failed ? text.slice(failed[0].length) : text;
-  // A notice is a line of the UI, not prose: no 。 at its end (stations before 2026-09-30 wrote them as sentences).
-  const said = words.replace(/。\s*$/u, "");
-  const colon = profile ? said.indexOf("：") : -1;
+  // As the core says it (notice.ts): a line of the UI, a failure's ⚠️ taken for its red, where a profile's link begins.
+  const { failed, words: said, linkAt } = notice;
   const [open, setOpen] = useState(false);
   const toggle = () => setOpen((o) => !o);
   return (
@@ -1144,8 +1141,8 @@ function SystemNotice({ text, profile, install, report, time, ts, enter, caught,
         onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); toggle(); } }}>
         <div className={css.msgSystemLine}>
           <div className={conversationCss.markdown}>
-            {profile && colon >= 0
-              ? <p>{said.slice(0, colon + 1)}<Link className={css.msgSystemLink} to={`${stationBase(station.address)}/settings/accounts/${encodeURIComponent(profile)}`}>{said.slice(colon + 1)}</Link></p>
+            {profile && linkAt !== undefined
+              ? <p>{said.slice(0, linkAt)}<Link className={css.msgSystemLink} to={`${stationBase(station.address)}/settings/accounts/${encodeURIComponent(profile)}`}>{said.slice(linkAt)}</Link></p>
               : install ? <p>{said}<InstallAction install={install} /></p> : <Prose>{said}</Prose>}
           </div>
           {report && <ReportAction thread={report.thread} seq={report.seq} />}
