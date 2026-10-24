@@ -171,11 +171,7 @@ case "${1:-build}" in
       for p in $APPDIR/Info.plist $EXT/Info.plist; do plutil -replace MBUIAppGroup -string group.$BID $p; done
     fi
     if [ $IOS_SDK = iphoneos ]; then
-      for p in $APPDIR/Info.plist ${EXT:+$EXT/Info.plist}; do
-        plutil -replace CFBundleSupportedPlatforms -json '["iPhoneOS"]' $p
-        plutil -replace DTPlatformName -string iphoneos $p
-        plutil -replace DTSDKName -string "iphoneos$(xcrun --sdk iphoneos --show-sdk-version)" $p
-      done
+      bash "$D/ios-metadata.sh" "$APPDIR/Info.plist" ${EXT:+"$EXT/Info.plist"}
     fi
     if type app_bundle >/dev/null 2>&1; then app_bundle || exit 1; fi
     # what the app carries signed first, then the app (ad hoc: the simulator asks no more; a device's: the packer's)
