@@ -138,44 +138,64 @@ pub fn model_triple(
           n => n
         }
       }
+      // (within the room it has, the most it can say: what matters least left out first, as the web's DROPS: who
+      // runs it by name, then who runs it, then the runtime, then how hard it thinks; the model never)
       c.text(name, style=words) |> ignore
       if !flag(v, "runtimeFixed") && items(vo, "runtimes").length() > 1 {
-        c.text("·", style=muted) |> ignore
-        c.text(@settings.runtime_label(runtime), style=words) |> ignore
+        c.box(style=triple_part, drop=triple_drop_runtime, fn() {
+          c.text("·", style=muted) |> ignore
+          c.text(@settings.runtime_label(runtime), style=words) |> ignore
+        })
+        |> ignore
       }
       let effort = text(value, "effort")
       if effort != "" || items(v, "efforts").length() > 0 {
-        c.text("·", style=muted) |> ignore
-        c.text(if effort == "" { @sf.t("web-main.model.defaultEffort") } else { effort_text(effort) }, style=words)
+        c.box(style=triple_part, drop=triple_drop_effort, fn() {
+          c.text("·", style=muted) |> ignore
+          c.text(if effort == "" { @sf.t("web-main.model.defaultEffort") } else { effort_text(effort) }, style=words)
+          |> ignore
+        })
         |> ignore
       }
       match text(v, "fastText") {
         "" => ()
-        f => {
-          c.text("·", style=muted) |> ignore
-          c.text(f, style=words) |> ignore
-        }
+        f =>
+          c.box(style=triple_part, drop=triple_drop_effort, fn() {
+            c.text("·", style=muted) |> ignore
+            c.text(f, style=words) |> ignore
+          })
+          |> ignore
       }
       if account is Some(Object(_)) {
-        c.text("·", style=muted) |> ignore
+        // (each of its pieces in the control's row: its name the first to go, then the rest of it)
         let profile = field(account, "profile")
-        if profile is Some(Object(_)) {
-          @sf.maker_mark(c, text(profile, "mark"), runtime, 14.0) |> ignore
-        }
+        c.box(style=triple_part, drop=triple_drop_account, fn() {
+          c.text("·", style=muted) |> ignore
+          if profile is Some(Object(_)) {
+            @sf.maker_mark(c, text(profile, "mark"), runtime, 14.0) |> ignore
+          }
+        })
+        |> ignore
         let level = text(account, "level")
-        c.text(
-          text(account, "text"),
-          style=if level == "amber" {
-            triple_amber
-          } else if level == "red" {
-            triple_red
-          } else {
-            words
-          },
-        )
+        c.box(drop=triple_drop_name, fn() {
+          c.text(
+            text(account, "text"),
+            style=if level == "amber" {
+              triple_amber
+            } else if level == "red" {
+              triple_red
+            } else {
+              words
+            },
+          )
+          |> ignore
+        })
         |> ignore
         if profile is Some(Object(_)) {
-          @settings.quota_chips(c, field(profile, "quota"), small=true)
+          c.box(style=triple_part, drop=triple_drop_account, fn() {
+            @settings.quota_chips(c, field(profile, "quota"), small=true)
+          })
+          |> ignore
         }
       }
     }
@@ -632,6 +652,25 @@ fn small_button(c : @ui.Ctx, key : String, words : String, primary : Bool, on : 
 ///|
 /// How wide a dialog that asks is (Dialog: 420).
 let confirm_w : Double = 420.0
+
+///|
+/// A part of the control's line after the model (triplePart): what it says and the dot before it, left out whole.
+// kept across runs: a value (no field of it changes)
+let triple_part : @ui.Style = @ui.css("row gap=S1_5 align=ACenter")
+
+///|
+/// The order the control's line leaves its parts out in, short of room (ModelTriple.tsx DROPS): who runs it by name
+/// (in its part), who runs it, the runtime, how hard it thinks and how fast.
+let triple_drop_name : Int = 1
+
+///|
+let triple_drop_account : Int = 2
+
+///|
+let triple_drop_runtime : Int = 3
+
+///|
+let triple_drop_effort : Int = 4
 
 ///|
 // kept across runs: a value (no field of it changes)

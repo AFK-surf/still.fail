@@ -235,6 +235,8 @@ fn frame_body(c : Ctx, w : Double, h : Double, scale : Double, t : Double) -> Do
       c.layout(c.layers[late].node, 0.0, 0.0, w, h) |> ignore
       late = late + 1
     }
+    // what rows left out where they had not the room, drawn nowhere (readback.mbt)
+    c.left_out_after_layout()
     // what covers an item, over it as laid out now (cover.mbt)
     c.covers_after_layout()
     // the corners said `Inner`, from where they lie in their parents as laid out, the covers moved (corners.mbt)

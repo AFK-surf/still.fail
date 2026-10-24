@@ -469,6 +469,7 @@ fn vault_item_page(c : @ui.Ctx, core : Core, here : Here, vault : String, item :
               if list_row(c, key=if station is Some(_) { "vault-use/" + i.to_string() } else { "" }, fn() {
                   c.box(w=Fill(1.0), fn() {
                     c.box(dir=Row, w=Fill(1.0), fn() {
+                      // (its chat's title cut short where the row is, what became of it kept)
                       c.text(
                         match opt_text(uv, "chatTitle") {
                           Some(x) => x
@@ -478,6 +479,7 @@ fn vault_item_page(c : @ui.Ctx, core : Core, here : Here, vault : String, item :
                         color=t.p.text,
                         wrap=false,
                         line=21.0,
+                        w=Cut,
                       )
                       |> ignore
                       if flag(uv, "denied") {

@@ -132,6 +132,12 @@ pub(all) struct Style {
   mut aspect : Double
   priv mut box_sizing : BoxSizing
   mut overflow : Overflow
+  // Not CSS's: what a row leaves out when it has not the room for all it holds at least (each item's width, else its
+  // min-width, with its margins). `drop` k > 0: the k-th to be left out (the last in the row first of the same k);
+  // -1: there only while something of its row is left out (its ⋯); 0: always there. `fits`: a row holding some of
+  // either. Left out, an item is laid out nowhere (Node::left_out).
+  mut drop : Int
+  mut fits : Bool
   // bumped by every change to what the box comes from (its lengths and box
   // sizing): a node's box stands while it is the same (Node's box_ver)
   priv mut ver : Int
@@ -203,6 +209,8 @@ pub fn Style::new() -> Style {
     aspect: 0.0,
     box_sizing: BorderBox,
     overflow: Visible,
+    drop: 0,
+    fits: false,
     ver: 0,
     basis_v: 0.0,
     basis_k: LEN_AUTO,
@@ -273,6 +281,8 @@ pub fn Style::reset(self : Style) -> Unit {
   self.aspect = 0.0
   self.box_sizing = BorderBox
   self.overflow = Visible
+  self.drop = 0
+  self.fits = false
   self.ver = self.ver + 1
   self.basis_v = 0.0
   self.basis_k = LEN_AUTO
@@ -945,7 +955,7 @@ pub(all) struct Node {
   mut top : Double
   mut width : Double
   mut height : Double
-  // which flex line it was placed on, for baselines
+  // which flex line it was placed on, for baselines; -1: left out of its row (Style's `drop`, Node::left_out)
   mut line : Int
   // (pre's compute, see below: here, and pre just before laid_gen, where
   // the C struct has room for them, so that a Node keeps within the
@@ -1024,6 +1034,12 @@ pub fn Node::new() -> Node {
     pre: no_pre,
     skip_gen: -1,
   }
+}
+
+///|
+/// Whether its row left it out as it was last laid out (Style's `drop`): laid out nowhere, of no size.
+pub fn Node::left_out(self : Node) -> Bool {
+  self.line < 0
 }
 
 ///|

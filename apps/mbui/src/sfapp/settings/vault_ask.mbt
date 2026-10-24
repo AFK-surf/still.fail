@@ -190,7 +190,8 @@ pub fn vault_actions(
       }
     })
   }
-  c.box(style=ask_foot, fn() {
+  // (on a second line what has not the room on the first)
+  c.box(style=ask_foot, flow=true, line_gap=ask_foot_lines, fn() {
     if save && !flag(view, "plain") && !flag(view, "setUp") {
       // kept only in a vault that is on here: the way to turn it on first
       if @sf.button(c, tr("android-settings.vault.turnOn"), key="vault/" + request + "/on", tone=Primary) {
@@ -262,6 +263,10 @@ let ask_note : @ui.TextStyle = @ui.text_style(size=Xs, leading=L4_75, color=Mute
 // kept across runs: a value (no field of it changes)
 let ask_foot : @ui.Style = @ui.css("row gap=S2_5 align=ACenter")
 
+
+///|
+/// Between the foot's lines, where its buttons go on to a second (8).
+let ask_foot_lines : Double = 8.0
 ///|
 /// How it ended: a dot and its words, 8 apart.
 // kept across runs: a value (no field of it changes)

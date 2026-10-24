@@ -297,7 +297,7 @@ fn node_shown(n : Node) -> FixedArray[Double] {
   let v = FixedArray::make(move_count + 2, 0.0)
   let size = fn(s : Size, at : Int, kind : Int) {
     match s {
-      Auto => v[kind] = 0.0
+      Auto | Cut => v[kind] = 0.0
       Px(p) => {
         v[at] = p
         v[kind] = 1.0

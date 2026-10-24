@@ -727,7 +727,7 @@ let chat_title_part : Double = 0.42
 ///|
 /// A page's title in its bar (sidebar.css.ts pageBar h1: 14 in 600, on 20).
 // kept across runs: a value (no field of it changes)
-let chat_title_words : @ui.TextStyle = @ui.text_style(size=Base, weight=Semibold, color=Fg, leading=L6, wrap=false)
+let chat_title_words : @ui.TextStyle = @ui.text_style(size=Base, weight=Semibold, color=Fg, leading=L6, wrap=false, w=Cut)
 
 ///|
 /// What is done in its bar, at its end, 2 apart (pageBarActions).

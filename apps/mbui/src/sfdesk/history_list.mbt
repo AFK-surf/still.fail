@@ -1189,15 +1189,15 @@ let h_one : @ui.Style = @ui.css("row w=Full min_h=S5 gap=S1_5 align=ACenter clip
 
 ///|
 // kept across runs: a value (no field of it changes)
-let h_one_words : @ui.TextStyle = @ui.text_style(size=Xs, leading=L5, color=Muted, wrap=false)
+let h_one_words : @ui.TextStyle = @ui.text_style(size=Xs, leading=L5, color=Muted, wrap=false, w=Cut)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let h_one_hot : @ui.TextStyle = @ui.text_style(size=Xs, leading=L5, color=Fg, wrap=false)
+let h_one_hot : @ui.TextStyle = @ui.text_style(size=Xs, leading=L5, color=Fg, wrap=false, w=Cut)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let h_one_red : @ui.TextStyle = @ui.text_style(size=Xs, leading=L5, color=Danger, wrap=false)
+let h_one_red : @ui.TextStyle = @ui.text_style(size=Xs, leading=L5, color=Danger, wrap=false, w=Cut)
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -1214,7 +1214,7 @@ let h_note_plain : @ui.TextStyle = @ui.text_style(size=Xs, color=Muted, w=Full)
 ///|
 /// What kind of words a one-line event's are (hTag): 5 in, round 4, on the neutral ground, 11.
 // kept across runs: a value (no field of it changes)
-let h_tag : @ui.Style = @ui.css("px=S1_25 radius=Base bg=Neutral")
+let h_tag : @ui.Style = @ui.css("row px=S1_25 radius=Base bg=Neutral")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -1258,11 +1258,11 @@ let h_group_head : @ui.Style = @ui.css("row w=Full px=S1_5 gap=S2 align=ACenter 
 
 ///|
 // kept across runs: a value (no field of it changes)
-let h_group_words : @ui.TextStyle = @ui.text_style(size=Xs, leading=L5, color=Muted, wrap=false)
+let h_group_words : @ui.TextStyle = @ui.text_style(size=Xs, leading=L5, color=Muted, wrap=false, w=Cut)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let h_group_hot : @ui.TextStyle = @ui.text_style(size=Xs, leading=L5, color=Fg, wrap=false)
+let h_group_hot : @ui.TextStyle = @ui.text_style(size=Xs, leading=L5, color=Fg, wrap=false, w=Cut)
 
 ///|
 /// Its calls, opened (hSteps): in its words' column (past the 20 gutter and 8), 2 apart, 2 under its line.
@@ -1288,11 +1288,11 @@ let h_step_name_red : @ui.TextStyle = @ui.text_style(size=Xs, weight=Semibold, c
 
 ///|
 // kept across runs: a value (no field of it changes)
-let h_step_hint : @ui.TextStyle = @ui.text_style(size=Xs, color=Muted, wrap=false)
+let h_step_hint : @ui.TextStyle = @ui.text_style(size=Xs, color=Muted, max_lines=1, w=Full)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let h_step_said : @ui.TextStyle = @ui.text_style(size=Xs, color=Fg, wrap=false)
+let h_step_said : @ui.TextStyle = @ui.text_style(size=Xs, color=Fg, wrap=false, w=Cut)
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -1319,7 +1319,7 @@ let h_thinking_muted : @ui.TextStyle = @ui.text_style(size=Xs, color=Muted, w=Fu
 ///|
 /// The thinking streaming in (hLiveThinking): 12 on 20, muted, a line.
 // kept across runs: a value (no field of it changes)
-let live_words : @ui.TextStyle = @ui.text_style(size=Xs, leading=L5, color=Muted, wrap=false)
+let live_words : @ui.TextStyle = @ui.text_style(size=Xs, leading=L5, color=Muted, wrap=false, w=Cut)
 
 ///|
 /// Where the turn stands (hPhase: 12, muted; responding in the ink), its clock subtle.

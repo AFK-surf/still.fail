@@ -45,6 +45,51 @@ pub fn Ctx::laid_size(self : Ctx, id : Int, loc~ : SourceLoc) -> (Double, Double
 }
 
 ///|
+/// Whether box `id` was left out of its row as this frame lays it out (Ctx::box `drop`: the row had not the room for
+/// it), for the row's ⋯ to offer what it left out: read back, laid out otherwise this frame, the frame is built again.
+/// False before it is first laid out, and for one no row may leave out.
+#callsite(autofill(loc))
+pub fn Ctx::left_out(self : Ctx, id : Int, loc~ : SourceLoc) -> Bool {
+  let v = self.left_ids.contains(id)
+  if building.val && !self.left_reads.contains(id) {
+    self.left_reads[id] = (v, loc)
+  }
+  v
+}
+
+///|
+/// Once laid out: what rows left out (Style's `drop`: Node::left_out, where its parent leaves things out) drawn
+/// nowhere, and pressed nowhere (no opacity: what it holds with it), kept by id for Ctx::left_out; what the view read
+/// of it looked at again.
+fn Ctx::left_out_after_layout(self : Ctx) -> Unit {
+  if self.fit_rows > 0 || !self.left_ids.is_empty() {
+    self.left_ids.clear()
+    if self.fit_rows > 0 {
+      for i in 0..<self.count {
+        let n = self.nodes[i]
+        if n.parent >= 0 && n.fl.left_out() && self.nodes[n.parent].fl.style.fits {
+          n.opacity = 0.0
+          if n.id != 0 {
+            self.left_ids[n.id] = true
+          }
+        }
+      }
+    }
+  }
+  self.fit_rows = 0
+  let moved : Array[String] = []
+  self.left_reads.each(fn(id, r) {
+    if self.left_ids.contains(id) != r.0 {
+      moved.push("left_out of box \{id}, read at \{r.1}")
+    }
+  })
+  self.left_reads.clear()
+  for m in moved {
+    self.read_changed(m)
+  }
+}
+
+///|
 /// What box `id` shows across, as the last frame laid it out (x of the left of what is leftmost, of the right of what
 /// is rightmost): its innermost parts that show something (words, a field, a picture, a drawing; not an empty box,
 /// whose ground may reach past what is drawn), those of them inside the box, none in a box moved by the name `but`

@@ -312,6 +312,11 @@ pub struct Ctx {
   info_reads : Array[(String, () -> Bool)]
   row_reads : Map[(Int, Int), (String, Double?)]
   words_reads : Map[String, Bool]
+  /// the boxes whose rows left them out as last laid out (Ctx::box `drop`), by id, and those the view asked about as
+  /// it built (Ctx::left_out: what it was told); how many rows laid out this pass may leave something out
+  left_ids : Map[Int, Bool]
+  left_reads : Map[Int, (Bool, SourceLoc)]
+  mut fit_rows : Int
   laid_watch : Map[Int, Int]
   laid_rects : Map[Int, (Double, Double, Double, Double)]
   /// the boxes whose parts shown across are asked (Ctx::shown_across): when last, and the name of the boxes whose parts
@@ -515,6 +520,9 @@ fn Ctx::new() -> Ctx {
     info_reads: [],
     row_reads: Map::new(),
     words_reads: Map::new(),
+    left_ids: Map::new(),
+    left_reads: Map::new(),
+    fit_rows: 0,
     laid_watch: Map::new(),
     laid_rects: Map::new(),
     shown_watch: Map::new(),
@@ -674,7 +682,11 @@ fn Ctx::with_parent(self : Ctx, i : Int, body : () -> Unit) -> Unit {
 /// width over its height, the side not said following the other (CSS's aspect-ratio). Built where the direction is
 /// right to left (Ctx::rtl), a row runs from the right and its left and right padding swap. `keep`: in a row, as wide
 /// as its content even where the row is short of room, its siblings squeezed instead (as Compose's Row measures what
-/// has no weight whole, a weight(1f, fill = false) sibling given the rest: a bar's title cut short, not its buttons).
+/// has no weight whole, a weight(1f, fill = false) sibling given the rest: a bar's title cut short, not its buttons);
+/// one that takes what its row leaves (`Fill`), never less than what it holds needs (CSS's flex: 1).
+/// `drop` k > 0: there whole (as wide as what it holds) or left out of its row when the row has not the room, the
+/// lowest k first (of the same k the last in the row first), laid out nowhere and not drawn (Ctx::left_out says so, for
+/// a ⋯ that offers it instead); `more`: the row's ⋯, there only while something of it is left out.
 /// `flow`: a row that goes on in lines when what it holds does not fit, each thing in it as wide as it is, `gap` apart
 /// along the line and between the lines, or `line_gap` between the lines (Compose's FlowRow and its two spacedBy).
 /// `label`: what it is called where it shows no words (an icon's button, as Compose's contentDescription), found by
@@ -746,6 +758,8 @@ pub fn Ctx::box(
   notch_fillet? : Double = 0.0,
   aspect? : Double = 0.0,
   keep? : Bool = false,
+  drop? : Int = 0,
+  more? : Bool = false,
   shadow_out? : Bool = false,
   flow? : Bool = false,
   line_gap? : Double = -1.0,
@@ -783,6 +797,7 @@ pub fn Ctx::box(
   n.rtl = self.direction == Rtl
   n.aspect = aspect
   n.keep = keep
+  n.drop = if more { -1 } else { drop }
   n.shadow_out = shadow_out
   n.flow = flow
   n.line_gap = line_gap

@@ -6,7 +6,8 @@
 /// A machine's CPU, memory and disk (MeterDials): each what is left large over its cells, filled as far as is used,
 /// its name and its total under them.
 fn meter_dials(c : @ui.Ctx, meters : Array[Json]) -> Unit {
-  c.box(style=dl_row, fn() {
+  // (on as many lines as they take: quotaDials' flex-wrap)
+  c.box(style=dl_row, flow=true, line_gap=dl_lines, fn() {
     for m in meters {
       let mv = Some(m)
       dial(c, text(mv, "big"), text(mv, "unit"), 100 - dial_part(count(mv, "left")), text(mv, "level"), text(mv, "title"), text(mv, "total"))
@@ -19,7 +20,7 @@ fn meter_dials(c : @ui.Ctx, meters : Array[Json]) -> Unit {
 /// An allowance's windows on its profile's page (QuotaBars, not compact): each what is left large over its cells, as
 /// far as is left, its name and when it refills.
 fn quota_dials(c : @ui.Ctx, windows : Array[Json]) -> Unit {
-  c.box(style=dl_row, fn() {
+  c.box(style=dl_row, flow=true, line_gap=dl_lines, fn() {
     for w in windows {
       let wv = Some(w)
       let left = count(wv, "left")
@@ -72,7 +73,7 @@ fn station_net(c : @ui.Ctx, net : Json?) -> Unit {
   c.box(style=nt_row, fn() {
     c.box(style=nt_part, fn() {
       c.box(style=nt_line, fn() {
-        c.text(text(net, "path"), style=nt_words) |> ignore
+        c.text(text(net, "path"), style=nt_words_cut) |> ignore
         match field(net, "loss") {
           Some(Object(_)) as f => figure(c, f)
           _ => ()
@@ -86,7 +87,7 @@ fn station_net(c : @ui.Ctx, net : Json?) -> Unit {
             let parts = words.split("\u{0}").map(fn(p) { p.to_string() }).collect()
             c.text(parts.get(0).unwrap_or(""), style=nt_words) |> ignore
             figure(c, f)
-            c.text(parts.get(1).unwrap_or(""), style=nt_words) |> ignore
+            c.text(parts.get(1).unwrap_or(""), style=nt_words_cut) |> ignore
           })
           |> ignore
         _ => ()
@@ -396,6 +397,10 @@ fn station_logins(c : @ui.Ctx, core : Core, station : String) -> Unit {
 let dl_row : @ui.Style = @ui.css("row gap=S9 align=AStart")
 
 ///|
+/// Between the dials' lines (quotaDials: 12).
+let dl_lines : Double = 12.0
+
+///|
 /// A dial (quotaDial: 96 wide at least, 2 apart).
 // kept across runs: a value (no field of it changes)
 let dl_dial : @ui.Style = @ui.css("min_w=S24 gap=S0_5 align=AStart")
@@ -437,10 +442,7 @@ let nt_row : @ui.Style = @ui.css("row gap=S3_5 align=ACenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let nt_part : @ui.Style = @ui.style(gap=S0_5, min_w=Fixed(nt_part_w))
-
-///|
-let nt_part_w : Double = 182.0
+let nt_part : @ui.Style = @ui.css("w=Cut gap=S0_5")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -449,6 +451,11 @@ let nt_line : @ui.Style = @ui.css("row gap=S2 align=ACenter")
 ///|
 // kept across runs: a value (no field of it changes)
 let nt_words : @ui.TextStyle = @ui.text_style(size=Sm, leading=L6, color=Muted, wrap=false)
+
+///|
+/// The last of a line's words, cut short where the line is (netLine's last child).
+// kept across runs: a value (no field of it changes)
+let nt_words_cut : @ui.TextStyle = @ui.text_style(size=Sm, leading=L6, color=Muted, wrap=false, w=Cut)
 
 ///|
 // kept across runs: a value (no field of it changes)

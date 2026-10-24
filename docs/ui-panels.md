@@ -36,6 +36,19 @@
 - 卡片标题前不放圆点：状态由标题的文字说（圆点放在线内会把标题往右推，挂到线外又贴着卡片边，都不对）。
 - 安卓同一套（`ui/Parts.kt` 的 `Card` / `ListCard` / `RowsCard`，`ui/Controls.kt` 的 `PickRow`、`Button`）：`Card(foot = true)` 是角上有实心按钮的内容卡，`RowsCard` 是放在 sheet 或表单里的列表卡，行（`ListRow` / `PickRow`）在卡上时自己知道（`LocalOnCard`），按下的底色是圆角的、离卡边 8。`Smooth` 会把圆角画大 1.25 倍：方块套方块用 `concentric(外, 距离)` / `concentricOut(内, 距离)`；胶囊或圆放在角里，外圆角 = 距离 + 半高，不再除 1.25（除了会在胶囊旁边空出月牙）。sheet 角上的按钮用 `SheetHead(action = …)`，32 高，放在离顶和侧边都是 10 的地方，和 sheet 的 26 圆角同心。不在滚动区里的角上按钮用 `Modifier.sheetCorner`（滚动区会把移上去的部分裁掉）。文字按钮（链接、全选、删除）用 `Modifier.pressText`：按下的底色是圆角的、比字多出 6，字的位置不动；不直接 `clickable`（方的涟漪在卡片角上会把角压方）。行在已经有左右内边距的 sheet 里时用 `Modifier.bleed` 伸出去，字和输入框对齐。
 
+## 放不下的时候
+
+一行东西比给它的地方宽时，只有三种让法，按页面说好的顺序让：
+
+- 字截断加省略号（名字、标题、路径、说明），并说好最少留多宽，不截到一个字都不剩；
+- 次要的部分按顺序收起：模型栏先收账号名，再收账号，再收运行方式，最后收思考强度，模型名永远在（`ModelTriple.tsx` 的 `DROPS`）；
+- 工具栏里放不下的按钮收进行末的「⋯」，用得最少的先进去（文件页：重新读取、Pin、收藏、预览、新建文件夹、上传，显示方式最后）。
+
+除此之外什么都不让：按钮、图标、胶囊、分段选择、徽标、数字不压扁、不截断，也不叠到旁边的东西上。
+
+- mbui：按内容定宽的一块永远不比内容窄（`docs/style.md` 的 Short of room）；谁先收用 `Ctx::box` 的 `drop`，放收起来的东西的「⋯」用 `more`，工具栏用 `@sf.tools_row`。
+- 检查：`Tester::squeeze_faults` 找出叠在一起的、被裁掉一截的、截得一个字不剩的；`apps/mbui/src/sfapp/squeeze_wbtest.mbt` 在电脑最窄的窗口（页面 405 宽）、平板和折叠屏展开（696，手指）、360 的手机上，中英文各量一遍每个页面，只许变少（`squeeze_known_wbtest.mbt`）；`apps/mbui/scripts/squeeze.sh` 用 Mac 的字给这些页面各出一张图。
+
 ## 等待
 
 只有三种等待，各一个组件，PC web、手机 web、安卓画法一样（`web/ui/src/waiting.tsx`，安卓 `ui/Waiting.kt`）：

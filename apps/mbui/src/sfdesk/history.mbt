@@ -182,7 +182,7 @@ fn wh_details(c : @ui.Ctx, src : Source, station : String, key : String, a : Jso
       fn() {
         c.text(text(s, "runtimeText") + " · " + text(s, "processText"), style=wh_words) |> ignore
         if text(s, "process") == "warm" {
-          c.text(" · ", style=wh_words) |> ignore
+          c.text(" · ", style=wh_dot) |> ignore
           wh_evict(c, src, station, key)
         }
       },
@@ -398,7 +398,7 @@ fn wh_link(c : @ui.Ctx, key : String, words : String) -> Bool {
   let id = c.id(key)
   c.cursor(id, Hand)
   let b = c.box(id~, style=wh_link_box, fn() {
-    c.text(words, style=if c.lit(id) { wh_link_hot } else { wh_words }) |> ignore
+    c.text(words, style=if c.lit(id) { wh_link_hot } else { wh_dot }) |> ignore
   })
   c.semantics(b, Button, id~, label=words)
   c.clicked(id)
@@ -491,7 +491,12 @@ let wh_line_words : @ui.Style = @ui.style(row=true, w=@sf.grow, align=ACenter, c
 
 ///|
 // kept across runs: a value (no field of it changes)
-let wh_words : @ui.TextStyle = @ui.text_style(size=Xs, color=Muted, wrap=false)
+let wh_words : @ui.TextStyle = @ui.text_style(size=Xs, color=Muted, wrap=false, w=Cut)
+
+///|
+/// The dot between a line's words and what is done at it, and a link at its end: kept whole.
+// kept across runs: a value (no field of it changes)
+let wh_dot : @ui.TextStyle = @ui.text_style(size=Xs, color=Muted, wrap=false)
 
 ///|
 // kept across runs: a value (no field of it changes)

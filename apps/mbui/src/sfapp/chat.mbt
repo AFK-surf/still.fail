@@ -664,6 +664,17 @@ fn jump_to_ask(
 }
 
 ///|
+/// The least of a chat's title its bar keeps (64), and the order what follows it leaves the bar in short of room: its
+/// people, then its station's update.
+let bar_title_least : Double = 64.0
+
+///|
+let bar_drop_people : Int = 1
+
+///|
+let bar_drop_update : Int = 2
+
+///|
 /// The bar's frame (Chat.kt BarFrame), the same while the chat is read and once it is: back, the title, what follows
 /// it, what is at its end, and "…".
 fn bar_frame(
@@ -697,13 +708,15 @@ fn bar_frame(
     |> ignore
     c.box(dir=Row, w=Fill(1.0), pr=8.0, gap=8.0, align=ACenter, fn() {
       // the title as long as there is room for it beside what follows it (weight(1f, fill = false): what follows is
-      // measured first, as wide as it is, and the title has what is left)
-      c.box(fn() {
+      // measured first, as wide as it is, and the title has what is left), a few words of it at least: short of
+      // that, what follows leaves the row as it says (chat_bar: its people, then its station's update)
+      let least = dmin(@ui.text_advance(title, size=16.0, weight=600), bar_title_least)
+      c.box(style=@ui.style(min_w=Fixed(least)), fn() {
         c.text(title, size=16.0, weight=600, color=t.p.text, wrap=false, line=chat_title_line)
         |> ignore
       })
       |> ignore
-      c.box(dir=Row, gap=8.0, align=ACenter, keep=true, fn() { after() }) |> ignore
+      after()
     })
     |> ignore
     trailing()
@@ -750,9 +763,9 @@ fn chat_bar(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef, v : ChatView)
           }
         }
         // its station's update (station_update.mbt)
-        station_update_control(c, src, r.station, v.station_update)
+        c.box(drop=bar_drop_update, fn() { station_update_control(c, src, r.station, v.station_update) }) |> ignore
         if people.length() > 0 {
-          people_stack(c, src, people, 16.0)
+          c.box(drop=bar_drop_people, fn() { people_stack(c, src, people, 16.0) }) |> ignore
         }
         for i, a in v.agents {
           // each opens its card (AgentSheet.kt)

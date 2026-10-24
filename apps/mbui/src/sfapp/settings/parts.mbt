@@ -98,7 +98,8 @@ pub fn wide_head(
     }
     c.box(style=title_line, fn() {
       c.box(style=if about == "" { title_words } else { title_about }, fn() {
-        c.text(title, size=22.0, weight=600, color=t.p.text, wrap=false, line=34.0) |> ignore
+        // (short of room, cut short before what is at its end: never under a few words, title_words)
+        c.text(title, size=22.0, weight=600, color=t.p.text, wrap=false, line=34.0, w=Cut) |> ignore
         if about != "" {
           @sf.about(c, "settings-about", about, label=tr("web-main.about"))
         }
@@ -164,7 +165,7 @@ let title_about : @ui.Style = title_words.then(@ui.css("row gap=S1_5 align=ACent
 /// The title's words, the room its line has left beside what follows them (pageHead: the title grows, its actions at
 /// its end).
 // kept across runs: a value (no field of it changes)
-let title_words : @ui.Style = @ui.style(w=@sf.grow)
+let title_words : @ui.Style = @ui.style(w=@sf.grow, min_w=S20)
 
 ///|
 /// A gap of `h` (Spacer).
