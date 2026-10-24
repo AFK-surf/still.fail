@@ -112,16 +112,17 @@ there), old and new side by side:
 From the inventory of 2026-10-25: about 300 motions, most set off rightly (the presenters, the sidebar's moves, the
 list's turns, words flying, everything in the hand). Each step below is a PR; a visible change shows before and after.
 
-1. This document.
-2. **The library.** `@motion.layout` moves only for its cause: given the state it moves for, it moves in the frame
-   that state changes; given none, a node is placed at once (no "any difference moves it"). A list's rows move for
-   the list's change in that frame, not for 150 ms after (motion/layer.mbt:938). A box reshaped draws its ground from
-   the shape it had to the new one, what it holds carried from where it showed (morph.ts `grow`). detlint: no measured
-   size as a follow's target, no `moving()` deciding anything.
-3. **The composer** (sfpages/composer.mbt, once the phone's chat is on it): reshaped for its words, files, quotes and
-   focus; moved for its page; held for words sent; nothing for the window, the sidebar, a keyboard or the tier. Its
-   page's foot and the ↓ button follow the same shape, not its final size. Each composer its own key. The scopes
-   taken to dodge (sfdesk/frame.mbt:655, 686; sfapp/composer.mbt:1611) go.
+1. This document (#1626). Done.
+2. **The library.** Done: `@motion.layout` moves only for its cause (`by`), a node moved by nothing it names placed at
+   once (#1634); a list's rows move for the list's change in that frame, not for 150 ms after (#1637); a box reshaped
+   draws its ground from the shape it had to the new one (`@motion.reshape`, morph.ts `grow`: #1640); detlint's
+   `follow-layout` and `motion-read` only let what is left fall (#1639).
+3. **The composer** (sfpages/composer.mbt, every tier's since #1646). Done: reshaped for what it holds (its words,
+   files, quotes, its being opened, its error) and for its page, its ＋, words, send and choices carried from where
+   they showed by the same cause; held for words sent; nothing for the window, the sidebar, a keyboard or the tier.
+   Laid out as it ends at once, its page's foot and the ↓ button follow what it is laid out as. The page's foot stays
+   what its parts take their places from (`@motion.scope`): the page moving, with the composer in it, moves none of
+   them.
 4. **Sheets.** A sheet's height from the content as this frame lays it out, placed, not chased; one sheet host
    (the presenters) for the chat's, the settings', the drive's and the link menu.
 5. **The chat's list.** The agent's line and words not yet in the chat making way for the rows' change

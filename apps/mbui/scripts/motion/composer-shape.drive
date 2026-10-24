@@ -1,0 +1,22 @@
+# A chat on a computer: words in its composer, a line and another started and one taken back: the box's ground goes
+# from the shape it had to the new one, its ＋, words and send from where they showed (docs/motion.md: moved or
+# reshaped, for its cause).
+# MBUI_FIXTURE=webdemo MBUI_WIN=1280x800.
+timeout 20000
+until 新建对话
+wait 600
+tap 把那个弄一下
+wait 900
+tap 发消息
+wait 700
+type 帮我看一下登录按钮
+wait 300
+key shift+enter
+wait 600
+type 还有注册页
+wait 300
+key shift+enter
+wait 600
+key backspace
+wait 700
+exit
