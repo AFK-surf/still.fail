@@ -84,8 +84,10 @@ fn top_bar(
         app.nav.push(Settings)
       }
       let wid = c.id("home-workspace")
-      if c.clicked(wid) {
-        raise_sheet(Workspaces, from=Of(wid))
+      // (the fixture's home-sheet: opened by it, as the app starts)
+      if c.clicked(wid) || home_sheet_at_start.val {
+        home_sheet_at_start.val = false
+        @sfpages.open_workspaces(src, Of(wid))
       }
       c.box(dir=Row, w=Fill(1.0), h=Px(34.0), gap=6.0, align=ACenter, id=wid, fn() {
         // the name as long as there is room for it
@@ -302,3 +304,8 @@ fn waiting(c : @ui.Ctx, n : Int, note : ListNote?, error : String?) -> Unit {
     },
   )
 }
+
+///|
+/// The workspaces opened from Home's top as it first draws (the fixture's home-sheet: newchat_fixture.mbt open_mode).
+// kept across runs: put back by reset, let go as Home reads it
+let home_sheet_at_start : Ref[Bool] = Ref(false)

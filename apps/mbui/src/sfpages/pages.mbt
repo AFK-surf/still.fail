@@ -22,4 +22,5 @@ pub fn reset() -> Unit {
   marks_reset()
   news_reset()
   landing_reset()
+  workspace_reset()
 }

@@ -65,8 +65,8 @@ fn reset() -> Unit {
   bar_timing.val = None
   bar_timed.val = None
   login_cards_reset()
+  home_sheet_at_start.val = false
   update_anchor_reset()
-  new_ws_reset()
   screens_open.clear()
   screens_made.val = 0
   screen_uis.clear()
@@ -448,14 +448,12 @@ fn signed_in(c : @ui.Ctx, src : Source) -> Unit {
       }
       sheet_contents(fn(kind) {
         match kind {
-          Workspaces => workspaces_sheet(c, src, w, all)
           PickStation(scope) => pick_station_sheet(c, src, scope)
           RunPicker(station) => run_picker_sheet(c, src, station)
           LoadOf(station, port) => load_sheet(c, src, station, port)
           PageSizes(key) => page_sizes_sheet(c, key)
           ShareSheet => share_in_sheet(c, src, w)
           InviteLink => invite_sheet(c, src)
-          NewWorkspace => new_workspace_sheet(c, src)
           NoSheet => ()
         }
       })

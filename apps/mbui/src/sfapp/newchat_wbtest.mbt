@@ -86,7 +86,7 @@ test "a sheet takes the drags on it: the list under it does not scroll" {
   sheet_rested(t, "sf-present")
   t.drag(195.0, 700.0, 195.0, 400.0)
   assert_eq(t.list_offset(), before)
-  assert_true(sheet_open())
+  assert_true(@sf.presenting())
 }
 
 ///|

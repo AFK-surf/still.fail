@@ -120,7 +120,7 @@
       "src/sfapp/home.mbt": 43,
       "src/sfapp/messages.mbt": 96,
       "src/sfapp/newchat.mbt": 178,
-      "src/sfapp/pages.mbt": 47,
+      "src/sfapp/pages.mbt": 36,
       "src/sfapp/service.mbt": 105,
       "src/sfapp/settings/archive.mbt": 47,
       "src/sfapp/settings/connect_more.mbt": 274,
@@ -177,7 +177,7 @@
       "src/sfapp/home.mbt": 15,
       "src/sfapp/messages.mbt": 52,
       "src/sfapp/newchat.mbt": 63,
-      "src/sfapp/pages.mbt": 20,
+      "src/sfapp/pages.mbt": 16,
       "src/sfapp/service.mbt": 41,
       "src/sfapp/service_marks.mbt": 1,
       "src/sfapp/settings/archive.mbt": 16,
@@ -213,7 +213,7 @@
       "src/videos/view.mbt": 48
     },
     "style-exact": {
-      "src/sf/tokens.mbt": 28
+      "src/sf/tokens.mbt": 29
     },
     "style-text": {},
     "build-effect": {},

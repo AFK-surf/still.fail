@@ -431,7 +431,7 @@ pub fn open_mode(mode : String) -> Unit {
     // ⌘K in the wide frame (sfdesk/switcher.mbt): with nothing typed, and with 签名 typed (what the search finds)
     @sfdesk.switcher_open_with(if mode == "switcher-found" { "签名" } else { "" })
   } else if mode == "home-sheet" {
-    raise_sheet(Workspaces)
+    home_sheet_at_start.val = true
   }
 }
 

@@ -346,10 +346,10 @@ test "the chat's sheet going down: its own rows take no tap, the scrim none" {
 test "the workspaces' sheet sinking takes no tap: the bar's 文件 tapped under it opens its page" {
   let t = tester("home")
   t.tap_text("星火工作室")
-  assert_true(sheet_open())
+  assert_true(@sf.presenting())
   t.tap_once(195.0, 60.0)
   t.frame()
-  assert_true(!sheet_open())
+  assert_true(!@sf.presenting())
   // sinking, drawn over the bar
   assert_true(@sf.presented_drawn())
   let (xs, y) = bar_places_at()

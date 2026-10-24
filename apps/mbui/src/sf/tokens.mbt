@@ -712,6 +712,10 @@ pub let sign_in_title_size : @ui.TextSize = Exact(28.0, 39.2)
 pub let sign_in_side : @ui.Space = Exact(30.0)
 
 ///|
+/// A picking row's line under its words (Controls.kt PickRow: 12.sp on 17.sp), between L4's 16 and L5's 18.
+pub let pick_sub_line : @ui.Leading = Exact(17.0)
+
+///|
 /// The search (Search.kt): its field 38 high (FIELD) on the ink at 6%; a row found 66 high (HitRow, ItemRow; 50 an item
 /// with no line of words), its first line 22; what a row found says starts 22 in.
 pub let search_field_h : @ui.Len = Fixed(38.0)

@@ -18,7 +18,6 @@ pub fn reset() -> Unit {
   @sfpages.reset()
   wide_reset()
   publish_reset()
-  new_ws_reset()
   share_dialog_reset()
   relay_focus.val = ""
   context_reset()
