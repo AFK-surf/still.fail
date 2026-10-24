@@ -10,15 +10,16 @@
 //   workspace's, the workspace switched to and the chat over its Home.
 // - `history` (`?history=<key>`, maybe with `entry`): that agent's execution history over the chat it is in, at the
 //   entry; alone, over the chat the link is in.
-// - `invite` (/invite#<token>): what the invitation leads to, in a sheet, before it is accepted (links_sheet.mbt).
+// - `invite` (/invite#<token>): what the invitation leads to, before it is accepted, as the frame shows it.
 // - `screen` (/w/…/s/…/screen/<id>): the station's screen in the viewer (open_screen).
 //
 // A link the system opened the app with (@hostapi.system_channel `link`: one of the app's links tapped in another app,
-// the manifest's App Links) opens as from outside, once signed in and the workspaces known.
+// the manifest's App Links) opens as from outside, once signed in and the workspaces known. What is over the pages,
+// the way home and how an invitation shows are the frame's (shell.mbt).
 
 ///|
 /// What a link opens, as the core's `link.parse` says (LinkTarget).
-priv struct LinkTarget {
+pub(all) struct LinkTarget {
   opens : String
   token : String
   workspace : String
@@ -33,7 +34,7 @@ priv struct LinkTarget {
 }
 
 ///|
-fn link_target(v : Json) -> LinkTarget {
+pub fn link_target(v : Json) -> LinkTarget {
   let j = Some(v)
   {
     opens: text(j, "opens"),
@@ -59,16 +60,16 @@ let link_workspace : Ref[String] = Ref("")
 
 ///|
 /// The core as last drawn, for a link tapped in a message (messages.mbt open_link).
-let link_src : Ref[Source?] = Ref(None)
+pub let link_src : Ref[Source?] = Ref(None)
 
 ///|
 /// The links the system opened the app with (@hostapi.system_channel `link`), oldest first, not opened yet: opened once
 /// signed in and the workspaces known (an invitation's shows its sheet signed out too).
-let link_later : Array[String] = []
+pub let link_later : Array[String] = []
 
 ///|
 /// Each frame signed in, the workspace `w` in view: the core and the workspace a link is opened against.
-fn links_frame(src : Source, w : Workspace) -> Unit {
+pub fn links_frame(src : Source, w : Workspace) -> Unit {
   link_workspace.val = w.id
   link_src.val = Some(src)
 }
@@ -76,7 +77,7 @@ fn links_frame(src : Source, w : Workspace) -> Unit {
 ///|
 /// The links the system opened the app with, opened as from outside (signed in: told once the frame that took them
 /// has been built, links_frame's workspace in view).
-fn links_given(src : Source) -> Unit {
+pub fn links_given(src : Source) -> Unit {
   let given = link_later.copy()
   link_later.clear()
   for url in given {
@@ -88,7 +89,7 @@ fn links_given(src : Source) -> Unit {
 ///|
 /// Each frame signed out: the links the system opened the app with; an invitation's shows its sheet (to sign in first,
 /// as InviteLinkSheet does), any other waits until signed in.
-fn signed_out_links(src : Source) -> Unit {
+pub fn signed_out_links(src : Source) -> Unit {
   let given = link_later.copy()
   link_later.clear()
   for url in given {
@@ -96,7 +97,7 @@ fn signed_out_links(src : Source) -> Unit {
     (src.call)("link.parse", { "url": Json::string(url) }, fn(r) {
       match r {
         Ok(Object(_) as t) if text(Some(t), "opens") == "invite" && text(Some(t), "token") != "" =>
-          open_invite(text(Some(t), "token"))
+          (shell.val.open_invite)(text(Some(t), "token"))
         Ok(Object(_)) => link_later.push(url)
         _ => ()
       }
@@ -108,7 +109,7 @@ fn signed_out_links(src : Source) -> Unit {
 /// Opens one of still.fail's links (AppState.openLink): what the core says it opens (`link.parse`), else `or_else`.
 /// `outside`: a link from outside the app (a notification, another app), whose item opens over the list; `at`: the
 /// message a notification is about, its chat opened there.
-fn open_link_in(
+pub fn open_link_in(
   src : Source,
   url : String,
   outside? : Bool = false,
@@ -129,7 +130,7 @@ fn open_link_in(
 
 ///|
 /// What a link opens, opened (AppState.open): false when it opens nothing here.
-fn open_target(src : Source, t : LinkTarget, outside : Bool, at : Double?) -> Bool {
+pub fn open_target(src : Source, t : LinkTarget, outside : Bool, at : Double?) -> Bool {
   let ws = t.workspace
   let address = ws + "/" + t.station
   let current = link_workspace.val
@@ -145,7 +146,7 @@ fn open_target(src : Source, t : LinkTarget, outside : Bool, at : Double?) -> Bo
       if t.token == "" {
         return false
       }
-      open_invite(t.token)
+      (shell.val.open_invite)(t.token)
     }
     // a reference to another chat (web/src/chatRefs.ts), opened over this one
     "chat" => {
@@ -159,7 +160,7 @@ fn open_target(src : Source, t : LinkTarget, outside : Bool, at : Double?) -> Bo
           if ws != current {
             open_item(src, ws, address, t.chat, None, None)
           } else {
-            close_overlays()
+            (shell.val.close_overlays)()
             app.nav.push(Chat(r))
           }
       }
@@ -187,7 +188,7 @@ fn open_target(src : Source, t : LinkTarget, outside : Bool, at : Double?) -> Bo
       } else if ws != current {
         open_item(src, ws, address, t.session, service, None)
       } else {
-        close_overlays()
+        (shell.val.close_overlays)()
         app.nav.push(Chat(chat_ref(address, t.session)))
         match service {
           Some(job) => app.nav.push(Service(address, job))
@@ -216,9 +217,9 @@ fn open_target(src : Source, t : LinkTarget, outside : Bool, at : Double?) -> Bo
       if away {
         pick_workspace(src, ws)
       }
-      close_overlays()
+      (shell.val.close_overlays)()
       if outside || away {
-        home()
+        (shell.val.home)()
         if app.nav.top() != Home {
           app.nav.replace(Home)
         }
@@ -243,7 +244,7 @@ fn open_target(src : Source, t : LinkTarget, outside : Bool, at : Double?) -> Bo
 
 ///|
 /// A chat by its station's address and session, its title and station's name the chat's own once it shows.
-fn chat_ref(station : String, session : String) -> ChatRef {
+pub fn chat_ref(station : String, session : String) -> ChatRef {
   { station, session, title: "", station_name: "" }
 }
 
@@ -264,20 +265,8 @@ fn push_history(r : ChatRef, key : String, entry : Int?) -> Unit {
 }
 
 ///|
-/// The sheets and the menus over the pages closed, as a page opens from a link (AppState: sheet, menu null).
-fn close_overlays() -> Unit {
-  lower_sheet()
-  app.menu = false
-  match dui.sheet {
-    Some(s) => dui.leaving = Some(s)
-    None => ()
-  }
-  dui.sheet = None
-}
-
-///|
 /// The workspace `ws` in view from now on (AppState.pickWorkspace): the prefs' `workspace`.
-fn pick_workspace(src : Source, ws : String) -> Unit {
+pub fn pick_workspace(src : Source, ws : String) -> Unit {
   if ws == "" || ws == link_workspace.val {
     return
   }
@@ -289,7 +278,7 @@ fn pick_workspace(src : Source, ws : String) -> Unit {
 ///|
 /// An item's chat from outside (AppState.openItem): its workspace in view, nothing over Home but the chat (and its
 /// web service over it), opened at `at` (the message a notification is about).
-fn open_item(
+pub fn open_item(
   src : Source,
   ws : String,
   station : String,
@@ -298,7 +287,7 @@ fn open_item(
   at : Double?,
 ) -> Unit {
   pick_workspace(src, ws)
-  home()
+  (shell.val.home)()
   if app.nav.top() != Home {
     app.nav.replace(Home)
   }
@@ -321,14 +310,13 @@ fn open_item(
 ///|
 /// One of a station's screens in the viewer (AppState.openScreen; remote/ScreenActivity.kt): `title`, the row's,
 /// until the core says one (screen_view.mbt).
-fn open_screen(station : String, screen : String, title : String?) -> Unit {
+pub fn open_screen(station : String, screen : String, title : String?) -> Unit {
   app.nav.push(Screen({ station, screen, title: title.unwrap_or("") }))
 }
 
 ///|
-fn links_reset() -> Unit {
+pub fn links_reset() -> Unit {
   link_workspace.val = ""
   link_src.val = None
   link_later.clear()
-  invite_reset()
 }
