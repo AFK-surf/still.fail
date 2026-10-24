@@ -20,7 +20,8 @@ import { watching } from "./store.ts";
 import * as store from "./store.ts";
 import type { AuthorKind, Json, SessionRow, Store, ThreadRow, ThreadSummary } from "./store.ts";
 import { setLang, tr } from "./spoken.ts";
-import { type TimelineEntry, brief, readTimeline, transcriptPaths } from "./transcript.ts";
+import { readTimeline, transcriptPaths } from "./transcript.ts";
+import { inBrief } from "./transcripts.ts";
 import { HttpError, messageView } from "./views.ts";
 import { type Thumbnail, SMALL, dir as thumbsDir, idOf, kept, wanted as thumbWanted } from "../drive/thumbs.ts";
 import { parseUsize } from "./jobs.ts";
@@ -295,23 +296,23 @@ export function timeline(s: Store, key: string, beforeParam: string | undefined,
   // Those of the runtime sessions it ran in before come first (sessions/afresh.ts).
   const homes = [profile.home, ...configOf(s).profiles.map((p) => p.home).filter((h) => h !== profile.home)];
   const { paths } = transcriptPaths(runtime, homes, store.runtimeSessions(s, key));
-  const entries = paths.flatMap((path) => readTimeline(runtime, path));
-  const told = (page: TimelineEntry[]) => (briefParam === "1" ? page.map(brief) : page);
+  // In brief, from what this reader keeps read (read/transcripts.ts); whole, from the files.
+  const entries = briefParam === "1" ? inBrief(runtime, paths) : paths.flatMap((path) => readTimeline(runtime, path));
   const end = entries.length;
   const from = parseUsize(fromParam);
   const to = parseUsize(toParam);
   if (from !== null && to !== null) {
     const last = Math.min(to, from + 999, entries.length - 1);
-    return { start: from, entries: told(entries.slice(from, last + 1)), end };
+    return { start: from, entries: entries.slice(from, last + 1), end };
   }
   const after = parseUsize(afterParam);
   if (after !== null) {
     const start = Math.min(after + 1, end);
-    return { start, entries: told(entries.slice(start, start + limit)), end };
+    return { start, entries: entries.slice(start, start + limit), end };
   }
   const upto = Math.min(before, entries.length);
   const start = Math.max(0, upto - limit);
-  return { start, entries: told(entries.slice(start, upto)), end };
+  return { start, entries: entries.slice(start, upto), end };
 }
 
 /// GET /sessions/:key/transcript: where its runtime keeps the session's transcript on this machine (the current runtime
