@@ -358,6 +358,17 @@ export function runtimeSessions(s: Store, key: string): string[] {
   return current === null ? ids : [...ids.filter((id) => id !== current), current];
 }
 
+/// How many entries sessions' transcripts have, as the station last read them while they were at work (one, or every
+/// one known when `key` is null): none for a session not read since (or a database no station of this version opened).
+export function transcriptLengths(s: Store, key: string | null): Map<string, number> {
+  try {
+    const rows = key !== null ? all(s, "SELECT session, n FROM transcript_lengths WHERE session = ?", key) : all(s, "SELECT session, n FROM transcript_lengths");
+    return new Map(rows.map((r) => [r.session as string, Number(r.n)]));
+  } catch {
+    return new Map();
+  }
+}
+
 // ── threads ──
 
 export function getThread(s: Store, id: number): ThreadRow | null {

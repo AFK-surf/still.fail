@@ -33,6 +33,9 @@ export type Kind = {
   /// Whether all of it is brought onto the device and kept so (how far it goes is known, and it is read when behind);
   /// else its latest page is, and what is before as asked.
   readonly whole: boolean;
+  /// Of one not brought whole: whether it is kept whole from the lowest item held up to how far it goes (read when
+  /// behind there: what came after what is held, a hole a stream left), what is before that still as asked.
+  readonly holes?: boolean;
   /// How much of a batch of reads one of it takes.
   readonly cost: number;
   /// The task that reads a channel, as its station's lane names it (what a UI makes urgent goes by this name).
@@ -60,6 +63,9 @@ export type Held = {
   /// How far a channel goes as far as is known (0: nothing says), and that it goes at least to `n`.
   head(channel: Channel): number;
   raise(channel: Channel, n: number): void;
+  /// Of a kind kept whole from its lowest item held (`Kind.holes`): whether this one is, as its station can say how far
+  /// it goes and gives what a read asks in brief (one from before does neither: its latest page alone). None: it is.
+  holes?(channel: Channel): boolean;
 };
 
 export type Answered = { _tag: "Success"; success: unknown } | { _tag: "Failure"; failure: CoreError };
@@ -135,16 +141,22 @@ export class Channels {
 
   // ── the rule ──
 
+  /// Whether a channel not brought whole is kept whole from its lowest item held (Kind.holes, Held.holes).
+  #holes(c: Channel): boolean {
+    return c.kind.holes === true && this.#held.holes?.(c) !== false;
+  }
+
   /// Whether the device is behind on a channel it holds some of: it goes further than what is held, or what is held has
   /// a hole. What is before all that is held is not that (brought in the background, or as asked), nor is a channel
   /// none of which is held (brought when a UI shows it, or in the background).
   behind(c: Channel): boolean {
-    return c.kind.whole && !this.#held.letGo(c) && fill.behind(this.#held.numbers(c), this.#held.head(c));
+    return (c.kind.whole || this.#holes(c)) && !this.#held.letGo(c) && fill.behind(this.#held.numbers(c), this.#held.head(c));
   }
 
   /// A channel the device is behind on is read until it is not: the one rule, for whatever said how far it goes.
   settle(c: Channel): void {
-    if (this.behind(c)) this.bring(c, Priority.shown, "latest");
+    // A thread's behind what is shown; another's in the background (what a UI shows of it is made urgent by its task).
+    if (this.behind(c)) this.bring(c, c.kind.whole ? Priority.shown : Priority.background, "latest");
   }
 
   /// Whether a channel's latest items are not on the device: none held, or it goes further.
@@ -160,7 +172,13 @@ export class Channels {
   next(c: Channel): fill.Read | null {
     if (this.#held.letGo(c)) return null;
     const held = this.#held.numbers(c);
-    if (!c.kind.whole) return held.length === 0 ? { latest: true } : null;
+    if (!c.kind.whole) {
+      if (held.length === 0) return { latest: true };
+      if (!this.#holes(c)) return null;
+      // What came after what is held, a hole in it; not what is before all that is held (gone back to as asked).
+      const read = fill.next(held, this.#held.head(c), c.kind.page);
+      return read !== null && "to" in read && read.to < held[0]! ? null : read;
+    }
     return fill.next(held, this.#held.head(c), c.kind.page);
   }
 

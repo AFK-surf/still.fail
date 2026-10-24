@@ -24,6 +24,8 @@ export const EVENT_STREAM = "text/event-stream";
 /// An events stream's answer when the station told first what came after the `since` it was asked (station/src/api/
 /// events.ts RESUMED): nothing is read again.
 export const RESUMED = "stillfail-resumed";
+/// A stream's answer when it follows the sessions at work itself (api/events.ts FOLLOWS): `running`.
+export const FOLLOWS = "stillfail-follows";
 /// What every request asks its answer compressed as (`accept-encoding`), but a preview's (its page reads what the service
 /// sent): zstd, an event stream flushed after each event and compressed against the last megabyte of it (station/src/mesh/
 /// compress.ts). On a slow link the bytes are the wait: JSON goes to a fifth or less, an events stream to a tenth. A

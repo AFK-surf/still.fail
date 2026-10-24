@@ -439,6 +439,7 @@ export const AgentsLive = (control: Control) =>
       // And the fields the station's parts add (parts.ts).
       const view = async (viewer: Viewer, lang: Lang) => ({ ...((await platformView(viewer, lang)) as object), ...(await parts.overviewOf(viewer, lang)) });
 
+      hub.live.heldTold = (key, message) => inBrief((told) => events.heldTold(key, told))(message);
       // The readers say what runs, and which chats clients made: the hub's.
       readers.processes = () => hub.processes();
       readers.clientKeys = () => hub.clientKeys();
@@ -447,6 +448,9 @@ export const AgentsLive = (control: Control) =>
           const id = hub.live.subscribe(key, from, last, brief ? inBrief(send) : send);
           return () => hub.live.unsubscribe(key, id);
         },
+        // The sessions at work, followed by the station itself: told to the streams that follow them, in brief.
+        held: () => hub.live.held(),
+        heldNow: (key) => hub.live.now(key),
         overview: view,
         processState: (key) => hub.processState(key),
         followed: () => accounts.followed(),

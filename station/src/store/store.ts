@@ -270,6 +270,12 @@ export class Store {
     this.#updateSession(key, "UPDATE sessions SET runtime_session_id = ?1 WHERE key = ?2", id, key);
   }
 
+  /// How many entries the session's transcript has, as just read (sessions/live.ts): its summary says it from then on.
+  /// Not a change of the session (nothing is told for it): the summary told next carries it.
+  setTranscriptLength(key: string, n: number): void {
+    this.#run("INSERT INTO transcript_lengths (session, n) VALUES (?1, ?2) ON CONFLICT (session) DO UPDATE SET n = excluded.n", key, n);
+  }
+
   /// A runtime session the session runs in, on `profile` (null: not known, a profile it had is kept).
   ranIn(key: string, id: string, profile: string | null): void {
     this.#run(
@@ -553,6 +559,7 @@ export class Store {
         this.#run("DELETE FROM jobs WHERE session_key = ?", key);
         this.#run("DELETE FROM widget_states WHERE session = ?", key);
         this.#run("DELETE FROM pins WHERE session = ?", key);
+        this.#run("DELETE FROM transcript_lengths WHERE session = ?", key);
         this.#run("DELETE FROM sessions WHERE key = ?", key);
         for (const thread of threads) {
           if (this.#one("SELECT 1 FROM thread_sessions WHERE thread = ? LIMIT 1", thread) !== undefined) {
