@@ -20,6 +20,9 @@ fn init {
       open_relay(c, src, r, thread)
     }
   }
+  // ＋'s Station 文件 (a composer's, sfpages): the station files' picker (sfdesk's station_pick.mbt). Said once, as the
+  // app starts (reset runs only as a Tester starts: a wire set there is never set in the app)
+  station_files_asked.val = @sfdesk.station_files_pick
   @ui.on_reset(fn() {
     if !reset_by_hand.val {
       reset()
@@ -43,8 +46,6 @@ fn reset() -> Unit {
   @sfbase.reset()
   // the desktop's own (src/sfdesk)
   @sfdesk.reset()
-  // ＋'s Station 文件 (a composer's, sfpages): the station files' picker (sfdesk's station_pick.mbt)
-  station_files_asked.val = @sfdesk.station_files_pick
   steadies.clear()
   sheet_host.kind = NoSheet
   sheet_host.serial = 0
