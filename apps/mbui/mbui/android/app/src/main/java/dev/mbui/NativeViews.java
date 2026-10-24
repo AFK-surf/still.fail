@@ -657,10 +657,12 @@ final class NativeViews {
         out[1] = v.position;
         out[2] = v.playing;
         if (v instanceof Video) {
-            // buffering for the app only while the player's reader waits on the app's bytes; else it plays on, as asked
+            // buffering for the app only while it is to play and the player's reader waits on the app's bytes (Apple's
+            // waiting to play): paused, a seek waiting on them (each move of a finger along the timeline) is no wait to
+            // say; else it plays on, as asked
             Video vid = (Video) v;
             boolean waits = vid.bytesWaited.get() > 0;
-            v.buffering = vid.exoBuffering && waits ? 1 : 0;
+            v.buffering = vid.exoBuffering && waits && vid.playWhenReady ? 1 : 0;
             if (vid.exoBuffering && !waits && vid.playWhenReady) out[2] = 1;
         }
         out[3] = v.nw;
@@ -946,9 +948,9 @@ final class NativeViews {
         /**
          * How many times the player's reader waits now for bytes still to come through the app; whether the player
          * says it buffers, and whether it is to play once it can (main thread's). It buffers for the app (info's 7)
-         * only while its reader waits so: a seek within what is here already (a finger along the timeline over what
-         * has played), the player catching up to the very frame, is not waiting on the network, and it plays on as it
-         * did (info's 2).
+         * only while it is to play and its reader waits so: a seek within what is here already (a finger along the
+         * timeline over what has played), the player catching up to the very frame, is not waiting on the network,
+         * and it plays on as it did (info's 2); paused, it waits for nothing to play.
          */
         final AtomicInteger bytesWaited = new AtomicInteger();
         volatile boolean exoBuffering, playWhenReady;

@@ -1116,8 +1116,9 @@ fn view_control(id : Int, op : Int, value : Double) -> Unit {
 /// How the view stands: -1 failed (a file the player cannot play, a page that cannot load), 0 opening, 1 ready.
 /// `out` (10): its length in ms (-1 not known), where it is (ms), playing (1; and while it seeks within what it has, if
 /// it is to play), the picture's own width and height (pixels), the bytes it has been given, whether a frame has been
-/// drawn (a page: loaded), buffering (1: waiting on bytes still to come through the app, not a seek within what it
-/// has), how far on it has what it needs to play (ms; 0 not said), played to its end (1).
+/// drawn (a page: loaded), buffering (1: to play and waiting on bytes still to come through the app, not a seek
+/// within what it has, nor one while paused), how far on it has what it needs to play (ms; 0 not said), played to its
+/// end (1).
 fn view_info(id : Int, out : FixedArray[Double]) -> Int {
   ffi_view_info(id, out)
 }
