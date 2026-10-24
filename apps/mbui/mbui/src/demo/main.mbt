@@ -198,11 +198,7 @@ fn view(c : @ui.Ctx) -> Unit {
       bg=0xFFFFFFFFL,
       fn() {
         let r = c.editor("composer", placeholder="输入消息，回车发送", field=app.draft)
-        match r.submitted {
-          Some(_) => send(app.draft.take())
-          None => ()
-        }
-        if c.button("发送") {
+        if c.button("发送") || r.submitted is Some(_) {
           let st = app.draft.take()
           if st.length() > 0 {
             send(st)

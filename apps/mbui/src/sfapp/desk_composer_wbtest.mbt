@@ -234,6 +234,26 @@ test "desk composer: words pasted at once past the core's bound go as a file of 
 }
 
 ///|
+test "desk composer: a file waiting and no words, Enter sends it (as send does)" {
+  let calls : Array[Made] = []
+  let (t, src) = desk_composer_tester(calls)
+  desk_focus(t)
+  t.frame()
+  let long = StringBuilder()
+  for i in 0..<1000 {
+    long.write_string("第\{i}条，")
+  }
+  t.paste(long.to_string())
+  t.frame()
+  t.frame()
+  assert_eq(desk_words(src), "")
+  assert_eq(@sfbase.writing(src, "ws1/st1:s-c1").files.length(), 1)
+  t.enter()
+  t.frame()
+  assert_eq(named(calls, "chat.send").length(), 1)
+}
+
+///|
 test "desk composer: a reference to another workspace's chat is asked about first (OutsideShare.tsx), Enter again shares it and it goes" {
   let calls : Array[Made] = []
   let (t, src) = desk_composer_tester(calls)
