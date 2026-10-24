@@ -11,6 +11,9 @@
 //   stream.open {url, method, headers} + body → {status, headers, id}; stream.read {id} → bytes, or {end}; stream.close {id}
 //   ws.open {url, protocols} → {id}; ws.next {id} → {text} or {end}; ws.send {id, text}; ws.close {id}
 //   storage.get {key} → bytes or {none}; storage.set {key} + value; storage.delete {key}
+//   kept.read {at, start, end} → bytes or {none} — a file the app saved where the person keeps files, read back
+//     (`at` as the system named it: a path; on Android a content address), answered by the app (Apple: apple_core.mm;
+//     Android: CoreHost; Windows: win_core.c)
 //   secure.get {key, user, reason?} → bytes or {none}; secure.set {key, user} + value; secure.delete {key};
 //     secure.ask {reason} — answered by the app (Kotlin: the Keystore, and the prompt when `user` or asked), not the
 //     shell (docs/vault.md, "设备上的钥匙")
@@ -245,6 +248,9 @@ export class BridgeHost implements Host {
   }
   storageSet(key: string, value: Uint8Array): Effect.Effect<void, HostError> {
     return Effect.asVoid(this.#bridge.call("storage.set", { key }, value));
+  }
+  savedRead(at: string, start: number, end: number): Effect.Effect<Uint8Array | null, HostError> {
+    return Effect.map(this.#bridge.call("kept.read", { at, start, end }), (a) => ((a.json as J)?.none === true ? null : (a.bytes ?? new Uint8Array(0))));
   }
   storageDelete(key: string): Effect.Effect<void, HostError> {
     return Effect.asVoid(this.#bridge.call("storage.delete", { key }));

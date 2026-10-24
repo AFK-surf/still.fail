@@ -509,6 +509,36 @@ static void core_listen_close_all(void) {
   core_listens = nil;
 }
 
+// ── kept.read (ember client/core-ts hosts/bridge.ts) ──
+//   kept.read {at, start, end} → {} + the bytes, or {none: true}: a file the app saved where the person keeps files
+//   (its path, as the keep said it: apple_views.m keep_answer) read back, bytes start to end (the core's downloads:
+//   drive-kept.ts `saved`). One exported through iOS's Files sheet is named only, out of the app's reach: none.
+
+static void core_kept(double cid, NSString *op, NSData *json) {
+  NSDictionary *a = [NSJSONSerialization JSONObjectWithData:json options:0 error:nil];
+  if (![op isEqualToString:@"kept.read"] || ![a isKindOfClass:NSDictionary.class]) {
+    answer_later(cid, nil, @"unsupported", nil);
+    return;
+  }
+  NSString *at = [a[@"at"] isKindOfClass:NSString.class] ? a[@"at"] : nil;
+  NSNumber *start = [a[@"start"] isKindOfClass:NSNumber.class] ? a[@"start"] : nil;
+  NSNumber *end = [a[@"end"] isKindOfClass:NSNumber.class] ? a[@"end"] : nil;
+  if (!at || !start || !end || end.longLongValue < start.longLongValue) {
+    answer_later(cid, nil, @"kept.read: at, start and end", nil);
+    return;
+  }
+  dispatch_async(dispatch_get_global_queue(QOS_CLASS_UTILITY, 0), ^{
+    NSFileHandle *f = at.isAbsolutePath ? [NSFileHandle fileHandleForReadingAtPath:at] : nil;
+    NSData *d = nil;
+    if (f) {
+      NSError *e = nil;
+      if ([f seekToOffset:start.unsignedLongLongValue error:&e]) d = [f readDataUpToLength:NSUInteger(end.longLongValue - start.longLongValue) error:&e];
+      [f closeAndReturnError:nil];
+    }
+    post([cid, d](jsi::Runtime &) { answer_later(cid, d ? const_json("{}") : const_json("{\"none\":true}"), nil, d); });
+  });
+}
+
 // ── __native ──
 
 static NSData *ns_data(const std::string &s) { return [NSData dataWithBytes:s.data() length:s.size()]; }
@@ -530,7 +560,7 @@ static void install(jsi::Runtime &rt) {
       p = b.data(rt);
       len = b.size(rt);
     }
-    bool here = op.rfind("secure.", 0) == 0 || op.rfind("listen.", 0) == 0;
+    bool here = op.rfind("secure.", 0) == 0 || op.rfind("listen.", 0) == 0 || op.rfind("kept.", 0) == 0;
     if (tracing())
       fprintf(stderr, "[core trace] -> %llu %s %.*s%s%s\n", (unsigned long long)id, op.c_str(), (int)std::min<size_t>(json.size(), 120), json.c_str(),
               has ? (" +" + std::to_string(len) + " bytes").c_str() : "", here ? " (here)" : "");
@@ -538,6 +568,7 @@ static void install(jsi::Runtime &rt) {
       @autoreleasepool {
         NSString *name = @(op.c_str());
         if (op[0] == 's') core_secure(double(id), name, ns_data(json), p, len);
+        else if (op[0] == 'k') core_kept(double(id), name, ns_data(json));
         else core_listen(double(id), name, ns_data(json), p, len);
       }
       return jsi::Value::undefined();

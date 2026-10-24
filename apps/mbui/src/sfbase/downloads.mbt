@@ -3,8 +3,8 @@
 // saved, going on as the app starts again); how far each has come said by its `downloads` topic, which every page reads
 // (the preview, the message's file). Once all of one is here, the app takes it (`download.take`, once) whatever page
 // shows, reads it off the device a part at a time (`station.file.part` with `keep`: not from the station again) into
-// the system's downloads (@ui.keep_begin: never whole in memory), and once the host has answered says it is done
-// (`download.done`: the device then keeps of it what it kept before it was asked).
+// the system's downloads (@ui.keep_begin: never whole in memory), and once the host has answered says it is done, with
+// where the system put it (`download.done`: read back from there, that is the file's copy on the device).
 
 ///|
 /// The ready ones being saved (by their id: taken, not taken again while the core's list still says ready), and how
@@ -113,7 +113,13 @@ fn take_ready(src : Source, listed : Array[Json]) -> Unit {
 /// A download taken, read off the device a part at a time into the host's keep; done once the host has answered (or
 /// when it could not be read: 下载失败).
 fn save_download(src : Source, id : String, station : String, key : String, name : String, size : Double) -> Unit {
-  let done = fn() { (src.call)("download.done", { "id": Json::string(id) }, fn(_) {  }) }
+  let done = fn(at : String) {
+    let p : Map[String, Json] = { "id": Json::string(id) }
+    if at != "" {
+      p["at"] = Json::string(at)
+    }
+    (src.call)("download.done", Json::object(p), fn(_) {  })
+  }
   let keep : Ref[@ui.Keep?] = { val: None }
   let failed = fn() {
     match keep.val {
@@ -121,7 +127,7 @@ fn save_download(src : Source, id : String, station : String, key : String, name
       None => ()
     }
     downloads.unread += 1
-    done()
+    done("")
   }
   fn next(at : Double) {
     let p : Map[String, Json] = {
@@ -158,7 +164,16 @@ fn save_download(src : Source, id : String, station : String, key : String, name
           let to = at + bytes.length().to_double()
           if bytes.length() == 0 || to >= total {
             k.finish()
-            keepings.push({ keep: k, name, then: fn(_) { done() } })
+            keepings.push({
+              keep: k,
+              name,
+              then: fn(kept) {
+                match kept {
+                  KeptAt(at) => done(at)
+                  _ => done("")
+                }
+              },
+            })
           } else {
             next(to)
           }

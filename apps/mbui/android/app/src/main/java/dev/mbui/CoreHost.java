@@ -133,6 +133,25 @@ final class CoreHost {
             });
             return;
         }
+        if (op.startsWith("kept.")) {
+            // a file the app kept in Downloads read back (the core's downloads: hosts/bridge.ts kept.read)
+            pickedCalls.execute(() -> {
+                try {
+                    if (!op.equals("kept.read")) {
+                        answer(id, null, "unsupported", null);
+                        return;
+                    }
+                    JSONObject a = new JSONObject(new String(json, StandardCharsets.UTF_8));
+                    byte[] b = Keeps.read(a.getString("at"), a.getLong("start"), a.getLong("end"));
+                    if (b == null) answer(id, "{\"none\":true}", null, null);
+                    else answer(id, "{}", null, b);
+                } catch (Throwable e) {
+                    if (tracing()) Host.log("core app call " + op + " -> error " + errorText(e));
+                    answer(id, null, op + ": " + (e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName()), null);
+                }
+            });
+            return;
+        }
         if (op.startsWith("listen.")) {
             // A thread of their own, not the Keystore's: none of them waits (a listen.next is answered as a request
             // comes, from the listener's thread).
