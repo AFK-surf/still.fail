@@ -3,8 +3,8 @@
 // build makes again is removed from its own directory, and the rest of its workspace and the transcripts its runtime
 // keeps in station storage are packed (archive.ts); they are restored before its runtime starts again, or when it is
 // shown again. The hub calls it (ColdStorage) from the session's queue, so no turn starts halfway through.
-import { existsSync, realpathSync } from "node:fs";
-import { rm, unlink, writeFile } from "node:fs/promises";
+import { existsSync, realpathSync, statSync } from "node:fs";
+import { readdir, rm, unlink, writeFile } from "node:fs/promises";
 import { basename, dirname, join } from "node:path";
 import { log } from "../ops/log.ts";
 import { realOutside } from "../ops/places.ts";
@@ -182,15 +182,62 @@ export class ColdRooms implements ColdStorage {
       await writeFile(join(room, "cold"), "workspace and history may be compressed\n");
       await archive.packWorkspaceIf(room, ready);
       if (!ready()) return;
-      const files = this.historyFiles(key, true);
-      for (const path of files) {
-        await archive.packFileIf(path, () => ready() && this.historyFiles(key, true).length > 0);
-      }
-      if (files.length > 0 && files.every((path) => !existsSync(path) && existsSync(archive.packed(path)))) {
-        // The legacy copy of an archived session's transcript, redundant once the transcript itself is packed.
-        const copy = join(this.hub().store.archiveDir(), "transcripts", `${key}.jsonl.zst`);
-        if (existsSync(copy)) await unlink(copy);
-      }
+      await this.packHistory(key, ready);
     });
   }
+
+  /// Packs an archived session's transcripts in place (its room locked, `ready` while it may), then lets go of the
+  /// Rust station's copy of them (`archive/transcripts/<key>.jsonl.zst`, which nothing reads) once they all are: the
+  /// copy's size, 0 without one.
+  private async packHistory(key: string, ready: () => boolean): Promise<number> {
+    const files = this.historyFiles(key, true);
+    for (const path of files) {
+      await archive.packFileIf(path, () => ready() && this.historyFiles(key, true).length > 0);
+    }
+    if (files.length === 0 || !files.every((path) => !existsSync(path) && existsSync(archive.packed(path)))) return 0;
+    const copy = legacyCopy(this.hub().store.archiveDir(), key);
+    const size = statSync(copy, { throwIfNoEntry: false })?.size;
+    if (size === undefined) return 0;
+    await unlink(copy);
+    return size;
+  }
+
+  /// What the Rust station's archiving left (2026-09 and early 10): each archived session's transcript copied into
+  /// `archive/transcripts/`, its own left as it was, so both were on the disk (1.4 GB on ccvm). Each such session's
+  /// transcripts are packed now as archiving packs them, and the copy let go; nothing makes copies any more, so this
+  /// comes to an end. Its workspace is left as it is: only the transcripts are touched. A copy whose session is back
+  /// in the lists or at work stays until its session is archived again.
+  async finishLegacyCopies(): Promise<void> {
+    const dir = join(this.hub().store.archiveDir(), "transcripts");
+    let names: string[];
+    try {
+      names = await readdir(dir);
+    } catch {
+      return;
+    }
+    let freed = 0;
+    let done = 0;
+    for (const name of names) {
+      if (!name.endsWith(LEGACY)) continue;
+      const key = name.slice(0, -LEGACY.length);
+      const room = this.archiveRoom(key);
+      if (room === null) continue;
+      const ready = () => this.archiveRoom(key) !== null;
+      try {
+        await archive.withLock(room, async () => {
+          if (!ready()) return;
+          const size = await this.packHistory(key, ready);
+          freed += size;
+          if (size > 0) done++;
+        });
+      } catch (error) {
+        log.warn("hub", "an archived session's transcripts not packed", { session: key, error: (error as Error).message });
+      }
+    }
+    if (done > 0) log.info("hub", "the Rust station's transcript copies let go, the transcripts packed", { sessions: done, freed });
+  }
 }
+
+/// The Rust station's copy of an archived session's transcript.
+const LEGACY = ".jsonl.zst";
+const legacyCopy = (archiveDir: string, key: string) => join(archiveDir, "transcripts", `${key}${LEGACY}`);

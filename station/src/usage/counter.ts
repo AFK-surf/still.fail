@@ -271,8 +271,11 @@ async function* packedFrom(path: string, offset: number): AsyncGenerator<Part> {
 /// read_from: what a file holds past `offset`, up to its last whole line, in parts with where each ends. A file now
 /// shorter than `offset` was written anew: it is read from its start (calls already recorded stay once). A file put
 /// away (only its `.zst` there) is read decompressed.
+/// Whether a transcript is put away: only its `.zst` there.
+const putAway = async (path: string): Promise<boolean> => !(await exists(path)) && (await exists(packed(path)));
+
 export async function* readFrom(path: string, offset: number): AsyncGenerator<Part> {
-  if (!(await exists(path)) && (await exists(packed(path)))) {
+  if (await putAway(path)) {
     yield* packedFrom(path, offset);
     return;
   }
@@ -657,6 +660,10 @@ export class UsageCounter {
 
   /// Reads one transcript of `session` on from where it was left, and records its calls, a part at a time.
   async #readFile(path: string, runtime: Runtime, subagent: boolean, session: SessionRow, was: UsageFile | undefined, turns: { of: UsageTurn[] | null }): Promise<number> {
+    // A transcript put away (only its `.zst` there) was read before it was: its session is archived and idle, and it is
+    // restored before its runtime writes in it again. Read again as the station starts, every one was decompressed
+    // whole at each start (10.8 s on ccvm, 2026-10-24, the station slow to answer meanwhile). One never read is read once.
+    if (this.#first && was !== undefined && (await putAway(path))) return 0;
     const before = was ?? { session: null, offset: 0, model: null };
     const state: CallState = { model: before.model, codexId: null };
     let added = 0;

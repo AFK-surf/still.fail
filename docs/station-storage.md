@@ -349,8 +349,8 @@ are those at the moment it opened.
   it goes on in its history, in an empty workspace.
 - `DELETE /sessions/:key`: ends its process, deletes its rows (turns,
   deliveries, thread_sessions; threads left with no session, with their
-  entries or archive files, and reads), its workspace directory and its
-  transcript copy. The runtime's own transcript file is left alone (it is in
+  entries or archive files, and reads), its workspace directory and the Rust
+  station's copy of its transcript. The runtime's own transcript file is left alone (it is in
   the profile's home, which may be a person's own). `thread-removed` tells
   clients about each thread that went.
 
@@ -381,10 +381,15 @@ into the database: a few at a time, two minutes after it starts
 (`Store.bringInArchived`, 20 a second), and at once when one is said in (an
 edit too) or a session of it is shown again. Since entries never change, they
 are the same either way, and clients' kept copies stay valid. Bringing one back
-writes its entries into the database first and removes the file. Archiving a session also writes its
-transcript copy, `<data>/archive/transcripts/<session>.jsonl.zst` (the
-runtime's file, compressed); the runtime's own file in the profile's home is
-left as it is. Showing the session again or deleting it removes the copy.
+writes its entries into the database first and removes the file.
+
+An archived, idle session's transcripts are packed in place (cold storage,
+under Housekeeping). The Rust station instead wrote a copy of them,
+`<data>/archive/transcripts/<session>.jsonl.zst`, and left them as they were,
+so both stayed on the disk (1.4 GB on ccvm); a station packs those sessions'
+transcripts and lets go of the copy three minutes after it starts
+(`ColdRooms.finishLegacyCopies`, their workspaces left as they are). Nothing
+reads the copies; showing the session again or deleting it removes one too.
 
 ### In the client core
 

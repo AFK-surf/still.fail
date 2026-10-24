@@ -264,6 +264,28 @@ test("compressed history keeps usage offsets and sub-agent discovery", async () 
   assert.deepEqual(await readAll(main, 13), ["third\n", 19]);
 });
 
+test("as the station starts, a transcript put away after it was read is not read again; one never read is", async () => {
+  const r = rig();
+  const read = join(r.data, "w1");
+  const never = join(r.data, "w2");
+  session(r.store, "k1", read, 0);
+  session(r.store, "k2", never, 0);
+  const first = join(r.data, "transcripts/claude", claudeProject(read), "r1.jsonl");
+  append(first, [claudeLine("m1", 1000, "claude-opus-5-5", usage(1, 0, 0, 0, 1))]);
+  assert.equal(await r.usage.read(), 1);
+  // Put away with a call the count never saw: a station starting again reads it no more (were it decompressed, it would
+  // be counted).
+  append(first, [claudeLine("m2", 2000, "claude-opus-5-5", usage(2, 0, 0, 0, 2))]);
+  pack(first);
+  const second = join(r.data, "transcripts/claude", claudeProject(never), "r2.jsonl");
+  append(second, [claudeLine("m3", 3000, "claude-opus-5-5", usage(3, 0, 0, 0, 3))]);
+  pack(second);
+  const again = new UsageCounter({ store: r.store, config: () => ({ dataDir: r.data, profiles: [{ home: join(r.data, "homes/cc") }] }) });
+  counters.push(again);
+  assert.equal(await again.read(), 1);
+  assert.deepEqual(r.store.usageGroups(0, MAX, 0).map((g) => g.input).sort(), [1, 3]);
+});
+
 test("a large compressed file is read in parts from its offset, and from its start once shorter than that", async () => {
   const root = tempdir();
   const path = join(root, "big.jsonl");

@@ -195,6 +195,7 @@ export const AgentsLive = (control: Control) =>
       const connectViews = new Map<string, ConnectView>();
       let slackView: SlackView | undefined;
       const along: Along[] = [];
+      const cold = new ColdRooms(() => hub);
       const hub = new Hub({
         config: settings,
         store,
@@ -225,7 +226,7 @@ export const AgentsLive = (control: Control) =>
         internal: new InternalChat(),
         link: pageOf,
         workspaces: () => cloud.memberships().map((m) => m.workspace),
-        cold: new ColdRooms(() => hub),
+        cold,
         places,
       });
       // Background jobs and web services: their agents told through the hub; a service's link is its session's page
@@ -653,6 +654,9 @@ export const AgentsLive = (control: Control) =>
         else if (broughtIn > 0) log.info("store", "the threads archived to files are back in the database", { n: broughtIn });
       };
       time.after(120_000, bringingIn);
+
+      // What the Rust station's archiving left (the transcripts kept twice): once, when the devices have come back.
+      time.after(180_000, () => cold.finishLegacyCopies());
 
       // The archive review turned on, or given another model: the done chats no decision has answered are reviewed then,
       // not only the ones that end all_done from now on; and once after the start (the profiles' checks read by then).
