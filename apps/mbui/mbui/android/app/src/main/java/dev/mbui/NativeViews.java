@@ -33,6 +33,7 @@ import androidx.media3.common.VideoSize;
 import androidx.media3.common.util.UnstableApi;
 import androidx.media3.datasource.BaseDataSource;
 import androidx.media3.datasource.DataSpec;
+import androidx.media3.exoplayer.DefaultRenderersFactory;
 import androidx.media3.exoplayer.ExoPlayer;
 import androidx.media3.exoplayer.SeekParameters;
 import androidx.media3.exoplayer.source.ProgressiveMediaSource;
@@ -116,17 +117,28 @@ final class NativeViews {
         /**
          * Up to `len` of its bytes at `p` into `buf` once they have come: how many; 0 when it ended short of `p` (its
          * last answer came, or it was let go of, before); an error when it could not be read. Waits on the reader's
-         * thread.
+         * thread; the player's reader (`pace.player`) waiting is the view's waiting for its bytes (Video.bytesWaited).
          */
-        synchronized int take(Video v, long p, byte[] buf, int off, int len) throws IOException {
+        synchronized int take(Video v, Video.Pace pace, long p, byte[] buf, int off, int len) throws IOException {
             int at = (int) (p - offset);
+            boolean counted = false;
             try {
                 while (got <= at && !done) {
                     if (v.closed) throw new InterruptedIOException("view " + v.id + " closed");
+                    if (pace.player && !counted) {
+                        counted = true;
+                        v.bytesWaited.incrementAndGet();
+                        Host.requestFrame();
+                    }
                     wait(250);
                 }
             } catch (InterruptedException e) {
                 throw new InterruptedIOException();
+            } finally {
+                if (counted) {
+                    v.bytesWaited.decrementAndGet();
+                    Host.requestFrame();
+                }
             }
             if (got > at) {
                 int k = Math.min(len, got - at);
@@ -644,6 +656,13 @@ final class NativeViews {
         out[0] = v.duration;
         out[1] = v.position;
         out[2] = v.playing;
+        if (v instanceof Video) {
+            // buffering for the app only while the player's reader waits on the app's bytes; else it plays on, as asked
+            Video vid = (Video) v;
+            boolean waits = vid.bytesWaited.get() > 0;
+            v.buffering = vid.exoBuffering && waits ? 1 : 0;
+            if (vid.exoBuffering && !waits && vid.playWhenReady) out[2] = 1;
+        }
         out[3] = v.nw;
         out[4] = v.nh;
         out[5] = v.bytes;
@@ -914,11 +933,25 @@ final class NativeViews {
         /** Whether this process has cleared what views of an earlier one left on the disk (main thread). */
         static boolean swept;
 
-        /** How one reader of it goes: where its last run of blocks ended and how long it was; the run it reads from. */
+        /**
+         * How one reader of it goes: where its last run of blocks ended and how long it was; the run it reads from;
+         * whether it is the player's (its waiting is the view's: bytesWaited).
+         */
         static final class Pace {
             int end = -1, run = 1;
             Read read;
+            boolean player;
         }
+
+        /**
+         * How many times the player's reader waits now for bytes still to come through the app; whether the player
+         * says it buffers, and whether it is to play once it can (main thread's). It buffers for the app (info's 7)
+         * only while its reader waits so: a seek within what is here already (a finger along the timeline over what
+         * has played), the player catching up to the very frame, is not waiting on the network, and it plays on as it
+         * did (info's 2).
+         */
+        final AtomicInteger bytesWaited = new AtomicInteger();
+        volatile boolean exoBuffering, playWhenReady;
 
         /** Up to `len` bytes of the file at `p` into `buf` for the reader `pace`: how many (at least one), -1 at its end. */
         int bytesAt(long p, byte[] buf, int off, int len, Pace pace) throws IOException {
@@ -938,7 +971,7 @@ final class NativeViews {
                 if (r != null && p >= r.offset && p < r.offset + r.length) {
                     int k;
                     try {
-                        k = r.take(this, p, buf, off, len);
+                        k = r.take(this, pace, p, buf, off, len);
                     } catch (IOException e) {
                         // (one that failed: not read from again, its reader's load asking anew)
                         if (r.failed) {
@@ -1331,7 +1364,9 @@ final class NativeViews {
             clip.addView(texture, new FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT,
                     FrameLayout.LayoutParams.MATCH_PARENT));
             texture.addOnLayoutChangeListener((view, l, t, r, b, ol, ot, or, ob) -> moved());
-            player = new ExoPlayer.Builder(c).build();
+            // the frames between a key frame and the one a seek goes to decoded without being put out (Android 14 on:
+            // MediaCodec's decode-only flag), so an exact seek gets there sooner
+            player = new ExoPlayer.Builder(c, new DefaultRenderersFactory(c).experimentalSetEnableMediaCodecBufferDecodeOnlyFlag(true)).build();
             player.setSeekParameters(SeekParameters.EXACT);
             player.setVideoTextureView(texture);
             player.addListener(new Player.Listener() {
@@ -1346,7 +1381,7 @@ final class NativeViews {
                     // a player with no picture (a sound) is ready for the app once it can play; one with a picture once
                     // its first frame shows (onRenderedFirstFrame)
                     if (s == Player.STATE_READY && !player.getCurrentTracks().containsType(C.TRACK_TYPE_VIDEO)) tell(1);
-                    buffering = s == Player.STATE_BUFFERING ? 1 : 0;
+                    exoBuffering = s == Player.STATE_BUFFERING;
                     // a wait once ready (a seek, its bytes not here yet), said with how long it took and what came
                     // through the app meanwhile (none: it waited on its own decoding, not on the network)
                     if (s == Player.STATE_BUFFERING && state == 1 && waitSince < 0) {
@@ -1360,6 +1395,12 @@ final class NativeViews {
                     }
                     ended = s == Player.STATE_ENDED ? 1 : 0;
                     if (s == Player.STATE_ENDED) playing = 0;
+                    Host.requestFrame();
+                }
+
+                @Override
+                public void onPlayWhenReadyChanged(boolean will, int reason) {
+                    playWhenReady = will;
                     Host.requestFrame();
                 }
 
@@ -1399,7 +1440,7 @@ final class NativeViews {
                     Host.requestFrame();
                 }
             });
-            ProgressiveMediaSource source = new ProgressiveMediaSource.Factory(() -> new ViewSource(this))
+            ProgressiveMediaSource source = new ProgressiveMediaSource.Factory(() -> new ViewSource(this, true))
                     .createMediaSource(MediaItem.fromUri("mbview://" + id + "/file"));
             player.setMediaSource(source);
             player.prepare();
@@ -1429,6 +1470,13 @@ final class NativeViews {
                 case 3:
                     // whole ms, floored: Media3 shows the first frame from there, so a frame's start (1583.33) is
                     // that frame (to 1584, the next)
+                    player.setSeekParameters(SeekParameters.EXACT);
+                    player.seekTo((long) Math.floor(value));
+                    position = value;
+                    break;
+                // about there, at once: the key frame nearest it (nothing before the frame asked decoded first)
+                case 11:
+                    player.setSeekParameters(SeekParameters.CLOSEST_SYNC);
                     player.seekTo((long) Math.floor(value));
                     position = value;
                     break;
@@ -1480,8 +1528,14 @@ final class NativeViews {
         boolean opened;
 
         ViewSource(Video v) {
+            this(v, false);
+        }
+
+        /** The view's file read through the app; `player`: the player's own reader (Pace.player). */
+        ViewSource(Video v, boolean player) {
             super(true);
             this.v = v;
+            pace.player = player;
         }
 
         @Override

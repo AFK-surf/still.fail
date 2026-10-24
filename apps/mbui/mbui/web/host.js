@@ -918,7 +918,7 @@
     if (!v || v.kind !== 1) return;
     if (op === 1) v.el.play().catch(() => {});
     else if (op === 2) v.el.pause();
-    else if (op === 3) v.el.currentTime = value / 1000;
+    else if (op === 3 || op === 11) v.el.currentTime = value / 1000;
     else if (op === 4) v.el.playbackRate = value;
     // a frame grabbed (op 21, or the one shown: 22): this host grabs none; failed, said so (viewText's 2: "-1", once)
     else if (op === 21 || op === 22) {
