@@ -106,6 +106,8 @@ pub(all) enum Route {
   Profile(String, String)
   /// the step right after a profile is added: its models chosen, or skipped (PickModelsScreen)
   PickModels(String, String)
+  /// which of a profile's models may be used, from its page: its station's address, its id
+  ProfileModels(String, String)
   /// the connects, of every station ("") or of one
   Connects(String)
   /// a connect's page: its station's address, its id
@@ -716,6 +718,7 @@ pub fn route_of(name : String) -> Route? {
             "profiles" => Some(Profiles(arg))
             "profile" => Some(Profile(address, id))
             "pick-models" => Some(PickModels(address, id))
+            "profile-models" => Some(ProfileModels(address, id))
             "connects" => Some(Connects(arg))
             "connect" => Some(Connect(address, id))
             _ => None

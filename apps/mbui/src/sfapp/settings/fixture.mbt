@@ -166,8 +166,8 @@ pub fn fixture_page(mode : String) -> String {
     "settings-first-station" => fx.none = true
     "settings-profile-menu" => up("profile-menu", "", 0)
     "settings-profile-lower" => up("", "settings/profile/ws1/st1/cc", 2)
-    // ChatGPT 团队's quota with its resets, its models (many, a filter, one to name by hand)
-    "settings-profile-models" => up("", "settings/profile/ws1/st1/cx", 7)
+    // ChatGPT 团队's models on their page (many, a filter, one to name by hand)
+    "settings-profile-models" => up("", "settings/profile-models/ws1/st1/cx", 0)
     "settings-profile-login" => {
       fx.login = "needs_code"
       up("", "settings/profile/ws1/st1/cc", 0)
@@ -248,7 +248,8 @@ pub fn fixture_page(mode : String) -> String {
     "settings-memory" => "memory:ws1/st1"
     "settings-memory-doc" => "memory-doc:ws1/st1#发布流程"
     "settings-profile" => "profile:ws1/st1#cc"
-    "settings-profile-quota" | "settings-profile-models" => "profile:ws1/st1#cx"
+    "settings-profile-quota" => "profile:ws1/st1#cx"
+    "settings-profile-models" => "profile-models:ws1/st1#cx"
     "settings-me-reading" => "me"
     "settings-connect" => "connect:ws1/st1#k1"
     _ =>
