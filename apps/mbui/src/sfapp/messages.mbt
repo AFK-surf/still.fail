@@ -363,7 +363,14 @@ fn said(
         c.stick(av, wide_avatar_held)
       }
       if carded_agent is Some(a) {
-        wide_hover(c, "agent-hover/" + m.ts, hid, tile=true, fn() { agent_card(c, src, ref_of(here), a) }) |> ignore
+        let station = here.station
+        @sfdesk.hover(c, "agent-hover/" + m.ts, hid, tile=true, fn() {
+          match agent_json((src.topic)("chat", chat_params(ref_of(here))).value, a.key) {
+            Some(j) => @sfdesk.agent_card(c, src, station, j)
+            None => ()
+          }
+        })
+        |> ignore
       }
       if emit_goes(em, m.seq) {
         @motion.measure(c, av, "emit-landing/" + ek + "/" + seq_s(m.seq))
@@ -2578,25 +2585,6 @@ fn unsent_size() -> Double {
 /// A running clock's second.
 let clock_tick_ms : Double = 1000.0
 
-
-///|
-/// A running clock's reading in short (Chat.kt elapsed): 45s, 3m 20s, 1h 5m.
-fn elapsed(ms : Double) -> String {
-  let s = dmax(ms / 1000.0, 0.0).to_int()
-  if s < 60 {
-    "\{s}s"
-  } else if s < 3600 {
-    if s % 60 != 0 {
-      "\{s / 60}m \{s % 60}s"
-    } else {
-      "\{s / 60}m"
-    }
-  } else if s % 3600 / 60 != 0 {
-    "\{s / 3600}h \{s % 3600 / 60}m"
-  } else {
-    "\{s / 3600}h"
-  }
-}
 
 ///|
 /// What an activity shows, steadied (Chat.kt steady): another thing replaces the shown one once it has stayed 700 ms

@@ -3,6 +3,16 @@
 // pages), taken in here by name.
 
 pub using @sfbase {
+  agent_json,
+  each_second,
+  elapsed,
+  second_ms,
+  act,
+  acting,
+  doing,
+  error_words,
+  failed_lately,
+  toast_later,
   decision_key,
   decision_show,
   long_jobs,

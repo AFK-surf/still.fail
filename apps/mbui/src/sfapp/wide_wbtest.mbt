@@ -1345,12 +1345,15 @@ test "wide: an agent's card over its picture beside its message (AgentCard.tsx),
   }
   assert_eq(word("Claude · Opus 5.5").length(), 0)
   t.move(last.1 - 20.0, last.2 + last.4 / 2.0)
-  t.run_for(hover_open_ms * 2.0)
+  t.run_for(@sfdesk.hover_open_ms * 2.0)
   // its label, where it stands under it, its latest lines, the figures side by side, its account, the quiet line
   let label = word("Claude · Opus 5.5")
   assert_eq(label.length(), 1, msg="its label in its card")
-  let status = word("做完了 · 5 分钟前")
   let lines = word("读了 src/ui/list.mbt")
+  // (where it stands alone: no clock while it neither waits nor works, as AgentCard.tsx)
+  let status = word("做完了").filter(fn(w) {
+    label.length() == 1 && lines.length() == 1 && w.2 > label[0].2 && w.2 < lines[0].2
+  })
   let cost = word("$4.20")
   let cache = word("91%")
   let names_of = word("费用估算")
@@ -1385,7 +1388,7 @@ test "wide: an agent's card over its picture beside its message (AgentCard.tsx),
   assert_true(left - 16.0 >= 0.0 && left + 288.0 + 16.0 <= 1280.0)
   // gone once the pointer has left it
   t.move(900.0, 300.0)
-  t.run_for(hover_close_ms * 2.0)
+  t.run_for(@sfdesk.hover_close_ms * 2.0)
   assert_eq(word("Claude · Opus 5.5").length(), 0)
 }
 
@@ -1428,7 +1431,7 @@ test "wide: an agent's card's latest lines run on as they change (AgentCard.tsx 
   })
   guard last is Some(name) else { fail("no agent's message") }
   t.move(name.1 - 20.0, name.2 + name.4 / 2.0)
-  t.run_for(hover_open_ms * 2.0)
+  t.run_for(@sfdesk.hover_open_ms * 2.0)
   // where the three are at rest: a line apart
   let near = fn(a : Double, b : Double) { (a - b).abs() < 0.01 }
   let y_of = fn(s : String) { word(s)[0].2 }
@@ -1447,7 +1450,7 @@ test "wide: an agent's card's latest lines run on as they change (AgentCard.tsx 
   let gone = word("读了 src/ui/list.mbt")
   assert_true(gone.length() == 1 && near(gone[0].2, y1) && gone[0].5 > 0.99, msg="\{gone}")
   // half way: on their way up together, the copy with them
-  t.run_for(lines_ms / 2.0)
+  t.run_for(@sfdesk.lines_ms / 2.0)
   let mid = y_of("跑了列表的测试")
   assert_true(mid < y2 - 1.0 && mid > y1 + 1.0, msg="\{mid}")
   let (m3, m4, m1) = (y_of("改了 src/ui/list.mbt"), y_of("提交了改动"), y_of("读了 src/ui/list.mbt"))
@@ -1456,7 +1459,7 @@ test "wide: an agent's card's latest lines run on as they change (AgentCard.tsx 
     msg="\{(mid, m3, m4, m1, pitch)}",
   )
   // there: a line up each, the new one whole, the copy gone
-  t.run_for(lines_ms / 2.0)
+  t.run_for(@sfdesk.lines_ms / 2.0)
   assert_true(near(y_of("跑了列表的测试"), y1) && near(y_of("改了 src/ui/list.mbt"), y2))
   let new = word("提交了改动")
   assert_true(near(new[0].2, y3) && new[0].5 > 0.99, msg="\{new}")

@@ -34,14 +34,8 @@ priv enum Sheet {
 ///|
 /// What this slice keeps while the app runs.
 priv struct Decide {
-  /// what was set going and is not answered yet (AppState.isDoing), by its call and what it is of
-  doing : Map[String, Bool]
   /// asks let go here, before the core says so (Chat.kt AskDismiss `gone`), by station, thread and post
   gone : Map[String, Bool]
-  /// what failed a moment ago (the core's doing, `stage: failed`, kept 6 s: DoingMark's red mark), by its key, which
-  /// failure it is (failed_serial: each its own 6 s)
-  failed : Map[String, Int]
-  mut failed_n : Int
   /// the sheet open; the one going (its motion is @kit.sheet's)
   mut sheet : Sheet?
   mut leaving : Sheet?
@@ -81,10 +75,7 @@ priv struct Decide {
 
 ///|
 let dui : Decide = {
-  doing: {},
   gone: {},
-  failed: {},
-  failed_n: 0,
   sheet: None,
   leaving: None,
   jobs_all: false,
@@ -111,9 +102,7 @@ let dui : Decide = {
 fn decide_reset() -> Unit {
   under_ends.clear()
   deck_anims.clear()
-  dui.doing.clear()
   dui.gone.clear()
-  dui.failed.clear()
   dui.sheet = None
   dui.leaving = None
   dui.jobs_all = false
@@ -138,108 +127,6 @@ fn decide_reset() -> Unit {
   dui.out_from = 0.0
   publish_reset()
   xsharing_reset()
-}
-
-///|
-/// Says `words` in the toast from the next frame on (from a call's answer, between frames).
-fn toast_later(words : String) -> Unit {
-  app.toast = words
-  app.toast_n += 1
-}
-
-///|
-/// Has the core do something (AppState.act): `key` under way until it answers (its button's spinner), `done` said
-/// when it did, why not said when it could not (`failed` told then). Nothing with MBUI_READONLY=1.
-fn act(
-  src : Source,
-  what : String,
-  key : String,
-  call : String,
-  params : Json,
-  done? : String = "",
-  ok? : (Json) -> Unit = fn(_) {  },
-  failed? : () -> Unit = fn() {  },
-) -> Unit {
-  if src.read_only {
-    toast_later(read_only_words)
-    failed()
-    return
-  }
-  if key != "" {
-    dui.doing[key] = true
-    dui.failed.remove(key)
-  }
-  (src.call)(call, params, fn(res) {
-    if key != "" {
-      dui.doing.remove(key)
-    }
-    if key != "" && res is Err(_) {
-      // its 6 s from the frame that first shows it (failed_lately)
-      dui.failed[key] = failed_next()
-    }
-    match res {
-      Ok(v) => {
-        if done != "" {
-          toast_later(done)
-        }
-        ok(v)
-      }
-      Err(e) => {
-        let code = text(Some(e), "code")
-        toast_later(
-          fill(
-            if code == "unconfirmed" {
-              "android-misc.act.unconfirmed"
-            } else {
-              "android-misc.act.failed"
-            },
-            [("what", what), ("error", error_words(e))],
-          ),
-        )
-        failed()
-      }
-    }
-  })
-}
-
-///|
-/// What went wrong, in words (errorText): the core's message, else its code.
-fn error_words(e : Json) -> String {
-  match text(Some(e), "message") {
-    "" => text(Some(e), "code")
-    m => m
-  }
-}
-
-///|
-/// Whether `key` is under way (AppState.isDoing).
-fn doing(key : String) -> Bool {
-  dui.doing.contains(key)
-}
-
-///|
-/// How long what failed keeps its red mark (the core's doing keeps a failure 6 s).
-let failed_ms : Double = 6000.0
-
-///|
-/// Whether `key` failed within the last 6 s (AppState.failedOf); a frame asked for when its mark is to go.
-fn failed_lately(c : @ui.Ctx, key : String) -> Bool {
-  match dui.failed.get(key) {
-    // (its going is not what is shown waits for: a screenshot of it failing shows the mark)
-    Some(n) if @kit.after(c, "failed/\{key}/\{n}", true, failed_ms, later=true) => {
-      dui.failed.remove(key)
-      false
-    }
-    Some(_) => true
-    None => false
-  }
-}
-
-///|
-/// Each failure told its own number (dui.failed): the same key failing again is a new 6 s.
-fn failed_next() -> Int {
-  dui.failed_n += 1
-  dui.failed_n
 }
 
 // ── what comes and goes under a post ────────────────────────────────────

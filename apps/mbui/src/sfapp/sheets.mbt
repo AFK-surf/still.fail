@@ -233,17 +233,6 @@ fn seg(
 }
 
 ///|
-/// The agent of a chat by its session, as the chat's view has it.
-fn agent_json(chat : Json?, key : String) -> Json? {
-  for a in items(chat, "agents") {
-    if text(field(Some(a), "session"), "key") == key {
-      return Some(a)
-    }
-  }
-  None
-}
-
-///|
 /// For how long it has stood where it does (AgentSheet.kt agentSince): at work since its turn began, waiting as long
 /// as it has (of at most), else when it was last at it.
 fn agent_since(c : @ui.Ctx, src : Source, a : Json?) -> String {

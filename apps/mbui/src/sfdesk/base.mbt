@@ -1,5 +1,12 @@
 // What the desktop's pages read of sfbase, by its own names (as sfapp/base.mbt takes them in).
 using @sfbase {
+  act,
+  doing,
+  each_second,
+  elapsed,
+  failed_lately,
+  opt_number,
+  second_ms,
   stamp_of,
   shown_days,
   row_tone,

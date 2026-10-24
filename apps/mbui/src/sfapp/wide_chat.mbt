@@ -303,7 +303,13 @@ fn wide_chat_bar(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef, v : Chat
             })
             |> ignore
             // the pointer resting on it: its card (AgentCard.tsx), as the web's
-            wide_hover(c, "agent-hover/" + a.key, id, tile=true, fn() { agent_card(c, src, r, a) }) |> ignore
+            @sfdesk.hover(c, "agent-hover/" + a.key, id, tile=true, fn() {
+              match agent_json((src.topic)("chat", chat_params(r)).value, a.key) {
+                Some(j) => @sfdesk.agent_card(c, src, r.station, j)
+                None => ()
+              }
+            })
+            |> ignore
           }
         }
         None => ()

@@ -177,5 +177,7 @@ pub fn reset() -> Unit {
   shown_days.clear()
   // the core's downloads being taken and kept (downloads.mbt)
   downloads_reset()
+  // what was asked of the core from a button, under way or failed (act.mbt)
+  acting_reset()
 }
 

@@ -21,4 +21,5 @@ pub fn reset() -> Unit {
   shell_reset()
   nav_reset()
   go_reset()
+  hover_reset()
 }
