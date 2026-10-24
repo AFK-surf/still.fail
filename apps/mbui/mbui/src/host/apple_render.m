@@ -26,10 +26,10 @@ static float *last_inst;
 static int32_t last_count;
 static size_t last_cap;
 static double last_bg[3];
-// glass (src/ui/glass.mbt): the passes that blur what is under it, the copies they work in (level j is 1/2^j of the
-// target, each as big as the target's at that level; tmp for a Gaussian's first half), the GPU's time of the last
-// frame done
-static id<MTLRenderPipelineState> ppipe;
+// glass (src/ui/glass.mbt): the passes that blur what is under it (into the copy, 8 bits a channel, and into the rest,
+// 10), the copies they work in (level j is 1/2^j of the target, each as big as the target's at that level; tmp for a
+// Gaussian's first half), the GPU's time of the last frame done
+static id<MTLRenderPipelineState> ppipe, ppipe_deep;
 static id<MTLTexture> lv[4], ltmp;
 static int lv_w, lv_h;
 static double last_gpu = -1;
@@ -166,6 +166,7 @@ MB_CORNER_SL
 "    // the edge shaded, more on the side away from the light, so the shape reads over a light ground too\n"
 "    c *= 1.0 - I.c2.x * band * (0.1 + 0.25 * max(-ndl, 0.0));\n"
 "    c = c + (1.0 - c) * clamp(spec, 0.0, 1.0);\n"
+"    c += mb_dither(p * u.scale) / 255.0;\n"
 "    return (float4(c, 1.0) * (a * I.c2.w)) * cover;\n"
 "  }\n"
 "  if (kind == 10) {\n"
@@ -229,6 +230,8 @@ MB_CORNER_SL
 "      g3 = mix(g3, float3(1.0), I.c2.y * lit);\n"
 "      g3 = mix(g3, float3(1.0), I.c2.z * back);\n"
 "    }\n"
+"    // dithered as it is written to 8 bits, so its slopes do not band (corner.sl mb_dither)\n"
+"    g3 += mb_dither(p * u.scale) / 255.0;\n"
 "    return (float4(g3, 1.0) * (a * I.c2.w)) * cover;\n"
 "  }\n"
 "  float4 fill = float4(col.rgb, 1.0) * col.a;\n"
@@ -316,6 +319,9 @@ void mb_render_init(CAMetalLayer *layer) {
   pd.colorAttachments[0].pixelFormat = MTLPixelFormatBGRA8Unorm;
   ppipe = [dev newRenderPipelineStateWithDescriptor:pd error:&err];
   if (!ppipe) NSLog(@"post pipeline: %@", err);
+  pd.colorAttachments[0].pixelFormat = MTLPixelFormatRGB10A2Unorm;
+  ppipe_deep = [dev newRenderPipelineStateWithDescriptor:pd error:&err];
+  if (!ppipe_deep) NSLog(@"post pipeline: %@", err);
   MTLTextureDescriptor *td = [MTLTextureDescriptor
       texture2DDescriptorWithPixelFormat:MTLPixelFormatRGBA8Unorm
                                    width:mb_atlas_size
@@ -344,15 +350,18 @@ void mb_atlas_upload(int x, int y, int w, int h, const void *rgba) {
 // Glass: when the instances reach a run of glass (slot 20 negative: the capture it shares), what is drawn so far
 // under it (its rects with room for the blur round them) is copied out, halved down to where the blur is a few texels
 // wide (dual Kawase's downsample, at most 1/8), blurred there by a Gaussian of what deviation is left, and drawn
-// through.
+// through. Level 0, the copy, has 8 bits a channel as the target has; what the passes write keeps 10 (RGB10A2, in as
+// many bytes): at 8 each pass rounds the frost's slow slopes into flat steps, a texel of the last level 8 pixels wide
+// on the screen (a blur under 4 pixels, too narrow to halve, is written back into the copy: it leaves no slope that
+// wide).
 
 typedef struct { float map[4]; float uvc[4]; float gb[4]; float shape[8][4]; float rad[2][4]; float misc[4]; } GU;
 static GU gu;
 static id<MTLTexture> gtex;  // the blurred copy the glass in view shows
 
-static id<MTLTexture> level_tex(int w, int h) {
+static id<MTLTexture> level_tex(MTLPixelFormat format, int w, int h) {
   MTLTextureDescriptor *td = [MTLTextureDescriptor
-      texture2DDescriptorWithPixelFormat:MTLPixelFormatBGRA8Unorm width:(NSUInteger)(w > 0 ? w : 1)
+      texture2DDescriptorWithPixelFormat:format width:(NSUInteger)(w > 0 ? w : 1)
                                   height:(NSUInteger)(h > 0 ? h : 1) mipmapped:NO];
   td.usage = MTLTextureUsageRenderTarget | MTLTextureUsageShaderRead;
   td.storageMode = MTLStorageModePrivate;
@@ -363,8 +372,10 @@ static void ensure_levels(int w, int h) {
   if (lv_w >= w && lv_h >= h && lv[0]) return;
   lv_w = w > lv_w ? w : lv_w;
   lv_h = h > lv_h ? h : lv_h;
-  for (int j = 0; j < 4; j++) lv[j] = level_tex((lv_w + (1 << j) - 1) >> j, (lv_h + (1 << j) - 1) >> j);
-  ltmp = level_tex(lv_w, lv_h);
+  for (int j = 0; j < 4; j++)
+    lv[j] = level_tex(j == 0 ? MTLPixelFormatBGRA8Unorm : MTLPixelFormatRGB10A2Unorm, (lv_w + (1 << j) - 1) >> j,
+                      (lv_h + (1 << j) - 1) >> j);
+  ltmp = level_tex(MTLPixelFormatRGB10A2Unorm, lv_w, lv_h);
 }
 
 // one pass of the blur: src into dst's top left (w × h); mode 1 halving, 2 a Gaussian of deviation sg along (dx, dy)
@@ -375,7 +386,7 @@ static void post_pass(id<MTLCommandBuffer> cb, id<MTLTexture> src, int sw, int s
   rp.colorAttachments[0].loadAction = MTLLoadActionDontCare;
   rp.colorAttachments[0].storeAction = MTLStoreActionStore;
   id<MTLRenderCommandEncoder> e = [cb renderCommandEncoderWithDescriptor:rp];
-  [e setRenderPipelineState:ppipe];
+  [e setRenderPipelineState:dst.pixelFormat == MTLPixelFormatRGB10A2Unorm ? ppipe_deep : ppipe];
   [e setViewport:(MTLViewport){0, 0, (double)w, (double)h, 0, 1}];
   [e setScissorRect:(MTLScissorRect){0, 0, (NSUInteger)w, (NSUInteger)h}];
   float tw = 1.0f / (float)src.width, th = 1.0f / (float)src.height;

@@ -228,6 +228,7 @@ static const char *shader_src =
     "    // the edge shaded, more on the side away from the light, so the shape reads over a light ground too\n"
     "    c *= 1.0 - I.c2.x * band * (0.1 + 0.25 * max(-ndl, 0.0));\n"
     "    c = c + (1.0 - c) * saturate(spec);\n"
+    "    c += mb_dither(p * scale) / 255.0;\n"
     "    return (float4(c, 1.0) * (a * I.c2.w)) * cover;\n"
     "  }\n"
     "  float2 hs = I.rect.zw * 0.5;\n"
@@ -266,6 +267,8 @@ static const char *shader_src =
     "      g3 = lerp(g3, float3(1.0, 1.0, 1.0), I.c2.y * lit);\n"
     "      g3 = lerp(g3, float3(1.0, 1.0, 1.0), I.c2.z * back);\n"
     "    }\n"
+    "    // dithered as it is written to 8 bits, so its slopes do not band (corner.sl mb_dither)\n"
+    "    g3 += mb_dither(p * scale) / 255.0;\n"
     "    return (float4(g3, 1.0) * (a * I.c2.w)) * cover;\n"
     "  }\n"
     "  float4 fill = float4(col.rgb, 1.0) * col.a;\n"
@@ -514,15 +517,18 @@ void mb_atlas_upload(int x, int y, int w, int h, const void *rgba) {
 // Glass: when the instances reach a run of glass (slot 20 negative: the capture it shares), what is drawn so far
 // under it (its rects with room for the blur round them) is copied out, halved down to where the blur is a few texels
 // wide (dual Kawase's downsample, at most 1/8), blurred there by a Gaussian of what deviation is left, and drawn
-// through.
+// through. Level 0, the copy, has 8 bits a channel as the target has; what the passes write keeps 10 (R10G10B10A2, in
+// as many bytes): at 8 each pass rounds the frost's slow slopes into flat steps, a texel of the last level 8 pixels
+// wide on the screen (a blur under 4 pixels, too narrow to halve, is written back into the copy: it leaves no slope
+// that wide).
 
-static level level_tex(int w, int h) {
+static level level_tex(DXGI_FORMAT format, int w, int h) {
   level l = {NULL, NULL, NULL, w > 0 ? w : 1, h > 0 ? h : 1};
   D3D11_TEXTURE2D_DESC td = {};
   td.Width = (UINT)l.w;
   td.Height = (UINT)l.h;
   td.MipLevels = td.ArraySize = 1;
-  td.Format = DXGI_FORMAT_B8G8R8A8_UNORM;
+  td.Format = format;
   td.SampleDesc.Count = 1;
   td.Usage = D3D11_USAGE_DEFAULT;
   td.BindFlags = D3D11_BIND_RENDER_TARGET | D3D11_BIND_SHADER_RESOURCE;
@@ -542,8 +548,10 @@ static void ensure_levels(int w, int h) {
     }
   lv_w = w > lv_w ? w : lv_w;
   lv_h = h > lv_h ? h : lv_h;
-  for (int j = 0; j < 4; j++) lv[j] = level_tex((lv_w + (1 << j) - 1) >> j, (lv_h + (1 << j) - 1) >> j);
-  lv[4] = level_tex(lv_w, lv_h);
+  for (int j = 0; j < 4; j++)
+    lv[j] = level_tex(j == 0 ? DXGI_FORMAT_B8G8R8A8_UNORM : DXGI_FORMAT_R10G10B10A2_UNORM, (lv_w + (1 << j) - 1) >> j,
+                      (lv_h + (1 << j) - 1) >> j);
+  lv[4] = level_tex(DXGI_FORMAT_R10G10B10A2_UNORM, lv_w, lv_h);
 }
 
 static void post_pass(level *src, int sw, int sh, level *dst, int w, int h, int mode, float sg, float dx, float dy) {

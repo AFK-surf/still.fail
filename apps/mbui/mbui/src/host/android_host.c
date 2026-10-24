@@ -319,7 +319,7 @@ static const char *FS =
     "uniform sampler2D u_img;\n"
     "// glass (src/ui/glass.mbt): the blurred copy under it and where a point is in it (uv = p * u_map.xy + u_map.zw, kept\n"
     "// in u_uvc), a liquid group's shapes and corners, how many\n"
-    "uniform sampler2D u_bd;\n"
+    "uniform highp sampler2D u_bd;\n"
     "uniform vec4 u_map;\n"
     "uniform vec4 u_uvc;\n"
     "uniform vec4 u_shape[8];\n"
@@ -443,6 +443,7 @@ static const char *FS =
     "    // the edge shaded, more on the side away from the light, so the shape reads over a light ground too\n"
     "    c *= 1.0 - v_c2.x * band * (0.1 + 0.25 * max(-ndl, 0.0));\n"
     "    c = c + (1.0 - c) * clamp(spec, 0.0, 1.0);\n"
+    "    c += mb_dither(p * u_scale) / 255.0;\n"
     "    o = vec4(c, 1.0) * (a * v_c2.w);\n"
     "    return;\n"
     "  }\n"
@@ -483,6 +484,8 @@ static const char *FS =
     "      g3 = mix(g3, vec3(1.0), v_c2.y * lit);\n"
     "      g3 = mix(g3, vec3(1.0), v_c2.z * back);\n"
     "    }\n"
+    "    // dithered as it is written to 8 bits, so its slopes do not band (corner.sl mb_dither)\n"
+    "    g3 += mb_dither(p * u_scale) / 255.0;\n"
     "    o = vec4(g3, 1.0) * (a * v_c2.w);\n"
     "    return;\n"
     "  }\n"
@@ -518,7 +521,7 @@ static const char *PFS =
     "precision highp float;\n"
     "// The backdrop's passes: u_a.xy the source's texel, u_a.z 1 halving (dual Kawase's down), 2 a Gaussian along u_b.zw\n"
     "// of deviation u_a.w (texels); u_b.xy the last texel's centre of what the source holds\n"
-    "uniform sampler2D u_src;\n"
+    "uniform highp sampler2D u_src;\n"
     "uniform vec4 u_a;\n"
     "uniform vec4 u_b;\n"
     "out vec4 o;\n"
@@ -643,7 +646,10 @@ JNIEXPORT void JNICALL Java_dev_mbui_Native_resize(JNIEnv *env, jclass c, jint w
 // Glass (src/ui/glass.mbt): when the instances reach a run of glass (slot 20 negative: the capture it shares), what
 // is drawn so far under it (its rects with room for the blur round them) is copied out of the surface, halved down
 // to where the blur is a few texels wide (dual Kawase's downsample, at most 1/8), blurred there by a Gaussian of what
-// deviation is left, and drawn through. Level j is 1/2^j of the surface, [4] a Gaussian's first half.
+// deviation is left, and drawn through. Level j is 1/2^j of the surface, [4] a Gaussian's first half. Level 0, the
+// copy, has 8 bits a channel as the surface has; what the passes write keeps 10 (RGB10_A2, in as many bytes): at 8 each
+// pass rounds the frost's slow slopes into flat steps, a texel of the last level 8 pixels wide on the screen (a blur
+// under 4 pixels, too narrow to halve, is written back into the copy: it leaves no slope that wide).
 
 typedef struct { GLuint t, fb; int w, h; } level;
 static level lv[5];
@@ -660,11 +666,11 @@ static void glass_lost(void) {
   lv_w = lv_h = 0;
 }
 
-static level level_tex(int w, int h) {
+static level level_tex(GLenum format, int w, int h) {
   level l = {0, 0, w > 0 ? w : 1, h > 0 ? h : 1};
   glGenTextures(1, &l.t);
   glBindTexture(GL_TEXTURE_2D, l.t);
-  glTexStorage2D(GL_TEXTURE_2D, 1, GL_RGBA8, l.w, l.h);
+  glTexStorage2D(GL_TEXTURE_2D, 1, format, l.w, l.h);
   glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
   glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
   glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
@@ -684,8 +690,9 @@ static void ensure_levels(int w, int h) {
     }
   lv_w = w > lv_w ? w : lv_w;
   lv_h = h > lv_h ? h : lv_h;
-  for (int j = 0; j < 4; j++) lv[j] = level_tex((lv_w + (1 << j) - 1) >> j, (lv_h + (1 << j) - 1) >> j);
-  lv[4] = level_tex(lv_w, lv_h);
+  for (int j = 0; j < 4; j++)
+    lv[j] = level_tex(j == 0 ? GL_RGBA8 : GL_RGB10_A2, (lv_w + (1 << j) - 1) >> j, (lv_h + (1 << j) - 1) >> j);
+  lv[4] = level_tex(GL_RGB10_A2, lv_w, lv_h);
   glBindFramebuffer(GL_FRAMEBUFFER, 0);
 }
 
