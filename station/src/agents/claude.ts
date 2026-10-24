@@ -136,6 +136,26 @@ const RENEWED = { CLAUDE_CODE_SDK_HAS_OAUTH_REFRESH: "1", CLAUDE_CODE_ENTRYPOINT
 /// A CLI that does not ask (one too old) retries a 401 on its own: past this attempt it is stopped as before.
 const RENEW_ATTEMPTS = 2;
 
+/// What Claude Code brings of its own that a station's chat agent cannot or must not use, kept out of its context (a
+/// fresh session began at 30k tokens, a third of them these; checked on 2.1.289):
+/// - its own scheduling: still.fail's jobs are the station's (stillfail-cron); a wakeup or cron of the process's own
+///   dies with it;
+/// - claude.ai connectors: they come with the Claude account the session runs on, which changes as accounts run out,
+///   so none is there to count on; and Claude Docs has the agent open a doc on claude.ai, out of the chat, first;
+/// - skills, each listed with its whole description in every session: "off" for those needing what a station's process
+///   never has (the desktop app's browser and computer use, connectors, a terminal, permission prompts, a scheduler of
+///   its own, settings in a profile's home it leaves when it changes account); "name-only" for those seldom needed.
+const DISALLOWED = ["ScheduleWakeup", "CronCreate", "CronDelete", "CronList", "RemoteTrigger"];
+const SETTINGS = {
+  disableClaudeAiConnectors: true,
+  skillOverrides: {
+    ...Object.fromEntries(["loop", "schedule", "keybindings-help", "fewer-permission-prompts", "plugin-authoring", "update-config"].map((name) => [name, "off"])),
+    ...Object.fromEntries(["dataviz", "claude-api", "code-review", "run"].map((name) => [name, "name-only"])),
+    ...Object.fromEntries(["computer-use", "chrome-browser", "built-in-browser", "docs", "google-workspace", "morning", "import-memory"].map((name) => [`anthropic-skills:${name}`, "off"])),
+    ...Object.fromEntries(["docx", "pptx", "xlsx", "pdf", "deep-research", "skill-creator"].map((name) => [`anthropic-skills:${name}`, "name-only"])),
+  },
+};
+
 /// A session as a next station takes it up (claude.rs Handed: the turn as its last handled line left it).
 export type ClaudeSnapshot = {
   runtime: "claude";
@@ -259,13 +279,16 @@ export class ClaudeDriver implements AgentDriver {
     else args.push("--session-id", sessionId);
     if (model !== undefined) args.push("--model", model);
     if (options.effort !== undefined) args.push("--effort", options.effort);
-    // None for a session continued from a terminal: its system prompt stays as it began, so its cache holds.
-    if (options.instructions !== "") args.push("--append-system-prompt", options.instructions);
+    // None for a session continued from a terminal: its system prompt and tools stay as they began, so its cache holds.
+    const ours = options.instructions !== "";
+    if (ours) args.push("--append-system-prompt", options.instructions);
     args.push("--mcp-config", JSON.stringify(mcpConfig));
+    if (ours) args.push("--disallowedTools", DISALLOWED.join(","));
     // A key the station renews in a file (a Kimi sign-in's token, minutes long): Claude Code's key helper reads it,
     // again every minute and after a 401 (Claude Code runs it in a POSIX shell, Git Bash on Windows).
     const file = keyFile(options.profile);
-    if (file !== undefined) args.push("--settings", JSON.stringify({ apiKeyHelper: `cat '${file.replaceAll("'", `'\\''`)}'` }));
+    const settings = { ...(ours ? SETTINGS : {}), ...(file === undefined ? {} : { apiKeyHelper: `cat '${file.replaceAll("'", `'\\''`)}'` }) };
+    if (Object.keys(settings).length > 0) args.push("--settings", JSON.stringify(settings));
 
     const env: Record<string, string> = { ...cleanEnv(SCRUBBED), ...expandRoute(profileEnv(options.profile, "claude"), options.route) };
     if (file !== undefined) env.CLAUDE_CODE_API_KEY_HELPER_TTL_MS = "60000";
