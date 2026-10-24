@@ -244,7 +244,15 @@ fn Ctx::desk_frame_end(self : Ctx) -> Unit {
   desk.mouse_drags = desk.next_mouse_drags
   desk.sels = desk.next_sels.copy()
   if !self.down && self.px >= 0.0 {
-    self.hover = hit_in(self.hit_ids, self.hit_rects, self.px, self.py)
+    if pointing() is Finger {
+      // a finger lifted is nowhere: what it last touched is not hovered, and the pointer is not over it (this frame,
+      // the one after it was lifted, still read where it was, for what a tap there opens)
+      self.px = -1.0
+      self.py = -1.0
+      self.hover = 0
+    } else {
+      self.hover = hit_in(self.hit_ids, self.hit_rects, self.px, self.py)
+    }
   }
   self.show_cursor()
 }
@@ -292,6 +300,22 @@ pub fn Ctx::right_clicked(self : Ctx, id : Int) -> (Double, Double)? {
     }
   }
   None
+}
+
+///|
+/// Where a menu of `id` was asked for since the last frame, in the window's terms: by a mouse, its secondary button
+/// clicked on it (Ctx::right_clicked); by a finger, held on it (long_press_ms, still: the press is then no click).
+/// For a menu the web's `contextmenu` opens (a row's, a place's), on either hand.
+pub fn Ctx::menu_asked(self : Ctx, id : Int) -> (Double, Double)? {
+  match self.right_clicked(id) {
+    Some(at) => Some(at)
+    None =>
+      if pointing() is Finger && self.long_press(id) {
+        Some((self.px, self.py))
+      } else {
+        None
+      }
+  }
 }
 
 ///|

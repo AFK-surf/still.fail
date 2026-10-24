@@ -72,8 +72,10 @@ pub fn hover_card(
   install()
   let id = c.id(key)
   let was = kit.val.opens.get(id).unwrap_or(false)
-  let on_trigger = c.hovered(trigger)
-  let on_card = was && pointer_in(c, c.id(key + "/panel"))
+  // (a mouse's: a finger rests on nothing, @ui.pointing)
+  let mouse = @ui.pointing() is Mouse
+  let on_trigger = mouse && c.hovered(trigger)
+  let on_card = mouse && was && pointer_in(c, c.id(key + "/panel"))
   let mut open = if was {
     !after(c, key + "/out", !(on_trigger || on_card), close_delay)
   } else {
@@ -113,7 +115,8 @@ pub let tooltip_skip_ms : Double = 300.0
 /// `key`'s tooltip (see the file's head) for the trigger `trigger` (its id), saying `text`: shown once a mouse has
 /// rested on it `delay` ms (at once within `skip` ms of another closing), or at once while it has the focus by the
 /// keyboard; beside the trigger, or beside `at` (a rect in the window: a point, the pointer, for a tip that follows
-/// it along a tall thin trigger, the web's usePointerTip). Whether it shows.
+/// it along a tall thin trigger, the web's usePointerTip). `shown`: held open by the app meanwhile (a mark that only
+/// explains itself, tapped by a finger, which rests on nothing). Whether it shows.
 pub fn tooltip(
   c : @ui.Ctx,
   key : String,
@@ -126,13 +129,15 @@ pub fn tooltip(
   offset? : Double = 6.0,
   look? : (@ui.Ctx, PopState, String) -> Unit = tooltip_look,
   at? : (Double, Double, Double, Double),
+  shown? : Bool = false,
 ) -> Bool {
   install()
   let id = c.id(key)
   let was = kit.val.opens.get(id).unwrap_or(false)
   // over its trigger: by where the pointer is, not by what is on top there (the tip itself, the frame it first comes
   // before it is placed, lies over the trigger: hovered alone, it shut and opened again every frame)
-  let hovered = c.hovered(trigger) || pointer_in(c, trigger)
+  // (a mouse's: a finger held on a button or dragging a list over one shows no tip, @ui.pointing)
+  let hovered = @ui.pointing() is Mouse && (c.hovered(trigger) || pointer_in(c, trigger))
   let focused = c.focus_shown(trigger)
   // pressed, or Escape: shut until the pointer and the focus have left it
   if c.pressed(trigger) || c.clicked(trigger) {
@@ -144,7 +149,7 @@ pub fn tooltip(
   let shut = kit.val.shut.contains(id)
   let soon = c.within(tip_closed, skip)
   let rested = after(c, key + "/in", hovered, if soon { 0.0 } else { delay })
-  let mut open = !shut && (focused || rested || (was && hovered))
+  let mut open = shown || (!shut && (focused || rested || (was && hovered)))
   let p = presence(c, key, open, enter=@motion.tween(100.0, ease=Out))
   if p.built {
     let o = c.overlay(key, anchor=trigger, outside=false, initial_focus=0, inert=p.leaving(), fn() {

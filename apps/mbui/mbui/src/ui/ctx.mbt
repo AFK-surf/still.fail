@@ -1296,7 +1296,8 @@ pub fn Ctx::pointer_at(self : Ctx) -> Double {
 
 ///|
 fn hit_in(ids : Array[Int], rects : Array[Double], x : Double, y : Double) -> Int {
-  let clips = if physical_equal(rects, g().hit_rects) { g().hit_clips } else { [] }
+  let targets = physical_equal(rects, g().hit_rects)
+  let clips = if targets { g().hit_clips } else { [] }
   let mut k = ids.length() - 1
   while k >= 0 {
     let r = k * 4
@@ -1305,11 +1306,84 @@ fn hit_in(ids : Array[Int], rects : Array[Double], x : Double, y : Double) -> In
       y >= rects[r + 1] &&
       y < rects[r + 3] &&
       in_round_clip(clips, k, x, y) {
-      return ids[k]
+      break
     }
     k = k - 1
   }
-  0
+  // a finger: what is smaller than a fingertip is reached from round it (Pointing)
+  if targets && pointing() is Finger {
+    match finger_reach(ids, rects, clips, k, x, y) {
+      Some(id) => return id
+      None => ()
+    }
+  }
+  if k >= 0 {
+    ids[k]
+  } else {
+    0
+  }
+}
+
+///|
+/// The least a finger's target is across, each way: the system's (Android's 48 dp, Compose's
+/// minimumInteractiveComponentSize; iOS's 44 pt).
+fn finger_target() -> Double {
+  if h_platform() == 1 {
+    44.0
+  } else {
+    48.0
+  }
+}
+
+///|
+/// What a finger at (x, y) reaches that it does not touch (Compose's minimum touch target): a target smaller than
+/// finger_target, grown to it round its middle (not drawn so, nor laid out), drawn over `top` (the target the finger
+/// is on, -1 none) and within it (a row's small button, not the row's neighbour: the one touched keeps it), within
+/// what cuts it; of several, the nearest.
+fn finger_reach(
+  ids : Array[Int],
+  rects : Array[Double],
+  clips : Array[Double],
+  top : Int,
+  x : Double,
+  y : Double,
+) -> Int? {
+  let least = finger_target()
+  let mut best : Int? = None
+  let mut best_d = 1.0e9
+  for k in (top + 1)..<ids.length() {
+    let r = k * 4
+    let (x0, y0, x1, y1) = (rects[r], rects[r + 1], rects[r + 2], rects[r + 3])
+    let (w, h) = (x1 - x0, y1 - y0)
+    if w <= 0.0 || h <= 0.0 || (w >= least && h >= least) {
+      continue
+    }
+    let gx = dmax(0.0, (least - w) / 2.0)
+    let gy = dmax(0.0, (least - h) / 2.0)
+    if x < x0 - gx || x >= x1 + gx || y < y0 - gy || y >= y1 + gy {
+      continue
+    }
+    // within what cuts it (a list's edge), and within what the finger is on
+    let b = k * clip_n
+    if b + clip_n <= clips.length() &&
+      (x < clips[b] || x >= clips[b + 2] || y < clips[b + 1] || y >= clips[b + 3]) {
+      continue
+    }
+    if top >= 0 {
+      let t = top * 4
+      if x0 < rects[t] || y0 < rects[t + 1] || x1 > rects[t + 2] || y1 > rects[t + 3] {
+        continue
+      }
+    }
+    let dx = dmax(0.0, dmax(x0 - x, x - x1))
+    let dy = dmax(0.0, dmax(y0 - y, y - y1))
+    let d = dx * dx + dy * dy
+    if d < best_d {
+      best_d = d
+      best = Some(ids[k])
+    }
+  }
+  best
 }
 
 ///|
