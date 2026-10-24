@@ -116,6 +116,7 @@ createRoot(root).render(<DemoApp phone />);
   assert.equal(lifted.text, widened.text, 'lifting keeps it');
   assert.equal(lifted.handles, 2, 'both handles show');
   assert.deepEqual(lifted.bar, ['引用', '复制', '全选'], 'the bar offers 引用, 复制, 全选');
+  await shot('selection-initial');
   // Drag both knobs: a small movement keeps the endpoint on its line rather than jumping to a hit-tested handle.
   for (const which of ['start', 'end']) {
     const handle = page.locator(`span[data-pick][data-end="${which}"]`);
@@ -126,6 +127,13 @@ createRoot(root).render(<DemoApp phone />);
     const move = (to) => cdp ? touch('touchMove', to, y) : page.mouse.move(to, y);
     const up = () => cdp ? touch('touchEnd') : page.mouse.up();
     await down();
+    await page.waitForFunction(() => !document.querySelector('div[data-pick]'));
+    // Other fingers neither take over this drag nor finish it when released or cancelled.
+    for (const type of ['pointerdown', 'pointerup', 'pointercancel', 'lostpointercapture']) {
+      await handle.evaluate((el, type) => el.dispatchEvent(new PointerEvent(type, {pointerId:99999, isPrimary:false, bubbles:true})), type);
+      await page.evaluate(() => new Promise(requestAnimationFrame));
+      assert.equal(await page.locator('div[data-pick]').count(), 0, `${type} from another pointer keeps the active drag`);
+    }
     await move(x + 1);
     await up();
     await page.waitForTimeout(100);

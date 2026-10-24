@@ -40,9 +40,11 @@ export function usePick(list: RefObject<HTMLElement | null>, onQuote: (quote: Om
   const end = useRef<HTMLSpanElement>(null);
   const bar = useRef<HTMLDivElement>(null);
   const paint = useRef<HTMLDivElement>(null);
+  const dragging = useRef<(() => void) | null>(null);
   const now = useRef({ picked, held });
   now.current = { picked, held };
-  const letGo = () => { setPicked(null); setHeld(false); };
+  const letGo = () => { dragging.current?.(); setPicked(null); setHeld(false); };
+  useEffect(() => () => dragging.current?.(), []);
 
   /** The words of the message picked in, as the list draws them now (none while its row is not drawn). */
   const wordsNow = (): HTMLElement | null => {
@@ -235,6 +237,7 @@ export function usePick(list: RefObject<HTMLElement | null>, onQuote: (quote: Om
   const drag = (which: "start" | "end") => (e: React.PointerEvent<HTMLElement>) => {
     e.stopPropagation();
     e.preventDefault();
+    if (!e.isPrimary || e.button !== 0 || dragging.current) return;
     const p = now.current.picked;
     if (!p) return;
     const el = e.currentTarget;
@@ -261,13 +264,18 @@ export function usePick(list: RefObject<HTMLElement | null>, onQuote: (quote: Om
       else { if (at <= ends.start) return; ends.end = at; }
       setPicked((q) => q && { ...q, span: { ...ends } });
     };
-    const up = () => {
+    const finish = () => {
       el.removeEventListener("pointermove", move);
       el.removeEventListener("pointerup", up);
       el.removeEventListener("pointercancel", up);
       el.removeEventListener("lostpointercapture", up);
+      dragging.current = null;
+      if (el.hasPointerCapture(e.pointerId)) el.releasePointerCapture(e.pointerId);
       setHeld(false);
     };
+    // Only the pointer that grabbed this handle may finish it, including capture lost on cancellation.
+    const up = (ev: PointerEvent) => { if (ev.pointerId === e.pointerId) finish(); };
+    dragging.current = finish;
     el.addEventListener("pointermove", move);
     el.addEventListener("pointerup", up);
     el.addEventListener("pointercancel", up);
