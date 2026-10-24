@@ -1507,3 +1507,22 @@ test "wide: 外观's 本机字体 lists the families installed here; one chosen 
   // the app's words in it: the host's family given to their face
   assert_eq(t.family_given(@hostapi.face_ui), "Menlo")
 }
+
+///|
+test "wide: 密钥's waiting request is its card as in its chat (Vault.tsx Request): 使用「…」, its command, 允许 for the chat, 拒绝, 打开对话" {
+  let calls : Array[Made] = []
+  let t = wide_tester(calls)
+  app.nav.replace(Setting(@settings.Route::Vault))
+  t.run_for(@ui.nav_push_ms)
+  for w in ["使用「GitHub token」", "git push origin main", "允许", "拒绝", "本对话内", "打开对话"] {
+    assert_true(t.find(w) is Some(_), msg=w)
+  }
+  // no more numbered rows of grants
+  assert_true(t.find("仅本次") is None)
+  t.tap_text("允许")
+  t.frame()
+  let made = named(calls, "vault.approve")
+  assert_eq(made.length(), 1)
+  assert_eq(field(Some(made[0].params), "request"), Some(Json::string("r1")))
+  assert_eq(field(Some(made[0].params), "scope"), Some(Json::string("chat")))
+}

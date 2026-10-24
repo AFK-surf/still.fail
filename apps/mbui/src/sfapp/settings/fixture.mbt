@@ -1231,6 +1231,7 @@ pub fn fixture_topic(mode : String, name : String, params : Map[String, Json]) -
                 ("item", str("it1")),
                 ("itemName", str("GitHub token")),
                 ("session", str("s-c1")),
+                ("station", str("st1")),
                 ("chat", str("c1")),
                 ("mode", str("proxy")),
                 ("reason", str("要把发布清单推到仓库")),

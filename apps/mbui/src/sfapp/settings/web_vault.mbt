@@ -93,7 +93,7 @@ fn vault_library_wide(c : @ui.Ctx, core : Core, ws : String, v : Json?) -> Array
         fn() {
           c.box(style=vt_requests, fn() {
             for r in requests {
-              vault_request_wide(c, core, ws, v, r)
+              vault_request_wide(c, core, ws, r)
             }
           })
           |> ignore
@@ -231,77 +231,33 @@ fn vault_library_wide(c : @ui.Ctx, core : Core, ws : String, v : Json?) -> Array
 }
 
 ///|
-/// A request waiting on the viewer (Request): which item, why, the command, how; its chat; its answers under it.
-fn vault_request_wide(c : @ui.Ctx, core : Core, ws : String, v : Json?, r : Json) -> Unit {
+/// A request waiting on the viewer (Vault.tsx Request): its card, as in its chat (vault_ask), and a way to that chat.
+fn vault_request_wide(c : @ui.Ctx, core : Core, ws : String, r : Json) -> Unit {
   let rv = Some(r)
   let id = text(rv, "id")
-  let mut station = ""
-  for x in items(v, "vaults") {
-    if text(Some(x), "id") == text(rv, "vault") {
-      station = text(Some(x), "station")
-    }
+  let save = field(rv, "save")
+  let asked : Asked = {
+    name: match opt_text(rv, "itemName") {
+      Some(n) => n
+      None => text(rv, "item")
+    },
+    mode: text(rv, "mode"),
+    command: text(rv, "command"),
+    save_kind: text(save, "kind"),
+    username: text(save, "username"),
+    station: "",
   }
-  c.box(style=vt_request, fn() {
-    c.box(style=vt_request_head, fn() {
-      let name = match opt_text(rv, "itemName") {
-        Some(n) => n
-        None => text(rv, "item")
-      }
-      c.text(fill("web-pages.vault.approve.wants", [("name", name)]), style=vt_row_name) |> ignore
-      let st = text(rv, "station")
-      if (st != "" || station != "") && vt_link(c, "vault-chat/" + id, tr("web-pages.vault.openChat")) {
-        let at = match st {
-          "" => station
-          s => s
-        }
-        (core.open_chat)(ws + "/" + at, text(rv, "session"), "")
+  let station = text(rv, "station")
+  let extra = if station == "" {
+    None
+  } else {
+    Some(fn() {
+      if @sf.button(c, tr("web-pages.vault.openChat"), key="vault-chat/" + id, tone=Ghost) {
+        (core.open_chat)(ws + "/" + station, text(rv, "session"), "")
       }
     })
-    |> ignore
-    // its facts (dl): what each is, beside it
-    c.box(style=vt_facts, fn() {
-      vt_fact(c, tr("web-pages.vault.reason"), fn() { c.text(text(rv, "reason"), style=vt_fact_words) |> ignore })
-      match opt_text(rv, "command") {
-        Some(cmd) => vt_fact(c, tr("web-pages.vault.command"), fn() { mono(c, cmd, style=vt_fact_mono, wrap=true) })
-        None => ()
-      }
-      vt_fact(c, tr("web-pages.vault.how"), fn() {
-        c.text(how_line(text(rv, "mode"), strings(rv, "hosts")), style=vt_fact_words) |> ignore
-      })
-    })
-    |> ignore
-    // its answers (VaultChoices): its grants up to the item's longest, the longest recommended; 拒绝
-    let scopes = vault_scopes_up_to(text(rv, "lasts"))
-    let options = scopes.mapi(fn(i, s) {
-      (tr("web-pages.vault.approve." + s), tr("web-pages.vault.approve." + s + "Detail"), i == scopes.length() - 1)
-    })
-    options.push((tr("web-pages.vault.approve.deny"), tr("web-pages.vault.approve.denyDetail"), false))
-    let on = [("workspace", ws), ("request", id)]
-    let mut busy : Int? = if is_doing(core, ["vault.deny"], on) { Some(scopes.length()) } else { None }
-    for i, s in scopes {
-      if is_doing(core, ["vault.approve"], [("workspace", ws), ("request", id), ("scope", s)]) {
-        busy = Some(i)
-      }
-    }
-    match @sf.options_card(c, "vault-options/" + id, options, true, busy, wide=true, room=desk_column_most) {
-      Some(k) if k == scopes.length() =>
-        act(core, tr("web-pages.vault.approve.denyWhat"), "vault.deny", obj([("workspace", str(ws)), ("request", str(id))]))
-      Some(k) =>
-        act(core, tr("web-pages.vault.approve.what"), "vault.approve", obj([("workspace", str(ws)), ("request", str(id)), ("scope", str(scopes[k]))]))
-      None => ()
-    }
-  })
-  |> ignore
-}
-
-///|
-/// A fact of a request: what it is (muted, as wide as the widest), what it says beside it.
-fn vt_fact(c : @ui.Ctx, label : String, value : () -> Unit) -> Unit {
-  c.box(style=vt_fact_row, fn() {
-    c.box(style=vt_fact_label_box, fn() { c.text(label, style=vt_fact_label) |> ignore }) |> ignore
-    c.box(style=vt_fact_value, value) |> ignore
-  })
-  |> ignore
+  }
+  c.box(style=vt_request, fn() { vault_ask(c, core, ws, id, asked, true, extra~) }) |> ignore
 }
 
 ///|
@@ -438,15 +394,6 @@ fn vt_row(c : @ui.Ctx, key : String, name : String, line : String, risk? : Bool 
 }
 
 ///|
-/// A link in a line (link: the accent's ink, the list's size). Whether it was pressed.
-fn vt_link(c : @ui.Ctx, key : String, words : String) -> Bool {
-  let id = c.id(key)
-  c.cursor(id, Hand)
-  c.box(id~, fn() { c.text(words, style=vt_link_words) |> ignore }) |> ignore
-  hit(c, id)
-}
-
-///|
 /// (the page, its foot over it)
 // kept across runs: a value (no field of it changes)
 let vt_fill : @ui.Style = @ui.style(w=Full, h=Full)
@@ -487,51 +434,14 @@ let vt_count : @ui.Style = @ui.style(px=S1_5, radius=Full, bg=DangerBg)
 let vt_count_words : @ui.TextStyle = @ui.text_style(size=Xs, leading=L5, weight=Medium, color=Danger, wrap=false)
 
 ///|
-/// (requests: 28 apart; request: its parts 8 apart)
+/// (requests: each one's card, 10 apart as the page's cards: pagesCss.card)
 // kept across runs: a value (no field of it changes)
-let vt_requests : @ui.Style = @ui.style(w=Full, gap=S7)
+let vt_requests : @ui.Style = @ui.style(w=Full, gap=S2_5)
 
 ///|
+/// (a request's card, as wide as the page: AskCard fill)
 // kept across runs: a value (no field of it changes)
-let vt_request : @ui.Style = @ui.style(w=Full, gap=S2)
-
-///|
-/// (requestHead: its name and its chat, 12 apart)
-// kept across runs: a value (no field of it changes)
-let vt_request_head : @ui.Style = @ui.style(row=true, gap=S3, align=AEnd)
-
-///|
-// kept across runs: a value (no field of it changes)
-let vt_row_name : @ui.TextStyle = @ui.text_style(size=Sm, leading=L6, weight=Medium, color=Fg, wrap=false)
-
-///|
-/// (facts: a row each, what it is and what it says 14 apart, 4 between rows, the list's words on the body's line)
-// kept across runs: a value (no field of it changes)
-let vt_facts : @ui.Style = @ui.style(w=Full, gap=S1)
-
-///|
-// kept across runs: a value (no field of it changes)
-let vt_fact_row : @ui.Style = @ui.style(row=true, w=Full, gap=S3_5, align=AStart)
-
-///|
-// kept across runs: a value (no field of it changes)
-let vt_fact_label_box : @ui.Style = @ui.style(min_w=S10)
-
-///|
-// kept across runs: a value (no field of it changes)
-let vt_fact_label : @ui.TextStyle = @ui.text_style(size=Sm, leading=L7, color=Muted, wrap=false)
-
-///|
-// kept across runs: a value (no field of it changes)
-let vt_fact_value : @ui.Style = @ui.style(w=@sf.grow)
-
-///|
-// kept across runs: a value (no field of it changes)
-let vt_fact_words : @ui.TextStyle = @ui.text_style(size=Sm, leading=L7, color=Fg, w=Full)
-
-///|
-// kept across runs: a value (no field of it changes)
-let vt_fact_mono : @ui.TextStyle = @ui.text_style(size=Xs, leading=L7, color=Fg, w=Full)
+let vt_request : @ui.Style = @ui.style(w=Full)
 
 ///|
 /// (link: the accent's ink, the list's size)

@@ -79,6 +79,8 @@ pub(all) struct Core {
   own_code_face : () -> Int
   /// the time of day (ms), for what is shown of it (剩余 N 分钟): the source's `now`
   now : () -> Double
+  /// run with MBUI_READONLY=1: what is said in place of an answer sent (a vault request's); "" where answers go
+  read_only : String
 }
 
 ///|
@@ -531,6 +533,7 @@ pub fn left(route : Route) -> Unit {
 /// As at the start: nothing chosen, no sheet (tests).
 pub fn reset() -> Unit {
   archive_reset()
+  vault_ask_reset()
   keymap_reset()
   notify_page_reset()
   login_marked.val = None
