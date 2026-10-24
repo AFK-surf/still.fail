@@ -56,7 +56,8 @@ fn open_pick_station(title : String, stations : Array[Json], go : (String) -> Un
 }
 
 ///|
-/// A profile's own actions (openProfileMenu): renamed (not one on the machine's login), checked again, its account
+/// A profile's own actions (openProfileMenu): renamed (not one on the machine's login), checked again (its allowance
+/// read again with it), its account
 /// signed in to again or by hand on the machine while its card asks for neither (signed in and well), deleted (one on
 /// the machine's login stopped instead: the login stays the machine's).
 fn open_profile_menu(_core : Core, station : String, p : Json?) -> Unit {
@@ -78,7 +79,8 @@ fn open_profile_menu(_core : Core, station : String, p : Json?) -> Unit {
         )
       })
     }
-    if pick_row(c, "profile-recheck", tr("android-settings.profile.recheck"), busy=is_doing(core, ["profile.check"], on)) {
+    // checked again with its allowance read again: whether it works and how much is left, as of now
+    if pick_row(c, "profile-recheck", tr("android-settings.profile.recheck"), busy=is_doing(core, ["profile.check", "profile.quota"], on)) {
       close_sheet()
       act(
         core,
@@ -87,6 +89,9 @@ fn open_profile_menu(_core : Core, station : String, p : Json?) -> Unit {
         obj([("station", str(station)), ("id", str(id))]),
         done=tr("android-settings.profile.checked"),
       )
+      if allowance_read(p) {
+        act(core, tr("android-settings.quota.checkWhat"), "profile.quota", obj([("station", str(station)), ("id", str(id))]))
+      }
     }
     if signs_in(p) && !sign_in_asked(p) {
       if pick_row(c, "profile-login", tr("android-settings.login.again"), busy=is_doing(core, ["profile.login"], on)) {
@@ -133,59 +138,76 @@ fn open_profile_menu(_core : Core, station : String, p : Json?) -> Unit {
 }
 
 ///|
-/// The core's diagnosis of a profile in trouble and its next step (ProfileRecovery): what is wrong, what to do, a
-/// command to run where that is it, the button that does it (a key asked for, its variables, its allowance read again,
-/// checked again).
-fn profile_recovery(c : @ui.Ctx, core : Core, s : Json?, p : Json?) -> Array[() -> Unit] {
+/// Whether a profile has an allowance its provider says (a subscription's; not a key's, which has none to read).
+fn allowance_read(p : Json?) -> Bool {
+  let q = field(p, "quota")
+  q is Some(Object(_)) && text(q, "state") != "unsupported"
+}
+
+///|
+/// The core's diagnosis of a profile in trouble and its next step (ProfileRecovery), on its account's card under where
+/// it stands (whose first line its title is: account_head): why, what to do, a command to run where that is it, the
+/// button that does it (a key asked for, its variables, its allowance read again, checked again; signing in is the
+/// card's own, profile_sign_in), one under the other as the card's column has them.
+fn profile_trouble(c : @ui.Ctx, core : Core, s : Json?, p : Json?) -> Unit {
   let issue = field(p, "trouble")
-  guard issue is Some(Object(_)) else { return [] }
-  let t = @sf.theme()
+  guard issue is Some(Object(_)) else { return }
   let station = text(s, "station")
   let id = text(p, "id")
   let on = [("station", station), ("id", id)]
   let action = text(issue, "action")
   let online = flag(s, "online")
-  [
-    fn() { section_header(c, text(issue, "title"), start=S6) },
-    fn() {
-      // its button at the bottom, in the corner (Card(foot = action != "login"))
-      card(c, foot=action != "login", fn() {
-        c.box(w=Fill(1.0), gap=10.0, fn() {
-          c.text(text(issue, "detail"), size=13.0, color=t.p.text, w=Fill(1.0), line=18.0) |> ignore
-          c.text(text(issue, "next"), size=13.0, color=t.p.muted, w=Fill(1.0), line=18.0) |> ignore
-          if !online {
-            c.text(fill("android-settings.profile.offline", [("name", text(s, "name"))]), size=13.0, color=t.p.muted, w=Fill(1.0), line=18.0)
-            |> ignore
-          }
-          if action == "command" {
-            command_box(c, core, text(p, "loginCommand"))
-          }
-          let checking = is_doing(core, ["profile.check"], on)
-          let refreshing = is_doing(core, ["profile.quota"], on)
-          // (one under the other, as the card's column has them)
-          if action != "login" &&
-              button(c, "recover-go", text(issue, "label"), false, enabled=online, busy=checking || refreshing) {
-              match action {
-                "key" => ask_key(core, station, p, tr("android-settings.profile.newKey"), tr("android-settings.profile.keyHintShort"))
-                "env" => open_env_sheet(core, station, p)
-                "quota" =>
-                  act(core, tr("android-settings.quota.checkWhat"), "profile.quota", obj([("station", str(station)), ("id", str(id))]), done=tr("android-settings.quota.updated"))
-                _ =>
-                  act(core, tr("android-settings.profile.checkWhat"), "profile.check", obj([("station", str(station)), ("id", str(id))]), done=tr("android-settings.profile.checked"))
-              }
-            }
-          if (action == "key" || action == "env") &&
-              button(c, "recover-check", tr("android-settings.profile.recheck"), false, enabled=online, busy=checking) {
-              act(core, tr("android-settings.profile.checkWhat"), "profile.check", obj([("station", str(station)), ("id", str(id))]), done=tr("android-settings.profile.checked"))
-          }
-          doing_mark(c, false, failed_of(core, ["profile.check", "profile.quota"], on))
-        })
-        |> ignore
-      })
-      |> ignore
-    },
-  ]
+  c.box(style=trouble_rows, fn() {
+    if text(issue, "detail") != "" {
+      c.text(text(issue, "detail"), style=trouble_words) |> ignore
+    }
+    if text(issue, "next") != "" {
+      c.text(text(issue, "next"), style=@sf.meta.then(@sf.full_words)) |> ignore
+    }
+    if !online {
+      c.text(fill("android-settings.profile.offline", [("name", text(s, "name"))]), style=@sf.meta.then(@sf.full_words)) |> ignore
+    }
+    if action == "command" {
+      command_box(c, core, text(p, "loginCommand"))
+    }
+    let checking = is_doing(core, ["profile.check"], on)
+    let refreshing = is_doing(core, ["profile.quota"], on)
+    if action != "login" &&
+      button(c, "recover-go", text(issue, "label"), false, enabled=online, busy=checking || refreshing) {
+      match action {
+        "key" => ask_key(core, station, p, tr("android-settings.profile.newKey"), tr("android-settings.profile.keyHintShort"))
+        "env" => open_env_sheet(core, station, p)
+        "quota" =>
+          act(core, tr("android-settings.quota.checkWhat"), "profile.quota", obj([("station", str(station)), ("id", str(id))]), done=tr("android-settings.quota.updated"))
+        _ =>
+          act(core, tr("android-settings.profile.checkWhat"), "profile.check", obj([("station", str(station)), ("id", str(id))]), done=tr("android-settings.profile.checked"))
+      }
+    }
+    if (action == "key" || action == "env") &&
+      button(c, "recover-check", tr("android-settings.profile.recheck"), false, enabled=online, busy=checking) {
+      act(core, tr("android-settings.profile.checkWhat"), "profile.check", obj([("station", str(station)), ("id", str(id))]), done=tr("android-settings.profile.checked"))
+    }
+  })
+  |> ignore
 }
+
+///|
+/// Whether a profile's trouble ends in a button of its own (all but signing in, which is its card's): its card's
+/// corner then taken from it.
+fn trouble_button(p : Json?) -> Bool {
+  let issue = field(p, "trouble")
+  issue is Some(Object(_)) && text(issue, "action") != "login"
+}
+
+///|
+/// What a trouble says and its button, 10 apart.
+// kept across runs: a value (no field of it changes)
+let trouble_rows : @ui.Style = @ui.style(w=Full, gap=S2_5)
+
+///|
+/// Why it is in trouble (13, the text's ink).
+// kept across runs: a value (no field of it changes)
+let trouble_words : @ui.TextStyle = @ui.text_style(size=Sm, leading=L5, color=Fg, w=Full)
 
 ///|
 /// A new key asked for, in a field that shows dots (secret), and saved (`profile.put` with the account's kind and the
@@ -488,13 +510,27 @@ fn profile_env(c : @ui.Ctx, core : Core, station : String, p : Json?) -> Array[(
 }
 
 ///|
-/// How the profile runs (Profiles.kt): its subscription's default Fast, and commands put to the background as a new
-/// message comes (Claude Code's), each a switch (`profile.put`): the first (`fast_part`) or the second.
-fn profile_run(c : @ui.Ctx, core : Core, station : String, p : Json?, fast_part : Bool) -> Array[() -> Unit] {
-  let t = @sf.theme()
+/// How the profile runs (Profiles.kt), one card under 运行: which of its models may be used (a row to their page,
+/// profile_models_page: how many of how many on), its subscription's default Fast, and commands put to the background
+/// as a new message comes (Claude Code's), each a switch (`profile.put`). A decision model's models are said, not
+/// picked (models_section, apart).
+fn profile_run(c : @ui.Ctx, core : Core, station : String, p : Json?) -> Array[() -> Unit] {
   let id = text(p, "id")
   let on = [("station", station), ("id", id)]
-  let out : Array[() -> Unit] = []
+  let picks = !flag(p, "decisionOnly")
+  let fast = match field(p, "fast") {
+    Some(True) => Some(true)
+    Some(False) => Some(false)
+    _ => None
+  }
+  let background = match field(p, "backgroundOnMessage") {
+    Some(True) if strings(p, "runtimes").contains("claude") => Some(true)
+    Some(False) if strings(p, "runtimes").contains("claude") => Some(false)
+    _ => None
+  }
+  if !picks && fast is None && background is None {
+    return []
+  }
   let switch_row = fn(key : String, title : String, sub : String, value : Bool, field_name : String, what : String, done : String) {
     let busy = is_doing(core, ["profile.put"], on)
     if list_row(c, key=if busy { "" } else { key }, fn() {
@@ -511,53 +547,58 @@ fn profile_run(c : @ui.Ctx, core : Core, station : String, p : Json?, fast_part 
       )
     }
   }
-  match field(p, "fast") {
-    Some(True) | Some(False) as f if fast_part => {
-      let fast = f is Some(True)
-      out.push(fn() { section_header(c, tr("android-settings.profile.run"), start=S6) })
-      out.push(fn() {
-        list_card(c, fn() {
-          switch_row(
-            "profile-fast",
-            tr("android-settings.profile.fast"),
-            tr("android-settings.profile.fastNote"),
-            fast,
-            "fast",
-            tr("android-settings.profile.saveFast"),
-            tr(if fast { "android-settings.profile.fastOff" } else { "android-settings.profile.fastOn" }),
-          )
-        })
+  [
+    fn() { section_header(c, tr("android-settings.profile.run"), start=S6) },
+    fn() {
+      list_card(c, fn() {
+        if picks {
+          let ticked = strings(p, "models").length()
+          let all = model_choices(p).length()
+          if list_row(c, key="profile-models", fn() {
+              row_title(c, tr("web-pages.profiles.models"))
+              doing_mark(c, has(p, "modelsSaving"), None)
+              c.text(if all > 0 { ticked.to_string() + " / " + all.to_string() } else { ticked.to_string() }, style=@sf.value)
+              |> ignore
+              chevron(c)
+            }) {
+            (core.push)(ProfileModels(station, id))
+          }
+        }
+        match fast {
+          Some(f) =>
+            switch_row(
+              "profile-fast",
+              tr("android-settings.profile.fast"),
+              tr("android-settings.profile.fastNote"),
+              f,
+              "fast",
+              tr("android-settings.profile.saveFast"),
+              tr(if f { "android-settings.profile.fastOff" } else { "android-settings.profile.fastOn" }),
+            )
+          None => ()
+        }
+        match background {
+          Some(bg) =>
+            switch_row(
+              "profile-background",
+              tr("android-settings.profile.background"),
+              tr(if bg { "android-settings.profile.backgroundOn" } else { "android-settings.profile.backgroundOff" }),
+              bg,
+              "backgroundOnMessage",
+              tr("android-settings.profile.run"),
+              tr(if bg { "android-settings.profile.turnedOff" } else { "android-settings.profile.turnedOn" }),
+            )
+          None => ()
+        }
       })
-    }
-    _ => ()
-  }
-  match field(p, "backgroundOnMessage") {
-    Some(True) | Some(False) as b if !fast_part && strings(p, "runtimes").contains("claude") => {
-      let bg = b is Some(True)
-      out.push(fn() { section_header(c, tr("android-settings.profile.run"), start=S6) })
-      out.push(fn() {
-        list_card(c, fn() {
-          switch_row(
-            "profile-background",
-            tr("android-settings.profile.background"),
-            tr(if bg { "android-settings.profile.backgroundOn" } else { "android-settings.profile.backgroundOff" }),
-            bg,
-            "backgroundOnMessage",
-            tr("android-settings.profile.run"),
-            tr(if bg { "android-settings.profile.turnedOff" } else { "android-settings.profile.turnedOn" }),
-          )
-        })
-      })
-    }
-    _ => ()
-  }
-  ignore(t)
-  out
+    },
+  ]
 }
 
 ///|
 /// Which of the workspaces the station joined may run their chats on this profile too (WorkspacesSection), a switch
-/// each: for its home workspace's owners and admins, once the station is in more than one.
+/// each, rows of its 分享 card (profile_sharing): for its home workspace's owners and admins, once the station is in
+/// more than one.
 fn profile_workspaces(c : @ui.Ctx, core : Core, station : String, p : Json?) -> Array[() -> Unit] {
   let view = (core.topic)("memberships", { "station": str(station) }).value
   if !flag(view, "manages") {
@@ -571,38 +612,62 @@ fn profile_workspaces(c : @ui.Ctx, core : Core, station : String, p : Json?) -> 
   let now = strings(p, "workspaces")
   let on = [("station", station), ("id", id)]
   [
-    fn() { section_header(c, tr("web-pages.profiles.workspaces.title"), start=S6) },
+    fn() {
+      let busy = is_doing(core, ["profile.put"], on)
+      for w in joined {
+        let ws = text(Some(w), "workspace")
+        let name = text(Some(w), "name")
+        let is_on = now.contains(ws)
+        if list_row(c, key=if busy { "" } else { "profile-ws/" + ws }, fn() {
+            row_lines(
+              c,
+              fill("web-pages.profiles.workspaces.for", [("name", name)]),
+              fill(if is_on { "web-pages.profiles.workspaces.on" } else { "web-pages.profiles.workspaces.off" }, [
+                ("name", name),
+              ]),
+              wrap_sub=true,
+            )
+            doing_mark(c, busy, failed_of(core, ["profile.put"], on))
+            switch(c, "profile-ws/" + ws, is_on)
+          }) {
+          let next = if is_on { now.filter(fn(x) { x != ws }) } else { now + [ws] }
+          act(
+            core,
+            tr("web-pages.profiles.workspaces.what"),
+            "profile.put",
+            obj([("station", str(station)), ("id", str(id)), ("input", obj([("workspaces", Json::array(next.map(str)))]))]),
+            done=fill(
+              if is_on { "web-pages.profiles.workspaces.turnedOff" } else { "web-pages.profiles.workspaces.turnedOn" },
+              [("name", name)],
+            ),
+          )
+        }
+      }
+    },
+  ]
+}
+
+///|
+/// Whom a profile is shared with, one card under 分享: the station's other workspaces whose chats may use it
+/// (profile_workspaces), the workspace's other stations (profile_share; a copy of another station's, whose it is).
+/// None of either to say, no section.
+fn profile_sharing(c : @ui.Ctx, core : Core, here : Here, s : Json?, p : Json?) -> Array[() -> Unit] {
+  let rows : Array[() -> Unit] = []
+  if text(field(p, "share"), "role") != "user" {
+    rows.append(profile_workspaces(c, core, text(s, "station"), p))
+  }
+  if flag(field(s, "overview"), "sharing") {
+    rows.append(profile_share(c, core, here, s, p))
+  }
+  if rows.length() == 0 {
+    return []
+  }
+  [
+    fn() { section_header(c, tr("web-pages.profiles.share.title"), start=S6) },
     fn() {
       list_card(c, fn() {
-        let busy = is_doing(core, ["profile.put"], on)
-        for w in joined {
-          let ws = text(Some(w), "workspace")
-          let name = text(Some(w), "name")
-          let is_on = now.contains(ws)
-          if list_row(c, key=if busy { "" } else { "profile-ws/" + ws }, fn() {
-              row_lines(
-                c,
-                fill("web-pages.profiles.workspaces.for", [("name", name)]),
-                fill(if is_on { "web-pages.profiles.workspaces.on" } else { "web-pages.profiles.workspaces.off" }, [
-                  ("name", name),
-                ]),
-                wrap_sub=true,
-              )
-              doing_mark(c, busy, failed_of(core, ["profile.put"], on))
-              switch(c, "profile-ws/" + ws, is_on)
-            }) {
-            let next = if is_on { now.filter(fn(x) { x != ws }) } else { now + [ws] }
-            act(
-              core,
-              tr("web-pages.profiles.workspaces.what"),
-              "profile.put",
-              obj([("station", str(station)), ("id", str(id)), ("input", obj([("workspaces", Json::array(next.map(str)))]))]),
-              done=fill(
-                if is_on { "web-pages.profiles.workspaces.turnedOff" } else { "web-pages.profiles.workspaces.turnedOn" },
-                [("name", name)],
-              ),
-            )
-          }
+        for r in rows {
+          r()
         }
       })
     },
@@ -610,9 +675,9 @@ fn profile_workspaces(c : @ui.Ctx, core : Core, station : String, p : Json?) -> 
 }
 
 ///|
-/// Sharing a profile with the workspace's other stations (ShareSection): a switch; once on, where a subscription is
-/// signed in (moved from here) and which stations may use it. A copy of another station's says whose, its page a tap
-/// away.
+/// Sharing a profile with the workspace's other stations (ShareSection), rows of its 分享 card (profile_sharing): a
+/// switch; once on, where a subscription is signed in (moved from here) and which stations may use it. A copy of
+/// another station's says whose, its page a tap away.
 fn profile_share(c : @ui.Ctx, core : Core, here : Here, s : Json?, p : Json?) -> Array[() -> Unit] {
   let t = @sf.theme()
   let station = text(s, "station")
@@ -643,31 +708,28 @@ fn profile_share(c : @ui.Ctx, core : Core, here : Here, s : Json?, p : Json?) ->
       None => None
     }
     return [
-      fn() { section_header(c, tr("web-pages.profiles.share.title"), start=S6) },
       fn() {
-        list_card(c, fn() {
-          if list_row(c, key=if lender is Some(_) { "share-lender" } else { "" }, fn() {
-              c.box(w=Fill(1.0), fn() {
-                c.text(fill("web-main.memory.share.from", [("station", host)]), size=15.0, color=t.p.text, w=Fill(1.0), line=21.0)
-                |> ignore
-                c.text(tr("web-pages.profiles.share.changeThere"), size=13.0, color=t.p.muted, w=Fill(1.0), line=18.0)
-                |> ignore
-                if subscription && field(share, "reachable") is Some(False) {
-                  c.text(fill("web-pages.profiles.share.hostAway", [("station", host)]), size=13.0, color=t.p.red, w=Fill(1.0), line=18.0)
-                  |> ignore
-                }
-              })
+        if list_row(c, key=if lender is Some(_) { "share-lender" } else { "" }, fn() {
+            c.box(w=Fill(1.0), fn() {
+              c.text(fill("web-main.memory.share.from", [("station", host)]), size=15.0, color=t.p.text, w=Fill(1.0), line=21.0)
               |> ignore
-              if lender is Some(_) {
-                chevron(c)
+              c.text(tr("web-pages.profiles.share.changeThere"), size=13.0, color=t.p.muted, w=Fill(1.0), line=18.0)
+              |> ignore
+              if subscription && field(share, "reachable") is Some(False) {
+                c.text(fill("web-pages.profiles.share.hostAway", [("station", host)]), size=13.0, color=t.p.red, w=Fill(1.0), line=18.0)
+                |> ignore
               }
-            }) {
-            match lender {
-              Some(m) => (core.push)(Profile(text(Some(m), "station"), text(Some(m), "profileId")))
-              None => ()
+            })
+            |> ignore
+            if lender is Some(_) {
+              chevron(c)
             }
+          }) {
+          match lender {
+            Some(m) => (core.push)(Profile(text(Some(m), "station"), text(Some(m), "profileId")))
+            None => ()
           }
-        })
+        }
       },
     ]
   }
@@ -689,70 +751,67 @@ fn profile_share(c : @ui.Ctx, core : Core, here : Here, s : Json?, p : Json?) ->
   }
   let targets = stations.filter(fn(x) { text(Some(x), "id") != sid })
   [
-    fn() { section_header(c, tr("web-pages.profiles.share.title"), start=S6) },
     fn() {
-      list_card(c, fn() {
-        if list_row(c, key=if sharing { "" } else { "share-switch" }, fn() {
-            row_lines(
-              c,
-              tr("web-pages.profiles.share.switch"),
-              if !shared {
-                fill("web-pages.profiles.share.onlyHere", [("station", text(s, "name"))])
-              } else if subscription {
-                tr("web-pages.profiles.share.lent")
-              } else {
-                tr("web-pages.profiles.share.copied")
-              },
-              wrap_sub=true,
-            )
-            doing_mark(c, sharing, failed_of(core, ["profile.share"], on))
-            switch(c, "share-switch", shared)
-          }) {
-          act(
-            core,
+      if list_row(c, key=if sharing { "" } else { "share-switch" }, fn() {
+          row_lines(
+            c,
             tr("web-pages.profiles.share.switch"),
-            "profile.share",
-            obj([("station", str(station)), ("id", str(id)), ("on", Json::boolean(!shared))]),
-            done=tr(if shared { "web-pages.profiles.share.unshared" } else { "web-pages.profiles.share.shared" }),
+            if !shared {
+              fill("web-pages.profiles.share.onlyHere", [("station", text(s, "name"))])
+            } else if subscription {
+              tr("web-pages.profiles.share.lent")
+            } else {
+              tr("web-pages.profiles.share.copied")
+            },
+            wrap_sub=true,
           )
+          doing_mark(c, sharing, failed_of(core, ["profile.share"], on))
+          switch(c, "share-switch", shared)
+        }) {
+        act(
+          core,
+          tr("web-pages.profiles.share.switch"),
+          "profile.share",
+          obj([("station", str(station)), ("id", str(id)), ("on", Json::boolean(!shared))]),
+          done=tr(if shared { "web-pages.profiles.share.unshared" } else { "web-pages.profiles.share.shared" }),
+        )
+      }
+      if shared && subscription && !flag(p, "machine") {
+        if list_row(c, key=if moving || targets.length() == 0 { "" } else { "share-move" }, fn() {
+            row_title(c, tr("web-pages.profiles.share.signedIn"))
+            doing_mark(c, moving, failed_of(core, ["profile.move"], on))
+            c.text(text(s, "name"), size=13.0, color=t.p.muted, wrap=false) |> ignore
+            chevron(c)
+          }) {
+          open_move(core, s, p, targets)
         }
-        if shared && subscription && !flag(p, "machine") {
-          if list_row(c, key=if moving || targets.length() == 0 { "" } else { "share-move" }, fn() {
-              row_title(c, tr("web-pages.profiles.share.signedIn"))
-              doing_mark(c, moving, failed_of(core, ["profile.move"], on))
-              c.text(text(s, "name"), size=13.0, color=t.p.muted, wrap=false) |> ignore
-              chevron(c)
-            }) {
-            open_move(core, s, p, targets)
-          }
+      }
+      if shared {
+        if list_row(c, key="share-stations", fn() {
+            let users = strings(share, "users")
+            c.box(w=Fill(1.0), fn() {
+              c.text(tr("web-pages.profiles.share.stations"), size=15.0, color=t.p.text, w=Fill(1.0), line=21.0) |> ignore
+              if users.length() > 0 {
+                c.text(
+                  fill("web-pages.profiles.share.users", [("stations", join(users.map(name_of), tr("web-main.list.separator")))]),
+                  size=13.0,
+                  color=t.p.muted,
+                  w=Fill(1.0),
+                  line=18.0,
+                )
+                |> ignore
+              }
+            })
+            |> ignore
+            c.box(max_w=160.0, fn() {
+              c.text(names, size=13.0, color=t.p.muted, wrap=false, line=18.0) |> ignore
+            })
+            |> ignore
+            chevron(c)
+          }) {
+          open_pick_share(core, s, p, stations, allowed)
         }
-        if shared {
-          if list_row(c, key="share-stations", fn() {
-              let users = strings(share, "users")
-              c.box(w=Fill(1.0), fn() {
-                c.text(tr("web-pages.profiles.share.stations"), size=15.0, color=t.p.text, w=Fill(1.0), line=21.0) |> ignore
-                if users.length() > 0 {
-                  c.text(
-                    fill("web-pages.profiles.share.users", [("stations", join(users.map(name_of), tr("web-main.list.separator")))]),
-                    size=13.0,
-                    color=t.p.muted,
-                    w=Fill(1.0),
-                    line=18.0,
-                  )
-                  |> ignore
-                }
-              })
-              |> ignore
-              c.box(max_w=160.0, fn() {
-                c.text(names, size=13.0, color=t.p.muted, wrap=false, line=18.0) |> ignore
-              })
-              |> ignore
-              chevron(c)
-            }) {
-            open_pick_share(core, s, p, stations, allowed)
-          }
-        }
-      })
+      }
     },
   ]
 }

@@ -1,5 +1,5 @@
 // A profile's quota reset and its models (settings/profiles.mbt; Profiles.kt Quota, ModelsSection) over ChatGPT 团队:
-// a reset used once asked, a model named by hand, a filter over the many.
+// a reset used once asked, its models on a page of their own: a model named by hand, a filter over the many.
 
 ///|
 test "a profile's quota: 重置额度 asks first, then uses one of the resets left" {
@@ -20,6 +20,11 @@ test "a profile's quota: 重置额度 asks first, then uses one of the resets le
 ///|
 test "a profile's models: one named by hand is added, the filter leaves what has its words" {
   let t = settings_tester("profile:ws1/st1#cx")
+  // on a page of their own, from 运行's 模型 (how many of how many on)
+  shown_on_page(t, "1 / 12")
+  t.tap_text("1 / 12")
+  nav_rested(t)
+  assert_true(t.find("已选 1 项") is Some(_))
   shown_on_page(t, "筛选模型")
   assert_true(t.find("O9-MINI") is Some(_))
   // a name typed, then 添加

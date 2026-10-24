@@ -1119,6 +1119,7 @@ let zh : Map[String, String] = {
   "web-pages.profiles.share.stations": "可用的 station",
   "web-pages.profiles.share.switch": "分享给其他 station",
   "web-pages.profiles.share.title": "分享",
+  "web-pages.profiles.models": "模型",
   "web-pages.profiles.share.unshared": "已停止分享",
   "web-pages.profiles.share.users": "使用中：{stations}",
   "web-pages.profiles.step1": "打开授权页面，用 {name} 要使用的 Claude 账号登录并同意授权",
