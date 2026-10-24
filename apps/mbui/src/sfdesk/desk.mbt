@@ -40,6 +40,7 @@ pub fn reset() -> Unit {
   changelog_reset()
   vault_item_reset()
   memory_doc_reset()
+  add_profile_reset()
   station_cards_reset()
   places_reset()
   chat_page_reset()

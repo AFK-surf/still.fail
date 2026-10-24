@@ -136,3 +136,13 @@ test "wide: a skill's memory page says what it is and when it is read, its pages
   t.draw()
   assert_true(t.find("签名") is Some(_), msg="the file's text")
 }
+
+///|
+test "wide: the Station place with none in the workspace is the first to add, not a phone's page" {
+  let t = wide_tester([], mode="settings-first-station")
+  t.draw()
+  app.nav.replace(Place("stations"))
+  t.run_for(@ui.nav_push_ms)
+  // its scene and its one thing to do (the sidebar's 添加 station too)
+  assert_true(t.find_last("添加 station") is Some(_))
+}

@@ -101,7 +101,13 @@ fn place_split(c : @ui.Ctx, src : Source, w : Workspace, pages : Pages, place : 
       // a profile's: the desktop's own (accounts.mbt)
       Some(Profile(a, id)) => profile_page(c, core, @settings.here_of(core, w.id, w.name), a, id)
       Some(r) => @settings.page(c, core, @settings.here_of(core, w.id, w.name), r, root=true)
-      None => @settings.page(c, core, @settings.here_of(core, w.id, w.name), Route::Stations, root=true)
+      // none to pick yet: the first to add (the web's StationsFirst, RuntimeSettings' first)
+      None =>
+        if place == "profiles" {
+          profiles_first(c, core, @settings.here_of(core, w.id, w.name), stations_listed(src, w))
+        } else {
+          stations_first(c, core, @settings.here_of(core, w.id, w.name), src, w)
+        }
     }
   })
   |> ignore
@@ -385,3 +391,114 @@ let meter_chip_low : @ui.Style = meter_chip.then(@ui.css("border=B1 border_color
 ///|
 // kept across runs: a value (no field of it changes)
 let meter_value : @ui.TextStyle = @ui.text_style(size=Xs, weight=Semibold, color=Fg, wrap=false)
+
+///|
+/// No station picked: while they are read, said so; none in the workspace, the first to add (its scene, 添加 station).
+fn stations_first(c : @ui.Ctx, core : Core, here : Here, src : Source, w : Workspace) -> Unit {
+  let t = @sf.theme()
+  let read = (src.topic)("stations", { "scope": Json::string(w.id) }).value is Some(_)
+  desk_page(c, core, "stations-first", "Station", [
+    fn() {
+      if !read {
+        @sf.waiting(c, shape=Cards, note={ reading: true, text: @sf.t("common.readingStations"), failing: [] })
+        return
+      }
+      @sf.first_one(
+        c,
+        @sf.t("web-pages.settings.stations.add"),
+        art=fn() { @sf.drawable(c, if t.dark { "illus_no_station_dark" } else { "illus_no_station" }, pl_art_w) |> ignore },
+        fn() {
+          // (its managers': the others wait for one)
+          match @settings.place_action(core, here, "stations") {
+            Some(add) =>
+              if @sf.button(c, @sf.t("web-pages.settings.stations.add"), key="stations-first/add", tone=Primary, icon="plus") {
+                add()
+              }
+            None => c.text(@sf.t("web-pages.settings.stations.noneYet"), style=desk_muted_line) |> ignore
+          }
+        },
+      )
+    },
+  ])
+}
+
+///|
+/// Not one profile yet (RuntimeSettings' first): what a profile is, then each station in a row, where one is added (an
+/// online one's 添加 Profile; an offline one's, later), with its machine's own logins not used yet under it.
+fn profiles_first(c : @ui.Ctx, core : Core, here : Here, stations : Array[Json]) -> Unit {
+  let t = @sf.theme()
+  desk_page(c, core, "profiles-first", "Profile", [
+    fn() {
+      @sf.first_one(
+        c,
+        @sf.t("web-pages.settings.profiles.addFirst"),
+        lead=@sf.t("web-pages.settings.profiles.lead", args=[("name", "still.fail")]),
+        art=fn() { @sf.drawable(c, if t.dark { "illus_no_profile_dark" } else { "illus_no_profile" }, pl_art_w) |> ignore },
+        fn() {
+          c.box(style=pl_first_stations, fn() {
+            for st in stations {
+              let sv = Some(st)
+              let address = text(sv, "station")
+              let online = flag(sv, "online")
+              c.box(style=pl_first_station, fn() {
+                c.box(style=pl_first_row, fn() {
+                  @sf.status_dot(c, if online { "online" } else { "offline" })
+                  c.text(text(sv, "name"), style=pl_first_name) |> ignore
+                  if online {
+                    if @sf.button(
+                        c,
+                        @sf.t("web-pages.settings.profiles.add"),
+                        key="profiles-first/add/" + address,
+                        tone=if stations.length() == 1 { Primary } else { Plain },
+                        icon="plus",
+                      ) {
+                      (core.push)(NewProfile(address))
+                    }
+                  } else {
+                    c.text(@sf.t("web-pages.settings.profiles.offlineAdd"), style=desk_muted_line) |> ignore
+                  }
+                })
+                |> ignore
+                if online {
+                  machine_offers(c, core, sv, fn(rt) {
+                    // the machine's login signed in again as its vendor's plan, on the add page
+                    add_profile_start[address] = [("provider", str(if rt == "claude" { "anthropic" } else { "openai" })), ("method", str("plan"))]
+                    (core.push)(NewProfile(address))
+                  })
+                }
+              })
+              |> ignore
+            }
+          })
+          |> ignore
+        },
+      )
+    },
+  ])
+  ignore(here)
+}
+
+///|
+let pl_art_w : Double = 240.0
+
+///|
+/// Each station a row (firstStations: 28 apart, at the start; firstStationRow: 10 apart; its name semibold, taking the
+/// room; its machine's logins 14 under it).
+// kept across runs: a value (no field of it changes)
+let pl_first_stations : @ui.Style = @ui.css("w=Full gap=S7 align=AStretch")
+
+///|
+// kept across runs: a value (no field of it changes)
+let pl_first_station : @ui.Style = @ui.css("w=Full gap=S3_5")
+
+///|
+// kept across runs: a value (no field of it changes)
+let pl_first_row : @ui.Style = @ui.css("row w=Full gap=S2_5 align=ACenter")
+
+///|
+// kept across runs: a value (no field of it changes)
+let pl_first_name : @ui.TextStyle = @ui.text_style(size=Sm, leading=L6, weight=Semibold, color=Fg, wrap=false, w=@sf.grow)
+
+///|
+// kept across runs: a value (no field of it changes)
+let desk_muted_line : @ui.TextStyle = @ui.text_style(size=Sm, leading=L6, color=Muted, wrap=false)
