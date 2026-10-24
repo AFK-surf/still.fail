@@ -18,10 +18,6 @@ priv struct Wide {
   mut station_menu : Bool
   /// the page picked in a place with a list of its own (Station's, Profile's: wide_places.mbt), by place
   place_pick : Map[String, @settings.Route]
-  /// 待处理's panel: what was let go in it (忽略, `decision.dismiss`) until the core no longer lists it, by station and
-  /// chat; the stations' trouble as looked at when it opened, as it shows it while open (None: closed)
-  gone : Array[String]
-  mut trouble_seen : String?
 }
 
 ///|
@@ -32,8 +28,6 @@ let wide : Wide = {
   job_picked: "",
   station_menu: false,
   place_pick: {},
-  gone: [],
-  trouble_seen: None,
 }
 
 ///|
@@ -53,8 +47,6 @@ fn wide_reset() -> Unit {
   wide.station_menu = false
   wide.place_pick.clear()
   wide_switch_reset()
-  wide.gone.clear()
-  wide.trouble_seen = None
   wide_on.val = false
   corners_on.val = false
   recent_open.val = false
@@ -85,15 +77,14 @@ fn desk_pages() -> @sfdesk.Pages {
     other: fn(c, src, w, all, invited, page) { page_view(c, src, w, all, invited, page) },
     // the settings', the files', the stations', the profiles' (wide_place_side.mbt)
     side: fn(c, src, w, width) { sidebar(c, src, w, width) },
-    rename: fn(c, src, item) { side_rename(c, src, item) },
     jobs: fn(c, src, w) { open_jobs(c, src, w) },
+    relay: fn(c, src, r, thread) { open_relay(c, src, r, thread) },
     act: fn(src, what, call, params, done) { act(src, what, "", call, params, done~) },
     gated: fn(src, w) { @settings.lock_waiting(settings_core(src, w), w.id) },
     gate: fn(c, src, w) { lock_gate(c, src, w) |> ignore },
     switching: fn(c) { wide_switch_frame(c) },
     updating: fn() { side_update_shown() },
     update: fn(c, src, bar, s, inset) { side_update(c, src, bar, s, inset) },
-    bell: fn(src, w) { bell_lit(src, w) },
     sheet: fn() { sheet_open() },
     lower: fn() { lower_sheet() },
     home: fn() { home() },

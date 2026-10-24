@@ -235,7 +235,7 @@ fn lists_band(c : @ui.Ctx, src : Source, w : Workspace, pages : Pages) -> Unit {
       |> ignore
       match view {
         // (lit while it narrows the chats or another list is shown: 奏, 已归档)
-        Some(v) if v.stations > 0 => filter_button(c, filter, list_mode(src, w) != 0, in_bar)
+        Some(v) if v.stations > 0 => filter_button(c, filter, list_place(list_mode(src, w)), list_mode(src, w) != 0, in_bar)
         _ => ()
       }
     })
@@ -362,8 +362,8 @@ let side_words_bad : @ui.TextStyle = @ui.text_style(size=Sm, color=Danger, leadi
 
 ///|
 /// The list's filter (components.tsx MineFilter, compact): a 32 square, in the accent's ground while it narrows the
-/// list or another list is shown (`narrowed`); pressed, its menu (the app's: sfapp's wide_filter_menu).
-fn filter_button(c : @ui.Ctx, filter : String, narrowed : Bool, in_bar : Bool) -> Unit {
+/// list or another list is shown (`narrowed`), its tip 筛选会话; pressed, its menu (filter_menu).
+fn filter_button(c : @ui.Ctx, filter : String, shown : String, narrowed : Bool, in_bar : Bool) -> Unit {
   let t = @sf.theme()
   let id = c.id("side/filter")
   c.cursor(id, Hand)
@@ -378,10 +378,47 @@ fn filter_button(c : @ui.Ctx, filter : String, narrowed : Bool, in_bar : Bool) -
   let ground = @sf.over(@sf.alpha(t.p.hover, hot * (1.0 - lit)), @sf.alpha(t.p.accent_bg, lit))
   // (in the closed bar's corner, concentric with it as the rail's places are: Sidebar.css.ts navNew, closed)
   let look = if in_bar { filter_box_bar } else { filter_box }
-  c.box(style=look.then(@ui.style(bg=Data(ground))), id~, fn() {
+  let b = c.box(style=look.then(@ui.style(bg=Data(ground))), id~, fn() {
     @sf.icon(c, "filter", size=side_icon, color=@sf.mix(t.p.accent_text, lit, @sf.mix(t.p.text, hot, t.p.muted))) |> ignore
   })
-  |> ignore
+  c.semantics(b, Button, id~, label=@sf.t("web-main.filter.chats.named", args=[("named", filter_named(shown))]))
+  @sf.tip(c, "side/filter-tip", id, @sf.t("web-main.filter.chats"))
+}
+
+///|
+/// The list shown (list_place), named (MineFilter `named`): 奏, 已归档, 我参与的, 监控中, else 全部.
+fn filter_named(filter : String) -> String {
+  match filter {
+    "decisions" => @sf.t("web-main.decisions.title")
+    "archive" => @sf.t("web-main.filter.archived")
+    "mine" => @sf.t("web-main.filter.chats.mine")
+    "watching" => @sf.t("web-main.filter.watching")
+    _ => @sf.t("web-main.filter.all")
+  }
+}
+
+///|
+/// The filter's menu (components.tsx MineFilter's DropdownMenu, controls.css.ts chooserMenu): 全部会话, 我参与的, 监控中,
+/// 奏, then 已归档, the list shown checked; under the button, its right edge under the button's, 6 below it. Chosen, that
+/// list: 奏's and the archive's their page, a filter the chats' (from 奏 or the archive, back to the chats).
+fn filter_menu(c : @ui.Ctx, src : Source, w : Workspace, pages : Pages) -> Unit {
+  let shown = list_place(list_mode(src, w))
+  let entries = [
+    @kit.menu_radio("all", shown == "chats", label=@sf.t("web-main.filter.chats.all")),
+    @kit.menu_radio("mine", shown == "mine", label=@sf.t("web-main.filter.chats.mine")),
+    @kit.menu_radio("watching", shown == "watching", label=@sf.t("web-main.filter.watching")),
+    @kit.menu_radio("decisions", shown == "decisions", label=@sf.t("web-main.decisions.title")),
+    @kit.menu_separator(),
+    @kit.menu_radio("archive", shown == "archive", label=@sf.t("web-main.filter.archived")),
+  ]
+  let m = @sf.menu(c, "filter-menu", wide.filter_open, c.id("side/filter"), entries, {}, @sf.chooser_menu_w, along=End)
+  wide.filter_open = m.open
+  match m.chosen {
+    Some("decisions") => go_place(pages, "decisions")
+    Some("archive") => rail_go(c, src, w, pages, "archive")
+    Some(f) => rail_go(c, src, w, pages, if f == "all" { "chats" } else { f })
+    None => ()
+  }
 }
 
 ///|
@@ -464,7 +501,7 @@ fn side_chat_row(
             c.box(style=side_mark_slot, fn() { row_mark(c, key, tone) }) |> ignore
           }
           if wide.renaming == key {
-            (pages.rename)(c, src, item)
+            side_rename(c, src, item)
           } else {
             let title = if item.unread { side_title_unread } else { side_title }
             c.text(item.title, style=if offline { title.then(side_dim) } else { title }) |> ignore

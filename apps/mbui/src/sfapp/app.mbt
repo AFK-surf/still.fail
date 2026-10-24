@@ -229,9 +229,6 @@ fn reset() -> Unit {
   // a drive's files, a text read (keep.mbt, drive_reader.mbt)
   // the wide frame's keys (wide_keys.mbt)
   focus_composer.val = false
-  rename_for.val = ""
-  side_rename_field.set("")
-  rename_seen.val = false
   reset_by_hand.val = true
 }
 

@@ -30,10 +30,10 @@ pub(all) struct Pages {
   /// the sidebar of a place other than the chats' (the settings', the files', the stations', the profiles'), `width`
   /// wide
   side : (@ui.Ctx, Source, Workspace, Double) -> Unit
-  /// a row's title renamed in place (Rename.tsx TitleInput), the services left up long (OpenJobs.tsx, over the lists'
-  /// foot)
-  rename : (@ui.Ctx, Source, ChatItem) -> Unit
+  /// the services left up long (OpenJobs.tsx, over the lists' foot and in 待处理's panel); a chat relayed to a channel
+  /// (Relay.tsx, from a row's menu: the chat, its thread)
   jobs : (@ui.Ctx, Source, Workspace) -> Unit
+  relay : (@ui.Ctx, Source, ChatRef, Double) -> Unit
   /// the core asked to do something, said once done (`what` it is, the call, its params, what is said then)
   act : (Source, String, String, Json, String) -> Unit
   /// whether this device waits to be confirmed in the workspace's safe mode, and what it sees then
@@ -45,8 +45,6 @@ pub(all) struct Pages {
   /// (closed, the sidebar's width, the window's buttons in the app's top row)
   updating : () -> Bool
   update : (@ui.Ctx, Source, Bool, Double, Bool) -> Unit
-  /// whether the rail's bell has its dot (Attention.tsx `lit`)
-  bell : (Source, Workspace) -> Bool
   /// whether a sheet is over the pages (back closes it first); what is over the pages put down (a sheet, the menu): a
   /// place gone to; and the stack back to its root with them, as another workspace is
   sheet : () -> Bool
@@ -445,7 +443,7 @@ fn peek_shift(c : @ui.Ctx, shown : (Double, Double)?, from : Double, s : Double)
 
 ///|
 /// The wide frame (WorkspaceShell): the rail and the sidebar on the sidebar's ground, the page in the rest. What opens
-/// over them is drawn after it (sfapp's wide_overlays, with rail_overlays).
+/// over them is drawn after it (overlays).
 pub fn frame(
   c : @ui.Ctx,
   src : Source,
