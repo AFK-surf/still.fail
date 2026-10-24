@@ -228,11 +228,17 @@ let chip_inner : @ui.Style = @ui.css("radius=Inner")
 let segmented_in : Double = 12.0
 
 ///|
+/// What a segmented track scrolls: its options in a line, 2 apart (segmented's --gap), each kept whole.
+// kept across runs: a value (no field of it changes)
+let segmented_strip : @ui.Style = @ui.css("row gap=S0_5")
+
+///|
 /// A choice of a few (Segmented; the kit's sliding toggle group): a quiet
 /// pill track, the chosen raised on the canvas and sliding to it; its options
 /// equal columns, as wide as the widest in the chosen weight with 12 either
-/// side (segmented, segmentedOption, segmentedSizer), `item_w` at least,
-/// narrower alike where there is not the room.
+/// side (segmented, segmentedOption, segmentedSizer), `item_w` at least; its
+/// words never cut: where they need more room than there is, they scroll
+/// sideways in the track (as Seg's).
 /// Returns the chosen index.
 pub fn segmented(
   c : @ui.Ctx,
@@ -250,6 +256,8 @@ pub fn segmented(
   let widest = labels.fold(init=0.0, fn(m, l) { dmax(m, @ui.text_advance(l, size=t.t.ui, weight=500)) })
   let w = dmax(item_w, widest + 2.0 * segmented_in)
   let items = labels.mapi(fn(i, l) { @kit.item(i.to_string(), label=l) })
+  // (the group's id, as it takes it: its options' are its parts')
+  let group = c.id(key)
   let now = @kit.toggle_group(
     c,
     key,
@@ -257,10 +265,7 @@ pub fn segmented(
     [chosen.to_string()],
     slide=true,
     look=fn(c, s) {
-      // as wide as its column (`w`, held by what lies unseen across it: segmentedSizer), narrower alike where the row
-      // has less room, its words cut short then (minmax(0, 1fr))
-      c.box(w=Cut, h=Px(30.0), padx=segmented_in, align=ACenter, justify=JCenter, fn() {
-        c.box(w=Px(w - 2.0 * segmented_in), h=Px(0.0), fn() {  }) |> ignore
+      c.box(w=Px(w), h=Px(30.0), align=ACenter, justify=JCenter, fn() {
         c.text(
           s.label,
           size=t.t.ui,
@@ -288,8 +293,15 @@ pub fn segmented(
       |> ignore
     },
     ground=fn(c, _, items) {
-      // (never wider than where it is: its options narrower alike there)
-      c.box(dir=Row, w=Cut, pad=3.0, gap=2.0, bg=alpha(ink, 0.06), radius=18.0, items) |> ignore
+      // never wider than where it is; where its options need more, they scroll sideways in it, whole, the chosen one
+      // brought into view (as Seg's)
+      c.box(dir=Row, w=Cut, pad=3.0, bg=alpha(ink, 0.06), radius=18.0, fn() {
+        c.sideways(key, w=Cut, show=@kit.part_id(group, chosen), fn() {
+          c.box(style=segmented_strip, keep=true, items) |> ignore
+        })
+        |> ignore
+      })
+      |> ignore
     },
   ).value
   // the chosen one tapped again stays chosen
