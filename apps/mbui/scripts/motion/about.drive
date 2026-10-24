@@ -1,0 +1,8 @@
+# 关于 and 更新日志 in a phone's window (sfdesk about.mbt, one page in every frame; the web's mobile/Settings.tsx
+# AboutScreen, mobile/Changelog.tsx): MBUI_FIXTURE=settings-about. 关于 open, then 更新日志.
+timeout 20000
+until 服务条款
+wait 1200
+tap 更新日志
+wait 1800
+exit

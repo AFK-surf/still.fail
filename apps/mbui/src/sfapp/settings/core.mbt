@@ -510,7 +510,6 @@ pub fn left(route : Route) -> Unit {
       kept.loose = []
       kept.asked += 1
     }
-    Changelog => changelog_state.seen = false
     BarSettings => bar_adding.val = false
     RunSettings(_, key) => {
       run_opened.remove("session:" + key)
@@ -637,8 +636,6 @@ pub fn reset() -> Unit {
   new_profiles.clear()
   bar_adding.val = false
   bar_moves.clear()
-  changelog_state.part = ""
-  changelog_state.seen = false
   opened.plain.clear()
   opened.opening.clear()
   opened.shown.clear()

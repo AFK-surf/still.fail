@@ -15,14 +15,25 @@ fn setting_page(c : @ui.Ctx, src : Source, w : Workspace, route : Route) -> Unit
   settings_deep.val = deep
   // (the settings' pages not ported yet read it too)
   @settings.wide_deep.val = deep
+  // a page merged for every frame: back over it only under another settings page (the sidebar is the way to the others)
+  let frame : PageFrame = {
+    back: if deep {
+      Some(back_label(stack[stack.length() - 2]))
+    } else {
+      None
+    },
+    top: 0.0,
+    foot: 0.0,
+  }
+  if setting_route(c, src, w, route, frame) {
+    return
+  }
   @settings.desk_vault.val = Some(desk_vault)
   @settings.frame(core, here)
   settings_fixture(core)
   match route {
     Me => me_page(c, core, here)
     Appearance => appearance_page(c, core)
-    About => about_page(c, core)
-    Changelog => changelog_page(c, core)
     Workspace => workspace_page(c, core, here)
     Security => security_page(c, core, here)
     Vault => vault_page(c, core, here)
@@ -50,6 +61,24 @@ fn setting_page(c : @ui.Ctx, src : Source, w : Workspace, route : Route) -> Unit
     StationArchiving(s) => station_archiving_page(c, core, here, s)
     _ => @settings.page(c, core, here, route)
   }
+}
+
+///|
+/// The settings' pages, one for every frame, by route: drawn in the frame it is shown in (the Small stack's, the wide
+/// frame's pane: back, the room over and under it). False for a route whose pages are not one yet (its frame draws its
+/// own copy).
+pub fn setting_route(c : @ui.Ctx, src : Source, w : Workspace, route : Route, frame : PageFrame) -> Bool {
+  if !(route is (About | Changelog)) {
+    return false
+  }
+  let core = settings_core(src, w)
+  @settings.frame(core, @settings.here_of(core, w.id, w.name))
+  match route {
+    About => about_page(c, core, frame)
+    Changelog => changelog_page(c, core, frame)
+    _ => ()
+  }
+  true
 }
 
 ///|

@@ -18,14 +18,21 @@ fn desk_page(
   actions? : () -> Unit,
   head? : () -> Unit,
   on_back? : () -> Unit,
+  deep? : Bool = settings_deep.val,
+  top? : Double = 0.0,
+  foot? : Double = 0.0,
 ) -> Unit {
   let blocks : Array[() -> Unit] = []
+  // the room the frame keeps over it (a status bar's)
+  if top > 0.0 {
+    blocks.push(fn() { c.box(style=@ui.style(w=Full, h=Fixed(top)), fn() {  }) |> ignore })
+  }
   // a head of its own in place of the title (an account's: who it is), as the page's first block
   match head {
     // as far down as a title's head stands
     Some(h) =>
       blocks.push(fn() {
-        let deep = settings_deep.val || on_back is Some(_)
+        let deep = deep || on_back is Some(_)
         c.box(style=if deep { desk_own_head_deep } else { desk_own_head }, fn() {
           // back over it on a page under another (BackLink), as a title's head has it
           if deep {
@@ -38,13 +45,13 @@ fn desk_page(
     None =>
       blocks.push(fn() {
         // (a step of the page's own: its back goes to the step before)
-        @settings.wide_head(c, core, back, title, trailing?=actions, inside=true, about~, lead~, on_back?, deep=settings_deep.val || on_back is Some(_))
+        @settings.wide_head(c, core, back, title, trailing?=actions, inside=true, about~, lead~, on_back?, deep=deep || on_back is Some(_))
       })
   }
   for i, b in content {
     blocks.push(fn() { c.box(style=if i == 0 { desk_first } else { desk_block }, fn() { b() }) |> ignore })
   }
-  desk_lanes(c, key, blocks)
+  desk_lanes(c, key, blocks, foot~)
 }
 
 ///|
@@ -85,10 +92,15 @@ let desk_back_lit : @ui.TextStyle = @ui.text_style(size=Sm, leading=L5, color=Fg
 ///|
 /// A page's blocks in a list, each laid out as it comes into view: in the pane's middle, 24 from its sides at least,
 /// 80 room at its foot.
-fn desk_lanes(c : @ui.Ctx, key : String, blocks : Array[() -> Unit]) -> Unit {
+fn desk_lanes(c : @ui.Ctx, key : String, blocks : Array[() -> Unit], foot? : Double = 0.0) -> Unit {
   c.list("settings/" + key, blocks.length() + 1, 80.0, fn(i) {
     if i == blocks.length() {
-      c.box(style=desk_foot, fn() {  }) |> ignore
+      // (and the frame's room under that)
+      if foot > 0.0 {
+        c.box(style=@ui.style(w=Full, h=Fixed(desk_foot_h + foot)), fn() {  }) |> ignore
+      } else {
+        c.box(style=desk_foot, fn() {  }) |> ignore
+      }
     } else {
       c.box(style=desk_lane, fn() { c.box(style=desk_lane_column, fn() { (blocks[i])() }) |> ignore }) |> ignore
     }
@@ -154,6 +166,9 @@ let desk_lane_in : Double = 24.0
 /// The room at the page's foot.
 // kept across runs: a value (no field of it changes)
 let desk_foot : @ui.Style = @ui.css("w=Full h=S20")
+
+///|
+let desk_foot_h : Double = 80.0
 
 ///|
 /// A page's head of its own (an account's): where a title's head would stand.

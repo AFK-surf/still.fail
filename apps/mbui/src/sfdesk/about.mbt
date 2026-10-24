@@ -1,22 +1,40 @@
-// 关于 and 更新日志 on the desktop (ember web/src/pages/About.tsx; Changelog.tsx, Changelog.css.ts). 关于: whether this
-// device sends usage statistics and error reports, on a card (not where nothing is sent), and still.fail's terms and
-// privacy policy on its site. 更新日志: the core's `changelog`, a tab a part, by day, each change's lines with their
-// kind before them and its version at the end of the first, what is not out yet under them; opened, what the last
-// update brought is read (`changelog.seen`).
+// 关于 and 更新日志, one page each in every frame (ember web/src/pages/About.tsx, Changelog.tsx, Changelog.css.ts; the
+// narrow app's mobile/Settings.tsx AboutScreen, mobile/Changelog.tsx). 关于: this build and the way to a newer one,
+// what changed; whether this device sends usage statistics and error reports (not where nothing is sent); still.fail's
+// terms and privacy policy on its site. 更新日志: the core's `changelog`, a tab a part, by day, each change's lines
+// with their kind before them, its version, what is not out yet; opened, what the last update brought is read
+// (`changelog.seen`). Laid out by the page's width (page_look.mbt).
 
 ///|
-/// 关于 (AboutPage).
-fn about_page(c : @ui.Ctx, core : Core) -> Unit {
-  let t = @sf.theme()
+/// 关于 (AboutPage; the narrow app's AboutScreen, Android's SettingsHome.kt AboutScreen): this build and the way to a
+/// newer one, what changed; whether this device sends usage statistics and error reports (not where nothing is sent);
+/// still.fail's terms and privacy policy on its site.
+fn about_page(c : @ui.Ctx, core : Core, frame : PageFrame) -> Unit {
+  let look = look_of(c)
   let blocks : Array[() -> Unit] = []
+  // this build (its name and version, and the way to a newer one: pressed, installed or asked now), and what changed
+  blocks.push(fn() {
+    look_section(c, look, @sf.t("web-pages.settings.nav.version"), fn() {
+      look_group(c, look, fn() {
+        let (words, newer) = (core.version_words)()
+        if look_link(c, look, "about/version", "still.fail mbui " + build_version(), value=words, value_lit=newer, chevron=false) {
+          (core.version_tap)()
+        }
+        if look_link(c, look, "about/changelog", @sf.t("web-pages.settings.nav.changelog")) {
+          (core.push)(Changelog)
+        }
+      })
+    })
+  })
   // a build that sends nothing has nothing to turn off
   match (core.reporting)() {
     Some(on) =>
       blocks.push(fn() {
-        @sf.section(c, @sf.t("web-pages.about.privacy"), fn() {
-          c.box(style=desk_card, fn() {
-            let now = @sf.switch_row(
+        look_section(c, look, @sf.t("web-pages.about.privacy"), fn() {
+          look_group(c, look, card=true, fn() {
+            let now = look_switch(
               c,
+              look,
               "about/reporting",
               @sf.t("common.telemetry.title"),
               on,
@@ -26,57 +44,55 @@ fn about_page(c : @ui.Ctx, core : Core) -> Unit {
               (core.set_reporting)(now)
             }
           })
-          |> ignore
         })
       })
     None => ()
   }
   // on still.fail's site, in the browser
   blocks.push(fn() {
-    @sf.section(c, @sf.t("web-pages.about.legal"), fn() {
-      c.box(style=desk_list, fn() {
+    look_section(c, look, @sf.t("web-pages.about.legal"), fn() {
+      look_group(c, look, fn() {
         for l in [("terms", "common.legal.terms"), ("privacy", "common.legal.privacy")] {
-          let id = c.id("about/" + l.0)
-          c.cursor(id, Hand)
-          if c.clicked(id) {
+          if look_link(c, look, "about/" + l.0, @sf.t(l.1), out=true) {
             (core.open_link)(@settings.legal_url(l.0))
           }
-          let b = c.box(style=desk_list_link, id~, fn() {
-            c.box(style=desk_list_text, fn() { c.text(@sf.t(l.1), style=desk_list_title) |> ignore }) |> ignore
-            @sf.icon(c, "arrow-up-right", size=desk_chevron, color=t.p.muted) |> ignore
-          })
-          c.semantics(b, Link, id~, label=@sf.t(l.1))
         }
       })
-      |> ignore
     })
   })
-  desk_page(c, core, "about", @sf.t("web-pages.settings.nav.about"), blocks)
+  look_page(c, core, frame, look, "about", @sf.t("web-pages.settings.nav.about"), blocks)
 }
 
 ///|
-/// The changelog's part in view ("" the first) and whether its news was told read while it is open.
+/// The changelog's part in view ("" the first), and the news last told read (as the core says it: told once, not again
+/// each frame until the core has it, and news an update brings later told again).
 // kept across runs: said by its tabs and as it opens; changelog_reset puts them back
 let changelog_part : Ref[String] = Ref("")
 
 ///|
 // kept across runs: said as the page opens; changelog_reset puts it back
-let changelog_seen : Ref[Bool] = Ref(false)
+let changelog_seen : Ref[String] = Ref("")
 
 ///|
 fn changelog_reset() -> Unit {
   changelog_part.val = ""
-  changelog_seen.val = false
+  changelog_seen.val = ""
 }
 
 ///|
-/// 更新日志 (ChangelogPage).
-fn changelog_page(c : @ui.Ctx, core : Core) -> Unit {
+/// 更新日志 (ChangelogPage; the narrow app's ChangelogScreen): the core's `changelog`, a tab a part, by day (narrow: each
+/// day's changes on a card); opened, what the last update brought is read (`changelog.seen`).
+fn changelog_page(c : @ui.Ctx, core : Core, frame : PageFrame) -> Unit {
+  let look = look_of(c)
   let topic = (core.topic)("changelog", Map([]))
   let v = topic.value
   // opened: what the update brought is read
-  if has(v, "news") && !changelog_seen.val {
-    changelog_seen.val = true
+  let news = match field(v, "news") {
+    Some(Null) | None => ""
+    Some(n) => n.stringify()
+  }
+  if news != "" && news != changelog_seen.val {
+    changelog_seen.val = news
     c.tell("changelog.seen", fn() { (core.call)("changelog.seen", obj([]), fn(_) {  }) })
   }
   let tabs = items(v, "tabs")
@@ -87,51 +103,79 @@ fn changelog_page(c : @ui.Ctx, core : Core) -> Unit {
   let blocks : Array[() -> Unit] = []
   if tabs.length() > 0 {
     blocks.push(fn() {
-      c.box(style=cl_tabs_row, fn() {
-        let i = @sf.segmented(c, "changelog/tabs", tabs.map(fn(x) { text(Some(x), "label") }), at, item_w=cl_tab_w)
-        if i != at {
-          changelog_part.val = text(Some(tabs[i]), "part")
+      let labels = tabs.map(fn(x) { text(Some(x), "label") })
+      let chosen = match look {
+        // as wide as the page, each part an equal share (Seg fill, 34 high)
+        Narrow => {
+          let mut i = at
+          c.box(style=cl_narrow_tabs, fn() { i = @sf.seg(c, "changelog/tabs", labels, at, fill=true, height=cl_narrow_tab_h) })
+          |> ignore
+          i
         }
-      })
-      |> ignore
+        Wide => {
+          let mut i = at
+          c.box(style=cl_tabs_row, fn() { i = @sf.segmented(c, "changelog/tabs", labels, at, item_w=cl_tab_w) }) |> ignore
+          i
+        }
+      }
+      if chosen != at {
+        changelog_part.val = text(Some(tabs[chosen]), "part")
+      }
     })
   }
   if v is None || flag(v, "loading") {
     blocks.push(fn() {
-      @sf.waiting(
-        c,
-        count=5,
-        error=match topic.error {
-          Some(e) => @settings.error_text(e)
-          None => ""
-        },
-      )
+      let error = match topic.error {
+        Some(e) => @settings.error_text(e)
+        None => ""
+      }
+      match look {
+        Narrow => waiting_cards(c, error~)
+        Wide => @sf.waiting(c, count=5, error~)
+      }
     })
   } else if has(v, "error") {
-    blocks.push(fn() { c.text(text(v, "error"), style=desk_note_bad) |> ignore })
+    blocks.push(fn() { cl_said(c, look, text(v, "error"), bad=true) })
   } else {
     let days = match tabs.get(at) {
       Some(x) => items(Some(x), "days")
       None => []
     }
     if days.length() == 0 {
-      blocks.push(fn() { c.text(@sf.t("web-pages.changelog.empty"), style=desk_muted) |> ignore })
+      blocks.push(fn() { cl_said(c, look, @sf.t("web-pages.changelog.empty")) })
     }
     for day in days {
-      blocks.push(fn() {
-        c.box(style=cl_day, fn() {
-          c.box(style=cl_heading_room, fn() { c.text(text(Some(day), "label"), style=cl_heading) |> ignore }) |> ignore
-          for e in items(Some(day), "entries") {
-            change_item(c, Some(e))
-          }
-        })
-        |> ignore
-      })
+      match look {
+        // the day's heading, its changes on a card under it
+        Narrow => {
+          blocks.push(fn() { look_heading(c, look, text(Some(day), "label")) })
+          blocks.push(fn() {
+            look_group(c, look, fn() {
+              for e in items(Some(day), "entries") {
+                change_narrow(c, Some(e))
+              }
+            })
+          })
+        }
+        Wide =>
+          blocks.push(fn() {
+            c.box(style=cl_day, fn() {
+              c.box(style=cl_heading_room, fn() { c.text(text(Some(day), "label"), style=cl_heading) |> ignore })
+              |> ignore
+              for e in items(Some(day), "entries") {
+                change_item(c, Some(e))
+              }
+            })
+            |> ignore
+          })
+      }
     }
   }
-  desk_page(
+  look_page(
     c,
     core,
+    frame,
+    look,
     "changelog/" + at.to_string(),
     @sf.t("web-pages.settings.nav.changelog"),
     lead=if has(v, "build") && !(field(v, "build") is Some(Null)) {
@@ -141,6 +185,56 @@ fn changelog_page(c : @ui.Ctx, core : Core) -> Unit {
     },
     blocks,
   )
+}
+
+///|
+/// What the page says in place of the changes (none yet, or why they could not be read: red).
+fn cl_said(c : @ui.Ctx, look : Look, words : String, bad? : Bool = false) -> Unit {
+  match look {
+    Narrow =>
+      c.box(style=cl_narrow_said, fn() { c.text(words, style=if bad { cl_narrow_bad } else { cl_narrow_note }) |> ignore })
+      |> ignore
+    Wide => c.text(words, style=if bad { desk_note_bad } else { desk_muted }) |> ignore
+  }
+}
+
+///|
+/// One change on a narrow page (mChange): each line led by its kind on a small tinted label (the accent's for something
+/// new), its words wrapping under it; then its version and what is not out yet (in the accent: an update would bring
+/// it).
+fn change_narrow(c : @ui.Ctx, e : Json?) -> Unit {
+  let t = @sf.theme()
+  c.box(style=cl_narrow_change, fn() {
+    for l in items(e, "lines") {
+      let lv = Some(l)
+      let label = text(lv, "label")
+      if label == "" {
+        c.text(text(lv, "text"), style=cl_narrow_line) |> ignore
+      } else {
+        // the label inline before the words (Changelog.css.ts mKind, in ems of its 13: 6 either side, 19 high, 6
+        // round, 6 before the words)
+        let fresh = text(lv, "kind") == "new"
+        let ground : @ui.Ground = { room: 6.0 / 13.0, height: 19.0 / 13.0, corner: 6.0 / 13.0, after: 6.0 / 13.0 }
+        let kind = @ui.span(
+          label,
+          scale=13.0 / 15.0,
+          color=if fresh { t.p.accent_text } else { t.p.muted },
+          bg=if fresh { t.p.accent_bg } else { t.p.chip },
+          ground=Some(ground),
+        )
+        c.rich([kind, @ui.plain(text(lv, "text"))], style=cl_narrow_line) |> ignore
+      }
+    }
+    c.box(style=cl_narrow_meta, fn() {
+      c.text(text(e, "versionName"), style=cl_narrow_version) |> ignore
+      if text(e, "note") != "" {
+        c.text(text(e, "note"), style=if field(e, "has") is Some(False) { cl_narrow_coming } else { cl_narrow_version })
+        |> ignore
+      }
+    })
+    |> ignore
+  })
+  |> ignore
 }
 
 ///|
@@ -255,3 +349,48 @@ let cl_note : @ui.TextStyle = @ui.text_style(size=Xs, leading=L5, color=Muted, w
 ///|
 // kept across runs: a value (no field of it changes)
 let cl_note_new : @ui.TextStyle = @ui.text_style(size=Xs, leading=L5, color=AccentText, w=@sf.grow)
+
+// ── the narrow page's (mobile/Changelog.css.ts) ─────────────────────────
+
+///|
+/// The parts' tabs (mTabs: 16 in, 4 over, 2 under).
+// kept across runs: a value (no field of it changes)
+let cl_narrow_tabs : @ui.Style = @ui.css("w=Full px=S4 pt=S1 pb=S0_5")
+
+///|
+let cl_narrow_tab_h : Double = 34.0
+
+///|
+/// What is said in place of the changes (mNote: 24 by 8 in).
+// kept across runs: a value (no field of it changes)
+let cl_narrow_said : @ui.Style = @ui.css("w=Full px=S6 py=S2")
+
+///|
+// kept across runs: a value (no field of it changes)
+let cl_narrow_note : @ui.TextStyle = @ui.text_style(size=Base, leading=L5, color=Muted, w=Full)
+
+///|
+// kept across runs: a value (no field of it changes)
+let cl_narrow_bad : @ui.TextStyle = cl_narrow_note.then(@ui.text_style(color=Danger))
+
+///|
+/// A change (mChange: 16 by 10 in, its lines 2 apart).
+// kept across runs: a value (no field of it changes)
+let cl_narrow_change : @ui.Style = @ui.css("w=Full px=S4 py=S2_5 gap=S0_5")
+
+///|
+// kept across runs: a value (no field of it changes)
+let cl_narrow_line : @ui.TextStyle = @sf.body.then(@sf.full_words)
+
+///|
+/// Its version and what is not out yet (mMeta: in a line, 10 apart).
+// kept across runs: a value (no field of it changes)
+let cl_narrow_meta : @ui.Style = @ui.css("row w=Full gap=S2_5")
+
+///|
+// kept across runs: a value (no field of it changes)
+let cl_narrow_version : @ui.TextStyle = @ui.text_style(size=Sm, color=Muted, wrap=false)
+
+///|
+// kept across runs: a value (no field of it changes)
+let cl_narrow_coming : @ui.TextStyle = cl_narrow_version.then(@ui.text_style(color=AccentText))

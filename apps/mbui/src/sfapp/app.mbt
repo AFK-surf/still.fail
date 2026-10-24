@@ -533,10 +533,23 @@ fn go_place(c : @ui.Ctx, place : String, sets : Array[Array[String]], cur : Int)
 }
 
 ///|
-/// A page of the settings (src/sfapp/settings), over the workspace in view.
+/// A page of the settings, over the workspace in view, in the stack's frame: back to the page under it, under the status
+/// bar, over the navigation bar. One not merged yet: the phone's copy (src/sfapp/settings).
 fn setting_page(c : @ui.Ctx, src : Source, w : Workspace, r : @settings.Route) -> Unit {
-  let core = settings_core(src, w)
-  @settings.page(c, core, @settings.here_of(core, w.id, w.name), r)
+  let pages = app.nav.pages()
+  let frame : PageFrame = {
+    back: if pages.length() >= 2 {
+      Some(@sfdesk.back_label(pages[pages.length() - 2]))
+    } else {
+      None
+    },
+    top: status_top(),
+    foot: nav_foot(),
+  }
+  if !@sfdesk.setting_route(c, src, w, r, frame) {
+    let core = settings_core(src, w)
+    @settings.page(c, core, @settings.here_of(core, w.id, w.name), r)
+  }
 }
 
 ///|

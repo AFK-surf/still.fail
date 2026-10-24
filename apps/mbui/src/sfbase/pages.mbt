@@ -44,6 +44,17 @@ pub(all) enum Page {
 } derive(Eq)
 
 ///|
+/// What the frame a page is shown in gives it (the stack's, the pane's): where back goes, said as its words (None:
+/// nowhere, the page at the stack's root or beside a list that is the way back), how far down the page starts under
+/// what stands over it (the status bar), and the room it keeps at its foot (the navigation bar, the bottom bar). The page
+/// draws its bar and what it shows within these and works none of them out itself.
+pub(all) struct PageFrame {
+  back : String?
+  top : Double
+  foot : Double
+}
+
+///|
 /// A station's screen to view: its station (`<workspace>/<station>`), its id there, and its title until the core says
 /// one (the link's own, or the row's it was opened from; "" none).
 pub(all) struct ScreenAt {

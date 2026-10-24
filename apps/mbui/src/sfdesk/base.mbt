@@ -232,6 +232,7 @@ using @sfbase {
   type FoundItem,
   type FoundMessage,
   type Page,
+  type PageFrame,
   type SearchView,
   type Source,
   type Workspace,
