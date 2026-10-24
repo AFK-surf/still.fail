@@ -6,7 +6,8 @@
 /// A node as the last frame drew it. `x`, `y`: its top left as drawn (moved by its looks and its ancestors':
 /// Ctx::drawn_at), `w`, `h` its size as laid out; `cut`: what of it shows inside the boxes that clip it (x, y, w, h;
 /// w or h 0 when none does). `opacity`: its and its ancestors' opacities and looks' alphas, multiplied. `bg`, `border_c`,
-/// `color`: RGBA. `font_size`, `weight`, `color`: its words' (0 for a box). `name`: Ctx::box's `name`; `moves`: the
+/// `color`: RGBA. `font_size`, `weight`, `color`: its words' (0 for a box). `name`: Ctx::box's `name`; `label`: its
+/// `label`, else what Ctx::semantics calls it (a screen reader's name, the web's aria-label); `moves`: the
 /// name a move_state moves it by (the web's moveState's selector): either a name of the web's it stands for. `words_w`:
 /// how wide its words are drawn, its widest line (0 for a box); `hit`: it takes the presses on its room; `draws`: it
 /// draws a picture of its own (an image, shapes or lines over its ground: an icon, a mark); `glass`: its ground is made
@@ -70,6 +71,13 @@ pub fn Tester::boxes(self : Tester) -> Array[Laid] {
   ignore(self)
   let c = g()
   let out = []
+  // (what a screen reader is told a node is called, where the box was given no label of its own: the last to say)
+  let said : Map[Int, String] = {}
+  for s in c.sems {
+    if s.label != "" {
+      said[s.node] = s.label
+    }
+  }
   for i in 0..<c.count {
     let n = c.nodes[i]
     let (x, y) = c.drawn_at(i)
@@ -109,7 +117,7 @@ pub fn Tester::boxes(self : Tester) -> Array[Laid] {
       kind: laid_kind(n),
       name: n.name,
       moves: n.moves,
-      label: n.label,
+      label: if n.label != "" { n.label } else { said.get(i).unwrap_or("") },
       text: if words { n.text } else { "" },
       words_w: match (n.tl, n.rl) {
         (Some(tl), _) if n.kind == kind_text => tl.w

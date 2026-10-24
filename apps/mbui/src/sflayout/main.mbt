@@ -50,6 +50,12 @@ fn main {
   }
   @sf.kept_call.val = Some(@sfkept.answer)
   let t = @ui.Tester::new(view, w~, h~, platform=0, live=@film.live())
+  // what the story shares into the app as it opens (stories.tsx `share`: the page's offerShare), shared into mbui's as
+  // another app's share comes
+  match field(web, "share") {
+    Some(Object(_) as s) => t.share_in(str(s, "source"), title=str(s, "title"))
+    _ => ()
+  }
   t.run_for(step_ms)
   let notes : Array[String] = []
   for step in arr(web, "steps") {
@@ -185,7 +191,16 @@ fn take(t : @ui.Tester, step : Json) -> String? {
           Some(p) => return Ok(p)
           None => "「\{want.1}」 is not on mbui's screen"
         }
-      None => "its selector is not one this tool reads ([aria-label=…], text=…)"
+      None =>
+        // (a selector of the page's DOM, a link by its href: what the page called what it acted on)
+        match field(step, "name") {
+          Some(String(name)) if name != "" =>
+            match find(t, ("=", name)) {
+              Some(p) => return Ok(p)
+              None => "「\{name}」 (\{sel}) is not on mbui's screen"
+            }
+          _ => "its selector is not one this tool reads ([aria-label=…], text=…)"
+        }
     }
     match there {
       Some(_) => Err("~" + why + ": taken where the page had it")
