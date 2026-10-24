@@ -109,7 +109,6 @@ fn reset() -> Unit {
   cui.picking_for = ""
   cui.outside = false
   cui.restore_error.clear()
-  sharing.val = None
   cui.room_for = ("", None)
   cui.cap_id = 0
   cui.content_id = 0

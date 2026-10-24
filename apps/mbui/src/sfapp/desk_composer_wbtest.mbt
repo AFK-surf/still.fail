@@ -200,3 +200,43 @@ test "desk composer: words pasted at once past the core's bound go as a file of 
   assert_true(t.find("发布前要核对的条目") is Some(_), msg=t.words().map(fn(x) { x.0 }).join("|"))
   assert_true(t.find("pasted-text-") is None)
 }
+
+///|
+test "desk composer: a reference to another workspace's chat is asked about first (OutsideShare.tsx), Enter again shares it and it goes" {
+  let calls : Array[Made] = []
+  let (t, src) = desk_composer_tester(calls)
+  desk_focus(t)
+  t.type_text("先看 @[季度路线图] 再定")
+  t.frame()
+  t.enter()
+  t.frame()
+  // not sent: the core asked what it refers to, the dialog saying whose
+  assert_eq(named(calls, "chat.outsideRefs").length(), 1)
+  assert_eq(named(calls, "chat.send").length(), 0)
+  assert_true(t.find("分享对话") is Some(_), msg=t.words().map(fn(x) { x.0 }).join("|"))
+  assert_true(t.find("来自 个人") is Some(_))
+  assert_true(t.find("分享并发送") is Some(_))
+  // Enter again: shared by the core (which of them, with which workspace: its), then it goes
+  t.enter()
+  t.frame()
+  t.frame()
+  let shared = named(calls, "chat.outsideShare")
+  assert_eq(shared.length(), 1)
+  assert_eq(text(Some(shared[0].params), "station"), "ws1/st1")
+  assert_eq(named(calls, "chat.send").length(), 1)
+  assert_eq(text(Some(named(calls, "chat.send")[0].params), "text"), "先看 @[季度路线图] 再定")
+  assert_true(fix_xshared.contains("s-p1"))
+  ignore(src)
+}
+
+///|
+test "desk composer: words with no reference go at once, the core not asked what they refer to" {
+  let calls : Array[Made] = []
+  let (t, _) = desk_composer_tester(calls)
+  desk_focus(t)
+  t.type_text("没有引用的话")
+  t.enter()
+  t.frame()
+  assert_eq(named(calls, "chat.outsideRefs").length(), 0)
+  assert_eq(named(calls, "chat.send").length(), 1)
+}

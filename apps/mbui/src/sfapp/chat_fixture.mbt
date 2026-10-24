@@ -1028,6 +1028,19 @@ fn fixture_chat_call(f : Fixture, name : String, params : Json) -> Result[Json, 
       }
       Some(Ok({ "chats": Json::array(chats) }))
     }
+    // those of them the viewer may share, shared with 星火工作室 (xshare.ts chat.outsideShare)
+    "chat.outsideShare" => {
+      let words = text(p, "text")
+      let mut shared = 0
+      for x in fix_outside {
+        let (id, title, may) = x
+        if may && words.contains("@[" + title + "]") && !fix_xshared.contains(id) {
+          fix_xshared[id] = true
+          shared += 1
+        }
+      }
+      Some(Ok({ "shared": Json::number(shared.to_double()) }))
+    }
     "chat.xshareAdd" => {
       let id = text(p, "id")
       if fix_outside.iter().any(fn(x) { x.0 == id && x.2 }) {

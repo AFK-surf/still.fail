@@ -102,11 +102,15 @@ pub fn composer(
     w.files.length() > 0 ||
     w.quotes.length() > 0
   let ready = w.ready && !spec.locked
+  // sent once what it refers to can be read in this workspace (OutsideShare.tsx, sfbase's outside.mbt): at once when
+  // it refers to nothing of another workspace, else once the viewer has said so (outside.mbt's dialog)
+  @sfbase.sharing_go(w.key)
   let submit = fn() {
     if ready {
-      send(w)
+      @sfbase.send_sharing(src, w.key, spec.station, w.text.trim(chars=" \n\t").to_string(), fn() { send(w) })
     }
   }
+  outside_dialog(c, src, w.key)
   let cap = c.id("composer/cap")
   if c.clicked(cap) && !spec.locked {
     c.focus_editor(composer_field_key)
@@ -259,7 +263,8 @@ fn composer_text(
     match res.submitted {
       // (the field gives its words up as sent: the draft keeps them until they go)
       Some(words) => {
-        w.field.set(words)
+        // (put back as the app's own: what the core read of them is asked again, not taken as none)
+        @sfbase.refs_put(w.key, w.field, words)
         if words != w.text {
           writing_text(src, w, words)
         }
