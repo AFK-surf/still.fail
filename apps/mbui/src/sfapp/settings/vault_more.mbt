@@ -38,7 +38,7 @@ fn field_name(f : String) -> String {
 ///|
 /// What a vault call's failure says (vaultSaid): nothing when the person turned the system's prompt down
 /// (`user_cancelled`), that another device wrote first (`vault_conflict`), else why.
-fn vault_said(e : Json) -> String? {
+pub fn vault_said(e : Json) -> String? {
   match text(Some(e), "code") {
     "user_cancelled" => None
     "vault_conflict" => Some(tr("android-settings.vault.conflict"))
@@ -49,7 +49,7 @@ fn vault_said(e : Json) -> String? {
 ///|
 /// A vault call (`vault.<name>` on the workspace), as act is for others (vaultAct): `done` said once through, a
 /// failure said (a write made elsewhere first said as such; the prompt turned down, nothing).
-fn vault_act(
+pub fn vault_act(
   core : Core,
   ws : String,
   name : String,
@@ -99,7 +99,7 @@ fn vault_act(
 ///|
 /// The recovery words `vault.setup` gave, by workspace, until the person says they have written them down: in memory
 /// only, never kept (the core gives them only the once).
-let recovery_words : Map[String, Array[String]] = Map([])
+pub let recovery_words : Map[String, Array[String]] = Map([])
 
 ///|
 /// This device set up (`vault.setup`): the first time the recovery words come back, to be written down; then (or at
@@ -122,7 +122,7 @@ fn vault_create_first(core : Core, ws : String) -> Unit {
 
 ///|
 /// The 24 recovery words, numbered, three to a row, for the person to copy out (Words).
-fn vault_words(c : @ui.Ctx, words : Array[String]) -> Unit {
+pub fn vault_words(c : @ui.Ctx, words : Array[String]) -> Unit {
   let t = @sf.theme()
   list_card(c, fn() {
     body(c, fn() {
@@ -153,7 +153,7 @@ fn vault_words(c : @ui.Ctx, words : Array[String]) -> Unit {
 
 ///|
 /// The page's foot (Security.kt Foot): what goes on, over the page's ground, a note under it.
-fn vault_foot(c : @ui.Ctx, core : Core, ws : String, v : Json?) -> Unit {
+pub fn vault_foot(c : @ui.Ctx, core : Core, ws : String, v : Json?) -> Unit {
   match recovery_words.get(ws) {
     Some(_) =>
       foot(c, words=tr("android-settings.vault.wordsOnce"), fn() {
@@ -179,10 +179,10 @@ fn vault_foot(c : @ui.Ctx, core : Core, ws : String, v : Json?) -> Unit {
 /// (its rows' words: "web-pages.vault.addKind.profile" "web-pages.vault.addKind.profileDetail" "web-pages.vault.addKind.token" "web-pages.vault.addKind.tokenDetail" "web-pages.vault.addKind.ssh_key" "web-pages.vault.addKind.ssh_keyDetail" "web-pages.vault.addKind.login" "web-pages.vault.addKind.loginDetail")
 /// 添加 in the library (addSheet): a subscription or a model's key (a profile, added from the Profile list), or a secret
 /// of a kind (its editor, the kind fixed); not locked, that such a secret is kept in the clear.
-fn open_vault_add(_core : Core, here : Here) -> Unit {
-  // the desktop's: the web's dialog (web_vault_dialogs.mbt)
-  if wide.val {
-    return vault_add_dialog(_core, here)
+pub fn open_vault_add(_core : Core, here : Here) -> Unit {
+  // the desktop's: its dialog (src/sfdesk vault_dialogs.mbt)
+  if wide.val && desk_vault.val is Some(d) {
+    return (d.add)(_core, here)
   }
   let ws = here.workspace
   open_sheet(0.55, fn(c, core) {
@@ -606,7 +606,7 @@ fn copy_secret(c : @ui.Ctx, core : Core, words : String, secret : Bool) -> Unit 
 
 ///|
 /// An item being written (Editor's state): its kind, whether agents may ask for it, how, the error said under it.
-priv struct VaultEditing {
+pub(all) struct VaultEditing {
   mut kind : Int
   mut agent : Bool
   mut mode : String
@@ -620,7 +620,7 @@ priv struct VaultEditing {
 }
 
 ///|
-let vault_serial : Ref[Int] = Ref(0)
+pub let vault_serial : Ref[Int] = Ref(0)
 
 ///|
 /// An item's editor (editorSheet, Editor): its kind (new, and not fixed: picked), name and fields, whether agents may
@@ -628,9 +628,9 @@ let vault_serial : Ref[Int] = Ref(0)
 /// saved (the system's prompt may come up): turned down, nothing lost; refused, why under it. 删除这一条 for one there.
 /// `editing`: the item's row and what it holds as opened.
 fn open_vault_editor(_core : Core, ws : String, vault : String, editing : (Json, Json)?, kind? : String = "", plain? : Bool = false) -> Unit {
-  // the desktop's: the web's dialog (web_vault_dialogs.mbt)
-  if wide.val {
-    return vault_editor_dialog(_core, ws, vault, editing, kind~, plain~, kinds=kind == "")
+  // the desktop's: its dialog (src/sfdesk vault_dialogs.mbt)
+  if wide.val && desk_vault.val is Some(d) {
+    return (d.editor)(_core, ws, vault, editing, kind, plain)
   }
   vault_serial.val += 1
   let was = match editing {
@@ -888,7 +888,7 @@ fn open_vault_editor(_core : Core, ws : String, vault : String, editing : (Json,
 /// What `vault.putItem` is given for an item (Vault.tsx putOf): the vault, the item's id where it is one already, what
 /// it holds (`words`: its fields' words by name, as typed), and, where agents may ask for it, how (`mode`, its hosts,
 /// its variable) and its longest grant (`lasts`: "default" its vault's).
-fn vault_put_params(
+pub fn vault_put_params(
   vault : String,
   row : Json?,
   was : Json?,
@@ -943,7 +943,7 @@ fn vault_put_params(
 
 ///|
 /// The hosts typed (`words`' hosts: by commas, spaces or lines).
-fn vault_hosts(words : Map[String, String]) -> Array[String] {
+pub fn vault_hosts(words : Map[String, String]) -> Array[String] {
   let out : Array[String] = []
   for h in words.get("hosts").unwrap_or("").replace_all(old=",", new=" ").replace_all(old="\n", new=" ").split(" ") {
     if h != "" {
@@ -956,7 +956,7 @@ fn vault_hosts(words : Map[String, String]) -> Array[String] {
 ///|
 /// Whether an item's words can be saved (Vault.tsx formProblem): its name, what its kind needs, and the hosts where a
 /// proxy gives it; the problem's name, or "" none.
-fn vault_problem(k : String, words : Map[String, String], agent : Bool, mode : String) -> String {
+pub fn vault_problem(k : String, words : Map[String, String], agent : Bool, mode : String) -> String {
   let got = fn(f : String) { words.get(f).unwrap_or("").trim(chars=" \n").to_owned() }
   let filled_in = match k {
     "token" => got("value") != ""
@@ -978,9 +978,9 @@ fn vault_problem(k : String, words : Map[String, String], agent : Bool, mode : S
 /// This device keyed into the person's vaults again by their 24 recovery words (recoverSheet: `vault.recover`); the
 /// words typed are this sheet's only while it is up.
 fn open_vault_recover(_core : Core, ws : String) -> Unit {
-  // the desktop's: the web's dialog (web_vault_dialogs.mbt)
-  if wide.val {
-    return vault_recover_dialog(_core, ws)
+  // the desktop's: its dialog (src/sfdesk vault_dialogs.mbt)
+  if wide.val && desk_vault.val is Some(d) {
+    return (d.recover)(_core, ws)
   }
   vault_serial.val += 1
   let key = "vault-recover/" + vault_serial.val.to_string()
@@ -1060,3 +1060,18 @@ let vault_note_room : @ui.Style = @ui.style(w=Full, pt=S1)
 ///|
 // kept across runs: a value (no field of it changes)
 let vault_note_words : @ui.TextStyle = @ui.text_style(size=Xs, leading=L5, color=Muted, w=Full)
+
+///|
+/// The desktop's dialogs for the vault (src/sfdesk vault_dialogs.mbt), given by its settings as they are drawn: in
+/// the wide frame the settings' pages not ported from the web's yet (a secret's) open them in place of the sheets. A
+/// secret added, one's editor (its vault, the item's row and what it holds, a kind fixed, kept in the clear), this
+/// device keyed in again by the recovery words.
+pub(all) struct DeskVault {
+  add : (Core, Here) -> Unit
+  editor : (Core, String, String, (Json, Json)?, String, Bool) -> Unit
+  recover : (Core, String) -> Unit
+}
+
+///|
+// kept across runs: given again by the desktop's settings as they are drawn, the same each time
+pub let desk_vault : Ref[DeskVault?] = Ref(None)

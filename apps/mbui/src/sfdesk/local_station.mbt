@@ -5,7 +5,7 @@
 
 ///|
 /// 本机 Station (LocalStationPage): read again every few seconds (it starts, stops and updates on its own time).
-fn local_station_page_wide(c : @ui.Ctx, core : Core) -> Unit {
+fn local_station_page(c : @ui.Ctx, core : Core) -> Unit {
   ignore(c.every(local_read_ms))
   let parsed = @json.parse(@ui.local_station()) catch { _ => Json::null() }
   let s = Some(parsed)
@@ -17,32 +17,32 @@ fn local_station_page_wide(c : @ui.Ctx, core : Core) -> Unit {
     body.push(fn() {
       c.box(style=desk_card, fn() {
         if doing != "" {
-          local_progress_wide(c, s, doing)
+          local_progress(c, s, doing)
         } else {
-          c.text(tr("desktop.local.noService"), style=desk_muted) |> ignore
+          c.text(@sf.t("desktop.local.noService"), style=desk_muted) |> ignore
           if @ui.platform() == 0 {
             c.box(style=vt_actions, fn() {
-              if @sf.button(c, tr("web-pages.settings.thisMac.add"), key="local/install", tone=Primary) {
+              if @sf.button(c, @sf.t("web-pages.settings.thisMac.add"), key="local/install", tone=Primary) {
                 (core.local_install)(true)
               }
             })
             |> ignore
           }
         }
-        local_failed_wide(c, s)
+        local_failed(c, s)
       })
       |> ignore
     })
   } else {
     body.push(fn() { local_card(c, core, s, pc) })
   }
-  desk_page(c, core, "local-station", tr("web-pages.localStation.title"), about=fill(
+  desk_page(c, core, "local-station", @sf.t("web-pages.localStation.title"), about=@sf.t(
       if pc {
         "web-pages.localStation.leadPc"
       } else {
         "web-pages.localStation.lead"
       },
-      [("name", "still.fail")],
+      args=[("name", "still.fail")],
     ), body)
 }
 
@@ -56,35 +56,35 @@ fn local_card(c : @ui.Ctx, core : Core, s : Json?, pc : Bool) -> Unit {
   let service = field(s, "service") is Some(_)
   let workspace = field(s, "workspace")
   let name = match text(workspace, "stationName") {
-    "" => tr(if pc { "web-pages.localStation.thisPc" } else { "web-pages.localStation.thisMac" })
+    "" => @sf.t(if pc { "web-pages.localStation.thisPc" } else { "web-pages.localStation.thisMac" })
     n => n
   }
   let state = if working {
-    tr("web-pages.localStation.doing." + doing)
+    @sf.t("web-pages.localStation.doing." + doing)
   } else if running {
-    tr("web-pages.localStation.running")
+    @sf.t("web-pages.localStation.running")
   } else {
-    tr("web-pages.localStation.stopped")
+    @sf.t("web-pages.localStation.stopped")
   }
   let run_by = match text(s, "runner") {
     "service" => service_name(s)
-    "other" => tr("web-pages.localStation.byHand")
-    "app" => fill("web-pages.localStation.byApp", [("name", "still.fail")])
+    "other" => @sf.t("web-pages.localStation.byHand")
+    "app" => @sf.t("web-pages.localStation.byApp", args=[("name", "still.fail")])
     _ =>
       if service {
         service_name(s)
       } else {
-        fill("web-pages.localStation.byApp", [("name", "still.fail")])
+        @sf.t("web-pages.localStation.byApp", args=[("name", "still.fail")])
       }
   }
   let place = if workspace is None {
-    tr("web-pages.localStation.noWorkspace")
+    @sf.t("web-pages.localStation.noWorkspace")
   } else {
     let ws = match text(workspace, "name") {
       "" => text(workspace, "id")
       n => n
     }
-    fill(if flag(workspace, "removed") { "web-pages.localStation.removed" } else { "web-pages.localStation.inWorkspace" }, [("workspace", ws)])
+    @sf.t(if flag(workspace, "removed") { "web-pages.localStation.removed" } else { "web-pages.localStation.inWorkspace" }, args=[("workspace", ws)])
   }
   let act = fn(a : String) {
     if a == "update" {
@@ -101,7 +101,7 @@ fn local_card(c : @ui.Ctx, core : Core, s : Json?, pc : Bool) -> Unit {
         c.text(state, style=ls_state) |> ignore
       })
       |> ignore
-      if !running && !working && service && @sf.button(c, tr("web-pages.localStation.start"), key="local/start-now", tone=Ghost) {
+      if !running && !working && service && @sf.button(c, @sf.t("web-pages.localStation.start"), key="local/start-now", tone=Ghost) {
         act("start")
       }
       // its menu (⋯)
@@ -112,24 +112,24 @@ fn local_card(c : @ui.Ctx, core : Core, s : Json?, pc : Bool) -> Unit {
         local_menu.val = !open
       }
       let b = c.box(style=ws_more, id=mid, fn() { @sf.icon(c, "more", size=ws_more_icon, color=t.p.muted) |> ignore })
-      c.semantics(b, Button, id=mid, label=tr("web-main.menu.more"), expanded=open)
+      c.semantics(b, Button, id=mid, label=@sf.t("web-main.menu.more"), expanded=open)
       let entries : Array[@kit.Entry] = []
       if running {
-        entries.push(@kit.menu_item("stop", label=tr("web-pages.localStation.stop"), disabled=working))
+        entries.push(@kit.menu_item("stop", label=@sf.t("web-pages.localStation.stop"), disabled=working))
         if text(s, "runner") != "other" {
-          entries.push(@kit.menu_item("restart", label=tr("web-pages.localStation.restart"), disabled=working))
+          entries.push(@kit.menu_item("restart", label=@sf.t("web-pages.localStation.restart"), disabled=working))
         }
       } else {
-        entries.push(@kit.menu_item("start", label=tr("web-pages.localStation.start"), disabled=working || !service))
+        entries.push(@kit.menu_item("start", label=@sf.t("web-pages.localStation.start"), disabled=working || !service))
       }
       // brought up to the latest release (the installer), not one started by hand
       if text(s, "runner") != "other" && @ui.platform() == 0 {
-        entries.push(@kit.menu_item("update", label=tr("web-pages.localStation.update"), disabled=working))
+        entries.push(@kit.menu_item("update", label=@sf.t("web-pages.localStation.update"), disabled=working))
       }
       entries.push(@kit.menu_separator())
-      entries.push(@kit.menu_item("log", label=tr("web-pages.localStation.openLog")))
+      entries.push(@kit.menu_item("log", label=@sf.t("web-pages.localStation.openLog")))
       entries.push(
-        @kit.menu_item("folder", label=tr(if pc { "web-pages.localStation.openFolderPc" } else { "web-pages.localStation.openFolder" })),
+        @kit.menu_item("folder", label=@sf.t(if pc { "web-pages.localStation.openFolderPc" } else { "web-pages.localStation.openFolder" })),
       )
       let m = @sf.menu(
         c,
@@ -165,10 +165,10 @@ fn local_card(c : @ui.Ctx, core : Core, s : Json?, pc : Bool) -> Unit {
       |> ignore
     })
     if doing == "install" || doing == "update" {
-      ls_past_dot(c, fn() { c.box(style=ls_under, fn() { local_progress_wide(c, s, doing) }) |> ignore })
+      ls_past_dot(c, fn() { c.box(style=ls_under, fn() { local_progress(c, s, doing) }) |> ignore })
     }
     if text(s, "failed") != "" {
-      ls_past_dot(c, fn() { local_failed_wide(c, s) })
+      ls_past_dot(c, fn() { local_failed(c, s) })
     }
   })
   |> ignore
@@ -188,17 +188,17 @@ fn ls_past_dot(c : @ui.Ctx, body : () -> Unit) -> Unit {
 /// Which service runs it (launchd, systemd, a task), as the host says.
 fn service_name(s : Json?) -> String {
   match text(field(s, "service"), "kind") {
-    "" => tr("web-pages.localStation.service.launchd")
-    k => tr("web-pages.localStation.service." + k)
+    "" => @sf.t("web-pages.localStation.service.launchd")
+    k => @sf.t("web-pages.localStation.service." + k)
   }
 }
 
 ///|
 /// The installer at work (install, update): what it does and how far, a bar as far, the step it last said.
-fn local_progress_wide(c : @ui.Ctx, s : Json?, doing : String) -> Unit {
+fn local_progress(c : @ui.Ctx, s : Json?, doing : String) -> Unit {
   let known = field(s, "percent") is Some(_)
   let percent = number(s, "percent")
-  c.text(tr("web-pages.localStation.doing." + doing) + (if known { " · \{percent.to_int()}%" } else { "" }), style=desk_muted)
+  c.text(@sf.t("web-pages.localStation.doing." + doing) + (if known { " · \{percent.to_int()}%" } else { "" }), style=desk_muted)
   |> ignore
   c.box(style=ls_bar, fn() { @sf.progress(c, if known { Some(percent / 100.0) } else { None }) }) |> ignore
   match text(s, "said") {
@@ -209,12 +209,12 @@ fn local_progress_wide(c : @ui.Ctx, s : Json?, doing : String) -> Unit {
 
 ///|
 /// What went wrong with the last act (warn: red).
-fn local_failed_wide(c : @ui.Ctx, s : Json?) -> Unit {
+fn local_failed(c : @ui.Ctx, s : Json?) -> Unit {
   let words = match text(s, "failed") {
     "" => return
-    "busy" => tr("desktop.local.busy")
-    "byHand" => tr("desktop.local.byHand")
-    "noService" => tr("desktop.local.noService")
+    "busy" => @sf.t("desktop.local.busy")
+    "byHand" => @sf.t("desktop.local.byHand")
+    "noService" => @sf.t("desktop.local.noService")
     e => e
   }
   c.text(words, style=ls_warn) |> ignore
@@ -222,7 +222,7 @@ fn local_failed_wide(c : @ui.Ctx, s : Json?) -> Unit {
 
 ///|
 /// Whether its menu is open.
-// kept across runs: said by the page's ⋯; core.mbt's reset puts it back
+// kept across runs: said by the page's ⋯; settings_reset puts it back
 let local_menu : Ref[Bool] = Ref(false)
 
 ///|
@@ -280,14 +280,14 @@ let ls_warn : @ui.TextStyle = @ui.text_style(size=Sm, leading=L6, weight=Medium,
 ///|
 /// 版本 (AppVersionPage): the desktop app's own version, what the last look found under it, and its button: 检查更新,
 /// or, with a newer build known, 更新到 it (the app's: version_words, version_tap).
-fn version_page_wide(c : @ui.Ctx, core : Core) -> Unit {
+fn version_page(c : @ui.Ctx, core : Core) -> Unit {
   let (words, newer) = (core.version_words)()
-  let check = tr("android-settings.version.check")
+  let check = @sf.t("android-settings.version.check")
   // what is under way (checking, downloading, installing): said under the version, the button turning
   let note = if newer || words == check { "" } else { words }
-  desk_page(c, core, "version", tr("web-pages.settings.nav.version"), [
+  desk_page(c, core, "version", @sf.t("web-pages.settings.nav.version"), [
     fn() {
-      @sf.section(c, fill("web-pages.version.title", [("name", "still.fail")]), note=tr("web-pages.version.lead"), fn() {
+      @sf.section(c, @sf.t("web-pages.version.title", args=[("name", "still.fail")]), note=@sf.t("web-pages.version.lead"), fn() {
         c.box(style=ver_row, fn() {
           c.box(style=ver_text, fn() {
             c.text("still.fail mbui " + build_version(), style=desk_words) |> ignore

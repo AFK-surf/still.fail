@@ -8,10 +8,10 @@
 ///|
 /// The kinds of item, in the editor's order (Vault.kt KINDS).
 // kept across runs: a table, never written
-let vault_kinds : Array[String] = ["token", "ssh_key", "login"]
+pub let vault_kinds : Array[String] = ["token", "ssh_key", "login"]
 
 ///|
-fn kind_icon(kind : String) -> String {
+pub fn kind_icon(kind : String) -> String {
   match kind {
     "ssh_key" => "server"
     "login" => "user"
@@ -20,7 +20,7 @@ fn kind_icon(kind : String) -> String {
 }
 
 ///|
-fn mode_name(mode : String) -> String {
+pub fn mode_name(mode : String) -> String {
   match mode {
     "proxy" | "env" | "ssh" => tr("android-settings.vault.mode." + mode)
     m => m
@@ -55,10 +55,6 @@ fn how_line(mode : String, hosts : Array[String]) -> String {
 
 ///|
 fn vault_page(c : @ui.Ctx, core : Core, here : Here) -> Unit {
-  // the desktop's: the web's (web_vault.mbt)
-  if wide.val {
-    return vault_page_wide(c, core, here)
-  }
   let ws = here.workspace
   let topic = (core.topic)("vaults", { "workspace": str(ws) })
   let v = topic.value
@@ -132,7 +128,7 @@ fn to_security(c : @ui.Ctx, core : Core, title : String, why : String) -> Unit {
 
 ///|
 /// Not set up on this device yet (Vault.kt Off): what it is and what agents do with it.
-fn vault_off(c : @ui.Ctx) -> Unit {
+pub fn vault_off(c : @ui.Ctx) -> Unit {
   let t = @sf.theme()
   list_card(c, fn() {
     body(c, fn() {
@@ -286,7 +282,7 @@ fn library(c : @ui.Ctx, core : Core, ws : String, v : Json?) -> Array[() -> Unit
 
 ///|
 /// The profiles' accounts by the kind they are listed under, in the core's order: (its title, its accounts).
-fn profile_groups(list : Array[Json]) -> Array[(String, Array[Json])] {
+pub fn profile_groups(list : Array[Json]) -> Array[(String, Array[Json])] {
   let out : Array[(String, String, Array[Json])] = []
   for e in list {
     let g = text(Some(e), "group")
@@ -462,7 +458,7 @@ fn decision_options(c : @ui.Ctx, key : String, options : Array[(String, String, 
 
 ///|
 /// A vault known by its items' names only (Vault.kt VaultSection): a web page's, or one this device has no key to.
-fn vault_section(c : @ui.Ctx, core : Core, ws : String, row : Json) -> Array[() -> Unit] {
+pub fn vault_section(c : @ui.Ctx, core : Core, ws : String, row : Json) -> Array[() -> Unit] {
   let t = @sf.theme()
   let rv = Some(row)
   let topic = (core.topic)("vaultItems", { "workspace": str(ws), "vault": str(text(rv, "id")) })
@@ -624,7 +620,7 @@ fn library_vault(c : @ui.Ctx, core : Core, ws : String, row : Json, plain : Bool
 ///|
 /// Whose service a profile runs on (Parts.kt ProviderMark): OpenCode's square, a listed provider's maker (the plug where
 /// there is none), Anthropic, xAI, Cursor, Devin or OpenAI by its runtime.
-fn provider_mark(c : @ui.Ctx, runtime : String, kind : String, size : Double, mark : String) -> Unit {
+pub fn provider_mark(c : @ui.Ctx, runtime : String, kind : String, size : Double, mark : String) -> Unit {
   let t = @sf.theme()
   if kind == "opencode-go" || mark == "opencode" {
     c.box(w=Px(size), h=Px(size), align=ACenter, justify=JCenter, fn() {
@@ -708,7 +704,7 @@ let plain_left_body : @ui.TextStyle = @ui.text_style(size=Sm, leading=L4_75, col
 ///|
 /// How long a grant lasts, shortest first: one use, an hour, the chat until it is archived (Vault.kt SCOPES).
 // kept across runs: a table, never written
-let vault_scopes : Array[String] = ["once", "hour", "chat"]
+pub let vault_scopes : Array[String] = ["once", "hour", "chat"]
 
 ///|
 /// The longest an item is granted for, in a word: 仅一次, 1 小时, 直到对话归档 (Vault.kt lastsName: the chat's when
@@ -721,11 +717,11 @@ fn lasts_name(lasts : String) -> String {
 /// An item's longest grant as its editor offers it: its vault's (`default`, the library's setting), or its own
 /// (Vault.kt LASTS).
 // kept across runs: a table, never written
-let vault_lasts : Array[String] = ["default", "once", "hour", "chat"]
+pub let vault_lasts : Array[String] = ["default", "once", "hour", "chat"]
 
 ///|
 /// An item's longest grant as its editor names it (Vault.kt lastsChoice).
-fn lasts_choice(lasts : String) -> String {
+pub fn lasts_choice(lasts : String) -> String {
   if lasts == "default" {
     tr("android-settings.vault.lasts.default")
   } else {

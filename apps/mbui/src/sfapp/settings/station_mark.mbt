@@ -175,7 +175,7 @@ let mark_pictures : Ref[Int] = Ref(0)
 ///|
 /// The mark picker (openMarkPick) for `name`, whose mark is `emoji` and `icon` now: `save(emoji, icon)` sets one,
 /// `what` naming it should it fail ("" and "" take it away).
-fn open_mark_pick(
+pub fn open_mark_pick(
   core : Core,
   name : String,
   emoji : String,

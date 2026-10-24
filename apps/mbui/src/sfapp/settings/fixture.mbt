@@ -88,10 +88,12 @@ priv struct FixtureOpen {
   mut list : String
   mut block : Int
   mut frames : Int
+  /// a dialog of the desktop's pages to put up (src/sfdesk: fixture_desk), "" none
+  mut desk : String
 }
 
 ///|
-let fixture_open : FixtureOpen = { sheet: "", list: "", block: 0, frames: 0 }
+let fixture_open : FixtureOpen = { sheet: "", list: "", block: 0, frames: 0, desk: "" }
 
 ///|
 /// The new connect's step its fixture shows (MBUI_FIXTURE=settings-new-connect: team; -platform, -scan: Feishu's).
@@ -121,6 +123,7 @@ fn fixture_reset() -> Unit {
   fixture_open.list = ""
   fixture_open.block = 0
   fixture_open.frames = 0
+  fixture_open.desk = ""
   fx_connect_step.val = "team"
 }
 
@@ -189,13 +192,13 @@ pub fn fixture_page(mode : String) -> String {
     "settings-workspace-mark" => up("workspace-mark", "", 0)
     // 外观's 本机字体 open (fonts.mbt local_tile: the families the host lists)
     "settings-local-fonts" => local_open.val = true
-    // the desktop's archive policy with a dialog up (web_decisions.mbt): its words, an option of the station's
-    "settings-policy-text" => fx_policy_up.val = "text"
-    "settings-policy-option" => fx_policy_up.val = "option"
-    // the desktop's 安全 with a dialog up (web_security.mbt): a device's code to confirm, MBA to take in, turning it off
-    "settings-security-confirm" => up("lock-confirm", "", 0)
-    "settings-security-join" => up("lock-join", "", 0)
-    "settings-security-off" => up("lock-off", "", 0)
+    // the desktop's archive policy with a dialog up (src/sfdesk automatic_decisions.mbt): its words, an option of the
+    // station's; its 安全 with one (security.mbt): a device's code to confirm, MBA to take in, turning it off
+    "settings-policy-text" => fixture_open.desk = "policy-text"
+    "settings-policy-option" => fixture_open.desk = "policy-option"
+    "settings-security-confirm" => fixture_open.desk = "lock-confirm"
+    "settings-security-join" => fixture_open.desk = "lock-join"
+    "settings-security-off" => fixture_open.desk = "lock-off"
     // the run's models listed (model_list.mbt): more than 8, by series, one of another station's to borrow
     "settings-run-models" => {
       fx_many_models.val = true
@@ -1572,6 +1575,15 @@ fn waiting_lock(mode : String) -> Json {
 }
 
 ///|
+/// The dialog of the desktop's pages a fixture's mode puts up ("" none), taken once: the desktop's page puts it up
+/// once it is drawn with what it needs.
+pub fn fixture_desk() -> String {
+  let d = fixture_open.desk
+  fixture_open.desk = ""
+  d
+}
+
+///|
 /// The sheet a fixture's mode puts up, once its page is drawn with what it needs (`page`).
 fn fixture_sheet(core : Core, here : Here) -> Unit {
   let what = fixture_open.sheet
@@ -1606,13 +1618,6 @@ fn fixture_sheet(core : Core, here : Here) -> Unit {
     "vault-editor" => open_vault_editor(core, "ws1", "v1", None, kind="token")
     "vault-recover" => open_vault_recover(core, "ws1")
     "add-people" => open_add_people(core, here, workspace_view(core, here).value)
-    "lock-confirm" =>
-      match items((core.topic)("lock", { "workspace": str("ws1") }).value, "requests") {
-        [r, ..] => confirm_dialog(core, "ws1", r)
-        _ => ()
-      }
-    "lock-join" => join_dialog(core, "ws1", "st2", "MBA")
-    "lock-off" => turn_off_dialog(core, "ws1", "星火工作室")
     "workspace-mark" => open_mark_pick(core, "星火工作室", "", "glyph:rocket:orange", "", fn(_, _, _) {  })
     "add" | "add-existing" | "add-command" => {
       open_add_station(core, here, ["st1", "st2"], existing=what == "add-existing")

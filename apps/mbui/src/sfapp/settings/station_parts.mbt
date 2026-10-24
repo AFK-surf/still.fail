@@ -1141,7 +1141,7 @@ fn adb_state(c : @ui.Ctx, view : Json?, now : Double) -> String {
 
 ///|
 /// The station at `address` as the workspace's `stations` has it.
-fn station_of(core : Core, here : Here, address : String) -> Json? {
+pub fn station_of(core : Core, here : Here, address : String) -> Json? {
   match stations_of(core, here).value {
     Some(Array(a)) => a.iter().find_first(fn(x) { text(Some(x), "station") == address })
     _ => None

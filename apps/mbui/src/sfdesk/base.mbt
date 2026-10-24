@@ -65,6 +65,7 @@ using @sfbase {
   dv_take_picked,
   dv_upload,
   field,
+  opt_text,
   filter_of,
   flag,
   items,

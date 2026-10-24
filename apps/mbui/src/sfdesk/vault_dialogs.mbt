@@ -7,7 +7,7 @@
 /// the kind fixed); not locked, that such a secret is kept in the clear.
 fn vault_add_dialog(core : Core, here : Here) -> Unit {
   let ws = here.workspace
-  open_dialog("vault-add/" + (desk_dialogs.val + 1).to_string(), tr("web-pages.vault.addKind.title"), fn(c, shut) {
+  open_dialog("vault-add/" + (desk_dialogs.val + 1).to_string(), @sf.t("web-pages.vault.addKind.title"), fn(c, shut) {
     let t = @sf.theme()
     let v = (core.topic)("vaults", { "workspace": str(ws) }).value
     let mine = items(v, "vaults").iter().find_first(fn(x) { flag(Some(x), "mine") })
@@ -33,12 +33,12 @@ fn vault_add_dialog(core : Core, here : Here) -> Unit {
         }
         c.box(style=vd_kind_row, id~, fn() {
           c.box(style=vt_row_icon, fn() {
-            @sf.icon(c, if k == "profile" { "quota" } else { kind_icon(k) }, size=vt_glyph, color=t.p.muted) |> ignore
+            @sf.icon(c, if k == "profile" { "quota" } else { @settings.kind_icon(k) }, size=vt_glyph, color=t.p.muted) |> ignore
           })
           |> ignore
           c.box(style=desk_list_text, fn() {
-            c.text(tr("web-pages.vault.addKind." + k), style=desk_list_title) |> ignore
-            c.text(tr("web-pages.vault.addKind." + k + "Detail"), style=desk_note) |> ignore
+            c.text(@sf.t("web-pages.vault.addKind." + k), style=desk_list_title) |> ignore
+            c.text(@sf.t("web-pages.vault.addKind." + k + "Detail"), style=desk_note) |> ignore
           })
           |> ignore
         })
@@ -47,7 +47,7 @@ fn vault_add_dialog(core : Core, here : Here) -> Unit {
     })
     |> ignore
     if plain && mine is Some(_) {
-      c.text(tr("web-pages.vault.risk.editor"), style=vt_warn_lines) |> ignore
+      c.text(@sf.t("web-pages.vault.risk.editor"), style=vt_warn_lines) |> ignore
     }
   }, fn(_, _) {  })
 }
@@ -127,7 +127,7 @@ fn vault_editor_dialog(
     })
   }
   let title = match was {
-    None => tr("web-pages.vault.editor.new")
+    None => @sf.t("web-pages.vault.editor.new")
     Some(p) => text(Some(p), "name")
   }
   open_dialog(
@@ -136,32 +136,32 @@ fn vault_editor_dialog(
     fn(c, _) {
       let k = vault_kinds[e.kind]
       if plain {
-        c.text(tr("web-pages.vault.risk.editor"), style=vt_warn_lines) |> ignore
+        c.text(@sf.t("web-pages.vault.risk.editor"), style=vt_warn_lines) |> ignore
       }
       if was is None && kinds {
         c.box(fn() {
-          e.kind = @sf.segmented(c, key("kind"), vault_kinds.map(fn(x) { tr("web-pages.vault.kind." + x) }), e.kind)
+          e.kind = @sf.segmented(c, key("kind"), vault_kinds.map(fn(x) { @sf.t("web-pages.vault.kind." + x) }), e.kind)
         })
         |> ignore
       }
-      input(c, "name", tr("web-pages.vault.editor.name"), tr("web-pages.vault.editor.namePlaceholder"), false, false, "")
+      input(c, "name", @sf.t("web-pages.vault.editor.name"), @sf.t("web-pages.vault.editor.namePlaceholder"), false, false, "")
       match k {
-        "token" => input(c, "value", tr("web-pages.vault.editor.value"), "", true, false, "")
+        "token" => input(c, "value", @sf.t("web-pages.vault.editor.value"), "", true, false, "")
         "ssh_key" => {
-          input(c, "private_key", tr("web-pages.vault.editor.privateKey"), "-----BEGIN OPENSSH PRIVATE KEY-----", false, true, "")
-          input(c, "public_key", tr("web-pages.vault.editor.publicKey"), "ssh-ed25519 AAAA…", false, false, "")
+          input(c, "private_key", @sf.t("web-pages.vault.editor.privateKey"), "-----BEGIN OPENSSH PRIVATE KEY-----", false, true, "")
+          input(c, "public_key", @sf.t("web-pages.vault.editor.publicKey"), "ssh-ed25519 AAAA…", false, false, "")
         }
         _ => {
-          input(c, "username", tr("web-pages.vault.editor.username"), "", false, false, "")
-          input(c, "password", tr("web-pages.vault.editor.password"), "", true, false, "")
-          input(c, "totp", tr("web-pages.vault.editor.totp"), "", true, false, "")
+          input(c, "username", @sf.t("web-pages.vault.editor.username"), "", false, false, "")
+          input(c, "password", @sf.t("web-pages.vault.editor.password"), "", true, false, "")
+          input(c, "totp", @sf.t("web-pages.vault.editor.totp"), "", true, false, "")
         }
       }
       // how agents may ask for it (agentBox)
       c.box(style=vd_agent, fn() {
-        e.agent = @sf.switch_row(c, key("agent"), tr("web-pages.vault.editor.agent"), e.agent, note=tr("web-pages.vault.editor.agentNote"))
+        e.agent = @sf.switch_row(c, key("agent"), @sf.t("web-pages.vault.editor.agent"), e.agent, note=@sf.t("web-pages.vault.editor.agentNote"))
         if e.agent {
-          @sf.field(c, tr("web-pages.vault.editor.how"), fn() {
+          @sf.field(c, @sf.t("web-pages.vault.editor.how"), fn() {
             if k == "ssh_key" {
               c.text(mode_name("ssh"), style=desk_words) |> ignore
             } else {
@@ -170,7 +170,7 @@ fn vault_editor_dialog(
             }
           })
           c.text(
-            tr(
+            @sf.t(
               if k == "ssh_key" {
                 "web-pages.vault.editor.sshNote"
               } else if e.mode == "proxy" {
@@ -184,15 +184,15 @@ fn vault_editor_dialog(
           |> ignore
           if k != "ssh_key" && e.mode == "proxy" {
             let typed = words.get("hosts").unwrap_or("")
-            input(c, "hosts", tr("web-pages.vault.editor.hosts"), tr("web-pages.vault.editor.hostsPlaceholder"), false, false, if typed != "" && vault_hosts(words).length() == 0 { tr("web-pages.vault.editor.hostsNeeded") } else { "" })
+            input(c, "hosts", @sf.t("web-pages.vault.editor.hosts"), @sf.t("web-pages.vault.editor.hostsPlaceholder"), false, false, if typed != "" && vault_hosts(words).length() == 0 { @sf.t("web-pages.vault.editor.hostsNeeded") } else { "" })
           }
           if k != "ssh_key" {
-            input(c, "env", tr("web-pages.vault.editor.env"), tr("web-pages.vault.editor.envPlaceholder"), false, false, "")
+            input(c, "env", @sf.t("web-pages.vault.editor.env"), @sf.t("web-pages.vault.editor.envPlaceholder"), false, false, "")
           }
-          @sf.field(c, tr("web-pages.vault.editor.lasts"), fn() {
+          @sf.field(c, @sf.t("web-pages.vault.editor.lasts"), fn() {
             e.lasts = @sf.segmented(c, key("lasts"), vault_lasts.map(lasts_choice), e.lasts)
           })
-          c.text(tr("web-pages.vault.editor.lastsNote"), style=desk_note) |> ignore
+          c.text(@sf.t("web-pages.vault.editor.lastsNote"), style=desk_note) |> ignore
         }
       })
       |> ignore
@@ -205,15 +205,15 @@ fn vault_editor_dialog(
       match row {
         Some(r) => {
           let removing = is_doing(core, ["vault.deleteItem"], [("workspace", ws), ("vault", vault)])
-          if @sf.button(c, tr("common.delete"), key=key("delete"), tone=GhostDanger, busy=removing) {
+          if @sf.button(c, @sf.t("common.delete"), key=key("delete"), tone=GhostDanger, busy=removing) {
             confirm(
-              fill("web-pages.vault.deleteTitle", [("name", text(was, "name"))]),
-              tr("web-pages.vault.deleteBody"),
-              tr("common.delete"),
+              @sf.t("web-pages.vault.deleteTitle", args=[("name", text(was, "name"))]),
+              @sf.t("web-pages.vault.deleteBody"),
+              @sf.t("common.delete"),
               danger=true,
               fn() {
                 shut()
-                vault_act(core, ws, "deleteItem", [("vault", str(vault)), ("item", str(text(Some(r), "id")))], tr("web-pages.vault.deleteWhat"), done=tr("web-pages.vault.deleted"), then=fn(
+                vault_act(core, ws, "deleteItem", [("vault", str(vault)), ("item", str(text(Some(r), "id")))], @sf.t("web-pages.vault.deleteWhat"), done=@sf.t("web-pages.vault.deleted"), then=fn(
                   _,
                 ) {
                   (core.pop)()
@@ -225,12 +225,12 @@ fn vault_editor_dialog(
         None => ()
       }
       c.spacer()
-      if @sf.button(c, tr("common.cancel"), key=key("cancel"), tone=Ghost) {
+      if @sf.button(c, @sf.t("common.cancel"), key=key("cancel"), tone=Ghost) {
         c.blur()
         shut()
       }
       let ready = vault_problem(k, words, e.agent, e.mode) == ""
-      if @sf.button(c, tr("common.save"), key=key("save"), tone=Primary, busy=e.saving, disabled=!ready) {
+      if @sf.button(c, @sf.t("common.save"), key=key("save"), tone=Primary, busy=e.saving, disabled=!ready) {
         e.saving = true
         e.error = ""
         c.blur()
@@ -239,8 +239,8 @@ fn vault_editor_dialog(
           ws,
           "putItem",
           vault_put_params(vault, row, was, k, words, e.agent, e.mode, vault_lasts[e.lasts]),
-          tr("web-pages.vault.saveWhat"),
-          done=tr("web-pages.vault.saved"),
+          @sf.t("web-pages.vault.saveWhat"),
+          done=@sf.t("web-pages.vault.saved"),
           then=fn(_) {
             e.saving = false
             shut()
@@ -271,8 +271,8 @@ fn vault_recover_dialog(core : Core, ws : String) -> Unit {
   let count_of = fn() { words.val.replace_all(old="\n", new=" ").split(" ").filter(fn(w) { w != "" }).count() }
   open_dialog(
     key,
-    tr("web-pages.vault.recover"),
-    description=tr("web-pages.vault.recoverLead"),
+    @sf.t("web-pages.vault.recover"),
+    description=@sf.t("web-pages.vault.recoverLead"),
     fn(c, _) {
       words.val = @sf.textarea(c, key, rows=4, field=field_of(key))
       let (_, error) = state.val
@@ -284,12 +284,12 @@ fn vault_recover_dialog(core : Core, ws : String) -> Unit {
       let n = count_of()
       c.text("\{n} / 24", style=desk_note) |> ignore
       c.spacer()
-      if @sf.button(c, tr("common.cancel"), key=key + "/cancel", tone=Ghost) {
+      if @sf.button(c, @sf.t("common.cancel"), key=key + "/cancel", tone=Ghost) {
         c.blur()
         shut()
       }
       let (busy, _) = state.val
-      if @sf.button(c, tr("web-pages.vault.recover"), key=key + "/go", tone=Primary, busy~, disabled=n != 24) {
+      if @sf.button(c, @sf.t("web-pages.vault.recover"), key=key + "/go", tone=Primary, busy~, disabled=n != 24) {
         state.val = (true, "")
         (core.call)("vault.recover", obj([("workspace", str(ws)), ("words", str(words.val.trim(chars=" \n").to_lower().to_owned()))]), fn(
           r,
@@ -300,9 +300,9 @@ fn vault_recover_dialog(core : Core, ws : String) -> Unit {
               let got = count(Some(v), "recovered")
               (core.say)(
                 if got > 0 {
-                  fill("web-pages.vault.recovered", [("n", got.to_string())])
+                  @sf.t("web-pages.vault.recovered", args=[("n", got.to_string())])
                 } else {
-                  tr("web-pages.vault.recoveredNone")
+                  @sf.t("web-pages.vault.recoveredNone")
                 },
               )
               if got > 0 {

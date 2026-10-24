@@ -493,6 +493,8 @@ fn signed_in(c : @ui.Ctx, src : Source) -> Unit {
       // a new device waiting on this one's code, in any workspace of the person's, over whichever page is open
       // (App.kt LockPrompts): put up when no other sheet is
       @settings.lock_prompts(settings_core(src, w), !sheet_open() && dui.sheet is None)
+      // the desktop's settings pages' dialogs (src/sfdesk settings_page.mbt), under the settings' questions
+      @sfdesk.settings_overlay(c)
       @settings.overlay(c, settings_core(src, w))
       toast(c)
     }
@@ -653,9 +655,6 @@ let picture_pick : Ref[(@ui.Pick, (Bytes?) -> Unit)?] = Ref(None)
 /// A page of the settings (src/sfapp/settings), over the workspace in view.
 fn setting_page(c : @ui.Ctx, src : Source, w : Workspace, r : @settings.Route) -> Unit {
   let core = settings_core(src, w)
-  // in the wide frame, a page under another of them shows back (the sidebar is the way to the others)
-  let pages = app.nav.pages()
-  @settings.wide_deep.val = pages.length() >= 2 && pages[pages.length() - 2] is Setting(_)
   @settings.page(c, core, @settings.here_of(core, w.id, w.name), r)
 }
 

@@ -6,7 +6,7 @@
 // security.mbt's. The phone's page is security.mbt's.
 
 ///|
-fn security_page_wide(c : @ui.Ctx, core : Core, here : Here) -> Unit {
+fn security_page(c : @ui.Ctx, core : Core, here : Here) -> Unit {
   let topic = (core.topic)("lock", { "workspace": str(here.workspace) })
   let lock = topic.value
   let blocks : Array[() -> Unit] = []
@@ -23,47 +23,47 @@ fn security_page_wide(c : @ui.Ctx, core : Core, here : Here) -> Unit {
       })
     Some(_) if !flag(lock, "available") =>
       blocks.push(fn() {
-        c.box(style=desk_card, fn() { c.text(tr("web-pages.security.unavailable"), style=desk_muted) |> ignore }) |> ignore
+        c.box(style=desk_card, fn() { c.text(@sf.t("web-pages.security.unavailable"), style=desk_muted) |> ignore }) |> ignore
       })
-    Some(_) if flag(lock, "locked") => blocks.append(lock_on_wide(c, core, here, lock))
-    Some(_) => blocks.append(lock_off_wide(c, lock))
+    Some(_) if flag(lock, "locked") => blocks.append(lock_on(c, core, here, lock))
+    Some(_) => blocks.append(lock_off(c, lock))
   }
-  desk_page(c, core, "security", tr("web-pages.security.title"), blocks, lead=tr("web-pages.security.lead"))
+  desk_page(c, core, "security", @sf.t("web-pages.security.title"), blocks, lead=@sf.t("web-pages.security.lead"))
 }
 
 ///|
 /// Off (Off): the lock's state, what it is now and once on and how new devices come in, a line each with its mark; the
 /// way to turn it on (where this device signs), or who may; 签名 under it.
-fn lock_off_wide(c : @ui.Ctx, lock : Json?) -> Array[() -> Unit] {
+fn lock_off(c : @ui.Ctx, lock : Json?) -> Array[() -> Unit] {
   [
     fn() {
       c.box(style=sec_lead, fn() {
-        c.text(tr("web-pages.security.off"), style=sec_state) |> ignore
+        c.text(@sf.t("web-pages.security.off"), style=sec_state) |> ignore
         c.box(style=sec_points, fn() {
-          sec_point(c, "server", tr("web-pages.security.now"), tr("web-pages.security.nowRisk"))
-          sec_point(c, "key", tr("web-pages.security.then"), tr("web-pages.security.thenSafe"))
-          sec_point(c, "devices", tr("web-pages.security.newDevices"), tr("web-pages.security.newDevicesHow"))
+          sec_point(c, "server", @sf.t("web-pages.security.now"), @sf.t("web-pages.security.nowRisk"))
+          sec_point(c, "key", @sf.t("web-pages.security.then"), @sf.t("web-pages.security.thenSafe"))
+          sec_point(c, "devices", @sf.t("web-pages.security.newDevices"), @sf.t("web-pages.security.newDevicesHow"))
         })
         |> ignore
         if !flag(lock, "owner") {
-          c.text(tr("web-pages.security.ownerOnly"), style=sec_note) |> ignore
+          c.text(@sf.t("web-pages.security.ownerOnly"), style=sec_note) |> ignore
         } else if flag(lock, "canSign") {
           c.box(style=sec_actions, fn() {
-            if @sf.button(c, tr("web-pages.security.turnOn"), key="lock-turn-on", tone=Primary) {
+            if @sf.button(c, @sf.t("web-pages.security.turnOn"), key="lock-turn-on", tone=Primary) {
               opening_lock.val = true
             }
-            c.text(tr("web-pages.security.signsHere"), style=sec_note) |> ignore
+            c.text(@sf.t("web-pages.security.signsHere"), style=sec_note) |> ignore
           })
           |> ignore
         } else {
-          c.text(tr("web-pages.security.webCannotSign"), style=sec_note) |> ignore
+          c.text(@sf.t("web-pages.security.webCannotSign"), style=sec_note) |> ignore
         }
       })
       |> ignore
     },
     fn() {
-      @sf.section(c, tr("web-pages.security.signing"), fn() {
-        c.box(style=desk_card, fn() { c.text(tr("web-pages.security.signingWho"), style=desk_muted) |> ignore }) |> ignore
+      @sf.section(c, @sf.t("web-pages.security.signing"), fn() {
+        c.box(style=desk_card, fn() { c.text(@sf.t("web-pages.security.signingWho"), style=desk_muted) |> ignore }) |> ignore
       })
     },
   ]
@@ -88,7 +88,7 @@ fn sec_point(c : @ui.Ctx, icon : String, words : String, rest : String) -> Unit 
 /// On (On): its state with how many sign and what it protects, what that means; this device's own pairing where it
 /// waits or was let in without signing; the devices waiting (each with its code, 验证 where this device signs); its
 /// people and their devices; its stations; what a web page may do; 关闭安全模式.
-fn lock_on_wide(c : @ui.Ctx, core : Core, here : Here, lock : Json?) -> Array[() -> Unit] {
+fn lock_on(c : @ui.Ctx, core : Core, here : Here, lock : Json?) -> Array[() -> Unit] {
   let ws = here.workspace
   let signs = flag(lock, "signs")
   let me = field(lock, "me")
@@ -97,10 +97,10 @@ fn lock_on_wide(c : @ui.Ctx, core : Core, here : Here, lock : Json?) -> Array[()
     fn() {
       c.box(style=sec_lead, fn() {
         c.box(style=sec_state_line, fn() {
-          c.text(tr("web-pages.security.on"), style=sec_state) |> ignore
+          c.text(@sf.t("web-pages.security.on"), style=sec_state) |> ignore
           c.text(
             "· " +
-            fill("web-pages.security.onMeta", [
+            @sf.t("web-pages.security.onMeta", args=[
               ("signers", count(lock, "signers").to_string()),
               ("stations", count(lock, "protected").to_string()),
             ]),
@@ -109,10 +109,10 @@ fn lock_on_wide(c : @ui.Ctx, core : Core, here : Here, lock : Json?) -> Array[()
           |> ignore
         })
         |> ignore
-        c.text(tr("web-pages.security.onLead"), style=desk_muted) |> ignore
+        c.text(@sf.t("web-pages.security.onLead"), style=desk_muted) |> ignore
         if !signs && !flag(me, "waiting") && !flag(me, "unsigned") {
           c.text(
-            tr(if flag(lock, "canSign") { "web-pages.security.notSignerApp" } else { "web-pages.security.notSignerWeb" }),
+            @sf.t(if flag(lock, "canSign") { "web-pages.security.notSignerApp" } else { "web-pages.security.notSignerWeb" }),
             style=sec_note,
           )
           |> ignore
@@ -126,7 +126,7 @@ fn lock_on_wide(c : @ui.Ctx, core : Core, here : Here, lock : Json?) -> Array[()
     blocks.push(fn() {
       c.box(style=sec_lead, fn() {
         c.text(
-          tr(if flag(me, "unsigned") { "web-pages.security.upgradeTitle" } else { "web-pages.security.waitingTitle" }),
+          @sf.t(if flag(me, "unsigned") { "web-pages.security.upgradeTitle" } else { "web-pages.security.waitingTitle" }),
           style=sec_state,
         )
         |> ignore
@@ -139,7 +139,7 @@ fn lock_on_wide(c : @ui.Ctx, core : Core, here : Here, lock : Json?) -> Array[()
     blocks.push(fn() {
       @sf.section(
         c,
-        tr("web-pages.security.waiting"),
+        @sf.t("web-pages.security.waiting"),
         title_after=fn() {
           c.box(style=sec_count, fn() { c.text(requests.length().to_string(), style=sec_count_words) |> ignore }) |> ignore
         },
@@ -151,7 +151,7 @@ fn lock_on_wide(c : @ui.Ctx, core : Core, here : Here, lock : Json?) -> Array[()
                 c.box(style=sec_row, fn() {
                   c.box(style=sec_row_text, fn() {
                     c.text(
-                      fill("web-pages.security.newDeviceOf", [
+                      @sf.t("web-pages.security.newDeviceOf", args=[
                         (
                           "name",
                           match text(rv, "name") {
@@ -169,7 +169,7 @@ fn lock_on_wide(c : @ui.Ctx, core : Core, here : Here, lock : Json?) -> Array[()
                   |> ignore
                   c.box(style=sec_code, fn() { mono(c, text(rv, "code"), style=sec_code_words) }) |> ignore
                   if signs &&
-                    @sf.button(c, tr("web-pages.security.check"), key="request/" + text(rv, "device"), tone=Primary) {
+                    @sf.button(c, @sf.t("web-pages.security.check"), key="request/" + text(rv, "device"), tone=Primary) {
                     confirm_dialog(core, ws, r)
                   }
                 })
@@ -184,7 +184,7 @@ fn lock_on_wide(c : @ui.Ctx, core : Core, here : Here, lock : Json?) -> Array[()
     })
   }
   blocks.push(fn() {
-    @sf.section(c, tr("web-pages.security.people"), fn() {
+    @sf.section(c, @sf.t("web-pages.security.people"), fn() {
       c.box(style=desk_card, fn() {
         c.box(style=sec_rows, fn() {
           for m in items(lock, "members") {
@@ -228,7 +228,7 @@ fn lock_on_wide(c : @ui.Ctx, core : Core, here : Here, lock : Json?) -> Array[()
       c.box(style=desk_card, fn() {
         let stations = items(lock, "stations")
         if stations.length() == 0 {
-          c.text(tr("web-pages.security.noStations"), style=desk_muted) |> ignore
+          c.text(@sf.t("web-pages.security.noStations"), style=desk_muted) |> ignore
         } else {
           c.box(style=sec_rows, fn() {
             for st in stations {
@@ -242,15 +242,15 @@ fn lock_on_wide(c : @ui.Ctx, core : Core, here : Here, lock : Json?) -> Array[()
     })
   })
   blocks.push(fn() {
-    @sf.section(c, tr("web-pages.security.webTitle"), fn() {
-      c.box(style=desk_card, fn() { c.text(tr("web-pages.security.webRisk"), style=desk_muted) |> ignore }) |> ignore
+    @sf.section(c, @sf.t("web-pages.security.webTitle"), fn() {
+      c.box(style=desk_card, fn() { c.text(@sf.t("web-pages.security.webRisk"), style=desk_muted) |> ignore }) |> ignore
     })
   })
   if flag(lock, "owner") && signs {
     blocks.push(fn() {
       c.box(style=sec_actions, fn() {
         let off = is_doing(core, ["lock.disable"], [("workspace", ws)])
-        if @sf.button(c, tr("web-pages.security.turnOff"), key="lock-off", tone=Danger, busy=off) {
+        if @sf.button(c, @sf.t("web-pages.security.turnOff"), key="lock-off", tone=Danger, busy=off) {
           turn_off_dialog(core, ws, here.name)
         }
       })
@@ -266,8 +266,8 @@ fn sec_role(role : String) -> String {
   match role {
     "owner" => "Owner"
     "admin" => "Admin"
-    "member" => tr("web-pages.roles.member")
-    "viewer" => tr("web-pages.security.viewer")
+    "member" => @sf.t("web-pages.roles.member")
+    "viewer" => @sf.t("web-pages.security.viewer")
     r => r
   }
 }
@@ -283,14 +283,14 @@ fn sec_device_row(c : @ui.Ctx, core : Core, ws : String, d : Json, can_renew : B
   let days = if has(dv, "daysLeft") { Some(count(dv, "daysLeft")) } else { None }
   let meta = join(
     [
-      tr(if text(dv, "kind") == "web" { "web-pages.security.web" } else { "web-pages.security.app" }),
-      if flag(dv, "signs") { tr("web-pages.security.signs") } else { "" },
-      if flag(dv, "mine") { tr("web-pages.security.thisDevice") } else { "" },
+      @sf.t(if text(dv, "kind") == "web" { "web-pages.security.web" } else { "web-pages.security.app" }),
+      if flag(dv, "signs") { @sf.t("web-pages.security.signs") } else { "" },
+      if flag(dv, "mine") { @sf.t("web-pages.security.thisDevice") } else { "" },
       match days {
-        Some(n) => fill("web-pages.security.daysLeft", [("n", n.to_string())])
+        Some(n) => @sf.t("web-pages.security.daysLeft", args=[("n", n.to_string())])
         None => ""
       },
-      if flag(dv, "recent") { tr("web-pages.security.recent") } else { "" },
+      if flag(dv, "recent") { @sf.t("web-pages.security.recent") } else { "" },
     ],
     " · ",
   )
@@ -303,8 +303,8 @@ fn sec_device_row(c : @ui.Ctx, core : Core, ws : String, d : Json, can_renew : B
     })
     |> ignore
     if days is Some(_) && can_renew &&
-      @sf.button(c, tr("web-pages.security.renew"), key="renew/" + id, tone=Ghost, busy=renewing) {
-      lock_call(core, ws, "renew", tr("web-pages.security.renew"), [("device", id)], done=tr("web-pages.security.renewed"))
+      @sf.button(c, @sf.t("web-pages.security.renew"), key="renew/" + id, tone=Ghost, busy=renewing) {
+      lock_call(core, ws, "renew", @sf.t("web-pages.security.renew"), [("device", id)], done=@sf.t("web-pages.security.renewed"))
     }
   })
   |> ignore
@@ -329,18 +329,18 @@ fn sec_station_row(c : @ui.Ctx, core : Core, ws : String, sv : Json?, can : Bool
       })
       |> ignore
       if !guarded {
-        c.text(tr("web-pages.security.unprotectedWhy"), style=sec_row_meta) |> ignore
+        c.text(@sf.t("web-pages.security.unprotectedWhy"), style=sec_row_meta) |> ignore
       }
     })
     |> ignore
     if guarded {
-      c.text(tr("web-pages.security.protected"), style=sec_row_meta) |> ignore
+      c.text(@sf.t("web-pages.security.protected"), style=sec_row_meta) |> ignore
     } else if can {
-      if @sf.button(c, tr("web-pages.security.join"), key="lock-station/" + id, tone=Ghost, busy=joining) {
+      if @sf.button(c, @sf.t("web-pages.security.join"), key="lock-station/" + id, tone=Ghost, busy=joining) {
         join_dialog(core, ws, id, text(sv, "name"))
       }
     } else {
-      c.text(tr("web-pages.security.unprotected"), style=sec_warn) |> ignore
+      c.text(@sf.t("web-pages.security.unprotected"), style=sec_warn) |> ignore
     }
   })
   |> ignore
@@ -359,8 +359,8 @@ fn confirm_dialog(core : Core, ws : String, r : Json) -> Unit {
   }
   open_dialog(
     "lock-confirm/" + device,
-    fill("web-pages.security.confirmTitle", [("name", who)]),
-    description=fill("web-pages.security.confirmBody", [
+    @sf.t("web-pages.security.confirmTitle", args=[("name", who)]),
+    description=@sf.t("web-pages.security.confirmBody", args=[
       ("device", device_name(text(rv, "kind"), text(rv, "label"))),
       ("name", who),
     ]),
@@ -375,22 +375,22 @@ fn confirm_dialog(core : Core, ws : String, r : Json) -> Unit {
       } else {
         "web-pages.security.confirmApp"
       }
-      c.text(tr(says), style=sec_note_centred) |> ignore
+      c.text(@sf.t(says), style=sec_note_centred) |> ignore
     },
     fn(c, shut) {
-      if @sf.button(c, tr("web-pages.security.deny"), key="lock-deny", tone=Ghost) {
+      if @sf.button(c, @sf.t("web-pages.security.deny"), key="lock-deny", tone=Ghost) {
         shut()
-        lock_call(core, ws, "deny", tr("web-pages.security.denyDevice"), [("device", device)])
+        lock_call(core, ws, "deny", @sf.t("web-pages.security.denyDevice"), [("device", device)])
       }
-      if @sf.button(c, tr("web-pages.security.confirm"), key="lock-confirm", tone=Primary) {
+      if @sf.button(c, @sf.t("web-pages.security.confirm"), key="lock-confirm", tone=Primary) {
         shut()
         lock_call(
           core,
           ws,
           "confirm",
-          tr("web-pages.security.confirmDevice"),
+          @sf.t("web-pages.security.confirmDevice"),
           [("device", device), ("code", code)],
-          done=tr("web-pages.security.confirmed"),
+          done=@sf.t("web-pages.security.confirmed"),
         )
       }
     },
@@ -402,22 +402,22 @@ fn confirm_dialog(core : Core, ws : String, r : Json) -> Unit {
 fn join_dialog(core : Core, ws : String, station : String, name : String) -> Unit {
   open_dialog(
     "lock-join/" + station,
-    fill("web-pages.security.joinTitle", [("name", name)]),
-    description=tr("web-pages.security.joinBody"),
+    @sf.t("web-pages.security.joinTitle", args=[("name", name)]),
+    description=@sf.t("web-pages.security.joinBody"),
     fn(_, _) {  },
     fn(c, shut) {
-      if @sf.button(c, tr("common.cancel"), key="join-cancel", tone=Ghost) {
+      if @sf.button(c, @sf.t("common.cancel"), key="join-cancel", tone=Ghost) {
         shut()
       }
-      if @sf.button(c, tr("web-pages.security.join"), key="join-go", tone=Primary) {
+      if @sf.button(c, @sf.t("web-pages.security.join"), key="join-go", tone=Primary) {
         shut()
         lock_call(
           core,
           ws,
           "joinStation",
-          tr("web-pages.security.join"),
+          @sf.t("web-pages.security.join"),
           [("station", station)],
-          done=fill("web-pages.security.joined", [("name", name)]),
+          done=@sf.t("web-pages.security.joined", args=[("name", name)]),
         )
       }
     },
@@ -434,20 +434,20 @@ fn turn_off_dialog(core : Core, ws : String, name : String) -> Unit {
   let go = fn(c : @ui.Ctx, shut : () -> Unit) {
     c.blur()
     shut()
-    act(core, tr("web-pages.security.turnOff"), "lock.disable", obj([("workspace", str(ws))]))
+    @settings.act(core, @sf.t("web-pages.security.turnOff"), "lock.disable", obj([("workspace", str(ws))]))
   }
   open_dialog(
     key,
-    tr("web-pages.security.turnOffTitle"),
-    description=tr("web-pages.security.turnOffBody"),
+    @sf.t("web-pages.security.turnOffTitle"),
+    description=@sf.t("web-pages.security.turnOffBody"),
     fn(c, shut) {
       c.box(style=sec_points, fn() {
-        sec_off_point(c, "server", tr("web-pages.security.nowRisk"))
-        sec_off_point(c, "devices", tr("web-pages.security.turnOffApproval"))
-        sec_off_point(c, "key", tr("web-pages.security.turnOffVault"))
+        sec_off_point(c, "server", @sf.t("web-pages.security.nowRisk"))
+        sec_off_point(c, "devices", @sf.t("web-pages.security.turnOffApproval"))
+        sec_off_point(c, "key", @sf.t("web-pages.security.turnOffVault"))
       })
       |> ignore
-      @sf.field(c, fill("web-pages.security.turnOffType", [("name", name)]), fn() {
+      @sf.field(c, @sf.t("web-pages.security.turnOffType", args=[("name", name)]), fn() {
         if @sf.input(c, key, field=field_of(key)).submitted && named() {
           go(c, shut)
         }
@@ -458,11 +458,11 @@ fn turn_off_dialog(core : Core, ws : String, name : String) -> Unit {
       }
     },
     fn(c, shut) {
-      if @sf.button(c, tr("common.cancel"), key="off-cancel", tone=Ghost) {
+      if @sf.button(c, @sf.t("common.cancel"), key="off-cancel", tone=Ghost) {
         c.blur()
         shut()
       }
-      if @sf.button(c, tr("web-pages.security.turnOff"), key="off-go", tone=DangerSolid, disabled=!named()) {
+      if @sf.button(c, @sf.t("web-pages.security.turnOff"), key="off-go", tone=DangerSolid, disabled=!named()) {
         go(c, shut)
       }
     },
@@ -486,21 +486,12 @@ fn sec_off_point(c : @ui.Ctx, icon : String, words : String) -> Unit {
 let sec_big_code_box : @ui.Style = @ui.style(w=Full, my=S1_5)
 
 ///|
-let sec_big_size : Double = 28.0
-
-///|
-let sec_big_line : Double = 36.4
-
-///|
-let sec_big_tracking : Double = 6.0
-
-///|
 // kept across runs: a value (no field of it changes)
 let sec_big_code : @ui.TextStyle = @ui.text_style(
-  size=Exact(sec_big_size, sec_big_line), // det-ok(style-literal, style-exact): the web's display size (28, its line 1.3 of it), off the scale
+  size=@sf.code_big_size,
   weight=Semibold,
   color=Fg,
-  tracking=Exact(sec_big_tracking), // det-ok(style-literal, style-exact): bigCode's letters 6 apart, a code read aloud
+  tracking=@sf.code_big_tracking,
   wrap=false,
 )
 

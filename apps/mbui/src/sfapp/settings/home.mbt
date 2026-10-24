@@ -17,15 +17,12 @@ pub fn page(
   root? : Bool = false,
   top? : Double = 0.0,
 ) -> Unit {
-  frame_core.val = Some(core)
-  at_root.val = root
-  root_top.val = if root { top } else { 0.0 }
-  left_core.val = Some(core)
-  fixture_sheet(core, here)
+  frame(core, here, root~, top~)
   // the wide frame's words as the web's settings pages size them (their rows 13, what is under them 12, a section's
   // title 14): the scale's body (Lg), secondary (Sm) and values (Base) taken down there, every page's words with them,
-  // and Xl2 (Android's back, 17, which these pages never say) the web's body for a section's title
-  if wide.val && !desk_ported(route) {
+  // and Xl2 (Android's back, 17, which these pages never say) the web's body for a section's title (the desktop's own
+  // pages, ported from the web's, are src/sfdesk's, in the library's sizes)
+  if wide.val {
     let t = c.theme()
     c.with_theme({ ..t, text: { ..t.text, lg: wide_body, sm: wide_small, base: wide_body, xl2: wide_heading } }, fn() {
       route_page(c, core, here, route)
@@ -36,13 +33,14 @@ pub fn page(
 }
 
 ///|
-/// The desktop's pages ported from the web's onto the library's parts (desk_page.mbt): their words in the library's
-/// sizes, as the web's, not the wide scale taken down for the pages still made of the phone's parts.
-fn desk_ported(route : Route) -> Bool {
-  match route {
-    Notifications | Permissions | Archiving | StationArchiving(_) | Connects("") | Workspace | Security | Shortcuts | AutoDecisions | AutoCompletion | AutoPolicy(_) | Memories | Memory(_) | Me | Vault | LocalStation | Version => true
-    _ => false
-  }
+/// What a page of the settings is drawn in (`page`'s, and the desktop's own pages', src/sfdesk): its core, where it
+/// stands, the sheet a fixture's mode puts up over it.
+pub fn frame(core : Core, here : Here, root? : Bool = false, top? : Double = 0.0) -> Unit {
+  frame_core.val = Some(core)
+  at_root.val = root
+  root_top.val = if root { top } else { 0.0 }
+  left_core.val = Some(core)
+  fixture_sheet(core, here)
 }
 
 ///|
@@ -93,13 +91,9 @@ fn route_page(c : @ui.Ctx, core : Core, here : Here, route : Route) -> Unit {
     KeptChat(s, thread) => kept_chat_page(c, core, s, thread)
     Changelog => changelog_page(c, core)
     About => about_page(c, core)
-    Shortcuts => shortcuts_page(c, core)
-    Version => version_page(c, core)
     LocalStation => local_station_page(c, core)
-    Notifications => notify_page(c, core, here)
-    Permissions => permissions_page(c, core)
-    Archiving => archiving_page(c, core, here)
-    StationArchiving(s) => station_archiving_page(c, core, here, s)
+    // the desktop's own, drawn by its frame (src/sfdesk)
+    Shortcuts | Version | Notifications | Permissions | Archiving | StationArchiving(_) => ()
     UsagePrices(days) => prices_page(c, core, here, days)
     RunSettings(s, key) => run_settings_page(c, core, s, key)
   }
@@ -120,7 +114,7 @@ let chosen : Map[String, String] = Map::new()
 
 ///|
 /// A pref as the core keeps it (the `prefs` topic), or as it was chosen here a moment ago.
-fn pref(core : Core, name : String) -> String {
+pub fn pref(core : Core, name : String) -> String {
   let kept = text((core.topic)("prefs", Map::new()).value, name)
   match chosen.get(name) {
     Some(v) => {
@@ -136,7 +130,7 @@ fn pref(core : Core, name : String) -> String {
 
 ///|
 /// A pref set (prefs.set), shown as chosen at once; "" takes it away (null: the default).
-fn set_pref(core : Core, name : String, value : String) -> Unit {
+pub fn set_pref(core : Core, name : String, value : String) -> Unit {
   chosen[name] = value
   (core.call)(
     "prefs.set",
@@ -599,13 +593,13 @@ let about_row_note : @ui.TextStyle = @ui.text_style(size=Sm, color=Muted, w=Full
 
 ///|
 /// Notifications as switched here, until the core has answered (AppState.useNotify's `notify` meanwhile).
-let notify_switched : Ref[Bool?] = Ref(None)
+pub let notify_switched : Ref[Bool?] = Ref(None)
 
 ///|
 /// Notifications turned on or off on this device (SettingsHome.kt Notify, AppState.useNotify): turned on, the system
 /// asked to allow them too; the core keeps it (`notify.set`), taking this device's pushes off the accounts when off,
 /// and the push registration follows what it answers (Push.sync). Not done: said in a toast, the switch back.
-fn use_notify(core : Core, on : Bool) -> Unit {
+pub fn use_notify(core : Core, on : Bool) -> Unit {
   if on {
     (core.notify_ask)()
   }
@@ -641,7 +635,7 @@ fn use_notify(core : Core, on : Bool) -> Unit {
 ///|
 /// This build's version, as the version row says it after the app's name (SettingsHome.kt Version: its versionName,
 /// 0.1.<build>): the build where the host knows it (Android's version code), the line alone where it does not.
-fn build_version() -> String {
+pub fn build_version() -> String {
   let v = @ui.app_version()
   if v > 0 {
     "0.1." + v.to_string()
@@ -790,10 +784,6 @@ fn appearance_page(c : @ui.Ctx, core : Core) -> Unit {
 /// The account (Me.kt MeScreen): who is signed in, the accounts on this device (signing each out, adding another), and
 /// where it is signed in (Devices).
 fn me_page(c : @ui.Ctx, core : Core, here : Here) -> Unit {
-  // the desktop's: the web's (web_account.mbt)
-  if wide.val {
-    return me_page_wide(c, core, here)
-  }
   let t = @sf.theme()
   let accounts = match (core.topic)("accounts", Map::new()).value {
     Some(Array(a)) => a

@@ -6,7 +6,7 @@
 
 ///|
 /// A device's name as people know it (Security.kt deviceName): its label, or what kind of client it is.
-fn device_name(kind : String, label : String, older? : Bool = false) -> String {
+pub fn device_name(kind : String, label : String, older? : Bool = false) -> String {
   if older {
     if label == "" {
       tr("web-pages.security.olderClient")
@@ -24,7 +24,7 @@ fn device_name(kind : String, label : String, older? : Bool = false) -> String {
 
 ///|
 /// `lock.<name>` on this workspace, let go on by itself and said how it ended (AppState.lockCall).
-fn lock_call(
+pub fn lock_call(
   core : Core,
   ws : String,
   name : String,
@@ -41,17 +41,12 @@ fn lock_call(
 
 ///|
 /// Whether the security page is turning the lock on (SecurityOpen) rather than showing it.
-let opening_lock : Ref[Bool] = Ref(false)
+pub let opening_lock : Ref[Bool] = Ref(false)
 
 ///|
 fn security_page(c : @ui.Ctx, core : Core, here : Here) -> Unit {
   if opening_lock.val {
     security_open_page(c, core, here)
-    return
-  }
-  // the desktop's as the web's (web_security.mbt)
-  if wide.val {
-    security_page_wide(c, core, here)
     return
   }
   let topic = (core.topic)("lock", { "workspace": str(here.workspace) })

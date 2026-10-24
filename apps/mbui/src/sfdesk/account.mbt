@@ -4,18 +4,18 @@
 
 ///|
 /// 账号 (AccountSettings).
-fn me_page_wide(c : @ui.Ctx, core : Core, here : Here) -> Unit {
+fn me_page(c : @ui.Ctx, core : Core, here : Here) -> Unit {
   let name = if here.person != "" { here.person } else { here.email }
   let how = if here.sub.has_prefix("em-") || here.sub.has_prefix("pw-") {
-    tr("web-pages.settings.account.email")
+    @sf.t("web-pages.settings.account.email")
   } else {
-    tr("web-pages.settings.account.google")
+    @sf.t("web-pages.settings.account.google")
   }
   desk_page(
     c,
     core,
     "me",
-    tr("android-settings.me.title"),
+    @sf.t("android-settings.me.title"),
     // who it is (identity): its picture 52, its name in the heading's size, its email and how it signs in under it
     head=fn() {
       c.box(style=acc_identity, fn() {
@@ -34,32 +34,32 @@ fn me_page_wide(c : @ui.Ctx, core : Core, here : Here) -> Unit {
     },
     [
       fn() {
-        @sf.section(c, tr("web-pages.settings.account.sessions"), note=fill("web-pages.settings.account.sessionsLead", [("name", "still.fail")]), fn() {
+        @sf.section(c, @sf.t("web-pages.settings.account.sessions"), note=@sf.t("web-pages.settings.account.sessionsLead", args=[("name", "still.fail")]), fn() {
           acc_devices(c, core, here)
         })
       },
       fn() {
-        @sf.section(c, tr("web-pages.settings.account.signOut"), fn() {
+        @sf.section(c, @sf.t("web-pages.settings.account.signOut"), fn() {
           c.box(style=desk_card, fn() {
             c.box(style=desk_card_row, fn() {
               c.box(style=desk_card_text, fn() {
-                c.text(fill("web-pages.settings.account.signOutHere", [("email", here.email)]), style=desk_strong) |> ignore
-                c.text(tr("web-pages.settings.account.signOutHereBody"), style=desk_muted) |> ignore
+                c.text(@sf.t("web-pages.settings.account.signOutHere", args=[("email", here.email)]), style=desk_strong) |> ignore
+                c.text(@sf.t("web-pages.settings.account.signOutHereBody"), style=desk_muted) |> ignore
               })
               |> ignore
-              if @sf.button(c, tr("web-pages.settings.account.signOutAction"), key="account-sign-out", icon="log-out") {
+              if @sf.button(c, @sf.t("web-pages.settings.account.signOutAction"), key="account-sign-out", icon="log-out") {
                 confirm(
-                  fill("web-pages.settings.account.signOutConfirm", [("email", here.email)]),
-                  tr("web-pages.settings.account.signOutConfirmBody"),
-                  tr("web-pages.settings.account.signOutAction"),
+                  @sf.t("web-pages.settings.account.signOutConfirm", args=[("email", here.email)]),
+                  @sf.t("web-pages.settings.account.signOutConfirmBody"),
+                  @sf.t("web-pages.settings.account.signOutAction"),
                   fn() {
                     (core.home)()
-                    act(
+                    @settings.act(
                       core,
-                      tr("web-pages.settings.account.signOut"),
+                      @sf.t("web-pages.settings.account.signOut"),
                       "auth.signOut",
                       obj([("account", str(here.sub))]),
-                      done=fill("web-pages.settings.account.signedOut", [("email", here.email)]),
+                      done=@sf.t("web-pages.settings.account.signedOut", args=[("email", here.email)]),
                     )
                   },
                 )
@@ -71,28 +71,28 @@ fn me_page_wide(c : @ui.Ctx, core : Core, here : Here) -> Unit {
         })
       },
       fn() {
-        @sf.section(c, tr("web-pages.settings.account.delete"), fn() {
+        @sf.section(c, @sf.t("web-pages.settings.account.delete"), fn() {
           c.box(style=desk_card, fn() {
             c.box(style=desk_card_row, fn() {
               c.box(style=desk_card_text, fn() {
-                c.text(fill("web-pages.settings.account.deleteHere", [("email", here.email)]), style=desk_strong) |> ignore
-                c.text(fill("web-pages.settings.account.deleteHereBody", [("name", "still.fail")]), style=desk_muted) |> ignore
+                c.text(@sf.t("web-pages.settings.account.deleteHere", args=[("email", here.email)]), style=desk_strong) |> ignore
+                c.text(@sf.t("web-pages.settings.account.deleteHereBody", args=[("name", "still.fail")]), style=desk_muted) |> ignore
               })
               |> ignore
-              if @sf.button(c, tr("web-pages.settings.account.deleteAction"), key="account-delete", tone=Danger, icon="trash") {
+              if @sf.button(c, @sf.t("web-pages.settings.account.deleteAction"), key="account-delete", tone=Danger, icon="trash") {
                 confirm(
-                  tr("web-pages.settings.account.delete"),
-                  fill("web-pages.settings.account.deleteConfirmBody", [("email", here.email)]),
-                  tr("web-pages.settings.account.deleteAction"),
+                  @sf.t("web-pages.settings.account.delete"),
+                  @sf.t("web-pages.settings.account.deleteConfirmBody", args=[("email", here.email)]),
+                  @sf.t("web-pages.settings.account.deleteAction"),
                   danger=true,
                   fn() {
                     (core.home)()
-                    act(
+                    @settings.act(
                       core,
-                      tr("web-pages.settings.account.deleteAction"),
+                      @sf.t("web-pages.settings.account.deleteAction"),
                       "auth.deleteAccount",
                       obj([("account", str(here.sub))]),
-                      done=fill("web-pages.settings.account.deleted", [("email", here.email)]),
+                      done=@sf.t("web-pages.settings.account.deleted", args=[("email", here.email)]),
                     )
                   },
                 )
@@ -117,8 +117,8 @@ fn acc_devices(c : @ui.Ctx, core : Core, here : Here) -> Unit {
     _ => {
       match topic.error {
         Some(e) =>
-          c.text(fill("web-pages.settings.account.sessionsFailed", [("error", error_text(e))]), style=desk_note_bad) |> ignore
-        None => @sf.wait_line(c, tr("common.reading"))
+          c.text(@sf.t("web-pages.settings.account.sessionsFailed", args=[("error", error_text(e))]), style=desk_note_bad) |> ignore
+        None => @sf.wait_line(c, @sf.t("common.reading"))
       }
       return
     }
@@ -133,19 +133,19 @@ fn acc_devices(c : @ui.Ctx, core : Core, here : Here) -> Unit {
           c.box(style=desk_named, fn() {
             c.text(
               match text(dv, "name") {
-                "" => tr("web-pages.settings.account.unnamedDevice")
+                "" => @sf.t("web-pages.settings.account.unnamedDevice")
                 n => n
               },
               style=desk_list_title,
             )
             |> ignore
             if current {
-              you(c, tr("web-pages.settings.account.here"))
+              you(c, @sf.t("web-pages.settings.account.here"))
             }
           })
           |> ignore
           c.text(
-            fill("web-pages.settings.account.sessionTimes", [("time", stamp(dv, "created_at", "ago")), ("until", stamp(dv, "expires_at", "until"))]),
+            @sf.t("web-pages.settings.account.sessionTimes", args=[("time", stamp(dv, "created_at", "ago")), ("until", stamp(dv, "expires_at", "until"))]),
             style=desk_muted,
           )
           |> ignore
@@ -153,13 +153,13 @@ fn acc_devices(c : @ui.Ctx, core : Core, here : Here) -> Unit {
         |> ignore
         if !current {
           let revoking = is_doing(core, ["loginSession.revoke"], [("id", id)])
-          if @sf.button(c, tr("web-pages.settings.account.revoke"), key="revoke/" + id, tone=Ghost, busy=revoking) {
-            act(
+          if @sf.button(c, @sf.t("web-pages.settings.account.revoke"), key="revoke/" + id, tone=Ghost, busy=revoking) {
+            @settings.act(
               core,
-              tr("web-pages.settings.account.revoke"),
+              @sf.t("web-pages.settings.account.revoke"),
               "loginSession.revoke",
               obj([("id", str(id)), ("account", str(here.sub))]),
-              done=tr("web-pages.settings.account.revoked"),
+              done=@sf.t("web-pages.settings.account.revoked"),
             )
           }
         }

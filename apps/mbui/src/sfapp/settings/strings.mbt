@@ -1590,3 +1590,14 @@ fn fill(key : String, args : Array[(String, String)]) -> String {
   }
   s
 }
+
+///|
+/// The words for `key` from these tables (`args` choosing a count's of one), None for a key they have none for: what
+/// the app's own words fall back to (src/sfapp/strings.mbt), so a key of these pages said elsewhere (the desktop's
+/// pages, src/sfdesk) is said once, here.
+pub fn said(key : String, args : Array[(String, String)]) -> String? {
+  match english(key, args~) {
+    Some(s) => Some(s)
+    None => zh.get(key)
+  }
+}

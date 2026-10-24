@@ -6,7 +6,7 @@
 
 ///|
 /// The first of `keys` that `v` has, else `or_else`.
-fn first_text(v : Json?, keys : Array[String], or_else : String) -> String {
+pub fn first_text(v : Json?, keys : Array[String], or_else : String) -> String {
   for k in keys {
     match opt_text(v, k) {
       Some(x) => return x
@@ -856,7 +856,7 @@ let connect_forms : Ref[Int] = Ref(0)
 
 ///|
 /// A new connect on `station` (openNewConnect): from the start, or going on with a Slack app made before (`resuming`).
-fn open_new_connect(core : Core, station : String, resuming? : String = "") -> Unit {
+pub fn open_new_connect(core : Core, station : String, resuming? : String = "") -> Unit {
   connect_forms.val += 1
   new_connects[station] = { form: "mbui-connect-" + connect_forms.val.to_string(), resuming, opened: false, dropped: false }
   (core.push)(NewConnect(station))

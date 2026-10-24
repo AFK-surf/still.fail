@@ -61,10 +61,10 @@ fn scroll_page(c : @ui.Ctx, key : String, blocks : Array[() -> Unit]) -> Unit {
 }
 
 ///|
-/// A page's head in the wide frame (pages.css.ts pageHead): back above it only on a page under another (`on_back` when
-/// it is said, else the page popped), the title (`about`: what the page is for, said by a mark beside it), what it
-/// does at its end.
-fn wide_head(
+/// A page's head in the wide frame (pages.css.ts pageHead), the desktop's own pages' too (src/sfdesk): back above it
+/// only on a page under another (`deep`; `on_back` when it is said, else the page popped), the title (`about`: what
+/// the page is for, said by a mark beside it), what it does at its end.
+pub fn wide_head(
   c : @ui.Ctx,
   core : Core,
   back : String,
@@ -74,13 +74,14 @@ fn wide_head(
   on_back? : () -> Unit,
   about? : String = "",
   lead? : String = "",
+  deep? : Bool = wide_deep.val,
 ) -> Unit {
   let t = @sf.theme()
   head_block.val = block_at.val
   // (inside a block of the page, which stands in already)
   let side = if inside { 16.0 } else { wide_side(c) + 16.0 }
-  c.box(style=if wide_deep.val { wide_head_deep } else { wide_head_top }, pl=side, pr=side, fn() {
-    if wide_deep.val {
+  c.box(style=if deep { wide_head_deep } else { wide_head_top }, pl=side, pr=side, fn() {
+    if deep {
       let id = c.id("settings-back")
       c.cursor(id, Hand)
       c.box(style=wide_back, id~, fn() {
@@ -1216,13 +1217,13 @@ let seg_pill_line : @ui.Style = @ui.style(row=true, w=Full)
 
 ///|
 /// A person's picture (Parts.kt Avatar): theirs once it is here, else their initial on their colour.
-fn avatar(c : @ui.Ctx, core : Core, id : String, name : String, size : Double, picture? : String = "") -> Unit {
+pub fn avatar(c : @ui.Ctx, core : Core, id : String, name : String, size : Double, picture? : String = "") -> Unit {
   @sf.avatar(c, id, name, if picture == "" { "" } else { (core.picture)(picture, c.page_stint()) }, size)
 }
 
 ///|
 /// A word in the accent's wash (Settings.kt You: 你, 本机).
-fn you(c : @ui.Ctx, words : String) -> Unit {
+pub fn you(c : @ui.Ctx, words : String) -> Unit {
   c.box(style=you_ground, fn() {
     // Settings.kt:294 (12sp)
     c.text(words, style=you_words) |> ignore
@@ -1242,7 +1243,7 @@ let you_words : @ui.TextStyle = @sf.caption.then(@ui.text_style(color=AccentText
 
 ///|
 /// The turning ring (Waiting.kt Spinner): 14, or 12 in a line of small text.
-fn spinner(c : @ui.Ctx, inline? : Bool = false) -> Unit {
+pub fn spinner(c : @ui.Ctx, inline? : Bool = false) -> Unit {
   @sf.spinner(c, size=if inline { 12.0 } else { 14.0 }) |> ignore
 }
 
@@ -1277,7 +1278,7 @@ let wait_line_padded : @ui.Style = @ui.style(w=Full, px=S5, py=S2)
 ///|
 /// The shapes of a settings page's cards to come (the library's Waiting: @sf.waiting, its cards), 12 in from the page's
 /// sides; what could not be read over them in red (the shapes then still).
-fn waiting_cards(c : @ui.Ctx, count? : Int = 3, error? : String = "", failing? : Array[String] = []) -> Unit {
+pub fn waiting_cards(c : @ui.Ctx, count? : Int = 3, error? : String = "", failing? : Array[String] = []) -> Unit {
   c.box(style=wait_cards_in, fn() {
     @sf.waiting(c, shape=Cards, count~, error~, note={ reading: failing.length() == 0, text: "", failing })
   })
@@ -1296,7 +1297,7 @@ fn waiting_rows(c : @ui.Ctx, count? : Int = 3, error? : String = "", failing? : 
 
 ///|
 /// What could not be read of a list, by the stations that failed (a ListNote's `failing`).
-fn failing_of(note : Json?) -> Array[String] {
+pub fn failing_of(note : Json?) -> Array[String] {
   items(note, "failing").map(fn(f) { text(Some(f), "text") })
 }
 
@@ -1575,7 +1576,7 @@ let press_room : @ui.Style = @ui.style(p=S1)
 
 ///|
 /// Words that do something when tapped (a link's look: Theme.kt link). True on the frame after a tap.
-fn tap_text(
+pub fn tap_text(
   c : @ui.Ctx,
   key : String,
   label : String,
@@ -1717,7 +1718,7 @@ let tone_pill_words : @ui.TextStyle = @sf.caption.then(@sf.one_line)
 ///|
 /// Words in the code face (CodeFont: a code, a key, a variable), one line unless `wrap`.
 /// With `style` (a role of @sf's styles.mbt), that, and what is said besides over it.
-fn mono(
+pub fn mono(
   c : @ui.Ctx,
   words : String,
   style? : @ui.TextStyle,

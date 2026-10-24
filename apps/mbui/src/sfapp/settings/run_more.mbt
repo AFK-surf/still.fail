@@ -480,7 +480,7 @@ fn role_hint(role : String) -> String {
 /// Adding people by email (AddSheet): no invitation to accept, members at once when they have signed in to still.fail
 /// before, from their first sign-in otherwise (`workspace.addMembers`). Typed or pasted, or picked from the people of
 /// the Slack workspaces the online stations are in (`slack.people`); their role; what came of it said.
-fn open_add_people(_core : Core, here : Here, view : Json?) -> Unit {
+pub fn open_add_people(_core : Core, here : Here, view : Json?) -> Unit {
   vault_serial.val += 1
   let key = "add-people/" + vault_serial.val.to_string()
   let role : Ref[String] = Ref("member")

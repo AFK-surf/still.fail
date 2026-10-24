@@ -4,6 +4,15 @@
 // begin with); 连接 and 用量 a page across the pane, no sidebar.
 
 ///|
+/// A place's sidebar, the stations' or the profiles' (`desk_pages().side`).
+fn sidebar(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
+  match @sfdesk.lit_place() {
+    "stations" => stations_side(c, src, w)
+    _ => profiles_side(c, src, w)
+  }
+}
+
+///|
 /// The page picked in a place (the stations' or the profiles' list), by place; none: the first.
 fn place_route(src : Source, w : Workspace, place : String) -> @settings.Route? {
   match wide.place_pick.get(place) {

@@ -65,8 +65,6 @@ pub fn close() -> Unit {
 /// The sheet, over everything the app shows: call after the pages each frame.
 pub fn overlay(c : @ui.Ctx, core : Core) -> Unit {
   menu_overlay(c)
-  // the desktop pages' dialogs (desk_page.mbt)
-  desk_dialog_overlay(c)
   // the wide frame's question, while it is asked and as it goes
   match asked.val {
     Some(a) => {
@@ -144,7 +142,7 @@ fn sheet_head(c : @ui.Ctx, title : String, lead? : () -> Unit) -> Unit {
 let keyed_fields : Map[String, @ui.Field] = {}
 
 ///|
-fn field_of(key : String) -> @ui.Field {
+pub fn field_of(key : String) -> @ui.Field {
   match keyed_fields.get(key) {
     Some(f) => f
     None => {
@@ -177,7 +175,7 @@ fn field_box(
 /// Asks for a line (PageParts.kt ask): its title, the field (with `value` in it at first), a hint under it, then
 /// 取消 and `action`, which is there once the line has words and differs from `value`. The sheet closes at once and
 /// `run` goes on with the line, trimmed.
-fn ask(
+pub fn ask(
   title : String,
   value : String,
   placeholder : String,

@@ -244,8 +244,8 @@ fn english(key : String, args? : Array[(String, String)] = []) -> String? {
 
 ///|
 /// The words for `key`.
-pub fn tr(key : String) -> String {
-  if english(key) is Some(s) {
+pub fn tr(key : String, args? : Array[(String, String)] = []) -> String {
+  if english(key, args~) is Some(s) {
     return s
   }
   match zh.get(key) {
@@ -266,7 +266,12 @@ pub fn tr(key : String) -> String {
                       match zh_screen.get(key) {
                         Some(s) => s
                         // (the preview's own words: the library's player says some of them)
-                        None => pv_zh.get(key).unwrap_or(key)
+                        None =>
+                          match pv_zh.get(key) {
+                            Some(s) => s
+                            // (the settings' own words: the desktop's settings pages say them too)
+                            None => @settings.said(key, args).unwrap_or(key)
+                          }
                       }
                   }
               }
@@ -280,7 +285,7 @@ pub fn tr(key : String) -> String {
 pub fn fill(key : String, args : Array[(String, String)]) -> String {
   let mut s = match english(key, args~) {
     Some(w) => w
-    None => tr(key)
+    None => tr(key, args~)
   }
   for a in args {
     s = s.replace_all(old="{" + a.0 + "}", new=a.1)
