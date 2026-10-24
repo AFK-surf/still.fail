@@ -23,8 +23,8 @@ priv struct Ev {
   /// when what it was handed to took it here (a message in: the frame that takes what is posted, Replay::deliver's
   /// `taken_at`): `at` is when it was due
   mut given : Double
-  /// what the run's host said of its views (`{"view":…}`, `{"still":…}`, `{"info":…}`: mbui's trace_views), the line
-  /// whole: given in its place like a message in, to the Tester's host (Replay::host)
+  /// what the run's host said of its views (`{"view":…}`, `{"still":…}`, `{"info":…}`, a player's `{"read":…}`:
+  /// mbui's trace_views), the line whole: given in its place like a message in, to the Tester's host (Replay::host)
   host : Bool
 }
 
@@ -161,7 +161,8 @@ pub fn Replay::parse(log : String) -> Replay {
           m.contains("info") ||
           m.contains("site") ||
           m.contains("sitebody") ||
-          m.contains("sitestate") {
+          m.contains("sitestate") ||
+          m.contains("read") {
           let (wall, has_wall) = match m.get("w") {
             Some(Number(d, ..)) => (d, true)
             _ => (0.0, false)

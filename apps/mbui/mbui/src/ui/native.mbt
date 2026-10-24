@@ -5,7 +5,9 @@
 // moves, and hides it on the frames it is not painted (a page gone under another, scrolled away).
 //
 // A video's bytes come only through the app: the player asks for ranges (`view_read_next`), the view's `read`
-// fetches them (still.fail: `station.file.part`, `drive.read` through the core) and answers.
+// fetches them (still.fail: `station.file.part`, `drive.read` through the core) and answers each as its bytes come
+// (the player goes on with the first of them while the rest is on its way), and stops reading one the player let go
+// of (it went elsewhere) or the view's that closes.
 //
 // Hosts: Android (NativeViews.java: Media3's ExoPlayer on a TextureView, a WebView), macOS and iOS (apple_views.m:
 // AVPlayerLayer, WKWebView), the browser (web/host.js: <video>, a sandboxed <iframe>), Windows (win_views.cpp: WebView2,
@@ -19,7 +21,9 @@
 /// A native view: a player or a page.
 pub struct NativeView {
   priv id : Int
-  priv read : ((Double, Int, (Bytes, Double) -> Unit) -> Unit)?
+  priv read : ((Double, Int, (Bytes, Double, Bool) -> Unit) -> () -> Unit)?
+  /// its reads under way, by the host's number for each: how each is let go of
+  priv reading : Map[Int, () -> Unit]
   priv info : FixedArray[Double]
   priv mut state : Int
   /// the frame it was last painted in, and where: content x y w h, clip x0 y0 x1 y1
@@ -166,7 +170,7 @@ let read_out : FixedArray[Double] = FixedArray::make(2, 0.0)
 fn NativeView::make(
   kind : Int,
   arg : String,
-  read : ((Double, Int, (Bytes, Double) -> Unit) -> Unit)?,
+  read : ((Double, Int, (Bytes, Double, Bool) -> Unit) -> () -> Unit)?,
   serve? : ((SiteRequest, SiteReply) -> Unit)? = None,
   leave? : (String) -> Unit = fn(_) {  },
   said? : ((String) -> Unit)? = None,
@@ -181,6 +185,7 @@ fn NativeView::make(
     touch: All,
     keeps_cookies: false,
     read,
+    reading: {},
     serve,
     leave,
     replies: {},
@@ -220,11 +225,13 @@ fn NativeView::make(
 
 ///|
 /// A player of the video (or audio) of MIME type `type_`, its bytes read through `read(offset, length, answer)`:
-/// `answer(bytes, total)` with the bytes from `offset` (at most `length`, fewer is fine, none only at the end) and the
-/// file's whole size (-1 not known; -2: it could not be read). Paused until `play`.
+/// `answer(bytes, total, more)` with its next bytes as they come, from `offset` on (all of them at most `length`,
+/// fewer is fine, none only at the end), the file's whole size (-1 not known; -2: it could not be read) and whether
+/// more of it comes (the last answer may bring none). What `read` gives back stops the read: called when the player
+/// lets go of it or the view closes before its last answer (nothing more of it is taken). Paused until `play`.
 pub fn NativeView::video(
   type_ : String,
-  read : (Double, Int, (Bytes, Double) -> Unit) -> Unit,
+  read : (Double, Int, (Bytes, Double, Bool) -> Unit) -> () -> Unit,
 ) -> NativeView {
   NativeView::make(1, type_, Some(read))
 }
@@ -364,6 +371,12 @@ pub fn NativeView::close(self : NativeView) -> Unit {
     return
   }
   self.closed = true
+  // its reads under way stopped: nothing more of them is wanted
+  let reading = self.reading.values().collect()
+  self.reading.clear()
+  for stop in reading {
+    stop()
+  }
   if self.id != 0 {
     h_view_close(self.id)
     open_views.retain(fn(v) { !physical_equal(v, self) })
@@ -765,15 +778,40 @@ fn Ctx::sync_views(self : Ctx) -> Unit {
       Some(read) =>
         for _ in 0..<64 {
           let req = h_view_read_next(v.id, read_out)
-          if req <= 0 {
+          if req == 0 {
             break
           }
-          let id = v.id
-          read(read_out[0], read_out[1].to_int(), fn(data, total) {
-            if !v.closed {
-              h_view_read_answer(id, req, data, total)
+          // one the player let go of: stopped, its answers taken no more
+          if req < 0 {
+            match v.reading.get(-req) {
+              Some(stop) => {
+                v.reading.remove(-req)
+                stop()
+              }
+              None => ()
             }
+            continue
+          }
+          let id = v.id
+          // (answered to its end, or let go of: nothing more of it handed on)
+          let ended = Ref(false)
+          let gone = Ref(false)
+          let stop = read(read_out[0], read_out[1].to_int(), fn(data, total, more) {
+            if ended.val || gone.val || v.closed {
+              return
+            }
+            if !more {
+              ended.val = true
+              v.reading.remove(req)
+            }
+            h_view_read_answer(id, req, data, total, more)
           })
+          if !ended.val {
+            v.reading[req] = fn() {
+              gone.val = true
+              stop()
+            }
+          }
         }
       None => ()
     }

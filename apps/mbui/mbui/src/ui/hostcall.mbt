@@ -114,10 +114,14 @@ struct FakeHost {
   picks : Array[@hostapi.Picked]
   pick_asks : Array[FakePick]
   keeps : Array[FakeKeep]
-  /// what its players ask of the app's bytes, not taken yet (Tester::view_reads), and what the app gave (hostmedia.mbt)
+  /// what its players ask of the app's bytes and let go of, not taken yet (Tester::view_reads, view_lets_go), and what
+  /// the app gave, piece by piece: the view, the read, how many bytes, the whole's length, whether more comes
+  /// (hostmedia.mbt)
   reads : Array[FakeRead]
   mut read_ids : Int
-  read_answers : Array[(Int, Int, Int, Double)]
+  read_answers : Array[(Int, Int, Int, Double, Bool)]
+  /// where each read the app took is from, by its view and number
+  read_from : Map[(Int, Int), Double]
   /// a player's state as the test set it (Tester::set_player): view_info's ten numbers
   players : Map[Int, FixedArray[Double]]
   /// what another app shares in (Tester::share_in), from the frame after it was told; its files' bytes
@@ -1633,16 +1637,40 @@ fn h_view_site_load(id : Int, path : String) -> Unit {
 fn h_view_read_next(id : Int, out : FixedArray[Double]) -> Int {
   match fake.val {
     Some(f) => fake_read_next(f, id, out)
-    None => @hostapi.view_read_next(id, out)
+    None => {
+      let req = @hostapi.view_read_next(id, out)
+      if req != 0 {
+        view_read_told(id, req, out)
+      }
+      req
+    }
   }
 }
 
 ///|
-fn h_view_read_answer(id : Int, req : Int, data : Bytes, total : Double) -> Unit {
+/// A player's ask of the app's bytes (`req`, `out`'s offset and length), or one it let go of (`req` below 0), told to
+/// the app's tracer as `{"read":{"view":N,"req":R,"offset":O,"length":L}}` (`{"read":{"view":N,"gone":R}}`): a run's
+/// player's reads, for a Tester's host to ask again where the run's did (Tester::view_said). Not on a tape (what
+/// mbui's own contracts replay asks none).
+fn view_read_told(id : Int, req : Int, out : FixedArray[Double]) -> Unit {
+  guard views_tracer.val is Some(t) else { return }
+  let read : Map[String, Json] = { "view": Json::number(id.to_double()) }
+  if req > 0 {
+    read["req"] = Json::number(req.to_double())
+    read["offset"] = Json::number(out[0])
+    read["length"] = Json::number(out[1])
+  } else {
+    read["gone"] = Json::number((-req).to_double())
+  }
+  t({ "read": Json::object(read) })
+}
+
+///|
+fn h_view_read_answer(id : Int, req : Int, data : Bytes, total : Double, more : Bool) -> Unit {
   outside_answered(id)
   match fake.val {
-    Some(f) => f.read_answers.push((id, req, data.length(), total))
-    None => @hostapi.view_read_answer(id, req, data, total)
+    Some(f) => f.read_answers.push((id, req, data.length(), total, more))
+    None => @hostapi.view_read_answer(id, req, data, total, more)
   }
 }
 

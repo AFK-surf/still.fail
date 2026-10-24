@@ -958,16 +958,21 @@
     out[1] = r.length;
     return r.id;
   };
-  H.viewReadAnswer = (id, req, data, total) => {
+  // a read's bytes as they come (more: more of it comes), the next read asked after its last answer
+  H.viewReadAnswer = (id, req, data, total, more) => {
     const v = views.get(id);
-    if (!v || !v.waiting.delete(req)) return;
+    const r = v && v.waiting.get(req);
+    if (!r) return;
+    if (!more || total === -2) v.waiting.delete(req);
     if (total === -2) { v.state = -1; ready(id, v, -1); H.requestFrame(); return; }
     const part = new Uint8Array(data);
     v.parts.push(part);
     v.have += part.length;
+    r.got = (r.got || 0) + part.length;
     v.info[5] = v.have;
     if (total >= 0) v.total = total;
-    if (part.length > 0 && (v.total < 0 || v.have < v.total)) return v.ask(v.have);
+    if (more) return;
+    if (r.got > 0 && (v.total < 0 || v.have < v.total)) return v.ask(v.have);
     v.url = URL.createObjectURL(new Blob(v.parts, { type: v.type }));
     v.el.src = v.url;
   };

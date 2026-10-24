@@ -451,8 +451,8 @@ impl @hostapi.Host for Native with view_read_next(_, id, out) {
 }
 
 ///|
-impl @hostapi.Host for Native with view_read_answer(_, id, req, data, total) {
-  view_read_answer(id, req, data, total)
+impl @hostapi.Host for Native with view_read_answer(_, id, req, data, total, more) {
+  view_read_answer(id, req, data, total, more)
 }
 
 ///|

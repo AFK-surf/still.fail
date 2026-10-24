@@ -5,7 +5,7 @@
 // comes at a frame's boundary.
 
 ///|
-/// A player's ask for the app's bytes (view_read_next): `length` from `offset`.
+/// A player's ask for the app's bytes (view_read_next): `length` from `offset`; a read let go of: minus its number.
 priv struct FakeRead {
   view : Int
   req : Int
@@ -20,6 +20,9 @@ fn fake_read_next(f : FakeHost, view : Int, out : FixedArray[Double]) -> Int {
       f.reads.remove(i) |> ignore
       out[0] = r.offset
       out[1] = r.length.to_double()
+      if r.req > 0 {
+        f.read_from[(view, r.req)] = r.offset
+      }
       return r.req
     }
   }
@@ -37,10 +40,64 @@ pub fn Tester::view_reads(self : Tester, view : Int, offset : Double, length : I
 }
 
 ///|
-/// What the app gave view `view`'s player for its reads, oldest first: (the read's number, how many bytes, the
-/// whole's length as the app said it, -1 unknown).
+/// Native view `view`'s player lets go of its read `req` (it wants none of what is left of it: a seek elsewhere),
+/// handed to the app at the next frame.
+pub fn Tester::view_lets_go(self : Tester, view : Int, req : Int) -> Unit {
+  self.fake.reads.push({ view, req: -req, offset: 0.0, length: 0 })
+  self.fake.wants = true
+}
+
+///|
+/// What the app gave view `view`'s player for its reads answered to their end, in the order they ended: (the read's
+/// number, how many bytes in all its answers, the whole's length as the app last said it, -1 unknown).
 pub fn Tester::view_answers(self : Tester, view : Int) -> Array[(Int, Int, Double)] {
-  self.fake.read_answers.filter(fn(a) { a.0 == view }).map(fn(a) { (a.1, a.2, a.3) })
+  let given : Map[Int, Int] = {}
+  let ended = []
+  for a in self.fake.read_answers {
+    if a.0 == view {
+      let n = given.get(a.1).unwrap_or(0) + a.2
+      given[a.1] = n
+      if !a.4 {
+        ended.push((a.1, n, a.3))
+      }
+    }
+  }
+  ended
+}
+
+///|
+/// How far into its file view `view`'s player has had its bytes: the furthest any of its reads has come with what the
+/// app gave it (where the read is from, and the bytes given it), 0 none.
+pub fn Tester::view_read_to(self : Tester, view : Int) -> Double {
+  let given : Map[Int, Int] = {}
+  for a in self.fake.read_answers {
+    if a.0 == view {
+      given[a.1] = given.get(a.1).unwrap_or(0) + a.2
+    }
+  }
+  let mut most = 0.0
+  for req, n in given {
+    match self.fake.read_from.get((view, req)) {
+      Some(from) if from + n.to_double() > most => most = from + n.to_double()
+      _ => ()
+    }
+  }
+  most
+}
+
+///|
+/// How many bytes the app has given view `view`'s player for its read `req` so far, and whether that read has had its
+/// last answer.
+pub fn Tester::view_given(self : Tester, view : Int, req : Int) -> (Int, Bool) {
+  let mut n = 0
+  let mut ended = false
+  for a in self.fake.read_answers {
+    if a.0 == view && a.1 == req {
+      n += a.2
+      ended = ended || !a.4
+    }
+  }
+  (n, ended)
 }
 
 ///|
@@ -360,6 +417,26 @@ fn fake_view_said(f : FakeHost, line : String) -> Bool {
         _ => false
       }
     Object(m) if m.get("stream") is Some(Object(v)) => fake_stream_said(f, v)
+    // a run's player's read (or one it let go of), asked again: the app takes it at the next frame
+    Object(m) if m.get("read") is Some(Object(v)) => {
+      let offset = match v.get("offset") {
+        Some(Number(n, ..)) => n
+        _ => 0.0
+      }
+      match (num(v, "view"), num(v, "req"), num(v, "gone")) {
+        (Some(id), Some(req), _) if req > 0 => {
+          f.reads.push({ view: id, req, offset, length: num(v, "length").unwrap_or(0) })
+          f.wants = true
+          true
+        }
+        (Some(id), _, Some(gone)) if gone > 0 => {
+          f.reads.push({ view: id, req: -gone, offset: 0.0, length: 0 })
+          f.wants = true
+          true
+        }
+        _ => false
+      }
+    }
     Object(m) if m.get("info") is Some(Object(v)) =>
       match (num(v, "view"), num(v, "state"), v.get("at")) {
         (Some(id), Some(state), Some(Array(xs))) if xs.length() == 10 => {

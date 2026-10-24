@@ -192,20 +192,28 @@ pub fn player_media(c : @ui.Ctx, key : String, file : ViewerFile, siblings : Arr
 
 ///|
 /// How the player reads `file` a part at a time: as it streams, or from its bytes here already, or (neither) read
-/// whole once and answered from that.
-fn player_read(file : ViewerFile) -> (Double, Int, (Bytes, Double) -> Unit) -> Unit {
+/// whole once and answered from that (a read let go of meanwhile answered no more).
+fn player_read(file : ViewerFile) -> (Double, Int, (Bytes, Double, Bool) -> Unit) -> () -> Unit {
   match (file.stream, file.bytes) {
     (Some(stream), _) => stream
-    (None, Some(b)) => fn(offset, length, answer) { answer(player_slice(b, offset, length), b.length().to_double()) }
+    (None, Some(b)) =>
+      fn(offset, length, answer) {
+        answer(player_slice(b, offset, length), b.length().to_double(), false)
+        fn() {  }
+      }
     (None, None) => {
       let whole : Ref[Bytes?] = Ref(None)
-      let waiting : Array[(Double, Int, (Bytes, Double) -> Unit)] = []
+      let waiting : Array[(Double, Int, (Bytes, Double, Bool) -> Unit, Ref[Bool])] = []
       let asked = Ref(false)
       fn(offset, length, answer) {
         match whole.val {
-          Some(b) => answer(player_slice(b, offset, length), b.length().to_double())
+          Some(b) => {
+            answer(player_slice(b, offset, length), b.length().to_double(), false)
+            fn() {  }
+          }
           None => {
-            waiting.push((offset, length, answer))
+            let gone = Ref(false)
+            waiting.push((offset, length, answer, gone))
             if !asked.val {
               asked.val = true
               (file.read)(-1, fn(_) {  }, fn(r) {
@@ -213,17 +221,22 @@ fn player_read(file : ViewerFile) -> (Double, Int, (Bytes, Double) -> Unit) -> U
                   Ok(b) => {
                     whole.val = Some(b)
                     for w in waiting {
-                      (w.2)(player_slice(b, w.0, w.1), b.length().to_double())
+                      if !w.3.val {
+                        (w.2)(player_slice(b, w.0, w.1), b.length().to_double(), false)
+                      }
                     }
                   }
                   Err(_) =>
                     for w in waiting {
-                      (w.2)(b"", -2.0)
+                      if !w.3.val {
+                        (w.2)(b"", -2.0, false)
+                      }
                     }
                 }
                 waiting.clear()
               })
             }
+            fn() { gone.val = true }
           }
         }
       }
@@ -693,7 +706,8 @@ fn player_cue(c : @ui.Ctx, words : String, up : Bool, right : Double) -> Unit {
 }
 
 ///|
-/// What it waits on, why it failed, in the stage's middle.
+/// What it waits on (with how fast its bytes come meanwhile, once a second of it has gone: moving, or not at all), why
+/// it failed, in the stage's middle.
 fn player_waits(c : @ui.Ctx, p : @kit.Media, f : @kit.MediaFrame, ink : MediaInk) -> Unit {
   c.layer(fn() {
     c.box(style=player_middle, fn() {
@@ -702,8 +716,9 @@ fn player_waits(c : @ui.Ctx, p : @kit.Media, f : @kit.MediaFrame, ink : MediaInk
           if f.waited {
             c.box(style=player_pill.then(@ui.style(bg=Data(ink.ground))), fn() {
               spinner(c, size=player_pill_spinner) |> ignore
+              let what = t(if f.phase == Opening { "common.opening" } else { "web-pages.drive.player.buffering" })
               c.text(
-                t(if f.phase == Opening { "common.opening" } else { "web-pages.drive.player.buffering" }),
+                if f.rate >= 0.0 { what + " · " + file_size(f.rate) + "/s" } else { what },
                 style=player_pill_words.then(@ui.text_style(color=Data(ink.text))),
               )
               |> ignore

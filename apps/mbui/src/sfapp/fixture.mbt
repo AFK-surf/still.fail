@@ -851,6 +851,40 @@ pub fn fixture(mode : String) -> Source {
       fix_later(at + (k - 1).to_double() * 1600.0, fn() { f.step = k })
     }
   }
+  let read_bytes = fn(name : String, params : Json, done : (Result[(Json, Bytes), Json]) -> Unit) {
+    match fixture_kept(name, params, None) {
+      Some(r) => {
+        done(r.map(fn(a) { (a.0, a.1.unwrap_or(Bytes::new(0))) }))
+        return
+      }
+      None => ()
+    }
+    // the faces' files (fonts_fixture.mbt)
+    match fixture_fonts_read(f, name) {
+      Some(r) => {
+        done(r)
+        return
+      }
+      None => ()
+    }
+    // a download's, as the made-up core keeps it (downloads_fixture.mbt)
+    if name == "download.read" && fixture_download_read(params, done) {
+      return
+    }
+    // a chat's made-up files (the preview's), else the made-up drive's
+    if name.has_prefix("station.file") {
+      fixture_fetch(name, params, done)
+      return
+    }
+    // the player's made-up films (play_fixture.mbt)
+    if name == "drive.read" && fixture_play_read(params, done) {
+      return
+    }
+    match fixture_drive_read(name, params) {
+      Some(r) => done(r)
+      None => done(Err({ "code": "unknown_call", "message": "这份假数据没有 " + name }))
+    }
+  }
   {
     topic: fn(name, params) { fixture_topic(f, name, params) },
     call: fn(name, params, done) {
@@ -972,43 +1006,23 @@ pub fn fixture(mode : String) -> Source {
           }
       }
     },
-    read_bytes: fn(name, params, done) {
-      match fixture_kept(name, params, None) {
-        Some(r) => {
-          done(r.map(fn(a) { (a.0, a.1.unwrap_or(Bytes::new(0))) }))
-          return
-        }
-        None => ()
-      }
-      // the faces' files (fonts_fixture.mbt)
-      match fixture_fonts_read(f, name) {
-        Some(r) => {
-          done(r)
-          return
-        }
-        None => ()
-      }
-      // a download's, as the made-up core keeps it (downloads_fixture.mbt)
-      if name == "download.read" && fixture_download_read(params, done) {
-        return
-      }
-      // a chat's made-up files (the preview's), else the made-up drive's
-      if name.has_prefix("station.file") {
-        fixture_fetch(name, params, done)
-        return
-      }
-      // the player's made-up films (play_fixture.mbt)
-      if name == "drive.read" && fixture_play_read(params, done) {
-        return
-      }
-      match fixture_drive_read(name, params) {
-        Some(r) => done(r)
-        None => done(Err({ "code": "unknown_call", "message": "这份假数据没有 " + name }))
-      }
-    },
+    read_bytes,
     // a chat's made-up files, whole: here at once, nothing said of how far they have got
     read_going: fn(name, params, _on_value, done) { fixture_fetch(name, params, done) },
     stream: fn(name, params, _bytes, on_value, done) {
+      // a player's part read (preview.mbt stream_part): as read_bytes answers it, its bytes in one piece
+      if name == "station.file.part" || name == "drive.read" {
+        read_bytes(name, params, fn(r) {
+          match r {
+            Ok((v, b)) => {
+              on_value({ "loaded": Json::number(b.length().to_double()) }, Some(b))
+              done(Ok(v))
+            }
+            Err(e) => done(Err(e))
+          }
+        })
+        return 0
+      }
       // a file's part going up (composer.mbt upload_part): as the station takes it, all of it at once
       if name == "station.upload.part" {
         match fixture_chat_call(f, name, params) {

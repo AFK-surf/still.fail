@@ -14,7 +14,7 @@ fn film(name : String, kind? : String = "video") -> ViewerFile {
     key: name,
     bytes: None,
     read: fn(_, _, done) { done(Err("")) },
-    stream: Some(fn(_, _, _) {  }),
+    stream: Some(fn(_, _, _) { fn() {  } }),
     beside: None,
     place: fn() { NeverLeft },
     keep_place: fn(_, _) {  },

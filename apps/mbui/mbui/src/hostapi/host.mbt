@@ -99,7 +99,7 @@ pub(open) trait Host {
   view_control(Self, Int, Int, Double) -> Unit = _
   view_info(Self, Int, FixedArray[Double]) -> Int = _
   view_read_next(Self, Int, FixedArray[Double]) -> Int = _
-  view_read_answer(Self, Int, Int, Bytes, Double) -> Unit = _
+  view_read_answer(Self, Int, Int, Bytes, Double, Bool) -> Unit = _
   pdf_open(Self, Bytes) -> Int = _
   pdf_pages(Self, Int) -> Int = _
   pdf_page_size(Self, Int, Int, FixedArray[Double]) -> Unit = _
@@ -624,7 +624,7 @@ impl Host with view_read_next(_, _, _) {
 }
 
 ///|
-impl Host with view_read_answer(_, _, _, _, _) {
+impl Host with view_read_answer(_, _, _, _, _, _) {
   ()
 }
 
@@ -1746,18 +1746,20 @@ pub fn view_info(id : Int, out : FixedArray[Double]) -> Int {
 }
 
 ///|
-/// A read the player waits on: its id (0: none waiting), `out` [0] its offset, [1] how many bytes it wants. Each is
-/// answered once (`view_read_answer`); the host asks for a frame when one comes.
+/// A read the player waits on: its id (0: none waiting), `out` [0] its offset, [1] how many bytes it wants; or minus
+/// the id of one it let go of (it wants none of what is left of it: the app stops reading it, answers it no more).
+/// Each is answered as its bytes come (`view_read_answer`); the host asks for a frame when one comes.
 pub fn view_read_next(id : Int, out : FixedArray[Double]) -> Int {
   current.val.view_read_next(id, out)
 }
 
 ///|
-/// Read `req`'s answer: the bytes from its offset (at most as many as it wanted; fewer is fine, none only at the
-/// file's end), `total` the file's whole size (-1 not known: Apple's player needs it, so give it); -2: it could not be
-/// read (the player fails).
-pub fn view_read_answer(id : Int, req : Int, data : Bytes, total : Double) -> Unit {
-  current.val.view_read_answer(id, req, data, total)
+/// Read `req`'s next bytes, as they come: those after what it was answered before (all of them at most as many as it
+/// wanted; fewer is fine, none only at the file's end), `more` while more of it comes (its last answer may bring
+/// none); `total` the file's whole size (-1 not known: Apple's player needs it, so give it, at the latest with its
+/// last answer); -2: it could not be read (its last: the player fails).
+pub fn view_read_answer(id : Int, req : Int, data : Bytes, total : Double, more : Bool) -> Unit {
+  current.val.view_read_answer(id, req, data, total, more)
 }
 
 ///|

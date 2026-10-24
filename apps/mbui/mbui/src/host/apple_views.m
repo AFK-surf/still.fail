@@ -125,6 +125,7 @@ id mb_views_root(CGRect frame) {
 @interface MBRead : NSObject
 @property(nonatomic) int32_t rid;
 @property(nonatomic) long long off, len;
+@property(nonatomic) long long got;  // its bytes answered so far (it is answered as they come)
 @property(nonatomic, strong) MBLoad *load;
 @end
 @implementation MBRead
@@ -177,7 +178,8 @@ id mb_views_root(CGRect frame) {
 @property(nonatomic) double seekMs, chaseMs;
 @property(nonatomic) BOOL observing, readyLogged, frameLogged;
 @property(nonatomic, strong) NSMutableArray<MBRead *> *pending;                  // not yet taken
-@property(nonatomic, strong) NSMutableDictionary<NSNumber *, MBRead *> *taken;  // taken, not answered
+@property(nonatomic, strong) NSMutableDictionary<NSNumber *, MBRead *> *taken;  // taken, not answered to its end
+@property(nonatomic, strong) NSMutableArray<NSNumber *> *lettingGo;  // taken, then let go of: not told yet
 @property(nonatomic, strong) NSMutableArray<MBLoad *> *loads;
 @property(nonatomic) CVPixelBufferRef lastFrame;
 // its frames' times (ms, comma between: nil not read yet) and a frame grabbed (PNG; stillState 1 grabbing, 2 here,
@@ -500,7 +502,8 @@ static void fill_info(AVAssetResourceLoadingRequest *req, NSString *uti, long lo
   });
 }
 
-// The player gave the load up: its reads not asked any more, their answers dropped.
+// The player gave the load up: its reads not asked any more, those under way let go of (the app stops them), their
+// answers dropped.
 - (void)drop:(MBLoad *)l {
   l.gone = YES;
   [self.loads removeObject:l];
@@ -508,12 +511,21 @@ static void fill_info(AVAssetResourceLoadingRequest *req, NSString *uti, long lo
   for (MBRead *r in self.pending)
     if (r.load != l) [keep addObject:r];
   self.pending = keep;
+  for (NSNumber *rid in self.taken.allKeys) {
+    if (self.taken[rid].load != l) continue;
+    [self.taken removeObjectForKey:rid];
+    if (!self.lettingGo) self.lettingGo = [NSMutableArray new];
+    [self.lettingGo addObject:rid];
+  }
+  if (self.lettingGo.count) mb_host_request_frame();
 }
 
-- (void)answer:(int32_t)rid data:(const uint8_t *)bytes length:(long long)n total:(double)total {
+// Read `rid`'s next bytes (after those it was answered before), as the app has them: given to the load as they come,
+// its next read asked once it has had its last answer (`more` NO).
+- (void)answer:(int32_t)rid data:(const uint8_t *)bytes length:(long long)n total:(double)total more:(BOOL)more {
   MBRead *r = self.taken[@(rid)];
   if (!r) return;
-  [self.taken removeObjectForKey:@(rid)];
+  if (!more || total == -2) [self.taken removeObjectForKey:@(rid)];
   MBLoad *l = r.load;
   if (total == -2) {
     vlog(@"view %d: read at %lld failed", self.vid, r.off);
@@ -524,15 +536,20 @@ static void fill_info(AVAssetResourceLoadingRequest *req, NSString *uti, long lo
     return;
   }
   if (total >= 0) self.total = (long long)total;
+  long long at = r.off + r.got;  // where these bytes are in the file
+  r.got += n;
   self.answered += n;
-  self.nanswers++;
-  if (self.nanswers <= 4 || self.answered >= self.logNext) {
-    vlog(@"view %d: read at %lld: %lld bytes (%.0f in all, of %lld)", self.vid, r.off, n, self.answered,
-         self.total);
-    while (self.logNext <= self.answered) self.logNext += kMaxRead;
+  if (n > 0) {
+    self.nanswers++;
+    if (self.nanswers <= 4 || self.answered >= self.logNext) {
+      vlog(@"view %d: read at %lld: %lld of %lld bytes%s (%.0f in all, of %lld)", self.vid, r.off, r.got, r.len,
+           more ? "" : ", its last", self.answered, self.total);
+      while (self.logNext <= self.answered) self.logNext += kMaxRead;
+    }
   }
   if (l.gone) return;
   if (!l.hasData) {
+    if (more) return;
     if (self.total < 0) {
       vlog(@"view %d: the file's size not told", self.vid);
       [self end:l error:YES];
@@ -541,39 +558,32 @@ static void fill_info(AVAssetResourceLoadingRequest *req, NSString *uti, long lo
     [self advance:l];
     return;
   }
-  if (n == 0) {  // the file's end: none before it (else the load fails, not asked again forever)
+  long long end = l.end >= 0 ? l.end : LLONG_MAX;
+  if (self.total >= 0 && end > self.total) end = self.total;
+  long long skip = l.next - at;  // given on from where the load is: l.next
+  long long give = skip >= 0 && skip < n ? MIN(n - skip, end - l.next) : 0;
+  if (give > 0) {
+    NSData *d = [NSData dataWithBytes:bytes + skip length:(NSUInteger)give];
+    l.next += give;
+    BOOL info = l.wantsInfo && !l.infoSent && self.total >= 0;
+    if (info) l.infoSent = YES;
+    NSString *uti = self.uti;
+    long long tot = self.total;
+    dispatch_async(self.lq, ^{
+      if (l.cancelled) return;
+      if (info) fill_info(l.req, uti, tot);
+      [l.req.dataRequest respondWithData:d];
+    });
+  }
+  if (more) return;
+  if (r.got == 0) {  // the file's end: none before it (else the load fails, not asked again forever)
     if (self.total < 0) self.total = l.next;
     if (self.total > l.next) {
       vlog(@"view %d: no bytes at %lld, before the end (%lld)", self.vid, l.next, self.total);
       [self end:l error:YES];
       return;
     }
-    [self advance:l];
-    return;
   }
-  long long end = l.end >= 0 ? l.end : LLONG_MAX;
-  if (self.total >= 0 && end > self.total) end = self.total;
-  long long skip = l.next - r.off;  // answered from where it was asked: l.next
-  if (skip < 0 || skip >= n) {
-    [self advance:l];
-    return;
-  }
-  long long give = MIN(n - skip, end - l.next);
-  if (give <= 0) {
-    [self advance:l];
-    return;
-  }
-  NSData *d = [NSData dataWithBytes:bytes + skip length:(NSUInteger)give];
-  l.next += give;
-  BOOL info = l.wantsInfo && !l.infoSent && self.total >= 0;
-  if (info) l.infoSent = YES;
-  NSString *uti = self.uti;
-  long long tot = self.total;
-  dispatch_async(self.lq, ^{
-    if (l.cancelled) return;
-    if (info) fill_info(l.req, uti, tot);
-    [l.req.dataRequest respondWithData:d];
-  });
   [self advance:l];
 }
 
@@ -1232,6 +1242,11 @@ int32_t mb_host_view_info(int32_t vid, double *out) {
 
 int32_t mb_host_view_read_next(int32_t vid, double *out) {
   MBNative *v = views[@(vid)];
+  if (v.lettingGo.count) {
+    int32_t gone = v.lettingGo.firstObject.intValue;
+    [v.lettingGo removeObjectAtIndex:0];
+    return -gone;
+  }
   while (v.pending.count) {
     MBRead *r = v.pending.firstObject;
     [v.pending removeObjectAtIndex:0];
@@ -1244,10 +1259,10 @@ int32_t mb_host_view_read_next(int32_t vid, double *out) {
   return 0;
 }
 
-void mb_host_view_read_answer(int32_t vid, int32_t req, moonbit_bytes_t data, double total) {
+void mb_host_view_read_answer(int32_t vid, int32_t req, moonbit_bytes_t data, double total, int32_t more) {
   MBNative *v = views[@(vid)];
   if (!v) return;
-  [v answer:req data:(const uint8_t *)data length:Moonbit_array_length(data) total:total];
+  [v answer:req data:(const uint8_t *)data length:Moonbit_array_length(data) total:total more:more != 0];
 }
 
 // ---- a site's API ----

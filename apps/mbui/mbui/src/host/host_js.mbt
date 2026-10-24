@@ -784,8 +784,8 @@ extern "js" fn js_view_read_next(id : Int, out : FixedArray[Double]) -> Int =
   #|(i, o) => { const H = globalThis.__mbhost; return H && H.viewReadNext ? H.viewReadNext(i, o) : 0 }
 
 ///|
-extern "js" fn js_view_read_answer(id : Int, req : Int, data : Bytes, total : Double) -> Unit =
-  #|(i, r, d, t) => { const H = globalThis.__mbhost; if (H && H.viewReadAnswer) H.viewReadAnswer(i, r, d, t) }
+extern "js" fn js_view_read_answer(id : Int, req : Int, data : Bytes, total : Double, more : Bool) -> Unit =
+  #|(i, r, d, t, m) => { const H = globalThis.__mbhost; if (H && H.viewReadAnswer) H.viewReadAnswer(i, r, d, t, m) }
 
 ///|
 fn view_open(kind : Int, arg : String) -> Int {
@@ -830,8 +830,8 @@ fn view_read_next(id : Int, out : FixedArray[Double]) -> Int {
 }
 
 ///|
-fn view_read_answer(id : Int, req : Int, data : Bytes, total : Double) -> Unit {
-  js_view_read_answer(id, req, data, total)
+fn view_read_answer(id : Int, req : Int, data : Bytes, total : Double, more : Bool) -> Unit {
+  js_view_read_answer(id, req, data, total, more)
 }
 
 ///|
