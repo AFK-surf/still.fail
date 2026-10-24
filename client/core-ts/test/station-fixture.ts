@@ -123,8 +123,9 @@ export function stationHost(answers: Answers) {
   // How its events stream answers: opens, fails (the station is not reached), hangs (a try that takes long), a status
   // of its own, or the station's refusal of the link (a CoreError, as the mesh says it: a security mode's); `resumes`:
   // one asked `since` an event says it was told first what came after it; `marks`: one not resumed is told where the
-  // log is, an id alone (station/src/api/events.ts).
-  const gate: { stream: "open" | "fail" | "hang" | number | CoreError; resumes: boolean; marks: boolean } = { stream: "open", resumes: false, marks: false };
+  // log is, an id alone (station/src/api/events.ts); `follows`: one asked `running=1` says it follows the sessions at work
+  // itself (FOLLOWS).
+  const gate: { stream: "open" | "fail" | "hang" | number | CoreError; resumes: boolean; marks: boolean; follows: boolean } = { stream: "open", resumes: false, marks: false, follows: false };
   let marked = 0;
   host.onFetchStream((req) =>
     Effect.gen(function* () {
@@ -148,7 +149,8 @@ export function stationHost(answers: Answers) {
       if (gate.marks && !resumed) Queue.offerUnsafe(queue, new TextEncoder().encode(`id: abcdef.${++marked}\n\n`));
       const compress = asksCompressed(req) ? zstdBlocks() : null;
       const body: Pull<Uint8Array> = { take: Effect.map(Queue.take(queue), (c) => (c && compress ? compress(c) : c)) };
-      const headers: [string, string][] = [...(resumed ? [["stillfail-resumed", "1"] as [string, string]] : []), ...(compress ? [["content-encoding", "zstd"] as [string, string]] : [])];
+      const follows = gate.follows && path.includes("running=1");
+      const headers: [string, string][] = [...(resumed ? [["stillfail-resumed", "1"] as [string, string]] : []), ...(follows ? [["stillfail-follows", "running"] as [string, string]] : []), ...(compress ? [["content-encoding", "zstd"] as [string, string]] : [])];
       return { status: 200, headers, body };
     }),
   );

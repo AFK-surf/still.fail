@@ -326,11 +326,22 @@ that only notifications change it:
   page. What it reads is kept (docs/station-storage.md, In the client core),
   with the thread's summary and its sidebar title as `threads` and `chatRows`
   have them.
-- `live` starts from the latest page (200 entries) of the transcript kept on
-  the device and follows it on `/events?live=<key>&from=<entries it has>&last=200`,
-  keeping what comes: the station sends no more than the last 200 entries, so
-  a timeline message past what it has (or before it: the transcript written
-  anew) starts the timeline there. `history.older` brings the pages before, from
+- `live` shows the latest page (200 entries) of the transcript kept on the
+  device. A station whose stream answers `stillfail-follows: running` to
+  `running=1` follows every session at work itself: it tells each one's steps
+  and entries as they are written to every stream whose viewer sees it, and a
+  stream that opens is told where each stands (a timeline message with no
+  entries) and nothing of before. The device names no session on it, and an
+  agent starting its turn or a history shown opens no stream. What the device
+  lacks after the lowest entry it holds is read in the background
+  (`?after=<last held>`, a hole `?from=&to=&brief=1`) as soon as anything says
+  the transcript goes further: that message, a session's summary
+  (`transcriptLength`), a read's `end`; a history shown makes that read urgent,
+  nothing else. A station from before is followed on
+  `/events?live=<key>&from=<entries it has>&last=200` as before, keeping what
+  comes: it sends no more than the last 200 entries, so a timeline message past
+  what it has (or before it: the transcript written anew) starts the timeline
+  there. `history.older` brings the pages before, from
   what is kept, else `GET /sessions/:key/timeline?before=&limit=`. Both ask
   `brief=1`: what is pushed and paged is what a history shows before a step is
   opened (docs/station-storage.md, Reading); a step or thought in brief says

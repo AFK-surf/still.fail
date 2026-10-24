@@ -160,7 +160,13 @@ export class StationTopics implements Owner {
       else if (this.#sync.channels.latestMissing(entries)) this.#sync.channels.bring(entries, Priority.shown, "latest");
       this.#moveOldPlace(station, id);
     }
-    if (topic.topic === "live" && this.#core.data.opened("transcript", station, topic.key as string, true)) this.#sync.channels.bring(transcriptOf(station, topic.key as string), Priority.shown);
+    // Shown: what the sync would bring of it next (its latest page, what came after what is held, a hole) comes first,
+    // nothing it would not read anyway; let go for room before, it is the sync's again from now on. A station whose
+    // stream does not follow the sessions at work itself is told it on the stream instead (`live` named there).
+    if (topic.topic === "live") {
+      const evicted = this.#core.data.opened("transcript", station, topic.key as string, true);
+      if (evicted || this.#sync.link(station)?.followsRunning === true) this.#sync.channels.bring(transcriptOf(station, topic.key as string), Priority.shown);
+    }
     if (topic.topic === "net" || topic.topic === "way") this.#sampleNet(station, topic.topic);
     // A folder of the drive: kept as it is on the station's disk while shown.
     if (topic.topic === "drive") this.#samplers.set(topicKey(topic), this.#core.runner.fork(this.#sync.driveWatch(station, topic.root as string, topic.path as string)));

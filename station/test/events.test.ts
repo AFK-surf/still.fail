@@ -399,3 +399,45 @@ test("what says a thing whole is kept as it was last told only", async () => {
   await back.close();
   await other.close();
 });
+
+test("a stream that follows the sessions at work is told what each its viewer sees does, from where it stood, naming none", async () => {
+  const { events } = setup(testClock().clock);
+  const seen: Record<string, string> = { k: "a@x", other: "b@x" };
+  const named: string[] = [];
+  events.follow({
+    held: () => ["k", "other"],
+    heldNow: (key) => [{ type: "timeline", start: key === "k" ? 7 : 2, entries: [], usage: null }, { type: "steps", steps: [], phase: null }],
+    // A client that does not know yet names the sessions too: they are not followed by name then.
+    live: (key) => (named.push(key), () => {}),
+  });
+  // Only the viewer's sessions (docs/multi-workspace.md).
+  (events as any).deps.seen = (v: any, of: any) => !("session" in of) || seen[of.session] === v.email;
+  const answer = await events.open(viewer("a@x"), "zh", false, [["k", 0, 200]], [], null, true, [], true);
+  assert.equal(answer.headers?.["stillfail-follows"], "running");
+  const a = reader(answer.body as AsyncIterable<Buffer>);
+  const old = reader((await events.open(viewer("a@x"), "zh", false, [], [])).body as AsyncIterable<Buffer>);
+  await settle();
+  assert.deepEqual(named, [], "nothing followed by name");
+  const live = () => a.got.filter((e) => e.event === "live").map((e) => [e.data.key, e.data.type, e.data.start ?? null]);
+  // As it is now: where its transcript ends, nothing of it; its steps.
+  assert.deepEqual(live(), [["k", "timeline", 7], ["k", "steps", null]]);
+  // From now on, what it does as it does it; the other viewer's not at all; a stream from before not at all.
+  events.heldTold("k", { type: "timeline", start: 7, entries: [{ text: "new" }] });
+  events.heldTold("other", { type: "timeline", start: 2, entries: [{ text: "theirs" }] });
+  await settle();
+  assert.deepEqual(live().slice(2), [["k", "timeline", 7]]);
+  assert.equal(old.got.filter((e) => e.event === "live").length, 0);
+  await a.close();
+  await old.close();
+});
+
+test("a stream from before asked nothing new: the sessions it names, as before", async () => {
+  const { events } = setup(testClock().clock);
+  const named: [string, number][] = [];
+  events.follow({ held: () => ["k"], heldNow: () => [], live: (key, from) => (named.push([key, from]), () => {}) });
+  const answer = await events.open(viewer("a@x"), "zh", false, [["k", 3, 200]], []);
+  assert.equal(answer.headers?.["stillfail-follows"], undefined);
+  await settle();
+  assert.deepEqual(named, [["k", 3]]);
+  reader(answer.body as AsyncIterable<Buffer>).close();
+});

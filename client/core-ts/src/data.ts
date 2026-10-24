@@ -258,6 +258,8 @@ export class Data {
   readonly #logChanged: ((table: string, station: string, id: string) => void)[] = [];
   readonly #chatsChanged: ((station: string, changes: RowChange[], first: boolean) => void)[] = [];
   readonly #modelEdits = new Map<string, [unknown, unknown]>();
+  /// How far sessions' transcripts go as streams and reads said, past what their summaries say (`transcriptHead`).
+  readonly #transcriptHeads = new Map<string, number>();
   /// Values as typed, there at once and written a moment after their last change (drafts).
   readonly #soon = new Map<string, [Topic, unknown]>();
   #flushing = false;
@@ -972,6 +974,20 @@ export class Data {
 
   summary(station: string, key: string): unknown {
     return this.of(station)?.summary(station, key);
+  }
+
+  /// How far a session's transcript goes as far as is known (0: nothing says): its summary's `transcriptLength`, or
+  /// further where a stream or a read said so since (`raiseTranscript`, kept while the core runs: the next stream says
+  /// where each session at work stands again).
+  transcriptHead(station: string, key: string): number {
+    const length = get(this.summary(station, key), "transcriptLength");
+    const said = typeof length === "number" && Number.isInteger(length) && length > 0 ? length - 1 : 0;
+    return Math.max(said, this.#transcriptHeads.get(`${station}\n${key}`) ?? 0);
+  }
+
+  raiseTranscript(station: string, key: string, n: number): void {
+    const k = `${station}\n${key}`;
+    if ((this.#transcriptHeads.get(k) ?? 0) < n) this.#transcriptHeads.set(k, n);
   }
 
   detail(station: string, key: string): unknown {

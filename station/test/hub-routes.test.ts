@@ -562,6 +562,36 @@ test("several reads in one: each answered as its GET is, in their order, only th
   }
 });
 
+test("a session at work: the station follows it, its summary says how long its transcript is, and what comes after a point is read in brief", async () => {
+  const r = rig();
+  try {
+    const [, made] = await r.ask("POST", "/sessions", { runtime: "claude", title: "a" });
+    const key = made.key;
+    const dir = join(r.data, "homes", "cc", "projects", "p");
+    mkdirSync(dir, { recursive: true });
+    const said = (text: string, id: string) => `${JSON.stringify({ type: "assistant", timestamp: "2026-10-24T00:00:00Z", message: { id, content: [{ type: "text", text }] } })}\n`;
+    writeFileSync(join(dir, "rs1.jsonl"), ["one", "two", "three", "four", "five"].map((t, i) => said(t, `m${i}`)).join(""));
+    r.store.ranIn(key, "rs1", "cc");
+    r.store.setRuntimeSessionId(key, "rs1");
+    // Where the reads find its profile's home.
+    writeFileSync(join(r.data, "config.json"), JSON.stringify({ profiles: [{ id: "cc", runtime: "claude", home: join(r.data, "homes", "cc") }] }));
+    const summary = async () => (await r.ask("GET", `/sessions/${encodeURIComponent(key)}`))[1].session;
+    assert.equal((await summary()).transcriptLength, undefined, "not read at work yet: not said");
+    // At work: followed, read, its length kept where its summary reads it.
+    r.store.setRunning(key, true);
+    assert.deepEqual(r.hub.live.held(), [key]);
+    assert.equal((await summary()).transcriptLength, 5);
+    const timeline = async (query: [string, string][]) => (await r.ask("GET", `/sessions/${encodeURIComponent(key)}/timeline`, undefined, query))[1];
+    const texts = (t: any) => [t.start, t.entries.map((e: any) => e.text), t.end];
+    assert.deepEqual(texts(await timeline([["after", "1"], ["limit", "2"], ["brief", "1"]])), [2, ["three", "four"], 5]);
+    assert.deepEqual(texts(await timeline([["after", "4"], ["brief", "1"]])), [5, [], 5]);
+    assert.deepEqual(texts(await timeline([["before", "1000000000000000"], ["limit", "2"], ["brief", "1"]])), [3, ["four", "five"], 5]);
+    assert.deepEqual(texts(await timeline([["from", "0"], ["to", "1"], ["brief", "1"]])), [0, ["one", "two"], 5]);
+  } finally {
+    await r.close();
+  }
+});
+
 test("an archived chat is listed from its file, and anew once it is archived again", async () => {
   const r = rig();
   try {

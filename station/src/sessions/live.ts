@@ -61,6 +61,9 @@ const RATE_WINDOW_MS = 2_000;
 const RATE_FIRST_MS = 500;
 /// While a watched session works, the usage counter is asked to count it at most this often (it counts once a turn ends).
 const ASK_MS = 15_000;
+/// How long a session is still followed once its turn is over (`running`): a person who answers within it is answered
+/// without its transcript read again from the start.
+export const HELD_AFTER_MS = 2 * 60_000;
 
 const takeChars = (text: string, n: number) => Array.from(text).slice(0, n).join("");
 /**
@@ -385,6 +388,15 @@ export class LiveHub {
   private askedAt = Number.NEGATIVE_INFINITY;
   /// Each watched session's usage as last told.
   private told = new Map<string, string>();
+  /// The sessions at work, followed by the station itself (`running`): what each says goes to `heldTold`, whoever
+  /// watches; and, of those whose turn is over, the end of the while they are still followed.
+  private holds = new Map<string, number>();
+  private releases = new Map<string, () => void>();
+  /// Where what the sessions at work say goes (api/events.ts: every stream whose viewer sees them).
+  heldTold: ((key: string, message: LiveMessage) => void) | null = null;
+  /// Where each watched transcript's length goes as it changes (the store: its session's summary says it).
+  lengths: ((key: string, n: number) => void) | null = null;
+  private lengthTold = new Map<string, number>();
 
   constructor(locate: Locate, clock?: Clock.Clock) {
     this.locate = locate;
@@ -474,13 +486,75 @@ export class LiveHub {
     }
   }
 
-  /// The turn is over: whatever was in flight is in the transcript now, or never will be.
+  /// The turn is over: whatever was in flight is in the transcript now, or never will be. What it wrote last is read
+  /// now, so it is told (and its length kept) before the session is told to be done, not after the next write.
   turnEnded(key: string) {
     this.steps.delete(key);
     this.phase.delete(key);
     this.rates.delete(key);
+    this.readNow(key);
     this.emit(key, { type: "clear" });
     this.soon(key);
+  }
+
+  /// Whether a session is at work (its `running` as the store has it): from when it starts until HELD_AFTER_MS after it
+  /// stops, the station follows it itself, whoever watches, and tells what it does as it does it (`heldTold`). A stream
+  /// asks for nothing to be told of it; and an answer given within the while finds it still read.
+  running(key: string, on: boolean) {
+    if (on) {
+      this.releases.get(key)?.();
+      this.releases.delete(key);
+      if (this.holds.has(key)) return;
+      // From where it ends now: what it said before is read by whoever lacks it, not told.
+      this.holds.set(key, this.subscribe(key, Number.MAX_SAFE_INTEGER, null, (message) => this.heldTold?.(key, message)));
+      return;
+    }
+    if (!this.holds.has(key) || this.releases.has(key)) return;
+    this.releases.set(
+      key,
+      this.time.after(HELD_AFTER_MS, () => {
+        this.releases.delete(key);
+        const id = this.holds.get(key);
+        this.holds.delete(key);
+        if (id !== undefined) this.unsubscribe(key, id);
+      }),
+    );
+  }
+
+  /// The sessions the station follows now (`running`).
+  held(): string[] {
+    return [...this.holds.keys()];
+  }
+
+  /// A followed session as it is now, for a stream that opens: where its transcript ends (no entry of it) with its
+  /// usage, and the steps in flight.
+  now(key: string): LiveMessage[] {
+    const out: LiveMessage[] = [];
+    const watched = this.watched.get(key);
+    if (watched) out.push({ type: "timeline", start: watched.tail.entries.length, entries: [], usage: this.usageOf(key, watched.tail) });
+    const phase = this.phase.get(key);
+    out.push({ type: "steps", steps: [...(this.steps.get(key) ?? [])], phase: phase ? { phase: phase[0], elapsedMs: this.time.now() - phase[1] } : null });
+    return out;
+  }
+
+  /// Reads a watched transcript's new entries now and tells them.
+  private readNow(key: string) {
+    const watched = this.watched.get(key);
+    if (!watched) return;
+    if (watched.behind) this.follow(watched, key);
+    const [start, entries] = watched.tail.read();
+    this.noteLength(key, watched.tail);
+    if (entries.length > 0) this.emit(key, { type: "timeline", start, entries, usage: this.usageOf(key, watched.tail) });
+  }
+
+  /// A watched transcript's length, kept where its summary reads it, as it changes.
+  private noteLength(key: string, tail: ChainTail) {
+    const n = tail.entries.length;
+    if (this.lengthTold.get(key) === n) return;
+    this.lengthTold.set(key, n);
+    try {
+      this.lengths?.(key, n);
+    } catch {}
   }
 
   /// Follows a session: first the transcript entries from index `from` on (only the `last` of them, when given: a long
@@ -510,7 +584,11 @@ export class LiveHub {
       return [start, entries.slice(start, end)];
     };
     const watched = this.watched.get(key);
-    if (watched) return slice(watched.tail.entries);
+    if (watched) {
+      // As far as it is written now (the transcript it went on in included): what this reads is told as it would be.
+      this.readNow(key);
+      return slice(watched.tail.entries);
+    }
     const at = this.locate(key);
     if (!at) return null;
     const tail = new ChainTail(at.runtime, at.paths);
@@ -559,6 +637,10 @@ export class LiveHub {
     this.phase.delete(key);
     this.rates.delete(key);
     this.emit(key, { type: "clear" });
+    this.releases.get(key)?.();
+    this.releases.delete(key);
+    this.holds.delete(key);
+    this.lengthTold.delete(key);
     this.listeners.delete(key);
     this.unwatch(key);
   }
@@ -598,6 +680,7 @@ export class LiveHub {
     if (!at) return false;
     const tail = new ChainTail(at.runtime, at.paths);
     tail.read(); // what is already there counts as known; subscribers ask for what they lack
+    this.noteLength(key, tail);
     // The transcript written to now is watched: its file, or its `.zst` while packed (sessions/cold.ts): packed or
     // restored, it is another file, watched from then on (live.rs looks at whichever is there).
     const arm = () => {
@@ -641,6 +724,7 @@ export class LiveHub {
       now.reading = false;
       if (now.behind) this.follow(now, key);
       const [start, entries] = now.tail.read();
+      this.noteLength(key, now.tail);
       if (entries.length > 0 || fresh) this.emit(key, { type: "timeline", start, entries, usage: this.usageOf(key, now.tail) });
       // Working on: the counter counts what it has written so far, now and then.
       if (entries.length > 0 && this.count !== null && this.time.now() - this.askedAt >= ASK_MS) {

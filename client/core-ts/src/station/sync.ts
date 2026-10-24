@@ -29,7 +29,7 @@ import { StationAddr } from "./addr.ts";
 import { IDEMPOTENCY_KEY, READS, Requests, httpError } from "./requests.ts";
 import { digest } from "../digest.ts";
 import { type Channel, Channels } from "../channels/channels.ts";
-import { ENTRIES, PAGE, TRANSCRIPT_PAGE, entriesOf, heldIn, transcriptOf } from "./channel-kinds.ts";
+import { ENTRIES, PAGE, TRANSCRIPT, TRANSCRIPT_PAGE, entriesOf, heldIn, transcriptOf } from "./channel-kinds.ts";
 import { HOST_KEY, HOST_SAVE_MS, type HistoryRead, type Link, Links, type LiveView } from "./link.ts";
 import { readAll, type StationWire } from "./wire.ts";
 import * as logins from "./machine-logins.ts";
@@ -123,7 +123,7 @@ export class StationsSync {
     this.requests.onAnswered = (station) => this.#links.answered(station.toString());
     this.relays = new Relays(core);
     this.relays.onChange = (station) => this.onChange(station, "logins");
-    this.channels = new Channels(heldIn(core.data), {
+    this.channels = new Channels(heldIn(core.data, (station) => this.#links.get(station)?.followsRunning === true), {
       read: (station, path, options) => Effect.suspend(() => this.requests.call(this.#links.get(station)?.addr ?? StationAddr.parse(station), "GET", path, null, options)),
       reached: (station) => this.#links.has(station) && this.reachable(station),
       enqueue: (station, task, priority, work) => this.#enqueue(station, task, priority, work),
@@ -691,7 +691,13 @@ export class StationsSync {
   /// not to be read (no longer this viewer's) says so while nothing of it is held.
   #channelAnswered(channel: Channel, error: CoreError | null, nothing: boolean): void {
     const link = this.#links.get(channel.station);
-    if (!link || channel.kind !== ENTRIES) return;
+    if (!link) return;
+    // A transcript read: what the station has of it is known (a history with nothing in it is not still loading).
+    if (channel.kind === TRANSCRIPT) {
+      if (error === null) this.#transcriptKnown(link, channel.id);
+      return;
+    }
+    if (channel.kind !== ENTRIES) return;
     const id = Number(channel.id);
     const topic = topicKey({ topic: "thread", station: channel.station, thread: id });
     if (error === null) {
@@ -736,7 +742,7 @@ export class StationsSync {
   /// never pushed, read when a history's step is opened, behind what is shown in brief (Priority.detail). Asked for by
   /// someone waiting on it, it is tried while the station seems away too: what went wrong is theirs to see.
   detail(address: string, key: string, from: number, to: number): Effect.Effect<void, CoreError> {
-    const work = Effect.suspend(() => (this.#links.has(address) ? Effect.asVoid(this.channels.read(transcriptOf(address, key), { from, to }, { quiet: true })) : Effect.void));
+    const work = Effect.suspend(() => (this.#links.has(address) ? Effect.asVoid(this.channels.read(transcriptOf(address, key), { from, to, whole: true }, { quiet: true })) : Effect.void));
     return Deferred.await(this.#enqueue(address, `detail/${key}/${from}-${to}`, Priority.detail, work));
   }
 
@@ -893,6 +899,9 @@ export class StationsSync {
     const key = str(get(summary, "key"));
     if (!key) return;
     if (this.#core.data.putSummary(address, summary)) this.#enqueue(address, `session/${key}`, Priority.shown, this.#session(address, key));
+    // How far its transcript goes: what the device lacks of it after what it holds is read (channels.ts `settle`).
+    const length = u64(get(summary, "transcriptLength"));
+    if (length !== null && length > 0) this.channels.goesTo(transcriptOf(address, key), length - 1);
   }
 
   #onSessionRemoved(address: string, key: string): void {
@@ -1001,6 +1010,9 @@ export class StationsSync {
         const held = core.data.logSpan("transcript", address, key);
         const top = held ? held.max + 1 : 0;
         this.channels.told(transcriptOf(address, key), entries.map((e, i) => [start + i, e] as [number, unknown]), start < top ? start + entries.length - 1 : null);
+        // Where it stands, told as a stream opens or as its usage changes (nothing of it): the device reads what it
+        // lacks before there.
+        if (entries.length === 0 && start > 0) this.channels.goesTo(transcriptOf(address, key), start - 1);
         view.usage = get(message, "usage") ?? null;
         // Ended steps stay until the entries that record them arrive.
         if (entries.length > 0) view.steps = view.steps.filter((s) => get(s, "ended") !== true);
@@ -1019,6 +1031,15 @@ export class StationsSync {
       } else return;
       this.onChange(address, "live", key);
     }
+  }
+
+  /// A session's transcript was read, or told as it stands: its history is loaded (`loaded`), what it holds what there is.
+  #transcriptKnown(link: Link, key: string): void {
+    let view = link.lives.get(key);
+    if (!view) link.lives.set(key, (view = { steps: [], phase: null, rate: null, usage: null, loaded: false }));
+    if (view.loaded) return;
+    view.loaded = true;
+    this.onChange(link.address, "live", key);
   }
 
   /// What the chat shows of a session at work (activity.ts), from its live view.

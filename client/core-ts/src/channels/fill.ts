@@ -8,7 +8,8 @@
 
 /// One read of a channel: its latest page; what came after an item; a stretch of them (both included); or the page
 /// before an item.
-export type Read = { latest: true } | { after: number } | { from: number; to: number } | { before: number };
+/// `whole` (a stretch): its items as they are, where a channel's are otherwise read in brief (a transcript's step opened).
+export type Read = { latest: true } | { after: number } | { from: number; to: number; whole?: boolean } | { before: number };
 
 /// The highest item not held, up to how far the channel goes; null when every one is held.
 export function missing(held: number[], last: number): number | null {
