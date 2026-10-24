@@ -279,6 +279,14 @@ fn Flow::spots(self : Flow, what : String) -> Array[(Double, Double)] {
 }
 
 ///|
+/// Those of them a finger reaches, lowest first (Tester::reachable): where a tap goes, as a scripted run's does.
+fn Flow::reach_spots(self : Flow, what : String) -> Array[(Double, Double)] {
+  let at = self.t.reachable(what)
+  at.sort_by(fn(a, b) { b.1.compare(a.1) })
+  at
+}
+
+///|
 /// What the test says must hold here, `why` said when it does not: the test fails, as an assert would; but while it
 /// writes the steps as a scripted run over a trace the app has outgrown (FLOW_EMIT), said and the steps after it
 /// written all the same (Flow::fail).
@@ -384,9 +392,10 @@ pub fn Flow::field(self : Flow, words : String) -> Unit {
 /// The lowest `what` on screen (`top`: the highest) tapped, and what the core answers to it given.
 pub fn Flow::tap(self : Flow, what : String, top? : Bool = false) -> Unit {
   emit((if top { "tap1 " } else { "tap " }) + what)
-  // (as a scripted run's tap waits for what it taps to show: what came for it given first, Flow::until)
-  self.until(fn() { self.spots(what).length() > 0 })
-  let at = self.spots(what)
+  // (as a scripted run's tap waits for what it taps to show, where a finger reaches it, not under a sheet or a scrim:
+  // what came for it given first, Flow::until)
+  self.until(fn() { self.reach_spots(what).length() > 0 })
+  let at = self.reach_spots(what)
   if at.length() == 0 {
     self.fail("nothing to tap: " + what)
     return

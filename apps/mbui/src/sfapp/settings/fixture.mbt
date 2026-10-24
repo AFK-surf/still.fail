@@ -185,9 +185,9 @@ pub fn fixture_page(mode : String) -> String {
     "settings-vault-plain" => fx.plain_left = 2
     "settings-lock-prompt" => fx.pairing = true
     "settings-vault-words" => recovery_words["ws1"] = fx_words()
-    "settings-vault-add" => up("vault-add", "", 0)
-    "settings-vault-editor" => up("vault-editor", "", 0)
-    "settings-vault-recover" => up("vault-recover", "", 0)
+    "settings-vault-add" => fixture_open.desk = "vault-add"
+    "settings-vault-editor" => fixture_open.desk = "vault-editor"
+    "settings-vault-recover" => fixture_open.desk = "vault-recover"
     "settings-add-people" => up("add-people", "", 0)
     "settings-workspace-mark" => up("workspace-mark", "", 0)
     // 外观's 本机字体 open (src/sfdesk font_setting.mbt local_tile: the families the host lists)
@@ -1858,9 +1858,6 @@ fn fixture_sheet(core : Core, here : Here) -> Unit {
         open_mode(core, "ws1/st1", Some(item))
       }
     }
-    "vault-add" => open_vault_add(core, here)
-    "vault-editor" => open_vault_editor(core, "ws1", "v1", None, kind="token")
-    "vault-recover" => open_vault_recover(core, "ws1")
     "add-people" => open_add_people(core, here, workspace_view(core, here).value)
     "workspace-mark" => open_mark_pick(core, "星火工作室", "", "glyph:rocket:orange", "", fn(_, _, _) {  })
     "add" | "add-existing" | "add-command" => {

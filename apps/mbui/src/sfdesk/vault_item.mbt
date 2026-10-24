@@ -1,7 +1,8 @@
-// A secret's page on the desktop (设置 › 密钥 › it; ember web/src/cloud/VaultItem.tsx, Vault.css.ts), as a profile's is:
-// what it is and where it is kept; in a library not locked, that it is not encrypted and the way to lock it; its content
-// masked until shown (each field's eye opens it, `vault.open`, and shows that field), copied; how agents may use it;
-// when they did, each use leading to its chat. 编辑 opens it first, then its editor. What it says is the core's
+// A secret's page, one in every frame (设置 › 密钥 › it; web/src/cloud/VaultItem.tsx, Vault.css.ts; the narrow app's
+// mobile/Vault.tsx VaultItemScreen), laid out by its width (page_look.mbt), as a profile's is: what it is and where it
+// is kept; in a library not locked, that it is not encrypted and the way to lock it; its content masked until shown
+// (each field's eye opens it, `vault.open`, and shows that field), copied; how agents may use it; when they did, each
+// use leading to its chat. 编辑 opens it first, then its editor (the presenters'). What it says is the core's
 // (vault-words.ts); what it held goes as its page is left (the settings package's opened item).
 
 ///|
@@ -21,9 +22,10 @@ fn vault_item_reset() -> Unit {
 }
 
 ///|
-/// The page (VaultItemPage).
-fn vault_item_page(c : @ui.Ctx, core : Core, here : Here, vault : String, item : String) -> Unit {
+/// The page (VaultItemPage, VaultItemScreen).
+fn vault_item_page(c : @ui.Ctx, core : Core, here : Here, frame : PageFrame, vault : String, item : String) -> Unit {
   let t = @sf.theme()
+  let look = look_of(c)
   let ws = here.workspace
   let view = (core.topic)("vaults", { "workspace": str(ws) }).value
   let list = (core.topic)("vaultItems", { "workspace": str(ws), "vault": str(vault) }).value
@@ -31,12 +33,12 @@ fn vault_item_page(c : @ui.Ctx, core : Core, here : Here, vault : String, item :
   let key = "vault-item/" + vault + "/" + item
   let back = @sf.t("web-pages.vault.title")
   guard view is Some(_) && list is Some(_) else {
-    desk_page(c, core, key, back, back~, [fn() { @sf.waiting(c, shape=Cards, count=2) }])
+    look_page(c, core, frame, look, key, back, [fn() { waiting_cards(c, count=2) }])
   }
   let v = items(view, "vaults").search_by(fn(x) { text(Some(x), "id") == vault })
   let row = items(list, "items").search_by(fn(x) { text(Some(x), "id") == item })
   guard v is Some(vi) && row is Some(ri) else {
-    desk_page(c, core, key, back, back~, [fn() { c.text(@sf.t("web-pages.vault.empty"), style=desk_muted) |> ignore }])
+    look_page(c, core, frame, look, key, back, [fn() { look_note(c, look, @sf.t("web-pages.vault.empty")) }])
   }
   let vv = Some(items(view, "vaults")[vi])
   let rv = Some(items(list, "items")[ri])
@@ -51,11 +53,27 @@ fn vault_item_page(c : @ui.Ctx, core : Core, here : Here, vault : String, item :
       None => ()
     }
   }
+  // 编辑: opened first (its content is what is edited)
+  let edit_pressed = fn() {
+    match opened {
+      Some(p) => edit(p)
+      None => open(fn(p) { edit(p) })
+    }
+  }
+  let editing_busy = opening && vi_reveal.get(item) is None
+  let section = fn(title : String, body : () -> Unit) {
+    look_section(c, look, title, heads=true, fn() {
+      match look {
+        Narrow => look_card(c, look, body)
+        Wide => body()
+      }
+    })
+  }
   let blocks : Array[() -> Unit] = []
   // in a library not locked: that it is not encrypted, the way to lock it
   if plain {
     blocks.push(fn() {
-      c.box(style=desk_card, fn() {
+      look_card(c, look, fn() {
         c.text(@sf.t("web-pages.vault.risk.title"), style=vi_risk_title) |> ignore
         c.text(@sf.t("web-pages.vault.risk.body", args=[("station", text(vv, "stationName"))]), style=desk_muted) |> ignore
         c.box(style=pf_card_foot, fn() {
@@ -65,12 +83,11 @@ fn vault_item_page(c : @ui.Ctx, core : Core, here : Here, vault : String, item :
         })
         |> ignore
       })
-      |> ignore
     })
   }
   // its content: each field's eye where its value is, before it is opened as after
   blocks.push(fn() {
-    @sf.section(c, @sf.t("web-pages.vault.content"), fn() {
+    section(@sf.t("web-pages.vault.content"), fn() {
       c.box(style=vi_fields, fn() {
         match opened {
           Some(_) =>
@@ -109,7 +126,7 @@ fn vault_item_page(c : @ui.Ctx, core : Core, here : Here, vault : String, item :
   })
   // how agents may use it
   blocks.push(fn() {
-    @sf.section(c, @sf.t("web-pages.vault.forAgents"), fn() {
+    section(@sf.t("web-pages.vault.forAgents"), fn() {
       if !flag(rv, "listed") {
         c.text(@sf.t("web-pages.vault.notForAgents"), style=desk_muted) |> ignore
         return
@@ -133,7 +150,7 @@ fn vault_item_page(c : @ui.Ctx, core : Core, here : Here, vault : String, item :
   })
   // when agents used it
   blocks.push(fn() {
-    @sf.section(c, @sf.t("web-pages.vault.uses.title"), fn() {
+    section(@sf.t("web-pages.vault.uses.title"), fn() {
       match uses {
         None => @sf.waiting(c, count=2, dense=true)
         Some(_) if items(uses, "uses").length() == 0 => c.text(@sf.t("web-pages.vault.uses.none"), style=desk_muted) |> ignore
@@ -155,8 +172,9 @@ fn vault_item_page(c : @ui.Ctx, core : Core, here : Here, vault : String, item :
                       if c.clicked(id) {
                         (core.open_chat)(ws + "/" + station, text(uv, "session"), chat)
                       }
+                      // (lit under the pointer, or a finger's press)
                       c.box(id~, fn() {
-                        c.text(chat, style=if c.hovered(id) { vi_chat_lit } else { vi_chat }) |> ignore
+                        c.text(chat, style=if c.lit(id) { vi_chat_lit } else { vi_chat }) |> ignore
                       })
                       |> ignore
                     } else {
@@ -183,31 +201,36 @@ fn vault_item_page(c : @ui.Ctx, core : Core, here : Here, vault : String, item :
       }
     })
   })
-  desk_page(c, core, key, text(rv, "name"), back~, head=fn() {
-      c.box(style=pf_head, fn() {
-        c.box(style=pf_mark, fn() {
-          @sf.icon(c, @settings.kind_icon(text(rv, "kind")), size=vi_mark_glyph, color=t.p.text) |> ignore
-        })
-        |> ignore
-        c.box(style=pf_identity, fn() {
-          c.text(text(rv, "name"), style=pf_name) |> ignore
-          c.text(
-            join([text(rv, "kindText"), @sf.t("web-pages.vault.storedOn", args=[("station", text(vv, "stationName"))])], " · "),
-            style=pf_sub,
-          )
+  let sub = join([text(rv, "kindText"), @sf.t("web-pages.vault.storedOn", args=[("station", text(vv, "stationName"))])], " · ")
+  match look {
+    Wide =>
+      look_page(c, core, frame, look, key, text(rv, "name"), blocks, head=fn() {
+        c.box(style=pf_head, fn() {
+          c.box(style=pf_mark, fn() {
+            @sf.icon(c, @settings.kind_icon(text(rv, "kind")), size=vi_mark_glyph, color=t.p.text) |> ignore
+          })
           |> ignore
+          c.box(style=pf_identity, fn() {
+            c.text(text(rv, "name"), style=pf_name) |> ignore
+            c.text(sub, style=pf_sub) |> ignore
+          })
+          |> ignore
+          if @sf.button(c, @sf.t("common.edit"), key=key + "/edit", tone=Ghost, icon="edit", busy=editing_busy) {
+            edit_pressed()
+          }
         })
         |> ignore
-        // 编辑: opened first (its content is what is edited)
-        if @sf.button(c, @sf.t("common.edit"), key=key + "/edit", tone=Ghost, icon="edit", busy=opening && vi_reveal.get(item) is None) {
-          match opened {
-            Some(p) => edit(p)
-            None => open(fn(p) { edit(p) })
-          }
+      })
+    // (narrow: its name the large title, what it is and where under it, 编辑 at the title's end)
+    Narrow =>
+      look_page(c, core, frame, look, key, text(rv, "name"), blocks, lead=sub, actions=fn() {
+        if editing_busy {
+          @sf.spinner(c, size=pf_spin) |> ignore
+        } else if @sf.icon_button(c, "edit", key=key + "/edit", round=true, label=@sf.t("common.edit")) {
+          edit_pressed()
         }
       })
-      |> ignore
-    }, blocks)
+  }
 }
 
 ///|

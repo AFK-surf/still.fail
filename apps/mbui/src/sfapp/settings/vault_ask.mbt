@@ -41,8 +41,9 @@ fn vault_ask_reset() -> Unit {
 }
 
 ///|
-/// Request `request` in workspace `ws` as a card: what is asked, and its answer at the foot (vault_actions; `mine`,
-/// `who`, `extra` as there).
+/// Request `request` in workspace `ws` as a card: what is asked (`said`: lines more of it, each its own, where they are
+/// not in its chat beside it: why the agent asks, how it would be given), and its answer at the foot (vault_actions;
+/// `mine`, `who`, `extra` as there).
 pub fn vault_ask(
   c : @ui.Ctx,
   core : Core,
@@ -52,6 +53,7 @@ pub fn vault_ask(
   mine : Bool,
   who? : String? = None,
   extra? : (() -> Unit)? = None,
+  said? : Array[String] = [],
 ) -> Unit {
   let view = vaults_of(core, ws)
   let row = items(view, "requests").iter().find_first(fn(r) { text(Some(r), "id") == request })
@@ -61,6 +63,11 @@ pub fn vault_ask(
     (row is Some(_) || vault_pending.contains(request))
   @sf.card(c, button_corner=answers, fn() {
     vault_asked(c, ask)
+    for line in said {
+      if line != "" {
+        c.text(line, style=ask_note) |> ignore
+      }
+    }
     vault_actions(c, core, ws, request, mine, who~, extra~)
   })
   |> ignore
