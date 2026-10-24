@@ -12,4 +12,5 @@ pub fn reset() -> Unit {
   kept_reset()
   pane_reset()
   drive_reset()
+  shell_reset()
 }

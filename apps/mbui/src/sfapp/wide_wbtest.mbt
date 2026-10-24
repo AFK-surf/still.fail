@@ -600,7 +600,7 @@ test "wide: 文件 as the web's Finder: 个人收藏, each station, 团队共享
 }
 
 ///|
-test "wide: 文件's tabs as Finder's: ⌘T a new one, the bar's split shows two folders side by side, a press in the other side puts it in front; kept (prefs.set filesTabs)" {
+test "wide: 文件's tabs as Finder's: ⌘T a new one, the bar's split shows two folders side by side, a press in the other side puts it in front; kept (files.tabs)" {
   let calls : Array[Made] = []
   let t = wide_tester(calls)
   app.nav.replace(Files)
@@ -611,8 +611,8 @@ test "wide: 文件's tabs as Finder's: ⌘T a new one, the bar's split shows two
   t.key(@ui.key_of_char('t'), mods=@ui.mod_cmd)
   t.frame()
   assert_true(t.query(Button, label="关闭标签") is Some(_), msg="two tabs shown")
-  let kept = named(calls, "prefs.set").filter(fn(m) { text(Some(m.params), "filesTabs") != "" || field(Some(m.params), "filesTabs") is Some(_) })
-  assert_true(kept.length() > 0)
+  let opened = named(calls, "files.tabs").filter(fn(m) { text(Some(m.params), "act") == "open" })
+  assert_eq(opened.length(), 1, msg="kept by the core")
   // split: the same folder on both sides, the right one in front
   t.click(Button, label="左右分栏")
   t.frame()
@@ -630,7 +630,9 @@ test "wide: 文件's tabs as Finder's: ⌘T a new one, the bar's split shows two
     Drive(at) => assert_eq(at.path, "会议记录")
     _ => fail("no folder open")
   }
-  // the other side still 文档
+  // the side pressed in front, gone into; the other still 文档
+  let shown = t.all(Tab).filter(fn(n) { n.selected == Some(true) })
+  assert_eq(shown.map(fn(n) { n.label }), ["Studio › 会议记录 | Studio › 文档"])
   assert_true(t.find("长篇小说.txt") is Some(_))
   // one again: the side in front kept
   t.click(Button, label="取消分栏")
@@ -1546,4 +1548,37 @@ test "wide: 密钥's waiting request is its card as in its chat (Vault.tsx Reque
   assert_eq(made.length(), 1)
   assert_eq(field(Some(made[0].params), "request"), Some(Json::string("r1")))
   assert_eq(field(Some(made[0].params), "scope"), Some(Json::string("chat")))
+}
+
+///|
+test "wide: 文件's tabs as the core keeps them (filesTabs, files.tabs): the address arrives, a new tab, split and one again by ⌘⌥D, a tab closed" {
+  let calls : Array[Made] = []
+  let t = files_dragging(calls)
+  t.frame()
+  let acts = fn() { named(calls, "files.tabs").map(fn(m) { text(Some(m.params), "act") }) }
+  assert_eq(acts(), ["arrive"])
+  // one tab alone has none shown, only the bar's buttons
+  assert_eq(t.all(Tab).length(), 0)
+  t.click(Button, label="新标签")
+  t.frame()
+  t.frame()
+  assert_eq(acts().filter(fn(a) { a == "open" }).length(), 1)
+  assert_eq(t.all(Tab).length(), 2, msg="two tabs")
+  assert_eq(t.all(Tab).filter(fn(n) { n.selected == Some(true) }).length(), 1)
+  // split: two sides, the bar's button says it undoes it; ⌘⌥D one again
+  t.click(Button, label="左右分栏")
+  t.frame()
+  t.frame()
+  assert_true(t.query(Button, label="取消分栏") is Some(_), msg="split")
+  t.key(@ui.key_of_char('d'), mods=@ui.mod_cmd + @ui.mod_alt)
+  t.frame()
+  t.frame()
+  assert_true(t.query(Button, label="左右分栏") is Some(_), msg="one again")
+  // the tab shown closed: the other left alone, no tabs shown
+  let (x, y, w, h) = t.all(Button, label="关闭标签")[0].rect
+  t.tap(x + w / 2.0, y + h / 2.0)
+  t.frame()
+  t.frame()
+  assert_eq(acts().filter(fn(a) { a == "close" }).length(), 1)
+  assert_eq(t.all(Tab).length(), 0, msg="one tab left")
 }

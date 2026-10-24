@@ -23,6 +23,7 @@ using @sfbase {
   dv_name,
   dv_name_problem,
   dv_pump,
+  dv_rights,
   dv_root_label,
   dv_stations,
   dv_take_picked,

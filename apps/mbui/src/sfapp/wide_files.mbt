@@ -301,198 +301,13 @@ fn files_landing(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
   }
 }
 
-// ── the tabs (Files.tsx FilesShell, drive/tabsModel.ts) ─────────────────
-
-///|
-/// One of the files' page's tabs (tabsModel.ts FilesTab): a folder, or two side by side, one of them in front.
-priv struct FTab {
-  id : String
-  panes : Array[DriveAt]
-  front : Int
-}
-
-///|
-/// The page's tabs and the one shown.
-priv struct FTabs {
-  tabs : Array[FTab]
-  current : String
-}
-
-///|
-/// At most this many tabs (the oldest let go past it).
-let files_most_tabs : Int = 12
-
-///|
-fn pane_same(a : DriveAt, b : DriveAt) -> Bool {
-  a.station == b.station && a.root == b.root && a.path == b.path
-}
-
-///|
-/// The workspace's tabs as kept (prefs `filesTabs[workspace]`, as kept here until the prefs say); what does not hold
-/// together let go.
-fn files_tabs_read(src : Source, ws : String) -> FTabs? {
-  let raw = match wide.tabs_set.get(ws) {
-    Some(r) => r
-    None => text(field(field((src.topic)("prefs", {}).value, "filesTabs"), ws), "")
-  }
-  let parsed = @json.parse(raw) catch { _ => Json::null() }
-  let v = Some(parsed)
-  let tabs : Array[FTab] = []
-  for x in items(v, "tabs") {
-    let x = Some(x)
-    let panes : Array[DriveAt] = []
-    for p in items(x, "panes") {
-      let p = Some(p)
-      if text(p, "station") != "" && text(p, "root") != "" {
-        panes.push({ station: text(p, "station"), root: Some(text(p, "root")), path: text(p, "path") })
-      }
-    }
-    if text(x, "id") != "" && panes.length() >= 1 && panes.length() <= 2 {
-      tabs.push({ id: text(x, "id"), panes, front: if number(x, "front") == 1.0 && panes.length() == 2 { 1 } else { 0 } })
-    }
-  }
-  if tabs.length() == 0 {
-    return None
-  }
-  let current = text(v, "current")
-  Some({ tabs, current: if tabs.iter().any(fn(t) { t.id == current }) { current } else { tabs[0].id } })
-}
-
-///|
-/// The tabs kept (`prefs.set {filesTabs: {workspace: …}}`, the web's shape).
-fn files_tabs_keep(src : Source, ws : String, s : FTabs) -> Unit {
-  let pane = fn(p : DriveAt) -> Json {
-    { "station": Json::string(p.station), "root": Json::string(p.root.unwrap_or("")), "path": Json::string(p.path) }
-  }
-  let tabs = s.tabs.map(fn(t) -> Json {
-    { "id": Json::string(t.id), "panes": Json::array(t.panes.map(pane)), "front": Json::number(t.front.to_double()) }
-  })
-  let raw = ({ "tabs": Json::array(tabs), "current": Json::string(s.current) } : Json).stringify()
-  wide.tabs_set[ws] = raw
-  (src.call)("prefs.set", { "filesTabs": Json::object(Map::from_array([(ws, Json::string(raw))])) }, fn(_) {  })
-}
-
-///|
-/// A new tab's id: the first `t<n>` none has (by count, so the same steps give the same ids).
-fn files_tab_id(tabs : Array[FTab]) -> String {
-  let mut n = tabs.length()
-  while tabs.iter().any(fn(t) { t.id == "t\{n}" }) {
-    n = n + 1
-  }
-  "t\{n}"
-}
-
-///|
-/// The tab shown.
-fn files_tab_of(s : FTabs) -> FTab {
-  match s.tabs.iter().find_first(fn(t) { t.id == s.current }) {
-    Some(t) => t
-    None => s.tabs[0]
-  }
-}
-
-///|
-/// The pane in front of the tab shown.
-fn files_front_of(s : FTabs) -> DriveAt {
-  let t = files_tab_of(s)
-  t.panes.get(t.front).unwrap_or(t.panes[0])
-}
-
-///|
-/// The address moved (the sidebar, a folder opened): the pane in front shows it; with no tabs yet, the first.
-fn files_arrive(s : FTabs?, p : DriveAt) -> FTabs {
-  match s {
-    None => { tabs: [{ id: "t0", panes: [p], front: 0 }], current: "t0" }
-    Some(s) => {
-      let tabs = s.tabs.map(fn(t) {
-        if t.id != s.current || pane_same(t.panes[t.front], p) {
-          t
-        } else {
-          { ..t, panes: t.panes.mapi(fn(i, x) { if i == t.front { p } else { x } }) }
-        }
-      })
-      { ..s, tabs, }
-    }
-  }
-}
-
-///|
-/// A new tab showing `p`, after the one shown, shown.
-fn files_opened(s : FTabs, p : DriveAt) -> FTabs {
-  let tab : FTab = { id: files_tab_id(s.tabs), panes: [p], front: 0 }
-  let at = s.tabs.search_by(fn(t) { t.id == s.current }).unwrap_or(0)
-  let tabs : Array[FTab] = []
-  for i, t in s.tabs {
-    tabs.push(t)
-    if i == at {
-      tabs.push(tab)
-    }
-  }
-  let first = s.tabs[0].id
-  { tabs: if tabs.length() > files_most_tabs { tabs.filter(fn(t) { t.id != first }) } else { tabs }, current: tab.id }
-}
-
-///|
-/// A tab closed (the last one is not: it stays, as Finder keeps a window); the one beside it shown.
-fn files_closed(s : FTabs, id : String) -> FTabs {
-  if s.tabs.length() <= 1 {
-    return s
-  }
-  let at = s.tabs.search_by(fn(t) { t.id == id }).unwrap_or(0)
-  let tabs = s.tabs.filter(fn(t) { t.id != id })
-  let next = if at < tabs.length() { at } else { tabs.length() - 1 }
-  { tabs, current: if s.current == id { tabs[next].id } else { s.current } }
-}
-
-///|
-/// The tab shown split in two (the other side opening where the front is), or one again (the side in front kept).
-fn files_split(s : FTabs) -> FTabs {
-  let tabs = s.tabs.map(fn(t) {
-    if t.id != s.current {
-      t
-    } else if t.panes.length() == 2 {
-      { ..t, panes: [t.panes[t.front]], front: 0 }
-    } else {
-      { ..t, panes: [t.panes[0], t.panes[0]], front: 1 }
-    }
-  })
-  { ..s, tabs, }
-}
-
-///|
-/// The side `front` of the tab shown put in front.
-fn files_fronted(s : FTabs, front : Int) -> FTabs {
-  let tabs = s.tabs.map(fn(t) { if t.id == s.current && front < t.panes.length() { { ..t, front, } } else { t } })
-  { ..s, tabs, }
-}
-
-///|
-/// A pane's folder (its last part; a root pinned by its name, the home as 主目录) and its station's name.
-fn files_pane_parts(p : DriveAt, stations : Array[DvStation]) -> (String, String) {
-  let root = p.root.unwrap_or("")
-  match stations.iter().find_first(fn(s) { s.station == p.station }) {
-    Some(s) => {
-      let folder = if p.path != "" {
-        dv_name(p.path)
-      } else if root == s.home && !s.roots.iter().any(fn(r) { r.path == root }) {
-        tr("web-pages.drive.home")
-      } else {
-        dv_root_label(s.roots, root)
-      }
-      (folder, s.name)
-    }
-    None => (if p.path != "" { dv_name(p.path) } else { dv_name(root) }, "")
-  }
-}
-
 // ── a folder (FolderView) ───────────────────────────────────────────────
 
 ///|
-/// The files' page at a folder: the bar (the tabs, when more than one; what can be done to the folder in front; split
-/// and a new tab), then the tab shown, a folder or two side by side. The folder in front is the stack's top (what the
-/// sidebar and opening a folder move); a press in the other side puts it in front.
+/// The files' page at a folder: the desk's shell (src/sfdesk/files.mbt: its tabs, the core's), what is the app's own
+/// until it is the desk's given to it (the sidebar's way there, ⌘⇧G, 传输, a side's head, what is dragged). The folder
+/// in front is the stack's top (what the sidebar and opening a folder move).
 fn wide_folder(c : @ui.Ctx, src : Source, w : Workspace, at : DriveAt) -> Unit {
-  let t = @sf.theme()
   let (list, _) = dv_stations(src, w.id)
   let stations = list.unwrap_or([])
   let s = stations.iter().find_first(fn(x) { x.station == at.station })
@@ -514,108 +329,25 @@ fn wide_folder(c : @ui.Ctx, src : Source, w : Workspace, at : DriveAt) -> Unit {
         }
       }
   }
-  let can = dv_rights(src, w.id, s)
   let here : DriveAt = { station: at.station, root: Some(root), path: at.path }
   dv.building = dv_page_of(Some(here))
   // what is dragged moved on or let go; the files picked to go up
   fdrag_frame(c, src, w)
   dv_take_picked(src, here, [])
-  let tabs = files_arrive(files_tabs_read(src, w.id), here)
-  let tab = files_tab_of(tabs)
-  let split_on = tab.panes.length() == 2
-  // other tabs or sides brought in front: kept, the stack's top the folder in front
-  let show = fn(next : FTabs) {
-    files_tabs_keep(src, w.id, next)
-    let f = files_front_of(next)
-    if !pane_same(f, here) {
-      files_go(f)
-    }
-  }
-  // ⌘T a new tab where the front is, ⌘⌥D split
-  if c.shortcut('t') {
-    show(files_opened(tabs, here))
-  }
-  if c.key_pressed(@ui.key_of_char('d'), mods=@ui.mod_cmd + @ui.mod_alt) {
-    show(files_split(tabs))
-  }
-  // ⌘⇧G: a folder by its path (FilesGo.tsx GoTo), as Finder's 前往文件夹
-  if c.key_pressed(@ui.key_of_char('g'), mods=@ui.mod_cmd + @ui.mod_shift_key) {
-    fgo_open()
-  }
-  // the folder in front, as the folder's own parts take it (src/sfdesk/drive.mbt)
-  let front_of = fn(i : Int, p : DriveAt) -> @sfdesk.FolderOf {
-    let ps = stations.iter().find_first(fn(x) { x.station == p.station }).unwrap_or(st)
-    {
-      key: "page/\{i}",
-      ws: w.id,
-      st: ps,
-      rights: dv_rights(src, w.id, Some(ps)),
-      at: p,
-      front: i == tab.front,
-      room: 0.0,
-      go: fn(to, _) { files_go(to) },
-      open_in: None,
-      go_to: Some(fn() { fgo_open() }),
-      manage: Some(fn() { dv_open(c, View(p, can.manage && p.path == "")) }),
-    }
-  }
-  let page = c.id("files-page")
-  c.box(style=files_page_box, id=page, fn() {
-    // the bar (Files.tsx's): the tabs, the folder's ways and what can be done to it, then the tabs' own
-    let bar = c.id("files-bar")
-    if @ui.window_inset() {
-      c.window_drag(bar)
-    }
-    c.box(style=files_bar, id=bar, fn() {
-      if tabs.tabs.length() > 1 {
-        files_tab_row(c, stations, tabs, show)
-      } else {
-        c.box(style=files_tabs_none, fn() {  }) |> ignore
-      }
-      @sfdesk.folder_actions(c, src, front_of(tab.front, here))
-      c.box(style=files_bar_sep, fn() {  }) |> ignore
-      // the transfers (Files.tsx: past the folder's own, before the tabs')
-      files_transfers(c, src, w.id)
-      if files_lit_button(c, "files/split", "view-columns", tr(if split_on { "web-pages.files.unsplit" } else { "web-pages.files.split" }), split_on) {
-        show(files_split(tabs))
-      }
-      if icon_button(c, "files/new-tab", "plus", label=tr("web-pages.files.newTab")) {
-        show(files_opened(tabs, here))
-      }
-    })
-    |> ignore
-    c.box(style=files_bar_rule, fn() {  }) |> ignore
-    // the tab shown: a side each, split the one in front lined at its top
-    c.box(style=files_panes, fn() {
-      for i, p in tab.panes {
-        let front = i == tab.front
-        let pane = if front { here } else { p }
-        if i > 0 {
-          c.box(style=files_column_rule, fn() {  }) |> ignore
-        }
-        c.box(style=if split_on { files_side_half } else { files_side_one }, fn() {
-          if split_on {
-            c.box(style=if front { files_front_line } else { files_back_line }, fn() {  }) |> ignore
-          }
-          // (each side's ids its own: the same folder can be on both)
-          c.scope(i, fn() {
-            folder_pane(c, src, w, stations, front_of(i, pane), split_on, fn() {
-              if !front {
-                show(files_fronted(tabs, i))
-              }
-            })
-          })
-        })
-        |> ignore
-      }
-    })
-    |> ignore
-    dv_sheets(c, src, w, dv_page_of(Some(here)))
-    files_goto(c, src, stations, here)
-    files_clash_dialog(c)
-    fdrag_ghost(c, page)
+  let room = c.width - rail_w - (if wide.folded { 0.0 } else { wide.side_w })
+  @sfdesk.files_shell(c, src, w.id, stations, here, room, {
+    go: fn(to, _) { files_go(to) },
+    head: fn(c, f, split_on, front_it) { files_side_head(c, src, w, stations, f, split_on, front_it) },
+    go_to: fgo_open,
+    transfers: fn(c) { files_transfers(c, src, w.id) },
+    manage: fn(p) { dv_open(c, View(p, dv_rights(src, w.id, Some(st)).manage && p.path == "")) },
+    over: fn(c, page) {
+      dv_sheets(c, src, w, dv_page_of(Some(here)))
+      files_goto(c, src, stations, here)
+      files_clash_dialog(c)
+      fdrag_ghost(c, page)
+    },
   })
-  |> ignore
 }
 
 // ── going somewhere (FilesGo.tsx) ───────────────────────────────────────
@@ -1036,58 +768,9 @@ let fgo_row_words : @ui.TextStyle = @ui.text_style(size=Sm, color=Fg, wrap=false
 let fgo_key : @ui.TextStyle = @ui.text_style(size=Xs, color=Subtle, wrap=false)
 
 ///|
-/// The tabs as Safari's compact ones (Files.css.ts tabs): one groove, each tab an equal share of it, the one shown
-/// raised; its folder first, its station after it, small, a dot of its station's colour before; its close at its left
-/// while pointed at.
-fn files_tab_row(c : @ui.Ctx, stations : Array[DvStation], tabs : FTabs, show : (FTabs) -> Unit) -> Unit {
-  let t = @sf.theme()
-  c.box(style=files_tabs_groove, fn() {
-    for x in tabs.tabs {
-      let on = x.id == tabs.current
-      let id = c.id("files/tab/" + x.id)
-      let cid = c.id("files/tab-close/" + x.id)
-      c.cursor(id, Hand)
-      c.cursor(cid, Hand)
-      if c.clicked(cid) {
-        show(files_closed(tabs, x.id))
-      } else if c.clicked(id) && !on {
-        show({ ..tabs, current: x.id })
-      }
-      let hot = c.hovered(id) || c.hovered(cid)
-      let words = x.panes.map(fn(p) { files_pane_parts(p, stations).0 }).join(" | ")
-      let b = c.box(style=if on { files_tab_on } else { files_tab_off }, id~, fn() {
-        let close = c.box(style=files_tab_close, id=cid, fn() {
-          if hot {
-            @sf.icon(c, "close", size=files_close_icon, color=t.p.muted) |> ignore
-          }
-        })
-        c.semantics(close, Button, id=cid, label=tr("web-pages.files.closeTab"))
-        c.box(style=files_tab_parts, fn() {
-          for i, p in x.panes {
-            if i > 0 {
-              c.box(style=files_tab_split, fn() {  }) |> ignore
-            }
-            let tone = stations.search_by(fn(s) { s.station == p.station }).unwrap_or(0) % files_dots.length()
-            c.box(style=files_dots[tone], fn() {  }) |> ignore
-            let (folder, station) = files_pane_parts(p, stations)
-            c.text(folder, style=if on { files_tab_folder_on } else { files_tab_folder }) |> ignore
-            c.text(station, style=files_tab_station) |> ignore
-          }
-        })
-        |> ignore
-        // (as wide as its close, so its words are in its middle)
-        c.box(style=files_tab_close, fn() {  }) |> ignore
-      })
-      c.semantics(b, Button, id~, label=words)
-    }
-  })
-  |> ignore
-}
-
-///|
-/// One side: its station and where in it, its name and what it holds, then its way of showing. `front_it` puts it in
-/// front, said first by whatever is pressed in it.
-fn folder_pane(
+/// A side's head: its station and where in it, its name and what it holds. `front_it` puts the side in front, said
+/// first by whatever is pressed in it.
+fn files_side_head(
   c : @ui.Ctx,
   src : Source,
   w : Workspace,
@@ -1098,21 +781,14 @@ fn folder_pane(
 ) -> Unit {
   let t = @sf.theme()
   let at = f.at
-  let st = match stations.iter().find_first(fn(x) { x.station == at.station }) {
-    Some(v) => v
-    None => {
-      c.box(style=files_head, fn() { c.text(tr("web-pages.workspace.noSuchStation"), style=place_meta) |> ignore })
-      |> ignore
-      return
-    }
-  }
+  let st = f.st
   let root = at.root.unwrap_or("")
   let topic = (src.topic)("drive", {
     "station": Json::string(at.station),
     "root": Json::string(root),
     "path": Json::string(at.path),
   })
-  let (name, _) = files_pane_parts(at, stations)
+  let (name, _) = @sfdesk.pane_parts(at, stations)
   // where it is: its station, then the way down to it (its root, then each folder above it)
   c.box(style=if split_on { files_head_half } else { files_head }, fn() {
     c.box(style=files_crumbs, fn() {
@@ -1132,7 +808,7 @@ fn folder_pane(
       c.semantics(b, Button, id=chip, label=tr("web-pages.files.switchStation"))
       files_switch_menu(c, src, stations, chip, at)
       let parts = if at.path == "" { [] } else { at.path.split("/").map(fn(p) { p.to_string() }).collect() }
-      let (root_name, _) = files_pane_parts({ ..at, path: "" }, stations)
+      let (root_name, _) = @sfdesk.pane_parts({ ..at, path: "" }, stations)
       let crumbs : Array[(String, String)] = if at.path == "" { [] } else { [(root_name, "")] }
       let mut so_far = ""
       for p in parts[:dmax(0.0, (parts.length() - 1).to_double()).to_int()] {
@@ -1159,28 +835,6 @@ fn folder_pane(
     }
   })
   |> ignore
-  let total = c.width - rail_w - (if wide.folded { 0.0 } else { wide.side_w })
-  let room = if split_on { total / 2.0 - files_body_in_half } else { total - files_body_in }
-  // the folder's own (src/sfdesk/drive.mbt FolderView), what is pressed in it putting this side in front first
-  c.box(style=if split_on { files_pane_half } else { files_pane }, fn() {
-    let pid = c.id("files/side/" + f.key)
-    // (a press anywhere in it, as the web's side takes the pointer going down first)
-    let (px, py, down) = c.pointer()
-    let inside = match c.rect_of(pid) {
-      Some((x, y, w, h)) => px >= x && px < x + w && py >= y && py < y + h
-      None => false
-    }
-    if down && !wide.files_down.contains(f.key) && inside {
-      front_it()
-    }
-    if down {
-      wide.files_down[f.key] = true
-    } else {
-      wide.files_down.remove(f.key)
-    }
-    c.box(style=files_side_box, id=pid, fn() { @sfdesk.folder_view(c, src, { ..f, room, }) }) |> ignore
-  })
-  |> ignore
 }
 
 ///|
@@ -1197,16 +851,9 @@ fn files_lit_button(c : @ui.Ctx, key : String, icon : String, label : String, on
 }
 
 ///|
-// kept across runs: a value (no field of it changes)
-let files_side_box : @ui.Style = @ui.style(w=Full, h=Full)
-
-///|
 /// A row's mark (16, as the web's rows) and the folder's room in from the pane's sides (32 before it, 40 after: the
 /// page's, as the preview beside it ends where the head does).
 let files_icon : Double = 16.0
-
-///|
-let files_body_in : Double = 72.0
 
 ///|
 /// A disk's bar (FilesNav.css.ts disk: 28 by 3, its corner 2, how much is used filled from its start).
@@ -1226,15 +873,6 @@ let files_disk_used : @ui.Style = @ui.style(h=Full, bg=Muted)
 ///|
 // kept across runs: a value (no field of it changes)
 let files_disk_warn : @ui.Style = @ui.style(h=Full, bg=Warn)
-
-///|
-// kept across runs: a value (no field of it changes)
-let files_page_box : @ui.Style = @ui.style(w=Full, h=Full, bg=Bg)
-
-///|
-/// The bar: 45 high, what is on it at its end, 12 in, a line under it.
-// kept across runs: a value (no field of it changes)
-let files_bar : @ui.Style = @ui.style(row=true, w=Full, h=S11, px=S3, gap=S1, align=ACenter, justify=JEnd)
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -1274,125 +912,12 @@ let files_crumb : @ui.Style = @ui.style(px=S0_5, radius=Sm, hovered=@ui.patch(bg
 let files_title : @ui.TextStyle = @ui.text_style(size=Xl3, weight=Semibold, color=Fg, wrap=false)
 
 ///|
-// kept across runs: a value (no field of it changes)
-let files_pane : @ui.Style = @ui.style(row=true, w=Full, h=Full, pl=S8, pr=S10, clip=true)
-
-///|
-/// Split, a side's room in from its sides (24 each and its rows' 16).
-let files_body_in_half : Double = 80.0
-
-///|
 /// A tab's close (10).
 let files_close_icon : Double = 10.0
 
 ///|
-/// Room for what the bar starts with when there is one tab (none shown).
-// kept across runs: a value (no field of it changes)
-let files_tabs_none : @ui.Style = @ui.style(w=@sf.grow)
-
-///|
-/// Between what is done to the folder and the tabs' own buttons: a short line, 16 high (Files.css.ts barFolder).
-// kept across runs: a value (no field of it changes)
-let files_bar_sep : @ui.Style = @ui.style(w=SPx, h=S4, bg=Line)
-
-///|
-/// The tabs' groove (Files.css.ts tabs): capsules in a capsule, 2 apart, on the words' colour at 6%.
-// kept across runs: a value (no field of it changes)
-let files_tabs_groove : @ui.Style = @ui.style(row=true, w=@sf.grow, p=S0_5, gap=S0_5, radius=Full, bg=Tint)
-
-///|
-/// A tab: an equal share of the groove, at most 280, 28 high; the one shown on the page's ground.
-// kept across runs: a value (no field of it changes)
-let files_tab_off : @ui.Style = @ui.style(
-  row=true,
-  w=@sf.grow,
-  max_w=Fixed(files_tab_most),
-  h=S7,
-  px=S1_5,
-  align=ACenter,
-  radius=Full,
-  hovered=@ui.patch(bg=Hover),
-)
-
-///|
-// kept across runs: a value (no field of it changes)
-let files_tab_on : @ui.Style = files_tab_off.then(@ui.style(bg=Bg, shadow=Sm))
-
-///|
-let files_tab_most : Double = 280.0
-
-///|
-/// Its close: a circle 16 across, 6 in from its end.
-// kept across runs: a value (no field of it changes)
-let files_tab_close : @ui.Style = @ui.style(
-  w=S4,
-  h=S4,
-  radius=Full,
-  align=ACenter,
-  justify=JCenter,
-  hovered=@ui.patch(bg=Hover),
-)
-
-///|
-// kept across runs: a value (no field of it changes)
-let files_tab_parts : @ui.Style = @ui.style(row=true, w=@sf.grow, gap=S1_5, align=ACenter, justify=JCenter, clip=true)
-
-///|
-// kept across runs: a value (no field of it changes)
-let files_tab_split : @ui.Style = @ui.style(w=SPx, h=S2_5, bg=Line)
-
-///|
-// kept across runs: a value (no field of it changes)
-let files_tab_folder : @ui.TextStyle = @ui.text_style(size=Xs, color=Muted, wrap=false)
-
-///|
-// kept across runs: a value (no field of it changes)
-let files_tab_folder_on : @ui.TextStyle = @ui.text_style(size=Xs, weight=Medium, color=Fg, wrap=false)
-
-///|
-// kept across runs: a value (no field of it changes)
-let files_tab_station : @ui.TextStyle = @ui.text_style(size=Xs, color=Subtle, wrap=false)
-
-///|
-/// A station's colour on the tabs: one of six, by its place among the workspace's (Files.css.ts dot: 7 across).
-// kept across runs: a table, never written
-let files_dots : Array[@ui.Style] = ([Accent, Link, Positive, Warn, Danger, Muted] : Array[@ui.Color]).map(fn(k) {
-  @ui.style(w=S1_5, h=S1_5, radius=Full, bg=k)
-})
-
-///|
-/// The tab's sides, side by side.
-// kept across runs: a value (no field of it changes)
-let files_panes : @ui.Style = @ui.style(row=true, w=Full, h=Full)
-
-///|
-// kept across runs: a value (no field of it changes)
-let files_side_one : @ui.Style = @ui.style(w=Full, h=Full)
-
-///|
-// kept across runs: a value (no field of it changes)
-let files_side_half : @ui.Style = @ui.style(w=@sf.grow, h=Full, clip=true)
-
-///|
-/// Split, the side in front lined at its top in the accent (2), the other not.
-// kept across runs: a value (no field of it changes)
-let files_front_line : @ui.Style = @ui.style(w=Full, h=S0_5, bg=Accent)
-
-///|
-// kept across runs: a value (no field of it changes)
-let files_back_line : @ui.Style = @ui.style(w=Full, h=S0_5)
-
-///|
 // kept across runs: a value (no field of it changes)
 let files_head_half : @ui.Style = @ui.style(w=Full, px=S6, pt=S3, pb=S3, gap=S1_5)
-
-///|
-// kept across runs: a value (no field of it changes)
-let files_pane_half : @ui.Style = @ui.style(row=true, w=Full, h=Full, px=S4, clip=true)
-
-///|
-// kept across runs: a value (no field of it changes)
-let files_row_end : @ui.Style = @ui.style(w=S16)
 
 ///|
 /// The line under the bar (Files.css.ts: the pane's line across it).
