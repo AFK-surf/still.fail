@@ -34,3 +34,17 @@ test "touch wide: a row tapped is opened and left as it rests (a lifted finger h
   t.draw()
   assert_true(t.query(Button, label="归档「首页的列表改成按天分组」") is None)
 }
+
+///|
+test "touch wide: a row held shows its time while its menu is open, its 归档 in the menu, not on the row" {
+  let t = touch_wide_tester()
+  let log = t.drive("hold 700 首页的列表改成按天分组\nuntil 复制会话链接\n")
+  assert_true(log.contains("EXIT 0"), msg=log.join("\n"))
+  assert_true(t.find("8 分钟前") is Some(_))
+  assert_true(t.query(Button, label="归档「首页的列表改成按天分组」") is None)
+  // under the row, not over it
+  let (_, row_y) = t.find("首页的列表改成按天分组").unwrap()
+  let (_, time_y) = t.find("8 分钟前").unwrap()
+  let (_, menu_y) = t.find("重命名").unwrap()
+  assert_true(menu_y > time_y && time_y > row_y)
+}
