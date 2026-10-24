@@ -167,15 +167,16 @@ function JoinSheet({ s }: { s: LockView["stations"][number] }) {
 }
 
 /** A new device met face to face, showing a code of this one's to type there (the core's `lockPrompts`): put up wherever
- * the person is and kept up as pages change. Nothing here approves it, only the code typed on the new device; closed or
- * turned away (`lockPrompt.deny`), the code is worth nothing. */
+ * the person is and kept up as pages change. Nothing here approves it, only the code typed on the new device; turned
+ * away (`lockPrompt.deny`), the code is worth nothing; closed (`lockPrompt.hide`), it is no longer shown and the code
+ * still holds. */
 export function SecurityPrompt() {
   const app = useApp();
   const call = useCall();
   const r = useLockPrompts()?.pairing[0] ?? null;
   useEffect(() => {
     if (!r) return;
-    app.sheet({ height: 0.55, keep: true, onClose: () => void call("lockPrompt.deny", { device: r.device }), content: () => <PairSheet r={r} /> });
+    app.sheet({ height: 0.55, keep: true, onClose: () => void call("lockPrompt.hide", { device: r.device }), content: () => <PairSheet r={r} /> });
   }, [r?.device]); // eslint-disable-line react-hooks/exhaustive-deps
   return null;
 }

@@ -31,8 +31,11 @@ priv struct SettingsFixture {
   mut resets_used : Int
   /// the models named by hand on ChatGPT 团队 (`profile.addModel`)
   models_added : Array[String]
-  /// a new device of lin's asking to be let in with this one's code (settings-lock-prompt), until turned away
+  /// a new device of lin's asking to be let in with this one's code (settings-lock-prompt), until turned away or its
+  /// prompt closed
   mut pairing : Bool
+  /// how its prompt went: "deny" (turned away), "hide" (closed, the code still good), "" while it is up
+  mut pair_ended : String
   /// the bytes of the drives' files kept (`cache.usage`'s `drive`), until let go (`drive.kept.clear`)
   mut drive_kept : Double
   /// the chats' files kept let go (`cache.file.clear`), by name
@@ -55,6 +58,7 @@ let fx : SettingsFixture = {
   resets_used: 0,
   models_added: [],
   pairing: false,
+  pair_ended: "",
   drive_kept: fx_drive_kept,
   kept_cleared: [],
 }
@@ -124,6 +128,7 @@ fn fixture_reset() -> Unit {
   fx.vault_off = false
   fx.plain_left = 0
   fx.pairing = false
+  fx.pair_ended = ""
   fixture_open.sheet = ""
   fixture_open.list = ""
   fixture_open.block = 0
@@ -136,6 +141,12 @@ fn fixture_reset() -> Unit {
 /// How often the made-up settings changed: added to the fixture's own version.
 pub fn fixture_version() -> Int {
   fx.version
+}
+
+///|
+/// How the new device's prompt went (`lockPrompt.deny` "deny", `lockPrompt.hide` "hide"; "" while it is up).
+pub fn fixture_pair_ended() -> String {
+  fx.pair_ended
 }
 
 ///|
@@ -1693,9 +1704,10 @@ pub fn fixture_call(name : String, params : Json) -> Result[Json, Json]? {
       fx.version += 1
       Some(Ok(obj([])))
     }
-    // the new device turned away: no longer asking
-    "lockPrompt.deny" => {
+    // the new device turned away, or its prompt closed: no longer shown
+    "lockPrompt.deny" | "lockPrompt.hide" => {
       fx.pairing = false
+      fx.pair_ended = if name == "lockPrompt.deny" { "deny" } else { "hide" }
       fx.version += 1
       Some(Ok(obj([])))
     }

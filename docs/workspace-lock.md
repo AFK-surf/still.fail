@@ -72,7 +72,8 @@ sig   = {key: "ed25519:<hex>", alg: "Ed25519", sig: <hex>}          // 签的是
 - **直连受信任设备**：新设备从锁里挑出能批准它的设备（自己账号下带 `sign_key` 的 app 设备，和 owner、admin 的），用 iroh 按 id 直连（ALPN `stillfail/pair/1`，relay 用账号和 workspace 的 relay 列表），每台连上的发 `hello {workspaces: [{ws, credential}], kind, label, sign_key}`。app 的主 endpoint 带这个 ALPN 接受连接（`mesh.ts` `takes`）。
 - **受信任设备核对**：用自己核对过签名的锁（`vault/lock-check.ts` `checkLock`）里的 cloud 公钥验每个 workspace 的成员凭证（EdDSA，`device` 必须是连上来的那个 endpoint id），确认这台设备在那个 workspace 能为此人批准（owner/admin，或本人自己的设备），然后弹出码（`lockPrompts` 的 `pairing`，在哪个 workspace 都弹）：只有码和「拒绝」，没有批准按钮。码是 6 位数字（约 20 bit：每次连接最多试 3 次，每次都会在受信任设备上弹出），只显示不发送；新设备上是 6 个格子，弹数字键盘，输满自动提交，输错清空重来（2026-10-19 用户：「好输入一点」）。
 - **CPace**：新设备输入码，两边各自用「码 + 双方 endpoint id（各自从连接上看到的）+ workspace 列表」生成 ristretto255 上的生成元，交换一次 share，算出同一把钥匙再互发 MAC。新设备先验受信任设备的 MAC 才回自己的；受信任设备验过新设备的 MAC 才在每个 workspace 签 `device` 条目（app 带 `sign_key`，网页版 30 天到期）。连错了对象（假的锁、中间人）时双方的 id 不一致，码对也算不出同一把钥匙。
-- **次数和时限**：一次连接最多试 `PAIR_TRIES`（3）次，码 `PAIR_WAIT_MS`（5 分钟）内有效；受信任设备上点「拒绝」或关掉弹窗（`lockPrompt.deny`），码立即作废；新设备连每台 `PAIR_DIAL_MS`（20 秒）为限，一台都没连上时页面说明要在已获批的设备上打开 still.fail。
+- **次数和时限**：一次连接最多试 `PAIR_TRIES`（3）次，码 `PAIR_WAIT_MS`（5 分钟）内有效；受信任设备上点「拒绝」（`lockPrompt.deny`），码立即作废；关掉弹窗（点旁边、Esc、返回，`lockPrompt.hide`）只是不再显示，码照样有效（人看完码顺手关掉弹窗是常事，以前关掉就作废，新设备上输对了也报「错误次数过多」，2026-10-25）；新设备连每台 `PAIR_DIAL_MS`（20 秒）为限，一台都没连上时页面说明要在已获批的设备上打开 still.fail。
+- **没批成时说原因**：受信任设备结束时回 `no {error}`（`tries` 次数用完、`denied` 被拒绝、`late` 码过期），新设备照它说（`core-misc.lock.pairTries` / `pairDenied` / `pairLate`），连接断了、对方没说原因就说连不上显示安全码的设备（`pairGone`），不再一律说错误次数过多。
 - **状态**：新设备的进度在 `lock` topic 的 `me.pair`（`finding` / `code` / `checking` / `wrong` / `none` / `failed` / `done`），等待页按它显示输入框、剩余次数或重试。
 - 锁住的 station 拒绝不在锁里的设备时回 `{code: "lock_unconfirmed", lock}`，core 报 `lock_unconfirmed`，说明是哪个 workspace、去哪批和这台的安全码。
 - **旧客户端**：旧版新设备仍经 cloud 申请（`lock.request`，`/v1/workspaces/:ws/lock/requests`），在各 workspace 的 设置 › 安全「待你批准」里核对短码后批（`lock.confirm`），不再弹窗。cloud 上的申请 7 天后作废；同一个人、同一类、同一个名字的设备只留最新一条。
@@ -107,7 +108,7 @@ sig   = {key: "ed25519:<hex>", alg: "Ed25519", sig: <hex>}          // 签的是
 - 桌面/网页：设置 › 安全（`web/src/cloud/Security.tsx`）；开启前核对页 `settings/security/open`；owner 在设置页顶上的一行提示（`lock.dismiss` 关掉，记在 prefs `lockNotice`）；等待确认的设备看到的整页。
 - 等待页在首页的位置，顶上仍是首页的顶栏：设置，和 workspace 名称（点开切换 workspace）。手机上没有底栏，以前进了待批准的 workspace 就回不去（2026-10-23）。
 - 被安全模式拦下的 station（这台设备未获批 `lock_unconfirmed`，或 station 不接受这个 workspace 的成员 `lock_station`）不显示成离线：link 的 `cause` 是 `lock`，station 列表写「安全模式未放行」，station 页（`blocked`）和对话里写原因。
-- 受信任设备上，面对面批准的新设备自己弹出来（`lockPrompts` 的 `pairing`，见「新设备」）：在哪个 workspace 都弹，写明申请访问哪几个 workspace，只显示码和「拒绝」（桌面对话框，手机网页和安卓底部面板），关掉就是拒绝；新设备那边输对码、或被拒绝，弹窗跟着关。被拒绝（或手动关掉）的只是那一次请求（设备加它当时的码）：同一台新设备再发请求，弹窗照样弹（以前要重启 app，2026-10-23）。
+- 受信任设备上，面对面批准的新设备自己弹出来（`lockPrompts` 的 `pairing`，见「新设备」）：在哪个 workspace 都弹，写明申请访问哪几个 workspace，只显示码和「拒绝」（桌面对话框，手机网页和安卓底部面板），关掉只是收起、码仍有效，点「拒绝」才作废；新设备那边输对码、或被拒绝，弹窗跟着关。被拒绝（或手动关掉）的只是那一次请求（设备加它当时的码）：同一台新设备再发请求，弹窗照样弹（以前要重启 app，2026-10-23）。
 - 手机网页（`web/src/mobile/Security.tsx`）和安卓（`screens/Security.kt`）同一套：设置里「安全」一行写现状（等你确认的件数标红），确认设备用底部面板。
 - 网页版设备 30 天到期，快到期（5 天内）在「成员和设备」里标出、可续期（`lock.renew`）。
 

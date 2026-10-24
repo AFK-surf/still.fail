@@ -24,6 +24,7 @@
 //                           pairCancel given up
 // Calls (lockPrompt.<name> {device}), on a new device showing this one's code (views/pair.ts):
 //   deny                    turned away
+//   hide                    its prompt closed: no longer shown, the code still good
 //
 // A station that refuses this device for the lock (`lock_unconfirmed`) is not asked again until the lock moves on
 // (someone confirmed something): what waits for it then is tried at once.
@@ -479,12 +480,13 @@ export function promptsView(inner: Inner): J {
   return { pairing: pairs.shown(inner) };
 }
 
-/// A `lockPrompt.*` call: `deny {device}`, a new device showing this one's code turned away (views/pair.ts); `state`,
-/// the topic's value (tests, scripts).
+/// A `lockPrompt.*` call: `deny {device}`, a new device showing this one's code turned away (views/pair.ts); `hide
+/// {device}`, its prompt closed; `state`, the topic's value (tests, scripts).
 export function runPrompt(inner: Inner, name: string, params: Record<string, unknown>, _ctx: SpanContext | null): Effect.Effect<unknown, CoreError> {
   if (name === "state") return Effect.succeed(promptsView(inner));
-  if (name !== "deny") return Effect.fail(CoreError.invalid(`no lockPrompt call ${name}`));
-  pairs.deny(inner, str(params.device) ?? "");
+  if (name === "deny") pairs.deny(inner, str(params.device) ?? "");
+  else if (name === "hide") pairs.hide(inner, str(params.device) ?? "");
+  else return Effect.fail(CoreError.invalid(`no lockPrompt call ${name}`));
   return Effect.succeed(null);
 }
 
@@ -494,8 +496,9 @@ export const pairs: {
   shown(inner: Inner): J[];
   mine(inner: Inner, ws: string): J | null;
   deny(inner: Inner, device: string): void;
+  hide(inner: Inner, device: string): void;
   run(inner: Inner, name: string, ws: string, params: Record<string, unknown>): Effect.Effect<unknown, CoreError>;
-} = { shown: () => [], mine: () => null, deny: () => {}, run: () => Effect.fail(CoreError.invalid("no face-to-face approval here")) };
+} = { shown: () => [], mine: () => null, deny: () => {}, hide: () => {}, run: () => Effect.fail(CoreError.invalid("no face-to-face approval here")) };
 
 /// The draft of turning it on: the devices that asked for credentials, the stations asked whether they understand a
 /// lock (GET /lock: one from before answers 404).
