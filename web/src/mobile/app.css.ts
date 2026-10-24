@@ -107,6 +107,7 @@ export const mGrab = style({
 export const mSheetHead = style({ display: "flex", alignItems: "center", padding: "4px 18px 10px" });
 export const mMenuLayer = style({ zIndex: "55" });
 export const mMenu = style({
+  userSelect: "none", WebkitUserSelect: "none", WebkitTouchCallout: "none",
   position: "absolute", borderRadius: `calc(14px * ${vars.cornerScale})`, cornerShape: vars.cornerShape,
   background: "var(--m-surface)",
   boxShadow: "0 12px 36px rgba(0, 0, 0, .25)", overflow: "hidden", transformOrigin: "0 0", opacity: "0",
