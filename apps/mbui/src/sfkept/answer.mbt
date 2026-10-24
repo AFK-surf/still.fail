@@ -174,6 +174,23 @@ pub fn answer(name : String, params : Json, bytes : Bytes?) -> Result[(Json, Byt
       }
     }
     // where a chat's find goes (chat-find.ts): from what was found and where the reader is, which way, what shows
+    // what is written, read (refLinks.ts refAt, markBefore, marksIn, pastedRefs; pasted.ts): by the call and its words
+    "ref.at" | "ref.before" | "ref.marks" | "ref.pasted" | "paste.info" => {
+      let ask : Map[String, Json] = { "call": Json::string(name), "text": Json::string(word(params, "text")) }
+      match param(params, "caret") {
+        Some(Number(_, ..) as n) => ask["caret"] = n
+        _ => ()
+      }
+      match word(params, "here") {
+        "" => ()
+        h => ask["here"] = Json::string(h)
+      }
+      let key = Json::object(ask).stringify()
+      match kept("words").get(key) {
+        Some(v) => Some(Ok((v, None)))
+        None => not_kept({ "call": "words", "key": Json::string(key) })
+      }
+    }
     "chat.find.go" => {
       let key = params.stringify()
       match kept("chat.find.go").get(key) {

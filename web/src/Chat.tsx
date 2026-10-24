@@ -15,6 +15,7 @@ import { useApi, useChat, useChatSend, useLives, type ChatTo, type Outgoing, typ
 import { Mark } from "./brand.tsx";
 import { scopeOf, stationBase, usePerson, useStation } from "./station.tsx";
 import { chatOfLink } from "./chatRefs.ts";
+import { pastedRefs } from "../../client/core-ts/src/refLinks.ts";
 import { Hover, PathSession } from "./Peeks.tsx";
 import { Avatar, Button, Dialog, ElsewhereLogo, ICON, ModelLogo, Pill, Progress, Segmented, Spinner, Switch, SlackLogo, Time, Tip, transitionTo } from "./ui.tsx";
 import { ComposerSlot, useComposerHeight } from "./dock.tsx";
@@ -1916,17 +1917,15 @@ export function useComposerText({ draft, input, draftKey, sessionKey, locked, no
   const here = useStation().address;
   const pasteReferences = (e: ClipboardEvent<HTMLTextAreaElement>) => {
     const pasted = e.clipboardData.getData("text/plain");
-    const found = here.includes("/") ? [...pasted.matchAll(/\[([^\]\n]{1,120})\]\((\S+?)\)/g)].flatMap((m) => {
-      const chat = chatOfLink(m[2]!);
-      return chat && scopeOf(chat.station) === scopeOf(here) ? [{ m, chat }] : [];
-    }) : [];
+    // (the core's reading of what is pasted: refLinks.ts pastedRefs)
+    const found = pastedRefs(pasted, here);
     if (found.length === 0) return;
     e.preventDefault();
     const el = e.currentTarget;
     const [start, end, before] = [el.selectionStart, el.selectionEnd, el.value];
-    const marks = found.map(async ({ m, chat }) => {
+    const marks = found.map(async (chat) => {
       try {
-        const { mark } = (await core().call("chat.ref", { station: chat.station, id: chat.id, title: m[1], base })) as { mark: string };
+        const { mark } = (await core().call("chat.ref", { station: chat.station, id: chat.id, title: chat.title, base })) as { mark: string };
         // A link to its execution history: the mark kept as that link, not the chat's.
         if (chat.history) {
           const at = chat.station.indexOf("/");
@@ -1935,12 +1934,12 @@ export function useComposerText({ draft, input, draftKey, sessionKey, locked, no
         }
         return mark;
       } catch {
-        return m[0];
+        return pasted.slice(chat.start, chat.end);
       }
     });
     void Promise.all(marks).then((made) => {
       let text = "", at = 0;
-      found.forEach(({ m }, i) => { text += pasted.slice(at, m.index) + made[i]; at = m.index + m[0].length; });
+      found.forEach((r, i) => { text += pasted.slice(at, r.start) + made[i]; at = r.end; });
       text += pasted.slice(at);
       // Typed on meanwhile: at the end.
       const now = input.current?.value ?? "";

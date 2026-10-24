@@ -21,6 +21,7 @@ import { changed, tabsOf, type Change } from "../src/chat-tabs.ts";
 import { order, picked, setAside, shownIn, type Shown } from "../src/decisions.ts";
 import { findGo, type FindAt, type FindHit } from "../src/chat-find.ts";
 import { toolCall, toolResult, type ToolPart } from "../src/tool-step.ts";
+import { wordsAnswer } from "../src/words.ts";
 import { tr, type Lang } from "../src/i18n.ts";
 import { Browsing, withDrive, type BrowsingState, type Ordered } from "../src/drive-browse.ts";
 
@@ -43,6 +44,7 @@ type Kept = {
   "decisions.queue": Record<string, unknown>;
   "chat.find.go": Record<string, unknown>;
   "history.tool": Record<string, unknown>;
+  words: Record<string, unknown>;
   browse: Record<string, unknown>;
   railView: Record<string, unknown>;
 };
@@ -64,6 +66,9 @@ const queues = new Set(Object.keys(was["decisions.queue"] ?? {}));
 const goes = new Set(Object.keys(was["chat.find.go"] ?? {}));
 // What a history step is: by what was asked (its name, call, result, whether it failed, whether its words show).
 const tools = new Set(Object.keys(was["history.tool"] ?? {}));
+// What is written, read (ref.at, ref.before, ref.marks, ref.pasted, paste.info): by what was asked (the call, the
+// words, the caret, the station it is written on).
+const words = new Set(Object.keys(was.words ?? {}));
 // the prefs a rail is drawn from, as JSON (the app's runs say them in Chinese, as its fixtures are)
 const rails = new Set(Object.keys(was.railView ?? {}));
 const bookKey = (md: unknown, text: unknown) => `${md === true ? "md" : "txt"}\u0001${String(text ?? "")}`;
@@ -87,6 +92,7 @@ for (const file of outputs) {
     else if (ask.call === "decisions.queue") queues.add(String(ask.key ?? ""));
     else if (ask.call === "chat.find.go") goes.add(String(ask.key ?? ""));
     else if (ask.call === "history.tool") tools.add(String(ask.key ?? ""));
+    else if (ask.call === "words") words.add(String(ask.key ?? ""));
     else if (ask.call === "railView") rails.add(JSON.stringify(ask.prefs ?? {}));
     else if (ask.call === "browse") {
       const { call: _call, key, ...step } = ask;
@@ -97,7 +103,7 @@ for (const file of outputs) {
 
 // Each worked out by the core as it is now.
 const sorted = (keys: Iterable<string>) => [...keys].sort();
-const kept: Kept = { markdown: {}, "code.ink": {}, "reader.book": {}, "commands.find": {}, "chat.tabs": {}, "decisions.queue": {}, "chat.find.go": {}, "history.tool": {}, browse: {}, railView: {} };
+const kept: Kept = { markdown: {}, "code.ink": {}, "reader.book": {}, "commands.find": {}, "chat.tabs": {}, "decisions.queue": {}, "chat.find.go": {}, "history.tool": {}, words: {}, browse: {}, railView: {} };
 for (const text of sorted(texts)) kept.markdown[text] = markdown(text);
 for (const key of sorted(rails)) kept.railView[key] = railView(JSON.parse(key) as { rail?: unknown; rails?: unknown }, "zh");
 for (const key of sorted(codes)) {
@@ -143,6 +149,11 @@ for (const key of sorted(queues)) {
     const { at, next } = shownIn(was, keys);
     kept["decisions.queue"][key] = { order: keys, shown: at, was: next };
   }
+}
+for (const key of sorted(words)) {
+  const ask = JSON.parse(key) as { call?: unknown; text?: unknown; caret?: unknown; here?: unknown };
+  const text = String(ask.text ?? "");
+  kept.words[key] = wordsAnswer(String(ask.call ?? ""), text, typeof ask.caret === "number" ? ask.caret : text.length, String(ask.here ?? ""));
 }
 for (const key of sorted(goes)) {
   const ask = JSON.parse(key) as { hits?: FindHit[]; at?: FindAt | null; by?: -1 | 0 | 1; from?: number | null; to?: number | null; drawn?: Record<string, number> };

@@ -7,6 +7,7 @@ import { type AccountProvider, type AccountProviderFactory, type AccountSessions
 import * as brand from "./brand.ts";
 import * as commands from "./commands.ts";
 import { findGo } from "./chat-find.ts";
+import { wordsAnswer } from "./words.ts";
 import { toolCall, toolResult, type ToolPart } from "./tool-step.ts";
 import * as fonts from "./fonts.ts";
 import { parseCall, cancellable, callStation, counts, type Call } from "./core/calls.ts";
@@ -267,6 +268,10 @@ export class Core {
           result: c.result === null ? null : withMd(toolResult(c.name, c.call, c.result, c.failed, t)),
         }));
       };
+      handlers.words = (_i, call) => {
+        const c = call as Extract<Call, { kind: "words" }>;
+        return Effect.sync(() => wordsAnswer(c.what, c.text, c.caret, c.here));
+      };
       handlers.chatFindGo = (_i, call) => {
         const c = call as Extract<Call, { kind: "chatFindGo" }>;
         return Effect.sync(() => findGo(c.hits, c.at, c.by, c.from, c.to, c.drawn));
@@ -525,3 +530,4 @@ export function entriesOf(me: unknown): string[] {
 export function gone(): CoreError {
   return new CoreError("closed", t("core-misc.core.closed"));
 }
+
