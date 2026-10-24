@@ -895,6 +895,28 @@ void mb_host_set_full_screen(int32_t on) {
   if (w && (on != 0) != ((w.styleMask & NSWindowStyleMaskFullScreen) != 0)) [w toggleFullScreen:nil];
 }
 
+// How round the system draws the window's corners (@hostapi.window_corner), in points: what AppKit's own frame of it
+// says (16 on macOS 27, for a window with a title bar, one see-through over its content, one with a toolbar alike);
+// where it says nothing, by the system's version (16 since macOS 26, 10 before). None filling the screen.
+double mb_host_window_corner(void) {
+  NSWindow *w = the_view.window;
+  if (!w || (w.styleMask & NSWindowStyleMaskFullScreen)) return 0;
+  SEL s = NSSelectorFromString(@"_cornerRadius");
+  if ([w respondsToSelector:s]) {
+    NSMethodSignature *sig = [w methodSignatureForSelector:s];
+    if (strcmp(sig.methodReturnType, @encode(CGFloat)) == 0) {
+      NSInvocation *inv = [NSInvocation invocationWithMethodSignature:sig];
+      inv.selector = s;
+      inv.target = w;
+      [inv invoke];
+      CGFloat r = 0;
+      [inv getReturnValue:&r];
+      if (r >= 0 && r < 64) return r;
+    }
+  }
+  return NSProcessInfo.processInfo.operatingSystemVersion.majorVersion >= 26 ? 16 : 10;
+}
+
 // The press under way drags the window (the app's top row: @hostapi.window_drag); twice, what the system's title bar
 // does on a double click (zoom, minimize or nothing, as set in the system's settings).
 void mb_host_window_drag(void) {

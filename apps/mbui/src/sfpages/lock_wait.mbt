@@ -32,8 +32,9 @@ pub fn lock_wait_page(c : @ui.Ctx, core : Core, here : @settings.Here) -> Unit {
 ///|
 /// Asking to be confirmed, and the code typed (PairSteps): on the waiting page and on 设置 › 安全. Typing (a trusted
 /// device shows a code): 输入… over the six boxes, then 正在核对 (turning) or how many tries are left in red; finding
-/// one, turning; else what is so (none found, why it failed, not asked yet), 发送批准请求 under it.
-pub fn pair_steps(c : @ui.Ctx, core : Core, ws : String) -> Unit {
+/// one, turning; else what is so (none found, why it failed, not asked yet), 发送批准请求 under it (`in_card`: last on
+/// a page's card, in its foot corner, concentric with it: @sf.foot_reach).
+pub fn pair_steps(c : @ui.Ctx, core : Core, ws : String, in_card? : Bool = false) -> Unit {
   let lock = (core.topic)("lock", { "workspace": Json::string(ws) }).value
   let me = field(lock, "me")
   let pair = field(me, "pair")
@@ -92,7 +93,7 @@ pub fn pair_steps(c : @ui.Ctx, core : Core, ws : String) -> Unit {
         c.text(@sf.t("web-pages.security.requestFailed", args=[("error", failed)]), style=lock_failed) |> ignore
     }
     // (actions: its row, the button as wide as its words)
-    c.box(style=lock_actions, fn() {
+    c.box(style=if in_card { lock_actions.then(@sf.foot_reach(@sf.button_height())) } else { lock_actions }, fn() {
       if @sf.button(c, @sf.t("web-pages.security.request"), key="lock-pair/" + ws, tone=Primary) {
         @settings.lock_call(core, ws, "pair", @sf.t("web-pages.security.request"), [])
       }

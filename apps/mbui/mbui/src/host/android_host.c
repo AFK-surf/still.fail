@@ -2107,6 +2107,9 @@ int32_t mb_host_window_inset(void) { return 0; }
 // A window filling the screen (@hostapi.full_screen): not one of this host's.
 int32_t mb_host_full_screen(void) { return 0; }
 void mb_host_set_full_screen(int32_t on) { (void)on; }
+// How round the window's corners are (@hostapi.window_corner): the app fills the screen, whose own corners (40 and
+// more) are rounder than anything by them could follow within the corner rule's ranges: said as none.
+double mb_host_window_corner(void) { return 0; }
 void mb_host_window_drag(void) {}
 void mb_host_set_cursor(int32_t kind) { (void)kind; }
 void mb_host_set_badge(int32_t n) { (void)n; }

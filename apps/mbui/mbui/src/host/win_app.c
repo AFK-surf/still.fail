@@ -905,6 +905,22 @@ int32_t mb_host_window_inset(void) { return 0; }
 int32_t mb_host_full_screen(void) { return 0; }
 void mb_host_set_full_screen(int32_t on) { (void)on; }
 
+// How round the system draws the window's corners (@hostapi.window_corner): Windows 11's 8 (its build 22000 on: the
+// rounding DWM gives every window that does not ask otherwise), none maximised; Windows 10's are square.
+double mb_host_window_corner(void) {
+  static int build = -1;
+  if (build < 0) {
+    build = 0;
+    typedef LONG(WINAPI * rtl_get_version)(OSVERSIONINFOW *);
+    HMODULE nt = GetModuleHandleW(L"ntdll.dll");
+    rtl_get_version get = nt ? (rtl_get_version)(void *)GetProcAddress(nt, "RtlGetVersion") : NULL;
+    OSVERSIONINFOW v = {sizeof v};
+    if (get && get(&v) == 0) build = (int)v.dwBuildNumber;
+  }
+  if (build < 22000 || !hwnd || IsZoomed(hwnd)) return 0;
+  return 8;
+}
+
 // The press under way moves the window (the app's top row), as the title bar's would.
 void mb_host_window_drag(void) {
   ReleaseCapture();

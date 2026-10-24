@@ -9,13 +9,17 @@
 
 ///|
 /// The windows: the narrowest of each layout (squeeze_windows': a phone's, a finger's Medium, a desktop's Medium, a
-/// tablet's Large) and a wide desktop's (Large, its dialogs and pages at their widest).
+/// tablet's Large) and a wide desktop's (Large, its dialogs and pages at their widest); the desktop's on a Mac (its
+/// window's corners 16: what lies in them follows them) and on Windows 11 (8: too square to follow, so standing as
+/// alone, as in a square window) (test_window_corner).
 let corner_windows : Array[(String, Double, Double, Int, String)] = [
   ("phone", 360.0, 740.0, 2, ""),
   ("touch", 600.0, 900.0, 2, "medium"),
   ("desk", 600.0, 760.0, 0, ""),
+  ("desk-win", 600.0, 760.0, 3, ""),
   ("tablet", 840.0, 900.0, 2, "expanded"),
   ("wide", 1280.0, 800.0, 0, ""),
+  ("wide-win", 1280.0, 800.0, 3, ""),
 ]
 
 ///|

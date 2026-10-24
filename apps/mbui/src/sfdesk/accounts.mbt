@@ -364,7 +364,7 @@ fn profile_sign_in(c : @ui.Ctx, core : Core, address : String, p : Json?, needed
       if profile_edit.command == key && command != "" {
         @sf.copy_command(c, "profile-command/" + key, command, copy=@sf.t("common.copy"), copied=@sf.t("common.copied"))
       }
-      c.box(style=pf_card_foot, fn() {
+      c.box(style=pf_card_foot.then(@sf.foot_reach(@sf.button_height())), fn() {
         let starting = is_doing(core, ["profile.login"], on)
         if @sf.button(
             c,
@@ -409,7 +409,7 @@ fn profile_sign_in(c : @ui.Ctx, core : Core, address : String, p : Json?, needed
         then=fn(_) { sent() },
       )
     })
-    c.box(style=pf_card_foot, fn() {
+    c.box(style=pf_card_foot.then(@sf.foot_reach(@sf.button_height())), fn() {
       let cancelling = is_doing(core, ["profile.cancelLogin"], on)
       if @sf.button(c, @sf.t("common.cancel"), key="profile-login-cancel/" + key, tone=Ghost, busy=cancelling) {
         @settings.act(core, @sf.t("common.cancel"), "profile.cancelLogin", obj([("station", str(address)), ("id", str(id))]))
@@ -1154,7 +1154,7 @@ fn profile_models(c : @ui.Ctx, core : Core, address : String, p : Json?) -> Unit
 ///|
 /// The whole list of a profile's models to enable (ModelChecklist), by the core's series, a filter when many, all or
 /// none of what is shown, each tick saved at once (`profile.put` models).
-fn model_checklist(c : @ui.Ctx, core : Core, address : String, p : Json?) -> Unit {
+fn model_checklist(c : @ui.Ctx, core : Core, address : String, p : Json?, head? : Bool = false) -> Unit {
   let id = text(p, "id")
   let key = address + "/" + id
   let enabled = strings(p, "models")
@@ -1180,26 +1180,32 @@ fn model_checklist(c : @ui.Ctx, core : Core, address : String, p : Json?) -> Uni
     )
   }
   c.box(style=pf_pool, fn() {
-    // (all and none go on under the filter where the two have not the room)
-    c.box(style=pf_pool_tools, flow=true, fn() {
-      if all.length() > 10 {
+    // (all and none together, going on under the filter where the two have not the room; `head`: first on its card,
+    // the filter in its top corner, concentric with it (@sf.head_reach), the two back where the card's words stand)
+    let filtered = all.length() > 10
+    let reach = head && filtered
+    c.box(style=if reach { pf_pool_tools.then(@sf.head_reach(@sf.input_height)) } else { pf_pool_tools }, flow=true, fn() {
+      if filtered {
         c.box(style=pf_pool_filter, fn() {
           @sf.input(c, "profile-filter/" + key, placeholder=@sf.t("web-pages.profiles.filter"), field=filter) |> ignore
         })
         |> ignore
       }
-      if text_toggle(c, "profile-all/" + key, if q != "" { @sf.t("web-pages.profiles.selectFiltered") } else { @sf.t("web-pages.settings.members.all") }, busy) {
-        let next = enabled.copy()
-        for m in shown {
-          if !next.contains(m) {
-            next.push(m)
+      c.box(style=if reach { pf_pool_toggles.then(@sf.head_back(@sf.input_height)) } else { pf_pool_toggles }, fn() {
+        if text_toggle(c, "profile-all/" + key, if q != "" { @sf.t("web-pages.profiles.selectFiltered") } else { @sf.t("web-pages.settings.members.all") }, busy) {
+          let next = enabled.copy()
+          for m in shown {
+            if !next.contains(m) {
+              next.push(m)
+            }
           }
+          commit(next)
         }
-        commit(next)
-      }
-      if text_toggle(c, "profile-none/" + key, if q != "" { @sf.t("web-pages.profiles.unselectFiltered") } else { @sf.t("web-pages.settings.members.none") }, busy) {
-        commit(enabled.filter(fn(m) { !shown.contains(m) }))
-      }
+        if text_toggle(c, "profile-none/" + key, if q != "" { @sf.t("web-pages.profiles.unselectFiltered") } else { @sf.t("web-pages.settings.members.none") }, busy) {
+          commit(enabled.filter(fn(m) { !shown.contains(m) }))
+        }
+      })
+      |> ignore
     })
     |> ignore
     for s in items(p, "series") {
@@ -1276,8 +1282,9 @@ fn text_toggle(c : @ui.Ctx, key : String, words : String, disabled : Bool) -> Bo
 }
 
 ///|
-/// A model named by hand (AddModel), for a provider that does not list them all.
-fn add_model(c : @ui.Ctx, core : Core, address : String, id : String) -> Unit {
+/// A model named by hand (AddModel), for a provider that does not list them all; `foot`: last on its card, its field and
+/// button in its foot corners, concentric with them (@sf.foot_reach).
+fn add_model(c : @ui.Ctx, core : Core, address : String, id : String, foot? : Bool = false) -> Unit {
   let f = profile_field("add-model/" + address + "/" + id)
   let adding = is_doing(core, ["profile.addModel"], [("station", address), ("id", id)])
   let add = fn() {
@@ -1287,7 +1294,7 @@ fn add_model(c : @ui.Ctx, core : Core, address : String, id : String) -> Unit {
       f.set("")
     }
   }
-  c.box(style=pf_input_row, fn() {
+  c.box(style=if foot { pf_input_row.then(@sf.foot_reach(@sf.button_height(), start=@sf.input_height)) } else { pf_input_row }, fn() {
     c.box(style=pf_input_grow, fn() {
       if @sf.input(c, "profile-add-model/" + address + "/" + id, placeholder=@sf.t("web-pages.profiles.addModelPlaceholder"), field=f).submitted {
         add()
@@ -1718,6 +1725,11 @@ let pf_pool : @ui.Style = @ui.css("w=Full gap=S3")
 let pf_pool_tools : @ui.Style = @ui.css("row w=Full gap=S3 align=ACenter")
 
 ///|
+/// Its all and none, one beside the other (each 4 in: pf_toggle), moving as one.
+// kept across runs: a value (no field of it changes)
+let pf_pool_toggles : @ui.Style = @ui.css("row gap=S3 align=ACenter")
+
+///|
 // kept across runs: a value (no field of it changes)
 let pf_pool_filter : @ui.Style = @ui.css("w=S60")
 
@@ -1831,12 +1843,15 @@ fn pick_models_page(c : @ui.Ctx, core : Core, here : Here, frame : PageFrame, ad
           )
           |> ignore
         } else {
+          // (narrow, on a card of its own: what is first and last on it in its corners, unless a failure is said under it)
+          let carded = look is Narrow
+          let foot = carded && failed_of(core, ["profile.put"], [("station", address), ("id", text(p, "id"))]) is None
           c.box(style=pf_models_body, fn() {
             if listed {
-              model_checklist(c, core, address, p)
+              model_checklist(c, core, address, p, head=carded)
             }
             if flag(p, "canAddModel") {
-              add_model(c, core, address, id)
+              add_model(c, core, address, id, foot~)
             }
           })
           |> ignore
@@ -1918,12 +1933,14 @@ fn profile_models_page(c : @ui.Ctx, core : Core, here : Here, frame : PageFrame,
       fn() { look_note(c, look, @sf.t("android-settings.models.note")) },
       fn() {
         models_body(c, core, look, address, p, fn() {
+          let carded = look is Narrow
+          let foot = carded && failed_of(core, ["profile.put"], [("station", address), ("id", text(p, "id"))]) is None
           c.box(style=pf_models_body, fn() {
             if items(p, "available").length() > 0 {
-              model_checklist(c, core, address, p)
+              model_checklist(c, core, address, p, head=carded)
             }
             if flag(p, "canAddModel") {
-              add_model(c, core, address, id)
+              add_model(c, core, address, id, foot~)
             }
           })
           |> ignore

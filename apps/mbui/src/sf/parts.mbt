@@ -495,26 +495,11 @@ pub fn page_head(
 }
 
 ///|
-/// A page card of words (pages.css.ts card): card_pad in from every side,
-/// its corner 22, or 38 with a solid button in its corner (`button_corner`).
-pub fn card(
-  c : @ui.Ctx,
-  button_corner? : Bool = false,
-  gap? : Double = 14.0,
-  body : () -> Unit,
-) -> Int {
+/// A page card of words (pages.css.ts card): card_pad in from every side, round by the ladder's card step; a solid
+/// button in its foot corner stands there itself (foot_reach), its corner the card's whatever is in it.
+pub fn card(c : @ui.Ctx, gap? : Double = 14.0, body : () -> Unit) -> Int {
   let t = theme()
-  c.box(
-    pad=card_pad,
-    gap~,
-    bg=t.p.card,
-    radius=if button_corner {
-      card_pad + button_h / 2.0
-    } else {
-      card_corner
-    },
-    body,
-  )
+  c.box(pad=card_pad, gap~, bg=t.p.card, radius=card_corner, body)
 }
 
 ///|
@@ -1700,6 +1685,10 @@ let input_size : Double = 14.0
 let input_line : Double = 20.0
 
 ///|
+/// A one-line field's height (input_box's min_h, S9), for what stands it concentric in a corner.
+pub let input_height : Double = 36.0
+
+///|
 // kept across runs: a value (no field of it changes)
 let input_box : @ui.Style = @ui.css(
   #|row w=Full min_h=S9 px=S4 py=S1_5 radius=Full bg=Surface border=B1 border_color=Border align=ACenter
@@ -2140,6 +2129,23 @@ let panel_label_at : @ui.Style = @ui.css("w=Full px=S2_5 pt=S1_5 pb=S0_5")
 let panel_text_box : @ui.Style = @ui.css("w=Full px=S2_5")
 
 ///|
+/// A small panel's foot with a pill at its end (its one thing to do), or at both its ends (`panel_foot_ends`: who runs
+/// it at its start, buttons at its end): each in its foot corner, as far in as makes a pill concentric with it, past the
+/// panel's padding; its words where they are.
+// kept across runs: a value (no field of it changes)
+pub let panel_foot_end : @ui.Style = @ui.style(
+  pr=capsule_room(r_menu, panel_pill, less=panel_pad),
+  pb=capsule_room(r_menu, panel_pill, less=panel_pad),
+)
+
+///|
+// kept across runs: a value (no field of it changes)
+pub let panel_foot_ends : @ui.Style = @ui.style(
+  px=capsule_room(r_menu, panel_pill, less=panel_pad),
+  pb=capsule_room(r_menu, panel_pill, less=panel_pad),
+)
+
+///|
 // kept across runs: a value (no field of it changes)
 let panel_foot_box : @ui.Style = @ui.style(
   row=true,
@@ -2559,10 +2565,9 @@ pub fn resize_handle(
 // A card of options (SettingParts.kt DecisionOptions; Decisions.css.ts options, choice)
 
 ///|
-/// How far in the card of options' rows stand, how far a row's number stands in it, its disc's size: the first disc is
-/// in the card's corner, and the card's corner is drawn round it (docs/ui-panels.md: a whole circle stays round, the
-/// container follows it).
-let options_card_pad : Double = 8.0
+/// How far in the card of options' rows stand (the ladder's inset: round by its next step, 18, in the card's corners),
+/// how far a row's number stands in it (concentric with the row: its corner less the disc's half), its disc's size.
+let options_card_pad : Double = corner_inset
 
 ///|
 let options_row_pad : Double = 7.0
@@ -2609,16 +2614,18 @@ fn options_w(options : Array[(String, String, Bool)], ot : OptionType, wide : Bo
     words = dmax(words, @ui.text_advance(o.0, size=ot.label, weight=500))
     words = dmax(words, @ui.text_advance(o.1, size=ot.detail, weight=400))
   }
-  // (the card's 8 each side, the row's number in by 8 and 12 after it, the row's 12 at its end)
+  // (the card's inset each side, the row's number in by 8 and 12 after it, the row's 12 at its end)
   Px(dmin(room, dmax(options_least_wide, options_card_pad * 2.0 + ot.pad_in + ot.disc + 12.0 + words + 12.0)).ceil())
 }
 
 ///|
-let options_card_radius : Double = around(options_card_pad + options_row_pad, option_disc / 2.0)
+/// The card's corner: a card's of the ladder, its rows the ladder's inset in round by its next step (18) and their
+/// discs concentric with them (as far in as their half less that: the row's pad_in).
+let options_card_radius : Double = card_corner
 
 ///|
-/// A card of options (SettingParts.kt DecisionOptions): each a row to be pressed (its ground under the finger 8 in
-/// from the card's edge, rounded 18), its number in a disc (the one recommended in the accent), its label and what it
+/// A card of options (SettingParts.kt DecisionOptions): each a row to be pressed (its ground under the finger the
+/// ladder's inset in from the card's edge, rounded 18), its number in a disc (the one recommended in the accent), its label and what it
 /// leads to (`options`: each its label, its detail, whether recommended); half there when not `enabled`, a spinner on
 /// the one being answered (`busy`, none pressed meanwhile; `chosen` stays whole). The wide frame's as the web's (`wide`:
 /// as wide as what it says, `room` at most, on the text at 5%, its row's ground under the pointer). The option

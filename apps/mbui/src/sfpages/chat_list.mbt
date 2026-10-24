@@ -624,7 +624,7 @@ let float_count : @ui.TextStyle = @ui.text_style(size=Xs, weight=Medium, color=F
 /// The composer's width on a chat's page (dock.css.ts, the chat's: the column and the capsule's curve each side, 760
 /// and 22 each side at most, 12 clear of the pane's edges).
 pub fn composer_width(pane : Double) -> Double {
-  dmin(pane - 2.0 * composer_side, composer_most)
+  dmin(pane - 2.0 * composer_side(), composer_most)
 }
 
 ///|
@@ -632,7 +632,10 @@ pub fn composer_width(pane : Double) -> Double {
 let composer_most : Double = 804.0
 
 ///|
-pub let composer_side : Double = @sf.corner_inset
+/// (In a panel of its own, as far in as makes its box concentric with the panel's foot corners: @sf.pane_foot_in.)
+pub fn composer_side() -> Double {
+  @sf.pane_foot_in(@sf.card_corner)
+}
 
 ///|
 /// What row `i` moves for when what comes in over it pushes it down: how many rows are over it (one come in over it,

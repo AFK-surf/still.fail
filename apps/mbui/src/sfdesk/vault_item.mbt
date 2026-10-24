@@ -76,7 +76,8 @@ fn vault_item_page(c : @ui.Ctx, core : Core, here : Here, frame : PageFrame, vau
       look_card(c, look, fn() {
         c.text(@sf.t("web-pages.vault.risk.title"), style=vi_risk_title) |> ignore
         c.text(@sf.t("web-pages.vault.risk.body", args=[("station", text(vv, "stationName"))]), style=desk_muted) |> ignore
-        c.box(style=pf_card_foot, fn() {
+        // (its button in its foot corner, concentric with it)
+        c.box(style=pf_card_foot.then(@sf.foot_reach(@sf.button_height())), fn() {
           if @sf.button(c, @sf.t("web-pages.vault.lib.turnOn"), key=key + "/lock", tone=Primary) {
             (core.push)(Security)
           }

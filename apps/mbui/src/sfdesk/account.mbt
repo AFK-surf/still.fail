@@ -251,27 +251,17 @@ fn acc_devices(c : @ui.Ctx, core : Core, look : Look, here : Here) -> Unit {
                 "" => @sf.t("web-pages.settings.account.unnamedDevice")
                 n => n
               },
-              style=if narrow { narrow_row_title } else { desk_list_title },
+              style=if narrow { acc_device_narrow } else { desk_list_title },
             )
             |> ignore
-            if current && !narrow {
+            // (当前 after its name, wide and narrow alike: clear of its row's corners)
+            if current {
               you(c, @sf.t("web-pages.settings.account.here"))
             }
           })
           |> ignore
           let times = @sf.t("web-pages.settings.account.sessionTimes", args=[("time", stamp(dv, "created_at", "ago")), ("until", stamp(dv, "expires_at", "until"))])
-          if narrow {
-            // (narrow: 当前 before its times, clear of the card's corner)
-            c.box(style=acc_times_line, fn() {
-              if current {
-                you(c, @sf.t("web-pages.settings.account.here"))
-              }
-              c.text(times, style=acc_times_narrow) |> ignore
-            })
-            |> ignore
-          } else {
-            c.text(times, style=desk_muted) |> ignore
-          }
+          c.text(times, style=if narrow { @sf.secondary } else { desk_muted }) |> ignore
         })
         |> ignore
         if !current {
@@ -296,12 +286,9 @@ fn acc_devices(c : @ui.Ctx, core : Core, look : Look, here : Here) -> Unit {
 let acc_picture_narrow : Double = 46.0
 
 ///|
+/// (a device's name, narrow: as wide as it is, cut short where 当前 after it leaves it less)
 // kept across runs: a value (no field of it changes)
-let acc_times_narrow : @ui.TextStyle = @sf.secondary.then(@ui.text_style(w=@sf.grow))
-
-///|
-// kept across runs: a value (no field of it changes)
-let acc_times_line : @ui.Style = @ui.css("row w=Full gap=S1_5 align=ACenter")
+let acc_device_narrow : @ui.TextStyle = @sf.body.then(@sf.one_line).then(@ui.text_style(w=Cut))
 
 ///|
 // kept across runs: a value (no field of it changes)

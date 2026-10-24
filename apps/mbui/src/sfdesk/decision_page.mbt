@@ -314,7 +314,7 @@ fn zou_answer(c : @ui.Ctx, src : Source, w : Workspace, x : Json, draft : String
     offline: false,
   }
   let width = composer_width(c.width)
-  let foot = c.box(style=if @sf.in_pane() { zp_foot_tape } else { zp_foot }, fn() {
+  let foot = c.box(style=if @sf.in_pane() { zp_foot_tape() } else { zp_foot }, fn() {
     c.box(style=@ui.style(w=Fixed(width)), fn() {
       c.sized(width, c.height, fn() {
         @sfpages.composer(c, src, w, spec, fn(wr) {
@@ -683,10 +683,11 @@ let zp_assignee : @ui.TextStyle = @ui.text_style(size=Xs, leading=L5, color=Subt
 let zp_foot : @ui.Style = @ui.css("w=Full px=S8 pt=S2 pb=S4 align=ACenter")
 
 ///|
-/// In a panel of its own (the tape's): the composer as far from its foot as from its sides, in its foot corners
-/// concentric with it.
-// kept across runs: a value (no field of it changes)
-let zp_foot_tape : @ui.Style = zp_foot.then(@ui.style(pb=@sf.inset_room))
+/// In a panel of its own (the tape's): the composer as far from its foot as from its sides (composer_side), in its
+/// foot corners concentric with it.
+fn zp_foot_tape() -> @ui.Style {
+  zp_foot.then(@ui.style(pb=@sf.room_of(composer_side())))
+}
 
 ///|
 /// The way to its chat (elsewhere): the column's width, 38 high, 14 in, on the chips' grey, 13 medium.
