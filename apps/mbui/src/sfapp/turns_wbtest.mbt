@@ -27,6 +27,7 @@ test "turns: a row comes in at once when none plays; a change asked after it wai
     },
     w=100.0,
     h=100.0,
+    platform=2,
   )
   t.draw()
   t.draw()
@@ -66,6 +67,7 @@ test "turns: the next waits for the list at rest (its glide's declared end), not
     },
     w=100.0,
     h=100.0,
+    platform=2,
   )
   t.draw()
   t.draw()
@@ -86,7 +88,7 @@ test "a decision answered: its options close in their turn after the answer has 
   let src = fixture("chat")
   open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
   open_fixture("chat")
-  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0)
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0, platform=2)
   t.run_for(@ui.nav_push_ms)
   t.move(195.0, 400.0)
   for _ in 0..<6 {
@@ -140,6 +142,7 @@ test "turns: words sent wait for nothing (a row before them, a list never at res
     },
     w=100.0,
     h=100.0,
+    platform=2,
   )
   t.draw()
   t.draw()

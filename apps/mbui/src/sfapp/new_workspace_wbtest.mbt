@@ -34,7 +34,7 @@ fn ws_sheet_core(calls : Array[(String, Json)], invited? : Bool = false) -> @ui.
       }
     },
   }
-  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0)
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0, platform=2)
   // the workspaces' sheet, as its name on Home opens it
   raise_sheet(Workspaces)
   t.frame()

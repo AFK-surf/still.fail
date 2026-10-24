@@ -1885,13 +1885,14 @@ fn composer_bar(
   }
   let k = ct()
   let wide = wide_on.val
-  // in the wide frame grey, its ground and the text's ink under the pointer, its tip with its keys (Chat.tsx
-  // ComposerTools, Chat.css.ts attachBtn)
-  if wide && !no_files {
+  // in the wide frame grey; pointed at with a mouse, in any layout, its ground and the text's ink under the pointer,
+  // its tip with its keys (Chat.tsx ComposerTools, Chat.css.ts attachBtn)
+  let mouse = @ui.pointing() is Mouse
+  if mouse && !no_files {
     c.cursor(plus, Hand)
     @sf.tip(c, "composer/plus", plus, tr("web-main.composer.attach"), shortcut="composer.file")
   }
-  let plus_hot = wide && !no_files && c.lit(plus)
+  let plus_hot = mouse && !no_files && c.lit(plus)
   let plus_button = fn() {
     let b = c.box(
       w=Px(k.button),
@@ -1924,9 +1925,9 @@ fn composer_bar(
     // not ready: the ink faint over the capsule's own ground, its arrow that ground (Composer.kt: 18% ink over
     // C.surface, the phone's canvas; the web's over --raised on a desktop's width)
     let ground = if t.narrow { t.p.canvas } else { t.p.raised }
-    // (in the wide frame its ink a step lighter under the pointer: Chat.css.ts sendBtn, the text at 82%)
-    let hot = wide && ready && c.lit(send)
-    if wide && ready {
+    // (its ink a step lighter under a mouse's pointer, in any layout: Chat.css.ts sendBtn, the text at 82%)
+    let hot = mouse && ready && c.lit(send)
+    if mouse && ready {
       c.cursor(send, Hand)
     }
     let b = c.box(
@@ -1997,10 +1998,8 @@ fn composer_bar(
           placeholder_color=@sf.alpha(t.p.subtle, hint.get()),
           caret_color=t.p.accent,
           // pointed at with a mouse (a keyboard at hand) Enter sends and ⇧Enter is a new line; with a finger (the
-          // screen's keyboard) Enter is a new line, whatever the frame (the web's `hover: hover`, mobile/Chat.tsx).
-          // (The phone's layout keeps its new line, a mouse in a narrow desktop window too: its pages are the
-          // phone's, the phone's tests a desktop's system.)
-          enter_sends=wide_on.val && @ui.pointing() is Mouse,
+          // screen's keyboard) Enter is a new line, whatever the layout (the web's `hover: hover`, mobile/Chat.tsx)
+          enter_sends=@ui.pointing() is Mouse,
           paste_limit=if no_files { 0 } else { @sfbase.paste_threshold(c, src) },
           // ⌘V with a picture on the clipboard: it, as a file (Chat.tsx onPaste: the clipboard's files)
           pictures=!no_files,

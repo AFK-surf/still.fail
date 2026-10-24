@@ -1,6 +1,7 @@
 import {
   "stillfail/core",
   "stillfail/sfapp",
+  "stillfail/sf",
   "stillfail/sfcore",
   "stillfail/sfkept",
   "mbui/ui",

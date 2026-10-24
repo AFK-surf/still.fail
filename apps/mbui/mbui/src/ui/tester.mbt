@@ -149,7 +149,9 @@ fn leaked_state() -> Array[String] {
 /// it runs (hostread.mbt): the system dark, the window's buttons in its top
 /// row, environment variables, the build's version code.
 /// `platform`: the system it plays, as @hostapi.platform has them (0 macOS,
-/// 1 iOS, 2 Android: how lists scroll). `seed`: the order the runtime's ready
+/// 1 iOS, 2 Android: how lists scroll). `pointing`: what the person points with (@ui.pointing), by default the
+/// system's (a finger on iOS and Android): a run told on one system and replayed as it was (its core told that
+/// system) by the hand it was made with. `seed`: the order the runtime's ready
 /// fibers run in is drawn from it (fx.mbt; without, the order they became ready).
 /// `text`: a real host's text as it kept it (MBUI_TEXT_RECORD's lines, textrec.mbt): its metrics, shaping and glyphs
 /// in place of the fake host's. `scale`: device pixels a point. `time`: the clock before the first frame (drawn 16 ms
@@ -175,6 +177,7 @@ pub fn Tester::new(
   app_version? : Int = 0,
   images? : Array[(String, Int, Int)] = [],
   platform? : Int = 0,
+  pointing? : Pointing,
   seed? : Int,
   text? : String,
   scale? : Double = 2.0,
@@ -215,6 +218,10 @@ pub fn Tester::new(
     clipboard_image: -1,
     back_on: false,
     platform,
+    pointing: match pointing {
+      Some(p) => p
+      None => platform_pointing(platform)
+    },
     reduce_transparency: false,
     reduce_motion: false,
     logs: [],

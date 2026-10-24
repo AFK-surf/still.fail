@@ -3,7 +3,7 @@
 fn tester(mode : String) -> @ui.Tester {
   reset()
   let src = fixture(mode)
-  @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0)
+  @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0, platform=2)
 }
 
 ///|
@@ -35,7 +35,7 @@ test "signed out in a desktop's window: 登录或注册 alone, no wider than the
   assert_eq(pressed.val, 1)
   // a phone's: as wide as the page less its sides
   reset()
-  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0)
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0, platform=2)
   let (x, y, w, h) = t.rect_of("登录或注册").unwrap()
   t.tap(x + w / 2.0 + 160.0, y + h / 2.0)
   assert_eq(pressed.val, 2)
@@ -218,6 +218,7 @@ test "a state line's lead is the core's: an icon in its words' place with what f
     },
     w=390.0,
     h=120.0,
+    platform=2,
   )
   t.draw()
   assert_true(t.find("看一下") is Some(_))
@@ -240,14 +241,15 @@ test "Java's hashCode" {
 fn hold_row(t : @ui.Tester, title : String) -> Unit {
   let (x, y) = t.find(title).unwrap()
   t.press_at(x, y)
-  t.run_for(hold_ms)
+  // (a finger's press in a list shows a moment after it goes down: @ui.tap_indication_ms)
+  t.run_for(@ui.tap_indication_ms + hold_ms)
   t.release(x, y)
 }
 
 ///|
 test "a row held long: its menu (固定, 重命名, 复制会话链接, 归档), the chat not opened; 重命名 its sheet" {
   let calls : Array[Made] = []
-  let t = wide_tester(calls, w=390.0, h=844.0)
+  let t = wide_tester(calls, w=390.0, h=844.0, platform=2)
   hold_row(t, "夜里的构建又失败了")
   assert_eq(app.nav.depth(), 1)
   // felt as it opened, once
@@ -265,7 +267,7 @@ test "a row held long: its menu (固定, 重命名, 复制会话链接, 归档),
 ///|
 test "a row's menu: 复制会话链接 copies its link, 固定 pins it (chat.pin)" {
   let calls : Array[Made] = []
-  let t = wide_tester(calls, w=390.0, h=844.0)
+  let t = wide_tester(calls, w=390.0, h=844.0, platform=2)
   hold_row(t, "夜里的构建又失败了")
   t.tap_text("复制会话链接")
   assert_true(t.clipboard().has_prefix("[夜里的构建又失败了]("))
@@ -283,7 +285,7 @@ test "a row's menu: 复制会话链接 copies its link, 固定 pins it (chat.pin
 ///|
 test "a chat keeping watch is archived only once asked, in the core's words" {
   let calls : Array[Made] = []
-  let t = wide_tester(calls, w=390.0, h=844.0)
+  let t = wide_tester(calls, w=390.0, h=844.0, platform=2)
   hold_row(t, "盯着 CI，绿了告诉我")
   // the menu's last item, a row (45) under 复制会话链接
   let (lx, ly) = t.find("复制会话链接").unwrap()
@@ -300,7 +302,7 @@ test "a chat keeping watch is archived only once asked, in the core's words" {
 ///|
 test "a row with nothing left in it, swiped left past a third: off, then archived (chat.archive); a short swipe archives nothing" {
   let calls : Array[Made] = []
-  let t = wide_tester(calls, w=390.0, h=844.0)
+  let t = wide_tester(calls, w=390.0, h=844.0, platform=2)
   t.scroll_to(12)
   t.draw()
   let (_, y) = t.find("把旧的截图都换成新的").unwrap()
@@ -359,6 +361,7 @@ test "a row's state line in red while a message of the viewer's in it did not go
     },
     w=390.0,
     h=40.0,
+    platform=2,
   )
   t.draw()
   assert_true(t.drawn_glyphs().length() > 0)
@@ -370,6 +373,7 @@ test "a row's state line in red while a message of the viewer's in it did not go
     },
     w=390.0,
     h=40.0,
+    platform=2,
   )
   t2.draw()
   assert_true(t2.drawn_glyphs().iter().all(fn(g) { g.2 == muted.val }))
@@ -392,7 +396,7 @@ test "the filter's other lists read once its menu opens; one picked slides in ov
       (base.topic)(name, params)
     },
   }
-  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0)
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0, platform=2)
   t.draw()
   let mine = fn() { read.iter().any(fn(k) { k.contains("\"mine\":true") }) }
   assert_false(mine())

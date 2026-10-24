@@ -205,6 +205,7 @@ test "the notch's icon swaps with a short scale and fade while it stays open; cl
     fn(c) { p.val = show_icon(c, face.val, out.val) },
     w=390.0,
     h=844.0,
+    platform=2,
   )
   t.draw()
   assert_eq(m_face.val, "ling")

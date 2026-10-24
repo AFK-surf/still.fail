@@ -70,7 +70,7 @@ test "downloads: one the core has all here is taken once, read off the device a 
   let calls : Array[(String, Json)] = []
   let bytes = Bytes::makei(10, fn(i) { (i * 7).to_byte() })
   let src = downloads_src("home", [listed("dist.zip", "ready", 10.0, 10.0, "已下载 · 10 B")], calls, bytes~, part=4)
-  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0)
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0, platform=2)
   t.frame()
   t.frame()
   t.frame()
@@ -99,7 +99,7 @@ test "downloads: a file's card says how far the core has downloaded it in its si
   let going = listed("发布包.zip", "going", 22020096.0, 52428800.0, "正在下载 42% · 50 MB")
   let src = downloads_src("chat-download", [going], calls)
   open_fixture_mode("chat-download")
-  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0)
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0, platform=2)
   t.run_for(@ui.nav_push_ms)
   assert_true(t.find("正在下载 42% · 50 MB") is Some(_), msg=t.words().map(fn(w) { w.0 }).join("|"))
   // (in its size's place)
@@ -130,7 +130,7 @@ test "downloads: a video's block in the chat says how far the core has downloade
   let going = listed("演示录屏.mp4", "waiting", 1048576.0, 5242880.0, "等待连接 station · 20%")
   let src = downloads_src("chat-download", [going], calls)
   open_fixture_mode("chat-download")
-  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0)
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0, platform=2)
   t.run_for(@ui.nav_push_ms)
   assert_true(t.find("等待连接 station · 20%") is Some(_), msg=t.words().map(fn(w) { w.0 }).join("|"))
 }
@@ -170,7 +170,7 @@ test "downloads: 下载 on a file told of asks the core to download it, which go
   let calls : Array[(String, Json)] = []
   let src = downloads_src("home", [], calls)
   let file : Json = { "name": "dist.zip", "path": "work/s-c1/dist.zip", "size": 52428800.0, "owner": "s-c1" }
-  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0)
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0, platform=2)
   open_preview("ws1/st1", "s-c1", attachment_of(file))
   t.run_for(@ui.nav_push_ms)
   let (x, y) = t.find("下载").unwrap()
@@ -191,7 +191,7 @@ test "downloads: while the core downloads a file told of, the preview says how f
   let calls : Array[(String, Json)] = []
   let src = downloads_src("home", [listed("dist.zip", "going", 1048576.0, 52428800.0, "正在下载 2% · 50 MB")], calls)
   let file : Json = { "name": "dist.zip", "path": "work/s-c1/dist.zip", "size": 52428800.0, "owner": "s-c1" }
-  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0)
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0, platform=2)
   open_preview("ws1/st1", "s-c1", attachment_of(file))
   t.run_for(@ui.nav_push_ms)
   assert_true(t.find("正在下载 2% · 50 MB") is Some(_), msg=t.words().map(fn(w) { w.0 }).join("|"))
@@ -221,7 +221,7 @@ test "desk: a file's card has its name's extension right after its stem, not at 
 test "downloads: a drive's file downloading shows how far on its row; a folder being zipped for it, 0 while the station zips it" {
   reset()
   let src = fixture("drive-download")
-  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0)
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0, platform=2)
   open_fixture_mode("drive-download")
   t.run_for(@ui.nav_push_ms + 600.0)
   assert_true(t.find("40%") is Some(_), msg=t.words().map(fn(w) { w.0 }).join("|"))

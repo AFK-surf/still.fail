@@ -63,7 +63,7 @@ fn picking(
   fill? : Bool = true,
 ) -> Unit {
   match here.list {
-    Some(_) => @sfbase.pickable(c, ts, author, role, words, fill, @sfbase.mouse_picks(true), body)
+    Some(_) => @sfbase.pickable(c, ts, author, role, words, fill, @sfbase.mouse_picks(), body)
     None => body()
   }
 }

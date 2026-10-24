@@ -29,6 +29,8 @@ struct FakeHost {
   mut back_on : Bool
   // the system it plays (as @hostapi.platform: 0 macOS, 1 iOS, 2 Android)
   platform : Int
+  // what the person points with (Tester::new's `pointing`: by default its system's)
+  pointing : Pointing
   // the system asks for less transparency (glass drawn solid)
   mut reduce_transparency : Bool
   // the person's setting for motion: reduced (Tester::set_reduce_motion; or the environment's MBUI_REDUCE_MOTION=1)

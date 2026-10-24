@@ -82,9 +82,12 @@ pub fn Flow::start(
     )
   }
   // (and its host's answers as the run's gave them, where it kept them: a word's bounds as the system splits words)
+  // (on the system the run was on, its core told so; by the hand it was made with: a phone's window's runs, the
+  // phone's layout's, a finger's)
+  let pointing : @ui.Pointing = if w < @sf.medium_from { Finger } else { Mouse }
   let t = match r.text() {
-    Some(text) => @ui.Tester::new(app, w~, h~, env=r.env() + env, text~)
-    None => @ui.Tester::new(app, w~, h~, env=r.env() + env)
+    Some(text) => @ui.Tester::new(app, w~, h~, env=r.env() + env, text~, pointing~)
+    None => @ui.Tester::new(app, w~, h~, env=r.env() + env, pointing~)
   }
   // (which station this machine is, as the run's host said)
   if r.local_station() != "" {

@@ -4,7 +4,7 @@ fn chat_tester(mode : String) -> @ui.Tester {
   reset()
   let src = fixture(mode)
   open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
-  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0)
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0, platform=2)
   t.run_for(@ui.nav_push_ms)
   t
 }
@@ -156,7 +156,7 @@ test "images take their own proportions before they load" {
 test "a file card in the chat opens its preview" {
   reset()
   let src = fixture("chat")
-  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0)
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0, platform=2)
   open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
   // (the chat opened drawn at its moment, its push from there)
   t.draw()
@@ -253,6 +253,7 @@ test "a long title has what is left beside what follows it, which keeps its own 
     },
     w=390.0,
     h=200.0,
+    platform=2,
   )
   t.draw()
   let (tx, _, tw, _) = t.rect_of("端到端").unwrap()
@@ -275,7 +276,7 @@ test "a chat left lets go of all that holds its thread at the core: its view and
   }
   let r : ChatRef = { station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" }
   open_chat(r)
-  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0)
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0, platform=2)
   t.run_for(@ui.nav_push_ms)
   assert_eq(left, [])
   t.back()
@@ -305,7 +306,7 @@ test "left short of its end, a chat opens again where it was left, though the co
     },
   }
   let r : ChatRef = { station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" }
-  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0)
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0, platform=2)
   t.draw()
   open_chat(r)
   t.run_for(@ui.nav_push_ms)

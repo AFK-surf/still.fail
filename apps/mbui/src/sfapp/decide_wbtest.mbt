@@ -26,7 +26,7 @@ fn decide_core(calls : Array[Made], mode : String, wide? : Bool = false) -> @ui.
   let t = if wide {
     @ui.Tester::new(fn(c) { view(c, src) }, w=1280.0, h=800.0, platform=0)
   } else {
-    @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0)
+    @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0, platform=2)
   }
   // the pages opened slid in
   t.run_for(@ui.nav_push_ms)
@@ -334,7 +334,7 @@ test "接力到频道: the places the station's bots are in, one picked, relayed
   }
   open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
   open_fixture("chat-info")
-  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0)
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0, platform=2)
   t.run_for(@ui.nav_push_ms)
   t.tap_text("接力到频道…")
   assert_eq(named(calls, "chat.relayPlaces").length(), 1)

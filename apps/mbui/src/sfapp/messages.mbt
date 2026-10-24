@@ -349,6 +349,10 @@ fn said_head(c : @ui.Ctx, name : String, id : Int, key : String, time : Stamp?) 
         // one that opens something takes the accent under the pointer (Chat.css.ts msgAgent:hover)
         c.text(name, style=if id != 0 && c.lit(id) { wide_name_hot } else { wide_name }) |> ignore
       } else {
+        // (a mouse's pointer on one that opens something: the hand, as in the wide frame)
+        if id != 0 && @ui.pointing() is Mouse {
+          c.cursor(id, Hand)
+        }
         c.text(name, size=15.0, weight=650, color=k.name, wrap=false, line=21.0) |> ignore
       }
     })

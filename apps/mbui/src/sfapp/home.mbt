@@ -677,12 +677,20 @@ fn chat_row(
       (src.topic)("chat", chat_params(r)) |> ignore
     }
   }
-  // held hold_ms (a frame asked for when it will have been)
-  let held = @kit.after(c, "row-hold/" + row_name(item), pressed && app.held == id, hold_ms)
+  // held hold_ms by a finger (a frame asked for when it will have been); right clicked with a mouse (a mouse holds
+  // nothing: Ctx::menu_asked)
+  let finger = @ui.pointing() is Finger
+  let held = finger && @kit.after(c, "row-hold/" + row_name(item), pressed && app.held == id, hold_ms)
   if held {
     app.held_long = true
     // held long: what can be done to the chat (home_menu.mbt)
     row_held(c, id, item)
+  }
+  if !found {
+    match c.right_clicked(id) {
+      Some((x, _)) => row_menu(c, id, item, x) |> ignore
+      None => ()
+    }
   }
   if c.clicked(id) {
     // a long press is not a tap

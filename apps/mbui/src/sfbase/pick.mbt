@@ -45,11 +45,10 @@ pub fn pick_reset() -> Unit {
 }
 
 ///|
-/// Whether words are picked as a desktop's (a mouse's selection over the wide frame's page, its pill) rather than as a
-/// phone's (held, the handles, the bar): by the hand, a finger's the phone's way in any frame (the phone's frame has no
-/// mouse's selection: a mouse there holds too). `wide`: the desktop's frame.
-pub fn mouse_picks(wide : Bool) -> Bool {
-  wide && @ui.pointing() is Mouse
+/// Whether words are picked as a desktop's (a mouse's selection over the page, its pill) rather than as a phone's
+/// (held, the handles, the bar): by the hand alone, in any layout (@ui.pointing).
+pub fn mouse_picks() -> Bool {
+  @ui.pointing() is Mouse
 }
 
 ///|

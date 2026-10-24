@@ -995,11 +995,10 @@ pub fn code_block(c : @ui.Ctx, code : String, lang : String, colours? : String? 
     })
   // the copy key in the block's top right corner: as far from both edges, concentric with it; to a mouse over the code,
   // quiet (55%) until the pointer is on the block (Prose.css.ts codeBar), to a finger on a row of its own over it (it
-  // hovers over nothing: `pointer: coarse`), whatever the layout. (The phone's layout keeps the row, a mouse in a
-  // narrow desktop window too: its pages are the phone's, the phone's tests a desktop's system.)
+  // hovers over nothing: `pointer: coarse`), whatever the layout
   let block_radius = 12.0
   let key_inset = 4.0
-  let over = @ui.pointing() is Mouse && !t.narrow
+  let over = @ui.pointing() is Mouse
   let block = c.id("sf-code-block/" + code)
   let bar = fn() {
     c.box(

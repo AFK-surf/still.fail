@@ -19,7 +19,7 @@ fn picker_tester(asks : Array[Json], pending : Array[() -> Unit]) -> @ui.Tester 
     },
   }
   open_drive_fixture("files")
-  @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0)
+  @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0, platform=2)
 }
 
 ///|

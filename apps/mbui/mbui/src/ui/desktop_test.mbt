@@ -375,6 +375,18 @@ test "desktop: what the person points with is the system's: a finger on a phone'
 }
 
 ///|
+test "desktop: a Tester told the hand plays it on the system it says, which stays that system" {
+  let view = fn(c : @ui.Ctx) { c.box(w=Px(10.0), h=Px(10.0), fn() {  }) |> ignore }
+  // a run made on a desktop by a finger (a phone's layout's), replayed so: its core told it was on a desktop
+  let _ = @ui.Tester::new(view, platform=0, pointing=Finger)
+  assert_eq(@ui.pointing(), @ui.Finger)
+  assert_eq(@ui.platform(), 0)
+  let _ = @ui.Tester::new(view, platform=2, pointing=Mouse)
+  assert_eq(@ui.pointing(), @ui.Mouse)
+  assert_eq(@ui.platform(), 2)
+}
+
+///|
 test "desktop: a finger hovers over nothing, and lifted it is nowhere; a mouse hovers where it rests" {
   let seen : Ref[String] = { val: "" }
   let tapped_at : Array[Int] = []

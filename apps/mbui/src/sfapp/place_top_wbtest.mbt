@@ -8,7 +8,7 @@ fn place_tester(place : String) -> @ui.Tester {
   reset()
   let src = fixture("home")
   app.nav.replace(Place(place))
-  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=520.0)
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=520.0, platform=2)
   t.post(@hostapi.system_channel, "{\"bars\":{\"top\":24,\"bottom\":48,\"left\":0,\"right\":0}}")
   t.frame()
   t

@@ -105,7 +105,7 @@ test "a face kept here: given by where its files are the frame the prefs come, t
       (base.read_bytes)(name, params, done)
     },
   }
-  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0)
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0, platform=2)
   t.draw()
   assert_true(t.find("整理发布清单") is Some(_))
   assert_true(face_here("noto-sans-sc"))
@@ -132,7 +132,7 @@ test "a face's file the host cannot read where it is: had through the core inste
   }
   // (the app from the frame its host is set so)
   let on = Ref(false)
-  let t = @ui.Tester::new(fn(c) { if on.val { view(c, src) } }, w=390.0, h=844.0)
+  let t = @ui.Tester::new(fn(c) { if on.val { view(c, src) } }, w=390.0, h=844.0, platform=2)
   t.set_unreadable_font("/data/500")
   on.val = true
   t.draw()

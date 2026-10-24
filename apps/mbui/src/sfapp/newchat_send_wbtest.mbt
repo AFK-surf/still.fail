@@ -61,7 +61,7 @@ fn held_core(held : Map[String, () -> Unit], unread : Ref[Bool]) -> @ui.Tester {
       }
     },
   }
-  @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0)
+  @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0, platform=2)
 }
 
 ///|
@@ -175,7 +175,7 @@ test "a new chat's first words not sent (the chat not made): they leave the scre
     },
   }
   ignore(unread)
-  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0)
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0, platform=2)
   let words = "把发布说明写一下"
   new_chat_sent(t, words) |> ignore
   match held.get("newChat.create") {
@@ -223,7 +223,7 @@ fn reading_core(reading : Ref[Bool], made : Ref[Int]) -> @ui.Tester {
       }
     },
   }
-  @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0)
+  @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0, platform=2)
 }
 
 ///|
