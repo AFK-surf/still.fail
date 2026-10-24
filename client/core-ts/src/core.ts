@@ -260,6 +260,7 @@ export class Core {
         return Effect.sync(() => commands.find(c.query, c.offered, t));
       };
       const fontFiles = new FontFiles(inner.host, inner.store, () => get(inner.data.get({ topic: "prefs" }), "fonts"));
+      fonts.setKeptAt((sha256) => fontFiles.at(sha256));
       inner.router.owners.push(fontFiles);
       handlers.fonts = (_i, call) => fontFiles.run((call as Extract<Call, { kind: "fonts" }>).call);
       hooks.device = (_inner, facts) => inner.changelog.device(facts);

@@ -3077,6 +3077,11 @@ export interface FontFile {
 	bytes: number;
 	/** The hash of it unzipped. */
 	sha256: string;
+	/**
+	 * Where this device keeps it, unzipped, as a file its host reads there itself (a place's face only: font-files.ts);
+	 * absent where it keeps none, or not as a file.
+	 */
+	path?: string;
 }
 
 export interface FontFace {

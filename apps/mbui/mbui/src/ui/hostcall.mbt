@@ -69,6 +69,8 @@ struct FakeHost {
   /// faces, by face (@ui.face_add_family)
   mut local_fonts : String
   families_given : Map[Int, String]
+  /// the font files (by where they are) its host could not read as a font (Tester::set_unreadable_font)
+  unreadable_fonts : Array[String]
   /// the dock: whether there is one, the lines sent to it, whether it was stopped, its settings as kept
   mut dock_on : Bool
   dock_lines : Array[String]
@@ -538,7 +540,7 @@ fn h_glyphs_ahead(keys : FixedArray[Int], n : Int) -> Unit {
 fn h_face_add(face : Int, path : String, weight : Int) -> Bool {
   match fake.val {
     Some({ live: Some(l), .. }) => l.host.face_add(face, path, weight)
-    Some(_) => true
+    Some(f) => !f.unreadable_fonts.contains(path)
     None => @hostapi.face_add(face, path, weight)
   }
 }

@@ -83,20 +83,18 @@ test("a face's files are fetched once, how far said as they come, kept gzipped u
   await assert.rejects(run(r.files.fetch("comic-sans")));
 });
 
-test("a file kept unzipped, on a host that keeps values as files: said by where it is, not carried", async () => {
+test("where a file is kept, on a host that keeps values as files; its bytes still given by the call", async () => {
   const r = rig(() => ({ text: "lxgw-wenkai" }));
+  const first = fonts.faceOf("lxgw-wenkai")!.files[0];
+  // a host without files: nowhere
+  assert.equal(r.files.at(first.sha256), null);
   r.host.storagePath = (key) => (r.host.storage.has(key) ? `/data/${key}` : null);
-  const [first, second] = fonts.faceOf("lxgw-wenkai")!.files;
+  assert.equal(r.files.at(first.sha256), null);
   await run(r.files.fetch("lxgw-wenkai"));
-  // as fetched: its bytes, for the app to unzip and check
-  assert.deepEqual(((await run(r.files.file(first.sha256))) as Beside).value, { zipped: true });
+  assert.equal(r.files.at(first.sha256), `/data/fonts/file/${first.sha256}`);
   await run(r.files.keep(first.sha256, new Uint8Array([1, 2, 3])));
-  assert.deepEqual(await run(r.files.file(first.sha256)), { zipped: false, path: `/data/fonts/file/${first.sha256}` });
-  // the other one still as fetched
-  assert.deepEqual(((await run(r.files.file(second.sha256))) as Beside).value, { zipped: true });
-  // its file gone from under the core: its bytes asked for, so none (fetched again)
-  r.host.storage.delete(`fonts/file/${first.sha256}`);
-  await assert.rejects(run(r.files.file(first.sha256)));
+  const kept = (await run(r.files.file(first.sha256))) as Beside;
+  assert.deepEqual([kept.value, [...kept.bytes]], [{ zipped: false }, [1, 2, 3]]);
 });
 
 test("a fetch that fails says why until the face is fetched again; only the chosen faces' files stay", async () => {

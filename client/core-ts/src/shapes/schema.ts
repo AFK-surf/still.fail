@@ -1741,6 +1741,7 @@ export const SHAPES: Record<string, Shape> = {
     ["url", "String", { doc: "Where it is, gzipped." }],
     ["bytes", "i64", { client: "I54", doc: "Its size gzipped." }],
     ["sha256", "String", { doc: "The hash of it unzipped." }],
+    ["path", opt("String"), { doc: "Where this device keeps it, unzipped, as a file its host reads there itself (a place's face only: font-files.ts);\nabsent where it keeps none, or not as a file." }],
   ], { doc: "A face's file for the Android app." }),
   BadgeKinds: struct([
     ["on", "bool", { default: true, doc: "The badge shown at all." }],

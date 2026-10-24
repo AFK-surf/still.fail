@@ -181,6 +181,11 @@ export class WakingHost implements Host {
     if (inner.savedRead) this.savedRead = (at, start, end) => inner.savedRead!(at, start, end);
   }
 
+  /// Where a value is kept as a file: the device's, at once.
+  storagePath(key: string): string | null {
+    return this.inner.storagePath?.(key) ?? null;
+  }
+
   /// A loopback listener (a login's callback): the device's, nothing of a UI's to wait on.
   get listen(): Host["listen"] {
     const inner = this.inner;
