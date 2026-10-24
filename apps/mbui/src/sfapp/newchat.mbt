@@ -531,7 +531,7 @@ fn send_first(
     field=field_key,
     font=ct().font,
     line=ct().line,
-    desk=wide_on.val,
+    desk=false,
   )
   ref_field_put(d, "")
   d.files.clear()

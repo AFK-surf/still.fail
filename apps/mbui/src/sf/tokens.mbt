@@ -440,11 +440,13 @@ fn screen_layout(width : Double) -> Layout {
 }
 
 ///|
-/// The theme for this frame: a phone's or a tablet's always its own, a desktop's the narrow screen's where its window
-/// shows one page at a time (layout): call at the top of a view.
+/// The theme for this frame, by the hand (@ui.pointing), never what the system is: pointed at with a finger the phone's
+/// (its palette, its type a finger's size: Android's app, a tablet's too), with a mouse the web's. Laid out Small the
+/// phone's whatever the hand, as its pages are the phone's, which carry its palette in places (sfapp messages.mbt
+/// `ink`) until they and the web's are one (docs/architecture.md, the way there 4): call at the top of a view.
 pub fn begin(c : @ui.Ctx) -> Theme {
   let dark = dark_set.val.unwrap_or(false)
-  let narrow = touch_system() || layout(c.width) is Small
+  let narrow = @ui.pointing() is Finger || layout(c.width) is Small
   let p = match (narrow, dark) {
     (false, false) => wide_light
     (false, true) => wide_dark

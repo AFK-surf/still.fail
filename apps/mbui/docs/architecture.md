@@ -128,6 +128,13 @@ One shell. It arranges the same panes in every tier:
 
 1. **The axes read once.** This is the shell's work (the chat 按屏幕分三档布局). The hidden axes go: `wide_on`,
    `@settings.wide`, the viewer's `narrow`, the touch-system theme. Density follows the input.
+   - Done: `wide_on` is gone (the shell reads `@sf.layout` where it arranges, and the phone pages' wide branches,
+     never drawn, with it), and `@sf.begin`'s theme follows `@ui.pointing()`, not the system: a finger's the phone's, a
+     mouse's the web's; laid out Small still the phone's whatever the hand, as the phone's pages carry its palette in
+     places, until step 4 makes them one with the web's. A Tester or a program says the hand apart from its system
+     (`Tester::new(pointing=…)`, `@ui.set_pointing`: the phone's screens recorded on a Mac are a finger's).
+   - Left to the merges that rewrite their readers: `@settings.wide` (the settings pages, merged, go by their own
+     width) and the viewer host's `narrow` (the reader and the player, by the tier as the file viewer's frame is).
 2. **The presenters** land in the library, and the three sheet hosts and the desk's dialogs move onto them.
 3. **Navigation by what is opened,** with the pane table in the shell.
 4. **The pages merge, by area, in parallel,** once 2 has landed:

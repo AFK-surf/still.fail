@@ -39,13 +39,9 @@ fn list_gap() -> Double {
 
 ///|
 /// Where the chat's bar ends, from the list's top (the list runs on under it), and what the list keeps over its first
-/// row: 14 under the bar (Chat.kt); in the wide frame (its picking's bar: pick.mbt) the web's bar's.
+/// row: 14 under the bar (Chat.kt).
 fn bar_foot() -> Double {
-  if wide_on.val {
-    wide_bar_h
-  } else {
-    status_top() + chat_bar_h
-  }
+  status_top() + chat_bar_h
 }
 
 ///|

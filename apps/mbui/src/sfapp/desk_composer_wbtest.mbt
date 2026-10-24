@@ -8,7 +8,6 @@ fn desk_composer_tester(
   spec_of? : (ComposerFor) -> @sfdesk.ComposerSpec = default_spec,
 ) -> (@ui.Tester, Source) {
   reset()
-  wide_on.val = true
   let base = fixture("chat")
   let src : Source = {
     ..base,

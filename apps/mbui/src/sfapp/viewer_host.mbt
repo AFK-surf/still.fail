@@ -7,8 +7,8 @@
 /// What the app gives its viewers over `src`.
 fn viewer_host_of(c : @ui.Ctx, src : Source) -> @sf.ViewerHost {
   {
-    narrow: fn() { !wide_on.val },
-    room: fn() { if wide_on.val { (0.0, 0.0) } else { (status_top(), nav_foot()) } },
+    narrow: fn() { !@sfdesk.is_wide(c) },
+    room: fn() { if @sfdesk.is_wide(c) { (0.0, 0.0) } else { (status_top(), nav_foot()) } },
     // a phone's: the drive's reader sheet (drive_parts.mbt dv_sheet_frame)
     sheet: Some(fn(c, s) {
       dv_sheet_frame(

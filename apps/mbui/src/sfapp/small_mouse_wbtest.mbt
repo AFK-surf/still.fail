@@ -5,7 +5,7 @@
 test "small with a mouse: a chat's row right clicked opens its menu where it was clicked, the chat not opened" {
   let calls : Array[Made] = []
   let t = wide_tester(calls, w=390.0, h=844.0)
-  assert_false(wide_on.val)
+  assert_false(@sfdesk.is_wide(t.ctx()))
   let (x, y) = t.find("夜里的构建又失败了").unwrap()
   t.right_click(x, y)
   assert_true(t.find("复制会话链接") is Some(_), msg="\{t.drawn_text()}")
@@ -34,7 +34,7 @@ test "small with a mouse: a chat's row held is no long press, a click that opens
 test "small with a mouse: Enter sends what is typed (a keyboard at hand), as in the wide frame" {
   let calls : Array[Made] = []
   let t = fake_core(calls, platform=0)
-  assert_false(wide_on.val)
+  assert_false(@sfdesk.is_wide(t.ctx()))
   t.tap_text("发消息")
   t.type_text("第一行")
   t.enter()

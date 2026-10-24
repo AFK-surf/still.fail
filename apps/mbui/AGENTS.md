@@ -48,7 +48,7 @@ particular to this app:
   - Something both need moves down into `sfbase` or the library, once.
   - Logic is the core's, never a page's.
   - Words are `@sf.t` (the app's tables).
-  - Don't add a branch on `wide_on` or on the tier inside a page. A page that needs another arrangement asks its own
+  - Don't add a branch on the tier inside a page. A page that needs another arrangement asks its own
     width.
 
 ## What is checked, and where

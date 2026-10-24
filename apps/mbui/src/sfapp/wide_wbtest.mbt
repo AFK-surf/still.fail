@@ -29,7 +29,7 @@ fn wide_tester(
 test "wide: the rail, the chats' list beside it and a page in the rest; below the breakpoint the phone's Home" {
   let calls : Array[Made] = []
   let t = wide_tester(calls)
-  assert_true(wide_on.val)
+  assert_true(@sfdesk.is_wide(t.ctx()))
   // the list's band and its days
   assert_true(t.find("新建对话") is Some(_))
   assert_true(t.find("今天") is Some(_))
@@ -39,7 +39,7 @@ test "wide: the rail, the chats' list beside it and a page in the rest; below th
   assert_true(app.nav.top() == NewChat)
   // a phone's width: the phone's Home, the same stack
   t.resize(390.0, 844.0)
-  assert_false(wide_on.val)
+  assert_false(@sfdesk.is_wide(t.ctx()))
   assert_true(t.find("新建对话") is None)
 }
 

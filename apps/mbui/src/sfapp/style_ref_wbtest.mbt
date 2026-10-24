@@ -12,12 +12,23 @@ fn fnv(s : String) -> String {
 }
 
 ///|
+/// The hand a screen this wide is drawn for: a phone's width a finger's (the phone the screens are of), a desktop's
+/// a mouse's.
+fn hand_of(w : Double) -> @ui.Pointing {
+  if w < @sf.medium_from {
+    Finger
+  } else {
+    Mouse
+  }
+}
+
+///|
 /// The app over fixture `mode`, `w` × `h`, its first frame (and, with `page`, a settings page pushed): the draw list.
 fn screen_drawlist(mode : String, w : Double, h : Double, page? : String = "") -> String {
   reset()
   @settings.reset()
   let src = fixture(mode)
-  let t = @ui.Tester::new(fn(c) { view(c, src) }, w~, h~)
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, w~, h~, pointing=hand_of(w))
   if page != "" {
     open_setting(page)
   }
