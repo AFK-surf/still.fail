@@ -63,6 +63,13 @@ final class Device {
         return Build.VERSION.SDK_INT >= 33;
     }
 
+    /** What is held with a key, as the framework's modifiers (src/ui/desktop.mbt: Shift 1, Ctrl 2, Alt 4, Meta 8). */
+    static int keyMods(KeyEvent e) {
+        int meta = e.getMetaState();
+        return ((meta & KeyEvent.META_SHIFT_ON) != 0 ? 1 : 0) | ((meta & KeyEvent.META_CTRL_ON) != 0 ? 2 : 0)
+                | ((meta & KeyEvent.META_ALT_ON) != 0 ? 4 : 0) | ((meta & KeyEvent.META_META_ON) != 0 ? 8 : 0);
+    }
+
     /**
      * A key with the focus a catcher's (from a keyboard, or the input method's sendKeyEvent): the framework's code and
      * modifiers (src/ui/desktop.mbt: Shift 1, Ctrl 2, Alt 4, Meta 8), or null for a character typed as text. As
@@ -70,9 +77,7 @@ final class Device {
      * the character, lower case), another character with them by itself.
      */
     static int[] catchKey(KeyEvent e) {
-        int meta = e.getMetaState();
-        int mods = ((meta & KeyEvent.META_SHIFT_ON) != 0 ? 1 : 0) | ((meta & KeyEvent.META_CTRL_ON) != 0 ? 2 : 0)
-                | ((meta & KeyEvent.META_ALT_ON) != 0 ? 4 : 0) | ((meta & KeyEvent.META_META_ON) != 0 ? 8 : 0);
+        int mods = keyMods(e);
         int code;
         switch (e.getKeyCode()) {
             case KeyEvent.KEYCODE_DEL: code = 1; break;

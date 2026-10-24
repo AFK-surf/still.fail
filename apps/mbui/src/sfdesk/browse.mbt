@@ -504,9 +504,9 @@ fn key_name(code : Int, mods : Int) -> String? {
     "Enter"
   } else if code == @ui.key_escape {
     "Escape"
-  } else if code == key_backspace {
+  } else if code == @ui.key_code_backspace {
     "Backspace"
-  } else if code == key_delete {
+  } else if code == @ui.key_code_delete {
     "Delete"
   } else if code >= 1000 {
     let ch = (code - 1000).unsafe_to_char()
@@ -517,13 +517,6 @@ fn key_name(code : Int, mods : Int) -> String? {
   }
   Some(if m { "mod+" + k } else { k })
 }
-
-///|
-/// The editor's codes for Backspace and Delete, as a host sends them with no field to take them.
-let key_backspace : Int = 1
-
-///|
-let key_delete : Int = 2
 
 ///|
 /// The keys pressed since the last frame where the rows are (the page's, anywhere on it but a field): one that does

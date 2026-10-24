@@ -272,7 +272,10 @@ static void touch_gone(int end, NSSet<UITouch *> *t, UIView *v) {
       if (catch_press(p)) handled = YES;
       continue;
     }
-    int mods = (p.key.modifierFlags & UIKeyModifierShift) ? 1 : 0;
+    // what is held with it (ui's mod_*): ⌘← to the line's start, ⌥← by words, as an iPad's fields have them
+    UIKeyModifierFlags m = p.key.modifierFlags;
+    int mods = ((m & UIKeyModifierShift) ? 1 : 0) | ((m & UIKeyModifierControl) ? 2 : 0) |
+               ((m & UIKeyModifierAlternate) ? 4 : 0) | ((m & UIKeyModifierCommand) ? 8 : 0);
     int code = 0;
     switch (p.key.keyCode) {
       case UIKeyboardHIDUsageKeyboardLeftArrow: code = 3; break;

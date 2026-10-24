@@ -167,6 +167,362 @@ fn EditorState::move_to(self : EditorState, off : Int, ext : Bool) -> Unit {
   }
 }
 
+// ── moving and deleting by keys ────────────────────────────────────────────────────────────────────────────────
+
+///|
+/// How far a key's move or deletion in a field goes from where it starts, back (-1) or on (1).
+priv enum Reach {
+  /// a character
+  Grapheme(Int)
+  /// a line up or down, as near the same x as there is
+  Line(Int)
+  /// back, to the start of the word it is in or of the one before; on, to the end of the word it is in or of the next
+  Word(Int)
+  /// on, to the start of the next word (Windows')
+  NextWord
+  /// to the start or the end of the line it shows on
+  LineEnd(Int)
+  /// to the start or the end of its paragraph (what lies between line breaks)
+  Para(Int)
+  /// the same, or of the paragraph before or after when it is there already (a Mac's ⌥↑ ⌥↓, Ctrl+↑ Ctrl+↓)
+  ParaOver(Int)
+  /// to the start or the end of all of it
+  All(Int)
+}
+
+///|
+fn Reach::dir(self : Reach) -> Int {
+  match self {
+    Grapheme(d) | Line(d) | Word(d) | LineEnd(d) | Para(d) | ParaOver(d) | All(d) => d
+    NextWord => 1
+  }
+}
+
+///|
+/// What a key does in a field: the caret moved (with Shift, what is picked widened to where it goes), or what lies
+/// between the caret and where it reaches deleted (what is picked instead, when anything is).
+priv enum Edit {
+  Move(Reach)
+  Erase(Reach)
+}
+
+///|
+/// The keys that move and delete in every system's fields, with nothing held but Shift.
+// kept across runs: a table, never written
+let plain_keys : Array[(Int, Int, Edit)] = [
+  (key_backspace, 0, Erase(Grapheme(-1))),
+  (key_delete, 0, Erase(Grapheme(1))),
+  (key_left, 0, Move(Grapheme(-1))),
+  (key_right, 0, Move(Grapheme(1))),
+  (key_up, 0, Move(Line(-1))),
+  (key_down, 0, Move(Line(1))),
+]
+
+///|
+/// A Mac's (an iPad's, an iPhone's with a keyboard), as Cocoa's key bindings have them (StandardKeyBinding.dict). A
+/// Mac's host sends what its text system makes of a key instead (edit_keys); these are for a key that came as it was.
+// kept across runs: a table, never written
+let apple_keys : Array[(Int, Int, Edit)] = [
+  (key_home, 0, Move(All(-1))),
+  (key_end, 0, Move(All(1))),
+  (key_left, mod_alt, Move(Word(-1))),
+  (key_right, mod_alt, Move(Word(1))),
+  (key_up, mod_alt, Move(ParaOver(-1))),
+  (key_down, mod_alt, Move(ParaOver(1))),
+  (key_left, mod_cmd, Move(LineEnd(-1))),
+  (key_right, mod_cmd, Move(LineEnd(1))),
+  (key_up, mod_cmd, Move(All(-1))),
+  (key_down, mod_cmd, Move(All(1))),
+  (key_backspace, mod_alt, Erase(Word(-1))),
+  (key_delete, mod_alt, Erase(Word(1))),
+  (key_backspace, mod_cmd, Erase(LineEnd(-1))),
+]
+
+///|
+/// Windows' (and a browser's), as Blink's EditingBehavior table has them: Ctrl+→ to the next word's start
+/// (ShouldSkipSpaceWhenMovingRight).
+// kept across runs: a table, never written
+let windows_keys : Array[(Int, Int, Edit)] = [
+  (key_home, 0, Move(LineEnd(-1))),
+  (key_end, 0, Move(LineEnd(1))),
+  (key_home, mod_ctrl, Move(All(-1))),
+  (key_end, mod_ctrl, Move(All(1))),
+  (key_left, mod_ctrl, Move(Word(-1))),
+  (key_right, mod_ctrl, Move(NextWord)),
+  (key_up, mod_ctrl, Move(ParaOver(-1))),
+  (key_down, mod_ctrl, Move(ParaOver(1))),
+  (key_backspace, mod_ctrl, Erase(Word(-1))),
+  (key_delete, mod_ctrl, Erase(NextWord)),
+]
+
+///|
+/// Android's, as Blink's EditingBehavior table has them there: Alt+← Alt+→ to the line's ends, Alt+Backspace deleting
+/// to its start.
+// kept across runs: a table, never written
+let android_keys : Array[(Int, Int, Edit)] = [
+  (key_home, 0, Move(LineEnd(-1))),
+  (key_end, 0, Move(LineEnd(1))),
+  (key_home, mod_ctrl, Move(All(-1))),
+  (key_end, mod_ctrl, Move(All(1))),
+  (key_left, mod_ctrl, Move(Word(-1))),
+  (key_right, mod_ctrl, Move(Word(1))),
+  (key_left, mod_alt, Move(LineEnd(-1))),
+  (key_right, mod_alt, Move(LineEnd(1))),
+  (key_up, mod_ctrl, Move(ParaOver(-1))),
+  (key_down, mod_ctrl, Move(ParaOver(1))),
+  (key_backspace, mod_ctrl, Erase(Word(-1))),
+  (key_delete, mod_ctrl, Erase(Word(1))),
+  (key_backspace, mod_alt, Erase(LineEnd(-1))),
+]
+
+///|
+/// The edit keys (key_code_word_back… key_code_delete_paragraph_on), in their order: what a Mac's text system makes of
+/// a key (NSResponder's moveWordLeft:, moveToLeftEndOfLine:, deleteToBeginningOfLine:…), the same on every system.
+// kept across runs: a table, never written
+let edit_keys : Array[Edit] = [
+  Move(Word(-1)),
+  Move(Word(1)),
+  Move(LineEnd(-1)),
+  Move(LineEnd(1)),
+  Move(Para(-1)),
+  Move(Para(1)),
+  Move(All(-1)),
+  Move(All(1)),
+  Move(ParaOver(-1)),
+  Move(ParaOver(1)),
+  Erase(Word(-1)),
+  Erase(Word(1)),
+  Erase(LineEnd(-1)),
+  Erase(LineEnd(1)),
+  Erase(Para(-1)),
+  Erase(Para(1)),
+]
+
+///|
+/// What key `code` with `mods` held does in a field on system `platform` (@ui.platform), as that system's own fields
+/// do; Shift aside (it widens a move). None: nothing of these (Enter, ⌘C…, or a key with other keys held).
+fn edit_of(code : Int, mods : Int, platform : Int) -> Edit? {
+  if code >= key_code_word_back && code <= key_code_delete_paragraph_on {
+    return Some(edit_keys[code - key_code_word_back])
+  }
+  let held = mods & (mod_ctrl | mod_alt | mod_cmd)
+  let own = match platform {
+    0 | 1 => apple_keys
+    2 => android_keys
+    _ => windows_keys
+  }
+  for keys in [plain_keys, own] {
+    for k in keys {
+      if k.0 == code && k.1 == held {
+        return Some(k.2)
+      }
+    }
+  }
+  None
+}
+
+///|
+/// Whether code unit `c` lies between words: a space, a line break, a mark (punctuation, a symbol: ASCII's, Latin-1's,
+/// the general punctuation, the CJK and full-width ones); what a move by words passes over to come to one.
+fn between_words(c : Int) -> Bool {
+  if c < 0x80 {
+    !((c >= 0x30 && c <= 0x39) || (c >= 0x41 && c <= 0x5A) || (c >= 0x61 && c <= 0x7A) || c == 0x5F)
+  } else {
+    (c >= 0x80 && c <= 0xBF) ||
+    c == 0xD7 ||
+    c == 0xF7 ||
+    (c >= 0x2000 && c <= 0x206F) ||
+    (c >= 0x3000 && c <= 0x303F) ||
+    (c >= 0xFE30 && c <= 0xFE6F) ||
+    (c >= 0xFF00 && c <= 0xFF0F) ||
+    (c >= 0xFF1A && c <= 0xFF20) ||
+    (c >= 0xFF3B && c <= 0xFF40) ||
+    (c >= 0xFF5B && c <= 0xFF65)
+  }
+}
+
+///|
+fn between_words_at(t : String, i : Int) -> Bool {
+  between_words(t.code_unit_at(i).to_int())
+}
+
+///|
+/// The start of the word before `off` in `t` (the one it is in, or the one before what lies between them), as the
+/// host's word boundaries have it (word_at: a dictionary's words in Chinese).
+fn word_start_before(t : String, off : Int) -> Int {
+  let mut i = off
+  while i > 0 && between_words_at(t, prev_boundary(t, i)) {
+    i = prev_boundary(t, i)
+  }
+  if i == 0 {
+    return 0
+  }
+  let p = prev_boundary(t, i)
+  imin(word_at(t, p).0, p)
+}
+
+///|
+/// The end of the word after `off` in `t` (the one it is in, or the one after what lies between them).
+fn word_end_after(t : String, off : Int) -> Int {
+  let n = t.length()
+  let mut i = off
+  while i < n && between_words_at(t, i) {
+    i = next_boundary(t, i)
+  }
+  if i >= n {
+    return n
+  }
+  imax(word_at(t, i).1, next_boundary(t, i))
+}
+
+///|
+/// The start of the word after the one `off` is in (Windows' Ctrl+→): the rest of that word, and what lies after it,
+/// passed over.
+fn next_word_start(t : String, off : Int) -> Int {
+  let n = t.length()
+  let mut i = off
+  if i < n && !between_words_at(t, i) {
+    i = imax(word_at(t, i).1, next_boundary(t, i))
+  }
+  while i < n && between_words_at(t, i) {
+    i = next_boundary(t, i)
+  }
+  i
+}
+
+///|
+/// The start (`d` -1) or the end (1) of the paragraph of `t` that `off` is in: after the line break before it, before
+/// the one after it.
+fn paragraph_end(t : String, off : Int, d : Int) -> Int {
+  let n = t.length()
+  let mut i = off
+  if d < 0 {
+    while i > 0 && !is_nl(t.code_unit_at(i - 1).to_int()) {
+      i = i - 1
+    }
+  } else {
+    while i < n && !is_nl(t.code_unit_at(i).to_int()) {
+      i = i + 1
+    }
+  }
+  i
+}
+
+///|
+/// Whether the caret shows at the end of the line before where a line wraps into the next at it (EditorState's
+/// `upstream`): its own place, words being composed none.
+fn EditorState::caret_up(self : EditorState) -> Bool {
+  self.upstream == self.caret && self.marked == ""
+}
+
+///|
+/// Where offset `off` shows in `tl` (x, line), as the caret there would: at the end of the line before, where it is
+/// the caret's and the caret shows so (EditorState's `upstream`).
+fn EditorState::place_of(self : EditorState, tl : TextLayout, off : Int) -> (Double, Int) {
+  tl.caret_side(off, off == self.caret && self.caret_up())
+}
+
+///|
+/// The caret put nearest to (`x`, `y`) in the window, laid out as `tl` (the anchor left where it is): shown on the line
+/// the point is on, at its end where the point is past it and the line wraps into the next there.
+fn EditorState::caret_to_point(self : EditorState, tl : TextLayout, x : Double, y : Double) -> Unit {
+  let line = imin(imax(((y - self.oy) / tl.line_h).to_int(), 0), imax(tl.line_start.length() - 1, 0))
+  let (off, up) = tl.offset_on(x - self.ox, line)
+  self.caret = imin(off, self.text.length())
+  self.upstream = if up { self.caret } else { -1 }
+}
+
+///|
+/// Where `r` reaches from `off` (`up`: the caret is there, shown at the end of the line before), and whether the caret
+/// there shows so too.
+fn EditorState::reach(self : EditorState, off : Int, r : Reach, up : Bool) -> (Int, Bool) {
+  let t = self.text
+  let n = t.length()
+  match r {
+    Grapheme(d) => (if d < 0 { prev_boundary(t, off) } else { next_boundary(t, off) }, false)
+    Line(d) =>
+      match self.tl {
+        Some(tl) => {
+          let (x, line) = tl.caret_side(off, up)
+          if self.pref_x < 0.0 {
+            self.pref_x = x
+          }
+          let target = line + d
+          if target < 0 {
+            (0, false)
+          } else if target >= tl.line_start.length() {
+            (n, false)
+          } else {
+            tl.offset_on(self.pref_x, target)
+          }
+        }
+        None => (off, false)
+      }
+    // (a secret's words are all one, as a password field's: where it has words is not given away)
+    Word(_) | NextWord if self.secret => (if r.dir() < 0 { 0 } else { n }, false)
+    Word(d) => (if d < 0 { word_start_before(t, off) } else { word_end_after(t, off) }, false)
+    NextWord => (next_word_start(t, off), false)
+    LineEnd(d) =>
+      match self.tl {
+        Some(tl) => tl.line_end_at(off, up, d)
+        None => (paragraph_end(t, off, d), false)
+      }
+    Para(d) => (paragraph_end(t, off, d), false)
+    ParaOver(d) => (paragraph_end(t, if d < 0 { prev_boundary(t, off) } else { next_boundary(t, off) }, d), false)
+    All(d) => (if d < 0 { 0 } else { n }, false)
+  }
+}
+
+///|
+/// The caret moved by `r` (`widen`: what is picked widened to where it goes; `up`: it showed at a line's end, as
+/// `upstream` said before the key). Not widening, a move goes from the end of what is picked it goes towards, a
+/// character's only to there.
+fn EditorState::move_by(self : EditorState, r : Reach, widen : Bool, up : Bool) -> Unit {
+  let (a, b) = self.sel()
+  let back = r.dir() < 0
+  if !widen && a != b && r is Grapheme(_) {
+    self.move_to(if back { a } else { b }, false)
+  } else {
+    let from = if widen || a == b {
+      self.caret
+    } else if back {
+      a
+    } else {
+      b
+    }
+    let (to, to_up) = self.reach(from, r, up && from == self.caret)
+    self.move_to(to, widen)
+    if to_up {
+      self.upstream = to
+    }
+  }
+  if !(r is Line(_)) {
+    self.pref_x = -1.0
+  }
+}
+
+///|
+/// What lies between the caret and where `r` reaches from it deleted (what is picked instead, when anything is); a
+/// reach that comes to the caret itself (⌘⌫ at a line's start) takes the character that way, as a Mac's fields do.
+fn EditorState::erase(self : EditorState, r : Reach, up : Bool) -> Unit {
+  self.pref_x = -1.0
+  if self.delete_selection() {
+    return
+  }
+  let t = self.text
+  let to = match self.reach(self.caret, r, up) {
+    (to, _) if to != self.caret => to
+    _ => self.reach(self.caret, Grapheme(r.dir()), false).0
+  }
+  let a = imin(to, self.caret)
+  let b = imax(to, self.caret)
+  if a < b {
+    self.text = sub(t, 0, a) + sub(t, b, t.length())
+    self.caret = a
+    self.anchor = a
+  }
+}
+
 ///|
 fn EditorState::key(self : EditorState, code : Int, mods : Int, now : Double) -> Unit {
   // (one the app takes for itself: not the field's)
@@ -182,91 +538,48 @@ fn EditorState::key(self : EditorState, code : Int, mods : Int, now : Double) ->
   let menu_was = self.menu
   self.menu = false
   self.sel_handles = false
+  // the caret at a line's end shows there until a key moves it (a move to one says so again)
+  let up = self.caret_up()
+  self.upstream = -1
   let t = self.text
-  if code == key_backspace {
-    if !self.delete_selection() && self.caret > 0 {
-      let p = prev_boundary(t, self.caret)
-      self.text = sub(t, 0, p) + sub(t, self.caret, t.length())
-      self.caret = p
-      self.anchor = p
-    }
-  } else if code == key_delete {
-    if !self.delete_selection() && self.caret < t.length() {
-      let q = next_boundary(t, self.caret)
-      self.text = sub(t, 0, self.caret) + sub(t, q, t.length())
-    }
-  } else if code == key_left {
-    let (a, b) = self.sel()
-    if a != b && !shift {
-      self.move_to(a, false)
-    } else {
-      self.move_to(prev_boundary(t, self.caret), shift)
-    }
-    self.pref_x = -1.0
-  } else if code == key_right {
-    let (a, b) = self.sel()
-    if a != b && !shift {
-      self.move_to(b, false)
-    } else {
-      self.move_to(next_boundary(t, self.caret), shift)
-    }
-    self.pref_x = -1.0
-  } else if code == key_up || code == key_down {
-    match self.tl {
-      Some(tl) => {
-        let (x, line) = tl.caret(self.caret)
-        if self.pref_x < 0.0 {
-          self.pref_x = x
+  match edit_of(code, mods, h_platform()) {
+    Some(Move(r)) => self.move_by(r, shift, up)
+    Some(Erase(r)) => self.erase(r, up)
+    None =>
+      if code == key_select_all {
+        self.anchor = 0
+        self.caret = t.length()
+        // (from the floating menu, over words picked or the caret: picked, both handles and the menu over all of it)
+        if picked || menu_was {
+          self.sel_handles = t.length() > 0
+          self.menu = t.length() > 0
         }
-        let target = if code == key_up { line - 1 } else { line + 1 }
-        if target < 0 {
-          self.move_to(0, shift)
-        } else if target >= tl.line_start.length() {
-          self.move_to(t.length(), shift)
-        } else {
-          let off = tl.offset_at(self.pref_x, (target.to_double() + 0.5) * tl.line_h)
-          self.move_to(off, shift)
+      } else if code == key_copy || code == key_cut {
+        let (a, b) = self.sel()
+        // (a secret is not copied or cut out)
+        if a != b && !self.secret {
+          h_clipboard_set(sub(t, a, b))
+          if code == key_cut {
+            self.delete_selection() |> ignore
+          } else if picked {
+            // copied from a finger's menu: let go of, the caret at its end (Compose's copy(cancelSelection))
+            self.anchor = b
+            self.caret = b
+          }
+        }
+      } else if code == key_enter {
+        if shift || !self.enter_sends {
+          if self.marked.length() > 0 {
+            self.text_input(2, "", 0, 0, now)
+          }
+          self.insert("\n")
+        } else if self.text.length() > 0 {
+          self.submitted = Some(self.text)
+          self.text = ""
+          self.caret = 0
+          self.anchor = 0
         }
       }
-      None => ()
-    }
-  } else if code == key_home {
-    self.move_to(0, shift)
-  } else if code == key_end {
-    self.move_to(t.length(), shift)
-  } else if code == key_select_all {
-    self.anchor = 0
-    self.caret = t.length()
-    // (from the floating menu, over words picked or the caret: picked, both handles and the menu over all of it)
-    if picked || menu_was {
-      self.sel_handles = t.length() > 0
-      self.menu = t.length() > 0
-    }
-  } else if code == key_copy || code == key_cut {
-    let (a, b) = self.sel()
-    // (a secret is not copied or cut out)
-    if a != b && !self.secret {
-      h_clipboard_set(sub(t, a, b))
-      if code == key_cut {
-        self.delete_selection() |> ignore
-      } else if picked {
-        // copied from a finger's menu: let go of, the caret at its end (Compose's copy(cancelSelection))
-        self.anchor = b
-        self.caret = b
-      }
-    }
-  } else if code == key_enter {
-    if shift || !self.enter_sends {
-      if self.marked.length() > 0 {
-        self.text_input(2, "", 0, 0, now)
-      }
-      self.insert("\n")
-    } else if self.text.length() > 0 {
-      self.submitted = Some(self.text)
-      self.text = ""
-      self.caret = 0
-      self.anchor = 0
-    }
   }
 }
 
@@ -283,11 +596,13 @@ fn EditorState::text_input(
 ) -> Unit {
   self.blink0 = now
   self.pref_x = -1.0
-  // what is typed lets the handle go (Compose: shown again by the next tap), and the menu and a pick's handles
+  // what is typed lets the handle go (Compose: shown again by the next tap), and the menu and a pick's handles, and
+  // the caret's place at a line's end
   if kind != text_composing {
     self.handle = false
     self.menu = false
     self.sel_handles = false
+    self.upstream = -1
   }
   if kind == 0 {
     if self.limit > 0 && s.length() >= self.limit {
@@ -558,8 +873,8 @@ fn Ctx::paint_editor(self : Ctx, n : Node, alpha : Double) -> Unit {
   // selection
   let (a, b) = st.sel()
   if focused && a != b && ml == 0 {
-    let (x0, l0) = tl.caret(a)
-    let (x1, l1) = tl.caret(b)
+    let (x0, l0) = st.place_of(tl, a)
+    let (x1, l1) = st.place_of(tl, b)
     for l in l0..=l1 {
       let sx = if l == l0 { x0 } else { 0.0 }
       let ex = if l == l1 { x1 } else { tl.line_w[l] + 4.0 }
@@ -612,7 +927,7 @@ fn Ctx::paint_editor(self : Ctx, n : Node, alpha : Double) -> Unit {
     self.wake_at_time(st.blink0 + (phase + 1).to_double() * blink, later=true)
     let coff = if ml > 0 { st.caret + st.msel_a } else { st.caret }
     if phase % 2 == 0 {
-      let (cx, cl) = tl.caret(coff)
+      let (cx, cl) = st.place_of(tl, coff)
       let top = st.oy + cl.to_double() * tl.line_h
       // Android's as Compose's text field draws it (TextFieldCursor.kt): from the caret rightwards (kept in the
       // field), its line's whole height, square; elsewhere about the caret, 2 short of each end, round
@@ -638,7 +953,7 @@ fn Ctx::paint_editor(self : Ctx, n : Node, alpha : Double) -> Unit {
   // Android's handle under the caret (Compose's cursor handle, TextFieldSelectionManager): a drop in the caret's colour
   // hanging from it, a circle 25 across under a corner turned to point up, over everything (a popup's: no box cuts it)
   if focused && st.handle && h_feel() == 2 && a == b && ml == 0 && st.text.length() > 0 {
-    let (cx, cl) = tl.caret(st.caret)
+    let (cx, cl) = st.place_of(tl, st.caret)
     let x = st.ox + cx
     let y = st.oy + (cl + 1).to_double() * tl.line_h
     st.handle_on = true
@@ -662,8 +977,8 @@ fn Ctx::paint_editor(self : Ctx, n : Node, alpha : Double) -> Unit {
   // from each end's foot, the start's corner up and to its right, the end's up and to its left, over everything
   if focused && st.sel_handles && h_feel() == 2 && a != b && ml == 0 {
     let r = handle_r
-    let (ax, al) = tl.caret(a)
-    let (bx, bl) = tl.caret(b)
+    let (ax, al) = st.place_of(tl, a)
+    let (bx, bl) = st.place_of(tl, b)
     st.sel_ax = st.ox + ax
     st.sel_ay = st.oy + (al + 1).to_double() * tl.line_h
     st.sel_bx = st.ox + bx
@@ -718,7 +1033,7 @@ fn Ctx::sync_ime(self : Ctx) -> Unit {
             h_ime_action(st.ime_action)
           }
           let coff = st.caret + st.marked.length()
-          let (cx, cl) = tl.caret(coff)
+          let (cx, cl) = st.place_of(tl, coff)
           let x = st.ox + cx
           let y = st.oy + cl.to_double() * tl.line_h
           let (a, b) = st.sel()
@@ -769,6 +1084,7 @@ fn EditorState::fresh(text : String, now : Double) -> EditorState {
     oy: 0.0,
     submitted: None,
     pref_x: -1.0,
+    upstream: -1,
     scroll: 0.0,
     pasted: None,
     limit: 0,
@@ -839,6 +1155,7 @@ pub fn Field::set(self : Field, text : String, caret? : Int) -> Unit {
   st.caret = at
   st.anchor = at
   st.pref_x = -1.0
+  st.upstream = -1
   if text == "" {
     st.scroll = 0.0
   }
@@ -856,6 +1173,7 @@ pub fn Field::pick(self : Field, from : Int, to : Int) -> Unit {
   st.anchor = imin(imax(from, 0), st.text.length())
   st.caret = imin(imax(to, 0), st.text.length())
   st.pref_x = -1.0
+  st.upstream = -1
   st.blink_again = true
   field_written()
 }
@@ -885,6 +1203,7 @@ fn Ctx::put_editor_text(self : Ctx, key : String, text : String) -> Unit {
       st.text = text
       st.caret = text.length()
       st.anchor = st.caret
+      st.upstream = -1
       st.blink0 = self.now
     }
     None => {
@@ -951,6 +1270,7 @@ fn EditorState::pick_word(self : EditorState, x : Double, y : Double, now : Doub
   let (a, b) = word_at(self.text, off)
   self.blink0 = now
   self.handle = false
+  self.upstream = -1
   if b <= a || self.secret {
     self.caret = off
     self.anchor = off
@@ -1099,8 +1419,8 @@ fn Ctx::sync_text_menu(self : Ctx) -> Unit {
       match st.tl {
         Some(tl) => {
           let (a, b) = st.sel()
-          let (x0, l0) = tl.caret(a)
-          let (x1, l1) = tl.caret(b)
+          let (x0, l0) = st.place_of(tl, a)
+          let (x1, l1) = st.place_of(tl, b)
           let top = st.oy + l0.to_double() * tl.line_h
           let bottom = st.oy + (l1 + 1).to_double() * tl.line_h
           let (x, w) = if l0 == l1 {
