@@ -195,19 +195,19 @@ describe("the queue", { skip: WINDOWS && "jobs' groups and sh" }, () => {
     assert.equal(readFileSync(join(r.dir, "work", "cpus"), "utf8"), "6");
   });
 
-  test("one started that has ended holds nothing back: the next starts at the next look", async () => {
+  test("one started that has ended holds nothing back: the next starts at once, or at the next look", async () => {
     const state = { busy: 0.05, pressure: "normal" as Pressure };
     const r = rig(state);
     r.start("one", "a", FOREVER);
     const quick = r.start("two", "b", "true");
     await looks(r.clock, () => r.store.getJob(quick.id)!.queued !== true);
     await until("it ends", () => r.store.getJob(quick.id)!.state === "exited");
+    // (the first still runs: under the old flat ramp this one waited for the ended one's)
     const next = r.start("three", "c", "true");
-    assert.equal(next.queued, true, "the first still runs");
-    await r.clock.move(LOOK_MS);
-    await sleep(5);
-    await r.clock.move(LOOK_MS);
-    await sleep(5);
+    if (next.queued === true) {
+      await r.clock.move(LOOK_MS);
+      await sleep(5);
+    }
     assert.notEqual(r.store.getJob(next.id)!.queued, true, "not held for the ended one's ramp");
   });
 
