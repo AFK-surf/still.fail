@@ -43,6 +43,11 @@ pub(all) struct Wide {
   mut edge_held : Bool
   /// folded, whether it is shown a while over the page (Rail.tsx peekSidebar)
   mut peeking : Bool
+  /// folded for the page's room whatever was chosen (page_beside_least), this frame; shown a while from the next as a
+  /// place is pressed into; the page shown as the last build began (a row chosen while shown: another page, folded)
+  mut crowded : Bool
+  mut peek_next : Bool
+  mut peek_top : Page?
   /// the sidebar shown (its workspace and group) and how it was kept (prefs `sidebars`)
   mut side_key : String
   mut kept_w : Double
@@ -92,6 +97,9 @@ pub let wide : Wide = {
   folded: false,
   edge_held: false,
   peeking: false,
+  crowded: false,
+  peek_next: false,
+  peek_top: None,
   side_key: "",
   kept_w: 0.0,
   kept_folded: false,
@@ -147,6 +155,9 @@ fn wide_reset() -> Unit {
   wide.folded = false
   wide.edge_held = false
   wide.peeking = false
+  wide.crowded = false
+  wide.peek_next = false
+  wide.peek_top = None
   wide.side_key = ""
   wide.kept_w = 0.0
   wide.kept_folded = false
@@ -213,6 +224,21 @@ fn side_on_fold() -> Double? {
 ///|
 /// The rail's width; the sidebar's own, its least and most (Rail.tsx SIDEBAR: 240, from 180 to 480; the stations' 280).
 pub let rail_w : Double = 56.0
+
+///|
+/// On a phone's or a tablet's screen, the least a page is laid out at beside the sidebar: a phone's (360, the width
+/// every page is made for); with less beside it (a small tablet held upright), the sidebar stays folded to the rail
+/// whatever was chosen, its place's mark there saying what waits in it, shown over the page as the place is pressed
+/// and folded again as what it shows is chosen or the page is tapped. A desktop's window is the wide frame only from
+/// wide_from on, the page beside the sidebar as the person sizes them.
+pub let page_beside_least : Double = 360.0
+
+///|
+/// Whether the sidebar is folded to the rail now: as it was left (⌘\, its place pressed again, its edge), or kept so
+/// for the page's room (page_beside_least).
+pub fn side_folded() -> Bool {
+  wide.folded || wide.crowded
+}
 
 ///|
 let side_own : Double = 240.0
@@ -364,7 +390,7 @@ fn dock(
           c.box(style=dock_side.then(@ui.style(w=Fixed(side_w))), moves="sidebar", fn() {
             if shown && s > 0.0 {
               // (in the bar: what the web's sidebar does there, at once, as the bar starts out)
-              wide.in_bar = wide.folded
+              wide.in_bar = side_folded()
               sidebar(c, src, w, pages, side_w)
               wide.in_bar = false
             }
@@ -443,14 +469,19 @@ pub fn frame(
   let bare = place_bare(lit_place())
   // the sidebar of this place and workspace, as it was left
   side_follow(c, src, w.id)
-  // (on a fold standing upright, the sidebar ends on it while it is not folded away)
-  let on_fold = if wide.folded { None } else { side_on_fold() }
   let own = !gated && !bare
+  // (a phone's or a tablet's screen with less than a phone's width for the page beside it: folded whatever was chosen)
+  wide.crowded = own &&
+    @sf.touch_system() &&
+    c.width - rail_w - side_on_fold().unwrap_or(wide.side_w) < page_beside_least
+  side_crowded()
+  // (on a fold standing upright, the sidebar ends on it while it is not folded away)
+  let on_fold = if side_folded() { None } else { side_on_fold() }
   // folded to the rail's bar (and a page with no sidebar of its own: Rail.tsx showSidebar), shown a while beside it as
   // the pointer comes on it: each part built as the web's CSS has it in that state, and moved there from what it showed
   // as the state changes, all together (brand.tsx moveSidebar: 380 ms, ease out); not the width the edge drags, which
   // follows the pointer at once
-  let bar = (own && wide.folded) || bare
+  let bar = (own && side_folded()) || bare
   let s = if gated { 0.0 } else { on_fold.unwrap_or(wide.side_w) }
   let bars = @ui.system_bars()
   let top = bars.top
@@ -458,7 +489,7 @@ pub fn frame(
   let inset = @ui.window_inset()
   let peek_r = rail_w - closed_bar_gap + (if wide.peeking { s } else { 0.0 })
   side_peek(c, closed_bar_in, top + (if inset { closed_bar_top } else { closed_bar_in }), peek_r, c.height - foot - closed_bar_in)
-  let peek = own && wide.folded && wide.peeking
+  let peek = own && side_folded() && wide.peeking
   // what the page shows across as the last frame laid it out (its bars left out): what it moves aside for, shown a
   // while
   let page_id = c.id("main-page")
@@ -557,8 +588,8 @@ pub fn frame(
     }
   })
   // (the sidebar's edge: on its right edge open, between the bar and the page folded, at the edge of the sidebar shown
-  // a while; dragged, unless it is on the fold)
-  if !bare && on_fold is None {
+  // a while; dragged, unless it is on the fold or folded for the page's room)
+  if !bare && on_fold is None && !wide.crowded {
     let at = if !bar {
       rail_w + s - edge_half
     } else if peek {
@@ -793,19 +824,22 @@ fn whole_of(s : String) -> Int? {
 /// menu, the filter's, a row renamed in place, the workspaces' ＋); to a finger, from its press on the bar until a tap
 /// off them.
 fn side_peek(c : @ui.Ctx, bar_x : Double, bar_y : Double, bar_r : Double, bar_b : Double) -> Unit {
-  if !wide.folded {
+  if !side_folded() {
     wide.peeking = false
     return
   }
   let (px, py, _) = c.pointer()
-  // a finger, which rests on nothing: shown as it presses the bar, until a tap off the bar and the sidebar shown
+  // (something from it open: a row's menu, the filter's, a row renamed in place, the workspaces' ＋)
+  let held = wide.menu is Some(_) || wide.filter_open || wide.renaming != "" || wide.add_open
+  // a finger, which rests on nothing: shown as it presses the bar (folded for the room: as its place is pressed,
+  // rail.mbt), until a tap off the bar and the sidebar shown with nothing from it open
   if @ui.pointing() is Finger {
     let on_bar = fn(x : Double, y : Double) { x >= bar_x && x < bar_r && y >= bar_y && y < bar_b }
-    if on_bar(px, py) && px < bar_x + rail_closed_w {
+    if !wide.crowded && on_bar(px, py) && px < bar_x + rail_closed_w {
       wide.peeking = true
     }
     match c.tapped_anywhere() {
-      Some((x, y)) if wide.peeking && !on_bar(x, y) && x >= closed_bar_in + rail_closed_w + wide.side_w =>
+      Some((x, y)) if wide.peeking && !held && !on_bar(x, y) && x >= closed_bar_in + rail_closed_w + wide.side_w =>
         wide.peeking = false
       _ => ()
     }
@@ -817,10 +851,29 @@ fn side_peek(c : @ui.Ctx, bar_x : Double, bar_y : Double, bar_r : Double, bar_b 
   if over && !wide.peeking && px < bar_x + rail_closed_w {
     wide.peeking = true
   }
-  let held = wide.menu is Some(_) || wide.filter_open || wide.renaming != "" || wide.add_open
   if @kit.after(c, "side/peek-away", wide.peeking && !over && !held, peek_leave_ms) {
     wide.peeking = false
   }
+}
+
+///|
+/// Folded for the page's room (page_beside_least): shown a while from the start where a place was pressed into, and
+/// folded again as a row of it is chosen (the page another); else nothing kept of it.
+fn side_crowded() -> Unit {
+  let top = app.nav.top()
+  if !wide.crowded {
+    wide.peek_next = false
+    wide.peek_top = None
+    return
+  }
+  if wide.peeking && wide.peek_top is Some(was) && was != top {
+    wide.peeking = false
+  }
+  if wide.peek_next {
+    wide.peek_next = false
+    wide.peeking = true
+  }
+  wide.peek_top = Some(top)
 }
 
 ///|

@@ -164,10 +164,11 @@ fn profile_head(c : @ui.Ctx, core : Core, here : Here, address : String, p : Jso
       @sf.maker_mark(c, text(p, "providerMark"), text(p, "runtime"), pf_mark_glyph) |> ignore
     })
     |> ignore
-    c.box(style=pf_identity, fn() {
+    c.box(style=pf_identity, keep=true, fn() {
       c.box(style=pf_name_line, fn() {
         // its new name shows while it is saved
         let saving = is_doing(core, ["profile.put"], on)
+        // (short of room, its name is cut short, its tags and its rename kept)
         c.text(text(p, "name"), style=pf_name) |> ignore
         if saving {
           @sf.spinner(c, size=pf_spin) |> ignore
@@ -201,10 +202,14 @@ fn profile_head(c : @ui.Ctx, core : Core, here : Here, address : String, p : Jso
         if text(p, "checkTone") != "green" {
           @sf.pill(c, text(p, "checkText"), tone=pill_tone(text(p, "checkTone")))
         }
-        c.text(text(p, "checkLine"), style=pf_sub_words) |> ignore
+        // (short of room, when it was checked leaves, then what the check said is cut short; checking again kept)
+        c.text(text(p, "checkLine"), style=pf_check_words) |> ignore
         let ago = text(field(field(field(p, "check"), "time"), "checkedAt"), "ago")
         if ago != "" {
-          c.text(@sf.t("web-pages.profiles.checkedAt", args=[("time", ago)]), style=pf_sub_quiet) |> ignore
+          c.box(drop=pf_drop_checked, fn() {
+            c.text(@sf.t("web-pages.profiles.checkedAt", args=[("time", ago)]), style=pf_sub_quiet) |> ignore
+          })
+          |> ignore
         }
         let checking = is_doing(core, ["profile.check"], on)
         if @sf.icon_button(c, "refresh", key="profile-check/" + address + "/" + id, disabled=checking, label=@sf.t("web-pages.profiles.recheck")) {
@@ -804,7 +809,7 @@ fn profile_share(c : @ui.Ctx, core : Core, s : Json?, p : Json?, entry : Json?) 
           c.box(style=desk_card_text, fn() { c.text(@sf.t("web-pages.profiles.share.signedIn"), style=desk_strong) |> ignore }) |> ignore
           c.box(style=pf_share_value, fn() {
             @sf.status_dot(c, "online")
-            c.text(text(s, "name"), style=desk_note) |> ignore
+            c.text(text(s, "name"), style=desk_note_line) |> ignore
           })
           |> ignore
           let targets = stations.filter(fn(x) { text(Some(x), "id") != sid })
@@ -843,7 +848,7 @@ fn profile_share(c : @ui.Ctx, core : Core, s : Json?, p : Json?, entry : Json?) 
                       @sf.status_dot(c, if online { "online" } else { "offline" })
                       c.text(text(xv, "name"), style=desk_list_title) |> ignore
                       if !online {
-                        c.text(@sf.t("web-pages.stations.offline"), style=desk_note) |> ignore
+                        c.text(@sf.t("web-pages.stations.offline"), style=desk_note_line) |> ignore
                       }
                     })
                     |> ignore
@@ -878,7 +883,7 @@ fn profile_share(c : @ui.Ctx, core : Core, s : Json?, p : Json?, entry : Json?) 
             .map(fn(x) { text(Some(x), "name") })
             .join(@sf.t("web-main.list.separator"))
         }
-        c.text(names, style=desk_note) |> ignore
+        c.text(names, style=desk_note_line) |> ignore
         if @sf.button(c, @sf.t("web-pages.profiles.share.change"), key="profile-share-pick/" + address + "/" + id, tone=Ghost, disabled=sharing) {
           pick_stations(core, address, id, stations, sid, allowed)
         }
@@ -921,7 +926,7 @@ fn pick_stations(core : Core, address : String, id : String, stations : Array[Js
             @sf.status_dot(c, if flag(xv, "online") { "online" } else { "offline" })
             c.text(text(xv, "name"), style=desk_list_title) |> ignore
             if self {
-              c.text(@sf.t("web-pages.profiles.share.here"), style=desk_note) |> ignore
+              c.text(@sf.t("web-pages.profiles.share.here"), style=desk_note_line) |> ignore
             }
           })
           |> ignore
@@ -1603,15 +1608,20 @@ let pf_name_line : @ui.Style = @ui.css("row gap=S1 align=ACenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let pf_name : @ui.TextStyle = @ui.text_style(size=Xl3, weight=Semibold, color=Fg, wrap=false)
+let pf_name : @ui.TextStyle = @ui.text_style(size=Xl3, weight=Semibold, color=Fg, wrap=false, w=Cut)
 
 ///|
 // kept across runs: a value (no field of it changes)
 let pf_sub : @ui.TextStyle = @ui.text_style(size=Sm, leading=L6, color=Muted, w=Full)
 
 ///|
+/// What its last check said, cut short where its line has less.
 // kept across runs: a value (no field of it changes)
-let pf_sub_words : @ui.TextStyle = @ui.text_style(size=Sm, leading=L6, color=Muted, wrap=false)
+let pf_check_words : @ui.TextStyle = @ui.text_style(size=Sm, leading=L6, color=Muted, wrap=false, w=Cut)
+
+///|
+/// What leaves its check's line first, short of room: when it was checked.
+let pf_drop_checked : Int = 1
 
 ///|
 // kept across runs: a value (no field of it changes)

@@ -7,7 +7,7 @@
 /// the block's move has got to (frame's --brand).
 pub fn side_top(c : @ui.Ctx) -> Unit {
   let id = c.id("side/top")
-  if @ui.window_inset() && !wide.folded {
+  if @ui.window_inset() && !side_folded() {
     c.window_drag(id)
   }
   c.box(style=side_full.then(@ui.style(h=Fixed(wide.brand_h))), id~, fn() {  }) |> ignore

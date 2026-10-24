@@ -296,8 +296,12 @@ pub fn find_position() -> (Int, Int) {
 pub let find_key : String = "find/field"
 
 ///|
-/// How wide its field is (ChatFind.css.ts field: 320), and each of its buttons (button: 26 square).
+/// How wide its field is (ChatFind.css.ts field: 320, less where the bar has less: 160 at least), and each of its
+/// buttons (button: 26 square).
 let find_field_w : Double = 320.0
+
+///|
+let find_field_least : Double = 160.0
 
 ///|
 let find_button_w : Double = 26.0
@@ -420,6 +424,7 @@ let find_note_box : @ui.Style = @ui.style(max_w=Fixed(find_field_w), clip=true)
 let find_field_style : @ui.Style = @ui.style(
   row=true,
   w=Fixed(find_field_w),
+  min_w=Fixed(find_field_least),
   h=S8,
   pl=S1_5,
   pr=S0_5,

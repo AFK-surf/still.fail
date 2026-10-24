@@ -490,7 +490,8 @@ fn machine_offers(c : @ui.Ctx, core : Core, s : Json?, sign_in : (String) -> Uni
             |> ignore
           })
           |> ignore
-          c.text(if text(lv, "email") != "" { text(lv, "email") } else { @sf.t("web-main.profile.signedIn") }, style=desk_note) |> ignore
+          c.text(if text(lv, "email") != "" { text(lv, "email") } else { @sf.t("web-main.profile.signedIn") }, style=desk_note_line)
+          |> ignore
           // why it cannot be used (what the provider said)
           if blocked || text(quota, "state") == "unavailable" {
             c.text(text(quota, "detail"), style=if blocked { desk_note_bad } else { desk_note }) |> ignore

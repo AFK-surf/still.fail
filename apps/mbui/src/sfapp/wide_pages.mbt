@@ -102,6 +102,6 @@ fn wide_folder(c : @ui.Ctx, src : Source, w : Workspace, at : DriveAt) -> Unit {
   dv.building = dv_page_of(Some(here))
   // the files picked to go up
   dv_take_picked(src, here, [])
-  let room = c.width - @sfdesk.rail_w - (if @sfdesk.wide.folded { 0.0 } else { @sfdesk.wide.side_w })
+  let room = c.width - @sfdesk.rail_w - (if @sfdesk.side_folded() { 0.0 } else { @sfdesk.wide.side_w })
   @sfdesk.files_shell(c, src, w.id, stations, here, room)
 }

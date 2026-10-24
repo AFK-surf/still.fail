@@ -12,6 +12,11 @@ fn Ctx::editor_display(self : Ctx, n : Node) -> String {
 }
 
 ///|
+/// How much of words cut short (`w=Cut`) their row keeps before a part of it leaves (Ctx::box `drop`): four of their
+/// size, or all of them where they are fewer.
+let cut_kept_ems : Double = 4.0
+
+///|
 /// The text laid out in `max_w`. The engine asks for a few widths per frame;
 /// greedy wrapping gives the same lines for any width from the widest line
 /// up to the one it was laid out in, so one layout serves them all, frame
@@ -372,6 +377,11 @@ fn Ctx::flex_tree(self : Ctx, i : Int, pdir : Int) -> Int {
     Px(p) => {
       wpx = p
       has_w = true
+      // (a least said below it: that width where its row has it, down to the least where it has less, as CSS's width
+      // in a flex row with its min-width)
+      if in_row && n.min_w > 0.0 && n.min_w < p {
+        shrink = 1.0
+      }
     }
     Pct(p) => wpct = p
     Fill(k) =>
@@ -540,6 +550,9 @@ fn Ctx::flex_tree(self : Ctx, i : Int, pdir : Int) -> Int {
   let mut droppable = false
   let mut more_need = -1.0
   let mut fits = false
+  // (the same, what it holds keeping what its row's fit keeps of it: Node's `fit_least`)
+  let mut fsum = 0.0
+  let mut fwidest = 0.0
   let k = n.kind
   if k == kind_text ||
     k == kind_rich ||
@@ -616,7 +629,9 @@ fn Ctx::flex_tree(self : Ctx, i : Int, pdir : Int) -> Int {
       // what it needs across at least, with what is beside it in its row (all of it) or under it (the widest): what it
       // may leave out apart, its ⋯ with it where it may
       if !(cn.layer || cn.portal || cn.pager != 0 || cn.placed_at()) {
-        let need = cn.least + self.on_px(cn.mar_l, whole) + self.on_px(cn.mar_r, whole)
+        let margins = self.on_px(cn.mar_l, whole) + self.on_px(cn.mar_r, whole)
+        let need = cn.least + margins
+        let fneed = cn.fit_least + margins
         if along && cn.drop > 0 {
           droppable = true
         } else if along && cn.drop == -1 {
@@ -624,11 +639,14 @@ fn Ctx::flex_tree(self : Ctx, i : Int, pdir : Int) -> Int {
         } else if along {
           if placed_in > 0 {
             sum = sum + gap
+            fsum = fsum + gap
           }
           sum = sum + need
+          fsum = fsum + fneed
           placed_in = placed_in + 1
         } else {
           widest = dmax(widest, need)
+          fwidest = dmax(fwidest, fneed)
         }
         if cn.drop != 0 {
           fits = true
@@ -680,7 +698,8 @@ fn Ctx::flex_tree(self : Ctx, i : Int, pdir : Int) -> Int {
   // its own, words on one line in a row); one sized by the room it is given (Fill, a share) or cut by it (`clip`,
   // `sideways`) takes what it is given, what it holds squeezed in it where that is too little (Tester::squeeze_faults)
   let mut least = match n.w {
-    Px(p) => len(p)
+    // (giving way down to a least said below it: that)
+    Px(p) => if n.min_w > 0.0 && n.min_w < p { 0.0 } else { len(p) }
     Pct(_) | Cut => 0.0
     // (one said to keep what it holds: never less than that needs, the rest of its row squeezed first)
     Fill(_) if !(n.keep && k == kind_box) => 0.0
@@ -711,6 +730,33 @@ fn Ctx::flex_tree(self : Ctx, i : Int, pdir : Int) -> Int {
     least = dmin(least, len(n.max_w))
   }
   n.least = least
+  // what its row's fit (Ctx::box drop) keeps of it before a part of the row leaves: words cut short four of their size
+  // (all of them, fewer), what holds them as it holds them; else its least
+  let mut fit_least = if k == kind_text && n.w is Cut && !n.wrap {
+    dmin(n.text_layout(1.0e9).w, cut_kept_ems * n.font_size) + pad_l + pad_r
+  } else if k == kind_box && (n.w is Auto || (n.w is Fill(_) && n.keep)) && !(n.clip || n.sideways) {
+    let row = if more_need >= 0.0 && droppable {
+      fsum + (if placed_in > 0 { gap } else { 0.0 }) + more_need
+    } else {
+      fsum
+    }
+    dmax(row, fwidest) + pad_l + pad_r
+  } else {
+    least
+  }
+  if n.min_w > 0.0 {
+    fit_least = dmax(fit_least, said_min)
+  }
+  if n.max_w < 1.0e9 {
+    fit_least = dmin(fit_least, len(n.max_w))
+  }
+  fit_least = dmax(fit_least, least)
+  n.fit_least = fit_least
+  let fit_need = if fit_least > least + 0.01 { fit_least } else { 0.0 / 0.0 }
+  if !(s.fit_need == fit_need || (s.fit_need.is_nan() && fit_need.is_nan())) {
+    s.fit_need = fit_need
+    ch = true
+  }
   // in a row, sized by what it holds: never narrower than that needs (CSS's min-width: auto); else as said
   let min_w = if in_row && !over && !at && (n.w is Auto || (n.w is Fill(_) && n.keep)) {
     least

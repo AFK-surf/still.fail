@@ -214,16 +214,17 @@ fn chat_bar(
   c.box(style=chat_bar_box, id=bar, fn() {
       room(room_l)
       // the title, its people and agents 10 apart, 8 in from the bar's padding (conversation.css.ts pageBarTitle)
+      // (short of room, its people leave first, then its station's update, the title cut short meanwhile)
       c.box(style=chat_bar_title_row, fn() {
         chat_title(c, src, r, v)
         match v {
           Some(view) => {
-            station_update(c, src, r.station, view.station_update)
+            c.box(drop=chat_bar_drop_update, fn() { station_update(c, src, r.station, view.station_update) }) |> ignore
             if view.agents.length() == 0 {
               chat_station(c, r.station, station)
             }
             if view.people.length() > 0 {
-              people_stack(c, src, "bar-people", view.people, 5)
+              c.box(drop=chat_bar_drop_people, fn() { people_stack(c, src, "bar-people", view.people, 5) }) |> ignore
             }
             let (_, front) = side_of(view)
             for i, a in view.agents {
@@ -716,13 +717,21 @@ let chat_bar_box : @ui.Style = @ui.style(row=true, w=@sf.grow, h=@sf.wide_bar_h_
 let chat_bar_row : @ui.Style = @ui.style(row=true, w=Full, h=@sf.wide_bar_h_size)
 
 ///|
-/// Its title, its people and agents 10 apart, 8 in (pageBarTitle).
+/// Its title, its people and agents 10 apart, 8 in (pageBarTitle); what it cuts 4 past its last, the reach of the
+/// badge at an agent's corner (agent_mark.mbt: 3 past it).
 // kept across runs: a value (no field of it changes)
-let chat_bar_title_row : @ui.Style = @ui.style(row=true, w=@sf.grow, pl=S2, gap=S2_5, align=ACenter, clip=true)
+let chat_bar_title_row : @ui.Style = @ui.style(row=true, w=@sf.grow, pl=S2, pr=S1, gap=S2_5, align=ACenter, clip=true)
 
 ///|
 // kept across runs: a value (no field of it changes)
 let chat_title_room : @ui.Style = @ui.css("row")
+
+///|
+/// What leaves the bar's title row first, short of room: its people, then its station's update.
+let chat_bar_drop_people : Int = 1
+
+///|
+let chat_bar_drop_update : Int = 2
 
 ///|
 /// How wide the title may be: 42% of the bar, 80 at least.

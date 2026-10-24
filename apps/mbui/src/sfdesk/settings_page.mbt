@@ -285,6 +285,12 @@ let desk_list_title : @ui.TextStyle = @ui.text_style(size=Sm, leading=L6, weight
 let desk_note : @ui.TextStyle = @ui.text_style(size=Xs, leading=L5, color=Muted, w=Full)
 
 ///|
+/// A note on one line beside or under what it is about (a name's station, the stations that may use it, 离线, an
+/// account's address): cut short where it has less, never wrapped a letter a line.
+// kept across runs: a value (no field of it changes)
+let desk_note_line : @ui.TextStyle = @ui.text_style(size=Xs, leading=L5, color=Muted, wrap=false, w=Cut)
+
+///|
 // kept across runs: a value (no field of it changes)
 let desk_note_bad : @ui.TextStyle = desk_note.then(@ui.text_style(color=Danger))
 
