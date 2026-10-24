@@ -418,6 +418,8 @@ pub fn back_label(p : Page) -> String {
     Setting(Route::Version) => @sf.t("web-pages.settings.nav.version")
     Setting(Route::Memories) => @sf.t("web-pages.settings.memory.title")
     Setting(Route::AutoDecisions) => @sf.t("web-pages.automaticDecisions.title")
+    Setting(Route::Usage) => @sf.t("web-pages.settings.nav.usage")
+    Place("usage") => @sf.t("web-pages.settings.nav.usage")
     _ => @sf.t("common.back")
   }
 }

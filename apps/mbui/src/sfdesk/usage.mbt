@@ -774,8 +774,10 @@ let ug_empty : @ui.TextStyle = @ui.text_style(size=Sm, leading=L6, color=Muted, 
 ///|
 /// The prices the usage is counted at (UsagePricesSettings, Usage.tsx PriceTables): each station's, on a card of its own,
 /// its name, what its prices are, and a table of its models and their rates (as a message's table is drawn); none, said.
-/// The prices are each station's, through the core; no table of the app's own.
-fn usage_prices_page(c : @ui.Ctx, core : Core, here : Here, days : Int) -> Unit {
+/// The prices are each station's, through the core; no table of the app's own. One page in every frame (the narrow app's
+/// UsagePricesScreen too), laid out by its width (page_look.mbt): narrow, each station's card 12 from the page's sides.
+fn usage_prices_page(c : @ui.Ctx, core : Core, here : Here, frame : PageFrame, days : Int) -> Unit {
+  let look = look_of(c)
   let topic = (core.topic)("usage", { "scope": str(here.workspace), "days": Json::number(days.to_double()) })
   let v = topic.value
   let blocks : Array[() -> Unit] = []
@@ -794,13 +796,17 @@ fn usage_prices_page(c : @ui.Ctx, core : Core, here : Here, days : Int) -> Unit 
       })
     Some(_) => {
       let tables = items(v, "prices")
-      if tables.length() == 0 {
-        blocks.push(fn() { c.text(@sf.t("web-main.usage.noPrices"), style=desk_muted) |> ignore })
+      let wait = field(v, "wait")
+      // none yet while stations are still read (each failure said), else none to show
+      if tables.length() == 0 && (flag(wait, "reading") || failing_of(wait).length() > 0) {
+        blocks.push(fn() { desk_waiting_rows(c, wait, count=2) })
+      } else if tables.length() == 0 {
+        blocks.push(fn() { up_said(c, look, @sf.t("web-main.usage.noPrices")) })
       }
       for table in tables {
         let tv = Some(table)
         blocks.push(fn() {
-          c.box(style=desk_card, fn() {
+          look_card(c, look, fn() {
             c.text(text(tv, "station"), style=up_station) |> ignore
             c.text(text(tv, "note"), style=desk_note) |> ignore
             let rows = items(tv, "rows")
@@ -820,20 +826,29 @@ fn usage_prices_page(c : @ui.Ctx, core : Core, here : Here, days : Int) -> Unit 
               @sf.markdown(c, md.join("\n"), key="prices/" + text(tv, "station"), size=@sf.text_scale.base.0) |> ignore
             }
           })
-          |> ignore
         })
       }
     }
   }
-  desk_page(
+  look_page(
     c,
     core,
+    frame,
+    look,
     "usage-prices/" + days.to_string(),
     @sf.t("web-pages.settings.prices.title"),
     lead=@sf.t("web-pages.settings.prices.lead"),
-    back=@sf.t("web-pages.settings.nav.usage"),
     blocks,
   )
+}
+
+///|
+/// What a page says in place of what it lists (none: muted; narrow, 24 in as a page's note is).
+fn up_said(c : @ui.Ctx, look : Look, words : String) -> Unit {
+  match look {
+    Narrow => c.box(style=narrow_lead_box, fn() { c.text(words, style=narrow_lead) |> ignore }) |> ignore
+    Wide => c.text(words, style=desk_muted) |> ignore
+  }
 }
 
 ///|
