@@ -32,12 +32,25 @@ pub(all) struct Run {
   color : Int64
   /// a ground behind the words, rounded, a little room either side; 0 none
   bg : Int64
+  /// its ground's shape (None: a code run's)
+  ground : Ground?
   strike : Bool
   underline : Bool
   /// where it leads ("" nowhere): tapped, the paragraph's on_link hears it
   link : String
   /// A positioned inline drawing; text is still its copyable, accessible alternative.
   drawing : InlineDrawing?
+} derive(Eq, Debug)
+
+///|
+/// A run's ground shaped as a label on its line rather than code's (CSS's inline-block: a tag before words), in ems of
+/// the run's size: `room` either side of its words on it, `height` (centred on its words' ink), its `corner`, and
+/// `after` it, off it, before what follows.
+pub(all) struct Ground {
+  room : Double
+  height : Double
+  corner : Double
+  after : Double
 } derive(Eq, Debug)
 
 ///|
@@ -63,6 +76,7 @@ pub fn span(
   scale? : Double = 1.0,
   color? : Int64 = 0L,
   bg? : Int64 = 0L,
+  ground? : Ground? = None,
   strike? : Bool = false,
   underline? : Bool = false,
   link? : String = "",
@@ -78,6 +92,7 @@ pub fn span(
     scale,
     color,
     bg,
+    ground,
     strike,
     underline,
     link,
@@ -233,6 +248,21 @@ fn Rich::run_bg(self : Rich, r : Run) -> Int64 {
 }
 
 ///|
+/// The room a run of `size` has on its ground either side of its words, and after it off its ground (none without
+/// one), to the half pixel.
+fn Rich::run_room(self : Rich, r : Run, size : Double) -> (Double, Double) {
+  let half = fn(v : Double) { (v * 2.0).round() / 2.0 }
+  if self.run_bg(r) == 0L {
+    (0.0, 0.0)
+  } else {
+    match r.ground {
+      Some(g) => (half(g.room * size), half(g.after * size))
+      None => (half(size * 0.3), 0.0)
+    }
+  }
+}
+
+///|
 fn layout_rich(r : Rich, max_w : Double) -> RichLayout {
   let sc = g().scale
   let (_, _, own0) = font_metrics(r.size, r.weight)
@@ -307,11 +337,7 @@ fn layout_rich(r : Rich, max_w : Double) -> RichLayout {
     run_ldesc.push(l - lasc)
     run_c0.push(starts.length())
     let n = s.starts.length()
-    let room = if r.run_bg(run) != 0L {
-      (size * 0.3 * 2.0).round() / 2.0
-    } else {
-      0.0
-    }
+    let (room, after) = r.run_room(run, size)
     for i in 0..<n {
       starts.push(s.starts[i] + off)
       lens.push(s.lens[i])
@@ -322,7 +348,7 @@ fn layout_rich(r : Rich, max_w : Double) -> RichLayout {
         p = p + room
       }
       if i == n - 1 {
-        a = a + room
+        a = a + room + after
       }
       adv.push(a)
       pre.push(p)
@@ -942,15 +968,25 @@ fn Ctx::paint_rich(self : Ctx, i : Int, n : Node, alpha : Double) -> Unit {
         let d = lay.run_d[k]
         let (bx0, bx1) = if pressed && r.run_bg(run) == 0L {
           (x0 - 2.0, x1 + 2.0)
+        } else if c1 == lay.run_c1[k] {
+          (x0, x1 - r.run_room(run, lay.run_size[k]).1)
         } else {
           (x0, x1)
         }
+        // a code run's: its ink and a pixel either way; a label's centred on its ink
+        let (by, bh, corner) = match run.ground {
+          None => (base - a - 1.0, a + d + 2.0, dmin(4.0, (a + d) / 2.0))
+          Some(g) => {
+            let h = g.height * lay.run_size[k]
+            (base - (a - d) / 2.0 - h / 2.0, h, dmin(g.corner * lay.run_size[k], h / 2.0))
+          }
+        }
         self.emit_rect(
           bx0,
-          base - a - 1.0,
+          by,
           bx1 - bx0,
-          a + d + 2.0,
-          dmin(4.0, (a + d) / 2.0),
+          bh,
+          corner,
           bg,
           0.0,
           0L,
@@ -1019,7 +1055,7 @@ fn Ctx::paint_rich(self : Ctx, i : Int, n : Node, alpha : Double) -> Unit {
     }
     let size = lay.run_size[k]
     let t = dmax(1.0, (size / 15.0 * sc).round() / sc)
-    // a code run's room either side is not under the line
+    // a code run's room either side is not under the line, nor a label's after it
     let room = if lay.run_c1[k] > lay.run_c0[k] {
       lay.pre[lay.run_c0[k]]
     } else {
@@ -1030,7 +1066,7 @@ fn Ctx::paint_rich(self : Ctx, i : Int, n : Node, alpha : Double) -> Unit {
       let base = oy + lay.line_y[l] + lay.line_base[l]
       let (sx0, sx1) = lay.span_x(c0, c1)
       let x0 = ox + sx0 + (if c0 == lay.run_c0[k] { room } else { 0.0 })
-      let x1 = ox + sx1 - (if c1 == lay.run_c1[k] { room } else { 0.0 })
+      let x1 = ox + sx1 - (if c1 == lay.run_c1[k] { room + r.run_room(run, size).1 } else { 0.0 })
       if run.strike {
         let y = ((base - size * 0.27 - t / 2.0) * sc).round() / sc
         self.emit_rect(x0, y, x1 - x0, t, 0.0, colors[k], 0.0, 0L, alpha)
