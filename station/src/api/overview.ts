@@ -198,7 +198,7 @@ function decisionsView(d: OverviewDeps, viewer: Viewer): unknown {
 
 /// What a session's chat is called in the chat list; its key only where it has no chat.
 function chatTitleOf(store: Store, session: string): string {
-  const summary = store.listThreads("", session, null)[0];
-  if (summary) return titleOf(summary.thread, summary.firstText, null);
+  const chat = store.sessionChat(session);
+  if (chat) return titleOf(chat.thread, chat.firstText, null);
   return store.getSession(session)?.title ?? session;
 }

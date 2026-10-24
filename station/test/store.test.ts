@@ -13,6 +13,7 @@ import {
 import { MERGED, SCHEMA } from "../src/store/schema.ts";
 import * as read from "../src/read/store.ts";
 import { fileAway } from "./archived-before.ts";
+import { testClock } from "./hub-fakes.ts";
 
 const dirs: string[] = [];
 const stores: Store[] = [];
@@ -421,6 +422,30 @@ test("the store announces what changed", () => {
   h.stop();
   store.notify("a");
   assert.equal(h.changes.length, 8, "unsubscribed");
+});
+
+test("a session's chat is named by the thread said in last, as the lists have it, read by its rows alone", async () => {
+  const time = testClock();
+  await time.adjust(Date.parse("2026-10-25T00:00:00Z"));
+  const store = Store.open(":memory:", null, time.clock);
+  stores.push(store);
+  session(store, "a");
+  assert.equal(store.sessionChat("a"), null);
+  const slack = store.openThread("slack", "C1", "1.1", null, null);
+  const own = store.openThreadOf("ember", "EMBER", "2.1", null, null, "a");
+  store.joinThread(slack.id, "a", "slack");
+  store.joinThread(own.id, "a", "ember");
+  say(store, slack.id, "1.2", "person", "u1", "看一下构建");
+  await time.adjust(1000);
+  say(store, own.id, "2.2", "person", "local", "hi");
+  const named = () => [store.sessionChat("a")!.thread.id, store.sessionChat("a")!.firstText];
+  // The still.fail chat said in last: its words are not asked (its title is its own, or 新对话).
+  assert.deepEqual(named(), [own.id, null]);
+  assert.equal(store.listThreads("", "a", null)[0]!.thread.id, own.id);
+  await time.adjust(1000);
+  say(store, slack.id, "1.3", "agent", "a", "好");
+  assert.deepEqual(named(), [slack.id, "看一下构建"]);
+  assert.equal(store.listThreads("", "a", null)[0]!.thread.id, slack.id);
 });
 
 test("a session's own chat is archived with it, a chat of its own alone; anything new said brings them back", () => {

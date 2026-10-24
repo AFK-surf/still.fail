@@ -32,6 +32,10 @@ CREATE TABLE IF NOT EXISTS decision_checks (
   created_at INTEGER NOT NULL,
   result TEXT NOT NULL
 );
+-- A session's latest check (review.ts undecided, for every done chat) and those of the last days (the archive policy's
+-- view, in every overview): without them each scanned every check.
+CREATE INDEX IF NOT EXISTS decision_checks_session ON decision_checks (session, id);
+CREATE INDEX IF NOT EXISTS decision_checks_at ON decision_checks (created_at);
 CREATE TABLE IF NOT EXISTS sessions (
   key TEXT PRIMARY KEY,
   connect TEXT NOT NULL,
@@ -147,6 +151,9 @@ CREATE TABLE IF NOT EXISTS turns (
 -- A session's turns, by when they started: every list of chats and sessions counts each session's turns and takes its
 -- latest (sessionStats); without it each scanned every turn of every session (some 160 ms a list on a busy station).
 CREATE INDEX IF NOT EXISTS turns_by_session ON turns (session_key, started_at);
+-- The turns running or ended lately (usage.ts usageActiveSessions, at each read of the usage counter: every few seconds
+-- while agents work): without it each read scanned every turn of the station's.
+CREATE INDEX IF NOT EXISTS turns_ended ON turns (ended_at);
 CREATE TABLE IF NOT EXISTS processes (
   pgid INTEGER PRIMARY KEY,
   started_at INTEGER NOT NULL,
@@ -174,6 +181,9 @@ CREATE TABLE IF NOT EXISTS jobs (
   size TEXT
 );
 CREATE INDEX IF NOT EXISTS jobs_by_session ON jobs (session_key);
+-- The jobs running (store.ts runningJobs, for every station_list that asks how busy this one is): without it each
+-- asking scanned every job the station ever ran, its command and log path with it.
+CREATE INDEX IF NOT EXISTS jobs_state ON jobs (state);
 CREATE TABLE IF NOT EXISTS job_notices (
   job_id TEXT NOT NULL,
   at INTEGER NOT NULL,

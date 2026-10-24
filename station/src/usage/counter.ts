@@ -28,6 +28,8 @@ const MARGIN_MS = 60_000;
 export const SETTLE_MS = 2_000;
 /// How often everything that ran is read anyway, for what no turn's end told.
 export const SAFETY_MS = 10 * 60_000;
+/// How many sessions' turns are kept between reads (those of the sessions at work, the most recently read).
+const TURNS_KEPT = 64;
 /// How much of a transcript is read, parsed and recorded at a time before the event loop is let through.
 const CHUNK = 1 << 20;
 
@@ -445,6 +447,8 @@ export class UsageCounter {
   #clock: Clock.Clock;
   /// The sessions the read under way recorded new calls of.
   #counted = new Set<string>();
+  /// Each session's turns as the last read made them (`usageTurns`), and what they were made of (`usageTurnsStamp`).
+  #turnsKept = new Map<string, { stamp: string; turns: UsageTurn[] }>();
 
   constructor(options: UsageCounterOptions) {
     this.#store = options.store;
@@ -658,6 +662,20 @@ export class UsageCounter {
     return added;
   }
 
+  /// A session's turns, each with whom it worked for: made again only once what they are made of changed (a turn begun,
+  /// a message taken). A read comes every few seconds while agents work, and a long session has a thousand turns, each
+  /// row read where it lies.
+  #turnsOf(key: string): UsageTurn[] {
+    const stamp = this.#store.usageTurnsStamp(key);
+    const kept = this.#turnsKept.get(key);
+    if (kept !== undefined && kept.stamp === stamp) return kept.turns;
+    const turns = this.#store.usageTurns(key);
+    this.#turnsKept.delete(key);
+    this.#turnsKept.set(key, { stamp, turns });
+    while (this.#turnsKept.size > TURNS_KEPT) this.#turnsKept.delete(this.#turnsKept.keys().next().value!);
+    return turns;
+  }
+
   /// Reads one transcript of `session` on from where it was left, and records its calls, a part at a time.
   async #readFile(path: string, runtime: Runtime, subagent: boolean, session: SessionRow, was: UsageFile | undefined, turns: { of: UsageTurn[] | null }): Promise<number> {
     // A transcript put away (only its `.zst` there) was read before it was: its session is archived and idle, and it is
@@ -677,7 +695,7 @@ export class UsageCounter {
       }
       // What ran before the station had the session (a terminal's, continued here) is not the station's.
       const calls = callsOf(runtime, part.text, subagent, state).filter((c) => c.at >= session.createdAt - SKEW_MS);
-      turns.of ??= this.#store.usageTurns(session.key);
+      turns.of ??= this.#turnsOf(session.key);
       const of = turns.of;
       const withFor: [UsageCall, UsageFor][] = calls.map((c) => {
         // The turn it was made in: the last to start before it (the first, for one before them all).

@@ -212,6 +212,46 @@ test("each call is counted once, for whom its turn worked, where and on what", a
   assert.equal(r.store.usageGroups(0, MAX, 0).reduce((s, g) => s + g.calls, 0), 4);
 });
 
+test("a session's turns are made again only once a turn begins or a message is taken, not at every read", async () => {
+  const time = await today();
+  const pause = () => time.adjust(15);
+  const r = rig({ clock: time.clock });
+  const workspace = join(r.data, "sessions/ember/c-1/workspace");
+  session(r.store, "ember:c-1", workspace, r.store.now());
+  const chat = r.store.openThreadOf("ember", "ember", "1.0", null, "creator@x", "ember:c-1");
+  r.store.joinThread(chat.id, "ember:c-1", "ember");
+  const real = r.store.usageTurns.bind(r.store);
+  let made = 0;
+  r.store.usageTurns = (key: string) => (made++, real(key));
+  await pause();
+  r.store.startTurnFor("t1", "ember:c-1", "input", { profile: "cc", person: "a@x", thread: chat.id });
+  const main = join(r.data, "transcripts/claude", claudeProject(workspace), "r1.jsonl");
+  const at = () => r.store.now() + 1;
+  append(main, [claudeLine("m1", at(), "claude-opus-5-5", usage(1, 0, 0, 0, 1))]);
+  assert.equal(await r.usage.read(), 1);
+  assert.equal(made, 1);
+  // The same turn going on: read on, its turns as they were.
+  await pause();
+  append(main, [claudeLine("m2", at(), "claude-opus-5-5", usage(2, 0, 0, 0, 1))]);
+  assert.equal(await r.usage.read(), 1);
+  assert.equal(made, 1);
+  // A turn begun (a job's notice: for whom the one before worked) and a message taken during it: made again each time.
+  await pause();
+  r.store.startTurn("t2", "ember:c-1", "job");
+  append(main, [claudeLine("m3", at(), "claude-opus-5-5", usage(3, 0, 0, 0, 1))]);
+  assert.equal(await r.usage.read(), 1);
+  assert.equal(made, 2);
+  await pause();
+  const [n] = r.store.insertMessage(newMessage(chat.id, "2.0", "person", "b@x", "再看看"));
+  r.store.deliver(chat.id, n, ["ember:c-1"]);
+  r.store.markDelivered("ember:c-1", [[chat.id, n]]);
+  append(main, [claudeLine("m4", at(), "claude-opus-5-5", usage(4, 0, 0, 0, 1))]);
+  assert.equal(await r.usage.read(), 1);
+  assert.equal(made, 3);
+  // Each for whom its turn worked: the job's and the one during it for the person before.
+  assert.deepEqual(r.store.usageGroups(0, MAX, 0).map((g) => [g.calls, g.input, g.person, g.thread]), [[4, 10, "a@x", chat.id]]);
+});
+
 test("days are the asker's own", async () => {
   const r = rig();
   const workspace = join(r.data, "w");
