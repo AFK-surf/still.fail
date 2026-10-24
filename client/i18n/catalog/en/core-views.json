@@ -555,5 +555,15 @@
   "core-views.present.access.subscription": "Subscription",
   "core-views.present.access.provider": "API provider",
   "core-views.present.access.env": "Custom environment variables",
-  "core-views.present.profile.never_checked": "Not checked yet"
+  "core-views.present.profile.never_checked": "Not checked yet",
+  "core-views.software.dev": "Dev build",
+  "core-views.software.unknown": "Unknown",
+  "core-views.software.not_installed": "Not installed",
+  "core-views.software.latest": "Up to date",
+  "core-views.software.check_failed_retry": "Update check failed. Click \"Check now\" to retry.",
+  "core-views.software.updating": "Updating",
+  "core-views.software.installing": "Installing",
+  "core-views.software.update_failed": "Update failed",
+  "core-views.software.install_failed": "Install failed",
+  "core-views.software.separator": "; "
 }

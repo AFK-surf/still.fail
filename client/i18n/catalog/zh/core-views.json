@@ -477,5 +477,15 @@
   "core-views.present.access.subscription": "订阅账号",
   "core-views.present.access.provider": "API 服务商",
   "core-views.present.access.env": "自定义环境变量",
-  "core-views.present.profile.never_checked": "尚未检查"
+  "core-views.present.profile.never_checked": "尚未检查",
+  "core-views.software.dev": "开发版",
+  "core-views.software.unknown": "版本未知",
+  "core-views.software.not_installed": "未安装",
+  "core-views.software.latest": "已是最新",
+  "core-views.software.check_failed_retry": "检查更新失败，点击「检查更新」重试",
+  "core-views.software.updating": "正在更新",
+  "core-views.software.installing": "正在安装",
+  "core-views.software.update_failed": "更新失败",
+  "core-views.software.install_failed": "安装失败",
+  "core-views.software.separator": "；"
 }

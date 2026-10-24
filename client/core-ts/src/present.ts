@@ -1151,7 +1151,7 @@ function overview(value: J, c: Clock, station: string | null): J {
   const connects = arr(v.connects);
   if (connects) v.connects = connects.map(connect);
   const updates = arr(v.updates);
-  if (updates) v.updates = updates.map((u) => (get(u, "id") === "station" ? { ...u, name: "Station" } : u));
+  if (updates) v.updates = updates.map((u) => software(get(u, "id") === "station" ? { ...u, name: "Station" } : u));
   const listed = arr(v.profiles);
   // A stable sort: by kind of account (a station's list is a section each), those in trouble first in each.
   const kindOf = (p: J) => PROFILE_GROUPS.indexOf(get(p, "group"));
@@ -1258,4 +1258,25 @@ export function installView(runtime: string, updates: J[], manages: boolean): J 
   if (can) return { runtime, state: "missing", title, action: t("core-views.install.action") };
   const why = str(v.note) ?? (manages ? null : t("core-views.install.managers_only"));
   return { runtime, state: "missing", title, ...(why !== null ? { note: why } : {}) };
+}
+
+/// A piece of software as it is said (the web's Versions.tsx describe): its version as shown, what is said of it on
+/// hover (up to date, or that the last check failed), and while it updates or once that failed, in words.
+export function software(u: J): J {
+  const installed = get(u, "installed") === true;
+  const version = typeof get(u, "version") === "string" ? (get(u, "version") as string) : null;
+  const latest = typeof get(u, "latest") === "string" ? (get(u, "latest") as string) : null;
+  const shownText = installed ? (version ?? t(get(u, "id") === "station" ? "core-views.software.dev" : "core-views.software.unknown")) : t("core-views.software.not_installed");
+  const tips = [
+    installed && get(u, "newer") !== true && get(u, "downgrade") !== true && latest !== null ? t("core-views.software.latest") : null,
+    installed && latest === null && typeof get(u, "checkedAt") === "number" ? t("core-views.software.check_failed_retry") : null,
+  ].filter((x): x is string => x !== null);
+  const progress = get(u, "progress");
+  return {
+    ...u,
+    shownText,
+    tipText: tips.join(t("core-views.software.separator")),
+    updatingText: typeof progress === "string" ? progress : t(installed ? "core-views.software.updating" : "core-views.software.installing"),
+    failedText: t(installed ? "core-views.software.update_failed" : "core-views.software.install_failed"),
+  };
 }

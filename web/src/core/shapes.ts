@@ -4337,6 +4337,14 @@ export interface SoftwareVersion {
 	message?: string;
 	/** When what is out was last read. */
 	checkedAt?: number;
+	/** Its version as shown: not installed, a clone's (开发版), or one not read. */
+	shownText?: string;
+	/** What is said of it on hover: up to date, or that the last check failed ("" nothing). */
+	tipText?: string;
+	/** While it updates, where that is (its `progress`, else 正在更新/正在安装). */
+	updatingText?: string;
+	/** Its last update or install failed, in words. */
+	failedText?: string;
 }
 
 /** What a station's search finds of its machine (`Overview.search`). */

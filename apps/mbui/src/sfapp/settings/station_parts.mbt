@@ -458,7 +458,7 @@ fn version_call(core : Core, station : String, name : String, params : Array[(St
 ///|
 /// A moment (ms since 1970) as Android's short date and time say it in Chinese (DateFormat.SHORT, SHORT: 2026/9/21
 /// 22:13), in the device's local time.
-fn short_date_time(ms : Double) -> String {
+pub fn short_date_time(ms : Double) -> String {
   let day_ms = 86400000.0
   let local = ms + @ui.utc_offset_min(ms).to_double() * 60000.0
   let days = (local / day_ms).floor()
