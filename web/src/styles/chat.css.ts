@@ -16,7 +16,7 @@ export const msgAvatar = style({
   },
 });
 export const msgPlain = style({
-  whiteSpace: "pre-wrap", overflowWrap: "anywhere", fontFamily: vars.fontText, fontSize: vars.textBody, lineHeight: "1.55",
+  whiteSpace: "pre-wrap", overflowWrap: "anywhere", fontFamily: vars.fontText, fontVariantNumeric: "normal", fontSize: vars.textBody, lineHeight: "1.55",
 });
 export const msgWaiting = style({ display: "inline-flex", alignItems: "center", gap: "5px" });
 /** A profile's model pool: a checklist of what it may be used for. */

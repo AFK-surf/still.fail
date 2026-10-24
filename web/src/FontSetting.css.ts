@@ -55,7 +55,7 @@ export const preview = style({
   fontFamily: vars.fontBody, color: vars.text,
 });
 export const previewMine = style({ display: "flex", justifyContent: "flex-end" });
-export const previewWords = style({ fontFamily: vars.fontText, fontSize: vars.textBody, lineHeight: "1.55" });
+export const previewWords = style({ fontFamily: vars.fontText, fontVariantNumeric: "normal", fontSize: vars.textBody, lineHeight: "1.55" });
 export const previewName = style({ fontSize: vars.textUi, fontWeight: "600", color: vars.accentText });
 // On the settings' grey card, the bubble and the code on the page's own ground, as a chat has them.
 globalStyle(`${preview} ${previewMine} > *, ${preview} pre`, { background: vars.canvas });

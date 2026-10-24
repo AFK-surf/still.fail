@@ -73,6 +73,12 @@ line, cut with an ellipsis), `tracking`, `max_lines` (wrapped words cut after th
 many lines, the last ending in an ellipsis: what follows of its paragraph up to what fits with it, as Android's
 `maxLines`; a count, so no style-literal). Letter spacing is Android's: each cluster's advance has it, its piece drawn
 half of it in; words with it are shaped with no ligatures (`@hostapi.style_no_ligatures`), each cluster spaced on its own.
+`tabular` (CSS's `font-variant-numeric: tabular-nums`): digits all one width, the font's tabular figures
+(`@hostapi.style_tabular`), so a number keeps its width as it changes (a percentage, a time running, a count) and what
+is beside it stays put. Where words say nothing of it the theme's `tabular` decides, for the app's own words (`Ctx::text`,
+a `Ctx::rich` not `words`): an app whose numbers move sets it once there, as a web page sets it on its root, rather than
+on each number. What people wrote (`words`), a face shown in itself and a book's pages keep the font's own figures. Words
+with no digit are shaped as they are either way.
 Rich text (`Ctx::rich`) has both: letter spacing in every run, and `max_lines` (the ellipsis in the style of the run it
 follows). Behaviour is not a style (`id`, `glass`, `notch_*`,
 `aspect`, `tx`/`ty`, a place in the parent: `left` `top` `right` `bottom`, `moves`).

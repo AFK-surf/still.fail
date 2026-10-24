@@ -805,6 +805,9 @@ pub fn ui_theme() -> @ui.Theme {
     // WebType: 1.4.em)
     text_line: 1.4,
     corner_ladder,
+    // the app's own words with digits all one width, as the web's root (`font-variant-numeric: tabular-nums`): a
+    // percentage, a time running, a count keep their width as they change; what people wrote keeps the font's own
+    tabular: true,
   }
 }
 

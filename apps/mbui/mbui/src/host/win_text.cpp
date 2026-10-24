@@ -330,17 +330,24 @@ static IDWriteTextFormat *format_for(double size, int weight, int style) {
   return f;
 }
 
-// style & 8: no ligatures (words with letter spacing, each cluster spaced on its own): liga and clig off
-static IDWriteTypography *no_ligatures;
+// style & 8: no ligatures (words with letter spacing, each cluster spaced on its own): liga and clig off; style & 32:
+// digits all one width (style.mbt style_tabular): tnum. One typography for each of the three ways they go together.
+static IDWriteTypography *typographies[4];
 
 static void set_style_features(IDWriteTextLayout *l, int len, int style) {
-  if (!(style & 8)) return;
-  if (!no_ligatures) {
-    dw->CreateTypography(&no_ligatures);
-    no_ligatures->AddFontFeature({DWRITE_FONT_FEATURE_TAG_STANDARD_LIGATURES, 0});
-    no_ligatures->AddFontFeature({DWRITE_FONT_FEATURE_TAG_CONTEXTUAL_LIGATURES, 0});
+  int k = ((style & 8) ? 1 : 0) | ((style & 32) ? 2 : 0);
+  if (!k) return;
+  if (!typographies[k]) {
+    IDWriteTypography *t = NULL;
+    dw->CreateTypography(&t);
+    if (k & 1) {
+      t->AddFontFeature({DWRITE_FONT_FEATURE_TAG_STANDARD_LIGATURES, 0});
+      t->AddFontFeature({DWRITE_FONT_FEATURE_TAG_CONTEXTUAL_LIGATURES, 0});
+    }
+    if (k & 2) t->AddFontFeature({DWRITE_FONT_FEATURE_TAG_TABULAR_FIGURES, 1});
+    typographies[k] = t;
   }
-  l->SetTypography(no_ligatures, {0, (UINT32)len});
+  l->SetTypography(typographies[k], {0, (UINT32)len});
 }
 
 static IDWriteTextLayout *make_layout(const WCHAR *s, int len, double size, int weight, int style) {

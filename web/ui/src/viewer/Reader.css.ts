@@ -47,7 +47,7 @@ export const scroller = style({
 /** One column, as wide as a line reads well, in the reader's own size and lines. */
 export const column = style({
   boxSizing: "border-box", maxWidth: "calc(34em + 2 * var(--r-margin))", margin: "0 auto", padding: "0 var(--r-margin)",
-  fontSize: "var(--r-size)", lineHeight: "var(--r-line)", overflowWrap: "anywhere", textWrap: "wrap",
+  fontSize: "var(--r-size)", lineHeight: "var(--r-line)", overflowWrap: "anywhere", textWrap: "wrap", fontVariantNumeric: "normal",
 });
 
 /** Lines laid out only as they come near the screen; their height kept once drawn. */

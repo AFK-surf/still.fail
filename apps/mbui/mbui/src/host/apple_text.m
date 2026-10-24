@@ -78,8 +78,17 @@ static int face_id(int style) {
   return face_descs[1].count ? 1 : 0;
 }
 
-// Face `face` at this size and weight: its file for the nearest weight, a variable one at the weight itself.
-static CTFontRef face_font(int face, double size, int weight) {
+// Digits all one width (style.mbt style_tabular), as UIFont's monospacedDigitSystemFont.
+static NSDictionary *tabular_figures(void) {
+  return @{
+    (__bridge id)kCTFontFeatureTypeIdentifierKey : @(kNumberSpacingType),
+    (__bridge id)kCTFontFeatureSelectorIdentifierKey : @(kMonospacedNumbersSelector),
+  };
+}
+
+// Face `face` at this size and weight: its file for the nearest weight, a variable one at the weight itself; its digits
+// all one width where `tabular`.
+static CTFontRef face_font(int face, double size, int weight, bool tabular) {
   NSArray<NSNumber *> *ws = face_weights[face];
   NSUInteger best = 0;
   int bestd = INT_MAX;
@@ -100,11 +109,13 @@ static CTFontRef face_font(int face, double size, int weight) {
   // the app's words and what people wrote with the web's alternates (global.css.ts: font-feature-settings "cv11",
   // "ss01": Inter's single-storey a, its open digits; a face without them is as it is)
   CTFontDescriptorRef feat = NULL;
+  NSMutableArray *fs = [NSMutableArray new];
   if (face == 1 || face == 2) {
-    NSArray *fs = @[
-      @{(__bridge id)kCTFontOpenTypeFeatureTag : @"cv11", (__bridge id)kCTFontOpenTypeFeatureValue : @1},
-      @{(__bridge id)kCTFontOpenTypeFeatureTag : @"ss01", (__bridge id)kCTFontOpenTypeFeatureValue : @1},
-    ];
+    [fs addObject:@{(__bridge id)kCTFontOpenTypeFeatureTag : @"cv11", (__bridge id)kCTFontOpenTypeFeatureValue : @1}];
+    [fs addObject:@{(__bridge id)kCTFontOpenTypeFeatureTag : @"ss01", (__bridge id)kCTFontOpenTypeFeatureValue : @1}];
+  }
+  if (tabular) [fs addObject:tabular_figures()];
+  if (fs.count) {
     feat = CTFontDescriptorCreateCopyWithAttributes(at ? at : d,
                                                     (__bridge CFDictionaryRef)@{(__bridge id)kCTFontFeatureSettingsAttribute : fs});
   }
@@ -229,8 +240,21 @@ static CTFontRef font_for(double size, int weight, int style) {
   id f = fonts[k];
   if (!f) {
     int face = face_id(style);
-    CTFontRef base = face ? face_font(face, size, weight) : NULL;
-    if (!base) base = (style & 4) && !(style & 2) ? serif_font(size, weight) : mb_platform_font(size, weight, (style & 2) != 0);
+    CTFontRef base = face ? face_font(face, size, weight, (style & 32) != 0) : NULL;
+    if (!base) {
+      base = (style & 4) && !(style & 2) ? serif_font(size, weight) : mb_platform_font(size, weight, (style & 2) != 0);
+      if (style & 32) {
+        // digits all one width (style.mbt style_tabular)
+        CTFontDescriptorRef d = CTFontDescriptorCreateWithAttributes(
+            (__bridge CFDictionaryRef)@{(__bridge id)kCTFontFeatureSettingsAttribute : @[ tabular_figures() ]});
+        CTFontRef t = CTFontCreateCopyWithAttributes(base, 0.0, NULL, d);
+        CFRelease(d);
+        if (t) {
+          CFRelease(base);
+          base = t;
+        }
+      }
+    }
     if (style & 1) {
       CTFontRef it = CTFontCreateCopyWithSymbolicTraits(base, 0, NULL, kCTFontTraitItalic, kCTFontTraitItalic);
       if (it) {
