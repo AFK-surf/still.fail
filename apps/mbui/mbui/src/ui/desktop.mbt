@@ -310,7 +310,7 @@ pub fn Ctx::menu_asked(self : Ctx, id : Int) -> (Double, Double)? {
   match self.right_clicked(id) {
     Some(at) => Some(at)
     None =>
-      if pointing() is Finger && self.long_press(id) {
+      if pointing() is Finger && self.held_long(id) {
         Some((self.px, self.py))
       } else {
         None

@@ -470,3 +470,24 @@ test "desktop: a finger reaches a target smaller than a fingertip from round it,
   t.tap(250.0, 12.0)
   assert_eq(clicks, ["row"])
 }
+
+///|
+test "desktop: lit by the hand on it: a mouse resting on it, a finger pressing it (and nothing once lifted)" {
+  let lit : Ref[Bool] = { val: false }
+  let view = fn(c : @ui.Ctx) {
+    let b = c.id("b")
+    lit.val = c.lit(b)
+    c.box(id=b, w=Px(100.0), h=Px(40.0), fn() {  }) |> ignore
+  }
+  let t = @ui.Tester::new(view, platform=2)
+  t.press_at(20.0, 20.0)
+  t.draw()
+  assert_true(lit.val)
+  t.release(20.0, 20.0)
+  t.draw()
+  assert_false(lit.val)
+  let t = @ui.Tester::new(view, platform=0)
+  t.move(20.0, 20.0)
+  t.draw()
+  assert_true(lit.val)
+}
