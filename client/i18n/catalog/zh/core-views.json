@@ -466,5 +466,11 @@
   "core-views.admin.relay.chart_rate": "转发速率",
   "core-views.admin.relay.peak": "峰值 {value}",
   "core-views.admin.relay.range.day": "24 小时",
-  "core-views.admin.relay.range.week": "7 天"
+  "core-views.admin.relay.range.week": "7 天",
+  "core-views.station.last_online": "{time}在线",
+  "core-views.station.never_online": "尚未上线",
+  "core-views.station.running_agents": "{n} 个 agent 正在运行",
+  "core-views.station.silent": "无响应：{name} cloud 显示其在线，但始终无法读取其状态，该机器可能已断网或处于睡眠状态",
+  "core-views.station.away": "离线：在该机器上打开 {name} 即可重新连接",
+  "core-views.station.never_connected": "尚未连接：在该机器上打开 {name}"
 }

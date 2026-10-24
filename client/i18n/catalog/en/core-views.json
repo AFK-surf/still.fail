@@ -541,5 +541,14 @@
   "core-views.admin.relay.chart_rate": "Throughput",
   "core-views.admin.relay.peak": "Peak {value}",
   "core-views.admin.relay.range.day": "24 hours",
-  "core-views.admin.relay.range.week": "7 days"
+  "core-views.admin.relay.range.week": "7 days",
+  "core-views.station.last_online": "Online {time}",
+  "core-views.station.never_online": "Never online",
+  "core-views.station.running_agents": {
+    "one": "1 agent running",
+    "other": "{n} agents running"
+  },
+  "core-views.station.silent": "Not responding: {name} cloud reports it online, but its status can't be read. The machine may be offline or asleep.",
+  "core-views.station.away": "Offline: open {name} on that machine to reconnect",
+  "core-views.station.never_connected": "Never connected: open {name} on that machine"
 }

@@ -210,7 +210,7 @@ function deciding(id: string, th: number, seq: number, at: number, dismissed: bo
 const ids = (v: J): string[] => v.days.flatMap((d: J) => d.items.map((i: J) => i.id));
 
 /// A value without what the clients show of it: what a view puts together, alone.
-const SHOWN = new Set(["trouble", "settled", "archivable", "stateText", "face", "line", "available", "offered", "connection", "glyph", "note", "time", "statusText", "tone", "badgeText", "titleText", "agentText", "maker", "runtimeText", "processText", "efforts", "modeText", "modeShort", "runText", "presence", "checkText", "checkTone", "preview", "makers", "mark", "order", "left", "level", "refills", "shown", "processesText", "by", "waiting", "since", "originText", "originKind", "summary", "modelsText"]);
+const SHOWN = new Set(["trouble", "settled", "archivable", "stateText", "face", "line", "available", "offered", "connection", "glyph", "note", "time", "statusText", "tone", "badgeText", "titleText", "agentText", "maker", "runtimeText", "processText", "efforts", "modeText", "modeShort", "runText", "presence", "checkText", "checkTone", "preview", "makers", "mark", "order", "left", "level", "refills", "shown", "processesText", "by", "waiting", "since", "originText", "originKind", "summary", "modelsText", "stateBusy", "problems"]);
 function plain(v: J): J {
   if (Array.isArray(v)) return v.map(plain);
   if (v !== null && typeof v === "object") return Object.fromEntries(Object.entries(v).filter(([k, x]) => !SHOWN.has(k) && x !== null && x !== undefined).map(([k, x]) => [k, plain(x)]));
@@ -1959,4 +1959,34 @@ test("what_the_core_keeps_and_shares_is_never_written_on_whatever_a_chat_holds",
     });
     assert.equal(uis[0][0].value.messages.length, drawn.page.entries.filter((e: J) => e.kind === "message").length, said);
   }
+});
+
+test("a_station_says_how_it_is_and_what_is_wrong_with_it_in_the_cores_words", async () => {
+  // StationCards.tsx's state() and problems() were the web's own (and its 15 s silence a timer of the page's): the
+  // core's now, for the web's station page and the desktop app's alike.
+  const t = setup();
+  const list = ui();
+  t.subscribe(1, { topic: "stations", scope: "ws" });
+  t.set(workspace(), stations(t.nowS()));
+  await t.read(list, 1);
+  t.set(link("ws/a"), { state: "online" });
+  t.set(link("ws/b"), { state: "offline" });
+  t.set(link("ws/c"), { state: "offline" });
+  await t.read(list, 1);
+  const of = (st: string) => (list.value as J[]).find((s) => s.station === st);
+  // up, not read yet: connecting, nothing wrong yet
+  assert.deepEqual([of("ws/a").stateText, of("ws/a").stateBusy, of("ws/a").problems], ["正在连接", false, []]);
+  // away: when it was last online, red; never online, amber
+  assert.ok(of("ws/b").stateText.endsWith("在线"), of("ws/b").stateText);
+  assert.deepEqual(of("ws/b").problems.map((p: J) => [p.key, p.level]), [["away", "red"]]);
+  assert.deepEqual([of("ws/c").stateText, of("ws/c").problems.map((p: J) => [p.key, p.level])], ["尚未上线", [["away", "amber"]]]);
+  // up and no host reading for 15 s: silent
+  await t.host.time.pass(15_000);
+  await t.read(list, 1);
+  assert.deepEqual(of("ws/a").problems.map((p: J) => [p.key, p.level]), [["silent", "amber"]]);
+  // its host read and its agents at work: busy, nothing wrong
+  t.set(hostOf("ws/a"), hostInfo("studio"));
+  t.set(overview("ws/a"), { ...overviewOf([], []), counts: { sessions: 2, running: 2, warm: 0 } });
+  await t.read(list, 1);
+  assert.deepEqual([of("ws/a").stateText, of("ws/a").stateBusy, of("ws/a").problems], ["2 个 agent 正在运行", true, []]);
 });
