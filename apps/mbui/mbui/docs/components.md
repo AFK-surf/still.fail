@@ -70,7 +70,9 @@ the gallery: every component in its states, light beside dark (`APP=kitdemo`, `M
 
 Everything that scrolls has the same bar, drawn by mbui, with no call of its own: a list (`Ctx::list`), a box kept
 to a height (`Ctx::capped`), a box scrolled sideways (`Ctx::sideways`; boxes scrolled as one, `across`, one bar along
-the foot of the list they are in). It is still.fail's web's (`web/src/scrollbars.ts`), for every hand:
+the foot of the list they are in), a field of more lines than it shows (`Ctx::editor` with `max_lines` over 1: its
+words scroll in it as a capped box's do, by the wheel, a finger and its bar, the caret's line brought into view only
+as the caret or the words change). It is still.fail's web's (`web/src/scrollbars.ts`), for every hand:
 
 - **Look.** A thumb 3 wide, round, 2 in from the edge it runs along (the right, or the foot of what scrolls
   sideways), the theme's words' colour at 26%, 45% while the pointer is on it or holds it; at least 28 long. Over

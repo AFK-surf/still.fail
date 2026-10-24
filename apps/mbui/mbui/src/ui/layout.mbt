@@ -909,15 +909,38 @@ fn Ctx::commit(self : Ctx, i : Int, px : Double, py : Double, gen : Int) -> Unit
       Some(st) => {
         let tl = layout_text(st.shown(), n.font_size, n.weight, iw, true, line=n.line_h, trim=n.line_trim, style=faces_style(st.words, 0))
         st.tl = Some(tl)
-        // taller than the field: scrolled so that the caret's line shows
+        // taller than the field: scrolled so that the caret's line shows; a field of more lines, where it was scrolled
+        // to (the wheel, a finger, its bar: Ctx::editor) until the caret or the words change
         let (_, cl) = st.place_of(tl, st.caret + st.marked.length())
         let top = cl.to_double() * tl.line_h
-        if top - st.scroll < 0.0 {
-          st.scroll = top
-        } else if top + tl.line_h - st.scroll > ih {
-          st.scroll = top + tl.line_h - ih
+        let most = dmax(0.0, tl.h - ih)
+        let sw = sideways.get(n.id)
+        let was = match sw {
+          Some(s) => s.x
+          None => st.scroll
         }
-        st.scroll = dmax(0.0, dmin(st.scroll, tl.h - ih))
+        let now = (st.caret, st.anchor, st.text.length() + st.marked.length())
+        st.scroll = was
+        if sw is None || now != st.followed {
+          st.followed = now
+          if top - st.scroll < 0.0 {
+            st.scroll = top
+          } else if top + tl.line_h - st.scroll > ih {
+            st.scroll = top + tl.line_h - ih
+          }
+        }
+        st.scroll = dmax(0.0, dmin(st.scroll, most))
+        match sw {
+          Some(s) => {
+            s.max = most
+            s.x = st.scroll
+            // (brought to the caret where its bar was drawn: it scrolled)
+            if st.scroll != was && self.bar_drawn(n.id) is Some(_) {
+              self.sideways_scrolled(s)
+            }
+          }
+          None => ()
+        }
         st.ox = ix
         st.oy = iy - st.scroll
       }
