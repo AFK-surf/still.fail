@@ -58,6 +58,14 @@
       "stillfail/sfkept"
     ]
   },
+  "pages": {
+    "roots": [
+      "src/sfapp",
+      "src/sfbase",
+      "src/sfdesk",
+      "src/sfpages"
+    ]
+  },
   "build_effect": {
     "later": [
       "@sf.menu",
@@ -216,7 +224,21 @@
     "unsettled-ok": {},
     "host-delay": {},
     "library-import": {},
-    "reset-wire": {}
+    "reset-wire": {},
+    "page-hand": {
+      "src/sfapp/app.mbt": 1,
+      "src/sfapp/composer.mbt": 2,
+      "src/sfapp/link_menu.mbt": 1,
+      "src/sfbase/pick.mbt": 1,
+      "src/sfbase/viewer.mbt": 1,
+      "src/sfbase/viewer_frame.mbt": 2,
+      "src/sfdesk/drag.mbt": 1,
+      "src/sfdesk/drive.mbt": 1,
+      "src/sfdesk/frame.mbt": 2,
+      "src/sfpages/chat_row.mbt": 1,
+      "src/sfpages/composer.mbt": 5,
+      "src/sfpages/sidebar.mbt": 1
+    }
   },
   "excused": {
     "frame-request": {},
@@ -258,6 +280,7 @@
     "unsettled-ok": {},
     "host-delay": {},
     "library-import": {},
-    "reset-wire": {}
+    "reset-wire": {},
+    "page-hand": {}
   }
 }

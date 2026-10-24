@@ -1618,3 +1618,20 @@ test "host-delay" {
   )
   |> ignore
 }
+
+///|
+test "page-hand" {
+  let cfg = Config::new(@rjson.parse("{\"pages\": {\"roots\": [\"src/pages\"]}}"))
+  // a page reading the hand; the library's and a page's test's not counted
+  found(
+    [
+      ("src/pages/row.mbt", "fn v() -> Unit {\n  let f = @ui.pointing() is Finger\n}\n"),
+      ("src/lib/hand.mbt", "pub fn by_finger() -> Bool {\n  @ui.pointing() is Finger\n}\n"),
+      ("src/pages/row_wbtest.mbt", "test \"t\" {\n  assert_true(@ui.pointing() is Mouse)\n}\n"),
+    ],
+    "page-hand",
+    1,
+    cfg~,
+  )
+  |> ignore
+}
