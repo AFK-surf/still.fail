@@ -204,6 +204,31 @@ fn lint_mbt(
     if c.name == "pointing" && c.kind == "pkg" && c.qual == "@ui" && !in_t && under(f.rel, cfg.pages) {
       add("page-hand", c.at, f.line_text(c.at))
     }
+    // a motion following what the layout measured: a place or a size moves for its cause, not because what it was
+    // laid out at changed (the app's docs/motion.md)
+    match follow_target(f, c, returns) {
+      Some(n) if !in_t => {
+        let pos = c.args.filter(fn(a) { a.0 is None })
+        if n < pos.length() {
+          match reads_layout(f, pos[n].1, item) {
+            Some(q) => add("follow-layout", c.at, "\{f.line_text(c.at)}   (follows: \{q})")
+            None => ()
+          }
+        }
+      }
+      _ => ()
+    }
+    // whether a motion runs, read by the app: what is shown, what takes a press, when state goes follow from the
+    // cause and the motion's declared end (what only draws by it says so on its line, det-ok)
+    if c.name == "moving" &&
+      c.kind == "method" &&
+      c.args.length() == 0 &&
+      app &&
+      !in_t &&
+      !(f.recv_type(c.at, returns) is Some("Tester")) &&
+      !moving_listed(f, c.at) {
+      add("motion-read", c.at, f.line_text(c.at))
+    }
     // the app as it is screenshotted is not the app
     if c.name == "stable" &&
       c.kind == "method" &&
@@ -685,6 +710,106 @@ fn literal_time(f : MbtFile, idx : Array[Int]) -> Bool {
     return false
   }
   rest.iter().any(fn(t) { t.kind == "num" })
+}
+
+///|
+/// Which positional argument of call `c` is the target a motion follows: an Anim's or a Value's `follow(target, …)`,
+/// `@motion.animate(c, key, target)` and `@kit.animate`'s, `Ctx::spring(key, target)`; None for any other call.
+fn follow_target(f : MbtFile, c : Call, returns : Map[String, String]) -> Int? {
+  if c.kind == "method" && c.name == "follow" {
+    Some(0)
+  } else if c.kind == "pkg" && c.name == "animate" && (c.qual == "@motion" || c.qual == "@kit") {
+    Some(2)
+  } else if c.kind == "method" && c.name == "spring" && f.recv_type(c.at, returns) is Some("Ctx") {
+    Some(1)
+  } else {
+    None
+  }
+}
+
+///|
+/// Whether the `moving()` at `k` is a Tester's list of what moves (`for m in t.moving()`, `t.moving().iter()`), not
+/// whether a motion runs.
+fn moving_listed(f : MbtFile, k : Int) -> Bool {
+  let toks = f.toks
+  // its call's closing bracket, and what follows it
+  let o = k + 1
+  if o < toks.length() && toks[o].text == "(" && toks[o].end >= 0 {
+    let after = toks[o].end + 1
+    if after < toks.length() && toks[after].text == "." {
+      return true
+    }
+  }
+  // `in` before its receiver (a chain of names and dots)
+  let mut j = k - 1
+  while j > 0 && (toks[j].text == "." || toks[j].kind == "ident") {
+    j -= 1
+  }
+  j >= 0 && toks[j].text == "in"
+}
+
+///|
+/// What the layout measures, as read by a view: a node's size or place, the window's, the keyboard's.
+let layout_reads : Array[String] = [
+  "measured", "measured_rect", "laid_size", "laid_rect", "laid_out", "rect_of", "node_rect", "drawn_rect",
+  "drawn_at", "window_size", "ime_inset", "list_place", "list_row_height", "row_height",
+]
+
+///|
+/// Whether tokens `idx` (an argument) read what the layout measures: a call of one of layout_reads, or a name bound
+/// in the same item (`let x = …`) to what calls one; what it reads, if so.
+fn reads_layout(f : MbtFile, idx : Array[Int], item : Int) -> String? {
+  let toks = f.toks
+  let direct = fn(ii : Array[Int]) -> String? {
+    for i in ii {
+      let t = toks[i]
+      if t.kind == "ident" &&
+        i + 1 < toks.length() &&
+        toks[i + 1].text == "(" &&
+        layout_reads.contains(t.text) {
+        return Some(t.text)
+      }
+    }
+    None
+  }
+  match direct(idx) {
+    Some(q) => return Some(q)
+    None => ()
+  }
+  if item < 0 || idx.length() == 0 {
+    return None
+  }
+  let lo = f.items[item].start
+  for i in idx {
+    let t = toks[i]
+    if t.kind != "ident" || (i + 1 < toks.length() && toks[i + 1].text == "(") || (i > 0 && toks[i - 1].text == ".") {
+      continue
+    }
+    // the nearest `let name =` before the argument, its value to the end of its line
+    let mut j = idx[0] - 1
+    while j > lo {
+      let at_let = toks[j].text == t.text &&
+        j + 1 < toks.length() &&
+        (toks[j + 1].text == "=" || toks[j + 1].text == ":") &&
+        (toks[j - 1].text == "let" || (toks[j - 1].text == "mut" && j > 1 && toks[j - 2].text == "let"))
+      if at_let {
+        let line = toks[j].line
+        let rhs : Array[Int] = []
+        let mut k = j + 1
+        while k < toks.length() && toks[k].line == line {
+          rhs.push(k)
+          k += 1
+        }
+        match direct(rhs) {
+          Some(q) => return Some(t.text + " = " + q + "()")
+          None => ()
+        }
+        break
+      }
+      j -= 1
+    }
+  }
+  None
 }
 
 ///|
