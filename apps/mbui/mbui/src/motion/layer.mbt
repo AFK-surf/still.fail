@@ -106,6 +106,8 @@ priv struct Moving {
   mut scope : Int
   /// flown from (x, y, scale), how far across, down and grown
   mut fly : (Double, Double, Double, Double, Double, Double)?
+  /// its own ground changes shape for its cause (reshape), by `spec`
+  mut reshape : Bool
 }
 
 ///|
@@ -155,6 +157,26 @@ priv struct Rec {
   mut was_fy : Double
   /// a build of this frame moved it (its offsets set from was_ox, was_oy, or the drive then)
   mut moved_now : Bool
+  /// reshape: the shape its ground set out from (x, y in its list or scope, w, h, its corner), how far it has gone
+  /// there (0 → 1), its corner as last laid out; and the same as the frame before left them
+  mut gx : Double
+  mut gy : Double
+  mut gw : Double
+  mut gh : Double
+  mut gr : Double
+  gp : Anim
+  mut rad : Double
+  mut was_w : Double
+  mut was_h : Double
+  mut was_rad : Double
+  mut was_gx : Double
+  mut was_gy : Double
+  mut was_gw : Double
+  mut was_gh : Double
+  mut was_gr : Double
+  mut was_gp : Double
+  /// a build of this frame set its ground off anew
+  mut g_now : Bool
 }
 
 ///|
@@ -193,6 +215,23 @@ fn Rec::new() -> Rec {
     was_fx: 0.0,
     was_fy: 0.0,
     moved_now: false,
+    gx: 0.0,
+    gy: 0.0,
+    gw: 0.0,
+    gh: 0.0,
+    gr: 0.0,
+    gp: Anim::new(1.0),
+    rad: 0.0,
+    was_w: 0.0,
+    was_h: 0.0,
+    was_rad: 0.0,
+    was_gx: 0.0,
+    was_gy: 0.0,
+    was_gw: 0.0,
+    was_gh: 0.0,
+    was_gr: 0.0,
+    was_gp: 1.0,
+    g_now: false,
   }
 }
 
@@ -355,6 +394,7 @@ fn moving_of(c : @ui.Ctx, i : Int) -> Moving {
     kept: 0,
     scope: 0,
     fly: None,
+    reshape: false,
   }
   mo.stamp[i] = build
   mo.at[i] = mo.entries.length()
@@ -436,6 +476,24 @@ pub fn entering(c : @ui.Ctx, i : Int, key : String, enter : Trans) -> Unit {
   e.key = motion_key(key)
   e.enter = Some(enter)
   e.fresh = true
+}
+
+///|
+/// Node `i` keyed `key` changes shape for its cause (the web's morph.ts `grow`): in the frame `by` (what it changes for:
+/// its words, its files, its being opened) changes, what it holds is laid out as it ends at once, and its own ground
+/// (its colour, glass, shadow, border and corners) goes by `spec` from the shape it showed to the one it is laid out
+/// in, carrying on from wherever it had got to. What in it moves with it says so itself (`layout` with the same `by`).
+/// Moved or resized by nothing it changes for (a window, a keyboard), its ground is where it is laid out at once, a
+/// change of its own going on from there. Only drawn so: tapped where it is laid out.
+pub fn reshape(c : @ui.Ctx, i : Int, key : String, by~ : String, spec~ : Spec) -> Unit {
+  let e = moving_of(c, i)
+  e.name = key
+  e.key = motion_key(key)
+  e.reshape = true
+  e.spec = spec
+  if by != "" {
+    e.by = by
+  }
 }
 
 ///|
@@ -529,7 +587,7 @@ pub fn layout_rest(key : String) -> Double {
     }
   }
   match mo.recs.get(k) {
-    Some(r) => [r.ox, r.oy, r.ef, r.em].each(at)
+    Some(r) => [r.ox, r.oy, r.ef, r.em, r.gp].each(at)
     None => ()
   }
   for gh in mo.ghosts {
@@ -894,6 +952,7 @@ fn after_layout(c : @ui.Ctx) -> Unit {
           r.oy.name = said
           r.ef.name = said
           r.em.name = said
+          r.gp.name = said
           mo.recs[e.key] = r
           r
         }
@@ -915,6 +974,17 @@ fn after_layout(c : @ui.Ctx) -> Unit {
         r.was_fx = r.fx
         r.was_fy = r.fy
         r.moved_now = false
+        r.was_w = r.w
+        r.was_h = r.h
+        r.was_rad = r.rad
+        r.gp.step(c)
+        r.was_gp = r.gp.get()
+        r.was_gx = r.gx
+        r.was_gy = r.gy
+        r.was_gw = r.gw
+        r.was_gh = r.gh
+        r.was_gr = r.gr
+        r.g_now = false
       }
       let lm = if li >= 0 { mo.lists.get(ref) } else { None }
       let was_seen = r.was_seen >= frame - 1 && r.was_ref == ref
@@ -1033,6 +1103,61 @@ fn after_layout(c : @ui.Ctx) -> Unit {
         }
         _ => ()
       }
+      // its ground on its way from the shape it had to the one it is laid out in, for its cause (reshape)
+      if e.reshape {
+        let corner = fn(cr : Double, w : Double, h : Double) { dmin(cr, dmin(w, h) / 2.0) }
+        let to_r = corner(c.node_radius(e.node), nw, nh)
+        let caused = e.by != "" && r.was_by != "" && e.by != r.was_by
+        let changed_shape = (r.was_x - rx).abs() > 0.5 ||
+          (r.was_y - ry).abs() > 0.5 ||
+          (r.was_w - nw).abs() > 0.5 ||
+          (r.was_h - nh).abs() > 0.5
+        let p0 = r.was_gp
+        if still || !was_seen {
+          r.gp.snap(1.0)
+          r.g_now = false
+        } else if caused && changed_shape {
+          // from the shape it showed as the frame began (on its way, or as it was laid out)
+          let wr = corner(r.was_rad, r.was_w, r.was_h)
+          r.gx = r.was_gx + (r.was_x - r.was_gx) * p0
+          r.gy = r.was_gy + (r.was_y - r.was_gy) * p0
+          r.gw = r.was_gw + (r.was_w - r.was_gw) * p0
+          r.gh = r.was_gh + (r.was_h - r.was_gh) * p0
+          r.gr = r.was_gr + (wr - r.was_gr) * p0
+          r.gp.snap(0.0)
+          r.gp.animate(1.0, e.spec)
+          r.g_now = true
+        } else {
+          // what holds it moved or resized it: where it set out from as far off its new shape as it was off its old,
+          // its way going on as it was (a build before this one set it off anew: back as the frame began)
+          r.gx = r.was_gx + (rx - r.was_x)
+          r.gy = r.was_gy + (ry - r.was_y)
+          r.gw = r.was_gw + (nw - r.was_w)
+          r.gh = r.was_gh + (nh - r.was_h)
+          r.gr = r.was_gr
+          if r.g_now {
+            r.g_now = false
+            r.gp.snap(p0)
+            if p0 < 1.0 {
+              r.gp.animate(1.0, e.spec)
+            }
+          }
+        }
+        let p = r.gp.get()
+        if p < 1.0 {
+          let ox = nx - rx
+          let oy = ny - ry
+          c.draw_ground(
+            e.node,
+            ox + r.gx + (rx - r.gx) * p,
+            oy + r.gy + (ry - r.gy) * p,
+            r.gw + (nw - r.gw) * p,
+            r.gh + (nh - r.gh) * p,
+            r.gr + (to_r - r.gr) * p,
+          )
+        }
+      }
+      r.rad = c.node_radius(e.node)
       r.x = rx
       r.y = ry
       r.by = e.by
@@ -1110,7 +1235,11 @@ fn forget_recs(c : @ui.Ctx) -> Unit {
     return
   }
   let old : Array[Int] = []
-  mo.recs.each(fn(k, r) { if frame - r.seen > 90 && !r.ox.running && !r.oy.running { old.push(k) } })
+  mo.recs.each(fn(k, r) {
+    if frame - r.seen > 90 && !r.ox.running && !r.oy.running && !r.gp.running {
+      old.push(k)
+    }
+  })
   for k in old {
     mo.recs.remove(k)
   }
