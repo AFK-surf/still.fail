@@ -143,9 +143,9 @@ pub struct Media {
   /// how loud (0 … 1), and its sound off, kept for what it plays next
   priv mut volume : Double
   priv mut muted : Bool
-  /// while it waits (opening, buffering): since when (-1: it does not), the last whole second of it measured and the
-  /// bytes it had been given by then, how fast they came (Media::rate_now)
-  priv mut wait_from : Double
+  /// while it waits (opening, buffering): whether it does, the last whole second measured and the bytes it had been
+  /// given by then (-1: none yet), how fast they came (Media::rate_now)
+  priv mut waiting : Bool
   priv mut rate_tick : Int
   priv mut rate_bytes : Double
   priv mut rate : Double
@@ -207,7 +207,7 @@ pub fn Media::new(
     pinned: None,
     volume: 1.0,
     muted: false,
-    wait_from: -1.0,
+    waiting: false,
     rate_tick: 0,
     rate_bytes: 0.0,
     rate: -1.0,
@@ -236,7 +236,7 @@ pub fn Media::open(self : Media, track : MediaTrack, start? : Double = 0.0) -> U
   self.awake = true
   self.scrub = -1.0
   self.scrub_sent = -1.0
-  self.wait_from = -1.0
+  self.waiting = false
   @ui.log("player: open \{track.name} (\{track.mime}) from \{start.to_int()} ms")
 }
 
@@ -602,29 +602,34 @@ pub fn Media::frame(self : Media, c : @ui.Ctx) -> MediaFrame {
 
 ///|
 /// How fast its bytes come while it waits (`waiting`: opening or buffering): those its player was given (the host's
-/// count, NativeView::bytes) over each whole second since the wait began, as the last one ended; -1 when it does not
-/// wait, or before its first second is over.
+/// count, NativeView::bytes) over each whole second of the clock (Ctx::every) from the first that began after the wait
+/// did, as the last one ended; -1 when it does not wait, or before such a second is over.
 fn Media::rate_now(self : Media, c : @ui.Ctx, waiting : Bool) -> Double {
   let bytes = match self.view {
     Some(n) => n.bytes()
     None => 0.0
   }
   if !waiting {
-    self.wait_from = -1.0
+    self.waiting = false
     return -1.0
   }
-  if self.wait_from < 0.0 {
-    self.wait_from = c.now()
-    self.rate_tick = 0
-    self.rate_bytes = bytes
+  let k = c.every(1000.0)
+  if !self.waiting {
+    // (the second it began in counts for nothing: part of it was not waited)
+    self.waiting = true
+    self.rate_tick = k + 1
+    self.rate_bytes = -1.0
     self.rate = -1.0
   }
-  let k = c.every(1000.0, from=self.wait_from)
-  if k > self.rate_tick {
-    let came = bytes - self.rate_bytes
-    self.rate = (if came > 0.0 { came } else { 0.0 }) / (k - self.rate_tick).to_double()
-    self.rate_tick = k
-    self.rate_bytes = bytes
+  if k >= self.rate_tick {
+    if self.rate_bytes >= 0.0 && k > self.rate_tick {
+      let came = bytes - self.rate_bytes
+      self.rate = (if came > 0.0 { came } else { 0.0 }) / (k - self.rate_tick).to_double()
+    }
+    if self.rate_bytes < 0.0 || k > self.rate_tick {
+      self.rate_tick = k
+      self.rate_bytes = bytes
+    }
   }
   self.rate
 }
