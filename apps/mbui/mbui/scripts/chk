@@ -6,6 +6,8 @@ D=$(cd "$(dirname "$0")" && pwd)
 T=$D/../tools
 B=$T/_build/native/release/build/chk/chk.exe
 src=$(cd "$T" && find chk png sys re rjson moon.mod moon.work -type f | LC_ALL=C sort | xargs cat | cksum)
+# (`key`: what it is built from, said: the key CI keeps the tool by, .github/actions/mbui-moonbit)
+[ "${1:-}" != key ] || { echo "$src" | tr ' ' -; exit 0; }
 if [ ! -x "$B" ] || [ "$(cat "$B.src" 2>/dev/null)" != "$src" ]; then
   (cd "$T" && env -u MOON_CC moon build --target native --release chk >&2) || { echo "chk: tools/chk did not build" >&2; exit 1; }
   echo "$src" > "$B.src"
