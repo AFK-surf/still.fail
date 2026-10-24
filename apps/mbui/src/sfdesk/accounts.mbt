@@ -1765,3 +1765,90 @@ let pf_env_name : @ui.Style = @ui.css("w=S48")
 /// How it runs: its switches 14 apart.
 // kept across runs: a value (no field of it changes)
 let pf_run_rows : @ui.Style = @ui.css("w=Full gap=S3_5")
+
+// ── choosing its models ─────────────────────────────────────────────────
+
+///|
+/// Choosing a new profile's models (PickModelsPage), the step chats need once it is added: the whole list to tick, one
+/// named by hand where the provider lists none; 跳过 or 完成 (once one is on) to its page. While its list is read, said
+/// so; none to list, why.
+fn pick_models_page(c : @ui.Ctx, core : Core, here : Here, address : String, id : String) -> Unit {
+  let s = @settings.station_of(core, here, address)
+  let o = field(s, "overview")
+  let key = "pick-models/" + address + "/" + id
+  let title = @sf.t("web-pages.profiles.pickModels.title")
+  guard o is Some(Object(_)) else {
+    desk_page(c, core, key, title, [
+      fn() { @sf.waiting(c, shape=Cards, note={ reading: true, text: @sf.t("web-pages.profiles.loading"), failing: [] }) },
+    ])
+  }
+  guard items(o, "profiles").search_by(fn(p) { text(Some(p), "id") == id }) is Some(i) else {
+    desk_page(c, core, key, title, [
+      fn() { c.text(@sf.t("web-pages.profiles.notFound", args=[("id", id)]), style=desk_muted) |> ignore },
+    ])
+  }
+  let p = Some(items(o, "profiles")[i])
+  // on to its page, in this one's place
+  let leave = fn() {
+    (core.pop)()
+    (core.push)(Profile(address, id))
+  }
+  let listed = items(p, "available").length() > 0
+  let check = field(p, "check")
+  desk_page(
+    c,
+    core,
+    key,
+    title,
+    lead=@sf.t("web-pages.profiles.pickModels.lead", args=[("name", text(p, "name"))]),
+    actions=fn() {
+      c.box(style=pf_pick_actions, fn() {
+        if @sf.button(c, @sf.t("web-pages.profiles.pickModels.skip"), key=key + "/skip", tone=Ghost) {
+          leave()
+        }
+        if @sf.button(c, @sf.t("common.done"), key=key + "/done", tone=Primary, disabled=items(p, "models").length() == 0) {
+          leave()
+        }
+      })
+      |> ignore
+    },
+    [
+      fn() {
+        if flag(p, "modelsReading") {
+          @sf.wait_line(c, @sf.t("web-pages.profiles.pickModels.reading"))
+        } else if !listed && !flag(p, "canAddModel") {
+          c.text(
+            if text(check, "state") == "ok" {
+              @sf.t("web-pages.profiles.pickModels.none")
+            } else if text(check, "detail") != "" {
+              text(check, "detail")
+            } else {
+              text(p, "checkText")
+            },
+            style=desk_muted,
+          )
+          |> ignore
+        } else {
+          c.box(style=pf_models_body, fn() {
+            if listed {
+              model_checklist(c, core, address, p)
+            }
+            if flag(p, "canAddModel") {
+              add_model(c, core, address, id)
+            }
+          })
+          |> ignore
+        }
+        match failed_of(core, ["profile.put"], [("station", address), ("id", id)]) {
+          Some(f) => c.text(f, style=desk_note_bad) |> ignore
+          None => ()
+        }
+      },
+    ],
+  )
+}
+
+///|
+/// Its two buttons at the head's end (pickModelsActions: 8 apart).
+// kept across runs: a value (no field of it changes)
+let pf_pick_actions : @ui.Style = @ui.css("row gap=S2 align=ACenter")
