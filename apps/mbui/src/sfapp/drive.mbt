@@ -19,7 +19,7 @@ pub fn files_page(c : @ui.Ctx, src : Source, w : Workspace, place? : Bool = fals
       if dv_nav_bar(c, back, tr("android-misc.bar.place.files"), fn() {
           if lenders.length() > 0 &&
             dv_nav_button(c, "files-lend", "plus", size=20.0, said=tr("android-misc.bar.action.files")) {
-            @sfdesk.add_folder(lenders)
+            @sfdesk.add_folder(src, w.id, lenders)
           }
         }) {
         app.nav.pop() |> ignore
@@ -37,7 +37,6 @@ pub fn files_page(c : @ui.Ctx, src : Source, w : Workspace, place? : Bool = fals
       }
     })
     |> ignore
-    @sfdesk.drive_dialogs(c, src, w.id)
   })
   |> ignore
 }
@@ -53,7 +52,7 @@ pub fn files_can_lend(src : Source, w : Workspace) -> Bool {
 /// ＋ of 文件 (the bottom bar's notch): Pin 文件夹, on the one station there is or one chosen first.
 pub fn files_lend(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
   ignore(c)
-  @sfdesk.add_folder(@sfdesk.pin_stations(src, w.id))
+  @sfdesk.add_folder(src, w.id, @sfdesk.pin_stations(src, w.id))
 }
 
 ///|
