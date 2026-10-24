@@ -228,6 +228,13 @@ pub fn capsule_end_room(outer : Double, height : Double) -> @ui.Space {
 }
 
 ///|
+/// `more` under the system's bar at the window's top (a phone's status bar; 0 where the host lays the app out under it):
+/// where what floats at the top of a layer over the whole window stands.
+pub fn system_top_room(more : Double) -> @ui.Space {
+  room(more + @ui.system_bars().top)
+}
+
+///|
 /// How far under a page's bar what is drawn from the page's top stands (the bar 45, in a panel of its own as much taller
 /// as puts its buttons in the panel's corner concentric with it: tape_bar_over).
 pub fn under_bar_room() -> @ui.Space {

@@ -483,6 +483,8 @@ fn signed_in(c : @ui.Ctx, src : Source) -> Unit {
         )
         // a file open over the pages (preview.mbt), under the menu, the sheet and the toasts
         preview(c, src)
+        // the chat being made public (sfpages' publish.mbt)
+        @sfpages.publish_layer(c, src)
         // a visualization over the whole screen (viz.mbt)
         viz_full_layer(c, src)
       }

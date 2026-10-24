@@ -14,7 +14,7 @@ pub fn overlays(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
   // a chat shared with the viewer's other workspaces (share_dialog.mbt)
   share_dialog(c, src)
   // a chat made public (publish.mbt)
-  publish_dialog(c, src)
+  @sfpages.publish_layer(c, src)
   // a file open over the window (sfbase viewer_frame.mbt)
   file_viewer(c, src)
 }

@@ -1,5 +1,5 @@
-// Making a chat public (publish.mbt; Publish.kt) over the fixture's chat: its sheet's links, the sheet that publishes
-// it with what a snapshot would hold, the attachments ticked, and a link revoked once asked.
+// Making a chat public on a phone (sfpages' publish.mbt, the same as a computer's; publish.mbt the info's links) over
+// the fixture's chat: its sheet's links, the publishing over the screen with what a snapshot would hold, the attachments ticked, and a link revoked once asked.
 
 ///|
 /// The chat's sheet open over the fixture's chat; `chat.publishPreview` answered with fix_preview, `chat.publish` with
@@ -60,7 +60,9 @@ test "公开分享: the sheet shows what a snapshot would hold; 发布 takes the
   let calls : Array[Made] = []
   let t = publish_core(calls)
   t.tap_text("公开分享")
-  // the sheet risen: its own declared end
+  // the chat's sheet put down (to where it rests, gone), the publishing over the whole screen (the pages', as on a
+  // computer)
+  t.frame()
   t.run_for(@kit.sheet_rest("decide-sheet") - t.time())
   let asked = named(calls, "chat.publishPreview")
   assert_eq(asked.length(), 1)
@@ -70,10 +72,17 @@ test "公开分享: the sheet shows what a snapshot would hold; 发布 takes the
   assert_true(t.find("截图、日志和构建缓存都附上了") is Some(_))
   assert_true(t.find("已隐藏 1 处") is Some(_))
   assert_true(t.find("共隐藏 1 处疑似机密") is Some(_))
-  // the log and the cache left out: tapped, each is unticked (nothing opens)
-  t.tap_text("deploy.log")
-  t.tap_text("build-cache.tar")
-  assert_true(publishing.off.contains("f1") && publishing.off.contains("f2"))
+  // the log and the cache left out: tapped, each is unticked (nothing opens); brought up from under the screen's foot
+  // (a file's card says its name's stem and its extension apart, as the chat's)
+  for _ in 0..<6 {
+    match t.find("build-cache") {
+      Some((_, y)) if y < publish_fold => break
+      _ => t.wheel(195.0, 400.0, 300.0)
+    }
+  }
+  t.tap_text(".log")
+  t.tap_text(".tar")
+  assert_true(@sfpages.publish_left_out("f1") && @sfpages.publish_left_out("f2"))
   assert_true(viewer.val is None)
   // (the button, under the chat's name 整理发布清单)
   tap_last(t, "发布")
@@ -84,6 +93,8 @@ test "公开分享: the sheet shows what a snapshot would hold; 发布 takes the
     Some(Array(fs)) => assert_eq(fs, [Json::string("f0")])
     _ => fail("no files said")
   }
+  // published: the publishing gone, its link in the presenters' sheet
+  t.run_for(@kit.sheet_rest("sf-present") - t.time())
   assert_true(t.find("已发布") is Some(_))
   assert_true(t.find("https://share.still.fail/#st1key.p3.k3") is Some(_))
   t.tap_text("复制链接")
