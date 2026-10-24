@@ -1464,6 +1464,16 @@ fn composer(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView?, fresh? : Fres
     }
     None => ()
   }
+  // a message's files quoted from their menus (sfpages menus.mbt): each a quote with its file in its card
+  match quoted_into.get(d.key) {
+    Some(list) => {
+      quoted_into.remove(d.key)
+      for q in list {
+        draft_quote_file(d, q.0, q.1, q.2, q.3)
+      }
+    }
+    None => ()
+  }
   // words a visualization of this chat asked to send (sfbase viz_page.mbt): after what is written, the field focused
   match followed_into.get(d.key) {
     Some(words) => {

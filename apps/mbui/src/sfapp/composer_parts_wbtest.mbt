@@ -108,6 +108,8 @@ test "sent while a file is going up: the message names it (uploads) and the core
     _ => fail("the file going up was not named")
   }
   t.run_for(flight_wait_ms + composer_morph_ms)
+  // (its row under way: said so once it has been a while, sfpages chat_rows.mbt)
+  t.run_for(@sfpages.sending_shows_ms)
   t.assert_idle()
 }
 
@@ -309,6 +311,8 @@ test "an archived chat's restore failing says why under it, in red; tapped again
   assert_true(t.find("station 没有回应") is None)
   // the capsule back to its height without the line
   t.run_for(composer_morph_ms)
+  // (the chat's pictures brushed in once decoded: sfpages message_files.mbt)
+  t.run_for(@sfpages.reveal_ms)
   t.assert_idle()
 }
 

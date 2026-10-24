@@ -919,27 +919,6 @@ fn quote_image(
 }
 
 ///|
-/// A file as the core gives it (Attachment), kept by `owner`'s workspace.
-fn attachment_json(a : Attachment, owner : String) -> Json {
-  let o : Map[String, Json] = {
-    "name": Json::string(a.name),
-    "path": Json::string(a.path),
-    "size": Json::number(a.size),
-  }
-  if a.width > 0.0 && a.height > 0.0 {
-    o["width"] = Json::number(a.width)
-    o["height"] = Json::number(a.height)
-  }
-  if a.thumbhash != "" {
-    o["thumbhash"] = Json::string(a.thumbhash)
-  }
-  if owner != "" {
-    o["owner"] = Json::string(owner)
-  }
-  Json::object(o)
-}
-
-///|
 /// The press an image of a message was last quoted by (file_item): a passage of its message is not picked by it too.
 let image_quoted_at : Ref[Int] = { val: -1 }
 
@@ -1293,18 +1272,6 @@ let no_preview_words : @ui.TextStyle = @ui.text_style(size=Xs, color=Muted, wrap
 fn file_corner() -> Double {
   10.0
 }
-
-///|
-/// Options answered fade out in this long (Decisions.kt DecisionUnder); how it went fades in after them as long.
-pub let options_out_ms : Double = 200.0
-
-///|
-/// The answered options' curve (CSS's ease-out) and how small they are as they have gone: 90%.
-// kept across runs: a curve, never written
-pub let options_ease : @motion.Ease = CssOut
-
-///|
-pub let options_scale : Double = 0.9
 
 ///|
 /// Under a post (Decisions.kt DecisionUnder): a login card as its login stands; an options card's options while it

@@ -180,6 +180,30 @@ fn take_in(c : @ui.Ctx, src : Source, spec : ComposerSpec, w : Writing, no_files
     Some(png) if !no_files => writing_add(src, w, spec.station, pasted_picture_name, png)
     _ => ()
   }
+  // a message's files quoted from their menus (sfpages menus.mbt): each a quote with its file in its card
+  match quoted_into.get(w.key) {
+    Some(list) if !no_files => {
+      quoted_into.remove(w.key)
+      c.tell("composer/quoted/" + w.key, fn() {
+        for q in list {
+          let name = text(Some(q.3), "name")
+          writing_quote(
+            src,
+            w,
+            {
+              "author": Json::string(q.0),
+              "text": Json::string(name),
+              "ts": Json::string(q.1),
+              "role": Json::string(q.2),
+              "file": Json::string(name),
+            },
+            file=q.3,
+          )
+        }
+      })
+    }
+    _ => ()
+  }
   // words a visualization of this chat asked to send (sfbase viz_page.mbt): after what is written, the cursor in it
   match followed_into.get(w.key) {
     Some(words) => {

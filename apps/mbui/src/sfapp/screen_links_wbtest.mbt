@@ -204,6 +204,8 @@ test "a tab's preview: asked for while its card is on the screen, cancelled as i
   assert_eq(again.length(), 1)
   assert_true(text(Some(streams[again[0] - 1].params), "view") != first_view)
   t.run_for(t.rest_of("a list") - t.time())
+  // (the chat's pictures brushed in once decoded: sfpages message_files.mbt)
+  t.run_for(@sfpages.reveal_ms)
   t.assert_idle()
 }
 

@@ -33,7 +33,7 @@ test "a bare address tapped is handed to the system; one to a chat opens it here
 }
 
 ///|
-test "a link held still: its menu (打开链接, 复制链接), the link not followed" {
+test "a link held still: its menu (打开链接, 复制链接: the presenters' sheet), the link not followed" {
   let calls : Array[Made] = []
   let t = fake_core(calls)
   scroll_run_clear(t, "example.com/bench/list") |> ignore
@@ -42,17 +42,21 @@ test "a link held still: its menu (打开链接, 复制链接), the link not fol
   t.run_for(long_press_ms)
   t.release(x + w / 2.0, y + h / 2.0)
   assert_eq(t.opened().length(), 0)
+  // (its menu, the presenters': a sheet with a finger, in)
+  t.run_for(@kit.sheet_rest("sf-present") - t.time())
   assert_true(t.find("打开链接") is Some(_))
   // felt as it opened, once (Links.kt: LongPress)
   assert_eq(t.haptics(), [@ui.Haptic::LongPress])
   // no words picked by the same press
   assert_eq(pk.ts, "")
   t.tap_text("复制链接")
+  t.frame()
+  t.frame()
   assert_eq(t.clipboard(), "https://example.com/bench/list")
   assert_true(t.find("已复制链接") is Some(_))
-  assert_true(!link_menu.open)
-  // gone on the menus' spring
-  t.run_for(@motion.menu_spring.duration(1.0, 0.0, 0.0))
+  assert_true(!@sf.presenting())
+  // gone as the sheet goes
+  t.run_for(@kit.sheet_rest("sf-present") - t.time())
   assert_true(t.find("打开链接") is None)
 }
 

@@ -34,6 +34,8 @@ test "words with no reference go at once: the core is not asked what they refer 
   assert_eq(named(calls, "chat.outsideRefs").length(), 0)
   assert_eq(named(calls, "chat.send").length(), 1)
   t.run_for(flight_wait_ms + composer_morph_ms)
+  // (its row under way: said so once it has been a while, sfpages chat_rows.mbt)
+  t.run_for(@sfpages.sending_shows_ms)
   t.assert_idle()
 }
 
@@ -78,6 +80,8 @@ test "a reference to another workspace's chat: asked first, the sheet says whose
   run_to_outside_rest(t)
   assert_true(t.find("分享对话") is None)
   t.run_for(flight_wait_ms + composer_morph_ms)
+  // (its row under way: said so once it has been a while, sfpages chat_rows.mbt)
+  t.run_for(@sfpages.sending_shows_ms)
   t.assert_idle()
 }
 
@@ -127,6 +131,8 @@ test "none of them the viewer may share: each says so, and 仍然发送 sends it
   assert_eq(named(calls, "chat.send").length(), 1)
   run_to_outside_rest(t)
   t.run_for(flight_wait_ms + composer_morph_ms)
+  // (its row under way: said so once it has been a while, sfpages chat_rows.mbt)
+  t.run_for(@sfpages.sending_shows_ms)
   t.assert_idle()
 }
 
@@ -142,6 +148,8 @@ test "a core that cannot say what the words refer to: they go as they are" {
   assert_eq(named(calls, "chat.send").length(), 1)
   assert_true(t.find("分享对话") is None)
   t.run_for(flight_wait_ms + composer_morph_ms)
+  // (its row under way: said so once it has been a while, sfpages chat_rows.mbt)
+  t.run_for(@sfpages.sending_shows_ms)
   t.assert_idle()
 }
 
@@ -178,5 +186,7 @@ test "references the core says nothing of: the words go with no sheet" {
   assert_eq(named(calls, "chat.send").length(), 1)
   assert_true(t.find("分享对话") is None)
   t.run_for(flight_wait_ms + composer_morph_ms)
+  // (its row under way: said so once it has been a while, sfpages chat_rows.mbt)
+  t.run_for(@sfpages.sending_shows_ms)
   t.assert_idle()
 }

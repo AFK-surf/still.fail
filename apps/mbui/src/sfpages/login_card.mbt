@@ -182,7 +182,7 @@ fn login_active(c : @ui.Ctx, core : Core, station : String, l : Json?, relay : B
       let busy = @settings.is_doing(core, ["machineLogin.open"], [("station", station), ("id", id)])
       let label = @sf.t(if opened { "web-main.logins.openAgain" } else { "web-main.logins.signIn" })
       if login_step(c, "login-main/" + id, label, !opened, busy~) {
-        login_relay(c, core, station, id)
+        login_relay(c, core, station, id, text(l, "title"))
       }
     }
     "open" if url != "" => {
@@ -207,12 +207,19 @@ fn login_open(core : Core, url : String) -> Unit {
 }
 
 ///|
-/// A loopback login's browser, on this device (useRelay): the core listens for the browser's callback (not on the
+/// A loopback login's browser, on this device (useRelay), the app held up meanwhile: the core listens for the browser's callback (not on the
 /// station's own machine: the browser comes back there by itself), then answers the page to open; this device's port
 /// taken is said on the card (the core's `relayText`), nothing opened.
-fn login_relay(c : @ui.Ctx, core : Core, station : String, id : String) -> Unit {
+fn login_relay(c : @ui.Ctx, core : Core, station : String, id : String, title : String) -> Unit {
   let here = this_machine() == station
   c.tell("login-open/" + id, fn() {
+    // the app held up while the core waits for the browser, by a notice saying which login (LoginRelay.kt: its title;
+    // where the system keeps nothing up, nothing)
+    @ui.hold_words(
+      channel=@sf.t("web-main.logins.title"),
+      title=if title == "" { @sf.t("web-main.logins.title") } else { title },
+      body=@sf.t("web-main.logins.waitingBrowser"),
+    )
     (core.call)(
       "machineLogin.open",
       { "station": Json::string(station), "id": Json::string(id), "here": Json::boolean(here) },

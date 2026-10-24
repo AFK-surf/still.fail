@@ -59,41 +59,78 @@ fn message_decision(c : @ui.Ctx, src : Source, here : MessageHere, m : Message, 
     None => m.options
   }
   let key = here.station + "/" + m.ts
-  // answered, what is under it closes in its turn, its options and 忽略 together (after the answer has come in)
+  // answered, what is under it closes in its turn, its options and 忽略 together (after the answer has come in): they
+  // go (200 ms, fading to 90%, Decisions.css.ts), their room closing on the rows' spring a little late, how it went
+  // fading in after them in their place
   let open = match turns {
     Some(tu) => tu.in_turn(c, "ask/" + m.ts, !resolved, close_turn_ms)
     None => !resolved
   }
+  let asked_at = match turns {
+    Some(tu) => tu.started_at("ask/" + m.ts)
+    None => -1.0
+  }
+  let start_at = if asked_at >= 0.0 { Some(asked_at) } else { None }
   let thread = if here.view.offline || here.view.archived { None } else { here.view.thread }
   c.box(style=decision_box, fn() {
-    if open {
-      match m.card {
-        Some({ assignee_text: Some(a), .. }) => c.text(a, style=settled_line) |> ignore
-        _ => ()
-      }
-      match m.card {
-        // an agent's request for a vault item: approved here (VaultApproval.tsx), not answered in words
-        Some({ vault, assignee, .. }) if vault != "" =>
-          match here.core {
-            Some(core) => @settings.vault_actions(c, core, workspace_of(here.station), vault, mine_to(here, assignee))
-            None => ()
-          }
-        _ =>
-          match (options, thread) {
-            (Some(list), Some(th)) if list.length() > 0 => decision_options(c, src, here, m, th, list, resolved)
+    under_post(
+      c,
+      "options/" + key,
+      open,
+      exit=@motion.trans(fade=0.0, scale=options_scale, spec=@motion.tween(options_out_ms, ease=options_ease)),
+      close=close_gap,
+      start_at?,
+      fn() {
+        c.box(style=decision_box, fn() {
+          match m.card {
+            Some({ assignee_text: Some(a), .. }) => c.text(a, style=settled_line) |> ignore
             _ => ()
           }
-      }
-      ask_dismiss(c, src, here, m, resolved)
-    } else {
-      match m.decision {
-        Some({ text: Some(words), .. }) => c.text(words, style=settled_line) |> ignore
-        _ => ()
-      }
+          match m.card {
+            // an agent's request for a vault item: approved here (VaultApproval.tsx), not answered in words
+            Some({ vault, assignee, .. }) if vault != "" =>
+              match here.core {
+                Some(core) => @settings.vault_actions(c, core, workspace_of(here.station), vault, mine_to(here, assignee))
+                None => ()
+              }
+            _ =>
+              match (options, thread) {
+                (Some(list), Some(th)) if list.length() > 0 => decision_options(c, src, here, m, th, list, resolved)
+                _ => ()
+              }
+          }
+        })
+        |> ignore
+      },
+    )
+    ask_dismiss(c, src, here, m, resolved, asking=open, asked_at~)
+    // (in their place once they close: in the same turn)
+    let outcome = match m.decision {
+      Some({ text: Some(words), .. }) if resolved && !open => Some(words)
+      _ => None
     }
+    under_post(
+      c,
+      "outcome/" + key,
+      outcome is Some(_),
+      start_at?,
+      enter=@motion.trans(
+        fade=0.0,
+        spec=@motion.Snap(0.0),
+        fade_spec=@motion.tween(options_out_ms, ease=CssOut, delay=options_out_ms),
+      ),
+      open=close_gap,
+      exit=@motion.trans(spec=@motion.Snap(0.0)),
+      close=@motion.Snap(0.0),
+      fn() {
+        match outcome {
+          Some(w) => c.text(w, style=settled_line) |> ignore
+          None => ()
+        }
+      },
+    )
   })
   |> ignore
-  ignore(key)
 }
 
 ///|
@@ -212,17 +249,37 @@ pub fn decision_options(
 
 ///|
 /// 忽略 under a post that asks what no one has decided (the core's `asked`): the viewer lets it go (`decision.dismiss`),
-/// gone at once and back if that fails; answered, it goes with the options.
-fn ask_dismiss(c : @ui.Ctx, src : Source, here : MessageHere, m : Message, resolved : Bool) -> Unit {
+/// gone at once and back if that fails. It goes as the archive buttons go (280 ms, ArchiveEase: fading, to 85% from its
+/// top left, its room closing), in its turn among what changes the list's height, and with the options once the card
+/// is answered (`asking` false, from `asked_at`).
+fn ask_dismiss(
+  c : @ui.Ctx,
+  src : Source,
+  here : MessageHere,
+  m : Message,
+  resolved : Bool,
+  asking? : Bool = true,
+  asked_at? : Double = -1.0,
+) -> Unit {
   guard here.view.thread is Some(thread) && !here.view.offline && !here.view.archived else { return }
-  let key = seq_key(here.station, m.thread, m.seq)
-  if !(m.asked || resolved) || dismissed.contains(key) {
+  if !m.asked && !resolved {
     return
   }
+  let k = seq_key(here.station, m.thread, m.seq)
+  // (answered, it goes with the options, in their turn; let go here, in a turn of its own)
+  let (mine, own_at) = match here.list {
+    Some(l) =>
+      (l.turns.in_turn(c, "dismiss/" + k, !dismissed.contains(k), dismiss_turn_ms), l.turns.started_at("dismiss/" + k))
+    None => (!dismissed.contains(k), -1.0)
+  }
+  let shown = asking && mine
+  let at = if !asking { asked_at } else { own_at }
   let id = c.id("ask-dismiss/" + m.ts)
-  c.cursor(id, Hand)
-  if c.clicked(id) {
-    dismissed[key] = true
+  if shown {
+    c.cursor(id, Hand)
+  }
+  if shown && c.clicked(id) {
+    dismissed[k] = true
     c.tell("ask-dismiss/" + m.ts, fn() {
       act(
         src,
@@ -230,25 +287,34 @@ fn ask_dismiss(c : @ui.Ctx, src : Source, here : MessageHere, m : Message, resol
         "",
         "decision.dismiss",
         { "station": Json::string(here.station), "thread": Json::number(thread), "seq": Json::number(m.seq) },
-        failed=fn() { dismissed.remove(key) },
+        failed=fn() { dismissed.remove(k) |> ignore },
       )
     })
   }
-  let hot = c.hovered(id)
-  c.box(style=dismiss_room, id~, fn() {
-    c.rich([@ui.span(@sf.t("web-main.chat.asks.dismiss"), underline=hot)], style=if hot {
-      dismiss_words_hot
-    } else {
-      dismiss_words
-    })
-    |> ignore
-  })
-  |> ignore
+  let hot = shown && c.hovered(id)
+  under_post(
+    c,
+    "dismiss/" + k,
+    shown,
+    exit=@motion.trans(fade=0.0, scale=archive_scale, ox=0.0, oy=0.0, spec=archive_tween),
+    start_at?=if at >= 0.0 { Some(at) } else { None },
+    fn() {
+      c.box(style=dismiss_room, id=if shown { id } else { 0 }, fn() {
+        c.rich([@ui.span(@sf.t("web-main.chat.asks.dismiss"), underline=hot)], style=if hot {
+          dismiss_words_hot
+        } else {
+          dismiss_words
+        })
+        |> ignore
+      })
+      |> ignore
+    },
+  )
 }
 
 ///|
 /// What was let go here (by its post: seq_key), gone at once: back if letting it go failed.
-let dismissed : Map[String, Bool] = {}
+pub let dismissed : Map[String, Bool] = {}
 
 ///|
 /// What is under a post (decision): 8 under its words, at the column's start.

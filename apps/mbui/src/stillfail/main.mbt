@@ -322,6 +322,13 @@ fn local_cloud(url : String) -> Bool {
 
 ///|
 fn main {
+  // MBUI_POINTING=finger: pointed at as a phone is (a test's trace recorded again on a Mac by the hand its Tester
+  // plays: scripts/rerecord.sh); mouse, as a desktop is
+  match @ui.env("MBUI_POINTING") {
+    "finger" => @ui.set_pointing(Some(Finger))
+    "mouse" => @ui.set_pointing(Some(Mouse))
+    _ => ()
+  }
   // MBUI_CORE_TRACE=1: the app's conversation with its core kept on the log (CORETRACE …), for a Tester to give
   // again (src/core/replay.mbt). Only on a local cloud (MBUI_CLOUD on this machine: its made-up account): what a real
   // account's core says (its tokens, a vault's values) is never put on a log.

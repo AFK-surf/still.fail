@@ -169,6 +169,8 @@ test "words typed go with send: by the chat's thread, the field emptied, Enter a
   // the words sent wait over the field for their row, which this core never gives; the composer's room held as
   // tall as they went meanwhile, then let go to its own height (both said as they set off)
   t.run_for(flight_wait_ms + composer_morph_ms)
+  // (its row under way: said so once it has been a while, sfpages chat_rows.mbt)
+  t.run_for(@sfpages.sending_shows_ms)
   t.assert_idle()
 }
 
@@ -216,6 +218,8 @@ test "a kept quote's comment comes back into its line and goes with the message"
   // the words sent wait over the field for their row, which this core never gives; the composer's room held as
   // tall as they went meanwhile, then let go to its own height (both said as they set off)
   t.run_for(flight_wait_ms + composer_morph_ms)
+  // (its row under way: said so once it has been a while, sfpages chat_rows.mbt)
+  t.run_for(@sfpages.sending_shows_ms)
   t.assert_idle()
 }
 
@@ -428,6 +432,8 @@ test "a long paste goes as a text file, up to the station, and with the message"
   // the words sent wait over the field for their row, which this core never gives; the composer's room held as
   // tall as they went meanwhile, then let go to its own height (both said as they set off)
   t.run_for(flight_wait_ms + composer_morph_ms)
+  // (its row under way: said so once it has been a while, sfpages chat_rows.mbt)
+  t.run_for(@sfpages.sending_shows_ms)
   t.assert_idle()
 }
 
@@ -459,6 +465,8 @@ test "a station's file sent as a file: staged on the chat's station, the message
   // the words sent wait over the field for their row, which this core never gives; the composer's room held as
   // tall as they went meanwhile, then let go to its own height (both said as they set off)
   t.run_for(flight_wait_ms + composer_morph_ms)
+  // (its row under way: said so once it has been a while, sfpages chat_rows.mbt)
+  t.run_for(@sfpages.sending_shows_ms)
   t.assert_idle()
 }
 
@@ -477,6 +485,8 @@ test "refused before the outbox, the words come back and why is said" {
   // the words sent wait over the field for their row, which this core never gives; the composer's room held as
   // tall as they went meanwhile, then let go to its own height (both said as they set off)
   t.run_for(flight_wait_ms + composer_morph_ms)
+  // (its row under way: said so once it has been a while, sfpages chat_rows.mbt)
+  t.run_for(@sfpages.sending_shows_ms)
   t.assert_idle()
 }
 
@@ -534,6 +544,8 @@ test "a message held: its words quoted into the draft, with a line for a comment
   // the words sent wait over the field for their row, which this core never gives; the composer's room held as
   // tall as they went meanwhile, then let go to its own height (both said as they set off)
   t.run_for(flight_wait_ms + composer_morph_ms)
+  // (its row under way: said so once it has been a while, sfpages chat_rows.mbt)
+  t.run_for(@sfpages.sending_shows_ms)
   t.assert_idle()
 }
 

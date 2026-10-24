@@ -234,6 +234,8 @@ test "send tapped while the composer grows goes at once, the field emptied" {
   assert_eq(after, "")
   // the words sent wait for their row, which this core never gives; the composer's room let go after
   t.run_for(flight_wait_ms + composer_morph_ms)
+  // (its row under way: said so once it has been a while, sfpages chat_rows.mbt)
+  t.run_for(@sfpages.sending_shows_ms)
   t.assert_idle()
 }
 
@@ -262,6 +264,8 @@ test "＋'s sheet going down takes no tap: the field tapped meanwhile is the fie
   assert_eq(text(Some(sent[0].params), "text"), "还在下去的时候")
   // the words sent wait for their row, which this core never gives; the composer's room let go after
   t.run_for(flight_wait_ms + composer_morph_ms)
+  // (its row under way: said so once it has been a while, sfpages chat_rows.mbt)
+  t.run_for(@sfpages.sending_shows_ms)
   t.assert_idle()
 }
 
@@ -289,6 +293,8 @@ test "a quote's line for a comment, tapped while the capsule grows round it, tak
   }
   // the words sent wait for their row, which this core never gives; the composer's room let go after
   t.run_for(flight_wait_ms + composer_morph_ms)
+  // (its row under way: said so once it has been a while, sfpages chat_rows.mbt)
+  t.run_for(@sfpages.sending_shows_ms)
   t.assert_idle()
 }
 

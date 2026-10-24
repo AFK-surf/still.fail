@@ -6,8 +6,6 @@
 /// What this package keeps put back as the app begins anew (its reset).
 pub fn reset() -> Unit {
   @sfpages.reset()
-  // what a page asks of the chat beside it: the side panel's tab, toggled (panel.mbt)
-  detail_asked.val = side_toggle
   wide_reset()
   publish_reset()
   new_ws_reset()

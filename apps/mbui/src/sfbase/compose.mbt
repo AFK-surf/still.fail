@@ -46,6 +46,7 @@ let writing_n : Ref[Int] = { val: 0 }
 
 ///|
 pub fn writings_reset() -> Unit {
+  quoted_into.clear()
   writings.clear()
   writing_pictures.clear()
   writing_went.clear()
@@ -419,3 +420,39 @@ pub fn file_type(name : String) -> String {
     ""
   }
 }
+
+///|
+/// A file as the core gives it (Attachment), kept by `owner`'s workspace.
+pub fn attachment_json(a : Attachment, owner : String) -> Json {
+  let o : Map[String, Json] = {
+    "name": Json::string(a.name),
+    "path": Json::string(a.path),
+    "size": Json::number(a.size),
+  }
+  if a.width > 0.0 && a.height > 0.0 {
+    o["width"] = Json::number(a.width)
+    o["height"] = Json::number(a.height)
+  }
+  if a.thumbhash != "" {
+    o["thumbhash"] = Json::string(a.thumbhash)
+  }
+  if owner != "" {
+    o["owner"] = Json::string(owner)
+  }
+  Json::object(o)
+}
+
+///|
+/// A message's file quoted into a chat's draft (a picture's menu, 引用): by the draft's key, whose (`author`), the
+/// message's `ts`, its role, the file as the core gives it; taken by whichever composer the draft's is, as it is next
+/// drawn (its quote with the file in its card, the file going again with the message as the station has it).
+pub fn quote_file_into(draft : String, author : String, ts : String, role : String, file : Json) -> Unit {
+  let list = quoted_into.get(draft).unwrap_or([])
+  list.push((author, ts, role, file))
+  quoted_into[draft] = list
+}
+
+///|
+/// The files quoted, by draft key, not yet taken by a composer.
+// kept across runs: put back by writings_reset (sfbase's reset)
+pub let quoted_into : Map[String, Array[(String, String, String, Json)]] = {}
