@@ -91,9 +91,14 @@ pub fn ripple(
   // a finger down on it, or a tap let go before the press showed: a ripple from where it went down
   if (down || tapped) && !list.iter().any(fn(r) { !r.lifted }) {
     let (px, py, _) = c.pointer()
+    // (where it is laid this frame; a list's row, laid as the list is, after its build: where it was laid last)
     let (bx, by) = match c.laid_rect(id) {
       Some((x, y, _, _)) => (x, y)
-      None => (px, py)
+      None =>
+        match c.rect_of(id) {
+          Some((x, y, _, _)) => (x, y)
+          None => (px, py)
+        }
     }
     let p = Anim::new(0.0)
     p.name = "ripple"
