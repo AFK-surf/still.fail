@@ -468,6 +468,12 @@
   "core-logic.drive.empty": "空文件夹",
   "core-logic.memory.lead": "开头",
   "core-logic.memory.whole": "全文",
+  "core-logic.memory.kind.project": "项目记忆",
+  "core-logic.memory.kind.builtin": "station 内置",
+  "core-logic.memory.kind.skill": "Skill",
+  "core-logic.memory.no_when": "（未注明使用时机）",
+  "core-logic.memory.overview": "总览",
+  "core-logic.memory.empty": "（空）",
   "core-logic.memory.points": {
     "one": "{n} 条",
     "other": "{n} 条"

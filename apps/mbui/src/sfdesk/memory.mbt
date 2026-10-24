@@ -82,10 +82,8 @@ fn memory_view(c : @ui.Ctx, core : Core, address : String, names : Map[String, S
   let open = builtin_open.get(address).unwrap_or(false)
   let skill_row = fn(k : Json) {
     let kv = Some(k)
-    let line = match skill_line(kv) {
-      "" => @sf.t("web-main.memory.noWhen")
-      l => l
-    }
+    // (the core's: when it is read, in a line)
+    let line = text(kv, "line")
     if mem_row(c, "memory/" + address + "/skill/" + text(kv, "name"), text(kv, "name"), line, text(kv, "size"), tag=skill_tag(kv, names)) {
       (core.push)(MemoryDoc(address, text(kv, "name"), 0))
     }

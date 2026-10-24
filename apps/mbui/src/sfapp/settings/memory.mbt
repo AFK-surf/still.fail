@@ -50,32 +50,9 @@ pub fn memory_of(c : @ui.Ctx, core : Core, address : String) -> MemoryRead {
 }
 
 ///|
-/// The global memory's parts (Memory.kt sectionsOf): by its headings; all of it in one from a core before them.
+/// The global memory's parts (Memory.kt sectionsOf): by its headings, as the core reads them.
 pub fn sections_of(m : Json?) -> Array[(String, String, String)] {
-  let g = field(m, "global")
-  let parts = items(g, "sections").map(fn(x) { (text(Some(x), "title"), text(Some(x), "text"), text(Some(x), "note")) })
-  if parts.length() > 0 {
-    return parts
-  }
-  let whole = text(g, "text").trim(chars=" \t\n").to_owned()
-  if whole == "" {
-    []
-  } else {
-    [(tr("android-misc.memory.global"), whole, "")]
-  }
-}
-
-///|
-/// What a skill is for, in a line (Memory.kt SkillFile.line).
-pub fn skill_line(k : Json?) -> String {
-  match opt_text(k, "brief") {
-    Some(b) => b
-    None =>
-      match opt_text(k, "about") {
-        Some(a) => a
-        None => text(k, "description")
-      }
-  }
+  items(field(m, "global"), "sections").map(fn(x) { (text(Some(x), "title"), text(Some(x), "text"), text(Some(x), "note")) })
 }
 
 ///|
@@ -220,10 +197,7 @@ fn memory_page(c : @ui.Ctx, core : Core, here : Here, address : String) -> Unit 
               c,
               "skill/" + text(kv, "name"),
               text(kv, "name"),
-              match skill_line(kv) {
-                "" => tr("android-misc.memory.noWhen")
-                l => l
-              },
+              text(kv, "line"),
               text(kv, "size"),
               tag=skill_tag(kv, names),
             ) {
@@ -345,14 +319,9 @@ fn memory_doc_page(c : @ui.Ctx, core : Core, address : String, skill : String, a
   }
   let sub = if skill == "" {
     tr("web-main.memory.global.when")
-  } else if kv is None {
-    ""
-  } else if flag(kv, "project") {
-    tr("android-misc.memory.projects")
-  } else if flag(kv, "builtin") {
-    tr("android-misc.memory.builtin")
   } else {
-    tr("web-main.memory.skill")
+    // (the core's: 项目记忆, station 内置, Skill)
+    text(kv, "kindText")
   }
   let key = address + "\u{1}" + skill
   let picked = doc_picked.get(key).unwrap_or(at)
@@ -382,16 +351,8 @@ fn memory_doc_page(c : @ui.Ctx, core : Core, address : String, skill : String, a
     let pages : Array[(String, String, String)] = if kv is None {
       sections_of(m).map(fn(p) { (p.0, p.2, p.1) })
     } else {
-      let body = match opt_text(kv, "body") {
-        Some(b) => b
-        None => text(kv, "text")
-      }
-      let ps = [(tr("web-main.memory.overview"), "", body)]
-      for f in items(kv, "files") {
-        let fv = Some(f)
-        ps.push((opt_text(fv, "label").unwrap_or(text(fv, "name")), text(fv, "size"), text(fv, "text")))
-      }
-      ps
+      // its SKILL.md (总览), then each other file (the core's)
+      items(kv, "pages").map(fn(p) { (text(Some(p), "label"), text(Some(p), "size"), text(Some(p), "text")) })
     }
     let i = if pages.length() == 0 { 0 } else if picked >= pages.length() { pages.length() - 1 } else if picked < 0 { 0 } else { picked }
     let blocks : Array[() -> Unit] = [fn() { gap(c, 4.0) }]
@@ -404,14 +365,7 @@ fn memory_doc_page(c : @ui.Ctx, core : Core, address : String, skill : String, a
               c.text(tr("web-main.memory.when"), size=12.0, weight=500, color=t.p.subtle, wrap=false, line=17.0) |> ignore
               c.box(w=Fill(1.0), pt=2.0, fn() {
                 c.text(
-                  match opt_text(kv, "about") {
-                    Some(a) if a != "" => a
-                    _ =>
-                      match text(kv, "description") {
-                        "" => tr("android-misc.memory.noWhen")
-                        d => d
-                      }
-                  },
+                  text(kv, "whenText"),
                   size=13.0,
                   color=t.p.muted,
                   w=Fill(1.0),

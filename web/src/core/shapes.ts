@@ -4217,6 +4217,16 @@ export interface MemoryFile {
 	size?: string;
 }
 
+/** A page of a skill, as its page picks between them. */
+export interface MemoryPage {
+	/** "" its SKILL.md; else the file's name. */
+	key: string;
+	label: string;
+	size?: string;
+	/** What it says (（空） when nothing). */
+	text: string;
+}
+
 export interface MeshStatus {
 	/** off | missing | running | restarting */
 	state: string;
@@ -5516,6 +5526,14 @@ export interface SkillFile {
 	files?: SkillDoc[];
 	/** Shared with the workspace's other stations, or another station's (absent: neither). */
 	share?: SkillShare;
+	/** What kind it is, in words: 项目记忆, station 内置, Skill. */
+	kindText?: string;
+	/** When it is read, for its page (`about`, else that it does not say). */
+	whenText?: string;
+	/** Its row's line (`brief`, else that it does not say when it is used). */
+	line?: string;
+	/** Its pages to pick between: its SKILL.md (总览), then each other file. */
+	pages?: MemoryPage[];
 }
 
 /** Address of a transient Slack token form, shared by calls and topic subscriptions. */
