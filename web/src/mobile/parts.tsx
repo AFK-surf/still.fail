@@ -148,7 +148,16 @@ export function Seg({ options, selected, onSelect, height = 30, fill = false, ra
     if (!el) return;
     // The first placement jumps; a change of choice slides.
     setThumb((t) => ({ x: el.offsetLeft, w: el.offsetWidth, moved: t !== null }));
-  }, [selected, options.length]);
+    // Filling and short of room, the options scroll sideways (parts.css.ts mSeg): the chosen one brought into view, as
+    // little as that takes.
+    const box = row.current?.parentElement;
+    if (fill && box) {
+      const left = el.offsetLeft;
+      const right = left + el.offsetWidth + 2 * inset;
+      if (left < box.scrollLeft) box.scrollLeft = left;
+      else if (right > box.scrollLeft + box.clientWidth) box.scrollLeft = right - box.clientWidth;
+    }
+  }, [selected, options.length, fill, inset]);
   return (
     <div className={`${css.mSeg}${className ? ` ${className}` : ""}`} data-track={track || undefined} data-fill={fill || undefined}
       data-smooth={smooth || undefined} style={{ height, borderRadius: smooth ? `calc(${radius}px * ${vars.cornerScale})` : radius, padding: inset }}>

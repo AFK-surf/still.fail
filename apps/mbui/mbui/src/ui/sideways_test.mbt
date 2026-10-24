@@ -243,3 +243,78 @@ test "sideways to its end: a path's end in view as it is first laid out and as i
   t.draw()
   assert_eq(at.val, 400.0)
 }
+
+///|
+/// A strip of tabs (`words`, size 10) filling a box 300 wide, sideways: each tab an equal share, never narrower than
+/// its words; the one keyed `shown` (its index) brought into view.
+fn strip_view(words : Ref[Array[String]], at : Ref[Double], shown? : Ref[Int] = Ref::new(-1)) -> @ui.Tester {
+  @ui.Tester::new(
+    fn(c) {
+      at.val = c.sideways_at("tabs")
+      let show = if shown.val >= 0 { c.id("tab/\{shown.val}") } else { 0 }
+      c.sideways("tabs", fill=true, show~, fn() {
+        c.box(dir=Row, w=Fill(1.0), h=Px(20.0), keep=true, fn() {
+          for k, w in words.val {
+            c.box(dir=Row, w=Fill(1.0), keep=true, id=c.id("tab/\{k}"), fn() {
+              c.text(w, size=10.0, wrap=false) |> ignore
+            })
+            |> ignore
+          }
+        })
+        |> ignore
+      })
+      |> ignore
+    },
+    w=300.0,
+    h=100.0,
+  )
+}
+
+///|
+test "sideways filling: what it holds as wide as the box where it needs no more, its parts sharing it; wider, scrolled" {
+  let words = Ref::new(["ab", "cd"])
+  let at = Ref::new(0.0)
+  let t = strip_view(words, at)
+  t.draw()
+  // two of 10 in 300: 150 each
+  assert_eq(t.rect_of("ab").unwrap().0, 0.0)
+  assert_eq(t.rect_of("cd").unwrap().0, 150.0)
+  // three of 200: 600, each whole, dragged as far as its end
+  words.val = ["a".repeat(40), "b".repeat(40), "c".repeat(40)]
+  t.draw()
+  assert_eq(t.rect_of("bbbb").unwrap().0, 200.0)
+  t.drag(290.0, 10.0, 0.0, 10.0)
+  t.drag(290.0, 10.0, 0.0, 10.0)
+  t.draw()
+  assert_eq(at.val, 300.0)
+  assert_eq(t.rect_of("cccc").unwrap().0, 100.0)
+}
+
+///|
+test "sideways show: the part brought into view as it is first shown and as another is asked, scrolled as little as that takes" {
+  let words = Ref::new(["a".repeat(40), "b".repeat(40), "c".repeat(40)])
+  let at = Ref::new(0.0)
+  let shown = Ref::new(2)
+  let t = strip_view(words, at, shown~)
+  t.draw()
+  // the last (400 to 600) in view at once: its end at the box's
+  assert_eq(t.rect_of("cccc").unwrap().0, 100.0)
+  // the first: back to its start; the second (200 to 400): its end at the box's, no further
+  shown.val = 0
+  t.draw()
+  assert_eq(t.rect_of("aaaa").unwrap().0, 0.0)
+  shown.val = 1
+  t.draw()
+  assert_eq(t.rect_of("aaaa").unwrap().0, -100.0)
+  // the first again: back as far as its start
+  shown.val = 0
+  t.draw()
+  assert_eq(t.rect_of("aaaa").unwrap().0, 0.0)
+  // dragged away from where it was shown, it stays where the finger left it while the same part is asked
+  t.drag(290.0, 10.0, 190.0, 10.0)
+  t.draw()
+  assert_true(at.val > 0.0)
+  let left = at.val
+  t.draw()
+  assert_eq(at.val, left)
+}

@@ -33,6 +33,10 @@ priv struct Sideways {
   /// what it was last sent to its end for (Ctx::sideways's `to_end`), and whether it is to go there once laid out
   mut end_for : String
   mut to_end : Bool
+  /// the part last asked to be in view (Ctx::sideways's `show`, an id), and the one to bring there once laid out (0:
+  /// none)
+  mut show_last : Int
+  mut show_want : Int
 }
 
 ///|
@@ -47,7 +51,10 @@ let sideways_friction : Double = 0.996
 /// head). `key` keeps where it is scrolled to from frame to frame. `across`: the boxes of `key` in any scope (a long
 /// text's rows in a list, each its own row) are one: scrolled together, as far as the widest of them seen. `to_end`:
 /// sent to its end once laid out whenever this changes (a path's end in view as it goes deeper, as Compose's
-/// scrollTo(maxValue)). Its id, for what is drawn in it.
+/// scrollTo(maxValue)). `fill`: what it holds at least as wide as the box (what fills it there sharing it: a strip of
+/// tabs across it), scrolled only where it needs more. `show`: the part built in it with that id brought into view
+/// once laid out whenever it is another (the chosen one of a strip of tabs, as it is first shown and as another is
+/// chosen), as little as that takes. Its id, for what is drawn in it.
 pub fn Ctx::sideways(
   self : Ctx,
   key : String,
@@ -57,6 +64,8 @@ pub fn Ctx::sideways(
   pady? : Double = -1.0,
   across? : Bool = false,
   to_end? : String = "",
+  fill? : Bool = false,
+  show? : Int = 0,
   body : () -> Unit,
 ) -> Int {
   let id = if across { self.root_id("\u{1}sideways\u{1}" + key) } else { self.id("\u{1}sideways\u{1}" + key) }
@@ -66,7 +75,9 @@ pub fn Ctx::sideways(
   let mut inner = -1
   let b = self.box(dir=Row, w~, clip=true, id~, fn() {
     self.sideways_depth += 1
-    inner = self.box(tx=-st.x, pl=px, pr=px, pt=py, pb=py, body)
+    // (filling: as wide as the box where what it holds needs no more, never narrower than that: Ctx::box keep)
+    let inner_w = if fill { Some(Fill(1.0)) } else { None }
+    inner = self.box(w?=inner_w, keep=fill, tx=-st.x, pl=px, pr=px, pt=py, pb=py, body)
     self.sideways_depth -= 1
   })
   self.nodes[b].sideways = true
@@ -76,6 +87,10 @@ pub fn Ctx::sideways(
   if to_end != "" && to_end != st.end_for {
     st.end_for = to_end
     st.to_end = true
+  }
+  if show != 0 && show != st.show_last {
+    st.show_last = show
+    st.show_want = show
   }
   if across && st.frame == self.build_no {
     st.others.push((b, inner))
@@ -119,6 +134,8 @@ fn Ctx::scroll_state(self : Ctx, id : Int, vertical : Bool) -> Sideways {
         across: false,
         end_for: "",
         to_end: false,
+        show_last: 0,
+        show_want: 0,
       }
       sideways[id] = s
       s
@@ -273,6 +290,32 @@ fn Ctx::sideways_after_layout(self : Ctx) -> Unit {
     }
     if st.x > st.max {
       st.x = st.max
+    }
+    // a part brought into view: from where it is in what the box holds, scrolled as little as that takes
+    if st.show_want != 0 {
+      let want = st.show_want
+      st.show_want = 0
+      let mut k = st.inner + 1
+      while k < self.count && self.nodes[k].id != want {
+        k = k + 1
+      }
+      if k < self.count {
+        let p = self.nodes[k]
+        let from = p.x - i.x
+        let to = if from < st.x {
+          from
+        } else if from + p.fw > st.x + o.fw {
+          from + p.fw - o.fw
+        } else {
+          st.x
+        }
+        let to = dclamp(to, 0.0, dmax(st.max, 0.0))
+        if to != st.x {
+          st.x = to
+          // (built again before this frame goes out: drawn there at once)
+          self.read_changed("a sideways box's part brought into view")
+        }
+      }
     }
   })
   for id in gone {

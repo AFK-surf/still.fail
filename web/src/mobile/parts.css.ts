@@ -46,6 +46,10 @@ export const mSeg = style({
     "&[data-track]": { background: "color-mix(in srgb, var(--m-ink) 6%, transparent)" },
     // Not a capsule (parts.tsx Seg): the smooth corner, its thumb's too.
     "&[data-smooth]": { cornerShape: vars.cornerShape },
+    // Filling, where its options' words need more than its width: they scroll sideways in it, whole (parts.tsx Seg
+    // brings the chosen one into view).
+    "&[data-fill]": { overflowX: "auto", overscrollBehaviorX: "contain", scrollbarWidth: "none" },
+    "&[data-fill]::-webkit-scrollbar": { display: "none" },
   },
 });
 export const mSegRow = style({ position: "relative", display: "flex", height: "100%" });

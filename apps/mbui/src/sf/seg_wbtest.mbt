@@ -39,6 +39,42 @@ test "a filling Seg short of room for equal shares: each option's words whole, t
 }
 
 ///|
+test "a filling Seg with less room than its options' words: they scroll sideways in its track, whole, the chosen one in view" {
+  let parts = ["Android", "Desktop", "Web", "Station", "Cloud"]
+  let chosen = Ref::new(4)
+  // 260 wide: 224 in the track for options needing 283
+  let t = @ui.Tester::new(
+    fn(c) {
+      begin(c) |> ignore
+      c.with_theme(ui_theme(), fn() {
+        c.box(style=seg_test_room, fn() {
+          chosen.val = seg(c, "parts", parts, chosen.val, fill=true, height=34.0)
+        })
+        |> ignore
+      })
+    },
+    w=260.0,
+    h=200.0,
+    platform=2,
+  )
+  t.draw()
+  for words in parts {
+    assert_eq(t.lines_of(words), [words], msg=words)
+  }
+  // the chosen one, the last, whole in the track (16 in, 2 inside it); the first scrolled out at its start
+  let (x, _, w, _) = t.get(@ui.Radio, label="Cloud").rect
+  assert_true(x >= 17.5 && x + w <= 242.5)
+  assert_true(t.get(@ui.Radio, label="Android").rect.0 < 17.5)
+  assert_eq(t.squeeze_faults(), [])
+  // the first, a sliver of it showing, tapped there: chosen, brought whole into view
+  let (_, y, _, h) = t.get(@ui.Radio, label="Android").rect
+  t.tap(21.0, y + h / 2.0)
+  t.draw()
+  assert_eq(chosen.val, 0)
+  assert_true((t.get(@ui.Radio, label="Android").rect.0 - 18.0).abs() < 0.5)
+}
+
+///|
 /// Where the Seg is: a phone's page, 16 in from its sides.
 // kept across runs: a value (no field of it changes)
 let seg_test_room : @ui.Style = @ui.css("w=Full px=S4")
