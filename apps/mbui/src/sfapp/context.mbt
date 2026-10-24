@@ -67,7 +67,7 @@ fn context_tile_name(c : @ui.Ctx, name : String, open : ContextTile?) -> Unit {
 /// (asked first in a sheet of its own).
 fn context_sheet(c : @ui.Ctx, src : Source, r : ChatRef, key : String) -> Unit {
   let s = field(agent_json((src.topic)("chat", chat_params(r)).value, key), "session")
-  sheet_frame(c, "context", c.height * 0.34, fn() {
+  sheet_frame(c, "context", c.height * 0.34, fit=true, fn() {
     sheet_head(c, tr("web-pages.chat.context"))
     if flag(s, "canCompact") &&
       @settings.pick_row(c, "context/compact", tr("web-pages.chat.compact"), sub=tr("web-mobile.agent.compactSub")) {
@@ -89,7 +89,7 @@ fn context_sheet(c : @ui.Ctx, src : Source, r : ChatRef, key : String) -> Unit {
 /// Asks before its context is cleared (PageParts.kt confirm, with `what`): the sheet goes as it is answered, the row
 /// shows it under way, a failure said by a toast.
 fn clear_context_sheet(c : @ui.Ctx, src : Source, r : ChatRef, key : String) -> Unit {
-  sheet_frame(c, "clear-context", c.height * 0.36, fn() {
+  sheet_frame(c, "clear-context", c.height * 0.36, fit=true, fn() {
     sheet_head(c, tr("web-pages.chat.clearConfirm"))
     c.box(style=clear_context_body, fn() {
       c.text(tr("web-pages.chat.clearBody"), style=clear_context_words) |> ignore
