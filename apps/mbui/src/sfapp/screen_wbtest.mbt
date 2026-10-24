@@ -706,7 +706,7 @@ test "a station from before the clipboard and files, or only looking: neither of
 }
 
 ///|
-test "files go onto the machine one after another, the first under a free name; then their paths pasted or shown" {
+test "files go onto the machine one after another, the first beside the one of its name there, as the station keeps both; then their paths pasted or shown" {
   let r = screen_rig()
   driven(r)
   r.answer.val = fn(name, p) {
@@ -732,10 +732,10 @@ test "files go onto the machine one after another, the first under a free name; 
   r.tap_label("发送文件")
   r.t.draw()
   r.t.draw()
-  assert_true(r.t.find("/Users/alice/Downloads/季度报告 (1).pdf") is Some(_))
+  assert_true(r.t.find("/Users/alice/Downloads/季度报告 2.pdf") is Some(_))
   assert_true(r.t.find("/Users/alice/Downloads/notes.txt") is Some(_))
   r.t.tap_text("粘贴路径")
-  assert_eq(text(Some(r.told("screen.clipboard")[0]), "text"), "/Users/alice/Downloads/季度报告 (1).pdf")
+  assert_eq(text(Some(r.told("screen.clipboard")[0]), "text"), "/Users/alice/Downloads/季度报告 2.pdf")
   let reveals = r.t.locate("在访达中显示")
   let (rx, ry) = reveals[1]
   r.t.tap(rx, ry)

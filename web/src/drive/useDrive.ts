@@ -103,12 +103,11 @@ export const drive = {
   remove: (at: At, entry: DriveEntry, permanent = false) => call("drive.remove", { station: at.station, root: at.root, path: joinPath(at.path, entry.name), ...(permanent ? { permanent: true } : {}) }),
 };
 
-/** A name a folder or file may have: not empty, no slash, not . or .. */
-export function nameProblem(name: string): string | null {
-  const n = name.trim();
-  if (!n) return t("web-pages.drive.name.empty");
-  if (n.includes("/") || n.includes("\\") || n === "." || n === "..") return t("web-pages.drive.name.bad");
-  return null;
+/** A name typed for a folder or file, as it may be (the core's `drive.check`: not empty, no slash, not . or ..); else
+ * refused, saying why. */
+export async function named(name: string): Promise<void> {
+  const { problem } = await call("drive.check", { text: name }) as { problem: string | null };
+  if (problem !== null) throw new Error(problem);
 }
 
 /** Where a page of the drive is: `files?root=…&path=…` under the station (`read`, `play`: a file opened). */

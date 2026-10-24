@@ -72,8 +72,8 @@ const goes = new Set(Object.keys(was["chat.find.go"] ?? {}));
 const relays = new Set(Object.keys(was["chat.relayView"] ?? {}));
 // What a history step is: by what was asked (its name, call, result, whether it failed, whether its words show).
 const tools = new Set(Object.keys(was["history.tool"] ?? {}));
-// What is written, read (ref.at, ref.before, ref.marks, ref.pasted, paste.info): by what was asked (the call, the
-// words, the caret, the station it is written on).
+// What is written, read (ref.at, ref.before, ref.marks, ref.pasted, paste.info, drive.check): by what was asked (the
+// call, the words, the caret, the station it is written on).
 const words = new Set(Object.keys(was.words ?? {}));
 // the prefs a rail is drawn from, as JSON (the app's runs say them in Chinese, as its fixtures are)
 const rails = new Set(Object.keys(was.railView ?? {}));

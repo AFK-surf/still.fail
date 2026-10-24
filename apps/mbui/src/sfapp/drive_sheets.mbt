@@ -171,30 +171,32 @@ fn entry_sheet(
         c,
         Ask(tr("android-misc.drive.rename"), e.name, e.name, tr("common.save"), fn(name) {
           let what = tr("android-misc.drive.rename.what")
-          match dv_name_problem(name) {
-            Some(p) => say(c, fill("android-misc.act.failed", [("what", what), ("error", p)]))
-            None =>
-              if name != e.name && names.contains(name) {
-                say(
-                  c,
-                  fill("android-misc.act.failed", [("what", what), ("error", tr("station.drive.exists"))]),
-                )
-              } else {
-                dv_doing(
-                  c,
-                  src,
-                  dv_key("entry", at.station, root, path),
-                  what,
-                  "drive.rename",
-                  Json::object({
-                    "station": Json::string(at.station),
-                    "root": Json::string(root),
-                    "from": Json::string(path),
-                    "to": Json::string(dv_join(at.path, name)),
-                  }),
-                )
-              }
-          }
+          dv_check_name(src, name, fn(problem) {
+            match problem {
+              Some(p) => say(c, fill("android-misc.act.failed", [("what", what), ("error", p)]))
+              None =>
+                if name != e.name && names.contains(name) {
+                  say(
+                    c,
+                    fill("android-misc.act.failed", [("what", what), ("error", tr("station.drive.exists"))]),
+                  )
+                } else {
+                  dv_doing(
+                    c,
+                    src,
+                    dv_key("entry", at.station, root, path),
+                    what,
+                    "drive.rename",
+                    Json::object({
+                      "station": Json::string(at.station),
+                      "root": Json::string(root),
+                      "from": Json::string(path),
+                      "to": Json::string(dv_join(at.path, name)),
+                    }),
+                  )
+                }
+            }
+          })
         }),
       )
     }
@@ -306,19 +308,21 @@ fn dv_new_folder(c : @ui.Ctx, src : Source, at : DriveAt) -> Unit {
     c,
     Ask(tr("android-misc.drive.mkdir"), "", tr("android-misc.drive.mkdir.placeholder"), tr("android-misc.drive.mkdir.make"), fn(name) {
       let what = tr("android-misc.drive.mkdir.what")
-      match dv_name_problem(name) {
-        Some(p) => say(c, fill("android-misc.act.failed", [("what", what), ("error", p)]))
-        None =>
-          (src.call)(
-            "drive.mkdir",
-            Json::object({
-              "station": Json::string(at.station),
-              "root": Json::string(root),
-              "path": Json::string(dv_join(at.path, name)),
-            }),
-            dv_act(c, what),
-          )
-      }
+      dv_check_name(src, name, fn(problem) {
+        match problem {
+          Some(p) => say(c, fill("android-misc.act.failed", [("what", what), ("error", p)]))
+          None =>
+            (src.call)(
+              "drive.mkdir",
+              Json::object({
+                "station": Json::string(at.station),
+                "root": Json::string(root),
+                "path": Json::string(dv_join(at.path, name)),
+              }),
+              dv_act(c, what),
+            )
+        }
+      })
     }),
   )
 }

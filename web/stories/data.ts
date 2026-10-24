@@ -1,6 +1,7 @@
 // What the stories show that the site's demo has none of (src/demo/mount.tsx extendDemo): a novel and a note to read,
 // a clip and a picture in a folder, the changelog's news. Made up here, the same every time.
 import type { DriveEntry, DriveKind, HistoryItem, HistoryStep, HistoryView, MachineLoginScreen, MachineLoginShown, MachineLoginsView } from "../src/core/shapes.ts";
+import { opensOf } from "../../client/core-ts/src/drive-kind.ts";
 import { markdown } from "../../client/core-ts/src/markdown.ts";
 import clipUrl from "./assets/story-clip.mp4?url";
 import pictureUrl from "./assets/story-picture.png?url";
@@ -64,7 +65,7 @@ const NOTE_BYTES = bytes(NOTE);
 const MTIME = Date.UTC(2026, 9, 15, 8);
 
 const entry = (name: string, kind: DriveKind, size: number, type: string): DriveEntry =>
-  ({ name, dir: false, size, mtime: MTIME, type, kind, sizeText: "", timeText: "10/15" });
+  ({ name, dir: false, size, mtime: MTIME, type, kind, opens: opensOf(kind), sizeText: "", timeText: "10/15" });
 
 /** The folder the stories' files are in, as the drive lists it. */
 export const AT = { station: "local", root: "/Users/lin/Downloads" } as const;
