@@ -20,6 +20,7 @@ fn setting_page(c : @ui.Ctx, src : Source, w : Workspace, pages : Pages, route :
   settings_fixture(core)
   match route {
     Me => me_page(c, core, here)
+    Appearance => appearance_page(c, core)
     Workspace => workspace_page(c, core, here)
     Security => security_page(c, core, here)
     Vault => vault_page(c, core, here)
@@ -76,6 +77,7 @@ fn settings_fixture(core : Core) -> Unit {
       }
     "lock-join" => join_dialog(core, "ws1", "st2", "MBA")
     "lock-off" => turn_off_dialog(core, "ws1", "星火工作室")
+    "local-fonts" => local_open.val = true
     _ => ()
   }
 }
