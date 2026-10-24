@@ -90,8 +90,8 @@ fn route_page(c : @ui.Ctx, core : Core, here : Here, route : Route) -> Unit {
     BarSettings => bars_page(c, core)
     KeptFiles => kept_page(c, core)
     KeptChat(s, thread) => kept_chat_page(c, core, s, thread)
-    Changelog => changelog_page(c, core)
-    About => about_page(c, core)
+    // one page for every frame (src/sfdesk about.mbt), drawn by the frame's setting_route
+    Changelog | About => ()
     LocalStation => local_station_page(c, core)
     // the desktop's own, drawn by its frame (src/sfdesk)
     Shortcuts | Version | Notifications | Permissions | Archiving | StationArchiving(_) => ()
@@ -449,68 +449,6 @@ fn workspace_tile(c : @ui.Ctx, name : String, emoji : String, icon : String) -> 
     }
   })
   |> ignore
-}
-
-///|
-/// About this app (SettingsHome.kt AboutScreen), from settings' 关于: this build and the way to a newer one, the
-/// changelog; whether it reports; the terms and privacy policy on the web.
-fn about_page(c : @ui.Ctx, core : Core) -> Unit {
-  let t = @sf.theme()
-  let blocks : Array[() -> Unit] = [
-    fn() { top_back(c, core, tr("android-settings.title")) },
-    fn() { large_title(c, tr("web-pages.settings.nav.about")) },
-    fn() {
-      list_card(c, fn() {
-        // this build (Version): its name and version, and the way to a newer one (tapped: installed, or asked now)
-        let (words, newer) = (core.version_words)()
-        if list_row(c, key="version", fn() {
-            c.text("still.fail mbui " + build_version(), size=15.0, color=t.p.text, wrap=false, w=Fill(1.0), line=21.0)
-            |> ignore
-            c.text(words, size=15.0, color=if newer { @sf.link_ink() } else { t.p.muted }, wrap=false, line=21.0)
-            |> ignore
-          }) {
-          (core.version_tap)()
-        }
-        if go_row(c, "go-changelog", tr("android-settings.changelog.title")) {
-          (core.push)(Changelog)
-        }
-      })
-    },
-  ]
-  // usage statistics and error reports from this device (SettingsHome.kt Reporting): not where nothing is sent
-  match (core.reporting)() {
-    Some(on) =>
-      blocks.push(fn() {
-        list_card(c, fn() {
-          if list_row(c, key="reporting", fn() {
-              c.box(style=@sf.full_width, fn() {
-                c.text(tr("android-settings.telemetry.title"), style=@sf.body) |> ignore
-                c.text(fill("android-settings.telemetry.note", [("app", "still.fail")]), style=@sf.meta) |> ignore
-              })
-              |> ignore
-              switch(c, "reporting", on)
-            }) {
-            (core.set_reporting)(!on)
-          }
-        })
-      })
-    None => ()
-  }
-  // still.fail's terms and privacy policy, on the web, the arrow out (SettingsHome.kt Legal)
-  blocks.push(fn() {
-    list_card(c, fn() {
-      for l in [("terms", "android-settings.legal.terms"), ("privacy", "android-settings.legal.privacy")] {
-        if list_row(c, key="go-" + l.0, fn() {
-            row_title(c, tr(l.1))
-            @sf.icon(c, "arrow-up-right", size=14.0, color=t.p.subtle) |> ignore
-          }) {
-          (core.open_link)(legal_url(l.0))
-        }
-      }
-    })
-  })
-  blocks.push(fn() { gap(c, 30.0) })
-  scroll_page(c, "about", blocks)
 }
 
 ///|

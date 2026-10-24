@@ -501,6 +501,7 @@ pub using @sfbase {
   type Message,
   type Outgoing,
   type Page,
+  type PageFrame,
   type Person,
   type Place,
   type Quote,
