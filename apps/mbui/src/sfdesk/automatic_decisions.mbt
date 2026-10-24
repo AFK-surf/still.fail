@@ -4,10 +4,10 @@
 ///|
 /// 自动决策 (AutomaticDecisions): the point a decision is made at (the completion of a turn), what it does, how many
 /// stations have it on, a row to its page.
-fn decisions_page_wide(c : @ui.Ctx, core : Core, here : Here) -> Unit {
+fn decisions_page(c : @ui.Ctx, core : Core, here : Here) -> Unit {
   let t = @sf.theme()
-  let stations = stations_of(core, here).value
-  desk_page(c, core, "auto-decisions", tr("web-pages.automaticDecisions.title"), about=tr("web-pages.automaticDecisions.choosePoint"), [
+  let stations = @settings.stations_of(core, here).value
+  desk_page(c, core, "auto-decisions", @sf.t("web-pages.automaticDecisions.title"), about=@sf.t("web-pages.automaticDecisions.choosePoint"), [
     fn() {
       c.box(style=desk_list, fn() {
         let id = c.id("auto-completion")
@@ -17,8 +17,8 @@ fn decisions_page_wide(c : @ui.Ctx, core : Core, here : Here) -> Unit {
         }
         c.box(style=desk_list_link, id~, fn() {
           c.box(style=desk_list_text, fn() {
-            c.text(tr("web-pages.automaticDecisions.completion"), style=desk_list_title) |> ignore
-            c.text(tr("web-pages.automaticDecisions.completionNote"), style=desk_note) |> ignore
+            c.text(@sf.t("web-pages.automaticDecisions.completion"), style=desk_list_title) |> ignore
+            c.text(@sf.t("web-pages.automaticDecisions.completionNote"), style=desk_note) |> ignore
           })
           |> ignore
           match stations {
@@ -26,9 +26,9 @@ fn decisions_page_wide(c : @ui.Ctx, core : Core, here : Here) -> Unit {
               let on = a.filter(fn(s) { flag(field(field(field(field(Some(s), "overview"), "automaticDecisions"), "settings"), "completion"), "enabled") }).length()
               c.text(
                 if on > 0 {
-                  fill("web-pages.automaticDecisions.stationsOn", [("n", on.to_string())])
+                  @sf.t("web-pages.automaticDecisions.stationsOn", args=[("n", on.to_string())])
                 } else {
-                  tr("web-pages.automaticDecisions.off")
+                  @sf.t("web-pages.automaticDecisions.off")
                 },
                 style=dc_aside,
               )
@@ -48,14 +48,14 @@ fn decisions_page_wide(c : @ui.Ctx, core : Core, here : Here) -> Unit {
 ///|
 /// The completion rule's page (AutomaticDecisionCompletion): a row for each station, its rule's controls where it can
 /// be set, else why not (offline, older, connecting); a wait while the stations are read.
-fn completion_page_wide(c : @ui.Ctx, core : Core, here : Here) -> Unit {
-  let topic = stations_of(core, here)
+fn completion_page(c : @ui.Ctx, core : Core, here : Here) -> Unit {
+  let topic = @settings.stations_of(core, here)
   let body : Array[() -> Unit] = []
   match topic.value {
     Some(Array(a)) =>
       body.push(fn() {
         if a.length() == 0 {
-          c.text(tr("web-pages.automaticDecisions.addStation"), style=desk_note) |> ignore
+          c.text(@sf.t("web-pages.automaticDecisions.addStation"), style=desk_note) |> ignore
         }
         c.box(style=desk_list, fn() {
           for st in a {
@@ -68,11 +68,11 @@ fn completion_page_wide(c : @ui.Ctx, core : Core, here : Here) -> Unit {
                 c,
                 s,
                 if !flag(s, "online") {
-                  tr("web-pages.automaticDecisions.offline")
+                  @sf.t("web-pages.automaticDecisions.offline")
                 } else if !(field(s, "overview") is Some(Object(_))) {
-                  tr("common.connecting")
+                  @sf.t("common.connecting")
                 } else {
-                  tr("web-pages.automaticDecisions.upgrade")
+                  @sf.t("web-pages.automaticDecisions.upgrade")
                 },
                 waiting=flag(s, "online") && !(field(s, "overview") is Some(Object(_))),
               )
@@ -85,7 +85,7 @@ fn completion_page_wide(c : @ui.Ctx, core : Core, here : Here) -> Unit {
       body.push(fn() {
         match topic.error {
           Some(e) => c.text(error_text(e), style=desk_note) |> ignore
-          None => @sf.wait_line(c, tr("common.readingStations"))
+          None => @sf.wait_line(c, @sf.t("common.readingStations"))
         }
       })
   }
@@ -93,23 +93,23 @@ fn completion_page_wide(c : @ui.Ctx, core : Core, here : Here) -> Unit {
     c,
     core,
     "auto-completion",
-    tr("web-pages.automaticDecisions.completion"),
-    about=tr("web-pages.automaticDecisions.completionNote"),
-    back=tr("web-pages.automaticDecisions.title"),
+    @sf.t("web-pages.automaticDecisions.completion"),
+    about=@sf.t("web-pages.automaticDecisions.completionNote"),
+    back=@sf.t("web-pages.automaticDecisions.title"),
     // 重新发现模型: every online station's models read again
     actions=fn() {
-      if @sf.button(c, tr("web-pages.automaticDecisions.refresh"), key="auto-refresh", tone=Ghost, icon="refresh") {
+      if @sf.button(c, @sf.t("web-pages.automaticDecisions.refresh"), key="auto-refresh", tone=Ghost, icon="refresh") {
         c.after_build("auto-refresh", fn() {
           match topic.value {
             Some(Array(a)) =>
               for st in a {
                 if flag(Some(st), "online") {
-                  act(
+                  @settings.act(
                     core,
-                    tr("web-pages.automaticDecisions.refreshAction"),
+                    @sf.t("web-pages.automaticDecisions.refreshAction"),
                     "automaticDecisions.refresh",
                     obj([("station", str(text(Some(st), "station")))]),
-                    done=tr("web-pages.automaticDecisions.refreshed"),
+                    done=@sf.t("web-pages.automaticDecisions.refreshed"),
                   )
                 }
               }
@@ -163,17 +163,17 @@ fn completion_station(c : @ui.Ctx, core : Core, s : Json?, view : Json?) -> Unit
   let t = @sf.theme()
   let station = text(s, "station")
   if !flag(view, "canEdit") {
-    dc_status(c, s, tr("web-pages.automaticDecisions.adminOnly"))
+    dc_status(c, s, @sf.t("web-pages.automaticDecisions.adminOnly"))
     return
   }
   let form = decision_form(c, core, station)
   let call = fn(action : String, input : Array[(String, Json)]) {
-    act(
+    @settings.act(
       core,
-      tr("web-pages.automaticDecisions.configAction"),
+      @sf.t("web-pages.automaticDecisions.configAction"),
       "automaticDecisions.form." + action,
       obj([("station", str(station)), ("form", str(form)), ("input", obj(input))]),
-      done=if action == "save" { tr("web-pages.automaticDecisions.saved") } else { "" },
+      done=if action == "save" { @sf.t("web-pages.automaticDecisions.saved") } else { "" },
     )
   }
   let topic = (core.topic)("decisionForm", { "station": str(station), "form": str(form) })
@@ -181,7 +181,7 @@ fn completion_station(c : @ui.Ctx, core : Core, s : Json?, view : Json?) -> Unit
   guard d is Some(Object(_)) else {
     match topic.error {
       Some(e) => dc_status(c, s, error_text(e))
-      None => dc_status(c, s, tr("web-pages.automaticDecisions.readingConfig"), waiting=true)
+      None => dc_status(c, s, @sf.t("web-pages.automaticDecisions.readingConfig"), waiting=true)
     }
   }
   let saving = is_doing(core, ["automaticDecisions.form.save"], [("station", station), ("form", form)])
@@ -190,7 +190,7 @@ fn completion_station(c : @ui.Ctx, core : Core, s : Json?, view : Json?) -> Unit
   let model_id = text(d, "model")
   let chosen = match items(view, "models").iter().find_first(fn(m) { text(Some(m), "id") == model_id }) {
     Some(m) => text(Some(m), "name")
-    None => tr("web-pages.automaticDecisions.noModels")
+    None => @sf.t("web-pages.automaticDecisions.noModels")
   }
   let can_review = flag(view, "canReview") && flag(field(field(view, "settings"), "completion"), "enabled") && !flag(d, "dirty")
   c.box(style=desk_list_row, fn() {
@@ -199,9 +199,9 @@ fn completion_station(c : @ui.Ctx, core : Core, s : Json?, view : Json?) -> Unit
       dc_name(c, s)
       c.text(
         if flag(d, "enabled") {
-          fill("web-pages.automaticDecisions.enabledWith", [("model", chosen)])
+          @sf.t("web-pages.automaticDecisions.enabledWith", args=[("model", chosen)])
         } else {
-          tr("web-pages.automaticDecisions.disabled")
+          @sf.t("web-pages.automaticDecisions.disabled")
         },
         style=desk_note,
       )
@@ -212,7 +212,7 @@ fn completion_station(c : @ui.Ctx, core : Core, s : Json?, view : Json?) -> Unit
       match field(d, "pick") {
         Some(Object(_)) as pick => {
           let options = items(pick, "options").map(fn(o) { (text(Some(o), "model"), text(Some(o), "name")) })
-          let now = @sf.select(c, "auto-model/" + station, model_id, options, disabled=busy, label=tr("web-pages.automaticDecisions.model"))
+          let now = @sf.select(c, "auto-model/" + station, model_id, options, disabled=busy, label=@sf.t("web-pages.automaticDecisions.model"))
           if now != model_id {
             c.after_build("auto-model/" + station, fn() { call("edit", [("model", str(now))]) })
           }
@@ -223,18 +223,18 @@ fn completion_station(c : @ui.Ctx, core : Core, s : Json?, view : Json?) -> Unit
         c.after_build("auto-enabled/" + station, fn() { call("edit", [("enabled", Json::boolean(!flag(d, "enabled")))]) })
       }
       if flag(d, "dirty") &&
-        @sf.button(c, tr("web-pages.automaticDecisions.save"), key="auto-save/" + station, tone=Primary, busy=saving, disabled=busy) {
+        @sf.button(c, @sf.t("web-pages.automaticDecisions.save"), key="auto-save/" + station, tone=Primary, busy=saving, disabled=busy) {
         c.after_build("auto-save/" + station, fn() { call("save", []) })
       }
       if can_review &&
-        @sf.button(c, tr("web-pages.automaticDecisions.review"), key="auto-review/" + station, tone=Ghost, busy=reviewing, disabled=busy || reviewing) {
+        @sf.button(c, @sf.t("web-pages.automaticDecisions.review"), key="auto-review/" + station, tone=Ghost, busy=reviewing, disabled=busy || reviewing) {
         c.after_build("auto-review/" + station, fn() {
-          act(
+          @settings.act(
             core,
-            tr("web-pages.automaticDecisions.reviewAction"),
+            @sf.t("web-pages.automaticDecisions.reviewAction"),
             "automaticDecisions.review",
             obj([("station", str(station))]),
-            done=tr("web-pages.automaticDecisions.reviewStarted"),
+            done=@sf.t("web-pages.automaticDecisions.reviewStarted"),
           )
         })
       }
@@ -261,9 +261,9 @@ fn completion_station(c : @ui.Ctx, core : Core, s : Json?, view : Json?) -> Unit
       c.box(style=dc_policy_row, id~, fn() {
         // past the station's dot, lined up with its name
         c.box(style=dc_dot_room, fn() {  }) |> ignore
-        c.text(tr("web-pages.archivePolicy.title"), style=desk_list_title) |> ignore
+        c.text(@sf.t("web-pages.archivePolicy.title"), style=desk_list_title) |> ignore
         let summary = text(policy, "summaryText")
-        let line = fill("web-pages.archivePolicy.optionCount", [("n", items(policy, "options").length().to_string())]) +
+        let line = @sf.t("web-pages.archivePolicy.optionCount", args=[("n", items(policy, "options").length().to_string())]) +
           (if summary == "" { "" } else { " · " + summary })
         c.text(line, style=if count(policy, "failed") > 0 { dc_error_line } else { dc_aside }) |> ignore
         c.spacer()
@@ -272,24 +272,6 @@ fn completion_station(c : @ui.Ctx, core : Core, s : Json?, view : Json?) -> Unit
       |> ignore
     }
     _ => ()
-  }
-}
-
-///|
-/// A station's rule's draft (`decisionForm`), opened once (by the frame's builds' end) and kept by station.
-fn decision_form(c : @ui.Ctx, core : Core, station : String) -> String {
-  match decision_forms.get(station) {
-    Some(f) => f
-    None => {
-      profile_forms.val += 1
-      let f = "mbui-decision-" + profile_forms.val.to_string()
-      decision_forms[station] = f
-      // (opened once the frame's builds are over: the build that first comes to it alone)
-      c.tell("decision-open/" + f, fn() {
-        act(core, tr("web-pages.automaticDecisions.configAction"), "automaticDecisions.form.open", obj([("station", str(station)), ("form", str(f)), ("input", obj([]))]))
-      })
-      f
-    }
   }
 }
 
@@ -331,15 +313,15 @@ let dc_spin : @ui.Style = @ui.style(pr=S1)
 /// options in their two groups, each with how many chats the checks put there (pressed, edited in a dialog: its name,
 /// what it means, which group, the chats it got; 删除), 添加选项 under each; what changed and what the checks said under
 /// them. Each dialog edits the core's draft (`policyForm`), back to the station's first.
-fn policy_page_wide(c : @ui.Ctx, core : Core, here : Here, station : String) -> Unit {
+fn policy_page(c : @ui.Ctx, core : Core, here : Here, station : String) -> Unit {
   let s = station_of(core, here, station)
   let view = if flag(s, "online") { field(field(s, "overview"), "automaticDecisions") } else { None }
   let policy = field(view, "policy")
   let name = text(s, "name")
   let title = if name == "" {
-    tr("web-pages.archivePolicy.title")
+    @sf.t("web-pages.archivePolicy.title")
   } else {
-    tr("web-pages.archivePolicy.title") + " · " + name
+    @sf.t("web-pages.archivePolicy.title") + " · " + name
   }
   let body : Array[() -> Unit] = []
   if policy is Some(Object(_)) && flag(view, "canEdit") {
@@ -347,7 +329,7 @@ fn policy_page_wide(c : @ui.Ctx, core : Core, here : Here, station : String) -> 
   } else {
     body.push(fn() {
       c.text(
-        tr(
+        @sf.t(
           if !flag(s, "online") {
             "web-pages.automaticDecisions.offline"
           } else if view is Some(Object(_)) && !flag(view, "canEdit") {
@@ -366,8 +348,8 @@ fn policy_page_wide(c : @ui.Ctx, core : Core, here : Here, station : String) -> 
     core,
     "auto-policy/" + station,
     title,
-    about=tr("web-pages.archivePolicy.textLead"),
-    back=tr("web-pages.automaticDecisions.completion"),
+    about=@sf.t("web-pages.archivePolicy.textLead"),
+    back=@sf.t("web-pages.automaticDecisions.completion"),
     body,
   )
 }
@@ -381,7 +363,7 @@ fn policy_form(c : @ui.Ctx, core : Core, station : String) -> String {
       let f = policy_form_name(station)
       // (opened once the frame's builds are over: the build that first comes to it alone)
       c.tell("policy-open/" + f, fn() {
-        act(core, tr("web-pages.archivePolicy.readAction"), "automaticDecisions.policy.open", obj([("station", str(station)), ("form", str(f)), ("input", obj([]))]))
+        @settings.act(core, @sf.t("web-pages.archivePolicy.readAction"), "automaticDecisions.policy.open", obj([("station", str(station)), ("form", str(f)), ("input", obj([]))]))
       })
       f
     }
@@ -404,11 +386,11 @@ fn policy_form_name(station : String) -> String {
 
 ///|
 /// The dialog a fixture's mode puts up over the policy ("" none, "text", "option": its first option's).
-// kept across runs: said by fixture_page; core.mbt's reset empties it
+// kept across runs: said by settings_fixture; settings_reset empties it
 let fx_policy_up : Ref[String] = Ref("")
 
 ///|
-/// The policy (ArchivePolicy): see policy_page_wide.
+/// The policy (ArchivePolicy): see policy_page.
 fn policy_body(c : @ui.Ctx, core : Core, station : String, policy : Json?) -> Unit {
   let t = @sf.theme()
   let form = policy_form(c, core, station)
@@ -416,7 +398,7 @@ fn policy_body(c : @ui.Ctx, core : Core, station : String, policy : Json?) -> Un
     (core.call)("automaticDecisions.policy." + action, obj([("station", str(station)), ("form", str(form)), ("input", obj(input))]), fn(r) {
       match r {
         Ok(v) => then(v)
-        Err(e) => (core.say)(fill("android-misc.act.failed", [("what", tr("web-pages.archivePolicy.editAction")), ("error", error_text(e))]))
+        Err(e) => (core.say)(@sf.t("android-misc.act.failed", args=[("what", @sf.t("web-pages.archivePolicy.editAction")), ("error", error_text(e))]))
       }
     })
   }
@@ -480,7 +462,7 @@ fn policy_body(c : @ui.Ctx, core : Core, station : String, policy : Json?) -> Un
     for archive in [true, false] {
       c.box(style=pol_group, fn() {
         c.box(style=pol_group_head, fn() {
-          c.text(tr(if archive { "web-pages.archivePolicy.archive" } else { "web-pages.archivePolicy.keep" }), style=pol_group_name)
+          c.text(@sf.t(if archive { "web-pages.archivePolicy.archive" } else { "web-pages.archivePolicy.keep" }), style=pol_group_name)
           |> ignore
         })
         |> ignore
@@ -510,7 +492,7 @@ fn policy_body(c : @ui.Ctx, core : Core, station : String, policy : Json?) -> Un
         }
         c.box(style=if busy { pol_add } else { pol_add_live }, id=aid, fn() {
           @sf.icon(c, "plus", size=pol_plus, color=t.p.muted) |> ignore
-          c.text(tr("web-pages.archivePolicy.add"), style=pol_add_words) |> ignore
+          c.text(@sf.t("web-pages.archivePolicy.add"), style=pol_add_words) |> ignore
         })
         |> ignore
       })
@@ -537,12 +519,12 @@ fn policy_dialog(core : Core, station : String, form : String, policy : Json?, i
     (core.call)("automaticDecisions.policy.edit", obj([("station", str(station)), ("form", str(form)), ("input", obj(input))]), fn(_) {  })
   }
   let save = fn() {
-    act(
+    @settings.act(
       core,
-      tr("web-pages.archivePolicy.saveAction"),
+      @sf.t("web-pages.archivePolicy.saveAction"),
       "automaticDecisions.policy.save",
       obj([("station", str(station)), ("form", str(form)), ("input", obj([]))]),
-      done=tr("web-pages.archivePolicy.saved"),
+      done=@sf.t("web-pages.archivePolicy.saved"),
     )
   }
   let draft = fn() { (core.topic)("policyForm", { "station": str(station), "form": str(form) }).value }
@@ -561,7 +543,7 @@ fn policy_dialog(core : Core, station : String, form : String, policy : Json?, i
   let foot = fn(remove : String) {
     fn(c : @ui.Ctx, shut : () -> Unit) {
       if remove != "" &&
-        @sf.button(c, tr("web-pages.archivePolicy.remove"), key="policy-remove", tone=GhostDanger, icon="trash") {
+        @sf.button(c, @sf.t("web-pages.archivePolicy.remove"), key="policy-remove", tone=GhostDanger, icon="trash") {
         shut()
         (core.call)("automaticDecisions.policy.edit", obj([("station", str(station)), ("form", str(form)), ("input", obj([("remove", str(remove))]))]), fn(
           _,
@@ -570,12 +552,12 @@ fn policy_dialog(core : Core, station : String, form : String, policy : Json?, i
         })
       }
       c.spacer()
-      if @sf.button(c, tr("web-pages.archivePolicy.cancel"), key="policy-cancel", tone=Ghost) {
+      if @sf.button(c, @sf.t("web-pages.archivePolicy.cancel"), key="policy-cancel", tone=Ghost) {
         c.blur()
         shut()
         edit([("reset", Json::boolean(true))])
       }
-      if @sf.button(c, tr("web-pages.archivePolicy.save"), key="policy-save", tone=Primary, disabled=!flag(draft(), "dirty")) {
+      if @sf.button(c, @sf.t("web-pages.archivePolicy.save"), key="policy-save", tone=Primary, disabled=!flag(draft(), "dirty")) {
         c.blur()
         shut()
         save()
@@ -585,8 +567,8 @@ fn policy_dialog(core : Core, station : String, form : String, policy : Json?, i
   if id == "" && key == "" {
     open_dialog(
       "policy/" + serial,
-      tr("web-pages.archivePolicy.title"),
-      description=tr("web-pages.archivePolicy.textLead"),
+      @sf.t("web-pages.archivePolicy.title"),
+      description=@sf.t("web-pages.archivePolicy.textLead"),
       wide=true,
       fn(c, _) {
         let d = draft()
@@ -604,7 +586,7 @@ fn policy_dialog(core : Core, station : String, form : String, policy : Json?, i
   open_dialog(
     "policy/" + serial,
     if fresh {
-      tr("web-pages.archivePolicy.newOption")
+      @sf.t("web-pages.archivePolicy.newOption")
     } else {
       text(ov, "name")
     },
@@ -614,23 +596,23 @@ fn policy_dialog(core : Core, station : String, form : String, policy : Json?, i
       guard o is Some(oj) else { return }
       let o = Some(oj)
       let okey = text(o, "key")
-      @sf.field(c, tr("web-pages.archivePolicy.name"), fn() {
+      @sf.field(c, @sf.t("web-pages.archivePolicy.name"), fn() {
         let n = @sf.input(c, "policy/" + serial + "/name", field=words_of("name", text(o, "name"))).text
         if n != text(o, "name") {
           c.after_build("policy-name", fn() { edit([("option", str(okey)), ("name", str(n))]) })
         }
       })
-      @sf.field(c, tr("web-pages.archivePolicy.rubric"), fn() {
+      @sf.field(c, @sf.t("web-pages.archivePolicy.rubric"), fn() {
         let r = @sf.textarea(c, "policy/" + serial + "/rubric", rows=3, field=words_of("rubric", text(o, "rubric")))
         if r != text(o, "rubric") {
           c.after_build("policy-rubric", fn() { edit([("option", str(okey)), ("rubric", str(r))]) })
         }
       })
-      @sf.field(c, tr("web-pages.archivePolicy.counts"), fn() {
+      @sf.field(c, @sf.t("web-pages.archivePolicy.counts"), fn() {
         let i = @sf.segmented(
           c,
           "policy/" + serial + "/archive",
-          [tr("web-pages.archivePolicy.archive"), tr("web-pages.archivePolicy.keep")],
+          [@sf.t("web-pages.archivePolicy.archive"), @sf.t("web-pages.archivePolicy.keep")],
           if flag(o, "archive") { 0 } else { 1 },
         )
         if (i == 0) != flag(o, "archive") {
@@ -640,7 +622,7 @@ fn policy_dialog(core : Core, station : String, form : String, policy : Json?, i
       // the chats the checks put there, each to its chat
       if count(ov, "count") > 0 {
         c.box(style=pol_chats, fn() {
-          c.text(fill("web-pages.archivePolicy.chats", [("days", count(policy, "days").to_string())]), style=pol_group_name) |> ignore
+          c.text(@sf.t("web-pages.archivePolicy.chats", args=[("days", count(policy, "days").to_string())]), style=pol_group_name) |> ignore
           for ch in items(ov, "chats") {
             let cid = c.id("policy-chat/" + text(Some(ch), "session"))
             c.cursor(cid, Hand)
@@ -653,7 +635,7 @@ fn policy_dialog(core : Core, station : String, form : String, policy : Json?, i
           }
           let more = count(ov, "count") - items(ov, "chats").length()
           if more > 0 {
-            c.text(fill("web-pages.archivePolicy.more", [("n", more.to_string())]), style=dc_aside) |> ignore
+            c.text(@sf.t("web-pages.archivePolicy.more", args=[("n", more.to_string())]), style=dc_aside) |> ignore
           }
         })
         |> ignore

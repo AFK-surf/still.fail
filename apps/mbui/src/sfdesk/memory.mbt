@@ -4,8 +4,8 @@
 
 ///|
 /// 记忆 (MemorySettings): each station's memory, or that it is offline.
-fn memories_page_wide(c : @ui.Ctx, core : Core, here : Here) -> Unit {
-  let topic = stations_of(core, here)
+fn memories_page(c : @ui.Ctx, core : Core, here : Here) -> Unit {
+  let topic = @settings.stations_of(core, here)
   let stations = match topic.value {
     Some(Array(a)) => a
     _ => []
@@ -22,32 +22,32 @@ fn memories_page_wide(c : @ui.Ctx, core : Core, here : Here) -> Unit {
         if flag(sv, "online") {
           memory_view(c, core, text(sv, "station"), names)
         } else {
-          c.text(tr("web-pages.settings.memory.offline"), style=desk_muted) |> ignore
+          c.text(@sf.t("web-pages.settings.memory.offline"), style=desk_muted) |> ignore
         }
       })
       |> ignore
     })
   }
   if topic.value is None {
-    body.push(fn() { @sf.wait_line(c, tr("common.readingStations")) })
+    body.push(fn() { @sf.wait_line(c, @sf.t("common.readingStations")) })
   }
-  desk_page(c, core, "memories", tr("web-pages.settings.memory.title"), about=tr("web-pages.settings.memory.lead"), body)
+  desk_page(c, core, "memories", @sf.t("web-pages.settings.memory.title"), about=@sf.t("web-pages.settings.memory.lead"), body)
 }
 
 ///|
 /// One station's memory, on a page of its own (a link to it): as 记忆 shows it, under its name.
-fn memory_page_wide(c : @ui.Ctx, core : Core, here : Here, address : String) -> Unit {
-  let stations = match stations_of(core, here).value {
+fn memory_page(c : @ui.Ctx, core : Core, here : Here, address : String) -> Unit {
+  let stations = match @settings.stations_of(core, here).value {
     Some(Array(a)) => a
     _ => []
   }
-  let mut name = station_name(address)
+  let mut name = @settings.station_name(address)
   for s in stations {
     if text(Some(s), "station") == address {
       name = text(Some(s), "name")
     }
   }
-  desk_page(c, core, "memory/" + address, name, about=tr("web-pages.settings.memory.lead"), back=tr("web-pages.settings.memory.title"), [
+  desk_page(c, core, "memory/" + address, name, about=@sf.t("web-pages.settings.memory.lead"), back=@sf.t("web-pages.settings.memory.title"), [
     fn() { memory_view(c, core, address, station_names(stations)) },
   ])
 }
@@ -68,9 +68,9 @@ fn memory_view(c : @ui.Ctx, core : Core, address : String, names : Map[String, S
   let read = memory_of(c, core, address)
   guard read.value is Some(_) else {
     if read.error == "" {
-      @sf.wait_line(c, tr("common.reading"))
+      @sf.wait_line(c, @sf.t("common.reading"))
     } else {
-      c.text(fill("web-main.memory.failed", [("error", read.error)]), style=desk_note_bad) |> ignore
+      c.text(@sf.t("web-main.memory.failed", args=[("error", read.error)]), style=desk_note_bad) |> ignore
     }
   }
   let m = read.value
@@ -83,17 +83,17 @@ fn memory_view(c : @ui.Ctx, core : Core, address : String, names : Map[String, S
   let skill_row = fn(k : Json) {
     let kv = Some(k)
     let line = match skill_line(kv) {
-      "" => tr("web-main.memory.noWhen")
+      "" => @sf.t("web-main.memory.noWhen")
       l => l
     }
     if mem_row(c, "memory/" + address + "/skill/" + text(kv, "name"), text(kv, "name"), line, text(kv, "size"), tag=skill_tag(kv, names)) {
       (core.push)(MemoryDoc(address, text(kv, "name"), 0))
     }
   }
-  let global_said = join([tr("web-main.memory.global.when"), text(field(m, "global"), "size")], " · ")
-  @sf.section(c, tr("web-main.memory.global"), note=global_said, fn() {
+  let global_said = join([@sf.t("web-main.memory.global.when"), text(field(m, "global"), "size")], " · ")
+  @sf.section(c, @sf.t("web-main.memory.global"), note=global_said, fn() {
     if sections.length() == 0 {
-      c.text(tr("web-main.memory.empty"), style=desk_muted) |> ignore
+      c.text(@sf.t("web-main.memory.empty"), style=desk_muted) |> ignore
     } else {
       c.box(style=desk_list, fn() {
         for i, p in sections {
@@ -105,9 +105,9 @@ fn memory_view(c : @ui.Ctx, core : Core, address : String, names : Map[String, S
       |> ignore
     }
   })
-  @sf.section(c, tr("web-main.memory.projects"), note=tr("web-main.memory.projects.when"), fn() {
+  @sf.section(c, @sf.t("web-main.memory.projects"), note=@sf.t("web-main.memory.projects.when"), fn() {
     if projects.length() == 0 {
-      c.text(tr("web-main.memory.projects.none"), style=desk_muted) |> ignore
+      c.text(@sf.t("web-main.memory.projects.none"), style=desk_muted) |> ignore
     } else {
       c.box(style=desk_list, fn() {
         for k in projects {
@@ -118,7 +118,7 @@ fn memory_view(c : @ui.Ctx, core : Core, address : String, names : Map[String, S
     }
   })
   if others.length() + builtin.length() > 0 {
-    @sf.section(c, tr("web-main.memory.others"), fn() {
+    @sf.section(c, @sf.t("web-main.memory.others"), fn() {
       c.box(style=desk_list, fn() {
         for k in others {
           skill_row(k)
@@ -127,13 +127,13 @@ fn memory_view(c : @ui.Ctx, core : Core, address : String, names : Map[String, S
           if mem_row(
               c,
               "memory/" + address + "/builtin",
-              tr("web-main.memory.builtin"),
+              @sf.t("web-main.memory.builtin"),
               if open {
                 ""
               } else {
-                join(builtin.map(fn(k) { text(Some(k), "name") }), tr("web-main.list.separator"))
+                join(builtin.map(fn(k) { text(Some(k), "name") }), @sf.t("web-main.list.separator"))
               },
-              fill("web-main.memory.count", [("n", builtin.length().to_string())]),
+              @sf.t("web-main.memory.count", args=[("n", builtin.length().to_string())]),
               open~,
             ) {
             builtin_open[address] = !open

@@ -14,7 +14,7 @@
 let notify_kinds : Array[String] = ["wait", "failed", "done", "message"]
 
 ///|
-/// As at the start (core.mbt reset): no kind opened, nothing chosen.
+/// As at the start (settings_reset): no kind opened, nothing chosen.
 fn notify_page_reset() -> Unit {
   kind_open.val = ""
   kinds_chosen.clear()
@@ -50,7 +50,7 @@ fn set_badge_kind(core : Core, kind : String, on : Bool) -> Unit {
       Ok(_) => ()
       Err(e) => {
         badge_chosen.remove(kind)
-        (core.say)(fill("web-pages.notifications.kindsFailed", [("error", error_text(e))]))
+        (core.say)(@sf.t("web-pages.notifications.kindsFailed", args=[("error", error_text(e))]))
       }
     }
   })
@@ -112,7 +112,7 @@ fn set_kind(core : Core, kind : String, value : Json) -> Unit {
       Ok(_) => ()
       Err(e) => {
         kinds_chosen.remove(kind)
-        (core.say)(fill("web-pages.notifications.kindsFailed", [("error", error_text(e))]))
+        (core.say)(@sf.t("web-pages.notifications.kindsFailed", args=[("error", error_text(e))]))
       }
     }
   })
@@ -140,7 +140,7 @@ fn notify_page(c : @ui.Ctx, core : Core, here : Here) -> Unit {
   let blocks : Array[() -> Unit] = []
   if notify is None {
     blocks.push(fn() { waiting_cards(c) })
-    desk_page(c, core, "notify", tr("web-pages.settings.nav.notifications"), blocks)
+    desk_page(c, core, "notify", @sf.t("web-pages.settings.nav.notifications"), blocks)
     return
   }
   let permission = text(notify, "permission")
@@ -158,12 +158,12 @@ fn notify_page(c : @ui.Ctx, core : Core, here : Here) -> Unit {
   }
   blocks.push(fn() { notify_preview(c, core, here, notify, on, shown_kind) })
   blocks.push(fn() {
-    @sf.section(c, tr("web-pages.notifications.ways.title"), note=tr("web-pages.notifications.noteDevice"), fn() {
+    @sf.section(c, @sf.t("web-pages.notifications.ways.title"), note=@sf.t("web-pages.notifications.noteDevice"), fn() {
       c.box(style=way_tiles, fn() {
         // a banner: the system's word asked first, or its settings opened where it refused
         let action = match permission {
-          "denied" => tr("web-pages.notifications.enable.open")
-          "default" => tr("web-pages.notifications.enable.allow")
+          "denied" => @sf.t("web-pages.notifications.enable.open")
+          "default" => @sf.t("web-pages.notifications.enable.allow")
           _ => ""
         }
         if way_tile(c, "notify-banner", "banner", on, action~, busy=pending) && !pending {
@@ -189,7 +189,7 @@ fn notify_page(c : @ui.Ctx, core : Core, here : Here) -> Unit {
     })
   })
   blocks.push(fn() {
-    @sf.section(c, tr("web-pages.notifications.kinds.title"), fn() {
+    @sf.section(c, @sf.t("web-pages.notifications.kinds.title"), fn() {
       c.box(style=kinds_card, fn() {
         for i, kind in notify_kinds {
           if i > 0 {
@@ -202,20 +202,20 @@ fn notify_page(c : @ui.Ctx, core : Core, here : Here) -> Unit {
     })
   })
   blocks.push(fn() {
-    @sf.section(c, tr("web-pages.notifications.more.title"), fn() {
+    @sf.section(c, @sf.t("web-pages.notifications.more.title"), fn() {
       c.box(style=more_card, fn() {
         let preview = flag(notify, "preview") || field(notify, "preview") is None
         let now = @sf.switch_row(
           c,
           "notify-preview",
-          tr("web-pages.notifications.preview"),
+          @sf.t("web-pages.notifications.preview"),
           preview,
-          note=tr("web-pages.notifications.previewNote"),
+          note=@sf.t("web-pages.notifications.previewNote"),
           disabled=!on,
         )
         if now != preview {
           c.after_build("notify-preview", fn() {
-            act(core, tr("web-pages.notifications.preview"), "notify.set", obj([("preview", Json::boolean(now))]))
+            @settings.act(core, @sf.t("web-pages.notifications.preview"), "notify.set", obj([("preview", Json::boolean(now))]))
           })
         }
         // new ones peeking out of the dock, or only waiting at the edge
@@ -224,9 +224,9 @@ fn notify_page(c : @ui.Ctx, core : Core, here : Here) -> Unit {
           let next = @sf.switch_row(
             c,
             "dock-peek",
-            tr("web-pages.dock.peek"),
+            @sf.t("web-pages.dock.peek"),
             peek,
-            note=tr("web-pages.dock.peekNote"),
+            note=@sf.t("web-pages.dock.peekNote"),
             disabled=!dock_setting("on"),
           )
           if next != peek {
@@ -234,13 +234,13 @@ fn notify_page(c : @ui.Ctx, core : Core, here : Here) -> Unit {
           }
         }
         if @ui.platform() == 0 {
-          c.text(fill("web-pages.notifications.sound", [("name", "still.fail")]), style=sound_words) |> ignore
+          c.text(@sf.t("web-pages.notifications.sound", args=[("name", "still.fail")]), style=sound_words) |> ignore
         }
       })
       |> ignore
     })
   })
-  desk_page(c, core, "notify", tr("web-pages.settings.nav.notifications"), blocks)
+  desk_page(c, core, "notify", @sf.t("web-pages.settings.nav.notifications"), blocks)
 }
 
 ///|
@@ -274,7 +274,7 @@ fn way_tile(c : @ui.Ctx, key : String, way : String, on : Bool, action? : String
       }
     })
     |> ignore
-    c.text(tr("web-pages.notifications.ways." + way), style=tile_name) |> ignore
+    c.text(@sf.t("web-pages.notifications.ways." + way), style=tile_name) |> ignore
     if busy {
       spinner(c, inline=true)
     } else if action != "" {
@@ -284,10 +284,10 @@ fn way_tile(c : @ui.Ctx, key : String, way : String, on : Bool, action? : String
       })
       |> ignore
     } else {
-      c.text(tr(if on { "web-pages.notifications.on" } else { "web-pages.notifications.off" }), style=tile_state) |> ignore
+      c.text(@sf.t(if on { "web-pages.notifications.on" } else { "web-pages.notifications.off" }), style=tile_state) |> ignore
     }
   })
-  c.semantics(b, Button, id~, label=tr("web-pages.notifications.ways." + way), pressed=lit)
+  c.semantics(b, Button, id~, label=@sf.t("web-pages.notifications.ways." + way), pressed=lit)
   hit(c, id)
 }
 
@@ -301,17 +301,17 @@ fn kind_row(c : @ui.Ctx, core : Core, notify : Json?, kind : String, on : Bool, 
   if banner {
     ways.push(
       if kind == "done" && done_banner(notify) == "away" {
-        tr("web-pages.notifications.sumBannerAway")
+        @sf.t("web-pages.notifications.sumBannerAway")
       } else {
-        tr("web-pages.notifications.ways.banner")
+        @sf.t("web-pages.notifications.ways.banner")
       },
     )
   }
   if badge_kind(core, "on") && badge_kind(core, kind) {
-    ways.push(tr("web-pages.notifications.ways.badge"))
+    ways.push(@sf.t("web-pages.notifications.ways.badge"))
   }
   if dock && dock_setting("on") && dock_setting(kind) {
-    ways.push(tr("web-pages.notifications.ways.dock"))
+    ways.push(@sf.t("web-pages.notifications.ways.dock"))
   }
   let open = kind_open.val == kind
   let id = c.id("notify-kind/" + kind)
@@ -321,31 +321,31 @@ fn kind_row(c : @ui.Ctx, core : Core, notify : Json?, kind : String, on : Bool, 
   }
   let head = c.box(style=kind_head, id~, fn() {
     c.box(style=kind_text, fn() {
-      c.text(tr("web-pages.notifications.kinds." + kind), style=kind_title) |> ignore
-      c.text(tr("web-pages.notifications.kinds." + kind + "Note"), style=kind_note) |> ignore
+      c.text(@sf.t("web-pages.notifications.kinds." + kind), style=kind_title) |> ignore
+      c.text(@sf.t("web-pages.notifications.kinds." + kind + "Note"), style=kind_note) |> ignore
     })
     |> ignore
-    c.text(if ways.length() == 0 { tr("web-pages.notifications.none") } else { ways.join(" · ") }, style=kind_sum)
+    c.text(if ways.length() == 0 { @sf.t("web-pages.notifications.none") } else { ways.join(" · ") }, style=kind_sum)
     |> ignore
     @sf.icon(c, if open { "chevron-down" } else { "chevron-right" }, size=kind_chevron, color=t.p.muted) |> ignore
   })
-  c.semantics(head, Button, id~, label=tr("web-pages.notifications.kinds." + kind), expanded=open)
+  c.semantics(head, Button, id~, label=@sf.t("web-pages.notifications.kinds." + kind), expanded=open)
   if !open {
     return
   }
   c.box(style=kind_ways, fn() {
     if kind == "done" {
       c.box(style=way_row, fn() {
-        c.text(tr("web-pages.notifications.ways.banner"), style=way_words) |> ignore
+        c.text(@sf.t("web-pages.notifications.ways.banner"), style=way_words) |> ignore
         let choices = ["off", "away", "always"]
         let at = choices.search(done_banner(notify)).unwrap_or(1)
         let picked = @sf.segmented(
           c,
           "notify-done",
           [
-            tr("web-pages.notifications.kinds.doneOff"),
-            tr("web-pages.notifications.kinds.doneAway"),
-            tr("web-pages.notifications.kinds.doneAlways"),
+            @sf.t("web-pages.notifications.kinds.doneOff"),
+            @sf.t("web-pages.notifications.kinds.doneAway"),
+            @sf.t("web-pages.notifications.kinds.doneAlways"),
           ],
           at,
         )
@@ -356,21 +356,21 @@ fn kind_row(c : @ui.Ctx, core : Core, notify : Json?, kind : String, on : Bool, 
       })
       |> ignore
     } else {
-      way_switch(c, "notify-way/" + kind, tr("web-pages.notifications.ways.banner"), kind_banner(notify, kind), !on, fn(
+      way_switch(c, "notify-way/" + kind, @sf.t("web-pages.notifications.ways.banner"), kind_banner(notify, kind), !on, fn(
         v,
       ) {
         set_kind(core, kind, Json::boolean(v))
       })
     }
     // 计入红点: whether the app's icon counts it (off while the badge is)
-    way_switch(c, "notify-badge/" + kind, tr("web-pages.notifications.inBadge"), badge_kind(core, kind), !badge_kind(core, "on"), fn(
+    way_switch(c, "notify-badge/" + kind, @sf.t("web-pages.notifications.inBadge"), badge_kind(core, kind), !badge_kind(core, "on"), fn(
       v,
     ) {
       c.after_build("notify-badge/" + kind, fn() { set_badge_kind(core, kind, v) })
     })
     // 显示在桌面浮窗: whether the dock holds it (off while the dock is)
     if dock {
-      way_switch(c, "notify-dock/" + kind, tr("web-pages.notifications.inDock"), dock_setting(kind), !dock_setting("on"), fn(
+      way_switch(c, "notify-dock/" + kind, @sf.t("web-pages.notifications.inDock"), dock_setting(kind), !dock_setting("on"), fn(
         v,
       ) {
         dock_set(kind, v)
@@ -408,10 +408,10 @@ fn notify_preview(c : @ui.Ctx, core : Core, here : Here, notify : Json?, on : Bo
     })
   let (title, body) = match latest {
     Some(n) => (text(Some(n), "title"), text(Some(n), "body"))
-    None => (tr("web-pages.notifications.sample.title"), tr("web-pages.notifications.sample." + kind))
+    None => (@sf.t("web-pages.notifications.sample.title"), @sf.t("web-pages.notifications.sample." + kind))
   }
   let preview = flag(notify, "preview") || field(notify, "preview") is None
-  let body = if preview { body } else { tr("web-pages.notifications.hidden." + kind) }
+  let body = if preview { body } else { @sf.t("web-pages.notifications.hidden." + kind) }
   let banner = on && kind_banner(notify, kind)
   let count = count(
     (core.topic)("workspaceMarks", { "workspace": str(here.workspace) }).value,
@@ -436,7 +436,7 @@ fn notify_preview(c : @ui.Ctx, core : Core, here : Here, notify : Json?, on : Bo
           c.box(style=banner_text, fn() {
             c.box(style=banner_head, fn() {
               c.text(title, style=banner_title) |> ignore
-              c.text(tr("web-pages.notifications.now"), style=banner_muted) |> ignore
+              c.text(@sf.t("web-pages.notifications.now"), style=banner_muted) |> ignore
             })
             |> ignore
             c.text(body, style=banner_body) |> ignore
@@ -452,7 +452,7 @@ fn notify_preview(c : @ui.Ctx, core : Core, here : Here, notify : Json?, on : Bo
       c.box(style=edge_at, top=0.0, bottom=0.0, right=0.0, fn() {
         for k in docked {
           c.box(style=edge_item, fn() {
-            c.text(tr("web-pages.notifications.kinds." + k), style=match k {
+            c.text(@sf.t("web-pages.notifications.kinds." + k), style=match k {
               "failed" => edge_failed
               "wait" => edge_wait
               _ => edge_words
@@ -487,7 +487,7 @@ fn notify_preview(c : @ui.Ctx, core : Core, here : Here, notify : Json?, on : Bo
     })
     |> ignore
   })
-  c.semantics(b, Image, label=tr("web-pages.notifications.previewLabel"))
+  c.semantics(b, Image, label=@sf.t("web-pages.notifications.previewLabel"))
 }
 
 ///|

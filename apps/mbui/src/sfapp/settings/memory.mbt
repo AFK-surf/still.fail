@@ -7,7 +7,7 @@
 ///|
 /// The last memory read of each station (Memory.kt kept), so a page opened from the list has it at once; whether it
 /// was asked for since its page came; why it could not be read.
-priv struct MemoryRead {
+pub(all) struct MemoryRead {
   mut value : Json?
   mut error : String
   mut asked : Bool
@@ -19,7 +19,7 @@ let memories : Map[String, MemoryRead] = Map::new()
 ///|
 /// A station's memory, asked for once each time one of its pages comes (it changes as agents write it, not while it is
 /// looked at).
-fn memory_of(c : @ui.Ctx, core : Core, address : String) -> MemoryRead {
+pub fn memory_of(c : @ui.Ctx, core : Core, address : String) -> MemoryRead {
   let m = match memories.get(address) {
     Some(m) => m
     None => {
@@ -51,7 +51,7 @@ fn memory_of(c : @ui.Ctx, core : Core, address : String) -> MemoryRead {
 
 ///|
 /// The global memory's parts (Memory.kt sectionsOf): by its headings; all of it in one from a core before them.
-fn sections_of(m : Json?) -> Array[(String, String, String)] {
+pub fn sections_of(m : Json?) -> Array[(String, String, String)] {
   let g = field(m, "global")
   let parts = items(g, "sections").map(fn(x) { (text(Some(x), "title"), text(Some(x), "text"), text(Some(x), "note")) })
   if parts.length() > 0 {
@@ -67,7 +67,7 @@ fn sections_of(m : Json?) -> Array[(String, String, String)] {
 
 ///|
 /// What a skill is for, in a line (Memory.kt SkillFile.line).
-fn skill_line(k : Json?) -> String {
+pub fn skill_line(k : Json?) -> String {
   match opt_text(k, "brief") {
     Some(b) => b
     None =>
@@ -81,10 +81,6 @@ fn skill_line(k : Json?) -> String {
 ///|
 /// Every station's memory, a row each (MemoriesScreen): one offline says so.
 fn memories_page(c : @ui.Ctx, core : Core, here : Here) -> Unit {
-  // the desktop's: the web's (web_memory.mbt)
-  if wide.val {
-    return memories_page_wide(c, core, here)
-  }
   let t = @sf.theme()
   let topic = stations_of(core, here)
   scroll_page(c, "memories", [
@@ -126,7 +122,7 @@ fn memories_page(c : @ui.Ctx, core : Core, here : Here) -> Unit {
 
 ///|
 /// Whose a skill is, after its name (Memory.kt tagOf): another station's, or shared from here.
-fn skill_tag(k : Json?, names : Map[String, String]) -> String {
+pub fn skill_tag(k : Json?, names : Map[String, String]) -> String {
   let share = field(k, "share")
   match text(share, "role") {
     "user" => {
@@ -173,19 +169,15 @@ fn memory_row(c : @ui.Ctx, key : String, title : String, sub : String, value : S
 }
 
 ///|
-let memory_chevron : Double = 14.0
+pub let memory_chevron : Double = 14.0
 
 ///|
 /// Whether the built-in skills are folded open, by station.
-let builtin_open : Map[String, Bool] = Map::new()
+pub let builtin_open : Map[String, Bool] = Map::new()
 
 ///|
 /// A station's memory (MemoryScreen).
 fn memory_page(c : @ui.Ctx, core : Core, here : Here, address : String) -> Unit {
-  // the desktop's: the web's (web_memory.mbt)
-  if wide.val {
-    return memory_page_wide(c, core, here, address)
-  }
   let t = @sf.theme()
   let stations = match stations_of(core, here).value {
     Some(Array(a)) => a

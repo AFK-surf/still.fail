@@ -1151,3 +1151,11 @@ pub let job_choice_w : @ui.Len = Fixed(120.0)
 ///|
 /// A tab of a chat's side panel (the web's ChatPage.css.ts sideTab: 30 high).
 pub let side_tab_h : @ui.Len = Fixed(30.0)
+
+///|
+/// A device's code read aloud, large (Security.css.ts bigCode): the web's display size, 28, its line 1.3 of it, off
+/// the scale; its letters 6 apart.
+pub let code_big_size : @ui.TextSize = Exact(28.0, 36.4)
+
+///|
+pub let code_big_tracking : @ui.Tracking = Exact(6.0)

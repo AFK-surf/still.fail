@@ -6,10 +6,10 @@
 // profile first where no station has one). The phone's page, each station's under its name, is connects.mbt's.
 
 ///|
-fn connects_page_wide(c : @ui.Ctx, core : Core, here : Here) -> Unit {
+fn connects_page(c : @ui.Ctx, core : Core, here : Here) -> Unit {
   let mine = connects_mine.val
   let topic = (core.topic)("connects", { "scope": str(here.workspace), "mine": Json::boolean(mine) })
-  let st = stations_of(core, here)
+  let st = @settings.stations_of(core, here)
   let stations = match st.value {
     Some(Array(a)) => a
     _ => []
@@ -36,40 +36,42 @@ fn connects_page_wide(c : @ui.Ctx, core : Core, here : Here) -> Unit {
   let station_of = fn(address : String) -> Json? {
     stations.iter().find_first(fn(s) { text(Some(s), "station") == address })
   }
-  place_page(
+  desk_place(
     c,
     core,
-    tr("android-settings.connects.title"),
-    about=fill("web-pages.connects.about", [("name", "still.fail")]),
-    primary?=if first {
-      None
-    } else {
-      match add {
-        Some(run) => Some(("add-connect", run))
-        None => None
-      }
+    @sf.t("android-settings.connects.title"),
+    about=@sf.t("web-pages.connects.about", args=[("name", "still.fail")]),
+    actions?=match add {
+      // (its primary action a pill named as what it adds)
+      Some(run) if !first =>
+        Some(fn() {
+          if @sf.button(c, @sf.t("android-misc.bar.action.connects"), key="add-connect", icon="plus") {
+            run()
+          }
+        })
+      _ => None
     },
     fn() {
       let blocks : Array[() -> Unit] = []
       if first && no_profile {
         blocks.push(fn() {
-          @sf.first_one(c, tr("web-pages.connects.profileFirst"), lead=tr("web-pages.connects.profileFirstLead"), fn() {
-            if @sf.button(c, tr("web-pages.connects.goAddProfile"), key="connects-go-profiles", tone=Primary) {
+          @sf.first_one(c, @sf.t("web-pages.connects.profileFirst"), lead=@sf.t("web-pages.connects.profileFirstLead"), fn() {
+            if @sf.button(c, @sf.t("web-pages.connects.goAddProfile"), key="connects-go-profiles", tone=Primary) {
               (core.push)(Profiles(""))
             }
           })
         })
       } else if first {
         blocks.push(fn() {
-          @sf.first_one(c, tr("web-pages.connects.addFirst"), lead=tr("web-pages.connects.addFirstLead"), fn() {
+          @sf.first_one(c, @sf.t("web-pages.connects.addFirst"), lead=@sf.t("web-pages.connects.addFirstLead"), fn() {
             match add {
               Some(run) =>
-                if @sf.button(c, tr("web-pages.connects.add"), key="connects-add-first", tone=Primary, icon="plus") {
+                if @sf.button(c, @sf.t("web-pages.connects.add"), key="connects-add-first", tone=Primary, icon="plus") {
                   run()
                 }
               None =>
                 c.text(
-                  tr(
+                  @sf.t(
                     if stations.length() > 0 {
                       "web-pages.connects.noOnline"
                     } else {
@@ -92,7 +94,7 @@ fn connects_page_wide(c : @ui.Ctx, core : Core, here : Here) -> Unit {
       }
       if waiting.length() > 0 {
         blocks.push(fn() {
-          c.box(style=cn_quiet_room, fn() { c.text(tr("web-pages.connects.waiting"), style=cn_quiet) |> ignore })
+          c.box(style=cn_quiet_room, fn() { c.text(@sf.t("web-pages.connects.waiting"), style=cn_quiet) |> ignore })
           |> ignore
           c.box(style=cn_list_room, fn() {
             c.box(style=desk_list, fn() {
@@ -107,14 +109,14 @@ fn connects_page_wide(c : @ui.Ctx, core : Core, here : Here) -> Unit {
       }
       if !first {
         if shown.length() == 0 && topic.error is None && (loading || items(wait, "failing").length() > 0) {
-          blocks.push(fn() { waiting_rows(c, failing=failing_of(wait)) })
+          blocks.push(fn() { desk_waiting_rows(c, wait) })
         } else if shown.length() == 0 {
           blocks.push(fn() {
             c.box(style=cn_none_room, fn() {
               match topic.error {
                 Some(e) => c.text(error_text(e), style=cn_error) |> ignore
                 None =>
-                  c.text(tr(if mine { "web-pages.connects.noneMine" } else { "web-pages.connects.none" }), style=cn_note)
+                  c.text(@sf.t(if mine { "web-pages.connects.noneMine" } else { "web-pages.connects.none" }), style=cn_note)
                   |> ignore
               }
             })
@@ -135,12 +137,12 @@ fn connects_page_wide(c : @ui.Ctx, core : Core, here : Here) -> Unit {
             |> ignore
           })
           // what the list still waits on: a row's shape for a station not read yet, each failure said
-          if note_waits(wait) {
-            blocks.push(fn() { waiting_rows(c, count=1, failing=failing_of(wait)) })
+          if flag(wait, "reading") || items(wait, "failing").length() > 0 {
+            blocks.push(fn() { desk_waiting_rows(c, wait, count=1) })
           }
         }
       }
-      scroll_page(c, "connects-wide/" + mine.to_string(), blocks)
+      desk_lanes(c, "connects-wide/" + mine.to_string(), blocks)
     },
   )
 }
@@ -233,13 +235,13 @@ fn cn_station_tag(c : @ui.Ctx, name : String, s : Json?) -> Unit {
 fn cn_owner(c : @ui.Ctx, core : Core, by : Json?) -> Unit {
   let shown = field(by, "shown")
   if !(shown is Some(Object(_))) {
-    c.text(tr("web-main.owner.none"), style=cn_owner_none) |> ignore
+    c.text(@sf.t("web-main.owner.none"), style=cn_owner_none) |> ignore
     return
   }
   let name = text(shown, "name")
   c.box(style=cn_owner_box, fn() {
     avatar(c, core, text(by, "id"), name, cn_owner_size, picture=text(shown, "picture"))
-    c.text(if flag(shown, "mine") { fill("web-main.owner.you", [("name", name)]) } else { name }, style=cn_owner_words)
+    c.text(if flag(shown, "mine") { @sf.t("web-main.owner.you", args=[("name", name)]) } else { name }, style=cn_owner_words)
     |> ignore
   })
   |> ignore
@@ -255,11 +257,11 @@ fn cn_waiting_app(c : @ui.Ctx, core : Core, a : Json, s : Json) -> Unit {
   let online = flag(sv, "online")
   let app_id = text(av, "appId")
   let where_ = if flag(av, "installed") {
-    fill("web-pages.connects.installedNeedsToken", [("team", first_text(av, ["installedTeam", "team"], tr("android-settings.flow.team")))])
+    @sf.t("web-pages.connects.installedNeedsToken", args=[("team", first_text(av, ["installedTeam", "team"], @sf.t("android-settings.flow.team")))])
   } else if has(av, "install") {
-    tr("web-pages.connects.notInstalled")
+    @sf.t("web-pages.connects.notInstalled")
   } else {
-    tr("web-pages.connects.needsToken")
+    @sf.t("web-pages.connects.needsToken")
   }
   c.box(style=desk_list_row, fn() {
     c.box(style=cn_kind_box, fn() { @sf.slack_mark(c, cn_waiting_mark) |> ignore }) |> ignore
@@ -284,11 +286,11 @@ fn cn_waiting_app(c : @ui.Ctx, core : Core, a : Json, s : Json) -> Unit {
     let on = [("station", station), ("appId", app_id)]
     let dropping = is_doing(core, ["slack.dropApp"], on)
     if online {
-      if @sf.button(c, tr("web-pages.connects.continue"), key="waiting-go/" + app_id) {
+      if @sf.button(c, @sf.t("web-pages.connects.continue"), key="waiting-go/" + app_id) {
         open_new_connect(core, station, resuming=app_id)
       }
     } else {
-      c.text(tr("web-pages.connects.stationOffline"), style=cn_meta) |> ignore
+      c.text(@sf.t("web-pages.connects.stationOffline"), style=cn_meta) |> ignore
     }
     doing_mark(c, dropping, failed_of(core, ["slack.dropApp"], on))
     // dropped from under ⋯ (Menu), asked again first (Confirm); it stays in Slack
@@ -302,25 +304,25 @@ fn cn_waiting_app(c : @ui.Ctx, core : Core, a : Json, s : Json) -> Unit {
       let b = c.box(style=cn_more, id=mid, fn() {
         @sf.icon(c, "more", size=cn_more_icon, color=@sf.theme().p.muted) |> ignore
       })
-      c.semantics(b, Button, id=mid, label=tr("web-pages.connects.removeHere"), expanded=open)
-      let m = @sf.menu(c, "waiting-menu/" + app_id, open, mid, [@kit.menu_item("remove", label=tr("web-pages.connects.removeHere"))], {}, @sf.menu_w, along=End)
+      c.semantics(b, Button, id=mid, label=@sf.t("web-pages.connects.removeHere"), expanded=open)
+      let m = @sf.menu(c, "waiting-menu/" + app_id, open, mid, [@kit.menu_item("remove", label=@sf.t("web-pages.connects.removeHere"))], {}, @sf.menu_w, along=End)
       if open && !m.open {
         waiting_menu.val = ""
       }
       if m.chosen is Some(_) {
         waiting_menu.val = ""
         confirm(
-          fill("web-pages.settings.stations.removeConfirm", [("name", text(av, "name"))]),
-          fill("web-pages.connects.removeBody", [("name", "still.fail")]),
-          tr("android-settings.members.remove"),
+          @sf.t("web-pages.settings.stations.removeConfirm", args=[("name", text(av, "name"))]),
+          @sf.t("web-pages.connects.removeBody", args=[("name", "still.fail")]),
+          @sf.t("android-settings.members.remove"),
           danger=true,
           fn() {
-            act(
+            @settings.act(
               core,
-              tr("android-settings.waiting.removeWhat"),
+              @sf.t("android-settings.waiting.removeWhat"),
               "slack.dropApp",
               obj([("station", str(station)), ("appId", str(app_id))]),
-              done=tr("android-settings.members.removed"),
+              done=@sf.t("android-settings.members.removed"),
             )
           },
         )
@@ -368,7 +370,7 @@ let cn_list_room : @ui.Style = @ui.style(w=Full, px=S4)
 
 ///|
 /// The ⋯ menu open, by the waiting app's id ("" none).
-// kept across runs: said again by each press; core.mbt's reset empties it
+// kept across runs: said again by each press; settings_reset empties it
 let waiting_menu : Ref[String] = Ref("")
 
 ///|

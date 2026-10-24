@@ -1,12 +1,11 @@
 // A settings page on the desktop as the web's frames one (ember web/src/styles/pages.css.ts page, pageNarrow,
 // pageHead; brand.css.ts: the narrow page's column): its head, then what it holds in the 760 column in the pane's
 // middle, 28 under the head, 80 room at its foot. The pages ported from the web's onto the library's parts
-// (web_notifications.mbt, …) are laid out in it; their words in the library's true sizes (home.mbt `page`: no wide
-// scale over them).
+// (notifications.mbt, …) are laid out in it, their words in the library's true sizes.
 
 ///|
 /// `title`'s page holding `content`, a block at a time (each laid out as it comes into view), `about` what it is for
-/// said by a mark beside its title, or `lead` under it.
+/// said by a mark beside its title, or `lead` under it; back over it on a page under another (`back` where it goes).
 fn desk_page(
   c : @ui.Ctx,
   core : Core,
@@ -15,29 +14,98 @@ fn desk_page(
   content : Array[() -> Unit],
   about? : String = "",
   lead? : String = "",
-  back? : String = tr("android-settings.title"),
+  back? : String = @sf.t("android-settings.title"),
   actions? : () -> Unit,
   head? : () -> Unit,
 ) -> Unit {
-  // (its actions given to its title's head itself: which of the list's rows is built first is the list's)
-  let blocks : Array[() -> Unit] = [fn() { top_back(c, core, back) }]
+  let blocks : Array[() -> Unit] = []
   // a head of its own in place of the title (an account's: who it is), as the page's first block
   match head {
-    // as far down as a title's head stands (wide_head_top)
+    // as far down as a title's head stands
     Some(h) => blocks.push(fn() { c.box(style=desk_own_head, fn() { h() }) |> ignore })
-    None => blocks.push(fn() { large_title(c, title, about~, says=lead, trailing?=actions) })
+    None =>
+      blocks.push(fn() {
+        @settings.wide_head(c, core, back, title, trailing?=actions, inside=true, about~, lead~, deep=settings_deep.val)
+      })
   }
   for i, b in content {
     blocks.push(fn() { c.box(style=if i == 0 { desk_first } else { desk_block }, fn() { b() }) |> ignore })
   }
-  scroll_page(c, key, blocks)
+  desk_lanes(c, key, blocks)
 }
+
+///|
+/// A page's blocks in a list, each laid out as it comes into view: in the pane's middle, 24 from its sides at least,
+/// 80 room at its foot.
+fn desk_lanes(c : @ui.Ctx, key : String, blocks : Array[() -> Unit]) -> Unit {
+  c.list("settings/" + key, blocks.length() + 1, 80.0, fn(i) {
+    if i == blocks.length() {
+      c.box(style=desk_foot, fn() {  }) |> ignore
+    } else {
+      c.box(style=desk_lane, fn() { c.box(style=desk_lane_column, fn() { (blocks[i])() }) |> ignore }) |> ignore
+    }
+  })
+  |> ignore
+}
+
+///|
+/// A place's page across the pane (连接: Connects.tsx's page): its head standing over what scrolls, its title, what it
+/// is for by a mark beside it, what it does at its end; what it shows 8 under it.
+fn desk_place(
+  c : @ui.Ctx,
+  core : Core,
+  title : String,
+  body : () -> Unit,
+  about? : String = "",
+  actions? : () -> Unit,
+) -> Unit {
+  c.box(style=desk_place_fill, fn() {
+    c.box(style=desk_lane, fn() {
+      c.box(style=desk_lane_column, fn() {
+        @settings.wide_head(c, core, "", title, trailing?=actions, inside=true, about~, deep=false)
+      })
+      |> ignore
+    })
+    |> ignore
+    c.box(style=desk_place_body, fn() { body() }) |> ignore
+  })
+  |> ignore
+}
+
+///|
+// kept across runs: a value (no field of it changes)
+let desk_place_fill : @ui.Style = @ui.style(w=Full, h=Full)
+
+///|
+// kept across runs: a value (no field of it changes)
+let desk_place_body : @ui.Style = desk_place_fill.then(@ui.style(pt=S2))
 
 ///|
 /// How wide the page's column is (pageNarrow: 760 at most), for what is drawn to its width before it is laid out.
 fn desk_column(c : @ui.Ctx) -> Double {
-  dmin(desk_column_most, c.width - 2.0 * wide_side(c) - 2.0 * desk_column_in)
+  dmin(desk_column_most, dmin(c.width - 2.0 * desk_lane_in, desk_lane_most) - 2.0 * desk_column_in)
 }
+
+///|
+/// A block's lane across the pane, its column in the middle: 792 at most, 24 from the pane's sides at least (its blocks'
+/// own 16 inside it: the 760 column).
+// kept across runs: a value (no field of it changes)
+let desk_lane : @ui.Style = @ui.style(w=Full, px=S6, align=ACenter)
+
+///|
+// kept across runs: a value (no field of it changes)
+let desk_lane_column : @ui.Style = @ui.style(w=Full, max_w=Fixed(desk_lane_most))
+
+///|
+let desk_lane_most : Double = 792.0
+
+///|
+let desk_lane_in : Double = 24.0
+
+///|
+/// The room at the page's foot.
+// kept across runs: a value (no field of it changes)
+let desk_foot : @ui.Style = @ui.style(w=Full, h=S20)
 
 ///|
 /// A page's head of its own (an account's): where a title's head would stand.
@@ -191,7 +259,7 @@ fn mine_filter(c : @ui.Ctx, key : String, of : String, mine : Bool, set : (Bool)
   if c.clicked(id) {
     mine_filter_open[key] = !open
   }
-  let named = if mine { tr("web-main.filter." + of + ".mine") } else { tr("web-main.filter.all") }
+  let named = if mine { @sf.t("web-main.filter." + of + ".mine") } else { @sf.t("web-main.filter.all") }
   let lit = c.hovered(id) || open
   let ink = if mine {
     t.p.accent_text
@@ -205,10 +273,10 @@ fn mine_filter(c : @ui.Ctx, key : String, of : String, mine : Bool, set : (Bool)
     c.text(named, style=if mine { mine_filter_on_words } else if lit { mine_filter_lit_words } else { mine_filter_words })
     |> ignore
   })
-  c.semantics(b, Button, id~, label=fill("web-main.filter." + of + ".named", [("named", named)]), expanded=open)
+  c.semantics(b, Button, id~, label=@sf.t("web-main.filter." + of + ".named", args=[("named", named)]), expanded=open)
   let entries = [
-    @kit.menu_radio("all", !mine, label=tr("web-main.filter." + of + ".all")),
-    @kit.menu_radio("mine", mine, label=tr("web-main.filter." + of + ".mine")),
+    @kit.menu_radio("all", !mine, label=@sf.t("web-main.filter." + of + ".all")),
+    @kit.menu_radio("mine", mine, label=@sf.t("web-main.filter." + of + ".mine")),
   ]
   let m = @sf.menu(c, key + "/menu", open, id, entries, {}, mine_filter_menu_w)
   if open && !m.open {
@@ -227,7 +295,7 @@ fn mine_filter(c : @ui.Ctx, key : String, of : String, mine : Bool, set : (Bool)
 
 ///|
 /// Which filter's menu is open, by its key.
-// kept across runs: said again by each press; core.mbt's reset empties it
+// kept across runs: said again by each press; settings_reset empties it
 let mine_filter_open : Map[String, Bool] = {}
 
 ///|
@@ -283,16 +351,16 @@ priv struct DeskDialog {
 
 ///|
 /// The dialog up ("None": none), and the last one put up, drawn as it goes.
-// kept across runs: said by open_dialog and its close; core.mbt's reset empties them
+// kept across runs: said by open_dialog and its close; settings_reset empties them
 let desk_dialog : Ref[DeskDialog?] = Ref(None)
 
 ///|
-// kept across runs: said by open_dialog; core.mbt's reset empties it
+// kept across runs: said by open_dialog; settings_reset empties it
 let desk_dialog_last : Ref[DeskDialog?] = Ref(None)
 
 ///|
 /// How many dialogs were put up (a dialog's fields' keys, new each time it opens).
-// kept across runs: counted by open_dialog; core.mbt's reset puts it back
+// kept across runs: counted by open_dialog; settings_reset puts it back
 let desk_dialogs : Ref[Int] = Ref(0)
 
 ///|
@@ -321,7 +389,7 @@ fn desk_dialog_overlay(c : @ui.Ctx) -> Unit {
         Some(now) => now.key == d.key
         None => false
       }
-      let still = @sf.dialog(c, d.key, open, d.title, fn() { (d.body)(c, shut) }, description=d.description, wide=d.wide, close_label=tr("common.close"), footer=fn() {
+      let still = @sf.dialog(c, d.key, open, d.title, fn() { (d.body)(c, shut) }, description=d.description, wide=d.wide, close_label=@sf.t("common.close"), footer=fn() {
         (d.foot)(c, shut)
       })
       if open && !still {
@@ -330,4 +398,11 @@ fn desk_dialog_overlay(c : @ui.Ctx) -> Unit {
     }
     None => ()
   }
+}
+
+///|
+/// What a list still waits on (the core's `wait`: stations not read yet, each failure said): `count` rows' shapes.
+fn desk_waiting_rows(c : @ui.Ctx, wait : Json?, count? : Int = 3) -> Unit {
+  let failing = failing_of(wait)
+  @sf.waiting(c, shape=Rows, count~, note={ reading: failing.length() == 0, text: "", failing })
 }

@@ -5,7 +5,7 @@
 
 ///|
 /// The new-profile pages open, by station: the draft's form, the sign-in it started (none: ""), why that failed.
-priv struct NewProfile {
+pub(all) struct NewProfile {
   form : String
   mut opened : Bool
   mut dropped : Bool
@@ -22,7 +22,7 @@ let new_profiles : Map[String, NewProfile] = Map([])
 
 ///|
 /// A count of drafts opened.
-let profile_forms : Ref[Int] = Ref(0)
+pub let profile_forms : Ref[Int] = Ref(0)
 
 ///|
 /// The draft of a new profile's page, made the first time it is drawn.

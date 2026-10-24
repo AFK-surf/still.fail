@@ -18,8 +18,6 @@ pub let wide_from : Double = 701.0
 pub(all) struct Pages {
   /// a chat (wide_chat.mbt), with what moves as it comes from a new chat or goes to one
   chat : (@ui.Ctx, Source, Workspace, ChatRef) -> Unit
-  /// a settings page
-  setting : (@ui.Ctx, Source, Workspace, @settings.Route) -> Unit
   /// a place of the rail's other than the chats' (Station, Profile, 连接, 用量)
   place : (@ui.Ctx, Source, Workspace, String) -> Unit
   /// 文件, and a folder of a station's drive
@@ -27,9 +25,8 @@ pub(all) struct Pages {
   folder : (@ui.Ctx, Source, Workspace, DriveAt) -> Unit
   /// any other page: the phone's of it, its bar at its top (the workspaces, whether invitations wait)
   other : (@ui.Ctx, Source, Workspace, Array[Workspace], Bool, Page) -> Unit
-  /// the sidebar of a place other than the chats' (the settings', the files', the stations', the profiles'), `width`
-  /// wide
-  side : (@ui.Ctx, Source, Workspace, Double) -> Unit
+  /// the sidebar of a place other than the chats', the files' and the settings' (the stations', the profiles')
+  side : (@ui.Ctx, Source, Workspace) -> Unit
   /// the pane's page's own keys (the open chat's, 奏's), after the frame's (`escape`: Esc pressed and not taken by
   /// what the frame opened), and what it offers ⌘K now
   keys : (@ui.Ctx, Source, Workspace, Bool) -> Unit
@@ -40,8 +37,9 @@ pub(all) struct Pages {
   relay : (@ui.Ctx, Source, ChatRef, Double) -> Unit
   /// the core asked to do something, said once done (`what` it is, the call, its params, what is said then)
   act : (Source, String, String, Json, String) -> Unit
-  /// whether this device waits to be confirmed in the workspace's safe mode, and what it sees then
-  gated : (Source, Workspace) -> Bool
+  /// what the settings' pages read and call, and how they move (src/sfapp/settings: the core as the app has it)
+  core : (Source, Workspace) -> Core
+  /// what this device sees while it waits to be confirmed in the workspace's safe mode
   gate : (@ui.Ctx, Source, Workspace) -> Unit
   /// as the pane's page is built: a switch between a chat and a new chat sets out (wide_switch.mbt)
   switching : (@ui.Ctx) -> Unit
@@ -465,7 +463,7 @@ pub fn frame(
   c.mouse_drags_lists(touch)
   // a device waiting to be confirmed in the workspace's safe mode: beside the rail (the workspaces, settings) only
   // what it waits on, no chats' list (its stations refuse it), unless a settings page is open
-  let gated = lit_place() != "settings" && (pages.gated)(src, w)
+  let gated = lit_place() != "settings" && @settings.lock_waiting((pages.core)(src, w), w.id)
   // (连接 and 用量: a page across the pane, no sidebar)
   let bare = place_bare(lit_place())
   // the sidebar of this place and workspace, as it was left
@@ -696,8 +694,10 @@ fn main_page(
     // the chats' list is the sidebar's: nothing open (yet), the page's ground
     Home => ()
     // settings' own home is its first page (the web goes to 外观)
-    Settings => (pages.setting)(c, src, w, @settings.Route::Appearance)
+    Settings => setting_page(c, src, w, pages, Route::Appearance)
+    Setting(r) => setting_page(c, src, w, pages, r)
     // a place of the rail's other than the chats': its page, under its title
+    Place("connects") => connects_place(c, src, w, pages)
     Place(p) => (pages.place)(c, src, w, p)
     // 文件: a folder under its bar, as the web's
     Files => (pages.files)(c, src, w)

@@ -11,7 +11,8 @@
 fn sidebar(c : @ui.Ctx, src : Source, w : Workspace, pages : Pages, width : Double) -> Unit {
   match lit_place() {
     "files" => files_nav(c, src, w.id)
-    "settings" | "stations" | "profiles" => (pages.side)(c, src, w, width)
+    "settings" => settings_side(c, src, w, pages)
+    "stations" | "profiles" => (pages.side)(c, src, w)
     _ => lists_side(c, src, w, pages, width)
   }
 }

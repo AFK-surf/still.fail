@@ -1,6 +1,6 @@
 // The wide frame's pages still in this package (the frame itself, the rail and their parts are sfdesk's: frame.mbt,
 // rail.mbt), given to it as it is drawn (desk_pages): the chat, a settings page, a place's, the files', the phone's page
-// of the rest, the sidebars of the places other than the chats' (wide_place_side.mbt), and what the frame asks
+// of the rest, the stations' and the profiles' sidebars (wide_places.mbt), and what the frame asks
 // of the app.
 
 ///|
@@ -55,7 +55,6 @@ fn desk_pages() -> @sfdesk.Pages {
       // (come to from a new chat by the sidebar: the new chat fading over it)
       switch_new_out(c, src, w)
     },
-    setting: fn(c, src, w, r) { setting_page(c, src, w, r) },
     // Station and Profile a list of their own beside their page (wide_places.mbt); the others under their title
     place: fn(c, src, w, p) {
       match p {
@@ -67,14 +66,14 @@ fn desk_pages() -> @sfdesk.Pages {
     files: fn(c, src, w) { files_landing(c, src, w) },
     folder: fn(c, src, w, at) { wide_folder(c, src, w, at) },
     other: fn(c, src, w, all, invited, page) { page_view(c, src, w, all, invited, page) },
-    // the settings', the files', the stations', the profiles' (wide_place_side.mbt)
-    side: fn(c, src, w, width) { sidebar(c, src, w, width) },
+    // the stations', the profiles' (wide_places.mbt)
+    side: fn(c, src, w) { sidebar(c, src, w) },
     keys: fn(c, src, w, escape) { page_keys(c, src, w, escape) },
     offered: fn(c, src) { chat_offered(c, src) },
     jobs: fn(c, src, w) { open_jobs(c, src, w) },
     relay: fn(c, src, r, thread) { open_relay(c, src, r, thread) },
     act: fn(src, what, call, params, done) { act(src, what, "", call, params, done~) },
-    gated: fn(src, w) { @settings.lock_waiting(settings_core(src, w), w.id) },
+    core: fn(src, w) { settings_core(src, w) },
     gate: fn(c, src, w) { lock_gate(c, src, w) |> ignore },
     switching: fn(c) { wide_switch_frame(c) },
     updating: fn() { side_update_shown() },

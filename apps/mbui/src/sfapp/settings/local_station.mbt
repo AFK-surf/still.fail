@@ -6,10 +6,6 @@
 ///|
 /// 本机 Station's page: read as it is shown and every few seconds (a station starts, stops and updates on its own time).
 fn local_station_page(c : @ui.Ctx, core : Core) -> Unit {
-  // the desktop's: the web's (web_local_station.mbt)
-  if wide.val {
-    return local_station_page_wide(c, core)
-  }
   ignore(c.every(local_read_ms))
   let parsed = @json.parse(@ui.local_station()) catch { _ => Json::null() }
   let s = Some(parsed)
@@ -129,7 +125,7 @@ fn local_station_page(c : @ui.Ctx, core : Core) -> Unit {
 
 ///|
 /// How often the page reads the station again while shown (LocalStation.tsx: 3 s).
-let local_read_ms : Double = 3000.0
+pub let local_read_ms : Double = 3000.0
 
 ///|
 /// What went wrong with the last act, said under its rows.

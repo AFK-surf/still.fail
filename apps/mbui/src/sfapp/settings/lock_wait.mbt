@@ -73,7 +73,7 @@ let lock_page : @ui.Style = @sf.phone_page.then(@ui.style(h=@sf.grow))
 ///|
 /// Asking to be confirmed (or, in the lock without signing, made a trusted device) and the code typed (Security.kt
 /// PairSteps): on the waiting page and on 设置 › 安全.
-fn pair_steps(c : @ui.Ctx, core : Core, ws : String) -> Unit {
+pub fn pair_steps(c : @ui.Ctx, core : Core, ws : String) -> Unit {
   let lock = (core.topic)("lock", { "workspace": str(ws) }).value
   let me = field(lock, "me")
   let pair = field(me, "pair")
