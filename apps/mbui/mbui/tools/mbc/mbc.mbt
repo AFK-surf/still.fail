@@ -1666,6 +1666,22 @@ fn cmd_wrap(args : Array[String]) -> Unit {
     return
   }
   let out = out.unwrap()
+  // a test program its build said has no tests (MBC_EMPTY_TESTS: "pkg/name.kind …", apps/mbui/scripts/test.sh): moon
+  // builds a package's internal, blackbox and whitebox programs whatever it has, each the whole app, and runs only
+  // those with tests. Not compiled: in its place a file that is no program, so that one run anyway fails, said
+  // (sfapp's two empty ones were 27 s of the app part's compile, sfreplay's 29 s of the replay part's, 2026-10-24)
+  match getenv("MBC_EMPTY_TESTS") {
+    Some(list) =>
+      for e in split_words(list) {
+        if ends(out, cat([b"/", e, b".exe"])) {
+          let _ = write_file(out, b"mbc: a test program with no tests (MBC_EMPTY_TESTS), not built\n")
+          log("\{str(e)}: no tests, not built")
+          c_exit(0)
+          return
+        }
+      }
+    None => ()
+  }
   let c_file = wargs[cs[0]]
   let objdir = cat([sub(out, 0, out.length() - 4), b".mbc"])
   makedirs(objdir)

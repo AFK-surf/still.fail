@@ -39,8 +39,9 @@ for t in ${TARGETS:-native}; do
   fi
   if [[ " ${PARTS:-app replay} " = *" replay "* ]]; then
     if [ "${MBC_LTO:-0}" = thin ]; then pkgs="$pkgs -p stillfail/sfreplay/flows"; else
-    pkgs="$pkgs -p stillfail/core -p stillfail/sfreplay"
-    pkgs="$pkgs -p stillfail/sfreplay/flows"
+    # (not sfreplay: no test of its own is left there, and its package was two empty programs of the whole app, 29 s
+    # of the replay part's compile, 2026-10-24)
+    pkgs="$pkgs -p stillfail/core -p stillfail/sfreplay/flows"
     fi
     # (a test under a directory of its own there is in no package this runs: a branch from before brought one back)
     for g in src/sfreplay/flows/*/; do
@@ -49,6 +50,18 @@ for t in ${TARGETS:-native}; do
       code=1
     done
   fi
+  # The kinds of test program a package has none of (internal: a test in its own files; blackbox: *_test.mbt;
+  # whitebox: *_wbtest.mbt), which moon builds anyway, each the whole app, and never runs: scripts/mbc puts a stand-in
+  # in their place (MBC_EMPTY_TESTS)
+  empty=""
+  for p in $pkgs; do
+    [ "$p" = -p ] && continue
+    d=src/${p#stillfail/}; n=$(basename "$d"); [ -d "$d" ] || continue
+    [ -n "$(ls "$d"/*.mbt 2>/dev/null | grep -vE '_(wb)?test\.mbt$' | xargs grep -l '^test ' 2>/dev/null)" ] || empty="$empty ${p#stillfail/}/$n.internal_test"
+    [ -n "$(ls "$d"/*_test.mbt 2>/dev/null | grep -v '_wbtest\.mbt$')" ] || empty="$empty ${p#stillfail/}/$n.blackbox_test"
+    [ -n "$(ls "$d"/*_wbtest.mbt 2>/dev/null)" ] || empty="$empty ${p#stillfail/}/$n.whitebox_test"
+  done
+  export MBC_EMPTY_TESTS="$empty"
   out=$(mktemp)
   # (TIMES=1, as CI's: built first on its own, then run, each said with how long it took; its errors shown by the run)
   if [ -n "${TIMES:-}" ]; then
