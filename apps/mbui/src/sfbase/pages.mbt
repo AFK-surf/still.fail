@@ -197,5 +197,11 @@ pub fn reset() -> Unit {
   emits.clear()
   // words sent flying (flight.mbt)
   send_flight.val = None
+  // the chats' lists as kept while they show and where they were left (chat_list.mbt)
+  read_chats.clear()
+  readings.clear()
+  kept_places.clear()
+  flash_held.val = false
+  at_end_env.val = -1
 }
 
