@@ -1170,18 +1170,18 @@ fn model_checklist(c : @ui.Ctx, core : Core, address : String, p : Json?) -> Uni
   let filter = profile_field("filter/" + key)
   let q = filter.text().trim(chars=" \t\n").to_owned().to_lower()
   let shown = all.filter(fn(m) { q == "" || m.to_lower().contains(q) || name(m).to_lower().contains(q) })
+  // (each once and in order, as the core puts them: ops.ts profileInput)
   let commit = fn(next : Array[String]) {
-    let sorted = next.copy()
-    sorted.sort()
     @settings.act(
       core,
       @sf.t("web-pages.profiles.models"),
       "profile.put",
-      obj([("station", str(address)), ("id", str(id)), ("input", obj([("models", Json::array(sorted.map(str)))]))]),
+      obj([("station", str(address)), ("id", str(id)), ("input", obj([("models", Json::array(next.map(str)))]))]),
     )
   }
   c.box(style=pf_pool, fn() {
-    c.box(style=pf_pool_tools, fn() {
+    // (all and none go on under the filter where the two have not the room)
+    c.box(style=pf_pool_tools, flow=true, fn() {
       if all.length() > 10 {
         c.box(style=pf_pool_filter, fn() {
           @sf.input(c, "profile-filter/" + key, placeholder=@sf.t("web-pages.profiles.filter"), field=filter) |> ignore
@@ -1777,22 +1777,23 @@ let pf_run_rows : @ui.Style = @ui.css("w=Full gap=S3_5")
 // ── choosing its models ─────────────────────────────────────────────────
 
 ///|
-/// Choosing a new profile's models (PickModelsPage), the step chats need once it is added: the whole list to tick, one
-/// named by hand where the provider lists none; 跳过 or 完成 (once one is on) to its page. While its list is read, said
-/// so; none to list, why.
-fn pick_models_page(c : @ui.Ctx, core : Core, here : Here, address : String, id : String) -> Unit {
+/// 选择模型, right after a profile is added (PickModelsPage; the narrow app's PickModelsScreen): what it is for, the list
+/// to tick (or a wait while it is read, or why none is listed), a model named by hand where the provider lists none;
+/// 跳过 and 完成 (wide: at the head's end; narrow: over the list) go on to its page in this one's place.
+fn pick_models_page(c : @ui.Ctx, core : Core, here : Here, frame : PageFrame, address : String, id : String) -> Unit {
+  let look = look_of(c)
   let s = @settings.station_of(core, here, address)
   let o = field(s, "overview")
   let key = "pick-models/" + address + "/" + id
   let title = @sf.t("web-pages.profiles.pickModels.title")
   guard o is Some(Object(_)) else {
-    desk_page(c, core, key, title, [
+    look_page(c, core, frame, look, key, title, [
       fn() { @sf.waiting(c, shape=Cards, note={ reading: true, text: @sf.t("web-pages.profiles.loading"), failing: [] }) },
     ])
   }
   guard items(o, "profiles").search_by(fn(p) { text(Some(p), "id") == id }) is Some(i) else {
-    desk_page(c, core, key, title, [
-      fn() { c.text(@sf.t("web-pages.profiles.notFound", args=[("id", id)]), style=desk_muted) |> ignore },
+    look_page(c, core, frame, look, key, title, [
+      fn() { look_note(c, look, @sf.t("web-pages.profiles.notFound", args=[("id", id)])) },
     ])
   }
   let p = Some(items(o, "profiles")[i])
@@ -1801,27 +1802,19 @@ fn pick_models_page(c : @ui.Ctx, core : Core, here : Here, address : String, id 
     (core.pop)()
     (core.push)(Profile(address, id))
   }
+  let buttons = fn() {
+    if @sf.button(c, @sf.t("web-pages.profiles.pickModels.skip"), key=key + "/skip", tone=Ghost) {
+      leave()
+    }
+    if @sf.button(c, @sf.t("common.done"), key=key + "/done", tone=Primary, disabled=items(p, "models").length() == 0) {
+      leave()
+    }
+  }
   let listed = items(p, "available").length() > 0
   let check = field(p, "check")
-  desk_page(
-    c,
-    core,
-    key,
-    title,
-    lead=@sf.t("web-pages.profiles.pickModels.lead", args=[("name", text(p, "name"))]),
-    actions=fn() {
-      c.box(style=pf_pick_actions, fn() {
-        if @sf.button(c, @sf.t("web-pages.profiles.pickModels.skip"), key=key + "/skip", tone=Ghost) {
-          leave()
-        }
-        if @sf.button(c, @sf.t("common.done"), key=key + "/done", tone=Primary, disabled=items(p, "models").length() == 0) {
-          leave()
-        }
-      })
-      |> ignore
-    },
-    [
-      fn() {
+  let blocks : Array[() -> Unit] = [
+    fn() {
+      models_body(c, core, look, address, p, fn() {
         if flag(p, "modelsReading") {
           @sf.wait_line(c, @sf.t("web-pages.profiles.pickModels.reading"))
         } else if !listed && !flag(p, "canAddModel") {
@@ -1847,14 +1840,119 @@ fn pick_models_page(c : @ui.Ctx, core : Core, here : Here, address : String, id 
           })
           |> ignore
         }
-        match failed_of(core, ["profile.put"], [("station", address), ("id", id)]) {
-          Some(f) => c.text(f, style=desk_note_bad) |> ignore
-          None => ()
+      })
+    },
+  ]
+  // (narrow: 跳过 and 完成 under what the page is for, over the list, at its end)
+  if look == Narrow {
+    blocks.insert(0, fn() { c.box(style=pf_pick_foot, buttons) |> ignore })
+  }
+  look_page(
+    c,
+    core,
+    frame,
+    look,
+    key,
+    title,
+    lead=@sf.t("web-pages.profiles.pickModels.lead", args=[("name", text(p, "name"))]),
+    actions?=if look == Wide { Some(fn() { c.box(style=pf_pick_actions, buttons) |> ignore }) } else { None },
+    blocks,
+  )
+}
+
+///|
+/// 模型, which of a profile's models may be used, on a page of their own (the narrow app's ProfileModelsScreen; the
+/// wide page has the same list on the profile's): how many are on under its title, the list to tick, a model named by
+/// hand where the provider lists none.
+fn profile_models_page(c : @ui.Ctx, core : Core, here : Here, frame : PageFrame, address : String, id : String) -> Unit {
+  let look = look_of(c)
+  let s = @settings.station_of(core, here, address)
+  let o = field(s, "overview")
+  let key = "profile-models/" + address + "/" + id
+  let title = @sf.t("web-pages.profiles.models")
+  guard items(o, "profiles").search_by(fn(p) { text(Some(p), "id") == id }) is Some(i) else {
+    look_page(c, core, frame, look, key, title, [
+      fn() {
+        if o is Some(Object(_)) {
+          look_note(c, look, @sf.t("web-pages.profiles.notFound", args=[("id", id)]))
+        } else {
+          @sf.waiting(c, shape=Cards, note={ reading: true, text: @sf.t("web-pages.profiles.loading"), failing: [] })
         }
+      },
+    ])
+  }
+  let p = Some(items(o, "profiles")[i])
+  let ticked = items(p, "models").length()
+  look_page(
+    c,
+    core,
+    frame,
+    look,
+    key,
+    title,
+    lead=if ticked > 0 { @sf.t("android-settings.profile.pickModels.selected", args=[("n", ticked.to_string())]) } else { "" },
+    // read again (its models as the provider lists them now), at its title's end
+    actions=fn() {
+      let on = [("station", address), ("id", id)]
+      let checking = is_doing(core, ["profile.check"], on)
+      if tap_text(
+          c,
+          "models-refresh/" + key,
+          @sf.t(if checking { "android-settings.refreshing" } else { "android-settings.models.refresh" }),
+          color=@sf.link_ink(),
+          size=link_size,
+        ) &&
+        !checking {
+        @settings.act(
+          core,
+          @sf.t("android-settings.models.refreshWhat"),
+          "profile.check",
+          obj([("station", str(address)), ("id", str(id))]),
+          done=@sf.t("android-settings.models.refreshed"),
+        )
+      }
+    },
+    [
+      // what they are for (the narrow app's note)
+      fn() { look_note(c, look, @sf.t("android-settings.models.note")) },
+      fn() {
+        models_body(c, core, look, address, p, fn() {
+          c.box(style=pf_models_body, fn() {
+            if items(p, "available").length() > 0 {
+              model_checklist(c, core, address, p)
+            }
+            if flag(p, "canAddModel") {
+              add_model(c, core, address, id)
+            }
+          })
+          |> ignore
+        })
       },
     ],
   )
 }
+
+///|
+/// What a page of a profile's models holds, and why saving them failed under it: narrow, on a card 12 from the page's
+/// sides.
+fn models_body(c : @ui.Ctx, core : Core, look : Look, address : String, p : Json?, body : () -> Unit) -> Unit {
+  let inner = fn() {
+    body()
+    match failed_of(core, ["profile.put"], [("station", address), ("id", text(p, "id"))]) {
+      Some(f) => c.text(f, style=desk_note_bad) |> ignore
+      None => ()
+    }
+  }
+  match look {
+    Narrow => look_card(c, look, inner)
+    Wide => inner()
+  }
+}
+
+///|
+/// 跳过 and 完成 on a narrow page, over its list: 12 from its sides, 10 under them, 10 apart, at the end.
+// kept across runs: a value (no field of it changes)
+let pf_pick_foot : @ui.Style = @ui.css("row w=Full px=S3 pb=S2_5 gap=S2_5 justify=JEnd")
 
 ///|
 /// Its two buttons at the head's end (pickModelsActions: 8 apart).
