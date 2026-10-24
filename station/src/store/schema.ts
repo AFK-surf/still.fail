@@ -262,6 +262,8 @@ CREATE TABLE IF NOT EXISTS usage (
   output INTEGER NOT NULL
 );
 CREATE INDEX IF NOT EXISTS usage_at ON usage (at);
+-- A session's calls (session_usage, accounts.ts lastContexts) read without the rest.
+CREATE INDEX IF NOT EXISTS usage_session ON usage (session, at);
 -- The runtime sessions a session has run in, the first first, each with the profile it last ran on. The latest is
 -- sessions.runtime_session_id; one before it was left for a new one (its account changed), and its history goes on
 -- from theirs.
@@ -332,6 +334,13 @@ CREATE TABLE IF NOT EXISTS relayed_to (
 CREATE TABLE IF NOT EXISTS transcript_lengths (
   session TEXT PRIMARY KEY,
   n INTEGER NOT NULL
+);
+-- What each session's calls used (read/tail.ts TranscriptUsage, as JSON), as its live view last told it or the usage
+-- counter counted it since (sessions/live.ts, usage/module.ts): its summary says it, so a device knows what an agent at
+-- rest used without following it.
+CREATE TABLE IF NOT EXISTS session_usage (
+  session TEXT PRIMARY KEY,
+  usage TEXT NOT NULL
 );
 `;
 

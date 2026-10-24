@@ -394,6 +394,19 @@ test("a_session_event_says_whether_its_detail_is_to_be_read_again", async () => 
   runner.shutdown();
 });
 
+test("a_sessions_detail_says_its_summary_as_the_station_last_said_it_in_its_list_too", async () => {
+  const { data, open, again, runner } = fresh();
+  await open();
+  // Its detail, read before its station said what can be done to its context; its list, read since, says it.
+  data.set({ topic: "session", station: "w/a", key: "k1" }, { session: { key: "k1", turns: 1 }, turns: [{ kind: "chat" }], jobs: [], threads: [] });
+  data.set(sessions("w/a"), [{ key: "k1", turns: 1, contextActions: ["compact", "clear"] }]);
+  const actions = (d: Data) => (d.get({ topic: "session", station: "w/a", key: "k1" }) as J).session.contextActions;
+  assert.deepEqual(actions(data), ["compact", "clear"]);
+  await run(data.written);
+  assert.deepEqual(actions(await again()), ["compact", "clear"], "as the device opens again");
+  runner.shutdown();
+});
+
 test("a_burst_says_each_chat_row_before_and_after", async () => {
   const { data, open, runner } = fresh();
   await open();

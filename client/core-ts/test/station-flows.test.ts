@@ -1945,6 +1945,29 @@ test("an_agent_used_lately_has_its_whole_history_brought_in_the_background_one_n
   core.close();
 });
 
+test("an_agent_at_rest_says_what_it_used_and_what_can_be_done_to_its_context_as_its_summary_says_now", async () => {
+  const answers: J = base();
+  const used = { modelCalls: 4, inputTokens: 1000, cachedTokens: 900, outputTokens: 20, model: "claude-opus-5-5", contextTokens: 300, contextWindow: null, cost: 1.5, unpricedCalls: 0 };
+  const ended = { id: "t1", kind: "input", startedAt: 1, endedAt: 2, outcome: "completed" };
+  const rested = { ...session("k1", 1), runtimeSessionId: "r", lastTurn: ended };
+  // Its detail as a station said it before either was said; its list as the station says it now.
+  answers["GET /sessions/k1"] = { session: rested, threads: [], turns: [ended], jobs: [] };
+  answers["GET /sessions"] = [{ ...rested, contextActions: ["compact", "clear"], usage: used }];
+  // A station that follows the sessions at work itself: one at rest is named on no stream, which says nothing of it.
+  const s = await ui(answers, (st) => (st.gate.follows = true));
+  const { core, values, read } = s;
+  core.receive(s.ui, { kind: "subscribe", id: 1, subscribe: { topic: "agentCard", station: ST, key: "k1" } });
+  core.receive(s.ui, { kind: "subscribe", id: 2, subscribe: { topic: "history", station: ST, key: "k1" } });
+  await read();
+  await read();
+  const card = v(values, 1) as J;
+  assert.deepEqual([card.cost, card.cache.text, card.context.text], ["$1.50", "90%", "300"]);
+  assert.equal((v(values, 2) as J).usage[0].value, "4 次");
+  const agent = core.inner.views.agent(ST, "k1");
+  assert.deepEqual([agent.session.canCompact, agent.session.canClear], [true, true]);
+  core.close();
+});
+
 test("a_history_step_in_brief_is_read_whole_as_it_is_opened_and_shown_so", async () => {
   const answers: J = base();
   const s = await ui(answers);

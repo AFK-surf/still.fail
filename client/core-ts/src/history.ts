@@ -486,7 +486,7 @@ export function presentHistory(live: J, cx: Context): J {
   const pushedNow = pushed(live, cx.runtime);
   const liveSteps = pushedNow.liveSteps.map(({ id, text }) => ({ id, text }));
   const phase = pushedNow.phase;
-  const { usage, usageLine } = usageOf(live);
+  const { usage, usageLine } = usageOf(live?.usage);
   const loaded = flag(live, "loaded");
   let edge: string;
   let empty: boolean;
@@ -499,11 +499,10 @@ export function presentHistory(live: J, cx: Context): J {
   return { items: shown, live: liveSteps, phase, usage, usageLine, edge, empty, loaded, more: base > 0 };
 }
 
-/// What a session's calls used (its live `usage`), as its history shows it: label and value rows, and in a line; and on
-/// their own, what its card shows of it (views/brief.ts): the context it carries (how full its window is, when known)
-/// and the cost. Nothing before the station has counted any.
-export function usageOf(live: J): { usage: J[] | null; usageLine: string | null; context: string | null; contextPercent: number | null; cost: string | null } {
-  const u = live?.usage;
+/// What a session's calls used (views/brief.ts `usageNow`), as its history shows it: label and value rows, and in a
+/// line; and on their own, what its card shows of it (views/brief.ts): the context it carries (how full its window is,
+/// when known) and the cost. Nothing before the station has counted any.
+export function usageOf(u: J): { usage: J[] | null; usageLine: string | null; context: string | null; contextPercent: number | null; cost: string | null } {
   const isUsage = u !== null && typeof u === "object" && !Array.isArray(u);
   const n = (k: string): number => (isUsage && typeof u[k] === "number" ? u[k] : 0);
   // The context and the cost come from stations since; an older one's usage has neither.

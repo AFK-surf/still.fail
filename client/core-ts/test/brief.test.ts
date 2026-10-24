@@ -2,7 +2,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { holdLanguage } from "../src/i18n.ts";
-import { card, jobsText, latestOf, recentOf, workText } from "../src/views/brief.ts";
+import { card, jobsText, latestOf, recentOf, usageNow, workText } from "../src/views/brief.ts";
 
 holdLanguage();
 const MIN = 60_000;
@@ -44,6 +44,23 @@ test("the_card_says_what_it_did_cost_and_used", () => {
   // Before its first turn and its usage is read: nothing.
   const none = card({ turns: [], attention: [], jobs: [] }, null);
   assert.deepEqual([none.work, none.cost, none.cache, none.context, none.jobs, none.latest, none.attention], [null, undefined, undefined, undefined, null, [], []]);
+});
+
+test("what_it_used_is_its_streams_while_it_works_else_its_summarys", () => {
+  const told = { modelCalls: 3, inputTokens: 100, cachedTokens: 50, outputTokens: 5, contextTokens: 40, contextWindow: null, cost: 0.1, unpricedCalls: 0 };
+  const said = { ...told, modelCalls: 5, cost: 0.3 };
+  const rested = { lastTurn: { id: "t", kind: "input", startedAt: 1, endedAt: 2, outcome: "completed" }, usage: said };
+  const working = { ...rested, process: "running" };
+  assert.equal(usageNow(rested, { usage: told }), said, "at rest: its summary's, the station's count since");
+  assert.equal(usageNow(working, { usage: told }), told, "at work: its stream's, each call as it is made");
+  assert.equal(usageNow(working, {}), said, "at work, its stream not heard yet: its summary's");
+  assert.equal(usageNow({ ...rested, usage: undefined }, { usage: told }), told, "a station from before says it on its stream alone");
+  assert.equal(usageNow({ ...rested, usage: undefined }, null), null);
+  // At rest, followed by no stream: its card says what it used all the same.
+  const c = card({ turns: [turn(0, 5)], attention: [], jobs: [], session: rested }, { timeline: [] });
+  assert.equal(c.cost, "$0.30");
+  assert.deepEqual(c.cache, { percent: 50, text: "50%", level: "ok" });
+  assert.deepEqual(c.context, { percent: 0, text: "40", level: "ok", unknown: true });
 });
 
 test("the_latest_three_things_it_did_oldest_first", () => {

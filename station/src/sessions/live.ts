@@ -123,6 +123,8 @@ export class LiveHub {
   heldTold: ((key: string, message: LiveMessage) => void) | null = null;
   /// Where each watched transcript's length goes as it changes (the store: its session's summary says it).
   lengths: ((key: string, n: number) => void) | null = null;
+  /// Where each watched session's usage goes as it changes (the store: its session's summary says it).
+  usages: ((key: string, usage: TranscriptUsage) => void) | null = null;
   private lengthTold = new Map<string, number>();
   /// Where a transcript's past is read (agents.ts: the readers); none (tests): here, and kept in memory.
   history: History | null = null;
@@ -144,7 +146,12 @@ export class LiveHub {
       counted = this.count?.of(key) ?? null;
     } catch {}
     const usage = counted !== null && counted.modelCalls > 0 ? { ...tail.usage, ...counted } : tail.usage;
-    this.told.set(key, JSON.stringify(usage));
+    const json = JSON.stringify(usage);
+    if (this.told.get(key) === json) return usage;
+    this.told.set(key, json);
+    try {
+      this.usages?.(key, usage);
+    } catch {}
     return usage;
   }
 

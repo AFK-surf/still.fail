@@ -276,6 +276,31 @@ export class Store {
     this.#run("INSERT INTO transcript_lengths (session, n) VALUES (?1, ?2) ON CONFLICT (session) DO UPDATE SET n = excluded.n", key, n);
   }
 
+  /// What a session's calls used, as just told or counted (sessions/live.ts, usage/module.ts): its summary says it from
+  /// then on. While it works its stream tells each change and the summary told next carries it; at rest (the count of
+  /// its last turn comes in after it ended) the change is the session's, told as one unless `quiet`.
+  setSessionUsage(key: string, usage: Json, quiet = false): void {
+    const json = JSON.stringify(usage);
+    if (this.#one("SELECT usage FROM session_usage WHERE session = ?", key)?.usage === json) return;
+    const session = this.getSession(key);
+    if (session === null) return;
+    this.#with((changes) => {
+      this.#run("INSERT INTO session_usage (session, usage) VALUES (?1, ?2) ON CONFLICT (session) DO UPDATE SET usage = excluded.usage", key, json);
+      if (!quiet && !session.running) changes.push({ type: "session", key });
+    });
+  }
+
+  /// What a session's calls used as last kept (`setSessionUsage`); null before any.
+  sessionUsage(key: string): Json | null {
+    const r = this.#one("SELECT usage FROM session_usage WHERE session = ?", key);
+    return r ? JSON.parse(r.usage) : null;
+  }
+
+  /// The sessions of which no usage is kept yet.
+  sessionsWithoutUsage(): string[] {
+    return this.#all("SELECT key FROM sessions WHERE key NOT IN (SELECT session FROM session_usage)").map((r) => r.key as string);
+  }
+
   /// A runtime session the session runs in, on `profile` (null: not known, a profile it had is kept).
   ranIn(key: string, id: string, profile: string | null): void {
     this.#run(
@@ -560,6 +585,7 @@ export class Store {
         this.#run("DELETE FROM widget_states WHERE session = ?", key);
         this.#run("DELETE FROM pins WHERE session = ?", key);
         this.#run("DELETE FROM transcript_lengths WHERE session = ?", key);
+        this.#run("DELETE FROM session_usage WHERE session = ?", key);
         this.#run("DELETE FROM sessions WHERE key = ?", key);
         for (const thread of threads) {
           if (this.#one("SELECT 1 FROM thread_sessions WHERE thread = ? LIMIT 1", thread) !== undefined) {
@@ -1634,9 +1660,9 @@ export class Store {
     return usage.compactionPoints(this.db, since, least);
   }
 
-  /// Tells whoever follows the store that calls were recorded.
-  usageChanged(): void {
-    this.#send([{ type: "usage" }]);
+  /// Tells whoever follows the store that calls of `sessions` were recorded.
+  usageChanged(sessions: string[]): void {
+    this.#send([{ type: "usage", sessions }]);
   }
 
   /// Sessions whose transcripts may have grown since `since`: a turn running, or ended since then.

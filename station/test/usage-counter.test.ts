@@ -13,6 +13,8 @@ import { cost, price, priceTable, sessionUsage } from "../src/read/usage.ts";
 import { iso, parseIso } from "../src/read/transcript.ts";
 import { type StoreChange, type UsageGroup, Store, newMessage } from "../src/store/store.ts";
 import { type CallState, UsageCounter, callsOf, claudeFiles, claudeProject, readFrom } from "../src/usage/counter.ts";
+import type { UsageCall, UsageFor } from "../src/store/usage.ts";
+import { keepUsage } from "../src/usage/module.ts";
 import { testClock } from "./hub-fakes.ts";
 
 const dirs: string[] = [];
@@ -321,8 +323,8 @@ test("a turn's end is read shortly after, and the pages are told", async () => {
   await time.adjust(20);
   await time.begun(5);
   assert.equal(calls(), 1);
-  // Told once the read is over (the rows are there a moment before).
-  assert.ok(told.some((c) => c.type === "usage"));
+  // Told once the read is over (the rows are there a moment before), with the sessions it counted anew.
+  assert.deepEqual(told.filter((c) => c.type === "usage"), [{ type: "usage", sessions: ["k"] }]);
   await r.usage.stop();
 });
 
@@ -413,4 +415,25 @@ test("on a real station's copy, the calls counted are the Rust's", { skip: !exis
   rust.close();
   assert.deepEqual(ours, theirs);
   assert.equal(more, 0);
+});
+
+test("a session's summary says what its calls used: counted over what its live view told, else its last call's", () => {
+  const store = Store.open(":memory:", null);
+  stores.push(store);
+  store.insertSession({ key: "k", connect: "ds", runtime: "claude", profile: "cc", workspace: "/w/k", token: "k", createdAt: 1, lastActiveAt: 1 });
+  keepUsage(store, "k");
+  assert.equal(store.sessionUsage("k"), null, "no call: none");
+  const of = { turn: null, person: null, thread: null, profile: "cc" };
+  const call = (id: string, at: number, subagent: boolean, input: number): [UsageCall, UsageFor] =>
+    [{ id, at, model: subagent ? "claude-haiku-4-5" : "claude-opus-5-5", subagent, fast: false, input, cacheRead: 100, cacheWrite: 10, cacheWriteLong: 0, output: 5 }, of];
+  store.recordUsage("/t.jsonl", { session: "k", offset: 1, model: null }, "claude", [call("a", 1000, false, 1), call("b", 2000, false, 2), call("c", 3000, true, 50)]);
+  keepUsage(store, "k", true);
+  const kept = store.sessionUsage("k");
+  // Before its live view told any: the model and the context of its last call of its own (not a subagent's).
+  assert.deepEqual([kept.modelCalls, kept.inputTokens, kept.cachedTokens, kept.outputTokens, kept.model, kept.contextTokens, kept.contextWindow], [3, 383, 300, 15, "claude-opus-5-5", 112, null]);
+  assert.ok(kept.cost > 0);
+  // What its live view told of the rest stays (a window the runtime told), its calls as counted.
+  store.setSessionUsage("k", { ...kept, modelCalls: 2, contextTokens: 90, contextWindow: 1000 }, true);
+  keepUsage(store, "k", true);
+  assert.deepEqual([store.sessionUsage("k").modelCalls, store.sessionUsage("k").contextTokens, store.sessionUsage("k").contextWindow], [3, 90, 1000]);
 });
