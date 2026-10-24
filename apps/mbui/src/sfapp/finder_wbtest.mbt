@@ -1,7 +1,8 @@
 // The search, one in every tier (sfpages' switcher.mbt): at a width of each tier with a finger and with a mouse, the
 // same words find the same; with a finger its page in the lists' box (sfpages' search.mbt), from the field at a list's
-// top; with a mouse ⌘K's panel (sfdesk's switcher.mbt). A row pressed opens its chat where the shell has it: ⌘K closes
-// as it does, a finger's search stays open in the lists' box.
+// top; with a mouse ⌘K: laid out Medium or Large its panel (sfdesk's switcher.mbt), Small the same page as a finger's,
+// over the page open. A row pressed opens its chat where the shell has it: ⌘K's panel closes as it does, the search's
+// page stays open in the lists' box.
 
 ///|
 /// The fixture's Home at width `w` with `platform`'s hand, the search opened as its frame has it, `words` typed.
@@ -92,7 +93,10 @@ test "the search's way in by the hand: a finger's field at the lists' top in eve
       assert_true(t.find("搜索全部内容") is None, msg=at)
       t.key(@ui.key_of_char('k'), mods=@ui.mod_cmd)
       t.frame()
-      assert_true(@sfdesk.switcher_open(), msg=at)
+      // laid out Small the search's page, else the panel
+      let wide = @sfdesk.is_wide(t.ctx())
+      assert_eq(@sfdesk.switcher_open(), wide, msg=at)
+      assert_eq(@sfpages.search_opened(), !wide, msg=at)
     }
   }
 }
@@ -121,21 +125,79 @@ fn small_mouse(calls : Array[Made]) -> @ui.Tester {
 }
 
 ///|
-test "small with a mouse, the app's keys: ⌘K's panel and a row of it opened; ⌘N a new chat; ⌘, settings; ⌘/ the shortcuts" {
+test "small with a mouse, ⌘K: the search's page in the lists' box, the keys in its field; Enter opens the line chosen, Esc closes it" {
   let calls : Array[Made] = []
   let t = small_mouse(calls)
   assert_false(@sfdesk.is_wide(t.ctx()))
   t.key(@ui.key_of_char('k'), mods=@ui.mod_cmd)
   t.frame()
-  assert_true(@sfdesk.switcher_open())
-  assert_true(t.find("搜索全部内容和操作") is Some(_))
+  assert_true(@sfpages.search_opened())
+  assert_false(@sfdesk.switcher_open())
+  // what can be done here among what it finds: 设置 with its keys, Enter runs it
+  t.type_text("设置")
+  t.frame()
+  assert_true(t.find("⌘,") is Some(_), msg=t.words().map(fn(w) { w.0 }).join("|"))
+  t.enter()
+  t.frame()
+  assert_true(app.nav.top() is Setting(_))
+  // a chat found: Enter opens it
+  let t = small_mouse(calls)
+  t.key(@ui.key_of_char('k'), mods=@ui.mod_cmd)
+  t.frame()
+  t.type_text("签名")
+  t.frame()
+  assert_true(t.find_last("签名证书续期") is Some(_))
+  // Enter: the line chosen (the first) opened
+  t.enter()
+  t.frame()
+  t.run_for(@ui.nav_push_ms)
+  assert_true(app.nav.top() is Chat(_))
+  // Esc on Home's: closed, the lists as they were
+  let t = small_mouse(calls)
+  t.key(@ui.key_of_char('k'), mods=@ui.mod_cmd)
+  t.frame()
+  assert_true(@sfpages.search_opened())
+  t.key(@ui.key_escape)
+  t.frame()
+  assert_false(@sfpages.search_opened())
+  assert_true(app.nav.top() == Home)
+  assert_true(t.find("整理发布清单") is Some(_))
+}
+
+///|
+test "small with a mouse, ⌘K in a chat: the search's page over it; Esc back to that chat, a row found its chat instead" {
+  let calls : Array[Made] = []
+  let t = small_mouse(calls)
+  t.tap_text("夜里的构建又失败了")
+  t.run_for(@ui.nav_push_ms)
+  assert_eq(app.nav.depth(), 2)
+  t.key(@ui.key_of_char('k'), mods=@ui.mod_cmd)
+  t.frame()
+  assert_true(@sfpages.search_opened())
+  t.type_text("签名")
+  t.frame()
+  assert_true(t.find_last("签名证书续期") is Some(_))
+  // Esc: closed, the chat under it as it was
+  t.key(@ui.key_escape)
+  t.frame()
+  assert_false(@sfpages.search_opened())
+  assert_eq(app.nav.depth(), 2)
+  assert_true(app.nav.top() is Chat({ title: "夜里的构建又失败了", .. }))
+  // again, a row pressed: its chat over this one, the search gone
+  t.key(@ui.key_of_char('k'), mods=@ui.mod_cmd)
+  t.frame()
   t.type_text("签名")
   t.frame()
   let (x, y) = t.find_last("签名证书续期").unwrap()
   t.tap(x, y)
   t.run_for(@ui.nav_push_ms)
-  assert_true(app.nav.top() is Chat(_))
-  assert_false(@sfdesk.switcher_open())
+  assert_false(@sfpages.search_opened())
+  assert_true(app.nav.top() is Chat({ title: "签名证书续期", .. }))
+}
+
+///|
+test "small with a mouse, the app's keys: ⌘N a new chat; ⌘, settings; ⌘/ the shortcuts" {
+  let calls : Array[Made] = []
   // ⌘N: a new chat, risen on the stack
   let t = small_mouse(calls)
   t.key(@ui.key_of_char('n'), mods=@ui.mod_cmd)
@@ -151,6 +213,23 @@ test "small with a mouse, the app's keys: ⌘K's panel and a row of it opened; �
   t.key(@ui.key_of_char('/'), mods=@ui.mod_cmd)
   t.frame()
   assert_true(@sfdesk.wide.keys_open)
+}
+
+///|
+test "⌘K laid out Medium and Large: its panel, room round it on every side" {
+  for w in [600.0, 1280.0] {
+    let calls : Array[Made] = []
+    let t = wide_tester(calls, w~, h=800.0, platform=0)
+    t.draw()
+    assert_true(@sfdesk.is_wide(t.ctx()), msg=w.to_string())
+    t.key(@ui.key_of_char('k'), mods=@ui.mod_cmd)
+    t.frame()
+    assert_true(@sfdesk.switcher_open(), msg=w.to_string())
+    assert_false(@sfpages.search_opened(), msg=w.to_string())
+    let c = t.ctx()
+    let (x, y, pw, _) = c.rect_of(c.id("switcher")).unwrap()
+    assert_true(x >= 16.0 && x + pw <= w - 16.0 && y > 0.0, msg="\{w}: \{x} \{pw}")
+  }
 }
 
 ///|

@@ -411,6 +411,8 @@ fn signed_in(c : @ui.Ctx, src : Source) -> Unit {
         let page_took = c.took_back(fn() {
           let pages = fn() {
             c.nav(app.nav, fn(page) { page_view(c, src, w, all, invited, page) }, bg=t.p.bg) |> ignore
+            // ⌘K's search over a page other than the lists (sfdesk's keys.mbt, sfpages' search.mbt), under the bars
+            @sfpages.search_over(c, src, w, status_top())
           }
           if finger {
             pages()

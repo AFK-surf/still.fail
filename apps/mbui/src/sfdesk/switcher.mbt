@@ -79,8 +79,10 @@ pub fn switcher(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
   // mbui's layer over the page (modal: its scrim takes the presses outside, Tab stays in it; Esc, back or a press
   // outside dismiss it), the panel 14% down the window in its middle
   let o = c.overlay("switcher-layer", modal=true, scrim=t.p.overlay, initial_focus=0, fn() {
+    // (32 short of the window at most: room round it however narrow the frame is)
+    let room = dmin(switcher_w, c.width - switcher_side - switcher_side)
     let i = c.box(
-      style=switcher_panel,
+      style=switcher_panel.then(@ui.style(max_w=Fixed(room))),
       bg=@sf.panel_ground(),
       shadow=@sf.dialog_shadow,
       shadow_y=@sf.dialog_shadow_y,
@@ -169,6 +171,10 @@ let switcher_panel : @ui.Style = switcher_surface
 
 ///|
 let switcher_w : Double = 560.0
+
+///|
+/// What is left of the window either side of it at least (the web's calc(100vw - 32px)).
+let switcher_side : Double = 16.0
 
 ///|
 /// What the panel holds besides its list: its search's 48, its 12 in at its top and foot, 4 over the list.

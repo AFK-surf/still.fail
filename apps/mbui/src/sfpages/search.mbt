@@ -8,17 +8,30 @@
 ///|
 /// The search's page as it stands (what it finds is sfpages' finder: switcher.mbt): open (its field off the list: `from`,
 /// its top in the window when tapped, and `wide`, its width there), going back (`leaving`); the field to take the
-/// focus as it opens.
+/// focus as it opens. Opened by the keys (⌘K laid out Small: `summoned`), what can be done here among what it finds
+/// (`offered`), and whether over another page than the lists (`over`: the shell's, search_over).
 priv struct Search {
   mut open : Bool
   mut leaving : Bool
   mut from : Double
   mut wide : Double
   mut focus : Bool
+  mut summoned : Bool
+  mut over : Bool
+  mut offered : Array[Offered]
 }
 
 ///|
-let search : Search = { open: false, leaving: false, from: 0.0, wide: 0.0, focus: false }
+let search : Search = {
+  open: false,
+  leaving: false,
+  from: 0.0,
+  wide: 0.0,
+  focus: false,
+  summoned: false,
+  over: false,
+  offered: [],
+}
 
 ///|
 /// A search open as the app starts (src/sffix's modes search-results and search-jobs, the Android app's
@@ -57,6 +70,9 @@ fn search_reset() -> Unit {
   search.from = 0.0
   search.wide = 0.0
   search.focus = false
+  search.summoned = false
+  search.over = false
+  search.offered = []
 }
 
 ///|
@@ -79,7 +95,7 @@ fn search_up(c : @ui.Ctx) -> @motion.Anim {
 ///|
 /// How far Home is away under the search (0 none).
 pub fn search_away(c : @ui.Ctx) -> Double {
-  if search.open {
+  if search.open && !search.over {
     search_up(c).get()
   } else {
     0.0
@@ -89,7 +105,7 @@ pub fn search_away(c : @ui.Ctx) -> Double {
 ///|
 /// The bottom bar out of the search's way while it is open (Home.kt app.barAway): from the tap until it starts back.
 pub fn search_bar_away() -> Bool {
-  search.open && !search.leaving
+  search.open && !search.leaving && !search.over
 }
 
 ///|
@@ -109,20 +125,71 @@ fn search_open(c : @ui.Ctx, from : Double, wide : Double) -> Unit {
 }
 
 ///|
-/// 取消 or back: the keyboard goes and the field goes back to the list (Search.kt close).
+/// ⌘K laid out Small (the shell's: sfdesk's keys.mbt): the search open, its field at the top with the keys in it, what
+/// can be done here (`offered`) among what it finds; `over` another page than the lists (a chat), drawn over it by the
+/// shell (search_over). Open already, closed.
+pub fn search_summon(c : @ui.Ctx, offered : Array[Offered], over : Bool) -> Unit {
+  if search.open {
+    search_close(c)
+    return
+  }
+  finder_cleared()
+  search.open = true
+  search.leaving = false
+  search.from = 0.0
+  search.wide = 0.0
+  search.focus = true
+  search.summoned = true
+  search.over = over
+  search.offered = offered
+  search_up(c).snap(1.0)
+}
+
+///|
+/// 取消, back or Esc: the keyboard goes and the field goes back to the list (Search.kt close); opened by the keys, there
+/// is no field in the list to go back to: gone at once, the page under it as it was.
 fn search_close(c : @ui.Ctx) -> Unit {
   if !search.open || search.leaving {
     return
   }
-  search.leaving = true
   c.blur()
+  if search.summoned {
+    search_gone()
+    return
+  }
+  search.leaving = true
   search_up(c).animate(0.0, @motion.tween(search_out_ms, ease=Standard))
+}
+
+///|
+/// Closed: the field the list's again, what was found let go.
+fn search_gone() -> Unit {
+  search.open = false
+  search.leaving = false
+  search.summoned = false
+  search.over = false
+  search.offered = []
+  finder_cleared()
+}
+
+///|
+/// The search over another page than the lists (⌘K laid out Small in a chat: search_summon), in the box the shell
+/// gives it over that page, `inset` from its top; nothing while there is none.
+pub fn search_over(c : @ui.Ctx, src : Source, w : Workspace, inset : Double) -> Unit {
+  if search.over {
+    search_page(c, src, w, inset)
+  }
 }
 
 ///|
 /// The page over Home: all of it, nothing under it touched through it.
 // kept across runs: a value (no field of it changes)
 let search_page_box : @ui.Style = @ui.css("w=Full h=Full")
+
+///|
+/// Over another page than the lists (search_over): on the page's ground, nothing of the page under it seen.
+// kept across runs: a value (no field of it changes)
+let search_over_box : @ui.Style = @ui.css("w=Full h=Full bg=Bg")
 
 ///|
 /// Its bar: under the status bar 8 (the home bar's top), 16 either side, 8 under; 取消 12 after the field.
@@ -205,21 +272,29 @@ fn search_page(c : @ui.Ctx, src : Source, w : Workspace, inset : Double) -> Unit
     return
   }
   let up = search_up(c)
-  // back: from one kind to every kind first, then the search away
-  if !search.leaving && app.nav.depth() == 1 {
+  // back (and Esc): from one kind to every kind first, then the search away
+  if !search.leaving && (app.nav.depth() == 1 || search.over) {
     c.take_back(fn() { if !finder_back() { search_close(c) } })
+    if c.key_pressed(@ui.key_escape) || c.key_pressed(@ui.key_escape, in_field=true) {
+      if !finder_back() {
+        search_close(c)
+      }
+    }
+  }
+  if !search.open {
+    return
   }
   let u = up.get()
   // gone back: the field is the list's again
   if search.leaving && !up.moving() {
-    search.open = false
-    search.leaving = false
-    finder_cleared()
+    search_gone()
     return
   }
+  // a row opened from over another page: the search goes as its page comes (as ⌘K's panel does)
+  let close = fn() { if search.over { search_gone() } }
   let t = @sf.theme()
   c.layer(fn() {
-    c.box(style=search_page_box, id=c.id("search/page"), fn() {
+    c.box(style=if search.over { search_over_box } else { search_page_box }, id=c.id("search/page"), fn() {
       // under what is over the lists' box (a phone's status bar: Search.kt windowInsetsPadding(statusBars); the
       // sidebar's top row)
       if inset > 0.0 {
@@ -244,15 +319,24 @@ fn search_page(c : @ui.Ctx, src : Source, w : Workspace, inset : Double) -> Unit
                   placeholder=@sf.t("android-chat.search.field"),
                   font_size=16.0,
                   max_lines=1,
-                  // the keyboard's search key (Search.kt: ImeAction.Search)
+                  // the keyboard's search key (Search.kt: ImeAction.Search); a keyboard's Enter opens the line chosen
                   ime_action=@hostapi.ime_action_search,
+                  enter_sends=!@sf.touch_system(),
                   plain=true,
                   color=t.p.text,
                   placeholder_color=t.p.muted,
                   caret_color=t.p.accent,
                   field=finder_field(),
                 )
-                finder_typed(res.text)
+                match res.submitted {
+                  // (the words as they were: the field gives them up as it sends them)
+                  Some(typed) => {
+                    finder_field().set(typed)
+                    finder_typed(typed)
+                    finder_enter(close)
+                  }
+                  None => finder_typed(res.text)
+                }
                 if search.focus {
                   search.focus = false
                   c.focus_on(c.id("search-field"))
@@ -280,7 +364,9 @@ fn search_page(c : @ui.Ctx, src : Source, w : Workspace, inset : Double) -> Unit
       })
       |> ignore
       // what the words find (sfpages' finder): a row opened, its page over this one, back to it
-      let lb = c.box(style=search_list_box, fn() { finder_list(c, src, w, [], fn() {  }) })
+      let lb = c.box(style=search_list_box, fn() {
+        finder_list(c, src, w, search.offered, close, idle_chats=search.summoned)
+      })
       c.look(lb, { ..@ui.still_look, alpha: u })
     })
     |> ignore

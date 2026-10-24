@@ -108,7 +108,8 @@ pub fn chats_lists(c : @ui.Ctx, src : Source, w : Workspace, frame : ListsFrame)
 /// A finger's search over the lists, while it is open (search.mbt): drawn by the frame after what it lays over the
 /// lists (their bar, faded by `search_away`), in the same box, `inset` what is over it there.
 pub fn chats_search(c : @ui.Ctx, src : Source, w : Workspace, inset : Double) -> Unit {
-  if @ui.pointing() is Finger {
+  // (opened from the field at a list's top, or by ⌘K laid out Small; over another page, the shell's: search_over)
+  if !search.over {
     search_page(c, src, w, inset)
   }
 }
