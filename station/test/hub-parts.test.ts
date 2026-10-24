@@ -14,7 +14,7 @@ import { completionQuestion, parse, request } from "../src/sessions/decision.ts"
 import { sizeOf } from "../src/sessions/image-size.ts";
 import { nextTsAt } from "../src/sessions/internal.ts";
 import { type Counted, HELD_AFTER_MS, type History, type LiveMessage, LiveHub, TranscriptTail, briefInput, inBrief } from "../src/sessions/live.ts";
-import { inBrief as keptInBrief, stateOf } from "../src/read/transcripts.ts";
+import { chainOf, entriesOf, lengthOf, stateOf } from "../src/read/transcripts.ts";
 import { prepare } from "../src/sessions/local-links.ts";
 import { formatSteps, linkedSession } from "../src/sessions/others.ts";
 import { availableEfforts, cheapToLeave, commonEfforts, pickProfile, serves, urgency } from "../src/sessions/pool.ts";
@@ -340,14 +340,15 @@ test("a session at work is followed by the station itself: told from where it en
 /// Where a LiveHub reads a transcript's past (as the readers do: read/transcripts.ts), counting what it is asked.
 function historyOf(path: string, asked: string[] = [], hold?: Promise<void>): History {
   return {
-    state: async () => (asked.push("state"), stateOf("claude", [path])),
+    state: async () => (asked.push("state"), stateOf("claude", [path], null)),
     page: async (_key, before, limit, briefed) => {
       asked.push(`page ${before} ${limit} ${briefed}`);
       await hold;
-      const all = briefed ? keptInBrief("claude", [path]) : readTimeline("claude", path);
-      const upto = Math.min(before, all.length);
+      const chain = chainOf("claude", [path], null);
+      const end = lengthOf(chain);
+      const upto = Math.min(before, end);
       const start = Math.max(0, upto - limit);
-      return { start, entries: all.slice(start, upto), end: all.length };
+      return { start, entries: entriesOf("claude", chain, start, upto, briefed), end };
     },
   };
 }

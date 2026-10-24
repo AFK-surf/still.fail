@@ -3,12 +3,14 @@
 // the Rust station's hub/tests.rs, on a real Store, a fake chat platform and fake runtimes.
 import { CONNECTION_LOST, keyPart, placeIn, sandboxConfig, sandboxName } from "../src/agents/sandbox.ts";
 import assert from "node:assert/strict";
-import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { test } from "node:test";
 import { GO_ON_AFTER_AUTH, GO_ON_AFTER_LOST, GO_ON_AFTER_REFILL, GO_ON_AFTER_SPENT, NUDGE, TOOLS_LOST } from "../src/agents/instructions.ts";
 import { latest } from "../src/agents/migrations.ts";
 import { classifyResult } from "../src/agents/claude.ts";
+import { homesFirst, transcriptPaths } from "../src/read/transcript.ts";
+import { marksDir, stateOf } from "../src/read/transcripts.ts";
 import { sessionKey } from "../src/sessions/hub.ts";
 import { addToThread, autoArchive, archive, archiveBy, archiveChat, bindSingle, configure, deleteSession, newSession, openChat, say as sayIn } from "../src/sessions/lifecycle.ts";
 import { AUTO, MANUAL } from "../src/store/store.ts";
@@ -1169,7 +1171,7 @@ test("a pending message edited before delivery reaches the agent as edited", asy
   await r.close();
 });
 
-test("deleting a session ends its process and removes its workspace and the threads only it was in", async () => {
+test("deleting a session ends its process and removes its workspace, the threads only it was in and what the readers kept of its transcript's reading", async () => {
   const r = new Rig();
   const m = message();
   await r.accept(m);
@@ -1180,6 +1182,10 @@ test("deleting a session ends its process and removes its workspace and the thre
   const transcript = join(r.config.profiles[0]!.home, "projects", "x", `${row.runtimeSessionId}.jsonl`);
   mkdirSync(dirname(transcript), { recursive: true });
   writeFileSync(transcript, "{}\n");
+  // Read as a reader reads it (read/sessions.ts `transcriptState`).
+  const marks = marksDir(r.config.dataDir);
+  stateOf("claude", transcriptPaths("claude", r.config.dataDir, homesFirst(r.config.profiles, row.profile), r.store.runtimeSessions(key)).paths, marks);
+  assert.equal(readdirSync(marks).length, 1);
   assert.ok(existsSync(row.workspace));
   await deleteSession(r.hub, key);
   assert.ok(r.claude.last().disposed);
@@ -1188,6 +1194,7 @@ test("deleting a session ends its process and removes its workspace and the thre
   assert.ok(!existsSync(row.workspace));
   assert.ok(!existsSync(dirname(row.workspace)));
   assert.ok(existsSync(transcript));
+  assert.deepEqual(readdirSync(marks), []);
   await r.close();
 });
 

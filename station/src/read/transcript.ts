@@ -75,6 +75,14 @@ function withBrief(e: TimelineEntry, input: Json | undefined): TimelineEntry {
   return e;
 }
 
+/// Lines' bytes as text (str::from_utf8_lossy): a byte order mark stays, so a line starting with one is no record however
+/// lines are cut into what is decoded at once (here a line at a time, read/tail.ts a piece).
+export const utf8 = new TextDecoder("utf-8", { ignoreBOM: true });
+
+/// How lines are read into entries (`timelineOf`): a change to how many entries a line gives, or which, takes this one
+/// higher, so what was counted and marked of transcripts the way before is read anew (read/transcripts.ts).
+export const READING = 1;
+
 /**
  * An entry as an execution history shows it before it is opened (`brief: true` when anything was left out; the whole of
  * it is read again by its index when it is): a call by what says what it does, a result without what it gave (Slack's
@@ -105,7 +113,7 @@ export function brief(e: TimelineEntry): TimelineEntry {
 }
 
 /// archive.rs `storage`: the file, or its `.zst` once put away.
-const storage = (path: string) => (existsSync(path) ? path : `${path}.zst`);
+export const storage = (path: string) => (existsSync(path) ? path : `${path}.zst`);
 const isFile = (path: string) => {
   try {
     return statSync(path).isFile();
@@ -581,6 +589,8 @@ function codexTimeline(r: Json, state: ReadState, out: TimelineEntry[]) {
     const failed = said >= 0 && /^[1-9]/.test(text.slice(said + 25));
     out.push(result(!failed, callId, clip(text)));
     const count = callId === undefined ? 0 : (state.inner.get(callId) ?? 0);
+    // Done with: what is kept between lines (and at every mark, read/transcripts.ts) is the scripts still running.
+    if (callId !== undefined) state.inner.delete(callId);
     for (let i = 0; i < count; i++) out.push(result(!failed, `${callId ?? ""}#${i}`, tr("station.transcript.inScriptOutput")));
   }
 }
@@ -892,7 +902,7 @@ export function readTimeline(runtime: RuntimeKind, path: string): TimelineEntry[
   const state: ReadState = { inner: new Map() };
   const line = (bytes: Buffer) => {
     // str::lines: a line's \r before its \n goes; from_utf8_lossy.
-    const text = new TextDecoder("utf-8").decode(bytes.at(-1) === 0x0d ? bytes.subarray(0, -1) : bytes);
+    const text = utf8.decode(bytes.at(-1) === 0x0d ? bytes.subarray(0, -1) : bytes);
     if (text === "") return;
     let record: Json;
     try {
