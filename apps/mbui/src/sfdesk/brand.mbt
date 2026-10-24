@@ -12,8 +12,9 @@ fn update_shown() -> Bool {
 /// The desktop app's newer build (brand.tsx UpdateButton, brand.css.ts sidebarUpdate): 更新 at the open sidebar's top
 /// right, 12 in from its edge, or past the rail (and the window's buttons) when it is closed, moved with it; how far it
 /// has downloaded, 正在重启 while it is put in place, 更新失败，重试 when it failed (why, its tip). Pressed, the build is
-/// downloaded and the app restarts as it.
-fn update_button(c : @ui.Ctx, src : Source, bar : Bool, s : Double, inset : Bool) -> Unit {
+/// downloaded and the app restarts as it. `top`: the system's bars over the window (a phone's status bar), which take
+/// what is pressed under them: it goes below them.
+fn update_button(c : @ui.Ctx, src : Source, bar : Bool, s : Double, inset : Bool, top : Double) -> Unit {
   // (its phase as the host says it, what went wrong said once: updates.mbt)
   update_progress() |> ignore
   let v = try Some(@json.parse(@ui.update_state())) catch { _ => None }
@@ -43,7 +44,7 @@ fn update_button(c : @ui.Ctx, src : Source, bar : Bool, s : Double, inset : Bool
   }
   c.cursor(id, Hand)
   c.layer(fn() {
-    let b = c.box(style=update_at, moves="side-update", left~, top=update_top, tx~, id~, fn() {
+    let b = c.box(style=update_at, moves="side-update", left~, top=top + update_top, tx~, id~, fn() {
       @sf.pill(c, label, tone=Accented)
     })
     c.semantics(b, Button, id~, label~)
