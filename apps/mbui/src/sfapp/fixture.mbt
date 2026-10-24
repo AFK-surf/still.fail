@@ -627,9 +627,8 @@ fn fixture_topic_inner(f : Fixture, name : String, params : Map[String, Json]) -
     "accounts" => if f.mode == "signin" { Some([]) } else { Some([account]) }
     // a chat's files downloaded (downloads_fixture.mbt)
     "downloads" => Some(fixture_downloads_topic())
-    // a draft's files going up in the core (composer.add): up at once
-    "composer" =>
-      Some({ "files": Json::array(fix_composers.get(text(Some(Json::object(params)), "key")).unwrap_or([])) })
+    // what is written, as the core's composers keep it (compose_fixture.mbt): its files up at once
+    "composer" => Some(fix_compose_view(f, text(Some(Json::object(params)), "key")))
     // signed in with no workspace yet (landing.mbt): landing, landing-invited (an invitation waiting), blocked (the
     // account not let into this app)
     "workspaces" if f.mode == "landing" || f.mode == "landing-invited" || f.mode == "blocked" => {

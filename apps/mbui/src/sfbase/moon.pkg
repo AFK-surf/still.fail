@@ -5,6 +5,7 @@ import {
   "mbui/kit",
   "mbui/codec",
   "mbui/motion",
+  "mbui/pixels",
   "stillfail/sf",
   "stillfail/sfapp/settings",
 }
