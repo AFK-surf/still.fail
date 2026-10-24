@@ -3,6 +3,7 @@
 // pages), taken in here by name.
 
 pub using @sfbase {
+  stations_at_glance,
   agent_of,
   app,
   arrangement_none,

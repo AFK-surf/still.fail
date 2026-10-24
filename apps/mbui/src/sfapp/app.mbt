@@ -301,7 +301,7 @@ pub fn view(c : @ui.Ctx, src : Source) -> Unit {
   // iPad): the web app's wide frame (wide.mbt); one regular in width alone (a phone on its side) or half open on its
   // back half: Android's, the pages the whole width with the latest chats at a corner (corners.mbt); otherwise the
   // phone's pages
-  wide_on.val = is_wide(c) || is_touch_wide()
+  wide_on.val = @sfdesk.is_wide(c) || @sfdesk.is_touch_wide()
   // the wide frame's lines set as the desktop app's pages set them (a browser's way)
   @ui.set_web_lines(wide_on.val)
   corners_on.val = is_corners() && !wide_on.val
@@ -424,8 +424,10 @@ fn signed_in(c : @ui.Ctx, src : Source) -> Unit {
       // files being kept on the device, said once kept (keep.mbt)
       keeps_frame(c)
       if wide_on.val {
-        // the rail, the sidebar and the page beside it (wide.mbt); what opens over them after them
-        wide_frame(c, src, w, all, invited)
+        // the wide frame's keys (wide_keys.mbt), then the rail, the sidebar and the page beside it (sfdesk's frame.mbt,
+        // this package's pages given to it: wide_pages.mbt); what opens over them after them
+        wide_keys(c, src, w)
+        @sfdesk.frame(c, src, w, all, invited, desk_pages())
         // a station's screen: over the whole window, as Android's ScreenActivity is over the app
         match app.nav.top() {
           Screen(at) =>
@@ -981,7 +983,7 @@ fn sign_in_body(c : @ui.Ctx, src : Source) -> Unit {
   let t = @sf.theme()
   let busy = (src.signing_in)()
   // a desktop's: the picture and 登录或注册 alone, no words around them (asked for, 2026-10-23)
-  let wide = is_wide(c)
+  let wide = @sfdesk.is_wide(c)
   c.box(
     w=Fill(1.0),
     h=Fill(1.0),

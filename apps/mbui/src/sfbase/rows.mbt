@@ -222,3 +222,29 @@ pub fn row_agent_groups(item : ChatItem) -> Array[RowAgent] {
   }
   groups
 }
+
+///|
+/// The stations at a glance, as the core has them in workspace `ws` (StationGlyph.kt's counts: asleep while the core
+/// reaches nothing at all), and in words: asleep, what the core cannot reach says it; else the stations (the core's),
+/// and what is wrong with them.
+pub fn stations_at_glance(src : Source, ws : String) -> (@sf.GlyphCounts, String) {
+  let chats = (src.topic)("chats", { "scope": Json::string(ws), "mine": Json::boolean(false) })
+  let g = field(chats.value, "glyph")
+  let status = (src.topic)("status", { "workspace": Json::string(ws) }).value
+  let asleep = text(status, "state") == "trouble"
+  let glyph : @sf.GlyphCounts = {
+    online: count(g, "online"),
+    dim: count(g, "dim"),
+    failing: count(g, "failing"),
+    working: count(g, "working"),
+    connecting: count(g, "connecting"),
+    asleep,
+  }
+  let said = if asleep { text(status, "text") } else { text(g, "label") }
+  let words = match field(chats.value, "trouble") {
+    _ if said == "" => ""
+    Some(Object(_)) as trouble => @sf.t("android-chat.home.stations.trouble", args=[("said", said), ("trouble", text(trouble, "text"))])
+    _ => @sf.t("android-chat.home.stations", args=[("said", said)])
+  }
+  (glyph, words)
+}

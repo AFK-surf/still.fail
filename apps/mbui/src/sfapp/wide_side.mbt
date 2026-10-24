@@ -24,7 +24,7 @@ priv enum SideItem {
 ///|
 /// The sidebar `width` wide (its 8 at the left over the rail's empty side): what the place lists.
 fn sidebar(c : @ui.Ctx, src : Source, w : Workspace, width : Double) -> Unit {
-  match lit_place() {
+  match @sfdesk.lit_place() {
     "settings" => settings_side(c, src, w)
     "files" => files_side(c, src, w)
     "stations" => stations_side(c, src, w)
@@ -32,103 +32,6 @@ fn sidebar(c : @ui.Ctx, src : Source, w : Workspace, width : Double) -> Unit {
     // the chats' lists, 奏 and 已归档 among them (wide_lists.mbt)
     _ => lists_side(c, src, w, width)
   }
-}
-
-///|
-/// The band's first row (Sidebar.css.ts brand): beside the rail only a margin (8); in a window with its buttons in the
-/// app's top row, their row (44), which drags the window.
-fn side_top(c : @ui.Ctx) -> Unit {
-  let id = c.id("side/top")
-  if @ui.window_inset() && !wide.folded {
-    c.window_drag(id)
-  }
-  c.box(w=Fill(1.0), h=Px(side_top_h()), id~, fn() {  }) |> ignore
-}
-
-///|
-/// The band's first row's height: the window's buttons' row (44) where they are in the app's top row, else a margin
-/// (8); none in the closed bar, which starts under that row (Sidebar.css.ts brand, closed): where the block's move has
-/// got to (wide_frame's --brand).
-fn side_top_h() -> Double {
-  rail_ws.brand_h
-}
-
-///|
-let side_top_inset : Double = 44.0
-
-///|
-let side_top_web : Double = 8.0
-
-///|
-/// A row of a sidebar's list (Sidebar.css.ts navRow): 32 high at least, 6 by 10 in, its corner the nav's; the
-/// pointer's ground on hover, the selected one's ground when it is the page in view. True on the frame after a press.
-fn nav_row(
-  c : @ui.Ctx,
-  key : String,
-  on : Bool,
-  body : () -> Unit,
-  pady? : Double = 6.0,
-  align? : @ui.Align = ACenter,
-) -> Bool {
-  let t = @sf.theme()
-  let id = c.id(key)
-  c.cursor(id, Hand)
-  c.box(
-    dir=Row,
-    w=Fill(1.0),
-    min_h=32.0,
-    padx=10.0,
-    pady~,
-    gap=8.0,
-    align~,
-    radius=12.0,
-    bg=nav_ground(c, key, c.hovered(id) || c.pressed(id), on),
-    id~,
-    body,
-  )
-  |> ignore
-  c.clicked(id)
-}
-
-///|
-/// A row's or a place's ground as the web moves it (Sidebar.css.ts navRow, Rail.css.ts item: `transition: background
-/// 140ms` ease out): the pointer's ground in and out, the lit one's, as the state changes.
-fn nav_ground(c : @ui.Ctx, key : String, hover : Bool, on : Bool, lit? : Int64) -> Int64 {
-  let t = @sf.theme()
-  let lit = lit.unwrap_or(t.p.selected)
-  let h = @kit.animate(c, key + "/hover", if hover { 1.0 } else { 0.0 }, transition=nav_fade)
-  let o = @kit.animate(c, key + "/on", if on { 1.0 } else { 0.0 }, transition=nav_fade)
-  if h <= 0.0 && o <= 0.0 {
-    0L
-  } else {
-    @sf.over(@sf.alpha(t.p.hover, h * (1.0 - o)), @sf.alpha(lit, o))
-  }
-}
-
-///|
-/// What a state's ground changes over (vars.dur: 140 ms, ease out).
-// kept across runs: a value (no field of it changes)
-let nav_fade : @motion.Spec = @motion.tween(@sf.dur_ms, ease=Out)
-
-///|
-/// A heading over a part of a list (Sidebar.css.ts navHeading): 12 on 18, muted, 14 above, 4 under.
-fn nav_heading(c : @ui.Ctx, label : String) -> Unit {
-  let t = @sf.theme()
-  c.box(w=Fill(1.0), pl=8.0, pr=8.0, pt=14.0, pb=4.0, fn() {
-    c.text(label, size=12.0, color=t.p.muted, wrap=false, line=18.0) |> ignore
-  })
-  |> ignore
-}
-
-///|
-/// A row's words, 13 on 20, as long as there is room.
-fn nav_words(c : @ui.Ctx, words : String, color? : Int64, weight? : Int = 400) -> Unit {
-  let t = @sf.theme()
-  c.box(w=Fill(1.0), fn() {
-    c.text(words, size=13.0, weight~, color=color.unwrap_or(t.p.text), wrap=false, line=20.0)
-    |> ignore
-  })
-  |> ignore
 }
 
 // ── the chats ───────────────────────────────────────────────────────────
@@ -198,7 +101,7 @@ fn chats_pane(c : @ui.Ctx, src : Source, w : Workspace, filter : String) -> Unit
     c.list(key, lines.length(), 54.0, fn(i) {
       let n = c.box(w=Fill(1.0), padx=8.0, fn() {
         match lines[i] {
-          Heading(label) => nav_heading(c, label)
+          Heading(label) => @sfdesk.nav_heading(c, label)
           Chat(item) => {
             let on = match open {
               Some(r) => r.station == item.station && (r.session == item.session || r.session == item.id)
@@ -209,8 +112,8 @@ fn chats_pane(c : @ui.Ctx, src : Source, w : Workspace, filter : String) -> Unit
           }
           Words(words, bad) => side_said(c, words, bad)
           // (Sidebar.tsx: the stations' page by its link)
-          NoStation => side_said(c, "", false, stations=Some(fn() { rail_go(c, src, w, "stations") }))
-          Breathing => side_breathing(c)
+          NoStation => side_said(c, "", false, stations=Some(fn() { @sfdesk.rail_go(c, src, w, desk_pages(), "stations") }))
+          Breathing => @sfdesk.side_breathing(c)
           // the band: its top row, 新建对话's (6 + 32 + 2), and 4
           Top => side_space(c, band + 4.0)
           Foot => side_space(c, 12.0)
@@ -267,8 +170,8 @@ fn pin_moved(key : String, days : Array[ChatDay]) -> Bool {
 fn side_held(c : @ui.Ctx, key : String) -> Bool {
   let (px, _, _) = c.pointer()
   c.list_moving(key) ||
-  (rail_ws.peeking && px >= closed_bar_in + rail_closed_w && px < closed_bar_in + rail_closed_w + wide.side_w) ||
-  (!wide.folded && px >= rail_w - 8.0 && px < rail_w + wide.side_w)
+  (@sfdesk.wide.peeking && px >= @sfdesk.closed_bar_in + @sfdesk.rail_closed_w && px < @sfdesk.closed_bar_in + @sfdesk.rail_closed_w + @sfdesk.wide.side_w) ||
+  (!@sfdesk.wide.folded && px >= @sfdesk.rail_w - 8.0 && px < @sfdesk.rail_w + @sfdesk.wide.side_w)
 }
 
 ///|
@@ -280,11 +183,11 @@ fn lists_band(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
   let (view, _) = chats_of(src, w.id, "all")
   // (in the closed bar, its ground the bar's: shell.css.ts dock, closed, sets the sidebar's ground to a panel's)
   // (its ground the block's: shell.css.ts dock, closed, a panel's; moved with it)
-  c.box(w=Fill(1.0), glass=@sf.glass_floating(tint=@sf.mix(closed_ground(), rail_ws.band, t.p.sidebar)), fn() {
-    side_top(c)
+  c.box(w=Fill(1.0), glass=@sf.glass_floating(tint=@sf.mix(@sfdesk.closed_ground(), @sfdesk.wide.band, t.p.sidebar)), fn() {
+    @sfdesk.side_top(c)
     // in the closed bar, what stands in its top right corner (the filter) 6 from its top and side, the band ending 6
     // under it (Sidebar.css.ts navNew, closed)
-    let in_bar = rail_ws.in_bar
+    let in_bar = @sfdesk.wide.in_bar
     c.box(
       dir=Row,
       w=Fill(1.0),
@@ -297,10 +200,10 @@ fn lists_band(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
       fn() {
       let is_new = app.nav.top() is NewChat
       c.box(w=Fill(1.0), fn() {
-        if nav_row(c, "side/new", is_new, fn() {
+        if @sfdesk.nav_row(c, "side/new", is_new, fn() {
             c.box(tx=-1.0, fn() { @sf.icon(c, "compose", size=16.0, color=t.p.muted) |> ignore })
             |> ignore
-            nav_words(c, tr("web-main.sidebar.newChat"))
+            @sfdesk.nav_words(c, tr("web-main.sidebar.newChat"))
           }) {
           new_chat_wide()
         }
@@ -308,7 +211,7 @@ fn lists_band(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
       |> ignore
       match view {
         // (lit while it narrows the chats or another list is shown: 奏, 已归档)
-        Some(v) if v.stations > 0 => filter_button(c, filter, list_mode(src, w) != 0, in_bar)
+        Some(v) if v.stations > 0 => filter_button(c, filter, @sfdesk.list_mode(src, w) != 0, in_bar)
         _ => ()
       }
     },
@@ -319,6 +222,10 @@ fn lists_band(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
   })
   |> ignore
 }
+
+///|
+/// The filter's corner in the closed bar's corner, concentric with it as the rail's places are (Rail.css.ts item: 9).
+let rail_ground_r : Double = 9.0
 
 ///|
 /// Room in a list, `h` high (for the band over it, at its foot).
@@ -359,13 +266,13 @@ fn filter_button(c : @ui.Ctx, filter : String, narrowed : Bool, in_bar : Bool) -
   let id = c.id("side/filter")
   c.cursor(id, Hand)
   if c.clicked(id) {
-    wide.filter_open = !wide.filter_open
-    wide.menu = None
+    @sfdesk.wide.filter_open = !@sfdesk.wide.filter_open
+    @sfdesk.wide.menu = None
   }
   let narrowed = narrowed || filter != "all"
   // its ground and colour moved over 140 ms (page.css.ts iconBtn: transition background, color)
-  let hot = @kit.animate(c, "side/filter/hover", if c.hovered(id) || wide.filter_open { 1.0 } else { 0.0 }, transition=nav_fade)
-  let lit = @kit.animate(c, "side/filter/on", if narrowed { 1.0 } else { 0.0 }, transition=nav_fade)
+  let hot = @kit.animate(c, "side/filter/hover", if c.hovered(id) || @sfdesk.wide.filter_open { 1.0 } else { 0.0 }, transition=@sfdesk.nav_fade)
+  let lit = @kit.animate(c, "side/filter/on", if narrowed { 1.0 } else { 0.0 }, transition=@sfdesk.nav_fade)
   c.box(
     w=Px(32.0),
     h=Px(32.0),
@@ -383,24 +290,6 @@ fn filter_button(c : @ui.Ctx, filter : String, narrowed : Bool, in_bar : Bool) -
 }
 
 ///|
-/// Rows to come, breathing (Waiting shape rows, dense).
-fn side_breathing(c : @ui.Ctx) -> Unit {
-  let t = @sf.theme()
-  let breath = @sf.breath(c)
-  c.box(w=Fill(1.0), pt=8.0, gap=12.0, padx=10.0, fn() {
-    for k in 0..<6 {
-      c.box(w=Fill(1.0), gap=6.0, opacity=breath, fn() {
-        c.box(w=Px(if k % 2 == 0 { 120.0 } else { 150.0 }), h=Px(12.0), radius=6.0, bg=t.p.neutral_bg, fn() {  })
-        |> ignore
-        c.box(w=Px(180.0), h=Px(10.0), radius=5.0, bg=t.p.neutral_bg, fn() {  }) |> ignore
-      })
-      |> ignore
-    }
-  })
-  |> ignore
-}
-
-///|
 /// A chat's row (Sidebar.tsx ChatRow): its state's mark before its title (500 while something in it is unread), its
 /// station's mark, then where it stands or the last thing said, who is in it at the second line's end; pointed at, the
 /// time in their place and 归档 at its top right; pressed, its chat beside the list; right clicked, its menu.
@@ -409,21 +298,21 @@ fn side_chat_row(c : @ui.Ctx, src : Source, item : ChatItem, lead : String, on :
   let key = item.station + "/" + item.id
   let id = c.id("side/row/" + key)
   c.cursor(id, Hand)
-  if c.clicked(id) && wide.renaming != key {
+  if c.clicked(id) && @sfdesk.wide.renaming != key {
     open_row(item)
   }
   let menu = item.offline is None && !item.pending
   match c.right_clicked(id) {
     Some((x, y)) if menu => {
-      wide.menu = Some((key, item, x, y))
-      wide.filter_open = false
-      wide.attention_open = false
+      @sfdesk.wide.menu = Some((key, item, x, y))
+      @sfdesk.wide.filter_open = false
+      @sfdesk.wide.attention_open = false
     }
     _ => ()
   }
   // its menu open (beside the pointer, not over the page: ContextMenu modal false), still pointed at while the pointer
   // stays on it
-  let menu_on = match wide.menu {
+  let menu_on = match @sfdesk.wide.menu {
     Some((k, _, _, _)) if k == key =>
       match c.rect_of(id) {
         Some((rx, ry, rw, rh)) => {
@@ -446,7 +335,7 @@ fn side_chat_row(c : @ui.Ctx, src : Source, item : ChatItem, lead : String, on :
       gap=8.0,
       align=AStart,
       radius=12.0,
-      bg=nav_ground(c, "side/row/" + key, hover || c.pressed(id), on),
+      bg=@sfdesk.nav_ground(c, "side/row/" + key, hover || c.pressed(id), on),
       id~,
       fn() {
         c.box(w=Fill(1.0), gap=2.0, opacity=if item.settled { 0.45 } else { 1.0 }, fn() {
@@ -455,7 +344,7 @@ fn side_chat_row(c : @ui.Ctx, src : Source, item : ChatItem, lead : String, on :
             if tone != "" {
               c.box(w=Px(10.0), align=ACenter, fn() { chat_mark(c, tone, pop=key) }) |> ignore
             }
-            if wide.renaming == key {
+            if @sfdesk.wide.renaming == key {
               side_rename(c, src, item)
             } else {
               c.box(w=Fill(1.0), opacity=dim, fn() {
@@ -603,7 +492,7 @@ fn side_aside(c : @ui.Ctx, src : Source, item : ChatItem, lead : String, on : Bo
   // (the row's ground round each face: the folded bar's, a floating panel's, when the list is in it)
   let ground = if on {
     side_face_on
-  } else if wide.folded {
+  } else if @sfdesk.wide.folded {
     side_face_bar
   } else {
     side_face_ground
@@ -775,7 +664,7 @@ fn archive_row(c : @ui.Ctx, src : Source, item : ChatItem) -> Unit {
     match app.nav.top() {
       Chat(r) if r.station == item.station && (r.session == item.session || r.session == item.id) => {
         app.nav.pop() |> ignore
-        wide.landed = ""
+        @sfdesk.wide.landed = ""
       }
       _ => ()
     }
@@ -819,11 +708,11 @@ fn settings_side(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
     Archived => Some(@settings.Route::Archive)
     _ => None
   }
-  let rails = rail_items(src, w.id)
+  let rails = @sfdesk.rail_items(src, w.id)
   let page = fn(r : @settings.Route, key : String, icon : String, label : String) {
-    if nav_row(c, "settings-nav/" + key, here == Some(r), fn() {
+    if @sfdesk.nav_row(c, "settings-nav/" + key, here == Some(r), fn() {
         @sf.icon(c, icon, size=16.0, color=t.p.muted) |> ignore
-        nav_words(c, label)
+        @sfdesk.nav_words(c, label)
       }) {
       while app.nav.depth() > 1 {
         if !app.nav.pop() {
@@ -835,11 +724,11 @@ fn settings_side(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
   }
   let here_of = @settings.here_of(settings_core(src, w), w.id, w.name)
   c.box(w=Fill(1.0), h=Fill(1.0), fn() {
-    side_top(c)
+    @sfdesk.side_top(c)
     c.box(w=Fill(1.0), h=Fill(1.0), padx=8.0, pt=4.0, fn() {
-      if nav_row(c, "settings-nav/back", false, fn() {
+      if @sfdesk.nav_row(c, "settings-nav/back", false, fn() {
           @sf.icon(c, "arrow-left", size=16.0, color=t.p.muted) |> ignore
-          nav_words(c, tr("web-pages.settings.nav.backToChats"))
+          @sfdesk.nav_words(c, tr("web-pages.settings.nav.backToChats"))
         }) {
         while app.nav.depth() > 1 {
           if !app.nav.pop() {
@@ -849,9 +738,9 @@ fn settings_side(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
         if app.nav.top() != Home {
           app.nav.replace(Home)
         }
-        wide.landed = ""
+        @sfdesk.wide.landed = ""
       }
-      nav_heading(c, tr("web-pages.settings.nav.client"))
+      @sfdesk.nav_heading(c, tr("web-pages.settings.nav.client"))
       page(@settings.Route::Appearance, "appearance", "sliders", tr("web-pages.settings.nav.appearance"))
       page(@settings.Route::Notifications, "notifications", "bell", tr("web-pages.settings.nav.notifications"))
       page(@settings.Route::Permissions, "permissions", "key", tr("web-pages.settings.nav.permissions"))
@@ -863,7 +752,7 @@ fn settings_side(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
       if @ui.platform() == 0 {
         page(@settings.Route::LocalStation, "local-station", "monitor", tr("web-pages.localStation.title"))
       }
-      nav_heading(c, "Station")
+      @sfdesk.nav_heading(c, "Station")
       if !rails.contains("stations") {
         page(@settings.Route::Stations, "stations", "server", "Station")
       }
@@ -879,7 +768,7 @@ fn settings_side(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
       if !rails.contains("usage") {
         page(@settings.Route::Usage, "usage", "chart", tr("web-pages.settings.nav.usage"))
       }
-      nav_heading(c, "Cloud")
+      @sfdesk.nav_heading(c, "Cloud")
       page(@settings.Route::Workspace, "workspace", "users", "Workspace · " + w.name)
       page(@settings.Route::Security, "security", "shield-check", tr("web-pages.security.title"))
       page(@settings.Route::Vault, "vault", "key", tr("web-pages.vault.title"))
@@ -918,7 +807,7 @@ fn decisions_pane(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
           "" => text(v, "title")
           q => q
         }
-        if nav_row(c, "zou-nav/" + decision_key(d), i == front, pady=8.0, align=AStart, fn() {
+        if @sfdesk.nav_row(c, "zou-nav/" + decision_key(d), i == front, tall=true, fn() {
             c.box(w=Fill(1.0), gap=2.0, fn() {
               c.box(w=Fill(1.0), max_h=40.0, clip=true, fn() {
                 c.text(question, size=13.0, weight=500, color=t.p.text, line=20.0) |> ignore

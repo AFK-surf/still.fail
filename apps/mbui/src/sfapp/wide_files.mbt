@@ -54,7 +54,7 @@ fn files_side(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
   }
   let views = stations_listed(src, w)
   c.box(style=place_side, fn() {
-    side_top(c)
+    @sfdesk.side_top(c)
     c.box(style=place_list, fn() {
       let stations = match list {
         Some(l) => l.filter(fn(s) { s.drive })
@@ -72,7 +72,7 @@ fn files_side(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
       }
       match (list, error) {
         (None, Some(e)) => c.text(e, style=place_trouble) |> ignore
-        (None, None) => side_breathing(c)
+        (None, None) => @sfdesk.side_breathing(c)
         _ => ()
       }
       if list is Some(_) && stations.length() == 0 {
@@ -86,7 +86,7 @@ fn files_side(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
       let kid = c.id("files/keep")
       let keeping = fdrag_target(c, kid, "keep", None, "", true, true, 0, outside=false) is Some(_)
       c.box(style=if keeping { fdrag_keep_on } else { fdrag_keep }, id=kid, fn() {
-      nav_heading(c, tr("web-pages.files.favorites"))
+      @sfdesk.nav_heading(c, tr("web-pages.files.favorites"))
       if favs.length() == 0 {
         c.box(style=files_hint, fn() {
           @sf.icon(c, "star", size=files_icon, color=t.p.subtle) |> ignore
@@ -103,7 +103,7 @@ fn files_side(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
             fdrag_side_row(c, "fav/" + f.station + "/" + f.root + "/" + f.path, into, f.name, files_writes(src, w, st), st.transfers, fn() {
               if c.clicked(rid) {
                 @sfdesk.favorite_remove(src, w.id, f.station, f.root, f.path)
-              } else if nav_row(c, "files/fav/" + f.station + "/" + f.root + "/" + f.path, lit(f.station, f.root, f.path), fn() {
+              } else if @sfdesk.nav_row(c, "files/fav/" + f.station + "/" + f.root + "/" + f.path, lit(f.station, f.root, f.path), fn() {
                   @sf.icon(c, "folder", size=files_icon, color=t.p.muted) |> ignore
                   c.text(f.name, style=place_name) |> ignore
                   c.text(st.name, style=place_meta) |> ignore
@@ -123,7 +123,7 @@ fn files_side(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
       |> ignore
       // Station: each, opened to its places
       if stations.length() > 0 {
-        nav_heading(c, "Station")
+        @sfdesk.nav_heading(c, "Station")
       }
       // this machine's first (the station this Mac is), then as the workspace lists them
       let here_station = files_this_machine()
@@ -141,7 +141,7 @@ fn files_side(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
           }
         } else {
           let row = fn() {
-            if nav_row(
+            if @sfdesk.nav_row(
                 c,
                 "files/station/" + s.station,
                 match start {
@@ -204,7 +204,7 @@ fn files_side(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
             let (name, path, disk) = p
             c.box(style=files_place_in, fn() {
               fdrag_side_row(c, "place/" + s.station + "/" + path, { station: s.station, root: Some(path), path: "" }, name, files_writes(src, w, s), s.transfers, fn() {
-                if nav_row(c, "files/place/" + s.station + "/" + path, lit(s.station, path, ""), fn() {
+                if @sfdesk.nav_row(c, "files/place/" + s.station + "/" + path, lit(s.station, path, ""), fn() {
                     @sf.icon(c, if disk { "disk" } else { "folder" }, size=files_icon, color=t.p.muted) |> ignore
                     c.text(name, style=place_name) |> ignore
                   }) {
@@ -224,13 +224,13 @@ fn files_side(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
         }
       }
       if pinned.length() > 0 {
-        nav_heading(c, tr("web-pages.files.shared"))
+        @sfdesk.nav_heading(c, tr("web-pages.files.shared"))
       }
       for x in pinned {
         let (s, r) = x
         let name = if r.name != "" { r.name } else { dv_name(r.path) }
         fdrag_side_row(c, "shared/" + s.station + "/" + r.path, { station: s.station, root: Some(r.path), path: "" }, name, files_writes(src, w, s), s.transfers, fn() {
-          if nav_row(c, "files/shared/" + s.station + "/" + r.path, lit(s.station, r.path, ""), fn() {
+          if @sfdesk.nav_row(c, "files/shared/" + s.station + "/" + r.path, lit(s.station, r.path, ""), fn() {
               @sf.icon(c, "pin", size=files_icon, color=t.p.muted) |> ignore
               c.text(name, style=place_name) |> ignore
               c.text(s.name, style=place_meta) |> ignore
@@ -334,7 +334,7 @@ fn wide_folder(c : @ui.Ctx, src : Source, w : Workspace, at : DriveAt) -> Unit {
   // what is dragged moved on or let go; the files picked to go up
   fdrag_frame(c, src, w)
   dv_take_picked(src, here, [])
-  let room = c.width - rail_w - (if wide.folded { 0.0 } else { wide.side_w })
+  let room = c.width - @sfdesk.rail_w - (if @sfdesk.wide.folded { 0.0 } else { @sfdesk.wide.side_w })
   @sfdesk.files_shell(c, src, w.id, stations, here, room, {
     go: fn(to, _) { files_go(to) },
     head: fn(c, f, split_on, front_it) { files_side_head(c, src, w, stations, f, split_on, front_it) },

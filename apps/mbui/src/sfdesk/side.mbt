@@ -1,0 +1,153 @@
+// What every sidebar is made of (ember web/src/Sidebar.css.ts brand, navRow, navHeading, navEmpty; SidebarList.tsx
+// NavItem): its top row, its rows to press, a heading over a part of a list, rows to come breathing.
+
+///|
+/// The band's first row (Sidebar.css.ts brand): beside the rail only a margin (8); in a window with its buttons in the
+/// app's top row, their row (44), which drags the window; none in the closed bar, which starts under that row: where
+/// the block's move has got to (frame's --brand).
+pub fn side_top(c : @ui.Ctx) -> Unit {
+  let id = c.id("side/top")
+  if @ui.window_inset() && !wide.folded {
+    c.window_drag(id)
+  }
+  c.box(style=side_full.then(@ui.style(h=Fixed(wide.brand_h))), id~, fn() {  }) |> ignore
+}
+
+///|
+/// The band's first row's height (side_top).
+pub fn side_top_h() -> Double {
+  wide.brand_h
+}
+
+///|
+let side_top_inset : Double = 44.0
+
+///|
+let side_top_web : Double = 8.0
+
+///|
+// kept across runs: a value (no field of it changes)
+let side_full : @ui.Style = @ui.style(w=Full)
+
+///|
+/// A row of a sidebar's list (Sidebar.css.ts navRow): 32 high at least, 6 by 10 in (`tall`: 8, its words from the
+/// top), its corner the nav's; the pointer's ground on hover, the selected one's ground when it is the page in view.
+/// True on the frame after a press.
+pub fn nav_row(
+  c : @ui.Ctx,
+  key : String,
+  on : Bool,
+  body : () -> Unit,
+  tall? : Bool = false,
+  align? : @ui.Align = ACenter,
+) -> Bool {
+  let id = c.id(key)
+  c.cursor(id, Hand)
+  let look = if tall { nav_row_tall } else { nav_row_look.then(@ui.style(align~)) }
+  let ground = nav_ground(c, key, c.hovered(id) || c.pressed(id), on)
+  c.box(style=look.then(@ui.style(bg=Data(ground))), id~, body) |> ignore
+  c.clicked(id)
+}
+
+///|
+// kept across runs: a value (no field of it changes)
+let nav_row_look : @ui.Style = @ui.style(row=true, w=Full, min_h=S8, px=S2_5, py=S1_5, gap=S2, radius=Xl)
+
+///|
+// kept across runs: a value (no field of it changes)
+let nav_row_tall : @ui.Style = @ui.style(row=true, w=Full, min_h=S8, px=S2_5, py=S2, gap=S2, align=AStart, radius=Xl)
+
+///|
+/// A row's or a place's ground as the web moves it (Sidebar.css.ts navRow, Rail.css.ts item: `transition: background
+/// 140ms` ease out): the pointer's ground in and out, the lit one's (`lit`, the selected grey by default), as the state
+/// changes.
+pub fn nav_ground(c : @ui.Ctx, key : String, hover : Bool, on : Bool, lit? : Int64) -> Int64 {
+  let t = @sf.theme()
+  let lit = lit.unwrap_or(t.p.selected)
+  let h = @kit.animate(c, key + "/hover", if hover { 1.0 } else { 0.0 }, transition=nav_fade)
+  let o = @kit.animate(c, key + "/on", if on { 1.0 } else { 0.0 }, transition=nav_fade)
+  if h <= 0.0 && o <= 0.0 {
+    0L
+  } else {
+    @sf.over(@sf.alpha(t.p.hover, h * (1.0 - o)), @sf.alpha(lit, o))
+  }
+}
+
+///|
+/// What a state's ground changes over (vars.dur: 140 ms, ease out).
+// kept across runs: a value (no field of it changes)
+pub let nav_fade : @motion.Spec = @motion.tween(@sf.dur_ms, ease=Out)
+
+///|
+/// A heading over a part of a list (Sidebar.css.ts navHeading): 12 on 18, muted, 14 above, 4 under.
+pub fn nav_heading(c : @ui.Ctx, label : String) -> Unit {
+  c.box(style=nav_heading_box, fn() { c.text(label, style=nav_heading_words) |> ignore }) |> ignore
+}
+
+///|
+// kept across runs: a value (no field of it changes)
+let nav_heading_box : @ui.Style = @ui.style(w=Full, px=S2, pt=S3_5, pb=S1)
+
+///|
+// kept across runs: a value (no field of it changes)
+let nav_heading_words : @ui.TextStyle = @ui.text_style(size=Xs, color=Muted, leading=L5, wrap=false)
+
+///|
+/// A row's words, 13 on 20, as long as there is room (`color`: the words' own by default).
+pub fn nav_words(c : @ui.Ctx, words : String, color? : Int64) -> Unit {
+  let look = match color {
+    Some(k) => nav_words_look.then(@ui.text_style(color=Data(k)))
+    None => nav_words_look
+  }
+  c.text(words, style=look) |> ignore
+}
+
+///|
+// kept across runs: a value (no field of it changes)
+let nav_words_look : @ui.TextStyle = @ui.text_style(size=Sm, color=Fg, leading=L6, wrap=false, w=Full)
+
+///|
+/// Rows to come, breathing (Waiting shape rows, dense): six, each a title and a line under it.
+pub fn side_breathing(c : @ui.Ctx) -> Unit {
+  let breath = @sf.breath(c)
+  c.box(style=breathing_list, fn() {
+    for k in 0..<6 {
+      let row = c.box(style=breathing_row, fn() {
+        c.box(style=if k % 2 == 0 { breathing_title } else { breathing_title_long }, fn() {  }) |> ignore
+        c.box(style=breathing_line, fn() {  }) |> ignore
+      })
+      c.look(row, @ui.look(alpha=breath))
+    }
+  })
+  |> ignore
+}
+
+///|
+/// The waiting rows' bars: a title 120 or 150 long and 12 high, a line 180 long and 10 high (Waiting dense).
+let breath_title_w : Double = 120.0
+
+///|
+let breath_title_long_w : Double = 150.0
+
+///|
+let breath_line_w : Double = 180.0
+
+///|
+// kept across runs: a value (no field of it changes)
+let breathing_list : @ui.Style = @ui.style(w=Full, pt=S2, gap=S3, px=S2_5)
+
+///|
+// kept across runs: a value (no field of it changes)
+let breathing_row : @ui.Style = @ui.style(w=Full, gap=S1_5)
+
+///|
+// kept across runs: a value (no field of it changes)
+let breathing_title : @ui.Style = @ui.style(w=Fixed(breath_title_w), h=S3, radius=Full, bg=Neutral)
+
+///|
+// kept across runs: a value (no field of it changes)
+let breathing_title_long : @ui.Style = @ui.style(w=Fixed(breath_title_long_w), h=S3, radius=Full, bg=Neutral)
+
+///|
+// kept across runs: a value (no field of it changes)
+let breathing_line : @ui.Style = @ui.style(w=Fixed(breath_line_w), h=S2_5, radius=Full, bg=Neutral)

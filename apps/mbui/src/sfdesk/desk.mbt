@@ -5,6 +5,7 @@
 ///|
 /// What this package keeps put back as the app begins anew (its reset).
 pub fn reset() -> Unit {
+  wide_reset()
   context_reset()
   switcher_reset()
   browse_reset()

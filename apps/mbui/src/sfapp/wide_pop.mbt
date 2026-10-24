@@ -10,8 +10,8 @@ fn wide_overlays(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
   // a right click's menu (sfdesk/context_menu.mbt)
   @sfdesk.context_menu(c)
   row_menu(c, src)
-  rail_menu(c, src, w)
-  rail_adder(c, src, w)
+  // the rail's menu, and what can be added beside it while it is changed (sfdesk's rail.mbt)
+  @sfdesk.rail_overlays(c, src, w, desk_pages())
   wide_filter_menu(c, src, w)
   attention_panel(c, src, w)
   // ⌘K (sfdesk/switcher.mbt): what the frame can do now offered to it, and where it opens a chat found
@@ -28,7 +28,7 @@ fn wide_overlays(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
 fn wide_filter_menu(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
   let filter = filter_of(src, w.id)
   // (the archive is one of the lists, not the chats': choosing one of these leaves it)
-  let chats = lit_place() == "chats" && !app.nav.pages().contains(Archived)
+  let chats = @sfdesk.lit_place() == "chats" && !app.nav.pages().contains(Archived)
   let entries = ["all", "mine", "watching"].map(fn(f) {
     let label = match f {
       "all" => tr("web-main.filter.chats.all")
@@ -40,11 +40,11 @@ fn wide_filter_menu(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
   entries.push(@kit.menu_item("decisions", label=tr("web-main.rail.decisions")))
   entries.push(@kit.menu_separator())
   entries.push(@kit.menu_item("archived", label=tr("web-main.filter.archived")))
-  let m = @sf.menu(c, "filter-menu", wide.filter_open, c.id("side/filter"), entries, {}, @sf.chooser_menu_w, along=End)
-  wide.filter_open = m.open
+  let m = @sf.menu(c, "filter-menu", @sfdesk.wide.filter_open, c.id("side/filter"), entries, {}, @sf.chooser_menu_w, along=End)
+  @sfdesk.wide.filter_open = m.open
   match m.chosen {
     Some("decisions") => go_place(c, "decisions", [], -1)
-    Some("archived") => rail_go(c, src, w, "archive")
+    Some("archived") => @sfdesk.rail_go(c, src, w, desk_pages(), "archive")
     Some(f) => {
       if !chats {
         go_place(c, "chats", [], -1)
@@ -65,24 +65,24 @@ fn wide_filter_menu(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
 /// first; then each workspace's chats that want the viewer (the one in view's first), 忽略 on the row pointed at
 /// (`decision.dismiss`); pressed, its chat; 全部决定 (奏) and 通知设置 at its foot.
 fn attention_panel(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
-  let close = fn() { wide.attention_open = false }
-  let railed = rail_items(src, w.id).contains("attention")
+  let close = fn() { @sfdesk.wide.attention_open = false }
+  let railed = @sfdesk.rail_items(src, w.id).contains("attention")
   let trigger = c.id(if railed { "rail/attention" } else { "side/attention" })
   // its stations all reached again: a trouble later in the same words is new
   trouble_forget(src, w)
-  if wide.attention_open && rail_ws.trouble_seen is None {
-    rail_ws.trouble_seen = Some(trouble_kept(src, w, "seen"))
+  if @sfdesk.wide.attention_open && wide.trouble_seen is None {
+    wide.trouble_seen = Some(trouble_kept(src, w, "seen"))
     let now = station_trouble_words(src, w)
     if railed && now != "" && now != trouble_kept(src, w, "gone") {
       trouble_keep(src, w, "seen", Json::string(now))
     }
-  } else if !wide.attention_open {
-    rail_ws.trouble_seen = None
+  } else if !@sfdesk.wide.attention_open {
+    wide.trouble_seen = None
   }
   let p = @kit.popover(
     c,
     "attention",
-    wide.attention_open,
+    @sfdesk.wide.attention_open,
     trigger,
     side=if railed { Right } else { Bottom },
     along=Start,
@@ -90,7 +90,7 @@ fn attention_panel(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
     look=fn(c, _, body) { @sf.panel(c, w=Px(attention_w), fn() { c.box(style=att_list, body) |> ignore }) |> ignore },
     fn() { attention_rows(c, src, w, railed, close) },
   )
-  wide.attention_open = p.value
+  @sfdesk.wide.attention_open = p.value
 }
 
 ///|
@@ -144,7 +144,7 @@ fn bell_trouble(src : Source, w : Workspace) -> (String, Bool) {
   if words == "" || words == trouble_kept(src, w, "gone") {
     return ("", false)
   }
-  let seen = match rail_ws.trouble_seen {
+  let seen = match wide.trouble_seen {
     Some(s) => s
     None => trouble_kept(src, w, "seen")
   }
@@ -165,7 +165,7 @@ fn long_jobs(src : Source, w : Workspace) -> Int {
 fn bell_lit(src : Source, w : Workspace) -> Bool {
   let marks = (src.topic)("workspaceMarks", { "workspace": Json::string(w.id) }).value
   let gone_fresh = attention_groups(src, w, false).fold(init=0, fn(n, g) {
-    n + g.2.filter(fn(i) { rail_ws.gone.contains(attention_key(i)) && !flag(Some(i), "seen") }).length()
+    n + g.2.filter(fn(i) { wide.gone.contains(attention_key(i)) && !flag(Some(i), "seen") }).length()
   })
   count(marks, "badge") - gone_fresh > 0 || bell_trouble(src, w).1 || long_jobs(src, w) > 0
 }
@@ -191,7 +191,7 @@ fn attention_groups(src : Source, w : Workspace, shown : Bool) -> Array[(String,
       order.sort_by(fn(a, b) { if a == w.id { -1 } else if b == w.id { 1 } else { 0 } })
       for ws in order {
         let list = items(by.get(ws), "items").filter(fn(i) {
-          (!only || text(Some(i), "kind") == "wait") && (!shown || !rail_ws.gone.contains(attention_key(i)))
+          (!only || text(Some(i), "kind") == "wait") && (!shown || !wide.gone.contains(attention_key(i)))
         })
         if list.length() > 0 {
           groups.push((ws, text(Some(list[0]), "workspaceName"), list))
@@ -230,7 +230,7 @@ fn attention_rows(c : @ui.Ctx, src : Source, w : Workspace, railed : Bool, close
         trouble_keep(src, w, "gone", Json::string(trouble))
       }), fn() {
         close()
-        rail_go(c, src, w, "stations")
+        @sfdesk.rail_go(c, src, w, desk_pages(), "stations")
       })
     })
   }
@@ -248,11 +248,11 @@ fn attention_rows(c : @ui.Ctx, src : Source, w : Workspace, railed : Bool, close
         let seq = field(v, "seq")
         let dismiss = if thread > 0.0 && seq is Some(Number(_, ..)) {
           Some(fn() {
-            rail_ws.gone.push(key)
+            wide.gone.push(key)
             (src.call)("decision.dismiss", { "station": Json::string(text(v, "station")), "thread": Json::number(thread), "seq": seq.unwrap() }, fn(r) {
               // not let go: listed again
               if r is Err(_) {
-                rail_ws.gone.retain(fn(k) { k != key })
+                wide.gone.retain(fn(k) { k != key })
               }
             })
           })
