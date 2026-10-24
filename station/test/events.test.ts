@@ -22,6 +22,8 @@ function setup(clock?: Clock.Clock) {
     read: async (op: string, args: any) => {
       reads.push(op);
       if (op === "chats") return JSON.stringify(rows[args.viewer.email] ?? []);
+      // The items a change can touch (read/views.ts chatRows): here every one, each a session's.
+      if (op === "chatRows") return JSON.stringify({ rows: rows[args.viewer.email] ?? [], scope: [...(args.sessions as string[]), ...(rows[args.viewer.email] ?? []).map((r) => r.id)] });
       if (op === "summary") return JSON.stringify({ key: args.key });
       if (op === "entries") return JSON.stringify({ entries: [{ n: 1, text: "hi" }] });
       if (op === "thread") return JSON.stringify({ id: args.id, last: 1, unread: 1, for: args.viewer.email });
@@ -440,4 +442,28 @@ test("a stream from before asked nothing new: the sessions it names, as before",
   await settle();
   assert.deepEqual(named, [["k", 3]]);
   reader(answer.body as AsyncIterable<Buffer>).close();
+});
+
+test("a change of a session or a thread reads again only the sidebar items it can touch, an item gone told so", async () => {
+  const { events, rows, change, reads } = setup(testClock().clock);
+  const a = reader((await events.open(viewer("a@x"), "zh", false, [], [])).body as AsyncIterable<Buffer>);
+  await settle();
+  reads.length = 0;
+  rows["a@x"] = [{ id: "1", title: "renamed" }];
+  change({ type: "session", key: "1" });
+  change({ type: "thread", id: 7, entries: [] });
+  await settle();
+  assert.deepEqual(reads.filter((r) => r === "chats" || r === "chatRows"), ["chatRows"], "no sidebar read whole");
+  assert.deepEqual(a.got.filter((e) => e.event === "chat").map((e) => e.data), [{ id: "1", title: "renamed" }]);
+  // Gone from the sidebar: told so, as one the change could touch.
+  rows["a@x"] = [];
+  change({ type: "session", key: "1" });
+  await settle();
+  assert.deepEqual(a.got.filter((e) => e.event === "chat-removed").map((e) => e.data), [{ id: "1" }]);
+  // What only a viewer's read position changes: only theirs.
+  reads.length = 0;
+  change({ type: "read", viewer: "b@x", thread: 3, n: 1 });
+  await settle();
+  assert.deepEqual(reads, [], "nobody of b@x follows");
+  await a.close();
 });
