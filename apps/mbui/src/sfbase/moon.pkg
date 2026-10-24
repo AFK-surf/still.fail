@@ -4,6 +4,7 @@ import {
   "mbui/hostapi",
   "mbui/kit",
   "mbui/codec",
+  "mbui/motion",
   "stillfail/sf",
   "stillfail/sfapp/settings",
 }

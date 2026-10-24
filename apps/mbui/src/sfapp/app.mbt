@@ -52,13 +52,6 @@ fn reset() -> Unit {
   sheet_host.shown = NoSheet
   sheet_host.accounts = false
   bar_reset()
-  fresh.became = None
-  fresh.made = ""
-  fresh.made_sig = ""
-  fresh.sent = false
-  fresh.starting = false
-  fresh.scene = None
-  fresh.room = 0.0
   composer_page_from.val = None
   new_fix.station = "st1"
   new_fix.model = "claude-opus-5-5"

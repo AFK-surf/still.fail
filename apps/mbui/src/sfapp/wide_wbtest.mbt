@@ -230,10 +230,10 @@ test "wide: a new chat as the web's: its scene and the composer in the pane's mi
   assert_true(station is Some(_))
   t.click(Button, label="Studio")
   t.frame()
-  assert_true(wide.station_menu)
+  assert_true(t.query(MenuItemRadio, label="MBA") is Some(_))
   t.key(@ui.key_escape)
   t.frame()
-  assert_false(wide.station_menu)
+  assert_true(t.query(MenuItemRadio, label="MBA") is None)
 }
 
 ///|
@@ -318,7 +318,7 @@ test "wide: a chat and a new chat switched by the sidebar as the web's: the comp
   assert_true(app.nav.top() == NewChat)
   let (_, y0, _, h0) = composer_glass(t)
   assert_true((y0 + h0 - (cy + ch)).abs() < 1.0, msg="from the chat's foot: \{(y0, h0)} \{(cy, ch)}")
-  t.run_for(page_cross_ms / 2.0)
+  t.run_for(@sfdesk.page_cross_ms / 2.0)
   match t.look_of("新对话") {
     Some((_, _, a)) => assert_true(a > 0.05 && a < 0.95, msg="coming in: \{a}")
     None => fail("no 新对话")
@@ -332,7 +332,7 @@ test "wide: a chat and a new chat switched by the sidebar as the web's: the comp
   t.draw()
   let back = t.time()
   assert_true(app.nav.top() is Chat(_))
-  t.run_for(page_cross_ms / 2.0)
+  t.run_for(@sfdesk.page_cross_ms / 2.0)
   match t.look_of("新对话") {
     Some((_, _, a)) => assert_true(a > 0.05 && a < 0.95, msg="fading: \{a}")
     None => fail("the new chat gone at once")

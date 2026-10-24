@@ -88,7 +88,8 @@ fn chat_page(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef, pages : Page
     })
   })
   |> ignore
-  (pages.chat_after)(c, src, w, r)
+  // the new chat it became leaving over it, or one left for it fading over it (newchat.mbt)
+  new_chat_after(c, src, w, pages, r)
 }
 
 ///|

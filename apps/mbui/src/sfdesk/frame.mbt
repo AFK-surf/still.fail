@@ -16,11 +16,10 @@ pub let wide_from : Double = 701.0
 /// What the frame draws that is not here yet, given by the app (sfapp): the pages in the pane, the sidebars of the
 /// places other than the chats', and what the frame asks of the app.
 pub(all) struct Pages {
-  /// a chat's messages and composer (chat_page.mbt's: `over` drawn over the messages, under the composer), what moves
-  /// as it comes from a new chat or goes to one, what its side panel shows that is not here yet, its list as ⌘F goes
-  /// along it, its sharing's and publishing's dialogs (its thread)
+  /// a chat's messages and composer (chat_page.mbt's: `over` drawn over the messages, under the composer), what its
+  /// side panel shows that is not here yet, its list as ⌘F goes along it, its sharing's and publishing's dialogs (its
+  /// thread)
   talk : (@ui.Ctx, Source, Workspace, ChatRef, () -> Unit) -> Unit
-  chat_after : (@ui.Ctx, Source, Workspace, ChatRef) -> Unit
   panel : (@ui.Ctx, Source, ChatRef) -> PanelParts
   find_list : (ChatRef) -> FindList
   share : (@ui.Ctx, ChatRef, Double?) -> Unit
@@ -44,8 +43,15 @@ pub(all) struct Pages {
   core : (Source, Workspace) -> Core
   /// what this device sees while it waits to be confirmed in the workspace's safe mode
   gate : (@ui.Ctx, Source, Workspace) -> Unit
-  /// as the pane's page is built: a switch between a chat and a new chat sets out (wide_switch.mbt)
-  switching : (@ui.Ctx) -> Unit
+  /// the new chat's composer (the app's: Chat.tsx's Composer in dock.tsx's ComposerSlot "new"): on station `address`
+  /// (named `name`), its draft `new:<address>`; `held` (its stations not read yet), taking words but sending nothing;
+  /// its choices (`tools`) in the row under the words; `sent`, told as the page becomes its chat (NewChat.tsx onSent).
+  /// A row of the 文件 tab carried over box `pane` and let go there: into draft `key` (ChatSide.tsx DropHint,
+  /// useChatDrop). The composer going to another page from where it is now (dock.tsx useComposerMove): to the chat's
+  /// whose draft is `key` ("*": the next page's)
+  new_composer : (@ui.Ctx, Source, Workspace, Json?, String, String, Bool, () -> Unit, (ChatRef) -> Unit) -> Unit
+  drop : (@ui.Ctx, Source, String, Int) -> Unit
+  composer_moves : (@ui.Ctx, String) -> Unit
   /// whether the desktop app has a newer build to offer (brand.tsx UpdateButton), and its 更新 over the sidebar's top
   /// (closed, the sidebar's width, the window's buttons in the app's top row)
   updating : () -> Bool
@@ -559,8 +565,8 @@ pub fn frame(
               })
               |> ignore
             } else {
-              // a chat and a new chat switched between: the composer moving, the rest crossfading (wide_switch.mbt)
-              (pages.switching)(c)
+              // a chat and a new chat switched between: the composer moving, the rest crossfading (switch.mbt)
+              page_switch_frame(c, pages)
               c.nav_flat(app.nav, fn(page) { main_page(c, src, w, all, invited, pages, page) }, bg=@sf.theme().p.bg)
               |> ignore
             }
@@ -704,6 +710,8 @@ fn main_page(
     // 文件: a folder under its bar, as the web's
     Files => (pages.files)(c, src, w)
     Drive(at) => (pages.folder)(c, src, w, at)
+    // a new chat (newchat.mbt)
+    NewChat => new_chat_page(c, src, w, pages)
     // a station's screen, a drive's text read, a film played are over the whole window (sfapp's signed_in), not in
     // the pane
     Screen(_) | DriveRead(_) | DrivePlay(_) => ()

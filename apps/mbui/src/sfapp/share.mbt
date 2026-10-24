@@ -587,7 +587,7 @@ fn share_open(
         // (the station by its own id, the address's last part, as the core's shareIn.open picks it)
         None => {
           let parts = station.split("/").to_array()
-          pick_new(c, src, w.id, { "station": Json::string(parts[parts.length() - 1].to_owned()) })
+          pick_new(src, w.id, { "station": Json::string(parts[parts.length() - 1].to_owned()) })
         }
         Some(_) => ()
       }

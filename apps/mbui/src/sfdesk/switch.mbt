@@ -2,7 +2,7 @@
 // useComposerMove, styles/global.css.ts's view transition): the composer goes from its place on the one to its place
 // on the other (340 ms, the ease out: composer_page) and the rest crossfades (260 ms, CSS's ease): the new chat's scene
 // fading as a chat comes in, or a new chat's coming in. Between two chats nothing moves (the web leaves those to the
-// link); a new chat become its chat has its own (newchat.mbt new_chat_leaving_wide).
+// link); a new chat become its chat has its own (newchat.mbt new_chat_after).
 
 ///|
 /// The page the pane showed as the last frame was built (what a switch is from), whether the switch is away from a new
@@ -14,18 +14,18 @@ priv struct WideSwitch {
 }
 
 ///|
-let wide_switch : WideSwitch = { was: None, from_new: false, new_view: None }
+let page_switch : WideSwitch = { was: None, from_new: false, new_view: None }
 
 ///|
-fn wide_switch_reset() -> Unit {
-  wide_switch.was = None
-  wide_switch.from_new = false
-  wide_switch.new_view = None
+fn page_switch_reset() -> Unit {
+  page_switch.was = None
+  page_switch.from_new = false
+  page_switch.new_view = None
 }
 
 ///|
 /// How long the rest crossfades (global.css.ts: the root's view transition).
-let page_cross_ms : Double = 260.0
+pub let page_cross_ms : Double = 260.0
 
 ///|
 /// How far the crossfade has come (0 … 1, CSS's ease).
@@ -35,9 +35,9 @@ fn switch_anim(c : @ui.Ctx) -> @motion.Anim {
 
 ///|
 /// As the pane's page is built: a switch between a chat and a new chat begins, from now.
-fn wide_switch_frame(c : @ui.Ctx) -> Unit {
+fn page_switch_frame(c : @ui.Ctx, pages : Pages) -> Unit {
   let top = app.nav.top()
-  let switched = match (wide_switch.was, top) {
+  let switched = match (page_switch.was, top) {
     (Some(NewChat), Chat(r)) =>
       match fresh.became {
         Some(b) if b == r => false
@@ -47,16 +47,20 @@ fn wide_switch_frame(c : @ui.Ctx) -> Unit {
     _ => false
   }
   if switched && !@ui.reduced_motion() {
-    wide_switch.from_new = wide_switch.was == Some(NewChat)
-    if wide_switch.from_new {
+    page_switch.from_new = page_switch.was == Some(NewChat)
+    if page_switch.from_new {
       fresh.room = @motion.measured(c, "new/composer").unwrap_or(0.0)
     }
-    composer_page_starts(c, "*")
+    (pages.composer_moves)(c, "*")
     let a = switch_anim(c)
     a.snap(0.0)
     a.animate(1.0, @motion.tween(page_cross_ms, ease=Css))
   }
-  wide_switch.was = Some(top)
+  // a new chat come to: nothing made for it yet (NewChat.tsx useEnsureChat: once a page)
+  if top == NewChat && page_switch.was != Some(NewChat) {
+    fresh_reset()
+  }
+  page_switch.was = Some(top)
 }
 
 ///|
@@ -73,9 +77,9 @@ fn switch_in(c : @ui.Ctx) -> Double {
 ///|
 /// Over a chat come in from a new chat: what it showed under the composer's place, fading (its look of the page's
 /// grounds, so what is under it comes in as it goes).
-fn switch_veil(c : @ui.Ctx) -> Unit {
+pub fn switch_veil(c : @ui.Ctx) -> Unit {
   let p = switch_in(c)
-  if p >= 1.0 || !wide_switch.from_new {
+  if p >= 1.0 || !page_switch.from_new {
     return
   }
   let l = c.layer(fn() { c.box(style=switch_veil_box, fn() {  }) |> ignore })
@@ -85,13 +89,13 @@ fn switch_veil(c : @ui.Ctx) -> Unit {
 
 ///|
 /// The new chat left for a chat, fading over it (drawn only, its composer gone to the chat's).
-fn switch_new_out(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
+fn switch_new_out(c : @ui.Ctx, src : Source, w : Workspace, pages : Pages) -> Unit {
   let p = switch_in(c)
-  if p >= 1.0 || !wide_switch.from_new {
+  if p >= 1.0 || !page_switch.from_new {
     return
   }
-  let v = wide_switch.new_view
-  let l = c.layer(fn() { new_chat_page_wide(c, src, w, v, field(v, "station"), going=Some((0.0, 0.0))) })
+  let v = page_switch.new_view
+  let l = c.layer(fn() { new_page(c, src, w, pages, v, field(v, "station"), Some((0.0, 0.0))) })
   c.look(l, @ui.look(alpha=1.0 - p))
   c.draw_only(l)
 }
@@ -100,7 +104,7 @@ fn switch_new_out(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
 /// Node `i` of a new chat come in from a chat, fading in as it comes.
 fn switch_appear(c : @ui.Ctx, i : Int) -> Unit {
   let p = switch_in(c)
-  if p < 1.0 && !wide_switch.from_new {
+  if p < 1.0 && !page_switch.from_new {
     c.look(i, @ui.look(alpha=p))
   }
 }
