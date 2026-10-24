@@ -4,8 +4,13 @@
 // middle is 0.5, 0.5; one in the letterbox says nothing), the wheel, keys, an IME's and a paste's text, 只看 (nothing
 // goes), and on a phone a finger: as a trackpad (it moves the pointer, a tap clicks where it points, two tapped
 // right-click), the keys row's modifiers held for the next key; then directly, a tap clicks, a drag holds the button,
-// two fingers scroll. Builds the stories and serves
-// the build, as stories.mjs does. PLAYWRIGHT_MODULE selects Playwright; SHOTS keeps a picture of each.
+// two fingers scroll. Builds the stories and serves the build, as stories.mjs does. PLAYWRIGHT_MODULE selects Playwright;
+// SHOTS keeps a picture of each.
+// The page's time is the test's (Playwright's clock, held still): its timers (a finger held as long as a press, the
+// station's word on the pointer taken again, its pauses between frames) and its frames run only as far as the test says,
+// and a finger's events say when they happen (their timeStamp: a double tap, a two-finger tap, how fast a finger moved
+// the pointer), never what real time took between them. What comes in real time (a frame encoded, decoded, drawn) is
+// waited for by what it does.
 import assert from 'node:assert/strict';
 import { mkdir, mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -16,6 +21,21 @@ const playwright = await import(process.env.PLAYWRIGHT_MODULE || 'playwright');
 const out = process.env.SHOTS;
 let server, browser, dist;
 const near = (a, b, why) => assert.ok(Math.abs(a - b) < 0.01, `${why}: ${a} is not ${b}`);
+/** The page's clock from a moment of its own, held there: on only as far as `run` says. */
+const T0 = new Date('2026-10-24T08:00:00Z');
+const held = async (page) => { await page.clock.install({ time: T0 }); await page.clock.pauseAt(new Date(T0.getTime() + 1000)); };
+const run = (page, ms) => page.clock.runFor(ms);
+/** Until `fn` holds in the page, its time run on a little at a time meanwhile (what the station times by it: its pauses
+ *  between frames), what comes in real time let in between (a frame encoded, decoded). Then the station's frames all
+ *  sent (three, a quarter of a second apart), so that what follows starts from the same place every time. */
+const opened = async (page, fn, arg) => {
+  for (const end = Date.now() + 20000; !(await page.evaluate(fn, arg));) {
+    assert.ok(Date.now() < end, `never came: ${fn}`);
+    await run(page, 50);
+  }
+  await run(page, 1000);
+};
+const liveAt = (w) => !!document.querySelector('[data-phase="live"]') && document.querySelector('canvas')?.width === w;
 try {
   const configFile = fileURLToPath(new URL('../../web/vite.stories.config.ts', import.meta.url));
   dist = await mkdtemp(join(tmpdir(), 'screen-input-'));
@@ -26,18 +46,28 @@ try {
   browser = await playwright.chromium.launch(process.env.PLAYWRIGHT_CHANNEL ? { channel: process.env.PLAYWRIGHT_CHANNEL } : {});
 
   // ── a mouse and keys ──
-  // 1280×700: the 1600×1000 picture is 1120×700, 80 in from either side.
+  // 1280×700: the bar along the top (always there, ViewerBar.tsx), the 1600×1000 picture fitted whole under it, in the
+  // middle of what is left (under a bar 45 high: 1048×655, 116 in from either side).
   const page = await browser.newPage({ viewport: { width: 1280, height: 700 }, deviceScaleFactor: 1, locale: 'zh-CN' });
+  await held(page);
   const errors = [];
   page.on('pageerror', (e) => errors.push(e.message));
   await page.goto(`${base}?story=screen-live&theme=light`);
-  await page.waitForFunction(() => document.querySelector('[data-phase="live"]') && document.querySelector('canvas')?.width === 1600);
+  await opened(page, liveAt, 1600);
   const heard = () => page.evaluate(() => window.screenInputs.splice(0));
-  const box = await page.evaluate(() => { const r = document.querySelector('canvas').getBoundingClientRect(); return { x: r.x, y: r.y, w: r.width, h: r.height }; });
-  assert.deepEqual(box, { x: 80, y: 0, w: 1120, h: 700 }, 'the picture fitted whole, in the middle');
+  const { box, under } = await page.evaluate(() => {
+    const rect = (el) => { const r = el.getBoundingClientRect(); return { x: r.x, y: r.y, w: r.width, h: r.height }; };
+    const bar = rect(document.querySelector('[data-phase="live"] header'));
+    return { box: rect(document.querySelector('canvas')), under: bar.y + bar.h };
+  });
+  assert.ok(under > 0, 'the bar along the top');
+  const scale = Math.min(1280 / 1600, (700 - under) / 1000);
+  assert.deepEqual(box, { x: (1280 - 1600 * scale) / 2, y: under, w: 1600 * scale, h: 1000 * scale }, 'the picture fitted whole under the bar, in the middle');
+  /** A point of the picture (0 to 1 across and down it) in the window. */
+  const on = (x, y) => [box.x + box.w * x, box.y + box.h * y];
   await heard();
 
-  await page.mouse.move(640, 350);
+  await page.mouse.move(...on(0.5, 0.5));
   await page.mouse.down();
   await page.mouse.up();
   let got = await heard();
@@ -46,16 +76,19 @@ try {
   near(presses[0].x, 0.5, 'x'); near(presses[0].y, 0.5, 'y');
 
   // In the letterbox: nothing.
-  await page.mouse.move(40, 350);
+  await page.mouse.move(box.x / 2, box.y + box.h / 2);
   await page.mouse.down();
   await page.mouse.up();
   got = await heard();
   assert.deepEqual(got.filter((i) => i.t === 'pointer' && i.kind !== 'move'), [], 'a click beside the picture says nothing');
 
-  // A drag: moves with the button held, once a frame.
-  await page.mouse.move(80 + 1120 * 0.25, 700 * 0.25);
+  // A drag: moves with the button held, once a frame (the frame's on the page's clock).
+  await page.mouse.move(...on(0.25, 0.25));
   await page.mouse.down();
-  await page.mouse.move(80 + 1120 * 0.75, 700 * 0.75, { steps: 8 });
+  await page.mouse.move(...on(0.5, 0.5), { steps: 4 });
+  await run(page, 20);
+  await page.mouse.move(...on(0.75, 0.75), { steps: 4 });
+  await run(page, 20);
   await page.mouse.up();
   got = await heard();
   const moves = got.filter((i) => i.t === 'pointer' && i.kind === 'move' && i.buttons === 1);
@@ -64,9 +97,9 @@ try {
   assert.equal(got.at(-1).kind, 'up');
 
   // The wheel, at the pointer.
-  await page.mouse.move(640, 350);
+  await page.mouse.move(...on(0.5, 0.5));
   await page.mouse.wheel(0, 120);
-  await page.waitForTimeout(100);
+  await run(page, 20);
   got = (await heard()).filter((i) => i.t === 'wheel');
   assert.equal(got.reduce((n, i) => n + i.dy, 0), 120, 'the wheel, in pixels');
 
@@ -98,7 +131,7 @@ try {
   await page.getByRole('radio', { name: '只看' }).click();
   await page.waitForFunction(() => document.querySelector('[data-phase="live"] [data-driving]') === null);
   await heard();
-  await page.mouse.move(640, 350);
+  await page.mouse.move(...on(0.5, 0.5));
   await page.mouse.down();
   await page.mouse.up();
   await page.keyboard.press('b');
@@ -109,36 +142,49 @@ try {
   // ── a finger ──
   const phone = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true, locale: 'zh-CN' });
   const p = await phone.newPage();
+  await held(p);
   p.on('pageerror', (e) => errors.push(e.message));
   await p.goto(`${base}?story=screen-phone&theme=light`);
-  await p.waitForFunction(() => document.querySelector('[data-phase="live"]') && document.querySelector('canvas')?.width === 1600);
+  await opened(p, liveAt, 1600);
   const pic = await p.evaluate(() => { const r = document.querySelector('canvas').getBoundingClientRect(); return { x: r.x, y: r.y, w: r.width, h: r.height }; });
   const at = (x, y) => ({ x: pic.x + pic.w * x, y: pic.y + pic.h * y });
   const fingers = await p.context().newCDPSession(p);
-  const touch = (type, points) => fingers.send('Input.dispatchTouchEvent', { type, touchPoints: points.map((q, id) => ({ ...q, id })) });
+  // A finger's events at the page's time: each says when it happened (`timestamp`, the event's timeStamp), the time
+  // the test has run the page's clock on by since it began (`pass`).
+  let now = Date.now() / 1000;
+  const pass = async (ms) => { now += ms / 1000; await run(p, ms); };
+  const touch = (type, points) => fingers.send('Input.dispatchTouchEvent', { type, timestamp: now, touchPoints: points.map((q, id) => ({ ...q, id })) });
+  /** A finger along `points`, 20 ms between each (its frames taken in as it goes), lifted at the last. */
+  const along = async (...points) => {
+    await touch('touchStart', points[0]);
+    for (const q of points.slice(1)) { await pass(20); await touch('touchMove', q); }
+    await pass(20);
+    await touch('touchEnd', []);
+    await pass(20);
+  };
+  const tap = async (q) => { await touch('touchStart', [q]); await pass(50); await touch('touchEnd', []); await pass(20); };
   const said = () => p.evaluate(() => window.screenInputs.splice(0));
   await said();
   // ── as a trackpad (unless the device keeps `direct`) ──
   // A tap anywhere: a click where the pointer is (where the station says it is: the demo's 0.5, 0.565).
-  await p.touchscreen.tap(at(0.1, 0.1).x, at(0.1, 0.1).y);
+  await tap(at(0.1, 0.1));
   got = (await said()).filter((i) => i.t === 'pointer');
   assert.deepEqual(got.map((i) => [i.kind, i.buttons]), [['down', 1], ['up', 0]], 'a tap on the trackpad clicks');
   near(got[0].x, 0.5, 'trackpad tap x'); near(got[0].y, 0.565, 'trackpad tap y');
-  await p.waitForTimeout(400);
+  await pass(400);
   // A finger moved right: the pointer goes right, no button held.
-  await touch('touchStart', [at(0.2, 0.3)]);
-  for (let i = 1; i <= 6; i++) { await touch('touchMove', [at(0.2 + i * 0.03, 0.3)]); await p.waitForTimeout(20); }
-  await touch('touchEnd', []);
+  await along(...Array.from({ length: 7 }, (_, i) => [at(0.2 + i * 0.03, 0.3)]));
   got = (await said()).filter((i) => i.t === 'pointer');
   assert.ok(got.length > 0 && got.every((i) => i.kind === 'move' && i.buttons === 0), `the trackpad moves the pointer: ${JSON.stringify(got)}`);
   const padX = got.at(-1).x;
   assert.ok(padX > 0.55 && padX <= 1, `moved right: ${padX}`);
   near(got.at(-1).y, 0.565, 'moved along');
   // Two fingers tapped: the right button where it points.
-  await p.waitForTimeout(400);
+  await pass(400);
   await touch('touchStart', [at(0.3, 0.5), at(0.6, 0.5)]);
-  await p.waitForTimeout(60);
+  await pass(60);
   await touch('touchEnd', []);
+  await pass(20);
   got = (await said()).filter((i) => i.t === 'pointer');
   assert.deepEqual(got.map((i) => [i.kind, i.buttons]), [['down', 2], ['up', 0]], 'two fingers tapped right-click');
   near(got[0].x, padX, 'right click where it points');
@@ -151,29 +197,27 @@ try {
   // ── directly ──
   await p.getByRole('button', { name: '触控板' }).click();
   await p.waitForFunction(() => document.querySelector('button[aria-label="触控板"]')?.getAttribute('aria-pressed') === 'false');
-  await p.waitForTimeout(400);
+  await pass(400);
   // A tap: a click where it is.
-  await p.touchscreen.tap(at(0.5, 0.5).x, at(0.5, 0.5).y);
+  await tap(at(0.5, 0.5));
   got = (await said()).filter((i) => i.t === 'pointer');
   assert.deepEqual(got.map((i) => [i.kind, i.buttons]), [['down', 1], ['up', 0]], 'a tap clicks');
   near(got[0].x, 0.5, 'tap x'); near(got[0].y, 0.5, 'tap y');
   // A drag: down where it began, moves holding the button, up where it ended.
-  await touch('touchStart', [at(0.2, 0.5)]);
-  for (let i = 1; i <= 6; i++) { await touch('touchMove', [at(0.2 + i * 0.1, 0.5)]); await p.waitForTimeout(20); }
-  await touch('touchEnd', []);
+  await along(...Array.from({ length: 7 }, (_, i) => [at(0.2 + i * 0.1, 0.5)]));
   got = (await said()).filter((i) => i.t === 'pointer');
   assert.equal(got[0].kind, 'down'); near(got[0].x, 0.2, 'drag from');
   assert.ok(got.some((i) => i.kind === 'move' && i.buttons === 1), 'moves holding the button');
   assert.equal(got.at(-1).kind, 'up'); near(got.at(-1).x, 0.8, 'drag to');
   // Two fingers up the picture: the page under them scrolls on down (the wheel, down), no click.
-  await touch('touchStart', [at(0.4, 0.7), at(0.6, 0.7)]);
-  for (let i = 1; i <= 5; i++) { await touch('touchMove', [at(0.4, 0.7 - i * 0.05), at(0.6, 0.7 - i * 0.05)]); await p.waitForTimeout(20); }
-  await touch('touchEnd', []);
+  await along(...Array.from({ length: 6 }, (_, i) => [at(0.4, 0.7 - i * 0.05), at(0.6, 0.7 - i * 0.05)]));
   got = await said();
   assert.deepEqual(got.filter((i) => i.t === 'pointer'), [], 'two fingers click nothing');
   const down = got.filter((i) => i.t === 'wheel').reduce((n, i) => n + i.dy, 0);
   assert.ok(Math.abs(down - pic.h * 0.25) < 2, `two fingers scroll as far as they went (${down})`);
-  // The keyboard: its field focused, what is typed on it goes as text, Enter as a key.
+  // The keyboard: its field focused, what is typed on it goes as text, Enter as a key. (What 触控板 said, over the keys
+  // row, gone first: a toast's 2.6 s.)
+  await pass(3000);
   await p.getByRole('button', { name: '键盘' }).click();
   assert.ok(await p.evaluate(() => document.activeElement?.tagName === 'TEXTAREA'), 'the keyboard\'s field focused');
   await (await p.context().newCDPSession(p)).send('Input.insertText', { text: 'ok' });
@@ -194,14 +238,15 @@ try {
   // ── an agent driving it: opened to look (nothing goes), 接管 makes it this view's ──
   const g = await browser.newPage({ viewport: { width: 1280, height: 800 }, deviceScaleFactor: 1, locale: 'zh-CN' });
   g.on('pageerror', (e) => errors.push(e.message));
+  await held(g);
   await g.goto(`${base}?story=screen-agent-driving&theme=light`);
-  await g.waitForFunction(() => document.querySelector('[data-phase="live"]') && document.querySelector('canvas')?.width === 1600);
+  await opened(g, liveAt, 1600);
   const told = () => g.evaluate(() => window.screenInputs.splice(0));
   await told();
   await g.mouse.click(640, 400);
   await g.keyboard.press('a');
   assert.deepEqual(await told(), [], 'while the agent drives, opening it takes nothing over');
-  await g.waitForTimeout(2600);
+  await run(g, 2600);
   assert.ok(await g.getByText('Agent「修登录」 正在控制', { exact: true }).isVisible(), 'who drives it, still in sight after a rest');
   await g.getByRole('button', { name: '接管' }).click();
   await g.waitForFunction(() => document.querySelector('[data-driving]'));
@@ -214,8 +259,9 @@ try {
   // ── H.264, where the browser has it (Chrome; not Playwright's own Chromium): decoded, drawn, every frame acknowledged ──
   const h = await browser.newPage({ viewport: { width: 1280, height: 800 }, deviceScaleFactor: 1, locale: 'zh-CN' });
   h.on('pageerror', (e) => errors.push(e.message));
+  await held(h);
   await h.goto(`${base}?story=screen-live-h264&theme=light`);
-  await h.waitForFunction(() => window.screenSeen?.codec && window.screenSeen.acks.length >= 3, null, { timeout: 15000 });
+  await opened(h, () => !!window.screenSeen?.codec && window.screenSeen.acks.length >= 3);
   const seen = await h.evaluate(() => {
     const c = document.querySelector('canvas');
     // The page's ground under the form, and the green of its button (scene() in web/stories/screens.ts).
