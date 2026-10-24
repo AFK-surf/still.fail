@@ -36,7 +36,6 @@ fn desk_pages() -> @sfdesk.Pages {
     offered: fn(c, src) { chat_offered(c, src) },
     jobs: fn(c, src, w) { open_jobs(c, src, w) },
     relay: fn(c, src, r, thread) { open_relay(c, src, r, thread) },
-    act: fn(src, what, call, params, done) { act(src, what, "", call, params, done~) },
     core: fn(src, w) { settings_core(src, w) },
     gate: fn(c, src, w) { lock_gate(c, src, w) |> ignore },
     // the new chat's composer, the chat's (composer.mbt), its first message making the chat (newchat.mbt send_first)
@@ -57,8 +56,6 @@ fn desk_pages() -> @sfdesk.Pages {
       chat_drop(c, src, key, pane)
     },
     composer_moves: fn(c, chat) { composer_page_starts(c, chat) },
-    updating: fn() { side_update_shown() },
-    update: fn(c, src, bar, s, inset) { side_update(c, src, bar, s, inset) },
     sheet: fn() { sheet_open() },
     lower: fn() { lower_sheet() },
     home: fn() { home() },
@@ -77,82 +74,6 @@ fn open_settings() -> Unit {
 fn open_settings_at(route : @settings.Route) -> Unit {
   @sfdesk.open_settings_at(desk_pages(), route)
 }
-
-///|
-/// Whether the desktop app has a newer build to offer, or one on its way in (brand.tsx UpdateButton: the app's update
-/// state, none while there is none).
-fn side_update_shown() -> Bool {
-  update.available is Some(_) || update_busy() || update.phase == "failed"
-}
-
-///|
-/// The desktop app's newer build (brand.tsx UpdateButton, brand.css.ts sidebarUpdate): 更新 at the open sidebar's top
-/// right, 12 in from its edge, or past the rail (and the window's buttons) when it is closed, moved with it; how far it
-/// has downloaded, 正在重启 while it is put in place, 更新失败，重试 when it failed (why, its tip). Pressed, the build is
-/// downloaded and the app restarts as it.
-fn side_update(c : @ui.Ctx, src : Source, bar : Bool, s : Double, inset : Bool) -> Unit {
-  // (its phase as the host says it, what went wrong said once: updates.mbt)
-  update_progress() |> ignore
-  let v = try Some(@json.parse(@ui.update_state())) catch { _ => None }
-  let busy = update_busy()
-  let label = match update.phase {
-    "downloading" | "retrying" =>
-      fill("web-main.appUpdate.downloading", [("percent", dmax(0.0, number(v, "percent")).to_int().to_string())])
-    "installing" => tr("web-main.appUpdate.restarting")
-    "failed" => tr("web-main.appUpdate.failed")
-    _ => tr("web-main.versions.update")
-  }
-  let tip = if update.phase == "failed" {
-    update_error(text(v, "error"))
-  } else {
-    fill("web-main.appUpdate.title", [("version", text(update.available, "versionName")), ("app", "still.fail")])
-  }
-  let id = c.id("side/update")
-  // open, its end 12 in from the sidebar's (translateX(-100%)); closed, its start past the rail and the window's buttons
-  let width = match c.laid_size(id) {
-    Some((w, _)) => w
-    None => 0.0
-  }
-  let (left, tx) = if bar {
-    (if inset { update_closed_inset } else { update_closed_in }, 0.0)
-  } else {
-    (@sfdesk.rail_w + s - @sfdesk.bar_in, -width)
-  }
-  c.cursor(id, Hand)
-  c.layer(fn() {
-    let b = c.box(style=update_at, moves="side-update", left~, top=update_top, tx~, id~, fn() {
-      @sf.pill(c, label, tone=Accented)
-    })
-    c.semantics(b, Button, id~, label~)
-  })
-  |> ignore
-  @sf.tip(c, "side/update-tip", id, tip, side=Bottom)
-  if c.clicked(id) && !busy {
-    update_install(src)
-  }
-}
-
-///|
-/// Where 更新 is (brand.css.ts sidebarUpdate): 11 down in the desktop app; closed, 68 from the window's edge (80 with
-/// the window's buttons in the app's top row); the page bars' start clear of it then (72, 84).
-let update_top : Double = 11.0
-
-///|
-let update_closed_in : Double = 68.0
-
-///|
-let update_closed_inset : Double = 80.0
-
-///|
-let bar_update_in : Double = 72.0
-
-///|
-let bar_update_inset : Double = 84.0
-
-///|
-/// 更新's box: its pill's size.
-// kept across runs: a value (no field of it changes)
-let update_at : @ui.Style = @ui.css("row")
 
 ///|
 /// The system's side of still.fail (before @ui.run). The desktop's window: 1280 by 820 at first, as still.fail's

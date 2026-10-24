@@ -185,6 +185,8 @@ pub fn reset() -> Unit {
   refs_reset()
   // what was asked of the core from a button, under way or failed (act.mbt)
   acting_reset()
+  // how an update stands (updates.mbt)
+  update_reset()
   // the messages chats are to go to (jump.mbt)
   go_tos.clear()
   go_to_words.clear()

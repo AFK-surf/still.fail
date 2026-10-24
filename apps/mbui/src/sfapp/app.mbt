@@ -99,13 +99,6 @@ fn reset() -> Unit {
   share_in.find.set("")
   share_over.val = false
   share_closing.val = false
-  update.available = None
-  update.asked = false
-  update.checking = false
-  update.installing = false
-  update.phase = "idle"
-  update.source = None
-  update_version.val = 0
   svc_folded.val = None
   svc_keep.val = fn(_) {  }
   splash_waited.val = false

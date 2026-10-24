@@ -382,12 +382,13 @@ fn archive_side_row(c : @ui.Ctx, src : Source, pages : Pages, it : Json, more : 
                 @sf.t("common.delete"),
                 danger=true,
                 fn() {
-                  (pages.act)(
+                  act(
                     src,
                     @sf.t("common.delete"),
+                    "",
                     "session.delete",
                     { "station": Json::string(station), "key": Json::string(session) },
-                    @sf.t("web-pages.archive.deleted"),
+                    done=@sf.t("web-pages.archive.deleted"),
                   )
                 },
               )
@@ -419,7 +420,7 @@ fn archive_restore(src : Source, pages : Pages, it : Json) -> Unit {
     Some(Number(_, ..) as n) => p["thread"] = n
     _ => ()
   }
-  (pages.act)(src, @sf.t("web-pages.archive.restore"), "chat.archive", Json::object(p), @sf.t("web-pages.archive.restored"))
+  act(src, @sf.t("web-pages.archive.restore"), "", "chat.archive", Json::object(p), done=@sf.t("web-pages.archive.restored"))
 }
 
 ///|
