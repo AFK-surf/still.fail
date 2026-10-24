@@ -24,9 +24,7 @@ pub(all) struct Pages {
   folder : (@ui.Ctx, Source, Workspace, DriveAt) -> Unit
   /// any other page: the phone's of it, its bar at its top (the workspaces, whether invitations wait)
   other : (@ui.Ctx, Source, Workspace, Array[Workspace], Bool, Page) -> Unit
-  /// the pane's page's own keys (奏's), after the frame's and the open chat's (`escape`: Esc pressed and not taken by
-  /// what the frame opened), and what it offers ⌘K now
-  keys : (@ui.Ctx, Source, Workspace, Bool) -> Unit
+  /// what the open chat offers ⌘K now
   offered : (@ui.Ctx, Source) -> Array[Offered]
   /// what the settings' pages read and call, and how they move (src/sfapp/settings: the core as the app has it)
   core : (Source, Workspace) -> Core
@@ -699,6 +697,8 @@ fn main_page(
     Screen(_) | DriveRead(_) | DrivePlay(_) => ()
     // 已归档, none of its chats open beside the list: what it is
     Archived => archive_main(c)
+    // 奏: the decision picked in the sidebar's 奏 (decision_page.mbt)
+    Decisions => decision_page(c, src, w, pages)
     _ => (pages.other)(c, src, w, all, invited, page)
   }
 }

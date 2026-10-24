@@ -140,6 +140,7 @@ fn decision_options(
   thread : Double,
   options : Array[Choice],
   resolved : Bool,
+  on_pick? : () -> Unit = fn() {  },
 ) -> Unit {
   let on = [
     ("station", here.station),
@@ -185,6 +186,8 @@ fn decision_options(
       ) {
       Some(i) if !resolved => {
         let label = options[i].label
+        // (the 奏 page sends the decision on its way first: DecisionOptions' onPick)
+        on_pick()
         c.tell("options/" + m.ts, fn() {
           act(src, @sf.t("web-main.decisions.answerWhat", args=[("option", label)]), "", "decision.answer", {
             "station": Json::string(here.station),

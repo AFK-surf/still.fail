@@ -52,5 +52,6 @@ pub fn reset() -> Unit {
   rows_reset()
   login_cards_reset()
   layers_reset()
+  zou_page_reset()
   list_reset()
 }
