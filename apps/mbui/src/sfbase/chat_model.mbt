@@ -593,3 +593,12 @@ pub fn stations_of(v : Json?) -> Array[Station] {
 pub fn chat_params(r : ChatRef) -> Map[String, Json] {
   { "station": Json::string(r.station), "session": Json::string(r.session) }
 }
+
+///|
+/// The last part of a path.
+pub fn base_name(path : String) -> String {
+  match path.rev_find("/") {
+    Some(i) => path.view(start_offset=i + 1).to_string()
+    None => path
+  }
+}

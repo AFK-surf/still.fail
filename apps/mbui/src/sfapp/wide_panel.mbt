@@ -31,22 +31,6 @@ fn side_change(r : ChatRef, action : String, tab : String?) -> Unit {
 /// and its menu, a station's screens' cards (screen_links.mbt).
 fn desk_chat_parts() -> @sfbase.ChatParts {
   {
-    open_file: fn(station, owner, a, thread, session) {
-      open_preview(station, owner, a, steps=InChat(thread, session))
-    },
-    thumb: fn(c, id, node, radius, letterbox) { note_thumb(c, id, node, radius, letterbox~) },
-    thumb_shows,
-    video_still: fn(c, src, station, owner, a, thumb) {
-      match pv_frames.get(thumb) {
-        Some((k, _)) => k
-        None =>
-          match (src.poster)(station, owner, base_name(a.path)) {
-            "!" => first_frame(c, src, station, owner, a, thumb)
-            k => k
-          }
-      }
-    },
-    sent_picture,
     viz: viz_file_of,
     viz_open: fn(station, session, owner, a) { viz_open_full(a.name, station, owner, a.path, session, linked=true) },
     mermaid: viz_mermaid_block,

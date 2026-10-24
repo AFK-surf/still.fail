@@ -781,27 +781,6 @@ fn draft_unquote(src : Source, d : Draft, q : DraftQuote) -> Unit {
 // ── files ──────────────────────────────────────────────────────────────
 
 ///|
-/// The pictures of images sent from here, as they were picked (ChatFiles.kt FileData.sentOf): by station and the name
-/// it keeps the file under once up, or by the upload's id from when it starts going up (a message sent before it is up
-/// names it so: Attachment.upload). What their messages draw, rather than the likeness and then the station's thumbnail
-/// a round trip after the picture flew in; the bytes are kept for the run anyway (@ui.add_image).
-let sent_pictures : Map[String, String] = {}
-
-///|
-fn sent_key(station : String, path : String) -> String {
-  station + "\u{1}" + base_name(path)
-}
-
-///|
-/// The picture `a` was sent from here as, if it was.
-fn sent_picture(station : String, a : Attachment) -> String? {
-  match sent_pictures.get(sent_key(station, a.path)) {
-    Some(k) => Some(k)
-    None => if a.upload != "" { sent_pictures.get("upload\u{1}" + a.upload) } else { None }
-  }
-}
-
-///|
 /// A file the host holds, too big to be read whole (a video: @hostapi.Picked.held), into the draft: the core sends it
 /// up, reading it from the host a part at a time as it goes (`composer.add` with `blob: {hostFile, size, type}`:
 /// still.fail's Android app's PickedFiles.kt), named by its content first where the host can say it; its tile the
