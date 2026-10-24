@@ -743,6 +743,7 @@ let en : Map[String, String] = {
   "web-pages.connect.addConnect": "Add and connect",
   "web-pages.connect.addTeamToken": "Add Slack workspace",
   "web-pages.connect.added": "Connect added, connecting",
+  "android-settings.workspace.title": "Workspace",
   "web-pages.connect.bothRuntimes": "This model runs on both runtimes. The runtime can't be changed after creation.",
   "web-pages.connect.createApp": "Create app",
   "web-pages.connect.feishu.added": "Connect added, connecting to Feishu",

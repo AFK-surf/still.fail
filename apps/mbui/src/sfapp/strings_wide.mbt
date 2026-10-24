@@ -500,6 +500,7 @@ let zh_wide : Map[String, String] = {
   "web-pages.connect.addConnect": "添加并连接",
   "web-pages.connect.addTeamToken": "添加工作区的配置 token",
   "web-pages.connect.added": "已添加连接，正在连接 Slack",
+  "android-settings.workspace.title": "Workspace",
   "web-pages.connect.bothRuntimes": "此模型支持两种运行时；运行时创建后无法更改。",
   "web-pages.connect.createApp": "创建 app",
   "web-pages.connect.feishu.added": "已添加连接，正在连接飞书",
