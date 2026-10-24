@@ -63,15 +63,35 @@ for t in ${TARGETS:-native}; do
   done
   export MBC_EMPTY_TESTS="$empty"
   out=$(mktemp)
-  # (TIMES=1, as CI's: built first on its own, then run, each said with how long it took; its errors shown by the run)
-  if [ -n "${TIMES:-}" ]; then
-    s=$(date +%s)
-    moon test $mode $pkgs --build-only > /dev/null 2>&1
-    echo "test.sh: built in $(( $(date +%s) - s )) s"
-    s=$(date +%s)
+  # Built first on its own (TIMES=1, as CI's: each said with how long it took; its errors shown by the run), then run.
+  s=$(date +%s)
+  moon test $mode $pkgs --build-only > /dev/null 2>&1
+  [ -z "${TIMES:-}" ] || echo "test.sh: built in $(( $(date +%s) - s )) s"
+  s=$(date +%s)
+  # (moon runs a program's tests one after another: sfapp's, the screens and every screen's squeeze among them, were
+  # one core's 71 s of the app part's run while the other packages' were done, 2026-10-24. Its files in SFAPP_SHARDS
+  # moon tests side by side over the build made, the other packages in one more: two moon tests at once go as fast
+  # as one, 7 s for 14 on Studio)
+  runs=("$pkgs")
+  if [[ " $pkgs " = *" -p stillfail/sfapp "* ]]; then
+    files=(src/sfapp/*_wbtest.mbt)
+    n=${SFAPP_SHARDS:-5}
+    runs=("$(echo " $pkgs " | sed 's| -p stillfail/sfapp | |')")
+    for ((k = 0; k < n; k++)); do
+      shard=()
+      for ((i = k; i < ${#files[@]}; i += n)); do shard+=("${files[i]}"); done
+      [ ${#shard[@]} = 0 ] || runs+=("${shard[*]}")
+    done
   fi
-  moon test $mode $pkgs ${UPDATE:+--update} 2>&1 | tee "$out" | grep -v "$F" | tail -${LINES_OUT:-60}
-  [ ${PIPESTATUS[0]} = 0 ] || code=1
+  pids=()
+  for i in "${!runs[@]}"; do
+    moon test $mode ${runs[i]} ${UPDATE:+--update} > "$out.$i" 2>&1 &
+    pids+=($!)
+  done
+  for p in "${pids[@]}"; do wait $p || code=1; done
+  for i in "${!runs[@]}"; do cat "$out.$i"; rm -f "$out.$i"; done > "$out"
+  grep -v "$F" "$out" | grep -v '^Total tests' | tail -${LINES_OUT:-60}
+  grep '^Total tests' "$out"
   [ -z "${TIMES:-}" ] || echo "test.sh: run in $(( $(date +%s) - s )) s"
   # (the core's answers a test asked and found not kept, src/sfkept: scripts/kept has the core work them out; KEPT_ASKS:
   # where it takes them from)

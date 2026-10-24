@@ -24,8 +24,8 @@ priv struct Ripple {
 }
 
 ///|
-/// The ripples going, by the id of what was pressed.
-// kept across runs: each is dropped once it has faded (a ripple is over in under a second)
+/// The ripples going, by the id of what was pressed (put back by layer.mbt's reset: a test that ended with one going
+/// left it to the next Tester's box of the same id, its Anim not at rest, screens_wbtest's home-sheet, 2026-10-24).
 let ripples : Map[Int, Array[Ripple]] = {}
 
 ///|
