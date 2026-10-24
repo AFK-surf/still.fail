@@ -173,12 +173,15 @@ test "tooltip: to a finger, shown as it is held on the trigger (no tap then), go
   t.draw()
   t.run_for(@ui.long_press_ms)
   assert_true(shown.val)
+  let lifted = t.time()
   t.release(x + w / 2.0, y + h / 2.0)
   assert_eq(taps.val, 1)
   assert_true(shown.val)
-  t.run_for(tooltip_lifted_ms - 1.0)
+  // (a millisecond before it goes)
+  let due = lifted + tooltip_lifted_ms
+  t.run_for(due - 1.0 - t.time())
   assert_true(shown.val)
-  t.run_for(1.0)
+  t.run_for(due - t.time())
   assert_false(shown.val)
 }
 
