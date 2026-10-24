@@ -5,21 +5,23 @@ import { IN, PANEL_PAD, TEXT_IN, inner, innerShape, pillInner } from "@stillfail
 import { mChat } from "./styles/chat.css.ts";
 
 /** The passage picked in a message of the chat's list (pick.tsx): on the accent's ground, its words as they are. */
-globalStyle("::highlight(chat-picked)", { backgroundColor: "color-mix(in srgb, var(--m-accent) 26%, transparent)", color: "inherit" });
+export const mPickedPaint = style({ position: "absolute", inset: "0", pointerEvents: "none", zIndex: "1", overflow: "hidden" });
+globalStyle(`${mPickedPaint} span`, { background: "color-mix(in srgb, var(--m-accent) 26%, transparent)" });
 
 /**
  * An end of the picked passage, over the list where its words are: a line down its side with a knob, and room round it
  * for a finger. Placed by pick.tsx as the list scrolls.
  */
 export const mHandle = style({
+  userSelect: "none", WebkitUserSelect: "none", WebkitTouchCallout: "none",
   position: "absolute", top: "0", left: "0", width: "2px", translate: "-50% 0", background: "var(--m-accent)", touchAction: "none", zIndex: "2",
   selectors: {
-    // The finger's room: 36px round the knob.
-    "&::before": { content: "", position: "absolute", left: "-17px", width: "36px", height: "36px" },
+    // The finger's room: 44px round the knob.
+    "&::before": { content: "", position: "absolute", left: "-21px", width: "44px", height: "44px" },
     "&::after": { content: "", position: "absolute", left: "-5px", width: "12px", height: "12px", borderRadius: "50%", background: "var(--m-accent)" },
-    "&[data-end=start]::before": { top: "-28px" },
+    "&[data-end=start]::before": { top: "-32px" },
     "&[data-end=start]::after": { top: "-11px" },
-    "&[data-end=end]::before": { bottom: "-28px" },
+    "&[data-end=end]::before": { bottom: "-32px" },
     "&[data-end=end]::after": { bottom: "-11px" },
   },
 });
@@ -33,6 +35,7 @@ const BUTTON = 32;
  */
 export const mPickBar = style([popover, {
   vars: { [IN]: pillInner(PANEL_PAD, BUTTON, vars.cornerScale) },
+  userSelect: "none", WebkitUserSelect: "none", WebkitTouchCallout: "none",
   position: "absolute", top: "0", left: "0", zIndex: "3", display: "flex", alignItems: "center", whiteSpace: "nowrap",
 }]);
 // The phone's rule for buttons' type (styles/root.css.ts) is stronger than a class of their own: said again here, as strong.
