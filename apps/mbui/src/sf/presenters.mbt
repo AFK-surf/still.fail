@@ -405,6 +405,36 @@ fn pick_popover(
   choose : (String) -> Unit,
 ) -> (Bool, Bool) {
   let (anchor, at) = anchor_of(c, p.from)
+  // short: a menu of choices (controls.css.ts chooserMenu: the one chosen checked before its words, the arrows,
+  // letters and Enter a menu's), a choice's note at its end
+  if choices.length() < pick_search_from {
+    let entries = choices.map(fn(x) { @kit.menu_radio(x.key, x.key == chosen, label=x.label) })
+    let icons : Map[String, String] = {}
+    let notes : Map[String, String] = {}
+    for x in choices {
+      if x.icon != "" {
+        icons[x.key] = x.icon
+      }
+      if x.note != "" {
+        notes[x.key] = x.note
+      }
+    }
+    let offset = match p.from {
+      At(_, _, 0.0, 0.0) => 0.0
+      _ => 6.0
+    }
+    let m = dropdown(c, key, p.open, anchor, entries, icons, chooser_menu_w, offset~, at?, row_end=fn(c, s) {
+      match notes.get(s.entry.value) {
+        Some(n) => c.text(n, style=pick_note) |> ignore
+        None => ()
+      }
+    })
+    match m.chosen {
+      Some(k) => done_with(c, p, fn() { choose(k) })
+      None => ()
+    }
+    return (m.open && m.chosen is None, p.open)
+  }
   let r = @kit.popover(
     c,
     key,
@@ -416,7 +446,7 @@ fn pick_popover(
     modal=true,
     look=fn(c, _, body) { small_panel(c, w=Px(chooser_menu_w), body) |> ignore },
     fn() {
-      let found = if choices.length() >= pick_search_from {
+      let found = {
         let f = input(c, key + "/search", placeholder=t("common.search"), field=p.line)
         focus_once(c, p, key + "/search")
         let found = pick_found(choices, line_of(p, f))
@@ -424,8 +454,6 @@ fn pick_popover(
           done_with(c, p, fn() { choose(found[0].key) })
         }
         found
-      } else {
-        choices
       }
       if found.is_empty() {
         c.box(style=panel_empty_at, fn() { c.text(t("common.noMatch"), style=panel_empty) |> ignore }) |> ignore
@@ -628,6 +656,11 @@ fn close_from_serial(serial : Int) -> Unit {
 /// Under a pick's search, when nothing is found (menuEmpty: 13, muted, a row's padding).
 // kept across runs: a value (no field of it changes)
 let panel_empty_at : @ui.Style = @ui.css("w=Full px=S2_5 py=S2")
+
+///|
+/// A choice's note at its row's end in a menu of choices (13, muted).
+// kept across runs: a value (no field of it changes)
+let pick_note : @ui.TextStyle = @ui.text_style(size=Sm, leading=L5, color=Muted, wrap=false)
 
 ///|
 // kept across runs: a value (no field of it changes)

@@ -327,3 +327,19 @@ test "a panel opened by nothing with a finger at Small: a sheet with its words a
   assert_eq(said, ["added"])
   assert_true(!presenting())
 }
+
+///|
+test "a short pick with a mouse at Large: a menu of choices beside what opened it, the chosen checked; one clicked" {
+  let chosen = Ref("c1")
+  let t = presenting_tester(desk, fn(from) { pick("选一个", choices_of(3), chosen.val, fn(k) { chosen.val = k }, from~) })
+  let (_, by) = where_is(t, "打开")
+  open_it(t)
+  assert_eq(presented_how, [AsPopover])
+  let (_, y) = where_is(t, "第1项")
+  assert_true(y > by && y < by + 80.0)
+  // its note at its end
+  assert_true(t.find("最近用过") is Some(_))
+  t.tap_text("第2项")
+  assert_eq(chosen.val, "c2")
+  assert_true(!presenting())
+}
