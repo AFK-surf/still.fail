@@ -241,10 +241,9 @@ fn tab_row(
         })
         .join(" | ")
       let b = c.box(style=if on { tab_on } else { tab_off }, id~, fn() {
+        // (drawn clear when not shown: the hand changes no box)
         let close = c.box(style=tab_close, id=cid, fn() {
-          if hot {
-            @sf.icon(c, "close", size=close_icon, color=t.p.muted) |> ignore
-          }
+          @sf.icon(c, "close", size=close_icon, color=if hot { t.p.muted } else { 0L }) |> ignore
         })
         c.semantics(close, Button, id=cid, label=@sf.t("web-pages.files.closeTab"))
         c.box(style=tab_parts, fn() {

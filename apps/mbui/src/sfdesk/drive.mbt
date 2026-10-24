@@ -963,20 +963,25 @@ pub fn drive_row(
       // next: `hover: none`; a spinner while something is under way)
       c.layer(fn() {
         c.box(style=more_place, fn() {
+          let shown = @sf.pointed_or_finger(over || open)
           if busy {
             @sf.spinner(c) |> ignore
-          } else if over || open || finger {
-            if @sf.icon_button(
-                c,
-                "more",
-                key=key + "/menu/more",
-                size=if compact { more_compact } else { more_size },
-                on=open,
-                label=@sf.t("web-main.menu.more"),
-              ) {
-              drive_row_menu(key, (row.items)(), Of(more), along=End)
-            }
-          } else if column && e.dir && along {
+          } else if shown || !(column && e.dir && along) {
+            // (there whether shown or not, clear while not: the hand changes no box)
+            c.box(style=if shown { more_shown } else { more_clear }, fn() {
+              if @sf.icon_button(
+                  c,
+                  "more",
+                  key=key + "/menu/more",
+                  size=if compact { more_compact } else { more_size },
+                  on=open,
+                  label=@sf.t("web-main.menu.more"),
+                ) {
+                drive_row_menu(key, (row.items)(), Of(more), along=End)
+              }
+            })
+            |> ignore
+          } else {
             c.box(style=next_box, fn() {
               @sf.icon(c, "chevron-right", size=disclosure_icon, color=t.p.muted) |> ignore
             })
@@ -1346,6 +1351,15 @@ let end_compact : @ui.Style = @ui.css("w=S7")
 /// Its ⋯ (more), and › in columns (next: 24), 6 in from its end, in its middle.
 // kept across runs: a value (no field of it changes)
 let more_place : @ui.Style = @ui.css("row w=Full h=Full pr=S1_5 gap=SPx align=ACenter justify=JEnd")
+
+///|
+/// The ⋯ shown (pointed at, or a finger's), or there and clear.
+// kept across runs: a value (no field of it changes)
+let more_shown : @ui.Style = @ui.css("row")
+
+///|
+// kept across runs: a value (no field of it changes)
+let more_clear : @ui.Style = @ui.css("row opacity=O0")
 
 ///|
 // kept across runs: a value (no field of it changes)
