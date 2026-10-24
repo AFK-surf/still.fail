@@ -15,8 +15,9 @@ priv struct SettingsFixture {
   mut auto : Bool
   /// the mode's page has no station (settings-first-station)
   mut none : Bool
-  /// the subscription signing in (settings-profile-login)
-  mut login : Bool
+  /// the subscription's sign-in: "" none, "needs_code" under way (settings-profile-login), "failed"
+  /// (settings-profile-login-failed)
+  mut login : String
   /// the vault not set up on this device (settings-vault-off)
   mut vault_off : Bool
   /// secrets of lin's still in plain text from before security mode (settings-vault-plain), until encrypted
@@ -43,7 +44,7 @@ let fx : SettingsFixture = {
   marks: {},
   auto: false,
   none: false,
-  login: false,
+  login: "",
   vault_off: false,
   plain_left: 0,
   skills_shared: {},
@@ -112,7 +113,7 @@ fn fixture_reset() -> Unit {
   fx.marks.clear()
   fx.auto = false
   fx.none = false
-  fx.login = false
+  fx.login = ""
   fx.vault_off = false
   fx.plain_left = 0
   fx.pairing = false
@@ -168,7 +169,11 @@ pub fn fixture_page(mode : String) -> String {
     // ChatGPT 团队's quota with its resets, its models (many, a filter, one to name by hand)
     "settings-profile-models" => up("", "settings/profile/ws1/st1/cx", 7)
     "settings-profile-login" => {
-      fx.login = true
+      fx.login = "needs_code"
+      up("", "settings/profile/ws1/st1/cc", 0)
+    }
+    "settings-profile-login-failed" => {
+      fx.login = "failed"
       up("", "settings/profile/ws1/st1/cc", 0)
     }
     "settings-connect-menu" => up("connect-menu", "", 0)
@@ -342,17 +347,26 @@ fn fx_profiles() -> Array[Json] {
       ("loginCommand", str("claude setup-token")),
       (
         "login",
-        if fx.login {
-          obj([
-            ("profile", str("cc")),
-            ("runtime", str("claude")),
-            ("state", str("needs_code")),
-            ("url", str("https://claude.example/oauth/authorize")),
-            ("startedAt", Json::number(0.0)),
-            ("expiresAt", Json::number(0.0)),
-          ])
-        } else {
-          Json::null()
+        match fx.login {
+          "" => Json::null()
+          "failed" =>
+            obj([
+              ("profile", str("cc")),
+              ("runtime", str("claude")),
+              ("state", str("failed")),
+              ("error", str("授权码已过期")),
+              ("startedAt", Json::number(0.0)),
+              ("expiresAt", Json::number(0.0)),
+            ])
+          state =>
+            obj([
+              ("profile", str("cc")),
+              ("runtime", str("claude")),
+              ("state", str(state)),
+              ("url", str("https://claude.example/oauth/authorize")),
+              ("startedAt", Json::number(0.0)),
+              ("expiresAt", Json::number(0.0)),
+            ])
         },
       ),
     ]),
@@ -1458,6 +1472,12 @@ pub fn fixture_call(name : String, params : Json) -> Result[Json, Json]? {
       Some(Ok(obj([])))
     "agentEnv.form.open" | "agentEnv.form.edit" | "agentEnv.form.drop" | "agentEnv.form.save" => Some(Ok(obj([])))
     "profile.quota" | "profile.check" | "profile.put" => Some(Ok(obj([])))
+    // the subscription's sign-in begun: as settings-profile-login has it, waiting on the code
+    "profile.login" => {
+      fx.login = "needs_code"
+      fx.version += 1
+      Some(Ok(obj([])))
+    }
     "profile.resetQuota" => {
       fx.resets_used += 1
       fx.version += 1

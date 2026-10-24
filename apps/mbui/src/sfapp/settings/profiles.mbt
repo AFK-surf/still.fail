@@ -472,12 +472,8 @@ fn profile_page(c : @ui.Ctx, core : Core, here : Here, address : String, id : St
         // a subscription's (or one on an account: OpenCode Go's, Kimi Code's) is the head of its sign-in's card; the
         // machine's own login's, of the card that says whose it is; a key's, of the card with its key (one card for the
         // account, not a card of a pill over another)
-        let signs = !copy &&
-          (kind == "subscription" || flag(field(pv, "access"), "login")) &&
-          !flag(pv, "machine")
-        if signs {
-          let state = text(field(pv, "login"), "state")
-          blocks.append(profile_sign_in(c, core, address, pv, text(check, "state") == "login" || signing_in.contains(state), status))
+        if !copy && signs_in(pv) {
+          blocks.append(profile_sign_in(c, core, address, pv, status))
         } else if !copy && flag(pv, "machine") {
           // on the machine's own login: whose it is is changed on that machine, not here
           let runtime = runtime_label(text(pv, "runtime"))

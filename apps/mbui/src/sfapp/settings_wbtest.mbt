@@ -613,15 +613,43 @@ test "the run's 账号: what 自动分配 means, then 自动分配 and each acco
 }
 
 ///|
-test "a subscription's page: where it stands at the head of its sign-in's card, 重新登录 with 在机器上手动登录 beside it (Profiles.kt SignIn)" {
+test "a subscription's page signed in: where it stands alone on its card; 重新登录 and 在机器上手动登录 under its …" {
   let t = settings_tester("profile:ws1/st1#cc")
-  // one card for the account: its pill, then the button and the link beside it, no title over the card
+  // one card for the account: its pill, no title over the card, nothing to do on it while it is signed in and well
+  assert_true(t.find("可用") is Some(_))
+  assert_true(t.find("Claude 订阅") is None)
+  assert_true(t.find("重新登录") is None)
+  assert_true(t.find("在机器上手动登录") is None)
+  let more = fn() {
+    let (x, y) = t.locate("icon:more")[0]
+    t.tap(x, y)
+    sheet_rested(t, "settings-sheet")
+  }
+  // its …: the command to run by hand, in a sheet of its own
+  more()
+  t.tap_text("在机器上手动登录")
+  sheet_rested(t, "settings-sheet")
+  assert_true(t.find("claude setup-token") is Some(_))
+  // (put away by a tap beside it)
+  t.tap(195.0, 60.0)
+  sheet_rested(t, "settings-sheet")
+  // 重新登录: begun on the station, its steps on the card
+  more()
+  t.tap_text("重新登录")
+  sheet_rested(t, "settings-sheet")
+  t.draw()
+  assert_true(t.find("打开授权页面") is Some(_))
+}
+
+///|
+test "a subscription's sign-in that failed: why, then 重新登录 with 在机器上手动登录 beside it on its card (Profiles.kt SignIn)" {
+  let t = settings_tester("profile:ws1/st1#cc", shows="settings-profile-login-failed")
   let (_, pill_y) = t.find("可用").unwrap()
+  let (_, why_y) = t.find("上次登录失败：授权码已过期").unwrap()
   let (bx, by) = t.find("重新登录").unwrap()
   let (mx, my) = t.find("在机器上手动登录").unwrap()
-  assert_true(by > pill_y)
+  assert_true(why_y > pill_y && by > why_y)
   assert_true((my - by).abs() < 2.0 && mx > bx)
-  assert_true(t.find("Claude 订阅") is None)
   // the command to run by hand, under them once asked
   t.tap_text("在机器上手动登录")
   t.draw()

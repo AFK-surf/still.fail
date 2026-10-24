@@ -56,7 +56,8 @@ fn open_pick_station(title : String, stations : Array[Json], go : (String) -> Un
 }
 
 ///|
-/// A profile's own actions (openProfileMenu): renamed (not one on the machine's login), checked again, deleted (one on
+/// A profile's own actions (openProfileMenu): renamed (not one on the machine's login), checked again, its account
+/// signed in to again or by hand on the machine while its card asks for neither (signed in and well), deleted (one on
 /// the machine's login stopped instead: the login stays the machine's).
 fn open_profile_menu(_core : Core, station : String, p : Json?) -> Unit {
   let id = text(p, "id")
@@ -86,6 +87,17 @@ fn open_profile_menu(_core : Core, station : String, p : Json?) -> Unit {
         obj([("station", str(station)), ("id", str(id))]),
         done=tr("android-settings.profile.checked"),
       )
+    }
+    if signs_in(p) && !sign_in_asked(p) {
+      if pick_row(c, "profile-login", tr("android-settings.login.again"), busy=is_doing(core, ["profile.login"], on)) {
+        close_sheet()
+        start_sign_in(core, station, id)
+      }
+      // (OpenCode's has no command to run by hand)
+      let command = text(p, "loginCommand")
+      if command != "" && pick_row(c, "profile-login-manual", tr("android-settings.login.manualShort")) {
+        open_manual_sign_in(command)
+      }
     }
     let runtime = runtime_label(text(p, "runtime"))
     if pick_row(
@@ -852,12 +864,59 @@ priv struct LoginState {
 let login_state : LoginState = { copied: {}, manual: {}, error: {}, seen: {} }
 
 ///|
+/// Whether a profile is signed in to its account from here (a subscription's, or one on an account: OpenCode Go's,
+/// Kimi Code's), not on the machine's own login.
+fn signs_in(p : Json?) -> Bool {
+  (text(field(p, "access"), "kind") == "subscription" || flag(field(p, "access"), "login")) && !flag(p, "machine")
+}
+
+///|
+/// Whether its account is to be signed in to: its check says so, or a sign-in is under way.
+fn sign_in_needed(p : Json?) -> Bool {
+  text(field(p, "check"), "state") == "login" || signing_in.contains(text(field(p, "login"), "state"))
+}
+
+///|
+/// Whether its sign-in's card asks for one (its buttons): needed, or the last one failed. Signed in and well, it is
+/// asked for from its "…" instead.
+fn sign_in_asked(p : Json?) -> Bool {
+  sign_in_needed(p) || text(field(p, "login"), "state") == "failed"
+}
+
+///|
+/// Its sign-in begun on the station (`profile.login`); one that could not begin, said so.
+fn start_sign_in(core : Core, station : String, id : String) -> Unit {
+  (core.call)("profile.login", obj([("station", str(station)), ("id", str(id))]), fn(r) {
+    match r {
+      Ok(_) => ()
+      Err(e) => (core.say)(fill("android-settings.signIn.beginFailed", [("error", error_text(e))]))
+    }
+  })
+}
+
+///|
+/// The command to sign its account in on the machine by hand, in a sheet of its own (from its "…").
+fn open_manual_sign_in(command : String) -> Unit {
+  open_sheet(0.36, fn(c, core) {
+    sheet_head(c, tr("android-settings.login.manualShort"))
+    c.box(style=manual_sign_in_room, fn() { command_box(c, core, command) }) |> ignore
+  })
+}
+
+///|
+/// Its command's room in its sheet: 20 in from the sheet's sides, 24 over its foot.
+// kept across runs: a value (no field of it changes)
+let manual_sign_in_room : @ui.Style = @ui.style(w=Full, px=S5, pb=S6)
+
+///|
 /// A subscription's sign-in (SignIn): one card, `head` (where it stands: its pill says it once, no title over the
 /// card saying it again) at its top, while signing in a way out of it at the head's end (取消登录) and the browser's
-/// steps relayed here (LoginSteps); not under way, what was off or how it is done in words, then 登录 / 重新登录
-/// (`profile.login`) with 在机器上手动登录 beside it and the command to sign in on the machine by hand under them. Its
-/// buttons at its foot, in its corners; the command last instead, its corner taken from the command's box.
-fn profile_sign_in(c : @ui.Ctx, core : Core, station : String, p : Json?, needed : Bool, head : () -> Unit) -> Array[() -> Unit] {
+/// steps relayed here (LoginSteps). Asked for (`sign_in_asked`), what was off or how it is done in words, then 登录 /
+/// 重新登录 (`profile.login`) with 在机器上手动登录 beside it and the command to sign in on the machine by hand under
+/// them; signed in and well, the head alone (signing in again is in its "…", open_profile_menu), and while one asked
+/// from there starts, the wait for its link. Its buttons at its foot, in its corners; the command last instead, its
+/// corner taken from the command's box.
+fn profile_sign_in(c : @ui.Ctx, core : Core, station : String, p : Json?, head : () -> Unit) -> Array[() -> Unit] {
   let t = @sf.theme()
   let id = text(p, "id")
   let on = [("station", station), ("id", id)]
@@ -872,14 +931,18 @@ fn profile_sign_in(c : @ui.Ctx, core : Core, station : String, p : Json?, needed
     _ => ()
   }
   login_state.seen[k] = state
+  let needed = sign_in_needed(p)
+  let asked = sign_in_asked(p)
+  let starting = is_doing(core, ["profile.login"], on)
   let command = text(p, "loginCommand")
   let manual = login_state.manual.get(k).unwrap_or(false)
-  let command_last = !active && command != "" && manual
+  let command_last = !active && asked && command != "" && manual
   let waits = active && (state == "starting" || state == "verifying" || state == "done")
   [
     fn() {
-      // (the command last: the card's corner taken from its box's, CARD_PAD in: concentricOut(COMMAND_BOX_CORNER, CARD_PAD))
-      card(c, foot=!command_last && !waits, corner?=if command_last { Some(Around) } else { None }, fn() {
+      // (the command last: the card's corner taken from its box's, CARD_PAD in: concentricOut(COMMAND_BOX_CORNER, CARD_PAD);
+      // signed in and well, no button at its foot: a card's own corner)
+      card(c, foot=!command_last && !waits && asked, corner?=if command_last { Some(Around) } else { None }, fn() {
         c.box(style=sign_in_rows, fn() {
           c.box(dir=Row, w=Fill(1.0), fn() {
             c.box(w=Fill(1.0), fn() { head() }) |> ignore
@@ -899,8 +962,8 @@ fn profile_sign_in(c : @ui.Ctx, core : Core, station : String, p : Json?, needed
             login_steps(c, core, k, job, provider, fn(code) {
               act(core, tr("android-settings.login.finish"), "profile.loginCode", obj([("station", str(station)), ("id", str(id)), ("code", str(code))]))
             })
-          } else {
-            // signed in: the pill above says so; only what was off, or how it is done, in words
+          } else if asked {
+            // what was off, or how it is done, in words
             if state == "failed" {
               c.text(fill("android-settings.login.failed", [("error", text(job, "error"))]), style=sign_in_failed_words) |> ignore
             } else if needed {
@@ -912,14 +975,9 @@ fn profile_sign_in(c : @ui.Ctx, core : Core, station : String, p : Json?, needed
                   "login-start",
                   tr(if needed && state != "done" { "android-settings.login.signIn" } else { "android-settings.login.again" }),
                   needed,
-                  busy=is_doing(core, ["profile.login"], on),
+                  busy=starting,
                 ) {
-                (core.call)("profile.login", obj([("station", str(station)), ("id", str(id))]), fn(r) {
-                  match r {
-                    Ok(_) => ()
-                    Err(e) => (core.say)(fill("android-settings.signIn.beginFailed", [("error", error_text(e))]))
-                  }
-                })
+                start_sign_in(core, station, id)
               }
               // (OpenCode's has no command to run by hand)
               if command != "" && tap_text(c, "login-manual", tr("android-settings.login.manualShort"), size=14.0) {
@@ -930,6 +988,9 @@ fn profile_sign_in(c : @ui.Ctx, core : Core, station : String, p : Json?, needed
             if manual && command != "" {
               command_box(c, core, command)
             }
+          } else if starting {
+            // signed in again from its "…": the card says it is under way until the station's sign-in says where it is
+            wait_line(c, fill("android-settings.login.making", [("provider", provider)]))
           }
         })
         |> ignore
