@@ -470,6 +470,12 @@ fn side_chat_row(
   let asked = parts.fold(init=None, fn(at, p) { if at is Some(_) { at } else { c.menu_asked(p) } })
   match asked {
     Some((x, y)) if menu => {
+      // (at a mouse's pointer; held by a finger, under the row, which it would cover, from the finger's way along it,
+      // as the phone's row menu is)
+      let (x, y) = match c.rect_of(id) {
+        Some((_, ry, _, rh)) if @ui.pointing() is Finger => (x, ry + rh)
+        _ => (x, y)
+      }
       wide.menu = Some((key, item, x, y))
       wide.filter_open = false
       wide.attention_open = false
@@ -491,13 +497,16 @@ fn side_chat_row(
     _ => false
   }
   let hover = parts.iter().any(fn(p) { c.hovered(p) }) || c.hovered(archive) || menu_on
+  // its 归档 key while pointed at by a mouse; a finger holding it has its menu, 归档 in it (held, the row shows its
+  // time in place of who is in it, as the phone's: mobile/Home.css.ts mRowAside `data-held`)
+  let archive_key = hover && menu && @ui.pointing() is Mouse
   let pressed = parts.iter().any(fn(p) { c.pressed(p) })
   let ground = nav_ground(c, "side/row/" + key, hover || pressed, on)
   let offline = item.offline is Some(_)
   c.box(style=if more { side_row_more } else { side_row_last }, fn() {
     c.box(style=side_row.then(@ui.style(bg=Data(ground))), id~, fn() {
       c.box(style=if item.settled { side_text_settled } else { side_text }, fn() {
-        c.box(style=if hover && menu { side_head_room } else { side_head }, fn() {
+        c.box(style=if archive_key { side_head_room } else { side_head }, fn() {
           let tone = row_tone(item)
           if tone != "" {
             c.box(style=side_mark_slot, fn() { row_mark(c, key, tone) }) |> ignore
@@ -592,7 +601,7 @@ fn side_chat_row(
     })
     |> ignore
     // 归档, at the row's top right while it is pointed at (Sidebar.css.ts rowArchive: 5 down, 6 in)
-    if hover && menu && wide.renaming != key {
+    if archive_key && wide.renaming != key {
       c.layer(fn() {
         c.box(style=side_archive_at, fn() {
           c.cursor(archive, Hand)
