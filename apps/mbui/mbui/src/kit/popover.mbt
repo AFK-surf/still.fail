@@ -4,7 +4,8 @@
 // once the pointer has rested on its trigger, kept open while it is over the trigger or the card), a tooltip (Radix's
 // Tooltip: words about its trigger, shown once the pointer has rested on it or at once when the keyboard's focus comes
 // to it; shut by a press on the trigger and by Escape until the pointer leaves; one shown soon after another closed
-// skips the wait). They come in from their side by `presence`.
+// skips the wait; to a finger, which rests on nothing, shown as it is held on the trigger, as Android's tooltips are).
+// They come in from their side by `presence`.
 
 ///|
 /// What a popover's, a hover card's or a tooltip's look is given: the side of its trigger it went on, how far in it
@@ -55,8 +56,9 @@ pub let hover_card_close_ms : Double = 300.0
 
 ///|
 /// `key`'s hover card (see the file's head) for the trigger `trigger` (its id): opened once a mouse has rested on the
-/// trigger `open_delay` ms, closed `close_delay` ms after it has left both, and by Escape and a press outside. Whether
-/// it is open.
+/// trigger `open_delay` ms, closed `close_delay` ms after it has left both, and by Escape and a press outside. A finger
+/// rests on nothing: it holds the trigger (long_press_ms) to open it, or with `tap` (a trigger that does nothing else
+/// when tapped) taps it, and it stays until a press outside or another tap on the trigger. Whether it is open.
 pub fn hover_card(
   c : @ui.Ctx,
   key : String,
@@ -66,20 +68,27 @@ pub fn hover_card(
   side? : @ui.Side = Bottom,
   along? : @ui.Along = Middle,
   offset? : Double = 6.0,
+  tap? : Bool = false,
   look? : (@ui.Ctx, PopState, () -> Unit) -> Unit = popover_look,
   body : () -> Unit,
 ) -> Bool {
   install()
   let id = c.id(key)
   let was = kit.val.opens.get(id).unwrap_or(false)
-  // (a mouse's: a finger rests on nothing, @ui.pointing)
-  let mouse = @ui.pointing() is Mouse
-  let on_trigger = mouse && c.hovered(trigger)
-  let on_card = mouse && was && pointer_in(c, c.id(key + "/panel"))
-  let mut open = if was {
-    !after(c, key + "/out", !(on_trigger || on_card), close_delay)
-  } else {
-    after(c, key + "/in", on_trigger, open_delay)
+  let mut open = match @ui.pointing() {
+    Finger => {
+      let tapped = tap && c.clicked(trigger)
+      if was { !tapped } else { tapped || c.held_long(trigger) }
+    }
+    Mouse => {
+      let on_trigger = c.hovered(trigger)
+      let on_card = was && pointer_in(c, c.id(key + "/panel"))
+      if was {
+        !after(c, key + "/out", !(on_trigger || on_card), close_delay)
+      } else {
+        after(c, key + "/in", on_trigger, open_delay)
+      }
+    }
   }
   let p = presence(c, key, open)
   if p.built {
@@ -112,9 +121,14 @@ pub let tooltip_delay_ms : Double = 700.0
 pub let tooltip_skip_ms : Double = 300.0
 
 ///|
+/// How long a tooltip a finger held open stays once it is lifted (Android's: 1500 ms).
+pub let tooltip_lifted_ms : Double = 1500.0
+
+///|
 /// `key`'s tooltip (see the file's head) for the trigger `trigger` (its id), saying `text`: shown once a mouse has
 /// rested on it `delay` ms (at once within `skip` ms of another closing), or at once while it has the focus by the
-/// keyboard; beside the trigger, or beside `at` (a rect in the window: a point, the pointer, for a tip that follows
+/// keyboard, or held by a finger on the trigger (long_press_ms: the press is then no tap) until tooltip_lifted_ms
+/// after it is lifted; beside the trigger, or beside `at` (a rect in the window: a point, the pointer, for a tip that follows
 /// it along a tall thin trigger, the web's usePointerTip). `shown`: held open by the app meanwhile (a mark that only
 /// explains itself, tapped by a finger, which rests on nothing). Whether it shows.
 pub fn tooltip(
@@ -139,6 +153,17 @@ pub fn tooltip(
   // (a mouse's: a finger held on a button or dragging a list over one shows no tip, @ui.pointing)
   let hovered = @ui.pointing() is Mouse && (c.hovered(trigger) || pointer_in(c, trigger))
   let focused = c.focus_shown(trigger)
+  // a finger held on the trigger: shown while it stays down and a moment after
+  if @ui.pointing() is Finger && c.held_long(trigger) {
+    kit.val.held_tips[id] = true
+  }
+  if kit.val.held_tips.contains(id) {
+    let (_, _, down) = c.pointer()
+    if after(c, key + "/lifted", !down, tooltip_lifted_ms) {
+      kit.val.held_tips.remove(id)
+    }
+  }
+  let held = kit.val.held_tips.contains(id)
   // pressed, or Escape: shut until the pointer and the focus have left it
   if c.pressed(trigger) || c.clicked(trigger) {
     kit.val.shut[id] = true
@@ -149,7 +174,7 @@ pub fn tooltip(
   let shut = kit.val.shut.contains(id)
   let soon = c.within(tip_closed, skip)
   let rested = after(c, key + "/in", hovered, if soon { 0.0 } else { delay })
-  let mut open = shown || (!shut && (focused || rested || (was && hovered)))
+  let mut open = shown || held || (!shut && (focused || rested || (was && hovered)))
   let p = presence(c, key, open, enter=@motion.tween(100.0, ease=Out))
   if p.built {
     let o = c.overlay(key, anchor=trigger, outside=false, initial_focus=0, inert=p.leaving(), fn() {
@@ -157,6 +182,7 @@ pub fn tooltip(
     })
     if o.dismissed is Some(_) {
       kit.val.shut[id] = true
+      kit.val.held_tips.remove(id)
       open = false
     }
   }

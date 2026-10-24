@@ -237,6 +237,9 @@ pub struct Ctx {
   /// when the pointer's latest event (down, moved, up) came, its own time (Ctx::pointer_at)
   mut pointer_t : Double
   mut held_told : Double
+  /// what a press told held long (Ctx::long_press) was on, and in which frame
+  mut held_on : Int
+  mut held_frame : Int
   /// the press as frames see it (Ctx::press, press.mbt): as the frame it was last worked out in saw it, whether a
   /// frame saw it down, when one first did
   mut press_seen : Press
@@ -466,6 +469,8 @@ fn Ctx::new() -> Ctx {
     press_late: false,
     pointer_t: 0.0,
     held_told: -1.0,
+    held_on: 0,
+    held_frame: -1,
     press_seen: no_press,
     press_seen_frame: -1,
     press_was_down: false,
@@ -757,7 +762,7 @@ pub fn Ctx::box(
         self.narrow,
         self.theme.dark,
         selected,
-        id != 0 && self.hovered(id),
+        id != 0 && self.lit(id),
         id != 0 && self.focus_shown(id),
         id != 0 && self.pressed(id),
         disabled,
@@ -1167,8 +1172,20 @@ pub fn Ctx::set_clear(self : Ctx, color : Int64) -> Unit {
 }
 
 ///|
+/// Whether a mouse's pointer rests on `id` (a finger hovers over nothing: Pointing). For what only a resting pointer
+/// is shown; a look that answers the hand on it is Ctx::lit.
 pub fn Ctx::hovered(self : Ctx, id : Int) -> Bool {
   self.hover == id
+}
+
+///|
+/// Whether `id` is lit by the hand on it: a mouse's pointer resting on it, a finger pressing it (the web's `:hover`
+/// with a fine pointer, `:active` with a coarse one). What a style's `hovered` patch and a widget's hovered look go by.
+pub fn Ctx::lit(self : Ctx, id : Int) -> Bool {
+  match pointing() {
+    Mouse => self.hover == id
+    Finger => self.pressed(id)
+  }
 }
 
 ///|

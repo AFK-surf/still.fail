@@ -147,6 +147,78 @@ test "tooltip: shown once the pointer has rested on its trigger; at once by the 
 }
 
 ///|
+test "tooltip: to a finger, shown as it is held on the trigger (no tap then), gone a moment after it is lifted" {
+  let shown = Ref(false)
+  let taps = Ref(0)
+  let t = @ui.Tester::new(
+    fn(c) {
+      c.column(gap=40.0, pad=80.0, fn() {
+        let r = button(c, "Bold", key="bold")
+        if r.clicked {
+          taps.val += 1
+        }
+        shown.val = tooltip(c, "tip", r.id, "Bold")
+      })
+      |> ignore
+    },
+    platform=2,
+  )
+  let (x, y, w, h) = t.get(@ui.Button, label="Bold").rect
+  // a tap: a tap, no tip
+  t.tap(x + w / 2.0, y + h / 2.0)
+  assert_eq(taps.val, 1)
+  assert_false(shown.val)
+  // held: the tip, and lifting it taps nothing
+  t.press_at(x + w / 2.0, y + h / 2.0)
+  t.draw()
+  t.run_for(@ui.long_press_ms)
+  assert_true(shown.val)
+  t.release(x + w / 2.0, y + h / 2.0)
+  assert_eq(taps.val, 1)
+  assert_true(shown.val)
+  t.run_for(tooltip_lifted_ms - 1.0)
+  assert_true(shown.val)
+  t.run_for(1.0)
+  assert_false(shown.val)
+}
+
+///|
+test "hover card: to a finger, opened as it holds the trigger, or by a tap with `tap`; a press outside closes it" {
+  let held = Ref(false)
+  let tapped = Ref(false)
+  let t = @ui.Tester::new(
+    fn(c) {
+      c.column(gap=40.0, pad=80.0, fn() {
+        let a = button(c, "Held", key="held")
+        held.val = hover_card(c, "card-a", a.id, fn() { c.text("A's card") |> ignore })
+        let b = button(c, "Tapped", key="tapped")
+        tapped.val = hover_card(c, "card-b", b.id, tap=true, fn() { c.text("B's card") |> ignore })
+      })
+      |> ignore
+    },
+    platform=2,
+  )
+  let (ax, ay, aw, ah) = t.get(@ui.Button, label="Held").rect
+  // a tap on one without `tap`: nothing
+  t.tap(ax + aw / 2.0, ay + ah / 2.0)
+  assert_false(held.val)
+  t.press_at(ax + aw / 2.0, ay + ah / 2.0)
+  t.draw()
+  t.run_for(@ui.long_press_ms)
+  t.release(ax + aw / 2.0, ay + ah / 2.0)
+  assert_true(held.val)
+  // a press outside closes it
+  t.tap(380.0, 800.0)
+  assert_false(held.val)
+  let (bx, by, bw, bh) = t.get(@ui.Button, label="Tapped").rect
+  t.tap(bx + bw / 2.0, by + bh / 2.0)
+  assert_true(tapped.val)
+  // tapped again: closed
+  t.tap(bx + bw / 2.0, by + bh / 2.0)
+  assert_false(tapped.val)
+}
+
+///|
 test "tooltip: one shown soon after another closed skips the wait" {
   let a = Ref(false)
   let b = Ref(false)

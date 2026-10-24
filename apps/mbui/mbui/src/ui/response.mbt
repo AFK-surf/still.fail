@@ -13,7 +13,7 @@ pub(all) struct Response {
   long_pressed : Bool
   /// where it was clicked with the secondary button (a right click; Ctrl-click on macOS), in the window
   right_clicked : (Double, Double)?
-  /// the pointer is over it (a mouse's: a finger's only while down)
+  /// lit by the hand on it (Ctx::lit): a mouse's pointer resting on it, a finger pressing it
   hovered : Bool
   /// held down
   pressed : Bool
@@ -85,7 +85,7 @@ pub fn Ctx::interact(
   }
   let rect = self.rect_of(id).unwrap_or((0.0, 0.0, 0.0, 0.0))
   if disabled {
-    return { ..Response::none(), id, hovered: self.hover == id, rect }
+    return { ..Response::none(), id, hovered: self.lit(id), rect }
   }
   if focusable {
     self.focusable(id, node~, keys~, on_press=focus_on_press)
@@ -96,7 +96,7 @@ pub fn Ctx::interact(
     clicked: self.clicked.contains(id) || self.action_asked(id, Activate),
     long_pressed: long,
     right_clicked: self.right_clicked(id),
-    hovered: self.hover == id,
+    hovered: self.lit(id),
     pressed: self.active == id && self.down,
     focused: self.focus == id,
     focus_shown: self.focus == id && self.focus_visible,
@@ -104,6 +104,14 @@ pub fn Ctx::interact(
     changed: false,
     rect,
   }
+}
+
+///|
+/// Whether `id` has been held still long_press_ms since it was pressed: in the frame it comes to, to whoever asks
+/// (the widget's response, its tooltip); the press is then no tap. What a finger asks a menu or a tooltip by.
+pub fn Ctx::held_long(self : Ctx, id : Int) -> Bool {
+  self.long_press(id) ||
+  (id != 0 && self.held_on == id && self.held_frame == self.frame_no && self.held_told == self.press_at)
 }
 
 ///|
@@ -119,6 +127,8 @@ fn Ctx::long_press(self : Ctx, id : Int) -> Bool {
   let held = self.now - self.press_at
   if held >= long_press_ms {
     self.held_told = self.press_at
+    self.held_on = id
+    self.held_frame = self.frame_no
     self.take_press()
     true
   } else {

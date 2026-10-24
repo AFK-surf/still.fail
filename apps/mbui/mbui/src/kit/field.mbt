@@ -79,7 +79,7 @@ fn pill_field(
 ) -> Unit {
   let t = c.theme()
   let fid = c.id(key + "/field")
-  let st = { id: fid, w, focused: c.editor_focused(key), hovered: c.hovered(fid), disabled, invalid }
+  let st = { id: fid, w, focused: c.editor_focused(key), hovered: c.lit(fid), disabled, invalid }
   look(c, st, fn() {
     got(
       c.editor(
