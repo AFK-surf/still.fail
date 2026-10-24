@@ -5,8 +5,9 @@
 # on (native by default, as the apps are built; CI's check-mbui: native on Linux, and on macOS on main). PARTS: which
 # of the two (app: the design system, the pages, the screens, gallery and player; replay: the core and the flows seen
 # again), both by default; check-mbui runs each on a runner of its own. SFAPP_SHARDS: how many processes sfapp's test
-# files are run in side by side (5); 1, all in one, as check-mbui runs them: what one file leaves behind that a later
-# one trips on shows only there. mbui's own: its scripts/test.sh.
+# files are run in side by side (5); 1, the pages' files all in one (the two screen sweeps a process each beside
+# them), as check-mbui runs them: what one file leaves behind that a later one trips on shows only there. mbui's own:
+# its scripts/test.sh.
 D="$(cd "$(dirname "$0")" && pwd)"
 . "$D/env.sh"
 cd "$A"
@@ -79,11 +80,23 @@ for t in ${TARGETS:-native}; do
     files=(src/sfapp/*_wbtest.mbt)
     n=${SFAPP_SHARDS:-5}
     runs=("$(echo " $pkgs " | sed 's| -p stillfail/sfapp | |')")
-    for ((k = 0; k < n; k++)); do
-      shard=()
-      for ((i = k; i < ${#files[@]}; i += n)); do shard+=("${files[i]}"); done
-      [ ${#shard[@]} = 0 ] || runs+=("${shard[*]}")
-    done
+    if [ "$n" = 1 ]; then
+      # (one: the files that test the pages in one process, every one after the ones moon runs before it, so what one
+      # leaves behind that a later one trips on shows (shards, a process each, hide it); the two that sweep every
+      # screen, each a Tester from scratch per screen (screens, squeeze: 10.7 and 7.8 of the 39 s on Studio,
+      # 2026-10-25), a process each beside it, so the run takes the longest of the three, not their sum)
+      sweeps=(src/sfapp/screens_wbtest.mbt src/sfapp/squeeze_wbtest.mbt)
+      pages=()
+      for f in "${files[@]}"; do [[ " ${sweeps[*]} " = *" $f "* ]] || pages+=("$f"); done
+      runs+=("${pages[*]}")
+      for f in "${sweeps[@]}"; do [ -f "$f" ] && runs+=("$f"); done
+    else
+      for ((k = 0; k < n; k++)); do
+        shard=()
+        for ((i = k; i < ${#files[@]}; i += n)); do shard+=("${files[i]}"); done
+        [ ${#shard[@]} = 0 ] || runs+=("${shard[*]}")
+      done
+    fi
   fi
   pids=()
   for i in "${!runs[@]}"; do
