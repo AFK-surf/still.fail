@@ -108,6 +108,12 @@ globalStyle(`${navTrack} > ${navScroll}`, { flex: "none", width: "20%", contain:
 // before it goes (it gets inert before the slide starts); the one it goes to shows at once (that has no transition).
 globalStyle(`${navTrack}:not([data-sliding]) > ${navScroll}[inert]`, { contentVisibility: "hidden", transition: "content-visibility 0s 240ms allow-discrete" });
 globalStyle(`${STILL} ${navTrack}:not([data-sliding]) > ${navScroll}[inert]`, stillAtOnce);
+// Not drawn is not stopped: a loop left running in a pane gone hidden (a row's spokes, its waiting dots) cannot go to
+// the compositor, so the page is woken for it every frame of the screen (120 a second), and every motion shown is
+// worked out again on each of those frames. So they end there, at once, while the pane is still drawn: once it is
+// hidden its style is not looked at again, and a rule coming then would never reach them (2026-10-24).
+const hiddenPane = `${navTrack}:not([data-sliding]) > ${navScroll}[inert]`;
+globalStyle(`${hiddenPane} *, ${hiddenPane} *::before, ${hiddenPane} *::after`, { animation: "none !important" });
 
 export const navFoot = style({ ...band, marginTop: "auto", padding: 8 });
 export const navFootRow = style({ display: "flex", alignItems: "center", gap: 4 });
