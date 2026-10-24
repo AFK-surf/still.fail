@@ -6,29 +6,11 @@ test "wide: 接力到频道… from a row's menu: the dialog lists the bot's pla
   reset()
   let calls : Array[Made] = []
   let base = fixture("home")
-  let places : Json = {
-    "connects": [
-      {
-        "id": "slack-1",
-        "kind": "slack",
-        "name": "星火助手",
-        "team": "星火",
-        "places": [
-          { "id": "C1", "name": "dev", "kind": "channel", "used": 20 },
-          { "id": "C2", "name": "ops", "kind": "channel", "private": true },
-        ],
-      },
-    ],
-  }
   let src : Source = {
     ..base,
     call: fn(name, params, done) {
       calls.push({ name, params, bytes: None, done, heard: None })
-      match name {
-        "chat.relayPlaces" => done(Ok(places))
-        "chat.relay" => done(Ok({ "place": "#dev" }))
-        _ => (base.call)(name, params, done)
-      }
+      (base.call)(name, params, done)
     },
   }
   let t = @ui.Tester::new(fn(c) { view(c, src) }, w=1280.0, h=800.0, platform=0)

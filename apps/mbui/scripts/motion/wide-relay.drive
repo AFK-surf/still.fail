@@ -1,0 +1,10 @@
+# The wide frame's 接力到频道… from a chat's row (sfdesk/relay.mbt, Relay.tsx): the dialog's places, one picked.
+timeout 20000
+until 整理发布清单
+wait 400
+rightclick 整理发布清单
+wait 700
+tap 接力到频道…
+wait 1400
+tap #dev
+wait 1600
