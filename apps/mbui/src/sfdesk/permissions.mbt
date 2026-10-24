@@ -9,7 +9,8 @@
 ///|
 /// 权限 (PermissionsPage): what the system lets still.fail do on this device, each with what it is for and whether it
 /// is given; not given, what goes without it and the way to give it.
-fn permissions_page(c : @ui.Ctx, core : Core) -> Unit {
+fn permissions_page(c : @ui.Ctx, core : Core, frame : PageFrame) -> Unit {
+  let look = look_of(c)
   let notify = (core.topic)("notify", Map::new()).value
   let state = match text(notify, "permission") {
     "granted" | "denied" | "default" => text(notify, "permission")
@@ -23,9 +24,11 @@ fn permissions_page(c : @ui.Ctx, core : Core) -> Unit {
     },
     args=[("name", "still.fail")],
   )
-  desk_page(
+  look_page(
     c,
     core,
+    frame,
+    look,
     "permissions",
     @sf.t("web-pages.settings.nav.permissions"),
     lead=@sf.t("web-pages.permissions.lead", args=[("name", "still.fail")]),
@@ -33,6 +36,7 @@ fn permissions_page(c : @ui.Ctx, core : Core) -> Unit {
       fn() {
         permission_row(
           c,
+          look,
           "bell",
           @sf.t("web-pages.permissions.notify.name"),
           @sf.t("web-pages.permissions.notify.purpose"),
@@ -52,6 +56,7 @@ fn permissions_page(c : @ui.Ctx, core : Core) -> Unit {
 /// in red); not given, what goes without it, where the system keeps it when refused, and the way to give it.
 fn permission_row(
   c : @ui.Ctx,
+  look : Look,
   icon : String,
   name : String,
   purpose : String,
@@ -62,7 +67,7 @@ fn permission_row(
   open : () -> Unit,
 ) -> Unit {
   let t = @sf.theme()
-  c.box(style=desk_card, fn() {
+  look_card(c, look, fn() {
     c.box(style=desk_card_row, fn() {
       c.box(style=permission_icon, fn() { @sf.icon(c, icon, size=permission_glyph, color=t.p.text) |> ignore }) |> ignore
       c.box(style=desk_card_text, fn() {
@@ -109,7 +114,6 @@ fn permission_row(
       |> ignore
     }
   })
-  |> ignore
 }
 
 // ---------------------------------------------------------------------------

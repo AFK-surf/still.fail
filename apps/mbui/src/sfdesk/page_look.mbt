@@ -232,6 +232,16 @@ let narrow_card_room : @ui.Style = @ui.css("w=Full px=S3 pb=S2_5")
 let narrow_card : @ui.Style = @ui.style(w=Full, p=S2, radius=@sf.list_card_radius, bg=Card, clip=true)
 
 ///|
+/// A card of words on the page (narrow: Card, 12 from the page's sides, 10 under it; wide: pages.css.ts card, at the
+/// column's edges), its rows 14 apart, 20 in.
+fn look_card(c : @ui.Ctx, look : Look, body : () -> Unit) -> Unit {
+  match look {
+    Narrow => c.box(style=narrow_card_room, fn() { c.box(style=desk_card, body) |> ignore }) |> ignore
+    Wide => c.box(style=desk_card, body) |> ignore
+  }
+}
+
+///|
 /// A row that goes somewhere: its title (and `note` under it), what it says at its end (`value`, in the link's ink where `value_lit`), and
 /// a chevron (none where not `chevron`: what it does is done here), or an arrow out where it goes `out` of the app.
 /// True on the frame it is pressed.
@@ -404,6 +414,8 @@ pub fn back_label(p : Page) -> String {
     Home => @sf.t("android-misc.bar.place.chats")
     Settings | Setting(Route::Home) => @sf.t("android-settings.title")
     Setting(Route::About) => @sf.t("web-pages.settings.nav.about")
+    Setting(Route::Permissions) => @sf.t("web-pages.settings.nav.permissions")
+    Setting(Route::Version) => @sf.t("web-pages.settings.nav.version")
     Setting(Route::Memories) => @sf.t("web-pages.settings.memory.title")
     Setting(Route::AutoDecisions) => @sf.t("web-pages.automaticDecisions.title")
     _ => @sf.t("common.back")

@@ -280,15 +280,19 @@ let ls_warn : @ui.TextStyle = @ui.text_style(size=Sm, leading=L6, weight=Medium,
 ///|
 /// 版本 (AppVersionPage): the desktop app's own version, what the last look found under it, and its button: 检查更新,
 /// or, with a newer build known, 更新到 it (the app's: version_words, version_tap).
-fn version_page(c : @ui.Ctx, core : Core) -> Unit {
+fn version_page(c : @ui.Ctx, core : Core, frame : PageFrame) -> Unit {
+  let look = look_of(c)
   let (words, newer) = (core.version_words)()
   let check = @sf.t("android-settings.version.check")
   // what is under way (checking, downloading, installing): said under the version, the button turning
   let note = if newer || words == check { "" } else { words }
-  desk_page(c, core, "version", @sf.t("web-pages.settings.nav.version"), [
+  let lead = @sf.t("web-pages.version.lead")
+  // (what it is for: narrow under the page's title, wide under its section's)
+  look_page(c, core, frame, look, "version", @sf.t("web-pages.settings.nav.version"), lead=if look == Narrow { lead } else { "" }, [
     fn() {
-      @sf.section(c, @sf.t("web-pages.version.title", args=[("name", "still.fail")]), note=@sf.t("web-pages.version.lead"), fn() {
-        c.box(style=ver_row, fn() {
+      let title = @sf.t("web-pages.version.title", args=[("name", "still.fail")])
+      look_section(c, look, title, heads=true, note=if look == Wide { lead } else { "" }, fn() {
+        let row = fn() {
           c.box(style=ver_text, fn() {
             c.text("still.fail mbui " + build_version(), style=desk_words) |> ignore
             if note != "" {
@@ -299,8 +303,12 @@ fn version_page(c : @ui.Ctx, core : Core) -> Unit {
           if @sf.button(c, if newer { words } else { check }, key="version-app", tone=if newer { Primary } else { Plain }, busy=note != "") {
             (core.version_tap)()
           }
-        })
-        |> ignore
+        }
+        match look {
+          // (narrow: on a card of its own; wide: on the page under its section's title)
+          Narrow => look_card(c, look, fn() { c.box(style=ver_row, row) |> ignore })
+          Wide => c.box(style=ver_row, row) |> ignore
+        }
       })
     },
   ])
