@@ -36,6 +36,11 @@ priv struct Composing {
   comments : Map[String, @ui.Field]
   mut roomy : Bool?
   mut draft : String
+  /// as the frame before left them (the frame each build of this one starts from: frame_body may build it twice), and
+  /// that frame's number
+  mut roomy_before : Bool?
+  mut draft_before : String
+  mut frame : Int
   restoring : Map[String, Bool]
   restore_errors : Map[String, String]
   /// a finger went down outside it (keyboard_let_go)
@@ -43,7 +48,20 @@ priv struct Composing {
 }
 
 ///|
-let composing : Composing = { picking: None, let_go: false, warmed: {}, comments: {}, roomy: None, draft: "", restoring: {}, restore_errors: {}, outside: false }
+let composing : Composing = {
+  picking: None,
+  let_go: false,
+  warmed: {},
+  comments: {},
+  roomy: None,
+  draft: "",
+  roomy_before: None,
+  draft_before: "",
+  frame: -1,
+  restoring: {},
+  restore_errors: {},
+  outside: false,
+}
 
 ///|
 fn composing_reset() -> Unit {
@@ -53,6 +71,9 @@ fn composing_reset() -> Unit {
   composing.comments.clear()
   composing.roomy = None
   composing.draft = ""
+  composing.roomy_before = None
+  composing.draft_before = ""
+  composing.frame = -1
   composing.restoring.clear()
   composing.restore_errors.clear()
   composing.outside = false
@@ -81,6 +102,11 @@ pub fn composer(
   // switched to another chat (Chat.tsx: its thread another; a new chat's has none, whichever station): the cursor in
   // it, with a mouse, before it is first drawn; not taken from a field in use (the switcher's, a dialog's)
   let whose = "\u{1}" + spec.session
+  if composing.frame != c.frame_number() {
+    composing.frame = c.frame_number()
+    composing.roomy_before = composing.roomy
+    composing.draft_before = composing.draft
+  }
   if whose != composing.draft {
     composing.draft = whose
     if @ui.pointing() is Mouse && !c.field_focused() {
@@ -146,14 +172,22 @@ pub fn composer(
   )
   // over a chat's messages: their scroll bar keeps clear of it
   c.floats_over(box)
-  // capsule ⇄ box in one motion (useMorph), its height following what it holds; laid out for the other page (a new
-  // chat's in the page, a chat's at its foot: dock.tsx), from where it was there to here, one composer changing
-  let moved = match composing.roomy {
+  // capsule ⇄ box in one motion for what it holds (useMorph: its words, files, quotes, its being opened, what it says
+  // under it); laid out for the other page (a new chat's in the page, a chat's at its foot: dock.tsx), from where it
+  // was there to here, one composer changing. Moved by nothing of these (the window, the sidebar, a keyboard), or
+  // another chat's on the same page (what it holds swapped, not changed), it is where it is laid out at once
+  // (docs/motion.md)
+  let moved = match composing.roomy_before {
     Some(was) => was != spec.roomy
     None => false
   }
   composing.roomy = Some(spec.roomy)
-  @motion.layout(c, box, "composer/box", spec=@motion.tween(if moved { page_move_ms } else { morph_ms }, ease=Out), listed=false)
+  let holds = if whose != composing.draft_before && !moved {
+    ""
+  } else {
+    "\{spec.roomy}|\{multiline}|\{w.files.length()}|\{w.quotes.length()}|\{w.error != ""}|" + w.field.text()
+  }
+  @motion.layout(c, box, "composer/box", spec=@motion.tween(if moved { page_move_ms } else { morph_ms }, ease=Out), by=holds)
   // with a finger: a press outside it lets go of the keyboard once lifted or moved on (reading on)
   if @ui.pointing() is Finger {
     keyboard_let_go(c, cap)

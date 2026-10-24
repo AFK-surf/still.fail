@@ -84,11 +84,11 @@ pub fn Trans::at(self : Trans, pf : Double, pm : Double) -> @ui.Look {
 priv struct Moving {
   node : Int
   mut key : Int
-  /// layout animation: by `spec`; `gate` 1 only while its list's rows changed lately; `drive` ≥ 0: the move goes by
-  /// that progress the app gives (0 → 1)
+  /// layout animation: by `spec`, when its cause changed (`by`: what it moves for, as said this build; "" none) or, in
+  /// a list told its rows, as they change; `drive` ≥ 0: the move goes by that progress the app gives (0 → 1)
   mut flip : Bool
   mut spec : Spec
-  mut gate : Int
+  mut by : String
   mut drive : Double
   /// in a list, by where it shows in the list's view rather than in its content (what the list's scrolling moves too)
   mut screen : Bool
@@ -146,6 +146,9 @@ priv struct Rec {
   mut was_seen : Int
   mut was_ox : Double
   mut was_oy : Double
+  /// what it moved for (layout's `by`) as last laid out, and as the frame before laid it out
+  mut by : String
+  mut was_by : String
   /// and its drive then, if driven
   mut was_driven : Bool
   mut was_fx : Double
@@ -184,6 +187,8 @@ fn Rec::new() -> Rec {
     was_seen: -10,
     was_ox: 0.0,
     was_oy: 0.0,
+    by: "",
+    was_by: "",
     was_driven: false,
     was_fx: 0.0,
     was_fy: 0.0,
@@ -340,7 +345,7 @@ fn moving_of(c : @ui.Ctx, i : Int) -> Moving {
     key: 0,
     flip: false,
     spec: row_spring,
-    gate: 0,
+    by: "",
     drive: -1.0,
     screen: false,
     name: "",
@@ -369,18 +374,20 @@ fn entry_of(c : @ui.Ctx, i : Int) -> Moving? {
 }
 
 ///|
-/// Node `i` keyed `key` moves to its place when its place changes (Motion's `layout`, FLIP): drawn where it was, it
-/// goes by `spec` to where it is now, carrying on from wherever it had got to. In a list told its rows (list_keys),
-/// only as they change (`listed`: the list's own layout, a width or an item over the rows growing, is taken at once),
-/// and `enter` is how a row new to it comes in, `exit` how one gone leaves (a copy of it where it was). `drive` (0 →
-/// 1, from the frame it moved): the move goes by that progress instead of `spec`. `screen`: in a list, by where it
-/// shows in the list's view.
+/// Node `i` keyed `key` moves to its new place for its cause (Motion's `layout`, FLIP, set off by what moved it):
+/// `by` is what it moves for (its words, its page, the row over it: any value naming that state); in the frame `by`
+/// changes, it is drawn where it was and goes by `spec` to where it is now, carrying on from wherever it had got to. A
+/// row of a list told its rows (list_keys) that names no cause of its own moves for their change. Moved by nothing it
+/// moves for (a window resized, a keyboard, a pane made narrower), it is put in its new place at once, a move of its
+/// own going on as it was: no difference found between frames moves anything (docs/motion.md of the app). `enter` is how a row new to its list comes in, `exit` how one gone leaves (a copy of it where it was).
+/// `drive` (0 → 1, from the frame it moved): the move goes by that progress instead of `spec`. `screen`: in a list, by
+/// where it shows in the list's view.
 pub fn layout(
   c : @ui.Ctx,
   i : Int,
   key : String,
   spec? : Spec = row_spring,
-  listed? : Bool = true,
+  by? : String = "",
   enter? : Trans,
   exit? : Trans,
   drive? : Double = -1.0,
@@ -392,7 +399,9 @@ pub fn layout(
   e.flip = true
   e.screen = screen
   e.spec = spec
-  e.gate = if listed { 1 } else { 0 }
+  if by != "" {
+    e.by = by
+  }
   if enter is Some(_) {
     e.enter = enter
   }
@@ -404,13 +413,17 @@ pub fn layout(
 
 ///|
 /// Node `i` keyed `key`, kept from frame to frame (what it came in by goes on; in a list told its rows, one gone
-/// leaves by `exit`, a copy of it).
-pub fn keyed(c : @ui.Ctx, i : Int, key : String, exit? : Trans) -> Unit {
+/// leaves by `exit`, a copy of it). `by`: what it would move for, kept each frame, so a layout motion it is given in a
+/// later frame knows whether that changed (layout's `by`).
+pub fn keyed(c : @ui.Ctx, i : Int, key : String, exit? : Trans, by? : String = "") -> Unit {
   let e = moving_of(c, i)
   e.name = key
   e.key = motion_key(key)
   if exit is Some(_) {
     e.exit = exit
+  }
+  if by != "" {
+    e.by = by
   }
 }
 
@@ -898,6 +911,7 @@ fn after_layout(c : @ui.Ctx) -> Unit {
         r.was_ox = r.ox.get()
         r.was_oy = r.oy.get()
         r.was_driven = r.driven
+        r.was_by = r.by
         r.was_fx = r.fx
         r.was_fy = r.fy
         r.moved_now = false
@@ -934,11 +948,17 @@ fn after_layout(c : @ui.Ctx) -> Unit {
           undo()
         }
         if dx.abs() > 0.5 || dy.abs() > 0.5 {
-          // in a list told its rows: only as they change (else it is the list's own layout, taken at once)
-          let changed = match lm {
-            Some(l) => e.gate != 1 || c.now() - l.changed_at < 150.0
-            None => true
-          }
+          // moved for its cause: a progress the app drives it by, what it names changed since the frame before, or (it
+          // naming none) its list's rows; else what holds it moved it, taken at once
+          let changed = e.drive >= 0.0 ||
+            (if e.by != "" {
+              r.was_by != "" && e.by != r.was_by
+            } else {
+              match lm {
+                Some(l) => c.now() - l.changed_at < 150.0
+                None => false
+              }
+            })
           // what is left of the progress driving it now, and where it is drawn off its place as the frame begins: on
           // the drive it was on (the same progress, gone on to now) or its spring; a move carries on from there
           let left = if e.drive >= 0.0 { 1.0 - dclamp(e.drive, 0.0, 1.0) } else { 0.0 }
@@ -948,11 +968,14 @@ fn after_layout(c : @ui.Ctx) -> Unit {
           } else {
             (r.was_ox, r.was_oy)
           }
-          if still || !changed || (e.drive >= 0.0 && left <= 0.0) {
+          if still || (e.drive >= 0.0 && left <= 0.0) {
             r.ox.snap(0.0)
             r.oy.snap(0.0)
             r.driven = false
             r.moved_now = false
+          } else if !changed {
+            // what holds it moved it: there at once, a move of its own going on as it was
+            undo()
           } else if e.drive >= 0.0 {
             // the rest of its way by what is left of the progress (a move as it sets off: all of it)
             r.fx = (cx + dx) / left
@@ -1012,6 +1035,7 @@ fn after_layout(c : @ui.Ctx) -> Unit {
       }
       r.x = rx
       r.y = ry
+      r.by = e.by
       r.vy = vy
       r.w = nw
       r.h = nh

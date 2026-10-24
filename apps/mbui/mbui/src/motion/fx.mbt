@@ -539,6 +539,10 @@ priv struct LayoutFx {
   /// the build it was asked in (Ctx::build_number: its node one of that build's)
   mut build : Int
   mut known : Bool
+  /// what it moves for (animate_layout's `by`) as asked this build, as last laid out, and as the frame before laid it out
+  mut by : String
+  mut laid_by : String
+  mut was_by : String
   /// as it stood when this frame was first laid out (a frame built again moves it from there, not from what an
   /// earlier build of it set, which was never drawn), and whether a build of this frame moved it
   mut frame_at : Int
@@ -553,11 +557,13 @@ priv struct LayoutFx {
 let layouts : Map[Int, LayoutFx] = Map([])
 
 ///|
-/// Node `i` keyed `key` animates to where it is laid out whenever that changes (Motion's `layout` prop, the Effect
-/// way): drawn from the box it showed in (wherever an animation had got it to), it goes to its new box by `spec`, its
-/// offset and its scale worked out by Motion's projection (calc_box_delta) every frame from a progress 0 → 1 that a
-/// fiber animates. Only drawn so (tapped where it is laid out). For a list's rows, `layout` and `list_keys`.
-pub fn animate_layout(c : @ui.Ctx, i : Int, key : String, spec? : Spec = spring_to()) -> Unit {
+/// Node `i` keyed `key` animates to where it is laid out for its cause (Motion's `layout` prop, the Effect way, set off
+/// by what moved it): in the frame `by` (what it moves for: any value naming that state) changes, it is drawn from the
+/// box it showed in (wherever an animation had got it to) and goes to its new box by `spec`, its offset and its scale
+/// worked out by Motion's projection (calc_box_delta) every frame from a progress 0 → 1 that a fiber animates. Moved
+/// by nothing it moves for (a window resized, a pane made narrower), it is in its new box at once, a move of its own
+/// going on from there. Only drawn so (tapped where it is laid out). For a list's rows, `layout` and `list_keys`.
+pub fn animate_layout(c : @ui.Ctx, i : Int, key : String, spec? : Spec = spring_to(), by? : String = "") -> Unit {
   install()
   let id = c.id("\u{5}" + key)
   let l = match layouts.get(id) {
@@ -571,6 +577,9 @@ pub fn animate_layout(c : @ui.Ctx, i : Int, key : String, spec? : Spec = spring_
         node: i,
         build: -1,
         known: false,
+        by: "",
+        laid_by: "",
+        was_by: "",
         frame_at: -1,
         was_from: create_box(),
         was_to: create_box(),
@@ -584,6 +593,7 @@ pub fn animate_layout(c : @ui.Ctx, i : Int, key : String, spec? : Spec = spring_
   }
   l.node = i
   l.spec = spec
+  l.by = by
   l.build = c.build_number()
 }
 
@@ -592,6 +602,15 @@ pub fn animate_layout(c : @ui.Ctx, i : Int, key : String, spec? : Spec = spring_
 fn laid_box(c : @ui.Ctx, i : Int) -> Box {
   let (x, y, w, h) = c.node_rect(i)
   box_of_edges(top=y, right=x + w, bottom=y + h, left=x)
+}
+
+///|
+/// `into` is `from` moved and grown as `was` became `now`, edge by edge.
+fn shift_box(into : Box, from : Box, was : Box, now : Box) -> Unit {
+  into.x.min = from.x.min + now.x.min - was.x.min
+  into.x.max = from.x.max + now.x.max - was.x.max
+  into.y.min = from.y.min + now.y.min - was.y.min
+  into.y.max = from.y.max + now.y.max - was.y.max
 }
 
 ///|
@@ -628,6 +647,7 @@ fn layouts_after(c : @ui.Ctx) -> Unit {
       copy_box_into(l.was_to, l.to)
       l.was_p = l.p.get()
       l.was_known = l.known
+      l.was_by = l.laid_by
       l.moved_now = false
     }
     let now = laid_box(c, l.node)
@@ -635,6 +655,16 @@ fn layouts_after(c : @ui.Ctx) -> Unit {
       l.known = true
       copy_box_into(l.from, now)
       copy_box_into(l.to, now)
+    } else if now != l.was_to && !(l.by != "" && l.was_by != "" && l.by != l.was_by) {
+      // moved by what holds it, not for its cause: in its new box at once, a move of its own going on from there (the
+      // box it is drawn from as far off its new place as it was off its old one)
+      shift_box(l.from, l.was_from, l.was_to, now)
+      copy_box_into(l.to, now)
+      l.p.set(l.was_p)
+      if l.was_p < 1.0 {
+        ignore(l.p.start(1.0, l.spec))
+      }
+      l.moved_now = false
     } else if now != l.was_to {
       // from where it showed as the frame began
       let p = l.was_p
@@ -657,6 +687,7 @@ fn layouts_after(c : @ui.Ctx) -> Unit {
         ignore(l.p.start(1.0, l.spec))
       }
     }
+    l.laid_by = l.by
     if l.p.get() < 1.0 || l.p.is_animating() {
       let d = create_delta()
       calc_box_delta(d, now, l.shown())

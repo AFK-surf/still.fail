@@ -190,7 +190,7 @@ test "a spring told anew mid-way goes on as fast as it went" {
 }
 
 ///|
-test "a keyed node moved by its layout is drawn from where it was, then goes there" {
+test "a keyed node moved for its cause is drawn from where it was, then goes there" {
   let before = Ref::new(true)
   let mut id = 0
   let t = @ui.Tester::new(fn(c) {
@@ -200,7 +200,7 @@ test "a keyed node moved by its layout is drawn from where it was, then goes the
         c.box(w=Px(50.0), h=Px(40.0), fn() {  }) |> ignore
       }
       let i = c.box(w=Px(50.0), h=Px(20.0), bg=0xFF0000FFL, id~, fn() {  })
-      @motion.layout(c, i, "moved", listed=false)
+      @motion.layout(c, i, "moved", by="\{before.val}")
     })
     |> ignore
   })
@@ -224,6 +224,66 @@ test "a keyed node moved by its layout is drawn from where it was, then goes the
 }
 
 ///|
+test "a keyed node moved by what holds it, its cause the same, is in its new place at once" {
+  let above = Ref::new(40.0)
+  let t = @ui.Tester::new(fn(c) {
+    c.column(fn() {
+      c.box(w=Px(50.0), h=Px(above.val), fn() {  }) |> ignore
+      let i = c.box(w=Px(50.0), h=Px(20.0), bg=0xFF0000FFL, fn() {  })
+      @motion.layout(c, i, "held", by="its words")
+    })
+    |> ignore
+  })
+  assert_eq(drawn_y(t, 0xFF0000FFL), 40.0)
+  // what is over it shrinks (a window resized, a keyboard): nothing it moves for changed
+  above.val = 0.0
+  t.frame()
+  assert_eq(drawn_y(t, 0xFF0000FFL), 0.0)
+  assert_eq(@motion.layout_rest("held"), -1.0)
+  t.assert_idle()
+}
+
+///|
+/// A move told for its cause (its tween's length), and a moment within it.
+let caused_ms : Double = 200.0
+
+///|
+let caused_midway_ms : Double = 100.0
+
+///|
+test "a keyed node on its way, moved by what holds it, goes on with its own move from its new place" {
+  let above = Ref::new(40.0)
+  let words = Ref::new("one line")
+  let t = @ui.Tester::new(fn(c) {
+    c.column(fn() {
+      c.box(w=Px(50.0), h=Px(above.val), fn() {  }) |> ignore
+      let i = c.box(w=Px(50.0), h=Px(20.0), bg=0xFF0000FFL, fn() {  })
+      @motion.layout(c, i, "both", spec=@motion.tween(caused_ms, ease=Linear), by=words.val)
+    })
+    |> ignore
+  })
+  // moved up 40 for its cause: drawn where it was, then on its way
+  above.val = 0.0
+  words.val = "two lines"
+  t.frame()
+  assert_eq(drawn_y(t, 0xFF0000FFL), 40.0)
+  t.run_for(caused_midway_ms)
+  let mid = drawn_y(t, 0xFF0000FFL)
+  assert_true(mid > 0.0 && mid < 40.0, msg="\{mid}")
+  let end = @motion.layout_rest("both")
+  // what holds it puts it 10 lower, its cause the same: those 10 at once, the rest of its own move as it was (neither
+  // started again nor put at its end)
+  above.val = 10.0
+  t.frame()
+  let off = drawn_y(t, 0xFF0000FFL) - 10.0
+  assert_true(off > 0.0 && off <= mid, msg="\{off} \{mid}")
+  assert_eq(@motion.layout_rest("both"), end)
+  t.run_for(end - t.time())
+  assert_eq(drawn_y(t, 0xFF0000FFL), 10.0)
+  t.assert_idle()
+}
+
+///|
 test "a keyed node driven to its place, moved again on the way, goes on from where it is drawn" {
   let above = Ref::new(40.0)
   let drive = Ref::new(-1.0)
@@ -231,7 +291,7 @@ test "a keyed node driven to its place, moved again on the way, goes on from whe
     c.column(fn() {
       c.box(w=Px(50.0), h=Px(above.val), fn() {  }) |> ignore
       let i = c.box(w=Px(50.0), h=Px(20.0), bg=0xFF0000FFL, fn() {  })
-      @motion.layout(c, i, "driven", listed=false, drive=drive.val)
+      @motion.layout(c, i, "driven", drive=drive.val)
     })
     |> ignore
   })
@@ -267,7 +327,7 @@ test "layout_rest: a keyed node's move ends when its spring says, the same whene
         c.box(w=Px(50.0), h=Px(40.0), fn() {  }) |> ignore
       }
       let i = c.box(w=Px(50.0), h=Px(20.0), bg=0xFF0000FFL, fn() {  })
-      @motion.layout(c, i, "moved", listed=false)
+      @motion.layout(c, i, "moved", by="\{before.val}")
     })
     |> ignore
   })

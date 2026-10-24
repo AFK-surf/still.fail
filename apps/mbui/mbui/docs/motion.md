@@ -23,7 +23,7 @@ The code is in `src/motion/fx.mbt`, with tests in `src/motion/fx_test.mbt`. The 
 | `AnimatePresence` with an `exit` | `animate_presence(c, key, shown, enter=…, exit=…, body)` (see below) |
 | `whileHover`, `whileTap` | `while_hover(c, id, v, rest=…, to=…)`, `while_press(…)` |
 | `drag`, `dragConstraints`, `dragElastic`, drag momentum | `drag_value(c, id, v, min=, max=, elastic=0.5)` on a `Ctx::drag_area`. When released it continues with Motion's drag inertia: power 0.8, time constant 750 ms, and a spring at the bounds |
-| the `layout` prop (FLIP through projection) | `animate_layout(c, node, key, spec)` |
+| the `layout` prop (FLIP through projection) | `animate_layout(c, node, key, spec, by=…)`: set off by its cause, not by any change of its box (below) |
 | still.fail's `moveState(moves, change)` (web/ui/src/motion.ts: a state changed, the listed properties of the listed elements moved from what they showed to what the rules now say, on one clock) | `c.move_state([(name, [css property…])…])` as the state changes, the boxes named with `moves=name` (below) |
 | `useReducedMotion` | `Ctx::still()`: under reduced motion and in screenshots every value goes straight to its end |
 
@@ -67,13 +67,13 @@ let y = @motion.value(c, "sheet/y", 40.0)
 
 ## Layout
 
-Every frame, after layout, `animate_layout` compares the node's laid-out box with its box from the last layout. When the box has changed:
+A layout motion is set off by its cause, never by a difference found between frames (docs/determinism.md, "Motion is data"): `by` names what the node moves for (its words, its page, the row over it). After layout, when its box has changed and `by` changed with it:
 
 1. The node's starting box is the box it is drawn in right now, which may be partway through an earlier animation.
 2. A progress value restarts at 0, and a fiber animates it to 1.
 3. Each frame, the node is drawn in the box that is the progress-mix of the start and the new box. The look that takes the laid-out box onto it (translate, plus scale about the centre) comes from Motion's projection: `calc_box_delta`.
 
-The look only changes how the node is drawn. Taps still go where the node is laid out. Rows of a list use the older `layout` and `list_keys` in `layer.mbt`, which also handle rows entering, leaving and being scrolled.
+When its box changed and `by` did not (a window resized, a keyboard, a pane made narrower: what holds it moved it), it is in its new box at once; a move of its own going on carries on from there. The look only changes how the node is drawn. Taps still go where the node is laid out. Rows of a list use the older `layout` and `list_keys` in `layer.mbt`, which also handle rows entering, leaving and being scrolled: `layout` takes the same `by`, and a row that names none moves for its list's change.
 
 ## Tests
 

@@ -1834,8 +1834,11 @@ fn composer_bar(
   }
   // (laid out for another page, on its move: composer_page)
   let part_ms = if composer_page(c, d.key) is Some(_) { composer_page_ms } else { 260.0 }
+  // each part goes to its new place for what the bar holds (folded or opened, its words, files, quotes, what it says
+  // under it), each draft's its own; moved by nothing of these (a keyboard, the window), there at once
+  let holds = "\{expanded}|\{d.files.length()}|\{d.quotes.length()}|\{d.error is Some(_)}|" + d.field.text()
   let part = fn(i : Int, name : String) {
-    @motion.layout(c, i, "composer/part/" + name, spec=@motion.tween(part_ms, ease=Out), listed=false)
+    @motion.layout(c, i, "composer/part/" + d.key + "/" + name, spec=@motion.tween(part_ms, ease=Out), by=holds)
   }
   let k = ct()
   // pointed at with a mouse, its ground and the text's ink under the pointer,

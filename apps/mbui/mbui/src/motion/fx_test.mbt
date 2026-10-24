@@ -417,7 +417,7 @@ test "drag: the value follows the finger, then goes on by momentum and is caught
 }
 
 ///|
-test "layout: a node that moves is drawn from where it was, and goes to its new place over frames" {
+test "layout: a node moved for its cause is drawn from where it was, and goes to its new place over frames" {
   let top = Ref(true)
   // the move's length
   let move_ms = 160.0
@@ -427,7 +427,7 @@ test "layout: a node that moves is drawn from where it was, and goes to its new 
         c.box(h=Px(200.0), fn() {  }) |> ignore
       }
       let i = c.box(fn() { c.text("card") |> ignore })
-      @motion.animate_layout(c, i, "card", spec=@motion.tween_to(duration=move_ms, ease=@motion.linear))
+      @motion.animate_layout(c, i, "card", spec=@motion.tween_to(duration=move_ms, ease=@motion.linear), by="\{top.val}")
     })
     |> ignore
   })
@@ -454,4 +454,24 @@ test "layout: a node that moves is drawn from where it was, and goes to its new 
   }
   t.draw()
   assert_true(same(t.drawn_of("card").unwrap().1, y0 + 200.0))
+}
+
+///|
+test "layout: a node moved by what holds it, its cause the same, is in its new place at once" {
+  let top = Ref(true)
+  let t = @ui.Tester::new(fn(c) {
+    c.column(w=Fill(1.0), h=Fill(1.0), fn() {
+      if !top.val {
+        c.box(h=Px(200.0), fn() {  }) |> ignore
+      }
+      let i = c.box(fn() { c.text("card") |> ignore })
+      @motion.animate_layout(c, i, "card", by="its words")
+    })
+    |> ignore
+  })
+  let (_, y0) = t.drawn_of("card").unwrap()
+  top.val = false
+  t.frame()
+  assert_true(same(t.drawn_of("card").unwrap().1, y0 + 200.0))
+  t.assert_idle()
 }
