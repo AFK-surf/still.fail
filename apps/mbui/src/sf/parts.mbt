@@ -47,7 +47,7 @@ pub fn button(
   let p = t.p
   let id = c.id(if key == "" { "sf-btn/" + label } else { key })
   let live = !disabled && !busy
-  let h = ease_to(c, "sf-btn-h/\{id}", live && (c.hovered(id) || c.pressed(id)))
+  let h = ease_to(c, "sf-btn-h/\{id}", live && (c.lit(id) || c.pressed(id)))
   let (ground, line, ink) = if t.narrow {
     match tone {
       Primary => (p.text, p.text, p.bg)
@@ -136,7 +136,7 @@ pub fn icon_button(
   let ink = ink.unwrap_or(t.p.text)
   let quiet = quiet.unwrap_or(t.p.muted)
   let id = c.id(if key == "" { "sf-ib/" + icon } else { key })
-  let h = ease_to(c, "sf-ib-h/\{id}", !disabled && (c.hovered(id) || c.pressed(id)))
+  let h = ease_to(c, "sf-ib-h/\{id}", !disabled && (c.lit(id) || c.pressed(id)))
   let ground = if on {
     alpha(ink, 0.08)
   } else {
@@ -179,7 +179,7 @@ pub fn chip(
   let t = theme()
   let ink = ink.unwrap_or(t.p.text)
   let id = c.id(if key == "" { "sf-chip/" + label + icon } else { key })
-  let h = ease_to(c, "sf-chip-h/\{id}", !disabled && c.hovered(id))
+  let h = ease_to(c, "sf-chip-h/\{id}", !disabled && c.lit(id))
   c.box(
     dir=Row,
     h=Px(30.0),
@@ -347,7 +347,7 @@ pub fn menu_item(
     pady=7.0,
     gap=if panel { panel_row_gap } else { menu_row_gap },
     align=ACenter,
-    bg=if c.hovered(id) { t.p.hover } else { 0L },
+    bg=if c.lit(id) { t.p.hover } else { 0L },
     radius=small_panel_inner(r_menu),
     id~,
     fn() {
@@ -553,9 +553,8 @@ pub let tip_delay_ms : Double = 400.0
 ///|
 /// A tip over control `id` (parts.tsx Tip): `label` said beside it once the pointer has rested on it a moment (on
 /// `side`, under it by default), and with a `shortcut`, the keys that do the same after it, quieter (shortcuts.mbt).
-/// The only way anything explains itself on hover: none on a touch screen, where nothing is pointed at (a phone's, a
-/// tablet's, as the web's Radix tooltip opens for none of a finger's). With no label, none. `key` names it where it is
-/// asked.
+/// The only way anything explains itself on hover; to a finger, which rests on nothing, as it holds what it names
+/// (Android's tooltips: @kit.tooltip). With no label, none. `key` names it where it is asked.
 pub fn tip(
   c : @ui.Ctx,
   key : String,
@@ -565,7 +564,7 @@ pub fn tip(
   shortcut? : String = "",
   shown? : Bool = false,
 ) -> Unit {
-  if label == "" || id == 0 || touch_system() {
+  if label == "" || id == 0 {
     return
   }
   let keys = shortcut_keys(shortcut)
@@ -912,7 +911,7 @@ pub fn about(c : @ui.Ctx, key : String, words : String, label~ : String, side? :
     about_open.val = ""
   }
   let b = c.box(style=about_box, id~, fn() {
-    icon(c, "info", size=about_icon, color=if c.hovered(id) { t.p.text } else { t.p.subtle }) |> ignore
+    icon(c, "info", size=about_icon, color=if c.lit(id) { t.p.text } else { t.p.subtle }) |> ignore
   })
   c.semantics(b, Button, id~, label~)
   tip(c, key + "/tip", id, words, side~, shown=finger && about_open.val == key)
@@ -1433,7 +1432,7 @@ pub fn textarea(
 ) -> String {
   let t = theme()
   let box_id = c.id(key + "/frame")
-  let hot = c.hovered(box_id) || c.has_focus(c.id(key))
+  let hot = c.lit(box_id) || c.has_focus(c.id(key))
   let mut words = ""
   let tall = @ui.style(min_h=Fixed(rows.to_double() * textarea_line + textarea_in))
   c.box(id=box_id, style=(if hot { textarea_box_hot } else { textarea_box }).then(tall), fn() {
@@ -1804,7 +1803,7 @@ pub fn panel_button(
   disabled? : Bool = false,
 ) -> Bool {
   let id = c.id(key)
-  let hot = !disabled && c.hovered(id)
+  let hot = !disabled && c.lit(id)
   let b = c.box(
     style=if tone == Filled { panel_button_filled } else { panel_button_box },
     disabled~,
@@ -1828,7 +1827,7 @@ pub fn panel_button(
 pub fn panel_icon_button(c : @ui.Ctx, key : String, name : String, label : String, disabled? : Bool = false) -> Bool {
   let p = theme().p
   let id = c.id(key)
-  let hot = !disabled && c.hovered(id)
+  let hot = !disabled && c.lit(id)
   let b = c.box(style=panel_icon_box, disabled~, id=if disabled { 0 } else { id }, fn() {
     icon(c, name, size=panel_icon_size, color=if hot { p.text } else { p.muted }) |> ignore
   })
@@ -1946,7 +1945,7 @@ pub fn chooser(
   let p = theme().p
   let id = c.id(key)
   let opened = if c.clicked(id) { !open } else { open }
-  let lit = c.hovered(id) || opened
+  let lit = c.lit(id) || opened
   let b = c.box(style=chooser_box, selected=opened, id~, fn() {
     match lead {
       Some(f) => f(if lit { p.text } else { p.muted })
@@ -2194,7 +2193,7 @@ pub fn edge_tip(c : @ui.Ctx, key : String, id : Int, words : String, side? : @ui
     return
   }
   let (px, py, down) = c.pointer()
-  let on = c.hovered(id) ||
+  let on = c.lit(id) ||
     (match c.rect_of(id) {
       Some((x, y, w, h)) => px >= x && px < x + w && py >= y && py < y + h
       None => false
@@ -2254,7 +2253,7 @@ pub fn resize_handle(
   c.cursor(id, ResizeX)
   let said = handle_drag(c, id, width, min~, max~, edge~)
   let held = active || (said is Dragging(_)) || c.pressed(id)
-  let on = c.hovered(id) || c.focus_shown(id) || held
+  let on = c.lit(id) || c.focus_shown(id) || held
   let words = if press == "" { label } else { label + " · " + press }
   let body = fn() { edge_look(c, key, over~, on~, active=held) }
   let b = if edge is Left {
@@ -2363,7 +2362,7 @@ pub fn options_card(
         if wide && free {
           c.cursor(id, Hand)
         }
-        let hot = wide && free && c.hovered(id)
+        let hot = wide && free && c.lit(id)
         c.box(
           dir=Row,
           w=Fill(1.0),

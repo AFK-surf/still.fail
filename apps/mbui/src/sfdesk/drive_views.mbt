@@ -96,7 +96,7 @@ pub fn view_switch(c : @ui.Ctx, key : String, value : String, on_change : (Strin
       if c.clicked(id) && !on {
         on_change(v)
       }
-      let hot = c.hovered(id)
+      let hot = c.lit(id)
       let x = c.box(style=if on { view_on } else { view_off }, id~, fn() {
         @sf.icon(c, icon, size=view_icon, color=if on || hot { t.p.text } else { t.p.muted }) |> ignore
       })
@@ -493,7 +493,7 @@ fn column_edge(c : @ui.Ctx, src : Source, s : Shown, path : String, column : Int
   }
   let words = @sf.t("web-pages.drive.resizeColumn")
   let b = c.box(style=column_edge_room, id~, fn() {
-    @sf.edge_look(c, key, over~, on=c.hovered(id) || c.focus_shown(id) || active, active~)
+    @sf.edge_look(c, key, over~, on=c.lit(id) || c.focus_shown(id) || active, active~)
   })
   c.semantics(b, Separator, id~, label=words)
   if !active {

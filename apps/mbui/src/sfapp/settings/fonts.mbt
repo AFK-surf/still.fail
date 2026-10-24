@@ -360,7 +360,7 @@ fn font_setting_wide(c : @ui.Ctx, core : Core) -> Unit {
       let tile = fn(key : String, id : String, name : String, face : Int, status : String) {
         let tid = c.id("fonts/tile/" + place + "/" + key)
         c.cursor(tid, Hand)
-        if c.hovered(tid) {
+        if c.lit(tid) {
           fonts_trying.val = if id == "" { "\u{1}" } else { id }
         }
         if hit(c, tid) {
@@ -608,14 +608,14 @@ fn local_tile(c : @ui.Ctx, core : Core, place : String, chosen : String) -> Unit
           for f in list {
             let rid = c.id("fonts/local/" + f)
             c.cursor(rid, Hand)
-            if c.hovered(rid) {
+            if c.lit(rid) {
               fonts_trying.val = local_prefix + f
             }
             if c.clicked(rid) {
               set_font(core, place, Some(local_prefix + f))
               local_open.val = false
             }
-            c.box(style=if f == picked || c.hovered(rid) { local_row_hot } else { local_row }, id=rid, fn() {
+            c.box(style=if f == picked || c.lit(rid) { local_row_hot } else { local_row }, id=rid, fn() {
               c.text(f, style=local_name) |> ignore
               if f == picked {
                 @sf.icon(c, "check", size=font_check, color=t.p.text) |> ignore

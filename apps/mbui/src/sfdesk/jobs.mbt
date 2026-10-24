@@ -127,7 +127,7 @@ fn job_row(
     |> ignore
     if end != "" {
       c.box(style=job_end, fn() {
-        @sf.icon(c, end, size=16.0, color=if press && c.hovered(id) {
+        @sf.icon(c, end, size=16.0, color=if press && c.lit(id) {
           @sf.theme().p.text
         } else {
           @sf.theme().p.subtle
@@ -364,7 +364,7 @@ pub fn jobs_popover(
     }
     let words = text(view, "allText") + " · " + @sf.t("web-main.jobs.inPanel")
     let b = c.box(style=jobs_all, id=all, fn() {
-      c.text(words, style=if c.hovered(all) { jobs_all_hot } else { jobs_all_words }) |> ignore
+      c.text(words, style=if c.lit(all) { jobs_all_hot } else { jobs_all_words }) |> ignore
     })
     c.semantics(b, Button, id=all, label=words)
     // what the popover leaves out is all over: the button to clear them says how many
@@ -385,7 +385,7 @@ fn job_action(c : @ui.Ctx, key : String, mark : () -> Unit, words : String, on :
   }
   let b = c.box(style=job_action_style, id~, fn() {
     mark()
-    c.text(words, style=if on && c.hovered(id) { job_action_hot } else { job_action_words }) |> ignore
+    c.text(words, style=if on && c.lit(id) { job_action_hot } else { job_action_words }) |> ignore
   })
   c.semantics(b, Button, id~, label=words)
   on && c.clicked(id)
@@ -501,7 +501,7 @@ fn job_detail(c : @ui.Ctx, src : Source, station : String, job : Json?) -> Unit 
           if stopping || failed is Some(_) {
             @settings.doing_mark(c, stopping, failed)
           } else {
-            @sf.icon(c, "stop", size=16.0, color=if c.hovered(sid) {
+            @sf.icon(c, "stop", size=16.0, color=if c.lit(sid) {
               @sf.theme().p.text
             } else {
               @sf.theme().p.muted

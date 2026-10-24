@@ -328,7 +328,7 @@ fn chat_station(c : @ui.Ctx, station : String, s : Station?) -> Unit {
   if c.clicked(id) {
     @settings.open_station_peek(station)
   }
-  let hot = c.hovered(id)
+  let hot = c.lit(id)
   c.box(style=if hot { chat_station_hot } else { chat_station_tag }, id~, label=s.name, fn() {
     if s.via != "" {
       via_dot(c, s.via)
@@ -403,7 +403,7 @@ fn agent_tile(c : @ui.Ctx, src : Source, r : ChatRef, a : Agent, marked : Bool, 
   let chat = (src.topic)("chat", chat_params(r)).value
   let aj = agent_json(chat, a.key)
   let said = @sf.t("web-pages.chat.historyOf", args=[("agent", a.who)])
-  let hot = c.hovered(id)
+  let hot = c.lit(id)
   match station {
     Some(s) =>
       c.box(style=if marked { agent_station_on } else { agent_station }, fn() {
@@ -412,7 +412,7 @@ fn agent_tile(c : @ui.Ctx, src : Source, r : ChatRef, a : Agent, marked : Bool, 
         })
         c.semantics(b, Button, id~, label=said)
         let part = c.id("bar-agent-station/" + a.key)
-        let part_hot = c.hovered(part)
+        let part_hot = c.lit(part)
         c.box(style=if part_hot { agent_station_part_hot } else { agent_station_part }, id=part, label=s.name, fn() {
           if @sf.has_station_mark(s.emoji, s.icon) {
             @sf.station_mark(c, s.emoji, s.icon, chat_station_mark, if part_hot {

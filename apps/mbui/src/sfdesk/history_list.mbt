@@ -368,7 +368,7 @@ fn one_line(c : @ui.Ctx, key : String, lead : () -> Unit, line : String, tone : 
       steps_own.opened[key] = true
     }
   }
-  let hot = c.hovered(id)
+  let hot = c.lit(id)
   c.box(style=h_one, id~, fn() {
     lead()
     if !open && line != "" {
@@ -424,7 +424,7 @@ fn fold(c : @ui.Ctx, key : String, lines : Int, line : Double, body : () -> Unit
         @sf.t("web-main.history.more", args=[("n", more.to_string())])
       }
       let b = c.box(style=h_fold_toggle, id~, fn() {
-        c.text(words, style=if c.hovered(id) { h_toggle_hot } else { h_toggle_words }) |> ignore
+        c.text(words, style=if c.lit(id) { h_toggle_hot } else { h_toggle_words }) |> ignore
       })
       c.semantics(b, Button, id~, label=words)
     }
@@ -491,7 +491,7 @@ fn place_view(c : @ui.Ctx, station : String, key : String, place : Json?) -> Uni
       }
     }
   }
-  let hot = goes && c.hovered(id)
+  let hot = goes && c.lit(id)
   c.box(style=if hot { h_place_hot } else { h_place }, id~, fn() {
     match text(place, "surface") {
       "ember" | "stillfail" =>
@@ -520,7 +520,7 @@ fn slack_name(c : @ui.Ctx, src : Source, station : String, key : String, user : 
     }
   }
   c.box(style=h_person, id~, fn() {
-    c.rich([@ui.span(name, underline=c.hovered(id) && !saying)], style=h_strong) |> ignore
+    c.rich([@ui.span(name, underline=c.lit(id) && !saying)], style=h_strong) |> ignore
     @settings.doing_mark(c, saying, core_failed(src, ["slack.identity"], on), inline=true)
   })
   |> ignore
@@ -647,7 +647,7 @@ fn group_view(c : @ui.Ctx, src : Source, station : String, key : String, ik : St
   }
   let failures = number(g, "failures").to_int()
   let pending = number(g, "pending").to_int()
-  let hot = c.hovered(id)
+  let hot = c.lit(id)
   c.box(style=h_group, fn() {
     if rail {
       c.layer(fn() { c.box(style=h_rail_room_last, fn() { c.box(style=h_rail, fn() {  }) |> ignore }) |> ignore }) |> ignore

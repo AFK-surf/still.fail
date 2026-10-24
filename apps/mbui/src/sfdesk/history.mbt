@@ -65,8 +65,8 @@ fn history_head(c : @ui.Ctx, src : Source, station : String, key : String, a : J
       }
       let on = history_own.only_io
       let b = c.box(style=if on { wh_toggle_on } else { wh_toggle }, id=io, fn() {
-        @sf.icon(c, "filter", size=14.0, color=if on || c.hovered(io) { t.p.text } else { t.p.muted }) |> ignore
-        c.text(@sf.t("web-main.history.onlyIo"), style=if on || c.hovered(io) { wh_toggle_hot } else { wh_toggle_words })
+        @sf.icon(c, "filter", size=14.0, color=if on || c.lit(io) { t.p.text } else { t.p.muted }) |> ignore
+        c.text(@sf.t("web-main.history.onlyIo"), style=if on || c.lit(io) { wh_toggle_hot } else { wh_toggle_words })
         |> ignore
       })
       c.semantics(b, Button, id=io, label=@sf.t("web-main.history.onlyIo"))
@@ -76,7 +76,7 @@ fn history_head(c : @ui.Ctx, src : Source, station : String, key : String, a : J
       if c.clicked(more) {
         history_own.shut = !history_own.shut
       }
-      let hot = c.hovered(more)
+      let hot = c.lit(more)
       let d = c.box(style=wh_toggle, id=more, fn() {
         c.text(@sf.t("web-main.history.details"), style=if hot { wh_toggle_hot } else { wh_toggle_words }) |> ignore
         @sf.icon(c, if history_own.shut { "chevron-down" } else { "chevron-up" }, size=14.0, color=if hot {
@@ -398,7 +398,7 @@ fn wh_link(c : @ui.Ctx, key : String, words : String) -> Bool {
   let id = c.id(key)
   c.cursor(id, Hand)
   let b = c.box(id~, style=wh_link_box, fn() {
-    c.text(words, style=if c.hovered(id) { wh_link_hot } else { wh_words }) |> ignore
+    c.text(words, style=if c.lit(id) { wh_link_hot } else { wh_words }) |> ignore
   })
   c.semantics(b, Button, id~, label=words)
   c.clicked(id)

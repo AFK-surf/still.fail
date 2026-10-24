@@ -384,7 +384,7 @@ fn frequent_combos(c : @ui.Ctx, src : Source, w : Workspace, combos : Array[Json
           }
           c.tell("new/pick", fn() { pick_new(src, w.id, m) })
         }
-        let lit = selected || c.hovered(id)
+        let lit = selected || c.lit(id)
         let chip = c.box(style=if selected { combo_on } else { combo_off }, id~, fn() {
           c.text(text(v, "label"), style=if lit { combo_words_lit } else { combo_words }) |> ignore
         })

@@ -86,7 +86,7 @@ pub fn wide_head(
       c.cursor(id, Hand)
       c.box(style=wide_back, id~, fn() {
         @sf.icon(c, "chevron-left", size=14.0, color=t.p.muted) |> ignore
-        c.text(back, size=13.0, color=if c.hovered(id) { t.p.text } else { t.p.muted }, wrap=false) |> ignore
+        c.text(back, size=13.0, color=if c.lit(id) { t.p.text } else { t.p.muted }, wrap=false) |> ignore
       })
       |> ignore
       if hit(c, id) {

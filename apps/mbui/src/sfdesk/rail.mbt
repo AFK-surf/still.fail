@@ -249,7 +249,7 @@ let rail_icon_size : Double = 20.0
 /// A place's 38 to press, its ground (hovered, lit) 30 square under the icon (Rail.css.ts item).
 fn rail_ground(c : @ui.Ctx, id : Int, on : Bool, body : (Int64) -> Unit, label? : String = "") -> Unit {
   let t = @sf.theme()
-  let hover = c.hovered(id)
+  let hover = c.lit(id)
   // its ground and its icon's colour moved over 140 ms (Rail.css.ts item: transition background, color)
   let key = "rail/ground/" + id.to_string()
   let ink = @kit.animate(c, key + "/ink", if on || hover { 1.0 } else { 0.0 }, transition=nav_fade)
@@ -363,9 +363,9 @@ fn rail_workspaces(c : @ui.Ctx, src : Source, w : Workspace, all : Array[Workspa
   // (always to a finger, which hovers over nothing: Rail.css.ts workspaceAdd `hover: none`)
   let over = open ||
     @ui.pointing() is Finger ||
-    c.hovered(area) ||
-    c.hovered(add) ||
-    all.iter().any(fn(x) { c.hovered(c.id("rail/ws/" + x.id)) })
+    c.lit(area) ||
+    c.lit(add) ||
+    all.iter().any(fn(x) { c.lit(c.id("rail/ws/" + x.id)) })
   let waiting = invitations_waiting(src).length() > 0
   let switch_to = fn(x : Workspace) {
     app.picked = x.id
@@ -385,7 +385,7 @@ fn rail_workspaces(c : @ui.Ctx, src : Source, w : Workspace, all : Array[Workspa
     if c.clicked(add) {
       wide.add_open = !open
     }
-    let hot = c.hovered(add) || open
+    let hot = c.lit(add) || open
     let plus = rail_square(
       c,
       if hot { t.p.hover } else { 0L },
@@ -409,7 +409,7 @@ fn rail_workspaces(c : @ui.Ctx, src : Source, w : Workspace, all : Array[Workspa
         switch_to(x)
       }
       let on = x.id == w.id
-      let hot = c.hovered(id)
+      let hot = c.lit(id)
       let marked = @sf.has_station_mark(x.emoji, x.icon)
       let square = rail_square(c, if !marked || hot { t.p.hover } else { 0L }, fn() {
         if marked {
@@ -789,9 +789,15 @@ fn rail_menu_add(c : @ui.Ctx, place : String, label : String, hot : Bool) -> Boo
   let t = @sf.theme()
   let id = c.id("rail-menu/add/" + place)
   c.cursor(id, Hand)
-  let over = c.hovered(id)
-  // in on its row pointed at (Rail.css.ts menuAdd: transition opacity 140 ms)
-  let shown = @kit.animate(c, "rail-menu/add-shown/" + place, if hot || over { 1.0 } else { 0.0 }, transition=nav_fade)
+  let over = c.lit(id)
+  // in on its row pointed at (Rail.css.ts menuAdd: transition opacity 140 ms); always to a finger, which hovers over
+  // nothing
+  let shown = @kit.animate(
+    c,
+    "rail-menu/add-shown/" + place,
+    if hot || over || @ui.pointing() is Finger { 1.0 } else { 0.0 },
+    transition=nav_fade,
+  )
   let b = c.box(style=if over { rail_menu_plus_on } else { rail_menu_plus }, id~, fn() {
     if shown > 0.0 {
       @sf.icon(c, "plus", size=rail_menu_plus_icon, color=@sf.alpha(if over { t.p.text } else { t.p.muted }, shown))
@@ -1179,7 +1185,7 @@ fn sidebar_edge(c : @ui.Ctx, at : Double) -> Unit {
         c,
         "sidebar-edge",
         over=false,
-        on=c.hovered(id) || c.focus_shown(id) || active,
+        on=c.lit(id) || c.focus_shown(id) || active,
         active~,
         line=!wide.folded,
       )

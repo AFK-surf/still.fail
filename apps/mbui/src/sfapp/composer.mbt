@@ -1898,7 +1898,7 @@ fn composer_bar(
     c.cursor(plus, Hand)
     @sf.tip(c, "composer/plus", plus, tr("web-main.composer.attach"), shortcut="composer.file")
   }
-  let plus_hot = wide && !no_files && c.hovered(plus)
+  let plus_hot = wide && !no_files && c.lit(plus)
   let plus_button = fn() {
     let b = c.box(
       w=Px(k.button),
@@ -1932,7 +1932,7 @@ fn composer_bar(
     // C.surface, the phone's canvas; the web's over --raised on a desktop's width)
     let ground = if t.narrow { t.p.canvas } else { t.p.raised }
     // (in the wide frame its ink a step lighter under the pointer: Chat.css.ts sendBtn, the text at 82%)
-    let hot = wide && ready && c.hovered(send)
+    let hot = wide && ready && c.lit(send)
     if wide && ready {
       c.cursor(send, Hand)
     }

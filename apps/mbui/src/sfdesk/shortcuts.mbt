@@ -212,7 +212,7 @@ fn keys_row(c : @ui.Ctx, core : Core, a : Json) -> Unit {
       id~,
       style=if on {
         keys_record_on
-      } else if c.hovered(id) {
+      } else if c.lit(id) {
         keys_record_hot
       } else {
         keys_record
@@ -243,7 +243,7 @@ fn keys_toggle(c : @ui.Ctx, key : String, words : String) -> Bool {
   c.cursor(id, Hand)
   c.focusable(id)
   c.box(id~, style=keys_toggle_box, fn() {
-    c.text(words, style=if c.hovered(id) { keys_toggle_hot } else { keys_toggle_words }) |> ignore
+    c.text(words, style=if c.lit(id) { keys_toggle_hot } else { keys_toggle_words }) |> ignore
   })
   |> ignore
   hit(c, id)

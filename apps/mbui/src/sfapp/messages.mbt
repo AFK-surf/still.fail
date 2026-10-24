@@ -364,7 +364,8 @@ fn said(
       }
       if carded_agent is Some(a) {
         let station = here.station
-        @sfdesk.hover(c, "agent-hover/" + m.ts, hid, tile=true, fn() {
+        // (a finger taps the picture for it: it does nothing else)
+        @sfdesk.hover(c, "agent-hover/" + m.ts, hid, tile=true, tap=true, fn() {
           match agent_json((src.topic)("chat", chat_params(ref_of(here))).value, a.key) {
             Some(j) => @sfdesk.agent_card(c, src, station, j)
             None => ()
@@ -394,7 +395,7 @@ fn said_head(c : @ui.Ctx, name : String, id : Int, key : String, time : Stamp?) 
     c.box(max_w=240.0, id~, fn() {
       if wide_on.val {
         // one that opens something takes the accent under the pointer (Chat.css.ts msgAgent:hover)
-        c.text(name, style=if id != 0 && c.hovered(id) { wide_name_hot } else { wide_name }) |> ignore
+        c.text(name, style=if id != 0 && c.lit(id) { wide_name_hot } else { wide_name }) |> ignore
       } else {
         c.text(name, size=15.0, weight=650, color=k.name, wrap=false, line=21.0) |> ignore
       }
@@ -1035,7 +1036,7 @@ fn quote_cards(
                   @ui.span(q.text),
                 ],
                 size~,
-                color=if jump != 0 && c.hovered(jump) { k.text } else { k.muted },
+                color=if jump != 0 && c.lit(jump) { k.text } else { k.muted },
                 line~,
               )
               |> ignore
@@ -1490,7 +1491,7 @@ fn file_card_wide(c : @ui.Ctx, a : Attachment, w : Double, id : Int, dl : Json?,
     c.cursor(id, Hand)
     @sf.tip(c, "file-card/" + a.path, id, if a.path != "" { a.path } else { a.name })
   }
-  let hot = id != 0 && c.hovered(id)
+  let hot = id != 0 && c.lit(id)
   c.box(style=if hot { file_card_hot } else { file_card_box }, w=Px(w), radius=message_file_corner, id~, fn() {
     let (meta, failed) = file_card_said(a, dl)
     @sf.file_tile(c, a.name, progress=file_card_coming(dl), error=failed)
@@ -1514,7 +1515,7 @@ fn file_card_wide(c : @ui.Ctx, a : Attachment, w : Double, id : Int, dl : Json?,
 fn file_card_button(c : @ui.Ctx, id : Int, icon : String, label : String) -> Unit {
   let p = @sf.theme().p
   c.cursor(id, Hand)
-  let hot = c.hovered(id)
+  let hot = c.lit(id)
   let b = c.box(style=if hot { file_card_button_hot } else { file_card_button_box }, id~, fn() {
     @sf.icon(c, icon, size=file_card_button_icon, color=if hot { p.text } else { p.muted }) |> ignore
   })
@@ -2166,14 +2167,14 @@ fn sent_elsewhere_wide(c : @ui.Ctx, src : Source, here : Here, s : Elsewhere) ->
     c.box(style=elsewhere_main, fn() {
       c.box(style=elsewhere_head, fn() {
         c.box(style=elsewhere_name, id=if mine { name } else { 0 }, fn() {
-          c.text(s.by.name, style=if mine && c.hovered(name) { wide_name_hot } else { wide_name }) |> ignore
+          c.text(s.by.name, style=if mine && c.lit(name) { wide_name_hot } else { wide_name }) |> ignore
         })
         |> ignore
         c.box(style=elsewhere_route, fn() {
           @sf.icon(c, if s.received { "received" } else { "send" }, size=14.0, color=t.p.accent) |> ignore
           let words = tr(if s.received { "web-main.chat.fromSlack" } else { "web-main.history.sentTo" }).trim_end(chars=" ").to_string()
           c.text(words, style=elsewhere_words) |> ignore
-          c.box(style=if place != 0 && c.hovered(place) { elsewhere_place_hot } else { elsewhere_place }, id=place, fn() {
+          c.box(style=if place != 0 && c.lit(place) { elsewhere_place_hot } else { elsewhere_place }, id=place, fn() {
             let (mark, said) = match s.place {
               Some(p) => (p.surface, p.name)
               None => ("slack", "Slack")
@@ -2399,7 +2400,7 @@ fn unsent_button(
     }
   }
   // (in the wide frame the pointer's ground and the text's ink under it: Chat.css.ts msgUnsentBtn)
-  let hot = wide_on.val && enabled && !busy && c.hovered(id)
+  let hot = wide_on.val && enabled && !busy && c.lit(id)
   if wide_on.val && enabled && !busy {
     c.cursor(id, Hand)
   }
@@ -2597,7 +2598,7 @@ fn activity(
   if wide {
     c.cursor(id, Hand)
   }
-  let words_ink = if wide && c.hovered(id) { k.text } else { k.muted }
+  let words_ink = if wide && c.lit(id) { k.text } else { k.muted }
   // one of several agents: stopped alone from its row, under the pointer (Chat.tsx Activity `stoppable`)
   let row = c.id("activity-row/" + a.key)
   c.box(dir=Row, w=Fill(1.0), align=ACenter, id=row, fn() {
@@ -2648,7 +2649,7 @@ fn activity(
   )
   |> ignore
   // (always to a finger, which hovers over nothing: OpenJobs.css.ts openJobStop `hover: none`)
-  if wide && here.view.agents.length() > 1 && (c.hovered(row) || c.hovered(id) || @ui.pointing() is Finger) {
+  if wide && here.view.agents.length() > 1 && (c.lit(row) || c.lit(id) || @ui.pointing() is Finger) {
     activity_stop(c, src, here, a)
   }
   })
@@ -2709,7 +2710,7 @@ fn activity_stop(c : @ui.Ctx, src : Source, here : Here, a : Agent) -> Unit {
     c.cursor(id, Hand)
     @sf.tip(c, "activity-stop/" + a.key, id, fill("web-main.activity.stop", [("who", a.who)]))
   }
-  let hot = id != 0 && c.hovered(id)
+  let hot = id != 0 && c.lit(id)
   c.box(style=if hot { activity_stop_hot } else { activity_stop_box }, id~, fn() {
     if busy {
       @sf.spinner(c, size=12.0) |> ignore

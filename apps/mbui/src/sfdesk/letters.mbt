@@ -94,7 +94,7 @@ fn letters_tab(
             }
             let b = c.box(style=letters_name_box, id=nid, fn() {
               // (underlined on hover)
-              c.rich([@ui.span(title, underline=c.hovered(nid))], style=letters_name) |> ignore
+              c.rich([@ui.span(title, underline=c.lit(nid))], style=letters_name) |> ignore
             })
             c.semantics(b, Link, id=nid, label=title)
           }

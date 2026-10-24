@@ -297,7 +297,7 @@ fn Viewer::desk_tools(self : Viewer, c : @ui.Ctx, ink : @sf.ViewerInk, dl : Json
 fn desk_text_tool(c : @ui.Ctx, key : String, words : String, label : String, ink : @sf.ViewerInk, wide? : Bool = false) -> Bool {
   let id = c.id(key)
   c.cursor(id, Hand)
-  let hot = c.hovered(id) || c.pressed(id)
+  let hot = c.lit(id) || c.pressed(id)
   let b = c.box(style=if wide { desk_text_tool_wide } else { desk_text_tool_box }, id~, fn() {
     c.text(words, style=desk_text_tool_words.then(@ui.text_style(color=Data(if hot { ink.ink } else { ink.muted }))))
     |> ignore
@@ -329,7 +329,7 @@ fn Viewer::desk_steps(self : Viewer, c : @ui.Ctx, src : Source, shown : Double) 
       let id = c.id("preview/go/\{side.1}")
       match side.0 {
         Some(_) => {
-          let hot = c.hovered(id) || c.pressed(id)
+          let hot = c.lit(id) || c.pressed(id)
           let seen = @motion.animate(c, "preview/go-seen/\{side.1}", if awake || hot { 1.0 } else { 0.0 }, spec=@motion.tween(
               if awake || hot {
                 desk_wake_ms

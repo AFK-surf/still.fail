@@ -340,7 +340,7 @@ fn pick_pop(c : @ui.Ctx, src : Source, r : ChatRef) -> Unit {
     c.box(style=pick_pop_frame, id=frame, fn() {
       c.box(style=pick_pop_row, ty=dmax(0.0, y - fy), fn() {
         c.box(tx=x - fx - fw / 2.0, fn() {
-          let hot = c.hovered(pop)
+          let hot = c.lit(pop)
           c.box(style=if hot { pick_pop_hot } else { pick_pop_box }, id=pop, fn() {
             @sf.icon(c, "quote", size=12.0, color=@sf.theme().p.on_primary) |> ignore
             c.text(tr("web-main.chat.quote"), style=pick_pop_words) |> ignore

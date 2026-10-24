@@ -138,7 +138,7 @@ pub fn media_key(
   if on {
     c.cursor(id, Hand)
   }
-  let hot = on && (c.hovered(id) || c.pressed(id))
+  let hot = on && (c.lit(id) || c.pressed(id))
   let ground = if lit { alpha(ink.text, media_lit_share) } else if hot { alpha(ink.text, media_hot_share) } else { no_ground }
   let b = c.box(style=media_key_box.then(@ui.style(bg=Data(ground))), disabled=!on, id=if on { id } else { 0 }, fn() {
     icon(c, icon_name, size=if small { viewer_tool_icon } else { viewer_back_icon }, color=if bright || hot || lit { ink.text } else { ink.muted })

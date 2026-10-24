@@ -472,7 +472,7 @@ fn switcher(c : @ui.Ctx, src : Source, w : Workspace, pages : Pages) -> Unit {
               if c.clicked(id) {
                 switcher_go(c, line, pages)
               }
-              if c.hovered(id) {
+              if c.lit(id) {
                 switching.chosen = k
               }
               switcher_line(c, key, id, line, k == switching.chosen)

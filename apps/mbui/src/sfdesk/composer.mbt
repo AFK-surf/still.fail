@@ -92,7 +92,7 @@ pub fn composer(
     c.focus_editor(composer_field_key)
   }
   // dragged over: marked (the 文件 tab's rows; files from the computer the page takes)
-  let dragging = !no_files && dragged() is Some(_) && c.hovered(cap)
+  let dragging = !no_files && dragged() is Some(_) && c.lit(cap)
   let box = c.box(
     style=if multiline { composer_box_open } else { composer_box },
     glass=@sf.glass_floating(tint=if dragging { @sf.alpha(p.accent, drag_tint) } else { 0L }),
@@ -276,7 +276,7 @@ fn warm(c : @ui.Ctx, src : Source, spec : ComposerSpec) -> Unit {
 fn attach(c : @ui.Ctx, spec : ComposerSpec, w : Writing, no_files : Bool) -> Unit {
   let p = @sf.theme().p
   let id = c.id("composer/plus")
-  let hot = !no_files && c.hovered(id)
+  let hot = !no_files && c.lit(id)
   if !no_files {
     c.cursor(id, Hand)
     @sf.tip(c, "composer/plus", id, @sf.t("web-main.composer.attach"), shortcut="composer.file")
@@ -313,7 +313,7 @@ pub fn pick_files(w : Writing) -> Unit {
 fn send_button(c : @ui.Ctx, ready : Bool, starting : Bool, submit : () -> Unit) -> Unit {
   let p = @sf.theme().p
   let id = c.id("composer/send")
-  let hot = ready && c.hovered(id)
+  let hot = ready && c.lit(id)
   if ready {
     c.cursor(id, Hand)
     if c.clicked(id) {
