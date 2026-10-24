@@ -25,7 +25,7 @@ fn desk_composer_tester(
       c.box(style=@ui.css("w=Full h=Full p=S4 justify=JEnd"), fn() {
         @sfdesk.composer(c, src, ws, desk_pages(), spec_of({ station: r.station, key: "ws1/st1:s-c1" }), fn(w) {
           match (src.topic)("chat", chat_params(r)).value {
-            Some(v) => @sfdesk.send_in_chat(c, src, desk_pages(), r, chat_view(v), w)
+            Some(v) => @sfdesk.send_in_chat(c, src, r, chat_view(v), w)
             None => ()
           }
         })
@@ -195,4 +195,8 @@ test "desk composer: words pasted at once past the core's bound go as a file of 
   let one = files[0]
   assert_true(text(Some(one), "name").has_prefix("pasted-text-"))
   assert_eq(text(field(Some(one), "pasted"), "preview"), "发布前要核对的条目")
+  // its card: what they begin with and how many, not the file's name
+  t.frame()
+  assert_true(t.find("发布前要核对的条目") is Some(_), msg=t.words().map(fn(x) { x.0 }).join("|"))
+  assert_true(t.find("pasted-text-") is None)
 }

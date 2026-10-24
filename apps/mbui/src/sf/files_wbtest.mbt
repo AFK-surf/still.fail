@@ -1,6 +1,6 @@
 ///|
 test "a file's card (FileCard): its name and size, how far it has gone up while it goes, why it failed; its ✕ and ↻ pressed" {
-  let done : Ref[FileCardDone] = Ref({ removed: false, retried: false, opened: false })
+  let done : Ref[FileCardDone] = Ref({ removed: false, retried: false, restored: false, opened: false })
   let pending = Ref(true)
   let failed = Ref("")
   let t = @ui.Tester::new(
@@ -19,7 +19,12 @@ test "a file's card (FileCard): its name and size, how far it has gone up while 
           retry=failed.val != "",
         )
         // (kept once pressed: the frames after it say no more)
-        done.val = { removed: done.val.removed || d.removed, retried: done.val.retried || d.retried, opened: done.val.opened || d.opened }
+        done.val = {
+          removed: done.val.removed || d.removed,
+          retried: done.val.retried || d.retried,
+          restored: done.val.restored || d.restored,
+          opened: done.val.opened || d.opened,
+        }
       })
       |> ignore
     },
@@ -41,6 +46,43 @@ test "a file's card (FileCard): its name and size, how far it has gone up while 
   let (x, y, w, h) = t.query(Button, label="web-main.file.remove").unwrap().rect
   t.tap(x + w / 2.0, y + h / 2.0)
   assert_true(done.val.removed)
+}
+
+///|
+test "pasted words' card (PendingFile's pasted card): what they begin with and how many in place of name and size; ✎ puts them back" {
+  let restored = Ref(false)
+  let t = @ui.Tester::new(
+    fn(c) {
+      let _ = begin(c)
+      c.box(style=@ui.css("w=Full h=Full p=S4"), fn() {
+        let d = file_card(
+          c,
+          "paste",
+          "pasted-text-1.txt",
+          6000.0,
+          title="发布前要核对的条目",
+          meta="6,000 字符",
+          remove=true,
+          restore=true,
+          remove_label="删除粘贴片段",
+        )
+        if d.restored {
+          restored.val = true
+        }
+      })
+      |> ignore
+    },
+    w=400.0,
+    h=200.0,
+  )
+  t.draw()
+  assert_true(t.find("发布前要核对的条目") is Some(_))
+  assert_true(t.find("6,000 字符") is Some(_))
+  assert_true(t.find("pasted-text") is None)
+  assert_true(t.query(Button, label="删除粘贴片段") is Some(_))
+  let (x, y, w, h) = t.query(Button, label="web-main.composer.expandPaste").unwrap().rect
+  t.tap(x + w / 2.0, y + h / 2.0)
+  assert_true(restored.val)
 }
 
 ///|

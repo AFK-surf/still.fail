@@ -25,3 +25,20 @@ pub fn to_fixed(x : Double, places : Int) -> String {
   let digits = if places == 2 && part < 10 { "0\{part}" } else { "\{part}" }
   "\{whole}.\{digits}"
 }
+
+///|
+/// A whole count with its thousands apart, as the web says one (toLocaleString("en-US")): 6,000; 1,234,567.
+pub fn grouped(n : Double) -> String {
+  let digits = n.abs().floor().to_int64().to_string()
+  let sb = StringBuilder()
+  if n < 0.0 {
+    sb.write_string("-")
+  }
+  for i, ch in digits {
+    if i > 0 && (digits.length() - i) % 3 == 0 {
+      sb.write_char(',')
+    }
+    sb.write_char(ch)
+  }
+  sb.to_string()
+}

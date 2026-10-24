@@ -25,16 +25,18 @@ pub(all) struct ComposerSpec {
 
 ///|
 /// What the composer keeps of its own: the system's picker asked for files (for which draft), when the cursor left it
-/// (it stays a box a moment, LET_GO_MS), when typing last warmed the agent's runtime, each quote's comment field.
+/// (it stays a box a moment, LET_GO_MS), when typing last warmed the agent's runtime, each quote's comment field, how
+/// it was laid out as it was last drawn (a new chat's roomy, or a chat's: another, it has moved between the pages).
 priv struct Composing {
   mut picking : (String, @ui.Pick)?
   mut let_go : Bool
   warmed : Map[String, Int]
   comments : Map[String, @ui.Field]
+  mut roomy : Bool?
 }
 
 ///|
-let composing : Composing = { picking: None, let_go: false, warmed: {}, comments: {} }
+let composing : Composing = { picking: None, let_go: false, warmed: {}, comments: {}, roomy: None }
 
 ///|
 fn composing_reset() -> Unit {
@@ -42,6 +44,7 @@ fn composing_reset() -> Unit {
   composing.let_go = false
   composing.warmed.clear()
   composing.comments.clear()
+  composing.roomy = None
 }
 
 ///|
@@ -117,8 +120,14 @@ pub fn composer(
       }
     },
   )
-  // capsule ⇄ box in one motion (useMorph), its height following what it holds
-  @motion.layout(c, box, "composer/box", spec=@motion.tween(morph_ms, ease=Out), listed=false)
+  // capsule ⇄ box in one motion (useMorph), its height following what it holds; laid out for the other page (a new
+  // chat's in the page, a chat's at its foot: dock.tsx), from where it was there to here, one composer changing
+  let moved = match composing.roomy {
+    Some(was) => was != spec.roomy
+    None => false
+  }
+  composing.roomy = Some(spec.roomy)
+  @motion.layout(c, box, "composer/box", spec=@motion.tween(if moved { page_move_ms } else { morph_ms }, ease=Out), listed=false)
   @motion.measure(c, box, "composer/content")
   if w.error != "" {
     c.box(style=error_box, fn() { c.text(w.error, style=composer_error_words) |> ignore }) |> ignore
@@ -457,6 +466,40 @@ fn composer_file(c : @ui.Ctx, src : Source, spec : ComposerSpec, w : Writing, f 
             error=text(ref_, "stationName") + " · " + @sf.t("web-main.file.modePath"),
             remove=true,
           )
+        // pasted words (PendingFile's pasted card): what they begin with, how many, put back as words while not too
+        // long; failed, made again from them
+        _ if field(v, "pasted") is Some(Object(_)) => {
+          let info = field(v, "pasted")
+          let can_restore = field(info, "text") is Some(String(_)) && !w.starting
+          let card = @sf.file_card(
+            c,
+            key,
+            name,
+            number(v, "size"),
+            pending~,
+            error~,
+            title=match text(info, "preview") {
+              "" => @sf.t("web-main.composer.pastedText")
+              first => first
+            },
+            meta=@sf.t("web-main.composer.pasteAttachment", args=[("count", @sf.grouped(number(info, "characters")))]),
+            remove=true,
+            remove_label=@sf.t("web-main.composer.removePaste"),
+            retry=error != "",
+            restore=can_restore,
+          )
+          if card.restored {
+            let words = if w.text == "" { text(info, "text") } else { w.text + "\n" + text(info, "text") }
+            @sfbase.refs_put(w.key, w.field, words)
+            writing_text(src, w, words)
+            writing_remove(src, w, id)
+            c.focus_editor(composer_field_key)
+          }
+          if card.retried {
+            @sfbase.writing_paste_again(src, w, id)
+          }
+          { ..card, retried: false }
+        }
         _ =>
           @sf.file_card(
             c,
@@ -551,6 +594,10 @@ let let_go_ms : Double = 300.0
 
 ///|
 let morph_ms : Double = 260.0
+
+///|
+/// Laid out for the other page, how long it goes there (dock.tsx: 340, the ease out).
+let page_move_ms : Double = 340.0
 
 ///|
 /// Typing warms the agent's runtime at most once a minute.
@@ -730,24 +777,32 @@ let composer_error_words : @ui.TextStyle = @ui.text_style(size=Xs, color=Danger,
 /// the quotes) goes (`chat.send`), the files still going up named so it waits for them. Not taken in at all (the core
 /// refused it, or went away with it): back in the composer unless something new is written there, saying why; one the
 /// station did not take waits in the outbox, which says so.
-pub fn send_in_chat(c : @ui.Ctx, src : Source, pages : Pages, r : ChatRef, v : ChatView, w : Writing) -> Unit {
+pub fn send_in_chat(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView, w : Writing) -> Unit {
   if src.read_only {
     toast_later(read_only_words)
     return
   }
   let words = w.text.trim(chars=" \n\t").to_string()
   let up = w.files.filter_map(fn(f) { field(Some(f), "done") })
-  let going = w.files.filter_map(fn(f) {
-    let o = Some(f)
-    if field(o, "done") is None && text(o, "error") == "" && field(o, "ref") is None && field(o, "link") is None {
-      Some(Json::object({ "id": Json::string(text(o, "id")), "name": Json::string(text(o, "name")), "size": Json::number(number(o, "size")) }))
-    } else {
-      None
-    }
-  })
+  let going = going_up(w)
   let rk = r.station + "\u{1}" + r.session
   let row = sent_local(rk, Some(v), words, up)
-  (pages.fly)(c, w.key, rk, row, words, @motion.measured(c, "composer/content").unwrap_or(0.0))
+  // its words take off from the field as they are (before it is emptied), its room held till they let go of it
+  let room = @motion.measured(c, "composer/content").unwrap_or(0.0)
+  @sfbase.flight_start(
+    c,
+    w.key,
+    rk,
+    row,
+    words,
+    room,
+    [],
+    field=composer_field_key,
+    hold=fn(ms) { composer_hold(w.key, room, ms) },
+    font=text_size,
+    line=text_line,
+    desk=true,
+  )
   writing_take(src, w, fn(taken) {
     guard taken is Some(_) else {
       sent_local_gone(rk, row)
@@ -779,5 +834,44 @@ pub fn send_in_chat(c : @ui.Ctx, src : Source, pages : Pages, r : ChatRef, v : C
         Ok(_) => ()
       }
     })
+  })
+}
+
+///|
+/// What was sent from draft `draft`'s composer holds its room as tall as it was (`room`) for `ms`, then gives it up as
+/// it shrinks (dock.tsx: the list's foot kept where it was till the message's row is in).
+fn composer_hold(draft : String, room : Double, ms : Double) -> Unit {
+  let c = @ui.current()
+  @motion.anim(c, "composer/held/" + draft, 0.0, global=true).snap(room)
+  let a = @motion.anim(c, "composer/hold/" + draft, 0.0, global=true)
+  a.snap(1.0)
+  a.animate(0.0, @motion.tween(morph_ms, ease=Out, delay=ms))
+}
+
+///|
+/// How much room draft `draft`'s composer takes at its page's foot (what the list leaves free under its last row): as
+/// tall as its box, or as it was when words were sent from it until they let go of it (composer_hold).
+pub fn composer_room(c : @ui.Ctx, draft : String) -> Double {
+  let now = @motion.measured(c, "composer/content").unwrap_or(0.0)
+  let held = @motion.anim(c, "composer/held/" + draft, 0.0, global=true).get()
+  let share = @motion.anim(c, "composer/hold/" + draft, 0.0, global=true).get()
+  if held > now {
+    now + (held - now) * share
+  } else {
+    now
+  }
+}
+
+///|
+/// The files of draft `w` still going up, as a message sent before they are up names them (`uploads`: the core sends
+/// it once they are).
+fn going_up(w : Writing) -> Array[Json] {
+  w.files.filter_map(fn(f) {
+    let o = Some(f)
+    if field(o, "done") is None && text(o, "error") == "" && field(o, "ref") is None && field(o, "link") is None {
+      Some(Json::object({ "id": Json::string(text(o, "id")), "name": Json::string(text(o, "name")), "size": Json::number(number(o, "size")) }))
+    } else {
+      None
+    }
   })
 }
