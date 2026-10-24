@@ -282,7 +282,7 @@ test "the history's post: where it went with its platform's mark, in the accent'
 }
 
 ///|
-test "接力到频道: the places the station's bots are in, one picked, relayed there with a note (Relay.kt)" {
+test "接力到频道 on a phone: the pages' relay as a sheet, the places the bots are in, one picked, relayed there (chat.relay)" {
   reset()
   let calls : Array[Made] = []
   let base = fixture("chat-info")
@@ -319,8 +319,8 @@ test "接力到频道: the places the station's bots are in, one picked, relayed
   t.run_for(@ui.nav_push_ms)
   t.tap_text("接力到频道…")
   assert_eq(named(calls, "chat.relayPlaces").length(), 1)
-  // (the info sheet goes, the relay sheet comes up, to where it rests)
-  t.run_for(@kit.sheet_rest("decide-sheet") - t.time())
+  // (the info sheet goes, the relay's sheet comes up, to where it rests: the presenters')
+  t.run_for(@kit.sheet_rest("sf-present") - t.time())
   assert_true(t.find("接力到频道") is Some(_))
   assert_true(t.find("#dev") is Some(_))
   assert_true(t.find("🔒 #ops") is Some(_))
@@ -340,5 +340,9 @@ test "接力到频道: the places the station's bots are in, one picked, relayed
   assert_eq(relayed.length(), 1)
   assert_eq(text(Some(relayed[0].params), "connect"), "slack-1")
   assert_eq(text(Some(relayed[0].params), "channel"), "C1")
+  // the sheet gone, where it went said
+  t.frame()
+  assert_true(t.find("开头附一句（可选）") is None)
+  assert_true(t.find("已接力到 #dev") is Some(_))
 }
 

@@ -1,9 +1,12 @@
-// A chat relayed to a channel (docs/relay.md; web/src/Relay.tsx RelayDialog, Relay.css.ts): from its title bar's
-// panel or its row's menu, a dialog offers the channels and groups one of the station's connects' bots is in (the
-// chat's own bot as it opens, another picked above), those relayed to before first, found by typing; one picked, with
-// a note if wanted, 接力 has the station start the conversation there and the chat's agent go on in it too. A Slack
-// message's link typed (pasted) into the search offers that message's thread instead. What it offers, and in what
-// order, is the core's (sfbase relay.mbt, relay-pick.ts).
+// A chat relayed to a channel (docs/relay.md; web/src/Relay.tsx useRelay, RelayDialog, and the phone's RelaySheet in
+// mobile/Chat.tsx; Relay.css.ts), one on every screen: from a chat's row's menu, its title bar's panel or its info, the
+// picking opens through the presenters (a dialog with 取消 and 接力 at its foot, a sheet from the foot on a touch device
+// short of Large). It offers the channels and groups one of the station's connects' bots is in (the chat's own bot as
+// it opens, another picked above), those relayed to before first, found by typing; one picked, with a note if wanted,
+// 接力 has the station start the conversation there and the chat's agent go on in it too, and the panel goes with a
+// toast saying where. A Slack message's link typed (pasted) into the search offers that message's thread instead. What
+// it offers, and in what order, is the core's (sfbase relay.mbt, relay-pick.ts). The search takes the focus as it opens
+// on a computer, not on a touch device (where that would bring the keyboard up over the list: useRelay's `focus`).
 
 ///|
 /// The editor to be given the focus as it is next drawn (the search as it opens, the note once a place is picked:
@@ -11,45 +14,51 @@
 let relay_focus : Ref[String] = Ref("")
 
 ///|
-/// The dialog opened for the chat `thread` of `r`'s station.
-pub fn open_relay(src : Source, r : ChatRef, thread : Double) -> Unit {
-  relay_open(src, r.station, thread)
-  relay_focus.val = "relay/search"
+/// As at the start (the package's reset).
+fn relay_focus_reset() -> Unit {
+  relay_focus.val = ""
 }
 
 ///|
-/// The dialog (RelayDialog), while it is open: its picking (useRelay's body), 取消 and 接力 at its foot.
-fn relay_dialog(c : @ui.Ctx, src : Source) -> Unit {
-  if relaying.thread < 0.0 {
-    return
-  }
-  let view = relay_view(c, src)
-  let link = opt_text(view, "link")
-  let picked = relaying.picked
-  let ready = picked is Some(_) || link is Some(_)
-  let label = match picked {
-    Some(row) => @sf.t("web-main.relay.goTo", args=[("place", text(Some(row), "name"))])
-    None => @sf.t("web-main.relay.go")
-  }
-  let shown = @sf.dialog(
-    c,
-    "relay",
-    true,
+/// The share of the window the picking fills (the phone's sheet: height 0.9), as a sheet or beside what opened it.
+let relay_tall : Double = 0.9
+
+///|
+/// Relays chat `thread` of `r`'s station: its places asked for (sfbase relay.mbt), the picking presented from `from`.
+pub fn open_relay(src : Source, r : ChatRef, thread : Double, from~ : @sf.Anchor) -> Unit {
+  relay_open(src, r.station, thread)
+  relay_focus.val = if @sf.touch_system() { "" } else { "relay/search" }
+  @sf.panel(
     @sf.t("web-main.relay.title"),
+    fn(c, _) {
+      let view = relay_view(c, src)
+      relay_body(c, src, view, opt_text(view, "link"), relaying.picked)
+    },
+    from~,
     description=@sf.t("web-main.relay.lead"),
-    footer=fn() {
+    live=fn() { (@sf.t("web-main.relay.title"), "", @sf.t("web-main.relay.lead")) },
+    tall=relay_tall,
+    foot=fn(c, close) {
+      let view = relay_view(c, src)
+      let picked = relaying.picked
+      let ready = picked is Some(_) || opt_text(view, "link") is Some(_)
+      let label = match picked {
+        Some(row) => @sf.t("web-main.relay.goTo", args=[("place", text(Some(row), "name"))])
+        None => @sf.t("web-main.relay.go")
+      }
       if @sf.button(c, @sf.t("common.cancel"), key="relay/cancel", tone=Ghost) {
-        relay_reset()
+        close()
       }
       if @sf.button(c, label, key="relay/go", tone=Primary, busy=relaying.busy, disabled=!ready) {
-        relay_go(src, view)
+        relay_go(src, view, done=close)
       }
     },
-    fn() { relay_body(c, src, view, link, picked) },
+    gone=fn() {
+      if !relaying.busy {
+        relay_reset()
+      }
+    },
   )
-  if !shown && !relaying.busy {
-    relay_reset()
-  }
 }
 
 ///|

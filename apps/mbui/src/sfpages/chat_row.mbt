@@ -52,12 +52,6 @@ fn chat_rows_reset() -> Unit {
 }
 
 ///|
-/// A chat's relay to a channel opened (its station, the chat, its thread): the app's, until the relay's dialog and
-/// sheet are one (sfdesk's relay.mbt, sfapp's).
-// kept across runs: set once as the app starts, never put back
-pub let relay_opener : Ref[(@ui.Ctx, Source, ChatRef, Double) -> Unit] = Ref(fn(_, _, _, _) {  })
-
-///|
 /// How long a finger holds a row before its time shows (mobile/Home.tsx: 450 ms).
 pub let hold_ms : Double = 450.0
 
@@ -547,7 +541,7 @@ fn row_menu(c : @ui.Ctx, src : Source, item : ChatItem, id : Int, x : Double, y 
       items.push(
         Some(
           @sf.menu_item_of(@sf.t("web-main.relay.action"), icon="arrow-up-right", fn() {
-            (relay_opener.val)(@ui.current(), src, r, th)
+            open_relay(src, r, th, from=Unanchored)
           }),
         ),
       )

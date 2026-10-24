@@ -19,7 +19,6 @@ pub fn reset() -> Unit {
   wide_reset()
   publish_reset()
   share_dialog_reset()
-  relay_focus.val = ""
   context_reset()
   switcher_reset()
   browse_reset()

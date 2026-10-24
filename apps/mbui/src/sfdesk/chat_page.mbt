@@ -653,7 +653,7 @@ fn chat_info(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef, v : ChatView
       }
       if relayable && info_row(c, "info-pop/relay", "arrow-up-right", @sf.t("web-main.relay.action"), "") {
         chat_own.info_open = false
-        open_relay(src, r, id)
+        @sfpages.open_relay(src, r, id, from=Unanchored)
       }
       if slack != "" && info_row(c, "info-pop/slack", "external", @sf.t("web-pages.chat.openInSlack"), "") {
         chat_own.info_open = false

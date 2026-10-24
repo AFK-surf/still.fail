@@ -8,6 +8,7 @@ pub fn reset() -> Unit {
   message_reset()
   rows_reset()
   login_cards_reset()
+  relay_focus_reset()
   list_reset()
   menus_reset()
   steps_reset()

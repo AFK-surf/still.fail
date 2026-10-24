@@ -12,14 +12,6 @@ let reset_by_hand : Ref[Bool] = Ref(false)
 /// Every Tester starts from the app as at the start (mbui's on_reset), whatever ran before it in the process: what is
 /// kept here from one Tester to the next would be an input the test does not give.
 fn init {
-  // a chat relayed from its row's menu: the wide frame's dialog, the stack's sheet (until they are one)
-  @sfpages.relay_opener.val = fn(c, src, r, thread) {
-    if @sfdesk.is_wide(c) {
-      @sfdesk.open_relay(src, r, thread)
-    } else {
-      open_relay(c, src, r, thread)
-    }
-  }
   // ＋'s Station 文件 (a composer's, sfpages): the station files' picker (sfdesk's station_pick.mbt). Said once, as the
   // app starts (reset runs only as a Tester starts: a wire set there is never set in the app)
   station_files_asked.val = @sfdesk.station_files_pick

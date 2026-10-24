@@ -25,8 +25,6 @@ priv enum Sheet {
   ContextOf(ChatRef, String)
   /// asking before an agent's context is cleared (AgentSheet.kt, PageParts.kt confirm): its session
   ClearContext(ChatRef, String)
-  /// relaying the chat to a channel (Relay.kt openRelay): its thread
-  Relay(ChatRef, Double)
   /// what its agents and other chats' wrote each other (Letters.kt openLetters): its thread
   LettersOf(ChatRef, Double)
 }
@@ -373,7 +371,6 @@ fn sheets(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
     XShare(r, thread) => xshare_sheet(c, src, r, thread)
     ContextOf(r, key) => context_sheet(c, src, r, key)
     ClearContext(r, key) => clear_context_sheet(c, src, r, key)
-    Relay(r, thread) => relay_sheet(c, src, r, thread)
     LettersOf(r, thread) => letters_sheet(c, src, r, thread)
   }
 }

@@ -533,7 +533,9 @@ fn chat_info_sheet(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef) -> Uni
                   |> ignore
                   chevron(c)
                 }) {
-                open_relay(c, src, r, th)
+                // (the chat's sheet put down, the picking up in its place)
+                close_sheet(c)
+                @sfpages.open_relay(src, r, th, from=Unanchored)
               }
             _ => ()
           }

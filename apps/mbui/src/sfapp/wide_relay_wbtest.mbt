@@ -1,4 +1,4 @@
-// The desktop's relay dialog (sfdesk relay.mbt, Relay.tsx RelayDialog): from a row's menu, the places the station's
+// The relay on a computer (sfpages relay.mbt, Relay.tsx RelayDialog: the presenters' dialog): from a row's menu, the places the station's
 // bots are in as the core offers them, one picked with its note, relayed there.
 
 ///|
