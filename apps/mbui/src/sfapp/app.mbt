@@ -73,9 +73,6 @@ fn reset() -> Unit {
   landing_reset()
   new_ws_reset()
   news_reset()
-  read_chats.clear()
-  readings.clear()
-  kept_places.clear()
   screens_open.clear()
   screens_made.val = 0
   screen_uis.clear()
@@ -145,7 +142,6 @@ fn reset() -> Unit {
   find_marking.val = []
   search_reset()
   ask_turns.clear()
-  flash_held.val = false
   notices_reset()
   faces_reset()
   links_reset()
@@ -176,7 +172,6 @@ fn reset() -> Unit {
   tool_parts.clear()
   flashing.val = ("", 0.0)
   flash_row.val = None
-  at_end_env.val = -1
   bench_on.val = -1
   boxed_n.val = 0
   run_picker_opened.val = false
@@ -294,7 +289,7 @@ pub fn view(c : @ui.Ctx, src : Source) -> Unit {
   @settings.status_top.val = status_top()
   @settings.nav_foot.val = nav_foot()
   @settings.bar_room.val = if has_bar() { bar_room } else { 0.0 }
-  linger_tick(c, src)
+  linger_tick(c, src, in_front=app_in_front())
   // the screens live in their cards (screen_links.mbt): which are on the screen, their frames acknowledged
   peeks_frame(c, src)
   // pages left: where they were left told once the frame's builds are over (a later build would see them left too)
