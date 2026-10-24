@@ -289,3 +289,43 @@ test "a layer opened by a list's row (built as the list is laid out) is laid out
   assert_eq((card[0].1, card[0].2), (110.0, 210.0))
   assert_true(card[0].3 > 0.0 && card[0].3 <= 60.0, msg="\{card[0].3} wide")
 }
+
+///|
+test "an open layer the focus is in has the keys: the page under it reads none (Escape, a letter, its raw keys); the layer reads them" {
+  let open = Ref(true)
+  let log : Array[String] = []
+  let t = Tester::new(fn(c) {
+    // a page reading keys as a list's rows do (Ctx::keys) and as its shortcuts do (Ctx::key_pressed)
+    for k in c.keys() {
+      log.push("page key \{k.0}")
+    }
+    if c.key_pressed(key_escape) || c.key_pressed(key_escape, in_field=true) {
+      log.push("page escape")
+    }
+    if open.val {
+      // (as a menu opened is: the focus on its first)
+      let o = c.overlay("menu", initial_focus=-1, fn() {
+        if c.key_pressed(key_of_char('a')) {
+          log.push("menu a")
+        }
+        btn(c, "inside") |> ignore
+      })
+      if o.dismissed is Some(d) {
+        log.push("dismissed \{d}")
+        open.val = false
+      }
+    }
+  })
+  t.draw()
+  t.key(key_of_char('a'))
+  t.frame()
+  assert_eq(log, ["menu a"])
+  t.key(key_escape)
+  t.frame()
+  assert_eq(log, ["menu a", "dismissed Escape"])
+  assert_false(open.val)
+  // closed: the page's again
+  t.key(key_of_char('a'))
+  t.frame()
+  assert_eq(log, ["menu a", "dismissed Escape", "page key \{key_of_char('a')}"])
+}

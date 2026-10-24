@@ -197,22 +197,6 @@ pub fn go_to(c : @ui.Ctx, src : Source, ws : String, here : DriveAt, to : (Drive
   if go.at >= rows.length() {
     go.at = if rows.length() > 0 { rows.length() - 1 } else { 0 }
   }
-  if c.key_pressed(@ui.key_code_down, in_field=true) && go.at < rows.length() - 1 {
-    go.at += 1
-  }
-  if c.key_pressed(@ui.key_code_up, in_field=true) && go.at > 0 {
-    go.at -= 1
-  }
-  if c.key_pressed(@ui.key_tab, in_field=true) {
-    match rows.get(go.at) {
-      Some((_, complete, _)) => {
-        go.field.set(complete)
-        go.typed = complete
-        go.at = 0
-      }
-      None => ()
-    }
-  }
   let open = fn(target : (String, String)?) {
     match target {
       Some((st, abs)) =>
@@ -246,6 +230,23 @@ pub fn go_to(c : @ui.Ctx, src : Source, ws : String, here : DriveAt, to : (Drive
     w=dmin(go_w, c.width - go_margin),
     close_label=@sf.t("common.close"),
     fn() {
+      // ↓ ↑ move what is chosen, Tab completes it (read in the dialog: its keys while it is open)
+      if c.key_pressed(@ui.key_code_down, in_field=true) && go.at < rows.length() - 1 {
+        go.at += 1
+      }
+      if c.key_pressed(@ui.key_code_up, in_field=true) && go.at > 0 {
+        go.at -= 1
+      }
+      if c.key_pressed(@ui.key_tab, in_field=true) {
+        match rows.get(go.at) {
+          Some((_, complete, _)) => {
+            go.field.set(complete)
+            go.typed = complete
+            go.at = 0
+          }
+          None => ()
+        }
+      }
       c.box(style=go_field_box, fn() {
         let res = c.editor(
           "files-goto/field",
