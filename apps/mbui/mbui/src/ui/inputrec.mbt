@@ -4,7 +4,7 @@
 // Tester's `replay_frames` hands each on again at its place, at its time: the run's whole input, seen again frame by
 // frame.
 //
-//   INPUT {"k":"pointer","t":T,"a":[kind,x,y,button]}   "wheel" [x,y,dx,dy,phase]   "key" [code,mods]
+//   INPUT {"k":"pointer","t":T,"a":[kind,x,y,button,mods]} (mods: the keys held as it went down; none before them)   "wheel" [x,y,dx,dy,phase]   "key" [code,mods]
 //   INPUT {"k":"text","t":T,"a":[kind,a,b],"s":TEXT}    "back" [kind,x,progress,edge]   "app" [state]
 
 ///|
@@ -62,7 +62,7 @@ fn replay_input(f : FakeHost, line : String) -> Unit {
   let frame_time = f.time
   f.time = t
   match m.get("k") {
-    Some(String("pointer")) => on_pointer(n(0).to_int(), n(1), n(2), n(3).to_int())
+    Some(String("pointer")) => pointer_in(n(0).to_int(), n(1), n(2), n(3).to_int(), n(4).to_int())
     Some(String("wheel")) => on_wheel(n(0), n(1), n(2), n(3), n(4).to_int())
     Some(String("key")) => on_key(n(0).to_int(), n(1).to_int())
     Some(String("text")) => {

@@ -243,6 +243,8 @@ pub struct Ctx {
   mut press_seen_frame : Int
   mut press_was_down : Bool
   mut press_seen_at : Double
+  /// the keys held as the pointer last went down (Press::mods)
+  mut press_mods : Int
   /// a tap this frame (a press let go without dragging, not taken by the app: Ctx::tapped_anywhere), and the press
   /// the app took (Ctx::take_press)
   mut tapped : (Double, Double)?
@@ -468,6 +470,7 @@ fn Ctx::new() -> Ctx {
     press_seen_frame: -1,
     press_was_down: false,
     press_seen_at: -1.0,
+    press_mods: 0,
     tapped: None,
     taken_at: -1.0,
     press_y: 0.0,
