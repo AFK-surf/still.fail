@@ -2,7 +2,8 @@
 // as a log: each event its number in it, kept a while. A client's stream is this log from some number on, in order; the
 // last id a client heard (`<run>.<n>`) is where its next stream goes on from (`since`): what came after it is told again,
 // or, when that is not all kept any more (or the id is another run's), the client is told it missed something and reads
-// the station again.
+// the station again. A run is a log, not a process: at a handover what it keeps goes on in the next one (`kept`, `from`),
+// the same run numbered on; a crash ends it.
 //
 // Only what is appended here has a number. What a stream is given because it asked for it (a session's steps as it
 // runs, a job's log, host samples) is not of the log, is never told again (the next stream asks for it anew), and has
@@ -18,12 +19,16 @@ export const KEPT_MS = 3_600_000;
 export const KEPT_MOST = 20_000;
 export const KEPT_BYTES = 8 * 1024 * 1024;
 
-/// An event of the log: its number, whom it was for (`to`, as the teller says it), and as it goes out ("": it said a
-/// thing whole, and the thing was said again since).
-export type Logged<To> = { n: number; to: To; text: string; at: number };
+/// An event of the log: its number, whom it was for (`to`, as the teller says it), as it goes out ("": it said a thing
+/// whole, and the thing was said again since), and the thing it says whole (`of`).
+export type Logged<To> = { n: number; to: To; text: string; at: number; of?: string };
+
+/// What a log keeps, as it goes over to the next process: its run, its last number and the last let go, and what is kept
+/// that is told again (what was said again since is not).
+export type Kept<To> = { run: string; seq: number; forgotten: number; events: Logged<To>[] };
 
 export class EventLog<To> {
-  /// This run of the station, in each event's id: a number of another run says nothing here.
+  /// This run of the log, in each event's id: a number of another run says nothing here.
   readonly run: string;
   #seq = 0;
   /// What is kept, oldest first, how much it is, and the number of the last let go (nothing before it can be gone on
@@ -38,13 +43,38 @@ export class EventLog<To> {
     this.run = run;
   }
 
+  /// The log `kept` says (another process's, handed over), at `now`: the same run, numbered on from where it was, what it
+  /// keeps bounded as by `append`. Throws on what is no log.
+  static from<To>(kept: Kept<To>, now: number): EventLog<To> {
+    const { run, seq, forgotten, events } = kept;
+    if (typeof run !== "string" || !/^[0-9a-f]+$/.test(run) || !Number.isSafeInteger(seq) || !Number.isSafeInteger(forgotten) || forgotten > seq || !Array.isArray(events)) throw new Error("not a log");
+    const log = new EventLog<To>(run);
+    log.#seq = seq;
+    log.#forgotten = forgotten;
+    let last = forgotten;
+    for (const e of events) {
+      if (!Number.isSafeInteger(e?.n) || e.n <= last || e.n > seq || typeof e.text !== "string" || typeof e.at !== "number") throw new Error("not a log");
+      last = e.n;
+      log.#kept.push(e);
+      log.#bytes += e.text.length;
+      if (e.of !== undefined) log.#latest.set(e.of, e);
+    }
+    log.#letGo(now);
+    return log;
+  }
+
+  /// What it keeps, for the log that goes on from it in the next process (`from`).
+  kept(): Kept<To> {
+    return { run: this.run, seq: this.#seq, forgotten: this.#forgotten, events: this.#kept.filter((e) => e.text !== "") };
+  }
+
   /// Appends an event, at `now`: the event as it goes out, with its id. `of`: the thing it says whole (a session, a
   /// viewer's overview or sidebar row, a job): it takes the place of what is kept of that thing, as told again the
   /// latest alone says how the thing is. Kept every time, a viewer's overview (some 20 KB at each change of a process)
   /// was most of what is kept: a busy station kept a few minutes of events, and told a phone coming back megabytes.
   append(event: string, data: unknown, to: To, now: number, of?: string): Logged<To> {
     const n = ++this.#seq;
-    const logged: Logged<To> = { n, to, text: `id: ${this.run}.${n}\nevent: ${event}\ndata: ${JSON.stringify(data)}\n\n`, at: now };
+    const logged: Logged<To> = { n, to, text: `id: ${this.run}.${n}\nevent: ${event}\ndata: ${JSON.stringify(data)}\n\n`, at: now, of };
     if (of !== undefined) {
       const before = this.#latest.get(of);
       if (before !== undefined) {
@@ -55,6 +85,12 @@ export class EventLog<To> {
     }
     this.#kept.push(logged);
     this.#bytes += logged.text.length;
+    this.#letGo(now);
+    return logged;
+  }
+
+  /// Lets go of the oldest kept, while it keeps more than it may or they are older than KEPT_MS at `now`.
+  #letGo(now: number) {
     let gone = 0;
     while (gone < this.#kept.length && (this.#kept.length - gone > KEPT_MOST || this.#bytes > KEPT_BYTES || now - this.#kept[gone]!.at > KEPT_MS)) {
       this.#bytes -= this.#kept[gone]!.text.length;
@@ -66,7 +102,6 @@ export class EventLog<To> {
       const from = this.#kept[0]?.n ?? Infinity;
       for (const [thing, e] of this.#latest) if (e.n < from) this.#latest.delete(thing);
     }
-    return logged;
   }
 
   /// The number `since` (`<run>.<n>`) says, where all that was appended after it is kept: this run's, and not before

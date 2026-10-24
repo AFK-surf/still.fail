@@ -103,7 +103,7 @@ export const DriveTransfersLive = Layer.effectDiscard(
             remote: (t) => peerSource((station, request) => bus.ask(station, request), t),
             now,
             // Told to the asker's own streams, the latest kept for one coming back.
-            changed: (t) => events.tell("drive-transfers", { transfer: shown(t) }, `drive-transfer\0${t.id}`, (viewer) => viewer.email === t.by),
+            changed: (t) => events.tell("drive-transfers", { transfer: shown(t) }, `drive-transfer\0${t.id}`, { email: t.by }),
           }),
       ),
       (t) => Effect.sync(() => t.close()),
