@@ -28,6 +28,7 @@ import {
 } from "./rows.ts";
 import { SCHEMA, SCHEMA_VERSION, addArchiveColumns, addAutoTitleColumns, addClientColumn, addLetterColumn, addQueueColumns, addSizeColumn, addUsageTotals, addWatchColumn, addWorkspaceColumns } from "./schema.ts";
 import * as usage from "./usage.ts";
+import { timed } from "./timed.ts";
 
 export * from "./rows.ts";
 export { SCHEMA_VERSION } from "./schema.ts";
@@ -77,7 +78,8 @@ export class Store {
     const memory = path === ":memory:";
     if (!memory) mkdirSync(dirname(path), { recursive: true });
     // Busy for a moment (another process reading, the WAL recovered after a crash): waited for, from the first statement.
-    const db = new DatabaseSync(path, { timeout: 5000 });
+    // On the main thread, what takes long is said (timed.ts).
+    const db = timed(new DatabaseSync(path, { timeout: 5000 }));
     try {
       // A commit waits for the log's write, not for the disk: what the last moments before a power cut wrote may be lost,
       // the database never damaged (WAL). Each live step of an agent commits a few times; with each its own flush to

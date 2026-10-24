@@ -11,6 +11,7 @@ import {
   AUTO, type AuthorKind, type EntryRow, type JobRow, MANUAL, type NewMessage, SCHEMA_VERSION, Store, type StoreChange, newMessage,
 } from "../src/store/store.ts";
 import { MERGED, SCHEMA } from "../src/store/schema.ts";
+import { ACTIVE_SESSIONS } from "../src/store/usage.ts";
 import * as read from "../src/read/store.ts";
 import { fileAway } from "./archived-before.ts";
 import { testClock } from "./hub-fakes.ts";
@@ -816,6 +817,22 @@ test("jobs: started, said, ended and cleared", () => {
   assert.deepEqual(store.listJobs(null), []);
   assert.deepEqual(h.changes.slice(-2), [{ type: "session", key: "a" }, { type: "jobRemoved", id: "j1", session: "a" }]);
   h.stop();
+});
+
+test("usage: the sessions at work are found by when their turns ended, once each, not by reading every turn", () => {
+  const store = memory();
+  for (const key of ["a", "b", "c"]) session(store, key);
+  store.startTurn("t1", "a", "input");
+  store.startTurn("t2", "b", "input");
+  store.endTurn("t2", "completed", null, null, null);
+  store.startTurn("t3", "b", "input");
+  store.endTurn("t3", "completed", null, null, null);
+  store.startTurn("t4", "b", "job");
+  assert.deepEqual(store.usageActiveSessions(0).sort(), ["a", "b"]);
+  assert.deepEqual(store.usageActiveSessions(Number.MAX_SAFE_INTEGER).sort(), ["a", "b"], "running ones whenever");
+  // As the station's SQLite plans it: by the index on when turns ended, never a scan of every turn.
+  const plan = (store.db.prepare(`EXPLAIN QUERY PLAN ${ACTIVE_SESSIONS}`).all(0) as { detail: string }[]).map((r) => r.detail);
+  assert.ok(plan.every((d) => !d.startsWith("SCAN")), plan.join(" | "));
 });
 
 test("usage: a call is recorded once, its output grown; turns tell whom they were for", () => {

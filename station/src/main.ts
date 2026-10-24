@@ -9,6 +9,7 @@
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { createServer } from "node:http";
 import type { AddressInfo } from "node:net";
+import { monitorEventLoopDelay } from "node:perf_hooks";
 import { join } from "node:path";
 import { Effect, Fiber, Layer, SubscriptionRef } from "effect";
 import { enroll, id, joinWorkspace, lockCommand, staysIn, status } from "./cli.ts";
@@ -62,6 +63,9 @@ const data = dataDir(args);
 const command = args.find((a, i) => !a.startsWith("--") && !(i > 0 && args[i - 1].startsWith("--") && args[i - 1] !== "--with-parent"));
 /// Flags that take a value: what follows them is no command's argument.
 const VALUED = ["--data", "--provider", "--lock"];
+/// How often the main thread's longest hold is looked at, and from how long a hold is said.
+const HELD_EVERY_MS = 10_000;
+const HELD_MS = 1_000;
 
 // What it says on this machine is in the station's language (config.json `language`).
 try {
@@ -182,6 +186,15 @@ function run() {
     const readers = yield* Readers;
     // `stillfail heap`: a snapshot of this thread's heap, asked for from the command line.
     answerHeapRequests(data);
+    // The main thread held (a query of seconds, a long parse): said as it is let go, with how long. Every device's
+    // requests wait meanwhile; the slow queries say what held it (store/timed.ts).
+    const held = monitorEventLoopDelay({ resolution: 50 });
+    held.enable();
+    wall.every(HELD_EVERY_MS, () => {
+      const ms = held.max / 1e6;
+      if (ms >= HELD_MS) log.warn("station", "the main thread was held", { ms: Math.round(ms) });
+      held.reset();
+    });
     wall.every(process.env.STILLFAIL_MEMLOG ? 10_000 : 600_000, () => {
       const m = process.memoryUsage();
       const mb = (v: number) => Math.round(v / 1048576);
