@@ -601,7 +601,7 @@ pub fn open_fixture(mode : String) -> Unit {
       dui.letters_open = ""
       dui.letters_held[r.station + "\u{1}" + r.session] = 7.0
     }
-    "chat-model-pop" => @sfdesk.open_triple(r.station, "session:s-c1")
+    "chat-model-pop" => @sfpages.open_triple(r.station, "session:s-c1")
     // (what is typed is looked for as the bar is first drawn)
     "chat-find" => @sfpages.find_preset(side_key(r), "截图")
     "chat-letters-open" => {

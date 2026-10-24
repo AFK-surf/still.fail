@@ -499,7 +499,7 @@ fn cd_run_section(c : @ui.Ctx, src : Source, core : Core, here : Here, station :
             (core.push)(Profiles(station))
           }
         } else {
-          model_triple(c, src, station, "connect:" + id, saved=@sf.t("web-pages.connect.bindSaved"))
+          @sfpages.model_triple(c, src, station, "connect:" + id, saved=@sf.t("web-pages.connect.bindSaved"))
         }
       })
       |> ignore

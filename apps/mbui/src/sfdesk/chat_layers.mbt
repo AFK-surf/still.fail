@@ -24,7 +24,7 @@ fn layers_reset() -> Unit {
 fn chat_layers(c : @ui.Ctx, src : Source, r : ChatRef, draft : String, pane : Int, room : Double) -> Unit {
   if layers_own.focus {
     layers_own.focus = false
-    c.focus_editor(composer_field_key)
+    c.focus_editor(@sfpages.composer_field_key)
   }
   @sfbase.pick_layer(c, list_key(r), bar_foot, room, @sfbase.mouse_picks(), fn(author, words, ts, role) {
     c.tell("pick/quote", fn() {
@@ -46,7 +46,7 @@ pub fn chat_drop(c : @ui.Ctx, src : Source, station : String, draft : String, pa
   match tab_take_drop(c) {
     Some((item, x, y)) if inside(c.rect_of(pane), x, y) =>
       c.tell("chat-drop/" + draft, fn() {
-        writing_drop(src, writing(src, draft), station, [dropped_of(item)], drops_as_files(src, draft))
+        writing_drop(src, writing(src, draft), station, [@sfpages.dropped_of(item)], @sfpages.drops_as_files(src, draft))
       })
     _ => ()
   }

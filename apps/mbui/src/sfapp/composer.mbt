@@ -1516,7 +1516,7 @@ fn composer(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView?, fresh? : Fres
     None => ()
   }
   // what the 文件 tab's 添加到消息 put in for this chat (src/sfdesk/drive_tab.mbt), named by their paths or as files
-  refs_put(src, d.key, @sfdesk.tab_take_sent(d.key))
+  refs_put(src, d.key, @sfbase.files_taken(d.key))
   // files another app shared into this chat (share.mbt), up as ＋'s are
   // (taken once from where they wait: the files as they were shared, whichever build takes them)
   match shared_into.get(d.key) {

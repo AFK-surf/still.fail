@@ -66,7 +66,7 @@ test "a chat's 文件 tab: a row's menu puts it into the chat's message (添加�
   t.frame()
   t.tap_text("添加到消息")
   t.frame()
-  let sent = @sfdesk.tab_take_sent("s-c1")
+  let sent = @sfbase.files_taken("s-c1")
   assert_eq(sent.length(), 1)
   assert_eq(sent[0].abs, fix_docs + "/发布清单.md")
   let (x, y) = t.find("长篇小说.txt").unwrap()

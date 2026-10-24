@@ -30,9 +30,11 @@ pub fn reset() -> Unit {
   row_menu_reset()
   attention_reset()
   newchat_reset()
-  composing_reset()
   page_switch_reset()
-  triple_reset()
+  // what the pages ask of the frame: what a row dragged carries, the chats either side of the one open
+  @sfbase.drag_carried.val = dragged
+  @sfbase.neighbour_go.val = neighbour
+  @sfbase.neighbour_held.val = switcher_open
   history_reset()
   find_close()
   jobs_reset()

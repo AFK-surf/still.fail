@@ -723,7 +723,7 @@ let triple_search : @ui.Style = @ui.css("row w=Full px=S2_5 py=S2_5 gap=S2 align
 
 ///|
 // kept across runs: a value (no field of it changes)
-let triple_rule_h : @ui.Style = @ui.css("w=Full h=SPx bg=Line")
+pub let triple_rule_h : @ui.Style = @ui.css("w=Full h=SPx bg=Line")
 
 ///|
 // kept across runs: a value (no field of it changes)
