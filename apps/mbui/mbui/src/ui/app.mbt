@@ -666,7 +666,10 @@ fn pointer_in(kind : Int, x : Double, y : Double, button : Int, mods : Int) -> U
       None => if target == 0 { c.focus = 0 }
     }
   } else if kind == 1 {
-    c.hover = hit_in(c.hit_ids, c.hit_rects, x, y)
+    // (a finger hovers over nothing: Pointing)
+    if pointing() is Mouse {
+      c.hover = hit_in(c.hit_ids, c.hit_rects, x, y)
+    }
     if c.down {
       track_x.add(t, x)
       track_y.add(t, y)

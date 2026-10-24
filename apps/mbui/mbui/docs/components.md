@@ -36,7 +36,15 @@ the gallery: every component in its states, light beside dark (`APP=kitdemo`, `M
    label="Save")`, `Tester::click`, `Tester::act`, `Tester::semantics_dump`), not by coordinates. A modal hides what
    is under it; `Ctx::hidden_from_semantics` hides decoration. The tree is made to be handed to VoiceOver, TalkBack
    and UI Automation later (roles and actions are theirs; an action comes to its widget as input does).
-7. **Each component is tested and shown**: behaviour with a Tester (pointer, touch, keys, its value given from
+7. **The hand is one thing, the layout another.** How a component answers the person's hand goes by
+   `@ui.pointing()` alone (a finger on a phone's or a tablet's system, a mouse or a trackpad on a desktop's): a
+   finger hovers over nothing (no hover's look, tooltip or hover card; a lifted finger is nowhere), asks for a menu by
+   holding (`Ctx::menu_asked`), reaches what is smaller than a fingertip from round it (48 across, iOS's 44: the
+   target it touches keeps it, a row's small button wins over the row), and is shown what a mouse is shown only by
+   resting on it. The window's size and the
+   system's size classes decide the layout and nothing of this: a tablet drawn as a desktop's wide frame is still
+   pointed at with a finger, a narrow desktop window still with a mouse.
+8. **Each component is tested and shown**: behaviour with a Tester (pointer, touch, keys, its value given from
    outside, disabled), its semantics asserted, and its states in the gallery, light and dark, as screenshots
    (`scripts/shots.sh kit`, goldens `goldens/mac-kit-*.png`).
 

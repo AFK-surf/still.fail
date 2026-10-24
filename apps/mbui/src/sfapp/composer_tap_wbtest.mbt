@@ -55,15 +55,11 @@ test "Android composer: a tap anywhere on the capsule nothing in it takes puts t
   let probe = composer_tap_tester()
   let (px, py, pw, ph) = probe.query(Button, label="添加到消息").unwrap().rect
   let (wx, wy, ww, wh) = probe.rect_of("发消息").unwrap()
-  // the capsule's own edge over ＋ and under it; in the bar's row over the words' line and under it (the room of what the
-  // capsule holds, which no part of it takes); between ＋ and the words
-  let points = [
-    (px + pw / 2.0, py - 3.0),
-    (px + pw / 2.0, py + ph + 3.0),
-    (wx + ww / 2.0, (py + wy) / 2.0),
-    (wx + ww / 2.0, (wy + wh + py + ph) / 2.0),
-    ((px + pw + wx) / 2.0, py + ph / 2.0),
-  ]
+  // in the bar's row over the words' line and under it (the room of what the capsule holds, which no part of it
+  // takes). (Round ＋, within a fingertip of it, is ＋'s, the gap between it and the words too: a finger reaches what
+  // is smaller than it from round it, @ui.pointing)
+  ignore((px, pw))
+  let points = [(wx + ww / 2.0, (py + wy) / 2.0), (wx + ww / 2.0, (wy + wh + py + ph) / 2.0)]
   for at in points {
     let t = composer_tap_tester()
     t.tap(at.0, at.1)

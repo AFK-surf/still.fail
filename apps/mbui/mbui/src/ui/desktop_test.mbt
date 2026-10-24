@@ -361,3 +361,112 @@ test "desktop: two clicks on the same thing within double_click_ms are a double 
   t.tap(20.0, 20.0)
   assert_eq(clicks, ["click", "click"])
 }
+
+///|
+test "desktop: what the person points with is the system's: a finger on a phone's or a tablet's, at any width" {
+  let view = fn(c : @ui.Ctx) { c.box(w=Px(10.0), h=Px(10.0), fn() {  }) |> ignore }
+  for p in [(0, @ui.Mouse), (3, @ui.Mouse), (1, @ui.Finger), (2, @ui.Finger)] {
+    let (platform, hand) = p
+    for w in [390.0, 1400.0] {
+      let _ = @ui.Tester::new(view, w~, platform~)
+      assert_eq(@ui.pointing(), hand)
+    }
+  }
+}
+
+///|
+test "desktop: a finger hovers over nothing, and lifted it is nowhere; a mouse hovers where it rests" {
+  let seen : Ref[String] = { val: "" }
+  let tapped_at : Array[Int] = []
+  let view = fn(c : @ui.Ctx) {
+    let b = c.id("b")
+    let (px, _, _) = c.pointer()
+    // (the frame that sees the tap still reads where it was: what the tap opens there)
+    if c.clicked(b) {
+      tapped_at.push(px.to_int())
+    }
+    seen.val = "\{c.hovered(b)} \{px >= 0.0}"
+    c.box(id=b, w=Px(100.0), h=Px(40.0), fn() {  }) |> ignore
+  }
+  let t = @ui.Tester::new(view, platform=2)
+  t.touch(0, 20.0, 20.0)
+  t.touch(1, 22.0, 20.0)
+  t.draw()
+  assert_eq(seen.val, "false true")
+  t.touch(2, 22.0, 20.0)
+  t.draw()
+  assert_eq(tapped_at, [22])
+  assert_eq(seen.val, "false false")
+  let t = @ui.Tester::new(view, platform=0)
+  t.move(20.0, 20.0)
+  t.draw()
+  assert_eq(seen.val, "true true")
+}
+
+///|
+test "desktop: a menu is asked for by a mouse's right click, by a finger held still" {
+  let asked : Array[String] = []
+  let clicks : Array[String] = []
+  let view = fn(c : @ui.Ctx) {
+    let row = c.id("row")
+    if c.menu_asked(row) is Some((x, _)) {
+      asked.push("menu at \{x.to_int()}")
+    }
+    if c.clicked(row) {
+      clicks.push("click")
+    }
+    c.box(id=row, w=Px(300.0), h=Px(40.0), fn() {  }) |> ignore
+  }
+  let t = @ui.Tester::new(view, platform=2)
+  t.press_at(50.0, 20.0)
+  t.draw()
+  t.run_for(@ui.long_press_ms)
+  t.release(50.0, 20.0)
+  assert_eq(asked, ["menu at 50"])
+  assert_eq(clicks, [])
+  asked.clear()
+  // a mouse held is a press, not a menu; its right click is
+  let t = @ui.Tester::new(view, platform=0)
+  t.press_at(50.0, 20.0)
+  t.draw()
+  t.run_for(@ui.long_press_ms)
+  t.release(50.0, 20.0)
+  assert_eq(asked, [])
+  t.right_click(80.0, 20.0)
+  assert_eq(asked, ["menu at 80"])
+}
+
+///|
+test "desktop: a finger reaches a target smaller than a fingertip from round it, not its neighbour's; a mouse does not" {
+  let clicks : Array[String] = []
+  let view = fn(c : @ui.Ctx) {
+    let row = c.id("row")
+    let a = c.id("a")
+    let b = c.id("b")
+    for p in [("row", row), ("a", a), ("b", b)] {
+      if c.clicked(p.1) {
+        clicks.push(p.0)
+      }
+    }
+    // a row 300 by 60, two 20 by 20 buttons in it 4 apart at its end
+    c.box(id=row, w=Px(300.0), h=Px(60.0), dir=Row, align=ACenter, pl=240.0, gap=4.0, fn() {
+      c.box(id=a, w=Px(20.0), h=Px(20.0), fn() {  }) |> ignore
+      c.box(id=b, w=Px(20.0), h=Px(20.0), fn() {  }) |> ignore
+    })
+    |> ignore
+  }
+  let t = @ui.Tester::new(view, platform=2)
+  // 10 over the first button (at 240..260, 20..40): its own
+  t.tap(250.0, 12.0)
+  // on the first, by its edge nearest the second: the first keeps it
+  t.tap(259.0, 30.0)
+  // between them, nearer the second
+  t.tap(263.5, 30.0)
+  // far from both: the row's
+  t.tap(100.0, 30.0)
+  assert_eq(clicks, ["a", "a", "b", "row"])
+  clicks.clear()
+  let t = @ui.Tester::new(view, platform=0)
+  t.tap(250.0, 12.0)
+  assert_eq(clicks, ["row"])
+}
