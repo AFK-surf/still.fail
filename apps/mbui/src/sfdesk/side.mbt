@@ -27,7 +27,7 @@ let side_top_web : Double = 8.0
 
 ///|
 // kept across runs: a value (no field of it changes)
-let side_full : @ui.Style = @ui.style(w=Full)
+let side_full : @ui.Style = @ui.css("w=Full")
 
 ///|
 /// A row of a sidebar's list (Sidebar.css.ts navRow): 32 high at least, 6 by 10 in (`tall`: 8, its words from the
@@ -51,11 +51,11 @@ pub fn nav_row(
 
 ///|
 // kept across runs: a value (no field of it changes)
-let nav_row_look : @ui.Style = @ui.style(row=true, w=Full, min_h=S8, px=S2_5, py=S1_5, gap=S2, radius=Xl)
+let nav_row_look : @ui.Style = @ui.css("row w=Full min_h=S8 px=S2_5 py=S1_5 gap=S2 radius=Xl")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let nav_row_tall : @ui.Style = @ui.style(row=true, w=Full, min_h=S8, px=S2_5, py=S2, gap=S2, align=AStart, radius=Xl)
+let nav_row_tall : @ui.Style = @ui.css("row w=Full min_h=S8 px=S2_5 py=S2 gap=S2 align=AStart radius=Xl")
 
 ///|
 /// A row's or a place's ground as the web moves it (Sidebar.css.ts navRow, Rail.css.ts item: `transition: background
@@ -86,7 +86,7 @@ pub fn nav_heading(c : @ui.Ctx, label : String) -> Unit {
 
 ///|
 // kept across runs: a value (no field of it changes)
-let nav_heading_box : @ui.Style = @ui.style(w=Full, px=S2, pt=S3_5, pb=S1)
+let nav_heading_box : @ui.Style = @ui.css("w=Full px=S2 pt=S3_5 pb=S1")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -134,11 +134,11 @@ let breath_line_w : Double = 180.0
 
 ///|
 // kept across runs: a value (no field of it changes)
-let breathing_list : @ui.Style = @ui.style(w=Full, pt=S2, gap=S3, px=S2_5)
+let breathing_list : @ui.Style = @ui.css("w=Full pt=S2 gap=S3 px=S2_5")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let breathing_row : @ui.Style = @ui.style(w=Full, gap=S1_5)
+let breathing_row : @ui.Style = @ui.css("w=Full gap=S1_5")
 
 ///|
 // kept across runs: a value (no field of it changes)

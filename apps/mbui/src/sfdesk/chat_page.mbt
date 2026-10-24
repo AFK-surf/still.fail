@@ -95,7 +95,7 @@ fn chat_page(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef, pages : Page
 ///|
 /// The pane's ground under a chat.
 // kept across runs: a value (no field of it changes)
-let chat_ground : @ui.Style = @ui.style(w=Full, h=Full, bg=Bg)
+let chat_ground : @ui.Style = @ui.css("w=Full h=Full bg=Bg")
 
 ///|
 /// The chat's own keys (keymap.ts, ChatPage.tsx useShortcut): ⌘⇧E into the archive while nothing is left in it, ⌘⇧H
@@ -714,7 +714,7 @@ let chat_bar_title_row : @ui.Style = @ui.style(row=true, w=@sf.grow, pl=S2, gap=
 
 ///|
 // kept across runs: a value (no field of it changes)
-let chat_title_room : @ui.Style = @ui.style(row=true)
+let chat_title_room : @ui.Style = @ui.css("row")
 
 ///|
 /// How wide the title may be: 42% of the bar, 80 at least.
@@ -731,7 +731,7 @@ let chat_title_words : @ui.TextStyle = @ui.text_style(size=Base, weight=Semibold
 ///|
 /// What is done in its bar, at its end, 2 apart (pageBarActions).
 // kept across runs: a value (no field of it changes)
-let chat_bar_buttons : @ui.Style = @ui.style(row=true, gap=S0_5, align=ACenter)
+let chat_bar_buttons : @ui.Style = @ui.css("row gap=S0_5 align=ACenter")
 
 ///|
 /// The station's tag (chatStation): 1 by 7 in, a line round it, round as a pill, its dot, mark and name 4 apart, 12,
@@ -752,7 +752,7 @@ let chat_station_tag : @ui.Style = @ui.style(
 
 ///|
 // kept across runs: a value (no field of it changes)
-let chat_station_hot : @ui.Style = chat_station_tag.then(@ui.style(border_color=Border))
+let chat_station_hot : @ui.Style = chat_station_tag.then(@ui.css("border_color=Border"))
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -769,19 +769,19 @@ let chat_station_mark : Double = 12.0
 ///|
 /// How a station is reached, a dot 7 across (StationLink.css.ts dot): green, amber, red, a grey ring.
 // kept across runs: a value (no field of it changes)
-let via_direct : @ui.Style = @ui.style(w=S2, h=S2, radius=Full, bg=Positive)
+let via_direct : @ui.Style = @ui.css("w=S2 h=S2 radius=Full bg=Positive")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let via_relay : @ui.Style = @ui.style(w=S2, h=S2, radius=Full, bg=Warn)
+let via_relay : @ui.Style = @ui.css("w=S2 h=S2 radius=Full bg=Warn")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let via_offline : @ui.Style = @ui.style(w=S2, h=S2, radius=Full, bg=Danger)
+let via_offline : @ui.Style = @ui.css("w=S2 h=S2 radius=Full bg=Danger")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let via_waiting : @ui.Style = @ui.style(w=S2, h=S2, radius=Full, border=B1, border_color=Muted)
+let via_waiting : @ui.Style = @ui.css("w=S2 h=S2 radius=Full border=B1 border_color=Muted")
 
 ///|
 /// The same on a tile's corner (cornerDot): 10 across, ringed 2 in the page's ground, 3 past its edges.
@@ -796,19 +796,19 @@ fn corner_dot_of(via : String) -> @ui.Style {
 
 ///|
 // kept across runs: a value (no field of it changes)
-let corner_direct : @ui.Style = @ui.style(w=S2_5, h=S2_5, radius=Full, bg=Positive, border=B2, border_color=Bg)
+let corner_direct : @ui.Style = @ui.css("w=S2_5 h=S2_5 radius=Full bg=Positive border=B2 border_color=Bg")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let corner_relay : @ui.Style = @ui.style(w=S2_5, h=S2_5, radius=Full, bg=Warn, border=B2, border_color=Bg)
+let corner_relay : @ui.Style = @ui.css("w=S2_5 h=S2_5 radius=Full bg=Warn border=B2 border_color=Bg")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let corner_offline : @ui.Style = @ui.style(w=S2_5, h=S2_5, radius=Full, bg=Danger, border=B2, border_color=Bg)
+let corner_offline : @ui.Style = @ui.css("w=S2_5 h=S2_5 radius=Full bg=Danger border=B2 border_color=Bg")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let corner_waiting : @ui.Style = @ui.style(w=S2_5, h=S2_5, radius=Full, bg=Muted, border=B2, border_color=Bg)
+let corner_waiting : @ui.Style = @ui.css("w=S2_5 h=S2_5 radius=Full bg=Muted border=B2 border_color=Bg")
 
 ///|
 /// People in a stack (peopleStack): each 16 across, each 4 over the one before; +n after them, 11 muted.
@@ -816,7 +816,7 @@ let person_side : Double = 16.0
 
 ///|
 // kept across runs: a value (no field of it changes)
-let people_row : @ui.Style = @ui.style(row=true, align=ACenter)
+let people_row : @ui.Style = @ui.css("row align=ACenter")
 
 ///|
 /// Each 16, ringed 1.5 (a 19 circle), the first's face where the stack starts, each 4 over the one before.
@@ -833,7 +833,7 @@ let person_next : @ui.Style = @sf.overlap(7.0)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let people_letter_box : @ui.Style = @ui.style(w=S4, h=S4, radius=Full, align=ACenter, justify=JCenter)
+let people_letter_box : @ui.Style = @ui.css("w=S4 h=S4 radius=Full align=ACenter justify=JCenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -854,34 +854,34 @@ let people_more : @ui.TextStyle = @ui.text_style(size=Xs2, color=Muted, wrap=fal
 
 ///|
 // kept across runs: a value (no field of it changes)
-let people_more_box : @ui.Style = @ui.style(pl=S1_5)
+let people_more_box : @ui.Style = @ui.css("pl=S1_5")
 
 ///|
 /// An agent's mark in the bar (agentMarkBtn), round 6; an accent ring 2 round it while its history shows (among
 /// several); with its station one tile (agentStation): the maker's square (the pointer's ground on hover) and the
 /// station's part (its mark, or its name 140 at most, in by .19 of the tile and 1), the dot on the tile's corner.
 // kept across runs: a value (no field of it changes)
-let agent_mark_btn : @ui.Style = @ui.style(radius=Md)
+let agent_mark_btn : @ui.Style = @ui.css("radius=Md")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let agent_mark_btn_on : @ui.Style = @ui.style(radius=Md, border=B2, border_color=Accent)
+let agent_mark_btn_on : @ui.Style = @ui.css("radius=Md border=B2 border_color=Accent")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let agent_station : @ui.Style = @ui.style(row=true, h=S5, radius=Md, bg=Neutral)
+let agent_station : @ui.Style = @ui.css("row h=S5 radius=Md bg=Neutral")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let agent_station_on : @ui.Style = agent_station.then(@ui.style(border=B2, border_color=Accent))
+let agent_station_on : @ui.Style = agent_station.then(@ui.css("border=B2 border_color=Accent"))
 
 ///|
 // kept across runs: a value (no field of it changes)
-let agent_station_agent : @ui.Style = @ui.style(w=S5, h=S5, radius=Md)
+let agent_station_agent : @ui.Style = @ui.css("w=S5 h=S5 radius=Md")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let agent_station_agent_hot : @ui.Style = @ui.style(w=S5, h=S5, radius=Md, bg=Hover)
+let agent_station_agent_hot : @ui.Style = @ui.css("w=S5 h=S5 radius=Md bg=Hover")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -897,38 +897,38 @@ let agent_station_part : @ui.Style = @ui.style(
 
 ///|
 // kept across runs: a value (no field of it changes)
-let agent_station_part_hot : @ui.Style = agent_station_part.then(@ui.style(bg=Hover))
+let agent_station_part_hot : @ui.Style = agent_station_part.then(@ui.css("bg=Hover"))
 
 ///|
 /// The dot on the tile's bottom right corner, 3 past it.
 // kept across runs: a value (no field of it changes)
-let agent_station_dot_room : @ui.Style = @ui.style(w=Full, h=Full, align=AEnd, justify=JEnd).then(@sf.oversize(3.0))
+let agent_station_dot_room : @ui.Style = @ui.css("w=Full h=Full align=AEnd justify=JEnd").then(@sf.oversize(3.0))
 
 ///|
 /// The services' button's dot (jobsTrigger ::after): 7 across, 6 in from its top right, ringed 2 in the page's ground.
 // kept across runs: a value (no field of it changes)
-let jobs_alarm_room : @ui.Style = @ui.style(w=S8, h=S8, pt=S1, pr=S1, align=AEnd)
+let jobs_alarm_room : @ui.Style = @ui.css("w=S8 h=S8 pt=S1 pr=S1 align=AEnd")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let jobs_alarm_fail : @ui.Style = @ui.style(w=S2_5, h=S2_5, radius=Full, bg=Danger, border=B2, border_color=Bg)
+let jobs_alarm_fail : @ui.Style = @ui.css("w=S2_5 h=S2_5 radius=Full bg=Danger border=B2 border_color=Bg")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let jobs_alarm_restart : @ui.Style = @ui.style(w=S2_5, h=S2_5, radius=Full, bg=Warn, border=B2, border_color=Bg)
+let jobs_alarm_restart : @ui.Style = @ui.css("w=S2_5 h=S2_5 radius=Full bg=Warn border=B2 border_color=Bg")
 
 ///|
 /// The info's facts (detailRow): what it is muted in a 6em column, 12 apart; 13; at the panel's words' inset.
 // kept across runs: a value (no field of it changes)
-let info_facts : @ui.Style = @ui.style(w=Full, px=S2_5, pt=S2_5, gap=S1_5)
+let info_facts : @ui.Style = @ui.css("w=Full px=S2_5 pt=S2_5 gap=S1_5")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let info_fact : @ui.Style = @ui.style(row=true, w=Full, min_h=S6, gap=S3, align=ACenter)
+let info_fact : @ui.Style = @ui.css("row w=Full min_h=S6 gap=S3 align=ACenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let info_fact_label : @ui.Style = @ui.style(w=S20)
+let info_fact_label : @ui.Style = @ui.css("w=S20")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -948,39 +948,30 @@ let info_end : @ui.TextStyle = @ui.text_style(size=Xs, color=Muted, wrap=false)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let info_inline : @ui.Style = @ui.style(row=true, gap=S1_5, align=ACenter)
+let info_inline : @ui.Style = @ui.css("row gap=S1_5 align=ACenter")
 
 ///|
 /// Its agents (detailsList): 8 under the facts, each its mark and label over its line, 2 apart.
 // kept across runs: a value (no field of it changes)
-let info_agents : @ui.Style = @ui.style(w=Full, px=S2_5, pt=S2, gap=S1_5)
+let info_agents : @ui.Style = @ui.css("w=Full px=S2_5 pt=S2 gap=S1_5")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let info_agent : @ui.Style = @ui.style(w=Full, gap=S0_5)
+let info_agent : @ui.Style = @ui.css("w=Full gap=S0_5")
 
 ///|
 /// What is done with it (infoTools, PanelRow): 8 under what is over it, 2 apart; a row 32 high at least, its icon's
 /// 20 column and words 10 apart, 10 in, round with the panel, the pointer's ground on it.
 // kept across runs: a value (no field of it changes)
-let info_tools : @ui.Style = @ui.style(w=Full, pt=S2, gap=S0_5)
+let info_tools : @ui.Style = @ui.css("w=Full pt=S2 gap=S0_5")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let info_tool : @ui.Style = @ui.style(
-  row=true,
-  w=Full,
-  min_h=S8,
-  px=S2_5,
-  gap=S2_5,
-  align=ACenter,
-  radius=Inner,
-  hovered=@ui.patch(bg=Hover),
-)
+let info_tool : @ui.Style = @ui.css("row w=Full min_h=S8 px=S2_5 gap=S2_5 align=ACenter radius=Inner hovered{bg=Hover}")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let info_tool_icon : @ui.Style = @ui.style(w=S5, align=ACenter)
+let info_tool_icon : @ui.Style = @ui.css("w=S5 align=ACenter")
 
 ///|
 // kept across runs: a value (no field of it changes)

@@ -327,16 +327,16 @@ let body_in_half : Double = 80.0
 
 ///|
 // kept across runs: a value (no field of it changes)
-let page_box : @ui.Style = @ui.style(w=Full, h=Full, bg=Bg)
+let page_box : @ui.Style = @ui.css("w=Full h=Full bg=Bg")
 
 ///|
 /// The bar (bar): 44 high, what is on it at its end, 12 in, a line under it.
 // kept across runs: a value (no field of it changes)
-let bar_box : @ui.Style = @ui.style(row=true, w=Full, h=S11, px=S3, gap=S1, align=ACenter, justify=JEnd)
+let bar_box : @ui.Style = @ui.css("row w=Full h=S11 px=S3 gap=S1 align=ACenter justify=JEnd")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let bar_rule : @ui.Style = @ui.style(w=Full, h=SPx, bg=Line)
+let bar_rule : @ui.Style = @ui.css("w=Full h=SPx bg=Line")
 
 ///|
 /// Room for what the bar starts with when there is one tab (tabsNone).
@@ -346,7 +346,7 @@ let tabs_none : @ui.Style = @ui.style(w=@sf.grow)
 ///|
 /// Between what is done to the folder and the tabs' own buttons: a short line, 16 high (barFolder's).
 // kept across runs: a value (no field of it changes)
-let bar_line : @ui.Style = @ui.style(w=SPx, h=S4, bg=Line)
+let bar_line : @ui.Style = @ui.css("w=SPx h=S4 bg=Line")
 
 ///|
 /// The tabs' groove (tabs): capsules in a capsule, 2 apart, on the words' colour at 6%.
@@ -369,7 +369,7 @@ let tab_off : @ui.Style = @ui.style(
 
 ///|
 // kept across runs: a value (no field of it changes)
-let tab_on : @ui.Style = tab_off.then(@ui.style(bg=Bg, shadow=Sm, hovered=@ui.patch(bg=Bg)))
+let tab_on : @ui.Style = tab_off.then(@ui.css("bg=Bg shadow=Sm hovered{bg=Bg}"))
 
 ///|
 let tab_most : Double = 280.0
@@ -377,7 +377,7 @@ let tab_most : Double = 280.0
 ///|
 /// Its close (tabClose): a circle 16 across, 6 in from its end.
 // kept across runs: a value (no field of it changes)
-let tab_close : @ui.Style = @ui.style(w=S4, h=S4, radius=Full, align=ACenter, justify=JCenter, hovered=@ui.patch(bg=Hover))
+let tab_close : @ui.Style = @ui.css("w=S4 h=S4 radius=Full align=ACenter justify=JCenter hovered{bg=Hover}")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -385,7 +385,7 @@ let tab_parts : @ui.Style = @ui.style(row=true, w=@sf.grow, gap=S1_5, align=ACen
 
 ///|
 // kept across runs: a value (no field of it changes)
-let tab_split : @ui.Style = @ui.style(w=SPx, h=S2_5, bg=Line)
+let tab_split : @ui.Style = @ui.css("w=SPx h=S2_5 bg=Line")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -409,15 +409,15 @@ let station_dots : Array[@ui.Style] = ([Accent, Link, Positive, Warn, Danger, Mu
 ///|
 /// The tab's sides, side by side, a line between.
 // kept across runs: a value (no field of it changes)
-let panes_row : @ui.Style = @ui.style(row=true, w=Full, h=Full)
+let panes_row : @ui.Style = @ui.css("row w=Full h=Full")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let pane_rule : @ui.Style = @ui.style(w=SPx, h=Full, bg=Line)
+let pane_rule : @ui.Style = @ui.css("w=SPx h=Full bg=Line")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let side_one : @ui.Style = @ui.style(w=Full, h=Full)
+let side_one : @ui.Style = @ui.css("w=Full h=Full")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -426,25 +426,25 @@ let side_half : @ui.Style = @ui.style(w=@sf.grow, h=Full, clip=true)
 ///|
 /// Split, the side in front lined at its top in the accent (2), the other not.
 // kept across runs: a value (no field of it changes)
-let front_line : @ui.Style = @ui.style(w=Full, h=S0_5, bg=Accent)
+let front_line : @ui.Style = @ui.css("w=Full h=S0_5 bg=Accent")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let back_line : @ui.Style = @ui.style(w=Full, h=S0_5)
+let back_line : @ui.Style = @ui.css("w=Full h=S0_5")
 
 ///|
 /// What a side shows of its folder (FolderView), in from its sides.
 // kept across runs: a value (no field of it changes)
-let body_one : @ui.Style = @ui.style(row=true, w=Full, h=Full, pl=S8, pr=S10, clip=true)
+let body_one : @ui.Style = @ui.css("row w=Full h=Full pl=S8 pr=S10 clip")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let body_half : @ui.Style = @ui.style(row=true, w=Full, h=Full, px=S4, clip=true)
+let body_half : @ui.Style = @ui.css("row w=Full h=Full px=S4 clip")
 
 ///|
 /// A side whose station is not among the workspace's (Missing).
 // kept across runs: a value (no field of it changes)
-let missing_box : @ui.Style = @ui.style(w=Full, px=S10, pt=S3, pb=S3)
+let missing_box : @ui.Style = @ui.css("w=Full px=S10 pt=S3 pb=S3")
 
 ///|
 // kept across runs: a value (no field of it changes)

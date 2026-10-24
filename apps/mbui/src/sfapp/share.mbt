@@ -110,7 +110,7 @@ let open_app_words : @ui.TextStyle = @ui.text_style(size=Lg, weight=Semibold, co
 
 ///|
 // kept across runs: a value (no field of it changes)
-let open_app_box : @ui.Style = @ui.style(px=S5, py=S2, pb=S6)
+let open_app_box : @ui.Style = @ui.css("px=S5 py=S2 pb=S6")
 
 ///|
 /// Over another app (ShareActivity): what is shared taken, its sheet over that app and nothing else; the toasts.
@@ -181,7 +181,7 @@ fn share_reading(c : @ui.Ctx) -> Unit {
 
 ///|
 // kept across runs: a value (no field of it changes)
-let share_reading_box : @ui.Style = @ui.style(w=Full, px=S5, pt=S2)
+let share_reading_box : @ui.Style = @ui.css("w=Full px=S5 pt=S2")
 
 ///|
 /// From six chats the list can be searched.

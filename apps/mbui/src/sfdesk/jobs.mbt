@@ -602,68 +602,51 @@ let jobs_clear_h : Double = 38.0
 ///|
 /// A job's dot (jobDot): 8 across, round.
 // kept across runs: a value (no field of it changes)
-let job_dot_off : @ui.Style = @ui.style(w=S2, h=S2, radius=Full, bg=Border)
+let job_dot_off : @ui.Style = @ui.css("w=S2 h=S2 radius=Full bg=Border")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let job_dot_up : @ui.Style = @ui.style(w=S2, h=S2, radius=Full, bg=Positive)
+let job_dot_up : @ui.Style = @ui.css("w=S2 h=S2 radius=Full bg=Positive")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let job_dot_restart : @ui.Style = @ui.style(w=S2, h=S2, radius=Full, bg=Warn)
+let job_dot_restart : @ui.Style = @ui.css("w=S2 h=S2 radius=Full bg=Warn")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let job_dot_fail : @ui.Style = @ui.style(w=S2, h=S2, radius=Full, bg=Danger)
+let job_dot_fail : @ui.Style = @ui.css("w=S2 h=S2 radius=Full bg=Danger")
 
 ///|
 /// An alive job's breath round its dot: 16 across (inset -4), the online green.
 // kept across runs: a value (no field of it changes)
-let job_halo : @ui.Style = @ui.style(w=S4, h=S4, radius=Full, bg=Positive)
+let job_halo : @ui.Style = @ui.css("w=S4 h=S4 radius=Full bg=Positive")
 
 ///|
 /// The dot on the name's line (20 high): 6 down.
 // kept across runs: a value (no field of it changes)
-let job_dot_room : @ui.Style = @ui.style(pt=S1_5)
+let job_dot_room : @ui.Style = @ui.css("pt=S1_5")
 
 ///|
 /// A job's row (jobRow): its dot and words 12 apart, 6 by 8 in (12 at its start); round as an option, the pointer's
 /// ground on it, the picked ground while picked; in the popover in by the panel's words (10), round with it.
 // kept across runs: a value (no field of it changes)
-let job_row_style : @ui.Style = @ui.style(
-  row=true,
-  w=Full,
-  py=S1_5,
-  pl=S3,
-  pr=S2,
-  gap=S3,
-  align=AStart,
-  radius=Xl,
-  hovered=@ui.patch(bg=Hover),
-  selected=@ui.patch(bg=Selected),
+let job_row_style : @ui.Style = @ui.css(
+  #|row w=Full py=S1_5 pl=S3 pr=S2 gap=S3 align=AStart radius=Xl hovered{bg=Hover} selected{bg=Selected}
 )
 
 ///|
 // kept across runs: a value (no field of it changes)
-let job_row_inset : @ui.Style = @ui.style(
-  row=true,
-  w=Full,
-  py=S1_5,
-  px=S2_5,
-  gap=S3,
-  align=AStart,
-  radius=Inner,
-  hovered=@ui.patch(bg=Hover),
-  selected=@ui.patch(bg=Hover),
+let job_row_inset : @ui.Style = @ui.css(
+  #|row w=Full py=S1_5 px=S2_5 gap=S3 align=AStart radius=Inner hovered{bg=Hover} selected{bg=Hover}
 )
 
 ///|
 // kept across runs: a value (no field of it changes)
-let job_row_static : @ui.Style = @ui.style(row=true, w=Full, py=S1_5, pl=S3, pr=S2, gap=S3, align=AStart, radius=Xl)
+let job_row_static : @ui.Style = @ui.css("row w=Full py=S1_5 pl=S3 pr=S2 gap=S3 align=AStart radius=Xl")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let job_row_static_inset : @ui.Style = @ui.style(row=true, w=Full, py=S1_5, px=S2_5, gap=S3, align=AStart, radius=Inner)
+let job_row_static_inset : @ui.Style = @ui.css("row w=Full py=S1_5 px=S2_5 gap=S3 align=AStart radius=Inner")
 
 ///|
 /// Its dot and words, faded while it is over (data-off: .55).
@@ -690,29 +673,29 @@ let job_meta_words : @ui.TextStyle = @ui.text_style(size=Xs, color=Muted, wrap=f
 ///|
 /// What is at its end (jobEnd): 24 wide, at the middle of its two lines.
 // kept across runs: a value (no field of it changes)
-let job_end : @ui.Style = @ui.style(w=S6, pt=S2_5, align=ACenter)
+let job_end : @ui.Style = @ui.css("w=S6 pt=S2_5 align=ACenter")
 
 ///|
 /// What a job said (jobNotices): 6 apart, 12; with the time of day 12 apart, 13; the time in a column of its own.
 // kept across runs: a value (no field of it changes)
-let job_notices_box : @ui.Style = @ui.style(w=Full, gap=S1_5)
+let job_notices_box : @ui.Style = @ui.css("w=Full gap=S1_5")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let job_notices_clock : @ui.Style = @ui.style(w=Full, gap=S3)
+let job_notices_clock : @ui.Style = @ui.css("w=Full gap=S3")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let job_notice : @ui.Style = @ui.style(row=true, w=Full, gap=S2, align=AStart)
+let job_notice : @ui.Style = @ui.css("row w=Full gap=S2 align=AStart")
 
 ///|
 /// Its time's column (5.6em of 12, about 68; 3.4em of 13, about 44).
 // kept across runs: a value (no field of it changes)
-let job_notice_ago : @ui.Style = @ui.style(w=S16)
+let job_notice_ago : @ui.Style = @ui.css("w=S16")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let job_notice_clock : @ui.Style = @ui.style(w=S11)
+let job_notice_clock : @ui.Style = @ui.css("w=S11")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -737,7 +720,7 @@ let job_quiet_words : @ui.TextStyle = @ui.text_style(size=Xs, color=Muted, w=Ful
 ///|
 /// Its last output (jobLast): 10 over it, 2 apart; when (11, subtle), the line in mono, cut at its end.
 // kept across runs: a value (no field of it changes)
-let job_last_box : @ui.Style = @ui.style(w=Full, pt=S2_5, gap=S0_5)
+let job_last_box : @ui.Style = @ui.css("w=Full pt=S2_5 gap=S0_5")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -751,7 +734,7 @@ let job_last_line : @ui.TextStyle = @ui.text_style(size=Xs2, color=Muted, wrap=f
 /// Its actions (jobActions): 2 apart, 6 under what is over them, 8 out at their start; each 26 high, 8 in, its mark and
 /// words 5 apart, the picked ground on hover.
 // kept across runs: a value (no field of it changes)
-let job_actions : @ui.Style = @ui.style(row=true, pt=S1_5, gap=S0_5).then(@sf.outset_start(8.0))
+let job_actions : @ui.Style = @ui.css("row pt=S1_5 gap=S0_5").then(@sf.outset_start(8.0))
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -776,7 +759,7 @@ let job_action_hot : @ui.TextStyle = @ui.text_style(size=Xs, color=Fg, wrap=fals
 ///|
 /// A group's head (jobsHead): 8 over, 12 in, 4 under; 12 in 500, muted; its note in 400, subtle, 6 after.
 // kept across runs: a value (no field of it changes)
-let jobs_head_box : @ui.Style = @ui.style(row=true, w=Full, pt=S2, px=S3, pb=S1, gap=S1_5, align=AEnd)
+let jobs_head_box : @ui.Style = @ui.css("row w=Full pt=S2 px=S3 pb=S1 gap=S1_5 align=AEnd")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -789,25 +772,25 @@ let jobs_head_note : @ui.TextStyle = @ui.text_style(size=Xs, color=Subtle, wrap=
 ///|
 /// A group's rows, 4 apart; one after another 6 under it (the 任务 tab's).
 // kept across runs: a value (no field of it changes)
-let jobs_group : @ui.Style = @ui.style(w=Full, gap=S1)
+let jobs_group : @ui.Style = @ui.css("w=Full gap=S1")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let jobs_group_after : @ui.Style = @ui.style(w=Full, pt=S1_5, gap=S1)
+let jobs_group_after : @ui.Style = @ui.css("w=Full pt=S1_5 gap=S1")
 
 ///|
 /// The popover's groups, and a job opened in it (jobFold): its row and its body under it on the pointer's ground, 4 by
 /// 8 in, 32 at its start, its foot round as an option.
 // kept across runs: a value (no field of it changes)
-let jobs_list : @ui.Style = @ui.style(w=Full)
+let jobs_list : @ui.Style = @ui.css("w=Full")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let jobs_fold : @ui.Style = @ui.style(w=Full)
+let jobs_fold : @ui.Style = @ui.css("w=Full")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let jobs_fold_body : @ui.Style = @ui.style(w=Full, mb=S1, pt=S1, pr=S2, pb=S2, pl=S8, bg=Hover, radius=Inner)
+let jobs_fold_body : @ui.Style = @ui.css("w=Full mb=S1 pt=S1 pr=S2 pb=S2 pl=S8 bg=Hover radius=Inner")
 
 ///|
 /// Nothing now (jobsQuiet): 8 over, 32 at its start, 13 muted.
@@ -818,7 +801,7 @@ let jobs_quiet : @ui.TextStyle = @ui.text_style(size=Sm, color=Muted, w=Full)
 /// The popover's foot (jobsFoot): 6 under its groups, 4 apart; all of them a row 38 high, its words in the names'
 /// column (the panel's words' 10 and a dot's 20), muted, the words' ink on the pointer's ground; clearing beside it.
 // kept across runs: a value (no field of it changes)
-let jobs_foot : @ui.Style = @ui.style(row=true, w=Full, mt=S1_5, gap=S1, align=ACenter)
+let jobs_foot : @ui.Style = @ui.css("row w=Full mt=S1_5 gap=S1 align=ACenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -878,7 +861,7 @@ let jobs_clear_words_sm : @ui.TextStyle = @ui.text_style(size=Xs, color=Muted, w
 ///|
 /// None at all (jobsEmpty): 26 by 20 in, in the middle, 4 apart; its title 13 in 500.
 // kept across runs: a value (no field of it changes)
-let jobs_empty : @ui.Style = @ui.style(w=Full, py=S6, px=S5, gap=S1, align=ACenter)
+let jobs_empty : @ui.Style = @ui.css("w=Full py=S6 px=S5 gap=S1 align=ACenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -891,15 +874,15 @@ let jobs_empty_words : @ui.TextStyle = @ui.text_style(size=Xs, color=Muted)
 ///|
 /// The 任务 tab (jobsTab): its list (4 over, 8 at the sides and under), the job picked under it.
 // kept across runs: a value (no field of it changes)
-let jobs_tab_box : @ui.Style = @ui.style(w=Full, h=Full)
+let jobs_tab_box : @ui.Style = @ui.css("w=Full h=Full")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let jobs_tab_list_room : @ui.Style = @ui.style(w=Full)
+let jobs_tab_list_room : @ui.Style = @ui.css("w=Full")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let jobs_tab_list : @ui.Style = @ui.style(w=Full, pt=S1, px=S2, pb=S2)
+let jobs_tab_list : @ui.Style = @ui.css("w=Full pt=S1 px=S2 pb=S2")
 
 ///|
 /// The job picked (jobDetail): 8 from the tab's sides and foot, 10 over, 6 at its end, 14 at its start, round as a
@@ -920,7 +903,7 @@ let job_detail_box : @ui.Style = @ui.style(
 ///|
 /// Its head (jobDetailHead): 8 apart, its name 13 in 600, its state 12 muted; the choice 120 wide; the stop 28.
 // kept across runs: a value (no field of it changes)
-let job_detail_head : @ui.Style = @ui.style(row=true, w=Full, gap=S2, align=ACenter)
+let job_detail_head : @ui.Style = @ui.css("row w=Full gap=S2 align=ACenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -940,19 +923,12 @@ let job_detail_choice : @ui.Style = @ui.style(w=@sf.job_choice_w)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let job_detail_stop : @ui.Style = @ui.style(
-  w=S7,
-  h=S7,
-  radius=Xl,
-  align=ACenter,
-  justify=JCenter,
-  hovered=@ui.patch(bg=Hover),
-)
+let job_detail_stop : @ui.Style = @ui.css("w=S7 h=S7 radius=Xl align=ACenter justify=JCenter hovered{bg=Hover}")
 
 ///|
 /// Its command (jobDetailCommand): 4 over, 6 under, 11.5 mono on 1.5, subtle, a line.
 // kept across runs: a value (no field of it changes)
-let job_detail_command : @ui.Style = @ui.style(w=Full, pt=S1, pb=S1_5)
+let job_detail_command : @ui.Style = @ui.css("w=Full pt=S1 pb=S1_5")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -965,7 +941,7 @@ let job_detail_notices : @ui.Style = @ui.style(w=Full, h=@sf.grow, pt=S2, pr=S2_
 
 ///|
 // kept across runs: a value (no field of it changes)
-let job_detail_last : @ui.Style = @ui.style(w=Full, pb=S3)
+let job_detail_last : @ui.Style = @ui.css("w=Full pb=S3")
 
 ///|
 /// Its output (jobOutput): the rest of it, 4 over, 8 under and at its end; 11.5 mono on 1.6, the words' ink.

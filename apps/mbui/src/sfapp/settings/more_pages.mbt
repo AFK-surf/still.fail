@@ -726,7 +726,7 @@ let place_lifted : @sf.Raised = @sf.raised(6.0, ambient=0.14, spot=0.14)
 ///|
 /// A place on its bar as it lies.
 // kept across runs: a value (no field of it changes)
-let place_slot : @ui.Style = @ui.style()
+let place_slot : @ui.Style = @ui.css("")
 
 ///|
 /// A place held: on the card's ground, raised (place_lifted).
@@ -1183,7 +1183,7 @@ fn kept_file_row(c : @ui.Ctx, core : Core, station : String, f : Json, piece : (
 ///|
 /// A kept file's bin (KeptFiles.kt: a 36 circle, its icon in its middle).
 // kept across runs: a value (no field of it changes)
-let kept_bin : @ui.Style = @ui.style(w=S9, h=S9, radius=Full, align=ACenter, justify=JCenter)
+let kept_bin : @ui.Style = @ui.css("w=S9 h=S9 radius=Full align=ACenter justify=JCenter")
 
 ///|
 /// A chat's (KeptChatScreen): what is kept of its messages, deleted when asked (`cache.clear`: read again from its

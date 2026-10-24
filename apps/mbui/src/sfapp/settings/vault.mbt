@@ -695,7 +695,7 @@ fn plain_left(c : @ui.Ctx, core : Core, ws : String, n : Int) -> Unit {
 ///|
 /// Its words, then its button, 12 apart (Vault.kt:493); the line under its title 13 on 19 in the muted.
 // kept across runs: a value (no field of it changes)
-let plain_left_column : @ui.Style = @ui.style(w=Full, gap=S3)
+let plain_left_column : @ui.Style = @ui.css("w=Full gap=S3")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -768,4 +768,4 @@ fn default_lasts(c : @ui.Ctx, core : Core, ws : String, row : Json) -> Array[() 
 ///|
 /// Under the note, 4 before the first choice (Vault.kt DefaultLasts).
 // kept across runs: a value (no field of it changes)
-let lasts_note_room : @ui.Style = @ui.style(w=Full, pb=S1)
+let lasts_note_room : @ui.Style = @ui.css("w=Full pb=S1")

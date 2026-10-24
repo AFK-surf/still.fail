@@ -210,9 +210,13 @@
     "builtin-hash": {},
     "hash-order": {},
     "globals": {},
-    "style-literal": {},
+    "style-literal": {
+      "src/ui/style_css.mbt": 4
+    },
     "box-loose": {},
-    "style-exact": {},
+    "style-exact": {
+      "src/ui/style_css.mbt": 4
+    },
     "build-effect": {},
     "unsettled-ok": {},
     "host-delay": {},

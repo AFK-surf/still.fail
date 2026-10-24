@@ -1511,7 +1511,7 @@ fn reading_pill(c : @ui.Ctx, words : String) -> Unit {
 
 ///|
 // kept across runs: a value (no field of it changes)
-let reading_pill_box : @ui.Style = @ui.style(row=true, px=S3, py=S1_5, gap=S2, align=ACenter, bg=Neutral, radius=Full)
+let reading_pill_box : @ui.Style = @ui.css("row px=S3 py=S1_5 gap=S2 align=ACenter bg=Neutral radius=Full")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -1682,24 +1682,15 @@ fn note_button(c : @ui.Ctx, key : String, icon : String, label : String, strong 
 
 ///|
 // kept across runs: a value (no field of it changes)
-let note_base : @ui.Style = @ui.style(
-  row=true,
-  w=Full,
-  px=S3_5,
-  py=S2_5,
-  gap=S1_5,
-  align=ACenter,
-  justify=JCenter,
-  radius=Xl,
-)
+let note_base : @ui.Style = @ui.css("row w=Full px=S3_5 py=S2_5 gap=S1_5 align=ACenter justify=JCenter radius=Xl")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let note_strong : @ui.Style = note_base.then(@ui.style(bg=Accent))
+let note_strong : @ui.Style = note_base.then(@ui.css("bg=Accent"))
 
 ///|
 // kept across runs: a value (no field of it changes)
-let note_plain : @ui.Style = note_base.then(@ui.style(bg=Faint))
+let note_plain : @ui.Style = note_base.then(@ui.css("bg=Faint"))
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -3027,7 +3018,7 @@ fn Viewer::bar(self : Viewer, c : @ui.Ctx, src : Source, shown : Double) -> Unit
 ///|
 /// How far the core has downloaded the file, in the bar's 下载's place: a ring of the bar's ink, 18 in its 32.
 // kept across runs: a value (no field of it changes)
-let picture_ring_box : @ui.Style = @ui.style(w=S8, h=S8, align=ACenter, justify=JCenter)
+let picture_ring_box : @ui.Style = @ui.css("w=S8 h=S8 align=ACenter justify=JCenter")
 
 ///|
 let picture_ring : Double = 18.0

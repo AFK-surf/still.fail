@@ -138,25 +138,16 @@ let foot_glyph : Double = 18.0
 
 ///|
 // kept across runs: a value (no field of it changes)
-let foot_fill : @ui.Style = @ui.style(w=Full, h=Full, justify=JEnd)
+let foot_fill : @ui.Style = @ui.css("w=Full h=Full justify=JEnd")
 
 ///|
 /// 8 in, its line and the chip 6 apart (Sidebar.css.ts navFoot, navFootStatus).
 // kept across runs: a value (no field of it changes)
-let foot_band : @ui.Style = @ui.style(row=true, w=Full, p=S2, gap=S1_5, align=ACenter)
+let foot_band : @ui.Style = @ui.css("row w=Full p=S2 gap=S1_5 align=ACenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let foot_trouble : @ui.Style = @ui.style(
-  row=true,
-  w=Full,
-  min_h=S8,
-  px=S2_5,
-  gap=S2,
-  align=ACenter,
-  radius=Xl,
-  hovered=@ui.patch(bg=Hover),
-)
+let foot_trouble : @ui.Style = @ui.css("row w=Full min_h=S8 px=S2_5 gap=S2 align=ACenter radius=Xl hovered{bg=Hover}")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -168,20 +159,11 @@ let foot_trouble_red : @ui.TextStyle = @ui.text_style(size=Sm, color=Danger, wra
 
 ///|
 // kept across runs: a value (no field of it changes)
-let foot_chip : @ui.Style = @ui.style(
-  row=true,
-  h=S6,
-  px=S2,
-  gap=S1_5,
-  align=ACenter,
-  bg=Hover,
-  radius=Full,
-  hovered=@ui.patch(bg=Selected),
-)
+let foot_chip : @ui.Style = @ui.css("row h=S6 px=S2 gap=S1_5 align=ACenter bg=Hover radius=Full hovered{bg=Selected}")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let foot_chip_dot : @ui.Style = @ui.style(w=S1_5, h=S1_5, bg=Positive, radius=Full)
+let foot_chip_dot : @ui.Style = @ui.css("w=S1_5 h=S1_5 bg=Positive radius=Full")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -471,34 +453,34 @@ fn archive_main(c : @ui.Ctx) -> Unit {
 
 ///|
 // kept across runs: a value (no field of it changes)
-let lists_fill : @ui.Style = @ui.style(w=Full, h=Full)
+let lists_fill : @ui.Style = @ui.css("w=Full h=Full")
 
 ///|
 /// A list's lines 8 in from the sidebar's sides (Sidebar.css.ts navScroll).
 // kept across runs: a value (no field of it changes)
-let lists_inset : @ui.Style = @ui.style(w=Full, px=S2)
+let lists_inset : @ui.Style = @ui.css("w=Full px=S2")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let arch_field_box : @ui.Style = @ui.style(w=Full, pb=S1)
+let arch_field_box : @ui.Style = @ui.css("w=Full pb=S1")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let arch_field_alone : @ui.Style = @ui.style(w=Full)
+let arch_field_alone : @ui.Style = @ui.css("w=Full")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let arch_field : @ui.Style = @ui.style(row=true, w=Full, h=S8, px=S2_5, gap=S2, align=ACenter, bg=Hover, radius=Xl)
+let arch_field : @ui.Style = @ui.css("row w=Full h=S8 px=S2_5 gap=S2 align=ACenter bg=Hover radius=Xl")
 
 ///|
 /// A row 2 from the next (Sidebar.css.ts navSessionWrap).
 // kept across runs: a value (no field of it changes)
-let arch_wrap : @ui.Style = @ui.style(w=Full, pb=S0_5)
+let arch_wrap : @ui.Style = @ui.css("w=Full pb=S0_5")
 
 ///|
 /// The last of a day's rows: its heading's 14 under it alone.
 // kept across runs: a value (no field of it changes)
-let arch_wrap_last : @ui.Style = @ui.style(w=Full)
+let arch_wrap_last : @ui.Style = @ui.css("w=Full")
 
 ///|
 /// A chat's row's shape (Sidebar.css.ts navRow, navSession): 54 high, 10 in, its corner the nav's; the pointer's ground
@@ -517,20 +499,20 @@ let arch_row : @ui.Style = @ui.style(
 
 ///|
 // kept across runs: a value (no field of it changes)
-let arch_text : @ui.Style = @ui.style(w=Full, gap=S0_5)
+let arch_text : @ui.Style = @ui.css("w=Full gap=S0_5")
 
 ///|
 /// The title's line, 20 high; pointed at, room at its end for the two buttons (Archive.css.ts head: 52).
 // kept across runs: a value (no field of it changes)
-let arch_head : @ui.Style = @ui.style(row=true, w=Full, h=S5, gap=S1_5, align=ACenter)
+let arch_head : @ui.Style = @ui.css("row w=Full h=S5 gap=S1_5 align=ACenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let arch_head_room : @ui.Style = @ui.style(row=true, w=Full, h=S5, pr=S12, gap=S1_5, align=ACenter)
+let arch_head_room : @ui.Style = @ui.css("row w=Full h=S5 pr=S12 gap=S1_5 align=ACenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let arch_meta : @ui.Style = @ui.style(row=true, w=Full, h=S4_5, gap=S1_5, align=ACenter)
+let arch_meta : @ui.Style = @ui.css("row w=Full h=S4_5 gap=S1_5 align=ACenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -547,22 +529,15 @@ let arch_clock : @ui.TextStyle = @ui.text_style(size=Xs2, color=Subtle, leading=
 ///|
 /// The buttons, centred on the title line (Archive.css.ts actions: 5 down, 6 in, 2 apart).
 // kept across runs: a value (no field of it changes)
-let arch_actions : @ui.Style = @ui.style(row=true, w=Full, pt=S1_25, pr=S1_5, gap=S0_5, justify=JEnd)
+let arch_actions : @ui.Style = @ui.css("row w=Full pt=S1_25 pr=S1_5 gap=S0_5 justify=JEnd")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let arch_action : @ui.Style = @ui.style(
-  w=S6,
-  h=S6,
-  align=ACenter,
-  justify=JCenter,
-  radius=Lg,
-  hovered=@ui.patch(bg=Hover),
-)
+let arch_action : @ui.Style = @ui.css("w=S6 h=S6 align=ACenter justify=JCenter radius=Lg hovered{bg=Hover}")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let arch_empty : @ui.Style = @ui.style(w=Full, h=Full, px=S10, gap=S2, align=ACenter, justify=JCenter)
+let arch_empty : @ui.Style = @ui.css("w=Full h=Full px=S10 gap=S2 align=ACenter justify=JCenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -607,16 +582,16 @@ fn side_todo(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
 ///|
 /// 待处理's row in the band: 2 above it, 8 in, 8 under (Sidebar.css.ts navTodo).
 // kept across runs: a value (no field of it changes)
-let todo_box : @ui.Style = @ui.style(w=Full, pt=S0_5, px=S2, pb=S2)
+let todo_box : @ui.Style = @ui.css("w=Full pt=S0_5 px=S2 pb=S2")
 
 ///|
 /// Its count's place, as wide as the lists' menu button above it, centred under it.
 // kept across runs: a value (no field of it changes)
-let todo_slot : @ui.Style = @ui.style(w=S8, align=ACenter)
+let todo_slot : @ui.Style = @ui.css("w=S8 align=ACenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let todo_count : @ui.Style = @ui.style(min_w=S4, h=S4, px=S1, align=ACenter, justify=JCenter, bg=Danger, radius=Full)
+let todo_count : @ui.Style = @ui.css("min_w=S4 h=S4 px=S1 align=ACenter justify=JCenter bg=Danger radius=Full")
 
 ///|
 // kept across runs: a value (no field of it changes)

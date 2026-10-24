@@ -154,7 +154,7 @@ let bar_update_inset : Double = 84.0
 ///|
 /// 更新's box: its pill's size.
 // kept across runs: a value (no field of it changes)
-let update_at : @ui.Style = @ui.style(row=true)
+let update_at : @ui.Style = @ui.css("row")
 
 ///|
 /// The system's side of still.fail (before @ui.run). The desktop's window: 1280 by 820 at first, as still.fail's

@@ -409,7 +409,7 @@ fn find_button(c : @ui.Ctx, key : String, icon : String, label : String, on : Bo
 
 ///|
 // kept across runs: a value (no field of it changes)
-let find_bar_style : @ui.Style = @ui.style(row=true, gap=S2, align=ACenter)
+let find_bar_style : @ui.Style = @ui.css("row gap=S2 align=ACenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -433,7 +433,7 @@ let find_field_style : @ui.Style = @ui.style(
 
 ///|
 // kept across runs: a value (no field of it changes)
-let find_count_box : @ui.Style = @ui.style(px=S1_5)
+let find_count_box : @ui.Style = @ui.css("px=S1_5")
 
 ///|
 // kept across runs: a value (no field of it changes)

@@ -116,7 +116,7 @@ let usage_tile : @ui.Style = @ui.style(w=@sf.grow, px=S4, py=S3_5, gap=S0_5, rad
 
 ///|
 // kept across runs: a value (no field of it changes)
-let usage_tile_link : @ui.Style = usage_tile.then(@ui.style(hovered=@ui.patch(bg=Hover)))
+let usage_tile_link : @ui.Style = usage_tile.then(@ui.css("hovered{bg=Hover}"))
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -129,11 +129,11 @@ let usage_tile_sub : @ui.TextStyle = @ui.text_style(size=Xs, color=Subtle, wrap=
 ///|
 /// How it is counted, under what was counted: 24 in on a phone, 6 over and under, 4 apart; the meta's 12 subtle.
 // kept across runs: a value (no field of it changes)
-let usage_notes : @ui.Style = @ui.style(w=Full, px=S6, py=S1_5, gap=S1)
+let usage_notes : @ui.Style = @ui.css("w=Full px=S6 py=S1_5 gap=S1")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let usage_notes_wide : @ui.Style = @ui.style(w=Full, px=S4, pt=S7, gap=S1)
+let usage_notes_wide : @ui.Style = @ui.css("w=Full px=S4 pt=S7 gap=S1")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -201,11 +201,11 @@ fn usage_tiles(c : @ui.Ctx, core : Core, v : Json?) -> Unit {
 /// The totals' room: 12 in on a phone, 10 under them; in the wide frame 16 in (the column's edge), 8 further under the
 /// head than its own room, where the web's are (pageHead: 28 under it), and 28 over the days (the page's sections).
 // kept across runs: a value (no field of it changes)
-let usage_tiles_box : @ui.Style = @ui.style(w=Full, px=S3, pb=S2_5, gap=S2_5)
+let usage_tiles_box : @ui.Style = @ui.css("w=Full px=S3 pb=S2_5 gap=S2_5")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let usage_tiles_wide : @ui.Style = @ui.style(w=Full, px=S4, pt=S2, pb=S7, gap=S2_5)
+let usage_tiles_wide : @ui.Style = @ui.css("w=Full px=S4 pt=S2 pb=S7 gap=S2_5")
 
 ///|
 /// Each day's cost as a bar on the scale's lines, split by who it was for (Usage.kt Days): the day tapped (the last at
@@ -383,7 +383,7 @@ let usage_day_name : @ui.TextStyle = @ui.text_style(size=Xs, color=Muted, wrap=f
 
 ///|
 // kept across runs: a value (no field of it changes)
-let usage_figures : @ui.Style = @ui.style(row=true, pt=S0_5, pb=S4, gap=S2, align=AEnd)
+let usage_figures : @ui.Style = @ui.css("row pt=S0_5 pb=S4 gap=S2 align=AEnd")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -391,7 +391,7 @@ let usage_cost_words : @ui.TextStyle = @ui.text_style(size=Xl3, weight=Semibold,
 
 ///|
 // kept across runs: a value (no field of it changes)
-let usage_calls_box : @ui.Style = @ui.style(pb=S1)
+let usage_calls_box : @ui.Style = @ui.css("pb=S1")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -404,11 +404,11 @@ let usage_plot_box : @ui.Style = @ui.style(w=Full, h=@sf.usage_plot_h)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let usage_tick_rule : @ui.Style = @ui.style(w=Full, h=SPx, bg=Line)
+let usage_tick_rule : @ui.Style = @ui.css("w=Full h=SPx bg=Line")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let usage_tick_row : @ui.Style = @ui.style(row=true, w=Full, justify=JEnd)
+let usage_tick_row : @ui.Style = @ui.css("row w=Full justify=JEnd")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -416,15 +416,15 @@ let usage_tick_words : @ui.TextStyle = @ui.text_style(size=Xs3, color=Subtle, wr
 
 ///|
 // kept across runs: a value (no field of it changes)
-let usage_days_row : @ui.Style = @ui.style(row=true, w=Full, h=Full, pr=S6, gap=S1_5)
+let usage_days_row : @ui.Style = @ui.css("row w=Full h=Full pr=S6 gap=S1_5")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let usage_days_row_many : @ui.Style = @ui.style(row=true, w=Full, h=Full, pr=S6, gap=S0_5)
+let usage_days_row_many : @ui.Style = @ui.css("row w=Full h=Full pr=S6 gap=S0_5")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let usage_day_col : @ui.Style = @ui.style(w=Full, h=Full, align=ACenter, justify=JEnd)
+let usage_day_col : @ui.Style = @ui.css("w=Full h=Full align=ACenter justify=JEnd")
 
 ///|
 /// A bar: at most 16 wide, cut at the foot; its parts 1 apart, round 4 (2 when many).
@@ -433,36 +433,36 @@ let usage_bar_box : @ui.Style = @ui.style(w=Full, max_w=@sf.usage_bar_max, clip=
 
 ///|
 // kept across runs: a value (no field of it changes)
-let usage_bar_many : @ui.Style = @ui.style(w=Full, clip=true)
+let usage_bar_many : @ui.Style = @ui.css("w=Full clip")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let usage_bar_parts : @ui.Style = @ui.style(w=Full, gap=SPx)
+let usage_bar_parts : @ui.Style = @ui.css("w=Full gap=SPx")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let usage_part : @ui.Style = @ui.style(w=Full, radius=Base)
+let usage_part : @ui.Style = @ui.css("w=Full radius=Base")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let usage_part_many : @ui.Style = @ui.style(w=Full, radius=Sm)
+let usage_part_many : @ui.Style = @ui.css("w=Full radius=Sm")
 
 ///|
 /// The days' foot and their dates under it.
 // kept across runs: a value (no field of it changes)
-let usage_base : @ui.Style = @ui.style(w=Full, h=SPx, bg=Line)
+let usage_base : @ui.Style = @ui.css("w=Full h=SPx bg=Line")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let usage_labels : @ui.Style = @ui.style(row=true, w=Full, pt=S1_5, pr=S6, gap=S1_5)
+let usage_labels : @ui.Style = @ui.css("row w=Full pt=S1_5 pr=S6 gap=S1_5")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let usage_labels_many : @ui.Style = @ui.style(row=true, w=Full, pt=S1_5, pr=S6, gap=S0_5)
+let usage_labels_many : @ui.Style = @ui.css("row w=Full pt=S1_5 pr=S6 gap=S0_5")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let usage_label_cell : @ui.Style = @ui.style(w=Full, align=ACenter)
+let usage_label_cell : @ui.Style = @ui.css("w=Full align=ACenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -476,19 +476,19 @@ let usage_label_on : @ui.TextStyle = @ui.text_style(size=Xs2, weight=Medium, col
 /// Each of the day's people: a dot of theirs, their name, what they spent, its share under the name on the chip's
 /// ground.
 // kept across runs: a value (no field of it changes)
-let usage_people : @ui.Style = @ui.style(w=Full, pt=S4, gap=S3)
+let usage_people : @ui.Style = @ui.css("w=Full pt=S4 gap=S3")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let usage_person : @ui.Style = @ui.style(w=Full, gap=S1_5)
+let usage_person : @ui.Style = @ui.css("w=Full gap=S1_5")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let usage_person_row : @ui.Style = @ui.style(row=true, w=Full, gap=S2, align=ACenter)
+let usage_person_row : @ui.Style = @ui.css("row w=Full gap=S2 align=ACenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let usage_person_dot : @ui.Style = @ui.style(w=S2, h=S2, radius=Full)
+let usage_person_dot : @ui.Style = @ui.css("w=S2 h=S2 radius=Full")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -500,15 +500,15 @@ let usage_person_part : @ui.TextStyle = @ui.text_style(size=Sm, color=Fg, wrap=f
 
 ///|
 // kept across runs: a value (no field of it changes)
-let usage_share_room : @ui.Style = @ui.style(row=true, w=Full, h=S1, pl=S4)
+let usage_share_room : @ui.Style = @ui.css("row w=Full h=S1 pl=S4")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let usage_share_track : @ui.Style = @ui.style(row=true, w=Full, h=Full, radius=Sm, bg=Neutral, clip=true)
+let usage_share_track : @ui.Style = @ui.css("row w=Full h=Full radius=Sm bg=Neutral clip")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let usage_share_fill : @ui.Style = @ui.style(h=Full, radius=Sm)
+let usage_share_fill : @ui.Style = @ui.css("h=Full radius=Sm")
 
 ///|
 /// The lists, one at a time, the first eight until asked for all (Usage.kt Lists).
@@ -734,19 +734,19 @@ let usage_lead : Double = 20.0
 
 ///|
 // kept across runs: a value (no field of it changes)
-let usage_row : @ui.Style = @ui.style(w=Full, px=S3, py=S2_5, gap=S1_5, radius=Xl)
+let usage_row : @ui.Style = @ui.css("w=Full px=S3 py=S2_5 gap=S1_5 radius=Xl")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let usage_row_link : @ui.Style = usage_row.then(@ui.style(hovered=@ui.patch(bg=Hover)))
+let usage_row_link : @ui.Style = usage_row.then(@ui.css("hovered{bg=Hover}"))
 
 ///|
 // kept across runs: a value (no field of it changes)
-let usage_row_line : @ui.Style = @ui.style(row=true, w=Full, gap=S3, align=ACenter)
+let usage_row_line : @ui.Style = @ui.css("row w=Full gap=S3 align=ACenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let usage_rank_box : @ui.Style = @ui.style(w=S5, align=AEnd)
+let usage_rank_box : @ui.Style = @ui.css("w=S5 align=AEnd")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -770,7 +770,7 @@ let usage_row_sub_end : @ui.TextStyle = @ui.text_style(size=Xs, color=Muted, wra
 
 ///|
 // kept across runs: a value (no field of it changes)
-let usage_row_cost : @ui.Style = @ui.style(gap=SPx, align=AEnd)
+let usage_row_cost : @ui.Style = @ui.css("gap=SPx align=AEnd")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -780,12 +780,12 @@ let usage_cost : @ui.TextStyle = @ui.text_style(size=Lg, weight=Bold, color=Fg, 
 /// The share's bar: from the row's words on (its lead's 20 and the 12 after it), 4 high on the hover's ground, what
 /// it had in the strong line's grey.
 // kept across runs: a value (no field of it changes)
-let usage_row_share_room : @ui.Style = @ui.style(w=Full, pl=S8)
+let usage_row_share_room : @ui.Style = @ui.css("w=Full pl=S8")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let usage_row_share_track : @ui.Style = @ui.style(row=true, w=Full, h=S1, radius=Full, bg=Hover, clip=true)
+let usage_row_share_track : @ui.Style = @ui.css("row w=Full h=S1 radius=Full bg=Hover clip")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let usage_row_share_fill : @ui.Style = @ui.style(h=Full, radius=Full, bg=Border)
+let usage_row_share_fill : @ui.Style = @ui.css("h=Full radius=Full bg=Border")

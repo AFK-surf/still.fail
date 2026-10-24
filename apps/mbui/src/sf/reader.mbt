@@ -1823,40 +1823,26 @@ let narrow_sheet_half : Double = 0.5
 
 ///|
 // kept across runs: a value (no field of it changes)
-let narrow_bar_row : @ui.Style = @ui.style(row=true, w=Full, justify=JCenter)
+let narrow_bar_row : @ui.Style = @ui.css("row w=Full justify=JCenter")
 
 ///|
 /// The top bar (top): 48 high, 6 in, its corner 16; its ends at least 64 (minmax(64px, auto)).
 // kept across runs: a value (no field of it changes)
-let narrow_top_box : @ui.Style = @ui.style(row=true, h=S12, px=S1_5, align=ACenter, radius=Xl1_5)
+let narrow_top_box : @ui.Style = @ui.css("row h=S12 px=S1_5 align=ACenter radius=Xl1_5")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let narrow_top_end : @ui.Style = @ui.style(row=true, min_w=S16, align=ACenter)
+let narrow_top_end : @ui.Style = @ui.css("row min_w=S16 align=ACenter")
 
 ///|
 /// The way back (back): 36 high, 4 before the chevron and 10 after, its corner 12; 搜索 (topButton) 36 across.
 // kept across runs: a value (no field of it changes)
-let narrow_back_box : @ui.Style = @ui.style(
-  row=true,
-  h=S9,
-  pl=S1,
-  pr=S2_5,
-  align=ACenter,
-  radius=Xl,
-  hovered=@ui.patch(bg=Tint),
-)
+let narrow_back_box : @ui.Style = @ui.css("row h=S9 pl=S1 pr=S2_5 align=ACenter radius=Xl hovered{bg=Tint}")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let narrow_top_button : @ui.Style = @ui.style(
-  w=S9,
-  h=S9,
-  align=ACenter,
-  justify=JCenter,
-  radius=Xl,
-  hovered=@ui.patch(bg=Tint),
-  selected=@ui.patch(bg=Tint),
+let narrow_top_button : @ui.Style = @ui.css(
+  #|w=S9 h=S9 align=ACenter justify=JCenter radius=Xl hovered{bg=Tint} selected{bg=Tint}
 )
 
 ///|
@@ -1875,16 +1861,16 @@ let narrow_title_small : @ui.TextStyle = @ui.text_style(size=Xs2, wrap=false, na
 ///|
 /// The foot (bottom): 12 over, 14 either side, 8 under, 8 between its rows, its corner 16; at its foot the page's.
 // kept across runs: a value (no field of it changes)
-let narrow_foot_place : @ui.Style = @ui.style(w=Full, h=Full, justify=JEnd)
+let narrow_foot_place : @ui.Style = @ui.css("w=Full h=Full justify=JEnd")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let narrow_foot_box : @ui.Style = @ui.style(p=S3, gap=S2, radius=Xl1_5)
+let narrow_foot_box : @ui.Style = @ui.css("p=S3 gap=S2 radius=Xl1_5")
 
 ///|
 /// The chapter's row (chapterRow): 上一章, its name, 下一章, 10 apart.
 // kept across runs: a value (no field of it changes)
-let narrow_chapter_row : @ui.Style = @ui.style(row=true, w=Full, gap=S2_5, align=ACenter)
+let narrow_chapter_row : @ui.Style = @ui.css("row w=Full gap=S2_5 align=ACenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -1893,7 +1879,7 @@ let narrow_chapter_words : @ui.TextStyle = @ui.text_style(size=Xs, wrap=false, n
 ///|
 /// The track and how far (trackRow): the track 28 high, 7 in from its ends; how far 40 wide, 10 apart.
 // kept across runs: a value (no field of it changes)
-let narrow_track_row : @ui.Style = @ui.style(row=true, w=Full, gap=S2_5, align=ACenter)
+let narrow_track_row : @ui.Style = @ui.css("row w=Full gap=S2_5 align=ACenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -1901,7 +1887,7 @@ let narrow_track_box : @ui.Style = @ui.style(w=grow, h=S7, px=S1_5, justify=JCen
 
 ///|
 // kept across runs: a value (no field of it changes)
-let narrow_percent_box : @ui.Style = @ui.style(w=S10, align=AEnd)
+let narrow_percent_box : @ui.Style = @ui.css("w=S10 align=AEnd")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -1910,7 +1896,7 @@ let narrow_percent_words : @ui.TextStyle = @ui.text_style(size=Xs, weight=Semibo
 ///|
 /// The tools (tools: three to a row, 4 apart): a tool 50 high, its icon over its name 3 apart.
 // kept across runs: a value (no field of it changes)
-let narrow_tools : @ui.Style = @ui.style(row=true, w=Full, gap=S1)
+let narrow_tools : @ui.Style = @ui.css("row w=Full gap=S1")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -1967,11 +1953,11 @@ let reader_snippet_after : Int = 40
 
 ///|
 // kept across runs: a value (no field of it changes)
-let reader_fill : @ui.Style = @ui.style(w=Full, h=Full)
+let reader_fill : @ui.Style = @ui.css("w=Full h=Full")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let reader_chunk_row : @ui.Style = @ui.style(row=true, w=Full)
+let reader_chunk_row : @ui.Style = @ui.css("row w=Full")
 
 ///|
 /// A block's words across what its margins leave.
@@ -1980,7 +1966,7 @@ let reader_words_w : @ui.Size = Fill(1.0)
 ///|
 /// A text cut says so under it (Reader.css.ts cut: 2em over it, 12, quiet).
 // kept across runs: a value (no field of it changes)
-let reader_cut_row : @ui.Style = @ui.style(row=true, w=Full, pt=S8)
+let reader_cut_row : @ui.Style = @ui.css("row w=Full pt=S8")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -2007,7 +1993,7 @@ let desk_note_down : Double = 0.3
 
 ///|
 // kept across runs: a value (no field of it changes)
-let desk_note_box : @ui.Style = @ui.style(w=Full, px=S6, gap=S3, align=ACenter)
+let desk_note_box : @ui.Style = @ui.css("w=Full px=S6 gap=S3 align=ACenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -2164,7 +2150,7 @@ pub let desk_grow_middle : @ui.Style = @ui.style(w=grow, align=ACenter)
 ///|
 /// What was found: under the bar (10 below it), over the text's middle.
 // kept across runs: a value (no field of it changes)
-let desk_found_place : @ui.Style = @ui.style(w=Full)
+let desk_found_place : @ui.Style = @ui.css("w=Full")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -2172,14 +2158,14 @@ let desk_found_top : @ui.Style = @ui.style(w=Full, h=Fixed(viewer_bar_h + desk_f
 
 ///|
 // kept across runs: a value (no field of it changes)
-let desk_found_row : @ui.Style = @ui.style(row=true, w=Full)
+let desk_found_row : @ui.Style = @ui.css("row w=Full")
 
 ///|
 let desk_found_gap : Double = 10.0
 
 ///|
 // kept across runs: a value (no field of it changes)
-let desk_found_box : @ui.Style = @ui.style(row=true, h=S10, pl=S3_5, pr=S1_25, gap=S1, align=ACenter, radius=Xl1_5)
+let desk_found_box : @ui.Style = @ui.css("row h=S10 pl=S3_5 pr=S1_25 gap=S1 align=ACenter radius=Xl1_5")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -2187,16 +2173,16 @@ let desk_found_words : @ui.TextStyle = @ui.text_style(size=Xs, wrap=false, narro
 
 ///|
 // kept across runs: a value (no field of it changes)
-let desk_hairline_place : @ui.Style = @ui.style(w=Full, h=Full, justify=JEnd)
+let desk_hairline_place : @ui.Style = @ui.css("w=Full h=Full justify=JEnd")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let desk_hairline : @ui.Style = @ui.style(row=true, w=Full, h=S0_5)
+let desk_hairline : @ui.Style = @ui.css("row w=Full h=S0_5")
 
 ///|
 /// The panel: under the bar, at the window's right, a line before it, 320 wide.
 // kept across runs: a value (no field of it changes)
-pub let desk_panel_place : @ui.Style = @ui.style(w=Full, h=Full)
+pub let desk_panel_place : @ui.Style = @ui.css("w=Full h=Full")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -2212,7 +2198,7 @@ pub let desk_panel_room : @ui.Style = @ui.style(w=grow, h=Full)
 
 ///|
 // kept across runs: a value (no field of it changes)
-pub let desk_panel_rule : @ui.Style = @ui.style(w=SPx, h=Full)
+pub let desk_panel_rule : @ui.Style = @ui.css("w=SPx h=Full")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -2225,7 +2211,7 @@ let desk_panel_inner : Double = desk_panel_w - 1.0
 ///|
 /// Its head (panelHead): 12 over and right, 6 under, 18 at its start; the title 16 in 600.
 // kept across runs: a value (no field of it changes)
-let desk_panel_head : @ui.Style = @ui.style(row=true, w=Full, pl=S4_5, pr=S3, pt=S3, pb=S1_5, gap=S2, align=ACenter)
+let desk_panel_head : @ui.Style = @ui.css("row w=Full pl=S4_5 pr=S3 pt=S3 pb=S1_5 gap=S2 align=ACenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -2237,7 +2223,7 @@ pub let desk_panel_note : @ui.TextStyle = @ui.text_style(size=Xs, leading=L5, na
 
 ///|
 // kept across runs: a value (no field of it changes)
-let desk_panel_note_box : @ui.Style = @ui.style(w=Full, px=S5, pt=S1_5, pb=S2_5)
+let desk_panel_note_box : @ui.Style = @ui.css("w=Full px=S5 pt=S1_5 pb=S2_5")
 
 ///|
 /// Its list (panelList): 8 in, 2 over, 12 under; a row (panelRow) 12 and 10 in, the page's option's corner.
@@ -2246,20 +2232,11 @@ pub let desk_panel_list : @ui.Style = @ui.style(w=Full, h=grow, px=S2, pb=S3)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let desk_panel_list_top : @ui.Style = @ui.style(w=Full, px=S2, pt=S0_5)
+let desk_panel_list_top : @ui.Style = @ui.css("w=Full px=S2 pt=S0_5")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let desk_row : @ui.Style = @ui.style(
-  row=true,
-  w=Full,
-  px=S3,
-  py=S2_5,
-  gap=S2_5,
-  align=ACenter,
-  radius=Xl,
-  hovered=@ui.patch(bg=Tint),
-)
+let desk_row : @ui.Style = @ui.css("row w=Full px=S3 py=S2_5 gap=S2_5 align=ACenter radius=Xl hovered{bg=Tint}")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -2284,7 +2261,7 @@ pub let desk_chapter_n_words : @ui.TextStyle = @ui.text_style(size=Xs2, wrap=fal
 ///|
 /// The field: 16 in from the panel's sides, 6 over and 8 under; 38 high, a pill, 16 in.
 // kept across runs: a value (no field of it changes)
-let desk_find_place : @ui.Style = @ui.style(w=Full, px=S4, pt=S1_5, pb=S2)
+let desk_find_place : @ui.Style = @ui.css("w=Full px=S4 pt=S1_5 pb=S2")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -2295,7 +2272,7 @@ let desk_field_h : Double = 38.0
 
 ///|
 // kept across runs: a value (no field of it changes)
-let desk_hit_row : @ui.Style = @ui.style(w=Full, px=S3, py=S2_5, radius=Xl, hovered=@ui.patch(bg=Tint))
+let desk_hit_row : @ui.Style = @ui.css("w=Full px=S3 py=S2_5 radius=Xl hovered{bg=Tint}")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -2304,11 +2281,11 @@ let desk_hit_words : @ui.TextStyle = @ui.text_style(size=Sm, max_lines=2, narrow
 ///|
 /// The layout (layout): 20 in, 4 over, 24 under; its blocks 10 apart, each its name over its control, 8 between.
 // kept across runs: a value (no field of it changes)
-let desk_layout_box : @ui.Style = @ui.style(w=Full, px=S5, pt=S1, pb=S6, gap=S2_5)
+let desk_layout_box : @ui.Style = @ui.css("w=Full px=S5 pt=S1 pb=S6 gap=S2_5")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let desk_layout_block : @ui.Style = @ui.style(w=Full, gap=S2)
+let desk_layout_block : @ui.Style = @ui.css("w=Full gap=S2")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -2317,11 +2294,11 @@ let desk_layout_label : @ui.TextStyle = @ui.text_style(size=Xs, wrap=false, narr
 ///|
 /// The papers (papers: five to a row, 8 apart): each a swatch 44 high, its corner the page's, its name under it.
 // kept across runs: a value (no field of it changes)
-let desk_papers : @ui.Style = @ui.style(row=true, w=Full, gap=S2)
+let desk_papers : @ui.Style = @ui.css("row w=Full gap=S2")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let desk_swatch_box : @ui.Style = @ui.style(gap=S1, align=ACenter)
+let desk_swatch_box : @ui.Style = @ui.css("gap=S1 align=ACenter")
 
 ///|
 /// The layout's room (layout: 20 either side; the panel's 280 of its 320), its papers five to a row 8 apart, the face
@@ -2345,23 +2322,23 @@ let desk_seg_track : Double = 4.0
 
 ///|
 // kept across runs: a value (no field of it changes)
-let desk_layout_pair : @ui.Style = @ui.style(row=true, w=Full, gap=S3_5)
+let desk_layout_pair : @ui.Style = @ui.css("row w=Full gap=S3_5")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let desk_layout_column : @ui.Style = @ui.style(w=Full, gap=S2_5)
+let desk_layout_column : @ui.Style = @ui.css("w=Full gap=S2_5")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let desk_layout_half : @ui.Style = @ui.style(gap=S2)
+let desk_layout_half : @ui.Style = @ui.css("gap=S2")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let desk_swatch_off : @ui.Style = @ui.style(w=Full, h=S11, radius=Xl, align=ACenter, justify=JCenter, border=B1)
+let desk_swatch_off : @ui.Style = @ui.css("w=Full h=S11 radius=Xl align=ACenter justify=JCenter border=B1")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let desk_swatch_on : @ui.Style = desk_swatch_off.then(@ui.style(border=B2))
+let desk_swatch_on : @ui.Style = desk_swatch_off.then(@ui.css("border=B2"))
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -2374,19 +2351,12 @@ let desk_swatch_name : @ui.TextStyle = @ui.text_style(size=Xs2, wrap=false, narr
 ///|
 /// The size's row (sizeRow): 40 high, 4 in, the page's corner; its keys 32 high, 44 wide at least, 10 in.
 // kept across runs: a value (no field of it changes)
-let desk_size_row : @ui.Style = @ui.style(row=true, w=Full, h=S10, px=S1, align=ACenter, radius=Xl)
+let desk_size_row : @ui.Style = @ui.css("row w=Full h=S10 px=S1 align=ACenter radius=Xl")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let desk_size_key_box : @ui.Style = @ui.style(
-  h=S8,
-  min_w=S11,
-  px=S2_5,
-  radius=Lg,
-  align=ACenter,
-  justify=JCenter,
-  hovered=@ui.patch(bg=TintStrong),
-  disabled=@ui.patch(opacity=O35),
+let desk_size_key_box : @ui.Style = @ui.css(
+  #|h=S8 min_w=S11 px=S2_5 radius=Lg align=ACenter justify=JCenter hovered{bg=TintStrong} disabled{opacity=O35}
 )
 
 ///|
@@ -2400,15 +2370,15 @@ let desk_size_value : @ui.TextStyle = @ui.text_style(size=Sm, weight=Semibold, w
 ///|
 /// A slider's row (sliderRow): its name 48, the line, its value 48, 10 apart.
 // kept across runs: a value (no field of it changes)
-let desk_slider_box : @ui.Style = @ui.style(row=true, w=Full, gap=S2_5, align=ACenter)
+let desk_slider_box : @ui.Style = @ui.css("row w=Full gap=S2_5 align=ACenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let desk_slider_label : @ui.Style = @ui.style(w=S12)
+let desk_slider_label : @ui.Style = @ui.css("w=S12")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let desk_slider_value_box : @ui.Style = @ui.style(w=S12, align=AEnd)
+let desk_slider_value_box : @ui.Style = @ui.css("w=S12 align=AEnd")
 
 ///|
 // kept across runs: a value (no field of it changes)

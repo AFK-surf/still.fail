@@ -76,15 +76,15 @@ fn keys_dialog(c : @ui.Ctx, src : Source, pages : Pages) -> Unit {
 ///|
 /// (Shortcuts.css.ts sheet: the groups 18 apart; group: its lines 2 apart, its title 4 over them)
 // kept across runs: a value (no field of it changes)
-let keys_sheet : @ui.Style = @ui.style(w=Full, gap=S4_5)
+let keys_sheet : @ui.Style = @ui.css("w=Full gap=S4_5")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let keys_group : @ui.Style = @ui.style(w=Full, gap=S0_5)
+let keys_group : @ui.Style = @ui.css("w=Full gap=S0_5")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let keys_group_head : @ui.Style = @ui.style(w=Full, pb=S1)
+let keys_group_head : @ui.Style = @ui.css("w=Full pb=S1")
 
 ///|
 /// (groupTitle: 12, 500, muted)
@@ -94,7 +94,7 @@ let keys_group_title : @ui.TextStyle = @ui.text_style(size=Xs, leading=L4_75, we
 ///|
 /// (line: what it does and its keys at the two ends, 16 apart, 4 over and under, the list's words)
 // kept across runs: a value (no field of it changes)
-let keys_line : @ui.Style = @ui.style(row=true, w=Full, py=S1, gap=S4, align=AEnd, justify=JBetween)
+let keys_line : @ui.Style = @ui.css("row w=Full py=S1 gap=S4 align=AEnd justify=JBetween")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -251,12 +251,12 @@ fn keys_toggle(c : @ui.Ctx, key : String, words : String) -> Bool {
 
 ///|
 // kept across runs: a value (no field of it changes)
-let keys_rows : @ui.Style = @ui.style(w=Full, gap=S0_5)
+let keys_rows : @ui.Style = @ui.css("w=Full gap=S0_5")
 
 ///|
 /// (Shortcuts.css.ts row: 40 high at least, 8 apart, the list's words)
 // kept across runs: a value (no field of it changes)
-let keys_row_box : @ui.Style = @ui.style(row=true, w=Full, min_h=S10, gap=S2, align=ACenter)
+let keys_row_box : @ui.Style = @ui.css("row w=Full min_h=S10 gap=S2 align=ACenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -289,11 +289,11 @@ let keys_record_h : Double = 30.0
 
 ///|
 // kept across runs: a value (no field of it changes)
-let keys_record_hot : @ui.Style = keys_record.then(@ui.style(bg=Selected))
+let keys_record_hot : @ui.Style = keys_record.then(@ui.css("bg=Selected"))
 
 ///|
 // kept across runs: a value (no field of it changes)
-let keys_record_on : @ui.Style = keys_record.then(@ui.style(bg=AccentBg))
+let keys_record_on : @ui.Style = keys_record.then(@ui.css("bg=AccentBg"))
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -310,7 +310,7 @@ let keys_record_on_words : @ui.TextStyle = keys_record_words.then(@ui.text_style
 ///|
 /// (controls.css.ts textToggle: 2 by 4 in)
 // kept across runs: a value (no field of it changes)
-let keys_toggle_box : @ui.Style = @ui.style(px=S1, py=S0_5)
+let keys_toggle_box : @ui.Style = @ui.css("px=S1 py=S0_5")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -322,7 +322,7 @@ let keys_toggle_hot : @ui.TextStyle = keys_toggle_words.then(@ui.text_style(colo
 
 ///|
 // kept across runs: a value (no field of it changes)
-let keys_reset_box : @ui.Style = @ui.style(px=S2, py=S1, radius=Base, hovered=@ui.patch(bg=Hover))
+let keys_reset_box : @ui.Style = @ui.css("px=S2 py=S1 radius=Base hovered{bg=Hover}")
 
 ///|
 // kept across runs: a value (no field of it changes)

@@ -41,7 +41,7 @@ let xshare_where : @ui.TextStyle = @sf.secondary.then(@sf.one_line)
 ///|
 /// What takes the row's room after its name: where it is shared, at its end.
 // kept across runs: a value (no field of it changes)
-let xshare_where_box : @ui.Style = @ui.style(w=Full, align=AEnd)
+let xshare_where_box : @ui.Style = @ui.css("w=Full align=AEnd")
 
 ///|
 /// The chat's xsharing in its sheet (ChatInfo.kt ShareRow).
@@ -83,30 +83,21 @@ fn open_xshare(c : @ui.Ctx, r : ChatRef, thread : Double?, share : Json?) -> Uni
 ///|
 /// Its words 20 in from the sheet's sides, a little room over and under.
 // kept across runs: a value (no field of it changes)
-let xshare_lead : @ui.Style = @ui.style(w=Full, px=S5, py=S1_5)
+let xshare_lead : @ui.Style = @ui.css("w=Full px=S5 py=S1_5")
 
 ///|
 /// The switch's row on its own ground, 20 in from the sheet's sides (12 above it, 16 under).
 // kept across runs: a value (no field of it changes)
-let xshare_write_room : @ui.Style = @ui.style(w=Full, pl=S5, pr=S5, pt=S3, pb=S4)
+let xshare_write_room : @ui.Style = @ui.css("w=Full pl=S5 pr=S5 pt=S3 pb=S4")
 
 ///|
 /// Whether their agents may send: a row on the ink at 5%, 14 round, its words and the switch.
 // kept across runs: a value (no field of it changes)
-let xshare_write : @ui.Style = @ui.style(
-  row=true,
-  w=Full,
-  px=S3_5,
-  py=S2_5,
-  gap=S3,
-  radius=Xl1_5,
-  bg=A(Fg, O5),
-  align=ACenter,
-)
+let xshare_write : @ui.Style = @ui.css("row w=Full px=S3_5 py=S2_5 gap=S3 radius=Xl1_5 bg=A(Fg,O5) align=ACenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let xshare_write_off : @ui.Style = xshare_write.then(@ui.style(opacity=O50))
+let xshare_write_off : @ui.Style = xshare_write.then(@ui.css("opacity=O50"))
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -115,7 +106,7 @@ let xshare_write_title : @ui.TextStyle = @ui.text_style(size=Lg, weight=Semibold
 ///|
 /// 完成 at the sheet's end, 20 in, 24 over its foot.
 // kept across runs: a value (no field of it changes)
-let xshare_done : @ui.Style = @ui.style(row=true, w=Full, px=S5, pb=S6, justify=JEnd)
+let xshare_done : @ui.Style = @ui.css("row w=Full px=S5 pb=S6 justify=JEnd")
 
 ///|
 /// Which of the viewer's other workspaces the chat is shared with, ticked, and whether their agents may send: done,

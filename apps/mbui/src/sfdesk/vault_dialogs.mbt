@@ -329,7 +329,7 @@ let vd_kind_row : @ui.Style = desk_list_link
 ///|
 /// (agentBox: the switch and what it opens, 10 apart, 4 over them)
 // kept across runs: a value (no field of it changes)
-let vd_agent : @ui.Style = @ui.style(w=Full, gap=S2_5, pt=S1)
+let vd_agent : @ui.Style = @ui.css("w=Full gap=S2_5 pt=S1")
 
 ///|
 /// (warn: the amber, the meta's size, in lines)

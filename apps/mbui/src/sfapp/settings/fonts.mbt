@@ -217,12 +217,12 @@ fn font_preview(c : @ui.Ctx, ui_face : Int, text_face : Int, wide? : Bool = fals
 ///|
 /// The places' switch's room: 12 in from the page's sides (Fonts.kt:93).
 // kept across runs: a value (no field of it changes)
-let fonts_seg_room : @ui.Style = @ui.style(w=Full, px=S3)
+let fonts_seg_room : @ui.Style = @ui.css("w=Full px=S3")
 
 ///|
 /// A face's name over a line of it, 2 apart (Fonts.kt:138), each on one line: 16 in the ink, 13 in the muted.
 // kept across runs: a value (no field of it changes)
-let face_lines : @ui.Style = @ui.style(w=Full, gap=S0_5)
+let face_lines : @ui.Style = @ui.css("w=Full gap=S0_5")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -245,19 +245,19 @@ let face_status_words : @ui.TextStyle = @ui.text_style(size=Xs, color=Subtle, wr
 /// The preview's two messages 12 apart (Fonts.kt:152): theirs at the end in a bubble (18 round on the page's ground,
 /// 14 by 8 in), the agent's name (14 semibold in the accent's ink) and when (12 subtle) over its words, 4 apart.
 // kept across runs: a value (no field of it changes)
-let preview_column : @ui.Style = @ui.style(w=Full, gap=S3)
+let preview_column : @ui.Style = @ui.css("w=Full gap=S3")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let preview_mine_room : @ui.Style = @ui.style(w=Full, align=AEnd)
+let preview_mine_room : @ui.Style = @ui.css("w=Full align=AEnd")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let preview_bubble : @ui.Style = @ui.style(radius=Xl2, bg=Bg, px=S3_5, py=S2)
+let preview_bubble : @ui.Style = @ui.css("radius=Xl2 bg=Bg px=S3_5 py=S2")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let preview_agent : @ui.Style = @ui.style(w=Full, gap=S1)
+let preview_agent : @ui.Style = @ui.css("w=Full gap=S1")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -435,7 +435,7 @@ let font_setting_most : Double = 640.0
 /// The tiles (tiles: 96 wide at least, 10 apart; tile: 96 high, 12 by 10 in, the card's corner and ground, ringed 1.5 in
 /// the accent when chosen).
 // kept across runs: a value (no field of it changes)
-let font_tiles : @ui.Style = @ui.style(row=true, w=Full, gap=S2_5)
+let font_tiles : @ui.Style = @ui.css("row w=Full gap=S2_5")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -454,7 +454,7 @@ let font_tile : @ui.Style = @ui.style(
 
 ///|
 // kept across runs: a value (no field of it changes)
-let font_tile_on : @ui.Style = font_tile.then(@ui.style(border=B1, border_color=Accent))
+let font_tile_on : @ui.Style = font_tile.then(@ui.css("border=B1 border_color=Accent"))
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -470,7 +470,7 @@ let font_tile_name_on : @ui.TextStyle = @ui.text_style(size=Xs, color=Fg, wrap=f
 
 ///|
 // kept across runs: a value (no field of it changes)
-let font_tile_check_place : @ui.Style = @ui.style(w=Full, h=Full, p=S2_5, align=AEnd)
+let font_tile_check_place : @ui.Style = @ui.css("w=Full h=Full p=S2_5 align=AEnd")
 
 ///|
 /// A tile as wide as six to the setting's width are, 10 apart (tiles: auto-fill, 96 at least).
@@ -479,7 +479,7 @@ let font_tile_w : Double = (font_setting_most - 50.0) / 6.0
 ///|
 /// The wide frame's preview (preview: a settings card, 20 in, as wide as the setting).
 // kept across runs: a value (no field of it changes)
-let font_preview_card : @ui.Style = @ui.style(w=Full, p=S5, radius=Xl3, bg=Card)
+let font_preview_card : @ui.Style = @ui.css("w=Full p=S5 radius=Xl3 bg=Card")
 
 ///|
 /// What a face of this machine's own is said as in the prefs' `fonts` (client/core-ts/src/fonts.ts LOCAL).
@@ -644,7 +644,7 @@ let local_most : Int = 400
 ///|
 /// (localSearch: its icon and field 8 apart, a line under it, 4 over and 8 under)
 // kept across runs: a value (no field of it changes)
-let local_search : @ui.Style = @ui.style(row=true, w=Full, gap=S2, px=S2_5, pt=S1, pb=S2, align=ACenter)
+let local_search : @ui.Style = @ui.css("row w=Full gap=S2 px=S2_5 pt=S1 pb=S2 align=ACenter")
 
 ///|
 /// (its line: the words' colour faintly, 6 over the list)
@@ -661,11 +661,11 @@ let local_search_field : @ui.Style = @ui.style(w=@sf.grow)
 ///|
 /// (localRow: a menu's item, the chosen on the hover ground, its check at its end)
 // kept across runs: a value (no field of it changes)
-let local_row : @ui.Style = @ui.style(row=true, w=Full, min_h=S8, px=S2_5, gap=S2, radius=Xl, align=ACenter)
+let local_row : @ui.Style = @ui.css("row w=Full min_h=S8 px=S2_5 gap=S2 radius=Xl align=ACenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let local_row_hot : @ui.Style = local_row.then(@ui.style(bg=Hover))
+let local_row_hot : @ui.Style = local_row.then(@ui.css("bg=Hover"))
 
 ///|
 /// (localName: the body's size, cut short)
@@ -674,7 +674,7 @@ let local_name : @ui.TextStyle = @ui.text_style(size=Base, leading=L7, color=Fg,
 
 ///|
 // kept across runs: a value (no field of it changes)
-let local_note_box : @ui.Style = @ui.style(w=Full, px=S2_5, py=S2)
+let local_note_box : @ui.Style = @ui.css("w=Full px=S2_5 py=S2")
 
 ///|
 // kept across runs: a value (no field of it changes)

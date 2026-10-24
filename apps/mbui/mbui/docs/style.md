@@ -12,6 +12,18 @@ c.rich(runs, style=@sf.body)
 
 `src/ui/style_tokens.mbt` has the tokens, `src/ui/style.mbt` the values, `src/kit/styles.mbt` kit's recipes.
 
+A named style that is all tokens is said as its text, `@ui.css(…)` (`src/ui/style_css.mbt`): the same items, `row`
+and `clip` alone for `=true`, a state's block in braces.
+
+```moonbit
+let card : @ui.Style = @ui.css("w=Full p=S5 radius=Xl3 bg=Card pressed{bg=Over(Card, A(Fg, O5))}")
+```
+
+It is the same Style, read once as the app starts; a `style(…)` constant was ~5-10 KB of C in the program's start
+(an assignment and a release for each of its ~38 optional parameters), ~1400 of them ~11.8 MB of one function built
+again on every build. A word it does not know aborts, naming the text, so a mistyped one fails every test at once.
+`style(…)` stays for what is worked out (a length of the app's, `.then(…)` of named styles).
+
 ## Tokens
 
 A style says names, not numbers. The numbers are in the theme (`Theme`, set with `Ctx::set_theme`), looked up as the
@@ -90,9 +102,9 @@ Nothing cascades: no selectors, words do not inherit from the boxes round them. 
 detlint (docs/detlint.md) counts, file by file, only going down:
 
 - `style-literal`: a number in a box's or words' look (`c.box(pad=12.0)`, `c.text(size=13.0)`), in `@ui.style(…)`
-  and its kin, or an `Exact(…)` outside the token files;
+  and its kin (a `@ui.css("…")` text's numbers too), or an `Exact(…)` outside the token files;
 - `box-loose`: a call that says its look loosely (`pad=`, `bg=`, `size=`…) rather than by `style=`;
-- `style-exact`: every `Exact(…)`, the token files' too.
+- `style-exact`: every `Exact(…)`, the token files' too (and a style's text's).
 
 `Tester::census()` gives the values the last frame used, by kind (sizes of words, weights, paddings, corners,
 colours): an app counts how many each kind has across its screens, which should go down.

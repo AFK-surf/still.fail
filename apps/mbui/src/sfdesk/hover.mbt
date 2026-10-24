@@ -59,7 +59,7 @@ let hover_tile : @ui.Style = @ui.style(min_w=@sf.hover_tile_least)
 ///|
 /// What it holds, 10 in from the panel's padding (controls.css.ts panelCard), 8 apart (Hover.css.ts card).
 // kept across runs: a value (no field of it changes)
-let hover_inner : @ui.Style = @ui.style(w=Full, p=S2_5, gap=S2)
+let hover_inner : @ui.Style = @ui.css("w=Full p=S2_5 gap=S2")
 
 // ── an agent's card ──────────────────────────────────────────────────────
 
@@ -530,7 +530,7 @@ let agent_card_box : @ui.Style = @ui.style(w=@sf.agent_card_w, gap=S2)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let agent_card_head : @ui.Style = @ui.style(row=true, w=Full, gap=S2_5, align=ACenter)
+let agent_card_head : @ui.Style = @ui.css("row w=Full gap=S2_5 align=ACenter")
 
 ///|
 /// Its name and its account's room: what is left of the row.
@@ -545,15 +545,15 @@ let agent_card_name : @ui.TextStyle = @ui.text_style(size=Sm, weight=Medium, col
 ///|
 /// Where it stands: 14 in, its dot (6, in its tone) at the first line's middle.
 // kept across runs: a value (no field of it changes)
-let agent_card_status : @ui.Style = @ui.style(row=true, w=Full, gap=S1_5, align=AStart, pl=S0_5)
+let agent_card_status : @ui.Style = @ui.css("row w=Full gap=S1_5 align=AStart pl=S0_5")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let agent_card_dot_room : @ui.Style = @ui.style(pt=S1_5)
+let agent_card_dot_room : @ui.Style = @ui.css("pt=S1_5")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let agent_card_dot : @ui.Style = @ui.style(w=S1_5, h=S1_5, radius=Full)
+let agent_card_dot : @ui.Style = @ui.css("w=S1_5 h=S1_5 radius=Full")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -571,11 +571,11 @@ let agent_card_lines_gap : @ui.Space = S0_5
 ///|
 /// A line: as wide as the list, cut at its end; a gone one's copy over the list, at its padding.
 // kept across runs: a value (no field of it changes)
-let agent_card_line_box : @ui.Style = @ui.style(w=Full)
+let agent_card_line_box : @ui.Style = @ui.css("w=Full")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let agent_card_gone_box : @ui.Style = @ui.style(w=Full, pl=S3_5)
+let agent_card_gone_box : @ui.Style = @ui.css("w=Full pl=S3_5")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -597,7 +597,7 @@ let agent_card_amber : @ui.TextStyle = @ui.text_style(size=Xs, color=Warn, wrap=
 /// The figures, side by side, 6 apart; each 7 by 9 in, 8 round, on the hover's ground: the figure 16 in 600 over its
 /// name (11, muted).
 // kept across runs: a value (no field of it changes)
-let agent_card_tiles_row : @ui.Style = @ui.style(row=true, w=Full, gap=S1_5)
+let agent_card_tiles_row : @ui.Style = @ui.css("row w=Full gap=S1_5")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -606,11 +606,11 @@ let agent_card_tile : @ui.Style = @ui.style(w=@sf.grow, py=@sf.files_row_end, px
 ///|
 /// The context's tile when something can be done to it: the selected ground on hover, its name ending in › 2 after.
 // kept across runs: a value (no field of it changes)
-let agent_card_tile_button : @ui.Style = agent_card_tile.then(@ui.style(hovered=@ui.patch(bg=Selected)))
+let agent_card_tile_button : @ui.Style = agent_card_tile.then(@ui.css("hovered{bg=Selected}"))
 
 ///|
 // kept across runs: a value (no field of it changes)
-let agent_card_tile_more : @ui.Style = @ui.style(row=true, gap=SPx, align=ACenter)
+let agent_card_tile_more : @ui.Style = @ui.css("row gap=SPx align=ACenter")
 
 ///|
 /// The context's tile with its tip, sharing the row as the others do.
@@ -641,7 +641,7 @@ let agent_card_chips_gap : @ui.Space = S1
 ///|
 /// Its account (12), what is left of it to its right, 8 apart.
 // kept across runs: a value (no field of it changes)
-let agent_card_account : @ui.Style = @ui.style(row=true, w=Full, gap=S2, align=ACenter)
+let agent_card_account : @ui.Style = @ui.css("row w=Full gap=S2 align=ACenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -649,20 +649,13 @@ let agent_card_quiet : @ui.TextStyle = @ui.text_style(size=Xs, color=Muted, w=Fu
 
 ///|
 // kept across runs: a value (no field of it changes)
-let agent_card_notes : @ui.Style = @ui.style(w=Full, gap=S0_5)
+let agent_card_notes : @ui.Style = @ui.css("w=Full gap=S0_5")
 
 ///|
 /// Its stop: a pill 24 high, 10 in, 5 between its mark and words, on the red's ground.
 // kept across runs: a value (no field of it changes)
-let agent_card_stop_pill : @ui.Style = @ui.style(
-  row=true,
-  h=S6,
-  px=S2_5,
-  gap=S1_25,
-  radius=Full,
-  align=ACenter,
-  bg=DangerBg,
-  hovered=@ui.patch(bg=A(Danger, O20)),
+let agent_card_stop_pill : @ui.Style = @ui.css(
+  #|row h=S6 px=S2_5 gap=S1_25 radius=Full align=ACenter bg=DangerBg hovered{bg=A(Danger,O20)}
 )
 
 ///|

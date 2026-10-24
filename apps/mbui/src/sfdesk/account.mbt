@@ -176,7 +176,7 @@ let acc_picture : Double = 52.0
 ///|
 /// (identity: its picture and its words 16 apart, 28 over what follows: 12 and the first block's own 16)
 // kept across runs: a value (no field of it changes)
-let acc_identity : @ui.Style = @ui.style(row=true, w=Full, gap=S4, mb=S3, align=ACenter)
+let acc_identity : @ui.Style = @ui.css("row w=Full gap=S4 mb=S3 align=ACenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -190,7 +190,7 @@ let acc_name : @ui.TextStyle = @ui.text_style(size=Xl3, leading=L8, weight=Semib
 ///|
 /// (identitySub: its parts 14 apart, the list's words, muted)
 // kept across runs: a value (no field of it changes)
-let acc_sub : @ui.Style = @ui.style(row=true, gap=S3_5, align=ACenter)
+let acc_sub : @ui.Style = @ui.css("row gap=S3_5 align=ACenter")
 
 ///|
 // kept across runs: a value (no field of it changes)

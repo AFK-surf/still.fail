@@ -471,11 +471,11 @@ let pick_row_h : Double = 40.0
 ///|
 /// The folders pinned (rootsList: 4 apart), each (rootLine) 8 by 4 in, 12 between its mark, its words and its ×.
 // kept across runs: a value (no field of it changes)
-let roots_list : @ui.Style = @ui.style(w=Full, gap=S1)
+let roots_list : @ui.Style = @ui.css("w=Full gap=S1")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let root_line : @ui.Style = @ui.style(row=true, w=Full, px=S1, py=S2, gap=S3, align=ACenter)
+let root_line : @ui.Style = @ui.css("row w=Full px=S1 py=S2 gap=S3 align=ACenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -489,11 +489,13 @@ let root_trouble_words : @ui.TextStyle = @ui.text_style(size=Xs, color=Warn, wra
 /// A row to pick (pickRow): 40 high at least, 6 by 10 in, 10 between, the field's corner; the list's ground under the
 /// pointer, and where the picker is (600).
 // kept across runs: a value (no field of it changes)
-let pick_row : @ui.Style = @ui.style(row=true, w=Full, min_h=S10, px=S2_5, py=S1_5, gap=S2_5, align=ACenter, radius=Lg, hovered=@ui.patch(bg=ListGround))
+let pick_row : @ui.Style = @ui.css(
+  #|row w=Full min_h=S10 px=S2_5 py=S1_5 gap=S2_5 align=ACenter radius=Lg hovered{bg=ListGround}
+)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let pick_row_here : @ui.Style = pick_row.then(@ui.style(bg=ListGround))
+let pick_row_here : @ui.Style = pick_row.then(@ui.css("bg=ListGround"))
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -510,7 +512,7 @@ let pick_meta : @ui.TextStyle = @ui.text_style(size=Xs, color=Muted, wrap=false)
 ///|
 /// The way (pickerPath): the trail, then the filter 200 wide, 12 apart, 10 over the folders, 36 high at least.
 // kept across runs: a value (no field of it changes)
-let picker_path : @ui.Style = @ui.style(row=true, w=Full, min_h=S9, pb=S2_5, gap=S3, align=ACenter)
+let picker_path : @ui.Style = @ui.css("row w=Full min_h=S9 pb=S2_5 gap=S3 align=ACenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -518,7 +520,7 @@ let picker_crumbs : @ui.Style = @ui.style(row=true, w=@sf.grow, gap=SPx, align=A
 
 ///|
 // kept across runs: a value (no field of it changes)
-let crumb_box : @ui.Style = @ui.style(px=S1, py=S0_5, radius=Md)
+let crumb_box : @ui.Style = @ui.css("px=S1 py=S0_5 radius=Md")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -530,16 +532,16 @@ let crumb_last : @ui.TextStyle = @ui.text_style(size=Xs, weight=Semibold, color=
 
 ///|
 // kept across runs: a value (no field of it changes)
-let picker_filter : @ui.Style = @ui.style(w=S48)
+let picker_filter : @ui.Style = @ui.css("w=S48")
 
 ///|
 /// Its places (180) beside its folders, 12 apart, as high as 420 at most.
 // kept across runs: a value (no field of it changes)
-let picker_box : @ui.Style = @ui.style(row=true, w=Full, h=S96, gap=S3)
+let picker_box : @ui.Style = @ui.css("row w=Full h=S96 gap=S3")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let picker_places : @ui.Style = @ui.style(w=S44, h=Full, gap=S0_5, clip=true)
+let picker_places : @ui.Style = @ui.css("w=S44 h=Full gap=S0_5 clip")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -553,7 +555,7 @@ let picker_head : @ui.TextStyle = @ui.text_style(size=Xs2, color=Muted, wrap=fal
 ///|
 /// A folder the station cannot read (pickerShut): its mark over what to do, in the middle.
 // kept across runs: a value (no field of it changes)
-let picker_shut : @ui.Style = @ui.style(w=Full, h=Full, px=S6, gap=S3, align=ACenter, justify=JCenter)
+let picker_shut : @ui.Style = @ui.css("w=Full h=Full px=S6 gap=S3 align=ACenter justify=JCenter")
 
 ///|
 // kept across runs: a value (no field of it changes)

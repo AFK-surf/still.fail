@@ -98,7 +98,7 @@ let pick_selected : @ui.TextStyle = @ui.text_style(size=Xs2, color=Muted, wrap=f
 ///|
 /// What the page is for: 13 muted, 24 in, 8 under it, the page's words 8 under its bar (Profiles.kt:787-788).
 // kept across runs: a value (no field of it changes)
-let pick_lead_room : @ui.Style = @ui.style(w=Full, px=S6, pt=S2, pb=S2)
+let pick_lead_room : @ui.Style = @ui.css("w=Full px=S6 pt=S2 pb=S2")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -107,20 +107,20 @@ let pick_lead : @ui.TextStyle = @ui.text_style(size=Sm, color=Muted, w=Full)
 ///|
 /// What is said in place of the list (its models being read; none listed): 24 in, 8 over and under.
 // kept across runs: a value (no field of it changes)
-let pick_said_room : @ui.Style = @ui.style(w=Full, px=S6, py=S2)
+let pick_said_room : @ui.Style = @ui.css("w=Full px=S6 py=S2")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let pick_body : @ui.Style = @ui.style(w=Full, h=Full)
+let pick_body : @ui.Style = @ui.css("w=Full h=Full")
 
 ///|
 /// 跳过 and 完成, as wide as each other, 10 apart, 16 in and 12 over and under (Profiles.kt:799).
 // kept across runs: a value (no field of it changes)
-let pick_foot : @ui.Style = @ui.style(row=true, w=Full, px=S4, py=S3, gap=S2_5)
+let pick_foot : @ui.Style = @ui.css("row w=Full px=S4 py=S3 gap=S2_5")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let pick_button : @ui.Style = @ui.style(w=Full)
+let pick_button : @ui.Style = @ui.css("w=Full")
 
 ///|
 /// Which of a profile's models may be used, on a page of their own from its 运行's 模型 row (ProfileScreen's

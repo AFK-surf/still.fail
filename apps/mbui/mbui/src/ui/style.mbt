@@ -1,5 +1,6 @@
 // Style values (docs/style.md): a box's (Style, its state blocks Patch) and words' (TextStyle, TextPatch); made with
-// `style(…)`, `patch(…)`, `text_style(…)`, `text_patch(…)`, put together with `then`. Every property is a token of
+// `style(…)`, `patch(…)`, `text_style(…)`, `text_patch(…)`, or a Style read from its text (`css("…")`, style_css.mbt:
+// what a named constant is said with), put together with `then`. Every property is a token of
 // style_tokens.mbt; one not said is the default (Ctx::box's, Ctx::text's) or what the style under it says.
 
 ///|
@@ -37,7 +38,7 @@ pub(all) struct Patch {
   shadow : Shadow?
   clip : Bool?
   opacity : Opacity?
-}
+} derive(Eq)
 
 ///|
 /// A box's style: what it looks like, and what it looks like instead in a state (each a Patch over it). The states
@@ -51,7 +52,7 @@ pub(all) struct Style {
   focused : Patch?
   pressed : Patch?
   disabled : Patch?
-}
+} derive(Eq)
 
 ///|
 /// A box's look, every property a token (style_tokens.mbt); a state's block in place of none.

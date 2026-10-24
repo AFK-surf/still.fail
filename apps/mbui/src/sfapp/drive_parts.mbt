@@ -473,29 +473,29 @@ fn dv_card_row(
 /// A card's row's room in it (DriveScreen.kt cardRow, Parts.kt LIST_PAD): 8 in from the card's sides, and from its top
 /// on the first row, its bottom on the last.
 // kept across runs: a value (no field of it changes)
-let dv_row_room : @ui.Style = @ui.style(w=Full, px=S2)
+let dv_row_room : @ui.Style = @ui.css("w=Full px=S2")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let dv_row_room_first : @ui.Style = @ui.style(w=Full, px=S2, pt=S2)
+let dv_row_room_first : @ui.Style = @ui.css("w=Full px=S2 pt=S2")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let dv_row_room_last : @ui.Style = @ui.style(w=Full, px=S2, pb=S2)
+let dv_row_room_last : @ui.Style = @ui.css("w=Full px=S2 pb=S2")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let dv_row_room_only : @ui.Style = @ui.style(w=Full, p=S2)
+let dv_row_room_only : @ui.Style = @ui.css("w=Full p=S2")
 
 ///|
 /// A card's row's own ground (pressed, chosen): rounded LIST_ROW_CORNER, concentric with the card's.
 // kept across runs: a value (no field of it changes)
-let dv_row_ground : @ui.Style = @ui.style(w=Full, radius=Xl2)
+let dv_row_ground : @ui.Style = @ui.css("w=Full radius=Xl2")
 
 ///|
 /// The card's ground as tall as its row; where the card goes on past it, its corner's room.
 // kept across runs: a value (no field of it changes)
-let dv_card_whole : @ui.Style = @ui.style(w=Full, h=Full)
+let dv_card_whole : @ui.Style = @ui.css("w=Full h=Full")
 
 ///|
 // kept across runs: a value (no field of it changes)

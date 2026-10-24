@@ -74,11 +74,11 @@ fn desk_place(
 
 ///|
 // kept across runs: a value (no field of it changes)
-let desk_place_fill : @ui.Style = @ui.style(w=Full, h=Full)
+let desk_place_fill : @ui.Style = @ui.css("w=Full h=Full")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let desk_place_body : @ui.Style = desk_place_fill.then(@ui.style(pt=S2))
+let desk_place_body : @ui.Style = desk_place_fill.then(@ui.css("pt=S2"))
 
 ///|
 /// How wide the page's column is (pageNarrow: 760 at most), for what is drawn to its width before it is laid out.
@@ -90,7 +90,7 @@ fn desk_column(c : @ui.Ctx) -> Double {
 /// A block's lane across the pane, its column in the middle: 792 at most, 24 from the pane's sides at least (its blocks'
 /// own 16 inside it: the 760 column).
 // kept across runs: a value (no field of it changes)
-let desk_lane : @ui.Style = @ui.style(w=Full, px=S6, align=ACenter)
+let desk_lane : @ui.Style = @ui.css("w=Full px=S6 align=ACenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -105,12 +105,12 @@ let desk_lane_in : Double = 24.0
 ///|
 /// The room at the page's foot.
 // kept across runs: a value (no field of it changes)
-let desk_foot : @ui.Style = @ui.style(w=Full, h=S20)
+let desk_foot : @ui.Style = @ui.css("w=Full h=S20")
 
 ///|
 /// A page's head of its own (an account's): where a title's head would stand.
 // kept across runs: a value (no field of it changes)
-let desk_own_head : @ui.Style = @ui.style(w=Full, px=S4, pt=S10)
+let desk_own_head : @ui.Style = @ui.css("w=Full px=S4 pt=S10")
 
 ///|
 let desk_column_most : Double = 760.0
@@ -121,11 +121,11 @@ let desk_column_in : Double = 16.0
 ///|
 /// A block of the page, at the column's edges; the first 28 under the head (its own 12 and these 16).
 // kept across runs: a value (no field of it changes)
-let desk_block : @ui.Style = @ui.style(w=Full, px=S4)
+let desk_block : @ui.Style = @ui.css("w=Full px=S4")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let desk_first : @ui.Style = desk_block.then(@ui.style(pt=S4))
+let desk_first : @ui.Style = desk_block.then(@ui.css("pt=S4"))
 
 ///|
 /// What the option chosen above it does (chat.css.ts appearanceHint: 8 under it, the meta's 12 muted, 52em at most).
@@ -147,21 +147,21 @@ let desk_hint_words : @ui.TextStyle = @ui.text_style(size=Xs, leading=L5, color=
 ///|
 /// A hint and its link in a line (8 under what is over it).
 // kept across runs: a value (no field of it changes)
-let desk_hint_line : @ui.Style = @ui.style(w=Full, pt=S2, gap=S1)
+let desk_hint_line : @ui.Style = @ui.css("w=Full pt=S2 gap=S1")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let desk_said_line : @ui.Style = @ui.style(row=true, w=Full, align=ACenter)
+let desk_said_line : @ui.Style = @ui.css("row w=Full align=ACenter")
 
 ///|
 /// A card of words (pages.css.ts card: 20 in, its rows 14 apart, the settings' corner on the card's ground; a row of
 /// it: cardRow, 12 apart in its middle; its words cardRowText, 2 apart, the ui's 13 on 20, the title in 600).
 // kept across runs: a value (no field of it changes)
-let desk_card : @ui.Style = @ui.style(w=Full, p=S5, gap=S3_5, radius=Xl3, bg=Card)
+let desk_card : @ui.Style = @ui.css("w=Full p=S5 gap=S3_5 radius=Xl3 bg=Card")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let desk_card_row : @ui.Style = @ui.style(row=true, w=Full, gap=S3, align=ACenter)
+let desk_card_row : @ui.Style = @ui.css("row w=Full gap=S3 align=ACenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -193,7 +193,7 @@ let desk_mark : Double = 14.0
 
 ///|
 // kept across runs: a value (no field of it changes)
-let desk_list : @ui.Style = @sf.outset(desk_list_out).then(@ui.style(gap=S0_5))
+let desk_list : @ui.Style = @sf.outset(desk_list_out).then(@ui.css("gap=S0_5"))
 
 ///|
 let desk_list_out : Double = 12.0
@@ -213,7 +213,7 @@ let desk_list_row : @ui.Style = @ui.style(
 
 ///|
 // kept across runs: a value (no field of it changes)
-let desk_list_link : @ui.Style = desk_list_row.then(@ui.style(hovered=@ui.patch(bg=Hover)))
+let desk_list_link : @ui.Style = desk_list_row.then(@ui.css("hovered{bg=Hover}"))
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -221,7 +221,7 @@ let desk_list_text : @ui.Style = @ui.style(w=@sf.grow, gap=S0_5)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let desk_named : @ui.Style = @ui.style(row=true, gap=S1_5, align=ACenter)
+let desk_named : @ui.Style = @ui.css("row gap=S1_5 align=ACenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -243,7 +243,7 @@ fn desk_choice(c : @ui.Ctx, body : () -> Unit) -> Unit {
 
 ///|
 // kept across runs: a value (no field of it changes)
-let desk_choice_row : @ui.Style = @ui.style(row=true, w=Full)
+let desk_choice_row : @ui.Style = @ui.css("row w=Full")
 
 ///|
 /// A list's filter on the wide page (components.tsx MineFilter, not compact; History.css.ts mineFilterBtn,
@@ -307,23 +307,14 @@ let mine_filter_menu_w : Double = 220.0
 
 ///|
 // kept across runs: a value (no field of it changes)
-let mine_filter_box : @ui.Style = @ui.style(
-  row=true,
-  h=S8,
-  min_w=S8,
-  px=S2,
-  gap=S1_5,
-  align=ACenter,
-  radius=Xl,
-  border=B1,
-  border_color=Line,
-  hovered=@ui.patch(bg=Hover),
-  selected=@ui.patch(bg=Hover),
+let mine_filter_box : @ui.Style = @ui.css(
+  #|row h=S8 min_w=S8 px=S2 gap=S1_5 align=ACenter radius=Xl border=B1 border_color=Line hovered{bg=Hover}
+  #|selected{bg=Hover}
 )
 
 ///|
 // kept across runs: a value (no field of it changes)
-let mine_filter_on : @ui.Style = mine_filter_box.then(@ui.style(bg=AccentBg))
+let mine_filter_on : @ui.Style = mine_filter_box.then(@ui.css("bg=AccentBg"))
 
 ///|
 // kept across runs: a value (no field of it changes)

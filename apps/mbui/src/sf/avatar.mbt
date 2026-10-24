@@ -41,7 +41,7 @@ pub fn initial(name : String) -> String {
 ///|
 /// A face's disc: round, what it holds in its middle (its side and colour said where it is drawn).
 // kept across runs: a value (no field of it changes)
-let avatar_disc : @ui.Style = @ui.style(radius=Full, align=ACenter, justify=JCenter)
+let avatar_disc : @ui.Style = @ui.css("radius=Full align=ACenter justify=JCenter")
 
 ///|
 /// A face's initial: semibold, white on every theme (Parts.kt: Color.White), on one line (its size, half the face's,

@@ -104,16 +104,16 @@ pub fn side_width(pane : Double) -> Double {
 ///|
 /// The chat and the panel side by side.
 // kept across runs: a value (no field of it changes)
-let panel_row : @ui.Style = @ui.style(row=true, w=Full, h=Full)
+let panel_row : @ui.Style = @ui.css("row w=Full h=Full")
 
 ///|
 /// The panel (sidePanel): its ground the canvas, a hairline at its left.
 // kept across runs: a value (no field of it changes)
-pub let side_panel_style : @ui.Style = @ui.style(w=Full, h=Full, bg=Bg)
+pub let side_panel_style : @ui.Style = @ui.css("w=Full h=Full bg=Bg")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let side_rule : @ui.Style = @ui.style(w=SPx, h=Full, bg=Line)
+let side_rule : @ui.Style = @ui.css("w=SPx h=Full bg=Line")
 
 ///|
 /// How wide that hairline is (its SPx), the panel's column being it and the panel.
@@ -122,7 +122,7 @@ let side_rule_w : Double = 1.0
 ///|
 /// Its bar (sideBar): 45 high, the tabs from 8 in, the panel's switch at its right 12 in.
 // kept across runs: a value (no field of it changes)
-pub let side_bar : @ui.Style = @ui.style(row=true, w=Full, h=S11, pl=S2, pr=S3, gap=S2, align=ACenter)
+pub let side_bar : @ui.Style = @ui.css("row w=Full h=S11 pl=S2 pr=S3 gap=S2 align=ACenter")
 
 ///|
 /// Its tabs (sideTabList), 2 apart.
@@ -157,19 +157,12 @@ pub let side_tab_front : @ui.TextStyle = @ui.text_style(size=Sm, weight=Medium, 
 ///|
 /// Its close (sideTabClose): 20 square, round 6 (a small mark of its own), the line's ground on it.
 // kept across runs: a value (no field of it changes)
-pub let side_tab_close : @ui.Style = @ui.style(
-  w=S5,
-  h=S5,
-  radius=Md,
-  align=ACenter,
-  justify=JCenter,
-  hovered=@ui.patch(bg=Line),
-)
+pub let side_tab_close : @ui.Style = @ui.css("w=S5 h=S5 radius=Md align=ACenter justify=JCenter hovered{bg=Line}")
 
 ///|
 /// What the tab in front shows, under the bar.
 // kept across runs: a value (no field of it changes)
-pub let side_pane : @ui.Style = @ui.style(w=Full, h=Full, clip=true)
+pub let side_pane : @ui.Style = @ui.css("w=Full h=Full clip")
 
 ///|
 /// How long the side panel takes to slide in and out (ChatSide.tsx useSidePanel: 0.28 s and 0.24 s, the page's ease-out).
@@ -460,12 +453,6 @@ pub fn icon_button(c : @ui.Ctx, key : String, icon : String, label? : String = "
 
 ///|
 // kept across runs: a value (no field of it changes)
-let bar_icon_button : @ui.Style = @ui.style(
-  w=S8,
-  h=S8,
-  radius=Xl,
-  align=ACenter,
-  justify=JCenter,
-  hovered=@ui.patch(bg=Hover),
-  pressed=@ui.patch(bg=Hover),
+let bar_icon_button : @ui.Style = @ui.css(
+  #|w=S8 h=S8 radius=Xl align=ACenter justify=JCenter hovered{bg=Hover} pressed{bg=Hover}
 )

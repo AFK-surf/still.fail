@@ -296,8 +296,8 @@ pub fn group_item_look(c : @ui.Ctx, s : ToggleState) -> Unit {
 /// A group and its items as wide as what their looks draw, or (`grow`) the group as wide as where it is and each item
 /// an equal share of it.
 // kept across runs: a value (no field of it changes)
-let group_item_own : @ui.Style = @ui.style()
+let group_item_own : @ui.Style = @ui.css("")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let group_item_grow : @ui.Style = @ui.style(w=Full)
+let group_item_grow : @ui.Style = @ui.css("w=Full")

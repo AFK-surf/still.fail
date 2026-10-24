@@ -420,7 +420,7 @@ fn scope_of(station : String) -> String {
 ///|
 /// The head (historyHead): 45 high, 16 in at its start, 8 at its end.
 // kept across runs: a value (no field of it changes)
-let wh_head : @ui.Style = @ui.style(row=true, w=Full, h=S11, pl=S4, pr=S2, pb=SPx, gap=S2, align=ACenter, justify=JBetween)
+let wh_head : @ui.Style = @ui.css("row w=Full h=S11 pl=S4 pr=S2 pb=SPx gap=S2 align=ACenter justify=JBetween")
 
 ///|
 /// What it runs on and what needs seeing to (historyIdentity): what is too long cut at its end; the control's own 10 in
@@ -430,21 +430,21 @@ let wh_identity : @ui.Style = @ui.style(row=true, w=@sf.grow, gap=S2, align=ACen
 
 ///|
 // kept across runs: a value (no field of it changes)
-let wh_tools : @ui.Style = @ui.style(row=true, gap=S0_5, align=ACenter)
+let wh_tools : @ui.Style = @ui.css("row gap=S0_5 align=ACenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let wh_summary_row : @ui.Style = @ui.style(row=true, gap=S2_5, align=ACenter)
+let wh_summary_row : @ui.Style = @ui.css("row gap=S2_5 align=ACenter")
 
 ///|
 /// 只看收发 and 详情 (controls.css.ts textToggle): 2 by 4 in, 12 on 18, muted; the words' ink on hover; 只看收发 on, its
 /// ground the picked one's.
 // kept across runs: a value (no field of it changes)
-let wh_toggle : @ui.Style = @ui.style(row=true, px=S1, py=S0_5, gap=S1, align=ACenter)
+let wh_toggle : @ui.Style = @ui.css("row px=S1 py=S0_5 gap=S1 align=ACenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let wh_toggle_on : @ui.Style = @ui.style(row=true, px=S1, py=S0_5, gap=S1, align=ACenter, bg=Selected, radius=Lg)
+let wh_toggle_on : @ui.Style = @ui.css("row px=S1 py=S0_5 gap=S1 align=ACenter bg=Selected radius=Lg")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -457,7 +457,7 @@ let wh_toggle_hot : @ui.TextStyle = @ui.text_style(size=Xs, color=Fg, wrap=false
 ///|
 /// 详情 (sessionDetails): 2 over, 16 at the sides, 14 under, 10 between; words 12, muted.
 // kept across runs: a value (no field of it changes)
-let wh_details_box : @ui.Style = @ui.style(w=Full, px=S4, pt=S0_5, pb=S3_5, gap=S2_5)
+let wh_details_box : @ui.Style = @ui.css("w=Full px=S4 pt=S0_5 pb=S3_5 gap=S2_5")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -466,7 +466,7 @@ let wh_quiet : @ui.TextStyle = @ui.text_style(size=Xs, color=Muted)
 ///|
 /// The quiet line 4 nearer what is over it (sessionQuiet: outsetTop(4)).
 // kept across runs: a value (no field of it changes)
-let wh_quiet_box : @ui.Style = @ui.style(w=Full).then(@sf.outset_top(4.0))
+let wh_quiet_box : @ui.Style = @ui.css("w=Full").then(@sf.outset_top(4.0))
 
 ///|
 /// What needs seeing to, in its tone (ChatPage.css.ts attention: 12; the disk amber, an account red).
@@ -479,11 +479,11 @@ let wh_red : @ui.TextStyle = @ui.text_style(size=Xs, color=Danger, wrap=false)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let wh_line_style : @ui.Style = @ui.style(row=true, w=Full, gap=S2, align=ACenter)
+let wh_line_style : @ui.Style = @ui.css("row w=Full gap=S2 align=ACenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let wh_mark : @ui.Style = @ui.style(w=S4, align=ACenter, justify=JCenter)
+let wh_mark : @ui.Style = @ui.css("w=S4 align=ACenter justify=JCenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -503,7 +503,7 @@ let wh_file : @ui.TextStyle = @ui.text_style(size=Xs, color=Muted, wrap=false, w
 
 ///|
 // kept across runs: a value (no field of it changes)
-let wh_link_box : @ui.Style = @ui.style(row=true, align=ACenter)
+let wh_link_box : @ui.Style = @ui.css("row align=ACenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -512,4 +512,4 @@ let wh_link_hot : @ui.TextStyle = @ui.text_style(size=Xs, color=Fg, wrap=false)
 ///|
 /// The steps under the head: the rest of the panel.
 // kept across runs: a value (no field of it changes)
-let wh_fill : @ui.Style = @ui.style(w=Full, h=Full)
+let wh_fill : @ui.Style = @ui.css("w=Full h=Full")

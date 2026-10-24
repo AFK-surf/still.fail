@@ -109,7 +109,7 @@ fn foot(c : @ui.Ctx, f : () -> Unit, words? : String = "") -> Unit {
 
 ///|
 // kept across runs: a value (no field of it changes)
-let foot_ground : @ui.Style = @ui.style(w=Full, bg=Bg)
+let foot_ground : @ui.Style = @ui.css("w=Full bg=Bg")
 
 ///|
 /// Off (Security.kt Off): what it is now and once on, how new devices come in; who may turn it on.
@@ -430,7 +430,7 @@ fn confirm_device(core : Core, ws : String, r : Json) -> Unit {
 ///|
 /// 确认 over 拒绝, 10 apart, 4 under the note (Security.kt:349).
 // kept across runs: a value (no field of it changes)
-let confirm_buttons : @ui.Style = @ui.style(w=Full, pt=S1, gap=S2_5)
+let confirm_buttons : @ui.Style = @ui.css("w=Full pt=S1 gap=S2_5")
 
 ///|
 /// A code's letters a little apart (letterSpacing 5): a thin space between each two.

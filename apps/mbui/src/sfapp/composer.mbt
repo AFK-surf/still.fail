@@ -82,11 +82,11 @@ fn files_card() -> @ui.Style {
 
 ///|
 // kept across runs: a value (no field of it changes)
-let files_card_inner : @ui.Style = @ui.style(radius=Inner)
+let files_card_inner : @ui.Style = @ui.css("radius=Inner")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let files_card_set : @ui.Style = @ui.style(radius=Xl2)
+let files_card_set : @ui.Style = @ui.css("radius=Xl2")
 
 ///|
 /// Whether the files' row (or the station files') is in the capsule's top left corner this frame (capsule_top).
@@ -637,7 +637,7 @@ fn page_ground(c : @ui.Ctx, cap : Int, from : (Double, Double, Double, Double), 
 ///|
 /// What the ground stands in on its way: all of the capsule, from its bottom edge.
 // kept across runs: a value (no field of it changes)
-let page_ground_room : @ui.Style = @ui.style(w=Full, h=Full, justify=JEnd)
+let page_ground_room : @ui.Style = @ui.css("w=Full h=Full justify=JEnd")
 
 ///|
 /// Words sent from chat `chat`'s composer hold its room as tall as when they went (`room`) for `ms` from the next frame,
@@ -755,7 +755,7 @@ fn draft_quote_file(d : Draft, author : String, ts : String, role : String, a : 
 ///|
 /// A quote's own picture in the composer's quote card: 16 in, 6 under its words (Composer.kt DraftExtras).
 // kept across runs: a value (no field of it changes)
-let quote_picture_in : @ui.Style = @ui.style(pl=S4, pt=S1_5)
+let quote_picture_in : @ui.Style = @ui.css("pl=S4 pt=S1_5")
 
 ///|
 /// The file going with a quote (a mark's screenshot, an image of a message quoted), shown in its card rather than
@@ -1741,7 +1741,7 @@ fn pick_files_now(c : @ui.Ctx, d : Draft) -> Unit {
 ///|
 /// The roomy composer's choices beside ＋ (the web's composer toolbar): 4 apart, on ＋'s line.
 // kept across runs: a value (no field of it changes)
-let composer_tools : @ui.Style = @ui.style(row=true, h=S9, gap=S1, align=ACenter)
+let composer_tools : @ui.Style = @ui.css("row h=S9 gap=S1 align=ACenter")
 
 ///|
 /// What floats over the page in the composer's glass (Glass.kt floating, ComposerCorner): the capsule's ground, the
@@ -1772,11 +1772,11 @@ fn workspace_of(station : String) -> String {
 /// A notice over the bar (Composer.kt: 8 in from the capsule's room at its sides, 2 above and under), its words in a
 /// line (13, muted; the restore's in the ink, underlined, as a link), why the restore failed in red under them.
 // kept across runs: a value (no field of it changes)
-let notice_box : @ui.Style = @ui.style(px=S2, py=S0_5)
+let notice_box : @ui.Style = @ui.css("px=S2 py=S0_5")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let notice_line : @ui.Style = @ui.style(row=true, align=ACenter)
+let notice_line : @ui.Style = @ui.css("row align=ACenter")
 
 ///|
 // kept across runs: a value (no field of it changes)

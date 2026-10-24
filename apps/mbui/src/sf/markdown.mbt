@@ -1287,7 +1287,7 @@ fn Md::cell_images(self : Md, cell : Array[MdInline]) -> Array[(Double, (Double)
 ///|
 /// A table cell's images in a row (Markdown.kt CellImageRow: spacedBy(6), 4 over and under).
 // kept across runs: a value (no field of it changes)
-let cell_image_row : @ui.Style = @ui.style(row=true, gap=S1_5, py=S1)
+let cell_image_row : @ui.Style = @ui.css("row gap=S1_5 py=S1")
 
 ///|
 /// An image's width in a table's cell: as wide as 160 for a wide image, as tall as 240 for a tall one (Markdown.kt

@@ -697,7 +697,7 @@ let switcher_lead : Int = 3
 ///|
 /// The search (Switcher.css.ts search): 48 high, 12 in, the words a title's (16), the placeholder subtle.
 // kept across runs: a value (no field of it changes)
-let switcher_search_box : @ui.Style = @ui.style(row=true, w=Full, h=S12, px=S3, align=ACenter)
+let switcher_search_box : @ui.Style = @ui.css("row w=Full h=S12 px=S3 align=ACenter")
 
 ///|
 let switcher_search_size : Double = 16.0
@@ -708,7 +708,7 @@ let switcher_search_line : Double = 24.0
 ///|
 /// A heading (Switcher.css.ts section): 12, muted, 12 in, 10 over and 4 under.
 // kept across runs: a value (no field of it changes)
-let switcher_head : @ui.Style = @ui.style(w=Full, px=S3, pt=S2_5, pb=S1)
+let switcher_head : @ui.Style = @ui.css("w=Full px=S3 pt=S2_5 pb=S1")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -733,12 +733,12 @@ let switcher_row : @ui.Style = @ui.style(
 ///|
 /// A row of two lines (a message, a chat found by its words, something else: Switcher.css.ts said): from its top.
 // kept across runs: a value (no field of it changes)
-let switcher_row_said : @ui.Style = switcher_row.then(@ui.style(align=AStart))
+let switcher_row_said : @ui.Style = switcher_row.then(@ui.css("align=AStart"))
 
 ///|
 /// A picture's place (Switcher.css.ts picture): 20 square, what it holds in its middle.
 // kept across runs: a value (no field of it changes)
-let switcher_picture : @ui.Style = @ui.style(w=S5, h=S5, align=ACenter, justify=JCenter)
+let switcher_picture : @ui.Style = @ui.css("w=S5 h=S5 align=ACenter justify=JCenter")
 
 ///|
 let switcher_icon : Double = 16.0
@@ -769,7 +769,7 @@ let switcher_said : @ui.Style = @ui.style(w=@sf.grow, gap=S0_5)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let switcher_said_head : @ui.Style = @ui.style(row=true, w=Full, gap=S2_5, align=ACenter)
+let switcher_said_head : @ui.Style = @ui.css("row w=Full gap=S2_5 align=ACenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -787,7 +787,7 @@ let switcher_under_words : @ui.TextStyle = @ui.text_style(size=Sm, color=Muted, 
 ///|
 /// Nothing found (Switcher.css.ts none): 14 over and under, 12 in, the page's words muted.
 // kept across runs: a value (no field of it changes)
-let switcher_none_box : @ui.Style = @ui.style(w=Full, px=S3, py=S3_5)
+let switcher_none_box : @ui.Style = @ui.css("w=Full px=S3 py=S3_5")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -797,7 +797,7 @@ let switcher_none : @ui.TextStyle = @ui.text_style(size=Sm, color=Muted)
 /// What the list says under it (Switcher.css.ts note): the stations not answered yet, those offline or too old; 8 over,
 /// 10 under, 12 in, 12 muted.
 // kept across runs: a value (no field of it changes)
-let switcher_note_box : @ui.Style = @ui.style(w=Full, px=S3, pt=S2, pb=S2_5)
+let switcher_note_box : @ui.Style = @ui.css("w=Full px=S3 pt=S2 pb=S2_5")
 
 ///|
 // kept across runs: a value (no field of it changes)

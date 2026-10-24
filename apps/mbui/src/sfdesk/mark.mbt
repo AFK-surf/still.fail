@@ -50,11 +50,11 @@ let mark_wait : @ui.Style = @ui.style(w=S2_5, h=S2_5, radius=Full, border=B2, bo
 
 ///|
 // kept across runs: a value (no field of it changes)
-let mark_other : @ui.Style = @ui.style(w=S2_5, h=S2_5, radius=Full, border=B2, border_color=Subtle)
+let mark_other : @ui.Style = @ui.css("w=S2_5 h=S2_5 radius=Full border=B2 border_color=Subtle")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let mark_busy : @ui.Style = @ui.style(w=S2_5, h=S2_5)
+let mark_busy : @ui.Style = @ui.css("w=S2_5 h=S2_5")
 
 ///|
 /// A row's mark (ChatMark.tsx ChatMark, its row's `key`): one that comes while the chat is in view (a new message, work

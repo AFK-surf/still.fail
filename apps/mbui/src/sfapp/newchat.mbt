@@ -1097,7 +1097,7 @@ let run_picker_saving : Ref[Bool] = { val: false }
 ///|
 /// The frequent choices in lines, in the middle, 6 apart each way (NewChat.kt: a FlowRow).
 // kept across runs: a value (no field of it changes)
-let frequent_flow : @ui.Style = @ui.style(row=true, w=Full, gap=S1_5, justify=JCenter)
+let frequent_flow : @ui.Style = @ui.css("row w=Full gap=S1_5 justify=JCenter")
 
 ///|
 /// The new chat's scene's height as its list guesses it before it is laid out.
@@ -1140,8 +1140,8 @@ let held_bar_h : Double = 12.0
 
 ///|
 // kept across runs: a value (no field of it changes)
-let held_lines : @ui.Style = @ui.style(w=Full)
+let held_lines : @ui.Style = @ui.css("w=Full")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let held_line_box : @ui.Style = @ui.style(w=Full, h=S5, align=ACenter, justify=JCenter)
+let held_line_box : @ui.Style = @ui.css("w=Full h=S5 align=ACenter justify=JCenter")

@@ -489,7 +489,7 @@ let bar_icon_size : Double = 14.0
 
 ///|
 // kept across runs: a value (no field of it changes)
-let mark_key : @ui.Style = @ui.style(w=S7, h=S7, radius=Full, align=ACenter, justify=JCenter)
+let mark_key : @ui.Style = @ui.css("w=S7 h=S7 radius=Full align=ACenter justify=JCenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -498,7 +498,7 @@ let mark_key_on : @ui.Style = mark_key.then(@ui.style(bg=@sf.mark_key_on))
 ///|
 /// The address's place while marking (Preview.kt Bar's `instead`: 4 in at each side, all the room there is).
 // kept across runs: a value (no field of it changes)
-let mark_mode_place : @ui.Style = @ui.style(w=Full, px=S1)
+let mark_mode_place : @ui.Style = @ui.css("w=Full px=S1")
 
 ///|
 /// MarkMode's capsule: 30 high, round, the chip's ground a tenth of the way to the accent, 12 in at its start and 3 at
@@ -532,12 +532,12 @@ let mark_dot : @ui.Style = @ui.style(w=@sf.dot_size, h=@sf.dot_size, radius=Full
 
 ///|
 // kept across runs: a value (no field of it changes)
-let mark_dot_on : @ui.Style = mark_dot.then(@ui.style(bg=Accent))
+let mark_dot_on : @ui.Style = mark_dot.then(@ui.css("bg=Accent"))
 
 ///|
 /// What it says: how many (or what to do), 13 medium in the ink; 可继续点选 muted; why it failed in red; all on one line.
 // kept across runs: a value (no field of it changes)
-let mark_words_box : @ui.Style = @ui.style(row=true, w=Full, gap=S2, clip=true)
+let mark_words_box : @ui.Style = @ui.css("row w=Full gap=S2 clip")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -555,7 +555,7 @@ let mark_error_words : @ui.TextStyle = @ui.text_style(size=Sm, color=Danger, wra
 /// Its × (24 round, a 12 icon) and 添加到对话 (24 high, round, the ink's ground, 10 in, 5 apart; 12 medium, the
 /// surface's colour: faint while it cannot be pressed).
 // kept across runs: a value (no field of it changes)
-let mark_close : @ui.Style = @ui.style(w=S6, h=S6, radius=Full, align=ACenter, justify=JCenter)
+let mark_close : @ui.Style = @ui.css("w=S6 h=S6 radius=Full align=ACenter justify=JCenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -571,7 +571,7 @@ let mark_put_pill : @ui.Style = @ui.style(
 
 ///|
 // kept across runs: a value (no field of it changes)
-let mark_put_off : @ui.Style = mark_put_pill.then(@ui.style(bg=A(Fg, O40)))
+let mark_put_off : @ui.Style = mark_put_pill.then(@ui.css("bg=A(Fg,O40)"))
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -665,7 +665,7 @@ let mark_pin : @ui.Style = @ui.style(w=S6, h=S6, radius=Full, bg=OnAccent, p=S0_
 
 ///|
 // kept across runs: a value (no field of it changes)
-let mark_pin_in : @ui.Style = @ui.style(w=Full, h=Full, radius=Full, bg=Accent, align=ACenter, justify=JCenter)
+let mark_pin_in : @ui.Style = @ui.css("w=Full h=Full radius=Full bg=Accent align=ACenter justify=JCenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -816,11 +816,11 @@ let mark_note : @ui.Style = @ui.style(
 
 ///|
 // kept across runs: a value (no field of it changes)
-let mark_note_field : @ui.Style = @ui.style(w=Full)
+let mark_note_field : @ui.Style = @ui.css("w=Full")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let mark_note_remove : @ui.Style = @ui.style(w=S7, h=S7, radius=Full, align=ACenter, justify=JCenter)
+let mark_note_remove : @ui.Style = @ui.css("w=S7 h=S7 radius=Full align=ACenter justify=JCenter")
 
 ///|
 let note_most : Double = 280.0

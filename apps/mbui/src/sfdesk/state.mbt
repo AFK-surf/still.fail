@@ -191,17 +191,17 @@ let state_alert : @ui.TextStyle = @ui.text_style(size=Xs, color=Danger, leading=
 /// The line led by an icon (leadLine): the icon's column, then what follows where the title starts (the head's gap,
 /// 6: navSessionMeta's --lead-gap).
 // kept across runs: a value (no field of it changes)
-let state_lead_line : @ui.Style = @ui.style(row=true, w=Full, gap=S1_5, align=ACenter)
+let state_lead_line : @ui.Style = @ui.css("row w=Full gap=S1_5 align=ACenter")
 
 ///|
 /// The title's mark's column: 10 wide, 14 high (leadSlot).
 // kept across runs: a value (no field of it changes)
-let state_slot : @ui.Style = @ui.style(w=S2_5, h=S3_5)
+let state_slot : @ui.Style = @ui.css("w=S2_5 h=S3_5")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let state_icon_at : @ui.Style = @ui.style(w=S3_5, h=S3_5)
+let state_icon_at : @ui.Style = @ui.css("w=S3_5 h=S3_5")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let state_row : @ui.Style = @ui.style(row=true, w=Full, align=ACenter)
+let state_row : @ui.Style = @ui.css("row w=Full align=ACenter")

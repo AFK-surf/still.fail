@@ -472,12 +472,12 @@ let ftab_chevron : Double = 12.0
 
 ///|
 // kept across runs: a value (no field of it changes)
-let ftab_box : @ui.Style = @ui.style(w=Full, h=Full)
+let ftab_box : @ui.Style = @ui.css("w=Full h=Full")
 
 ///|
 /// Its trail and what is done to the folder (head: 4 over, 8 at its end, 6 under, 12 before).
 // kept across runs: a value (no field of it changes)
-let ftab_head : @ui.Style = @ui.style(row=true, w=Full, pt=S1, pr=S2, pb=S1_5, pl=S3, gap=S2, align=ACenter)
+let ftab_head : @ui.Style = @ui.css("row w=Full pt=S1 pr=S2 pb=S1_5 pl=S3 gap=S2 align=ACenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -486,7 +486,7 @@ let ftab_trail_box : @ui.Style = @ui.style(row=true, w=@sf.grow, gap=SPx, align=
 ///|
 /// A step of it (3 by 4 in, the option's corner); the folder shown bold in the words' ink.
 // kept across runs: a value (no field of it changes)
-let ftab_step : @ui.Style = @ui.style(px=S1, py=SPx, radius=Md, hovered=@ui.patch(bg=Hover))
+let ftab_step : @ui.Style = @ui.css("px=S1 py=SPx radius=Md hovered{bg=Hover}")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -498,7 +498,7 @@ let ftab_step_last : @ui.TextStyle = @ui.text_style(size=Xs, weight=Semibold, co
 
 ///|
 // kept across runs: a value (no field of it changes)
-let ftab_actions : @ui.Style = @ui.style(row=true, gap=S1, align=ACenter)
+let ftab_actions : @ui.Style = @ui.css("row gap=S1 align=ACenter")
 
 ///|
 /// The rows, from edge to edge but for a little room (list: 0 by 8, 8 under).
@@ -512,7 +512,7 @@ let ftab_note : @ui.TextStyle = @ui.text_style(size=Xs, color=Muted, w=Full)
 ///|
 /// A station's name over its places (group: 8 over, 10 in, 4 under, muted, medium).
 // kept across runs: a value (no field of it changes)
-let ftab_group : @ui.Style = @ui.style(row=true, w=Full, pt=S2, px=S2_5, pb=S1, gap=S1_5)
+let ftab_group : @ui.Style = @ui.css("row w=Full pt=S2 px=S2_5 pb=S1 gap=S1_5")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -525,7 +525,7 @@ let ftab_place_words : @ui.Style = @ui.style(w=@sf.grow, clip=true)
 ///|
 /// Why the folder could not be read, and 重试.
 // kept across runs: a value (no field of it changes)
-let ftab_problem : @ui.Style = @ui.style(w=Full, p=S3, gap=S2_5, align=AStart)
+let ftab_problem : @ui.Style = @ui.css("w=Full p=S3 gap=S2_5 align=AStart")
 
 ///|
 /// Where `name` goes in the folder `folder`, as an absolute path (useDrive.ts childOf).
@@ -551,7 +551,7 @@ let tab_icon : Double = 16.0
 ///|
 /// A place's row (Drive.css.ts row: 36 high, 8 in, the field's corner).
 // kept across runs: a value (no field of it changes)
-let place_row : @ui.Style = @ui.style(row=true, w=Full, h=S9, px=S2, gap=S2, align=ACenter, radius=Lg, hovered=@ui.patch(bg=Hover))
+let place_row : @ui.Style = @ui.css("row w=Full h=S9 px=S2 gap=S2 align=ACenter radius=Lg hovered{bg=Hover}")
 
 ///|
 // kept across runs: a value (no field of it changes)

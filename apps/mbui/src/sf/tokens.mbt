@@ -824,7 +824,7 @@ pub let face_ink : Int64 = 0xFFFFFFFFL
 /// A sheet's grabber (Sheet.kt SheetGrab): 38 × 5, round at its ends (its 3 capped at half its height, as every
 /// renderer draws it; its colour the palette's line, said where it is drawn).
 // kept across runs: a value (no field of it changes)
-pub let sheet_grabber : @ui.Style = @ui.style(w=Fixed(38.0), h=Fixed(5.0), radius=Full)
+pub let sheet_grabber : @ui.Style = @ui.css("w=Fixed(38.0) h=Fixed(5.0) radius=Full")
 
 ///|
 /// A tip's widest (the web's parts.css.ts tooltip: 300).
