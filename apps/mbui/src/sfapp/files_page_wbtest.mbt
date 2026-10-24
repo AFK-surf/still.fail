@@ -183,3 +183,14 @@ test "a wide folder's rows: the ⋯ of a row under the pointer, its menu beside 
     }
   }
 }
+
+///|
+test "a wide folder's station button: the stations beside it, the one shown 当前, one away 离线, under what picking one does" {
+  let t = files_page_tester(1280.0, 800.0, 0)
+  t.click(Button, label="换 station")
+  t.run_for(@kit.presence_in_ms)
+  assert_true(@sf.presenting())
+  assert_true(t.find("尽量打开同一个文件夹 · 按住 ⌥ 在新标签打开") is Some(_), msg="what picking does")
+  assert_true(t.find("当前") is Some(_))
+  assert_true(t.find("离线") is Some(_))
+}
