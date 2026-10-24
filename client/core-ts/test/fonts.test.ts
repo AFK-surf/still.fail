@@ -59,3 +59,30 @@ test("each place's face is as chosen, whole as it goes out; text is ui's until c
   assert.deepEqual(v(values, 1).faces.ui.id, "");
   core.close();
 });
+
+test("a place's face says where this device keeps each of its files, so the app reads them there as it starts", async () => {
+  const kept = new Set<string>();
+  const { host, core } = await started(undefined, 0, undefined, (s) => {
+    s.host.storagePath = (key) => (kept.has(key) ? `/data/${key}` : null);
+  });
+  const ui = core.connect();
+  subscribe(core, ui, 1, { topic: "prefs" });
+  call(core, ui, 2, "prefs.set", { fonts: { text: "lxgw-wenkai" } });
+  await host.settle();
+  const values = new Map();
+  apply(host, values);
+  // none kept yet: no path
+  assert.deepEqual(v(values, 1).faces.text.files.map((f: any) => f.path), [undefined, undefined]);
+  // kept (an earlier run's): each file where it is, the faces not chosen saying none
+  const [a, b] = v(values, 1).faces.text.files.map((f: any) => f.sha256);
+  kept.add(`fonts/file/${a}`);
+  kept.add(`fonts/file/${b}`);
+  call(core, ui, 3, "prefs.set", { fonts: { text: "lxgw-wenkai", ui: "inter" } });
+  await host.settle();
+  apply(host, values);
+  const faces = v(values, 1).faces;
+  assert.deepEqual(faces.text.files.map((f: any) => f.path), [`/data/fonts/file/${a}`, `/data/fonts/file/${b}`]);
+  assert.deepEqual(faces.ui.files.map((f: any) => f.path), [undefined]);
+  assert.ok(faces.list.every((f: any) => f.files.every((x: any) => x.path === undefined)));
+  core.close();
+});

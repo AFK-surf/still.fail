@@ -64,38 +64,80 @@ test "a face being fetched: how far said on its row, the app's own standing in u
 }
 
 ///|
-test "the first page in the faces chosen: the splash while the files kept are read, given by where they are; one chosen later does not hold the page" {
+/// The made-up prefs with each place's face's files said kept here (`path`, as the core says it of those this device
+/// keeps: client/core-ts/src/fonts.ts setKeptAt), at `/data/` and the file's weight.
+fn kept_here(base : Source) -> Source {
+  {
+    ..base,
+    topic: fn(name, params) {
+      let t = (base.topic)(name, params)
+      if name == "prefs" {
+        match field(t.value, "faces") {
+          Some(Object(faces)) =>
+            for place in ["ui", "text", "code"] {
+              for f in items(faces.get(place), "files") {
+                match f {
+                  Object(m) => m["path"] = ("/data/" + number(Some(f), "weight").to_int().to_string()).to_json()
+                  _ => ()
+                }
+              }
+            }
+          _ => ()
+        }
+      }
+      t
+    },
+  }
+}
+
+///|
+test "a face kept here: given by where its files are the frame the prefs come, the first page set in it, nothing asked of the core" {
   reset()
   let base = fixture("home")
-  // a face kept from an earlier run: the core says where its file is, a while after it is asked
   (base.call)("prefs.set", { "fonts": { "ui": "noto-sans-sc" } }, fn(_) {  })
-  let asked : Array[(Result[(Json, Bytes), Json]) -> Unit] = []
+  let asked = Ref(0)
   let src : Source = {
-    ..base,
+    ..kept_here(base),
     read_bytes: fn(name, params, done) {
       if name == "fonts.file" {
-        asked.push(done)
-      } else {
-        (base.read_bytes)(name, params, done)
+        asked.val += 1
       }
+      (base.read_bytes)(name, params, done)
     },
   }
   let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0)
   t.draw()
-  t.draw()
-  assert_eq(asked.length(), 1)
-  assert_true(t.find("整理发布清单") is None)
-  assert_false(@ui.face_given(@hostapi.face_ui))
-  // where it is (no bytes beside: given empty, the host could not take it)
-  (asked[0])(Ok(({ "zipped": false, "path": "/data/fonts%2Ffile%2Fa3" }, Bytes::new(0))))
-  t.draw()
-  assert_true(@ui.face_given(@hostapi.face_ui))
+  assert_true(t.find("整理发布清单") is Some(_))
   assert_true(face_here("noto-sans-sc"))
-  assert_true(t.find("整理发布清单") is Some(_))
-  // another chosen while the page shows: it stays, the app's own standing in until the file is here
-  (base.call)("prefs.set", { "fonts": { "ui": "lxgw-wenkai" } }, fn(_) {  })
+  assert_true(@ui.face_given(@hostapi.face_ui))
+  assert_eq(asked.val, 0)
+}
+
+///|
+test "a face's file the host cannot read where it is: had through the core instead, unzipped and checked" {
+  reset()
+  let base = fixture("home")
+  // fetched, kept as fetched (gzipped): what the host cannot read as a face
+  (base.call)("fonts.fetch", { "id": "lxgw-wenkai" }, fn(_) {  })
+  (base.call)("prefs.set", { "fonts": { "text": "lxgw-wenkai" } }, fn(_) {  })
+  let asked = Ref(0)
+  let src : Source = {
+    ..kept_here(base),
+    read_bytes: fn(name, params, done) {
+      if name == "fonts.file" {
+        asked.val += 1
+      }
+      (base.read_bytes)(name, params, done)
+    },
+  }
+  // (the app from the frame its host is set so)
+  let on = Ref(false)
+  let t = @ui.Tester::new(fn(c) { if on.val { view(c, src) } }, w=390.0, h=844.0)
+  t.set_unreadable_font("/data/500")
+  on.val = true
   t.draw()
-  assert_eq(asked.length(), 2)
-  assert_true(t.find("整理发布清单") is Some(_))
-  assert_false(@ui.face_given(@hostapi.face_ui))
+  t.draw()
+  assert_eq(asked.val, 2)
+  assert_true(face_here("lxgw-wenkai"))
+  assert_true(@ui.face_given(@hostapi.face_text))
 }

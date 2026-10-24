@@ -32,11 +32,11 @@ origin):
   storage (client/core-ts/src/font-files.ts): `fonts.fetch {id}` fetches a face's files not kept yet (how far it got
   on the `fonts` topic: `fetching` by face, 0 to 1, and `failed`, why); `fonts.file {sha256}` gives one back beside
   the answer (`zipped`: as fetched); the app unzips it (mbui's `zip`), checks its sha256 and gives it back unzipped
-  (`fonts.keep {sha256}`), and gives a face to the host once all its files are here. A file kept unzipped is said by
-  its path where the host keeps values as files (the native apps' shell, `storage.path`): the host reads it there, so
-  a start carries none of it through the core nor checks it again, and the app's first page waits on the splash for
-  the faces chosen (a frame or two) instead of showing in its own face and then again in them. Only the chosen faces'
-  files stay. `fonts.preview {id}` gives a face's preview (below), fetched once and kept.
+  (`fonts.keep {sha256}`), and gives a face to the host once all its files are here. Where the host keeps each value
+  as a file (the native apps' shell, `storage.path`), the prefs' `faces` say where each file of a place's face is kept
+  (`path`): the app gives them to its host by where they are the frame the prefs come, so its first page is set in
+  them, nothing asked of the core, carried through it or checked again (one the host cannot read there, kept as
+  fetched: had through `fonts.file` as above). Only the chosen faces' files stay. `fonts.preview {id}` gives a face's preview (below), fetched once and kept.
 - `preview-<hash>.ttf` for the Android app too: the face's glyphs for the fonts page's own words alone (its catalog
   keys `web-pages.appearance.fonts.*`, the faces' names, ASCII; tens of KB), fetched as the page opens so each face
   is shown in itself before it is chosen. Changing those words: `scripts/fonts.py --put --previews` and copy the

@@ -334,8 +334,6 @@ fn view_in(c : @ui.Ctx, src : Source, t : @sf.Theme) -> Unit {
     let accounts = (src.topic)("accounts", {})
     match (accounts.value, (src.fatal)()) {
       (_, Some(why)) => splash(c, Some(why), true)
-      // the first page in the faces chosen: the splash on while their files kept here are read (faces.mbt)
-      (Some(Array(_)), _) if faces_wait() => splash(c, None, false)
       (Some(Array(list)), _) if list.length() == 0 => {
         sign_in_page(c, src)
         // an invitation's link opened signed out: its sheet over the page, saying to sign in first (links.mbt)
