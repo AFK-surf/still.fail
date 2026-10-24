@@ -703,28 +703,43 @@ pub fn frame(
     }
     sidebar_edge(c, at)
   }
-  // back (⌘[, a mouse's back button) a page of the stack, where there is one; on the tape, with the page in use, the
-  // sidebar brought over from the page the sidebar opened (the chats' place's chat, a settings page), and nothing
-  // taken with the sidebar in use (the system's: as from a phone's list); what is over the whole window put away first
+  // back (⌘[, a mouse's back button), the shell's one way (sfbase's go_back: wide_back here), after what the page or
+  // the sidebar takes it for
   if !took && !app.menu {
-    let over_all = app.nav.top() is (Screen(_) | DriveRead(_) | DrivePlay(_))
-    if wide.tape && !over_all {
-      match wide.tape_at {
-        Side => ()
-        Panel => c.take_back(fn() { wide.tape_ask = Some(Page) })
-        Page =>
-          if app.nav.depth() <= 2 {
-            c.take_back(fn() { wide.tape_ask = Some(Side) })
-          } else {
-            c.take_back(fn() { app.nav.pop() |> ignore })
-          }
-      }
-    } else if app.nav.depth() > 1 {
-      c.take_back(fn() { app.nav.pop() |> ignore })
+    match @sfbase.back_step() {
+      Some(f) => c.take_back(f)
+      None => ()
     }
   }
   // the pages of web services' and visualizations' tabs closed, no longer drawn, let go (service_tab.mbt)
   sv_sweep(c, src)
+}
+
+///|
+/// Back on the wide frame (docs/architecture.md, the tiers' table): what is over the whole window (a screen, a file
+/// read or played) put away first, a page of the stack popped. On the tape, with a chat's side panel in use, the page
+/// brought over; with the page in use, the sidebar brought over from the page the sidebar opened (the chats' place's
+/// chat, a settings page), else the page popped; nothing with the sidebar in use (the system's: as from a phone's
+/// list). Laid out Large, the stack's top popped, but for the new chat beside the chats alone: the page there is never
+/// empty (land: popped, a new chat would come again), so nothing to go back to.
+pub fn wide_back() -> (() -> Unit)? {
+  let over_all = app.nav.top() is (Screen(_) | DriveRead(_) | DrivePlay(_))
+  if wide.tape && !over_all {
+    match wide.tape_at {
+      Side => None
+      Panel => Some(fn() { wide.tape_ask = Some(Page) })
+      Page =>
+        if app.nav.depth() <= 2 {
+          Some(fn() { wide.tape_ask = Some(Side) })
+        } else {
+          Some(fn() { app.nav.pop() |> ignore })
+        }
+    }
+  } else if app.nav.depth() > 2 || (app.nav.depth() == 2 && !(app.nav.pages() == [Home, NewChat])) {
+    Some(fn() { app.nav.pop() |> ignore })
+  } else {
+    None
+  }
 }
 
 ///|
