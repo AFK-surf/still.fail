@@ -1,0 +1,11 @@
+# Files dragged on the files' page (drag.ts, browse.ts effectOf, transfer.ts: the core's drive.moves): MBUI_FIXTURE=drive
+# MBUI_WIN=1280x800. A file dragged onto a folder of the same station (moved there: a rename), then another onto the
+# sidebar's 备份盘 (another root of the station: moved there too).
+timeout 20000
+until 设计稿
+wait 600
+dragon 0 -228 700 长篇小说.txt
+wait 1200
+dragon -294 52 900 发布清单.md
+wait 1500
+exit

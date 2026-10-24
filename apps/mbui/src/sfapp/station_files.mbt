@@ -645,7 +645,7 @@ fn ref_sheet(c : @ui.Ctx, src : Source, key : String, station : String) -> Unit 
 /// A station's files from its 文件 tab (wide_files_tab.mbt: 添加到消息, or dragged onto the chat) into draft `key`, as
 /// the web's droppedFrom: each named by its path, or as a file where the chat says so (a folder only named); what is
 /// already in it not twice.
-fn refs_put(src : Source, key : String, items : Array[FDragged]) -> Unit {
+fn refs_put(src : Source, key : String, items : Array[Dragged]) -> Unit {
   if items.is_empty() {
     return
   }

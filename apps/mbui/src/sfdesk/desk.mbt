@@ -13,6 +13,8 @@ pub fn reset() -> Unit {
   cols_reset()
   kept_reset()
   pane_reset()
+  drag_reset()
+  transfers_reset()
   drive_reset()
   shell_reset()
   nav_reset()

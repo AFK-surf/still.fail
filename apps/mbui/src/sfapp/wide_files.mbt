@@ -18,10 +18,9 @@ fn files_go(at : DriveAt) -> Unit {
 }
 
 ///|
-/// The files' sidebar (src/sfdesk/files_nav.mbt), what is dragged over it moved on or let go first; Pin 文件夹 the
-/// picker of the one station it can be done on, else which.
+/// The files' sidebar (src/sfdesk/files_nav.mbt); Pin 文件夹 the picker of the one station it can be done on, else
+/// which.
 fn files_side(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
-  fdrag_frame(c, src, w)
   @sfdesk.files_nav(c, src, w.id, {
     top: @sfdesk.side_top,
     go: files_go,
@@ -76,18 +75,14 @@ fn wide_folder(c : @ui.Ctx, src : Source, w : Workspace, at : DriveAt) -> Unit {
   }
   let here : DriveAt = { station: at.station, root: Some(root), path: at.path }
   dv.building = dv_page_of(Some(here))
-  // what is dragged moved on or let go; the files picked to go up
-  fdrag_frame(c, src, w)
+  // the files picked to go up
   dv_take_picked(src, here, [])
   let room = c.width - @sfdesk.rail_w - (if @sfdesk.wide.folded { 0.0 } else { @sfdesk.wide.side_w })
   @sfdesk.files_shell(c, src, w.id, stations, here, room, {
     go: fn(to, _) { files_go(to) },
-    transfers: fn(c) { files_transfers(c, src, w.id) },
     manage: fn(p) { dv_open(c, View(p, dv_rights(src, w.id, Some(st)).manage && p.path == "")) },
     over: fn(c, page) {
       dv_sheets(c, src, w, dv_page_of(Some(here)))
-      files_clash_dialog(c)
-      fdrag_ghost(c, page)
     },
   })
 }
@@ -109,19 +104,6 @@ fn files_lit_button(c : @ui.Ctx, key : String, icon : String, label : String, on
 /// A row's mark (16, as the web's rows) and the folder's room in from the pane's sides (32 before it, 40 after: the
 /// page's, as the preview beside it ends where the head does).
 let files_icon : Double = 16.0
-
-///|
-// kept across runs: a value (no field of it changes)
-let files_chip_words : @ui.TextStyle = @ui.text_style(size=Xs, color=Fg, wrap=false)
-
-///|
-/// A tab's close (10).
-let files_close_icon : Double = 10.0
-
-///|
-/// The line under the bar (Files.css.ts: the pane's line across it).
-// kept across runs: a value (no field of it changes)
-let files_bar_rule : @ui.Style = @ui.style(w=Full, h=SPx, bg=Line)
 
 ///|
 /// A row (Drive.css.ts row: 36 high, 8 in, the field's corner), chosen on the selected ground.

@@ -105,9 +105,7 @@ fn wide_reset() -> Unit {
   wide.clear_asking = ""
   wide.station_menu = false
   wide.place_pick.clear()
-  fdrag_reset()
   ftab_reset()
-  ftransfers.open = false
   wide_switch_reset()
   wide.gone.clear()
   wide.trouble_seen = None

@@ -1,0 +1,237 @@
+// The files' page's copies between folders and stations (ember web/src/pages/Transfers.tsx, Files.css.ts transfers):
+// the bar's 传输 (how many go, how far), its list (each copy's way, how it stands, stopped, tried again, its folder shown
+// once done).
+
+///|
+/// Whether the bar's 传输 has its list open.
+priv struct Transfers {
+  mut open : Bool
+}
+
+///|
+// kept across runs: the list's state (transfers_reset puts it back)
+let ftransfers : Transfers = { open: false }
+
+///|
+fn transfers_reset() -> Unit {
+  ftransfers.open = false
+}
+
+///|
+/// The bar's 传输 with its list open (a page shown at that moment: the fixture's).
+pub fn transfers_open() -> Unit {
+  ftransfers.open = true
+}
+
+///|
+/// The person's transfers into the workspace's stations (the `driveTransfers` topic), newest first.
+fn transfer_list(src : Source, ws : String) -> Array[Json] {
+  items((src.topic)("driveTransfers", { "workspace": Json::string(ws) }).value, "transfers")
+}
+
+///|
+/// On the bar: the transfers, how many go and how far they are (in the accent while they go, red when one failed);
+/// pressed, their list. Nothing while there has been none.
+pub fn transfers_button(c : @ui.Ctx, src : Source, ws : String, go : (DriveAt) -> Unit) -> Unit {
+  let t = @sf.theme()
+  let all = transfer_list(src, ws)
+  let id = c.id("files/transfers")
+  if all.length() == 0 {
+    ftransfers.open = false
+    return
+  }
+  let going = all.filter(fn(x) { flag(Some(x), "active") })
+  let failed = all.iter().any(fn(x) { text(Some(x), "state") == "failed" })
+  let total = going.fold(init=0.0, fn(a, x) { a + number(Some(x), "total") })
+  let copied = going.fold(init=0.0, fn(a, x) { a + number(Some(x), "copied") })
+  let label = if going.length() > 0 {
+    let percent = if total > 0.0 { (copied / total * 100.0).floor().to_int() } else { 0 }
+    @sf.t("web-pages.files.transfersGoing", args=[("n", going.length().to_string()), ("percent", percent.to_string())])
+  } else {
+    @sf.t("web-pages.files.transfers")
+  }
+  c.cursor(id, Hand)
+  if c.clicked(id) {
+    ftransfers.open = !ftransfers.open
+  }
+  let (style, words, ink) = if failed {
+    (ftransfers_chip_failed, ftransfers_chip_failed_words, t.p.red)
+  } else if going.length() > 0 {
+    (ftransfers_chip_going, ftransfers_chip_going_words, t.p.accent_text)
+  } else {
+    (ftransfers_chip, ftransfers_chip_words, t.p.muted)
+  }
+  let b = c.box(style~, id~, fn() {
+    @sf.icon(c, "move", size=transfer_icon, color=ink) |> ignore
+    c.text(label, style=words) |> ignore
+  })
+  c.semantics(b, Button, id~, label~)
+  let p = @kit.popover(
+    c,
+    "files/transfers-pop",
+    ftransfers.open,
+    id,
+    side=Bottom,
+    along=End,
+    look=fn(c, _, body) { @sf.panel(c, w=Px(ftransfers_w), body) |> ignore },
+    fn() {
+      c.box(style=ftransfers_head, fn() { c.text(@sf.t("web-pages.files.transfers"), style=ftransfers_head_words) |> ignore })
+      |> ignore
+      for x in all {
+        transfer_row(c, src, x, go)
+      }
+    },
+  )
+  ftransfers.open = ftransfers.open && p.value
+}
+
+///|
+/// A transfer (TransferRow): its mark, what goes and where, how far (a bar while it copies), how it stands; stopped
+/// while it goes, tried again once failed, its folder shown once done.
+fn transfer_row(c : @ui.Ctx, src : Source, x : Json, go : (DriveAt) -> Unit) -> Unit {
+  let t = @sf.theme()
+  let j = Some(x)
+  let state = text(j, "state")
+  let station = text(j, "station")
+  let tid = text(j, "id")
+  let way = if text(j, "fromStation") == station {
+    @sf.t("web-pages.files.into", args=[("to", text(j, "toText"))])
+  } else {
+    @sf.t("web-pages.files.fromInto", args=[("from", text(j, "fromStationName")), ("to", text(j, "toText"))])
+  }
+  let call = fn(name : String) {
+    (src.call)(name, { "station": Json::string(station), "id": Json::string(tid) }, act_done(c, @sf.t("web-pages.files.transferWhat")))
+  }
+  c.box(style=transfer_rule, fn() {  }) |> ignore
+  c.box(style=ftransfer_row, fn() {
+    let (mark, ink) = match state {
+      "done" => ("check", t.p.green)
+      "failed" => ("retry", t.p.red)
+      "cancelled" => ("close", t.p.muted)
+      _ => ("move", t.p.muted)
+    }
+    c.box(style=ftransfer_mark, fn() { @sf.icon(c, mark, size=transfer_icon, color=ink) |> ignore }) |> ignore
+    c.box(style=ftransfer_text, fn() {
+      c.box(style=ftransfer_title, fn() {
+        c.text(text(j, "title"), style=ftransfer_title_words) |> ignore
+        c.text(if flag(j, "move") { @sf.t("web-pages.files.moving", args=[("way", way)]) } else { way }, style=ftransfer_way) |> ignore
+      })
+      |> ignore
+      if state == "copying" {
+        @sf.progress(c, Some(number(j, "progress")))
+      }
+      let files = number(j, "files").to_int()
+      let status = text(j, "statusText") +
+        (if (state == "copying" || state == "done") && files > 1 {
+          " · " + @sf.t("web-pages.files.filesCount", args=[("n", files.to_string())])
+        } else {
+          ""
+        })
+      c.text(status, style=if state == "failed" { ftransfer_failed } else { ftransfer_status }) |> ignore
+    })
+    |> ignore
+    c.box(style=ftransfer_actions, fn() {
+      if flag(j, "active") && @sf.icon_button(c, "close", key="files/transfer/cancel/" + tid, label=@sf.t("web-pages.files.cancelTransfer")) {
+        call("drive.transfer.cancel")
+      }
+      if state == "failed" && @sf.icon_button(c, "retry", key="files/transfer/retry/" + tid, label=@sf.t("web-pages.drive.retry")) {
+        call("drive.transfer.retry")
+      }
+      if state == "done" && @sf.button(c, @sf.t("web-pages.files.show"), key="files/transfer/show/" + tid, tone=Ghost) {
+        ftransfers.open = false
+        go({ station, root: Some(text(j, "toRoot")), path: text(j, "toPath") })
+      }
+    })
+    |> ignore
+  })
+  |> ignore
+}
+
+///|
+/// The transfers' list (transfers: 360 wide).
+let ftransfers_w : Double = 360.0
+
+
+///|
+/// The chip (transfersChip: 28 high, 10 in, the neutral ground, its words muted; going: the accent's; failed: red's).
+// kept across runs: a value (no field of it changes)
+let ftransfers_chip : @ui.Style = @ui.style(row=true, h=S7, px=S2_5, gap=S1_5, align=ACenter, radius=Full, bg=Neutral)
+
+///|
+// kept across runs: a value (no field of it changes)
+let ftransfers_chip_going : @ui.Style = ftransfers_chip.then(@ui.style(bg=AccentBg))
+
+///|
+// kept across runs: a value (no field of it changes)
+let ftransfers_chip_failed : @ui.Style = ftransfers_chip.then(@ui.style(bg=DangerBg))
+
+///|
+// kept across runs: a value (no field of it changes)
+let ftransfers_chip_words : @ui.TextStyle = @ui.text_style(size=Xs, color=Muted, wrap=false)
+
+///|
+// kept across runs: a value (no field of it changes)
+let ftransfers_chip_going_words : @ui.TextStyle = @ui.text_style(size=Xs, color=AccentText, wrap=false)
+
+///|
+// kept across runs: a value (no field of it changes)
+let ftransfers_chip_failed_words : @ui.TextStyle = @ui.text_style(size=Xs, color=Danger, wrap=false)
+
+///|
+// kept across runs: a value (no field of it changes)
+let ftransfers_head : @ui.Style = @ui.style(w=Full, px=S2, pt=S1, pb=S2)
+
+///|
+// kept across runs: a value (no field of it changes)
+let ftransfers_head_words : @ui.TextStyle = @ui.text_style(size=Xs, weight=Semibold, color=Fg, wrap=false)
+
+///|
+/// A transfer (transfer: its mark 18, its words, its keys; 8 in, 8 apart, a line over it).
+// kept across runs: a value (no field of it changes)
+let ftransfer_row : @ui.Style = @ui.style(row=true, w=Full, p=S2, gap=S2, align=AStart)
+
+///|
+// kept across runs: a value (no field of it changes)
+let ftransfer_mark : @ui.Style = @ui.style(w=S4_5, h=S4_5, align=ACenter, justify=JCenter)
+
+///|
+// kept across runs: a value (no field of it changes)
+let ftransfer_text : @ui.Style = @ui.style(w=@sf.grow, gap=S1, clip=true)
+
+///|
+// kept across runs: a value (no field of it changes)
+let ftransfer_title : @ui.Style = @ui.style(row=true, gap=S1, clip=true)
+
+///|
+// kept across runs: a value (no field of it changes)
+let ftransfer_title_words : @ui.TextStyle = @ui.text_style(size=Xs, weight=Medium, color=Fg, wrap=false)
+
+///|
+// kept across runs: a value (no field of it changes)
+let ftransfer_way : @ui.TextStyle = @ui.text_style(size=Xs, color=Muted, wrap=false)
+
+///|
+// kept across runs: a value (no field of it changes)
+let ftransfer_status : @ui.TextStyle = @ui.text_style(size=Xs, color=Muted, wrap=false)
+
+///|
+// kept across runs: a value (no field of it changes)
+let ftransfer_failed : @ui.TextStyle = @ui.text_style(size=Xs, color=Danger, wrap=false)
+
+///|
+// kept across runs: a value (no field of it changes)
+let ftransfer_actions : @ui.Style = @ui.style(row=true, gap=SPx, align=ACenter)
+
+
+
+
+
+
+
+///|
+/// A row's mark (14), and the line over each row of the list.
+let transfer_icon : Double = 14.0
+
+///|
+// kept across runs: a value (no field of it changes)
+let transfer_rule : @ui.Style = @ui.style(w=Full, h=SPx, bg=Line)

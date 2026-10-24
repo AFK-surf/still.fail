@@ -73,6 +73,8 @@ pub fn drive_start(s : DvStation) -> String? {
 ///|
 /// The files' sidebar of workspace `ws` (FilesNav).
 pub fn files_nav(c : @ui.Ctx, src : Source, ws : String, around : FilesNavAround) -> Unit {
+  // what is dragged over it moved on or let go
+  drag_frame(c, src, ws)
   let t = @sf.theme()
   let here = this_machine()
   // those with a drive, this machine's first, then as the workspace lists them
@@ -110,7 +112,7 @@ pub fn files_nav(c : @ui.Ctx, src : Source, ws : String, around : FilesNavAround
       // 个人收藏: a folder dragged onto it kept there
       let favs = favorites(src, ws)
       let kid = c.id("files/keep")
-      let keeping = drag_keep(c, kid)
+      let keeping = fdrag_target(c, kid, "keep", None, "", true, true, 0, outside=false) is Some(_)
       c.box(style=if keeping { keep_on } else { keep_off }, id=kid, fn() {
         nav_heading(c, @sf.t("web-pages.files.favorites"))
         if favs.length() == 0 {
@@ -126,7 +128,7 @@ pub fn files_nav(c : @ui.Ctx, src : Source, ws : String, around : FilesNavAround
               let place = f.station + "/" + f.root + "/" + f.path
               let rid = c.id("files/unfav/" + place)
               let into : DriveAt = { station: f.station, root: Some(f.root), path: f.path }
-              drag_side(c, "fav/" + place, into, f.name, writes(st), st.transfers, fn() {
+              fdrag_side_row(c, "fav/" + place, into, f.name, writes(st), st.transfers, fn() {
                 if c.clicked(rid) {
                   favorite_remove(src, ws, f.station, f.root, f.path)
                 } else if nav_row(c, "files/fav/" + place, lit(f.station, f.root, f.path), fn() {
@@ -168,7 +170,7 @@ pub fn files_nav(c : @ui.Ctx, src : Source, ws : String, around : FilesNavAround
         let (s, r) = x
         let name = if r.name != "" { r.name } else { dv_name(r.path) }
         let into : DriveAt = { station: s.station, root: Some(r.path), path: "" }
-        drag_side(c, "shared/" + s.station + "/" + r.path, into, name, writes(s), s.transfers, fn() {
+        fdrag_side_row(c, "shared/" + s.station + "/" + r.path, into, name, writes(s), s.transfers, fn() {
           if nav_row(c, "files/shared/" + s.station + "/" + r.path, lit(s.station, r.path, ""), fn() {
               @sf.icon(c, "pin", size=nav_icon, color=t.p.muted) |> ignore
               nav_words(c, name, color?=if s.online { None } else { Some(t.p.muted) })
@@ -246,7 +248,7 @@ fn station_row(
       }
     }
     match start {
-      Some(r) => drag_side(c, "station/" + s.station, { station: s.station, root: Some(r), path: "" }, s.name, write, s.transfers, row)
+      Some(r) => fdrag_side_row(c, "station/" + s.station, { station: s.station, root: Some(r), path: "" }, s.name, write, s.transfers, row)
       None => row()
     }
   }
@@ -283,7 +285,7 @@ fn station_row(
     for p in places {
       let (name, path, disk) = p
       let into : DriveAt = { station: s.station, root: Some(path), path: "" }
-      drag_side(c, "place/" + s.station + "/" + path, into, name, write, s.transfers, fn() {
+      fdrag_side_row(c, "place/" + s.station + "/" + path, into, name, write, s.transfers, fn() {
         if nav_row(c, "files/place/" + s.station + "/" + path, lit(s.station, path, ""), fn() {
             @sf.icon(c, if disk { "disk" } else { "folder" }, size=nav_icon, color=t.p.muted) |> ignore
             nav_words(c, name, color?=if s.online { None } else { Some(t.p.muted) })
