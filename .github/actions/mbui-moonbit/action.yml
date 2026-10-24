@@ -62,13 +62,43 @@ runs:
         echo "MOON_HOME=$m" >> "$GITHUB_ENV"
     - shell: bash
       run: moon version --all
-    # mbui's C tool (scripts/mbc builds tools/mbc when there is none built from its sources): built once for each change
-    # of them and kept here, not built again in every job. A change to the tools' other sources (detlint's, chk's) restores
-    # the last one kept: each tool's script finds its own built from the sources it has (by content) and builds only
-    # itself when they changed. (Restored only by this very key, every change to detlint rebuilt the four tools and
-    # mbc came after them: main's windows job 181 s, 40122097582, its build waited on them, 2026-10-24.)
-    - uses: actions/cache@v4
+    # mbui's tools (scripts/mbc, chk, detlint, apk: each built when there is none built from its own sources, by content)
+    # kept here each by its own key, what its script says it is built from (`scripts/<tool> key`), the tool's program
+    # alone: a job saves only the tools it ran, each built from the sources its key names, so a key restored is a tool
+    # up to date. (Kept together by a hash of all tools/, a key was saved by the job that ended first, with the tools
+    # that job never ran as stale as what it had restored: main's android job built mbc and chk again in every run,
+    # 65 s of its 185, a key restored that had neither from its sources, 2026-10-25, 40141156498.)
+    - id: tools
+      shell: bash
+      # (none in a checkout without mbui's tools: nothing kept)
+      run: |
+        [ -d apps/mbui/mbui/tools ] || exit 0
+        for t in mbc chk detlint apk; do echo "$t=$(sh apps/mbui/mbui/scripts/$t key)" >> "$GITHUB_OUTPUT"; done
+    - if: steps.tools.outputs.mbc != ''
+      uses: actions/cache@v4
       with:
-        path: apps/mbui/mbui/tools/_build
-        key: mbc-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('apps/mbui/mbui/tools/**') }}
-        restore-keys: mbc-${{ runner.os }}-${{ runner.arch }}-
+        path: |
+          apps/mbui/mbui/tools/_build/native/release/build/mbc/mbc.exe
+          apps/mbui/mbui/tools/_build/native/release/build/mbc/mbc.exe.src
+        key: mbui-tool-mbc-${{ runner.os }}-${{ runner.arch }}-${{ steps.tools.outputs.mbc }}
+    - if: steps.tools.outputs.chk != ''
+      uses: actions/cache@v4
+      with:
+        path: |
+          apps/mbui/mbui/tools/_build/native/release/build/chk/chk.exe
+          apps/mbui/mbui/tools/_build/native/release/build/chk/chk.exe.src
+        key: mbui-tool-chk-${{ runner.os }}-${{ runner.arch }}-${{ steps.tools.outputs.chk }}
+    - if: steps.tools.outputs.detlint != ''
+      uses: actions/cache@v4
+      with:
+        path: |
+          apps/mbui/mbui/tools/_build/native/release/build/detlint/detlint.exe
+          apps/mbui/mbui/tools/_build/native/release/build/detlint/detlint.exe.src
+        key: mbui-tool-detlint-${{ runner.os }}-${{ runner.arch }}-${{ steps.tools.outputs.detlint }}
+    - if: steps.tools.outputs.apk != ''
+      uses: actions/cache@v4
+      with:
+        path: |
+          apps/mbui/mbui/tools/_build/native/release/build/apk/apk.exe
+          apps/mbui/mbui/tools/_build/native/release/build/apk/apk.exe.src
+        key: mbui-tool-apk-${{ runner.os }}-${{ runner.arch }}-${{ steps.tools.outputs.apk }}
