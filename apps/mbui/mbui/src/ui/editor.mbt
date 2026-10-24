@@ -815,6 +815,16 @@ pub fn Ctx::editor(
     n.border_w = if focused { 2.0 } else { 1.0 }
     n.border_c = if focused { 0x0A84FFFFL } else { 0xD2D2D7FFL }
   }
+  // more than a line: its words scroll in it as a box kept to a height does (sideways.mbt: the wheel, a finger, a fling,
+  // its scroll bar), how far the layout's (layout.mbt)
+  if max_lines > 1 {
+    let sw = self.scroll_state(id, true)
+    sw.field = true
+    sw.theme = self.theme
+    sw.built_frame = self.frame_no
+    sw.box = i
+    sw.frame = self.build_no
+  }
   let res = { submitted: st.submitted, focused, text: st.text, pasted: st.pasted }
   st.submitted = None
   st.pasted = None
@@ -872,6 +882,8 @@ fn Ctx::paint_editor(self : Ctx, n : Node, alpha : Double) -> Unit {
     None => return
   }
   push_clip(n.x, n.y, n.x + n.fw, n.y + n.fh)
+  // its scroll bar, where its words scroll in it (scroll_bar.mbt)
+  let bar = if sideways.contains(n.id) { self.bar_at(n) } else { None }
   let focused = self.focus == n.id
   let ml = st.marked.length()
   // selection
@@ -952,6 +964,10 @@ fn Ctx::paint_editor(self : Ctx, n : Node, alpha : Double) -> Unit {
         alpha,
       )
     }
+  }
+  match bar {
+    Some(b) => self.paint_bar(b, alpha)
+    None => ()
   }
   pop_clip()
   // Android's handle under the caret (Compose's cursor handle, TextFieldSelectionManager): a drop in the caret's colour
@@ -1090,6 +1106,7 @@ fn EditorState::fresh(text : String, now : Double) -> EditorState {
     pref_x: -1.0,
     upstream: -1,
     scroll: 0.0,
+    followed: (-1, -1, -1),
     pasted: None,
     limit: 0,
     enter_sends: true,

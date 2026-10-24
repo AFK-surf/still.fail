@@ -555,6 +555,17 @@ fn Ctx::paint(self : Ctx, i : Int, alpha_in : Double) -> Unit {
     return
   }
   if n.kind == kind_editor {
+    // its words more than it shows: what the wheel and a finger scroll there, as a box kept to a height (sideways.mbt)
+    match sideways.get(n.id) {
+      Some(sw) if sw.max > 0.0 => {
+        self.next_scroll_ids.push(n.id)
+        self.next_scroll_rects.push(dmax(n.x, cx0))
+        self.next_scroll_rects.push(dmax(n.y, cy0))
+        self.next_scroll_rects.push(dmin(n.x + n.fw, cx1))
+        self.next_scroll_rects.push(dmin(n.y + n.fh, cy1))
+      }
+      _ => ()
+    }
     self.paint_editor(n, alpha)
     return
   }

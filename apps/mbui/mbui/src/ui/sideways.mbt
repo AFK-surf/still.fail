@@ -43,6 +43,8 @@ priv struct Sideways {
   mut theme : Theme
   /// the frame it was last built in (one not built is shown by nothing: at rest)
   mut built_frame : Int
+  /// a field's words, more lines than it shows (Ctx::editor): how far it can go is its layout's (layout.mbt), not boxes'
+  mut field : Bool
 }
 
 ///|
@@ -148,6 +150,7 @@ fn Ctx::scroll_state(self : Ctx, id : Int, vertical : Bool) -> Sideways {
         last_scroll: -1.0e9,
         theme: self.theme,
         built_frame: -1,
+        field: false,
       }
       sideways[id] = s
       s
@@ -314,6 +317,9 @@ fn Ctx::sideways_after_layout(self : Ctx) -> Unit {
       if !st.held {
         gone.push(id)
       }
+      return
+    }
+    if st.field {
       return
     }
     let o = self.nodes[st.box]
