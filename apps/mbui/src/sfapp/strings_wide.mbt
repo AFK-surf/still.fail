@@ -359,6 +359,8 @@ let zh_wide : Map[String, String] = {
   "common.legal.privacy": "隐私政策",
   "common.legal.terms": "服务条款",
   "common.telemetry.note": "帮助改进 {name}。不包含聊天内容。",
+  "common.edit": "编辑",
+  "web-pages.vault.hide": "隐藏",
   "common.telemetry.title": "发送使用统计和错误报告",
   "web-pages.changelog.build": "当前版本 0.1.{build}",
   "web-pages.changelog.empty": "暂无更新记录",

@@ -102,3 +102,19 @@ test "wide: a new profile's models chosen on a page of their own, then on to its
   t.run_for(@ui.nav_push_ms)
   assert_true(app.nav.top() is Setting(@settings.Route::Profile("ws1/st1", "cc")), msg="on to its page")
 }
+
+///|
+test "wide: a secret's page says what it is, how agents may get it and when they did, its content masked until opened" {
+  let t = wide_tester([], mode="settings")
+  t.draw()
+  app.nav.push(Setting(@settings.Route::VaultItem("v1", "it1")))
+  t.run_for(@ui.nav_push_ms)
+  assert_true(t.find("GitHub token") is Some(_))
+  // the core's words of it
+  assert_true(t.find("代理 · 限 api.github.com") is Some(_), msg="how it is given")
+  assert_true(t.find("跟随默认 · 直到对话归档") is Some(_), msg="its longest grant")
+  assert_true(t.find("git push origin main · 代理") is Some(_), msg="a use, how")
+  // not opened: its field's name over dots
+  assert_true(t.find("值") is Some(_))
+  assert_true(t.find("ghp_") is None, msg="nothing of it shown")
+}

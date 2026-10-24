@@ -271,7 +271,7 @@ let opened : Opened = { plain: {}, fields: {}, opening: {}, shown: {} }
 ///|
 /// The item opened (`vault.open`: the system's prompt first where its vault is locked here), then `then` with what it
 /// holds.
-fn open_item(core : Core, ws : String, item : String, then : (Json) -> Unit) -> Unit {
+pub fn open_item(core : Core, ws : String, item : String, then : (Json) -> Unit) -> Unit {
   if opened.opening.contains(item) {
     return
   }
@@ -299,9 +299,27 @@ fn open_item(core : Core, ws : String, item : String, then : (Json) -> Unit) -> 
 }
 
 ///|
+/// What an item opened holds while its page is up (the phone's and the desktop's page alike), its fields as the page
+/// shows them (the core's `shown`), and whether it is being opened.
+pub fn opened_plain(item : String) -> Json? {
+  opened.plain.get(item)
+}
+
+///|
+pub fn opened_fields(item : String) -> Array[Json] {
+  opened.fields.get(item).unwrap_or([])
+}
+
+///|
+pub fn item_opening(item : String) -> Bool {
+  opened.opening.contains(item)
+}
+
+///|
 /// An item's page left: what it held goes.
 fn vault_item_left(item : String) -> Unit {
   opened.plain.remove(item)
+  opened.fields.remove(item)
   opened.opening.remove(item)
   let gone = opened.shown.keys().filter(fn(k) { k.has_prefix(item + "/") }).collect()
   for k in gone {
