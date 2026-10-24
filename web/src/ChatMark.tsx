@@ -66,51 +66,43 @@ export function MarkCounts({ mark }: { mark: WorkspaceMark | undefined }) {
 }
 
 /**
- * A row's second line from where its chat stands (the core's `stateText`; a core before it: its decision's `decision.text`):
- * 奏 · … (Decision · …) in ink, its lead bold; 要你帮忙：… (Needs you: …) in ink too (it wants the viewer); 出问题：…, 在等：…, 做完了 as quiet as the
- * last message would be. `slot` (every chat list, as Android's): a lead said as an icon (a bell, the waiting arc, a check; 监控中 a radar before its words;
- * the two still going, waiting and watching, move: waiting's dots breathe in turn, the radar's arcs light up in turn, going out)
- * stands in the title's mark's column, centred under it, and what follows starts where the title does. `alert` (a message
- * that did not go, the row's `unsent`): in red.
+ * A row's second line from where its chat stands (the core's `stateText`; a core before it: its decision's `decision.text`),
+ * by what the core says leads it (`lead`, `leadText`, `rest`: ChatItem's stateLead…): 奏 · … (Decision · …) in ink, its
+ * lead word bold; needs-the-viewer in ink too; 出错：…, 在等：…, 已完成 as quiet as the last message would be. `slot` (every
+ * chat list, as Android's): a lead said as an icon (a bell, the waiting arc, a check; watching a radar before its words;
+ * the two still going, waiting and watching, move: waiting's dots breathe in turn, the radar's arcs light up in turn, going
+ * out) stands in the title's mark's column, centred under it, and what follows starts where the title does. `alert` (a
+ * message that did not go, the row's `unsent`): in red.
  */
-export function WaitingText({ text, className, slot = false, alert = false }: { text: string; className: string; slot?: boolean; alert?: boolean }) {
-  const need = slot ? /^(?:要你帮忙|需要你处理|Needs you)(?:[：:]\s*|$)/.exec(text) : null;
-  const lead = /^(?:奏|Decision)(?: · |$)/.test(text) ? text.split(" · ")[0]! : "";
-  const turn = lead !== "" || /^(?:要你帮忙|需要你处理|Needs you:)/.test(text);
-  const watch = slot && !need ? WATCH.exec(text) : null;
-  const icon = slot ? need ?? DONE.exec(text) ?? WAIT.exec(text) ?? watch : null;
-  const motion = icon && !need && !DONE.test(text) ? (watch ? "watch" : "wait") : undefined;
+export function WaitingText({ text, lead, leadText, rest, className, slot = false, alert = false }: { text: string; lead?: string | null | undefined; leadText?: string | null | undefined; rest?: string | null | undefined; className: string; slot?: boolean; alert?: boolean }) {
+  const turn = lead === "decision" || lead === "need";
+  const icon = slot && (lead === "need" || lead === "done" || lead === "wait" || lead === "watch") ? lead : null;
   if (icon) {
-    const label = watch ? text : t(need ? "web-main.chatMark.alert" : DONE.test(text) ? "web-main.status.done" : "web-main.status.waiting");
-    // Watching keeps its words after its radar.
-    const rest = watch ? text : text.slice(icon[0].length);
-    const Moving = watch ? Watch : Wait;
+    const motion = icon === "watch" ? "watch" : icon === "wait" ? "wait" : undefined;
+    const label = icon === "watch" ? text : t(icon === "need" ? "web-main.chatMark.alert" : icon === "done" ? "web-main.status.done" : "web-main.status.waiting");
+    const after = rest ?? "";
+    const Moving = icon === "watch" ? Watch : Wait;
     return (
       <span className={`${className} ${css.leadLine}`} data-turn={turn || undefined} data-alert={alert || undefined} data-state-line="" aria-label={text}>
         <Tip label={label}><span className={css.leadSlot} role="img" aria-label={label} data-motion={motion}>
-          {need ? <Bell size={14} /> : DONE.test(text) ? <Check size={14} strokeWidth={1.7} /> : watch ? <Watch size={14} strokeWidth={1.7} /> : <Wait size={14} strokeWidth={1.7} />}
+          {icon === "need" ? <Bell size={14} /> : icon === "done" ? <Check size={14} strokeWidth={1.7} /> : icon === "watch" ? <Watch size={14} strokeWidth={1.7} /> : <Wait size={14} strokeWidth={1.7} />}
           {/* What moves, each part on a copy of its own (ChatMark.css.ts leadSlot). */}
           {motion && MOVING[motion].map((n) => <span key={n} data-part={n}><Moving size={14} strokeWidth={1.7} /></span>)}
         </span></Tip>
-        {rest && <span className={css.leadRest}>{rest}</span>}
+        {after && <span className={css.leadRest}>{after}</span>}
       </span>
     );
   }
+  const word = lead === "decision" && leadText && text.startsWith(leadText) ? leadText : "";
   return (
     <span className={className} data-turn={turn || undefined} data-alert={alert || undefined} data-state-line="">
-      {lead && <b className={css.waitingLead}>{lead}</b>}<StatusText text={text.slice(lead.length)} />
+      {word && <b className={css.waitingLead}>{word}</b>}<StatusText text={text.slice(word.length)} lead={word ? null : lead} rest={rest} />
     </span>
   );
 }
 
 /** The parts of the icons that move, by their place among the icon's children: waiting's three dots; watching's dot and arcs. */
 const MOVING = { wait: [2, 3, 4], watch: [1, 2, 3] } as const;
-
-/** The core's done and waiting leads, in either language (as ui.tsx StatusText reads them). */
-const DONE = /^(?:(?:做完了|已完成)(?:：|$)|Done(?:: |$))/;
-const WAIT = /^(?:在等：|等待：|等待中$|Waiting(?:: |$))/;
-/** The core's watching (an agent waiting on a watch of its own, present.ts): 监控中, Watching. */
-const WATCH = /^(?:监控中|Watching)(?:：|: |$)/;
 
 /**
  * A row pressed on its state line (WaitingText) when the core says which message the state is about (`stateAbout`):

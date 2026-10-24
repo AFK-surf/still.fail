@@ -347,21 +347,38 @@ export function stateAbout(agent: J, thread: number | null): number | null {
   return u64(about.seq) ?? null;
 }
 
-/// Where a chat stands, in words, and the message that is about. A line that asks for a decision (奏 · …, 要你帮忙：…)
-/// is about none: the line only says so, and the chat leads to what it asks (`ChatView.asks`).
-export function rowStateLine(row: J): [string, number | null, string] | null {
+/// What leads a state line, for a client to say as a mark of its own (`StateLead`): a bell for needs-the-viewer, a
+/// check for done, the waiting arc, the watch's radar; a card waiting for the viewer (奏 · …), its lead word (`text`)
+/// in bold. `rest`: what follows the lead (for watching, the whole line: its words stay after the radar).
+export type Lead = { kind: "need" | "done" | "wait" | "watch" | "decision"; text?: string; rest: string };
+
+/// Where a chat stands, in words, and the message that is about; the line without its lead (what the dot before it does
+/// not say); what leads it, if anything does. A line that asks for a decision (奏 · …, 要你帮忙：…) is about none: the
+/// line only says so, and the chat leads to what it asks (`ChatView.asks`).
+export function rowStateLine(row: J): [string, number | null, string, Lead | null] | null {
   const thread = u64(get(row, "thread")) ?? null;
   const p = decisions.pending(row);
   const lead = t("core-logic.decisions.line", { text: "" });
   const given = str(p?.text);
-  const card: [string, number | null, string] | null = p
-    ? [given ?? decisions.line(str(get(p.message, "text")) ?? ""), null, given !== undefined ? (given.startsWith(lead) ? given.slice(lead.length) : given) : decisions.question(str(get(p.message, "text")) ?? "")]
+  const cardLine = p ? (given ?? decisions.line(str(get(p.message, "text")) ?? "")) : "";
+  const word = t("core-logic.decisions.line.empty");
+  const card: [string, number | null, string, Lead | null] | null = p
+    ? [
+      cardLine,
+      null,
+      given !== undefined ? (given.startsWith(lead) ? given.slice(lead.length) : given) : decisions.question(str(get(p.message, "text")) ?? ""),
+      cardLine.startsWith(word) ? { kind: "decision", text: word, rest: cardLine.slice(word.length) } : null,
+    ]
     : null;
   const agents: J[] = arr(get(row, "agents")) ?? [];
   const textOf = (a: J): string | null => str(get(a, "statusText")) ?? null;
-  const said = (a: J, about: number | null): [string, number | null, string] | null => {
+  const leadOf = (a: J): Lead | null => {
+    const kind = str(get(a, "statusLead"));
+    return kind === "need" || kind === "done" || kind === "wait" || kind === "watch" ? { kind, rest: str(get(a, "statusRest")) ?? "" } : null;
+  };
+  const said = (a: J, about: number | null): [string, number | null, string, Lead | null] | null => {
     const text = textOf(a);
-    return text === null ? null : [text, about, stateWhat(a) ?? text];
+    return text === null ? null : [text, about, stateWhat(a) ?? text, leadOf(a)];
   };
   const atWork = agents.some((a) => shownStatus(a) === "queued" || (shownStatus(a) === "running" && waiting(a) === null));
   if (!atWork) {
@@ -382,6 +399,7 @@ export function rowStateLine(row: J): [string, number | null, string] | null {
   if (!settled(row)) return null;
   const done = agents.find((a) => nonEmpty(get(get(a, "lastTurn"), "need")) !== null);
   const text = (done && textOf(done)) ?? t("core-views.present.done");
+  const doneLead: Lead = (done && leadOf(done)) ?? { kind: "done", rest: "" };
   let about = done ? stateAbout(done, thread) : null;
   if (about === null) {
     for (const a of agents) {
@@ -389,7 +407,7 @@ export function rowStateLine(row: J): [string, number | null, string] | null {
       if (about !== null) break;
     }
   }
-  return [text, about, text];
+  return [text, about, text, doneLead];
 }
 
 export function rowStateText(row: J): string | null {
@@ -552,18 +570,28 @@ export function session(s: J): J {
   let [text, tone] = format.statusText(status);
   const turn = get(s, "lastTurn");
   const said = (k: string) => nonEmpty(get(turn, k));
+  // What leads the words, said by a client as a mark of its own (Lead), and what follows it.
+  let lead: Lead["kind"] | null = null;
+  let rest = "";
   if (status === "block") {
     const need = said("need");
     if (need !== null) text = t("core-views.present.need_help", { need });
+    lead = "need";
+    rest = need ?? "";
   } else if (status === "final") {
     const done = said("need");
     if (done !== null) text = t("core-views.present.done_with", { done });
+    lead = "done";
+    rest = done ?? "";
   } else if (status === "failed") {
     text = t("core-views.present.failed", { why: format.failureText(said("detail") ?? "") });
   }
   if (waiting(s) !== null) {
     const what = nonEmpty(get(turn, "waitFor"));
-    text = isObject(get(s, "watch")) ? t("core-views.present.watching") : what !== null ? t("core-views.present.waiting_for", { what }) : t("core-views.present.waiting");
+    const watching = isObject(get(s, "watch"));
+    text = watching ? t("core-views.present.watching") : what !== null ? t("core-views.present.waiting_for", { what }) : t("core-views.present.waiting");
+    lead = watching ? "watch" : "wait";
+    rest = watching ? text : what ?? "";
   }
   const o = s as J;
   const strOf = (k: string): string | null => (typeof o[k] === "string" ? o[k] : null);
@@ -580,6 +608,7 @@ export function session(s: J): J {
   return {
     ...o,
     statusText: text,
+    ...(lead !== null ? { statusLead: lead, statusRest: rest } : {}),
     tone,
     mark: b,
     badgeText: b !== null ? badgeText(b) : null,

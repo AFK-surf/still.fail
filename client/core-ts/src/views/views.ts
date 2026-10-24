@@ -1262,6 +1262,12 @@ export class Views implements Owner {
     if (line !== null) {
       row.stateText = line[0];
       if (line[1] !== null) row.stateAbout = line[1];
+      const lead = line[3];
+      if (lead !== null) {
+        row.stateLead = lead.kind;
+        if (lead.text !== undefined) row.stateLeadText = lead.text;
+        row.stateRest = lead.rest;
+      }
     }
     if (typeof raw.pinned === "number") pinnedAt.set(row, raw.pinned);
     return row;
@@ -1275,7 +1281,7 @@ export class Views implements Owner {
     const unsent = this.local.unsent(station, thread, row.pending === true && typeof row.clientKey === "string" ? row.clientKey : null);
     if (unsent === undefined) return row;
     const text = format.cleanText(format.plainText(str(unsent.text) ?? ""));
-    const { stateAbout: _stateAbout, ...rest } = row;
+    const { stateAbout: _stateAbout, stateLead: _stateLead, stateLeadText: _stateLeadText, stateRest: _stateRest, ...rest } = row;
     const marked: J = { ...rest, tone: "alert", unsent: true, stateText: t("core-views.unsent", { text: text === "" ? t("core-views.file") : text }) };
     deepFreeze(marked);
     const pinned = pinnedAt.get(row);

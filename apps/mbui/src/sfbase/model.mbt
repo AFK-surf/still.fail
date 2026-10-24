@@ -90,6 +90,11 @@ pub(all) struct ChatItem {
   /// alert | wait | busy | done | other, or ""
   tone : String
   state_text : String?
+  /// what the core says leads it (need, done, wait, watch, decision, or ""), the lead word of a card's line (奏) and
+  /// what follows the lead (watching: the whole line)
+  state_lead : String
+  state_lead_text : String
+  state_rest : String
   /// the message `state_text` is about (a seq in the chat), not one that asks for a decision: opened from the line,
   /// the chat goes to it
   state_about : Double?
@@ -179,6 +184,9 @@ pub fn chat_item(v : Json) -> ChatItem {
     state: text(s, "state"),
     tone: text(s, "tone"),
     state_text: opt_text(s, "stateText"),
+    state_lead: text(s, "stateLead"),
+    state_lead_text: text(s, "stateLeadText"),
+    state_rest: text(s, "stateRest"),
     state_about: match field(s, "stateAbout") {
       Some(Number(n, ..)) => Some(n)
       _ => None

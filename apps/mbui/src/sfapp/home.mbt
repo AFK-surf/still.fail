@@ -808,7 +808,8 @@ fn chat_row(
                 None => item.decision_text
               }
               match state {
-                Some(s) => state_line(c, s, alert=item.unsent)
+                Some(s) =>
+                  state_line(c, s, lead=item.state_lead, lead_text=item.state_lead_text, rest=item.state_rest, alert=item.unsent)
                 None =>
                   match item.last {
                     Some(l) =>
@@ -879,78 +880,30 @@ fn archive_chip(c : @ui.Ctx, src : Source, item : ChatItem, busy : Bool) -> Unit
 }
 
 ///|
-/// The length of `word` and what follows it at the start of `s` when `s` starts so: one of `after` next, or
-/// nothing at all when `end` lets it end there.
-fn lead_of(s : String, words : Array[String], after : Array[String], end : Bool) -> Int? {
-  for w in words {
-    if s.has_prefix(w) {
-      let n = w.length()
-      if n == s.length() {
-        if end {
-          return Some(n)
-        }
-        continue
-      }
-      let rest = s.view(start_offset=n).to_owned()
-      for a in after {
-        if rest.has_prefix(a) {
-          let mut k = n + a.length()
-          // what the core's ：or : leaves after it
-          while k < s.length() && s.at(k).to_int() == 32 {
-            k += 1
-          }
-          return Some(k)
-        }
-      }
-    }
-  }
-  None
-}
-
-///|
-/// Where the chat stands, in its last message's place (Home.kt StateLine): a lead said as an icon (要你帮忙 a bell,
-/// in ink; 在等 the wait mark, 监控中 the watch before its words, 做完了 a check) where the title's mark is; 奏 · …
-/// (a card waiting for the viewer) in ink with its 奏 bold; anything else in the secondary colour.
-fn state_line(c : @ui.Ctx, state : String, alert? : Bool = false, size? : Double = 14.0, line? : Double = 20.0) -> Unit {
+/// Where the chat stands, in its last message's place (Home.kt StateLine), by what the core says leads its words
+/// (`lead`: ChatItem's state_lead, `lead_text` its card's lead word, `rest` what follows the lead): needs the viewer a
+/// bell, in ink; waiting the wait mark, watching the watch before its words, done a check, each where the title's mark
+/// is; a card waiting for the viewer (奏 · …) in ink with its lead word bold; anything else in the secondary colour.
+fn state_line(
+  c : @ui.Ctx,
+  state : String,
+  lead? : String = "",
+  lead_text? : String = "",
+  rest? : String = "",
+  alert? : Bool = false,
+  size? : Double = 14.0,
+  line? : Double = 20.0,
+) -> Unit {
   let t = @sf.theme()
-  let need = lead_of(state, ["要你帮忙", "需要你处理", "Needs you"], ["：", ":"], true)
-  let done = if need is None {
-    match lead_of(state, ["做完了", "已完成"], ["："], true) {
-      Some(n) => Some(n)
-      None => lead_of(state, ["Done"], [": "], true)
-    }
-  } else {
-    None
-  }
-  let wait = if need is None && done is None {
-    match lead_of(state, ["在等", "等待"], ["："], false) {
-      Some(n) => Some(n)
-      None =>
-        if state == "等待中" {
-          Some(state.length())
-        } else {
-          lead_of(state, ["Waiting"], [": "], true)
-        }
-    }
-  } else {
-    None
-  }
-  let watch = if need is None && done is None && wait is None {
-    lead_of(state, ["监控中", "Watching"], ["：", ": "], true)
-  } else {
-    None
-  }
-  let (icon, n) = match (need, done, wait, watch) {
-    (Some(n), _, _, _) => ("bell", n)
-    (_, Some(n), _, _) => ("check", n)
-    (_, _, Some(n), _) => ("wait", n)
-    // watching keeps its words after its radar
-    (_, _, _, Some(_)) => ("watch", 0)
-    _ => ("", 0)
+  let icon = match lead {
+    "need" => "bell"
+    "done" => "check"
+    "wait" => "wait"
+    "watch" => "watch"
+    _ => ""
   }
   if icon != "" {
-    let rest = state.view(start_offset=n).to_owned()
-    let tint = if need is Some(_) { t.p.text } else { t.p.muted }
+    let tint = if lead == "need" { t.p.text } else { t.p.muted }
     // (read out whole: StateLine's contentDescription)
     c.box(dir=Row, w=Fill(1.0), gap=8.0, align=ACenter, label=state, fn() {
       // the title's mark's place (10), the icon 14 centred on it
@@ -969,23 +922,15 @@ fn state_line(c : @ui.Ctx, state : String, alert? : Bool = false, size? : Double
     |> ignore
     return
   }
-  // the core's lead in either language: 奏 · …, Decision · …
-  let lead = if state == "奏" || state.has_prefix("奏 · ") {
-    "奏"
-  } else if state == "Decision" || state.has_prefix("Decision · ") {
-    "Decision"
-  } else {
-    ""
-  }
   // (a message that did not go: in red)
-  if lead != "" {
+  if lead == "decision" && lead_text != "" && state.has_prefix(lead_text) {
     let ink = if alert { t.p.red } else { t.p.text }
     c.box(dir=Row, w=Fill(1.0), align=ACenter, fn() {
-      c.text(lead, size~, weight=700, color=ink, wrap=false, line~)
+      c.text(lead_text, size~, weight=700, color=ink, wrap=false, line~)
       |> ignore
       c.box(w=Fill(1.0), fn() {
         c.text(
-          state.view(start_offset=lead.length()).to_owned(),
+          state.view(start_offset=lead_text.length()).to_owned(),
           size~,
           color=ink,
           wrap=false,
