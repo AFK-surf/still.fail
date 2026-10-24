@@ -340,7 +340,7 @@ pub(all) struct Viewer {
   mut media : @kit.Media?
   /// a desktop's image put on the clipboard: how many times (its check shown a while after each)
   mut copied : Int
-  /// how wide the floating bar has been (it never narrows once open: viewer_frame.mbt vf_head)
+  /// how wide the floating bar has been (it never narrows once open: @sf.viewer_frame_bar)
   mut head_w : Double
 }
 
@@ -2460,9 +2460,7 @@ pub fn dark_glass() -> @ui.Glass {
 /// The same over a document (FilePreview.kt pageGlass): the surface at 72% (dark, surface2's) over its blur, over the
 /// viewer's canvas.
 pub fn page_glass() -> @ui.Glass {
-  let t = @sf.theme()
-  let tint = @sf.alpha(if t.dark { t.p.card2 } else { t.p.card }, 0.72)
-  @ui.Glass::frosted(blur=page_glass_blur, tint~, solid=@sf.over(t.p.canvas, tint))
+  @sf.viewer_page_glass()
 }
 
 ///|
@@ -2537,7 +2535,7 @@ pub fn Viewer::pdf_stage(self : Viewer, c : @ui.Ctx, b : Bytes, stage : Int) -> 
   tap_stage(c, v, stage)
   // as the web's (FilePreview.css.ts fpPdf): 76 down, as wide as 1000 less 56 allows, 20 apart; under 640, 60 down,
   // 12 round them and between them
-  let small = c.width <= vf_small_w
+  let small = c.width <= @sf.viewer_small_w
   let w = if small { c.width - 2.0 * pdf_small_in } else { desk_pdf_width(c.width) }
   let side = (c.width - w) / 2.0
   let gap = if small { pdf_small_in } else { desk_pdf_gap }
@@ -2600,7 +2598,7 @@ pub fn Viewer::text_stage(self : Viewer, c : @ui.Ctx, kind : PKind, b : Bytes, s
       }
     }
     // under the bar: 60 under the status bar, a desktop's 76 (FilePreview.css.ts fpPageFrame)
-    let top = if c.width <= vf_small_w { page_small_top } else { desk_page_top }
+    let top = if c.width <= @sf.viewer_small_w { page_small_top } else { desk_page_top }
     c.box(w=Fill(1.0), h=Fill(1.0), pt=top, fn() {
       if page.here() && !v.closing {
         c.native(page) |> ignore
@@ -2653,7 +2651,7 @@ pub fn Viewer::text_stage(self : Viewer, c : @ui.Ctx, kind : PKind, b : Bytes, s
   let count = if markdown { 1 } else { chunks }
   // as the web's (FilePreview.css.ts fpCode 64 and the block's 16 down, 32 in, 12 on 1.6; fpPlain 76 down, 32 in, 12
   // on 1.65; under 640, 60 down, 16 in, 48 under)
-  let small = c.width <= vf_small_w && !code && !markdown
+  let small = c.width <= @sf.viewer_small_w && !code && !markdown
   let top = if markdown { 64.0 } else if code { 80.0 } else if small { page_small_top } else { desk_page_top }
   let foot = if markdown { 64.0 } else if small { plain_small_foot } else { desk_text_foot }
   let size = desk_code_size

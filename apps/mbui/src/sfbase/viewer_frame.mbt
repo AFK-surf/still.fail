@@ -1,13 +1,13 @@
-// The viewer's frame, whatever the layout (ember web/src/FilePreview.tsx, FilePreview.css.ts): over the whole window,
-// on the page's own canvas whatever it shows (a PDF's a step greyer). Laid out wide (the frame's narrow word false,
-// @sf.viewer_host: the web's `docked`), the bar every file opened has across the top (viewer_bar.mbt: back to the
-// chat or the folder by name, the file's name, which of how many, its size and kind; its tools, download); narrow (a
-// phone's), one bar floating at the top as wide as what it holds, the file's name, its tools, download and close
-// (fpHead). The ways to the image before and after are discs of the canvas at its sides. What it does follows the
-// input, not the layout: a mouse moving wakes the bars over an image and the ways beside it, which go again once it
-// rests (REST_MS) unless it is on them, a click round the image (not on it) closes it; a finger's tap shows or hides
-// them. Esc closes it, ← and → step. A text and Markdown open in the library's reader, a film and a song in its
-// player, each with its own bar; what it shows otherwise is laid out as the web's, narrower under 640 (viewer.mbt).
+// The viewer's frame, whatever the tier and the input (ember web/src/FilePreview.tsx; drawn by the library's
+// viewer_frame.mbt, what it says and does given from here): over the whole window, on the page's own canvas whatever
+// it shows (a PDF's a step greyer). In any tier but Small (the web's `docked`) the bar every file opened has across
+// the top (back to the chat or the folder by name, the file's name, which of how many, its size and kind; its tools,
+// download); in Small one bar floating at the top as wide as what it holds (its name, tools, download and close). The
+// ways to the image before and after are discs of the canvas at its sides. What it does follows the input: a mouse
+// moving wakes the bars over an image and the ways beside it, which go again once it rests (REST_MS) unless it is on
+// them, a click round the image (not on it) closes it; a finger's tap shows or hides them. Esc closes it, ← and →
+// step. A text and Markdown open in the library's reader, a film and a song in its player, each with its own bar;
+// what it shows otherwise is laid out as the web's, narrower under 640 (viewer.mbt).
 
 ///|
 /// The viewer over the window, if one is open: drawn after what is under it.
@@ -152,100 +152,37 @@ pub fn vf_bar(vw : Viewer, c : @ui.Ctx, src : Source, shown : Double) -> Unit {
     } else if c.key_pressed(@ui.key_code_right) {
       v.go(c, src, 1, 0.0)
     }
-    // + − 0 1: in, out, fitted, as it is (useZoom's keys; + is ⇧= on most keyboards)
-    let key = fn(ch : Char) {
-      c.key_pressed(@ui.key_of_char(ch)) || c.key_pressed(@ui.key_of_char(ch), mods=@ui.mod_shift_key)
-    }
-    let z = v.zoom
-    if z.nw > 0.0 {
-      if key('+') || key('=') {
-        z.zoom_to(z.scale * vf_zoom_step, z.bw / 2.0, z.bh / 2.0, true)
-      } else if key('-') || key('_') {
-        z.zoom_to(z.scale / vf_zoom_step, z.bw / 2.0, z.bh / 2.0, true)
-      } else if key('0') {
-        z.reset()
-      } else if key('1') {
-        z.zoom_to(desk_whole, z.bw / 2.0, z.bh / 2.0, true)
-      }
-    }
-  }
-  // narrow: the bar floating over it (fpHead)
-  if (@sf.viewer_host().narrow)() {
-    vf_head(v, c, src, shown)
-    return
+    @sf.viewer_zoom_keys(c, v.zoom)
   }
   // a picture's bar goes as the pointer rests (not while it comes, nor marking); what is read stays
   let hidden = kind == Some(KImage) && !v.bars_shown()
-  let n = c.box(style=vf_layer, fn() {
-    if @sf.viewer_bar(c, "preview/bar", v.desk_back(src), v.file.name, vf_meta(v, src), hidden, ink, fn() {
-        vf_tools(v, c, ink, v.download(src))
-      }) &&
-      !v.closing {
-      v.shut(c)
-    }
-  })
-  c.look(n, @ui.look(alpha=shown))
-}
-
-///|
-/// The bar floating at the top of a narrow window (FilePreview.tsx's header, fpHead): page glass, its corner 14, 44
-/// high, as wide as what it holds and never narrower once open (its buttons stay where they are), the room's top or
-/// 16 down (8 under 640); the file's name, its kind and size (not under 640), its tools, download and close. It fades
-/// with the rest as it is left alone, and comes again as a finger taps or a mouse moves.
-pub fn vf_head(vw : Viewer, c : @ui.Ctx, src : Source, shown : Double) -> Unit {
-  let v = vw
-  let ink = @sf.page_viewer_ink()
-  let small = c.width <= vf_small_w
   let awake = v.bars_shown() || v.coming() || marking.on
-  let seen = @motion.animate(c, "preview/head-seen", if awake { 1.0 } else { 0.0 }, spec=@motion.tween(
-      if awake {
-        vf_wake_ms
-      } else {
-        vf_rest_fade_ms
-      },
-      ease=Out,
-    ))
-  let (top, _) = (@sf.viewer_host().room)()
-  let down = dmax(top, if small { vf_head_top_small } else { vf_head_top })
-  let most = dmin(c.width - (if small { vf_head_side_small } else { vf_head_side }), vf_head_most)
-  let head = c.id("preview/head")
-  let n = c.box(style=vf_head_room, fn() {
-    c.box(style=@ui.style(w=Full, h=Fixed(down)), fn() {  }) |> ignore
-    c.box(
-      style=(if small { vf_head_box_small } else { vf_head_box }).then(@ui.style(max_w=Fixed(most), min_w=Fixed(dmin(v.head_w, most)))),
-      glass=page_glass(),
-      id=head,
-      fn() {
-        c.box(style=vf_head_title, fn() {
-          c.text(v.file.name, style=vf_head_name) |> ignore
-          if !small {
-            c.text(vf_meta(v, src), style=vf_head_meta) |> ignore
-          }
-        })
-        |> ignore
-        c.box(style=vf_head_gap, fn() {  }) |> ignore
-        // (short of room, the tools kept whole: the name gives way)
-        c.box(style=vf_head_tools, keep=true, fn() {
-          match v.got {
-            Some(got) if v.coming() => file_progress(c, got, v.file.size)
-            _ => ()
-          }
-          vf_tools(v, c, ink, v.download(src))
-          if @sf.viewer_tool(c, "preview/close", "close", @sf.t("web-main.preview.closeKey"), ink) && !v.closing {
-            v.shut(c)
-          }
-        })
-        |> ignore
-      },
-    )
-    |> ignore
-  })
-  // (once open it only grows)
-  match c.laid_size(head) {
-    Some((w, _)) if w > v.head_w => v.head_w = w
-    _ => ()
+  let (closed, wide) = @sf.viewer_frame_bar(
+    c,
+    "preview",
+    v.desk_back(src),
+    v.file.name,
+    vf_meta(v, src),
+    hidden,
+    awake,
+    v.head_w,
+    shown,
+    ink,
+    fn() {
+      match v.got {
+        Some(got) if v.coming() && (@sf.layout(c.width) is Small) => file_progress(c, got, v.file.size)
+        _ => ()
+      }
+      vf_tools(v, c, ink, v.download(src))
+    },
+  )
+  // (the floating bar, once open, only grows)
+  if wide > v.head_w {
+    v.head_w = wide
   }
-  c.look(n, @ui.look(alpha=seen * shown))
+  if closed && !v.closing {
+    v.shut(c)
+  }
 }
 
 ///|
@@ -257,23 +194,7 @@ pub fn vf_tools(vw : Viewer, c : @ui.Ctx, ink : @sf.ViewerInk, dl : Json?) -> Un
     Some(KImage) if marking.on =>
       marks_actions(c, v.draft_key() != "", fn(draft) { v.finish_marks(c, draft) }, ink=ink.muted)
     Some(KImage) if !v.coming() => {
-      let z = v.zoom
-      c.box(style=vf_zoom, fn() {
-        if @sf.viewer_tool(c, "preview/zoom-out", "minus", @sf.t("web-main.preview.zoomOutKey"), ink, disabled=z.scale <= z.min_scale() + vf_zoom_slack) {
-          z.zoom_to(z.scale / vf_zoom_step, z.bw / 2.0, z.bh / 2.0, true)
-        }
-        if vf_text_tool(c, "preview/zoom-reset", "\{(z.scale * 100.0).round().to_int()}%", @sf.t("web-main.preview.fitKey"), ink, wide=true) {
-          z.reset()
-        }
-        if @sf.viewer_tool(c, "preview/zoom-in", "plus", @sf.t("web-main.preview.zoomInKey"), ink, disabled=z.scale >= z.max_scale() - vf_zoom_slack) {
-          z.zoom_to(z.scale * vf_zoom_step, z.bw / 2.0, z.bh / 2.0, true)
-        }
-        // (not on a phone's width: fpToolText's last in the zoom, none under 640)
-        if c.width > vf_small_w && vf_text_tool(c, "preview/zoom-actual", "1:1", @sf.t("web-main.preview.actualKey"), ink) {
-          z.zoom_to(1.0, z.bw / 2.0, z.bh / 2.0, true)
-        }
-      })
-      |> ignore
+      @sf.viewer_zoom(c, "preview", v.zoom, ink)
       // 标注图片: once its whole picture is here (annotate/ImageMarks.tsx)
       if v.bytes is Some(_) && @sf.viewer_tool(c, "preview/mark", "edit", @sf.t("web-main.annotate.image"), ink) {
         marks_start()
@@ -325,68 +246,16 @@ pub fn vf_tools(vw : Viewer, c : @ui.Ctx, ink : @sf.ViewerInk, dl : Json?) -> Un
 }
 
 ///|
-/// A tool that says words (FilePreview.css.ts fpToolText: the zoom's per cent, 1:1): 32 high, 36 wide at least (52
-/// `wide`), 8 in, 12 in the quieter ink until pointed at.
-pub fn vf_text_tool(c : @ui.Ctx, key : String, words : String, label : String, ink : @sf.ViewerInk, wide? : Bool = false) -> Bool {
-  let id = c.id(key)
-  c.cursor(id, Hand)
-  let hot = c.lit(id) || c.pressed(id)
-  let b = c.box(style=if wide { vf_text_tool_wide } else { vf_text_tool_box }, id~, fn() {
-    c.text(words, style=vf_text_tool_words.then(@ui.text_style(color=Data(if hot { ink.ink } else { ink.muted }))))
-    |> ignore
-  })
-  c.semantics(b, Button, id~, label~)
-  @sf.tip(c, key + "/tip", id, label, side=Bottom)
-  c.clicked(id)
-}
-
-///|
-/// The ways to the image before and after (FilePreview.css.ts fpStep): 40 discs of the canvas at 80% over a 12 blur,
-/// 16 in from the sides, in the middle; there while the bar is (or the pointer is on one), none where there is none.
+/// The ways to the image before and after (@sf.viewer_steps), while an image steps through others and is not marked.
 pub fn vf_steps(vw : Viewer, c : @ui.Ctx, src : Source, shown : Double) -> Unit {
   if vw.shown_kind() != Some(KImage) || marking.on {
     return
   }
   let (before, after) = vw.near(src)
-  if before is None && after is None {
-    return
+  let went = @sf.viewer_steps(c, "preview", before is Some(_), after is Some(_), vw.bars_shown(), shown)
+  if went != 0 {
+    vw.go(c, src, went, 0.0)
   }
-  let p = @sf.theme().p
-  let awake = vw.bars_shown()
-  let glass = @ui.Glass::frosted(blur=vf_step_blur, tint=@sf.alpha(p.canvas, vf_step_share), solid=p.canvas)
-  let small = c.width <= vf_small_w
-  c.box(style=if small { vf_steps_row_small } else { vf_steps_row }, fn() {
-    for side in [(before, -1, "chevron-left", "web-main.preview.prevKey"), (after, 1, "chevron-right", "web-main.preview.nextKey")] {
-      if side.1 > 0 {
-        c.box(style=vf_steps_gap, fn() {  }) |> ignore
-      }
-      let id = c.id("preview/go/\{side.1}")
-      match side.0 {
-        Some(_) => {
-          let hot = c.lit(id) || c.pressed(id)
-          let seen = @motion.animate(c, "preview/go-seen/\{side.1}", if awake || hot { 1.0 } else { 0.0 }, spec=@motion.tween(
-              if awake || hot {
-                vf_wake_ms
-              } else {
-                vf_rest_fade_ms
-              },
-              ease=Out,
-            ))
-          c.cursor(id, Hand)
-          if seen > 0.0 && c.clicked(id) {
-            vw.go(c, src, side.1, 0.0)
-          }
-          let b = c.box(style=if small { vf_step_small } else { vf_step }, glass~, id=if seen > 0.0 { id } else { 0 }, fn() {
-            @sf.icon(c, side.2, size=vf_step_icon, color=p.text) |> ignore
-          })
-          c.semantics(b, Button, id~, label=@sf.t(side.3))
-          c.look(b, @ui.look(alpha=seen * shown))
-        }
-        None => c.box(style=if small { vf_step_none_small } else { vf_step_none }, fn() {  }) |> ignore
-      }
-    }
-  })
-  |> ignore
 }
 
 ///|
@@ -395,25 +264,16 @@ pub fn vf_steps(vw : Viewer, c : @ui.Ctx, src : Source, shown : Double) -> Unit 
 /// core's download of it, downloads.mbt).
 pub fn vf_facts(vw : Viewer, c : @ui.Ctx, src : Source, dl : Json?) -> Unit {
   let v = vw
-  let p = @sf.theme().p
-  @sf.icon(c, "file", size=vf_facts_icon, color=p.muted) |> ignore
-  c.box(style=vf_facts_name_box, fn() { c.text(v.file.name, style=vf_facts_name) |> ignore }) |> ignore
-  let ext = match @sf.lower(v.file.name).rev_find(".") {
-    Some(i) if i > 0 && v.file.name.length() - i - 1 <= vf_ext_most =>
-      upper(v.file.name.view(start_offset=i + 1).to_owned())
-    _ => ""
-  }
-  c.text(if ext == "" { @sf.file_size(v.file.size) } else { @sf.file_size(v.file.size) + " · " + ext }, style=vf_facts_words)
-  |> ignore
-  c.text(
+  @sf.viewer_facts(
+    c,
+    v.file.name,
+    v.file.size,
     if v.shown_kind() is None {
       @sf.t("web-main.preview.unsupported")
     } else {
       pv("android-chat.file.tooBigToShow")
     },
-    style=vf_facts_words,
   )
-  |> ignore
   if v.asked && v.bytes is None && v.error is None {
     vf_coming(v, c)
     return
@@ -427,10 +287,10 @@ pub fn vf_facts(vw : Viewer, c : @ui.Ctx, src : Source, dl : Json?) -> Unit {
     return
   }
   if text(dl, "state") == "failed" {
-    c.text(text(dl, "statusText"), style=vf_facts_failed) |> ignore
+    @sf.viewer_failed(c, text(dl, "statusText"))
   }
   match v.error {
-    Some(e) => c.text(@sf.t("web-main.preview.loadFailed", args=[("error", e)]), style=vf_facts_failed) |> ignore
+    Some(e) => @sf.viewer_failed(c, @sf.t("web-main.preview.loadFailed", args=[("error", e)]))
     None => ()
   }
   // an APK: 安装 first, handed to the system's installer (FilePreview.kt: install, strong); 下载 then the quieter
@@ -458,165 +318,8 @@ pub fn vf_coming(vw : Viewer, c : @ui.Ctx) -> Unit {
 let vf_copied_ms : Double = 1600.0
 
 ///|
-/// The width under which the viewer is laid out as a phone's (FilePreview.css.ts `max-width: 640px`).
-pub let vf_small_w : Double = 640.0
-
-///|
-/// The floating bar: 16 down (8 under 640), 16 in from the sides at most (8 under 640), 1080 wide at most.
-let vf_head_top : Double = 16.0
-
-///|
-let vf_head_top_small : Double = 8.0
-
-///|
-let vf_head_side : Double = 32.0
-
-///|
-let vf_head_side_small : Double = 16.0
-
-///|
-let vf_head_most : Double = 1080.0
-
-///|
-/// What the floating bar is laid in: the window's width, it in the middle.
-// kept across runs: a value (no field of it changes)
-let vf_head_room : @ui.Style = @ui.css("w=Full align=ACenter")
-
-///|
-/// The floating bar (fpHead): 44 high, 12 between what it holds, 16 in at its start and 6 at its end (4 and 12 under
-/// 640), its corner 14.
-// kept across runs: a value (no field of it changes)
-let vf_head_box : @ui.Style = @ui.css("row h=S11 gap=S3 pl=S4 pr=S1_5 radius=Xl align=ACenter clip")
-
-///|
-// kept across runs: a value (no field of it changes)
-let vf_head_box_small : @ui.Style = @ui.css("row h=S11 gap=S1 pl=S3 pr=S1_5 radius=Xl align=ACenter clip")
-
-///|
-/// Its name and meta (fpTitle): the name first, its line's meta after it 10 on; the rest pushed to the end.
-// kept across runs: a value (no field of it changes)
-let vf_head_title : @ui.Style = @ui.css("row gap=S2_5 pr=S3 align=AEnd clip")
-
-///|
-// kept across runs: a value (no field of it changes)
-let vf_head_gap : @ui.Style = @ui.style(w=@sf.grow)
-
-///|
-// kept across runs: a value (no field of it changes)
-let vf_head_tools : @ui.Style = @ui.css("row gap=S0_5 align=ACenter")
-
-///|
-// kept across runs: a value (no field of it changes)
-let vf_head_name : @ui.TextStyle = @ui.text_style(size=Base, weight=Semibold, color=Fg, wrap=false, w=Cut)
-
-///|
-// kept across runs: a value (no field of it changes)
-let vf_head_meta : @ui.TextStyle = @ui.text_style(size=Xs, color=Muted, wrap=false)
-
-///|
-/// The zoom's steps (a quarter more or less each), and the room for a scale's rounding at its ends.
-let vf_zoom_step : Double = 1.25
-
-///|
-let vf_zoom_slack : Double = 0.000001
-
-///|
 /// 预览 / 源码 in the bar (FilePreview.css.ts: the Segmented 120 wide, less its 2 in).
 let vf_tabs_item : Double = 58.0
-
-///|
-/// The ways beside: 22 chevrons; their glass (the canvas at 80% over a 12 blur); coming as the bar does (120 ms) and
-/// going slower (320 ms).
-let vf_step_icon : Double = 22.0
-
-///|
-let vf_step_blur : Double = 12.0
-
-///|
-let vf_step_share : Double = 0.8
-
-///|
-let vf_wake_ms : Double = 120.0
-
-///|
-let vf_rest_fade_ms : Double = 320.0
-
-///|
-/// A file told of: its mark (44), an extension said up to 12 letters.
-let vf_facts_icon : Double = 44.0
-
-///|
-let vf_ext_most : Int = 12
-
-///|
-/// What the bar is laid in: the window's width, at its top.
-// kept across runs: a value (no field of it changes)
-let vf_layer : @ui.Style = @ui.css("w=Full")
-
-///|
-// kept across runs: a value (no field of it changes)
-let vf_zoom : @ui.Style = @ui.css("row gap=S0_5 align=ACenter")
-
-///|
-// kept across runs: a value (no field of it changes)
-let vf_text_tool_box : @ui.Style = @ui.css(
-  #|h=S8 min_w=S9 px=S2 radius=Xl align=ACenter justify=JCenter hovered{bg=Hover}
-)
-
-///|
-// kept across runs: a value (no field of it changes)
-let vf_text_tool_wide : @ui.Style = vf_text_tool_box.then(@ui.css("min_w=S12"))
-
-///|
-// kept across runs: a value (no field of it changes)
-let vf_text_tool_words : @ui.TextStyle = @ui.text_style(size=Xs, wrap=false)
-
-///|
-/// The ways beside, 16 in from the window's sides, in the middle of its height.
-// kept across runs: a value (no field of it changes)
-let vf_steps_row : @ui.Style = @ui.css("row w=Full h=Full px=S4 align=ACenter")
-
-///|
-/// Under 640: 36 discs, 8 in.
-// kept across runs: a value (no field of it changes)
-let vf_steps_row_small : @ui.Style = @ui.css("row w=Full h=Full px=S2 align=ACenter")
-
-///|
-// kept across runs: a value (no field of it changes)
-let vf_step_small : @ui.Style = @ui.css("w=S9 h=S9 radius=Full align=ACenter justify=JCenter shadow=Base hovered{bg=Bg}")
-
-///|
-// kept across runs: a value (no field of it changes)
-let vf_step_none_small : @ui.Style = @ui.css("w=S9")
-
-///|
-// kept across runs: a value (no field of it changes)
-let vf_steps_gap : @ui.Style = @ui.style(w=@sf.grow)
-
-///|
-// kept across runs: a value (no field of it changes)
-let vf_step : @ui.Style = @ui.css("w=S10 h=S10 radius=Full align=ACenter justify=JCenter shadow=Base hovered{bg=Bg}")
-
-///|
-// kept across runs: a value (no field of it changes)
-let vf_step_none : @ui.Style = @ui.css("w=S10")
-
-///|
-// kept across runs: a value (no field of it changes)
-let vf_facts_name_box : @ui.Style = @ui.css("max_w=S96")
-
-///|
-/// A file told of (fpNote): its name 14 in 600, what is said of it 13 and quiet, 14 between them (the note's gap).
-// kept across runs: a value (no field of it changes)
-let vf_facts_name : @ui.TextStyle = @ui.text_style(size=Base, weight=Semibold, color=Fg, center=true)
-
-///|
-// kept across runs: a value (no field of it changes)
-let vf_facts_words : @ui.TextStyle = @ui.text_style(size=Sm, color=Muted, center=true)
-
-///|
-// kept across runs: a value (no field of it changes)
-let vf_facts_failed : @ui.TextStyle = @ui.text_style(size=Sm, color=Danger, center=true)
 
 ///|
 /// A chat's text or Markdown open in its preview, read in the desktop's reader (FilePreview.tsx hands it to the same
