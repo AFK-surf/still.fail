@@ -20,7 +20,10 @@ fn place_page(c : @ui.Ctx, src : Source, w : Workspace, place : String) -> Unit 
     _ =>
       c.box(style=place_across, fn() {
         match @settings.route_of(place) {
-          Some(r) => @settings.page(c, core, here, r, root=true)
+          Some(r) =>
+            if !setting_route(c, src, w, r, { back: None, top: 0.0, foot: 0.0, named: false }) {
+              @settings.page(c, core, here, r, root=true)
+            }
           None => ()
         }
       })

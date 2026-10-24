@@ -80,19 +80,22 @@ fn look_page(
           })
         None => ()
       }
-      blocks.push(fn() {
-        c.box(style=narrow_title_box, fn() {
-          c.box(style=narrow_title_line, fn() {
-            c.box(style=narrow_title_words, fn() { c.text(title, style=narrow_title) |> ignore }) |> ignore
-            match actions {
-              Some(f) => f()
-              None => ()
-            }
+      // (a place's top page: the frame's bar over it names it)
+      if !frame.named {
+        blocks.push(fn() {
+          c.box(style=narrow_title_box, fn() {
+            c.box(style=narrow_title_line, fn() {
+              c.box(style=narrow_title_words, fn() { c.text(title, style=narrow_title) |> ignore }) |> ignore
+              match actions {
+                Some(f) => f()
+                None => ()
+              }
+            })
+            |> ignore
           })
           |> ignore
         })
-        |> ignore
-      })
+      }
       if lead != "" {
         blocks.push(fn() { c.box(style=narrow_lead_box, fn() { c.text(lead, style=narrow_lead) |> ignore }) |> ignore })
       }
@@ -142,14 +145,21 @@ let narrow_lead : @ui.TextStyle = @sf.secondary.then(@sf.full_words)
 let narrow_foot : Double = 30.0
 
 ///|
-/// A section of the page: its title over what it holds (wide: the web's Section; narrow: SectionHeader where `heads`,
-/// else what it holds alone, as the web's mobile pages leave a group's title out).
-fn look_section(c : @ui.Ctx, look : Look, title : String, body : () -> Unit, heads? : Bool = false) -> Unit {
+/// A section of the page: its title over what it holds, `note` what it holds said by it (wide: the web's Section;
+/// narrow: SectionHeader where `heads`, else what it holds alone, as the web's mobile pages leave a group's title out).
+fn look_section(
+  c : @ui.Ctx,
+  look : Look,
+  title : String,
+  body : () -> Unit,
+  heads? : Bool = false,
+  note? : String = "",
+) -> Unit {
   match look {
-    Wide => @sf.section(c, title, body)
+    Wide => @sf.section(c, title, body, note~)
     Narrow => {
       if heads && title != "" {
-        look_heading(c, look, title)
+        look_heading(c, look, title, note~)
       }
       body()
     }
@@ -158,17 +168,37 @@ fn look_section(c : @ui.Ctx, look : Look, title : String, body : () -> Unit, hea
 
 ///|
 /// A heading over a group (narrow: SectionHeader, 24 in, its words strong; wide: a section's title).
-fn look_heading(c : @ui.Ctx, look : Look, title : String) -> Unit {
+fn look_heading(c : @ui.Ctx, look : Look, title : String, note? : String = "") -> Unit {
   match look {
-    Narrow => c.box(style=narrow_heading_line, fn() { c.text(title, style=narrow_heading) |> ignore }) |> ignore
-    Wide => c.box(style=wide_heading_line, fn() { c.text(title, style=wide_heading) |> ignore }) |> ignore
+    // what the group holds said at its end (SectionHeader's trailing)
+    Narrow =>
+      c.box(style=narrow_heading_line, fn() {
+        c.text(title, style=narrow_heading) |> ignore
+        c.spacer()
+        if note != "" {
+          c.text(note, style=narrow_heading_note) |> ignore
+        }
+      })
+      |> ignore
+    Wide =>
+      c.box(style=wide_heading_line, fn() {
+        c.text(title, style=wide_heading) |> ignore
+        if note != "" {
+          c.text(note, style=wide_value) |> ignore
+        }
+      })
+      |> ignore
   }
 }
 
 ///|
+// kept across runs: a value (no field of it changes)
+let narrow_heading_note : @ui.TextStyle = @sf.secondary.then(@sf.one_line)
+
+///|
 /// SectionHeader's line: 24 in, 20 at its end, 14 over, 6 under.
 // kept across runs: a value (no field of it changes)
-let narrow_heading_line : @ui.Style = @ui.css("row w=Full pl=S6 pr=S5 pt=S3_5 pb=S1_5 align=AEnd")
+let narrow_heading_line : @ui.Style = @ui.css("row w=Full pl=S6 pr=S5 pt=S3_5 pb=S1_5 gap=S2 align=AEnd")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -276,6 +306,40 @@ fn look_switch(c : @ui.Ctx, look : Look, key : String, title : String, on : Bool
 }
 
 ///|
+/// A row that says how something stands, going nowhere: its title, a note under it (narrow: on its card; wide: the
+/// web's list row, no ground under the pointer).
+fn look_said_row(c : @ui.Ctx, look : Look, title : String, note : String) -> Unit {
+  match look {
+    Narrow =>
+      c.box(style=narrow_said_row, fn() {
+        c.box(style=narrow_row_words, fn() {
+          c.text(title, style=narrow_row_title) |> ignore
+          if note != "" {
+            c.text(note, style=@sf.secondary.then(@sf.full_words)) |> ignore
+          }
+        })
+        |> ignore
+      })
+      |> ignore
+    Wide =>
+      c.box(style=desk_list_row, fn() {
+        c.box(style=desk_list_text, fn() {
+          c.text(title, style=desk_list_title) |> ignore
+          if note != "" {
+            c.text(note, style=desk_note) |> ignore
+          }
+        })
+        |> ignore
+      })
+      |> ignore
+  }
+}
+
+///|
+// kept across runs: a value (no field of it changes)
+let narrow_said_row : @ui.Style = @ui.css("row w=Full px=S3 py=S3 gap=S3 radius=Inner align=ACenter")
+
+///|
 /// A finger's press rippling over a row (ListRow's, its corner concentric with its card's).
 fn finger_ripple(c : @ui.Ctx, id : Int) -> Unit {
   if @ui.pointing() is Finger {
@@ -320,6 +384,7 @@ pub fn back_label(p : Page) -> String {
     Home => @sf.t("android-misc.bar.place.chats")
     Settings | Setting(Route::Home) => @sf.t("android-settings.title")
     Setting(Route::About) => @sf.t("web-pages.settings.nav.about")
+    Setting(Route::Memories) => @sf.t("web-pages.settings.memory.title")
     _ => @sf.t("common.back")
   }
 }

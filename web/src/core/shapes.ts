@@ -5572,6 +5572,11 @@ export interface SkillFile {
 	share?: SkillShare;
 	/** What kind it is, in words: 项目记忆, station 内置, Skill. */
 	kindText?: string;
+	/**
+	 * Which part of the memory's list it is under: "project" (项目记忆), "skill" (其他 skill), "builtin"
+	 * (the station's own, folded under them).
+	 */
+	group?: string;
 	/** When it is read, for its page (`about`, else that it does not say). */
 	whenText?: string;
 	/** Its row's line (`brief`, else that it does not say when it is used). */

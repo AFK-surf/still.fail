@@ -1,0 +1,8 @@
+# 记忆 in a phone's window (sfdesk memory.mbt, one page in every frame; the web's mobile/Memory.tsx): MBUI_FIXTURE=
+# settings-memories. A row for each station, then Studio's memory.
+timeout 20000
+until 全局记忆 · 项目记忆
+wait 1200
+tap Studio
+wait 1800
+exit

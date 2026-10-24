@@ -142,9 +142,10 @@ export function answer(method: string, path: string, value: J): void {
     }
     skill.files = files;
     skill.size = size(bytes);
-    // What its page and its row say: what kind it is, when it is read (its row's line), its pages to pick between (its
+    // Which part of the list it is under, and what its page and its row say: what kind it is, when it is read (its row's line), its pages to pick between (its
     // SKILL.md, 总览, then each other file).
-    skill.kindText = t(project ? "core-logic.memory.kind.project" : get(skill, "builtin") === true ? "core-logic.memory.kind.builtin" : "core-logic.memory.kind.skill");
+    skill.group = project ? "project" : get(skill, "builtin") === true ? "builtin" : "skill";
+    skill.kindText = t(skill.group === "project" ? "core-logic.memory.kind.project" : skill.group === "builtin" ? "core-logic.memory.kind.builtin" : "core-logic.memory.kind.skill");
     skill.whenText = skill.about !== "" ? skill.about : t("core-logic.memory.no_when");
     skill.line = skill.brief !== "" ? skill.brief : t("core-logic.memory.no_when");
     skill.pages = [
