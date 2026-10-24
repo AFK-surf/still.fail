@@ -705,6 +705,8 @@ fn fixture_topic_inner(f : Fixture, name : String, params : Map[String, Json]) -
           "ws2": { "alert": 0, "unread": 2, "tone": "done" },
         },
         "others": if f.workspace == "ws1" { "done" } else { "alert" },
+        // what the badge counts, as the core says it (the prefs' badgeKinds, or their defaults)
+        "badgeKinds": { "on": true, "wait": true, "failed": true, "done": false, "message": false },
       })
     "status" => Some({ "items": [] })
     // what the last update brought (home_news.mbt): said on MBUI_FIXTURE=home-news only
