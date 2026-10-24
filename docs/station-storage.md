@@ -217,9 +217,13 @@ The archive and hide columns (`archived_by`, `shown_at`, `cwd`, `home`,
   written; a watcher asking past the end is told where it ends). The rest comes
   from `GET /sessions/:key/timeline`: `?before=&limit=` (a page before),
   `?after=&limit=` (what comes after an entry), `?from=&to=` (a stretch), each
-  answer saying how many entries there are (`end`); the station keeps each
-  watched transcript parsed incrementally (a read of a page still reads the
-  file). With `brief=1` on
+  answer saying how many entries there are (`end`). The station keeps each
+  watched transcript parsed incrementally, and a reader keeps those it was asked
+  pages of in brief (`read/transcripts.ts`, at most 40,000 entries, the least
+  recently read let go; the pool sends a session's pages to the reader that read
+  it last), so a page is a slice and a read goes on from where the last left
+  off; a stretch read whole is read from the file. A transcript is read 4 MB at
+  a time (`read/tail.ts`), never as one buffer. With `brief=1` on
   either, entries come in brief, as an execution history shows them before a
   step is opened (`read/transcript.ts` `brief`, marked `brief: true`): a call
   longer than 600 characters by the fields of its input that say what it does
