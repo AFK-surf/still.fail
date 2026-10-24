@@ -781,7 +781,7 @@ fn station_env_editor(c : @ui.Ctx, core : Core, address : String) -> Unit {
     }
   }
   let saving = is_doing(core, ["agentEnv.form.save"], [("station", address), ("form", form)])
-  c.box(style=desk_card, fn() {
+  c.box(style=st_footed_card(), fn() {
     let typed = @sf.textarea(c, "env/" + address, rows=6, field=field_, placeholder=env_placeholder)
     if env_seeded.contains(address) && typed != text(d, "text") && typed != env_sent.get(address).unwrap_or("") {
       env_sent[address] = typed
@@ -817,7 +817,7 @@ fn station_env_editor(c : @ui.Ctx, core : Core, address : String) -> Unit {
         |> ignore
       }
     }
-    c.box(style=st_card_actions, fn() {
+    c.box(style=st_foot_actions(), fn() {
       if flag(d, "dirty") &&
         @sf.button(c, @sf.t("common.cancel"), key="env-reset/" + address, tone=Ghost) {
         env_seeded.remove(address)
@@ -1137,3 +1137,16 @@ let st_env_problems : @ui.Style = @ui.css("w=Full gap=S1")
 /// A card's buttons at its foot, at its end (cardActions: 8 apart).
 // kept across runs: a value (no field of it changes)
 let st_card_actions : @ui.Style = @ui.css("row w=Full gap=S2 justify=JEnd")
+
+///|
+/// A card with its buttons last (st_foot_actions): its foot as far in as makes them concentric with its corners
+/// (@sf.card_foot_in).
+fn st_footed_card() -> @ui.Style {
+  desk_card.then(@sf.foot_pad(@sf.button_height()))
+}
+
+///|
+/// A st_footed_card's buttons at its end, reaching past its words to its foot corner's.
+fn st_foot_actions() -> @ui.Style {
+  st_card_actions.then(@sf.foot_across(@sf.button_height()))
+}
