@@ -202,7 +202,6 @@ fn reset() -> Unit {
   viewer_awake_env.val = -1
   src_now.val = fn() { 0.0 }
   // a drive's files, a text read (keep.mbt, drive_reader.mbt)
-  // the chat's keys (wide_keys.mbt)
   reset_by_hand.val = true
 }
 

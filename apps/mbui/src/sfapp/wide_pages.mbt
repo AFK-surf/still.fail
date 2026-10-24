@@ -29,7 +29,6 @@ fn desk_pages() -> @sfdesk.Pages {
     files: fn(c, src, w) { files_landing(c, src, w) },
     folder: fn(c, src, w, at) { wide_folder(c, src, w, at) },
     other: fn(c, src, w, all, invited, page) { page_view(c, src, w, all, invited, page) },
-    offered: fn(c, src) { chat_offered(c, src) },
     core: fn(src, w) { settings_core(src, w) },
     sheet: fn() { sheet_open() },
     lower: fn() { lower_sheet() },

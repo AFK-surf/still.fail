@@ -812,8 +812,33 @@ fn switcher_offered(c : @ui.Ctx, src : Source, pages : Pages) -> Array[Offered] 
   // an action's first keys as shown (as kept on this device: settings' 快捷键)
   let prefs = (src.topic)("prefs", {}).value
   let keys = fn(action : String) { @settings.key_label(prefs, action) }
-  // the page's own (the open chat's: find, its services)
-  let all : Array[Offered] = (pages.offered)(c, src)
+  // the open chat's (ChatPage.tsx chat.find, chat.jobs)
+  let all : Array[Offered] = match app.nav.top() {
+    Chat(r) =>
+      [
+        {
+          id: "chat.find",
+          group: "",
+          label: "",
+          words: "",
+          icon: "search",
+          keys: keys("chat.find"),
+          typed: false,
+          run: fn() { chat_find_open(c, r) },
+        },
+        {
+          id: "chat.jobs",
+          group: "",
+          label: "",
+          words: "",
+          icon: "web",
+          keys: keys("chat.jobs"),
+          typed: false,
+          run: fn() { open_jobs_pop() },
+        },
+      ]
+    _ => []
+  }
   all.push({
     id: "chat.new",
     group: "",
