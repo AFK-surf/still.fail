@@ -94,7 +94,7 @@ final class NativeViews {
         final int block, blocks;
         final byte[] data;
         /** how many of its bytes have come; when the last of them came (System.nanoTime) */
-        int got;
+        volatile int got;
         long heard;
         /** its last answer came; it could not be read (the app said so, or nothing came for STALL_NS); let go of */
         volatile boolean done;
@@ -842,7 +842,8 @@ final class NativeViews {
          * MB), stopping short of one here or on its way for another reader, whose run it reads from instead. A run's
          * bytes are read as they come, not once the whole run is here: on a slow link a player waits for the bytes it
          * needs, not for the 4 MB around them. A run is let go of (the app stops reading it) once no reader is on it
-         * any more and some of it has not come: the player seeking elsewhere, a reader done; what came of it is kept.
+         * any more and some of it has not come: the player seeking elsewhere (or ahead of where the run has come to by
+         * a block or more: what lies between is not waited for), a reader done; what came of it is kept.
          * One that brings nothing for STALL_NS fails (its reader's load tried again by the player).
          */
         static final int BLOCK = 256 << 10, RUN = 16;
@@ -875,8 +876,15 @@ final class NativeViews {
             for (;;) {
                 if (closed) throw new InterruptedIOException("view " + id + " closed");
                 if (total >= 0 && p >= total) return -1;
-                // in the run it reads from, as it comes
+                // in the run it reads from, as it comes; but a jump ahead of where that run has come to by a block or
+                // more (a seek) is not waited for through what lies between: that run let go of, one asked from there
                 Read r = pace.read;
+                if (r != null && p >= r.offset && p < r.offset + r.length && !r.done && p - (r.offset + r.got) >= BLOCK) {
+                    synchronized (keptLock) {
+                        leave(pace);
+                    }
+                    r = null;
+                }
                 if (r != null && p >= r.offset && p < r.offset + r.length) {
                     int k;
                     try {
@@ -957,6 +965,7 @@ final class NativeViews {
 
         /** A run no reader wants any more: the app told to stop it, its blocks not to come (keptLock held). */
         void letGo(Read r) {
+            Host.log("view " + id + ": the read at " + r.offset + " let go of, " + r.got + " of its " + r.length + " bytes here");
             waiting.remove(r.id);
             for (int i = 0; i < r.blocks; i++) coming.remove(r.block + i, r);
             lettingGo.add(r.id);
