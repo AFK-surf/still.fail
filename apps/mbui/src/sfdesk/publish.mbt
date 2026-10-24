@@ -288,8 +288,16 @@ fn publish_message(c : @ui.Ctx, src : Source, here : MessageHere, m : Json?) -> 
 fn publish_file(c : @ui.Ctx, src : Source, here : MessageHere, f : Json) -> Unit {
   let k = text(Some(f), "k")
   let on = !publishing.off.contains(k)
-  let card = c.box(style=publish_file_box, fn() {
-    message_files(c, src, here, [@sfbase.attachment_of(field(Some(f), "file").unwrap_or(Json::null()))], false)
+  let a = @sfbase.attachment_of(field(Some(f), "file").unwrap_or(Json::null()))
+  // as wide as the chat draws it (message_files.mbt: an image's box, a file's card), the column's at most
+  let room = publish_page_w - 2.0 * publish_page_in
+  let w = match file_kind(a.name) {
+    "image" => dmin(image_box(a, image_least).0, room)
+    "video" => dmin(image_box(a, video_least).0, room)
+    _ => dmin(@sf.file_card_w, room)
+  }
+  let card = c.box(style=publish_file_box.then(@ui.style(w=Fixed(w))), fn() {
+    message_files(c, src, here, [a], false)
     c.layer(fn() {
       c.box(style=publish_tick, fn() {
         let now = @kit.checkbox(c, "publish/tick/" + k, if on { On } else { Off }, label=text(Some(f), "name")).value
@@ -352,6 +360,10 @@ let publish_column : @ui.Style = @ui.css("w=Full px=S8 pt=S20 pb=S24 gap=S4").th
 let publish_page_w : Double = 760.0
 
 ///|
+/// How far in its words are (page: 32 each side).
+let publish_page_in : Double = 32.0
+
+///|
 /// Who can read it (lead: the ui's size, muted).
 // kept across runs: a value (no field of it changes)
 let publish_lead : @ui.TextStyle = @ui.text_style(size=Sm, color=Muted, w=Full)
@@ -386,9 +398,9 @@ let publish_head_note : @ui.Style = @ui.css("row gap=S1 align=ACenter")
 let publish_meta : @ui.TextStyle = @ui.text_style(size=Xs, color=Muted, wrap=false)
 
 ///|
-/// The attachments under a message (files: 8 apart, 6 under its words).
+/// The attachments under a message (files: 8 apart, 6 under its words), each as wide as the chat draws it.
 // kept across runs: a value (no field of it changes)
-let publish_files : @ui.Style = @ui.css("row gap=S2 pt=S1_5")
+let publish_files : @ui.Style = @ui.css("w=Full gap=S2 pt=S1_5 align=AStart")
 
 ///|
 /// An attachment to tick (file), its box 8 in from its top right (tick).
