@@ -1,4 +1,5 @@
-// 通知 on the desktop, as the web's (ember web/src/pages/Notifications.tsx, Notifications.css.ts): what this device
+// 通知, one page in every frame, as the web's (ember web/src/pages/Notifications.tsx, Notifications.css.ts; laid out by its
+// width, page_look.mbt): what this device
 // tells its person about their chats, and how, laid out as a phone's notification settings are: a preview that follows
 // the settings (the banner of the kind looked at, the app's badge with what it counts, the dock on the screen's edge
 // with the kinds it holds), the ways it tells as tiles each with a picture of it, each kind of thing that happens with
@@ -27,17 +28,13 @@ fn notify_page_reset() -> Unit {
 let badge_chosen : Map[String, Bool] = {}
 
 ///|
-/// What the badge counts as kept (prefs `badgeKinds`; Notifications.tsx BADGE_DEFAULT where none is): itself on, the
-/// waits and failures, not done turns nor messages.
-fn badge_kind(core : Core, kind : String) -> Bool {
+/// What the badge counts, as the core keeps it (`workspaceMarks`' `badgeKinds`: the prefs', or as their older `badge`
+/// says), or as it was just chosen here.
+fn badge_kind(core : Core, here : Here, kind : String) -> Bool {
   match badge_chosen.get(kind) {
     Some(v) => v
     None =>
-      match field(field((core.topic)("prefs", Map::new()).value, "badgeKinds"), kind) {
-        Some(True) => true
-        Some(False) => false
-        _ => kind == "on" || kind == "wait" || kind == "failed"
-      }
+      flag(field((core.topic)("workspaceMarks", { "workspace": str(here.workspace) }).value, "badgeKinds"), kind)
   }
 }
 
@@ -71,35 +68,29 @@ let kind_open : Ref[String] = Ref("")
 let kinds_chosen : Map[String, Json] = {}
 
 ///|
-/// Whether `kind` comes as a banner now (Notifications.tsx banner): notifications on, and the kind's own; a done turn
-/// unless off.
+/// Whether `kind` comes as a banner now: notifications on, and the kind's own as the core keeps it (`kinds`, each said:
+/// attend.ts kindsOf) or as it was just chosen here; a done turn's unless off.
 fn kind_banner(notify : Json?, kind : String) -> Bool {
-  if notify is Some(_) && !flag(notify, "on") {
+  if !flag(notify, "on") {
     return false
   }
-  let kinds = field(notify, "kinds")
   let now = match kinds_chosen.get(kind) {
     Some(v) => Some(v)
-    None => field(kinds, kind)
+    None => field(field(notify, "kinds"), kind)
   }
-  match (kind, now) {
-    ("done", Some(String(v))) => v != "off"
-    ("done", _) => true
-    (_, Some(False)) => false
-    _ => true
+  match now {
+    Some(String(v)) => v != "off"
+    Some(True) => true
+    _ => false
   }
 }
 
 ///|
-/// A done turn's banner: off, while away (the default), or always.
+/// A done turn's banner: off, while away, or always (the core's `kinds.done`, or as just chosen here).
 fn done_banner(notify : Json?) -> String {
   match kinds_chosen.get("done") {
     Some(String(v)) => v
-    _ =>
-      match field(field(notify, "kinds"), "done") {
-        Some(String(v)) if v != "" => v
-        _ => "away"
-      }
+    _ => text(field(notify, "kinds"), "done")
   }
 }
 
@@ -121,7 +112,8 @@ fn set_kind(core : Core, kind : String, value : Json) -> Unit {
 ///|
 /// 通知 (NotificationsPage): until the core's settings have come, their cards' shapes; then the preview, 提醒方式's
 /// tiles, 通知类别's card of kinds, 其他.
-fn notify_page(c : @ui.Ctx, core : Core, here : Here) -> Unit {
+fn notify_page(c : @ui.Ctx, core : Core, here : Here, frame : PageFrame) -> Unit {
+  let look = look_of(c)
   let notify = (core.topic)("notify", Map::new()).value
   // what was chosen, once the core says it
   for k in notify_kinds {
@@ -130,7 +122,7 @@ fn notify_page(c : @ui.Ctx, core : Core, here : Here) -> Unit {
       _ => ()
     }
   }
-  let kept_badge = field((core.topic)("prefs", Map::new()).value, "badgeKinds")
+  let kept_badge = field((core.topic)("workspaceMarks", { "workspace": str(here.workspace) }).value, "badgeKinds")
   for k in ["on", "wait", "failed", "done", "message"] {
     match (badge_chosen.get(k), field(kept_badge, k)) {
       (Some(true), Some(True)) | (Some(false), Some(False)) => badge_chosen.remove(k)
@@ -140,7 +132,7 @@ fn notify_page(c : @ui.Ctx, core : Core, here : Here) -> Unit {
   let blocks : Array[() -> Unit] = []
   if notify is None {
     blocks.push(fn() { waiting_cards(c) })
-    desk_page(c, core, "notify", @sf.t("web-pages.settings.nav.notifications"), blocks)
+    look_page(c, core, frame, look, "notify", @sf.t("web-pages.settings.nav.notifications"), blocks)
     return
   }
   let permission = text(notify, "permission")
@@ -156,10 +148,21 @@ fn notify_page(c : @ui.Ctx, core : Core, here : Here) -> Unit {
   } else {
     notify_kinds.iter().find_first(fn(k) { on && kind_banner(notify, k) }).unwrap_or("wait")
   }
-  blocks.push(fn() { notify_preview(c, core, here, notify, on, shown_kind) })
+  // (narrow: 12 from the page's sides, as its cards are; the preview as wide as what is left)
+  let side = fn(body : () -> Unit) {
+    match look {
+      Narrow => c.box(style=np_narrow, body) |> ignore
+      Wide => body()
+    }
+  }
+  let preview_w = match look {
+    Narrow => c.width - 2.0 * np_narrow_in
+    Wide => desk_column(c)
+  }
+  blocks.push(fn() { side(fn() { notify_preview(c, core, here, notify, on, shown_kind, preview_w) }) })
   blocks.push(fn() {
-    @sf.section(c, @sf.t("web-pages.notifications.ways.title"), note=@sf.t("web-pages.notifications.noteDevice"), fn() {
-      c.box(style=way_tiles, fn() {
+    look_section(c, look, @sf.t("web-pages.notifications.ways.title"), heads=true, note=if look == Wide { @sf.t("web-pages.notifications.noteDevice") } else { "" }, fn() {
+      side(fn() { c.box(style=way_tiles, fn() {
         // a banner: the system's word asked first, or its settings opened where it refused
         let action = match permission {
           "denied" => @sf.t("web-pages.notifications.enable.open")
@@ -173,7 +176,7 @@ fn notify_page(c : @ui.Ctx, core : Core, here : Here) -> Unit {
             _ => use_notify(core, !on)
           }
         }
-        let badge_on = badge_kind(core, "on")
+        let badge_on = badge_kind(core, here, "on")
         if way_tile(c, "notify-badge", "badge", badge_on) {
           c.after_build("notify-badge", fn() { set_badge_kind(core, "on", !badge_on) })
         }
@@ -185,25 +188,28 @@ fn notify_page(c : @ui.Ctx, core : Core, here : Here) -> Unit {
           }
         }
       })
-      |> ignore
+      |> ignore })
+      if look == Narrow {
+        look_note(c, look, @sf.t("web-pages.notifications.noteDevice"))
+      }
     })
   })
   blocks.push(fn() {
-    @sf.section(c, @sf.t("web-pages.notifications.kinds.title"), fn() {
-      c.box(style=kinds_card, fn() {
+    look_section(c, look, @sf.t("web-pages.notifications.kinds.title"), heads=true, fn() {
+      side(fn() { c.box(style=kinds_card, fn() {
         for i, kind in notify_kinds {
           if i > 0 {
             c.box(style=kind_rule, fn() {  }) |> ignore
           }
-          kind_row(c, core, notify, kind, on, dock)
+          kind_row(c, core, here, notify, kind, on, dock)
         }
       })
-      |> ignore
+      |> ignore })
     })
   })
   blocks.push(fn() {
-    @sf.section(c, @sf.t("web-pages.notifications.more.title"), fn() {
-      c.box(style=more_card, fn() {
+    look_section(c, look, @sf.t("web-pages.notifications.more.title"), heads=true, fn() {
+      side(fn() { c.box(style=more_card, fn() {
         let preview = flag(notify, "preview") || field(notify, "preview") is None
         let now = @sf.switch_row(
           c,
@@ -237,11 +243,19 @@ fn notify_page(c : @ui.Ctx, core : Core, here : Here) -> Unit {
           c.text(@sf.t("web-pages.notifications.sound", args=[("name", "still.fail")]), style=sound_words) |> ignore
         }
       })
-      |> ignore
+      |> ignore })
     })
   })
-  desk_page(c, core, "notify", @sf.t("web-pages.settings.nav.notifications"), blocks)
+  look_page(c, core, frame, look, "notify", @sf.t("web-pages.settings.nav.notifications"), blocks)
 }
+
+///|
+/// The narrow page's blocks 12 from its sides, as its cards are.
+// kept across runs: a value (no field of it changes)
+let np_narrow : @ui.Style = @ui.css("w=Full px=S3")
+
+///|
+let np_narrow_in : Double = 12.0
 
 ///|
 /// One way of telling as a tile (Tile): a picture of it, its name, on or off; `action` (the system has to allow it
@@ -294,7 +308,7 @@ fn way_tile(c : @ui.Ctx, key : String, way : String, on : Bool, action? : String
 ///|
 /// A kind of thing that happens (KindRow): its name and what it is, what tells of it in a line, a chevron turned down
 /// while open; opened, each way on or off (a done turn's banner: off, while away, always).
-fn kind_row(c : @ui.Ctx, core : Core, notify : Json?, kind : String, on : Bool, dock : Bool) -> Unit {
+fn kind_row(c : @ui.Ctx, core : Core, here : Here, notify : Json?, kind : String, on : Bool, dock : Bool) -> Unit {
   let t = @sf.theme()
   let banner = on && kind_banner(notify, kind)
   let ways : Array[String] = []
@@ -307,7 +321,7 @@ fn kind_row(c : @ui.Ctx, core : Core, notify : Json?, kind : String, on : Bool, 
       },
     )
   }
-  if badge_kind(core, "on") && badge_kind(core, kind) {
+  if badge_kind(core, here, "on") && badge_kind(core, here, kind) {
     ways.push(@sf.t("web-pages.notifications.ways.badge"))
   }
   if dock && dock_setting("on") && dock_setting(kind) {
@@ -363,7 +377,7 @@ fn kind_row(c : @ui.Ctx, core : Core, notify : Json?, kind : String, on : Bool, 
       })
     }
     // 计入红点: whether the app's icon counts it (off while the badge is)
-    way_switch(c, "notify-badge/" + kind, @sf.t("web-pages.notifications.inBadge"), badge_kind(core, kind), !badge_kind(core, "on"), fn(
+    way_switch(c, "notify-badge/" + kind, @sf.t("web-pages.notifications.inBadge"), badge_kind(core, here, kind), !badge_kind(core, here, "on"), fn(
       v,
     ) {
       c.after_build("notify-badge/" + kind, fn() { set_badge_kind(core, kind, v) })
@@ -397,7 +411,7 @@ fn way_switch(c : @ui.Ctx, key : String, title : String, now : Bool, off : Bool,
 /// The preview (Preview): a small screen as the settings make it: the banner of `kind` (the latest one that came,
 /// else a sample) in its top right corner, the dock on its right edge with the kinds it holds, the app's icon in the
 /// Dock below with what its badge counts now.
-fn notify_preview(c : @ui.Ctx, core : Core, here : Here, notify : Json?, on : Bool, kind : String) -> Unit {
+fn notify_preview(c : @ui.Ctx, core : Core, here : Here, notify : Json?, on : Bool, kind : String, w : Double) -> Unit {
   let t = @sf.theme()
   let latest = items((core.topic)("notices", { "workspace": str(here.workspace) }).value, "items")
     .rev()
@@ -417,7 +431,7 @@ fn notify_preview(c : @ui.Ctx, core : Core, here : Here, notify : Json?, on : Bo
     (core.topic)("workspaceMarks", { "workspace": str(here.workspace) }).value,
     "badge",
   )
-  let badge = badge_kind(core, "on") && count > 0
+  let badge = badge_kind(core, here, "on") && count > 0
   let docked = if @ui.dock_available() && dock_setting("on") {
     notify_kinds.filter(fn(k) { dock_setting(k) })
   } else {
@@ -426,7 +440,7 @@ fn notify_preview(c : @ui.Ctx, core : Core, here : Here, notify : Json?, on : Bo
   let b = c.box(style=screen, fn() {
     // (its ground the web's linear-gradient(150deg, blue-bg, accent-bg): the column's width by the screen's height)
     c.box(left=0.0, top=0.0, right=0.0, bottom=0.0, fn() {
-      @sf.gradient(c, desk_column(c), screen_h, screen_angle, t.p.blue_bg, t.p.accent_bg, radius=screen_corner)
+      @sf.gradient(c, w, screen_h, screen_angle, t.p.blue_bg, t.p.accent_bg, radius=screen_corner)
     })
     |> ignore
     if banner {
