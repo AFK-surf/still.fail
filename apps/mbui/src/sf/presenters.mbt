@@ -194,6 +194,12 @@ pub fn presented_drawn() -> Bool {
 }
 
 ///|
+/// Whether the one presented as `serial` is still drawn (open, or going).
+pub fn presented_drawn_of(serial : Int) -> Bool {
+  presented_now.iter().any(fn(p) { p.serial == serial })
+}
+
+///|
 /// Asks before `action` (parts.tsx Confirm; PageParts.kt confirm): `title`, what it does (`words`), the cancel and
 /// `action` (in red when `danger`: what cannot be undone). Said, it closes and `run` goes on.
 pub fn confirm(
@@ -872,8 +878,16 @@ fn sheet_body(c : @ui.Ctx, key : String, p : Presented) -> Unit {
       if description != "" {
         c.box(style=sheet_words_at, fn() { c.text(description, style=sheet_lead) |> ignore }) |> ignore
       }
-      // (filling its room, a tall one lays out its own sides)
-      c.box(style=if x.tall > 0.0 { sheet_grows } else { sheet_panel }, fn() { (x.body)(c, close) }) |> ignore
+      // what it holds in from the sheet's sides as its words are, opened by nothing (a form, a question); one opened
+      // by a press, as its rows are in a panel beside it, lays out its own sides (filling its room when tall)
+      let room = if x.tall > 0.0 {
+        sheet_grows
+      } else if p.from != Unanchored {
+        full_width
+      } else {
+        sheet_panel
+      }
+      c.box(style=room, fn() { (x.body)(c, close) }) |> ignore
       match x.foot {
         Some(f) => c.box(style=sheet_foot_at, fn() { f(c, close) }) |> ignore
         None => ()
@@ -1044,9 +1058,10 @@ let sheet_row_note : @ui.TextStyle = @ui.text_style(size=Xs, color=Muted)
 let sheet_search_at : @ui.Style = @ui.css("w=Full px=S5 pb=S2_5")
 
 ///|
-/// What a panel holds in a sheet: its rows' 12 in, 24 under.
+/// What a panel holds in a sheet: 20 in from its sides as the phone's sheets' words are (PageParts.kt confirm, ask;
+/// Composer.kt askToShare), 24 under.
 // kept across runs: a value (no field of it changes)
-let sheet_panel : @ui.Style = @ui.css("w=Full px=S3 pb=S6 gap=S2_5")
+let sheet_panel : @ui.Style = @ui.css("w=Full px=S5 pb=S6 gap=S2_5")
 
 ///|
 /// A confirm's and a question's words (PageParts.kt confirm, ask): 20 in, 10 apart.
