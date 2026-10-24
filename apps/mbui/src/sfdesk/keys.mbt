@@ -11,9 +11,15 @@ pub fn keys(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
   let framed = is_wide(c)
   let prefs = (src.topic)("prefs", {}).value
   let pressed = fn(action : String) { @settings.action_pressed(c, prefs, action) }
+  // ⌘K: laid out Medium or Large its panel over the page (switcher.mbt); Small, the search's page in the lists' box,
+  // over the page open when it is not the lists (sfpages' search.mbt), what the panel offers in it
   if pressed("chat.switch") {
-    switcher_toggle(c)
-    wide.attention_open = false
+    if framed {
+      switcher_toggle(c)
+      wide.attention_open = false
+    } else {
+      @sfpages.search_summon(c, switcher_offered(c, src), app.nav.top() != Home)
+    }
   }
   if pressed("chat.new") {
     new_chat()
