@@ -72,7 +72,8 @@ export function PublishMessages({ messages, ticking, whole = false }: { messages
 
 function PreviewMessage({ message: m, ticking }: { message: PublishMessage; ticking: Ticking }) {
   const named = new Map(m.files.map((f) => [f.name, f.file]));
-  const placed = m.agent ? m.files.filter((f) => m.text.includes(`](${f.name})`) || m.text.includes(`](${encodeURI(f.name)})`)) : [];
+  // Which of them its words place is the core's (placed.ts): drawn there, the rest under it.
+  const placed = m.files.filter((f) => m.placed?.includes(f.name) ?? false);
   const under = m.files.filter((f) => !placed.includes(f));
   const toggle = (name: string) => {
     const f = m.files.find((x) => x.name === name);

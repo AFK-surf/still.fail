@@ -5043,8 +5043,15 @@ export interface PublishMessage {
 	picture?: string;
 	/** Its Markdown, what looks secret in it already `[已隐藏]`. */
 	text: string;
+	/** An agent's `text` read as Markdown (markdown.ts): what the clients draw. Absent for a person's. */
+	md?: unknown;
 	/** Its attachments, ticked or not where they are shown (the panel shows them in their message). */
 	files: PublishFile[];
+	/**
+	 * The names of the files an agent's text places, drawn where it names them (placed.ts); the rest go below it.
+	 * Absent when it places none.
+	 */
+	placed?: string[];
 	/** How many things in it were hidden. */
 	hidden: number;
 	/** That in words (隐藏了 2 处); absent when none. */
