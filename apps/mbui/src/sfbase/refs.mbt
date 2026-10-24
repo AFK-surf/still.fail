@@ -22,9 +22,6 @@ priv struct RefField {
   mut marks : Array[(Int, Int)]
   mut marks_of : String
   mut marks_asked : String
-  /// the words before the last edit, with their marks and the words the core read them in (put back as they were:
-  /// a field giving its words up as sent, the app putting them back, knows them still)
-  mut before : (String, Array[(Int, Int)], String)
 }
 
 ///|
@@ -60,7 +57,6 @@ fn ref_field(key : String) -> RefField {
         marks: [],
         marks_of: "",
         marks_asked: "",
-        before: ("", [], ""),
       }
       ref_fields[key] = f
       f
@@ -107,7 +103,6 @@ pub fn refs_edits(c : @ui.Ctx, src : Source, key : String, input : @ui.Field, he
   let was = f.text
   let (wa, wc) = (f.anchor, f.caret)
   if now != was {
-    f.before = (was, f.marks, f.marks_of)
     let (start, took, put) = edit_of(was, now)
     // one character taken just before the caret: a mark ending there goes whole
     let one_back = wa == wc && anchor == caret && caret == wc - 1 && start == wc - 1 && took == wc && put == start
@@ -198,19 +193,15 @@ fn refs_ask_marks(c : @ui.Ctx, src : Source, key : String, now : String) -> Unit
 }
 
 ///|
-/// Words the app put in draft `key`'s field itself (a mark, the draft kept, put back, given up as sent): put there,
-/// seen as they are, not as written (no paste in them, no Backspace).
+/// Words the app put in draft `key`'s field itself (a mark, the draft kept, put back): put there, seen as they are,
+/// not as written (no paste in them, no Backspace).
 pub fn refs_put(key : String, input : @ui.Field, words : String, caret? : Int) -> Unit {
   let f = ref_field(key)
   let was = f.text
   input.set(words, caret?)
   let (anchor, at) = input.selection()
-  // its marks where they are now, those the change took gone; the words before the last edit put back, theirs
-  let (back, back_marks, back_of) = f.before
-  if words != was && words == back {
-    f.marks = back_marks
-    f.marks_of = back_of
-  } else if words != was {
+  // its marks where they are now, those the change took gone
+  if words != was {
     let (start, took, put) = edit_of(was, words)
     let moved = put - took
     f.marks = f.marks.filter_map(fn(m) {

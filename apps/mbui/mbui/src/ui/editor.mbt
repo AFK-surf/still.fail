@@ -574,10 +574,8 @@ fn EditorState::key(self : EditorState, code : Int, mods : Int, now : Double) ->
           }
           self.insert("\n")
         } else if self.text.length() > 0 {
+          // (the words stay: what is done with them, a message sent and its field emptied, is the app's)
           self.submitted = Some(self.text)
-          self.text = ""
-          self.caret = 0
-          self.anchor = 0
         }
       }
   }

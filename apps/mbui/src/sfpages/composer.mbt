@@ -370,10 +370,8 @@ fn composer_text(
     // `@` and a few letters: the chats they find over the composer (Enter picks one there)
     let menu = ref_menu(c, src, spec, w, cap, res.focused)
     match res.submitted {
-      // (the field gives its words up as sent: the draft keeps them until they go)
+      // (they stay in the field until they go)
       Some(words) => {
-        // (put back as the app's own: what the core read of them is asked again, not taken as none)
-        @sfbase.refs_put(w.key, w.field, words)
         if words != w.text {
           writing_text(src, w, words)
         }
