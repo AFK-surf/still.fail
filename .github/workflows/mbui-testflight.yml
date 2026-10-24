@@ -1,0 +1,93 @@
+name: mbui TestFlight (manual)
+on:
+  workflow_dispatch:
+    inputs:
+      sha:
+        description: Full current main SHA to test and release
+        required: true
+        type: string
+      version:
+        description: Explicit marketing version (not git commit count)
+        default: "0.1.0"
+        required: true
+        type: string
+      build:
+        description: Fresh positive build number (existing 0.1.0 build 4 is already used)
+        required: true
+        type: string
+# All versions of this app share one upload lock. Other uploaders must coordinate manually.
+concurrency:
+  group: mbui-testflight-6818750243
+  cancel-in-progress: false
+permissions:
+  contents: read
+jobs:
+  guard:
+    if: github.repository == 'AFK-surf/still.fail' && github.ref == 'refs/heads/main' && github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ github.sha }}
+      - run: bash apps/mbui/scripts/testflight-guard-test.sh
+      - run: bash apps/mbui/scripts/testflight-guard.sh checkout
+        env:
+          RELEASE_SHA: ${{ inputs.sha }}
+          RELEASE_VERSION: ${{ inputs.version }}
+          RELEASE_BUILD: ${{ inputs.build }}
+  tests:
+    needs: guard
+    uses: ./.github/workflows/mbui-check.yml
+  release:
+    needs: [guard, tests]
+    runs-on: xcode-27
+    timeout-minutes: 10
+    # Configure required reviewers, prevent self-review, and main-only deployment rules.
+    # No production/Cloudflare credentials are used by this job.
+    environment: ios-testflight
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_27.1.app/Contents/Developer
+      RELEASE_SHA: ${{ inputs.sha }}
+      RELEASE_VERSION: ${{ inputs.version }}
+      RELEASE_BUILD: ${{ inputs.build }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ github.sha }}
+      - run: bash apps/mbui/scripts/testflight-guard.sh checkout
+      - name: iOS's SDK 27.1 or later
+        shell: bash
+        run: |
+          v=$(xcrun --sdk iphoneos --show-sdk-version)
+          echo "iOS SDK $v ($(xcodebuild -version | head -1))"
+          case "$v" in 2[0-6].*|27.0*) echo "::error::iOS SDK $v: an iPhone Duo letterboxes an app built before 27.1"; exit 1 ;; esac
+      - uses: ./.github/actions/setup
+      - uses: ./.github/actions/mbui-moonbit
+      - name: Device build dependencies
+        run: |
+          rustup target add aarch64-apple-ios
+          (cd client/core-ts && pnpm install --frozen-lockfile --prefer-offline --ignore-scripts)
+      - name: Validate identity and profiles, build, sign, validate and upload
+        env:
+          IOS_TEAM_ID: ${{ vars.IOS_TEAM_ID }}
+          IOS_APP_GROUP: ${{ vars.IOS_APP_GROUP }}
+          IOS_RELEASE_REVIEWED: ${{ vars.IOS_RELEASE_REVIEWED }}
+          IOS_DISTRIBUTION_P12_B64: ${{ secrets.IOS_DISTRIBUTION_P12_B64 }}
+          IOS_DISTRIBUTION_P12_PASSWORD: ${{ secrets.IOS_DISTRIBUTION_P12_PASSWORD }}
+          IOS_APP_PROFILE_B64: ${{ secrets.IOS_APP_PROFILE_B64 }}
+          IOS_SHARE_PROFILE_B64: ${{ secrets.IOS_SHARE_PROFILE_B64 }}
+          IOS_SIGNING_SHA1: ${{ secrets.IOS_SIGNING_SHA1 }}
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          ASC_PRIVATE_KEY_B64: ${{ secrets.ASC_PRIVATE_KEY_B64 }}
+        run: bash apps/mbui/scripts/testflight.sh
+      - name: Clean temporary signing material (also on failure/cancellation)
+        if: always()
+        shell: bash
+        run: |
+          for dir in "$RUNNER_TEMP"/mbui-testflight.*; do
+            [ -d "$dir" ] || continue
+            security delete-keychain "$dir/signing.keychain-db" >/dev/null 2>&1 || true
+            rm -rf "$dir"
+          done
