@@ -13,12 +13,13 @@ import { useShortcut } from "./keymap.ts";
 import { placeStrokes, strokeLayer } from "@stillfail/ui/strokes.ts";
 import { Tip } from "./ui.tsx";
 import type { VirtualList } from "./virtual/list.tsx";
+import { findGo, findPlace, findStart, findStep, type FindAt } from "../../client/core-ts/src/chat-find.ts";
 import * as css from "./ChatFind.css.ts";
 import * as conversationCss from "./styles/conversation.css.ts";
 import * as chatCss from "./styles/chat.css.ts";
 
-/** The one the reader is at: the `k`th time the words are in message `seq`. */
-interface At { seq: number; k: number }
+/** The one the reader is at: the `k`th time the words are in message `seq` (where they go is the core's: chat-find.ts). */
+type At = FindAt;
 
 /** How far below what covers the pane's top what was found is put at least (some of what is before it shows). */
 const LEAD = 72;
@@ -107,15 +108,13 @@ export function useChatFind(list: RefObject<HTMLElement | null>, virtual: Virtua
     const q = query.trim();
     if (q === "") { setFound(null); setAt(null); setBringing(false); return; }
     let stale = false;
-    /** Where the reader starts: what is found in the messages drawn, else the nearest before them, else the first. */
+    /** Where the reader starts, from the messages drawn (chat-find.ts findStart). */
     const start = (hits: ChatFound["hits"]): At | null => {
       const { model } = latest.current;
       const showing = model.showing();
       const shown: number[] = [];
       for (let i = showing?.first ?? 0; showing && i <= showing.last; i++) { const key = model.keyAt(i); if (key?.startsWith("m:")) shown.push(Number(key.slice(2))); }
-      const [from, to] = [Math.min(...shown), Math.max(...shown)];
-      const hit = hits.find((h) => h.seq >= from && h.seq <= to) ?? hits.findLast((h) => h.seq < from) ?? hits[0];
-      return hit ? { seq: hit.seq, k: 0 } : null;
+      return shown.length ? findStart(hits, Math.min(...shown), Math.max(...shown)) : findStart(hits, null, null);
     };
     const timer = setTimeout(() => {
       void (async () => {
@@ -129,7 +128,7 @@ export function useChatFind(list: RefObject<HTMLElement | null>, virtual: Virtua
           const all = await api.find(thread, q, true);
           if (stale) return;
           setFound(all);
-          setAt((was) => (was && all.hits.some((h) => h.seq === was.seq) ? was : start(all.hits)));
+          setAt((was) => findGo(all.hits, was, 0, null, null).at ?? start(all.hits));
         } catch {
           // Its station away, or the core's an older one: what was found stays as it is.
         } finally {
@@ -252,28 +251,21 @@ export function useChatFind(list: RefObject<HTMLElement | null>, virtual: Virtua
     };
   }, [shown, words, at, drawn, messages, list]);
 
-  /** The next one (`by` 1) or the one before (-1), round from an end to the other. */
+  /** The next one (`by` 1) or the one before (-1), round from an end to the other (chat-find.ts findStep): as many
+   *  times in a message as its row draws them, where it is drawn (its text's marks, a link's address, are not words in it). */
   const step = (by: 1 | -1) => {
     if (!hits?.length) return;
-    const i = at ? hits.findIndex((h) => h.seq === at.seq) : -1;
-    if (i < 0 || !at) { setAt({ seq: hits[by > 0 ? 0 : hits.length - 1]!.seq, k: 0 }); return; }
-    // As many times as its row has them, where it is drawn (its text's marks, a link's address, are not words in it).
-    const times = (h: { seq: number; count: number }) => {
+    const drawn: Record<string, number> = {};
+    for (const h of hits) {
       const row = list.current ? rowOf(list.current, h.seq) : null;
-      const n = row ? rangesIn(row, words!).length : 0;
-      return n > 0 ? Math.min(n, h.count) : h.count;
-    };
-    const k = at.k + by;
-    if (k >= 0 && k < times(hits[i]!)) { setAt({ seq: at.seq, k }); return; }
-    const next = hits[(i + by + hits.length) % hits.length]!;
-    setAt({ seq: next.seq, k: by > 0 ? 0 : Math.max(0, times(next) - 1) });
+      if (row) drawn[String(h.seq)] = rangesIn(row, words!).length;
+    }
+    setAt(findStep(hits, at, by, drawn));
   };
 
   useShortcut("panel.close", open ? close : null);
 
-  const total = hits?.reduce((n, h) => n + h.count, 0) ?? 0;
-  const i = at && hits ? hits.findIndex((h) => h.seq === at.seq) : -1;
-  const position = i < 0 || !hits ? 0 : hits.slice(0, i).reduce((n, h) => n + h.count, 0) + Math.min(at!.k, hits[i]!.count - 1) + 1;
+  const { position, total } = findPlace(hits ?? [], at);
   const made = !open ? null : (
     <div className={css.bar} role="search" data-chat-find="" data-over={slot ? undefined : ""}>
       {found && !found.whole && (
