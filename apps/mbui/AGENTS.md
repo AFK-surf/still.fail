@@ -55,6 +55,17 @@ particular to this app:
     width. Nor on `@ui.pointing()`: a page's look and what it offers follow `@sf.touch_system()`, and the hand reaches
     it only through the library's primitives (`c.lit`, `c.menu_asked`, tips).
 
+## Motion
+
+- `docs/motion.md` says what moves and how; read it before adding or changing a motion. In short (the user,
+  2026-10-25):
+  - Every motion is one of nine kinds (in the hand, coming and going, moved or reshaped, flying, another page,
+    scrolled to, a control answering, waiting, emphasis), each set off one way, with the kind's presets.
+  - A place or a size moves only for its cause, from the frame of that cause. Nothing moves because its layout
+    differs from last frame's, and no measured size is a follow's target: what the window, the sidebar, a keyboard
+    or the tier does to a thing is no motion of its own.
+  - No time window is a cause, and no logic reads whether a motion runs.
+
 ## What is checked, and where
 
 - The app's screens are tested in the Tester: its draw list at the declared moment.

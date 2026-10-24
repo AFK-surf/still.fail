@@ -43,7 +43,13 @@ of a test (src/ui/motion_data.mbt).
 - Springs are solved, not stepped (`SpringPath`: under-, critically and over-damped in closed form, at rest by an
   envelope bound). Sent elsewhere mid-way, a spring goes on from where it is, as fast as it goes.
 - Logic waits for no motion's end. What leaves is told at once and drawn from what it was (a page popped, a sheet
-  closed: being changed so; where it is not yet, the code says so).
+  closed: being changed so; where it is not yet, the code says so). Nor does logic read whether a motion runs: what
+  is shown, what takes a press, when state is let go follow from the cause and the motion's declared end.
+- A motion is set off by its cause, in the frame of its cause, and says so: never found by comparing frames. A place
+  or a size moves because what it moves for changed (typed words, a page gone to, a row come in), not because its
+  laid-out box differs from last frame's, and no measured size is a follow's target; a box moved by what holds it (a
+  window resized, a keyboard, a pane made narrower) is laid out there at once. No time window is a cause ("moves within
+  150 ms of a change are the change's"): a window lets in whatever falls into it.
 - What follows another's layout is placed in the same layout, never chased by a motion: a segmented choice's thumb is
   laid out over its item (`Ctx::cover`), so a page sliding in or a window resized moves it with the item, in the same
   frame. Only another item chosen is a motion, between the items' places as laid out at each frame.
