@@ -18,7 +18,7 @@ import { stationBase } from "../station.tsx";
 import { VaultActions } from "../VaultApproval.tsx";
 import { AskCard } from "../VaultAsk.tsx";
 import {
-  ITEM_SECTIONS, KINDS, LASTS, SCOPES, blankForm, copySecret, itemPath, lastsChoice, lastsName, listLine, fieldsOf, formOf, formProblem, howLine, itemLine, kindName, masked, modeName, modesOf, putOf, useForm,
+  ITEM_SECTIONS, KINDS, LASTS, SCOPES, blankForm, copySecret, itemPath, lastsChoice, lastsName, formOf, formProblem, kindName, masked, modeName, modesOf, putOf, useForm,
   useVaultCall, useVaultItems, useVaults, type Form, type Kind, type Mode, type Opened, type VaultItemRow, type VaultRequest, type VaultRow, type VaultsView,
 } from "../vault.ts";
 import { t } from "../i18n.ts";
@@ -300,7 +300,7 @@ function LibraryVault({ entry, v, plain, many, quiet }: { entry: WorkspaceEntry;
                     <span className={css.rowIcon}><KindIcon kind={row.kind} /></span>
                     <span className={pagesCss.listRowText}>
                       <span className={pagesCss.listRowTitle}>{row.name}</span>
-                      <span className={css.rowMeta}>{plain && <><span className={css.riskTitle}>{t("web-pages.vault.risk.row")}</span> · </>}{listLine(row)}</span>
+                      <span className={css.rowMeta}>{plain && <><span className={css.riskTitle}>{t("web-pages.vault.risk.row")}</span> · </>}{row.lineText}</span>
                     </span>
                   </Link>
                 </li>
@@ -396,7 +396,7 @@ function ItemRow({ entry, row, readOnly, onOpen }: { entry: WorkspaceEntry; row:
     <span className={css.rowIcon}><KindIcon kind={row.kind} /></span>
     <span className={pagesCss.listRowText}>
       <span className={pagesCss.listRowTitle}>{row.name}</span>
-      <span className={css.rowMeta}>{itemLine(row)}</span>
+      <span className={css.rowMeta}>{row.agentText}</span>
     </span>
     {opening && <Spinner inline />}
   </>;
@@ -424,13 +424,13 @@ function DevicesRow({ entry, v, many }: { entry: WorkspaceEntry; v: VaultRow; ma
 function ItemDialog({ opened, row, onClose, onEdit }: { opened: Opened; row: VaultItemRow | undefined; onClose(): void; onEdit(): void }) {
   const p = opened.plain;
   return (
-    <Dialog open title={p.name} description={kindName(p.kind)} onClose={onClose}
+    <Dialog open title={p.name} description={opened.kindText} onClose={onClose}
       footer={<><span className={css.grow} /><Button variant="primary" onClick={onEdit}>{t("common.edit")}</Button></>}>
-      <div className={css.fields}>{fieldsOf(p).map((f) => <Secret key={f.key} label={f.label} value={f.value} secret={f.secret} mono={f.mono} />)}</div>
+      <div className={css.fields}>{opened.shown.map((f) => <Secret key={f.key} label={f.label} value={f.value} secret={f.secret} mono={f.mono} />)}</div>
       <div className={css.agentBox}>
         <span className={css.fieldLabel}>{t("web-pages.vault.forAgents")}</span>
         {row?.listed
-          ? <span>{row.modes.map((m) => howLine(m, row.hosts)).join("、")}{row.env ? <> · <code className={css.mono}>{row.env}</code></> : null}</span>
+          ? <span>{row.howText}{row.env ? <> · <code className={css.mono}>{row.env}</code></> : null}</span>
           : <span className={css.rowMeta}>{t("web-pages.vault.notForAgents")}</span>}
       </div>
     </Dialog>

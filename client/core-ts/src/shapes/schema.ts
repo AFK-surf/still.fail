@@ -1511,6 +1511,7 @@ export const SHAPES: Record<string, Shape> = {
     ["hosts", vec("String")],
     ["at", "i64", { client: "I54" }],
     ["save", opt("VaultSave"), { doc: "A request to keep a secret rather than use one: `vault.approve` keeps it (its scope unused)." }],
+    ["howText", "String", { default: true, doc: "How it would be given, in a line (代理 · 限 api.github.com)." }],
   ], { doc: "An agent's request to use an item, or to keep one, waiting on the viewer (`vault.approve`, `vault.deny`)." }),
   VaultRefusal: struct([
     ["station", "String"],
@@ -1527,6 +1528,8 @@ export const SHAPES: Record<string, Shape> = {
     ["refused", vec("VaultRefusal")],
     ["plain", opt("bool"), { doc: "No lock in the workspace: the library is kept in the clear on its station (its one vault, id `plain`), and any item but a subscription or a model's key is said to be at risk (docs/vault.md 不加锁的库)." }],
     ["plainLeft", opt("u32"), { doc: "Security mode on, items of the viewer's still kept in plain text from before: `vault.migrate` encrypts them into their own vault." }],
+    ["statusText", "String", { default: true, doc: "What the settings say of it at their row's end: how many wait to be approved, else how many items, else 未开启." }],
+    ["statusBad", "bool", { default: true, doc: "`statusText` says some wait to be approved." }],
   ], { doc: "The workspace's vaults as the viewer sees them (the `vaults` topic; client/core-ts/src/views/vault.ts, docs/vault.md)." }),
   VaultItemRow: struct([
     ["id", "String"],
@@ -1540,7 +1543,20 @@ export const SHAPES: Record<string, Shape> = {
     ["env", opt("String"), { doc: "The variable its listing suggests the command gets it in (`GH_TOKEN`)." }],
     ["lasts", opt("String"), { doc: "The longest grant it is given for, its own: `once`, `hour` or `chat` (none: its vault's, VaultRow `lasts`)." }],
     ["lastUse", opt("VaultUse"), { doc: "The last time an agent used it." }],
+    ["kindText", "String", { default: true, doc: "Its kind in a word (Token, SSH 密钥, 登录); \"\" unknown." }],
+    ["agentText", "String", { default: true, doc: "Whether agents may ask for it and how (允许 agent 申请 · 代理 · api.github.com), or 仅自己可见." }],
+    ["lineText", "String", { default: true, doc: "Its second line in a list: when an agent last used it, else `agentText`." }],
+    ["howText", "String", { default: true, doc: "How agents are given it, a line each way joined by 、 (代理 · 限 api.github.com)." }],
+    ["lastsText", "String", { default: true, doc: "Its longest grant in words: its own, or 跟随默认 · its vault's." }],
+    ["shut", vec("VaultField"), { default: true, doc: "Its fields before it is opened: what each is called over dots." }],
   ], { doc: "An item of a vault." }),
+  VaultField: struct([
+    ["key", "String"],
+    ["label", "String", { doc: "What it is called (值, 私钥, 用户名…)." }],
+    ["value", "String"],
+    ["secret", "bool", { doc: "Masked until shown." }],
+    ["mono", "bool", { doc: "In a fixed width." }],
+  ], { doc: "A field of an item as its page shows it (vault-words.ts shownFields): `vault.open` answers `shown`, a row says `shut`." }),
   VaultUse: struct([
     ["at", "Stamp"],
     ["session", "String"],
@@ -1550,6 +1566,7 @@ export const SHAPES: Record<string, Shape> = {
     ["command", opt("String")],
     ["hosts", vec("String")],
     ["denied", opt("bool"), { doc: "Asked for and turned down." }],
+    ["howText", "String", { default: true, doc: "How, in a line: the command it ran and its way, else how it was given." }],
   ], { doc: "An agent's use of an item (the station's `vault_audit`): when, in which chat, how." }),
   VaultUsesView: struct([
     ["item", "String"],

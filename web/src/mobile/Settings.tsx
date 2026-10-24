@@ -10,7 +10,7 @@ import { useStations, useConnects } from "../api.ts";
 import { useWorkspace } from "../cloud/api.ts";
 import { ROLE_LABEL } from "../cloud/settings.tsx";
 import { useLock } from "../cloud/Security.tsx";
-import { useVaults, vaultStatus } from "../vault.ts";
+import { useVaults } from "../vault.ts";
 import { Archive, ArrowUpRight, Bell, Brain, Chart, Check, ChevronRight, Im, Info, Key, Quota, Refresh, Server, ShieldCheck, Sliders, ViewColumns, Web, type IconProps } from "@stillfail/ui/icons.tsx";
 import type { ComponentType } from "react";
 import { WorkspaceMark, marked } from "../WorkspaceMark.tsx";
@@ -84,7 +84,9 @@ export function SettingsScreen() {
   const language = usePrefs((p) => p.language) ?? null;
   const bars = useBars();
   const lock = useLock(app.entry.id);
-  const vault = vaultStatus(useVaults(app.entry.id));
+  // (what the core says of it at the row's end)
+  const vaults = useVaults(app.entry.id);
+  const vault = vaults ? { text: vaults.statusText ?? "", bad: vaults.statusBad === true } : undefined;
   const at = (path: string) => () => app.push(app.at(path));
   const under = app.under();
   return (

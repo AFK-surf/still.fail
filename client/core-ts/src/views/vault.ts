@@ -56,6 +56,7 @@ import {
 import { type Checked, checkLock } from "../vault/lock-check.ts";
 import { ofAddress } from "../workspace.ts";
 import { stamp } from "../present.ts";
+import { howText, itemWords, kindText, modeText, shownFields, statusWords } from "../vault-words.ts";
 
 // deno-lint-ignore no-explicit-any
 type J = any;
@@ -484,6 +485,7 @@ export function vaultsView(inner: Inner, ws: string): J {
   const requestRow = (r: Request, itemName: string | null, vaultName: string, lasts: Scope) => ({
     id: r.id, vault: r.vault, vaultName, item: r.item, itemName, lasts,
     session: r.session, chat: r.chat, station: h.asked[r.id] ?? null, mode: r.mode, reason: r.reason, command: r.command ?? null, hosts: r.hosts ?? [], at: r.at,
+    howText: howText(r.mode, r.hosts ?? []),
     // A secret an agent asks to keep: what kind, and the account it is for.
     ...(r.save ? { save: { kind: r.save.kind, ...(r.save.username ? { username: r.save.username } : {}) } } : {}),
   });
@@ -501,7 +503,7 @@ export function vaultsView(inner: Inner, ws: string): J {
       .filter((r) => r.status === "pending" && r.vault === PLAIN)
       .sort((a, b) => a.at - b.at)
       .map((r) => requestRow(r, r.save?.name ?? h.plain[r.item]?.name ?? null, personal, h.plain[r.item]?.listing?.lasts ?? h.plainLasts?.lasts ?? "chat"));
-    return { ...base, plain: true, vaults: row, requests };
+    return { ...base, plain: true, vaults: row, requests, ...statusWords(row, requests) };
   }
   const self = me(lock, signerOf(inner));
   const vouched = certs(inner, ws, lock);
@@ -532,7 +534,7 @@ export function vaultsView(inner: Inner, ws: string): J {
       return requestRow(r, r.save?.name ?? listing?.name ?? null, h.vaults[r.vault]?.name ?? personal, listing?.lasts ?? h.vaults[r.vault]?.lasts ?? "chat");
     });
   // What is left of the plain library from before security mode, to be moved into the person's vault.
-  return { ...base, canSign: self !== null, setUp: mine !== undefined && mine.box === m.box, vaults, requests, ...(plainItems.length > 0 ? { plainLeft: plainItems.length } : {}) };
+  return { ...base, canSign: self !== null, setUp: mine !== undefined && mine.box === m.box, vaults, requests, ...statusWords(vaults, requests), ...(plainItems.length > 0 ? { plainLeft: plainItems.length } : {}) };
 }
 
 const clockOf = (inner: Inner) => {
@@ -550,6 +552,8 @@ function usesOf(inner: Inner, ws: string, vault: string): J[] {
     .sort((a, b) => b.at - a.at)
     .map((u) => ({
       item: u.item, at: stamp(u.at * 1000, clock), session: u.session, station: u.station, chatTitle: u.chatTitle, mode: u.mode, command: u.command, hosts: u.hosts,
+      // how, in a line: the command it ran (and its way), else how it was given
+      howText: typeof u.command === "string" && u.command !== "" ? `${u.command} · ${modeText(u.mode)}` : howText(u.mode, u.hosts ?? []),
       ...(u.denied ? { denied: true } : {}),
     }));
 }
@@ -576,6 +580,7 @@ function plainItemsView(inner: Inner, ws: string): J {
       listed: i.listing !== undefined, modes: i.listing?.modes ?? [], hosts: i.listing?.hosts ?? [], env: i.listing?.env ?? null, lasts: i.listing?.lasts ?? null,
       ...(last.has(i.id) ? { lastUse: last.get(i.id) } : {}),
     }))
+    .map((r) => ({ ...r, ...itemWords(r, held(inner, ws).plainLasts?.lasts) }))
     .sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : a.id < b.id ? -1 : 1));
   return { vault: PLAIN, name: t("core-misc.vault.personal"), open: true, items: list };
 }
@@ -606,6 +611,7 @@ export function itemsView(inner: Inner, ws: string, id: string): J {
         ...(last.has(i.id) ? { lastUse: last.get(i.id) } : {}),
       };
     })
+    .map((r) => ({ ...r, ...itemWords(r, v.lasts) }))
     .sort((a, b) => ((a.name ?? "") < (b.name ?? "") ? -1 : (a.name ?? "") > (b.name ?? "") ? 1 : a.id < b.id ? -1 : 1));
   return { vault: id, name: v.name, open: key !== null, items: list };
 }
@@ -652,7 +658,10 @@ function run(inner: Inner, c: Of, ctx: SpanContext | null): Effect.Effect<unknow
     case "deleteItem":
       return p("vault") === PLAIN ? v.deletePlain(p("item")) : v.deleteItem(p("vault"), p("item"));
     case "open":
-      return held(inner, c.workspace).plain[p("item")] ? v.openPlain(p("item")) : v.open(p("item"));
+      // (with its fields as its page shows them, and its kind in a word)
+      return (held(inner, c.workspace).plain[p("item")] ? v.openPlain(p("item")) : v.open(p("item"))).pipe(
+        Effect.map((o) => ({ ...(o as J), shown: shownFields(get(o, "plain")), kindText: kindText(get(get(o, "plain"), "kind")) })),
+      );
     case "migrate":
       return v.migrate();
     case "recover":

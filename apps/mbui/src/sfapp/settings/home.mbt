@@ -252,23 +252,9 @@ fn settings_home(c : @ui.Ctx, core : Core, here : Here) -> Unit {
             (core.push)(Security)
           }
         }
-        // the vault's row (Vault.kt VaultSettingsRow): what waits, else how many items, else off
-        let n = items(vaults, "requests").length()
-        let said = match vaults {
-          None => ""
-          Some(_) =>
-            if n > 0 {
-              fill("android-settings.vault.waiting", [("n", n.to_string())])
-            } else if items(vaults, "vaults").length() > 0 {
-              let mut total = 0
-              for x in items(vaults, "vaults") {
-                total += count(Some(x), "items")
-              }
-              fill("android-settings.vault.items", [("n", total.to_string())])
-            } else {
-              tr("android-settings.vault.off")
-            }
-        }
+        // the vault's row (Vault.kt VaultSettingsRow): what waits, else how many items, else off (the core's words)
+        let said = text(vaults, "statusText")
+        let n = if flag(vaults, "statusBad") { 1 } else { 0 }
         if go_row(c, "go-vault", tr("android-settings.vault.title"), value=said, bad=n > 0, icon="key") {
           (core.push)(Vault)
         }

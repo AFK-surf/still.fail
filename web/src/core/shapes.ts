@@ -5692,6 +5692,18 @@ export interface UsageView {
 	prices?: UsagePriceTable[];
 }
 
+/** A field of an item as its page shows it (vault-words.ts shownFields): `vault.open` answers `shown`, a row says `shut`. */
+export interface VaultField {
+	key: string;
+	/** What it is called (值, 私钥, 用户名…). */
+	label: string;
+	value: string;
+	/** Masked until shown. */
+	secret: boolean;
+	/** In a fixed width. */
+	mono: boolean;
+}
+
 /** An agent's use of an item (the station's `vault_audit`): when, in which chat, how. */
 export interface VaultUse {
 	at: Stamp;
@@ -5705,6 +5717,8 @@ export interface VaultUse {
 	hosts: string[];
 	/** Asked for and turned down. */
 	denied?: boolean;
+	/** How, in a line: the command it ran and its way, else how it was given. */
+	howText?: string;
 }
 
 /** An item of a vault. */
@@ -5726,6 +5740,18 @@ export interface VaultItemRow {
 	lasts?: string;
 	/** The last time an agent used it. */
 	lastUse?: VaultUse;
+	/** Its kind in a word (Token, SSH 密钥, 登录); "" unknown. */
+	kindText?: string;
+	/** Whether agents may ask for it and how (允许 agent 申请 · 代理 · api.github.com), or 仅自己可见. */
+	agentText?: string;
+	/** Its second line in a list: when an agent last used it, else `agentText`. */
+	lineText?: string;
+	/** How agents are given it, a line each way joined by 、 (代理 · 限 api.github.com). */
+	howText?: string;
+	/** Its longest grant in words: its own, or 跟随默认 · its vault's. */
+	lastsText?: string;
+	/** Its fields before it is opened: what each is called over dots. */
+	shut?: VaultField[];
 }
 
 /** A vault's items (the `vaultItems` topic). */
@@ -5771,6 +5797,8 @@ export interface VaultRequest {
 	at: number;
 	/** A request to keep a secret rather than use one: `vault.approve` keeps it (its scope unused). */
 	save?: VaultSave;
+	/** How it would be given, in a line (代理 · 限 api.github.com). */
+	howText?: string;
 }
 
 /** A vault the viewer is a member of. */
@@ -5823,6 +5851,10 @@ export interface VaultsView {
 	plain?: boolean;
 	/** Security mode on, items of the viewer's still kept in plain text from before: `vault.migrate` encrypts them into their own vault. */
 	plainLeft?: number;
+	/** What the settings say of it at their row's end: how many wait to be approved, else how many items, else 未开启. */
+	statusText?: string;
+	/** `statusText` says some wait to be approved. */
+	statusBad?: boolean;
 }
 
 /**
