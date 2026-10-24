@@ -2,7 +2,7 @@
 # The still.fail client core (client/core-ts of this repository) in Hermes on its Rust shell (client/shell), for the
 # Apple apps (src/host/apple_core.mm) and Android's (src/host/android_core.c on still.fail's prebuilt engine): builds the
 # pieces from the checkout and runs a headless smoke test. See core/README.md.
-#   scripts/core.sh deps | shell [TARGET] | hermes | hermes-kept [apple] | hermes-script FILE [OUT] | hermes-apple | engine [TARGET] | apple [TARGET]
+#   scripts/core.sh deps | shell [TARGET] | hermes [apple] | hermes-kept [apple] | hermes-script FILE [OUT] | hermes-apple | engine [TARGET] | apple [TARGET]
 #                   | smoke [build|run] | listen | exit | sealed | collate | login-test | vectors | sizes | clean | all
 #                   | chat-open | md-parse
 # EMBER: the still.fail checkout (default: this one, scripts/env.sh); out/core/ gets everything built.
@@ -255,12 +255,16 @@ engine() {
 
 # What an Apple app with the core needs for TARGET: Hermes, the engine (when stale), the shell's .a (still.fail's natives
 # by its key; where native.ts cannot say, the one here, else built by cargo: rebuild it with `shell`), the core's
-# bytecode (ENTRY, by default the media app's entry, as Android's).
+# bytecode (ENTRY, by default the media app's entry, as Android's). apple-native is what the app's link takes (all
+# but the bytecode, which only its bundle carries: scripts/mac.sh makes that beside the app's compile, `hermes apple`).
 APPLE_ENTRY=$ROOT/core/media-hermes.ts
-apple() {
+apple_native() {
   local target=${1:-aarch64-apple-darwin}
   engine $target || return 1
-  shell_prebuilt $target || [ -f $OUT/$target/libstillfail_shell.a ] || shell $target || return 1
+  shell_prebuilt $target || [ -f $OUT/$target/libstillfail_shell.a ] || shell $target
+}
+apple() {
+  apple_native "${1:-}" || return 1
   ENTRY=${ENTRY:-$APPLE_ENTRY} hermes
 }
 
@@ -441,12 +445,13 @@ sizes() {
 case "${1:-all}" in
   deps) deps ;;
   shell) shell "$2" ;;
-  hermes) hermes ;;
+  hermes) [ "${2:-}" != apple ] || ENTRY=${ENTRY:-$APPLE_ENTRY}; hermes ;;
   hermes-kept) hermes_kept "${2:-}" ;;
   hermes-script) hermes_script "$2" "${3:-}" ;;
   hermes-apple) hermes_apple ;;
   engine) engine "${2:-aarch64-apple-darwin}" ;;
   apple) apple "${2:-aarch64-apple-darwin}" ;;
+  apple-native) apple_native "${2:-aarch64-apple-darwin}" ;;
   listen) listen_test ;;
   chat-open) chat_open ;;
   md-parse) md_parse ;;
@@ -464,5 +469,5 @@ case "${1:-all}" in
   sizes) sizes ;;
   clean) rm -rf "$CARGO_TARGET_DIR"; echo "removed $CARGO_TARGET_DIR (out/core kept)" ;;
   all) deps; shell; smoke_build; smoke_run; sizes ;;
-  *) echo "usage: scripts/core.sh deps | shell [TARGET] | hermes | hermes-kept [apple] | hermes-script FILE [OUT] | hermes-apple | engine [TARGET] | apple [TARGET] | smoke [build|run] | listen | exit | collate | login-test | vectors | sizes | chat-open | md-parse | clean | all"; exit 2 ;;
+  *) echo "usage: scripts/core.sh deps | shell [TARGET] | hermes [apple] | hermes-kept [apple] | hermes-script FILE [OUT] | hermes-apple | engine [TARGET] | apple [TARGET] | apple-native [TARGET] | smoke [build|run] | listen | exit | collate | login-test | vectors | sizes | chat-open | md-parse | clean | all"; exit 2 ;;
 esac

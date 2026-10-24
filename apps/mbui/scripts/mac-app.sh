@@ -76,11 +76,10 @@ if [ "${1:-build}" = sign ]; then
   exit 0
 fi
 
-# the core's parts: its Rust shell and its engine (linked in), Hermes and its bytecode (carried). (Not `core.sh shell`
-# first when the .a was missing, as before: that built the shell with cargo, past its prebuilt part, on every CI run
-# whose Actions cache of out/core missed: 253 s of 427, 2026-10-24, 40069429045.)
-bash "$D/core.sh" apple aarch64-apple-darwin > "$OUT/core.log" 2>&1 || { tail -30 "$OUT/core.log"; exit 1; }
-t1=$(now)
+# the app with the core's parts: its Rust shell and its engine (linked in), Hermes and its bytecode (carried), which
+# scripts/mac.sh makes (the bytecode beside the app's compile). (Not `core.sh shell` first when the .a was missing, as
+# before: that built the shell with cargo, past its prebuilt part, on every CI run whose Actions cache of out/core
+# missed: 253 s of 427, 2026-10-24, 40069429045.)
 APP=stillfail MODE=release bash "$D/mac.sh" build > "$OUT/build.log" 2>&1 || { tail -40 "$OUT/build.log"; exit 1; }
 if grep -q 'built for newer macOS version' "$OUT/build.log"; then
   grep 'built for newer macOS version' "$OUT/build.log" | head -5 >&2
@@ -151,6 +150,6 @@ plutil -lint "$PLIST" > /dev/null
 codesign --force --sign - --timestamp=none "$APPDIR/Contents/Frameworks/hermes.framework"
 codesign --force --sign - --timestamp=none "$APPDIR/Contents/Resources/dock/StillfailDock"
 codesign --force --sign - --timestamp=none "$APPDIR"
-echo "mac-app.sh: $NAME.app 0.1.$N in $(secs $t0) s: the core's parts $(python3 -c "print(f'{$t1-$t0:.1f}')") s," \
-  "the app $(python3 -c "print(f'{$t2-$t1:.1f}')") s, the bundle $(secs $t2) s"
+echo "mac-app.sh: $NAME.app 0.1.$N in $(secs $t0) s: the app and the core's parts $(python3 -c "print(f'{$t2-$t0:.1f}')") s," \
+  "the bundle $(secs $t2) s"
 [ "${1:-}" = build ] || sign
