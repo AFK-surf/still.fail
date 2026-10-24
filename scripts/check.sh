@@ -317,7 +317,7 @@ if part ts; then
     step "desktop: its executables' own UUIDs" node --test apps/desktop/test/after-pack.test.ts; fi
   # The TypeScript core (docs/core-ts.md): its own tsconfig.
   if touches "$ts_core"; then prep core deps client/core-ts; step "typecheck: core-ts" after core sh -c 'cd client/core-ts && pnpm exec tsgo --noEmit'; fi
-  if touches "$ts_core|^client/math/|^apps/mbui/src/sf/math_font\\.mbt$"; then prep core deps client/core-ts; step "shared math alphabet" after core node client/core-ts/scripts/math-font.ts --check; fi
+  if touches "$ts_core|^client/math/|^apps/mbui/src/sf/math_glyphs\\.mbt$"; then prep core deps client/core-ts; step "shared math alphabet" after core node client/core-ts/scripts/math-font.ts --check; fi
   if touches "$ts_core|^client/fixtures/math\\.json$|^apps/mbui/src/sf/math\\.json$"; then prep core deps client/core-ts; step "shared math fixture" after core node client/core-ts/scripts/math-fixture.ts --check; fi
   # The core's pure answers the mbui app's runs without a core keep (apps/mbui/src/sfkept), as the core answers them now.
   if touches "$ts_core|^apps/mbui/src/sfkept/kept\\.mbt$"; then prep core deps client/core-ts; step "kept core answers" after core node client/core-ts/scripts/kept-answers.ts --check; fi

@@ -3,3 +3,7 @@ onlyBuiltDependencies:
   - esbuild
 allowBuilds:
   esbuild: true
+# MathJax's default font (New Computer Modern), which its SVG output imports whether or not it is used: none
+# (no-default-font). The core lays formulas out with the TeX font it gives (src/math.ts).
+overrides:
+  "@mathjax/mathjax-newcm-font": "link:./no-default-font"

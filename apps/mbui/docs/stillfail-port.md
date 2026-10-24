@@ -1010,8 +1010,9 @@ tests, the screenshots' app, and tapes older than those calls) has the real core
 (`kept.mbt`, made by `client/core-ts/scripts/kept-answers.ts`): an answer asked and not kept is said on the run's output
 and fails `scripts/test.sh`; `scripts/kept` runs the tests and has the core work out what they asked (`FRESH=1`: only
 what they ask now). The check script verifies the kept answers are the core's own. This adds no backend messages or elapsed time
-to the recordings. Formula glyphs are packaged once from `client/math/font.json`; messages carry only glyph IDs,
-positions, rules and any native text (see `client/math/README.md`).
+to the recordings. Formula glyphs are packaged once, their outlines packed and gzipped (`src/sf/math_glyphs.mbt`,
+made with `client/math/font.json` by `client/core-ts/scripts/math-font.ts`), not in the core, which has the glyphs'
+sizes alone; messages carry only glyph IDs, positions, rules and any native text (see `client/math/README.md`).
 
 A run is also kept to be seen again without a backend: with MBUI_CORE_TRACE=1 (only on a local cloud) the app logs
 every message between it and its core (CORETRACE lines on the flow's log, src/core/trace.mbt), `scripts/trace make
