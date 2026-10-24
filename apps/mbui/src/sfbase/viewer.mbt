@@ -1237,32 +1237,38 @@ pub fn viewer_layer(c : @ui.Ctx, src : Source) -> Unit {
   }
   // a film or a song: the player's own page (its bars, its controls, what a finger does on it)
   let media = kind == Some(KVideo) || kind == Some(KAudio)
-  c.layer(fn() {
-    let stage = c.id("preview/stage")
-    if !media {
-      @ui.capture(c, stage)
-    }
-    c.box(w=Fill(1.0), h=Fill(1.0), bg=@sf.alpha(ground, shown), opacity=faded, id=stage, fn() {
-      v.content(c, src, stage)
-    })
-    |> ignore
-    if !marking.on {
-      c.layer(fn() { vf_steps(v, c, src, shown) }) |> ignore
-    } else {
-      c.layer(fn() {
-        c.spacer()
-        // over the navigation bar (FilePreview.kt MarksFoot)
-        marks_foot(c)
-        let nav = (@sf.viewer_host().room)().1
-        if nav > 0.0 {
-          c.box(style=@ui.style(w=Full, h=Fixed(nav)), fn() {  }) |> ignore
-        }
+  // over the window, a modal layer (the web's preview is a dialog): the keys its, what is under it reads none (the
+  // chat's Space taking its composer, its Esc closing its panel); its own Esc and back, what it shows closed first;
+  // going, inert (the page's again as it fades)
+  c.overlay("preview-layer", modal=true, escape=false, outside=false, initial_focus=0, inert=v.closing, fn() {
+    c.layer(fn() {
+      let stage = c.id("preview/stage")
+      if !media {
+        @ui.capture(c, stage)
+      }
+      c.box(w=Fill(1.0), h=Fill(1.0), bg=@sf.alpha(ground, shown), opacity=faded, id=stage, fn() {
+        v.content(c, src, stage)
       })
       |> ignore
-    }
-    if !media {
-      c.layer(fn() { vf_bar(v, c, src, shown) }) |> ignore
-    }
+      if !marking.on {
+        c.layer(fn() { vf_steps(v, c, src, shown) }) |> ignore
+      } else {
+        c.layer(fn() {
+          c.spacer()
+          // over the navigation bar (FilePreview.kt MarksFoot)
+          marks_foot(c)
+          let nav = (@sf.viewer_host().room)().1
+          if nav > 0.0 {
+            c.box(style=@ui.style(w=Full, h=Fixed(nav)), fn() {  }) |> ignore
+          }
+        })
+        |> ignore
+      }
+      if !media {
+        c.layer(fn() { vf_bar(v, c, src, shown) }) |> ignore
+      }
+    })
+    |> ignore
   })
   |> ignore
   // 下载 tapped (on the page or its bar, just built): asked of the core, on by itself whatever becomes of this viewer

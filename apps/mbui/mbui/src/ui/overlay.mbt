@@ -1,13 +1,15 @@
 // What lies over the page (Radix's Portal, DismissableLayer and FocusScope in one): a layer built where the view
 // asks for it, among what it belongs to, but laid over the whole window and drawn and tapped over everything built
 // outside a layer, layers opened later over those opened before. A layer is dismissed (Overlay::dismissed, the view
-// closes it: it is the view's to keep open or not) by Escape and by the system's back when it is the topmost, and by
-// a press outside what it holds (outside each layer over it too: a press in a dialog dismisses the menu open over
-// it, not the dialog), unless the press is on its anchor (the button that toggles it). A modal layer covers the page
-// with a ground of its own (a scrim) that takes every press and wheel the layer does not, and hides the page from the
-// semantics tree; one that traps the focus keeps Tab among what it holds. As it opens, the focus goes into it (its
-// first focusable, or what it says); as it goes (no longer built, or inert: leaving, its exit drawn), the focus goes
-// back where it was when it opened (its anchor), unless it went elsewhere meanwhile.
+// closes it: it is the view's to keep open or not) by Escape when it is the topmost Escape dismisses (one that it does
+// not, over it, without the keys, passed: a toast), by the system's back when it is the topmost, and by a press
+// outside what it holds (outside each layer over it too: a press in a dialog dismisses the menu open over it, not the
+// dialog), unless the press is on its anchor (the button that toggles it). A modal layer covers the page with a
+// ground of its own (a scrim) that takes every press and wheel the layer does not, hides the page from the semantics
+// tree, and has the keys (what is built under it reads none, a field there given the focus does not keep it); one
+// that traps the focus keeps Tab among what it holds. As it opens, the focus goes into it (its first focusable, or
+// what it says); as it goes (no longer built, or inert: leaving, its exit drawn), the focus goes back where it was
+// when it opened (its anchor), unless it went elsewhere meanwhile.
 //
 // Where a layer's content goes, by an anchor (a popover by its button), is Ctx::place's (Radix's Popper): on a side
 // of it, along it, flipped to the other side and moved along to stay in the window.
@@ -257,32 +259,37 @@ fn Ctx::layer_keys(self : Ctx) -> Unit {
   for id in stale {
     self.dismissals.remove(id)
   }
-  let top = self.top_layer()
-  // the keys this frame the topmost open layer's that has them: a modal one (a menu, a dialog, a sheet), one the focus
-  // is in — not the page's under it, as a modal layer takes its presses. One the focus stayed outside of (a field's
-  // suggestions, a menubar's menu opened by the pointer: the field, the bar, move in it) leaves them where the focus is.
-  self.keys_layer = match top {
-    Some(l) if l.modal || self.focus_in_layer(l.id) => l.id
-    _ => 0
+  // the keys this frame the topmost open layer's that has them: a modal one (a menu, a dialog, a sheet, a file over
+  // the window), one the focus is in — not the page's under it, as a modal layer takes its presses. One over it that
+  // has none (a toast, a tip) leaves them to it; one the focus stayed outside of (a field's suggestions, a menubar's
+  // menu opened by the pointer: the field, the bar, move in it) leaves them where the focus is.
+  let open = self.last_layers.filter(fn(l) { !l.inert }).rev()
+  self.keys_layer = match open.iter().find_first(fn(l) { l.modal || self.focus_in_layer(l.id) }) {
+    Some(l) => l.id
+    None => 0
   }
-  match top {
-    Some(l) => {
+  // Escape the topmost's it dismisses, down to where the keys go: one that is not dismissed by it and has no keys (a
+  // toast) leaves it to those under it; one that has the keys and is not (a file over the window) to what it holds,
+  // its own Escape (what it shows closed first)
+  for l in open {
+    if l.escape {
       for k in 0..<desk.keys.length() {
         let (code, mods, taken) = desk.keys[k]
         if code == key_escape && !taken {
-          if l.escape {
-            self.dismissals[l.id] = Escape
-          }
+          self.dismissals[l.id] = Escape
           desk.keys[k] = (code, mods, true)
         }
       }
       // (an Escape that dismissed it is its, gone for everything else: not even what reads the keys a field took
       // sees it, a page's own Escape under it)
-      if l.escape && self.dismissals.get(l.id) == Some(Escape) {
+      if self.dismissals.get(l.id) == Some(Escape) {
         desk.keys.retain(fn(k) { k.0 != key_escape })
       }
+      break
     }
-    None => ()
+    if l.id == self.keys_layer {
+      break
+    }
   }
   match self.press_down {
     Some((x, y)) => {
@@ -364,20 +371,6 @@ fn Ctx::keys_here(self : Ctx) -> Bool {
     }
   }
   false
-}
-
-///|
-/// The topmost layer of the last frame that is not leaving.
-fn Ctx::top_layer(self : Ctx) -> Layer? {
-  let mut k = self.last_layers.length() - 1
-  while k >= 0 {
-    let l = self.last_layers[k]
-    if !l.inert {
-      return Some(l)
-    }
-    k = k - 1
-  }
-  None
 }
 
 ///|
@@ -475,9 +468,42 @@ fn Ctx::layers_focus(self : Ctx) -> Unit {
       self.focus = back
     }
   }
+  // a field given the focus this frame under the topmost modal layer (a page's composer taking the cursor as its chat
+  // is first drawn under a file over the window) does not keep it: hidden there, it would take what is typed over it
+  // (Radix's FocusScope: nothing outside a trapped scope takes the focus); it goes back to what had it
+  if self.focus != self.focus_before && self.editors.contains(self.focus) {
+    let modal = self.layers.filter(fn(l) { l.modal && !l.inert }).last()
+    match (modal, self.focusables.iter().find_first(fn(f) { f.id == self.focus })) {
+      (Some(m), Some(f)) if !self.layer_built_in(f.layer, m.id) => self.focus = self.focus_before
+      _ => ()
+    }
+  }
   if self.focus != had {
     self.read_changed("the focus, into a layer or back from one")
   }
+}
+
+///|
+/// Whether layer `l` is `outer` or was built in it, as this frame built them (as the last did, for one not built yet).
+fn Ctx::layer_built_in(self : Ctx, l : Int, outer : Int) -> Bool {
+  let mut at = l
+  for _ in 0..<64 {
+    if at == outer {
+      return true
+    }
+    if at == 0 {
+      return false
+    }
+    at = match self.layers.iter().find_first(fn(x) { x.id == at }) {
+      Some(x) => x.parent
+      None =>
+        match self.last_layer(at) {
+          Some(x) => x.parent
+          None => 0
+        }
+    }
+  }
+  false
 }
 
 ///|

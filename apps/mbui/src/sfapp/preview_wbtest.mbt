@@ -765,3 +765,22 @@ test "marking: a box's pin up and right of its corner wherever the marks before 
   assert_true(t.find("这里对齐") is Some(_))
   marks_leave()
 }
+
+///|
+test "a desktop's video opened over its chat has the keys: Space plays it each time, the chat's composer under it never taking them" {
+  reset()
+  let src = fixture("chat-preview-video")
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=1280.0, h=800.0, platform=0)
+  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
+  t.draw()
+  t.run_for(fly_open_ms)
+  assert_true(viewer.val is Some(_))
+  let played = fn() { t.views().filter(fn(l) { l == "control 1 1 0" }).length() }
+  let before = played()
+  // (the chat's own Space, with no field focused, puts the cursor in its composer: not under the film)
+  t.key(@ui.key_space)
+  assert_false(t.ctx().field_focused())
+  t.key(@ui.key_space)
+  assert_false(t.ctx().field_focused())
+  assert_eq(played(), before + 2)
+}
