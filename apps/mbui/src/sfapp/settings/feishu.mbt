@@ -218,38 +218,9 @@ fn feishu_own_app(
 }
 
 ///|
-/// A QR code the core made (its dark modules row by row, `1` dark), on white whatever the theme, four modules of
-/// quiet zone around, whole pixels a module (Qr).
+/// A QR code the core made (Qr: the library's).
 fn feishu_qr(c : @ui.Ctx, code : Json?, size : Double) -> Unit {
-  let rows = strings(code, "rows")
-  let quiet = 4
-  let n = count(code, "size") + quiet * 2
-  let cell = (size / n.to_double()).floor()
-  let start = (size - cell * n.to_double()) / 2.0 + cell * quiet.to_double()
-  // (FeishuConnect.kt Qr: what it is to a screen reader)
-  c.box(w=Px(size), h=Px(size), radius=12.0, bg=0xFFFFFFFFL, clip=true, label=tr("web-mobile.connects.feishu.qr"), fn() {
-    for y, row in rows {
-      // each row's dark runs, laid over the white
-      let mut x = 0
-      while x < row.length() {
-        if row.unsafe_get(x).to_int() != 49 {
-          x += 1
-          continue
-        }
-        let mut end = x
-        while end + 1 < row.length() && row.unsafe_get(end + 1).to_int() == 49 {
-          end += 1
-        }
-        let (rx, ry, rw) = (start + x.to_double() * cell, start + y.to_double() * cell, (end - x + 1).to_double() * cell)
-        c.layer(fn() {
-          c.box(w=Px(rw), h=Px(cell), bg=0x000000FFL, tx=rx, ty=ry, fn() {  }) |> ignore
-        })
-        |> ignore
-        x = end + 1
-      }
-    }
-  })
-  |> ignore
+  @sf.qr_code(c, code, size, tr("web-mobile.connects.feishu.qr"))
 }
 
 ///|

@@ -23,7 +23,7 @@ fn setting_page(c : @ui.Ctx, src : Source, w : Workspace, pages : Pages, route :
     Workspace => workspace_page(c, core, here)
     Security => security_page(c, core, here)
     Vault => vault_page(c, core, here)
-    Connects("") => connects_page(c, core, here)
+    Connects("") => connects_page(c, src, core, here)
     Connect(station, id) => connect_page(c, src, core, here, station, id)
     Memories => memories_page(c, core, here)
     Usage => usage_page(c, core, here)
@@ -98,6 +98,8 @@ fn settings_reset() -> Unit {
   local_menu.val = false
   settings_deep.val = false
   connect_reset()
+  new_connect_reset()
+  cn_add_open.val = ""
 }
 
 ///|

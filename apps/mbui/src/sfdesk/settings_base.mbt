@@ -35,7 +35,6 @@ using @settings {
   obj,
   open_add_people,
   open_mark_pick,
-  open_new_connect,
   opening_lock,
   pair_steps,
   place_action,

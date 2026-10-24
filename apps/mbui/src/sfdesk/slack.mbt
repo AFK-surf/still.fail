@@ -35,7 +35,7 @@ fn slack_reset() -> Unit {
 ///|
 /// The draft `key` holds, opened for a connect's tokens (`connect`: a blank one keeps what it has) or an app
 /// installed through Slack's OAuth (`install`, its state: its bot token is on the station already); the core told
-/// once the frame's builds are over.
+/// once the frame's builds are over. `form`: a connect wizard's, whose draft it is.
 fn slack_tokens(
   c : @ui.Ctx,
   core : Core,
@@ -43,6 +43,7 @@ fn slack_tokens(
   key : String,
   connect? : String = "",
   install? : String = "",
+  form? : String = "",
 ) -> SlackTokens {
   match slack_token_forms.get(key) {
     Some(tk) => tk
@@ -50,7 +51,8 @@ fn slack_tokens(
       slack_forms_made.val += 1
       let tk = {
         station,
-        form: "desk-tokens-" + slack_forms_made.val.to_string(),
+        // (a wizard's draft its own form: useSlackTokens' `form`)
+        form: if form != "" { form } else { "desk-tokens-" + slack_forms_made.val.to_string() },
         app: @ui.Field::new(),
         bot: @ui.Field::new(),
         app_sent: "",

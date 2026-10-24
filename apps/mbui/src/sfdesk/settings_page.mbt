@@ -336,6 +336,10 @@ priv struct DeskDialog {
   title : String
   description : String
   wide : Bool
+  /// its title, its step's count beside it and what it is about as they are now (a wizard's), over those given
+  live : (() -> (String, String, String))?
+  /// what is let go of as it closes by its ✕, Esc or a press outside
+  gone : (() -> Unit)?
   body : (@ui.Ctx, () -> Unit) -> Unit
   foot : (@ui.Ctx, () -> Unit) -> Unit
 }
@@ -363,8 +367,10 @@ fn open_dialog(
   foot : (@ui.Ctx, () -> Unit) -> Unit,
   description? : String = "",
   wide? : Bool = false,
+  live? : () -> (String, String, String),
+  gone? : () -> Unit,
 ) -> Unit {
-  let d = { key, title, description, wide, body, foot }
+  let d = { key, title, description, wide, live, gone, body, foot }
   desk_dialogs.val += 1
   desk_dialog.val = Some(d)
   desk_dialog_last.val = Some(d)
@@ -380,11 +386,19 @@ fn desk_dialog_overlay(c : @ui.Ctx) -> Unit {
         Some(now) => now.key == d.key
         None => false
       }
-      let still = @sf.dialog(c, d.key, open, d.title, fn() { (d.body)(c, shut) }, description=d.description, wide=d.wide, close_label=@sf.t("common.close"), footer=fn() {
+      let (title, step, description) = match d.live {
+        Some(f) => f()
+        None => (d.title, "", d.description)
+      }
+      let still = @sf.dialog(c, d.key, open, title, fn() { (d.body)(c, shut) }, description~, wide=d.wide, close_label=@sf.t("common.close"), step~, footer=fn() {
         (d.foot)(c, shut)
       })
       if open && !still {
         shut()
+        match d.gone {
+          Some(f) => f()
+          None => ()
+        }
       }
     }
     None => ()
