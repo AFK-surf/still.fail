@@ -8,9 +8,16 @@
 //   (A flat 30 s after each start held a task of an idle machine back minutes when several sessions each had one
 //   waiting, 2026-10-24: two a minute, the CPUs at 5%.)
 // - None starts while the system says its memory is under pressure (high or critical).
-// - A task that uses the screen (windows, a simulator, screenshots) starts only while no other such task runs.
+// - A task that uses the screen (windows, a simulator, screenshots) throughout starts only while no other task has the
+//   screen, and none of the commands that asked for it before it came waits for it.
 // - Which one: of the sessions that have tasks waiting, the one whose task last started longest ago (one never started
 //   first), its oldest task. A session that asks for ten does not keep the others behind them.
+//
+// The screen is one task's at a time; a task has it while it uses it: one prepared with `screen` for as long as it
+// runs, any other while a command of its holds it (`stillfail-job screen <command>`: a claim, below). A task that
+// takes pictures between builds and tests has it only for the pictures: the rest of it runs beside the others' (with
+// whole tasks having it, one that had drawn its pictures in 40 s held it minutes more for its tests, the others with
+// pictures to take waited 20 minutes and more in line, the CPUs a third busy, 2026-10-25).
 //
 // A task started with others running is told how many CPUs are free (STILLFAIL_CPUS, and the build tools' own
 // variables when its environment has none of them), so a build does not take every core for itself.
@@ -59,6 +66,30 @@ export class Busy {
 
 export type Room = { busy: number | null; pressure: Pressure | null };
 
+/// A command's claim on the screen (`stillfail-job screen`): its job, the process that asked (the command's shell),
+/// when it first asked (the store's clock, as a task's queuedAt), and whether it has the screen now.
+export type Claim = { job: string; pid: number; at: number; held: boolean };
+
+/// What the claims say to the queue: whether one holds the screen, and when the first still waiting asked.
+export type Claims = { held: boolean; asked: number | null };
+
+export const claimsOf = (claims: readonly Claim[]): Claims => ({
+  held: claims.some((c) => c.held),
+  asked: claims.find((c) => !c.held)?.at ?? null,
+});
+
+/// The claims with the screen given out: to the first waiting while no task has it, and at once to a job's that has it
+/// already (`screenJobs`: those running that use it throughout; or a command of its own holds it), so a command inside
+/// another, or inside a task that has the screen throughout, does not wait for itself.
+export function served(claims: readonly Claim[], screenJobs: ReadonlySet<string>): Claim[] {
+  const having = new Set([...screenJobs, ...claims.filter((c) => c.held).map((c) => c.job)]);
+  return claims.map((c) => {
+    if (c.held || (having.size > 0 && !having.has(c.job))) return c;
+    having.add(c.job);
+    return { ...c, held: true };
+  });
+}
+
 /// The task to start now, if any, and else why the first waiting waits.
 export function pick(
   waiting: readonly Waiting[],
@@ -67,11 +98,13 @@ export function pick(
   now: number,
   lastStart: number | null,
   lastOf: (session: string) => number | null,
+  claims: Claims = { held: false, asked: null },
 ): { start: Waiting } | { wait: Why } | null {
   if (waiting.length === 0) return null;
   if (room.pressure === "high" || room.pressure === "critical") return { wait: "memory" };
-  const screenBusy = running.some((r) => r.screen);
-  const able = waiting.filter((w) => !(w.screen && screenBusy));
+  // (the screen another task's, or asked for by a command before this task came)
+  const screenBusy = running.some((r) => r.screen) || claims.held;
+  const able = waiting.filter((w) => !(w.screen && (screenBusy || (claims.asked !== null && claims.asked <= w.queuedAt))));
   if (able.length === 0) return { wait: "screen" };
   if (running.length > 0) {
     if (lastStart !== null && now - lastStart < RAMP_MS) return { wait: "busy" };

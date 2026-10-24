@@ -27,7 +27,7 @@ for h in $HOSTS; do
       APP=textdiff MODE=release bash scripts/mac.sh build >/dev/null || { echo "textdiff: mac build failed"; fail=1; continue; }
       # MBUI_SHAPE_CHECK: Core Text's own layout of every string the ASCII fast path lays out, compared with it
       MBUI_SHAPE_CHECK=1 MBUI_BENCH=-1 MBUI_WIN=$WIN MBUI_TEXTDIFF_ONLY=${ONLY:-} MBUI_SHOT_DIR=$PWD/$O \
-        ./_build/native/release/build/textdiff/textdiff.exe > $O/log.txt 2>&1
+        on_screen ./_build/native/release/build/textdiff/textdiff.exe > $O/log.txt 2>&1
       checks=$(grep -c "shape check:" $O/log.txt)
       echo "textdiff mac: the ASCII fast path differs from Core Text in $checks strings"
       [ "$checks" = 0 ] || { grep "shape check:" $O/log.txt | head -5; fail=1; } ;;

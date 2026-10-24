@@ -16,7 +16,7 @@ rm -rf "$dir"; mkdir -p "$dir"
 APP=sffix MODE=release bash scripts/mac.sh build >/dev/null || exit 1
 extra=()
 if [ -n "$drive" ]; then extra=(MBUI_DRIVE_B64="$(base64 < scripts/motion/$drive.drive | tr -d '\n')"); fi
-env MBUI_WIN=${MBUI_WIN:-390x844} MBUI_RECORD="$PWD/$dir" MBUI_RECORD_FRAMES=$frames MBUI_MOTION_LOG=1 "${extra[@]}" \
+on_screen env MBUI_WIN=${MBUI_WIN:-390x844} MBUI_RECORD="$PWD/$dir" MBUI_RECORD_FRAMES=$frames MBUI_MOTION_LOG=1 "${extra[@]}" \
   ./_build/native/release/build/stillfail/sffix/sffix.exe > "$dir/log.txt" 2>&1
 n=$(ls "$dir"/f*.png 2>/dev/null | wc -l | tr -d ' ')
 echo "RECORDED $name: $n frames"

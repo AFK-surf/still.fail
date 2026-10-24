@@ -135,7 +135,7 @@ for ds in json.load(sys.stdin)['devices'].values():
 run() {
   case $H in
     mac)
-      env MBUI_BENCH=-1 MBUI_WIN=960x720 $1 ./_build/native/release/build/kitdemo/kitdemo.exe > "$2" 2>&1 ;;
+      on_screen env MBUI_BENCH=-1 MBUI_WIN=960x720 $1 ./_build/native/release/build/kitdemo/kitdemo.exe > "$2" 2>&1 ;;
     windows)
       env MBUI_BENCH=-1 MBUI_WIN=960x720 $1 ./out/win/mod/_build/native/release/build/kitdemo/kitdemo.exe > "$2" 2>&1 ;;
     web)
@@ -312,7 +312,7 @@ case $CMD in
         [ "$H" = windows ] && DIR=$(cygpath -m "$DIR")
         EXE=./_build/native/release/build/kitdemo/kitdemo.exe
         [ "$H" = windows ] && EXE=./out/win/mod/_build/native/release/build/kitdemo/kitdemo.exe
-        env MBUI_BENCH=-1 MBUI_WIN=960x720 MBUI_DRIVE_B64=$DRV MBUI_DONE_DIR="$DIR" $EXE 2>&1 \
+        on_screen env MBUI_BENCH=-1 MBUI_WIN=960x720 MBUI_DRIVE_B64=$DRV MBUI_DONE_DIR="$DIR" $EXE 2>&1 \
           | "$PY" scripts/done_runner.py --log $O/done.log --dir "$DIR" $SAID || true ;;
       android)
         APPID=${MBUI_APP_ID:-dev.mbui.demo}

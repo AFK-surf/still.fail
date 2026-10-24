@@ -15,7 +15,9 @@ import { after, describe, test } from "node:test";
 import { type Clock, type Duration, Effect, Exit, Scope } from "effect";
 import { TestClock } from "effect/testing";
 import { endGroup, groupAlive, signalGroup } from "../src/ops/group.ts";
-import { Jobs, notifyEndpoint, readExit, restartPause, shown, tail, watching } from "../src/jobs/jobs.ts";
+import { Jobs, notifyEndpoint, readExit, restartPause, screenEndpoint, shown, tail, watching } from "../src/jobs/jobs.ts";
+import { openAgentsDoor } from "../src/tools/http.ts";
+import { McpEndpoint } from "../src/tools/mcp.ts";
 import { agentNice } from "../src/ops/nice.ts";
 import { jobTools } from "../src/tools/jobs.ts";
 import { Store } from "../src/store/store.ts";
@@ -193,7 +195,8 @@ describe("jobs", { concurrency: true }, () => {
     await until("it ends", () => r.state(job.id) !== "running");
     const ended = r.store.getJob(job.id)!;
     assert.equal(ended.state, "exited");
-    assert.equal(tail(ended.log, 10), "usage: stillfail-job notify <words>\nusage: stillfail-job notify <words>\nsame");
+    const usage = "usage: stillfail-job notify <words> | stillfail-job screen <command>...";
+    assert.equal(tail(ended.log, 10), `${usage}\n${usage}\nsame`);
     // Made again (a station starting over the same directory), the link stays one.
     const bin = join(r.dir, "jobs", "bin");
     jobsOn(r.dir, r.store, [], () => null);
@@ -236,6 +239,35 @@ describe("jobs", { concurrency: true }, () => {
     } finally {
       server.closeAllConnections();
       server.close();
+    }
+  });
+
+  test("stillfail-job screen: one job's command has the screen at a time; the next waits, and has it once it is given back", { skip: WINDOWS && "a fifo for the gate" }, async () => {
+    const r = new Rig();
+    // The agents' door, as the station's: /jobs/screen to these jobs, asked by the real script and curl.
+    const door = await openAgentsDoor(
+      { port: 0 }, new McpEndpoint(() => undefined, []), (auth, body) => notifyEndpoint(r.jobs, auth, body), () => null, () => [],
+      (auth, body) => screenEndpoint(r.jobs, auth, body),
+    );
+    r.jobs.setNotifyUrl(door.url.replace(/\/mcp$/, "/jobs/notify"));
+    try {
+      const go = gate(r.dir);
+      const first = r.jobs.start("s1", "shots", `stillfail-job screen sh -c "touch first.in; ${go.wait}; touch first.out"; echo "first $?"`, r.work, null, false);
+      await until("the first has the screen", () => existsSync(join(r.work, "first.in")));
+      const next = r.jobs.start("s2", "more shots", `stillfail-job screen sh -c '[ -e first.out ] && touch next.after; exit 3'; echo "next $?"`, r.work, null, false);
+      await until("the next waits for it", () => tail(r.store.getJob(next.id)!.log, 5).includes("waiting for the screen"));
+      assert.equal(r.state(next.id), "running");
+      await go.open();
+      await until("both end", () => r.state(first.id) !== "running" && r.state(next.id) !== "running");
+      assert.ok(existsSync(join(r.work, "next.after")), "the next's command ran once the first's had ended");
+      assert.match(tail(r.store.getJob(first.id)!.log, 5), /first 0$/);
+      assert.match(tail(r.store.getJob(next.id)!.log, 5), /next 3$/, "the command's own exit code");
+      // A job with no way to ask (a station from before it) runs the command as it is.
+      const old = r.jobs.start("s3", "old", `STILLFAIL_JOB_SCREEN= stillfail-job screen sh -c 'exit 5'; echo "old $?"`, r.work, null, false);
+      await until("it ends", () => r.state(old.id) !== "running");
+      assert.equal(tail(r.store.getJob(old.id)!.log, 5), "old 5");
+    } finally {
+      await door.close(0);
     }
   });
 

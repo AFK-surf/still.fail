@@ -14,7 +14,7 @@ APP=render bash scripts/mac.sh build >/dev/null
 APP=kitdemo bash scripts/mac.sh build >/dev/null
 # the host's run: its picture, and its tape (its text, its frames: MBUI_TEXT_RECORD, MBUI_DRAW_LOG)
 MBUI_BENCH=-1 MBUI_SCREEN=controls MBUI_WIN=960x720 MBUI_SCRIPT=shot MBUI_SHOT_NAME=host MBUI_SHOT_DIR=$PWD/$O \
-  MBUI_TEXT_RECORD=1 MBUI_DRAW_LOG=1 ./_build/native/release/build/kitdemo/kitdemo.exe > $O/host.log 2>&1 || true
+  MBUI_TEXT_RECORD=1 MBUI_DRAW_LOG=1 on_screen ./_build/native/release/build/kitdemo/kitdemo.exe > $O/host.log 2>&1 || true
 [ -s $O/host.png ] || { echo "render_check: the host took no picture"; grep -a 'SETTLE' $O/host.log | tail -2; exit 1; }
 # the same run drawn again in a Tester from its tape: its last frame's draw list (each frame the host's: DLFRAMES)
 MBUI_DL_PRINT=1 MBUI_DL_TAPE=$PWD/$O/host.log moon_test_native src/kitdemo/gallery/dl_print_wbtest.mbt 2>/dev/null > $O/print.txt
