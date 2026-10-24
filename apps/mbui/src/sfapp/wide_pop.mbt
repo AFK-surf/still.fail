@@ -16,7 +16,7 @@ fn wide_overlays(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
   attention_panel(c, src, w)
   // ⌘K (sfdesk/switcher.mbt): what the frame can do now offered to it, and where it opens a chat found
   @sfdesk.switcher(c, src, w.id, switcher_offered(c, src), {
-    chat: open_row,
+    chat: fn(item) { @sfdesk.open_row(desk_pages(), item) },
     message: fn(r, seq, words) { open_chat_found(r, seq, words) },
   })
   keys_dialog(c, src)
@@ -149,14 +149,6 @@ fn bell_trouble(src : Source, w : Workspace) -> (String, Bool) {
     None => trouble_kept(src, w, "seen")
   }
   (words, words != seen)
-}
-
-///|
-/// How many services are left up long in the workspace (the `longJobs` topic).
-fn long_jobs(src : Source, w : Workspace) -> Int {
-  items((src.topic)("longJobs", { "scope": Json::string(w.id) }).value, "groups").fold(init=0, fn(n, g) {
-    n + items(Some(g), "jobs").length()
-  })
 }
 
 ///|

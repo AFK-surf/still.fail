@@ -76,7 +76,7 @@ test "styles: how many values of each kind the app's screens use" {
     #|weight 4
     #|space 27
     #|radius 28
-    #|color 115
+    #|color 117
     #|
 
 

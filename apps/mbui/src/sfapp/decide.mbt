@@ -242,11 +242,6 @@ fn failed_next() -> Int {
   dui.failed_n
 }
 
-///|
-fn seq_key(station : String, thread : Double, seq : Double) -> String {
-  station + "\t" + thread.to_int64().to_string() + "\t" + seq.to_int64().to_string()
-}
-
 // ── what comes and goes under a post ────────────────────────────────────
 
 ///|

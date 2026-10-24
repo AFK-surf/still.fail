@@ -60,6 +60,51 @@ pub fn icon(c : @ui.Ctx, name : String, size? : Double = 16.0, color? : Int64) -
 }
 
 ///|
+/// Of icon `name`, only its parts `parts` (their places among what it is drawn of, from 0: a line, a closed line, a
+/// fill with its holes), as `icon` draws it whole: what of it moves drawn apart from what stays (ChatMark.css.ts
+/// leadSlot's copies, each showing one part of the icon).
+pub fn icon_parts(c : @ui.Ctx, name : String, parts : Array[Int], size? : Double = 16.0, color? : Int64) -> Int {
+  let color = color.unwrap_or(theme().p.text)
+  let key = "icon/\{name}/\{parts}/\{size}/\{color}"
+  let shapes = match shapes_made.get(key) {
+    Some(s) => s
+    None => {
+      let s = match icon_data.get(name) {
+        Some(d) => icon_shapes(icon_data_parts(d, parts), size / 24.0, color)
+        None => []
+      }
+      shapes_made[key] = s
+      s
+    }
+  }
+  c.shapes(shapes, w=Px(size), h=Px(size), name="sf/" + key)
+}
+
+///|
+/// The entries of an icon's data that are its parts `parts` (a fill's holes, of no width, with the fill they cut).
+fn icon_data_parts(data : Array[Double], parts : Array[Int]) -> Array[Double] {
+  let out : Array[Double] = []
+  let mut i = 0
+  let mut part = -1
+  while i + 2 < data.length() {
+    let kind = data[i].to_int()
+    let w = data[i + 1]
+    let n = data[i + 2].to_int()
+    let end = i + 3 + 2 * n
+    if !(kind == 2 && w <= 0.0 && part >= 0) {
+      part = part + 1
+    }
+    if parts.contains(part) {
+      for k in i..<end {
+        out.push(data[k])
+      }
+    }
+    i = end
+  }
+  out
+}
+
+///|
 /// An icon's parts as icon_data.mbt has them (0 a line, 1 a closed one, 2 a fill's outline: one with a width the
 /// first of a fill), `k` points a unit, in `color`: its strokes of a width one shape (their pieces' nearest the one
 /// that covers a pixel, as one stroke), each fill one.

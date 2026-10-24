@@ -1,5 +1,15 @@
 // What the desktop's pages read of sfbase, by its own names (as sfapp/base.mbt takes them in).
 using @sfbase {
+  stamp_of,
+  shown_days,
+  row_tone,
+  row_agent_groups,
+  open_listed,
+  long_jobs,
+  held_order,
+  decision_show,
+  decision_key,
+  chats_of,
   app,
   arrangement_none,
   browse_topic,
@@ -43,6 +53,7 @@ using @sfbase {
   ups,
   type Arrangement,
   type BrowseView,
+  type ChatDay,
   type ChatItem,
   type ChatRef,
   type Chosen,
