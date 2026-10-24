@@ -23,7 +23,18 @@ fn desk_page(
   // a head of its own in place of the title (an account's: who it is), as the page's first block
   match head {
     // as far down as a title's head stands
-    Some(h) => blocks.push(fn() { c.box(style=desk_own_head, fn() { h() }) |> ignore })
+    Some(h) =>
+      blocks.push(fn() {
+        let deep = settings_deep.val || on_back is Some(_)
+        c.box(style=if deep { desk_own_head_deep } else { desk_own_head }, fn() {
+          // back over it on a page under another (BackLink), as a title's head has it
+          if deep {
+            desk_back(c, core, back, on_back)
+          }
+          h()
+        })
+        |> ignore
+      })
     None =>
       blocks.push(fn() {
         // (a step of the page's own: its back goes to the step before)
@@ -35,6 +46,41 @@ fn desk_page(
   }
   desk_lanes(c, key, blocks)
 }
+
+///|
+/// The way back over a page's own head (BackLink): its chevron and where it goes, the ink under the pointer.
+fn desk_back(c : @ui.Ctx, core : Core, back : String, on_back : (() -> Unit)?) -> Unit {
+  let t = @sf.theme()
+  let id = c.id("settings-back")
+  c.cursor(id, Hand)
+  if c.clicked(id) {
+    match on_back {
+      Some(f) => f()
+      None => (core.pop)()
+    }
+  }
+  let lit = c.hovered(id)
+  let b = c.box(style=desk_back_line, id~, fn() {
+    @sf.icon(c, "chevron-left", size=desk_back_icon, color=if lit { t.p.text } else { t.p.muted }) |> ignore
+    c.text(back, style=if lit { desk_back_lit } else { desk_back_words }) |> ignore
+  })
+  c.semantics(b, Link, id~, label=back)
+}
+
+///|
+let desk_back_icon : Double = 14.0
+
+///|
+// kept across runs: a value (no field of it changes)
+let desk_back_line : @ui.Style = @ui.css("row pb=S2 gap=S1 align=ACenter")
+
+///|
+// kept across runs: a value (no field of it changes)
+let desk_back_words : @ui.TextStyle = @ui.text_style(size=Sm, leading=L5, color=Muted, wrap=false)
+
+///|
+// kept across runs: a value (no field of it changes)
+let desk_back_lit : @ui.TextStyle = @ui.text_style(size=Sm, leading=L5, color=Fg, wrap=false)
 
 ///|
 /// A page's blocks in a list, each laid out as it comes into view: in the pane's middle, 24 from its sides at least,
@@ -113,6 +159,11 @@ let desk_foot : @ui.Style = @ui.css("w=Full h=S20")
 /// A page's head of its own (an account's): where a title's head would stand.
 // kept across runs: a value (no field of it changes)
 let desk_own_head : @ui.Style = @ui.css("w=Full px=S4 pt=S10")
+
+///|
+/// (with the way back over it: as high as a title's head with it stands)
+// kept across runs: a value (no field of it changes)
+let desk_own_head_deep : @ui.Style = @ui.css("w=Full px=S4 pt=S5")
 
 ///|
 let desk_column_most : Double = 760.0

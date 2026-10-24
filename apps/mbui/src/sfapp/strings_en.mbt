@@ -756,6 +756,8 @@ let en : Map[String, String] = {
   "common.legal.privacy": "Privacy Policy",
   "common.legal.terms": "Terms of Service",
   "common.telemetry.note": "Helps improve {name}. Never includes what's in your chats.",
+  "common.edit": "Edit",
+  "web-pages.vault.hide": "Hide",
   "common.telemetry.title": "Send usage statistics and error reports",
   "web-pages.changelog.build": "Version 0.1.{build}",
   "web-pages.changelog.empty": "No updates yet",
