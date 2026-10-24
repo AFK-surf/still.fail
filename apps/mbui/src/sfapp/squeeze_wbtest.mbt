@@ -98,3 +98,14 @@ fn squeeze_wrong(at : String, faults : Array[String]) -> String? {
     faults.join("\n  "),
   )
 }
+
+///|
+/// The corner test's sweep measures the squeeze only on the screens it opens (corner_modes, corner_windows): one listed
+/// here and not there would be measured nowhere.
+test "squeeze: every screen and window it measures is among the corner test's" {
+  let missing = squeeze_modes.filter(m => !corner_modes.contains(m)) +
+    squeeze_windows.filter(w => !corner_windows.iter().any(c => c.0 == w))
+  if missing.length() > 0 {
+    fail("not in corner_modes or corner_windows (corners_wbtest.mbt), so never measured: \{missing.join(", ")}")
+  }
+}
