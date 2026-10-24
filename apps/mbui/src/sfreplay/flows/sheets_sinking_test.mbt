@@ -34,6 +34,9 @@ test "51-sheets-sinking" {
     f.run_to(@kit.sheet_rest("decide-sheet"))
     f.see("穿过下去的面板 082939")
     f.gone("正在发送")
+    // the test station's agent answers with a failure (no model there), its notice offering 上报: looked for, so the run
+    // ends once it is in, as the replay does (else whether its row was built before the end is the run's luck)
+    f.see("上报")
     f.end()
   })
 }

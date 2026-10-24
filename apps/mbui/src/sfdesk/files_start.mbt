@@ -49,13 +49,12 @@ fn files_home(c : @ui.Ctx, src : Source, w : Workspace, core : Core, room : Doub
             @sf.empty(c, fn() {
               c.text(@sf.t("web-main.rail.filesNone"), style=fs_empty_words) |> ignore
               if can.length() > 0 && @sf.button(c, @sf.t("web-pages.drive.pick"), key="files-home/pick", tone=Primary) {
-                add_folder(can)
+                add_folder(src, w.id, can)
               }
             })
           }
         },
       ])
-      drive_dialogs(c, src, w.id)
     }
   }
 }
@@ -112,11 +111,10 @@ pub fn files_station(
           go: fn(to, _) { go(to) },
           open_in: None,
           go_to: None,
-          manage: Some(fn() { manage_roots(s.station) }),
+          manage: Some(fn() { manage_roots(src, w.id, s.station) }),
         },
         narrow,
       )
-      drive_dialogs(c, src, w.id)
     }
     (_, _, Narrow) => roots_narrow(c, src, w.id, st, known is None, error, manage, narrow, go)
     _ => {
@@ -125,13 +123,12 @@ pub fn files_station(
         core,
         "files-roots/" + at.station,
         @sf.t("web-pages.drive.title"),
-        [fn() { files_roots(c, st, known is None, error, manage) }],
+        [fn() { files_roots(c, src, w.id, st, known is None, error, manage) }],
         lead=match st {
           Some(s) => s.name
           None => ""
         },
       )
-      drive_dialogs(c, src, w.id)
     }
   }
 }
@@ -139,7 +136,7 @@ pub fn files_station(
 ///|
 /// A station's folders pinned (Roots): while read, their shapes (why not, if it failed); from before drives, says so;
 /// none, says so (Pin 文件夹 for one who may); else a row each.
-fn files_roots(c : @ui.Ctx, st : DvStation?, reading : Bool, error : String?, manage : Bool) -> Unit {
+fn files_roots(c : @ui.Ctx, src : Source, ws : String, st : DvStation?, reading : Bool, error : String?, manage : Bool) -> Unit {
   match st {
     _ if reading => @sf.waiting(c, count=6, error=error.unwrap_or(""))
     None => @sf.empty(c, fn() { c.text(@sf.t("web-pages.workspace.noSuchStation"), style=fs_empty_words) |> ignore })
@@ -151,7 +148,7 @@ fn files_roots(c : @ui.Ctx, st : DvStation?, reading : Bool, error : String?, ma
         c.text(@sf.t(if manage { "web-pages.drive.noneManage" } else { "web-pages.drive.noneMember" }), style=fs_empty_words)
         |> ignore
         if manage && @sf.button(c, @sf.t("web-pages.drive.pick"), key="files-roots/pick", tone=Primary) {
-          add_folder([s])
+          add_folder(src, ws, [s])
         }
       })
     Some(s) =>

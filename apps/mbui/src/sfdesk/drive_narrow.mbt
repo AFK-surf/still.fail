@@ -556,7 +556,7 @@ pub fn roots_narrow(
         match st {
           Some(s) if manage && s.drive && s.roots.length() > 0 =>
             if narrow_bar_button(c, "files/narrow/roots-more", "more", @sf.t("web-pages.drive.manage")) {
-              manage_roots(s.station)
+              manage_roots(src, ws, s.station)
             }
           _ => ()
         }
@@ -570,7 +570,7 @@ pub fn roots_narrow(
       Some(s) if !s.drive => narrow_empty(c, @sf.t("web-pages.drive.oldStation"), None)
       Some(s) if s.roots.length() == 0 =>
         narrow_empty(c, @sf.t(if manage { "web-pages.drive.noneManage" } else { "web-pages.drive.noneMember" }), if manage {
-          Some((@sf.t("web-pages.drive.pick"), fn() { add_folder([s]) }))
+          Some((@sf.t("web-pages.drive.pick"), fn() { add_folder(src, ws, [s]) }))
         } else {
           None
         })
@@ -593,7 +593,6 @@ pub fn roots_narrow(
     }
   })
   |> ignore
-  drive_dialogs(c, src, ws)
   ignore(t)
 }
 

@@ -1,17 +1,14 @@
 // The files' page's dialogs about the folders a station pins (ember web/src/pages/Drive.tsx useAddFolder, useManage,
 // RootsDialog, PickerDialog; Drive.css.ts rootsList, picker): Pin 文件夹 (the station first, where there are several),
 // the folders pinned (each taken back after asking), and the picker of a folder on a station (its places beside its
-// folders, the way back as a trail, a filter; entered by a click, the one shown pinned).
+// folders, the way back as a trail, a filter; entered by a click, the one shown pinned). Each is the library's panel
+// (@sf.panel, opened by nothing): a dialog in the middle of a wide window, a sheet on a narrow one.
 
 ///|
-/// What is open: which station to pin on (choosing), the folders pinned on a station (`roots`: "" none), one asked to be
-/// taken back, the picker on a station (`picking`: "" none); the picker's place asked (None: the home), what it holds
-/// (and what it held last: its places stay while the next is read), why it could not be read, the ask on its way
-/// (`asking`: one asked, not answered yet).
-priv struct Dialogs {
-  mut choosing : Bool
-  mut roots : String
-  mut unpin : DvRoot?
+/// The picker's state (it is the one open: presented, its body drawn each frame): the station it shows (`picking`: ""
+/// none), the place asked (None: the home), what it holds (and what it held last: its places stay while the next is
+/// read), why it could not be read, the ask on its way (`asking`: one asked, not answered yet).
+priv struct Picker {
   mut picking : String
   mut at : String?
   mut value : Json?
@@ -24,11 +21,8 @@ priv struct Dialogs {
 }
 
 ///|
-// kept across runs: the dialogs' state (dialogs_reset puts it back)
-let dialogs : Dialogs = {
-  choosing: false,
-  roots: "",
-  unpin: None,
+// kept across runs: the picker's state (dialogs_reset puts it back)
+let dialogs : Picker = {
   picking: "",
   at: None,
   value: None,
@@ -42,9 +36,6 @@ let dialogs : Dialogs = {
 
 ///|
 fn dialogs_reset() -> Unit {
-  dialogs.choosing = false
-  dialogs.roots = ""
-  dialogs.unpin = None
   picker_close()
 }
 
@@ -70,26 +61,101 @@ pub fn pin_stations(src : Source, ws : String) -> Array[DvStation] {
 }
 
 ///|
-/// Pin 文件夹 where no one station is in view (the files' sidebar): the picker of the one station, else which first.
-pub fn add_folder(stations : Array[DvStation]) -> Unit {
+/// Pin 文件夹 of workspace `ws` where no one station is in view (the files' sidebar): the picker of the one station,
+/// else which first (useAddFolder's dialog: the stations, one chosen opening its picker).
+pub fn add_folder(src : Source, ws : String, stations : Array[DvStation]) -> Unit {
   match stations {
-    [s] => picker_open(s.station)
+    [s] => picker_open(src, ws, s.station)
     [] => ()
-    _ => dialogs.choosing = true
+    _ =>
+      @sf.panel(
+        @sf.t("web-pages.drive.addRoot"),
+        fn(c, close) {
+          let t = @sf.theme()
+          c.box(style=roots_list, fn() {
+            for s in stations {
+              let id = c.id("drive/which/" + s.station)
+              c.cursor(id, Hand)
+              if c.clicked(id) {
+                close()
+                picker_open(src, ws, s.station)
+              }
+              let b = c.box(style=pick_row, id~, fn() {
+                @sf.station_icon(c, s.emoji, s.icon, pick_icon, t.p.muted)
+                c.text(s.name, style=pick_name) |> ignore
+                if !s.online {
+                  c.text(@sf.t("web-pages.stations.offline"), style=pick_meta) |> ignore
+                }
+              })
+              c.semantics(b, Button, id~, label=s.name)
+            }
+          })
+          |> ignore
+        },
+        from=Unanchored,
+        description=@sf.t("web-pages.drive.whichStation"),
+      )
   }
 }
 
 ///|
-/// The folders a station pins, to take one back or pin another (useManage's RootsDialog).
-pub fn manage_roots(station : String) -> Unit {
-  dialogs.roots = station
+/// The folders `station` of workspace `ws` pins (useManage's RootsDialog): each to be taken back (asked first), another
+/// to be pinned.
+pub fn manage_roots(src : Source, ws : String, station : String) -> Unit {
+  @sf.panel(
+    @sf.t("web-pages.drive.manage"),
+    fn(c, _) {
+      let t = @sf.theme()
+      let st = drive_station_of(src, ws, station)
+      let roots = match st {
+        Some(s) => s.roots
+        None => []
+      }
+      c.box(style=roots_list, fn() {
+        if roots.length() == 0 {
+          c.text(@sf.t("web-pages.drive.noneYet"), style=pick_meta) |> ignore
+        }
+        for r in roots {
+          c.box(style=root_line, fn() {
+            @sf.icon(c, "folder", size=root_icon, color=t.p.muted) |> ignore
+            c.box(style=root_text, fn() {
+              c.text(r.name, style=pick_name) |> ignore
+              c.text(r.path, style=pick_meta) |> ignore
+              match dv_trouble(r.state) {
+                Some((what, hint)) => c.text(what + " · " + hint, style=root_trouble_words) |> ignore
+                None => ()
+              }
+            })
+            |> ignore
+            match st {
+              Some(s) if @sf.icon_button(c, "close", key="drive/roots/unpin/" + r.path, label=@sf.t("web-pages.drive.unshare")) =>
+                ask_unpin(c, src, s, r)
+              _ => ()
+            }
+          })
+          |> ignore
+        }
+      })
+      |> ignore
+    },
+    from=Unanchored,
+    description=@sf.t("web-pages.drive.manageNote"),
+    foot=fn(c, close) {
+      if @sf.button(c, @sf.t("common.done"), key="drive/roots/done", tone=Ghost) {
+        close()
+      }
+      if @sf.button(c, @sf.t("web-pages.drive.addRoot"), key="drive/roots/add", tone=Primary, icon="plus") {
+        close()
+        picker_open(src, ws, station)
+      }
+    },
+  )
 }
 
 ///|
-/// The picker on `station`, at its home.
-fn picker_open(station : String) -> Unit {
-  picker_close()
-  dialogs.picking = station
+/// Station `id` of workspace `ws`, as the files' pages know it.
+fn drive_station_of(src : Source, ws : String, id : String) -> DvStation? {
+  dv_stations(src, ws).0.unwrap_or([]).iter().find_first(fn(s) { s.station == id })
 }
 
 ///|
@@ -145,150 +211,31 @@ fn set_roots(c : @ui.Ctx, src : Source, station : String, roots : Array[String],
 }
 
 ///|
-/// The dialogs of workspace `ws`, whichever is open (drawn over the page).
-pub fn drive_dialogs(c : @ui.Ctx, src : Source, ws : String) -> Unit {
-  let t = @sf.theme()
-  let stations = dv_stations(src, ws).0.unwrap_or([])
-  let station_of = fn(id : String) { stations.iter().find_first(fn(s) { s.station == id }) }
-  let roots_of = fn(id : String) -> Array[DvRoot] {
-    match station_of(id) {
-      Some(s) => s.roots
+/// The picker on `station` of workspace `ws`, at its home (PickerDialog): the way to where it is, a filter; the
+/// station's places beside the folders where it is (over them, narrow); entered by a click; 选这个文件夹 pins the one
+/// shown (one pinned already, or one the station may not read, is not).
+fn picker_open(src : Source, ws : String, station : String) -> Unit {
+  picker_close()
+  dialogs.picking = station
+  let lent = fn() {
+    match drive_station_of(src, ws, station) {
+      Some(s) => s.roots.map(fn(r) { r.path })
       None => []
     }
   }
-  // which station (Pin 文件夹 with several)
-  if dialogs.choosing {
-    let shown = @sf.dialog(
-      c,
-      "drive/which",
-      true,
-      @sf.t("web-pages.drive.addRoot"),
-      description=@sf.t("web-pages.drive.whichStation"),
-      close_label=@sf.t("common.close"),
-      fn() {
-        c.box(style=roots_list, fn() {
-          for s in pin_stations(src, ws) {
-            let id = c.id("drive/which/" + s.station)
-            c.cursor(id, Hand)
-            if c.clicked(id) {
-              dialogs.choosing = false
-              picker_open(s.station)
-            }
-            let b = c.box(style=pick_row, id~, fn() {
-              @sf.station_icon(c, s.emoji, s.icon, pick_icon, t.p.muted)
-              c.text(s.name, style=pick_name) |> ignore
-              if !s.online {
-                c.text(@sf.t("web-pages.stations.offline"), style=pick_meta) |> ignore
-              }
-            })
-            c.semantics(b, Button, id~, label=s.name)
-          }
-        })
-        |> ignore
-      },
-    )
-    if !shown {
-      dialogs.choosing = false
-    }
-  }
-  // the folders pinned (RootsDialog)
-  if dialogs.roots != "" {
-    let station = dialogs.roots
-    let roots = roots_of(station)
-    let shown = @sf.dialog(
-      c,
-      "drive/roots",
-      true,
-      @sf.t("web-pages.drive.manage"),
-      description=@sf.t("web-pages.drive.manageNote"),
-      close_label=@sf.t("common.close"),
-      footer=fn() {
-        if @sf.button(c, @sf.t("common.done"), key="drive/roots/done", tone=Ghost) {
-          dialogs.roots = ""
-        }
-        if @sf.button(c, @sf.t("web-pages.drive.addRoot"), key="drive/roots/add", tone=Primary, icon="plus") {
-          dialogs.roots = ""
-          picker_open(station)
-        }
-      },
-      fn() {
-        c.box(style=roots_list, fn() {
-          if roots.length() == 0 {
-            c.text(@sf.t("web-pages.drive.noneYet"), style=pick_meta) |> ignore
-          }
-          for r in roots {
-            c.box(style=root_line, fn() {
-              @sf.icon(c, "folder", size=root_icon, color=t.p.muted) |> ignore
-              c.box(style=root_text, fn() {
-                c.text(r.name, style=pick_name) |> ignore
-                c.text(r.path, style=pick_meta) |> ignore
-                match dv_trouble(r.state) {
-                  Some((what, hint)) => c.text(what + " · " + hint, style=root_trouble_words) |> ignore
-                  None => ()
-                }
-              })
-              |> ignore
-              if @sf.icon_button(c, "close", key="drive/roots/unpin/" + r.path, label=@sf.t("web-pages.drive.unshare")) {
-                dialogs.unpin = Some(r)
-              }
-            })
-            |> ignore
-          }
-        })
-        |> ignore
-      },
-    )
-    if !shown {
-      dialogs.roots = ""
-    }
-    // a folder taken back, asked first
-    let asked = @sf.confirm_dialog(
-      c,
-      "drive/roots/unpin",
-      dialogs.unpin is Some(_),
-      @sf.t("web-pages.drive.unshareAsk", args=[("name", match dialogs.unpin { Some(r) => r.name; None => "" })]),
-      @sf.t("web-pages.drive.unshareText"),
-      @sf.t("web-pages.drive.unshare"),
-      cancel=@sf.t("common.cancel"),
-    )
-    match dialogs.unpin {
-      Some(r) if asked.confirmed => {
-        dialogs.unpin = None
-        set_roots(c, src, station, roots.filter(fn(x) { x.path != r.path }).map(fn(x) { x.path }))
-      }
-      Some(_) if !asked.open => dialogs.unpin = None
-      _ => ()
-    }
-  }
-  if dialogs.picking != "" {
-    picker(c, src, dialogs.picking, roots_of(dialogs.picking).map(fn(r) { r.path }))
-  }
-}
-
-///|
-/// The picker (PickerDialog): the way to where it is, a filter at its end; the station's places beside the folders
-/// where it is (its home's own and its disks, while at the home nothing typed not listed again under their names);
-/// entered by a click; 选这个文件夹 pins the one shown (one pinned already, or one the station may not read, is not).
-fn picker(c : @ui.Ctx, src : Source, station : String, lent : Array[String]) -> Unit {
-  let t = @sf.theme()
-  // (asked once: not again each frame while the answer is on its way)
-  if dialogs.value is None && dialogs.error == "" && !dialogs.denied && dialogs.last is None && !dialogs.asking {
-    picker_go(c, src, station, dialogs.at)
-  }
-  let v = dialogs.value
-  let near = dialogs.last
-  let path = text(v, "path")
-  let taken = v is Some(_) && lent.contains(path)
-  let shown = @sf.dialog(
-    c,
-    "drive/picker",
-    true,
+  @sf.panel(
     @sf.t("web-pages.drive.pick"),
+    fn(c, _) { picker(c, src, station) },
+    from=Unanchored,
     description=@sf.t("web-pages.drive.pickNote"),
     wide=true,
-    close_label=@sf.t("common.close"),
-    footer=fn() {
+    foot=fn(c, close) {
+      let v = dialogs.value
+      let path = text(v, "path")
+      let lent = lent()
+      let taken = v is Some(_) && lent.contains(path)
       if @sf.button(c, @sf.t("common.cancel"), key="drive/picker/cancel", tone=Ghost) {
+        close()
         picker_close()
       }
       if @sf.button(
@@ -302,124 +249,139 @@ fn picker(c : @ui.Ctx, src : Source, station : String, lent : Array[String]) -> 
           "" => path
           n => n
         }
+        close()
         picker_close()
         set_roots(c, src, station, lent + [path], done=@sf.t("web-pages.drive.shared", args=[("name", name)]))
       }
     },
-    fn() {
-      // the way here, the filter at its end
-      let way = match near {
-        Some(h) => way_of(h)
-        None => []
-      }
-      c.box(style=picker_path, fn() {
-        c.box(style=picker_crumbs, fn() {
-          for i, step in way {
-            let (name, p) = step
-            if i > 0 {
-              @sf.icon(c, "chevron-right", size=crumb_icon, color=t.p.muted) |> ignore
-            }
-            let last = i == way.length() - 1
-            let id = c.id("drive/picker/way/\{i}")
-            if !last && c.clicked(id) {
-              picker_go(c, src, station, Some(p))
-            }
-            c.box(style=crumb_box, id=if last { 0 } else { id }, fn() {
-              c.text(name, style=if last { crumb_last } else { crumb_words }) |> ignore
-            })
-            |> ignore
-          }
-        })
-        |> ignore
-        if !dialogs.denied && dialogs.error == "" {
-          c.box(style=picker_filter, fn() {
-            @sf.input(c, "drive/picker/filter", placeholder=@sf.t("web-pages.drive.pickFilter"), field=dialogs.filter) |> ignore
-          })
-          |> ignore
+    gone=picker_close,
+  )
+}
+
+///|
+/// What the picker on `station` holds, each frame while it is open.
+fn picker(c : @ui.Ctx, src : Source, station : String) -> Unit {
+  // (closed: what it held last stays drawn as it goes, nothing asked)
+  if dialogs.picking != station {
+    return
+  }
+  let t = @sf.theme()
+  // (asked once: not again each frame while the answer is on its way)
+  if dialogs.value is None && dialogs.error == "" && !dialogs.denied && dialogs.last is None && !dialogs.asking {
+    picker_go(c, src, station, dialogs.at)
+  }
+  let narrow = look_of(c) is Narrow
+  let v = dialogs.value
+  let near = dialogs.last
+  let path = text(v, "path")
+  // the way here, the filter at its end (under it, narrow)
+  let way = match near {
+    Some(h) => way_of(h)
+    None => []
+  }
+  c.box(style=if narrow { picker_path_narrow } else { picker_path }, fn() {
+    c.box(style=picker_crumbs, fn() {
+      for i, step in way {
+        let (name, p) = step
+        if i > 0 {
+          @sf.icon(c, "chevron-right", size=crumb_icon, color=t.p.muted) |> ignore
         }
-      })
-      |> ignore
-      let wanted = dialogs.filter.text().trim(chars=" ").to_owned()
-      let row = fn(name : String, p : String, unreadable : Bool, disk : Bool, here : Bool) {
-        let id = c.id("drive/picker/row/" + p)
-        c.cursor(id, Hand)
-        if c.clicked(id) {
+        let last = i == way.length() - 1
+        let id = c.id("drive/picker/way/\{i}")
+        if !last && c.clicked(id) {
           picker_go(c, src, station, Some(p))
         }
-        let b = c.box(style=if here { pick_row_here } else { pick_row }, id~, fn() {
-          @sf.icon(c, if disk { "disk" } else { "folder" }, size=pick_icon, color=t.p.muted) |> ignore
-          c.box(style=root_text, fn() {
-            c.text(name, style=if here { pick_name_here } else { pick_name }) |> ignore
-            if unreadable {
-              c.text(@sf.t("web-pages.drive.pickUnreadable"), style=pick_meta) |> ignore
-            }
-          })
-          |> ignore
-        })
-        c.semantics(b, Button, id~, label=name)
-      }
-      let folders_of = fn(h : Json?, key : String) {
-        items(h, key).map(fn(x) {
-          let x = Some(x)
-          (text(x, "name"), text(x, "path"), flag(x, "unreadable"), flag(x, "disk"))
-        })
-      }
-      c.box(style=picker_box, fn() {
-        // its places, where it was last (they stay while the next folder is read)
-        let places = folders_of(near, "places")
-        if places.length() > 0 {
-          c.box(style=picker_places, fn() {
-            c.text(@sf.t("web-pages.drive.places"), style=picker_head) |> ignore
-            let here_at = match v {
-              Some(_) => path
-              None => match way.last() { Some((_, p)) => p; None => "" }
-            }
-            for p in places {
-              row(p.0, p.1, p.2, p.3, p.1 == here_at)
-            }
-          })
-          |> ignore
-        }
-        c.box(style=picker_list, fn() {
-          if dialogs.denied || dialogs.error != "" {
-            c.box(style=picker_shut, fn() {
-              @sf.icon(c, "folder", size=shut_icon, color=t.p.muted) |> ignore
-              c.text(if dialogs.denied { @sf.t("web-pages.drive.pickNeedsAccess") } else { dialogs.error }, style=shut_words) |> ignore
-            })
-            |> ignore
-          } else {
-            match v {
-              None => @sf.wait_line(c, @sf.t("common.reading"), key="drive/picker")
-              Some(_) => {
-                let home = text(v, "home")
-                let entries = folders_of(v, "entries")
-                // at the home with nothing typed, the usual places (on the left) not listed again
-                let shown = entries.filter(fn(e) {
-                  (wanted == "" || e.0.to_lower().contains(wanted.to_lower())) &&
-                  !(path == home && wanted == "" && places.iter().any(fn(p) { p.1 == e.1 }))
-                })
-                if shown.length() == 0 {
-                  c.text(@sf.t(if wanted != "" { "web-pages.drive.pickNoMatch" } else { "web-pages.drive.noSubfolders" }), style=picker_head) |> ignore
-                } else {
-                  c.text(@sf.t("web-pages.drive.foldersHere"), style=picker_head) |> ignore
-                  c.list("drive/picker/" + path, shown.length(), pick_row_h, fn(i) {
-                    let e = shown[i]
-                    row(e.0, e.1, e.2, e.3, false)
-                  })
-                  |> ignore
-                }
-              }
-            }
-          }
+        c.box(style=crumb_box, id=if last { 0 } else { id }, fn() {
+          c.text(name, style=if last { crumb_last } else { crumb_words }) |> ignore
         })
         |> ignore
+      }
+    })
+    |> ignore
+    if !dialogs.denied && dialogs.error == "" {
+      c.box(style=if narrow { picker_filter_narrow } else { picker_filter }, fn() {
+        @sf.input(c, "drive/picker/filter", placeholder=@sf.t("web-pages.drive.pickFilter"), field=dialogs.filter) |> ignore
       })
       |> ignore
-    },
-  )
-  if !shown {
-    picker_close()
+    }
+  })
+  |> ignore
+  let wanted = dialogs.filter.text().trim(chars=" ").to_owned()
+  let row = fn(name : String, p : String, unreadable : Bool, disk : Bool, here : Bool) {
+    let id = c.id("drive/picker/row/" + p)
+    c.cursor(id, Hand)
+    if c.clicked(id) {
+      picker_go(c, src, station, Some(p))
+    }
+    let b = c.box(style=if here { pick_row_here } else { pick_row }, id~, fn() {
+      @sf.icon(c, if disk { "disk" } else { "folder" }, size=pick_icon, color=t.p.muted) |> ignore
+      c.box(style=root_text, fn() {
+        c.text(name, style=if here { pick_name_here } else { pick_name }) |> ignore
+        if unreadable {
+          c.text(@sf.t("web-pages.drive.pickUnreadable"), style=pick_meta) |> ignore
+        }
+      })
+      |> ignore
+    })
+    c.semantics(b, Button, id~, label=name)
   }
+  let folders_of = fn(h : Json?, key : String) {
+    items(h, key).map(fn(x) {
+      let x = Some(x)
+      (text(x, "name"), text(x, "path"), flag(x, "unreadable"), flag(x, "disk"))
+    })
+  }
+  c.box(style=if narrow { picker_box_narrow } else { picker_box }, fn() {
+    // its places, where it was last (they stay while the next folder is read)
+    let places = folders_of(near, "places")
+    if places.length() > 0 {
+      c.box(style=if narrow { picker_places_narrow } else { picker_places }, fn() {
+        c.text(@sf.t("web-pages.drive.places"), style=picker_head) |> ignore
+        let here_at = match v {
+          Some(_) => path
+          None => match way.last() { Some((_, p)) => p; None => "" }
+        }
+        for p in places {
+          row(p.0, p.1, p.2, p.3, p.1 == here_at)
+        }
+      })
+      |> ignore
+    }
+    c.box(style=picker_list, fn() {
+      if dialogs.denied || dialogs.error != "" {
+        c.box(style=picker_shut, fn() {
+          @sf.icon(c, "folder", size=shut_icon, color=t.p.muted) |> ignore
+          c.text(if dialogs.denied { @sf.t("web-pages.drive.pickNeedsAccess") } else { dialogs.error }, style=shut_words) |> ignore
+        })
+        |> ignore
+      } else {
+        match v {
+          None => @sf.wait_line(c, @sf.t("common.reading"), key="drive/picker")
+          Some(_) => {
+            let home = text(v, "home")
+            let entries = folders_of(v, "entries")
+            // at the home with nothing typed, the usual places (on the left) not listed again
+            let shown = entries.filter(fn(e) {
+              (wanted == "" || e.0.to_lower().contains(wanted.to_lower())) &&
+              !(path == home && wanted == "" && places.iter().any(fn(p) { p.1 == e.1 }))
+            })
+            if shown.length() == 0 {
+              c.text(@sf.t(if wanted != "" { "web-pages.drive.pickNoMatch" } else { "web-pages.drive.noSubfolders" }), style=picker_head) |> ignore
+            } else {
+              c.text(@sf.t("web-pages.drive.foldersHere"), style=picker_head) |> ignore
+              c.list("drive/picker/" + path, shown.length(), pick_row_h, fn(i) {
+                let e = shown[i]
+                row(e.0, e.1, e.2, e.3, false)
+              })
+              |> ignore
+            }
+          }
+        }
+      }
+    })
+    |> ignore
+  })
+  |> ignore
 }
 
 ///|
@@ -529,6 +491,23 @@ let crumb_last : @ui.TextStyle = @ui.text_style(size=Xs, weight=Semibold, color=
 ///|
 // kept across runs: a value (no field of it changes)
 let picker_filter : @ui.Style = @ui.css("w=S48")
+
+///|
+/// Narrow: the filter under the trail, as wide as it; the places over the folders.
+// kept across runs: a value (no field of it changes)
+let picker_path_narrow : @ui.Style = @ui.css("w=Full pb=S2_5 gap=S2")
+
+///|
+// kept across runs: a value (no field of it changes)
+let picker_filter_narrow : @ui.Style = @ui.css("w=Full")
+
+///|
+// kept across runs: a value (no field of it changes)
+let picker_box_narrow : @ui.Style = @ui.css("w=Full h=S96 gap=S3")
+
+///|
+// kept across runs: a value (no field of it changes)
+let picker_places_narrow : @ui.Style = @ui.css("w=Full gap=S0_5")
 
 ///|
 /// Its places (180) beside its folders, 12 apart, as high as 420 at most.

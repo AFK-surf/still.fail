@@ -104,3 +104,44 @@ test "a narrow folder's ⋯: the order and hidden files, its path, 收藏; chose
   t.draw()
   assert_eq(text(fix_browse.prefs.get("driveViews").map(fn(m) { Json::object(m) }), "sort"), "size")
 }
+
+///|
+test "Pin 文件夹 on a phone: which station, then the picker in a sheet from the foot, the station's places over its folders; one entered and pinned (drive.setRoots)" {
+  reset()
+  let calls : Array[Made] = []
+  let base = fixture("home")
+  let src : Source = {
+    ..base,
+    call: fn(name, params, done) {
+      calls.push({ name, params, bytes: None, done, heard: None })
+      (base.call)(name, params, done)
+    },
+  }
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0, platform=2)
+  app.nav.replace(Files)
+  t.run_for(@ui.nav_push_ms)
+  @sfdesk.add_folder(src, "ws1", @sfdesk.pin_stations(src, "ws1"))
+  sheet_rested(t, "sf-present")
+  // (two stations it can be done on: which first)
+  assert_true(t.find("选择一台 station，然后选择其中要 pin 的文件夹") is Some(_), msg="which station")
+  t.click(Button, label="Studio")
+  t.frame()
+  sheet_rested(t, "sf-present")
+  assert_eq(named(calls, "drive.folders").length(), 1)
+  // a sheet from the foot; the places (a disk among them) over the folders here (those not among the places)
+  let (_, pin_y) = t.find("Pin 这个文件夹").unwrap()
+  assert_true(pin_y > 844.0 / 2.0)
+  let (_, disk_y) = t.find("外接硬盘").unwrap()
+  let (x, folder_y) = t.find("项目").unwrap()
+  assert_true(disk_y < folder_y)
+  t.tap(x, folder_y)
+  t.frame()
+  assert_eq(text(Some(named(calls, "drive.folders")[1].params), "path"), "/Users/lin/项目")
+  t.frame()
+  t.click(Button, label="Pin 这个文件夹")
+  t.frame()
+  let set = named(calls, "drive.setRoots")
+  assert_eq(set.length(), 1)
+  assert_true(set[0].params.stringify().contains("/Users/lin/项目"))
+  assert_true(!@sf.presenting())
+}

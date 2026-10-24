@@ -12,6 +12,9 @@ test "18-drive-upload" {
     f.tap("=e2e-115455")
     f.run_to(@ui.nav_rest())
     f.see("小说-e2e.txt")
+    // (the folder slid in whole over 文件, whose own ＋ pins another folder: in a run it may still be coming as its
+    // entries show)
+    f.run_for(@ui.nav_push_ms)
     f.tap("icon:plus")
     f.run_for(@kit.presence_in_ms)
     f.see("新建文件夹")

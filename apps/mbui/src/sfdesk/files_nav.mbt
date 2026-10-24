@@ -54,7 +54,7 @@ pub fn files_nav(c : @ui.Ctx, src : Source, ws : String) -> Unit {
     side_top(c)
     let pins = pin_stations(src, ws)
     if pins.length() > 0 {
-      c.box(style=nav_band, fn() { nav_action(c, "files/pin", @sf.t("web-pages.drive.addRoot"), Some(fn() { add_folder(pins) })) })
+      c.box(style=nav_band, fn() { nav_action(c, "files/pin", @sf.t("web-pages.drive.addRoot"), Some(fn() { add_folder(src, ws, pins) })) })
       |> ignore
     }
     files_places(c, src, ws, top=if pins.length() > 0 { 0.0 } else { nav_top })
