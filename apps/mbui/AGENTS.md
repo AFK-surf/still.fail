@@ -21,6 +21,13 @@ particular to this app:
   both use it; a page keeps no copy of its own. The library imports nothing of the app (detlint's `library-import`):
   what it needs of the app is given to it as the app starts.
 
+- A named style (a top-level `let`, and a `.then(…)` of one) whose properties are all tokens and numbers is written
+  as its text, `@ui.css("w=Full px=S2 hovered{bg=Hover}")`; `@ui.style(…)` is for one that names a variable or is
+  worked out (`w=@sf.grow`, `Fixed(side_w)`), and inside functions (mbui/docs/style.md). Why (2026-10-24): moonc made
+  each `@ui.style(…)` constant ~5-10 KB of C in the program's start, ~1400 of them ~11.8 MB of one function compiled
+  again on every build; as text each is a string read once at start-up. detlint's `style-text` forbids the other
+  way and prints the text to write.
+
 ## What the app's packages are
 
 - `src/sf`: the component library (above). `src/sfbase`: what both frames read and the stack they show — the core's

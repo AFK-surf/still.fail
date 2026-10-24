@@ -4,7 +4,7 @@ What a box or a line of words looks like is a value, named, made of the theme's 
 builds it:
 
 ```moonbit
-let card : @ui.Style = @ui.style(w=Full, p=S5, radius=Xl3, bg=Card, pressed=@ui.patch(bg=Over(Card, A(Fg, O5))))
+let card : @ui.Style = @ui.css("w=Full p=S5 radius=Xl3 bg=Card pressed{bg=Over(Card, A(Fg, O5))}")
 c.box(style=card, id=c.id("row"), fn() { … })
 c.text(title, style=@sf.title)
 c.rich(runs, style=@sf.body)
@@ -12,17 +12,25 @@ c.rich(runs, style=@sf.body)
 
 `src/ui/style_tokens.mbt` has the tokens, `src/ui/style.mbt` the values, `src/kit/styles.mbt` kit's recipes.
 
-A named style that is all tokens is said as its text, `@ui.css(…)` (`src/ui/style_css.mbt`): the same items, `row`
-and `clip` alone for `=true`, a state's block in braces.
+A named style is said in one of two ways, and which is not a choice:
+
+- all tokens and numbers: its text, `@ui.css("…")` (`src/ui/style_css.mbt`). The same items as `style(…)`'s, `row`
+  and `clip` alone for `=true`, a state's block in braces; a `.then(…)` of named styles adds its literal part the
+  same way (`base.then(@ui.css("bg=AccentBg"))`). Longer than a line, its text goes on `#|` lines.
+- naming a variable (`w=@sf.grow`, `Fixed(side_w)`, `shadow=@sf.floating.cast()`) or worked out: `@ui.style(…)`;
+  inside a function always `@ui.style(…)` (made as the frame is built, no constant).
 
 ```moonbit
 let card : @ui.Style = @ui.css("w=Full p=S5 radius=Xl3 bg=Card pressed{bg=Over(Card, A(Fg, O5))}")
+let card_on : @ui.Style = card.then(@ui.css("bg=Selected"))
+let side : @ui.Style = @ui.style(w=@sf.grow, px=S2) // names the library's length
 ```
 
-It is the same Style, read once as the app starts; a `style(…)` constant was ~5-10 KB of C in the program's start
-(an assignment and a release for each of its ~38 optional parameters), ~1400 of them ~11.8 MB of one function built
-again on every build. A word it does not know aborts, naming the text, so a mistyped one fails every test at once.
-`style(…)` stays for what is worked out (a length of the app's, `.then(…)` of named styles).
+Why text: a constant is made in the program's start, and moonc made each `style(…)` constant ~5-10 KB of C there (an
+assignment and a release for each of its ~38 optional parameters), ~1400 of them ~11.8 MB of one function built again
+on every build (2026-10-24: 38 s of Windows' MSVC). Said as text it is a string, read once as the app starts into
+the same Style. A word it does not know aborts, naming the text, so a mistyped one fails every test at once.
+detlint's `style-text` holds it (forbidden: none left), and prints the text to write in its place.
 
 ## Tokens
 
@@ -105,6 +113,8 @@ detlint (docs/detlint.md) counts, file by file, only going down:
   and its kin (a `@ui.css("…")` text's numbers too), or an `Exact(…)` outside the token files;
 - `box-loose`: a call that says its look loosely (`pad=`, `bg=`, `size=`…) rather than by `style=`;
 - `style-exact`: every `Exact(…)`, the token files' too (and a style's text's).
+- `style-text`: a named style (a top-level `let`, a `.then(…)` of one) said as `@ui.style(…)` with nothing but
+  tokens and numbers in it: forbidden; its message is the `@ui.css("…")` to write instead.
 
 `Tester::census()` gives the values the last frame used, by kind (sizes of words, weights, paddings, corners,
 colours): an app counts how many each kind has across its screens, which should go down.

@@ -333,6 +333,7 @@ fn lint_sources(files : Array[(String, String)], cfg : Config) -> Array[Finding]
   for f in mbts {
     lint_mbt(f, cfg, findings, returns, readers)
     lint_style(f, cfg, findings)
+    lint_style_text(f, findings)
   }
   lap("calls, style")
   lint_globals(mbts, cfg, findings)
