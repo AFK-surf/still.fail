@@ -385,12 +385,22 @@ export function threadSessions(s: Store, thread: number): Membership[] {
   return all(s, "SELECT * FROM thread_sessions WHERE thread = ? ORDER BY joined_at, rowid", thread).map(toMembership);
 }
 
+/// The threads sessions take part in (each once).
+export function threadsOfSessions(s: Store, keys: string[]): number[] {
+  if (keys.length === 0) return [];
+  return all(s, `SELECT DISTINCT thread FROM thread_sessions WHERE session IN (${keys.map(() => "?").join(", ")})`, ...keys).map((r) => r.thread as number);
+}
+
 /// Threads with their sessions, last entry, latest message and the viewer's unread count, most recently said in
-/// first: those of one session, one thread, or all.
-export function listThreads(s: Store, viewer: string, session: string | null, thread: number | null): ThreadSummary[] {
+/// first: those of one session, one thread (or those named), or all.
+export function listThreads(s: Store, viewer: string, session: string | null, thread: number | number[] | null): ThreadSummary[] {
   const base = "SELECT t.*, COALESCE(r.n, 0) AS read_n FROM threads t LEFT JOIN reads r ON r.thread = t.id AND r.viewer = ?1";
   const rows: Json[] =
-    thread !== null
+    Array.isArray(thread)
+      ? thread.length === 0
+        ? []
+        : all(s, `${base} WHERE t.id IN (${thread.map((_, i) => `?${i + 2}`).join(", ")})`, viewer, ...thread)
+      : thread !== null
       ? all(s, `${base} WHERE t.id = ?2`, viewer, thread)
       : session !== null
         ? all(s, `${base} WHERE t.id IN (SELECT thread FROM thread_sessions WHERE session = ?2)`, viewer, session)
@@ -761,7 +771,9 @@ function turnSummary(r: Json, startedAt: number): TurnSummary {
 
 /// Per session (or for one): turn count, the latest turn (with its id: a client holding the turns puts it in place
 /// rather than read them all again), undelivered messages and the first one it heard.
-export function sessionStats(s: Store, key: string | null): Map<string, SessionStats> {
+/// Each session's counts and last turn: one's, those named (`keys`), or all (null).
+export function sessionStats(s: Store, key: string | string[] | null): Map<string, SessionStats> {
+  if (Array.isArray(key) && key.length === 0) return new Map();
   const sql = `SELECT s.key,
        (SELECT COUNT(*) FROM turns t WHERE t.session_key = s.key) AS turns,
        (SELECT COUNT(*) FROM deliveries d WHERE d.session = s.key AND d.delivered_at IS NULL) AS pending,
@@ -770,8 +782,8 @@ export function sessionStats(s: Store, key: string | null): Map<string, SessionS
        l.id AS turn_id, l.kind, l.outcome, l.declared, l.wait_seconds, l.wait_for, l.need, l.about_thread, l.about_n, l.about_ts, l.detail, l.started_at, l.ended_at
      FROM sessions s
      LEFT JOIN turns l ON l.id = (SELECT id FROM turns t2 WHERE t2.session_key = s.key ORDER BY t2.started_at DESC LIMIT 1)
-     ${key !== null ? "WHERE s.key = ?" : ""}`;
-  const rows = key !== null ? all(s, sql, key) : all(s, sql);
+     ${Array.isArray(key) ? `WHERE s.key IN (${key.map(() => "?").join(", ")})` : key !== null ? "WHERE s.key = ?" : ""}`;
+  const rows = Array.isArray(key) ? all(s, sql, ...key) : key !== null ? all(s, sql, key) : all(s, sql);
   return new Map(
     rows.map((r) => [
       r.key as string,

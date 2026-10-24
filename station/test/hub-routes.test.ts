@@ -18,6 +18,8 @@ import { Hub } from "../src/sessions/hub.ts";
 import { InternalChat } from "../src/sessions/internal.ts";
 import { Store, newMessage } from "../src/store/store.ts";
 import { digest } from "../src/read/digest.ts";
+import { openStore } from "../src/read/store.ts";
+import { chatRows, chats } from "../src/read/views.ts";
 import { isDeepStrictEqual } from "node:util";
 import { FakeDriver, settle } from "./hub-fakes.ts";
 
@@ -587,6 +589,29 @@ test("a session at work: the station follows it, its summary says how long its t
     assert.deepEqual(texts(await timeline([["after", "4"], ["brief", "1"]])), [5, [], 5]);
     assert.deepEqual(texts(await timeline([["before", "1000000000000000"], ["limit", "2"], ["brief", "1"]])), [3, ["four", "five"], 5]);
     assert.deepEqual(texts(await timeline([["from", "0"], ["to", "1"], ["brief", "1"]])), [0, ["one", "two"], 5]);
+  } finally {
+    await r.close();
+  }
+});
+
+test("the sidebar items a change can touch are read as the whole sidebar has them, and only they", async () => {
+  const r = rig();
+  try {
+    const made: any[] = [];
+    for (const title of ["a", "b", "c"]) made.push((await r.ask("POST", "/sessions", { runtime: "claude", title }))[1]);
+    // b brought into a's chat: a's item has both; c alone.
+    assert.equal((await r.ask("POST", `/threads/${made[0].thread.id}/sessions`, { session: made[1].key }))[0], 200);
+    r.store.insertMessage(newMessage(made[0].thread.id, "1.2", "person", "a@x", "hi"));
+    const store = openStore(r.data);
+    const whole = chats(store, viewer, false);
+    const byId = new Map(whole.map((row: any) => [String(row.id), row]));
+    for (const [sessions, threads] of [[[made[1].key], []], [[], [made[0].thread.id]], [[made[2].key], []]] as [string[], number[]][]) {
+      const some = chatRows(store, viewer, sessions, threads);
+      assert.ok(some.rows.length > 0 && some.rows.length < whole.length, JSON.stringify(some.scope));
+      for (const row of some.rows) assert.deepEqual(row, byId.get(String(row.id)));
+      for (const row of some.rows) assert.ok(some.scope.includes(String(row.id)));
+    }
+    store.db.close();
   } finally {
     await r.close();
   }

@@ -119,7 +119,15 @@ export class Events {
   private rowsTold = new Map<string, Map<string, string>>();
   private overviewTold = new Map<string, string>();
   private deps: EventsDeps;
-  private dirty = { sessions: new Set<string>(), rowsAll: false, rows: new Set<string>(), overview: false };
+  /// What changed since the last round: sessions (their events), whose sidebars to read whole (`rowsAll`, `rows`), and the
+  /// sessions and threads whose items alone to read again, for everyone (`items`) or one viewer (`viewerItems`).
+  private dirty = Events.clean();
+  private static clean() {
+    return {
+      sessions: new Set<string>(), rowsAll: false, rows: new Set<string>(), overview: false,
+      items: { sessions: new Set<string>(), threads: new Set<number>() }, viewerItems: new Map<string, Set<number>>(),
+    };
+  }
   /// The process state last told per session.
   private states = new Map<string, string>();
   private flushing: Promise<void> | null = null;
@@ -186,6 +194,20 @@ export class Events {
   rowsChanged(viewer: string | null) {
     if (viewer === null) this.dirty.rowsAll = true;
     else this.dirty.rows.add(viewer);
+    this.wake();
+  }
+
+  /// The sidebar items a change of these sessions and threads can touch may have changed (read/views.ts `scopeOf`), for
+  /// everyone or one viewer: only those are read again.
+  private itemsChanged(of: { sessions?: string[]; threads?: number[] }, viewer: string | null = null) {
+    if (viewer === null) {
+      for (const key of of.sessions ?? []) this.dirty.items.sessions.add(key);
+      for (const id of of.threads ?? []) this.dirty.items.threads.add(id);
+    } else {
+      const threads = this.dirty.viewerItems.get(viewer) ?? new Set<number>();
+      for (const id of of.threads ?? []) threads.add(id);
+      this.dirty.viewerItems.set(viewer, threads);
+    }
     this.wake();
   }
 
@@ -415,14 +437,14 @@ export class Events {
     switch (change.type) {
       case "session":
         this.dirty.sessions.add(change.key);
-        this.rowsChanged(null);
+        this.itemsChanged({ sessions: [change.key] });
         break;
       case "sessionRemoved":
         this.dirty.sessions.delete(change.key);
         this.states.delete(change.key);
         this.overviewChanged();
         this.emit("session-removed", { key: change.key }, (c) => sees(c.viewer, change.ws ?? null), `session\0${change.key}`);
-        this.rowsChanged(null);
+        this.itemsChanged({ sessions: [change.key] });
         break;
       case "thread": {
         // Read as one who follows (or did last) would have it.
@@ -443,7 +465,7 @@ export class Events {
             );
           }
         }
-        this.rowsChanged(null);
+        this.itemsChanged({ threads: [change.id] });
         break;
       }
       case "threadRemoved":
@@ -452,7 +474,7 @@ export class Events {
         break;
       case "read":
         this.emit("read", { viewer: change.viewer, thread: change.thread, n: change.n }, (c) => c.viewer.email === change.viewer && this.sees(c, { thread: change.thread }));
-        this.rowsChanged(change.viewer);
+        this.itemsChanged({ threads: [change.thread] }, change.viewer);
         break;
       case "identities":
         // Who the viewer is on Slack: their overview says it, and their rows count it.
@@ -505,7 +527,8 @@ export class Events {
     if (this.flushing) return;
     this.flushing = new Promise<void>((resolve) => setImmediate(resolve)).then(() => this.flush()).finally(() => {
       this.flushing = null;
-      if (this.dirty.sessions.size > 0 || this.dirty.rowsAll || this.dirty.rows.size > 0 || this.dirty.overview) this.wake();
+      const d = this.dirty;
+      if (d.sessions.size > 0 || d.rowsAll || d.rows.size > 0 || d.overview || d.items.sessions.size > 0 || d.items.threads.size > 0 || d.viewerItems.size > 0) this.wake();
     });
   }
 
@@ -513,7 +536,7 @@ export class Events {
   /// streams were asked in.
   private async flush() {
     const dirty = this.dirty;
-    this.dirty = { sessions: new Set(), rowsAll: false, rows: new Set(), overview: false };
+    this.dirty = Events.clean();
     let overview = dirty.overview;
     for (const key of dirty.sessions) {
       if (!this.deps.sessionExists(key)) continue;
@@ -553,9 +576,31 @@ export class Events {
         }),
       );
     }
-    if (!dirty.rowsAll && dirty.rows.size === 0) return;
+    // Each viewer's sidebar: read whole where it may all have changed, or nothing of it is told against yet (it could
+    // not be read); else only the items the changes can touch.
     const seen = new Set<string>();
-    const viewers = this.clients.filter((c) => (dirty.rowsAll || dirty.rows.has(c.viewer.email)) && !seen.has(viewerKey(c.viewer, c.lang)) && seen.add(viewerKey(c.viewer, c.lang)));
+    const everyone = this.clients.filter((c) => !seen.has(viewerKey(c.viewer, c.lang)) && seen.add(viewerKey(c.viewer, c.lang)));
+    const itemsOf = (viewer: Viewer) => new Set([...dirty.items.threads, ...(dirty.viewerItems.get(viewer.email) ?? [])]);
+    const touched = (viewer: Viewer) => dirty.items.sessions.size > 0 || itemsOf(viewer).size > 0;
+    const whole = (v: { viewer: Viewer; lang: Lang }) => dirty.rowsAll || dirty.rows.has(v.viewer.email) || (touched(v.viewer) && !this.rowsTold.has(viewerKey(v.viewer, v.lang)));
+    await Promise.all(
+      everyone
+        .filter((v) => !whole(v))
+        .map(async ({ viewer, lang }) => {
+          const threads = itemsOf(viewer);
+          if (!touched(viewer)) return;
+          let read: { rows: any[]; scope: string[] };
+          try {
+            read = JSON.parse(await this.deps.readers.read("chatRows", { viewer, sessions: [...dirty.items.sessions], threads: [...threads] }, lang));
+          } catch (error) {
+            log.warn("events", "sidebar rows not read", { error: (error as Error).message });
+            return;
+          }
+          this.tellSomeRows(viewer, lang, read.rows, read.scope);
+        }),
+    );
+    const viewers = everyone.filter(whole);
+    if (viewers.length === 0) return;
     await Promise.all(
       viewers.map(async ({ viewer, lang }) => {
         let rows: any[];
@@ -577,6 +622,30 @@ export class Events {
         this.tellRows(viewer, lang, rows);
       }),
     );
+  }
+
+  /// Some of a viewer's sidebar items as they are now (`rows`, of those `scope` names: one named and not among them is gone
+  /// from it), told against what their streams were told of them last; the rest as it was. Nothing while nothing of it was
+  /// told (the next stream reads it whole).
+  private tellSomeRows(viewer: Viewer, lang: Lang, rows: any[], scope: string[]) {
+    const k = viewerKey(viewer, lang);
+    const told = this.rowsTold.get(k);
+    if (!told) return;
+    const to = (c: Client) => theirs(c, viewer, lang);
+    const now = new Set<string>();
+    for (const row of rows) {
+      const id = String(row.id ?? "");
+      now.add(id);
+      const json = JSON.stringify(row);
+      if (told.get(id) === json) continue;
+      told.set(id, json);
+      this.emit("chat", row, to, `chat\0${k}\0${id}`);
+    }
+    for (const id of scope) {
+      if (now.has(id) || !told.has(id)) continue;
+      told.delete(id);
+      this.emit("chat-removed", { id }, to, `chat\0${k}\0${id}`);
+    }
   }
 
   /// A viewer's sidebar as it is now (`rows`, in `lang`): the rows that changed since their streams were told it last
