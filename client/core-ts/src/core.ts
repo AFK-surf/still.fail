@@ -7,6 +7,7 @@ import { type AccountProvider, type AccountProviderFactory, type AccountSessions
 import * as brand from "./brand.ts";
 import * as commands from "./commands.ts";
 import { findGo } from "./chat-find.ts";
+import { toolCall, toolResult, type ToolPart } from "./tool-step.ts";
 import * as fonts from "./fonts.ts";
 import { parseCall, cancellable, callStation, counts, type Call } from "./core/calls.ts";
 import { execute, handlers, hooks } from "./core/execute.ts";
@@ -19,6 +20,7 @@ import { DriveKept } from "./drive-kept.ts";
 import { CoreError, asCoreError } from "./error.ts";
 import type { Host } from "./host.ts";
 import { t } from "./i18n.ts";
+import { markdown } from "./markdown.ts";
 import * as prefs from "./prefs.ts";
 import { Beside, parseClientMessage, type ClientId, type ClientMessage, type CoreMessage, type RequestId } from "./protocol.ts";
 import { Runner } from "./runtime.ts";
@@ -256,6 +258,15 @@ export class Core {
       inner.changelog = new Changelog(inner.host, inner.store, inner.data);
       inner.router.owners.push(inner.changelog);
       handlers.changelogSeen = () => Effect.sync(() => (inner.changelog.seen(), null));
+      handlers.historyTool = (_i, call) => {
+        const c = call as Extract<Call, { kind: "historyTool" }>;
+        // Markdown read here for the clients that draw its tree (markdown.ts), as everywhere else.
+        const withMd = (parts: ToolPart[]) => parts.map((part) => (part.kind === "markdown" ? { ...part, md: markdown(part.text) } : part));
+        return Effect.sync(() => ({
+          call: withMd(toolCall(c.name, c.call, c.said, t)),
+          result: c.result === null ? null : withMd(toolResult(c.name, c.call, c.result, c.failed, t)),
+        }));
+      };
       handlers.chatFindGo = (_i, call) => {
         const c = call as Extract<Call, { kind: "chatFindGo" }>;
         return Effect.sync(() => findGo(c.hits, c.at, c.by, c.from, c.to, c.drawn));

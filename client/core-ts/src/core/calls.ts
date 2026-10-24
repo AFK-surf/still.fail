@@ -130,6 +130,8 @@ export type Call =
   | { kind: "clientDevice"; facts: unknown }
   | { kind: "changelogSeen" }
   | { kind: "commandsFind"; query: string; offered: unknown[] }
+  /// A history step's call and what came back, read by what they are (tool-step.ts).
+  | { kind: "historyTool"; name: string; call: string; result: string | null; failed: boolean; said: boolean }
   /// Where a chat's find goes (chat-find.ts): what was found, where the reader is, which way, what the view shows.
   | { kind: "chatFindGo"; hits: FindHit[]; at: FindAt | null; by: -1 | 0 | 1; from: number | null; to: number | null; drawn: Record<string, number> }
   /// A face's files on a device that keeps none of its own (font-files.ts): fetched, kept, given back.
@@ -743,6 +745,16 @@ export function parseCall(name: string, params: unknown, bytes?: Uint8Array, mod
       return { kind: "clientDevice", facts: orEmpty(params) };
     case "changelog.seen":
       return { kind: "changelogSeen" };
+    case "history.tool": {
+      const p = read(params, [
+        ["name", S, "req"],
+        ["call", S, "req"],
+        ["result", S, "opt"],
+        ["failed", "bool", "default"],
+        ["said", "bool", "default"],
+      ]);
+      return { kind: "historyTool", name: p.name as string, call: p.call as string, result: p.result as string | null, failed: p.failed as boolean, said: p.said as boolean };
+    }
     case "chat.find.go": {
       const p = read(params, [
         ["hits", "values", "default"],
