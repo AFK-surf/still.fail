@@ -23,11 +23,10 @@ pub(all) struct Pages {
   other : (@ui.Ctx, Source, Workspace, Array[Workspace], Bool, Page) -> Unit
   /// what the settings' pages read and call, and how they move (src/sfapp/settings: the core as the app has it)
   core : (Source, Workspace) -> Core
-  /// whether a sheet is over the pages (back closes it first); what is over the pages put down (a sheet, the menu): a
-  /// place gone to; and the stack back to its root with them, as another workspace is
+  /// whether one of the phone's sheets is over the pages (back closes it first), and what is over the pages put down
+  /// as a place is gone to: what the phone's pages still shown here (`other`, the files') open
   sheet : () -> Bool
   lower : () -> Unit
-  home : () -> Unit
 }
 
 ///|

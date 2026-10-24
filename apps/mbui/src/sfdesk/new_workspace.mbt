@@ -237,7 +237,7 @@ fn to_workspace(src : Source, pages : Pages, ws : String) -> Unit {
   }
   app.picked = ws
   (src.call)("prefs.set", Json::object({ "workspace": Json::string(ws) }), fn(_) {  })
-  (pages.home)()
+  desk_home(pages)
 }
 
 ///|

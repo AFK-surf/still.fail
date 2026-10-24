@@ -233,7 +233,7 @@ fn attention_rows(c : @ui.Ctx, src : Source, w : Workspace, pages : Pages, raile
             if g.0 != w.id {
               app.picked = g.0
               (src.call)("prefs.set", Json::object({ "workspace": Json::string(g.0) }), fn(_) {  })
-              (pages.home)()
+              desk_home(pages)
             }
             let chat : ChatRef = {
               station: text(v, "station"),
