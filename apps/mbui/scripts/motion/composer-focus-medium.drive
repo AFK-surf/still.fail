@@ -1,0 +1,16 @@
+# Medium on an opened fold's inner screen (MBUI_WIN=690x840 MBUI_FILM_PLATFORM=2): the chat's page brought over, its
+# composer pressed (a box), a press on the messages (let go: a capsule again), pressed again: the box's ground goes
+# from the shape it had to the new one, its foot where it is (docs/motion.md: moved or reshaped, for its cause).
+system {"size_class":{"width":"medium","height":"medium"}}
+timeout 20000
+until 发消息
+wait 600
+tapxy -80 420
+wait 900
+tap 发消息
+wait 900
+tapxy -80 300
+wait 1200
+tap 发消息
+wait 900
+exit

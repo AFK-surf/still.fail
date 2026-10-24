@@ -152,6 +152,11 @@ pub fn composer(
   }
   // dragged over: marked (the 文件 tab's rows; files from the computer the page takes)
   let dragging = !no_files && (@sfbase.drag_carried.val)() is Some(_) && c.lit(cap)
+  // its parts (what goes with it from where it showed as it changes shape: morph.ts's PARTS), as this build has them
+  let mut plus = -1
+  let mut words = -1
+  let mut send_i = -1
+  let mut chosen = -1
   let box = c.box(
     style=if multiline { composer_box_open } else { composer_box },
     // (the raised ground's glass, the accent's over it while dragged over)
@@ -160,30 +165,31 @@ pub fn composer(
     fn() {
       if multiline {
         composer_extras(c, src, spec, w)
-        composer_text(c, src, ws, spec, w, cap, multiline, submit)
+        words = composer_text(c, src, ws, spec, w, cap, multiline, submit)
         c.box(style=tools_row, fn() {
-          attach(c, src, spec, w, no_files)
+          plus = attach(c, src, spec, w, no_files)
           match spec.toolbar {
-            Some(f) => c.box(style=choices, f) |> ignore
+            Some(f) => chosen = c.box(style=choices, f)
             None => c.box(style=tools_gap, fn() {  }) |> ignore
           }
-          send_button(c, ready, w.starting, submit)
+          send_i = send_button(c, ready, w.starting, submit)
         })
         |> ignore
       } else {
-        attach(c, src, spec, w, no_files)
-        composer_text(c, src, ws, spec, w, cap, multiline, submit)
-        send_button(c, ready, w.starting, submit)
+        plus = attach(c, src, spec, w, no_files)
+        words = composer_text(c, src, ws, spec, w, cap, multiline, submit)
+        send_i = send_button(c, ready, w.starting, submit)
       }
     },
   )
   // over a chat's messages: their scroll bar keeps clear of it
   c.floats_over(box)
-  // capsule ⇄ box in one motion for what it holds (useMorph: its words, files, quotes, its being opened, what it says
-  // under it); laid out for the other page (a new chat's in the page, a chat's at its foot: dock.tsx), from where it
-  // was there to here, one composer changing. Moved by nothing of these (the window, the sidebar, a keyboard), or
-  // another chat's on the same page (what it holds swapped, not changed), it is where it is laid out at once
-  // (docs/motion.md)
+  // capsule ⇄ box in one motion for what it holds (useMorph, morph.ts grow: its words, files, quotes, its being opened,
+  // what it says under it): laid out as it ends at once, its ground going from the shape it had to this one, its parts
+  // from where they showed to their places; laid out for the other page (a new chat's in the page, a chat's at its
+  // foot: dock.tsx), the same from where it was there, one composer changing. Moved by nothing of these (the window,
+  // the sidebar, a keyboard), or another chat's on the same page (what it holds swapped, not changed), it is where it
+  // is laid out at once (docs/motion.md)
   let moved = match composing.roomy_before {
     Some(was) => was != spec.roomy
     None => false
@@ -194,7 +200,13 @@ pub fn composer(
   } else {
     "\{spec.roomy}|\{multiline}|\{w.files.length()}|\{w.quotes.length()}|\{w.error != ""}|" + w.field.text()
   }
-  @motion.layout(c, box, "composer/box", spec=@motion.tween(if moved { page_move_ms } else { morph_ms }, ease=Out), by=holds)
+  let shape = @motion.tween(if moved { page_move_ms } else { morph_ms }, ease=Out)
+  @motion.reshape(c, box, "composer/box", by=holds, spec=shape)
+  for part in [(plus, "plus"), (words, "words"), (send_i, "send"), (chosen, "choices")] {
+    if part.0 >= 0 {
+      @motion.layout(c, part.0, "composer/part/" + part.1, spec=shape, by=holds)
+    }
+  }
   // with a finger: a press outside it lets go of the keyboard once lifted or moved on (reading on)
   if @ui.pointing() is Finger {
     keyboard_let_go(c, cap)
@@ -375,7 +387,7 @@ fn composer_text(
   cap : Int,
   multiline : Bool,
   submit : () -> Unit,
-) -> Unit {
+) -> Int {
   let p = @sf.theme().p
   let prefs = (src.topic)("prefs", {}).value
   let hint = space_hint(c, prefs, spec.locked)
@@ -434,7 +446,6 @@ fn composer_text(
       }
     }
   })
-  |> ignore
 }
 
 ///|
@@ -469,7 +480,7 @@ fn warm(c : @ui.Ctx, src : Source, spec : ComposerSpec) -> Unit {
 ///|
 /// ＋ (ComposerTools' attach, Chat.css.ts attachBtn: 32 round, the muted ink, the hover's ground and the text's ink
 /// pointed at, faint where no file is taken in): the system's file picker; its tip with its keys (composer.file).
-fn attach(c : @ui.Ctx, src : Source, spec : ComposerSpec, w : Writing, no_files : Bool) -> Unit {
+fn attach(c : @ui.Ctx, src : Source, spec : ComposerSpec, w : Writing, no_files : Bool) -> Int {
   let p = @sf.theme().p
   let id = c.id("composer/plus")
   let hot = !no_files && c.lit(id)
@@ -497,6 +508,7 @@ fn attach(c : @ui.Ctx, src : Source, spec : ComposerSpec, w : Writing, no_files 
     |> ignore
   })
   c.semantics(b, Button, id~, label=@sf.t("web-main.composer.attach"), disabled=no_files)
+  b
 }
 
 ///|
@@ -511,7 +523,7 @@ pub fn pick_files(w : Writing) -> Unit {
 ///|
 /// Send (sendBtn): 32 round, the text's ink with the canvas's arrow while it can go (a step lighter pointed at), the
 /// ink faint over the box's ground while not; a turning ring while a new chat is made for it.
-fn send_button(c : @ui.Ctx, ready : Bool, starting : Bool, submit : () -> Unit) -> Unit {
+fn send_button(c : @ui.Ctx, ready : Bool, starting : Bool, submit : () -> Unit) -> Int {
   let p = @sf.theme().p
   let id = c.id("composer/send")
   let hot = ready && c.lit(id)
@@ -537,6 +549,7 @@ fn send_button(c : @ui.Ctx, ready : Bool, starting : Bool, submit : () -> Unit) 
     }
   })
   c.semantics(b, Button, id~, label=@sf.t("web-main.composer.send"), disabled=!ready)
+  b
 }
 
 ///|
