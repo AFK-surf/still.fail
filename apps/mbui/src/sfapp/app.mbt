@@ -589,43 +589,30 @@ fn page_view(
 /// coming in from the side the ball goes to (App.kt placeSwitch); the same place again changes nothing. `sets`, `cur`:
 /// the bar it is chosen in (none: from no side).
 fn go_place(c : @ui.Ctx, place : String, sets : Array[Array[String]], cur : Int) -> Unit {
-  let page : Page = match place {
-    "chats" => Home
-    "files" => Files
-    "decisions" => Decisions
-    p => Place(p)
-  }
-  if app.nav.depth() == 1 && app.nav.top() == page {
-    return
-  }
-  lower_sheet()
-  app.menu = false
   let from = match place_of(app.nav.top()) {
     Some(p) => p
     None => ""
   }
-  // (timed from here: BarTiming)
-  bar_placed(from, place)
+  // the side it comes in from: the bar's order now
   let bar_now = if cur >= 0 && cur < sets.length() { sets[cur] } else { [] }
   let a = bar_now.search(from).unwrap_or(-1)
   let b = bar_now.search(place).unwrap_or(-1)
-  app.switch_way = if a < 0 || b < 0 || a == b {
+  let way = if a < 0 || b < 0 || a == b {
     0
   } else if b > a {
     1
   } else {
     -1
   }
-  // it comes in from here (Arrive)
+  // the shell's (sfbase's shell.mbt), then the bar's own: timed from here (BarTiming), the page coming in from its side
+  // (Arrive)
+  if !@sfbase.go_place(place, way~) {
+    return
+  }
+  bar_placed(from, place)
   let fade = place_switch(c)
   fade.snap(0.0)
-  fade.animate(1.0, @motion.tween(if app.switch_way == 0 { switch_fade_ms } else { switch_side_ms }, ease=Arrive))
-  while app.nav.depth() > 1 {
-    if !app.nav.pop() {
-      break
-    }
-  }
-  app.nav.replace(page)
+  fade.animate(1.0, @motion.tween(if way == 0 { switch_fade_ms } else { switch_side_ms }, ease=Arrive))
 }
 
 ///|

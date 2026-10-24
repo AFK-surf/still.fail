@@ -513,28 +513,6 @@ fn desk_home() -> Unit {
 }
 
 ///|
-/// A place gone to (sfapp's go_place, as the web's NavLink: no switch of its own): its page the stack's root, in place;
-/// the same place again changes nothing.
-fn go_place(place : String) -> Unit {
-  let page : Page = match place {
-    "chats" => Home
-    "files" => Files
-    "decisions" => Decisions
-    p => Place(p)
-  }
-  if app.nav.depth() == 1 && app.nav.top() == page {
-    return
-  }
-  app.menu = false
-  while app.nav.depth() > 1 {
-    if !app.nav.pop() {
-      break
-    }
-  }
-  app.nav.replace(page)
-}
-
-///|
 /// A place gone to, from the rail or its menu (Rail.tsx `drawn`'s presses and `go`): 待处理 its panel; a list of chats
 /// its list in the sidebar, the chat last open beside it; 已归档 the archive; the others their page.
 pub fn rail_go(c : @ui.Ctx, src : Source, w : Workspace, place : String) -> Unit {
@@ -554,7 +532,7 @@ pub fn rail_go(c : @ui.Ctx, src : Source, w : Workspace, place : String) -> Unit
       if app.nav.pages()[0] == Home && lit_place() == "chats" && !app.nav.pages().contains(Archived) {
         ()
       } else {
-        go_place("chats")
+        @sfbase.go_place("chats") |> ignore
         wide.landed = ""
       }
     }
@@ -567,7 +545,7 @@ pub fn rail_go(c : @ui.Ctx, src : Source, w : Workspace, place : String) -> Unit
       archive_side.landed = false
       app.nav.push(Archived)
     }
-    p => go_place(p)
+    p => @sfbase.go_place(p) |> ignore
   }
 }
 
