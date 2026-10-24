@@ -2788,7 +2788,8 @@ fn activity(
     },
   )
   |> ignore
-  if wide && here.view.agents.length() > 1 && (c.hovered(row) || c.hovered(id)) {
+  // (always to a finger, which hovers over nothing: OpenJobs.css.ts openJobStop `hover: none`)
+  if wide && here.view.agents.length() > 1 && (c.hovered(row) || c.hovered(id) || @ui.pointing() is Finger) {
     activity_stop(c, src, here, a)
   }
   })

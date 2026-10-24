@@ -347,7 +347,8 @@ fn archive_side_row(c : @ui.Ctx, src : Source, pages : Pages, it : Json, more : 
     _ => false
   }
   let busy = archive_doing(src, station, session)
-  let over = c.hovered(id) || c.hovered(back) || c.hovered(drop) || busy
+  // (always to a finger, which hovers over nothing: Archive.css.ts actions `hover: none`)
+  let over = c.hovered(id) || c.hovered(back) || c.hovered(drop) || busy || @ui.pointing() is Finger
   c.box(style=if more { arch_wrap } else { arch_wrap_last }, fn() {
     c.box(style=arch_row, selected=on, id~, fn() {
       c.box(style=arch_text, fn() {
@@ -372,7 +373,7 @@ fn archive_side_row(c : @ui.Ctx, src : Source, pages : Pages, it : Json, more : 
       |> ignore
     })
     |> ignore
-    // 恢复 and 删除 over the title's end while pointed at (or one under way)
+    // 恢复 and 删除 over the title's end while pointed at (or one under way), always to a finger
     if over {
       c.layer(fn() {
         c.box(style=arch_actions, fn() {

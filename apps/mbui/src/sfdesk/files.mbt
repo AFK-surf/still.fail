@@ -232,7 +232,8 @@ fn tab_row(
       } else if c.clicked(id) && !on {
         show("show", x.id)
       }
-      let hot = c.hovered(id) || c.hovered(cid)
+      // (its ✕ always to a finger, which hovers over nothing)
+      let hot = c.hovered(id) || c.hovered(cid) || @ui.pointing() is Finger
       let panes = Array::makei(x.panes.length(), fn(i) { pane_at(x, i) })
       let words = panes
         .map(fn(p) {

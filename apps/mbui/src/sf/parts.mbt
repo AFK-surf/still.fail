@@ -563,12 +563,13 @@ pub fn tip(
   label : String,
   side? : @ui.Side = Bottom,
   shortcut? : String = "",
+  shown? : Bool = false,
 ) -> Unit {
   if label == "" || id == 0 || touch_system() {
     return
   }
   let keys = shortcut_keys(shortcut)
-  @kit.tooltip(c, "tip/" + key, id, label, delay=tip_delay_ms, side~, look=fn(c, _, words) {
+  @kit.tooltip(c, "tip/" + key, id, label, delay=tip_delay_ms, side~, shown~, look=fn(c, _, words) {
     tip_look(c, words, keys)
   })
   |> ignore
@@ -797,9 +798,10 @@ let menu_open : Ref[String] = Ref("")
 let menu_open_at : Ref[(Double, Double)] = Ref((0.0, 0.0))
 
 ///|
-/// No menu open (the app begun again).
+/// No menu open, no mark's words (the app begun again).
 pub fn parts_reset() -> Unit {
   menu_open.val = ""
+  about_open.val = ""
   menu_open_at.val = (0.0, 0.0)
 }
 
@@ -897,17 +899,28 @@ pub let chooser_menu_w : Double = 220.0
 
 ///|
 /// What a thing is, said when the pointer rests on a quiet mark beside it (parts.tsx About, own.css.ts about: a 20
-/// circle, its ⓘ 14 in the subtle ink, the words' under the pointer; what it says in a tip under it, or on `side`).
-/// `label`: what a screen reader calls the mark (the app's word for 关于).
+/// circle, its ⓘ 14 in the subtle ink, the words' under the pointer; what it says in a tip under it, or on `side`); to
+/// a finger, which rests on nothing, once it is tapped, until a tap anywhere. `label`: what a screen reader calls the
+/// mark (the app's word for 关于).
 pub fn about(c : @ui.Ctx, key : String, words : String, label~ : String, side? : @ui.Side = Bottom) -> Unit {
   let t = theme()
   let id = c.id(key)
+  let finger = @ui.pointing() is Finger
+  if finger && c.clicked(id) {
+    about_open.val = if about_open.val == key { "" } else { key }
+  } else if about_open.val == key && c.tapped_anywhere() is Some(_) {
+    about_open.val = ""
+  }
   let b = c.box(style=about_box, id~, fn() {
     icon(c, "info", size=about_icon, color=if c.hovered(id) { t.p.text } else { t.p.subtle }) |> ignore
   })
   c.semantics(b, Button, id~, label~)
-  tip(c, key + "/tip", id, words, side~)
+  tip(c, key + "/tip", id, words, side~, shown=finger && about_open.val == key)
 }
+
+///|
+/// The mark a finger tapped open (`about`'s key), "" none.
+let about_open : Ref[String] = Ref("")
 
 ///|
 let about_icon : Double = 14.0

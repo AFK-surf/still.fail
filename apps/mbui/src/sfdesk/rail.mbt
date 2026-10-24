@@ -126,7 +126,7 @@ fn list_place(mode : Int) -> String {
 fn rail(c : @ui.Ctx, src : Source, w : Workspace, all : Array[Workspace], pages : Pages, bar : Bool) -> Unit {
   let lit = lit_place()
   let rail_id = c.id("rail")
-  match c.right_clicked(rail_id) {
+  match c.menu_asked(rail_id) {
     Some((x, y)) if wide.rail_menu is None => wide.rail_menu = Some(("", x, y))
     _ => ()
   }
@@ -360,7 +360,9 @@ fn rail_workspaces(c : @ui.Ctx, src : Source, w : Workspace, all : Array[Workspa
   let area = c.id("rail/workspaces")
   let add = c.id("rail/ws-add")
   let open = wide.add_open
+  // (always to a finger, which hovers over nothing: Rail.css.ts workspaceAdd `hover: none`)
   let over = open ||
+    @ui.pointing() is Finger ||
     c.hovered(area) ||
     c.hovered(add) ||
     all.iter().any(fn(x) { c.hovered(c.id("rail/ws/" + x.id)) })
@@ -509,7 +511,7 @@ fn rail_place(
   let t = @sf.theme()
   let id = c.id("rail/" + place)
   c.cursor(id, Hand)
-  match c.right_clicked(id) {
+  match c.menu_asked(id) {
     Some((x, y)) => wide.rail_menu = Some((place, x, y))
     None => ()
   }

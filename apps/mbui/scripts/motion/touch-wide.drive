@@ -1,0 +1,10 @@
+# A tablet's wide frame (an opened fold's inner screen: the system's size classes regular both ways), pointed at with
+# a finger: an agent's picture tapped (no card: a finger hovers over nothing), then a chat's row held (its menu).
+system {"size_class":{"width":"regular","height":"regular"}}
+timeout 20000
+until 发消息
+wait 800
+tapxy 316 251
+wait 1500
+hold 700 首页的列表改成按天分组
+wait 1200

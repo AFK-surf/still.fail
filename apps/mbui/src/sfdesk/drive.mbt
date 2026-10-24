@@ -453,7 +453,7 @@ pub fn folder_view(c : @ui.Ctx, src : Source, f : FolderOf) -> Unit {
         if c.clicked(lid) {
           b.clear(c, src)
         }
-        match c.right_clicked(lid) {
+        match c.menu_asked(lid) {
           Some((x, y)) => @sf.menu_open_here(list_menu, x, y)
           None => ()
         }
@@ -751,8 +751,11 @@ pub fn drive_row(
     Some(into) => drag_target(c, id, "row/" + key, into, e.name, s, 2)
     None => None
   }
+  // (a finger: its ⋯ always there, as nothing is hovered; a tap opens it, as a double click does with a mouse)
+  let finger = @ui.pointing() is Finger
   if live {
-    match c.right_clicked(id) {
+    let asked = c.menu_asked(id)
+    match asked {
       Some((x, y)) => {
         held.row_frame = c.frame_number()
         (row.menu)()
@@ -763,11 +766,11 @@ pub fn drive_row(
     if c.clicked(id) || c.clicked(did) {
       held.row_frame = c.frame_number()
     }
-    if c.right_clicked(id) is Some(_) {
+    if asked is Some(_) {
       ()
     } else if depth is Some(_) && e.dir && c.clicked(did) {
       on_toggle()
-    } else if c.double_clicked(id) {
+    } else if c.double_clicked(id) || (finger && c.clicked(id)) {
       (row.open)()
     } else if c.clicked(id) {
       (row.press)()
@@ -836,12 +839,13 @@ pub fn drive_row(
         }
       })
       |> ignore
-      // at its end: › on the folder open beside (columns), the ⋯ on hover (a spinner while something is under way)
+      // at its end: › on the folder open beside (columns), the ⋯ on hover, always to a finger (Drive.css.ts more,
+      // next: `hover: none`; a spinner while something is under way)
       c.layer(fn() {
         c.box(style=more_place, fn() {
           if busy {
             @sf.spinner(c) |> ignore
-          } else if over || open {
+          } else if over || open || finger {
             @sf.menu_of(
               c,
               menu_key,
