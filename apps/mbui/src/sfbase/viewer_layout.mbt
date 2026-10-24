@@ -1,6 +1,5 @@
-// What the desktop's viewer lays out as the web's (ember web/src/FilePreview.tsx, FilePreview.css.ts), read by the
-// viewer's stages (viewer.mbt) when the frame drawing it is the desktop's (sfdesk/viewer.mbt), and how it says where a
-// file was opened from.
+// What the viewer lays out as the web's (ember web/src/FilePreview.tsx, FilePreview.css.ts), read by its stages
+// (viewer.mbt), and how it says where a file was opened from.
 
 ///|
 /// Back to where it was opened from, by name (FilePreview.tsx backLabel): a drive's file its folder (mobile/Drive.tsx
@@ -117,3 +116,17 @@ pub let desk_text_foot : Double = 64.0
 /// As it is (a zoom of 1).
 pub let desk_whole : Double = 1.0
 
+
+///|
+/// Under 640 (FilePreview.css.ts's phone widths): a page and a PDF 60 down, a PDF's pages 12 in and apart, a text 16 in
+/// and 48 under.
+pub let page_small_top : Double = 60.0
+
+///|
+pub let pdf_small_in : Double = 12.0
+
+///|
+pub let plain_small_side : Double = 16.0
+
+///|
+pub let plain_small_foot : Double = 48.0

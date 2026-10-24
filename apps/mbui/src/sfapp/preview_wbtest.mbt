@@ -716,8 +716,9 @@ test "marking a picture of a long name: the bar's 取消, download and 添加到
   t.draw()
   let (px, _, pw, _) = t.rect_of("添加到对话").unwrap()
   let (cx, _, cw, _) = t.rect_of("取消").unwrap()
-  // the bar 8 in from the window's right, 6 inside it the × (32), 4 before it the pill, its words 12 inside it
-  assert_true(px + pw <= 390.0 - 8.0 - 6.0 - 32.0 - 4.0 - 12.0 + 0.5, msg="添加到对话 inside its ground, clear of ×")
+  // the bar 8 in from the window's right (fpHead under 640), 6 inside it the × (32), 2 before it the pill, its words
+  // 12 inside it
+  assert_true(px + pw <= 390.0 - 8.0 - 6.0 - 32.0 - 2.0 - 12.0 + 0.5, msg="添加到对话 inside its ground, clear of ×")
   assert_true(cw >= 24.0, msg="取消 whole")
   assert_true(cx + cw <= px, msg="取消 before 添加到对话")
   match t.rect_of("web-open-2") {
