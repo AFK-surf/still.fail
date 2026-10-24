@@ -246,7 +246,7 @@ fn lock_on(c : @ui.Ctx, core : Core, here : Here, look : Look, lock : Json?) -> 
           style=sec_state,
         )
         |> ignore
-        desk_pair_steps(c, core, ws)
+        @sfpages.pair_steps(c, core, ws)
       })
     })
   }
@@ -871,139 +871,6 @@ let sec_dot_on : @ui.Style = @ui.style(w=Fixed(sec_dot_side), h=Fixed(sec_dot_si
 ///|
 // kept across runs: a value (no field of it changes)
 let sec_dot_amber : @ui.Style = sec_dot_on.then(@ui.css("bg=Warn"))
-
-///|
-/// What a device waiting to be confirmed shows instead of the workspace's pages (SecurityWaiting, Security.css.ts
-/// waiting): 110 down, a column 460 wide at most, its parts 14 apart and centred: the shield (40), 等待批准 (the
-/// heading's size, 600), what it waits for (the body's, muted), then asking by hand, its person's trusted devices
-/// reached and the code one of them shows typed here (PairSteps: the lock's `me.pair`).
-pub fn security_waiting(c : @ui.Ctx, core : Core, here : Here) -> Unit {
-  c.box(style=sec_waiting_room, fn() {
-    c.box(style=@ui.style(h=Fixed(sec_waiting_top)), fn() {  }) |> ignore
-    c.box(style=sec_waiting, fn() {
-      @sf.icon(c, "shield-check", size=sec_waiting_icon, color=@sf.theme().p.text) |> ignore
-      c.text(@sf.t("web-pages.security.waitingTitle"), style=sec_waiting_title) |> ignore
-      c.text(@sf.t("web-pages.security.waitingLead", args=[("name", here.name)]), style=sec_waiting_lead) |> ignore
-      desk_pair_steps(c, core, here.workspace)
-    })
-    |> ignore
-  })
-  |> ignore
-}
-
-///|
-/// Asking to be confirmed, and the code typed (PairSteps): on the waiting page and on 设置 › 安全. Typing (a trusted
-/// device shows a code): 输入… over the six boxes, then 正在核对 (turning) or how many tries are left in red; finding
-/// one, turning; else what is so (none found, why it failed, not asked yet), 发送批准请求 under it.
-fn desk_pair_steps(c : @ui.Ctx, core : Core, ws : String) -> Unit {
-  let lock = (core.topic)("lock", { "workspace": str(ws) }).value
-  let me = field(lock, "me")
-  let pair = field(me, "pair")
-  let state = text(pair, "state")
-  let on = [("workspace", ws)]
-  let asking = is_doing(core, ["lock.pair"], on)
-  let checking = is_doing(core, ["lock.pairCode"], on) || state == "checking"
-  let note = fn(words : String, turning : Bool) {
-    c.box(style=sec_waiting_note, fn() {
-      if turning {
-        @sf.spinner(c, size=sec_waiting_spin) |> ignore
-      }
-      c.text(words, style=sec_waiting_note_words) |> ignore
-    })
-    |> ignore
-  }
-  if state == "code" || state == "wrong" || state == "checking" {
-    note(@sf.t("web-pages.security.pairEnter"), false)
-    let key = "lock-code/" + ws
-    // six boxes, three and three (CodeEntry), handed on once a code is typed; refused, they empty for the next try
-    let typed = c.code_field(
-      key,
-      wrong=state == "wrong",
-      enabled=!checking,
-      color=c.color(Fg),
-      disabled_color=c.color(Muted),
-      edge=c.color(@sf.code_edge),
-      next_edge=c.color(Fg),
-      wrong_edge=c.color(Danger),
-    )
-    if typed is Some(code) {
-      (core.call)("lock.pairCode", { "workspace": str(ws), "code": str(code) }, fn(r) {
-        if r is Err(_) {
-          c.clear_code_field(key)
-        }
-      })
-    }
-    if checking {
-      note(@sf.t("web-pages.security.pairChecking"), true)
-    } else if state == "wrong" {
-      c.text(@sf.t("web-pages.security.pairWrong", args=[("n", count(pair, "left").to_string())]), style=sec_waiting_failed)
-      |> ignore
-    }
-  } else if state == "finding" || asking {
-    note(@sf.t("web-pages.security.pairFinding"), true)
-  } else {
-    match (state, text(me, "failed")) {
-      ("none", _) => note(@sf.t("web-pages.security.pairNone"), false)
-      ("failed", _) => c.text(text(pair, "error"), style=sec_waiting_failed) |> ignore
-      (_, "") =>
-        note(
-          @sf.t(if flag(me, "unsigned") { "web-pages.security.upgradeNotAsked" } else { "web-pages.security.notAsked" }),
-          false,
-        )
-      (_, failed) =>
-        c.text(@sf.t("web-pages.security.requestFailed", args=[("error", failed)]), style=sec_waiting_failed) |> ignore
-    }
-    c.box(style=sec_actions, fn() {
-      if @sf.button(c, @sf.t("web-pages.security.request"), key="lock-pair/" + ws, tone=Primary) {
-        lock_call(core, ws, "pair", @sf.t("web-pages.security.request"), [])
-      }
-    })
-    |> ignore
-  }
-}
-
-///|
-/// What is so (waitingNote: a turning ring 8 before it, muted, the meta's size); why it failed (waitingFailed: red);
-/// 发送批准请求's row (actions: 10 apart).
-// kept across runs: a value (no field of it changes)
-let sec_waiting_note : @ui.Style = @ui.css("row gap=S2 align=ACenter")
-
-///|
-// kept across runs: a value (no field of it changes)
-let sec_waiting_note_words : @ui.TextStyle = @ui.text_style(size=Xs, color=Muted, center=true)
-
-///|
-// kept across runs: a value (no field of it changes)
-let sec_waiting_failed : @ui.TextStyle = @ui.text_style(size=Xs, leading=L6, color=Danger, center=true)
-
-///|
-let sec_waiting_spin : Double = 12.0
-
-///|
-/// The waiting page's place (waiting: margin 110 auto 0, 460 wide at most, 24 in at its sides), its shield (40).
-let sec_waiting_top : Double = 110.0
-
-///|
-let sec_waiting_w : Double = 460.0
-
-///|
-let sec_waiting_icon : Double = 40.0
-
-///|
-// kept across runs: a value (no field of it changes)
-let sec_waiting_room : @ui.Style = @ui.css("w=Full h=Full align=ACenter")
-
-///|
-// kept across runs: a value (no field of it changes)
-let sec_waiting : @ui.Style = @ui.css("w=Full px=S6 gap=S3_5 align=ACenter").then(@ui.style(max_w=Fixed(sec_waiting_w)))
-
-///|
-// kept across runs: a value (no field of it changes)
-let sec_waiting_title : @ui.TextStyle = @ui.text_style(size=Xl3, weight=Semibold, color=Fg, center=true)
-
-///|
-// kept across runs: a value (no field of it changes)
-let sec_waiting_lead : @ui.TextStyle = @ui.text_style(size=Base, leading=L7, color=Muted, center=true)
 
 ///|
 /// A card's words (the web's sub: the ui's 13, muted).

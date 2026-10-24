@@ -609,7 +609,7 @@ pub fn frame(
         if gated {
           c.box(style=frame_gate.then(@ui.style(w=Fixed(main_w), h=Fixed(c.height))), fn() {
             let core = settings_core(src, w)
-            security_waiting(c, core, @settings.here_of(core, w.id, w.name))
+            @sfpages.lock_wait_page(c, core, @settings.here_of(core, w.id, w.name))
           })
           |> ignore
         } else {

@@ -186,6 +186,9 @@ One shell. It arranges the same panes in every tier:
        (`ListsFrame`: the phone's search field, the update's news and what is left up long, the desk's 奏 and 已归档). The filter's menu
        is one (`filter_menu`), each bar's button opening it. The bars over the lists (Home's top bar, the sidebar's
        band) are left for the places' chooser and the shell.
+     - Done: the page of a device waiting in the workspace's lock (sfpages' `lock_wait.mbt`, `pair_steps` also
+       设置 › 安全's): the web's mobile screen on a touch device, its desktop page on a computer; the shell puts it in
+       the page's place (laid out Small under Home's bar, over the navigation bar).
 
    Each merged page is drawn in all three tiers with both inputs and tested so, its old copies are deleted, and its
    films (old and new) are made per tier.
