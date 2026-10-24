@@ -165,7 +165,7 @@ fn messages(
   flashing.val = (rd.flash, flash_of(c, rd, rd.flash))
   // a search's words marked in the message it opened the chat at (search_marks.mbt)
   found_marking.val = (rd.found_at, rd.found_words, rd.found_drawn.get())
-  find_marking.val = @sfdesk.find_words_in(side_key(r))
+  find_marking.val = @sfpages.find_words_in(side_key(r))
   found_centre(c, rd, key)
   flash_row.val = None
   let carry = lf.carry
@@ -336,7 +336,7 @@ fn messages(
       lead=unread_lead(),
       bar=bar_foot(),
       room=chat_foot_room(c, r, Some(v)),
-      finding=@sfdesk.find_chat() == r.station + "\u{1}" + r.session,
+      finding=@sfpages.find_chat() == r.station + "\u{1}" + r.session,
       on_found=found_start,
       find_around~,
     )

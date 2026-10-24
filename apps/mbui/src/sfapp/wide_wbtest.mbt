@@ -233,29 +233,29 @@ test "wide: ⌘F's bar in the chat's bar looks in all of it (chat.find), Enter t
   // the bar in place of the chat's buttons
   assert_true(t.query(Button, label="关闭查找") is Some(_))
   t.type_text("截图")
-  t.run_for(@sfdesk.find_typing_ms * 2.0)
+  t.run_for(@sfpages.find_typing_ms * 2.0)
   assert_true(named(calls, "chat.find").length() > 0)
-  let (at, total) = @sfdesk.find_position()
+  let (at, total) = @sfpages.find_position()
   assert_true(total >= 2)
   assert_true(t.find("\{at}/\{total}") is Some(_))
   // gone to: its words marked in it
-  let first = @sfdesk.find_at()
+  let first = @sfpages.find_at()
   t.enter()
   // (where the reader goes is the core's: asked once the frame is built, answered the next)
   t.frame()
   t.frame()
-  let (next, _) = @sfdesk.find_position()
+  let (next, _) = @sfpages.find_position()
   assert_eq(next, if at == total { 1 } else { at + 1 })
-  assert_true(@sfdesk.find_at() != first || @sfdesk.find_k() > 0 || total == 1)
-  assert_eq(@sfdesk.find_words_in("ws1/st1\u{1}s-c1"), ["截图"])
+  assert_true(@sfpages.find_at() != first || @sfpages.find_k() > 0 || total == 1)
+  assert_eq(@sfpages.find_words_in("ws1/st1\u{1}s-c1"), ["截图"])
   t.key(@ui.key_escape)
   t.frame()
   assert_true(t.find("在对话中查找") is None)
-  assert_eq(@sfdesk.find_chat(), "")
+  assert_eq(@sfpages.find_chat(), "")
   assert_true(find_marking.val.is_empty())
   // opened again: empty
   t.key(@ui.key_of_char('f'), mods=@ui.mod_cmd)
-  assert_eq(@sfdesk.find_query(), "")
+  assert_eq(@sfpages.find_query(), "")
 }
 
 ///|
@@ -509,8 +509,10 @@ test "wide: a right click on a message's image: 复制图片, the picture on the
   t.run_for(history_fade_ms)
   t.right_click(x, y)
   t.frame()
-  assert_true(@sfdesk.context.image != "", msg="its picture's source")
-  t.add_pixels(@sfdesk.context.image, 2, 2, FixedArray::make(16, b'\xff'))
+  // (its menu, the presenters': a small panel at the pointer with a mouse, in)
+  t.run_for(@kit.presence_in_ms)
+  assert_true(@sfpages.offered_image() != "", msg="its picture's source")
+  t.add_pixels(@sfpages.offered_image(), 2, 2, FixedArray::make(16, b'\xff'))
   t.tap_text("复制图片")
   t.frame()
   t.frame()
@@ -1530,7 +1532,7 @@ test "wide: an agent's card over its picture beside its message (AgentCard.tsx),
   }
   assert_eq(word("Claude · Opus 5.5").length(), 0)
   t.move(last.1 - 20.0, last.2 + last.4 / 2.0)
-  t.run_for(@sfdesk.hover_open_ms * 2.0)
+  t.run_for(@sfpages.hover_open_ms * 2.0)
   // its label, where it stands under it, its latest lines, the figures side by side, its account, the quiet line
   let label = word("Claude · Opus 5.5")
   assert_eq(label.length(), 1, msg="its label in its card")
@@ -1573,7 +1575,7 @@ test "wide: an agent's card over its picture beside its message (AgentCard.tsx),
   assert_true(left - 16.0 >= 0.0 && left + 288.0 + 16.0 <= 1280.0)
   // gone once the pointer has left it
   t.move(900.0, 300.0)
-  t.run_for(@sfdesk.hover_close_ms * 2.0)
+  t.run_for(@sfpages.hover_close_ms * 2.0)
   assert_eq(word("Claude · Opus 5.5").length(), 0)
 }
 
@@ -1616,7 +1618,7 @@ test "wide: an agent's card's latest lines run on as they change (AgentCard.tsx 
   })
   guard last is Some(name) else { fail("no agent's message") }
   t.move(name.1 - 20.0, name.2 + name.4 / 2.0)
-  t.run_for(@sfdesk.hover_open_ms * 2.0)
+  t.run_for(@sfpages.hover_open_ms * 2.0)
   // where the three are at rest: a line apart
   let near = fn(a : Double, b : Double) { (a - b).abs() < 0.01 }
   let y_of = fn(s : String) { word(s)[0].2 }
@@ -1635,7 +1637,7 @@ test "wide: an agent's card's latest lines run on as they change (AgentCard.tsx 
   let gone = word("读了 src/ui/list.mbt")
   assert_true(gone.length() == 1 && near(gone[0].2, y1) && gone[0].5 > 0.99, msg="\{gone}")
   // half way: on their way up together, the copy with them
-  t.run_for(@sfdesk.lines_ms / 2.0)
+  t.run_for(@sfpages.lines_ms / 2.0)
   let mid = y_of("跑了列表的测试")
   assert_true(mid < y2 - 1.0 && mid > y1 + 1.0, msg="\{mid}")
   let (m3, m4, m1) = (y_of("改了 src/ui/list.mbt"), y_of("提交了改动"), y_of("读了 src/ui/list.mbt"))
@@ -1644,7 +1646,7 @@ test "wide: an agent's card's latest lines run on as they change (AgentCard.tsx 
     msg="\{(mid, m3, m4, m1, pitch)}",
   )
   // there: a line up each, the new one whole, the copy gone
-  t.run_for(@sfdesk.lines_ms / 2.0)
+  t.run_for(@sfpages.lines_ms / 2.0)
   assert_true(near(y_of("跑了列表的测试"), y1) && near(y_of("改了 src/ui/list.mbt"), y2))
   let new = word("提交了改动")
   assert_true(near(new[0].2, y3) && new[0].5 > 0.99, msg="\{new}")
@@ -1863,7 +1865,7 @@ test "wide: Esc goes to what the frame opened first (a row's menu), then to the 
   let t = wide_tester(calls, mode="chat")
   t.key(@ui.key_of_char('f'), mods=@ui.mod_cmd)
   t.frame()
-  assert_true(@sfdesk.find_chat() != "")
+  assert_true(@sfpages.find_chat() != "")
   let (x, y) = t.find("夜里的构建又失败了").unwrap()
   t.right_click(x, y)
   assert_true(t.find("复制会话链接") is Some(_))
@@ -1871,9 +1873,9 @@ test "wide: Esc goes to what the frame opened first (a row's menu), then to the 
   t.key(@ui.key_escape)
   t.frame()
   assert_true(t.find("复制会话链接") is None)
-  assert_true(@sfdesk.find_chat() != "")
+  assert_true(@sfpages.find_chat() != "")
   // then the bar
   t.key(@ui.key_escape)
   t.frame()
-  assert_eq(@sfdesk.find_chat(), "")
+  assert_eq(@sfpages.find_chat(), "")
 }

@@ -332,3 +332,9 @@ pub fn open_link(href : String) -> Unit {
     None => elsewhere()
   }
 }
+
+///|
+/// A detail of chat `r` asked by a page (an agent's history by its key, jobs, letters, files, a service: the side
+/// panel's tabs), opened where the shell has it (the desktop's side panel, toggled; given as the frame starts).
+// kept across runs: given by the shell as it starts (sfdesk's reset)
+pub let detail_asked : Ref[(Source, ChatRef, String) -> Unit] = Ref(fn(_, _, _) {  })

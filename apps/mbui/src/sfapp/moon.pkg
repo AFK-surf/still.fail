@@ -16,6 +16,7 @@ import {
   "stillfail/sfapp/settings",
   "stillfail/sfbase",
   "stillfail/sfdesk",
+  "stillfail/sfpages",
 }
 
 import { "stillfail/sfkept", "stillfail/sfscreens" } for "wbtest"

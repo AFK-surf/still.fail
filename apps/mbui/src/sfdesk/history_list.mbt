@@ -432,18 +432,6 @@ let md_line : Double = 23.0
 let words_line : Double = 20.0
 
 ///|
-/// The first line of some words that has any: what a one-line event shows of them.
-fn first_line(words : String) -> String {
-  for l in words.split("\n") {
-    let s = l.trim(chars=" \t").to_string()
-    if s != "" {
-      return s
-    }
-  }
-  ""
-}
-
-///|
 /// Words as Markdown, as the core read them (its tree, `md`): the panel's size, or small and grey (`small`: the agent's
 /// own words, a sub-agent's answer).
 fn md_view(c : @ui.Ctx, key : String, words : String, md : Json?, small? : Bool = false) -> Unit {

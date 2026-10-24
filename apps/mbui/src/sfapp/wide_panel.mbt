@@ -4,7 +4,7 @@
 ///|
 /// A chat's key among the frame's own: its station and session.
 fn side_key(r : ChatRef) -> String {
-  @sfdesk.chat_key(r)
+  @sfpages.chat_key(r)
 }
 
 ///|

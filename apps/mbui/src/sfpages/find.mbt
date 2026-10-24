@@ -9,7 +9,7 @@
 ///|
 /// What the core found (`chat.find`): the words looked for, the messages that have them (oldest first, each with how
 /// many times), how many of the chat's entries were looked in of how many, and whether that was all of them.
-priv struct Found {
+pub(all) struct Found {
   words : Array[String]
   hits : Array[(Double, Int)]
   held : Int
@@ -21,7 +21,7 @@ priv struct Found {
 /// What the find keeps of its own: the chat its bar is open in (its key, "" closed), its field, what is typed and what
 /// was last asked of the core, what the core found (None nothing asked yet), the time the reader is at (which of its
 /// messages, which time in it), whether what is not on the device is being read.
-priv struct Finding {
+pub(all) struct Finding {
   mut chat : String
   field : @ui.Field
   mut query : String
@@ -36,7 +36,7 @@ priv struct Finding {
 }
 
 ///|
-let finding : Finding = {
+pub let finding : Finding = {
   chat: "",
   field: @ui.Field::new(),
   query: "",

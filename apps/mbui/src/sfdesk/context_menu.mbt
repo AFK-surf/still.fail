@@ -184,27 +184,5 @@ fn context_pending(c : @ui.Ctx) -> Unit {
 }
 
 ///|
-/// Pixels with their colours as they are (the host's are premultiplied by their alpha, a PNG's not).
-fn unpremultiplied(rgba : FixedArray[Byte]) -> FixedArray[Byte] {
-  let out = FixedArray::make(rgba.length(), b'\x00')
-  let n = rgba.length() / 4
-  for i in 0..<n {
-    let k = i * 4
-    let a = rgba[k + 3].to_int()
-    for j in 0..<3 {
-      let v = rgba[k + j].to_int()
-      let u = if a == 0 { 0 } else { (v * 255 + a / 2) / a }
-      out[k + j] = (if u > 255 { 255 } else { u }).to_byte()
-    }
-    out[k + 3] = rgba[k + 3]
-  }
-  out
-}
-
-///|
-/// The picture copied at most this many pixels on its long side.
-let image_copy_px : Int = 4096
-
-///|
 /// The menu's least width (the system's menus' are about as wide).
 let context_menu_w : Double = 180.0
