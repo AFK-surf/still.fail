@@ -70,7 +70,7 @@
 {"in":{"id":26,"value":{"manages":true,"loading":true,"canJoin":false,"workspaces":[]}},"w":1792625315898.77}
 {"in":{"id":27,"value":{"sharing":false,"phase":"off","tunnels":0}},"w":1792625315898.789}
 {"in":{"id":26,"value":{"manages":true,"loading":false,"canJoin":true,"workspaces":[{"workspace":"01M5GCMD3MGV82SXZBBDJZN5D5","name":"Dev","stationName":"studio","home":true,"here":true,"line":"主 workspace"}]}},"w":1792625315965.415}
-{"step":"now until 在此 station 上","w":1792625316198.959}
+{"step":"now until 概览","w":1792625316198.959}
 {"step":"tap icon:more","w":1792625316198.982}
 {"step":"tap icon:more","acted":true,"w":1792625316199.001}
 {"step":"wait 1403","w":1792625316217.276}
