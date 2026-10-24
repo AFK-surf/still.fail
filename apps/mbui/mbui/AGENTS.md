@@ -14,7 +14,9 @@ yet and you can add one, add it.
   a function of the inputs and that moment, at 60 Hz, at 120 Hz, or in one jump.
 - Motion is data (docs/determinism.md "Motion is data"): said once with where from, where to, curve and start; its
   value at any time computed from that. Nothing in an animation, a timer or a fiber may step frame by frame
-  (`@effect.next_frame` loops), or start at "the next frame" instead of the moment of what caused it.
+  (`@effect.next_frame` loops), or start at "the next frame" instead of the moment of what caused it. A motion is set
+  off by its cause, never found by comparing frames (a laid-out box or a measured size that differs from last frame's),
+  and never by a time window.
 - Never wait for things to settle or for a motion to end, under any name: `rest`, `at_rest` used as a wait,
   `settle`, "until it stops moving", "until the animation landed", a fixed `wait`/`sleep`, a retry, a longer
   timeout. `assert_idle` / `at_rest` are assertions only. An end-to-end step waits only for its own named event that

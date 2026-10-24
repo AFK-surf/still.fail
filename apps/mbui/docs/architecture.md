@@ -56,7 +56,8 @@ upright after. A tablet and an opened fold's inner screen turn as they are held.
 
 ### The library (`src/sf`)
 
-Parts, tokens, motion, the viewers (Reader, Player, ViewerBar and the frame around them), and the **presenters**:
+Parts, tokens, motion (its kinds, rules and presets: docs/motion.md), the viewers (Reader, Player, ViewerBar and the
+frame around them), and the **presenters**:
 
 - `@sf.menu`, `@sf.pick`, `@sf.panel` (a small panel of rows or fields), `@sf.confirm`, `@sf.ask`.
   - A sheet spans the window, not the pane that opened it: on the tape it is over every panel.
