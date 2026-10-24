@@ -16,16 +16,38 @@ inputs:
   cross:
     description: Install Linux station cross compilers
     default: 'false'
+  pnpm:
+    description: pnpm and its store (false for a job that installs no packages, as mbui's Apple jobs when the core's bytecode is kept)
+    default: 'true'
 runs:
   using: composite
   steps:
+    # The pinned Node put in the runner's tool cache when its image has none there (macos-15 has no 24.22.1, xcode-27
+    # has), for setup-node to find: nodejs.org's tarball, checked against the release's SHASUMS256.txt, unpacked in
+    # place. setup-node's own download unpacked it and copied it there file by file: 8.8 s of the mac job (2026-10-24,
+    # 40076678382).
+    - if: runner.os == 'macOS'
+      shell: bash
+      run: |
+        t0=$(date +%s)
+        v=$(tr -d 'v[:space:]' < .node-version); a=$(uname -m | sed 's/x86_64/x64/')
+        d="$RUNNER_TOOL_CACHE/node/$v/$a"
+        [ ! -f "$d.complete" ] || exit 0
+        f=node-v$v-darwin-$a.tar.gz
+        curl -fsSL --retry 3 -o "$RUNNER_TEMP/$f" "https://nodejs.org/dist/v$v/$f"
+        curl -fsSL --retry 3 "https://nodejs.org/dist/v$v/SHASUMS256.txt" | grep " $f\$" > "$RUNNER_TEMP/$f.sha256"
+        (cd "$RUNNER_TEMP" && shasum -a 256 -c --quiet "$f.sha256") || { echo "$f: not the SHA-256 nodejs.org lists"; exit 1; }
+        rm -rf "$d" && mkdir -p "$d" && tar -xzf "$RUNNER_TEMP/$f" --strip-components 1 -C "$d" && touch "$d.complete"
+        rm -f "$RUNNER_TEMP/$f"
+        echo "Node $v in the tool cache in $(( $(date +%s) - t0 )) s"
     - uses: actions/setup-node@v5
       with:
         # The Node the station ships (.node-version), not whichever 24 the runner has cached: node:sqlite on Linux
         # bound TextEncoder's empty Uint8Array as NULL in 24.13 (core-ts's bridge test, 2026-10-04), not in 24.15.
         node-version-file: .node-version
         package-manager-cache: false
-    - shell: bash
+    - if: inputs.pnpm == 'true'
+      shell: bash
       run: |
         # The pnpm every package.json names (packageManager, one version for all: a mix had each install switch
         # versions, and installs side by side raced to fetch the other one, 2026-10-04).
@@ -52,8 +74,10 @@ runs:
     # pnpm's store, which every install here links from: kept between runs by the lockfiles. The lockfiles are named,
     # not found by '**/': a walk of the whole checkout races a job's own build writing into it (Windows' app build runs
     # in the background from before this step, and hashFiles failed on a file it removed, 39538551764). A new
-    # lockfile is added here.
-    - uses: actions/cache@v4
+    # lockfile is added here. (Not for a job without pnpm: mbui's mac job spent 6-22 s restoring its ~58 MB for packages
+    # it did not install, 2026-10-24, 40076678382.)
+    - if: inputs.pnpm == 'true'
+      uses: actions/cache@v4
       with:
         path: ${{ env.PNPM_STORE }}
         key: pnpm-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml', 'apps/desktop/pnpm-lock.yaml', 'client/core-ts/pnpm-lock.yaml', 'cloud/pnpm-lock.yaml', 'media/core/pnpm-lock.yaml', 'media/test/pnpm-lock.yaml', 'station/pnpm-lock.yaml') }}
