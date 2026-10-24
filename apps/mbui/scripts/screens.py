@@ -4,6 +4,9 @@ frames it drew (MBUI_DRAW_LOG=1: their DRAWHASH lines), kept in screens/text-mac
 
   # MODE FRAME TIME WIDTH HEIGHT SCALE HASH STABLE      (the DRAWHASH line of the frame its picture is of)
   {"m":…}                                              (its TEXTREC lines, as the run said them)
+  ENV {…}                                              (the system's settings it was drawn by: the window's inset,
+                                                       its buttons' band over the page, among them; before its first
+                                                       frame and where one changed)
   VIEWSAID {…}                                         (what the host said of its views, where it said it)
   MSG {…}                                              (what came from outside: the system's bars, where it came)
   DRAWHASH FRAME TIME …                                (each frame it drew, in its place among them: when it drew
@@ -47,6 +50,12 @@ def keep_log(mode, log):
             continue
         # what the host said of its views (a player's state, a video's frames), in its place among the frames
         i = line.find("VIEWSAID ")
+        if i >= 0:
+            rec.append(line[i:].rstrip("\n"))
+            continue
+        # the system's settings it was drawn by (envrec.mbt), in their place among the frames: the screen's Tester is
+        # drawn by them too (Tester::new's `run`), the Mac's window inset as it was, not a phone's with no band
+        i = line.find("ENV {")
         if i >= 0:
             rec.append(line[i:].rstrip("\n"))
             continue
