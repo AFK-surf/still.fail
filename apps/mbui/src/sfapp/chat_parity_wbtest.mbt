@@ -216,12 +216,15 @@ test "a Slack user's name in a history: 这是我 binds them to the viewer (slac
   }
   let t = edited_core(calls, "history", fn(name, v) {
     if name == "history" {
-      with_fields(v, [("items", Json::array(items(Some(v), "items").map(slack_from)))])
+      // (that item alone: the steps open at their newest, and it in view)
+      with_fields(v, [("items", Json::array(items(Some(v), "items").map(slack_from)[:1].to_array()))])
     } else {
       v
     }
   })
   t.tap_text("林小满")
+  // its menu, the presenters' sheet with a finger, up
+  t.run_for(@kit.sheet_rest("sf-present") - t.time())
   assert_true(t.find("这是我") is Some(_), msg="its menu")
   t.tap_text("这是我")
   let sent = named(calls, "slack.identity")

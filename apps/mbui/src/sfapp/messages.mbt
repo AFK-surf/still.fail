@@ -65,20 +65,6 @@ let flying : Ref[SendFlight?] = { val: None }
 let opened_notices : Map[String, Bool] = {}
 
 ///|
-/// The unread line's row, its rules each side (1, the accent at 50%), its words 13 in 500 (the wide screen's 12:
-/// Chat.css.ts chatUnreadLine) in the accent.
-// kept across runs: a value (no field of it changes)
-let unread_row : @ui.Style = @ui.css("row w=Full gap=S2_5 align=ACenter")
-
-///|
-// kept across runs: a value (no field of it changes)
-let unread_rule : @ui.Style = @ui.css("w=Grow(1.0) h=SPx bg=A(Accent,O50)")
-
-///|
-// kept across runs: a value (no field of it changes)
-let unread_words : @ui.TextStyle = @ui.text_style(size=Sm, weight=Medium, color=Accent, wrap=false)
-
-///|
 /// When it was said, small (Chat.kt MessageTime): how long ago, or when, in every message, after a tap on one.
 fn message_time(c : @ui.Ctx, key : String, time : Stamp?) -> Unit {
   match time {
@@ -1449,15 +1435,6 @@ fn login_ended_line(c : @ui.Ctx, words : String, failed : Bool) -> Unit {
 }
 
 ///|
-/// What is said under a message that did not go: 13 (Chat.kt).
-let unsent_size : Double = 13.0
-
-///|
-/// A running clock's second.
-let clock_tick_ms : Double = 1000.0
-
-
-///|
 /// What an activity shows, steadied (Chat.kt steady): another thing replaces the shown one once it has stayed 700 ms
 /// (a passing 请求中 does not flicker by); the same thing's new words show at once. Per row: what shows (its key, its
 /// words), what showed before it, and when it came (the frames' clock).
@@ -1470,37 +1447,6 @@ priv struct Steady {
 
 ///|
 let steadies : Map[String, Steady] = {}
-
-///|
-/// How long a shown thing stays before another replaces it (Chat.kt steady).
-let steady_ms : Double = 700.0
-
-///|
-/// How long the new words take to come in as the old go (Chat.kt Activity's AnimatedContent: 240 ms).
-let now_swap_ms : Double = 240.0
-
-///|
-/// The words' room, a line high: what goes and comes cut at its edges (AnimatedContent's SizeTransform clips).
-// kept across runs: a value (no field of it changes)
-let now_room : @ui.Style = @ui.style(h=Fixed(now_line), clip=true)
-
-///|
-/// What it does now: 15, on one line.
-// kept across runs: a value (no field of it changes)
-let now_said : @ui.TextStyle = @ui.text_style(size=Lg, wrap=false)
-
-///|
-/// Its line's height (Lg's): the words come and go a quarter of it.
-let now_line : Double = 21.0
-
-///|
-/// Its picture and its words 5 apart.
-let activity_gap : Double = 5.0
-
-///|
-/// How long its turn has run, after what it does: 3 after it in 15 (Chat.kt).
-let clock_type : (Double, Double) = (3.0, 15.0)
-
 
 ///|
 /// How far an activity's ring reaches round its avatar (Chat.kt: the messages' 18dp avatar, its ring 3dp round it).

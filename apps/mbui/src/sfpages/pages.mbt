@@ -10,4 +10,5 @@ pub fn reset() -> Unit {
   login_cards_reset()
   list_reset()
   menus_reset()
+  steps_reset()
 }

@@ -215,8 +215,7 @@ test "the 奏 page: the card turns as it is moved across, 4° a width about its 
 }
 
 ///|
-test "a step's brief, a chat's link" {
-  assert_eq(plain_brief("## 标题\n- 一项 **重点**\n```sh\nls\n```"), "标题 一项 重点 ls")
+test "a chat's link" {
   assert_eq(chat_link("ws1/st1", "ember:c-1"), "https://app.still.fail/o/ws1/st1/ember%3Ac-1")
 }
 

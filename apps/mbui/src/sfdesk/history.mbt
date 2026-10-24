@@ -12,7 +12,6 @@
 /// its context's 管理 menu open (its session's, and from which: its tile or its line), clearing it asked to confirm
 /// (its session's key, "" none).
 priv struct HistoryOwn {
-  mut only_io : Bool
   mut shut : Bool
   transcripts : Map[String, String]
   mut context_menu : String
@@ -20,21 +19,14 @@ priv struct HistoryOwn {
 }
 
 ///|
-let history_own : HistoryOwn = { only_io: false, shut: false, transcripts: {}, context_menu: "", clear_asking: "" }
+let history_own : HistoryOwn = { shut: false, transcripts: {}, context_menu: "", clear_asking: "" }
 
 ///|
 fn history_reset() -> Unit {
-  history_own.only_io = false
   history_own.shut = false
   history_own.transcripts.clear()
   history_own.context_menu = ""
   history_own.clear_asking = ""
-}
-
-///|
-/// Whether a history shows only what came in and went out (History.tsx onlyIo: what the core calls `work` left out).
-pub fn history_only_io() -> Bool {
-  history_own.only_io
 }
 
 ///|
@@ -46,7 +38,7 @@ fn history_beside(src : Source, r : ChatRef, key : String, entry : Int?) -> Unit
     _ => ()
   }
   match entry {
-    Some(e) => history_focus(r.station, key, e)
+    Some(e) => @sfpages.history_focus(r.station, key, e)
     None => ()
   }
   side_change(src, r, "open", Some(key))
@@ -54,10 +46,10 @@ fn history_beside(src : Source, r : ChatRef, key : String, entry : Int?) -> Unit
 
 ///|
 /// Agent `key`'s history on `station` (`a` as its chat's view has it): its head and, unfolded, its details, a line
-/// under them; its steps in the rest (history_list.mbt).
+/// under them; its steps in the rest (sfpages' history_steps.mbt).
 fn agent_history(c : @ui.Ctx, src : Source, station : String, key : String, a : Json?) -> Unit {
   history_head(c, src, station, key, a)
-  c.box(style=wh_fill, fn() { history_list(c, src, station, key) }) |> ignore
+  c.box(style=wh_fill, fn() { @sfpages.history_steps(c, src, station, key) }) |> ignore
 }
 
 ///|
@@ -76,9 +68,9 @@ fn history_head(c : @ui.Ctx, src : Source, station : String, key : String, a : J
       let io = c.id("history/only-io")
       c.cursor(io, Hand)
       if c.clicked(io) {
-        history_own.only_io = !history_own.only_io
+        @sfpages.history_only_io_flip()
       }
-      let on = history_own.only_io
+      let on = @sfpages.history_only_io()
       let b = c.box(style=if on { wh_toggle_on } else { wh_toggle }, id=io, fn() {
         @sf.icon(c, "filter", size=14.0, color=if on || c.lit(io) { t.p.text } else { t.p.muted }) |> ignore
         c.text(@sf.t("web-main.history.onlyIo"), style=if on || c.lit(io) { wh_toggle_hot } else { wh_toggle_words })
