@@ -52,6 +52,7 @@ type Download = {
   loaded: number;
   state: State;
   error: string | null;
+  /// When it was asked, in whole ms (the shapes' i64: a host's clock says fractions of one).
   startedAt: number;
   /// Whether the device kept any of the file before it was asked (a viewer's): kept so once it is saved.
   keptBefore: boolean;
@@ -211,7 +212,7 @@ export class Downloads {
           if (typeof n.id !== "string" || typeof n.station !== "string" || typeof n.key !== "string" || typeof n.name !== "string" || typeof n.size !== "number") continue;
           // (asked again before this was read: that one)
           if (this.#held.has(n.id)) continue;
-          const d: Download = { id: n.id, station: n.station, key: n.key, name: n.name, size: n.size, loaded: 0, state: "going", error: null, startedAt: n.startedAt ?? 0, keptBefore: n.keptBefore === true, told: -1, fiber: null };
+          const d: Download = { id: n.id, station: n.station, key: n.key, name: n.name, size: n.size, loaded: 0, state: "going", error: null, startedAt: Math.floor(n.startedAt ?? 0), keptBefore: n.keptBefore === true, told: -1, fiber: null };
           this.#held.set(d.id, d);
           this.#go(d);
         }
@@ -251,7 +252,7 @@ export class Downloads {
         // (asked again while that was read: the one made then)
         const again = held.get(id);
         if (again !== undefined) return { download: shown(again) };
-        const d: Download = { id, station, key, name, size, loaded: 0, state: "going", error: null, startedAt: self.#inner.host.nowMs(), keptBefore, told: -1, fiber: null };
+        const d: Download = { id, station, key, name, size, loaded: 0, state: "going", error: null, startedAt: Math.floor(self.#inner.host.nowMs()), keptBefore, told: -1, fiber: null };
         held.set(id, d);
         yield* self.#note(d);
         self.#go(d);
