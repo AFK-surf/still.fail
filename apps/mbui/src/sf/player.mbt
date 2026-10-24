@@ -788,7 +788,8 @@ pub fn player_view(
     v.grabbing = false
     v.ended_off = ""
   }
-  if (viewer_host().narrow)() {
+  // laid out Small: a phone's player, as the viewer's frame
+  if layout(c.width) is Small {
     phone_player(c, p, file, list, back_label, on_back, on_go, still)
   } else {
     desk_player(c, p, file, list, back_label, on_back, on_go, still)
