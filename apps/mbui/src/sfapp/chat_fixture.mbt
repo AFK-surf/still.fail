@@ -929,10 +929,13 @@ fn fixture_chat_call(f : Fixture, name : String, params : Json) -> Result[Json, 
             "size": Json::number(number(o, "size")),
           },
         }
-        // (pasted words: what the core said of them, kept with the file as composer.ts keeps it)
-        match field(o, "pasted") {
-          Some(x) => kept["pasted"] = x
-          None => ()
+        // (pasted words: what the core said of them; a station's file: where it is; kept with the file as
+        // composer.ts keeps them)
+        for k in ["pasted", "ref"] {
+          match field(o, k) {
+            Some(x) => kept[k] = x
+            None => ()
+          }
         }
         list.push(Json::object(kept))
       }

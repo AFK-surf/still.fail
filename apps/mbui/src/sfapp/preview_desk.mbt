@@ -172,6 +172,10 @@ fn Viewer::desk_bar(self : Viewer, c : @ui.Ctx, src : Source, shown : Double) ->
   v.mouse_x = px
   v.mouse_y = py
   v.mouse_seen = true
+  // over the page (holding no field of its own), the keys its own: the page's composer under it gives them up
+  if !v.closing && c.field_focused() {
+    c.blur()
+  }
   // Esc closes it (marking: leaves the marks first), ← and → step
   if !v.closing && c.key_pressed(@ui.key_escape) {
     if marking.on {

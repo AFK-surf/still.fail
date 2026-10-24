@@ -1,7 +1,7 @@
 # A Slack connect's app on its page on the desktop (sfdesk slack_app.mbt, the web's pages/SlackApp.tsx): MBUI_WIN=1280x800
 # over the made-up chat. 连接 from the rail, a connect opened, its Slack app unfolded, its permissions unfolded.
 timeout 30000
-until 按空格输入
+until 发消息
 wait 600
 tap icon:im
 wait 1500

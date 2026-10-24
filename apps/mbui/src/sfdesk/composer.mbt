@@ -26,17 +26,22 @@ pub(all) struct ComposerSpec {
 ///|
 /// What the composer keeps of its own: the system's picker asked for files (for which draft), when the cursor left it
 /// (it stays a box a moment, LET_GO_MS), when typing last warmed the agent's runtime, each quote's comment field, how
-/// it was laid out as it was last drawn (a new chat's roomy, or a chat's: another, it has moved between the pages).
+/// it was laid out as it was last drawn (a new chat's roomy, or a chat's: another, it has moved between the pages),
+/// which chat it was for (another: switched to, the cursor put in it), the archived chats being restored and why
+/// restoring one failed (by their drafts).
 priv struct Composing {
   mut picking : (String, @ui.Pick)?
   mut let_go : Bool
   warmed : Map[String, Int]
   comments : Map[String, @ui.Field]
   mut roomy : Bool?
+  mut draft : String
+  restoring : Map[String, Bool]
+  restore_errors : Map[String, String]
 }
 
 ///|
-let composing : Composing = { picking: None, let_go: false, warmed: {}, comments: {}, roomy: None }
+let composing : Composing = { picking: None, let_go: false, warmed: {}, comments: {}, roomy: None, draft: "", restoring: {}, restore_errors: {} }
 
 ///|
 fn composing_reset() -> Unit {
@@ -45,6 +50,9 @@ fn composing_reset() -> Unit {
   composing.warmed.clear()
   composing.comments.clear()
   composing.roomy = None
+  composing.draft = ""
+  composing.restoring.clear()
+  composing.restore_errors.clear()
 }
 
 ///|
@@ -68,6 +76,15 @@ pub fn composer(
   // what the system's picker answered, taken in before the box is laid out (the host's word that it answered brings
   // this frame); a picture pasted into the field; what 文件's 添加到消息 put in for this draft
   take_in(c, src, spec, w, no_files)
+  // switched to another chat (Chat.tsx: its thread another; a new chat's has none, whichever station): the cursor in
+  // it, with a mouse, before it is first drawn; not taken from a field in use (the switcher's, a dialog's)
+  let whose = "\u{1}" + spec.session
+  if whose != composing.draft {
+    composing.draft = whose
+    if @ui.pointing() is Mouse && !c.field_focused() {
+      c.focus_editor(composer_field_key)
+    }
+  }
   let focused = c.editor_focused(composer_field_key)
   // a box while it has the cursor; lost, a capsule a moment later (LET_GO_MS)
   if focused {
@@ -98,7 +115,8 @@ pub fn composer(
   let dragging = !no_files && dragged() is Some(_) && c.lit(cap)
   let box = c.box(
     style=if multiline { composer_box_open } else { composer_box },
-    glass=@sf.glass_floating(tint=if dragging { @sf.alpha(p.accent, drag_tint) } else { 0L }),
+    // (the raised ground's glass, the accent's over it while dragged over)
+    glass=@sf.glass_floating(tint?=if dragging { Some(@sf.alpha(p.accent, drag_tint)) } else { None }),
     id=cap,
     fn() {
       if multiline {
@@ -788,7 +806,7 @@ pub fn send_in_chat(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView, w : Wr
   let rk = r.station + "\u{1}" + r.session
   let row = sent_local(rk, Some(v), words, up)
   // its words take off from the field as they are (before it is emptied), its room held till they let go of it
-  let room = @motion.measured(c, "composer/content").unwrap_or(0.0)
+  let room = @motion.measured(c, "composer/foot").unwrap_or(0.0)
   @sfbase.flight_start(
     c,
     w.key,
@@ -803,6 +821,8 @@ pub fn send_in_chat(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView, w : Wr
     line=text_line,
     desk=true,
   )
+  // the chat's list to its end, where the row is (gliding there while nothing flies to it)
+  c.list_to_end("chat/" + r.station + "/" + r.session, glide=@sfbase.flight_of(w.key) is None)
   writing_take(src, w, fn(taken) {
     guard taken is Some(_) else {
       sent_local_gone(rk, row)
@@ -850,9 +870,11 @@ fn composer_hold(draft : String, room : Double, ms : Double) -> Unit {
 
 ///|
 /// How much room draft `draft`'s composer takes at its page's foot (what the list leaves free under its last row): as
-/// tall as its box, or as it was when words were sent from it until they let go of it (composer_hold).
+/// tall as its place (chat_composer: its box, what it says under it, its margins), or as it was when words were sent
+/// from it until they let go of it (composer_hold).
 pub fn composer_room(c : @ui.Ctx, draft : String) -> Double {
-  let now = @motion.measured(c, "composer/content").unwrap_or(0.0)
+  // (not laid out yet: a capsule's)
+  let now = @motion.measured(c, "composer/foot").unwrap_or(capsule_room)
   let held = @motion.anim(c, "composer/held/" + draft, 0.0, global=true).get()
   let share = @motion.anim(c, "composer/hold/" + draft, 0.0, global=true).get()
   if held > now {
@@ -875,3 +897,156 @@ fn going_up(w : Writing) -> Array[Json] {
     }
   })
 }
+
+///|
+/// A chat's composer at its pane's foot (dock.tsx's chat place; cloud.css.ts composerWrap: 12 over it, 16 under it;
+/// dock.css.ts: 12 clear of the pane's sides, the column and its curve wide at most, in the middle): the chat's draft
+/// (ChatPage.tsx chatKey), what it sends going into the chat (send_in_chat), locked while the chat is archived, no
+/// file taken in while its station is down. Its place measured (composer_room).
+pub fn chat_composer(c : @ui.Ctx, src : Source, ws : Workspace, pages : Pages, r : ChatRef, v : ChatView?) -> Unit {
+  let spec : ComposerSpec = {
+    station: r.station,
+    draft: r.station + ":" + r.session,
+    session: r.session,
+    placeholder: @sf.t(if v.map(fn(v) { v.archived }).unwrap_or(false) {
+      "web-main.chat.archivedPlaceholder"
+    } else {
+      "web-main.composer.placeholder"
+    }),
+    toolbar: None,
+    roomy: false,
+    locked: match v {
+      Some(v) => v.archived
+      None => false
+    },
+    offline: match v {
+      Some(v) => v.offline
+      None => false
+    },
+  }
+  let width = composer_width(c.width)
+  let foot = c.box(style=chat_foot, fn() {
+    match v {
+      Some(v) => chat_notices(c, src, r, v)
+      None => ()
+    }
+    c.box(style=@ui.style(w=Fixed(width)), fn() {
+      c.sized(width, c.height, fn() {
+        composer(c, src, ws, pages, spec, fn(w) {
+          match v {
+            Some(v) => send_in_chat(c, src, r, v, w)
+            None => ()
+          }
+        })
+      })
+    })
+    |> ignore
+  })
+  @motion.measure(c, foot, "composer/foot")
+}
+
+///|
+/// What is said over a chat's composer (Chat.tsx ChatShown, ArchiveNotice, offlineNotice): an archived chat's, with
+/// its 还原对话 (why it failed after it, till it is tried again; not while its station is down); its station down, and
+/// that what is shown was read before.
+fn chat_notices(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView) -> Unit {
+  let key = r.station + ":" + r.session
+  let width = dmin(c.width - composer_notice_in, composer_notice_most)
+  if v.archived {
+    let restore = c.id("composer/restore")
+    let busy = composing.restoring.contains(key)
+    if !busy && !v.offline {
+      c.cursor(restore, Hand)
+      if c.clicked(restore) && !src.read_only {
+        composing.restoring[key] = true
+        composing.restore_errors.remove(key)
+        let p : Map[String, Json] = {
+          "station": Json::string(r.station),
+          "session": Json::string(r.session),
+          "archived": Json::boolean(false),
+        }
+        match v.thread {
+          Some(th) => p["thread"] = Json::number(th)
+          None => ()
+        }
+        c.tell("composer/restore", fn() {
+          (src.call)("chat.archive", Json::object(p), fn(res) {
+            composing.restoring.remove(key)
+            match res {
+              Err(e) => composing.restore_errors[key] = error_words(e)
+              Ok(_) => ()
+            }
+          })
+        })
+      }
+    }
+    c.box(style=composer_notice_box.then(@ui.style(w=Fixed(width))), fn() {
+      c.box(style=composer_notice_line, flow=true, fn() {
+        c.text(@sf.t("web-main.archived.notice"), style=composer_notice_words) |> ignore
+        let b = c.box(id=restore, fn() {
+          c.rich(
+            [@ui.span(@sf.t(if busy { "web-main.archived.restoring" } else { "web-main.archived.restore" }), underline=true)],
+            style=if busy || v.offline { composer_notice_words } else { composer_notice_button },
+          )
+          |> ignore
+        })
+        c.semantics(b, Button, id=restore, label=@sf.t("web-main.archived.restore"), disabled=busy || v.offline)
+      })
+      |> ignore
+      match composing.restore_errors.get(key) {
+        Some(e) => c.text(e, style=composer_notice_failed) |> ignore
+        None => ()
+      }
+    })
+    |> ignore
+  }
+  if v.offline {
+    let said = match v.offline_note {
+      Some(n) => n
+      None =>
+        if r.station_name != "" {
+          @sf.t("web-main.chat.offline.named", args=[("name", r.station_name)])
+        } else {
+          @sf.t("web-main.chat.offline")
+        }
+    }
+    c.box(style=composer_notice_box.then(@ui.style(w=Fixed(width))), fn() { c.text(said, style=composer_notice_words) |> ignore })
+    |> ignore
+  }
+}
+
+///|
+/// A notice over the composer (offlineNotice): 760 wide at most, 32 in from each side, 8 over the composer, 8 by 12 in,
+/// rounded 10, on the hover's ground, the ui size, muted.
+let composer_notice_most : Double = 760.0
+
+///|
+let composer_notice_in : Double = 64.0
+
+///|
+// kept across runs: a value (no field of it changes)
+let composer_notice_box : @ui.Style = @ui.css("mb=S2 px=S3 py=S2 radius=Lg bg=Hover gap=S1")
+
+///|
+// kept across runs: a value (no field of it changes)
+let composer_notice_line : @ui.Style = @ui.css("row w=Full gap=S1 align=ACenter")
+
+///|
+// kept across runs: a value (no field of it changes)
+let composer_notice_words : @ui.TextStyle = @ui.text_style(size=Sm, color=Muted)
+
+///|
+// kept across runs: a value (no field of it changes)
+let composer_notice_button : @ui.TextStyle = @ui.text_style(size=Sm, color=Fg)
+
+///|
+// kept across runs: a value (no field of it changes)
+let composer_notice_failed : @ui.TextStyle = @ui.text_style(size=Sm, color=Danger)
+
+///|
+/// A chat's composer's place while it is a capsule: its buttons (32) 6 in, 12 over it and 16 under it.
+let capsule_room : Double = 32.0 + 2.0 * 6.0 + 12.0 + 16.0
+
+///|
+// kept across runs: a value (no field of it changes)
+let chat_foot : @ui.Style = @ui.css("w=Full pt=S3 pb=S4 align=ACenter")

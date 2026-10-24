@@ -1,7 +1,7 @@
 # 关于 and 更新日志 on the desktop (sfdesk about.mbt; the web's pages/About.tsx, Changelog.tsx): MBUI_WIN=1280x800 over
 # the made-up chat. ⌘, then 关于, then 更新日志.
 timeout 30000
-until 按空格输入
+until 发消息
 wait 600
 key cmd+,
 wait 1000

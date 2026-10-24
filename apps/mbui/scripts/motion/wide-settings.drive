@@ -2,7 +2,7 @@
 # chat. ⌘, then each page of the sidebar ported from the web's, a still of each: 通知, 权限, 快捷键, 版本, 归档, 自动决策,
 # 记忆, Workspace, 安全, 密钥, the account; then 连接.
 timeout 40000
-until 按空格输入
+until 发消息
 wait 600
 key cmd+,
 wait 1000

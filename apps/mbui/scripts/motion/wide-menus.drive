@@ -1,6 +1,6 @@
 # The wide frame's right click, as the desktop app's (sfdesk/context_menu.mbt): a link's menu, an image's, the composer's.
 timeout 20000
-until 按空格输入
+until 发消息
 wait 400
 wheel -900
 wait 1600
@@ -8,7 +8,7 @@ rightclick example.com/review/42
 wait 1000
 key escape
 wait 300
-rightclick 按空格输入
+rightclick 发消息
 wait 1000
 key escape
 wait 300

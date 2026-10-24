@@ -2,7 +2,7 @@
 # chat. Opened by the chat bar's switch (its first agent's history in from the pane's right edge, the chat narrowing
 # with it), closed by the panel's (out the other way), then opened and closed again.
 timeout 20000
-until 按空格输入
+until 发消息
 wait 600
 tap icon:panel-open
 wait 900

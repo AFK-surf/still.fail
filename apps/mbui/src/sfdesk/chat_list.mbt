@@ -588,13 +588,13 @@ let float_count : @ui.TextStyle = @ui.text_style(size=Xs, weight=Medium, color=F
 
 ///|
 /// Chat `r`'s pane (ChatShown): its list running on under the composer (or, before its view is read, what waits for
-/// it), `over` it (the bar), and the composer at its foot (the app's for now: Pages.composer, which says the room it
-/// takes and draws it, with what is let go over the pane, `pane`); the words sent, as typed, till their row is in the
-/// list, and the files sent with them, over all of it.
+/// it), `over` it (the bar), and the composer at its foot (composer.mbt chat_composer: the room it takes the list's
+/// foot, among what the app still draws over the list, Pages.chat_layers, with what is let go over the pane, `pane`);
+/// the words sent, as typed, till their row is in the list, and the files sent with them, over all of it.
 pub fn chat_talk(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef, pages : Pages, pane : Int, over : () -> Unit) -> Unit {
   let (view, read, error) = view_of_chat(src, r)
   let draft = r.station + ":" + r.session
-  let (room, composer) = (pages.composer)(c, src, w, r, view, pane)
+  let room = composer_room(c, draft)
   match view {
     Some(v) => {
       latest_key(c, src, r, v)
@@ -616,7 +616,13 @@ pub fn chat_talk(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef, pages : 
   if view is Some(_) {
     switch_veil(c)
   }
-  composer()
+  (pages.chat_layers)(c, src, r, view, pane, fn() {
+    c.layer(fn() {
+      c.spacer()
+      chat_composer(c, src, w, pages, r, view)
+    })
+    |> ignore
+  })
   flight_waiting(c, draft)
   flight_files(c, draft)
 }

@@ -11,7 +11,12 @@ fn message_files(c : @ui.Ctx, src : Source, here : MessageHere, list : Array[Att
   if list.length() == 0 {
     return
   }
-  let room = c.width
+  // as wide as where it is at most (the column's, as laid out: c.width is the pane's), the pane's until it is laid out
+  let at = c.id("msg-files/" + here.station + "/" + list[0].path)
+  let room = match c.laid_size(at) {
+    Some((w, _)) if w > 0.0 => w
+    _ => c.width
+  }
   // each one's width as the row lays it (an image's and a video's box at most the column's)
   let widths = list.map(fn(a) {
     match file_kind(a.name) {
@@ -31,7 +36,7 @@ fn message_files(c : @ui.Ctx, src : Source, here : MessageHere, list : Array[Att
       used = used + files_gap + w
     }
   }
-  c.box(style=if mine { files_column_end } else { files_column }, fn() {
+  c.box(style=if mine { files_column_end } else { files_column }, id=at, fn() {
     for r in rows {
       c.box(style=files_row, fn() {
         for i in r {

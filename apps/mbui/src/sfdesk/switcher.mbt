@@ -426,7 +426,8 @@ fn switcher(c : @ui.Ctx, src : Source, w : Workspace, pages : Pages) -> Unit {
             enter_sends=true,
             field=switching.field,
           )
-          if !res.focused && !c.field_focused() {
+          // (modal, its search the only field: it has the keys while it is open, the composer's given up as it opens)
+          if !res.focused {
             c.focus_editor("switcher/field")
           }
           match res.submitted {

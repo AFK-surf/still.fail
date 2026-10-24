@@ -10,7 +10,7 @@ test "66-wide-resize" {
     f.resize(1280.0, 800.0)
     f.see("新建对话")
     f.tap("端到端测试")
-    f.see("按空格输入")
+    f.see("发消息")
     f.resize(390.0, 844.0)
     f.gone("新建对话")
     f.see("发消息")

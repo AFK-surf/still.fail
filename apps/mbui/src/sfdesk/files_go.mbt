@@ -260,7 +260,8 @@ pub fn go_to(c : @ui.Ctx, src : Source, ws : String, here : DriveAt, to : (Drive
           enter_sends=true,
           field=go.field,
         )
-        if !res.focused && !c.field_focused() {
+        // (a dialog's only field: it has the keys while it is open, a composer's given up as it opens)
+        if !res.focused {
           c.focus_editor("files-goto/field")
         }
         if res.text != go.typed {

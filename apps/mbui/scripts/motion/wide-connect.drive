@@ -2,7 +2,7 @@
 # made-up chat. 连接 from the rail, a connect opened; its ⋯; 更改: all its messages in one session chosen, what that
 # does said; back to the connects.
 timeout 30000
-until 按空格输入
+until 发消息
 wait 600
 tap icon:im
 wait 1500
