@@ -1,4 +1,4 @@
-// A connect's page on the desktop (ember web/src/pages/Connect.tsx ConnectPage, ConnectDetail, SlackSection,
+// A connect's page, one in every frame, laid out by its width (page_look.mbt) (web/src/pages/Connect.tsx ConnectPage, ConnectDetail, SlackSection,
 // ConnectTrouble, TokenDialog, ModeChoices, RunSection, ModeDialog, ChooseSessionDialog, ConnectSessions,
 // OwnerDialog; Connect.css.ts; FeishuConnect.tsx FeishuSection, SecretDialog; FeishuConnect.css.ts): back to the
 // connects; who it is and whether it is up (its picture, its name, how it is, where it is reached, its station, who
@@ -7,9 +7,10 @@
 // sessions. Everything said is the core's (its connects view, the core's ModeWords and ModeChange).
 
 ///|
-/// A connect's page (ConnectPage), by its station and id: a wait until the connects are read (its station's among
-/// them); one gone, that it is not there.
-fn connect_page(c : @ui.Ctx, src : Source, core : Core, here : Here, station : String, id : String) -> Unit {
+/// A connect's page (ConnectPage, ConnectScreen), by its station and id: a wait until the connects are read (its
+/// station's among them); one gone, that it is not there.
+fn connect_page(c : @ui.Ctx, src : Source, core : Core, here : Here, frame : PageFrame, station : String, id : String) -> Unit {
+  let look = look_of(c)
   let connects = (core.topic)("connects", { "scope": str(here.workspace), "mine": Json::boolean(false) })
   let found = items(connects.value, "items").iter().find_first(fn(i) {
     text(Some(i), "station") == station && text(field(Some(i), "connect"), "id") == id
@@ -23,7 +24,7 @@ fn connect_page(c : @ui.Ctx, src : Source, core : Core, here : Here, station : S
       Some(e) => error_text(e)
       None => ""
     }
-    desk_page(c, core, key, back, head=fn() { cd_back(c, core, back) }, [
+    look_page(c, core, frame, look, key, back, [
       fn() {
         if error != "" {
           @sf.empty(c, fn() { c.text(error, style=desk_muted) |> ignore })
@@ -40,22 +41,25 @@ fn connect_page(c : @ui.Ctx, src : Source, core : Core, here : Here, station : S
   }
   match found {
     None =>
-      desk_page(c, core, key, back, head=fn() { cd_back(c, core, back) }, [
+      look_page(c, core, frame, look, key, back, [
         fn() { @sf.empty(c, fn() { c.text(@sf.t("web-pages.connect.notFound", args=[("id", id)]), style=desk_muted) |> ignore }) },
       ])
-    Some(item) => connect_detail(c, src, core, here, Some(item))
+    Some(item) => connect_detail(c, src, core, here, frame, look, Some(item))
   }
 }
 
 ///|
-/// The page of a connect found (ConnectDetail).
-fn connect_detail(c : @ui.Ctx, src : Source, core : Core, here : Here, item : Json?) -> Unit {
+/// The page of a connect found (ConnectDetail): its sections each as wide as the page's column (narrow, 12 from its
+/// sides, as its cards are), who it is at its head (narrow, the first of them under its name).
+fn connect_detail(c : @ui.Ctx, src : Source, core : Core, here : Here, frame : PageFrame, look : Look, item : Json?) -> Unit {
   let cv = field(item, "connect")
   let station = text(item, "station")
   let id = text(cv, "id")
   let feishu = text(cv, "kind") == "feishu"
-  let back = @sf.t("web-pages.settings.nav.connects")
   let blocks : Array[() -> Unit] = []
+  if look == Narrow {
+    blocks.push(fn() { cn_gutter(c, look, fn() { cd_identity(c, core, here, station, text(item, "stationName"), cv, named=false) }) })
+  }
   // what its link needs: Slack's tokens, or why it fails (a Feishu connect's only why)
   let state = text(field(cv, "connection"), "state")
   if !feishu && state == "no_tokens" {
@@ -73,38 +77,27 @@ fn connect_detail(c : @ui.Ctx, src : Source, core : Core, here : Here, item : Js
     blocks.push(fn() { slack_app_section(c, core, station, cv) })
   }
   blocks.push(fn() { cd_sessions(c, core, station, item) })
-  desk_page(c, core, "connect/" + station + "/" + id, text(cv, "name"), back~, head=fn() {
-      cd_back(c, core, back)
-      cd_identity(c, core, here, station, text(item, "stationName"), cv)
-    }, blocks)
-}
-
-///|
-/// Back to the connects (BackLink: a row of its own 24 high, 14 over what follows; its chevron and words in the muted
-/// ink, the words' under the pointer).
-fn cd_back(c : @ui.Ctx, core : Core, label : String) -> Unit {
-  let t = @sf.theme()
-  let id = c.id("connect-back")
-  c.cursor(id, Hand)
-  if hit(c, id) {
-    (core.pop)()
-  }
-  let ink = if c.hovered(id) { t.p.text } else { t.p.muted }
-  c.box(style=cd_back_row, fn() {
-    let b = c.box(style=cd_back_link, id~, fn() {
-      @sf.icon(c, "chevron-left", size=cd_icon, color=ink) |> ignore
-      c.text(label, style=if c.hovered(id) { cd_back_lit } else { cd_back_words }) |> ignore
-    })
-    c.semantics(b, Link, id~, label~)
+  let sections = blocks.map(fn(b) { fn() { cn_gutter(c, look, b) } })
+  look_page(c, core, frame, look, "connect/" + station + "/" + id, text(cv, "name"), sections, head?=if look == Wide {
+    Some(fn() { cd_identity(c, core, here, station, text(item, "stationName"), cv) })
+  } else {
+    None
   })
-  |> ignore
 }
 
 ///|
 /// Who it is and whether it is up (header: pages.css.ts identity): its picture 52, its name, and in a line under it how
 /// it is (being reconnected, switched or saved: a ring and so; failed a moment ago: a red mark and so; else its dot and
 /// state), where people reach it, its station, who owns it; its ⋯ at the end.
-fn cd_identity(c : @ui.Ctx, core : Core, here : Here, station : String, station_name : String, cv : Json?) -> Unit {
+fn cd_identity(
+  c : @ui.Ctx,
+  core : Core,
+  here : Here,
+  station : String,
+  station_name : String,
+  cv : Json?,
+  named? : Bool = true,
+) -> Unit {
   let id = text(cv, "id")
   let on = [("station", station), ("id", id)]
   let reconnecting = is_doing(core, ["connect.reconnect"], on)
@@ -135,7 +128,10 @@ fn cd_identity(c : @ui.Ctx, core : Core, here : Here, station : String, station_
   c.box(style=cd_identity_box, fn() {
     cd_avatar(c, core, cv, cd_avatar_size)
     c.box(style=cd_identity_text, fn() {
-      c.text(text(cv, "name"), style=cd_name) |> ignore
+      // (narrow: its name the page's title over it)
+      if named {
+        c.text(text(cv, "name"), style=cd_name) |> ignore
+      }
       c.box(style=cd_sub, flow=true, fn() {
         c.box(style=cd_status, label=if doing != "" { doing } else if failing != "" { failing } else { text(cv, "statusText") }, fn() {
           if doing != "" {
@@ -180,15 +176,10 @@ fn cd_identity(c : @ui.Ctx, core : Core, here : Here, station : String, station_
 // kept across runs: said by the menu's 停用 and 启用; connect_reset empties it
 let cd_switching : Map[String, Bool] = {}
 
-///|
-/// Its ⋯ open (station/id, "" none).
-// kept across runs: said by its press; connect_reset puts it back
-let cd_menu_open : Ref[String] = Ref("")
 
 ///|
 fn connect_reset() -> Unit {
   cd_switching.clear()
-  cd_menu_open.val = ""
   cd_all_sessions.clear()
   slack_reset()
   slack_app_reset()
@@ -225,96 +216,71 @@ fn cd_menu(c : @ui.Ctx, core : Core, here : Here, station : String, cv : Json?) 
   let console = text(field(cv, "feishu"), "console")
   let mid = c.id("connect-more/" + me)
   c.cursor(mid, Hand)
-  let open = cd_menu_open.val == me
-  if c.clicked(mid) {
-    cd_menu_open.val = if open { "" } else { me }
-  }
   let b = c.box(style=cn_more, id=mid, fn() { @sf.icon(c, "more", size=cn_more_icon, color=t.p.muted) |> ignore })
-  c.semantics(b, Button, id=mid, label=@sf.t("common.more"), expanded=open)
-  let entries = [
-    @kit.menu_item("reconnect", label=@sf.t("web-pages.connect.reconnect"), disabled=reconnecting),
-    @kit.menu_item("replace", label=@sf.t(if feishu { "web-pages.connect.feishu.replace" } else { "web-pages.connect.replaceToken" })),
+  c.semantics(b, Button, id=mid, label=@sf.t("common.more"))
+  if !c.clicked(mid) {
+    return
+  }
+  let delete = fn() {
+    let sessions = text_number(cv, "sessions")
+    confirm(
+      @sf.t("web-pages.archive.deleteConfirm", args=[("title", text(cv, "name"))]),
+      if sessions > 0 {
+        @sf.t(cd_kind_key("web-pages.connect.deleteBodySessions", cv), args=[("n", sessions.to_string())])
+      } else {
+        @sf.t(cd_kind_key("web-pages.connect.deleteBody", cv))
+      },
+      @sf.t("web-pages.connect.delete"),
+      danger=true,
+      // back to the list at once: its row turns there until the station has dropped it
+      fn() {
+        (core.pop)()
+        cd_act(core, station, id, @sf.t("web-pages.connect.delete"), "connect.delete", [], done=@sf.t("web-pages.connect.deleted"))
+      },
+    )
+  }
+  let items : Array[@sf.MenuItem?] = [
+    Some(
+      @sf.menu_item_of(@sf.t("web-pages.connect.reconnect"), icon="refresh", disabled=reconnecting, fn() {
+        cd_act(core, station, id, @sf.t("web-pages.connect.reconnect"), "connect.reconnect", [], done=@sf.t("web-pages.connect.reconnected"))
+      }),
+    ),
+    Some(
+      @sf.menu_item_of(@sf.t(if feishu { "web-pages.connect.feishu.replace" } else { "web-pages.connect.replaceToken" }), icon="key", fn() {
+        if feishu {
+          cd_secret_dialog(core, station, cv)
+        } else {
+          cd_token_dialog(core, station, cv)
+        }
+      }),
+    ),
   ]
   if !feishu && slack_url != "" {
-    entries.push(@kit.menu_item("slack", label=@sf.t("web-pages.connect.openSlack")))
+    items.push(Some(@sf.menu_item_of(@sf.t("web-pages.connect.openSlack"), icon="external", fn() { (core.open_link)(slack_url) })))
   }
   if feishu && console != "" {
-    entries.push(@kit.menu_item("console", label=@sf.t("web-pages.connect.feishu.openConsole")))
+    items.push(Some(@sf.menu_item_of(@sf.t("web-pages.connect.feishu.openConsole"), icon="external", fn() { (core.open_link)(console) })))
   }
-  entries.push(@kit.menu_separator())
-  entries.push(
-    if flag(cv, "enabled") {
-      @kit.menu_item("disable", label=@sf.t("web-pages.profiles.disable"), disabled=saving)
-    } else {
-      @kit.menu_item("enable", label=@sf.t("web-pages.connect.enable"), disabled=saving)
-    },
-  )
-  entries.push(@kit.menu_item("owner", label=@sf.t("web-pages.connect.changeOwner")))
-  entries.push(@kit.menu_separator())
-  entries.push(@kit.menu_item("delete", label=@sf.t("web-pages.connect.delete")))
-  let m = @sf.dropdown(
-    c,
-    "connect-menu/" + me,
-    open,
-    mid,
-    entries,
-    {
-      "reconnect": "refresh",
-      "replace": "key",
-      "slack": "external",
-      "console": "external",
-      "disable": "power",
-      "enable": "power",
-      "owner": "user",
-      "delete": "trash",
-    },
-    @sf.menu_w,
-    along=End,
-    danger=["delete"],
-  )
-  if open && !m.open {
-    cd_menu_open.val = ""
-  }
-  match m.chosen {
-    Some(v) => {
-      cd_menu_open.val = ""
-      match v {
-        "reconnect" =>
-          cd_act(core, station, id, @sf.t("web-pages.connect.reconnect"), "connect.reconnect", [], done=@sf.t("web-pages.connect.reconnected"))
-        "replace" => if feishu { cd_secret_dialog(core, station, cv) } else { cd_token_dialog(core, station, cv) }
-        "slack" => (core.open_link)(slack_url)
-        "console" => (core.open_link)(console)
-        "disable" => {
+  items.push(None)
+  items.push(
+    Some(
+      if flag(cv, "enabled") {
+        @sf.menu_item_of(@sf.t("web-pages.profiles.disable"), icon="power", disabled=saving, fn() {
           cd_switching[me] = true
           cd_put(core, station, id, obj([("enabled", Json::boolean(false))]), done=@sf.t(cd_kind_key("web-pages.connect.disabled", cv)))
-        }
-        "enable" => {
+        })
+      } else {
+        @sf.menu_item_of(@sf.t("web-pages.connect.enable"), icon="power", disabled=saving, fn() {
           cd_switching[me] = true
           cd_put(core, station, id, obj([("enabled", Json::boolean(true))]), done=@sf.t("web-pages.connect.enabled"))
-        }
-        "owner" => cd_owner_dialog(core, here, station, cv)
-        _ => {
-          let sessions = text_number(cv, "sessions")
-          confirm(
-            @sf.t("web-pages.archive.deleteConfirm", args=[("title", text(cv, "name"))]),
-            if sessions > 0 {
-              @sf.t(cd_kind_key("web-pages.connect.deleteBodySessions", cv), args=[("n", sessions.to_string())])
-            } else {
-              @sf.t(cd_kind_key("web-pages.connect.deleteBody", cv))
-            },
-            @sf.t("web-pages.connect.delete"),
-            danger=true,
-            // back to the list at once: its row turns there until the station has dropped it
-            fn() {
-              (core.pop)()
-              cd_act(core, station, id, @sf.t("web-pages.connect.delete"), "connect.delete", [], done=@sf.t("web-pages.connect.deleted"))
-            },
-          )
-        }
-      }
-    }
-    None => ()
-  }
+        })
+      },
+    ),
+  )
+  items.push(Some(@sf.menu_item_of(@sf.t("web-pages.connect.changeOwner"), icon="user", fn() { cd_owner_dialog(core, here, station, cv) })))
+  items.push(None)
+  items.push(Some(@sf.menu_item_of(@sf.t("web-pages.connect.delete"), icon="trash", danger=true, delete)))
+  @sf.menu(items, from=Of(mid), along=End)
 }
 
 ///|
@@ -971,23 +937,6 @@ let cd_select_w : Double = 280.0
 ///|
 // kept across runs: a value (no field of it changes)
 let cd_avatar_box : @ui.Style = @ui.css("align=ACenter justify=JCenter radius=Xl")
-
-///|
-/// BackLink (ui.css.ts pageBackRow: 24 high, 14 under; pageBack: 2 apart, the ui's 13 on 20, 4 out at its start).
-// kept across runs: a value (no field of it changes)
-let cd_back_row : @ui.Style = @ui.css("row w=Full h=S6 mb=S3_5 align=ACenter")
-
-///|
-// kept across runs: a value (no field of it changes)
-let cd_back_link : @ui.Style = @sf.outset_start(4.0).then(@ui.css("row gap=SPx align=ACenter"))
-
-///|
-// kept across runs: a value (no field of it changes)
-let cd_back_words : @ui.TextStyle = @ui.text_style(size=Sm, leading=L6, color=Muted, wrap=false)
-
-///|
-// kept across runs: a value (no field of it changes)
-let cd_back_lit : @ui.TextStyle = cd_back_words.then(@ui.text_style(color=Fg))
 
 ///|
 /// Its head (pages.css.ts identity: 16 apart, its middle in line, 28 over what follows; identityName 22 on 34 in 600;

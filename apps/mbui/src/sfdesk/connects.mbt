@@ -1,21 +1,23 @@
-// Connects in the wide frame, as the web's (ember web/src/pages/Connects.tsx ConnectList; Connects.css.ts): at its
-// head its title with what a connect is beside it (a mark that says it on hover) and 添加连接; under it the filter
-// (全部 or 我的); the Slack apps made and not connected yet, quietly titled, each to go on with; then every station's
-// connects in one list, each its bot's picture, its name and its Slack workspace, how it runs, and at its end its
-// station's tag, who added it, how it is and its dot. With none at all yet, the page is about adding the first (a
-// profile first where no station has one). The phone's page, each station's under its name, is connects.mbt's.
+// 连接, one page in every frame (web/src/pages/Connects.tsx ConnectList, Connects.css.ts; the narrow app's
+// mobile/Connects.tsx), laid out by its width (page_look.mbt): at its head its title with what a connect is and 添加连接;
+// under it the filter (全部 or 我的); the Slack apps made and not connected yet, each to go on with; then the connects,
+// each its bot's picture, its name and its Slack workspace, how it runs, its station, who added it, how it is and its
+// dot (wide: one list, each with its station's tag; narrow: a card a station, under its name). With none at all yet,
+// the page is about adding the first (a profile first where no station has one). `only`: one station's (its page's
+// 连接). Adding is the new connect's dialog (new_connect.mbt); menus and asking first, the presenters.
 
 ///|
-fn connects_page(c : @ui.Ctx, src : Source, core : Core, here : Here) -> Unit {
+fn connects_page(c : @ui.Ctx, src : Source, core : Core, here : Here, frame : PageFrame, only : String) -> Unit {
+  let look = look_of(c)
   let mine = connects_mine.val
   let topic = (core.topic)("connects", { "scope": str(here.workspace), "mine": Json::boolean(mine) })
   let st = @settings.stations_of(core, here)
   let stations = match st.value {
-    Some(Array(a)) => a
+    Some(Array(a)) => if only == "" { a } else { a.filter(fn(x) { text(Some(x), "station") == only }) }
     _ => []
   }
   let view = topic.value
-  let shown = items(view, "items")
+  let shown = items(view, "items").filter(fn(x) { only == "" || text(Some(x), "station") == only })
   let wait = field(view, "wait")
   let loading = wait is None || flag(wait, "reading")
   // the Slack apps the viewer made that no connect has taken yet, each on its station
@@ -37,192 +39,260 @@ fn connects_page(c : @ui.Ctx, src : Source, core : Core, here : Here) -> Unit {
   let station_of = fn(address : String) -> Json? {
     stations.iter().find_first(fn(s) { text(Some(s), "station") == address })
   }
-  desk_place(
-    c,
-    core,
-    @sf.t("android-settings.connects.title"),
-    about=@sf.t("web-pages.connects.about", args=[("name", "still.fail")]),
-    actions?=if targets.length() > 0 && !first {
-      // (its primary action a pill named as what it adds)
-      Some(fn() { cn_add(c, src, core, here, targets, @sf.t("android-misc.bar.action.connects"), "add-connect", false) })
-    } else {
-      None
-    },
-    fn() {
-      let blocks : Array[() -> Unit] = []
-      if first && no_profile {
-        blocks.push(fn() {
-          @sf.first_one(c, @sf.t("web-pages.connects.profileFirst"), lead=@sf.t("web-pages.connects.profileFirstLead"), fn() {
-            if @sf.button(c, @sf.t("web-pages.connects.goAddProfile"), key="connects-go-profiles", tone=Primary) {
-              (core.push)(Profiles(""))
-            }
-          })
+  let gutter = fn(f : () -> Unit) { cn_gutter(c, look, f) }
+  let blocks : Array[() -> Unit] = []
+  if first && no_profile {
+    blocks.push(fn() {
+      gutter(fn() {
+        @sf.first_one(c, @sf.t("web-pages.connects.profileFirst"), lead=@sf.t("web-pages.connects.profileFirstLead"), fn() {
+          if @sf.button(c, @sf.t("web-pages.connects.goAddProfile"), key="connects-go-profiles", tone=Primary) {
+            (core.push)(Profiles(""))
+          }
         })
-      } else if first {
-        blocks.push(fn() {
-          @sf.first_one(c, @sf.t("web-pages.connects.addFirst"), lead=@sf.t("web-pages.connects.addFirstLead"), fn() {
-            match targets.length() {
-              0 =>
-                c.text(
-                  @sf.t(
-                    if stations.length() > 0 {
-                      "web-pages.connects.noOnline"
-                    } else {
-                      "web-pages.connects.stationFirst"
-                    },
-                  ),
-                  style=cn_note,
-                )
-                |> ignore
-              _ => cn_add(c, src, core, here, targets, @sf.t("web-pages.connects.add"), "connects-add-first", true)
-            }
-          })
+      })
+    })
+  } else if first {
+    blocks.push(fn() {
+      gutter(fn() {
+        @sf.first_one(c, @sf.t("web-pages.connects.addFirst"), lead=@sf.t("web-pages.connects.addFirstLead"), fn() {
+          match targets.length() {
+            0 =>
+              c.text(@sf.t(if stations.length() > 0 { "web-pages.connects.noOnline" } else { "web-pages.connects.stationFirst" }), style=cn_note)
+              |> ignore
+            _ => cn_add(c, src, core, here, targets, @sf.t("web-pages.connects.add"), "connects-add-first", true)
+          }
         })
-      } else {
-        blocks.push(fn() {
-          c.box(style=cn_filter_room, fn() {
-            mine_filter(c, "connects-filter", "connects", mine, fn(v) { connects_mine.val = v })
-          })
-          |> ignore
-        })
-      }
-      if waiting.length() > 0 {
-        blocks.push(fn() {
-          c.box(style=cn_quiet_room, fn() { c.text(@sf.t("web-pages.connects.waiting"), style=cn_quiet) |> ignore })
-          |> ignore
+      })
+    })
+  } else {
+    blocks.push(fn() {
+      c.box(style=if look == Wide { cn_filter_room } else { cn_filter_room_narrow }, fn() {
+        mine_filter(c, "connects-filter", "connects", mine, fn(v) { connects_mine.val = v })
+      })
+      |> ignore
+    })
+  }
+  if waiting.length() > 0 {
+    blocks.push(fn() {
+      match look {
+        Wide => {
+          c.box(style=cn_quiet_room, fn() { c.text(@sf.t("web-pages.connects.waiting"), style=cn_quiet) |> ignore }) |> ignore
           c.box(style=cn_list_room, fn() {
             c.box(style=desk_list, fn() {
               for w in waiting {
-                cn_waiting_app(c, src, core, here, w.0, w.1)
+                cn_waiting_app(c, src, core, here, look, w.0, w.1)
               }
             })
             |> ignore
           })
           |> ignore
-        })
-      }
-      if !first {
-        if shown.length() == 0 && topic.error is None && (loading || items(wait, "failing").length() > 0) {
-          blocks.push(fn() { desk_waiting_rows(c, wait) })
-        } else if shown.length() == 0 {
-          blocks.push(fn() {
-            c.box(style=cn_none_room, fn() {
-              match topic.error {
-                Some(e) => c.text(error_text(e), style=cn_error) |> ignore
-                None =>
-                  c.text(@sf.t(if mine { "web-pages.connects.noneMine" } else { "web-pages.connects.none" }), style=cn_note)
-                  |> ignore
-              }
-            })
-            |> ignore
+        }
+        Narrow => {
+          look_heading(c, look, @sf.t("web-pages.connects.waiting"))
+          look_group(c, look, fn() {
+            for w in waiting {
+              cn_waiting_app(c, src, core, here, look, w.0, w.1)
+            }
           })
-        } else {
+        }
+      }
+    })
+  }
+  if !first {
+    if shown.length() == 0 && topic.error is None && (loading || items(wait, "failing").length() > 0) {
+      blocks.push(fn() { gutter(fn() { desk_waiting_rows(c, wait) }) })
+    } else if shown.length() == 0 {
+      blocks.push(fn() {
+        c.box(style=if look == Wide { cn_none_room } else { cn_filter_room_narrow }, fn() {
+          match topic.error {
+            Some(e) => c.text(error_text(e), style=cn_error) |> ignore
+            None => c.text(@sf.t(if mine { "web-pages.connects.noneMine" } else { "web-pages.connects.none" }), style=cn_note) |> ignore
+          }
+        })
+        |> ignore
+      })
+    } else {
+      match look {
+        Wide =>
           blocks.push(fn() {
             c.box(style=cn_list_room, fn() {
               c.box(style=desk_list, fn() {
                 for x in shown {
                   let xv = Some(x)
                   let address = text(xv, "station")
-                  cn_row(c, core, address, text(xv, "stationName"), station_of(address), field(xv, "connect"))
+                  cn_row(c, core, look, address, text(xv, "stationName"), station_of(address), field(xv, "connect"))
                 }
               })
               |> ignore
             })
             |> ignore
           })
-          // what the list still waits on: a row's shape for a station not read yet, each failure said
-          if flag(wait, "reading") || items(wait, "failing").length() > 0 {
-            blocks.push(fn() { desk_waiting_rows(c, wait, count=1) })
+        // (narrow: each station's under its name, as a card; one offline said so)
+        Narrow => {
+          // (the stations in the order their connects come, each once)
+          let addresses : Array[String] = []
+          for x in shown {
+            let a = text(Some(x), "station")
+            if !addresses.contains(a) {
+              addresses.push(a)
+            }
+          }
+          for address in addresses {
+            let here_list = shown.filter(fn(x) { text(Some(x), "station") == address })
+            let sv = station_of(address)
+            let name = text(Some(here_list[0]), "stationName")
+            blocks.push(fn() {
+              if only == "" {
+                look_heading(
+                  c,
+                  look,
+                  if sv is None || flag(sv, "online") { name } else { @sf.t("android-settings.connects.offline", args=[("name", name)]) },
+                )
+              }
+              look_group(c, look, fn() {
+                for x in here_list {
+                  cn_row(c, core, look, address, name, sv, field(Some(x), "connect"))
+                }
+              })
+            })
           }
         }
       }
-      desk_lanes(c, "connects-wide/" + mine.to_string(), blocks)
-    },
+      // what the list still waits on: a row's shape for a station not read yet, each failure said
+      if flag(wait, "reading") || items(wait, "failing").length() > 0 {
+        blocks.push(fn() { gutter(fn() { desk_waiting_rows(c, wait, count=1) }) })
+      }
+    }
+  }
+  let add = if targets.length() > 0 && !first {
+    // (its primary action named as what it adds; narrow, the title's ＋)
+    Some(fn() { cn_add(c, src, core, here, targets, @sf.t("android-misc.bar.action.connects"), "add-connect", false, round=look == Narrow) })
+  } else {
+    None
+  }
+  look_page(
+    c,
+    core,
+    frame,
+    look,
+    "connects/" + only + "/" + mine.to_string(),
+    @sf.t("android-settings.connects.title"),
+    about=@sf.t("web-pages.connects.about", args=[("name", "still.fail")]),
+    actions?=add,
+    blocks,
   )
 }
 
 ///|
-/// Adding one (Connects.tsx add): on the one station online at once, else on one picked from a menu under it (which
-/// station?), in the new connect's dialog. `primary`: the first one's (a solid button).
-fn cn_add(c : @ui.Ctx, src : Source, core : Core, here : Here, targets : Array[Json], label : String, key : String, primary : Bool) -> Unit {
-  if targets.length() == 1 {
-    if @sf.button(c, label, key~, tone=if primary { Primary } else { Plain }, icon="plus") {
-      new_connect_dialog(src, core, here, text(Some(targets[0]), "station"))
-    }
-    return
-  }
-  let open = cn_add_open.val == key
-  if @sf.button(c, label, key~, tone=if primary { Primary } else { Plain }, icon="plus") {
-    cn_add_open.val = if open { "" } else { key }
-  }
-  let entries = [@kit.menu_label(@sf.t("web-pages.connects.whichStation"))]
-  for s in targets {
-    entries.push(@kit.menu_item(text(Some(s), "station"), label=text(Some(s), "name")))
-  }
-  let m = @sf.dropdown(c, key + "/stations", open, c.id(key), entries, {}, @sf.menu_w, along=if primary { Middle } else { End })
-  if open && !m.open {
-    cn_add_open.val = ""
-  }
-  match m.chosen {
-    Some(station) => {
-      cn_add_open.val = ""
-      new_connect_dialog(src, core, here, station)
-    }
-    None => ()
+/// What sits on the page's ground as wide as its column, narrow 12 from its sides (as its cards are).
+fn cn_gutter(c : @ui.Ctx, look : Look, body : () -> Unit) -> Unit {
+  match look {
+    Wide => body()
+    Narrow => c.box(style=narrow_card_room, body) |> ignore
   }
 }
 
 ///|
-/// Which add's menu of stations is open, by its key ("" none).
-// kept across runs: said by its press; settings_reset puts it back
-let cn_add_open : Ref[String] = Ref("")
+/// Adding one (Connects.tsx add): on the one station online at once, else on one picked from a menu under it (which
+/// station?), in the new connect's dialog. `primary`: the first one's (a solid button); `round`: the narrow title's ＋.
+fn cn_add(
+  c : @ui.Ctx,
+  src : Source,
+  core : Core,
+  here : Here,
+  targets : Array[Json],
+  label : String,
+  key : String,
+  primary : Bool,
+  round? : Bool = false,
+) -> Unit {
+  let pressed = if round {
+    @sf.icon_button(c, "plus", key~, round=true, label~)
+  } else {
+    @sf.button(c, label, key~, tone=if primary { Primary } else { Plain }, icon="plus")
+  }
+  if !pressed {
+    return
+  }
+  if targets.length() == 1 {
+    new_connect_dialog(src, core, here, text(Some(targets[0]), "station"))
+    return
+  }
+  let items : Array[@sf.MenuItem?] = []
+  for s in targets {
+    let station = text(Some(s), "station")
+    items.push(Some(@sf.menu_item_of(text(Some(s), "name"), fn() { new_connect_dialog(src, core, here, station) })))
+  }
+  @sf.menu(items, from=Of(c.id(key)), title=@sf.t("web-pages.connects.whichStation"), along=if primary { Middle } else { End })
+}
 
 ///|
 /// A connect in the list (its row's Link): its picture, its name with its Slack workspace after it, how it runs; at
-/// its end its station's tag, who added it, how it is (being deleted: a ring), its dot. Pressed, its page.
-fn cn_row(c : @ui.Ctx, core : Core, station : String, station_name : String, s : Json?, cv : Json?) -> Unit {
+/// its end (wide) its station's tag, who added it, how it is (being deleted: a ring), its dot (narrow: how it is and
+/// its dot). Pressed, its page.
+fn cn_row(c : @ui.Ctx, core : Core, look : Look, station : String, station_name : String, s : Json?, cv : Json?) -> Unit {
   let id = text(cv, "id")
   let rid = c.id("connect/" + station + "/" + id)
   c.cursor(rid, Hand)
   if hit(c, rid) {
     (core.push)(Connect(station, id))
   }
-  c.box(style=desk_list_link, id=rid, fn() {
-      cn_avatar(c, core, cv)
-      // (short of room, its name kept: its team leaves its line, where it runs and who made it the row)
-      c.box(style=cn_text, keep=true, fn() {
-        c.box(style=cn_title_line, fn() {
-          c.text(text(cv, "name"), style=cn_title) |> ignore
-          match opt_text(cv, "team") {
-            Some(team) =>
-              c.box(style=cn_team, drop=cn_drop_team, fn() {
-                cn_kind(c, text(cv, "kind"), cn_team_icon)
-                c.text(team, style=cn_meta) |> ignore
-              })
-              |> ignore
-            None => ()
-          }
+  let bind = field(cv, "bind")
+  let model = match opt_text(bind, "model") {
+    Some(m) => " · " + opt_text(cv, "modelName").unwrap_or(m)
+    None => ""
+  }
+  let how = text(cv, "modeText") + " · " + text(cv, "runtimeText") + model
+  let on = [("station", station), ("id", id)]
+  let b = match look {
+    Wide =>
+      c.box(style=desk_list_link, id=rid, fn() {
+        cn_avatar(c, core, cv)
+        // (short of room, its name kept: its team leaves its line, where it runs and who made it the row)
+        c.box(style=cn_text, keep=true, fn() {
+          c.box(style=cn_title_line, fn() {
+            c.text(text(cv, "name"), style=cn_title) |> ignore
+            match opt_text(cv, "team") {
+              Some(team) =>
+                c.box(style=cn_team, drop=cn_drop_team, fn() {
+                  cn_kind(c, text(cv, "kind"), cn_team_icon)
+                  c.text(team, style=cn_meta) |> ignore
+                })
+                |> ignore
+              None => ()
+            }
+          })
+          |> ignore
+          c.text(how, style=cn_sub) |> ignore
         })
         |> ignore
-        let bind = field(cv, "bind")
-        let model = match opt_text(bind, "model") {
-          Some(m) => " · " + opt_text(cv, "modelName").unwrap_or(m)
-          None => ""
-        }
-        c.text(text(cv, "modeText") + " · " + text(cv, "runtimeText") + model, style=cn_sub) |> ignore
+        c.box(style=cn_facts, drop=cn_drop_facts, fn() {
+          cn_station_tag(c, station_name, s)
+          cn_owner(c, core, field(cv, "createdBy"))
+        })
+        |> ignore
+        c.text(text(cv, "statusText"), style=cn_meta) |> ignore
+        doing_mark(c, is_doing(core, ["connect.delete"], on), failed_of(core, ["connect.delete"], on))
+        @sf.status_dot(c, text(cv, "presence"))
       })
-      |> ignore
-      c.box(style=cn_facts, drop=cn_drop_facts, fn() {
-        cn_station_tag(c, station_name, s)
-        cn_owner(c, core, field(cv, "createdBy"))
+    Narrow =>
+      c.box(style=narrow_row, id=rid, fn() {
+        cn_avatar(c, core, cv)
+        c.box(style=narrow_row_words, fn() {
+          c.text(text(cv, "name") + (match opt_text(cv, "team") { Some(team) => " · " + team; None => "" }), style=narrow_row_title) |> ignore
+          c.text(how, style=cn_narrow_sub) |> ignore
+        })
+        |> ignore
+        doing_mark(c, is_doing(core, ["connect.delete"], on), failed_of(core, ["connect.delete"], on))
+        c.box(style=cn_narrow_state, fn() {
+          @sf.status_dot(c, text(cv, "presence"))
+          c.text(text(cv, "statusText"), style=cn_meta) |> ignore
+        })
+        |> ignore
+        finger_ripple(c, rid)
       })
-      |> ignore
-      c.text(text(cv, "statusText"), style=cn_meta) |> ignore
-      let on = [("station", station), ("id", id)]
-      doing_mark(c, is_doing(core, ["connect.delete"], on), failed_of(core, ["connect.delete"], on))
-      @sf.status_dot(c, text(cv, "presence"))
-    })
-  |> ignore
+  }
+  c.semantics(b, Link, id=rid, label=text(cv, "name"))
 }
 
 ///|
@@ -280,8 +350,8 @@ fn cn_owner(c : @ui.Ctx, core : Core, by : Json?) -> Unit {
 
 ///|
 /// A Slack app made and not connected yet (WaitingApp): Slack's mark, its name and workspace, where it stands; its
-/// station's tag; 继续 while its station is online (else that it is not), dropped from under ⋯.
-fn cn_waiting_app(c : @ui.Ctx, src : Source, core : Core, here : Here, a : Json, s : Json) -> Unit {
+/// station's tag (wide); 继续 while its station is online (else that it is not), dropped from under ⋯ (asked first).
+fn cn_waiting_app(c : @ui.Ctx, src : Source, core : Core, here : Here, look : Look, a : Json, s : Json) -> Unit {
   let av = Some(a)
   let sv = Some(s)
   let station = text(sv, "station")
@@ -294,11 +364,30 @@ fn cn_waiting_app(c : @ui.Ctx, src : Source, core : Core, here : Here, a : Json,
   } else {
     @sf.t("web-pages.connects.needsToken")
   }
-  c.box(style=desk_list_row, fn() {
+  let on = [("station", station), ("appId", app_id)]
+  let dropping = is_doing(core, ["slack.dropApp"], on)
+  let drop = fn() {
+    confirm(
+      @sf.t("web-pages.settings.stations.removeConfirm", args=[("name", text(av, "name"))]),
+      @sf.t("web-pages.connects.removeBody", args=[("name", "still.fail")]),
+      @sf.t("android-settings.members.remove"),
+      danger=true,
+      fn() {
+        @settings.act(
+          core,
+          @sf.t("android-settings.waiting.removeWhat"),
+          "slack.dropApp",
+          obj([("station", str(station)), ("appId", str(app_id))]),
+          done=@sf.t("android-settings.members.removed"),
+        )
+      },
+    )
+  }
+  c.box(style=if look == Wide { desk_list_row } else { narrow_said_row }, fn() {
     c.box(style=cn_kind_box, fn() { @sf.slack_mark(c, cn_waiting_mark) |> ignore }) |> ignore
-    c.box(style=cn_text, keep=true, fn() {
+    c.box(style=if look == Wide { cn_text } else { narrow_row_words }, keep=true, fn() {
       c.box(style=cn_title_line, fn() {
-        c.text(text(av, "name"), style=cn_title) |> ignore
+        c.text(text(av, "name"), style=if look == Wide { cn_title } else { narrow_row_title }) |> ignore
         match opt_text(av, "team") {
           Some(team) =>
             c.box(style=cn_team, drop=cn_drop_team, fn() {
@@ -310,59 +399,39 @@ fn cn_waiting_app(c : @ui.Ctx, src : Source, core : Core, here : Here, a : Json,
         }
       })
       |> ignore
-      c.text(where_, style=cn_sub) |> ignore
+      c.text(where_, style=if look == Wide { cn_sub } else { cn_narrow_sub }) |> ignore
     })
     |> ignore
-    c.box(style=cn_facts, drop=cn_drop_facts, fn() { cn_station_tag(c, text(sv, "name"), sv) }) |> ignore
-    let on = [("station", station), ("appId", app_id)]
-    let dropping = is_doing(core, ["slack.dropApp"], on)
+    if look == Wide {
+      c.box(style=cn_facts, drop=cn_drop_facts, fn() { cn_station_tag(c, text(sv, "name"), sv) }) |> ignore
+    }
     if online {
-      if @sf.button(c, @sf.t("web-pages.connects.continue"), key="waiting-go/" + app_id) {
+      let go = match look {
+        Wide => @sf.button(c, @sf.t("web-pages.connects.continue"), key="waiting-go/" + app_id)
+        Narrow => tap_text(c, "waiting-go/" + app_id, @sf.t("web-pages.connects.continue"), color=@sf.link_ink())
+      }
+      if go {
         new_connect_dialog(src, core, here, station, resume=app_id)
       }
     } else {
       c.text(@sf.t("web-pages.connects.stationOffline"), style=cn_meta) |> ignore
     }
     doing_mark(c, dropping, failed_of(core, ["slack.dropApp"], on))
-    // dropped from under ⋯ (Menu), asked again first (Confirm); it stays in Slack
+    // dropped from under ⋯ (its menu), asked again first; it stays in Slack
     if online && !dropping {
       let mid = c.id("waiting-more/" + app_id)
       c.cursor(mid, Hand)
-      let open = waiting_menu.val == app_id
       if c.clicked(mid) {
-        waiting_menu.val = if open { "" } else { app_id }
+        @sf.menu([Some(@sf.menu_item_of(@sf.t("web-pages.connects.removeHere"), drop, danger=true))], from=Of(mid), along=End)
       }
       let b = c.box(style=cn_more, id=mid, fn() {
         @sf.icon(c, "more", size=cn_more_icon, color=@sf.theme().p.muted) |> ignore
       })
-      c.semantics(b, Button, id=mid, label=@sf.t("web-pages.connects.removeHere"), expanded=open)
-      let m = @sf.dropdown(c, "waiting-menu/" + app_id, open, mid, [@kit.menu_item("remove", label=@sf.t("web-pages.connects.removeHere"))], {}, @sf.menu_w, along=End)
-      if open && !m.open {
-        waiting_menu.val = ""
-      }
-      if m.chosen is Some(_) {
-        waiting_menu.val = ""
-        confirm(
-          @sf.t("web-pages.settings.stations.removeConfirm", args=[("name", text(av, "name"))]),
-          @sf.t("web-pages.connects.removeBody", args=[("name", "still.fail")]),
-          @sf.t("android-settings.members.remove"),
-          danger=true,
-          fn() {
-            @settings.act(
-              core,
-              @sf.t("android-settings.waiting.removeWhat"),
-              "slack.dropApp",
-              obj([("station", str(station)), ("appId", str(app_id))]),
-              done=@sf.t("android-settings.members.removed"),
-            )
-          },
-        )
-      }
+      c.semantics(b, Button, id=mid, label=@sf.t("web-pages.connects.removeHere"))
     }
   })
   |> ignore
 }
-
 
 ///|
 /// The sizes: its picture 28, its kind's mark 17 in a 20 square (a waiting app's 18), the team's and the tag's
@@ -398,11 +467,6 @@ let cn_filter_room : @ui.Style = @ui.css("w=Full px=S4 pt=S2 pb=S3 align=AStart"
 /// The lists at the column's edges (their rows reaching 12 past them: desk_list).
 // kept across runs: a value (no field of it changes)
 let cn_list_room : @ui.Style = @ui.css("w=Full px=S4")
-
-///|
-/// The ⋯ menu open, by the waiting app's id ("" none).
-// kept across runs: said again by each press; settings_reset empties it
-let waiting_menu : Ref[String] = Ref("")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -488,3 +552,17 @@ let cn_owner_none : @ui.TextStyle = @ui.text_style(size=Xs, leading=L5, color=Su
 // kept across runs: a value (no field of it changes)
 let cn_more : @ui.Style = @ui.css("w=S8 h=S8 radius=Xl align=ACenter justify=JCenter hovered{bg=Hover}")
 
+
+///|
+/// Narrow: the filter 12 from the page's sides, 10 under; a row's line under its name (the secondary's, on one line);
+/// how it is at its end, its dot before the words.
+// kept across runs: a value (no field of it changes)
+let cn_filter_room_narrow : @ui.Style = @ui.css("w=Full px=S3 pb=S2_5 align=AStart")
+
+///|
+// kept across runs: a value (no field of it changes)
+let cn_narrow_sub : @ui.TextStyle = @sf.secondary.then(@sf.one_line)
+
+///|
+// kept across runs: a value (no field of it changes)
+let cn_narrow_state : @ui.Style = @ui.css("row gap=S1_25 align=ACenter")

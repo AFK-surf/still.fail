@@ -1,8 +1,8 @@
 // The rail's places beyond the chats and the files, as the web's (ember web/src/cloud/workspace.tsx StationsSidebar,
 // ProfilesSidebar; cloud/StationPage.tsx StationsNav, StationRow; ProfilesNav.tsx): Station and Profile each a list of
 // their own in the sidebar (添加 in the band over it), the one picked its page beside it (the first to begin with); 连接
-// and 用量 a page across the pane, no sidebar. The pages themselves are still the settings' package's
-// (@settings.page) but for 连接's and 用量's (connects.mbt, usage.mbt).
+// and 用量 a page across the pane, no sidebar. A page merged for every frame is setting_route's (连接's, 用量's), the
+// others still the settings' package's (@settings.page).
 
 ///|
 /// A place of the rail's in the pane: Station's and Profile's the page picked in their list, 连接's its page, the
@@ -15,7 +15,6 @@ fn place_page(c : @ui.Ctx, src : Source, w : Workspace, place : String) -> Unit 
   @settings.frame(core, here, root=true)
   match place {
     "stations" | "profiles" => place_split(c, src, w, place)
-    "connects" => c.box(style=place_across, fn() { connects_page(c, src, core, here) }) |> ignore
     _ =>
       c.box(style=place_across, fn() {
         match @settings.route_of(place) {
