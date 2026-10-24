@@ -225,3 +225,41 @@ test "a phone turned sideways for a film: the layout it had (the player the whol
   assert_true(app.nav.top() is DrivePlay(_))
   assert_true(said_at(t, "全屏") is Some(_))
 }
+
+///|
+/// Where the composer's field is drawn from the left and the bottom of the panel it is in (as drawn: a panel's move
+/// and any of the field's own); None when it is drawn out of every panel.
+fn composer_in_panel(t : @ui.Tester) -> (Double, Double)? {
+  let bs = t.boxes()
+  guard bs.search_by(fn(b) { b.kind == "editor" }) is Some(e) else { return None }
+  let ed = bs[e]
+  for b in bs {
+    if @ui.Radius::Exact(b.radius) == @sf.page_panel_corner && b.x <= ed.x && ed.x + ed.w <= b.x + b.w {
+      return Some((ed.x - b.x, b.y + b.h - ed.y))
+    }
+  }
+  None
+}
+
+///|
+test "on the tape the composer is drawn with its page as the page moves, never after it" {
+  let t = tape_chat(2, 690.0, 840.0, width="medium", height="medium")
+  guard composer_in_panel(t) is Some((x0, y0)) else { fail("the composer is out of its panel") }
+  let same = fn(at : String) raise {
+    guard composer_in_panel(t) is Some((x, y)) else { fail("\{at}: the composer is drawn out of its panel") }
+    assert_true((x - x0).abs() < 0.5 && (y - y0).abs() < 0.5, msg="\{at}: \{x},\{y}, at rest \{x0},\{y0}")
+  }
+  // the page brought over, and back
+  t.tap(650.0, 400.0)
+  for k in 1..=6 {
+    t.run_for(@sfdesk.side_move_ms / 8.0)
+    same("bringing the page, step \{k}")
+  }
+  t.run_for(@sfdesk.side_move_ms)
+  same("the page over")
+  t.back()
+  for k in 1..=6 {
+    t.run_for(@sfdesk.side_move_ms / 8.0)
+    same("going back, step \{k}")
+  }
+}
