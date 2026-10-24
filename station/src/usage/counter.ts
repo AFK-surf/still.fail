@@ -12,10 +12,10 @@ import { Clock, Effect, Fiber, Queue } from "effect";
 import { liveClock } from "../ops/fibers.ts";
 import { createReadStream, existsSync } from "node:fs";
 import { type FileHandle, open, readdir, realpath, stat } from "node:fs/promises";
-import { basename, dirname, join } from "node:path";
+import { basename, dirname, join, sep } from "node:path";
 import { createZstdDecompress } from "node:zlib";
 import { log } from "../ops/log.ts";
-import { parseIso, transcriptPath } from "../read/transcript.ts";
+import { parseIso, sharedTranscripts, transcriptDir, transcriptPaths } from "../read/transcript.ts";
 import type { SessionRow, Store, UsageCall, UsageFile, UsageFor, UsageTurn } from "../store/store.ts";
 import type { RuntimeKind } from "../agents/runtime.ts";
 
@@ -556,8 +556,24 @@ export class UsageCounter {
       }
       return out;
     };
-    const claudeRoots = await distinct([join(config.dataDir, "transcripts", "claude"), ...config.profiles.map((p) => join(p.home, "projects"))]);
-    const codexRoots = await distinct([join(config.dataDir, "transcripts", "codex"), ...config.profiles.map((p) => join(p.home, "sessions"))]);
+    // Where each runtime's transcripts are: the shared place, then each profile's home's.
+    const ways = (runtime: Runtime) => [sharedTranscripts(config.dataDir, runtime), ...config.profiles.map((p) => join(p.home, transcriptDir(runtime)))];
+    // How far a transcript was read, however it was reached then: one read through a home's own directory before is
+    // reached through the shared place once that directory is a link there (sessions/agent-home.ts `linkTranscripts`).
+    const readBefore = (path: string, runtime: Runtime): UsageFile | undefined => {
+      const had = known.get(path);
+      if (had !== undefined) return had;
+      const roots = ways(runtime);
+      const root = roots.find((r) => path.startsWith(r + sep));
+      if (root === undefined) return undefined;
+      for (const r of roots) {
+        const was = known.get(r + path.slice(root.length));
+        if (was !== undefined) return was;
+      }
+      return undefined;
+    };
+    const claudeRoots = await distinct(ways("claude"));
+    const codexRoots = await distinct(ways("codex"));
     const seenFiles = new Set<string>();
     for (const s of sessions) {
       if (wanted !== null && !wanted.has(s.key)) continue;
@@ -571,7 +587,7 @@ export class UsageCounter {
           const real = await canonical(path);
           if (seenFiles.has(real)) continue;
           seenFiles.add(real);
-          added += await this.#readFile(path, "claude", subagent, s, known, turns);
+          added += await this.#readFile(path, "claude", subagent, s, readBefore(path, "claude"), turns);
         }
       }
     }
@@ -583,7 +599,7 @@ export class UsageCounter {
       const codex = sessions.filter((s) => s.runtime === "codex");
       const turnsOf = new Map<string, { of: UsageTurn[] | null }>();
       for (const path of rollouts) {
-        const file = known.get(path);
+        const file = readBefore(path, "codex");
         let session: string | null;
         if (file !== undefined) session = file.session;
         else {
@@ -606,26 +622,25 @@ export class UsageCounter {
         if (s === undefined) continue;
         let turns = turnsOf.get(session);
         if (turns === undefined) turnsOf.set(session, (turns = { of: null }));
-        added += await this.#readFile(path, "codex", false, s, known, turns);
+        added += await this.#readFile(path, "codex", false, s, file, turns);
       }
     }
-    // DeepSeek Harness: each runtime session's own file, looked for in every profile's home (dsh.ts); Grok Build: what the
+    // DeepSeek Harness: each runtime session's own file, found as its history finds it (dsh.ts); Grok Build: what the
     // station kept of its turns beside each one's transcript (grok.ts); Cursor and Devin: their transcripts, the
     // station's own (cursor.ts, devin.ts).
+    const homes = config.profiles.map((p) => p.home);
     for (const s of sessions) {
       if ((s.runtime !== "dsh" && s.runtime !== "grok" && s.runtime !== "cursor" && s.runtime !== "devin") || (wanted !== null && !wanted.has(s.key))) continue;
       const runtime = s.runtime;
       const turns: { of: UsageTurn[] | null } = { of: null };
       for (const id of store.runtimeSessions(s.key)) {
-        for (const p of config.profiles) {
-          const transcript = transcriptPath(runtime, p.home, id);
-          const path = transcript !== null && runtime === "grok" ? join(dirname(transcript), "stillfail-usage.jsonl") : transcript;
-          if (path === null || (runtime === "grok" && !existsSync(path))) continue;
-          const real = await canonical(path);
-          if (seenFiles.has(real)) continue;
-          seenFiles.add(real);
-          added += await this.#readFile(path, runtime, false, s, known, turns);
-        }
+        const transcript = transcriptPaths(runtime, config.dataDir, homes, [id]).paths[0];
+        const path = transcript !== undefined && runtime === "grok" ? join(dirname(transcript), "stillfail-usage.jsonl") : transcript;
+        if (path === undefined || (runtime === "grok" && !existsSync(path))) continue;
+        const real = await canonical(path);
+        if (seenFiles.has(real)) continue;
+        seenFiles.add(real);
+        added += await this.#readFile(path, runtime, false, s, readBefore(path, runtime), turns);
       }
     }
     this.#last = started;
@@ -638,8 +653,8 @@ export class UsageCounter {
   }
 
   /// Reads one transcript of `session` on from where it was left, and records its calls, a part at a time.
-  async #readFile(path: string, runtime: Runtime, subagent: boolean, session: SessionRow, known: Map<string, UsageFile>, turns: { of: UsageTurn[] | null }): Promise<number> {
-    const before = known.get(path) ?? { session: null, offset: 0, model: null };
+  async #readFile(path: string, runtime: Runtime, subagent: boolean, session: SessionRow, was: UsageFile | undefined, turns: { of: UsageTurn[] | null }): Promise<number> {
+    const before = was ?? { session: null, offset: 0, model: null };
     const state: CallState = { model: before.model, codexId: null };
     let added = 0;
     let first = true;

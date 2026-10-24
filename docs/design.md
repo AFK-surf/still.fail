@@ -135,7 +135,7 @@ still.fail 直接提供 HTTP MCP，不为每个会话额外起进程：
 ## 12. 存储
 
 - SQLite，一个库（`stillfail.db`，旧版的 `ember.db` 启动时自动迁移）：sessions、threads、thread_sessions、entries、deliveries、reads、turns、processes、jobs、job_notices、bindings、profile_status、identities。表结构和变更通知见 [station-storage.md](station-storage.md)。
-- 运行时会话记录按 runtime 放在 `<数据目录>/transcripts/<runtime>`，每个 profile 目录里的 `projects/`（Claude）/ `sessions/`（Codex）链接到那里。
+- 运行时会话记录按 runtime 放在 `<数据目录>/transcripts/<runtime>`，每个 profile 目录里的 `projects/`（Claude）/ `sessions/`（Codex）等链接到那里（启动时和 config 每次变化时做）。所以记录属于 station 而不是账号：换账号能接着用，profile 换了目录或被删掉，执行历史照样从这里读到。已经是真实目录的（链接之前运行时自己建的），先把里面每个文件硬链接过去（还在写它的运行时接着写的是同一个文件），再换成链接；`<数据目录>/homes/` 下不再属于任何 profile 的目录也一样。数据目录外的 profile 目录里已有的记录是用户自己的，不动，从那里读。
 
 ## 13. 可观测性
 
