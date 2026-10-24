@@ -80,7 +80,13 @@ fn look_page(
           })
         None => ()
       }
-      // (a place's top page: the frame's bar over it names it)
+      // (a place's top page: the frame's bar over it names it, and holds what it does at its end)
+      if frame.named {
+        match actions {
+          Some(f) => @settings.root_bar_actions.val = Some(f)
+          None => ()
+        }
+      }
       if !frame.named {
         blocks.push(fn() {
           c.box(style=narrow_title_box, fn() {

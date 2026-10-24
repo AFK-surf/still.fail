@@ -871,6 +871,10 @@ fn fx_usage(days : Int) -> Json {
         ("callsText", str((cost * 12.0).to_int().to_string() + " 次调用")),
         ("parts", [Json::number(a), Json::number(b), Json::number(rest)]),
         ("partsText", [str("$" + a.to_int().to_string()), str("$" + b.to_int().to_string()), str("$" + rest.to_int().to_string())]),
+        // (what the core says of it: views/usage.ts)
+        ("name", str(if i == days - 1 { "今天" } else { "10/" + (i + 1).to_string() })),
+        ("tick", str(if i == days - 1 { "今天" } else if days <= 10 || (days - 1 - i) % 7 == 0 { "10/" + (i + 1).to_string() } else { "" })),
+        ("shares", [Json::number(0.6), Json::number(0.3), Json::number(0.1)]),
       ]),
     )
   }
@@ -904,6 +908,7 @@ fn fx_usage(days : Int) -> Json {
     ),
     ("series", [obj([("key", str("lin@example.com")), ("name", str("林"))]), obj([("key", str("ana@example.com")), ("name", str("Ana"))]), obj([("key", str("")), ("name", str("其他"))])]),
     ("daily", Json::array(daily)),
+    ("many", Json::boolean(days > 10)),
     ("max", Json::number(27.0)),
     // (the scale the core works out for it: views/usage.ts scale)
     ("top", Json::number(30.0)),

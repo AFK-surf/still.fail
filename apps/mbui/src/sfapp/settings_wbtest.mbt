@@ -259,7 +259,8 @@ test "memory: a station's global memory, its projects, a skill's page" {
 test "usage: the totals, the days, 30 天 picked" {
   let t = settings_tester("usage")
   assert_true(t.find("$118") is Some(_))
-  assert_true(t.find("整理发布清单") is Some(_))
+  // the lists, the people's first (the web's)
+  assert_true(t.find("68%") is Some(_))
   t.tap_text("30 天")
   assert_true(t.find("$486") is Some(_))
   // (not idle yet: a Ctx::spring still moves, till mbui#25 declares its end)

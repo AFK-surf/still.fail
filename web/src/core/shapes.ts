@@ -5673,6 +5673,15 @@ export interface UsageDay {
 	callsText: string;
 	parts: number[];
 	partsText: string[];
+	/** What the day is called where it is picked: 今天, else `label`. */
+	name?: string;
+	/**
+	 * What its bar says under it: its `name`, or "" where days are many (`many`) and it is not
+	 * today nor a week back from the last.
+	 */
+	tick?: string;
+	/** Each of `parts` as a share of the day's cost (0 to 1; 0.01 at least for one spent at all). */
+	shares?: number[];
 }
 
 /**
@@ -5754,6 +5763,8 @@ export interface UsageView {
 	tiles: UsageTile[];
 	series: UsageSeries[];
 	daily: UsageDay[];
+	/** Days too many for each to say its date under its bar (more than 10): narrower bars, a date a week. */
+	many?: boolean;
 	/** The most a day cost. */
 	max: number;
 	/** What the bars are drawn against: a round number at or above `max` (views/usage.ts scale), 0 when nothing was spent. */

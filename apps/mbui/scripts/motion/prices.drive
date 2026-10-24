@@ -1,0 +1,5 @@
+# 价目表 (sfdesk usage.mbt, one page in every frame): MBUI_FIXTURE=settings-prices, a phone's window or a desktop's.
+timeout 20000
+until Opus 5.5
+wait 1500
+exit

@@ -1,4 +1,4 @@
-// 用量 on the desktop (ember web/src/cloud/settings.tsx UsageSettings; Usage.tsx UsageBody, Tiles, DaysChart, Bar,
+// 用量, one page in every frame (ember web/src/cloud/settings.tsx UsageSettings; the narrow app's mobile/Usage.tsx; Usage.tsx UsageBody, Tiles, DaysChart, Bar,
 // Rankings, Ranking, Row, Notes; Usage.css.ts): what the agents spent over the last 7 or 30 days (picked at the page's
 // head), as the core's `usage` view says it: a few totals (the first the way to the prices), each day's cost as a bar
 // split by who it was for (the day pointed at or picked says its numbers, and with several people what each spent),
@@ -37,33 +37,42 @@ let usage_days_choices : Array[Int] = [7, 30]
 ///|
 /// 用量 (UsageSettings): its head (what it counts by a mark beside its title), the days at its end; the view once read, a wait till then, what went
 /// wrong.
-fn usage_page(c : @ui.Ctx, core : Core, here : Here) -> Unit {
+fn usage_page(c : @ui.Ctx, core : Core, here : Here, frame : PageFrame) -> Unit {
+  let look = look_of(c)
   let days = usage_pick.days
   let topic = (core.topic)("usage", { "scope": str(here.workspace), "days": Json::number(days.to_double()) })
   let v = topic.value
   let body : Array[() -> Unit] = []
   match (v, topic.error) {
-    (Some(_), _) => body.push(fn() { usage_body(c, core, v) })
+    (Some(_), _) =>
+      body.push(fn() {
+        match look {
+          // (narrow: 12 from the page's sides, as its cards are)
+          Narrow => c.box(style=ug_narrow, fn() { usage_body(c, core, look, v) }) |> ignore
+          Wide => usage_body(c, core, look, v)
+        }
+      })
     (None, Some(e)) =>
       body.push(fn() {
         c.text(@sf.t("web-pages.settings.usage.failed", args=[("error", error_text(e))]), style=desk_note_bad) |> ignore
       })
     (None, None) => body.push(fn() { @sf.waiting(c, shape=Cards) })
   }
-  desk_page(
+  look_page(
     c,
     core,
+    frame,
+    look,
     "usage/" + days.to_string(),
     @sf.t("web-pages.settings.usage.title"),
     about=@sf.t("web-pages.settings.usage.lead"),
     actions=fn() {
       let at = if days == 30 { 1 } else { 0 }
-      let picked = @sf.segmented(
-        c,
-        "usage-days",
-        usage_days_choices.map(fn(n) { @sf.t("web-main.usage.days", args=[("n", n.to_string())]) }),
-        at,
-      )
+      let labels = usage_days_choices.map(fn(n) { @sf.t("web-main.usage.days", args=[("n", n.to_string())]) })
+      let picked = match look {
+        Narrow => @sf.seg(c, "usage-days", labels, at)
+        Wide => @sf.segmented(c, "usage-days", labels, at)
+      }
       if picked != at {
         usage_pick.days = usage_days_choices[picked]
         usage_pick.day = ""
@@ -76,7 +85,7 @@ fn usage_page(c : @ui.Ctx, core : Core, here : Here) -> Unit {
 ///|
 /// The page's body under its head (UsageBody): the totals, the days and the lists (or that nothing was spent, or what
 /// it waits on), how it is counted; 28 apart.
-fn usage_body(c : @ui.Ctx, core : Core, v : Json?) -> Unit {
+fn usage_body(c : @ui.Ctx, core : Core, look : Look, v : Json?) -> Unit {
   c.box(style=ug_body, fn() {
     usage_totals(c, core, v)
     if flag(v, "empty") {
@@ -88,8 +97,17 @@ fn usage_body(c : @ui.Ctx, core : Core, v : Json?) -> Unit {
         c.box(style=ug_empty_box, fn() { c.text(@sf.t("web-main.usage.none"), style=ug_empty) |> ignore }) |> ignore
       }
     } else {
-      usage_chart(c, v)
-      usage_rankings(c, core, v)
+      // (narrow: each on a card, as the narrow app's)
+      match look {
+        Narrow => {
+          c.box(style=ug_narrow_card, fn() { usage_chart(c, v) }) |> ignore
+          c.box(style=ug_narrow_card, fn() { usage_rankings(c, core, look, v) }) |> ignore
+        }
+        Wide => {
+          usage_chart(c, v)
+          usage_rankings(c, core, look, v)
+        }
+      }
     }
     usage_notes(c, v)
   })
@@ -153,7 +171,7 @@ fn usage_chart(c : @ui.Ctx, v : Json?) -> Unit {
   let daily = items(v, "daily")
   let series = items(v, "series")
   let top = number(v, "top")
-  let many = daily.length() > 10
+  let many = flag(v, "many")
   let find = fn(key : String) -> Json? {
     match daily.search_by(fn(d) { key != "" && text(Some(d), "day") == key }) {
       Some(i) => Some(daily[i])
@@ -173,7 +191,7 @@ fn usage_chart(c : @ui.Ctx, v : Json?) -> Unit {
     if day is Some(_) {
       let dv = day
       c.box(style=ug_day_head, fn() {
-        c.text(if flag(dv, "today") { @sf.t("web-main.usage.today") } else { text(dv, "label") }, style=ug_day_name)
+        c.text(text(dv, "name"), style=ug_day_name)
         |> ignore
         c.box(style=ug_day_figures, fn() {
           c.text(text(dv, "costText"), style=ug_day_cost) |> ignore
@@ -220,23 +238,10 @@ fn usage_chart(c : @ui.Ctx, v : Json?) -> Unit {
     |> ignore
     c.box(style=ug_base, fn() {  }) |> ignore
     c.box(style=if many { ug_labels_many } else { ug_labels }, fn() {
-      let n = daily.length()
-      for i, d in daily {
+      for d in daily {
         let dv = Some(d)
-        let today = flag(dv, "today")
-        let shown = !many || today || (n - 1 - i) % 7 == 0
         c.box(style=ug_label_cell, fn() {
-          c.text(
-            if !shown {
-              ""
-            } else if today {
-              @sf.t("web-main.usage.today")
-            } else {
-              text(dv, "label")
-            },
-            style=if text(dv, "day") == text(day, "day") { ug_label_on } else { ug_label },
-          )
-          |> ignore
+          c.text(text(dv, "tick"), style=if text(dv, "day") == text(day, "day") { ug_label_on } else { ug_label }) |> ignore
         })
         |> ignore
       }
@@ -244,19 +249,14 @@ fn usage_chart(c : @ui.Ctx, v : Json?) -> Unit {
     |> ignore
     // with several people: each of them, what they spent the day shown, its share of the day's under it
     if series.length() > 1 && day is Some(_) {
-      let parts = items(day, "parts")
+      let shares = items(day, "shares")
       let words = strings(day, "partsText")
-      let cost = number(day, "cost")
       c.box(style=ug_day_rows, fn() {
         for i, s in series {
-          let part = match parts.get(i) {
+          // (its share of the day's: the core's)
+          let share = match shares.get(i) {
             Some(Number(p, ..)) => p
             _ => 0.0
-          }
-          let share = if cost > 0.0 {
-            @cmp.minimum(1.0, @cmp.maximum(if part > 0.0 { 0.01 } else { 0.0 }, part / cost))
-          } else {
-            0.0
           }
           let ink = usage_series_ink(series, i)
           c.box(style=ug_day_row, fn() {
@@ -336,7 +336,7 @@ fn usage_bar(c : @ui.Ctx, dv : Json?, series : Array[Json], top : Double, many :
 ///|
 /// The lists, one at a time (Rankings): which, at their head (the people's first), then the most spent first, the
 /// first 8 until all are asked for (Ranking).
-fn usage_rankings(c : @ui.Ctx, core : Core, v : Json?) -> Unit {
+fn usage_rankings(c : @ui.Ctx, core : Core, look : Look, v : Json?) -> Unit {
   let lists = items(v, "lists")
   if lists.length() == 0 {
     return
@@ -347,13 +347,12 @@ fn usage_rankings(c : @ui.Ctx, core : Core, v : Json?) -> Unit {
   let kind = text(list, "key")
   c.box(style=ug_rankings, fn() {
     c.box(style=ug_list_head, fn() {
-      let picked = @sf.segmented(
-        c,
-        "usage-lists",
-        lists.map(fn(l) { text(Some(l), "title") }),
-        at,
-        item_w=ug_list_pick_w,
-      )
+      let titles = lists.map(fn(l) { text(Some(l), "title") })
+      // (narrow: as wide as the card, each an equal share)
+      let picked = match look {
+        Narrow => @sf.seg(c, "usage-lists", titles, at, fill=true)
+        Wide => @sf.segmented(c, "usage-lists", titles, at, item_w=ug_list_pick_w)
+      }
       if picked != at {
         usage_pick.list = text(Some(lists[picked]), "key")
         usage_pick.all = false
@@ -485,6 +484,16 @@ fn usage_notes(c : @ui.Ctx, v : Json?) -> Unit {
 }
 
 // ── styles (Usage.css.ts) ───────────────────────────────────────────────
+
+///|
+/// The narrow page's body 12 from its sides, its chart and lists each on a card (16 in, its corner round what lies in
+/// its corner: a share's bar, the lists' choice).
+// kept across runs: a value (no field of it changes)
+let ug_narrow : @ui.Style = @ui.css("w=Full px=S3")
+
+///|
+// kept across runs: a value (no field of it changes)
+let ug_narrow_card : @ui.Style = @ui.css("w=Full p=S4 radius=Around bg=Card")
 
 ///|
 /// The page's parts 28 apart (usage).

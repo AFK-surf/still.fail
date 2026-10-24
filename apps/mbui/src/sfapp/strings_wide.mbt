@@ -28,7 +28,6 @@ let zh_wide : Map[String, String] = {
   "web-pages.profiles.leadSubscription": "一份订阅（Claude、ChatGPT），",
   "web-main.combos.label": "常用搭配",
   // 用量 (src/sfdesk usage.mbt)
-  "web-main.usage.today": "今天",
   "web-main.usage.seePrices": "查看价目表 →",
   "web-main.usage.days": "{n} 天",
   "web-main.usage.showAll": "显示全部 {n} 个",
