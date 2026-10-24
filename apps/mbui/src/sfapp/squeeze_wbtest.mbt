@@ -27,7 +27,7 @@ let squeeze_modes : Array[String] = [
   "drive-upload", "drive-empty", "reader", "decisions", "decisions-text", "history", "history-details",
   "switcher", "keys-dialog", "search", "home-jobs", "service", "settings-home", "settings-appearance", "settings-me",
   "settings-workspace", "settings-security", "settings-vault", "settings-vault-item", "settings-stations",
-  "settings-station", "settings-station-env", "settings-profiles", "settings-profile", "settings-profile-models",
+  "settings-station", "settings-station-env", "settings-station-processes", "settings-profiles", "settings-profile", "settings-profile-models",
   "settings-connects", "settings-connect", "settings-memory", "settings-memory-doc", "settings-usage",
   "settings-archive", "settings-run-models", "settings-run", "settings-decisions", "settings-changelog",
   "settings-new-profile",
