@@ -364,7 +364,7 @@ fn Viewer::desk_facts(self : Viewer, c : @ui.Ctx, src : Source, dl : Json?) -> U
   let p = @sf.theme().p
   @sf.icon(c, "file", size=desk_facts_icon, color=p.muted) |> ignore
   c.box(style=desk_facts_name_box, fn() { c.text(v.file.name, style=desk_facts_name) |> ignore }) |> ignore
-  let ext = match lower(v.file.name).rev_find(".") {
+  let ext = match @sf.lower(v.file.name).rev_find(".") {
     Some(i) if i > 0 && v.file.name.length() - i - 1 <= desk_ext_most =>
       upper(v.file.name.view(start_offset=i + 1).to_owned())
     _ => ""

@@ -1303,3 +1303,78 @@ let drop_words : @ui.TextStyle = @ui.text_style(size=Sm, color=Fg, wrap=false)
 /// What is done to the folder (actions): 6 apart.
 // kept across runs: a value (no field of it changes)
 let actions_row : @ui.Style = @ui.style(row=true, gap=S1_5, align=ACenter)
+
+///|
+/// A folder's page's head (Drive.tsx FolderView's pageHead): its trail (its station's button, then the way down to it:
+/// its root, then each folder above it), its name (h1), its station and what it holds. `split`: a side of a split tab,
+/// in less; `front_it`: what is pressed in a side puts it in front first.
+pub fn folder_head(c : @ui.Ctx, src : Source, f : FolderOf, split : Bool, front_it : () -> Unit) -> Unit {
+  let t = @sf.theme()
+  let at = f.at
+  let root = at.root.unwrap_or("")
+  let stations = dv_stations(src, f.ws).0.unwrap_or([])
+  let topic = (src.topic)("drive", { "station": Json::string(at.station), "root": Json::string(root), "path": Json::string(at.path) })
+  let (name, _) = pane_parts(at, stations)
+  c.box(style=if split { head_half } else { head_one }, fn() {
+    c.box(style=head_trail, fn() {
+      station_switch(c, src, f, front_it)
+      let parts : Array[String] = if at.path == "" { [] } else { at.path.split("/").map(fn(p) { p.to_string() }).collect() }
+      let (root_name, _) = pane_parts({ ..at, path: "" }, stations)
+      let crumbs : Array[(String, String)] = if at.path == "" { [] } else { [(root_name, "")] }
+      let mut so_far = ""
+      for i in 0..<(parts.length() - 1) {
+        so_far = dv_join(so_far, parts[i])
+        crumbs.push((parts[i], so_far))
+      }
+      for x in crumbs {
+        let (word, path) = x
+        @sf.icon(c, "chevron-right", size=trail_chevron, color=t.p.subtle) |> ignore
+        let cid = c.id("files/crumb/" + at.station + "/" + root + "/" + path)
+        c.cursor(cid, Hand)
+        if c.clicked(cid) {
+          front_it()
+          (f.go)({ station: at.station, root: Some(root), path }, false)
+        }
+        c.box(style=head_crumb, id=cid, fn() { c.text(word, style=head_meta) |> ignore }) |> ignore
+      }
+    })
+    |> ignore
+    c.text(name, style=head_title) |> ignore
+    match text(topic.value, "countText") {
+      "" => ()
+      count => c.text(f.st.name + " · " + count, style=head_meta) |> ignore
+    }
+  })
+  |> ignore
+}
+
+///|
+/// The trail's chevrons (16).
+let trail_chevron : Double = 16.0
+
+///|
+/// The head (pageHead): 12 over and under, 6 between its lines; in from its side as the page is (40; split, 24).
+// kept across runs: a value (no field of it changes)
+let head_one : @ui.Style = @ui.style(w=Full, px=S10, pt=S3, pb=S3, gap=S1_5)
+
+///|
+// kept across runs: a value (no field of it changes)
+let head_half : @ui.Style = @ui.style(w=Full, px=S6, pt=S3, pb=S3, gap=S1_5)
+
+///|
+/// Its trail (crumbs): 4 between.
+// kept across runs: a value (no field of it changes)
+let head_trail : @ui.Style = @ui.style(row=true, gap=S1, align=ACenter)
+
+///|
+// kept across runs: a value (no field of it changes)
+let head_crumb : @ui.Style = @ui.style(px=S0_5, radius=Sm, hovered=@ui.patch(bg=Hover))
+
+///|
+// kept across runs: a value (no field of it changes)
+let head_meta : @ui.TextStyle = @ui.text_style(size=Xs, color=Muted, wrap=false)
+
+///|
+/// Its name (h1): 22, 600.
+// kept across runs: a value (no field of it changes)
+let head_title : @ui.TextStyle = @ui.text_style(size=Xl3, weight=Semibold, color=Fg, wrap=false)

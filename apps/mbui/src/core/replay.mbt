@@ -68,6 +68,8 @@ pub struct Replay {
   /// what the run's host answered that its text recording kept (`{"textrec":…}`: TEXTREC lines, mbui's hostrec.mbt):
   /// a word's bounds, a picture's sizes; one a line
   priv run_text : Array[String]
+  /// this machine's station as the run's host said it (its trace's `{"host":{"localStation":…}}`: src/stillfail's CORETRACE host)
+  priv run_local : String
   /// where what the run's host said of its views goes (Replay::host)
   priv mut host_said : ((String) -> Unit)?
 }
@@ -104,6 +106,7 @@ pub fn Replay::parse(log : String) -> Replay {
   let evs : Array[Ev] = []
   let run_env : Array[(String, String)] = []
   let run_text : Array[String] = []
+  let run_local : Ref[String] = Ref("")
   for v in log.split("\n") {
     let line = v.to_owned()
     let start = match line.find("CORETRACE ") {
@@ -145,6 +148,11 @@ pub fn Replay::parse(log : String) -> Replay {
             if v is String(s) {
               run_env.push((k, s))
             }
+          }
+        } else if m.get("host") is Some(Object(h)) {
+          match h.get("localStation") {
+            Some(Object(_) as v) => run_local.val = v.stringify()
+            _ => ()
           }
         } else if m.get("textrec") is Some(rec) {
           run_text.push(rec.stringify())
@@ -237,6 +245,7 @@ pub fn Replay::parse(log : String) -> Replay {
     ambient_ids: {},
     run_env,
     run_text,
+    run_local: run_local.val,
   }
   r.advance()
   r
@@ -1187,6 +1196,13 @@ pub fn Replay::first_happened(self : Replay) -> (Double, Double)? {
 /// What the run's app was started with, as its trace keeps it (`{"env":…}`): for a replay's to be started the same.
 pub fn Replay::env(self : Replay) -> Array[(String, String)] {
   self.run_env
+}
+
+///|
+/// This machine's station as the run's host said it (Tester::set_local_station: @ui.local_station's JSON); "" where
+/// its trace does not say.
+pub fn Replay::local_station(self : Replay) -> String {
+  self.run_local
 }
 
 ///|

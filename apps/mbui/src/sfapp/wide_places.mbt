@@ -59,24 +59,6 @@ fn place_page_wide(c : @ui.Ctx, src : Source, w : Workspace, place : String) -> 
 }
 
 ///|
-/// The band's action over a place's list (NavTop's NavAction): its ＋ and words, a row of its own.
-fn place_add(c : @ui.Ctx, key : String, label : String, run : (() -> Unit)?) -> Unit {
-  let t = @sf.theme()
-  match run {
-    Some(go) =>
-      if @sfdesk.nav_row(c, key, false, fn() {
-          @sf.icon(c, "plus", size=@sf.row_icon, color=t.p.muted) |> ignore
-          @sfdesk.nav_words(c, label)
-        }) {
-        go()
-      }
-    None => ()
-  }
-}
-
-// ── Station ─────────────────────────────────────────────────────────────
-
-///|
 /// The stations' sidebar (StationsNav): 添加 station, then a row each.
 fn stations_side(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
   let core = settings_core(src, w)
@@ -85,7 +67,7 @@ fn stations_side(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
   c.box(style=place_side, fn() {
     @sfdesk.side_top(c)
     c.box(style=place_list, fn() {
-      place_add(c, "stations/add", tr("web-pages.settings.stations.add"), @settings.place_action(core, here, "stations"))
+      @sfdesk.nav_action(c, "stations/add", tr("web-pages.settings.stations.add"), @settings.place_action(core, here, "stations"))
       for s in stations_listed(src, w) {
         let s = Some(s)
         let address = text(s, "station")
@@ -110,7 +92,7 @@ fn station_side_row(c : @ui.Ctx, src : Source, s : Json?, on : Bool, pick : () -
   let running = number(field(field(s, "overview"), "counts"), "running")
   if @sfdesk.nav_row(c, "stations/" + address, on, align=AStart, fn() {
       c.box(style=place_mark, fn() {
-        station_or_server(c, text(s, "emoji"), text(s, "icon"), @sf.row_icon, t.p.text)
+        @sf.station_icon(c, text(s, "emoji"), text(s, "icon"), @sf.row_icon, t.p.text)
       })
       |> ignore
       c.box(style=place_row_words, fn() {
@@ -179,7 +161,7 @@ fn profiles_side(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
   c.box(style=place_side, fn() {
     @sfdesk.side_top(c)
     c.box(style=place_list, fn() {
-      place_add(c, "profiles/add", tr("web-pages.settings.profiles.add"), @settings.place_action(core, here, "profiles"))
+      @sfdesk.nav_action(c, "profiles/add", tr("web-pages.settings.profiles.add"), @settings.place_action(core, here, "profiles"))
       let mut group = ""
       for e in list {
         let e = Some(e)

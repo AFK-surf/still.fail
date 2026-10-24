@@ -400,7 +400,7 @@ fn new_chat_on(
               c,
               "new/station",
               fn() {
-                station_or_server(c, text(station, "emoji"), text(station, "icon"), 14.0, t.p.text)
+                @sf.station_icon(c, text(station, "emoji"), text(station, "icon"), 14.0, t.p.text)
               },
               name,
               128.0,
@@ -466,16 +466,6 @@ fn new_chat_on(
     |> ignore
   })
   |> ignore
-}
-
-///|
-/// A station's mark where it has one (Parts.kt StationMark), else the server's (`none = Icons.Server`).
-fn station_or_server(c : @ui.Ctx, emoji : String, icon : String, size : Double, tint : Int64) -> Unit {
-  if @sf.has_station_mark(emoji, icon) {
-    @sf.station_mark(c, emoji, icon, size, tint)
-  } else {
-    @sf.icon(c, "server", size~, color=tint) |> ignore
-  }
 }
 
 ///|
@@ -821,7 +811,7 @@ fn pick_station_sheet(c : @ui.Ctx, src : Source, ws : String) -> Unit {
           align=ACenter,
           id~,
           fn() {
-            station_or_server(c, text(st, "emoji"), text(st, "icon"), 22.0, t.p.text)
+            @sf.station_icon(c, text(st, "emoji"), text(st, "icon"), 22.0, t.p.text)
             c.box(w=Fill(1.0), fn() {
               c.text(text(st, "name"), size=15.0, color=t.p.text, wrap=false, line=21.0) |> ignore
               if text(st, "summary") != "" {

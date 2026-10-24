@@ -736,7 +736,7 @@ test "wide: the rail's menu from its right click: a place taken out of it, one n
 }
 
 ///|
-test "wide: ⌘⇧G goes to a folder by its path (~ the home), its station's button to another station's same folder or home" {
+test "wide: ⌘⇧G goes to a folder by its path (~ the home: the core's files.go), its station's button to another station's same folder or home" {
   let calls : Array[Made] = []
   let t = wide_tester(calls)
   app.nav.replace(Files)
@@ -748,6 +748,8 @@ test "wide: ⌘⇧G goes to a folder by its path (~ the home), its station's but
   t.type_text("~/项目")
   t.frame()
   assert_true(t.find("Studio › /Users/lin/项目") is Some(_), msg="where it goes")
+  // (worked out by the core)
+  assert_true(named(calls, "files.go").length() > 0)
   t.enter()
   t.run_for(@ui.nav_push_ms)
   match app.nav.top() {

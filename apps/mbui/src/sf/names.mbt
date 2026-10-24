@@ -168,3 +168,14 @@ pub fn side_subtitle(base : String, names : Array[String]) -> String? {
     None => None
   }
 }
+
+///|
+/// `s` with its capital letters (A to Z) small, as what is typed is matched against names without caring for case.
+pub fn lower(s : String) -> String {
+  let sb = StringBuilder()
+  for ch in s {
+    let k = ch.to_int()
+    sb.write_char(if k >= 65 && k <= 90 { (k + 32).unsafe_to_char() } else { ch })
+  }
+  sb.to_string()
+}

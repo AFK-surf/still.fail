@@ -340,6 +340,10 @@ fn main {
       }
     }
     @hostapi.log("CORETRACE " + Json::object({ "env": Json::object(started) }).stringify())
+    // and which station this machine is, as its host says it (@ui.local_station: what the files' page lists first), for
+    // a replay's host to say the same
+    let local = @json.parse(@ui.local_station()) catch { _ => Json::null() }
+    @hostapi.log("CORETRACE " + ({ "host": { "localStation": local } } : Json).stringify())
     // and what the host said of its views (a video's frames' times, a frame grabbed), at the core's clock, beside it
     @ui.trace_views(fn(m) { @core.trace_note(m) })
     // and each line of a scripted run's script as it began (`{"step":…}`), and a line that acts again as its input

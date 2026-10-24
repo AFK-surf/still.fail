@@ -59,6 +59,12 @@ pub(all) struct DvStation {
   role : String
   /// whether it takes copies from another station (`drive.transfer`: one from before does not)
   transfers : Bool
+  /// its mark (StationMark: an emoji, or an icon's name), none set
+  emoji : String
+  icon : String
+  /// its disk's size and what is free on it (none known: 0)
+  disk_total : Double
+  disk_free : Double
 }
 
 ///|
@@ -102,6 +108,10 @@ pub fn dv_station(v : Json) -> DvStation {
     zip: flag(d, "zip") || flag(d, "anywhere"),
     role: text(field(ov, "viewer"), "role"),
     transfers: flag(d, "transfers"),
+    emoji: text(s, "emoji"),
+    icon: text(s, "icon"),
+    disk_total: number(field(ov, "disk"), "totalBytes"),
+    disk_free: number(field(ov, "disk"), "freeBytes"),
   }
 }
 

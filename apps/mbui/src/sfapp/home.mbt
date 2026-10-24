@@ -1022,16 +1022,6 @@ fn row_aside(c : @ui.Ctx, src : Source, item : ChatItem, lead : String, face_siz
 }
 
 ///|
-fn lower(s : String) -> String {
-  let sb = StringBuilder()
-  for ch in s {
-    let k = ch.to_int()
-    sb.write_char(if k >= 65 && k <= 90 { (k + 32).unsafe_to_char() } else { ch })
-  }
-  sb.to_string()
-}
-
-///|
 /// A person, round (RowPicture.kt Face, Parts.kt Avatar): their account's picture once it is here, their initial on
 /// their colour until then; ringed 1.5 over their edge, in ink when they started the chat, else in the page's ground
 /// (the starter's ring asked 4 wider is held to the face's own size by its Box, as Compose's `size` takes the
