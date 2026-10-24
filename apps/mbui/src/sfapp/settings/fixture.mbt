@@ -1211,8 +1211,8 @@ pub fn fixture_topic(mode : String, name : String, params : Map[String, Json]) -
           (
             "uses",
             [
-              obj([("at", stamp_of("昨天")), ("session", str("s-c1")), ("station", str("st1")), ("chatTitle", str("整理发布清单")), ("mode", str("proxy")), ("hosts", ["api.github.com"]), ("command", str("git push origin main"))]),
-              obj([("at", stamp_of("3 天前")), ("session", str("s-c4")), ("station", str("st1")), ("chatTitle", str("给设置页加一个深色模式开关")), ("mode", str("proxy")), ("hosts", []), ("denied", Json::boolean(true))]),
+              obj([("at", stamp_of("昨天")), ("session", str("s-c1")), ("station", str("st1")), ("chatTitle", str("整理发布清单")), ("mode", str("proxy")), ("hosts", ["api.github.com"]), ("command", str("git push origin main")), ("howText", str("git push origin main · 代理"))]),
+              obj([("at", stamp_of("3 天前")), ("session", str("s-c4")), ("station", str("st1")), ("chatTitle", str("给设置页加一个深色模式开关")), ("mode", str("proxy")), ("hosts", []), ("denied", Json::boolean(true)), ("howText", str("代理"))]),
             ],
           ),
         ]),
@@ -1433,11 +1433,15 @@ pub fn fixture_topic(mode : String, name : String, params : Map[String, Json]) -
                 ("reason", str("要把发布清单推到仓库")),
                 ("command", str("git push origin main")),
                 ("hosts", ["api.github.com"]),
+                ("howText", str("代理 · 限 api.github.com")),
                 ("at", Json::number(0.0)),
               ]),
             ],
           ),
           ("refused", []),
+          // (the core's words of it: its one request waits)
+          ("statusText", str("1 个待批准")),
+          ("statusBad", Json::boolean(true)),
         ]),
       )
     "vaultItems" =>
@@ -1449,9 +1453,9 @@ pub fn fixture_topic(mode : String, name : String, params : Map[String, Json]) -
           (
             "items",
             [
-              obj([("id", str("it1")), ("version", Json::number(1.0)), ("at", Json::number(0.0)), ("name", str("GitHub token")), ("kind", str("token")), ("listed", Json::boolean(true)), ("modes", ["proxy"]), ("hosts", ["api.github.com"]), ("lastUse", obj([("at", stamp_of("昨天")), ("session", str("s-c1")), ("mode", str("proxy")), ("hosts", [])]))]),
-              obj([("id", str("it2")), ("version", Json::number(1.0)), ("at", Json::number(0.0)), ("name", str("部署机")), ("kind", str("ssh_key")), ("listed", Json::boolean(true)), ("modes", ["ssh"]), ("hosts", [])]),
-              obj([("id", str("it3")), ("version", Json::number(1.0)), ("at", Json::number(0.0)), ("kind", str("login")), ("listed", Json::boolean(false)), ("modes", []), ("hosts", [])]),
+              obj([("id", str("it1")), ("version", Json::number(1.0)), ("at", Json::number(0.0)), ("name", str("GitHub token")), ("kind", str("token")), ("listed", Json::boolean(true)), ("modes", ["proxy"]), ("hosts", ["api.github.com"]), ("lastUse", obj([("at", stamp_of("昨天")), ("session", str("s-c1")), ("mode", str("proxy")), ("hosts", [])])), ("kindText", str("Token")), ("agentText", str("允许 agent 申请 · 代理 · api.github.com")), ("lineText", str("昨天使用")), ("howText", str("代理 · 限 api.github.com")), ("lastsText", str("跟随默认 · 直到对话归档"))]),
+              obj([("id", str("it2")), ("version", Json::number(1.0)), ("at", Json::number(0.0)), ("name", str("部署机")), ("kind", str("ssh_key")), ("listed", Json::boolean(true)), ("modes", ["ssh"]), ("hosts", []), ("kindText", str("SSH 密钥")), ("agentText", str("允许 agent 申请 · ssh-agent")), ("lineText", str("允许 agent 申请 · ssh-agent")), ("howText", str("ssh-agent")), ("lastsText", str("跟随默认 · 直到对话归档"))]),
+              obj([("id", str("it3")), ("version", Json::number(1.0)), ("at", Json::number(0.0)), ("kind", str("login")), ("listed", Json::boolean(false)), ("modes", []), ("hosts", []), ("kindText", str("登录")), ("agentText", str("仅自己可见")), ("lineText", str("仅自己可见")), ("howText", str("")), ("lastsText", str("跟随默认 · 直到对话归档"))]),
             ],
           ),
         ]),

@@ -296,6 +296,35 @@
     "other": "Found {n} decision models"
   },
   "core-views.present.profile.decision.changed": "Profile changed; waiting for the automatic check",
+  "core-views.vault.kind.token": "Token",
+  "core-views.vault.kind.ssh_key": "SSH key",
+  "core-views.vault.kind.login": "Login",
+  "core-views.vault.mode.proxy": "Proxy",
+  "core-views.vault.mode.env": "Env variable",
+  "core-views.vault.mode.ssh": "ssh-agent",
+  "core-views.vault.only_to": "only to {hosts}",
+  "core-views.vault.private": "Only for you",
+  "core-views.vault.agent_may": "Agents may ask",
+  "core-views.vault.used": "Used {when}",
+  "core-views.vault.lasts.once": "One use",
+  "core-views.vault.lasts.hour": "1 hour",
+  "core-views.vault.lasts.chat": "Until the chat is archived",
+  "core-views.vault.lasts.following": "Default · {lasts}",
+  "core-views.vault.waiting": {
+    "one": "{n} waiting for you",
+    "other": "{n} waiting for you"
+  },
+  "core-views.vault.count": {
+    "one": "{n} item",
+    "other": "{n} items"
+  },
+  "core-views.vault.off": "Off",
+  "core-views.vault.field.private_key": "Private key",
+  "core-views.vault.field.public_key": "Public key",
+  "core-views.vault.field.username": "Username",
+  "core-views.vault.field.password": "Password",
+  "core-views.vault.field.totp": "TOTP secret",
+  "core-views.vault.field.value": "Value",
   "core-views.present.profile.models": {
     "one": "{enabled}/1 model on",
     "other": "{enabled}/{n} models on"

@@ -310,12 +310,8 @@ fn vault_secrets(c : @ui.Ctx, core : Core, ws : String, row : Json, plain : Bool
         c.box(style=desk_list, fn() {
           for it in rows {
             let iv = Some(it)
-            let used = field(field(iv, "lastUse"), "at")
-            let line = match used {
-              Some(Object(_)) => @sf.t("web-pages.vault.uses.last", args=[("when", text(used, "ago"))])
-              _ => vt_item_line(iv)
-            }
-            if vt_row(c, "vault-item/" + text(iv, "id"), text(iv, "name"), line, risk=plain, fn() {
+            // (the core's: when an agent last used it, else how agents may ask for it)
+            if vt_row(c, "vault-item/" + text(iv, "id"), text(iv, "name"), text(iv, "lineText"), risk=plain, fn() {
                 @sf.icon(c, @settings.kind_icon(kind), size=vt_glyph, color=t.p.muted) |> ignore
               }) {
               (core.push)(VaultItem(text(rv, "id"), text(iv, "id")))
@@ -352,21 +348,6 @@ fn vault_secrets(c : @ui.Ctx, core : Core, ws : String, row : Json, plain : Bool
     out.push(fn() { c.text(@sf.t("web-pages.vault.empty"), style=desk_note) |> ignore })
   }
   out
-}
-
-///|
-/// An item's second line (itemLine): whether agents may ask for it and how, or that it is the viewer's alone.
-fn vt_item_line(iv : Json?) -> String {
-  if !flag(iv, "listed") {
-    return @sf.t("web-pages.vault.private")
-  }
-  let modes = strings(iv, "modes")
-  let parts = [@sf.t("web-pages.vault.agentMay")]
-  parts.append(modes.map(mode_name))
-  if modes.contains("proxy") {
-    parts.append(strings(iv, "hosts"))
-  }
-  join(parts, " · ")
 }
 
 ///|

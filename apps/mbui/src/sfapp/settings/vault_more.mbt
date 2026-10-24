@@ -18,10 +18,6 @@ fn vault_fields(kind : String) -> Array[String] {
 }
 
 ///|
-// kept across runs: a table of constants, never written
-let open_fields : Array[String] = ["public_key", "username"]
-
-///|
 /// A field's name (Vault.kt fieldName).
 fn field_name(f : String) -> String {
   match f {
@@ -262,13 +258,15 @@ fn vault_devices(c : @ui.Ctx, core : Core, ws : String, vaults : Array[Json]) ->
 /// What `vault.open` gave of the item on its page (by item), while the page is up; whether it is being opened.
 priv struct Opened {
   plain : Map[String, Json]
+  /// its fields as its page shows them (the core's `shown`: each its key, what it is called, its value, whether secret)
+  fields : Map[String, Array[Json]]
   opening : Map[String, Bool]
   /// the fields shown (by item and field)
   shown : Map[String, Bool]
 }
 
 ///|
-let opened : Opened = { plain: {}, opening: {}, shown: {} }
+let opened : Opened = { plain: {}, fields: {}, opening: {}, shown: {} }
 
 ///|
 /// The item opened (`vault.open`: the system's prompt first where its vault is locked here), then `then` with what it
@@ -285,6 +283,7 @@ fn open_item(core : Core, ws : String, item : String, then : (Json) -> Unit) -> 
         match field(Some(v), "plain") {
           Some(Object(_) as p) => {
             opened.plain[item] = p
+            opened.fields[item] = items(Some(v), "shown")
             then(p)
           }
           _ => ()
@@ -347,7 +346,7 @@ fn vault_item_page(c : @ui.Ctx, core : Core, here : Here, vault : String, item :
       text(rv, "name"),
       sub=fn() {
         c.text(
-          join([tr("android-settings.vault.kind." + text(rv, "kind")), fill("web-pages.vault.storedOn", [("station", text(vv, "stationName"))])], " · "),
+          join([text(rv, "kindText"), fill("web-pages.vault.storedOn", [("station", text(vv, "stationName"))])], " · "),
           size=11.0,
           color=t.p.muted,
           wrap=false,
@@ -398,23 +397,12 @@ fn vault_item_page(c : @ui.Ctx, core : Core, here : Here, vault : String, item :
               }
             })
             |> ignore
-          Some(p) => {
-            let kind = text(Some(p), "kind")
-            let fs = match vault_fields(kind) {
-              [] =>
-                match field(Some(p), "fields") {
-                  Some(Object(m)) => m.keys().collect()
-                  _ => []
-                }
-              x => x
+          Some(_) =>
+            // (the core's: each field as the page shows it)
+            for f in opened.fields.get(item).unwrap_or([]) {
+              let fv = Some(f)
+              field_row(c, core, item, text(fv, "key"), text(fv, "label"), text(fv, "value"), flag(fv, "secret"))
             }
-            for f in fs {
-              let value = text(field(Some(p), "fields"), f)
-              if value != "" {
-                field_row(c, core, item, f, value, !open_fields.contains(f))
-              }
-            }
-          }
         }
       })
     })
@@ -425,17 +413,13 @@ fn vault_item_page(c : @ui.Ctx, core : Core, here : Here, vault : String, item :
           if !flag(rv, "listed") {
             c.text(tr("web-pages.vault.notForAgents"), size=15.0, color=t.p.muted, w=Fill(1.0), line=21.0) |> ignore
           } else {
-            let hosts = strings(rv, "hosts")
-            fact(c, tr("web-pages.vault.how"), join(strings(rv, "modes").map(fn(m) { how_line(m, hosts) }), tr("web-main.list.separator")))
+            fact(c, tr("web-pages.vault.how"), text(rv, "howText"))
             match opt_text(rv, "env") {
               Some(env) if env != "" => fact(c, tr("android-settings.vault.env"), env, code=true)
               _ => ()
             }
             // its own longest grant, else its vault's (跟随默认 · …)
-            fact(c, tr("android-settings.vault.lasts"), match opt_text(rv, "lasts") {
-              Some(l) if l != "" => lasts_name(l)
-              _ => fill("android-settings.vault.lasts.following", [("lasts", lasts_name(text(vv, "lasts")))])
-            })
+            fact(c, tr("android-settings.vault.lasts"), text(rv, "lastsText"))
           }
         })
       })
@@ -487,7 +471,7 @@ fn vault_item_page(c : @ui.Ctx, core : Core, here : Here, vault : String, item :
                       c,
                       match opt_text(uv, "command") {
                         Some(x) => x
-                        None => how_line(text(uv, "mode"), strings(uv, "hosts"))
+                        None => text(uv, "howText")
                       },
                       size=13.0,
                       color=t.p.muted,
@@ -562,13 +546,13 @@ fn eye_said(shown : Bool) -> String {
 ///|
 /// A field of an opened item (FieldRow): its name over its value (dots until shown, when secret), shown and copied from
 /// beside it.
-fn field_row(c : @ui.Ctx, core : Core, item : String, f : String, value : String, secret : Bool) -> Unit {
+fn field_row(c : @ui.Ctx, core : Core, item : String, f : String, label : String, value : String, secret : Bool) -> Unit {
   let t = @sf.theme()
   let k = item + "/" + f
   let shown = !secret || opened.shown.contains(k)
   c.box(dir=Row, w=Fill(1.0), pl=16.0, pr=8.0, pt=10.0, pb=10.0, gap=2.0, align=ACenter, fn() {
     c.box(w=Fill(1.0), gap=2.0, fn() {
-      c.text(field_name(f), size=12.0, color=t.p.muted, wrap=false, line=17.0) |> ignore
+      c.text(label, size=12.0, color=t.p.muted, wrap=false, line=17.0) |> ignore
       // masked, as long whatever its length
       mono(c, if shown { value } else { "••••••••••••" }, size=14.0, line=20.0, wrap=shown)
     })

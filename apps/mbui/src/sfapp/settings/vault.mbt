@@ -28,32 +28,6 @@ pub fn mode_name(mode : String) -> String {
 }
 
 ///|
-/// What agents may do with an item, in a line (Vault.kt agentLine).
-fn agent_line(listed : Bool, modes : Array[String], hosts : Array[String]) -> String {
-  if !listed {
-    return tr("android-settings.vault.selfOnly")
-  }
-  let parts = [tr("android-settings.vault.agentCan")]
-  parts.append(modes.map(mode_name))
-  // (no hosts, none said: an env's)
-  if hosts.length() > 0 {
-    parts.push(join(hosts, ", "))
-  }
-  join(parts, " · ")
-}
-
-///|
-/// How a request would be given (Vault.kt howLine).
-fn how_line(mode : String, hosts : Array[String]) -> String {
-  let only = if mode == "proxy" && hosts.length() > 0 {
-    fill("web-pages.vault.onlyTo", [("hosts", join(hosts, ", "))])
-  } else {
-    ""
-  }
-  join([mode_name(mode), only], " · ")
-}
-
-///|
 fn vault_page(c : @ui.Ctx, core : Core, here : Here) -> Unit {
   let ws = here.workspace
   let topic = (core.topic)("vaults", { "workspace": str(ws) })
@@ -343,7 +317,7 @@ fn request_card(c : @ui.Ctx, core : Core, ws : String, v : Json?, r : Json) -> U
         Some(cmd) => mono(c, cmd, size=13.0, line=19.0, wrap=true)
         None => ()
       }
-      c.text(how_line(text(rv, "mode"), strings(rv, "hosts")), size=13.0, color=t.p.muted, w=Fill(1.0), line=18.0)
+      c.text(text(rv, "howText"), size=13.0, color=t.p.muted, w=Fill(1.0), line=18.0)
       |> ignore
       if station != "" &&
         tap_text(c, "vault-chat/" + id, tr("android-settings.vault.request.openChat"), size=14.0) {
@@ -513,7 +487,7 @@ pub fn vault_section(c : @ui.Ctx, core : Core, ws : String, row : Json) -> Array
                 c.box(w=Px(6.0), h=Px(6.0), radius=3.0, bg=t.p.green, fn() {  }) |> ignore
               }
               c.text(
-                agent_line(flag(iv, "listed"), strings(iv, "modes"), strings(iv, "hosts")),
+                text(iv, "agentText"),
                 size=13.0,
                 color=t.p.muted,
                 wrap=false,
@@ -564,7 +538,7 @@ fn library_vault(c : @ui.Ctx, core : Core, ws : String, row : Json, plain : Bool
               let used = field(field(iv, "lastUse"), "at")
               let line = match used {
                 Some(Object(_)) => fill("web-pages.vault.uses.last", [("when", text(used, "ago"))])
-                _ => agent_line(flag(iv, "listed"), strings(iv, "modes"), strings(iv, "hosts"))
+                _ => text(iv, "agentText")
               }
               c.box(w=Fill(1.0), fn() {
                 c.text(text(iv, "name"), size=15.0, color=t.p.text, wrap=false, w=Fill(1.0), line=21.0) |> ignore

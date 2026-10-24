@@ -4,7 +4,7 @@
 // VaultApproval.tsx: they only draw.
 import { useCallback, useState } from "react";
 import { useCall, useTopic } from "./core/react.ts";
-import type { VaultItemRow, VaultItemsView, VaultRequest, VaultsView, VaultUse, VaultUsesView } from "./core/shapes.ts";
+import type { VaultField, VaultItemRow, VaultItemsView, VaultRequest, VaultsView, VaultUsesView } from "./core/shapes.ts";
 import { useToast } from "@stillfail/ui/toast.tsx";
 import { t } from "./i18n.ts";
 
@@ -26,14 +26,11 @@ export const lastsName = (lasts: string | undefined | null): string => t(`web-pa
 export type Lasts = Scope | "default";
 export const LASTS: Lasts[] = ["default", ...SCOPES];
 export const lastsChoice = (l: Lasts): string => (l === "default" ? t("web-pages.vault.lasts.default") : lastsName(l));
-/** What an item's page says of its longest grant: its own, or 跟随默认 · the vault's. */
-export const itemLasts = (own: string | undefined | null, vault: string | undefined | null): string =>
-  own ? lastsName(own) : t("web-pages.vault.lasts.following", { lasts: lastsName(vault) });
-
 /** What an item holds (its plaintext, docs/vault.md 条目): `vault.open` gives it, `vault.putItem` takes it. */
 export interface Plain { kind: Kind; name: string; fields: Record<string, string>; domains: string[]; notes: string }
-/** An item opened: its plaintext, and the version it is (the next write is the one after). */
-export interface Opened { vault: string; id: string; version: number; plain: Plain }
+/** An item opened: its plaintext, and the version it is (the next write is the one after); its kind in a word and its
+ * fields as its page shows them (the core's: vault-words.ts). */
+export interface Opened { vault: string; id: string; version: number; plain: Plain; kindText: string; shown: VaultField[] }
 
 export function useVaults(workspace: string): VaultsView | undefined {
   return useTopic<VaultsView>({ topic: "vaults", workspace }).value;
@@ -54,33 +51,8 @@ export const itemPath = (workspace: string, vault: string, item: string) => `/w/
 /** The kinds the library lists after the profiles, a section each, in this order. */
 export const ITEM_SECTIONS: Kind[] = ["token", "ssh_key", "login"];
 
-/** An item's second line in the library's list: when an agent last used it, else how agents may ask for it. */
-export const listLine = (row: VaultItemRow): string => (row.lastUse ? usedLine(row.lastUse) : itemLine(row));
-export const usedLine = (use: VaultUse): string => t("web-pages.vault.uses.last", { when: use.at.ago });
-
 export const kindName = (kind: string | undefined): string => (KINDS.includes(kind as Kind) ? t(`web-pages.vault.kind.${kind}`) : "");
 export const modeName = (mode: string): string => (["proxy", "env", "ssh"].includes(mode) ? t(`web-pages.vault.mode.${mode}`) : mode);
-
-/** How an agent gets it, in a line: 代理 · 限 api.github.com; ssh-agent; 环境变量. */
-export function howLine(mode: string, hosts: readonly string[]): string {
-  const name = modeName(mode);
-  return mode === "proxy" && hosts.length ? `${name} · ${t("web-pages.vault.onlyTo", { hosts: hosts.join(", ") })}` : name;
-}
-
-/** An item's second line: whether agents may ask for it, and how (agent 可申请 · 代理 · api.github.com), or 只给自己看. */
-export function itemLine(row: Pick<VaultItemRow, "listed" | "modes" | "hosts">): string {
-  if (!row.listed) return t("web-pages.vault.private");
-  return [t("web-pages.vault.agentMay"), ...row.modes.map(modeName), ...(row.modes.includes("proxy") ? row.hosts : [])].join(" · ");
-}
-
-/** What the settings say of the vault at their row's end: how many wait to be approved (red), else how many items, else
- * that it is off. */
-export function vaultStatus(view: VaultsView | undefined): { text: string; bad: boolean } | undefined {
-  if (!view) return undefined;
-  if (view.requests.length > 0) return { text: t("web-pages.vault.waitingCount", { n: view.requests.length }), bad: true };
-  if (view.vaults.length > 0) return { text: t("web-pages.vault.count", { n: view.vaults.reduce((n, v) => n + v.items, 0) }), bad: false };
-  return { text: t("web-pages.vault.off"), bad: false };
-}
 
 /** The request a card names, while it waits on the viewer (the `vaults` topic's): none once decided, or not theirs. */
 export function useVaultRequest(workspace: string, request: string | undefined): { view: VaultsView | undefined; request: VaultRequest | undefined } {
@@ -185,15 +157,6 @@ export function putOf(f: Form, notes = ""): { plain: Plain; listing?: { name: st
   const mode = modesOf(f.kind).includes(f.mode) ? f.mode : modesOf(f.kind)[0]!;
   const env = f.kind === "ssh_key" ? "" : f.env.trim();
   return { plain, listing: { name, kind: f.kind, modes: [mode], hosts: hostsOf(f.hosts), ...(env ? { env } : {}), ...(f.lasts !== "default" ? { lasts: f.lasts } : {}) } };
-}
-
-/** An item's fields as its detail shows them, in order: what each is called, its value, whether it is masked. */
-export function fieldsOf(plain: Plain): { key: string; label: string; value: string; secret: boolean; mono: boolean }[] {
-  const f = plain.fields;
-  const row = (key: string, label: string, secret: boolean, mono: boolean) => (f[key] ? [{ key, label, value: f[key]!, secret, mono }] : []);
-  if (plain.kind === "ssh_key") return [...row("private_key", t("web-pages.vault.editor.privateKey"), true, true), ...row("public_key", t("web-pages.vault.editor.publicKey"), false, true)];
-  if (plain.kind === "login") return [...row("username", t("web-pages.vault.editor.username"), false, false), ...row("password", t("web-pages.vault.editor.password"), true, true), ...row("totp", t("web-pages.vault.editor.totp"), true, true)];
-  return row("value", t("web-pages.vault.editor.value"), true, true);
 }
 
 /** A form kept while the editor is open: its value, a change to some fields, and it all again from `first`. */

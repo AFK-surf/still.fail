@@ -3,6 +3,7 @@
 // an item opened), and an agent's request for an item (or to keep one, secret_save) as a card in the demo's chat.
 import type { DemoExtension } from "../src/demo/mount.tsx";
 import type { ChatMessage, ChatView, Stamp, VaultItemRow, VaultItemsView, VaultRequest, VaultRow, VaultsView, VaultUse, VaultUsesView } from "../src/core/shapes.ts";
+import { howText, itemWords, kindText, modeText, shownFields, statusWords } from "../../client/core-ts/src/vault-words.ts";
 
 const AT = 1_792_200_000;
 const WORDS = "orbit canvas lemon thrive patrol velvet ankle humble glide quarter mosaic ripple sponsor dune fabric wisdom cradle ozone timber jungle echo salute pigeon harbor";
@@ -11,8 +12,10 @@ const PERSONAL: VaultRow = {
   id: "v_01JAVAULT", name: "个人", owner: "demo-you", ownerName: "你", mine: true, members: [{ sub: "demo-you", name: "你" }],
   station: "local", stationName: "Studio", items: 4, devices: 2, open: true, keyed: true, missing: 0, recoverable: true,
 };
+/** An item's row, with what the core says of it (vault-words.ts). */
+const withWords = (row: VaultItemRow): VaultItemRow => ({ ...row, ...itemWords({ ...row, lasts: row.lasts ?? null }, "chat") });
 const item = (id: string, name: string, kind: string, modes: string[], hosts: string[] = [], env?: string): VaultItemRow =>
-  ({ id, version: 0, at: AT, name, kind, listed: modes.length > 0, modes, hosts, ...(env ? { env } : {}) });
+  withWords({ id, version: 0, at: AT, name, kind, listed: modes.length > 0, modes, hosts, ...(env ? { env } : {}) });
 const ITEMS: VaultItemRow[] = [
   item("i_gh", "GitHub token", "token", ["proxy"], ["api.github.com", "uploads.github.com"], "GH_TOKEN"),
   item("i_openai", "OpenAI key", "token", ["proxy"], ["api.openai.com"], "OPENAI_API_KEY"),
@@ -46,6 +49,11 @@ export const SAVE_REQUEST: VaultRequest = {
 export type VaultStory = "web" | "noLock" | "unconfirmed" | "off" | "on" | "locked" | "waiting" | "notKeyed";
 
 function view(story: VaultStory): VaultsView {
+  const v = viewOf(story);
+  return { ...v, ...statusWords(v.vaults, v.requests) };
+}
+
+function viewOf(story: VaultStory): VaultsView {
   const base: VaultsView = { available: true, locked: true, canSign: true, setUp: true, vaults: [PERSONAL], requests: [], refused: [] };
   switch (story) {
     case "web": return { ...base, available: false, canSign: false, setUp: false, vaults: [{ ...PERSONAL, open: false, keyed: false }], requests: [REQUEST] };
@@ -62,7 +70,7 @@ function view(story: VaultStory): VaultsView {
 function items(story: VaultStory): VaultItemsView {
   const open = story === "on" || story === "waiting";
   // Locked: the names the listings give, the others' not.
-  return { vault: PERSONAL.id, name: "个人", open, items: open ? ITEMS : ITEMS.map((i) => (i.listed ? i : { id: i.id, version: i.version, at: i.at, listed: false, modes: [], hosts: [] })) };
+  return { vault: PERSONAL.id, name: "个人", open, items: open ? ITEMS : ITEMS.map((i) => (i.listed ? i : withWords({ id: i.id, version: i.version, at: i.at, listed: false, modes: [], hosts: [] }))) };
 }
 
 /** A command longer than the card's three lines. */
@@ -130,7 +138,7 @@ export function vaultDemo(story: VaultStory, card: boolean | CardStory = false):
       if (name === "vault.setup") return { words: WORDS, device: "d_demo", stations: ["local"] };
       if (name === "vault.open") {
         const plain = PLAIN[String(params.item)];
-        return plain ? { vault: PERSONAL.id, id: params.item, version: 0, plain: { ...plain, domains: [], notes: "" } } : undefined;
+        return plain ? { vault: PERSONAL.id, id: params.item, version: 0, plain: { ...plain, domains: [], notes: "" }, shown: shownFields(plain), kindText: kindText(plain.kind) } : undefined;
       }
       // What changes something answers at once, the page as it was (the stories show states, not what follows).
       if (name.startsWith("vault.")) return {};
@@ -143,7 +151,8 @@ export function vaultDemo(story: VaultStory, card: boolean | CardStory = false):
 
 const stamp = (minutes: number, full: string): Stamp => ({ at: (AT - minutes * 60) * 1000, ago: minutes < 60 ? `${minutes} 分钟前` : minutes < 1440 ? `${Math.round(minutes / 60)} 小时前` : `${Math.round(minutes / 1440)} 天前`, full, until: "", past: true });
 const use = (minutes: number, full: string, chatTitle: string, mode: string, command?: string, hosts: string[] = [], denied?: boolean): VaultUse =>
-  ({ at: stamp(minutes, full), session: "ember:c-demo-safari", station: "local", chatTitle, mode, ...(command ? { command } : {}), hosts, ...(denied ? { denied } : {}) });
+  ({ at: stamp(minutes, full), session: "ember:c-demo-safari", station: "local", chatTitle, mode, ...(command ? { command } : {}), hosts, ...(denied ? { denied } : {}),
+    howText: command ? `${command} · ${modeText(mode)}` : howText(mode, hosts) });
 const USES: Record<string, VaultUse[]> = {
   i_gh: [
     use(12, "10/17 20:28", "修 Safari 上的登录跳转", "proxy", "gh pr create --fill", ["api.github.com"]),
@@ -152,13 +161,14 @@ const USES: Record<string, VaultUse[]> = {
   ],
   i_deploy: [use(2900, "10/15 20:20", "部署 staging", "ssh", "git push deploy main")],
 };
-const LIB_ITEMS: VaultItemRow[] = ITEMS.filter((i) => i.id !== "i_openai").map((i) => (USES[i.id] ? { ...i, lastUse: USES[i.id]![0]! } : i));
+const LIB_ITEMS: VaultItemRow[] = ITEMS.filter((i) => i.id !== "i_openai").map((i) => (USES[i.id] ? withWords({ ...i, lastUse: USES[i.id]![0]! }) : i));
 
 /** The library `locked` (security mode on, unlocked here) or not (kept in plain text on the station). */
 export function libraryDemo(locked: boolean, left = 0): DemoExtension {
-  const vaults: VaultsView = locked
+  const bare: VaultsView = locked
     ? { available: true, locked: true, canSign: true, setUp: true, vaults: [PERSONAL], requests: [], refused: [], ...(left ? { plainLeft: left } : {}) }
     : { available: true, locked: false, canSign: false, setUp: true, vaults: [{ ...PERSONAL, recoverable: false }], requests: [], refused: [], plain: true };
+  const vaults: VaultsView = { ...bare, ...statusWords(bare.vaults, bare.requests) };
   return {
     topic: (t) => {
       if (t.topic === "vaults") return vaults;
