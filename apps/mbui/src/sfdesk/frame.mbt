@@ -16,11 +16,10 @@ pub let wide_from : Double = 701.0
 /// What the frame draws that is not here yet, given by the app (sfapp): the pages in the pane, the sidebars of the
 /// places other than the chats', and what the frame asks of the app.
 pub(all) struct Pages {
-  /// a chat's messages and composer (chat_page.mbt's: `over` drawn over the messages, under the composer), what its
-  /// side panel shows that is not here yet, its list as ⌘F goes along it, its sharing's and publishing's dialogs (its
-  /// thread)
-  talk : (@ui.Ctx, Source, Workspace, ChatRef, () -> Unit) -> Unit
-  find_list : (ChatRef) -> FindList
+  /// a chat's composer (the app's for now: its words fly into chat_list.mbt's list): the room it takes at the pane's
+  /// foot and what draws it there over the list, with what is let go over the pane (its box: a row of the 文件 tab)
+  composer : (@ui.Ctx, Source, Workspace, ChatRef, ChatView?, Int) -> (Double, () -> Unit)
+  /// a chat's sharing's and publishing's dialogs (its thread)
   share : (@ui.Ctx, ChatRef, Double?) -> Unit
   publish : (@ui.Ctx, String, Double) -> Unit
   /// 文件, and a folder of a station's drive
@@ -51,9 +50,6 @@ pub(all) struct Pages {
   new_composer : (@ui.Ctx, Source, Workspace, Json?, String, String, Bool, () -> Unit, (ChatRef) -> Unit) -> Unit
   drop : (@ui.Ctx, Source, String, Int) -> Unit
   composer_moves : (@ui.Ctx, String) -> Unit
-  /// what was sent flying from the composer of draft `draft` into chat `rk`'s list (its row `row`: sent_local's), its
-  /// words from where they were typed, the composer's room `room` held meanwhile, the list to its end (flight.mbt)
-  fly : (@ui.Ctx, String, String, String, String, Double) -> Unit
   /// whether the desktop app has a newer build to offer (brand.tsx UpdateButton), and its 更新 over the sidebar's top
   /// (closed, the sidebar's width, the window's buttons in the app's top row)
   updating : () -> Bool

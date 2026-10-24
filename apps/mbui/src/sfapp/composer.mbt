@@ -1536,13 +1536,17 @@ fn composer(
         Some(files) => {
           cui.picking = None
           if cui.picking_for == d.key {
-            for f in files {
-              if f.held != 0 {
-                add_held_file(src, d, r.station, f)
-              } else {
-                add_file(src, d, r.station, f.name, f.bytes, None)
+            // (told once the frame's builds are over, as the host's answer is the build's that took it)
+            let station = r.station
+            c.tell("composer/picked", fn() {
+              for f in files {
+                if f.held != 0 {
+                  add_held_file(src, d, station, f)
+                } else {
+                  add_file(src, d, station, f.name, f.bytes, None)
+                }
               }
-            }
+            })
           }
         }
         None => ()

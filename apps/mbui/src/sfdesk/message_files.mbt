@@ -35,7 +35,12 @@ fn message_files(c : @ui.Ctx, src : Source, here : MessageHere, list : Array[Att
     for r in rows {
       c.box(style=files_row, fn() {
         for i in r {
-          file_item(c, src, here, list[i], widths[i])
+          // (each in a box of its own: where a file sent from the composer flies to, sfbase's flight.mbt)
+          let item = c.box(fn() { file_item(c, src, here, list[i], widths[i]) })
+          match flight_here(here) {
+            Some(f) => flight_landing(c, f, item, list[i].path)
+            None => ()
+          }
         }
       })
       |> ignore
@@ -250,6 +255,8 @@ fn card_item(c : @ui.Ctx, src : Source, here : MessageHere, a : Attachment) -> U
     remove=active,
     retry=failed && !active,
     open=true,
+    remove_label=@sf.t("web-main.file.cancelDownload"),
+    retry_label=@sf.t("web-main.file.retryDownload"),
   )
   let id = text(dl, "id")
   if done.removed {

@@ -46,4 +46,6 @@ pub fn reset() -> Unit {
   usage_reset()
   steps_reset()
   message_reset()
+  rows_reset()
+  list_reset()
 }

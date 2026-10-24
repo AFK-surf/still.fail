@@ -3,7 +3,7 @@
 // new one goes, that one with a turning ring), its station's update, the station while no agent is in it, its people,
 // its agents (each its history beside the chat, its card on hover); at its end 归档 while nothing is left in it, its
 // services and jobs (a popover: jobs.mbt), 对话信息 (a popover), the panel's switch while the panel is closed; ⌘F's bar
-// in place of those while it is open (find.mbt). Its messages and its composer are still sfapp's (Pages.talk).
+// in place of those while it is open (find.mbt). Its messages are chat_list.mbt's, its composer composer.mbt's.
 
 ///|
 /// What the chat's page keeps of its own (the rest is the core's): its info's popover open, its services' popover
@@ -58,7 +58,7 @@ fn chat_page(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef, pages : Page
     None => None
   }
   let key = chat_key(r)
-  let list = (pages.find_list)(r)
+  let list = chat_find_list(r)
   // ⌘F: the chat's own find; another chat's let go
   if find_chat() != "" && find_chat() != key {
     (list.forget)()
@@ -75,8 +75,9 @@ fn chat_page(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef, pages : Page
   }
   c.box(style=chat_ground, fn() {
     with_side(c, src, w, r, view, fn() {
-      c.box(style=side_panel_style, id=c.id("chat/pane"), fn() {
-        (pages.talk)(c, src, w, r, fn() {
+      let pane = c.id("chat/pane")
+      c.box(style=side_panel_style, id=pane, fn() {
+        chat_talk(c, src, w, r, pages, pane, fn() {
           c.layer(fn() { chat_bar(c, src, w, r, view, chat, list, pages) }) |> ignore
           match view {
             Some(v) => bar_popovers(c, src, w, r, v, chat, pages)

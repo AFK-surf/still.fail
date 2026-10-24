@@ -78,6 +78,8 @@ pub fn sent_local(rk : String, v : ChatView?, words : String, files : Array[Json
       seq: -1.0,
       waits: "",
       uploads: [],
+      created_at: @ui.current().now,
+      final: false,
     },
     // (a chat just made: none)
     before: match v {

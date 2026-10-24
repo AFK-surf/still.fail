@@ -60,7 +60,6 @@ pub using @sfbase {
   flight_carry_into,
   flight_carry_waiting,
   flight_carry_gone,
-  flight_carry_shift,
   flight_carried,
   flight_of,
   flight_p,

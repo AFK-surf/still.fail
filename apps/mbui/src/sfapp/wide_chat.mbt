@@ -84,81 +84,34 @@ let drop_hint_words : @ui.TextStyle = @ui.text_style(size=Sm, weight=Medium, col
 /// A folder's mark there, as large as a card's sheet.
 let drop_folder : Double = 30.0
 
-///|
-/// ⌘↓ (keymap.ts chat.latest): to the chat's end, with the cursor in an empty composer too; past a window short of its
-/// end, the latest asked of the core.
-fn chat_latest(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView) -> Unit {
-  let prefs = (src.topic)("prefs", {}).value
-  let empty = match drafts.get(draft_key(r)) {
-    Some(d) => draft_empty(d)
-    None => true
-  }
-  if @settings.action_pressed(c, prefs, "chat.latest", in_field=empty) {
-    if !v.newer {
-      c.list_to_end(list_key(r))
-    } else {
-      match v.thread {
-        Some(th) => (src.call)("chat.latest", { "station": Json::string(r.station), "thread": Json::number(th) }, fn(_) {  })
-        None => ()
-      }
-    }
-  }
-}
 
 ///|
-/// What the desktop's chat page (sfdesk/chat_page.mbt) draws of this package's in its pane (Pages.talk): its messages
-/// (or, before its view is read, what waits for them), `over` over them (its bar and what opens under it), what comes
-/// over them from a new chat and a row of the 文件 tab carried over it, the composer at its foot with what flies to it;
-/// a row of that tab let go over it, into its message; its ⌘↓.
-fn chat_talk(c : @ui.Ctx, src : Source, r : ChatRef, over : () -> Unit) -> Unit {
-  let (view, list, error) = view_of_chat(src, r)
+/// The desktop's chat's composer (sfdesk's chat_talk: Pages.composer), this package's for now: the room it takes at the
+/// pane's foot, and what draws it there over the list (a row of the 文件 tab carried over the pane frosted under it, let
+/// go there into its message; the list's picking and a link's menu, over it).
+fn chat_composer(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView?, pane : Int) -> (Double, () -> Unit) {
   if focus_composer.val {
     focus_composer.val = false
     c.focus_editor(field_key)
   }
-  let pane = c.id("chat/pane")
-  match view {
-    None => {
-      let failed = match error {
-        Some(e) => Some(fill("android-chat.chat.unreadable", [("error", text(Some(e), "message"))]))
-        None => None
+  (
+    chat_foot_room(c, r, v),
+    fn() {
+      if v is Some(_) {
+        drop_hint(c, pane)
       }
-      // (a chat just made from a new chat is the core's own: nothing breathing while its first view comes)
-      if failed is Some(_) || !new_chat_made(c, r) {
-        waiting_messages(c, failed)
-      }
-      over()
       c.layer(fn() {
         c.spacer()
-        wide_composer(c, src, r, None)
+        wide_composer(c, src, r, v)
       })
       |> ignore
-      // its first words, as typed, till their row is in the list (flight.mbt)
-      flight_frame(c, draft_key(r))
-      flight_waiting(c, draft_key(r))
-      flight_files(c, draft_key(r))
-    }
-    Some(v) => {
-      chat_latest(c, src, r, v)
-      messages(c, src, r, v, list)
-      over()
-      // come to from a new chat: what it showed fading under the composer (sfdesk's switch.mbt)
-      @sfdesk.switch_veil(c)
-      // a row of the 文件 tab carried over it: frosted, under its composer
-      drop_hint(c, pane)
-      c.layer(fn() {
-        c.spacer()
-        wide_composer(c, src, r, Some(v))
-      })
-      |> ignore
-      flight_waiting(c, draft_key(r))
-      flight_files(c, draft_key(r))
-      pick_layer(c, src, r)
-      link_menu_layer(c)
-    }
-  }
-  // a row of the 文件 tab let go over the chat: into its message (once the tab has said so, this frame)
-  chat_drop(c, src, draft_key(r), pane)
+      if v is Some(_) {
+        pick_layer(c, src, r)
+        link_menu_layer(c)
+      }
+      chat_drop(c, src, draft_key(r), pane)
+    },
+  )
 }
 
 ///|
@@ -261,40 +214,8 @@ fn find_open(c : @ui.Ctx, r : ChatRef) -> Unit {
   @sfdesk.chat_find_open(c, r)
 }
 
-///|
-/// ⌘F's bar closed: what it marked in the chat's list let go with it.
-fn find_forget() -> Unit {
-  let k = @sfdesk.find_chat()
-  match readings.get(k) {
-    Some(rd) => {
-      rd.found_at = ""
-      rd.found_words = []
-    }
-    None => ()
-  }
-  go_tos.remove(k)
-  go_to_words.remove(k)
-  find_around.val = -1.0
-  @sfdesk.find_close()
-}
 
 ///|
 /// The message the chat's window was last moved about for what ⌘F found (`chat.around`, once each).
 let find_around : Ref[Double] = Ref(-1.0)
 
-///|
-/// Chat `r`'s list as ⌘F goes along it: the messages showing, a message gone to with the words marked in it.
-fn find_list(r : ChatRef) -> @sfdesk.FindList {
-  let k = side_key(r)
-  {
-    showing: fn() {
-      let rd = reading_of(k)
-      (rd.top_seq, rd.bottom_seq)
-    },
-    go: fn(seq, words) {
-      go_tos[k] = seq
-      go_to_words[k] = words
-    },
-    forget: fn() { find_forget() },
-  }
-}
