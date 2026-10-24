@@ -183,10 +183,6 @@ fn dv_surface() -> Int64 {
 /// A page's compact bar (Parts.kt NavBar): back and where to, the title in the middle, what it does at the right; no
 /// line under it. True on the frame after back was tapped.
 fn dv_nav_bar(c : @ui.Ctx, back : String, title : String, trailing : () -> Unit) -> Bool {
-  // the wide frame's page bar (wide_chat.mbt)
-  if wide_on.val {
-    return page_bar_wide(c, title, app.nav.depth() > 1, trailing)
-  }
   @sf.nav_bar(c, "dv-nav-back", back, title, trailing~, back_max=dmax(80.0, c.width / 2.0 - 120.0), bg=@sf.theme().p.bg, top=status_top())
 }
 
