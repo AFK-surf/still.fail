@@ -105,7 +105,7 @@ export const TOPICS: Record<string, Spec> = {
   stationUsage: { station: S },
   usage: { scope: S, days: ["u32", "skip"] },
   stationResources: { station: S },
-  resources: { scope: S },
+  resources: { scope: S, station: ["string", "skip"] },
   job: { station: S, id: S },
   drive: { station: S, root: S, path: ["string", "def"] },
   drivePlace: { station: S, root: S, path: S },

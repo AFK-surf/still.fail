@@ -1,7 +1,7 @@
 // What of the stations' machines still.fail uses (the core's `resources` view, client/core-ts/src/views/resources.ts),
 // as Activity Monitor says it: four totals with the last minutes' line, then one table, grouped by whose (a chat, the
 // agents, the desktop app, the station; each opens to its processes) or every process flat with its whose, filtered by
-// kind and sorted by a column. The settings page draws it (cloud/settings.tsx ResourcesSettings).
+// kind and sorted by a column. A station's page draws it, its 进程 (cloud/StationPage.tsx).
 import { Fragment, useState } from "react";
 import { Link } from "react-router";
 import { ChevronRight } from "@stillfail/ui/icons.tsx";
@@ -12,8 +12,9 @@ import { Segmented, Waiting } from "./ui.tsx";
 import * as css from "./Resources.css.ts";
 import { t } from "./i18n.ts";
 
-export function useResources(scope: string) {
-  return useTopic<ResourcesView>({ topic: "resources", scope });
+/** `station`: that one's only; none, every station's of the workspace. */
+export function useResources(scope: string, station?: string) {
+  return useTopic<ResourcesView>(station === undefined ? { topic: "resources", scope } : { topic: "resources", scope, station });
 }
 
 type Column = "cpu" | "memory" | "watts" | "wakeups";

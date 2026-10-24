@@ -645,7 +645,8 @@ export class Views implements Owner {
         break;
       case "resources":
         scope = view.scope as string;
-        perStation = (s) => [{ topic: "stationResources", station: s }];
+        // One station's (its page's 进程), or every station's.
+        perStation = (s) => (view.station === undefined || view.station === s ? [{ topic: "stationResources", station: s }] : []);
         break;
       case "connects":
         scope = view.scope as string;
@@ -1014,7 +1015,8 @@ export class Views implements Owner {
       case "resources": {
         const stations = this.#stationsOr(view.scope as string);
         if (stations === undefined || !Array.isArray(stations)) return stations as Value | undefined;
-        const sources = stations.map((s) => ({ address: s.address, name: s.name, online: s.online, value: s.online ? this.value({ topic: "stationResources", station: s.address }) : undefined }));
+        const sources = stations.filter((s) => view.station === undefined || s.address === view.station)
+          .map((s) => ({ address: s.address, name: s.name, online: s.online, value: s.online ? this.value({ topic: "stationResources", station: s.address }) : undefined }));
         return { ok: resourcesView(sources, this.#core.host.nowMs(), looks.waitNote) };
       }
       case "longJobs": {

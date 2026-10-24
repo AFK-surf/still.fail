@@ -23,16 +23,16 @@ import * as controlsCss from "@stillfail/ui/styles/controls.css.ts";
 
 /** `manager`: may update a station and its runtimes (a workspace owner or admin); `onMark`: may give it an icon or emoji. */
 /** `page`: where its own page is, opened by its name. `resources`: what still.fail uses of each machine (by its station),
- * a line on its card opening the resources page (`resourcesPage`). */
+ * a line on its card opening its 进程 (`resourcesPage`). */
 export function StationList({ stations, menu, page, manager = false, onMark, markBusy, resources, resourcesPage }: {
   stations: StationView[]; menu(s: StationView): ReactNode; page(s: StationView): string; manager?: boolean; onMark?: ((s: StationView, mark: Mark) => void) | undefined; markBusy?: ((s: StationView) => boolean) | undefined;
-  resources?: ReadonlyMap<string, ResourceUse> | undefined; resourcesPage?: string | undefined;
+  resources?: ReadonlyMap<string, ResourceUse> | undefined; resourcesPage?: ((s: StationView) => string) | undefined;
 }) {
   return <div className={css.cards}>{stations.map((s) => <StationCard key={s.id} s={s} menu={menu(s)} page={page(s)} manager={manager} onMark={onMark} markBusy={markBusy?.(s) ?? false}
-    uses={s.online ? resources?.get(s.station) : undefined} usesPage={resourcesPage} />)}</div>;
+    uses={s.online ? resources?.get(s.station) : undefined} usesPage={resourcesPage?.(s)} />)}</div>;
 }
 
-/** What still.fail uses of the machine now, in a line opening the resources page. `flush`: at its section's edge (its
+/** What still.fail uses of the machine now, in a line opening its 进程. `flush`: at its section's edge (its
  * own page), not in by a card's dot. */
 export function Uses({ use, to, flush = false }: { use: ResourceUse; to: string; flush?: boolean }) {
   return (
