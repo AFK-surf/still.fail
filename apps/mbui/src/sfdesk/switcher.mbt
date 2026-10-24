@@ -63,7 +63,7 @@ pub fn switcher_open_with(words : String) -> Unit {
 /// ⌘K over the page (ChatSwitcher): over a scrim, 14% down the window, 560 wide at most (32 short of the window), 480
 /// high at most (72% of the window); its search, then sfpages' list of what is found and what can be done (finder_list),
 /// the latest chats with nothing typed. Drawn each frame; nothing while closed.
-fn switcher(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
+pub fn switcher(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
   if !switching.val {
     return
   }
@@ -231,7 +231,8 @@ fn switcher_offered(c : @ui.Ctx, src : Source) -> Array[@sfpages.Offered] {
     typed: false,
     run: fn() { new_chat() },
   })
-  all.push({
+  // (the wide frame's alone)
+  if is_wide(c) { all.push({
     id: "sidebar.toggle",
     group: "",
     label: "",
@@ -241,6 +242,7 @@ fn switcher_offered(c : @ui.Ctx, src : Source) -> Array[@sfpages.Offered] {
     typed: false,
     run: fn() { sidebar_toggle() },
   })
+  }
   all.push({
     id: "settings",
     group: "",

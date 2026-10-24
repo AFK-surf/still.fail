@@ -30,17 +30,24 @@ fn lists_side(c : @ui.Ctx, src : Source, w : Workspace, width : Double) -> Unit 
   let band = band_h(src, w)
   let t = @sf.theme()
   let frame : @sfpages.ListsFrame = {
-    ..@sfpages.bare_lists(band, 0.0, if side_folded() || wide.tape { closed_ground() } else { t.p.sidebar }, mode),
+    ..@sfpages.bare_lists(band, 0.0, side_top_h(), if side_folded() || wide.tape { closed_ground() } else { t.p.sidebar }, mode),
     others: [fn() { decisions_pane(c, src, w) }, fn() { archive_pane(c, src, w) }],
   }
+  // under a finger's search (sfpages' search.mbt): the band and the foot away with the lists, the search over them
+  let away = @sfpages.search_away(c)
   c.box(style=lists_fill, fn() {
     @sfpages.chats_lists(c, src, w, frame)
-    c.layer(fn() { lists_band(c, src, w) }) |> ignore
+    let b = c.layer(fn() { lists_band(c, src, w) })
     // with no bell in the rail: the stations' trouble and the services up long, at the foot (the rail's bell has them
     // where it is: cloud/workspace.tsx WorkspaceSidebarFooter)
-    if !rail_items(src, w.id).contains("attention") {
-      c.layer(fn() { lists_foot(c, src, w) }) |> ignore
+    let f = if !rail_items(src, w.id).contains("attention") { c.layer(fn() { lists_foot(c, src, w) }) } else { 0 }
+    if away > 0.0 {
+      c.look(b, { ..@ui.still_look, alpha: 1.0 - away })
+      if f != 0 {
+        c.look(f, { ..@ui.still_look, alpha: 1.0 - away })
+      }
     }
+    @sfpages.chats_search(c, src, w, side_top_h())
   })
   |> ignore
 }

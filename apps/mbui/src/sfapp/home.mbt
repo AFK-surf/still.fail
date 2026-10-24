@@ -9,9 +9,8 @@
 let bar_h : Double = 50.0
 
 ///|
-/// Home (Home.kt HomeScreen, mobile/Home.tsx Home): the chats' lists (sfpages' sidebar.mbt) under the top bar, the
-/// search's field at each list's top (search.mbt) and what is left up long after its words; the search over them,
-/// the lists and the bar away under it.
+/// Home (Home.kt HomeScreen, mobile/Home.tsx Home): the chats' lists (sfpages' sidebar.mbt) under the top bar, what
+/// is left up long after their words; a finger's search over them (sfpages' search.mbt), the bar away under it.
 fn home_page(
   c : @ui.Ctx,
   src : Source,
@@ -20,26 +19,23 @@ fn home_page(
   invited : Bool,
 ) -> Unit {
   ignore(all)
-  search_start(c)
   let filter = filter_of(src, w.id)
   let (view, _) = chats_of(src, w.id, filter)
   let frame : @sfpages.ListsFrame = {
     // under the top bar, the status bar's height and its own (Home.kt padding: topBar + 8); over the bottom bar
     top: status_top() + bar_h + 8.0,
     foot: nav_foot() + bar_room_now(),
+    // (the search's bar under the status bar: sfpages' search.mbt)
+    inset: status_top(),
     ground: @sf.theme().p.bg,
-    // the search at a list's top, out of view until scrolled to (Home.kt top), while the list has rows to look for
-    // then what the last update brought, until it is seen (sfpages' changelog.mbt; beside the wide frame's rail the
-    // web says it in a bubble of its own), even while the list is read
-    before: fn(_, v) {
-      let parts : Array[@sfpages.ListPart] = match v {
-        Some({ note: Some({ empty: true, .. }), .. }) | None => []
-        Some(_) => [{ key: "search", draw: fn() { search_field(c) }, tucked: true }]
-      }
+    // what the last update brought, until it is seen (sfpages' changelog.mbt; beside the wide frame's rail the web
+    // says it in a bubble of its own), even while the list is read
+    before: fn(_, _) {
       if @sfpages.news_of(src) is Some(_) {
-        parts.push({ key: "changelog-news", draw: fn() { @sfpages.changelog_news(c, src) }, tucked: false })
+        [{ key: "changelog-news", draw: fn() { @sfpages.changelog_news(c, src) }, tucked: false }]
+      } else {
+        []
       }
-      parts
     },
     // what is left up a long while on the stations (OpenJobs.kt): nothing while there is none
     after: fn(_, _) {
@@ -52,20 +48,18 @@ fn home_page(
     others: [],
     shown: @sfpages.filter_at(src, w),
   }
-  // under the search (search.mbt): the lists up 56 and away, the bar faded (Home.kt `away`)
-  let away = search_away(c)
+  // under a finger's search (sfpages' search.mbt): the lists up and away, the bar faded (Home.kt `away`), the
+  // search over them
+  let away = @sfpages.search_away(c)
   c.box(w=Fill(1.0), h=Fill(1.0), fn() {
-    let lists = c.layer(fn() { @sfpages.chats_lists(c, src, w, frame) })
-    if away > 0.0 {
-      c.look(lists, { ..@ui.still_look, alpha: 1.0 - away, dy: -search_list_rise * away })
-    }
+    c.layer(fn() { @sfpages.chats_lists(c, src, w, frame) }) |> ignore
     let bar = c.layer(fn() {
       top_bar(c, src, w, view, filter, invited)
     })
     if away > 0.0 {
       c.look(bar, { ..@ui.still_look, alpha: 1.0 - away })
     }
-    search_page(c, src, w)
+    @sfpages.chats_search(c, src, w, status_top())
   })
   |> ignore
 }

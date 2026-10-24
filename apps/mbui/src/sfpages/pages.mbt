@@ -18,6 +18,7 @@ pub fn reset() -> Unit {
   chat_rows_reset()
   sidebar_reset()
   finder_reset()
+  search_reset()
   marks_reset()
   news_reset()
 }

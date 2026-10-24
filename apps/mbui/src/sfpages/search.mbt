@@ -1,8 +1,9 @@
-// The search at the top of Home's list (ember apps/android chat/screens/Search.kt; web mobile/Home.tsx SearchField,
-// SearchPage): a field at the list's top; tapped, the list goes up and away with the bars, the field comes up from
-// where it was to the top (narrowing as 取消 comes in beside it), and under it what the words find (sfpages' finder,
+// The search at the top of the chats' lists with a finger (ember web/src/mobile/Home.tsx SearchField, SearchPage;
+// apps/android chat/screens/Search.kt), in every tier (with a mouse ⌘K's panel has it: a finger has no keys to press):
+// a field at a list's top; tapped, the lists go up and away with their bar, the field comes up from where it was to
+// the top of the lists' box (narrowing as 取消 comes in beside it), and under it what the words find (the finder,
 // switcher.mbt: the same as ⌘K's). Back goes from one kind to all of them first; 取消 (or back) puts the field back
-// in the list.
+// in the list. A row opened goes where the shell has it, the search left open in the lists' box.
 
 ///|
 /// The search's page as it stands (what it finds is sfpages' finder: switcher.mbt): open (its field off the list: `from`,
@@ -26,7 +27,7 @@ let search_at_start : Ref[(String, String)?] = Ref(None)
 
 ///|
 /// What a fixture mode opens of the search (open_fixture_mode).
-fn open_search_mode(mode : String) -> Unit {
+pub fn open_search_mode(mode : String) -> Unit {
   if mode == "search-results" || mode == "search-results-dark" {
     search_at_start.val = Some(("登录", ""))
   } else if mode == "search-jobs" || mode == "search-jobs-dark" {
@@ -36,12 +37,12 @@ fn open_search_mode(mode : String) -> Unit {
 
 ///|
 /// The search the app starts with, opened as Home first builds.
-fn search_start(c : @ui.Ctx) -> Unit {
+pub fn search_start(c : @ui.Ctx) -> Unit {
   match search_at_start.val {
     Some((q, k)) => {
       search_at_start.val = None
       search.open = true
-      @sfpages.finder_start(q, kind=k)
+      finder_start(q, kind=k)
       search_up(c).snap(1.0)
     }
     None => ()
@@ -61,13 +62,13 @@ fn search_reset() -> Unit {
 ///|
 /// How long the field takes to come up (Ease.Arrive) and to go back (Ease.Standard), and how far the list goes up
 /// meanwhile (Home.kt, Search.kt).
-let search_in_ms : Double = 280.0
+pub let search_in_ms : Double = 280.0
 
 ///|
-let search_out_ms : Double = 240.0
+pub let search_out_ms : Double = 240.0
 
 ///|
-let search_list_rise : Double = 56.0
+pub let search_list_rise : Double = 56.0
 
 ///|
 /// The search's way up: 0 its field in the list, 1 at the top (Search.kt `up`, Home.kt `away`: the same times).
@@ -77,7 +78,7 @@ fn search_up(c : @ui.Ctx) -> @motion.Anim {
 
 ///|
 /// How far Home is away under the search (0 none).
-fn search_away(c : @ui.Ctx) -> Double {
+pub fn search_away(c : @ui.Ctx) -> Double {
   if search.open {
     search_up(c).get()
   } else {
@@ -87,7 +88,7 @@ fn search_away(c : @ui.Ctx) -> Double {
 
 ///|
 /// The bottom bar out of the search's way while it is open (Home.kt app.barAway): from the tap until it starts back.
-fn search_bar_away() -> Bool {
+pub fn search_bar_away() -> Bool {
   search.open && !search.leaving
 }
 
@@ -186,7 +187,7 @@ fn search_field(c : @ui.Ctx) -> Unit {
   c.box(style=search_field_line, fn() {
     let f = c.box(style=search_field_box, id~, fn() {
       @sf.icon(c, "search", size=17.0, color=t.p.muted) |> ignore
-      c.text(tr("android-chat.search.field"), style=search_field_words) |> ignore
+      c.text(@sf.t("android-chat.search.field"), style=search_field_words) |> ignore
     })
     if search.open {
       c.look(f, { ..@ui.still_look, alpha: 0.0 })
@@ -199,29 +200,30 @@ fn search_field(c : @ui.Ctx) -> Unit {
 
 ///|
 /// The search over Home (Search.kt SearchPage), while it is open.
-fn search_page(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
+fn search_page(c : @ui.Ctx, src : Source, w : Workspace, inset : Double) -> Unit {
   if !search.open {
     return
   }
   let up = search_up(c)
   // back: from one kind to every kind first, then the search away
   if !search.leaving && app.nav.depth() == 1 {
-    c.take_back(fn() { if !@sfpages.finder_back() { search_close(c) } })
+    c.take_back(fn() { if !finder_back() { search_close(c) } })
   }
   let u = up.get()
   // gone back: the field is the list's again
   if search.leaving && !up.moving() {
     search.open = false
     search.leaving = false
-    @sfpages.finder_cleared()
+    finder_cleared()
     return
   }
   let t = @sf.theme()
   c.layer(fn() {
     c.box(style=search_page_box, id=c.id("search/page"), fn() {
-      // under the status bar (Search.kt: windowInsetsPadding(statusBars))
-      if status_top() > 0.0 {
-        c.box(style=@ui.style(w=Full, h=Fixed(status_top())), fn() {  }) |> ignore
+      // under what is over the lists' box (a phone's status bar: Search.kt windowInsetsPadding(statusBars); the
+      // sidebar's top row)
+      if inset > 0.0 {
+        c.box(style=@ui.style(w=Full, h=Fixed(inset)), fn() {  }) |> ignore
       }
       c.box(style=search_bar_row, fn() {
         // as wide as the list's while there, narrowing to its room as it comes up (and back as it goes): 取消 comes
@@ -239,7 +241,7 @@ fn search_page(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
               c.box(style=search_grow, fn() {
                 let res = c.editor(
                   "search-field",
-                  placeholder=tr("android-chat.search.field"),
+                  placeholder=@sf.t("android-chat.search.field"),
                   font_size=16.0,
                   max_lines=1,
                   // the keyboard's search key (Search.kt: ImeAction.Search)
@@ -248,9 +250,9 @@ fn search_page(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
                   color=t.p.text,
                   placeholder_color=t.p.muted,
                   caret_color=t.p.accent,
-                  field=@sfpages.finder_field(),
+                  field=finder_field(),
                 )
-                @sfpages.finder_typed(res.text)
+                finder_typed(res.text)
                 if search.focus {
                   search.focus = false
                   c.focus_on(c.id("search-field"))
@@ -272,13 +274,13 @@ fn search_page(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
           None => 0.0
         }
         let cb = c.box(id=cancel, fn() {
-          c.text(tr("android-chat.search.cancel"), style=search_cancel) |> ignore
+          c.text(@sf.t("android-chat.search.cancel"), style=search_cancel) |> ignore
         })
         c.look(cb, { ..@ui.still_look, alpha: u, dx: (cw + 12.0) * (1.0 - u) })
       })
       |> ignore
       // what the words find (sfpages' finder): a row opened, its page over this one, back to it
-      let lb = c.box(style=search_list_box, fn() { @sfpages.finder_list(c, src, w, [], fn() {  }) })
+      let lb = c.box(style=search_list_box, fn() { finder_list(c, src, w, [], fn() {  }) })
       c.look(lb, { ..@ui.still_look, alpha: u })
     })
     |> ignore
@@ -286,3 +288,14 @@ fn search_page(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
   |> ignore
 }
 
+
+///|
+/// Whether the search is open over the lists (and whether it is going back to its field).
+pub fn search_opened() -> Bool {
+  search.open
+}
+
+///|
+pub fn search_leaving() -> Bool {
+  search.leaving
+}
