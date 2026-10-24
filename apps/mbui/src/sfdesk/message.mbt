@@ -50,8 +50,8 @@ fn marked_of(here : MessageHere, ts : String) -> Array[String] {
 }
 
 ///|
-/// A message's words in a chat's list, picked with the pointer to be quoted (useSelectionQuote: the app's picking,
-/// chat_parts' `pick`); out of a list, as they are.
+/// A message's words in a chat's list, picked with the pointer to be quoted (useSelectionQuote: sfbase's picking);
+/// out of a list, as they are.
 fn picking(
   here : MessageHere,
   c : @ui.Ctx,
@@ -426,7 +426,6 @@ fn prose_with_files(c : @ui.Ctx, src : Source, here : MessageHere, m : Message, 
     }
     _ => ()
   }
-  let parts = chat_parts.val
   let placed : Map[String, Attachment] = {}
   for n in m.placed {
     match files.iter().find_first(fn(a) { a.name == n }) {
@@ -445,7 +444,7 @@ fn prose_with_files(c : @ui.Ctx, src : Source, here : MessageHere, m : Message, 
       found=marked_of(here, m.ts),
       on_link=fn(h) {
         match placed.get(@sf.file_name_of(h)) {
-          Some(a) if is_viz(a.name) => (parts.viz_open)(here.station, here.session, owner_of(here, a), a)
+          Some(a) if is_viz(a.name) => viz_open_full(a.name, here.station, owner_of(here, a), a.path, here.session, linked=true)
           Some(a) => open_file(here, a)
           None => open_link(h)
         }
@@ -455,9 +454,17 @@ fn prose_with_files(c : @ui.Ctx, src : Source, here : MessageHere, m : Message, 
         match placed.get(name) {
           Some(a) if is_viz(a.name) =>
             Some(fn() {
-              (parts.viz)(c, src, here.station, here.session, owner_of(here, a), m.ts, a, fn() {
-                message_files(c, src, here, [a], false)
-              })
+              viz_file_of(
+                c,
+                src,
+                here.station,
+                here.session,
+                owner_of(here, a),
+                m.ts,
+                a,
+                fn() { message_files(c, src, here, [a], false) },
+                @sf.theme().p.subtle,
+              )
             })
           Some(a) => Some(fn() { message_files(c, src, here, [a], false) })
           None => None
@@ -469,7 +476,7 @@ fn prose_with_files(c : @ui.Ctx, src : Source, here : MessageHere, m : Message, 
           None => lang
         }
         if first.to_lower() == "mermaid" && code.trim() != "" {
-          Some(fn() { (parts.mermaid)(c, "chat/" + here.station + ":" + here.session + "/" + m.ts, code) })
+          Some(fn() { viz_mermaid_block(c, "chat/" + here.station + ":" + here.session + "/" + m.ts, code, @sf.theme().p.subtle) })
         } else {
           None
         }

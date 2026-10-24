@@ -3,6 +3,7 @@
 // pages), taken in here by name.
 
 pub using @sfbase {
+  viz_full_layer,
   open_link,
   peek_ms,
   peek_size,
@@ -11,6 +12,18 @@ pub using @sfbase {
   peeks_stop_all,
   screen_links,
   file_viewer,
+  followed_into,
+  viz_chat_left,
+  viz_close_full,
+  viz_file_of,
+  viz_follow_up,
+  viz_frame,
+  viz_frames,
+  viz_full,
+  viz_ground,
+  viz_mermaid_block,
+  viz_mermaid_document,
+  viz_open_full,
   drive_player,
   drive_reader,
   play_left,

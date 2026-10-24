@@ -37,9 +37,6 @@ fn reset() -> Unit {
   @sfbase.reset()
   // the desktop's own (src/sfdesk)
   @sfdesk.reset()
-  // what the drive's pages ask of the app: its file preview
-  // what the desktop's messages draw that is this package's: the file preview, visualizations, links (wide_panel.mbt)
-  @sfbase.chat_parts.val = desk_chat_parts()
   home_rows.val = []
   steadies.clear()
   sheet_host.kind = NoSheet
@@ -70,10 +67,6 @@ fn reset() -> Unit {
   screen_uis.clear()
   screen_fix_mode.val = ""
   peeks_reset()
-  viz_frames.clear()
-  viz_heights.clear()
-  viz_full.val = None
-  viz_unmade.clear()
   share_in.shared = None
   share_in.files = []
   share_in.raised = false

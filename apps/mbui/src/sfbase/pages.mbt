@@ -196,6 +196,8 @@ pub fn reset() -> Unit {
   file_viewer_reset()
   // a station's screens' cards live in a chat (screen_links.mbt)
   peeks_reset()
+  // visualizations drawn, one open over the whole window, words they asked to send (viz_page.mbt)
+  viz_pages_reset()
   // what was sent from here, not in the core's view yet (sent.mbt)
   sent_reset()
   // what the composers' fields were seen as, their marks and `@` words (refs.mbt)
