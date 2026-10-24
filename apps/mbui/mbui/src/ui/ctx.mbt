@@ -148,7 +148,7 @@ struct EditorState {
   /// what was put in at once that was `limit` characters or more, not put in (a long paste the app takes instead)
   mut pasted : String?
   mut limit : Int
-  /// Enter sends (the words go to `submitted`, and stay in it); else it is a new line
+  /// Enter sends (the words go to `submitted`, none too, and stay in it); else it is a new line
   mut enter_sends : Bool
   /// the keys it leaves to the app, pressed with nothing held (a menu the field offers, chosen in by ↑ / ↓, picked
   /// from by Enter: the web's preventDefault on them)

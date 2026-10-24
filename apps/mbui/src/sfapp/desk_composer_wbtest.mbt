@@ -205,19 +205,25 @@ test "desk composer: a chat's link pasted as it is copied goes in as its mark" {
 }
 
 ///|
+/// Words past the core's bound for a paste (what the core says of them kept: src/sfkept).
+fn long_paste() -> String {
+  let long = StringBuilder()
+  long.write_string("发布前要核对的条目\n")
+  for i in 0..<1000 {
+    long.write_string("第\{i}条，")
+  }
+  long.to_string()
+}
+
+///|
 test "desk composer: words pasted at once past the core's bound go as a file of their own, what they begin with kept with it" {
   let calls : Array[Made] = []
   let (t, src) = desk_composer_tester(calls)
   desk_focus(t)
   // (the bound asked of the core once the field is drawn)
   t.frame()
-  let long = StringBuilder()
-  long.write_string("发布前要核对的条目\n")
-  for i in 0..<1000 {
-    long.write_string("第\{i}条，")
-  }
-  assert_true(long.to_string().length() >= 5000)
-  t.paste(long.to_string())
+  assert_true(long_paste().length() >= 5000)
+  t.paste(long_paste())
   t.frame()
   t.frame()
   assert_eq(desk_words(src), "")
@@ -231,6 +237,22 @@ test "desk composer: words pasted at once past the core's bound go as a file of 
   t.frame()
   assert_true(t.find("发布前要核对的条目") is Some(_), msg=t.words().map(fn(x) { x.0 }).join("|"))
   assert_true(t.find("pasted-text-") is None)
+}
+
+///|
+test "desk composer: a file waiting and no words, Enter sends it (as send does)" {
+  let calls : Array[Made] = []
+  let (t, src) = desk_composer_tester(calls)
+  desk_focus(t)
+  t.frame()
+  t.paste(long_paste())
+  t.frame()
+  t.frame()
+  assert_eq(desk_words(src), "")
+  assert_eq(@sfbase.writing(src, "ws1/st1:s-c1").files.length(), 1)
+  t.enter()
+  t.frame()
+  assert_eq(named(calls, "chat.send").length(), 1)
 }
 
 ///|
