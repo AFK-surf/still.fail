@@ -326,6 +326,12 @@ pub fn Ctx::take_press(self : Ctx) -> Unit {
   }
   self.active = 0
   self.taken_at = self.press_at
+  // what scrolls or is dragged under it lets it go, none of them to take it as it moves on (claim.mbt: a list round a
+  // code block held in it would take it up or down)
+  for id in self.press_chain {
+    drag_cancel(id)
+  }
+  self.claimed = true
   self.drag_scroll = 0
   self.dragging = false
   self.editor_drag = false
