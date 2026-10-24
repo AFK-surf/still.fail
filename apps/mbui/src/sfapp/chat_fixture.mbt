@@ -799,6 +799,11 @@ fn fix_deliver(session : String, id : String) -> Unit {
 /// The fixture's writes in a chat (`chat.send`, `chat.retry`, `chat.discard`, `draft.get`, `draft.put`,
 /// `station.upload.part`, `session.warm`), and what the page tells (`client.focus`, `chat.place`): None for any other.
 fn fixture_chat_call(f : Fixture, name : String, params : Json) -> Result[Json, Json]? {
+  // what is written, as the core's composers keep it (compose_fixture.mbt)
+  match fix_compose_call(f, name, params) {
+    Some(r) => return Some(r)
+    None => ()
+  }
   let p = Some(params)
   let session = match text(p, "session") {
     "" =>

@@ -131,6 +131,7 @@ fn reset() -> Unit {
   fix_unsaid.clear()
   fix_drafts.clear()
   fix_composers.clear()
+  fix_writes.clear()
   fix_xshared.clear()
   fix_decided.clear()
   fix_replied.clear()

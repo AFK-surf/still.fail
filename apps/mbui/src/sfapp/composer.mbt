@@ -974,39 +974,6 @@ fn upload_key(d : Draft) -> String {
 }
 
 ///|
-/// What a file is by its name's ending, for the core (URLConnection.guessContentTypeFromName: a picture's size is read
-/// from its head as it goes up): "" when not known.
-fn file_type(name : String) -> String {
-  let lower = name.to_lower()
-  let ends = fn(e : String) { lower.has_suffix(e) }
-  if ends(".png") {
-    "image/png"
-  } else if ends(".jpg") || ends(".jpeg") {
-    "image/jpeg"
-  } else if ends(".gif") {
-    "image/gif"
-  } else if ends(".webp") {
-    "image/webp"
-  } else if ends(".heic") {
-    "image/heic"
-  } else if ends(".mp4") || ends(".m4v") {
-    "video/mp4"
-  } else if ends(".mov") {
-    "video/quicktime"
-  } else if ends(".webm") {
-    "video/webm"
-  } else if ends(".3gp") {
-    "video/3gpp"
-  } else if ends(".pdf") {
-    "application/pdf"
-  } else if ends(".txt") {
-    "text/plain"
-  } else {
-    ""
-  }
-}
-
-///|
 /// What the core says of the draft's files as they go up (its composer's topic), each frame one is going: how far,
 /// up (with a picture's size from here when the station gave none), or failed (to go again).
 fn follow_uploads(src : Source, d : Draft, station : String) -> Unit {

@@ -177,6 +177,8 @@ pub fn reset() -> Unit {
   shown_days.clear()
   // the core's downloads being taken and kept (downloads.mbt)
   downloads_reset()
+  // the drafts as the core keeps them (compose.mbt)
+  writings_reset()
   // what was sent from here, not in the core's view yet (sent.mbt)
   sent_reset()
   // what was asked of the core from a button, under way or failed (act.mbt)

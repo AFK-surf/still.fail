@@ -23,6 +23,7 @@ pub using @sfbase {
   stations_at_glance,
   agent_of,
   app,
+  file_type,
   local_sent,
   sending_of,
   sent_local,
