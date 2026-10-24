@@ -48,7 +48,7 @@ fn setting_page(c : @ui.Ctx, src : Source, w : Workspace, route : Route) -> Unit
 /// frame's pane: back, the room over and under it). False for a route whose pages are not one yet (its frame draws its
 /// own copy).
 pub fn setting_route(c : @ui.Ctx, src : Source, w : Workspace, route : Route, frame : PageFrame) -> Bool {
-  if !(route is (Appearance | Fonts | About | Changelog | Memories | Memory(_) | AutoDecisions | Permissions | Version | UsagePrices(_) | Usage | Archiving | StationArchiving(_) | Notifications | PickModels(_, _) | ProfileModels(_, _) | Shortcuts | Me | Workspace | Security | SecurityOpen | Vault | VaultItem(_, _) | Connects(_) | Connect(_, _) | Station(_))) {
+  if !(route is (Appearance | Fonts | BarSettings | About | Changelog | Memories | Memory(_) | AutoDecisions | Permissions | Version | UsagePrices(_) | Usage | Archiving | StationArchiving(_) | Notifications | PickModels(_, _) | ProfileModels(_, _) | Shortcuts | Me | Workspace | Security | SecurityOpen | Vault | VaultItem(_, _) | Connects(_) | Connect(_, _) | Station(_))) {
     return false
   }
   let core = settings_core(src, w)
@@ -58,6 +58,7 @@ pub fn setting_route(c : @ui.Ctx, src : Source, w : Workspace, route : Route, fr
   match route {
     Appearance => appearance_page(c, core, frame)
     Fonts => fonts_page(c, core, frame)
+    BarSettings => bars_page(c, core, frame)
     About => about_page(c, core, frame)
     Changelog => changelog_page(c, core, frame)
     Memories => memories_page(c, core, here, frame)
