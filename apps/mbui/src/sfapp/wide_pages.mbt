@@ -59,7 +59,20 @@ fn desk_pages() -> @sfdesk.Pages {
     },
     composer_moves: fn(c, chat) { composer_page_starts(c, chat) },
     fly: fn(c, draft, rk, row, words, room) {
-      flight_start(c, draft, rk, row, words, room, [])
+      flight_start(
+        c,
+        draft,
+        rk,
+        row,
+        words,
+        room,
+        [],
+        field=field_key,
+        hold=fn(ms) { composer_hold(draft, room, ms) },
+        font=ct().font,
+        line=ct().line,
+        desk=true,
+      )
       match rk.split("\u{1}").map(fn(x) { x.to_string() }).collect() {
         [station, session] => c.list_to_end("chat/" + station + "/" + session, glide=flight_of(draft) is None)
         _ => ()

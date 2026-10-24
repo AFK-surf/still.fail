@@ -601,7 +601,7 @@ fn messages(
                   key + "\u{1}" + keys[i],
                   listed=false,
                   screen=true,
-                  drive=flight_up(flight_p(c, f)),
+                  drive=flight_up(flight_p(c, f), f.desk),
                 )
               // what was sent from here not in the chat yet, pushed down by a message coming in over it out of an
               // avatar (where the avatar landed): it glides there, as an agent's activity does

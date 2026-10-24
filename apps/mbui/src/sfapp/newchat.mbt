@@ -529,7 +529,16 @@ fn send_first(
   // the words stay where they were typed, the files where their tiles were, while the chat is made (flight.mbt:
   // carried; NewChat.kt host.sending; in the wide frame from the middle of the page, as the web's madeChat.ts)
   let here : ChatRef = { station, session: "", title: "", station_name }
-  flight_carry_start(c, d.key, words, draft_flying(c, src, here, d))
+  flight_carry_start(
+    c,
+    d.key,
+    words,
+    draft_flying(c, src, here, d),
+    field=field_key,
+    font=ct().font,
+    line=ct().line,
+    desk=wide_on.val,
+  )
   ref_field_put(d, "")
   d.files.clear()
   d.quotes.clear()

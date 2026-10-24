@@ -347,7 +347,7 @@ fn said(
     // coming out of its agent's avatar (emit.mbt): from 35% at its corner, unrolling from its top
     if emit_goes(em, m.seq) {
       @motion.measure(c, col, "emit-col/" + seq_s(m.seq))
-      emit_out(c, col, em, m.seq)
+      emit_out(c, col, em, m.seq, if wide_on.val { -16.0 } else { 12.0 })
     }
     // the picture over the name's start, or out in the margin before it in the wide frame, held at the list's top as a
     // long message scrolls past (where a message out of an avatar lands: hidden while the flying one is over it)

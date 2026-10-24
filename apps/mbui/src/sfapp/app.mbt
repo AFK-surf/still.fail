@@ -136,8 +136,6 @@ fn reset() -> Unit {
   fix_xshared.clear()
   fix_decided.clear()
   fix_replied.clear()
-  emits.clear()
-  turns_by.clear()
   dv_reset()
   decide_reset()
   close_now()
@@ -173,7 +171,6 @@ fn reset() -> Unit {
   marks_seen.clear()
   told_bars.val = None
   told_dark.val = None
-  send_flight.val = None
   flying.val = None
   opened_notices.clear()
   tool_parts.clear()
