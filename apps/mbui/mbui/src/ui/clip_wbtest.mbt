@@ -1,7 +1,7 @@
 // A box with `clip` and a `radius` cuts what it holds to its rounded rect (Compose's clip(RoundedCornerShape)): the
 // instances of what it holds carry that rounded rect (scene.mbt 16-19, the corners' radii 24-27 and how smooth they
 // are 28-31), the renderers cover their edge as the box's own ground's, and a press in a corner it cut away reaches
-// nothing there.
+// nothing there. What a box that does not cut holds is drawn where it shows, past the box too.
 
 ///|
 let red : Int64 = 0xFF3B30FFL
@@ -235,4 +235,33 @@ test "a rounded clip inside another: the inner's corners, and the outer's where 
   assert_eq([a[16], a[17], a[18], a[19]], [20.0, 20.0, 60.0, 100.0])
   // the left corners both's (16 the rounder), the right ones the inner's alone
   assert_eq([a[24], a[25], a[26], a[27]], [16.0, 6.0, 6.0, 16.0])
+}
+
+///|
+test "what a box that does not cut holds past its own rect is drawn where it shows, the box laid out outside the clip" {
+  // ten tiles 100 wide in a row squeezed to the 200 of a box that cuts, moved 650 to the left (as ＋'s recent photos
+  // are dragged): the row itself lies wholly left of the cut, its 7th, 8th and 9th tiles (each red as its number) in it
+  let t = Tester::new(
+    fn(c) {
+      c.box(dir=Row, w=Px(200.0), h=Px(100.0), clip=true, fn() {
+        c.box(dir=Row, tx=-650.0, fn() {
+          for k in 0..<10 {
+            c.box(w=Px(100.0), h=Px(100.0), bg=(k.to_int64() << 24) | 0xFFL, fn() { () }) |> ignore
+          }
+        })
+        |> ignore
+      })
+      |> ignore
+    },
+    w=400.0,
+    h=200.0,
+  )
+  t.draw()
+  let rows = t.boxes().filter(fn(b) { b.kind == "row" })
+  let row = rows[rows.length() - 1]
+  assert_true(row.x + row.w < 0.0)
+  let shown = insts()
+    .filter(fn(a) { a[5] == 0.0 && a[2] == 100.0 && a[3] == 100.0 })
+    .map(fn(a) { ((a[8] * 255.0).round().to_int(), a[0]) })
+  assert_eq(shown, [(6, -50.0), (7, 50.0), (8, 150.0)])
 }
