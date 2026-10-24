@@ -825,9 +825,22 @@ function gh(args: string[], options: { allowFail?: boolean } = {}): string {
   if (done.status !== 0 && !options.allowFail) throw new Error(`gh ${args.join(" ")}: ${done.stderr}`);
   return done.status === 0 ? done.stdout : "";
 }
-function published(): Set<string> | null {
-  // (one request: the release's own answer lists every asset, 180 of them as they are kept. With --paginate it took
-  // 22 s on GitHub's Windows runner against 1 s without, the same 180 names, each mbui windows run, 2026-10-24)
+async function published(): Promise<Set<string> | null> {
+  // (one request, by fetch with the job's token where there is one: the release's own answer lists every asset, 180 of
+  // them as they are kept. Through gh it was 21-35 s of Windows mbui runs with nothing missing, its first call in the job
+  // (a later one 1 s), curl or fetch 0-1 s, on GitHub's Windows runner, 2026-10-24/25)
+  const token = process.env.GH_TOKEN ?? process.env.GITHUB_TOKEN;
+  if (token) {
+    try {
+      const r = await fetch(`https://api.github.com/repos/${REPO}/releases/tags/${RELEASE}`, {
+        headers: { authorization: `Bearer ${token}`, accept: "application/vnd.github+json" },
+        signal: AbortSignal.timeout(30_000),
+      });
+      if (r.ok) return new Set(((await r.json()) as { assets: { name: string }[] }).assets.map((a) => a.name));
+    } catch {
+      // (gh, as without a token)
+    }
+  }
   const out = gh(["api", `repos/${REPO}/releases/tags/${RELEASE}`, "--jq", ".assets[].name"], { allowFail: true });
   return out ? new Set(out.split("\n").filter(Boolean)) : null;
 }
@@ -902,7 +915,7 @@ async function main(argv: string[]) {
       return;
     }
     case "status": {
-      const remote = published();
+      const remote = await published();
       for (const [p, part] of Object.entries(PARTS)) for (const t of part.targets) {
         const k = key(p, t);
         const local = complete(cached(p, t, k), p, t) ? "cached" : "-";
@@ -927,7 +940,7 @@ async function main(argv: string[]) {
       const wanted: [string, Target][] = [];
       for (const a of args.filter((a) => a !== "--windows")) { const [p, t] = a.split(":"); wanted.push(pair(t ? [p!, t] : [p!])); }
       if (wanted.length === 0) for (const [p, t] of ours()) if (onWindows(p, t) === windows) wanted.push([p, t]);
-      const remote = published() ?? fail("the release's assets could not be listed");
+      const remote = (await published()) ?? fail("the release's assets could not be listed");
       for (const [p, t] of wanted) if (!remote.has(asset(p, t, key(p, t)))) console.log(`${p}:${t}`);
       return;
     }
@@ -942,7 +955,7 @@ async function main(argv: string[]) {
       }
       // Default: all of ours that this kind of machine builds (--windows: what only Windows does).
       if (wanted.length === 0) for (const [p, t] of ours()) if (onWindows(p, t) === windows) wanted.push([p, t]);
-      const remote = published() ?? new Set<string>();
+      const remote = (await published()) ?? new Set<string>();
       if (publish && !gh(["release", "view", RELEASE, "-R", REPO, "--json", "name"], { allowFail: true })) {
         throw new Error(`the release ${RELEASE} is not on ${REPO}: make it once (docs/development.md, "Native parts")`);
       }
