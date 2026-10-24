@@ -575,3 +575,39 @@ test("a_mac_stations_grants_are_said_in_words_with_what_goes_without_them_and_ho
   const shown = p.decorate(topic, raw(true, ["desktop"]), c) as J;
   assert.ok("ok" in conform("StationPermissions", shown.permissions), JSON.stringify(conform("StationPermissions", shown.permissions)));
 });
+
+test("a_connect_says_where_it_is_reached_how_it_runs_and_what_switching_it_does", () => {
+  const base: J = { id: "f1", name: "助手", kind: "feishu", mode: "single-session", requireMention: true, session: "s1", feishu: { appId: "cli_1", domain: "lark" }, bind: { runtime: "claude" } };
+  const c = p.connect(base);
+  // a Feishu connect: its groups' words, its platform where no Slack workspace is said
+  assert.equal(c.placeText, "Lark");
+  assert.equal(c.modeLabel, "所有群共用一个会话");
+  assert.ok(c.modeSentence.endsWith("仅在被 @ 时唤醒。"));
+  assert.equal(c.modeWords.single.label, "所有群共用一个会话");
+  assert.equal(p.connect({ ...base, kind: "slack", team: "Acme", feishu: undefined }).placeText, "Acme");
+  // switched to one each, with two running: what that does in its groups' words, then that the running finish
+  const changes = p.modeChanges(base, 2);
+  const multi = changes.find((x: J) => x.mode === "multi-session");
+  assert.deepEqual([multi.changed, multi.action], [true, "改为多会话"]);
+  assert.deepEqual(multi.effects, [
+    "当前绑定的会话将不再接收新消息。此后每个群被 @ 时各开启一个会话。",
+    "如需在群里继续，须重新 @，这将开启一个新会话，不含之前的上下文。",
+    "以后切回单会话时，将继续使用原来的会话。",
+    "当前有 2 个会话正在运行，它们会完成当前这一轮。",
+  ]);
+  // the way it is now changes nothing, so says nothing; answering every message is said on its own
+  const same = changes.find((x: J) => x.mode === "single-session" && x.requireMention);
+  assert.deepEqual([same.changed, same.effects, same.action], [false, [], "确认更改"]);
+  const all = changes.find((x: J) => x.mode === "single-session" && !x.requireMention);
+  assert.equal(all.effects[0], "无需 @：它所在的所有群和私聊中的每条消息都会发送给 agent，用量会明显增加。");
+});
+
+test("a_slack_apps_permissions_are_said_in_sections_those_only_admins_allow_marked", () => {
+  const sections = p.slackSections();
+  assert.deepEqual(sections.map((s: J) => s.title)[0], "消息");
+  assert.deepEqual(sections.flatMap((s: J) => s.groups.map((g: J) => g.id)).length, 16);
+  const base = sections[0].groups[0];
+  assert.deepEqual([base.id, base.fixed, base.admin], ["base", true, null]);
+  const connect = sections[1].groups.find((g: J) => g.id === "connect");
+  assert.equal(connect.tip, `${connect.description} ${connect.admin}`);
+});

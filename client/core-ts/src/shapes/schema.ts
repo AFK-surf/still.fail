@@ -415,7 +415,40 @@ export const SHAPES: Record<string, Shape> = {
     ["runtimeText", "String"],
     ["runText", "String"],
     ["modelName", opt("String"), { doc: "Its bound model as people call it (Opus 5.5)." }],
+    ["modeWords", "ModeWords", { doc: "How it says the ways its conversations become sessions (core)." }],
+    ["modeLabel", "String", { doc: "Its way's name (core)." }],
+    ["modeSentence", "String", { doc: "What its way means, and in single-session whether it waits for an @, in a sentence (core)." }],
+    ["placeText", "String", { doc: "Where people reach it: its Slack workspace, else its platform (Slack, 飞书, Lark) (core)." }],
   ], { doc: "A connect, with its state and how it runs in words." }),
+  ModeWord: struct([
+    ["label", "String"],
+    ["description", "String"],
+  ]),
+  ModeWords: struct([
+    ["multi", "ModeWord"],
+    ["single", "ModeWord"],
+    ["mentionOn", "String", { doc: "What waiting for an @ does, on." }],
+    ["mentionOff", "String", { doc: "What answering every message does." }],
+  ], { doc: "How a connect of a kind says the ways its conversations become sessions (a Feishu one in its groups' words)." }),
+  ModeChange: struct([
+    ["mode", "ConnectMode"],
+    ["requireMention", "bool"],
+    ["changed", "bool", { doc: "Whether switching to it changes anything." }],
+    ["effects", vec("String"), { doc: "What switching to it does to the connect's conversations, in plain words." }],
+    ["action", "String", { doc: "Its button's words." }],
+  ], { doc: "A way a connect could be switched to (core)." }),
+  SlackGroupWord: struct([
+    ["id", "String"],
+    ["label", "String"],
+    ["description", "String"],
+    ["admin", opt("String"), { doc: "What Slack's admins must allow, for a group only they allow." }],
+    ["tip", "String", { doc: "Its description and that, as its tip says them." }],
+    ["fixed", "bool", { doc: "Always on." }],
+  ]),
+  SlackGroupSection: struct([
+    ["title", "String"],
+    ["groups", vec("SlackGroupWord")],
+  ], { doc: "A section of a Slack app's permissions, as its form shows them (core)." }),
   FeishuApp: struct([
     ["appId", "String"],
     ["appSecret", "String", { doc: "Masked." }],
@@ -2846,6 +2879,7 @@ export const SHAPES: Record<string, Shape> = {
     ["bound", opt("Session")],
     ["candidates", vec("Session")],
     ["running", "i64", { client: "I54" }],
+    ["changes", vec("ModeChange"), { doc: "The ways it could be switched to: every session in one, one each, and one waiting for an @ or not." }],
   ]),
   ConnectsView: struct([
     ["me", "Me"],
@@ -3094,6 +3128,8 @@ export const SHAPES: Record<string, Shape> = {
     ["platform", opt("String"), { doc: "slack | feishu, once chosen." }],
     ["platforms", vec("String"), { doc: "What the station connects to (feishu only where it has the Feishu connect)." }],
     ["feishu", opt("ConnectFeishuFlow")],
+    ["modeWords", "ModeWords", { doc: "How the ways its conversations become sessions are said, as its platform says them." }],
+    ["sections", vec("SlackGroupSection"), { doc: "The app's permissions as its form shows them." }],
   ], { doc: "One transient connect wizard. Decisions and navigation come from the core on every client." }),
   AutomaticDecisionView: struct([
     ["canEdit", "bool"],

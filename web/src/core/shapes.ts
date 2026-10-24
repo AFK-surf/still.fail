@@ -1001,6 +1001,21 @@ export interface Owner {
 /** A link's dot. */
 export type Presence = "online" | "busy" | "error" | "offline";
 
+export interface ModeWord {
+	label: string;
+	description: string;
+}
+
+/** How a connect of a kind says the ways its conversations become sessions (a Feishu one in its groups' words). */
+export interface ModeWords {
+	multi: ModeWord;
+	single: ModeWord;
+	/** What waiting for an @ does, on. */
+	mentionOn: string;
+	/** What answering every message does. */
+	mentionOff: string;
+}
+
 /** A connect, with its state and how it runs in words. */
 export interface Connect {
 	id: string;
@@ -1031,6 +1046,14 @@ export interface Connect {
 	runText: string;
 	/** Its bound model as people call it (Opus 5.5). */
 	modelName?: string;
+	/** How it says the ways its conversations become sessions (core). */
+	modeWords: ModeWords;
+	/** Its way's name (core). */
+	modeLabel: string;
+	/** What its way means, and in single-session whether it waits for an @, in a sentence (core). */
+	modeSentence: string;
+	/** Where people reach it: its Slack workspace, else its platform (Slack, 飞书, Lark) (core). */
+	placeText: string;
 }
 
 export interface EnvVar {
@@ -2556,6 +2579,24 @@ export interface MadeSlackApp {
 	installedTeam?: string;
 }
 
+export interface SlackGroupWord {
+	id: string;
+	label: string;
+	description: string;
+	/** What Slack's admins must allow, for a group only they allow. */
+	admin?: string;
+	/** Its description and that, as its tip says them. */
+	tip: string;
+	/** Always on. */
+	fixed: boolean;
+}
+
+/** A section of a Slack app's permissions, as its form shows them (core). */
+export interface SlackGroupSection {
+	title: string;
+	groups: SlackGroupWord[];
+}
+
 /** One transient connect wizard. Decisions and navigation come from the core on every client. */
 export interface ConnectFlowView {
 	step: string;
@@ -2589,6 +2630,22 @@ export interface ConnectFlowView {
 	/** What the station connects to (feishu only where it has the Feishu connect). */
 	platforms: string[];
 	feishu?: ConnectFeishuFlow;
+	/** How the ways its conversations become sessions are said, as its platform says them. */
+	modeWords: ModeWords;
+	/** The app's permissions as its form shows them. */
+	sections: SlackGroupSection[];
+}
+
+/** A way a connect could be switched to (core). */
+export interface ModeChange {
+	mode: ConnectMode;
+	requireMention: boolean;
+	/** Whether switching to it changes anything. */
+	changed: boolean;
+	/** What switching to it does to the connect's conversations, in plain words. */
+	effects: string[];
+	/** Its button's words. */
+	action: string;
 }
 
 export interface ConnectItem {
@@ -2600,6 +2657,8 @@ export interface ConnectItem {
 	bound?: Session;
 	candidates: Session[];
 	running: number;
+	/** The ways it could be switched to: every session in one, one each, and one waiting for an @ or not. */
+	changes: ModeChange[];
 }
 
 /** One thing waited on: what (`text`), how long or how much (`detail`), and whether it is slow | trouble. */

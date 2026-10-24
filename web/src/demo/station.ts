@@ -118,12 +118,22 @@ function slack(): Connect {
     connection: { state: "connected", botUserId: "U07EMBER", workspace: { team: "Acme", teamId: "T0ACME", url: "https://acme.slack.com/", botUserId: "U07EMBER", botName: "still.fail" } },
     createdBy: { id: LIN.id, name: LIN.name, shown: LIN.shown }, sessions: 14,
     statusText: "在线", presence: "online", modeText: "多会话", modeShort: "多会话", runtimeText: "Claude Code", runText: "Claude Code · Opus 5.5 · medium", modelName: "Opus 5.5",
+    modeWords: {
+      multi: { label: "每个 thread 一个会话", description: "在 thread 中 @ 它即开启一个新会话，该 thread 的后续消息都进入此会话" },
+      single: { label: "所有 thread 共用一个会话", description: "它看到的所有 thread 都进入同一个会话，适合长期值守的助手" },
+      mentionOn: "被 @ 的 thread 中，后续回复无需再 @。", mentionOff: "频道中它可见的每条消息都会进入会话。",
+    },
+    modeLabel: "每个 thread 一个会话", modeSentence: "在 thread 中 @ 它即开启一个新会话，该 thread 的后续消息都进入此会话", placeText: "Acme",
   };
 }
 
 export const connects = (): ConnectsView => ({
   me: { id: "local" }, wait: { reading: false, failing: [], empty: false },
-  items: [{ station: STATION, stationName: "Studio", connect: slack(), sessions: [], candidates: [], running: 0 }],
+  items: [{ station: STATION, stationName: "Studio", connect: slack(), sessions: [], candidates: [], running: 0, changes: [
+    { mode: "multi-session", requireMention: true, changed: false, effects: [], action: "确认更改" },
+    { mode: "single-session", requireMention: true, changed: true, effects: ["此后它收到的消息都将进入同一个会话；现有各 thread 的会话不再接收新消息，包括这些 thread 中的回复。记录会保留。", "下一条消息将开始新的单会话；也可在切换后选择已有会话。"], action: "改为单会话" },
+    { mode: "single-session", requireMention: false, changed: true, effects: ["此后它收到的消息都将进入同一个会话；现有各 thread 的会话不再接收新消息，包括这些 thread 中的回复。记录会保留。", "下一条消息将开始新的单会话；也可在切换后选择已有会话。", "无需 @：它可见的所有频道和私信中的每条消息都会发送给 agent，用量会明显增加。"], action: "改为单会话" },
+  ] }],
 });
 
 /**
