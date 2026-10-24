@@ -15,7 +15,7 @@ fn place_page(c : @ui.Ctx, src : Source, w : Workspace, pages : Pages, place : S
   @settings.frame(core, here, root=true)
   match place {
     "stations" | "profiles" => place_split(c, src, w, pages, place)
-    "connects" => c.box(style=place_across, fn() { connects_page(c, core, here) }) |> ignore
+    "connects" => c.box(style=place_across, fn() { connects_page(c, src, core, here) }) |> ignore
     "usage" => c.box(style=place_across, fn() { usage_page(c, core, here) }) |> ignore
     _ =>
       c.box(style=place_across, fn() {

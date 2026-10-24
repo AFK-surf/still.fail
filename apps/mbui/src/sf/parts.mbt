@@ -1329,6 +1329,7 @@ pub fn dialog(
   wide? : Bool = false,
   w? : Double,
   close_label? : String = "",
+  step? : String = "",
 ) -> Bool {
   let closed = Ref(false)
   let w = w.unwrap_or(if wide { dialog_wide_w } else { dialog_w })
@@ -1352,7 +1353,16 @@ pub fn dialog(
         shadow_color=theme().p.shadow,
         fn() {
         c.box(style=dialog_head, fn() {
-          c.text(s.title, style=dialog_title) |> ignore
+          // a step's count beside the title (Connect.css.ts dialogStep: the ui's 13 in 400 muted, 8 after it)
+          if step != "" {
+            c.box(style=dialog_title_line, fn() {
+              c.text(s.title, style=dialog_title_one) |> ignore
+              c.text(step, style=dialog_step) |> ignore
+            })
+            |> ignore
+          } else {
+            c.text(s.title, style=dialog_title) |> ignore
+          }
           if close_label != "" &&
             icon_button(c, "close", key=key + "/close", size=dialog_close, round=true, label=close_label) {
             closed.val = true
@@ -1646,7 +1656,7 @@ let select_hint : @ui.TextStyle = @ui.text_style(size=Xs, leading=L5, color=Mute
 /// Exclusive options that need a sentence each (parts.tsx Choices: mbui's radio group, @kit.radio_group): bordered
 /// cards 8 apart, each its `icon` (by its value) before its title (13, 600) and `description` (12, muted), a radio mark
 /// at its end; the chosen one edged in the ink, what it holds more (`extra`, by its value: a switch of it) under a line
-/// in it; those `disabled` faded and not chosen. `options`: each value, title and description. What is chosen now.
+/// in it; those `disabled` faded and not chosen; `note`: what draws a description of its own, by its value. `options`: each value, title and description. What is chosen now.
 pub fn choices(
   c : @ui.Ctx,
   key : String,
@@ -1656,7 +1666,9 @@ pub fn choices(
   icon? : (String) -> Unit,
   extra? : (String) -> Unit,
   disabled? : Array[String] = [],
+  note? : (String) -> Unit,
 ) -> String {
+  let note_of = note
   let items = options.map(fn(o) { @kit.item(o.0, label=o.1, disabled=disabled.contains(o.0)) })
   @kit.radio_group(c, key, items, value, label~, gap=choice_gap, look=fn(c, s) {
       let at = options.search_by(fn(o) { o.1 == s.label })
@@ -1670,8 +1682,13 @@ pub fn choices(
             }
             c.box(style=choice_words, fn() {
               c.text(s.label, style=choice_title) |> ignore
-              if note != "" {
-                c.text(note, style=choice_note) |> ignore
+              // (its description a part of its own, by its value: a Slack workspace's token's owner)
+              match note_of {
+                Some(f) => f(v)
+                None =>
+                  if note != "" {
+                    c.text(note, style=choice_note) |> ignore
+                  }
               }
             })
             |> ignore
@@ -2531,3 +2548,15 @@ pub fn options_card(
   |> ignore
   picked
 }
+
+///|
+// kept across runs: a value (no field of it changes)
+let dialog_title_line : @ui.Style = @ui.style(row=true, w=grow, gap=S2, align=AEnd)
+
+///|
+// kept across runs: a value (no field of it changes)
+let dialog_step : @ui.TextStyle = @ui.text_style(size=Sm, leading=L6, color=Muted, wrap=false)
+
+///|
+// kept across runs: a value (no field of it changes)
+let dialog_title_one : @ui.TextStyle = dialog_title.then(one_line)

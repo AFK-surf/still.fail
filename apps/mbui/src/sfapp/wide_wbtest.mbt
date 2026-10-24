@@ -1385,6 +1385,33 @@ test "wide: a Slack connect's app folded on its page as the web's: its look and 
 }
 
 ///|
+test "wide: a new connect in a dialog as the web's: the core's wizard a step at a time, its title and count, the Slack workspaces to make its app in; 下一步 goes on as the core says" {
+  let calls : Array[Made] = []
+  let t = wide_tester(calls)
+  app.nav.replace(Place("connects"))
+  t.run_for(@ui.nav_push_ms)
+  t.click(Button, label="添加连接")
+  t.run_for(@ui.nav_push_ms)
+  // the wizard opened on the one station online, as the desktop's (not a phone's)
+  let opened = named(calls, "connect.flow.open")
+  assert_eq(opened.length(), 1)
+  assert_eq(text(Some(opened[0].params), "station"), "ws1/st1")
+  assert_true(!flag(field(Some(opened[0].params), "input"), "mobile"))
+  for w in ["Slack 工作区", "1 / 4", "星火", "实验室", "添加工作区的配置 token"] {
+    assert_true(t.find(w) is Some(_), msg=w + ": " + t.words().map(fn(w) { w.0 }).join("|"))
+  }
+  t.click(Button, label="下一步")
+  t.frame()
+  let go = named(calls, "connect.flow.go")
+  assert_eq(go.length(), 1)
+  assert_eq(text(field(Some(go[0].params), "input"), "to"), "app")
+  // closed: its wizard let go of
+  t.click(Button, label="关闭")
+  t.run_for(@ui.nav_push_ms)
+  assert_eq(named(calls, "connect.flow.drop").length(), 1)
+}
+
+///|
 test "wide: 用量 as the web's: what it counts beside its title, who spent it the list shown first, how it is counted at its foot" {
   let calls : Array[Made] = []
   let t = wide_tester(calls)

@@ -6,7 +6,7 @@
 // profile first where no station has one). The phone's page, each station's under its name, is connects.mbt's.
 
 ///|
-fn connects_page(c : @ui.Ctx, core : Core, here : Here) -> Unit {
+fn connects_page(c : @ui.Ctx, src : Source, core : Core, here : Here) -> Unit {
   let mine = connects_mine.val
   let topic = (core.topic)("connects", { "scope": str(here.workspace), "mine": Json::boolean(mine) })
   let st = @settings.stations_of(core, here)
@@ -32,7 +32,8 @@ fn connects_page(c : @ui.Ctx, core : Core, here : Here) -> Unit {
     stations.iter().all(fn(s) {
       field(Some(s), "overview") is Some(Object(_)) && items(field(Some(s), "overview"), "profiles").length() == 0
     })
-  let add = place_action(core, here, "connects")
+  // where one is added: the stations online
+  let targets = stations.filter(fn(s) { flag(Some(s), "online") })
   let station_of = fn(address : String) -> Json? {
     stations.iter().find_first(fn(s) { text(Some(s), "station") == address })
   }
@@ -41,15 +42,11 @@ fn connects_page(c : @ui.Ctx, core : Core, here : Here) -> Unit {
     core,
     @sf.t("android-settings.connects.title"),
     about=@sf.t("web-pages.connects.about", args=[("name", "still.fail")]),
-    actions?=match add {
+    actions?=if targets.length() > 0 && !first {
       // (its primary action a pill named as what it adds)
-      Some(run) if !first =>
-        Some(fn() {
-          if @sf.button(c, @sf.t("android-misc.bar.action.connects"), key="add-connect", icon="plus") {
-            run()
-          }
-        })
-      _ => None
+      Some(fn() { cn_add(c, src, core, here, targets, @sf.t("android-misc.bar.action.connects"), "add-connect", false) })
+    } else {
+      None
     },
     fn() {
       let blocks : Array[() -> Unit] = []
@@ -64,12 +61,8 @@ fn connects_page(c : @ui.Ctx, core : Core, here : Here) -> Unit {
       } else if first {
         blocks.push(fn() {
           @sf.first_one(c, @sf.t("web-pages.connects.addFirst"), lead=@sf.t("web-pages.connects.addFirstLead"), fn() {
-            match add {
-              Some(run) =>
-                if @sf.button(c, @sf.t("web-pages.connects.add"), key="connects-add-first", tone=Primary, icon="plus") {
-                  run()
-                }
-              None =>
+            match targets.length() {
+              0 =>
                 c.text(
                   @sf.t(
                     if stations.length() > 0 {
@@ -81,6 +74,7 @@ fn connects_page(c : @ui.Ctx, core : Core, here : Here) -> Unit {
                   style=cn_note,
                 )
                 |> ignore
+              _ => cn_add(c, src, core, here, targets, @sf.t("web-pages.connects.add"), "connects-add-first", true)
             }
           })
         })
@@ -99,7 +93,7 @@ fn connects_page(c : @ui.Ctx, core : Core, here : Here) -> Unit {
           c.box(style=cn_list_room, fn() {
             c.box(style=desk_list, fn() {
               for w in waiting {
-                cn_waiting_app(c, core, w.0, w.1)
+                cn_waiting_app(c, src, core, here, w.0, w.1)
               }
             })
             |> ignore
@@ -146,6 +140,42 @@ fn connects_page(c : @ui.Ctx, core : Core, here : Here) -> Unit {
     },
   )
 }
+
+///|
+/// Adding one (Connects.tsx add): on the one station online at once, else on one picked from a menu under it (which
+/// station?), in the new connect's dialog. `primary`: the first one's (a solid button).
+fn cn_add(c : @ui.Ctx, src : Source, core : Core, here : Here, targets : Array[Json], label : String, key : String, primary : Bool) -> Unit {
+  if targets.length() == 1 {
+    if @sf.button(c, label, key~, tone=if primary { Primary } else { Plain }, icon="plus") {
+      new_connect_dialog(src, core, here, text(Some(targets[0]), "station"))
+    }
+    return
+  }
+  let open = cn_add_open.val == key
+  if @sf.button(c, label, key~, tone=if primary { Primary } else { Plain }, icon="plus") {
+    cn_add_open.val = if open { "" } else { key }
+  }
+  let entries = [@kit.menu_label(@sf.t("web-pages.connects.whichStation"))]
+  for s in targets {
+    entries.push(@kit.menu_item(text(Some(s), "station"), label=text(Some(s), "name")))
+  }
+  let m = @sf.menu(c, key + "/stations", open, c.id(key), entries, {}, @sf.menu_w, along=if primary { Middle } else { End })
+  if open && !m.open {
+    cn_add_open.val = ""
+  }
+  match m.chosen {
+    Some(station) => {
+      cn_add_open.val = ""
+      new_connect_dialog(src, core, here, station)
+    }
+    None => ()
+  }
+}
+
+///|
+/// Which add's menu of stations is open, by its key ("" none).
+// kept across runs: said by its press; settings_reset puts it back
+let cn_add_open : Ref[String] = Ref("")
 
 ///|
 /// A connect in the list (its row's Link): its picture, its name with its Slack workspace after it, how it runs; at
@@ -250,7 +280,7 @@ fn cn_owner(c : @ui.Ctx, core : Core, by : Json?) -> Unit {
 ///|
 /// A Slack app made and not connected yet (WaitingApp): Slack's mark, its name and workspace, where it stands; its
 /// station's tag; 继续 while its station is online (else that it is not), dropped from under ⋯.
-fn cn_waiting_app(c : @ui.Ctx, core : Core, a : Json, s : Json) -> Unit {
+fn cn_waiting_app(c : @ui.Ctx, src : Source, core : Core, here : Here, a : Json, s : Json) -> Unit {
   let av = Some(a)
   let sv = Some(s)
   let station = text(sv, "station")
@@ -287,7 +317,7 @@ fn cn_waiting_app(c : @ui.Ctx, core : Core, a : Json, s : Json) -> Unit {
     let dropping = is_doing(core, ["slack.dropApp"], on)
     if online {
       if @sf.button(c, @sf.t("web-pages.connects.continue"), key="waiting-go/" + app_id) {
-        open_new_connect(core, station, resuming=app_id)
+        new_connect_dialog(src, core, here, station, resume=app_id)
       }
     } else {
       c.text(@sf.t("web-pages.connects.stationOffline"), style=cn_meta) |> ignore
