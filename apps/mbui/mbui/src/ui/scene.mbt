@@ -421,6 +421,31 @@ fn span_color(spans : Array[(Int, Int, Int64)], off : Int, color : Int64) -> Int
 }
 
 ///|
+/// What node `n` holds, painted in turn (what goes over its siblings after them).
+fn Ctx::paint_held(self : Ctx, n : Node, alpha : Double) -> Unit {
+  let mut c = n.first
+  let mut over = false
+  while c >= 0 {
+    if dr.any && self.drawn_z(c) == 1 {
+      over = true
+    } else {
+      self.paint(c, alpha)
+    }
+    c = self.nodes[c].next
+  }
+  if over {
+    // what goes over its siblings, after them
+    c = n.first
+    while c >= 0 {
+      if self.drawn_z(c) == 1 {
+        self.paint(c, alpha)
+      }
+      c = self.nodes[c].next
+    }
+  }
+}
+
+///|
 fn Ctx::paint(self : Ctx, i : Int, alpha_in : Double) -> Unit {
   // drawn by its look, tapped as laid out (draw.mbt), when it has one
   if dr.any && self.drawn_paint(i, alpha_in) {
@@ -436,9 +461,14 @@ fn Ctx::paint(self : Ctx, i : Int, alpha_in : Double) -> Unit {
   let cy0 = clip_stack[k + 1]
   let cx1 = clip_stack[k + 2]
   let cy1 = clip_stack[k + 3]
-  // cull what is outside the clip
+  // cull what is outside the clip: nothing of its own shows there, and nothing it cuts; what a box that does not cut
+  // holds may lie past the box (a row squeezed to the room it has, wider than that, moved sideways: ＋'s recent
+  // photos), each part of it culled where it is
   if (n.x > cx1 || n.y > cy1 || n.x + n.fw < cx0 || n.y + n.fh < cy0) &&
     !(dr.any && dr.mode != mode_hits && self.draw_carries(i)) {
+    if !n.clip && (n.kind == kind_box || n.kind == kind_scroll) {
+      self.paint_held(n, alpha)
+    }
     return
   }
   match n.glass {
@@ -579,26 +609,7 @@ fn Ctx::paint(self : Ctx, i : Int, alpha_in : Double) -> Unit {
     // under its rows: what the motion package draws there (its rows gone, leaving)
     self.paint_underlay(i)
   }
-  let mut c = n.first
-  let mut over = false
-  while c >= 0 {
-    if dr.any && self.drawn_z(c) == 1 {
-      over = true
-    } else {
-      self.paint(c, alpha)
-    }
-    c = self.nodes[c].next
-  }
-  if over {
-    // what goes over its siblings, after them
-    c = n.first
-    while c >= 0 {
-      if self.drawn_z(c) == 1 {
-        self.paint(c, alpha)
-      }
-      c = self.nodes[c].next
-    }
-  }
+  self.paint_held(n, alpha)
   glass_paint.ink_x = ink.0
   glass_paint.ink_y = ink.1
   glass_paint.ink_r = ink.2
