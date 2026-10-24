@@ -9,7 +9,7 @@ fn search_tester() -> @ui.Tester {
   t.scroll_to(0)
   t.draw()
   t.tap_text("搜索全部内容")
-  t.run_for(search_in_ms)
+  t.run_for(@sfpages.search_in_ms)
   t
 }
 
@@ -33,10 +33,10 @@ test "the field tapped: the search opens over Home, its field focused, the bars 
   t.draw()
   let (_, from) = t.find("搜索全部内容").unwrap()
   t.tap_text("搜索全部内容")
-  assert_true(search.open)
+  assert_true(@sfpages.search_opened())
   // the bottom bar goes out of its way at once
-  assert_true(search_bar_away())
-  t.run_for(search_in_ms)
+  assert_true(@sfpages.search_bar_away())
+  t.run_for(@sfpages.search_in_ms)
   let (active, _, _, _) = t.ime()
   assert_true(active)
   // the keyboard's action key a search key (Search.kt: ImeAction.Search)
@@ -50,11 +50,11 @@ test "the field tapped: the search opens over Home, its field focused, the bars 
   assert_true(t.find("签名证书续期") is Some(_))
   assert_true(t.find("消息") is Some(_))
   t.tap_text("取消")
-  assert_true(search.leaving)
-  assert_true(!search_bar_away())
-  t.run_for(search_out_ms)
+  assert_true(@sfpages.search_leaving())
+  assert_true(!@sfpages.search_bar_away())
+  t.run_for(@sfpages.search_out_ms)
   t.draw()
-  assert_true(!search.open)
+  assert_true(!@sfpages.search_opened())
   assert_true(t.find("取消") is None)
   assert_eq(@sfpages.finder_query(), "")
   t.run_for(@sf.strokes_ms(4))
@@ -105,12 +105,12 @@ test "查看更多 lists that kind alone, from the top; 全部结果 and back go
   assert_true(t.takes_back())
   t.back()
   assert_eq(@sfpages.finder_kind(), "")
-  assert_true(search.open)
+  assert_true(@sfpages.search_opened())
   t.back()
-  assert_true(search.leaving)
-  t.run_for(search_out_ms)
+  assert_true(@sfpages.search_leaving())
+  t.run_for(@sfpages.search_out_ms)
   t.draw()
-  assert_true(!search.open)
+  assert_true(!@sfpages.search_opened())
   t.run_for(@sf.strokes_ms(4))
   t.assert_idle()
 }
@@ -247,7 +247,8 @@ test "a search's words: where they are, case aside; runs cut and bold there" {
 /// The app as src/sffix opens `mode`, for a Tester (search-results, search-jobs).
 fn search_mode(mode : String) -> @ui.Tester {
   let src = fixture_app(mode)
-  @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0)
+  // (a phone's: a finger's search, in the lists)
+  @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0, platform=2)
 }
 
 ///|

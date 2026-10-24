@@ -11,9 +11,6 @@ pub fn overlays(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
   // the rail's menu, and what can be added beside it while it is changed (rail.mbt)
   rail_overlays(c, src, w)
   attention_panel(c, src, w)
-  // ⌘K (switcher.mbt): what the frame and its page can do now offered to it
-  switcher(c, src, w)
-  keys_dialog(c, src)
   // a chat relayed to a channel (relay.mbt)
   relay_dialog(c, src)
   // a workspace made (new_workspace.mbt)

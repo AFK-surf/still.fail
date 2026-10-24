@@ -4,8 +4,11 @@
 // (settings' 快捷键: prefs.keymap). The page in the pane answers its own after them.
 
 ///|
-/// The frame's keys, read as its frame is built (before the page's: Esc goes to what the frame opened over it first).
+/// The app's keys, read as its frame is built in every tier (before the page's: Esc goes to what the frame opened over
+/// it first). What is the wide frame's alone (the sidebar folded, the chat before or after in the list beside, the
+/// chat's side panel's Esc) does nothing laid out Small; what opens something opens it where the shell has it.
 pub fn keys(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
+  let framed = is_wide(c)
   let prefs = (src.topic)("prefs", {}).value
   let pressed = fn(action : String) { @settings.action_pressed(c, prefs, action) }
   if pressed("chat.switch") {
@@ -15,7 +18,7 @@ pub fn keys(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
   if pressed("chat.new") {
     new_chat()
   }
-  if pressed("sidebar.toggle") {
+  if pressed("sidebar.toggle") && framed {
     sidebar_toggle()
   }
   if pressed("settings") {
@@ -32,7 +35,7 @@ pub fn keys(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
   } else {
     0
   }
-  if way != 0 {
+  if way != 0 && framed {
     if app.nav.top() == Decisions {
       let view = (src.topic)("decisions", { "workspace": Json::string(w.id) }).value
       let shown = items(view, "items")
@@ -47,7 +50,9 @@ pub fn keys(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
   let escape = c.key_pressed(@ui.key_escape) || c.key_pressed(@ui.key_escape, in_field=true)
   let left = escape && !frame_escape(c)
   // Esc in the open chat (chat_layers.mbt)
-  chat_escape(c, src, left) |> ignore
+  if framed {
+    chat_escape(c, src, left) |> ignore
+  }
 }
 
 ///|

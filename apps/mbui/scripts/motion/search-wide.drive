@@ -1,0 +1,12 @@
+# ⌘K on a desktop's window (old and new side by side): opened, words typed, the keys choosing down.
+timeout 20000
+until 新建对话
+wait 600
+key cmd+k
+wait 800
+type 签名
+wait 1200
+key down
+wait 400
+key down
+wait 800

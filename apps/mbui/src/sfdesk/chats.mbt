@@ -56,22 +56,9 @@ let side_icon : Double = 16.0
 let compose_in : Double = 1.0
 
 ///|
-/// A new chat (新建对话, ⌘N): its page beside the list.
+/// A new chat (新建对话, ⌘N): where the shell has it (beside the list on the wide frame, risen on the stack).
 pub fn new_chat() -> Unit {
-  match app.nav.top() {
-    NewChat => ()
-    _ => {
-      while app.nav.depth() > 1 {
-        if !app.nav.pop() {
-          break
-        }
-      }
-      if app.nav.top() != Home {
-        app.nav.replace(Home)
-      }
-      app.nav.push(NewChat)
-    }
-  }
+  open_page(NewChat)
 }
 
 ///|

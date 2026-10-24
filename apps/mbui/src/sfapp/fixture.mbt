@@ -1121,7 +1121,7 @@ pub fn open_fixture_mode(mode : String) -> Unit {
     open_setting(@settings.fixture_page(mode))
   }
   // the search open over Home, words typed (search_fixture.mbt)
-  open_search_mode(mode)
+  @sfpages.open_search_mode(mode)
   // a device not yet confirmed in the workspace's safe mode: lock-waiting, lock-finding, lock-code, lock-wrong (its
   // waiting page in the chats' place), lock-security (its security page)
   if mode == "lock-security" {

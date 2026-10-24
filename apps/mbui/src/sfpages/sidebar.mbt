@@ -9,13 +9,15 @@
 // left up long), and the lists that follow the three on the track (奏, 已归档, where the frame has them so).
 
 ///|
-/// What the frame gives the lists: the room over them (the bar they run under) and at their foot, their ground (what a
+/// What the frame gives the lists: the room over them (the bar they run under) and at their foot, what is over the
+/// box they are in where the search's bar goes under it (a phone's status bar, the sidebar's top row), their ground (what a
 /// row's faces' rings are cut in), what stands at a list's top before its words and rows (`before`) and after its
 /// words (`after`), each said for a list's filter and its view; the lists on the track after the three (each drawn the
 /// pane's whole), and which of all of them is shown (0 all, 1 mine, 2 watching, then the others').
 pub(all) struct ListsFrame {
   top : Double
   foot : Double
+  inset : Double
   ground : Int64
   before : (String, ChatsView?) -> Array[ListPart]
   after : (String, ChatsView?) -> Array[ListPart]
@@ -34,8 +36,8 @@ pub(all) struct ListPart {
 
 ///|
 /// A frame's lists with nothing of the frame's own in them.
-pub fn bare_lists(top : Double, foot : Double, ground : Int64, shown : Int) -> ListsFrame {
-  { top, foot, ground, before: fn(_, _) { [] }, after: fn(_, _) { [] }, others: [], shown }
+pub fn bare_lists(top : Double, foot : Double, inset : Double, ground : Int64, shown : Int) -> ListsFrame {
+  { top, foot, inset, ground, before: fn(_, _) { [] }, after: fn(_, _) { [] }, others: [], shown }
 }
 
 ///|
@@ -73,25 +75,42 @@ pub fn chats_lists(c : @ui.Ctx, src : Source, w : Workspace, frame : ListsFrame)
     }
   }
   let width = c.width
+  // a finger's search (search.mbt): the lists up and away under it (its page over them: chats_search)
+  search_start(c)
+  let away = if finger { search_away(c) } else { 0.0 }
   c.box(style=lists_fill, fn() {
-    for p in x.floor().to_int()..=x.ceil().to_int() {
-      if p < 0 || p > last {
-        continue
-      }
-      c.layer(fn() {
-        c.box(style=lists_fill, tx=(p.to_double() - x) * width, fn() {
-          if p < list_filters.length() {
-            chats_pane(c, src, w, list_filters[p], frame, p == frame.shown)
-          } else {
-            (frame.others[p - list_filters.length()])()
-          }
+    let track = c.layer(fn() {
+      for p in x.floor().to_int()..=x.ceil().to_int() {
+        if p < 0 || p > last {
+          continue
+        }
+        c.layer(fn() {
+          c.box(style=lists_fill, tx=(p.to_double() - x) * width, fn() {
+            if p < list_filters.length() {
+              chats_pane(c, src, w, list_filters[p], frame, p == frame.shown)
+            } else {
+              (frame.others[p - list_filters.length()])()
+            }
+          })
+          |> ignore
         })
         |> ignore
-      })
-      |> ignore
+      }
+    })
+    if away > 0.0 {
+      c.look(track, { ..@ui.still_look, alpha: 1.0 - away, dy: -search_list_rise * away })
     }
   })
   |> ignore
+}
+
+///|
+/// A finger's search over the lists, while it is open (search.mbt): drawn by the frame after what it lays over the
+/// lists (their bar, faded by `search_away`), in the same box, `inset` what is over it there.
+pub fn chats_search(c : @ui.Ctx, src : Source, w : Workspace, inset : Double) -> Unit {
+  if @ui.pointing() is Finger {
+    search_page(c, src, w, inset)
+  }
 }
 
 ///|
@@ -147,6 +166,14 @@ fn chats_pane(c : @ui.Ctx, src : Source, w : Workspace, filter : String, frame :
     _ => ()
   }
   let lines : Array[Line] = [Top]
+  // a finger's search at the list's top, out of view until scrolled to (Home.kt top), while it has rows to look in;
+  // a mouse has ⌘K (a finger has no keys to press)
+  if finger {
+    match view {
+      Some({ note: Some({ empty: true, .. }), .. }) | None => ()
+      Some(_) => lines.push(Part({ key: "search", draw: fn() { search_field(c) }, tucked: true }))
+    }
+  }
   for p in (frame.before)(filter, view) {
     lines.push(Part(p))
   }

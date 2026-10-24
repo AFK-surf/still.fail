@@ -112,7 +112,6 @@ fn reset() -> Unit {
   @settings.reset()
   found_marking.val = ("", [], 0.0)
   find_marking.val = []
-  search_reset()
   ask_turns.clear()
   wide_reset()
   invite_reset()
@@ -172,8 +171,27 @@ fn open_where(p : Page) -> Unit {
   }
   match p {
     Chat(r) => open_chat_beside(r)
+    NewChat => new_chat_beside()
     _ => app.nav.push(p)
   }
+}
+
+///|
+/// A new chat on the wide frame (新建对话, ⌘N): the page pane's, in place of what was there, the chats the place in view;
+/// one there already, nothing.
+fn new_chat_beside() -> Unit {
+  if app.nav.top() is NewChat {
+    return
+  }
+  while app.nav.depth() > 1 {
+    if !app.nav.pop() {
+      break
+    }
+  }
+  if app.nav.top() != Home {
+    app.nav.replace(Home)
+  }
+  app.nav.push(NewChat)
 }
 
 ///|
@@ -361,10 +379,11 @@ fn signed_in(c : @ui.Ctx, src : Source) -> Unit {
       share_in_frame(c)
       // files being kept on the device, said once kept (keep.mbt)
       keeps_frame(c)
+      // the app's keys, in every tier (sfdesk's keys.mbt): what is the wide frame's alone does nothing laid out Small
+      @sfdesk.keys(c, src, w)
       if @sfdesk.is_wide(c) {
         // the wide frame's keys (sfdesk's keys.mbt), then the rail, the sidebar and the page beside it (sfdesk's
         // frame.mbt); what opens over them after them
-        @sfdesk.keys(c, src, w)
         @sfdesk.frame(c, src, w, all, invited)
         // a station's screen: over the whole window, as Android's ScreenActivity is over the app
         match app.nav.top() {
@@ -417,7 +436,7 @@ fn signed_in(c : @ui.Ctx, src : Source) -> Unit {
           src,
           w,
           place_of(root),
-          app.nav.depth() == 1 && place_of(root) is Some(_) && !search_bar_away() && !waiting,
+          app.nav.depth() == 1 && place_of(root) is Some(_) && !@sfpages.search_bar_away() && !waiting,
         )
         // a file open over the pages (preview.mbt), under the menu, the sheet and the toasts
         preview(c, src)
@@ -443,6 +462,10 @@ fn signed_in(c : @ui.Ctx, src : Source) -> Unit {
       // (App.kt LockPrompts): put up when no other sheet is
       @settings.lock_prompts(settings_core(src, w), !sheet_open() && dui.sheet is None)
       @settings.overlay(c, settings_core(src, w))
+      // ⌘K's panel and ⌘/'s shortcuts, in every tier over the pages, under the presenters (sfdesk's switcher.mbt,
+      // shortcuts.mbt)
+      @sfdesk.switcher(c, src, w)
+      @sfdesk.keys_dialog(c, src)
       // the library's menus, picks, panels, confirms and questions (src/sf presenters.mbt), over all of those
       @sf.presented(c)
       toast(c)

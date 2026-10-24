@@ -1,0 +1,9 @@
+# The search on a phone (old and new side by side): the field at the list's top, words typed, what they find.
+timeout 20000
+until 今天
+wheel -300
+wait 600
+tap 搜索全部内容
+wait 900
+type 签名
+wait 1600
