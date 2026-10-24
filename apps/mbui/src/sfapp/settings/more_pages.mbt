@@ -1370,15 +1370,18 @@ fn change_item(c : @ui.Ctx, e : Json?) -> Unit {
       if label == "" {
         c.text(text(lv, "text"), size=15.0, color=t.p.text, w=Fill(1.0), line=21.0) |> ignore
       } else {
+        // the label inline before the words, which wrap under it (Changelog.css.ts mKind, in ems of its 13: 6 either
+        // side, 19 high, 6 round, 6 before the words)
         let fresh = text(lv, "kind") == "new"
-        c.box(dir=Row, w=Fill(1.0), gap=6.0, fn() {
-          c.box(padx=6.0, radius=6.0, bg=if fresh { t.p.accent_bg } else { t.p.chip }, fn() {
-            c.text(label, size=13.0, color=if fresh { t.p.accent_text } else { t.p.muted }, wrap=false, line=19.0) |> ignore
-          })
-          |> ignore
-          c.text(text(lv, "text"), size=15.0, color=t.p.text, w=Fill(1.0), line=21.0) |> ignore
-        })
-        |> ignore
+        let ground : @ui.Ground = { room: 6.0 / 13.0, height: 19.0 / 13.0, corner: 6.0 / 13.0, after: 6.0 / 13.0 }
+        let kind = @ui.span(
+          label,
+          scale=13.0 / 15.0,
+          color=if fresh { t.p.accent_text } else { t.p.muted },
+          bg=if fresh { t.p.accent_bg } else { t.p.chip },
+          ground=Some(ground),
+        )
+        c.rich([kind, @ui.plain(text(lv, "text"))], size=15.0, color=t.p.text, w=Fill(1.0), line=21.0) |> ignore
       }
     }
     c.box(dir=Row, w=Fill(1.0), gap=10.0, fn() {
