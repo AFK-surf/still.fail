@@ -26,7 +26,7 @@ import { Check, ChevronLeft, ChevronRight, Close, Copy, Disk, Server, Download, 
 import { KindIcon } from "../drive/KindIcon.tsx";
 import { Reader } from "@stillfail/ui/viewer/Reader.tsx";
 import { Player } from "@stillfail/ui/viewer/Player.tsx";
-import { cancel, download, downloadZip, joinPath, nameOf, openerOf, parentOf, refresh, retry, rootLabel, settle, sizeOf, upload, useFolder, useUploads, type At, type Upload as Up } from "../drive/model.ts";
+import { cancel, download, downloadZip, joinPath, nameOf, parentOf, refresh, retry, rootLabel, settle, sizeOf, upload, useFolder, useUploads, type At, type Upload as Up } from "../drive/model.ts";
 import { useDriveFile } from "../drive/viewerFile.ts";
 import { absoluteOf, childOf, drive, drivePath, filtered, folderName, rootTrouble, trailOf, useDrive, type DriveState, type PickFolder } from "../drive/useDrive.ts";
 import { carriesDrive, draggedNow, draggedOf, droppedOf, endDrag, startDrag } from "../drive/drag.ts";
@@ -245,7 +245,7 @@ export function FolderView({ d, root, path, front = true }: { d: DriveState; roo
   const openIn = (in_: At, e: DriveEntry, siblings: readonly DriveEntry[] = [e]) => {
     const full = joinPath(in_.path, e.name);
     keepOpened("page", in_, e.name);
-    switch (openerOf(e.kind)) {
+    switch (e.opens) {
       case "folder": return go(drivePath(station.base, root, full));
       case "read": return go(drivePath(station.base, root, full, "read"));
       case "play": return go(drivePath(station.base, root, full, "play"));

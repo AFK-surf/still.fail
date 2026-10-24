@@ -175,15 +175,25 @@ fn ScreenSess::drop_part(self : ScreenSess, d : ScreenDropItem, have : Int, plan
       Err(e) => {
         let taken = number(Some(e), "status") == 409.0 || text(Some(e), "code") == "exists"
         if taken && d.tried.length() < drop_tries {
-          // a name taken there: the next free one beside it (putFree)
+          // a name taken there: the next one beside it, from the first one asked, as the station keeps both (putFree)
           d.tried.push(d.name)
-          d.name = drop_free_name(d.name, d.tried)
-          d.sent = 0
-          d.id = upload_id(
-            "screen\u{1}\{d.folder}\u{1}" + file_seed(self.station, d.name, d.bytes),
-            d.serial,
-          )
-          self.drop_part(d, 0, dv_part_first)
+          dv_beside_name(self.src, self.station, d.folder, "", d.tried[0], d.tried, fn(r) {
+            if !self.still_going(d) {
+              return
+            }
+            match r {
+              Ok(name) => {
+                d.name = name
+                d.sent = 0
+                d.id = upload_id(
+                  "screen\u{1}\{d.folder}\u{1}" + file_seed(self.station, d.name, d.bytes),
+                  d.serial,
+                )
+                self.drop_part(d, 0, dv_part_first)
+              }
+              Err(why) => self.drop_failed(d, why)
+            }
+          })
         } else {
           self.drop_failed(d, error_words(e))
         }
@@ -200,10 +210,3 @@ fn ScreenSess::drop_failed(self : ScreenSess, d : ScreenDropItem, why : String) 
   self.pump()
 }
 
-///|
-/// The next name for a file whose name was taken (Drives.kt freeName over the names tried): from the first one asked,
-/// "name (1).ext", "name (2).ext"…
-fn drop_free_name(name : String, tried : Array[String]) -> String {
-  let first = if tried.length() > 0 { tried[0] } else { name }
-  dv_free_name(first, tried)
-}

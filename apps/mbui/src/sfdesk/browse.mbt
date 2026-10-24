@@ -402,29 +402,31 @@ pub fn Browse::rename(self : Browse, c : @ui.Ctx, src : Source, folder : String,
     return
   }
   let what = @sf.t("web-pages.drive.renameWhat")
-  match dv_name_problem(name) {
-    Some(problem) => say(c, @sf.t("web-main.act.failed", args=[("what", what), ("error", problem)]))
-    None => {
-      let b = self
-      c.tell("browse-renamed/" + self.key, fn() {
-        (src.call)(
-          "drive.rename",
-          {
-            "station": Json::string(b.at.station),
-            "root": Json::string(b.root),
-            "from": Json::string(dv_join(folder, e.name)),
-            "to": Json::string(dv_join(folder, name)),
-          },
-          fn(r) {
-            match r {
-              Ok(_) => browse_send(c, src, b, { "act": "choose", "folder": Json::string(folder), "name": Json::string(name) })
-              Err(err) => say(c, @sf.t("web-main.act.failed", args=[("what", what), ("error", dv_error(err))]))
-            }
-          },
-        )
-      })
-    }
-  }
+  let b = self
+  c.tell("browse-renamed/" + self.key, fn() {
+    // (a name it may not have refused, in the core's words)
+    dv_check_name(src, name, fn(problem) {
+      match problem {
+        Some(p) => say(c, @sf.t("web-main.act.failed", args=[("what", what), ("error", p)]))
+        None =>
+          (src.call)(
+            "drive.rename",
+            {
+              "station": Json::string(b.at.station),
+              "root": Json::string(b.root),
+              "from": Json::string(dv_join(folder, e.name)),
+              "to": Json::string(dv_join(folder, name)),
+            },
+            fn(r) {
+              match r {
+                Ok(_) => browse_send(c, src, b, { "act": "choose", "folder": Json::string(folder), "name": Json::string(name) })
+                Err(err) => say(c, @sf.t("web-main.act.failed", args=[("what", what), ("error", dv_error(err))]))
+              }
+            },
+          )
+      }
+    })
+  })
 }
 
 ///|

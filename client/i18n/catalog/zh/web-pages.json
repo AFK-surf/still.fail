@@ -1226,8 +1226,6 @@
   "web-pages.drive.keepBoth": "保留两者",
   "web-pages.drive.uploadFailed": "上传失败：{error}",
   "web-pages.drive.uploading": "{sent} / {size}",
-  "web-pages.drive.name.empty": "名称不能为空",
-  "web-pages.drive.name.bad": "名称不能包含 / 或 \\",
   "web-pages.drive.root.missing": "找不到此文件夹",
   "web-pages.drive.root.missingHint": "文件夹已被移动或删除，或所在磁盘未连接",
   "web-pages.drive.root.notFolder": "此项不是文件夹",

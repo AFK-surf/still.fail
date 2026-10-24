@@ -6,7 +6,7 @@ import { arrange, freeName, movesOf, type Arrangement } from "../client/core-ts/
 import type { DriveEntry } from "../web/src/core/shapes.ts";
 
 const entry = (name: string, dir = false, size = 0, mtime = 0): DriveEntry =>
-  ({ name, dir, size, mtime, type: "", kind: dir ? "folder" : name.endsWith(".md") ? "markdown" : "other", sizeText: "", timeText: "" }) as DriveEntry;
+  ({ name, dir, size, mtime, type: "", kind: dir ? "folder" : name.endsWith(".md") ? "markdown" : "other", opens: dir ? "folder" : name.endsWith(".md") ? "read" : "save", sizeText: "", timeText: "" }) as DriveEntry;
 const names = (es: DriveEntry[]) => es.map((e) => e.name);
 const by = (a: Partial<Arrangement>): Arrangement => ({ by: "name", down: false, hidden: false, ...a });
 

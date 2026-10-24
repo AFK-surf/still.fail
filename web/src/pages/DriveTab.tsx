@@ -15,7 +15,7 @@ import { offerToDraft } from "../draft.ts";
 import type { DriveEntry, StationView } from "../core/shapes.ts";
 import { Button, IconButton, ICON, type MenuItem, Waiting } from "../ui.tsx";
 import { ChevronRight, Copy, Download, Folder, PanelClose, PanelOpen, Pin, Refresh, Retry, Send, Server } from "@stillfail/ui/icons.tsx";
-import { download, joinPath, openerOf, refresh, useFolder, type At } from "../drive/model.ts";
+import { download, joinPath, refresh, useFolder, type At } from "../drive/model.ts";
 import { keepOpened, keepTab, keptTab, useKeptScroll, type Owner } from "../drive/kept.ts";
 import { useBrowse } from "../drive/browse.ts";
 import { absoluteOf, drive, drivePath, folderName, rootTrouble, trailOf, useDrive } from "../drive/useDrive.ts";
@@ -59,7 +59,7 @@ export function DriveTab({ chat }: {
           onOpen={(at, entries, entry) => {
             const full = joinPath(at.path, entry.name);
             keepOpened(owner, at, entry.name);
-            switch (openerOf(entry.kind)) {
+            switch (entry.opens) {
               case "folder": return setAsked({ station: at.station, root: at.root, path: full });
               case "read": return go(drivePath(stationBase(at.station), at.root, full, "read"));
               case "play": return go(drivePath(stationBase(at.station), at.root, full, "play"));

@@ -4,7 +4,8 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { apply as applyDelta } from "../src/delta.ts";
 import { EVICT_AFTER_MS } from "../src/store.ts";
-import { kindOf } from "../src/drive.ts";
+import { kindOf, opensOf } from "../src/drive.ts";
+import { wordsAnswer } from "../src/words.ts";
 import { apply, answers, call, subscribe, v } from "./helpers.ts";
 import { started, stationReplies, status } from "./station-fixture.ts";
 
@@ -33,6 +34,8 @@ test("a folder is read as it is shown, kept on the device, and shown with its ki
   apply(host, values);
   const shown = v(values, 1);
   assert.deepEqual(shown.entries.map((e: any) => [e.name, e.kind, e.sizeText]), [["Season 1", "folder", ""], ["E2.mp4", "video", "3.0 MB"], ["notes.md", "markdown", "120 B"]]);
+  // what a press on each does: entered, played, read
+  assert.deepEqual(shown.entries.map((e: any) => e.opens), ["folder", "play", "read"]);
   assert.match(shown.entries[1].timeText, /^\d{4}\/\d{1,2}\/\d{1,2}$/);
   assert.equal(shown.countText, "1 个文件夹 · 2 个文件");
   // Shown again: what is held at once, and read again (the station says nothing of its disk).
@@ -175,4 +178,18 @@ test("the reader's settings are the core's: whole, each in its bounds, one chang
   apply(host, values);
   assert.deepEqual(v(values, 1).reader, { size: 32, line: 1.9, margin: 22, face: "sans", indent: true, paper: "follow" });
   core.close();
+});
+
+test("what a press on an entry does, by its kind: entered, read, played, previewed, else saved", () => {
+  const of = (name: string) => opensOf(kindOf(name));
+  assert.deepEqual(["notes.txt", "README", "a.md", "film.mkv", "song.flac", "shot.png", "doc.pdf", "main.rs", "data.csv", "page.html", "a.srt", "archive.zip"].map(of),
+    ["read", "read", "read", "play", "play", "preview", "preview", "preview", "preview", "preview", "preview", "save"]);
+  assert.equal(opensOf("folder"), "folder");
+});
+
+test("a name typed for a file or folder: empty, a slash, . or .. said in words; anything else none", () => {
+  const problem = (name: string) => (wordsAnswer("drive.check", name, name.length, "") as { problem: string | null }).problem;
+  assert.equal(problem("  "), "名称不能为空");
+  for (const bad of ["a/b", "a\\b", ".", ".."]) assert.equal(problem(bad), "名称不能包含 / 或 \\", bad);
+  for (const fine of ["新建文件夹", ".hidden", "a.b.c", " 两头有空格 "]) assert.equal(problem(fine), null, fine);
 });

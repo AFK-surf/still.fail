@@ -2965,8 +2965,14 @@ export interface DriveBrowseView {
 	keys: string[];
 }
 
-/** What opens an entry of the drive. */
+/** What kind an entry of the drive is (its mark; what opens it: `DriveOpener`). */
 export type DriveKind = "folder" | "video" | "audio" | "image" | "markdown" | "text" | "code" | "csv" | "html" | "pdf" | "subtitle" | "other";
+
+/**
+ * What a press on an entry of the drive does: a folder entered, a text read, a video or a song played,
+ * the rest previewed as a chat's files are, or saved to the device.
+ */
+export type DriveOpener = "folder" | "read" | "play" | "preview" | "save";
 
 export interface DriveEntry {
 	name: string;
@@ -2977,6 +2983,7 @@ export interface DriveEntry {
 	/** A file's media type, by its name (empty for a folder). */
 	type: string;
 	kind: DriveKind;
+	opens: DriveOpener;
 	/** Its size in words (empty for a folder). */
 	sizeText: string;
 	/** Its time in words: 14:05 today, 9/27 this year, 2024/9/27 before. */

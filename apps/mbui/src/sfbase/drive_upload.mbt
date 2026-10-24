@@ -13,7 +13,7 @@ pub(all) struct DvUpload {
   mut name : String
   bytes : Bytes
   mut sent : Int
-  /// waiting | going | taken | failed
+  /// waiting | going | taken (asked: 替换 or 保留两者) | naming (kept beside: its name asked of the core) | failed
   mut state : String
   mut error : String
   mut replace : Bool

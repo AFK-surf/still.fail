@@ -5,6 +5,7 @@
 import data from "./station.json";
 import { CHEN, LIN, stamp, STATION, ZHOU, type Runs } from "./fixtures.ts";
 import type { ArchiveDay, ArchiveView, Connect, ConnectsView, DriveEntry, DriveFolder, DriveKind, Person } from "../core/shapes.ts";
+import { opensOf } from "../../../client/core-ts/src/drive-kind.ts";
 import { scale } from "../../../client/core-ts/src/views/scale.ts";
 import { resourcesView } from "../../../client/core-ts/src/views/resources.ts";
 
@@ -91,7 +92,7 @@ export function driveFolder(root: string, path: string): DriveFolder {
     const d = new Date(mtime);
     const today = new Date(at).toDateString() === d.toDateString();
     return {
-      name, dir: kind === "folder", size, mtime, type: TYPES[kind] ?? "", kind,
+      name, dir: kind === "folder", size, mtime, type: TYPES[kind] ?? "", kind, opens: opensOf(kind),
       sizeText: kind === "folder" ? "" : size >= 1_048_576 ? `${(size / 1_048_576).toFixed(1)} MB` : `${Math.round(size / 1024)} KB`,
       timeText: today ? d.toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" }) : `${d.getMonth() + 1}/${d.getDate()}`,
     };

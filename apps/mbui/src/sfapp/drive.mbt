@@ -578,7 +578,7 @@ fn folder_page(
       Failed(e) => dv_retry_line(c, e, 14.0, t.p.red, 12.0, reload)
       Reading => waiting(c, 7, None, None)
       CountLine(s) => dv_count_line(c, s)
-      Up(u, first, last) => upload_row(c, src, u, first, last, entries)
+      Up(u, first, last) => upload_row(c, src, u, first, last)
       EmptyFolder =>
         dv_empty(
           c,
@@ -892,7 +892,6 @@ fn upload_row(
   u : DvUpload,
   first : Bool,
   last : Bool,
-  entries : Array[DvEntry],
 ) -> Unit {
   let t = @sf.theme()
   let k = "up/\{u.serial}"
@@ -915,11 +914,7 @@ fn upload_row(
                 dv_pump(src)
               }
               if c.clicked(bid) {
-                let others = ups.uploads.filter(fn(x) { x.serial != u.serial && x.dir == u.dir })
-                let taken = entries.map(fn(e) { e.name }) + others.map(fn(x) { x.name })
-                u.name = dv_free_name(u.name, taken)
-                u.state = "waiting"
-                dv_pump(src)
+                dv_keep_both(src, u)
               }
               c.box(style=drive_answer, id=rid, fn() {
                 c.text(tr("android-misc.drive.exists.replace"), size=12.0, weight=600, color=@sf.link_ink(), wrap=false, line=16.0)

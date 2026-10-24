@@ -1301,8 +1301,6 @@
   "web-pages.drive.keepBoth": "Keep both",
   "web-pages.drive.uploadFailed": "Upload failed: {error}",
   "web-pages.drive.uploading": "{sent} / {size}",
-  "web-pages.drive.name.empty": "Name can't be empty",
-  "web-pages.drive.name.bad": "Name can't contain / or \\",
   "web-pages.drive.root.missing": "Folder not found",
   "web-pages.drive.root.missingHint": "It was moved or deleted, or its disk isn't connected",
   "web-pages.drive.root.notFolder": "This isn't a folder",

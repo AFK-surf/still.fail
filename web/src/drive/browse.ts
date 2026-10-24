@@ -11,7 +11,7 @@ import { core, topicNow, useTopic } from "../core/react.ts";
 import { CoreError } from "../core/client.ts";
 import type { DriveArrangement, DriveBrowseView, DriveEntry, DriveFolder } from "../core/shapes.ts";
 import { joinPath, parentOf, refresh, upload, type At } from "./model.ts";
-import { drive, nameProblem } from "./useDrive.ts";
+import { drive, named } from "./useDrive.ts";
 import { carriesDrive, droppedOf, type Dragged } from "./drag.ts";
 import { movesOf } from "./transfer.ts";
 import type { Owner } from "./kept.ts";
@@ -164,9 +164,8 @@ export function useBrowse(o: BrowseOptions): Browse {
     setRenaming(null);
     const name = to?.trim();
     if (!name || name === entry.name) return;
-    const problem = nameProblem(name);
     // Chosen under its new name as soon as the station has it.
-    o.act(problem ? Promise.reject(new Error(problem)) : drive.rename(in_, entry, name).then(() => ask({ act: "choose", folder: in_.path, name })), t("web-pages.drive.renameWhat"));
+    o.act(named(name).then(() => drive.rename(in_, entry, name)).then(() => ask({ act: "choose", folder: in_.path, name })), t("web-pages.drive.renameWhat"));
   };
 
   const newFolder = async (in_: At, entries: readonly DriveEntry[]) => {

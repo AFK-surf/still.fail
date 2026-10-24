@@ -1275,8 +1275,6 @@ let en : Map[String, String] = {
   "android-misc.drive.mkdir.make": "Create",
   "android-misc.drive.mkdir.placeholder": "Folder name",
   "android-misc.drive.mkdir.what": "create the folder",
-  "android-misc.drive.name.bad": "A name can't contain / or \\",
-  "android-misc.drive.name.empty": "A name can't be empty",
   "android-misc.drive.none.manager": "No folders shared yet. Pick a folder on this machine and the workspace's members can browse it here.",
   "android-misc.drive.none.member": "The workspace's admins haven't shared any folder on this machine yet",
   "android-misc.drive.oldStation": "This station is too old for Files; update it first",

@@ -16,9 +16,9 @@ import { FilePreview, FileSource, Gallery, PreviewBack, type FileSourceOf, type 
 import { KindIcon } from "../drive/KindIcon.tsx";
 import { Reader } from "@stillfail/ui/viewer/Reader.tsx";
 import { Player } from "@stillfail/ui/viewer/Player.tsx";
-import { cancel, download, joinPath, nameOf, openerOf, parentOf, readKept, readPart, refresh, retry, rootLabel, settle, sizeOf, upload, useFolder, useUploads, type At, type Upload as Up } from "../drive/model.ts";
+import { cancel, download, joinPath, nameOf, parentOf, readKept, readPart, refresh, retry, rootLabel, settle, sizeOf, upload, useFolder, useUploads, type At, type Upload as Up } from "../drive/model.ts";
 import { useDriveFile } from "../drive/viewerFile.ts";
-import { childOf, drive, drivePath, filtered, nameProblem, rootTrouble, useDrive, type DriveState, type Folders, type PickFolder } from "../drive/useDrive.ts";
+import { childOf, drive, drivePath, filtered, named, rootTrouble, useDrive, type DriveState, type Folders, type PickFolder } from "../drive/useDrive.ts";
 import { SheetGrab, SheetHead, useApp, type MobileApp } from "./app.tsx";
 import { ask, confirm } from "./sheets.tsx";
 import { Button, ListCard, NavBar, NavButton, PickRow, SectionHeader } from "./parts.tsx";
@@ -145,7 +145,7 @@ function FolderPage({ d, root, path, top }: { d: DriveState; root: string; path:
   ) });
   const open = (e: DriveEntry) => {
     const full = joinPath(path, e.name);
-    switch (openerOf(e.kind)) {
+    switch (e.opens) {
       case "folder": return app.push(drivePath(station.base, root, full));
       case "read": return app.push(drivePath(station.base, root, full, "read"));
       case "play": return app.push(drivePath(station.base, root, full, "play"));
@@ -268,7 +268,7 @@ function EntrySheet({ at, entry, write, act }: { at: At; entry: DriveEntry; writ
       <div className={sheetsCss.mSheetScroll}>
         {write && <PickRow label={t("web-pages.drive.rename")} leading={<Edit size={20} />} onClick={() => ask(app, {
           title: t("web-pages.drive.renameTitle"), value: entry.name, placeholder: entry.name, action: t("common.save"), atOnce: "web-pages.drive.renameFailed",
-          run: (name) => { const bad = nameProblem(name); return bad ? Promise.reject(new Error(bad)) : drive.rename(at, entry, name); },
+          run: (name) => named(name).then(() => drive.rename(at, entry, name)),
         })} />}
         {!entry.dir && <PickRow label={t("web-pages.drive.download")} leading={<Download size={20} />} onClick={() => { app.sheet(null); save(app, act, { ...at, path: joinPath(at.path, entry.name) }, entry); }} />}
         {write && <PickRow label={t("web-pages.drive.delete")} accent leading={<Trash size={20} />} onClick={() => confirm(app, {
@@ -283,7 +283,7 @@ function EntrySheet({ at, entry, write, act }: { at: At; entry: DriveEntry; writ
 function newFolder(app: MobileApp, at: At) {
   ask(app, {
     title: t("web-pages.drive.mkdir"), value: "", placeholder: t("web-pages.drive.mkdirPlaceholder"), action: t("web-pages.drive.make"), atOnce: "web-pages.drive.mkdirFailed",
-    run: (name) => { const bad = nameProblem(name); return bad ? Promise.reject(new Error(bad)) : drive.mkdir(at, name); },
+    run: (name) => named(name).then(() => drive.mkdir(at, name)),
   });
 }
 

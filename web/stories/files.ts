@@ -3,6 +3,7 @@
 // done and failed (the `driveTransfers` topic as the core puts it together: client/core-ts/src/views/transfers.ts); and
 // what a copy asked answers.
 import type { DemoExtension } from "../src/demo/mount.tsx";
+import { opensOf } from "../../client/core-ts/src/drive-kind.ts";
 import { driveFolder as studioFolder } from "../src/demo/station.ts";
 import type { DriveEntry, DriveFolder, DriveKind, DriveTransferShown, StationView } from "../src/core/shapes.ts";
 
@@ -20,7 +21,7 @@ function folder(path: string): DriveFolder {
   const entries = (FOLDERS[path] ?? []).map(([name, kind, size, minutes]): DriveEntry => {
     const d = new Date(NOW - minutes * 60_000);
     return {
-      name, dir: kind === "folder", size, mtime: d.getTime(), type: "", kind,
+      name, dir: kind === "folder", size, mtime: d.getTime(), type: "", kind, opens: opensOf(kind),
       sizeText: kind === "folder" ? "" : size >= 1_048_576 ? `${(size / 1_048_576).toFixed(1)} MB` : `${Math.round(size / 1024)} KB`,
       timeText: `${d.getMonth() + 1}/${d.getDate()}`,
     };

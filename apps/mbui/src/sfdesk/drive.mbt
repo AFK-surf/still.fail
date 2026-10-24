@@ -393,7 +393,7 @@ pub fn folder_view(c : @ui.Ctx, src : Source, f : FolderOf) -> Unit {
       if view == "columns" {
         // (columns stay while the folder opened is read: each column says its own reading or trouble)
         for u in ups_here {
-          upload_row(c, src, u, entries)
+          upload_row(c, src, u)
         }
         columns_view(
           c,
@@ -428,7 +428,7 @@ pub fn folder_view(c : @ui.Ctx, src : Source, f : FolderOf) -> Unit {
                   view == "tree",
                   head=fn() {
                     for u in ups_here {
-                      upload_row(c, src, u, entries)
+                      upload_row(c, src, u)
                     }
                     if view == "list" && list.length() > 0 {
                       list_head(c, b.arrangement(), fn(by) {
@@ -1006,7 +1006,7 @@ pub fn list_head(c : @ui.Ctx, a : Arrangement, on_sort : (String) -> Unit) -> Un
 ///|
 /// A file going up into the folder shown (UploadRow): its mark, its name, how far (a thin bar, sent of its size); its
 /// name taken there (替换, 保留两者), or why it failed (重试); × lets it go.
-pub fn upload_row(c : @ui.Ctx, src : Source, u : DvUpload, entries : Array[DvEntry]) -> Unit {
+pub fn upload_row(c : @ui.Ctx, src : Source, u : DvUpload) -> Unit {
   let t = @sf.theme()
   let k = "files/up/\{u.serial}"
   c.box(style=entry_room, fn() {
@@ -1028,10 +1028,7 @@ pub fn upload_row(c : @ui.Ctx, src : Source, u : DvUpload, entries : Array[DvEnt
                   dv_pump(src)
                 }
                 if @sf.button(c, @sf.t("web-pages.drive.keepBoth"), key=k + "/both", tone=Ghost) {
-                  let others = ups.uploads.filter(fn(x) { x.serial != u.serial && x.dir == u.dir })
-                  u.name = dv_free_name(u.name, entries.map(fn(e) { e.name }) + others.map(fn(x) { x.name }))
-                  u.state = "waiting"
-                  dv_pump(src)
+                  dv_keep_both(src, u)
                 }
               })
               |> ignore

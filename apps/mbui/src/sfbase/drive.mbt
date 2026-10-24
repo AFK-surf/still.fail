@@ -226,16 +226,21 @@ pub fn dv_trouble(state : String) -> (String, String)? {
 }
 
 ///|
-/// What is wrong with a name a file or folder may have (empty, a slash, . or ..); None when nothing is.
-pub fn dv_name_problem(name : String) -> String? {
-  let n = name.trim(chars=" \t\n").to_owned()
-  if n == "" {
-    Some(@sf.t("android-misc.drive.name.empty"))
-  } else if n.contains("/") || n.contains("\\") || n == "." || n == ".." {
-    Some(@sf.t("android-misc.drive.name.bad"))
-  } else {
-    None
-  }
+/// A name typed for a file or folder, as the core says it may be (`drive.check`: not empty, no slash, not . or ..):
+/// `then(None)` where it may, else `then(Some(why))`.
+pub fn dv_check_name(src : Source, name : String, then : (String?) -> Unit) -> Unit {
+  (src.call)("drive.check", { "text": Json::string(name) }, fn(r) {
+    match r {
+      Ok(v) =>
+        then(
+          match field(Some(v), "problem") {
+            Some(String(p)) => Some(p)
+            _ => None
+          },
+        )
+      Err(e) => then(Some(dv_error(e)))
+    }
+  })
 }
 
 ///|
@@ -296,22 +301,56 @@ pub fn dv_manager(w : Json?) -> Bool {
 }
 
 ///|
-/// A name not among `taken`: "name (1).ext", "name (2).ext"… (web/src/drive/model.ts freeName: an upload kept beside a file of its name).
-pub fn dv_free_name(name : String, taken : Array[String]) -> String {
-  if !taken.contains(name) {
-    return name
-  }
-  let dot = match name.rev_find(".") {
-    Some(i) if i > 0 => i
-    _ => name.length()
-  }
-  let stem = name.view(end_offset=dot).to_owned()
-  let ext = name.view(start_offset=dot).to_owned()
-  let mut n = 1
-  while taken.contains("\{stem} (\{n})\{ext}") {
-    n += 1
-  }
-  "\{stem} (\{n})\{ext}"
+/// The name a file takes kept beside one of its name in the folder `path` of `root` (保留两者), as the station keeps
+/// both (the core's `drive.name`, beside: `a 2.txt`), not among the folder's names as the core holds them nor `taken`:
+/// `then(Ok(name))`, or why it could not be named.
+pub fn dv_beside_name(
+  src : Source,
+  station : String,
+  root : String,
+  path : String,
+  name : String,
+  taken : Array[String],
+  then : (Result[String, String]) -> Unit,
+) -> Unit {
+  (src.call)(
+    "drive.name",
+    {
+      "name": Json::string(name),
+      "station": Json::string(station),
+      "root": Json::string(root),
+      "path": Json::string(path),
+      "taken": Json::array(taken.map(fn(n) { Json::string(n) })),
+      "beside": Json::boolean(true),
+    },
+    fn(r) {
+      match r {
+        Ok(v) => then(Ok(text(Some(v), "name")))
+        Err(e) => then(Err(dv_error(e)))
+      }
+    },
+  )
+}
+
+///|
+/// A file whose name was taken in its folder kept beside it (保留两者: dv_beside_name over the others going up there),
+/// then on its way again.
+pub fn dv_keep_both(src : Source, u : DvUpload) -> Unit {
+  let others = ups.uploads.filter(fn(x) { x.serial != u.serial && x.station == u.station && x.root == u.root && x.dir == u.dir })
+  u.state = "naming"
+  dv_beside_name(src, u.station, u.root, u.dir, u.name, others.map(fn(x) { x.name }), fn(r) {
+    match r {
+      Ok(name) => {
+        u.name = name
+        u.state = "waiting"
+      }
+      Err(why) => {
+        u.state = "failed"
+        u.error = why
+      }
+    }
+    dv_pump(src)
+  })
 }
 
 

@@ -138,7 +138,7 @@ export type Call =
   | { kind: "historyTool"; name: string; call: string; result: string | null; failed: boolean; said: boolean }
   /// Where a chat's find goes (chat-find.ts): what was found, where the reader is, which way, what the view shows.
   | { kind: "chatFindGo"; hits: FindHit[]; at: FindAt | null; by: -1 | 0 | 1; from: number | null; to: number | null; drawn: Record<string, number> }
-  | { kind: "words"; what: "ref.at" | "ref.before" | "ref.marks" | "ref.pasted" | "paste.info"; text: string; caret: number; here: string }
+  | { kind: "words"; what: "ref.at" | "ref.before" | "ref.marks" | "ref.pasted" | "paste.info" | "drive.check"; text: string; caret: number; here: string }
   /// A face's files on a device that keeps none of its own (font-files.ts): fetched, kept, given back.
   | { kind: "fonts"; call: FontsCall }
   | { kind: "ask"; ask: Ask }
@@ -767,12 +767,14 @@ export function parseCall(name: string, params: unknown, bytes?: Uint8Array, mod
       ]);
       return { kind: "historyTool", name: p.name as string, call: p.call as string, result: p.result as string | null, failed: p.failed as boolean, said: p.said as boolean };
     }
-    // What is written, read as every client reads it (refLinks.ts refAt, markBefore, marksIn, pastedRefs; pasted.ts).
+    // What is written, read as every client reads it (refLinks.ts refAt, markBefore, marksIn, pastedRefs; pasted.ts;
+    // drive.ts nameProblem: a name typed for a file or folder, `text`).
     case "ref.at":
     case "ref.before":
     case "ref.marks":
     case "ref.pasted":
-    case "paste.info": {
+    case "paste.info":
+    case "drive.check": {
       const p = read(params, [
         ["text", S, "default"],
         ["caret", "f64", "opt"],

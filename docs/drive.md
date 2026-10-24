@@ -202,16 +202,20 @@ of a folder within one station by the disk's own clone.
 - Topic `drive {station, root, path}`: the folder (`DriveFolder`), kept on the
   device (a station document), read again each time it is shown, and while shown
   again each time the station says something in it changed (`GET /drive/watch`); each entry
-  with its `kind` (what opens it: folder, video, audio, image, markdown, text,
-  code, csv, html, pdf, subtitle, other), `sizeText`, `timeText`, and the
-  folder's `countText`. A folder the station refuses (gone, out of its root) is
+  with its `kind` (folder, video, audio, image, markdown, text, code, csv,
+  html, pdf, subtitle, other: its mark), what a press on it does (`opens`:
+  `folder` entered, `read`, `play`, `preview` as a chat's files are, else
+  `save`), `sizeText`, `timeText`, and the folder's `countText`. A folder the station refuses (gone, out of its root) is
   let go and its error shown.
 - Topic `drivePlace {station, root, path}`: where a file was left on this device
   (`{at, of, changed}`: a text's offset, a video's time in ms), null before.
 - Operations: `drive.setRoots {roots}`, `drive.folders {path?}`,
   `drive.mkdir {root, path}`, `drive.rename {root, from, to}`,
   `drive.remove {root, path}`; each change reads its folders again before it
-  answers.
+  answers. A name typed for a file or folder is asked first (`drive.check
+  {text}`: `{problem}`, in words, null where it may be: not empty, no slash, not
+  `.` or `..`); one kept beside another of its name (an upload's 保留两者) is
+  named as the station keeps both (`drive.name {…, beside: true}`: `a 2.txt`).
 - Calls: `drive.read {station, root, path, offset, length, progress?, stream?,
   keep?, mtime?, size?}` → `{type, total, mtime}`, the part as the answer's bytes
   (docs/client-core.md Protocol; with `progress`, values `{loaded}`, the part's

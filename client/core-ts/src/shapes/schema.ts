@@ -856,7 +856,8 @@ export const SHAPES: Record<string, Shape> = {
     ["state", "DriveRootState", { doc: "Whether it can be browsed now (`unreadable`: there, but the station may not list it, as macOS keeps some folders from a\nstation it did not ask)." }],
   ]),
   DriveRootState: words(["ok","missing","not_a_directory","unreadable"], { doc: "Whether a folder of the drive can be browsed now." }),
-  DriveKind: words(["folder","video","audio","image","markdown","text","code","csv","html","pdf","subtitle","other"], { doc: "What opens an entry of the drive." }),
+  DriveKind: words(["folder","video","audio","image","markdown","text","code","csv","html","pdf","subtitle","other"], { doc: "What kind an entry of the drive is (its mark; what opens it: `DriveOpener`)." }),
+  DriveOpener: words(["folder","read","play","preview","save"], { doc: "What a press on an entry of the drive does: a folder entered, a text read, a video or a song played,\nthe rest previewed as a chat's files are, or saved to the device." }),
   DriveEntry: struct([
     ["name", "String"],
     ["dir", "bool"],
@@ -864,6 +865,7 @@ export const SHAPES: Record<string, Shape> = {
     ["mtime", "i64", { client: "I54", doc: "When it last changed (ms)." }],
     ["type", "String", { doc: "A file's media type, by its name (empty for a folder)." }],
     ["kind", "DriveKind"],
+    ["opens", "DriveOpener"],
     ["sizeText", "String", { doc: "Its size in words (empty for a folder)." }],
     ["timeText", "String", { doc: "Its time in words: 14:05 today, 9/27 this year, 2024/9/27 before." }],
   ]),

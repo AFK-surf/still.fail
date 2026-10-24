@@ -49,8 +49,6 @@ let drive_zh : Map[String, String] = {
   "android-misc.drive.mkdir.make": "新建",
   "android-misc.drive.mkdir.placeholder": "文件夹名",
   "android-misc.drive.mkdir.what": "新建文件夹",
-  "android-misc.drive.name.bad": "名称不能包含 / 或 \\",
-  "android-misc.drive.name.empty": "名称不能为空",
   "android-misc.drive.none.manager": "暂无开放的文件夹。选择此机器上的文件夹后，workspace 成员即可在这里浏览。",
   "android-misc.drive.none.member": "workspace 管理员尚未开放此机器上的文件夹",
   "android-misc.drive.oldStation": "此 station 版本过旧，不支持文件功能，请先更新",
