@@ -176,8 +176,6 @@ priv struct Reading {
   history : Map[String, @motion.Anim]
   /// when the list's own motion is at rest, as last laid out (ListInfo's `rest`): a turn waits for it
   mut list_rest : Double
-  /// what was sent from here and is not in the core's view yet: in the list from the frame it was sent (sent_local)
-  sending : Array[LocalSent]
   /// the newest row (not an agent's line) as last built, and whether the list follows one from its top (Follow.kt
   /// anchor: a message arriving while it is followed is read from its start)
   mut newest : String
@@ -255,7 +253,6 @@ fn reading_of(key : String) -> Reading {
         rises: {},
         history: {},
         list_rest: -1.0,
-        sending: [],
         newest: "",
         following_row: false,
         follow_key: "",
@@ -455,7 +452,7 @@ fn messages(
   }
   let dkey = draft_key(r)
   let turns = turns_of(ek)
-  let (list, keys) = row_keys(c, rd, v, with_lingering(rd, read), key, turns, em, flight_of(dkey))
+  let (list, keys) = row_keys(c, rd, ek, v, with_lingering(rd, read), key, turns, em, flight_of(dkey))
   follow_newest(c, rd, list, keys, key)
   flight_frame(c, dkey)
   let flight = flight_of(dkey)
@@ -1146,80 +1143,6 @@ fn floor_of(c : @ui.Ctx, rd : Reading, key : String, keys : Array[String]) -> Do
 }
 
 ///|
-/// What was sent from here, in the list from the frame it was sent until the core's view has it (Chat.kt shows the
-/// core's outbox; here the core's row comes a round trip later, and what is sent is on screen first): drawn as an
-/// outbox entry of its words, by a key of its own ("local:n"); the first of this device's own rows not there when it
-/// was sent (an outbox entry, or the message it became) is it, from then on by that row's key.
-priv struct LocalSent {
-  row : Outgoing
-  before : Map[String, Bool]
-}
-
-///|
-let local_sent_n : Ref[Int] = { val: 0 }
-
-///|
-fn local_sent(o : Outgoing) -> Bool {
-  o.id.has_prefix("local:")
-}
-
-///|
-/// The rows of the view `v` there when words were sent: an outbox entry's, a message's, and the outbox entry it was
-/// (rows are keyed by it: row_keys).
-fn sent_before(v : ChatView) -> Map[String, Bool] {
-  let before : Map[String, Bool] = {}
-  for o in v.outbox {
-    before["o:" + o.id] = true
-  }
-  for m in v.messages {
-    if m.outgoing != "" {
-      before["o:" + m.outgoing] = true
-    }
-    before["m:" + m.ts] = true
-  }
-  before
-}
-
-///|
-/// Words sent from chat `rk` (its station and session; `v` its view, None for one just made) are in its list now,
-/// before the core has them (LocalSent). Its key, for what flies there (flight.mbt).
-fn sent_local(rk : String, v : ChatView?, words : String, files : Array[Json]) -> String {
-  local_sent_n.val += 1
-  let id = "local:\{local_sent_n.val}"
-  reading_of(rk).sending.push({
-    row: {
-      id,
-      text: words,
-      attachments: files.map(attachment_of),
-      quotes: [],
-      state: "sending",
-      error: "",
-      joined: false,
-      followed: false,
-      seq: -1.0,
-      waits: "",
-      uploads: [],
-    },
-    // (a chat just made: none)
-    before: match v {
-      Some(v) => sent_before(v)
-      None => Map::new()
-    },
-  })
-  "o:" + id
-}
-
-///|
-/// What was sent from chat `rk` (key: sent_local's) did not go: it leaves the list.
-fn sent_local_gone(rk : String, key : String) -> Unit {
-  let rd = reading_of(rk)
-  match rd.sending.search_by(fn(l) { "o:" + l.row.id == key }) {
-    Some(i) => rd.sending.remove(i) |> ignore
-    None => ()
-  }
-}
-
-///|
 /// What the chat's page builds from where its list is (messages): whether it is laid out, near its top (the page
 /// before asked for) or its end (the page after), at its end, away from it (the way to the newest), and whether the
 /// asks waiting are all in view (the bell over the way to the end, jump_to_ask). A scroll changing none of that builds
@@ -1365,6 +1288,7 @@ fn read_place(rd : Reading, v : ChatView, list : Array[Entry], lr : @ui.ListRead
 fn row_keys(
   c : @ui.Ctx,
   rd : Reading,
+  rk : String,
   v : ChatView,
   all : Array[Entry],
   key : String,
@@ -1400,7 +1324,8 @@ fn row_keys(
   // (the core's rows taken for what was sent before its own row was ever in the list: new to the list's end, they take
   // back the floor as what comes in does)
   let came_new : Array[String] = []
-  for l in rd.sending {
+  let sending = sending_of(rk)
+  for l in sending {
     let mut came = ""
     for i, e in all {
       let k = all_keys[i]
@@ -1428,9 +1353,9 @@ fn row_keys(
       _ => ()
     }
   }
-  rd.sending.clear()
+  sending.clear()
   for l in still {
-    rd.sending.push(l)
+    sending.push(l)
   }
   // (after the outbox, before the agents' lines and the room under them)
   let all = all.copy()
