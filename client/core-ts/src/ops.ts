@@ -24,7 +24,11 @@ export type Effect =
   /// Folders of the station's drive under `root` (paths relative to it): read again where held or shown.
   | { kind: "drive"; root: string; paths: string[] }
   /// A station's logins (docs/remote-login.md): the login answered with is put in place at once.
-  | { kind: "machineLogins" };
+  | { kind: "machineLogins" }
+  /// A sign-in for a new profile (the overview's `logins`) started, given its code or dropped: as the station answered,
+  /// in place at once until the overview says as much. `id`: the login's (null: the answer names it, as it starts);
+  /// `from`: the state the step moves it on from (null: not listed yet).
+  | { kind: "login"; id: string | null; from: string | null };
 
 /// The request an operation makes.
 export type Request = {
@@ -473,11 +477,12 @@ function stationOp(name: string, params: unknown): Request | null {
     case "profile.loginCode":
       return op("POST", () => `/profiles/${p.at("id")}/login-code`, p.pick(["code"]), OVERVIEW);
     case "login.new":
-      return op("POST", () => "/logins", p.pick(["runtime", "access"]), NONE);
+      return op("POST", () => "/logins", p.pick(["runtime", "access"]), { kind: "login", id: null, from: null });
+    // A code is taken only while its sign-in waits for one.
     case "login.code":
-      return op("POST", () => `/logins/${p.at("id")}/code`, p.pick(["code"]), NONE);
+      return op("POST", () => `/logins/${p.at("id")}/code`, p.pick(["code"]), { kind: "login", id: p.str("id"), from: "needs_code" });
     case "login.drop":
-      return op("DELETE", () => `/logins/${p.at("id")}`, null, NONE);
+      return op("DELETE", () => `/logins/${p.at("id")}`, null, { kind: "login", id: p.str("id"), from: null });
     case "job.get":
       return op("GET", () => `/jobs/${p.at("id")}`, null, NONE);
     case "job.log":

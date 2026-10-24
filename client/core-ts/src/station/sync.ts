@@ -1170,6 +1170,13 @@ export class StationsSync {
         case "machineLogins":
           this.putMachineLogin(address, isObject(get(answer, "login")) ? get(answer, "login") : answer);
           break;
+        // A sign-in for a new profile started, given its code or dropped: as the station answered, at once, until its
+        // overview says as much (a dropped one's answer has no job: let go).
+        case "login": {
+          const id = effect.id ?? str(get(answer, "id"));
+          if (id !== null) this.#core.data.stepLogin(address, id, get(answer, "job"), effect.from);
+          break;
+        }
         // The folders a change of the drive was in: read again where they are held or shown.
         case "drive":
           for (const path of new Set(effect.paths)) {
