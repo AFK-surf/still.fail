@@ -369,6 +369,17 @@ export function transcriptLengths(s: Store, key: string | null): Map<string, num
   }
 }
 
+/// What sessions' calls used, as the station keeps it (store.ts `setSessionUsage`; one, or every one known when `key` is
+/// null): none for a session that has made no call (or a database no station of this version opened).
+export function sessionUsages(s: Store, key: string | null): Map<string, Json> {
+  try {
+    const rows = key !== null ? all(s, "SELECT session, usage FROM session_usage WHERE session = ?", key) : all(s, "SELECT session, usage FROM session_usage");
+    return new Map(rows.map((r) => [r.session as string, JSON.parse(r.usage as string)]));
+  } catch {
+    return new Map();
+  }
+}
+
 // ── threads ──
 
 export function getThread(s: Store, id: number): ThreadRow | null {

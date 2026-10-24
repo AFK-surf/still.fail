@@ -283,7 +283,7 @@ fn agent_status(c : @ui.Ctx, src : Source, a : Json?) -> Unit {
     if since != "" {
       runs.push(@ui.span(" · " + since, color=t.p.muted))
     }
-    c.rich(runs, size=13.0, line=18.0, color=t.p.text, w=Fill(1.0)) |> ignore
+    c.rich(runs, size=13.0, line=18.0, color=t.p.text, w=Fill(1.0), max_lines=2) |> ignore
   })
   |> ignore
 }

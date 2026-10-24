@@ -337,7 +337,10 @@ that only notifications change it:
   (`?after=<last held>`, a hole `?from=&to=&brief=1`) as soon as anything says
   the transcript goes further: that message, a session's summary
   (`transcriptLength`), a read's `end`; a history shown makes that read urgent,
-  nothing else. The history of an agent used lately (its chat or its history
+  nothing else. What a session's calls used is the stream's `usage` while it
+  works, else its summary's (`usage`, which every session's has, so an agent at
+  rest says it with no stream naming it; views/brief.ts `usageNow`): its card
+  and its history show that. The history of an agent used lately (its chat or its history
   opened here in the last three days, `Data.usedLately`) is brought whole in the
   background, the page before the lowest entry held after another down to its
   first (`?before=`), as the room on the device allows; another agent's earlier

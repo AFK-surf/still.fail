@@ -440,6 +440,8 @@ export class UsageCounter {
   #unsubscribe: (() => void) | null = null;
   #abort = new AbortController();
   #clock: Clock.Clock;
+  /// The sessions the read under way recorded new calls of.
+  #counted = new Set<string>();
 
   constructor(options: UsageCounterOptions) {
     this.#store = options.store;
@@ -542,6 +544,7 @@ export class UsageCounter {
     const known = store.usageFiles();
     const config = this.#config();
     let added = 0;
+    this.#counted.clear();
     // Claude Code: each session's project directory (named after where it runs), in the shared transcripts and in any
     // profile's own.
     const distinct = async (roots: string[]) => {
@@ -647,7 +650,7 @@ export class UsageCounter {
     this.#first = false;
     if (added > 0) {
       if (last === 0) log.info("usage", "usage read from every transcript", { calls: added, ms: this.#clock.currentTimeMillisUnsafe() - started });
-      store.usageChanged();
+      store.usageChanged([...this.#counted]);
     }
     return added;
   }
@@ -680,7 +683,9 @@ export class UsageCounter {
         }
         return [c, of[Math.max(lo - 1, 0)]!.of];
       });
-      added += this.#store.recordUsage(path, { session: session.key, offset: part.offset, model: state.model }, runtime, withFor);
+      const recorded = this.#store.recordUsage(path, { session: session.key, offset: part.offset, model: state.model }, runtime, withFor);
+      if (recorded > 0) this.#counted.add(session.key);
+      added += recorded;
       await breathe();
     }
     return added;

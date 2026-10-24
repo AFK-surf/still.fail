@@ -146,7 +146,7 @@ function sessionRow(s: Store, key: string): SessionRow {
   return row;
 }
 
-type Lists = { stats: Map<string, store.SessionStats>; bindings: Map<string, string[]>; participants: Map<string, string[]>; watches: Map<string, Json>; lengths: Map<string, number> };
+type Lists = { stats: Map<string, store.SessionStats>; bindings: Map<string, string[]>; participants: Map<string, string[]>; watches: Map<string, Json>; lengths: Map<string, number>; usages: Map<string, Json> };
 
 /// views.rs `summary_with`: a session for lists and events: its row (without the token), process state, counts and people.
 function summaryWith(s: Store, key: string, l: Lists): Json {
@@ -172,19 +172,23 @@ function summaryWith(s: Store, key: string, l: Lists): Json {
   // the latest knows what it missed. None until the station has read it at work since it began to say so.
   const length = l.lengths.get(key);
   if (length !== undefined) v.transcriptLength = length;
+  // What its calls used (read/tail.ts TranscriptUsage): what its live view tells while it works, kept as it changes and
+  // counted since, so a device knows it of one at rest. None before a call.
+  const usage = l.usages.get(key);
+  if (usage !== undefined) v.usage = usage;
   return v;
 }
 
 /// views.rs `summary`: one session's.
 export function summary(s: Store, key: string): Json {
-  return summaryWith(s, key, { stats: store.sessionStats(s, key), bindings: store.listBindings(s), participants: store.participants(s, key), watches: watching(s), lengths: store.transcriptLengths(s, key) });
+  return summaryWith(s, key, { stats: store.sessionStats(s, key), bindings: store.listBindings(s), participants: store.participants(s, key), watches: watching(s), lengths: store.transcriptLengths(s, key), usages: store.sessionUsages(s, key) });
 }
 
 /// GET /sessions (views.rs `sessions`): the sessions shown in lists, or only the archived ones; those of one connect;
 /// those of the viewer's workspace (all of them for a read made for no one).
 export function sessions(s: Store, connect: string | null, archived: boolean, lang: Lang, viewer: InWorkspace | null = null): Json[] {
   setLang(lang);
-  const l: Lists = { stats: store.sessionStats(s, null), bindings: store.listBindings(s), participants: store.participants(s, null), watches: watching(s), lengths: store.transcriptLengths(s, null) };
+  const l: Lists = { stats: store.sessionStats(s, null), bindings: store.listBindings(s), participants: store.participants(s, null), watches: watching(s), lengths: store.transcriptLengths(s, null), usages: store.sessionUsages(s, null) };
   return store
     .listSessions(s)
     .filter((x) => (connect === null || x.connect === connect) && (x.archivedAt !== null) === archived && (viewer === null || sees(viewer, x.ws)))

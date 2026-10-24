@@ -7,6 +7,7 @@ import * as format from "../format.ts";
 import { usageOf } from "../history.ts";
 import { t } from "../i18n.ts";
 import * as jobs from "../jobs.ts";
+import { shownStatus } from "../present.ts";
 import { arr as arrU, get as getU } from "../util.ts";
 
 // deno-lint-ignore no-explicit-any
@@ -96,14 +97,27 @@ type Meter = { percent: number; text: string; level: Level };
 const CONTEXT_AMBER = 80;
 const CONTEXT_RED = 95;
 
-/// The card of `agent` (a chat's agent, ViewsInner `agent`), with its live usage (none before it is read): each part
+/// What a session's calls used as known now (the station's read/tail.ts TranscriptUsage): while it works, as its
+/// station's stream tells each call (`live`); at rest, as its summary says it, which the device holds of every session
+/// (the station's count, told again as that of its last turn comes in after it ended); either where the other says none
+/// (a station from before says it in no summary, and on its stream only of a session named there). None before a call.
+export function usageNow(session: unknown, live: unknown): J {
+  const told = get(live, "usage");
+  const said = get(session, "usage");
+  const has = (u: unknown) => u !== null && typeof u === "object" && !Array.isArray(u);
+  const status = shownStatus(session);
+  const [first, then] = status === "running" || status === "queued" ? [told, said] : [said, told];
+  return has(first) ? first : has(then) ? then : null;
+}
+
+/// The card of `agent` (a chat's agent, ViewsInner `agent`), with its live view (none before it is read): each part
 /// only when it has one. Its account and what is left of it the card takes from the agent as it is.
 export function card(agent: J, live: J, stations?: ReadonlyMap<string, string>): J {
   const out: J = { work: workText(get(agent, "turns")), jobs: jobsText(get(agent, "jobs")), latest: latestOf(agent, live, stations), attention: [] };
-  const u = get(live, "usage");
+  const u = usageNow(get(agent, "session"), live);
   const n = (k: string): number => (typeof get(u, k) === "number" ? u[k] : 0);
   if (n("modelCalls") > 0) {
-    const { contextPercent, cost } = usageOf(live);
+    const { contextPercent, cost } = usageOf(u);
     out.cost = cost;
     out.tokens = t("core-views.agent.tokens", { input: format.compactNumber(n("inputTokens")), output: format.compactNumber(n("outputTokens")) });
     if (n("inputTokens") > 0) {

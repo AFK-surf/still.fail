@@ -900,15 +900,14 @@ export class AccountDb {
       again = detail === undefined || !sameTurns(get(detail, "turns"), summary);
       // One more turn, or the last one gone on, as the summary says it: put in place, not all its turns read again.
       const placed = again && detail !== undefined && placeTurn(detail, summary);
-      if (placed) again = false;
-      // Its detail shows it as it is now too.
-      if (detail !== undefined && (placed || JSON.stringify(detail.session) !== json)) {
-        detail.session = summary;
+      if (placed) {
+        again = false;
         this.#run("UPDATE session SET detail = ? WHERE station = ? AND key = ?", [JSON.stringify(detail), station, key]);
         this.#tellSession(station, key);
       }
       if (r && r[1] === json && r[2] === listed) return;
-      this.#putSummary(station, key, summary, json, listed, ord, r !== undefined, false);
+      // Its detail shows it as it is now too (`detail`).
+      this.#putSummary(station, key, summary, json, listed, ord, r !== undefined, detail !== undefined);
     });
     return again;
   }
@@ -938,18 +937,20 @@ export class AccountDb {
     });
   }
 
-  /// A session's detail as a topic shows it: its summary, turns and jobs as read (the summary as events since say), and
-  /// its threads as their rows are now: those it read as its own and those whose members it is among.
+  /// A session's detail as a topic shows it: its turns and jobs as read, its summary as the station last said it (in its
+  /// list or an event: one summary, so a field a station says since is in both; read with the detail alone, the detail's),
+  /// and its threads as their rows are now: those it read as its own and those whose members it is among.
   detail(station: string, key: string): J {
     const ck = K("detail", station, key);
     const hit = this.#cache.get(ck);
     if (hit !== undefined) return hit ?? undefined;
-    const r = this.sql.all("SELECT detail FROM session WHERE station = ? AND key = ?", [station, key])[0];
+    const r = this.sql.all("SELECT detail, summary FROM session WHERE station = ? AND key = ?", [station, key])[0];
     if (!r || r[0] === null) {
       this.#cache.set(ck, null);
       return undefined;
     }
     const detail = parse(r[0]);
+    if (r[1] !== null) detail.session = parse(r[1]);
     detail.threads = this.#detailThreads(station, key, Array.isArray(detail.threadIds) ? detail.threadIds : []);
     delete detail.threadIds;
     const v = frozen(detail);

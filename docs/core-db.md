@@ -37,7 +37,7 @@ instead.
 | `slack_app` | station, connect | confirmed | `/connects/:id/slack-app` |
 | `list` | station, list (`chats`, `archived`, `sessions`, `threads`, `jobs`) | confirmed, rev | a list read at all (an empty one is not one never read); how often a station's chats changed |
 | `chat` | station, archived, id | ord, thread, session, client_key, last_active, pinned_at, unread, mine, running, tone, asks, desk | `/chats`, `/chats?archived=1`, `chat`/`chat-removed`/`read` events |
-| `session` | station, key | listed, ord, last_active, process, connect, archived_at, turns; `summary`, `detail` | `/sessions`, `/sessions/:key`, `session` events |
+| `session` | station, key | listed, ord, last_active, process, connect, archived_at, turns; `summary`, `detail` (its turns, jobs and threads; read, it says its session as `summary` does, which the lists and events keep current) | `/sessions`, `/sessions/:key`, `session` events |
 | `thread` | station, id | listed, last, read, unread, sort_at, created_at, surface, first_member | `/threads`, `/threads/:id`, a session's detail, `thread`/`read` events |
 | `thread_member` | station, session, thread | — | each thread's `sessions` |
 | `entry` | station, thread, n | — | `/threads/:id/entries`, `thread` events |

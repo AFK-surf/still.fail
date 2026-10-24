@@ -211,7 +211,12 @@ The archive and hide columns (`archived_by`, `shown_at`, `cwd`, `home`,
   such a stream is told as it opens where each stands (no entry of before).
   How many entries each transcript has is kept as it is read
   (`transcript_lengths`), and its session's summary says it
-  (`transcriptLength`). A client from before follows a session by name, on
+  (`transcriptLength`). So is what its calls used (`session_usage`, the
+  summary's `usage`): as the live view tells it, then as the usage counter
+  counts each session anew over what the live view last said of the rest (its
+  model, its context; before it said any, its last call's). A change of a
+  session at rest (its last turn's count comes in after it ended) is told as
+  the session's; one at work is on its stream. A client from before follows a session by name, on
   `/events?live=<key>&from=N&last=200` (entries from index N, no more than the
   last 200 — and the usage so far, even when N is all of them — then as they are
   written; a watcher asking past the end is told where it ends). The rest comes

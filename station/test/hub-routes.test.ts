@@ -594,6 +594,32 @@ test("a session at work: the station follows it, its summary says how long its t
   }
 });
 
+test("a session's summary says what its calls used as its live view told it, so a device knows it of one at rest", async () => {
+  const r = rig();
+  try {
+    const [, made] = await r.ask("POST", "/sessions", { runtime: "claude", title: "a" });
+    const key = made.key;
+    const dir = join(r.data, "homes", "cc", "projects", "p");
+    mkdirSync(dir, { recursive: true });
+    const said = (id: string, input: number) =>
+      `${JSON.stringify({ type: "assistant", timestamp: "2026-10-24T00:00:00Z", message: { id, model: "claude-opus-5-5", content: [{ type: "text", text: id }], usage: { input_tokens: input, cache_read_input_tokens: 100, output_tokens: 7 } } })}\n`;
+    writeFileSync(join(dir, "rs1.jsonl"), said("m1", 1) + said("m2", 2));
+    r.store.ranIn(key, "rs1", "cc");
+    r.store.setRuntimeSessionId(key, "rs1");
+    writeFileSync(join(r.data, "config.json"), JSON.stringify({ profiles: [{ id: "cc", runtime: "claude", home: join(r.data, "homes", "cc") }] }));
+    const summary = async () => (await r.ask("GET", `/sessions/${encodeURIComponent(key)}`))[1].session;
+    assert.equal((await summary()).usage, undefined, "no call read yet: not said");
+    r.store.setRunning(key, true);
+    const usage = (await summary()).usage;
+    assert.deepEqual([usage.modelCalls, usage.inputTokens, usage.cachedTokens, usage.outputTokens, usage.contextTokens, usage.model], [2, 203, 200, 14, 102, "claude-opus-5-5"]);
+    r.store.setRunning(key, false);
+    const listed = (await r.ask("GET", "/sessions"))[1].find((s: any) => s.key === key);
+    assert.deepEqual(listed.usage, usage, "the list says it as the session does");
+  } finally {
+    await r.close();
+  }
+});
+
 test("the sidebar items a change can touch are read as the whole sidebar has them, and only they", async () => {
   const r = rig();
   try {

@@ -212,8 +212,8 @@ export type StoreChange =
   | { type: "job"; id: string }
   /// A job that was over was taken off its session's record.
   | { type: "jobRemoved"; id: string; session: string }
-  /// Model calls were recorded (store/usage.ts).
-  | { type: "usage" };
+  /// Model calls were recorded (store/usage.ts), of these sessions.
+  | { type: "usage"; sessions: string[] };
 
 // ── words ──
 

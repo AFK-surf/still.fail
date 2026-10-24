@@ -1850,7 +1850,8 @@ export class Views implements Owner {
     const now = this.#core.host.nowMs();
     const md = this.#core.data.mdStore(station, `s:${key}`);
     return {
-      ok: presentHistory(live.ok, {
+      // What its calls used, from its stream while it works, else from its summary (brief.ts `usageNow`).
+      ok: presentHistory({ ...(live.ok as object), usage: brief.usageNow(session, live.ok) }, {
         workspaces,
         threads,
         members: members_,

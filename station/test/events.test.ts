@@ -309,13 +309,13 @@ test("what the agents spent is told at most once a minute: the first change at o
   const { events, change } = setup(time.clock);
   const s = reader((await events.open(viewer("a@x"), "zh", false, [], [])).body as AsyncIterable<Buffer>);
   const told = () => s.got.filter((e) => e.event === "usage").length;
-  change({ type: "usage" });
+  change({ type: "usage", sessions: ["k"] });
   await settle();
   assert.equal(told(), 1);
   // A model call every 15 s: told again once, a minute after the first.
   for (let i = 0; i < 3; i++) {
     await time.adjust(15_000);
-    change({ type: "usage" });
+    change({ type: "usage", sessions: ["k"] });
     await settle();
   }
   assert.equal(told(), 1);
@@ -324,7 +324,7 @@ test("what the agents spent is told at most once a minute: the first change at o
   assert.equal(told(), 2);
   // Quiet a while: the next change is told at once.
   await time.adjust(120_000);
-  change({ type: "usage" });
+  change({ type: "usage", sessions: ["k"] });
   await settle();
   assert.equal(told(), 3);
   await s.close();
