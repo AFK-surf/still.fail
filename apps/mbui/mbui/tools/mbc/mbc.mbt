@@ -134,13 +134,15 @@ fn compiler_kind(cc : Array[Bytes]) -> (Int, Bool) {
 }
 
 ///|
-/// ThinLTO (MBC_LTO=thin, the default with clang; 0 turns it off): the split loses the inlining across units that
-/// the whole file had, ThinLTO's link brings it back, its backends in parallel. The link's flags, or None.
+/// ThinLTO, or MSVC's /GL and /LTCG, only when asked (MBC_LTO=thin): the inlining across units the split loses,
+/// brought back at the link. Not by default: mbui's bench (scripts/bench.sh, Studio) drew its scenes in the same time
+/// with it and without (process CPU 107-111 µs a frame either way), while its link was most of a build of a changed
+/// app: 57 s of Android's, 66 s of Windows' (LTCG made 28% of the functions again for a 116-line change), 2026-10-24.
+/// The link's flags, or None.
 fn lto_for(cc : Array[Bytes], j : Int) -> Array[Bytes]? {
   match getenv("MBC_LTO") {
-    Some(v) if v == b"0" || v == b"off" || v == b"no" || v.length() == 0 =>
-      return None
-    _ => ()
+    Some(v) if v == b"thin" || v == b"1" || v == b"on" => ()
+    _ => return None
   }
   let (kind, apple) = compiler_kind(cc)
   if kind == 0 {

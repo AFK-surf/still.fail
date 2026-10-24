@@ -9,7 +9,7 @@
 # (2026-10-19), its tests do not hold it back: it is a test app (Windows' e2e runs after its zip is out). A feed moves
 # only once its file is fetched back from where it is served, the same bytes.
 # What stays between runs, by content, in the Actions cache: MoonBit (by its release's ETags), mbc's compiled units
-# (MBC_STORE) and ThinLTO's (MBC_LTO_CACHE), core.hbc by its inputs (HBC_CACHE), the core's Rust shell and engine for
+# (MBC_STORE), core.hbc by its inputs (HBC_CACHE), the core's Rust shell and engine for
 # Apple (out/core, by the shell's sources), the APK's dependencies, its dex (R8's: by its classes, dependencies and
 # rules) and its stripped native libraries (APK_CACHE: mbui's scripts/apk, the APK built without Gradle).
 name: mbui
@@ -73,7 +73,6 @@ jobs:
       MBUI_FRESH: 1
       MBUI_CACHE: ${{ github.workspace }}/.ci/release
       MBC_STORE: ${{ github.workspace }}/.ci/mbc-store
-      MBC_LTO_CACHE: ${{ github.workspace }}/.ci/lto
       HBC_CACHE: ${{ github.workspace }}/.ci/hbc
       APK_CACHE: ${{ github.workspace }}/.ci/apk
     steps:
@@ -89,7 +88,6 @@ jobs:
         with:
           path: |
             .ci/mbc-store
-            .ci/lto
             .ci/hbc
           key: mbui-android-${{ github.sha }}
           restore-keys: mbui-android-
@@ -123,15 +121,14 @@ jobs:
       - name: The caches' keys, by what they hold
         if: github.ref == 'refs/heads/main'
         run: |
-          sh apps/mbui/scripts/used.sh "$RUNNER_TEMP/start" .ci/mbc-store .ci/lto
-          echo "STORE_KEY=mbui-android-$(sh apps/mbui/scripts/held.sh .ci/mbc-store .ci/lto .ci/hbc)" >> "$GITHUB_ENV"
+          sh apps/mbui/scripts/used.sh "$RUNNER_TEMP/start" .ci/mbc-store
+          echo "STORE_KEY=mbui-android-$(sh apps/mbui/scripts/held.sh .ci/mbc-store .ci/hbc)" >> "$GITHUB_ENV"
           echo "APK_KEY=mbui-apk-$(sh apps/mbui/scripts/held.sh .ci/apk)" >> "$GITHUB_ENV"
       - if: github.ref == 'refs/heads/main' && env.STORE_KEY != steps.store.outputs.cache-matched-key
         uses: actions/cache/save@v4
         with:
           path: |
             .ci/mbc-store
-            .ci/lto
             .ci/hbc
           key: ${{ env.STORE_KEY }}
       - if: github.ref == 'refs/heads/main' && env.APK_KEY != steps.apk-store.outputs.cache-matched-key
@@ -150,7 +147,6 @@ jobs:
       MBUI_FRESH: 1
       MBUI_CACHE: ${{ github.workspace }}/.ci/release
       MBC_STORE: ${{ github.workspace }}/.ci/mbc-store
-      MBC_LTO_CACHE: ${{ github.workspace }}/.ci/lto
       HBC_CACHE: ${{ github.workspace }}/.ci/hbc
     steps:
       - uses: actions/checkout@v5
@@ -163,7 +159,6 @@ jobs:
         with:
           path: |
             .ci/mbc-store
-            .ci/lto
             .ci/hbc
           key: mbui-mac-${{ github.sha }}
           restore-keys: mbui-mac-
@@ -201,14 +196,13 @@ jobs:
       - name: The cache's key, by what it holds
         if: github.ref == 'refs/heads/main'
         run: |
-          sh apps/mbui/scripts/used.sh "$RUNNER_TEMP/start" .ci/mbc-store .ci/lto
-          echo "STORE_KEY=mbui-mac-$(sh apps/mbui/scripts/held.sh .ci/mbc-store .ci/lto .ci/hbc)" >> "$GITHUB_ENV"
+          sh apps/mbui/scripts/used.sh "$RUNNER_TEMP/start" .ci/mbc-store
+          echo "STORE_KEY=mbui-mac-$(sh apps/mbui/scripts/held.sh .ci/mbc-store .ci/hbc)" >> "$GITHUB_ENV"
       - if: github.ref == 'refs/heads/main' && env.STORE_KEY != steps.store.outputs.cache-matched-key
         uses: actions/cache/save@v4
         with:
           path: |
             .ci/mbc-store
-            .ci/lto
             .ci/hbc
           key: ${{ env.STORE_KEY }}
 
