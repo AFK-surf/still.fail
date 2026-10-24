@@ -296,8 +296,43 @@ void mb_host_haptic(int32_t kind) {
 #endif
 }
 
-// An app's own native calls (src/hostapi/native.mbt): none on this host yet.
-int32_t mb_host_native_call(moonbit_string_t name, moonbit_string_t params) { return 0; }
-int32_t mb_host_native_state(int32_t id) { return -1; }
-moonbit_string_t mb_host_native_result(int32_t id) { return moonbit_make_string_raw(0); }
-void mb_host_native_end(int32_t id) {}
+// A narrow accessibility status target, not an implementation of the renderer's full semantics tree. The iOS
+// host focuses the error's native accessibility element and speaks its label through one layout-change event.
+#if TARGET_OS_IOS
+static void mb_review_accessibility(NSDictionary *params);
+static NSMutableDictionary<NSNumber *, NSNumber *> *review_native_states;
+static int32_t review_native_serial;
+#endif
+int32_t mb_host_native_call(moonbit_string_t name, moonbit_string_t params) {
+#if TARGET_OS_IOS
+  if (![mb_ns_from_string(name) isEqualToString:@"accessibility.reviewError"]) return 0;
+  NSData *data = [mb_ns_from_string(params) dataUsingEncoding:NSUTF8StringEncoding];
+  id value = data ? [NSJSONSerialization JSONObjectWithData:data options:0 error:nil] : nil;
+  if (![value isKindOfClass:NSDictionary.class] || ![value[@"text"] isKindOfClass:NSString.class]) return 0;
+  if (!review_native_states) review_native_states = [NSMutableDictionary new];
+  int32_t ticket = ++review_native_serial;
+  review_native_states[@(ticket)] = @0;
+  dispatch_async(dispatch_get_main_queue(), ^{
+    mb_review_accessibility(value);
+    review_native_states[@(ticket)] = @1;
+    mb_host_outside(10, ticket, 1);
+    mb_host_request_frame();
+  });
+  return ticket;
+#else
+  return 0;
+#endif
+}
+int32_t mb_host_native_state(int32_t id) {
+#if TARGET_OS_IOS
+  return [review_native_states[@(id)] intValue];
+#else
+  return -1;
+#endif
+}
+moonbit_string_t mb_host_native_result(int32_t id) { return mb_string_from_ns(@"{}"); }
+void mb_host_native_end(int32_t id) {
+#if TARGET_OS_IOS
+  [review_native_states removeObjectForKey:@(id)];
+#endif
+}

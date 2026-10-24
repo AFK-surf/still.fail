@@ -571,6 +571,14 @@ public class MBView extends GLSurfaceView implements GLSurfaceView.Renderer {
             // a number's: digits, its Enter a done key (Compose's ImeAction.Done, KeyboardType.Number)
             out.inputType = InputType.TYPE_CLASS_NUMBER;
             out.imeOptions = EditorInfo.IME_ACTION_DONE | EditorInfo.IME_FLAG_NO_EXTRACT_UI | EditorInfo.IME_FLAG_NO_FULLSCREEN;
+        } else if (Device.imeAction == 4 || Device.imeAction == 5) {
+            // Credential modes never use the ordinary predictive composer. Showing the password is solely
+            // a renderer operation: its native connection remains a password connection, with no learning.
+            boolean password = Device.imeAction == 5;
+            out.inputType = InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS
+                    | (password ? InputType.TYPE_TEXT_VARIATION_PASSWORD : InputType.TYPE_TEXT_VARIATION_EMAIL_ADDRESS);
+            out.imeOptions = (password ? EditorInfo.IME_ACTION_GO : EditorInfo.IME_ACTION_NEXT)
+                    | EditorInfo.IME_FLAG_NO_PERSONALIZED_LEARNING | EditorInfo.IME_FLAG_NO_EXTRACT_UI | EditorInfo.IME_FLAG_NO_FULLSCREEN;
         }
         out.initialSelStart = Host.selStart;
         out.initialSelEnd = Host.selEnd;

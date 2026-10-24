@@ -65,7 +65,7 @@ test "settings: the account, the workspace's rows and how each stands, this devi
   // a tap on the account's card: the account
   t.tap_text("lin@example.com")
   t.run_for(@ui.nav_push_ms)
-  assert_true(t.find("lin@example.com · Google") is Some(_))
+  assert_true(t.find("lin@example.com") is Some(_))
   assert_true(t.find("Chrome · macOS") is Some(_))
   // the bottom bar going out of the way, on its own springs and glides, to where it rests
   t.run_for(bar.rest() - t.time())
@@ -376,7 +376,7 @@ test "飞书: scanning, its QR code drawn on white and 在飞书中打开 handed
 test "settings: the account's page has the accounts on this device on its one card (Me.kt): 退出登录 beside who it is" {
   let t = settings_tester("me")
   assert_true(t.find("此设备上的账号") is None)
-  let (_, name_y) = t.find("lin@example.com · Google").unwrap()
+  let (_, name_y) = t.find("lin@example.com").unwrap()
   let (_, out_y) = t.find("退出登录").unwrap()
   // on the account's own row, not on one of its own below it
   assert_true((out_y - name_y).abs() < row_h)

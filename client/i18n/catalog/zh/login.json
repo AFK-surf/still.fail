@@ -1,0 +1,17 @@
+{
+  "login.webAction": "通过网页登录",
+  "login.webHint": "使用 Google 或邮箱验证码登录。",
+  "login.reviewAction": "审核账号登录",
+  "login.reviewHint": "仅供已获授权的审核人员使用。",
+  "login.webWaiting": "请在打开的网页中完成登录。",
+  "login.waiting": "正在登录…",
+  "login.finishing": "正在完成登录…",
+  "login.finishingHint": "正在保存登录信息，请稍候。",
+  "login.saveFailed": "未能完成登录。请重试。",
+  "login.checkingSavedState": "正在确认登录状态…",
+  "login.savedStateUnavailable": "暂时无法确认登录状态，请重试。",
+  "login.failed": "暂时无法登录，请稍后重试。",
+  "login.rateLimited": "尝试次数过多，请稍后再试。",
+  "login.rateLimitedSeconds": "尝试次数过多，请在 {seconds} 秒后重试。",
+  "login.accountNotice": "已有账号？请使用之前的登录方式。不同登录方式可能进入不同账号；账号不会自动合并，对话也不会自动迁移。"
+}

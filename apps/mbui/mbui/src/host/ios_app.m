@@ -447,21 +447,58 @@ static int32_t menu_can;  // what the menu offers (hostapi text_menu_*: 1 cut, 2
 // The keyboard as Android's app asks for it (MBView.onCreateInputConnection: plain text, many lines, its suggestions,
 // no action of its own): no capitals put in by itself, no quotes or dashes made curly, its return key a new line the
 // field decides on; a search field's (hostapi ime_action, apple_device.h) its search key, an address's the keyboard
-// for addresses and its go key, a number's digits and its done key.
+// for addresses and its go key, a number's digits and its done key. Credential modes use the same custom
+// renderer, but tell UIKit the real input semantics. In particular Show only changes the renderer: the native
+// password input stays secure, so revealing a password never enables keyboard prediction or learning.
 - (UIKeyboardType)keyboardType {
   if (key_catching) return UIKeyboardTypeDefault;
+  if (ime_action_kind == 4) return UIKeyboardTypeEmailAddress;
   return ime_action_kind == 2 ? UIKeyboardTypeURL : ime_action_kind == 3 ? UIKeyboardTypeNumbersAndPunctuation : UIKeyboardTypeDefault;
 }
-- (UITextAutocorrectionType)autocorrectionType { return key_catching ? UITextAutocorrectionTypeNo : UITextAutocorrectionTypeDefault; }
+- (BOOL)isSecureTextEntry { return !key_catching && ime_action_kind == 5; }
+- (UITextContentType)textContentType {
+  if (key_catching) return nil;
+  return ime_action_kind == 4 ? UITextContentTypeUsername : ime_action_kind == 5 ? UITextContentTypePassword : nil;
+}
+- (UITextAutocorrectionType)autocorrectionType {
+  return key_catching || ime_action_kind == 4 || ime_action_kind == 5 ? UITextAutocorrectionTypeNo : UITextAutocorrectionTypeDefault;
+}
+- (UITextSpellCheckingType)spellCheckingType {
+  return ime_action_kind == 4 || ime_action_kind == 5 ? UITextSpellCheckingTypeNo : UITextSpellCheckingTypeDefault;
+}
 - (UITextAutocapitalizationType)autocapitalizationType { return UITextAutocapitalizationTypeNone; }
 - (UITextSmartQuotesType)smartQuotesType { return UITextSmartQuotesTypeNo; }
 - (UITextSmartDashesType)smartDashesType { return UITextSmartDashesTypeNo; }
 - (UITextSmartInsertDeleteType)smartInsertDeleteType { return UITextSmartInsertDeleteTypeNo; }
 - (UIReturnKeyType)returnKeyType {
+  if (ime_action_kind == 4) return UIReturnKeyNext;
+  if (ime_action_kind == 5) return UIReturnKeyGo;
   return ime_action_kind == 1 ? UIReturnKeySearch : ime_action_kind == 2 ? UIReturnKeyGo : ime_action_kind == 3 ? UIReturnKeyDone : UIReturnKeyDefault;
 }
 
 @end
+
+// Review errors get a single native accessibility status target even while the general custom-renderer tree
+// remains unsupported. It exposes no credential value and does not claim to make the rest of the form accessible.
+static void mb_review_accessibility(NSDictionary *params) {
+  MBView *v = the_view;
+  if (!v) return;
+  NSString *words = params[@"text"];
+  if (!words.length) {
+    v.accessibilityElements = nil;
+    return;
+  }
+  UIAccessibilityElement *error = [[UIAccessibilityElement alloc] initWithAccessibilityContainer:v];
+  error.isAccessibilityElement = YES;
+  error.accessibilityLabel = words;
+  error.accessibilityTraits = UIAccessibilityTraitStaticText;
+  CGRect rect = CGRectMake([params[@"x"] doubleValue], [params[@"y"] doubleValue],
+                           MAX(1, [params[@"w"] doubleValue]), MAX(1, [params[@"h"] doubleValue]));
+  error.accessibilityFrameInContainerSpace = rect;
+  v.accessibilityElements = @[error];
+  // The focused element's label is announced by this event; do not also post an announcement and speak it twice.
+  UIAccessibilityPostNotification(UIAccessibilityLayoutChangedNotification, error);
+}
 
 // ---- a finger on a page under the canvas ----
 
@@ -931,6 +968,11 @@ void mb_host_set_ime(int32_t active, double x, double y, double w, double h, moo
   BOOL was = v.imeActive;
   v.imeActive = active != 0;
   v.caretRect = CGRectMake(x, y, w, h);
+  // Leaving a credential editor must also discard any native composition; otherwise the marked-text guard
+  // below can retain its old document after the app has cleared the password and dismissed the keyboard.
+  if (!v.imeActive && ime_action_kind == 5) {
+    v.marked = NSMakeRange(NSNotFound, 0);
+  }
   // the field's text and selection as it has them: the keyboard told only of what differs from what it did itself
   // (MBView's echo), a change of the field's own (a tap, a paste, a send)
   if (v.marked.location == NSNotFound) {

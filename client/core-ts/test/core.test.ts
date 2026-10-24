@@ -2,7 +2,8 @@
 // still.fail cloud's events socket, prefs and drafts.
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { STORAGE_KEY } from "../src/accounts.ts";
+import { Effect } from "effect";
+import { PASSWORD_SAVE_WAIT_MS, STORAGE_KEY } from "../src/accounts.ts";
 import { answer, Core, CREDENTIAL_KEY, relaysOf } from "../src/core.ts";
 import { SOCKET_IDLE_MS, SOCKET_RETRY_MS } from "../src/sync/cloud.ts";
 import { run } from "./run.ts";
@@ -623,3 +624,85 @@ test("encodes_path_segments_like_encode_uri_component", () => {
 
 void answers;
 void parseJson;
+
+test("doing subscribers never receive auth credentials while running or during retained failure", async () => {
+  const host = new FakeHost();
+  const started = Promise.withResolvers<void>();
+  const response = Promise.withResolvers<ReturnType<typeof jsonResponse>>();
+  host.onFetch((req) => {
+    assert.ok(req.url.endsWith("/v1/auth/password"));
+    started.resolve();
+    return response.promise;
+  });
+  const core = await Core.create(host, { clock: host.time.clock });
+  const ui = core.connect();
+  const values = new Map();
+  subscribe(core, ui, 1, { topic: "doing" });
+  await host.settle();
+  apply(host, values);
+  call(core, ui, 2, "auth.password", { email: "synthetic-private@example.com", password: "synthetic-private-password", attempt: "synthetic-attempt", device_name: "synthetic-device" });
+  await started.promise;
+  await host.settle();
+  apply(host, values);
+  const running = values.get(1) as { doing: { call: string; params: unknown; stage: string }[] };
+  assert.equal(running.doing[0].call, "auth.password");
+  assert.deepEqual(running.doing[0].params, {});
+  assert.equal(running.doing[0].stage, "running");
+  response.resolve(jsonResponse(401, { error: "invalid_credentials" }));
+  await host.settle();
+  apply(host, values);
+  const failed = values.get(1) as { doing: { params: unknown; stage: string }[] };
+  assert.equal(failed.doing[0].stage, "failed");
+  assert.deepEqual(failed.doing[0].params, {});
+  const published = JSON.stringify(failed);
+  for (const secret of ["synthetic-private@example.com", "synthetic-private-password", "synthetic-attempt", "synthetic-device"]) assert.ok(!published.includes(secret));
+  core.close();
+});
+
+
+test("reviewer final-save progress and recovery use the existing per-call wire without publishing an unknown session", async () => {
+  assert.deepEqual(parseCall("auth.password.recover", { attempt: "wire-save" }), { kind: "authPasswordRecover", attempt: "wire-save" });
+  const host = new FakeHost();
+  host.onFetch((req) => req.url.endsWith("/v1/auth/password")
+    ? jsonResponse(200, { access_token: "synthetic-access", refresh_token: "synthetic-refresh", subject: "reviewer", email: "reviewer@example.com", name: "Reviewer", expires_at: nowS(host) + 3600 })
+    : jsonResponse(200, { user: {}, workspaces: [], invitations: [] }));
+  const core = await Core.create(host, { clock: host.time.clock });
+  const ui = core.connect();
+  const release = Promise.withResolvers<void>();
+  const set = host.storageSet.bind(host);
+  let accountWrites = 0;
+  host.storageSet = (key, bytes) => key !== STORAGE_KEY ? set(key, bytes) : Effect.gen(function* () {
+    accountWrites++;
+    assert.ok(host.emitted.some(([, m]) => JSON.stringify(m) === JSON.stringify({ id: 2, value: { phase: "committing", attempt: "wire-save" } })));
+    yield* Effect.promise(() => release.promise);
+    yield* set(key, bytes);
+  });
+  try {
+    call(core, ui, 1, "auth.password", { email: " reviewer@example.com ", password: " untrimmed ", attempt: "wire-save" });
+    await host.settle();
+    assert.ok(answers(host.emitted, 1)?.ok);
+    call(core, ui, 2, "auth.password.accept", { attempt: "wire-save" });
+    await host.time.pass(PASSWORD_SAVE_WAIT_MS, PASSWORD_SAVE_WAIT_MS);
+    assert.equal((answers(host.emitted, 2)?.error as { code: string }).code, "session_commit_unknown");
+    assert.equal(accountWrites, 1);
+    call(core, ui, 3, "auth.password.cancel", { attempt: "wire-save" });
+    await host.settle();
+    assert.deepEqual(answers(host.emitted, 3)?.ok, { cancelled: false, state: "committing" });
+    release.resolve();
+    await host.settle();
+    call(core, ui, 4, "auth.password.recover", { attempt: "wire-save" });
+    await host.settle();
+    assert.ok(host.emitted.some(([, m]) => JSON.stringify(m) === JSON.stringify({ id: 4, value: { phase: "checking", attempt: "wire-save" } })));
+    assert.equal(((answers(host.emitted, 4)?.ok as { account: { sub: string } }).account).sub, "reviewer");
+    assert.equal(accountWrites, 1);
+    const passwordRequests = host.requests.filter((req) => req.url.endsWith("/v1/auth/password"));
+    assert.equal(passwordRequests.length, 1);
+    const params = parseJson(passwordRequests[0].body!);
+    assert.equal((params as { email: string }).email, "reviewer@example.com");
+    assert.equal((params as { password: string }).password, " untrimmed ");
+  } finally {
+    release.resolve();
+    await host.settle();
+    core.close();
+  }
+});

@@ -161,6 +161,17 @@ pub let ime_action_go : Int = 2
 pub let ime_action_number : Int = 3
 
 ///|
+/// Credential email: email keyboard, username autofill semantics and Next; no capitalization or correction.
+/// Native iOS/Android hosts support this mode; other hosts may ignore it.
+pub let ime_action_email : Int = 4
+
+///|
+/// Credential password: secure native input and Go. Keep this mode even if the custom renderer reveals the
+/// password, so showing it never opts the native input back into prediction/learning. Paste remains available.
+/// Native iOS/Android hosts support this mode; other hosts may ignore it.
+pub let ime_action_password : Int = 5
+
+///|
 /// A long press taking something (Android LONG_PRESS, Compose's HapticFeedbackType.LongPress).
 pub let haptic_long_press : Int = 0
 

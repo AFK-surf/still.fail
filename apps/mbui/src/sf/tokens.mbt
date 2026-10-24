@@ -1081,3 +1081,43 @@ pub let edge_tip_ms : Double = 300.0
 
 ///|
 pub let edge_tip_gap : Double = 14.0
+
+///|
+/// Sign-in buttons and credential fields stay at least 52 high, including when their words wrap.
+pub let login_control_min : @ui.Len = Fixed(52.0)
+
+///|
+/// Stage-one sign-in's pill, kept at 26 even when its words wrap onto more than one line.
+pub let login_pill_radius : @ui.Radius = rounded(26.0)
+
+///|
+/// Credential editor typography (the editor takes measures rather than a TextStyle).
+pub let login_editor_size : Double = 17.0
+
+///|
+pub let login_editor_line : Double = 24.0
+
+///|
+/// Sign-in's own type and palette roles, scoped to the welcome/form subtree, not the rest of the app.
+/// The stage-one design uses 28/36 headings, 15/22 body, 13/19 hints and 17/24 actions/labels.
+pub fn login_theme(base : @ui.Theme) -> @ui.Theme {
+  let t = theme()
+  {
+    ..base,
+    bg: t.p.bg,
+    fg: t.p.text,
+    muted: t.p.muted,
+    surface: if t.dark { 0x26272BFFL } else { 0xFFFFFFFFL },
+    border: if t.dark { 0x84888FFFL } else { 0x7C7E81FFL },
+    danger: if t.dark { 0xEB6B58FFL } else { 0xBF3E2CFFL },
+    // Card is the persistent account-method notice, not a second page surface.
+    card: if t.dark { 0x4A2F25FFL } else { 0xFBE6DCFFL },
+    text: {
+      ..base.text,
+      xl4: (28.0, 36.0),
+      lg: (15.0, 22.0),
+      sm: (13.0, 19.0),
+      xl2: (login_editor_size, login_editor_line),
+    },
+  }
+}

@@ -191,7 +191,7 @@ engine() {
     *) echo "engine: no target $target"; return 1 ;;
   esac
   local lib=$OUT/$target/libmbui_core.a
-  if [ -f $lib ] && [ $lib -nt src/host/apple_core.mm ] && [ $lib -nt src/host/apple_collate.h ] && [ $lib -nt src/host/electron_sealed.h ] && [ $lib -nt src/host/core_api.h ] && [ $lib -nt "$D/core.sh" ]; then
+  if [ -f $lib ] && [ $lib -nt src/host/apple_core.mm ] && [ $lib -nt src/host/apple_collate.h ] && [ $lib -nt src/host/electron_sealed.h ] && [ $lib -nt src/host/core_api.h ] && [ $lib -nt src/host/mbui_ios_sessions.h ] && [ $lib -nt src/host/mbui_ios_sessions_apple.h ] && [ $lib -nt "$D/core.sh" ]; then
     return 0
   fi
   mkdir -p $OUT/$target

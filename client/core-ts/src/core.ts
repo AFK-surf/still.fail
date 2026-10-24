@@ -153,7 +153,7 @@ export class Core {
     return inner.runner.run(Core.make(inner, host, options));
   }
 
-  static make(inner: Inner, host: Host, options: Options): Effect.Effect<Core> {
+  static make(inner: Inner, host: Host, options: Options): Effect.Effect<Core, CoreError> {
     return Effect.gen(function* () {
       inner.wakes = new Wakes();
       // Everything the core asks of the host is given up or opened again when a UI comes back (wake.ts).
@@ -368,7 +368,7 @@ export class Core {
 
   #call(client: ClientId, id: RequestId, name: string, params: unknown, bytes: Uint8Array | undefined): void {
     const inner = this.inner;
-    const asked = heavy(name) ? null : params;
+    const asked = heavy(name) ? null : name.startsWith("auth.") ? {} : params;
     let call: Call;
     try {
       call = parseCall(name, params, bytes, inner.moduleCalls);

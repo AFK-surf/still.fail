@@ -1,0 +1,17 @@
+{
+  "login.webAction": "Sign in on the web",
+  "login.webHint": "Use Google or an email verification code.",
+  "login.reviewAction": "Review account sign-in",
+  "login.reviewHint": "For authorized reviewers only.",
+  "login.webWaiting": "Finish signing in on the page that opened.",
+  "login.waiting": "Signing in…",
+  "login.finishing": "Finishing sign-in…",
+  "login.finishingHint": "Saving your sign-in information. Please wait.",
+  "login.saveFailed": "Sign-in couldn’t be completed. Please try again.",
+  "login.checkingSavedState": "Checking sign-in status…",
+  "login.savedStateUnavailable": "Your sign-in status couldn’t be confirmed. Please try again.",
+  "login.failed": "We couldn’t sign you in. Please try again later.",
+  "login.rateLimited": "Too many attempts. Please try again later.",
+  "login.rateLimitedSeconds": "Too many attempts. Try again in {seconds} seconds.",
+  "login.accountNotice": "Already have an account? Use the same sign-in method as before. Different methods may sign you into different accounts. Accounts are not automatically merged, and conversations are not automatically moved."
+}

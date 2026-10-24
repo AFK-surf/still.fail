@@ -5,7 +5,7 @@
 // given its session by the app that embeds the core. Everything the rest of the core keeps is in still.fail cloud's
 // shapes (`/v1/me`, a workspace, its events), whichever provider answers.
 import { Effect, type Scope } from "effect";
-import { Accounts, type AccountView } from "./accounts.ts";
+import { Accounts, type AccountView, type PasswordCancellation, type PasswordProgress } from "./accounts.ts";
 import * as brand from "./brand.ts";
 import { Cloud, type Credential, type DeviceSaid } from "./cloud.ts";
 import { CoreError, asCoreError } from "./error.ts";
@@ -24,7 +24,10 @@ export interface AccountSessions {
   accessToken(sub: string): Effect.Effect<string, CoreError>;
   beginSignIn(redirectUri: string, returnTo: string, deviceName: string): Effect.Effect<string, CoreError>;
   completeSignIn(query: string): Effect.Effect<[AccountView, string], CoreError>;
-  passwordSignIn(email: string, password: string, deviceName: string): Effect.Effect<AccountView, CoreError>;
+  passwordSignIn(email: string, password: string, deviceName: string, attempt?: string): Effect.Effect<AccountView, CoreError>;
+  cancelPassword?(attempt: string): PasswordCancellation;
+  acceptPassword?(attempt: string, progress?: PasswordProgress): Effect.Effect<AccountView, CoreError>;
+  recoverPassword?(attempt: string, progress?: PasswordProgress): Effect.Effect<AccountView, CoreError>;
   signOut(sub: string): Effect.Effect<void, CoreError>;
   /// Accounts kept before the core (a page's, a dev cloud's).
   migrate(accounts: unknown): Effect.Effect<void, CoreError>;
@@ -64,7 +67,7 @@ export interface AccountProvider {
 export type ProviderEnv = { host: Host; tracer: Tracer; status: Status };
 
 /// How a core gets its provider (Options.account): still.fail cloud's unless the embedding app gives another.
-export type AccountProviderFactory = (env: ProviderEnv) => Effect.Effect<AccountProvider>;
+export type AccountProviderFactory = (env: ProviderEnv) => Effect.Effect<AccountProvider, CoreError>;
 
 /// The subprotocol still.fail cloud's `/v1/events` answers with; the token travels as a second one.
 export const EVENTS_PROTOCOL = "stillfail-events";

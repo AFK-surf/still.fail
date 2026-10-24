@@ -25,6 +25,7 @@ fn init {
 /// of this package is put back here (or in what this calls) as its `let` has it, or says why it is kept across runs
 /// (scripts/check.sh checks).
 fn reset() -> Unit {
+  reviewer_reset()
   @sf.set_language(None)
   reveals.clear()
   files_cornered.val = false
@@ -276,6 +277,7 @@ fn pages_left(src : Source) -> Unit {
 ///|
 /// The app over `src`: call each frame.
 pub fn view(c : @ui.Ctx, src : Source) -> Unit {
+  reviewer_accessibility_tick()
   fix_ctx.val = Some(c)
   // the Mac's menu bar, in the app's words (menu_bar.mbt); an item of the pages' chosen is read as its keys by the
   // frame after the menu said it (@settings.ask_action), and asked no more once that frame is built
@@ -330,6 +332,11 @@ fn view_in(c : @ui.Ctx, src : Source, t : @sf.Theme) -> Unit {
     over_view(c, src)
     return
   }
+  if login_adding.val || reviewer_open.val {
+    // A published account is not permission to skip the review attempt's durable completion/recovery callback.
+    sign_in_page(c, src)
+    return
+  }
   c.box(w=Fill(1.0), h=Fill(1.0), bg=t.p.bg, fn() {
     let accounts = (src.topic)("accounts", {})
     match (accounts.value, (src.fatal)()) {
@@ -342,7 +349,10 @@ fn view_in(c : @ui.Ctx, src : Source, t : @sf.Theme) -> Unit {
         }
         sheet_layer(c, fn(kind) { if kind == InviteLink { invite_sheet(c, src) } })
       }
-      (Some(Array(_)), _) => signed_in(c, src)
+      (Some(Array(_)), _) => {
+        if reviewer_open.val { reviewer_leave(c, src) }
+        signed_in(c, src)
+      }
       (_, _) =>
         splash(
           c,
@@ -735,7 +745,7 @@ fn settings_core(src : Source, w : Workspace) -> @settings.Core {
       app.nav.push(Chat({ station, session, title, station_name: name }))
     },
     open_drive: fn(station) { app.nav.push(Drive({ station, root: None, path: "" })) },
-    sign_in: fn() { (src.sign_in)() },
+    sign_in: fn() { login_adding.val = true },
     say: fn(words) {
       app.toast = words
       app.toast_n += 1
@@ -966,11 +976,7 @@ let splash_float_ms : Double = 1800.0
 let splash_waited : Ref[Bool] = { val: false }
 
 ///|
-/// The sign-in button's width at most in a desktop's window, as the desktop app's.
-let sign_in_wide_w : Double = 300.0
-
-///|
-/// Signed out (SignIn.kt SignInScreen): the illustration, what still.fail is for, and 登录或注册.
+/// Signed out: the existing illustration/title/copy, account notice, web action and reviewer form.
 fn sign_in_page(c : @ui.Ctx, src : Source) -> Unit {
   // inside the bars (SignIn.kt: windowInsetsPadding(systemBars))
   within_bars(c, fn() { sign_in_body(c, src) })
@@ -978,99 +984,7 @@ fn sign_in_page(c : @ui.Ctx, src : Source) -> Unit {
 
 ///|
 fn sign_in_body(c : @ui.Ctx, src : Source) -> Unit {
-  let t = @sf.theme()
-  let busy = (src.signing_in)()
-  // a desktop's: the picture and 登录或注册 alone, no words around them (asked for, 2026-10-23)
-  let wide = is_wide(c)
-  c.box(
-    w=Fill(1.0),
-    h=Fill(1.0),
-    padx=30.0,
-    pady=40.0,
-    gap=12.0,
-    align=ACenter,
-    justify=JCenter,
-    fn() {
-      @sf.drawable(
-        c,
-        if t.dark {
-          "illus_sign_in_dark"
-        } else {
-          "illus_sign_in"
-        },
-        dmin(300.0, c.width - 60.0),
-      )
-      |> ignore
-      if !wide {
-        c.box(pt=10.0, fn() {
-          c.text(
-            tr("android-settings.signIn.title"),
-            size=28.0,
-            weight=700,
-            color=t.p.text,
-            wrap=false,
-          )
-          |> ignore
-        })
-        |> ignore
-        c.text(
-          tr("android-settings.signIn.note"),
-          size=15.0,
-          color=t.p.muted,
-          center=true,
-          w=Fill(1.0),
-          line=21.0,
-        )
-        |> ignore
-      }
-      c.box(h=Px(6.0), fn() {  }) |> ignore
-      let id = c.id("sign-in")
-      if c.clicked(id) && !busy {
-        (src.sign_in)()
-      }
-      c.box(
-        dir=Row,
-        w=Fill(1.0),
-        // a desktop's no wider than the desktop app's (web cloud/gate.css.ts `ways`)
-        max_w=if wide { sign_in_wide_w } else { c.width },
-        h=Px(50.0),
-        radius=25.0,
-        bg=t.p.text,
-        align=ACenter,
-        justify=JCenter,
-        id~,
-        fn() {
-          c.text(
-            if busy {
-              tr("common.opening")
-            } else {
-              tr("android-settings.signIn.google")
-            },
-            size=16.0,
-            weight=600,
-            color=t.p.bg,
-            wrap=false,
-          )
-          |> ignore
-          // SignIn.kt: clip(CircleShape).clickable
-          if !busy {
-            @motion.ripple(c, id, 25.0)
-          }
-        },
-      )
-      |> ignore
-      if !wide {
-        c.text(
-          tr("android-settings.signIn.many"),
-          size=12.0,
-          color=t.p.muted,
-          wrap=false,
-        )
-        |> ignore
-      }
-    },
-  )
-  |> ignore
+  login_view(c, src)
 }
 
 ///|

@@ -7,6 +7,7 @@ import { DROPPED, GONE, NETWORK } from "./wake-words.ts";
 export class CoreError extends Error {
   code: string;
   status?: number;
+  retry_after?: number;
   constructor(code: string, message: string, status?: number) {
     super(message);
     this.code = code;
@@ -35,7 +36,8 @@ export class CoreError extends Error {
   }
 
   /// As it goes on the wire: `{ code, message, status? }`.
-  toJSON(): { code: string; message: string; status?: number } {
+  toJSON(): { code: string; message: string; status?: number; retry_after?: number } {
+    if (this.retry_after !== undefined) return { code: this.code, message: this.message, status: this.status, retry_after: this.retry_after };
     return this.status === undefined ? { code: this.code, message: this.message } : { code: this.code, message: this.message, status: this.status };
   }
 

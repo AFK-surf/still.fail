@@ -343,3 +343,27 @@ test "a page pushed whose data never comes slides in once it has waited the most
   assert_eq(t.rect_of("title 1").unwrap().0, 0.0)
   t.assert_idle()
 }
+
+///|
+test "a pre-pop guard vetoes system back and a committed edge gesture before removing the page" {
+  let allow = Ref(false)
+  let asked = Ref(0)
+  let nav = @ui.Nav::new(0, can_pop=fn(_) { asked.val += 1; allow.val })
+  let t = @ui.Tester::new(nav_view(nav))
+  t.tap_text("open 1")
+  t.run_for(@ui.nav_push_ms)
+  t.back()
+  assert_eq(asked.val, 1)
+  assert_eq(nav.depth(), 2)
+  t.hold_drag(5.0, 400.0, 220.0, 400.0)
+  t.release(220.0, 400.0)
+  t.run_for(@ui.nav_return_ms)
+  assert_eq(asked.val, 2)
+  assert_eq(nav.depth(), 2)
+  assert_eq(t.rect_of("title 1").unwrap().0, 0.0)
+  allow.val = true
+  t.back()
+  assert_eq(nav.depth(), 1)
+  t.run_for(@ui.nav_push_ms)
+  t.assert_idle()
+}

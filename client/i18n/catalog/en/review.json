@@ -1,0 +1,16 @@
+{
+  "review.body": "Sign in with the review account provided to you. Sign-up and password recovery are not available here.",
+  "review.emailLabel": "Email",
+  "review.emailPlaceholder": "Enter the review account email",
+  "review.passwordLabel": "Password",
+  "review.passwordPlaceholder": "Enter password",
+  "review.showPassword": "Show password",
+  "review.hidePassword": "Hide password",
+  "review.submit": "Sign in",
+  "review.emailRequired": "Enter your email.",
+  "review.emailInvalid": "Enter a valid email address.",
+  "review.passwordRequired": "Enter your password.",
+  "review.invalidCredentials": "The email or password is incorrect. Check them and try again.",
+  "review.title": "Review account sign-in",
+  "review.submitting": "Signing in…"
+}

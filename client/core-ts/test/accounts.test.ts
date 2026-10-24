@@ -3,9 +3,9 @@ import { Effect } from "effect";
 import { run } from "./run.ts";
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { Accounts, LOGIN_KEY, STORAGE_KEY, challenge, decodeComponent, encodeComponent, parseQuery, view, type StoredAccount } from "../src/accounts.ts";
+import { Accounts, LOGIN_KEY, PASSWORD_SAVE_WAIT_MS, STORAGE_KEY, challenge, decodeComponent, encodeComponent, parseQuery, view, type StoredAccount } from "../src/accounts.ts";
 import { stillfailAccountProvider } from "../src/account-provider.ts";
-import { HostError } from "../src/error.ts";
+import { CoreError, HostError } from "../src/error.ts";
 import { holdLanguage } from "../src/i18n.ts";
 import { Runner } from "../src/runtime.ts";
 import { FakeHost, flush, jsonResponse } from "../src/testing.ts";
@@ -314,4 +314,360 @@ test("migrate_merges_the_old_list", async () => {
   await run(accounts.migrate([{ sub: "s", email: "s@x.com", access: "fresh", refresh: "fresh", accessExpires: 5000 }]));
   assert.equal(accounts.stored("s")!.refresh, "fresh");
   await assert.rejects(run(accounts.migrate({ sub: "s" })));
+});
+
+test("review attempt cancellation before a late password success never publishes or stores an account", async () => {
+  const host = new FakeHost();
+  const original = account("original", now(host) + 3600);
+  const accounts = await withStored(host, [original]);
+  const started = Promise.withResolvers<void>();
+  const answer = Promise.withResolvers<ReturnType<typeof jsonResponse>>();
+  host.onFetch((req) => {
+    assert.ok(req.url.endsWith("/v1/auth/password"));
+    started.resolve();
+    return answer.promise;
+  });
+  let changes = 0;
+  accounts.onChange(() => changes++);
+  const pending = run(accounts.passwordSignIn("review@example.com", " secret ", "iPhone", "cancelled"));
+  const failed = assert.rejects(pending, (e: unknown) => (e as { code: string }).code === "login_cancelled");
+  await started.promise;
+  accounts.cancelPassword("cancelled");
+  answer.resolve(jsonResponse(200, tokens("new-access", "new-refresh", now(host) + 3600)));
+  await failed;
+  assert.deepEqual(accounts.list(), [view(original)]);
+  assert.deepEqual(stored(host, STORAGE_KEY), [original]);
+  assert.equal(changes, 0);
+  await assert.rejects(run(accounts.acceptPassword("cancelled")), (e: unknown) => (e as { code: string }).code === "login_cancelled");
+});
+
+test("prepared reviewer tokens do not change accounts; accepting adds uniquely and preserves the original", async () => {
+  const host = new FakeHost();
+  const original = account("original", now(host) + 3600);
+  const accounts = await withStored(host, [original]);
+  host.onFetch((req) => req.url.endsWith("/v1/me") ? jsonResponse(200, { user: {} }) : jsonResponse(200, tokens("acc", "ref", now(host) + 3600)));
+  await run(accounts.passwordSignIn("review@example.com", " secret ", "iPhone", "prepared"));
+  assert.deepEqual(accounts.list(), [view(original)]);
+  assert.equal(body(host.requests[0]).password, " secret ");
+  const duplicate = await Effect.runPromise(Effect.flip(accounts.passwordSignIn("review@example.com", " secret ", "iPhone", "prepared")));
+  assert.equal(duplicate.code, "invalid_params");
+  assert.equal(host.requests.length, 1);
+  const added = await run(accounts.acceptPassword("prepared"));
+  assert.deepEqual(accounts.list(), [view(original), added]);
+  await run(accounts.passwordSignIn("review@example.com", " secret ", "iPhone", "again"));
+  await run(accounts.acceptPassword("again"));
+  assert.deepEqual(accounts.list(), [view(original), added]);
+});
+
+test("cancellation during prepared profile completion still prevents account publication", async () => {
+  const host = new FakeHost();
+  const accounts = await run(Accounts.load(host));
+  const started = Promise.withResolvers<void>();
+  const profile = Promise.withResolvers<ReturnType<typeof jsonResponse>>();
+  host.onFetch((req) => {
+    if (req.url.endsWith("/v1/me")) { started.resolve(); return profile.promise; }
+    return jsonResponse(200, tokens("acc", "ref", now(host) + 3600));
+  });
+  await run(accounts.passwordSignIn("review@example.com", "secret", "iPhone", "profile"));
+  const accepting = run(accounts.acceptPassword("profile"));
+  const failed = assert.rejects(accepting, (e: unknown) => (e as { code: string }).code === "login_cancelled");
+  await started.promise;
+  accounts.cancelPassword("profile");
+  profile.resolve(jsonResponse(200, { user: {} }));
+  await failed;
+  assert.deepEqual(accounts.list(), []);
+  assert.equal(host.stored(STORAGE_KEY), undefined);
+});
+
+test("review throttling exposes only authoritative positive retry-after, rounded upwards", async () => {
+  for (const [raw, expected] of [["1.2", 2], ["60", 60], ["0", undefined], ["garbage", undefined], [undefined, undefined]] as const) {
+    const host = new FakeHost();
+    host.onFetch(() => ({ ...jsonResponse(429, { error: "rate_limited" }), headers: raw === undefined ? [] : [["Retry-After", raw]] }));
+    const accounts = await run(Accounts.load(host));
+    const error = await Effect.runPromise(Effect.flip(accounts.passwordSignIn("review@example.com", "secret", "iPhone")));
+    assert.equal(error.code, "rate_limited");
+    assert.equal(error.retry_after, expected);
+    assert.equal(error.toJSON().retry_after, expected);
+    assert.deepEqual(accounts.list(), []);
+  }
+});
+
+test("unavailable session storage fails closed instead of returning empty accounts or writing replacement data", async () => {
+  const host = new FakeHost();
+  const original = account("original", now(host) + 3600);
+  host.store(STORAGE_KEY, [original]);
+  host.storageGet = () => Effect.fail(new HostError("synthetic storage failure"));
+  const error = await Effect.runPromise(Effect.flip(Accounts.load(host)));
+  assert.equal(error.code, "session_storage_unavailable");
+  assert.equal(error.message, "Session storage is unavailable");
+  assert.deepEqual(stored(host, STORAGE_KEY), [original]);
+  assert.deepEqual(host.requests, []);
+});
+
+test("failed reviewer session persistence preserves the original account and never publishes a new identity", async () => {
+  const host = new FakeHost();
+  const original = account("original", now(host) + 3600);
+  const accounts = await withStored(host, [original]);
+  host.onFetch((req) => req.url.endsWith("/v1/me") ? jsonResponse(200, { user: {} }) : jsonResponse(200, tokens("acc", "ref", now(host) + 3600)));
+  await run(accounts.passwordSignIn("review@example.com", "secret", "iPhone", "write-failure"));
+  host.storageSet = () => Effect.fail(new HostError("synthetic write failure"));
+  const error = await Effect.runPromise(Effect.flip(accounts.acceptPassword("write-failure")));
+  assert.equal(error.code, "session_storage_unavailable");
+  assert.deepEqual(accounts.list(), [view(original)]);
+  assert.deepEqual(stored(host, STORAGE_KEY), [original]);
+  accounts.cancelPassword("write-failure");
+});
+
+test("a commit already handed to storage refuses cancellation and never relies on a rollback that can fail", async () => {
+  const host = new FakeHost();
+  const original = account("original", now(host) + 3600);
+  const accounts = await withStored(host, [original]);
+  host.onFetch((req) => req.url.endsWith("/v1/me") ? jsonResponse(200, { user: {} }) : jsonResponse(200, tokens("acc", "ref", now(host) + 3600)));
+  await run(accounts.passwordSignIn("review@example.com", "secret", "iPhone", "writing"));
+  const started = Promise.withResolvers<void>();
+  const release = Promise.withResolvers<void>();
+  const set = host.storageSet.bind(host);
+  let writes = 0;
+  host.storageSet = (key, bytes) => Effect.gen(function* () {
+    writes++;
+    if (writes > 1) return yield* Effect.fail(new HostError("rollback unavailable"));
+    started.resolve();
+    yield* Effect.promise(() => release.promise);
+    yield* set(key, bytes);
+  });
+  const accepting = run(accounts.acceptPassword("writing"));
+  await started.promise;
+  assert.deepEqual(accounts.cancelPassword("writing"), { cancelled: false, state: "committing" });
+  release.resolve();
+  const accepted = await accepting;
+  assert.deepEqual(accounts.cancelPassword("writing"), { cancelled: false, state: "committed" });
+  assert.equal(writes, 1);
+  assert.deepEqual(accounts.list(), [view(original), accepted]);
+  assert.deepEqual((await run(Accounts.load(host))).list(), accounts.list());
+});
+
+test("acknowledged cancellation while waiting for a legacy save never writes reviewer credentials or overwrites concurrent additions", async () => {
+  const host = new FakeHost();
+  const original = account("original", now(host) + 3600);
+  const accounts = await withStored(host, [original]);
+  host.onFetch((req) => req.url.endsWith("/v1/me") ? jsonResponse(200, { user: {} }) : jsonResponse(200, tokens("acc", "ref", now(host) + 3600)));
+  await run(accounts.passwordSignIn("review@example.com", "secret", "iPhone", "queued"));
+  const started = Promise.withResolvers<void>();
+  const release = Promise.withResolvers<void>();
+  const set = host.storageSet.bind(host);
+  let writes = 0;
+  host.storageSet = (key, bytes) => Effect.gen(function* () {
+    writes++;
+    assert.ok(!(parseJson(bytes) as StoredAccount[]).some((a) => a.sub === "sub1"));
+    if (writes === 1) { started.resolve(); yield* Effect.promise(() => release.promise); }
+    yield* set(key, bytes);
+  });
+  const migration = (sub: string) => accounts.migrate([{ sub, email: sub + "@example.com", access: "access", refresh: "refresh", accessExpires: now(host) + 3600 }]);
+  const first = run(migration("B"));
+  await started.promise;
+  const accepting = run(accounts.acceptPassword("queued"));
+  const failed = assert.rejects(accepting, (e: unknown) => (e as { code: string }).code === "login_cancelled");
+  const second = run(migration("C"));
+  assert.deepEqual(accounts.cancelPassword("queued"), { cancelled: true, state: "cancelled" });
+  assert.equal(writes, 1);
+  release.resolve();
+  await Promise.all([first, second, failed]);
+  assert.equal(writes, 2);
+  assert.deepEqual(accounts.list().map((a) => a.sub), ["original", "B", "C"]);
+  assert.deepEqual((await run(Accounts.load(host))).list(), accounts.list());
+});
+
+test("a host write that commits then reports failure is reconciled, not falsely cancelled", async () => {
+  const host = new FakeHost();
+  const accounts = await run(Accounts.load(host));
+  host.onFetch((req) => req.url.endsWith("/v1/me") ? jsonResponse(200, { user: {} }) : jsonResponse(200, tokens("acc", "ref", now(host) + 3600)));
+  await run(accounts.passwordSignIn("review@example.com", "secret", "iPhone", "ambiguous"));
+  const set = host.storageSet.bind(host);
+  host.storageSet = (key, bytes) => Effect.andThen(set(key, bytes), Effect.fail(new HostError("cleanup failed after durable commit")));
+  const accepted = await run(accounts.acceptPassword("ambiguous"));
+  assert.deepEqual(accounts.list(), [accepted]);
+  assert.deepEqual(accounts.cancelPassword("ambiguous"), { cancelled: false, state: "committed" });
+  assert.deepEqual((await run(Accounts.load(host))).list(), [accepted]);
+});
+
+// The runner supplies the SAME fake clock to deadlines and the injected native IO. None of these
+// tests depends on wall-clock sleeping, and every deliberately stalled callback is released at cleanup.
+async function preparedSave(attempt: string) {
+  const host = new FakeHost();
+  const runner = new Runner(host.time.clock);
+  const original = account("original", now(host) + 3600);
+  const accounts = await withStored(host, [original]);
+  host.onFetch((req) => req.url.endsWith("/v1/me") ? jsonResponse(200, { user: {} }) : jsonResponse(200, tokens("acc", "ref", now(host) + 3600)));
+  await runner.run(accounts.passwordSignIn("review@example.com", " secret ", "iPhone", attempt));
+  return { host, runner, accounts, original };
+}
+
+test("never-answer final save reaches its fake-clock budget and quarantines competing login and writes", async () => {
+  const { host, runner, accounts, original } = await preparedSave("never-write");
+  const release = Promise.withResolvers<void>();
+  let writes = 0;
+  host.storageSet = () => Effect.gen(function* () {
+    writes++;
+    yield* Effect.promise(() => release.promise);
+    return yield* Effect.fail(new HostError("synthetic final write failure"));
+  });
+  const phases: string[] = [];
+  let settled = false;
+  const pending = runner.run(Effect.flip(accounts.acceptPassword("never-write", (phase) => phases.push(phase)))).then((error) => { settled = true; return error; });
+  try {
+    await flush();
+    assert.deepEqual(phases, ["committing"]);
+    assert.equal(writes, 1);
+    await host.time.pass(PASSWORD_SAVE_WAIT_MS - 1, PASSWORD_SAVE_WAIT_MS - 1);
+    assert.equal(settled, false);
+    await host.time.pass(1);
+    assert.equal((await pending).code, "session_commit_unknown");
+    assert.deepEqual(accounts.list(), [view(original)]);
+    assert.deepEqual(accounts.cancelPassword("never-write"), { cancelled: false, state: "committing" });
+    const requestCount = host.requests.length;
+    const blocked: Effect.Effect<unknown, CoreError>[] = [
+      accounts.passwordSignIn("other@example.com", "password", "iPhone", "other"),
+      accounts.passwordSignIn("other@example.com", "password", "iPhone"),
+      accounts.beginSignIn("app://callback", "/", "iPhone"),
+      accounts.completeSignIn("code=other&state=other"),
+      accounts.signOut("original"),
+      accounts.migrate([{ sub: "other", email: "other@example.com", access: "a", refresh: "r", accessExpires: now(host) + 3600 }]),
+    ];
+    for (const effect of blocked) assert.equal((await runner.run(Effect.flip(effect))).code, "session_commit_unknown");
+    for (let i = 0; i < 20; i++) assert.equal((await runner.run(Effect.flip(accounts.recoverPassword("never-write")))).code, "session_commit_unknown");
+    assert.equal(host.requests.length, requestCount);
+    assert.equal(writes, 1);
+    assert.deepEqual(stored(host, STORAGE_KEY), [original]);
+  } finally {
+    release.resolve();
+    await flush();
+  }
+  // A late FAIL is not sufficient: only the read of the original authoritative snapshot confirms failure.
+  assert.equal((await runner.run(Effect.flip(accounts.recoverPassword("never-write")))).code, "session_storage_unavailable");
+  assert.deepEqual(accounts.cancelPassword("never-write"), { cancelled: true, state: "cancelled" });
+  assert.deepEqual(accounts.list(), [view(original)]);
+  runner.shutdown();
+});
+
+test("late final-write answer can be recovered without a second password request or write", async () => {
+  const { host, runner, accounts, original } = await preparedSave("late-write");
+  const release = Promise.withResolvers<void>();
+  const set = host.storageSet.bind(host);
+  let writes = 0;
+  host.storageSet = (key, bytes) => Effect.gen(function* () {
+    writes++;
+    yield* Effect.promise(() => release.promise);
+    yield* set(key, bytes);
+    // Native legacy-file cleanup may fail AFTER Keychain committed.
+    return yield* Effect.fail(new HostError("synthetic cleanup failure"));
+  });
+  const pending = runner.run(Effect.flip(accounts.acceptPassword("late-write")));
+  await host.time.pass(PASSWORD_SAVE_WAIT_MS, PASSWORD_SAVE_WAIT_MS);
+  assert.equal((await pending).code, "session_commit_unknown");
+  assert.deepEqual(accounts.list(), [view(original)]);
+  release.resolve();
+  await flush();
+  const phases: string[] = [];
+  const recovered = await runner.run(accounts.recoverPassword("late-write", (phase) => phases.push(phase)));
+  assert.deepEqual(phases, ["checking"]);
+  assert.equal(recovered.sub, "sub1");
+  assert.deepEqual(accounts.list(), [view(original), recovered]);
+  assert.deepEqual(accounts.cancelPassword("late-write"), { cancelled: false, state: "committed" });
+  assert.deepEqual(await runner.run(accounts.recoverPassword("late-write")), recovered);
+  assert.equal(writes, 1);
+  assert.equal(host.requests.filter((r) => r.url.endsWith("/v1/auth/password")).length, 1);
+  assert.deepEqual((await run(Accounts.load(host))).list(), accounts.list());
+  runner.shutdown();
+});
+
+test("never-answer confirmation read has one retained operation across bounded rechecks and a late answer", async () => {
+  const { host, runner, accounts, original } = await preparedSave("late-read");
+  const release = Promise.withResolvers<void>();
+  const get = host.storageGet.bind(host);
+  const set = host.storageSet.bind(host);
+  let reads = 0, writes = 0;
+  host.storageSet = (key, bytes) => { writes++; return set(key, bytes); };
+  host.storageGet = (key) => Effect.gen(function* () {
+    reads++;
+    yield* Effect.promise(() => release.promise);
+    return yield* get(key);
+  });
+  const phases: string[] = [];
+  const accepting = runner.run(Effect.flip(accounts.acceptPassword("late-read", (phase) => phases.push(phase))));
+  try {
+    await host.time.pass(PASSWORD_SAVE_WAIT_MS, PASSWORD_SAVE_WAIT_MS);
+    assert.equal((await accepting).code, "session_commit_unknown");
+    for (let i = 0; i < 2; i++) {
+      const checking = runner.run(Effect.flip(accounts.recoverPassword("late-read", (phase) => phases.push(phase))));
+      await host.time.pass(PASSWORD_SAVE_WAIT_MS, PASSWORD_SAVE_WAIT_MS);
+      assert.equal((await checking).code, "session_commit_unknown");
+    }
+    assert.equal(reads, 1);
+    assert.equal(writes, 1);
+    assert.deepEqual(phases, ["committing", "checking", "checking"]);
+    assert.deepEqual(accounts.list(), [view(original)]);
+    assert.deepEqual(accounts.cancelPassword("late-read"), { cancelled: false, state: "committing" });
+  } finally {
+    release.resolve();
+    await flush();
+  }
+  const recovered = await runner.run(accounts.recoverPassword("late-read"));
+  assert.equal(recovered.sub, "sub1");
+  assert.deepEqual(accounts.list(), [view(original), recovered]);
+  assert.equal(reads, 1);
+  assert.equal(writes, 1);
+  assert.equal(host.requests.filter((r) => r.url.endsWith("/v1/auth/password")).length, 1);
+  runner.shutdown();
+});
+
+test("unavailable confirmation read remains unknown until authoritative same-attempt recheck", async () => {
+  const { host, runner, accounts, original } = await preparedSave("unreadable");
+  const get = host.storageGet.bind(host);
+  host.storageGet = () => Effect.fail(new HostError("synthetic locked Keychain"));
+  assert.equal((await runner.run(Effect.flip(accounts.acceptPassword("unreadable")))).code, "session_commit_unknown");
+  assert.deepEqual(accounts.list(), [view(original)]);
+  assert.equal((await runner.run(Effect.flip(accounts.passwordSignIn("other@example.com", "secret", "iPhone", "new")))).code, "session_commit_unknown");
+  host.storageGet = get;
+  const recovered = await runner.run(accounts.recoverPassword("unreadable"));
+  assert.equal(recovered.sub, "sub1");
+  assert.deepEqual((await run(Accounts.load(host))).list(), [view(original), recovered]);
+  runner.shutdown();
+});
+
+test("late unchanged readback retains confirmed failure for subsequent recovery after the save budget", async () => {
+  const { host, runner, accounts, original } = await preparedSave("late-failure");
+  const release = Promise.withResolvers<void>();
+  const get = host.storageGet.bind(host);
+  let writes = 0, reads = 0;
+  host.storageSet = () => { writes++; return Effect.fail(new HostError("synthetic write rejected without committing")); };
+  host.storageGet = (key) => Effect.gen(function* () {
+    reads++;
+    yield* Effect.promise(() => release.promise);
+    return yield* get(key);
+  });
+  const accepting = runner.run(Effect.flip(accounts.acceptPassword("late-failure")));
+  try {
+    await host.time.pass(PASSWORD_SAVE_WAIT_MS, PASSWORD_SAVE_WAIT_MS);
+    assert.equal((await accepting).code, "session_commit_unknown");
+    assert.deepEqual(accounts.cancelPassword("late-failure"), { cancelled: false, state: "committing" });
+    assert.equal(reads, 1);
+    assert.equal(writes, 1);
+  } finally {
+    release.resolve();
+    await flush();
+  }
+  // The original waiter has already finished; the detached read must leave a replayable failure.
+  const phases: string[] = [];
+  for (let i = 0; i < 2; i++) {
+    const error = await runner.run(Effect.flip(accounts.recoverPassword("late-failure", (phase) => phases.push(phase))));
+    assert.equal(error.code, "session_storage_unavailable");
+  }
+  assert.deepEqual(phases, ["checking", "checking"]);
+  assert.deepEqual(accounts.cancelPassword("late-failure"), { cancelled: true, state: "cancelled" });
+  assert.equal(reads, 1);
+  assert.equal(writes, 1);
+  assert.deepEqual(accounts.list(), [view(original)]);
+  assert.deepEqual(stored(host, STORAGE_KEY), [original]);
+  assert.equal(host.requests.filter((req) => req.url.endsWith("/v1/auth/password")).length, 1);
+  runner.shutdown();
 });

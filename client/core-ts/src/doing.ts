@@ -13,6 +13,8 @@ export class Doing {
 
   /// One begun; `end` it with what this gives.
   start(call: string, params: unknown, now: number): number {
+    // Auth arguments are never topic data, even if a caller bypasses Core’s parameter scrubber.
+    if (call.startsWith("auth.")) params = null;
     const id = ++this.#next;
     const plain = new Map<string, string>();
     if (params !== null && typeof params === "object" && !Array.isArray(params)) {

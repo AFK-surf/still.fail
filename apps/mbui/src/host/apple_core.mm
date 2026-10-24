@@ -40,6 +40,9 @@
 #include "listen_api.h"
 #include "electron_sealed.h"
 #include "apple_collate.h"
+#if TARGET_OS_IPHONE
+#include "mbui_ios_sessions_apple.h"
+#endif
 
 namespace jsi = facebook::jsi;
 
@@ -174,10 +177,11 @@ bool tracing() {
 
 /// An answer to the core's call `id` (the shell's, or the host's own): a task. `error` empty when it succeeded.
 void completed(uint64_t id, std::string json, std::string error, std::string bytes, bool has_bytes) {
+  // Transport metadata may include authorization headers, cookies, URLs and token-bearing protocols.
+  // A prefix is not redaction: trace only routing/status and byte counts, never arbitrary JSON or errors.
   if (tracing())
-    fprintf(stderr, "[core trace] <- %llu %s%s\n", (unsigned long long)id,
-            error.empty() ? json.substr(0, 120).c_str() : ("error " + error).c_str(),
-            has_bytes ? (" +" + std::to_string(bytes.size()) + " bytes").c_str() : "");
+    fprintf(stderr, "[core trace] <- %llu %s json=%zu bytes=%zu\n", (unsigned long long)id,
+            error.empty() ? "ok" : "failed", json.size(), has_bytes ? bytes.size() : size_t(0));
   post([id, json = std::move(json), error = std::move(error), bytes = std::move(bytes), has_bytes](jsi::Runtime &rt) {
     jsi::Value j = error.empty() ? jsi::Value(jsi::String::createFromUtf8(rt, json)) : jsi::Value::null();
     jsi::Value e = error.empty() ? jsi::Value::null() : jsi::Value(jsi::String::createFromUtf8(rt, error));
@@ -208,6 +212,42 @@ static void answer_later(double cid, NSData *json, NSString *error, NSData *byte
   completed(uint64_t(cid), error ? std::string() : std_of(json), error ? std::string(error.UTF8String ?: "error") : std::string(), std_of(bytes),
             !error && bytes != nil);
 }
+
+// ── iOS accounts storage: authoritative, device-local main-app Keychain bytes ──
+#if TARGET_OS_IPHONE
+// Used/reset only on the core thread. HostFunctions execute there synchronously, and completed() posts only the
+// answer; a second operation cannot interleave a migration/update. The share host never starts this core, and the
+// exact bundle + NSExtension guard also fails closed if that ever changes. App Groups do not share Keychain access.
+static std::unique_ptr<mbui_ios_sessions::Store> ios_sessions;
+
+static void core_ios_sessions(double cid, const std::string &op, const uint8_t *bytes, size_t blen) {
+  NSBundle *bundle = NSBundle.mainBundle;
+  NSString *identifier = bundle.bundleIdentifier;
+  if (!mbui_ios_sessions::main_bundle(identifier.UTF8String ?: "", bundle.infoDictionary[@"NSExtension"] != nil)) {
+    answer_later(cid, nil, @"sessions unavailable", nil);
+    return;
+  }
+  if (!ios_sessions) {
+    auto backend = mbui_ios_sessions::apple_backend(@(C.dataDir.c_str()), identifier);
+    if (!backend) {
+      // A transient identity-file error may be retried by a later read; never cache a replacement namespace.
+      answer_later(cid, nil, @"sessions unavailable", nil);
+      return;
+    }
+    ios_sessions = std::make_unique<mbui_ios_sessions::Store>(std::move(*backend));
+  }
+  mbui_ios_sessions::Answer result;
+  if (op == "storage.get") result = ios_sessions->get();
+  else if (op == "storage.set") result = ios_sessions->set(bytes && blen ? std::string(reinterpret_cast<const char *>(bytes), blen) : std::string());
+  else result = ios_sessions->erase();
+  if (!result.ok) {
+    answer_later(cid, nil, @"sessions unavailable", nil);
+    return;
+  }
+  NSData *out = result.has_bytes ? [NSData dataWithBytes:result.bytes.data() length:result.bytes.size()] : nil;
+  answer_later(cid, const_json(op == "storage.get" && !result.has_bytes ? "{\"none\":true}" : "{}"), nil, out);
+}
+#endif
 
 // ── secure.* (ember hosts/bridge.ts; Android's Keystore) ──
 //   secure.get {key, user, reason} → {} + the bytes, or {none: true}; secure.set {key, user} + the bytes → {};
@@ -530,10 +570,23 @@ static void install(jsi::Runtime &rt) {
       p = b.data(rt);
       len = b.size(rt);
     }
+#if TARGET_OS_IPHONE
+    // Intercept exactly accounts before Rust's plaintext storage dispatch (and before request tracing). No
+    // MBUI_KEYS_IN_FILES exception: that option belongs exclusively to the unrelated secure.* implementation.
+    if (op == "storage.get" || op == "storage.set" || op == "storage.delete") {
+      @autoreleasepool {
+        NSDictionary *args = [NSJSONSerialization JSONObjectWithData:ns_data(json) options:0 error:nil];
+        if ([args isKindOfClass:NSDictionary.class] && [args[@"key"] isEqual:@"accounts"]) {
+          core_ios_sessions(double(id), op, p, len);
+          return jsi::Value::undefined();
+        }
+      }
+    }
+#endif
     bool here = op.rfind("secure.", 0) == 0 || op.rfind("listen.", 0) == 0;
     if (tracing())
-      fprintf(stderr, "[core trace] -> %llu %s %.*s%s%s\n", (unsigned long long)id, op.c_str(), (int)std::min<size_t>(json.size(), 120), json.c_str(),
-              has ? (" +" + std::to_string(len) + " bytes").c_str() : "", here ? " (here)" : "");
+      fprintf(stderr, "[core trace] -> %llu %s json=%zu bytes=%zu%s\n", (unsigned long long)id,
+              op.c_str(), json.size(), has ? len : size_t(0), here ? " (here)" : "");
     if (here) {
       @autoreleasepool {
         NSString *name = @(op.c_str());
@@ -548,7 +601,7 @@ static void install(jsi::Runtime &rt) {
   fn("callSync", 2, [](jsi::Runtime &rt, const jsi::Value &, const jsi::Value *a, size_t) -> jsi::Value {
     std::string op = a[0].asString(rt).utf8(rt);
     std::string json = a[1].asString(rt).utf8(rt);
-    if (tracing()) fprintf(stderr, "[core trace] sync %s %.*s\n", op.c_str(), (int)std::min<size_t>(json.size(), 120), json.c_str());
+    if (tracing()) fprintf(stderr, "[core trace] sync %s json=%zu\n", op.c_str(), json.size());
     // the order people read names in: the system's (apple_collate.h), not the shell's
     if (op == "text.collate") {
       NSData *said = apple_collate_answer([NSData dataWithBytes:json.data() length:json.size()]);
@@ -627,6 +680,9 @@ static void run(void) {
   std::unique_ptr<facebook::hermes::HermesRuntime> rt;
   @autoreleasepool {
     secure_dir = [@(C.dataDir.c_str()) stringByAppendingPathComponent:@"secure"];
+#if TARGET_OS_IPHONE
+    ios_sessions.reset();  // A restarted core must successfully read before it may mutate sessions again.
+#endif
     double t0 = clock_ms(CLOCK_MONOTONIC);
     C.shell = sf_shell_start(C.dataDir.c_str(), on_complete, C.gate);
     if (!C.shell) fatal("the core's files cannot be kept: " + C.dataDir);
@@ -705,6 +761,9 @@ static void run(void) {
 
   @autoreleasepool {
     core_listen_close_all();
+#if TARGET_OS_IPHONE
+    ios_sessions.reset();
+#endif
     rt.reset();
   }
 }

@@ -8,7 +8,7 @@
 //
 // Storage (the Rust core's, so either core reads the other's): `accounts` is a JSON array of StoredAccount
 // (`access_expires` in epoch seconds), `login` the sign-in in progress.
-import { Deferred, Effect } from "effect";
+import { Deferred, Effect, Semaphore } from "effect";
 import { CoreError, HostError, asCoreError } from "./error.ts";
 import type { Host, HttpResponse } from "./host.ts";
 import { t } from "./i18n.ts";
@@ -18,6 +18,14 @@ import { base64url, isObject, parseJson, pointer, sha256, toJsonBytes, utf8 } fr
 
 export const STORAGE_KEY = "accounts";
 export const LOGIN_KEY = "login";
+// Responsiveness budget, never a claim that the native operation was aborted.
+export const PASSWORD_SAVE_WAIT_MS = 15_000;
+export type PasswordProgress = (phase: "committing" | "checking") => void;
+type DurablePassword = {
+  attempt: string; sub: string; before: string; expected: string;
+  writing: boolean; written: Deferred.Deferred<void>;
+  reading: Deferred.Deferred<AccountView, CoreError> | null;
+};
 
 export type StoredAccount = {
   sub: string;
@@ -67,7 +75,30 @@ function readTokens(raw: unknown): Tokens | null {
   return raw as unknown as Tokens;
 }
 
+export type PasswordCancellation = { cancelled: boolean; state: "cancelled" | "committing" | "committed" };
+
 export class Accounts {
+  // Reviewer attempts are prepared, then accepted by the still-visible form. HTTP alone never activates.
+  readonly #passwordAttempts = new Map<string, { tokens: Tokens | null; committing: boolean }>();
+  readonly #persistence = Semaphore.makeUnsafe(1);
+  readonly #passwordCommitted = new Map<string, string>();
+  readonly #passwordFailed = new Set<string>();
+  #durable: DurablePassword | null = null;
+  // Cancellation is acknowledged only before the durable commit starts. Once storage owns the write,
+  // rollback cannot be made reliable with Host's get/set API. The UI MUST await the commit outcome then.
+  cancelPassword(attempt: string): PasswordCancellation {
+    if (this.#passwordCommitted.has(attempt)) return { cancelled: false, state: "committed" };
+    if (this.#passwordAttempts.get(attempt)?.committing) return { cancelled: false, state: "committing" };
+    this.#passwordAttempts.delete(attempt);
+    return { cancelled: true, state: "cancelled" };
+  }
+  acceptPassword(attempt: string, progress?: PasswordProgress): Effect.Effect<AccountView, CoreError> {
+    return Effect.suspend(() => {
+      if (this.#passwordAttempts.get(attempt)?.committing) return Effect.fail(new CoreError("session_commit_unknown", "Session commit is pending; cancellation is unavailable"));
+      const tokens = this.#passwordAttempts.get(attempt)?.tokens;
+      return tokens ? this.#signedIn(tokens, attempt, progress) : Effect.fail(new CoreError("login_cancelled", "Sign-in cancelled"));
+    });
+  }
   readonly #host: Host;
   #list: StoredAccount[];
   #listeners: (() => void)[] = [];
@@ -83,8 +114,8 @@ export class Accounts {
   }
 
   /// Loads the stored accounts.
-  static load(host: Host): Effect.Effect<Accounts> {
-    return Effect.map(Effect.orElseSucceed(host.storageGet(STORAGE_KEY), () => null), (bytes) => new Accounts(host, readStored(parseJson(bytes)) ?? []));
+  static load(host: Host): Effect.Effect<Accounts, CoreError> {
+    return Effect.map(Effect.mapError(host.storageGet(STORAGE_KEY), () => new CoreError("session_storage_unavailable", "Session storage is unavailable")), (bytes) => new Accounts(host, readStored(parseJson(bytes)) ?? []));
   }
 
   setTracer(tracer: Tracer): void {
@@ -107,6 +138,7 @@ export class Accounts {
   /// Starts a sign-in: stores the PKCE verifier and state, returns the URL to open.
   beginSignIn(redirectUri: string, returnTo: string, deviceName: string): Effect.Effect<string, CoreError> {
     return Effect.gen({ self: this }, function* () {
+      if (this.#durable) return yield* Effect.fail(this.#unknownPassword());
       const verifier = this.#secret();
       const state = this.#secret();
       const pending: PendingLogin = { verifier, state, return_to: returnTo, redirect_uri: redirectUri };
@@ -129,6 +161,7 @@ export class Accounts {
   /// Finishes a sign-in from the callback's query string. Returns the account and where to go next.
   completeSignIn(query: string): Effect.Effect<[AccountView, string], CoreError> {
     return Effect.gen({ self: this }, function* () {
+      if (this.#durable) return yield* Effect.fail(this.#unknownPassword());
       const params = parseQuery(query);
       const param = (k: string) => params.find(([n]) => n === k)?.[1];
       // A login is good for one try, whatever its outcome.
@@ -153,20 +186,38 @@ export class Accounts {
   }
 
   /// Signs in with an email and a password: only the accounts still.fail cloud set up for that (App Store review's).
-  passwordSignIn(email: string, password: string, deviceName: string): Effect.Effect<AccountView, CoreError> {
+  passwordSignIn(email: string, password: string, deviceName: string, attempt?: string): Effect.Effect<AccountView, CoreError> {
     return Effect.gen({ self: this }, function* () {
+      if (this.#durable) return yield* Effect.fail(this.#unknownPassword());
+      const pending = { tokens: null as Tokens | null, committing: false };
+      if (attempt !== undefined) {
+        if (this.#passwordAttempts.size > 0 || this.#passwordCommitted.has(attempt) || this.#passwordFailed.has(attempt)) return yield* Effect.fail(CoreError.invalid("Sign-in already pending"));
+        this.#passwordAttempts.set(attempt, pending);
+      }
       const failed = () => new CoreError("login_failed", t("core-logic.accounts.login.password_failed"));
       const response = yield* Effect.mapError(this.#post("/v1/auth/password", null, { email, password, name: deviceName }, null), failed);
+      if (attempt !== undefined && this.#passwordAttempts.get(attempt) !== pending) return yield* Effect.fail(new CoreError("login_cancelled", "Sign-in cancelled"));
+      if (response.status === 429) {
+        const error = new CoreError("rate_limited", "Too many attempts", 429);
+        const raw = response.headers.find(([k]) => k.toLowerCase() === "retry-after")?.[1];
+        const seconds = raw === undefined ? NaN : (/^\d+(\.\d+)?$/.test(raw.trim()) ? Number(raw) : (Date.parse(raw) - this.#host.nowMs()) / 1000);
+        if (Number.isFinite(seconds) && seconds > 0) error.retry_after = Math.ceil(seconds);
+        return yield* Effect.fail(error);
+      }
       if (response.status === 401) return yield* Effect.fail(new CoreError("login_wrong_password", t("core-logic.accounts.login.wrong_password")).withStatus(401));
       if (!ok(response)) return yield* Effect.fail(failed().withStatus(response.status));
       const tokens = readTokens(parseJson(response.body));
       if (!tokens) return yield* Effect.fail(failed());
+      if (attempt !== undefined) {
+        pending.tokens = tokens;
+        return { sub: tokens.subject, email: tokens.email, name: tokens.name ?? "", picture: "" };
+      }
       return yield* this.#signedIn(tokens);
     });
   }
 
   /// Keeps the account a sign-in answered with.
-  #signedIn(tokens: Tokens): Effect.Effect<AccountView, CoreError> {
+  #signedIn(tokens: Tokens, attempt?: string, progress?: PasswordProgress): Effect.Effect<AccountView, CoreError> {
     return Effect.gen({ self: this }, function* () {
       const account: StoredAccount = {
         sub: tokens.subject,
@@ -177,6 +228,15 @@ export class Accounts {
         refresh: tokens.refresh_token,
         access_expires: tokens.expires_at,
       };
+      // For a staged attempt, finish all remote work before the single account-publication boundary.
+      // Cancellation while the profile request is pending must still prevent #put, not just hide the form.
+      if (attempt !== undefined) {
+        const picture = yield* this.#picture(account.access);
+        if (this.#passwordAttempts.get(attempt)?.tokens !== tokens) return yield* Effect.fail(new CoreError("login_cancelled", "Sign-in cancelled"));
+        if (picture !== null) account.picture = picture;
+        yield* this.#publishPassword(account, tokens, attempt, progress);
+        return view(account);
+      }
       yield* this.#put(account);
       // The picture comes with the profile; fetched once, best effort.
       const picture = yield* this.#picture(account.access);
@@ -218,6 +278,7 @@ export class Accounts {
 
   signOut(sub: string): Effect.Effect<void, CoreError> {
     return Effect.gen({ self: this }, function* () {
+      if (this.#durable) return yield* Effect.fail(this.#unknownPassword());
       const account = this.#get(sub);
       if (account) yield* Effect.ignore(this.#post("/v1/auth/logout", account.refresh, { all: false }, null));
       yield* this.#forget(sub);
@@ -227,7 +288,7 @@ export class Accounts {
   /// Takes over the accounts a page kept before the core existed (camelCase fields). An account already here is
   /// replaced only by a newer session.
   migrate(accounts: unknown): Effect.Effect<void, CoreError> {
-    return Effect.gen({ self: this }, function* () {
+    return this.#serialized(Effect.gen({ self: this }, function* () {
       let raw = accounts;
       if (typeof raw === "string") {
         const parsed = parseJson(raw);
@@ -250,12 +311,12 @@ export class Accounts {
         changed = true;
       }
       if (changed) yield* this.#save();
-    });
+    }));
   }
 
   /// Takes the stored credentials of `sub` when another core wrote newer ones; their access token when still good.
-  #adoptStored(sub: string): Effect.Effect<string | null> {
-    return Effect.map(Effect.orElseSucceed(this.#host.storageGet(STORAGE_KEY), () => null), (bytes) => {
+  #adoptStored(sub: string): Effect.Effect<string | null, CoreError> {
+    return this.#serialized(Effect.map(Effect.orElseSucceed(this.#host.storageGet(STORAGE_KEY), () => null), (bytes) => {
       const theirs = readStored(parseJson(bytes))?.find((a) => a.sub === sub);
       const ours = this.#get(sub);
       if (!theirs || !ours || theirs.refresh === ours.refresh) return null;
@@ -263,7 +324,7 @@ export class Accounts {
       const i = this.#list.findIndex((a) => a.sub === sub);
       if (i >= 0) this.#list[i] = theirs;
       return good ? theirs.access : null;
-    });
+    }));
   }
 
   #get(sub: string): StoredAccount | undefined {
@@ -356,22 +417,127 @@ export class Accounts {
     return this.#host.fetch({ method: "POST", url: `${this.#host.cloudOrigin()}${path}`, headers, body: toJsonBytes(body) });
   }
 
+  #unknownPassword(): CoreError {
+    return new CoreError("session_commit_unknown", "Session commit outcome is unavailable; recheck saved state");
+  }
+
+  #fingerprint(list: StoredAccount[]): string { return base64url(sha256(toJsonBytes(list))); }
+
+  // No native operation is held under a semaphore after its UI budget expires. A single metadata-only
+  // quarantine instead refuses competing mutations. Both pre-lock and post-lock checks are required.
+  #serialized<A>(effect: Effect.Effect<A, CoreError>): Effect.Effect<A, CoreError> {
+    return Effect.suspend(() => this.#durable ? Effect.fail(this.#unknownPassword()) :
+      this.#persistence.withPermits(1)(Effect.suspend(() => this.#durable ? Effect.fail(this.#unknownPassword()) : effect)));
+  }
+
+  #bounded<A>(effect: Effect.Effect<A, CoreError>, until: number): Effect.Effect<A, CoreError> {
+    return Effect.raceFirst(effect, Effect.andThen(Effect.sleep(Math.max(0, until - this.#host.monotonicMs())), Effect.fail(this.#unknownPassword())));
+  }
+
+  // The detached operation owns its input bytes until the host callback, but holds no password/token
+  // object in attempt state. Timing out only interrupts the waiter, never pretends to abort native IO.
+  #startPasswordWrite(state: DurablePassword, bytes: Uint8Array): Effect.Effect<void> {
+    return Effect.asVoid(Effect.forkDetach(Effect.map(Effect.result(this.#host.storageSet(STORAGE_KEY, bytes)), () => {
+      state.writing = false;
+      Deferred.doneUnsafe(state.written, Effect.void);
+    })));
+  }
+
+  #readPasswordState(state: DurablePassword): Effect.Effect<Deferred.Deferred<AccountView, CoreError>> {
+    return Effect.gen({ self: this }, function* () {
+      if (state.reading) return state.reading;
+      const done = Deferred.makeUnsafe<AccountView, CoreError>();
+      state.reading = done;
+      yield* Effect.forkDetach(Effect.map(Effect.result(this.#host.storageGet(STORAGE_KEY)), (result) => {
+        state.reading = null;
+        if (result._tag === "Failure") { Deferred.doneUnsafe(done, Effect.fail(this.#unknownPassword())); return; }
+        const actual = result.success === null ? [] : readStored(parseJson(result.success));
+        if (!actual) { Deferred.doneUnsafe(done, Effect.fail(this.#unknownPassword())); return; }
+        const fingerprint = this.#fingerprint(actual);
+        const account = actual.find((a) => a.sub === state.sub);
+        if (fingerprint === state.expected && account) {
+          this.#list = actual;
+          this.#passwordAttempts.delete(state.attempt);
+          this.#passwordCommitted.set(state.attempt, state.sub);
+          // Tombstones contain IDs only, and are bounded. At most one unresolved attempt retains state.
+          if (this.#passwordCommitted.size > 64) this.#passwordCommitted.delete(this.#passwordCommitted.keys().next().value!);
+          this.#durable = null;
+          for (const listener of [...this.#listeners]) listener();
+          Deferred.doneUnsafe(done, Effect.succeed(view(account)));
+        } else if (fingerprint === state.before) {
+          this.#passwordAttempts.delete(state.attempt);
+          // A detached read may confirm failure after its waiter timed out. Keep the outcome so
+          // the next recheck can leave unknown safely, without repeating native IO or credentials.
+          this.#passwordFailed.add(state.attempt);
+          if (this.#passwordFailed.size > 64) this.#passwordFailed.delete(this.#passwordFailed.values().next().value!);
+          this.#durable = null;
+          Deferred.doneUnsafe(done, Effect.fail(new CoreError("session_storage_unavailable", "Session storage is unavailable")));
+        } else {
+          Deferred.doneUnsafe(done, Effect.fail(this.#unknownPassword()));
+        }
+      }));
+      return done;
+    });
+  }
+
+  recoverPassword(attempt: string, progress?: PasswordProgress): Effect.Effect<AccountView, CoreError> {
+    return Effect.suspend(() => {
+      progress?.("checking");
+      const state = this.#durable;
+      if (!state || state.attempt !== attempt) {
+        if (this.#passwordFailed.has(attempt)) return Effect.fail(new CoreError("session_storage_unavailable", "Session storage is unavailable"));
+        const sub = this.#passwordCommitted.get(attempt);
+        const account = sub === undefined ? undefined : this.#get(sub);
+        return account ? Effect.succeed(view(account)) : Effect.fail(new CoreError("login_cancelled", "No pending sign-in"));
+      }
+      // Until the write's ACTUAL callback, an old read cannot prove the write will not commit later.
+      if (state.writing) return Effect.fail(this.#unknownPassword());
+      const until = this.#host.monotonicMs() + PASSWORD_SAVE_WAIT_MS;
+      return Effect.flatMap(this.#readPasswordState(state), (done) => this.#bounded(Deferred.await(done), until));
+    });
+  }
+
+  // Exact irreversible boundary: progress, metadata quarantine and committing flag are established
+  // synchronously before storageSet is dispatched. HTTP/profile and lock-waiting remain cancellable.
+  #publishPassword(account: StoredAccount, tokens: Tokens, attempt: string, progress?: PasswordProgress): Effect.Effect<void, CoreError> {
+    return this.#serialized(Effect.gen({ self: this }, function* () {
+      const pending = this.#passwordAttempts.get(attempt);
+      if (!pending || pending.tokens !== tokens || pending.committing) return yield* Effect.fail(new CoreError("login_cancelled", "Sign-in cancelled"));
+      const next = this.#list.map(stored);
+      const i = next.findIndex((a) => a.sub === account.sub);
+      if (i < 0) next.push(stored(account)); else next[i] = stored(account);
+      const state: DurablePassword = {
+        attempt, sub: account.sub, before: this.#fingerprint(this.#list), expected: this.#fingerprint(next),
+        writing: true, written: Deferred.makeUnsafe<void>(), reading: null,
+      };
+      pending.committing = true;
+      pending.tokens = null;
+      this.#durable = state;
+      progress?.("committing");
+      const until = this.#host.monotonicMs() + PASSWORD_SAVE_WAIT_MS;
+      yield* this.#startPasswordWrite(state, toJsonBytes(next));
+      yield* this.#bounded(Deferred.await(state.written), until);
+      const checked = yield* this.#readPasswordState(state);
+      yield* this.#bounded(Deferred.await(checked), until);
+    }));
+  }
+
   /// Adds or replaces an account, keeping its place in the list.
   #put(account: StoredAccount): Effect.Effect<void, CoreError> {
-    return Effect.suspend(() => {
+    return this.#serialized(Effect.suspend(() => {
       const i = this.#list.findIndex((a) => a.sub === account.sub);
       if (i >= 0) this.#list[i] = stored(account);
       else this.#list.push(stored(account));
       return this.#save();
-    });
+    }));
   }
 
   #forget(sub: string): Effect.Effect<void, CoreError> {
-    return Effect.suspend(() => {
+    return this.#serialized(Effect.suspend(() => {
       const before = this.#list.length;
       this.#list = this.#list.filter((a) => a.sub !== sub);
       return this.#list.length === before ? Effect.void : this.#save();
-    });
+    }));
   }
 
   /// Writes the list and tells the listeners. Memory is updated first, so a failed write still changes this session.

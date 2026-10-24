@@ -1,0 +1,16 @@
+{
+  "review.body": "使用提供给你的审核账号登录。此处不提供注册或密码找回。",
+  "review.emailLabel": "邮箱",
+  "review.emailPlaceholder": "输入审核账号邮箱",
+  "review.passwordLabel": "密码",
+  "review.passwordPlaceholder": "输入密码",
+  "review.showPassword": "显示密码",
+  "review.hidePassword": "隐藏密码",
+  "review.submit": "登录",
+  "review.emailRequired": "请输入邮箱。",
+  "review.emailInvalid": "请输入有效的邮箱地址。",
+  "review.passwordRequired": "请输入密码。",
+  "review.invalidCredentials": "邮箱或密码不正确，请检查后重试。",
+  "review.title": "审核账号登录",
+  "review.submitting": "正在登录…"
+}

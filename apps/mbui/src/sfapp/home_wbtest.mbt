@@ -7,38 +7,22 @@ fn tester(mode : String) -> @ui.Tester {
 }
 
 ///|
-test "signed out: the sign-in page" {
+test "signed out: the existing title, explicit web action and persistent account notice" {
   let t = tester("signin")
   assert_true(t.find("让 agent 持续工作") is Some(_))
-  assert_true(t.find("登录或注册") is Some(_))
-  assert_true(t.find("可同时登录多个账号，随时切换 workspace。") is Some(_))
-  t.assert_idle()
+  assert_true(t.find("通过网页登录") is Some(_))
+  assert_true(t.find(tr("login.accountNotice")) is Some(_))
+  assert_true(t.find("审核账号登录") is Some(_))
 }
 
 ///|
-test "signed out in a desktop's window: 登录或注册 alone, no wider than the desktop app's; a phone's across the page" {
+test "signed out: wide windows retain the account notice and welcome copy" {
   reset()
-  let pressed = Ref::new(0)
-  let src : Source = { ..fixture("signin"), sign_in: fn() { pressed.val += 1 } }
+  let src = fixture("signin")
   let t = @ui.Tester::new(fn(c) { view(c, src) }, w=1280.0, h=800.0, platform=0)
-  // no words but its own
-  assert_true(t.find("让 agent 持续工作") is None)
-  assert_true(t.find("可同时登录多个账号，随时切换 workspace。") is None)
-  let (x, y, w, h) = t.rect_of("登录或注册").unwrap()
-  let (mid, at) = (x + w / 2.0, y + h / 2.0)
-  // beside it, where it ended when it was as wide as the page: nothing
-  t.tap(mid - 160.0, at)
-  t.tap(mid + 160.0, at)
-  assert_eq(pressed.val, 0)
-  // on it, near its end
-  t.tap(mid + 140.0, at)
-  assert_eq(pressed.val, 1)
-  // a phone's: as wide as the page less its sides
-  reset()
-  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0)
-  let (x, y, w, h) = t.rect_of("登录或注册").unwrap()
-  t.tap(x + w / 2.0 + 160.0, y + h / 2.0)
-  assert_eq(pressed.val, 2)
+  assert_true(t.find("让 agent 持续工作") is Some(_))
+  assert_true(t.find(tr("login.accountNotice")) is Some(_))
+  assert_true(t.find("通过网页登录") is Some(_))
 }
 
 ///|

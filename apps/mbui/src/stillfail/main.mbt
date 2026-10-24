@@ -45,6 +45,7 @@ let secret_fields : Array[String] = [
 /// A call's params or answer as the call log may show them: every secret's value replaced (`redacted`), and an
 /// agent environment's text (it holds proxies' passwords) too.
 fn logged(name : String, v : Json) -> String {
+  if name.has_prefix("auth.password") { return "<redacted>" }
   fn scrub(v : Json) -> Json {
     match v {
       Object(m) => {
@@ -280,7 +281,7 @@ let core_source : @sfapp.Source = {
     })
   },
   cancel: fn(id) { @core.cancel(id) },
-  sign_in: fn() { @sfcore.sign_in() },
+  sign_in: fn() { @sfcore.sign_in(on_success=fn() { @sfapp.web_signed_in() }) },
   signing_in: fn() { @sfcore.state.busy },
   picture,
   fatal: fn() { @core.fatal() },

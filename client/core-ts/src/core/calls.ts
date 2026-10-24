@@ -33,7 +33,10 @@ export type Call =
   | { kind: "wake"; away: number; network: boolean; retry: boolean }
   | { kind: "authBegin"; redirectUri: string; returnTo: string; deviceName: string | null }
   | { kind: "authComplete"; query: string }
-  | { kind: "authPassword"; email: string; password: string; deviceName: string | null }
+  | { kind: "authPassword"; email: string; password: string; deviceName: string | null; attempt: string | null }
+  | { kind: "authPasswordAccept"; attempt: string }
+  | { kind: "authPasswordRecover"; attempt: string }
+  | { kind: "authPasswordCancel"; attempt: string }
   | { kind: "signOut"; account: string }
   | { kind: "deleteAccount"; account: string }
   | { kind: "op"; op: ops.Request }
@@ -363,13 +366,20 @@ export function parseCall(name: string, params: unknown, bytes?: Uint8Array, mod
     }
     case "auth.complete":
       return { kind: "authComplete", query: read(params, [["query", S, "req"]]).query as string };
+    case "auth.password.accept":
+      return { kind: "authPasswordAccept", attempt: read(params, [["attempt", S, "req"]]).attempt as string };
+    case "auth.password.recover":
+      return { kind: "authPasswordRecover", attempt: read(params, [["attempt", S, "req"]]).attempt as string };
+    case "auth.password.cancel":
+      return { kind: "authPasswordCancel", attempt: read(params, [["attempt", S, "req"]]).attempt as string };
     case "auth.password": {
       const p = read(params, [
         ["email", S, "req"],
         ["password", S, "req"],
+        ["attempt", S, "opt"],
         ["device_name", S, "opt"],
       ]);
-      return { kind: "authPassword", email: p.email as string, password: p.password as string, deviceName: p.device_name as string | null };
+      return { kind: "authPassword", attempt: p.attempt as string | null, email: p.email as string, password: p.password as string, deviceName: p.device_name as string | null };
     }
     case "auth.signOut":
       return { kind: "signOut", account: read(params, [["account", S, "req"]]).account as string };

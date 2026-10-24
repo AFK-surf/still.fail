@@ -86,6 +86,8 @@ struct Nav[P] {
   mut vel : Double
   track : Tracker
   on_leave : (P) -> Unit
+  // A committed pop may be vetoed (for example, while a page awaits cancellation acknowledgement).
+  can_pop : (P) -> Bool
   // the pages that come in from the left and go back that way
   from_left : (P) -> Bool
   /// what its motion is said to move by (Ctx::moving), and the frame it was told to move in
@@ -106,6 +108,7 @@ struct Nav[P] {
 pub fn[P] Nav::new(
   root : P,
   on_leave? : (P) -> Unit = fn(_) {  },
+  can_pop? : (P) -> Bool = fn(_) { true },
   from_left? : (P) -> Bool = fn(_) { false },
 ) -> Nav[P] {
   {
@@ -123,6 +126,7 @@ pub fn[P] Nav::new(
     vel: 0.0,
     track: Tracker::new(),
     on_leave,
+    can_pop,
     from_left,
     mover: Mover::new(),
     asked: -1,
@@ -330,7 +334,7 @@ pub fn[P] Nav::risen(self : Nav[P]) -> Bool {
 ///|
 /// Back a page: the top slides away; false when there is none under it.
 pub fn[P] Nav::pop(self : Nav[P]) -> Bool {
-  if self.pages.length() < 2 {
+  if self.pages.length() < 2 || !(self.can_pop)(self.top()) {
     return false
   }
   if self.mode != 0 && self.mode != 3 {
@@ -410,6 +414,10 @@ fn[P] Nav::gesture(self : Nav[P], kind : Int, x : Double, w : Double, t : Double
 ///|
 /// Gone back from where a finger left the page: on from there, easing out.
 fn[P] Nav::let_go(self : Nav[P]) -> Unit {
+  if !(self.can_pop)(self.top()) {
+    self.go(4, 0.0, nav_return_ms, Standard)
+    return
+  }
   self.leaving = self.pages.pop()
   self.topped()
   self.go(2, 1.0, dmax(nav_let_go_ms * (1.0 - self.p), nav_let_go_min_ms), LetGo)

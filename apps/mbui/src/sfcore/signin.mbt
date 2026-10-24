@@ -317,7 +317,7 @@ fn login_command() -> Unit {
 ///|
 /// 登录: through the host's browser session where it has one, else the browser login (busy until its page is out; a
 /// second press starts it again: the page may have been closed).
-pub fn sign_in() -> Unit {
+pub fn sign_in(on_success? : () -> Unit = fn() {  }) -> Unit {
   if !@core.has_browser_session() {
     if login.val is Some((l, _)) {
       l.end()
@@ -327,6 +327,7 @@ pub fn sign_in() -> Unit {
     state.status = "正在浏览器里登录…"
     loopback_sign_in(fn(r) {
       state.busy = false
+      if r is Ok(_) { on_success() }
       state.status = match r {
         Ok(email) => "已登录：\{email}"
         Err(why) => "没有登录：\{why}"
@@ -342,6 +343,7 @@ pub fn sign_in() -> Unit {
   state.status = "正在打开登录页…"
   @core.sign_in(fn(r) {
     state.busy = false
+    if r is Ok(_) { on_success() }
     state.status = match r {
       Ok(Object(m)) => "已登录：\{str(m.get("account"), "email")}"
       Ok(_) => "已登录"

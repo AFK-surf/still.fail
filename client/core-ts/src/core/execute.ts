@@ -46,9 +46,16 @@ export function execute(inner: Inner, call: Call, progress: Progress, at: [Clien
         const deviceName = call.deviceName ?? prefs.deviceName(inner.data) ?? brand.name();
         return Effect.map(inner.accounts.beginSignIn(call.redirectUri, call.returnTo, deviceName), (url) => ({ url }));
       }
+      case "authPasswordCancel":
+        return Effect.succeed(inner.accounts.cancelPassword?.(call.attempt) ?? { cancelled: true, state: "cancelled" });
+      case "authPasswordRecover":
+        return inner.accounts.recoverPassword ? Effect.map(inner.accounts.recoverPassword(call.attempt, (phase) => progress({ phase, attempt: call.attempt })), (account) => ({ account })) : Effect.fail(new CoreError("unsupported", "Unsupported sign-in"));
+      case "authPasswordAccept":
+        return inner.accounts.acceptPassword ? Effect.map(inner.accounts.acceptPassword(call.attempt, (phase) => progress({ phase, attempt: call.attempt })), (account) => ({ account })) : Effect.fail(new CoreError("unsupported", "Unsupported sign-in"));
       case "authPassword": {
+        if (call.attempt !== null && !inner.accounts.acceptPassword) return Effect.fail(new CoreError("unsupported", "Unsupported sign-in"));
         const deviceName = call.deviceName ?? prefs.deviceName(inner.data) ?? brand.name();
-        return Effect.map(inner.accounts.passwordSignIn(call.email, call.password, deviceName), (account) => ({ account }));
+        return Effect.map(inner.accounts.passwordSignIn(call.email.trim(), call.password, deviceName, call.attempt ?? undefined), (account) => ({ account }));
       }
       case "authComplete":
         return Effect.map(inner.accounts.completeSignIn(call.query), ([account, returnTo]) => ({ account, return_to: returnTo }));

@@ -840,7 +840,7 @@ fn me_page(c : @ui.Ctx, core : Core, here : Here) -> Unit {
           avatar(c, core, here.email, me_name, 46.0, picture=here.picture)
           c.box(w=Fill(1.0), fn() {
             c.text(me_name, size=16.0, weight=700, color=t.p.text, wrap=false, w=Fill(1.0), line=22.0) |> ignore
-            c.text(here.email + " · Google", size=13.0, color=t.p.muted, wrap=false, w=Fill(1.0), line=18.0)
+            c.text(here.email, size=13.0, color=t.p.muted, wrap=false, w=Fill(1.0), line=18.0)
             |> ignore
           })
           |> ignore

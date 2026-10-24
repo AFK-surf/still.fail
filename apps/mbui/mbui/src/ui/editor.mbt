@@ -347,10 +347,13 @@ fn EditorState::text_set(self : EditorState, s : String, a : Int, b : Int) -> Un
 }
 
 ///|
+/// `accessible_label` names the field for assistive technology (the placeholder by default). Password values stay
+/// out of semantics even when their custom rendering is revealed with `secret=false`.
 pub fn Ctx::editor(
   self : Ctx,
   key : String,
   placeholder? : String = "",
+  accessible_label? : String,
   w? : Size = Fill(1.0),
   font_size? : Double = 15.0,
   max_lines? : Int = 5,
@@ -459,7 +462,15 @@ pub fn Ctx::editor(
   let i = self.alloc(kind_editor)
   // in Tab's order (focus.mbt); its keys are its own
   self.focusable(id, node=i, keys=0, on_press=true)
-  self.semantics(i, TextField, id~, label=placeholder, value=if secret { "" } else { st.text })
+  // Focus is already handled by focus_frame_start, through the same ask_action path as action_asked.
+  self.semantics(
+    i,
+    TextField,
+    id~,
+    label=accessible_label.unwrap_or(placeholder),
+    value=if secret || ime_action == @hostapi.ime_action_password { "" } else { st.text },
+    actions=[Focus],
+  )
   let n = self.nodes[i]
   // (the system's size of words: as Ctx::text's)
   let font_size = self.sp(font_size)

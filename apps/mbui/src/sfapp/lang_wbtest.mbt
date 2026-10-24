@@ -25,7 +25,7 @@ fn lang_tester(mode : String, locale : String, lang? : String) -> @ui.Tester {
 test "English: the sign-in page of a phone in English, as still.fail's Android app says it" {
   let t = lang_tester("signin", "en-US")
   assert_true(t.find("Keep your agents working") is Some(_))
-  assert_true(t.find("Sign in or sign up") is Some(_))
+  assert_true(t.find("Sign in on the web") is Some(_))
   assert_true(t.find("让 agent 持续工作") is None)
 }
 
@@ -34,7 +34,7 @@ test "Chinese: a phone in Chinese, or one that says no language" {
   for locale in ["zh-Hans-CN", ""] {
     let t = lang_tester("signin", locale)
     assert_true(t.find("让 agent 持续工作") is Some(_))
-    assert_true(t.find("登录或注册") is Some(_))
+    assert_true(t.find("通过网页登录") is Some(_))
   }
 }
 
