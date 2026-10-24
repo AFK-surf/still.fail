@@ -3,7 +3,7 @@
 // failing. The wizard's calls answer at once and change nothing (the stories show states, not what follows).
 import { qr } from "../../client/core-ts/src/qr.ts";
 import type { DemoExtension } from "../src/demo/mount.tsx";
-import type { Connect, ConnectFeishuFlow, ConnectFlowView, ConnectsView } from "../src/core/shapes.ts";
+import type { Connect, ConnectFeishuFlow, ConnectFlowView, ConnectsView, ModeWords } from "../src/core/shapes.ts";
 
 export type FeishuStep = "platform" | "old" | "bind" | "way" | "scan" | "expired" | "made" | "made-failed" | "app" | "app-verified" | "app-wrong";
 
@@ -27,6 +27,13 @@ function feishu(step: FeishuStep): ConnectFeishuFlow {
   }
 }
 
+/** A Feishu connect's ways in its groups' words (present.ts modeWords). */
+const WORDS: ModeWords = {
+  multi: { label: "每个群一个会话", description: "在群里 @ 它开始，之后群里的消息都交给这个会话；@ 它说「新会话」另开一个，话题群的每个话题各一个会话" },
+  single: { label: "所有群共用一个会话", description: "它所在的群和私聊都进入同一个会话，适合长期值守的助手" },
+  mentionOn: "被 @ 后，同一个群里的后续消息无需再 @。", mentionOff: "它所在的群里的每条消息都会进入会话。",
+};
+
 const STEP: Record<FeishuStep, [string, string, number, string]> = {
   platform: ["platform", "选择平台", 1, "close"],
   old: ["platform", "选择平台", 1, "close"],
@@ -48,7 +55,7 @@ function flowView(step: FeishuStep, mobile: boolean): ConnectFlowView {
     settings: { name: "still.fail", displayName: "still.fail", description: "", longDescription: "", backgroundColor: "#F3E3D3", groups: {} },
     config: "", configReady: false, mode: "multi-session", requireMention: true, gettingToken: false, noProfile: false, canMake: false,
     canCreate: true, teams: [], ...(step === "platform" || step === "old" ? {} : { platform: "feishu" }),
-    platforms: step === "old" ? ["slack"] : ["slack", "feishu"], feishu: feishu(step),
+    platforms: step === "old" ? ["slack"] : ["slack", "feishu"], feishu: feishu(step), modeWords: WORDS, sections: [],
   };
 }
 
@@ -72,6 +79,7 @@ function feishuConnect(failing: boolean): Connect {
       : { state: "connected", botUserId: "ou_7d8a6e6df7621556ce0d21922b676706", workspace: { team: "Acme 中国", teamId: "t1", url: "", botUserId: "ou_7d8a6e6df7621556ce0d21922b676706", botName: "Codex 机器人" } },
     createdBy: { id: "lin@acme.dev", name: "林晓", shown: { name: "林晓", display: "林晓", mine: false } }, sessions: 3,
     statusText: failing ? "出错" : "在线", presence: failing ? "error" : "online", modeText: "多会话", modeShort: "多会话", runtimeText: "Claude Code", runText: "Claude Code · Opus 5.5 · medium", modelName: "Opus 5.5",
+    modeWords: WORDS, modeLabel: WORDS.multi.label, modeSentence: WORDS.multi.description, placeText: "Acme 中国",
   };
 }
 
@@ -82,7 +90,7 @@ export function feishuConnectDemo(failing = false): DemoExtension {
       if (t.topic !== "connects" || !value || typeof value !== "object") return undefined;
       const v = value as ConnectsView;
       const station = v.items[0]?.station ?? "";
-      return { ...v, items: [...v.items, { station, stationName: "Studio", connect: feishuConnect(failing), sessions: [], candidates: [], running: 0 }] };
+      return { ...v, items: [...v.items, { station, stationName: "Studio", connect: feishuConnect(failing), sessions: [], candidates: [], running: 0, changes: [] }] };
     },
   };
 }

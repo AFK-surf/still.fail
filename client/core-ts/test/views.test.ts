@@ -210,7 +210,7 @@ function deciding(id: string, th: number, seq: number, at: number, dismissed: bo
 const ids = (v: J): string[] => v.days.flatMap((d: J) => d.items.map((i: J) => i.id));
 
 /// A value without what the clients show of it: what a view puts together, alone.
-const SHOWN = new Set(["trouble", "settled", "archivable", "stateText", "face", "line", "available", "offered", "connection", "glyph", "note", "time", "statusText", "tone", "badgeText", "titleText", "agentText", "maker", "runtimeText", "processText", "efforts", "modeText", "modeShort", "runText", "presence", "checkText", "checkTone", "preview", "makers", "mark", "order", "left", "level", "refills", "shown", "processesText", "by", "waiting", "since", "originText", "originKind", "summary", "modelsText", "stateBusy", "problems"]);
+const SHOWN = new Set(["trouble", "settled", "archivable", "stateText", "face", "line", "available", "offered", "connection", "glyph", "note", "time", "statusText", "tone", "badgeText", "titleText", "agentText", "maker", "runtimeText", "processText", "efforts", "modeText", "modeShort", "runText", "presence", "checkText", "checkTone", "preview", "makers", "mark", "order", "left", "level", "refills", "shown", "processesText", "by", "waiting", "since", "originText", "originKind", "summary", "modelsText", "stateBusy", "problems", "changes", "modeWords", "modeLabel", "modeSentence", "placeText"]);
 function plain(v: J): J {
   if (Array.isArray(v)) return v.map(plain);
   if (v !== null && typeof v === "object") return Object.fromEntries(Object.entries(v).filter(([k, x]) => !SHOWN.has(k) && x !== null && x !== undefined).map(([k, x]) => [k, plain(x)]));
@@ -1128,6 +1128,13 @@ test("connects_lists_every_online_stations_connects", async () => {
   assert.deepEqual([v.wait.reading, v.wait.failing.map((f: J) => [f.station, f.message])], [false, [["ws/b", "连不上"]]]);
   assert.equal(v.items[0].connect.createdBy.shown.display, "你");
   assert.equal(v.items[0].connect.statusText, "未连接 Slack");
+  // where it is reached and how it runs, in words; the ways it could be switched to, each with what that does
+  assert.deepEqual([v.items[0].connect.placeText, v.items[0].connect.modeLabel], ["Slack", "每个 thread 一个会话"]);
+  assert.deepEqual(v.items[0].changes.map((c: J) => [c.mode, c.requireMention, c.changed, c.effects.length]), [
+    ["multi-session", true, false, 0],
+    ["single-session", true, true, 2],
+    ["single-session", false, true, 3],
+  ]);
   const mine = ui();
   t.subscribe(2, { topic: "connects", scope: "ws", mine: true });
   await t.read(mine, 2);

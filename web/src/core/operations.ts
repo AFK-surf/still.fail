@@ -43,7 +43,7 @@ export interface OperationParams {
   "connect.delete": { id: string };
   "connect.reconnect": { id: string };
   "connect.bindSession": { connect: string; session?: string | null | undefined; title?: string | null | undefined };
-  "connect.putSlackApp": { connect: string; input?: unknown };
+  "connect.putSlackApp": { connect: string; input?: unknown; from?: unknown };
   "feishu.register": { domain?: string | null | undefined; name?: string | null | undefined };
   "feishu.cancelRegistration": { id: string };
   "feishu.verify": { appId: string; appSecret: string; domain?: string | null | undefined };

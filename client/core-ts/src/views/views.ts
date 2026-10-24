@@ -375,7 +375,7 @@ function connectSessions(connect: J, connects: J[], sessions: J[], threads: J[],
       return c;
     });
   const bound = sessions.find((s) => current !== null && strOf(s, "key") === current);
-  return { sessions: own, bound: bound !== undefined ? shown(bound) : null, candidates, running };
+  return { sessions: own, bound: bound !== undefined ? shown(bound) : null, candidates, running, changes: present.modeChanges(connect, running) };
 }
 
 /// What the views are put together with: the core's store and data, and what the accounts say of a workspace.

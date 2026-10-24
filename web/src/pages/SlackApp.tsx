@@ -7,7 +7,7 @@ import { useStation } from "../station.tsx";
 import { Check, External, ImageUpload, ShieldCheck } from "@stillfail/ui/icons.tsx";
 import { useEffect, useRef, useState } from "react";
 import { core, useTopic } from "../core/react.ts";
-import { useAction, useApi, type Buddy, type Connect, type SlackAppLinks, type SlackAppSettings, type SlackAppView, type SlackGroup } from "../api.ts";
+import { useAction, useApi, type Buddy, type Connect, type SlackAppLinks, type SlackAppSettings, type SlackAppView, type SlackGroup, type SlackGroupSection } from "../api.ts";
 import { useToast } from "@stillfail/ui/toast.tsx";
 import { Button, Dialog, Field, ICON, Section, Tip } from "../ui.tsx";
 import * as css from "./SlackApp.css.ts";
@@ -20,46 +20,6 @@ import * as additionsCss from "../styles/additions.css.ts";
 
 import { NAME } from "../channel.ts";
 import { t } from "../i18n.ts";
-/** Permission groups in plain words; mirrors SLACK_GROUPS on the server. */
-/** A group's words, read in the language at the time. */
-const group = (key: string) => ({
-  get label() { return t(`web-pages.slackApp.group.${key}`); },
-  get description() { return t(`web-pages.slackApp.group.${key}.description`); },
-});
-const GROUPS: Record<SlackGroup, { label: string; description: string }> = {
-  base: group("base"),
-  public: group("public"),
-  dm: group("dm"),
-  customize: group("customize"),
-  files: group("files"),
-  reactions: group("reactions"),
-  channels: group("channels"),
-  people: group("people"),
-  extras: group("extras"),
-  canvases: group("canvases"),
-  lists: group("lists"),
-  topics: group("topics"),
-  usergroups: group("usergroups"),
-  search: group("search"),
-  connect: group("connect"),
-  more: group("more"),
-};
-
-/** Groups that only work as Slack's admins allow (who installs the app, or the workspace's settings): marked so. */
-const ADMIN: Partial<Record<SlackGroup, () => string>> = {
-  connect: () => t("web-pages.slackApp.group.connect.admin"),
-  usergroups: () => t("web-pages.slackApp.group.usergroups.admin"),
-};
-
-/** The groups in sections, as the form shows them. */
-const SECTIONS: { title: string; groups: SlackGroup[] }[] = [
-  { get title() { return t("web-pages.slackApp.section.messages"); }, groups: ["base", "public", "dm", "customize", "reactions"] },
-  { get title() { return t("web-pages.slackApp.section.channels"); }, groups: ["channels", "topics", "connect"] },
-  { get title() { return t("web-pages.slackApp.section.files"); }, groups: ["files", "canvases", "lists"] },
-  { get title() { return t("web-pages.slackApp.section.people"); }, groups: ["people", "usergroups", "search"] },
-  { get title() { return t("web-pages.slackApp.section.other"); }, groups: ["extras", "more"] },
-];
-
 /**
  * The connect's Slack app, folded (it is changed now and then): its name, icon and permissions, edited here and written
  * into the app's manifest with the viewer's configuration token; without one, a way to add it, in a dialog.
@@ -93,7 +53,7 @@ export function SlackAppSection({ connect }: { connect: Connect }) {
               <Button onClick={() => setAdding(true)}>{t("web-pages.slackApp.replaceToken")}</Button>
             </div>
           )
-          : <AppForm key={JSON.stringify(app.value.settings)} connect={connect} settings={app.value.settings} links={app.value.links} onSaved={saved} />}
+          : <AppForm key={JSON.stringify(app.value.settings)} connect={connect} settings={app.value.settings} links={app.value.links} sections={app.value.sections} onSaved={saved} />}
         {links && <a className={`${chatCss.textButton} ${css.appFoldLink}`} href={links.settings} target="_blank" rel="noopener">{t("web-pages.slackApp.openInSlack")}</a>}
       </div>
       <Dialog open={adding} onClose={() => setAdding(false)} wide title={t("web-pages.slackApp.addTokenTitle")}>
@@ -283,20 +243,23 @@ export function edgeColour(dataUrl: string): Promise<string> {
   });
 }
 
-/** What a new app starts as: every permission on; its colour and icon come from its first avatar. */
+/** What a new app starts as, where the core's wizard is not there to say (the legacy dialog, the phone's): every
+ * permission on; its colour and icon come from its first avatar. */
+const EVERY_GROUP: SlackGroup[] = ["base", "public", "dm", "customize", "files", "reactions", "channels", "people", "extras", "canvases", "lists", "topics", "usergroups", "search", "connect", "more"];
 export const NEW_APP: SlackAppSettings = {
   name: NAME, displayName: NAME, description: `Coding agent in your threads (${NAME})`, longDescription: "", backgroundColor: "#F3E3D3",
-  groups: Object.fromEntries((Object.keys(GROUPS) as SlackGroup[]).map((g) => [g, true])) as Record<SlackGroup, boolean>,
+  groups: Object.fromEntries(EVERY_GROUP.map((g) => [g, true])) as Record<SlackGroup, boolean>,
 };
 
 /**
  * An app's look and permissions, by how often each is changed: its avatar and name up front (an avatar picked from
  * still.fail's buddies or the model makers, or uploaded), then its colour, which follows the avatar until it is set by
  * hand (and can go back); the description on a line; permissions folded. One name, which is the name in messages too.
- * `fresh`: a new app, which starts as the general helper.
+ * `fresh`: a new app, which starts as the general helper. `sections`: its permissions as the core says them.
  */
-export function AppFields({ settings, onChange, icon, onIcon, fresh }: {
+export function AppFields({ settings, onChange, icon, onIcon, fresh, sections }: {
   settings: SlackAppSettings; onChange(settings: SlackAppSettings): void; icon: string | null; onIcon(icon: string | null, error: string | null): void; fresh?: boolean;
+  sections: SlackGroupSection[];
 }) {
   const file = useRef<HTMLInputElement>(null);
   const buddyList = useBuddies();
@@ -329,7 +292,8 @@ export function AppFields({ settings, onChange, icon, onIcon, fresh }: {
     started.current = true;
     pick(buddyList.find((a) => a.id === "general-helper") ?? buddyList[0]!, false);
   });
-  const on = (Object.keys(GROUPS) as SlackGroup[]).filter((g) => settings.groups[g]).length;
+  const every = sections.flatMap((s) => s.groups.map((g) => g.id as SlackGroup));
+  const on = every.filter((g) => settings.groups[g]).length;
   const isPicked = (a: Avatar) => picked !== null && !("upload" in picked) && picked.avatar.id === a.id;
   const tile = (a: Avatar, maker: boolean) => (
     <Tip key={a.id} label={a.label}><button type="button" className={css.avatarTile} data-picked={isPicked(a) || undefined} aria-label={a.label}
@@ -370,18 +334,19 @@ export function AppFields({ settings, onChange, icon, onIcon, fresh }: {
         {(buddyList ?? []).map((a) => tile(a, false))}
         {MAKERS.map((a) => tile(a, true))}
       </div>
-      <details className={css.appPerms}>
+      {every.length > 0 && <details className={css.appPerms}>
         <summary>
-          {t("web-pages.slackApp.permissions", { on, all: Object.keys(GROUPS).length })}
-          {on < Object.keys(GROUPS).length && (
+          {t("web-pages.slackApp.permissions", { on, all: every.length })}
+          {on < every.length && (
             <button type="button" className={`${controlsCss.textToggle} ${css.permAll}`}
-              onClick={(e) => { e.preventDefault(); set("groups", Object.fromEntries(Object.keys(GROUPS).map((g) => [g, true])) as Record<SlackGroup, boolean>); }}>
+              onClick={(e) => { e.preventDefault(); set("groups", Object.fromEntries(every.map((g) => [g, true])) as Record<SlackGroup, boolean>); }}>
               {t("web-pages.slackApp.allOn")}
             </button>
           )}
         </summary>
         <div className={css.permSections}>
-          {SECTIONS.map(({ title, groups }) => {
+          {sections.map(({ title, groups: words }) => {
+            const groups = words.map((w) => w.id as SlackGroup);
             const all = groups.every((g) => settings.groups[g]);
             return (
               <div key={title} className={modelCss.poolSeries}>
@@ -393,35 +358,38 @@ export function AppFields({ settings, onChange, icon, onIcon, fresh }: {
                   </button>
                 </div>
                 <ul className={css.permGrid}>
-                  {groups.map((g) => (
-                    <li key={g}>
-                      {g === "base" ? (
-                        // Always on, no choice: a tick without a box.
-                        <Tip label={GROUPS[g].description}><span className={`${chatCss.modelPoolItem} ${css.permFixed}`} data-on>
-                          <Check size={13} strokeWidth={2.4} />
-                          <span>{GROUPS[g].label}</span>
-                        </span></Tip>
-                      ) : (
-                        <Tip label={ADMIN[g] ? `${GROUPS[g].description} ${ADMIN[g]()}` : GROUPS[g].description}><label className={chatCss.modelPoolItem} data-on={settings.groups[g] || undefined}>
-                          <input type="checkbox" checked={settings.groups[g] ?? false}
-                            onChange={(e) => set("groups", { ...settings.groups, [g]: e.target.checked })} />
-                          <span className={css.permLabel}>{GROUPS[g].label}</span>
-                          {ADMIN[g] && <span className={css.permAdmin}>{t("web-pages.slackApp.admin")}</span>}
-                        </label></Tip>
-                      )}
-                    </li>
-                  ))}
+                  {words.map((w) => {
+                    const g = w.id as SlackGroup;
+                    return (
+                      <li key={g}>
+                        {w.fixed ? (
+                          // Always on, no choice: a tick without a box.
+                          <Tip label={w.tip}><span className={`${chatCss.modelPoolItem} ${css.permFixed}`} data-on>
+                            <Check size={13} strokeWidth={2.4} />
+                            <span>{w.label}</span>
+                          </span></Tip>
+                        ) : (
+                          <Tip label={w.tip}><label className={chatCss.modelPoolItem} data-on={settings.groups[g] || undefined}>
+                            <input type="checkbox" checked={settings.groups[g] ?? false}
+                              onChange={(e) => set("groups", { ...settings.groups, [g]: e.target.checked })} />
+                            <span className={css.permLabel}>{w.label}</span>
+                            {w.admin && <span className={css.permAdmin}>{t("web-pages.slackApp.admin")}</span>}
+                          </label></Tip>
+                        )}
+                      </li>
+                    );
+                  })}
                 </ul>
               </div>
             );
           })}
         </div>
-      </details>
+      </details>}
     </>
   );
 }
 
-function AppForm({ connect, settings, links, onSaved }: { connect: Connect; settings: SlackAppSettings; links: SlackAppLinks; onSaved(): void }) {
+function AppForm({ connect, settings, links, sections, onSaved }: { connect: Connect; settings: SlackAppSettings; links: SlackAppLinks; sections: SlackGroupSection[]; onSaved(): void }) {
   const api = useApi();
   const toast = useToast();
   const [draft, setDraft] = useState(settings);
@@ -437,10 +405,8 @@ function AppForm({ connect, settings, links, onSaved }: { connect: Connect; sett
   // page once the app is written (closed if it went wrong). The desktop app opens pages in the system browser, from
   // any time.
   const approval = useRef<Window | null>(null);
-  const apply = useAction(() => api.putSlackApp(connect.id, {
-    ...Object.fromEntries(changed.map((k) => [k, draft[k]])),
-    ...(icon ? { icon } : {}),
-  }), (result) => {
+  // (the core writes only what differs from what it started from)
+  const apply = useAction(() => api.putSlackApp(connect.id, { ...draft, ...(icon ? { icon } : {}) }, settings), (result) => {
     setIcon(null);
     setIconError(result.iconError);
     setApprove(result.permissionsUpdated);
@@ -475,7 +441,7 @@ function AppForm({ connect, settings, links, onSaved }: { connect: Connect; sett
           <a className={`${controlsCss.btn} ${controlsCss.btnPrimary}`} href={links.install} target="_blank" rel="noopener" onClick={() => setApprove(false)}>{t("web-pages.slackApp.approve")}</a>
         </div>
       )}
-      <AppFields settings={draft} onChange={setDraft} icon={icon} onIcon={(i, e) => { setIcon(i); setIconError(e); }} />
+      <AppFields settings={draft} onChange={setDraft} icon={icon} onIcon={(i, e) => { setIcon(i); setIconError(e); }} sections={sections} />
       {iconError && <p className={controlsCss.fieldError} role="alert">{iconError}</p>}
       {apply.error && <p className={controlsCss.fieldError} role="alert">{apply.error.message}</p>}
       <div className={pagesCss.cardActions}>

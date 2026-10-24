@@ -11,7 +11,7 @@ import { kindKey, modeOf, RUNTIME_LABEL } from "../format.ts";
 import { illustrationUrl } from "../brand.tsx";
 import { ChevronRight, More } from "@stillfail/ui/icons.tsx";
 import { usePick } from "../pick.ts";
-import { consequences } from "../pages/Connect.tsx";
+import { modeChange } from "../pages/Connect.tsx";
 import { edgeColour, MAKERS, NEW_APP, renderAvatar, toIcon, useBuddies, type Avatar } from "../pages/SlackApp.tsx";
 import { useSlackTokens, type TokenCheck } from "../slack.tsx";
 import { StationContext, stationBase, useOnlyMine, useStation } from "../station.tsx";
@@ -372,8 +372,9 @@ function ModeSheet({ item }: { item: ConnectItem }) {
   const { connect } = item;
   const [next, setNext] = useState({ mode: connect.mode, requireMention: connect.requireMention });
   const busy = useDoing("connect.put", { station: useStation().address, id: connect.id });
-  const changed = next.mode !== connect.mode || (next.mode === "single-session" && next.requireMention !== connect.requireMention);
-  const effects = changed ? consequences(connect, next, item.running) : [];
+  const change = modeChange(item, next);
+  const changed = change?.changed ?? false;
+  const effects = change?.effects ?? [];
   return (
     <>
       <SheetGrab />

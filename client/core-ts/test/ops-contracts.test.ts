@@ -50,3 +50,14 @@ test("a_chat_is_kept_by_put_and_let_go_by_delete", () => {
   assert.equal(keep({ kept: true })?.method, "PUT");
   assert.deepEqual([keep({ kept: false })?.method, keep({ kept: false })?.path], ["DELETE", "/threads/3/keep"]);
 });
+
+test("a_slack_apps_form_writes_only_what_differs_from_what_it_started_from", () => {
+  const from = { name: "still.fail", description: "Coding agent", groups: { base: true, dm: true } };
+  const put = (params: Record<string, unknown>) => request("connect.putSlackApp", { station: "w/s", connect: "c1", ...params });
+  // the whole draft given with what it started from: its changed fields and a new icon, nothing else
+  const draft = { ...from, description: "Helper", groups: { base: true, dm: false }, icon: "data:image/jpeg;base64,AA" };
+  assert.deepEqual(put({ input: draft, from })?.body, { description: "Helper", groups: { base: true, dm: false }, icon: "data:image/jpeg;base64,AA" });
+  // nothing changed: nothing written; without `from`, the input as it is
+  assert.deepEqual(put({ input: from, from })?.body, {});
+  assert.deepEqual(put({ input: { name: "x" } })?.body, { name: "x" });
+});
