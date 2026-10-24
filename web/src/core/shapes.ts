@@ -5493,6 +5493,14 @@ export interface SessionDetail {
 	turns: TurnRecord[];
 }
 
+/** What the settings say of the workspace as a whole (the `settings` view), over its stations. */
+export interface SettingsView {
+	/** How many of the workspace's stations have the automatic decisions' completion rule on. */
+	decisionsOn: number;
+	/** That in words, for 自动决策's row: 2 台 station 已启用, 未启用. */
+	decisionsText: string;
+}
+
 export interface ShareInKept {
 	station: string;
 	/** Its row's `id`. */

@@ -35,6 +35,7 @@ import * as marks from "./marks.ts";
 import { usageView } from "./usage.ts";
 import { resourcesView } from "./resources.ts";
 import { workspaceProfiles } from "./profiles.ts";
+import { settingsView } from "./settings.ts";
 import { admin, sources as adminSources } from "./admin.ts";
 import { attention, choices, find, models, runnableOn, runtimes, servingIn } from "./models.ts";
 import * as brief from "./brief.ts";
@@ -56,7 +57,7 @@ const DAY_MS = 86_400_000;
 export const HEAD = 80;
 export const HEAD_FROM = 500;
 
-const VIEW_TOPICS = new Set(["chats", "chatSearch", "search", "stations", "profiles", "connects", "chat", "history", "agentCard", "stationNet", "archive", "workspaceMarks", "decisions", "chatJobs", "chatLetters", "imageNear", "longJobs", "usage", "resources", "adminList", "adminItem", "adminOverview", "adminRelays"]);
+const VIEW_TOPICS = new Set(["chats", "chatSearch", "search", "stations", "profiles", "connects", "chat", "history", "agentCard", "stationNet", "archive", "workspaceMarks", "decisions", "chatJobs", "chatLetters", "imageNear", "longJobs", "usage", "settings", "resources", "adminList", "adminItem", "adminOverview", "adminRelays"]);
 
 /// What a chat row's columns say that the views find rows by (db/account.ts): how urgent it is for its person
 /// (workspace marks), whether it asks something of them, whether the 奏 page lists it.
@@ -621,6 +622,7 @@ export class Views implements Owner {
       }
       case "stations":
       case "profiles":
+      case "settings":
         scope = view.scope as string;
         perStation = (s) => [{ topic: "link", station: s }, { topic: "overview", station: s }, { topic: "host", station: s }, { topic: "way", station: s }];
         break;
@@ -935,6 +937,11 @@ export class Views implements Owner {
         const stations = this.#stationsView(view.scope as string);
         if (stations === undefined || !("ok" in stations)) return stations;
         return { ok: workspaceProfiles(stations.ok as J[]) };
+      }
+      case "settings": {
+        const stations = this.#stationsView(view.scope as string);
+        if (stations === undefined || !("ok" in stations)) return stations;
+        return { ok: settingsView(stations.ok as J[]) };
       }
       case "connects":
         return this.#connects(view.scope as string, view.mine === true);

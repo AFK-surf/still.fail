@@ -29,8 +29,6 @@ let zh : Map[String, String] = {
   "web-pages.settings.memory.lead": "每台 station 上所有会话共用的记忆：全局记忆用于跨项目内容，项目记忆每个项目一份。记忆保存在各台 station 上，彼此不同步。",
   "web-pages.automaticDecisions.choosePoint": "选择决策点，分别设置各 station 使用的模型",
   "web-pages.automaticDecisions.completionNote": "agent 标记完成后，异步判断此 chat 是否还有后续事项，若无则推荐归档",
-  "web-pages.automaticDecisions.stationsOn": "{n} 台 station 已启用",
-  "web-pages.automaticDecisions.off": "未启用",
   "web-pages.about.legal": "条款与政策",
   "web-pages.about.privacy": "隐私",
   "web-pages.settings.usage.lead": "各台 station 上的 agent 调用模型所用的 token，按 API 价格折算为费用，可按成员、对话、账号和模型分别查看。workspace 中的所有人都能查看。",
