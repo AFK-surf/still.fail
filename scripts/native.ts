@@ -249,7 +249,7 @@ const PARTS: Record<string, Part> = {
       for (const f of existsSync(prints) ? readdirSync(prints) : []) {
         if (f.startsWith("stillfail-shell-")) rmSync(join(prints, f), { recursive: true });
       }
-      const done = spawnSync("cargo", shellApple(t), { cwd: join(ROOT, "client"), env, encoding: "utf8", stdio: ["ignore", "inherit", "pipe"] });
+      const done = spawnSync("cargo", shellApple(t), { cwd: join(ROOT, "client/shell"), env, encoding: "utf8", stdio: ["ignore", "inherit", "pipe"] });
       process.stderr.write(done.stderr ?? "");
       if (done.status !== 0) throw new Error(`cargo ${shellApple(t).join(" ")}: exit ${done.status ?? done.signal}`);
       const libs = /native-static-libs: (.*)/.exec(done.stderr ?? "")?.[1];
@@ -368,9 +368,11 @@ const HELPER_APP = "still.fail Helper.app";
 const APPLE_TRIPLES: Partial<Record<Target, string>> = { "darwin-arm64": "aarch64-apple-darwin", "ios-arm64": "aarch64-apple-ios", "ios-sim-arm64": "aarch64-apple-ios-sim" };
 const APPLE_MIN: Partial<Record<Target, string>> = { "darwin-arm64": "12.0", "ios-arm64": "17.0", "ios-sim-arm64": "17.0" };
 /// The shell's static library for Apple, as scripts/core.sh shell makes it (the crate untouched: a staticlib by rustc),
-/// rebuilt so that rustc says what it links (--print native-static-libs, said only when it builds)
+/// rebuilt so that rustc says what it links (--print native-static-libs, said only when it builds). In the crate's
+/// directory, as core.sh: from the workspace's with -p, a fresh build compiled zeroize before zeroize_derive was
+/// there (E0463 on mini1, 2026-10-24)
 const shellApple = (t: Target) => [
-  "rustc", "--locked", "--release", "-p", "stillfail-shell", "--lib", "--crate-type", "staticlib", "--target", APPLE_TRIPLES[t]!,
+  "rustc", "--locked", "--release", "--lib", "--crate-type", "staticlib", "--target", APPLE_TRIPLES[t]!,
   "--", "--print", "native-static-libs",
 ];
 const SHELL_RUSTFLAGS = "-C link-arg=-Wl,-z,max-page-size=16384";
