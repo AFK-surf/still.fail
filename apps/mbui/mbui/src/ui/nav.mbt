@@ -12,6 +12,10 @@
 // (.25, .46, .45, .94) over what is left of 280 ms (120 at least), else it
 // comes back in 200 ms.
 //
+// While a page slides in, the one it covers takes no press (drawn only, as UIKit's and Android's transitions keep
+// touches from the page underneath): a press where its button still shows goes to the page coming, or to nothing;
+// going back, the page leaving takes none.
+//
 // Only the top page is built while nothing moves; the pages under it keep
 // what their widgets hold (a list's scroll, a field's words), each page's
 // ids in a scope of its own, until the page leaves the stack: then it is
@@ -484,15 +488,17 @@ pub fn[P] Ctx::nav(
   let before_edge = self.back_edge_next
   let leaving = nav.leaving is Some(_)
   let i = self.box(w=Fill(1.0), h=Fill(1.0), clip=true, fn() {
+    // (pushed: the page it covers takes nothing from the moment it is pushed)
     match under {
-      Some(e) => self.nav_layer(e, if rising { 0.0 } else { way * (p - 1.0) }, 0.0, bg, page)
+      Some(e) => self.nav_layer(e, if rising { 0.0 } else { way * (p - 1.0) }, 0.0, bg, page, inert=nav.mode == 1)
       None => ()
     }
     // what the top page takes back for (a sheet, a menu, a step of its own, a stack in it) goes back before the stack
     // does, as Android's BackHandler in a page is asked before the pages' own; the page under it, one leaving, take none
     self.back_next = None
     self.back_node_next = -1
-    self.nav_layer(top, if rising { 0.0 } else { way * p }, if rising { p * self.height } else { 0.0 }, bg, page)
+    // (going back: the page leaving takes nothing)
+    self.nav_layer(top, if rising { 0.0 } else { way * p }, if rising { p * self.height } else { 0.0 }, bg, page, inert=leaving)
   })
   if self.back_next is Some(_) && !leaving {
     ()
@@ -537,6 +543,7 @@ fn[P] Ctx::nav_layer(
   drop : Double,
   bg : Int64,
   page : (P) -> Unit,
+  inert? : Bool = false,
 ) -> Unit {
   let i = self.box(w=Fill(1.0), h=Fill(1.0), bg~, ty=drop, fn() {
     let saved = self.owner
@@ -549,6 +556,9 @@ fn[P] Ctx::nav_layer(
   })
   self.nodes[i].layer = true
   self.nodes[i].slide = slide
+  if inert {
+    self.draw_only(i)
+  }
 }
 
 ///|
