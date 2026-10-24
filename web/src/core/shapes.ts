@@ -2100,7 +2100,8 @@ export interface ChatShare {
 export interface ChatTabs {
 	/**
 	 * The tabs open beside it, in their order, of those kept the ones it has (an agent's history by its session's key,
-	 * `service:<job>` one of its agents' services, `jobs`, `files`, `letters`, `file:[…]` a visualization); all kept while its
+	 * `service:<job>` one of its agents' services, `jobs`, `files`, `letters`, `file:[…]` a visualization, `screen:[…]` a station's
+	 * screen); all kept while its
 	 * agents are not known. None kept: none, or where its agent has no chat yet its history (`auto`).
 	 */
 	open: string[];

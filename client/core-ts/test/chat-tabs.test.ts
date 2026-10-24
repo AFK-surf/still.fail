@@ -13,12 +13,13 @@ type J = any;
 const agent = (key: string, jobs: string[] = []): J => ({ session: { key }, jobs: jobs.map((id) => ({ id })) });
 const AGENTS = [agent("a1", ["web"]), agent("a2")];
 const FILE = `file:${JSON.stringify(["a1", "/out/chart.html", "chart.html"])}`;
+const SCREEN = `screen:${JSON.stringify(["w1/s1", "simulator:8A17"])}`;
 const open = (tab: string): Change => ({ action: "open", tab, auto: true });
 const close = (tab: string): Change => ({ action: "close", tab, auto: true });
 
 test("a_chat_shows_the_tabs_kept_it_has_and_the_one_in_front", () => {
-  const kept = { tabs: ["a1", "gone", "service:web", "service:old", "jobs", FILE, "file:[1]", "letters", "files"], active: "jobs" };
-  assert.deepEqual(tabsOf(kept, AGENTS, false, "a1"), { open: ["a1", "service:web", "jobs", FILE, "letters", "files"], shown: "jobs" });
+  const kept = { tabs: ["a1", "gone", "service:web", "service:old", "jobs", FILE, "file:[1]", "letters", "files", SCREEN, "screen:[1]"], active: "jobs" };
+  assert.deepEqual(tabsOf(kept, AGENTS, false, "a1"), { open: ["a1", "service:web", "jobs", FILE, "letters", "files", SCREEN], shown: "jobs" });
   // The one kept in front gone: the first.
   assert.deepEqual(tabsOf({ tabs: ["a2", "a1"], active: "gone" }, AGENTS, false, null), { open: ["a2", "a1"], shown: "a2" });
   // Its agents not known yet: all kept, the panel holding its place.

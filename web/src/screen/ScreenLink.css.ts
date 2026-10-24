@@ -29,3 +29,19 @@ export const peekText = style({ display: "flex", minWidth: "0", padding: `${FILE
 
 /** A station's 共享调试 card (AdbLink.tsx) while this phone is lent there: its phone in the accent. */
 export const adbTile = style({ selectors: { "&[data-sharing]": { stroke: vars.accent } } });
+
+/** A card with the way to open it beside the chat: the button at the end of its words, there while the card is pointed
+ * at (always, where nothing points). */
+export const cardWith = style({ position: "relative", display: "inline-flex", maxWidth: "100%" });
+export const side = style({
+  position: "absolute", bottom: "9px", right: "8px", display: "grid", placeItems: "center", width: "28px", height: "28px",
+  padding: "0", border: "0", borderRadius: vars.rOption, cornerShape: vars.cornerShape, cursor: "pointer", opacity: "0",
+  background: vars.raised, color: vars.text, boxShadow: `0 0 0 1px ${vars.line}`,
+  transition: `opacity 120ms ${vars.easeOut}`,
+  selectors: {
+    [`${cardWith}:hover &, &:focus-visible`]: { opacity: "1" },
+    "&:hover": { background: vars.hover },
+  },
+  "@media": { "(hover: none)": { opacity: "1" } },
+});
+globalStyle(`${cardWith} ${peekText}, ${cardWith} [data-card]:not(${peekCard})`, { paddingRight: "44px" });

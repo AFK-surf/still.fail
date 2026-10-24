@@ -31,6 +31,18 @@ function isFile(key: string): boolean {
   }
 }
 
+/// A station's screen beside the chat (`screen:["<station>","<screen>"]`, web/src/screen/ScreenLink.tsx screenTab): its
+/// station's address and the screen's id, any station's (a link to it in a message).
+function isScreen(key: string): boolean {
+  if (!key.startsWith("screen:")) return false;
+  try {
+    const v = JSON.parse(key.slice("screen:".length));
+    return Array.isArray(v) && v.length === 2 && typeof v[0] === "string" && typeof v[1] === "string";
+  } catch {
+    return false;
+  }
+}
+
 /// The agents' session keys and their jobs' ids, as the chat view has them.
 function chatHas(agents: readonly unknown[]): { histories: Set<string>; jobs: Set<string> } {
   const histories = new Set<string>();
@@ -48,7 +60,7 @@ function chatHas(agents: readonly unknown[]): { histories: Set<string>; jobs: Se
 }
 
 /// The tabs a chat shows: those kept (`kept`, prefs `chatTabs`) that it has — an agent's history, a service of one of
-/// its agents' (`service:<job>`), 任务, 文件, 往来, a visualization — all of them while its agents are not known yet (the
+/// its agents' (`service:<job>`), 任务, 文件, 往来, a visualization, a station's screen — all of them while its agents are not known yet (the
 /// panel holds its place); the one in front: the one kept so, else the first. None kept: none, but where its agent has
 /// no chat yet (`noChat`, by its `session`) its history, opened by itself (`auto`: a client where the panel would lie
 /// over the chat shows none).
@@ -57,7 +69,7 @@ export function tabsOf(kept: unknown, agents: readonly unknown[], noChat: boolea
   const auto = chosen === null && noChat && session !== null;
   const tabs = chosen ?? (auto && session !== null ? [session] : []);
   const has = chatHas(agents);
-  const known = (key: string) => key === JOBS || key === FILES || key === LETTERS || isFile(key) || (key.startsWith("service:") && has.jobs.has(key.slice("service:".length))) || has.histories.has(key);
+  const known = (key: string) => key === JOBS || key === FILES || key === LETTERS || isFile(key) || isScreen(key) || (key.startsWith("service:") && has.jobs.has(key.slice("service:".length))) || has.histories.has(key);
   const open = agents.length ? tabs.filter(known) : tabs;
   const active = isObject(kept) && typeof kept.active === "string" ? kept.active : null;
   const shown = active !== null && open.includes(active) ? active : open[0];

@@ -160,7 +160,7 @@ export const rowKey = style({
   display: "grid", placeItems: "center", flex: "1 1 0", minWidth: "0", height: "36px", padding: "0", border: "0", borderRadius: "999px",
   background: `color-mix(in srgb, ${vars.text} 6%, transparent)`, color: vars.text, cursor: "pointer",
   fontSize: vars.textMeta, fontWeight: "600", lineHeight: "1", whiteSpace: "nowrap",
-  selectors: { "&[aria-pressed=true]": { background: vars.text, color: vars.canvas } },
+  selectors: { "&[aria-pressed=true]": { background: vars.text, color: vars.canvas }, "&:disabled": { opacity: ".4", cursor: "default" } },
 });
 
 // ── a phone's 全屏 ──
@@ -237,4 +237,39 @@ globalStyle(`${menuKeys} > kbd`, {
   display: "inline-flex", alignItems: "center", justifyContent: "center", minWidth: "20px", height: "20px", padding: "0 5px", boxSizing: "border-box",
   border: `1px solid color-mix(in srgb, ${vars.text} 18%, transparent)`, borderBottomWidth: "2px", borderRadius: "4px",
   fontFamily: "inherit", fontSize: vars.textCaption, fontWeight: "500", lineHeight: "1", color: vars.muted,
+});
+
+// ── a simulator's buttons, with a mouse ──
+
+/** A column of round buttons by the device's right edge (ScreenViewer.tsx place), as Simulator.app's own are beside it. */
+export const device = style({
+  position: "absolute", zIndex: "2", display: "flex", flexDirection: "column", gap: "8px",
+  selectors: { "[data-desktop] &": { WebkitAppRegion: "no-drag" } },
+});
+export const deviceButton = style({
+  display: "grid", placeItems: "center", width: "40px", height: "40px", padding: "0", border: "0", borderRadius: "50%",
+  background: `color-mix(in srgb, ${vars.text} 6%, transparent)`, color: vars.text, cursor: "pointer",
+  selectors: {
+    "&:hover:not(:disabled)": { background: `color-mix(in srgb, ${vars.text} 11%, transparent)` },
+    "&:disabled": { opacity: ".4", cursor: "default" },
+  },
+});
+
+// ── beside a chat ──
+
+/** Its bar in a tab of a chat's side panel (named by the tab): 只看/控制 at the start, its tools and its own page at the end. */
+export const panelBar = style({
+  position: "absolute", zIndex: "3", top: "0", left: "0", right: "0", height: `${VIEWER_BAR}px`, boxSizing: "border-box",
+  display: "flex", alignItems: "center", justifyContent: "space-between", gap: "8px", padding: "0 8px 1px",
+  boxShadow: `inset 0 -1px 0 color-mix(in srgb, ${vars.line} 70%, transparent)`,
+});
+export const panelTools = style({ display: "flex", alignItems: "center", gap: "2px", minWidth: "0" });
+export const panelExpand = style({
+  display: "grid", placeItems: "center", flex: "none", width: "32px", height: "32px", padding: "0", border: "0",
+  borderRadius: vars.rOption, cornerShape: vars.cornerShape, background: "none", color: vars.muted, cursor: "pointer",
+  selectors: { "&:hover": { background: vars.hover, color: vars.text } },
+});
+/** 控制中心 as its icon alone where the panel is narrow (its words kept for a screen reader). */
+globalStyle(`${panelTools} [aria-haspopup="menu"] > span`, {
+  position: "absolute", width: "1px", height: "1px", overflow: "hidden", clipPath: "inset(50%)", whiteSpace: "nowrap",
 });
