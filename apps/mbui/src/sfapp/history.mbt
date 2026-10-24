@@ -275,17 +275,13 @@ fn history_steps(c : @ui.Ctx, src : Source, r : ChatRef, key : String, entry : I
     history_edge(c, text(h, "edge"))
     return
   }
-  // 只看收发 (the wide frame's, History.tsx onlyIo): its steps and its own words left out
-  let io = wide_on.val && @sfdesk.history_only_io()
-  let its = items(h, "items").filter(fn(i) { !io || !history_work(Some(i)) })
+  let its = items(h, "items")
   let lines : Array[HLine] = [HEdge]
   for i in its {
     lines.push(HItem(i))
   }
-  if !io {
-    for l in items(h, "live") {
-      lines.push(HLive(l))
-    }
+  for l in items(h, "live") {
+    lines.push(HLive(l))
   }
   match field(h, "phase") {
     Some(Object(_) as p) => lines.push(HPhase(p))
@@ -1658,11 +1654,3 @@ fn output_box(c : @ui.Ctx, words : String, failed : Bool) -> Unit {
   })
 }
 
-///|
-/// An item of its own work (History.tsx isWork): its steps, and the words it says to itself; what 只看收发 leaves out.
-fn history_work(item : Json?) -> Bool {
-  match text(field(item, "body"), "kind") {
-    "group" | "text" => true
-    _ => false
-  }
-}

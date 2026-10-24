@@ -1849,28 +1849,20 @@ fn bar_gesture(
 /// A place's top page other than the chats (PlacePage.kt, with the bar under it): Home's top bar over it (settings,
 /// the place's name), what it shows the settings' page of it (src/sfapp/settings).
 fn place_page(c : @ui.Ctx, src : Source, w : Workspace, place : String) -> Unit {
-  // on a phone what it shows runs under the top bar, frosted over it (PlacePage.kt: `bar + 8.dp` down, scrolling
-  // under it); the wide frame's page bar stands above it
-  let over = !wide_on.val
+  // what it shows runs under the top bar, frosted over it (PlacePage.kt: `bar + 8.dp` down, scrolling under it)
   c.box(w=Fill(1.0), h=Fill(1.0), fn() {
-    if !over {
-      place_top_bar(c, place)
-    }
     // what it shows: the settings' page of the same place (src/sfapp/settings), in place of its own bar
     c.box(w=Fill(1.0), h=Fill(1.0), fn() {
       match @settings.route_of(place) {
         Some(r) => {
           let core = settings_core(src, w)
-          let top = if over { status_top() + bar_h + 8.0 } else { 0.0 }
-          @settings.page(c, core, @settings.here_of(core, w.id, w.name), r, root=true, top~)
+          @settings.page(c, core, @settings.here_of(core, w.id, w.name), r, root=true, top=status_top() + bar_h + 8.0)
         }
         None => ()
       }
     })
     |> ignore
-    if over {
-      c.layer(fn() { place_top_bar(c, place) }) |> ignore
-    }
+    c.layer(fn() { place_top_bar(c, place) }) |> ignore
   })
   |> ignore
 }

@@ -33,21 +33,13 @@ let gap : Double = 20.0
 let joined_gap : Double = 4.0
 
 ///|
-/// The list's gap in the wide frame (session.css.ts chatList: 28).
-let wide_list_gap : Double = 28.0
-
-///|
 fn list_gap() -> Double {
-  if wide_on.val {
-    wide_list_gap
-  } else {
-    gap
-  }
+  gap
 }
 
 ///|
 /// Where the chat's bar ends, from the list's top (the list runs on under it), and what the list keeps over its first
-/// row: 14 under the bar (Chat.kt); in the wide frame the web's 24 (session.css.ts chatList).
+/// row: 14 under the bar (Chat.kt); in the wide frame (its picking's bar: pick.mbt) the web's bar's.
 fn bar_foot() -> Double {
   if wide_on.val {
     wide_bar_h
@@ -58,33 +50,19 @@ fn bar_foot() -> Double {
 
 ///|
 fn list_top() -> Double {
-  if wide_on.val {
-    wide_bar_h + 24.0
-  } else {
-    status_top() + chat_bar_h + 14.0
-  }
+  status_top() + chat_bar_h + 14.0
 }
 
 ///|
-/// What the list keeps under its last row over the composer's room: 10 (Chat.kt); the web's 24 (session.css.ts
-/// chatList, its foot's padding).
+/// What the list keeps under its last row over the composer's room: 10 (Chat.kt).
 fn list_foot() -> Double {
-  if wide_on.val {
-    24.0
-  } else {
-    10.0
-  }
+  10.0
 }
 
 ///|
-/// How far under the list's top the unread line opens: a few lines of what came before it in view (Chat.kt 85; the
-/// web's four lines of 23, Chat.tsx useMessageList).
+/// How far under the list's top the unread line opens: a few lines of what came before it in view (Chat.kt 85).
 fn unread_lead() -> Double {
-  if wide_on.val {
-    92.0
-  } else {
-    85.0
-  }
+  85.0
 }
 
 ///|
@@ -166,7 +144,7 @@ fn messages(
     key~,
     draft=dkey,
     rise_ms=row_rise().0,
-    history_fade=wide_on.val,
+    history_fade=false,
     top=list_top(),
     in_front=app_in_front(),
   )
@@ -386,15 +364,10 @@ pub let out_leave_ms : Double = 200.0
 let rise_dy : Double = 14.0
 
 ///|
-/// How a row new to the list comes in: 320 ms on the standard curve, from 14 under (Chat.kt rise, the phone's mRise);
-/// in the wide frame the web's [data-enter], 220 ms on its ease-out from 6 under (keyframes.css.ts enterUp, motion.ts
-/// ENTER), each its turn as long (listQueue.ts).
+/// How a row new to the list comes in: 320 ms on the standard curve, from 14 under (Chat.kt rise, the phone's mRise),
+/// each its turn as long (listQueue.ts).
 fn row_rise() -> (Double, @motion.Ease, Double) {
-  if wide_on.val {
-    (@sf.enter_ms, @sf.ease_out, @sf.enter_rise)
-  } else {
-    (row_turn_ms, Standard, rise_dy)
-  }
+  (row_turn_ms, Standard, rise_dy)
 }
 
 
@@ -542,52 +515,33 @@ fn jump_to_latest(
 
 ///|
 /// The round buttons over the list's foot (the way to the end, the bell): 36 across, a count's pill 10 and 14 in at its
-/// ends (Chat.kt JumpToLatest); the wide screen's 32, 9 and 12 (Chat.css.ts chatToBottom).
+/// ends (Chat.kt JumpToLatest).
 fn float_side() -> (Double, (Double, Double)) {
-  if wide_on.val {
-    (32.0, (9.0, 12.0))
-  } else {
-    (36.0, (10.0, 14.0))
-  }
+  (36.0, (10.0, 14.0))
 }
 
 ///|
-/// Where they stand from the pane's right: 18 in (Chat.kt), or in the wide frame over the composer's send button (its
-/// column in the pane's middle, 6 in from its end: Chat.css.ts chatToBottom).
+/// Where they stand from the pane's right: 18 in (Chat.kt).
 fn float_right(c : @ui.Ctx) -> Double {
-  if wide_on.val {
-    (c.width - wide_composer_w(c)) / 2.0 + 6.0
-  } else {
-    18.0
-  }
+  18.0
 }
 
 ///|
-/// And from its foot: 2 over the composer's room (Chat.kt), or in the wide frame 12 over it (Chat.css.ts: 12 and the
-/// composer's room).
+/// And from its foot: 2 over the composer's room (Chat.kt).
 fn float_foot(c : @ui.Ctx, r : ChatRef, v : ChatView) -> Double {
-  chat_foot_room(c, r, Some(v)) + (if wide_on.val { 12.0 } else { 2.0 })
+  chat_foot_room(c, r, Some(v)) + 2.0
 }
 
 ///|
 /// How they come and go: growing from 60% and up from 18 under (Chat.kt JumpToLatest, web mJump: its opacity 180 ms,
-/// CSS's ease, the rest 220 on the standard curve; going, 150 and 180); in the wide frame fading in 160 ms (Chat.css.ts
-/// chatToBottom: fadeKeyframes, ease-out) and out as long.
+/// CSS's ease, the rest 220 on the standard curve; going, 150 and 180).
 fn float_enter() -> @motion.Trans {
-  if wide_on.val {
-    @motion.trans(fade=0.0, spec=@motion.tween(160.0, ease=Out), fade_spec=@motion.tween(160.0, ease=Out))
-  } else {
-    @motion.trans(fade=0.0, scale=0.6, dy=18.0, spec=@motion.tween(220.0), fade_spec=@motion.tween(180.0, ease=Css))
-  }
+  @motion.trans(fade=0.0, scale=0.6, dy=18.0, spec=@motion.tween(220.0), fade_spec=@motion.tween(180.0, ease=Css))
 }
 
 ///|
 fn float_exit() -> @motion.Trans {
-  if wide_on.val {
-    @motion.trans(fade=0.0, spec=@motion.tween(160.0, ease=Out), fade_spec=@motion.tween(160.0, ease=Out))
-  } else {
-    @motion.trans(fade=0.0, scale=0.6, dy=18.0, spec=@motion.tween(180.0), fade_spec=@motion.tween(150.0, ease=Css))
-  }
+  @motion.trans(fade=0.0, scale=0.6, dy=18.0, spec=@motion.tween(180.0), fade_spec=@motion.tween(150.0, ease=Css))
 }
 
 ///|
@@ -1026,62 +980,37 @@ fn agent_station_mark(c : @ui.Ctx, a : Agent, station : Station?) -> Unit {
 }
 
 ///|
-/// An agent's mark in the bar: 22 square on the card's ground with a line round it (PageParts.kt); the wide screen's
-/// 20 on the neutral ground, no line (ui.css.ts agentMark), its maker .62 of it (the phone's .6), a station's mark 12
-/// (13), a station's name on the tile's line, in by .19 of it and 1, 140 at most (ChatPage.css.ts agentStationPart).
+/// An agent's mark in the bar: 22 square on the card's ground with a line round it (PageParts.kt), its maker .6 of it,
+/// a station's mark 13.
 fn mark_side() -> Double {
-  if wide_on.val {
-    20.0
-  } else {
-    22.0
-  }
+  22.0
 }
 
 ///|
 fn mark_ground() -> (Int64, Double) {
   let p = @sf.theme().p
-  if wide_on.val {
-    (p.neutral_bg, 0.0)
-  } else {
-    (p.card, 1.0)
-  }
+  (p.card, 1.0)
 }
 
 ///|
-/// Its corner: 6; the wide screen's .3 of its side (ui.css.ts agentMark: 6 at 20, an agent's card's 28 at 8.4).
+/// Its corner: 6.
 fn mark_corner(side : Double) -> Double {
-  if wide_on.val {
-    side * 0.3
-  } else {
-    6.0
-  }
+  6.0
 }
 
 ///|
 fn mark_logo(side : Double) -> Double {
-  if wide_on.val {
-    (side * 0.62).round()
-  } else {
-    side * 0.6
-  }
+  side * 0.6
 }
 
 ///|
 fn mark_station() -> Double {
-  if wide_on.val {
-    12.0
-  } else {
-    13.0
-  }
+  13.0
 }
 
 ///|
 fn station_part_type() -> (Double, Double, Double) {
-  if wide_on.val {
-    (140.0, 20.0 * 0.19 + 1.0, 20.0)
-  } else {
-    (96.0, 5.0, 14.0)
-  }
+  (96.0, 5.0, 14.0)
 }
 
 ///|

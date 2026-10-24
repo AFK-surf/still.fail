@@ -8,12 +8,6 @@ fn side_key(r : ChatRef) -> String {
 }
 
 ///|
-/// The chat's side panel's tabs, in their order, and the one in front (sfdesk/panel.mbt).
-fn side_of(v : ChatView) -> (Array[String], String) {
-  @sfdesk.side_of(v)
-}
-
-///|
 /// Chat `r`'s tabs as its view has them now.
 fn side_now(r : ChatRef) -> (Array[String], String) {
   match link_src.val {
@@ -27,15 +21,6 @@ fn side_now(r : ChatRef) -> (Array[String], String) {
 fn side_change(r : ChatRef, action : String, tab : String?) -> Unit {
   match link_src.val {
     Some(src) => @sfdesk.side_change(src, r, action, tab)
-    None => ()
-  }
-}
-
-///|
-/// The change asked of the core alone, the panel told nothing (sfdesk's side_ask).
-fn side_ask(r : ChatRef, action : String, tab : String?) -> Unit {
-  match link_src.val {
-    Some(src) => @sfdesk.side_ask(src, r, action, tab)
     None => ()
   }
 }
