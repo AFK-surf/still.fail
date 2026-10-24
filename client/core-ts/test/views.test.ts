@@ -2009,6 +2009,9 @@ test("a_profile_says_what_it_is_who_signs_it_in_and_its_last_check_in_the_cores_
   assert.equal(machine.kindText, "终端里的登录");
   const go = presentProfile(profile("p4", { access: { kind: "opencode-go", key: "" } }));
   assert.deepEqual([go.kindText, go.signInProvider], ["OpenCode Go", "OpenCode"]);
+  // the station's detail in English starts with its Works, as the Chinese with 可用
+  const en = presentProfile(profile("p5", { check: { state: "ok", detail: "Works, 3 models", models: [] } }));
+  assert.equal(en.checkLine, "3 models");
 });
 
 test("still.fail's notice is shown as a line: a failure's mark taken off, no closing 。, a profile's link after its ：", () => {

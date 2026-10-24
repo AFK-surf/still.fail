@@ -457,14 +457,7 @@ fn profile_account_page(c : @ui.Ctx, core : Core, here : Here, key : String) -> 
             join(
               [
                 text(p, "email"),
-                if flag(p, "machine") {
-                  tr("android-settings.profile.machine")
-                } else {
-                  match opt_text(p, "providerName") {
-                    Some(x) => x
-                    None => access_label(text(field(p, "access"), "kind"))
-                  }
-                },
+                text(p, "kindText"),
               ],
               " · ",
             ),

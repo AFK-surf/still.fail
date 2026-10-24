@@ -803,10 +803,10 @@ export function profile(p: J): J {
   // Who a sign-in goes to: OpenCode for OpenCode Go, Kimi for Kimi Code, else its runtime's vendor.
   o.signInProvider = kind === "opencode-go" ? "OpenCode" : get(o.access, "provider") === "kimi-code" ? "Kimi"
     : (SIGN_IN[str(o.runtime) ?? ""] ?? "ChatGPT");
-  // Its last check in a line (its detail, without the 可用 a working one starts with: its state says that), or that it
+  // Its last check in a line (its detail, without the 可用 (Works) a working one starts with: its state says that), or that it
   // has none yet.
   const detailOf = str(get(o.check, "detail"));
-  o.checkLine = isObject(o.check) ? (detailOf ?? "").replace(/^可用[，,]\s*/, "") : t("core-views.present.profile.never_checked");
+  o.checkLine = isObject(o.check) ? (detailOf ?? "").replace(/^(可用[，,]|Works,)\s*/, "") : t("core-views.present.profile.never_checked");
   return o;
 }
 
