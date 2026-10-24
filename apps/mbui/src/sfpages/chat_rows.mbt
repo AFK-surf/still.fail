@@ -66,11 +66,8 @@ fn outbox_row(c : @ui.Ctx, src : Source, here : MessageHere, o : Outgoing) -> Un
       } else {
         @sf.t("web-main.chat.sending")
       }
-      // (shown once it has been on its way a while: from when it was sent, whenever its row is drawn)
-      let shows = (src.now)() >= o.created_at + sending_shows_ms
-      if !shows {
-        c.wake_in(o.created_at + sending_shows_ms - (src.now)())
-      }
+      // (shown once it has been on its way a while: from when its row was first drawn)
+      let shows = @kit.after(c, "sending/" + o.id, true, sending_shows_ms)
       let w = c.box(style=msg_waiting, fn() {
         @sf.spinner(c, size=waiting_spin) |> ignore
         c.text(words, style=msg_time) |> ignore
@@ -258,7 +255,7 @@ fn activity_row(c : @ui.Ctx, src : Source, here : MessageHere, a : Agent, em : E
   }
   let row = c.id("activity-row/" + a.key)
   c.box(style=activity_row_box, id=row, fn() {
-    let line = c.box(style=activity_line, id~, fn() {
+    let line = c.box(style=if here.inline { activity_line_narrow } else { activity_line }, id~, fn() {
       let face = c.box(style=activity_face, fn() {
         let av = c.box(fn() { agent_avatar(c, src, here, "a:" + a.key, a.maker, a.runtime, "", "") })
         @motion.measure(c, av, "emit-avatar/" + rk + "/" + a.key)
@@ -391,7 +388,7 @@ fn rows_reset() -> Unit {
 
 ///|
 /// "正在发送" shows once a message has been on its way this long (SENDING_SHOWS_MS).
-let sending_shows_ms : Double = 800.0
+pub let sending_shows_ms : Double = 800.0
 
 ///|
 /// An activity's line folding to its picture (FOLD_MS), its ring going as its turn ends (160).
@@ -505,6 +502,11 @@ let activity_row_box : @ui.Style = @ui.css("row w=Full gap=S1 align=ACenter")
 /// and what it does 8 apart, 6 round.
 // kept across runs: a value (no field of it changes)
 let activity_line : @ui.Style = @ui.style(row=true, gap=S2, radius=Md, align=ACenter, ml=@sf.activity_out)
+
+///|
+/// Narrow (Chat.css.ts activityLine, max-width 700: columns.activityNarrow): 9 out into the list's 16.
+// kept across runs: a value (no field of it changes)
+let activity_line_narrow : @ui.Style = @ui.style(row=true, gap=S2, radius=Md, align=ACenter, ml=@sf.activity_out_narrow)
 
 ///|
 /// Its picture with the ring round it (activityAvatar): 24 across, the picture in its middle.

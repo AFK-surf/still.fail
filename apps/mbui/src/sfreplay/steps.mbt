@@ -71,7 +71,10 @@ pub fn Flow::start(
   // do not hang on the run's pace, and an older trace's asks have no wall clock to keep it by)
   r.pace(if seed == 0 && emit_path() != "" { @core.AtOnce } else { pace_of(seed) }, strict=seed == 0)
   r.attach()
-  emit_start(seed, w, h, env)
+  // (by the hand it was made with: a phone's window's runs, the phone's layout's, a finger's; the live run recording
+  // it again pointed so too)
+  let pointing : @ui.Pointing = if w < @sf.medium_from { Finger } else { Mouse }
+  emit_start(seed, w, h, if pointing is Finger { env + [("MBUI_POINTING", "finger")] } else { env })
   // what the core says comes through mbui's queue, as the app's does (src/stillfail: sfcore.start)
   @ui.on_message("core", @core.receive)
   // (the app started with what the run's was: its trace's env, then what the test says of its own; a trace that does
@@ -82,9 +85,7 @@ pub fn Flow::start(
     )
   }
   // (and its host's answers as the run's gave them, where it kept them: a word's bounds as the system splits words)
-  // (on the system the run was on, its core told so; by the hand it was made with: a phone's window's runs, the
-  // phone's layout's, a finger's)
-  let pointing : @ui.Pointing = if w < @sf.medium_from { Finger } else { Mouse }
+  // (on the system the run was on, its core told so; by the hand above)
   let t = match r.text() {
     Some(text) => @ui.Tester::new(app, w~, h~, env=r.env() + env, text~, pointing~)
     None => @ui.Tester::new(app, w~, h~, env=r.env() + env, pointing~)

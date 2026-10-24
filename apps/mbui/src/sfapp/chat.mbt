@@ -93,7 +93,21 @@ fn chat_page(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef) -> Unit {
         flight_files(c, draft_key(r))
       }
       Some(v) => {
-        messages(c, src, r, v, list)
+        // its messages: the pages' one list, laid out by its width (sfpages chat_list.mbt), under the bar, over the
+        // composer's room
+        @sfpages.chat_list(
+          c,
+          src,
+          r,
+          v,
+          list,
+          chat_foot_room(c, r, Some(v)),
+          settings_core(src, w),
+          top=list_top(),
+          lead=unread_lead(),
+          bar=bar_foot(),
+          foot=list_foot(),
+        )
         c.layer(fn() { chat_bar(c, src, w, r, v) }) |> ignore
         c.layer(fn() { chat_foot(c, src, w, r, Some(v)) })
         |> ignore
@@ -103,8 +117,6 @@ fn chat_page(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef) -> Unit {
         flight_files(c, draft_key(r))
         // a passage picked: its handles and its bar over the list (pick.mbt)
         pick_layer(c, src, r)
-        // a link held: its menu (link_menu.mbt)
-        link_menu_layer(c)
         // the station's update opened under the bar's word (station_update.mbt)
         station_update_popover(c, src, r.station, v.station_update)
       }

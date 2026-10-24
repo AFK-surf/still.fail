@@ -69,7 +69,8 @@ test "忽略 lets the ask go (decision.dismiss), gone at once" {
   t.tap_text("忽略")
   assert_eq(named(calls, "decision.dismiss").length(), 1)
   // let go at once (what it showed only drawn as it closes up)
-  assert_eq(dui.gone.length(), 1)
+  t.frame()
+  assert_eq(@sfpages.dismissed.length(), 1)
   // (not idle yet: its room closes on the rows' spring, close_gap, till mbui#25 declares its end)
 }
 

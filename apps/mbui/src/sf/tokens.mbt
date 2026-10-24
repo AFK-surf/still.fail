@@ -1306,6 +1306,10 @@ pub let message_head_in : @ui.Space = room(25.0)
 pub let activity_out : @ui.Space = room(-35.0)
 
 ///|
+/// Narrow (columns.activityNarrow): 9 out into the list's 16.
+pub let activity_out_narrow : @ui.Space = room(-9.0)
+
+///|
 /// What says a chat is archived or its station down, over its composer (Chat.css.ts offlineNotice: 760 at most, 64
 /// less than the pane).
 pub let notice_w : @ui.Len = Fixed(760.0)

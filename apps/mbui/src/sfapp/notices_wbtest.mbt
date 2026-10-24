@@ -164,11 +164,11 @@ test "a message gone to flashes, in and out as the Android app's, nothing of it 
   t.draw()
   t.run_for(@ui.nav_push_ms)
   t.run_for((flash_in_ms + flash_held_ms) / 2.0)
-  assert_eq(flashing.val.0, "ts2")
-  assert_true(flashing.val.1 > 0.99)
+  assert_eq(@sfpages.flashing_now.val.0, "ts2")
+  assert_true(@sfpages.flashing_now.val.1 > 0.99)
   t.run_for(flash_ms)
   t.draw()
-  assert_eq(flashing.val.1, 0.0)
+  assert_eq(@sfpages.flashing_now.val.1, 0.0)
   t.assert_idle()
 }
 
@@ -180,9 +180,9 @@ test "with motion reduced, a message gone to is lit whole for its flash's time, 
   sys.opened = "/o/ws1/st1/s-c2?message=2\n2"
   t.draw()
   t.run_for(@ui.nav_push_ms)
-  assert_eq(flashing.val, ("ts2", 1.0))
+  assert_eq(@sfpages.flashing_now.val, ("ts2", 1.0))
   t.run_for(flash_ms)
-  assert_eq(flashing.val.1, 0.0)
+  assert_eq(@sfpages.flashing_now.val.1, 0.0)
 }
 
 ///|

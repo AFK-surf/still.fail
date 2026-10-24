@@ -308,6 +308,13 @@ fn signed_in(c : @ui.Ctx, src : Source) -> Unit {
       share_in_frame(c)
       // files being kept on the device, said once kept (keep.mbt)
       keeps_frame(c)
+      // what a page asks to open beside its chat (an agent's history, what the pages' message rows ask): the wide
+      // frame's side panel's tab, Small's page pushed
+      detail_asked.val = if @sfdesk.is_wide(c) {
+        fn(src, r, tab) { @sfdesk.side_toggle(src, r, tab) }
+      } else {
+        fn(_, r, tab) { app.nav.push(History(r, tab, None)) }
+      }
       if @sfdesk.is_wide(c) {
         // the wide frame's keys (sfdesk's keys.mbt), then the rail, the sidebar and the page beside it (sfdesk's
         // frame.mbt); what opens over them after them

@@ -122,7 +122,7 @@ pub fn message_row(c : @ui.Ctx, src : Source, here : MessageHere, m : Message) -
             person_words(c, m.text, "m:" + m.ts, found=marked_of(here, m.ts))
           })
         }
-        message_files(c, src, here, files, false)
+        message_files(c, src, here, files, false, by=Some((m.by.name, "person", m.ts)))
       } else {
         picking(here, c, m.ts, m.by.name, if m.author_kind == "agent" { "agent" } else { "person" }, m.text, fn() {
           prose_with_files(c, src, here, m, files)
@@ -149,7 +149,7 @@ fn mine_message(c : @ui.Ctx, src : Source, here : MessageHere, m : Message) -> U
         mine_bubble(c, here, m.text, "m:" + m.ts, found=marked_of(here, m.ts))
       }, fill=false)
     }
-    message_files(c, src, here, beside_quotes(m.quotes, m.attachments), true)
+    message_files(c, src, here, beside_quotes(m.quotes, m.attachments), true, by=Some((@sf.t("web-main.chat.you"), "person", m.ts)))
     if !m.followed {
       match m.blocked {
         Some(b) if b.state != "installed" => blocked_line(c, src, here.station, "m:" + m.ts, b)
@@ -404,6 +404,12 @@ fn mine_bubble(c : @ui.Ctx, here : MessageHere, words : String, key : String, fo
         let g = c.layer(fn() { c.box(style=bubble_ground, fn() {  }) |> ignore })
         c.look(g, @ui.look(alpha=ground))
       }
+      // gone to (a notification's), it takes the accent's ground as it flashes
+      let (at, lit) = flashing_now.val
+      if lit > 0.0 && "m:" + at == key {
+        let g = c.layer(fn() { c.box(style=bubble_lit, fn() {  }) |> ignore })
+        c.look(g, @ui.look(alpha=lit))
+      }
       person_words(c, words, key, found~)
     },
   )
@@ -418,6 +424,8 @@ fn mine_bubble(c : @ui.Ctx, here : MessageHere, words : String, key : String, fo
 /// drawn there, an HTML one as a visualization (PlacedFile), the rest under it; a link within a sentence to one it
 /// places opens that file; Mermaid drawn; a station's screens' links as their cards.
 fn prose_with_files(c : @ui.Ctx, src : Source, here : MessageHere, m : Message, files : Array[Attachment]) -> Unit {
+  // (whose its files are, quoted from their menus)
+  let by = (m.by.name, if m.author_kind == "agent" { "agent" } else { "person" }, m.ts)
   // an agent's request about a vault item: its card in place of the words, answered on it (decision.mbt)
   match m.card {
     Some({ ask: Some(ask), .. } as card) => {
@@ -462,11 +470,11 @@ fn prose_with_files(c : @ui.Ctx, src : Source, here : MessageHere, m : Message, 
                 owner_of(here, a),
                 m.ts,
                 a,
-                fn() { message_files(c, src, here, [a], false) },
+                fn() { message_files(c, src, here, [a], false, by=Some(by)) },
                 @sf.theme().p.subtle,
               )
             })
-          Some(a) => Some(fn() { message_files(c, src, here, [a], false) })
+          Some(a) => Some(fn() { message_files(c, src, here, [a], false, by=Some(by)) })
           None => None
         }
       },
@@ -485,7 +493,7 @@ fn prose_with_files(c : @ui.Ctx, src : Source, here : MessageHere, m : Message, 
     )
     |> ignore
   }
-  message_files(c, src, here, rest, false)
+  message_files(c, src, here, rest, false, by=Some(by))
 }
 
 ///|
@@ -710,7 +718,7 @@ pub fn quotes(
         role=q.role,
         comment=q.comment,
         jump=q.ts != "" && here.go is Some(_),
-        picture?=own.map(fn(a) { fn() { file_item(c, src, here, a, quote_picture_most) } }),
+        picture?=own.map(fn(a) { fn() { file_item(c, src, here, a, quote_picture_most, by=None) } }),
       )
       match here.go {
         Some(go) if done.jumped && seq >= 0.0 => go(seq)
@@ -936,6 +944,11 @@ let bubble : @ui.Style = @ui.css("px=S3_5 py=S2 radius=Xl2 bg=Neutral")
 /// Its ground on its own (coming in round words sent flying here), and the bubble without it meanwhile.
 // kept across runs: a value (no field of it changes)
 let bubble_ground : @ui.Style = @ui.css("w=Full h=Full radius=Xl2 bg=Neutral")
+
+///|
+/// Its ground lit as it flashes (msgFlash: the accent's).
+// kept across runs: a value (no field of it changes)
+let bubble_lit : @ui.Style = @ui.css("w=Full h=Full radius=Xl2 bg=AccentBg")
 
 ///|
 // kept across runs: a value (no field of it changes)

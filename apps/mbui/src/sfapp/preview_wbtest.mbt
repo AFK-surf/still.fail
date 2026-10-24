@@ -702,6 +702,8 @@ test "a picture of the chat grows from its thumbnail; back closes it at once and
   assert_true(last < 0.5)
   assert_true(pv_leaving.val is None)
   assert_eq(pv_hidden.val, "")
+  // (the chat's other pictures brushed in once decoded: sfpages message_files.mbt)
+  t.run_for(@sfpages.reveal_ms)
   t.assert_idle()
 }
 

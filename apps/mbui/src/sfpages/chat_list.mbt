@@ -9,7 +9,11 @@
 // (⌘↓) and to what waits to be decided.
 
 ///|
-/// Chat `r`'s list (its view `v`, `read` its entries), in its pane; `room` what the composer takes of the pane's foot.
+/// Chat `r`'s list (its view `v`, `read` its entries), in its pane; `room` what the composer takes of the pane's foot,
+/// `top` what the frame's bar takes of its top (and `bar` where the bar ends, `lead` how far under the top the unread
+/// line is put). Its own width decides how it is laid out: narrow (700 or less: the web's phone widths and its mobile
+/// page), 16 in from its sides, 20 between messages, each picture at its head's start (inlineHeads); wider, in the
+/// column 760 wide at most in its middle, 28 apart, the pictures out in the margin.
 pub fn chat_list(
   c : @ui.Ctx,
   src : Source,
@@ -18,7 +22,14 @@ pub fn chat_list(
   read : Array[Entry],
   room : Double,
   core : Core,
+  top? : Double = list_top,
+  lead? : Double = unread_lead,
+  bar? : Double = bar_foot,
+  foot? : Double = list_foot,
 ) -> Unit {
+  let narrow = c.width <= chat_narrow_w
+  let list_top = top
+  let list_gap = if narrow { list_gap_narrow } else { list_gap }
   let key = list_key(r)
   let draft = r.station + ":" + r.session
   // what a message's menu left to do (menus.mbt)
@@ -39,10 +50,11 @@ pub fn chat_list(
   let n = list.length()
   // a message gone to, flashing (a notification's): a ground under its row coming in and going
   let lit = (rd.flash, flash_of(c, rd, rd.flash))
+  flashing_now.val = lit
   // the room agents' lines left, less what has come in since (under the rows, over the composer's room)
   act_rooms(c, rd, key, keys)
   let floor = floor_of(c, rd, key, keys)
-  let side = row_side(c)
+  let side = if narrow { row_side_narrow } else { row_side(c) }
   let list_box = c.box(style=chat_list_box, ty=lf.carry.unwrap_or(0.0), fn() {
     c.list(
       key,
@@ -66,7 +78,7 @@ pub fn chat_list(
         let mk = key + "\u{1}" + keys[i]
         match e {
           Top => c.box(style=@ui.style(h=Fixed(list_top)), fn() {  }) |> ignore
-          Foot => c.box(style=@ui.style(h=Fixed(room + list_foot + floor)), fn() {  }) |> ignore
+          Foot => c.box(style=@ui.style(h=Fixed(room + foot + floor)), fn() {  }) |> ignore
           Working(a) => {
             // coming in, its room opens (220 ms, the ease out) as it fades in and grows from its picture; its turn
             // over, it stays a moment and fades (Activity)
@@ -84,7 +96,7 @@ pub fn chat_list(
             let fade = @motion.animate(c, "fade/" + mk, if leaving { 0.0 } else { 1.0 }, spec=@motion.tween(linger_out_ms))
             let p = open.get()
             rd.act_whole[keys[i]] = p >= 1.0 && !open.moving()
-            let here = here_of(r, v, rk, turns, em, None, core)
+            let here = here_of(r, v, rk, turns, em, None, core, inline=narrow)
             @motion.reveal(c, mk, p, fn() {
               let ri = row_box(c, side, top, fn() { activity_row(c, src, here, a, em, rk, leaving) })
               @motion.keyed(c, ri, mk, exit=@motion.trans(fade=0.0, spec=@motion.tween(leave_ms)))
@@ -102,7 +114,7 @@ pub fn chat_list(
               Some(f) if flies => flight_placed(c, f)
               _ => ()
             }
-            let here = here_of(r, v, rk, turns, em, if flies { flight } else { None }, core)
+            let here = here_of(r, v, rk, turns, em, if flies { flight } else { None }, core, inline=narrow)
             let ri = row_box(c, side, top, fn() {
               // (where a message out of a picture comes in over it: emit.mbt)
               if keys[i] == em.out_key {
@@ -186,14 +198,15 @@ pub fn chat_list(
       v,
       lf,
       top=list_top,
-      lead=unread_lead,
-      bar=bar_foot,
+      lead~,
+      bar~,
       room~,
       finding=find_chat() == chat_key(r),
       on_found=fn(rd) { rd.found_centre = true },
       find_around~,
     )
     // the way to the newest: away from its end, or short of the chat's end
+    rd.jump = la.away || v.newer
     to_latest(c, src, r, v, la.away || v.newer, room)
     // what waits to be decided and does not show: a bell over the way to the end
     rd.ask = to_ask(c, r, v, la.ask_rows, la.info, la.away || v.newer, room)
@@ -216,13 +229,14 @@ pub fn here_of(
   em : Emits,
   flight : SendFlight?,
   core : Core,
+  inline? : Bool = false,
 ) -> MessageHere {
   {
     station: r.station,
     session: r.session,
     view: v,
     go: Some(fn(seq) { @sfbase.go_to(r, seq) }),
-    inline: false,
+    inline: inline,
     list: Some({ rk, turns, emits: em, flight }),
     core: Some(core),
   }
@@ -359,7 +373,7 @@ fn to_ask(
 
 ///|
 /// Which of each chat's asks the bell goes to next (by the chat's key).
-let ask_turns : Map[String, Int] = {}
+pub let ask_turns : Map[String, Int] = {}
 
 ///|
 /// What ⌘F last asked the window moved about (`chat.around`), once (-1 none).
@@ -431,6 +445,7 @@ pub fn find_forget() -> Unit {
 ///|
 /// What the list keeps of its own, let go (the package's reset).
 fn list_reset() -> Unit {
+  flashing_now.val = ("", 0.0)
   ask_turns.clear()
   find_around.val = -1.0
 }
@@ -473,6 +488,17 @@ let chat_row_est : Double = 90.0
 ///|
 /// The rows 28 apart (session.css.ts chatList gap), one sent soon after the one before 4 under it.
 let list_gap : Double = 28.0
+
+///|
+/// The widest a list is laid out narrow (Chat.css.ts `max-width: 700px`), and then 20 between its messages (the web's
+/// mobile --list-gap) and 16 in from its sides (session.css.ts chatList).
+pub let chat_narrow_w : Double = 700.0
+
+///|
+let list_gap_narrow : Double = 20.0
+
+///|
+let row_side_narrow : Double = 16.0
 
 ///|
 let joined_gap : Double = 4.0
@@ -565,6 +591,11 @@ fn float_box(c : @ui.Ctx, right : Double, foot : Double, body : () -> Int) -> Un
 /// A message gone to, its ground (msgFlash): the accent's, round, out past its row's room.
 // kept across runs: a value (no field of it changes)
 let flash_ground : @ui.Style = @ui.css("w=Full h=Full radius=Xl bg=AccentBg").then(@sf.outset(8.0))
+
+///|
+/// The message gone to flashing in the list drawn now and how far its flash is (its ts, 0 to 1): the viewer's own
+/// words' bubble takes it (message.mbt mine_bubble), anyone else's row a ground under it.
+pub let flashing_now : Ref[(String, Double)] = Ref(("", 0.0))
 
 ///|
 /// Where the round buttons go: the pane's foot, at its end.

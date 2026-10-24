@@ -1,5 +1,8 @@
 // What the desktop's pages read of sfbase, by its own names (as sfapp/base.mbt takes them in).
 using @sfbase {
+  quoted_into,
+  quote_file_into,
+  attachment_json,
   workspace_of,
   first_line,
   detail_asked,
