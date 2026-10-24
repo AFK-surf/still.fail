@@ -25,6 +25,7 @@ on:
       - "apps/mbui/mbui/scripts/render_windows.sh"
       - ".github/workflows/mbui-render-windows.yml"
       - ".github/actions/mbui-warp/**"
+      - ".github/actions/msvc/**"
   push:
     branches: [main]
     paths: *paths
@@ -47,7 +48,7 @@ jobs:
       - run: git config --global core.autocrlf false
         working-directory: ${{ github.workspace }}
       - uses: actions/checkout@v4
-      - uses: ilammy/msvc-dev-cmd@v1
+      - uses: ./.github/actions/msvc
       - uses: ./.github/actions/mbui-moonbit
       - uses: ./.github/actions/mbui-warp
       - name: Drawn offscreen, twice (scripts/render_windows.sh)

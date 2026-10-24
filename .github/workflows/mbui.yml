@@ -28,6 +28,7 @@ on:
       - "cloud/test/dev.ts"
       - ".github/workflows/mbui.yml"
       - ".github/actions/setup/**"
+      - ".github/actions/msvc/**"
   workflow_dispatch:
 # main: one at a time, a push meanwhile waits as one run of the newest; a branch: only its newest push matters.
 concurrency:
@@ -317,7 +318,7 @@ jobs:
       # cl compiles the app
       - uses: actions/setup-node@v5
         with: { node-version-file: .node-version, package-manager-cache: false }
-      - uses: ilammy/msvc-dev-cmd@v1
+      - uses: ./.github/actions/msvc
       - uses: ./.github/actions/mbui-moonbit
       - name: Tools (MSVC's link.exe for cargo, which Git Bash's /usr/bin/link shadows)
         run: |

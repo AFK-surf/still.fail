@@ -61,7 +61,7 @@ jobs:
       - uses: actions/setup-node@v5
         with: { node-version-file: .node-version, package-manager-cache: false }
       - if: runner.os == 'Windows'
-        uses: ilammy/msvc-dev-cmd@v1
+        uses: ./.github/actions/msvc
       # Git Bash's /usr/bin/link shadows MSVC's link.exe for cargo
       - if: runner.os == 'Windows'
         run: echo "CARGO_TARGET_X86_64_PC_WINDOWS_MSVC_LINKER=$(cygpath -m "$(dirname "$(which cl)")/link.exe")" >> "$GITHUB_ENV"

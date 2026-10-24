@@ -1,0 +1,20 @@
+# MSVC for a Windows job (ilammy/msvc-dev-cmd: cl, link and lib on PATH, the SDK's paths), without its telemetry
+# uploader. cl and link start vctip.exe ("VC compiler and tools experience improvement data uploader") as they finish,
+# and it stays: every Windows job that compiled left one, the last process the runner had to end after the job's
+# steps, and once ending it took the job to its timeout (mbui-windows' demo, run 40116664392: its steps done in
+# 1.5 minutes, the job cancelled at 10). No setting stops cl starting it (VSCMD_SKIP_SENDTELEMETRY is vcvars' own, the
+# SQM OptIn keys are not read: fekir.info/post/disable-vctip-for-good), so on the runner, which is thrown away after
+# the job, the uploader is taken out of MSVC's directories; cl and link go on without it (Chromium's toolchain packs
+# no vctip.exe). Its absence checked: one left fails here.
+name: MSVC
+description: MSVC's tools on PATH, its telemetry uploader taken out
+runs:
+  using: composite
+  steps:
+    - uses: ilammy/msvc-dev-cmd@v1
+    - shell: bash
+      run: |
+        d=$(cygpath -u "$VCToolsInstallDir")
+        find "$d" -iname vctip.exe -print -delete
+        left=$(find "$d" -iname vctip.exe)
+        [ -z "$left" ] || { echo "::error::vctip.exe still in MSVC's directories: $left"; exit 1; }
