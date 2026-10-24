@@ -6,7 +6,9 @@ import { STILL, stillLoop } from "@stillfail/ui/styles/still.ts";
 export const mDot = style({
   width: "7px", height: "7px", borderRadius: "50%", background: "var(--m-accent)", flex: "none",
 });
-export const mHome = style({ position: "absolute", inset: "0" });
+// Home is navigation, not document text: iOS can expand a hold on an unselectable row to its selectable ancestor.
+export const mHome = style({ position: "absolute", inset: "0", userSelect: "none", WebkitUserSelect: "none", WebkitTouchCallout: "none" });
+globalStyle(`${mHome} input, ${mHome} textarea`, { userSelect: "text", WebkitUserSelect: "text", WebkitTouchCallout: "default" });
 export const mHomePanes = style({ position: "absolute", inset: "0", overflow: "hidden" });
 export const mHomePane = style({
   position: "absolute", inset: "0", overflowY: "auto", overscrollBehavior: "contain",
