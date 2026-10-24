@@ -4,7 +4,7 @@
 ///|
 /// The text `at.path` of `at.root` on `at.station`, read.
 pub fn reader_page(c : @ui.Ctx, src : Source, at : DriveAt) -> Unit {
-  drive_reader(c, src, at, fn() { app.nav.pop() |> ignore })
+  drive_reader(c, src, at, fn() { @sfbase.close_page(DriveRead(at)) |> ignore })
 }
 
 ///|

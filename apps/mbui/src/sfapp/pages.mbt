@@ -6,7 +6,7 @@
 /// A page's compact bar (Parts.kt NavBar): back to the chats, in the accent; its title in the middle.
 fn nav_bar(c : @ui.Ctx, title : String) -> Unit {
   if @sf.nav_bar(c, "nav-back", tr("android-misc.bar.place.chats"), title, top=status_top()) {
-    app.nav.pop() |> ignore
+    @sfbase.go_back() |> ignore
   }
 }
 

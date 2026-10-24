@@ -171,7 +171,9 @@ One shell. It arranges the same panes in every tier:
      a page popped, a place's top page back to the chats; Medium and Large sfdesk's `wide_back` (Large: none from the
      new chat beside the chats alone, the page there never empty). Both frames take the
      system's back, the back key and ⌘[ through it; the Small stack's swipe is the stack's own and pops as it does.
-     The pages that pop the stack themselves are next.
+     A page's own back (its bar's) is `go_back`; its 关闭 or 取消 (a screen, the reader, the player, a new chat, a
+     chat archived) is `close_page`, the page taken off where it lies. What still pops: the shell's own ways to the
+     root and the frames' (nav_home, desk_home, the rail's), and the routers that open a page where it goes.
 4. **The pages merge, by area, in parallel,** once 2 has landed:
    - the settings and the places;
    - the files and the viewer;

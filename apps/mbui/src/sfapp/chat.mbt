@@ -211,7 +211,7 @@ fn bar_frame(
   c.box(dir=Row, w=Fill(1.0), pl=4.0, pr=16.0, pt=status_top(), min_h=top_bar_h(), align=ACenter, fn() {
     let back = c.id("chat-back")
     if c.clicked(back) {
-      app.nav.pop() |> ignore
+      @sfbase.go_back() |> ignore
     }
     c.box(
       w=Px(40.0),

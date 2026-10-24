@@ -14,7 +14,7 @@
 /// what is at its end.
 fn page_bar(c : @ui.Ctx, key : String, back : String, title : String, trailing : () -> Unit) -> Unit {
   if @sf.nav_bar(c, key + "/back", back, title, trailing~, bg=@sf.theme().p.bg, top=status_top()) {
-    app.nav.pop() |> ignore
+    @sfbase.go_back() |> ignore
   }
 }
 

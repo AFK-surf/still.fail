@@ -105,7 +105,7 @@ fn service_bar(c : @ui.Ctx, title : String, station : String) -> Unit {
     @sf.nav_bar(c, "service/back", svc("android-chat.preview.back"), title, top=status_top())
   }
   if went {
-    app.nav.pop() |> ignore
+    @sfbase.go_back() |> ignore
   }
 }
 

@@ -36,7 +36,7 @@ pub fn settings_core_of(
         _ => open_page(Setting(r))
       }
     },
-    pop: fn() { app.nav.pop() |> ignore },
+    pop: fn() { go_back() |> ignore },
     home,
     open_chat: fn(station, session, title) {
       // its station's name, as the chats' rows have it
