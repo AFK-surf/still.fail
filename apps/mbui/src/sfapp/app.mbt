@@ -81,7 +81,6 @@ fn reset() -> Unit {
   landing_reset()
   new_ws_reset()
   news_reset()
-  read_views.clear()
   read_chats.clear()
   readings.clear()
   kept_places.clear()
@@ -179,8 +178,6 @@ fn reset() -> Unit {
   fix_serial.val = 0
   fix_stream_ids.val = 0
   // Home (home.mbt), the host told (above), a chat's page and what is in it
-  open_titled.val = ""
-  shown_days.clear()
   marks_seen.clear()
   told_bars.val = None
   told_dark.val = None
