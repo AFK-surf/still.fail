@@ -6,7 +6,7 @@
 // Each case is played on the wide pages and on the phone's. Not a check of timing: frames dropped or slow change how
 // many samples there are, never which way anything moves.
 // PLAYWRIGHT_MODULE selects Playwright; SHOTS keeps each case's samples (JSON), and with RECORD=1 its frames as drawn
-// (JPEG, from the browser's screencast); ONLY=<case> plays one; JUMPS=1 fails on a jump too (else it is said); THROTTLE=<n> slows the page's CPU n times (a slower
+// (JPEG, from the browser's screencast); ONLY=<case> plays one; JUMPS=1 fails on a jump too (else it is said); PAGES=<n> plays at once (2); THROTTLE=<n> slows the page's CPU n times (a slower
 // machine than the one at hand: what moves must not depend on it).
 import assert from 'node:assert/strict';
 import { mkdir, writeFile, rm } from 'node:fs/promises';
@@ -249,9 +249,17 @@ createRoot(root).render(<DemoApp phone={location.hash === '#phone'} />);
   // SHARD=<i>/<n>: only the i-th of every n of the plays (CI's jobs side by side).
   const [shard, shards] = (process.env.SHARD || '1/1').split('/').map(Number);
   let played = -1;
+  const plays = [];
   for (const phone of [false, true]) for (const [name, play] of Object.entries(CASES)) {
     if (process.env.ONLY && process.env.ONLY !== name) continue;
     if (++played % shards !== shard - 1) continue;
+    plays.push([phone, name, play]);
+  }
+  // PAGES of them at once (2), each in a context of its own: a play is mostly its page's own time running (what it
+  // waits for comes by real frames), so one after another the job was waiting, not working: a share took 90-150 s on
+  // CI's runners (2026-10-23). Frames dropped while another plays change how many samples there are, never which way
+  // anything moves (THROTTLE).
+  const take = async (phone, name, play) => {
     const context = await browser.newContext(phone
       ? { viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true, locale: 'zh-CN' }
       : { viewport: { width: 1280, height: 800 }, locale: 'zh-CN' });
@@ -301,7 +309,10 @@ createRoot(root).render(<DemoApp phone={location.hash === '#phone'} />);
     if (end > 1 && name !== 'long') failures.push(`${where}: left ${Math.round(end)}px short of the list's end`);
     console.log(found.length || (process.env.JUMPS && jumped.length) || early.length ? 'FAIL' : 'ok  ', where, `(${frames.length} frames)`);
     await context.close();
-  }
+  };
+  await Promise.all(Array.from({ length: Number(process.env.PAGES) || 2 }, async () => {
+    while (plays.length) await take(...plays.shift());
+  }));
   if (notes.length) console.log(notes.join('\n'));
   if (failures.length) { console.error(failures.join('\n')); process.exitCode = 1; }
 } finally {
