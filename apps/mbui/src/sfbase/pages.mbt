@@ -187,6 +187,8 @@ pub fn reset() -> Unit {
   acting_reset()
   // how an update stands (updates.mbt)
   update_reset()
+  // a chat's relay picker (relay.mbt)
+  relay_reset()
   // the messages chats are to go to (jump.mbt)
   go_tos.clear()
   go_to_words.clear()

@@ -5,7 +5,8 @@
 // message's link typed (pasted) into the search offers that message's thread instead. The phone's sheet
 // (mobile/Chat.tsx RelaySheet) picks the same way (useRelay).
 import { useEffect, useMemo, useState, useSyncExternalStore, type ReactNode } from "react";
-import { stationApi, useStationCall, type RelayConnect, type RelayPlace } from "./api.ts";
+import { relayView, type RelayRow } from "../../client/core-ts/src/relay-pick.ts";
+import { stationApi, useStationCall, type RelayConnect } from "./api.ts";
 import { Button, ConnectAvatar, Dialog, ElsewhereLogo, WaitLine } from "./ui.tsx";
 import { failure, useToast } from "@stillfail/ui/toast.tsx";
 import * as controlsCss from "@stillfail/ui/styles/controls.css.ts";
@@ -34,43 +35,6 @@ export function RelayHost() {
 /** Read as the dialog opens: being read, read, or why not. */
 type Read = { reading: true } | { ok: RelayConnect[] } | { error: string };
 
-/** A place with the connect it is through. */
-type Row = { connect: RelayConnect; place: RelayPlace };
-
-/** How many places relayed to before are offered as the dialog opens, before 「显示全部」; with no more than FEW places in
- * all, all of them are. */
-const RECENT = 5;
-const FEW = 8;
-
-/** How a place says what relaying there does: a new thread, a new topic, or the group's conversation taken over. */
-const kindNote = (p: RelayPlace) => t(p.kind === "channel" ? "web-main.relay.kind.channel" : p.kind === "topics" ? "web-main.relay.kind.topics" : "web-main.relay.kind.group");
-
-/** Whether what was typed is a link to a Slack message (the station finds its workspace among its connects'). */
-const slackLink = (typed: string) => /^https?:\/\/[^/\s]+\/archives\/[A-Z0-9]+\/p\d{16}/.test(typed.trim());
-
-/** A bot as people know it: its name, with its workspace (Slack) or tenant (Feishu) when `connects` are in several. */
-const botLabel = (c: RelayConnect, connects: RelayConnect[]) =>
-  c.team !== null && new Set(connects.map((o) => o.team)).size > 1 ? `${c.name} · ${c.team}` : c.name;
-
-const placeName = (p: RelayPlace) => (p.kind === "channel" ? `${p.private ? "🔒 " : ""}#${p.name}` : p.name);
-
-/**
- * The places offered, of the bot picked: those whose name has what was typed (those
- * starting with it first), else all of them; then those relayed to before (the latest first), then by name. Nothing
- * typed, more than FEW and some relayed to before, only the first RECENT of those (`recent`) unless all were asked for.
- */
-export function arrange(connects: RelayConnect[], query: string, all: boolean): { rows: Row[]; recent: boolean; total: number } {
-  const q = query.trim().toLowerCase();
-  const rows = connects.flatMap((connect) => connect.places.map((place) => ({ connect, place })));
-  const total = rows.length;
-  const shown = q === "" ? rows : rows.filter((r) => r.place.name.toLowerCase().includes(q));
-  const first = (r: Row) => (q !== "" && r.place.name.toLowerCase().startsWith(q) ? 0 : 1);
-  shown.sort((a, b) => first(a) - first(b) || (b.place.used ?? -1) - (a.place.used ?? -1) || a.place.name.localeCompare(b.place.name));
-  const used = shown.filter((r) => r.place.used !== undefined);
-  if (q === "" && !all && total > FEW && used.length > 0) return { rows: used.slice(0, RECENT), recent: true, total };
-  return { rows: shown, recent: false, total };
-}
-
 /**
  * The picking itself, the same on the wide screen's dialog and the phone's sheet: the bot to go on through when there
  * are several (the chat's own as it opens), the search (or a Slack link), its places relayed to before as it opens (all of them asked for or
@@ -84,8 +48,7 @@ export function useRelay(station: string, thread: number, say: (text: string) =>
   const [query, setQuery] = useState("");
   const [chosen, setChosen] = useState<string | null>(null);
   const [all, setAll] = useState(false);
-  const [picked, setPicked] = useState<Row | null>(null);
-  const link = slackLink(query) ? query.trim() : null;
+  const [picked, setPicked] = useState<RelayRow | null>(null);
   const [note, setNote] = useState("");
   const [busy, setBusy] = useState(false);
   useEffect(() => {
@@ -94,13 +57,12 @@ export function useRelay(station: string, thread: number, say: (text: string) =>
     return () => { gone = true; };
   }, [call, thread]);
   const connects = "ok" in read ? read.ok : [];
-  const several = connects.length > 1;
-  // The bot it goes on through: the one picked, else the chat's own (the station's preferred), else the first.
-  const bot = connects.find((c) => c.id === chosen) ?? connects.find((c) => c.preferred) ?? connects[0] ?? null;
-  const looked = useMemo(() => (bot === null ? [] : [bot]), [bot]);
-  const { rows, recent, total } = useMemo(() => arrange(looked, query, all), [looked, query, all]);
+  const view = useMemo(() => relayView(connects, query, all, chosen, t), [connects, query, all, chosen]);
+  const link = view.link;
+  const bot = connects.find((c) => c.id === view.bot) ?? null;
+  const via = (id: string) => connects.find((c) => c.id === id) ?? null;
   const go = () => {
-    const to = link !== null ? { link, ...(bot !== null ? { connect: bot.id } : {}) } : picked !== null ? { connect: picked.connect.id, channel: picked.place.id } : null;
+    const to = link !== null ? { link, ...(bot !== null ? { connect: bot.id } : {}) } : picked !== null ? { connect: picked.connect, channel: picked.place.id } : null;
     if (to === null) return;
     setBusy(true);
     api.relay(thread, to, note).then(
@@ -108,10 +70,10 @@ export function useRelay(station: string, thread: number, say: (text: string) =>
       (e: unknown) => { setBusy(false); say(t("web-main.act.failed", { what: t("web-main.relay.verb"), error: failure(e) })); },
     );
   };
-  const row = (r: Row, on: boolean, end: ReactNode, onClick: () => void) => (
-    <button key={`${r.connect.id}/${r.place.id}`} type="button" role="option" aria-selected={on} className={css.place} data-on={on || undefined} onClick={onClick}>
-      <ElsewhereLogo kind={r.connect.kind === "slack" ? "slack" : "feishu"} size={16} />
-      <span className={css.placeName}>{placeName(r.place)}</span>
+  const row = (r: RelayRow, on: boolean, end: ReactNode, onClick: () => void) => (
+    <button key={`${r.connect}/${r.place.id}`} type="button" role="option" aria-selected={on} className={css.place} data-on={on || undefined} onClick={onClick}>
+      <ElsewhereLogo kind={r.kind === "slack" ? "slack" : "feishu"} size={16} />
+      <span className={css.placeName}>{r.name}</span>
       <span className={css.placeNote} title={r.place.kind === "group" ? t("web-main.relay.kind.groupNote") : undefined}>{end}</span>
     </button>
   );
@@ -130,8 +92,8 @@ export function useRelay(station: string, thread: number, say: (text: string) =>
   } else if (picked !== null) {
     list = (
       <div className={css.list} role="listbox" aria-label={t("web-main.relay.places")}>
-        {row(picked, true, <>{kindNote(picked.place)} · <span className={css.change}>{t("web-main.relay.change")}</span></>, () => setPicked(null))}
-        <Via connect={picked.connect} />
+        {row(picked, true, <>{picked.note} · <span className={css.change}>{t("web-main.relay.change")}</span></>, () => setPicked(null))}
+        {via(picked.connect) !== null && <Via connect={via(picked.connect)!} />}
       </div>
     );
   } else if ("reading" in read) list = <WaitLine text={t("web-main.relay.reading")} />;
@@ -141,20 +103,20 @@ export function useRelay(station: string, thread: number, say: (text: string) =>
     list = (
       <>
         <div className={css.list} role="listbox" aria-label={t("web-main.relay.places")}>
-          {recent && <div className={css.groupHead}>{t("web-main.relay.recent")}</div>}
-          {rows.map((r) => row(r, false, r.place.kind === "channel" ? null : kindNote(r.place), () => setPicked(r)))}
-          {rows.length === 0 && <p className={css.empty}>{query.trim() === "" ? t("web-main.relay.noPlaces") : t("web-main.relay.noMatch")}</p>}
-          {recent && total > rows.length && <button type="button" className={css.more} onClick={() => setAll(true)}>{t("web-main.relay.showAll", { count: total })}</button>}
-          {looked.filter((c) => c.error).map((c) => <p key={c.id} className={css.unread}>{t("web-main.relay.unread", { error: c.error! })}</p>)}
+          {view.recent && <div className={css.groupHead}>{t("web-main.relay.recent")}</div>}
+          {view.rows.map((r) => row(r, false, r.aside, () => setPicked(r)))}
+          {view.empty !== null && <p className={css.empty}>{t(view.empty === "noPlaces" ? "web-main.relay.noPlaces" : "web-main.relay.noMatch")}</p>}
+          {view.recent && view.total > view.rows.length && <button type="button" className={css.more} onClick={() => setAll(true)}>{t("web-main.relay.showAll", { count: view.total })}</button>}
+          {view.unread.map((error) => <p key={error} className={css.unread}>{t("web-main.relay.unread", { error })}</p>)}
         </div>
       </>
     );
   }
-  const bots = several && picked === null && link === null && (
+  const bots = view.bots.length > 0 && picked === null && link === null && (
     <div className={css.scopes} role="group" aria-label={t("web-main.relay.bots")}>
-      {connects.map((c) => (
-        <button key={c.id} type="button" className={css.scope} data-on={c.id === bot?.id || undefined} aria-pressed={c.id === bot?.id} onClick={() => { setChosen(c.id); setAll(false); }}>
-          <ConnectAvatar connect={c} size={16} /><span className={css.scopeName}>{botLabel(c, connects)}</span>
+      {view.bots.map((b) => (
+        <button key={b.id} type="button" className={css.scope} data-on={b.id === view.bot || undefined} aria-pressed={b.id === view.bot} onClick={() => { setChosen(b.id); setAll(false); }}>
+          {via(b.id) !== null && <ConnectAvatar connect={via(b.id)!} size={16} />}<span className={css.scopeName}>{b.label}</span>
         </button>
       ))}
     </div>
@@ -172,7 +134,7 @@ export function useRelay(station: string, thread: number, say: (text: string) =>
       )}
     </div>
   );
-  const label = picked !== null ? t("web-main.relay.goTo", { place: placeName(picked.place) }) : t("web-main.relay.go");
+  const label = picked !== null ? t("web-main.relay.goTo", { place: picked.name }) : t("web-main.relay.go");
   return { body, ready: picked !== null || link !== null, busy, go, label };
 }
 

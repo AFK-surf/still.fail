@@ -1,6 +1,6 @@
 // The core's answers to its pure calls (`markdown`, `code.ink`, `reader.book`, `reader.text`, `reader.search`,
 // `commands.find`, a chat's side panel's tabs: chat-tabs.ts, the 奏 page's queue: decisions.ts, where a chat's find goes:
-// chat-find.ts), and to each step of a device's browsing (drive-browse.ts
+// chat-find.ts, what a chat's relay picker shows: relay-pick.ts), and to each step of a device's browsing (drive-browse.ts
 // `Browsing`: a topic of it or a call, given what it held before and what it reads, answering with what it holds
 // after; and the rail as drawn from the prefs kept, `railView`), worked
 // out by the real core and kept for the mbui app's runs without one (apps/mbui/src/sfkept: its Tester's tests, the
@@ -20,6 +20,7 @@ import { railView } from "../src/rail.ts";
 import { changed, tabsOf, type Change } from "../src/chat-tabs.ts";
 import { order, picked, setAside, shownIn, type Shown } from "../src/decisions.ts";
 import { findGo, type FindAt, type FindHit } from "../src/chat-find.ts";
+import { readConnects, relayView } from "../src/relay-pick.ts";
 import { toolCall, toolResult, type ToolPart } from "../src/tool-step.ts";
 import { wordsAnswer } from "../src/words.ts";
 import { tr, type Lang } from "../src/i18n.ts";
@@ -45,6 +46,7 @@ type Kept = {
   "chat.tabs": Record<string, unknown>;
   "decisions.queue": Record<string, unknown>;
   "chat.find.go": Record<string, unknown>;
+  "chat.relayView": Record<string, unknown>;
   "history.tool": Record<string, unknown>;
   words: Record<string, unknown>;
   browse: Record<string, unknown>;
@@ -66,6 +68,8 @@ const tabs = new Set(Object.keys(was["chat.tabs"] ?? {}));
 const queues = new Set(Object.keys(was["decisions.queue"] ?? {}));
 // Where a chat's find goes: by what was asked (what was found, where the reader is, which way, what shows).
 const goes = new Set(Object.keys(was["chat.find.go"] ?? {}));
+// What a chat's relay picker shows: by what was asked (the connects read, what was typed, all asked for, the bot).
+const relays = new Set(Object.keys(was["chat.relayView"] ?? {}));
 // What a history step is: by what was asked (its name, call, result, whether it failed, whether its words show).
 const tools = new Set(Object.keys(was["history.tool"] ?? {}));
 // What is written, read (ref.at, ref.before, ref.marks, ref.pasted, paste.info): by what was asked (the call, the
@@ -93,6 +97,7 @@ for (const file of outputs) {
     else if (ask.call === "chat.tabs") tabs.add(String(ask.key ?? ""));
     else if (ask.call === "decisions.queue") queues.add(String(ask.key ?? ""));
     else if (ask.call === "chat.find.go") goes.add(String(ask.key ?? ""));
+    else if (ask.call === "chat.relayView") relays.add(String(ask.key ?? ""));
     else if (ask.call === "history.tool") tools.add(String(ask.key ?? ""));
     else if (ask.call === "words") words.add(String(ask.key ?? ""));
     else if (ask.call === "railView") rails.add(JSON.stringify(ask.prefs ?? {}));
@@ -105,7 +110,7 @@ for (const file of outputs) {
 
 // Each worked out by the core as it is now.
 const sorted = (keys: Iterable<string>) => [...keys].sort();
-const kept: Kept = { markdown: {}, "code.ink": {}, "reader.book": {}, "commands.find": {}, "chat.tabs": {}, "decisions.queue": {}, "chat.find.go": {}, "history.tool": {}, words: {}, browse: {}, railView: {} };
+const kept: Kept = { markdown: {}, "code.ink": {}, "reader.book": {}, "commands.find": {}, "chat.tabs": {}, "decisions.queue": {}, "chat.find.go": {}, "chat.relayView": {}, "history.tool": {}, words: {}, browse: {}, railView: {} };
 for (const text of sorted(texts)) kept.markdown[text] = markdown(text);
 for (const key of sorted(rails)) kept.railView[key] = railView(JSON.parse(key) as { rail?: unknown; rails?: unknown }, "zh");
 for (const key of sorted(codes)) {
@@ -160,6 +165,10 @@ for (const key of sorted(words)) {
 for (const key of sorted(goes)) {
   const ask = JSON.parse(key) as { hits?: FindHit[]; at?: FindAt | null; by?: -1 | 0 | 1; from?: number | null; to?: number | null; drawn?: Record<string, number> };
   kept["chat.find.go"][key] = findGo(ask.hits ?? [], ask.at ?? null, ask.by ?? 0, ask.from ?? null, ask.to ?? null, ask.drawn ?? {});
+}
+for (const key of sorted(relays)) {
+  const ask = JSON.parse(key) as { connects?: unknown; query?: unknown; all?: unknown; bot?: unknown };
+  kept["chat.relayView"][key] = relayView(readConnects(ask.connects), String(ask.query ?? ""), ask.all === true, typeof ask.bot === "string" ? ask.bot : null, (k, a) => tr("zh", k, a));
 }
 for (const key of sorted(tools)) {
   const ask = JSON.parse(key) as { name?: string; call?: string; result?: string; failed?: boolean; said?: boolean };

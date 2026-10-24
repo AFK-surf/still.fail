@@ -35,7 +35,6 @@ fn desk_pages() -> @sfdesk.Pages {
     keys: fn(c, src, w, escape) { page_keys(c, src, w, escape) },
     offered: fn(c, src) { chat_offered(c, src) },
     jobs: fn(c, src, w) { open_jobs(c, src, w) },
-    relay: fn(c, src, r, thread) { open_relay(c, src, r, thread) },
     core: fn(src, w) { settings_core(src, w) },
     gate: fn(c, src, w) { lock_gate(c, src, w) |> ignore },
     drop: fn(c, src, key, pane) {

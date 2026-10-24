@@ -312,6 +312,8 @@ test "接力到频道: the places the station's bots are in, one picked, relayed
       match name {
         "chat.relayPlaces" => done(Ok(places))
         "chat.relay" => done(Ok({ "place": "#dev" }))
+        // (what the sheet shows of them, the core's: kept, src/sfkept)
+        "chat.relayView" => (base.call)(name, params, done)
         _ => done(Ok(Json::object({})))
       }
     },
@@ -345,10 +347,3 @@ test "接力到频道: the places the station's bots are in, one picked, relayed
   assert_eq(text(Some(relayed[0].params), "channel"), "C1")
 }
 
-///|
-test "接力: a pasted Slack message's link offers that thread, nothing else to pick" {
-  assert_true(slack_link("https://star.slack.com/archives/C0123ABC/p1729580000123456"))
-  assert_false(slack_link("https://star.slack.com/archives/C0123ABC"))
-  assert_false(slack_link("https://star.slack.com/archives/c0123abc/p1729580000123456"))
-  assert_false(slack_link("ops"))
-}
