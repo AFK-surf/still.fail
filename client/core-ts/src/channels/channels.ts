@@ -66,6 +66,8 @@ export type Held = {
   /// Of a kind kept whole from its lowest item held (`Kind.holes`): whether this one is, as its station can say how far
   /// it goes and gives what a read asks in brief (one from before does neither: its latest page alone). None: it is.
   holes?(channel: Channel): boolean;
+  /// Of those: whether this one is brought whole for now, down to its first item (a session used lately).
+  whole?(channel: Channel): boolean;
 };
 
 export type Answered = { _tag: "Success"; success: unknown } | { _tag: "Failure"; failure: CoreError };
@@ -175,9 +177,11 @@ export class Channels {
     if (!c.kind.whole) {
       if (held.length === 0) return { latest: true };
       if (!this.#holes(c)) return null;
-      // What came after what is held, a hole in it; not what is before all that is held (gone back to as asked).
+      // What came after what is held, a hole in it; what is before all that is held only while it is brought whole
+      // (else gone back to as asked): the page before it, down to its first.
       const read = fill.next(held, this.#held.head(c), c.kind.page);
-      return read !== null && "to" in read && read.to < held[0]! ? null : read;
+      if (read !== null && !("to" in read && read.to < held[0]!)) return read;
+      return held[0]! > c.kind.first && this.#held.whole?.(c) === true ? { before: held[0]! } : null;
     }
     return fill.next(held, this.#held.head(c), c.kind.page);
   }

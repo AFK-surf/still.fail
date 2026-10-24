@@ -1922,6 +1922,29 @@ test("a_transcript_shows_its_latest_page_and_the_ones_before_as_asked", async ()
   again.core.close();
 });
 
+test("an_agent_used_lately_has_its_whole_history_brought_in_the_background_one_not_used_its_latest_alone", async () => {
+  const items = (from: number, to: number) => Array.from({ length: to - from + 1 }, (_, i) => `e${from + i}`);
+  const answers: J = base();
+  answers["GET /sessions/k1/timeline?before=300&limit=200&brief=1"] = { start: 100, entries: items(100, 299), end: 500 };
+  answers["GET /sessions/k1/timeline?before=100&limit=200&brief=1"] = { start: 0, entries: items(0, 99), end: 500 };
+  const s = await ui(answers, (st) => (st.gate.follows = true));
+  const { host, core, read } = s;
+  const older = () => host.requests.filter((r) => /timeline\?before=(300|100)&/.test(r.url)).length;
+  // Its latest, as told; nothing before it is brought for an agent not used lately.
+  s.push("live", { key: "k1", type: "timeline", start: 300, entries: items(300, 499), usage: {} });
+  await host.time.pass(EVENTS_COALESCE_MS + 100);
+  await read();
+  assert.equal(older(), 0);
+  // Its chat opened: what is before it is brought, page after page, down to its first entry.
+  core.receive(s.ui, { kind: "subscribe", id: 9, subscribe: thread7 });
+  await read();
+  await read();
+  await read();
+  assert.equal(older(), 2);
+  assert.deepEqual([core.inner.data.logSpan("transcript", ST, "k1")?.min, core.inner.data.logCount("transcript", ST, "k1", 0, 499)], [0, 500]);
+  core.close();
+});
+
 test("a_history_step_in_brief_is_read_whole_as_it_is_opened_and_shown_so", async () => {
   const answers: J = base();
   const s = await ui(answers);

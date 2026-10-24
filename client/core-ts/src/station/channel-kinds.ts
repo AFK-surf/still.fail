@@ -91,5 +91,6 @@ export function heldIn(data: Data, follows: (station: string) => boolean = () =>
       else data.raiseTranscript(c.station, c.id, n);
     },
     holes: (c) => c.kind !== TRANSCRIPT || follows(c.station),
+    whole: (c) => c.kind === TRANSCRIPT && follows(c.station) && data.usedLately(c.station, c.id),
   };
 }
