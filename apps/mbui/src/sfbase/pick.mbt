@@ -203,6 +203,14 @@ pub fn pick_layer(
   }
   let first = lines[0]
   let last = lines[lines.length() - 1]
+  // (where the layers they are in start in the window, as this frame lays them out: the passage's lines are said in
+  // the window's, and a pane beside the sidebar starts away from its corner)
+  let frame = c.id("pick/frame")
+  let (fx, fy, fw, fh) = match c.laid_rect(frame) {
+    Some(r) => r
+    None => (0.0, 0.0, c.width, c.height)
+  }
+  c.layer(fn() { c.box(style=pick_pop_frame, id=frame, fn() {  }) |> ignore }) |> ignore
   // a handle taken and moved (its end following the finger from where it was taken); a tap anywhere but on the pick's
   // bar and handles lets go of it (not the lifting of the press that picked it: that press was taken)
   pk.sel.handles(c, words, ends)
@@ -220,7 +228,7 @@ pub fn pick_layer(
     let line_top = if k == 0 { h - line.3 } else { 0.0 }
     let knob_y = if k == 0 { line_top - 11.0 } else { line_top + line.3 - 1.0 }
     c.layer(fn() {
-      c.box(style=pick_handle.then(@ui.style(h=Fixed(h))), tx=x - handle_half, ty=top, id~, fn() {
+      c.box(style=pick_handle.then(@ui.style(h=Fixed(h))), tx=x - fx - handle_half, ty=top - fy, id~, fn() {
         c.layer(fn() {
           let lh = line.3
           c.box(style=pick_line.then(@ui.style(h=Fixed(lh))), tx=handle_half - 1.0, ty=line_top, fn() {  })
@@ -239,12 +247,12 @@ pub fn pick_layer(
   }
   // over the passage; under it (clear of the end's knob) when the bar over the list is too near; on the screen when
   // the passage runs past it
-  let least = top + 8.0
+  let least = fy + top + 8.0
   let over = first.1 - 52.0
   let y = if over < least { last.1 + last.3 + 28.0 } else { over }
-  let y = dmax(least, dmin(y, dmax(c.height - foot - 48.0, least)))
-  let x = if lines.length() > 1 { c.width / 2.0 } else { first.0 + first.2 / 2.0 }
-  let x = dmax(130.0, dmin(x, dmax(c.width - 130.0, 130.0)))
+  let y = dmax(least, dmin(y, dmax(fy + fh - foot - 48.0, least)))
+  let x = if lines.length() > 1 { fx + fw / 2.0 } else { first.0 + first.2 / 2.0 }
+  let x = dmax(fx + 130.0, dmin(x, dmax(fx + fw - 130.0, fx + 130.0)))
   let everything = pk.sel.a == 0 && pk.sel.b >= words.text.length()
   let button = fn(id : Int, label : String, icon : String) {
     c.box(style=pick_button, id~, fn() {
@@ -259,9 +267,9 @@ pub fn pick_layer(
   }
   c.layer(fn() {
     // (its row `y` down the layer)
-    c.box(style=@ui.style(h=Fixed(y)), fn() {  }) |> ignore
+    c.box(style=@ui.style(h=Fixed(y - fy)), fn() {  }) |> ignore
     c.box(style=pick_bar_row, fn() {
-      c.box(tx=x - c.width / 2.0, fn() {
+      c.box(tx=x - fx - fw / 2.0, fn() {
         c.box(
           style=pick_bar,
           id=bar,
@@ -393,7 +401,7 @@ let pick_fill : @ui.Style = @ui.css("w=Full")
 let pick_own : @ui.Style = @ui.css("w=Hug")
 
 ///|
-/// What the pill is placed in: all of the layer.
+/// What the pill, and a finger's handles and bar, are placed by: all of the layer (where it starts in the window).
 // kept across runs: a value (no field of it changes)
 let pick_pop_frame : @ui.Style = @ui.css("w=Full h=Full")
 
