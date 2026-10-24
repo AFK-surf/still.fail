@@ -3,8 +3,8 @@
 # GitHub's own runners (no machine of ours: 2026-10-21, a push to four packages in three minutes): its Android app
 # signed with every still.fail Android release's key (/releases/latest/android-mbui, its feed android/mbui/latest.json,
 # still.fail's AppRelease), its macOS app signed with still.fail's Developer ID (/releases/latest/mac-mbui), its
-# Windows app zipped (/releases/latest/win-mbui), side by side; its iOS app built for a device (signed and put once
-# the team's App Store Connect key is in production's secrets). A branch's push builds them (no key, nothing put).
+# Windows app zipped (/releases/latest/win-mbui), side by side; its iOS app built for a device (signed and put on
+# TestFlight by mbui-testflight.yml). A branch's push builds them (no key, nothing put).
 # A workflow of its own, not a job of pipeline.yml: nothing of the pipeline waits for it or fails with it. As asked
 # (2026-10-19), its tests do not hold it back: it is a test app (Windows' e2e runs after its zip is out). A feed moves
 # only once its file is fetched back from where it is served, the same bytes.
@@ -264,7 +264,7 @@ jobs:
         with: { pnpm: "${{ steps.core.outputs.kept != 'true' }}" }
       - uses: ./.github/actions/mbui-moonbit
       - run: touch "$RUNNER_TEMP/start"
-      # (unsigned until the team's App Store Connect key is in production's secrets: then signed ad hoc and put)
+      # (unsigned: mbui-testflight.yml signs it for TestFlight)
       - name: The iOS app for a device, as an .ipa
         run: |
           APP=stillfail MBUI_IOS_SDK=iphoneos MBUI_IOS_ID=fail.still.mbui EMBER=$PWD bash apps/mbui/scripts/ios.sh build
