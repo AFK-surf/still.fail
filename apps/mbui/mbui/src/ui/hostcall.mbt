@@ -88,6 +88,8 @@ struct FakeHost {
   mut inset : Bool
   /// the window filling the screen (Ctx::set_full_screen), as last made to
   mut full : Bool
+  /// how round the system draws the window's corners (Tester::new's `window_corner`; none filling the screen)
+  window_corner : Double
   /// the system's size of words (font_scale: 1 as it is)
   mut font_scale : Double
   /// something reading the widgets out (a11y_on), and what it was last told they are (a11y.mbt)

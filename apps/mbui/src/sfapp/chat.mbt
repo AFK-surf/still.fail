@@ -365,12 +365,15 @@ fn chat_bar(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef, v : ChatView)
 
 ///|
 /// A station named in a small outlined tag (PageParts.kt StationTag): how it is reached as a dot, its mark, its name.
+/// The dot leading it stands in its round end as far in as makes it concentric with it (20 high: its half less the
+/// dot's), its words 8 in otherwise.
 fn station_tag(c : @ui.Ctx, s : Station) -> Unit {
   let t = @sf.theme()
   c.box(
     dir=Row,
     max_w=104.0,
-    padx=8.0,
+    pl=if s.via != "" { @sf.capsule_in(station_tag_h / 2.0, via_dot_side) } else { station_tag_end },
+    pr=station_tag_end,
     pady=2.0,
     gap=4.0,
     radius=12.0,
@@ -381,7 +384,7 @@ fn station_tag(c : @ui.Ctx, s : Station) -> Unit {
     label=s.name,
     fn() {
       if s.via != "" {
-        via_dot(c, s.via, 7.0, 0.0)
+        via_dot(c, s.via, via_dot_side, 0.0)
       }
       if @sf.has_station_mark(s.emoji, s.icon) {
         @sf.station_mark(c, s.emoji, s.icon, 12.0, t.p.muted)
@@ -392,6 +395,16 @@ fn station_tag(c : @ui.Ctx, s : Station) -> Unit {
   )
   |> ignore
 }
+
+///|
+/// The tag's height (its words' 16 and 2 over and under), its words' room at its ends, its dot's side.
+let station_tag_h : Double = 20.0
+
+///|
+let station_tag_end : Double = 8.0
+
+///|
+let via_dot_side : Double = 7.0
 
 ///|
 /// The station's tag in a chat's bar while no agent is in it (PageParts.kt ChatStationChip): a tap opens its card

@@ -384,7 +384,7 @@ fn triple_panel(c : @ui.Ctx, src : Source, station : String, of : String, v : Js
     |> ignore
   }
   c.box(style=triple_rule_h, fn() {  }) |> ignore
-  c.box(style=triple_foot, fn() {
+  c.box(style=triple_foot.then(@sf.panel_foot_ends), fn() {
     // who runs it: the accounts in a panel beside this one
     let who = c.id("triple/who")
     c.cursor(who, Hand)

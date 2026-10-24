@@ -233,7 +233,7 @@ fn composer_in_panel(t : @ui.Tester) -> (Double, Double)? {
   guard bs.search_by(fn(b) { b.kind == "editor" }) is Some(e) else { return None }
   let ed = bs[e]
   for b in bs {
-    if @ui.Radius::Exact(b.radius) == @sf.page_panel_corner && b.x <= ed.x && ed.x + ed.w <= b.x + b.w {
+    if @ui.Radius::Exact(b.radius) == @sf.page_panel_corner() && b.x <= ed.x && ed.x + ed.w <= b.x + b.w {
       return Some((ed.x - b.x, b.y + b.h - ed.y))
     }
   }
@@ -292,14 +292,14 @@ test "on the tape the page panel's corner is its own: the composer and its butto
   let t = tape_chat(2, 690.0, 840.0, width="medium", height="medium")
   t.tap(650.0, 400.0)
   t.run_for(@sfdesk.side_move_ms * 2.0)
-  let panel = match @sf.page_panel_corner {
+  let panel = match @sf.page_panel_corner() {
     Exact(r) => r
     _ => abort("the panels' corner is a number")
   }
   // one line: a capsule the ladder's inset in, as round as the panel's corner less that (its half), its buttons round
   // in its ends
   guard composer_corners(t) is Some((k, s)) else { fail("no composer") }
-  assert_eq(k, panel - @sfpages.composer_side)
+  assert_eq(k, panel - @sfpages.composer_side())
   assert_eq(s, 16.0)
   assert_eq(t.corner_faults(), [])
   // lines more: the box concentric with the panel, the send button with the box, 12 in
@@ -308,7 +308,7 @@ test "on the tape the page panel's corner is its own: the composer and its butto
   t.run_for(@sfpages.morph_ms)
   guard composer_corners(t) is Some((k, s)) else { fail("no composer") }
   // (the ladder's: the panel's corner a step in, a card's; its buttons round in its corners, the inset in)
-  assert_eq(k, @ui.concentric(panel, @sfpages.composer_side))
+  assert_eq(k, @ui.concentric(panel, @sfpages.composer_side()))
   assert_eq(k, @sf.card_corner)
   assert_eq(s, 16.0)
   assert_eq(t.corner_faults(), [])

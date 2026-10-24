@@ -1599,6 +1599,57 @@ test "wide: an agent's card over its picture beside its message (AgentCard.tsx),
 }
 
 ///|
+test "wide: a working agent's card has its stop in its top right corner, concentric with it (the corner rule sees it)" {
+  reset()
+  let base = fixture("chat-agent-card")
+  // (its agents at work, as a turn under way has them: chat_fixture.mbt)
+  let src : Source = {
+    ..base,
+    topic: fn(name, params) {
+      let got = (base.topic)(name, params)
+      match (name, got.value) {
+        ("chat", Some(Object(m))) => {
+          let o = m.copy()
+          o["agents"] = Json::array(
+            items(got.value, "agents").map(fn(a) {
+              match a {
+                Object(am) => {
+                  let w = am.copy()
+                  w["status"] = Json::string("running")
+                  Json::object(w)
+                }
+                _ => a
+              }
+            }),
+          )
+          { ..got, value: Some(Json::object(o)) }
+        }
+        _ => got
+      }
+    },
+  }
+  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=1280.0, h=800.0, platform=0)
+  t.run_for(history_fade_ms)
+  let word = fn(s : String) { t.words().filter(fn(w) { w.0 == s && w.5 > 0.5 }) }
+  let last = word("Claude").iter().fold(init=None, fn(acc : (String, Double, Double, Double, Double, Double)?, w) {
+    match acc {
+      Some(a) if a.2 >= w.2 => acc
+      _ => Some(w)
+    }
+  })
+  guard last is Some(name) else { fail("no agent's message") }
+  t.move(name.1 - 20.0, name.2 + name.4 / 2.0)
+  t.run_for(@sfpages.hover_open_ms * 2.0)
+  // its stop shown, level with its label; nothing in the card's corners (nor anywhere) breaks the rule
+  let stop = word("停止当前任务")
+  let label = word("Claude · Opus 5.5")
+  assert_true(stop.length() == 1 && label.length() == 1, msg="\{(stop, label)}")
+  assert_true(stop[0].1 > label[0].1 + label[0].3, msg="its stop after its label")
+  assert_eq(t.corner_faults(), [])
+}
+
+///|
 test "wide: an agent's card's latest lines run on as they change (AgentCard.tsx useLinesMotion), the first gone leaving" {
   reset()
   let latest : Ref[(Array[(String, String)], Int)] = Ref(

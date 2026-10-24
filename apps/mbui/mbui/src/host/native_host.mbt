@@ -31,6 +31,11 @@ impl @hostapi.Host for Native with set_full_screen(_, on) {
 }
 
 ///|
+impl @hostapi.Host for Native with window_corner(_) {
+  window_corner()
+}
+
+///|
 impl @hostapi.Host for Native with window_drag(_) {
   window_drag()
 }

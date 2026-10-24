@@ -1090,7 +1090,7 @@ pub fn chat_composer(c : @ui.Ctx, src : Source, ws : Workspace, r : ChatRef, v :
   let width = composer_width(c.width)
   // (apart: the composer as far from its foot as from its sides, so it stands in the panel's corners and follows them:
   // InnerOr)
-  let foot = c.box(style=if apart { chat_foot_apart } else { chat_foot }, fn() {
+  let foot = c.box(style=if apart { chat_foot_apart() } else { chat_foot }, fn() {
     match v {
       Some(v) => chat_notices(c, src, r, v)
       None => ()
@@ -1219,5 +1219,11 @@ let capsule_room : Double = 32.0 + 2.0 * 8.0 + 12.0 + 16.0
 let chat_foot : @ui.Style = @ui.css("w=Full pt=S3 pb=S4 align=ACenter")
 
 ///|
+/// (apart: as far from the panel's foot as from its sides, composer_side)
+fn chat_foot_apart() -> @ui.Style {
+  chat_foot_top.then(@ui.style(pb=@sf.room_of(composer_side())))
+}
+
+///|
 // kept across runs: a value (no field of it changes)
-let chat_foot_apart : @ui.Style = @ui.css("w=Full pt=S3 align=ACenter").then(@ui.style(pb=@sf.inset_room))
+let chat_foot_top : @ui.Style = @ui.css("w=Full pt=S3 align=ACenter")
