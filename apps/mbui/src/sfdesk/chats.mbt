@@ -269,7 +269,6 @@ pub fn new_chat(pages : Pages) -> Unit {
   match app.nav.top() {
     NewChat => ()
     _ => {
-      (pages.lower)()
       while app.nav.depth() > 1 {
         if !app.nav.pop() {
           break
@@ -296,7 +295,6 @@ pub fn open_row(pages : Pages, item : ChatItem) -> Unit {
     Chat(open) if open.station == r.station && open.session == r.session => return
     _ => ()
   }
-  (pages.lower)()
   wide.menu = None
   // the chats' place under it: settings or another place left for the chat
   if lit_place() != "chats" {

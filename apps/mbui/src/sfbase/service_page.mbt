@@ -868,4 +868,43 @@ pub fn service_pages_reset() -> Unit {
   svc_keep.val = fn(_) {  }
   marked_into.clear()
   src_now.val = fn() { 0.0 }
+  viz_loads.clear()
+}
+
+///|
+/// Service page `p`'s site view, made the first time (the build places it, so it is made in it): every request of its
+/// page answered from the station through the core (service_serve), or for a visualization's (`file`) from here
+/// (file_serve); what its page says taken apart (a visualization's bridge its own, page.js the rest: link_said); a link
+/// elsewhere not followed in the page but handed to `leave`.
+pub fn service_site(src : Source, p : ServicePage, file : FilePage?, leave : (String) -> Unit) -> @ui.NativeView {
+  match p.site {
+    Some(v) => v
+    None => {
+      let v = @ui.NativeView::site(
+        "/",
+        fn(req, reply) {
+          match file {
+            Some(f) => file_serve(f, req, reply)
+            None => service_serve(src, p, req, reply)
+          }
+        },
+        said=fn(words) {
+          match file {
+            Some(f) => file_said(src, f, words)
+            None => ()
+          }
+          match p.site {
+            Some(v) => link_said(src, p, v, words)
+            None => ()
+          }
+        },
+        no_answer=svc("android-chat.web.timeout", args=[("s", (@ui.site_head_wait_ms / 1000.0).to_int().to_string())]),
+        too_slow=svc("android-chat.web.slow"),
+        leave~,
+      )
+      @ui.log("service: \{p.name} on \{p.station} (port \{p.port}) opened in a site view")
+      p.site = Some(v)
+      v
+    }
+  }
 }

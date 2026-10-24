@@ -78,7 +78,6 @@ fn reset() -> Unit {
   screen_uis.clear()
   screen_fix_mode.val = ""
   peeks_reset()
-  viz_loads.clear()
   viz_frames.clear()
   viz_heights.clear()
   viz_full.val = None

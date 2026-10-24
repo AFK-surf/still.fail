@@ -13,9 +13,14 @@ fn tabs_key(r : ChatRef) -> String {
 
 ///|
 /// Whether this panel shows `tab` beside a chat of `v`: one of its agents' histories (by its session's key), 任务, 文件,
-/// agent 往来 (not yet the web's services and visualizations).
+/// agent 往来, a web service of its agents' (`service:<job>`), a visualization (`file:[…]`: service_tab.mbt).
 fn side_shows(v : ChatView, tab : String) -> Bool {
-  tab == "jobs" || tab == "files" || tab == "letters" || v.agents.iter().any(fn(a) { a.key == tab })
+  tab == "jobs" ||
+  tab == "files" ||
+  tab == "letters" ||
+  tab_service(tab) is Some(_) ||
+  tab_file(tab) is Some(_) ||
+  v.agents.iter().any(fn(a) { a.key == tab })
 }
 
 ///|
@@ -51,6 +56,13 @@ pub fn side_change(src : Source, r : ChatRef, action : String, tab : String?) ->
     _ => false
   }
   side_changing(chat_key(r), tabs, front, any)
+  // a web service's or a visualization's tab closed lets its page go (ChatPage.tsx endPreview)
+  match (action, tab) {
+    ("close", Some(t)) => tab_let_go(r, t)
+    ("clear", _) => for t in tabs { tab_let_go(r, t) }
+    ("open", Some(t)) => tab_kept(r, t)
+    _ => ()
+  }
   side_ask(src, r, action, tab)
 }
 
@@ -402,7 +414,10 @@ fn side_panel(
     |> ignore
     c.box(style=side_pane, fn() {
       if front == "jobs" {
-        jobs_tab(c, src, r.station, chat_key(r), (src.topic)("chatJobs", chat_params(r)).value, fn(_) {  })
+        // a service up pressed: its own tab, in front (JobsTab onOpen)
+        jobs_tab(c, src, r.station, chat_key(r), (src.topic)("chatJobs", chat_params(r)).value, fn(job) {
+          c.tell("jobs-open/" + job, fn() { side_change(src, r, "open", Some("service:" + job)) })
+        })
       } else if front == "files" {
         // the workspace's stations' files (drive_tab.mbt), what is added from them going into the chat's draft
         files_tab(c, src, w.id, tabs_key(r), r.station)
@@ -411,6 +426,10 @@ fn side_panel(
           Some(th) => letters_tab(c, src, r, v, th)
           None => ()
         }
+      } else if tab_service(front) is Some(job) {
+        service_pane(c, src, r, job)
+      } else if tab_file(front) is Some((session, path, name)) {
+        file_pane(c, src, r, session, path, name)
       } else if front != "" {
         // one of its agents' execution histories
         agent_history(c, src, r.station, front, agent_json((src.topic)("chat", chat_params(r)).value, front))
@@ -458,9 +477,17 @@ fn side_tab_of(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView, tab : Strin
     side_change(src, r, "close", Some(tab))
   }
   let agent = v.agents.iter().find_first(fn(a) { a.key == tab })
-  let label = match agent {
-    Some(a) => a.who
-    None =>
+  // a web service's by its name and a dot of how it is; a visualization's by its file's name
+  let service = match tab_service(tab) {
+    Some(job) => Some((src.topic)("job", { "station": Json::string(r.station), "id": Json::string(job) }).value)
+    None => None
+  }
+  let file = tab_file(tab)
+  let label = match (agent, service, file) {
+    (Some(a), _, _) => a.who
+    (_, Some(j), _) => if text(j, "name") == "" { svc("android-chat.preview.service") } else { text(j, "name") }
+    (_, _, Some((_, _, name))) => name
+    _ =>
       if tab == "jobs" {
         @sf.t("web-pages.chat.jobs")
       } else if tab == "files" {
@@ -469,9 +496,9 @@ fn side_tab_of(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView, tab : Strin
         @sf.t("web-main.letters.title")
       }
   }
-  let closing = match agent {
-    Some(a) => @sf.t("web-pages.chat.close", args=[("name", a.who)])
-    None =>
+  let closing = match (agent, service, file) {
+    (Some(_), _, _) | (_, Some(_), _) | (_, _, Some(_)) => @sf.t("web-pages.chat.close", args=[("name", label)])
+    _ =>
       if tab == "jobs" {
         @sf.t("web-pages.chat.closeJobs")
       } else if tab == "files" {
@@ -481,10 +508,13 @@ fn side_tab_of(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView, tab : Strin
       }
   }
   let b = c.box(style=side_tab, selected=front, id~, fn() {
-    match agent {
-      Some(a) => @sf.maker_mark(c, a.maker, a.runtime, 14.0) |> ignore
-      None => {
-        let icon = if tab == "jobs" {
+    match (agent, service) {
+      (Some(a), _) => @sf.maker_mark(c, a.maker, a.runtime, 14.0) |> ignore
+      (_, Some(j)) => job_dot(c, text(j, "tone"))
+      _ => {
+        let icon = if file is Some(_) {
+          "file"
+        } else if tab == "jobs" {
           "boxes"
         } else if tab == "files" {
           "folder"
@@ -501,7 +531,7 @@ fn side_tab_of(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView, tab : Strin
     c.semantics(x, Button, id=close, label=closing)
   })
   c.semantics(b, Tab, id~, label~, selected=front)
-  if agent is Some(_) {
+  if agent is Some(_) || service is Some(_) || file is Some(_) {
     @sf.tip(c, "side/tab-tip/" + tab, id, label)
   }
 }

@@ -22,14 +22,8 @@
 /// What the frame draws that is not here yet, given by the app (sfapp): the pages in the pane, the sidebars of the
 /// places other than the chats', and what the frame asks of the app.
 pub(all) struct Pages {
-  /// any other page: the phone's of it, its bar at its top (the workspaces, whether invitations wait)
-  other : (@ui.Ctx, Source, Workspace, Array[Workspace], Bool, Page) -> Unit
   /// what the settings' pages read and call, and how they move (src/sfapp/settings: the core as the app has it)
   core : (Source, Workspace) -> Core
-  /// whether one of the phone's sheets is over the pages (back closes it first), and what is over the pages put down
-  /// as a place is gone to: what the phone's pages still shown here (`other`, the files') open
-  sheet : () -> Bool
-  lower : () -> Unit
 }
 
 ///|
@@ -707,7 +701,7 @@ pub fn frame(
   // back (⌘[, a mouse's back button) a page of the stack, where there is one; on the tape, with the page in use, the
   // sidebar brought over from the page the sidebar opened (the chats' place's chat, a settings page), and nothing
   // taken with the sidebar in use (the system's: as from a phone's list); what is over the whole window put away first
-  if !took && !app.menu && !(pages.sheet)() {
+  if !took && !app.menu {
     let over_all = app.nav.top() is (Screen(_) | DriveRead(_) | DrivePlay(_))
     if wide.tape && !over_all {
       match wide.tape_at {
@@ -724,6 +718,8 @@ pub fn frame(
       c.take_back(fn() { app.nav.pop() |> ignore })
     }
   }
+  // the pages of web services' and visualizations' tabs closed, no longer drawn, let go (service_tab.mbt)
+  sv_sweep(c, src)
 }
 
 ///|
@@ -1023,7 +1019,11 @@ fn main_page(
     Archived => archive_main(c)
     // 奏: the decision picked in the sidebar's 奏 (decision_page.mbt)
     Decisions => decision_page(c, src, w, pages)
-    _ => (pages.other)(c, src, w, all, invited, page)
+    // a web service, a visualization opened aside: its chat with it beside it (service_tab.mbt)
+    Service(station, job) => service_beside(c, src, w, pages, station, job)
+    PreviewFile(station, key, path, name) => tab_beside(c, src, w, pages, station, key, file_tab(key, path, name))
+    // the plain text a phone's history opens: the phone's own
+    Words(_, _) => ()
   }
 }
 

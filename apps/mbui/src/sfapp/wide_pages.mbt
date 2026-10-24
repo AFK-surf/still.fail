@@ -19,14 +19,7 @@ fn wide_reset() -> Unit {
 /// What the wide frame (sfdesk) draws of this package's: the pages in its pane, and what it asks.
 fn desk_pages() -> @sfdesk.Pages {
   {
-    other: fn(c, src, w, all, invited, page) { page_view(c, src, w, all, invited, page) },
     core: fn(src, w) { settings_core(src, w) },
-    sheet: fn() { sheet_open() },
-    lower: fn() {
-      lower_sheet()
-      dui.sheet = None
-      dui.leaving = None
-    },
   }
 }
 

@@ -129,47 +129,16 @@ fn service_body(
   p.name = name
   p.session = session
   src_now.val = src.now
-  let site = match p.site {
-    Some(v) => v
-    None => {
-      // (made once a page; the build places it, so it is made in it)
-      let v = @ui.NativeView::site(
-        "/",
-        fn(req, reply) {
-          match file {
-            Some(f) => file_serve(f, req, reply)
-            None => service_serve(src, p, req, reply)
-          }
-        },
-        said=fn(words) {
-          // (a visualization's bridge says its own; page.js says the rest, its marks on either)
-          match file {
-            Some(f) => file_said(src, f, words)
-            None => ()
-          }
-          match p.site {
-            Some(v) => link_said(src, p, v, words)
-            None => ()
-          }
-        },
-        no_answer=svc("android-chat.web.timeout", args=[("s", (@ui.site_head_wait_ms / 1000.0).to_int().to_string())]),
-        too_slow=svc("android-chat.web.slow"),
-        leave=fn(url) {
-          // a link elsewhere: not followed in the page; one of still.fail's opened here as the core says, any other
-          // handed to the system (AppState.openLink), said when nothing took it (Preview.kt's leave)
-          open_link_in(src, url, or_else=fn() {
-            if !@ui.open_url(url) {
-              app.toast = svc("android-chat.link.failed")
-              app.toast_n += 1
-            }
-          })
-        },
-      )
-      @ui.log("service: \{name} on \{station} (port \{port}) opened in a site view")
-      p.site = Some(v)
-      v
-    }
-  }
+  let site = service_site(src, p, file, fn(url) {
+    // a link elsewhere: one of still.fail's opened here as the core says, any other handed to the system
+    // (AppState.openLink), said when nothing took it (Preview.kt's leave)
+    open_link_in(src, url, or_else=fn() {
+      if !@ui.open_url(url) {
+        app.toast = svc("android-chat.link.failed")
+        app.toast_n += 1
+      }
+    })
+  })
   // up again after a restart: the page loads anew
   if p.restarting && !restarting {
     // (once the frame's builds are over: by the job's restart as the core says it)
@@ -1186,45 +1155,4 @@ let file_name_box : @ui.Style = @ui.css("w=Full clip")
 // kept across runs: a value (no field of it changes)
 let file_name_words : @ui.TextStyle = @ui.text_style(size=Sm, weight=Medium, color=Fg, wrap=false)
 
-///|
-/// A request of a visualization's page answered from here (Preview.kt's serve): its page (any path with no
-/// extension, reloaded with what it kept since), and nothing else there is.
-fn file_serve(f : FilePage, req : @ui.SiteRequest, reply : @ui.SiteReply) -> Unit {
-  let bare = match req.path.find("?") {
-    Some(i) => req.path.view(end_offset=i).to_owned()
-    None => req.path
-  }
-  let last = match bare.rev_find("/") {
-    Some(i) => bare.view(start_offset=i + 1).to_owned()
-    None => bare
-  }
-  let served = req.verb == "GET" && !last.contains(".")
-  if !served {
-    reply.head(404, [("Content-Type", "text/plain; charset=utf-8")])
-    reply.chunk(@utf8.encode("Not found"))
-    reply.end()
-    return
-  }
-  let doc = viz_served(f.html, f.state, @sf.theme().dark, 0xFFFFFFFFL, page_script_served(false))
-  reply.head(200, [("Content-Type", "text/html; charset=utf-8"), ("Cache-Control", "no-store")])
-  reply.chunk(@utf8.encode(doc))
-  reply.end()
-}
 
-///|
-/// What a visualization's page says to the app (its bridge's relay: Viz.kt VizKeeper): here only what its widget keeps.
-fn file_said(src : Source, f : FilePage, words : String) -> Unit {
-  match (try Some(@json.parse(words)) catch { _ => None }) {
-    Some(Object(m)) if m.get("type") == Some(Json::string("state")) => {
-      let s = m.get("state").unwrap_or(Json::null())
-      if s.stringify().length() <= viz_max_state {
-        f.state = match s {
-          Null => None
-          x => Some(x)
-        }
-        viz_keep(src, f.station, f.key, f.path, s)
-      }
-    }
-    _ => ()
-  }
-}
