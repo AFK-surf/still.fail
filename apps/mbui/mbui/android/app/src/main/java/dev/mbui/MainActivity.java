@@ -22,6 +22,8 @@ public class MainActivity extends Activity {
     @Override
     protected void onCreate(Bundle saved) {
         super.onCreate(saved);
+        // this build's code in memory before the drawing thread comes to it (a build just installed has none of it)
+        ReadAhead.start(this);
         Host.log("activity onCreate " + (saved != null ? "(restored)" : ""));
         Host.activity = this;
         // `--es env K=V;K2=V2`: environment variables for the app's MoonBit (as a desktop run has them: the core
