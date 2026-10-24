@@ -39,6 +39,7 @@ pub fn reset() -> Unit {
   font_setting_reset()
   changelog_reset()
   vault_item_reset()
+  memory_doc_reset()
   station_cards_reset()
   places_reset()
   chat_page_reset()
