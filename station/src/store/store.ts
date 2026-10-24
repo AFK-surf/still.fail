@@ -79,7 +79,10 @@ export class Store {
     // Busy for a moment (another process reading, the WAL recovered after a crash): waited for, from the first statement.
     const db = new DatabaseSync(path, { timeout: 5000 });
     try {
-      db.exec("PRAGMA busy_timeout = 5000; PRAGMA journal_mode = WAL;");
+      // A commit waits for the log's write, not for the disk: what the last moments before a power cut wrote may be lost,
+      // the database never damaged (WAL). Each live step of an agent commits a few times; with each its own flush to
+      // disk, a machine short of memory and disk time held the main thread on them.
+      db.exec("PRAGMA busy_timeout = 5000; PRAGMA journal_mode = WAL; PRAGMA synchronous = NORMAL;");
       const hasTables = db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'sessions'").get() !== undefined;
       if (hasTables) {
         const version = (db.prepare("PRAGMA user_version").get() as Json).user_version;

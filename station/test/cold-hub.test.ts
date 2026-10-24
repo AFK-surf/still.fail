@@ -167,6 +167,31 @@ test("the auto-archive timer does not sweep previously archived workspaces", asy
   await r.close();
 });
 
+test("the Rust station's transcript copies are let go once the transcripts are packed, the workspace left as it is", { skip: process.platform === "win32" && "no station there ever left these copies" }, async () => {
+  const [r, cold] = coldRig();
+  const { key } = await idleSession(r);
+  const workspace = r.session(key).workspace;
+  mkdirSync(join(workspace, "node_modules"), { recursive: true });
+  writeFileSync(join(workspace, "source.rs"), "old archive");
+  const transcript = transcriptOf(r, key, '{"type":"user","message":{"content":"history"}}\n');
+  // Archived by the Rust station: its copy made, the transcript and the workspace left as they were.
+  const copy = join(r.store.archiveDir(), "transcripts", `${key}.jsonl.zst`);
+  writeCompressed(copy, "old redundant copy");
+  r.store.setArchived(key, true, MANUAL);
+  // A copy whose session is back in the lists stays.
+  const { key: shown } = await idleSession(r);
+  const shownCopy = join(r.store.archiveDir(), "transcripts", `${shown}.jsonl.zst`);
+  writeCompressed(shownCopy, "another copy");
+  await cold.finishLegacyCopies();
+  assert.ok(!existsSync(transcript) && existsSync(packed(transcript)), "the transcript packed in place");
+  assert.equal(new TranscriptTail("claude", transcript).read()[1][0]!.text, "history");
+  assert.ok(!existsSync(copy), "its copy let go");
+  assert.ok(existsSync(shownCopy));
+  assert.ok(existsSync(join(workspace, "node_modules")) && existsSync(join(workspace, "source.rs")), "the workspace left as it is");
+  assert.ok(!existsSync(workspaceArchive(dirname(workspace))));
+  await r.close();
+});
+
 test("deleting an archived session lets go of the git worktrees it locked and removes its directory", async () => {
   const [r] = coldRig();
   const { key } = await idleSession(r);

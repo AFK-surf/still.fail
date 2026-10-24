@@ -118,7 +118,7 @@ still.fail 直接提供 HTTP MCP，不为每个会话额外起进程：
 
 **归档**
 - 空闲超过 `autoArchiveDays`（默认 1 天）且已结束的会话和对话自动归档（没有在跑、没有待投递、没有停在 block、发起人没有未读、没有单会话连接绑着）；只在 Slack 里的会话空闲超过 `slackArchiveDays`（默认 3 天）时停在 block 也归档；也可以手动归档。
-- 归档的会话从列表隐藏，空闲进程结束，运行时会话记录另存一份 zstd 压缩副本（`archive/transcripts/<key>.jsonl.zst`）；运行时自己目录里的原文件不动。
+- 归档的会话从列表隐藏，空闲进程结束，工作区和运行时会话记录就地压缩（冷存）。Rust 版 station 归档时另存一份压缩副本（`archive/transcripts/<key>.jsonl.zst`）、原文件不动，两份都占盘；station 启动三分钟后把这些会话的记录就地压缩、删掉副本。
 - thread 的会话全部归档后，它的消息照旧留在库里（消息很小，所有对话的消息靠索引一次读完约 10 ms）。以前的 station 会把这样的 thread 写成 `archive/threads/<id>.jsonl.zst` 并从库里删除，每次列表都要读这些文件；station 启动两分钟后把它们分批搬回库里，有人在里面说话或会话重新显示时立刻搬回。
 - 归档满 `archivedWorkspaceDays`（默认 7 天）后，会话工作区只留聊天里发过的文件，其余删掉；执行历史和聊天记录保留。
 - 有人在 thread 里说话，或手动恢复，就恢复成活跃状态。细节见 [station-storage.md](station-storage.md)。
