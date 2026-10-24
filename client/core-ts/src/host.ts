@@ -103,6 +103,10 @@ export interface Host {
   storageGet(key: string): Effect.Effect<Uint8Array | null, HostError>;
   storageSet(key: string, value: Uint8Array): Effect.Effect<void, HostError>;
   storageDelete(key: string): Effect.Effect<void, HostError>;
+  /// Where the value kept under `key` is, as a file of this device's: for what the app reads there itself (a face's
+  /// file given to the system by its path, not carried whole). Null while none is kept; none on a host whose values are
+  /// not files (a web page).
+  storagePath?(key: string): string | null;
 
   /// Values the system keeps sealed (docs/vault.md, "设备上的钥匙"): an app's only (Android's Keystore; the desktop's
   /// Electron safeStorage, its key in the macOS keychain or Windows' DPAPI); a web page has none. `user: true`: reading

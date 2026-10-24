@@ -35,7 +35,8 @@
 //     istream.reset {id, code}
 // And at once (`callSync`, answering {value} or {error}): sql.open {name} → {id} (`:memory:` one in memory);
 //   sql.exec {id, sql}; sql.run {id, sql, params} → changes; sql.all {id, sql, params} → rows (arrays);
-//   sql.close {id}; sql.delete {name}; iroh.endpointId {id}; iroh.addAddr {id, addr};
+//   sql.close {id}; sql.delete {name}; storage.path {key} → the file it is kept in, or null while none is;
+//   iroh.endpointId {id}; iroh.addAddr {id, addr};
 //   iroh.relayStatus {id}; conn.remoteId {id};
 //   conn.closeReason {id}; conn.paths {id}; conn.stats {id}; release {id} (a handle let go); text.collate {names} →
 //   each one's place in the order people read them (the system's collation; a shell without it: an error, and the
@@ -247,6 +248,19 @@ export class BridgeHost implements Host {
   }
   storageDelete(key: string): Effect.Effect<void, HostError> {
     return Effect.asVoid(this.#bridge.call("storage.delete", { key }));
+  }
+  /// The shell's file for a key (`storage.path`), until it says it has none.
+  #paths = true;
+  storagePath(key: string): string | null {
+    if (!this.#paths) return null;
+    try {
+      const path = this.#bridge.sync("storage.path", { key });
+      return typeof path === "string" ? path : null;
+    } catch {
+      // A shell from before it.
+      this.#paths = false;
+      return null;
+    }
   }
 
   secureGet(key: string, opts: { user: boolean; reason?: string }): Effect.Effect<Uint8Array | null, HostError> {
