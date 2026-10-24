@@ -140,6 +140,13 @@ using @sfbase {
   type Workspace,
   writing_add_picked,
   shared_into,
+  opt_text,
+  relaying,
+  relay_open,
+  relay_view,
+  relay_reset,
+  relay_go,
+  relay_connect,
   type FlyingFile,
 }
 
