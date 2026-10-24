@@ -35,4 +35,5 @@ pub fn reset() -> Unit {
   settings_reset()
   places_reset()
   chat_page_reset()
+  usage_reset()
 }

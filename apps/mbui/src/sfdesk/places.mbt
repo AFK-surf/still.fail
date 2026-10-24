@@ -2,7 +2,7 @@
 // ProfilesSidebar; cloud/StationPage.tsx StationsNav, StationRow; ProfilesNav.tsx): Station and Profile each a list of
 // their own in the sidebar (添加 in the band over it), the one picked its page beside it (the first to begin with); 连接
 // and 用量 a page across the pane, no sidebar. The pages themselves are still the settings' package's
-// (@settings.page) but for 连接's (connects.mbt).
+// (@settings.page) but for 连接's and 用量's (connects.mbt, usage.mbt).
 
 ///|
 /// A place of the rail's in the pane: Station's and Profile's the page picked in their list, 连接's its page, the
@@ -16,6 +16,7 @@ fn place_page(c : @ui.Ctx, src : Source, w : Workspace, pages : Pages, place : S
   match place {
     "stations" | "profiles" => place_split(c, src, w, pages, place)
     "connects" => c.box(style=place_across, fn() { connects_page(c, core, here) }) |> ignore
+    "usage" => c.box(style=place_across, fn() { usage_page(c, core, here) }) |> ignore
     _ =>
       c.box(style=place_across, fn() {
         match @settings.route_of(place) {
