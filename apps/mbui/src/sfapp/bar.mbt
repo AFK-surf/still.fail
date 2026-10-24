@@ -1872,11 +1872,6 @@ fn place_page(c : @ui.Ctx, src : Source, w : Workspace, place : String) -> Unit 
 /// (`@settings.root_bar_actions`); frosted over what runs under it, no line under it.
 fn place_top_bar(c : @ui.Ctx, place : String) -> Unit {
   let t = @sf.theme()
-  // the wide frame's page bar (wide_chat.mbt): the rail is the way to the others
-  if wide_on.val {
-    page_bar_wide(c, place_label(place), false, fn() {  }) |> ignore
-    return
-  }
   let actions = @settings.root_bar_actions.val
   @settings.root_bar_actions.val = None
   c.box(w=Fill(1.0), glass=@sf.glass_bar(), fn() {

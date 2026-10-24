@@ -181,21 +181,6 @@ let web_plain_line : Double = web_body * 1.55
 let web_time_line : Double = web_time * 1.65
 
 ///|
-let web_bubble_w : Double = 560.0
-
-///|
-let web_bubble_share : Double = 0.78
-
-///|
-let web_bubble_px : Double = 14.0
-
-///|
-let web_bubble_py : Double = 8.0
-
-///|
-let web_bubble_r : Double = 18.0
-
-///|
 /// A message's picture (Chat.kt MessageAvatar): an agent's maker on the round grey ground, still.fail's mark, or a
 /// person's face.
 fn message_avatar(c : @ui.Ctx, src : Source, m : Message) -> Unit {
@@ -291,19 +276,11 @@ fn said(
   let em = emits_of(ek)
   c.box(w=Fill(1.0), fn() {
     let col = c.box(w=Fill(1.0), gap=4.0, align=AStart, fn() {
-      // an agent of the chat's name opens its card (AgentSheet.kt); in the wide frame its execution history beside the
-      // chat, pressed again in front, closed (the web's chatPage.agent: its history where the page gives no card)
+      // an agent of the chat's name opens its card (AgentSheet.kt)
       let mine = m.by.agent != "" && here.view.agents.iter().any(fn(a) { a.key == m.by.agent })
       let name = c.id("name/" + m.ts)
-      if mine && wide_on.val {
-        c.cursor(name, Hand)
-      }
       if mine && c.clicked(name) {
-        if wide_on.val {
-          side_toggle(ref_of(here), m.by.agent)
-        } else {
-          open_sheet(c, AgentOf(ref_of(here), m.by.agent))
-        }
+        open_sheet(c, AgentOf(ref_of(here), m.by.agent))
       }
       // another chat's agent (session_send): its name opens that chat, by its link (Chat.tsx MessageRow `by.from`)
       let elsewhere = !mine && m.by.from != ""
@@ -343,35 +320,11 @@ fn said(
     // coming out of its agent's avatar (emit.mbt): from 35% at its corner, unrolling from its top
     if emit_goes(em, m.seq) {
       @motion.measure(c, col, "emit-col/" + seq_s(m.seq))
-      emit_out(c, col, em, m.seq, if wide_on.val { -16.0 } else { 12.0 })
+      emit_out(c, col, em, m.seq, 12.0)
     }
-    // the picture over the name's start, or out in the margin before it in the wide frame, held at the list's top as a
-    // long message scrolls past (where a message out of an avatar lands: hidden while the flying one is over it)
+    // the picture over the name's start (where a message out of an avatar lands: hidden while the flying one is over it)
     c.layer(fn() {
-      // one of the chat's agents': in the wide frame its card while the pointer rests on its picture (Chat.tsx
-      // AgentAvatar, AgentHover)
-      let carded_agent = if wide_on.val && m.author_kind == "agent" && m.by.agent != "" {
-        here.view.agents.iter().find_first(fn(a) { a.key == m.by.agent })
-      } else {
-        None
-      }
-      let carded = carded_agent is Some(_)
-      let hid = if carded { c.id("said-avatar/" + m.ts) } else { 0 }
-      let av = said_avatar(c, id=hid, fn() { message_avatar(c, src, m) })
-      if wide_on.val {
-        c.stick(av, wide_avatar_held)
-      }
-      if carded_agent is Some(a) {
-        let station = here.station
-        // (a finger taps the picture for it: it does nothing else)
-        @sfdesk.hover(c, "agent-hover/" + m.ts, hid, tile=true, tap=true, fn() {
-          match agent_json((src.topic)("chat", chat_params(ref_of(here))).value, a.key) {
-            Some(j) => @sfdesk.agent_card(c, src, station, j)
-            None => ()
-          }
-        })
-        |> ignore
-      }
+      let av = said_avatar(c, fn() { message_avatar(c, src, m) })
       if emit_goes(em, m.seq) {
         @motion.measure(c, av, "emit-landing/" + ek + "/" + seq_s(m.seq))
         if emit_emitting(em, m.seq) {
@@ -444,14 +397,11 @@ fn said_avatar(c : @ui.Ctx, body : () -> Unit, id? : Int = 0) -> Int {
 let wide_avatar_out : Double = 29.0
 
 ///|
-let wide_avatar_held : Double = wide_bar_h + 8.0
-
-///|
 /// A spinner and a word, small, under a message of the viewer's (Chat.kt UnderWay).
 fn under_way(c : @ui.Ctx, words : String) -> Unit {
   c.box(dir=Row, gap=5.0, align=ACenter, fn() {
     @sf.spinner(c, size=12.0) |> ignore
-    c.text(words, size=if wide_on.val { web_time } else { 10.0 }, color=ink().muted, wrap=false, line=16.0) |> ignore
+    c.text(words, size=10.0, color=ink().muted, wrap=false, line=16.0) |> ignore
   })
   |> ignore
 }
@@ -483,8 +433,8 @@ fn blocked_line(c : @ui.Ctx, src : Source, station : String, b : Install) -> Uni
       _ => ""
     }
     let note = if b.note != "" && b.action == "" { " · " + b.note } else { "" }
-    // (a time's size: 10, the wide screen's 11)
-    let size = if wide_on.val { web_time } else { 10.0 }
+    // (a time's size: 10)
+    let size = 10.0
     c.text(b.title + pct + note, size~, color~, line=16.0) |> ignore
     if b.action != "" {
       c.text("·", size~, color=ink().muted, wrap=false, line=16.0) |> ignore
@@ -633,11 +583,7 @@ fn pill_words(c : @ui.Ctx, words : String, color : Int64) -> Unit {
 /// A notice's words: 15 on a message's line (Chat.kt SystemNotice); in the wide frame the web's Markdown, 14 on 1.65
 /// (Chat.css.ts msgSystemBox's `.markdown`).
 fn notice_type() -> (Double, Double) {
-  if wide_on.val {
-    (web_body, web_body * 1.65)
-  } else {
-    (15.0, 24.75)
-  }
+  (15.0, 24.75)
 }
 
 ///|
@@ -756,18 +702,18 @@ fn bubble(c : @ui.Ctx, words : String, ts : String) -> Unit {
   // (the web's on a desktop's width: chat.css.ts msgMine msgBubble, 78% of the column and 560 at most, 8 by 14 in, 18
   // round)
   let b = c.box(
-    max_w=if wide_on.val { dmin(c.width * web_bubble_share, web_bubble_w) } else { c.width - 36.0 },
-    padx=if wide_on.val { web_bubble_px } else { 14.0 },
-    pady=if wide_on.val { web_bubble_py } else { 8.0 },
-    radius=if wide_on.val { web_bubble_r } else { 18.0 },
+    max_w=c.width - 36.0,
+    padx=14.0,
+    pady=8.0,
+    radius=18.0,
     bg=@sf.alpha(neutral, ground),
     fn() {
     c.rich(
       @sf.found_weight(ref_runs(words), found_words_of(ts)),
       key="bubble/" + ts,
-      size=if wide_on.val { web_body } else { 16.0 },
+      size=16.0,
       color=k.text,
-      line=if wide_on.val { web_plain_line } else { 21.0 },
+      line=21.0,
       // (SendTextStyle's lines: a TextStyle of its own, no LineHeightStyle)
       trim=true,
       link_color=t.p.blue,
@@ -832,7 +778,7 @@ fn agent_words(
         m.text,
         tree=m.md,
         key="md/" + m.ts,
-        size=if wide_on.val { web_body } else { 15.0 },
+        size=15.0,
         ink=ink().text,
         on_link=fn(h) {
           // a link within a sentence to a file it places, by the file's name as written or escaped (Markdown.kt
@@ -989,11 +935,7 @@ fn quote_cards(
 /// A quote card's words: the passage's size and line (13 on 19.5; the wide screen's 12 on 18, Chat.css.ts
 /// quoteCardText), and what was said about it, on lines 1.5 its size (15; the wide screen's 13: quoteCardComment).
 fn quote_type() -> (Double, Double, Double) {
-  if wide_on.val {
-    (12.0, 18.0, 13.0)
-  } else {
-    (13.0, 19.5, 15.0)
-  }
+  (13.0, 19.5, 15.0)
 }
 
 ///|
@@ -1226,10 +1168,6 @@ fn file_item(
       // where it is, for the viewer to fly from and back into (preview.mbt); hidden while the viewer is its picture
       let thumb = here.station + "/" + owner_of(here, a) + "/" + a.path
       note_thumb(c, thumb, open, file_corner(), letterbox~)
-      // right clicked in the wide frame: 复制图片 (sfdesk/context_menu.mbt)
-      if wide_on.val {
-        @sfdesk.context_image(c, open, key)
-      }
       // held long where the list quotes: quoted, the press its (lifting it opens nothing), once a press
       match quote {
         Some(q) => {
@@ -1244,14 +1182,8 @@ fn file_item(
         }
         None => ()
       }
-      if wide_on.val {
-        c.cursor(open, Hand)
-      }
-      c.box(w=Px(w), h=Px(h), radius=file_corner(), clip=true, bg=if wide_on.val { t.p.neutral_bg } else { t.p.chip }, id=open, opacity=thumb_shows(thumb), fn() {
-        if key != "" && key != "!" && wide_on.val && sent is None {
-          // brought in as the web's: brushed in from its top, blurred to sharp (image_reveal)
-          @sfdesk.image_reveal(c, key, w, h, if letterbox { FitContain } else { FitCover }, a.thumbhash)
-        } else if key != "" && key != "!" {
+      c.box(w=Px(w), h=Px(h), radius=file_corner(), clip=true, bg=t.p.chip, id=open, opacity=thumb_shows(thumb), fn() {
+        if key != "" && key != "!" {
           c.image(
             key,
             w=Px(w),
@@ -1502,11 +1434,7 @@ let no_preview_words : @ui.TextStyle = @ui.text_style(size=Xs, color=Muted, wrap
 ///|
 /// A message's pictures' corner: 10 (ChatFiles.kt), the wide screen's as its file cards' (message_file_corner).
 fn file_corner() -> Double {
-  if wide_on.val {
-    message_file_corner
-  } else {
-    10.0
-  }
+  10.0
 }
 
 ///|
@@ -1665,7 +1593,7 @@ fn decision_under(
           Some({ assignee_text: Some(a), .. }) => quiet(a)
           _ => ()
         }
-        c.box(style=if wide_on.val { options_room_wide } else { options_room }, fn() {
+        c.box(style=options_room, fn() {
           match m.card {
             // an agent's request for a vault item: approved here (Vault.kt), not answered in the chat
             Some({ vault, assignee, .. }) if vault != "" => {
@@ -1730,19 +1658,10 @@ fn decision_under(
 let options_room : @ui.Style = @ui.css("w=Full pt=S1_5")
 
 ///|
-/// In the wide frame 8 over them (Decisions.css.ts options: margin-top 8).
-// kept across runs: a value (no field of it changes)
-let options_room_wide : @ui.Style = @ui.css("w=Full pt=S2 align=AStart")
-
-///|
 /// The quiet line over or in place of a post's options (who decides, how it went): 13 on 19 (Decisions.kt); the wide
 /// frame's 12 on 18 (Decisions.css.ts settledLine).
 fn quiet_type() -> (Double, Double) {
-  if wide_on.val {
-    (12.0, 18.0)
-  } else {
-    (13.0, 19.0)
-  }
+  (13.0, 19.0)
 }
 
 ///|
@@ -1770,7 +1689,6 @@ fn decision_options(
     enabled,
     at(busy),
     chosen=at(chosen),
-    wide=wide_on.val,
     room=c.width - 2.0 * row_side(c),
   )
   match picked {
