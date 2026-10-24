@@ -5,7 +5,9 @@
 //     apk lock APP.json             its dependencies (APP.json's "lock": group:artifact:version[:classifier] a line) fetched once
 //                                   and their SHA-256 written beside each, so builds take those bytes and no others
 //     apk build APP.json --variant V --version-code N --version-name S --out APP.apk
-//                                   [--abi arm64-v8a] [--keystore PATH]
+//                                   [--abi arm64-v8a] [--keystore PATH] [--dex-only]
+//                                   (--dex-only: up to its dex, kept for the build after it: begun beside what
+//                                   the build packs, android.sh)
 //     apk fetch PATH SHA256         a file of the Maven repositories (its path in one), checked, kept: its local path
 //
 // APP.json (paths relative to it): "namespace" (its Java package, R's), "applicationId", "minSdk", "targetSdk",
@@ -644,6 +646,7 @@ priv struct BuildArgs {
   out : String
   abi : String
   keystore : String
+  dex_only : Bool
 }
 
 ///|
@@ -867,6 +870,13 @@ fn cmd_build(a : BuildArgs) -> Unit {
     }
     t = lap("dependencies dexed", t)
   }
+  // (--dex-only: no further: its dex is kept, and the build after it, with the app's native libraries and assets
+  // made meanwhile, finds it there)
+  if a.dex_only {
+    ignore(try_sh("rm -rf " + q(work)))
+    say("dex of \{a.variant} in \{secs(now_s() - t0)} s: " + times.map(fn(x) { "\{x.0} \{secs(x.1)} s" }).join(", "))
+    return
+  }
   // the APK: what aapt2 linked, the dex (stored), the native libraries (compressed), the assets, the jars' resources
   let unsigned = @sys.join(work, "unsigned.apk")
   ignore(sh("cp " + q(ap) + " " + q(unsigned), "cp"))
@@ -998,6 +1008,7 @@ fn main {
           out,
           abi: opt("--abi", ""),
           keystore: opt("--keystore", ""),
+          dex_only: rest.contains("--dex-only"),
         })
         0
       }
