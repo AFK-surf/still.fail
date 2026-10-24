@@ -21,4 +21,37 @@ reject RELEASE_SHA=aaaaaaa
 reject RELEASE_SHA=bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
 reject GITHUB_SHA=bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
 reject RELEASE_SHA='$(echo unsafe)'
-echo 'TestFlight input guards: passed (offline only)'
+# A real shallow checkout and local file remote: no GitHub or Apple requests.
+ROOT=$(mktemp -d)
+trap 'rm -rf "$ROOT"' EXIT
+git init -q -b codex/testflight-fixture "$ROOT/origin"
+git -C "$ROOT/origin" config user.name 'TestFlight guard test'
+git -C "$ROOT/origin" config user.email 'testflight-guard@example.invalid'
+git -C "$ROOT/origin" config commit.gpgsign false
+git -C "$ROOT/origin" commit -q --allow-empty -m first
+first=$(git -C "$ROOT/origin" rev-parse HEAD)
+git -C "$ROOT/origin" update-ref refs/heads/main "$first"
+git clone -q --depth 1 --branch main "file://$ROOT/origin" "$ROOT/checkout"
+export RELEASE_SHA=$first GITHUB_SHA=$first
+checkout_pass() { (cd "$ROOT/checkout" && bash "$D/testflight-guard.sh" checkout) > /dev/null 2>&1; }
+checkout_reject() {
+  if checkout_pass; then echo 'unexpected checkout acceptance' >&2; exit 1; fi
+}
+checkout_pass
+git -C "$ROOT/origin" commit -q --allow-empty -m forward
+forward=$(git -C "$ROOT/origin" rev-parse HEAD)
+git -C "$ROOT/origin" update-ref refs/heads/main "$forward"
+# main moves, but the tested checkout stays pinned to the dispatch commit.
+checkout_pass
+[ "$(git -C "$ROOT/checkout" rev-parse HEAD)" = "$first" ]
+git -C "$ROOT/checkout" checkout -q --detach "$forward"
+checkout_reject # a different checkout must not be signed
+export RELEASE_SHA=$forward GITHUB_SHA=$forward
+checkout_pass
+git -C "$ROOT/origin" update-ref refs/heads/main "$first"
+checkout_reject # main rolled back and removed the approved commit
+git -C "$ROOT/origin" checkout -q --orphan codex/unrelated
+git -C "$ROOT/origin" commit -q --allow-empty -m unrelated
+git -C "$ROOT/origin" update-ref refs/heads/main HEAD
+checkout_reject # unrelated replacement history cannot authorize a release
+echo 'TestFlight input and pinned-main guards: passed (offline only)'

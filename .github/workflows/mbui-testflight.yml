@@ -3,7 +3,7 @@ on:
   workflow_dispatch:
     inputs:
       sha:
-        description: Full current main SHA to test and release
+        description: Full main SHA captured by this manual dispatch (tested and released unchanged)
         required: true
         type: string
       version:

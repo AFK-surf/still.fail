@@ -15,7 +15,9 @@ case ${1:-inputs} in
   checkout)
     [ "$(git rev-parse HEAD)" = "$RELEASE_SHA" ] || fail 'checkout differs from approved SHA'
     git fetch --no-tags origin main
-    [ "$(git rev-parse FETCH_HEAD)" = "$RELEASE_SHA" ] || fail 'main moved; dispatch and approve the new SHA'
+    # GITHUB_SHA above proves this was main's head at dispatch. Keep building that
+    # exact commit while main advances; reject it if main no longer contains it.
+    git merge-base --is-ancestor "$RELEASE_SHA" FETCH_HEAD || fail 'approved SHA is no longer in main history'
     ;;
   *) fail 'expected inputs or checkout' ;;
 esac
