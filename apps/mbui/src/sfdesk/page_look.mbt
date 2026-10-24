@@ -483,6 +483,7 @@ pub fn back_label(p : Page) -> String {
     Setting(Route::Memories) => @sf.t("web-pages.settings.memory.title")
     Setting(Route::AutoDecisions) => @sf.t("web-pages.automaticDecisions.title")
     Setting(Route::Archiving) => @sf.t("web-pages.archiving.title")
+    Setting(Route::Shortcuts) => @sf.t("web-main.shortcuts.title")
     Setting(Route::Usage) => @sf.t("web-pages.settings.nav.usage")
     Place("usage") => @sf.t("web-pages.settings.nav.usage")
     _ => @sf.t("common.back")

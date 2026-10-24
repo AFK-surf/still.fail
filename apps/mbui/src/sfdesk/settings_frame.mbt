@@ -47,7 +47,6 @@ fn setting_page(c : @ui.Ctx, src : Source, w : Workspace, route : Route) -> Unit
     MemoryDoc(a, skill, at) => memory_doc_page(c, core, a, skill, at)
     AutoCompletion => completion_page(c, core, here)
     AutoPolicy(s) => policy_page(c, core, here, s)
-    Shortcuts => shortcuts_page(c, core)
     LocalStation => local_station_page(c, core)
     _ => @settings.page(c, core, here, route)
   }
@@ -58,7 +57,7 @@ fn setting_page(c : @ui.Ctx, src : Source, w : Workspace, route : Route) -> Unit
 /// frame's pane: back, the room over and under it). False for a route whose pages are not one yet (its frame draws its
 /// own copy).
 pub fn setting_route(c : @ui.Ctx, src : Source, w : Workspace, route : Route, frame : PageFrame) -> Bool {
-  if !(route is (About | Changelog | Memories | Memory(_) | AutoDecisions | Permissions | Version | UsagePrices(_) | Usage | Archiving | StationArchiving(_) | Notifications | PickModels(_, _) | ProfileModels(_, _))) {
+  if !(route is (About | Changelog | Memories | Memory(_) | AutoDecisions | Permissions | Version | UsagePrices(_) | Usage | Archiving | StationArchiving(_) | Notifications | PickModels(_, _) | ProfileModels(_, _) | Shortcuts)) {
     return false
   }
   let core = settings_core(src, w)
@@ -79,6 +78,7 @@ pub fn setting_route(c : @ui.Ctx, src : Source, w : Workspace, route : Route, fr
     Notifications => notify_page(c, core, here, frame)
     PickModels(a, id) => pick_models_page(c, core, here, frame, a, id)
     ProfileModels(a, id) => profile_models_page(c, core, here, frame, a, id)
+    Shortcuts => shortcuts_page(c, core, frame)
     _ => ()
   }
   true
