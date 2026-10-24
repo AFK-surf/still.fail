@@ -9,7 +9,7 @@
 
 ///|
 // kept across runs: a table, never written
-let menu_zh : Map[String, String] = {
+pub let menu_zh : Map[String, String] = {
   "desktop.menu.about": "关于 {app}",
   "desktop.menu.checkUpdates": "检查更新…",
   "desktop.menu.settings": "设置…",
@@ -49,21 +49,22 @@ let menu_zh : Map[String, String] = {
 
 ///|
 fn menu_tr(key : String) -> String {
-  match english(key) {
-    Some(s) => s
-    // (the editing items' words are the context menu's: strings_wide.mbt)
-    None => menu_zh.get(key).unwrap_or(tr(key))
+  // (the app's words first, as its tables have them: English, the editing items' the context menu's; else the menu's)
+  let w = @sf.t(key)
+  if w != key {
+    return w
   }
+  menu_zh.get(key).unwrap_or(key)
 }
 
 ///|
 /// What the menu bar was last given for ("": not yet): its language, whether a chat was open, the keys changed here.
-let menu_bar_given : Ref[String] = Ref("")
+pub let menu_bar_given : Ref[String] = Ref("")
 
 ///|
 /// The menu bar, as JSON (@hostapi.menu_setup's): `prefs` the core's (the keys changed in 快捷键), `in_chat` whether a chat
 /// is open (its actions can be done).
-fn menu_bar_json(prefs : Json?, in_chat : Bool) -> String {
+pub fn menu_bar_json(prefs : Json?, in_chat : Bool) -> String {
   let role = fn(key : String, role : String) -> Json {
     { "title": Json::string(menu_tr(key)), "role": Json::string(role) }
   }
@@ -156,7 +157,7 @@ fn menu_bar_json(prefs : Json?, in_chat : Bool) -> String {
 ///|
 /// Each frame: the menu bar given to the host once the frame is built, and again as what it shows changes (the
 /// language, the keys, a chat open or not).
-fn menu_bar(c : @ui.Ctx, src : Source) -> Unit {
+pub fn menu_bar(c : @ui.Ctx, src : Source) -> Unit {
   let prefs = (src.topic)("prefs", {}).value
   let in_chat = app.nav.top() is Chat(_)
   let keys = match field(prefs, "keys") {

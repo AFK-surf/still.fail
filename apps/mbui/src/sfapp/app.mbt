@@ -31,13 +31,8 @@ fn reset() -> Unit {
   felt_past.clear()
   felt_holds.clear()
   image_quoted_at.val = -1
-  attention.told = false
   bar_glyph.val = None
   bar_stations_said.val = ""
-  attention.visible = false
-  attention.focused = false
-  attention.workspace = ""
-  attention.src = None
   // the stack and what the app keeps of it (src/sfbase)
   @sfbase.reset()
   // the desktop's own (src/sfdesk)
@@ -90,7 +85,6 @@ fn reset() -> Unit {
   share_in.error = ""
   share_in.query = ""
   share_in.find.set("")
-  share_over.val = false
   share_closing.val = false
   splash_waited.val = false
   drafts.clear()
@@ -122,16 +116,13 @@ fn reset() -> Unit {
   find_marking.val = []
   search_reset()
   ask_turns.clear()
-  links_reset()
   wide_reset()
+  invite_reset()
   // the library's viewers: the texts read, the films played, a desktop's player's 选集 and the pointer it last saw
   @sf.viewer_reset()
   // the menu open (@sf.menu_of, context_items)
   @sf.parts_reset()
-  badge_told.val = -1
   // the menu bar given (menu_bar.mbt)
-  menu_bar_given.val = ""
-  dock_reset()
   // the made-up chats and their station (chat_fixture.mbt, service_fixture.mbt, drive_fixture.mbt)
   kept_chats.clear()
   fixture_pictures.clear()
@@ -143,8 +134,6 @@ fn reset() -> Unit {
   fix_stream_ids.val = 0
   // Home (home.mbt), the host told (above), a chat's page and what is in it
   marks_seen.clear()
-  told_bars.val = None
-  told_dark.val = None
   flying.val = None
   opened_notices.clear()
   tool_parts.clear()
@@ -170,6 +159,13 @@ fn reset() -> Unit {
   fix_fetches.clear()
   // a drive's files, a text read (keep.mbt, drive_reader.mbt)
   reset_by_hand.val = true
+}
+
+///|
+/// What the app's own doings ask of the pages (sfbase shell.mbt): home and what is over the pages put their sheets
+/// down too, an invitation's link shows its sheet, the screens live in their cards stop as the app goes behind.
+fn pages_shell() -> Shell {
+  { home, close_overlays, open_invite, behind: peeks_stop_all }
 }
 
 ///|
@@ -206,11 +202,12 @@ fn pages_left(src : Source) -> Unit {
 /// The app over `src`: call each frame.
 pub fn view(c : @ui.Ctx, src : Source) -> Unit {
   fix_ctx.val = Some(c)
+  shell.val = pages_shell()
   // the Mac's menu bar, in the app's words (menu_bar.mbt); an item of the pages' chosen is read as its keys by the
   // frame after the menu said it (@settings.ask_action), and asked no more once that frame is built
   menu_bar(c, src)
   c.after_build("menu-asked", fn() { @settings.action_asked_done() })
-  appearance(src)
+  appearance(src, page_dark(src))
   faces(src, @sfdesk.is_wide(c))
   // pictures put up by their address come as the core gives them (a GIF among them moves)
   @sf.picture_of.val = fn(url, frame) { (src.picture)(url, frame) }
@@ -283,32 +280,13 @@ fn view_in(c : @ui.Ctx, src : Source, t : @sf.Theme) -> Unit {
 }
 
 ///|
-/// The number last put on the app's icon (-1 none yet).
-let badge_told : Ref[Int] = Ref(-1)
-
-///|
 /// Signed in: the workspace in view (the one switched to, else the one last open, else the first once every account
 /// has answered), its Home at the root of the pages; the splash while none is known yet, and a page that says so when
 /// there is none.
 fn signed_in(c : @ui.Ctx, src : Source) -> Unit {
   let t = @sf.theme()
   let ws = (src.topic)("workspaces", {})
-  let prefs = (src.topic)("prefs", {})
-  let (all, answered, invited) = workspaces_of(ws.value)
-  let kept = if app.picked != "" {
-    app.picked
-  } else {
-    text(prefs.value, "workspace")
-  }
-  let current = match all.iter().find_first(fn(w) { w.id == kept }) {
-    Some(w) => Some(w)
-    None =>
-      if all.length() > 0 && (kept == "" || answered) {
-        Some(all[0])
-      } else {
-        None
-      }
-  }
+  let (current, all, answered, invited) = workspace_in_view(src)
   match current {
     Some(w) => {
       // (told once the frame's builds are over, as the last saw the app and the workspace)
@@ -318,25 +296,10 @@ fn signed_in(c : @ui.Ctx, src : Source) -> Unit {
       c.after_build("notices", fn() { notices_frame(src, w) })
       // the core and the workspace links are opened against, as the frame ends (links.mbt)
       c.after_build("links", fn() { links_frame(src, w) })
-      // the number on the app's icon (the desktop app's followBadge): the core's badge, else what is wrong and what
-      // waits in every workspace; told as it changes
-      let marks = (src.topic)("workspaceMarks", { "workspace": Json::string(w.id) }).value
-      let badge = match field(marks, "badge") {
-        Some(Number(_, ..)) => count(marks, "badge")
-        _ =>
-          match field(marks, "workspaces") {
-            Some(Object(m)) => m.values().fold(init=0, fn(n, x) { n + count(Some(x), "alert") + count(Some(x), "wait") })
-            _ => 0
-          }
-      }
+      // the number on the app's icon (app_frame.mbt)
+      badge_frame(c, src, w)
       // the desktop's dock (dock.mbt): every workspace's chats that want the person, on the screen's edge
       dock_frame(c, src, all)
-      if marks is Some(_) && badge != badge_told.val {
-        c.after_build("badge", fn() {
-          badge_told.val = badge
-          @ui.set_badge(badge)
-        })
-      }
       // a link the system opened the app with, told once: what the core says of it shown by the frame after (Ctx::tell)
       if !link_later.is_empty() {
         c.tell("links-given", fn() { links_given(src) })
@@ -631,44 +594,6 @@ fn place_switch(c : @ui.Ctx) -> @motion.Anim {
 }
 
 ///|
-/// Light or dark, as this device is set (the prefs' `appearance`, Appearance.kt), or as the system is (@hostapi.system_dark)
-/// when it follows it; the host told when it changes (its bars follow).
-fn appearance(src : Source) -> Unit {
-  let prefs = (src.topic)("prefs", {}).value
-  // the words' language too, the core's (its `lang`: as chosen, else the device's), I18n.kt's follow
-  @sf.set_language(if prefs is Some(_) { Some(text(prefs, "lang")) } else { None })
-  let dark = @settings.dark(prefs, @ui.system_dark())
-  @sf.set_dark(Some(dark))
-  // (the host told once the prefs are read: not the system's first, then the one chosen)
-  if prefs is Some(_) && told_dark.val != Some(dark) {
-    told_dark.val = Some(dark)
-    // (said on the log for scripted runs: e2e/flows checks the theme was taken)
-    @hostapi.log(if dark { "theme: dark" } else { "theme: light" })
-  }
-  // the system bars follow the page under them: the player's and a picture's or a video's in the viewer are dark
-  // whatever the theme, a reader's as dark as its paper
-  let bars = match page_dark(src) {
-    Some(d) => d
-    None => dark
-  }
-  // (told once the frame's builds are over, as the last saw the page)
-  if prefs is Some(_) && told_bars.val != Some(bars) {
-    @ui.current().after_build("bars", fn() {
-      if told_bars.val != Some(bars) {
-        told_bars.val = Some(bars)
-        @hostapi.set_dark(bars)
-      }
-    })
-  }
-}
-
-///|
-let told_bars : Ref[Bool?] = Ref(None)
-
-///|
-let told_dark : Ref[Bool?] = Ref(None)
-
-///|
 /// What a write said (Sheet.kt ToastHost), mbui's toast (@kit.toaster) in still.fail's look: over the foot, clear of
 /// the bar and the action standing over it (bar_room above it), in ink, 2.6 s (paused while the pointer is on it),
 /// coming in and going out; one said again is a new one.
@@ -896,128 +821,6 @@ fn dmax(a : Double, b : Double) -> Double {
 }
 
 ///|
-/// What this app last told the core of its attention (`client.focus`): shown, in front, the workspace in view; and
-/// where to tell it again when the system says the app left the front between frames.
-priv struct Attention {
-  mut told : Bool
-  mut visible : Bool
-  mut focused : Bool
-  mut workspace : String
-  mut src : Source?
-}
-
-///|
-let attention : Attention = {
-  told: false,
-  visible: false,
-  focused: false,
-  workspace: "",
-  src: None,
-}
-
-///|
-/// Tells the core where this app's attention is, as the Android app's activity and App.kt do: shown and in front or
-/// not (`client.focus {visible, focused}`, as the system says: @ui.app_visible, app_focused) and the workspace in view
-/// (`workspace`); a chat's own place (`chat`, `left`) is chat.mbt's. Only a change is told. What is read follows from
-/// it: the core marks a chat read only while a page in view (visible) shows its end, and shows no notice of a chat
-/// one in front shows.
-fn attend(src : Source, workspace : String) -> Unit {
-  if attention.src is None {
-    // the system's say between frames (Android's activity pausing: no frame comes after it)
-    @ui.on_app_change(fn(_, _) {
-      match attention.src {
-        Some(s) => {
-          attend(s, attention.workspace)
-          // the screens live in their cards stopped as the app goes behind (ScreenLinks.kt Peek: under STARTED)
-          if !@ui.app_visible() {
-            peeks_stop_all(s)
-          }
-        }
-        None => ()
-      }
-      notices_app_change(@ui.app_visible())
-    })
-  }
-  attention.src = Some(src)
-  let visible = @ui.app_visible()
-  let focused = @ui.app_focused()
-  if attention.told &&
-    visible == attention.visible &&
-    focused == attention.focused &&
-    workspace == attention.workspace {
-    return
-  }
-  attention.told = true
-  attention.visible = visible
-  attention.focused = focused
-  attention.workspace = workspace
-  let params : Map[String, Json] = {
-    "visible": Json::boolean(visible),
-    "focused": Json::boolean(focused),
-    "workspace": Json::string(workspace),
-  }
-  (src.call)("client.focus", Json::object(params), fn(_) {  })
-}
-
-///|
-/// What the system said between frames (@hostapi.system_channel; its handler set as the package starts, before the first
-/// frame takes what came with the app's start), to the core: back on screen after `away` ms off it, the
-/// core gives up requests that went out before and reconnects links gone quiet (MainActivity.kt wake: `client.wake
-/// {away}`, client/core-ts src/wake.ts), and a newer build is asked for again (onStart's checkUpdates); the default
-/// network changed, every link it had is taken for dead (NetworkWatch: `client.wake {away: 0, network: true}`).
-fn system_said(json : String) -> Unit {
-  let said = @hostapi.system_said(json)
-  for s in said {
-    match s {
-      // a link the system opened the app with (links.mbt): opened once the app can (signed in, its workspace known)
-      Link(url) => link_later.push(app_link(url))
-      // shown over another app, or in its own window again (share.mbt)
-      Over(over) => share_over.val = over
-      // (how far the bars reach in over the view: mbui keeps it, @ui.system_bars, bars.mbt)
-      _ => ()
-    }
-  }
-  let src = match attention.src {
-    Some(s) => s
-    None => return
-  }
-  if src.read_only {
-    return
-  }
-  for s in said {
-    match s {
-      Shown(away~) => {
-        (src.call)("client.wake", { "away": Json::number(away) }, fn(_) {  })
-        update_check(src, false)
-      }
-      // 检查更新 from the menu bar (menu_bar.mbt)
-      Menu("update.check") => update_from_menu(src)
-      // one of the pages' actions from the menu bar: as its keys pressed (keymap.mbt action_pressed)
-      Menu(action) => @settings.ask_action(action)
-      // a package handed to the system's installer could not be installed (FilePreview.kt install's toast)
-      InstallAllow(..) => toast_later(pv_fill("android-chat.file.allowInstall", [("app", "still.fail")]))
-      InstallFailed(error~, ..) => toast_later(pv_fill("android-chat.file.installFailed", [("error", error)]))
-      Network =>
-        (src.call)(
-          "client.wake",
-          { "away": Json::number(0.0), "network": Json::boolean(true) },
-          fn(_) {  },
-        )
-      _ => ()
-    }
-  }
-}
-
-///|
-/// The system's say has its handler before the first frame (what is posted as the app starts, a link it was opened
-/// with, would be left with none).
-fn init {
-  @ui.on_message(@hostapi.system_channel, fn(json, _) { system_said(json) })
-  // what the phone has for 共享调试, as its host says by itself (the app's Android: AdbShare.java)
-  @ui.on_message("native:adb.phone", fn(json, _) { @settings.adb_phone_said(json) })
-}
-
-///|
 /// How long a page opening waits for what the core has on the device (App.kt LOCAL_MS, the library's: motion.ts): never
 /// for a station.
 let page_local_ms : Double = @sf.local_ms
@@ -1032,20 +835,6 @@ fn page_ready(src : Source, p : Page) -> Bool {
     History(r, key, _) => answered((src.topic)("chat", chat_params(r))) && answered((src.topic)("history", history_params(r, key)))
     _ => true
   }
-}
-
-///|
-/// A link the system opened the app with, as the core reads it (`link.parse`): one of still.fail's desktop app's own
-/// (stillfail://, ember://, stillfail-beta://: …//o/<workspace>/<station>/<chat>, as the web's /o/ page hands an item
-/// to that app, which this one takes as it is built in its place: scripts/mac-app.sh) as the same page's on the
-/// cloud; any other as it is.
-fn app_link(url : String) -> String {
-  for scheme in ["stillfail://", "ember://", "stillfail-beta://"] {
-    if url.has_prefix(scheme) {
-      return "\{cloud_origin()}/\{url.view(start_offset=scheme.length())}"
-    }
-  }
-  url
 }
 
 ///|

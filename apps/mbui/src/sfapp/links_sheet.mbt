@@ -331,3 +331,15 @@ fn accept_invite(src : Source, token : String, sub : String, name : String) -> U
     }
   })
 }
+
+///|
+/// The sheets and the menus over the pages closed, as a page opens from a link (AppState: sheet, menu null).
+fn close_overlays() -> Unit {
+  lower_sheet()
+  app.menu = false
+  match dui.sheet {
+    Some(s) => dui.leaving = Some(s)
+    None => ()
+  }
+  dui.sheet = None
+}

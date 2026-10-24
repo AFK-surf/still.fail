@@ -2,6 +2,8 @@
 test "the menu bar: the system's menus, the pages' actions with their keys here, 检查更新 the app's own, in the app's words" {
   // the core's keymap (the fixture's: keymap_fixture.mbt), keys changed here or none
   let prefs = fn(changed : Map[String, Array[String]]) -> Json? { Some({ "keymap": fixture_keymap(changed) }) }
+  // (the app's words, as it says them as it starts)
+  @sf.set_words(fill)
   let zh = menu_bar_json(prefs({}), false)
   assert_true(zh.contains("{\"title\":\"退出 {app}\",\"role\":\"quit\"}"))
   assert_true(zh.contains("{\"title\":\"检查更新…\",\"action\":\"update.check\"}"))

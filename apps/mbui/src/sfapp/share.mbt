@@ -94,9 +94,6 @@ let share_in : ShareIn = {
   find: @ui.Field::new(),
 }
 
-///|
-/// Shown over another app (the host's say, @hostapi.system_channel `over`): only the share sheet is drawn.
-let share_over : Ref[Bool] = Ref(false)
 
 
 ///|

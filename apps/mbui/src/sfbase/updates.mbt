@@ -260,3 +260,16 @@ pub fn update_row_tapped(src : Source) -> Unit {
     }
   }
 }
+
+///|
+/// 检查更新 chosen in the menu bar (menu_bar.mbt), as the desktop app's checkFromMenu: the settings' 版本 page
+/// opened, where how it goes is shown and a newer build is offered (更新到 …), and still.fail cloud asked now unless
+/// one is known already (what it says, 已是最新 or why it failed, said as the row's tap says it).
+pub fn update_from_menu(src : Source) -> Unit {
+  if !(app.nav.top() is Setting(@settings.Route::Version)) {
+    open_setting("version")
+  }
+  if update.available is None {
+    update_row_tapped(src)
+  }
+}

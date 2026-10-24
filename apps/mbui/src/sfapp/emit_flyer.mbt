@@ -34,10 +34,3 @@ fn emit_flyer(c : @ui.Ctx, key : String, e : Emits, v : ChatView) -> Unit {
     None => ()
   }
 }
-
-
-///|
-/// Whether the app is shown (what it last told the core: `client.focus`); before it told anything, shown.
-fn app_in_front() -> Bool {
-  !attention.told || attention.visible
-}

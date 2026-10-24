@@ -202,7 +202,7 @@ fn dock_items(ws : String, chats : Json?, decisions : Json?) -> Array[(Json, Doc
 fn dock_words() -> String {
   let words : Map[String, Json] = {}
   for name in ["open", "read", "later", "empty", "waiting", "hide"] {
-    words[name] = Json::string(tr("desktop.dock." + name))
+    words[name] = Json::string(@sf.t("desktop.dock." + name))
   }
   words["locale"] = Json::string(if @sf.language() == "en" { "en" } else { "zh-Hans" })
   ({ "type": "words", "words": Json::object(words) } : Json).stringify()
@@ -211,7 +211,7 @@ fn dock_words() -> String {
 ///|
 /// Each frame signed in on a Mac with a dock: while it is on, every workspace's chats that want the person (its
 /// kinds), told it as they change, its words and settings as it starts; off, stopped. What it said is done here.
-fn dock_frame(c : @ui.Ctx, src : Source, all : Array[Workspace]) -> Unit {
+pub fn dock_frame(c : @ui.Ctx, src : Source, all : Array[Workspace]) -> Unit {
   if @ui.platform() != 0 || !@ui.dock_available() {
     return
   }
