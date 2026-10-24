@@ -471,6 +471,19 @@ fn Ctx::paint(self : Ctx, i : Int, alpha_in : Double) -> Unit {
     }
     return
   }
+  // its own ground drawn in another box (a shape on its way: draw_ground), what it holds where it is laid out
+  let laid = (n.x, n.y, n.fw, n.fh, n.radius)
+  let ground = self.ground_of(i)
+  match ground {
+    Some((gx, gy, gw, gh, gr)) => {
+      n.x = gx
+      n.y = gy
+      n.fw = gw
+      n.fh = gh
+      n.radius = gr
+    }
+    None => ()
+  }
   match n.glass {
     Some(gl) => self.paint_glass(n, gl, alpha)
     None => ()
@@ -513,6 +526,13 @@ fn Ctx::paint(self : Ctx, i : Int, alpha_in : Double) -> Unit {
       alpha,
     )
     self.notch_last(n)
+  }
+  if ground is Some(_) {
+    n.x = laid.0
+    n.y = laid.1
+    n.fw = laid.2
+    n.fh = laid.3
+    n.radius = laid.4
   }
   if n.hit && n.id != 0 {
     self.push_hit(n.id, dmax(n.x, cx0), dmax(n.y, cy0), dmin(n.x + n.fw, cx1), dmin(n.y + n.fh, cy1))
@@ -659,7 +679,11 @@ fn Ctx::paint(self : Ctx, i : Int, alpha_in : Double) -> Unit {
     pop_clip()
   }
   if border_over {
-    self.emit_rect(n.x, n.y, n.fw, n.fh, n.radius, 0L, n.border_w, n.border_c, alpha)
+    let (bx, by, bw, bh, br) = match ground {
+      Some(g) => g
+      None => (n.x, n.y, n.fw, n.fh, n.radius)
+    }
+    self.emit_rect(bx, by, bw, bh, br, 0L, n.border_w, n.border_c, alpha)
     self.notch_last(n)
   }
 }

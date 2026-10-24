@@ -127,6 +127,9 @@ priv struct Drawn {
   mut bottom : Double
   /// drawn only as its top this tall (-1 whole)
   mut top : Double
+  /// its own ground (its colour, glass, shadow, border and corners) drawn in this box (x, y, w, h, corner) instead of
+  /// where it is laid out: a shape on its way to its new one (motion's reshape); None as laid out
+  mut ground : (Double, Double, Double, Double, Double)?
 }
 
 ///|
@@ -268,7 +271,17 @@ fn Ctx::drawn_of(self : Ctx, i : Int) -> Drawn {
   if dr.stamp[i] == dr.build && dr.at[i] >= 0 {
     return dr.entries[dr.at[i]]
   }
-  let e : Drawn = { node: i, look: still_look, z: 0, only: false, keep: None, keep_rel: -1, bottom: -1.0, top: -1.0 }
+  let e : Drawn = {
+    node: i,
+    look: still_look,
+    z: 0,
+    only: false,
+    keep: None,
+    keep_rel: -1,
+    bottom: -1.0,
+    top: -1.0,
+    ground: None,
+  }
   dr.stamp[i] = dr.build
   dr.at[i] = dr.entries.length()
   dr.entries.push(e)
@@ -339,6 +352,23 @@ pub fn Ctx::put_over(self : Ctx, i : Int, z? : Int = 1) -> Unit {
 /// scrim fading, a menu closing) is one.
 pub fn Ctx::draw_only(self : Ctx, i : Int) -> Unit {
   self.drawn_of(i).only = true
+}
+
+///|
+/// Node `i`'s own ground (its colour, glass, shadow, border and corners) drawn in the box at `x`, `y`, `w` by `h`
+/// with corner `radius` (the window's, before its look), what it holds where it is laid out: a box on its way from the
+/// shape it had to its new one (motion's reshape). Tapped where it is laid out.
+pub fn Ctx::draw_ground(self : Ctx, i : Int, x : Double, y : Double, w : Double, h : Double, radius : Double) -> Unit {
+  self.drawn_of(i).ground = Some((x, y, w, h, radius))
+}
+
+///|
+/// Where node `i`'s own ground is drawn this frame (draw_ground), if elsewhere than where it is laid out.
+fn Ctx::ground_of(self : Ctx, i : Int) -> (Double, Double, Double, Double, Double)? {
+  match self.drawn_entry(i) {
+    Some(e) => e.ground
+    None => None
+  }
 }
 
 ///|
@@ -853,6 +883,12 @@ pub fn Ctx::in_frame(self : Ctx) -> Bool {
 pub fn Ctx::node_rect(self : Ctx, i : Int) -> (Double, Double, Double, Double) {
   let n = self.nodes[i]
   (n.x, n.y, n.fw, n.fh)
+}
+
+///|
+/// Node `i`'s corner as laid out (its radius, no more than half its height for a capsule's).
+pub fn Ctx::node_radius(self : Ctx, i : Int) -> Double {
+  self.nodes[i].radius
 }
 
 ///|
