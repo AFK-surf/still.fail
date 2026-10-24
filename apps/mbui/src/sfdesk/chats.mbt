@@ -414,9 +414,18 @@ fn side_chat_row(
   let kind = c.id("side/kind/" + key)
   let away = c.id("side/away/" + key)
   let archive = c.id("side/archive/" + key)
-  let parts = [id, slot, kind, away]
+  // its state line (ChatMark.tsx WaitingText), the icon leading it in it
+  let line = c.id("side/line/" + key)
+  let parts = [id, slot, kind, away, line]
   c.cursor(id, Hand)
   if parts.iter().any(fn(p) { c.clicked(p) }) && wide.renaming != key {
+    // pressed on its state line while the core says which message that is about, nothing in it unread: its chat goes
+    // there as it opens (ChatMark.tsx jumpFromLine)
+    match item.state_about {
+      Some(seq) if (c.clicked(line) || c.clicked(slot)) && !item.unread && item.thread is Some(_) =>
+        @sfbase.go_to({ station: item.station, session: item.session, title: item.title, station_name: item.station_name }, seq)
+      _ => ()
+    }
     open_row(pages, item)
   }
   let menu = item.offline is None && !item.pending
@@ -517,16 +526,19 @@ fn side_chat_row(
           }
           match state {
             Some(s) =>
-              state_line(
-                c,
-                "side/state/" + key,
-                slot,
-                s,
-                lead=item.state_lead,
-                lead_text=item.state_lead_text,
-                rest=item.state_rest,
-                alert=item.unsent,
-              )
+              c.box(style=side_state, id=line, fn() {
+                state_line(
+                  c,
+                  "side/state/" + key,
+                  slot,
+                  s,
+                  lead=item.state_lead,
+                  lead_text=item.state_lead_text,
+                  rest=item.state_rest,
+                  alert=item.unsent,
+                )
+              })
+              |> ignore
             None => c.text(item.last.unwrap_or(""), style=state_quiet) |> ignore
           }
           if hover {
@@ -613,6 +625,11 @@ let side_title_unread : @ui.TextStyle = @ui.text_style(size=Sm, weight=Medium, c
 ///|
 // kept across runs: a value (no field of it changes)
 let side_dim : @ui.TextStyle = @ui.text_style(color=A(Fg, O50))
+
+///|
+/// (its state line where the core says one: the words pressed for the message it is about)
+// kept across runs: a value (no field of it changes)
+let side_state : @ui.Style = @ui.style(row=true, w=Full, align=ACenter)
 
 ///|
 /// The second line (navSessionMeta: 18 high, 6 apart; offline at half).

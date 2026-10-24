@@ -20,6 +20,8 @@ pub using @sfbase {
   stations_at_glance,
   agent_of,
   app,
+  go_to,
+  go_tos,
   arrangement_none,
   arrangement_of,
   attachment_of,

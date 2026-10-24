@@ -1604,17 +1604,6 @@ fn follow_newest(c : @ui.Ctx, rd : Reading, list : Array[Entry], keys : Array[St
 let follow_margin : Double = 12.0
 
 ///|
-/// The message each chat is to go to once its list is in place (Screen.Chat.at: a notification's), by chat.
-let go_tos : Map[String, Double] = {}
-
-///|
-/// The chat `r`, once open and in place, goes to its message `seq` (the pages before it brought in until it is
-/// there), which flashes (ChatHost.kt goTo).
-fn go_to(r : ChatRef, seq : Double) -> Unit {
-  go_tos[r.station + "\u{1}" + r.session] = seq
-}
-
-///|
 /// A chat opened over Home from the start at its message `seq`, as a notification opens it; `held`: its flash kept at
 /// its peak (screenshots of it).
 pub fn open_chat_at(r : ChatRef, seq : Double, held? : Bool = false) -> Unit {

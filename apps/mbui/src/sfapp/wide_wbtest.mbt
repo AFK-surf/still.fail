@@ -783,12 +783,24 @@ test "wide: files going up are rows of the folder (Drive.tsx UploadRow): how far
 }
 
 ///|
-test "wide: a place of the rail dragged up a place is kept there (prefs.set rails); pressed alone it opens its page" {
+test "wide: a place of the rail pressed with ⌘ held and dragged up a place is kept there (prefs.set rails), ⌘ let go of on the way or not; pressed without it, not moved (Rail.tsx drag)" {
   let calls : Array[Made] = []
   let t = wide_tester(calls)
   let (rx, ry, rw, rh) = t.query(Button, label="文件").unwrap().rect
   let (x, y) = (rx + rw / 2.0, ry + rh / 2.0)
   t.drag(x, y, x, y - @sfdesk.rail_pitch)
+  t.frame()
+  assert_false(
+    named(calls, "prefs.set").iter().any(fn(m) { field(Some(m.params), "rails") is Some(_) }),
+    msg="moved without ⌘",
+  )
+  t.hold_mods(@ui.mod_cmd)
+  t.press_at(x, y)
+  t.hold_mods(0)
+  for k in 1..=10 {
+    t.move(x, y - @sfdesk.rail_pitch * k.to_double() / 10.0)
+  }
+  t.release(x, y - @sfdesk.rail_pitch)
   t.frame()
   let kept = named(calls, "prefs.set")
   assert_true(kept.length() > 0, msg="kept")
@@ -1607,4 +1619,67 @@ test "wide: 文件's Pin 文件夹 is the web's (Drive.tsx useAddFolder, PickerD
   let set = named(calls, "drive.setRoots")
   assert_eq(set.length(), 1)
   assert_eq(text(Some(set[0].params), "station"), "ws1/st1")
+}
+
+///|
+/// `v` with each row of chat `id` given `more` (wherever the view has it).
+fn with_row(v : Json, id : String, more : Map[String, Json]) -> Json {
+  match v {
+    Object(m) => {
+      let out : Map[String, Json] = {}
+      for k, x in m {
+        out[k] = with_row(x, id, more)
+      }
+      if m.get("id") == Some(Json::string(id)) {
+        for k, x in more {
+          out[k] = x
+        }
+      }
+      Json::object(out)
+    }
+    Array(a) => Json::array(a.map(fn(x) { with_row(x, id, more) }))
+    x => x
+  }
+}
+
+///|
+test "wide: a row pressed on its state line while the core says which message that is about opens its chat there, flashing it (ChatMark.tsx jumpFromLine); on its title, where it opens" {
+  reset()
+  let base = fixture("chat")
+  let src : Source = {
+    ..base,
+    topic: fn(name, params) {
+      let r = (base.topic)(name, params)
+      if name != "chats" {
+        return r
+      }
+      match r.value {
+        Some(v) =>
+          {
+            ..r,
+            value: Some(
+              with_row(v, "c1", {
+                "stateText": "等你回复：发布前要不要再跑一遍",
+                "stateAbout": 8,
+              }),
+            ),
+          }
+        None => r
+      }
+    },
+  }
+  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=1280.0, h=800.0, platform=0)
+  t.draw()
+  let rd = readings.get("ws1/st1\u{1}s-c1").unwrap()
+  // its title: the chat as it is
+  let (tx, ty) = t.find("整理发布清单").unwrap()
+  t.tap(tx, ty)
+  t.frame()
+  assert_eq(rd.flash, "")
+  // its state line: the message the state is about, flashing
+  let (lx, ly) = t.find("等你回复：发布前要不要再跑一遍").unwrap()
+  t.tap(lx, ly)
+  t.frame()
+  assert_eq(rd.flash, "ts8")
 }

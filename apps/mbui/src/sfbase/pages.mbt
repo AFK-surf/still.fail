@@ -179,5 +179,7 @@ pub fn reset() -> Unit {
   downloads_reset()
   // what was asked of the core from a button, under way or failed (act.mbt)
   acting_reset()
+  // the messages chats are to go to (jump.mbt)
+  go_tos.clear()
 }
 

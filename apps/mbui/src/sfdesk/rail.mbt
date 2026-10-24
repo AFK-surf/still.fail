@@ -513,7 +513,8 @@ fn rail_place(
     Some((x, y)) => wide.rail_menu = Some((place, x, y))
     None => ()
   }
-  // dragged up or down (past a few points): to another place in the rail, the others as they were until let go
+  // dragged up or down (past a few points) while the rail is changed or with ⌘ held as it was pressed: to another place
+  // in the rail, the others as they were until let go
   let (_, py, _) = c.pointer()
   let dragged = match wide.rail_drag {
     Some((p, y0, _)) if p == place =>
@@ -533,7 +534,8 @@ fn rail_place(
         }
         dy.abs() > rail_slop
       }
-    None if c.pressed(id) => {
+    // (only while the rail is changed, or pressed with ⌘ held: Rail.tsx drag)
+    None if c.pressed(id) && (wide.editing || (c.press().mods & @ui.mod_cmd) != 0) => {
       wide.rail_drag = Some((place, py, 0.0))
       false
     }
