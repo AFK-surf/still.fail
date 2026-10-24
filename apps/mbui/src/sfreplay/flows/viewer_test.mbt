@@ -6,14 +6,7 @@
 ///|
 test "96-viewer" {
   @sfreplay.orders(fn(seed) raise {
-    // (the run's app asked the station for the marked picture's thumbnail once it was sent; it is drawn from what was
-    // picked now, composer.mbt sent_picture: not asked again)
-    let f = @sfreplay.Flow::start(
-      @sfreplay.trace("viewer"),
-      seed~,
-      env=[("MBUI_VIEWER_AWAKE", "1")],
-      drop=["e2e-photo-标注-124427.png\",\"thumb\":true"],
-    )
+    let f = @sfreplay.Flow::start(@sfreplay.trace("viewer"), seed~, env=[("MBUI_VIEWER_AWAKE", "1")])
     // (what the host drew of the marks, as the run's gave it: the PNG it sent up)
     // (handed to the core whole: composer.add; a run from before, its parts: station.upload.part)
     let handed = match f.r.sent_bytes_from("composer.add", "name", "e2e-photo-标注-") {

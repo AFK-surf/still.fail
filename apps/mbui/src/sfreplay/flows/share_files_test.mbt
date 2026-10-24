@@ -6,9 +6,7 @@
 ///|
 test "93-share-files" {
   @sfreplay.orders(fn(seed) raise {
-    // (the run's app asked the station for the shared picture's thumbnail once it was sent; it is drawn from the bytes
-    // shared now, composer.mbt sent_picture: not asked again)
-    let f = @sfreplay.Flow::start(@sfreplay.trace("share-files"), seed~, drop=["2034d5-e2e-photo.jpg\",\"thumb\":true"])
+    let f = @sfreplay.Flow::start(@sfreplay.trace("share-files"), seed~)
     f.share_files(["e2e-photo.jpg", "e2e-doc.pdf"])
     // the sheet raised over the app as it starts
     f.see("发到")
