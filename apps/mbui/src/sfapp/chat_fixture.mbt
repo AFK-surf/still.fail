@@ -274,9 +274,10 @@ fn small_chat(title : String, session : String) -> Json {
 }
 
 ///|
-/// A chat just made from a new chat (`new:N`, newChat.create): no title yet, nothing said in it.
+/// A chat just made from a new chat (`new:N`, newChat.create): named by no one yet (新对话, as the core calls it),
+/// nothing said in it.
 fn made_chat(session : String) -> Json {
-  match small_chat("", session) {
+  match small_chat("新对话", session) {
     Object(m) => {
       let o = m.copy()
       o["messages"] = Json::array([])

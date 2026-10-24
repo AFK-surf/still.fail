@@ -448,10 +448,14 @@ viewer takes part all come from the station, which knows who is asking. The
 core joins nothing here: it puts every station's rows side by side, adds their
 station, applies `mine`, and groups them by day.
 
-The `chat` view's `title` is the thread's title; else the first line of the
-first thing a person said in it (`firstText`, Slack mentions left out, spaces
-collapsed); else its Slack channel (`#name`), `私信` for a direct message, or
-`新对话`.
+The `chat` view's `title` is the name people or its agent gave the chat (its
+row's, else the thread's `title`, then `autoTitle`). A still.fail chat has none
+until then and is `新对话` all along, from the moment it is asked for here: not
+the words sent, which come in pieces (here, then the station's chat, then the
+message stored in it) and changed the title as each came. A Slack or Feishu
+thread is called by the first line of the first thing a person said in it
+(`firstText`, Slack mentions left out, spaces collapsed); else its channel
+(`#name`), `私信` for a direct message, or `新对话`.
 
 ```jsonc
 // stations

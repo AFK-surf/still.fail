@@ -1093,11 +1093,12 @@ test("a_new_chat_is_there_at_once_and_what_is_sent_to_it_goes_in_once_the_statio
   core.close();
 });
 
-test("a_chat_made_here_is_titled_by_what_was_sent_until_its_station_has_a_message_in_it", async () => {
-  // Made, and read by its station before the message sent with it is in it: its station calls it what it calls a chat
-  // with nothing said in it yet (the page went from the words sent to （暂无消息） and back as the chat was made).
-  const made = { ...threadView(7, 0), title: "（暂无消息）", createdBy: "a@x.com" };
-  const { host, core } = await started({ ...base(), "GET /threads": [made], "GET /chats": [{ id: "7", thread: 7, session: "k1", title: "（暂无消息）", agents: [], lastActiveAt: 1 }], "GET /threads/7/entries?limit=50": { first: 1, last: 0, entries: [] } });
+test("a_chat_made_here_is_a_new_chat_all_along_until_it_is_named", async () => {
+  // Sent from a new chat, its page was called by the words sent, then (made, read by its station before the message was
+  // in it) what the station called a chat with nothing said in it, then by the words again as the station had them:
+  // the bar's title went and came. It is a new chat, as its station calls it, until people or its agent name it.
+  const made = { ...threadView(7, 0), createdBy: "a@x.com" };
+  const { host, core } = await started({ ...base(), "GET /threads": [made], "GET /chats": [{ id: "7", thread: 7, session: "k1", title: "新对话", agents: [], lastActiveAt: 1 }], "GET /threads/7/entries?limit=50": { first: 1, last: 0, entries: [] } });
   stationReplies(host, (req) => {
     const path = req.url.replace("https://stillfail.test/admin/api", "");
     if (req.method === "POST" && path === "/sessions") return { key: "k1", thread: made };
@@ -1109,16 +1110,18 @@ test("a_chat_made_here_is_titled_by_what_was_sent_until_its_station_has_a_messag
   subscribe(core, ui, 1, { topic: "chat", station: "ws/st", thread: 7 });
   await host.settle();
   apply(host, values);
-  assert.equal(v(values, 1).title, "（暂无消息）");
   const key = String((await ask(host, core, ui, 2, "chat.create", { station: "ws/st", runtime: "claude", model: "opus" })).key);
-  call(core, ui, 3, "chat.send", { station: "ws/st", session: key, text: "\n修一下登录\n就是那个按钮" });
-  await host.settle();
-  await host.settle();
   subscribe(core, ui, 4, { topic: "chat", station: "ws/st", session: key });
   await host.settle();
   apply(host, values);
-  // Its first line with words, by its thread and by the key it was asked for with.
-  assert.deepEqual([v(values, 1).title, v(values, 4).title], ["修一下登录", "修一下登录"]);
+  const titles = [v(values, 1).title, v(values, 4).title];
+  call(core, ui, 3, "chat.send", { station: "ws/st", session: key, text: "\n修一下登录\n就是那个按钮" });
+  await host.settle();
+  await host.settle();
+  apply(host, values);
+  titles.push(v(values, 1).title, v(values, 4).title);
+  // by its thread and by the key it was asked for with, before what is sent to it and after: the same
+  assert.deepEqual(titles, ["新对话", "新对话", "新对话", "新对话"]);
   core.close();
 });
 

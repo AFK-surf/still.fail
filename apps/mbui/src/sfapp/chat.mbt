@@ -65,8 +65,9 @@ fn chat_page(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef) -> Unit {
   c.box(w=Fill(1.0), h=Fill(1.0), bg=t.p.bg, pb=nav_foot(), fn() {
     match view {
       None => {
-        // until the core has it, already a chat's page: its bar (no title yet), the messages to come breathing
-        bar_frame(c, "", fn() {  }, fn() {  }, false)
+        // until the core has it, already a chat's page: its bar with the title it was opened by (a row's, a new
+        // chat's), the messages to come breathing
+        bar_frame(c, r.title, fn() {  }, fn() {  }, false)
         let failed = match error {
           Some(e) =>
             Some(

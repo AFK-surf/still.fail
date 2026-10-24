@@ -1561,9 +1561,10 @@ test("a_chat_asked_for_here_shows_at_once_and_becomes_its_stations_under_the_sam
   const first = local.pendingQueue(key, { text: "修一下登录\n细节…", attachments: [], quotes: [] })!;
   await both();
   v = screen.value;
-  assert.deepEqual([v.title, v.outbox[0].id, v.outbox[0].state], ["修一下登录", first, "sending"]);
+  // named by no one yet: a new chat, its page and its row, not the words sent (as its station calls it)
+  assert.deepEqual([v.title, v.outbox[0].id, v.outbox[0].state], ["新对话", first, "sending"]);
   let items = list.value.days[0].items;
-  assert.deepEqual([items[0].id, items[0].pending, items[0].title], [key, true, "修一下登录"]);
+  assert.deepEqual([items[0].id, items[0].pending, items[0].title], [key, true, "新对话"]);
   local.pendingFailed(key, "no claude profile configured");
   await both();
   const out = screen.value.outbox;
@@ -1609,26 +1610,26 @@ test("the_stations_row_covers_a_chat_made_here_before_its_answer_comes", async (
   local.pendingTry(key);
   const idsOf = (): [string, string][] => list.value.days.flatMap((d: J) => d.items).map((i: J) => [i.id ?? "", i.title ?? ""]);
   await t.read(list, 2);
-  assert.ok(idsOf().some(([i, ti]) => i === key && ti === "修一下登录"));
+  assert.ok(idsOf().some(([i, ti]) => i === key && ti === "新对话"));
   const theirs = { ...row("ember:c-2", t.host.nowMs()), mine: true, thread: 8, title: "新对话" };
   t.set(rows("ws/st"), [old, theirs]);
   await t.read(list, 2);
   const cmp = (a: [string, string], b: [string, string]) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0);
-  assert.deepEqual(idsOf().sort(cmp), [["ember:c-0", "ember:c-0 的标题"], ["ember:c-2", "新对话"], [key, "修一下登录"]].sort(cmp as never));
+  assert.deepEqual(idsOf().sort(cmp), [["ember:c-0", "ember:c-0 的标题"], ["ember:c-2", "新对话"], [key, "新对话"]].sort(cmp as never));
   assert.equal(local.pendingTry(key)?.[1].clientKey, key);
   const made: J = { ...row("ember:c-1", t.host.nowMs()), mine: true, thread: 9, title: "新对话", clientKey: key };
   t.set(rows("ws/st"), [old, theirs, made]);
   await t.read(list, 2);
-  const expected: [string, string][] = [["ember:c-0", "ember:c-0 的标题"], ["ember:c-1", "修一下登录"], ["ember:c-2", "新对话"]];
+  const expected: [string, string][] = [["ember:c-0", "ember:c-0 的标题"], ["ember:c-1", "新对话"], ["ember:c-2", "新对话"]];
   assert.deepEqual(idsOf().sort(cmp), expected);
   local.pendingMade(key, "ember:c-1", 9);
   await t.read(list, 2);
   assert.deepEqual(idsOf().sort(cmp), expected);
   made.last = { seq: 1, text: "修一下登录", authorKind: "person", author: "Me@x.com", createdAt: Math.trunc(t.host.nowMs()) };
-  made.title = "修一下登录（站上的）";
+  made.title = "登录按钮";
   t.set(rows("ws/st"), [old, theirs, made]);
   await t.read(list, 2);
-  assert.ok(idsOf().some(([i, ti]) => i === "ember:c-1" && ti === "修一下登录（站上的）"));
+  assert.ok(idsOf().some(([i, ti]) => i === "ember:c-1" && ti === "登录按钮"));
 });
 
 test("a_chat_made_here_keeps_its_first_message_until_its_page_has_the_entry", async () => {

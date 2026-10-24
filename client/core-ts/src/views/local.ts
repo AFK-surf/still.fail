@@ -262,33 +262,28 @@ export class Local {
     return sends;
   }
 
-  /// The rows of the chats asked for here on a station that its rows do not have yet (see views.rs `pending_rows`),
-  /// and of those it has, the ones still without a message titled as their first message here (by id).
-  pendingRows(station: string): { rows: J[]; titled: Map<string, J> } {
+  /// The rows of the chats asked for here on a station that its rows do not have yet (see views.rs `pending_rows`).
+  pendingRows(station: string): J[] {
     const out: J[] = [];
-    const titled = new Map<string, J>();
     for (const [key, chat] of this.#pending) {
       if (chat.station !== station) continue;
-      const first = this.#firstOf(chat);
-      const title = firstLine(first);
       const theirs: J = chat.made ? this.#data.chat(station, chat.made[0]) : this.#data.chatOfClientKey(station, key);
       if (theirs !== undefined) {
         if (chat.made && !chat.listed) {
           chat.listed = true;
           this.#savePending(key);
         }
-        const last = get(theirs, "last");
-        if (title !== null && (last === undefined || last === null)) titled.set(theirs.id, { ...theirs, title });
         continue;
       }
       if (chat.listed) continue;
-      if (first === undefined && chat.made === null) continue;
+      if (this.#firstOf(chat) === undefined && chat.made === null) continue;
       const [id, thread] = chat.made ? [chat.made[0], chat.made[1]] : [key, null];
       const row: J = {
         id,
         session: id,
         thread,
-        title: title ?? t("core-views.new_chat"),
+        // named by no one yet: what its station will call it till then (views.ts chatTitle)
+        title: t("core-views.new_chat"),
         agents: [],
         last: null,
         unread: false,
@@ -301,18 +296,7 @@ export class Local {
       if (chat.made === null) row.pending = true;
       out.push(row);
     }
-    return { rows: out, titled };
-  }
-
-  /// What a chat asked for here is titled while its station has no message in it yet (as its row is: pendingRows):
-  /// the first line of its first message here, by its key or, once made, its thread or its agent's key.
-  firstTitle(station: string, at: { key?: string; thread?: number; session?: string }): string | null {
-    for (const [key, chat] of this.#pending) {
-      if (chat.station !== station) continue;
-      if (key !== at.key && (chat.made === null || (chat.made[1] !== at.thread && chat.made[0] !== at.session))) continue;
-      return firstLine(this.#firstOf(chat));
-    }
-    return null;
+    return out;
   }
 
   #firstOf(chat: Pending): J {
@@ -726,10 +710,4 @@ export function sentAs(entry: J): J {
   const message: J = { text: entry.text ?? null, attachments: entry.attachments ?? null, quotes: entry.quotes ?? null };
   if (typeof entry.client === "string") message.client = entry.client;
   return message;
-}
-
-/// A message's first line with words, as a chat made by it is titled until its station has it.
-function firstLine(message: J): string | null {
-  const text = String(get(message, "text") ?? "").trim();
-  return text.split("\n").map((l) => l.trim()).find((l) => l !== "") ?? null;
 }

@@ -134,6 +134,8 @@ test("a chat published: previewed, written out frozen with the attachments ticke
     // The model it runs on: what its messages are said by.
     store.db.prepare("UPDATE sessions SET model = ?, effort = ? WHERE key = ?").run("claude-opus-4-1", "high", made.key);
     store.insertMessage(newMessage(thread, "1.1", "person", "alice@acme.dev", "deploy with token: abc123def456ghi"));
+    // named by its agent after what was said
+    store.setAutoTitle(thread, "deploy with token: abc123def456ghi", false);
     store.insertMessage({ ...newMessage(thread, "1.2", "agent", made.key, "done ![](shot.png)"), attachments: [
       { name: "shot.png", path: join(workspace, "uploads/shot.png"), size: 9, width: 4, height: 3 },
       { name: "notes.txt", path: join(workspace, "uploads/notes.txt"), size: 11 },
@@ -150,7 +152,7 @@ test("a chat published: previewed, written out frozen with the attachments ticke
     // The members' preview draws them as the chat does: an agent by its maker's mark, a person by their address's picture.
     assert.deepEqual(p.entries.map((e: any) => [e.maker ?? null, e.model ?? null, e.runtime ?? null, e.person ?? null]), [[null, null, null, "alice@acme.dev"], ["anthropic", "claude-opus-4-1", "claude", null], [null, null, null, "carol@elsewhere.org"]]);
     assert.equal(p.entries[0].text, "deploy with token: [hidden]");
-    assert.equal(p.title, "deploy with token: [hidden]", "its name, the first thing said, hidden alike");
+    assert.equal(p.title, "deploy with token: [hidden]", "its name, hidden alike");
     assert.deepEqual(p.redacted, [{ n: p.entries[0].n, count: 1 }]);
     assert.deepEqual(p.files.map((f: any) => [f.k, f.name, f.type]), [["f0", "shot.png", "image/png"], ["f1", "notes.txt", "text/plain; charset=utf-8"]]);
     // Members' pages show them as the chat does: where each is, through the session that keeps it.

@@ -299,11 +299,12 @@ origin (the web's connect icon's tip: `Slack · <workspace> · #channel`, or
 `私信` for a direct message). An agent's Slack thread is the latest one it is
 in; a chat's is that of the first of its sessions that has one.
 
-- **title**: the chat's title, else the first line of the first thing a person
-  said in it (Slack mentions left out, spaces collapsed); with neither, its
-  Slack thread's (the same, then `#channel`, `私信`); else `新对话`.
-  Without a chat: the session's title, else its Slack thread's, else
-  `新对话`.
+- **title**: the name people gave the chat, else the one its agent gave it;
+  with neither, its Slack thread's (that thread's name, else the first line of
+  the first thing a person said in it, Slack mentions left out and spaces
+  collapsed, then `#channel`, `私信`); else `新对话`, the same until it is named
+  (not the words said in it as they come in). Without a chat: the session's
+  title, else its Slack thread's, else `新对话`.
 - **mine**: a chat the viewer started, wrote in, or is among the people of;
   without a chat, the viewer started the session or is among the people of
   its Slack thread. A person is the viewer by id (an email, or `local`), by

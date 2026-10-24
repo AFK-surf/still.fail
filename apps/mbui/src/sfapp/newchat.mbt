@@ -573,8 +573,9 @@ fn send_first(
         Ok(_) => {
           fresh.sent = true
           fresh.starting = false
-          // the page becomes the chat, in place, its first words in its list from now and going on there
-          let r : ChatRef = { station, session: key, title: "", station_name }
+          // the page becomes the chat, in place, its first words in its list from now and going on there; called
+          // what the page was (新对话) until someone names it, as the core calls it
+          let r : ChatRef = { station, session: key, title: tr("android-chat.new.title"), station_name }
           let rk = station + "\u{1}" + key
           flight_carry_into(d.key, draft_key(r), rk, sent_local(rk, None, words, files))
           fresh.scene = v

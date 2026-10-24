@@ -128,14 +128,18 @@ function withoutMentions(text: string): string {
   return out + rest;
 }
 
-/// What a chat is called: its title, else the first line a person wrote in it, else its Slack channel.
+/// What a chat is called, as its station calls it (read/views.ts titleOf): the name people gave it, else the one its
+/// agent gave it; a chat of still.fail's own is a new chat until it has one, the same all along; a Slack or Feishu
+/// thread the first line a person wrote in it, else its channel.
 export function chatTitle(thread: J): string {
   const text = (name: string): string | null => {
     const v = get(thread, name);
     return typeof v === "string" && v.trim() !== "" ? v.trim() : null;
   };
-  const title = text("title");
+  const title = text("title") ?? text("autoTitle");
   if (title !== null) return title;
+  const surface = get(thread, "surface");
+  if (surface === "ember" || surface === "stillfail") return t("core-views.new_chat");
   const firstText = text("firstText");
   if (firstText !== null) {
     const first = withoutMentions(firstText)
@@ -145,10 +149,9 @@ export function chatTitle(thread: J): string {
     if (first !== undefined) return first;
   }
   const channel = text("channelName");
-  const surface = get(thread, "surface");
   // A Feishu chat is named as it is there (no #).
   if (channel !== null) return typeof surface === "string" && surface.startsWith("feishu:") ? channel : `#${channel}`;
-  if (!(surface === "ember" || surface === "stillfail") && text("channel")?.startsWith("D")) return t("core-views.direct_message");
+  if (text("channel")?.startsWith("D")) return t("core-views.direct_message");
   return t("core-views.new_chat");
 }
 
@@ -953,22 +956,12 @@ export class Views implements Owner {
           const of = thread !== null ? `t:${thread}` : typeof view.thread === "number" ? `t:${view.thread}` : `s:${String(view.session ?? "")}`;
           return drawn(out, (path) => this.local.uploadOf(station, path), this.#core.data.mdStore(station, of));
         };
-        // A chat asked for here is titled by its first message until its station has a message in it, as its row is
-        // (Local.pendingRows): not by what the station calls a chat with nothing said in it yet, between the two.
-        const titled = <V extends Value | undefined>(out: V, at: { key?: string; thread?: number; session?: string }): V => {
-          if (out === undefined || !("ok" in out)) return out;
-          const v = out.ok as J;
-          if (arr(v.messages).length > 0) return out;
-          const title = this.local.firstTitle(station, at);
-          if (title !== null && title !== v.title) return { ok: { ...v, title } } as V;
-          return out;
-        };
-        if (typeof view.thread === "number") return draw(titled(this.#chat(station, view.thread), { thread: view.thread }));
+        if (typeof view.thread === "number") return draw(this.#chat(station, view.thread));
         const session = typeof view.session === "string" ? view.session : null;
         if (session === null) return { err: CoreError.invalid(t("core-views.error.chat_needs_thread")) };
-        if (session.startsWith(PENDING_PREFIX)) return draw(titled(this.#pendingChat(station, session) ?? { err: new CoreError("http_404", t("core-views.error.no_chat"), 404) }, { key: session }));
+        if (session.startsWith(PENDING_PREFIX)) return draw(this.#pendingChat(station, session) ?? { err: new CoreError("http_404", t("core-views.error.no_chat"), 404) });
         const bound = this.boundThread(station, session);
-        const out = titled(bound !== null ? this.#chat(station, bound) : this.#unchatted(station, session), { session });
+        const out = bound !== null ? this.#chat(station, bound) : this.#unchatted(station, session);
         const waiting = this.local.firstOutbox(station, session);
         if (waiting.length === 0 || out === undefined || !("ok" in out)) return draw(out);
         const v = out.ok as J;
@@ -1110,8 +1103,7 @@ export class Views implements Owner {
         // Its station's emoji and icon only with several stations (with one, it says nothing).
         const mark = stations.length > 1 ? { emoji: s.emoji, icon: s.icon } : null;
         const sig = JSON.stringify([s.address, s.name, mark, s.online, link.state ?? null, link.cause ?? null, me, slackUsers, members_, watching, hint]);
-        for (const listedRaw of [...asked.rows, ...listed]) {
-          const raw = asked.titled.get(get(listedRaw, "id")) ?? listedRaw;
+        for (const raw of [...asked, ...listed]) {
           if (mine && get(raw, "mine") !== true) continue;
           if (this.local.beingArchived(s.address, raw)) continue;
           const shown = this.local.asChanging(s.address, raw);
@@ -1714,13 +1706,12 @@ export class Views implements Owner {
       }
     }
     const outbox = chat.made ? structuredClone(this.local.outbox(station, chat.made[1])) : structuredClone(chat.queue);
-    const firstText = str(get(outbox[0], "text"))?.trim() ?? "";
-    const title = firstText !== "" ? (firstText.split("\n").map((l) => l.trim()).find((l) => l !== "") ?? t("core-views.new_chat")) : t("core-views.new_chat");
     return {
       ok: {
         me: this.me(ofAddress(station)),
         thread: null,
-        title,
+        // named by no one yet: what its station will call it till then (chatTitle)
+        title: t("core-views.new_chat"),
         people: [],
         agents: [],
         messages: [],
