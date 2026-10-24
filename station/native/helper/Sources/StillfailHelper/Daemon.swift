@@ -106,7 +106,7 @@ final class Daemon {
     }
     switch request["op"] as? String {
     case "hello":
-      channel.line(["ok": true, "v": 1, "pid": Int(getpid()), "app": Bundle.main.bundlePath, "capabilities": ["screen", "files"]])
+      channel.line(["ok": true, "v": 1, "pid": Int(getpid()), "app": Bundle.main.bundlePath, "capabilities": ["screen", "files", "simulator"]])
     case "status":
       var status = Status.fresh() ?? Status.now()
       status["live"] = ["capture": CGPreflightScreenCaptureAccess(), "control": Status.inputAllowed()]
@@ -130,6 +130,13 @@ final class Daemon {
         return
       }
       ScreenView(channel: channel, options: request).run()
+    case "simulator.view":
+      // A booted simulator's screen: nothing of macOS's to grant (SimulatorView.swift).
+      guard let udid = request["udid"] as? String, UUID(uuidString: udid) != nil else {
+        channel.sendJSON(1, ["error": "no simulator named", "code": "simulator"])
+        return
+      }
+      SimulatorView(channel: channel, options: request, udid: udid).run()
     case "watch":
       // The station's watch: open for as long as this process is (its end is how the station learns this one ended).
       channel.line(["ok": true])

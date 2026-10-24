@@ -30,6 +30,8 @@ export interface InputHost {
   fingers?: {
     /** As a trackpad (else directly): the finger moves `pointer`, a tap clicks where it points. */
     pad: () => boolean;
+    /** A touchscreen's (a simulator's): a finger held stays down where it is (a long press), not the right button. */
+    touchscreen?: () => boolean;
     pointer: PadPointer;
     zoom: Zoom;
     /** The picture fitted on the stage, and the stage's size (px, on the stage). */
@@ -153,7 +155,8 @@ export function hearInput(host: InputHost): () => void {
   }, { passive: false });
 
   // ── fingers ──
-  // Driving it directly: a tap clicks where it is, one finger drags, two scroll, a press held right-clicks (a phone's).
+  // Driving it directly: a tap clicks where it is, one finger drags, two scroll, a press held right-clicks (a phone's; a
+  // touchscreen's, a simulator's, keeps the finger down: its long press).
   // As a trackpad (a phone's, where it says): a finger moves the pointer, a tap clicks where it points, tapped again
   // and moved (or held) it drags, two tapped right-click, two moving together scroll. On a phone two fingers spreading
   // zoom the picture here (never sent), and while only looking a zoomed picture is moved about.
@@ -195,8 +198,10 @@ export function hearInput(host: InputHost): () => void {
         hold = 0;
         if (touch !== "pending" || !host.driving() || !start) return;
         if (padding()) { const at = atPointer(); if (at) { press("down", at, 1); touch = "drag"; } return; }
-        // A press held: the right button, where it is.
         const at = where(start.x, start.y);
+        // A touchscreen's long press: the finger stays down, and drags from there as it moves.
+        if (pad?.touchscreen?.() && at?.inside) { press("down", at, 1); touch = "drag"; return; }
+        // A press held: the right button, where it is.
         if (at?.inside) { press("down", at, 2); press("up", at, 0); }
         touch = "done";
       }, HOLD_MS);

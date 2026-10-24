@@ -392,6 +392,7 @@
   "core-views.screen.many": "{names} 等 {more} 人",
   "core-views.screen.kind.desktop": "桌面",
   "core-views.screen.kind.browser": "浏览器标签页",
+  "core-views.screen.kind.simulator": "iOS 模拟器",
   "core-views.screen.on": "{names} 正在查看",
   "core-views.screen.openedBy": "由「{title}」打开",
   "core-views.screen.someChat": "一个对话",

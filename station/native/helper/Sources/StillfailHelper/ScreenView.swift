@@ -38,7 +38,8 @@ import IOKit.pwr_mgt
 @preconcurrency import ScreenCaptureKit
 import VideoToolbox
 
-final class ScreenView: NSObject, SCStreamOutput, SCStreamDelegate {
+/// A view of the display; SimulatorView.swift's view of a simulator is one too, its pictures and input its own.
+class ScreenView: NSObject, SCStreamOutput, SCStreamDelegate {
   let channel: Channel
   let displayID: CGDirectDisplayID
   /// The view's bounds: as it opened, then as the station asks (`bounds`).
@@ -109,7 +110,7 @@ final class ScreenView: NSObject, SCStreamOutput, SCStreamDelegate {
       case 1: next()
       case 2: keyframe()
       case 3:
-        if let op = (try? JSONSerialization.jsonObject(with: payload)) as? [String: Any] { input.post(op) }
+        if let op = (try? JSONSerialization.jsonObject(with: payload)) as? [String: Any] { post(op) }
       case 4: clipboard.set(payload)
       case 5: clipboard.watch(payload)
       case 6: clipboard.reveal(payload)
@@ -123,6 +124,11 @@ final class ScreenView: NSObject, SCStreamOutput, SCStreamDelegate {
     }
     clipboard.stop()
     stop()
+  }
+
+  /// A person's input, posted.
+  func post(_ op: [String: Any]) {
+    input.post(op)
   }
 
   /// The source's size fitted into the view's bounds, never larger, in even pixels (what 4:2:0 encodes).

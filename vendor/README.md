@@ -1,7 +1,8 @@
 # vendor
 
-Crates taken from crates.io and changed for still.fail; `[patch.crates-io]` in mesh/ and client/ points at them. Each
-change is marked `ember:` in the source. Drop a crate here once upstream has the same.
+Crates taken from crates.io, and Swift packages the native apps build in, changed for still.fail; `[patch.crates-io]` in
+mesh/ and client/ points at the crates. Each change is marked `ember:` in the source. Drop one here once upstream has
+the same.
 
 - **PermissionFlow** (Swift, EYHN/PermissionFlow at 9b02967, as Cue's Computer Use pins it; only SystemSettingsKit and
   PermissionFlow; station/native/screen uses it for its permission window)
@@ -12,6 +13,17 @@ change is marked `ember:` in the source. Drop a crate here once upstream has the
   - Its words are the host's (`PermissionFlowLocalizer.words`, the station's language), not a resource bundle: the
     helper ships as one app with nothing beside its executable. PermissionFlowButton (unused, its words a bundle's)
     is left out.
+
+- **serve-sim** (Swift, EvanBacon/serve-sim at 0193e65, `packages/serve-sim/Sources`, Apache-2.0; still.fail Helper's
+  `simulator.view` uses it, docs/remote-screens.md "Simulators"): only the iOS Simulator's capture and input,
+  `SimNative/{FrameCapture,HIDInjector,DeviceHubKeyboardBridge,DuoHIDBridge,PixelBufferUtils,SimFrameworks,Xcode}.swift`
+  and the `SimNativeSupport` they use; not its Node module, encoders, recorder or accessibility dumps. Package.swift is
+  ours (no node-swift).
+  - Shared.swift: what FrameCapture takes from upstream's files left out (PixelConsumerCount, isoTimestamp,
+    jsonString), as they are there.
+  - FrameCapture and HIDInjector, and the methods the helper calls, are public (another module uses them).
+  - FrameCapture re-emits a still screen's picture at its 5 fps idle floor only when asked (`setReemitsIdle`): the
+    helper encodes a picture only when it is new.
 
 - **swarm-discovery 0.6.3**
   - src/receiver.rs: a peer's addresses are read from the answers as well as the additionals, and records with
