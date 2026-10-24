@@ -1085,3 +1085,37 @@ pub let edge_tip_ms : Double = 300.0
 
 ///|
 pub let edge_tip_gap : Double = 14.0
+
+// ---------------------------------------------------------------------------
+// The desktop's sidebar and rail (sfdesk: ember web/src/Rail.css.ts, ChatMark.css.ts, styles/shell.css.ts)
+
+///|
+/// A chat's marks' colours, bright in both themes (ChatMark.css.ts: #3b82f6 done and waiting on the viewer, #e5484d to
+/// be seen now and its halo at 25%, #f2b01e at work).
+pub let mark_blue : @ui.Color = Exact(0x3B82F6FFL)
+
+///|
+pub let mark_red : @ui.Color = Exact(0xE5484DFFL)
+
+///|
+pub let mark_halo : @ui.Color = A(mark_red, O25)
+
+///|
+pub let mark_yellow : Int64 = 0xF2B01EFFL
+
+///|
+/// The rail's places 9 from its edges open, in its 56's middle (Rail.css.ts rail: 9 under the last, its 38s 9 in).
+pub let rail_in : @ui.Space = room(9.0)
+
+///|
+/// A square of the rail (a place's ground, a workspace's): its corner (Rail.css.ts item, workspaceItem: 9).
+pub let rail_corner : @ui.Radius = rounded(9.0)
+
+///|
+/// The closed bar's corner (shell.css.ts dock, closed: calc(9px * scale + 6px)): concentric with the places' grounds
+/// 6 in.
+pub let closed_bar_corner : @ui.Radius = rounded(surface_corner(6.0, 9.0))
+
+///|
+/// The sidebar's edge's look 3 in its strip (Rail.css.ts edge: its line 6 in, its bar 4 in, the library's 7 wide).
+pub let edge_in : @ui.Space = room(3.0)

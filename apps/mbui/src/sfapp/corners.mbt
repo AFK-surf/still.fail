@@ -394,32 +394,6 @@ fn open_in_place(p : Page) -> Unit {
 }
 
 ///|
-/// The stations at a glance, as the core has them in workspace `ws` (StationGlyph.kt's counts: asleep while the core
-/// reaches nothing at all), and in words: asleep, what the core cannot reach says it; else the stations (the core's),
-/// and what is wrong with them.
-fn stations_at_glance(src : Source, ws : String) -> (@sf.GlyphCounts, String) {
-  let chats = (src.topic)("chats", { "scope": Json::string(ws), "mine": Json::boolean(false) })
-  let g = field(chats.value, "glyph")
-  let status = (src.topic)("status", { "workspace": Json::string(ws) }).value
-  let asleep = text(status, "state") == "trouble"
-  let glyph : @sf.GlyphCounts = {
-    online: count(g, "online"),
-    dim: count(g, "dim"),
-    failing: count(g, "failing"),
-    working: count(g, "working"),
-    connecting: count(g, "connecting"),
-    asleep,
-  }
-  let said = if asleep { text(status, "text") } else { text(g, "label") }
-  let words = match field(chats.value, "trouble") {
-    _ if said == "" => ""
-    Some(Object(_)) as trouble => fill("android-chat.home.stations.trouble", [("said", said), ("trouble", text(trouble, "text"))])
-    _ => fill("android-chat.home.stations", [("said", said)])
-  }
-  (glyph, words)
-}
-
-///|
 /// The stations at a glance in Home's top bar on a wide screen (Home.kt: 34 round, the glyph 24): tapped, their page.
 fn stations_button(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
   let t = @sf.theme()

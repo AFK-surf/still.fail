@@ -6,32 +6,6 @@
 // list; opened, the newest of them is open beside it, or with none what the archive is.
 
 ///|
-/// The archive's list as it is looked at: the words looked for, how many asked for, the last read (shown while
-/// another is asked for); whether the newest was opened beside it since the archive was opened.
-priv struct ArchiveSide {
-  mut q : String
-  mut limit : Int
-  mut last : Json?
-  mut landed : Bool
-}
-
-///|
-let archive_side : ArchiveSide = { q: "", limit: archive_side_page, last: None, landed: false }
-
-///|
-/// How many the archive's list shows at first, and how many more each time it is scrolled near its end (Archive.tsx
-/// ARCHIVE_PAGE).
-let archive_side_page : Int = 60
-
-///|
-fn archive_side_reset() -> Unit {
-  archive_side.q = ""
-  archive_side.limit = archive_side_page
-  archive_side.last = None
-  archive_side.landed = false
-}
-
-///|
 /// How the track slides (Sidebar.css.ts navTrack: transform 240ms ease-out).
 // kept across runs: a value (no field of it changes)
 let list_slide : @motion.Spec = @motion.tween(list_slide_ms, ease=Out)
@@ -40,27 +14,11 @@ let list_slide : @motion.Spec = @motion.tween(list_slide_ms, ease=Out)
 let list_slide_ms : Double = 240.0
 
 ///|
-/// Which of the lists is shown: 全部 0, 我参与的 1, 监控中 2 (the filter), 奏 3, 已归档 4.
-fn list_mode(src : Source, w : Workspace) -> Int {
-  if app.nav.pages().contains(Archived) {
-    4
-  } else if lit_place() == "decisions" {
-    3
-  } else {
-    match filter_of(src, w.id) {
-      "mine" => 1
-      "watching" => 2
-      _ => 0
-    }
-  }
-}
-
-///|
 /// The chats' sidebar `width` wide: the band over the track of lists.
 fn lists_side(c : @ui.Ctx, src : Source, w : Workspace, width : Double) -> Unit {
-  let mode = list_mode(src, w)
+  let mode = @sfdesk.list_mode(src, w)
   if mode != 4 {
-    archive_side.landed = false
+    @sfdesk.archive_side.landed = false
   }
   let x = @kit.animate(c, "side/lists", mode.to_double(), transition=list_slide)
   let from = x.floor().to_int()
@@ -87,7 +45,7 @@ fn lists_side(c : @ui.Ctx, src : Source, w : Workspace, width : Double) -> Unit 
     c.layer(fn() { lists_band(c, src, w) }) |> ignore
     // with no bell in the rail: the stations' trouble and the services up long, at the foot (the rail's bell has them
     // where it is: cloud/workspace.tsx WorkspaceSidebarFooter)
-    if !rail_items(src, w.id).contains("attention") {
+    if !@sfdesk.rail_items(src, w.id).contains("attention") {
       c.layer(fn() { lists_foot(c, src, w) }) |> ignore
     }
   })
@@ -102,7 +60,7 @@ fn lists_side(c : @ui.Ctx, src : Source, w : Workspace, width : Double) -> Unit 
 fn lists_foot(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
   let t = @sf.theme()
   // with the bell in the rail, they are in its panel (workspace.tsx WorkspaceSidebarFooter)
-  if rail_items(src, w.id).contains("attention") {
+  if @sfdesk.rail_items(src, w.id).contains("attention") {
     return
   }
   let chats = (src.topic)("chats", { "scope": Json::string(w.id), "mine": Json::boolean(false) }).value
@@ -112,13 +70,13 @@ fn lists_foot(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
     return
   }
   c.box(style=foot_fill, fn() {
-    c.box(style=foot_band, glass=@sf.glass_floating(tint=@sf.mix(closed_ground(), rail_ws.band, t.p.sidebar)), fn() {
+    c.box(style=foot_band, glass=@sf.glass_floating(tint=@sf.mix(@sfdesk.closed_ground(), @sfdesk.wide.band, t.p.sidebar)), fn() {
       match trouble {
         Some(Object(_)) => {
           let go = c.id("side/station-trouble")
           c.cursor(go, Hand)
           if c.clicked(go) {
-            rail_go(c, src, w, "stations")
+            @sfdesk.rail_go(c, src, w, desk_pages(), "stations")
           }
           c.box(style=foot_trouble, id=go, fn() {
             @sf.station_glyph(c, stations_at_glance(src, w.id).0, 18.0, t.p.text, t.p.red) |> ignore
@@ -136,7 +94,7 @@ fn lists_foot(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
         let chip = c.id("side/open-jobs")
         c.cursor(chip, Hand)
         if c.clicked(chip) {
-          rail_ws.jobs_open = !rail_ws.jobs_open
+          @sfdesk.wide.jobs_open = !@sfdesk.wide.jobs_open
         }
         let b = c.box(style=foot_chip, id=chip, fn() {
           c.box(style=foot_chip_dot, fn() {  }) |> ignore
@@ -146,7 +104,7 @@ fn lists_foot(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
         let p = @kit.popover(
           c,
           "side/open-jobs",
-          rail_ws.jobs_open,
+          @sfdesk.wide.jobs_open,
           chip,
           side=Top,
           along=End,
@@ -154,7 +112,7 @@ fn lists_foot(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
           look=fn(c, _, body) { @sf.panel(c, w=Px(320.0), body) |> ignore },
           fn() { open_jobs(c, src, w) },
         )
-        rail_ws.jobs_open = p.value
+        @sfdesk.wide.jobs_open = p.value
       }
     })
     |> ignore
@@ -229,16 +187,16 @@ priv enum ArchiveLine {
 /// 已归档 as one of the lists (ArchiveRows): what to look for, its days, a row each; the newest open beside it as it
 /// opens.
 fn archive_pane(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
-  let params : Map[String, Json] = { "scope": Json::string(w.id), "limit": Json::number(archive_side.limit.to_double()) }
-  if archive_side.q != "" {
-    params["q"] = Json::string(archive_side.q)
+  let params : Map[String, Json] = { "scope": Json::string(w.id), "limit": Json::number(@sfdesk.archive_side.limit.to_double()) }
+  if @sfdesk.archive_side.q != "" {
+    params["q"] = Json::string(@sfdesk.archive_side.q)
   }
   let topic = (src.topic)("archive", params)
   match topic.value {
-    Some(_) => archive_side.last = topic.value
+    Some(_) => @sfdesk.archive_side.last = topic.value
     None => ()
   }
-  let view = archive_side.last
+  let view = @sfdesk.archive_side.last
   let days = items(view, "days")
   let lines : Array[ArchiveLine] = [Top, Search]
   if view is None {
@@ -263,24 +221,24 @@ fn archive_pane(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
     }
   }
   // opened: its newest chat beside it (ArchivePage)
-  if app.nav.top() == Archived && !archive_side.landed && archive_side.q == "" {
+  if app.nav.top() == Archived && !@sfdesk.archive_side.landed && @sfdesk.archive_side.q == "" {
     match days.get(0) {
       Some(d) =>
         match items(Some(d), "items").get(0) {
           Some(it) => {
-            archive_side.landed = true
+            @sfdesk.archive_side.landed = true
             archive_open(it)
           }
           None => ()
         }
-      None => if view is Some(_) { archive_side.landed = true }
+      None => if view is Some(_) { @sfdesk.archive_side.landed = true }
     }
   }
   // near its end, the next ones
   match c.list_info("side/archive/" + w.id) {
     Some(info) =>
       if flag(view, "more") && info.last >= info.count - 12 && topic.value is Some(_) && info.count == lines.length() {
-        archive_side.limit += archive_side_page
+        @sfdesk.archive_side.limit += @sfdesk.archive_side_page
       }
     None => ()
   }
@@ -293,9 +251,9 @@ fn archive_pane(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
         // (its 4 under it, as the web's margins: in a heading's 14 over it, not on top of it)
         Search => archive_search_side(c, i + 1 < lines.length() && lines[i + 1] is (Waiting | Row(_)))
         Failing(words) => side_said(c, words, true)
-        Waiting => side_breathing(c)
+        Waiting => @sfdesk.side_breathing(c)
         Said(words) => side_said(c, words, false)
-        Day(label) => nav_heading(c, label)
+        Day(label) => @sfdesk.nav_heading(c, label)
         Row(it) => archive_side_row(c, src, it, i + 1 < lines.length() && lines[i + 1] is Row(_))
       }
     })
@@ -340,9 +298,9 @@ fn archive_search_side(c : @ui.Ctx, gap : Bool) -> Unit {
         caret_color=t.p.accent,
       )
       let q = r.text.trim(chars=" \t\n").to_string()
-      if q != archive_side.q {
-        archive_side.q = q
-        archive_side.limit = archive_side_page
+      if q != @sfdesk.archive_side.q {
+        @sfdesk.archive_side.q = q
+        @sfdesk.archive_side.limit = @sfdesk.archive_side_page
       }
     })
     |> ignore
@@ -481,7 +439,7 @@ fn archive_doing(src : Source, station : String, session : String) -> Bool {
 ///|
 /// The archive open with none of its chats beside it (ArchivePage): what it is.
 fn archive_main(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
-  let note = text(archive_side.last, "note")
+  let note = text(@sfdesk.archive_side.last, "note")
   ignore(src)
   ignore(w)
   c.box(style=arch_empty, fn() {
@@ -610,9 +568,9 @@ fn side_todo(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
     return
   }
   c.box(style=todo_box, fn() {
-    if nav_row(c, "side/attention", wide.attention_open, fn() {
+    if @sfdesk.nav_row(c, "side/attention", @sfdesk.wide.attention_open, fn() {
         @sf.icon(c, "bell", size=16.0, color=t.p.muted) |> ignore
-        nav_words(c, tr("web-main.attention.entry"))
+        @sfdesk.nav_words(c, tr("web-main.attention.entry"))
         c.box(style=todo_slot, fn() {
           if n > 0 {
             c.box(style=todo_count, fn() { c.text(n.to_string(), style=todo_count_words) |> ignore }) |> ignore
@@ -622,8 +580,8 @@ fn side_todo(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
         })
         |> ignore
       }) {
-      wide.attention_open = !wide.attention_open
-      wide.menu = None
+      @sfdesk.wide.attention_open = !@sfdesk.wide.attention_open
+      @sfdesk.wide.menu = None
     }
   })
   |> ignore
@@ -669,16 +627,16 @@ fn todo_all(src : Source, w : Workspace) -> Int {
 ///|
 /// Whether 待处理 is under 新建对话: no bell in the rail, and something there (or its panel open).
 fn todo_shown(src : Source, w : Workspace) -> Bool {
-  !rail_items(src, w.id).contains("attention") && (todo_all(src, w) > 0 || wide.attention_open)
+  !@sfdesk.rail_items(src, w.id).contains("attention") && (todo_all(src, w) > 0 || @sfdesk.wide.attention_open)
 }
 
 ///|
 /// The band's height over the lists: its top row, 新建对话's (6 + 32 + 2; in the closed bar 6 + 32 + 6), 待处理's when
 /// there (2 + 32 + 8).
 fn band_h(src : Source, w : Workspace) -> Double {
-  side_top_h() +
+  @sfdesk.side_top_h() +
   side_new_h +
-  (if rail_ws.in_bar { bar_band_in - side_new_under } else { 0.0 }) +
+  (if @sfdesk.wide.in_bar { bar_band_in - side_new_under } else { 0.0 }) +
   (if todo_shown(src, w) { side_todo_h } else { 0.0 })
 }
 
@@ -694,185 +652,3 @@ let side_new_h : Double = 40.0
 
 ///|
 let side_todo_h : Double = 42.0
-
-///|
-/// A place of the rail as it is drawn, `moved` with its drag; while the rail is changed (自定义侧边条), outlined, its
-/// − at its top left corner (Rail.css.ts editing, remove).
-fn rail_edit_frame(c : @ui.Ctx, src : Source, w : Workspace, place : String, moved : Double, body : () -> Unit) -> Unit {
-  if !rail_ws.editing {
-    c.box(ty=moved, body) |> ignore
-    return
-  }
-  let t = @sf.theme()
-  let rm = c.id("rail/remove/" + place)
-  c.cursor(rm, Hand)
-  let items = rail_items(src, w.id)
-  if c.clicked(rm) && items.length() > 1 {
-    rail_keep(src, w.id, items.filter(fn(i) { i != place }))
-  }
-  c.box(ty=moved, fn() {
-    c.box(style=rail_editing, body) |> ignore
-    // its outline dashed, 1.5 wide, a pixel in from its edge (Rail.css.ts editing: outline-offset -1)
-    c.layer(fn() {
-      c.box(tx=rail_dash_at, ty=rail_dash_at, fn() {
-        @sf.dashed_frame(c, rail_dash_side, rail_dash_side, rail_dash_r, rail_dash_line, t.p.line_strong) |> ignore
-      })
-      |> ignore
-    })
-    |> ignore
-    c.layer(fn() {
-      c.box(style=rail_remove_at, tx=rail_remove_out, ty=rail_remove_out, fn() {
-        let b = c.box(style=rail_remove, id=rm, fn() { @sf.icon(c, "minus", size=12.0, color=t.p.sidebar) |> ignore })
-        c.semantics(b, Button, id=rm, label=fill("web-main.rail.remove", [("name", rail_label(src, place))]))
-      })
-      |> ignore
-    })
-    |> ignore
-  })
-  |> ignore
-}
-
-///|
-/// Beside the rail while it is changed (Rail.tsx's Popover): what can be added, by kind, each pressed into the rail;
-/// pressing anywhere but the rail (or Esc) ends the change.
-fn rail_adder(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
-  let kept = rail_items(src, w.id)
-  // beside the rail (its 56: the sidebar reaches over its last 8), 8 past it, clear of the window's buttons' row
-  // (Rail.tsx: Popover.Anchor the rail, collisionPadding top 52)
-  let p = @kit.popover(
-    c,
-    "rail/adder",
-    rail_ws.editing,
-    c.id("rail"),
-    side=Right,
-    along=Start,
-    offset=rail_adder_off,
-    at=(0.0, rail_menu_clear, rail_w, 0.0),
-    look=fn(c, _, body) { @sf.panel(c, w=Px(rail_adder_w), fn() { c.box(style=adder_body, body) |> ignore }) |> ignore },
-    fn() {
-      c.box(style=adder_head, fn() {
-        c.text(tr("web-main.rail.customize"), style=adder_title) |> ignore
-        c.text(tr("web-main.rail.customizeLead"), style=adder_lead) |> ignore
-      })
-      |> ignore
-      // (by kind, as the core groups them: railView's `groups`)
-      let kinds = items(rail_view(src), "groups").map(fn(g) {
-        (text(Some(g), "label"), words_in(items(Some(g), "places")))
-      })
-      let mut none = true
-      for k in kinds {
-        let hidden = k.1.filter(fn(i) { !kept.contains(i) })
-        if hidden.length() == 0 {
-          continue
-        }
-        none = false
-        c.box(style=adder_kind, fn() {
-          c.box(style=adder_group, fn() { c.text(k.0, style=adder_label) |> ignore }) |> ignore
-          for i in hidden {
-            if adder_row(c, i, rail_label(src, i)) {
-              let next = kept.copy()
-              next.push(i)
-              rail_keep(src, w.id, next)
-            }
-          }
-        })
-        |> ignore
-      }
-      if none {
-        c.box(style=adder_group, fn() { c.text(tr("web-main.rail.allIn"), style=adder_lead) |> ignore }) |> ignore
-      }
-    },
-  )
-  // (pressing in the rail does not end it: its places are moved and taken out there)
-  if !p.value {
-    let (px, _, _) = c.pointer()
-    if px >= rail_w || !rail_ws.editing {
-      rail_ws.editing = false
-    }
-  }
-}
-
-///|
-/// A place that can be put in the rail, in the adder (parts.tsx PanelRow): its icon (奏 its word), its ＋ at its end.
-/// True on the frame after it was pressed.
-fn adder_row(c : @ui.Ctx, place : String, label : String) -> Bool {
-  @sf.menu_item(
-    c,
-    label,
-    key="rail/add/" + place,
-    panel=true,
-    icon=rail_icon(place),
-    word=if place == "decisions" { "奏" } else { "" },
-    end="plus",
-  )
-}
-
-///|
-/// A kind's label and its rows, 2 apart (parts.css.ts panelGroup).
-// kept across runs: a value (no field of it changes)
-let adder_kind : @ui.Style = @ui.style(w=Full, gap=S0_5)
-
-///|
-/// The adder's panel: 248 wide, 8 past the rail (Rail.css.ts adder).
-let rail_adder_w : Double = 248.0
-
-///|
-let rail_adder_off : Double = 8.0
-
-///|
-/// The − 5 out past the place's top left corner (Rail.css.ts remove).
-let rail_remove_out : Double = -5.0
-
-///|
-/// A place's dashed outline while the rail is changed: 1.5 wide from a pixel in to half a pixel out of its 38 (its
-/// middle 0.25 in: 37.5 across, its corner 12's less as much), drawn from 0.75 further out.
-let rail_dash_line : Double = 1.5
-
-///|
-let rail_dash_side : Double = 37.5
-
-///|
-let rail_dash_r : Double = 11.75
-
-///|
-let rail_dash_at : Double = -0.5
-
-///|
-/// A place while the rail is changed: outlined, its corner the editing frame's (Rail.css.ts editing: 12).
-// kept across runs: a value (no field of it changes)
-let rail_editing : @ui.Style = @ui.style(radius=Xl)
-
-///|
-// kept across runs: a value (no field of it changes)
-let rail_remove_at : @ui.Style = @ui.style(w=Full)
-
-///|
-/// The −: 18 round in the words' colour, the rail's ground round it (Rail.css.ts remove).
-// kept across runs: a value (no field of it changes)
-let rail_remove : @ui.Style = @ui.style(w=S4_5, h=S4_5, align=ACenter, justify=JCenter, bg=Fg, radius=Full)
-
-///|
-// kept across runs: a value (no field of it changes)
-let adder_head : @ui.Style = @ui.style(w=Full, px=S2_5, pt=S1_5, pb=S1, gap=S0_5)
-
-///|
-// kept across runs: a value (no field of it changes)
-let adder_group : @ui.Style = @ui.style(w=Full, px=S2_5, pt=S1_5, pb=S0_5)
-
-///|
-/// The adder's head and its kinds 8 apart (Rail.css.ts adder: a grid, gap 8).
-// kept across runs: a value (no field of it changes)
-let adder_body : @ui.Style = @ui.style(w=Full, gap=S2)
-
-///|
-// kept across runs: a value (no field of it changes)
-let adder_title : @ui.TextStyle = @ui.text_style(size=Sm, weight=Semibold, color=Fg, leading=L6)
-
-///|
-// kept across runs: a value (no field of it changes)
-let adder_lead : @ui.TextStyle = @ui.text_style(size=Xs, color=Muted, leading=L5)
-
-///|
-/// A kind's label in the adder (parts.css.ts panelLabel: 12, muted, on the page's line, 1.55 of it).
-// kept across runs: a value (no field of it changes)
-let adder_label : @ui.TextStyle = @ui.text_style(size=Xs, color=Muted, leading=L4_75)

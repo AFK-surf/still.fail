@@ -42,7 +42,7 @@ fn new_chat_page_wide(
               new_files_set(src, w.id, !files)
             }
             // (its end by the window's while the page is moved aside for the sidebar shown a while)
-            page_bar_end(c)
+            @sfdesk.page_bar_end(c)
           })
           |> ignore
         })

@@ -11,14 +11,14 @@ fn wide_keys(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
   let pressed = fn(action : String) { @settings.action_pressed(c, prefs, action) }
   if pressed("chat.switch") {
     @sfdesk.switcher_toggle(c)
-    wide.menu = None
-    wide.attention_open = false
+    @sfdesk.wide.menu = None
+    @sfdesk.wide.attention_open = false
   }
   if pressed("chat.new") {
     new_chat_wide()
   }
   if pressed("sidebar.toggle") {
-    wide.folded = !wide.folded
+    @sfdesk.wide.folded = !@sfdesk.wide.folded
   }
   if pressed("settings") {
     open_settings()
@@ -36,8 +36,8 @@ fn wide_keys(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
     wide.jobs_open = !wide.jobs_open
   }
   if c.key_pressed(@ui.key_escape) || c.key_pressed(@ui.key_escape, in_field=true) {
-    if rail_ws.editing {
-      rail_ws.editing = false
+    if @sfdesk.wide.editing {
+      @sfdesk.wide.editing = false
     } else if @sfdesk.switcher_escape(c) {
       // ⌘K's: one kind's list back to all of them, else closed
       ()
@@ -46,12 +46,12 @@ fn wide_keys(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
       c.blur()
     } else if wide.keys_open {
       wide.keys_open = false
-    } else if wide.menu is Some(_) || wide.filter_open || wide.attention_open {
-      wide.menu = None
-      wide.filter_open = false
-      wide.attention_open = false
-    } else if wide.renaming != "" {
-      wide.renaming = ""
+    } else if @sfdesk.wide.menu is Some(_) || @sfdesk.wide.filter_open || @sfdesk.wide.attention_open {
+      @sfdesk.wide.menu = None
+      @sfdesk.wide.filter_open = false
+      @sfdesk.wide.attention_open = false
+    } else if @sfdesk.wide.renaming != "" {
+      @sfdesk.wide.renaming = ""
       c.blur()
     } else if pk.ts != "" {
       pick_clear()
@@ -134,7 +134,7 @@ let focus_composer : Ref[Bool] = Ref(false)
 /// 路径, 归档; at where
 /// the row was right clicked (mbui's dropdown menu there).
 fn row_menu(c : @ui.Ctx, src : Source) -> Unit {
-  let (key, item, x, y) = match wide.menu {
+  let (key, item, x, y) = match @sfdesk.wide.menu {
     Some(m) => m
     // (closed: told so, for its going)
     None => {
@@ -176,7 +176,7 @@ fn row_menu(c : @ui.Ctx, src : Source) -> Unit {
   // (its top left at the pointer, as the web's context menu opens)
   let m = @sf.menu(c, "row-menu", true, 0, entries, icons, @sf.menu_w, offset=0.0, at=(x, y, 0.0, 0.0))
   if !m.open {
-    wide.menu = None
+    @sfdesk.wide.menu = None
   }
   match m.chosen {
     Some("pin") =>
@@ -195,7 +195,7 @@ fn row_menu(c : @ui.Ctx, src : Source) -> Unit {
           )
         None => ()
       }
-    Some("rename") => wide.renaming = key
+    Some("rename") => @sfdesk.wide.renaming = key
     Some("keep") =>
       match item.thread {
         Some(th) =>
@@ -411,7 +411,7 @@ fn side_rename(c : @ui.Ctx, src : Source, item : ChatItem) -> Unit {
     )
     match res.submitted {
       Some(title) => {
-        wide.renaming = ""
+        @sfdesk.wide.renaming = ""
         rename_for.val = ""
         c.blur()
         let words = title.trim(chars=" \n\t").to_string()
@@ -428,7 +428,7 @@ fn side_rename(c : @ui.Ctx, src : Source, item : ChatItem) -> Unit {
           act(src, tr("android-chat.rename.verb"), "", "chat.rename", Json::object(p))
         }
       }
-      None => if !res.focused && rename_for.val != "" && rename_seen.val { wide.renaming = "" }
+      None => if !res.focused && rename_for.val != "" && rename_seen.val { @sfdesk.wide.renaming = "" }
     }
     rename_seen.val = res.focused
   })
@@ -495,7 +495,7 @@ fn switcher_offered(c : @ui.Ctx, src : Source) -> Array[@sfdesk.Offered] {
     icon: "panel-open",
     keys: keys("sidebar.toggle"),
     typed: false,
-    run: fn() { wide.folded = !wide.folded },
+    run: fn() { @sfdesk.wide.folded = !@sfdesk.wide.folded },
   })
   all.push({
     id: "settings",

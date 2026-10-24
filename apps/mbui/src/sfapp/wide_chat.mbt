@@ -136,7 +136,7 @@ fn chat_keys(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView) -> Unit {
   }
   if @settings.action_pressed(c, prefs, "chat.archive", in_field=true) && v.archivable && !v.archived && !v.offline {
     archive_chat(src, r, v)
-    wide.landed = ""
+    @sfdesk.wide.landed = ""
   }
   // an agent's history in front: the panel closed; else the first agent's open, or the first agent's opened
   // (ChatPage.tsx chat.history)
@@ -266,7 +266,7 @@ fn wide_chat_bar(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef, v : Chat
     c.window_drag(bar)
   }
   // (beside the rail its room as the block moves: page_bar_room)
-  let (room_l, room_r, ml, mr) = page_bar_room()
+  let (room_l, room_r, ml, mr) = @sfdesk.page_bar_room()
   c.box(moves="page-bar", dir=Row, w=Fill(1.0), h=Px(wide_bar_h), pl=room_l, pr=room_r, ml~, mr~, pb=1.0, gap=16.0, align=ACenter, bg=t.p.bg, id=bar, fn() {
     // (the title, its people and agents 10 apart, 8 in from the bar's padding: session.css.ts pageBarTitle)
     c.box(dir=Row, w=Fill(1.0), pl=bar_title_in, gap=bar_title_gap, align=ACenter, fn() {
@@ -322,7 +322,7 @@ fn wide_chat_bar(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef, v : Chat
               |> ignore
             } else if icon_button(c, "chat-archive", "archive", label=tr("web-pages.chat.archive"), action="chat.archive") {
               archive_chat(src, r, view)
-              wide.landed = ""
+              @sfdesk.wide.landed = ""
             }
           }
           let jobs = (src.topic)("chatJobs", chat_params(r))
@@ -508,7 +508,7 @@ fn page_bar_wide(c : @ui.Ctx, title : String, back : Bool, trailing : () -> Unit
     c.window_drag(bar)
   }
   let mut went = false
-  let (room_l, room_r, ml, mr) = page_bar_room()
+  let (room_l, room_r, ml, mr) = @sfdesk.page_bar_room()
   c.box(moves="page-bar", dir=Row, w=Fill(1.0), h=Px(wide_bar_h), pl=room_l, pr=room_r, ml~, mr~, pb=1.0, gap=8.0, align=ACenter, bg=t.p.bg, id=bar, fn() {
     if back {
       went = icon_button(c, "page-bar/back", "chevron-left")

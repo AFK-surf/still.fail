@@ -3,6 +3,11 @@
 
 ///|
 let zh_wide : Map[String, String] = {
+  "web-main.chatMark.alert": "需要处理",
+  "web-main.chatMark.busy": "工作中",
+  "web-main.chatMark.done": "已完成，有新消息",
+  "web-main.chatMark.other": "等待他人",
+  "web-main.chatMark.wait": "等待你处理",
   "android-settings.machine.use": "使用此账号",
   "web-pages.profiles.machineSignedIn": "已在 {station} 上登录",
   "web-pages.settings.profiles.add": "添加 Profile",

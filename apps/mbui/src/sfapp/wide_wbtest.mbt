@@ -28,7 +28,7 @@ test "wide: the rail, the chats' list beside it and a page in the rest; below th
   assert_true(t.find("新建对话") is Some(_))
   assert_true(t.find("今天") is Some(_))
   let (x, _) = t.find("整理发布清单").unwrap()
-  assert_true(x < rail_w + 240.0)
+  assert_true(x < @sfdesk.rail_w + 240.0)
   // nothing open: a new chat beside the list (the fixture keeps no chat last open)
   assert_true(app.nav.top() == NewChat)
   // a phone's width: the phone's Home, the same stack
@@ -240,7 +240,7 @@ fn composer_glass(t : @ui.Tester) -> (Double, Double, Double, Double) raise {
   let mut best : (Double, Double, Double, Double)? = None
   for g in t.drawn_glass() {
     let (x, y, w, h, _, _) = g
-    if x > rail_w + 240.0 && w > 400.0 {
+    if x > @sfdesk.rail_w + 240.0 && w > 400.0 {
       match best {
         Some((_, by, _, _)) if by >= y => ()
         _ => best = Some((x, y, w, h))
@@ -539,7 +539,7 @@ test "wide: Station and Profile a list of their own beside their page; 连接 an
   assert_true(t.find("添加 Profile") is Some(_))
   app.nav.replace(Place("usage"))
   // (the sidebar closing to the rail's bar as the web's: brand.tsx moveSidebar)
-  t.run_for(side_move_ms)
+  t.run_for(@sfdesk.side_move_ms)
   assert_true(t.find("添加 station") is None && t.find("添加 Profile") is None && t.find("新建对话") is None)
 }
 
@@ -562,7 +562,7 @@ test "wide: 文件 as the web's Finder: 个人收藏, each station, 团队共享
   t.frame()
   assert_eq(named(calls, "drive.folders").length(), 1)
   // a shared folder opens in the pane, in columns (the sidebar's 文档, not the pane's)
-  let (dx, dy) = t.locate("文档").filter(fn(p) { p.0 < rail_w + wide.side_w })[0]
+  let (dx, dy) = t.locate("文档").filter(fn(p) { p.0 < @sfdesk.rail_w + @sfdesk.wide.side_w })[0]
   t.tap(dx, dy)
   t.run_for(@ui.nav_push_ms)
   match app.nav.top() {
@@ -786,7 +786,7 @@ test "wide: a place of the rail dragged up a place is kept there (prefs.set rail
   let t = wide_tester(calls)
   let (rx, ry, rw, rh) = t.query(Button, label="文件").unwrap().rect
   let (x, y) = (rx + rw / 2.0, ry + rh / 2.0)
-  t.drag(x, y, x, y - rail_pitch)
+  t.drag(x, y, x, y - @sfdesk.rail_pitch)
   t.frame()
   let kept = named(calls, "prefs.set")
   assert_true(kept.length() > 0, msg="kept")
@@ -1151,7 +1151,7 @@ test "wide: the rail as the web's: the stations their glyph and how they are; th
   let calls : Array[Made] = []
   let t = wide_tester(calls)
   // the stations' place says how they are (RailStations' label)
-  assert_true(t.query(Button, label="Station：" + rail_stations_label(fixture("home"), "ws1")) is Some(_))
+  assert_true(t.query(Button, label="Station：" + @sfdesk.rail_stations_label(fixture("home"), "ws1")) is Some(_))
   // the workspaces, one under another, 36 apart (30 and the 6 between)
   let ws : Array[(Double, Double, Double, Double)] = []
   for x in ["星火工作室", "个人"] {
@@ -1288,7 +1288,7 @@ test "wide: 用量 as the web's: what it counts beside its title, who spent it t
   let t = wide_tester(calls)
   app.nav.replace(Place("usage"))
   // (the chats' sidebar closing to the rail's bar meanwhile, as the web's)
-  t.run_for(side_move_ms)
+  t.run_for(@sfdesk.side_move_ms)
   assert_true(t.query(Button, label="说明") is Some(_), msg="what it counts")
   assert_true(t.find("整理发布清单") is None, msg="not the chats' list first: " + t.words().map(fn(w) { w.0 }).join("|"))
   let (bx, by) = t.find_last("按对话").unwrap()

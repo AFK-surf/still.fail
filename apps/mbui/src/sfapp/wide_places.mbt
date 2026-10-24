@@ -4,12 +4,6 @@
 // begin with); 连接 and 用量 a page across the pane, no sidebar.
 
 ///|
-/// Whether the place has no sidebar: its page is the pane's whole (连接, 用量).
-fn place_bare(place : String) -> Bool {
-  place == "connects" || place == "usage"
-}
-
-///|
 /// The page picked in a place (the stations' or the profiles' list), by place; none: the first.
 fn place_route(src : Source, w : Workspace, place : String) -> @settings.Route? {
   match wide.place_pick.get(place) {
@@ -70,9 +64,9 @@ fn place_add(c : @ui.Ctx, key : String, label : String, run : (() -> Unit)?) -> 
   let t = @sf.theme()
   match run {
     Some(go) =>
-      if nav_row(c, key, false, fn() {
+      if @sfdesk.nav_row(c, key, false, fn() {
           @sf.icon(c, "plus", size=@sf.row_icon, color=t.p.muted) |> ignore
-          nav_words(c, label)
+          @sfdesk.nav_words(c, label)
         }) {
         go()
       }
@@ -89,7 +83,7 @@ fn stations_side(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
   let here = @settings.here_of(core, w.id, w.name)
   let picked = place_route(src, w, "stations")
   c.box(style=place_side, fn() {
-    side_top(c)
+    @sfdesk.side_top(c)
     c.box(style=place_list, fn() {
       place_add(c, "stations/add", tr("web-pages.settings.stations.add"), @settings.place_action(core, here, "stations"))
       for s in stations_listed(src, w) {
@@ -114,7 +108,7 @@ fn station_side_row(c : @ui.Ctx, src : Source, s : Json?, on : Bool, pick : () -
   let meters = if online { items(field(s, "host"), "meters") } else { [] }
   let net = if online { (src.topic)("stationNet", { "station": Json::string(address) }).value } else { None }
   let running = number(field(field(s, "overview"), "counts"), "running")
-  if nav_row(c, "stations/" + address, on, align=AStart, fn() {
+  if @sfdesk.nav_row(c, "stations/" + address, on, align=AStart, fn() {
       c.box(style=place_mark, fn() {
         station_or_server(c, text(s, "emoji"), text(s, "icon"), @sf.row_icon, t.p.text)
       })
@@ -183,7 +177,7 @@ fn profiles_side(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
   let picked = place_route(src, w, "profiles")
   let list = items((src.topic)("profiles", { "scope": Json::string(w.id) }).value, "items")
   c.box(style=place_side, fn() {
-    side_top(c)
+    @sfdesk.side_top(c)
     c.box(style=place_list, fn() {
       place_add(c, "profiles/add", tr("web-pages.settings.profiles.add"), @settings.place_action(core, here, "profiles"))
       let mut group = ""
@@ -191,7 +185,7 @@ fn profiles_side(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
         let e = Some(e)
         if text(e, "group") != group {
           group = text(e, "group")
-          nav_heading(c, text(e, "groupTitle"))
+          @sfdesk.nav_heading(c, text(e, "groupTitle"))
         }
         let p = field(e, "profile")
         let route = profile_route(e)
@@ -203,7 +197,7 @@ fn profiles_side(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
         } else {
           ""
         }
-        if nav_row(c, "profiles/" + text(e, "key"), picked == Some(route), align=AStart, fn() {
+        if @sfdesk.nav_row(c, "profiles/" + text(e, "key"), picked == Some(route), align=AStart, fn() {
             c.box(style=place_mark, fn() {
               @sf.maker_mark(c, text(p, "providerMark"), text(p, "runtime"), @sf.row_icon) |> ignore
             })
@@ -241,10 +235,10 @@ fn profiles_side(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
         if offers.length() == 0 {
           continue
         }
-        nav_heading(c, fill("web-pages.profiles.machineSignedIn", [("station", text(s, "name"))]))
+        @sfdesk.nav_heading(c, fill("web-pages.profiles.machineSignedIn", [("station", text(s, "name"))]))
         for l in offers {
           let l = Some(l)
-          if nav_row(c, "profiles/machine/" + station + "/" + text(l, "runtime"), false, align=AStart, fn() {
+          if @sfdesk.nav_row(c, "profiles/machine/" + station + "/" + text(l, "runtime"), false, align=AStart, fn() {
               c.box(style=place_mark, fn() {
                 @sf.maker_mark(c, "", text(l, "runtime"), @sf.row_icon) |> ignore
               })
