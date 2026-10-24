@@ -30,13 +30,20 @@ fn message_decision(c : @ui.Ctx, src : Source, here : MessageHere, m : Message, 
           }
         }
         login_card(c, core, station, card.login)
+        // (letting it go: under it while it is asked, as under a post with no card)
+        ask_dismiss(c, src, here, m, false)
       })
       |> ignore
       return
     }
     _ => ()
   }
+  // a post that asks with no card (an agent's need): 忽略 alone under it while it is asked (Chat.tsx: AskDismiss
+  // beside no MessageDecision)
   if m.card is None && m.options is None {
+    if m.asked {
+      c.box(style=decision_box, fn() { ask_dismiss(c, src, here, m, false) }) |> ignore
+    }
     return
   }
   // an agent's request about a vault item that says what it is: its card is in place of the words (message.mbt)

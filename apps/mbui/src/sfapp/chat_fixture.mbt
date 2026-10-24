@@ -408,6 +408,8 @@ fn fixture_chat_topic(f : Fixture, name : String, params : Map[String, Json]) ->
             with_file_links(rich_chat(f.older))
           } else if f.mode == "chat-screens" {
             with_message(rich_chat(f.older), screens_answer)
+          } else if f.mode == "chat-need" {
+            with_need(rich_chat(f.older))
           } else if f.mode == "chat-update" {
             with_station_update(rich_chat(f.older))
           } else if f.mode == "chat-download" {
@@ -1357,6 +1359,30 @@ fn with_message(v : Json, words : String) -> Json {
       all.push(
         msg(12, "agent", by_agent("anthropic", "claude", "s-c1"), words, "1 分钟前", {
           "ending": "all_done",
+        }),
+      )
+      o["messages"] = Json::array(all)
+      Json::object(o)
+    }
+    _ => v
+  }
+}
+
+///|
+/// The chat `v` ending on an agent's need with no card ("chat-need"): what it asks, waiting for a person, nothing to
+/// pick (the core's `asked`).
+fn with_need(v : Json) -> Json {
+  match v {
+    Object(m) => {
+      let o = m.copy()
+      let all = match m.get("messages") {
+        Some(Array(a)) => a.copy()
+        _ => []
+      }
+      all.push(
+        msg(12, "agent", by_agent("anthropic", "claude", "s-c1"), "你在手机上试一下新的列表，有问题截个图给我。", "1 分钟前", {
+          "ending": "need_human",
+          "asked": true,
         }),
       )
       o["messages"] = Json::array(all)
