@@ -54,7 +54,7 @@ fn days_tester(v : Json) -> @ui.Tester {
 test "usage: each day's bar 16 wide in the middle of its day, over its date, on the days' foot, as high as its share of the top" {
   let costs = [20.0, 16.0, 48.0, 80.0, 32.0, 24.0, 8.0]
   let t = days_tester(usage_week(costs.map(fn(c) { [c] })))
-  let bars = t.drawn_rects().filter(fn(r) { r.4 == usage_light[0] && r.2 == 16.0 })
+  let bars = t.drawn_rects().filter(fn(r) { r.4 == @sf.usage_series(0) && r.2 == 16.0 })
   assert_eq(bars.length(), 7)
   // the most spent 120 high (80 of 100), its foot the days' (its part the corner longer, cut there)
   let (_, top3, _, _, _) = bars[3]
@@ -82,8 +82,8 @@ test "usage: each day's bar 16 wide in the middle of its day, over its date, on 
 test "usage: a day split by its people 1 apart, the first at the foot; each of them, what they spent that day, under the days" {
   let parts = [[12.0, 8.0], [10.0, 6.0], [30.0, 18.0], [40.0, 40.0], [20.0, 12.0], [16.0, 8.0], [6.0, 2.0]]
   let t = days_tester(usage_week(parts))
-  let ann = t.drawn_rects().filter(fn(r) { r.4 == usage_light[0] && r.2 == 16.0 })
-  let bo = t.drawn_rects().filter(fn(r) { r.4 == usage_light[1] && r.2 == 16.0 })
+  let ann = t.drawn_rects().filter(fn(r) { r.4 == @sf.usage_series(0) && r.2 == 16.0 })
+  let bo = t.drawn_rects().filter(fn(r) { r.4 == @sf.usage_series(1) && r.2 == 16.0 })
   assert_eq((ann.length(), bo.length()), (7, 7))
   // the most spent: Bo's part over Ann's, 1 apart; the two (and the gap) its 120
   let (_, ay, _, ah, _) = ann[3]

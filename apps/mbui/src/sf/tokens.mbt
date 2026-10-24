@@ -1179,3 +1179,19 @@ pub let agent_station_in : @ui.Space = room(20.0 * 0.19 + 1.0)
 ///|
 /// A person in a chat's stack of people (the web's later.css.ts peopleStack): 16 ringed 1.5.
 pub let person_ringed : @ui.Len = Fixed(19.0)
+
+///|
+/// The people a day's usage is split by, in the order the core's usage view ranks them (the web's Usage.css.ts, the
+/// phone's Usage.kt): four of their own in light and in dark, the first still.fail's accent.
+// kept across runs: a table, never written
+let usage_light : Array[Int64] = [0xEF6A3CFFL, 0x2A78D6FFL, 0x1BAF7AFFL, 0x4A3AA7FFL]
+
+///|
+// kept across runs: a table, never written
+let usage_dark : Array[Int64] = [0xE0602FFFL, 0x3987E5FFL, 0x199E70FFL, 0x9085E9FFL]
+
+///|
+/// The `i`th person's colour in the theme shown.
+pub fn usage_series(i : Int) -> Int64 {
+  (if theme().dark { usage_dark } else { usage_light })[i % 4]
+}
