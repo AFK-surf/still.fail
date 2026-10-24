@@ -35,9 +35,9 @@ makes goes to `out/core/` (ignored); the shell's intermediate build goes to `$CA
 scripts/core.sh deps                 # pnpm install --frozen-lockfile in client/core-ts
 scripts/core.sh hermes-apple         # Hermes for macOS and iOS, fetched once (out/core/hermes, a link into the cache)
 scripts/core.sh engine [TARGET]      # out/core/<target>/libmbui_core.a: src/host/apple_core.mm (when it changed)
-scripts/core.sh shell [TARGET]       # out/core/<target>/libstillfail_shell.a (+ shell-<target>.libs)
+scripts/core.sh shell [TARGET]       # out/core/<target>/libstillfail_shell.a (+ shell-<target>.libs), built here by cargo
 scripts/core.sh hermes               # out/core/core.hbc (ENTRY: core/hermes.ts, or core/media-hermes.ts)
-scripts/core.sh apple [TARGET]       # all four for an app, each when missing or stale (the media entry)
+scripts/core.sh apple [TARGET]       # all four for an app, each when missing or stale (the shell by its key; the media entry)
 scripts/core.sh smoke                # out/core/smoke built and run twice against https://app.still.fail
 scripts/core.sh listen               # listen.* with core/listen-test.js in the core's place
 scripts/core.sh exit                 # exit() with the core in a task (core/exit_test.m, core/exit-test.js)
@@ -54,12 +54,13 @@ TARGET is aarch64-apple-darwin (the default), aarch64-apple-ios-sim or aarch64-a
   `apps/android/build.py` keeps hermesc), never committed; `out/core/hermes` links to it.
 - **The shell** is the crate's `cdylib` built as a static library (`cargo rustc --crate-type staticlib`), so ember's
   Cargo.toml is untouched. What it needs from the system (`-framework Security -framework CoreFoundation … -liconv`) is
-  what rustc prints as `native-static-libs`, kept in `out/core/shell-<target>.libs`. There is no prebuilt one for
-  Apple's targets (scripts/native.ts's `shell` part is Android's): it is built once per machine (≈ 1 min, sccache).
+  what rustc prints as `native-static-libs`, kept in `out/core/shell-<target>.libs`. `apple` takes it from
+  still.fail's natives (scripts/native.ts `shell-apple`, by the shell's sources: built once by CI's natives job, else
+  by native.ts here); `shell` builds it here (≈ 1 min with sccache, 4 without).
 - **The bytecode** is Android's exactly (`hermes`: esbuild to ES2020, Babel's class transform, hermesc 0.81.4 `-O
   -block-scoping`), kept with a stamp of its inputs.
 - **The engine** (`engine`): `src/host/apple_core.mm` compiled for the target (`-std=c++20 -fobjc-arc -fexceptions
-  -frtti`) against the tarball's headers into `libmbui_core.a`. moon does not see it: `scripts/mac.sh` touches the
+  -frtti`) against the tarball's headers into `libmbui_core.a` (1-2 s). moon does not see it: `scripts/mac.sh` touches the
   app's `core_engine.m` when it is made again, so the app is linked again.
 - The macOS apps find the framework where it is (`-rpath` to `out/core/hermes/…/macosx` from the executable, and
   `@executable_path/../Frameworks` for an app bundle); the iOS app carries it in `MBUI.app/Frameworks`.
