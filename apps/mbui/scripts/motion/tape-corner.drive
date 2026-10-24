@@ -1,0 +1,17 @@
+# Laid out Medium on an opened fold's inner screen (MBUI_WIN=690x840 MBUI_FILM_PLATFORM=2): the page brought over, its
+# composer one line, then three: in the page panel's corners it follows the panel's corner (InnerOr), whatever it is.
+system {"size_class":{"width":"medium","height":"medium"}}
+timeout 20000
+until 发消息
+wait 600
+tapxy -80 420
+wait 900
+tap 发消息
+wait 300
+type 第一行
+enter
+type 第二行
+enter
+type 第三行
+wait 600
+exit

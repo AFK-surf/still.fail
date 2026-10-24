@@ -251,7 +251,9 @@ let inner_even : Double = 0.5
 /// written, and corner_faults finds nothing
 /// in it. In the order they were built, a container `Inner` itself worked out first. A box in no rounded container,
 /// near none of its edges, or near edges at different distances (the window narrowed, a max_w come into force) is
-/// drawn square, and said so: corner_faults lists it, so a test fails where a person's screen would not.
+/// drawn square, and said so: corner_faults lists it, so a test fails where a person's screen would not. One said
+/// `InnerOr` keeps its own corner in no container or near none of its edges (it stands alone there), and at different
+/// distances keeps it too, said so.
 fn Ctx::corners_after_layout(self : Ctx) -> Unit {
   self.inner_faults.clear()
   // the containers whose corner is what lies in it (`Around`), before the boxes worked out from their containers
@@ -262,11 +264,16 @@ fn Ctx::corners_after_layout(self : Ctx) -> Unit {
   let grounds = self.layer_grounds()
   for i in self.inners {
     let n = self.nodes[i]
+    // (`InnerOr`: its own corner where it lies in no container's corner, as built)
+    let own = if self.inners_or.contains(i) { Some(n.radius) } else { None }
     n.radius = 0.0
     let (p, ra, _) = match self.corner_container(i, grounds) {
       Some(found) => found
       None => {
-        self.inner_faults.push("\{self.named(i)}: radius=Inner, in no rounded container")
+        match own {
+          Some(r) => n.radius = r
+          None => self.inner_faults.push("\{self.named(i)}: radius=Inner, in no rounded container")
+        }
         continue
       }
     }
@@ -280,9 +287,13 @@ fn Ctx::corners_after_layout(self : Ctx) -> Unit {
     // (an edge it reaches past is no edge of its: it is cut there, as corner_faults leaves out a corner it overhangs)
     let near = sides.filter(fn(s) { s.1 >= -inner_even && s.1 < ra })
     if near.is_empty() {
-      self.inner_faults.push(
-        "\{self.named(i)}: radius=Inner, near none of the edges of \{self.named(p)} (corner \{ra})",
-      )
+      match own {
+        Some(r) => n.radius = r
+        None =>
+          self.inner_faults.push(
+            "\{self.named(i)}: radius=Inner, near none of the edges of \{self.named(p)} (corner \{ra})",
+          )
+      }
       continue
     }
     let d = near[0].1
@@ -291,9 +302,17 @@ fn Ctx::corners_after_layout(self : Ctx) -> Unit {
       self.inner_faults.push(
         "\{self.named(i)}: radius=Inner, at different distances from the edges of \{self.named(p)} (corner \{ra}): \{said}",
       )
+      n.radius = own.unwrap_or(0.0)
       continue
     }
-    n.radius = concentric(ra, d)
+    // (`InnerOr` round of its own and round there too, as a pill or a circle is in a corner as round as it: its own
+    // corner kept, the same box drawn the same)
+    let k = concentric(ra, d)
+    let half = dmin(n.fw, n.fh) / 2.0
+    n.radius = match own {
+      Some(r) if r >= half && k >= half => r
+      _ => k
+    }
   }
 }
 

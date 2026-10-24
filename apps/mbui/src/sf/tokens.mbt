@@ -1192,10 +1192,10 @@ let ref_menu_round : Double = 32.0
 pub let closed_bar_corner : @ui.Radius = rounded(surface_corner(6.0, 9.0))
 
 ///|
-/// The corner of the tape's panels (laid out Medium: the sidebar's, the page's, the side panel's, all alike): concentric
-/// with the composer's capsule at the page's foot, 12 in from its sides and its foot (its buttons 32, 6 in: a pill 44
-/// high, round as it is).
-pub let page_panel_corner : @ui.Radius = rounded(around(page_panel_in, (composer_button + 12.0) / 2.0))
+/// The corner of the tape's panels (laid out Medium: the sidebar's, the page's, the side panel's, all alike): the
+/// frame's own. What stands in a panel's corner follows it (`InnerOr`: the composer's capsule at the page's foot, and
+/// its buttons in its corners, concentric), so it is chosen for the panels alone and changes without them.
+pub let page_panel_corner : @ui.Radius = rounded(34.0)
 
 ///|
 /// How far in from a page's own panel's sides and foot its composer stands.

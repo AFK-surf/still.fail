@@ -562,10 +562,12 @@ pub fn Theme::leading(self : Theme, l : Leading) -> Double? {
 }
 
 ///|
-/// A corner in this theme (`Inner` and `Around` are worked out once laid out: 0 here).
+/// A corner in this theme (`Inner` and `Around` are worked out once laid out: 0 here; `InnerOr` its own here, the
+/// container's once laid out where it lies in a corner of one).
 pub fn Theme::corner(self : Theme, r : Radius) -> Double {
   match r {
     Sharp | Inner | Around => 0.0
+    InnerOr(own) => self.corner(own)
     Sm => self.radii.sm
     Base => self.radii.base
     Md => self.radii.md

@@ -418,6 +418,12 @@ fn Css::radius(self : Css) -> Radius {
     "Xl4" => Xl4
     "Full" => Full
     "Inner" => Inner
+    "InnerOr" => {
+      self.expect('(')
+      let own = self.radius()
+      self.expect(')')
+      InnerOr(own)
+    }
     "Around" => Around
     // det-ok(style-exact, style-literal): what a style's text says, counted at the text (detlint's css)
     "Exact" => Exact(self.arg())

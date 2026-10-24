@@ -365,8 +365,10 @@ pub struct Ctx {
   mut narrow_below : Double
   mut narrow : Bool
   // the boxes built this frame whose corner is `Inner` (style.mbt): worked out once laid out (corners.mbt), and
-  // those that could not be (Tester::corner_faults says them)
+  // those that could not be (Tester::corner_faults says them); of them, those `InnerOr`, their own corner where they lie
+  // in no container's
   inners : Array[Int]
+  inners_or : Array[Int]
   // what move_state moves (move_state.mbt): the moves going on; what each box named to be moved was shown as, this
   // frame (its build so far) and the last; how many boxes of each name this build has built
   move_runs : Array[MoveRun]
@@ -556,6 +558,7 @@ fn Ctx::new() -> Ctx {
     narrow_below: 700.0,
     narrow: false,
     inners: [],
+    inners_or: [],
     move_runs: [],
     shown_now: {},
     shown_last: {},
@@ -888,9 +891,13 @@ pub fn Ctx::box(
       None => None
     },
   ).unwrap_or(0.0)
-  // a corner said `Inner` (and not said here): worked out once laid out (corners.mbt)
+  // a corner said `Inner` (and not said here): worked out once laid out (corners.mbt); `InnerOr`, its own till then
   if radius is None && st.radius is Some(Inner) {
     self.inners.push(i)
+  }
+  if radius is None && st.radius is Some(InnerOr(_)) {
+    self.inners.push(i)
+    self.inners_or.push(i)
   }
   // `Around`: from what lies in its corner, once laid out
   if radius is None && st.radius is Some(Around) {
