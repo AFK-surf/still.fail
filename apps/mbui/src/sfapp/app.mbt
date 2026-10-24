@@ -388,8 +388,6 @@ fn signed_in(c : @ui.Ctx, src : Source) -> Unit {
       // a new device waiting on this one's code, in any workspace of the person's, over whichever page is open
       // (App.kt LockPrompts): put up when no other sheet is
       @settings.lock_prompts(settings_core(src, w), !sheet_open() && dui.sheet is None)
-      // the desktop's settings pages' dialogs (src/sfdesk settings_page.mbt), under the settings' questions
-      @sfdesk.settings_overlay(c)
       @settings.overlay(c, settings_core(src, w))
       // the library's menus, picks, panels, confirms and questions (src/sf presenters.mbt), over all of those
       @sf.presented(c)

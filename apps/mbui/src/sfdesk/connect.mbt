@@ -398,7 +398,6 @@ fn cd_token_dialog(core : Core, station : String, cv : Json?) -> Unit {
   let key = "connect-tokens/" + (desk_dialogs.val + 1).to_string()
   let slack = field(cv, "slack")
   open_dialog(
-    key,
     @sf.t("web-pages.connect.replaceTitle"),
     description=@sf.t("web-pages.connect.replaceLead"),
     fn(c, _) {
@@ -585,7 +584,6 @@ fn cd_mode_dialog(core : Core, station : String, item : Json?) -> Unit {
     })
   }
   open_dialog(
-    key,
     @sf.t("web-pages.connect.modeTitle"),
     description=@sf.t("web-pages.connect.modeLead"),
     wide=true,
@@ -644,7 +642,6 @@ fn cd_choose_dialog(core : Core, station : String, item : Json?) -> Unit {
   )
   let title = field_of(key + "/title")
   open_dialog(
-    key,
     @sf.t("web-pages.connect.chooseTitle"),
     description=@sf.t("web-pages.connect.chooseLead", args=[("name", text(cv, "name"))]),
     wide=true,
@@ -806,7 +803,6 @@ fn cd_owner_dialog(core : Core, here : Here, station : String, cv : Json?) -> Un
     email.set(owner.val)
   }
   open_dialog(
-    key,
     @sf.t("web-pages.connect.changeOwner"),
     description=@sf.t("web-pages.connect.ownerLead"),
     fn(c, _) {
@@ -906,7 +902,6 @@ fn cd_secret_dialog(core : Core, station : String, cv : Json?) -> Unit {
   let secret = field_of(key + "/secret")
   let error : Ref[String] = Ref("")
   open_dialog(
-    key,
     @sf.t("web-pages.connect.feishu.replace"),
     description=@sf.t("web-pages.connect.feishu.replaceLead"),
     fn(c, _) {

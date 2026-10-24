@@ -62,7 +62,6 @@ fn new_connect_dialog(src : Source, core : Core, here : Here, station : String, 
   let opened = Ref(false)
   let view = fn() { (core.topic)("connectFlow", { "station": str(station), "form": str(f.form) }).value }
   open_dialog(
-    key,
     @sf.t("web-pages.connects.add"),
     wide=true,
     live=fn() {

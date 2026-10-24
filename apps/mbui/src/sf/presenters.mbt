@@ -42,13 +42,27 @@ priv enum Shows {
   Menu(Array[MenuItem?], String, @ui.Along)
   /// a pick: its title, the choices, the one chosen now, what choosing one does
   Pick(String, Array[Choice], String, (String) -> Unit)
-  /// a small panel: its title ("" none), what it holds (given what closes it), how wide beside what opened it
-  Panel(String, (@ui.Ctx, () -> Unit) -> Unit, Double)
+  /// a small panel, or with nothing that opened it a dialog (PanelOf)
+  Panel(PanelOf)
   /// a confirm: its title, what it does, its action, whether that cannot be undone, what goes on once it is said
   Confirm(String, String, String, Bool, () -> Unit)
   /// a question: its title, the line at first, its placeholder, its action, the hint under it, whether a secret, what
   /// goes on with the line (trimmed)
   Ask(String, String, String, String, String, Bool, (String) -> Unit)
+}
+
+///|
+/// A panel: its title ("" none), what it is about ("" nothing), what it holds and what is at its foot (each given
+/// what closes it), how wide beside what opened it, whether a wide dialog; its title, its step's count and what it
+/// is about as they are now (a wizard's), over those given.
+priv struct PanelOf {
+  title : String
+  description : String
+  body : (@ui.Ctx, () -> Unit) -> Unit
+  foot : ((@ui.Ctx, () -> Unit) -> Unit)?
+  w : Double
+  wide : Bool
+  live : (() -> (String, String, String))?
 }
 
 ///|
@@ -62,6 +76,10 @@ priv struct Presented {
   line : @ui.Field
   mut typed : String
   mut focused : Bool
+  /// what is let go of as it closes unsaid (back, Escape, a press outside, its close button), and whether it closed
+  /// so or was said
+  gone : () -> Unit
+  mut ended : Bool
 }
 
 ///|
@@ -95,7 +113,7 @@ pub fn presenters_reset() -> Unit {
 }
 
 ///|
-fn present(shows : Shows, from : Anchor, line? : String = "") -> Unit {
+fn present(shows : Shows, from : Anchor, line? : String = "", gone? : () -> Unit = fn() {  }) -> Unit {
   presented_count.val += 1
   presented_now.push({
     serial: presented_count.val,
@@ -105,6 +123,8 @@ fn present(shows : Shows, from : Anchor, line? : String = "") -> Unit {
     line: @ui.Field::new(text=line),
     typed: line,
     focused: false,
+    gone,
+    ended: false,
   })
 }
 
@@ -124,9 +144,23 @@ pub fn pick(title : String, choices : Array[Choice], chosen : String, choose : (
 
 ///|
 /// A small panel (parts.tsx PanelHead and its rows, fields) titled `title` ("" none), opened by `from`: `body` draws
-/// what it holds each frame, given what closes it. `w`: how wide beside what opened it.
-pub fn panel(title : String, body : (@ui.Ctx, () -> Unit) -> Unit, from~ : Anchor, w? : Double = panel_w) -> Unit {
-  present(Panel(title, body, w), from)
+/// what it holds each frame, given what closes it. `w`: how wide beside what opened it. Opened by nothing
+/// (Unanchored), a dialog in the middle of the window (parts.tsx Dialog: `description` under its title, `foot`'s
+/// buttons at its foot, given what closes it, `wide` 640 wide in place of 520; `live`: its title, its step's count and
+/// what it is about as they are now, a wizard's). `gone`: what is let go of as it closes unsaid (back, Escape, a press
+/// outside, its close button), not by what `close` was given to.
+pub fn panel(
+  title : String,
+  body : (@ui.Ctx, () -> Unit) -> Unit,
+  from~ : Anchor,
+  w? : Double = panel_w,
+  description? : String = "",
+  foot? : (@ui.Ctx, () -> Unit) -> Unit,
+  wide? : Bool = false,
+  live? : () -> (String, String, String),
+  gone? : () -> Unit = fn() {  },
+) -> Unit {
+  present(Panel({ title, description, body, foot, w, wide, live }), from, gone~)
 }
 
 ///|
@@ -207,8 +241,13 @@ pub fn presented(c : @ui.Ctx) -> Unit {
     if was && !open {
       close_from(i)
     }
+    // closed unsaid: what it holds let go of, once
+    if !p.open && !p.ended {
+      p.ended = true
+      c.tell("sf-present/gone/\{p.serial}", p.gone)
+    }
     if was && open {
-      presented_how.push(how_of(p.shows, sheet))
+      presented_how.push(how_of(p.shows, p.from, sheet))
     }
     if !p.open && !built {
       gone.push(p.serial)
@@ -222,10 +261,11 @@ pub fn presented(c : @ui.Ctx) -> Unit {
 }
 
 ///|
-fn how_of(shows : Shows, sheet : Bool) -> How {
+fn how_of(shows : Shows, from : Anchor, sheet : Bool) -> How {
   match (sheet, shows) {
     (true, _) => AsSheet
-    (false, Menu(_, _, _) | Pick(_, _, _, _) | Panel(_, _, _)) => AsPopover
+    (false, Panel(_)) if from == Unanchored => AsDialog
+    (false, Menu(_, _, _) | Pick(_, _, _, _) | Panel(_)) => AsPopover
     (false, Confirm(_, _, _, _, _) | Ask(_, _, _, _, _, _, _)) => AsDialog
   }
 }
@@ -240,7 +280,8 @@ fn draw_presented(c : @ui.Ctx, p : Presented, sheet : Bool) -> (Bool, Bool) {
   match p.shows {
     Menu(items, title, along) => menu_popover(c, key, p, items, title, along)
     Pick(title, choices, chosen, choose) => pick_popover(c, key, p, title, choices, chosen, choose)
-    Panel(title, body, w) => panel_popover(c, key, p, title, body, w)
+    Panel(x) if p.from == Unanchored => panel_centred(c, key, p, x)
+    Panel(x) => panel_popover(c, key, p, x.title, x.body, x.w)
     Confirm(title, words, action, danger, run) => confirm_centred(c, key, p, title, words, action, danger, run)
     Ask(title, value, placeholder, action, hint, secret, run) =>
       ask_centred(c, key, p, title, value, placeholder, action, hint, secret, run)
@@ -250,6 +291,7 @@ fn draw_presented(c : @ui.Ctx, p : Presented, sheet : Bool) -> (Bool, Bool) {
 ///|
 /// What chosen or said in `p` does, once the frame is built: `p` closes (and what is over it), then `f` goes on.
 fn done_with(c : @ui.Ctx, p : Presented, f : () -> Unit) -> Unit {
+  p.ended = true
   match presented_now.search_by(fn(q) { q.serial == p.serial }) {
     Some(i) => close_from(i)
     None => ()
@@ -430,6 +472,32 @@ fn panel_popover(
     },
   )
   (r.value, p.open)
+}
+
+///|
+/// A panel opened by nothing, in the middle of the window (parts.tsx Dialog: @sf.dialog, its close button).
+fn panel_centred(c : @ui.Ctx, key : String, p : Presented, x : PanelOf) -> (Bool, Bool) {
+  let close = fn() { done_with(c, p, fn() {  }) }
+  let (title, step, description) = match x.live {
+    Some(f) => f()
+    None => (x.title, "", x.description)
+  }
+  let still = dialog(
+    c,
+    key,
+    p.open,
+    title,
+    fn() { (x.body)(c, close) },
+    description~,
+    footer?=match x.foot {
+      Some(f) => Some(fn() { f(c, close) })
+      None => None
+    },
+    wide=x.wide,
+    close_label=t("common.close"),
+    step~,
+  )
+  (still && p.open, dialog_built(c, key, p.open))
 }
 
 ///|
@@ -697,11 +765,23 @@ fn sheet_body(c : @ui.Ctx, key : String, p : Presented) -> Unit {
         c.box(style=sheet_rows, rows) |> ignore
       }
     }
-    Panel(title, body, _) => {
+    Panel(x) => {
+      let close = fn() { done_with(c, p, fn() {  }) }
+      let (title, _, description) = match x.live {
+        Some(f) => f()
+        None => (x.title, "", x.description)
+      }
       if title != "" {
         sheet_title(c, title)
       }
-      c.box(style=sheet_panel, fn() { body(c, fn() { done_with(c, p, fn() {  }) }) }) |> ignore
+      if description != "" {
+        c.box(style=sheet_words_at, fn() { c.text(description, style=sheet_lead) |> ignore }) |> ignore
+      }
+      c.box(style=sheet_panel, fn() { (x.body)(c, close) }) |> ignore
+      match x.foot {
+        Some(f) => c.box(style=sheet_foot_at, fn() { f(c, close) }) |> ignore
+        None => ()
+      }
     }
     Confirm(title, words, action, danger, run) => {
       sheet_title(c, title)
@@ -884,6 +964,11 @@ let sheet_lead : @ui.TextStyle = @ui.text_style(size=Base, leading=L6, color=Mut
 ///|
 // kept across runs: a value (no field of it changes)
 let sheet_hint : @ui.TextStyle = @ui.text_style(size=Xs, color=Muted)
+
+///|
+/// A panel's buttons in a sheet (its foot): 20 in, at its end, 8 apart, 24 under.
+// kept across runs: a value (no field of it changes)
+let sheet_foot_at : @ui.Style = @ui.css("row w=Full px=S5 pb=S6 gap=S2 justify=JEnd")
 
 ///|
 /// Its buttons at its end: 6 over, 24 under, 8 apart.
