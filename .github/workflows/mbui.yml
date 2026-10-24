@@ -153,9 +153,8 @@ jobs:
     steps:
       - uses: actions/checkout@v5
         with: { fetch-depth: 0 }
-      - uses: ./.github/actions/setup
-      - uses: ./.github/actions/mbui-moonbit
-      # (restored on every run; saved by main's alone: a branch's would be its own, and the cache has 10 GB)
+      # (restored on every run; saved by main's alone: a branch's would be its own, and the cache has 10 GB. Before the
+      # setup: whether core.hbc is in it says whether the job needs pnpm, below)
       - uses: actions/cache/restore@v4
         id: store
         with:
@@ -177,11 +176,19 @@ jobs:
             ~/Library/Caches/stillfail-build
             apps/mbui/out/core/hermesc
           key: mbui-hermes-apple-${{ steps.hermes.outputs.key }}
+      # The core's packages (pnpm, its store, core-ts's node_modules) only when core.hbc is not in HBC_CACHE for this
+      # commit's inputs (core.sh hermes-kept: the key core.sh itself keeps it by), and then installed by core.sh as it
+      # makes the core: they are only esbuild's and Babel's, and the core is unchanged in most runs. They were 12-37 s
+      # of each run (pnpm, its ~58 MB store restored, the install; 2026-10-24, 40076678382: the job's 216 s).
+      - id: core
+        run: if bash apps/mbui/scripts/core.sh hermes-kept apple; then echo "kept=true" >> "$GITHUB_OUTPUT"; fi
+      - uses: ./.github/actions/setup
+        with: { pnpm: "${{ steps.core.outputs.kept != 'true' }}" }
+      - uses: ./.github/actions/mbui-moonbit
       # (no Rust target: nothing is built with cargo here; native.ts adds one itself if a part must be built)
-      - name: Tools (the core's packages)
+      - name: Tools
         run: |
           sh apps/mbui/scripts/mbui.sh > /dev/null
-          (cd client/core-ts && pnpm install --frozen-lockfile --prefer-offline > /dev/null)
           touch "$RUNNER_TEMP/start"
       - name: The macOS app, built (and signed with still.fail's identity, on main)
         if: github.ref == 'refs/heads/main'
@@ -231,9 +238,8 @@ jobs:
           echo "iOS SDK $v ($(xcodebuild -version | head -1))"
           case "$v" in 2[0-6].*|27.0*) echo "::error::iOS SDK $v: an iPhone Duo letterboxes an app built before 27.1"; exit 1 ;; esac
       - uses: actions/checkout@v5
-      - uses: ./.github/actions/setup
-      - uses: ./.github/actions/mbui-moonbit
-      # (restored on every run; saved by main's alone: a branch's would be its own, and the cache has 10 GB)
+      # (restored on every run; saved by main's alone: a branch's would be its own, and the cache has 10 GB; before the
+      # setup, as the mac job's)
       - uses: actions/cache/restore@v4
         id: store
         with:
@@ -251,10 +257,13 @@ jobs:
             ~/Library/Caches/stillfail-build
             apps/mbui/out/core/hermesc
           key: mbui-hermes-apple-${{ steps.hermes.outputs.key }}
-      - name: Tools (the core's packages)
-        run: |
-          (cd client/core-ts && pnpm install --frozen-lockfile --prefer-offline > /dev/null)
-          touch "$RUNNER_TEMP/start"
+      # (the core's packages only for a core.hbc not kept, as the mac job's)
+      - id: core
+        run: if bash apps/mbui/scripts/core.sh hermes-kept apple; then echo "kept=true" >> "$GITHUB_OUTPUT"; fi
+      - uses: ./.github/actions/setup
+        with: { pnpm: "${{ steps.core.outputs.kept != 'true' }}" }
+      - uses: ./.github/actions/mbui-moonbit
+      - run: touch "$RUNNER_TEMP/start"
       # (unsigned until the team's App Store Connect key is in production's secrets: then signed ad hoc and put)
       - name: The iOS app for a device, as an .ipa
         run: |

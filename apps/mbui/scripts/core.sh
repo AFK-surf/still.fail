@@ -2,7 +2,7 @@
 # The still.fail client core (client/core-ts of this repository) in Hermes on its Rust shell (client/shell), for the
 # Apple apps (src/host/apple_core.mm) and Android's (src/host/android_core.c on still.fail's prebuilt engine): builds the
 # pieces from the checkout and runs a headless smoke test. See core/README.md.
-#   scripts/core.sh deps | shell [TARGET] | hermes | hermes-script FILE [OUT] | hermes-apple | engine [TARGET] | apple [TARGET]
+#   scripts/core.sh deps | shell [TARGET] | hermes | hermes-kept [apple] | hermes-script FILE [OUT] | hermes-apple | engine [TARGET] | apple [TARGET]
 #                   | smoke [build|run] | listen | exit | sealed | collate | login-test | vectors | sizes | clean | all
 # EMBER: the still.fail checkout (default: this one, scripts/env.sh); out/core/ gets everything built.
 # TARGET: a Rust target (default aarch64-apple-darwin; aarch64-apple-ios, aarch64-apple-ios-sim for iOS).
@@ -132,6 +132,17 @@ hbc_key() {
     $SHA < "$1"; } | $SHA | cut -c1-24
 }
 
+# Whether `hermes` (with apple: as `apple` makes it, its entry) would take core.hbc from HBC_CACHE, its key said:
+# CI asks before it fetches the packages (pnpm's store, core-ts's node_modules), which only a core made here needs
+# (deps: done by `hermes` itself then). Fetches hermesc when there is none, as `hermes` would.
+hermes_kept() {
+  local key
+  [ "${1:-}" != apple ] || ENTRY=${ENTRY:-$APPLE_ENTRY}
+  ENTRY=${ENTRY:-$ROOT/core/hermes.ts}
+  [ -n "${HBC_CACHE:-}" ] && key=$(hbc_key "$(hermesc)") && [ -f "$HBC_CACHE/$key.hbc" ] || { echo "hermes-kept: no core.hbc in HBC_CACHE for ${ENTRY#"$ROOT"/}${key:+ ($key)}"; return 1; }
+  echo "hermes-kept: core.hbc for ${ENTRY#"$ROOT"/} kept as $key (HBC_CACHE)"
+}
+
 hermes() {
   local t0=$(now)
   local hc="$(hermesc)" key=
@@ -244,11 +255,12 @@ engine() {
 # What an Apple app with the core needs for TARGET: Hermes, the engine (when stale), the shell's .a (still.fail's natives
 # by its key; where native.ts cannot say, the one here, else built by cargo: rebuild it with `shell`), the core's
 # bytecode (ENTRY, by default the media app's entry, as Android's).
+APPLE_ENTRY=$ROOT/core/media-hermes.ts
 apple() {
   local target=${1:-aarch64-apple-darwin}
   engine $target || return 1
   shell_prebuilt $target || [ -f $OUT/$target/libstillfail_shell.a ] || shell $target || return 1
-  ENTRY=${ENTRY:-$ROOT/core/media-hermes.ts} hermes
+  ENTRY=${ENTRY:-$APPLE_ENTRY} hermes
 }
 
 # The shell's link line for TARGET, each library once (-framework X, -lY; clang adds -lSystem and -lobjc itself).
@@ -393,6 +405,7 @@ case "${1:-all}" in
   deps) deps ;;
   shell) shell "$2" ;;
   hermes) hermes ;;
+  hermes-kept) hermes_kept "${2:-}" ;;
   hermes-script) hermes_script "$2" "${3:-}" ;;
   hermes-apple) hermes_apple ;;
   engine) engine "${2:-aarch64-apple-darwin}" ;;
@@ -412,5 +425,5 @@ case "${1:-all}" in
   sizes) sizes ;;
   clean) rm -rf "$CARGO_TARGET_DIR"; echo "removed $CARGO_TARGET_DIR (out/core kept)" ;;
   all) deps; shell; smoke_build; smoke_run; sizes ;;
-  *) echo "usage: scripts/core.sh deps | shell [TARGET] | hermes | hermes-script FILE [OUT] | hermes-apple | engine [TARGET] | apple [TARGET] | smoke [build|run] | listen | exit | collate | login-test | vectors | sizes | clean | all"; exit 2 ;;
+  *) echo "usage: scripts/core.sh deps | shell [TARGET] | hermes | hermes-kept [apple] | hermes-script FILE [OUT] | hermes-apple | engine [TARGET] | apple [TARGET] | smoke [build|run] | listen | exit | collate | login-test | vectors | sizes | clean | all"; exit 2 ;;
 esac
