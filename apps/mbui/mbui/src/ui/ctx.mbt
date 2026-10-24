@@ -44,6 +44,12 @@ struct ListState {
   mut follow_margin : Double
   // the frame it was last built in (one not built is shown by nothing: at rest)
   mut built : Int
+  // the frame it was last laid out in; where it stood as that frame's first layout of it began and where that frame's
+  // last left it (the row it is anchored to, how far into it, what was scrolled not laid yet, whether at its end): laid
+  // out again in that frame, it is laid from where it began, unless something moved it since (Ctx::place_list)
+  mut laid : Int
+  mut began : (Int, Double, Double, Bool)
+  mut left : (Int, Double, Double, Bool)
   // the last scroll to a row asked of it (Ctx::list_scroll_to): the frame, the row and the offset (asked again as the
   // frame is built again, the same: done already)
   mut scroll_asked : (Int, Int, Double)

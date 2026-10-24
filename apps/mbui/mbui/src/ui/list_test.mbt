@@ -252,6 +252,52 @@ test "list: scrolling up into rows never measured moves by exactly the step" {
 }
 
 ///|
+test "list: scrolling up into a row cut once it is measured moves by exactly the step, never back to its end" {
+  // an agent's history read upward from its end (still.fail's): every sixth row holds a card's words, cut to 100 once
+  // it knows how tall they are (a fold): laid out whole the first time it is built, cut as the frame is built again
+  // from what its layout read
+  let t = @ui.Tester::new(
+    fn(c) {
+      c.list(
+        "list",
+        60,
+        40.0,
+        fn(i) {
+          if i % 6 == 0 {
+            let words = c.id("words")
+            let body = fn() {
+              c.box(h=Px(600.0), id=words, fn() { c.text("Row \{i}", wrap=false) |> ignore }) |> ignore
+            }
+            if c.laid_size(words) is Some(_) {
+              c.box(h=Px(100.0), clip=true, body) |> ignore
+            } else {
+              c.box(clip=true, body) |> ignore
+            }
+          } else {
+            c.box(h=Px(30.0), fn() { c.text("Row \{i}", wrap=false) |> ignore }) |> ignore
+          }
+        },
+        stick_end=true,
+      )
+      |> ignore
+    },
+    w=300.0,
+    h=400.0,
+  )
+  t.move(100.0, 100.0)
+  for _ in 0..<40 {
+    let first = t.visible().0
+    let before = y_of(t, first)
+    t.wheel(100.0, 100.0, -50.0)
+    match t.row(first) {
+      Some((_, y, _, _)) => assert_eq(y, before + 50.0)
+      None => fail("row \{first} out of view after a step of 50 toward the start")
+    }
+    t.check_rows(0.0, 400.0)
+  }
+}
+
+///|
 test "list: rows come in above what is in view, which stays where it is" {
   let n = [100]
   let first = [0]
