@@ -3,9 +3,8 @@
 // 文档 and a disk that is gone, its home browsable; MBA (away) lends 照片. Its folders take what the pages do to them
 // (rename, delete, a new folder, a file put up) while the app runs. Every word in it is made up.
 //
-// MBUI_FIXTURE: files (文件), drive (Studio's 文档), drive-sub (a folder in it), drive-chosen (two of it chosen),
-// drive-entry (a file's sheet), drive-upload (files going up, one whose name is taken, one failed), drive-download (a
-// file and a folder being downloaded: their rows' progress), drive-empty, reader
+// MBUI_FIXTURE: files (文件), drive (Studio's 文档), drive-sub (a folder in it), drive-upload (files going up, one whose
+// name is taken, one failed), drive-download (a file and a folder being downloaded), drive-empty, reader
 // (a novel read), reader-bars (with its bars), reader-contents, reader-layout, reader-md (a Markdown file read);
 // chat-station-files (＋'s Station 文件 in a folder, a file ticked), chat-station-ref (a station's file in the draft),
 // chat-station-file (one sent as a file, a folder as a zip going up), chat-station-sheet (its card's sheet).
@@ -416,25 +415,13 @@ pub fn open_drive_fixture(mode : String) -> Unit {
   let docs : DriveAt = { station: "ws1/st1", root: Some(fix_docs), path: "" }
   match mode {
     "files" => app.nav.push(Files)
-    "drive" | "drive-loading" | "drive-chosen" | "drive-entry" | "drive-upload" | "drive-download" => {
+    "drive" | "drive-loading" | "drive-upload" | "drive-download" => {
       app.nav.push(Files)
       app.nav.push(Drive(docs))
-      let key = folder_key("ws1/st1", fix_docs, "")
       // a file being downloaded, a folder being zipped for it (the core's downloads, downloads_fixture.mbt): their rows'
       // progress (keep.mbt)
       if mode == "drive-download" {
         fix_drive_downloads("ws1/st1", fix_docs)
-      }
-      if mode == "drive-chosen" {
-        dv.chosen[key] = ["长篇小说.txt", "首页截图.png"]
-      }
-      if mode == "drive-entry" {
-        dv.chosen[key] = ["长篇小说.txt"]
-        dv.sheet = Entry(
-          { ..docs, root: Some(fix_docs) },
-          dv_entry(fix_entry("长篇小说.txt", false, novel_text().length() * 3, "14:05")),
-          fix_folder(fix_docs, "").map(fn(e) { text(Some(e), "name") }),
-        )
       }
       if mode == "drive-upload" {
         let up = fn(name : String, size : Int, sent : Int, state : String, error : String) {

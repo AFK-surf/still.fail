@@ -6,7 +6,8 @@
 ///|
 /// What is open: which station to pin on (choosing), the folders pinned on a station (`roots`: "" none), one asked to be
 /// taken back, the picker on a station (`picking`: "" none); the picker's place asked (None: the home), what it holds
-/// (and what it held last: its places stay while the next is read), why it could not be read, the ask on its way.
+/// (and what it held last: its places stay while the next is read), why it could not be read, the ask on its way
+/// (`asking`: one asked, not answered yet).
 priv struct Dialogs {
   mut choosing : Bool
   mut roots : String
@@ -18,6 +19,7 @@ priv struct Dialogs {
   mut error : String
   mut denied : Bool
   mut serial : Int
+  mut asking : Bool
   filter : @ui.Field
 }
 
@@ -34,6 +36,7 @@ let dialogs : Dialogs = {
   error: "",
   denied: false,
   serial: 0,
+  asking: false,
   filter: @ui.Field::new(),
 }
 
@@ -54,6 +57,7 @@ fn picker_close() -> Unit {
   dialogs.error = ""
   dialogs.denied = false
   dialogs.serial += 1
+  dialogs.asking = false
   dialogs.filter.set("")
 }
 
@@ -103,6 +107,7 @@ fn picker_go(c : @ui.Ctx, src : Source, station : String, path : String?) -> Uni
   dialogs.serial += 1
   dialogs.filter.set("")
   let serial = dialogs.serial
+  dialogs.asking = true
   let params : Map[String, Json] = { "station": Json::string(station) }
   match path {
     Some(p) => params["path"] = Json::string(p)
@@ -113,6 +118,7 @@ fn picker_go(c : @ui.Ctx, src : Source, station : String, path : String?) -> Uni
       if serial != dialogs.serial {
         return
       }
+      dialogs.asking = false
       match r {
         Ok(v) => {
           dialogs.value = Some(v)
@@ -123,17 +129,6 @@ fn picker_go(c : @ui.Ctx, src : Source, station : String, path : String?) -> Uni
       }
     })
   })
-}
-
-///|
-/// What is wrong with a folder pinned (rootTrouble): what, and what to do; None where nothing is.
-fn root_trouble(state : String) -> (String, String)? {
-  match state {
-    "ok" | "" => None
-    "missing" => Some((@sf.t("web-pages.drive.root.missing"), @sf.t("web-pages.drive.root.missingHint")))
-    "not_a_directory" => Some((@sf.t("web-pages.drive.root.notFolder"), @sf.t("web-pages.drive.root.notFolderHint")))
-    _ => Some((@sf.t("web-pages.drive.root.unreadable"), @sf.t("web-pages.drive.root.unreadableHint")))
-  }
 }
 
 ///|
@@ -227,7 +222,7 @@ pub fn drive_dialogs(c : @ui.Ctx, src : Source, ws : String) -> Unit {
               c.box(style=root_text, fn() {
                 c.text(r.name, style=pick_name) |> ignore
                 c.text(r.path, style=pick_meta) |> ignore
-                match root_trouble(r.state) {
+                match dv_trouble(r.state) {
                   Some((what, hint)) => c.text(what + " · " + hint, style=root_trouble_words) |> ignore
                   None => ()
                 }
@@ -276,7 +271,8 @@ pub fn drive_dialogs(c : @ui.Ctx, src : Source, ws : String) -> Unit {
 /// entered by a click; 选这个文件夹 pins the one shown (one pinned already, or one the station may not read, is not).
 fn picker(c : @ui.Ctx, src : Source, station : String, lent : Array[String]) -> Unit {
   let t = @sf.theme()
-  if dialogs.value is None && dialogs.error == "" && !dialogs.denied && dialogs.last is None {
+  // (asked once: not again each frame while the answer is on its way)
+  if dialogs.value is None && dialogs.error == "" && !dialogs.denied && dialogs.last is None && !dialogs.asking {
     picker_go(c, src, station, dialogs.at)
   }
   let v = dialogs.value

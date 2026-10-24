@@ -32,7 +32,8 @@ let side_full : @ui.Style = @ui.css("w=Full")
 ///|
 /// A row of a sidebar's list (Sidebar.css.ts navRow): 32 high at least, 6 by 10 in (`tall`: 8, its words from the
 /// top), its corner the nav's; the pointer's ground on hover, the selected one's ground when it is the page in view.
-/// True on the frame after a press.
+/// `phone`: as a finger's list has it (SidebarList.css.ts phone): as wide as its box, 22 in on the left and 16 on the
+/// right, 10 over and under, its words a size up (nav_words's `phone`). True on the frame after a press.
 pub fn nav_row(
   c : @ui.Ctx,
   key : String,
@@ -40,10 +41,17 @@ pub fn nav_row(
   body : () -> Unit,
   tall? : Bool = false,
   align? : @ui.Align = ACenter,
+  phone? : Bool = false,
 ) -> Bool {
   let id = c.id(key)
   c.cursor(id, Hand)
-  let look = if tall { nav_row_tall } else { nav_row_look.then(@ui.style(align~)) }
+  let look = if phone {
+    nav_row_phone
+  } else if tall {
+    nav_row_tall
+  } else {
+    nav_row_look.then(@ui.style(align~))
+  }
   let ground = nav_ground(c, key, c.lit(id) || c.pressed(id), on)
   c.box(style=look.then(@ui.style(bg=Data(ground))), id~, body) |> ignore
   c.clicked(id)
@@ -52,6 +60,10 @@ pub fn nav_row(
 ///|
 // kept across runs: a value (no field of it changes)
 let nav_row_look : @ui.Style = @ui.css("row w=Full min_h=S8 px=S2_5 py=S1_5 gap=S2 radius=Xl")
+
+///|
+// kept across runs: a value (no field of it changes)
+let nav_row_phone : @ui.Style = @ui.css("row w=Full pr=S4 py=S2_5 gap=S2 align=ACenter").then(@ui.style(pl=@sf.phone_row_in))
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -79,10 +91,23 @@ pub fn nav_ground(c : @ui.Ctx, key : String, hover : Bool, on : Bool, lit? : Int
 pub let nav_fade : @motion.Spec = @motion.tween(@sf.dur_ms, ease=Out)
 
 ///|
-/// A heading over a part of a list (Sidebar.css.ts navHeading): 12 on 18, muted, 14 above, 4 under.
-pub fn nav_heading(c : @ui.Ctx, label : String) -> Unit {
-  c.box(style=nav_heading_box, fn() { c.text(label, style=nav_heading_words) |> ignore }) |> ignore
+/// A heading over a part of a list (Sidebar.css.ts navHeading): 12 on 18, muted, 14 above, 4 under; `phone`, as a
+/// finger's list has it (SidebarList.css.ts phoneHeading: as the chats' days are): 15, bold, in the words' colour, 14
+/// above, 6 under, 20 in.
+pub fn nav_heading(c : @ui.Ctx, label : String, phone? : Bool = false) -> Unit {
+  c.box(style=if phone { nav_heading_phone } else { nav_heading_box }, fn() {
+    c.text(label, style=if phone { nav_heading_phone_words } else { nav_heading_words }) |> ignore
+  })
+  |> ignore
 }
+
+///|
+// kept across runs: a value (no field of it changes)
+let nav_heading_phone : @ui.Style = @ui.css("w=Full px=S5 pt=S3_5 pb=S1_5")
+
+///|
+// kept across runs: a value (no field of it changes)
+let nav_heading_phone_words : @ui.TextStyle = @ui.text_style(size=Lg, weight=Semibold, color=Fg, wrap=false)
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -93,11 +118,13 @@ let nav_heading_box : @ui.Style = @ui.css("w=Full px=S2 pt=S3_5 pb=S1")
 let nav_heading_words : @ui.TextStyle = @ui.text_style(size=Xs, color=Muted, leading=L5, wrap=false)
 
 ///|
-/// A row's words, 13 on 20, as long as there is room (`color`: the words' own by default).
-pub fn nav_words(c : @ui.Ctx, words : String, color? : Int64) -> Unit {
+/// A row's words, 13 on 20, as long as there is room (`color`: the words' own by default); `phone`, 16 on 22 (a
+/// finger's list: SidebarList.css.ts phone's title).
+pub fn nav_words(c : @ui.Ctx, words : String, color? : Int64, phone? : Bool = false) -> Unit {
+  let base = if phone { nav_words_phone } else { nav_words_look }
   let look = match color {
-    Some(k) => nav_words_look.then(@ui.text_style(color=Data(k)))
-    None => nav_words_look
+    Some(k) => base.then(@ui.text_style(color=Data(k)))
+    None => base
   }
   c.text(words, style=look) |> ignore
 }
@@ -105,6 +132,10 @@ pub fn nav_words(c : @ui.Ctx, words : String, color? : Int64) -> Unit {
 ///|
 // kept across runs: a value (no field of it changes)
 let nav_words_look : @ui.TextStyle = @ui.text_style(size=Sm, color=Fg, leading=L6, wrap=false, w=Full)
+
+///|
+// kept across runs: a value (no field of it changes)
+let nav_words_phone : @ui.TextStyle = @ui.text_style(size=Xl, color=Fg, leading=L7, wrap=false, w=Full)
 
 ///|
 /// Rows to come, breathing (Waiting shape rows, dense): six, each a title and a line under it.

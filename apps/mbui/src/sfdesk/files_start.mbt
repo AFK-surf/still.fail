@@ -61,10 +61,21 @@ fn files_home(c : @ui.Ctx, src : Source, w : Workspace, core : Core, room : Doub
 }
 
 ///|
-/// A station's files at `at` (DrivePage): a folder among the files' page's tabs where there is one to show (the one
-/// asked, else the one folder pinned, else the home for a member who browses every folder); else its folders pinned
-/// (Roots).
-fn files_station(c : @ui.Ctx, src : Source, w : Workspace, core : Core, at : DriveAt, room : Double) -> Unit {
+/// A station's files at `at` (DrivePage), in whichever frame: a folder where there is one to show (the one asked, else
+/// the one folder pinned, else the home for a member who browses every folder), else its folders pinned (Roots). Laid
+/// out by its own width: wide, the files' page (its tabs, the folder's head, its ways); narrow, the narrow app's page
+/// (drive_narrow.mbt) in the frame it is given (`narrow`: back, the room over and under it). `go`: a folder shown in
+/// place of this one (the side in front, by default).
+pub fn files_station(
+  c : @ui.Ctx,
+  src : Source,
+  w : Workspace,
+  core : Core,
+  at : DriveAt,
+  room : Double,
+  narrow? : NarrowOf = narrow_bare(),
+  go? : (DriveAt) -> Unit = files_go,
+) -> Unit {
   let (known, error) = dv_stations(src, w.id)
   let stations = known.unwrap_or([])
   let st = stations.iter().find_first(fn(s) { s.station == at.station })
@@ -77,13 +88,38 @@ fn files_station(c : @ui.Ctx, src : Source, w : Workspace, core : Core, at : Dri
       }
     _ => None
   }
-  match (st, root) {
-    (Some(s), Some(r)) if s.drive => {
+  let look = look_of(c)
+  let manage = st is Some(s) && pin_stations(src, w.id).iter().any(fn(p) { p.station == s.station })
+  match (st, root, look) {
+    (Some(s), Some(r), Wide) if s.drive => {
       let (dk, _) = drive_stations(src, w.id)
       files_shell(c, src, w.id, dk.unwrap_or(stations), { station: at.station, root: Some(r), path: at.path }, room)
     }
+    (Some(s), Some(r), Narrow) if s.drive => {
+      let here : DriveAt = { station: at.station, root: Some(r), path: at.path }
+      folder_narrow(
+        c,
+        src,
+        {
+          // (a place of its own for each folder's page: on a stack the one under it is drawn as this one slides in)
+          key: "narrow/" + here.station + "\n" + r + "\n" + at.path,
+          ws: w.id,
+          st: s,
+          rights: dv_rights(src, w.id, Some(s)),
+          at: here,
+          front: true,
+          room,
+          go: fn(to, _) { go(to) },
+          open_in: None,
+          go_to: None,
+          manage: Some(fn() { manage_roots(s.station) }),
+        },
+        narrow,
+      )
+      drive_dialogs(c, src, w.id)
+    }
+    (_, _, Narrow) => roots_narrow(c, src, w.id, st, known is None, error, manage, narrow, go)
     _ => {
-      let manage = st is Some(s) && pin_stations(src, w.id).iter().any(fn(p) { p.station == s.station })
       desk_page(
         c,
         core,
@@ -142,7 +178,7 @@ fn files_root_row(c : @ui.Ctx, s : DvStation, r : DvRoot) -> Unit {
     @sf.icon(c, "folder", size=fs_icon, color=t.p.muted) |> ignore
     c.box(style=fs_row_words, fn() {
       c.text(r.name, style=fs_row_name) |> ignore
-      match root_trouble(r.state) {
+      match dv_trouble(r.state) {
         Some((what, hint)) =>
           c.rich([@ui.span(what, weight=600), @ui.span(" · " + hint)], style=fs_row_trouble) |> ignore
         None => ()
