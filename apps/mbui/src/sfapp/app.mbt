@@ -32,7 +32,6 @@ fn reset() -> Unit {
   felt_holds.clear()
   image_quoted_at.val = -1
   attention.told = false
-  picture_pick.val = None
   bar_glyph.val = None
   bar_stations_said.val = ""
   attention.visible = false
@@ -65,7 +64,6 @@ fn reset() -> Unit {
   new_fix.made = 0
   new_fix.reading = 0
   bar_timing.val = None
-  reporting_host.val = None
   bar_timed.val = None
   reset_row_menu()
   login_cards_reset()
@@ -127,8 +125,6 @@ fn reset() -> Unit {
   find_marking.val = []
   search_reset()
   ask_turns.clear()
-  notices_reset()
-  faces_reset()
   links_reset()
   wide_reset()
   // the library's viewers: the texts read, the films played, a desktop's player's 选集 and the pointer it last saw
@@ -201,14 +197,9 @@ fn reset() -> Unit {
 /// Back to Home (the stack's root), the sheets and the menu closed.
 fn home() -> Unit {
   lower_sheet()
-  app.menu = false
   dui.sheet = None
   dui.leaving = None
-  while app.nav.depth() > 1 {
-    if !app.nav.pop() {
-      break
-    }
-  }
+  nav_home()
 }
 
 ///|
@@ -241,7 +232,7 @@ pub fn view(c : @ui.Ctx, src : Source) -> Unit {
   menu_bar(c, src)
   c.after_build("menu-asked", fn() { @settings.action_asked_done() })
   appearance(src)
-  faces(src)
+  faces(src, @sfdesk.is_wide(c))
   // pictures put up by their address come as the core gives them (a GIF among them moves)
   @sf.picture_of.val = fn(url, frame) { (src.picture)(url, frame) }
   // a tip's keys, as the core's prefs set them (sfdesk's keys.mbt)
@@ -379,10 +370,10 @@ fn signed_in(c : @ui.Ctx, src : Source) -> Unit {
       // files being kept on the device, said once kept (keep.mbt)
       keeps_frame(c)
       if wide_on.val {
-        // the wide frame's keys (sfdesk's keys.mbt), then the rail, the sidebar and the page beside it (sfdesk's frame.mbt,
-        // this package's pages given to it: wide_pages.mbt); what opens over them after them
-        @sfdesk.keys(c, src, w, desk_pages())
-        @sfdesk.frame(c, src, w, all, invited, desk_pages())
+        // the wide frame's keys (sfdesk's keys.mbt), then the rail, the sidebar and the page beside it (sfdesk's
+        // frame.mbt); what opens over them after them
+        @sfdesk.keys(c, src, w)
+        @sfdesk.frame(c, src, w, all, invited)
         // a station's screen: over the whole window, as Android's ScreenActivity is over the app
         match app.nav.top() {
           Screen(at) =>
@@ -394,7 +385,7 @@ fn signed_in(c : @ui.Ctx, src : Source) -> Unit {
           _ => ()
         }
         // what opens over them (sfdesk's overlays.mbt)
-        @sfdesk.overlays(c, src, w, desk_pages())
+        @sfdesk.overlays(c, src, w)
         // the player sideways (a phone on its side for a film): back turns it upright first
         play_back(c)
         pick_back(c)
@@ -606,11 +597,6 @@ fn go_place(c : @ui.Ctx, place : String, sets : Array[Array[String]], cur : Int)
 }
 
 ///|
-/// A picture the settings asked the system's picker for (a station's or workspace's mark, a Slack app's icon), and who
-/// takes it: through the framework, so a Tester's picker is the test's (Tester::picks).
-let picture_pick : Ref[(@ui.Pick, (Bytes?) -> Unit)?] = Ref(None)
-
-///|
 /// A page of the settings (src/sfapp/settings), over the workspace in view.
 fn setting_page(c : @ui.Ctx, src : Source, w : Workspace, r : @settings.Route) -> Unit {
   let core = settings_core(src, w)
@@ -645,127 +631,13 @@ fn lock_gate(c : @ui.Ctx, src : Source, w : Workspace, bar? : Bool) -> Bool {
 let gate_fill : @ui.Style = @ui.css("w=Full h=Full")
 
 ///|
-/// What the settings' pages read and call, and how they move: the core as the app has it (Source), the app's stack.
+/// What the settings' pages read and call, and how they move, as the phone has them: the core as the app has it, its
+/// stack, its own way home (its sheets put down) and a station's login as its card.
 fn settings_core(src : Source, w : Workspace) -> @settings.Core {
-  // a picture asked of the system's picker for a mark: its answer given (the host asks for a frame as it answers)
-  match picture_pick.val {
-    Some((p, done)) =>
-      match p.files() {
-        Some(files) => {
-          picture_pick.val = None
-          done(files.get(0).map(fn(f) { f.bytes }))
-        }
-        None => ()
-      }
-    None => ()
-  }
-  {
-    topic: fn(name, params) {
-      let t = (src.topic)(name, params)
-      { value: t.value, error: t.error, version: t.version }
-    },
-    call: fn(name, params, done) { (src.call)(name, params, done) },
-    push: fn(r) {
-      match r {
-        @settings.Route::Home => app.nav.push(Settings)
-        _ => app.nav.push(Setting(r))
-      }
-    },
-    pop: fn() { app.nav.pop() |> ignore },
-    home: fn() { home() },
-    open_chat: fn(station, session, title) {
-      // its station's name, as the chats' rows have it
-      let stations = (src.topic)("stations", { "scope": Json::string(w.id) })
-      let mut name = ""
-      match stations.value {
-        Some(Array(a)) =>
-          for x in a {
-            if text(Some(x), "station") == station {
-              name = text(Some(x), "name")
-            }
-          }
-        _ => ()
-      }
-      app.nav.push(Chat({ station, session, title, station_name: name }))
-    },
-    open_drive: fn(station) { app.nav.push(Drive({ station, root: None, path: "" })) },
-    sign_in: fn() { (src.sign_in)() },
-    say: fn(words) {
-      app.toast = words
-      app.toast_n += 1
-    },
-    picture: fn(url, frame) { (src.picture)(url, frame) },
-    now: src.now,
-    notify_ask: fn() { ask_from_switch() },
-    push_sync: fn(wanted) { if !src.read_only { push_sync(src, wanted) } },
-    under: fn() {
-      let pages = app.nav.pages()
-      if pages.length() < 2 {
-        return ""
-      }
-      match pages[pages.length() - 2] {
-        Home => "chats"
-        Settings | Setting(@settings.Route::Home) => "settings"
-        _ => ""
-      }
-    },
-    version_words: fn() { update_row_words() },
-    version_tap: fn() { update_row_tapped(src) },
-    local_install: fn(join) { if join { local_station_install(src, w.id) } else { local_station_update() } },
-    // the system's browser (LocalUriHandler.openUri); nothing took it, said so (android-misc.link.cantOpen)
-    open_link: fn(url) {
-      if !@ui.open_url(url) {
-        app.toast = tr("android-misc.link.cantOpen")
-        app.toast_n += 1
-      }
-    },
-    pick_picture: fn(done) {
-      match @ui.pick(@hostapi.PickKind::Photos) {
-        Some(p) => {
-          picture_pick.val = Some((p, done))
-          true
-        }
-        None => false
-      }
-    },
-    bars: fn() { bars_in(src, w.id) },
-    set_bars: fn(sets, cur) { set_bars(src, w.id, sets, cur) },
-    place_icon: fn(c, place, color) {
-      if place == "stations" {
-        // one station on, as no station is meant (BarSettings.kt Still)
-        let still : @sf.GlyphCounts = { online: 1, dim: 0, failing: 0, working: 0, asleep: false, connecting: 0 }
-        @sf.station_glyph(c, still, 28.0, color, @sf.theme().p.red) |> ignore
-      } else {
-        @sf.icon(c, place_icon(place), size=28.0, color~) |> ignore
-      }
-    },
-    reporting: fn() { reporting_host.val.map(fn(h) { (h.get)() }) },
-    set_reporting: fn(on) {
-      match reporting_host.val {
-        Some(h) => (h.set)(on)
-        None => ()
-      }
-    },
-    login_card: fn(c, station, id, marked) { login_card(c, src, station, id, marked~, fill=true) },
-    face_preview: fn(id, index, variable) { face_preview(src, id, index, variable) },
-    face_here: face_here,
-    face_failed: face_failed,
-    own_code_face: own_code_preview,
-    read_only: if src.read_only { read_only_words } else { "" },
-  }
+  settings_core_of(src, w, home~, login_card=fn(c, station, id, marked) {
+    login_card(c, src, station, id, marked~, fill=true)
+  })
 }
-
-///|
-/// Whether usage statistics and error reports go out from this device, as the host keeps it (src/stillfail
-/// reports.mbt: Android's Crashes.reporting, the app's prefs); None where nothing is sent anyway: no settings row then.
-pub(all) struct ReportingHost {
-  get : () -> Bool
-  set : (Bool) -> Unit
-}
-
-///|
-/// The host's, set once as the app starts (src/stillfail main); None under a Tester (reset), unless its test sets one.
-pub let reporting_host : Ref[ReportingHost?] = Ref(None)
 
 ///|
 /// How long a place switched to on the bar takes to come in: fading in from no side, from the side the ball goes to.
@@ -1196,4 +1068,32 @@ fn app_link(url : String) -> String {
     }
   }
   url
+}
+
+///|
+/// Whether this frame is drawn wide (what the phone's parts read where they differ: the chat's rows' sides, the
+/// composer's Enter).
+let wide_on : Ref[Bool] = Ref(false)
+
+///|
+fn wide_reset() -> Unit {
+  @sfdesk.side_slide_reset()
+  @sfdesk.find_forget()
+  find_around.val = -1.0
+  wide_on.val = false
+}
+
+///|
+/// The system's side of still.fail (before @ui.run). The desktop's window: 1280 by 820 at first, as still.fail's
+/// desktop app opens (apps/desktop main.ts), its size not kept (the desktop app keeps none either); at least 360 by
+/// 560, a phone's page below the breakpoint; on macOS its title bar the app's (its buttons in its top row, as the
+/// desktop app's hiddenInset: the rail's and the sidebar's tops, a phone's page under their band), on Windows the
+/// system's. On a phone the app is
+/// Android's whatever the phone: on iOS too its lists fling, give at their edges and show no scroll bar as Android's,
+/// its fields take a tap, draw their caret and handles and pick words as Android's (@ui.feel_as).
+pub fn host_setup() -> Unit {
+  @hostapi.window_setup(360.0, 560.0, 1280.0, 820.0, inset=true)
+  if @ui.platform() == 1 {
+    @ui.feel_as(2)
+  }
 }

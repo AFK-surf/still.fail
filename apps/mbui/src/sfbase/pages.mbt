@@ -124,6 +124,17 @@ pub fn open_setting(name : String) -> Unit {
 }
 
 ///|
+/// Back to Home (the stack's root), the filter's menu closed: a workspace left, from either frame.
+pub fn nav_home() -> Unit {
+  app.menu = false
+  while app.nav.depth() > 1 {
+    if !app.nav.pop() {
+      break
+    }
+  }
+}
+
+///|
 /// A chat opened over Home from the start (a link, a scripted run).
 pub fn open_chat(r : ChatRef) -> Unit {
   app.nav.push(Chat(r))
@@ -211,5 +222,11 @@ pub fn reset() -> Unit {
   kept_places.clear()
   flash_held.val = false
   at_end_env.val = -1
+  // what the settings' core keeps (settings_core.mbt, notices.mbt, faces.mbt, bars.mbt)
+  picture_pick.val = None
+  reporting_host.val = None
+  notices_reset()
+  faces_reset()
+  bars_picked.val = None
 }
 

@@ -748,7 +748,7 @@ test "wide: ⌘K and a row's menu open again right after Esc closed them" {
   }
   t.key(@ui.key_of_char('k'), mods=@ui.mod_cmd)
   t.key(@ui.key_escape)
-  open_settings()
+  @sfdesk.open_settings()
   app.nav.replace(Home)
   t.run_for(@ui.nav_push_ms)
   let (x, y) = t.find("夜里的构建又失败了").unwrap()

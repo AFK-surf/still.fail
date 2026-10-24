@@ -1,11 +1,11 @@
 // The frame's keys (ember web/src/keymap.ts useShortcut, Switcher.tsx GlobalShortcuts, Sidebar.tsx goToNeighbour,
 // brand.tsx's sidebar.toggle): ⌘K the switcher, ⌘N a new chat, ⌥↑ / ⌥↓ the chat before or after, ⌘\ the sidebar, ⌘,
 // settings, ⌘/ the shortcuts, Esc what the frame opened closed; the keys as the core's prefs keep them on this device
-// (settings' 快捷键: prefs.keymap). The page in the pane answers its own after them (Pages.keys).
+// (settings' 快捷键: prefs.keymap). The page in the pane answers its own after them.
 
 ///|
 /// The frame's keys, read as its frame is built (before the page's: Esc goes to what the frame opened over it first).
-pub fn keys(c : @ui.Ctx, src : Source, w : Workspace, pages : Pages) -> Unit {
+pub fn keys(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
   let prefs = (src.topic)("prefs", {}).value
   let pressed = fn(action : String) { @settings.action_pressed(c, prefs, action) }
   if pressed("chat.switch") {
@@ -14,13 +14,13 @@ pub fn keys(c : @ui.Ctx, src : Source, w : Workspace, pages : Pages) -> Unit {
     wide.attention_open = false
   }
   if pressed("chat.new") {
-    new_chat(pages)
+    new_chat()
   }
   if pressed("sidebar.toggle") {
     sidebar_toggle()
   }
   if pressed("settings") {
-    open_settings(pages)
+    open_settings()
   }
   if pressed("shortcuts") {
     wide.keys_open = !wide.keys_open
@@ -42,7 +42,7 @@ pub fn keys(c : @ui.Ctx, src : Source, w : Workspace, pages : Pages) -> Unit {
         None => ()
       }
     } else {
-      neighbour(src, w, pages, way)
+      neighbour(src, w, way)
     }
   }
   let escape = c.key_pressed(@ui.key_escape) || c.key_pressed(@ui.key_escape, in_field=true)
@@ -77,7 +77,7 @@ fn frame_escape(c : @ui.Ctx) -> Bool {
 ///|
 /// The chat before (-1) or after (1) the one open, in the list as it shows (Sidebar.tsx goToNeighbour); the first when
 /// none is open.
-pub fn neighbour(src : Source, w : Workspace, pages : Pages, way : Int) -> Unit {
+pub fn neighbour(src : Source, w : Workspace, way : Int) -> Unit {
   let rows : Array[ChatItem] = []
   match chats_of(src, w.id, filter_of(src, w.id)) {
     (Some(v), _) =>
@@ -103,7 +103,7 @@ pub fn neighbour(src : Source, w : Workspace, pages : Pages, way : Int) -> Unit 
   if next < 0 || next >= rows.length() {
     return
   }
-  open_row(pages, rows[next])
+  open_row(rows[next])
 }
 
 ///|

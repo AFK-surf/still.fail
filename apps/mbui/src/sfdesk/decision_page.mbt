@@ -31,7 +31,7 @@ fn zou_page_reset() -> Unit {
 
 ///|
 /// The 奏 page for workspace `w`.
-fn decision_page(c : @ui.Ctx, src : Source, w : Workspace, pages : Pages) -> Unit {
+fn decision_page(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
   let topic = (src.topic)("decisions", { "workspace": Json::string(w.id) })
   let view = match topic.value {
     Some(Object(_)) as v => v
@@ -39,7 +39,7 @@ fn decision_page(c : @ui.Ctx, src : Source, w : Workspace, pages : Pages) -> Uni
   }
   let shown = items(view, "items")
   let d = shown.get(decision_front(view, shown))
-  let core = (pages.core)(src, w)
+  let core = settings_core(src, w)
   // another come in front (not the first the page shows, nor one in place of one leaving, which rises as that goes)
   let key = match d {
     Some(x) => decision_key(x)
@@ -58,7 +58,7 @@ fn decision_page(c : @ui.Ctx, src : Source, w : Workspace, pages : Pages) -> Uni
     c.box(style=zp_deck, id=deck, fn() {
       match d {
         Some(x) => {
-          let card = c.box(style=zp_card, fn() { zou_card(c, src, w, pages, core, x, true) })
+          let card = c.box(style=zp_card, fn() { zou_card(c, src, w, core, x, true) })
           let p = zou_anim(c, "zou/rise").get()
           if p < 1.0 {
             c.look(card, @ui.look(alpha=p, dy=zou_rise_dy * (1.0 - p), scale=zou_rise_scale + (1.0 - zou_rise_scale) * p))
@@ -75,7 +75,7 @@ fn decision_page(c : @ui.Ctx, src : Source, w : Workspace, pages : Pages) -> Uni
           }
         }
       }
-      zou_leaving(c, src, w, pages, core, dw, dh)
+      zou_leaving(c, src, w, core, dw, dh)
     })
     |> ignore
   })
@@ -155,7 +155,7 @@ fn zou_bar_button(c : @ui.Ctx, key : String, label : String, on : Bool) -> Bool 
 /// Decision `x` as the page shows it (its card: the deck's card), `live` the one in front (the one leaving takes
 /// nothing): who is to decide, the post and what came before it (DecisionMessages), under them what answers it
 /// (DecisionPicks), the composer over the foot (DecisionFoot, DecisionAnswer).
-fn zou_card(c : @ui.Ctx, src : Source, w : Workspace, pages : Pages, core : Core, x : Json, live : Bool) -> Unit {
+fn zou_card(c : @ui.Ctx, src : Source, w : Workspace, core : Core, x : Json, live : Bool) -> Unit {
   let v = Some(x)
   let station = text(v, "station")
   let card = field(v, "card")
@@ -239,7 +239,7 @@ fn zou_card(c : @ui.Ctx, src : Source, w : Workspace, pages : Pages, core : Core
     if replies && live {
       c.layer(fn() {
         c.spacer()
-        zou_answer(c, src, w, pages, x, draft, if kind == "text" { text(card, "placeholder") } else { "" })
+        zou_answer(c, src, w, x, draft, if kind == "text" { text(card, "placeholder") } else { "" })
       })
       |> ignore
     }
@@ -300,7 +300,7 @@ fn zou_picks(c : @ui.Ctx, src : Source, core : Core, here : MessageHere, x : Jso
 /// as `decision:<station>:<thread>:<seq>`; sent, it goes as the viewer's message quoting the post (`decision.reply`)
 /// and the decision goes up at once; refused by the core, what was written comes back where nothing was written since,
 /// and why is said.
-fn zou_answer(c : @ui.Ctx, src : Source, w : Workspace, pages : Pages, x : Json, draft : String, placeholder : String) -> Unit {
+fn zou_answer(c : @ui.Ctx, src : Source, w : Workspace, x : Json, draft : String, placeholder : String) -> Unit {
   let v = Some(x)
   let station = text(v, "station")
   let spec : ComposerSpec = {
@@ -317,7 +317,7 @@ fn zou_answer(c : @ui.Ctx, src : Source, w : Workspace, pages : Pages, x : Json,
   let foot = c.box(style=zp_foot, fn() {
     c.box(style=@ui.style(w=Fixed(width)), fn() {
       c.sized(width, c.height, fn() {
-        composer(c, src, w, pages, spec, fn(wr) {
+        composer(c, src, w, spec, fn(wr) {
           if src.read_only {
             toast_later(read_only_words)
             return
@@ -401,7 +401,7 @@ fn zou_anim(c : @ui.Ctx, key : String) -> @motion.Anim {
 ///|
 /// The decision leaving, over what is in front (`dw` × `dh` the deck's): answered, drawn in to 88% and pulled up,
 /// faster and faster; set aside or dismissed, across and off. Drawn only.
-fn zou_leaving(c : @ui.Ctx, src : Source, w : Workspace, pages : Pages, core : Core, dw : Double, dh : Double) -> Unit {
+fn zou_leaving(c : @ui.Ctx, src : Source, w : Workspace, core : Core, dw : Double, dh : Double) -> Unit {
   let x = match zou_own.leaving {
     Some(x) => x
     None => return
@@ -418,7 +418,7 @@ fn zou_leaving(c : @ui.Ctx, src : Source, w : Workspace, pages : Pages, core : C
     _ => ((dw + zou_off_more) * p, 0.0, 1.0)
   }
   let l = c.layer(fn() {
-    let card = c.box(style=zp_card, tx~, ty~, fn() { zou_card(c, src, w, pages, core, x, false) })
+    let card = c.box(style=zp_card, tx~, ty~, fn() { zou_card(c, src, w, core, x, false) })
     c.look(card, @ui.look(scale~, oy=0.0))
   })
   c.draw_only(l)

@@ -1,9 +1,9 @@
 // The app keeping itself current, for both frames (ember apps/android app/Updates.kt, Install.kt; the desktop app's
 // appUpdate): a newer build is asked of the update source the app is given (`set_update_source`), and one found is
 // downloaded, checked against its sha256 and handed to the host's installer (@ui.update_install), which puts it in
-// place of this one. Asked at the start; the phone's Home and settings' version row offer it (sfapp updates.mbt), the
-// desktop's 更新 over the sidebar's top (sfdesk brand.mbt). Hosts that do not update themselves (a version code of 0)
-// never ask.
+// place of this one. Asked at the start; the settings' version row offers it (update_row_words, below), the phone's
+// Home (sfapp updates.mbt) and the desktop's 更新 over the sidebar's top (sfdesk brand.mbt). Hosts that do not update
+// themselves (a version code of 0) never ask.
 //
 // Where a build comes from is the source's: `cloud_updates(feed)` is still.fail cloud's (the core's `app.update`, at
 // most hourly unless asked now: /releases/<feed>/latest.json, an AppRelease; its `file` under /releases/). No source
@@ -223,5 +223,40 @@ pub fn update_first(src : Source) -> Unit {
   if !update.asked {
     update.asked = true
     update_check(src, false)
+  }
+}
+
+///|
+/// The settings' version row's words at its end (SettingsHome.kt Version), and whether they are the accent's: how an
+/// update goes, 正在检查, 更新到 <version>, or 检查更新.
+pub fn update_row_words() -> (String, Bool) {
+  let progress = update_progress()
+  if progress != "" {
+    return (progress, false)
+  }
+  if update.checking {
+    return (@sf.t("android-settings.version.checking"), false)
+  }
+  match update.available {
+    Some(v) => (@sf.t("android-settings.version.update", args=[("version", text(Some(v), "versionName"))]), true)
+    None => (@sf.t("android-settings.version.check"), false)
+  }
+}
+
+///|
+/// The version row tapped: with a newer build known, installed; with none, still.fail cloud asked now.
+pub fn update_row_tapped(src : Source) -> Unit {
+  if update.checking || update.installing || update_busy() {
+    return
+  }
+  match update.available {
+    Some(_) => update_install(src)
+    None => {
+      update.checking = true
+      update_check(src, true, done=fn(said) {
+        update.checking = false
+        update_say(said)
+      })
+    }
   }
 }

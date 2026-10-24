@@ -23,7 +23,7 @@ priv enum SideItem {
 
 ///|
 /// One of the chats' lists (ChatPane): all of them, the viewer's or the watching ones, its days under the band.
-fn chats_pane(c : @ui.Ctx, src : Source, w : Workspace, pages : Pages, filter : String) -> Unit {
+fn chats_pane(c : @ui.Ctx, src : Source, w : Workspace, filter : String) -> Unit {
   let key = "side/chats/" + w.id + "/" + filter
   let (view, error) = chats_of(src, w.id, filter)
   match view {
@@ -92,11 +92,11 @@ fn chats_pane(c : @ui.Ctx, src : Source, w : Workspace, pages : Pages, filter : 
               None => false
             }
             // 2 between it and a row under it, none before a day's heading (Sidebar.css.ts navSessionWrap + navSessionWrap)
-            side_chat_row(c, src, pages, item, lead, on, i + 1 < lines.length() && lines[i + 1] is Chat(_))
+            side_chat_row(c, src, item, lead, on, i + 1 < lines.length() && lines[i + 1] is Chat(_))
           }
           Words(words, bad) => side_said(c, words, bad)
           // (Sidebar.tsx: the stations' page by its link)
-          NoStation => side_said(c, "", false, stations=Some(fn() { go_place(pages, "stations") }))
+          NoStation => side_said(c, "", false, stations=Some(fn() { go_place("stations") }))
           Breathing => side_breathing(c)
           // the band: its top row, 新建对话's (6 + 32 + 2), and 4 (navScroll's padding)
           Top => side_space(c, band + lists_top_in)
@@ -213,7 +213,7 @@ fn side_held(c : @ui.Ctx, key : String) -> Bool {
 /// The band over the lists (SidebarList.tsx NavTop): its top row, then 新建对话 and the filter (SidebarActions.tsx),
 /// then 待处理 where the rail has no bell; on the sidebar's own ground, whole (no glass: asked, 2026-10-24), the closed
 /// bar's as it closes (moved with it).
-fn lists_band(c : @ui.Ctx, src : Source, w : Workspace, pages : Pages) -> Unit {
+fn lists_band(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
   let t = @sf.theme()
   let filter = filter_of(src, w.id)
   let (view, _) = chats_of(src, w.id, "all")
@@ -229,7 +229,7 @@ fn lists_band(c : @ui.Ctx, src : Source, w : Workspace, pages : Pages) -> Unit {
             c.box(tx=-compose_in, fn() { @sf.icon(c, "compose", size=side_icon, color=t.p.muted) |> ignore }) |> ignore
             nav_words(c, @sf.t("web-main.sidebar.newChat"))
           }) {
-          new_chat(pages)
+          new_chat()
         }
       })
       |> ignore
@@ -265,7 +265,7 @@ let compose_in : Double = 1.0
 
 ///|
 /// A new chat (新建对话, ⌘N): its page beside the list.
-pub fn new_chat(pages : Pages) -> Unit {
+pub fn new_chat() -> Unit {
   match app.nav.top() {
     NewChat => ()
     _ => {
@@ -284,7 +284,7 @@ pub fn new_chat(pages : Pages) -> Unit {
 
 ///|
 /// A chat's row pressed: its chat the page beside the list (in place of what was open), the list's place kept.
-pub fn open_row(pages : Pages, item : ChatItem) -> Unit {
+pub fn open_row(item : ChatItem) -> Unit {
   let r : ChatRef = {
     station: item.station,
     session: item.session,
@@ -399,7 +399,7 @@ fn filter_named(filter : String) -> String {
 /// The filter's menu (components.tsx MineFilter's DropdownMenu, controls.css.ts chooserMenu): 全部会话, 我参与的, 监控中,
 /// 奏, then 已归档, the list shown checked; under the button, its right edge under the button's, 6 below it. Chosen, that
 /// list: 奏's and the archive's their page, a filter the chats' (from 奏 or the archive, back to the chats).
-fn filter_menu(c : @ui.Ctx, src : Source, w : Workspace, pages : Pages) -> Unit {
+fn filter_menu(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
   let shown = list_place(list_mode(src, w))
   let entries = [
     @kit.menu_radio("all", shown == "chats", label=@sf.t("web-main.filter.chats.all")),
@@ -412,9 +412,9 @@ fn filter_menu(c : @ui.Ctx, src : Source, w : Workspace, pages : Pages) -> Unit 
   let m = @sf.menu(c, "filter-menu", wide.filter_open, c.id("side/filter"), entries, {}, @sf.chooser_menu_w, along=End)
   wide.filter_open = m.open
   match m.chosen {
-    Some("decisions") => go_place(pages, "decisions")
-    Some("archive") => rail_go(c, src, w, pages, "archive")
-    Some(f) => rail_go(c, src, w, pages, if f == "all" { "chats" } else { f })
+    Some("decisions") => go_place("decisions")
+    Some("archive") => rail_go(c, src, w, "archive")
+    Some(f) => rail_go(c, src, w, if f == "all" { "chats" } else { f })
     None => ()
   }
 }
@@ -434,7 +434,6 @@ let filter_box_bar : @ui.Style = @ui.style(w=S8, h=S8, radius=@sf.rail_corner, a
 fn side_chat_row(
   c : @ui.Ctx,
   src : Source,
-  pages : Pages,
   item : ChatItem,
   lead : String,
   on : Bool,
@@ -461,7 +460,7 @@ fn side_chat_row(
         @sfbase.go_to({ station: item.station, session: item.session, title: item.title, station_name: item.station_name }, seq)
       _ => ()
     }
-    open_row(pages, item)
+    open_row(item)
   }
   let menu = item.offline is None && !item.pending
   // (right clicked, or held by a finger: Ctx::menu_asked, each part asked once)

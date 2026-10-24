@@ -204,6 +204,8 @@ using @sfbase {
   type SearchView,
   type Source,
   type Workspace,
+  settings_core_of,
+  nav_home,
 }
 
 ///|

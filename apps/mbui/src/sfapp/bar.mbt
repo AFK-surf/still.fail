@@ -73,50 +73,9 @@ let closes : Double = 16.0
 let bar_room : Double = 56.0 + 22.0 + 16.0 + 32.0
 
 ///|
-/// Every place a bar can hold (the core's BAR_PLACES); the chats' family, whose pages have 令 in the notch.
-// kept across runs: a table, never written
-let places : Array[String] = [
-  "chats", "decisions", "files", "stations", "profiles", "connects", "usage", "archive",
-]
-
-///|
+/// The chats' family of places, whose pages have 令 in the notch.
 // kept across runs: a table, never written
 let chat_family : Array[String] = ["chats", "decisions", "archive"]
-
-///|
-/// The bars before the core has said (BARS_DEFAULT).
-fn default_bars() -> (Array[Array[String]], Int) {
-  ([["chats", "files", "profiles", "stations"], ["decisions", "usage", "connects", "archive"]], 0)
-}
-
-///|
-/// The bars whole, as the core keeps them (prefs.ts barsOf): each one to four known places, none twice; empty ones
-/// dropped; none left, the default ones; the one in view one of them.
-fn bars_of(v : Json?) -> (Array[Array[String]], Int) {
-  let sets : Array[Array[String]] = []
-  for s in items(v, "sets") {
-    let kept : Array[String] = []
-    match s {
-      Array(a) =>
-        for p in a {
-          match p {
-            String(k) if places.contains(k) && !kept.contains(k) && kept.length() < 4 =>
-              kept.push(k)
-            _ => ()
-          }
-        }
-      _ => ()
-    }
-    if kept.length() > 0 {
-      sets.push(kept)
-    }
-  }
-  if sets.length() == 0 {
-    return default_bars()
-  }
-  let cur = number(v, "current").to_int()
-  (sets, if cur < 0 { 0 } else if cur >= sets.length() { sets.length() - 1 } else { cur })
-}
 
 ///|
 /// The places' middles on a bar `w` wide holding `n` with the notch `k` open (Bar.kt barCentres).
@@ -742,7 +701,6 @@ fn bar_reset() -> Unit {
   bar.icon_was = ""
   back_glide(bar.icon_swap, 1.0)
   m_face.val = ""
-  bars_picked.val = None
   bar_clock.now = 0.0
 }
 
@@ -841,42 +799,6 @@ fn BarModel::jump(self : BarModel) -> Unit {
 let m_face : Ref[String] = { val: "" }
 
 ///|
-/// The bars as switched here, before the prefs say it.
-let bars_picked : Ref[(Array[Array[String]], Int)?] = { val: None }
-
-///|
-/// The bars of workspace `ws`: switched here, else its own as the prefs keep them (`barsBy`), else everyone's (`bars`).
-fn bars_in(src : Source, ws : String) -> (Array[Array[String]], Int) {
-  match bars_picked.val {
-    Some(b) => b
-    None => {
-      let prefs = (src.topic)("prefs", {}).value
-      match field(field(prefs, "barsBy"), ws) {
-        Some(Object(_)) as b => bars_of(b)
-        _ =>
-          match field(prefs, "bars") {
-            Some(Object(_)) as b => bars_of(b)
-            _ => default_bars()
-          }
-      }
-    }
-  }
-}
-
-///|
-/// Another bar in view (AppState.setBars): shown at once, kept whole as the workspace's (`prefs.set {barsBy}`).
-fn set_bars(src : Source, ws : String, sets : Array[Array[String]], cur : Int) -> Unit {
-  bars_picked.val = Some((sets, cur))
-  let whole = Json::object({
-    "sets": Json::array(sets.map(fn(s) { Json::array(s.map(fn(p) { Json::string(p) })) })),
-    "current": Json::number(cur.to_double()),
-  })
-  let by : Map[String, Json] = Map([])
-  by[ws] = whole
-  (src.call)("prefs.set", Json::object({ "barsBy": Json::object(by) }), fn(_) {  })
-}
-
-///|
 /// A place's name (the bar's words for what a screen reader says, the place's page's title).
 fn place_label(place : String) -> String {
   tr("android-misc.bar.place." + place)
@@ -890,21 +812,6 @@ let bar_glyph : Ref[@sf.GlyphCounts?] = Ref(None)
 /// What Station's place says to a screen reader as the bar last read it (Places.kt stationsSaid: the stations in the
 /// core's words, what is wrong with them), "" before or when the core said nothing of them.
 let bar_stations_said : Ref[String] = Ref("")
-
-///|
-/// A place's icon (Places.kt placeIcon; Station's is the stations' glyph of their state once read, bar_glyph).
-fn place_icon(place : String) -> String {
-  match place {
-    "chats" => "chats"
-    "decisions" => "zou"
-    "files" => "folder"
-    "profiles" => "quota"
-    "connects" => "im"
-    "usage" => "chart"
-    "archive" => "archive"
-    _ => "server"
-  }
-}
 
 ///|
 /// The place a page is the top of (none: it is not a place's).

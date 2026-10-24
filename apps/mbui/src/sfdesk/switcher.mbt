@@ -300,7 +300,7 @@ fn switcher_lines(
 ///|
 /// A line picked (Enter, a press): a command done once the list is closed, a chat opened (a message at it, its words
 /// marked), something else where the core says it opens; 查看更多 its kind alone, 全部结果 all again.
-fn switcher_go(c : @ui.Ctx, line : SwLine, pages : Pages) -> Unit {
+fn switcher_go(c : @ui.Ctx, line : SwLine) -> Unit {
   let words = match switching.kept {
     Some(v) => v.words
     None => []
@@ -326,7 +326,7 @@ fn switcher_go(c : @ui.Ctx, line : SwLine, pages : Pages) -> Unit {
     }
     Chat(ch) => {
       close()
-      open_row(pages, ch.item)
+      open_row(ch.item)
     }
     Message(m) => {
       close()
@@ -343,13 +343,13 @@ fn switcher_go(c : @ui.Ctx, line : SwLine, pages : Pages) -> Unit {
 /// ⌘K over the page (ChatSwitcher): over a scrim, 14% down the window, 560 wide at most (32 short of the window), 480
 /// high at most (72% of the window); its search, then the list of what is found and what can be done, the row the keys
 /// or the pointer chose lit. Drawn each frame; nothing while closed.
-fn switcher(c : @ui.Ctx, src : Source, w : Workspace, pages : Pages) -> Unit {
+fn switcher(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
   if !switching.open {
     switcher_closed()
     return
   }
   let scope = w.id
-  let offered = switcher_offered(c, src, pages)
+  let offered = switcher_offered(c, src)
   let t = @sf.theme()
   let query = switching.query.trim(chars=" ").to_string()
   let typed = query != ""
@@ -436,7 +436,7 @@ fn switcher(c : @ui.Ctx, src : Source, w : Workspace, pages : Pages) -> Unit {
               switching.field.set(typed)
               typed_now.val = typed
               match picks.get(switching.chosen) {
-                Some(k) => switcher_go(c, lines[k], pages)
+                Some(k) => switcher_go(c, lines[k])
                 None => ()
               }
             }
@@ -471,7 +471,7 @@ fn switcher(c : @ui.Ctx, src : Source, w : Workspace, pages : Pages) -> Unit {
               let id = c.id(key)
               c.cursor(id, Hand)
               if c.clicked(id) {
-                switcher_go(c, line, pages)
+                switcher_go(c, line)
               }
               if c.lit(id) {
                 switching.chosen = k
@@ -808,7 +808,7 @@ let switcher_note : @ui.TextStyle = @ui.text_style(size=Xs, color=Muted, w=Full)
 /// What ⌘K offers of what the frame can do now (Switcher.tsx offered: the keys' actions it answers, and its own): the
 /// open chat's (find, its services), the app's (a new chat, the sidebar, settings, the shortcuts), settings' pages (only
 /// found by typing). The core names the keys' actions and finds what was typed among them (sfdesk/switcher.mbt).
-fn switcher_offered(c : @ui.Ctx, src : Source, pages : Pages) -> Array[Offered] {
+fn switcher_offered(c : @ui.Ctx, src : Source) -> Array[Offered] {
   // an action's first keys as shown (as kept on this device: settings' 快捷键)
   let prefs = (src.topic)("prefs", {}).value
   let keys = fn(action : String) { @settings.key_label(prefs, action) }
@@ -847,7 +847,7 @@ fn switcher_offered(c : @ui.Ctx, src : Source, pages : Pages) -> Array[Offered] 
     icon: "compose",
     keys: keys("chat.new"),
     typed: false,
-    run: fn() { new_chat(pages) },
+    run: fn() { new_chat() },
   })
   all.push({
     id: "sidebar.toggle",
@@ -867,7 +867,7 @@ fn switcher_offered(c : @ui.Ctx, src : Source, pages : Pages) -> Array[Offered] 
     icon: "settings",
     keys: keys("settings"),
     typed: false,
-    run: fn() { open_settings(pages) },
+    run: fn() { open_settings() },
   })
   all.push({
     id: "shortcuts",
@@ -901,7 +901,7 @@ fn switcher_offered(c : @ui.Ctx, src : Source, pages : Pages) -> Array[Offered] 
       keys: "",
       typed: true,
       run: fn() {
-        open_settings_at(pages, route)
+        open_settings_at(route)
       },
     })
   }

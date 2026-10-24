@@ -27,7 +27,7 @@ fn attention_reset() -> Unit {
 /// bell; 忽略: no longer listed, both until the trouble changes, kept on this device) and the services left up long
 /// first; then each workspace's chats that want the viewer (the one in view's first), 忽略 on the row pointed at
 /// (`decision.dismiss`); pressed, its chat; 全部决定 (奏) and 通知设置 at its foot.
-fn attention_panel(c : @ui.Ctx, src : Source, w : Workspace, pages : Pages) -> Unit {
+fn attention_panel(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
   let close = fn() { wide.attention_open = false }
   let railed = rail_items(src, w.id).contains("attention")
   let trigger = c.id(if railed { "rail/attention" } else { "side/attention" })
@@ -52,7 +52,7 @@ fn attention_panel(c : @ui.Ctx, src : Source, w : Workspace, pages : Pages) -> U
     along=Start,
     offset=if railed { attention_off_rail } else { attention_off_side },
     look=fn(c, _, body) { @sf.panel(c, w=Px(attention_w), fn() { c.box(style=att_list, body) |> ignore }) |> ignore },
-    fn() { attention_rows(c, src, w, pages, railed, close) },
+    fn() { attention_rows(c, src, w, railed, close) },
   )
   wide.attention_open = p.value
 }
@@ -161,7 +161,7 @@ fn attention_groups(src : Source, w : Workspace, shown : Bool) -> Array[(String,
 
 ///|
 /// What 待处理's panel holds, read while it is open.
-fn attention_rows(c : @ui.Ctx, src : Source, w : Workspace, pages : Pages, railed : Bool, close : () -> Unit) -> Unit {
+fn attention_rows(c : @ui.Ctx, src : Source, w : Workspace, railed : Bool, close : () -> Unit) -> Unit {
   let groups = attention_groups(src, w, true)
   let (trouble, trouble_new) = if railed { bell_trouble(src, w) } else { ("", false) }
   let jobs = if railed { long_jobs(src, w) } else { 0 }
@@ -186,12 +186,12 @@ fn attention_rows(c : @ui.Ctx, src : Source, w : Workspace, pages : Pages, raile
         c.tell("attention/gone", fn() { trouble_keep(src, w, "gone", Json::string(trouble)) })
       }), fn() {
         close()
-        rail_go(c, src, w, pages, "stations")
+        rail_go(c, src, w, "stations")
       })
     })
   }
   if jobs > 0 {
-    group("", fn() { open_jobs(c, src, w, pages) })
+    group("", fn() { open_jobs(c, src, w) })
   }
   for g in groups {
     group(if several { g.1 } else { "" }, fn() {
@@ -233,7 +233,7 @@ fn attention_rows(c : @ui.Ctx, src : Source, w : Workspace, pages : Pages, raile
             if g.0 != w.id {
               app.picked = g.0
               (src.call)("prefs.set", Json::object({ "workspace": Json::string(g.0) }), fn(_) {  })
-              desk_home(pages)
+              desk_home()
             }
             let chat : ChatRef = {
               station: text(v, "station"),
@@ -257,11 +257,11 @@ fn attention_rows(c : @ui.Ctx, src : Source, w : Workspace, pages : Pages, raile
   c.box(style=att_foot, fn() {
     if attention_link(c, "attention/desk", @sf.t("web-main.attention.desk")) {
       close()
-      go_place(pages, "decisions")
+      go_place("decisions")
     }
     if attention_link(c, "attention/settings", @sf.t("web-main.attention.settings")) {
       close()
-      open_settings_at(pages, @settings.Route::Notifications)
+      open_settings_at(@settings.Route::Notifications)
     }
   })
   |> ignore

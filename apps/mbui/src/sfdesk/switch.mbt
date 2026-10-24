@@ -35,7 +35,7 @@ fn switch_anim(c : @ui.Ctx) -> @motion.Anim {
 
 ///|
 /// As the pane's page is built: a switch between a chat and a new chat begins, from now.
-fn page_switch_frame(c : @ui.Ctx, pages : Pages) -> Unit {
+fn page_switch_frame(c : @ui.Ctx) -> Unit {
   let top = app.nav.top()
   let switched = match (page_switch.was, top) {
     (Some(NewChat), Chat(r)) =>
@@ -88,13 +88,13 @@ pub fn switch_veil(c : @ui.Ctx) -> Unit {
 
 ///|
 /// The new chat left for a chat, fading over it (drawn only, its composer gone to the chat's).
-fn switch_new_out(c : @ui.Ctx, src : Source, w : Workspace, pages : Pages) -> Unit {
+fn switch_new_out(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
   let p = switch_in(c)
   if p >= 1.0 || !page_switch.from_new {
     return
   }
   let v = page_switch.new_view
-  let l = c.layer(fn() { new_page(c, src, w, pages, v, field(v, "station"), Some((0.0, 0.0))) })
+  let l = c.layer(fn() { new_page(c, src, w, v, field(v, "station"), Some((0.0, 0.0))) })
   c.look(l, @ui.look(alpha=1.0 - p))
   c.draw_only(l)
 }

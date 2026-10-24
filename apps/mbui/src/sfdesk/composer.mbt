@@ -66,7 +66,6 @@ pub fn composer(
   c : @ui.Ctx,
   src : Source,
   ws : Workspace,
-  pages : Pages,
   spec : ComposerSpec,
   send : (Writing) -> Unit,
 ) -> Unit {
@@ -125,7 +124,7 @@ pub fn composer(
     fn() {
       if multiline {
         composer_extras(c, src, spec, w)
-        composer_text(c, src, ws, pages, spec, w, cap, multiline, submit)
+        composer_text(c, src, ws, spec, w, cap, multiline, submit)
         c.box(style=tools_row, fn() {
           attach(c, spec, w, no_files)
           match spec.toolbar {
@@ -137,7 +136,7 @@ pub fn composer(
         |> ignore
       } else {
         attach(c, spec, w, no_files)
-        composer_text(c, src, ws, pages, spec, w, cap, multiline, submit)
+        composer_text(c, src, ws, spec, w, cap, multiline, submit)
         send_button(c, ready, w.starting, submit)
       }
     },
@@ -248,7 +247,6 @@ fn composer_text(
   c : @ui.Ctx,
   src : Source,
   ws : Workspace,
-  pages : Pages,
   spec : ComposerSpec,
   w : Writing,
   cap : Int,
@@ -308,9 +306,9 @@ fn composer_text(
     // nothing typed: the chat above or below, as the list shows them now
     if res.focused && w.text == "" && !switcher_open() && !menu {
       if c.key_pressed(@ui.key_code_up, in_field=true) {
-        neighbour(src, ws, pages, -1)
+        neighbour(src, ws, -1)
       } else if c.key_pressed(@ui.key_code_down, in_field=true) {
-        neighbour(src, ws, pages, 1)
+        neighbour(src, ws, 1)
       }
     }
   })
@@ -937,7 +935,7 @@ fn going_up(w : Writing) -> Array[Json] {
 /// dock.css.ts: 12 clear of the pane's sides, the column and its curve wide at most, in the middle): the chat's draft
 /// (ChatPage.tsx chatKey), what it sends going into the chat (send_in_chat), locked while the chat is archived, no
 /// file taken in while its station is down. Its place measured (composer_room).
-pub fn chat_composer(c : @ui.Ctx, src : Source, ws : Workspace, pages : Pages, r : ChatRef, v : ChatView?) -> Unit {
+pub fn chat_composer(c : @ui.Ctx, src : Source, ws : Workspace, r : ChatRef, v : ChatView?) -> Unit {
   let spec : ComposerSpec = {
     station: r.station,
     draft: r.station + ":" + r.session,
@@ -966,7 +964,7 @@ pub fn chat_composer(c : @ui.Ctx, src : Source, ws : Workspace, pages : Pages, r
     }
     c.box(style=@ui.style(w=Fixed(width)), fn() {
       c.sized(width, c.height, fn() {
-        composer(c, src, ws, pages, spec, fn(w) {
+        composer(c, src, ws, spec, fn(w) {
           match v {
             Some(v) => send_in_chat(c, src, r, v, w)
             None => ()

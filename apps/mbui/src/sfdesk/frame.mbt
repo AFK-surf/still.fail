@@ -14,16 +14,14 @@
 // but a press on the page beside it (a chat chosen in it shows in the page, the sidebar still in use; no ⌘\, no lit
 // place pressed again: asked, 2026-10-24); the sidebar at first. The side panel comes over as it opens (the page
 // again as it closes); back goes from the side panel to the page, from the page to the sidebar.
-//
-// The pages and sidebars not yet here are sfapp's, given to the frame as it is drawn (Pages): each moves in on its own
-// without the frame changing but for the line that calls it.
 
 ///|
-/// What the frame draws that is not here yet, given by the app (sfapp): the pages in the pane, the sidebars of the
-/// places other than the chats', and what the frame asks of the app.
-pub(all) struct Pages {
-  /// what the settings' pages read and call, and how they move (src/sfapp/settings: the core as the app has it)
-  core : (Source, Workspace) -> Core
+/// What the settings' pages read and call, and how they move, as the desktop has them (sfbase's settings_core_of): its
+/// way home the stack's, a station's login its own card (login_card.mbt).
+fn settings_core(src : Source, w : Workspace) -> Core {
+  settings_core_of(src, w, home=nav_home, login_card=fn(c, station, id, marked) {
+    login_card(c, settings_core(src, w), station, id, marked~)
+  })
 }
 
 ///|
@@ -358,7 +356,6 @@ fn dock(
   src : Source,
   w : Workspace,
   all : Array[Workspace],
-  pages : Pages,
   bar : Bool,
   peek : Bool,
   s : Double,
@@ -418,12 +415,12 @@ fn dock(
         left=ml,
         top=top + mt,
         fn() {
-          rail(c, src, w, all, pages, bar)
+          rail(c, src, w, all, bar)
           c.box(style=dock_side.then(@ui.style(w=Fixed(side_w))), moves="sidebar", fn() {
             if shown && s > 0.0 {
               // (in the bar: what the web's sidebar does there, at once, as the bar starts out)
               wide.in_bar = side_folded()
-              sidebar(c, src, w, pages, side_w)
+              sidebar(c, src, w, side_w)
               wide.in_bar = false
             }
           })
@@ -488,7 +485,6 @@ pub fn frame(
   w : Workspace,
   all : Array[Workspace],
   invited : Bool,
-  pages : Pages,
 ) -> Unit {
   // pointed at with a mouse: the wheel and the trackpad scroll, a drag is the pointer's own; with a finger (a tablet's
   // screen, whatever the frame): it drags the lists
@@ -496,7 +492,7 @@ pub fn frame(
   c.mouse_drags_lists(finger)
   // a device waiting to be confirmed in the workspace's safe mode: beside the rail (the workspaces, settings) only
   // what it waits on, no chats' list (its stations refuse it), unless a settings page is open
-  let gated = lit_place() != "settings" && @settings.lock_waiting((pages.core)(src, w), w.id)
+  let gated = lit_place() != "settings" && @settings.lock_waiting(settings_core(src, w), w.id)
   // (连接 and 用量: a page across the pane, no sidebar)
   let bare = place_bare(lit_place())
   // the sidebar of this place and workspace, as it was left
@@ -606,14 +602,14 @@ pub fn frame(
       let page = fn() {
         if gated {
           c.box(style=frame_gate.then(@ui.style(w=Fixed(main_w), h=Fixed(c.height))), fn() {
-            let core = (pages.core)(src, w)
+            let core = settings_core(src, w)
             security_waiting(c, core, @settings.here_of(core, w.id, w.name))
           })
           |> ignore
         } else {
           // a chat and a new chat switched between: the composer moving, the rest crossfading (switch.mbt)
-          page_switch_frame(c, pages)
-          c.nav_flat(app.nav, fn(page) { main_page(c, src, w, all, invited, pages, page) }, bg=@sf.theme().p.bg)
+          page_switch_frame(c)
+          c.nav_flat(app.nav, fn(page) { main_page(c, src, w, all, invited, page) }, bg=@sf.theme().p.bg)
           |> ignore
         }
       }
@@ -681,7 +677,7 @@ pub fn frame(
       })
       |> ignore
     }
-    dock(c, src, w, all, pages, bar, peek, s, col, top, foot, tape_x)
+    dock(c, src, w, all, bar, peek, s, col, top, foot, tape_x)
     if updating {
       update_button(c, src, bar, s, inset, top, tape_x)
     }
@@ -997,39 +993,38 @@ fn main_page(
   w : Workspace,
   all : Array[Workspace],
   invited : Bool,
-  pages : Pages,
   page : Page,
 ) -> Unit {
   match page {
-    Chat(r) => chat_page(c, src, w, r, pages)
+    Chat(r) => chat_page(c, src, w, r)
     // an agent's history, asked as a page (a link's `?history=…&entry=…`): on the desktop its chat with the history
     // open beside it at the entry asked (ChatPage.tsx's `history`), the page the chat's
     History(r, key, entry) => {
       c.tell("history-page/" + key, fn() { history_beside(src, r, key, entry) })
-      chat_page(c, src, w, r, pages)
+      chat_page(c, src, w, r)
     }
     // the chats' list is the sidebar's: nothing open (yet), the page's ground
     Home => ()
     // settings' own home is its first page (the web goes to 外观)
-    Settings => setting_page(c, src, w, pages, Route::Appearance)
-    Setting(r) => setting_page(c, src, w, pages, r)
+    Settings => setting_page(c, src, w, Route::Appearance)
+    Setting(r) => setting_page(c, src, w, r)
     // a place of the rail's other than the chats': its page, under its title
-    Place(p) => place_page(c, src, w, pages, p)
+    Place(p) => place_page(c, src, w, p)
     // 文件: a folder under its bar, as the web's
-    Files => files_home(c, src, w, (pages.core)(src, w), files_room(c))
-    Drive(at) => files_station(c, src, w, (pages.core)(src, w), at, files_room(c))
+    Files => files_home(c, src, w, settings_core(src, w), files_room(c))
+    Drive(at) => files_station(c, src, w, settings_core(src, w), at, files_room(c))
     // a new chat (newchat.mbt)
-    NewChat => new_chat_page(c, src, w, pages)
+    NewChat => new_chat_page(c, src, w)
     // a station's screen, a drive's text read, a film played are over the whole window (sfapp's signed_in), not in
     // the pane
     Screen(_) | DriveRead(_) | DrivePlay(_) => ()
     // 已归档, none of its chats open beside the list: what it is
     Archived => archive_main(c)
     // 奏: the decision picked in the sidebar's 奏 (decision_page.mbt)
-    Decisions => decision_page(c, src, w, pages)
+    Decisions => decision_page(c, src, w)
     // a web service, a visualization opened aside: its chat with it beside it (service_tab.mbt)
-    Service(station, job) => service_beside(c, src, w, pages, station, job)
-    PreviewFile(station, key, path, name) => tab_beside(c, src, w, pages, station, key, file_tab(key, path, name))
+    Service(station, job) => service_beside(c, src, w, station, job)
+    PreviewFile(station, key, path, name) => tab_beside(c, src, w, station, key, file_tab(key, path, name))
     // the plain text a phone's history opens: the phone's own
     Words(_, _) => ()
   }

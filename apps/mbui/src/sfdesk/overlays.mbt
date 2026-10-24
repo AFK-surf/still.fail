@@ -5,21 +5,21 @@
 
 ///|
 /// Everything the frame opens over itself, drawn after it.
-pub fn overlays(c : @ui.Ctx, src : Source, w : Workspace, pages : Pages) -> Unit {
+pub fn overlays(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
   // a right click's menu (context_menu.mbt)
   context_menu(c)
-  row_menu(c, src, pages)
+  row_menu(c, src)
   // the rail's menu, and what can be added beside it while it is changed (rail.mbt)
-  rail_overlays(c, src, w, pages)
-  filter_menu(c, src, w, pages)
-  attention_panel(c, src, w, pages)
+  rail_overlays(c, src, w)
+  filter_menu(c, src, w)
+  attention_panel(c, src, w)
   // ⌘K (switcher.mbt): what the frame and its page can do now offered to it
-  switcher(c, src, w, pages)
-  keys_dialog(c, src, pages)
+  switcher(c, src, w)
+  keys_dialog(c, src)
   // a chat relayed to a channel (relay.mbt)
   relay_dialog(c, src)
   // a workspace made (new_workspace.mbt)
-  new_workspace_dialog(c, src, pages)
+  new_workspace_dialog(c, src)
   // a chat shared with the viewer's other workspaces (share_dialog.mbt)
   share_dialog(c, src)
   // a chat made public (publish.mbt)
