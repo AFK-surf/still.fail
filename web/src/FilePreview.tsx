@@ -546,8 +546,8 @@ function Viewer({ onClose, closing, local, ...opened }: { onClose(): void; closi
     return () => { live = false; };
   }, [blob, known.kind]);
   const kind = known.kind ?? (front === "text" ? "text" : front === "binary" ? null : sniffed);
-  // An image on its way: its thumbnail stands in, and how far the whole of it has come shows in the bar.
-  const coming = known.kind === "image" && loaded.state === "loading" ? loaded.got : undefined;
+  // A loading image keeps its bar even before the first progress arrives; null means none has been reported yet.
+  const coming = known.kind === "image" && loaded.state === "loading" ? loaded.got ?? null : undefined;
   // The bar is as wide as what it holds, and once open it only grows: its buttons stay where they are to be clicked.
   const head = useRef<HTMLElement>(null);
   const widest = useRef(0);
