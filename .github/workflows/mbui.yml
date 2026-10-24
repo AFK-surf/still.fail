@@ -290,6 +290,10 @@ jobs:
     runs-on: windows-2025
     environment: ${{ github.ref == 'refs/heads/main' && 'production' || '' }}
     timeout-minutes: 10
+    # (actions: the pipeline's run of this commit and its natives artifact, for the test station's natives)
+    permissions:
+      contents: read
+      actions: read
     defaults:
       run:
         shell: bash
@@ -372,6 +376,35 @@ jobs:
         with:
           path: .ci/hbc
           key: ${{ env.HBC_KEY }}
+      # The test station's natives (e2e/win.sh: mesh and runner, win32-x64), by their keys. A change to one of them is in
+      # no release yet and is built only by the pipeline's natives job (a Mac's cross-build: this machine has no zig):
+      # then its end is waited for (an outside wait, its job's own state), and a branch takes what it built (its run's
+      # artifact, as the pipeline's own jobs do, .github/actions/natives); main's it published to the release. None
+      # missing, nothing waited for (the run of #1493 found mesh missing and failed building it here).
+      - name: The test station's natives (the pipeline's natives job's, for a change to them)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          missing=$(node scripts/native.ts missing mesh:win32-x64 runner:win32-x64)
+          [ -n "$missing" ] || exit 0
+          echo "not in the release yet: $(echo $missing); the pipeline's natives job is waited for"
+          api() { gh api "repos/$GITHUB_REPOSITORY/$1" --jq "$2"; }
+          t0=$SECONDS run=""
+          while :; do
+            [ -n "$run" ] || run=$(api "actions/workflows/pipeline.yml/runs?head_sha=$GITHUB_SHA&per_page=1" '.workflow_runs[0].id // empty' || true)
+            state=$([ -z "$run" ] || api "actions/runs/$run/jobs?per_page=100" '.jobs[] | select(.name == "natives") | "\(.status) \(.conclusion // "")"' || true)
+            case "$state" in
+              "completed success") break ;;
+              completed*) echo "::error::the pipeline's natives job ended $state (run $run)"; exit 1 ;;
+            esac
+            [ $((SECONDS - t0)) -lt 360 ] || { echo "::error::the pipeline's natives job not done after 6 minutes (run ${run:-not found})"; exit 1; }
+            sleep 5
+          done
+          echo "(its natives job done after $((SECONDS - t0)) s: run $run)"
+          if [ "$GITHUB_REF" != refs/heads/main ]; then
+            gh run download "$run" -R "$GITHUB_REPOSITORY" -n "natives-$GITHUB_SHA" -D "$RUNNER_TEMP/natives"
+            echo "STILLFAIL_NATIVE_INBOX=$RUNNER_TEMP/natives" >> "$GITHUB_ENV"
+          fi
       # The still.fail the e2e flow signs in against (its cloud, relay, station and chat: ~13 s of the flow's ~18, none
       # of it the app's) made while cl compiles the app; the flow waits for the app (E2E_APP: "Build (APP=stillfail)"
       # says it is whole), then runs it. Waited for at the end, with the zip's put (main's) and the cache's save beside it.
