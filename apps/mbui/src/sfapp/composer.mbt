@@ -1929,7 +1929,7 @@ fn composer_bar(
   // ComposerTools, Chat.css.ts attachBtn)
   if wide && !no_files {
     c.cursor(plus, Hand)
-    wide_tip(c, "composer/plus", plus, tr("web-main.composer.attach"), action="composer.file")
+    @sf.tip(c, "composer/plus", plus, tr("web-main.composer.attach"), shortcut="composer.file")
   }
   let plus_hot = wide && !no_files && c.hovered(plus)
   let plus_button = fn() {

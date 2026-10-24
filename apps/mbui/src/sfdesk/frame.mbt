@@ -30,6 +30,10 @@ pub(all) struct Pages {
   /// the sidebar of a place other than the chats' (the settings', the files', the stations', the profiles'), `width`
   /// wide
   side : (@ui.Ctx, Source, Workspace, Double) -> Unit
+  /// the pane's page's own keys (the open chat's, 奏's), after the frame's (`escape`: Esc pressed and not taken by
+  /// what the frame opened), and what it offers ⌘K now
+  keys : (@ui.Ctx, Source, Workspace, Bool) -> Unit
+  offered : (@ui.Ctx, Source) -> Array[Offered]
   /// the services left up long (OpenJobs.tsx, over the lists' foot and in 待处理's panel); a chat relayed to a channel
   /// (Relay.tsx, from a row's menu: the chat, its thread)
   jobs : (@ui.Ctx, Source, Workspace) -> Unit
@@ -100,12 +104,13 @@ pub(all) struct Wide {
   mut editing : Bool
   mut add_open : Bool
   /// a chat's row's menu open (its right click): its row's key, the item, where; a row renamed in place (its key); the
-  /// lists' filter menu, 待处理's panel, the services' panel from the lists' foot open
+  /// lists' filter menu, 待处理's panel, the services' panel from the lists' foot, ⌘/'s shortcuts open
   mut menu : (String, ChatItem, Double, Double)?
   mut renaming : String
   mut filter_open : Bool
   mut attention_open : Bool
   mut jobs_open : Bool
+  mut keys_open : Bool
 }
 
 ///|
@@ -138,6 +143,7 @@ pub let wide : Wide = {
   filter_open: false,
   attention_open: false,
   jobs_open: false,
+  keys_open: false,
 }
 
 ///|
@@ -192,6 +198,7 @@ fn wide_reset() -> Unit {
   wide.filter_open = false
   wide.attention_open = false
   wide.jobs_open = false
+  wide.keys_open = false
 }
 
 ///|

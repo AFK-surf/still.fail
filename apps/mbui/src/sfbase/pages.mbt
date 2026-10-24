@@ -181,5 +181,6 @@ pub fn reset() -> Unit {
   acting_reset()
   // the messages chats are to go to (jump.mbt)
   go_tos.clear()
+  go_to_words.clear()
 }
 

@@ -148,7 +148,6 @@ fn reset() -> Unit {
   close_now()
   @settings.reset()
   ref_fields.clear()
-  go_to_words.clear()
   found_marking.val = ("", [], 0.0)
   find_marking.val = []
   search_reset()
@@ -227,7 +226,7 @@ fn reset() -> Unit {
   viewer_awake_env.val = -1
   src_now.val = fn() { 0.0 }
   // a drive's files, a text read (keep.mbt, drive_reader.mbt)
-  // the wide frame's keys (wide_keys.mbt)
+  // the chat's keys (wide_keys.mbt)
   focus_composer.val = false
   reset_by_hand.val = true
 }
@@ -279,8 +278,8 @@ pub fn view(c : @ui.Ctx, src : Source) -> Unit {
   faces(src)
   // pictures put up by their address come as the core gives them (a GIF among them moves)
   @sf.picture_of.val = fn(url, frame) { (src.picture)(url, frame) }
-  // a tip's keys, as the core's prefs set them (wide_tip.mbt)
-  @sf.set_shortcuts(tip_keys_of)
+  // a tip's keys, as the core's prefs set them (sfdesk's keys.mbt)
+  @sf.set_shortcuts(@sfdesk.tip_keys(src))
   // the library's words, the app's catalog's; what its viewers ask of the page (viewer_host.mbt)
   @sf.set_words(fill)
   @sf.set_viewer_host(viewer_host_of(c, src))
@@ -418,9 +417,9 @@ fn signed_in(c : @ui.Ctx, src : Source) -> Unit {
       // files being kept on the device, said once kept (keep.mbt)
       keeps_frame(c)
       if wide_on.val {
-        // the wide frame's keys (wide_keys.mbt), then the rail, the sidebar and the page beside it (sfdesk's frame.mbt,
+        // the wide frame's keys (sfdesk's keys.mbt), then the rail, the sidebar and the page beside it (sfdesk's frame.mbt,
         // this package's pages given to it: wide_pages.mbt); what opens over them after them
-        wide_keys(c, src, w)
+        @sfdesk.keys(c, src, w, desk_pages())
         @sfdesk.frame(c, src, w, all, invited, desk_pages())
         // a station's screen: over the whole window, as Android's ScreenActivity is over the app
         match app.nav.top() {
@@ -432,7 +431,8 @@ fn signed_in(c : @ui.Ctx, src : Source) -> Unit {
           DrivePlay(at) => c.layer(fn() { play_page(c, src, at) }) |> ignore
           _ => ()
         }
-        wide_overlays(c, src, w)
+        // what opens over them (sfdesk's overlays.mbt)
+        @sfdesk.overlays(c, src, w, desk_pages())
         pick_back(c)
         preview(c, src)
         viz_full_layer(c, src)

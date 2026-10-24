@@ -151,7 +151,7 @@ fn message_time(c : @ui.Ctx, key : String, time : Stamp?) -> Unit {
         absolute_times.val = !absolute_times.val
       }
       // in the wide frame the other way of saying it, on hover (ui.tsx Time: its Tip)
-      wide_tip(c, "time/" + key, id, if absolute_times.val { s.ago } else { s.full })
+      @sf.tip(c, "time/" + key, id, if absolute_times.val { s.ago } else { s.full })
       c.box(id~, fn() {
         c.text(
           if absolute_times.val { s.full } else { s.ago },
@@ -1488,7 +1488,7 @@ fn file_card(c : @ui.Ctx, a : Attachment, w : Double, id? : Int = 0, dl? : Json?
 fn file_card_wide(c : @ui.Ctx, a : Attachment, w : Double, id : Int, dl : Json?, act : Int) -> Unit {
   if id != 0 {
     c.cursor(id, Hand)
-    wide_tip(c, "file-card/" + a.path, id, if a.path != "" { a.path } else { a.name })
+    @sf.tip(c, "file-card/" + a.path, id, if a.path != "" { a.path } else { a.name })
   }
   let hot = id != 0 && c.hovered(id)
   c.box(style=if hot { file_card_hot } else { file_card_box }, w=Px(w), radius=message_file_corner, id~, fn() {
@@ -2847,7 +2847,7 @@ fn activity_stop(c : @ui.Ctx, src : Source, here : Here, a : Agent) -> Unit {
   }
   if id != 0 {
     c.cursor(id, Hand)
-    wide_tip(c, "activity-stop/" + a.key, id, fill("web-main.activity.stop", [("who", a.who)]))
+    @sf.tip(c, "activity-stop/" + a.key, id, fill("web-main.activity.stop", [("who", a.who)]))
   }
   let hot = id != 0 && c.hovered(id)
   c.box(style=if hot { activity_stop_hot } else { activity_stop_box }, id~, fn() {
