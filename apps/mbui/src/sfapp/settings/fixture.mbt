@@ -444,6 +444,49 @@ fn fx_connect(id : String, name : String, presence : String, status : String, mo
     ("runtimeText", str("Claude Code")),
     ("runText", str("")),
     ("modelName", str("Opus 5.5")),
+    // (the core's words of it: present.ts connect)
+    ("placeText", str("星火")),
+    ("modeLabel", str(if mode == "multi-session" { "每个 thread 一个会话" } else { "所有 thread 共用一个会话" })),
+    (
+      "modeSentence",
+      str(
+        if mode == "multi-session" {
+          "在 thread 中 @ 它即开启一个新会话，该 thread 的后续消息都进入此会话"
+        } else {
+          "它看到的所有 thread 都进入同一个会话，适合长期值守的助手仅在被 @ 时唤醒。"
+        },
+      ),
+    ),
+    (
+      "modeWords",
+      obj([
+        ("multi", obj([("label", str("每个 thread 一个会话")), ("description", str("在 thread 中 @ 它即开启一个新会话，该 thread 的后续消息都进入此会话"))])),
+        ("single", obj([("label", str("所有 thread 共用一个会话")), ("description", str("它看到的所有 thread 都进入同一个会话，适合长期值守的助手"))])),
+        ("mentionOn", str("被 @ 的 thread 中，后续回复无需再 @。")),
+        ("mentionOff", str("频道中它可见的每条消息都会进入会话。")),
+      ]),
+    ),
+  ])
+}
+
+///|
+/// The ways a multi-session connect could be switched to, as the core says them (present.ts modeChanges).
+fn fx_mode_changes() -> Json {
+  let change = fn(mode : String, mention : Bool, changed : Bool, effects : Array[String], action : String) {
+    obj([
+      ("mode", str(mode)),
+      ("requireMention", Json::boolean(mention)),
+      ("changed", Json::boolean(changed)),
+      ("effects", Json::array(effects.map(str))),
+      ("action", str(action)),
+    ])
+  }
+  let single = "此后它收到的消息都将进入同一个会话；现有各 thread 的会话不再接收新消息，包括这些 thread 中的回复。记录会保留。"
+  let fresh = "下一条消息将开始新的单会话；也可在切换后选择已有会话。"
+  Json::array([
+    change("multi-session", true, false, [], "确认更改"),
+    change("single-session", true, true, [single, fresh], "改为单会话"),
+    change("single-session", false, true, [single, fresh, "无需 @：它可见的所有频道和私信中的每条消息都会发送给 agent，用量会明显增加。"], "改为单会话"),
   ])
 }
 
@@ -1128,6 +1171,7 @@ pub fn fixture_topic(mode : String, name : String, params : Map[String, Json]) -
                 ),
                 ("candidates", []),
                 ("running", Json::number(0.0)),
+                ("changes", fx_mode_changes()),
               ]),
               obj([
                 ("station", str("ws1/st1")),
@@ -1136,6 +1180,7 @@ pub fn fixture_topic(mode : String, name : String, params : Map[String, Json]) -
                 ("sessions", []),
                 ("candidates", []),
                 ("running", Json::number(0.0)),
+                ("changes", Json::array([])),
               ]),
             ],
           ),

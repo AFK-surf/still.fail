@@ -72,7 +72,8 @@ fn pick_draft(src : Source, station : String, of : String, patch : Map[String, J
 ///|
 /// The control of the pick `of` on `station` (ModelTriple): its line, and its panel under it while open (above it with
 /// `up`). `page`: the control as a page has it with itself (a new chat's: its `pick`), not read on its own; `small`: in
-/// a composer's row (ModelTriple.css.ts in newChat: 28 high, its words 12).
+/// a composer's row (ModelTriple.css.ts in newChat: 28 high, its words 12). `saved`: what is said once 确定 kept it
+/// (onConfirm's toast: a connect's, its model bound).
 pub fn model_triple(
   c : @ui.Ctx,
   src : Source,
@@ -81,6 +82,7 @@ pub fn model_triple(
   up? : Bool = false,
   page? : Json? = None,
   small? : Bool = false,
+  saved? : String = "",
 ) -> Unit {
   let t = @sf.theme()
   let v = match page {
@@ -194,7 +196,7 @@ pub fn model_triple(
     side=if up { Top } else { Bottom },
     along=Start,
     look=fn(c, _, body) { @sf.panel(c, body) |> ignore },
-    fn() { triple_panel(c, src, station, of, v) },
+    fn() { triple_panel(c, src, station, of, v, saved) },
   )
   if open && !pop.value {
     triple.open = ""
@@ -206,7 +208,7 @@ pub fn model_triple(
 ///|
 /// The panel: the filter across its top (more than 8 models), the columns side by side under it with a line between,
 /// what borrowing would do, the foot.
-fn triple_panel(c : @ui.Ctx, src : Source, station : String, of : String, v : Json?) -> Unit {
+fn triple_panel(c : @ui.Ctx, src : Source, station : String, of : String, v : Json?, saved : String) -> Unit {
   let t = @sf.theme()
   let options = items(v, "options")
   let draft = field(v, "draft")
@@ -405,7 +407,7 @@ fn triple_panel(c : @ui.Ctx, src : Source, station : String, of : String, v : Js
         "pick.save/" + station + "/" + of,
         "pick.save",
         Json::object(pick_params(station, of)),
-        done=@sf.t("web-pages.chat.pickSaved"),
+        done=if saved == "" { @sf.t("web-pages.chat.pickSaved") } else { saved },
       )
     }
   })

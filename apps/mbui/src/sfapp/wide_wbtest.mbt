@@ -1302,6 +1302,55 @@ test "wide: 连接 as the web's: one list of every station's, each its station's
 }
 
 ///|
+test "wide: a connect's page as the web's: back to the connects, who it is and how it is, how it runs in one card, its sessions; its ⋯; 更改 says what switching does before it is done" {
+  let calls : Array[Made] = []
+  let t = wide_tester(calls)
+  app.nav.replace(Place("connects"))
+  t.run_for(@ui.nav_push_ms)
+  let (rx, ry) = t.find("星火助手").unwrap()
+  t.tap(rx, ry)
+  t.run_for(@ui.nav_push_ms)
+  // its head: back over it, its name, how it is, where it is reached, its station, who owns it
+  assert_true(t.query(Link, label="连接") is Some(_), msg="back: " + t.words().map(fn(w) { w.0 }).join("|"))
+  for w in ["星火助手", "在线", "星火", "Studio", "所属"] {
+    assert_true(t.find(w) is Some(_), msg=w)
+  }
+  // how it runs, in the core's words; its latest sessions
+  for w in ["运行方式", "每个 thread 一个会话", "在 thread 中 @ 它即开启一个新会话", "最近会话", "Slack 里问的报销流程"] {
+    assert_true(t.find(w) is Some(_), msg=w)
+  }
+  assert_true(t.find("运行于 Claude Code") is Some(_), msg="its runtime its own")
+  // its ⋯: what is done to it less often
+  t.click(Button, label="更多")
+  t.frame()
+  for w in ["重新连接", "更换 token", "停用", "更改所属用户", "删除连接"] {
+    assert_true(t.find(w) is Some(_), msg="its menu: " + w)
+  }
+  t.key(@ui.key_escape)
+  t.run_for(@ui.nav_push_ms)
+  // 更改: the ways, what switching to all in one does (the core's), its button the core's words
+  t.click(Button, label="更改")
+  t.run_for(@ui.nav_push_ms)
+  assert_true(t.find("更改会话方式") is Some(_), msg="its dialog: " + t.words().map(fn(w) { w.0 }).join("|"))
+  assert_true(t.find("更改后") is None, msg="nothing said while nothing changes")
+  t.click(Radio, label="所有 thread 共用一个会话")
+  t.frame()
+  assert_true(t.find("更改后") is Some(_), msg="what it does: " + t.words().map(fn(w) { w.0 }).join("|"))
+  assert_true(t.find("下一条消息将开始新的单会话") is Some(_))
+  assert_true(t.find("仅在被 @ 时唤醒") is Some(_), msg="whether it waits for an @, in the chosen one")
+  t.click(Button, label="改为单会话")
+  t.run_for(@ui.nav_push_ms)
+  let put = named(calls, "connect.put")
+  assert_eq(put.length(), 1)
+  assert_eq(text(field(Some(put[0].params), "input"), "mode"), "single-session")
+  assert_true(t.find("更改会话方式") is None, msg="closed as it goes")
+  // back: the connects
+  t.click(Link, label="连接")
+  t.run_for(@ui.nav_push_ms)
+  assert_true(t.query(Button, label="添加连接") is Some(_), msg="the list again")
+}
+
+///|
 test "wide: 用量 as the web's: what it counts beside its title, who spent it the list shown first, how it is counted at its foot" {
   let calls : Array[Made] = []
   let t = wide_tester(calls)
