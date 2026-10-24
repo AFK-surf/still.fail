@@ -730,3 +730,147 @@ test "corners: in a strip scrolled sideways with nothing to scroll, a box lies w
   assert_eq(strip_box().radius, 18.0)
   assert_eq(t.corner_faults(), [])
 }
+
+///|
+/// still.fail's ranges (its Theme::corner_fit): a corner 6 to 34, standing 4 to 16 in.
+let fit_ranges : CornerFit = { least: 6.0, most: 34.0, near: 4.0, far: 16.0 }
+
+///|
+/// A panel `edge` in from the window's every edge, its corner 34 standing alone (its ground: `shade`), with what `inside`
+/// builds in it; the theme's ladder and ranges.
+fn window_panel(edge : Double, inside? : (Ctx) -> Unit = fn(_) {  }) -> (Ctx) -> Unit {
+  fn(c) {
+    c.with_theme({ ..Theme::light(), corner_ladder: [34.0, 26.0, 18.0, 10.0], corner_fit: Some(fit_ranges) }, fn() {
+      c.box(w=Fill(1.0), h=Fill(1.0), pad=edge, fn() {
+        c.box(w=Fill(1.0), h=Fill(1.0), radius=34.0, bg=0x333333FFL, fn() { inside(c) }) |> ignore
+      })
+      |> ignore
+    })
+  }
+}
+
+///|
+test "corners: the window is the outermost container: a panel 6 in from its corners round as the window's less that" {
+  // a Mac's window, 16 round: 6 in, 11.2, within the ranges
+  let t = Tester::new(window_panel(6.0), w=600.0, h=400.0, window_corner=16.0)
+  t.draw()
+  assert_eq(strip_box().radius, concentric(16.0, 6.0))
+  assert_eq(t.corner_faults(), [])
+  // Windows 11's 8: 6 in would leave 3.2, too square for the ranges, and nowhere in them squarer than 6: as alone
+  let t = Tester::new(window_panel(6.0), w=600.0, h=400.0, window_corner=8.0)
+  t.draw()
+  assert_eq(strip_box().radius, 34.0)
+  assert_eq(t.corner_faults(), [])
+  // square (filling the screen): no corner to follow
+  let t = Tester::new(window_panel(6.0), w=600.0, h=400.0)
+  t.draw()
+  assert_eq(strip_box().radius, 34.0)
+  assert_eq(t.corner_faults(), [])
+}
+
+///|
+test "corners: a box concentric only with a corner squarer than the ranges let it have keeps its own, and is said" {
+  // a box said `InnerOr` (a composer) the ladder's inset in from a Mac window's panel (11.2): concentric there it would
+  // be 3.2, as good as square; it keeps its own corner and the rule says where it would fit (6.5 in, 6 round)
+  let inside = fn(pad : Double) {
+    fn(c : Ctx) {
+      c.box(w=Fill(1.0), h=Fill(1.0), pad~, justify=JEnd, fn() {
+        c.box(style=style(w=Full, h=Fixed(80.0), radius=InnerOr(Exact(26.0)), bg=Faint), fn() {  }) |> ignore
+      })
+      |> ignore
+    }
+  }
+  let t = Tester::new(window_panel(6.0, inside=inside(10.0)), w=600.0, h=400.0, window_corner=16.0, corners_held=false)
+  t.draw()
+  let faults = t.corner_faults()
+  assert_true(faults.length() > 0 && faults.iter().all(fn(f) { f.contains("too far in to follow it") }), msg="\{faults}")
+  // standing there, it follows the panel
+  let t = Tester::new(window_panel(6.0, inside=inside(6.5)), w=600.0, h=400.0, window_corner=16.0)
+  t.draw()
+  assert_eq(t.corner_faults(), [])
+}
+
+///|
+test "corners: a mark smaller than the gap it would leave in a corner stands by its words, a bigger circle by the corner" {
+  // a card 26 round, a round thing `side` across 20 in from its top and start (a status dot before a name, an avatar)
+  let dot = fn(side : Double) {
+    fn(c : Ctx) {
+      c.with_theme({ ..Theme::light(), corner_ladder: [34.0, 26.0, 18.0, 10.0], corner_fit: Some(fit_ranges) }, fn() {
+        c.box(pad=20.0, align=AStart, fn() {
+          c.box(w=Px(300.0), h=Px(120.0), radius=26.0, bg=0xEEEEEEFFL, pad=20.0, fn() {
+            c.box(w=Px(side), h=Px(side), radius=side / 2.0, bg=0x333333FFL, fn() {  }) |> ignore
+          })
+          |> ignore
+        })
+        |> ignore
+      })
+    }
+  }
+  let t = Tester::new(dot(7.0), corners_held=false)
+  t.draw()
+  assert_eq(t.corner_faults(), [])
+  let t = Tester::new(dot(20.0), corners_held=false)
+  t.draw()
+  assert_eq(t.corner_faults().length(), 1)
+}
+
+///|
+test "corners: a panel beside the window's, past its side, follows the window's corner as it will when it comes over" {
+  // two panels on a strip as a Mac's 16 window lays them (6 from its top and foot), the second past the window's right
+  // edge: as round as the first, 11.2, and what lies in its corners (6.5 in) concentric with that, 6
+  let follow = concentric(16.0, 6.0)
+  let tape = fn(c : Ctx) {
+    c.with_theme({ ..Theme::light(), corner_ladder: [34.0, 26.0, 18.0, 10.0], corner_fit: Some(fit_ranges) }, fn() {
+      c.box(w=Fill(1.0), h=Fill(1.0), fn() {
+        c.box(w=Px(588.0), h=Px(388.0), left=6.0, top=6.0, radius=follow, bg=0x333333FFL, fn() {  }) |> ignore
+        c.box(w=Px(300.0), h=Px(388.0), left=602.0, top=6.0, radius=follow, bg=0x333333FFL, pad=6.5, fn() {
+          c.box(w=Fill(1.0), h=Fill(1.0), radius=concentric(follow, 6.5), bg=0xEEEEEEFFL, fn() {  }) |> ignore
+        })
+        |> ignore
+      })
+      |> ignore
+    })
+  }
+  let t = Tester::new(tape, w=600.0, h=400.0, window_corner=16.0)
+  t.draw()
+  assert_eq(t.corner_faults(), [])
+  // in a square window (no corner to follow) the same panel is one round off the ladder, said
+  let t = Tester::new(tape, w=600.0, h=400.0, corners_held=false)
+  t.draw()
+  assert_eq(t.corner_faults().length(), 1)
+}
+
+///|
+test "corners: what could follow a corner within the ranges, standing where it cannot, is said" {
+  // a circle 30 across 13 in from a 16 window's corner would stand 1 in to follow it: past the ranges, as alone
+  let circle = fn(c : Ctx) {
+    c.with_theme({ ..Theme::light(), corner_ladder: [34.0, 26.0, 18.0, 10.0], corner_fit: Some(fit_ranges) }, fn() {
+      c.box(w=Fill(1.0), h=Fill(1.0), pad=13.0, justify=JEnd, fn() {
+        c.box(w=Px(30.0), h=Px(30.0), radius=15.0, bg=0x333333FFL, fn() {  }) |> ignore
+      })
+      |> ignore
+    })
+  }
+  let t = Tester::new(circle, w=600.0, h=400.0, window_corner=16.0)
+  t.draw()
+  assert_eq(t.corner_faults(), [])
+  // a pill 24 high in a 26 card's top corner, in the middle of a short row there (a bar's button), 20 from its side and
+  // 22 from its top: in the corner, at different distances, though it could stand 14 from both
+  let pill = fn(c : Ctx) {
+    c.with_theme({ ..Theme::light(), corner_ladder: [34.0, 26.0, 18.0, 10.0], corner_fit: Some(fit_ranges) }, fn() {
+      c.box(pad=20.0, align=AStart, fn() {
+        c.box(w=Px(300.0), h=Px(200.0), radius=26.0, bg=0xEEEEEEFFL, pad=20.0, fn() {
+          c.box(dir=Row, w=Fill(1.0), h=Px(28.0), align=ACenter, justify=JEnd, fn() {
+            c.box(w=Px(80.0), h=Px(24.0), radius=12.0, bg=0x333333FFL, fn() {  }) |> ignore
+          })
+          |> ignore
+        })
+        |> ignore
+      })
+      |> ignore
+    })
+  }
+  let t = Tester::new(pill, corners_held=false)
+  t.draw()
+  assert_eq(t.corner_faults().length(), 1)
+}

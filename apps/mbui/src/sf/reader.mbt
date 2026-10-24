@@ -1870,9 +1870,16 @@ let narrow_foot_place : @ui.Style = @ui.css("w=Full h=Full justify=JEnd")
 let narrow_foot_box : @ui.Style = @ui.css("p=S2_5 gap=S2 radius=Xl3")
 
 ///|
-/// The chapter's row (chapterRow): 上一章, its name, 下一章, 10 apart.
+/// The chapter's row (chapterRow): 上一章, its name, 下一章, 10 apart; in the foot's top corners (narrow_chip_past).
 // kept across runs: a value (no field of it changes)
-let narrow_chapter_row : @ui.Style = @ui.css("row w=Full gap=S2_5 align=ACenter")
+let narrow_chapter_row : @ui.Style = @ui.css("row w=Full gap=S2_5 align=ACenter").then(
+  @ui.style(px=room(narrow_chip_past), pt=room(narrow_chip_past)),
+)
+
+///|
+/// How far past the foot's padding its chapter's chips (30 high capsules) stand in its top corners: concentric with
+/// its corner (a card's: capsule_in), what is at its foot (squarer buttons) the ladder's inset in, round by its next step.
+let narrow_chip_past : Double = capsule_in(card_corner, 30.0) - corner_inset
 
 ///|
 // kept across runs: a value (no field of it changes)

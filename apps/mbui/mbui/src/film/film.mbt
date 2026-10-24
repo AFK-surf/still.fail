@@ -9,6 +9,7 @@
 // An app's film program gives its view to `run` (still.fail's src/sffilm, scripts/film.sh), which reads:
 //   MBUI_FILM=<out.mp4> MBUI_FILM_DRIVE=<script> [MBUI_WIN=390x844] [MBUI_FILM_SCALE=2] [MBUI_FILM_PLATFORM=0]
 //   [MBUI_DARK=1] [MBUI_FILM_INSET=1: the window's buttons in the app's top row, a Mac's] [MBUI_FILM_FRAMES=3000]
+//   [MBUI_FILM_WINDOW_CORNER=16: how round the system draws the window's corners, a Mac's: @hostapi.window_corner]
 //   [MBUI_LOCALE=en-US: the app's language, as a device's]
 // What it cannot show: what is not drawn by mbui (the system's keyboard and dialogs, a native view's content: a
 // video playing, a web page), and a stream's frames (none decoded under a Tester).
@@ -38,6 +39,7 @@ pub fn film(
   platform? : Int = 0,
   dark? : Bool = false,
   inset? : Bool = false,
+  window_corner? : Double = 0.0,
   max? : Int = 3000,
 ) -> Bool {
   if !supported {
@@ -63,6 +65,7 @@ pub fn film(
     // (the app's words in the language the film says: MBUI_LOCALE, as a device's)
     env=[("MBUI_TEXT_RECORD", "1"), ("MBUI_LOCALE", arg("MBUI_LOCALE"))],
     live={ host, turn: fn() { spin(1.0) } },
+    window_corner~,
   )
   // (the window's buttons in the app's top row, as a Mac's window has them: Tester::set_window_inset)
   if inset {
@@ -172,7 +175,20 @@ pub fn run(view : (@ui.Ctx) -> Unit) -> Unit {
   let scale = number(arg("MBUI_FILM_SCALE")).unwrap_or(2.0)
   let platform = number(arg("MBUI_FILM_PLATFORM")).unwrap_or(0.0).to_int()
   let max = number(arg("MBUI_FILM_FRAMES")).unwrap_or(3000.0).to_int()
-  let ok = film(view, script~, out~, w~, h~, scale~, platform~, dark=arg("MBUI_DARK") == "1", inset=arg("MBUI_FILM_INSET") == "1", max~)
+  let window_corner = number(arg("MBUI_FILM_WINDOW_CORNER")).unwrap_or(0.0)
+  let ok = film(
+    view,
+    script~,
+    out~,
+    w~,
+    h~,
+    scale~,
+    platform~,
+    dark=arg("MBUI_DARK") == "1",
+    inset=arg("MBUI_FILM_INSET") == "1",
+    window_corner~,
+    max~,
+  )
   exit(if ok { 0 } else { 1 })
 }
 

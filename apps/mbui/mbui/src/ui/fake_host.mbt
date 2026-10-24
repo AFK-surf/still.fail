@@ -379,6 +379,11 @@ impl @hostapi.Host for FakeHost with set_full_screen(_, on) {
 }
 
 ///|
+impl @hostapi.Host for FakeHost with window_corner(_) {
+  window_corner()
+}
+
+///|
 impl @hostapi.Host for FakeHost with env(_, a0) {
   h_env(a0)
 }

@@ -104,6 +104,9 @@ pub(all) struct Theme {
   /// corner, and a smooth one there, each round by one of them; a capsule or a circle round by its shape. None said:
   /// any (Tester::corner_faults)
   corner_ladder : Array[Double]
+  /// how round what lies in a container's corner may be, and how far from its edges, to be concentric with it
+  /// (CornerFit); None: any, as concentric asks
+  corner_fit : CornerFit?
   /// the height of a line of words that say none, a size of words (1.4: CSS's `line-height: 1.4`, still.fail's
   /// apps'); 0: the host's own (its system's, about 1.42)
   text_line : Double
@@ -242,6 +245,7 @@ pub fn Theme::light() -> Theme {
     text_line: 0.0,
     radii: RadiusScale::tailwind(),
     corner_ladder: [],
+    corner_fit: None,
     tabular: false,
   }
 }
@@ -395,6 +399,7 @@ pub fn Theme::ios_light() -> Theme {
     text_line: 0.0,
     radii: RadiusScale::tailwind(),
     corner_ladder: [],
+    corner_fit: None,
     tabular: false,
   }
 }
@@ -597,12 +602,29 @@ pub fn Theme::corner(self : Theme, r : Radius) -> Double {
 }
 
 ///|
+/// What lies in a rounded container's corner and what the corner rule may make of it to be concentric with it (still.fail's
+/// docs/ui-panels.md 圆角阶梯, 适应范围): its corner `least` at least and `most` at most, standing `near` to `far` from
+/// the container's edges. The outermost container is the window, its corner the system's (@hostapi.window_corner: a
+/// Mac's 16, Windows 11's 8, square full screen): where none of these makes a thing concentric with what it lies in
+/// (the container too square for it, or too round: a window's 8, a phone's screen), it stands as it would alone, its
+/// own corner where it is, and the rule asks nothing more of it there.
+pub(all) struct CornerFit {
+  least : Double
+  most : Double
+  near : Double
+  far : Double
+}
+
+///|
 /// `body` built under theme `t` (a dark panel in a light page, a part restyled), the theme as it was after it.
 pub fn Ctx::with_theme(self : Ctx, t : Theme, body : () -> Unit) -> Unit {
   let saved = self.theme
   self.theme = t
   if t.corner_ladder.length() > 0 {
     self.corner_ladder = t.corner_ladder
+  }
+  if t.corner_fit is Some(_) {
+    self.corner_fit = t.corner_fit
   }
   body()
   self.theme = saved

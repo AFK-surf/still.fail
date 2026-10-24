@@ -437,7 +437,8 @@ fn install_step(c : @ui.Ctx, core : Core, station : String, install : Json?) -> 
     }
     match opt_text(install, "action") {
       Some(action) =>
-        c.box(style=pf_card_foot, fn() {
+        // (last on its card: its button in its foot corner, concentric with it)
+        c.box(style=pf_card_foot.then(@sf.foot_reach(@sf.button_height())), fn() {
           if @sf.button(c, action, key="add-profile-install/" + runtime, tone=Primary, busy~) {
             @settings.act(core, action, "software.update", obj([("station", str(station)), ("id", str(runtime))]))
           }

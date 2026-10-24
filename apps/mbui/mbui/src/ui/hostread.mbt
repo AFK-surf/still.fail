@@ -146,6 +146,16 @@ pub fn full_screen() -> Bool {
 }
 
 ///|
+/// How round the system draws the window's corners now (@hostapi.window_corner; a Tester's `window_corner`, none while
+/// it fills the screen): the outermost container of all (corners.mbt).
+pub fn window_corner() -> Double {
+  match fake.val {
+    Some(f) => if f.full { 0.0 } else { f.window_corner }
+    None => @hostapi.window_corner()
+  }
+}
+
+///|
 /// The host's environment variable `name`, "" unset (a Tester's `env`).
 pub fn env(name : String) -> String {
   h_env(name)

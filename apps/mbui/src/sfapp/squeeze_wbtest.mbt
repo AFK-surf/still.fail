@@ -40,6 +40,17 @@ fn squeeze_of(mode : String, win : (String, Double, Double, Int, String), lang :
 }
 
 ///|
+/// How round the system draws a desktop's window on `platform` (@hostapi.window_corner): a Mac's 16 (macOS 27), Windows
+/// 11's 8; a phone's or a tablet's app fills its screen (none said).
+fn test_window_corner(platform : Int) -> Double {
+  match platform {
+    0 => 16.0
+    3 => 8.0
+    _ => 0.0
+  }
+}
+
+///|
 /// `mode` in window `win` (its name, size, platform and the size class its host says, "" none) in `lang`, a moment
 /// after it opens (what it opens with over), drawn: the squeeze and corner tests' (corners_wbtest.mbt).
 fn screen_in(mode : String, win : (String, Double, Double, Int, String), lang : String) -> @ui.Tester {
@@ -60,6 +71,9 @@ fn screen_in(mode : String, win : (String, Double, Double, Int, String), lang : 
     w~,
     h~,
     platform~,
+    window_corner=test_window_corner(platform),
+    // (the corner test says each screen's faults against its bar itself, all of them: none stops it at the first)
+    corners_held=false,
     // (the device's language: the fixture's prefs say none; motion reduced, as a person may have it: what a screen
     // opens with at its end at once and a spinner held, so no frame is drawn between its first and the one measured,
     // none of which ever changed what fits: 576 screens' ten frames each were most of the sfapp run, 2026-10-25)

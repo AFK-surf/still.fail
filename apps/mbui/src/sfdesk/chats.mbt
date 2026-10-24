@@ -14,7 +14,7 @@ fn lists_band(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
     // in the closed bar, what stands in its top right corner (the filter) 6 from its top and side, the band ending 6
     // under it (Sidebar.css.ts navNew, closed)
     let in_bar = wide.in_bar
-    c.box(style=if in_bar { band_new_bar } else if wide.tape { band_new_tape } else { nav_new }, fn() {
+    c.box(style=if in_bar { band_new_bar } else if wide.tape { band_new_tape() } else { nav_new }, fn() {
       let is_new = app.nav.top() is NewChat
       c.box(style=side_full, fn() {
         if nav_row(c, "side/new", is_new, fn() {
@@ -46,15 +46,24 @@ fn lists_band(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
 let band_new_bar : @ui.Style = @ui.css("row w=Full pl=S2 pr=S1_5 pt=S1_5 pb=S1_5 gap=S1 align=ACenter")
 
 ///|
-/// In a panel of the tape (laid out Medium, round by the ladder's pane corner): the filter in its top right corner as
-/// far in as makes it concentric with it (a circle 32 across: @sf.capsule_in), under the band's top row.
-// kept across runs: a value (no field of it changes)
-let band_new_tape : @ui.Style = nav_new.then(
-  @ui.style(
-    pr=@sf.capsule_room(@sf.pane_corner, filter_side),
-    pt=@sf.capsule_room(@sf.pane_corner, filter_side, less=side_top_web),
-  ),
-)
+/// In a panel of the tape (laid out Medium, its corner @sf.tape_pane): the filter in its top right corner as far in as
+/// makes it concentric with it (a circle 32 across: @sf.tape_capsule_room), under the band's top row; where the panel
+/// is too square for that (it follows a round window), where it stands in the wide frame.
+fn band_new_tape() -> @ui.Style {
+  nav_new.then(
+    @ui.style(
+      pr=@sf.tape_capsule_room(filter_side, band_new_end),
+      pt=@sf.tape_capsule_room(filter_side, side_top_web + band_new_top, less=side_top_web),
+    ),
+  )
+}
+
+///|
+/// nav_new's end and top (px=S2, pt=S1_5).
+let band_new_end : Double = 8.0
+
+///|
+let band_new_top : Double = 6.0
 
 ///|
 /// The filter's side: a circle 32 across.
@@ -62,7 +71,9 @@ let filter_side : Double = 32.0
 
 ///|
 /// How much taller 新建对话's row is in a panel of the tape (band_new_tape over nav_new's 6).
-let band_new_tape_over : Double = @sf.capsule_in(@sf.pane_corner, filter_side) - side_top_web - 6.0
+fn band_new_tape_over() -> Double {
+  @sf.capsule_fit(@sf.tape_pane.val, filter_side, side_top_web + band_new_top) - side_top_web - band_new_top
+}
 
 ///|
 /// A row's icon (16), 新建对话's a pixel in (Sidebar.css.ts navCompose: aligned with the 14px check under it).

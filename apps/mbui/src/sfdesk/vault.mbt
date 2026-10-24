@@ -108,9 +108,10 @@ fn vt_card(
 }
 
 ///|
-/// A card's buttons at its foot, its words before them (the row goes on under where it has not the room).
-fn vt_buttons(c : @ui.Ctx, f : () -> Unit) -> Unit {
-  c.box(style=vt_actions, flow=true, f) |> ignore
+/// A card's buttons at its foot, its words before them (the row goes on under where it has not the room): in the card's
+/// foot corners, concentric with them (@sf.foot_reach; `words_first`: words lead the row, only its end reaching).
+fn vt_buttons(c : @ui.Ctx, words_first? : Bool = false, f : () -> Unit) -> Unit {
+  c.box(style=vt_actions.then(@sf.foot_reach(@sf.button_height(), words_first~)), flow=true, f) |> ignore
 }
 
 ///|
@@ -188,7 +189,7 @@ fn vault_words(c : @ui.Ctx, core : Core, look : Look, ws : String, v : Json?, wo
       }
     })
     |> ignore
-    vt_buttons(c, fn() {
+    vt_buttons(c, words_first=true, fn() {
       c.text(@sf.t("android-settings.vault.wordsOnce"), style=desk_note) |> ignore
       if @sf.button(c, @sf.t("android-settings.vault.wordsDone"), key="vault-words-done", tone=Primary) {
         recovery_words.remove(ws)
@@ -236,7 +237,7 @@ fn vault_library(c : @ui.Ctx, core : Core, look : Look, ws : String, v : Json?) 
             }
           })
         } else if vaults.iter().any(fn(x) { flag(Some(x), "open") }) {
-          vt_buttons(c, fn() {
+          vt_buttons(c, words_first=true, fn() {
             c.text(@sf.t("web-pages.vault.opened"), style=desk_note) |> ignore
             let locking = is_doing(core, ["vault.lock"], [("workspace", ws)])
             if @sf.button(c, @sf.t("web-pages.vault.lockNow"), key="vault-lock", tone=Ghost, busy=locking) {

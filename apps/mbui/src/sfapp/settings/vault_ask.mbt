@@ -57,18 +57,18 @@ pub fn vault_ask(
 ) -> Unit {
   let view = vaults_of(core, ws)
   let row = items(view, "requests").iter().find_first(fn(r) { text(Some(r), "id") == request })
-  // (a solid button at its foot where there is an answer to give here: the card's corner is then the button's)
+  // (a solid button at its foot where there is an answer to give here: in the card's foot corner, concentric with it)
   let answers = mine &&
     (flag(view, "available") || flag(view, "plain")) &&
     (row is Some(_) || vault_pending.contains(request))
-  @sf.card(c, button_corner=answers, fn() {
+  @sf.card(c, fn() {
     vault_asked(c, ask)
     for line in said {
       if line != "" {
         c.text(line, style=ask_note) |> ignore
       }
     }
-    vault_actions(c, core, ws, request, mine, who~, extra~)
+    vault_actions(c, core, ws, request, mine, who~, extra~, foot=answers)
   })
   |> ignore
 }
@@ -148,7 +148,7 @@ pub fn vault_outcome(c : @ui.Ctx, ask : Asked, status : String, scope : String) 
 ///|
 /// The answer to request `request` in workspace `ws` (VaultActions): the buttons while it waits on the viewer (`mine`),
 /// or a line where there is no answer to give here (`who`: whose it is). `extra`: after the buttons (the vault page's
-/// 打开对话).
+/// 打开对话). `foot`: last on a page card, its buttons in the card's foot corners.
 pub fn vault_actions(
   c : @ui.Ctx,
   core : Core,
@@ -157,6 +157,7 @@ pub fn vault_actions(
   mine : Bool,
   who? : String? = None,
   extra? : (() -> Unit)? = None,
+  foot? : Bool = false,
 ) -> Unit {
   let note = fn(words : String) { c.text(words, style=ask_note) |> ignore }
   let view = vaults_of(core, ws)
@@ -204,7 +205,8 @@ pub fn vault_actions(
     })
   }
   // (on a second line what has not the room on the first)
-  c.box(style=ask_foot, flow=true, line_gap=ask_foot_lines, fn() {
+  // (`foot`: last on a page card, its buttons in its foot corners: @sf.foot_reach)
+  c.box(style=if foot { ask_foot.then(@sf.foot_reach(@sf.button_height())) } else { ask_foot }, flow=true, line_gap=ask_foot_lines, fn() {
     if save && !flag(view, "plain") && !flag(view, "setUp") {
       // kept only in a vault that is on here: the way to turn it on first
       if @sf.button(c, tr("android-settings.vault.turnOn"), key="vault/" + request + "/on", tone=Primary) {

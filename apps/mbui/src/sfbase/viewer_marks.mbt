@@ -1100,14 +1100,16 @@ pub fn note_box(c : @ui.Ctx, note : (Int, Int, String, Int64)) -> Unit {
 }
 
 ///|
-/// A note's card in the tray (Notes.kt Card, in the dark): 160 wide, frosted, 16 round, 12 and 9 in: its pin and what
-/// is said of it (只引用, muted, while nothing is), over what it is, muted.
+/// A note's card in the tray (Notes.kt Card, in the dark): 160 wide, frosted, round by the ladder's row step: its pin
+/// and what is said of it (只引用, muted, while nothing is), over what it is, muted. Its pin (16 round) in its top left
+/// corner as far from both edges as makes it concentric with it (@sf.capsule_in), level with the first line (20).
 pub fn note_card(c : @ui.Ctx, note : (Int, Int, String, Int64), id : Int) -> Unit {
   let (mid, n, what, color) = note
   let said = marking.comments.get(mid).unwrap_or("").trim(chars=" \n\t").to_string()
-  c.box(w=Px(160.0), padx=12.0, pady=9.0, gap=3.0, radius=16.0, bg=note_ground, shadow=@sf.floating.sigma, shadow_y=@sf.floating.dy, shadow_color=@sf.floating.color, id~, fn() {
+  let pin_in = @sf.capsule_in(note_card_corner, note_pin)
+  c.box(w=Px(160.0), pl=pin_in, pr=note_card_end, pt=pin_in - (note_first_line - note_pin) / 2.0, pb=note_card_foot, gap=3.0, radius=note_card_corner, bg=note_ground, shadow=@sf.floating.sigma, shadow_y=@sf.floating.dy, shadow_color=@sf.floating.color, id~, fn() {
     c.box(style=card_head, fn() {
-      picture_pin(c, n, color, 16.0) |> ignore
+      picture_pin(c, n, color, note_pin) |> ignore
       c.box(w=Fill(1.0), clip=true, fn() {
         c.text(if said == "" { pv("android-chat.annotate.quoteOnly") } else { said }, size=14.0, line=20.0, color=if said == "" { note_muted } else { note_ink }, wrap=false)
         |> ignore
@@ -1119,6 +1121,23 @@ pub fn note_card(c : @ui.Ctx, note : (Int, Int, String, Int64), id : Int) -> Uni
   })
   |> ignore
 }
+
+///|
+/// A note's card's corner in the tray: the ladder's row step (Notes.kt Card's 16 before it), its pin concentric in it;
+/// its pin's side, its first line's height, its room at its end and its foot (Notes.kt Card: 12, 9).
+let note_card_corner : Double = @sf.row_corner
+
+///|
+let note_pin : Double = 16.0
+
+///|
+let note_first_line : Double = 20.0
+
+///|
+let note_card_end : Double = 12.0
+
+///|
+let note_card_foot : Double = 9.0
 
 ///|
 /// A note's box's head (its pin and what it is: 8 in, 6 apart), the row under it (the bin, the field, the tick: 2

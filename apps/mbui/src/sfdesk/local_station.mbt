@@ -15,21 +15,23 @@ fn local_station_page(c : @ui.Ctx, core : Core) -> Unit {
   if text(s, "data") == "" {
     // none here: 添加这台 Mac downloads one, joins it and runs it as a service
     body.push(fn() {
-      c.box(style=desk_card, fn() {
+      // (添加这台 Mac last, in the card's foot corner: concentric with it, out past its words: @sf.card_foot_in)
+      let adds = doing == "" && @ui.platform() == 0
+      c.box(style=if adds { desk_card.then(@sf.foot_pad(@sf.button_height())) } else { desk_card }, fn() {
         if doing != "" {
           local_progress(c, s, doing)
         } else {
           c.text(@sf.t("desktop.local.noService"), style=desk_muted) |> ignore
-          if @ui.platform() == 0 {
-            c.box(style=vt_actions, fn() {
-              if @sf.button(c, @sf.t("web-pages.settings.thisMac.add"), key="local/install", tone=Primary) {
-                (core.local_install)(true)
-              }
-            })
-            |> ignore
-          }
         }
         local_failed(c, s)
+        if adds {
+          c.box(style=vt_actions.then(@sf.foot_across(@sf.button_height())), fn() {
+            if @sf.button(c, @sf.t("web-pages.settings.thisMac.add"), key="local/install", tone=Primary) {
+              (core.local_install)(true)
+            }
+          })
+          |> ignore
+        }
       })
       |> ignore
     })

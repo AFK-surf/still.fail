@@ -87,7 +87,7 @@ fn latest_key(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView) -> Unit {
 /// How tall the chat's bar over the list is (pageBar: 45; in a panel of its own as much taller as puts its buttons in
 /// the panel's corner concentric with it: chat_bar_box_tape), and the list's room under it over its first row (24).
 fn chat_bar_room() -> Double {
-  @sf.wide_bar_h + (if @sf.in_pane() { @sf.tape_bar_over } else { 0.0 })
+  @sf.wide_bar_h + (if @sf.in_pane() { @sf.tape_bar_over() } else { 0.0 })
 }
 
 ///|

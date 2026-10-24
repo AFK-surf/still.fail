@@ -405,6 +405,8 @@ fn frame_build(c : Ctx, w : Double, h : Double) -> Int {
   c.moves_build_start()
   c.arounds.clear()
   c.corner_ladder = c.theme.corner_ladder
+  c.corner_fit = c.theme.corner_fit
+  c.window_corner = window_corner()
   // (what an earlier build of this frame said to tell outside is let go: this one says it again, or not)
   c.tells.clear()
   drawing_begin()

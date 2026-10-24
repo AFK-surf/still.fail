@@ -157,19 +157,26 @@ let side_rule_w : Double = 1.0
 pub let side_bar : @ui.Style = @ui.css("row w=Full h=S11 pl=S2 pr=S3 gap=S2 align=ACenter")
 
 ///|
-/// Its bar as a panel of its own on the tape (laid out Medium, round by the ladder's pane corner): the first tab and the
-/// switch in its top corners as far in as makes them concentric with it (capsules: @sf.capsule_in), its foot as before.
-// kept across runs: a value (no field of it changes)
-pub let side_bar_tape : @ui.Style = @ui.style(
-  row=true,
-  w=Full,
-  pt=@sf.capsule_room(@sf.pane_corner, bar_button_side),
-  pb=S1_5,
-  pl=@sf.capsule_room(@sf.pane_corner, @sf.side_tab_side),
-  pr=@sf.capsule_room(@sf.pane_corner, bar_button_side),
-  gap=S2,
-  align=ACenter,
-)
+/// Its bar as a panel of its own on the tape (laid out Medium, its corner @sf.tape_pane): the first tab and the switch
+/// in its top corners as far in as makes them concentric with it (capsules: @sf.capsule_fit), its foot as before; where
+/// the panel is too square for that (it follows a round window), the bar as in the wide frame (side_bar).
+pub fn side_bar_tape() -> @ui.Style {
+  let corner = @sf.tape_pane.val
+  let at = @sf.capsule_in(corner, bar_button_side)
+  if !@sf.capsule_fits(corner, bar_button_side) || !@sf.capsule_fits(corner, @sf.side_tab_side) {
+    return side_bar
+  }
+  @ui.style(
+    row=true,
+    w=Full,
+    pt=@sf.room_of(at),
+    pb=S1_5,
+    pl=@sf.room_of(@sf.capsule_in(corner, @sf.side_tab_side)),
+    pr=@sf.room_of(at),
+    gap=S2,
+    align=ACenter,
+  )
+}
 
 ///|
 /// Its tabs (sideTabList), 2 apart.
@@ -430,7 +437,7 @@ fn side_panel(
     if @ui.window_inset() {
       c.window_drag(bar)
     }
-    c.box(style=if side_on_tape.val { side_bar_tape } else { side_bar }, id=bar, fn() {
+    c.box(style=if side_on_tape.val { side_bar_tape() } else { side_bar }, id=bar, fn() {
       c.box(style=side_tab_list, fn() {
         for tab in tabs {
           side_tab_of(c, src, r, v, tab, tab == front)

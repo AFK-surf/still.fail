@@ -153,7 +153,7 @@ pub fn files_places(
               ) {
               go(into)
             }
-          })
+          }, phone~)
         }
       }
     })
@@ -221,7 +221,7 @@ fn places_favorites(
               ) {
               go(into)
             }
-          })
+          }, phone~)
         }
         None => ()
       }
@@ -295,7 +295,7 @@ fn station_row(
   }
   c.box(style=station_item, fn() {
     match start {
-      Some(r) => fdrag_side_row(c, "station/" + s.station, { station: s.station, root: Some(r), path: "" }, s.name, write, s.transfers, row)
+      Some(r) => fdrag_side_row(c, "station/" + s.station, { station: s.station, root: Some(r), path: "" }, s.name, write, s.transfers, row, phone~)
       None => row()
     }
     if open {
@@ -359,7 +359,7 @@ fn station_places(
           ) {
           go(into)
         }
-      })
+      }, phone~)
     }
   })
   |> ignore
