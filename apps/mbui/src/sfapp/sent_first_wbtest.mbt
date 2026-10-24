@@ -1,11 +1,10 @@
-// What is sent is on screen first (chat.mbt LocalSent, flight.mbt): in the list the frame it is sent, whatever the
-// core, the list or anything else in it is doing; the core's row goes on from it once it comes.
+// What is sent is on screen first (sfbase's sent.mbt LocalSent, flight.mbt): in the list the frame it is sent,
+// whatever the core, the list or anything else in it is doing; the core's row goes on from it once it comes.
 
 ///|
 /// The keys of chat s-c1's rows as last built.
 fn sent_rows() -> Array[String] {
-  let rd = reading_of("ws1/st1\u{1}s-c1")
-  rd.sending.map(fn(l) { "o:" + l.row.id })
+  sending_of("ws1/st1\u{1}s-c1").map(fn(l) { "o:" + l.row.id })
 }
 
 ///|
