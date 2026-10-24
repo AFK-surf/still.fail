@@ -317,13 +317,13 @@ test("a_chat_with_nothing_left_is_settled_and_says_where_it_stands", () => {
   const asked = row([done], false);
   asked.card = card;
   // A line that asks for a decision is about no message: the chat leads to what it asks.
-  assert.deepEqual([p.settled(asked), p.rowStateLine(asked)], [false, ["奏 · 域名用哪个？", null, "域名用哪个？"]]);
+  assert.deepEqual([p.settled(asked), p.rowStateLine(asked)], [false, ["奏 · 域名用哪个？", null, "域名用哪个？", { kind: "decision", text: "奏", rest: " · 域名用哪个？" }]]);
   asked.agents = [agent(null, "running")];
   assert.equal(p.rowStateText(asked), "奏 · 域名用哪个？");
   asked.agents = [waits];
   assert.equal(p.rowStateText(asked), "奏 · 域名用哪个？");
   asked.agents = [helped];
-  assert.deepEqual(p.rowStateLine(asked), ["需要你处理：要 key", null, "要 key"]);
+  assert.deepEqual(p.rowStateLine(asked), ["需要你处理：要 key", null, "要 key", { kind: "need", rest: "要 key" }]);
   asked.agents = [agent({ outcome: "failed", detail: "auth: 401" }, "warm")];
   assert.equal(p.rowStateText(asked), "出错：登录失效");
   asked.agents = [agent({ declared: "block", ending: "need_decision", outcome: "completed" }, "warm")];
@@ -341,12 +341,21 @@ test("a_chat_with_nothing_left_is_settled_and_says_where_it_stands", () => {
   const about = (a: J) => agent({ declared: "final", ending: "all_done", need: "已合进 main", about: a, outcome: "completed" }, "warm");
   const here = row([about({ thread: 7, seq: 12, ts: "1.2" })], false);
   here.thread = 7;
-  assert.deepEqual(p.rowStateLine(here), ["已完成：已合进 main", 12, "已完成：已合进 main"]);
+  assert.deepEqual(p.rowStateLine(here), ["已完成：已合进 main", 12, "已完成：已合进 main", { kind: "done", rest: "已合进 main" }]);
   here.agents = [about({ thread: 8, seq: 12, ts: "1.2" })];
-  assert.deepEqual(p.rowStateLine(here), ["已完成：已合进 main", null, "已完成：已合进 main"]);
+  assert.deepEqual(p.rowStateLine(here), ["已完成：已合进 main", null, "已完成：已合进 main", { kind: "done", rest: "已合进 main" }]);
   const waiting = row([agent({ declared: "waiting", ending: "waiting", waitFor: "CI", about: { thread: 7, seq: 3, ts: "1.1" }, outcome: "completed", endedAt: 5 }, "warm")], false);
   waiting.thread = 7;
-  assert.deepEqual(p.rowStateLine(waiting), ["等待：CI", 3, "等待：CI"]);
+  assert.deepEqual(p.rowStateLine(waiting), ["等待：CI", 3, "等待：CI", { kind: "wait", rest: "CI" }]);
+  // What leads a session's words is said with them (not read back out of them): done alone, a need, watching whole.
+  assert.deepEqual([done.statusText, done.statusLead, done.statusRest], ["已完成", "done", ""]);
+  assert.deepEqual([helped.statusLead, helped.statusRest], ["need", "要 key"]);
+  assert.deepEqual([waits.statusText, waits.statusLead, waits.statusRest], ["等待：CI 跑完", "wait", "CI 跑完"]);
+  assert.deepEqual([works.statusLead, works.statusRest], [undefined, undefined]);
+  const failed = agent({ outcome: "failed", detail: "auth: 401" }, "warm");
+  assert.deepEqual([failed.statusText, failed.statusLead], ["出错：登录失效", undefined]);
+  const watching = p.session({ key: "w", process: "warm", pending: 0, lastTurn: { declared: "waiting", ending: "waiting", outcome: "completed", endedAt: 5 }, watch: { every: 60 } });
+  assert.deepEqual([watching.statusText, watching.statusLead, watching.statusRest], ["监控中", "watch", "监控中"]);
 });
 
 test("what_a_profile_can_enable_and_which_machine_logins_are_offered", () => {

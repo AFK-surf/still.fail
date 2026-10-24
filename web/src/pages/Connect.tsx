@@ -365,7 +365,7 @@ function ConnectSessions({ item }: { item: ConnectItem }) {
             const row = (
               <>
                 <span className={pagesCss.listRowTitle}>{s.titleText}</span>
-                <Pill tone={s.tone}><StatusText text={s.statusText} /></Pill>
+                <Pill tone={s.tone}><StatusText text={s.statusText} lead={s.statusLead} rest={s.statusRest} /></Pill>
                 <Time className={`${shellCss.muted} ${css.listRowTime}`} stamp={s.time?.lastActiveAt} />
               </>
             );

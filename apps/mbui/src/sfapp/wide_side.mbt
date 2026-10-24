@@ -510,7 +510,16 @@ fn side_chat_row(c : @ui.Ctx, src : Source, item : ChatItem, lead : String, on :
             }
             c.box(w=Fill(1.0), fn() {
               match state {
-                Some(s) => state_line(c, s, size=12.0, line=18.0)
+                Some(s) =>
+                  state_line(
+                    c,
+                    s,
+                    lead=item.state_lead,
+                    lead_text=item.state_lead_text,
+                    rest=item.state_rest,
+                    size=12.0,
+                    line=18.0,
+                  )
                 None =>
                   match item.last {
                     Some(l) => c.text(l, size=12.0, color=t.p.muted, wrap=false, line=18.0) |> ignore

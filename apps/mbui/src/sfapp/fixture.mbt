@@ -385,6 +385,11 @@ fn fixture_days(f : Fixture) -> Array[Json] {
       "unread": true,
       "tone": "wait",
       "decision": { "seq": 3, "options": [], "text": "奏 · 分组的标题用相对日期还是具体日期？" },
+      // (its line, and what leads it, as the core says them: client/core-ts present.ts rowStateLine)
+      "stateText": "奏 · 分组的标题用相对日期还是具体日期？",
+      "stateLead": "decision",
+      "stateLeadText": "奏",
+      "stateRest": " · 分组的标题用相对日期还是具体日期？",
       "people": [me, ana],
       "creator": { "id": "lin@example.com", "name": "林", "via": "cloud" },
     }),
@@ -392,16 +397,22 @@ fn fixture_days(f : Fixture) -> Array[Json] {
       "state": "failed",
       "tone": "alert",
       "stateText": "要你帮忙：测试机的磁盘满了，要不要清理旧的缓存？",
+      "stateLead": "need",
+      "stateRest": "测试机的磁盘满了，要不要清理旧的缓存？",
       "unread": true,
     }),
     row("c4", "给设置页加一个深色模式开关", "ws1/st1", "40 分钟前", {
       "unread": true,
       "tone": "done",
       "stateText": "做完了：开关和三处颜色都改好了",
+      "stateLead": "done",
+      "stateRest": "开关和三处颜色都改好了",
       "agents": [agent("deepseek", "dsh")],
     }),
     row("c5", "盯着 CI，绿了告诉我", "ws1/st2", "1 小时前", {
       "stateText": "监控中：每 5 分钟看一次主干的构建",
+      "stateLead": "watch",
+      "stateRest": "监控中：每 5 分钟看一次主干的构建",
       "stateAbout": 12,
       "watch": { "text": "监控中：主干构建", "ask": "它会在归档里继续盯着。" },
     }),
@@ -422,6 +433,8 @@ fn fixture_days(f : Fixture) -> Array[Json] {
       "settled": true,
       "archivable": true,
       "stateText": "做完了",
+      "stateLead": "done",
+      "stateRest": "",
     }),
   ]
   let earlier = [
@@ -468,6 +481,8 @@ fn fixture_days(f : Fixture) -> Array[Json] {
         "unread": true,
         "tone": "alert",
         "stateText": "要你帮忙：深色模式下图标看不清，要不要换一套？",
+        "stateLead": "need",
+        "stateRest": "深色模式下图标看不清，要不要换一套？",
         "agents": [agent("deepseek", "dsh")],
       })
     }
@@ -483,13 +498,25 @@ fn fixture_days(f : Fixture) -> Array[Json] {
   if f.mode == "long" {
     // weeks more, six chats a day, every word made up
     let topics = ["例会的记录", "接口的命名", "图标的尺寸", "崩溃的日志", "发布的说明", "测试的清单"]
-    let states = ["做完了", "等你回复", "监控中：每小时看一次", "写到一半", "要你帮忙看一眼", "已经交给评审"]
+    // (each with what leads it, as the core would say: none for words of their own)
+    let states : Array[(String, String, String)] = [
+      ("做完了", "done", ""),
+      ("等你回复", "", ""),
+      ("监控中：每小时看一次", "watch", "监控中：每小时看一次"),
+      ("写到一半", "", ""),
+      ("要你帮忙看一眼", "", ""),
+      ("已经交给评审", "", ""),
+    ]
     for d in 0..<40 {
       let items = Array::makei(6, fn(k) {
         let n = d * 6 + k + 11
-        row("c\{n}", "第 \{n} 个：" + topics[k], if k % 2 == 0 { "ws1/st1" } else { "ws1/st2" }, "\{d + 5} 天前", {
-          "stateText": Json::string(states[(d + k) % 6]),
-        })
+        let (said, lead, rest) = states[(d + k) % 6]
+        let state : Map[String, Json] = { "stateText": Json::string(said) }
+        if lead != "" {
+          state["stateLead"] = Json::string(lead)
+          state["stateRest"] = Json::string(rest)
+        }
+        row("c\{n}", "第 \{n} 个：" + topics[k], if k % 2 == 0 { "ws1/st1" } else { "ws1/st2" }, "\{d + 5} 天前", state)
       })
       days.push({ "daysAgo": Json::number((d + 5).to_double()), "at": 0, "label": Json::string("\{d + 5} 天前"), "items": keep(items) })
     }

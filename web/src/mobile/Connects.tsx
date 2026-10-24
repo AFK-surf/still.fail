@@ -278,7 +278,7 @@ function ConnectPage({ item }: { item: ConnectItem }) {
           {sessions.map((s) => (
             <ListRow key={s.key} onClick={() => app.push(`${stationBase(station.address)}/chats/${encodeURIComponent(s.key)}`)}>
               <span className={`${partsCss.mGrow} ${listsCss.mRowTitle}`}>{s.titleText}</span>
-              <span className={listsCss.mRowNote}><StatusText text={s.statusText} /></span>
+              <span className={listsCss.mRowNote}><StatusText text={s.statusText} lead={s.statusLead} rest={s.statusRest} /></span>
             </ListRow>
           ))}
         </ListCard>

@@ -853,6 +853,13 @@ export interface TurnSummary {
 	endedAt?: number;
 }
 
+/**
+ * What leads a state line, for a client to say as a mark of its own in its words' place: needs the viewer (a bell),
+ * done (a check), waiting (the waiting arc), watching (the watch's radar); a card waiting for the viewer (奏 · …: its
+ * lead word in bold).
+ */
+export type StateLead = "need" | "done" | "wait" | "watch" | "decision";
+
 /** A colour of meaning. */
 export type Tone = "accent" | "green" | "blue" | "red" | "amber" | "neutral";
 
@@ -905,6 +912,10 @@ export interface Session {
 	firstText?: string;
 	lastTurn?: TurnSummary;
 	statusText: string;
+	/** What leads `statusText` (need, done, wait, watch), said by a client as a mark of its own. Absent when nothing does. */
+	statusLead?: StateLead;
+	/** What follows the lead in `statusText` (watching: the whole line). Absent with `statusLead`. */
+	statusRest?: string;
 	/** accent | green | blue | red | neutral */
 	tone: Tone;
 	/** Its mark (run | block | failed), and in words. */
@@ -1401,6 +1412,10 @@ export interface RowAgent {
 	maker?: Maker;
 	mark?: Badge;
 	statusText: string;
+	/** What leads `statusText`, as a session's. */
+	statusLead?: StateLead;
+	/** What follows the lead, as a session's. */
+	statusRest?: string;
 	badgeText?: string;
 	/** Keeping watch, as its session's `watch`. */
 	watch?: Watching;
@@ -1640,6 +1655,15 @@ export interface ChatItem {
 	 * no card waiting, or with nothing to say.
 	 */
 	stateText?: string;
+	/**
+	 * What leads `stateText`, for a client to say as a mark of its own (a bell, a check, the waiting arc, the radar;
+	 * 奏 · …'s word in bold), not read back out of its words. Absent when nothing does (an agent's failure, an unsent message).
+	 */
+	stateLead?: StateLead;
+	/** A card's line's lead word (奏, Decision), drawn in bold before the rest of `stateText`. Absent otherwise. */
+	stateLeadText?: string;
+	/** What follows the lead in `stateText` (watching: the whole line). Absent with `stateLead`. */
+	stateRest?: string;
 	/**
 	 * A message sent here into it did not go (it waits in the chat to be sent again or dropped): `stateText` says
 	 * which (未发送：…), drawn in red, and `tone` is alert. Absent otherwise.

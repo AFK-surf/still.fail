@@ -27,16 +27,14 @@ setShortcuts({ keys: shortcutOf, use: useKeymap });
 
 /**
  * Keep a completed or waiting state compact while retaining its explanation and accessible name: a check, an open arc and dots
- * in its words' place. The core says it in words, in either language (client/core-ts present.ts: 做完了, 做完了：<why>;
- * Done, Done: <why>; 等待中, 在等：<what>; Waiting, Waiting: <what>).
+ * in its words' place. Which leads it is the core's (`lead`, with what follows it: `rest`; client/core-ts present.ts
+ * Lead), not read out of its words.
  */
-export function StatusText({ text }: { text: string }) {
-  const done = /^(?:(?:做完了|已完成)(?:：|$)|Done(?:: |$))/.exec(text);
-  const wait = done ? null : /^(?:在等：|等待：|等待中$|Waiting(?:: |$))/.exec(text);
-  const lead = done ?? wait;
-  if (!lead) return <>{text}</>;
+export function StatusText({ text, lead, rest }: { text: string; lead?: string | null | undefined; rest?: string | null | undefined }) {
+  const done = lead === "done";
+  if (!done && lead !== "wait") return <>{text}</>;
   const label = t(done ? "web-main.status.done" : "web-main.status.waiting");
-  const reason = text.slice(lead[0].length);
+  const reason = rest ?? "";
   return <><Tip label={label}><span className={css.doneMark} role="img" aria-label={label}>{done ? <Check size={14} strokeWidth={1.7} /> : <Wait size={14} strokeWidth={1.7} />}</span></Tip>{reason && <> {reason}</>}</>;
 }
 
