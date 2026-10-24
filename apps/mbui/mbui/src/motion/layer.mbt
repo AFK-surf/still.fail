@@ -197,13 +197,13 @@ fn Rec::new() -> Rec {
 }
 
 ///|
-/// A list's rows by key, as last told (list_keys): when they last changed, which came in, which went ahead of others,
-/// until when the rest wait to close over what left.
+/// A list's rows by key, as last told (list_keys): the frame they last changed in, which came in, which went ahead of
+/// others, until when the rest wait to close over what left.
 priv struct ListMo {
   mut keys : Array[Int]
   /// the same, as given (what a row's copy is named by as it leaves)
   mut names : Array[String]
-  mut changed_at : Double
+  mut changed_frame : Int
   mut close_until : Double
   arrived : Map[Int, Double]
   lifted : Map[Int, Double]
@@ -548,8 +548,10 @@ pub fn layout_rest(key : String) -> Double {
 /// of the rows of list `list` (as given to Ctx::list in the same scope) in order. The first time nothing moves, nor
 /// the first time again after a frame it was not built in (Android's list composed anew: its page come back to). As
 /// they change: rows new to it come in (layout's `enter`), rows gone that showed leave by a copy (its `exit`), rows
-/// that went ahead of others pass over them (lifted), the rest close over what left 100 ms late, and for 150 ms the
-/// rows' moves are the list's change (moved to on their springs); otherwise rows are put in their places at once.
+/// that went ahead of others pass over them (lifted), the rest close over what left 100 ms late, and in the frame of the
+/// change the rows' moves are the list's (moved to on their springs); otherwise rows are put in their places at once:
+/// the list's rows laid out in that frame (frame_body builds it again while what it read changes), no window of time
+/// after it lets in a move another cause made.
 /// `liftable`: which keys can go over others (not a day's heading). Its answer is the list's id (for lifted, from its
 /// rows).
 pub fn list_keys(
@@ -569,7 +571,7 @@ pub fn list_keys(
       let l = {
         keys: ks,
         names: keys,
-        changed_at: -1.0e9,
+        changed_frame: -1,
         close_until: -1.0e9,
         arrived: {},
         lifted: {},
@@ -595,7 +597,7 @@ pub fn list_keys(
     lm.unghost.clear()
     return id
   }
-  lm.changed_at = now
+  lm.changed_frame = frame
   let old : Map[Int, Int] = {}
   for i, k in before {
     old[k] = i
@@ -955,7 +957,7 @@ fn after_layout(c : @ui.Ctx) -> Unit {
               r.was_by != "" && e.by != r.was_by
             } else {
               match lm {
-                Some(l) => c.now() - l.changed_at < 150.0
+                Some(l) => l.changed_frame == frame
                 None => false
               }
             })
