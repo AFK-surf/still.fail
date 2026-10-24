@@ -41,7 +41,6 @@ fn setting_page(c : @ui.Ctx, src : Source, w : Workspace, route : Route) -> Unit
     VaultItem(v, item) => vault_item_page(c, core, here, v, item)
     Connects("") => connects_page(c, src, core, here)
     Connect(station, id) => connect_page(c, src, core, here, station, id)
-    Usage => usage_page(c, core, here)
     Station(a) => station_page(c, core, here, a)
     Profile(a, id) => profile_page(c, core, here, a, id)
     NewProfile(a) => add_profile_page(c, core, here, a)
@@ -63,7 +62,7 @@ fn setting_page(c : @ui.Ctx, src : Source, w : Workspace, route : Route) -> Unit
 /// frame's pane: back, the room over and under it). False for a route whose pages are not one yet (its frame draws its
 /// own copy).
 pub fn setting_route(c : @ui.Ctx, src : Source, w : Workspace, route : Route, frame : PageFrame) -> Bool {
-  if !(route is (About | Changelog | Memories | Memory(_) | AutoDecisions | Permissions | Version | UsagePrices(_))) {
+  if !(route is (About | Changelog | Memories | Memory(_) | AutoDecisions | Permissions | Version | UsagePrices(_) | Usage)) {
     return false
   }
   let core = settings_core(src, w)
@@ -78,6 +77,7 @@ pub fn setting_route(c : @ui.Ctx, src : Source, w : Workspace, route : Route, fr
     Permissions => permissions_page(c, core, frame)
     Version => version_page(c, core, frame)
     UsagePrices(days) => usage_prices_page(c, core, here, frame, days)
+    Usage => usage_page(c, core, here, frame)
     _ => ()
   }
   true

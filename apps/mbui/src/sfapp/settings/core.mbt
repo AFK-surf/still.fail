@@ -520,10 +520,6 @@ pub fn left(route : Route) -> Unit {
       slack_adding.remove(a + "/" + id)
       app_looks.remove("slack-app/" + a + "/" + id)
     }
-    Usage => {
-      usage_state.day = ""
-      usage_state.all = false
-    }
     _ => ()
   }
   close_sheet()
@@ -545,10 +541,6 @@ pub fn reset() -> Unit {
   opening_lock.val = false
   memories.clear()
   connects_mine.val = false
-  usage_state.days = 7
-  usage_state.day = ""
-  usage_state.list = -1
-  usage_state.all = false
   chosen.clear()
   builtin_open.clear()
   doc_picked.clear()

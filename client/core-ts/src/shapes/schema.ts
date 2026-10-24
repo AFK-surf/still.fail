@@ -2454,6 +2454,7 @@ export const SHAPES: Record<string, Shape> = {
     ["tiles", vec("UsageTile")],
     ["series", vec("UsageSeries")],
     ["daily", vec("UsageDay")],
+    ["many", "bool", { default: true, doc: "Days too many for each to say its date under its bar (more than 10): narrower bars, a date a week." }],
     ["max", "f64", { doc: "The most a day cost." }],
     ["top", "f64", { doc: "What the bars are drawn against: a round number at or above `max` (views/usage.ts scale), 0 when nothing was spent." }],
     ["ticks", vec("UsageTick"), { doc: "The scale's lines, the last at `top`." }],
@@ -2559,6 +2560,9 @@ export const SHAPES: Record<string, Shape> = {
     ["callsText", "String"],
     ["parts", vec("f64")],
     ["partsText", vec("String")],
+    ["name", "String", { default: true, doc: "What the day is called where it is picked: 今天, else `label`." }],
+    ["tick", "String", { default: true, doc: "What its bar says under it: its `name`, or \"\" where days are many (`many`) and it is not\ntoday nor a week back from the last." }],
+    ["shares", vec("f64"), { default: true, doc: "Each of `parts` as a share of the day's cost (0 to 1; 0.01 at least for one spent at all)." }],
   ], { doc: "A day (`day` 2026-10-01, `label` 10/1): what it cost, split as `series` (`parts`, in dollars, and in words), and its\ncalls.", keepNone: true }),
   UsageList: struct([
     ["key", "String"],

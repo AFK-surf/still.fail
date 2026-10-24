@@ -380,6 +380,7 @@
   "core-views.usage.tile.input_sub": "缓存命中 {percent}",
   "core-views.usage.tile.output": "输出 token",
   "core-views.usage.tile.output_sub": "平均每次 {n}",
+  "core-views.usage.today": "今天",
   "core-views.usage.unknown_account": "未知账号",
   "core-views.usage.unknown_model": "未知模型",
   "core-views.usage.unknown_person": "未知用户",

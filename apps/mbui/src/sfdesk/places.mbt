@@ -16,7 +16,6 @@ fn place_page(c : @ui.Ctx, src : Source, w : Workspace, place : String) -> Unit 
   match place {
     "stations" | "profiles" => place_split(c, src, w, place)
     "connects" => c.box(style=place_across, fn() { connects_page(c, src, core, here) }) |> ignore
-    "usage" => c.box(style=place_across, fn() { usage_page(c, core, here) }) |> ignore
     _ =>
       c.box(style=place_across, fn() {
         match @settings.route_of(place) {

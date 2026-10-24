@@ -269,7 +269,6 @@ let en : Map[String, String] = {
   "web-pages.profiles.lead": "What agents use to run models: {subscription} or a model service key",
   "web-pages.profiles.leadSubscription": "a subscription (Claude, ChatGPT)",
   "web-main.combos.label": "Frequent picks",
-  "web-main.usage.today": "Today",
   "web-main.usage.seePrices": "See prices →",
   "web-main.usage.days": "{n} days",
   "web-main.usage.days.one": "1 day",

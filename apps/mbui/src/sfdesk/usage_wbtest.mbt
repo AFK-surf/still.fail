@@ -1,4 +1,4 @@
-// The usage page's days (usage.mbt usage_days, Usage.kt Days): the day tapped (the last at first) said over them, each
+// 用量's days (usage.mbt usage_chart, the web's Usage.tsx DaysChart): the day tapped (the last at first) said over them, each
 // day's bar in the middle of its day over its date, standing on the days' foot as high as its share of the scale's top,
 // split by who it was for 1 apart, and with several people what each spent that day under them.
 
@@ -17,6 +17,10 @@ fn usage_week(parts : Array[Array[Double]]) -> Json {
       "day": Json::string("2026-10-\{17 + i}"),
       "label": Json::string("10/\{17 + i}"),
       "today": Json::boolean(i == parts.length() - 1),
+      // (what the core says of it: views/usage.ts)
+      "name": Json::string(if i == parts.length() - 1 { "今天" } else { "10/\{17 + i}" }),
+      "tick": Json::string(if i == parts.length() - 1 { "今天" } else { "10/\{17 + i}" }),
+      "shares": Json::array(ps.map(fn(p) { Json::number(if cost > 0.0 { p / cost } else { 0.0 }) })),
       "cost": Json::number(cost),
       "parts": Json::array(ps.map(fn(p) { Json::number(p) })),
       "partsText": Json::array(ps.map(fn(p) { Json::string("$\{p.to_int()}") })),
@@ -40,11 +44,11 @@ fn usage_week(parts : Array[Array[Double]]) -> Json {
 }
 
 ///|
-/// usage_days over `v` in a card's width (282: a phone's 346 less the page's 12 and the card's 20 each side).
+/// usage_chart over `v` in a card's width (282: a phone's 346 less the page's 12 and the card's 20 each side).
 fn days_tester(v : Json) -> @ui.Tester {
-  usage_state.day = ""
+  usage_reset()
   let t = @ui.Tester::new(fn(c) {
-    c.box(align=AStart, fn() { c.box(w=Px(282.0), fn() { usage_days(c, Some(v)) }) |> ignore }) |> ignore
+    c.box(align=AStart, fn() { c.box(w=Px(282.0), fn() { usage_chart(c, Some(v)) }) |> ignore }) |> ignore
   }, platform=2)
   t.draw()
   t
