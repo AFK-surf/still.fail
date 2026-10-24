@@ -247,6 +247,9 @@ type Opened = { db: AccountDb; sql: Sql } | { db: null; sql: Sql | null; error: 
 
 const NO_DERIVE: Derive = { tone: () => null, asks: () => false };
 
+/// How long a session counts as used lately once its chat or history was opened (`usedLately`).
+export const RECENT_MS = 3 * 86_400_000;
+
 export class Data {
   readonly #host: Host;
   readonly #runner: Runner;
@@ -983,6 +986,16 @@ export class Data {
     const length = get(this.summary(station, key), "transcriptLength");
     const said = typeof length === "number" && Number.isInteger(length) && length > 0 ? length - 1 : 0;
     return Math.max(said, this.#transcriptHeads.get(`${station}\n${key}`) ?? 0);
+  }
+
+  /// Whether a session was used here lately (its chat or its history opened within RECENT_MS): its transcript is then
+  /// kept whole, down to its first entry (channel-kinds.ts `whole`).
+  usedLately(station: string, key: string): boolean {
+    const db = this.of(station);
+    if (db === undefined) return false;
+    const since = this.#host.nowMs() - RECENT_MS;
+    const thread = db.threadOf(station, key);
+    return (db.lastOpened("transcript", station, key) ?? 0) >= since || (thread !== null && (db.lastOpened("entry", station, String(thread)) ?? 0) >= since);
   }
 
   raiseTranscript(station: string, key: string, n: number): void {

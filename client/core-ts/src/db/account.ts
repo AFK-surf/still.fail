@@ -1352,6 +1352,12 @@ export class AccountDb {
     return was;
   }
 
+  /// When a log was last opened here (`opened`), null when it never was.
+  lastOpened(kind: "entry" | "transcript", station: string, id: string): number | null {
+    const v = this.sql.all("SELECT opened FROM log_use WHERE kind = ? AND station = ? AND id = ?", [kind, station, id])[0]?.[0];
+    return typeof v === "number" ? v : null;
+  }
+
   /// The logs held, of `kind`, least recently used first: by when their chat was last opened here or last said
   /// something (an agent's: last active), whichever is later.
   logsByUse(kind: "entry" | "transcript", limit: number): { station: string; id: string }[] {

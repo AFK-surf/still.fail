@@ -337,7 +337,11 @@ that only notifications change it:
   (`?after=<last held>`, a hole `?from=&to=&brief=1`) as soon as anything says
   the transcript goes further: that message, a session's summary
   (`transcriptLength`), a read's `end`; a history shown makes that read urgent,
-  nothing else. A station from before is followed on
+  nothing else. The history of an agent used lately (its chat or its history
+  opened here in the last three days, `Data.usedLately`) is brought whole in the
+  background, the page before the lowest entry held after another down to its
+  first (`?before=`), as the room on the device allows; another agent's earlier
+  pages are not brought until it is used. A station from before is followed on
   `/events?live=<key>&from=<entries it has>&last=200` as before, keeping what
   comes: it sends no more than the last 200 entries, so a timeline message past
   what it has (or before it: the transcript written anew) starts the timeline
