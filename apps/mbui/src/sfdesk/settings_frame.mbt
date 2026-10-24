@@ -166,7 +166,7 @@ fn settings_side(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
   let here_of = @settings.here_of(settings_core(src, w), w.id, w.name)
   c.box(style=settings_side_fill, fn() {
     side_top(c)
-    c.box(style=settings_nav_list, fn() {
+    c.box(style=side_list, fn() {
       if nav_row(c, "settings-nav/back", false, fn() {
           @sf.icon(c, "arrow-left", size=settings_nav_icon, color=t.p.muted) |> ignore
           nav_words(c, @sf.t("web-pages.settings.nav.backToChats"))
@@ -227,7 +227,3 @@ let settings_nav_icon : Double = 16.0
 // kept across runs: a value (no field of it changes)
 let settings_side_fill : @ui.Style = @ui.css("w=Full h=Full")
 
-///|
-/// Its pages under the band, 8 in at its sides, 4 under it (Sidebar.css.ts navList).
-// kept across runs: a value (no field of it changes)
-let settings_nav_list : @ui.Style = @ui.css("w=Full h=Full px=S2 pt=S1")

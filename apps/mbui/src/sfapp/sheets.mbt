@@ -195,12 +195,6 @@ fn tone_color(tone : String) -> Int64 {
 }
 
 ///|
-/// An allowance's windows, compact (Parts.kt QuotaChips): the settings' boxes (one FillChip, as Android's app has).
-fn quota_chips(c : @ui.Ctx, quota : Json?, small? : Bool = false, gap? : Double = 8.0, tip? : (Int, Json) -> Unit) -> Unit {
-  @settings.quota_chips(c, quota, small~, gap~, tip?)
-}
-
-///|
 /// A choice of a few (Parts.kt Seg): mbui's toggle group (@kit.toggle_group: the arrows move along it, a screen reader
 /// reads its options) in Seg's look: a track of the ink at 6%, 10 round, the chosen one on a light ground with a
 /// hairline round it, its word in the ink (the others muted); `fill`, the options share the width. The one chosen,
@@ -455,7 +449,7 @@ fn chat_info_sheet(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef) -> Uni
                   c.text(line, size=12.0, color=t.p.muted, wrap=false) |> ignore
                 })
                 |> ignore
-                quota_chips(c, match field(field(av, "account"), "quota") {
+                @settings.quota_chips(c, match field(field(av, "account"), "quota") {
                   Some(_) as q => q
                   None => field(field(av, "profile"), "quota")
                 })
@@ -781,7 +775,7 @@ fn agent_sheet(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef, key : Stri
         }
         // changing how it runs is a page of its own (History.kt RunSettingsScreen)
         if agent_row(c, "agent/account", tr("android-chat.agent.account"), value, fn() {
-            quota_chips(c, field(account, "quota"))
+            @settings.quota_chips(c, field(account, "quota"))
           }) {
           close_sheet(c)
           app.nav.push(Setting(@settings.Route::RunSettings(r.station, key)))

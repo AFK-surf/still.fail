@@ -184,7 +184,7 @@ fn history_summary(c : @ui.Ctx, a : Json?) -> Unit {
       let nv = Some(n)
       match field(nv, "quota") {
         Some(Object(_)) as q =>
-          quota_chips(
+          @settings.quota_chips(
             c,
             Some(
               Json::object({
@@ -351,7 +351,7 @@ fn run_row(c : @ui.Ctx, a : Json?) -> Bool {
           c.text(" · " + effort + " · " + account, size=14.0, color=t.p.muted, wrap=false) |> ignore
         })
         |> ignore
-        quota_chips(c, field(field(a, "account"), "quota"))
+        @settings.quota_chips(c, field(field(a, "account"), "quota"))
         @sf.icon(c, "chevron-down", size=14.0, color=t.p.muted) |> ignore
         // History.kt: clip(Smooth(10)).clickable
         @motion.ripple(c, id, 10.0)

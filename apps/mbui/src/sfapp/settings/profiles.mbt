@@ -36,7 +36,7 @@ pub fn quota_chips(
       let wv = Some(w)
       let left = clamp(count(wv, "left"))
       let chip = fn() {
-        fill_chip(
+        @sf.fill_chip(
           c,
           left,
           text(wv, "level"),
@@ -723,7 +723,7 @@ fn quota_dials(c : @ui.Ctx, windows : Array[Json]) -> Unit {
     for w in windows {
       let wv = Some(w)
       let level = text(wv, "level")
-      let tone = level_color(level)
+      let tone = @sf.level_color(level)
       let low = level == "amber" || level == "red"
       let left = clamp(count(wv, "left"))
       let lit = (left.to_double() / 10.0 + 0.5).floor().to_int()

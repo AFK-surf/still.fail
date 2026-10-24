@@ -972,6 +972,13 @@ pub let custom_field_r : @ui.Radius = Exact(10.0)
 // them.
 
 ///|
+/// A sidebar's row, every sidebar's (Sidebar.css.ts navRow, navSession; SidebarList.css.ts item): the ladder's row
+/// (row_corner), as a list card's rows and a menu's are. The web's nav corner (12, as a field's and an option's) is a
+/// row's; on the ladder a row is 18, so a one-line row (32) is round at its ends as a menu's row is, and a chat's (54)
+/// as a list card's.
+pub let side_row_radius : @ui.Radius = row_radius
+
+///|
 /// A chat's row in the wide frame's sidebar (Sidebar.css.ts navSession: two lines, 20 and 18, 2 apart, 7 above and
 /// under).
 pub let side_row_h : @ui.Len = Fixed(54.0)

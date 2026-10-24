@@ -54,10 +54,9 @@ pub fn files_nav(c : @ui.Ctx, src : Source, ws : String) -> Unit {
     side_top(c)
     let pins = pin_stations(src, ws)
     if pins.length() > 0 {
-      c.box(style=nav_band, fn() { nav_action(c, "files/pin", @sf.t("web-pages.drive.addRoot"), Some(fn() { add_folder(src, ws, pins) })) })
-      |> ignore
+      nav_action(c, "files/pin", @sf.t("web-pages.drive.addRoot"), Some(fn() { add_folder(src, ws, pins) }))
     }
-    files_places(c, src, ws, top=if pins.length() > 0 { 0.0 } else { nav_top })
+    files_places(c, src, ws, top=nav_top)
   })
   |> ignore
 }
@@ -273,7 +272,7 @@ fn station_row(
             label=@sf.t(if open { "web-pages.files.collapse" } else { "web-pages.files.expand" }, args=[("name", s.name)]),
             expanded=open,
           )
-          @sf.station_icon(c, s.emoji, s.icon, @sf.row_icon, t.p.muted, here~)
+          @sf.station_icon(c, s.emoji, s.icon, nav_icon, t.p.muted, here~)
           nav_words(c, s.name, color?=if s.online { None } else { Some(t.p.muted) }, phone~)
           if here {
             c.box(style=here_chip, fn() { c.text(@sf.t("web-pages.files.thisMachine"), style=here_words) |> ignore })
@@ -417,11 +416,6 @@ let nav_top : Double = 4.0
 let places_phone : @ui.Style = @ui.css("w=Full h=Full")
 
 ///|
-/// The band over the list (NavTop's NavAction): 8 in at its sides, as the list is.
-// kept across runs: a value (no field of it changes)
-let nav_band : @ui.Style = @ui.css("w=Full px=S2 pt=S1")
-
-///|
 /// A station's row and its places under it, one item of the list.
 // kept across runs: a value (no field of it changes)
 let station_item : @ui.Style = @ui.css("w=Full")
@@ -435,9 +429,6 @@ let place_est : Double = 36.0
 // kept across runs: a value (no field of it changes)
 let nav_hint_phone : @ui.Style = @ui.css("row w=Full pr=S4 py=S2_5 gap=S2 align=ACenter").then(@ui.style(pl=@sf.phone_row_in))
 
-///|
-// kept across runs: a value (no field of it changes)
-let nav_meta : @ui.TextStyle = @ui.text_style(size=Xs, color=Muted, wrap=false)
 
 ///|
 // kept across runs: a value (no field of it changes)

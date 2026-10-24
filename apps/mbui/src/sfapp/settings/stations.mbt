@@ -143,7 +143,7 @@ fn station_body(c : @ui.Ctx, core : Core, s : Json?) -> Unit {
         c.box(style=seen(peek_meters, host is Some(_), faded), fn() {
           for m in items(host, "meters") {
             if text(Some(m), "level") != "ok" {
-              fill_chip(c, 100 - clamp(count(Some(m), "left")), text(Some(m), "level"), text(Some(m), "short"), text(Some(m), "remaining"))
+              meter_chip(c, Some(m))
             }
           }
         })
@@ -253,64 +253,16 @@ fn clamp(n : Int) -> Int {
 }
 
 ///|
-/// How full, as a colour: the core's level (Parts.kt levelColor).
-fn level_color(level : String) -> Int64 {
-  let t = @sf.theme()
-  match level {
-    "red" => t.p.red
-    "amber" => warn
-    "progress" => t.p.accent
-    _ => t.p.green
+/// A machine's CPU, memory or disk (components.tsx MeterChip): its mark and what is left, filled as far as is used;
+/// `brief`, the figure alone with its unit's first letter, small (a station's row).
+pub fn meter_chip(c : @ui.Ctx, m : Json?, brief? : Bool = false) -> Unit {
+  let unit = text(m, "unit")
+  let words = if brief && text(m, "big") != "" {
+    text(m, "big") + (if unit == "%" || unit == "" { unit } else { unit.view(end_offset=1).to_string() })
+  } else {
+    text(m, "remaining")
   }
-}
-
-///|
-/// A fill chip's height: tall enough that the ladder's small corner leaves it no capsule (in a card's corner, 20 in, as
-/// concentric with it as a block is).
-pub let fill_chip_h : Double = 22.0
-
-///|
-/// A rounded box with a figure in it, its mark before it, its ground filled from the left as far as `fill` (0–100):
-/// grey while it is ok, faintly the level's colour once it is not, the figure then in that colour (Parts.kt FillChip).
-fn fill_chip(
-  c : @ui.Ctx,
-  fill : Int,
-  level : String,
-  mark : String,
-  words : String,
-  small? : Bool = false,
-) -> Unit {
-  let t = @sf.theme()
-  let tone = level_color(level)
-  let low = level == "amber" || level == "red"
-  let ground = if low || level == "progress" { @sf.alpha(tone, 0.2) } else { @sf.alpha(t.p.muted, 0.22) }
-  let fs = if small { 10.0 } else { 11.0 }
-  // (its fill a plain rectangle the chip's clip cuts along its corners, FillChip's drawRect in its clip; its end square
-  // where it stops)
-  c.box(h=Px(if small { 16.0 } else { fill_chip_h }), radius=@sf.fill_chip_corner, bg=t.p.chip, clip=true, justify=JCenter, fn() {
-    if fill > 0 {
-      c.layer(fn() {
-        c.box(dir=Row, w=Fill(1.0), h=Fill(1.0), fn() {
-          c.box(w=Fill(fill.to_double()), h=Fill(1.0), bg=ground, fn() {  }) |> ignore
-          if fill < 100 {
-            c.box(w=Fill((100 - fill).to_double()), h=Fill(1.0), fn() {  }) |> ignore
-          }
-        })
-        |> ignore
-      })
-      |> ignore
-    }
-    c.box(dir=Row, padx=if small { 5.0 } else { 8.0 }, gap=5.0, align=ACenter, fn() {
-      if mark != "" {
-        c.text(mark, size=fs, weight=600, color=@sf.mix(t.p.text, 0.5, t.p.muted), wrap=false, line=fs + 2.0)
-        |> ignore
-      }
-      c.text(words, size=fs, weight=600, color=if low { tone } else { t.p.text }, wrap=false, line=fs + 2.0)
-      |> ignore
-    })
-    |> ignore
-  })
-  |> ignore
+  @sf.fill_chip(c, 100 - clamp(count(m, "left")), text(m, "level"), text(m, "short"), words, small=brief)
 }
 
 ///|
@@ -325,7 +277,7 @@ pub fn meter_chips(c : @ui.Ctx, key : String, meters : Array[Json], alerts? : Bo
       }
       let id = c.id(key + "/meter/" + text(mv, "label"))
       c.box(id~, taps=false, fn() {
-        fill_chip(c, 100 - clamp(count(mv, "left")), text(mv, "level"), text(mv, "short"), text(mv, "remaining"))
+        meter_chip(c, mv)
       })
       |> ignore
       let note = text(mv, "note")
@@ -415,7 +367,7 @@ fn meter_dials(c : @ui.Ctx, meters : Array[Json]) -> Unit {
     for m in meters {
       let v = Some(m)
       let level = text(v, "level")
-      let tone = level_color(level)
+      let tone = @sf.level_color(level)
       let low = level == "amber" || level == "red"
       let lit = ((100 - clamp(count(v, "left"))).to_double() / 10.0 + 0.5).floor().to_int()
       c.box(w=Fill(1.0), gap=2.0, fn() {
