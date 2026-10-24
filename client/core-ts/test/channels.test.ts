@@ -356,28 +356,6 @@ test("a_stream_that_was_away_has_it_asked_what_came_after_what_is_held_whatever_
   assert.equal(w.asked.length, 4);
 });
 
-test("a_message_sent_into_it_is_waited_on_until_it_is_held", async () => {
-  const w = world();
-  const c = log("c");
-  w.tell(c, 1, 2, 3);
-  // Sent, and given number 5 (another came in before it): what came after what is held is read before it answers.
-  w.there.set("c", 5);
-  await w.work(Effect.runPromise(w.channels.sent(c, 5)));
-  assert.deepEqual(w.asked, ["c?after=3"]);
-  assert.deepEqual(w.numbers(c), run(1, 5));
-  // Told before its answer came: held already, nothing is read.
-  w.there.set("c", 6);
-  w.tell(c, 6);
-  await w.work(Effect.runPromise(w.channels.sent(c, 6)));
-  assert.equal(w.asked.length, 1);
-  // The read failing does not fail the sending: the message went.
-  w.there.set("c", 7);
-  w.state.failing = new CoreError("network", "连不上");
-  await w.work(Effect.runPromise(w.channels.sent(c, 7)));
-  assert.equal(w.held.head(c), 7);
-  assert.deepEqual(w.numbers(c), run(1, 6));
-});
-
 test("a_stretch_and_the_page_before_are_read_for_one_who_waits_and_fail_as_the_read_does", async () => {
   const w = world();
   const c = log("c");

@@ -1521,7 +1521,8 @@ test("a_sent_message_shows_until_the_chat_has_it", async () => {
   views.local.outboxState("ws/a", 7, id, null);
   views.outboxSent("ws/a", 7, id, 6);
   await t.read(u, 1);
-  assert.equal(u.value.outbox[0].seq, 6);
+  // The station took it: sent, kept until its entry comes.
+  assert.deepEqual([u.value.outbox[0].seq, u.value.outbox[0].state], [6, "sent"]);
   t.store.update(pageOf("ws/a", 7), (p) => ({ ...(p as J), entries: [...(p as J).entries, entry(6, "你好")], last: 6 }));
   await t.host.time.pass(100);
   const sent = t.host.takeEmitted();

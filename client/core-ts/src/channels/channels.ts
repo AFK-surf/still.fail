@@ -241,17 +241,6 @@ export class Channels {
     return read === null ? null : { path: c.kind.path(c.id, read), took: (answer) => this.#took(c, read, answer) };
   }
 
-  /// A message sent into the channel was given number `n`: it goes that far, and unless `n` is held what came after
-  /// what is held is read now, and waited on.
-  sent(c: Channel, n: number): Effect.Effect<void> {
-    return Effect.suspend(() => {
-      this.#held.raise(c, n);
-      if (this.#held.count(c, n, n) > 0) return Effect.void;
-      const asked = this.bring(c, Priority.asked, "latest");
-      return asked === null ? Effect.void : Effect.ignore(Deferred.await(asked));
-    });
-  }
-
   /// A push says the channel goes to `n` (its station's notice, through still.fail cloud, while the station's stream may
   /// be away): unless `n` is held, what came after what is held is read now, and waited on. With no `n` (an older
   /// station's notice), what came after what is held is asked, as after a stream that was away.

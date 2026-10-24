@@ -59,7 +59,8 @@ export type Change = {
 
 /// What changed here, for the views to show it anew.
 export type LocalChange =
-  | { kind: "outbox"; station: string; thread: number }
+  /// `chat`: what changed shows in the chat alone (a message the station took), not in any list.
+  | { kind: "outbox"; station: string; thread: number; chat?: true }
   | { kind: "pending"; key: string }
   | { kind: "first"; station: string; key: string }
   | { kind: "changing"; station: string }
@@ -497,15 +498,15 @@ export class Local {
     this.onChange({ kind: "outbox", station, thread });
   }
 
-  /// The station has the message as entry `seq`: it stays until the chat's entries reach it. `shown`: whether a page
-  /// shows the chat (else it goes now, but for a chat asked for here, whose page is on its way to it).
+  /// The station has the message as entry `seq`: it is `sent`, and stays until the chat's entries reach it. `shown`:
+  /// whether a page shows the chat (else it goes now, but for a chat asked for here, whose page is on its way to it).
   outboxSent(station: string, thread: number, id: string, seq: number, shown: boolean): void {
     this.#sentIn.push([station, thread, seq]);
     if (this.#sentIn.length > 256) this.#sentIn.shift();
     const madeHere = [...this.#pending.values()].some((c) => c.station === station && c.made?.[1] === thread);
     if (!madeHere && !shown) return this.outboxRemove(station, thread, id);
-    this.#outboxPut(station, thread, this.outbox(station, thread).map((m) => (m.id === id ? { ...m, seq } : m)));
-    this.onChange({ kind: "outbox", station, thread });
+    this.#outboxPut(station, thread, this.outbox(station, thread).map((m) => (m.id === id ? { ...m, seq, state: "sent" } : m)));
+    this.onChange({ kind: "outbox", station, thread, chat: true });
   }
 
   outboxRemove(station: string, thread: number, id: string): void {

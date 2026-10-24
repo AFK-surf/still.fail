@@ -77,6 +77,7 @@ pub fn sent_local(rk : String, v : ChatView?, words : String, files : Array[Json
       joined: false,
       followed: false,
       seq: -1.0,
+      time: None,
       waits: "",
       uploads: [],
       created_at: @ui.current().now,

@@ -30,8 +30,8 @@ fn chat_empty(c : @ui.Ctx) -> Unit {
 ///|
 /// What was sent from here and is not in the chat yet (OutboxRow): as the viewer's message (its quotes, its words, its
 /// files; those still going up as cards saying how far), and under it "正在发送" once it has been on its way a while
-/// (800 ms from when it was sent); not sent, said briefly (why in its tip), with sending it again (or, refused as it
-/// is, its words back in the composer: 编辑) and dropping it right beside.
+/// (800 ms from when it was sent) until the station takes it, then its time; not sent, said briefly (why in its tip),
+/// with sending it again (or, refused as it is, its words back in the composer: 编辑) and dropping it right beside.
 fn outbox_row(c : @ui.Ctx, src : Source, here : MessageHere, o : Outgoing) -> Unit {
   let failed = o.state == "failed"
   c.box(style=mine_column, fn() {
@@ -58,7 +58,16 @@ fn outbox_row(c : @ui.Ctx, src : Source, here : MessageHere, o : Outgoing) -> Un
     |> ignore
     if failed {
       outbox_unsent(c, src, here, o)
-    } else if !o.followed {
+    } else if o.followed {
+      ()
+    } else if o.state == "sent" {
+      // the station took it: its time under it, as its message has it, until the message takes its place
+      let at = c.box(fn() { message_time(c, "o:" + o.id, o.time) })
+      match flight_here(here) {
+        Some(f) if f.text != "" => c.look(at, @ui.look(alpha=flight_settled_of(c, f)))
+        _ => ()
+      }
+    } else {
       let words = if o.waits != "" {
         o.waits
       } else if o.uploads.length() > 0 {

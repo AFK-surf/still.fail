@@ -378,6 +378,8 @@ function OutboxRow({ o, to, locked }: { o: Outgoing; to: ChatTo | null; locked: 
           </div>
         // Another sent soon after it: that one says it is on its way.
         : o.followed ? null
+        // The station took it: sent, its time under it as its message has it, until its message takes its place.
+        : o.state === "sent" ? <Time className={conversationCss.msgTime} stamp={o.time?.createdAt} />
         : <span className={`${conversationCss.msgTime} ${chatCss2.msgWaiting} ${chatCss2.msgSending}`} data-shows-at={showsAt} style={{ animationDelay: delay }}><Spinner inline />{o.uploads?.length ? t("common.uploading") : o.waits ?? t("web-main.chat.sending")}</span>}
     </MineMessage>
   );

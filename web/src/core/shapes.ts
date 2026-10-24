@@ -2211,7 +2211,10 @@ export interface ComposerFile {
 	link?: ComposerLink;
 }
 
-/** A message sent from here that the chat does not show yet (sending | failed); `seq` once the station has it. */
+/**
+ * A message sent from here that the chat does not show yet: sending, sent (the station has it as `seq`; its entry not here
+ * yet) or failed.
+ */
 export interface Outgoing {
 	/** Attachments still uploading in the background before delivery. */
 	uploads?: ComposerFile[];
