@@ -130,6 +130,8 @@ test "words a visualization asks to send go into the composer, said so; the pers
   let (page, _) = viz_views(t)
   t.view_says(page, "{\"emberViz\":true,\"type\":\"followup\",\"prompt\":\"  把周五的发布挪到周四 \"}")
   t.frame()
+  // (left for the chat's composer, whichever frame's: taken as it is next drawn)
+  t.frame()
   let d = drafts.get("ws1/st1:s-c1").unwrap()
   assert_eq(d.text, "把周五的发布挪到周四")
   t.frame()

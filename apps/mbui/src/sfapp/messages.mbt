@@ -805,7 +805,7 @@ fn agent_words(
             None => lang
           }
           if first.to_lower() == "mermaid" && code.trim() != "" {
-            Some(fn() { viz_mermaid_block(c, "chat/" + here.station + ":" + here.session + "/" + m.ts, code) })
+            Some(fn() { viz_mermaid_block(c, "chat/" + here.station + ":" + here.session + "/" + m.ts, code, ink().subtle) })
           } else {
             None
           }

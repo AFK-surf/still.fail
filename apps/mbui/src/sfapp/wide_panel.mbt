@@ -25,12 +25,3 @@ fn side_change(r : ChatRef, action : String, tab : String?) -> Unit {
   }
 }
 
-///|
-/// What the desktop's messages (sfdesk/message.mbt) draw that is this package's: a visualization (viz.mbt).
-fn desk_chat_parts() -> @sfbase.ChatParts {
-  {
-    viz: viz_file_of,
-    viz_open: fn(station, session, owner, a) { viz_open_full(a.name, station, owner, a.path, session, linked=true) },
-    mermaid: viz_mermaid_block,
-  }
-}

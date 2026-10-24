@@ -1498,6 +1498,16 @@ fn composer(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView?, fresh? : Fres
     }
     None => ()
   }
+  // words a visualization of this chat asked to send (sfbase viz_page.mbt): after what is written, the field focused
+  match followed_into.get(d.key) {
+    Some(words) => {
+      followed_into.remove(d.key)
+      d.text = if d.text.trim() == "" { words } else { d.text.trim_end().to_owned() + "\n" + words }
+      d.put_text = Some(d.text)
+      d.focus = -1
+    }
+    None => ()
+  }
   // what the system's picker answered, taken in before the capsule is laid out too (the host's word that it has
   // answered brings this frame)
   // (taken once from where it waits: what goes up is what was picked, whichever build takes it)

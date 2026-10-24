@@ -180,6 +180,18 @@ fn take_in(c : @ui.Ctx, src : Source, spec : ComposerSpec, w : Writing, no_files
     Some(png) if !no_files => writing_add(src, w, spec.station, pasted_picture_name, png)
     _ => ()
   }
+  // words a visualization of this chat asked to send (sfbase viz_page.mbt): after what is written, the cursor in it
+  match followed_into.get(w.key) {
+    Some(words) => {
+      followed_into.remove(w.key)
+      let now = w.text
+      let said = if now.trim() == "" { words } else { now.trim_end().to_owned() + "\n" + words }
+      w.field.set(said)
+      c.tell("composer/followed/" + w.key, fn() { writing_text(src, w, said) })
+      c.focus_editor(composer_field_key)
+    }
+    None => ()
+  }
   // pictures marked for this chat (a service's page, an image viewed: sfbase's marked_into), each going up as a file
   // with a quote per mark (what is said of it its comment); taken once, whichever build takes them
   match marked_into.get(w.key) {
