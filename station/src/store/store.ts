@@ -17,7 +17,7 @@ import { dirname, join } from "node:path";
 import { DatabaseSync, type SQLInputValue, type StatementSync } from "node:sqlite";
 import { liveClock } from "../ops/fibers.ts";
 import { type Lang, stationLang, tr } from "../ops/i18n.ts";
-import { archiveText, readArchive, threadFile, writeCompressed } from "./archive.ts";
+import { readArchive, threadFile } from "./archive.ts";
 import {
   type Attachment, type AutoTitle, type CardAnswer, type ChatShare, type EntryRow, type JobNotice, type JobRow, type Json, type Membership,
   type MessageRow, type NewMessage, type NewSession, type Opened, type PendingMessage, type Published, type ProcessRow, type ProfileStatus,
@@ -498,8 +498,8 @@ export class Store {
     this.#run("UPDATE sessions SET last_active_at = ? WHERE key = ?", this.now(), key);
   }
 
-  /// Hides a session from lists, or shows it again, with its own chat (ThreadRow.home); `by` is MANUAL or AUTO. A thread
-  /// out of lists goes out to its archive file; showing it again brings it back.
+  /// Hides a session from lists, or shows it again, with its own chat (ThreadRow.home); `by` is MANUAL or AUTO. Its
+  /// threads' entries stay where they are (in the database); one an older station wrote out to a file is brought back.
   setArchived(key: string, archived: boolean, by: string): void {
     this.#with((changes) => this.#setArchived(key, archived, by, changes));
   }
@@ -1794,7 +1794,7 @@ export class Store {
       this.#run("UPDATE threads SET hidden_at = ?, hidden_by = ? WHERE home = ?", archived ? now : null, archived ? by : null, key);
     });
     for (const t of this.sessionThreads(key)) {
-      this.#fileAway(t.thread.id);
+      this.#bringIn(t.thread.id);
       changes.push({ type: "thread", id: t.thread.id, entries: [] });
     }
     changes.push({ type: "session", key });
@@ -1808,7 +1808,7 @@ export class Store {
       const shown = by === MANUAL ? now : null;
       this.#run("UPDATE threads SET hidden_at = NULL, hidden_by = NULL, shown_at = COALESCE(?, shown_at) WHERE id = ?", shown, thread);
     }
-    this.#fileAway(thread);
+    this.#bringIn(thread);
     changes.push({ type: "thread", id: thread, entries: [] });
   }
 
@@ -1822,12 +1822,9 @@ export class Store {
     return !shown;
   }
 
-  /// Writes a thread out to its archive file when it went out of lists, or brings it back when it came back.
-  #fileAway(thread: number): void {
-    const out = this.#outOfLists(thread);
-    const filed = this.#isArchived(thread);
-    if (out && !filed) this.#archiveThread(thread);
-    else if (!out && filed) this.#restoreThread(thread);
+  /// Brings a thread an older station wrote out to its archive file back into the database.
+  #bringIn(thread: number): void {
+    if (this.#isArchived(thread)) this.#restoreThread(thread);
   }
 
   /// Something new said in a thread brings what it is about back into lists: the chat, if the station archived it
@@ -1858,6 +1855,23 @@ export class Store {
   }
 
   // ── archive ──
+  //
+  // A chat out of every list keeps its entries in the database, as one in a list does: they are a few KB each (all of
+  // ccvm's 26,000 come to some 20 MB), and every list read all of them alone, by an index, in some 10 ms. Stations before
+  // wrote each such thread's entries out to `archive/threads/<id>.jsonl.zst` and took them out of the database
+  // (`threads.archived_at`): then every list read each of those files (some 850 on ccvm, decompressed again whenever a
+  // reader had let go of what it kept of them), and a thread said in again was read back first. Those files are read as
+  // they are until each is brought back (`bringInArchived`, a few at a time after the station starts; at once when one
+  // is said in or shown again).
+
+  /// Brings back into the database up to `most` of the threads an older station wrote out to their archive files,
+  /// the oldest first: how many it brought, and how many are left. Their entries are the same, so what clients keep of
+  /// them stays true.
+  bringInArchived(most: number): { brought: number; left: number } {
+    const ids = this.#all("SELECT id FROM threads WHERE archived_at IS NOT NULL ORDER BY id LIMIT ?", most).map((r) => r.id as number);
+    for (const id of ids) this.#restoreThread(id);
+    return { brought: ids.length, left: this.#one("SELECT COUNT(*) AS c FROM threads WHERE archived_at IS NOT NULL").c };
+  }
 
   /// The archived threads whose file is not there (lost with the disk it was on): each reads as one with no entries.
   lostArchives(): number[] {
@@ -1875,24 +1889,8 @@ export class Store {
     return threadFile(this.#archiveDir, thread);
   }
 
-  /// Writes a thread's entries out to its archive file (one entry per line, zstd) and deletes their rows. Entries never
-  /// change, so the file is the thread as it was and what clients keep of it stays true.
-  #archiveThread(thread: number): void {
-    const entries = this.#all("SELECT * FROM entries WHERE thread = ? ORDER BY n", thread).map(toEntry);
-    const path = this.#threadFile(thread);
-    writeCompressed(path, archiveText(entries));
-    try {
-      this.#tx(() => {
-        this.#run("DELETE FROM entries WHERE thread = ?", thread);
-        this.#run("UPDATE threads SET archived_at = ? WHERE id = ?", this.now(), thread);
-      });
-    } catch (e) {
-      rmSync(path, { force: true });
-      throw e;
-    }
-  }
-
-  /// Loads an archived thread's entries back into the database and removes its file.
+  /// Loads an archived thread's entries back into the database and removes its file (one lost: none, and the thread is
+  /// counted on from what was read and delivered of it, `#lastKnown`).
   #restoreThread(thread: number): void {
     const entries = this.#archivedEntries(thread);
     this.#tx(() => {

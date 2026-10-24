@@ -73,6 +73,9 @@ const encode = encodeURIComponent;
 
 /// How often the sandboxes nothing runs in are looked for (hub.ts `sweepSandboxes`).
 const SWEEP_MS = 3 * 60_000;
+/// How many threads archived to files are brought back into the database at a time, a second apart (store.ts
+/// `bringInArchived`): each a file read and its entries written, the main thread's.
+const BRING_IN = 20;
 
 export type AgentsParts = {
   /// The agents' predecessor-exit wait, also used before binding the mesh socket.
@@ -632,6 +635,24 @@ export const AgentsLive = (control: Control) =>
         time.after(Math.min(3_600_000, next === null ? Infinity : next - hub.now()), emptying);
       };
       time.after(300_000, emptying);
+
+      // The threads a station before wrote out to their archive files, back into the database a few at a time
+      // (store.ts `bringInArchived`), once the devices have come back from the start.
+      let broughtIn = 0;
+      const bringingIn = () => {
+        let left: number;
+        try {
+          const step = store.bringInArchived(BRING_IN);
+          broughtIn += step.brought;
+          left = step.left;
+        } catch (error) {
+          log.warn("store", "archived threads not brought back into the database", { error: (error as Error).message });
+          return;
+        }
+        if (left > 0) time.after(1_000, bringingIn);
+        else if (broughtIn > 0) log.info("store", "the threads archived to files are back in the database", { n: broughtIn });
+      };
+      time.after(120_000, bringingIn);
 
       // The archive review turned on, or given another model: the done chats no decision has answered are reviewed then,
       // not only the ones that end all_done from now on; and once after the start (the profiles' checks read by then).
