@@ -311,7 +311,7 @@ fn new_chat_on(
               false,
             ) &&
             !leaving {
-            raise_sheet(PickStation(w.id))
+            raise_sheet(PickStation(w.id), from=Of(c.id("new/station")))
           }
           let p = field(v, "pick")
           let options = items(p, "options")
@@ -326,7 +326,7 @@ fn new_chat_on(
             }
           } else if runtime == "" || model == "" {
             if chooser(c, "new/model", fn() {  }, tr("android-chat.pick.model"), 1.0e9, true) && !leaving {
-              raise_sheet(RunPicker(address))
+              raise_sheet(RunPicker(address), from=Of(c.id("new/model")))
             }
           } else {
             let on = field(p, "valueOption")
@@ -344,7 +344,7 @@ fn new_chat_on(
                 true,
               ) &&
               !leaving {
-              raise_sheet(RunPicker(address))
+              raise_sheet(RunPicker(address), from=Of(c.id("new/model")))
             }
           }
         })
@@ -645,8 +645,6 @@ fn pick_station_sheet(c : @ui.Ctx, src : Source, ws : String) -> Unit {
   let t = @sf.theme()
   let v = new_chat_topic(src, ws).value
   let current = text(field(v, "station"), "station")
-  @sf.sheet_grab(c)
-  sheet_head(c, tr("android-chat.new.station.pick"))
   c.box(w=Fill(1.0), h=Fill(1.0), pb=24.0, clip=true, fn() {
     for s in items(v, "stations") {
       let st = Some(s)
@@ -789,7 +787,6 @@ fn run_picker_sheet(c : @ui.Ctx, src : Source, station : String) -> Unit {
     run_picker_opened.val = true
     set({ "open": Json::boolean(true) })
   }
-  @sf.sheet_grab(c)
   if sheet_host.accounts {
     c.box(dir=Row, w=Fill(1.0), pl=8.0, pr=18.0, pt=4.0, pb=10.0, align=ACenter, fn() {
       let back = c.id("pick/accounts-back")

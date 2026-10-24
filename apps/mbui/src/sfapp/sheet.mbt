@@ -1,9 +1,7 @@
-// One sheet from the bottom at a time (ember apps/android shared/ui/Sheet.kt SheetHost), mbui's @kit.sheet: it rises on
-// a spring over a scrim (black at 28%), takes its share of the screen, and its top (the grabber and the head, 64 high)
-// drags it: a draggable sheet between half (55%) and nearly all (94%) of the screen, or down to close (under 30%); any
-// other only down, closing past 80. Let go, it goes on at the finger's speed to where it settles; a tap on a
-// draggable sheet's grabber switches it between half and full. A tap on the scrim, back, or the sheet dragged down
-// closes it; it sinks away on the same spring. What it shows is its kind's (SheetKind), drawn anew each frame.
+// The app's sheets (ember apps/android shared/ui/Sheet.kt SheetHost), one at a time: each the library's panel
+// (@sf.panel, src/sf presenters.mbt), with a finger the phone's sheet, its share of the screen, a draggable one between
+// half (55%) and nearly all (94%); with a mouse beside what opened it. What it shows is its kind's (SheetKind), drawn
+// anew each frame by what the frame tells (sheet_contents).
 
 ///|
 /// Which sheet: what it shows and how it sits.
@@ -43,30 +41,69 @@ fn sheet_spec(kind : SheetKind) -> (Double, Bool) {
 }
 
 ///|
+/// A kind's title (Sheet.kt SheetHead), its panel's; "" for one that draws its own head (the run picker's, a page's
+/// load, what is shared, an invitation).
+fn sheet_title(kind : SheetKind) -> String {
+  match kind {
+    Workspaces => tr("android-misc.workspace.sheet.title")
+    PickStation(_) => tr("android-chat.new.station.pick")
+    PageSizes(_) => svc("android-chat.preview.size.title")
+    NewWorkspace => tr("android-misc.workspace.new")
+    _ => ""
+  }
+}
+
+///|
+/// The sheet up (NoSheet: none), and the presenter it is (@sf.last_presented); the run picker showing its accounts'
+/// list.
 priv struct SheetHost {
-  /// asked open (NoSheet: closed), and what is drawn (until it has sunk away)
   mut kind : SheetKind
-  mut shown : SheetKind
-  /// the run picker showing its accounts' list
+  mut serial : Int
   mut accounts : Bool
 }
 
 ///|
-let sheet_host : SheetHost = { kind: NoSheet, shown: NoSheet, accounts: false }
+let sheet_host : SheetHost = { kind: NoSheet, serial: 0, accounts: false }
 
 ///|
-/// Opens `kind` (in place of one open). What was typed lets go of the keyboard first.
-fn raise_sheet(kind : SheetKind) -> Unit {
+/// What each kind draws, as this frame has it (its source, its workspace): told by the frame before the library's
+/// host draws (sheet_contents).
+// kept across runs: told anew by each frame before it is read
+let sheet_drawer : Ref[(SheetKind) -> Unit] = Ref(fn(_) {  })
+
+///|
+/// Opens `kind` (in place of one open), by what opened it: the library's panel (@sf.panel), as tall as its share of
+/// the window (a sheet with a finger, beside `from` or in the middle of the window with a mouse). What was typed lets
+/// go of the keyboard first.
+fn raise_sheet(kind : SheetKind, from? : @sf.Anchor = Unanchored) -> Unit {
+  lower_sheet()
   let s = sheet_host
   s.kind = kind
   s.accounts = false
   run_picker_opened.val = false
+  let (share, draggable) = sheet_spec(kind)
+  @sf.panel(
+    sheet_title(kind),
+    fn(_, _) { (sheet_drawer.val)(kind) },
+    from~,
+    tall=share,
+    grows=draggable,
+    gone=fn() {
+      if s.kind == kind {
+        s.kind = NoSheet
+      }
+    },
+  )
+  s.serial = @sf.last_presented()
 }
 
 ///|
 /// Closes the sheet open: it sinks away.
 fn lower_sheet() -> Unit {
-  sheet_host.kind = NoSheet
+  if sheet_host.kind != NoSheet {
+    sheet_host.kind = NoSheet
+    @sf.close_presented_of(sheet_host.serial)
+  }
 }
 
 ///|
@@ -76,64 +113,10 @@ fn sheet_open() -> Bool {
 }
 
 ///|
-/// How tall `kind` is at first (its share of `total`).
-fn sheet_tall(kind : SheetKind, total : Double) -> Double {
-  let (share, _) = sheet_spec(kind)
-  share * total
-}
-
-///|
-/// A sheet's glass (Sheet.kt: frosted over the pages, the scrim's black and the surface at 80% over a 28px blur; the
-/// scrim is drawn under it, so it is in what the glass frosts): `@sf.glass_sheet`, and where glass is drawn solid, what
-/// it is with nothing under it but the paper (the paper, the scrim's black as far as it shows, the surface at 80%).
-fn sheet_glass(scrim : Double) -> @ui.Glass {
-  let t = @sf.theme()
-  {
-    ..@sf.glass_sheet(),
-    solid: @sf.over(@sf.over(t.p.bg, @sf.alpha(0x000000FFL, 0.28 * scrim)), @sf.alpha(t.p.card, 0.8)),
-  }
-}
-
-///|
-/// The sheet, over everything (call last); `content` draws a kind's content in the room it is given.
-fn sheet_layer(c : @ui.Ctx, content : (SheetKind) -> Unit) -> Unit {
-  let s = sheet_host
-  if s.kind != NoSheet {
-    s.shown = s.kind
-  }
-  if s.shown == NoSheet {
-    return
-  }
-  let kind = s.shown
-  let (share, draggable) = sheet_spec(kind)
-  let r = @kit.sheet(
-    c,
-    "sheet",
-    s.kind != NoSheet,
-    share~,
-    detents=if draggable { [0.55, 0.94] } else { [] },
-    close_below=0.3,
-    scrim=@sf.sheet_scrim,
-    // over another app, on the page's paper, not frosted (Sheet.kt SheetSpec solid: there is nothing of the app's under it)
-    look=if share_over.val { @sf.sheet_look(ground=@sf.theme().p.bg) } else { @sf.sheet_look() },
-    fn() {
-      content(kind)
-      sheet_foot(c)
-    },
-  )
-  // what it comes to, for scripted runs (e2e: a sheet opened and closed by dragging)
-  match r.dragged {
-    Some(DraggedClosed) => @hostapi.log("SHEET dragged closed")
-    Some(DraggedBack) => @hostapi.log("SHEET dragged back")
-    Some(DraggedTo(f)) => @hostapi.log(if f > 0.72 { "SHEET dragged to 94%" } else { "SHEET dragged to 55%" })
-    None => ()
-  }
-  if s.kind != NoSheet && !r.open {
-    lower_sheet()
-  }
-  if s.kind == NoSheet && !r.shown {
-    s.shown = NoSheet
-  }
+/// What the kinds draw this frame (call before the library's host, @sf.presented): `content` draws a kind's content in
+/// the room it is given (closed by lower_sheet).
+fn sheet_contents(content : (SheetKind) -> Unit) -> Unit {
+  sheet_drawer.val = content
 }
 
 // The grabber and a sheet's head (Sheet.kt SheetGrab, SheetHead) are decide.mbt's `sheet_grab`, `sheet_head`.

@@ -10,13 +10,13 @@ test "48-share" {
     let f = @sfreplay.Flow::start(@sfreplay.trace("share"), seed~)
     f.share_in("https://www.youtube.com/watch?v=e2e105609", title="列表视频105609")
     // the sheet of chats raised
-    f.run_to(@kit.sheet_rest("sheet"))
+    f.run_to(@kit.sheet_rest("sf-present"))
     f.see("发到")
     f.see("列表视频105609")
     f.see("新 chat")
     f.tap("端到端测试")
     // the sheet going down as the chat comes up: the sheet's the later
-    f.run_to(@kit.sheet_rest("sheet"))
+    f.run_to(@kit.sheet_rest("sf-present"))
     f.see("youtube.com")
     f.tap("icon:arrow-up")
     f.run_for(@sfapp.flight_ms)

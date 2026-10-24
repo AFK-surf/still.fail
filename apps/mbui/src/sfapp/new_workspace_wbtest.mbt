@@ -45,10 +45,10 @@ fn ws_sheet_core(calls : Array[(String, Json)], invited? : Bool = false) -> @ui.
 test "the workspaces' sheet: 新建 workspace, named, made by the account (workspace.create), then it is in view" {
   let calls : Array[(String, Json)] = []
   let t = ws_sheet_core(calls)
-  t.run_for(@kit.sheet_rest("sheet") - t.time())
+  t.run_for(@kit.sheet_rest("sf-present") - t.time())
   t.tap_text("新建 workspace")
   t.frame()
-  t.run_for(@kit.sheet_rest("sheet") - t.time())
+  t.run_for(@kit.sheet_rest("sf-present") - t.time())
   assert_true(t.find("workspace 是一组人和他们共用的 station。你会成为它的 owner。") is Some(_))
   t.tap_text("例如：产品团队")
   t.type_text("产品团队")
@@ -65,7 +65,7 @@ test "the workspaces' sheet: 新建 workspace, named, made by the account (works
 test "the workspaces' sheet: an invitation waiting, 加入 joins it, 忽略 ignores it" {
   let calls : Array[(String, Json)] = []
   let t = ws_sheet_core(calls, invited=true)
-  t.run_for(@kit.sheet_rest("sheet") - t.time())
+  t.run_for(@kit.sheet_rest("sf-present") - t.time())
   assert_true(t.find("安娜邀请你加入「开源」") is Some(_))
   let (x, y) = words_node(t, "忽略").unwrap()
   t.tap(x, y)
