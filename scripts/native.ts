@@ -237,14 +237,16 @@ const PARTS: Record<string, Part> = {
     files: () => ["libstillfail_shell.a", "libstillfail_shell.libs"],
     targets: ["darwin-arm64", "ios-arm64", "ios-sim-arm64"],
     inputs: ["client/shell", "client/Cargo.toml", "client/Cargo.lock", ...VENDORED],
-    recipe: (t) => ({ cargo: shellApple(t), min: APPLE_MIN[t] }),
+    recipe: (t) => ({ cargo: shellApple(t), min: APPLE_MIN[t], c: appleCOldest(t) }),
     build(t, out) {
       const triple = APPLE_TRIPLES[t]!;
       const target = targetDir(join(ROOT, "client/target"), "shell-apple");
       rustTarget(triple);
       // (macOS's oldest is rustc's own, no MACOSX_DEPLOYMENT_TARGET: that is the host's too, and Xcode 27's ld links
-      // the build's proc-macros for 12.0 so that dyld refuses them, "mis-aligned LINKEDIT string pool": E0463 on mini1)
-      const env = rustEnv({ CARGO_TARGET_DIR: target, ...(t === "darwin-arm64" ? {} : { IPHONEOS_DEPLOYMENT_TARGET: APPLE_MIN[t]! }) });
+      // the build's proc-macros for 12.0 so that dyld refuses them, "mis-aligned LINKEDIT string pool": E0463 on mini1.
+      // The C its crates build (ring's assembly, sqlite) is told the same oldest for the target alone: left to the
+      // SDK's own, it was for macOS 27.0, below which the linker warned, 2026-10-24)
+      const env = rustEnv({ CARGO_TARGET_DIR: target, ...appleCOldest(t) });
       // (the crate itself built again, its dependencies kept: rustc says what it links only when it builds it)
       run("cargo", ["clean", "--release", "-p", "stillfail-shell", "--target", triple], { cwd: join(ROOT, "client"), env });
       const done = spawnSync("cargo", shellApple(t), { cwd: join(ROOT, "client"), env, encoding: "utf8", stdio: ["ignore", "inherit", "pipe"] });
@@ -366,6 +368,12 @@ const HELPER_APP = "still.fail Helper.app";
 const APPLE_TRIPLES: Partial<Record<Target, string>> = { "darwin-arm64": "aarch64-apple-darwin", "ios-arm64": "aarch64-apple-ios", "ios-sim-arm64": "aarch64-apple-ios-sim" };
 /// (macOS: rustc's for aarch64-apple-darwin, below the app's 12.0)
 const APPLE_MIN: Partial<Record<Target, string>> = { "darwin-arm64": "11.0", "ios-arm64": "17.0", "ios-sim-arm64": "17.0" };
+/// What tells an Apple target's C (the cc crate's) its oldest system: iOS by IPHONEOS_DEPLOYMENT_TARGET (not the host's),
+/// macOS by its target's CFLAGS alone (MACOSX_DEPLOYMENT_TARGET is the host's too: shell-apple's build above).
+const appleCOldest = (t: Target): Record<string, string> =>
+  t === "darwin-arm64"
+    ? { CFLAGS_aarch64_apple_darwin: `-mmacosx-version-min=${APPLE_MIN[t]}` }
+    : { IPHONEOS_DEPLOYMENT_TARGET: APPLE_MIN[t]! };
 /// The shell's static library for Apple, as scripts/core.sh shell makes it (the crate untouched: a staticlib by rustc),
 /// rebuilt so that rustc says what it links (--print native-static-libs, said only when it builds)
 const shellApple = (t: Target) => [
