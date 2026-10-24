@@ -89,7 +89,7 @@ fn new_connect_dialog(src : Source, core : Core, here : Here, station : String, 
             obj([
               ("station", str(station)),
               ("form", str(f.form)),
-              ("input", obj([("mobile", Json::boolean(false)), ("resume", if resume == "" { Json::null() } else { str(resume) })])),
+              ("input", obj([("mobile", Json::boolean(@sf.touch_system())), ("resume", if resume == "" { Json::null() } else { str(resume) })])),
             ]),
             fn(r) {
               match r {

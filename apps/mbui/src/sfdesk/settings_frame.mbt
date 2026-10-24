@@ -15,9 +15,10 @@ fn setting_page(c : @ui.Ctx, src : Source, w : Workspace, route : Route) -> Unit
   settings_deep.val = deep
   // (the settings' pages not ported yet read it too)
   @settings.wide_deep.val = deep
-  // a page merged for every frame: back over it only under another settings page (the sidebar is the way to the others)
+  // a page merged for every frame: back over it only under another settings page or a place of the rail's (a connect's
+  // under 连接; the sidebar is the way to the others)
   let frame : PageFrame = {
-    back: if deep {
+    back: if deep || (stack.length() >= 2 && stack[stack.length() - 2] is Place(_)) {
       Some(back_label(stack[stack.length() - 2]))
     } else {
       None
@@ -33,8 +34,6 @@ fn setting_page(c : @ui.Ctx, src : Source, w : Workspace, route : Route) -> Unit
   settings_fixture(core)
   match route {
     Appearance => appearance_page(c, core)
-    Connects("") => connects_page(c, src, core, here)
-    Connect(station, id) => connect_page(c, src, core, here, station, id)
     Station(a) => station_page(c, core, here, a)
     Profile(a, id) => profile_page(c, core, here, a, id)
     NewProfile(a) => add_profile_page(c, core, here, a)
@@ -51,7 +50,7 @@ fn setting_page(c : @ui.Ctx, src : Source, w : Workspace, route : Route) -> Unit
 /// frame's pane: back, the room over and under it). False for a route whose pages are not one yet (its frame draws its
 /// own copy).
 pub fn setting_route(c : @ui.Ctx, src : Source, w : Workspace, route : Route, frame : PageFrame) -> Bool {
-  if !(route is (About | Changelog | Memories | Memory(_) | AutoDecisions | Permissions | Version | UsagePrices(_) | Usage | Archiving | StationArchiving(_) | Notifications | PickModels(_, _) | ProfileModels(_, _) | Shortcuts | Me | Workspace | Security | SecurityOpen | Vault | VaultItem(_, _))) {
+  if !(route is (About | Changelog | Memories | Memory(_) | AutoDecisions | Permissions | Version | UsagePrices(_) | Usage | Archiving | StationArchiving(_) | Notifications | PickModels(_, _) | ProfileModels(_, _) | Shortcuts | Me | Workspace | Security | SecurityOpen | Vault | VaultItem(_, _) | Connects(_) | Connect(_, _))) {
     return false
   }
   let core = settings_core(src, w)
@@ -80,6 +79,8 @@ pub fn setting_route(c : @ui.Ctx, src : Source, w : Workspace, route : Route, fr
     SecurityOpen => security_open_page(c, core, here, frame)
     Vault => vault_page(c, core, here, frame)
     VaultItem(v, item) => vault_item_page(c, core, here, frame, v, item)
+    Connects(only) => connects_page(c, src, core, here, frame, only)
+    Connect(station, id) => connect_page(c, src, core, here, frame, station, id)
     _ => ()
   }
   true
@@ -116,7 +117,6 @@ fn settings_fixture(core : Core) -> Unit {
 /// What the settings pages here keep put back as the app begins anew.
 fn settings_reset() -> Unit {
   notify_page_reset()
-  waiting_menu.val = ""
   ws_menu.val = ""
   mine_filter_open.clear()
   desk_dialogs.val = 0
@@ -125,7 +125,6 @@ fn settings_reset() -> Unit {
   settings_deep.val = false
   connect_reset()
   new_connect_reset()
-  cn_add_open.val = ""
 }
 
 ///|
