@@ -1,5 +1,5 @@
 // What a viewer (reader.mbt, player.mbt) asks of the page it is drawn on, told once as the app starts (web/ui
-// viewer/host.ts setViewerHost): whether it is a phone's (narrow), how far its bars reach in, a phone's sheets, what a
+// viewer/host.ts setViewerHost): how far its bars reach in, a phone's sheets, what a
 // link in Markdown opens, where the reader's layout is kept, and the page's core reading a text for the reader. With
 // none told: a wide page's, its layout kept here, a text as it is. (The theme is the library's own: @sf.theme().)
 
@@ -42,7 +42,6 @@ pub(all) struct ViewerSheet {
 ///|
 /// What the viewer asks of the page (ViewerHost).
 pub(all) struct ViewerHost {
-  narrow : () -> Bool
   /// how far the page's own bars reach in over a viewer, at its top and at its foot (the web's --m-top, --m-foot: a
   /// phone's status and navigation bars)
   room : () -> (Double, Double)
@@ -72,7 +71,6 @@ let style_here : Ref[ReaderStyle] = Ref(reader_style_default)
 /// The host with none told.
 fn viewer_host_default() -> ViewerHost {
   {
-    narrow: fn() { false },
     room: fn() { (0.0, 0.0) },
     sheet: None,
     on_link: fn(_) {  },

@@ -34,8 +34,8 @@ let test_words : Map[String, String] = {
 }
 
 ///|
-/// The player of `name` among `list` (a folder's films), a phone's (`narrow`) or a desktop's (on a Mac), what it went
-/// to and how often it went back counted.
+/// The player of `name` among `list` (a folder's films), a phone's (`narrow`: laid out Small) or a desktop's (on a
+/// Mac), what it went to and how often it went back counted.
 fn player_tester(
   narrow : Bool,
   name : String,
@@ -45,7 +45,7 @@ fn player_tester(
   kind? : String = "video",
 ) -> @ui.Tester {
   viewer_reset()
-  set_viewer_host({ ..viewer_host_default(), narrow: fn() { narrow } })
+  set_viewer_host(viewer_host_default())
   set_words(fn(key, args) {
     args.fold(init=test_words.get(key).unwrap_or(key), fn(said, a) { said.replace_all(old="{" + a.0 + "}", new=a.1) })
   })

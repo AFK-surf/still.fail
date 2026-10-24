@@ -813,7 +813,8 @@ pub fn reader(
   let r = reading_for(key)
   reader_load(r, file, markdown)
   let host = viewer_host()
-  let narrow = (host.narrow)()
+  // laid out Small: a phone's (its own bars that a tap brings, the panels as the page's sheets), as the viewer's frame
+  let narrow = layout(c.width) is Small
   let (room_top, room_foot) = (host.room)()
   let style = (host.reader_style)()
   let p = reader_paper(style.paper)
