@@ -187,6 +187,19 @@ export function ensureFilesKept(sql: Sql): void {
   ); CREATE INDEX IF NOT EXISTS file_kept_used ON file_kept (used);`);
 }
 
+/// The trees of what agents said (markdown.ts), as read here: a chat's page shows its Markdown read, and reading it is
+/// the most of opening a chat (in Hermes ~0.3 s a page of agents' replies on a Mac Studio), so it is read once on the
+/// device, not again each time the app starts. By the text's key (markdown.ts mdKey: the reading that made it, so a
+/// core that reads otherwise reads afresh); `of`, the chat (`t:<thread>`) or agent (`s:<session>`) it was read for,
+/// let go with it; `size` and `used` as file_kept's (the least lately shown let go first past MD_KEPT, account.ts).
+/// Made as the first is kept.
+export function ensureMdKept(sql: Sql): void {
+  sql.exec(`CREATE TABLE IF NOT EXISTS md_kept (
+    station TEXT NOT NULL, key TEXT NOT NULL, of TEXT NOT NULL, size INTEGER NOT NULL, used INTEGER NOT NULL,
+    json TEXT NOT NULL, PRIMARY KEY (station, key)
+  ) WITHOUT ROWID; CREATE INDEX IF NOT EXISTS md_kept_used ON md_kept (used); CREATE INDEX IF NOT EXISTS md_kept_of ON md_kept (station, of);`);
+}
+
 /// What agents said in Slack and heard from it, read from their transcripts as they are written (elsewhere.ts): kept
 /// beyond the transcript's items (let go for room, they are still shown in their chats). Made where missing at every
 /// open, as `said`; answers whether it was made now (to be filled from the transcripts held).

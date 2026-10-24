@@ -26,7 +26,7 @@ import { arr as arrU, deepFreeze, get as getU, isObject } from "../util.ts";
 import { ofAddress } from "../workspace.ts";
 import { presentHistory } from "../history.ts";
 import { archiveHintOf, type ArchiveHint } from "../prefs.ts";
-import { markdown } from "../markdown.ts";
+import { markdown, type MdStore } from "../markdown.ts";
 import { withDrive } from "../drive-browse.ts";
 import { near, placeFiles } from "../placed.ts";
 import { archive } from "./archive.ts";
@@ -947,7 +947,12 @@ export class Views implements Owner {
         return this.#connects(view.scope as string, view.mine === true);
       case "chat": {
         const station = view.station as string;
-        const draw = <V extends Value | undefined>(out: V) => drawn(out, (path) => this.local.uploadOf(station, path));
+        // (its agents' Markdown read once on the device: kept by the chat it is read for)
+        const draw = <V extends Value | undefined>(out: V) => {
+          const thread = out !== undefined && "ok" in out ? u64(get(get(out.ok, "thread"), "id")) : null;
+          const of = thread !== null ? `t:${thread}` : typeof view.thread === "number" ? `t:${view.thread}` : `s:${String(view.session ?? "")}`;
+          return drawn(out, (path) => this.local.uploadOf(station, path), this.#core.data.mdStore(station, of));
+        };
         // A chat asked for here is titled by its first message until its station has a message in it, as its row is
         // (Local.pendingRows): not by what the station calls a chat with nothing said in it yet, between the two.
         const titled = <V extends Value | undefined>(out: V, at: { key?: string; thread?: number; session?: string }): V => {
@@ -1641,7 +1646,7 @@ export class Views implements Owner {
     });
     // Each chat's letters drawn as the chat's page draws its messages (their Markdown, their files).
     const chats = lettersByChat(letters).map((c) => {
-      const out = drawn({ ok: { agents, messages: c.letters } }, (path) => this.local.uploadOf(station, path));
+      const out = drawn({ ok: { agents, messages: c.letters } }, (path) => this.local.uploadOf(station, path), this.#core.data.mdStore(station, `t:${id}`));
       return { ...c, letters: arr(get(out.ok, "messages")) };
     });
     return { ok: { title: view.title, chats, whole: get(held.ok, "whole") === true } };
@@ -1852,6 +1857,7 @@ export class Views implements Owner {
     const members_ = arr(get(this.ok({ topic: "workspace", workspace: ofAddress(station) }), "members"));
     const workspaces = slackWorkspaces(overview);
     const now = this.#core.host.nowMs();
+    const md = this.#core.data.mdStore(station, `s:${key}`);
     return {
       ok: presentHistory(live.ok, {
         workspaces,
@@ -1866,6 +1872,7 @@ export class Views implements Owner {
         offsetMin: this.#core.host.utcOffsetMin(now),
         now,
         stations: this.stationNames(ofAddress(station)),
+        ...(md !== undefined ? { md } : {}),
       }),
     };
   }
@@ -2010,7 +2017,7 @@ const pinnedAt = new WeakMap<object, number>();
 /// outbox's) and which of them went up from here after it was sent (`uploadOf`: their pictures are still here), which of an agent's files its text places (placed.ts), and what its
 /// agents sent to Slack or were given there after it (`elsewhere`; the chat's own `elsewhere` keeps what came before
 /// its first message), and which of the viewer's go close together with their next one, its time under that one (`followed`, `joined`).
-function drawn<V extends Value | undefined>(out: V, uploadOf: (path: unknown) => string | undefined): V {
+function drawn<V extends Value | undefined>(out: V, uploadOf: (path: unknown) => string | undefined, md?: MdStore): V {
   if (out === undefined || !("ok" in out) || !isObject(out.ok)) return out;
   // Everything said here goes on copies: what the view is made of may be the core's kept values, frozen (a message's
   // files, the outbox's), and writing on one of them threw and took the core down.
@@ -2042,7 +2049,7 @@ function drawn<V extends Value | undefined>(out: V, uploadOf: (path: unknown) =>
     // A person's words are drawn as they wrote them and place nothing: their files are all below them. An agent's are
     // Markdown, read here (once: markdown.ts keeps it by the words).
     if (m.authorKind !== "person") {
-      out.md = markdown(str(m.text) ?? "");
+      out.md = markdown(str(m.text) ?? "", md);
       if (Array.isArray(files) && files.length > 0) {
         const { placed } = placeFiles(str(m.text) ?? "", files as J[]);
         if (placed.size > 0) out.placed = [...placed.keys()];

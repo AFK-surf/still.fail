@@ -50,15 +50,18 @@ instead.
 | `said` (+ `said_index`, FTS5 trigram) | id; station, thread, seq | n, at, text | each message's latest words, kept by triggers on `entry` (`ensureSaid`): what ⌘K's search finds |
 | `log_use` | kind, station, id | opened, evicted | when a log's chat was last opened here, whether its items were let go for room (`ensureKept`) |
 | `file_kept` | station, session, name, kind (`thumb`, `poster`) | type, size, used; `bytes` (base64: they are small, and given beside the answer) | an image's thumbnail and a video's poster as the station sent them (`station.file` with `thumb`, `station.poster`): a file sent never changes, and a chat opened again shows them without reading them again (`ensureFilesKept`) |
+| `md_kept` | station, key (markdown.ts `mdKey`: the reading, the length, the text's hashes) | of (`t:<thread>`, `s:<session>`), size, used; `json` (the tree) | the trees of what agents said as markdown.ts reads them: reading a page of agents' replies was the most of opening a chat in Hermes, so each is read once on the device (`ensureMdKept`); the latest replies of chats spoken in lately are read ahead as they come (md-ahead.ts) |
 
-`said` and `log_use` are made where missing at every open, `file_kept` as the first file is kept, not by a migration
+`said` and `log_use` are made where missing at every open, `file_kept` and `md_kept` as the first is kept, not by a migration
 (the version stays, so an older core still writes the database; `said`'s triggers keep it current under it too). The
 room an account's database takes is kept within `KEPT` (data.ts, 256 MB): past it, the items of the logs not shown,
 least recently used first (opened here, or last active), transcripts before entries, go down to 80% of it, their words
 with them; a log let go is not synced again until its chat is opened. `file_kept` has room of its own (account.ts
 `FILES_KEPT`, 64 MB of base64, none over 1 MB): past it, the least lately shown go down to 80% of it (when one was
 shown is noted at most once a day, as noting it writes its row again); they count with their session's first chat in
-`cache.usage` and go with it in `cache.clear`.
+`cache.usage` and go with it in `cache.clear`. `md_kept` too (`MD_KEPT`, 32 M characters of JSON), with the chat or the
+agent it was read for. A tree kept is read only by the reading that made it (`MD_READING`, in its key): a core that reads
+Markdown otherwise reads afresh.
 
 Indexes: `chat (archived, pinned_at DESC, last_active DESC)` (a list's first screen across stations), by thread, by
 session, the rows at work (`running`), those that ask something or are unread (`tone`/`asks`), those the 奏 page
@@ -209,3 +212,19 @@ chat list's first value with rows, "whole" when it held all 40 000; three runs e
 - Web bundle: SQLite's WASM build adds 215 KB of JS and 869 KB of wasm (65 KB + 402 KB gzipped), loaded by the tab
   running the core only; the worker grew 46 KB (12 KB gzipped). The build also emits 246 KB of the package's files
   that are never loaded (its Worker1 API and the `opfs` VFS's proxy).
+
+### A chat opened (2026-10-25)
+
+Studio, the core in Hermes as the apps run it (`apps/mbui/scripts/core.sh chat-open`: core/chatopen.m on the engine of
+src/host/apple_core.mm), offline, over `bench/chat-open.ts seed`: one station of 300 chats, 20 of them with 120
+entries, the agents' replies parts of this repository's docs (a chat's page ~80 000 characters, its view 140–220 KB of
+JSON). From `subscribe` to the chat's first value, the first ten chats, the app started anew over what an earlier run
+kept (the core's own memory empty):
+
+| | k0 | k1 | k2 | k3 | k4–k9 (their replies shared with k0–k3) |
+|---|---|---|---|---|---|
+| before (the Markdown read again each start) | 246 ms | 183 ms | 91 ms | 153 ms | 13–46 ms |
+| `md_kept` (read once on the device) | 26 ms | 24 ms | 19 ms | 25 ms | 13–23 ms |
+
+Reading the agents' Markdown was the most of it (micromark in Hermes, which has no JIT: some 300 KB/s here, a phone
+slower); the rest is the view made and sent. Opened again within the minute the core keeps a view: ~2 ms either way.

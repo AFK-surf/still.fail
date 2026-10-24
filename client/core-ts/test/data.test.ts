@@ -510,6 +510,36 @@ test("what_chats_show_small_is_kept_and_past_its_room_the_least_lately_shown_go"
   runner.shutdown();
 });
 
+test("what_agents_said_is_kept_read_as_the_app_starts_anew_and_let_go_with_its_chat", async () => {
+  const { data, open, runner, again } = fresh();
+  await open();
+  data.putThread("w/a", { id: 7, title: "长回复", sessions: [{ session: "k1" }] });
+  data.putThread("w/a", { id: 8, title: "另一个", sessions: [] });
+  data.putItems("entry", "w/a", "8", [[1, { text: "other" }]]);
+  const tree = JSON.stringify([["p", [[0, 3]]]]);
+  const chat = data.mdStore("w/a", "t:7")!;
+  assert.equal(chat.has("1.a"), false);
+  assert.equal(chat.get("1.a"), null);
+  chat.put("1.a", tree);
+  data.mdStore("w/a", "s:k1")!.put("1.b", "[]");
+  data.mdStore("w/a", "t:8")!.put("1.c", "[]");
+  await flush();
+  assert.equal(chat.get("1.a"), tree);
+  assert.equal(data.mdStore("w/a", "t:8")!.has("1.a"), true, "by its text, whichever chat asks");
+  assert.equal(data.mdStore("w/b", "t:7")!.has("1.a"), false, "a station's own");
+  // Counted with the chat it was read for (an agent's, with its first chat): its entries' and its trees' characters.
+  assert.deepEqual(data.cacheUsage().map((u) => [u.thread, u.bytes]).sort((a, b) => a[0]! - b[0]!), [[7, tree.length + 2], [8, '{"text":"other"}'.length + 2]]);
+  // Kept as the app starts anew.
+  await run(data.written);
+  const later = await again();
+  assert.equal(later.mdStore("w/a", "t:7")!.get("1.a"), tree);
+  // Its chat forgotten: what was read for it and its agent goes with it, the other chat's stays.
+  later.forgetChat("w/a", 7);
+  await flush();
+  assert.deepEqual(["1.a", "1.b", "1.c"].map((k) => later.mdStore("w/a", "t:8")!.has(k)), [false, false, true]);
+  runner.shutdown();
+});
+
 test("a_full_disk_is_said_and_what_was_done_here_is_kept", async () => {
   const { data, open, db, runner } = fresh();
   await open();
