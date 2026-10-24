@@ -59,7 +59,7 @@ fn drop_hint(c : @ui.Ctx, pane : Int) -> Unit {
         if item.dir {
           @sf.icon(c, "folder", size=drop_folder, color=@sf.theme().p.muted) |> ignore
         } else {
-          file_sheet(c, item.name)
+          @sf.file_tile(c, item.name)
         }
       })
       c.look(mark, @ui.look(scale=2.0))

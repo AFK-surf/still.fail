@@ -3,6 +3,11 @@
 
 ///|
 let zh_wide : Map[String, String] = {
+  "web-main.file.uploadingPart": "正在上传 {percent}% · {size}",
+  "web-main.file.remove": "移除 {name}",
+  "web-main.quote.jump": "跳到原消息",
+  "web-main.quote.author": "{author}：",
+  "web-main.quote.remove": "移除引用",
   "web-main.newChat.subChosen": "描述要做的事。将在所选 station 上使用所选模型开启新会话。",
   "web-main.newChat.thisMachine": "本机",
   "web-main.newChat.noStation": "没有在线的 station。可在设置中添加，或启动已添加的 station。",

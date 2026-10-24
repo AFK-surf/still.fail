@@ -1493,9 +1493,9 @@ fn file_card_wide(c : @ui.Ctx, a : Attachment, w : Double, id : Int, dl : Json?,
   let hot = id != 0 && c.hovered(id)
   c.box(style=if hot { file_card_hot } else { file_card_box }, w=Px(w), radius=message_file_corner, id~, fn() {
     let (meta, failed) = file_card_said(a, dl)
-    file_sheet(c, a.name, filled=file_card_coming(dl), failed~)
+    @sf.file_tile(c, a.name, progress=file_card_coming(dl), error=failed)
     c.box(style=file_card_words, fn() {
-      file_name_line(c, a.name)
+      @sf.file_name(c, a.name)
       c.text(meta, style=if failed { file_card_failed } else { file_card_meta }) |> ignore
     })
     |> ignore
@@ -1746,146 +1746,12 @@ let file_card_words : @ui.Style = @ui.css("w=Grow(1.0)")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let file_card_name : @ui.TextStyle = @ui.text_style(size=Sm, color=Fg, leading=L6, wrap=false)
-
-///|
-// kept across runs: a value (no field of it changes)
 let file_card_meta : @ui.TextStyle = @ui.text_style(size=Xs2, color=Muted, leading=L4, wrap=false)
 
 ///|
 /// Why the core's download of it failed, in its size's place.
 // kept across runs: a value (no field of it changes)
 let file_card_failed : @ui.TextStyle = @ui.text_style(size=Xs2, color=Danger, leading=L4, wrap=false)
-
-///|
-// kept across runs: a value (no field of it changes)
-let file_name_row : @ui.Style = @ui.css("row w=Full")
-
-///|
-/// As wide as it is, short of the room the extension leaves (Chat.css.ts fileCardStem: flex's 0 1 auto, cut with an
-/// ellipsis): the extension right after it, not at the card's end.
-// kept across runs: a value (no field of it changes)
-let file_name_stem : @ui.Style = @ui.css("w=Hug")
-
-///|
-/// A file's name on one line, what is cut short the middle of it, never its extension (Chat.tsx FileName: an extension
-/// of 7 at most, the dot with it).
-fn file_name_line(c : @ui.Ctx, name : String) -> Unit {
-  let (stem, ext) = match name.rev_find(".") {
-    Some(i) if i > 0 && name.length() - i <= 8 => (name.view(end_offset=i).to_string(), name.view(start_offset=i).to_string())
-    _ => (name, "")
-  }
-  c.box(style=file_name_row, fn() {
-    c.box(style=file_name_stem, fn() { c.text(stem, style=file_card_name) |> ignore }) |> ignore
-    if ext != "" {
-      c.text(ext, style=file_card_name) |> ignore
-    }
-  })
-  |> ignore
-}
-
-///|
-/// What a file is, at a glance (Chat.tsx FileTile): a sheet 30 by 36, its top corner folded, drawn in the muted ink
-/// 1.5 wide, its extension on it in the text's ink (six letters at most, upper case), or two lines where it has none.
-/// `filled`: how far it has come (one downloaded), the sheet filling from its foot with the accent at 22%; `failed`:
-/// its extension red.
-fn file_sheet(c : @ui.Ctx, name : String, filled? : Double? = None, failed? : Bool = false) -> Unit {
-  let t = @sf.theme()
-  let dot = name.rev_find(".")
-  let ext = match dot {
-    Some(i) if i > 0 && name.length() - i <= 6 => name.view(start_offset=i + 1).to_string().to_upper()
-    _ => ""
-  }
-  let lines = if ext == "" { file_sheet_lines } else { "" }
-  let shapes = match filled {
-    Some(part) => [file_sheet_fill(c.scale, part, @sf.alpha(t.p.accent, file_sheet_fill_share))]
-    None => []
-  }
-  shapes.push(
-    @ui.shape_of(@pixels.svg_path(file_sheet_outline + file_sheet_fold + lines, c.scale), stroke=t.p.muted, width=1.5),
-  )
-  c.box(style=file_sheet_box, fn() {
-    c.shapes(shapes, w=Px(file_sheet_side.0), h=Px(file_sheet_side.1), name="file-sheet") |> ignore
-    if ext != "" {
-      // on the sheet's lower part, its middle at 14.5 (FileTile's <text x=14.5 y=27>), .62 of the card's 14
-      c.layer(fn() {
-        c.box(style=file_sheet_ext_room, fn() {
-          c.text(ext, size=file_sheet_ext_size, weight=600, color=if failed { t.p.red } else { t.p.text }, wrap=false)
-          |> ignore
-        })
-        |> ignore
-      })
-      |> ignore
-    }
-  })
-  |> ignore
-}
-
-///|
-/// The sheet filled from its foot `part` of its height (FileTile's rect from y = 36 − 36 × part, cut to the sheet's
-/// outline): the outline's inside (a convex shape) cut below that line, in the sheet's points (its curves cut for
-/// `scale` pixels a point).
-fn file_sheet_fill(scale : Double, part : Double, color : Int64) -> @ui.Shape {
-  let share = if part < 0.0 { 0.0 } else if part > 1.0 { 1.0 } else { part }
-  let from = file_sheet_side.1 * (1.0 - share)
-  let cut = @pixels.svg_path(file_sheet_outline, scale).filter_map(fn(o) {
-    let (pts, closed) = o
-    let n = pts.length() / 2
-    let out : Array[Double] = []
-    for i in 0..<n {
-      let (ax, ay) = (pts[2 * i], pts[2 * i + 1])
-      let j = (i + 1) % n
-      let (bx, by) = (pts[2 * j], pts[2 * j + 1])
-      if ay >= from {
-        out.push(ax)
-        out.push(ay)
-      }
-      if (ay >= from) != (by >= from) {
-        let k = (from - ay) / (by - ay)
-        out.push(ax + (bx - ax) * k)
-        out.push(from)
-      }
-    }
-    // (nothing of it come yet: nothing filled)
-    if out.length() < 6 {
-      None
-    } else {
-      Some((out, closed))
-    }
-  })
-  @ui.shape_of(cut, fill=color)
-}
-
-///|
-/// How much of the accent fills a sheet as it comes (FileTile's color-mix 22%).
-let file_sheet_fill_share : Double = 0.22
-
-///|
-/// The sheet's outline, its fold, and its lines where it has no extension (FileTile's paths, in its 30 by 36).
-let file_sheet_outline : String = "M6 1.75H19L26.25 9V31Q26.25 34.25 23 34.25H6Q2.75 34.25 2.75 31V5Q2.75 1.75 6 1.75Z"
-
-///|
-let file_sheet_fold : String = "M19 1.75V6.5Q19 9 21.5 9H26.25"
-
-///|
-let file_sheet_lines : String = "M8.5 19H20.5M8.5 23.5H17"
-
-///|
-/// The sheet's box (FileTile's 30 by 36).
-let file_sheet_side : (Double, Double) = (30.0, 36.0)
-
-///|
-/// The extension's size on the sheet (.62 of the message's 14).
-let file_sheet_ext_size : Double = 14.0 * 0.62
-
-///|
-// kept across runs: a value (no field of it changes)
-let file_sheet_box : @ui.Style = @ui.style(w=@sf.file_sheet_w, h=@sf.file_sheet_h)
-
-///|
-/// The extension's room: the sheet's width, its words' baseline 27 down (FileTile's <text y=27>).
-// kept across runs: a value (no field of it changes)
-let file_sheet_ext_room : @ui.Style = @ui.css("w=Full h=Full pt=S4_5 align=ACenter")
 
 ///|
 /// Options answered fade out in this long (Decisions.kt DecisionUnder); how it went fades in after them as long.
