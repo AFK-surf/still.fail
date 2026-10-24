@@ -621,7 +621,7 @@ let composer_side : Double = 12.0
 ///|
 /// The capsule (composerBox, one line): its parts on its centre line, 2 apart, 6 in at its start, a pill.
 // kept across runs: a value (no field of it changes)
-let composer_box : @ui.Style = @ui.style(row=true, w=Full, gap=SPx, pl=S1_5, pr=S1_5, py=S1_5, radius=Full, align=ACenter)
+let composer_box : @ui.Style = @ui.css("row w=Full gap=SPx pl=S1_5 pr=S1_5 py=S1_5 radius=Full align=ACenter")
 
 ///|
 /// The box (composerBox[data-multiline]): a column 12 in, its parts 10 apart, its corner its buttons' pill's with its
@@ -641,12 +641,12 @@ let text_shut : @ui.Style = @ui.style(w=@sf.grow, pr=S2, py=S1_25)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let text_open : @ui.Style = @ui.style(w=Full, px=S2, pt=S2)
+let text_open : @ui.Style = @ui.css("w=Full px=S2 pt=S2")
 
 ///|
 /// Its row under the text (composerToolbar, multiline: space-between, 4 apart).
 // kept across runs: a value (no field of it changes)
-let tools_row : @ui.Style = @ui.style(row=true, w=Full, gap=S1, align=ACenter)
+let tools_row : @ui.Style = @ui.css("row w=Full gap=S1 align=ACenter")
 
 ///|
 /// The page's choices (composerChoices: in what is left of the row, at its start).
@@ -660,21 +660,21 @@ let tools_gap : @ui.Style = @ui.style(w=@sf.grow)
 ///|
 /// ＋ and send: 32 round, centred.
 // kept across runs: a value (no field of it changes)
-let round_button : @ui.Style = @ui.style(w=S8, h=S8, radius=Full, align=ACenter, justify=JCenter)
+let round_button : @ui.Style = @ui.css("w=S8 h=S8 radius=Full align=ACenter justify=JCenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let round_button_hot : @ui.Style = round_button.then(@ui.style(bg=Hover))
+let round_button_hot : @ui.Style = round_button.then(@ui.css("bg=Hover"))
 
 ///|
 /// The quotes waiting, 6 apart.
 // kept across runs: a value (no field of it changes)
-let quotes_column : @ui.Style = @ui.style(w=Full, gap=S1_5)
+let quotes_column : @ui.Style = @ui.css("w=Full gap=S1_5")
 
 ///|
 /// The files waiting (composerFiles: wrapped, 6 apart, flush with the box's padding).
 // kept across runs: a value (no field of it changes)
-let files_flow : @ui.Style = @ui.style(row=true, w=Full, gap=S1_5)
+let files_flow : @ui.Style = @ui.css("row w=Full gap=S1_5")
 
 ///|
 /// A picture waiting: 56 square, the files' corner (MESSAGE_FILE_CORNER), clipped; failed, edged red.
@@ -683,26 +683,26 @@ let thumb_box : @ui.Style = @ui.style(w=S14, h=S14, radius=@sf.message_file_radi
 
 ///|
 // kept across runs: a value (no field of it changes)
-let thumb_failed : @ui.Style = thumb_box.then(@ui.style(border=B2, border_color=Danger))
+let thumb_failed : @ui.Style = thumb_box.then(@ui.css("border=B2 border_color=Danger"))
 
 ///|
 /// Over a picture going up or failed: the ink's veil, what it says in its middle.
 // kept across runs: a value (no field of it changes)
-let thumb_veil : @ui.Style = @ui.style(w=Full, h=Full, bg=Veil, align=ACenter, justify=JCenter)
+let thumb_veil : @ui.Style = @ui.css("w=Full h=Full bg=Veil align=ACenter justify=JCenter")
 
 ///|
 /// A picture's ✕ (composerThumbRemove): 20 round at its top right corner, 4 in, on the veil.
 // kept across runs: a value (no field of it changes)
-let thumb_x_at : @ui.Style = @ui.style(w=Full, pt=S1, pr=S1, align=AEnd)
+let thumb_x_at : @ui.Style = @ui.css("w=Full pt=S1 pr=S1 align=AEnd")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let thumb_x : @ui.Style = @ui.style(w=S5, h=S5, radius=Full, bg=Veil, align=ACenter, justify=JCenter)
+let thumb_x : @ui.Style = @ui.css("w=S5 h=S5 radius=Full bg=Veil align=ACenter justify=JCenter")
 
 ///|
 /// What went wrong (chatError: under the box, 32 in, 10 under it; fieldError's red).
 // kept across runs: a value (no field of it changes)
-let error_box : @ui.Style = @ui.style(w=Full, px=S8, pt=S1, pb=S2_5)
+let error_box : @ui.Style = @ui.css("w=Full px=S8 pt=S1 pb=S2_5")
 
 ///|
 // kept across runs: a value (no field of it changes)
