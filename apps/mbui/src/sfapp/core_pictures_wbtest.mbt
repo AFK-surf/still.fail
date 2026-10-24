@@ -82,7 +82,7 @@ test "people stacked: side by side 5 over the one before, the first drawn over t
 }
 
 ///|
-test "a row's people: the one who started the chat drawn over the rest, ringed in ink at their face's own size" {
+test "a row's people (sfpages' RowAside, a finger's 18): each 3 over the one before, the one who started the chat drawn over the rest, a pixel of the row's ground round each" {
   reset()
   let src = fixture("home")
   let person = fn(id : String, name : String) -> Json {
@@ -93,18 +93,18 @@ test "a row's people: the one who started the chat drawn over the rest, ringed i
     "people": [person("lin", "Lin"), person("mo", "Mo"), person("kai", "Kai")],
     "creator": { "id": "mo" },
   })
-  let t = @ui.Tester::new(fn(c) { c.box(fn() { row_aside(c, src, item, "people") }) |> ignore }, platform=2)
+  let ground = 0x123456FFL
+  let t = @ui.Tester::new(fn(c) { c.box(fn() { @sfpages.row_aside(c, src, item, "people", ground) }) |> ignore }, platform=2)
   let lin = drawn_in(t, @sf.avatar_color("lin"))
   let mo = drawn_in(t, @sf.avatar_color("mo"))
   let kai = drawn_in(t, @sf.avatar_color("kai"))
-  // 18 each, 3 over the one before
-  assert_eq([lin[0].1, mo[0].1, kai[0].1], [0.0, 15.0, 30.0])
-  // Mo started it: over Lin and Kai (RowPicture.kt Faces: zIndex(1f))
+  // 18 each, 2 in, 3 over the one before; a pixel more after who started it (RowPicture.css.ts)
+  assert_eq([lin[0].1, mo[0].1, kai[0].1], [2.0, 17.0, 33.0])
+  assert_eq([lin[0].3, mo[0].3, kai[0].3], [18.0, 18.0, 18.0])
+  // Mo started it: over Lin and Kai
   assert_true(mo[0].0 > lin[0].0 && mo[0].0 > kai[0].0)
-  // the rings over the faces' edges: none wider than a face (Compose's `size` held to the Box's 18), the last drawn
-  // Mo's
-  let rings = drawn_in(t, 0L)
-  assert_true(rings.length() >= 3)
-  assert_true(rings.iter().all(fn(r) { r.3 <= 18.0 }))
-  assert_eq(rings[rings.length() - 1].1, 15.0)
+  // the row's ground a pixel round each face
+  let rings = drawn_in(t, ground)
+  assert_eq(rings.length(), 3)
+  assert_true(rings.iter().all(fn(r) { r.3 == 20.0 }))
 }

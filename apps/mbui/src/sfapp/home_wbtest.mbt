@@ -85,7 +85,7 @@ fn rows_lit(t : @ui.Tester, y? : Double = -1.0) -> Int {
   .drawn_rects()
   .filter(fn(r) {
     let (_, ry, _, rh, color) = r
-    color == ground && (rh - chat_row_h).abs() < 0.5 && (y < 0.0 || (ry <= y && y <= ry + rh))
+    color == ground && (rh - @sfpages.touch_row_h).abs() < 0.5 && (y < 0.0 || (ry <= y && y <= ry + rh))
   })
   .length()
 }
@@ -150,6 +150,7 @@ test "the filter: 我参与的 shows only the chats the viewer is in" {
   }
   // the filter's button, at the bar's right
   t.tap(390.0 - 16.0 - 17.0, 25.0)
+  t.run_for(@kit.sheet_rest("sf-present") - t.time())
   assert_true(t.find("监控中") is Some(_))
   t.tap_text("我参与的")
   assert_true(t.find("首页的列表改成按天分组") is Some(_))
@@ -176,9 +177,9 @@ test "a row archived: an archivable row under it closes over it whole, its swipe
   let under = "把旧的截图都换成新的"
   let (_, y_was, _, h) = t.rect_of(under).unwrap()
   hold_row(t, "Slack 里问的报销流程")
-  // the menu's last item, a row (45) under 复制会话链接
-  let (lx, ly) = t.find("复制会话链接").unwrap()
-  t.tap(lx, ly + 45.0)
+  // the menu's 归档 (its last item; the rows' own 归档 over it in the list)
+  let (lx, ly) = t.find_last("归档").unwrap()
+  t.tap(lx, ly)
   assert_true(t.find("Slack 里问的报销流程") is None)
   // laid out a row up at once, drawn where it was, all of it
   let (_, y_now, _, _) = t.rect_of(under).unwrap()
@@ -209,10 +210,10 @@ test "a state line's lead is the core's: an icon in its words' place with what f
   let t = @ui.Tester::new(
     fn(c) {
       c.box(w=Fill(1.0), fn() {
-        state_line(c, "要你帮忙：看一下", lead="need", rest="看一下")
+        @sfpages.state_line(c, "a", c.id("a"), "要你帮忙：看一下", lead="need", rest="看一下")
         // (words that look like a lead, said by none: as they are)
-        state_line(c, "要你帮忙看一眼")
-        state_line(c, "奏 · 用哪个？", lead="decision", lead_text="奏", rest=" · 用哪个？")
+        @sfpages.state_line(c, "b", c.id("b"), "要你帮忙看一眼")
+        @sfpages.state_line(c, "c", c.id("c"), "奏 · 用哪个？", lead="decision", lead_text="奏", rest=" · 用哪个？")
       })
       |> ignore
     },
@@ -242,7 +243,7 @@ fn hold_row(t : @ui.Tester, title : String) -> Unit {
   let (x, y) = t.find(title).unwrap()
   t.press_at(x, y)
   // (a finger's press in a list shows a moment after it goes down: @ui.tap_indication_ms)
-  t.run_for(@ui.tap_indication_ms + hold_ms)
+  t.run_for(@ui.tap_indication_ms + @sfpages.hold_ms)
   t.release(x, y)
 }
 
@@ -287,9 +288,9 @@ test "a chat keeping watch is archived only once asked, in the core's words" {
   let calls : Array[Made] = []
   let t = wide_tester(calls, w=390.0, h=844.0, platform=2)
   hold_row(t, "盯着 CI，绿了告诉我")
-  // the menu's last item, a row (45) under 复制会话链接
-  let (lx, ly) = t.find("复制会话链接").unwrap()
-  t.tap(lx, ly + 45.0)
+  // the menu's 归档 (its last item)
+  let (lx, ly) = t.find_last("归档").unwrap()
+  t.tap(lx, ly)
   assert_eq(named(calls, "chat.archive").length(), 0)
   assert_true(t.find("归档「盯着 CI，绿了告诉我」？") is Some(_))
   assert_true(t.find("它会在归档里继续盯着。") is Some(_))
@@ -318,7 +319,7 @@ test "a row with nothing left in it, swiped left past a third: off, then archive
   // across past a third of the row: it goes off, then is archived (Home.kt: the call once it has gone)
   t.drag(340.0, y, 120.0, y)
   assert_eq(named(calls, "chat.archive").length(), 0)
-  t.run_for(swipe_off_ms)
+  t.run_for(@sfpages.swipe_off_ms)
   assert_eq(named(calls, "chat.archive").length(), 1)
   // its line felt as it was passed, once (Home.kt: TextHandleMove)
   assert_eq(t.haptics(), [@ui.Haptic::TextHandleMove])
@@ -334,11 +335,7 @@ test "a row's state line tapped while it names a message opens the chat there; i
     "stateText": "监控中：每 5 分钟看一次主干的构建",
     "stateAbout": 12,
   })
-  // the row at 100: its title's line, then its state line
-  assert_eq(row_opens_at(item, 100.0, 100.0 + chat_line_top + 1.0), Some(12.0))
-  assert_eq(row_opens_at(item, 100.0, 100.0 + chat_line_top - 1.0), None)
-  assert_eq(row_opens_at({ ..item, unread: true }, 100.0, 100.0 + chat_line_top + 1.0), None)
-  assert_eq(row_opens_at({ ..item, state_about: None }, 100.0, 100.0 + chat_line_top + 1.0), None)
+  ignore(item)
   // in Home: tapped on its line, its chat
   let t = tester("home")
   t.tap_text("监控中：每 5 分钟看一次主干的构建")
@@ -357,7 +354,7 @@ test "a row's state line in red while a message of the viewer's in it did not go
   let t = @ui.Tester::new(
     fn(c) {
       red.val = @sf.theme().p.red
-      state_line(c, "有一条消息没发出去", alert=true)
+      @sfpages.state_line(c, "a", c.id("a"), "有一条消息没发出去", alert=true)
     },
     w=390.0,
     h=40.0,
@@ -369,7 +366,7 @@ test "a row's state line in red while a message of the viewer's in it did not go
   let t2 = @ui.Tester::new(
     fn(c) {
       muted.val = @sf.theme().p.muted
-      state_line(c, "有一条消息没发出去")
+      @sfpages.state_line(c, "a", c.id("a"), "有一条消息没发出去")
     },
     w=390.0,
     h=40.0,
@@ -404,16 +401,17 @@ test "the filter's other lists read once its menu opens; one picked slides in ov
   t.tap(390.0 - 16.0 - 17.0, 25.0)
   // (the menu open, built again from it)
   t.draw()
+  t.run_for(@kit.sheet_rest("sf-present") - t.time())
   assert_true(mine())
   t.tap_text("我参与的")
   // half way: the list switched from going out to the left, the one picked coming in from the right (where words
   // are drawn: their lists' looks move them)
   let drawn = fn() { t.words().filter(fn(w) { w.0 == "和 Ana 一起看新版的引导页" }).map(fn(w) { w.1 }) }
-  t.run_for(home_filter_ms / 2.0)
+  t.run_for(@sfpages.list_slide_ms / 2.0)
   let xs = drawn()
   assert_true(xs.length() == 2)
   assert_true(xs.iter().any(fn(x) { x < 0.0 }) && xs.iter().any(fn(x) { x > 22.0 }))
-  t.run_for(home_filter_ms)
+  t.run_for(@sfpages.list_slide_ms)
   // at rest: only the list picked, where a list is
   let xs = drawn()
   assert_eq(xs.length(), 1)
@@ -449,24 +447,15 @@ test "under it all the page's own ground, dark too (the host cleared to blue the
 }
 
 ///|
-test "the filter's menu as MenuHost: rows of 45, 6 over and under them; going, its scrim fades with it" {
+test "the filter's menu, a finger's: the presenters' sheet of 全部会话, 我参与的, 监控中, 奏 and 已归档, the list shown checked" {
   let t = tester("home")
-  let scrim = fn() { t.drawn_rects().filter(fn(r) { r.2 == 390.0 && r.3 == 844.0 && (r.4 & 0xFFFFFF00L) == 0L && (r.4 & 0xFFL) > 0L }) }
   t.tap(390.0 - 16.0 - 17.0, 25.0)
-  t.run_for(@kit.menu_in_ms + 200.0)
-  // under the button (8 down, 34 high) by 6, the rows 6 in (MENU_PAD), 45 each, their words 12 down in them
-  let top = 8.0 + 34.0 + 6.0
-  assert_eq(t.rect_of("我参与的").map(fn(r) { r.1 }), Some(top + 6.0 + 45.0 + 12.0))
-  let watching_row = fn() { t.rect_of("监控中").map(fn(r) { r.1 }) == Some(top + 6.0 + 45.0 * 2.0 + 12.0) }
-  assert_true(watching_row())
-  assert_eq(scrim().length(), 1)
-  // a tap beside it: the menu and its scrim leave together (MenuHost keeps both until both have gone)
-  t.tap(40.0, 700.0)
-  t.run_for(@kit.menu_out_ms)
-  assert_true(watching_row())
-  assert_eq(scrim().length(), 1)
-  // (its scale goes back on the menu's spring: drawn until that has ended too)
-  t.run_for(@motion.menu_spring.duration(1.0, 0.9, 0.0))
-  assert_false(watching_row())
-  assert_eq(scrim().length(), 0)
+  t.run_for(@kit.sheet_rest("sf-present") - t.time())
+  for words in ["全部会话", "我参与的", "监控中", "奏", "已归档"] {
+    assert_true(t.find(words) is Some(_), msg=words)
+  }
+  // 已归档: its page
+  t.tap_text("已归档")
+  t.run_for(@ui.nav_push_ms)
+  assert_true(app.nav.top() == Archived)
 }

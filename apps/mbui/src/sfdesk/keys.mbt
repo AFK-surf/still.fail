@@ -10,7 +10,6 @@ pub fn keys(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
   let pressed = fn(action : String) { @settings.action_pressed(c, prefs, action) }
   if pressed("chat.switch") {
     switcher_toggle(c)
-    wide.menu = None
     wide.attention_open = false
   }
   if pressed("chat.new") {
@@ -53,7 +52,7 @@ pub fn keys(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
 
 ///|
 /// Esc to what the frame opened, the one on top first: the rail changed, ⌘K (one kind's list back to all of them,
-/// else closed), ⌘/, a menu or 待处理's panel, a row's title renamed. Whether it took it.
+/// else closed), ⌘/, 待处理's panel, what the presenters show (their host closes it), a row's title renamed. Whether it took it.
 fn frame_escape(c : @ui.Ctx) -> Bool {
   if wide.editing {
     wide.editing = false
@@ -61,13 +60,13 @@ fn frame_escape(c : @ui.Ctx) -> Bool {
     ()
   } else if wide.keys_open {
     wide.keys_open = false
-  } else if wide.menu is Some(_) || wide.filter_open || wide.attention_open {
-    wide.menu = None
-    wide.filter_open = false
+  } else if wide.attention_open {
     wide.attention_open = false
-  } else if wide.renaming != "" {
-    wide.renaming = ""
-    c.blur()
+  } else if @sf.presenting() {
+    // (a menu, a pick, a dialog of the presenters': theirs, the topmost closed by their host)
+    ()
+  } else if @sfpages.rename_escape(c) {
+    ()
   } else {
     return false
   }
@@ -103,7 +102,8 @@ pub fn neighbour(src : Source, w : Workspace, way : Int) -> Unit {
   if next < 0 || next >= rows.length() {
     return
   }
-  open_row(rows[next])
+  let item = rows[next]
+  open_page(Chat({ station: item.station, session: item.session, title: item.title, station_name: item.station_name }))
 }
 
 ///|

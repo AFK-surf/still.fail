@@ -44,10 +44,6 @@ let search : Search = {
 }
 
 ///|
-/// The lists Home put at their first row once (the search above it, out of view: Home.kt top).
-let home_placed : Map[String, Bool] = {}
-
-///|
 /// A search open as the app starts (src/sffix's modes search-results and search-jobs, the Android app's
 /// SearchResultsTest twins): the words typed, the kind alone ("" every kind); its field come up, the keyboard away.
 let search_at_start : Ref[(String, String)?] = Ref(None)
@@ -92,7 +88,6 @@ fn search_reset() -> Unit {
   search.kept = None
   search.kept_of = (-1, "", "")
   search.field.set("")
-  home_placed.clear()
 }
 
 ///|
@@ -605,7 +600,7 @@ fn search_row(c : @ui.Ctx, src : Source, row : SearchRow, view : SearchView?, se
             app.nav.push(Chat(chat_ref_of(ch.item)))
           }
         }
-        None => chat_row(c, src, ch.item, "agents", found=true) |> ignore
+        None => @sfpages.chat_row(c, src, ch.item, "agents", found=true) |> ignore
       }
     Message(m) => {
       let meta = @sf.join_meta([m.by, m.ago])

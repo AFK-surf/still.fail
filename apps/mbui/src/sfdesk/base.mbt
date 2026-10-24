@@ -266,6 +266,9 @@ fn dmax(a : Double, b : Double) -> Double {
 
 ///|
 using @sfpages {
+  chat_mark,
+  nav_fade,
+  nav_ground,
   type ContextEntry,
   type FindList,
   type MessageHere,

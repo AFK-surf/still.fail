@@ -97,53 +97,6 @@ fn menu_row_look(c : @ui.Ctx, s : @kit.MenuItemState, icon : String) -> Unit {
 }
 
 ///|
-/// The filter's menu (Home.kt, in Sheet.kt MenuHost's look), mbui's dropdown menu (@kit.dropdown_menu): 180 wide under
-/// the filter's button, its right edge under the button's: 全部, 我参与的, 监控中 (the one in use checked), 已归档. In: its
-/// opacity 160 ms (Ease.Out), its scale from 90% on the menu's spring, from its top left; out: 120 ms (CSS's ease-out),
-/// back to 90%; the scrim (black at 28%) 200 ms. Drawn until it has gone; the arrows, letters and Escape as a menu's.
-fn filter_menu(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
-  let filter = filter_of(src, w.id)
-  let entries = ["all", "mine", "watching"].map(fn(f) {
-    @kit.menu_radio(f, filter == f, label=tr("android-chat.home.filter." + f))
-  })
-  entries.push(@kit.menu_item("archived", label=tr("android-chat.home.filter.archived")))
-  let x = dmax(12.0, c.width - 16.0 - 180.0)
-  let m = @kit.dropdown_menu(
-    c,
-    "filter-menu",
-    app.menu,
-    c.id("home-filter"),
-    entries,
-    // under the button (34 round, 8 under the status bar: top_bar), 6 below it (Sheet.kt MenuHost)
-    at=(x, status_top() + 8.0, 180.0, 34.0),
-    along=Start,
-    offset=6.0,
-    scrim=0x00000047L,
-    enter=@motion.trans(fade=0.0, scale=0.9, ox=0.0, oy=0.0, spec=@motion.menu_spring, fade_spec=@motion.tween(160.0, ease=Out)),
-    exit=@motion.trans(fade=0.0, scale=0.9, ox=0.0, oy=0.0, spec=@motion.menu_spring, fade_spec=@motion.tween(120.0, ease=CssOut)),
-    look=menu_panel_look,
-    item_look=fn(c, s) {
-      let icon = match s.entry.kind {
-        @kit.Choice(true) => "check"
-        _ => if s.entry.value == "archived" { "archive" } else { "" }
-      }
-      menu_row_look(c, s, icon)
-    },
-  )
-  app.menu = m.open
-  match m.chosen {
-    Some("archived") => app.nav.push(Archived)
-    Some(f) => {
-      app.filters[w.id] = f
-      let pick : Map[String, Json] = {}
-      pick[w.id] = Json::string(f)
-      (src.call)("prefs.set", Json::object({ "listFilter": Json::object(pick) }), fn(_) {  })
-    }
-    None => ()
-  }
-}
-
-///|
 /// The workspaces' sheet (Workspaces.kt WorkspacesSheet, in a draggable sheet of 70%: sheet.mbt): the workspace in use
 /// (checked), the invitations waiting, the others to switch to (what each has waiting at its end), signing in another
 /// account, a new one. A workspace

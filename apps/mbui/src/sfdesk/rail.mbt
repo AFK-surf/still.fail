@@ -671,7 +671,6 @@ pub fn rail_go(c : @ui.Ctx, src : Source, w : Workspace, place : String) -> Unit
   match place {
     "attention" => {
       wide.attention_open = !wide.attention_open
-      wide.menu = None
     }
     "chats" | "mine" | "watching" => {
       // its list in the sidebar (Rail.tsx toList): 对话 all of them, the others theirs

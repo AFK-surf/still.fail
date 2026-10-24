@@ -57,16 +57,16 @@ fn decisions_pane(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
     c.list(key, lines.length(), zou_row_h, fn(i) {
       let n = c.box(style=lists_inset, fn() {
         match lines[i] {
-          Top => side_space(c, band + lists_top_in)
+          Top => side_space(c, band + @sfpages.lists_top_in)
           Aside => c.box(style=zou_group, fn() { c.text(@sf.t("web-main.decisions.defer"), style=zou_group_words) |> ignore }) |> ignore
           Row(k, d) => zou_row(c, src, w, d, here && k == front, i + 1 < lines.length() && lines[i + 1] is Row(_, _))
           Empty => c.box(style=zou_empty, fn() { c.text(@sf.t("web-main.decisions.empty"), style=zou_empty_words) |> ignore }) |> ignore
           Reading => side_breathing(c)
-          Foot => side_space(c, lists_foot_in)
+          Foot => side_space(c, @sfpages.lists_foot_in)
         }
       })
       if keys[i] != "" {
-        row_moving(c, lid, key, keys[i], n)
+        @sfpages.row_moving(c, lid, key, keys[i], n)
       }
     })
     |> ignore
@@ -108,14 +108,14 @@ fn zou_row(c : @ui.Ctx, src : Source, w : Workspace, d : Json, on : Bool, more :
   }
   let ground = nav_ground(c, key, c.lit(id) || c.pressed(id), on)
   let look = if flag(v, "deferred") { zou_row_look.then(zou_aside) } else { zou_row_look }
-  c.box(style=if more { side_row_more } else { side_row_last }, fn() {
+  c.box(style=if more { @sfpages.row_more } else { @sfpages.row_last }, fn() {
     c.box(style=look.then(@ui.style(bg=Data(ground))), id~, fn() {
       c.text(question, style=zou_question) |> ignore
       c.box(style=zou_meta, fn() {
         c.box(style=zou_where, fn() {
           c.text(text(v, "title") + " · ", style=zou_meta_words.then(@ui.text_style(w=Hug))) |> ignore
           if @sf.has_station_mark(text(v, "stationEmoji"), text(v, "stationIcon")) {
-            @sf.station_mark(c, text(v, "stationEmoji"), text(v, "stationIcon"), side_kind_mark, t.p.subtle)
+            @sf.station_mark(c, text(v, "stationEmoji"), text(v, "stationIcon"), @sfpages.kind_mark, t.p.subtle)
           }
           c.text(text(v, "stationName"), style=zou_meta_words) |> ignore
         })

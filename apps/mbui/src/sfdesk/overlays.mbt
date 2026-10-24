@@ -8,10 +8,8 @@
 pub fn overlays(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
   // a right click's menu (context_menu.mbt)
   context_menu(c)
-  row_menu(c, src)
   // the rail's menu, and what can be added beside it while it is changed (rail.mbt)
   rail_overlays(c, src, w)
-  filter_menu(c, src, w)
   attention_panel(c, src, w)
   // ⌘K (switcher.mbt): what the frame and its page can do now offered to it
   switcher(c, src, w)

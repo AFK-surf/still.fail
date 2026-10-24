@@ -326,7 +326,7 @@ fn switcher_go(c : @ui.Ctx, line : SwLine) -> Unit {
     }
     Chat(ch) => {
       close()
-      open_row(ch.item)
+      open_page(Chat({ station: ch.item.station, session: ch.item.session, title: ch.item.title, station_name: ch.item.station_name }))
     }
     Message(m) => {
       close()

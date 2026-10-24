@@ -20,7 +20,7 @@ test "small with a mouse: a chat's row held is no long press, a click that opens
   let t = wide_tester(calls, w=390.0, h=844.0)
   let (x, y) = t.find("夜里的构建又失败了").unwrap()
   t.press_at(x, y)
-  t.run_for(@ui.tap_indication_ms + hold_ms)
+  t.run_for(@ui.tap_indication_ms + @sfpages.hold_ms)
   assert_true(t.find("复制会话链接") is None)
   t.release(x, y)
   t.run_for(@ui.nav_push_ms)

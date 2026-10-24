@@ -131,6 +131,10 @@ pub let row_icon : Double = 22.0
 pub let phone_row_in : @ui.Space = room(22.0)
 
 ///|
+/// An empty list's illustration and words in from its sides (Home.kt Empty: 30).
+pub let empty_in : @ui.Space = room(30.0)
+
+///|
 /// The account's picture and the workspace's mark, each on its card atop settings (SettingsHome.kt): 46.
 pub let identity_mark : Double = 46.0
 
@@ -810,6 +814,14 @@ pub let side_row_h : @ui.Len = Fixed(54.0)
 /// A person's picture after the first at a sidebar row's end (RowPicture.css.ts: 16 across, 3 over the one before):
 /// the room it takes.
 pub let side_face_step : @ui.Len = Fixed(13.0)
+
+///|
+/// The same at a finger's row's end (mobile/Home.tsx RowAside size 18): 15 the room after the first, the starter's ring
+/// 22 across (2 past the face's ground).
+pub let touch_face_step : @ui.Len = Fixed(15.0)
+
+///|
+pub let touch_face_ring : @ui.Len = Fixed(22.0)
 
 ///|
 /// The dot before a chat that wants the viewer in 待处理's panel (Attention.css.ts dot): 7 across.

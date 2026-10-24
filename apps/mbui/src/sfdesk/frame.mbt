@@ -73,11 +73,7 @@ pub(all) struct Wide {
   mut rail_drag : (String, Double, Double)?
   mut editing : Bool
   mut add_open : Bool
-  /// a chat's row's menu open (its right click): its row's key, the item, where; a row renamed in place (its key); the
-  /// lists' filter menu, 待处理's panel, the services' panel from the lists' foot, ⌘/'s shortcuts open
-  mut menu : (String, ChatItem, Double, Double)?
-  mut renaming : String
-  mut filter_open : Bool
+  /// 待处理's panel, the services' panel from the lists' foot, ⌘/'s shortcuts open
   mut attention_open : Bool
   mut jobs_open : Bool
   mut keys_open : Bool
@@ -129,9 +125,6 @@ pub let wide : Wide = {
   rail_drag: None,
   editing: false,
   add_open: false,
-  menu: None,
-  renaming: "",
-  filter_open: false,
   attention_open: false,
   jobs_open: false,
   keys_open: false,
@@ -192,9 +185,6 @@ fn wide_reset() -> Unit {
   wide.rail_drag = None
   wide.editing = false
   wide.add_open = false
-  wide.menu = None
-  wide.renaming = ""
-  wide.filter_open = false
   wide.attention_open = false
   wide.jobs_open = false
   wide.keys_open = false
@@ -1145,7 +1135,7 @@ fn side_peek(c : @ui.Ctx, bar_x : Double, bar_y : Double, bar_r : Double, bar_b 
   }
   let (px, py, _) = c.pointer()
   // (something from it open: a row's menu, the filter's, a row renamed in place, the workspaces' ＋)
-  let held = wide.menu is Some(_) || wide.filter_open || wide.renaming != "" || wide.add_open
+  let held = @sf.presenting() || @sfpages.renaming() || wide.add_open
   // a finger, which rests on nothing: shown as it presses the bar (folded for the room: as its place is pressed,
   // rail.mbt), until a tap off the bar and the sidebar shown with nothing from it open
   if @ui.pointing() is Finger {

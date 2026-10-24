@@ -11,7 +11,7 @@ test "02-home-new-chat" {
     f.see("另一台设备新建的对话 082947")
     f.see("=新对话里的回复 082947")
     // its row grown in, the rows under it moved down: to the end of their motions, as each set out
-    f.run_to_rest("layout home/")
+    f.run_to_rest("layout chats/")
     f.end()
   })
 }

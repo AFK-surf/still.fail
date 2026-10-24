@@ -18,42 +18,23 @@ fn sidebar(c : @ui.Ctx, src : Source, w : Workspace, width : Double) -> Unit {
 }
 
 ///|
-/// How the track slides (Sidebar.css.ts navTrack: transform 240ms ease-out).
-// kept across runs: a value (no field of it changes)
-let list_slide : @motion.Spec = @motion.tween(list_slide_ms, ease=Out)
-
-///|
-pub let list_slide_ms : Double = 240.0
-
-///|
-/// The chats' sidebar `width` wide: the band over the track of lists.
+/// The chats' sidebar `width` wide: the band over the lists (sfpages' chats_lists: 全部, 我参与的, 监控中, then 奏 and
+/// 已归档 on its track).
 fn lists_side(c : @ui.Ctx, src : Source, w : Workspace, width : Double) -> Unit {
+  ignore(width)
   let mode = list_mode(src, w)
   if mode != 4 {
     archive_side.landed = false
   }
-  let x = @kit.animate(c, "side/lists", mode.to_double(), transition=list_slide)
-  let from = x.floor().to_int()
-  let to = x.ceil().to_int()
+  // (read now: the rows are made as the list is laid out, after the closed bar's drawing is over)
+  let band = band_h(src, w)
+  let t = @sf.theme()
+  let frame : @sfpages.ListsFrame = {
+    ..@sfpages.bare_lists(band, 0.0, if side_folded() || wide.tape { closed_ground() } else { t.p.sidebar }, mode),
+    others: [fn() { decisions_pane(c, src, w) }, fn() { archive_pane(c, src, w) }],
+  }
   c.box(style=lists_fill, fn() {
-    for p in from..=to {
-      if p < 0 || p > 4 {
-        continue
-      }
-      c.layer(fn() {
-        c.box(style=lists_fill, tx=(p.to_double() - x) * width, fn() {
-          match p {
-            0 => chats_pane(c, src, w, "all")
-            1 => chats_pane(c, src, w, "mine")
-            2 => chats_pane(c, src, w, "watching")
-            3 => decisions_pane(c, src, w)
-            _ => archive_pane(c, src, w)
-          }
-        })
-        |> ignore
-      })
-      |> ignore
-    }
+    @sfpages.chats_lists(c, src, w, frame)
     c.layer(fn() { lists_band(c, src, w) }) |> ignore
     // with no bell in the rail: the stations' trouble and the services up long, at the foot (the rail's bell has them
     // where it is: cloud/workspace.tsx WorkspaceSidebarFooter)
@@ -253,7 +234,7 @@ fn archive_pane(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
         Failing(words) => side_said(c, words, true)
         Waiting => side_breathing(c)
         Said(words) => side_said(c, words, false)
-        Day(label) => nav_heading(c, label)
+        Day(label) => @sfpages.list_heading(c, label)
         Row(it) => archive_side_row(c, src, it, i + 1 < lines.length() && lines[i + 1] is Row(_))
       }
     })
@@ -339,7 +320,7 @@ fn archive_side_row(c : @ui.Ctx, src : Source, it : Json, more : Bool) -> Unit {
         c.box(style=if over { arch_head_room } else { arch_head }, fn() {
           c.text(title, style=arch_title) |> ignore
           if @sf.has_station_mark(text(v, "stationEmoji"), text(v, "stationIcon")) {
-            c.box(style=side_kind, fn() {
+            c.box(style=@sfpages.kind_slot, fn() {
               @sf.station_mark(c, text(v, "stationEmoji"), text(v, "stationIcon"), 12.0, t.p.muted)
             })
             |> ignore
@@ -577,7 +558,6 @@ fn side_todo(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
         |> ignore
       }) {
       wide.attention_open = !wide.attention_open
-      wide.menu = None
     }
   })
   |> ignore
