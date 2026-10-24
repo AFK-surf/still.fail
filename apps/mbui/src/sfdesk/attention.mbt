@@ -191,7 +191,7 @@ fn attention_rows(c : @ui.Ctx, src : Source, w : Workspace, pages : Pages, raile
     })
   }
   if jobs > 0 {
-    group("", fn() { (pages.jobs)(c, src, w) })
+    group("", fn() { open_jobs(c, src, w, pages) })
   }
   for g in groups {
     group(if several { g.1 } else { "" }, fn() {

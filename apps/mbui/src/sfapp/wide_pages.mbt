@@ -34,7 +34,6 @@ fn desk_pages() -> @sfdesk.Pages {
     other: fn(c, src, w, all, invited, page) { page_view(c, src, w, all, invited, page) },
     keys: fn(c, src, w, escape) { page_keys(c, src, w, escape) },
     offered: fn(c, src) { chat_offered(c, src) },
-    jobs: fn(c, src, w) { open_jobs(c, src, w) },
     core: fn(src, w) { settings_core(src, w) },
     gate: fn(c, src, w) { lock_gate(c, src, w) |> ignore },
     drop: fn(c, src, key, pane) {
