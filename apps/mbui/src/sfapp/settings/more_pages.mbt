@@ -595,8 +595,9 @@ let bar_adding : Ref[Bool] = Ref(false)
 ///|
 /// 下方栏 (BarSettingsScreen): this device's bottom bars, each a card of its places (a place taken out with the "−" at its
 /// corner, one added from a sheet of them all, one held and moved sideways to change its order); a bar made the one in
-/// view, deleted, or a new one made.
-fn bars_page(c : @ui.Ctx, core : Core) -> Unit {
+/// view, deleted, or a new one made. A block at a time; the page and its frame are sfdesk's bars.mbt (one page for every
+/// frame).
+pub fn bars_blocks(c : @ui.Ctx, core : Core) -> Array[() -> Unit] {
   let t = @sf.theme()
   let (made, cur) = (core.bars)()
   let sets : Array[Array[String]] = made.copy()
@@ -614,11 +615,7 @@ fn bars_page(c : @ui.Ctx, core : Core) -> Unit {
       }
     })
   }
-  let blocks : Array[() -> Unit] = [
-    fn() { top_back(c, core, tr("android-settings.title")) },
-    fn() { large_title(c, tr("android-misc.bar.title"), small=tr("android-misc.bar.small")) },
-    fn() { page_note(c, tr("android-misc.bar.note")) },
-  ]
+  let blocks : Array[() -> Unit] = [fn() { page_note(c, tr("android-misc.bar.note")) }]
   for i, set in sets {
     let is_made = i < made.length()
     blocks.push(fn() {
@@ -683,8 +680,7 @@ fn bars_page(c : @ui.Ctx, core : Core) -> Unit {
     |> ignore
   })
   blocks.push(fn() { page_note(c, tr(if made.length() > 1 { "android-misc.bar.foot.many" } else { "android-misc.bar.foot.one" })) })
-  blocks.push(fn() { gap(c, 30.0) })
-  scroll_page(c, "bars", blocks)
+  blocks
 }
 
 ///|

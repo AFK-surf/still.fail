@@ -53,3 +53,15 @@ test "字体, at each width on either screen: narrow the places' switch over the
     }
   }
 }
+
+///|
+test "下方栏, at each width on either screen: its bars a card each, the one in view said, a new one to make" {
+  for case in one_page_cases {
+    let (w, platform, regular, _) = case
+    let t = one_page_tester(@settings.Route::BarSettings, w, platform~, regular~)
+    let at = "\{w} platform \{platform}"
+    assert_true(t.find("下方栏") is Some(_), msg=at)
+    assert_true(t.find("第 1 栏") is Some(_), msg=at)
+    assert_true(t.find("当前") is Some(_), msg=at)
+  }
+}
