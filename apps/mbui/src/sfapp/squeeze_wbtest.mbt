@@ -20,7 +20,7 @@ let squeeze_windows : Array[(String, Double, Double, Int, String)] = [
 /// The screens, as sffix opens them (fixture.mbt open_fixture_mode).
 let squeeze_modes : Array[String] = [
   "home", "chat", "chat-compose", "chat-attach", "chat-quote", "chat-cards", "chat-md", "chat-pick", "chat-info",
-  "chat-publish", "chat-agent", "chat-peek", "chat-jobs", "chat-job", "chat-jobs-side", "chat-letters-side",
+  "chat-publish", "chat-agent", "chat-agent-unsaid", "chat-peek", "chat-jobs", "chat-job", "chat-jobs-side", "chat-letters-side",
   "chat-find", "chat-model-pop", "chat-login", "chat-update", "chat-station-files", "chat-preview-image",
   "chat-preview-code", "newchat", "newchat-station", "newchat-model", "newchat-profiles", "place", "files",
   "files-columns", "files-list", "files-preview", "files-transfers", "files-tree", "drive", "drive-sub",
