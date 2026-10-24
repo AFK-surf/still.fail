@@ -1255,7 +1255,7 @@ export class StationsSync {
     }).pipe(Effect.ensuring(Effect.sync(() => watch?.drop())));
   }
 
-  /// A person's message into a thread; answers its entry number once the thread's entries hold it.
+  /// A person's message into a thread; answers its entry number as the station takes it.
   post(address: string, thread: number, message: unknown, ctx: SpanContext | null, idempotency?: string): Effect.Effect<number, CoreError> {
     return Effect.gen({ self: this }, function* () {
       const addr = StationAddr.parse(address);
@@ -1263,8 +1263,9 @@ export class StationsSync {
       const answer = yield* this.requests.call(addr, "POST", `/threads/${thread}/messages`, message, { ctx, headers });
       const n = u64(get(answer, "n"));
       if (n === null) return yield* Effect.fail(new CoreError("bad_response", t("station.core.noMessageNumber")));
-      // The thread goes that far now: what came after what is held is read.
-      yield* this.channels.sent(entriesOf(address, thread), n);
+      // Sent: the station has it. The thread goes that far now, and its entry comes as anything said in it does (its
+      // stream tells it; else it is read once the burst is over), not waited on here.
+      this.channels.goesTo(entriesOf(address, thread), n);
       return n;
     });
   }

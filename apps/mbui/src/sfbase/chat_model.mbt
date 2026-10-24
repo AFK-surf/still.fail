@@ -383,13 +383,15 @@ pub(all) struct Outgoing {
   text : String
   attachments : Array[Attachment]
   quotes : Array[Quote]
-  /// sending | failed
+  /// sending | sent (the station has it: `seq`) | failed
   state : String
   error : String
   joined : Bool
   followed : Bool
   /// the message's seq once the station has it (-1 before)
   seq : Double
+  /// when it was sent, in words (Time), shown under it once it is sent
+  time : Stamp?
   /// why it has not reached the station yet, in place of 正在发送 ("" none)
   waits : String
   /// its files still going up before it goes (`uploads`): each one's name, size and how much of it the station has
@@ -521,6 +523,7 @@ pub fn chat_view(v : Json) -> ChatView {
         joined: flag(s, "joined"),
         followed: flag(s, "followed"),
         seq: opt_number(s, "seq").unwrap_or(-1.0),
+        time: stamp_of(s, "createdAt"),
         waits: text(s, "waits"),
         uploads: items(s, "uploads").map(fn(u) {
           (text(Some(u), "name"), number(Some(u), "size").to_int(), number(Some(u), "sent").to_int())

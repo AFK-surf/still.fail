@@ -1704,7 +1704,7 @@ test("a_thread_pages_back_and_catches_up", async () => {
   core.close();
 });
 
-test("posts_into_a_thread_and_answers_once_it_shows", async () => {
+test("posts_into_a_thread_answering_as_the_station_takes_it_its_entry_coming_as_any_does", async () => {
   const answers: J = {
     ...base(),
     "GET /threads": [threadView(7, 12)],
@@ -1713,12 +1713,19 @@ test("posts_into_a_thread_and_answers_once_it_shows", async () => {
     "GET /threads/7/entries?after=12": { last: 13, entries: [entry(13, "你好")] },
     "PUT /threads/7/read": { viewer: "a@x.com", thread: 7, n: 13 },
   };
-  const { host, core, values, read } = await ui(answers);
+  const { host, core, values, read, push } = await ui(answers);
   core.receive(1, { kind: "subscribe", id: 1, subscribe: thread7 });
   await read();
+  const entryReads = (from: number) => host.requests.slice(from).filter((r) => r.url.includes("/threads/7/entries")).length;
+  // Sent once the station takes it: nothing of the thread is read for it.
+  let from = host.requests.length;
   assert.equal(await run(core.inner.stations.post(ST, 7, { text: "你好" }, null)), 13);
+  assert.equal(entryReads(from), 0);
+  // Its stream not telling it, its entry is read once the burst is over.
+  await host.time.pass(EVENTS_COALESCE_MS + 50, 50);
   await read();
   assert.deepEqual(texts(values), ["d", "你好"]);
+  assert.equal(entryReads(from), 1);
   // Reading: sent once, not again for less.
   await run(core.inner.stations.read(ST, 7, 13, null));
   await run(core.inner.stations.read(ST, 7, 12, null));
@@ -1726,6 +1733,15 @@ test("posts_into_a_thread_and_answers_once_it_shows", async () => {
   assert.equal(puts.length, 1);
   assert.equal(text(puts[0].body), '{"n":13}');
   assert.equal(threadsOf(core)[0].unread, 0);
+  // Told by its stream (as it mostly is): not read at all.
+  answers["POST /threads/7/messages"] = { n: 14 };
+  from = host.requests.length;
+  assert.equal(await run(core.inner.stations.post(ST, 7, { text: "再一条" }, null)), 14);
+  push("thread", { id: 7, entries: [entry(14, "再一条")] });
+  await host.time.pass(EVENTS_COALESCE_MS + 50, 50);
+  await read();
+  assert.deepEqual(texts(values), ["d", "你好", "再一条"]);
+  assert.equal(entryReads(from), 0);
   core.close();
 });
 

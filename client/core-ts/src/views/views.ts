@@ -530,6 +530,7 @@ export class Views implements Owner {
     switch (change.kind) {
       case "outbox":
         for (const view of this.chatViews(change.station, change.thread)) this.#core.store.invalidate(view);
+        if (change.chat) return;
         // A card answered from here waits no more; a message that did not go marks its chat's row.
         this.#invalidate((v) => v.topic === "decisions" || v.topic === "workspaceMarks" || v.topic === "chats" || v.topic === "chatSearch" || v.topic === "search");
         return;
