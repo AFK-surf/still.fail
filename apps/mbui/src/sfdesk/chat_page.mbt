@@ -214,8 +214,9 @@ fn chat_bar(
   c.box(style=chat_bar_box, id=bar, fn() {
       room(room_l)
       // the title, its people and agents 10 apart, 8 in from the bar's padding (conversation.css.ts pageBarTitle)
-      // (short of room, its people leave first, then its station's update, the title cut short meanwhile)
-      c.box(style=chat_bar_title_row, fn() {
+      // (short of room, its people leave first, then its station's update, then its agents but the first, the title cut
+      // short meanwhile)
+      c.box(style=chat_bar_title_row, keep=true, fn() {
         chat_title(c, src, r, v)
         match v {
           Some(view) => {
@@ -228,7 +229,14 @@ fn chat_bar(
             }
             let (_, front) = side_of(view)
             for i, a in view.agents {
-              agent_tile(c, src, r, a, view.agents.length() > 1 && front == a.key, if i == 0 { station } else { None })
+              let tile = fn() {
+                agent_tile(c, src, r, a, view.agents.length() > 1 && front == a.key, if i == 0 { station } else { None })
+              }
+              if i == 0 {
+                tile()
+              } else {
+                c.box(drop=chat_bar_drop_agents, tile) |> ignore
+              }
             }
           }
           None => ()
@@ -717,21 +725,26 @@ let chat_bar_box : @ui.Style = @ui.style(row=true, w=@sf.grow, h=@sf.wide_bar_h_
 let chat_bar_row : @ui.Style = @ui.style(row=true, w=Full, h=@sf.wide_bar_h_size)
 
 ///|
-/// Its title, its people and agents 10 apart, 8 in (pageBarTitle); what it cuts 4 past its last, the reach of the
-/// badge at an agent's corner (agent_mark.mbt: 3 past it).
+/// Its title, its people and agents 10 apart, 8 in (pageBarTitle), 4 kept past its last for the reach of the badge at
+/// an agent's corner (agent_mark.mbt: 3 past it); never narrower than what is left in it needs (Ctx::box keep), ⌘F's
+/// field beside it giving way first, down to its least.
 // kept across runs: a value (no field of it changes)
-let chat_bar_title_row : @ui.Style = @ui.style(row=true, w=@sf.grow, pl=S2, pr=S1, gap=S2_5, align=ACenter, clip=true)
+let chat_bar_title_row : @ui.Style = @ui.style(row=true, w=@sf.grow, pl=S2, pr=S1, gap=S2_5, align=ACenter)
 
 ///|
 // kept across runs: a value (no field of it changes)
 let chat_title_room : @ui.Style = @ui.css("row")
 
 ///|
-/// What leaves the bar's title row first, short of room: its people, then its station's update.
+/// What leaves the bar's title row first, short of room: its people, then its station's update, then its agents but the
+/// first (the last of them first).
 let chat_bar_drop_people : Int = 1
 
 ///|
 let chat_bar_drop_update : Int = 2
+
+///|
+let chat_bar_drop_agents : Int = 3
 
 ///|
 /// How wide the title may be: 42% of the bar, 80 at least.

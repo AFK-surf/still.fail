@@ -5,9 +5,11 @@
 /// A page that says what the system said of the window's room and the hinge.
 fn pose_view(c : @ui.Ctx) -> Unit {
   let room = match @ui.system_size_class() {
-    Some({ width: Regular, height: Regular }) => "regular"
-    Some({ width: Regular, height: Compact }) => "wide"
+    Some({ width: Expanded, height: Expanded }) => "regular"
+    Some({ width: Medium, height: Compact }) | Some({ width: Expanded, height: Compact }) => "wide"
+    Some({ width: Medium, .. }) => "medium"
     Some({ width: Compact, .. }) => "compact"
+    Some({ width: Expanded, height: Medium }) => "expanded"
     None => "unsaid"
   }
   let pose = match @ui.system_tabletop() {
@@ -58,6 +60,20 @@ test "the outer screen of a folded phone: compact, no fold in the window" {
   t.frame()
   assert_true(t.find("compact") is Some(_), msg="\{t.drawn_text()}")
   assert_true(t.find("hinge NoHinge") is Some(_), msg="\{t.drawn_text()}")
+}
+
+///|
+test "Android's three widths: a fold's inner screen upright medium, a phone on its side expanded but compact in height" {
+  let t = @ui.Tester::new(pose_view, w=673.0, h=841.0)
+  t.post(@hostapi.system_channel, "{\"size_class\":{\"width\":\"medium\",\"height\":\"medium\"}}")
+  t.frame()
+  assert_true(t.find("medium") is Some(_), msg="\{t.drawn_text()}")
+  t.post(@hostapi.system_channel, "{\"size_class\":{\"width\":\"expanded\",\"height\":\"compact\"}}")
+  t.frame()
+  assert_true(t.find("wide") is Some(_), msg="\{t.drawn_text()}")
+  t.post(@hostapi.system_channel, "{\"size_class\":{\"width\":\"expanded\",\"height\":\"medium\"}}")
+  t.frame()
+  assert_true(t.find("expanded") is Some(_), msg="\{t.drawn_text()}")
 }
 
 ///|

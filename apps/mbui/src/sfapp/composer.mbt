@@ -1468,15 +1468,7 @@ fn send_draft(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView, d : Draft) -
 ///|
 /// The composer at the chat page's foot (ChatHost.kt HostComposer): its notices, what waits to go, the bar, what went
 /// wrong; ＋'s sheet over the page when open. `v` None while the chat is read the first time (it takes nothing yet).
-/// `beside`: a chat's on a wide screen, beside the latest chats' button (ChatHost.kt besideRecent, corners.mbt).
-fn composer(
-  c : @ui.Ctx,
-  src : Source,
-  r : ChatRef,
-  v : ChatView?,
-  fresh? : Fresh? = None,
-  beside? : Bool = false,
-) -> Unit {
+fn composer(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView?, fresh? : Fresh? = None) -> Unit {
   let t = @sf.theme()
   let d = draft_by(c, src, match fresh {
     Some(f) => f.key
@@ -1598,7 +1590,7 @@ fn composer(
   let side = if wide_on.val { 0.0 } else { 10.0 }
   // laid out for another page (a new chat become its chat, in the wide frame), from where it was (composer_page)
   let page = composer_page(c, d.key)
-  c.box(w=Fill(1.0), pl=if beside { beside_recent } else { side }, pr=side, pt=k.over, pb=k.under, fn() {
+  c.box(w=Fill(1.0), pl=side, pr=side, pt=k.over, pb=k.under, fn() {
     let capsule = c.box(w=Fill(1.0), pad=k.inset, pt=top, id=cap, fn() {
       // its ground, as tall as the morph has it, on the capsule's bottom edge (over it while it is taller); in the wide
       // frame its corner a pill's while it is one line high, the opened box's past that (the web's: its corners go from

@@ -13,9 +13,6 @@ fn wide_reset() -> Unit {
   @sfdesk.find_forget()
   find_around.val = -1.0
   wide_on.val = false
-  corners_on.val = false
-  recent_open.val = false
-  recent_over.val = None
 }
 
 ///|

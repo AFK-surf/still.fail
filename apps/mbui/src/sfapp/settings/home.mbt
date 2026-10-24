@@ -350,7 +350,7 @@ fn settings_home(c : @ui.Ctx, core : Core, here : Here) -> Unit {
           (core.push)(Appearance)
         }
         // this device's bottom bars: none on a wide screen (SettingsHome.kt: !LocalWide)
-        if !no_bar.val && go_row(c, "go-bars", tr("android-misc.bar.title"), value=bars_value(core), icon="view-columns") {
+        if go_row(c, "go-bars", tr("android-misc.bar.title"), value=bars_value(core), icon="view-columns") {
           (core.push)(BarSettings)
         }
         // notifications on this device, local notices and pushes alike (SettingsHome.kt Notify): as the core's

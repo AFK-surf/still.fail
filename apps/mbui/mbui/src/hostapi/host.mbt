@@ -1047,6 +1047,7 @@ let current : Ref[&Host] = { val: NoHost::{  } }
 /// Who answers from now on: the platform's (mbui/host's init, as the program starts), a Tester's fake.
 pub fn set_host(h : &Host) -> Unit {
   current.val = h
+  sideways_now.val = false
 }
 
 ///|
@@ -1534,8 +1535,21 @@ pub fn set_dark(dark : Bool) -> Unit {
 /// Android does it (the activity's requested orientation, its window's insets controller), and iOS (the scene's
 /// orientations, the status bar and the home indicator hidden); elsewhere nothing turns.
 pub fn set_sideways(on : Bool) -> Unit {
+  sideways_now.val = on
   current.val.set_sideways(on)
 }
+
+///|
+/// Whether the app has the device turned sideways (set_sideways): its window as wide as it is because the app turned
+/// it, for a film or a screen over all of it, not because the screen is another kind (what a layout goes by is not this
+/// turn: still.fail's @sf.layout keeps the one it had).
+pub fn sideways() -> Bool {
+  sideways_now.val
+}
+
+///|
+// kept across runs: put back as a host is set
+let sideways_now : Ref[Bool] = { val: false }
 
 ///|
 /// Words (`text`), or a file of `data` named `name` (`mime`), handed to another app through the system's share sheet

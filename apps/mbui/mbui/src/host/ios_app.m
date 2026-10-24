@@ -573,8 +573,8 @@ static int32_t menu_can;  // what the menu offers (hostapi text_menu_*: 1 cut, 2
 @property(nonatomic) BOOL barsSaid;
 // turned sideways for a film (@hostapi.set_sideways)
 @property(nonatomic) BOOL sideways;
-// the size classes last said to the app (`size_class`)
-@property(nonatomic) UIUserInterfaceSizeClass saidWidth, saidHeight;
+// the size classes last said to the app (`size_class`: its width's and its height's, a space between)
+@property(nonatomic, copy) NSString *saidClasses;
 // the hinge as the system last said it (a UIHingeStatus; -1 none: no hinge, or not said yet), and the fold last said to
 // the app (`fold`)
 @property(nonatomic) NSInteger hinge;
@@ -620,19 +620,21 @@ static MBController *the_controller;
 }
 // The window's size classes as its traits have them, said to the app as they change (src/hostapi/system.mbt
 // `size_class`): what its layout is chosen by (regular both ways on an opened iPhone Duo, compact in width upright on a
-// phone or beside another app), never the view's width.
+// phone or beside another app). iOS splits a window's width in two where Android splits it in three: regular is said
+// as Android's medium while the window is narrower than where Android's expanded starts (840 points: an iPad upright,
+// beside another app), its expanded from there (an iPad on its side), so a window as wide is laid out alike on both.
 - (void)saySizeClasses {
   UITraitCollection *t = self.traitCollection;
   UIUserInterfaceSizeClass w = t.horizontalSizeClass, h = t.verticalSizeClass;
-  if (w == UIUserInterfaceSizeClassUnspecified || h == UIUserInterfaceSizeClassUnspecified) return;
-  if (w == self.saidWidth && h == self.saidHeight) return;
-  self.saidWidth = w;
-  self.saidHeight = h;
-  NSString *(^name)(UIUserInterfaceSizeClass) = ^(UIUserInterfaceSizeClass k) {
-    return k == UIUserInterfaceSizeClassRegular ? @"regular" : @"compact";
-  };
-  say_system(@{@"size_class" : @{@"width" : name(w), @"height" : name(h)}});
-  say([NSString stringWithFormat:@"ios: size classes %@ wide, %@ high", name(w), name(h)]);
+  CGFloat across = self.view.bounds.size.width;
+  if (w == UIUserInterfaceSizeClassUnspecified || h == UIUserInterfaceSizeClassUnspecified || across <= 0) return;
+  NSString *wide = w != UIUserInterfaceSizeClassRegular ? @"compact" : across < 840 ? @"medium" : @"expanded";
+  NSString *high = h == UIUserInterfaceSizeClassRegular ? @"regular" : @"compact";
+  NSString *said = [NSString stringWithFormat:@"%@ %@", wide, high];
+  if ([said isEqualToString:self.saidClasses]) return;
+  self.saidClasses = said;
+  say_system(@{@"size_class" : @{@"width" : wide, @"height" : high}});
+  say([NSString stringWithFormat:@"ios: size classes %@ wide, %@ high", wide, high]);
   [the_view requestFrame];
 }
 // The hinge and where its fold divides the app's view, said to the app as they change (src/hostapi/system.mbt `fold`):
