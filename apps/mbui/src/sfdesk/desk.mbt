@@ -7,6 +7,7 @@
 pub fn reset() -> Unit {
   wide_reset()
   new_ws_reset()
+  share_dialog_reset()
   relay_focus.val = ""
   marks_reset()
   context_reset()

@@ -1,0 +1,6 @@
+# The chat's info open over the wide frame, 分享给其他 workspace pressed (sfdesk/share_dialog.mbt, ChatPage.tsx ShareDialog).
+timeout 20000
+until 分享给其他 workspace
+wait 400
+tap 分享给其他 workspace
+wait 1200
