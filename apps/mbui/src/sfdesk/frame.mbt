@@ -24,8 +24,6 @@ pub(all) struct Pages {
   folder : (@ui.Ctx, Source, Workspace, DriveAt) -> Unit
   /// any other page: the phone's of it, its bar at its top (the workspaces, whether invitations wait)
   other : (@ui.Ctx, Source, Workspace, Array[Workspace], Bool, Page) -> Unit
-  /// what the open chat offers ⌘K now
-  offered : (@ui.Ctx, Source) -> Array[Offered]
   /// what the settings' pages read and call, and how they move (src/sfapp/settings: the core as the app has it)
   core : (Source, Workspace) -> Core
   /// whether a sheet is over the pages (back closes it first); what is over the pages put down (a sheet, the menu): a

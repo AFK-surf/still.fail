@@ -85,11 +85,6 @@ fn page_bar_wide(c : @ui.Ctx, title : String, back : Bool, trailing : () -> Unit
   went
 }
 
-///|
-/// ⌘F's bar (sfdesk/find.mbt) opened in chat `r`, what opens under the chat's bar closed (sfdesk's chat page).
-fn find_open(c : @ui.Ctx, r : ChatRef) -> Unit {
-  @sfdesk.chat_find_open(c, r)
-}
 
 
 ///|

@@ -1977,7 +1977,7 @@ fn composer_bar(
     (Some(f), _) => f.placeholder
     (_, Some(view)) if view.archived => tr("android-chat.composer.archived.placeholder")
     // with a mouse and nothing focused, the web's says Space takes the keyboard there (Chat.tsx useSpaceHint
-    // `pointer: fine`; the wide frame's keys take it: wide_keys.mbt)
+    // `pointer: fine`; the wide frame's keys take it: sfdesk chat_page.mbt)
     _ if wide_on.val && @ui.pointing() is Mouse && !c.field_focused() =>
       fill("web-main.composer.pressToTypeCjk", [("key", tr("web-main.keymap.space"))])
     _ => tr("android-chat.chat.placeholder")
