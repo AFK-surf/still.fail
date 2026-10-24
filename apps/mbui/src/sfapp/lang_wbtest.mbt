@@ -18,7 +18,7 @@ fn lang_tester(mode : String, locale : String, lang? : String) -> @ui.Tester {
       }
     },
   }
-  @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0, env=[("MBUI_LOCALE", locale)])
+  @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0, platform=1, env=[("MBUI_LOCALE", locale)])
 }
 
 ///|

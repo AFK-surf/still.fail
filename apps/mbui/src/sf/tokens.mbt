@@ -1251,6 +1251,16 @@ pub let white_ink : @ui.Color = Data(0xFFFFFFFFL)
 pub let white : Int64 = 0xFFFFFFFFL
 
 ///|
+/// The desktop sign-in's existing off-scale inset, button height and pill corner.
+pub let desktop_sign_in_inset : @ui.Space = room(30.0)
+
+///|
+pub let desktop_sign_in_height : @ui.Len = Fixed(50.0)
+
+///|
+pub let desktop_sign_in_radius : @ui.Radius = rounded(25.0)
+
+///|
 /// Sign-in buttons and credential fields stay at least 52 high, including when their words wrap.
 pub let login_control_min : @ui.Len = Fixed(52.0)
 

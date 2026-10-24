@@ -315,7 +315,7 @@ fn view_in(c : @ui.Ctx, src : Source, t : @sf.Theme) -> Unit {
     sign_in_page(c, src)
     return
   }
-  c.box(w=Fill(1.0), h=Fill(1.0), bg=t.p.bg, fn() {
+  c.box(style=app_ground, fn() {
     let accounts = (src.topic)("accounts", {})
     match (accounts.value, (src.fatal)()) {
       (_, Some(why)) => splash(c, Some(why), true)
@@ -681,6 +681,9 @@ fn lock_gate(c : @ui.Ctx, src : Source, w : Workspace, bar? : Bool) -> Bool {
 let gate_fill : @ui.Style = @ui.css("w=Full h=Full")
 
 ///|
+let app_ground : @ui.Style = @ui.css("w=Full h=Full bg=Bg")
+
+///|
 /// What the settings' pages read and call, and how they move: the core as the app has it (Source), the app's stack.
 fn settings_core(src : Source, w : Workspace) -> @settings.Core {
   // a picture asked of the system's picker for a mark: its answer given (the host asks for a frame as it answers)
@@ -725,7 +728,7 @@ fn settings_core(src : Source, w : Workspace) -> @settings.Core {
       app.nav.push(Chat({ station, session, title, station_name: name }))
     },
     open_drive: fn(station) { app.nav.push(Drive({ station, root: None, path: "" })) },
-    sign_in: fn() { if @sf.theme().narrow { login_adding.val = true } else { (src.sign_in)() } },
+    sign_in: fn() { if @sf.touch_system() { login_adding.val = true } else { (src.sign_in)() } },
     say: fn(words) {
       app.toast = words
       app.toast_n += 1
@@ -966,8 +969,40 @@ fn sign_in_page(c : @ui.Ctx, src : Source) -> Unit {
 let sign_in_wide_w : Double = 300.0
 
 ///|
+let desktop_sign_in_page : @ui.Style = @ui.style(
+  w=Full, h=Full, px=@sf.desktop_sign_in_inset, py=S10, gap=S3,
+  align=ACenter, justify=JCenter,
+)
+
+///|
+let desktop_sign_in_title_inset : @ui.Style = @ui.css("pt=S2_5")
+
+///|
+// Keep the title's loose size: its line is the theme's multiplier, not a token's fixed line.
+let desktop_sign_in_title : @ui.TextStyle = @ui.text_style(weight=Bold, color=Fg, wrap=false)
+
+///|
+let desktop_sign_in_note : @ui.TextStyle = @ui.text_style(size=Lg, color=Muted, center=true, w=Full)
+
+///|
+let desktop_sign_in_gap : @ui.Style = @ui.css("h=S1_5")
+
+///|
+let desktop_sign_in_action : @ui.Style = @ui.style(
+  row=true, w=Full, h=@sf.desktop_sign_in_height, radius=@sf.desktop_sign_in_radius,
+  bg=Fg, align=ACenter, justify=JCenter,
+)
+
+///|
+let desktop_sign_in_action_words : @ui.TextStyle = @ui.text_style(size=Xl, weight=Semibold, color=Bg, wrap=false)
+
+///|
+let desktop_sign_in_many : @ui.TextStyle = @ui.text_style(size=Xs, color=Muted, wrap=false)
+
+///|
 fn sign_in_body(c : @ui.Ctx, src : Source) -> Unit {
-  if !@sfdesk.is_wide(c) {
+  // Resizing a desktop window must never enter or hide the mobile reviewer flow.
+  if @sf.touch_system() {
     login_view(c, src)
     return
   }
@@ -976,13 +1011,7 @@ fn sign_in_body(c : @ui.Ctx, src : Source) -> Unit {
   // a desktop's: the picture and 登录或注册 alone, no words around them (asked for, 2026-10-23)
   let wide = @sfdesk.is_wide(c)
   c.box(
-    w=Fill(1.0),
-    h=Fill(1.0),
-    padx=30.0,
-    pady=40.0,
-    gap=12.0,
-    align=ACenter,
-    justify=JCenter,
+    style=desktop_sign_in_page,
     fn() {
       @sf.drawable(
         c,
@@ -995,42 +1024,29 @@ fn sign_in_body(c : @ui.Ctx, src : Source) -> Unit {
       )
       |> ignore
       if !wide {
-        c.box(pt=10.0, fn() {
+        c.box(style=desktop_sign_in_title_inset, fn() {
           c.text(
             tr("android-settings.signIn.title"),
+            style=desktop_sign_in_title,
             size=28.0,
-            weight=700,
-            color=t.p.text,
-            wrap=false,
           )
           |> ignore
         })
         |> ignore
         c.text(
           tr("android-settings.signIn.note"),
-          size=15.0,
-          color=t.p.muted,
-          center=true,
-          w=Fill(1.0),
-          line=21.0,
+          style=desktop_sign_in_note,
         )
         |> ignore
       }
-      c.box(h=Px(6.0), fn() {  }) |> ignore
+      c.box(style=desktop_sign_in_gap, fn() {  }) |> ignore
       let id = c.id("sign-in")
       if c.clicked(id) && !busy {
         (src.sign_in)()
       }
       c.box(
-        dir=Row,
-        w=Fill(1.0),
         // a desktop's no wider than the desktop app's (web cloud/gate.css.ts `ways`)
-        max_w=if wide { sign_in_wide_w } else { c.width },
-        h=Px(50.0),
-        radius=25.0,
-        bg=t.p.text,
-        align=ACenter,
-        justify=JCenter,
+        style=desktop_sign_in_action.then(@ui.style(max_w=Fixed(if wide { sign_in_wide_w } else { c.width }))),
         id~,
         fn() {
           c.text(
@@ -1039,10 +1055,7 @@ fn sign_in_body(c : @ui.Ctx, src : Source) -> Unit {
             } else {
               tr("android-settings.signIn.google")
             },
-            size=16.0,
-            weight=600,
-            color=t.p.bg,
-            wrap=false,
+            style=desktop_sign_in_action_words,
           )
           |> ignore
           // SignIn.kt: clip(CircleShape).clickable
@@ -1055,9 +1068,7 @@ fn sign_in_body(c : @ui.Ctx, src : Source) -> Unit {
       if !wide {
         c.text(
           tr("android-settings.signIn.many"),
-          size=12.0,
-          color=t.p.muted,
-          wrap=false,
+          style=desktop_sign_in_many,
         )
         |> ignore
       }

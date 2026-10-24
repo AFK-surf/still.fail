@@ -3,7 +3,7 @@
 fn tester(mode : String) -> @ui.Tester {
   reset()
   let src = fixture(mode)
-  @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0)
+  @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0, platform=if mode == "signin" { 1 } else { 0 })
 }
 
 ///|
@@ -16,13 +16,25 @@ test "signed out: the existing title, explicit web action and persistent account
 }
 
 ///|
-test "signed out: wide windows retain the account notice and welcome copy" {
+test "signed out: wide touch windows retain the account notice and welcome copy" {
   reset()
   let src = fixture("signin")
-  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=1280.0, h=800.0, platform=0)
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=1280.0, h=800.0, platform=1)
   assert_true(t.find("让 agent 持续工作") is Some(_))
   assert_true(t.find(tr("login.accountNotice")) is Some(_))
   assert_true(t.find("通过网页登录") is Some(_))
+}
+
+///|
+test "signed out: desktop browser sign-in is stable at narrow and wide widths" {
+  for width in [390.0, 1280.0] {
+    reset()
+    let src = fixture("signin")
+    let t = @ui.Tester::new(fn(c) { view(c, src) }, w=width, h=800.0, platform=0)
+    assert_true(t.find(tr("android-settings.signIn.google")) is Some(_))
+    assert_true(t.find(tr("login.reviewAction")) is None)
+    assert_false(reviewer_open.val)
+  }
 }
 
 ///|

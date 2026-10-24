@@ -234,8 +234,12 @@ module TestFlight
     runs.length < 100 || earlier.any? { |r| r['status'] == 'completed' && r['conclusion'] == 'success' }
   end
   def self.jobs_prove_preupload?(payload)
-    jobs = payload.fetch('jobs')
-    return false unless payload.fetch('total_count') == jobs.length && jobs.length.between?(1, 100)
+    jobs = payload['jobs']
+    total = payload['total_count']
+    return false unless jobs.is_a?(Array) && total.is_a?(Integer) && total == jobs.length && jobs.length <= 100
+    # GitHub concurrency can cancel a queued run before any job executes.
+    # A complete all-attempt zero-job response positively proves no execution.
+    return true if jobs.empty?
     jobs.all? do |job|
       steps = Array(job['steps'])
       boundary = steps.select { |s| [IDENTITY_STEP, UPLOAD_STEP].include?(s['name']) }

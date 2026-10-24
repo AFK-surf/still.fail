@@ -38,9 +38,11 @@ Ampo 已按所有者确认的实现和范围清除本次免文档加密门槛：
 
 ## 已验证与仍需验证
 
-受管理的最终离线脚本测试 run `cc860eb6-c88c-4f25-aed2-6a0de5cb2025`：12 tests / 59 assertions 通过，Ruby syntax 与 workflow YAML 通过。测试覆盖合成证书/API key、XML DATE/DATA、错误 profile、版本分配、失败阶段、GET 有界重试与 POST 不重放、处理与组分配 fixture，以及完整原始历史页、跨尝试的上传边界、过期或删除凭据清单后的保守停止。此前 10/46 为中间记录，最终补丁另经独立源码复核，无剩余具体阻断；不是云端上传证据。
+受管理的离线脚本测试 run `cb0cda04-b7bf-4970-8095-693f959ae0e4`：12 tests / 64 assertions 通过，Ruby syntax 与 workflow YAML 通过。此前 `cc860eb6-c88c-4f25-aed2-6a0de5cb2025` 为 12/59；本轮补充完整零 job 的排队取消恢复及字段、类型、数量不符拒绝。测试覆盖合成证书/API key、XML DATE/DATA、错误 profile、版本分配、失败阶段、GET 有界重试与 POST 不重放、处理与组分配 fixture，以及完整原始历史页、跨尝试的上传边界、过期或删除凭据清单后的保守停止。此前 10/46 为中间记录，最终补丁另经独立源码复核，无剩余具体阻断；不是云端上传证据。
 
-本机 `runbuild --sign` 已多次证明新 app 可以分发签名，最新既有签名包为 0.1.4756（4756），未上传。真实 iOS 17 预览中最小键盘修复已验证；这些都不是本次云端发布的替代证据。
+本轮整合最终检查已通过：`mbui_checks` run `a9025102-a004-4f68-9af0-c4f6e7642f78`，1979 warnings / 0 errors，detlint 通过；样式基线仅将 app.mbt 的 style-literal 从 17 收紧为 16，未放宽规则。`reviewer_ui` run `3c0664b3-9680-441f-8d95-7735eaaca038`，695/695；账号安全 run `b0fdedcc-1259-46d9-9899-1e5a04dd0c12`，55/55；类型 run `2495d775-d4d8-4eb3-acbc-b60cb18c7667` 通过。桌面手机路由与同值命名样式另经独立源码复核，没有具体剩余阻断；不是渲染或实际 VoiceOver 验收。
+
+最终本机签名 run `12092067-62c7-446e-9816-0c1c59ef78a6`：0.1.4866（4866），IPA SHA256 `0f0869a653cf68b98af85350f803a9882e41270f19067852814d68e1853c0db6`。导出后严格深层签名、主 app/Share 的 ID/team/App Group、最低 iOS 17、core.hbc 与免文档加密声明复验通过。此包未安装、未上传。当前预览仍是此前已验证最小键盘修复的版本，不把它的截图作为本次整合树证据。本地结果均不是本次云端发布的替代证据。
 
 完整验收必须记录：最终源码 SHA、真实 Actions run/触发方式、签名 IPA 版本与 SHA256、Apple build ID/处理结果、批准的内部成员与组、实际 TestFlight 安装证据。当前无正向端到端发布记录。
 
@@ -52,7 +54,7 @@ Ampo 已按所有者确认的实现和范围清除本次免文档加密门槛：
 
 `.airbuild/`、下载工具、缓存、签名材料、生成工程不入 Git。保持窄暂存，不清理已有未跟踪文件。远端 main 正在独立演进，发布前在隔离 worktree 合并验证，不 force-push，不以旧本地树覆盖远端。
 
-本次发布配置没有改变业务动作/权限/部署目标，复用现有 `intent-opportunities.md`；现有 App Intents 零项，可实施首批零项。
+发布配置本身没有改变业务动作，但本次整合引入了上游记忆/skill 业务契约变化，因此已重跑评估并更新 `intent-opportunities.md`。现有 App Intents 零项，可实施首批零项；新增“打开指定站点记忆/skill 文档”候选仍待真实授权、桥接和 API 证据。
 
 ## 参考
 

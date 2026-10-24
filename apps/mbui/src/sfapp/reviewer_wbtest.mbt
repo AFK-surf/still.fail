@@ -82,7 +82,7 @@ test "review leaving an account addition keeps the original account and invalida
       } else { done(Ok(Json::null())) }
     },
   }
-  let t = @ui.Tester::new(fn(c) { view(c, source) }, w=390.0, h=844.0)
+  let t = @ui.Tester::new(fn(c) { view(c, source) }, w=390.0, h=844.0, platform=1)
   login_adding.val = true
   reviewer_open.val = true
   reviewer_email.set("review@example.com")
@@ -130,7 +130,7 @@ test "review final save is phase-bound, bounded, and recovery retries only the o
       else { done(Ok((Json::null(), Bytes::new(0)))) }
     },
   }
-  let t = @ui.Tester::new(fn(c) { view(c, source) }, w=390.0, h=844.0)
+  let t = @ui.Tester::new(fn(c) { view(c, source) }, w=390.0, h=844.0, platform=1)
   t.native_answers("accessibility.reviewError", fn(_) { Json::null() })
   login_adding.val = true
   reviewer_open.val = true
@@ -187,7 +187,7 @@ test "review error focus is requested once per error, not each countdown tick or
   reset()
   let now = Ref(0.0)
   let source : Source = { ..fixture("signin"), now: fn() { now.val } }
-  let t = @ui.Tester::new(fn(c) { view(c, source) }, w=390.0, h=844.0)
+  let t = @ui.Tester::new(fn(c) { view(c, source) }, w=390.0, h=844.0, platform=1)
   t.native_answers("accessibility.reviewError", fn(_) { Json::null() })
   reviewer_open.val = true
   t.frame()
@@ -294,7 +294,7 @@ test "review passive native reveal preserves editor focus in a keyboard-constrai
   let t = @ui.Tester::new(fn(c) {
     login_page(c, source, true)
     viewport.val = c.laid_rect(c.id("login/review-scroll"))
-  }, w=320.0, h=560.0)
+  }, w=320.0, h=560.0, platform=1)
   t.native_answers("accessibility.reviewError", fn(_) { Json::null() })
   t.frame()
   // Like ios_app.m: resize the app frame AND report the declared IME inset.
@@ -343,7 +343,7 @@ test "review native tap and Next reveal focused editors after host keyboard resi
   let t = @ui.Tester::new(fn(c) {
     login_page(c, source, true)
     viewport.val = c.laid_rect(c.id("login/review-scroll"))
-  }, w=320.0, h=780.0)
+  }, w=320.0, h=780.0, platform=1)
   t.frame()
   let (_, _, _, full_height) = viewport.val.unwrap()
   assert_eq(full_height, 780.0 - status_top() - nav_foot())

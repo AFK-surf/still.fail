@@ -9,7 +9,7 @@ pub let login_action : @ui.Style = @ui.style(
 )
 
 ///|
-pub let login_primary_action : @ui.Style = login_action.then(@ui.style(bg=Fg))
+pub let login_primary_action : @ui.Style = login_action.then(@ui.css("bg=Fg"))
 
 ///|
 pub let login_action_words : @ui.TextStyle = @ui.text_style(size=Xl2, weight=Semibold, center=true, w=Full, color=Fg)
@@ -18,7 +18,7 @@ pub let login_action_words : @ui.TextStyle = @ui.text_style(size=Xl2, weight=Sem
 pub let login_primary_words : @ui.TextStyle = login_action_words.then(@ui.text_style(color=Bg))
 
 ///|
-pub let login_page : @ui.Style = @ui.style(w=Full, p=S6, align=ACenter)
+pub let login_page : @ui.Style = @ui.css("w=Full p=S6 align=ACenter")
 
 ///|
 pub let login_column : @ui.Style = @ui.style(w=Full, max_w=phone_max, gap=S4)
@@ -42,7 +42,7 @@ pub let login_welcome_body : @ui.TextStyle = login_explanation.then(@ui.text_sty
 pub let login_hint : @ui.TextStyle = @ui.text_style(size=Sm, color=Muted, w=Full)
 
 ///|
-pub let login_notice : @ui.Style = @ui.style(w=Full, p=S4, radius=Xl, bg=Card)
+pub let login_notice : @ui.Style = @ui.css("w=Full p=S4 radius=Xl bg=Card")
 
 ///|
 pub let login_field_label : @ui.TextStyle = @ui.text_style(size=Xl2, weight=Semibold, color=Fg, w=Full)

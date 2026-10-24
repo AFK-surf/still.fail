@@ -73,7 +73,12 @@ class TestFlightTest < Minitest::Test
     refute TestFlight.jobs_prove_preupload?('total_count' => 1, 'jobs' => [attempted])
     refute TestFlight.jobs_prove_preupload?('total_count' => 1, 'jobs' => [{'steps' => []}])
     refute TestFlight.jobs_prove_preupload?('total_count' => 101, 'jobs' => [safe])
-    refute TestFlight.jobs_prove_preupload?('total_count' => 0, 'jobs' => [])
+    assert TestFlight.jobs_prove_preupload?('total_count' => 0, 'jobs' => [])
+    refute TestFlight.jobs_prove_preupload?('total_count' => 1, 'jobs' => [])
+    refute TestFlight.jobs_prove_preupload?('total_count' => 0, 'jobs' => [safe])
+    refute TestFlight.jobs_prove_preupload?('jobs' => [])
+    refute TestFlight.jobs_prove_preupload?('total_count' => 0)
+    refute TestFlight.jobs_prove_preupload?('total_count' => 0, 'jobs' => '')
     workflow = File.read(File.expand_path('../../../.github/workflows/mbui-testflight.yml', __dir__))
     assert_includes workflow, "name: #{TestFlight::IDENTITY_STEP}"
     assert_includes workflow, "name: #{TestFlight::UPLOAD_STEP}"
