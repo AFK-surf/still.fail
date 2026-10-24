@@ -2285,6 +2285,10 @@ fn Viewer::go(self : Viewer, c : @ui.Ctx, src : Source, dir : Int, velocity : Do
       pv_strip.near.remove(n.id())
       strip.snap(from + dir.to_double() * width)
       strip.animate(0.0, @motion.spring(ratio=1.0, stiffness=400.0), velocity~)
+      // the frame built again from the one it stepped to: a swipe let go steps in the middle of the stage's build,
+      // which would go on to draw this one's picture where the strip now puts the next one (a frame of this one in its
+      // place, or of nothing where the one before comes)
+      c.built_from_changed("the preview stepped")
       @ui.log("preview: stepped to \{n.file.name}")
     }
   }

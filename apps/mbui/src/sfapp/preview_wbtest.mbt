@@ -511,6 +511,43 @@ test "a swipe past a fifth of the stage goes to the next; a short one comes back
 }
 
 ///|
+/// The pictures drawn in the last frame (x, y, w, h), left to right.
+fn drawn_pictures(t : @ui.Tester) -> Array[(Double, Double, Double, Double)] {
+  let out = t.drawn_images().map(fn(i) { (i[0], i[1], i[2], i[3]) })
+  out.sort_by(fn(a, b) { a.0.compare(b.0) })
+  out
+}
+
+///|
+test "the frame a swipe is let go in shows both pictures where the finger left them, never this one where the next comes" {
+  for way in [(300.0, 100.0), (100.0, 300.0)] {
+    let t = preview_tester("step")
+    if way.0 < way.1 {
+      // from the second, back toward the first
+      t.drag(300.0, 422.0, 100.0, 422.0)
+      t.run_for(t.rest_of("preview/strip") - t.time())
+    }
+    let from = viewer.val.unwrap().file.name
+    t.hold_drag(way.0, 422.0, way.1, 422.0)
+    let held = drawn_pictures(t)
+    t.touch(2, way.1, 422.0)
+    t.frame()
+    assert_true(viewer.val.unwrap().file.name != from)
+    let drawn = drawn_pictures(t)
+    assert_eq(drawn.length(), held.length())
+    for i, d in drawn {
+      let h = held[i]
+      assert_true(
+        (d.0 - h.0).abs() < 0.001 &&
+        (d.1 - h.1).abs() < 0.001 &&
+        (d.2 - h.2).abs() < 0.001 &&
+        (d.3 - h.3).abs() < 0.001,
+      )
+    }
+  }
+}
+
+///|
 /// The viewer's image zoomed in by a double tap in its middle (2.5 times fitted: 915 × 610 on the 390 × 844 stage, 262.5
 /// to go either way across), the next taps a double tap of their own.
 fn zoom_in_middle(t : @ui.Tester) -> @kit.Zoom raise {
