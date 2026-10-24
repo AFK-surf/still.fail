@@ -5,7 +5,7 @@ import { appendFileSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
-import { PIECE, TranscriptTail } from "../src/read/tail.ts";
+import { ChainTail, PIECE, TranscriptTail } from "../src/read/tail.ts";
 import { brief, readTimeline } from "../src/read/transcript.ts";
 import { KEPT_ENTRIES, forgetKept, inBrief, keptNow } from "../src/read/transcripts.ts";
 
@@ -74,5 +74,41 @@ test("a reader keeps no more than its share, the least recently read let go firs
   assert.equal(now.chains, 2);
   assert.ok(now.entries <= KEPT_ENTRIES);
   forgetKept();
+  rmSync(dir, { recursive: true, force: true });
+});
+
+test("where a reading stands goes to another thread: a tail made from it reads on as the one it was taken of, keeping none", () => {
+  const dir = temp();
+  const path = join(dir, "t.jsonl");
+  const half = said("three", "m3");
+  writeFileSync(path, said("one", "m1") + said("two", "m2") + half.slice(0, 15));
+  const there = new TranscriptTail("claude", path, brief);
+  there.read();
+  const state = JSON.parse(JSON.stringify(there.snapshot()));
+  appendFileSync(path, half.slice(15) + said("four", "m4"));
+  const here = TranscriptTail.from("claude", state);
+  const [start, entries] = here.read();
+  assert.deepEqual([start, entries.map((e) => e.text)], [2, ["three", "four"]]);
+  assert.deepEqual([here.keeps, here.length, here.entries.length], [false, 4, 0]);
+  // Its usage as a read from the start counts it.
+  const whole = new TranscriptTail("claude", path);
+  whole.read();
+  assert.deepEqual(here.usage, whole.usage);
+  rmSync(dir, { recursive: true, force: true });
+});
+
+test("a chain that keeps nothing tells all that follows one of its transcripts that changed, numbered on", () => {
+  const dir = temp();
+  const [a, b] = ["a", "b"].map((n) => join(dir, `${n}.jsonl`));
+  writeFileSync(a!, said("a1", "a1"));
+  writeFileSync(b!, said("b1", "b1"));
+  const chain = new ChainTail("claude", [a!, b!], null, false);
+  assert.deepEqual(chain.read()[0], 0);
+  assert.equal(chain.length, 2);
+  // The first grew (its runtime session is over, rarely): what follows it is told again, after it.
+  appendFileSync(a!, said("a2", "a2"));
+  const [from, told] = chain.read();
+  assert.deepEqual([from, told.map((e) => e.text)], [1, ["a2", "b1"]]);
+  assert.equal(chain.length, 3);
   rmSync(dir, { recursive: true, force: true });
 });

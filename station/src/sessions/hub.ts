@@ -196,8 +196,13 @@ export class Hub {
       if (change.type === "session") this.live.running(change.key, this.store.getSession(change.key)?.running === true);
       else if (change.type === "sessionRemoved") this.live.running(change.key, false);
     });
-    for (const row of this.store.listSessions()) if (row.running) this.live.running(row.key, true);
     this.deps = this.sessionDeps();
+  }
+
+  /// The sessions at work as the station starts are followed (live.ts `running`): once where their history is read
+  /// is set (agents.ts), so none is read on the main thread.
+  followRunning() {
+    for (const row of this.store.listSessions()) if (row.running) this.live.running(row.key, true);
   }
 
   config(): HubConfig {

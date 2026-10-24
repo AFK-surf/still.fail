@@ -21,13 +21,13 @@ import * as store from "./store.ts";
 import type { AuthorKind, Json, SessionRow, Store, ThreadRow, ThreadSummary } from "./store.ts";
 import { setLang, tr } from "./spoken.ts";
 import { readTimeline, transcriptPaths } from "./transcript.ts";
-import { inBrief } from "./transcripts.ts";
+import { inBrief, stateOf } from "./transcripts.ts";
 import { HttpError, messageView } from "./views.ts";
 import { type Thumbnail, SMALL, dir as thumbsDir, idOf, kept, wanted as thumbWanted } from "../drive/thumbs.ts";
 import { parseUsize } from "./jobs.ts";
 import { agentHomeOf } from "./memory.ts";
 import { shown } from "./jobs.ts";
-import { runtimeKind } from "../agents/runtime.ts";
+import { type RuntimeKind, runtimeKind } from "../agents/runtime.ts";
 import { protectedPlace } from "../drive/fs.ts";
 import { realOutside } from "../ops/places.ts";
 import { platform } from "../platform/index.ts";
@@ -286,16 +286,11 @@ export function parseI64(text: string): number | null {
 /// session's profile (hub.rs `locate`); none found: nothing.
 export function timeline(s: Store, key: string, beforeParam: string | undefined, limitParam: string | undefined, lang: Lang, fromParam?: string, toParam?: string, briefParam?: string, afterParam?: string): Json {
   setLang(lang);
-  const row = sessionRow(s, key);
   const before = parseUsize(beforeParam) ?? 0;
   const limit = Math.min(Math.max(parseUsize(limitParam) ?? 200, 1), 1000);
-  const profile = configOf(s).profiles.find((p) => p.id === row.profile);
-  const runtime = runtimeKind(row.runtime) ?? null;
-  // None now (its context cleared) still reads those it ran in.
-  if (!profile || runtime === null || store.runtimeSessions(s, key).length === 0) return { start: 0, entries: [], end: 0 };
-  // Those of the runtime sessions it ran in before come first (sessions/afresh.ts).
-  const homes = [profile.home, ...configOf(s).profiles.map((p) => p.home).filter((h) => h !== profile.home)];
-  const { paths } = transcriptPaths(runtime, homes, store.runtimeSessions(s, key));
+  const found = transcriptsOf(s, key);
+  if (found === null) return { start: 0, entries: [], end: 0 };
+  const { runtime, paths } = found;
   // In brief, from what this reader keeps read (read/transcripts.ts); whole, from the files.
   const entries = briefParam === "1" ? inBrief(runtime, paths) : paths.flatMap((path) => readTimeline(runtime, path));
   const end = entries.length;
@@ -313,6 +308,24 @@ export function timeline(s: Store, key: string, beforeParam: string | undefined,
   const upto = Math.min(before, entries.length);
   const start = Math.max(0, upto - limit);
   return { start, entries: entries.slice(start, upto), end };
+}
+
+/// A session's transcripts, through its profile (hub.rs `locate`): those of the runtime sessions it ran in before first
+/// (sessions/afresh.ts), and none now (its context cleared) still reads those it ran in. Null: none found.
+function transcriptsOf(s: Store, key: string): { runtime: RuntimeKind; paths: string[] } | null {
+  const row = sessionRow(s, key);
+  const profile = configOf(s).profiles.find((p) => p.id === row.profile);
+  const runtime = runtimeKind(row.runtime) ?? null;
+  if (!profile || runtime === null || store.runtimeSessions(s, key).length === 0) return null;
+  const homes = [profile.home, ...configOf(s).profiles.map((p) => p.home).filter((h) => h !== profile.home)];
+  return { runtime, paths: transcriptPaths(runtime, homes, store.runtimeSessions(s, key)).paths };
+}
+
+/// Where the reading of a session's transcripts stands (read/transcripts.ts `stateOf`), for its live view to go on from
+/// (sessions/live.ts): no read of the transcripts' past on the station's main thread. `states` null: none found.
+export function transcriptState(s: Store, key: string): Json {
+  const found = transcriptsOf(s, key);
+  return { states: found === null ? null : stateOf(found.runtime, found.paths) };
 }
 
 /// GET /sessions/:key/transcript: where its runtime keeps the session's transcript on this machine (the current runtime

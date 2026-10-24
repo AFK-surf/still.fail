@@ -217,8 +217,13 @@ The archive and hide columns (`archived_by`, `shown_at`, `cwd`, `home`,
   written; a watcher asking past the end is told where it ends). The rest comes
   from `GET /sessions/:key/timeline`: `?before=&limit=` (a page before),
   `?after=&limit=` (what comes after an entry), `?from=&to=` (a stretch), each
-  answer saying how many entries there are (`end`). The station keeps each
-  watched transcript parsed incrementally, and a reader keeps those it was asked
+  answer saying how many entries there are (`end`). The live view reads none
+  of a transcript's past on the main thread: a session it starts to watch goes
+  on from where the reader that keeps its history stands (the `transcriptState`
+  read: offsets, counts and what a read keeps between lines, `read/tail.ts`
+  `snapshot`), counting what came before without keeping it, and a listener
+  that lacks some of it is given it from there (what is said meanwhile told
+  after). A reader keeps those it was asked
   pages of in brief (`read/transcripts.ts`, at most 40,000 entries, the least
   recently read let go; the pool sends a session's pages to the reader that read
   it last), so a page is a slice and a read goes on from where the last left
