@@ -13,7 +13,9 @@
 /// box they are in where the search's bar goes under it (a phone's status bar, the sidebar's top row), their ground (what a
 /// row's faces' rings are cut in), what stands at a list's top before its words and rows (`before`) and after its
 /// words (`after`), each said for a list's filter and its view; the lists on the track after the three (each drawn the
-/// pane's whole), and which of all of them is shown (0 all, 1 mine, 2 watching, then the others').
+/// pane's whole), and which of all of them is shown (0 all, 1 mine, 2 watching, then the others'); whether it is a
+/// panel of its own beside a rail (`beside_rail`): a finger's rows and days' headings 16 and 14 in from its left, as
+/// far as from its right, not a phone's 22 and 20 from the screen's edge.
 pub(all) struct ListsFrame {
   top : Double
   foot : Double
@@ -23,6 +25,7 @@ pub(all) struct ListsFrame {
   after : (String, ChatsView?) -> Array[ListPart]
   others : Array[() -> Unit]
   shown : Int
+  beside_rail : Bool
 }
 
 ///|
@@ -37,7 +40,7 @@ pub(all) struct ListPart {
 ///|
 /// A frame's lists with nothing of the frame's own in them.
 pub fn bare_lists(top : Double, foot : Double, inset : Double, ground : Int64, shown : Int) -> ListsFrame {
-  { top, foot, inset, ground, before: fn(_, _) { [] }, after: fn(_, _) { [] }, others: [], shown }
+  { top, foot, inset, ground, before: fn(_, _) { [] }, after: fn(_, _) { [] }, others: [], shown, beside_rail: false }
 }
 
 ///|
@@ -290,7 +293,7 @@ fn chats_pane(c : @ui.Ctx, src : Source, w : Workspace, filter : String, frame :
           Part(p) => (p.draw)()
           Wait(note, error) => list_waiting(c, note, error)
           Empty(v) => list_empty(c, v, filter)
-          Heading(label) => list_heading(c, label)
+          Heading(label) => list_heading(c, label, beside_rail=frame.beside_rail)
           Row(item) => {
             let name = key + "\u{1}" + key_at(i)
             let on = match open {
@@ -304,6 +307,7 @@ fn chats_pane(c : @ui.Ctx, src : Source, w : Workspace, filter : String, frame :
               lead,
               on~,
               list_ground=frame.ground,
+              beside_rail=frame.beside_rail,
               more=i + 1 < count && line_at(i + 1) is Row(_),
               lifted=@motion.lifted(c, lid, name),
               unghost=fn(off) { @motion.list_unghost(c, lid, name, off~) },
@@ -429,9 +433,13 @@ fn list_space(c : @ui.Ctx, h : Double) -> Unit {
 /// A day's heading (SidebarList.tsx NavSection): a mouse's 12 on 18, muted, 14 above and 4 under (Sidebar.css.ts
 /// navHeading); a finger's the phone's, 15 bold in ink, 20 in, 14 above and 6 under (SidebarList.css.ts
 /// phoneHeading, Parts.kt SectionHeader).
-pub fn list_heading(c : @ui.Ctx, label : String) -> Unit {
+pub fn list_heading(c : @ui.Ctx, label : String, beside_rail? : Bool = false) -> Unit {
   if @sf.touch_system() {
-    c.box(style=heading_touch, fn() { c.text(label, style=heading_touch_words) |> ignore }) |> ignore
+    // (in from the list's left as its rows are, 2 less: a phone's 20 to its rows' 22, beside a rail 14 to 16)
+    c.box(style=if beside_rail { heading_beside_rail } else { heading_touch }, fn() {
+      c.text(label, style=heading_touch_words) |> ignore
+    })
+    |> ignore
   } else {
     c.box(style=heading_mouse, fn() { c.text(label, style=heading_mouse_words) |> ignore }) |> ignore
   }
@@ -448,6 +456,10 @@ let heading_mouse_words : @ui.TextStyle = @ui.text_style(size=Xs, color=Muted, l
 ///|
 // kept across runs: a value (no field of it changes)
 let heading_touch : @ui.Style = @ui.css("w=Full px=S5 pt=S3_5 pb=S1_5")
+
+///|
+// kept across runs: a value (no field of it changes)
+let heading_beside_rail : @ui.Style = @ui.css("w=Full pl=S3_5 pr=S5 pt=S3_5 pb=S1_5")
 
 ///|
 // kept across runs: a value (no field of it changes)

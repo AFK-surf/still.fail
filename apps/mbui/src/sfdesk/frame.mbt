@@ -795,7 +795,9 @@ fn tape_peek(width : Double) -> Double {
 /// What moves as the other comes over on the tape: the tape (how far it is moved), as the sidebar moves (380 ms, its
 /// ease out).
 // kept across runs: a table, never written
-let tape_moves : Array[(String, Array[String])] = [("tape", ["--tape-x"])]
+let tape_moves : Array[(String, Array[String])] = [
+  ("tape", ["--tape-x", "--behind-side", "--behind-page", "--behind-panel"]),
+]
 
 ///|
 /// Where the tape is with each of its panels in use, a window `width` wide (`d`: where the page's panel starts on it,
@@ -920,12 +922,24 @@ let tape_unknown : String = "?"
 /// What `body` draws of panel `p` (its answer): on the tape behind the one in use, on the ground a step darker
 /// (@sf.behind_ground), what is on it as it is; in use, or off the tape, on its own.
 fn[T] tape_behind(c : @ui.Ctx, p : TapePane, body : () -> T) -> T {
-  if !wide.tape || wide.tape_at == p {
+  // (how far behind it is: as far as the tape's move has got, the tape and its grounds one move: tape_moves)
+  let k = if wide.tape { c.moved(tape_behind_var(p), if wide.tape_at == p { 0.0 } else { 1.0 }) } else { 0.0 }
+  if k <= 0.0 {
     return body()
   }
   let mut out : T? = None
-  @sf.with_ground(c, @sf.behind_ground(), fn() { out = Some(body()) })
+  @sf.with_ground(c, @sf.behind_ground(k~), fn() { out = Some(body()) })
   out.unwrap()
+}
+
+///|
+/// The move's name for how far panel `p` is behind (tape_moves).
+fn tape_behind_var(p : TapePane) -> String {
+  match p {
+    Side => "--behind-side"
+    Page => "--behind-page"
+    Panel => "--behind-panel"
+  }
 }
 
 ///|

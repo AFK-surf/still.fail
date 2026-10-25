@@ -17,9 +17,12 @@ fn lists_band(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
     c.box(style=if in_bar { band_new_bar } else if wide.tape { band_new_tape() } else { nav_new }, fn() {
       let is_new = app.nav.top() is NewChat
       c.box(style=side_full, fn() {
+        // (on the tape over a finger's rows 16 in: its icon over their marks, its words where their titles start)
+        let (icon_back, words_back) = if wide.tape { (tape_new_icon_back, tape_new_words_back) } else { (0.0, 0.0) }
         if nav_row(c, "side/new", is_new, fn() {
-            c.box(tx=-compose_in, fn() { @sf.icon(c, "compose", size=side_icon, color=t.p.muted) |> ignore }) |> ignore
-            nav_words(c, @sf.t("web-main.sidebar.newChat"))
+            c.box(tx=-compose_in - icon_back, fn() { @sf.icon(c, "compose", size=side_icon, color=t.p.muted) |> ignore })
+            |> ignore
+            c.box(style=side_full, tx=-words_back, fn() { nav_words(c, @sf.t("web-main.sidebar.newChat")) }) |> ignore
           }) {
           new_chat()
         }
@@ -95,6 +98,15 @@ let side_icon : Double = 16.0
 
 ///|
 let compose_in : Double = 1.0
+
+///|
+/// On the tape, how far 新建对话's icon and words are drawn back from where its row lays them (its 8 and 10 in, the
+/// icon 16 and 8 to its words) to stand over the chats' rows beside the rail (16 in, a mark's 10 and 8 to the title):
+/// the icon's middle over a mark's, the words where a title starts (pengxiao, 2026-10-25: 新建对话 not in line).
+let tape_new_icon_back : Double = 4.0
+
+///|
+let tape_new_words_back : Double = 8.0
 
 ///|
 /// A new chat (新建对话, ⌘N): where the shell has it (beside the list on the wide frame, risen on the stack). On the tape

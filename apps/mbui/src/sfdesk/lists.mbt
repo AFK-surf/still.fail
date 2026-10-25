@@ -32,6 +32,9 @@ fn lists_side(c : @ui.Ctx, src : Source, w : Workspace, width : Double) -> Unit 
   let frame : @sfpages.ListsFrame = {
     ..@sfpages.bare_lists(band, 0.0, side_top_h(), if side_folded() || wide.tape { apart_ground() } else { t.p.sidebar }, mode),
     others: [fn() { decisions_pane(c, src, w) }, fn() { archive_pane(c, src, w) }],
+    // on the tape, a panel of its own beside the rail: its rows as far in from its left as from its right (16), not a
+    // phone's 22 from the screen's edge (pengxiao, 2026-10-25: the list too far from the rail)
+    beside_rail: wide.tape,
   }
   // under a finger's search (sfpages' search.mbt): the band and the foot away with the lists, the search over them
   let away = @sfpages.search_away(c)

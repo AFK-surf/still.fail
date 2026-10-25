@@ -102,7 +102,7 @@ let row_held : Ref[(Int, Bool)] = Ref((0, false))
 /// `lifted`: how far it is in going ahead of others (its ground of its own over them; -1 not); `unghost` whether it
 /// leaves the list without a copy (swiped off), or with one again. `found`: a chat a search found (pressed alone: not
 /// held, archived nor swiped); `opened`: what a press does instead of opening its chat. Its answer is the box that
-/// moves as the list changes.
+/// moves as the list changes. `beside_rail`: a finger's row in a list beside a rail, 16 in from its left (ListsFrame).
 pub fn chat_row(
   c : @ui.Ctx,
   src : Source,
@@ -115,6 +115,7 @@ pub fn chat_row(
   found? : Bool = false,
   opened? : (ChatRef) -> Unit,
   unghost? : (Bool) -> Unit = fn(_) {  },
+  beside_rail? : Bool = false,
 ) -> Int {
   let t = @sf.theme()
   // (how it looks and what it offers by the screen; how it answers by the hand: docs/architecture.md)
@@ -217,7 +218,9 @@ pub fn chat_row(
     // (what shows of it over the list's: what its faces' rings are cut in)
     let face_ground = @sf.over(list_ground, ground)
     c.box(style=if more && !touch { row_more } else { row_last }, tx~, fn() {
-      c.box(style=look.row.then(@ui.style(bg=Data(ground))), id~, fn() {
+      // (a finger's beside a rail: as far in from its list's left as from its right)
+      let row = if touch && beside_rail { look.row.then(row_beside_rail) } else { look.row }
+      c.box(style=row.then(@ui.style(bg=Data(ground))), id~, fn() {
         if archivable {
           archive_chip(c, src, item, busy)
         }
@@ -413,6 +416,10 @@ let touch_look : RowLook = {
   title_unread: @ui.text_style(size=Xl, weight=Semibold, color=Fg, leading=L7, wrap=false, w=Full),
   last: @ui.text_style(size=Base, color=Muted, leading=L6, wrap=false, w=Full),
 }
+
+///|
+// kept across runs: a value (no field of it changes)
+let row_beside_rail : @ui.Style = @ui.css("pl=S4")
 
 ///|
 /// A finger's row's height and its title's line (mobile/Home.css.ts mChatRow, mChatLine1).

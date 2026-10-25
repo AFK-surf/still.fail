@@ -605,3 +605,52 @@ test "on the tape the panels behind the one in use stand on a ground a step dark
     assert_true(grounds_at(t, rx, ry).contains(behind), msg="dark \{dark}: the sidebar behind")
   }
 }
+
+///|
+test "on the tape a panel's ground goes behind or comes in front with the tape's move, not at once" {
+  let t = tape_chat(2, 750.0, 830.0, width="medium", height="medium")
+  let behind = @sf.behind_ground()
+  let bg = @sf.theme().p.bg
+  let (mx, my) = t.find("做完了：列表、跳到最新的按钮").unwrap()
+  assert_true(grounds_at(t, mx - 4.0, my).contains(behind))
+  // what shows of the page pressed: half way over, its ground half way back to the page's
+  t.tap(750.0 - 40.0, 400.0)
+  t.run_for(@sfdesk.side_move_ms / 2.0)
+  let (mx, my) = t.find("做完了：列表、跳到最新的按钮").unwrap()
+  // (the ground on top there: the page's panel's, its message's own drawn on it clear)
+  let half = grounds_at(t, mx - 4.0, my).filter(fn(g) { g != 0L })[0]
+  assert_true(half != behind && half != bg, msg="\{half}")
+  t.run_for(@sfdesk.side_move_ms)
+  let (mx, my) = t.find("做完了：列表、跳到最新的按钮").unwrap()
+  assert_false(grounds_at(t, mx - 4.0, my).contains(behind))
+}
+
+///|
+test "on the tape the sidebar's rows stand 16 in from its left, as from its right; a phone's 22 from the screen's edge" {
+  let t = tape_chat(2, 750.0, 830.0, width="medium", height="medium")
+  // the sidebar's panel 6 from the window's edge, its list from 8 into the rail inside its line (1): a row's words
+  // without a mark before them 16 in from there
+  let (x, _, _, _) = t.rect_of("Slack 里问的报销流程").unwrap()
+  assert_eq(x, @sfdesk.closed_bar_in + @sfdesk.rail_w - 8.0 + 1.0 + 16.0)
+  let p = tape_chat(2, 390.0, 844.0, width="compact", height="medium")
+  p.run_for(@ui.nav_push_ms)
+  p.back()
+  p.run_for(@ui.nav_push_ms)
+  let (x, _, _, _) = p.rect_of("Slack 里问的报销流程").unwrap()
+  assert_eq(x, 22.0)
+}
+
+///|
+test "on the tape 新建对话 is in line with the chats' rows under it: its icon over their marks, its words where their titles start" {
+  let t = tape_chat(2, 750.0, 830.0, width="medium", height="medium")
+  let (wx, _, _, _) = t.rect_of("新建对话").unwrap()
+  let (tx, _, _, _) = t.rect_of("首页的列表改成按天分组").unwrap()
+  assert_eq(wx, tx)
+  // the icon's middle and the row's mark's (its status dot, 10 across) within a point
+  let marks = t.boxes().filter(fn(b) { b.label == "工作中" && b.w == 10.0 })
+  let icons = t.boxes().filter(fn(b) { b.w == 16.0 && b.h == 16.0 && b.y < 100.0 && b.x > 60.0 && b.x < 90.0 })
+  assert_true(marks.length() > 0 && icons.length() > 0, msg="marks \{marks.length()}, icons \{icons.length()}")
+  let mc = marks[0].x + marks[0].w / 2.0
+  let ic = icons[0].x + icons[0].w / 2.0
+  assert_true((mc - ic).abs() <= 1.0, msg="mark's middle \{mc}, icon's \{ic}")
+}
