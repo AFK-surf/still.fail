@@ -17,9 +17,6 @@ export type InboundMessage = {
   addressed: boolean;
   /// Files shared with it, fetched (`download`) into the uploads of a session of its thread when it is recorded.
   files?: InboundFile[];
-  /// Said in a direct message (docs/private-chats.md): one with the bot alone (`one`: its sender), or a group's
-  /// (`group`: its people as `directMembers` says); absent in a channel or group chat.
-  direct?: "one" | "group";
 };
 
 /// A file shared with a message, as the platform holds it. `url`: where its bytes are; null where the platform keeps
@@ -78,8 +75,6 @@ export interface ChatSurface {
   api?(method: string, params: Record<string, Json>): Promise<Json>;
   /// A person's email, where the platform shares it.
   userEmail?(user: string): Promise<string | null>;
-  /// The people of a group direct message besides the bot (docs/private-chats.md); throws where it cannot say.
-  directMembers?(channel: string): Promise<string[]>;
   /// What is already known of a person, without waiting (unknown ones are fetched in the background).
   knownPerson?(user: string): Person | null;
   knownChannel?(channel: string): string | null;

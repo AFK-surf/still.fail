@@ -9,7 +9,7 @@ import type { Hub } from "../sessions/hub.ts";
 import { sessionSend } from "../sessions/messages.ts";
 import { chatCreate } from "../sessions/opened.ts";
 import type { Args } from "../sessions/args.ts";
-import { chatList, chatRead, elsewhere, readAfar, readerOf, scopeOf, sessionHistory } from "../sessions/others.ts";
+import { chatList, chatRead, elsewhere, readAfar, scopeOf, sessionHistory } from "../sessions/others.ts";
 import { suggestArchive } from "../sessions/review.ts";
 import { STILLFAIL_SURFACE } from "../store/store.ts";
 import type { Tool } from "./mcp.ts";
@@ -477,6 +477,6 @@ export function chatTools(hub: Hub): Tool[] {
     { ...CHAT_READ, run: (key, args) => afar(hub, key, "chat_read", args) ?? chatRead(hub, key, args, undefined, scopeOf(hub, key)) },
     { ...SESSION_SEND, run: (key, args) => withStaged(hub, key, args, false, (a) => sessionSend(hub, key, a)) },
     { ...CHAT_CREATE, run: (key, args) => withStaged(hub, key, args, false, (a) => chatCreate(hub, key, a)) },
-    { ...SESSION_HISTORY, run: async (key, args) => afar(hub, key, "session_history", args) ?? sessionHistory(hub, args, scopeOf(hub, key), readerOf(hub, key)) },
+    { ...SESSION_HISTORY, run: async (key, args) => afar(hub, key, "session_history", args) ?? sessionHistory(hub, args, scopeOf(hub, key)) },
   ];
 }

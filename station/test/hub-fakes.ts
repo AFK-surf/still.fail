@@ -35,9 +35,6 @@ export class FakeChat implements ChatSurface {
   /// The bytes of files shared in messages, by file id (others cannot be read); the ids fetched, in order.
   shared = new Map<string, string>();
   downloads: string[] = [];
-  /// People's emails, by user id (those not here: none shared); a group direct message's people, by channel.
-  emails = new Map<string, string>();
-  groups = new Map<string, string[]>();
 
   constructor(bot: string) {
     this.bot = bot;
@@ -68,14 +65,6 @@ export class FakeChat implements ChatSurface {
     const bytes = this.shared.get(file.id);
     if (bytes === undefined) throw new Error("missing_scope");
     return new TextEncoder().encode(bytes);
-  }
-  async userEmail(user: string) {
-    return this.emails.get(user) ?? null;
-  }
-  async directMembers(channel: string) {
-    const people = this.groups.get(channel);
-    if (people === undefined) throw new Error("missing_scope");
-    return people;
   }
   working(thread: ThreadRef, messageTs: string | null, status: string) {
     this.statuses.push([`${thread.channel}/${thread.threadTs}`, messageTs, status]);

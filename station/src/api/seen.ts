@@ -1,15 +1,17 @@
-// What of the station's chats a viewer sees (docs/multi-workspace.md): those of their own workspace, but for those private
-// to other people (docs/private-chats.md). A request that names a session, a chat, a job or a published snapshot of
-// another workspace, or private to others, is answered as one naming what is not there.
+// What of the station's chats a viewer sees (docs/multi-workspace.md): those of their own workspace. A request that names
+// a session, a chat, a job or a published snapshot of another workspace is answered as one naming what is not there.
 import { percentDecode } from "./request.ts";
-import { type InWorkspace, seesChat, seesMembers } from "../store/rows.ts";
+import { type InWorkspace, sees } from "../store/rows.ts";
 import type { Store } from "../store/store.ts";
 
 /// Whether `viewer` sees a session (one not there: the home workspace's).
-export const sessionSeen = (store: Store, viewer: InWorkspace, key: string) => seesChat(viewer, store.getSession(key) ?? { ws: null });
+export const sessionSeen = (store: Store, viewer: InWorkspace, key: string) => sees(viewer, store.getSession(key)?.ws ?? null);
 
-/// Whether `viewer` sees a thread (store/rows.ts `seesMembers`).
-export const threadSeen = (store: Store, viewer: InWorkspace, id: number): boolean => seesMembers(viewer, store.threadSessions(id).map((m) => store.getSession(m.session)));
+/// Whether `viewer` sees a thread: one of its sessions is in their workspace (a thread with none: the home one's).
+export function threadSeen(store: Store, viewer: InWorkspace, id: number): boolean {
+  const members = store.threadSessions(id);
+  return members.length === 0 ? sees(viewer, null) : members.some((m) => sessionSeen(store, viewer, m.session));
+}
 
 /// Whether `viewer` sees a job: its session is theirs.
 export const jobSeen = (store: Store, viewer: InWorkspace, id: string) => {

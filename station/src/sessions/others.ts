@@ -3,7 +3,7 @@
 // what its agents did.
 import { parseThreadAddress, threadAddress } from "../agents/instructions.ts";
 import { iso, type TimelineEntry } from "../read/transcript.ts";
-import { LAPSED, opensTo, privateToAll } from "../store/rows.ts";
+import { LAPSED } from "../store/rows.ts";
 import { type Attachment, STILLFAIL_SURFACE, type SessionRow, type SessionThread, type ThreadRow } from "../store/store.ts";
 import { type Args, jsNumber, jsString } from "./args.ts";
 import { threadHistory } from "./conversations.ts";
@@ -119,19 +119,6 @@ export function threadIn(hub: Hub, thread: ThreadRow, ws: string | null): boolea
   return keys.length === 0 ? hub.wsOf(null) === ws : keys.some((k) => hub.inWorkspace(k, ws));
 }
 
-/// Whom what session `key` reads is shown to (store/rows.ts `opensTo`): its chat's people when that is private (a
-/// direct message's, docs/private-chats.md); null, anyone, for any other and for a session of another station.
-export const readerOf = (hub: Hub, key: string): string[] | null => hub.store.getSession(key)?.privateTo ?? null;
-
-/// Whom a thread is private to: those all of its private sessions are (store/rows.ts `privateToAll`); null, no one.
-export const threadPrivateTo = (hub: Hub, thread: ThreadRow): string[] | null =>
-  privateToAll(hub.store.threadSessions(thread.id).flatMap((m) => hub.store.getSession(m.session) ?? []));
-
-/// Refuses what `reader` may not read: a chat private to other people than those who see what it reads.
-function readable(reference: string, to: string[] | null, reader: string[] | null | undefined) {
-  if (reader !== undefined && !opensTo(reader, to)) throw new Error(`${reference} is a direct message, private to the people in it: it cannot be read from a chat others can see`);
-}
-
 /// The workspace whose chats and stations session `key` reaches (docs/multi-workspace.md): its chat's; null (any) on
 /// a station in no workspace, where there is no telling.
 export function scopeOf(hub: Hub, key: string): string | null {
@@ -205,7 +192,7 @@ export async function forPeer(hub: Hub, peer: string, request: Json, ws: string 
     const text = await chatRead(hub, `${peer}/${from}`, args, seen, ws);
     return { text, files: seen.map(({ path, name, size }) => ({ path, name, size })) };
   }
-  if (tool === "session_history") return { text: await sessionHistory(hub, args, ws, null) };
+  if (tool === "session_history") return { text: await sessionHistory(hub, args, ws) };
   throw new Error(`cannot read with ${JSON.stringify(tool)}`);
 }
 
@@ -271,9 +258,8 @@ export function formatSteps(start: number, entries: TimelineEntry[], maxChars: n
 
 /// What a reference names on this station: a chat link, an execution history link, a thread address (CHANNEL/THREAD_TS)
 /// or a session key. Of the chats workspace `ws` reaches (`reachable`; null: any): one of another workspace is not there
-/// for it unless shared with it (`write`: to write in). `reader`: to read it, whom what it reads is shown to
-/// (`readerOf`): a private chat of other people is refused (undefined: not to read it).
-export function named(hub: Hub, given: string, ws: string | null = null, write = false, reader?: string[] | null): Named {
+/// for it unless shared with it (`write`: to write in).
+export function named(hub: Hub, given: string, ws: string | null = null, write = false): Named {
   const reference = given.trim();
   if (reference === "") throw new Error("chat is required: a chat's link, a thread address (CHANNEL/THREAD_TS) or a session key; chat_list lists them");
   const linked = linkedSession(reference);
@@ -287,20 +273,15 @@ export function named(hub: Hub, given: string, ws: string | null = null, write =
     }
     if (!known || !reachable(hub, key, ws, false)) throw new Error(`${reference} names session ${key}, which is not on this station (it may be another station's, or deleted)`);
     if (!reachable(hub, key, ws, write)) throw new Error(`${reference} is shared with your workspace to read only: nothing can be sent to it`);
-    readable(reference, hub.store.getSession(key)?.privateTo ?? null, reader);
     return { type: "session", key, entry };
   }
   const address = parseThreadAddress(reference);
   if (address) {
     const found = hub.store.threadsAt(address[0], address[1]).filter((t) => threadIn(hub, t, ws));
     if (found.length === 0) throw new Error(`no conversation ${reference} on this station`);
-    readable(reference, threadPrivateTo(hub, found[0]!), reader);
     return { type: "thread", thread: found[0]! };
   }
-  if (hub.store.getSession(reference) !== null && reachable(hub, reference, ws, write)) {
-    readable(reference, hub.store.getSession(reference)?.privateTo ?? null, reader);
-    return { type: "session", key: reference, entry: null };
-  }
+  if (hub.store.getSession(reference) !== null && reachable(hub, reference, ws, write)) return { type: "session", key: reference, entry: null };
   throw new Error(`${JSON.stringify(reference)} is not a chat of this station: give a chat's link, a thread address (CHANNEL/THREAD_TS) or a session key; chat_list lists them`);
 }
 
@@ -326,9 +307,7 @@ export function chatList(hub: Hub, key: string, args: Args): string {
   const inWs = (k: string) => (sessions.get(k)?.ws ?? home) === ws;
   const ours = (t: { thread: ThreadRow; sessions: { session: string }[] }) =>
     ws === null || (t.thread.home !== null ? inWs(t.thread.home) : t.sessions.length === 0 ? home === ws : t.sessions.some((m) => inWs(m.session)));
-  // Nor a direct message of other people than those who see what it reads (docs/private-chats.md).
-  const reader = readerOf(hub, key);
-  const threads = hub.store.listThreads("", null, null).filter((t) => ours(t) && opensTo(reader, privateToAll(t.sessions.flatMap((m) => sessions.get(m.session) ?? []))));
+  const threads = hub.store.listThreads("", null, null).filter(ours);
   const when = (t: (typeof threads)[number]) => t.lastMessage?.createdAt ?? t.thread.createdAt;
   threads.sort((a, b) => when(b) - when(a));
   const lines: string[] = [];
@@ -369,7 +348,7 @@ export function chatList(hub: Hub, key: string, args: Args): string {
 /// attachments of the messages given.
 export async function chatRead(hub: Hub, key: string, args: Args, seen: Attachment[] | undefined, ws: string | null): Promise<string> {
   const reference = args.chat === undefined ? "" : jsString(args.chat);
-  const what = named(hub, reference, ws, false, readerOf(hub, key));
+  const what = named(hub, reference, ws);
   let thread: ThreadRow;
   let connect: string;
   let note = "";
@@ -394,10 +373,10 @@ export async function chatRead(hub: Hub, key: string, args: Args, seen: Attachme
 
 /// session_history: what a session's agent did (its execution history, as the pages show it), from its transcript; of
 /// the sessions workspace `ws` reaches (`named`). Read where the station reads histories (live.ts `page`: the readers),
-/// only the page asked for. `reader`: whom what it reads is shown to (`readerOf`).
-export async function sessionHistory(hub: Hub, args: Args, ws: string | null, reader: string[] | null): Promise<string> {
+/// only the page asked for.
+export async function sessionHistory(hub: Hub, args: Args, ws: string | null): Promise<string> {
   const reference = args.chat === undefined ? "" : jsString(args.chat);
-  const what = named(hub, reference, ws, false, reader);
+  const what = named(hub, reference, ws);
   let session: string;
   let entry: number | null = null;
   if (what.type === "session") [session, entry] = [what.key, what.entry];
