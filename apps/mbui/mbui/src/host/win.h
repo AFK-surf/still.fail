@@ -36,6 +36,9 @@ void mb_render_set_size(int pw, int ph, double w, double h, double scale);
 void mb_render_present(const double *inst, int32_t count, double r, double g, double b);
 // renders the last presented frame again into a texture and writes a PNG
 int mb_render_snapshot(const wchar_t *path);
+// renders the last presented frame again and reads the rectangle x, y, w × h of its pixels (from its top left) into
+// `out`: RGBA, premultiplied, rows from the top (host_native.mbt drawn_pixels); 1 when read
+int32_t mb_render_drawn_pixels(int32_t x, int32_t y, int32_t w, int32_t h, moonbit_bytes_t out);
 // what the screen shows of the window's client area, as a PNG
 int mb_screen_snapshot(void *hwnd, const wchar_t *path);
 void mb_atlas_upload(int x, int y, int w, int h, const void *rgba);

@@ -34,7 +34,27 @@ export function glyph(stations: J[], days: J[]): J {
   if (connecting > 0) label.push(t("core-logic.looks.connecting", { n: connecting }));
   if (dim > connecting) label.push(t("core-logic.looks.offline", { n: dim - connecting }));
   if (failing > 0) label.push(t("core-logic.looks.failing", { n: failing }));
-  return { online: online.length, dim, connecting, failing, working, summary, label: label.join(t("core-logic.looks.sep")) };
+  // the agents at work on them all, as each station counts its own (`doing`'s `running`)
+  const agents = stations.reduce((n, s) => n + (typeof get(s, "running") === "number" ? s.running : 0), 0);
+  const now = agents > 0 ? t("core-views.station.running_agents", { n: agents }) : t("core-logic.looks.none_running");
+  return { online: online.length, dim, connecting, failing, working, summary, label: label.join(t("core-logic.looks.sep")), running: agents, now, unit: t("core-logic.looks.running_unit", { n: agents }) };
+}
+
+/// What a station is doing, as the stations' card says it under the line of all of them (8 个 agent 正在运行): up,
+/// how many of its agents are at work as it counts them (its overview's `counts.running`; 0 while down) or idle, or
+/// still connecting until its overview is read; on its way; down, as its link says why.
+export function doing(state: string, cause: unknown, overview: J): { running: number; doing: string } {
+  if (state === "online") {
+    if (overview === undefined || overview === null) return { running: 0, doing: t("core-views.station.connecting") };
+    const n = get(get(overview, "counts"), "running");
+    const running = typeof n === "number" && n > 0 ? Math.floor(n) : 0;
+    return { running, doing: running > 0 ? t("core-logic.looks.station_running", { n: running }) : t("core-views.station.idle") };
+  }
+  if (state === "connecting") return { running: 0, doing: t("core-views.station.connecting") };
+  if (state === "error" || cause === "unreached") return { running: 0, doing: t("core-views.station.unreachable_short") };
+  if (cause === "network") return { running: 0, doing: t("core-views.station.network") };
+  if (cause === "lock") return { running: 0, doing: t("core-views.station.lock_short") };
+  return { running: 0, doing: t("core-views.station.offline_short") };
 }
 
 export function listNote(stations: J[], days: J[], loading: boolean, unread: string[]): J {

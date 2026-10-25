@@ -732,9 +732,13 @@ let gate_fill : @ui.Style = @ui.css("w=Full h=Full")
 /// What the settings' pages read and call, and how they move, as the phone has them: the core as the app has it, its
 /// stack, its own way home (its sheets put down) and a station's login as its card.
 fn settings_core(src : Source, w : Workspace) -> @settings.Core {
-  settings_core_of(src, w, home~, login_card=fn(c, station, id, marked) {
-    @sfpages.login_card(c, settings_core(src, w), station, id, marked~)
-  })
+  settings_core_of(
+    src,
+    w,
+    home~,
+    login_card=fn(c, station, id, marked) { @sfpages.login_card(c, settings_core(src, w), station, id, marked~) },
+    share_card=fn() { @sfpages.share_card_open(src, w) },
+  )
 }
 
 ///|

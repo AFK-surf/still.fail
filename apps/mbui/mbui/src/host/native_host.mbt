@@ -391,6 +391,11 @@ impl @hostapi.Host for Native with image_pixels(_, id, out) {
 }
 
 ///|
+impl @hostapi.Host for Native with drawn_pixels(_, x, y, w, h, out) {
+  drawn_pixels(x, y, w, h, out)
+}
+
+///|
 impl @hostapi.Host for Native with view_site_next(_, id) {
   view_site_next(id)
 }

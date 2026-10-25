@@ -74,6 +74,8 @@ pub(all) struct Core {
   /// a station's login as its card (the chat's, sfpages' login_card.mbt),
   /// by station and id
   login_card : (@ui.Ctx, String, String, Bool) -> Unit
+  /// the card to share of the workspace's agents at work opened (sfpages' share_card_open)
+  share_card : () -> Unit
   /// face `id` (at `index` in the faces' list; `variable`: one file for every weight) shown in itself on the fonts
   /// page: the host face its preview is given to, 0 until it is here (src/sfapp/faces.mbt)
   face_preview : (String, Int, Bool) -> Int

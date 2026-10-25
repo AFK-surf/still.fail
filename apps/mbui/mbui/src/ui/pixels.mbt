@@ -50,3 +50,32 @@ pub fn Ctx::image_pixels(self : Ctx, src : String, px : Int) -> ImagePixels {
   }
   p
 }
+
+///|
+/// What the thing with `id` showed last frame, as the host drew it: its hit area as drawn (Ctx::rect_of, cut to its
+/// clips) on the device's pixels, the frame drawn again by the host's renderer and read back (RGBA premultiplied, rows
+/// from the top): a part of the screen to share as a picture. Failed where it was not drawn or the host cannot read its
+/// frame back. Each read draws the frame again: asked once, as a press is told (Ctx::tell), not in every build. `inset`:
+/// that much less of it on every side (what is round at its corners left out).
+pub fn Ctx::drawn_pixels(self : Ctx, id : Int, inset? : Double = 0.0) -> ImagePixels {
+  match self.rect_of(id) {
+    Some((x0, y0, w0, h0)) => {
+      let (x, y, w, h) = (x0 + inset, y0 + inset, w0 - 2.0 * inset, h0 - 2.0 * inset)
+      let s = self.scale
+      let x0 = (x * s).round().to_int()
+      let y0 = (y * s).round().to_int()
+      let pw = ((x + w) * s).round().to_int() - x0
+      let ph = ((y + h) * s).round().to_int() - y0
+      if x0 < 0 || y0 < 0 || pw <= 0 || ph <= 0 {
+        return PixelsFailed
+      }
+      let out = FixedArray::make(pw * ph * 4, b'\x00')
+      if h_drawn_pixels(x0, y0, pw, ph, out) {
+        PixelsRead(pw, ph, out)
+      } else {
+        PixelsFailed
+      }
+    }
+    None => PixelsFailed
+  }
+}

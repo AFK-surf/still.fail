@@ -52,15 +52,80 @@ fn stations_page(c : @ui.Ctx, core : Core, here : Here) -> Unit {
           )
         })
       Some(a) if a.length() == 0 => blocks.push(fn() { first_station(c, core, here) })
-      Some(a) =>
+      Some(a) => {
+        blocks.push(fn() { stations_now_card(c, core, here) })
         for st in a {
           blocks.push(fn() { station_card(c, core, st) })
         }
+      }
     }
     blocks.push(fn() { gap(c, 30.0) })
     scroll_page(c, "stations", blocks)
   })
 }
+
+///|
+/// How many agents are at work on the workspace's stations, over their cards (the chats' view's glyph, as the rail's
+/// card over the Station place says it, sfpages' stations_now): the stations' glyph and the number in a line, and while
+/// any is at work, pressed for the card to share of them (Core's `share_card`).
+fn stations_now_card(c : @ui.Ctx, core : Core, here : Here) -> Unit {
+  let t = @sf.theme()
+  let chats = (core.topic)("chats", { "scope": Json::string(here.workspace), "mine": Json::boolean(false) }).value
+  let glyph = field(chats, "glyph")
+  let running = count(glyph, "running")
+  let now = match text(glyph, "now") {
+    "" => text(glyph, "label")
+    now => now
+  }
+  let counts : @sf.GlyphCounts = {
+    online: count(glyph, "online"),
+    dim: count(glyph, "dim"),
+    failing: count(glyph, "failing"),
+    working: count(glyph, "working"),
+    asleep: false,
+    connecting: count(glyph, "connecting"),
+  }
+  if card(c, key=if running > 0 { "stations/now" } else { "" }, fn() {
+      card_head(
+        c,
+        fn() { @sf.station_glyph(c, counts, card_mark, t.p.text, t.p.red) |> ignore },
+        now,
+        if running > 0 { Some(@sf.t("web-main.stations.shareCard")) } else { None },
+        fn() {
+          if running > 0 {
+            chevron(c)
+          }
+        },
+      )
+    }) {
+    (core.share_card)()
+  }
+}
+
+///|
+/// A card's head on this page (a station's, the agents at work's): its mark 28 across, its name and what is said of it
+/// under it (`said`: its line, even empty; none, no line), 12 from the mark; what stands at its end (a chevron).
+fn card_head(c : @ui.Ctx, mark : () -> Unit, name : String, said : String?, end : () -> Unit) -> Unit {
+  let t = @sf.theme()
+  c.box(dir=Row, w=Fill(1.0), gap=12.0, align=ACenter, fn() {
+    // In a box as large whatever it is: an emoji is drawn wider than an icon, and the names line up.
+    c.box(w=Px(card_mark), h=Px(card_mark), align=ACenter, justify=JCenter, mark) |> ignore
+    c.box(w=Fill(1.0), fn() {
+      c.text(name, size=t.t.title, weight=700, color=t.p.text, wrap=false, line=22.0) |> ignore
+      match said {
+        Some(line) => c.text(line, size=t.t.meta, color=t.p.muted, wrap=false, w=Fill(1.0), line=18.0) |> ignore
+        None => ()
+      }
+    })
+    |> ignore
+    end()
+  })
+  |> ignore
+}
+
+///|
+/// A card's mark's side.
+let card_mark : Double = 28.0
 
 ///|
 /// A station in the list: its mark (the server's where it has none), its name, what is said of it, and its body (StationBody).
@@ -69,30 +134,26 @@ fn station_card(c : @ui.Ctx, core : Core, st : Json) -> Unit {
   let s = Some(st)
   let address = text(s, "station")
   if card(c, key="station/" + address, fn() {
-      c.box(dir=Row, w=Fill(1.0), gap=12.0, align=ACenter, fn() {
-        let emoji = text(s, "emoji")
-        let icon = text(s, "icon")
-        // In a box as large whatever it is: an emoji is drawn wider than an icon, and the names line up.
-        c.box(w=Px(28.0), h=Px(28.0), align=ACenter, justify=JCenter, fn() {
+      let emoji = text(s, "emoji")
+      let icon = text(s, "icon")
+      card_head(
+        c,
+        fn() {
           if @sf.has_station_mark(emoji, icon) {
-            @sf.station_mark(c, emoji, icon, 28.0, t.p.text)
+            @sf.station_mark(c, emoji, icon, card_mark, t.p.text)
           } else {
-            @sf.icon(c, "server", size=28.0, color=t.p.text) |> ignore
+            @sf.icon(c, "server", size=card_mark, color=t.p.text) |> ignore
           }
-        })
-        |> ignore
-        c.box(w=Fill(1.0), fn() {
-          c.text(text(s, "name"), size=t.t.title, weight=700, color=t.p.text, wrap=false, line=22.0) |> ignore
-          c.text(join([joined_mark(s), text(s, "summary")], " · "), size=t.t.meta, color=t.p.muted, wrap=false, w=Fill(1.0), line=18.0)
-          |> ignore
-        })
-        |> ignore
-        if flag(s, "reconnecting") {
-          reconnecting(c)
-        }
-        chevron(c)
-      })
-      |> ignore
+        },
+        text(s, "name"),
+        Some(join([joined_mark(s), text(s, "summary")], " · ")),
+        fn() {
+          if flag(s, "reconnecting") {
+            reconnecting(c)
+          }
+          chevron(c)
+        },
+      )
       station_body(c, core, s)
     }) {
     (core.push)(Station(address))

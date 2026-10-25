@@ -84,6 +84,23 @@
   "core-logic.decisions.waited.under_minute": "<1 min",
   "core-logic.decisions.you": "You",
   "core-logic.footprint.actions.none": "Nothing to clean up",
+  "core-logic.fleet.machines": {
+    "one": "On 1 machine",
+    "other": "On {n} machines"
+  },
+  "core-logic.fleet.chats": {
+    "one": "1 chat running",
+    "other": "{n} chats running"
+  },
+  "core-logic.fleet.quota": {
+    "one": "of the weekly quota on 1 account ({kind})",
+    "other": "of the weekly quota on {n} accounts ({kind})"
+  },
+  "core-logic.fleet.quota_lead": "Used this week",
+  "core-logic.fleet.today": "Today",
+  "core-logic.fleet.week": "Last 7 days",
+  "core-logic.fleet.archived": "Chats archived",
+  "core-logic.fleet.archived_value": "{n}",
   "core-logic.footprint.actions.not_allowed": "Only workspace owners and admins can clean up",
   "core-logic.footprint.all": "All",
   "core-logic.footprint.archived.action": "Delete…",
@@ -450,6 +467,7 @@
   "core-logic.looks.link.down.named": "Can't reach “{name}”",
   "core-logic.looks.link.reconnecting": "Reconnecting to station",
   "core-logic.looks.link.reconnecting.named": "Reconnecting to “{name}”",
+  "core-logic.looks.none_running": "No agents running",
   "core-logic.looks.offline.station": "“{name}” is offline. Showing previously loaded content; messages you send are delivered when it is back.",
   "core-logic.looks.offline.network": "No network connection. Showing previously loaded content; messages you send go to “{name}” once connected.",
   "core-logic.looks.offline.unreached": "Can't reach “{name}” right now. Showing previously loaded content; messages you send are delivered once it is reached.",
@@ -464,6 +482,14 @@
     "other": "Connecting to {n} stations"
   },
   "core-logic.looks.reading.connecting_one": "Connecting to {name}",
+  "core-logic.looks.running_unit": {
+    "one": "agent running",
+    "other": "agents running"
+  },
+  "core-logic.looks.station_running": {
+    "one": "1 running",
+    "other": "{n} running"
+  },
   "core-logic.looks.wait.from": "Loading from {name}",
   "core-logic.looks.wait.from_many": {
     "one": "Loading from {n} station",

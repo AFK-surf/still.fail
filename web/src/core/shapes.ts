@@ -2469,6 +2469,16 @@ export interface StationState {
 	message?: string;
 	/** Offline, why as the device can tell (Link's `cause`). Absent otherwise. */
 	cause?: string;
+	/**
+	 * Its agents at work, as it counts them (its overview's `counts.running`); 0 while it is not up. Absent from a
+	 * core before it.
+	 */
+	running?: number;
+	/**
+	 * What it is doing in a few words, as the stations' card says it: 3 个正在运行 | 空闲 | 正在连接 | 离线…
+	 * Absent from a core before it.
+	 */
+	doing?: string;
 }
 
 /**
@@ -2499,6 +2509,15 @@ export interface StationsGlyph {
 	working: number;
 	summary: string;
 	label: string;
+	/** The agents at work on them all (their `running`). Absent from a core before it. */
+	running?: number;
+	/** That in a line, the stations' card's head: 8 个 agent 正在运行 | 暂无 agent 在运行. Absent from a core before it. */
+	now?: string;
+	/**
+	 * What follows the number of them on the card shared (个 agent 正在运行, agents running). Absent from a core
+	 * before it.
+	 */
+	unit?: string;
 }
 
 export interface ChatsView {
@@ -3226,6 +3245,66 @@ export interface FilesTabsView {
 	current: string;
 	/** The side in front of the tab shown: what the page's address says. */
 	front: FilesPane;
+}
+
+export interface FleetDay {
+	label: string;
+	/** Its chats archived as a share of the most on a day (0 to 1). */
+	share: number;
+	today: boolean;
+}
+
+export interface FleetQuota {
+	/** The kind of subscription (the profiles' group: claude, chatgpt…). */
+	kind: string;
+	accounts: number;
+	/**
+	 * How much of a week's quota they used, in percent of one account's: each account's share of its own
+	 * added up (80% and 90%: 170%).
+	 */
+	used: number;
+	/** 170%. */
+	usedText: string;
+	/** What it is of: 2 个 Claude 订阅账号的周额度. */
+	text: string;
+}
+
+export interface FleetStat {
+	label: string;
+	value: string;
+}
+
+export interface FleetToday {
+	title: string;
+	/** Its chats archived and cost. */
+	stats: FleetStat[];
+}
+
+export interface FleetWeek {
+	title: string;
+	/** Its chats archived; its input tokens and cost, as the usage page's tiles say them. */
+	stats: FleetStat[];
+	days: FleetDay[];
+}
+
+/** The card shared of a workspace's agents at work (the `fleet` view, views/fleet.ts). */
+export interface FleetView {
+	/** When this is, in words: 10月26日 04:12. */
+	at: string;
+	/** What leads the quota used: 本周用掉了. */
+	quotaLead: string;
+	/** The subscriptions' weekly quota used, by kind, the most accounts first; none read: empty. */
+	quota: FleetQuota[];
+	/** The chats at work now. */
+	chats: number;
+	/** That in words: 9 个对话正在运行. */
+	chatsText: string;
+	/** On how many stations: 分布在 3 台设备. */
+	where: string;
+	/** The chats archived and what was spent today; absent while it is read, or with nothing spent nor archived. */
+	today?: FleetToday;
+	/** The same over the last 7 days, each day's chats archived; absent with it. */
+	week?: FleetWeek;
 }
 
 export interface FlowChoice {

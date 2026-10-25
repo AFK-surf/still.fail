@@ -149,6 +149,9 @@ pub(all) struct TextScale {
   xl2 : (Double, Double)
   xl3 : (Double, Double)
   xl4 : (Double, Double)
+  xl5 : (Double, Double)
+  xl6 : (Double, Double)
+  xl7 : (Double, Double)
 }
 
 ///|
@@ -165,6 +168,9 @@ pub fn TextScale::tailwind() -> TextScale {
     xl2: (24.0, 32.0),
     xl3: (30.0, 36.0),
     xl4: (36.0, 40.0),
+    xl5: (48.0, 48.0),
+    xl6: (60.0, 60.0),
+    xl7: (72.0, 72.0),
     // the roles on Tailwind's: xs, xs, sm, base, xl, 3xl, 4xl
     caption: (12.0, 16.0),
     meta: (12.0, 16.0),
@@ -596,6 +602,9 @@ pub fn Theme::text_size(self : Theme, s : TextSize) -> (Double, Double) {
     Xl2 => self.text.xl2
     Xl3 => self.text.xl3
     Xl4 => self.text.xl4
+    Xl5 => self.text.xl5
+    Xl6 => self.text.xl6
+    Xl7 => self.text.xl7
     Exact(size, line) => (exact_ok(size, "TextSize"), exact_ok(line, "TextSize"))
   }
 }

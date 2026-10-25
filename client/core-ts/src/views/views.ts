@@ -34,6 +34,7 @@ import { Local, PENDING_PREFIX, type LocalChange } from "./local.ts";
 import { askAnswers } from "./vault.ts";
 import * as marks from "./marks.ts";
 import { usageView } from "./usage.ts";
+import { fleetView } from "./fleet.ts";
 import { resourcesView } from "./resources.ts";
 import { workspaceProfiles } from "./profiles.ts";
 import { settingsView } from "./settings.ts";
@@ -58,7 +59,7 @@ const DAY_MS = 86_400_000;
 export const HEAD = 80;
 export const HEAD_FROM = 500;
 
-const VIEW_TOPICS = new Set(["chats", "chatSearch", "search", "stations", "profiles", "connects", "chat", "history", "agentCard", "stationNet", "archive", "workspaceMarks", "decisions", "chatJobs", "chatLetters", "imageNear", "longJobs", "usage", "settings", "resources", "adminList", "adminItem", "adminOverview", "adminRelays"]);
+const VIEW_TOPICS = new Set(["chats", "chatSearch", "search", "stations", "profiles", "connects", "chat", "history", "agentCard", "stationNet", "archive", "workspaceMarks", "decisions", "chatJobs", "chatLetters", "imageNear", "longJobs", "usage", "fleet", "settings", "resources", "adminList", "adminItem", "adminOverview", "adminRelays"]);
 
 /// What a chat row's columns say that the views find rows by (db/account.ts): how urgent it is for its person
 /// (workspace marks), whether it asks something of them, whether the 奏 page lists it.
@@ -743,6 +744,11 @@ export class Views implements Owner {
         scope = view.scope as string;
         perStation = (s) => [{ topic: "stationUsage", station: s }];
         break;
+      case "fleet":
+        // (the card shared of the agents at work: views/fleet.ts)
+        scope = view.scope as string;
+        perStation = (s) => [{ topic: "chatRows", station: s }, { topic: "archivedRows", station: s }, { topic: "overview", station: s }, { topic: "link", station: s }, { topic: "host", station: s }, { topic: "way", station: s }, { topic: "stationUsage", station: s }];
+        break;
       case "resources":
         scope = view.scope as string;
         // One station's (its page's 进程), or every station's.
@@ -1115,6 +1121,32 @@ export class Views implements Owner {
         const now = this.#core.host.nowMs();
         return { ok: usageView(sources, typeof view.days === "number" ? view.days : 7, now, this.#core.host.utcOffsetMin(now), this.me(scope), members_) };
       }
+      case "fleet": {
+        const scope = view.scope as string;
+        const stations = this.#stationsOr(scope);
+        if (stations === undefined || !Array.isArray(stations)) return stations as Value | undefined;
+        // what they did over the last 7 days, as the usage page has it
+        const sources = stations.map((s) => ({ address: s.address, name: s.name, online: s.online, value: s.online ? this.value({ topic: "stationUsage", station: s.address }) : undefined }));
+        const now = this.#core.host.nowMs();
+        const usage = usageView(sources, 7, now, this.#core.host.utcOffsetMin(now), this.me(scope), arr(get(this.ok({ topic: "workspace", workspace: scope }), "members")));
+        // the subscriptions, as the profiles page lists them
+        const listed = this.#stationsView(scope);
+        const profiles = listed !== undefined && "ok" in listed ? arr(get(workspaceProfiles(listed.ok as J[]), "items")) : [];
+        // the chats at work, and when each archived one was archived (as the archive has it: views/archive.ts)
+        const read = stations.map((s) => {
+          const rows = this.value({ topic: "chatRows", station: s.address });
+          const archived = this.value({ topic: "archivedRows", station: s.address });
+          const at = (chat: J) => get(get(chat, "archived"), "at") ?? get(chat, "lastActiveAt");
+          return {
+            station: s.address,
+            online: s.online && !down(this.link(s.address)),
+            rows: rows && "ok" in rows ? arr(rows.ok) : [],
+            archived: archived && "ok" in archived ? arr(archived.ok).filter((c) => isObject(get(c, "archived"))).map(at).filter((x): x is number => typeof x === "number") : [],
+          };
+        });
+        const offset = this.#core.host.utcOffsetMin(now);
+        return { ok: fleetView(read, profiles, usage, format.dateClock(now, offset), offset) };
+      }
       case "resources": {
         const stations = this.#stationsOr(view.scope as string);
         if (stations === undefined || !Array.isArray(stations)) return stations as Value | undefined;
@@ -1242,7 +1274,8 @@ export class Views implements Owner {
       const cause = state === "offline" ? get(this.link(s.address), "cause") : undefined;
       // Refused for a security mode: why.
       if (cause === "lock") message = get(this.link(s.address), "message") ?? null;
-      states.push({ station: s.address, id: s.id, name: s.name, state, message, ...(typeof cause === "string" ? { cause } : {}) });
+      const now = looks.doing(state, cause, this.ok({ topic: "overview", station: s.address }));
+      states.push({ station: s.address, id: s.id, name: s.name, state, message, ...(typeof cause === "string" ? { cause } : {}), ...now });
     }
     const days = this.#days(rows);
     let trouble: J = null;

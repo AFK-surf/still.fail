@@ -87,6 +87,7 @@ pub(open) trait Host {
   image_info(Self, Int, FixedArray[Double]) -> Int = _
   image_free(Self, Int) -> Unit = _
   image_pixels(Self, Int, FixedArray[Byte]) -> Bool = _
+  drawn_pixels(Self, Int, Int, Int, Int, FixedArray[Byte]) -> Bool = _
   view_site_next(Self, Int) -> String = _
   view_site_body(Self, Int, Int) -> Bytes = _
   view_site_head(Self, Int, Int, Int, String) -> Unit = _
@@ -565,6 +566,11 @@ impl Host with image_free(_, _) {
 
 ///|
 impl Host with image_pixels(_, _, _) {
+  false
+}
+
+///|
+impl Host with drawn_pixels(_, _, _, _, _, _) {
   false
 }
 
@@ -1716,6 +1722,14 @@ pub fn image_free(id : Int) -> Unit {
 /// (at least w × h × 4 long): false where it is not ready or cannot be read back.
 pub fn image_pixels(id : Int, out : FixedArray[Byte]) -> Bool {
   current.val.image_pixels(id, out)
+}
+
+///|
+/// The frame presented last, drawn again by the renderer as it was, and its pixels in the rectangle `x`, `y`, `w` by `h`
+/// (device pixels from its top left) into `out` (at least w × h × 4 long: RGBA premultiplied, rows from the top): false
+/// where the rectangle is not all in it, or the frame cannot be read back here.
+pub fn drawn_pixels(x : Int, y : Int, w : Int, h : Int, out : FixedArray[Byte]) -> Bool {
+  current.val.drawn_pixels(x, y, w, h, out)
 }
 
 ///|

@@ -709,9 +709,9 @@ test("chats_puts_together_the_online_stations", async () => {
   assert.deepEqual(v.me, { id: "Me@x.com", email: "Me@x.com" });
   assert.equal(v.loading, true);
   assert.deepEqual(v.stations, [
-    { station: "ws/a", id: "a", name: "alpha", state: "connecting" },
-    { station: "ws/b", id: "b", name: "beta", state: "connecting" },
-    { station: "ws/c", id: "c", name: "gamma", state: "connecting" },
+    { station: "ws/a", id: "a", name: "alpha", state: "connecting", running: 0, doing: "正在连接" },
+    { station: "ws/b", id: "b", name: "beta", state: "connecting", running: 0, doing: "正在连接" },
+    { station: "ws/c", id: "c", name: "gamma", state: "connecting", running: 0, doing: "正在连接" },
   ]);
   assert.deepEqual(v.days, []);
   assert.deepEqual(v.note, { reading: true, text: "正在连接 3 台 station", failing: [], empty: false });
@@ -763,7 +763,7 @@ test("chats_puts_together_the_online_stations", async () => {
   t.fail(rows("ws/a"), new CoreError("http_500", "坏了"));
   await t.read(u, 1);
   v = u.value;
-  assert.deepEqual(v.stations[0], { station: "ws/a", id: "a", name: "alpha", state: "error", message: "坏了" });
+  assert.deepEqual(v.stations[0], { station: "ws/a", id: "a", name: "alpha", state: "error", message: "坏了", running: 0, doing: "连不上" });
   assert.deepEqual(ids(v), ["1"]);
   t.set(rows("ws/a"), [row("1", now - 1000)]);
   t.set(link("ws/a"), { state: "reconnecting", message: "连接已断开" });
@@ -824,7 +824,7 @@ test("groups_by_the_viewers_day_newest_first", async () => {
   );
   assert.equal(v.days[1].at, midnight - 1000);
   assert.deepEqual(v.me, { id: "Me@x.com", email: "Me@x.com" });
-  assert.deepEqual(v.stations, [{ station: "ws/st", id: "st", name: "studio", state: "online" }]);
+  assert.deepEqual(v.stations, [{ station: "ws/st", id: "st", name: "studio", state: "online", running: 0, doing: "正在连接" }]);
 });
 
 test("a_chat_a_station_from_before_pins_keeps_out_of_the_archive_has_the_rows_color_and_order", async () => {
@@ -1030,7 +1030,7 @@ test("a_station_refusing_for_a_security_mode_says_why_in_place_of_offline", asyn
   const b = (list.value as J[]).find((s) => s.station === "ws/b");
   assert.deepEqual([b.online, b.summary, b.line, b.blocked], [false, "安全模式未放行", "安全模式未放行", why]);
   const v = chats.value;
-  assert.deepEqual(v.stations.find((s: J) => s.station === "ws/b"), { station: "ws/b", id: "b", name: "beta", state: "offline", message: why, cause: "lock" });
+  assert.deepEqual(v.stations.find((s: J) => s.station === "ws/b"), { station: "ws/b", id: "b", name: "beta", state: "offline", message: why, cause: "lock", running: 0, doing: "安全模式未放行" });
   assert.deepEqual(v.trouble, { text: "安全模式未放行 beta", state: "offline", retry: false, station: "ws/b" });
   // Down for another reason: as before, nothing of a security mode.
   t.set(link("ws/b"), { state: "offline", cause: "unreached" });

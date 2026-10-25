@@ -8,14 +8,16 @@
 
 ///|
 /// `key`'s card over the trigger `trigger` (its id) while the pointer rests on it, holding `body`; to a finger, as it
-/// holds the trigger, or with `tap` (a trigger that does nothing else) as it taps it (@kit.hover_card). Whether it is
-/// open.
+/// holds the trigger, or with `tap` (a trigger that does nothing else) as it taps it (@kit.hover_card). Under it and at
+/// its start, or on `side` lined up `along` it (beside the rail's places: their right, their tops). Whether it is open.
 pub fn hover(
   c : @ui.Ctx,
   key : String,
   trigger : Int,
   tile? : Bool = false,
   tap? : Bool = false,
+  side? : @ui.Side = Bottom,
+  along? : @ui.Along = Start,
   body : () -> Unit,
 ) -> Bool {
   @kit.hover_card(
@@ -25,8 +27,8 @@ pub fn hover(
     tap~,
     open_delay=hover_open_ms,
     close_delay=hover_close_ms,
-    side=Bottom,
-    along=Start,
+    side~,
+    along~,
     offset=hover_offset,
     enter=hover_in,
     exit=hover_out,

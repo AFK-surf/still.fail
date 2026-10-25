@@ -1223,7 +1223,8 @@ pub fn mix(a : Int64, share : Double, b : Int64) -> Int64 {
 /// has, each with the line it has where a `Text` there says no `lineHeight` (ui/Theme.kt WebType: 1.4em, the web
 /// phone's root.css.ts), and mbui's two under Xs (Xs3 10, Xs2 11) on the same rule: Xs 12 (120 places), Sm 13 (292), Base 14 (156), Lg 15 (206: the body), Xl 16 (a bar's
 /// title, Parts.kt:527), Xl2 17 (back, Parts.kt:491), Xl3 22 (a title, bold: Security.kt:473, NewChat.kt:183,
-/// Usage.kt:130, Workspaces.kt:191), Xl4 32 (a large title, Parts.kt:559).
+/// Usage.kt:130, Workspaces.kt:191), Xl4 32 (a large title, Parts.kt:559); past them Tailwind's own, on lines as tall as
+/// they are, for a number standing alone in a picture (the card shared of the agents at work: Xl7 72).
 pub let text_scale : @ui.TextScale = {
   // (the roles: each screen's own, Type's, set by ui_theme: text_roles)
   caption: (11.0, 16.0),
@@ -1243,6 +1244,9 @@ pub let text_scale : @ui.TextScale = {
   xl2: (17.0, 23.8),
   xl3: (22.0, 30.8),
   xl4: (32.0, 44.8),
+  xl5: (48.0, 48.0),
+  xl6: (60.0, 60.0),
+  xl7: (72.0, 72.0),
 }
 
 ///|
@@ -1439,6 +1443,43 @@ pub let sign_in_title_size : @ui.TextSize = Exact(28.0, 39.2)
 
 ///|
 pub let sign_in_side : @ui.Space = Exact(30.0)
+
+///|
+/// The card shared of the agents at work (sfpages' stations_now.mbt): the same in either theme, as a poster is: a warm
+/// paper with a peach light on it, ink words and ink thinned for what is said of them, white cards, still.fail's orange.
+pub let share_paper : Int64 = 0xF6F1E9FFL
+
+///|
+pub let share_ink : Int64 = 0x24272BFFL
+
+///|
+pub let share_dim : Int64 = 0x24272B99L
+
+///|
+pub let share_card : Int64 = 0xFFFFFFFFL
+
+///|
+/// What a day's bar is drawn in (today's still.fail's orange): the ink thinned, seen on the paper.
+pub let share_bar : Int64 = 0x24272B2EL
+
+///|
+/// The rings of the subscriptions' weekly quota, one a kind, in this order: still.fail's orange, a green, a blue.
+// kept across runs: a table, never written
+pub let share_rings : Array[Int64] = [0xE5704AFFL, 0x1FA77AFFL, 0x4F74E8FFL]
+
+///|
+/// A ring's turn past its first (@sf.rings: a share past 1): this much of the turn before's colour, the rest black,
+/// as Activity's ring going round again is deeper.
+pub let ring_turn_keep : Double = 0.82
+
+///|
+pub let share_orange : Int64 = 0xE5704AFFL
+
+///|
+pub let share_glow_peach : Int64 = 0xF6B38E8CL
+
+///|
+pub let share_glow_sun : Int64 = 0xFFE3B36BL
 
 ///|
 /// A picking row's line under its words (Controls.kt PickRow: 12.sp on 17.sp), between L4's 16 and L5's 18.

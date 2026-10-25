@@ -547,11 +547,25 @@ fn fixture_chats(f : Fixture, params : Map[String, Json]) -> Json? {
     Some(String(s)) => s
     _ => ""
   }
+  // each with how many of its agents are at work, as the core says it (views.ts: looks.doing): Studio's one at work,
+  // MBA down; the card to share's (share-card, and share-card-… over the rest of the app) more of them, on more stations
   let stations : Json = if f.mode == "webdemo" {
     [{ "id": "ws1/st1", "name": "Studio" }]
+  } else if f.mode.has_prefix("share-card") {
+    [
+      { "id": "ws1/st1", "station": "ws1/st1", "name": "Studio", "state": "online", "running": 5, "doing": "5 个正在运行" },
+      { "id": "ws1/st3", "station": "ws1/st3", "name": "ccvm", "state": "online", "running": 3, "doing": "3 个正在运行" },
+      { "id": "ws1/st4", "station": "ws1/st4", "name": "Mini1", "state": "online", "running": 1, "doing": "1 个正在运行" },
+      { "id": "ws1/st2", "station": "ws1/st2", "name": "MBA", "state": "error", "running": 0, "doing": "连不上" },
+    ]
   } else {
-    [{ "id": "ws1/st1", "name": "Studio" }, { "id": "ws1/st2", "name": "MBA" }]
+    [
+      { "id": "ws1/st1", "station": "ws1/st1", "name": "Studio", "state": "online", "running": 1, "doing": "1 个正在运行" },
+      { "id": "ws1/st2", "station": "ws1/st2", "name": "MBA", "state": "offline", "running": 0, "doing": "离线" },
+    ]
   }
+  let rich = f.mode.has_prefix("share-card")
+  let running = if rich { 9 } else { 1 }
   if f.mode == "loading" {
     return None
   }
@@ -594,7 +608,17 @@ fn fixture_chats(f : Fixture, params : Map[String, Json]) -> Json? {
     "note": { "reading": false, "failing": [], "empty": Json::boolean(empty) },
     // the stations at a glance (Station's place in the bar): Studio online, MBA not (the web's demo: its one, online)
     "glyph": if scope == "ws1" && f.mode != "webdemo" {
-      { "online": 1, "dim": 1, "failing": 0, "working": 0, "connecting": 0, "label": "1 台在线" }
+      {
+        "online": if rich { 3 } else { 1 },
+        "dim": if rich { 0 } else { 1 },
+        "failing": if rich { 1 } else { 0 },
+        "working": if rich { 3 } else { 0 },
+        "connecting": 0,
+        "label": "1 台在线",
+        "running": Json::number(running.to_double()),
+        "now": Json::string("\{running} 个 agent 正在运行"),
+        "unit": "个 agent 正在运行",
+      }
     } else {
       { "online": 1, "dim": 0, "failing": 0, "working": 0, "connecting": 0, "label": "1 台在线" }
     },
@@ -730,6 +754,7 @@ fn fixture_topic_inner(f : Fixture, name : String, params : Map[String, Json]) -
     // (待处理 open, MBA offline: decide_fixture.mbt)
     "chats" if f.mode == "home-attention" => fixture_chats(f, params).map(fn(v) { fix_with_trouble(v, params) })
     "chats" => fixture_chats(f, params)
+    "fleet" => Some(fixture_fleet(f))
     "search" => fixture_search(f, params)
     // the archive's chats (the settings' made-up ones): the wide frame's sidebar lists them
     "archive" => @settings.fixture_topic(f.mode, name, params)
@@ -1242,10 +1267,13 @@ pub fn fixture_app(mode : String) -> Source {
 /// What the mode opens over the app once its source is made (what is put up reading through it), as open_fixture_mode
 /// opens its pages: ＋'s Station 文件 (chat-station-files); a station's file's card pressed, its panel (chat-station-sheet);
 /// the files' Pin 文件夹 with no one station in view, which station first (files-add-folder: its rows' grounds under the
-/// pointer, the last in the dialog's foot corners).
+/// pointer, the last in the dialog's foot corners); the card to share of the agents at work (share-card).
 pub fn open_fixture_src(mode : String, src : Source) -> Unit {
   if mode == "files-add-folder" {
     @sfdesk.add_folder(src, "ws1", @sfdesk.pin_stations(src, "ws1"))
+  }
+  if mode == "share-card" {
+    @sfpages.share_card_open(src, { id: "ws1", name: "星火工作室", emoji: "", icon: "", email: "lin@example.com" })
   }
   if mode == "chat-station-files" {
     fixture_station_files(src)
@@ -1271,4 +1299,52 @@ fn fixture_station_files(src : Source) -> Unit {
       dir: false,
     },
   ])
+}
+
+///|
+/// The card shared of the agents at work (the core's `fleet` view, views/fleet.ts), as the made-up workspace has it:
+/// its one Claude subscription's week, Studio's one chat at work; the card to share's (share-card, share-card-…) two
+/// kinds of subscription (two Claude accounts' past one's quota), nine chats at work on three stations, and their week.
+fn fixture_fleet(f : Fixture) -> Json {
+  if !f.mode.has_prefix("share-card") {
+    return {
+      "at": "10月26日 04:12",
+      "quotaLead": "本周用掉了",
+      "quota": [{ "kind": "claude", "accounts": 1, "used": 37, "usedText": "37%", "text": "1 个 Claude 订阅账号的周额度" }],
+      "chats": 1,
+      "chatsText": "1 个对话正在运行",
+      "where": "分布在 1 台设备",
+    }
+  }
+  // each day's chats archived (57 in all, 12 today), as a share of the most on a day
+  let shares = [5.0, 7.0, 4.0, 10.0, 8.0, 11.0, 12.0].map(fn(n) { n / 12.0 })
+  let labels = ["10/20", "10/21", "10/22", "10/23", "10/24", "10/25", "10/26"]
+  {
+    "at": "10月26日 04:12",
+    "quotaLead": "本周用掉了",
+    "quota": [
+      { "kind": "claude", "accounts": 2, "used": 170, "usedText": "170%", "text": "2 个 Claude 订阅账号的周额度" },
+      { "kind": "chatgpt", "accounts": 1, "used": 45, "usedText": "45%", "text": "1 个 ChatGPT 订阅账号的周额度" },
+    ],
+    "chats": 9,
+    "chatsText": "9 个对话正在运行",
+    "where": "分布在 3 台设备",
+    "today": {
+      "title": "今天",
+      "stats": [{ "label": "归档的对话", "value": "12 个" }, { "label": "折合费用", "value": "$362" }],
+    },
+    "week": {
+      "title": "近 7 天",
+      "stats": [
+        { "label": "归档的对话", "value": "57 个" },
+        { "label": "输入 token", "value": "3.1 亿" },
+        { "label": "折合费用", "value": "$1,911" },
+      ],
+      "days": Json::array(
+        shares.mapi(fn(i, x) {
+          Json::object({ "label": Json::string(labels[i]), "share": Json::number(x), "today": Json::boolean(i == 6) })
+        }),
+      ),
+    },
+  }
 }
