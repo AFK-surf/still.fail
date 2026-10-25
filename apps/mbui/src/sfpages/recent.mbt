@@ -128,6 +128,13 @@ pub fn recent_frame(src : Source, open : Bool) -> Unit {
 /// The strip (Attach.kt RecentPhotos): the camera, the recent photos, the tile that asks; `tapped(i)` with the tile
 /// tapped: 0 the camera, 1… a photo, -1 the asking tile.
 pub fn recent_strip(c : @ui.Ctx, tapped : (Int) -> Unit) -> Unit {
+  // (across the panel it is in, to its sides: scrolled, the tiles go under them)
+  c.box(style=@sf.panel_bleed(), fn() { recent_strip_across(c, tapped) }) |> ignore
+}
+
+///|
+/// The strip in the room it has.
+fn recent_strip_across(c : @ui.Ctx, tapped : (Int) -> Unit) -> Unit {
   let t = @sf.theme()
   let photos = recent.photos
   let ask = match recent.access {

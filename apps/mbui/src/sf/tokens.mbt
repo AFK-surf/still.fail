@@ -131,6 +131,8 @@ pub(all) struct Bars {
 /// 12; a box 18, a field 52 by 28, a switch 36 by 22).
 pub(all) struct Rows {
   least : @ui.Len
+  /// a row of a picker or a menu in a small panel at least: a computer's 32 (a menu's row), a finger's 44
+  pick : Double
   title : @ui.TextStyle
   /// what is said under a row's title (its note), muted
   note : @ui.TextStyle
@@ -833,6 +835,7 @@ let bars_drawn : Bars = { key: 28.0, icon: 14.0, field: 30.0 }
 ///|
 let wide_rows : Rows = {
   least: Fixed(40.0),
+  pick: menu_row_min,
   title: @ui.text_style(size=Sm, leading=L6, color=Fg),
   note: @ui.text_style(size=Xs, leading=L5, color=Muted),
   check: 18.0,
@@ -846,6 +849,7 @@ let wide_rows : Rows = {
 ///|
 let narrow_rows : Rows = {
   least: Fixed(48.0),
+  pick: narrow_control_h,
   title: @ui.text_style(size=Lg, color=Fg),
   note: @ui.text_style(size=Sm, leading=L5, color=Muted),
   check: 22.0,
@@ -1250,8 +1254,8 @@ pub let found_start : @ui.Space = Exact(22.0)
 pub let grow : @ui.Len = Grow(1.0)
 
 ///|
-/// The models' column of a new chat's run picker beside the rest (NewChat.kt openRunPicker: weight(1.35f)).
-pub let run_models_grow : @ui.Len = Grow(1.35)
+/// The models' column of a model's picker beside what goes with it (NewChat.kt openRunPicker: weight(1.35f)).
+pub let models_grow : @ui.Len = Grow(1.35)
 
 ///|
 /// Words on one line given the room left in their row, cut there with an ellipsis (Compose's Text with maxLines = 1

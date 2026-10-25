@@ -2568,7 +2568,7 @@ fn attach_sheet(
     }
     // the camera, the gallery's recent photos, the tile that asks for them (recent.mbt)
     @sfpages.recent_strip(c, tapped_tile)
-    c.box(dir=Row, w=Fill(1.0), pl=12.0, pr=12.0, pb=18.0, gap=8.0, fn() {
+    c.box(dir=Row, w=Fill(1.0), pb=18.0, gap=8.0, fn() {
       for item in [
         (photos, tr("android-chat.attach.photos"), "photo"),
         (files, tr("android-chat.attach.files"), "file"),

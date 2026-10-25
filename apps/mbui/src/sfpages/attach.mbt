@@ -89,9 +89,9 @@ fn attach_body(c : @ui.Ctx, src : Source, key : String, close : () -> Unit) -> U
 }
 
 ///|
-/// The tiles' row (Attach.kt: 12 from the sides, 18 under them, 8 between).
+/// The tiles' row (Attach.kt: 12 from the sides, the panel's room there; 18 under them, 8 between).
 // kept across runs: a value (no field of it changes)
-let attach_tiles : @ui.Style = @ui.css("row w=Full pl=S3 pr=S3 pb=S4_5 gap=S2")
+let attach_tiles : @ui.Style = @ui.css("row w=Full pb=S4_5 gap=S2")
 
 ///|
 /// A tile: 70 high, its icon over its name, on a quiet ground, 14 round.

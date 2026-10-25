@@ -7,7 +7,7 @@ tap Studio
 wait 1500
 tap MBA
 wait 1200
-tap Opus 5.5 · high
+tap Opus 5.5
 wait 1800
 tap GPT-6
 wait 900
