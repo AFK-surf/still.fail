@@ -464,6 +464,11 @@ let text_state = 5
 let text_keyboard_gone = 7
 
 ///|
+/// The host's text event putting in the clipboard's words (a paste: ⌘V, the edit menu's): as kind 0 puts in what is
+/// typed, but a step of its own to undo, not one with the typing about it (editor_undo.mbt).
+let text_paste = 8
+
+///|
 fn h_ime_action(kind : Int) -> Unit {
   match fake.val {
     Some(f) => f.dev.ime_action = kind

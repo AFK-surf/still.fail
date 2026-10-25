@@ -477,7 +477,8 @@ public class MBView extends GLSurfaceView implements GLSurfaceView.Renderer {
         CharSequence t = clip.getItemAt(0).coerceToText(getContext());
         if (t == null || t.length() == 0) return;
         String s = t.toString();
-        toGL(() -> Native.text(0, s, 0, 0));
+        // (text kind 8: put in as typed, a step of its own to undo)
+        toGL(() -> Native.text(8, s, 0, 0));
     }
 
     /** A key with the focus a key catcher's (Device.catching): its named keys and shortcuts as keys, a character as

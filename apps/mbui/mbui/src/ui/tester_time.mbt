@@ -361,7 +361,7 @@ pub fn Tester::field_words(self : Tester) -> String {
 /// as the system gives a paste; the frames it causes drawn.
 pub fn Tester::paste(self : Tester, words : String) -> Unit {
   h_clipboard_set(words)
-  on_text(0, words, 0, 0)
+  on_text(text_paste, words, 0, 0)
   self.draw()
 }
 

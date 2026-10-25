@@ -1150,8 +1150,10 @@ fn key_in(code : Int, mods : Int) -> Unit {
   if catcher_key(c, code, mods) {
     return
   }
+  // ⌘Z, ⇧⌘Z (Ctrl+Z, Ctrl+Y elsewhere) with a field focused: its edits undone and done again (editor_undo.mbt)
+  let step = if c.editors.contains(c.focus) { step_of(code, mods, h_platform()) } else { None }
   // every key the app may read (Ctx::key_pressed), and whether the focused field takes it (the editor's own keys)
-  desk_key(code, mods, c.editors.contains(c.focus) && field_key(code))
+  desk_key(code, mods, c.editors.contains(c.focus) && (field_key(code) || step is Some(_)))
   // ⌘V (Ctrl+V) as the app's key: the host saw files or a picture on the clipboard (mac_app.m, win_app.c), read for
   // the field focused (Ctx::editor: them where it takes files, its words where it does not)
   if code == key_of_char('v') && (mods & (mod_cmd | mod_ctrl)) != 0 && c.editors.contains(c.focus) {
@@ -1164,6 +1166,14 @@ fn key_in(code : Int, mods : Int) -> Unit {
   if code == key_copy && !c.editors.contains(c.focus) && selected_words() != "" {
     h_clipboard_set(selected_words())
     return
+  }
+  match (c.editors.get(c.focus), step) {
+    (Some(st), Some(s)) => {
+      st.step(s, h_now())
+      h_request_frame()
+      return
+    }
+    _ => ()
   }
   if !field_key(code) {
     h_request_frame()

@@ -542,6 +542,7 @@ fn EditorState::key(self : EditorState, code : Int, mods : Int, now : Double) ->
   let up = self.caret_up()
   self.upstream = -1
   let t = self.text
+  let (anchor, caret) = (self.anchor, self.caret)
   match edit_of(code, mods, h_platform()) {
     Some(Move(r)) => self.move_by(r, shift, up)
     Some(Erase(r)) => self.erase(r, up)
@@ -570,7 +571,7 @@ fn EditorState::key(self : EditorState, code : Int, mods : Int, now : Double) ->
       } else if code == key_enter {
         if shift || !self.enter_sends {
           if self.marked.length() > 0 {
-            self.text_input(2, "", 0, 0, now)
+            self.put_text(2, "", 0, 0, now)
           }
           self.insert("\n")
         } else {
@@ -580,12 +581,30 @@ fn EditorState::key(self : EditorState, code : Int, mods : Int, now : Double) ->
         }
       }
   }
+  // kept to undo (editor_undo.mbt): a cut a step of its own, a deletion or a new line typing
+  self.edited(t, anchor, caret, code != key_cut)
 }
 
 ///|
-/// kind 0 commits text, 1 sets the composition (with its selection),
-/// 2 commits the composition as it is.
+/// What the host's text event `kind` does to the field (put_text), kept to undo (editor_undo.mbt): a paste a step of
+/// its own, all else typing.
 fn EditorState::text_input(
+  self : EditorState,
+  kind : Int,
+  s : String,
+  a : Int,
+  b : Int,
+  now : Double,
+) -> Unit {
+  let (text, anchor, caret) = (self.text, self.anchor, self.caret)
+  self.put_text(kind, s, a, b, now)
+  self.edited(text, anchor, caret, kind != text_paste)
+}
+
+///|
+/// kind 0 commits text (text_paste the same, what the clipboard held), 1 sets the composition (with its selection),
+/// 2 commits the composition as it is.
+fn EditorState::put_text(
   self : EditorState,
   kind : Int,
   s : String,
@@ -603,7 +622,7 @@ fn EditorState::text_input(
     self.sel_handles = false
     self.upstream = -1
   }
-  if kind == 0 {
+  if kind == 0 || kind == text_paste {
     if self.limit > 0 && s.length() >= self.limit {
       self.pasted = Some(s)
     } else {
@@ -742,7 +761,7 @@ pub fn Ctx::editor(
               desk.pasted[id] = [(pasted_picture_name, png)]
               self.read_changed("a picture pasted")
             }
-            _ => if got.text != "" { st.text_input(0, got.text, 0, 0, self.now) }
+            _ => if got.text != "" { st.text_input(text_paste, got.text, 0, 0, self.now) }
           }
         }
         None => ()
@@ -1121,6 +1140,9 @@ fn EditorState::fresh(text : String, now : Double) -> EditorState {
     look: None,
     looked: None,
     blink_again: false,
+    undos: [],
+    redos: [],
+    typed: None,
     built_frame: -1,
     built_key: "",
     built_id: 0,
@@ -1160,7 +1182,8 @@ pub fn Field::selection(self : Field) -> (Int, Int) {
 
 ///|
 /// `text` in place of what it holds, the caret at `caret` (its end when not said), nothing selected: an app's own edit
-/// (words kept put back, a mark put in, a word taken out whole). What the input method was composing is let go.
+/// (words kept put back, a mark put in, a word taken out whole). What the input method was composing is let go; new
+/// words let go of the person's edits kept to undo.
 pub fn Field::set(self : Field, text : String, caret? : Int) -> Unit {
   let st = self.st
   let at = match caret {
@@ -1169,6 +1192,9 @@ pub fn Field::set(self : Field, text : String, caret? : Int) -> Unit {
   }
   if st.text == text && st.marked == "" && st.caret == at && st.anchor == at {
     return
+  }
+  if st.text != text {
+    st.forget_edits()
   }
   st.marked = ""
   st.text = text
@@ -1219,6 +1245,9 @@ fn Ctx::put_editor_text(self : Ctx, key : String, text : String) -> Unit {
   let id = self.id(key)
   match self.editors.get(id) {
     Some(st) => {
+      if st.text != text {
+        st.forget_edits()
+      }
       st.marked = ""
       st.text = text
       st.caret = text.length()
@@ -1423,7 +1452,7 @@ pub fn Ctx::field_edit(self : Ctx, id : Int, what : Int, paste? : String = "") -
     Some(st) => {
       if what == @hostapi.text_menu_paste {
         if paste != "" {
-          st.text_input(0, paste, 0, 0, self.now)
+          st.text_input(text_paste, paste, 0, 0, self.now)
         }
       } else if what == @hostapi.text_menu_cut {
         st.key(key_cut, 0, self.now)

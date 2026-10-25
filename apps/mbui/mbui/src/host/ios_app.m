@@ -429,8 +429,9 @@ static void touch_gone(int end, NSSet<UITouch *> *t, UIView *v) {
 // The system's edit actions (its floating edit menu: mb_host_text_menu; a hardware keyboard's ⌘X, ⌘C, ⌘V, ⌘A; a
 // scripted run's paste): what the field's menu offers (cut and copy over words picked, paste, select all), done as
 // Android's floating menu does them (MBView.textMenu): cut, copy and select all as the field's own keys, the
-// clipboard's words put in as typed (a long paste is the app's to take: the editor's paste_limit). Nothing else of the
-// system's (look up, translate, share…), which Android's menu has none of either.
+// clipboard's words pasted (text kind 8: put in as typed, a step of its own to undo; a long paste is the app's to take:
+// the editor's paste_limit). Nothing else of the system's (look up, translate, share…), which Android's menu has none
+// of either.
 static int32_t menu_can;  // what the menu offers (hostapi text_menu_*: 1 cut, 2 copy, 4 paste, 8 select all)
 - (BOOL)canPerformAction:(SEL)action withSender:(id)sender {
   if (!self.imeActive || key_catching) return NO;
@@ -442,7 +443,7 @@ static int32_t menu_can;  // what the menu offers (hostapi text_menu_*: 1 cut, 2
 }
 - (void)paste:(id)sender {
   NSString *s = UIPasteboard.generalPasteboard.string;
-  if (s.length) send_text(0, s, 0, 0);
+  if (s.length) send_text(8, s, 0, 0);
 }
 - (void)cut:(id)sender { mb_cb.key(14, 0); [self requestFrame]; }
 - (void)copy:(id)sender { mb_cb.key(13, 0); [self requestFrame]; }

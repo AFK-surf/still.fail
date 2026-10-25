@@ -165,6 +165,7 @@ static void ime_composition(LPARAM lp) {
 
 // ---- clipboard ----
 
+// The clipboard's words pasted (text kind 8: put in as typed, a step of its own to undo).
 static void paste(void) {
   if (!OpenClipboard(hwnd)) return;
   HANDLE h = GetClipboardData(CF_UNICODETEXT);
@@ -176,7 +177,7 @@ static void paste(void) {
       if (!(p[i] == '\r' && p[i + 1] == '\n')) s[k++] = p[i];
     GlobalUnlock(h);
     CloseClipboard();
-    if (k) send_text(0, s, (int)k, 0, 0);
+    if (k) send_text(8, s, (int)k, 0, 0);
     free(s);
     return;
   }
