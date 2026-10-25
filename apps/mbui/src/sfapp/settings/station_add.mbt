@@ -262,10 +262,10 @@ fn join_existing(c : @ui.Ctx, core : Core, here : Here, rows : Array[Json], load
     })
     |> ignore
     c.box(dir=Row, w=Fill(1.0), padx=20.0, pt=10.0, pb=24.0, gap=8.0, justify=JEnd, fn() {
-      if button(c, "join-close", tr(if adding.took.length() == 0 { "common.cancel" } else { "common.done" }), false) {
+      if @sf.button(c, tr(if adding.took.length() == 0 { "common.cancel" } else { "common.done" }), key="join-close") {
         close_sheet()
       }
-      if button(c, "join-go", tr("web-pages.settings.stations.joinAction"), true, busy~, enabled=chosen is Some(_)) {
+      if @sf.button(c, tr("web-pages.settings.stations.joinAction"), key="join-go", tone=Primary, busy=busy, disabled=chosen is None) {
         match chosen {
           Some(s) => {
             adding.error = ""
@@ -334,11 +334,11 @@ fn add_station_steps(
           c.text(adding.error, size=t.t.meta, color=t.p.red, w=Fill(1.0), line=18.0) |> ignore
         }
         c.box(dir=Row, w=Fill(1.0), pt=6.0, gap=8.0, justify=JEnd, fn() {
-          if cancel && button(c, "add-cancel", tr("common.cancel"), false) {
+          if cancel && @sf.button(c, tr("common.cancel"), key="add-cancel") {
             c.blur()
             close_sheet()
           }
-          if button(c, "add-make", tr("android-settings.station.make"), true, busy~, enabled=name != "") {
+          if @sf.button(c, tr("android-settings.station.make"), key="add-make", tone=Primary, busy=busy, disabled=name == "") {
             c.blur()
             adding.error = ""
             (core.call)(
@@ -363,7 +363,7 @@ fn add_station_steps(
         })
         |> ignore
         c.box(dir=Row, w=Fill(1.0), justify=JEnd, fn() {
-          if button(c, "add-done", tr("common.done"), true) {
+          if @sf.button(c, tr("common.done"), key="add-done", tone=Primary) {
             done()
           }
         })

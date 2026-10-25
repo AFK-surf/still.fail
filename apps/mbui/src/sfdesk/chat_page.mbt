@@ -254,18 +254,18 @@ fn chat_bar(
           c.box(style=chat_bar_buttons, fn() {
             // nothing left in it (the core's `archivable`): archived with one press
             if view.archivable && !view.archived {
-              if icon_button(c, "chat-archive", "archive", label=@sf.t("web-pages.chat.archive"), action="chat.archive") {
+              if @sf.icon_button(c, "archive", key="chat-archive", round=true, label=@sf.t("web-pages.chat.archive"), shortcut="chat.archive") {
                 c.tell("chat/archive", fn() { archive_asked(src, w, r, view, chat) })
               }
             }
             jobs_trigger(c, src, r)
-            if view.thread is Some(_) && icon_button(c, "chat-more", "more", label=@sf.t("web-pages.chat.info")) {
+            if view.thread is Some(_) && @sf.icon_button(c, "more", key="chat-more", round=true, label=@sf.t("web-pages.chat.info")) {
               chat_own.info_open = !chat_own.info_open
             }
             // the side panel's switch while it is closed: the first agent's history in it
             if side_of(view).0.length() == 0 &&
               view.agents.length() > 0 &&
-              icon_button(c, "chat-panel", "panel-open", label=@sf.t("web-pages.chat.openPanel"), action="chat.history") {
+              @sf.icon_button(c, "panel-open", key="chat-panel", round=true, label=@sf.t("web-pages.chat.openPanel"), shortcut="chat.history") {
               side_change(src, r, "open", Some(view.agents[0].key))
             }
           })
@@ -482,7 +482,7 @@ fn jobs_trigger(c : @ui.Ctx, src : Source, r : ChatRef) -> Unit {
   if items(view, "jobs").length() == 0 {
     return
   }
-  if icon_button(c, "chat-jobs", "web", label=@sf.t("web-pages.chat.services"), action="chat.jobs") {
+  if @sf.icon_button(c, "web", key="chat-jobs", round=true, label=@sf.t("web-pages.chat.services"), shortcut="chat.jobs") {
     chat_own.jobs_open = !chat_own.jobs_open
   }
   match text(view, "alarm") {

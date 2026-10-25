@@ -149,7 +149,7 @@ fn landing_picture(c : @ui.Ctx) -> Unit {
 ///|
 /// 切换账号: another account signed in (the system's browser).
 fn switch_account_button(c : @ui.Ctx, src : Source) -> Unit {
-  if @settings.button(c, "landing/switch", @sf.t("android-misc.account.switch"), false, busy=(src.signing_in)()) {
+  if @sf.button(c, @sf.t("android-misc.account.switch"), key="landing/switch", busy=(src.signing_in)()) {
     (src.sign_in)()
   }
 }
@@ -222,7 +222,7 @@ fn invite_code_form(c : @ui.Ctx, src : Source, account : Json?) -> Unit {
         code = r.text.trim(chars=" \n").to_string()
       })
       |> ignore
-      if @settings.button(c, "landing/create-code", @sf.t("android-misc.workspace.create"), true, busy=landing.creating, enabled=code != "") {
+      if @sf.button(c, @sf.t("android-misc.workspace.create"), key="landing/create-code", tone=Primary, busy=landing.creating, disabled=code == "") {
         create_workspace(src, account, code)
       }
     })
@@ -277,14 +277,7 @@ fn landing_page_of(c : @ui.Ctx, src : Source, entries : Array[Json], by_link : (
             |> ignore
           })
           |> ignore
-          if @settings.button(
-              c,
-              "landing/join/" + id,
-              @sf.t("android-misc.invite.join"),
-              true,
-              busy=landing.accepting == id,
-              reach=@settings.foot_across,
-            ) &&
+          if @sf.button(c, @sf.t("android-misc.invite.join"), key="landing/join/" + id, tone=Primary, busy=landing.accepting == id, reach=@sf.foot_across(@sf.button_height())) &&
             landing.accepting == "" {
             accept_invitation(src, account, id)
           }
@@ -296,7 +289,7 @@ fn landing_page_of(c : @ui.Ctx, src : Source, entries : Array[Json], by_link : (
       }
       if asking {
         invite_code_form(c, src, first)
-      } else if @settings.button(c, "landing/decline-create", @sf.t("android-misc.invite.declineCreate"), false, busy=landing.creating) {
+      } else if @sf.button(c, @sf.t("android-misc.invite.declineCreate"), key="landing/decline-create", busy=landing.creating) {
         create_workspace(src, first, "")
       }
     } else if asking {
@@ -309,13 +302,13 @@ fn landing_page_of(c : @ui.Ctx, src : Source, entries : Array[Json], by_link : (
       c.text(@sf.t("android-misc.workspace.none"), style=landing_title) |> ignore
       c.text(@sf.t("android-misc.workspace.none.lead", args=[("app", "still.fail"), ("email", text(first, "email"))]), style=landing_lead)
       |> ignore
-      if @settings.button(c, "landing/create", @sf.t("android-misc.workspace.createOne"), true, busy=landing.creating) {
+      if @sf.button(c, @sf.t("android-misc.workspace.createOne"), key="landing/create", tone=Primary, busy=landing.creating) {
         create_workspace(src, first, "")
       }
       if landing.create_error != "" {
         c.text(landing.create_error, style=landing_error) |> ignore
       }
-      if @settings.button(c, "landing/by-link", @sf.t("android-misc.invite.byLink"), false) {
+      if @sf.button(c, @sf.t("android-misc.invite.byLink"), key="landing/by-link") {
         by_link()
       }
       switch_account_button(c, src)
@@ -353,7 +346,7 @@ fn blocked_page(c : @ui.Ctx, src : Source, entry : Json?) -> Unit {
     landing_picture(c)
     c.text(text(entry, "blocked"), style=landing_title) |> ignore
     c.text(text(account, "email"), style=landing_lead) |> ignore
-    if @settings.button(c, "landing/sign-out", @sf.t("android-misc.account.signOut"), true, busy=landing.leaving) &&
+    if @sf.button(c, @sf.t("android-misc.account.signOut"), key="landing/sign-out", tone=Primary, busy=landing.leaving) &&
       !landing.leaving {
       landing.leaving = true
       landing.leave_error = ""

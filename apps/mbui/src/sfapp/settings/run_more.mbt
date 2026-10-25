@@ -418,10 +418,10 @@ fn look_at_machine_session(core : Core, station : String, name : String, s : Jso
     }
     let busy = is_doing(core, ["machineSessions.continue"], [("station", station), ("id", text(sv, "id"))])
     c.box(dir=Row, w=Fill(1.0), pl=20.0, pr=20.0, pt=10.0, pb=24.0, gap=8.0, justify=JEnd, fn() {
-      if button(c, "machine-back", tr("common.back"), false) {
+      if @sf.button(c, tr("common.back"), key="machine-back") {
         open_machine_sessions(core, station, name)
       }
-      if button(c, "machine-go", tr(if has(sv, "session") { "android-chat.new.machine.open" } else { "android-chat.new.machine.continue" }), true, busy~) {
+      if @sf.button(c, tr(if has(sv, "session") { "android-chat.new.machine.open" } else { "android-chat.new.machine.continue" }), key="machine-go", tone=Primary, busy=busy) {
         error.val = ""
         (core.call)("machineSessions.continue", obj([("station", str(station)), ("runtime", str(text(sv, "runtime"))), ("id", str(text(sv, "id")))]), fn(r) {
           match r {
@@ -509,7 +509,7 @@ pub fn open_add_people(_core : Core, here : Here, view : Json?) -> Unit {
       c.box(w=Fill(1.0), padx=20.0, gap=10.0, fn() {
         c.text(done.val, size=t.t.ui, color=t.p.text, w=Fill(1.0), line=20.0) |> ignore
         c.box(dir=Row, w=Fill(1.0), pb=24.0, justify=JEnd, fn() {
-          if button(c, "add-people-done", tr("common.done"), true) {
+          if @sf.button(c, tr("common.done"), key="add-people-done", tone=Primary) {
             close_sheet()
           }
         })
@@ -552,7 +552,7 @@ pub fn open_add_people(_core : Core, here : Here, view : Json?) -> Unit {
         None =>
           blocks.push(fn() {
             c.box(dir=Row, fn() {
-              if button(c, "add-from-slack", tr("android-settings.add.fromSlack"), false, busy=reading.val > 0) {
+              if @sf.button(c, tr("android-settings.add.fromSlack"), key="add-from-slack", busy=reading.val > 0) {
                 reading.val = online.length()
                 let seen : Map[String, Json] = Map([])
                 for s in online {
@@ -679,22 +679,15 @@ pub fn open_add_people(_core : Core, here : Here, view : Json?) -> Unit {
         c.text(error.val, size=t.t.meta, color=t.p.red, w=Fill(1.0), line=18.0) |> ignore
       }
       c.box(dir=Row, w=Fill(1.0), pt=6.0, pb=24.0, gap=8.0, justify=JEnd, fn() {
-        if button(c, "add-cancel", tr("common.cancel"), false) {
+        if @sf.button(c, tr("common.cancel"), key="add-cancel") {
           c.blur()
           close_sheet()
         }
-        if button(
-            c,
-            "add-go",
-            if emails.length() > 1 {
+        if @sf.button(c, if emails.length() > 1 {
               fill("android-settings.add.many", [("n", emails.length().to_string())])
             } else {
               tr("android-settings.add.one")
-            },
-            true,
-            busy~,
-            enabled=emails.length() > 0,
-          ) {
+            }, key="add-go", tone=Primary, busy=busy, disabled=emails.length() == 0) {
           c.blur()
           error.val = ""
           (core.call)(

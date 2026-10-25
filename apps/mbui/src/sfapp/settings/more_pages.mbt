@@ -217,7 +217,7 @@ fn decision_panel(c : @ui.Ctx, core : Core, station : String, name : String, vie
   if flag(d, "dirty") {
     out.push(fn() {
       c.box(dir=Row, w=Fill(1.0), padx=12.0, gap=12.0, align=ACenter, fn() {
-        if button(c, "auto-save/" + station, tr("web-pages.automaticDecisions.save"), true, busy=saving, enabled=!busy) {
+        if @sf.button(c, tr("web-pages.automaticDecisions.save"), key="auto-save/" + station, tone=Primary, busy=saving, disabled=busy) {
           call("save", [])
         }
         doing_mark(c, false, failed_of(core, ["automaticDecisions.form.save"], [("station", station), ("form", form)]))
@@ -326,11 +326,11 @@ fn policy_page(c : @ui.Ctx, core : Core, here : Here, station : String) -> Unit 
               None => ()
             }
             c.spacer()
-            if button(c, "policy-cancel", tr("web-pages.archivePolicy.cancel"), false) {
+            if @sf.button(c, tr("web-pages.archivePolicy.cancel"), key="policy-cancel") {
               c.blur()
               cancel()
             }
-            if button(c, "policy-save", tr("web-pages.archivePolicy.save"), true, enabled=flag(d, "dirty")) {
+            if @sf.button(c, tr("web-pages.archivePolicy.save"), key="policy-save", tone=Primary, disabled=!flag(d, "dirty")) {
               c.blur()
               save()
             }

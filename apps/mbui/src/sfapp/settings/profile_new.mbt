@@ -288,7 +288,7 @@ fn new_profile_page(c : @ui.Ctx, core : Core, here : Here, station : String) -> 
               line=18.0,
             )
             |> ignore
-            if button(c, "login-restart", tr("android-settings.login.restart"), false) {
+            if @sf.button(c, tr("android-settings.login.restart"), key="login-restart") {
               drop_login(core, station, n)
             }
           } else {
@@ -409,7 +409,7 @@ fn connect_form(
   }
   let submitting = is_doing(core, ["profile.flow.submit"], [("station", station), ("form", form)])
   c.box(dir=Row, w=Fill(1.0), justify=JEnd, fn() {
-    if button(c, "profile-submit", text(d, "submitLabel"), true, busy=submitting || flag(d, "pending"), enabled=flag(d, "canSubmit")) {
+    if @sf.button(c, text(d, "submitLabel"), key="profile-submit", tone=Primary, busy=submitting || flag(d, "pending"), disabled=!flag(d, "canSubmit")) {
       c.blur()
       (core.call)("profile.flow.submit", obj([("station", str(station)), ("form", str(form))]), fn(r) {
         match r {

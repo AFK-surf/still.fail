@@ -50,7 +50,7 @@ fn pane_bar(
       match back {
         Some((label, go)) => {
           room(@sf.tape_bar_start(room_l))
-          if icon_button(c, "settings-back", "chevron-left", label~) {
+          if @sf.icon_button(c, "chevron-left", key="settings-back", round=true, label~) {
             go()
           }
         }

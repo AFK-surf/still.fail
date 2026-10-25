@@ -72,7 +72,7 @@ fn letters_tab(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView, thread : Do
       rows.push(fn() {
         // back to the list, and its title (which opens that chat)
         c.box(style=letters_head, fn() {
-          if icon_button(c, "letters/back", "arrow-left", label=@sf.t("web-main.letters.back")) {
+          if @sf.icon_button(c, "arrow-left", key="letters/back", round=true, label=@sf.t("web-main.letters.back")) {
             letters_opened.remove(key)
           }
           let title = text(cv, "title")
