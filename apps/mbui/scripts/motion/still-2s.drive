@@ -1,0 +1,3 @@
+# A screen as it opens, held still two seconds (before and after films of a page that does not move).
+timeout 20000
+wait 2000

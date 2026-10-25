@@ -7,26 +7,16 @@
 // place while the lock's `me.waiting` says so (@settings.lock_waiting).
 
 ///|
-/// The page, in the box it is given: the shield, 等待批准, what it waits for, then the steps (pair_steps). On a touch
-/// device the web's mobile screen (mWaiting: in the middle of its height, 28 in at its sides, the shield 44); on a
-/// computer the web's desktop page (waiting: 110 down, 460 wide at most, 24 in at its sides, the shield 40). Its parts
-/// 14 apart, centred, on both.
+/// The page, in the box it is given (the library's waiting page): the shield, 等待批准, what it waits for, then the
+/// steps (pair_steps).
 pub fn lock_wait_page(c : @ui.Ctx, core : Core, here : @settings.Here) -> Unit {
-  let touch = @sf.touch_system()
-  c.box(style=if touch { lock_room_touch } else { lock_room }, fn() {
-    if !touch {
-      c.box(style=@ui.style(h=Fixed(lock_top)), fn() {  }) |> ignore
-    }
-    c.box(style=if touch { lock_column_touch } else { lock_column }, fn() {
-      @sf.icon(c, "shield-check", size=if touch { lock_icon_touch } else { lock_icon }, color=c.color(Fg)) |> ignore
-      c.text(@sf.t("web-pages.security.waitingTitle"), style=if touch { lock_title_touch } else { lock_title })
-      |> ignore
-      c.text(@sf.t("web-pages.security.waitingLead", args=[("name", here.name)]), style=lock_lead) |> ignore
-      pair_steps(c, core, here.workspace)
-    })
-    |> ignore
-  })
-  |> ignore
+  @sf.waiting_page(
+    c,
+    "shield-check",
+    @sf.t("web-pages.security.waitingTitle"),
+    @sf.t("web-pages.security.waitingLead", args=[("name", here.name)]),
+    fn() { pair_steps(c, core, here.workspace) },
+  )
 }
 
 ///|
@@ -101,52 +91,6 @@ pub fn pair_steps(c : @ui.Ctx, core : Core, ws : String, in_card? : Bool = false
     |> ignore
   }
 }
-
-///|
-/// The desktop page's place (waiting: margin 110 auto 0) and the touch screen's (mWaiting: its height, the column in
-/// its middle).
-// kept across runs: a value (no field of it changes)
-let lock_room : @ui.Style = @ui.css("w=Full h=Full align=ACenter")
-
-///|
-let lock_top : Double = 110.0
-
-///|
-// kept across runs: a value (no field of it changes)
-let lock_room_touch : @ui.Style = @ui.css("w=Full h=Full align=ACenter justify=JCenter")
-
-///|
-/// The column: 460 wide at most, 24 in at its sides (waiting); a touch screen's 28 in (mWaiting); 14 apart.
-// kept across runs: a value (no field of it changes)
-let lock_column : @ui.Style = @ui.css("w=Full px=S6 gap=S3_5 align=ACenter").then(@ui.style(max_w=Fixed(lock_w)))
-
-///|
-let lock_w : Double = 460.0
-
-///|
-// kept across runs: a value (no field of it changes)
-let lock_column_touch : @ui.Style = @ui.css("w=Full px=S7 gap=S3_5 align=ACenter")
-
-///|
-/// The shield: 40 on the desktop page, 44 on a touch screen.
-let lock_icon : Double = 40.0
-
-///|
-let lock_icon_touch : Double = 44.0
-
-///|
-/// 等待批准: the heading's size, 600 (waitingTitle); a touch screen's bold (mWaitingTitle, a <b>).
-// kept across runs: a value (no field of it changes)
-let lock_title : @ui.TextStyle = @ui.text_style(size=Xl3, weight=Semibold, color=Fg, center=true)
-
-///|
-// kept across runs: a value (no field of it changes)
-let lock_title_touch : @ui.TextStyle = @ui.text_style(size=Xl3, weight=Bold, color=Fg, center=true)
-
-///|
-/// What it waits for: the body's, muted (waitingLead).
-// kept across runs: a value (no field of it changes)
-let lock_lead : @ui.TextStyle = @ui.text_style(size=Base, leading=L7, color=Muted, center=true)
 
 ///|
 /// What is so (waitingNote: a turning ring 8 before it, muted, the meta's size); why it failed (waitingFailed: red).

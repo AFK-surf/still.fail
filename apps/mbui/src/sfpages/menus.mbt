@@ -35,32 +35,14 @@ fn link_held(c : @ui.Ctx, href : String) -> Unit {
   // (the press is the link's menu's, not a passage's pick)
   pk.taken_at = c.press().frame
   let (x, y, _) = c.pointer()
-  // on a touch device the phone's words (Links.kt), on a computer the desktop's (its context menu's); held by a finger,
-  // felt as it opens
-  let finger = @sf.touch_system()
+  // held by a finger, felt as it opens
   @sf.menu_held(c, "link") |> ignore
-  let items : Array[@sf.MenuItem?] = []
-  if href.has_prefix("https://") || href.has_prefix("http://") {
-    items.push(
-      Some(
-        @sf.menu_item_of(
-          @sf.t(if finger { "common.link.open" } else { "desktop.contextMenu.openLink" }),
-          fn() { menu_doing.open = href },
-          icon="external",
-        ),
-      ),
-    )
-  }
-  items.push(
-    Some(
-      @sf.menu_item_of(
-        @sf.t(if finger { "common.link.copy" } else { "desktop.contextMenu.copyLink" }),
-        fn() { menu_doing.copy = href },
-        icon="copy",
-      ),
-    ),
+  @sf.link_menu(
+    href,
+    from=@sf.at_point(x, y),
+    fn() { menu_doing.open = href },
+    fn() { menu_doing.copy = href },
   )
-  @sf.menu(items, from=@sf.at_point(x, y))
 }
 
 ///|

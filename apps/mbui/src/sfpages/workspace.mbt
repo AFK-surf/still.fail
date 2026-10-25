@@ -622,12 +622,11 @@ pub fn workspace_squares(c : @ui.Ctx, src : Source, w : Workspace, all : Array[W
   let area = c.id("rail/workspaces")
   let add = c.id("rail/ws-add")
   let open = ws_menu.val
-  // (always on a touch screen, which hovers over nothing: Rail.css.ts workspaceAdd `hover: none`)
+  // (always to a finger, which hovers over nothing: Rail.css.ts workspaceAdd `hover: none`)
   let over = open ||
-    @sf.touch_system() ||
-    c.lit(area) ||
-    c.lit(add) ||
-    all.iter().any(fn(x) { c.lit(c.id("rail/ws/" + x.id)) })
+    @sf.pointed_or_finger(
+      c.lit(area) || c.lit(add) || all.iter().any(fn(x) { c.lit(c.id("rail/ws/" + x.id)) }),
+    )
   let waiting = invitations_waiting(src).length() > 0
   let switch_to = fn(x : Workspace) { switch_workspace(src, x.id) }
   // ⌃1 … ⌃9 on a Mac (Alt elsewhere): the workspace at that place, as the web's keys (keymap.ts workspaceIndexOf)

@@ -2927,3 +2927,205 @@ let dialog_step : @ui.TextStyle = @ui.text_style(size=Sm, leading=L6, color=Mute
 ///|
 // kept across runs: a value (no field of it changes)
 let dialog_title_one : @ui.TextStyle = dialog_title.then(one_line)
+
+///|
+/// A page that waits on something (cloud/Security.tsx SecurityWaiting, mobile/Security.tsx SecurityWaitingScreen):
+/// its mark (`mark`, an icon's name), what it waits for (`title`, `lead`), then what can be done meanwhile (`body`); its parts 14 apart,
+/// centred. On a touch screen the phone's (mWaiting: in the middle of its height, 28 in at its sides, the mark 44, the
+/// title bold); on a computer the desktop page's (waiting: 110 down, 460 wide at most, 24 in, the mark 40, the title
+/// 600).
+pub fn waiting_page(c : @ui.Ctx, mark : String, title : String, lead : String, body : () -> Unit) -> Unit {
+  let touch = touch_system()
+  c.box(style=if touch { wait_room_touch } else { wait_room }, fn() {
+    if !touch {
+      c.box(style=@ui.style(h=Fixed(wait_top)), fn() {  }) |> ignore
+    }
+    c.box(style=if touch { wait_column_touch } else { wait_column }, fn() {
+      icon(c, mark, size=if touch { wait_icon_touch } else { wait_icon }, color=c.color(Fg)) |> ignore
+      c.text(title, style=if touch { wait_title_touch } else { wait_title }) |> ignore
+      c.text(lead, style=wait_lead) |> ignore
+      body()
+    })
+    |> ignore
+  })
+  |> ignore
+}
+
+///|
+/// The desktop page's place (waiting: margin 110 auto 0) and the touch screen's (mWaiting: its height, the column in
+/// its middle).
+// kept across runs: a value (no field of it changes)
+let wait_room : @ui.Style = @ui.css("w=Full h=Full align=ACenter")
+
+///|
+let wait_top : Double = 110.0
+
+///|
+// kept across runs: a value (no field of it changes)
+let wait_room_touch : @ui.Style = @ui.css("w=Full h=Full align=ACenter justify=JCenter")
+
+///|
+/// The column: 460 wide at most, 24 in at its sides (waiting); a touch screen's 28 in (mWaiting); 14 apart.
+// kept across runs: a value (no field of it changes)
+let wait_column : @ui.Style = @ui.css("w=Full px=S6 gap=S3_5 align=ACenter").then(@ui.style(max_w=Fixed(wait_w)))
+
+///|
+let wait_w : Double = 460.0
+
+///|
+// kept across runs: a value (no field of it changes)
+let wait_column_touch : @ui.Style = @ui.css("w=Full px=S7 gap=S3_5 align=ACenter")
+
+///|
+/// The mark: 40 on the desktop page, 44 on a touch screen.
+let wait_icon : Double = 40.0
+
+///|
+let wait_icon_touch : Double = 44.0
+
+///|
+/// The title: the heading's size, 600 (waitingTitle); a touch screen's bold (mWaitingTitle, a <b>).
+// kept across runs: a value (no field of it changes)
+let wait_title : @ui.TextStyle = @ui.text_style(size=Xl3, weight=Semibold, color=Fg, center=true)
+
+///|
+// kept across runs: a value (no field of it changes)
+let wait_title_touch : @ui.TextStyle = @ui.text_style(size=Xl3, weight=Bold, color=Fg, center=true)
+
+///|
+/// What it waits for: the body's, muted (waitingLead).
+// kept across runs: a value (no field of it changes)
+let wait_lead : @ui.TextStyle = @ui.text_style(size=Base, leading=L7, color=Muted, center=true)
+
+///|
+/// The way into an app, signed out (the web's cloud/gate.tsx SignInPage; SignIn.kt SignInScreen), in the box it is
+/// given: its picture (`art`, a drawable), what it is (`title`, `note`), its button (`label`; `busy` while it is under
+/// way, not pressed again), what to know of it (`foot`). A computer's the picture and the button alone, no wider than
+/// the desktop app's (asked for, 2026-10-23); a touch screen's all of it, the button across its page. True on the frame
+/// after the button was pressed.
+pub fn way_in(
+  c : @ui.Ctx,
+  art : String,
+  title : String,
+  note : String,
+  label : String,
+  foot : String,
+  busy? : Bool = false,
+) -> Bool {
+  let bare = !touch_system()
+  let id = c.id("sign-in")
+  let pressed = c.clicked(id) && !busy
+  c.box(style=sign_in_box, fn() {
+    drawable(c, art, dmin(sign_in_picture_w, c.width - sign_in_side_w - sign_in_side_w)) |> ignore
+    if !bare {
+      c.box(style=sign_in_title_box, fn() { c.text(title, style=sign_in_title) |> ignore }) |> ignore
+      c.text(note, style=sign_in_note) |> ignore
+    }
+    c.box(style=sign_in_gap, fn() {  }) |> ignore
+    c.box(style=if bare { sign_in_button_desk } else { sign_in_button_touch }, id~, fn() {
+      c.text(label, style=sign_in_words) |> ignore
+      // SignIn.kt: clip(CircleShape).clickable
+      if !busy {
+        @motion.ripple(c, id, sign_in_button_h / 2.0)
+      }
+    })
+    |> ignore
+    if !bare {
+      c.text(foot, style=sign_in_many) |> ignore
+    }
+  })
+  |> ignore
+  pressed
+}
+
+///|
+/// The sign-in button's width at most on a desktop, as the desktop app's.
+let sign_in_desk_w : Double = 300.0
+
+///|
+/// On a phone or a tablet: across a phone's page less its sides; no wider than this on a larger one.
+let sign_in_touch_w : Double = 420.0
+
+///|
+/// The button: 50 high, a pill (SignIn.kt: height(50.dp), CircleShape).
+let sign_in_button_h : Double = 50.0
+
+///|
+/// The picture: as wide as the button at most (SignIn.kt: widthIn(max = 300.dp)), never past the page's sides.
+let sign_in_picture_w : Double = 300.0
+
+///|
+/// The page: its picture, words and button in a column in its middle, 30 in from its sides and 40 from its top and
+/// foot, 12 apart (SignIn.kt: padding(horizontal = 30.dp, vertical = 40.dp), spacedBy(12.dp)).
+// kept across runs: a value (no field of it changes)
+let sign_in_box : @ui.Style = @ui.style(
+  w=Full,
+  h=Full,
+  px=sign_in_side,
+  py=S10,
+  gap=S3,
+  align=ACenter,
+  justify=JCenter,
+)
+
+///|
+/// What the page leaves either side of the picture (its sides: sign_in_box's px).
+let sign_in_side_w : Double = 30.0
+
+///|
+/// The title 10 under the picture, 28, bold, on the font's own line (SignIn.kt: 28.sp, Bold).
+// kept across runs: a value (no field of it changes)
+let sign_in_title_box : @ui.Style = @ui.css("pt=S2_5")
+
+///|
+// kept across runs: a value (no field of it changes)
+let sign_in_title : @ui.TextStyle = @ui.text_style(
+  size=sign_in_title_size,
+  weight=Bold,
+  color=Fg,
+  wrap=false,
+  leading=Font,
+)
+
+///|
+/// What still.fail is for: the body's size, muted, centred (SignIn.kt: 15.sp, lineHeight 21.sp).
+// kept across runs: a value (no field of it changes)
+let sign_in_note : @ui.TextStyle = @ui.text_style(size=Lg, color=Muted, center=true, w=Full)
+
+///|
+/// 6 more over the button.
+// kept across runs: a value (no field of it changes)
+let sign_in_gap : @ui.Style = @ui.css("h=S1_5")
+
+///|
+/// The button: the ink's, a pill across the page, no wider than `most`; its words the page's ground, semibold.
+fn sign_in_button(most : Double) -> @ui.Style {
+  @ui.style(
+    row=true,
+    w=Full,
+    max_w=Fixed(most),
+    h=Fixed(sign_in_button_h),
+    radius=Full,
+    bg=Fg,
+    align=ACenter,
+    justify=JCenter,
+  )
+}
+
+///|
+// kept across runs: a value (no field of it changes)
+let sign_in_button_desk : @ui.Style = sign_in_button(sign_in_desk_w)
+
+///|
+// kept across runs: a value (no field of it changes)
+let sign_in_button_touch : @ui.Style = sign_in_button(sign_in_touch_w)
+
+///|
+// kept across runs: a value (no field of it changes)
+let sign_in_words : @ui.TextStyle = @ui.text_style(size=Xl, weight=Semibold, color=Bg, wrap=false, leading=Font)
+
+///|
+/// 可同时登录多个账号: small, muted.
+// kept across runs: a value (no field of it changes)
+let sign_in_many : @ui.TextStyle = @ui.text_style(size=Xs, color=Muted, wrap=false, leading=Font)
+
