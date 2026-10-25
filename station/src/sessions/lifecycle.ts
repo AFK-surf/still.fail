@@ -5,6 +5,7 @@
 import { copyFileSync, mkdirSync, renameSync, rmSync } from "node:fs";
 import { rm } from "node:fs/promises";
 import { basename, dirname, join, relative, sep } from "node:path";
+import { DISK_LOW_BYTES } from "../ops/disk.ts";
 import { PlaceRefused } from "../ops/places.ts";
 import { log } from "../ops/log.ts";
 import { tr, type Lang, stationLang } from "../ops/i18n.ts";
@@ -249,6 +250,27 @@ export async function expireArchived(hub: Hub, now: number): Promise<number | nu
     }
   }
   return next;
+}
+
+/// The disk of the station's data is low (ops/disk.ts): archived workspaces are emptied before archivedWorkspaceMs, the
+/// longest archived first, as `expireArchived` empties them, until `free` is DISK_LOW_BYTES again. None with
+/// archivedWorkspaceDays 0 (kept on purpose).
+export async function relieveArchived(hub: Hub, free: () => number): Promise<void> {
+  const { cold } = hub;
+  if (hub.config().archivedWorkspaceMs <= 0 || !cold.expire || !cold.holdsMore) return;
+  const archived = hub.store
+    .listSessions()
+    .filter((s) => s.archivedAt !== null)
+    .sort((a, b) => a.archivedAt! - b.archivedAt!);
+  for (const s of archived) {
+    if (free() >= DISK_LOW_BYTES) return;
+    try {
+      // Shown and archived again since, it is not the one looked at: `expire` leaves it.
+      if (await cold.holdsMore(s.key)) await cold.expire(s.key, s.archivedAt!);
+    } catch (error) {
+      log.warn("hub", "the workspace of an archived session was not emptied", { session: s.key, error: (error as Error).message });
+    }
+  }
 }
 
 /// Archives what has idled past autoArchiveMs (counted from its last activity, or from being shown again by hand) and is

@@ -199,6 +199,20 @@ test("archived git worktree survives prune and restores dirty files", async () =
   rmSync(root, { recursive: true });
 });
 
+test("a worktree its repository no longer knows is packed with the rest, nothing locked for it", async () => {
+  const room = temp();
+  write(join(room, "workspace/source.rs"), "work");
+  write(join(room, "workspace/project/.git"), `gitdir: ${join(room, "gone.git", "worktrees", "project")}\n`);
+  write(join(room, "workspace/project/source.rs"), "the worktree's");
+  await packWorkspaceIf(room, () => true);
+  assert.ok(existsSync(workspaceArchive(room)));
+  assert.ok(!existsSync(join(room, "workspace/source.rs")));
+  assert.deepEqual(JSON.parse(readFileSync(join(room, "workspace-locks.json"), "utf8")), []);
+  await restoreWorkspace(room);
+  assert.equal(readFileSync(join(room, "workspace/project/source.rs"), "utf8"), "the worktree's");
+  rmSync(room, { recursive: true });
+});
+
 test("becoming active before commit keeps originals and removes temporary archives", async () => {
   const room = temp();
   write(join(room, "workspace/source.rs"), "work");

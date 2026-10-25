@@ -354,7 +354,12 @@ are those at the moment it opened.
   files sent in its chat (`uploads/`) are taken out of the archive onto the
   disk, the archive and everything else in the workspace are removed, and the
   git worktrees it locked are let go. Its transcripts and its threads stay, so
-  it goes on in its history, in an empty workspace.
+  it goes on in its history, in an empty workspace. With less than 20 GiB free
+  on the disk of the station's data (`ops/disk.ts`, looked at every five
+  minutes), once the mirrors of other stations' tasks not in use have gone,
+  archived workspaces are emptied the same way before their time, the longest
+  archived first, until there is that much again (`relieveArchived`); none
+  with `archivedWorkspaceDays` 0.
 - `DELETE /sessions/:key`: ends its process, deletes its rows (turns,
   deliveries, thread_sessions; threads left with no session, with their
   entries or archive files, and reads), its workspace directory and the Rust
