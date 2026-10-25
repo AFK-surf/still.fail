@@ -1740,7 +1740,6 @@ export const SHAPES: Record<string, Shape> = {
     ["previewSizes", map("String"), { default: true, doc: "The size a service's page is shown at on this device (its preview's 尺寸), by its station and job\n(`<station>\\n<job>`): its width, or `<width>x<height>`; none: as big as the preview." }],
     ["sidebars", map("String"), { default: true, doc: "Each sidebar of the wide frame as it was left on this device, by its workspace and its group\n(`<workspace>\\n<chats|settings|files|profiles|stations>`): its width, `<width>,closed` folded at that width, or `closed`." }],
     ["trouble", map("String"), { default: true, doc: "What this device did with a workspace's stations' trouble in the rail's bell, by `<workspace>\\n<seen|gone>`:\nthe trouble's words as they were when it was looked at (no longer lighting the bell) or let go (no longer listed)." }],
-    ["previewFolded", opt("bool"), { doc: "A service's page's toolbar folded away on this device (held down; the bar's size button opens it again)." }],
     ["resume", map("String"), { default: true, doc: "A Slack app made for a new connect, to go on with, by station (the Android app's)." }],
     ["stationUpdatesDismissed", map("String"), { default: true, doc: "Versions dismissed on this device, by workspace/station." }],
     ["badge", opt("String"), { default: true, doc: "What the app's badge counts: decisions (the cards waiting for them), attention (those and the chats of\ntheirs that went wrong; none: this), all (those and the unread). `badgeKinds`, when kept, says it instead." }],

@@ -903,11 +903,17 @@ fn sheet_body(c : @ui.Ctx, key : String, p : Presented, scrolls? : Bool = false)
         c.box(style=sheet_words_at, fn() { c.text(description, style=sheet_lead) |> ignore }) |> ignore
       }
       // what it holds in from the sheet's sides as its words are, opened by nothing (a form, a question); one opened
-      // by a press, as its rows are in a panel beside it, lays out its own sides (filling its room when tall)
+      // by a press, as its rows are in a panel beside it, lays out its own sides (filling its room when tall); the
+      // sheet's foot under it unless its buttons are (sheet_foot_at): the sheet's, as a panel's padding beside what
+      // opened it is the panel's, not what it holds
       let room = if x.tall > 0.0 {
         sheet_grows
       } else if p.from != Unanchored {
-        full_width
+        if x.foot is None {
+          sheet_held
+        } else {
+          full_width
+        }
       } else {
         sheet_panel
       }
@@ -1101,6 +1107,11 @@ let sheet_search_at : @ui.Style = @ui.css("w=Full px=S5 pb=S2_5")
 /// Composer.kt askToShare), 24 under.
 // kept across runs: a value (no field of it changes)
 let sheet_panel : @ui.Style = @ui.css("w=Full px=S5 pb=S6 gap=S2_5")
+
+///|
+/// What a panel opened by a press holds in a sheet: its own sides, 24 under.
+// kept across runs: a value (no field of it changes)
+let sheet_held : @ui.Style = @ui.css("w=Full pb=S6")
 
 ///|
 /// A confirm's and a question's words (PageParts.kt confirm, ask): 20 in, 10 apart.

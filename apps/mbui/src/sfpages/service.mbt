@@ -646,10 +646,10 @@ fn page_sizes(c : @ui.Ctx, key : String, close : () -> Unit) -> Unit {
 }
 
 ///|
-/// The sizes' room (10 in, 24 under them); a size's row: 10 in, its check's column, 8 apart, concentric with the panel;
+/// The sizes' room (10 in; under them the presenter's foot); a size's row: 10 in, its check's column, 8 apart, concentric with the panel;
 /// its name a row's title (500 chosen), its note a row's note (Rows); the check 16.
 // kept across runs: a value (no field of it changes)
-let sizes_room : @ui.Style = @ui.css("w=Full px=S2_5 pb=S6")
+let sizes_room : @ui.Style = @ui.css("w=Full px=S2_5")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -864,7 +864,7 @@ fn load_list(c : @ui.Ctx, src : Source, station : String, port : Int) -> Unit {
       row(Some(r))
     }
   }
-  c.box(w=Fill(1.0), padx=20.0, pb=load_list_foot, fn() {
+  c.box(w=Fill(1.0), padx=20.0, fn() {
     c.text(svc("android-chat.load.note"), size=12.0, color=t.p.muted) |> ignore
     c.box(w=Fill(1.0), pt=12.0, fn() {
       if number(v, "total") <= 0.0 {
@@ -883,10 +883,6 @@ let load_list_most : Double = 320.0
 
 ///|
 let load_list_share : Double = 0.55
-
-///|
-/// Under the list, as under the sizes (page_sizes: 24).
-let load_list_foot : Double = 24.0
 
 ///|
 fn load_label(v : Json?) -> String {

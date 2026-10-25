@@ -478,12 +478,11 @@ test("a_service_page_s_size_and_folded_toolbar_are_kept_on_the_device", async ()
   const values = new Map();
   apply(host, values);
   assert.deepEqual(v(values, 1).previewSizes, {});
-  call(core, ui, 2, "prefs.set", { previewSizes: { "ws/st\nj1": "390x844", "ws/st\nj2": "1280" }, previewFolded: true });
+  call(core, ui, 2, "prefs.set", { previewSizes: { "ws/st\nj1": "390x844", "ws/st\nj2": "1280" } });
   call(core, ui, 3, "prefs.set", { previewSizes: { "ws/st\nj2": null } });
   await host.settle();
   apply(host, values);
   assert.deepEqual(v(values, 1).previewSizes, { "ws/st\nj1": "390x844" });
-  assert.equal(v(values, 1).previewFolded, true);
   // a size is digits, or two with an x between
   call(core, ui, 4, "prefs.set", { previewSizes: { "ws/st\nj1": "wide" } });
   await host.settle();
