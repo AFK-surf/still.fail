@@ -116,17 +116,10 @@ fn Ctx::squeeze_faults(self : Ctx) -> Array[String] {
       continue
     }
     // words cut down to nothing
-    if b.kind == kind_text && !b.wrap && b.fw > 0.0 {
-      match (b.tl, b.full) {
-        (Some(shown), Some(full)) if full.w > b.fw + squeeze_slack => {
-          // (the ellipsis is the last of what shows)
-          let kept = shown.shaped.starts.length() - 1
-          if kept < squeeze_kept_chars {
-            out.push("\{self.named(i)}: its words cut to \{kept} characters (they need \{full.w.round()})")
-          }
-        }
-        _ => ()
-      }
+    match b.squeeze_kept() {
+      Some((kept, need)) if kept < squeeze_kept_chars =>
+        out.push("\{self.named(i)}: its words cut to \{kept} characters (they need \{need.round()})")
+      _ => ()
     }
     // words wrapped narrower than they break: a word broken inside it, a letter or two a line
     if b.kind == kind_text && b.wrap && b.fw > 0.0 && b.text != "" {
@@ -193,6 +186,22 @@ fn Ctx::squeeze_faults(self : Ctx) -> Array[String] {
     }
   }
   out
+}
+
+///|
+/// Words on one line cut short with an ellipsis (Ctx::text's, Ctx::rich's): how many characters of them show before it,
+/// and how wide all of them are; None where they are not cut.
+fn Node::squeeze_kept(self : Node) -> (Int, Double)? {
+  if !self.one_line_words() || self.fw <= 0.0 {
+    return None
+  }
+  // (the ellipsis is the last of what shows)
+  match (self.tl, self.full, self.rcut, self.rl) {
+    (Some(shown), Some(full), _, _) if self.kind == kind_text && full.w > self.fw + squeeze_slack =>
+      Some((shown.shaped.starts.length() - 1, full.w))
+    (_, _, Some(_), Some(shown)) if self.kind == kind_rich => Some((shown.starts.length() - 1, self.rl_whole))
+    _ => None
+  }
 }
 
 ///|

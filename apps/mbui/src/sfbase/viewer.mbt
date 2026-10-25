@@ -2768,6 +2768,7 @@ pub fn Viewer::text_stage(self : Viewer, c : @ui.Ctx, kind : PKind, b : Bytes, s
           color=t.p.text,
           line~,
           wrap=!code,
+          breaks=code,
         )
         |> ignore
       }

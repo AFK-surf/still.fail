@@ -189,6 +189,55 @@ test "on one line: cut with an ellipsis where its column is narrower, as Ctx::te
 }
 
 ///|
+test "on one line: its line breaks spaces, as Ctx::text's, and never wider than its column, whatever its alignment" {
+  let t = @ui.Tester::new(
+    fn(c) {
+      c.column(w=Px(60.0), align=AStart, fn() {
+        c.rich([@ui.plain("ab\ncd"), @ui.bold(" ef\n\n gh ij kl mn op")], size=10.0, wrap=false) |> ignore
+        c.text("pq\nrs tu vw xy zz yy", size=10.0, wrap=false) |> ignore
+      })
+      |> ignore
+    },
+    w=300.0,
+    h=300.0,
+  )
+  let lines = t.lines_of("ab")
+  assert_eq(lines.length(), 1)
+  assert_true(lines[0].has_prefix("ab cd ef"), msg=lines[0])
+  assert_true(lines[0].has_suffix("…"), msg=lines[0])
+  match t.rich_of("ab") {
+    Some((rl, _, _)) => assert_true(rl.w <= 60.0, msg="\{rl.w} wide in 60")
+    None => fail("no ab")
+  }
+  let plain = t.lines_of("pq")
+  assert_eq(plain.length(), 1)
+  assert_true(plain[0].has_prefix("pq rs"), msg=plain[0])
+  assert_true(plain[0].has_suffix("…"), msg=plain[0])
+}
+
+///|
+test "on one line with its breaks kept (code shown as written): a line each, as wide as the widest" {
+  let t = @ui.Tester::new(
+    fn(c) {
+      c.sideways("code", fn() {
+        c.rich([@ui.span("let a = 1\nlet bb = a + a + a + a + a + a", mono=true)], size=10.0, wrap=false, breaks=true)
+        |> ignore
+        c.text("x = 1\ny = 2", size=10.0, wrap=false, breaks=true) |> ignore
+      })
+      |> ignore
+    },
+    w=60.0,
+    h=300.0,
+  )
+  assert_eq(t.lines_of("let a").length(), 2)
+  assert_eq(t.lines_of("x = 1").length(), 2)
+  match t.rich_of("let a") {
+    Some((rl, _, _)) => assert_true(rl.w > 60.0, msg="\{rl.w}: cut")
+    None => fail("no code")
+  }
+}
+
+///|
 test "the same words in runs whose ranges moved (as many runs): drawn in the runs as they are now" {
   let red = 0xFF0000FFL
   let ink = 0x000000FFL

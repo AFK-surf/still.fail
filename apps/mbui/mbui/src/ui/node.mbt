@@ -232,6 +232,8 @@ struct Node {
   mut rl_max : Double
   // the paragraph `rl` was laid out from (its runs and their styles): `rl` serves only that one
   mut rl_for : Rich?
+  // on one line, how wide all of it is, as `rl` was laid out (what it is cut from; NaN: wrapped)
+  mut rl_whole : Double
   // list rows: index of the item this child shows
   mut item : Int
   // held this far below the top of the list it is in as its row scrolls past, within its parent (Ctx::stick; NaN:
@@ -375,6 +377,7 @@ fn Node::new() -> Node {
     rl: None,
     rl_max: 0.0,
     rl_for: None,
+    rl_whole: 0.0 / 0.0,
     item: -1,
     stick: 0.0 / 0.0,
     fl: @flex.Node::new(),
@@ -446,7 +449,7 @@ fn Node::reset_rest(self : Node) -> Unit {
   self.rich = None
   self.lines = []
   self.shapes = []
-  // (its cut runs go with its layout, kept with it: rl, rl_for)
+  // (its cut runs go with its layout, kept with it: rl, rl_for, rl_whole)
   self.item = -1
   self.stick = 0.0 / 0.0
 }

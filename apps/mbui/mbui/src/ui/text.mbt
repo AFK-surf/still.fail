@@ -881,6 +881,56 @@ fn is_nl(c : Int) -> Bool {
 }
 
 ///|
+/// Whether there is a line break in `s`.
+fn has_nl(s : String) -> Bool {
+  s.iter().any(fn(ch) { is_nl(ch.to_int()) })
+}
+
+///|
+/// Words that do not wrap put on one line, as CSS's white-space: nowrap puts them: each line break in them, with the
+/// spaces round it, one space; none before the first words or after the last. `texts` are a paragraph's runs in order
+/// (a break may run from one into the next), each its own again; None where there is no line break in them.
+fn one_line(texts : Array[String]) -> Array[String]? {
+  guard texts.iter().any(has_nl) else { None }
+  let chars : Array[(Char, Int)] = []
+  for k, s in texts {
+    for ch in s {
+      chars.push((ch, k))
+    }
+  }
+  let blank = fn(ch : Char) { ch == ' ' || ch == '\t' || is_nl(ch.to_int()) }
+  let out = texts.map(fn(_) { StringBuilder::new() })
+  let n = chars.length()
+  let mut said = false
+  let mut i = 0
+  while i < n {
+    let (ch, k) = chars[i]
+    if !blank(ch) {
+      out[k].write_char(ch)
+      said = true
+      i = i + 1
+      continue
+    }
+    // blanks: with a line break among them, one space where words are either side; else as they are
+    let mut j = i
+    let mut broken = false
+    while j < n && blank(chars[j].0) {
+      broken = broken || is_nl(chars[j].0.to_int())
+      j = j + 1
+    }
+    if !broken {
+      for m in i..<j {
+        out[chars[m].1].write_char(chars[m].0)
+      }
+    } else if said && j < n {
+      out[k].write_char(' ')
+    }
+    i = j
+  }
+  Some(out.map(fn(sb) { sb.to_string() }))
+}
+
+///|
 /// Whether cluster i ends a line by itself: a line terminator followed by a
 /// hard break (not CR before LF, when the host makes them two clusters).
 fn Shaped::hard_end(self : Shaped, i : Int) -> Bool {

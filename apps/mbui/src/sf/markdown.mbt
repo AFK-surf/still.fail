@@ -621,7 +621,7 @@ fn Md::piece(self : Md, b : MdBlock, tight : Bool, task : Bool?) -> Array[Piece]
       }
     MathBlock(source, drawing) => [{ top: 0.0, bottom: 8.0, draw: fn() {
       c.sideways("sf-math/" + source, fn() {
-        self.words([Formula(source, drawing)], s, 0, self.ink, None, wrap=false)
+        self.words([Formula(source, drawing)], s, 0, self.ink, None, wrap=false, breaks=true)
       }) |> ignore
     } }]
     Table(t) => {
@@ -874,7 +874,8 @@ fn task_box(c : @ui.Ctx, done : Bool, line : Double) -> Unit {
 }
 
 ///|
-/// A block's words as one paragraph of runs.
+/// A block's words as one paragraph of runs; `breaks`: on one line, its own lines kept (a formula's source shown as
+/// written).
 fn Md::words(
   self : Md,
   xs : Array[MdInline],
@@ -883,6 +884,7 @@ fn Md::words(
   ink : Int64,
   _task : Bool?,
   wrap? : Bool = true,
+  breaks? : Bool = false,
 ) -> Unit {
   let c = self.c
   let p = theme().p
@@ -908,6 +910,7 @@ fn Md::words(
     key="sf-md/p\{self.n}",
     size~,
     wrap~,
+    breaks~,
     weight=if weight > 0 { weight } else { 400 },
     color=ink,
     line=self.lh(size),
@@ -1093,6 +1096,7 @@ pub fn code_block(c : @ui.Ctx, code : String, lang : String, colours? : String? 
         size=t.t.caption,
         line=if over { code_line_wide } else { 18.0 },
         wrap=false,
+        breaks=true,
         color=t.p.text,
       )
       |> ignore
