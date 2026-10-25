@@ -950,10 +950,12 @@ extern "C" fn nt_state(what : Int) -> Int = "mb_host_notice_state"
 /// 0: a notification tapped (its `opens`), once; 1: the push token; 2: a push delivered, once
 extern "C" fn nt_text(what : Int) -> String = "mb_host_notice_text"
 
-// Native views over the canvas (src/ui/native.mbt): a system view (a video player, a web page) the host keeps in the
-// window under the app's surface, shown through a hole the app paints in it (instances of kind 9: transparent,
-// written without blending), so what the app paints after the hole draws over the view (a bar, a video's controls)
-// and what it paints over its edges clips it. Ids are the host's own, from 1; 0 where the host has none of that kind.
+// Native views in the canvas (src/ui/native.mbt): a system view (a video player, a web page) the app paints where it
+// shows (an instance of kind 9, its image the view's: @hostapi.view_tex_base), so what the app paints after it draws
+// over the view (a bar, a video's controls) and what it paints over its edges clips it. macOS, iOS and Windows keep
+// the view in the window under the app's surface and leave the canvas clear there (transparent, written without
+// blending), a hole it shows through; Android draws the view's picture there (NativeViews.Picture). Ids are the
+// host's own, from 1; 0 where the host has none of that kind.
 
 ///|
 #borrow(arg)

@@ -576,9 +576,10 @@ static void encode(id<MTLCommandBuffer> cb, id<MTLTexture> target, id<MTLRenderP
       continue;
     }
     [enc setRenderPipelineState:(hole ? hpipe : p)];
-    id<MTLTexture> t = tid > MB_STREAM_TEX ? mb_stream_texture(tid - MB_STREAM_TEX) : tid ? mb_image_texture(tid) : nil;
+    // (a hole's image is its view's, src/hostapi/host.mbt view_tex_base + its id: the view is under the canvas here)
+    id<MTLTexture> t = hole ? nil : tid > MB_STREAM_TEX ? mb_stream_texture(tid - MB_STREAM_TEX) : tid ? mb_image_texture(tid) : nil;
     // (a stream with no frame of its own yet, or lost: nothing, not the atlas)
-    if (tid > MB_STREAM_TEX && !t) {
+    if (!hole && tid > MB_STREAM_TEX && !t) {
       start = end;
       continue;
     }

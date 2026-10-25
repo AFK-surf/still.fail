@@ -803,9 +803,10 @@
         start = end;
         continue;
       }
-      // a stream's picture (STREAM_TEX + its id): nothing until a frame of its own shows
-      const im = tid > STREAM_TEX ? streams.get(tid - STREAM_TEX) : tid ? images.get(tid) : null;
-      if (tid > STREAM_TEX && !(im && im.tex)) {
+      // a stream's picture (STREAM_TEX + its id): nothing until a frame of its own shows; a hole's image is its
+      // view's (src/hostapi/host.mbt view_tex_base + its id), the element under the canvas here
+      const im = h ? null : tid > STREAM_TEX ? streams.get(tid - STREAM_TEX) : tid ? images.get(tid) : null;
+      if (!h && tid > STREAM_TEX && !(im && im.tex)) {
         start = end;
         continue;
       }

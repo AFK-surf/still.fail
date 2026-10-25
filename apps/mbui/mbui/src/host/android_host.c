@@ -51,7 +51,7 @@ static void device_init(JNIEnv *env);  // android_device.h
 static jmethodID m_mk_start, m_mk_state, m_mk_png;
 static jmethodID m_face_add, m_face_add_bytes, m_face_clear, m_ahead, m_flush;
 static jmethodID m_cs_known, m_cs_decode;
-static jmethodID m_v_text, m_v_still;
+static jmethodID m_v_text, m_v_still, m_v_lost;
 static jmethodID m_ga_access, m_ga_ask, m_ga_answers, m_ga_read, m_ga_state, m_ga_rows, m_ga_end, m_pk_photo;
 static jmethodID m_kp_begin, m_kp_append, m_kp_finish, m_kp_state, m_kp_where, m_kp_end;
 static jmethodID m_up_version, m_up_install, m_up_state, m_up_package, m_sh_share, m_sh_in, m_sh_file;
@@ -174,6 +174,7 @@ JNIEXPORT jint JNI_OnLoad(JavaVM *v, void *reserved) {
   m_v_open = (*env)->GetStaticMethodID(env, views_cls, "open", "(ILjava/lang/String;)I");
   m_v_place = (*env)->GetStaticMethodID(env, views_cls, "place", "(IFFFFFFFFFZ)V");
   m_v_close = (*env)->GetStaticMethodID(env, views_cls, "close", "(I)V");
+  m_v_lost = (*env)->GetStaticMethodID(env, views_cls, "lost", "()V");
   m_v_control = (*env)->GetStaticMethodID(env, views_cls, "control", "(IID)V");
   m_v_info = (*env)->GetStaticMethodID(env, views_cls, "info", "(I[D)I");
   m_v_read_next = (*env)->GetStaticMethodID(env, views_cls, "readNext", "(I[D)I");
@@ -237,12 +238,17 @@ typedef struct {
 static mb_image *imgs;  // by id; ids are not reused
 static int nimgs, img_cap;
 
-// a stream's texture (Streams.java; its instances' image is MB_STREAM_TEX + its id: src/hostapi/stream.mbt), below
+// a stream's texture (Streams.java; its instances' image is MB_STREAM_TEX + its id: src/hostapi/stream.mbt), and a
+// native view's picture (NativeViews.Picture; MB_VIEW_TEX + its id: src/hostapi/host.mbt view_tex_base), below
 #define MB_STREAM_TEX 4194304
+#define MB_VIEW_TEX 8388608
 static GLuint stream_tex(int id);
 static void streams_lost(JNIEnv *env);
+static GLuint view_tex(int id);
+static void views_lost(JNIEnv *env);
 
 static GLuint image_tex(int id) {
+  if (id > MB_VIEW_TEX) return view_tex(id - MB_VIEW_TEX);
   if (id > MB_STREAM_TEX) return stream_tex(id - MB_STREAM_TEX);
   return id > 0 && id < nimgs && imgs[id].state == 1 ? imgs[id].tex : 0;
 }
@@ -257,6 +263,7 @@ static void images_lost(JNIEnv *env) {
   for (int i = 0; i < nimgs; i++) imgs[i].tex = 0;
   (*env)->CallStaticVoidMethod(env, images_cls, m_img_reload);
   streams_lost(env);
+  views_lost(env);
 }
 
 static int image_new(void) {
@@ -380,7 +387,8 @@ static const char *FS =
     "// what it shows at p, as if uncut\n"
     "void shade(vec2 p) {\n"
     "  int kind = int(v_p.y + 0.5);\n"
-    "  if (kind == 9) { vec2 hh = v_rect.zw * 0.5; float rr = min(mb_corner_of(p - v_rect.xy - hh, v_rr), min(hh.x, hh.y)); vec2 q = abs(p - v_rect.xy - hh) - hh + rr; if (length(max(q, 0.0)) + min(max(q.x, q.y), 0.0) - rr > 0.0) discard; o = vec4(0.0); return; }\n"
+    "  // where a native view shows: its picture (NativeViews.Picture), the part of it c2 says, cut to its corners\n"
+    "  if (kind == 9) { vec2 hh = v_rect.zw * 0.5; float rr = min(mb_corner_of(p - v_rect.xy - hh, v_rr), min(hh.x, hh.y)); vec2 q = abs(p - v_rect.xy - hh) - hh + rr; float a = clamp(0.5 - (length(max(q, 0.0)) + min(max(q.x, q.y), 0.0) - rr) * u_scale, 0.0, 1.0); if (a <= 0.0) discard; o = texture(u_img, v_c2.xy + clamp((p - v_rect.xy) / v_rect.zw, 0.0, 1.0) * v_c2.zw) * a; return; }\n"
     "  vec4 col = v_color;\n"
     "  if (kind == 11) {\n"
     "    // a band of a shape (src/ui/shape.mbt): c2.y of its pieces from c2.x; p.x half its stroke's width (0: a fill,\n"
@@ -859,10 +867,36 @@ static void segs_upload(int32_t count) {
   glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, SEGS_ROW, rows, GL_RGBA, GL_FLOAT, fbuf + (size_t)d * MB_INST);
 }
 
+// The frame presented last, kept (in fbuf): its instances and its ground, drawn again as a native view's picture
+// changes (Native.redraw), the app not asked.
+static int32_t kept_count;
+static double kept_r, kept_g, kept_b;
+static void draw_kept(void);
+
 void mb_host_present(double *buf, int32_t count, double r, double g, double b) {
   // the glyphs placed in the atlas as the frame was painted, uploaded before it is drawn (MBText.flush)
   JNIEnv *env = env_();
   (*env)->CallStaticVoidMethod(env, text_cls, m_flush);
+  size_t n = (size_t)(count > 0 ? count : 0) * MB_INST;
+  // (and a row of the shapes' pieces more: segs_upload reads whole rows)
+  if (fcap < n + SEGS_ROW * 4) {
+    fcap = n * 2 + SEGS_ROW * 4;
+    fbuf = realloc(fbuf, fcap * sizeof(float));
+  }
+  for (size_t i = 0; i < n; i++) fbuf[i] = (float)buf[i];
+  kept_count = count;
+  kept_r = r;
+  kept_g = g;
+  kept_b = b;
+  draw_kept();
+}
+
+// (MBView.onDrawFrame, GL thread: only a native view's picture changed since the last frame)
+JNIEXPORT void JNICALL Java_dev_mbui_Native_redraw(JNIEnv *env, jclass c) { draw_kept(); }
+
+static void draw_kept(void) {
+  int32_t count = kept_count;
+  double r = kept_r, g = kept_g, b = kept_b;
   glBindFramebuffer(GL_FRAMEBUFFER, target_fb);
   glViewport(0, 0, fb_w, fb_h);
   if (over_other) glClearColor(0, 0, 0, 0);
@@ -879,12 +913,6 @@ void mb_host_present(double *buf, int32_t count, double r, double g, double b) {
   glViewport(0, vy0, fb_w, vhp);
   if (count <= 0) return;
   size_t n = (size_t)count * MB_INST;
-  // (and a row of the shapes' pieces more: segs_upload reads whole rows)
-  if (fcap < n + SEGS_ROW * 4) {
-    fcap = n * 2 + SEGS_ROW * 4;
-    fbuf = realloc(fbuf, fcap * sizeof(float));
-  }
-  for (size_t i = 0; i < n; i++) fbuf[i] = (float)buf[i];
   segs_upload(count);
   bd_tex = 0;
   memset(gmap, 0, sizeof gmap);
@@ -896,16 +924,15 @@ void mb_host_present(double *buf, int32_t count, double r, double g, double b) {
   glBindBuffer(GL_ARRAY_BUFFER, vbo);
   glBufferData(GL_ARRAY_BUFFER, n * sizeof(float), fbuf, GL_STREAM_DRAW);
   main_state();
-  // one draw per run of instances showing the same image (slot 20; 0: none, the atlas stands in), or sharing one
-  // capture of glass (negative); GLES has no base instance, so the attributes start at the run instead
-  // (and per run of holes, kind 9: where a native view shows, written transparent with no blending, NativeViews.java)
+  // one draw per run of instances showing the same image (slot 20; 0: none, the atlas stands in; a native view's
+  // picture where it shows, kind 9: nothing until it has one), or sharing one capture of glass (negative); GLES has no
+  // base instance, so the attributes start at the run instead
   int32_t start = 0;
   int bound = 0, shows = 0;
   while (start < count) {
     int tid = (int)fbuf[start * MB_INST + 20];
-    int hole = (int)(fbuf[start * MB_INST + 5] + 0.5f) == 9;
     int32_t end = start + 1;
-    while (end < count && (int)fbuf[end * MB_INST + 20] == tid && ((int)(fbuf[end * MB_INST + 5] + 0.5f) == 9) == hole) end++;
+    while (end < count && (int)fbuf[end * MB_INST + 20] == tid) end++;
     if (tid < 0) {
       if (tid != bound) {
         shows = capture(fbuf, start, end, count);
@@ -922,14 +949,12 @@ void mb_host_present(double *buf, int32_t count, double r, double g, double b) {
       continue;
     }
     GLuint t = tid ? image_tex(tid) : atlas;
-    if (t) {  // 0: lost with the context, decoding again
+    if (t) {  // 0: lost with the context, decoding again; a stream's or a view's with no picture yet
       glActiveTexture(GL_TEXTURE1);
       glBindTexture(GL_TEXTURE_2D, t);
       for (int i = 0; i < MB_INST / 4; i++)
         glVertexAttribPointer(i, 4, GL_FLOAT, GL_FALSE, MB_INST * 4, (void *)(intptr_t)(start * MB_INST * 4 + i * 16));
-      if (hole) glDisable(GL_BLEND);
       glDrawArraysInstanced(GL_TRIANGLES, 0, 6, end - start);
-      if (hole) glEnable(GL_BLEND);
     }
     start = end;
   }
@@ -1746,10 +1771,36 @@ void mb_host_pick_end(int32_t id) {
 }
 
 // ---------------------------------------------------------------------------
-// Native views over the canvas (host_native.mbt `view_*`): dev.mbui.NativeViews keeps them in a layer under the GL
-// surface (which is on top and translucent: they show through the holes the app paints, kind 9), a video player
-// (Media3's ExoPlayer, its bytes read through the app) or a WebView. Called on the GL thread; NativeViews moves to the
-// main thread what must run there.
+// Native views in the canvas (host_native.mbt `view_*`): dev.mbui.NativeViews keeps them in a layer under the GL
+// surface, a video player (Media3's ExoPlayer, its bytes read through the app) or a WebView, each drawing into a
+// picture of its own (NativeViews.Picture), which the frame draws where the app paints the view (kind 9, its image
+// MB_VIEW_TEX + its id: present). Called on the GL thread; NativeViews moves to the main thread what must run there.
+
+static GLuint *view_texs;  // by id
+static int view_cap;
+
+static GLuint view_tex(int id) { return id > 0 && id < view_cap ? view_texs[id] : 0; }
+
+static void views_lost(JNIEnv *env) {
+  for (int i = 0; i < view_cap; i++) view_texs[i] = 0;
+  (*env)->CallStaticVoidMethod(env, views_cls, m_v_lost);
+  if ((*env)->ExceptionCheck(env)) {
+    (*env)->ExceptionDescribe(env);
+    (*env)->ExceptionClear(env);
+  }
+}
+
+JNIEXPORT void JNICALL Java_dev_mbui_NativeViews_texture(JNIEnv *env, jclass c, jint id, jint tex) {
+  if (id <= 0) return;
+  if (id >= view_cap) {
+    int cap = view_cap ? view_cap : 16;
+    while (cap <= id) cap *= 2;
+    view_texs = realloc(view_texs, (size_t)cap * sizeof *view_texs);
+    memset(view_texs + view_cap, 0, (size_t)(cap - view_cap) * sizeof *view_texs);
+    view_cap = cap;
+  }
+  view_texs[id] = (GLuint)tex;
+}
 
 static jbyteArray jbytes(JNIEnv *env, moonbit_bytes_t data) {
   jsize n = Moonbit_array_length(data);

@@ -1,8 +1,11 @@
-// Native views over the canvas: a system view the host keeps under the app's surface (a video player, a web page),
-// shown through a hole the app paints where it is (an instance of kind 9: transparent, written without blending).
-// What is painted after the hole draws over the view (a bar, a video's controls, frosted or not); what is painted
-// around it, or a clip, hides the rest of it. The host places the view where its node was painted, every frame it
-// moves, and hides it on the frames it is not painted (a page gone under another, scrolled away).
+// Native views in the canvas: a system view (a video player, a web page) the app paints where it shows, an instance
+// of kind 9 whose image is the view's (@hostapi.view_tex_base + its id) and whose c2 is the part of its content seen.
+// A host that keeps its views under the app's surface (macOS, iOS, Windows, the browser) leaves the canvas clear there
+// (transparent, written without blending): a hole it shows through. Android draws each view into a picture of its own
+// and draws that there, in the frame, so a view moves with a list in step with what is around it. What is painted
+// after it draws over the view (a bar, a video's controls, frosted or not); what is painted around it, or a clip, hides
+// the rest of it. The host places the view where its node was painted, every frame it moves (where it takes a touch),
+// and hides it on the frames it is not painted (a page gone under another, scrolled away).
 //
 // A video's bytes come only through the app: the player asks for ranges (`view_read_next`), the view's `read`
 // fetches them (still.fail: `station.file.part`, `drive.read` through the core) and answers each as its bytes come
@@ -665,44 +668,53 @@ fn Ctx::paint_native(self : Ctx, i : Int, n : Node) -> Unit {
   if x1 <= x0 || y1 <= y0 {
     return
   }
-  // the hole: where the content is, within that, on whole device pixels (no edge row half covered)
+  // where it shows: where the content is, within that, on whole device pixels (no edge row half covered)
   let snap = fn(v : Double) { device_px(v, self.scale) }
   let hx0 = snap(dmax(x, x0))
   let hy0 = snap(dmax(y, y0))
   let hx1 = snap(dmin(x + w, x1))
   let hy1 = snap(dmin(y + h, y1))
-  if hx1 > hx0 && hy1 > hy0 {
+  let cx = snap(x)
+  let cy = snap(y)
+  let cw = snap(x + w) - cx
+  let ch = snap(y + h) - cy
+  if hx1 > hx0 && hy1 > hy0 && cw > 0.0 && ch > 0.0 {
     // round: the content's own rounded rect, cut by the clips it is painted in (its corners where the content's are,
     // not where the clip cuts it)
     let round = radius > 0.0
+    let (sx, sy, sw, sh) = if round {
+      (cx, cy, cw, ch)
+    } else {
+      (hx0, hy0, hx1 - hx0, hy1 - hy0)
+    }
+    // (its image the view's, the part of its content there: a host that draws the view's picture draws that)
     self.push_inst(
-      if round { snap(x) } else { hx0 },
-      if round { snap(y) } else { hy0 },
-      if round { snap(x + w) - snap(x) } else { hx1 - hx0 },
-      if round { snap(y + h) - snap(y) } else { hy1 - hy0 },
+      sx,
+      sy,
+      sw,
+      sh,
       radius,
       9.0,
       0.0,
       0.0,
-      0L,
+      0xFFFFFFFFL,
       1.0,
-      0.0,
-      0.0,
-      0.0,
-      0.0,
+      (sx - cx) / cw,
+      (sy - cy) / ch,
+      sw / cw,
+      sh / ch,
     )
+    self.inst[(self.ninst - 1) * inst_size + 20] = (@hostapi.view_tex_base + v.id).to_double()
   }
   // (by build: a frame built again paints again, and what the last build did not paint is not shown)
   v.painted = self.build_no
   v.hits_before = self.next_hit_ids.length()
-  // (its content on whole device pixels too, as its hole is: placed between pixels, the row its edge half covers
-  // shows what is under the canvas, a line along the picture's edge)
-  let cx0 = snap(x)
-  let cy0 = snap(y)
-  v.at[0] = cx0
-  v.at[1] = cy0
-  v.at[2] = snap(x + w) - cx0
-  v.at[3] = snap(y + h) - cy0
+  // (its content on whole device pixels too, as where it shows is: placed between pixels, the row its edge half
+  // covers shows what is under the canvas, a line along the picture's edge)
+  v.at[0] = cx
+  v.at[1] = cy
+  v.at[2] = cw
+  v.at[3] = ch
   v.at[4] = snap(x0)
   v.at[5] = snap(y0)
   v.at[6] = snap(x1)
