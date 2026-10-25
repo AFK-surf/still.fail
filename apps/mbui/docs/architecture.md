@@ -54,6 +54,35 @@ upright after. A tablet and an opened fold's inner screen turn as they are held.
   ⋯, a side part that gives way. This is the web's container query. It is not the tier: a page never asks which tier
   it is in.
 
+### The same on every screen, and what differs
+
+The same on a phone, a tablet and a computer: each page's content, its blocks and their order, what can be done there
+and its words; the parts it is made of; the palette, the corner ladder, the icons, the kinds of motion and the type's
+hierarchy; the presenters and the shell's ways.
+
+What differs comes of two things alone, the screen's kind and a width, and none of it is decided in a page:
+
+| What differs | By | Decided in |
+|---|---|---|
+| Sizes: the type, row heights, density, touch targets (44 at least on a touch device) | the screen's kind | the theme, chosen once (`@sf.begin`) |
+| What only a pointer's hover would show (a row's 归档, its time, its ⋯): on a touch device always there, or on a long press | the screen's kind | the library's parts (sf/hand.mbt) |
+| A menu, a pick, a confirm: a sheet from the foot, or a popover or a dialog | the screen's kind and the tier | the presenters |
+| Reaching things: the search field over the chats' list or ⌘K; the bottom bar or the rail | the screen's kind and the tier | the shell |
+| Enter makes a new line or sends; the keyboard raised as a chat opens or not | the screen's kind | the library's fields |
+| Scroll bars: none on a touch device | the screen's kind | the library (`scroll_bar.mbt`) |
+| The panes: one stack, the tape, columns | the tier (the window's width) | the shell |
+| A page's anatomy: narrow, under 640 (back over a large title, its rows grouped on inset cards under their headings), or wide (its head, one column at most 760 in the middle, sections with their titles, lists and cards) | the page's own width | the library's parts |
+
+So:
+- **A phone:** Small, a page at a time, laid out narrow, a touch device's sizes, sheets, the bottom bar, swiped back,
+  upright.
+- **A tablet:** the tape held upright (Medium), columns on its side (Large); each pane laid out by its own width (a
+  narrow one narrow); a touch device's sizes and targets; sheets on the tape, popovers in columns; the rail; turned as
+  it is held.
+- **A computer:** columns (Large), laid out wide, the web's sizes and density, popovers and dialogs, ⌘K and the keys,
+  what a pointer's hover shows. A window made narrow takes the tape or the stack and the narrow anatomy, at a
+  computer's sizes.
+
 ## Three kinds of UI code
 
 ### The library (`src/sf`)
@@ -69,6 +98,18 @@ frame around them), and the **presenters**:
 - One host draws them all, over the shell. Today's hosts become it: the app's `sheet.mbt`, `decide.mbt`'s `dui.sheet`,
   `settings/sheet.mbt`, and sfdesk's dialogs.
 
+And **a page's parts**: its frame (back and title, or a head of its own: a mark, a name, what it is, what it does),
+sections, groups of rows, rows (to another page, a value, a switch, a pick), cards, notes, choices, buttons and
+fields. Each is laid out as the page it is in is (the anatomy above): the page's frame decides that once, by the
+page's width, and its parts take it from there. A part never measures its own box for it (a section in a 380 column
+of a wide page is a wide page's section, and a computer's 480 dialog is no narrow page: what a presenter holds is laid
+out as the presenter says), and a page never passes it to them. Each takes its sizes from the theme. So a page made of
+them is right in any box on either screen. There is one of each, and none draws one screen's
+or one width's look alone: a page cannot reach for a wrong one. (Today they are two sets: sfdesk's `page_look.mbt`
+`look_*` know both widths; the library's `@sf.section`, `@sf.switch_row` and the desk's card know only the web's
+desktop, and a page made of them is the desktop's on a phone (#1675's Profile, #1599's station, #1576's connect). They
+become one set, in the library.)
+
 ### Pages
 
 One implementation per function: the chats' list, a chat, a new chat, a history, 奏, the files and a folder, each
@@ -76,19 +117,29 @@ settings page, each place, sign-in, the landing. There is no phone copy and desk
 
 - **Its box:** it draws into the box it is given. `c.width` and `c.height` are its pane's; it never subtracts a rail
   or a sidebar itself.
-- **What it reads:** the screen's kind (`@sf.touch_system()`) for its look and what it offers, its own width for its
-  arrangement, and the input only through the library's primitives (above). Never the tier, and never
-  `@ui.pointing()` itself.
+- **What it reads:** its own width for its arrangement (columns that drop, tools into ⋯), its anatomy through the
+  library's parts, and nothing of the screen's kind: what differs by it is the theme's, the parts', the presenters'
+  and the shell's (the table above). A page that needs something to differ by the screen asks the library for a part
+  that does it, and the part holds the difference for every page; no page draws a touch device's piece and a
+  computer's piece under an `if`. detlint's `page-screen` counts what reads `@sf.touch_system()` in the pages
+  (`pages.roots`), each file's bar only falling, to 0. The input reaches it only through the library's primitives
+  (above). Never the tier, and never `@ui.pointing()` itself.
 - **Opening things:** it says what to open: a page (`Page`), or a detail of the chat (a history, a service, a
   visualization, jobs, letters, files). The shell decides where that goes. A page never pushes onto the stack or moves
   the tape itself.
 - **Menus and dialogs:** it shows menus, picks, panels, confirms and questions only through the presenters.
 - **Its bar:** it says what its bar holds (title, lead, actions). The shell frames it: a back where there is one to
   go to, the window buttons' inset, the glass.
-- **Content and logic:** its content and structure follow the web's files for it, desktop and mobile together. What
-  it shows and does is the union of the two, as the core gives it, and its logic is the core's.
-  - On a touch device in a narrow box it looks as the web's mobile page does; on a computer in a wide box, as the
-    web's desktop page does. In between it is the same page, at its width, for its screen.
+- **Its design:** made once, from what the page is for: what a person comes to it to see and to do, and in what
+  order. Its structure is the same on every screen; what differs is the table's above, not the page's.
+  - The web's desktop and mobile files for it, and the Kotlin app's, are read for why they are as they are and so as
+    to miss nothing. They are not copied, and none is picked, neither one for every screen nor one for each screen
+    (the user, 2026-10-25: 「做最合理的，而不是从两个里选一个」; 「是不是又代码里 if 一下，直接把手机版代码复制进去」). Where
+    they differ, the reason that holds decides; where both fall short, the page does better. Its PR says why it is
+    laid out so before it is built.
+  - What it shows and does is the core's, and so is its logic.
+  - Two copies merged: neither is kept and the other dropped. The page is no worse on a phone than the phone's copy
+    was, nor on a computer than the desktop's; its PR shows both screens before and after.
 - **Decisions that stay:** the touch idioms the user decided:
   - swipe back, and long-press menus;
   - a row swiped to archive;
