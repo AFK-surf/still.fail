@@ -1625,7 +1625,8 @@ pub let login_card_least : @ui.Len = Within(360.0)
 
 ///|
 /// An agent's request about a vault item as its card in a chat (the web's VaultAsk.css.ts card): as wide as what it
-/// says, 320 at least where there is the room (min(100%, 320px)), 560 at most.
+/// says, 320 at least where there is the room (min(100%, 320px)), 560 at most and never wider than the room (min(100%,
+/// 560px): a Cut box's max in a column).
 // kept across runs: a value (no field of it changes)
 pub let ask_card_room : @ui.Style = @ui.css("w=Cut min_w=Within(320) max_w=Fixed(560)")
 

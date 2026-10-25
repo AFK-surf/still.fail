@@ -359,12 +359,15 @@ fn Ctx::flex_tree(self : Ctx, i : Int, pdir : Int) -> Int {
   let has_max_w = n.max_w < 1.0e9
   let max_w = len(n.max_w)
   // (words on one line in a column, and what is said to be cut short there: never wider than the column, cut with an
-  // ellipsis where it is narrower, whatever the column's alignment; as CSS's block with its overflow hidden)
+  // ellipsis where it is narrower, whatever the column's alignment; as CSS's block with its overflow hidden. A max said
+  // as well is that where the column has the room and the column's where it has less, CSS's min(100%, 560px): a card
+  // as wide as its words up to 560 is not 560 in a column of 360)
   let capped = pdir == 2 &&
     (n.w is Cut || (n.kind == kind_text && !n.wrap && !(n.w is Px(_))))
-  if !has_max_w && capped {
-    if !(s.max_width_kind() == @flex.LEN_PCT && s.max_width_value() == 100.0) {
-      s.set_max_width(Pct(100.0))
+  if capped {
+    let (k, v) = if has_max_w { (@flex.LEN_WITHIN, max_w) } else { (@flex.LEN_PCT, 100.0) }
+    if s.max_width_kind() != k || s.max_width_value() != v {
+      s.set_max_width(if has_max_w { Within(max_w) } else { Pct(100.0) })
       ch = true
     }
   } else if opt_differs(s.max_width_kind(), s.max_width_value(), has_max_w, max_w) {
