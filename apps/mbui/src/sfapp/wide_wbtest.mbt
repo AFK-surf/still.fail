@@ -214,7 +214,7 @@ test "wide: settings from the rail's gear, its list in the sidebar; back to the 
 ///|
 test "wide: settings' sidebar taller than a short window scrolls to its last rows (Cloud's), which open their pages" {
   let calls : Array[Made] = []
-  let h = 480.0
+  let h = 430.0
   let t = wide_tester(calls, h~)
   t.key(@ui.key_of_char(','), mods=@ui.mod_cmd)
   t.run_for(@ui.nav_push_ms)
