@@ -484,6 +484,17 @@ export const byBytes = (a: string, b: string) => Buffer.compare(Buffer.from(a), 
 /// readers' (who keeps watch).
 export const JOBS_RUNNING = "SELECT * FROM jobs WHERE state = 'running' ORDER BY started_at DESC";
 
+/// A session's jobs, the latest first, by the index on their session (schema.ts jobs_by_session): the main thread's and
+/// the readers'.
+export const SESSION_JOBS = "SELECT * FROM jobs WHERE session_key = ? ORDER BY started_at DESC";
+
+/// What each list of chats asks of the cards answered lately (answersSince, the main thread's and the readers'): the
+/// latest card, or post with options, before a person's message (schema.ts entries_cards, entries_options: not by
+/// going back over the thread), and the cards closed since (closed_cards_at).
+export const CARD_BEFORE = "SELECT max(n) AS n FROM entries WHERE thread = ? AND n < ? AND kind = 'message' AND card IS NOT NULL";
+export const OPTIONS_BEFORE = "SELECT max(n) AS n FROM entries WHERE thread = ? AND n < ? AND kind = 'message' AND options IS NOT NULL";
+export const CLOSED_SINCE = "SELECT thread, n, viewer, at FROM closed_cards WHERE at >= ?";
+
 /// A context falling under half of what the call before sent (at least this much), on the same account and model, was
 /// compacted (sessions/pool.ts; what schema.ts USAGE_COMPACTIONS keeps).
 export const COMPACTED_FROM = 50_000;

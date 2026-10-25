@@ -10,7 +10,7 @@ import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { zstdDecompressSync } from "node:zlib";
 import { wall } from "../ops/fibers.ts";
-import { type InWorkspace, JOBS_RUNNING, LETTER_SQL, PEOPLE_AT, type Letter, isLetter, liveShare, sees, toChatShare, withLetter } from "../store/rows.ts";
+import { CARD_BEFORE, CLOSED_SINCE, type InWorkspace, JOBS_RUNNING, LETTER_SQL, OPTIONS_BEFORE, SESSION_JOBS, PEOPLE_AT, type Letter, isLetter, liveShare, sees, toChatShare, withLetter } from "../store/rows.ts";
 
 export type Json = any;
 
@@ -719,8 +719,8 @@ export function answersSince(s: Store, since: number): CardAnswer[] {
   const out: CardAnswer[] = [];
   const said = all(s, "SELECT thread, n FROM entries WHERE author_kind = 'person' AND kind = 'message' AND at >= ?", since);
   const askedBefore = (thread: number, n: number): number | null => {
-    const card: number | null = one(s, "SELECT max(n) AS n FROM entries WHERE thread = ? AND n < ? AND kind = 'message' AND card IS NOT NULL", thread, n).n;
-    const options: number | null = one(s, "SELECT max(n) AS n FROM entries WHERE thread = ? AND n < ? AND kind = 'message' AND options IS NOT NULL", thread, n).n;
+    const card: number | null = one(s, CARD_BEFORE, thread, n).n;
+    const options: number | null = one(s, OPTIONS_BEFORE, thread, n).n;
     // Option's max: None below any Some.
     return card === null ? options : options === null ? card : Math.max(card, options);
   };
@@ -745,7 +745,7 @@ export function answersSince(s: Store, since: number): CardAnswer[] {
     const a = toMessage(answer);
     out.push({ question: found[0], card: found[1], by: a.author, at: a.createdAt, answer: a });
   }
-  for (const { thread, n, viewer: by, at } of all(s, "SELECT thread, n, viewer, at FROM closed_cards WHERE at >= ?", since)) {
+  for (const { thread, n, viewer: by, at } of all(s, CLOSED_SINCE, since)) {
     const found = cardAt(thread, n);
     if (!found) continue;
     // Withdrawn by its own agent: no one answered it.
@@ -819,7 +819,7 @@ const toJob = (r: Json): JobRow => ({
 
 /// A session's jobs (all sessions' with null), newest first.
 export function listJobs(s: Store, session: string | null): JobRow[] {
-  return all(s, "SELECT * FROM jobs WHERE ?1 IS NULL OR session_key = ?1 ORDER BY started_at DESC", session).map(toJob);
+  return (session === null ? all(s, "SELECT * FROM jobs ORDER BY started_at DESC") : all(s, SESSION_JOBS, session)).map(toJob);
 }
 
 /// A job's notices, newest first (at most `limit`).

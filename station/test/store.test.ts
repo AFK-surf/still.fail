@@ -8,8 +8,8 @@ import { DatabaseSync } from "node:sqlite";
 import { after, test } from "node:test";
 import { zstdDecompressSync } from "node:zlib";
 import {
-  ANY_RUNNING, AUTO, type AuthorKind, type EntryRow, JOBS_RUNNING, JOBS_UP, type JobRow, LIVE_SESSIONS, MANUAL, type NewMessage, SCHEMA_VERSION,
-  SESSION_COUNTS, STATS_OF, Store, type StoreChange, newMessage,
+  ANY_RUNNING, AUTO, type AuthorKind, CARD_BEFORE, CLOSED_SINCE, DECISIONS_SINCE, type EntryRow, JOBS_RUNNING, JOBS_UP, type JobRow, LIVE_SESSIONS, LOGIN_CARDS,
+  MANUAL, type NewMessage, OPTIONS_BEFORE, RUNNING_SESSIONS, SCHEMA_VERSION, SESSION_COUNTS, SESSION_JOBS, STATS_OF, Store, type StoreChange, newMessage,
 } from "../src/store/store.ts";
 import { MERGED, SCHEMA } from "../src/store/schema.ts";
 import { ACTIVE_SESSIONS } from "../src/store/usage.ts";
@@ -873,18 +873,24 @@ test("usage: the sessions at work are found by when their turns ended, once each
   assert.deepEqual(store.usageActiveSessions(Number.MAX_SAFE_INTEGER).sort(), ["a", "b"], "running ones whenever");
 });
 
-test("what the station's own periodic work asks is planned by an index, never a scan of what grows with time", () => {
+test("what the station asks again and again is planned by an index, never a scan of what grows with time", () => {
   const store = memory();
-  // As the station's SQLite (node's) plans each: a scan only of an index that holds the sessions shown or running, or of
-  // the small one that counts them; a table, or an index of every turn or job, never.
+  // As the station's SQLite (node's) plans each: a scan only of an index that holds the sessions shown or running, the
+  // login cards, or of the small one that counts sessions; a table, or an index of every turn, job or entry, never.
   const planned: [string, unknown[]][] = [
-    [ACTIVE_SESSIONS, [0]], [LIVE_SESSIONS, []], [ANY_RUNNING, []], [JOBS_RUNNING, []], [JOBS_UP, []], [STATS_OF, ["a"]], [SESSION_COUNTS, []],
+    [ACTIVE_SESSIONS, [0]], [LIVE_SESSIONS, []], [ANY_RUNNING, []], [RUNNING_SESSIONS, []], [JOBS_RUNNING, []], [JOBS_UP, []], [SESSION_JOBS, ["a"]],
+    [STATS_OF, ["a"]], [SESSION_COUNTS, []], [DECISIONS_SINCE, [0]], [CLOSED_SINCE, [0]], [LOGIN_CARDS, ["%l1%"]], [CARD_BEFORE, [1, 9]], [OPTIONS_BEFORE, [1, 9]],
   ];
-  const scans = /^SCAN (?!\w+ USING (?:COVERING )?INDEX (?:sessions_live|sessions_running|sessions_by_connect)\b)/;
+  const scans = /^SCAN (?!\w+ USING (?:COVERING )?INDEX (?:sessions_live|sessions_running|sessions_by_connect|entries_login_cards)\b)/;
+  const plans = new Map<string, string[]>();
   for (const [sql, args] of planned) {
     const plan = (store.db.prepare(`EXPLAIN QUERY PLAN ${sql}`).all(...(args as never[])) as { detail: string }[]).map((r) => r.detail);
     assert.ok(!plan.some((d) => scans.test(d)), `${sql}\n  ${plan.join(" | ")}`);
+    plans.set(sql, plan);
   }
+  // The latest card before a message: by the index of cards, not by going back over the thread to it.
+  assert.ok(plans.get(CARD_BEFORE)!.some((d) => d.includes("entries_cards")), plans.get(CARD_BEFORE)!.join(" | "));
+  assert.ok(plans.get(OPTIONS_BEFORE)!.some((d) => d.includes("entries_options")), plans.get(OPTIONS_BEFORE)!.join(" | "));
   // What each says.
   session(store, "a");
   session(store, "b");
@@ -896,6 +902,13 @@ test("what the station's own periodic work asks is planned by an index, never a 
   const stats = store.statsOf(["a", "missing"]);
   assert.deepEqual([...stats.keys()], ["a"]);
   assert.deepEqual([stats.get("a")!.turns, stats.get("a")!.pending, stats.get("a")!.firstText, stats.get("a")!.lastTurn?.kind], [1, 0, null, "input"]);
+  // In use: shown, or at work though archived.
+  assert.deepEqual(store.sessionsInUse().map((s) => s.key), ["a"]);
+  store.setRunning("b", true);
+  assert.deepEqual(store.runningSessions().map((s) => s.key), ["b"]);
+  assert.deepEqual(store.sessionsInUse().map((s) => s.key), ["a", "b"]);
+  store.setRunning("a", true);
+  assert.deepEqual(store.sessionsInUse().map((s) => s.key).sort(), ["a", "b"], "each once");
 });
 
 test("usage: where a model's context was compacted is kept as calls are recorded, and made once from those before", () => {

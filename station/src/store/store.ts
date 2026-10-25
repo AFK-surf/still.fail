@@ -24,18 +24,19 @@ import {
   type Quote, type SessionRow, type SessionStats, type SessionThread, type StoreChange, type ThreadRow, type ThreadSummary,
   type TurnFor, type TurnRow, type TurnSummary, type WidgetModel, AUTO, XSHARE_IDLE_MS, I64_MAX, MANUAL, STILLFAIL_SURFACE, attachment,
   byBytes, cardOf, jsonList, mergeEntries, optionsCard, parsed, quote, takeChars, toEntry, toJob, toMembership,
-  LETTER_SQL, isLetter, liveShare, shareLive, toChatShare, toMessage, toOpened, toPublished, toSession, toSessionThread, toThread, toTurnSummary, JOBS_RUNNING, PEOPLE_AT,
+  LETTER_SQL, isLetter, liveShare, shareLive, toChatShare, toMessage, toOpened, toPublished, toSession, toSessionThread, toThread, toTurnSummary, JOBS_RUNNING, SESSION_JOBS, CARD_BEFORE, OPTIONS_BEFORE, CLOSED_SINCE, PEOPLE_AT,
 } from "./rows.ts";
 import { SCHEMA, SCHEMA_VERSION, addArchiveColumns, addListState, addThreadIndexes, addUsageCompactions, addAutoTitleColumns, addClientColumn, addLetterColumn, addQueueColumns, addSizeColumn, addUsageTotals, addWatchColumn, addWorkspaceColumns } from "./schema.ts";
 import * as usage from "./usage.ts";
 import { timed } from "./timed.ts";
 
 // What the station's own periodic work asks, each by an index (schema.ts): their plans are tested to scan no table
-// (and rows.ts JOBS_RUNNING, the readers' too).
-export { JOBS_RUNNING };
+// (and rows.ts JOBS_RUNNING and SESSION_JOBS, the readers' too).
+export { JOBS_RUNNING, SESSION_JOBS };
 export const LIVE_SESSIONS = "SELECT * FROM sessions WHERE archived_at IS NULL ORDER BY last_active_at DESC";
 export const SESSION_COUNTS = "SELECT connect, ws, COUNT(*) AS n FROM sessions GROUP BY connect, ws";
 export const ANY_RUNNING = "SELECT 1 AS r FROM sessions WHERE running = 1 LIMIT 1";
+export const RUNNING_SESSIONS = "SELECT * FROM sessions WHERE running = 1";
 export const JOBS_UP = "SELECT * FROM (SELECT * FROM jobs WHERE state = 'running' UNION ALL SELECT * FROM jobs WHERE state = 'exited' AND port IS NOT NULL) ORDER BY started_at DESC";
 export const STATS_OF = `SELECT
     (SELECT COUNT(*) FROM turns t WHERE t.session_key = s.key) AS turns,
@@ -44,6 +45,13 @@ export const STATS_OF = `SELECT
   FROM sessions s
   LEFT JOIN turns l ON l.id = (SELECT id FROM turns t2 WHERE t2.session_key = s.key ORDER BY t2.started_at DESC LIMIT 1)
   WHERE s.key = ?`;
+
+// The checks of the last days (the archive policy's view) and a login's end (closeLoginCards), each by an index of its
+// own (and rows.ts CARD_BEFORE, OPTIONS_BEFORE, CLOSED_SINCE: each list of chats', the readers' too).
+export { CARD_BEFORE, CLOSED_SINCE, OPTIONS_BEFORE };
+export const DECISIONS_SINCE = "SELECT id, session, created_at, result FROM decision_checks WHERE created_at >= ? ORDER BY created_at, id";
+export const LOGIN_CARDS =
+  "SELECT thread, n, author FROM entries WHERE kind = 'message' AND author_kind = 'agent' AND card LIKE '%\"login\"%' AND card LIKE ? AND NOT EXISTS (SELECT 1 FROM closed_cards c WHERE c.thread = entries.thread AND c.n = entries.n)";
 
 export * from "./rows.ts";
 export { SCHEMA_VERSION } from "./schema.ts";
@@ -247,6 +255,18 @@ export class Store {
   /// archived only grow with time; each is looked at again as it is shown.
   liveSessions(): SessionRow[] {
     return this.#all(LIVE_SESSIONS).map(toSession);
+  }
+
+  /// The sessions running a turn now (archived ones too).
+  runningSessions(): SessionRow[] {
+    return this.#all(RUNNING_SESSIONS).map(toSession);
+  }
+
+  /// The sessions in use: shown, or running a turn (one archived while at work too).
+  sessionsInUse(): SessionRow[] {
+    const live = this.liveSessions();
+    const keys = new Set(live.map((s) => s.key));
+    return [...live, ...this.runningSessions().filter((s) => !keys.has(s.key))];
   }
 
   /// How many sessions each connect has, in each workspace (null: the home one's), archived ones too: from the index
@@ -926,7 +946,8 @@ export class Store {
 
   /// The checks recorded since `since` (ms), oldest first.
   decisionsSince(since: number): Json[] {
-    return this.#all("SELECT id, session, created_at, result FROM decision_checks WHERE created_at >= ? ORDER BY id", since).map((r) => ({
+    // In order of their time, as its index has them: in order of id, the station's SQLite read every check to sort them.
+    return this.#all(DECISIONS_SINCE, since).map((r) => ({
       id: r.id, session: r.session, at: r.created_at, detail: parsed(r.result) ?? null,
     }));
   }
@@ -1239,8 +1260,8 @@ export class Store {
     const out: CardAnswer[] = [];
     const said = this.#all("SELECT thread, n FROM entries WHERE author_kind = 'person' AND kind = 'message' AND at >= ?", since);
     const askedBefore = (thread: number, n: number): number | null => {
-      const card: number | null = this.#one("SELECT max(n) AS n FROM entries WHERE thread = ? AND n < ? AND kind = 'message' AND card IS NOT NULL", thread, n).n;
-      const options: number | null = this.#one("SELECT max(n) AS n FROM entries WHERE thread = ? AND n < ? AND kind = 'message' AND options IS NOT NULL", thread, n).n;
+      const card: number | null = this.#one(CARD_BEFORE, thread, n).n;
+      const options: number | null = this.#one(OPTIONS_BEFORE, thread, n).n;
       // Option's max: None below any Some.
       return card === null ? options : options === null ? card : Math.max(card, options);
     };
@@ -1265,7 +1286,7 @@ export class Store {
       const a = toMessage(answer);
       out.push({ question: found[0], card: found[1], by: a.author, at: a.createdAt, answer: a });
     }
-    for (const { thread, n, viewer: by, at } of this.#all("SELECT thread, n, viewer, at FROM closed_cards WHERE at >= ?", since)) {
+    for (const { thread, n, viewer: by, at } of this.#all(CLOSED_SINCE, since)) {
       const found = cardAt(thread, n);
       if (!found) continue;
       // Withdrawn by its own agent: no one answered it.
@@ -1328,10 +1349,7 @@ export class Store {
   /// the agent itself). The sessions whose cards they were.
   closeLoginCards(login: string): string[] {
     return this.#with((changes) => {
-      const rows = this.#all(
-        "SELECT thread, n, author FROM entries WHERE kind = 'message' AND author_kind = 'agent' AND card LIKE '%\"login\"%' AND card LIKE ? AND NOT EXISTS (SELECT 1 FROM closed_cards c WHERE c.thread = entries.thread AND c.n = entries.n)",
-        `%"login":${JSON.stringify(login)}%`,
-      );
+      const rows = this.#all(LOGIN_CARDS, `%"login":${JSON.stringify(login)}%`);
       for (const r of rows) {
         this.#run("INSERT OR IGNORE INTO closed_cards (thread, n, viewer, at) VALUES (?, ?, ?, ?)", r.thread, r.n, r.author, this.now());
         changes.push({ type: "thread", id: r.thread, entries: [] });
@@ -1615,9 +1633,11 @@ export class Store {
     return this.#all(JOBS_UP).map(toJob);
   }
 
-  /// A session's jobs (all sessions' with null), newest first.
+  /// A session's jobs (all sessions' with null), newest first. A session's by its index: asked as one statement for
+  /// both (`?1 IS NULL OR session_key = ?1`), each read every job the station ever ran (5 s on ccvm with its pages put
+  /// out, 2026-10-25).
   listJobs(session: string | null): JobRow[] {
-    return this.#all("SELECT * FROM jobs WHERE ?1 IS NULL OR session_key = ?1 ORDER BY started_at DESC", session).map(toJob);
+    return (session === null ? this.#all("SELECT * FROM jobs ORDER BY started_at DESC") : this.#all(SESSION_JOBS, session)).map(toJob);
   }
 
   /// The jobs running now, as listJobs gives them (by the index on their state: the queue reads them at each look, and

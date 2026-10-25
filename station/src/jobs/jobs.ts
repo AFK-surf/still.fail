@@ -827,8 +827,7 @@ export class Jobs {
   /// station left running (it ended before it could stop them) is ended. Agents are not told (no turn runs meanwhile,
   /// and telling them once it is back would wake them all); a job's state and log say it when one looks.
   async stopAll(why: string): Promise<void> {
-    const jobs = this.store.listJobs(null);
-    for (const job of jobs.filter((j) => j.state === "running" || (j.state === "exited" && j.port !== null))) {
+    for (const job of this.store.jobsUp()) {
       log.warn("jobs", "stopping a job", { job: job.id, why });
       try {
         await this.stop(job.id);
@@ -864,7 +863,7 @@ export class Jobs {
   relaunch(): void {
     const recorded = new Map<number, ProcessRow>(this.store.listProcesses().filter((p) => p.runtime === "job").map((p) => [p.pgid, p]));
     const followed = new Set<number>();
-    const jobs = this.store.listJobs(null);
+    const jobs = this.store.jobsUp();
     for (const job of jobs.filter((j) => j.state === "running")) {
       // Still waiting in the queue: it never ran, and starts when there is room.
       if (job.queued === true) continue;
