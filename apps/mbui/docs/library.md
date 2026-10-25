@@ -35,7 +35,7 @@ missing here is ported from the web's file (its structure, its states, its value
 | `fileSize.ts` | `file_size.mbt` | |
 | `shortcuts.ts` | `shortcuts.mbt` | |
 | `motion.ts`, `styles/keyframes.css.ts`, `styles/still.ts` | `motion.mbt` (EASE_OUT, ENTER, LEAVE, MOVE, GLIDE_*, LOCAL_MS; --dur, copied, woken and resting, the breath), mbui's `@motion` and `Ctx::move_state` (moveState); kit's `pop_in` (popKeyframes), `tip_in`, `dialog_in` | |
-| `toast.tsx`, `toast.css.ts` | `toast.mbt` (`toast_look`, `toast_said`, `toast_ms`) over mbui's `@kit.toaster` | the desktop's toast; the phone keeps its own (the web's ToastTo) |
+| `toast.tsx`, `toast.css.ts` | `toast.mbt` (`toast_look`, `toast_button`, `toast_said`, `toast_ms`) over mbui's `@kit.toaster` | every frame's toast, the frame saying only where (the narrow one's over its bar); its button (an archive's 撤销, which the web's has not) a capsule concentric with its end |
 | `i18n.ts` | `i18n.mbt` | `t`: the catalog's words as the app says them (`set_words`, its `fill`, told as it starts) |
 | `viewer/ViewerBar.tsx`, `ViewerBar.css.ts` | `viewer_bar.mbt` | the bar, its tools, download; `BarOnScroll` (useBarOnScroll) |
 | `viewer/host.ts` | `viewer_host.mbt` | `set_viewer_host`: what the viewers ask of the page (the app's `sfapp/viewer_host.mbt`, as the web's `web/src/viewer/whole.ts`); the theme is the library's own, so no `useDark` |

@@ -2053,12 +2053,27 @@ pub let wait_bubble_r : Double = 18.0
 pub let wait_bubble_share : Double = 0.7
 
 ///|
-/// A toast (toast.css.ts): 9 in over and under its words, 20 round, 560 wide at most, 24 over the window's foot, a
-/// floating shadow (0 8px 24px), coming in from 8 below.
-pub let toast_py : Double = 9.0
+/// A toast (toast.css.ts): 20 round, a capsule while its words fit one line (20 high, 10 over and under them), 18 in
+/// from its start, 560 wide at most, 24 over the window's foot, a floating shadow (0 8px 24px), coming in from 8 below.
+/// Its button (an archive's 撤销) a capsule 28 high in its end, concentric with it (capsule_in: 6 from its top, foot
+/// and end), its words as far from the toast's end as the toast's words are from its start (6 + 12 = 18).
+pub let toast_r : Double = 20.0
 
 ///|
-pub let toast_r : Double = 20.0
+/// (its words' line: L6)
+pub let toast_line : Double = leading_scale.l6
+
+///|
+pub let toast_py : Double = toast_r - toast_line / 2.0
+
+///|
+pub let toast_px : Double = 18.0
+
+///|
+pub let toast_action_h : Double = 28.0
+
+///|
+pub let toast_action_in : Double = capsule_in(toast_r, toast_action_h)
 
 ///|
 pub let toast_max : Double = 560.0
