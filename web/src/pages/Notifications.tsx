@@ -1,6 +1,8 @@
 // What this client tells its person about their chats, and how (notify.ts, docs/notifications.md), laid out as a
 // phone's notification settings are: a preview that follows the settings, the ways it tells (a banner, the badge), and
-// each kind of thing that happens with which of those it uses.
+// each kind of thing that happens with which of those it uses. The preview and the ways' pictures are of this device's
+// system (SYSTEM, as the app's page has them: apps/mbui sfdesk notifications.mbt), and the badge is a way only where
+// the app puts its number on its icon (BADGE_SHOWN): elsewhere a switch of it would change nothing.
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router";
 import type { BadgeKinds, Notice, NotifyKinds, NotifyView } from "../core/shapes.ts";
@@ -22,6 +24,17 @@ const KINDS_SHOWN: Kind[] = ["wait", "failed", "done", "message"];
 const NOTIFY_DEFAULT: NotifyKinds = { wait: true, failed: true, done: "away", message: true };
 const BADGE_DEFAULT: BadgeKinds = { on: true, wait: true, failed: true, done: false, message: false };
 const MAC_APP = !!window.stillfailDesktop && /Mac/.test(navigator.platform);
+/** Where the app puts a number on its icon: the desktop app's Dock tile on macOS (its main process's followBadge). A
+ * browser shows none, nor does the desktop app's taskbar on Windows. */
+const BADGE_SHOWN = MAC_APP;
+/** An iPhone's or iPad's (an iPad asking for desktop pages says it is a Mac with a touch screen). */
+const IOS = /iPhone|iPad|iPod/.test(navigator.userAgent) || (/Mac/.test(navigator.platform) && navigator.maxTouchPoints > 1);
+/** How this device's system shows notifications, as the preview draws it: a phone's system (Android, iOS) the device
+ * itself, a banner across the top over its home screen; Windows a banner in the screen's bottom right corner over the
+ * taskbar; else macOS's, a banner in its top right corner and the Dock. */
+const SYSTEM: "phone" | "windows" | "mac" = IOS || /Android/.test(navigator.userAgent) ? "phone" : /Win/.test(navigator.platform) ? "windows" : "mac";
+/** A tablet rather than a phone (its screen's shorter side 600 or more), drawn as one. */
+const TABLET = SYSTEM === "phone" && Math.min(window.screen.width, window.screen.height) >= 600;
 /** The app's own icon, as the system shows it beside its notifications and in the Dock. */
 const ICON = BETA || window.stillfailDesktop?.beta ? "/icon-beta-192.png" : "/icon-192.png";
 
@@ -37,12 +50,12 @@ export function NotificationsPage({ back, workspace }: { back: string; workspace
       {!s.read ? <Waiting shape="cards" /> : <>
       <Preview s={s} kind={open ?? KINDS_SHOWN.find((k) => s.banner(k)) ?? "wait"} />
       <Section title={t("web-pages.notifications.ways.title")} description={s.note}>
-        <div className={css.tiles}>
+        {(CAN_NOTIFY || BADGE_SHOWN) && <div className={css.tiles}>
           {CAN_NOTIFY && <Tile way="banner" on={s.state === "on"} busy={s.busy} disabled={s.state === "unsupported" || (s.permission === "denied" && !s.openSettings)}
             action={s.permission === "denied" ? t("web-pages.notifications.enable.open") : s.permission === "default" ? t("web-pages.notifications.enable.allow") : undefined}
             onChange={(on) => (s.permission === "denied" ? s.openSettings?.() : s.permission === "default" ? void requestPermission() : s.setBanner(on))} />}
-          <Tile way="badge" on={s.badge.on} onChange={(on) => s.setBadge({ on })} />
-        </div>
+          {BADGE_SHOWN && <Tile way="badge" on={s.badge.on} onChange={(on) => s.setBadge({ on })} />}
+        </div>}
       </Section>
       <Section title={t("web-pages.notifications.kinds.title")}>
         <div className={`${pagesCss.card} ${css.kinds}`}>
@@ -53,8 +66,9 @@ export function NotificationsPage({ back, workspace }: { back: string; workspace
       </Section>
       <Section title={t("web-pages.notifications.more.title")}>
         <div className={pagesCss.card}>
-          {window.stillfailDesktop && <SwitchRow title={t("web-pages.notifications.preview")} description={t("web-pages.notifications.previewNote")}
-            checked={s.preview} disabled={s.state !== "on"} onChange={s.setPreview} />}
+          {/* (a browser's pushes follow it too: the cloud makes them as its registration says) */}
+          <SwitchRow title={t("web-pages.notifications.preview")} description={t("web-pages.notifications.previewNote")}
+            checked={s.preview} disabled={s.state !== "on"} onChange={s.setPreview} />
           {MAC_APP && <p className={css.sound}>{t("web-pages.notifications.sound", { name: NAME })}</p>}
           {!window.stillfailDesktop && <p className={css.sound}>{t("web-pages.notifications.browserNote")}</p>}
         </div>
@@ -131,7 +145,7 @@ export function Tile({ way, on, onChange, busy, disabled, action }: { way: Way; 
     <button type="button" className={css.tile} aria-pressed={action ? undefined : on} data-on={(on && !action) || undefined} data-action={action ? true : undefined} disabled={busy || disabled} onClick={() => onChange(!on)}>
       <span className={css.tilePicture} aria-hidden="true">
         {action && <span className={css.picAlert}>!</span>}
-        {way === "banner" ? <span className={css.picBanner} /> : <span className={css.picApp}><span className={css.picBadge} /></span>}
+        {way === "banner" ? <span className={css.picBanner} data-system={SYSTEM} /> : <span className={css.picApp}><span className={css.picBadge} /></span>}
       </span>
       <span className={css.tileName}>{t(`web-pages.notifications.ways.${way}`)}</span>
       {action ? <span className={css.tileAction}>{action}<ChevronRight size={14} aria-hidden="true" /></span>
@@ -144,7 +158,7 @@ export function Tile({ way, on, onChange, busy, disabled, action }: { way: Way; 
 function KindRow({ kind, s, open, onOpen }: { kind: Kind; s: Settings; open: boolean; onOpen(): void }) {
   const ways = [
     CAN_NOTIFY && s.banner(kind) ? (kind === "done" && s.kinds.done === "away" ? t("web-pages.notifications.sumBannerAway") : t("web-pages.notifications.ways.banner")) : null,
-    s.badge.on && s.badge[kind] ? t("web-pages.notifications.ways.badge") : null,
+    BADGE_SHOWN && s.badge.on && s.badge[kind] ? t("web-pages.notifications.ways.badge") : null,
   ].filter(Boolean);
   const off = s.state !== "on";
   return (
@@ -169,7 +183,7 @@ function KindRow({ kind, s, open, onOpen }: { kind: Kind; s: Settings; open: boo
           ) : (
             <WayRow title={t("web-pages.notifications.ways.banner")} checked={s.kinds[kind] !== false} disabled={off} onChange={(v) => s.setKinds({ [kind]: v })} />
           ))}
-          <WayRow title={t("web-pages.notifications.inBadge")} checked={s.badge[kind]} disabled={!s.badge.on} onChange={(v) => s.setBadge({ [kind]: v })} />
+          {BADGE_SHOWN && <WayRow title={t("web-pages.notifications.inBadge")} checked={s.badge[kind]} disabled={!s.badge.on} onChange={(v) => s.setBadge({ [kind]: v })} />}
         </div>
       )}
     </div>
@@ -192,32 +206,56 @@ const SAMPLE: Record<Kind, () => { title: string; body: string }> = {
   message: () => ({ title: t("web-pages.notifications.sample.title"), body: t("web-pages.notifications.sample.message") }),
 };
 
-/** A screen as the settings make it: the banner of `kind` (the latest one that came, else a sample), the app's badge
- * with what it counts now. */
+/** A screen of this device's system as the settings make it (SYSTEM): the banner of `kind` (the latest one that came,
+ * else a sample) where the system shows one, the app's icon among others with what it carries now: its number where
+ * the system shows it (BADGE_SHOWN), else on Android the system's own dot while a banner shows. */
 function Preview({ s, kind }: { s: Settings; kind: Kind }) {
   const latest = [...s.notices].reverse().find((n) => (n.kind === "block" ? "wait" : n.kind) === kind);
   const shown = latest ? { title: latest.title, body: latest.body } : SAMPLE[kind]();
   const body = s.preview ? shown.body : t(`web-pages.notifications.hidden.${kind}`);
   const banner = CAN_NOTIFY && s.banner(kind);
-  const badge = s.badge.on && s.count > 0;
+  const badge = BADGE_SHOWN && s.badge.on && s.count > 0;
+  const dot = !BADGE_SHOWN && SYSTEM === "phone" && !IOS && banner;
+  const card = (
+    <div className={SYSTEM === "phone" ? css.bannerAcross : css.banner} data-system={SYSTEM} data-off={!banner || undefined}>
+      <img src={ICON} alt="" className={css.bannerIcon} />
+      <span className={css.bannerText}>
+        <span className={css.bannerHead}><b>{shown.title}</b><span className={css.muted}>{t("web-pages.notifications.now")}</span></span>
+        <span className={css.bannerBody}>{body}</span>
+      </span>
+    </div>
+  );
+  const icons = (
+    <>
+      <span className={SYSTEM === "phone" ? css.homeApp : css.appIcon} />
+      <span className={SYSTEM === "phone" ? css.homeApp : css.appIcon} />
+      <span className={SYSTEM === "phone" ? css.homeAppMine : css.appIconMine}>
+        <img src={ICON} alt="" className={css.appIconImage} />
+        {badge && <span className={css.badge}>{s.count > 99 ? "99+" : s.count}</span>}
+        {dot && <span className={css.dot} />}
+      </span>
+      <span className={SYSTEM === "phone" ? css.homeApp : css.appIcon} />
+    </>
+  );
+  if (SYSTEM === "phone") {
+    // The device itself, standing up from the preview's foot, its top in view.
+    return (
+      <div className={css.stage} aria-label={t("web-pages.notifications.previewLabel")} role="img">
+        <div className={css.device} data-tablet={TABLET || undefined}>
+          <div className={css.deviceScreen}>
+            <div className={css.status}><span>9:41</span><span className={css.battery} /></div>
+            <span className={IOS ? css.island : css.hole} />
+            <div className={css.homeRow}>{icons}</div>
+            {card}
+          </div>
+        </div>
+      </div>
+    );
+  }
   return (
     <div className={css.screen} aria-label={t("web-pages.notifications.previewLabel")} role="img">
-      <div className={css.banner} data-off={!banner || undefined}>
-        <img src={ICON} alt="" className={css.bannerIcon} />
-        <span className={css.bannerText}>
-          <span className={css.bannerHead}><b>{shown.title}</b><span className={css.muted}>{t("web-pages.notifications.now")}</span></span>
-          <span className={css.bannerBody}>{body}</span>
-        </span>
-      </div>
-      <div className={css.dockBar}>
-        <span className={css.appIcon} />
-        <span className={css.appIcon} />
-        <span className={css.appIconMine}>
-          <img src={ICON} alt="" className={css.appIconImage} />
-          {badge && <span className={css.badge}>{s.count > 99 ? "99+" : s.count}</span>}
-        </span>
-        <span className={css.appIcon} />
-      </div>
+      {card}
+      <div className={SYSTEM === "windows" ? css.taskbar : css.dockBar}>{icons}</div>
     </div>
   );
 }

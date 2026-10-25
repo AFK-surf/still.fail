@@ -144,6 +144,19 @@ try {
   }, still_ms);
 
   const wrong = [];
+  // What a phone's or tablet's browser says of itself, by its system (a story's `system`: stories.tsx): its name and
+  // its platform.
+  const SYSTEMS = {
+    android: { userAgent: 'Mozilla/5.0 (Linux; Android 15; Pixel 9) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Mobile Safari/537.36', platform: 'Linux armv8l' },
+    ios: { userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1', platform: 'iPhone' },
+    ipad: { userAgent: 'Mozilla/5.0 (iPad; CPU OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1', platform: 'iPad' },
+  };
+  const ownAgent = await (async () => {
+    const p = await browser.newPage();
+    const agent = await p.evaluate(() => navigator.userAgent);
+    await p.close();
+    return agent;
+  })();
   /** A page with the story in it, taken to its state by its steps; whether it got there. */
   const open = async (story, page, cdp) => {
     // What the story before it kept in the browser gone (its storage, its cookies, the pointer over it, a finger's
@@ -158,6 +171,8 @@ try {
     await page.mouse.move(-1, -1);
     await page.emulateMedia({ reducedMotion: 'no-preference' });
     await page.setViewportSize(story.phone ? { width: 390, height: 844 } : { width: 1280, height: 800 });
+    // A browser of a phone's or tablet's system (`system`), else the browser's own name for itself.
+    await cdp.send('Emulation.setUserAgentOverride', story.system ? SYSTEMS[story.system] : { userAgent: ownAgent });
     const errors = [];
     const onError = (e) => errors.push(e.message);
     page.on('pageerror', onError);
