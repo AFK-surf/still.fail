@@ -1,6 +1,6 @@
 // The layout by the screen alone (@sf.layout), and laid out Medium the wide frame's tape (sfdesk's frame.mbt): the
 // rail and the sidebar beside the page, the one in use whole, what shows of the other veiled; a press there brings it
-// over and goes to nothing it holds.
+// over and goes to nothing it holds, a drag across there brings it with the finger.
 
 ///|
 /// Where the widget said as `label` is (x, y, w, h).
@@ -184,7 +184,7 @@ test "on the tape back brings the sidebar over from the chat, and with the sideb
 }
 
 ///|
-test "on the tape a finger drags nothing across: the tape stays where it is" {
+test "on the tape a finger dragging across the one in use moves no tape: the tape stays where it is" {
   let t = tape_chat(2, 690.0, 840.0, width="medium", height="medium")
   page_over(t, 690.0)
   let (mx, my) = t.find("做完了：列表、跳到最新的按钮").unwrap()
@@ -223,6 +223,64 @@ test "a phone turned sideways for a film: the layout it had (the player the whol
   assert_false(@sfdesk.is_wide(t.ctx()))
   assert_true(app.nav.top() is DrivePlay(_))
   assert_true(said_at(t, "全屏") is Some(_))
+}
+
+///|
+/// A finger down at (`x`, `y`) dragged across by `by`, 10 at a time, 50 ms apart (slowly: no fling); `up`: let go at
+/// the end.
+fn drag_slowly(t : @ui.Tester, x : Double, y : Double, by : Double, up? : Bool = true) -> Unit {
+  t.press_at(x, y)
+  let steps = (by.abs() / 10.0).ceil().to_int()
+  let step = by / steps.to_double()
+  for i in 1..=steps {
+    t.run_for(50.0)
+    t.move(x + step * i.to_double(), y)
+  }
+  if up {
+    t.release(x + by, y)
+  }
+}
+
+///|
+test "on the tape what shows of the page dragged across comes with the finger; let go past a third of the way, it comes over" {
+  let t = tape_chat(2, 690.0, 840.0, width="medium", height="medium")
+  let words = "做完了：列表、跳到最新的按钮"
+  let (side_x, _) = t.find(words).unwrap()
+  // where the chat's message is with the page in use, and back to the sidebar
+  page_over(t, 690.0)
+  let (page_x, _) = t.find(words).unwrap()
+  t.back()
+  t.run_for(@sfdesk.side_move_ms)
+  assert_eq(@sfdesk.wide.tape_at, @sfdesk.TapePane::Side)
+  assert_eq(t.find(words).unwrap().0, side_x)
+  // half the way across, held: the page with the finger, between where it rests either way, the sidebar still in use
+  let way = side_x - page_x
+  drag_slowly(t, 650.0, 400.0, -way / 2.0, up=false)
+  let (held_x, _) = t.find(words).unwrap()
+  assert_true(held_x < side_x - way / 4.0 && held_x > page_x, msg="held at \{held_x}: \{page_x}..\{side_x}")
+  assert_eq(@sfdesk.wide.tape_at, @sfdesk.TapePane::Side)
+  // let go: the page comes over, nothing in it pressed
+  t.release(650.0 - way / 2.0, 400.0)
+  assert_eq(@sfdesk.wide.tape_at, @sfdesk.TapePane::Page)
+  t.run_for(@sfdesk.side_move_ms)
+  assert_eq(t.find(words).unwrap().0, page_x)
+  assert_true(on_first_chat())
+}
+
+///|
+test "on the tape what shows of the page dragged a little and let go: the tape back where it was, the sidebar in use" {
+  let t = tape_chat(2, 690.0, 840.0, width="medium", height="medium")
+  let words = "做完了：列表、跳到最新的按钮"
+  let (side_x, _) = t.find(words).unwrap()
+  drag_slowly(t, 650.0, 400.0, -40.0)
+  assert_eq(@sfdesk.wide.tape_at, @sfdesk.TapePane::Side)
+  t.run_for(@sfdesk.side_move_ms)
+  assert_eq(t.find(words).unwrap().0, side_x)
+  // the page in use: what shows of the sidebar dragged right past a third of the way brings it over
+  page_over(t, 690.0)
+  let (page_x, _) = t.find(words).unwrap()
+  drag_slowly(t, 40.0, 400.0, (side_x - page_x) * 0.6)
+  assert_eq(@sfdesk.wide.tape_at, @sfdesk.TapePane::Side)
 }
 
 ///|

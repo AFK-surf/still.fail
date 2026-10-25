@@ -10,7 +10,8 @@
 // side on a tape wider than the window, each a panel apart (the closed bar's: 6 from the window's edges, 8 between
 // them, on the sidebar's ground): the one in use whole, those beside it showing past its edges, veiled, as screens
 // beside it. What shows of another is not used where it is: a press on it, a tap or a click, only brings it over (the
-// tape moving, 380 ms), and what it holds answers from then on; nothing drags the tape. Nothing puts the sidebar away
+// tape moving, 380 ms), and what it holds answers from then on; dragged across, it comes with the finger and, let go,
+// over or back (the user, 2026-10-25: only there; a drag on the one in use is its own). Nothing puts the sidebar away
 // but a press on the page beside it (a chat chosen in it shows in the page, the sidebar still in use; no ⌘\, no lit
 // place pressed again: asked, 2026-10-24); the sidebar at first. The side panel comes over as it opens (the page
 // again as it closes); back goes from the side panel to the page, from the page to the sidebar.
@@ -85,6 +86,10 @@ pub(all) struct Wide {
   mut tape_ask : TapePane?
   mut tape_chat : String
   mut tape_panel : String
+  /// the one not in use being pulled over by what shows of it (tape_veils), and how far the finger has moved the tape
+  /// since it took it
+  mut tape_pull : TapePane?
+  mut tape_drag : Double
 }
 
 ///|
@@ -131,6 +136,8 @@ pub let wide : Wide = {
   tape_ask: None,
   tape_chat: "",
   tape_panel: "",
+  tape_pull: None,
+  tape_drag: 0.0,
 }
 
 ///|
@@ -190,6 +197,8 @@ fn wide_reset() -> Unit {
   wide.tape_ask = None
   wide.tape_chat = ""
   wide.tape_panel = ""
+  wide.tape_pull = None
+  wide.tape_drag = 0.0
 }
 
 ///|
@@ -801,12 +810,34 @@ fn tape_frame(c : @ui.Ctx, panel : ChatRef?, at : (Double, Double, Double)) -> D
     wide.tape_ask = None
     wide.tape_chat = ""
     wide.tape_panel = ""
+    wide.tape_pull = None
+    wide.tape_drag = 0.0
     return 0.0
   }
-  // a press on what shows of another (tape_veils)
+  // a press on what shows of another (tape_veils); or what shows of it dragged across: the tape in the hand from there,
+  // let go brought over or back (tape_let_go)
   for p in [Side, Page, Panel] {
-    if c.clicked(c.id("tape/" + p.to_string())) {
+    let id = c.id("tape/" + p.to_string())
+    if c.clicked(id) {
       wide.tape_ask = Some(p)
+    }
+    match c.drag_of(id) {
+      Some(d) => {
+        let (dx, _) = d.take_move()
+        if d.down && d.moving && p != wide.tape_at && wide.tape_pull is None {
+          wide.tape_pull = Some(p)
+          wide.tape_drag = 0.0
+        }
+        if wide.tape_pull == Some(p) {
+          if d.down {
+            wide.tape_drag = tape_pull_clamp(at, p, wide.tape_drag + dx)
+          } else {
+            d.take_end() |> ignore
+            tape_let_go(c, at, p, d.vx * 1000.0)
+          }
+        }
+      }
+      None => ()
     }
   }
   // the chat's side panel opened beside it (the same chat as before, its panel closed then): the panel comes over;
@@ -843,13 +874,58 @@ fn tape_frame(c : @ui.Ctx, panel : ChatRef?, at : (Double, Double, Double)) -> D
     }
     None => ()
   }
-  c.moved("--tape-x", tape_x_of(at, wide.tape_at))
+  // (another brought over while one was pulled, by back or a press: the pull is over)
+  if wide.tape_pull == Some(wide.tape_at) {
+    wide.tape_pull = None
+    wide.tape_drag = 0.0
+  }
+  let pulled = if wide.tape_pull is Some(_) { wide.tape_drag } else { 0.0 }
+  c.moved("--tape-x", tape_x_of(at, wide.tape_at) + pulled)
 }
+
+///|
+/// How far the finger may move the tape pulling `p` over: from where it is with the one in use to where it has `p` in
+/// use, no further either way (`at`: tape_at's).
+fn tape_pull_clamp(at : (Double, Double, Double), p : TapePane, drag : Double) -> Double {
+  let span = tape_x_of(at, p) - tape_x_of(at, wide.tape_at)
+  if span < 0.0 {
+    dmax(span, dmin(0.0, drag))
+  } else {
+    dmax(0.0, dmin(span, drag))
+  }
+}
+
+///|
+/// The one pulled over let go (`v`: the finger's speed across as it left, px/s): brought over when pulled a third of
+/// the way or flung toward it, else back to the one in use; on from where the finger left the tape, as the tape moves.
+fn tape_let_go(c : @ui.Ctx, at : (Double, Double, Double), p : TapePane, v : Double) -> Unit {
+  let span = tape_x_of(at, p) - tape_x_of(at, wide.tape_at)
+  let k = if span == 0.0 { 0.0 } else { wide.tape_drag / span }
+  let fling = v.abs() > tape_fling
+  let toward = fling && (v > 0.0) == (span > 0.0)
+  let away = fling && !toward
+  wide.tape_pull = None
+  wide.tape_drag = 0.0
+  if toward || (k > tape_pull_over && !away) {
+    wide.tape_ask = Some(p)
+  } else {
+    c.move_state(tape_moves, duration=side_move_ms)
+  }
+}
+
+///|
+/// How much of the way a panel pulled over must have come to be brought over when let go, and how fast a finger
+/// leaving it (px/s) flings it over or back whatever the way it came (the 奏 deck's swipe's fling, decisions.mbt).
+let tape_pull_over : Double = 0.3
+
+///|
+let tape_fling : Double = 900.0
 
 ///|
 /// What shows of the panels not in use on the tape, each veiled (the overlay's colour, a share of it as far as the tape
 /// is from where it has that panel in use): a press there, a tap or a click, brings it over (tape_frame) and goes to
-/// nothing it holds. `x`: how far the tape is moved; `at`: tape_at's; `panels`: each panel, its left on the tape and its
+/// nothing it holds; dragged across, it comes with the finger (the tape in the hand) and, let go, over or back. Drags
+/// on the one in use are its own (a row swiped, words scrolled across). `x`: how far the tape is moved; `at`: tape_at's; `panels`: each panel, its left on the tape and its
 /// width; `top`, `h`: theirs.
 fn tape_veils(
   c : @ui.Ctx,
@@ -879,11 +955,15 @@ fn tape_veils(
     for panel in panels {
       let (p, left, width) = panel
       let k = far(p)
-      if width <= 0.0 || k <= 0.0 {
+      // (the one pulled over still the finger's as it comes whole, its veil gone)
+      if width <= 0.0 || (k <= 0.0 && wide.tape_pull != Some(p)) {
         continue
       }
-      // (only one not in use takes presses: the one in use, its veil going, lets them through)
+      // (only one not in use takes presses and drags across: the one in use, its veil going, lets them through)
       let id = if p == wide.tape_at { 0 } else { c.id("tape/" + p.to_string()) }
+      if id != 0 {
+        c.drag_on(id, axis=Horizontal)
+      }
       let b = c.box(
         style=@ui.style(w=Fixed(width), h=Fixed(h), radius=@sf.page_panel_corner(), bg=Data(@sf.alpha(t.p.overlay, tape_veil_share * k))),
         left~,
