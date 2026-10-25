@@ -314,7 +314,7 @@
       "src/sfdesk/vault.mbt": 28,
       "src/sfdesk/vault_dialogs.mbt": 11,
       "src/sfdesk/vault_item.mbt": 10,
-      "src/sfdesk/workspace.mbt": 29
+      "src/sfdesk/workspace.mbt": 16
     },
     "follow-layout": {
       "src/sfbase/viewer.mbt": 1

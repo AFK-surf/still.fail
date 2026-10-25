@@ -71,8 +71,10 @@ let login_state : LoginState = { copied: {}, manual: {}, error: {}, seen: {} }
 ///|
 /// The accounts the station machine's own Claude Code and Codex are signed in with that no profile uses yet
 /// (MachineLoginOffers): one kept where the station reads it used as it is (`profile.useMachineLogin`), one it cannot
-/// signed in again for still.fail (`go_new`), a refused one only said so.
-fn machine_login_offers(c : @ui.Ctx, core : Core, station : String, overview : Json?, go_new : (String) -> Unit, inset? : Double = 12.0) -> Array[() -> Unit] {
+/// signed in again for still.fail (`go_new`), a refused one only said so. A section of the page it is on (its title a
+/// section's, its rows a list card's, as the page's others); `inset`, on a page of its own room (a new profile's sheet):
+/// its title and card that far in.
+fn machine_login_offers(c : @ui.Ctx, core : Core, station : String, overview : Json?, go_new : (String) -> Unit, inset? : Double) -> Array[() -> Unit] {
   let t = @sf.theme()
   let offers = items(overview, "machineLogins").filter(fn(l) { flag(Some(l), "offered") })
   if offers.length() == 0 {
@@ -80,14 +82,23 @@ fn machine_login_offers(c : @ui.Ctx, core : Core, station : String, overview : J
   }
   [
     fn() {
-      c.box(w=Fill(1.0), pl=inset + 12.0, pr=inset + 12.0, pt=8.0, pb=4.0, fn() {
-        c.text(tr("android-settings.machine.title"), size=t.t.meta, color=t.p.muted, w=Fill(1.0), line=18.0) |> ignore
-      })
-      |> ignore
+      match inset {
+        Some(inset) =>
+          c.box(w=Fill(1.0), pl=inset + 12.0, pr=inset + 12.0, pt=8.0, pb=4.0, fn() {
+            c.text(tr("android-settings.machine.title"), size=t.t.meta, color=t.p.muted, w=Fill(1.0), line=18.0) |> ignore
+          })
+          |> ignore
+        None => section_header(c, tr("android-settings.machine.title"), start=S6)
+      }
     },
     fn() {
-      c.box(w=Fill(1.0), pl=inset, pr=inset, pb=10.0, fn() {
-        rows_card(c, fn() {
+      let card = fn(body : () -> Unit) {
+        match inset {
+          Some(inset) => c.box(w=Fill(1.0), pl=inset, pr=inset, pb=10.0, fn() { rows_card(c, body) }) |> ignore
+          None => list_card(c, body)
+        }
+      }
+      card(fn() {
           for l in offers {
             let lv = Some(l)
             let rt = text(lv, "runtime")
@@ -162,10 +173,7 @@ fn machine_login_offers(c : @ui.Ctx, core : Core, station : String, overview : J
             })
             |> ignore
           }
-        })
-        |> ignore
       })
-      |> ignore
     },
   ]
 }

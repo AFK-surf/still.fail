@@ -1120,10 +1120,11 @@ pub fn card_lines(c : @ui.Ctx, title : String, words? : String = "", note? : Str
 
 ///|
 /// A footed card's buttons, last on it (cardFoot: 8 apart), reaching its foot corners as far as they are tall: at its
-/// start, or its end where `at_end`.
+/// start, or its end where `at_end`. Out across the card's words to its corners at its sides alone: its foot is the
+/// footed card's own (page_card's `footed`: as far under them as concentric with its corner), not reached again (the
+/// start's did, 4 past the card's edge: the spacing rule 4).
 pub fn card_foot(c : @ui.Ctx, body : () -> Unit, at_end? : Bool = false) -> Unit {
-  c.box(style=if at_end { pg_card_foot_end.then(foot_across(button_height())) } else { pg_card_foot.then(foot_reach(button_height())) }, body)
-  |> ignore
+  c.box(style=(if at_end { pg_card_foot_end } else { pg_card_foot }).then(foot_across(button_height())), body) |> ignore
 }
 
 ///|

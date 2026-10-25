@@ -183,13 +183,6 @@ let acc_device_narrow : @ui.TextStyle = @sf.body.then(@sf.one_line).then(@ui.tex
 let acc_picture : Double = @sf.identity_mark
 
 ///|
-/// 退出登录 at an account's row's end, in red (the workspace's page's, security's): pressed, asked first.
-fn acc_sign_out_link(c : @ui.Ctx, key : String, words : String) -> Bool {
-  let t = @sf.theme()
-  tap_text(c, key, words, color=t.p.red)
-}
-
-///|
 // kept across runs: a value (no field of it changes)
 let acc_delete_words : @ui.TextStyle = @sf.body.then(@sf.bad)
 
