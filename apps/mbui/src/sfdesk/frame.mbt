@@ -8,8 +8,8 @@
 //
 // Medium, the rail and the sidebar, the page, and a chat's side panel while it is open are as they are Large, side by
 // side on a tape wider than the window, each a panel apart (the closed bar's: 6 from the window's edges, 8 between
-// them, on the sidebar's ground): the one in use whole, those beside it showing past its edges, veiled, as screens
-// beside it. What shows of another is not used where it is: a press on it, a tap or a click, only brings it over (the
+// them, on the sidebar's ground, each on the ground its pages have on a phone): the one in use whole, those beside it
+// showing past its edges, as screens beside it, untinted (the user, 2026-10-25: the page's ground as a phone's). What shows of another is not used where it is: a press on it, a tap or a click, only brings it over (the
 // tape moving, 380 ms), and what it holds answers from then on; dragged across, it comes with the finger and, let go,
 // over or back (the user, 2026-10-25: only there; a drag on the one in use is its own). Nothing puts the sidebar away
 // but a press on the page beside it (a chat chosen in it shows in the page, the sidebar still in use; no ⌘\, no lit
@@ -87,7 +87,7 @@ pub(all) struct Wide {
   mut tape_ask : TapePane?
   mut tape_chat : String
   mut tape_panel : String
-  /// the one not in use being pulled over by what shows of it (tape_veils), and how far the finger has moved the tape
+  /// the one not in use being pulled over by what shows of it (tape_covers), and how far the finger has moved the tape
   /// since it took it
   mut tape_pull : TapePane?
   mut tape_drag : Double
@@ -403,9 +403,9 @@ fn dock(
   } else {
     dock_open
   }
-  // (a panel of its own, the closed bar or on the tape: on the closed bar's ground, as the lists' bands on it are: one
+  // (a panel of its own, the closed bar or on the tape: on its ground (apart_ground), as the lists' bands on it are: one
   // ground under all of it, whatever the theme's surface is on this system)
-  let look = if bar || apart { look.then(@ui.style(bg=Data(closed_ground()))) } else { look }
+  let look = if bar || apart { look.then(@ui.style(bg=Data(apart_ground()))) } else { look }
   let dock_w = dmax(0.0, col - ml - mr)
   let dock_h = dmax(0.0, c.height - top - foot - mt - mb)
   c.layer(fn() {
@@ -725,7 +725,7 @@ pub fn frame(
       if panel_of is Some(_) {
         panels.push((Panel, col + main_w + closed_bar_gap, panel_w))
       }
-      tape_veils(c, tape_x, at, panels, panel_top, panel_h)
+      tape_covers(c, tape_x, at, panels, panel_top, panel_h)
     }
   })
   // (the sidebar's edge: on its right edge open, between the bar and the page folded, at the edge of the sidebar shown
@@ -826,7 +826,7 @@ fn tape_frame(c : @ui.Ctx, panel : ChatRef?, at : (Double, Double, Double)) -> D
     wide.tape_drag = 0.0
     return 0.0
   }
-  // a press on what shows of another (tape_veils); or what shows of it dragged across: the tape in the hand from there,
+  // a press on what shows of another (tape_covers); or what shows of it dragged across: the tape in the hand from there,
   // let go brought over or back (tape_let_go)
   for p in [Side, Page, Panel] {
     let id = c.id("tape/" + p.to_string())
@@ -934,12 +934,12 @@ let tape_pull_over : Double = 0.3
 let tape_fling : Double = 900.0
 
 ///|
-/// What shows of the panels not in use on the tape, each veiled (the overlay's colour, a share of it as far as the tape
-/// is from where it has that panel in use): a press there, a tap or a click, brings it over (tape_frame) and goes to
-/// nothing it holds; dragged across, it comes with the finger (the tape in the hand) and, let go, over or back. Drags
-/// on the one in use are its own (a row swiped, words scrolled across). `x`: how far the tape is moved; `at`: tape_at's; `panels`: each panel, its left on the tape and its
-/// width; `top`, `h`: theirs.
-fn tape_veils(
+/// What shows of the panels not in use on the tape, each under a cover of its shape that takes what is done there, drawn
+/// nothing (the panel as it is, its pages' ground a phone's): a press there, a tap or a click, brings it over
+/// (tape_frame) and goes to nothing it holds; dragged across, it comes with the finger (the tape in the hand) and, let go,
+/// over or back. Drags on the one in use are its own (a row swiped, words scrolled across). `x`: how far the tape is
+/// moved; `at`: tape_at's; `panels`: each panel, its left on the tape and its width; `top`, `h`: theirs.
+fn tape_covers(
   c : @ui.Ctx,
   x : Double,
   at : (Double, Double, Double),
@@ -947,32 +947,17 @@ fn tape_veils(
   top : Double,
   h : Double,
 ) -> Unit {
-  let t = @sf.theme()
-  // how far from in use the tape has each (0 in use, 1 as far as the next of them is)
-  let far = fn(p : TapePane) {
-    let own = tape_x_of(at, p)
-    let mut span = 1.0e9
-    for q in panels {
-      if q.0 != p {
-        span = dmin(span, (tape_x_of(at, q.0) - own).abs())
-      }
-    }
-    if span <= 0.0 || span >= 1.0e9 {
-      0.0
-    } else {
-      dmax(0.0, dmin(1.0, (x - own).abs() / span))
-    }
-  }
+  // whether the tape has it in use: moved exactly where it has it
+  let in_use = fn(p : TapePane) { x == tape_x_of(at, p) }
   let side_open = panels.iter().any(fn(q) { q.0 == Panel })
   c.layer(fn() {
     for panel in panels {
       let (p, left, width) = panel
-      let k = far(p)
-      // (the one pulled over still the finger's as it comes whole, its veil gone)
-      if width <= 0.0 || (k <= 0.0 && wide.tape_pull != Some(p)) {
+      // (the one pulled over still the finger's as it comes whole)
+      if width <= 0.0 || (in_use(p) && wide.tape_pull != Some(p)) {
         continue
       }
-      // (only one not in use takes presses and drags across: the one in use, its veil going, lets them through)
+      // (only one not in use takes presses and drags across: the one in use lets them through)
       let id = if p == wide.tape_at { 0 } else { c.id("tape/" + p.to_string()) }
       if id != 0 {
         c.drag_on(id, axis=Horizontal)
@@ -982,7 +967,6 @@ fn tape_veils(
           w=Fixed(width),
           h=Fixed(h),
           radius=@sf.corners_radius(tape_pane_corners(p, side_open)),
-          bg=Data(@sf.alpha(t.p.overlay, tape_veil_share * k)),
         ),
         left~,
         top~,
@@ -1012,7 +996,7 @@ fn tape_pane_corners(p : TapePane, panel : Bool) -> FixedArray[@ui.CornerOf] {
 }
 
 ///|
-/// What a veiled panel is called to a screen reader: what pressing it does.
+/// What a covered panel is called to a screen reader: what pressing it does.
 fn tape_words(p : TapePane) -> String {
   match p {
     Side => @sf.t("web-main.sidebar.open")
@@ -1021,9 +1005,6 @@ fn tape_words(p : TapePane) -> String {
   }
 }
 
-///|
-/// How much of the overlay's colour veils the one not in use on the tape; the veil's corner, the panel's under it.
-let tape_veil_share : Double = 0.4
 
 
 ///|

@@ -417,6 +417,18 @@ let mark_folded_from : Double = 0.4
 let list_mark_in : Double = -3.0
 
 ///|
+/// The sidebar's ground where it is a panel of its own: the closed bar's, floating over the page (closed_ground); on
+/// the tape, a panel beside the page's as it is, the page's ground, which a phone's lists and pages share (the user,
+/// 2026-10-25: the medium screen's grounds the phone's, no other colours).
+pub fn apart_ground() -> Int64 {
+  if wide.tape {
+    @sf.theme().p.bg
+  } else {
+    closed_ground()
+  }
+}
+
+///|
 /// The closed bar's ground (a floating panel's: the canvas, raised in the dark).
 pub fn closed_ground() -> Int64 {
   let t = @sf.theme()

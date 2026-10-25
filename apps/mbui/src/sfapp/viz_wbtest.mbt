@@ -265,14 +265,14 @@ test "on the tape what shows of a visualization's page beside the sidebar in use
   t.view_says(page, "{\"emberViz\":true,\"type\":\"height\",\"height\":5000}")
   t.frame()
   t.frame()
-  // the sidebar in use at first, the page beside it veiled
+  // the sidebar in use at first, the page showing beside it
   assert_eq(@sfdesk.wide.tape_at, @sfdesk.TapePane::Side)
   let (x, y, w, h) = view_rect(t, page).unwrap()
   let edge = @sfdesk.rail_w + 240.0
   assert_true(x + w > edge + 20.0, msg="the page \{x} \{w}, the sidebar's edge \{edge}")
   // (in the middle of what the window shows of it)
   let (px, py) = (dmax(x, edge) + 10.0, (dmax(y, 0.0) + dmin(y + h, 840.0)) / 2.0)
-  // tapped: the veil's (the chat's page comes over), the page told nothing of it
+  // tapped: the cover's (the chat's page comes over), the page told nothing of it
   t.tap(px, py)
   assert_eq(@sfdesk.wide.tape_at, @sfdesk.TapePane::Page)
   assert_false(t.views().iter().any(fn(l) { l.has_prefix("finger \{page} ") }))

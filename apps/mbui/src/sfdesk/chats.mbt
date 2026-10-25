@@ -9,7 +9,7 @@ fn lists_band(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
   let t = @sf.theme()
   let filter = filter_of(src, w.id)
   let (view, _) = chats_of(src, w.id, "all")
-  let band = c.box(style=side_full.then(@ui.style(bg=Data(@sf.mix(closed_ground(), wide.band, t.p.sidebar)))), fn() {
+  let band = c.box(style=side_full.then(@ui.style(bg=Data(@sf.mix(apart_ground(), wide.band, t.p.sidebar)))), fn() {
     side_top(c)
     // in the closed bar, what stands in its top right corner (the filter) 6 from its top and side, the band ending 6
     // under it (Sidebar.css.ts navNew, closed)
