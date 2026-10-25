@@ -186,6 +186,7 @@ fn zou_card(c : @ui.Ctx, src : Source, w : Workspace, core : Core, x : Json, liv
     view: cv,
     go: None,
     inline: false,
+    gutter: 0.0,
     list: None,
     core: None,
   }

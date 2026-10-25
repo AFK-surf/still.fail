@@ -406,3 +406,22 @@ test "opened short of its end, the core is told the messages shown whole: read u
   assert_true(seen < newest)
   ignore(t)
 }
+
+///|
+test "a table wider than the message on a phone: at rest in line with the words, slid sideways out to the screen's edge" {
+  let t = chat_tester("chat-md")
+  let cell = "只排可见的行"
+  let (x, y) = t.drawn_of(cell).unwrap()
+  // at rest in line with the words (the list's 16 in), past the frame's line and the cell's 12
+  assert_eq(x, 16.0 + 1.0 + 12.0)
+  // slid to its end, held still before it is let go (no fling)
+  t.press_at(360.0, y)
+  for step in 1..=8 {
+    t.move(360.0 - step.to_double() * 40.0, y)
+  }
+  t.run_for(long_press_ms)
+  t.release(40.0, y)
+  // what went left shows out to the screen's edge, not cut at the words' margin
+  let (shown, _, _, _) = t.shown_of(cell).unwrap()
+  assert_eq(shown, 0.0)
+}

@@ -85,6 +85,7 @@ test "desk: an agent's request to use a secret is its card in place of its words
         view: chat_view(viewer),
         go: None,
         inline: false,
+        gutter: 0.0,
         list: None,
         core: Some(settings_core(src, w)),
       }
