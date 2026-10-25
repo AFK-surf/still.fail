@@ -28,6 +28,9 @@ const MIN_CLIENT_PROTOCOL = 1;
 const MAX_HEAD = 16 * 1024;
 // Files sent to a session go through here: in parts of 16 MB at most, or whole up to 50 MB (clients before parts).
 const MAX_BODY = 64 * 1024 * 1024;
+/// A reply this long or longer whose bytes took more than SLOW_REPLY_MS to be taken in whole is said on the log (slowly).
+const SLOW_REPLY_BYTES = 256 * 1024;
+const SLOW_REPLY_MS = 5_000;
 /// Headers of one hop, not of what is relayed.
 const HOP = ["connection", "keep-alive", "proxy-connection", "transfer-encoding", "upgrade", "te", "trailer", "host", "content-length"];
 
@@ -419,6 +422,7 @@ function tracing(traces: Traces | undefined, head: any, method: string, path: st
 }
 
 async function answerRequest(m: Members, stream: Stream, reader: Reader, head: any, method: string, path: string, viewer: Admitted["viewer"], conn: Connection) {
+  const asked = wall.now();
   const answer = async (status: number, body: unknown) => {
     await writeLine(stream, { status, headers: { "content-type": "application/json" } });
     await stream.write(Buffer.from(typeof body === "string" ? body : JSON.stringify(body)));
@@ -476,8 +480,34 @@ async function answerRequest(m: Members, stream: Stream, reader: Reader, head: a
     lang: langOfCore(headers),
   });
   // Compressed, for a client that asks so (compress.ts).
-  await send(stream, await compressed(handled, headers, rest));
+  const sent = await compressed(handled, headers, rest);
+  const ready = wall.now();
+  await send(stream, sent);
   await stream.finish();
+  if (Buffer.isBuffer(sent.body) && sent.body.length >= SLOW_REPLY_BYTES) slowly(stream, conn, method, rest, sent.body.length, ready - asked, ready);
+}
+
+/// A large reply's bytes, once the device has taken them all in (acknowledged): said on the log when that took over
+/// SLOW_REPLY_MS, with how long it was made in (`made`) and the way it went (a relay or an address, its round trip, the
+/// packets sent and lost on it), so a part of a video slow to come is seen here, the station's time apart from the way's.
+function slowly(stream: Stream, conn: Connection, method: string, path: string, bytes: number, made: number, from: number) {
+  void stream.stopped().then((code) => {
+    const ms = wall.now() - from;
+    if (code !== null || ms < SLOW_REPLY_MS) return;
+    const way = (conn.paths?.() ?? []).find((p) => p.selected);
+    log.info("mesh", "a reply went slowly", {
+      route: `${method} ${route(path.split("?")[0] ?? path)}`,
+      bytes,
+      made,
+      ms,
+      bytesPerSecond: Math.round((bytes / ms) * 1000),
+      device: conn.remoteId(),
+      way: way ? (way.relay ?? way.ip ?? "?") : "?",
+      rtt: way ? Math.round(way.rttMs) : null,
+      sent: way?.txPackets ?? null,
+      lost: way?.lostPackets ?? null,
+    });
+  }, () => {});
 }
 
 /// An answer onto its stream: its head line, then its body. A body that is a stream (GET /events) ends when the caller

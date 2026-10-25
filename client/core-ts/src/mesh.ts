@@ -95,6 +95,10 @@ export const SPEED_MIN_BYTES = 512 * 1024;
 export const TYPICAL_BYTES = 256 * 1024;
 /// How long the speed seen on a way counts; then it is found out again, from the replies that come through it.
 export const SPEED_KEPT_MS = 6 * 3600_000;
+/// How long the fastest a way was seen at holds against slower replies after it (one slower that came beside others on
+/// the way, or as the station read slowly); past it, a slower reply says how fast the way is now: it got slower (a
+/// line more crowded, a hop further), and is no longer taken to be as fast as it once was.
+export const SPEED_FRESH_MS = 10 * 60_000;
 /// A reply head is a line of JSON; anything longer is not a station talking.
 const MAX_HEAD = 64 * 1024;
 /// How many links in a row a read is asked again on when each is found gone under it.
@@ -112,7 +116,8 @@ export type CredentialSource = (device: string, fresh: boolean) => Effect.Effect
 export type Measured = { measuring: boolean; relays: [string, number | null][]; moved: string | null };
 
 type Day = { day: number; rx: number; tx: number };
-/// The fastest a way to a station was seen bringing a reply (bytes a second), and when that was first seen.
+/// How fast a way to a station was seen bringing a reply (bytes a second; the fastest within SPEED_FRESH_MS of it), and
+/// when.
 type Speed = { bps: number; at: number };
 
 /// A relay as a key: its URL as written out again, so `https://r` and `https://r/` are one.
@@ -727,7 +732,8 @@ export class Mesh {
   }
 
   /// A reply of `bytes` from a station came through `relay` in `ms` (from its first bytes to its end). The fastest seen
-  /// counts: a reply also comes slower than its way could bring it (others at once, the station reading slowly).
+  /// lately counts (SPEED_FRESH_MS): a reply also comes slower than its way could bring it (others at once, the station
+  /// reading slowly); one seen before that is not kept against how the way brings replies now.
   noteSpeed(addr: string, relay: string, bytes: number, ms: number): void {
     if (bytes < SPEED_MIN_BYTES || ms <= 0) return;
     const bps = (bytes / ms) * 1000;
@@ -735,12 +741,19 @@ export class Mesh {
     const of = (this.#speeds[stationId(addr)] ??= {});
     const key = relayKey(relay);
     const was = of[key];
-    if (was !== undefined && now - was.at < SPEED_KEPT_MS && was.bps >= bps) return;
-    of[key] = { bps, at: was !== undefined && now - was.at < SPEED_KEPT_MS ? was.at : now };
+    if (was !== undefined && now - was.at < SPEED_FRESH_MS && was.bps >= bps) return;
+    of[key] = { bps, at: now };
     for (const [id, relays] of Object.entries(this.#speeds)) {
       for (const [r, s] of Object.entries(relays)) if (now - s.at >= SPEED_KEPT_MS) delete relays[r];
       if (Object.keys(relays).length === 0) delete this.#speeds[id];
     }
+    this.#env.runner.fork(Effect.ignore(this.#env.host.storageSet(SPEED_KEY, toJsonBytes(this.#speeds))));
+  }
+
+  /// The speeds seen on every way let go (the device on another network now).
+  #forgetSpeeds(): void {
+    if (Object.keys(this.#speeds).length === 0) return;
+    for (const id of Object.keys(this.#speeds)) delete this.#speeds[id];
     this.#env.runner.fork(Effect.ignore(this.#env.host.storageSet(SPEED_KEY, toJsonBytes(this.#speeds))));
   }
 
@@ -1587,6 +1600,9 @@ export class Mesh {
         const wake = yield* this.#env.wakes.next;
         if (!wake.suspectsConnections()) continue;
         this.#env.runner.fork(this.#endpoint.networkChange());
+        // On another network, the speeds seen on the last say nothing of how fast each way is from here (a laptop taken
+        // from home would keep the relay it was fast through there, however slowly it brings replies now): found anew.
+        if (wake.network) this.#forgetSpeeds();
         // On another network now, perhaps the station's: its LAN addresses are worth a try again.
         this.#lanTried.clear();
         for (const [addr, link] of this.#openLinks()) {
