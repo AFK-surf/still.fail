@@ -9,7 +9,7 @@ import { after, test } from "node:test";
 import { zstdDecompressSync } from "node:zlib";
 import {
   ANY_RUNNING, AUTO, type AuthorKind, CARD_BEFORE, CLOSED_SINCE, type EntryRow, JOBS_RUNNING, JOBS_UP, type JobRow, LATEST_DECISIONS, LIVE_SESSIONS, LOGIN_CARDS,
-  MANUAL, type NewMessage, OPTIONS_BEFORE, RUNNING_SESSIONS, SCHEMA_VERSION, SESSION_COUNTS, SESSION_JOBS, SESSION_OF_RUNTIME, STATS_OF, Store, type StoreChange, newMessage,
+  MANUAL, type NewMessage, OPTIONS_BEFORE, RUNNING_SESSIONS, SAID_SINCE, SCHEMA_VERSION, SESSION_COUNTS, SESSION_JOBS, SESSION_OF_RUNTIME, STATS_OF, Store, type StoreChange, newMessage,
 } from "../src/store/store.ts";
 import { MERGED, SCHEMA } from "../src/store/schema.ts";
 import { ACTIVE_SESSIONS, TAKEN_SINCE, TURNS_BETWEEN, TURNS_FROM } from "../src/store/usage.ts";
@@ -764,6 +764,25 @@ test("an options card is kept as options too, and a choice that closes it ends t
   h.stop();
 });
 
+test("the cards answered lately of some threads alone are those the whole station's has in them", () => {
+  const data = tempdir();
+  const store = open(join(data, "stillfail.db"));
+  session(store, "a");
+  const card = { type: "options", options: [{ label: "x" }] };
+  const threads = ["1", "2"].map((ts) => {
+    const t = store.openThread("ember", "EMBER", `${ts}.0`, null, null);
+    store.joinThread(t.id, "a", "ember");
+    store.insertMessage({ ...newMessage(t.id, `${ts}.1`, "agent", "a", "?"), card });
+    say(store, t.id, `${ts}.2`, "person", "me@x", "x");
+    return t.id;
+  });
+  const reader = read.openStore(data);
+  const whole = read.answersSince(reader, 0);
+  assert.deepEqual(whole.map((a) => a.question.thread).sort(), [...threads].sort());
+  assert.deepEqual(read.answersSince(reader, 0, [threads[1]!]), whole.filter((a) => a.question.thread === threads[1]));
+  assert.deepEqual(read.answersSince(reader, 0, []), []);
+});
+
 test("an agent withdraws its own card only", () => {
   const store = memory();
   session(store, "a");
@@ -881,7 +900,7 @@ test("what the station asks again and again is planned by an index, never a scan
   const planned: [string, unknown[]][] = [
     [ACTIVE_SESSIONS, [0]], [LIVE_SESSIONS, []], [ANY_RUNNING, []], [RUNNING_SESSIONS, []], [JOBS_RUNNING, []], [JOBS_UP, []], [SESSION_JOBS, ["a"]],
     [STATS_OF, ["a"]], [SESSION_COUNTS, []], [LATEST_DECISIONS, [0]], [CLOSED_SINCE, [0]], [LOGIN_CARDS, ["%l1%"]], [CARD_BEFORE, [1, 9]], [OPTIONS_BEFORE, [1, 9]],
-    [TURNS_FROM, ["a", 0]], [TURNS_BETWEEN, ["a", 0, 9]], [TAKEN_SINCE, ["a", "ember", 0]], [SESSION_OF_RUNTIME, ["claude", "r1"]],
+    [TURNS_FROM, ["a", 0]], [TURNS_BETWEEN, ["a", 0, 9]], [TAKEN_SINCE, ["a", "ember", 0]], [SESSION_OF_RUNTIME, ["claude", "r1"]], [SAID_SINCE, [1, 0]],
   ];
   const scans = /^SCAN (?!CONSTANT ROW$|\(subquery-\d+\)$|\w+ USING (?:COVERING )?INDEX (?:sessions_live|sessions_running|sessions_by_connect|entries_login_cards)\b)/;
   const plans = new Map<string, string[]>();
@@ -893,6 +912,7 @@ test("what the station asks again and again is planned by an index, never a scan
   // The latest card before a message: by the index of cards, not by going back over the thread to it.
   assert.ok(plans.get(CARD_BEFORE)!.some((d) => d.includes("entries_cards")), plans.get(CARD_BEFORE)!.join(" | "));
   assert.ok(plans.get(OPTIONS_BEFORE)!.some((d) => d.includes("entries_options")), plans.get(OPTIONS_BEFORE)!.join(" | "));
+  assert.ok(plans.get(SAID_SINCE)!.some((d) => d.includes("entries_people_since (thread=? AND at>?)")), plans.get(SAID_SINCE)!.join(" | "));
   // Each session's latest check of the last days: from the index of their times alone.
   assert.ok(plans.get(LATEST_DECISIONS)!.some((d) => d.includes("COVERING INDEX decision_checks_lately")), plans.get(LATEST_DECISIONS)!.join(" | "));
   // The turns the usage counter reads at each part of a transcript: those of its calls' time alone.

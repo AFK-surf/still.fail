@@ -10,7 +10,7 @@ import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { zstdDecompressSync } from "node:zlib";
 import { wall } from "../ops/fibers.ts";
-import { CARD_BEFORE, CLOSED_SINCE, type InWorkspace, JOBS_RUNNING, LETTER_SQL, OPTIONS_BEFORE, SESSION_JOBS, SESSION_OF_RUNTIME, PEOPLE_AT, type Letter, isLetter, liveShare, sees, toChatShare, withLetter } from "../store/rows.ts";
+import { CARD_BEFORE, CLOSED_SINCE, type InWorkspace, JOBS_RUNNING, LETTER_SQL, OPTIONS_BEFORE, SAID_SINCE, SESSION_JOBS, SESSION_OF_RUNTIME, PEOPLE_AT, type Letter, isLetter, liveShare, sees, toChatShare, withLetter } from "../store/rows.ts";
 
 export type Json = any;
 
@@ -720,9 +720,15 @@ export function askingMessage(s: Store, thread: number, about: number | null, du
 
 /// The cards answered since `since` (ms), whoever answered them: each a person's first message after a card, or a
 /// choice that closed it (closed_cards, by a person: not its agent withdrawing it).
-export function answersSince(s: Store, since: number): CardAnswer[] {
+export function answersSince(s: Store, since: number, threads: number[] | null = null): CardAnswer[] {
   const out: CardAnswer[] = [];
-  const said = all(s, "SELECT thread, n FROM entries WHERE author_kind = 'person' AND kind = 'message' AND at >= ?", since);
+  // Of some threads alone (the items of a sidebar a change touched), each by the index of its people's messages: every
+  // person's message of the last day and a half on the station, each with a few lookups, was some 2,600 statements.
+  const said: Json[] =
+    threads === null
+      ? all(s, "SELECT thread, n FROM entries WHERE author_kind = 'person' AND kind = 'message' AND at >= ?", since)
+      : threads.flatMap((thread) => all(s, SAID_SINCE, thread, since));
+  const of = threads === null ? null : new Set(threads);
   const askedBefore = (thread: number, n: number): number | null => {
     const card: number | null = one(s, CARD_BEFORE, thread, n).n;
     const options: number | null = one(s, OPTIONS_BEFORE, thread, n).n;
@@ -751,6 +757,7 @@ export function answersSince(s: Store, since: number): CardAnswer[] {
     out.push({ question: found[0], card: found[1], by: a.author, at: a.createdAt, answer: a });
   }
   for (const { thread, n, viewer: by, at } of all(s, CLOSED_SINCE, since)) {
+    if (of !== null && !of.has(thread)) continue;
     const found = cardAt(thread, n);
     if (!found) continue;
     // Withdrawn by its own agent: no one answered it.
