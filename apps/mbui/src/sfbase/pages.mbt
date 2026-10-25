@@ -193,6 +193,7 @@ pub(all) struct DriveAt {
 pub fn reset() -> Unit {
   app.nav = new_nav()
   app.picked = ""
+  @ui.set_motion_chosen(None)
   app.filters.clear()
   app.menu = false
   app.switch_way = 0
