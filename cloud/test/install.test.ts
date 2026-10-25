@@ -53,6 +53,10 @@ test("the releases bucket serves the station's releases and the apps' builds, an
   assert.equal(releaseType("desktop/stillfail-mac.yml"), "text/yaml; charset=utf-8");
   assert.equal(releaseType("desktop/stillfail-0.1.1092-arm64-mac.zip"), "application/zip");
   assert.equal(releaseType("desktop/stillfail-0.1.1092-arm64-mac.zip.blockmap"), "application/octet-stream");
+  // The Mac app's own updater's feeds (mbui's, in the Electron app's place), naming the zips above.
+  assert.equal(releaseType("mac/latest.json"), "application/json");
+  assert.equal(releaseType("mac/beta/latest.json"), "application/json");
+  assert.equal(releaseType("mac/other/latest.json"), null);
   // The Windows app's: its feed (named by the channel alone), its installer and that one's blockmap.
   assert.equal(releaseType("desktop/stillfail.yml"), "text/yaml; charset=utf-8");
   assert.equal(releaseType("desktop/stillfail-beta.yml"), "text/yaml; charset=utf-8");

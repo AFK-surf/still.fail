@@ -74,3 +74,63 @@ test "本机 Station while the installer runs: how far, as a bar and its percent
   // nothing to tap while it runs
   assert_true(t.find("添加这台 Mac") is None)
 }
+
+///|
+/// A station as still.fail's desktop app left it, changed by `more` (its keys replaced): its data in a workspace, never
+/// installed on its own, nothing running it.
+fn desktop_apps_station(more : Map[String, Json]) -> String {
+  let s : Map[String, Json] = {
+    "data": "~/.stillfail",
+    "runner": "none",
+    "workspace": { "id": "ws1", "name": "星火工作室", "stationName": "MacBook", "removed": false },
+  }
+  for k, v in more {
+    s[k] = v
+  }
+  Json::object(s).stringify()
+}
+
+///|
+test "built in still.fail's desktop app's place, the station that app ran here is made a service as it is" {
+  reset()
+  let src = fixture("home")
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=1280.0, h=800.0, env=[("MBUI_OWN", "1")])
+  t.set_local_station(desktop_apps_station({}))
+  @sfbase.local_station_carry_on()
+  let acts = t.local_acts()
+  assert_eq(acts.length(), 1)
+  let (verb, ask) = local_ask_of(acts[0])
+  assert_eq(verb, "update")
+  assert_eq(text(ask, "token"), "")
+  assert_eq(text(ask, "channel"), "stable")
+}
+
+///|
+test "a station carried on only when still.fail's desktop app alone ran it" {
+  let left : Array[(String, Map[String, Json])] = [
+    ("installed on its own", { "installed": true }),
+    ("a service", { "service": { "kind": "launchd", "name": "fail.still.station" } }),
+    ("running", { "runner": "other" }),
+    ("removed from its workspace", { "workspace": { "id": "ws1", "removed": true } }),
+    ("in none", { "workspace": Json::null() }),
+    ("being installed", { "doing": "install" }),
+  ]
+  for one in left {
+    let (why, more) = one
+    reset()
+    let src = fixture("home")
+    let t = @ui.Tester::new(fn(c) { view(c, src) }, w=1280.0, h=800.0, env=[("MBUI_OWN", "1")])
+    t.set_local_station(desktop_apps_station(more))
+    @sfbase.local_station_carry_on()
+    if t.local_acts() != [] {
+      fail("carried on, \{why}")
+    }
+  }
+  // nor by an app of its own (still.fail mbui), whatever is here
+  reset()
+  let src = fixture("home")
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=1280.0, h=800.0)
+  t.set_local_station(desktop_apps_station({}))
+  @sfbase.local_station_carry_on()
+  assert_eq(t.local_acts(), [])
+}

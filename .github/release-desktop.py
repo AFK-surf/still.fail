@@ -1,8 +1,11 @@
 #!/usr/bin/env python3
 """Build and sign on the organization's Mac runner; never publish an unsigned macOS update.
 
-The Windows app is built here too (apps/desktop/build.sh --win, from the Mac), not signed yet: no Windows code-signing
-certificate has been provisioned, and an unsigned installer only makes SmartScreen warn on its first run."""
+The beta Mac app is mbui's (apps/mbui) in the Electron app's place since 2026-10-26 (scripts/release.sh --beta desktop:
+its zip, mbui's feed mac/beta/latest.json and electron-updater's stillfail-beta-mac.yml, which moves an installed
+Electron app over); the stable one follows once that is seen through. The Windows app is Electron's still
+(apps/desktop/build.sh --win, from the Mac), not signed yet: no Windows code-signing certificate has been provisioned,
+and an unsigned installer only makes SmartScreen warn on its first run."""
 import argparse
 import contextlib
 import os
@@ -43,7 +46,7 @@ with mac_signing.keychain() if mac else contextlib.nullcontext() as opened, \
     early = args.out and args.put_mac_early and mac and win
     if early and not os.environ.get('CLOUDFLARE_API_TOKEN'):
         raise SystemExit('--put-mac-early needs CLOUDFLARE_API_TOKEN')
-    for folder in (root, *(() if args.out and not early else (root / 'cloud',)), root / 'apps/desktop'):
+    for folder in (root, *(() if args.out and not early else (root / 'cloud',)), *((root / 'apps/desktop',) if win or args.stable else ())):
         run(['pnpm', 'install', '--frozen-lockfile', '--prefer-offline'], cwd=folder)
     env = mac_signing.signing_env(opened) if mac else dict(os.environ)
     env.pop('UNSIGNED', None)
@@ -55,42 +58,49 @@ with mac_signing.keychain() if mac else contextlib.nullcontext() as opened, \
     env['RELEASE_DIR'] = str(Path(directory) / 'releases')
     if mac:
         run(['sh', 'scripts/release.sh', *([] if args.stable else ['--beta']), 'desktop'], cwd=root, env=env)
-        app = str(root / 'apps/desktop/out/mac-arm64' / ('still.fail.app' if args.stable else 'youdid.wtf.app'))
-        run(['codesign', '--verify', '--deep', '--strict', app])
-        # Signed with a Developer ID, it went out notarized (after-sign.cjs): Gatekeeper lets it open downloaded.
-        if opened['identity'].startswith('Developer ID Application:'):
-            run(['spctl', '--assess', '--type', 'execute', '-vv', app])
+        if args.stable:
+            app = str(root / 'apps/desktop/out/mac-arm64/still.fail.app')
+            run(['codesign', '--verify', '--deep', '--strict', app])
+            # Signed with a Developer ID, it went out notarized (after-sign.cjs): Gatekeeper lets it open downloaded.
+            if opened['identity'].startswith('Developer ID Application:'):
+                run(['spctl', '--assess', '--type', 'execute', '-vv', app])
+        # (the beta's, mbui's, release.sh checks before it puts it: verified, the Electron app's id, still.fail's team;
+        # with a Developer ID notarized, not stapled: apps/mbui/scripts/mac-app.sh)
     version = subprocess.check_output(['git', 'rev-list', '--count', 'HEAD'], cwd=root, text=True).strip()
-    archive = f'stillfail{suffix}-0.1.{version}-arm64-mac.zip'
-    installer = f'stillfail{suffix}-0.1.{version}-x64-win.exe'
+    archive = f'desktop/stillfail{suffix}-0.1.{version}-arm64-mac.zip'
+    installer = f'desktop/stillfail{suffix}-0.1.{version}-x64-win.exe'
     # mini1's line is the slow part of putting them (~5 MB/s, 2026-10-16: a 141 MB archive and a 127 MB installer
     # took 63 s after both were built): the archive goes up while the Windows app builds (~35 s).
     putting = None
     if early:
         (Path(directory) / 'early/desktop').mkdir(parents=True)
-        for name in (archive, archive + '.blockmap'):
-            shutil.copy2(Path(env['RELEASE_DIR']) / 'desktop' / name, Path(directory) / 'early/desktop' / name)
+        for name in (archive, *((archive + '.blockmap',) if args.stable else ())):
+            shutil.copy2(Path(env['RELEASE_DIR']) / name, Path(directory) / 'early' / name)
         putting = subprocess.Popen(['sh', 'scripts/release-put.sh', '--files', str(Path(directory) / 'early')], cwd=root, env=env)
-    # After the Mac's check: build.sh starts by clearing out/.
     if win:
         run(['sh', 'scripts/release.sh', *([] if args.stable else ['--beta']), 'desktop-win'], cwd=root, env=env)
     files = (
-        *(((archive, 'application/zip'), (archive + '.blockmap', 'application/octet-stream'), (f'stillfail{suffix}-mac.yml', 'text/yaml; charset=utf-8')) if mac else ()),
+        # The Mac app's zip, then its feeds: the Electron app's (stable), its blockmap and electron-updater's; mbui's
+        # (beta), its own updater's and electron-updater's (an installed Electron app's).
+        *(((archive, 'application/zip'), (archive + '.blockmap', 'application/octet-stream'),
+           (f'desktop/stillfail{suffix}-mac.yml', 'text/yaml; charset=utf-8')) if mac and args.stable else ()),
+        *(((archive, 'application/zip'), ('mac/beta/latest.json', 'application/json'),
+           (f'desktop/stillfail{suffix}-mac.yml', 'text/yaml; charset=utf-8')) if mac and not args.stable else ()),
         *(((installer, 'application/vnd.microsoft.portable-executable'), (installer + '.blockmap', 'application/octet-stream'),
            # Its signature (scripts/release-sign.ts), which the app checks before installing it: before the feed.
-           (installer + '.sig', 'application/json'), (f'stillfail{suffix}.yml', 'text/yaml; charset=utf-8')) if win else ()),
+           (installer + '.sig', 'application/json'), (f'desktop/stillfail{suffix}.yml', 'text/yaml; charset=utf-8')) if win else ()),
     )
     for name, mime in files:
-        path = Path(env['RELEASE_DIR']) / 'desktop' / name
+        path = Path(env['RELEASE_DIR']) / name
         # Unsigned only outside CI, without RELEASE_SIGNING_KEY (release-sign.ts refuses that in CI).
         if name.endswith('.sig') and not path.is_file() and not os.environ.get('CI'): continue
         if not path.is_file(): raise SystemExit('Expected desktop artifact missing: ' + name)
         if args.out:
             if putting and name in (archive, archive + '.blockmap'): continue
-            (Path(args.out) / 'desktop').mkdir(parents=True, exist_ok=True)
-            shutil.copy2(path, Path(args.out) / 'desktop' / name)
+            (Path(args.out) / name).parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(path, Path(args.out) / name)
             continue
-        put = ['pnpm', 'exec', 'wrangler', 'r2', 'object', 'put', 'stillfail-releases/desktop/' + name, '--file', str(path), '--content-type', mime, '--remote']
+        put = ['pnpm', 'exec', 'wrangler', 'r2', 'object', 'put', 'stillfail-releases/' + name, '--file', str(path), '--content-type', mime, '--remote']
         # Cloudflare's API fails now and then on the way (a 502, "fetch failed"): put again, twice at most.
         for attempt in range(3):
             if subprocess.run(put, cwd=root / 'cloud', env=env).returncode == 0:
