@@ -166,10 +166,11 @@ fn outbox_call(src : Source, here : MessageHere, call : String, id : String) -> 
     Some(th) => p["thread"] = Json::number(th)
     None => p["session"] = Json::string(here.session)
   }
+  // (the verb alone: act says it as 无法{what}：{error})
   let what = if call == "chat.retry" {
-    @sf.t("web-main.chat.resendFailed", args=[("error", "")])
+    @sf.t("android-chat.chat.retry.verb")
   } else {
-    @sf.t("web-main.chat.deleteFailed", args=[("error", "")])
+    @sf.t("android-chat.chat.delete.verb")
   }
   act(src, what, "", call, Json::object(p))
 }

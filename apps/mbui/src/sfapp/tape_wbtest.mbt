@@ -554,7 +554,7 @@ test "on the tape a finger's search at the lists' top: tucked under the band at 
   assert_true(y + h <= band_foot(), msg="the search at \{y}..\{y + h}, the band to \{band_foot()}")
   let (rx, ry) = t.find("首页的列表改成按天分组").unwrap()
   t.drag(rx, ry, rx, ry + 400.0)
-  t.run_for(2000.0)
+  t.run_for(t.rest_of("a list") - t.time())
   let (_, y, _, _) = said_at(t, "搜索全部内容").unwrap()
   assert_true(y >= band_foot(), msg="the search from \{y}, the band to \{band_foot()}")
 }

@@ -321,6 +321,15 @@ test "the fixture's station: sending, then the message, then an answer; a failur
   t.draw()
   assert_true(t.find("未发送") is None)
   assert_true(t.find("这条会失败") is Some(_))
+  // one that fails again: why, said once (无法重新发送：…)
+  t.tap_text("发消息")
+  t.type_text("这条失败了也重发不了")
+  tap_send(t)
+  clock.val = clock.val + fix_deliver_ms
+  t.draw()
+  t.tap_text("重试")
+  t.draw()
+  assert_eq(app.toast, "无法重新发送：a.jpg 的上传源已丢失，请在新消息中重新添加附件。")
   fix_clock.val = None
 }
 
