@@ -1,10 +1,11 @@
 // References to other chats in what is written (ember apps/android chat/screens/Composer.kt ChatRefs, RefMarks, the
 // field's InputTransformation, ChatRefMenu, markPasted; web ChatRef.tsx): in the composer a short mark, `@[its title]`,
 // drawn in the accent, its brackets unseen; sent, a link the core keeps for it until then. `@` and a few letters at
-// the caret open a menu over the composer of the chats it finds (the core's `chatSearch`: this station's, then the
-// viewer's other workspaces', each saying whose); one picked goes in as the mark the core makes of it (`chat.ref`). A
-// backspace just after a mark takes it whole; a chat's link pasted as it is copied goes in as its mark. What the field
-// holds is read as the core reads it, by sfbase's refs.mbt (the desktop's composer's too); the menu is the phone's.
+// the caret open a menu over the composer of the chats it finds (the core's `chatSearch`: this workspace's, on every
+// station of it, then the viewer's other workspaces', each another's saying whose); one picked goes in as the mark the
+// core makes of it (`chat.ref`). A backspace just after a mark takes it whole; a chat's link pasted as it is copied
+// goes in as its mark. What the field holds is read as the core reads it, by sfbase's refs.mbt (the desktop's
+// composer's too); the menu is the phone's.
 
 ///|
 /// Words the app put in draft `d`'s field itself (kept, put back, given up as sent): put there, taken as they are, not
@@ -68,7 +69,8 @@ let ref_menu_row : @ui.Style = @ui.style(
 let ref_menu_mark : @ui.Style = @ui.css("w=S4 align=ACenter")
 
 ///|
-/// Its title and whose it is (another workspace's: its name right after the title, as a tag), 6 apart.
+/// Its title and whose it is (another workspace's: its name right after the title, as a tag; another station's: that
+/// station's tag), 6 apart.
 // kept across runs: a value (no field of it changes)
 let ref_menu_title_line : @ui.Style = @ui.css("row w=Full gap=S1_5 align=ACenter")
 
@@ -160,6 +162,14 @@ fn chat_ref_menu(c : @ui.Ctx, src : Source, d : Draft, station : String, here : 
                   c.box(style=ref_menu_title_box, fn() { c.text(item.title, style=ref_menu_title) |> ignore }) |> ignore
                   if outside != "" {
                     c.box(style=words_tag, fn() { c.text(outside, style=words_tag_words) |> ignore }) |> ignore
+                  } else if flag(Some(x), "otherStation") {
+                    station_tag(c, {
+                      address: item.station,
+                      name: item.station_name,
+                      emoji: item.station_emoji,
+                      icon: item.station_icon,
+                      via: "",
+                    })
                   }
                 })
                 |> ignore

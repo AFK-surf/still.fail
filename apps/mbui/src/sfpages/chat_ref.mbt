@@ -63,7 +63,7 @@ fn ref_menu(
         },
         fn() {
           c.box(style=@sf.full_width, fn() {
-            ref_menu_body(c, spec, query, topic, chats, @sfbase.refs_active(w.key, n), pick, w.key)
+            ref_menu_body(c, query, topic, chats, @sfbase.refs_active(w.key, n), pick, w.key)
           })
           |> ignore
         },
@@ -83,8 +83,8 @@ fn ref_menu(
 
 ///|
 /// What the menu of draft `w` offers while its field (`focused`, the words not locked) is at `@` and a few letters:
-/// the words after the `@`, the core's `chatSearch` for them and the chats it found (this workspace's, then the
-/// viewer's others', not the chat written in); None while it is in none.
+/// the words after the `@`, the core's `chatSearch` for them and the chats it found (this workspace's, on every station
+/// of it, then the viewer's others', not the chat written in); None while it is in none.
 fn ref_found(src : Source, spec : ComposerSpec, w : Writing, focused : Bool) -> (String, @sfbase.Topic, Array[Json])? {
   guard focused && !spec.locked && @sfbase.refs_at(w.key) is Some((_, query)) else { return None }
   let params : Map[String, Json] = {
@@ -119,7 +119,6 @@ let ref_keys : Array[Int] = [@ui.key_code_up, @ui.key_code_down, @ui.key_code_en
 ///|
 fn ref_menu_body(
   c : @ui.Ctx,
-  spec : ComposerSpec,
   query : String,
   topic : @sfbase.Topic,
   chats : Array[Json],
@@ -173,11 +172,12 @@ fn ref_menu_body(
       |> ignore
       c.box(style=ref_title_cell, fn() {
         c.text(item.title, style=ref_title) |> ignore
-        // another workspace's: whose; another station's: its mark and name (the row keeps its three columns)
+        // another workspace's: whose; another station's (the core says, `otherStation`): its mark and name (the row
+        // keeps its three columns)
         let outside = text(Some(x), "outside")
         if outside != "" {
           c.box(style=ref_chip_station, fn() { c.text(outside, style=ref_chip_words) |> ignore }) |> ignore
-        } else if item.station != spec.station {
+        } else if flag(Some(x), "otherStation") {
           c.box(style=ref_chip_station, fn() {
             @sf.station_mark(c, item.station_emoji, item.station_icon, ref_chip_icon, @sf.theme().p.muted)
             c.text(item.station_name, style=ref_chip_words) |> ignore

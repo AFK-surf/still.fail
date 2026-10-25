@@ -180,7 +180,7 @@ export function ChatRefMenu({ query, here, active, onPick, found }: {
   const station = useStation();
   // The viewer's other workspaces' too (`elsewhere`), after this one's, each saying whose: one referred to is shared
   // with this workspace as the message goes (OutsideShare.tsx).
-  const search = useChatSearch({ scope: scopeOf(station.address), query, exclude: here, limit: SHOWN, elsewhere: true });
+  const search = useChatSearch({ scope: scopeOf(station.address), query, station: station.address, exclude: here, limit: SHOWN, elsewhere: true });
   const items = search.value?.items;
   useEffect(() => found(items ?? []), [items]);
   const list = useRef<HTMLDivElement>(null);
@@ -200,7 +200,7 @@ export function ChatRefMenu({ query, here, active, onPick, found }: {
               <span className={css.refTitleCell}>
                 <span className={css.refTitle}>{item.title}</span>
                 {item.outside ? <span className={css.refChipStation}>{item.outside}</span>
-                  : item.station !== station.address && <span className={css.refChipStation}><StationMark emoji={item.stationEmoji} icon={item.stationIcon} size={11} className={css.refChipStationIcon} />{item.stationName}</span>}
+                  : item.otherStation && <span className={css.refChipStation}><StationMark emoji={item.stationEmoji} icon={item.stationIcon} size={11} className={css.refChipStationIcon} />{item.stationName}</span>}
               </span>
               <Time className={css.refTime} stamp={item.time?.lastActiveAt} fixed />
             </button>

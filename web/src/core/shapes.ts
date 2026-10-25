@@ -1779,6 +1779,11 @@ export interface ChatItem {
 	 * the workspace's own.
 	 */
 	outside?: string;
+	/**
+	 * A chat of another of the workspace's stations than the one the `@` menu is written on (`chatSearch`
+	 * `station`): its station's mark and name go after its title. Absent otherwise.
+	 */
+	otherStation?: boolean;
 	/** A chat a search found in its station's archive (`search`). Absent otherwise. */
 	archived?: boolean;
 	/**
