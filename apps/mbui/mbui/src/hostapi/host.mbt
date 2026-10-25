@@ -73,6 +73,7 @@ pub(open) trait Host {
   set_app_state(Self, FuncRef[(Int) -> Unit]) -> Unit = _
   system_dark(Self) -> Bool = _
   font_scale(Self) -> Double = _
+  native_pointing(Self) -> Int = _
   a11y_on(Self) -> Bool = _
   a11y_tree(Self, String) -> Unit = _
   set_dark(Self, Bool) -> Unit = _
@@ -509,6 +510,11 @@ impl Host with font_scale(_) {
 ///|
 impl Host with system_dark(_) {
   false
+}
+
+///|
+impl Host with native_pointing(_) {
+  0
 }
 
 ///|
@@ -1618,6 +1624,15 @@ pub let a11y_channel : String = "a11y"
 /// largest of most phones' steps): words are drawn that much bigger, as Compose's sp are; lengths are not.
 pub fn font_scale() -> Double {
   current.val.font_scale()
+}
+
+///|
+/// What the system was started to be used with (the native input), as the host can tell at launch: 1 touch (iOS and
+/// iPadOS with no pointing device, Android with no mouse or touchpad among its input devices, Windows with a touch
+/// screen and no mouse or in tablet mode), 2 keyboard and mouse (macOS; iOS and iPadOS with a pointer, Android with a
+/// mouse or a touchpad: DeX, ChromeOS; Windows otherwise), 0 where it cannot tell (the platform's then: @ui).
+pub fn native_pointing() -> Int {
+  current.val.native_pointing()
 }
 
 ///|

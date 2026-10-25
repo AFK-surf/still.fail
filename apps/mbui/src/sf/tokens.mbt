@@ -980,16 +980,12 @@ pub fn set_dark(dark : Bool?) -> Unit {
 /// The native input (原生操控: docs/architecture.md, the terms): touch (`Finger`) or keyboard and mouse (`Mouse`), as
 /// the app is started, the same the whole run: the theme's sizes (words, rows, what a press reaches), how what shows
 /// only under a pointer is reached, what Enter does, scroll bars, and with the screen's tier how the presenters show
-/// (a sheet or beside what opened it) and how search is opened (a field over the list or ⌘K). Said by the system for
-/// now (iOS, Android: touch; macOS, Windows: keyboard and mouse). How things answer the hand of the moment is not
-/// this: the current input, @ui.pointing.
+/// (a sheet or beside what opened it) and how search is opened (a field over the list or ⌘K). As the host tells it at
+/// launch (@ui.native_pointing: an iPad started with a pointer, Android with a mouse or a touchpad, keyboard and mouse;
+/// Windows with a touch screen and no mouse, touch), the platform's where it cannot. How things answer the hand of the
+/// moment is not this: the current input, @ui.pointing.
 pub fn native_input() -> @ui.Pointing {
-  let p = @ui.platform()
-  if p == 1 || p == 2 {
-    Finger
-  } else {
-    Mouse
-  }
+  @ui.native_pointing()
 }
 
 ///|

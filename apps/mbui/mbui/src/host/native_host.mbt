@@ -321,6 +321,11 @@ impl @hostapi.Host for Native with font_scale(_) {
 }
 
 ///|
+impl @hostapi.Host for Native with native_pointing(_) {
+  native_pointing()
+}
+
+///|
 impl @hostapi.Host for Native with a11y_on(_) {
   a11y_on()
 }

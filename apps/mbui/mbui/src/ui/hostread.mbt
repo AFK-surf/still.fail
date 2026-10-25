@@ -85,6 +85,40 @@ pub fn pointing() -> Pointing {
 }
 
 ///|
+/// What the app was started to be used with (the native input), the same the whole run: a Tester's `native` (by
+/// default its system's); else, where a program plays another system (set_platform), that system's; else what the
+/// host can tell at launch (@hostapi.native_pointing: a pointer on an iPad, a mouse on Android, a touch screen and no
+/// mouse on Windows), its system's where it cannot. Read once, at the first ask. How things answer the hand of the
+/// moment is pointing's.
+pub fn native_pointing() -> Pointing {
+  match fake.val {
+    Some(f) => f.native
+    None =>
+      match native_input_read.val {
+        Some(p) => p
+        None => {
+          let p = if said_platform.val >= 0 {
+            platform_pointing(said_platform.val)
+          } else {
+            match @hostapi.native_pointing() {
+              1 => Finger
+              2 => Mouse
+              _ => platform_pointing(platform())
+            }
+          }
+          native_input_read.val = Some(p)
+          p
+        }
+      }
+  }
+}
+
+///|
+/// The native input as first read (native_pointing).
+// kept across runs: read once as the app starts, the same the whole run
+let native_input_read : Ref[Pointing?] = Ref(None)
+
+///|
 /// The hand a program says it is pointed at with, over its system's (set_pointing); None: its system's.
 // kept across runs: what the program says once as it starts, before any frame
 let said_pointing : Ref[Pointing?] = Ref(None)

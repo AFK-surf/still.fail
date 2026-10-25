@@ -6,6 +6,7 @@ import android.content.Context;
 import android.os.Handler;
 import android.os.Looper;
 import android.util.Log;
+import android.view.InputDevice;
 import android.view.WindowInsets;
 import android.view.WindowInsetsController;
 import android.view.inputmethod.InputMethodManager;
@@ -51,6 +52,17 @@ final class Host {
 
     static float fontScale() {
         return fontScale;
+    }
+
+    /** What the app was started to be used with (@hostapi.native_pointing): keyboard and mouse (2) where a mouse or a
+     * touchpad is among the input devices as it starts (DeX, ChromeOS, a mouse plugged in), else touch (1). */
+    static int nativePointing() {
+        for (int id : InputDevice.getDeviceIds()) {
+            InputDevice d = InputDevice.getDevice(id);
+            if (d == null || d.isVirtual()) continue;
+            if (d.supportsSource(InputDevice.SOURCE_MOUSE) || d.supportsSource(InputDevice.SOURCE_TOUCHPAD)) return 2;
+        }
+        return 1;
     }
 
     /** Whether a service reads the screen (@hostapi.a11y_on; A11y.on). */
