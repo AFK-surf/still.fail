@@ -6,8 +6,9 @@
 //   frequent combinations, what keeps it from starting, the machine's own sessions) over all that is left, scrolled
 //   when it does not fit; at its foot what is wrong for now, the choices in glass capsules (the station, the model: each
 //   through the presenters), the composer where a chat has it;
-// - wide, as the web's desktop page: all of it in a column 720 wide at most in the middle, the composer roomy in it with
-//   the choices in the row under its words (the station's chooser, the model control: model_triple.mbt).
+// - wide, as the web's desktop page: a column 720 wide at most, the scene and the composer in the middle of the pane,
+//   the composer roomy with the choices in the row under its words (the station's chooser, the model control:
+//   model_triple.mbt), what differs by the station and its picks under it, moving nothing over it.
 // The composer is the pages' (composer.mbt), its draft the station's new chat's (`new:<station>`). The first message
 // makes the chat (`newChat.create`, made once a page, anew when the picks changed: useEnsureChat) and goes to it
 // (`chat.send` by its key); the page becomes the chat in place, its first words carried where they were typed till
@@ -277,7 +278,7 @@ fn new_scene_narrow_body(
     })
     |> ignore
   }
-  new_offer(c, src, frame, station, state, hung=false) |> ignore
+  new_offer(c, src, frame, station, state, new_offer_box) |> ignore
 }
 
 ///|
@@ -455,9 +456,10 @@ fn station_rows(c : @ui.Ctx, src : Source, w : Workspace, v : Json?, close : () 
 
 ///|
 /// The page wide (NewChatOn, newChat, newChatInner): the scene, 新对话, what it does and where (while its stations are
-/// read, that it starts on the station chosen), what is wrong for now, the composer, roomy, its choices in its row; the
-/// frequent combinations under it, what it waits for (or why its stations could not be read), the machine's own
-/// sessions to go on with.
+/// read, that it starts on the station chosen), the composer, roomy, its choices in its row, the two in the middle of
+/// the pane; under the composer what differs by the station and what is picked on it: what is wrong for now, the
+/// frequent combinations, what it waits for (or why its stations could not be read), the machine's own sessions to go
+/// on with.
 fn new_wide(
   c : @ui.Ctx,
   src : Source,
@@ -468,41 +470,65 @@ fn new_wide(
   state : NewState,
 ) -> Unit {
   let address = new_address(w, v, station, state)
-  new_column(c, fn(col) {
-    // (data-made-leave="up": out of view above as it fades)
-    new_head(c, station, state, new_scene_w, fn(i) { new_part(c, i, state, true) })
-    if !(state is Held(_)) {
-      // what is sent waits for its quota, or its station went as it was written in (the page stays, said so)
-      new_notices(c, v, station, col, part=fn(i) { new_part(c, i, state, true) })
-    }
-    new_composer_place(c, src, w, frame, v, address, station, state, col)
-    // (data-made-leave="fade": fading where it is)
-    new_part(c, new_combos(c, src, w, v, state is Going(_, _)), state, false)
-    match state {
-      Held(error) =>
-        if error != "" {
-          c.text(error, style=new_error) |> ignore
-        } else {
-          @sf.wait_line(c, @sf.t("common.readingStations"), key="new")
-        }
-      _ => {
-        // what it waits for, in a line of its own under the composer
-        match text(v, "problem") {
-          "" => ()
-          p => new_part(c, c.text(p, style=new_status), state, false)
-        }
-        new_part(c, new_offer(c, src, frame, station, state, hung=true), state, false)
+  new_column(
+    c,
+    fn(col) {
+      // (data-made-leave="up": out of view above as it fades)
+      new_head(c, station, state, new_scene_w, fn(i) { new_part(c, i, state, true) })
+      new_composer_place(c, src, w, frame, v, address, station, state, col)
+    },
+    under=fn(col) {
+      // (data-made-leave="fade": fading where it is)
+      if !(state is Held(_)) {
+        // what is sent waits for its quota, or its station went as it was written in (the page stays, said so)
+        new_notices(c, v, station, col, part=fn(i) { new_part(c, i, state, false) })
       }
-    }
-  })
+      new_part(c, new_combos(c, src, w, v, state is Going(_, _)), state, false)
+      match state {
+        Held(error) =>
+          if error != "" {
+            c.text(error, style=new_error) |> ignore
+          } else {
+            @sf.wait_line(c, @sf.t("common.readingStations"), key="new")
+          }
+        _ => {
+          // what it waits for, in a line of its own under the composer
+          match text(v, "problem") {
+            "" => ()
+            p => new_part(c, c.text(p, style=new_status), state, false)
+          }
+          new_part(c, new_offer(c, src, frame, station, state, new_offer_under), state, false)
+        }
+      }
+    },
+  )
 }
 
 ///|
 /// Its column (newChat: in the middle of the pane, 32 in; newChatInner: 720 at most, its parts 10 apart and centred),
-/// `body` given its width.
-fn new_column(c : @ui.Ctx, body : (Double) -> Unit) -> Unit {
+/// `body` given its width. With `under`: as tall as the pane, `body` in its middle and `under` from its foot down, as
+/// much room under it as over it (more where what is under needs it, as it was last laid out): what is under comes,
+/// goes and changes with the station and what is picked on it, and moves nothing in the middle with it, the composer
+/// staying where it is as another station is picked.
+fn new_column(c : @ui.Ctx, body : (Double) -> Unit, under? : (Double) -> Unit) -> Unit {
   let col = dmin(new_column_w, c.width - 2.0 * new_column_in)
-  c.box(style=new_page_box, fn() { c.box(style=new_inner.then(@ui.style(w=Fixed(col))), fn() { body(col) }) |> ignore })
+  c.box(style=new_page_box, fn() {
+    match under {
+      None => c.box(style=new_inner.then(@ui.style(w=Fixed(col))), fn() { body(col) }) |> ignore
+      Some(under) =>
+        c.box(style=new_inner_tall.then(@ui.style(w=Fixed(col))), fn() {
+          c.spacer()
+          body(col)
+          let least = @motion.measured(c, "new/under").unwrap_or(0.0)
+          c.box(style=new_under_room.then(@ui.style(min_h=Fixed(least))), fn() {
+            let held = c.box(style=new_under, fn() { under(col) })
+            @motion.measure(c, held, "new/under")
+          })
+          |> ignore
+        })
+        |> ignore
+    }
+  })
   |> ignore
 }
 
@@ -632,19 +658,13 @@ fn new_combos(c : @ui.Ctx, src : Source, w : Workspace, v : Json?, leaving : Boo
 }
 
 ///|
-/// The machine's own sessions to go on with, where it kept any (MachineSessions); nothing while its stations are read,
-/// nor read only. `hung`: out of the page's flow, hung under what is over it (newChatOffer): it comes once the station
-/// has said what there is, and taking room then it would move what the page centres, the composer with it; else the
-/// scene's last part (narrow, where what is over it stays as it comes).
-fn new_offer(c : @ui.Ctx, src : Source, frame : NewChatFrame, station : Json?, state : NewState, hung~ : Bool) -> Int {
+/// The machine's own sessions to go on with, where it kept any (MachineSessions), in a box of `style`; nothing while its
+/// stations are read, nor read only.
+fn new_offer(c : @ui.Ctx, src : Source, frame : NewChatFrame, station : Json?, state : NewState, style : @ui.Style) -> Int {
   if state is Held(_) || !(field(station, "overview") is Some(Object(_))) || src.read_only {
     return c.box(fn() {  })
   }
-  let offer = fn() { @settings.machine_sessions_offer(c, frame.core, text(station, "station"), text(station, "name")) }
-  if !hung {
-    return c.box(style=new_offer_box, offer)
-  }
-  c.box(style=new_offer_hold, fn() { c.box(style=new_offer_hung, left=0.0, top=0.0, right=0.0, offer) |> ignore })
+  c.box(style~, fn() { @settings.machine_sessions_offer(c, frame.core, text(station, "station"), text(station, "name")) })
 }
 
 ///|
@@ -1068,6 +1088,21 @@ let new_page_box : @ui.Style = @ui.css("w=Full h=Full align=ACenter justify=JCen
 let new_inner : @ui.Style = @ui.css("gap=S2_5 align=ACenter")
 
 ///|
+/// newChatInner as tall as the pane: room over what is in its middle, what is under it in the room left under that.
+// kept across runs: a value (no field of it changes)
+let new_inner_tall : @ui.Style = @ui.css("h=Full gap=S2_5 align=ACenter")
+
+///|
+/// The room under the composer: as much as over the scene.
+// kept across runs: a value (no field of it changes)
+let new_under_room : @ui.Style = @ui.style(w=Full, h=@sf.grow)
+
+///|
+/// What is in it, from its top: its parts 10 apart, centred.
+// kept across runs: a value (no field of it changes)
+let new_under : @ui.Style = @ui.css("w=Full gap=S2_5 align=ACenter")
+
+///|
 /// A page of a picture and a title alone (mNewNone): 30 in, 10 apart.
 // kept across runs: a value (no field of it changes)
 let new_alone_box : @ui.Style = @ui.css("w=Full px=S8 gap=S2_5 align=ACenter")
@@ -1114,14 +1149,9 @@ let new_error : @ui.TextStyle = @ui.text_style(size=Ui, leading=L6, color=Danger
 let new_offer_box : @ui.Style = @ui.css("w=Full pt=S2 align=ACenter")
 
 ///|
-/// Where it hangs wide, under the status line (newChatOffer: no room of its own, what it holds from its top, in the
-/// middle).
+/// The offer wide, the last of what is under the composer (newChatOffer: in the middle).
 // kept across runs: a value (no field of it changes)
-let new_offer_hold : @ui.Style = @ui.css("w=Full h=S0")
-
-///|
-// kept across runs: a value (no field of it changes)
-let new_offer_hung : @ui.Style = @ui.css("align=ACenter")
+let new_offer_under : @ui.Style = @ui.css("w=Full align=ACenter")
 
 ///|
 /// spentNotice: the amber's 12% under 13's words, 8 by 12 in, 10 round, 8 under it.

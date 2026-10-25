@@ -2,13 +2,14 @@ import { globalStyle, style } from "@vanilla-extract/css";
 import { chat } from "./styles/session.css.ts";
 import { composerWrap } from "./styles/cloud.css.ts";
 import { composerBox } from "./styles/composer.css.ts";
-import { newChatInner } from "./NewChat.css.ts";
+import { newChatInner, newChatTall } from "./NewChat.css.ts";
 
 /** The chat pages' one composer (dock.tsx) sits over its place on the page, laid out for a new chat or a chat. */
 export const composerSlot = style({
   flex: "none",
   selectors: {
     [`${newChatInner} > &`]: { justifySelf: "stretch" },
+    [`${newChatTall} > &`]: { gridArea: "composer" },
     // A chat's list runs on under its composer, which floats over it frosted, as the phone's does: what scrolls under it
     // shows through, blurred. The list's foot leaves the composer's height free, so its last message still ends above it.
     [`${chat}[data-under-composer] > &`]: {
