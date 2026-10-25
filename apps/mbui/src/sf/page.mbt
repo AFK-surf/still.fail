@@ -493,6 +493,17 @@ pub fn rows_room(c : @ui.Ctx, body : () -> Unit) -> Unit {
 }
 
 ///|
+/// What stands over a page's list and stays while it scrolls (a field that filters it), in the page's column as the
+/// list's blocks are: narrow, the page's room (pg_room: 12 from its sides); wide, the lanes' column (desk_lanes: in
+/// the pane's middle, 792 at most, 24 from its sides at least).
+pub fn over_rows(c : @ui.Ctx, body : () -> Unit) -> Unit {
+  match look() {
+    Narrow => c.box(style=pg_room, body) |> ignore
+    Wide => c.box(style=desk_lane, fn() { c.box(style=desk_lane_column, body) |> ignore }) |> ignore
+  }
+}
+
+///|
 /// What stands over a group's rows and tells of them (a list's head: where it is, what it holds), in as far as their
 /// words: narrow, those on its card (20; 2 over, 8 under); wide, a wide list's rows' (12; 12 over, 8 under); 6 between
 /// its lines.
