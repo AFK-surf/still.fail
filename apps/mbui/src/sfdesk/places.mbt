@@ -211,7 +211,7 @@ fn profiles_side(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
         let e = Some(e)
         if text(e, "group") != group {
           group = text(e, "group")
-          nav_heading(c, text(e, "groupTitle"))
+          @sf.list_heading(c, text(e, "groupTitle"), Side)
         }
         let p = field(e, "profile")
         let route = profile_route(e)
@@ -259,7 +259,7 @@ fn profiles_side(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
         if offers.length() == 0 {
           continue
         }
-        nav_heading(c, @sf.t("web-pages.profiles.machineSignedIn", args=[("station", text(s, "name"))]))
+        @sf.list_heading(c, @sf.t("web-pages.profiles.machineSignedIn", args=[("station", text(s, "name"))]), Side)
         for l in offers {
           let l = Some(l)
           if nav_item(

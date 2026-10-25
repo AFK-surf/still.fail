@@ -183,7 +183,7 @@ fn settings_side(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
         }
         wide.landed = ""
       }
-      nav_heading(c, @sf.t("web-pages.settings.nav.client"))
+      @sf.list_heading(c, @sf.t("web-pages.settings.nav.client"), Side)
       page(Route::Appearance, "appearance", "sliders", @sf.t("web-pages.settings.nav.appearance"))
       page(Route::Notifications, "notifications", "bell", @sf.t("web-pages.settings.nav.notifications"))
       page(Route::Permissions, "permissions", "key", @sf.t("web-pages.settings.nav.permissions"))
@@ -195,7 +195,7 @@ fn settings_side(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
       if @ui.platform() == 0 {
         page(Route::LocalStation, "local-station", "monitor", @sf.t("web-pages.localStation.title"))
       }
-      nav_heading(c, "Station")
+      @sf.list_heading(c, "Station", Side)
       if !rails.contains("stations") {
         page(Route::Stations, "stations", "server", "Station")
       }
@@ -211,7 +211,7 @@ fn settings_side(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
       if !rails.contains("usage") {
         page(Route::Usage, "usage", "chart", @sf.t("web-pages.settings.nav.usage"))
       }
-      nav_heading(c, "Cloud")
+      @sf.list_heading(c, "Cloud", Side)
       page(Route::Workspace, "workspace", "users", "Workspace · " + w.name)
       page(Route::Security, "security", "shield-check", @sf.t("web-pages.security.title"))
       page(Route::Vault, "vault", "key", @sf.t("web-pages.vault.title"))

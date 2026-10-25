@@ -81,14 +81,6 @@ fn band_row_h() -> Double {
 }
 
 ///|
-/// A heading over a part of a list (Sidebar.css.ts navHeading; a touch device's as the chats' days are: the theme's
-/// chats' list's heading).
-pub fn nav_heading(c : @ui.Ctx, label : String) -> Unit {
-  let l = @sf.theme().chat_list
-  c.box(style=l.heading.then(@sf.list_heading_in(Side)), fn() { c.text(label, style=l.heading_words) |> ignore }) |> ignore
-}
-
-///|
 /// A row's words, as long as there is room (`color`: the words' own by default): a list's title's (the theme's chats'
 /// list's: 13 on 20 on a computer, 16 on 22 on a touch device).
 pub fn nav_words(c : @ui.Ctx, words : String, color? : Int64) -> Unit {

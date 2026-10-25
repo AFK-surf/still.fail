@@ -244,7 +244,7 @@ fn archive_pane(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
         Failing(words) => side_said(c, words, true)
         Waiting => side_breathing(c)
         Said(words) => side_said(c, words, false)
-        Day(label) => @sfpages.list_heading(c, label, Side)
+        Day(label) => @sf.list_heading(c, label, Side)
         Row(it) => archive_side_row(c, src, it, i + 1 < lines.length() && lines[i + 1] is Row(_))
       }
     })
@@ -271,19 +271,22 @@ fn archive_open(it : Json) -> Unit {
 }
 
 ///|
-/// Looking for one (Archive.css.ts search): a field as tall as a row at the list's top, on the pointer's ground.
+/// Looking for one (Archive.css.ts search): a field at the list's top on the pointer's ground, as what stands over a
+/// sidebar's list is (the theme's band's: its height, its words' room, its mark, its words).
 fn archive_search_side(c : @ui.Ctx, gap : Bool) -> Unit {
   let t = @sf.theme()
+  let l = t.chat_list
+  let (size, line) = c.text_size(Ui)
   c.box(style=if gap { arch_field_box } else { arch_field_alone }, fn() {
-    c.box(style=arch_field, fn() {
-      @sf.icon(c, "search", size=14.0, color=t.p.muted) |> ignore
+    c.box(style=arch_field.then(@ui.style(h=Fixed(l.band_h), px=@sf.room_of(l.band_pad))), fn() {
+      @sf.icon(c, "search", size=l.band_icon, color=t.p.muted) |> ignore
       let r = c.editor(
         "side/archive-q",
         placeholder=@sf.t("web-pages.archive.search"),
-        font_size=13.0,
+        font_size=size,
         max_lines=1,
         plain=true,
-        line=20.0,
+        line~,
         color=t.p.text,
         placeholder_color=t.p.subtle,
         caret_color=t.p.accent,
@@ -324,77 +327,91 @@ fn archive_side_row(c : @ui.Ctx, src : Source, it : Json, more : Bool) -> Unit {
   let busy = archive_doing(src, station, session)
   // (always to a finger, which hovers over nothing: Archive.css.ts actions `hover: none`)
   let over = @sf.pointed_or_finger(c.lit(id) || c.lit(back) || c.lit(drop) || busy)
-  c.box(style=if more { arch_wrap } else { arch_wrap_last }, fn() {
-    c.box(style=arch_row, selected=on, id~, fn() {
-      c.box(style=arch_text, fn() {
-        c.box(style=if over { arch_head_room } else { arch_head }, fn() {
-          c.text(title, style=arch_title) |> ignore
-          if @sf.has_station_mark(text(v, "stationEmoji"), text(v, "stationIcon")) {
-            c.box(style=@sfpages.kind_slot, fn() {
-              @sf.station_mark(c, text(v, "stationEmoji"), text(v, "stationIcon"), 12.0, t.p.muted)
-            })
-            |> ignore
-          }
-        })
-        |> ignore
-        c.box(style=arch_meta, fn() {
-          c.text(text(v, "last"), style=arch_last) |> ignore
+  let l = @sf.theme().chat_list
+  c.box(style=if more { l.more } else { @sfpages.row_last }, fn() {
+    // (the library's list row, a chat's as high as its rows are: @sf.list_row)
+    @sf.list_row(
+      c,
+      id,
+      Side,
+      nav_ground(c, "side/archived/" + key, c.lit(id) || c.pressed(id), on),
+      high=true,
+      fn() {
+        c.text(title, style=l.title) |> ignore
+        if @sf.has_station_mark(text(v, "stationEmoji"), text(v, "stationIcon")) {
+          c.box(style=@sfpages.kind_slot, fn() {
+            @sf.station_mark(c, text(v, "stationEmoji"), text(v, "stationIcon"), @sfpages.kind_mark, t.p.muted)
+          })
+          |> ignore
+        }
+        // 恢复 and 删除 at the title's end while pointed at (or one under way), always to a finger
+        if over {
+          archive_actions(c, src, it, back, drop, busy)
+        }
+      },
+      fn() {
+        c.box(style=l.meta, fn() {
+          c.text(text(v, "last"), style=l.last) |> ignore
           // (its clock while pointed at; always to a finger, which hovers over nothing)
           if @sf.pointed_or_finger(c.hovered(id)) {
             c.text(text(v, "clock"), style=arch_clock) |> ignore
           }
         })
         |> ignore
-      })
-      |> ignore
-    })
+      },
+    )
     |> ignore
-    // 恢复 and 删除 over the title's end while pointed at (or one under way), always to a finger
-    if over {
-      c.layer(fn() {
-        c.box(style=arch_actions, fn() {
-          c.cursor(back, Hand)
-          if c.clicked(back) && !busy {
-            archive_restore(src, it)
-          }
-          let b = c.box(style=arch_action, id=back, fn() {
-            if busy {
-              @sf.spinner(c, size=12.0) |> ignore
-            } else {
-              @sf.icon(c, "retry", size=14.0, color=if c.lit(back) { t.p.text } else { t.p.muted }) |> ignore
-            }
-          })
-          c.semantics(b, Button, id=back, label=@sf.t("web-pages.archive.restoreNamed", args=[("title", title)]))
-          @sf.tip(c, "side/archived-back-tip/" + key, back, @sf.t("web-pages.archive.restore"))
-          if flag(v, "deletable") {
-            c.cursor(drop, Hand)
-            if c.clicked(drop) && !busy {
-              @sf.confirm(
-                @sf.t("web-pages.archive.deleteConfirm", args=[("title", title)]),
-                @sf.t("web-pages.archive.deleteText"),
-                @sf.t("common.delete"),
-                danger=true,
-                fn() {
-                  act(
-                    src,
-                    @sf.t("common.delete"),
-                    "",
-                    "session.delete",
-                    { "station": Json::string(station), "key": Json::string(session) },
-                    done=@sf.t("web-pages.archive.deleted"),
-                  )
-                },
-              )
-            }
-            let d = c.box(style=arch_action, id=drop, fn() {
-              @sf.icon(c, "trash", size=14.0, color=if c.lit(drop) { t.p.red } else { t.p.muted }) |> ignore
-            })
-            c.semantics(d, Button, id=drop, label=@sf.t("web-pages.archive.deleteNamed", args=[("title", title)]))
-          }
-        })
-        |> ignore
+  })
+  |> ignore
+}
+
+///|
+/// An archived chat's 恢复 and 删除 (Archive.css.ts actions: 2 apart), at its title's end; one under way: turning.
+fn archive_actions(c : @ui.Ctx, src : Source, it : Json, back : Int, drop : Int, busy : Bool) -> Unit {
+  let t = @sf.theme()
+  let v = Some(it)
+  let station = text(v, "station")
+  let session = text(v, "session")
+  let title = text(v, "title")
+  let key = station + "/" + session
+  c.box(style=arch_actions, fn() {
+    c.cursor(back, Hand)
+    if c.clicked(back) && !busy {
+      archive_restore(src, it)
+    }
+    let b = c.box(style=arch_action, id=back, fn() {
+      if busy {
+        @sf.spinner(c, size=arch_spin) |> ignore
+      } else {
+        @sf.icon(c, "retry", size=arch_icon, color=if c.lit(back) { t.p.text } else { t.p.muted }) |> ignore
+      }
+    })
+    c.semantics(b, Button, id=back, label=@sf.t("web-pages.archive.restoreNamed", args=[("title", title)]))
+    @sf.tip(c, "side/archived-back-tip/" + key, back, @sf.t("web-pages.archive.restore"))
+    if flag(v, "deletable") {
+      c.cursor(drop, Hand)
+      if c.clicked(drop) && !busy {
+        @sf.confirm(
+          @sf.t("web-pages.archive.deleteConfirm", args=[("title", title)]),
+          @sf.t("web-pages.archive.deleteText"),
+          @sf.t("common.delete"),
+          danger=true,
+          fn() {
+            act(
+              src,
+              @sf.t("common.delete"),
+              "",
+              "session.delete",
+              { "station": Json::string(station), "key": Json::string(session) },
+              done=@sf.t("web-pages.archive.deleted"),
+            )
+          },
+        )
+      }
+      let d = c.box(style=arch_action, id=drop, fn() {
+        @sf.icon(c, "trash", size=arch_icon, color=if c.lit(drop) { t.p.red } else { t.p.muted }) |> ignore
       })
-      |> ignore
+      c.semantics(d, Button, id=drop, label=@sf.t("web-pages.archive.deleteNamed", args=[("title", title)]))
     }
   })
   |> ignore
@@ -460,66 +477,23 @@ let arch_field_alone : @ui.Style = @ui.css("w=Full")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let arch_field : @ui.Style = @ui.css("row w=Full h=S8 px=S2_5 gap=S2 align=ACenter bg=Hover radius=Xl")
-
-///|
-/// A row 2 from the next (Sidebar.css.ts navSessionWrap).
-// kept across runs: a value (no field of it changes)
-let arch_wrap : @ui.Style = @ui.css("w=Full pb=S0_5")
-
-///|
-/// The last of a day's rows: its heading's 14 under it alone.
-// kept across runs: a value (no field of it changes)
-let arch_wrap_last : @ui.Style = @ui.css("w=Full")
-
-///|
-/// A chat's row's shape (Sidebar.css.ts navRow, navSession): 54 high, 10 in, its corner a sidebar row's; the pointer's ground
-/// on hover, the selected one's when its chat is beside the list.
-// kept across runs: a value (no field of it changes)
-let arch_row : @ui.Style = @ui.style(
-  row=true,
-  w=Full,
-  h=@sf.side_row_h,
-  px=S2_5,
-  align=ACenter,
-  radius=@sf.side_row_radius,
-  hovered=@ui.patch(bg=Hover),
-  selected=@ui.patch(bg=Selected),
-)
-
-///|
-// kept across runs: a value (no field of it changes)
-let arch_text : @ui.Style = @ui.css("w=Full gap=S0_5")
-
-///|
-/// The title's line, 20 high; pointed at, room at its end for the two buttons (Archive.css.ts head: 52).
-// kept across runs: a value (no field of it changes)
-let arch_head : @ui.Style = @ui.css("row w=Full h=S5 gap=S1_5 align=ACenter")
-
-///|
-// kept across runs: a value (no field of it changes)
-let arch_head_room : @ui.Style = @ui.css("row w=Full h=S5 pr=S12 gap=S1_5 align=ACenter")
-
-///|
-// kept across runs: a value (no field of it changes)
-let arch_meta : @ui.Style = @ui.css("row w=Full h=S4_5 gap=S1_5 align=ACenter")
-
-///|
-// kept across runs: a value (no field of it changes)
-let arch_title : @ui.TextStyle = @ui.text_style(size=Ui, color=Fg, leading=L6, wrap=false, w=Full)
-
-///|
-// kept across runs: a value (no field of it changes)
-let arch_last : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, leading=L5, wrap=false, w=Full)
+let arch_field : @ui.Style = @ui.css("row w=Full gap=S2 align=ACenter bg=Hover radius=Xl")
 
 ///|
 // kept across runs: a value (no field of it changes)
 let arch_clock : @ui.TextStyle = @ui.text_style(size=Caption, color=Subtle, leading=L5, wrap=false)
 
 ///|
-/// The buttons, centred on the title line (Archive.css.ts actions: 5 down, 6 in, 2 apart).
+/// The buttons at the title line's end, 2 apart (Archive.css.ts actions).
 // kept across runs: a value (no field of it changes)
-let arch_actions : @ui.Style = @ui.css("row w=Full pt=S1_25 pr=S1_5 gap=S0_5 justify=JEnd")
+let arch_actions : @ui.Style = @ui.css("row gap=S0_5 align=ACenter")
+
+///|
+/// Their marks (14; turning, 12).
+let arch_icon : Double = 14.0
+
+///|
+let arch_spin : Double = 12.0
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -551,7 +525,7 @@ fn side_todo(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
   }
   c.box(style=todo_box, fn() {
     if band_row(c, "side/attention", wide.attention_open, fn() {
-        @sf.icon(c, "bell", size=16.0, color=t.p.muted) |> ignore
+        band_mark(c, "bell", t.p.muted)
         band_words(c, @sf.t("web-main.attention.entry"))
         c.box(style=todo_slot, fn() {
           if n > 0 {

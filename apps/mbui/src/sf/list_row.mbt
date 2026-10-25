@@ -7,8 +7,8 @@
 /// Row `id` of a list standing `at`, on `ground` (lit, pressed or pointed at: the caller's): `mark` beside its first
 /// line where it has one (a station's, a profile's), its first line (`head`: its title and what is at its end), the lines
 /// under it (`under`), then `after` over it all (a ripple). `high`: as high as a chat's row always is (the theme's
-/// `row`), else as what it holds (`item`); `faded`: its words faded (a chat settled); `head_room`: room at its first
-/// line's end (归档 over it). Its box, the one pressed.
+/// `row`), else as what it holds (`item`); `faded`: its words faded (a chat settled); `end_room`: room kept at its
+/// first line's end (for what a caller lays over it there: 归档). Its box, the one pressed.
 pub fn list_row(
   c : @ui.Ctx,
   id : Int,
@@ -19,7 +19,7 @@ pub fn list_row(
   mark? : () -> Unit,
   high? : Bool = false,
   faded? : Bool = false,
-  head_room? : Bool = false,
+  end_room? : Double = 0.0,
   after? : () -> Unit = fn() {  },
 ) -> Int {
   let l = theme().chat_list
@@ -30,7 +30,7 @@ pub fn list_row(
       None => ()
     }
     c.box(style=if faded { l.text_settled } else { l.text }, fn() {
-      c.box(style=if head_room { l.head_room } else { l.head }, head) |> ignore
+      c.box(style=if end_room > 0.0 { l.head.then(@ui.style(pr=room(end_room))) } else { l.head }, head) |> ignore
       under()
     })
     |> ignore
@@ -49,3 +49,12 @@ pub fn list_row_line(c : @ui.Ctx, body : () -> Unit) -> Unit {
 /// A row's mark's column (SidebarList.css.ts mark: 16 wide, as high as the first line, its mark in its middle).
 // kept across runs: a value (no field of it changes)
 let list_row_mark : @ui.Style = @ui.css("w=S4 align=ACenter justify=JCenter")
+
+///|
+/// A heading over a part of a list (SidebarList.tsx NavSection; Sidebar.css.ts navHeading: the chats' days, the
+/// profiles' kinds, a sidebar's parts), its look the theme's chats' list's, in from the list's left as its rows are where
+/// the list stands (`at`).
+pub fn list_heading(c : @ui.Ctx, label : String, at : ListAt) -> Unit {
+  let l = theme().chat_list
+  c.box(style=l.heading.then(list_heading_in(at)), fn() { c.text(label, style=l.heading_words) |> ignore }) |> ignore
+}
