@@ -27,12 +27,18 @@ pub fn done_waiting(c : @ui.Ctx, key : String) -> Unit {
 ///|
 /// What waits breathing (the placeholders, to 0.5: waiting.css.ts breathe; a service restarting, its dot to 0.35:
 /// Jobs.css.ts jobBreathe), how much of it shows now: whole to `low` and back in breath_ms, each way on CSS's
-/// ease-in-out; 0.6 when what it waits on failed.
-pub fn breath(c : @ui.Ctx, failed? : Bool = false, low? : Double = 0.5) -> Double {
+/// ease-in-out; 0.6 when what it waits on failed. `resident`: a state's for as long as it lasts (a service
+/// restarting), on the one clock's steps, not a wait's (Ctx::cycle).
+pub fn breath(
+  c : @ui.Ctx,
+  failed? : Bool = false,
+  low? : Double = 0.5,
+  resident? : Bool = false,
+) -> Double {
   if failed {
     return 0.6
   }
-  let f = c.cycle(breath_ms)
+  let f = c.cycle(breath_ms, resident~)
   let way = if f < 0.5 { f * 2.0 } else { 2.0 - f * 2.0 }
   1.0 - (1.0 - low) * @ui.Ease::InOut.at(way)
 }

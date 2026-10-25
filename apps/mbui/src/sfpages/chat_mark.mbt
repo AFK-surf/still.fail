@@ -228,13 +228,13 @@ let wait_delays : Array[Double] = [0.0, 300.0, 600.0]
 let watch_delays : Array[Double] = [180.0, 420.0]
 
 ///|
-/// Where a part `delay` late is in its loop now (0 to 1); with motion reduced, at its rest (0: what each is between
-/// beats).
+/// Where a part `delay` late is in its loop now (0 to 1), on the one clock's steps (resident: up for as long as the
+/// agent waits or watches); with motion reduced, at its rest (0: what each is between beats).
 fn lead_phase(c : @ui.Ctx, delay : Double) -> Double {
   if @ui.reduced_motion() {
     return 0.0
   }
-  let f = c.cycle(lead_loop_ms) - delay / lead_loop_ms
+  let f = c.cycle(lead_loop_ms, resident=true) - delay / lead_loop_ms
   f - f.floor()
 }
 

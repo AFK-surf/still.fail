@@ -1,11 +1,29 @@
-// What never ends while shown (Ctx::cycle) steps on one clock, a frame a step; a moving picture's loop a frame as its
-// next frame comes (Ctx::loop_at).
+// What never ends while shown (Ctx::cycle): a wait drawn each frame; what stays up for as long as something elsewhere
+// lasts (resident) steps on one clock, a frame a step; a moving picture's loop a frame as its next frame comes
+// (Ctx::loop_at).
 
 ///|
-test "a cycle steps on one clock: its phase at the step it is at, a frame at each step, none between" {
+test "a wait's cycle is drawn each frame: its phase at the frame's time, a frame asked for while it shows" {
+  let phase = Ref(-1.0)
+  let t = @ui.Tester::new(fn(c) {
+    phase.val = c.cycle(1000.0)
+    c.text("go") |> ignore
+  })
+  assert_true(t.ctx().wants_frame)
+  // halfway between two of the resident clock's steps, where the time is, not at the step before it
+  t.run_for(@ui.cycle_step_ms * 1.5)
+  let now = t.ctx().now() / 1000.0
+  assert_true((phase.val - (now - now.floor())).abs() < 1.0e-9, msg="\{phase.val}")
+  assert_true(t.ctx().wants_frame)
+  assert_eq(t.cycles().length(), 1)
+  t.assert_idle()
+}
+
+///|
+test "a resident cycle steps on one clock: its phase at the step it is at, a frame at each step, none between" {
   let phases : Array[Double] = []
   let t = @ui.Tester::new(fn(c) {
-    phases.push(c.cycle(1000.0))
+    phases.push(c.cycle(1000.0, resident=true))
     c.text("go") |> ignore
   })
   // nothing asked for at once: the next step's frame comes as its time does
