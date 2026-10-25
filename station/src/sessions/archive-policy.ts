@@ -135,7 +135,7 @@ export function savePolicy(store: Kept, input: unknown, by: PolicyAuthor, ws: st
 const VIEW_DAYS = 7;
 const VIEW_CHATS = 20;
 
-type Viewed = Kept & { decisionsSince(since: number): any[]; now(): number; getSession(key: string): { runtime: string } | null };
+type Viewed = Kept & { latestDecisionsSince(since: number): any[]; now(): number; getSession(key: string): { runtime: string } | null };
 
 /// A workspace's archive policy as the pages show it (accounts' `policyView`, for one workspace: docs/multi-workspace.md):
 /// its words, its options each with the chats of that workspace (`mine`) the checks of the last days put there (by
@@ -144,7 +144,7 @@ export function policyView(store: Viewed, ws: string | null, mine: (session: str
   const policy = currentPolicy(store, ws);
   const saved = store.archivePolicy(ws);
   const latest = new Map<string, any>();
-  for (const row of store.decisionsSince(store.now() - VIEW_DAYS * 86_400_000)) if (typeof row.session === "string" && mine(row.session)) latest.set(row.session, row);
+  for (const row of store.latestDecisionsSince(store.now() - VIEW_DAYS * 86_400_000)) if (typeof row.session === "string" && mine(row.session)) latest.set(row.session, row);
   const byOption = new Map<string, any[]>();
   let failed = 0;
   for (const [session, row] of [...latest.entries()].reverse()) {

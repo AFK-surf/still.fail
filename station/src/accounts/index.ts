@@ -1117,7 +1117,7 @@ export class Accounts {
     const policy = currentPolicy(store);
     const saved = store.archivePolicy();
     const latest = new Map<string, Json>();
-    for (const row of store.decisionsSince(store.now() - POLICY_DAYS * 86_400_000)) if (typeof row.session === "string") latest.set(row.session, row);
+    for (const row of store.latestDecisionsSince(store.now() - POLICY_DAYS * 86_400_000)) if (typeof row.session === "string") latest.set(row.session, row);
     const byOption = new Map<string, Json[]>();
     let failed = 0;
     for (const [session, row] of [...latest.entries()].reverse()) {
