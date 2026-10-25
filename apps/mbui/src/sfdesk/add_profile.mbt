@@ -363,17 +363,19 @@ fn connect_form(
     let protocols = items(d, "protocols")
     if protocols.length() > 1 {
       @sf.field(c, @sf.t("web-pages.addProfile.protocol"), fn() {
-        let now = @sf.select(
+        @sf.select(
           c,
           "add-profile-protocol/" + form,
           text(d, "protocol"),
           protocols.map(fn(p) { (text(Some(p), "id"), text(Some(p), "label")) }),
+          fn(now) {
+            if now != text(d, "protocol") {
+              edit([("protocol", str(now))])
+            }
+          },
           label=@sf.t("web-pages.addProfile.protocol"),
           disabled=pending,
         )
-        if now != text(d, "protocol") {
-          edit([("protocol", str(now))])
-        }
       })
     }
     if flag(d, "showKey") {

@@ -193,10 +193,11 @@ fn completion_station(c : @ui.Ctx, core : Core, s : Json?, view : Json?) -> Unit
       match field(d, "pick") {
         Some(Object(_)) as pick => {
           let options = items(pick, "options").map(fn(o) { (text(Some(o), "model"), text(Some(o), "name")) })
-          let now = @sf.select(c, "auto-model/" + station, model_id, options, disabled=busy, label=@sf.t("web-pages.automaticDecisions.model"))
-          if now != model_id {
-            c.after_build("auto-model/" + station, fn() { call("edit", [("model", str(now))]) })
-          }
+          @sf.select(c, "auto-model/" + station, model_id, options, fn(now) {
+            if now != model_id {
+              call("edit", [("model", str(now))])
+            }
+          }, disabled=busy, label=@sf.t("web-pages.automaticDecisions.model"))
         }
         _ => c.text(chosen, style=dc_aside) |> ignore
       }

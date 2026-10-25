@@ -843,26 +843,26 @@ fn ws_member_row(c : @ui.Ctx, core : Core, here : Here, v : Json?, m : Json) -> 
     let now = text(mv, "role")
     if role == "owner" && sub != here.sub {
       let setting = is_doing(core, ["workspace.setRole"], on)
-      let picked = @sf.select(
+      @sf.select(
         c,
         "ws-role/" + sub,
         now,
         ["owner", "admin", "member"].map(fn(r) { (r, role_label(r)) }),
+        fn(picked) {
+          if picked != now {
+            @settings.act(
+              core,
+              @sf.t("android-settings.members.roleWhat"),
+              "workspace.setRole",
+              obj([("workspace", str(ws)), ("member", str(sub)), ("role", str(picked)), ("account", str(here.sub))]),
+              done=@sf.t("android-settings.members.roleSet"),
+            )
+          }
+        },
         label=@sf.t("web-pages.settings.members.role"),
         disabled=setting,
         w=ws_role_w,
       )
-      if picked != now {
-        c.after_build("ws-role/" + sub, fn() {
-          @settings.act(
-            core,
-            @sf.t("android-settings.members.roleWhat"),
-            "workspace.setRole",
-            obj([("workspace", str(ws)), ("member", str(sub)), ("role", str(picked)), ("account", str(here.sub))]),
-            done=@sf.t("android-settings.members.roleSet"),
-          )
-        })
-      }
     } else {
       @sf.pill(c, role_label(now))
     }

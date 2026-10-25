@@ -430,7 +430,8 @@ pub fn open_mode(mode : String) -> Unit {
   } else if mode == "switcher" || mode == "switcher-found" {
     // ⌘K in the wide frame (sfdesk/switcher.mbt): with nothing typed, and with 签名 typed (what the search finds)
     @sfdesk.switcher_open_with(if mode == "switcher-found" { "签名" } else { "" })
-  } else if mode == "home-sheet" {
+  } else if mode == "home-sheet" || mode == "home-accounts" {
+    // (home-accounts: two accounts signed in, what a new workspace asks which of)
     home_sheet_at_start.val = true
   }
 }

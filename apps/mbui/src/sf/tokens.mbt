@@ -92,6 +92,9 @@ pub(all) struct Theme {
   t : Type
   /// what a row is on this screen (Rows)
   rows : Rows
+  /// how tall a control is at least (a field, a select): the web's 36 on a computer; on a touch device a finger's 44,
+  /// what a press needs
+  control_h : Double
 }
 
 ///|
@@ -415,16 +418,17 @@ pub fn head_back(height : Double) -> @ui.Style {
 ///|
 /// A card's last row with capsules `height` high at its ends (a card card_pad in, as a page's): reaching past the
 /// card's words to where they stand concentric with its foot corners (card_foot_in), at both its sides and its foot;
-/// `start`: what leads it is that high instead (a field before a button: in its middle, the row's height `height`, it
-/// stands as much further from the foot as it is less high, concentric there too); `words_first`: words lead it (where
-/// the card's words stand), only its end reaching.
+/// `start`: what leads it is that high instead (a field before a button: the row as high as the higher, the lower in
+/// its middle stands as much further from the foot as it is less high, each concentric with its corner); `words_first`:
+/// words lead it (where the card's words stand), only its end reaching.
 pub fn foot_reach(height : Double, start? : Double, words_first? : Bool = false) -> @ui.Style {
   let out = room(card_foot_in(height) - card_pad)
   if words_first {
-    @ui.style(mr=out, mb=out)
-  } else {
-    @ui.style(ml=room(card_foot_in(start.unwrap_or(height)) - card_pad), mr=out, mb=out)
+    return @ui.style(mr=out, mb=out)
   }
+  let lead = start.unwrap_or(height)
+  let under = room(card_foot_in(dmax(height, lead)) - card_pad)
+  @ui.style(ml=room(card_foot_in(lead) - card_pad), mr=out, mb=under)
 }
 
 ///|
@@ -738,6 +742,13 @@ let wide_type : Type = {
 }
 
 ///|
+/// A control's height (Theme::control_h): the web's (controls.css.ts input, select: 36), a finger's (44).
+let wide_control_h : Double = 36.0
+
+///|
+let narrow_control_h : Double = 44.0
+
+///|
 /// The phone's: a size up, as Android's.
 let narrow_type : Type = {
   ..wide_type,
@@ -775,7 +786,7 @@ let dark_set : Ref[Bool?] = { val: None }
 
 ///|
 let current : Ref[Theme] = {
-  val: { dark: false, narrow: false, p: wide_light, t: wide_type, rows: wide_rows },
+  val: { dark: false, narrow: false, p: wide_light, t: wide_type, rows: wide_rows, control_h: wide_control_h },
 }
 
 ///|
@@ -869,6 +880,7 @@ pub fn begin(c : @ui.Ctx) -> Theme {
     p,
     t: if narrow { narrow_type } else { wide_type },
     rows: if narrow { narrow_rows } else { wide_rows },
+    control_h: if narrow { narrow_control_h } else { wide_control_h },
   }
   current.val
 }
