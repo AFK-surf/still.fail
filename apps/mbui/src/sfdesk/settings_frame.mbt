@@ -168,7 +168,7 @@ fn settings_side(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
   let here_of = @settings.here_of(settings_core(src, w), w.id, w.name)
   c.box(style=settings_side_fill, fn() {
     side_top(c)
-    c.box(style=side_list(), fn() {
+    side_scroll(c, "settings-nav", fn() {
       if nav_row(c, "settings-nav/back", false, fn() {
           @sf.icon(c, "arrow-left", size=settings_nav_icon, color=t.p.muted) |> ignore
           nav_words(c, @sf.t("web-pages.settings.nav.backToChats"))
@@ -217,7 +217,6 @@ fn settings_side(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
       page(Route::Vault, "vault", "key", @sf.t("web-pages.vault.title"))
       page(Route::Me, "account", "user", if here_of.email != "" { here_of.email } else { w.email })
     })
-    |> ignore
   })
   |> ignore
 }
