@@ -136,16 +136,16 @@ test "styles: screens with kit's components (switches, a sheet), drawn as before
   }
   inspect(out.to_string(), content=(
     #|settings narrow 95512:951d1d07
-    #|station narrow 67103:7d926a93
+    #|station narrow 92169:86bd5ad7
     #|me-reading narrow 9899:3a2845c4
-    #|settings wide 181223:c5d7a2e8
-    #|station wide 228348:6ce93bc7
+    #|settings wide 181194:c8d5326b
+    #|station wide 228348:cbba8277
     #|me-reading wide 170933:80801b3a
     #|settings-dark narrow 95616:82183247
-    #|station-dark narrow 66867:d05ac102
+    #|station-dark narrow 91903:cc39f57b
     #|me-reading-dark narrow 9940:ffbeae23
-    #|settings-dark wide 180792:f436c098
-    #|station-dark wide 227912:fc153ecc
+    #|settings-dark wide 180763:24233f91
+    #|station-dark wide 227912:785cd566
     #|me-reading-dark wide 170580:aac3ee
     #|
 

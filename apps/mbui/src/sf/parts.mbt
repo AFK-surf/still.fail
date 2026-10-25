@@ -1325,9 +1325,28 @@ fn wide_section(
       }
     })
     |> ignore
+    in_section.val += 1
     body()
+    in_section.val -= 1
   })
   |> ignore
+}
+
+///|
+/// How many wide sections what is drawn is in (wide_section): a page's part in none stands as one of them does
+/// (wide_alone).
+// kept across runs: counted up and down round a section's body (0 between them)
+let in_section : Ref[Int] = Ref(0)
+
+///|
+/// A page's part on a wide page standing alone, in no section (a group, a choice, a card of its own): as far from
+/// what follows as a section is (section_box's 28), its own room over it the section's under what is over it.
+fn wide_alone(c : @ui.Ctx, body : () -> Unit) -> Unit {
+  if in_section.val > 0 {
+    body()
+  } else {
+    c.box(style=section_box, body) |> ignore
+  }
 }
 
 ///|

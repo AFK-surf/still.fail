@@ -453,13 +453,15 @@ pub fn group(c : @ui.Ctx, body : () -> Unit, card? : Bool = false) -> Unit {
       })
       |> ignore
     Wide =>
-      c.box(style=if card { desk_card } else { desk_list }, fn() {
-        // (a wide list reaches past the column: what is not one of its rows stands in as far as its rows' words)
-        in_list.val += if card { 0 } else { 1 }
-        body()
-        in_list.val -= if card { 0 } else { 1 }
+      wide_alone(c, fn() {
+        c.box(style=if card { desk_card } else { desk_list }, fn() {
+          // (a wide list reaches past the column: what is not one of its rows stands in as far as its rows' words)
+          in_list.val += if card { 0 } else { 1 }
+          body()
+          in_list.val -= if card { 0 } else { 1 }
+        })
+        |> ignore
       })
-      |> ignore
   }
 }
 
@@ -675,7 +677,7 @@ pub fn page_card(c : @ui.Ctx, body : () -> Unit, footed? : Bool = false) -> Unit
   let card = if footed { desk_card.then(foot_pad(button_height())) } else { desk_card }
   match look() {
     Narrow => c.box(style=pg_card_room, fn() { c.box(style=card, body) |> ignore }) |> ignore
-    Wide => c.box(style=card, body) |> ignore
+    Wide => wide_alone(c, fn() { c.box(style=card, body) |> ignore })
   }
 }
 
@@ -684,10 +686,17 @@ pub fn page_card(c : @ui.Ctx, body : () -> Unit, footed? : Bool = false) -> Unit
 /// option `item_w` wide at least). Answers the one chosen (a press's, this frame).
 pub fn page_choice(c : @ui.Ctx, key : String, labels : Array[String], at : Int, item_w? : Double = 0.0) -> Int {
   let mut picked = at
-  c.box(style=if look() is Narrow { pg_choice_box } else { desk_choice_row }, fn() {
-    picked = segmented(c, key, labels, at, item_w~)
-  })
-  |> ignore
+  let choice = fn() {
+    c.box(style=if look() is Narrow { pg_choice_box } else { desk_choice_row }, fn() {
+      picked = segmented(c, key, labels, at, item_w~)
+    })
+    |> ignore
+  }
+  if look() is Narrow {
+    choice()
+  } else {
+    wide_alone(c, choice)
+  }
   picked
 }
 
@@ -1355,8 +1364,9 @@ let pg_barred_head : @ui.Style = pg_card_room.then(@ui.css("pt=S2"))
 let pg_card : @ui.Style = @ui.style(w=Full, p=inset_room, radius=list_card_radius, bg=Card, clip=true)
 
 ///|
+/// A choice of a few on a narrow page: as far from what follows as a card is (pg_card_room's 10), a page's block.
 // kept across runs: a value (no field of it changes)
-let pg_choice_box : @ui.Style = @ui.css("w=Full")
+let pg_choice_box : @ui.Style = @ui.css("w=Full pb=S2_5")
 
 ///|
 let pg_choice_h : Double = 34.0
