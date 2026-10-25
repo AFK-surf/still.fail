@@ -1,6 +1,7 @@
 // Settings · 下方栏 (the bottom bar, Bar.tsx): the device's bars, each a card of up to four places. A place's − takes it
 // out, the empty slot adds one (a sheet of the places), a place held and moved sideways takes another slot; a bar is
 // made the one in view, deleted (with more than one), or a new one made. Said to the core whole each time (`bars`).
+import { useFrameDraw } from "./gesture.ts";
 import { useRef, type PointerEvent as ReactPointerEvent } from "react";
 import { railLabel } from "../Rail.tsx";
 import { Archive, Chart, Chats, Folder, Im, Minus, Plus, Quota, Zou, type IconProps } from "@stillfail/ui/icons.tsx";
@@ -81,8 +82,13 @@ export function BarSettingsScreen() {
 function Slots({ set, last, onMove, onRemove, onAdd }: { set: BarPlace[]; last: boolean; onMove: (from: number, to: number) => void; onRemove: (j: number) => void; onAdd: () => void }) {
   const card = useRef<HTMLDivElement>(null);
   const hold = useRef<{ j: number; x: number; el: HTMLElement; moved: boolean } | null>(null);
+  const fingers = useFrameDraw<number>(dx => {
+    const h = hold.current;
+    if (h?.moved) { h.el.dataset.lifted = ""; h.el.style.transform = `translate3d(${dx}px, 0, 0) scale(1.08)`; }
+  });
   const down = (j: number) => (e: ReactPointerEvent<HTMLDivElement>) => {
     if ((e.target as HTMLElement).closest("button")) return;
+    fingers.cancel();
     hold.current = { j, x: e.clientX, el: e.currentTarget, moved: false };
     e.currentTarget.setPointerCapture(e.pointerId);
   };
@@ -91,15 +97,16 @@ function Slots({ set, last, onMove, onRemove, onAdd }: { set: BarPlace[]; last: 
     if (!h) return;
     const dx = e.clientX - h.x;
     if (Math.abs(dx) > 6) h.moved = true;
-    if (h.moved) { h.el.dataset.lifted = ""; h.el.style.transform = `translateX(${dx}px) scale(1.08)`; }
+    if (h.moved) fingers.set(dx);
   };
   const up = (e: ReactPointerEvent<HTMLDivElement>) => {
+    fingers.flush();
     const h = hold.current;
     hold.current = null;
     if (!h) return;
     delete h.el.dataset.lifted;
     h.el.style.transform = "";
-    if (!h.moved || !card.current) return;
+    if (e.type === "pointercancel" || !h.moved || !card.current) return;
     const slot = card.current.offsetWidth / SIZE;
     const to = Math.max(0, Math.min(set.length - 1, h.j + Math.round((e.clientX - h.x) / slot)));
     if (to !== h.j) onMove(h.j, to);

@@ -1,5 +1,6 @@
 // Home's virtual panes suppress native rubber-banding. One translation follows the finger to reveal the reload
 // mark; never switch between scrollTop bounce and translation partway through the same gesture.
+import { useFrameDraw } from "./gesture.ts";
 import { useEffect, useRef, type TouchEvent } from "react";
 import { reload } from "../reloads.ts";
 
@@ -30,7 +31,9 @@ export function usePullToReload(pane: string) {
     el.style.setProperty("--gap", `${moved}px`);
     el.toggleAttribute("data-ready", down >= PULL_READY_PX);
   };
+  const fingers = useFrameDraw<number>(down => { const at = pull.current; if (at) show(at, down); });
   const stop = (immediate = false) => {
+    fingers.cancel();
     finish();
     const at = pull.current;
     pull.current = null;
@@ -72,9 +75,10 @@ export function usePullToReload(pane: string) {
       const across = touch.clientX - at.x;
       if ((Math.abs(across) > 10 && Math.abs(across) > Math.abs(down)) || at.list.scrollTop > 0) return stop();
       at.down = Math.max(0, down);
-      show(at, at.down);
+      fingers.set(at.down);
     },
     onTouchEnd: () => {
+      fingers.flush();
       if (mark.current?.hasAttribute("data-reloading")) return;
       const at = pull.current;
       if (at && at.down >= PULL_READY_PX && mark.current) {

@@ -6,6 +6,7 @@
 // The browser's own selection is off for a finger there (Chat.css.ts): on a phone it fights the list's scrolling and
 // brings menus of its own. A mouse selects as ever (../Chat.tsx useSelectionQuote). The Android app's is its
 // screens/MessagePick.kt.
+import { latestFrame } from "@stillfail/ui/frames.ts";
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode, type RefObject } from "react";
 import type { Quote } from "../api.ts";
 import { Copy, Quote as QuoteIcon } from "@stillfail/ui/icons.tsx";
@@ -186,7 +187,9 @@ export function usePick(list: RefObject<HTMLElement | null>, onQuote: (quote: Om
       const span = w.start >= anchor.start ? { start: anchor.start, end: Math.max(anchor.end, w.end) } : { start: w.start, end: anchor.end };
       setPicked((p) => p && { ...p, span });
     };
+    const moves = latestFrame<{ x: number; y: number }>(point => widen(point.x, point.y));
     const finish = () => {
+      moves.flush();
       clearTimeout(timer);
       if (anchor) { setHeld(false); swallow = performance.now() + 400; }
       anchor = null;
@@ -207,7 +210,7 @@ export function usePick(list: RefObject<HTMLElement | null>, onQuote: (quote: Om
       if (!touch || !from) return;
       if (anchor) {
         if (e.cancelable) e.preventDefault();
-        widen(touch.clientX, touch.clientY);
+        moves.set({ x: touch.clientX, y: touch.clientY });
       } else if (Math.hypot(touch.clientX - from.x, touch.clientY - from.y) > STILL) {
         clearTimeout(timer);
         from = null;
@@ -224,6 +227,7 @@ export function usePick(list: RefObject<HTMLElement | null>, onQuote: (quote: Om
     el.addEventListener("touchcancel", finish);
     el.addEventListener("click", onClick, true);
     return () => {
+      moves.cancel();
       clearTimeout(timer);
       el.removeEventListener("touchstart", onTouchStart);
       el.removeEventListener("touchmove", onTouchMove);
@@ -247,7 +251,7 @@ export function usePick(list: RefObject<HTMLElement | null>, onQuote: (quote: Om
     const grab = { x: e.clientX - (box.left + box.width / 2), y: e.clientY - (box.top + box.height / 2) };
     const ends = { ...p.span };
     let moved = false;
-    const move = (ev: PointerEvent) => {
+    const moves = latestFrame<Pick<PointerEvent, "clientX" | "clientY" | "pointerId">>((ev) => {
       const words = wordsNow();
       if (!words || ev.pointerId !== e.pointerId) return;
       if (!moved && Math.hypot(ev.clientX - e.clientX, ev.clientY - e.clientY) < 3) return;
@@ -263,8 +267,10 @@ export function usePick(list: RefObject<HTMLElement | null>, onQuote: (quote: Om
       if (which === "start") { if (at >= ends.end) return; ends.start = at; }
       else { if (at <= ends.start) return; ends.end = at; }
       setPicked((q) => q && { ...q, span: { ...ends } });
-    };
+    });
+    const move = (ev: PointerEvent) => { if (ev.pointerId === e.pointerId) moves.set({ clientX: ev.clientX, clientY: ev.clientY, pointerId: ev.pointerId }); };
     const finish = () => {
+      moves.cancel();
       el.removeEventListener("pointermove", move);
       el.removeEventListener("pointerup", up);
       el.removeEventListener("pointercancel", up);
@@ -274,7 +280,7 @@ export function usePick(list: RefObject<HTMLElement | null>, onQuote: (quote: Om
       setHeld(false);
     };
     // Only the pointer that grabbed this handle may finish it, including capture lost on cancellation.
-    const up = (ev: PointerEvent) => { if (ev.pointerId === e.pointerId) finish(); };
+    const up = (ev: PointerEvent) => { if (ev.pointerId === e.pointerId) { if (ev.type === "pointerup") { move(ev); moves.flush(); } finish(); } };
     dragging.current = finish;
     el.addEventListener("pointermove", move);
     el.addEventListener("pointerup", up);
