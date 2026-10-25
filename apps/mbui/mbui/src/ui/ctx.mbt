@@ -1261,6 +1261,22 @@ fn Ctx::text_patch(self : Ctx, style : TextStyle?) -> TextPatch {
 }
 
 ///|
+/// The size and the line `style` sets words in, in the theme in force, as Ctx::text and Ctx::editor take them (the
+/// system's size of words not yet applied): for what is set apart from a text and must be set alike (a field's words
+/// as their message will have them). Its line, said by neither its size nor its leading, the theme's share of its size.
+pub fn Ctx::style_size(self : Ctx, style : TextStyle) -> (Double, Double) {
+  let (size, line) = self.text_sizes(self.text_patch(Some(style)))
+  let size = size.unwrap_or(15.0)
+  (
+    size,
+    match line {
+      Some(l) if l > 0.0 => l
+      _ => self.theme.text_line * size
+    },
+  )
+}
+
+///|
 /// The size and the line a style's words have, in the theme in force: the line its `leading` when it says one, else
 /// its size's. (A node's line_h 0 is the font's own: `Font`.)
 fn Ctx::text_sizes(self : Ctx, st : TextPatch) -> (Double?, Double?) {

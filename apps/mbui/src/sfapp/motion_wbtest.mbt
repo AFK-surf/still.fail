@@ -230,6 +230,69 @@ test "words sent: the composer stays as it was while they are in it, and comes d
 }
 
 ///|
+test "words sent set out from where they were typed and land where their message has them, set alike all the way" {
+  reset()
+  let clock = Ref::new(0.0)
+  fix_clock.val = Some(fn() { clock.val })
+  let src = fixture("chat")
+  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0, platform=2)
+  t.run_for(@ui.nav_push_ms)
+  t.tap_text("发消息")
+  let words = "第一行\n第二行\n第三行"
+  t.type_text(words)
+  t.run_for(composer_morph_ms)
+  tap_send(t)
+  t.frame()
+  // as they set out: a piece a line, each drawn where it was in the field (a copy of the message's words, cut to it)
+  let f = flight_of("ws1/st1:s-c1").unwrap()
+  let typed = f.lines.unwrap()
+  let (pieces, laid) = @sfbase.flight_pieces(t.ctx(), f).unwrap()
+  assert_eq(pieces.length(), 3)
+  // set alike: the field's lines as high as the message's
+  assert_eq(typed.line_h(), laid.layout.line_h[0])
+  let copies = t.words().filter(fn(w) { w.0 == words && w.5 > 0.99 })
+  for p in pieces {
+    let (fx, fy) = typed.place(f.lead + p.a)
+    assert_true(
+      copies.iter().any(fn(w) { (w.1 + p.at.0 - fx).abs() < 0.5 && (w.2 + p.at.1 - fy).abs() < 0.5 }),
+      msg="\{p.a}: \{fx},\{fy} \{copies}",
+    )
+  }
+  // landed: the message's own words where it has them, nothing else of them drawn
+  t.run_for(f.way.ends() - t.time())
+  t.frame()
+  assert_true(flight_of("ws1/st1:s-c1") is None)
+  let drawn = t.words().filter(fn(w) { w.0 == words && w.5 > 0.01 })
+  assert_eq(drawn.length(), 1, msg="\{drawn}")
+  fix_clock.val = None
+}
+
+///|
+test "words sent break their lines in their message where the composer broke them: a paragraph goes a line a piece" {
+  reset()
+  let clock = Ref::new(0.0)
+  fix_clock.val = Some(fn() { clock.val })
+  let src = fixture("chat")
+  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0, platform=2)
+  t.run_for(@ui.nav_push_ms)
+  t.tap_text("发消息")
+  t.type_text("帮我看一下登录按钮在深色模式下的颜色是不是不对，还有注册页输入框的边框也要再核对一遍")
+  t.run_for(composer_morph_ms)
+  tap_send(t)
+  t.frame()
+  let f = flight_of("ws1/st1:s-c1").unwrap()
+  let typed = f.lines.unwrap()
+  // more than a line in the field, and as many in the message, each its own piece
+  assert_true(typed.starts.length() > 1)
+  let (pieces, laid) = @sfbase.flight_pieces(t.ctx(), f).unwrap()
+  assert_eq(laid.layout.line_count(), typed.starts.length())
+  assert_eq(pieces.length(), typed.starts.length())
+  fix_clock.val = None
+}
+
+///|
 test "Home: the first rows, after the list waited, come as they are and a tap on one opens it at once" {
   reset()
   let src = fixture("home")

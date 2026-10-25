@@ -1,0 +1,12 @@
+# A paragraph longer than a line typed on a phone and sent: it breaks into lines one way in the field and another in
+# its message, each piece going from where it was typed to where the message has it (sfbase flight.mbt).
+timeout 20000
+until 发消息
+wait 600
+tap 发消息
+wait 500
+type 帮我看一下登录按钮在深色模式下的颜色是不是不对，还有注册页输入框的边框也要再核对一遍
+wait 700
+tap icon:arrow-up
+wait 1500
+exit

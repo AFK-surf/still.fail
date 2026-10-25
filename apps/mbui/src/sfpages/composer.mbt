@@ -487,12 +487,14 @@ fn composer_text(
   // what the field was given since the last frame, as the core reads it (a mark taken whole, a chat's link pasted)
   @sfbase.refs_edits(c, src, w.key, w.field, spec.station, spec.locked)
   c.box(style=if multiline { text_open } else { text_shut }, fn() {
+    // (what is typed set as its message will set it: the theme's words)
+    let (size, line) = c.style_size(@sf.theme().t.words)
     let res = c.editor(
       composer_field_key,
       placeholder=if hint != "" { hint } else { spec.placeholder },
       words=true,
-      font_size=@sf.theme().t.input,
-      line=@sf.theme().t.input_line,
+      font_size=size,
+      line~,
       trim=true,
       max_lines=text_lines(c),
       plain=true,
@@ -964,7 +966,7 @@ let text_window_share : Double = 0.4
 ///|
 /// How many lines the field grows to before it scrolls.
 fn text_lines(c : @ui.Ctx) -> Int {
-  let n = (dmin(text_most, c.height * text_window_share) / @sf.theme().t.input_line).to_int()
+  let n = (dmin(text_most, c.height * text_window_share) / c.style_size(@sf.theme().t.words).1).to_int()
   if n < 1 {
     1
   } else {
@@ -1078,6 +1080,14 @@ let text_shut : @ui.Style = @ui.style(w=@sf.grow, pr=S2, py=S1_25)
 ///|
 // kept across runs: a value (no field of it changes)
 let text_open : @ui.Style = @ui.css("w=Full px=S2 pt=S2")
+
+///|
+/// How wide the composer opened sets what is typed in it, at the foot of a pane `pane` wide (its box less its padding
+/// and its words' room's sides: text_open's px=S2): where what the viewer sent breaks its lines too (its bubble's,
+/// message.mbt mine_most).
+pub fn composer_words_width(pane : Double) -> Double {
+  composer_width(pane) - 2.0 * @sf.composer_pad - 2.0 * 8.0
+}
 
 ///|
 /// Its row under the text (composerToolbar, multiline: space-between, 4 apart), its ＋ and send round in the box's foot
@@ -1260,8 +1270,6 @@ pub fn send_in_chat(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView, w : Wr
     flying,
     field=composer_field_key,
     hold=fn(ms) { composer_hold(w.key, room, box, ms) },
-    font=@sf.theme().t.input,
-    line=@sf.theme().t.input_line,
     desk=true,
   )
   // the chat's list to its end, where the row is (gliding there while nothing flies to it)
@@ -1638,7 +1646,7 @@ let composer_foot_wide : Double = 16.0
 /// row as far from its foot as makes them concentric with its corners (round_in).
 fn composer_open_box(feet : (@ui.CornerOf, @ui.CornerOf)?) -> Double {
   let t = @sf.theme()
-  @sf.composer_pad + (8.0 + t.t.input_line) + 10.0 + t.round.side + round_in(feet).2
+  @sf.composer_pad + (8.0 + @ui.current().style_size(t.t.words).1) + 10.0 + t.round.side + round_in(feet).2
 }
 
 ///|

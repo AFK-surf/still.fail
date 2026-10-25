@@ -829,8 +829,6 @@ fn new_send(
     words,
     flying_files(c, d),
     field=composer_field_key,
-    font=@sf.theme().t.input,
-    line=@sf.theme().t.input_line,
     // (the flight where the chat opens has: in this page's place, Android's; beside it, the web's)
     desk=!frame.in_place,
   )

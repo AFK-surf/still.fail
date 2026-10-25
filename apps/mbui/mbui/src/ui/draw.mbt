@@ -1117,6 +1117,65 @@ pub fn Ctx::field_words(
 }
 
 ///|
+/// A field's words as it last laid them out, scrolled as it showed them (Ctx::field_lines): what words taken from it
+/// go from, line by line.
+pub struct FieldLines {
+  /// its words, where each of its lines starts and ends in them (UTF-16), and the room it showed them in (x, y, w, h,
+  /// in the window)
+  text : String
+  starts : Array[Int]
+  ends : Array[Int]
+  room : (Double, Double, Double, Double)
+  layout : TextLayout
+  /// its words' top left in the window
+  x : Double
+  y : Double
+}
+
+///|
+/// Where offset `off` of the words stands in the window: its x, and the top of the line it starts.
+pub fn FieldLines::place(self : FieldLines, off : Int) -> (Double, Double) {
+  let (cx, l) = self.layout.caret(off)
+  (self.x + cx, self.y + l.to_double() * self.layout.line_h)
+}
+
+///|
+/// How high each of its lines is.
+pub fn FieldLines::line_h(self : FieldLines) -> Double {
+  self.layout.line_h
+}
+
+///|
+/// The words of editor `key` as it last laid them out (FieldLines), None before it has.
+pub fn Ctx::field_lines(self : Ctx, key : String) -> FieldLines? {
+  let id = self.id(key)
+  match self.editors.get(id) {
+    Some(st) =>
+      match st.tl {
+        Some(tl) => {
+          let n = tl.shaped.starts.length()
+          let at = fn(c : Int) { if c < n { tl.shaped.starts[c] } else { tl.text.length() } }
+          Some({
+            text: tl.text,
+            starts: tl.line_start.map(at),
+            ends: tl.line_end.map(at),
+            // its room as it showed last frame (it may not be built yet this one)
+            room: match self.rect_of(id) {
+              Some(r) => r
+              None => (st.ox, st.oy, 0.0, 0.0)
+            },
+            layout: tl,
+            x: st.ox,
+            y: st.oy,
+          })
+        }
+        None => None
+      }
+    None => None
+  }
+}
+
+///|
 /// The frame being made's context (the one the app runs in).
 pub fn current() -> Ctx {
   g()
