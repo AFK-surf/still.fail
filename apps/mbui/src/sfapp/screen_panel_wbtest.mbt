@@ -65,7 +65,10 @@ test "组合键 while driving: a Windows station's, each sent down and up with i
   let r = screen_rig()
   r.live()
   open_center(r)
-  assert_true(r.t.find(tr("web-pages.screen.combos")) is Some(_))
+  // one row in 控制中心, its list opened from it
+  assert_true(r.t.find(tr("web-pages.screen.combo.taskManager")) is None)
+  r.t.tap_text(tr("web-pages.screen.combos"))
+  r.t.run_for(@kit.presence_out_ms + @sf.later_ms)
   r.t.tap_text(tr("web-pages.screen.combo.taskManager"))
   r.t.draw()
   let ins = r.inputs()

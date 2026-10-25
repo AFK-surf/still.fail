@@ -345,7 +345,7 @@ fn center_button(c : @ui.Ctx, s : ScreenSess, u : ScreenUi, close : () -> Unit) 
 
 ///|
 /// What 控制中心 holds: how the view goes (live: its round trip, pressed its figures), 画质, 缩放 (where the station
-/// changes it), 组合键 (while driving), then sending files, 全屏, and 断开.
+/// changes it), 组合键 (while driving: its list opened from its row), then sending files, 全屏, and 断开.
 fn center_panel(
   c : @ui.Ctx,
   s : ScreenSess,
@@ -416,14 +416,19 @@ fn center_panel(
       })
     None => ()
   }
+  // (组合键 one row, its list opened beside: 控制中心 stays short enough to see whole on a phone)
   if s.driving() {
-    @sf.panel_group(c, label=tr("web-pages.screen.combos"), fn() {
-      for k in combos_for(screen_os(src, s.station)) {
-        if @sf.menu_item(c, k.name, key="screen-combo/" + k.keys, panel=true, note=k.keys) {
-          let n = c.frame_number()
-          c.tell("screen-combo/" + s.view + "/\{n}", fn() { stroke(fn(j) { s.input(src, j) }, k.key, k.code, k.mods) })
-          done()
-        }
+    @sf.panel_group(c, fn() {
+      if @sf.menu_item(
+          c,
+          tr("web-pages.screen.combos"),
+          key="screen-center-combos",
+          panel=true,
+          icon="keyboard",
+          end="chevron-right",
+        ) {
+        done()
+        combos_open(s, from)
       }
     })
   }
@@ -445,6 +450,25 @@ fn center_panel(
       close()
     }
   })
+}
+
+///|
+/// 组合键: the keys worth sending to the screen's system, a row each with its keys; one chosen is sent and it closes.
+fn combos_open(s : ScreenSess, from : @sf.Anchor) -> Unit {
+  @sf.panel(
+    tr("web-pages.screen.combos"),
+    fn(c, done) {
+      for k in combos_for(screen_os(s.src, s.station)) {
+        if @sf.menu_item(c, k.name, key="screen-combo/" + k.keys, panel=true, note=k.keys) {
+          let n = c.frame_number()
+          c.tell("screen-combo/" + s.view + "/\{n}", fn() { stroke(fn(j) { s.input(s.src, j) }, k.key, k.code, k.mods) })
+          done()
+        }
+      }
+    },
+    from~,
+    focus=false,
+  )
 }
 
 ///|
