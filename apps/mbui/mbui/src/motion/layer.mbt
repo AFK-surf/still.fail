@@ -716,12 +716,11 @@ pub fn list_keys(
     }
     _ => ()
   }
-  let ks = keys.map(motion_key)
   let lm = match mo.lists.get(id) {
     Some(l) => l
     None => {
       let l = {
-        keys: ks,
+        keys: keys.map(motion_key),
         names: keys,
         changed_frame: -1,
         close_until: -1.0e9,
@@ -737,43 +736,70 @@ pub fn list_keys(
   // not built the frame before (its page come back to, its pane slid to): drawn anew, as the first time
   let away = lm.seen < frame - 1
   lm.seen = frame
-  if lm.keys == ks {
-    return id
-  }
+  // only what is between the rows alike at its start and at its end changed (a row come at the end, one gone, one
+  // moved: what is between them, never every row of a long list); the keys are each row's own (a key twice in a list is
+  // no list's)
   let before = lm.keys
   let before_names = lm.names
+  let nb = before.length()
+  let nk = keys.length()
+  let mut lead = 0
+  while lead < nb && lead < nk && before_names[lead] == keys[lead] {
+    lead += 1
+  }
+  let mut tail = 0
+  while tail < nb - lead && tail < nk - lead && before_names[nb - 1 - tail] == keys[nk - 1 - tail] {
+    tail += 1
+  }
+  if lead == nb && lead == nk {
+    lm.names = keys
+    return id
+  }
+  let ks : Array[Int] = Array::new(capacity=nk)
+  for i in 0..<lead {
+    ks.push(before[i])
+  }
+  for i in lead..<(nk - tail) {
+    ks.push(motion_key(keys[i]))
+  }
+  for i in (nb - tail)..<nb {
+    ks.push(before[i])
+  }
   lm.keys = ks
   lm.names = keys
   // nothing to move from: only where they are is kept
-  if before.is_empty() || away || c.still() {
+  if nb == 0 || away || c.still() {
     lm.unghost.clear()
     return id
   }
   lm.changed_frame = frame
+  // (the rows between, before and now)
   let old : Map[Int, Int] = {}
-  for i, k in before {
-    old[k] = i
+  for i in lead..<(nb - tail) {
+    old[before[i]] = i
   }
   let fresh : Map[Int, Int] = {}
-  for i, k in ks {
-    fresh[k] = i
+  for i in lead..<(nk - tail) {
+    fresh[ks[i]] = i
   }
-  for k in ks {
-    if !old.contains(k) {
-      lm.arrived[k] = now
+  for i in lead..<(nk - tail) {
+    if !old.contains(ks[i]) {
+      lm.arrived[ks[i]] = now
     }
   }
-  // which of the rows there before and now went ahead of others
+  // which of the rows there before and now went ahead of others (those alike at the start and the end went ahead of
+  // none)
   let mut kept_i = 0
   let kept_before : Map[Int, Int] = {}
   let mut j = 0
-  for k in before {
-    if fresh.contains(k) {
-      kept_before[k] = j
+  for i in lead..<(nb - tail) {
+    if fresh.contains(before[i]) {
+      kept_before[before[i]] = j
       j = j + 1
     }
   }
-  for i, k in ks {
+  for i in lead..<(nk - tail) {
+    let k = ks[i]
     if old.contains(k) {
       match kept_before.get(k) {
         Some(r) if r > kept_i && liftable(keys[i]) => {
@@ -788,7 +814,8 @@ pub fn list_keys(
   }
   // the rows gone that showed leave by a copy of them
   let mut gone = false
-  for i, k in before {
+  for i in lead..<(nb - tail) {
+    let k = before[i]
     if fresh.contains(k) {
       continue
     }
@@ -818,7 +845,7 @@ pub fn list_keys(
   }
   // (one let go without a copy stays so until it leaves: ListMotion.kt swiped.retainAll)
   let left : Array[Int] = []
-  lm.unghost.each(fn(k, _) { if !fresh.contains(k) { left.push(k) } })
+  lm.unghost.each(fn(k, _) { if !fresh.contains(k) && !ks.contains(k) { left.push(k) } })
   for k in left {
     lm.unghost.remove(k)
   }
