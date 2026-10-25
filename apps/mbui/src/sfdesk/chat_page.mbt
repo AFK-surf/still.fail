@@ -615,7 +615,7 @@ fn chat_info(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef, v : ChatView
         let s = field(av, "session")
         let connect = field(av, "connect")
         c.box(style=info_agent, fn() {
-          c.box(style=info_inline, fn() {
+          c.box(style=info_agent_head, fn() {
             agent_mark(c, text(field(s, "maker"), "id"), text(s, "runtime"), text(av, "badge"), side=14.0)
             c.text(text(s, "agentText"), style=info_words) |> ignore
           })
@@ -626,7 +626,7 @@ fn chat_info(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef, v : ChatView
           }
           parts.push(text(s, "processText"))
           parts.push(@sf.t("web-pages.chat.lastActive", args=[("time", text(field(field(s, "time"), "lastActiveAt"), "ago"))]))
-          c.text(parts.join(" · "), style=info_quiet) |> ignore
+          c.box(style=info_agent_line, fn() { c.text(parts.join(" · "), style=info_quiet) |> ignore }) |> ignore
         })
         |> ignore
       }
@@ -703,8 +703,9 @@ fn info_time(c : @ui.Ctx, key : String, stamp : Json?) -> Unit {
 }
 
 ///|
-/// A row of the info (ui.tsx PanelRow): its icon in a 20 column (14, muted) and words 10 apart, what is at its end
-/// muted; round with the panel, the pointer's ground on it. True on the frame after a press.
+/// A row of the info (ui.tsx PanelRow): its icon (14, muted) at the panel's words' inset, as the facts' words and the
+/// agents' marks over it, and words 10 apart, what is at its end muted; round with the panel, the pointer's ground on
+/// it. True on the frame after a press.
 fn info_row(c : @ui.Ctx, key : String, icon : String, label : String, end : String) -> Bool {
   let id = c.id(key)
   c.cursor(id, Hand)
@@ -965,13 +966,15 @@ let jobs_alarm_fail : @ui.Style = @ui.css("w=S2_5 h=S2_5 radius=Full bg=Danger b
 let jobs_alarm_restart : @ui.Style = @ui.css("w=S2_5 h=S2_5 radius=Full bg=Warn border=B2 border_color=Bg")
 
 ///|
-/// The info's facts (detailRow): what it is muted in a 6em column, 12 apart; 13; at the panel's words' inset.
+/// The info's facts (detailRow): what it is muted in a 6em column, 12 apart; 13; at the panel's words' inset. A fact
+/// 28 high and 6 apart, as far from the next as the rows under them are (32 and 2: pengxiao, 2026-10-25, the panel's
+/// rows unevenly apart).
 // kept across runs: a value (no field of it changes)
 let info_facts : @ui.Style = @ui.css("w=Full px=S2_5 pt=S2_5 gap=S1_5")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let info_fact : @ui.Style = @ui.css("row w=Full min_h=S6 gap=S3 align=ACenter")
+let info_fact : @ui.Style = @ui.css("row w=Full min_h=S7 gap=S3 align=ACenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -1007,8 +1010,18 @@ let info_agents : @ui.Style = @ui.css("w=Full px=S2_5 pt=S2 gap=S1_5")
 let info_agent : @ui.Style = @ui.css("w=Full gap=S0_5")
 
 ///|
+/// An agent's mark and label: the mark where the rows' icons stand under it, its label where their words do (14 and
+/// 10 apart: info_row), its line under its label (pengxiao, 2026-10-25: their edges out of line).
+// kept across runs: a value (no field of it changes)
+let info_agent_head : @ui.Style = @ui.css("row gap=S2_5 align=ACenter")
+
+///|
+// kept across runs: a value (no field of it changes)
+let info_agent_line : @ui.Style = @ui.css("w=Full pl=S6")
+
+///|
 /// What is done with it (infoTools, PanelRow): 8 under what is over it, 2 apart; a row 32 high at least, its icon's
-/// 20 column and words 10 apart, 10 in, round with the panel, the pointer's ground on it.
+/// 14 column and words 10 apart, 10 in, round with the panel, the pointer's ground on it.
 // kept across runs: a value (no field of it changes)
 let info_tools : @ui.Style = @ui.css("w=Full pt=S2 gap=S0_5")
 
@@ -1018,7 +1031,7 @@ let info_tool : @ui.Style = @ui.css("row w=Full min_h=S8 px=S2_5 gap=S2_5 align=
 
 ///|
 // kept across runs: a value (no field of it changes)
-let info_tool_icon : @ui.Style = @ui.css("w=S5 align=ACenter")
+let info_tool_icon : @ui.Style = @ui.css("w=S3_5 align=ACenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
