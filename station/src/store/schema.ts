@@ -313,6 +313,10 @@ CREATE TABLE IF NOT EXISTS runtime_sessions (
   at INTEGER NOT NULL,
   PRIMARY KEY (session_key, id)
 );
+-- The session that went on with a runtime's session, by its id (rows.ts SESSION_OF_RUNTIME: a machine's session gone
+-- on with, Codex's fast mode).
+CREATE INDEX IF NOT EXISTS runtime_sessions_by_id ON runtime_sessions (id);
+CREATE INDEX IF NOT EXISTS sessions_by_runtime_id ON sessions (runtime_session_id) WHERE runtime_session_id IS NOT NULL;
 -- How far each transcript has been read for it.
 CREATE TABLE IF NOT EXISTS usage_files (
   path TEXT PRIMARY KEY,

@@ -488,6 +488,14 @@ export const JOBS_RUNNING = "SELECT * FROM jobs WHERE state = 'running' ORDER BY
 /// the readers'.
 export const SESSION_JOBS = "SELECT * FROM jobs WHERE session_key = ? ORDER BY started_at DESC";
 
+/// The session that went on with a runtime's session (`?1`, `?2`: its current one, or one it ran in before), the latest
+/// active first: by the indexes on them (schema.ts sessions_by_runtime_id, runtime_sessions_by_id), not by asking every
+/// session in turn which it ran in.
+export const SESSION_OF_RUNTIME = `SELECT key FROM (
+    SELECT key, last_active_at FROM sessions WHERE runtime_session_id = ?2 AND runtime = ?1
+    UNION ALL SELECT s.key, s.last_active_at FROM runtime_sessions r JOIN sessions s ON s.key = r.session_key WHERE r.id = ?2 AND s.runtime = ?1
+  ) ORDER BY last_active_at DESC LIMIT 1`;
+
 /// What each list of chats asks of the cards answered lately (answersSince, the main thread's and the readers'): the
 /// latest card, or post with options, before a person's message (schema.ts entries_cards, entries_options: not by
 /// going back over the thread), and the cards closed since (closed_cards_at).

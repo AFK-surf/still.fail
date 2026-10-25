@@ -8,7 +8,7 @@
 import { type Dirent, closeSync, opendirSync, openSync, readSync, statSync } from "node:fs";
 import { basename, dirname, join } from "node:path";
 import { type Lang, tr } from "../ops/i18n.ts";
-import { type Json, type Store, listSessions, runtimeSessions } from "./store.ts";
+import { type Json, type Store, listSessions, runtimeSessions, sessionOfRuntime } from "./store.ts";
 import { HttpError } from "./views.ts";
 
 type Runtime = "claude" | "codex";
@@ -548,7 +548,7 @@ export function machineSession(s: Store, lang: Lang, runtime: string, id: string
   const found = find(roots(), runtime, id);
   if (found === null) throw new HttpError(404, tr(lang, "station.admin.noLocalSession", { id }));
   const said = conversation(runtime, found.path);
-  found.session = listSessions(s).find((r) => r.runtime === runtime && runtimeSessions(s, r.key).includes(found.id))?.key ?? null;
+  found.session = sessionOfRuntime(s, runtime, found.id);
   const total = said.length;
   return { session: shown(found), total, said: said.slice(Math.max(0, total - limit)) };
 }

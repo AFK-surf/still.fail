@@ -375,7 +375,7 @@ export async function continueMachineSession(hub: Hub, roots: Roots, found: Mach
   const { store } = hub;
   const runtime = found.runtime;
   // One it went on in (a runtime session left for a new one included).
-  const going = store.listSessions().find((r) => r.runtime === runtime && store.runtimeSessions(r.key).includes(found.id));
+  const going = store.sessionOfRuntime(runtime, found.id);
   if (going) {
     const thread = store.homeChat(going.key);
     if (thread) {
@@ -396,7 +396,7 @@ export async function continueMachineSession(hub: Hub, roots: Roots, found: Mach
     throw e;
   }
   // Looked at again, in case it was continued meanwhile.
-  const already = store.listSessions().find((r) => r.runtime === runtime && store.runtimeSessions(r.key).includes(found.id));
+  const already = store.sessionOfRuntime(runtime, found.id);
   if (already) {
     const thread = store.homeChat(already.key);
     if (thread) return [already.key, thread];
