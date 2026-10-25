@@ -94,6 +94,13 @@ held and writes the ones that differ; rows keep their place (`ord`, REAL) where 
 on top writes that chat alone. Events update rows in place (a session's summary, a thread's read position), never
 rewrite a list.
 
+What a read brings and what a stream tells are the same data, put in the same rows; what decides between them is their
+order, not where they came from. A read answers the station as it was at some moment after it was asked, so what the
+stream told after it was asked is no older: once what the read brought is written, that is written again on top, as it
+came (`station/retold.ts`, sync.ts `#retell`). Before, the later of the two won: a new chat's lists, read again as its
+first message went and answered after the station had told its agent at work, had it at rest again, its activity and
+mark gone for the whole of that turn.
+
 There is one writer by construction:
 
 - **Desktop**: the core runs in the app's one utility process (node:sqlite, `hosts/node-sql.ts`); files

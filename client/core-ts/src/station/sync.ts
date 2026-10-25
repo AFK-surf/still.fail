@@ -34,6 +34,7 @@ import { HOST_KEY, HOST_SAVE_MS, type HistoryRead, type Link, Links, type LiveVi
 import { readAll, type StationWire } from "./wire.ts";
 import * as logins from "./machine-logins.ts";
 import { Relays } from "./machine-logins.ts";
+import { Retold } from "./retold.ts";
 
 export { HOST_KEY, HOST_SAVE_MS, LINK_KEY, LONG_MISSES, MISSES, OFFLINE_RETRY_MS, RECONNECT_MAX_MS, RECONNECT_MS, STREAM_IDLE_MS, STREAM_QUIET_MS, Link } from "./link.ts";
 export type { EventsFor, LiveView } from "./link.ts";
@@ -56,6 +57,9 @@ export const HISTORY_BATCH = 40;
 export const RECHECKING = "等它回来确认";
 /// The station's events that change what a search of it finds.
 const SEARCHED = new Set(["session", "session-removed", "thread", "thread-removed", "chat", "chat-removed", "job", "job-removed"]);
+/// The station's events that say what its reads bring too: told again on top of what a read asked before them brought
+/// (retold.ts).
+const RETOLD = new Set(["session", "session-removed", "thread-view", "thread-removed", "read", "chat", "chat-removed", "job", "job-removed", "overview", "footprint"]);
 /// How long the words of a search stay as they are before the stations are asked what they find.
 export const SEARCH_SETTLE_MS = 150;
 /// How often a shown resources page asks its station again (the station, asked, looks as often itself).
@@ -99,6 +103,8 @@ export class StationsSync {
   readonly channels: Channels;
   /// Its stations' links: their streams, opened and tried again (link.ts).
   readonly #links: Links;
+  /// What their streams told while a read was out, to tell again on top of what it brings.
+  readonly #retold = new Retold();
   /// What the station topics want of a stream beyond what the sync wants (host samples, logs, sessions shown).
   wanted: (address: string) => { host: boolean; live: string[]; logs: [string, number][]; logins?: string[] } = () => ({ host: false, live: [], logs: [] });
   /// Told when what a station holds beyond the records changed (link, live views, host, logs).
@@ -401,7 +407,7 @@ export class StationsSync {
   /// is read again a little later (less and less often, a few times) while the station stays reached.
   /// `unread`: told where it is not read (the station read afresh: cursor.ts).
   #read(address: string, topic: Topic, path: string, shape?: (answer: unknown) => unknown, ctx: SpanContext | null = null, attempt = 0, unread?: () => void): Effect.Effect<void, CoreError> {
-    return Effect.gen({ self: this }, function* () {
+    return this.#asked((read) => Effect.gen({ self: this }, function* () {
       if (!this.reachable(address) || !this.#links.has(address)) return unread?.();
       const link = this.#links.get(address)!;
       const answer = yield* Effect.result(shape ? this.requests.call(link.addr, "GET", path, null, { quiet: true, ctx }) : this.#whole(link, topic, path, ctx));
@@ -409,6 +415,7 @@ export class StationsSync {
       if (answer._tag === "Success") {
         link.errors.delete(key);
         this.#core.data.set(topic, shape ? shape(answer.success) : answer.success);
+        this.#retell(address, read);
         return;
       }
       // Not answered (a station's no is how it stands, read again or not).
@@ -422,6 +429,15 @@ export class StationsSync {
         );
         this.#core.runner.fork(again, link.scoped);
       }
+    }));
+  }
+
+  /// A read of a station's, asked as `work` starts: what it is known by while it is out (retold.ts), for what it brings to
+  /// be told again on top of (`#retell`).
+  #asked<A, E>(work: (read: number) => Effect.Effect<A, E>): Effect.Effect<A, E> {
+    return Effect.suspend(() => {
+      const read = this.#retold.asked();
+      return work(read).pipe(Effect.ensuring(Effect.sync(() => this.#retold.over(read))));
     });
   }
 
@@ -642,7 +658,7 @@ export class StationsSync {
   }
 
   #history(address: string, attempt: number): Effect.Effect<void, CoreError> {
-    return Effect.gen({ self: this }, function* () {
+    return this.#asked((asked) => Effect.gen({ self: this }, function* () {
       const link = this.#links.get(address);
       if (!link || !this.reachable(address)) return;
       if (link.batchRefused !== null && this.#core.host.nowMs() - link.batchRefused < CHANGES_RETRY_MS) return this.#historyEach(address);
@@ -676,9 +692,10 @@ export class StationsSync {
         const after = read.apply(answered.success[i]!);
         if (after !== null && !link.historyAsked.has(after.path)) link.history.push(after);
       });
+      this.#retell(address, asked);
       // More to bring: asked again, behind what is more urgent.
       if (link.history.length > 0) this.#enqueue(address, "history", Priority.background, this.#history(address, 0));
-    });
+    }));
   }
 
   /// What a station's history has yet to bring onto the device, in the order it is brought: each listed session's
@@ -789,14 +806,14 @@ export class StationsSync {
     if (data === undefined) return;
     const core = this.#core;
     if (SEARCHED.has(name)) this.#searchStale(address);
+    if (RETOLD.has(name)) {
+      this.#retold.told(address, name, data);
+      this.#held(address, name, data);
+      // A sidebar row: an agent starting or ending its turn, which a stream to a station from before follows by name.
+      if (name === "chat") this.openEvents(address, false);
+      return;
+    }
     switch (name) {
-      case "session":
-        return this.#onSession(address, data);
-      case "session-removed": {
-        const key = str(get(data, "key"));
-        if (key) this.#onSessionRemoved(address, key);
-        return;
-      }
       case "thread": {
         const id = u64(get(data, "id"));
         if (id === null) return;
@@ -811,6 +828,76 @@ export class StationsSync {
         // Its summary for the viewer: told by the station (`thread-view`) when it tells it, else read.
         const viewed = this.#links.get(address)?.viewed.get(id);
         if (viewed === undefined || viewed < newest) this.#markDirty(address, id);
+        return;
+      }
+      case "live": {
+        const key = str(get(data, "key"));
+        if (key) this.#onLive(address, key, data);
+        return;
+      }
+      case "job-log": {
+        const id = str(get(data, "id"));
+        const lines = u64(get(data, "lines"));
+        const link = this.#links.get(address);
+        if (id && lines !== null && link) {
+          const key = topicKey({ topic: "jobLog", station: address, job: id, lines });
+          link.memory.set(key, { text: get(data, "text") ?? "", outputAt: get(data, "outputAt") ?? null });
+          this.onChange(address, "log", key);
+        }
+        return;
+      }
+      // The stream that took over could not be told all that came since the last its predecessor gave: read again.
+      case "missed":
+        return this.snapshot(address);
+      case "host": {
+        const link = this.#links.get(address);
+        if (link) {
+          link.memory.set("host", data);
+          this.onChange(address, "host");
+          const now = core.host.nowMs();
+          if (now - link.hostSaved >= HOST_SAVE_MS) {
+            link.hostSaved = now;
+            core.runner.fork(Effect.ignore(core.host.storageSet(`${HOST_KEY}/${address}`, new TextEncoder().encode(JSON.stringify(data)))));
+          }
+        }
+        return;
+      }
+      case "usage":
+        this.#usageChanged(address);
+        return;
+      // Its screens came or went, or who is on them changed (docs/remote-screens.md).
+      case "screens":
+        this.#heldScreens(address, { screens: Array.isArray(get(data, "screens")) ? (get(data, "screens") as unknown[]) : [], outdated: false });
+        return;
+      // A login of the station's (docs/remote-login.md).
+      case "machine-logins": {
+        const link = this.#links.get(address);
+        if (!link) return;
+        if (isObject(get(data, "login"))) this.putMachineLogin(address, get(data, "login"));
+        return;
+      }
+      // A login's terminal as it changes (while one is shown).
+      case "login-screen": {
+        const link = this.#links.get(address);
+        const id = link ? logins.putScreen(link, data) : null;
+        if (id !== null) this.onChange(address, "loginScreen", id);
+        return;
+      }
+      default:
+        for (const part of this.also) part.event(address, name, data);
+    }
+  }
+
+  /// What a stream told of what reads bring too (RETOLD) into what is held: as it is told, and again on top of what a
+  /// read asked before it brought (`#retell`).
+  #held(address: string, name: string, data: unknown): void {
+    const core = this.#core;
+    switch (name) {
+      case "session":
+        return this.#onSession(address, data);
+      case "session-removed": {
+        const key = str(get(data, "key"));
+        if (key) this.#onSessionRemoved(address, key);
         return;
       }
       case "thread-view": {
@@ -836,15 +923,10 @@ export class StationsSync {
         return;
       }
       case "chat":
-        return this.putRow(address, data);
+        return core.data.putChat(address, data);
       case "chat-removed": {
         const id = str(get(data, "id"));
         if (id) core.data.dropChat(address, id);
-        return;
-      }
-      case "live": {
-        const key = str(get(data, "key"));
-        if (key) this.#onLive(address, key, data);
         return;
       }
       case "job":
@@ -859,63 +941,15 @@ export class StationsSync {
         }
         return;
       }
-      case "job-log": {
-        const id = str(get(data, "id"));
-        const lines = u64(get(data, "lines"));
-        const link = this.#links.get(address);
-        if (id && lines !== null && link) {
-          const key = topicKey({ topic: "jobLog", station: address, job: id, lines });
-          link.memory.set(key, { text: get(data, "text") ?? "", outputAt: get(data, "outputAt") ?? null });
-          this.onChange(address, "log", key);
-        }
-        return;
-      }
       case "overview":
-        core.data.set({ topic: "overview", station: address }, data);
-        return;
-      // The stream that took over could not be told all that came since the last its predecessor gave: read again.
-      case "missed":
-        return this.snapshot(address);
-      case "host": {
-        const link = this.#links.get(address);
-        if (link) {
-          link.memory.set("host", data);
-          this.onChange(address, "host");
-          const now = core.host.nowMs();
-          if (now - link.hostSaved >= HOST_SAVE_MS) {
-            link.hostSaved = now;
-            core.runner.fork(Effect.ignore(core.host.storageSet(`${HOST_KEY}/${address}`, new TextEncoder().encode(JSON.stringify(data)))));
-          }
-        }
-        return;
-      }
-      case "usage":
-        this.#usageChanged(address);
-        return;
       case "footprint":
-        core.data.set({ topic: "footprint", station: address }, data);
-        return;
-      // Its screens came or went, or who is on them changed (docs/remote-screens.md).
-      case "screens":
-        this.#heldScreens(address, { screens: Array.isArray(get(data, "screens")) ? (get(data, "screens") as unknown[]) : [], outdated: false });
-        return;
-      // A login of the station's (docs/remote-login.md).
-      case "machine-logins": {
-        const link = this.#links.get(address);
-        if (!link) return;
-        if (isObject(get(data, "login"))) this.putMachineLogin(address, get(data, "login"));
-        return;
-      }
-      // A login's terminal as it changes (while one is shown).
-      case "login-screen": {
-        const link = this.#links.get(address);
-        const id = link ? logins.putScreen(link, data) : null;
-        if (id !== null) this.onChange(address, "loginScreen", id);
-        return;
-      }
-      default:
-        for (const part of this.also) part.event(address, name, data);
+        return core.data.set({ topic: name, station: address }, data);
     }
+  }
+
+  /// What `address`'s stream told since `read` was asked, on top of what it brought (retold.ts).
+  #retell(address: string, read: number): void {
+    for (const { name, data } of this.#retold.since(read, address)) this.#held(address, name, data);
   }
 
   /// A session's summary changed: in place among the listed (and in its detail); its detail is read again when its
@@ -958,13 +992,6 @@ export class StationsSync {
     if (core.data.putJob(address, job, open)) this.#enqueue(address, "jobs", Priority.shown, this.#read(address, { topic: "jobs", station: address }, "/jobs"));
   }
 
-  /// A row of the viewer's sidebar, new or changed.
-  putRow(address: string, row: unknown): void {
-    this.#core.data.putChat(address, row);
-    // An agent starting or ending its turn: the stream follows what is at work.
-    this.openEvents(address, false);
-  }
-
   /// A thread's summary into the station's threads, and the details of the sessions taking part. It says how far the
   /// thread goes: its channel is read if the device is behind on it.
   putThread(address: string, view: unknown): void {
@@ -1003,13 +1030,14 @@ export class StationsSync {
   }
 
   #threadSummary(address: string, id: number): Effect.Effect<void, CoreError> {
-    return Effect.gen({ self: this }, function* () {
+    return this.#asked((read) => Effect.gen({ self: this }, function* () {
       const link = this.#links.get(address);
       if (!link) return;
       const view = yield* Effect.result(this.requests.call(link.addr, "GET", `/threads/${id}`, null, { quiet: true }));
       if (view._tag === "Success") this.putThread(address, view.success);
       else if (view.failure.status === 404) this.#core.data.unlistThread(address, id);
-    });
+      this.#retell(address, read);
+    }));
   }
 
   /// One message of the live stream: transcript items into the records, steps and phase into the live view.
