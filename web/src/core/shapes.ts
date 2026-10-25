@@ -4910,8 +4910,6 @@ export interface PrefsView {
 	 * the trouble's words as they were when it was looked at (no longer lighting the bell) or let go (no longer listed).
 	 */
 	trouble?: Record<string, string>;
-	/** A service's page's toolbar folded away on this device (held down; the bar's size button opens it again). */
-	previewFolded?: boolean;
 	/** A Slack app made for a new connect, to go on with, by station (the Android app's). */
 	resume?: Record<string, string>;
 	/** Versions dismissed on this device, by workspace/station. */

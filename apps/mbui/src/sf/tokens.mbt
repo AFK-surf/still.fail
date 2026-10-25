@@ -95,17 +95,35 @@ pub(all) struct Theme {
   /// how tall a control is at least (a field, a select): the web's 36 on a computer; on a touch device a finger's 44,
   /// what a press needs
   control_h : Double
+  /// what a page's bar of keys is on this screen (Bars)
+  bars : Bars
+}
+
+///|
+/// A page's bar of keys (page_bar.mbt) on the screen in force: its keys round, `key` across with a `icon` icon, its
+/// capsule `field` high. The web's and the phone's alike (PreviewBar's iconBtn 28, its icons 14, previewAddress 30;
+/// Preview.kt the same): a finger reaches a key from round it (finger_reach), so a phone's are drawn no larger.
+pub(all) struct Bars {
+  key : Double
+  icon : Double
+  field : Double
 }
 
 ///|
 /// A row's roles on the screen in force (docs/architecture.md, the same on every screen and what differs): how high it
-/// is at least, its title's words, a tick's box and a switch in it. A touch device's: a finger's (48; the phone's
-/// mRowTitle, its body's 15 (the scale's Lg, on 21); a box 22, a switch 44 by 26, its mSwitch); a computer's: a list row's (40; the web's
-/// SwitchRow title, 13 on 24; a box 18, a switch 36 by 22).
+/// is at least, its title's words and its note's, a tick's box, a short field and a switch in it. A touch device's: a
+/// finger's (48; the phone's mRowTitle, its body's 15, the scale's Lg on 21, its mRowNote 13; a box 22, a field 72 by
+/// 36, a switch 44 by 26, its mSwitch); a computer's: a list row's (40; the web's SwitchRow title, 13 on 20, its note
+/// 12; a box 18, a field 52 by 28, a switch 36 by 22).
 pub(all) struct Rows {
   least : @ui.Len
   title : @ui.TextStyle
+  /// what is said under a row's title (its note), muted
+  note : @ui.TextStyle
   check : Double
+  /// a short field in a row (a number typed: a page's width)
+  field_w : @ui.Len
+  field_h : @ui.Len
   check_corner : Double
   switch_w : Double
   switch_h : Double
@@ -762,10 +780,16 @@ let narrow_type : Type = {
 }
 
 ///|
+let bars_drawn : Bars = { key: 28.0, icon: 14.0, field: 30.0 }
+
+///|
 let wide_rows : Rows = {
   least: Fixed(40.0),
   title: @ui.text_style(size=Sm, leading=L6, color=Fg),
+  note: @ui.text_style(size=Xs, leading=L5, color=Muted),
   check: 18.0,
+  field_w: Fixed(52.0),
+  field_h: Fixed(28.0),
   check_corner: 6.0,
   switch_w: 36.0,
   switch_h: 22.0,
@@ -775,7 +799,10 @@ let wide_rows : Rows = {
 let narrow_rows : Rows = {
   least: Fixed(48.0),
   title: @ui.text_style(size=Lg, color=Fg),
+  note: @ui.text_style(size=Sm, leading=L5, color=Muted),
   check: 22.0,
+  field_w: Fixed(72.0),
+  field_h: Fixed(36.0),
   check_corner: 7.0,
   switch_w: 44.0,
   switch_h: 26.0,
@@ -786,7 +813,7 @@ let dark_set : Ref[Bool?] = { val: None }
 
 ///|
 let current : Ref[Theme] = {
-  val: { dark: false, narrow: false, p: wide_light, t: wide_type, rows: wide_rows, control_h: wide_control_h },
+  val: { dark: false, narrow: false, p: wide_light, t: wide_type, rows: wide_rows, control_h: wide_control_h, bars: bars_drawn },
 }
 
 ///|
@@ -881,6 +908,7 @@ pub fn begin(c : @ui.Ctx) -> Theme {
     t: if narrow { narrow_type } else { wide_type },
     rows: if narrow { narrow_rows } else { wide_rows },
     control_h: if narrow { narrow_control_h } else { wide_control_h },
+    bars: bars_drawn,
   }
   current.val
 }

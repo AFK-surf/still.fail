@@ -26,6 +26,9 @@ pub let svc_zh : Map[String, String] = {
   "android-chat.preview.mark.gone": "标注 {n} 已不在页面上",
   "android-chat.preview.mark.quote": "网页 {name} 标注 {n}",
   "android-chat.preview.marked": "已标注 {n} 处",
+  "android-chat.preview.move": "移动页面",
+  "android-chat.preview.move.note": "开着时手指拖动的是画布，不点网页",
+  "android-chat.preview.moveOff": "停止移动页面",
   "android-chat.preview.pick": "点选页面上的元素",
   "android-chat.preview.pickMore": "可继续点选",
   "android-chat.preview.put": "添加到对话",
@@ -102,7 +105,6 @@ pub(all) struct ServicePage {
   /// the service's cookies, by name (kept here: sent along with each request)
   cookies : Map[String, String]
   mut viewport : Viewport?
-  mut folded : Bool
   mut restarting : Bool
   /// requests under way: the core's call for each
   calls : Map[Int, Int]
@@ -136,12 +138,10 @@ pub(all) struct ServicePage {
 pub let service_pages : Map[String, ServicePage] = Map([])
 
 ///|
-/// The size chosen for each service while the app runs, and whether the toolbar was folded (None: not chosen since it
-/// started): what the core keeps of them on the device (prefs `previewSizes`, `previewFolded`) is read only before.
+/// The size chosen for each service while the app runs (None: not chosen since it started): what the core keeps of
+/// them on the device (prefs `previewSizes`) is read only before.
 pub let svc_viewports : Map[String, Viewport?] = Map([])
 
-///|
-pub let svc_folded : Ref[Bool?] = Ref(None)
 
 ///|
 /// Puts a patch into the core's prefs (the page's source's `prefs.set`; nothing until a page has been shown).
@@ -186,12 +186,6 @@ pub fn keep_size(key : String, v : Viewport?) -> Unit {
   (svc_keep.val)(Json::object({ "previewSizes": Json::object(Map::from_array([(key, size_kept(v))])) }))
 }
 
-///|
-/// The toolbar folded away or opened again: kept on the device (null: opened, as none is).
-pub fn keep_folded(on : Bool) -> Unit {
-  svc_folded.val = Some(on)
-  (svc_keep.val)(Json::object({ "previewFolded": if on { Json::boolean(true) } else { Json::null() } }))
-}
 
 ///|
 pub fn service_key(station : String, job : String) -> String {
@@ -217,10 +211,6 @@ pub fn service_page_for(station : String, job : String, prefs? : Json? = None) -
               Some(String(s)) => size_of_kept(s)
               _ => None
             }
-        },
-        folded: match svc_folded.val {
-          Some(on) => on
-          None => flag(prefs, "previewFolded")
         },
         restarting: false,
         calls: {},
@@ -864,7 +854,6 @@ pub fn service_pages_reset() -> Unit {
   service_pages.clear()
   svc_viewports.clear()
   service_files.clear()
-  svc_folded.val = None
   svc_keep.val = fn(_) {  }
   marked_into.clear()
   src_now.val = fn() { 0.0 }

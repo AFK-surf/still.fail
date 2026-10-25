@@ -1210,7 +1210,7 @@ pub fn switch_row(
     c.box(style=switch_row_words, id=if disabled || busy { 0 } else { id }, fn() {
       c.text(title, style=theme().rows.title) |> ignore
       if note != "" {
-        c.text(note, style=switch_row_note) |> ignore
+        c.text(note, style=theme().rows.note) |> ignore
       }
     })
     |> ignore
@@ -1248,7 +1248,7 @@ pub fn check_row(c : @ui.Ctx, key : String, label : String, on : Bool, note? : S
     c.box(style=switch_row_words, fn() {
       c.text(label, style=r.title) |> ignore
       if note != "" {
-        c.text(note, style=switch_row_note) |> ignore
+        c.text(note, style=theme().rows.note) |> ignore
       }
     })
     |> ignore
@@ -1278,9 +1278,6 @@ let switch_row_box : @ui.Style = @ui.css("row w=Full align=ACenter gap=S4")
 // kept across runs: a value (no field of it changes)
 let switch_row_words : @ui.Style = @ui.css("w=Grow(1.0) gap=S0_5")
 
-///|
-// kept across runs: a value (no field of it changes)
-let switch_row_note : @ui.TextStyle = @ui.text_style(size=Xs, leading=L5, color=Muted)
 
 ///|
 /// A titled block of a page (parts.tsx Section, page.css.ts section, parts.css.ts sectionHead): its title (14 on 22,

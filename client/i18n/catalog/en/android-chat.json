@@ -224,6 +224,9 @@
     "one": "1 mark",
     "other": "{n} marks"
   },
+  "android-chat.preview.move": "Move the page",
+  "android-chat.preview.move.note": "While on, a finger drags the canvas instead of using the page",
+  "android-chat.preview.moveOff": "Stop moving the page",
   "android-chat.preview.notFound": "Service not found: {error}",
   "android-chat.preview.pick": "Tap an element",
   "android-chat.preview.pickMore": "Tap more to add",

@@ -13,12 +13,12 @@
 // (its name, then its path; typed, it goes there), marking it. The page fills what is under the bar, or is laid out at
 // a size of its own (a phone's, a tablet's, a laptop's, a desktop's, one typed) on the grey of a canvas, fitted and
 // centred, with its screen's corners; the ground dragged moves it, two fingers zoom it, a double tap fits it again: the
-// toolbar under it chooses (自适应, the sizes, 自定义), turns it, moves it by a finger (移动) and fits it again (适应);
-// held down it folds away and the bar's size button opens it again. A service being started again is said over the
-// page, which loads anew once it is back; one stopped, or not found, is said in its place.
+// bar's size key chooses (the sizes, 自定义, turned; 移动页面, 适应), as on every screen (sfpages' service.mbt). A
+// service being started again is said over the page, which loads anew once it is back; one stopped, or not found, is
+// said in its place.
 //
-// The size chosen and the toolbar folded are kept on the device (the core's prefs `previewSizes`, `previewFolded`;
-// Preview.kt keeps them in its own); the address is typed with the keyboard for addresses, its key 前往.
+// The size chosen is kept on the device (the core's prefs `previewSizes`); the address is typed with the keyboard for
+// addresses, its key 前往.
 //
 // Not yet, against the Android app (each waits on something mbui's hosts or the core do not do yet): a marked picture's
 // pin and edge as the page shows them (drawn as an image's marks are), and on Android the top page's fetch() on its

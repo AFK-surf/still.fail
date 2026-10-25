@@ -2,7 +2,7 @@
 // port), its page from the chat's jobs: the page drawn by a web view whose every request goes through the core to the
 // station (station.preview: its HTML, its stylesheet, what its script fetches; the view's requests as the run's host
 // made them, on its record: mbui's site lines), where it is typed in the bar (b.html), back in the page's own history,
-// shown at a phone's width, left by its bar's 对话. (19107: the service's port as the run's local still.fail gives it,
+// shown at a phone's width (its bar's size key's sheet), left by its bar's 对话. (19107: the service's port as the run's local still.fail gives it,
 // e2e-E's: E2E_PORT + 7.)
 
 ///|
@@ -26,7 +26,7 @@ test "47-service-page" {
     // the service: its page pushed, the site view loading it
     f.tap("在线")
     f.run_to(@ui.nav_rest())
-    f.see("自适应")
+    f.see("=e2e-web")
     // the page as the site view asks for it through the core (station.preview): its HTML, its stylesheet, its data
     f.answered("station.preview", 3)
     // a second page typed in the bar, then back in the page's own history: the bar says where it is
@@ -40,7 +40,11 @@ test "47-service-page" {
     f.answered("station.preview", 4)
     f.tap("icon:arrow-left")
     f.gone("/b.html")
+    // its size from the bar's size key, in the presenters' sheet (a phone's)
+    f.tap("icon:devices")
+    f.run_to(@kit.sheet_rest("sf-present"))
     f.tap("手机")
+    f.run_to(@kit.sheet_rest("sf-present"))
     // left by its bar's 对话 (the system's back would step the page back first while it has a page behind it, as the
     // view says: service_link_wbtest.mbt)
     f.tap("=对话")
