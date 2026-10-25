@@ -616,26 +616,62 @@ fn service_toolbar(c : @ui.Ctx, p : ServicePage) -> Unit {
       clip=true,
       id=bar,
       fn() {
-        // (scrolled sideways where they do not all fit)
-        c.sideways("service/sizes", w=Fill(1.0), fn() {
-          c.box(dir=Row, gap=2.0, align=ACenter, fn() {
-          if size_chip(c, "service/fit", svc("android-chat.preview.fit"), p.viewport is None) {
-            set(None)
+        // the sizes (key, words, chosen, the k-th to leave the row short of room, what it does opened from where): where
+        // they have not all the room, the largest leave first, never the one chosen, offered in a ⋯ at the end instead
+        // (in their order): nothing scrolled, nothing wrapped
+        let custom = sized && preset is None
+        let sizes : Array[(String, String, Bool, Int, (@sf.Anchor) -> Unit)] = [
+          ("fit", svc("android-chat.preview.fit"), p.viewport is None, 6, fn(_) { set(None) }),
+        ]
+        for pr in svc_presets {
+          let on = preset == Some(pr.0)
+          let leaves = match pr.0 {
+            "phone" => 5
+            "tablet" => 3
+            "laptop" => 2
+            _ => 1
           }
-          for pr in svc_presets {
-            let label = svc("android-chat.preview.preset." + pr.0)
-            if size_chip(c, "service/" + pr.0, label, preset == Some(pr.0)) && preset != Some(pr.0) {
-              set(Some({ width: pr.1, height: Some(pr.2) }))
+          sizes.push(
+            (
+              pr.0,
+              svc("android-chat.preview.preset." + pr.0),
+              on,
+              leaves,
+              fn(_) {
+                if !on {
+                  set(Some({ width: pr.1, height: Some(pr.2) }))
+                }
+              },
+            ),
+          )
+        }
+        let custom_words = match p.viewport {
+          Some(v) if custom => dims(v.width, v.height)
+          _ => svc("android-chat.preview.custom")
+        }
+        sizes.push(("custom", custom_words, custom, 4, fn(from) { service_sizes_panel(key, from) }))
+        let slot = fn(k : String) { c.id("service/size-slot/" + k) }
+        let more = c.id("service/sizes-more")
+        let gone : Array[@sf.MenuItem?] = []
+        for x in sizes {
+          if !x.2 && c.left_out(slot(x.0)) {
+            gone.push(Some(@sf.menu_item_of(x.1, fn() { (x.4)(Of(more)) })))
+          }
+        }
+        c.box(style=service_sizes_row, fn() {
+          for x in sizes {
+            c.box(id=slot(x.0), taps=false, drop=if x.2 { 0 } else { x.3 }, fn() {
+              if size_chip(c, "service/" + x.0, x.1, x.2) {
+                (x.4)(Of(c.id("service/" + x.0)))
+              }
+            })
+            |> ignore
+          }
+          // (the ⋯, there only while a size is out)
+          c.box(more=true, fn() {
+            if size_chip(c, "service/sizes-more", service_sizes_more, false) {
+              @sf.menu(gone, from=Of(more), along=End)
             }
-          }
-          let custom = sized && preset is None
-          let label = match p.viewport {
-            Some(v) if custom => dims(v.width, v.height)
-            _ => svc("android-chat.preview.custom")
-          }
-          if size_chip(c, "service/custom", label, custom) {
-            service_sizes_panel(key, Of(c.id("service/custom")))
-          }
           })
           |> ignore
         })
@@ -734,7 +770,9 @@ let fit_view_words : @ui.TextStyle = @ui.text_style(size=Sm, weight=Medium, colo
 fn size_chip(c : @ui.Ctx, key : String, label : String, on : Bool) -> Bool {
   let t = @sf.theme()
   let id = c.id(key)
+  // (in a row: its words never squeezed, a size short of room leaving whole)
   c.box(
+    dir=Row,
     h=Px(36.0),
     radius=18.0,
     padx=13.0,
@@ -753,6 +791,15 @@ fn size_chip(c : @ui.Ctx, key : String, label : String, on : Bool) -> Bool {
   |> ignore
   c.clicked(id)
 }
+
+///|
+/// The sizes in a line, 2 apart, taking what the toolbar leaves (what does not fit leaves it for its ⋯).
+// kept across runs: a value (no field of it changes)
+let service_sizes_row : @ui.Style = @ui.style(row=true, w=@sf.grow, gap=S0_5, align=ACenter)
+
+///|
+/// What stands for the sizes that left the line.
+let service_sizes_more : String = "⋯"
 
 ///|
 /// The preset a size is (either way round), if it is one.

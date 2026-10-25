@@ -240,6 +240,19 @@ fn ScreenRig::tap_label(self : ScreenRig, label : String) -> Unit {
 }
 
 ///|
+/// Key `label` of the keys row pressed: in the row, else (the row short of room for it) the row turned to it by its
+/// ⋯, then back.
+fn ScreenRig::press_key(self : ScreenRig, label : String) -> Unit {
+  if self.labelled(label) is Some(_) {
+    self.tap_label(label)
+    return
+  }
+  self.tap_label(tr("common.more"))
+  self.tap_label(label)
+  self.tap_label(tr("common.more"))
+}
+
+///|
 fn ScreenRig::tap_at(self : ScreenRig, x : Double, y : Double) -> Unit {
   let (px, py) = self.at(x, y)
   self.t.tap(px, py)
@@ -379,9 +392,9 @@ test "a trackpad moves the pointer and clicks where it points; two fingers tappe
   assert_true(r.t.haptics().contains(@ui.ContextClick))
   // ⌘ held, then Tab: ⌘Tab; Tab again goes alone
   let from = r.inputs().length()
-  r.tap_label("Command")
-  r.tap_label("Tab")
-  r.tap_label("Tab")
+  r.press_key("Command")
+  r.press_key("Tab")
+  r.press_key("Tab")
   let keys = r.inputs()[from:].to_array()
   assert_eq(keys.length(), 4)
   assert_eq(text(Some(keys[0]), "code"), "Tab")
@@ -406,7 +419,7 @@ test "the keyboard: words committed go as text, Enter between lines; with ⌘ he
   let ins = r.inputs()
   assert_eq(text(Some(ins[0]), "t"), "text")
   assert_eq(text(Some(ins[0]), "text"), "hi 你好")
-  r.tap_label("Command")
+  r.press_key("Command")
   r.t.type_text("c")
   let k = r.inputs()[1:].to_array()
   assert_eq(k.length(), 2)
@@ -416,6 +429,28 @@ test "the keyboard: words committed go as text, Enter between lines; with ⌘ he
   // only looking: the keyboard goes
   r.state("live", control=false, others=[])
   assert_true(!r.t.key_catching())
+  screen_done(r.t)
+}
+
+///|
+test "the keys row short of room on a phone: Esc and the arrows in it, the least used out; its ⋯ turns it to them, a modifier held there stays in it once back" {
+  let r = screen_rig()
+  r.live(others=[])
+  assert_true(r.labelled("Esc") is Some(_))
+  assert_true(r.labelled(tr("android-misc.screen.key.left")) is Some(_))
+  assert_true(r.labelled(tr("android-misc.screen.key.option")) is None)
+  // turned: the keys that were out, Esc not among them
+  r.tap_label(tr("common.more"))
+  assert_true(r.labelled(tr("android-misc.screen.key.option")) is Some(_))
+  assert_true(r.labelled("Esc") is None)
+  r.tap_label(tr("android-misc.screen.key.option"))
+  // back: ⌥ held, in the row with Esc
+  r.tap_label(tr("common.more"))
+  assert_true(r.labelled("Esc") is Some(_))
+  let opt = r.t.get(@ui.Button, label=tr("android-misc.screen.key.option"))
+  assert_eq(opt.pressed, Some(true))
+  // nothing over another, nothing cut
+  assert_eq(r.t.squeeze_faults(), [])
   screen_done(r.t)
 }
 

@@ -266,9 +266,8 @@ pub fn ask_rename(c : @ui.Ctx, src : Source, b : Browse, in_ : DriveAt, e : DvEn
 
 ///|
 /// Where the folder is under its root (Crumbs): the root, then each folder down to this one, each but the last a way
-/// to it; scrolled across when long, its end in view.
+/// to it (way_line: those between in its … where the line is short).
 fn narrow_crumbs(c : @ui.Ctx, f : FolderOf) -> Unit {
-  let t = @sf.theme()
   let at = f.at
   let root = at.root.unwrap_or("")
   let parts = at.path.split("/").filter(fn(p) { p != "" }).map(fn(p) { p.to_owned() }).to_array()
@@ -278,27 +277,23 @@ fn narrow_crumbs(c : @ui.Ctx, f : FolderOf) -> Unit {
     so_far = dv_join(so_far, p)
     levels.push((p, so_far))
   }
-  c.sideways("files/narrow/crumbs/" + at.station + "/" + root, to_end="/" + at.path, fn() {
-    c.box(style=narrow_crumbs_row, fn() {
-      for i, l in levels {
-        let (label, to) = l
-        if i > 0 {
-          @sf.icon(c, "chevron-right", size=narrow_crumb_chevron, color=t.p.subtle) |> ignore
-        }
-        let last = i == levels.length() - 1
-        let id = c.id("files/narrow/crumb/\{i}")
-        if !last && c.clicked(id) {
-          (f.go)({ ..at, path: to }, false)
-        }
-        c.box(style=narrow_crumb, id=if last { 0 } else { id }, fn() {
-          c.text(label, style=if last { narrow_crumb_here } else { narrow_crumb_words }) |> ignore
-        })
-        |> ignore
-      }
-    })
-    |> ignore
+  way_line(c, "files/narrow/crumbs/" + at.station + "/" + root, levels.map(fn(l) { l.0 }), narrow_way(), fn(i) {
+    (f.go)({ ..at, path: levels[i].1 }, false)
   })
-  |> ignore
+}
+
+///|
+/// The crumbs (mCrumbs): 20 in, a crumb 4 round, the way's muted, where it is in the words' colour, the chevrons
+/// subtle.
+fn narrow_way() -> WayLook {
+  {
+    line: narrow_crumbs_row,
+    step: narrow_crumb,
+    words: narrow_crumb_words,
+    here: narrow_crumb_here,
+    chevron: narrow_crumb_chevron,
+    chevron_ink: @sf.theme().p.subtle,
+  }
 }
 
 ///|

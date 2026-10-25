@@ -280,24 +280,9 @@ fn picker(c : @ui.Ctx, src : Source, station : String) -> Unit {
     None => []
   }
   c.box(style=if narrow { picker_path_narrow } else { picker_path }, fn() {
-    c.box(style=picker_crumbs, fn() {
-      for i, step in way {
-        let (name, p) = step
-        if i > 0 {
-          @sf.icon(c, "chevron-right", size=crumb_icon, color=t.p.muted) |> ignore
-        }
-        let last = i == way.length() - 1
-        let id = c.id("drive/picker/way/\{i}")
-        if !last && c.clicked(id) {
-          picker_go(c, src, station, Some(p))
-        }
-        c.box(style=crumb_box, id=if last { 0 } else { id }, fn() {
-          c.text(name, style=if last { crumb_last } else { crumb_words }) |> ignore
-        })
-        |> ignore
-      }
+    way_line(c, "drive/picker/way", way.map(fn(w) { w.0 }), picker_way(), fn(i) {
+      picker_go(c, src, station, Some(way[i].1))
     })
-    |> ignore
     if !dialogs.denied && dialogs.error == "" {
       c.box(style=if narrow { picker_filter_narrow } else { picker_filter }, fn() {
         @sf.input(c, "drive/picker/filter", placeholder=@sf.t("web-pages.drive.pickFilter"), field=dialogs.filter) |> ignore
@@ -473,8 +458,22 @@ let pick_meta : @ui.TextStyle = @ui.text_style(size=Xs, color=Muted, wrap=false)
 let picker_path : @ui.Style = @ui.css("row w=Full min_h=S9 pb=S2_5 gap=S3 align=ACenter")
 
 ///|
+/// Its trail (pickerCrumbs): 1 apart, a crumb 4 by 2 in, the way's muted, where it is bold in the words' colour, the
+/// chevrons muted (way_line: those between in its … where the line is short).
+fn picker_way() -> WayLook {
+  {
+    line: picker_trail,
+    step: crumb_box,
+    words: crumb_words,
+    here: crumb_last,
+    chevron: crumb_icon,
+    chevron_ink: @sf.theme().p.muted,
+  }
+}
+
+///|
 // kept across runs: a value (no field of it changes)
-let picker_crumbs : @ui.Style = @ui.style(row=true, w=@sf.grow, gap=SPx, align=ACenter, clip=true)
+let picker_trail : @ui.Style = @ui.style(row=true, w=@sf.grow, gap=SPx, align=ACenter)
 
 ///|
 // kept across runs: a value (no field of it changes)

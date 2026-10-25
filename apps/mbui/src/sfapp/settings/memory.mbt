@@ -174,10 +174,7 @@ fn memory_doc_page(c : @ui.Ctx, core : Core, address : String, skill : String, a
     }
     if pages.length() > 1 {
       blocks.push(fn() {
-        let got = doc_chips(c, key, pages, i)
-        if got != i {
-          doc_picked[key] = got
-        }
+        doc_chips(c, key, pages, i, fn(got) { doc_picked[key] = got })
       })
     }
     blocks.push(fn() {
@@ -194,43 +191,86 @@ fn memory_doc_page(c : @ui.Ctx, core : Core, address : String, skill : String, a
 }
 
 ///|
-/// Pages to pick between as a row of pills (Memory.kt DocChips): each with how much is in it; the one shown in ink.
-/// Answers the one picked.
-fn doc_chips(c : @ui.Ctx, key : String, pages : Array[(String, String, String)], picked : Int) -> Int {
+/// Pages to pick between as a row of pills (Memory.kt DocChips): each with how much is in it; the one shown (`picked`)
+/// in ink. Where the row has not the room for them all, the last leave it first (never the one shown), offered in a ⋯
+/// pill at its end instead (a pick of them, in their order): nothing scrolled, nothing wrapped. `pick`: one picked.
+fn doc_chips(
+  c : @ui.Ctx,
+  key : String,
+  pages : Array[(String, String, String)],
+  picked : Int,
+  pick : (Int) -> Unit,
+) -> Unit {
   let t = @sf.theme()
-  let mut got = picked
-  // scrolled across when they do not fit (Memory.kt DocChips: horizontalScroll)
+  let n = pages.length()
+  let slot = fn(i : Int) { c.id(key + "/chip-slot/" + i.to_string()) }
+  // those the row left out as last laid out (read back: the frame is built again where that changes)
+  let gone : Array[@sf.Choice] = []
+  for i, p in pages {
+    if i != picked && c.left_out(slot(i)) {
+      gone.push(@sf.choice(i.to_string(), p.0, note=p.1))
+    }
+  }
+  // a pill: its words and how much is in it beside them, the one shown in ink
+  let pill = fn(id : Int, words : String, much : String, on : Bool) {
+    c.box(dir=Row, padx=14.0, pady=7.0, radius=16.0, bg=if on { t.p.text } else { t.p.chip }, id~, fn() {
+      c.text(words, size=13.0, weight=if on { 600 } else { 400 }, color=if on { t.p.bg } else { t.p.text }, wrap=false)
+      |> ignore
+      if much != "" {
+        c.text("  " + much, size=13.0, color=@sf.alpha(if on { t.p.bg } else { t.p.text }, 0.6), wrap=false) |> ignore
+      }
+    })
+    |> ignore
+  }
   c.box(style=doc_chips_room, fn() {
-    c.sideways(key + "/chips", padx=12.0, fn() {
-      c.box(dir=Row, gap=6.0, fn() {
-        for i, p in pages {
-          let on = i == picked
-          let id = c.id(key + "/chip/" + i.to_string())
-          if hit(c, id) {
-            got = i
-          }
-          c.box(dir=Row, padx=14.0, pady=7.0, radius=16.0, bg=if on { t.p.text } else { t.p.chip }, id~, fn() {
-            c.text(p.0, size=13.0, weight=if on { 600 } else { 400 }, color=if on { t.p.bg } else { t.p.text }, wrap=false)
-            |> ignore
-            if p.1 != "" {
-              c.text("  " + p.1, size=13.0, color=@sf.alpha(if on { t.p.bg } else { t.p.text }, 0.6), wrap=false) |> ignore
-            }
-          })
-          |> ignore
+    c.box(style=doc_chips_row, fn() {
+      for i, p in pages {
+        let id = c.id(key + "/chip/" + i.to_string())
+        if hit(c, id) {
+          pick(i)
         }
+        c.box(id=slot(i), taps=false, drop=if i == picked { 0 } else { n - i }, fn() { pill(id, p.0, p.1, i == picked) })
+        |> ignore
+      }
+      // (the ⋯, there only while a page is out)
+      c.box(more=true, fn() {
+        let id = c.id(key + "/chips-more")
+        if hit(c, id) {
+          @sf.pick(
+            "",
+            gone,
+            "",
+            fn(k) {
+              for i in 0..<n {
+                if i.to_string() == k {
+                  pick(i)
+                }
+              }
+            },
+            from=Of(id),
+          )
+        }
+        pill(id, doc_chips_more, "", false)
       })
       |> ignore
     })
     |> ignore
   })
   |> ignore
-  got
 }
 
 ///|
-/// The pills' room: 10 over what is under them; 12 in from the page's sides as they scroll (Memory.kt:243).
+/// What stands for the pages that left the row.
+let doc_chips_more : String = "⋯"
+
+///|
+/// The pills' room: 10 over what is under them; their row 12 in from the page's sides, 6 between (Memory.kt:243).
 // kept across runs: a value (no field of it changes)
 let doc_chips_room : @ui.Style = @ui.css("w=Full pb=S2_5")
+
+///|
+// kept across runs: a value (no field of it changes)
+let doc_chips_row : @ui.Style = @ui.css("row w=Full px=S3 gap=S1_5 align=ACenter")
 
 ///|
 /// The card a skill's when and sharing are on: a card (20 down, 22 round) whose rows reach 8 from its sides, as

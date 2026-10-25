@@ -928,18 +928,33 @@ pub fn marks_foot(c : @ui.Ctx) -> Unit {
   // (over the picture: FilePreview.kt's darkGlass, as MarksTools has it)
   let glass = dark_glass()
   c.box(w=Fill(1.0), pb=8.0, gap=10.0, align=ACenter, fn() {
-    // the notes said so far, a card each, scrolled across when they do not fit (ImageMarks.kt: horizontalScroll)
+    // the notes said so far, a card each; where they do not all fit, the last leave the row first, a +N card at its
+    // end standing for them (a menu of them, in their order): nothing scrolled, nothing wrapped
     let notes = mark_notes()
     if notes.length() > 0 {
-      c.sideways("marks/notes", padx=16.0, fn() {
-        c.box(dir=Row, gap=8.0, fn() {
-          for x in notes {
-            let id = c.id("marks/card/\{x.0}")
-            if c.clicked(id) {
-              marks_open_note(c, x.0)
-            }
-            note_card(c, x, id)
+      let n = notes.length()
+      let slot = fn(mid : Int) { c.id("marks/card-slot/\{mid}") }
+      // (those the row left out as last laid out: read back, the frame built again where that changes)
+      let gone : Array[@sf.MenuItem?] = []
+      for x in notes {
+        if c.left_out(slot(x.0)) {
+          gone.push(Some(@sf.menu_item_of("\{x.1}  " + note_said(x.0), fn() { marks_open_note(c, x.0) })))
+        }
+      }
+      c.box(style=marks_notes_row, fn() {
+        for i, x in notes {
+          let id = c.id("marks/card/\{x.0}")
+          if c.clicked(id) {
+            marks_open_note(c, x.0)
           }
+          c.box(id=slot(x.0), taps=false, drop=n - i, fn() { note_card(c, x, id) }) |> ignore
+        }
+        c.box(more=true, fn() {
+          let id = c.id("marks/notes-more")
+          if c.clicked(id) {
+            @sf.menu(gone, from=Of(id), along=End)
+          }
+          note_tray_card(c, id, note_more_w, fn() { note_first(c, "+\{gone.length()}", false) })
         })
         |> ignore
       })
@@ -1106,21 +1121,54 @@ pub fn note_box(c : @ui.Ctx, note : (Int, Int, String, Int64)) -> Unit {
 pub fn note_card(c : @ui.Ctx, note : (Int, Int, String, Int64), id : Int) -> Unit {
   let (mid, n, what, color) = note
   let said = marking.comments.get(mid).unwrap_or("").trim(chars=" \n\t").to_string()
-  let pin_in = @sf.capsule_in(note_card_corner, note_pin)
-  c.box(w=Px(160.0), pl=pin_in, pr=note_card_end, pt=pin_in - (note_first_line - note_pin) / 2.0, pb=note_card_foot, gap=3.0, radius=note_card_corner, bg=note_ground, shadow=@sf.floating.sigma, shadow_y=@sf.floating.dy, shadow_color=@sf.floating.color, id~, fn() {
+  note_tray_card(c, id, note_card_w, fn() {
     c.box(style=card_head, fn() {
       picture_pin(c, n, color, note_pin) |> ignore
-      c.box(w=Fill(1.0), clip=true, fn() {
-        c.text(if said == "" { pv("android-chat.annotate.quoteOnly") } else { said }, size=14.0, line=20.0, color=if said == "" { note_muted } else { note_ink }, wrap=false)
-        |> ignore
-      })
-      |> ignore
+      note_first(c, note_said(mid), said == "")
     })
     |> ignore
     c.text(what, size=12.0, line=17.0, color=note_muted, wrap=false) |> ignore
   })
+}
+
+///|
+/// What is said of note `mid`, else 只引用.
+fn note_said(mid : Int) -> String {
+  match marking.comments.get(mid).unwrap_or("").trim(chars=" \n\t").to_string() {
+    "" => pv("android-chat.annotate.quoteOnly")
+    said => said
+  }
+}
+
+///|
+/// A card in the notes' tray, `w` wide (frosted, round by the ladder's row step, its first line level with a pin
+/// concentric in its corner): `body` in it.
+fn note_tray_card(c : @ui.Ctx, id : Int, w : Double, body : () -> Unit) -> Unit {
+  let pin_in = @sf.capsule_in(note_card_corner, note_pin)
+  c.box(w=Px(w), pl=pin_in, pr=note_card_end, pt=pin_in - (note_first_line - note_pin) / 2.0, pb=note_card_foot, gap=3.0, radius=note_card_corner, bg=note_ground, shadow=@sf.floating.sigma, shadow_y=@sf.floating.dy, shadow_color=@sf.floating.color, id~, body)
   |> ignore
 }
+
+///|
+/// A tray card's first line: `words`, muted where `quiet` (only quoting), cut by its card where long.
+fn note_first(c : @ui.Ctx, words : String, quiet : Bool) -> Unit {
+  c.box(w=Fill(1.0), clip=true, fn() {
+    c.text(words, size=14.0, line=20.0, color=if quiet { note_muted } else { note_ink }, wrap=false) |> ignore
+  })
+  |> ignore
+}
+
+///|
+/// A note's card's width, and the +N card's standing for those that left the tray (a picture's tile's).
+let note_card_w : Double = 160.0
+
+///|
+let note_more_w : Double = 56.0
+
+///|
+/// The notes' tray: 16 in from the sides, 8 between.
+// kept across runs: a value (no field of it changes)
+let marks_notes_row : @ui.Style = @ui.css("row w=Full px=S4 gap=S2")
 
 ///|
 /// A note's card's corner in the tray: the ladder's row step (Notes.kt Card's 16 before it), its pin concentric in it;

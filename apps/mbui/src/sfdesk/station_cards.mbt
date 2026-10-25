@@ -68,9 +68,10 @@ fn dial(c : @ui.Ctx, number : String, unit : String, fill : Int, level : String,
 
 ///|
 /// This device's connection to it (Net, flush): how it goes and packets lost over its round trip; beside them ↑ over ↓,
-/// the speed each way and what went that way since it opened. The figures in the words' ink, one off in its level's.
+/// the speed each way and what went that way since it opened (under them where the line has not the room: no figure
+/// cut short, nothing over another). The figures in the words' ink, one off in its level's.
 fn station_net(c : @ui.Ctx, net : Json?) -> Unit {
-  c.box(style=nt_row, fn() {
+  c.box(style=nt_row, flow=true, line_gap=nt_lines, fn() {
     c.box(style=nt_part, fn() {
       c.box(style=nt_line, fn() {
         c.text(text(net, "path"), style=nt_words_cut) |> ignore
@@ -436,9 +437,13 @@ let dl_label : @ui.TextStyle = @ui.text_style(size=Sm, leading=L6, weight=Medium
 let dl_reset : @ui.TextStyle = @ui.text_style(size=Xs, leading=L5, color=Muted, wrap=false)
 
 ///|
-/// The connection (net: 14 apart, the ui's 13 muted, its figures bold in the words' ink).
+/// The connection (net: 14 apart, 8 between its lines where the speeds go under, the ui's 13 muted, its figures bold
+/// in the words' ink).
 // kept across runs: a value (no field of it changes)
 let nt_row : @ui.Style = @ui.css("row gap=S3_5 align=ACenter")
+
+///|
+let nt_lines : Double = 8.0
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -462,7 +467,7 @@ let nt_words_cut : @ui.TextStyle = @ui.text_style(size=Sm, leading=L6, color=Mut
 let nt_figure : @ui.TextStyle = @ui.text_style(size=Sm, leading=L6, weight=Medium, color=Fg, wrap=false)
 
 ///|
-/// ↑ over ↓ (netRates: the speed 9.5 characters wide, its total after it).
+/// ↑ over ↓ (netRates: the speed 9.5 characters wide at least, so the totals line up; its total after it).
 // kept across runs: a value (no field of it changes)
 let nt_rates : @ui.Style = @ui.css("gap=S0_5")
 
@@ -472,7 +477,7 @@ let nt_rate : @ui.Style = @ui.css("row gap=S1_5 align=ACenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let nt_speed : @ui.Style = @ui.css("w=S20")
+let nt_speed : @ui.Style = @ui.css("min_w=S20")
 
 ///|
 /// The rest of a machine (hostDetails: its labels beside each, 14 apart, rows 8 apart, the meta's 12 muted).
