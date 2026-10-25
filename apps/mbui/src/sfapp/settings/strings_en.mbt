@@ -1557,8 +1557,6 @@ let en : Map[String, String] = {
   "web-main.shortcuts.title": "Shortcuts",
   "web-main.shortcuts.unset": "Not set",
   "web-pages.settings.nav.version": "Version",
-  "web-pages.version.title": "{name} desktop",
-  "web-pages.version.lead": "Checks automatically at launch and every 4 hours. When a new version is available, “Update” appears at the top of the sidebar.",
   "web-pages.localStation.title": "This machine's station",
   "web-pages.localStation.lead": "Manage the station on this Mac here, whether it comes with the {name} app or is installed separately. Which workspace it joins is set in each workspace's Station settings.",
   "web-pages.localStation.leadPc": "Manage the station on this PC here, whether it comes with the {name} app or is installed separately. Which workspace it joins is set in each workspace's Station settings.",

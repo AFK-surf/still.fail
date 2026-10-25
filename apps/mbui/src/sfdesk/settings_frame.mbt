@@ -47,7 +47,7 @@ fn setting_page(c : @ui.Ctx, src : Source, w : Workspace, route : Route) -> Unit
 /// frame's pane: back, the room over and under it). False for a route whose pages are not one yet (its frame draws its
 /// own copy).
 pub fn setting_route(c : @ui.Ctx, src : Source, w : Workspace, route : Route, frame : PageFrame) -> Bool {
-  if !(route is (Appearance | Fonts | BarSettings | About | Changelog | Memories | Memory(_) | AutoDecisions | Permissions | Version | UsagePrices(_) | Usage | Archiving | StationArchiving(_) | Notifications | PickModels(_, _) | ProfileModels(_, _) | Shortcuts | Me | Workspace | Security | SecurityOpen | Vault | VaultItem(_, _) | Connects(_) | Connect(_, _) | Station(_) | Profile(_, _))) {
+  if !(route is (Appearance | Fonts | BarSettings | About | Changelog | Memories | Memory(_) | AutoDecisions | Permissions | UsagePrices(_) | Usage | Archiving | StationArchiving(_) | Notifications | PickModels(_, _) | ProfileModels(_, _) | Shortcuts | Me | Workspace | Security | SecurityOpen | Vault | VaultItem(_, _) | Connects(_) | Connect(_, _) | Station(_) | Profile(_, _))) {
     return false
   }
   let core = settings_core(src, w)
@@ -64,7 +64,6 @@ pub fn setting_route(c : @ui.Ctx, src : Source, w : Workspace, route : Route, fr
     Memory(a) => memory_page(c, core, here, frame, a)
     AutoDecisions => decisions_page(c, core, here, frame)
     Permissions => permissions_page(c, core, frame)
-    Version => version_page(c, core, frame)
     UsagePrices(days) => usage_prices_page(c, core, here, frame, days)
     Usage => usage_page(c, core, here, frame)
     Archiving => archiving_page(c, core, here, frame)
@@ -191,7 +190,6 @@ fn settings_side(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
       page(Route::About, "about", "info", @sf.t("web-pages.settings.nav.about"))
       // the desktop's own (cloud/settings.tsx: the client's part)
       page(Route::Shortcuts, "shortcuts", "command", @sf.t("web-pages.settings.nav.shortcuts"))
-      page(Route::Version, "version", "info", @sf.t("web-pages.settings.nav.version"))
       if @ui.platform() == 0 {
         page(Route::LocalStation, "local-station", "monitor", @sf.t("web-pages.localStation.title"))
       }

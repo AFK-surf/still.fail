@@ -560,7 +560,7 @@ pub using @sfbase {
   own_code_face,
   preview_faces_from,
   face_here,
-  update_row_words,
+  update_stands,
   update_row_tapped,
   notice_host,
   notice_state,

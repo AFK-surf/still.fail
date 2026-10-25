@@ -41,9 +41,9 @@ pub(all) struct Core {
   push_sync : (Bool?) -> Unit
   /// what the page under this one is: "chats" (Home), "settings", or "" (another)
   under : () -> String
-  /// the version row's words at its end and whether they are the accent's (an update: 更新到 …, how far, 检查更新)
-  version_words : () -> (String, Bool)
-  /// the version row tapped: a newer build installed, or still.fail cloud asked now
+  /// how this build's update stands (关于's version row, settings' 关于 row)
+  version_now : () -> VersionNow
+  /// the version row's button pressed: a newer build installed, or still.fail cloud asked now
   version_tap : () -> Unit
   /// 本机 Station's installer run (the app's local_station.mbt): `true` a station downloaded and joined to this
   /// workspace (none here), `false` the one here brought up to the latest release and run as a service
@@ -147,9 +147,8 @@ pub(all) enum Route {
   Changelog
   /// about this app, from settings' 关于 (SettingsHome.kt AboutScreen): this build, the changelog, the terms
   About
-  /// the desktop's own pages (src/sfdesk shortcuts.mbt, local_station.mbt): 快捷键, each action's keys changed here; 版本, this build and a newer one
+  /// the desktop's own page (src/sfdesk shortcuts.mbt): 快捷键, each action's keys changed here
   Shortcuts
-  Version
   /// this machine's station (local_station.mbt)
   LocalStation
   /// the wide frame's pages as the web's has them (src/sfdesk notifications.mbt, permissions.mbt): 通知, 权限, 归档
@@ -163,6 +162,14 @@ pub(all) enum Route {
   /// how a chat's agent runs (RunSettingsScreen): its station, its session's key
   RunSettings(String, String)
 } derive(Eq)
+
+///|
+/// How this build's update stands: what is under way (正在检查, 下载中 40%, 正在安装; "" while nothing is) and the
+/// newer build known, by its name ("" while none is).
+pub(all) struct VersionNow {
+  doing : String
+  newer : String
+}
 
 ///|
 /// The workspace in view and the account it is reached through (AppState's WorkspaceEntry).
@@ -623,7 +630,8 @@ pub fn route_of(name : String) -> Route? {
     "changelog" => Some(Changelog)
     "about" => Some(About)
     "shortcuts" => Some(Shortcuts)
-    "version" => Some(Version)
+    // (版本, a page of the desktop's once: this build and a newer one are 关于's on every screen)
+    "version" => Some(About)
     "local-station" => Some(LocalStation)
     "notifications" => Some(Notifications)
     "permissions" => Some(Permissions)

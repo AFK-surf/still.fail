@@ -73,7 +73,7 @@ fn route_page(c : @ui.Ctx, core : Core, here : Here, route : Route) -> Unit {
     Appearance | Fonts | BarSettings | Changelog | About | Memories | Memory(_) | AutoDecisions | UsagePrices(_) | Usage | PickModels(_, _) | ProfileModels(_, _) | Me | Workspace | Security | SecurityOpen | Vault | VaultItem(_, _) | Connects(_) | Connect(_, _) | Station(_) | Profile(_, _) => ()
     LocalStation => local_station_page(c, core)
     // the desktop's own, drawn by its frame (src/sfdesk)
-    Shortcuts | Version | Notifications | Permissions | Archiving | StationArchiving(_) => ()
+    Shortcuts | Notifications | Permissions | Archiving | StationArchiving(_) => ()
     RunSettings(s, key) => run_settings_page(c, core, s, key)
   }
 }
@@ -364,8 +364,13 @@ fn settings_home(c : @ui.Ctx, core : Core, here : Here) -> Unit {
     // 关于 (SettingsHome.kt AboutRow): this build, or the newer one there is
     fn() {
       list_card(c, fn() {
-        let (words, newer) = (core.version_words)()
-        if go_row(c, "go-about", tr("web-pages.settings.nav.about"), value=if newer { words } else { build_version() }, icon="info") {
+        let v = (core.version_now)()
+        let value = if v.newer != "" && v.doing == "" {
+          @sf.t("android-settings.version.update", args=[("version", v.newer)])
+        } else {
+          build_version()
+        }
+        if go_row(c, "go-about", tr("web-pages.settings.nav.about"), value~, icon="info") {
           (core.push)(About)
         }
       })

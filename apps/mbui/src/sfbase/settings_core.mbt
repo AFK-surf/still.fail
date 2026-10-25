@@ -73,7 +73,7 @@ pub fn settings_core_of(
         _ => ""
       }
     },
-    version_words: fn() { update_row_words() },
+    version_now: fn() { update_stands() },
     version_tap: fn() { update_row_tapped(src) },
     local_install: fn(join) { if join { local_station_install(src, w.id) } else { local_station_update() } },
     // the system's browser (LocalUriHandler.openUri); nothing took it, said so (android-misc.link.cantOpen)

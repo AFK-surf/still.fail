@@ -80,6 +80,26 @@ test "关于, at each width and with either hand: this build, 更新日志, the 
 }
 
 ///|
+test "关于's version row, at each width and with either hand: its button, 检查更新 or 更新到 the newer build; what is under way under the version, the button turning" {
+  for case in one_page_cases {
+    let (w, platform, regular, _) = case
+    let t = one_page_tester(@settings.Route::About, w, platform~, regular~)
+    let at = "\{w} platform \{platform}"
+    assert_true(t.query(Button, label="检查更新") is Some(_), msg=at)
+    update.available = Some({ "versionCode": 2, "versionName": "0.1.1", "file": "android/stillfail-2.apk" })
+    t.draw()
+    assert_true(t.query(Button, label="更新到 0.1.1") is Some(_), msg=at)
+    // pressed: still.fail cloud asked again before it is downloaded, said under the version; the button turning, its
+    // words kept, taking no press
+    update.installing = true
+    t.draw()
+    assert_true(t.find("正在检查最新版本") is Some(_), msg=at)
+    assert_true(t.find("更新到 0.1.1") is Some(_), msg=at)
+    assert_true(t.query(Button, label="更新到 0.1.1") is None, msg=at)
+  }
+}
+
+///|
 test "关于 on a phone: back goes to settings" {
   let t = one_page_tester(@settings.Route::About, 390.0, platform=2)
   t.tap_text("设置")
