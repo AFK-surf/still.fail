@@ -243,7 +243,7 @@ test("a part streamed to a player stops as the player lets go of it, or its page
 
 test("past their bound the least lately read go, never the one just read nor one being written", async () => {
   const host = new FakeHost();
-  const kept = new DriveKept(host, { file: 10, played: 100, chat: Number.POSITIVE_INFINITY, sent: 100 });
+  const kept = new DriveKept(host, { file: 10, played: 100, chat: Number.POSITIVE_INFINITY, sent: 100, outbox: Number.POSITIVE_INFINITY });
   const run = <A>(e: Effect.Effect<A>) => Effect.runPromise(e);
   const ids = ["one", "two", "three"].map((n) => keptId(ST, ROOT, n));
   for (const id of ids) {
