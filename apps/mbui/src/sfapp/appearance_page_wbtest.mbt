@@ -1,5 +1,5 @@
 // 外观, one page in every frame (src/sfdesk appearance.mbt): at a width of each tier, with touch and on a
-// computer; the faces a row opening 字体 on every screen; laid out wide the rail changed in place; the files dragged
+// computer; 字体 a section, the faces chosen a row opening its page on every screen; laid out wide the rail changed in place; the files dragged
 // into a chat keyboard and mouse's alone. 字体 and 下方栏 one page each on every screen too.
 
 ///|
@@ -24,10 +24,10 @@ test "外观, at each width on either screen: 主题, 字体, 动画, 语言; �
     } else if w >= 1100.0 {
       assert_true(t.find("自定义侧边条") is Some(_), msg=at)
     }
-    // back up, the faces' row opens 字体's page
+    // back up, the faces' row (under 字体, the faces chosen) opens 字体's page
     t.wheel(w / 2.0, 450.0, -3000.0)
     t.run_for(@ui.nav_push_ms)
-    tap_in_page(t, "字体")
+    tap_in_page(t, "默认")
     t.run_for(@ui.nav_push_ms)
     assert_true(app.nav.top() == Setting(@settings.Route::Fonts), msg=at)
   }

@@ -437,8 +437,11 @@ pub fn heading(c : @ui.Ctx, title : String, note? : String = "", actions? : () -
 }
 
 ///|
-/// Rows together: narrow, on a rounded card (ListCard: 12 from the page's sides, 10 under it, its rows 8 in); wide, the
-/// web's list on the page (its rows on nothing but the pointer's ground), or on a card where `card` (pages.css.ts card).
+/// Rows together, on a list card on every page (docs/ui-panels.md 页面卡片, 列表卡: what a group of settings is, the same
+/// on a narrow page and a wide one; the user, 2026-10-26, 「设置感觉很乱」: a wide page's rows on the page and its cards
+/// mixed for no reason): narrow, ListCard (12 from the page's sides, 10 under it, its rows 8 in); wide, at the column's
+/// edges, its rows' grounds 10 in from its edges and 2 apart, their words 20 in, as a content card's (`card`: words on a
+/// card, pages.css.ts card).
 pub fn group(c : @ui.Ctx, body : () -> Unit, card? : Bool = false) -> Unit {
   match look() {
     Narrow =>
@@ -455,9 +458,11 @@ pub fn group(c : @ui.Ctx, body : () -> Unit, card? : Bool = false) -> Unit {
     Wide =>
       wide_alone(c, fn() {
         c.box(style=if card { desk_card } else { desk_list }, fn() {
-          // (a wide list reaches past the column: what is not one of its rows stands in as far as its rows' words)
+          // (what is not one of its rows stands in as far as its rows' words; its rows' grounds round in its corners)
           in_list.val += if card { 0 } else { 1 }
+          in_card.val += if card { 0 } else { 1 }
           body()
+          in_card.val -= if card { 0 } else { 1 }
           in_list.val -= if card { 0 } else { 1 }
         })
         |> ignore
@@ -716,11 +721,12 @@ pub fn page_note(c : @ui.Ctx, words : String, bad? : Bool = false) -> Unit {
 
 ///|
 /// A row that goes somewhere: its title (and `note` under it, in amber where it says what it `lacks`; then `trouble`,
-/// what is wrong, in red under that), what it says at its end (`value`, in the link's ink
-/// where `value_lit`, in red where `value_bad`, a red dot before it where `value_dot`: something there is not right
-/// though nothing is wrong to say), its title `strong` where it names who or what the row is, and a chevron (none where not `chevron`: what it does is done here), or an arrow out where it
-/// goes `out` of the app; `lead` before its words (a mark, a dot), `tail` after what it says (a pill, a spinner);
-/// going nowhere where not `goes` (a value said). True on the frame it is pressed.
+/// what is wrong, in red under that), what it says at its end (`value`, in the link's ink where `value_lit`, in red
+/// where `value_bad`, a red dot before it where `value_dot`: something there is not right though nothing is wrong to
+/// say), its title `strong` where it names who or what the row is, in red where it takes something away (`danger`:
+/// 注销账号), and a chevron (none where not `chevron`: what it does is done here), or an arrow out where it goes `out`
+/// of the app; `lead` before its words (a mark, a dot), `tail` after what it says (a pill, a spinner); going nowhere
+/// where not `goes` (a value said). True on the frame it is pressed.
 pub fn link_row(
   c : @ui.Ctx,
   key : String,
@@ -730,6 +736,7 @@ pub fn link_row(
   value_bad? : Bool = false,
   value_dot? : Bool = false,
   strong? : Bool = false,
+  danger? : Bool = false,
   out? : Bool = false,
   chevron? : Bool = true,
   note? : String = "",
@@ -778,7 +785,11 @@ pub fn link_row(
             words()
           }
         }
-        let titled = if strong { pg_row_title.then(row_strong) } else { pg_row_title }
+        let titled = match (strong, danger) {
+          (_, true) => pg_row_title.then(bad)
+          (true, false) => pg_row_title.then(row_strong)
+          (false, false) => pg_row_title
+        }
         if note == "" {
           c.text(title, style=titled) |> ignore
           if value != "" {
@@ -821,7 +832,12 @@ pub fn link_row(
           None => ()
         }
         c.box(style=desk_list_text, fn() {
-          c.text(title, style=if strong { desk_list_title.then(row_strong) } else { desk_list_title }) |> ignore
+          c.text(title, style=match (strong, danger) {
+            (_, true) => desk_list_title.then(bad)
+            (true, false) => desk_list_title.then(row_strong)
+            (false, false) => desk_list_title
+          })
+          |> ignore
           if note != "" {
             c.text(note, style=if lacks { wide_list_note.then(lacking) } else { wide_list_note }) |> ignore
           }
@@ -1713,9 +1729,9 @@ pub let desk_words : @ui.TextStyle = @ui.text_style(size=Ui, leading=L6, color=F
 pub let desk_muted : @ui.TextStyle = @ui.text_style(size=Meta, leading=L6, color=Muted, w=Full)
 
 ///|
-/// A list (pages.css.ts list, listRow: reaching 12 past the column, its rows 2 apart, each 52 high at least, 10 by 12 in,
-/// 12 apart, the field's corner; one that opens on the list's ground under the pointer; its title in 500, what is under
-/// it the meta's 12 muted, red where it is wrong; a chevron 16).
+/// A list on a wide page: a list card (the narrow page's ListCard, at the column's edges: 10 in, its rows 2 apart),
+/// each row 52 high at least, 10 by 10 in, its parts 12 apart, its corner concentric with the card's; one that opens on
+/// the pointer's ground; its title in 500, what is under it the meta's 12 muted, red where it is wrong; a chevron 16.
 pub let desk_row_least : Double = 52.0
 
 ///|
@@ -1726,7 +1742,7 @@ pub let desk_mark : Double = 14.0
 
 ///|
 // kept across runs: a value (no field of it changes)
-pub let desk_list : @ui.Style = outset(desk_list_out).then(@ui.css("gap=S0_5"))
+pub let desk_list : @ui.Style = @ui.style(w=Full, p=inset_room, gap=S0_5, radius=list_card_radius, bg=Card)
 
 ///|
 pub let desk_list_out : Double = 12.0
@@ -1737,11 +1753,11 @@ pub let wide_list_row : @ui.Style = @ui.style(
   row=true,
   w=Full,
   min_h=Fixed(desk_row_least),
-  px=S3,
+  px=list_words_room,
   py=S2_5,
   gap=S3,
   align=ACenter,
-  radius=Xl,
+  radius=InnerOr(Xl2),
 )
 
 ///|
@@ -1913,9 +1929,10 @@ let head_mark_wide_side : Double = 48.0
 let head_mark_narrow_side : Double = 40.0
 
 ///|
-/// What stands in a wide list that is not one of its rows: as far in as its rows' words (12), 10 over and under.
+/// What stands in a wide list that is not one of its rows: as far in as its rows' words (10 in its card's 10), 10 over
+/// and under.
 // kept across runs: a value (no field of it changes)
-let wide_in_list : @ui.Style = @ui.css("w=Full px=S3 py=S2_5")
+let wide_in_list : @ui.Style = @ui.css("w=Full py=S2_5").then(@ui.style(px=list_words_room))
 
 ///|
 /// What stands on the page as a section of its own without a title (a fold's row): wide, as far from what follows as a

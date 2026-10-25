@@ -1,74 +1,44 @@
 // 记忆, one page in every frame (web/src/Memory.tsx MemoryView, cloud/settings.tsx MemorySettings; the narrow app's
-// mobile/Memory.tsx MemoriesScreen, MemoryScreen), laid out by its width (page_look.mbt): narrow, a row for each
-// station opening its memory; wide, every station's memory on the one page, its name over it where there are several.
-// A station's memory: the global memory by its parts, the projects', the other skills (the station's own folded in a
-// row), each row opening its page; which part a skill is under is the core's (`group`).
+// mobile/Memory.tsx MemoriesScreen, MemoryScreen), the same on every width (the user, 2026-10-26: 「设置感觉很乱」; wide
+// had every station's memory on the one page, a third level of headings): a row for each station opening its memory,
+// one offline saying so. A station's memory: the global memory by its parts, the projects', the other skills (the
+// station's own folded in a row), each row opening its page; which part a skill is under is the core's (`group`).
 
 ///|
-/// 记忆 (MemorySettings, MemoriesScreen): each station's memory (wide), or a row to it (narrow); one offline says so.
+/// 记忆 (MemorySettings, MemoriesScreen): a row to each station's memory; one offline says so.
 fn memories_page(c : @ui.Ctx, core : Core, here : Here, frame : PageFrame) -> Unit {
-  let look = look_of(c)
   let topic = @settings.stations_of(core, here)
   let stations = match topic.value {
     Some(Array(a)) => a
     _ => []
   }
-  let names = station_names(stations)
-  let body : Array[() -> Unit] = []
-  match look {
-    Narrow =>
-      body.push(fn() {
-        if topic.value is None {
-          waiting_cards(
-            c,
-            error=match topic.error {
-              Some(e) => error_text(e)
-              None => ""
-            },
-          )
-          return
-        }
-        @sf.group(c, fn() {
-          for s in stations {
-            let sv = Some(s)
-            if flag(sv, "online") {
-              if @sf.link_row(c, "memory/" + text(sv, "station"), text(sv, "name"), value=@sf.t("android-misc.memory.row")) {
-                (core.push)(Memory(text(sv, "station")))
-              }
-            } else {
-              @sf.said_row(c, text(sv, "name"), @sf.t("web-pages.settings.memory.offline"))
-            }
-          }
-        })
-      })
-    Wide => {
-      for i, s in stations {
-        let sv = Some(s)
-        body.push(fn() {
-          c.box(style=if i == 0 { mem_station_first } else { mem_station }, fn() {
-            if stations.length() > 1 {
-              c.box(style=mem_station_head, fn() { c.text(text(sv, "name"), style=mem_station_name) |> ignore }) |> ignore
-            }
-            if flag(sv, "online") {
-              memory_view(c, core, look, text(sv, "station"), names)
-            } else {
-              c.text(@sf.t("web-pages.settings.memory.offline"), style=desk_muted) |> ignore
-            }
-          })
-          |> ignore
-        })
-      }
+  let body : Array[() -> Unit] = [
+    fn() {
       if topic.value is None {
-        body.push(fn() { @sf.wait_line(c, @sf.t("common.readingStations")) })
+        waiting_cards(
+          c,
+          error=match topic.error {
+            Some(e) => error_text(e)
+            None => ""
+          },
+        )
+        return
       }
-    }
-  }
-  look_page(c, core, frame, "memories",
-    @sf.t("web-pages.settings.memory.title"),
-    body,
-    about=@sf.t("web-pages.settings.memory.lead"),
-    lead=if look == Narrow { @sf.t("android-misc.memory.note") } else { "" },
-  )
+      @sf.group(c, fn() {
+        for s in stations {
+          let sv = Some(s)
+          if flag(sv, "online") {
+            if @sf.link_row(c, "memory/" + text(sv, "station"), text(sv, "name"), value=@sf.t("android-misc.memory.row")) {
+              (core.push)(Memory(text(sv, "station")))
+            }
+          } else {
+            @sf.said_row(c, text(sv, "name"), @sf.t("web-pages.settings.memory.offline"))
+          }
+        }
+      })
+    },
+  ]
+  look_page(c, core, frame, "memories", @sf.t("web-pages.settings.memory.title"), body, lead=@sf.t("android-misc.memory.note"))
 }
 
 ///|
@@ -254,24 +224,6 @@ let mem_narrow_title : @ui.TextStyle = @sf.body.then(@sf.one_line)
 ///|
 // kept across runs: a value (no field of it changes)
 let mem_narrow_sub : @ui.TextStyle = @sf.secondary.then(@sf.one_line).then(@sf.full_words)
-
-///|
-/// (memoryStation + memoryStation: 36 between two stations)
-// kept across runs: a value (no field of it changes)
-let mem_station_first : @ui.Style = @ui.css("w=Full")
-
-///|
-// kept across runs: a value (no field of it changes)
-let mem_station : @ui.Style = @ui.css("w=Full pt=S9")
-
-///|
-/// (memoryStationName: the title's size, 600, 8 over what follows)
-// kept across runs: a value (no field of it changes)
-let mem_station_head : @ui.Style = @ui.css("w=Full pb=S2")
-
-///|
-// kept across runs: a value (no field of it changes)
-let mem_station_name : @ui.TextStyle = @ui.text_style(size=Title, leading=L7, weight=Semibold, color=Fg, wrap=false)
 
 ///|
 /// (memoryRowTitle: its name and its tags in a line, 8 apart)

@@ -1,8 +1,8 @@
 // 外观, one page for every frame (web/src/pages/Appearance.tsx and mobile/Settings.tsx AppearanceScreen): how this
-// device shows still.fail, a section each: 主题, 字体, 动画, 语言; with keyboard and mouse the files dragged into a chat too, and
-// laid out wide the rail changed in place (as the web's, `wideOnly`). Each choice is the core's prefs (`prefs.set`),
-// shown at once. The faces are a row that opens 字体's page (FontRow; font_setting.mbt), on every screen. When a
-// done chat is offered to archive is 归档's (archiving.mbt), as the web's.
+// device shows still.fail, a section each: 主题, 字体, 动画, 语言; with keyboard and mouse the files dragged into a chat
+// too, and laid out wide the rail changed in place (as the web's, `wideOnly`). Each choice is the core's prefs
+// (`prefs.set`), shown at once. 字体 is a section as the others: the faces chosen, a row opening its page (FontRow;
+// font_setting.mbt), on every screen. When a done chat is offered to archive is 归档's (archiving.mbt), as the web's.
 
 ///|
 /// The page (AppearancePage, AppearanceScreen), in the frame it is given.
@@ -37,13 +37,15 @@ fn appearance_page(c : @ui.Ctx, core : Core, frame : PageFrame) -> Unit {
         )
       })
     },
-    // (the faces' row on a card of its own: SettingsHome.kt, mobile FontRow; a chat as they set it and their list are
-    // a page's own, on every screen)
+    // the faces, a section as the others: what they are for over the faces chosen, a row opening their page (a chat as
+    // they set it and their list are a page's own, on every screen)
     fn() {
-      @sf.group(c, fn() {
-        if @sf.link_row(c, "appearance/fonts", @sf.t("web-pages.appearance.fonts.title"), value=fonts_said(prefs)) {
-          (core.push)(Fonts)
-        }
+      section(@sf.t("web-pages.appearance.fonts.title"), @sf.t("web-pages.appearance.fonts.description"), false, fn() {
+        @sf.group(c, fn() {
+          if @sf.link_row(c, "appearance/fonts", fonts_said(prefs)) {
+            (core.push)(Fonts)
+          }
+        })
       })
     },
     fn() {
