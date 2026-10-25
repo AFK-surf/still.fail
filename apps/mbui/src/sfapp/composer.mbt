@@ -506,7 +506,7 @@ fn draft_named(d : Draft, v : Json) -> Unit {
 
 ///|
 /// The capsule changes shape over this long (Composer.kt Morph).
-let composer_morph_ms : Double = 260.0
+let composer_morph_ms : Double = @sf.shape_ms
 
 ///|
 /// Words sent from chat `chat`'s composer hold its room as tall as when they went (`room`) for `ms` from the next frame,

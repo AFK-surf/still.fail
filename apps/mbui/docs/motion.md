@@ -55,8 +55,9 @@ right: the state is the control's alone and means one thing.
 
 ## Presets
 
-Each kind has a few, named in `src/sf/motion.mbt` (the way there, 7), and every motion uses one of them. Their
-numbers are the web's at the same place (paths from the repository's root), not made up here.
+Each kind has a few, each named once: the app's in `src/sf/motion.mbt`, the framework's in mbui where it makes that
+motion (kit's panels and controls, `@motion`'s springs, ui's pages pushed), as the table says; every motion uses one
+of them. Their numbers are the web's at the same place (paths from the repository's root), not made up here.
 
 | Kind | Preset | Value | The web's |
 |---|---|---|---|
@@ -67,13 +68,15 @@ numbers are the web's at the same place (paths from the repository's root), not 
 | 2 | a tip | in 120 ms ease-out, a fade; out at once (`@kit.tip_in`) | web/ui/src/parts.css.ts:336 |
 | 2 | a sheet | up 380 ms `--m-ease`, down 300 ms; its scrim to 0.28 over 300 ms | web/src/mobile/app.css.ts:82-97 |
 | 2 | a dialog | in 200 ms ease-out from 0.98, a little low, and clear; its ground's fade 180 ms; out at once (`@kit.dialog_in`, `ground_in`) | web/ui/src/parts.css.ts:180, 193 |
-| 2 | a row of a list, a message | in 220 ms ease-out, up from 6 below; out 200 ms, a copy shrinking to 0.9 | `ENTER`, `LEAVE`, web/ui/src/motion.ts:19-22 |
+| 2 | a message | in 220 ms ease-out, up from 6 below (`@sf.enter_ms`, `enter_rise`) | `ENTER`, web/ui/src/motion.ts:19-20 |
+| 2 | a row new to a list | grown in from 0.9 and clear over 240 ms ease-out, 100 ms after (`@sf.row_grown_in`) | web/src/listMotion.ts:54 |
+| 2 | what goes from a list: a row, the agent's line, what leaves the outbox | out 200 ms CSS's ease-out, a copy shrinking to 0.9 as it fades (`@sf.leave`) | `LEAVE`, web/ui/src/motion.ts:21-22, web/src/listMotion.ts:116 |
 | 2 | a bar | in 380 ms `--m-ease`, out 300 ms | web/src/mobile/Bar.css.ts:17 |
 | 2 | a toast | in 200 ms ease-out, out 150 ms | web/ui/src/toast.css.ts:16-18 |
 | 2 | woken over a picture or a film: the viewer's bars, the player's controls | in 120 ms, resting out 320 ms, ease-out (`@sf.wake_ms`, `sleep_ms`: kit's media's) | web/src/FilePreview.css.ts:37, 54; web/ui/src/viewer/media.css.ts:23-25 |
-| 3 | a shape: the composer, a card | 260 ms ease-out | web/src/morph.ts `useMorph` |
-| 3 | the composer to another page | 340 ms ease-out | web/src/dock.tsx, web/src/styles/global.css.ts:257 (the view transition) |
-| 3 | a layout switched: the sidebar, a side panel, the tape | 380 ms ease-out | `moveState`, web/ui/src/motion.ts:287 |
+| 3 | a shape: the composer, a card | 260 ms ease-out (`@sf.shape_ms`) | web/src/morph.ts `useMorph` |
+| 3 | the composer to another page | 340 ms ease-out (`@sf.composer_page_ms`) | web/src/dock.tsx, web/src/styles/global.css.ts:257 (the view transition) |
+| 3 | a layout switched: the sidebar, a side panel, the tape | 380 ms ease-out (`@sf.move_state_ms`) | `moveState`, web/ui/src/motion.ts:287 |
 | 3 | rows making way, the agent's line among them | spring 0.28 s (`@sf.move_spring`) | `MOVE`, web/src/listMotion.ts |
 | 4 | words sent | 520 ms on the flight's curve (0.6, 0, 0.2, 1) | web/src/madeChat.ts:329-331 (sfbase/flight.mbt) |
 | 4 | a picture into the viewer and back | 320 ms `--m-ease`; back 280 ms | none on the web, which fades it in over 140 ms (web/src/FilePreview.css.ts); Android's FilePreview.kt (sfbase/viewer.mbt) |
@@ -146,8 +149,8 @@ list's turns, words flying, everything in the hand). Each step below is a PR; a 
    stroke, a picture's way in and a row's rise started once by what they are told, not by whether they move; what only
    logs a motion logs it while it is off its target. A message out of an avatar (its poses), words sent (their
    way) and the viewer's strip likewise.
-7. **Presets.** `src/sf/motion.mbt` holds the table above; every motion uses a preset. The copies in sfapp that
-   nothing calls are gone (#1714). One curve enum, `@ui.Ease`, played as Compose plays a cubic-bezier, for a page
+7. **Presets.** Done: each preset in the table named once (the app's in `src/sf/motion.mbt`, the framework's in mbui),
+   each motion of its kind using it. The copies in sfapp that nothing calls are gone (#1714). One curve enum, `@ui.Ease`, played as Compose plays a cubic-bezier, for a page
    pushed, a state moved, a scrollbar and every tween, a curve said by its name wherever it is one (a card's, the
    bar's); one sheet spring, kit's sheet's taken from `@motion.sheet_spring` (#1718). What comes by its trigger is
    kit's, by the presets above: a popover, a menu, a select, a context menu growing out of its trigger's side, a tip
@@ -156,7 +159,10 @@ list's turns, words flying, everything in the hand). Each step below is a PR; a 
    presenters' menus, made anew each time they open, had come in at once (#1725). A control answering the hand on
    --dur, a button's ground pointed at and a switch's knob on a tween where they were on springs; a known progress going
    to a part told anew over 200 ms where it jumped; the player's controls woken and resting as the viewer's bars are;
-   the agent's line making way on the rows' spring; zoom's glide, copied and the breath one each, not two or three.
+   the agent's line making way on the rows' spring; zoom's glide, copied and the breath one each, not two or three
+   (#1733). What goes from the chat's list (the agent's line, what leaves the outbox) goes as from any list (`@sf.leave`:
+   it faded on its own curve, not shrinking); the sidebar's rows come and go by the same presets; the sidebar's move,
+   the composer's shape and its page move take their numbers from the presets.
 8. **The page crossfade** between a new chat and a chat on a computer (sfdesk/switch.mbt). Done: the new chat's scene
    leaves by its own way up (as one become its chat does), what comes in is there at once, the composer moves between
    their places.

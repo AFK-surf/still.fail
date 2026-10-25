@@ -352,33 +352,13 @@ pub fn row_moving(c : @ui.Ctx, lid : Int, list : String, key : String, i : Int) 
     i,
     list + "\u{1}" + key,
     spec=if @sf.touch_system() { @motion.row_spring } else { @motion.move_spring },
-    enter=@motion.trans(fade=0.0, scale=row_from, spec=row_enter),
-    exit=@motion.trans(fade=0.0, scale=row_from, spec=row_leave),
+    enter=@sf.row_grown_in,
+    exit=@sf.leave,
   )
   if @motion.lifted(c, lid, list + "\u{1}" + key) >= 0.0 {
     c.put_over(i)
   }
 }
-
-///|
-let row_from : Double = 0.9
-
-///|
-// kept across runs: a value (no field of it changes)
-let row_enter : @motion.Spec = @motion.tween(row_enter_ms, ease=Out, delay=row_enter_after)
-
-///|
-// kept across runs: a value (no field of it changes)
-let row_leave : @motion.Spec = @motion.tween(row_leave_ms, ease=CssOut)
-
-///|
-let row_enter_ms : Double = 240.0
-
-///|
-let row_enter_after : Double = 100.0
-
-///|
-let row_leave_ms : Double = 200.0
 
 ///|
 /// Room in a list, `h` high (for the bar over it, at its foot).

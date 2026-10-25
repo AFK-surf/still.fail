@@ -1,6 +1,9 @@
-// The page's motion (web/ui motion.ts): its ease-out, the one way in and out of what comes and goes in a list, the
-// spring what makes way moves by, the list's glide, and the most a motion waits for what is here already. Motion as
-// data is mbui's (@motion, Ctx::move_state: the web's moveState, 380 ms on the ease-out by default).
+// The app's presets (docs/motion.md, Presets: each kind's few, every motion one of them), the web's at the same place:
+// its ease-out, what comes into and goes from a list, the spring what makes way moves by, a shape, the list's glide,
+// the most a motion waits for what is here already, a control answering the hand, what is woken, the breath, copied.
+// Those the framework makes are mbui's, named there and in the table (kit's pop_in, dialog_in, switch_ms,
+// progress_ms, zoom_glide_ms, media's; @motion's springs; ui's pages pushed); motion as data is mbui's (@motion,
+// Ctx::move_state: the web's moveState, 380 ms on the ease-out by default).
 
 ///|
 /// The page's --ease-out (EASE_OUT: cubic-bezier(0.2, 0.7, 0.2, 1)).
@@ -14,11 +17,35 @@ pub let enter_ms : Double = 220.0
 pub let enter_rise : Double = 6.0
 
 ///|
-/// What goes (LEAVE, LEAVE_TO): a copy where it was, 200 ms, shrinking to 0.9 as it fades.
+/// What goes from a list (LEAVE, LEAVE_TO: listMotion.ts, settling.tsx): a copy where it was, shrinking to 0.9 as it
+/// fades over 200 ms on CSS's ease-out (`leave`).
 pub let leave_ms : Double = 200.0
 
 ///|
 pub let leave_scale : Double = 0.9
+
+///|
+// kept across runs: a value (no field of it changes)
+pub let leave : @motion.Trans = @motion.trans(fade=0.0, scale=leave_scale, spec=@motion.tween(leave_ms, ease=CssOut))
+
+///|
+/// A row new to a list (listMotion.ts): grown in where it is from 0.9 and clear over 240 ms on the ease-out, 100 ms
+/// after the list changed (what makes way for it moves first).
+// kept across runs: a value (no field of it changes)
+pub let row_grown_in : @motion.Trans = @motion.trans(
+  fade=0.0,
+  scale=leave_scale,
+  spec=@motion.tween(240.0, ease=Out, delay=100.0),
+)
+
+///|
+/// A shape changed for what it holds (morph.ts useMorph: the composer, a card): from the shape it had to its new one
+/// over 260 ms on the ease-out.
+pub let shape_ms : Double = 260.0
+
+///|
+/// The composer going with its page to another (dock.tsx, the view transition): 340 ms on the ease-out.
+pub let composer_page_ms : Double = 340.0
 
 ///|
 /// How what makes way for a small service moves (MOVE): a spring of 0.28 s, no bounce, so a goal that moves on is
