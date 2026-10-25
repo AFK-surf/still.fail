@@ -568,8 +568,10 @@ function DeviceCode({ url, code, provider, there, children }: { url: string; cod
   return (
     <div className={css.deviceCode}>
       {code !== null && <span className={`${css.deviceCodeValue} ${shellCss.mono}`}>{code}</span>}
-      <Button variant={there ? "secondary" : "primary"} icon={External} onClick={go}>{filled ? t("web-pages.profiles.openAuth") : copied ? t("web-pages.profiles.copiedReopen") : t("web-pages.profiles.copyOpen")}</Button>
-      {children}
+      <div className={css.stepButtons}>
+        <Button variant={there ? "secondary" : "primary"} icon={External} onClick={go}>{filled ? t("web-pages.profiles.openAuth") : copied ? t("web-pages.profiles.copiedReopen") : t("web-pages.profiles.copyOpen")}</Button>
+        {children}
+      </div>
       <p className={shellCss.muted}>{code === null ? t("web-pages.profiles.deviceCodeNoteCursor") : provider === "OpenCode" ? t("web-pages.profiles.deviceCodeNoteOpencode") : provider === "Kimi" ? t("web-pages.profiles.deviceCodeNoteKimi") : provider === "Grok" ? t("web-pages.profiles.deviceCodeNoteGrok") : t("web-pages.profiles.deviceCodeNote", { name: NAME })}</p>
     </div>
   );
@@ -599,8 +601,10 @@ export function LoginSteps({ job, provider, code, setCode, send, sending, sendEr
         <ol className={controlsCss.steps}>
           <li>
             <span>{provider === "Devin" ? t("web-pages.profiles.step1Devin", { name: NAME }) : t("web-pages.profiles.step1", { name: NAME })}</span>
-            <a className={there ? controlsCss.btn : `${controlsCss.btn} ${controlsCss.btnPrimary}`} href={job.url} target="_blank" rel="noopener"><External {...ICON} />{t("web-pages.profiles.openAuth")}</a>
-            {stationStep}
+            <div className={css.stepButtonsInStep}>
+              <a className={there ? controlsCss.btn : `${controlsCss.btn} ${controlsCss.btnPrimary}`} href={job.url} target="_blank" rel="noopener"><External {...ICON} />{t("web-pages.profiles.openAuth")}</a>
+              {stationStep}
+            </div>
           </li>
           <li>
             <span>{provider === "Devin" ? t("web-pages.profiles.step2Devin") : t("web-pages.profiles.step2")}</span>
