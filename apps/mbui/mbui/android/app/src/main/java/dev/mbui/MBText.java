@@ -26,8 +26,9 @@ import java.util.LinkedHashSet;
 /**
  * Text with Android's own engine: grapheme clusters and their advances
  * (with kerning, from Paint.getTextRunAdvances), and each cluster rasterized
- * as it is asked for, put in the shared RGBA atlas where MoonBit says (its
- * atlas.mbt: what goes where, and what makes room). Called on the GL thread
+ * as it is asked for, put where MoonBit says (its atlas.mbt: what goes where,
+ * and what makes room) in an atlas: the words' (their cover, a byte a texel)
+ * or colour glyphs' (RGBA). Called on the GL thread
  * only, but for the drawing ahead (ahead): the glyphs shaped and not drawn
  * yet, drawn on a thread of their own and taken when they are first asked
  * for; what was put in a frame uploaded once, a row of the atlas at a time,
@@ -63,17 +64,22 @@ final class MBText {
         int faces;
     }
 
-    /** A glyph placed in the atlas this frame, its picture to be uploaded there (flush). */
+    /** A glyph put in an atlas this frame (colour glyphs' or the words'), its picture to be uploaded there (flush). */
     static final class Placed {
         final Bitmap bmp;
         final int x, y;
+        final boolean colour;
 
-        Placed(Bitmap bmp, int x, int y) {
+        Placed(Bitmap bmp, int x, int y, boolean colour) {
             this.bmp = bmp;
             this.x = x;
             this.y = y;
+            this.colour = colour;
         }
     }
+
+    /** A colour glyph's place across is this far past its place in colour glyphs' atlas (android_host.c MB_ATLAS_COLOR_U). */
+    static final int COLOUR_U = 16384;
 
     // each font's clusters (fontKey: its size, weight and style), their keys
     static final HashMap<Long, HashMap<String, Integer>> keys = new HashMap<>();
@@ -81,9 +87,10 @@ final class MBText {
     static final HashMap<Long, Paint> paints = new HashMap<>();
     static final ArrayList<Placed> placed = new ArrayList<>();
     static int generation;
-    // the glyph drawn last (glyph), its picture until it is put in the atlas (glyphPut)
+    // the glyph drawn last (glyph), its picture until it is put in its atlas (glyphPut), and whether it is in colours
     static int heldKey = -1;
     static Bitmap held;
+    static boolean heldColour;
     // moves on as the faces change: what was drawn in them before is drawn again
     static int faces;
     static float[] adv = new float[1024];
@@ -391,6 +398,7 @@ final class MBText {
         int pad = 1;
         heldKey = key;
         held = d.bmp;
+        heldColour = d.color != 0;
         out[2] = d.bmp.getWidth() / sc;
         out[3] = d.bmp.getHeight() / sc;
         out[4] = (d.b.left - pad) / sc;
@@ -398,10 +406,14 @@ final class MBText {
         out[6] = d.color;
     }
 
-    /** The glyph drawn last put in the atlas, its top left at x, y: uploaded with the frame's others (flush). */
+    /**
+     * The glyph drawn last put in its atlas, its top left at x, y (a colour glyph's COLOUR_U across past its place in
+     * theirs): uploaded with the frame's others (flush).
+     */
     static void glyphPut(int key, int x, int y) {
-        if (key != heldKey || held == null) return;
-        placed.add(new Placed(held, x, y));
+        boolean colour = x >= COLOUR_U;
+        if (key != heldKey || held == null || colour != heldColour) return;
+        placed.add(new Placed(held, colour ? x - COLOUR_U : x, y, colour));
         held = null;
         heldKey = -1;
     }
@@ -432,42 +444,77 @@ final class MBText {
     }
 
     /**
-     * The glyphs put since the last frame was drawn, into the atlas before this one is: those put one after another
-     * on a shelf of it in one upload (side by side, a pixel apart, right of what the shelf had), not one each; one put
-     * anywhere else (another shelf, another plot) starts another. Its texture bound as it was bound for each glyph
-     * before, on the unit active.
+     * The glyphs put since the last frame was drawn, into their atlases before this one is: those put one after
+     * another on a shelf of one in one upload (side by side, a pixel apart, right of what the shelf had), not one each;
+     * one put anywhere else (another shelf, another plot, the other atlas) starts another. The words' atlas takes a
+     * glyph's cover alone (drawn in white: its alpha), a byte a texel. The texture bound on the unit active, as it was
+     * bound for each glyph before.
      */
     static void flush() {
         int n = placed.size();
         if (n == 0) return;
-        GLES30.glBindTexture(GLES30.GL_TEXTURE_2D, Native.atlasTexture());
+        int bound = -1;
         int i = 0;
         while (i < n) {
             Placed first = placed.get(i);
             int j = i, right = first.x - 1, h = 0;
-            while (j < n && placed.get(j).y == first.y && placed.get(j).x == right + 1) {
+            while (j < n && placed.get(j).colour == first.colour && placed.get(j).y == first.y
+                    && placed.get(j).x == right + 1) {
                 Placed g = placed.get(j);
                 right = g.x + g.bmp.getWidth();
                 h = Math.max(h, g.bmp.getHeight());
                 j++;
             }
-            if (j - i == 1) {
-                GLUtils.texSubImage2D(GLES30.GL_TEXTURE_2D, 0, first.x, first.y, first.bmp);
+            int tex = first.colour ? Native.colourAtlasTexture() : Native.atlasTexture();
+            if (tex != bound) {
+                GLES30.glBindTexture(GLES30.GL_TEXTURE_2D, tex);
+                bound = tex;
+            }
+            int w = right - first.x;
+            if (first.colour) {
+                if (j - i == 1) {
+                    GLUtils.texSubImage2D(GLES30.GL_TEXTURE_2D, 0, first.x, first.y, first.bmp);
+                } else {
+                    Bitmap row = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888);
+                    Canvas c = new Canvas(row);
+                    for (int k = i; k < j; k++) {
+                        Placed g = placed.get(k);
+                        c.drawBitmap(g.bmp, g.x - first.x, 0, null);
+                    }
+                    GLUtils.texSubImage2D(GLES30.GL_TEXTURE_2D, 0, first.x, first.y, row);
+                    row.recycle();
+                }
             } else {
-                Bitmap row = Bitmap.createBitmap(right - first.x, h, Bitmap.Config.ARGB_8888);
-                Canvas c = new Canvas(row);
+                // each glyph's alpha where it lies in the row, nothing (0) round it
+                if (cover == null || cover.capacity() < w * h) {
+                    cover = ByteBuffer.allocateDirect(Math.max(w * h, 1 << 16)).order(ByteOrder.nativeOrder());
+                }
+                cover.clear();
+                for (int b = 0; b < w * h; b++) cover.put(b, (byte) 0);
                 for (int k = i; k < j; k++) {
                     Placed g = placed.get(k);
-                    c.drawBitmap(g.bmp, g.x - first.x, 0, null);
+                    int gw = g.bmp.getWidth(), gh = g.bmp.getHeight();
+                    if (px.length < gw * gh) px = new int[gw * gh * 2];
+                    g.bmp.getPixels(px, 0, gw, 0, 0, gw, gh);
+                    int ox = g.x - first.x;
+                    for (int y = 0; y < gh; y++)
+                        for (int x = 0; x < gw; x++) cover.put(y * w + ox + x, (byte) (px[y * gw + x] >>> 24));
                 }
-                GLUtils.texSubImage2D(GLES30.GL_TEXTURE_2D, 0, first.x, first.y, row);
-                row.recycle();
+                GLES30.glPixelStorei(GLES30.GL_UNPACK_ALIGNMENT, 1);
+                cover.position(0);
+                GLES30.glTexSubImage2D(GLES30.GL_TEXTURE_2D, 0, first.x, first.y, w, h, GLES30.GL_RED,
+                        GLES30.GL_UNSIGNED_BYTE, cover);
+                GLES30.glPixelStorei(GLES30.GL_UNPACK_ALIGNMENT, 4);
             }
             for (int k = i; k < j; k++) placed.get(k).bmp.recycle();
             i = j;
         }
         placed.clear();
     }
+
+    /** A glyph's pixels as they are read (flush), and a row's cover as it is uploaded: kept from one to the next. */
+    static int[] px = new int[4096];
+    static ByteBuffer cover;
 
     /** What was put and not uploaded, let go: the atlas is gone (reset). */
     static void dropPlaced() {
