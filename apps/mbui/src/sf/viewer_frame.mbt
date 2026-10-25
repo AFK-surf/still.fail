@@ -55,9 +55,9 @@ fn viewer_head(
   let small = c.width <= viewer_small_w
   let seen = @motion.animate(c, key + "/head-seen", if awake { 1.0 } else { 0.0 }, spec=@motion.tween(
       if awake {
-        viewer_wake_ms
+        wake_ms
       } else {
-        viewer_rest_fade_ms
+        sleep_ms
       },
       ease=Out,
     ))
@@ -130,9 +130,9 @@ pub fn viewer_steps(c : @ui.Ctx, key : String, before : Bool, after : Bool, awak
         let hot = c.lit(id) || c.pressed(id)
         let seen = @motion.animate(c, key + "/go-seen/\{side.1}", if awake || hot { 1.0 } else { 0.0 }, spec=@motion.tween(
             if awake || hot {
-              viewer_wake_ms
+              wake_ms
             } else {
-              viewer_rest_fade_ms
+              sleep_ms
             },
             ease=Out,
           ))
@@ -237,13 +237,6 @@ pub fn viewer_facts(c : @ui.Ctx, name : String, size : Double, said : String) ->
 pub fn viewer_failed(c : @ui.Ctx, words : String) -> Unit {
   c.text(words, style=vfr_facts_failed) |> ignore
 }
-
-///|
-/// Coming as the bar does (120 ms) and going slower (320 ms).
-pub let viewer_wake_ms : Double = 120.0
-
-///|
-pub let viewer_rest_fade_ms : Double = 320.0
 
 ///|
 let viewer_page_share : Double = 0.72

@@ -70,40 +70,36 @@ numbers are the web's at the same place (paths from the repository's root), not 
 | 2 | a row of a list, a message | in 220 ms ease-out, up from 6 below; out 200 ms, a copy shrinking to 0.9 | `ENTER`, `LEAVE`, web/ui/src/motion.ts:19-22 |
 | 2 | a bar | in 380 ms `--m-ease`, out 300 ms | web/src/mobile/Bar.css.ts:17 |
 | 2 | a toast | in 200 ms ease-out, out 150 ms | web/ui/src/toast.css.ts:16-18 |
+| 2 | woken over a picture or a film: the viewer's bars, the player's controls | in 120 ms, resting out 320 ms, ease-out (`@sf.wake_ms`, `sleep_ms`: kit's media's) | web/src/FilePreview.css.ts:37, 54; web/ui/src/viewer/media.css.ts:23-25 |
 | 3 | a shape: the composer, a card | 260 ms ease-out | web/src/morph.ts `useMorph` |
+| 3 | the composer to another page | 340 ms ease-out | web/src/dock.tsx, web/src/styles/global.css.ts:257 (the view transition) |
 | 3 | a layout switched: the sidebar, a side panel, the tape | 380 ms ease-out | `moveState`, web/ui/src/motion.ts:287 |
-| 3 | rows making way | spring 0.28 s | `MOVE`, web/src/listMotion.ts |
+| 3 | rows making way, the agent's line among them | spring 0.28 s (`@sf.move_spring`) | `MOVE`, web/src/listMotion.ts |
 | 4 | words sent | 520 ms on the flight's curve (0.6, 0, 0.2, 1) | web/src/madeChat.ts:329-331 (sfbase/flight.mbt) |
 | 4 | a picture into the viewer and back | 320 ms `--m-ease`; back 280 ms | none on the web, which fades it in over 140 ms (web/src/FilePreview.css.ts); Android's FilePreview.kt (sfbase/viewer.mbt) |
 | 5 | pushed, popped | 300 ms `--m-standard`; swiped back and let go, 200 ms | web/src/mobile/app.css.ts:16, 22-30 |
 | 5 | risen | 380 ms `--m-ease` | web/src/mobile/app.css.ts:32 |
 | 5 | another place on the bar | 220 ms `--m-ease`, from its side | web/src/mobile/app.css.ts:34 |
 | 6 | the glide | a share of what is left, τ 100 ms | `GLIDE_TAU`, web/ui/src/motion.ts:33 |
-| 7 | pressed, pointed at | 140 ms ease-out | `--dur`, web/src/styles/global.css.ts:104 |
-| 7 | a value moved: a segmented thumb, a switch, a fill | 240 ms ease-out | web/ui/src/parts.css.ts:64 |
+| 7 | pressed, pointed at; a switch turned | 140 ms ease-out (`@sf.dur_ms`, `@kit.switch_ms`) | `--dur`, web/src/styles/global.css.ts:104; web/ui/src/parts.css.ts:85, 94 |
+| 7 | a segmented thumb | 240 ms ease-out | web/ui/src/parts.css.ts:64 |
+| 7 | a known progress | to a part told anew over 200 ms ease-out (`@kit.progress_ms`) | web/ui/src/waiting.css.ts:61 |
+| 7 | a picture's zoom told where | 260 ms, a quick start and a soft landing (`@kit.zoom_glide_ms`) | Android's Zoom.kt |
 | 7 | a finger's ripple | in 450 ms, out 375 ms | none on the web (Android's RippleDrawable) |
-| 8 | breath, spinner, band | 1400 ms; 800 ms a turn; 1400 ms | web/ui/src/waiting.css.ts, web/ui/src/styles/spinner.css.ts |
+| 8 | breath (to 0.5, a restarting service's dot to 0.35), spinner, band | 1400 ms ease-in-out each way (`@sf.breath`); 800 ms a turn; 1400 ms | web/ui/src/waiting.css.ts, web/src/Jobs.css.ts:18, web/ui/src/styles/spinner.css.ts |
 | 9 | a message gone to | in 160 ms, held to 900 ms, gone by 1700 ms | web/src/Jobs.css.ts:199 |
 | 9 | a passage gone to | 2400 ms | web/src/styles/global.css.ts:299 |
 | 9 | a search's strokes | 520 ms each, 180 ms apart | web/src/styles/global.css.ts:278, 290 |
+| 9 | copied: a copy button's check, 已复制 | 1600 ms (`@sf.copied_ms`) | web/ui/src/parts.tsx:361 |
 
-### Not settled yet
+### Settled where the web differed from itself
 
-Where mbui differs from the web today, or the web from itself. Each is settled when its kind's step comes (the way
-there), old and new side by side:
-
-- A new message on a phone: the phone's web rises it over 320 ms on `--m-standard` (web/src/mobile/styles/root.css.ts:124),
-  the computer's over 220 ms.
-- Words sent on a phone fly 600 ms (Android's ChatHost.kt), on a computer 520 ms.
-- The composer going to another page: 340 ms (web/src/styles/global.css.ts:257, the view transition) against a layout
-  switched's 380 ms.
-- Pointed at: buttons ease on a spring (k 900, sf/parts.mbt), the sidebar's rows over 140 ms.
-- A switch on `spring()`, the web's thumb over 240 ms; a known progress moves over 200 ms on the web
-  (web/ui/src/waiting.css.ts:61), mbui's band jumps.
-- The player's bars fade 200 / 200 ms, the viewer's bar 120 / 320 ms, on the same screen.
-- The agent's line making way on its own spring (k 300, sfpages/chat_list.mbt) against rows' 0.28 s.
-- Zoom's glide (260 ms, Soft) is written three times; "copied" three ways (1500 / 1600 / 1600 ms); the breath two
-  ways (sf/waiting.mbt, sfdesk/jobs.mbt).
+- A new message: the library's `ENTER` (220 ms, up from 6) on every screen. The phone's web rises it over 320 ms on
+  `--m-standard`, up from 14 (web/src/mobile/styles/root.css.ts:124); one app on every device takes the library's.
+- Words sent: the web's 520 ms on every screen, since the phone took the shared composer (#1646). Android's 600 (its
+  flight over 80%, settling from 24%) is left only on sfapp's old composer, which sends nothing of its own now.
+- The composer going to another page: 340 ms, the web's for it (the view transition), not a layout switched's 380: it
+  is the composer moving with its page, not the page's layout changing.
 
 ## The way there
 
@@ -157,7 +153,10 @@ list's turns, words flying, everything in the hand). Each step below is a PR; a 
    kit's, by the presets above: a popover, a menu, a select, a context menu growing out of its trigger's side, a tip
    fading in, a dialog and its ground; each gone at once as it is put away, not faded out (a hover's card, which the
    pointer leaves, excepted). Each comes in the first time it is shown too (`@motion.presence`'s `initial`): the
-   presenters' menus, made anew each time they open, had come in at once.
+   presenters' menus, made anew each time they open, had come in at once (#1725). A control answering the hand on
+   --dur, a button's ground pointed at and a switch's knob on a tween where they were on springs; a known progress going
+   to a part told anew over 200 ms where it jumped; the player's controls woken and resting as the viewer's bars are;
+   the agent's line making way on the rows' spring; zoom's glide, copied and the breath one each, not two or three.
 8. **The page crossfade** between a new chat and a chat on a computer (sfdesk/switch.mbt). Done: the new chat's scene
    leaves by its own way up (as one become its chat does), what comes in is there at once, the composer moves between
    their places.

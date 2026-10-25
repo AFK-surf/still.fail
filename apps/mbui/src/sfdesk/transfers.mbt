@@ -146,7 +146,7 @@ fn transfer_row(c : @ui.Ctx, src : Source, x : Json, go : (DriveAt) -> Unit) -> 
       })
       |> ignore
       if state == "copying" {
-        @sf.progress(c, Some(number(j, "progress")))
+        @sf.progress(c, "transfer/" + tid, Some(number(j, "progress")))
       }
       let files = number(j, "files").to_int()
       let status = text(j, "statusText") +
@@ -197,7 +197,7 @@ fn download_row(c : @ui.Ctx, src : Source, d : Json) -> Unit {
       })
       |> ignore
       if flag(j, "active") {
-        @sf.progress(c, Some(number(j, "progress")))
+        @sf.progress(c, "download/" + did, Some(number(j, "progress")))
       }
       c.text(text(j, "statusText"), style=if failed { ftransfer_failed } else { ftransfer_status }) |> ignore
     })

@@ -202,7 +202,7 @@ fn local_progress(c : @ui.Ctx, s : Json?, doing : String) -> Unit {
   let percent = number(s, "percent")
   c.text(@sf.t("web-pages.localStation.doing." + doing) + (if known { " · \{percent.to_int()}%" } else { "" }), style=desk_muted)
   |> ignore
-  c.box(style=ls_bar, fn() { @sf.progress(c, if known { Some(percent / 100.0) } else { None }) }) |> ignore
+  c.box(style=ls_bar, fn() { @sf.progress(c, "local-station", if known { Some(percent / 100.0) } else { None }) }) |> ignore
   match text(s, "said") {
     "" => ()
     said => c.text(said, style=desk_note) |> ignore

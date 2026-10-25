@@ -110,8 +110,8 @@ fn controls(c : @ui.Ctx) -> Unit {
   section(c, "Progress and avatar", fn() {
     line(c, fn() {
       c.box(w=Px(140.0), gap=10.0, fn() {
-        @kit.progress(c, Some(30.0), label="Upload")
-        @kit.progress(c, None, label="Loading")
+        @kit.progress(c, "upload", Some(30.0), label="Upload")
+        @kit.progress(c, "loading", None, label="Loading")
       })
       |> ignore
       @kit.avatar(c, "", "Ada Lovelace")

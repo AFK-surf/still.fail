@@ -152,7 +152,7 @@ fn local_progress(c : @ui.Ctx, s : Json?, doing : String) -> Unit {
     (if known { " · \{percent.to_int()}%" } else { "" }),
   )
   c.box(style=local_bar_box, fn() {
-    @sf.progress(c, if known { Some(percent / 100.0) } else { None })
+    @sf.progress(c, "local-station", if known { Some(percent / 100.0) } else { None })
   })
   |> ignore
   match text(s, "said") {

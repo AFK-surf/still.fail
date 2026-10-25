@@ -502,7 +502,7 @@ fn narrow_upload_row(c : @ui.Ctx, src : Source, u : DvUpload) -> Unit {
           )
           |> ignore
           c.box(style=narrow_progress, fn() {
-            @sf.progress(c, if size > 0 { Some(u.sent.to_double() / size.to_double()) } else { None })
+            @sf.progress(c, k, if size > 0 { Some(u.sent.to_double() / size.to_double()) } else { None })
           })
           |> ignore
         }

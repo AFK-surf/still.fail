@@ -979,10 +979,6 @@ fn runs_of(
 let code_key_h : Double = 24.0
 
 ///|
-/// How long a code block says it was copied, after its copy is pressed.
-let copied_ms : Double = 1500.0
-
-///|
 /// The code blocks saying they were copied, by their id (for copied_ms, on @kit.after's clock).
 let copied_at : Map[Int, Bool] = {}
 

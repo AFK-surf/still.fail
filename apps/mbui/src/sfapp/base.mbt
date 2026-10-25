@@ -102,7 +102,6 @@ pub using @sfbase {
   upper,
   viewer,
   viewer_folder_label,
-  zoom_glide_ms,
   service_site,
   file_said,
   file_serve,

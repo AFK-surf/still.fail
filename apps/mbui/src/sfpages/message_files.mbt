@@ -240,7 +240,7 @@ fn video_item(c : @ui.Ctx, src : Source, here : MessageHere, a : Attachment, w :
           let coming = flag(dl, "active")
           c.text(if coming { text(dl, "statusText") } else { a.name }, style=video_name) |> ignore
           if coming {
-            c.box(style=video_bar, fn() { @sf.progress(c, Some(number(dl, "progress"))) }) |> ignore
+            c.box(style=video_bar, fn() { @sf.progress(c, "video/" + a.path, Some(number(dl, "progress"))) }) |> ignore
           }
         })
         |> ignore

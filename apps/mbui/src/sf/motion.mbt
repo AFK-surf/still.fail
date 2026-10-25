@@ -42,3 +42,26 @@ pub let local_ms : Double = 100.0
 ///|
 /// moveState's run (motion.ts moveState's default transition: 380 ms on the ease-out), Ctx::move_state's default.
 pub let move_state_ms : Double = 380.0
+
+///|
+/// A control answering the hand (--dur, global.css.ts): pointed at, pressed, a switch turned, over this long on the
+/// ease-out.
+pub let dur_ms : Double = 140.0
+
+///|
+/// What says a thing was copied (a check for the copy button, 已复制) shows this long (parts.tsx CopyButton: 1.6 s).
+pub let copied_ms : Double = 1600.0
+
+///|
+/// What is woken by the hand over a picture or a film (the viewer's bars, the player's controls) comes in over this
+/// long, and fades as it rests over `sleep_ms`, on the ease-out (FilePreview.css.ts floating, viewer/media.css.ts: 120,
+/// 320): kit's media controls' own.
+pub let wake_ms : Double = @kit.media_wake_ms
+
+///|
+pub let sleep_ms : Double = @kit.media_sleep_ms
+
+///|
+/// One breath of what waits (waiting.css.ts breathe, Jobs.css.ts jobBreathe): 1.4 s, from whole to `low` and back on
+/// CSS's ease-in-out each way.
+pub let breath_ms : Double = 1400.0

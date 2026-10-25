@@ -25,19 +25,16 @@ pub fn done_waiting(c : @ui.Ctx, key : String) -> Unit {
 }
 
 ///|
-/// One breath of the placeholders.
-let breath_ms : Double = 1400.0
-
-///|
-/// The placeholders' breath: 1 → 0.5 → 1 in breath_ms, eased; 0.6 when what they wait on failed.
-pub fn breath(c : @ui.Ctx, failed? : Bool = false) -> Double {
+/// What waits breathing (the placeholders, to 0.5: waiting.css.ts breathe; a service restarting, its dot to 0.35:
+/// Jobs.css.ts jobBreathe), how much of it shows now: whole to `low` and back in breath_ms, each way on CSS's
+/// ease-in-out; 0.6 when what it waits on failed.
+pub fn breath(c : @ui.Ctx, failed? : Bool = false, low? : Double = 0.5) -> Double {
   if failed {
     return 0.6
   }
-  let pi = 3.141592653589793
   let f = c.cycle(breath_ms)
-  // ease-in-out between the two ends
-  0.75 + 0.25 * @dmath.cos(2.0 * pi * f)
+  let way = if f < 0.5 { f * 2.0 } else { 2.0 - f * 2.0 }
+  1.0 - (1.0 - low) * @ui.Ease::InOut.at(way)
 }
 
 ///|
@@ -111,12 +108,14 @@ pub fn wait_line(c : @ui.Ctx, text : String, key? : String = "", error? : Bool =
 }
 
 ///|
-/// How much of something with a size has come (Progress): mbui's progress bar (@kit.progress) in still.fail's look, a 3
-/// high pill on 18% of the accent; `part` None when the whole is not known, a 40% piece sweeping across.
-pub fn progress(c : @ui.Ctx, part : Double?, w? : @ui.Size = Fill(1.0), color? : Int64) -> Unit {
+/// How much of `key` (what has a size: a download, a transfer) has come (Progress): mbui's progress bar (@kit.progress)
+/// in still.fail's look, a 3 high pill on 18% of the accent, going to a part told anew over 200 ms; `part` None when
+/// the whole is not known, a 40% piece sweeping across.
+pub fn progress(c : @ui.Ctx, key : String, part : Double?, w? : @ui.Size = Fill(1.0), color? : Int64) -> Unit {
   let accent = color.unwrap_or(theme().p.accent)
   @kit.progress(
     c,
+    key,
     match part {
       Some(k) => Some(k * 100.0)
       None => None

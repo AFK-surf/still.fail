@@ -852,7 +852,7 @@ pub fn reader(
           }
           c.text(said, style=desk_note_words.then(@ui.text_style(color=Data(p.muted)))) |> ignore
           c.box(style=desk_load_track, fn() {
-            progress(c, match r.got {
+            progress(c, r.key, match r.got {
               Some(g) if g.total > 0.0 => Some(g.loaded / g.total)
               _ => None
             })

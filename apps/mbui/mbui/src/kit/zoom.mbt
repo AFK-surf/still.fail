@@ -48,6 +48,11 @@ pub struct Zoom {
 pub let zoom_fling_ms : Double = 325.0
 
 ///|
+/// How long a zoom said with a glide takes there (still.fail's: 260 ms on a quick start and a soft landing, Ease.Soft):
+/// Zoom::new's, unless said otherwise.
+pub let zoom_glide_ms : Double = 260.0
+
+///|
 /// A picture's zoom, as Zoom.kt's: fitted within a margin (12, or 32 on a stage 640 wide or more), never enlarged;
 /// down to half the fitted size (of 100% at most) and up to 16 times its own; its glides 260 ms. A stage's own (a
 /// remote screen, fitted edge to edge, as far as 5 times the fitted size): `margin`, `enlarge`, `min_scale` and
@@ -58,7 +63,7 @@ pub fn Zoom::new(
   enlarge? : Bool = false,
   min_scale? : (Double) -> Double = fn(fit) { zmin(fit, 1.0) / 2.0 },
   max_scale? : (Double) -> Double = fn(_) { 16.0 },
-  glide_ms? : Double = 260.0,
+  glide_ms? : Double = zoom_glide_ms,
   free? : Bool = false,
   fit_step? : Double = 0.0,
 ) -> Zoom {

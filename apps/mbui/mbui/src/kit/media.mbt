@@ -114,7 +114,8 @@ pub struct Media {
   priv rest_ms : Double
   priv double_tap_ms : Double
   priv note_ms : Double
-  priv shown_ms : Double
+  priv wake_ms : Double
+  priv sleep_ms : Double
   priv wait_ms : Double
   priv mut track : MediaTrack?
   priv mut view : @ui.NativeView?
@@ -153,19 +154,24 @@ pub struct Media {
 
 ///|
 /// How long a player's controls stay left alone while it plays (Player.kt's 2.5 s), a note a double tap said is said
-/// (0.8 s), its controls take to come or go (0.2 s): Media::new's, unless said otherwise.
+/// (0.8 s), its controls take to come as they are woken (0.12 s) and to fade as they rest (0.32 s, both on the
+/// ease-out: still.fail's, viewer/media.css.ts): Media::new's, unless said otherwise.
 pub let media_rest_ms : Double = 2500.0
 
 ///|
 pub let media_note_ms : Double = 800.0
 
 ///|
-pub let media_shown_ms : Double = 200.0
+pub let media_wake_ms : Double = 120.0
+
+///|
+pub let media_sleep_ms : Double = 320.0
 
 ///|
 /// A player with nothing in it yet. Its ways, as Player.kt's: the speeds a tap steps through, what a double tap on a
 /// side jumps, how long its controls stay left alone while it plays (0: they stay), a double tap's second tap's time,
-/// how long a note is said, how long its controls take to come or go, how long it waits before it says it is waiting.
+/// how long a note is said, how long its controls take to come and to go, how long it waits before it says it is
+/// waiting.
 pub fn Media::new(
   key? : String = "media",
   speeds? : Array[Double] = [1.0, 1.25, 1.5, 2.0, 0.5, 0.75],
@@ -173,7 +179,8 @@ pub fn Media::new(
   rest_ms? : Double = media_rest_ms,
   double_tap_ms? : Double = 300.0,
   note_ms? : Double = media_note_ms,
-  shown_ms? : Double = media_shown_ms,
+  wake_ms? : Double = media_wake_ms,
+  sleep_ms? : Double = media_sleep_ms,
   wait_ms? : Double = 400.0,
 ) -> Media {
   {
@@ -183,7 +190,8 @@ pub fn Media::new(
     rest_ms,
     double_tap_ms,
     note_ms,
-    shown_ms,
+    wake_ms,
+    sleep_ms,
     wait_ms,
     track: None,
     view: None,
@@ -604,7 +612,14 @@ pub fn Media::frame(self : Media, c : @ui.Ctx) -> MediaFrame {
     }
   }
   let target = if p.awake || phase != Playing || audio { 1.0 } else { 0.0 }
-  let shown = @motion.animate(c, p.key + "/shown", target, spec=@motion.tween(p.shown_ms))
+  let shown = @motion.animate(c, p.key + "/shown", target, spec=@motion.tween(
+      if target > 0.0 {
+        p.wake_ms
+      } else {
+        p.sleep_ms
+      },
+      ease=Out,
+    ))
   let said = if p.subs_on { @codec.cues_at(p.cues, s.position) } else { "" }
   { status: s, phase, audio, waited, rate, shown, on: shown > 0.0, note: p.note, said }
 }
