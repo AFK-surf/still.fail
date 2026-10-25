@@ -1376,15 +1376,14 @@ test("a session heard only in Slack is archived after three idle days even when 
   await r.close();
 });
 
-test("kept chats survive idle archiving but can be archived by hand", async () => {
+test("pinned chats survive idle archiving, their agent's other chats too, but can be archived by hand", async () => {
   const r = new Rig();
   const [key, thread] = newSession(r.hub, chat());
-  r.store.keepChat("alice", thread.id);
+  r.store.setPin("alice", key, true);
   autoArchive(r.hub, Date.now() + 3 * 86_400_000);
   assert.equal(r.session(key).archivedAt, null);
   assert.equal(r.store.getThread(thread.id)!.hiddenAt, null);
   const second = openChat(r.hub, key, "alice", null);
-  r.store.keepChat("alice", second.id);
   autoArchive(r.hub, Date.now() + 3 * 86_400_000);
   assert.equal(r.store.getThread(second.id)!.hiddenAt, null);
   archiveChat(r.hub, second.id, true);

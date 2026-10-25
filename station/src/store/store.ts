@@ -26,7 +26,7 @@ import {
   byBytes, cardOf, jsonList, mergeEntries, optionsCard, parsed, quote, takeChars, toEntry, toJob, toMembership,
   CC_THREADS_SQL, LETTER_SQL, isLetter, liveShare, shareLive, toChatShare, toMessage, toOpened, toPublished, toSession, toSessionThread, toThread, toTurnSummary, JOBS_RUNNING, SESSION_JOBS, CARD_BEFORE, OPTIONS_BEFORE, CLOSED_SINCE, SESSION_OF_RUNTIME, PEOPLE_AT,
 } from "./rows.ts";
-import { SCHEMA, SCHEMA_VERSION, addArchiveColumns, addListState, addThreadIndexes, addUsageCompactions, addAutoTitleColumns, addClientColumn, addLetterColumn, addQueueColumns, addSizeColumn, addUsageTotals, addWatchColumn, addWorkspaceColumns } from "./schema.ts";
+import { SCHEMA, SCHEMA_VERSION, addArchiveColumns, addListState, addThreadIndexes, addUsageCompactions, addAutoTitleColumns, addClientColumn, addLetterColumn, addQueueColumns, addSizeColumn, addUsageTotals, addWatchColumn, addWorkspaceColumns, keptIntoPins } from "./schema.ts";
 import * as usage from "./usage.ts";
 import { timed } from "./timed.ts";
 
@@ -145,6 +145,7 @@ export class Store {
       addUsageTotals(db);
       addUsageCompactions(db);
       addListState(db);
+      keptIntoPins(db, clock.currentTimeMillisUnsafe());
       db.exec(`PRAGMA user_version = ${SCHEMA_VERSION}`);
     } catch (e) {
       db.close();
@@ -684,7 +685,6 @@ export class Store {
           this.#run("DELETE FROM items WHERE thread = ?", thread);
           this.#run("DELETE FROM dismissed WHERE thread = ?", thread);
           this.#run("DELETE FROM closed_cards WHERE thread = ?", thread);
-          this.#run("DELETE FROM kept_chats WHERE thread = ?", thread);
           // Its published snapshots go with it.
           for (const r of this.#all("SELECT id FROM published WHERE thread = ?", thread)) unpublished.push(r.id);
           this.#run("DELETE FROM published WHERE thread = ?", thread);
@@ -1195,7 +1195,7 @@ export class Store {
     return new Map(this.#all("SELECT session, at FROM pins WHERE viewer = ?", viewer).map((r) => [r.session, r.at]));
   }
 
-  /// The chats someone pinned (by their session's key): the station does not archive them for idling.
+  /// The chats someone pinned (by their session's key): the station does not archive them on its own.
   pinnedSessions(): Set<string> {
     return new Set(this.#all("SELECT DISTINCT session FROM pins").map((r) => r.session));
   }
@@ -1217,27 +1217,6 @@ export class Store {
   /// A chat was relayed to a connect's channel or group now.
   noteRelayed(connect: string, channel: string): void {
     this.#run("INSERT INTO relayed_to (connect, channel, at) VALUES (?1, ?2, ?3) ON CONFLICT (connect, channel) DO UPDATE SET at = ?3", connect, channel, this.now());
-  }
-
-  /// Chats kept instead of offered for archiving. Null selects every viewer, for automatic archiving.
-  keptChats(viewer: string | null): Set<number> {
-    return new Set(this.#all("SELECT DISTINCT thread FROM kept_chats WHERE ?1 IS NULL OR viewer = ?1", viewer).map((r) => r.thread));
-  }
-
-  keepChat(viewer: string, thread: number): void {
-    this.#with((changes) => {
-      this.#run("INSERT OR IGNORE INTO kept_chats (viewer, thread) VALUES (?, ?)", viewer, thread);
-      changes.push({ type: "dismissed", viewer });
-    });
-  }
-
-  /// A chat kept by the viewer let go: offered for archiving again, and archived on its own once idle (unless someone
-  /// else keeps it).
-  unkeepChat(viewer: string, thread: number): void {
-    this.#with((changes) => {
-      this.#run("DELETE FROM kept_chats WHERE viewer = ? AND thread = ?", viewer, thread);
-      changes.push({ type: "dismissed", viewer });
-    });
   }
 
   // ── cards ──

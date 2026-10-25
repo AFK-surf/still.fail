@@ -42,7 +42,7 @@ export type Pending = {
 /// An agent's first messages, sent before it has a chat.
 export type First = { queue: J[]; making: boolean; failed: string | null };
 
-/// A chat changed from here (`chat.rename`, `chat.pin`, `chat.keep`, `chat.archive`), until its station's rows have it.
+/// A chat changed from here (`chat.rename`, `chat.pin`, `chat.archive`), until its station's rows have it.
 export type Change = {
   id: number;
   station: string;

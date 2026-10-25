@@ -1,6 +1,9 @@
 // What a viewer marks, as admin/mod.rs answers it: read positions, names, pins, keeping, dismissing, closing a card,
 // widget states.
 import assert from "node:assert/strict";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { test } from "node:test";
 import { Admin } from "../src/api/admin.ts";
 import type { Request } from "../src/api/request.ts";
@@ -35,10 +38,13 @@ test("read positions, names, keeping and dismissing", async () => {
   assert.deepEqual(await ask("PUT", `/threads/${chat.id}/title`, { title: "  named  " }), [200, { op: "thread", id: String(chat.id) }]);
   assert.equal(store.getThread(chat.id)!.title, "named");
   assert.equal((await ask("PUT", `/threads/${slack.id}/title`, { title: "x" }))[0], 400);
+  // Kept as a client from before pins kept chats asks it: the chat's session pinned, then let go.
+  assert.deepEqual((await ask("PUT", `/threads/${chat.id}/keep`))[0], 404);
+  store.joinThread(chat.id, "s1", "ds");
   assert.deepEqual(await ask("PUT", `/threads/${chat.id}/keep`), [200, { kept: true }]);
-  assert.deepEqual([...store.keptChats("a@x")], [chat.id]);
+  assert.deepEqual([...store.pins("a@x").keys()], ["s1"]);
   assert.deepEqual(await ask("DELETE", `/threads/${chat.id}/keep`), [200, { kept: false }]);
-  assert.deepEqual([...store.keptChats("a@x")], []);
+  assert.deepEqual([...store.pins("a@x").keys()], []);
   assert.equal((await ask("PUT", `/threads/${chat.id}/dismissed`, { n: 1 }))[0], 404);
   assert.deepEqual(await ask("PUT", `/threads/${chat.id}/dismissed`, { n: 2 }), [200, { dismissed: { thread: chat.id, n: 2 } }]);
   const [n] = store.insertMessage({ ...newMessage(chat.id, "1.4", "agent", "s1", "deploy?"), card: { type: "options", options: [{ label: "no", action: "close" }] } });
@@ -58,4 +64,32 @@ test("sessions' names, pins and widget states", async () => {
   assert.deepEqual(await ask("PUT", "/sessions/s1/widget-state", { path: "w.html", state: { modelContent: { a: 1 } } }), [200, { ok: true }]);
   assert.equal(store.widgetState("s1", "w.html"), '{"modelContent":{"a":1}}');
   assert.equal((await ask("PUT", "/sessions/s1/widget-state", { path: "w.html", state: "x".repeat(17000) }))[0], 400);
+});
+
+test("chats kept out of the archive before pins did that are pinned as the store opens", () => {
+  const data = mkdtempSync(join(tmpdir(), "marks-"));
+  try {
+    const path = join(data, "stillfail.db");
+    const store = Store.open(path, join(data, "archive"));
+    for (const key of ["s1", "s2"]) {
+      store.insertSession({ key, connect: "ds", runtime: "claude", profile: "cc", workspace: `/w/${key}`, token: "t", createdAt: 1, lastActiveAt: 1 });
+    }
+    // One with no session of its own (its first to join is its item), one with none at all (nothing to pin).
+    const joined = store.openThread("ember", "EMBER", "1.1", null, "a@x");
+    store.joinThread(joined.id, "s2", "ds");
+    store.joinThread(joined.id, "s1", "ds");
+    const empty = store.openThread("ember", "EMBER", "3.3", null, "a@x");
+    const keep = store.db.prepare("INSERT INTO kept_chats (viewer, thread) VALUES (?, ?)");
+    for (const [viewer, thread] of [["a@x", joined.id], ["b@x", joined.id], ["a@x", empty.id]] as const) keep.run(viewer, thread);
+    store.setPin("b@x", "s2", true);
+    const before = store.pins("b@x").get("s2");
+    store.close();
+    const again = Store.open(path, join(data, "archive"));
+    assert.deepEqual([...again.pins("a@x").keys()], ["s2"]);
+    assert.equal(again.pins("b@x").get("s2"), before, "pinned already: kept as it was");
+    assert.equal((again.db.prepare("SELECT COUNT(*) AS n FROM kept_chats").get() as { n: number }).n, 0);
+    again.close();
+  } finally {
+    rmSync(data, { recursive: true, force: true });
+  }
 });

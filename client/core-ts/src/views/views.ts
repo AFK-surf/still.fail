@@ -1375,7 +1375,6 @@ export class Views implements Owner {
     row = decisions.presentRow(row);
     // Archived with one tap whenever nothing is left in it; offered to archive (faded, below the rest of its day) as the
     // viewer's `archiveHint` says.
-    if (row.archiveReminderDismissed === true) row.kept = true;
     if (present.archivable(row)) {
       row.archivable = true;
       if (present.offered(row, hint)) row.settled = true;

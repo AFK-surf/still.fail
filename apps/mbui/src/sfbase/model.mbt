@@ -120,7 +120,6 @@ pub(all) struct ChatItem {
   creator : String
   /// pinned to the list's top (None: a station from before pins), kept from the archive
   pinned : Bool?
-  kept : Bool
   /// the key a chat asked for here went by before its station made it ("" for none): its row is the same row
   /// throughout
   client_key : String
@@ -220,7 +219,6 @@ pub fn chat_item(v : Json) -> ChatItem {
       Some(False) => Some(false)
       _ => None
     },
-    kept: flag(s, "kept"),
     client_key: text(s, "clientKey"),
   }
 }

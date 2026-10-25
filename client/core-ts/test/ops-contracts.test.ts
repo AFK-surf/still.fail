@@ -44,13 +44,6 @@ test("every_operation_reads_what_its_contract_names_and_nothing_else", () => {
   }
 });
 
-test("a_chat_is_kept_by_put_and_let_go_by_delete", () => {
-  const keep = (params: Record<string, unknown>) => request("chat.keep", { station: "w/s", thread: 3, ...params });
-  assert.deepEqual([keep({})?.method, keep({})?.path], ["PUT", "/threads/3/keep"]);
-  assert.equal(keep({ kept: true })?.method, "PUT");
-  assert.deepEqual([keep({ kept: false })?.method, keep({ kept: false })?.path], ["DELETE", "/threads/3/keep"]);
-});
-
 test("a_slack_apps_form_writes_only_what_differs_from_what_it_started_from", () => {
   const from = { name: "still.fail", description: "Coding agent", groups: { base: true, dm: true } };
   const put = (params: Record<string, unknown>) => request("connect.putSlackApp", { station: "w/s", connect: "c1", ...params });
