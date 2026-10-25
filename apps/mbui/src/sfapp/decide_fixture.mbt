@@ -661,7 +661,7 @@ pub fn open_fixture(mode : String) -> Unit {
     }
     "chat-agent" | "chat-agent-unsaid" => dui.sheet = Some(AgentOf(r, "s-c1"))
     // its station's card, from the agent's (Stations.kt openStationPeek)
-    "chat-peek" => @settings.open_station_peek(r.station)
+    "chat-peek" => @settings.open_station_peek(r.station, from=Unanchored)
     "chat-jobs" => dui.sheet = Some(JobsOf(r))
     "chat-job" => {
       dui.job_tab = 0

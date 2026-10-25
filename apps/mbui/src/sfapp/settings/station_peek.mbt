@@ -3,10 +3,10 @@
 // its page.
 
 ///|
-/// The card of the station at `address` (`ws/station`) over the page: the library's panel, titled its name (a sheet
-/// with touch short of Large, else a dialog), drawn with the frame's core as it is drawn (put up before a frame is,
-/// a fixture's, as well).
-pub fn open_station_peek(address : String) -> Unit {
+/// The card of the station at `address` (`ws/station`) over the page: the library's panel, titled its name, opened
+/// `from` what was pressed (its tag in a chat's bar: a sheet with touch short of Large, else beside it), drawn with
+/// the frame's core as it is drawn (put up before a frame is, a fixture's, as well).
+pub fn open_station_peek(address : String, from~ : @sf.Anchor) -> Unit {
   @sf.panel(
     "",
     fn(c, close) {
@@ -15,7 +15,7 @@ pub fn open_station_peek(address : String) -> Unit {
         None => ()
       }
     },
-    from=Unanchored,
+    from~,
     live=fn() { (peek_name(address), "", "") },
   )
 }
@@ -72,7 +72,8 @@ fn station_peek(c : @ui.Ctx, core : Core, address : String, close : () -> Unit) 
   let s = peek_station(core, address)
   c.box(style=peek_body, fn() {
     if s is Some(_) {
-      c.box(style=peek_words, fn() {
+      // (its words as far in as its rows' words: a dialog's, a small panel's)
+      c.box(style=peek_words.then(@sf.panel_words_in()), fn() {
         c.text(text(s, "summary"), style=peek_said) |> ignore
         // what its agents' processes are is on its page, a tap away
         if flag(s, "online") {

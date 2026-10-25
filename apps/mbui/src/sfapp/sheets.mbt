@@ -762,7 +762,7 @@ fn agent_sheet(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef, key : Stri
               }) {
               // the station's card in place of this one
               close_sheet(c)
-              @settings.open_station_peek(r.station)
+              @settings.open_station_peek(r.station, from=Unanchored)
             }
           None => ()
         }

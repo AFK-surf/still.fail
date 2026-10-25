@@ -41,6 +41,8 @@ priv struct SettingsFixture {
   mut pairing : Bool
   /// how its prompt went: "deny" (turned away), "hide" (closed, the code still good), "" while it is up
   mut pair_ended : String
+  /// MBA online too (settings-profiles-pick: Profile's ＋ asks which station)
+  mut mba_online : Bool
   /// the bytes of the drives' files kept (`cache.usage`'s `drive`), until let go (`drive.kept.clear`)
   mut drive_kept : Double
   /// the chats' files kept let go (`cache.file.clear`), by name
@@ -66,6 +68,7 @@ let fx : SettingsFixture = {
   models_added: [],
   pairing: false,
   pair_ended: "",
+  mba_online: false,
   drive_kept: fx_drive_kept,
   kept_cleared: [],
 }
@@ -138,6 +141,7 @@ fn fixture_reset() -> Unit {
   fx.plain_left = 0
   fx.pairing = false
   fx.pair_ended = ""
+  fx.mba_online = false
   fixture_open.sheet = ""
   fixture_open.list = ""
   fixture_open.block = 0
@@ -188,8 +192,8 @@ pub fn fixture_page(mode : String) -> String {
       up("", "settings/station/ws1/st1", 0)
     }
     "settings-stations-add" => up("add", "", 0)
-    // Profile's ＋ with more than one station online: which to add it on
-    "settings-profiles-pick" => up("pick-station", "", 0)
+    // Profile's ＋ with more than one station online: which to add it on (pressed by the film's step)
+    "settings-profiles-pick" => fx.mba_online = true
     "settings-stations-existing" => up("add-existing", "", 0)
     "settings-stations-command" => up("add-command", "", 0)
     "settings-first-station" => fx.none = true
@@ -903,10 +907,10 @@ fn fx_station(address : String) -> Json {
       ("id", str(id)),
       ("name", str(renamed.unwrap_or("MBA"))),
       ("icon", str(fx.marks.get(id).unwrap_or("glyph:laptop:teal"))),
-      ("summary", str("离线 · 2 天前")),
-      ("face", str("offline")),
-      ("online", Json::boolean(false)),
-      ("link", obj([("state", str("offline"))])),
+      ("summary", str(if fx.mba_online { "Apple M3 · 空闲" } else { "离线 · 2 天前" })),
+      ("face", str(if fx.mba_online { "idle" } else { "offline" })),
+      ("online", Json::boolean(fx.mba_online)),
+      ("link", obj([("state", str(if fx.mba_online { "online" } else { "offline" }))])),
       ("runtimes", []),
       ("models", []),
     ])
@@ -1953,13 +1957,6 @@ fn fixture_sheet(core : Core, here : Here) -> Unit {
       open_mark_pick(core, text(s, "name"), text(s, "emoji"), text(s, "icon"), "", fn(_, _, _) {  })
     }
     "add-people" => open_add_people(core, here, workspace_view(core, here).value)
-    "pick-station" =>
-      open_pick_station(
-        [("ws1/st1", "Studio"), ("ws1/st3", "Mini1"), ("ws1/st4", "ccvm")].map(fn(s) {
-          obj([("station", str(s.0)), ("name", str(s.1)), ("online", Json::boolean(true))])
-        }),
-        fn(_) {  },
-      )
     "workspace-mark" => open_mark_pick(core, "星火工作室", "", "glyph:rocket:orange", "", fn(_, _, _) {  })
     "add" | "add-existing" | "add-command" => {
       open_add_station(core, here, ["st1", "st2"], existing=what == "add-existing")

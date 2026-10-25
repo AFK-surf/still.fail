@@ -370,7 +370,7 @@ fn chat_station(c : @ui.Ctx, station : String, s : Station?) -> Unit {
   let id = c.id("bar-station")
   c.cursor(id, Hand)
   if c.clicked(id) {
-    @settings.open_station_peek(station)
+    @settings.open_station_peek(station, from=Of(id))
   }
   let hot = c.lit(id)
   c.box(style=if hot { chat_station_hot } else { chat_station_tag }, id~, label=s.name, fn() {

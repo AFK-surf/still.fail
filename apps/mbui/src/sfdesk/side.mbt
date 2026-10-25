@@ -164,8 +164,8 @@ let breathing_line : @ui.Style = @ui.style(w=Fixed(breath_line_w), h=S2_5, radiu
 ///|
 /// The action over a list (SidebarList.tsx NavAction, in its band: Sidebar.css.ts navNew, 6 over it, 8 at its sides, 2
 /// under, the list's own 4 then): its ＋ (16, the row's mark column, ICON) and words, a row of its own; none, and no
-/// band, where it cannot be done.
-pub fn nav_action(c : @ui.Ctx, key : String, label : String, run : (() -> Unit)?) -> Unit {
+/// band, where it cannot be done. Pressed, `run` goes on with it as what opened what it puts up.
+pub fn nav_action(c : @ui.Ctx, key : String, label : String, run : ((@sf.Anchor) -> Unit)?) -> Unit {
   let t = @sf.theme()
   match run {
     Some(go) =>
@@ -174,7 +174,7 @@ pub fn nav_action(c : @ui.Ctx, key : String, label : String, run : (() -> Unit)?
             band_mark(c, "plus", t.p.muted)
             band_words(c, label)
           }) {
-          go()
+          go(Of(c.id(key)))
         }
       })
       |> ignore

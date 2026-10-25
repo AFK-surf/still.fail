@@ -333,7 +333,7 @@ fn stations_first(c : @ui.Ctx, core : Core, here : Here, src : Source, w : Works
           match @settings.place_action(core, here, "stations") {
             Some(add) =>
               if @sf.button(c, @sf.t("web-pages.settings.stations.add"), key="stations-first/add", tone=Primary, icon="plus") {
-                add()
+                add(Of(c.id("stations-first/add")))
               }
             None => c.text(@sf.t("web-pages.settings.stations.noneYet"), style=desk_muted_line) |> ignore
           }

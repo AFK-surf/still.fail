@@ -54,7 +54,7 @@ pub fn files_nav(c : @ui.Ctx, src : Source, ws : String) -> Unit {
     side_top(c)
     let pins = pin_stations(src, ws)
     if pins.length() > 0 {
-      nav_action(c, "files/pin", @sf.t("web-pages.drive.addRoot"), Some(fn() { add_folder(src, ws, pins) }))
+      nav_action(c, "files/pin", @sf.t("web-pages.drive.addRoot"), Some(fn(_) { add_folder(src, ws, pins) }))
     }
     // (a folder chosen there in the page, on the tape brought over to show it)
     files_places(c, src, ws, top=nav_top, go=fn(at) {
