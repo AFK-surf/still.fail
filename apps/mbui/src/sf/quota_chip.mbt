@@ -3,6 +3,16 @@
 // control), drawn by fill_chip.
 
 ///|
+/// Whether an allowance shows as chips (quota_chips draws any): the core can say it (`state` ok) and it has a window.
+pub fn has_quota(q : Json?) -> Bool {
+  chip_str(q, "state") == "ok" &&
+  (match chip_field(q, "windows") {
+    Some(Array(a)) => a.length() > 0
+    _ => false
+  })
+}
+
+///|
 /// An allowance's windows (components.tsx QuotaChip each, ProfilesNav.tsx Windows): a chip per window, what is left in
 /// it, filled as far as that, its mark before it where `marked` (the web's default; a chat's agents only with more
 /// than one); `small`, a lower line; `gap` apart; nothing while the core cannot say (`state` not ok) or there is no
@@ -15,15 +25,10 @@ pub fn quota_chips(
   gap? : Double = 8.0,
   tip? : (Int, Json) -> Unit,
 ) -> Unit {
-  if chip_str(q, "state") != "ok" {
-    return
-  }
+  guard has_quota(q) else { return }
   let windows = match chip_field(q, "windows") {
     Some(Array(a)) => a
     _ => []
-  }
-  if windows.length() == 0 {
-    return
   }
   c.box(style=quota_chips_row.then(@ui.style(gap=room(gap))), fn() {
     for w in windows {

@@ -439,7 +439,8 @@ fn chat_info_sheet(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef) -> Uni
                   state_of_badge(text(av, "badge")),
                   @sf.over(t.p.bg, @sf.alpha(t.p.card, 0.8)),
                 )
-                // (short of room, its allowance leaves the row, its name whole: in its own sheet)
+                // its name, how it is, and its allowance under them, each a line of its own (beside its name the
+                // allowance took the name's room, or left the row where it had not the room: the allowance gone)
                 c.box(w=Fill(1.0), keep=true, fn() {
                   c.text(text(s, "agentText"), style=info_agent_name, keep=true) |> ignore
                   let since = agent_since(c, src, av)
@@ -449,10 +450,7 @@ fn chat_info_sheet(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef) -> Uni
                     text(s, "statusText") + " · " + since
                   }
                   c.text(line, style=info_agent_line, keep=true) |> ignore
-                })
-                |> ignore
-                c.box(drop=1, fn() {
-                  @sf.quota_chips(c, match field(field(av, "account"), "quota") {
+                  allowance_line(c, match field(field(av, "account"), "quota") {
                     Some(_) as q => q
                     None => field(field(av, "profile"), "quota")
                   })
@@ -781,8 +779,8 @@ fn agent_sheet(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef, key : Stri
           fill("android-chat.agent.account.auto", [("name", name)])
         }
         // changing how it runs is a page of its own (History.kt RunSettingsScreen)
-        if agent_row(c, "agent/account", tr("android-chat.agent.account"), value, fn() {
-            @sf.quota_chips(c, field(account, "quota"))
+        if agent_row(c, "agent/account", tr("android-chat.agent.account"), value, fn() {  }, under=fn() {
+            allowance_line(c, field(account, "quota"))
           }) {
           close_sheet(c)
           app.nav.push(Setting(@settings.Route::RunSettings(r.station, key)))
@@ -835,20 +833,43 @@ fn agent_sheet(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef, key : Stri
 }
 
 ///|
-/// A row of the card (AgentSheet.kt AgentRow): what it is about, what there is of it, where a tap leads.
-fn agent_row(c : @ui.Ctx, key : String, label : String, value : String, trailing : () -> Unit) -> Bool {
+/// A row of the card (AgentSheet.kt AgentRow): what it is about, what there is of it (`under` it what goes with it:
+/// an account's allowance, a line of its own), what is under way at its end (`trailing`), where a tap leads.
+fn agent_row(
+  c : @ui.Ctx,
+  key : String,
+  label : String,
+  value : String,
+  trailing : () -> Unit,
+  under? : () -> Unit,
+) -> Bool {
   let t = @sf.theme()
   info_row(c, key, fn() {
     c.text(label, size=t.t.meta, color=t.p.muted, wrap=false) |> ignore
-    // (short of room, what follows its value leaves the row, the value whole)
     c.box(w=Fill(1.0), keep=true, fn() {
       c.text(value, style=agent_row_value, keep=true) |> ignore
+      match under {
+        Some(f) => f()
+        None => ()
+      }
     })
     |> ignore
-    c.box(drop=1, fn() { trailing() }) |> ignore
+    trailing()
     chevron(c)
   })
 }
+
+///|
+/// An account's allowance (its chips) on a line of its own under what names it, 4 under it; nothing where it says none.
+fn allowance_line(c : @ui.Ctx, quota : Json?) -> Unit {
+  if @sf.has_quota(quota) {
+    c.box(style=allowance_box, fn() { @sf.quota_chips(c, quota) }) |> ignore
+  }
+}
+
+///|
+// kept across runs: a value (no field of it changes)
+let allowance_box : @ui.Style = @ui.css("row pt=S1")
 
 ///|
 /// What an agent's row says (its account, its history): on a line, whole while what follows it may leave the row.
