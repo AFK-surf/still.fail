@@ -37,6 +37,9 @@ CREATE TABLE IF NOT EXISTS decision_checks (
 -- view, in every overview): without them each scanned every check.
 CREATE INDEX IF NOT EXISTS decision_checks_session ON decision_checks (session, id);
 CREATE INDEX IF NOT EXISTS decision_checks_at ON decision_checks (created_at);
+-- Each session's latest check of the last days (store.ts LATEST_DECISIONS): from the index alone, and then only the
+-- rows of those latest (ccvm: 1,025 checks of 210 sessions in a week).
+CREATE INDEX IF NOT EXISTS decision_checks_lately ON decision_checks (created_at, session);
 CREATE TABLE IF NOT EXISTS sessions (
   key TEXT PRIMARY KEY,
   connect TEXT NOT NULL,
