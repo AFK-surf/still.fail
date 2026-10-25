@@ -343,7 +343,7 @@ test "wide: a new chat becomes its chat as the web's: its scene up and away, the
   t.run_for(new_leave_ms / 2.0 + 1.0)
   assert_true(heading() is None)
   // the composer at the chat's foot at 340 ms, a capsule as wide as the column and its curves
-  t.run_for(sent + composer_page_ms + 1.0 - t.time())
+  t.run_for(sent + @sfpages.page_move_ms + 1.0 - t.time())
   let (ex, ey, ew, eh) = composer_glass(t)
   assert_true(ey + eh > 800.0 - 30.0, msg="at the foot: \{(ex, ey, ew, eh)}")
   assert_true(ew > bw)
@@ -384,9 +384,9 @@ test "wide: a chat and a new chat switched by the sidebar: the composer goes bet
   assert_eq(t.look_of("新对话").map(fn(l) { l.2 }), Some(1.0))
   // what it holds there and did not at the chat's foot (the new chat's choices) carried on its ground all the way
   choices_in_ground(t)
-  t.run_for(composer_page_ms / 2.0)
+  t.run_for(@sfpages.page_move_ms / 2.0)
   choices_in_ground(t)
-  t.run_for(went + composer_page_ms + 1.0 - t.time())
+  t.run_for(went + @sfpages.page_move_ms + 1.0 - t.time())
   let (_, y1, _, h1) = composer_glass(t)
   assert_true(y1 + h1 < cy - 100.0, msg="in the page's middle: \{(y1, h1)}")
   assert_eq(t.look_of("新对话").map(fn(l) { l.2 }), Some(1.0))
@@ -403,7 +403,7 @@ test "wide: a chat and a new chat switched by the sidebar: the composer goes bet
   }
   t.run_for(back + new_leave_ms + 1.0 - t.time())
   assert_true(t.find("新对话") is None)
-  t.run_for(back + composer_page_ms + 1.0 - t.time())
+  t.run_for(back + @sfpages.page_move_ms + 1.0 - t.time())
   let (_, y2, _, h2) = composer_glass(t)
   assert_true((y2 + h2 - (cy + ch)).abs() < 1.0, msg="at the chat's foot again: \{(y2, h2)}")
 }

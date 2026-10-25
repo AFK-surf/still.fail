@@ -19,10 +19,10 @@
 // the frame they are sent, over the new chat's composer and then its chat's (newchat.mbt makes the chat, the page
 // becomes it), until their row is laid out in the chat's list; then the list comes up out of the composer with them,
 // across and up together on Ease.Arrive (480 ms, 90 after: the choices fade first; in the wide frame from the middle of
-// the page at once, the composer going down to the chat's foot meanwhile: composer_page), their bubble's ground and time
-// coming in on the same way. The composer is not held for them. The list is not cut at the composer's top as Android's
-// is (ChatHost.kt clipRect): their bubble, in it, is drawn over the composer only while nothing over it cuts what it
-// draws (Ctx::put_over), and what else is in it then (its time) is all but clear there.
+// the page at once, the composer going down to the chat's foot meanwhile: sfpages composer.mbt), their bubble's ground
+// and time coming in on the same way. The composer is not held for them. The list is not cut at the composer's top as
+// Android's is (ChatHost.kt clipRect): their bubble, in it, is drawn over the composer only while nothing over it cuts
+// what it draws (Ctx::put_over), and what else is in it then (its time) is all but clear there.
 
 ///|
 pub(all) struct SendFlight {

@@ -123,7 +123,6 @@
       "src/sfapp/decisions.mbt": 113,
       "src/sfapp/drive.mbt": 11,
       "src/sfapp/drive_parts.mbt": 21,
-      "src/sfapp/emit_flyer.mbt": 2,
       "src/sfapp/history.mbt": 69,
       "src/sfapp/home.mbt": 24,
       "src/sfapp/messages.mbt": 94,
@@ -178,7 +177,6 @@
       "src/sfapp/decisions.mbt": 49,
       "src/sfapp/drive.mbt": 5,
       "src/sfapp/drive_parts.mbt": 7,
-      "src/sfapp/emit_flyer.mbt": 1,
       "src/sfapp/history.mbt": 29,
       "src/sfapp/home.mbt": 9,
       "src/sfapp/messages.mbt": 51,
@@ -234,7 +232,6 @@
       "src/sfbase/viewer.mbt": 1
     },
     "motion-read": {
-      "src/sfapp/composer.mbt": 1,
       "src/sfbase/chat_list.mbt": 1,
       "src/sfbase/emit.mbt": 3,
       "src/sfbase/flight.mbt": 1,
