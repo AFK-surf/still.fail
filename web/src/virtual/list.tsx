@@ -16,6 +16,7 @@
 // model puts it, once; it is read back as it is set (the browser may stop short of it, the page laid out by then).
 import { createContext, createElement, useContext, useEffect, useLayoutEffect, useMemo, useReducer, useRef, type ReactNode, type RefObject } from "react";
 import { flushSync } from "react-dom";
+import { outsideScroll } from "../scrollBounds.ts";
 import { sizesOf, Virtual, type Align, type Item, type Layout, type Row } from "./model.ts";
 import * as css from "./list.css.ts";
 import { glideClock, glided, glideShare } from "@stillfail/ui/motion.ts";
@@ -140,7 +141,7 @@ export function useVirtualList(pane: RefObject<HTMLElement | null>, made: Made, 
     /** The pane put where the model has it, at once. */
     const put = (el: HTMLElement) => {
       const top = model.layout().scrollTop;
-      if (Math.abs(top - made.written) < 0.5) return;
+      if (Math.abs(top - made.written) < 0.5 || outsideScroll(el)) return;
       const before = made.written;
       el.scrollTop = top;
       // As far as the browser took it: short of it while rows stand shorter than they were taken to be.
@@ -200,6 +201,8 @@ export function useVirtualList(pane: RefObject<HTMLElement | null>, made: Made, 
   useLayoutEffect(() => {
     const el = pane.current;
     if (!el) return;
+    // The pane may first appear after loading, or React may have replaced its className this commit.
+    if (!el.classList.contains(css.pane)) el.classList.add(css.pane);
     let later = 0;
     // Only for rows made in this very commit (each reports once it is laid out); nor a pane never put yet (its own
     // size comes with the same report). Any other time the pane is put now: no report may be coming.
@@ -244,6 +247,7 @@ export function useVirtualList(pane: RefObject<HTMLElement | null>, made: Made, 
     const scrolled = () => {
       const top = el.scrollTop;
       clearTimeout(rest);
+      if (outsideScroll(el)) return;
       // At rest: the pane put where it should be (what was held under the scroll), fewer rows made ahead.
       rest = window.setTimeout(() => { model.rested(); self.sync(el); }, REST_MS);
       if (Math.abs(top - made.written) < 1) return;
@@ -281,7 +285,7 @@ export function useVirtualList(pane: RefObject<HTMLElement | null>, made: Made, 
       // A reader's scroll was heard before this in the frame: the pane anywhere else than it was put is the browser's
       // doing as it laid the page out (what left the list's end left the pane past its end). The model puts it back.
       const at = el.scrollTop;
-      if (!Number.isNaN(made.written) && Math.abs(at - made.written) >= 1) { made.pulled = at; made.written = at; }
+      if (!Number.isNaN(made.written) && Math.abs(at - made.written) >= 1 && !outsideScroll(el)) { made.pulled = at; made.written = at; }
       const heights: ([string, number] | [string, number, number])[] = [];
       for (const entry of entries) {
         const box = entry.borderBoxSize[0];

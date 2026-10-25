@@ -143,6 +143,7 @@ export const mJobHead = style({ display: "flex", alignItems: "flex-start", gap: 
 export const mJobBody = style({});
 export const mJobNotices = style({ display: "grid", gap: "12px", fontSize: vars.textUi, overflowY: "auto" });
 export const mJobOutput = style({
+  overscrollBehaviorY: "none",
   margin: "0", padding: "12px 14px", maxHeight: "50vh", overflow: "auto", borderRadius: `calc(16px * ${vars.cornerScale})`,
   cornerShape: vars.cornerShape,
   background: "color-mix(in srgb, var(--m-ink) 5%, transparent)",
