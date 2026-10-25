@@ -416,6 +416,14 @@ export function addArchiveColumns(db: DatabaseSync): void {
   );
 }
 
+/// The indexes on the threads' columns that came with homes (addArchiveColumns), made once those are there: a session's
+/// own chat (store.ts homeChat, usage.ts usageTurns: each read of the usage counter that makes a session's turns
+/// again), and the chats of their own the auto-archiving goes over, without reading every thread.
+export function addThreadIndexes(db: DatabaseSync): void {
+  db.exec(`CREATE INDEX IF NOT EXISTS threads_home ON threads (home) WHERE home IS NOT NULL;
+    CREATE INDEX IF NOT EXISTS threads_own ON threads (surface) WHERE home IS NULL AND hidden_at IS NULL;`);
+}
+
 /// add_client_column: the column a message's app came with (entries.client) and those after it, and the `merged` view
 /// made anew with them.
 export function addClientColumn(db: DatabaseSync): void {
