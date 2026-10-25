@@ -603,6 +603,82 @@ export function addUsageCompactions(db: DatabaseSync): void {
   }
 }
 
+/// What lists say of each thread and session, kept as what they are made of is written, not read out of every message
+/// each time a list is made (every sidebar, every GET /threads and /sessions, every event a viewer is told):
+/// - thread_state: a thread's last entry, its latest message that is not a letter (`said_n`), the first a person
+///   said (`person_n`), and how many letters it has. Entries only grow, and a thread's go together.
+/// - thread_people: who wrote in a thread, each with the first message they wrote there.
+/// - session_first: the first message a session was given (its delivery the earliest made).
+/// Made once from what is there, in the same transaction as the triggers that keep them from then on (as
+/// usage_totals), after the letters were marked (addLetterColumn).
+const LIST_STATE = `
+CREATE TABLE thread_state (
+  thread INTEGER PRIMARY KEY,
+  last_n INTEGER NOT NULL,
+  said_n INTEGER,
+  person_n INTEGER,
+  letters INTEGER NOT NULL
+);
+CREATE TABLE thread_people (
+  thread INTEGER NOT NULL,
+  author TEXT NOT NULL,
+  first_n INTEGER NOT NULL,
+  PRIMARY KEY (thread, author)
+) WITHOUT ROWID;
+CREATE TABLE session_first (
+  session TEXT PRIMARY KEY,
+  thread INTEGER NOT NULL,
+  n INTEGER NOT NULL
+) WITHOUT ROWID;
+INSERT INTO thread_state
+  SELECT thread, MAX(n), MAX(CASE WHEN kind = 'message' AND letter IS NULL THEN n END),
+    MIN(CASE WHEN kind = 'message' AND author_kind = 'person' THEN n END), COUNT(CASE WHEN kind = 'message' AND letter IS NOT NULL THEN 1 END)
+  FROM entries GROUP BY thread;
+INSERT INTO thread_people
+  SELECT thread, author, MIN(n) FROM entries WHERE kind = 'message' AND author_kind = 'person' GROUP BY thread, author;
+INSERT INTO session_first
+  SELECT session, thread, n FROM (SELECT session, thread, n, MIN(rowid) FROM deliveries GROUP BY session);
+CREATE TRIGGER thread_state_add AFTER INSERT ON entries BEGIN
+  INSERT INTO thread_state VALUES (NEW.thread, NEW.n,
+      CASE WHEN NEW.kind = 'message' AND NEW.letter IS NULL THEN NEW.n END,
+      CASE WHEN NEW.kind = 'message' AND NEW.author_kind = 'person' THEN NEW.n END,
+      CASE WHEN NEW.kind = 'message' AND NEW.letter IS NOT NULL THEN 1 ELSE 0 END)
+  ON CONFLICT (thread) DO UPDATE SET
+    last_n = MAX(last_n, excluded.last_n),
+    said_n = CASE WHEN excluded.said_n IS NULL THEN said_n WHEN said_n IS NULL THEN excluded.said_n ELSE MAX(said_n, excluded.said_n) END,
+    person_n = CASE WHEN excluded.person_n IS NULL THEN person_n WHEN person_n IS NULL THEN excluded.person_n ELSE MIN(person_n, excluded.person_n) END,
+    letters = letters + excluded.letters;
+  INSERT INTO thread_people SELECT NEW.thread, NEW.author, NEW.n WHERE NEW.kind = 'message' AND NEW.author_kind = 'person'
+  ON CONFLICT (thread, author) DO UPDATE SET first_n = MIN(first_n, excluded.first_n);
+END;
+CREATE TRIGGER thread_state_drop AFTER DELETE ON entries BEGIN
+  DELETE FROM thread_state WHERE thread = OLD.thread;
+  DELETE FROM thread_people WHERE thread = OLD.thread;
+END;
+CREATE TRIGGER session_first_add AFTER INSERT ON deliveries BEGIN
+  INSERT OR IGNORE INTO session_first VALUES (NEW.session, NEW.thread, NEW.n);
+END;
+CREATE TRIGGER session_first_drop AFTER DELETE ON deliveries
+  WHEN EXISTS (SELECT 1 FROM session_first WHERE session = OLD.session AND thread = OLD.thread AND n = OLD.n) BEGIN
+  DELETE FROM session_first WHERE session = OLD.session;
+  INSERT OR IGNORE INTO session_first SELECT session, thread, n FROM deliveries WHERE session = OLD.session ORDER BY rowid LIMIT 1;
+END;
+`;
+
+/// The lists' kept state (LIST_STATE), made once, with its triggers (as addUsageTotals).
+export function addListState(db: DatabaseSync): void {
+  const made = () => db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'thread_state'").get() !== undefined;
+  if (made()) return;
+  db.exec("BEGIN IMMEDIATE");
+  try {
+    if (!made()) db.exec(LIST_STATE);
+    db.exec("COMMIT");
+  } catch (e) {
+    db.exec("ROLLBACK");
+    throw e;
+  }
+}
+
 /// The columns a station in several workspaces came with (docs/multi-workspace.md): which workspace a session's chat
 /// is in (sessions.ws) and whose archive policy a row is (archive_policy.ws); NULL is the station's home workspace.
 export function addWorkspaceColumns(db: DatabaseSync): void {
