@@ -576,3 +576,32 @@ test "on the tape a passage held in the page beside the sidebar brings the page 
   assert_true(t.find("添加说明（可选）") is Some(_))
   assert_eq(@sfdesk.wide.tape_at, @sfdesk.TapePane::Page)
 }
+
+///|
+/// The grounds drawn under point (x, y), as drawn rects, top first.
+fn grounds_at(t : @ui.Tester, x : Double, y : Double) -> Array[Int64] {
+  t.drawn_rects().filter(fn(r) { x >= r.0 && x < r.0 + r.2 && y >= r.1 && y < r.1 + r.3 }).map(fn(r) { r.4 }).rev()
+}
+
+///|
+test "on the tape the panels behind the one in use stand on a ground a step darker, their words as they are" {
+  for dark in [false, true] {
+    let t = tape_chat(2, 750.0, 830.0, width="medium", height="medium")
+    t.set_dark(dark)
+    t.draw()
+    let behind = @sf.behind_ground()
+    let bg = @sf.theme().p.bg
+    assert_true(behind != bg)
+    // the sidebar in use: the page behind, on the darker ground, its words drawn as before
+    let (mx, my) = t.find("做完了：列表、跳到最新的按钮").unwrap()
+    assert_true(grounds_at(t, mx - 4.0, my).contains(behind), msg="dark \{dark}: the page's grounds \{grounds_at(t, mx - 4.0, my)}")
+    let (rx, ry) = t.find("首页的列表改成按天分组").unwrap()
+    assert_false(grounds_at(t, rx, ry).contains(behind), msg="dark \{dark}: the sidebar's grounds")
+    // the page brought over: the sidebar behind now, the page on its own ground
+    page_over(t, 750.0)
+    let (mx, my) = t.find("做完了：列表、跳到最新的按钮").unwrap()
+    assert_false(grounds_at(t, mx - 4.0, my).contains(behind), msg="dark \{dark}: the page in use")
+    let (rx, ry) = t.find("首页的列表改成按天分组").unwrap()
+    assert_true(grounds_at(t, rx, ry).contains(behind), msg="dark \{dark}: the sidebar behind")
+  }
+}

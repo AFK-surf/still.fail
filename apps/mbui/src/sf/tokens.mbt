@@ -1063,6 +1063,31 @@ pub fn link_ink() -> Int64 {
 }
 
 ///|
+/// What `body` draws on ground `bg` in place of the page's: the palette's and the styles' `Bg` both (a panel behind
+/// the one in use on the tape: behind_ground).
+pub fn with_ground(c : @ui.Ctx, bg : Int64, body : () -> Unit) -> Unit {
+  let was = current.val
+  current.val = { ..was, p: { ..was.p, bg, } }
+  c.with_theme({ ..c.theme(), bg, }, body)
+  current.val = was
+}
+
+///|
+/// The ground of a panel behind the one in use (the tape's): the page's a step darker, what is on it as it is
+/// (pengxiao, 2026-10-25: which one is in use told apart, the words of the others as readable).
+pub fn behind_ground() -> Int64 {
+  let t = current.val
+  over(t.p.bg, if t.dark { behind_dark } else { behind_light })
+}
+
+///|
+/// How much darker it is: black at 4% on paper, at 35% in the dark.
+let behind_light : Int64 = 0x0000000AL
+
+///|
+let behind_dark : Int64 = 0x00000059L
+
+///|
 /// The theme `begin` picked.
 pub fn theme() -> Theme {
   current.val
