@@ -745,6 +745,7 @@ fn fixture_topic_inner(f : Fixture, name : String, params : Map[String, Json]) -
     // (a chat's agent's run settings, a settings page: the settings' own)
     "pick" if f.mode == "settings-run" || f.mode == "settings-run-models" || f.mode == "settings-run-accounts" =>
       @settings.fixture_topic(f.mode, name, params)
+    "pick" if params.get("of") is Some(String(o)) && o.has_prefix("session:") => Some(fix_session_pick())
     "newChat" | "pick" => fixture_new_topic(f, name)
     _ =>
       match decide_fixture_topic(f, name, params) {

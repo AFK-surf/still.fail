@@ -156,6 +156,14 @@ export const mPickLine = style({
 export const mPickCheck = style({
   display: "grid", placeItems: "center", width: "18px", flex: "none", color: "var(--m-accent)",
 });
+/** 自动分配 with what picks again over its line's end, before its check (the check's 18, the line's 12 gap and 4 in). */
+export const mPickAuto = style({ display: "grid" });
+globalStyle(`${mPickAuto} > *`, { gridArea: "1 / 1" });
+export const mRepick = style({
+  display: "inline-flex", alignItems: "center", gap: "6px", justifySelf: "end", alignSelf: "center", marginRight: "34px",
+  padding: "7px 14px", border: "0", borderRadius: "999px", background: "var(--m-chip)", fontSize: `${vars.textMeta} !important`,
+  cursor: "pointer",
+});
 export const mFilter = style({ margin: "8px 0 4px" });
 export const mAccountNote = style({ padding: "8px 0 4px" });
 globalStyle(`${mHHead} > b`, {

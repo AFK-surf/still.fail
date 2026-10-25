@@ -171,6 +171,18 @@ fn fix_pick() -> Json {
 }
 
 ///|
+/// A chat's model control (`pick` of `session:<key>`): the new chat's, with what picks its account again beside 自动.
+fn fix_session_pick() -> Json {
+  match fix_pick() {
+    Object(o) => {
+      o["repick"] = Json::string("重新分配")
+      Json::object(o)
+    }
+    other => other
+  }
+}
+
+///|
 fn fix_new_chat(f : Fixture) -> Json {
   let n = new_fix
   // its stations read stations_slow_ms after the page first asks (MBUI_FIXTURE=stations-slow: Home, for the films of

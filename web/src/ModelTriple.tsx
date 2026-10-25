@@ -8,8 +8,9 @@ import type { ModelOption } from "./api.ts";
 import type { Picking } from "./pick.ts";
 import { QuotaBars } from "./components.tsx";
 import { RUNTIME_LABEL } from "./format.ts";
-import { Button, Dialog, ModelLogo, ProviderLogo, RuntimeLogo, Tip } from "./ui.tsx";
+import { Button, Dialog, ModelLogo, PanelButton, ProviderLogo, RuntimeLogo, Tip } from "./ui.tsx";
 import { failure, useToast } from "@stillfail/ui/toast.tsx";
+import { Spinner } from "@stillfail/ui/waiting.tsx";
 import * as css from "./ModelTriple.css.ts";
 import * as css2 from "./ModelTriple.css.ts";
 import * as controlsCss from "@stillfail/ui/styles/controls.css.ts";
@@ -204,10 +205,19 @@ export function ModelTriple({ pick, onConfirm, side = "bottom", modelOnly = fals
                   onOpenAutoFocus={(e) => e.preventDefault()}>
                   <h4>{t("web-main.model.account")}</h4>
                   {v.dropped && <p className={css2.runPickerNote}>{v.dropped}</p>}
-                  <button type="button" className={css2.runPickerOption} aria-pressed={!draft.profile} onClick={() => pick.set({ profile: null })}>
-                    <span className={css2.runOptionText}><span className={css2.runOptionName}>{t("web-main.model.auto")}</span>
-                    <span className={css2.runAccountNote}>{v.autoNote}</span></span>
-                  </button>
+                  {/* 自动, and at its end a chat's: its station picks its account again now, which it took said. */}
+                  <div className={css2.runPickerAuto}>
+                    <button type="button" className={css2.runPickerOption} aria-pressed={!draft.profile} onClick={() => pick.set({ profile: null })}>
+                      <span className={css2.runOptionText}><span className={css2.runOptionName}>{t("web-main.model.auto")}</span>
+                      <span className={css2.runAccountNote}>{v.autoNote}</span></span>
+                    </button>
+                    {v.repick && pick.repick && (
+                      <PanelButton className={css2.runRepick} aria-busy={!!pick.repicking}
+                        onClick={() => { if (!pick.repicking) void pick.repick?.().then((r) => { if (r.said) toast(r.said); }, (e: unknown) => toast(t("web-main.pick.failed", { error: failure(e) }))); }}>
+                        {pick.repicking && <Spinner inline />}{v.repick}
+                      </PanelButton>
+                    )}
+                  </div>
                   {v.accounts.map((a) => (
                     <button key={a.id} type="button" className={css2.runPickerOption} aria-pressed={draft.profile === a.id} onClick={() => pick.set({ profile: a.id })}>
                       <span className={css2.runOptionText}><span className={css2.runOptionName}>{a.name}</span>

@@ -1496,6 +1496,41 @@ test("a session changes profile, model and effort by hand, and is taken on by an
   await r.close();
 });
 
+test("a session given back to the station has its account picked again as a new one's would be, its own process not counted", async () => {
+  const r = new Rig();
+  const m = say("<@UBOT> fix the build");
+  await r.accept(m);
+  await settle();
+  const key = sessionKey("cl", "C1", m.threadTs);
+  // Both run its model (opus, its connect's).
+  r.edit((raw) => {
+    raw.profiles[0].models = ["opus"];
+    raw.profiles.push({ ...raw.profiles[0], id: "cc2", name: "another" });
+  });
+  const used = (cc: number, cc2: number) =>
+    r.hub.accounts.setHealth((id) => ({ quota: { state: "ok", windows: [{ label: "5h", usedPercent: id === "cc" ? cc : cc2, resetsAt: null }], detail: null, checkedAt: 0 } }));
+  const on = () => [r.session(key).profile, r.session(key).profilePinned];
+  await r.call(key, "chat_post", { to: `C1/${m.threadTs}`, text: "done", kind: "final" });
+  r.claude.last().complete();
+  await settle();
+  assert.equal(r.session(key).profile, "cc");
+  // Its process stays on cc: counted, cc would look the busier one, and it would move for nothing.
+  used(30, 40);
+  await configure(r.hub, key, { repick: true });
+  assert.deepEqual(on(), ["cc", false]);
+  // Kept to cc2 by hand, then given back: it stays there until picked again, when the pool's choice takes it.
+  await configure(r.hub, key, { profile: "cc2" });
+  await configure(r.hub, key, { profile: null });
+  assert.deepEqual(on(), ["cc2", false]);
+  await configure(r.hub, key, { profile: "cc2" });
+  await configure(r.hub, key, { repick: true });
+  assert.deepEqual(on(), ["cc", false]);
+  // With a profile given, that one is kept to.
+  await configure(r.hub, key, { profile: "cc2", repick: true });
+  assert.deepEqual(on(), ["cc2", true]);
+  await r.close();
+});
+
 test("a session leaves an account whose five hours are nearly full for one with room, when its context was just compacted or is about to be", async () => {
   const time = testClock();
   const r = new Rig({ clock: time.clock });

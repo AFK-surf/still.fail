@@ -176,7 +176,7 @@ export class Hub {
     this.accounts = new Accounts({
       config: () => this.config(),
       store: this.store,
-      running: () => [...this.actors.values()].filter((a) => a.processState() !== "cold").flatMap((a) => this.store.getSession(a.key)?.profile ?? []),
+      running: (except) => [...this.actors.values()].filter((a) => a.key !== except && a.processState() !== "cold").flatMap((a) => this.store.getSession(a.key)?.profile ?? []),
       clock: this.clock,
       allows: (key, profile) => allowedIn(profile, this.wsOf(key), this.workspaces()[0] ?? null),
     });

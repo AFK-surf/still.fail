@@ -660,6 +660,11 @@ export interface PickView {
 	whoLevel?: Level;
 	/** The station's pick, said: who it is on now, or what it does. */
 	autoNote: string;
+	/**
+	 * Beside 自动, the words of what has the station pick a chat's account again now (`pick.repick`);
+	 * none where no other account could take it (not a chat's, or one account).
+	 */
+	repick?: string;
 	changed: boolean;
 	/**
 	 * Full screen (the phone's): the model, depth and account as they were and as they become; why the account

@@ -543,14 +543,18 @@ fn triple_column_head(c : @ui.Ctx, words : String) -> Unit {
 
 ///|
 /// A row of a column (runPickerOption): as high as the screen's picker rows at least (Theme::rows pick), 4 by 10 in, its ground under the pointer and while picked,
-/// a check at its end while picked. True on the frame after a press.
-fn triple_option(c : @ui.Ctx, key : String, label : String, on : Bool, body : () -> Unit) -> Bool {
+/// `trail` (a button of its own) at its end, a check after it while picked. True on the frame after a press.
+fn triple_option(c : @ui.Ctx, key : String, label : String, on : Bool, body : () -> Unit, trail? : () -> Unit) -> Bool {
   let t = @sf.theme()
   let id = c.id(key)
   c.cursor(id, Hand)
   let b = c.box(style=(if on { triple_option_on } else { triple_option_style }).then(@ui.style(min_h=Fixed(t.rows.pick))), id~, fn() {
     body()
     c.box(style=triple_grow, fn() {  }) |> ignore
+    match trail {
+      Some(f) => f()
+      None => ()
+    }
     if on {
       @sf.icon(c, "check", size=14.0, color=t.p.accent) |> ignore
     }
@@ -561,7 +565,8 @@ fn triple_option(c : @ui.Ctx, key : String, label : String, on : Bool, body : ()
 
 ///|
 /// The accounts (runPickerAccounts), in a panel of their own from who runs it: 自动 with what the station's pick is on
-/// now, then each account with what is left of it; picked, back to the pick's panel.
+/// now (and at its end, a chat's, what has the station pick again now: `pick.repick`, which account it took said in a
+/// toast), then each account with what is left of it; picked, back to the pick's panel.
 fn triple_accounts(c : @ui.Ctx, src : Source, station : String, of : String, close : () -> Unit) -> Unit {
   let v = (src.topic)("pick", pick_params(station, of)).value
   let draft = field(v, "draft")
@@ -571,13 +576,39 @@ fn triple_accounts(c : @ui.Ctx, src : Source, station : String, of : String, clo
       d => c.text(d, style=triple_amber_sm) |> ignore
     }
     let mine = text(draft, "profile")
-    if triple_option(c, "triple/account/", @sf.t("web-main.model.auto"), mine == "", fn() {
-        c.box(style=triple_option_text, fn() {
-          c.text(@sf.t("web-main.model.auto"), style=if mine == "" { triple_picked } else { triple_words }) |> ignore
-          c.text(text(v, "autoNote"), style=triple_note) |> ignore
-        })
-        |> ignore
-      }) {
+    let repick = text(v, "repick")
+    let repicking = "pick.repick/" + station + "/" + of
+    if triple_option(
+        c,
+        "triple/account/",
+        @sf.t("web-main.model.auto"),
+        mine == "",
+        fn() {
+          c.box(style=triple_option_text, fn() {
+            c.text(@sf.t("web-main.model.auto"), style=if mine == "" { triple_picked } else { triple_words }) |> ignore
+            c.text(text(v, "autoNote"), style=triple_note_cut) |> ignore
+          })
+          |> ignore
+        },
+        trail?=if repick == "" {
+          None
+        } else {
+          Some(fn() {
+            let busy = doing(repicking)
+            if busy {
+              @sf.spinner(c, size=14.0) |> ignore
+            }
+            if @sf.panel_button(c, "triple/repick", repick) && !busy {
+              act(src, repick, repicking, "pick.repick", Json::object(pick_params(station, of)), ok=fn(r) {
+                match text(Some(r), "said") {
+                  "" => ()
+                  said => toast_later(said)
+                }
+              })
+            }
+          })
+        },
+      ) {
       pick_draft(src, station, of, { "profile": Json::null() })
       close()
     }
@@ -765,6 +796,11 @@ let triple_red_sm : @ui.TextStyle = @ui.text_style(size=Meta, color=Danger)
 ///|
 // kept across runs: a value (no field of it changes)
 let triple_note : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, wrap=false)
+
+///|
+/// What the station's pick is on, under 自动: cut short where what picks again beside it needs the room.
+// kept across runs: a value (no field of it changes)
+let triple_note_cut : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, wrap=false, w=Cut)
 
 ///|
 /// A column's head (runPicker h4): 12, muted, medium; 4 over it, 6 under, as far in as the rows' words.
