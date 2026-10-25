@@ -111,6 +111,42 @@ test "a quote's card (QuoteCard): whose and the passage, what is said under it; 
 }
 
 ///|
+test "a quote waiting in the composer has its ✕ hung on its corner, as everything waiting there: its centre on the curve, the room for its reach at its end" {
+  let removed = Ref(false)
+  let t = @ui.Tester::new(
+    fn(c) {
+      let _ = begin(c)
+      c.box(style=@ui.css("w=Full h=Full p=S4"), fn() {
+        let d = quote_card(c, "q1", "Claude", "其余的行按估计的高度占位", composer=true, remove=true)
+        removed.val = removed.val || d.removed
+      })
+      |> ignore
+    },
+    w=400.0,
+    h=200.0,
+  )
+  t.draw()
+  let (x, y, w, h) = t.query(Button, label="web-main.quote.remove").unwrap().rect
+  // (the one ✕ of what waits to go: 20 round, solid)
+  assert_eq((w, h), (20.0, 20.0))
+  // the quote's ground: the widest rounded box drawn
+  let mut q = (0.0, 0.0, 0.0, 0.0, 0.0)
+  for r in t.drawn_rect_corners() {
+    if r.2 > q.2 && (r.5).1 > 0.0 {
+      q = (r.0, r.1, r.2, r.3, (r.5).1)
+    }
+  }
+  let m = @ui.smooth_middle(q.4)
+  let near = fn(a : Double, b : Double) { (a - b).abs() < 0.01 }
+  assert_true(near(x + w / 2.0, q.0 + q.2 - m), msg="across: \{x + w / 2.0}, the corner's curve at \{q.0 + q.2 - m}")
+  assert_true(near(y + h / 2.0, q.1 + m), msg="down: \{y + h / 2.0}, the corner's curve at \{q.1 + m}")
+  // the room for its reach kept at its end: the ✕ ends where the quote's room does (16 in from the window's edge)
+  assert_true(near(x + w, 400.0 - 16.0), msg="its end at \{x + w}")
+  t.tap(x + w / 2.0, y + h / 2.0)
+  assert_true(removed.val)
+}
+
+///|
 test "a station's file named by its path (RefCard): no ground, its edge dashed in the strong line, where it is and how it goes in the quiet ink, not a failure's" {
   let t = @ui.Tester::new(
     fn(c) {

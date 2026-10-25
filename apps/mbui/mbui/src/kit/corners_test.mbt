@@ -182,6 +182,42 @@ test "corners: a mark hung past the corner of a card in a container's corner is 
 }
 
 ///|
+test "corners: a box in a container's corner is measured without the corner a mark is hung on" {
+  // a quote waiting in a composer (26 round, 10 in): its corner its container's inner, the room for its remove
+  // button's reach (5) after it, so 10 from the composer's left and top and 15 from its right; the button over its top
+  // right corner, lifted past its top: that corner the button's, the quote measured by its top left: no fault
+  let quote = fn(mark : Bool) {
+    @ui.Tester::new(fn(c) {
+      c.column(pad=20.0, fn() {
+        c.box(w=Px(300.0), h=Px(120.0), pad=10.0, bg=0xEEEEEEFFL, radius=26.0, fn() {
+          c.box(dir=Row, w=Fill(1.0), fn() {
+            c.box(style=@ui.style(w=Grow(1.0), h=Fixed(60.0), bg=Exact(0xFFFFFFFFL), radius=InnerOr(Exact(18.0))), fn() {  })
+            |> ignore
+            c.box(w=Px(5.0), fn() {  }) |> ignore
+            if mark {
+              c.layer(align=AEnd, fn() {
+                c.box(w=Px(20.0), h=Px(20.0), bg=0x222222FFL, radius=10.0, ty=-5.0, fn() {  }) |> ignore
+              })
+              |> ignore
+            }
+          })
+          |> ignore
+        })
+        |> ignore
+      })
+      |> ignore
+    })
+  }
+  let t = quote(true)
+  t.draw()
+  assert_eq(t.corner_faults(), [])
+  // no mark on it: 10, 10 and 15 from the edges, a fault
+  let t = quote(false)
+  t.draw()
+  assert_true(t.corner_faults().length() > 0)
+}
+
+///|
 test "corners: a round thing centred in its container is not set in a corner" {
   // a card's trailing ×, centred up and down in a row: near the top right corner, but not in it
   let t = @ui.Tester::new(fn(c) {

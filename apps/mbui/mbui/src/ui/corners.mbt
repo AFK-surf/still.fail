@@ -431,6 +431,78 @@ fn Ctx::corner_exempt(self : Ctx, i : Int, p : Int, ra : Double, ground : Int, p
 }
 
 ///|
+/// The marks hung on something's corner in this frame (a waiting file's or quote's remove button): no larger than
+/// hung_most, moved off their place by an offset past the edge of what they are laid over; each its centre.
+fn Ctx::hung_marks(self : Ctx) -> Array[(Double, Double)] {
+  let out = []
+  for j in 0..<self.count {
+    let n = self.nodes[j]
+    if n.kind == kind_box &&
+      (n.tx != 0.0 || n.ty != 0.0) &&
+      n.parent >= 0 &&
+      n.fw <= hung_most &&
+      n.fh <= hung_most &&
+      reaches_past(n, self.nodes[n.parent]) {
+      out.push((n.x + n.fw / 2.0, n.y + n.fh / 2.0))
+    }
+  }
+  out
+}
+
+///|
+/// How large a mark hung on a corner is at most (a remove button's 20, a badge's).
+let hung_most : Double = 32.0
+
+///|
+/// The edges `near` of a box `n` in a container's corner (corner `ra`) less those only a corner of it with a mark hung on
+/// it (its centre on that corner, `hung`) meets them by: that corner is the mark's, not measured (the user, 2026-10-17,
+/// of a picture's ✕: 直接放在角上，这样就不用遵循圆角规则了). A quote waiting in the composer, its ✕ on its top right
+/// corner and the room for its reach after it: measured by its top left.
+fn unhung(
+  n : Node,
+  near : Array[(String, Double)],
+  hung : Array[(Double, Double)],
+  ra : Double,
+) -> Array[(String, Double)] {
+  let on = FixedArray::make(4, false)
+  let mut any = false
+  for h in hung {
+    let (hx, hy) = h
+    if hx < n.x || hx > n.x + n.fw || hy < n.y || hy > n.y + n.fh {
+      continue
+    }
+    for k in 0..<4 {
+      let across = if corner_left(k) { hx - n.x } else { n.x + n.fw - hx }
+      let down = if k < 2 { hy - n.y } else { n.y + n.fh - hy }
+      if across < ra && down < ra {
+        on[k] = true
+        any = true
+      }
+    }
+  }
+  if !any {
+    return near
+  }
+  let has = fn(name : String) { near.iter().any(fn(s) { s.0 == name }) }
+  let live : Set[String] = Set::new()
+  let gone : Set[String] = Set::new()
+  for k in 0..<4 {
+    let sx = if corner_left(k) { "left" } else { "right" }
+    let sy = if k < 2 { "top" } else { "bottom" }
+    if has(sx) && has(sy) {
+      if on[k] {
+        gone.add(sx)
+        gone.add(sy)
+      } else {
+        live.add(sx)
+        live.add(sy)
+      }
+    }
+  }
+  near.filter(fn(s) { !gone.contains(s.0) || live.contains(s.0) })
+}
+
+///|
 /// Whether node `n` reaches past an edge of `host` (by more than half a pixel).
 fn reaches_past(n : Node, host : Node) -> Bool {
   n.x < host.x - 0.5 || n.y < host.y - 0.5 || n.x + n.fw > host.x + host.fw + 0.5 || n.y + n.fh > host.y + host.fh + 0.5
@@ -723,7 +795,7 @@ fn Ctx::corners_after_layout(self : Ctx) -> Unit {
 ///|
 /// A corner said `Inner` or `InnerOr`, node `i`'s (corners_in_corners, in the order built: its container worked out
 /// before it).
-fn Ctx::inner_after_layout(self : Ctx, i : Int, grounds : Map[Int, Int]) -> Unit {
+fn Ctx::inner_after_layout(self : Ctx, i : Int, grounds : Map[Int, Int], hung : Array[(Double, Double)]) -> Unit {
   let n = self.nodes[i]
   // (`InnerOr`: its own corners where they lie in no container's corner, as built)
   let own = if self.inners_or.contains(i) { Some(n.radii_now()) } else { None }
@@ -752,12 +824,17 @@ fn Ctx::inner_after_layout(self : Ctx, i : Int, grounds : Map[Int, Int]) -> Unit
   // row of a list in it scrolls past its top and foot, so what it is near is the sides it lies between; a card of a
   // strip scrolled sideways, past its sides, so what it is near is its top and foot)
   let (up_down, across) = self.scrolls_between(i, p)
-  let near = sides.filter(fn(s) {
-    s.1 >= -inner_even &&
-    s.1 < ra &&
-    !(up_down && (s.0 == "top" || s.0 == "bottom")) &&
-    !(across && (s.0 == "left" || s.0 == "right"))
-  })
+  let near = unhung(
+    n,
+    sides.filter(fn(s) {
+      s.1 >= -inner_even &&
+      s.1 < ra &&
+      !(up_down && (s.0 == "top" || s.0 == "bottom")) &&
+      !(across && (s.0 == "left" || s.0 == "right"))
+    }),
+    hung,
+    ra,
+  )
   if near.is_empty() {
     match own {
       Some(r) => n.set_radii(r)
@@ -829,9 +906,10 @@ fn Ctx::corners_in_corners(self : Ctx, grounds : Map[Int, Int]) -> Unit {
     said.add(i)
   }
   let pictures = self.pictures()
+  let hung = self.hung_marks()
   for i in 0..<self.count {
     if inner.contains(i) {
-      self.inner_after_layout(i, grounds)
+      self.inner_after_layout(i, grounds, hung)
       continue
     }
     let b = self.nodes[i]
