@@ -45,6 +45,8 @@ priv struct Sideways {
   mut built_frame : Int
   /// a field's words, more lines than it shows (Ctx::editor): how far it can go is its layout's (layout.mbt), not boxes'
   mut field : Bool
+  /// built with room at its foot for its bar (Ctx::sideways: as it could scroll when last laid out)
+  mut bar_room : Bool
 }
 
 ///|
@@ -82,12 +84,17 @@ pub fn Ctx::sideways(
   st.built_frame = self.frame_no
   let px = if padx >= 0.0 { padx } else { pad }
   let py = if pady >= 0.0 { pady } else { pad }
+  // (while what it holds is wider than it (as last laid out: read back), room at its foot for its bar, under what it
+  // holds, its own padding there counted: the bar never lies over what it holds (the user, 2026-10-25: a table's bar
+  // over its last row). One of several scrolled as one has its bar along their list's foot: none.)
+  st.bar_room = !across && st.max > 0.5
+  let foot = if st.bar_room { dmax(py, scroll_bar_room) } else { py }
   let mut inner = -1
   let b = self.box(dir=Row, w~, clip=true, id~, fn() {
     self.sideways_depth += 1
     // (filling: as wide as the box where what it holds needs no more, never narrower than that: Ctx::box keep)
     let inner_w = if fill { Some(Fill(1.0)) } else { None }
-    inner = self.box(w?=inner_w, keep=fill, tx=-st.x, pl=px, pr=px, pt=py, pb=py, body)
+    inner = self.box(w?=inner_w, keep=fill, tx=-st.x, pl=px, pr=px, pt=py, pb=foot, body)
     self.sideways_depth -= 1
   })
   self.nodes[b].sideways = true
@@ -151,6 +158,7 @@ fn Ctx::scroll_state(self : Ctx, id : Int, vertical : Bool) -> Sideways {
         theme: self.theme,
         built_frame: -1,
         field: false,
+        bar_room: false,
       }
       sideways[id] = s
       s
@@ -329,6 +337,10 @@ fn Ctx::sideways_after_layout(self : Ctx) -> Unit {
       most = dmax(most, self.nodes[bi.1].fw - self.nodes[bi.0].fw)
     }
     st.max = if st.across { dmax(st.max, most) } else { most }
+    // (come to scroll, or no longer: built again with its bar's room, or without)
+    if !st.vertical && !st.across && (st.max > 0.5) != st.bar_room {
+      self.read_changed("a sideways box come to scroll or not: its bar's room")
+    }
     if st.to_end {
       st.to_end = false
       if st.x != st.max {

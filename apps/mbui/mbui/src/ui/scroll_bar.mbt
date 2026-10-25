@@ -6,7 +6,9 @@
 //
 // A thumb scroll_bar_size wide, round, scroll_bar_inset in from the edge it runs along (the right of what scrolls up
 // and down, the foot of what scrolls sideways), in the words' colour at 26% (45% pointed at or held), at least
-// scroll_bar_least long. Over what scrolls, taking no room from it, drawn in its clip after what it holds: what lies
+// scroll_bar_least long. Over what scrolls up and down, taking no room from it; what scrolls sideways keeps its foot
+// clear for it while it can scroll (scroll_bar_room under what it holds, Ctx::sideways), so it never lies over what it
+// holds (the user, 2026-10-25: a table's bar over its last row). Drawn in its clip after what it holds: what lies
 // over what scrolls (a menu, a dialog) lies over its bar too. It runs along what of that edge shows: clear of what
 // floats over the top and the foot of what scrolls (Ctx::floats_over: a page's bar, a composer) and scroll_bar_clear
 // more, and of the rounding of the corners it is cut by; where that leaves less than two thumbs' room, along all of it.
@@ -27,6 +29,10 @@ pub let scroll_bar_inset : Double = 2.0
 
 ///|
 pub let scroll_bar_least : Double = 28.0
+
+///|
+/// The room a bar along a foot takes: itself and its inset either side.
+pub let scroll_bar_room : Double = scroll_bar_size + 2.0 * scroll_bar_inset
 
 ///|
 /// How far in from the edge a bar runs along the pointer brings it out (the web's NEAR).
