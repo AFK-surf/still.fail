@@ -16,7 +16,8 @@
 //    edges, never touching one; and where it spans the box (in from both sides by less than a quarter of it), as far
 //    in from the left as from the right where it stands in one line (a row, a button, a chip: what a box with lines
 //    under lines holds stands as its column says): each end by its box, a drawing larger than an icon by its ink (a
-//    file's sheet in its tile), in a capsule what stands at its ends no wider than it is high by their middles.
+//    file's sheet in its tile), in a capsule what stands at its ends concentric with them by their middles (a dot, a
+//    tab's ×; a capsule button by its end's).
 //
 // Rules 2 (siblings of a kind equally spaced), 5 (one column's things aligned) and 6 (gaps on the scale) are still.fail's
 // too, not measured yet.
@@ -475,16 +476,28 @@ fn Ctx::gap_faults(self : Ctx) -> Array[String] {
       }
       k = ch.next
     }
-    // (in a capsule what stands at its ends no wider than it is high stands in their middles, concentric with them: as
-    // far from both, its middle: a tab's mark and its ×, each its own size)
+    // (in a capsule what stands at its ends stands concentric with them, each its own size: one no wider than the
+    // capsule is high by its middle (a tab's mark and its ×, a dot), a capsule of its own by its end's (a button 6 in
+    // from the end of a 44 bar, 32 high: 22, as a dot's 18 + 4); as far from both by those)
     let capsule = gb.corner() >= gb.fh / 2.0 - gap_slack
-    let small = fn(i : Int) { i >= 0 && self.nodes[i].fw <= gb.fh + gap_slack }
+    let end_mid = fn(i : Int, left : Bool) -> Double? {
+      if i < 0 {
+        return None
+      }
+      let n = self.nodes[i]
+      let inset = if left { n.x - gb.x } else { gb.x + gb.fw - (n.x + n.fw) }
+      if n.fw <= gb.fh + gap_slack {
+        Some(inset + n.fw / 2.0)
+      } else if n.corner() >= n.fh / 2.0 - gap_slack {
+        Some(inset + n.fh / 2.0)
+      } else {
+        None
+      }
+    }
     // (else each end where its box is; a drawing larger than an icon where it draws, not the room round it (a file's
     // sheet drawn 2.75 in its tile): an icon's box is its ink, drawn on its grid)
-    let (l, r) = if capsule && small(first) && small(last) {
-      let a = self.nodes[first]
-      let b = self.nodes[last]
-      (a.x + a.fw / 2.0 - gb.x, gb.x + gb.fw - (b.x + b.fw / 2.0))
+    let (l, r) = if capsule && end_mid(first, true) is Some(a) && end_mid(last, false) is Some(b) {
+      (a, b)
     } else {
       let x0 = match self.gap_ink_large(first) {
         Some((ix0, _)) => ix0
