@@ -22,7 +22,7 @@ pub fn strokes_ms(n : Int) -> Double {
 /// 180 ms after the one before).
 pub fn stroke_part(drawn : Double, i : Int) -> Double {
   let p = (drawn - i.to_double() * stroke_gap_ms) / stroke_ms
-  @motion.Standard.at(if p < 0.0 { 0.0 } else if p > 1.0 { 1.0 } else { p })
+  @ui.Standard.at(if p < 0.0 { 0.0 } else if p > 1.0 { 1.0 } else { p })
 }
 
 ///|

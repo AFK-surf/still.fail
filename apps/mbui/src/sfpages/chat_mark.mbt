@@ -247,7 +247,7 @@ fn lead_phase(c : @ui.Ctx, delay : Double) -> Double {
 
 ///|
 /// A keyframe track at `f` (0 to 1): its stops (where, what), each step eased by `ease`.
-fn keyframes(f : Double, stops : Array[(Double, Double)], ease : @motion.Ease) -> Double {
+fn keyframes(f : Double, stops : Array[(Double, Double)], ease : @ui.Ease) -> Double {
   for i in 1..<stops.length() {
     let (a, va) = stops[i - 1]
     let (b, vb) = stops[i]

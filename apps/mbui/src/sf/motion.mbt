@@ -4,7 +4,7 @@
 
 ///|
 /// The page's --ease-out (EASE_OUT: cubic-bezier(0.2, 0.7, 0.2, 1)).
-pub let ease_out : @motion.Ease = Out
+pub let ease_out : @ui.Ease = Out
 
 ///|
 /// What comes into a message list (ENTER, ENTER_FROM): 220 ms on the ease-out, up from 6 below as it fades in.

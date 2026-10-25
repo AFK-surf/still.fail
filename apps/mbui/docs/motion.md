@@ -104,8 +104,7 @@ there), old and new side by side:
 - The player's bars fade 200 / 200 ms, the viewer's bar 120 / 320 ms, on the same screen.
 - The agent's line making way on its own spring (k 300, sfpages/chat_list.mbt) against rows' 0.28 s.
 - Zoom's glide (260 ms, Soft) is written three times; "copied" three ways (1500 / 1600 / 1600 ms); the breath two
-  ways (sf/waiting.mbt, sfdesk/jobs.mbt); two curve enums (`@motion.Ease`, `@ui.Curve`) and two sheet springs carry
-  the same numbers.
+  ways (sf/waiting.mbt, sfdesk/jobs.mbt).
 
 ## The way there
 
@@ -152,8 +151,10 @@ list's turns, words flying, everything in the hand). Each step below is a PR; a 
    stroke, a picture's way in and a row's rise started once by what they are told, not by whether they move; what only
    logs a motion logs it while it is off its target. A message out of an avatar (its poses), words sent (their
    way) and the viewer's strip likewise.
-7. **Presets.** `src/sf/motion.mbt` holds the table above; every motion uses a preset; one curve enum; the copies in
-   sfapp that nothing calls go (emit_flyer.mbt, flash.mbt, `composer_page*`, …).
+7. **Presets.** `src/sf/motion.mbt` holds the table above; every motion uses a preset. The copies in sfapp that
+   nothing calls are gone (#1714). One curve enum, `@ui.Ease`, played as Compose plays a cubic-bezier, for a page
+   pushed, a state moved, a scrollbar and every tween, a curve said by its name wherever it is one (a card's, the
+   bar's); one sheet spring, kit's sheet's taken from `@motion.sheet_spring`.
 8. **The page crossfade** between a new chat and a chat on a computer (sfdesk/switch.mbt). Done: the new chat's scene
    leaves by its own way up (as one become its chat does), what comes in is there at once, the composer moves between
    their places.

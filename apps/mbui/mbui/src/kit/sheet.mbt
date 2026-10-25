@@ -42,13 +42,6 @@ pub(all) struct Sheet {
 }
 
 ///|
-/// still.fail's sheet spring (Motion.kt SheetSpring: motionSpring(0.32), critically damped): its stiffness.
-let sheet_k : Double = {
-  let w = 2.0 * 3.141592653589793 / (1.2 * 0.32)
-  w * w
-}
-
-///|
 /// How long a sheet's scrim takes to fade in or out (ms).
 pub let sheet_scrim_ms : Double = 300.0
 
@@ -59,9 +52,11 @@ fn scrim_fade() -> @motion.Spec {
 }
 
 ///|
-/// A sheet's spring at rest at `x` (at rest within half a point).
+/// A sheet's spring at rest at `x`: still.fail's (@motion.sheet_spring, Motion.kt SheetSpring: motionSpring(0.32),
+/// critically damped, at rest within half a point).
 fn sheet_spring(x : Double) -> @ui.SpringPath {
-  @ui.SpringPath::new(x, k=sheet_k, c=2.0 * sheet_k.sqrt(), rest=0.5)
+  guard @motion.sheet_spring is Spring(_, k, rest, _) else { abort("the sheet's spring is a spring") }
+  @ui.SpringPath::new(x, k~, c=2.0 * k.sqrt(), rest~)
 }
 
 ///|

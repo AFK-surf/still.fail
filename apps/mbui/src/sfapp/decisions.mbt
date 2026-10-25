@@ -338,16 +338,16 @@ pub fn deck_rest() -> Double {
 }
 
 ///|
-/// `a` from 0 to 1 by `ms` on cubic-bezier(x1, y1, x2, y2), from now (said once: the framework draws it to its end).
-fn card_go(a : @motion.Anim, ms : Double, x1 : Double, y1 : Double, x2 : Double, y2 : Double) -> Unit {
+/// `a` from 0 to 1 by `ms` on `ease`, from now (said once: the framework draws it to its end).
+fn card_go(a : @motion.Anim, ms : Double, ease : @ui.Ease) -> Unit {
   a.snap(0.0)
-  a.animate(1.0, @motion.tween(ms, ease=Bezier(x1, y1, x2, y2)))
+  a.animate(1.0, @motion.tween(ms, ease~))
 }
 
 ///|
 /// The front one comes in.
 fn card_comes(c : @ui.Ctx) -> Unit {
-  card_go(card_arrive(c), card_arrive_ms, 0.2, 0.7, 0.2, 1.0)
+  card_go(card_arrive(c), card_arrive_ms, Out)
 }
 
 ///|
@@ -358,9 +358,9 @@ fn go_decision(c : @ui.Ctx, dir : Int, item : Json, after : () -> Unit) -> Unit 
   dui.out_dir = dir
   dui.out_from = dui.drag
   if dir == 2 {
-    card_go(card_out(c), card_up_ms, 0.55, 0.0, 0.85, 0.35)
+    card_go(card_out(c), card_up_ms, Bezier(0.55, 0.0, 0.85, 0.35))
   } else {
-    card_go(card_out(c), card_off_ms, 0.2, 0.0, 0.0, 1.0)
+    card_go(card_out(c), card_off_ms, Bezier(0.2, 0.0, 0.0, 1.0))
   }
   dui.drag = 0.0
   dui.going = 0
@@ -470,7 +470,7 @@ fn deck(c : @ui.Ctx, src : Source, shown : Array[Json], at : Int) -> Unit {
             // back where it rests
             dui.going = 3
             dui.going_from = at
-            card_go(card_back(c), card_back_ms, 0.2, 0.0, 0.0, 1.0)
+            card_go(card_back(c), card_back_ms, Bezier(0.2, 0.0, 0.0, 1.0))
           }
         }
       }

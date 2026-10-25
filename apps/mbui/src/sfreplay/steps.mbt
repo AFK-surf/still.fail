@@ -960,7 +960,7 @@ pub fn Flow::shrinks(
   self : Flow,
   what : String,
   to~ : Double,
-  ease~ : @motion.Ease,
+  ease~ : @ui.Ease,
   ms~ : Double,
   rest~ : Double,
 ) -> Unit {

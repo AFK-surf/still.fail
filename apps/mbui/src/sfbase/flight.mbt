@@ -275,7 +275,7 @@ pub fn flight_carry_anchor(f : SendFlight) -> String {
 ///|
 /// How far a new chat's first words have come (0 … 1, Ease.Arrive): across, up, their ground and time all at once.
 pub fn flight_carry_e(f : SendFlight) -> Double {
-  @motion.Arrive.at(f.way.get())
+  @ui.Arrive.at(f.way.get())
 }
 
 ///|
@@ -344,12 +344,12 @@ pub fn flight_ground_of(c : @ui.Ctx, f : SendFlight) -> Double {
 
 ///|
 pub fn flight_across(p : Double, desk : Bool) -> Double {
-  @motion.Flight.at(dmin(dmin(p / fly_share(desk), 1.0) / 0.88, 1.0))
+  @ui.Flight.at(dmin(dmin(p / fly_share(desk), 1.0) / 0.88, 1.0))
 }
 
 ///|
 pub fn flight_up(p : Double, desk : Bool) -> Double {
-  @motion.Flight.at(dmax((dmin(p / fly_share(desk), 1.0) - 0.12) / 0.88, 0.0))
+  @ui.Flight.at(dmax((dmin(p / fly_share(desk), 1.0) - 0.12) / 0.88, 0.0))
 }
 
 ///|
@@ -378,7 +378,7 @@ pub fn flight_settled(p : Double, desk : Bool) -> Double {
   if desk {
     return flight_across(p, desk)
   }
-  @motion.Arrive.at(dclamp((p - flight_settle) / (1.0 - flight_settle), 0.0, 1.0))
+  @ui.Arrive.at(dclamp((p - flight_settle) / (1.0 - flight_settle), 0.0, 1.0))
 }
 
 ///|

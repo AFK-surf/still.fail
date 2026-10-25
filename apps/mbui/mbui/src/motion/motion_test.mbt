@@ -12,11 +12,11 @@ test "the named curves are CSS's cubic-beziers (Compose's CubicBezierEasing)" {
   let ts = [0.1, 0.25, 0.5, 0.75, 0.9]
   // worked out by bisection on the curves' own polynomials
   let want = [
-    (@motion.Standard, [0.025863015, 0.23658736, 0.775561311, 0.959367737, 0.994353929]),
-    (@motion.Arrive, [0.396693549, 0.767284301, 0.946079462, 0.991108187, 0.998830259]),
-    (@motion.Out, [0.359122765, 0.727373396, 0.929578821, 0.987468037, 0.998286622]),
-    (@motion.Flight, [0.010913674, 0.095832729, 0.70468533, 0.956226683, 0.994219017]),
-    (@motion.Css, [0.094796306, 0.408510591, 0.802403388, 0.960458978, 0.994316477]),
+    (@ui.Standard, [0.025863015, 0.23658736, 0.775561311, 0.959367737, 0.994353929]),
+    (@ui.Arrive, [0.396693549, 0.767284301, 0.946079462, 0.991108187, 0.998830259]),
+    (@ui.Out, [0.359122765, 0.727373396, 0.929578821, 0.987468037, 0.998286622]),
+    (@ui.Flight, [0.010913674, 0.095832729, 0.70468533, 0.956226683, 0.994219017]),
+    (@ui.Css, [0.094796306, 0.408510591, 0.802403388, 0.960458978, 0.994316477]),
   ]
   for w in want {
     let (curve, ys) = w
@@ -24,8 +24,8 @@ test "the named curves are CSS's cubic-beziers (Compose's CubicBezierEasing)" {
       assert_true(near(curve.at(t), ys[i], 1.0e-6), msg="\{curve} at \{t}: \{curve.at(t)} not \{ys[i]}")
     }
   }
-  assert_eq(@motion.Standard.at(0.0), 0.0)
-  assert_eq(@motion.Standard.at(1.0), 1.0)
+  assert_eq(@ui.Standard.at(0.0), 0.0)
+  assert_eq(@ui.Standard.at(1.0), 1.0)
 }
 
 ///|
@@ -96,7 +96,7 @@ test "a tween goes by whole milliseconds on its curve, after its delay" {
   let (x0, _) = s.value_at(50.0, dur, 0.0, 10.0, 0.0)
   assert_eq(x0, 0.0)
   let (x1, _) = s.value_at(250.9, dur, 0.0, 10.0, 0.0)
-  assert_true(near(x1, 10.0 * @motion.Standard.at(150.0 / 300.0), 1.0e-9))
+  assert_true(near(x1, 10.0 * @ui.Standard.at(150.0 / 300.0), 1.0e-9))
   let (x2, v2) = s.value_at(400.0, dur, 0.0, 10.0, 0.0)
   assert_eq((x2, v2), (10.0, 0.0))
 }

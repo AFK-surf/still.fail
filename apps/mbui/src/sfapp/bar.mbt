@@ -502,13 +502,8 @@ fn Glide::anim(self : Glide) -> @motion.Anim {
 }
 
 ///|
-/// Sent to `target` over `ms` on `curve` (0 CSS's ease, 1 Arrive, 2 linear); nothing new when it is going there.
-fn Glide::go(self : Glide, target : Double, ms : Double, curve : Int) -> Unit {
-  let ease : @motion.Ease = match curve {
-    0 => Css
-    1 => Arrive
-    _ => Linear
-  }
+/// Sent to `target` over `ms` on `ease`; nothing new when it is going there.
+fn Glide::go(self : Glide, target : Double, ms : Double, ease : @ui.Ease) -> Unit {
   self.anim().follow(target, @motion.tween(ms, ease~))
   self.target = target
 }
@@ -1044,7 +1039,7 @@ fn tint_of(id : String, on : Bool) -> Double {
       g
     }
   }
-  g.go(if on { 1.0 } else { 0.0 }, tint_ms, 0)
+  g.go(if on { 1.0 } else { 0.0 }, tint_ms, Css)
   g.value
 }
 
@@ -1107,7 +1102,7 @@ fn bottom_bar(c : @ui.Ctx, src : Source, ws : Workspace, active : String?, shown
   // there; a bar chosen is drawn as it was the frame it is chosen, and slides from the next)
   m.sample()
   // told each frame: shown or not, the notch as the place has it
-  m.vis.go(if shown { 1.0 } else { 0.0 }, if shown { bar_show_ms } else { bar_hide_ms }, 1)
+  m.vis.go(if shown { 1.0 } else { 0.0 }, if shown { bar_show_ms } else { bar_hide_ms }, Arrive)
   if !shown {
     if m.mode {
       m.open_panel(false)
@@ -1203,8 +1198,8 @@ fn bottom_bar(c : @ui.Ctx, src : Source, ws : Workspace, active : String?, shown
       Some({ key: Some(_), .. }) => true
       _ => false
     })
-  m.ball_alpha.go(if ball_shown { 1.0 } else { 0.0 }, ball_fade_ms, 0)
-  m.ball_scale.go(if ball_shown { 1.0 } else { 0.6 }, ball_grow_ms, 0)
+  m.ball_alpha.go(if ball_shown { 1.0 } else { 0.0 }, ball_fade_ms, Css)
+  m.ball_scale.go(if ball_shown { 1.0 } else { 0.6 }, ball_grow_ms, Css)
   // first drawn (or under reduced motion): everything where it goes, at once
   if !m.placed || c.still() {
     m.placed = true
@@ -1316,8 +1311,8 @@ fn bottom_bar(c : @ui.Ctx, src : Source, ws : Workspace, active : String?, shown
           body=fn() {
             // from one action to another with another icon (令 and a ＋): the icon swaps, the circle stays
             let v = swap_icon
-            let css : @motion.Ease = Css
-            let arrive : @motion.Ease = Arrive
+            let css : @ui.Ease = Css
+            let arrive : @ui.Ease = Arrive
             if bar.icon_was != "" {
               let p = css.at(dclamp(v * 300.0 / 120.0, 0.0, 1.0))
               let old = action_icon(c, bar.icon_was)
@@ -1502,7 +1497,7 @@ fn show_icon(c : @ui.Ctx, next : String, out : Bool) -> Double {
       bar.icon_was = m_face.val
       m_face.val = next
       sw.snap(0.0)
-      sw.go(1.0, icon_swap_ms, 2)
+      sw.go(1.0, icon_swap_ms, Linear)
     }
   }
   sw.sample()
