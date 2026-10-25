@@ -52,7 +52,7 @@ priv struct Composing {
 }
 
 ///|
-/// The cursor into the composer as it is next drawn, on a touch device too (its keyboard up): what opened it is for
+/// The cursor into the composer as it is next drawn, with touch too (its keyboard up): what opened it is for
 /// writing (新建对话: pengxiao, 2026-10-25).
 pub fn composer_take_focus() -> Unit {
   composing.wanted = true
@@ -118,7 +118,7 @@ pub fn composer(
   // this frame); the files pasted into the field; what 文件's 添加到消息 put in for this draft
   take_in(c, src, spec, w, no_files)
   // switched to another chat (Chat.tsx: its thread another; a new chat's has none, whichever station): the cursor in
-  // it on a computer (its keyboard at hand), before it is first drawn; not taken from a field in use (the switcher's, a dialog's)
+  // it with keyboard and mouse (its keyboard at hand), before it is first drawn; not taken from a field in use (the switcher's, a dialog's)
   let whose = "\u{1}" + spec.session
   if composing.frame != c.frame_number() {
     composing.frame = c.frame_number()
@@ -127,11 +127,11 @@ pub fn composer(
   }
   if whose != composing.draft {
     composing.draft = whose
-    if !@sf.touch_system() && !c.field_focused() {
+    if @sf.native_input() is Mouse && !c.field_focused() {
       c.focus_editor(composer_field_key)
     }
   }
-  // asked for (a new chat: composer_take_focus), on a touch device too, its keyboard up
+  // asked for (a new chat: composer_take_focus), with touch too, its keyboard up
   // (asked again till it is found held as a frame begins: the page it was asked from let go of as the new one comes,
   // its field's focus with it, nav.mbt forget)
   if composing.wanted && !spec.locked {
@@ -434,7 +434,7 @@ fn composer_text(
       color=p.text,
       placeholder_color=p.subtle,
       caret_color=p.accent,
-      enter_sends=!@sf.touch_system(),
+      enter_sends=@sf.native_input() is Mouse,
       // (the `@` menu open: ↑ / ↓ choose in it, Enter and Tab pick)
       leaves=ref_leaves(src, spec, w, c.editor_focused(composer_field_key)),
       files=!no_files,
@@ -476,10 +476,10 @@ fn composer_text(
 }
 
 ///|
-/// What the box says instead of its placeholder on a computer and nothing that takes keys focused: that the composer's
+/// What the box says instead of its placeholder with keyboard and mouse and nothing that takes keys focused: that the composer's
 /// key puts the cursor there ("" otherwise).
 fn space_hint(c : @ui.Ctx, prefs : Json?, locked : Bool) -> String {
-  if locked || @sf.touch_system() || c.field_focused() {
+  if locked || (@sf.native_input() is Finger) || c.field_focused() {
     return ""
   }
   match @settings.key_label(prefs, "composer.focus") {
@@ -514,9 +514,9 @@ fn attach(c : @ui.Ctx, src : Source, spec : ComposerSpec, w : Writing, no_files 
   if !no_files {
     c.cursor(id, Hand)
     @sf.tip(c, "composer/plus", id, @sf.t("web-main.composer.attach"), shortcut="composer.file")
-    // on a touch system the phone's sheet of what can go in (attach.mbt), on a computer the system's picker at once
+    // on a touch system the phone's sheet of what can go in (attach.mbt), with keyboard and mouse the system's picker at once
     if c.clicked(id) {
-      if @sf.touch_system() {
+      if @sf.native_input() is Finger {
         attach_open(id, src, w.key)
       } else {
         pick_files(w)

@@ -1,5 +1,5 @@
 // 外观, one page for every frame (web/src/pages/Appearance.tsx and mobile/Settings.tsx AppearanceScreen): how this
-// device shows still.fail, a section each: 主题, 字体, 动画, 语言; on a computer the files dragged into a chat too, and
+// device shows still.fail, a section each: 主题, 字体, 动画, 语言; with keyboard and mouse the files dragged into a chat too, and
 // laid out wide the rail changed in place (as the web's, `wideOnly`). Each choice is the core's prefs (`prefs.set`),
 // shown at once. The faces are a row that opens 字体's page (FontRow; font_setting.mbt), on every screen. When a
 // done chat is offered to archive is 归档's (archiving.mbt), as the web's.
@@ -61,8 +61,8 @@ fn appearance_page(c : @ui.Ctx, core : Core, frame : PageFrame) -> Unit {
       })
     },
   ]
-  // files dragged into a chat, a computer's: named by their path (the default), or sent as files
-  if !@sf.touch_system() {
+  // files dragged into a chat, keyboard and mouse's: named by their path (the default), or sent as files
+  if @sf.native_input() is Mouse {
     blocks.push(fn() {
       section(@sf.t("web-pages.appearance.drop.title"), @sf.t("web-pages.appearance.drop.description"), true, fn() {
         choice("dropAs", [("", "web-pages.appearance.drop.path"), ("file", "web-pages.appearance.drop.file")], @settings.pref(core, "dropAs"))

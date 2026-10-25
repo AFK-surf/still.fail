@@ -87,11 +87,11 @@ pub fn tab_take_drop(c : @ui.Ctx) -> (Dragged, Double, Double)? {
 
 ///|
 /// The tab for the chat `chat` (its key: what 添加到消息 puts things into), whose station is `station`, filling the box
-/// it is drawn in, as the screen is: a computer's, the web's tab (its ways, a row's menu, its rows dragged onto the
-/// chat); a touch device's (a phone, a tablet), the picker the phone's ＋ opens (station_pick.mbt): files ticked, 添加
+/// it is drawn in, as the screen is: keyboard and mouse's, the web's tab (its ways, a row's menu, its rows dragged onto the
+/// chat); touch's (a phone, a tablet), the picker the phone's ＋ opens (station_pick.mbt): files ticked, 添加
 /// at its foot.
 pub fn files_tab(c : @ui.Ctx, src : Source, ws : String, chat : String, station : String) -> Unit {
-  if @sf.touch_system() {
+  if @sf.native_input() is Finger {
     c.box(style=ftab_narrow, fn() {
       c.box(style=ftab_narrow_list, fn() { station_pick(c, src, ws) }) |> ignore
       // (in a panel of its own, 添加 in its foot corner concentric with it: @sf.foot_corner)
@@ -565,7 +565,7 @@ let tab_name : @ui.TextStyle = @ui.text_style(size=Ui, color=Fg, wrap=false, w=@
 let tab_trouble : @ui.TextStyle = @ui.text_style(size=Meta, color=Danger, wrap=false)
 
 ///|
-/// On a touch device: the picker over 添加, at the foot's end.
+/// With touch: the picker over 添加, at the foot's end.
 // kept across runs: a value (no field of it changes)
 let ftab_narrow : @ui.Style = @ui.css("w=Full h=Full")
 

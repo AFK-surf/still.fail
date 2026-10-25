@@ -164,7 +164,7 @@ pub fn state_line(
     }
     "decision" if lead_text != "" && text.has_prefix(lead_text) =>
       c.box(style=state_row, fn() {
-        // (the theme's lists' lead word: bold on a touch device, as the phone's Home.kt StateLine; 600 on a computer,
+        // (the theme's lists' lead word: bold with touch, as the phone's Home.kt StateLine; 600 with keyboard and mouse,
         // ChatMark.css.ts)
         c.text(lead_text, style=words.then(look.state_lead)) |> ignore
         c.text(text.view(start_offset=lead_text.length()).to_owned(), style=words) |> ignore

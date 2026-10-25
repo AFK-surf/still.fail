@@ -19,8 +19,8 @@ test "desk: a web service asked as a page is its chat with the service beside it
   assert_eq(side_now(r), (["service:j-web"], "service:j-web"))
   t.run_for(@sfdesk.side_in_ms)
   assert_true(t.query(Button, label="刷新") is Some(_), msg="its bar")
-  // its page's size on a computer: the bar's button, its choices in a panel beside it (ViewportSize.tsx), no toolbar
-  // under the page as a touch device has
+  // its page's size with keyboard and mouse: the bar's button, its choices in a panel beside it (ViewportSize.tsx), no toolbar
+  // under the page as touch has
   assert_true(t.find("自适应") is None, msg="no toolbar under the page")
   let had = t.ctx().focused_id()
   t.click(Button, label="页面尺寸")

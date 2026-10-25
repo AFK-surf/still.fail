@@ -1,7 +1,7 @@
 // A chat shared with the viewer's other workspaces (docs/chat-share.md; ember web/src/pages/ChatPage.tsx ShareOf,
 // ShareDialog, the phone's ShareSheet in mobile/Chat.tsx; ChatPage.css.ts shareList, shareWrite), one on every screen:
 // from its info's 共享 row, for those who may change it (its starter, an owner or admin), the presenters' panel (a
-// sheet on a touch device short of Large, the web's dialog otherwise) ticks the workspaces it is shared with and
+// sheet with touch short of Large, the web's dialog otherwise) ticks the workspaces it is shared with and
 // whether their agents may send in it; 完成 has the core tell its station (`chat.xshare`), the panel gone at once, the
 // row turning while it is told (its key: xshare_key). What it lists is the chat's `xshare`.
 

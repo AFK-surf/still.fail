@@ -148,9 +148,9 @@ pub fn menu(items : Array[MenuItem?], from~ : Anchor, title? : String = "", alon
 
 ///|
 /// A link's menu (`href`), opened by `from`: open it (a web address's), copy it, each going on with `open` or `copy`.
-/// Its words the screen's: a touch device's the phone's (Links.kt), a computer's its context menu's.
+/// Its words the screen's: touch's the phone's (Links.kt), keyboard and mouse's its context menu's.
 pub fn link_menu(href : String, from~ : Anchor, open : () -> Unit, copy : () -> Unit) -> Unit {
-  let touch = touch_system()
+  let touch = native_input() is Finger
   let items : Array[MenuItem?] = []
   if href.has_prefix("https://") || href.has_prefix("http://") {
     items.push(
@@ -306,8 +306,8 @@ pub fn ask(
 }
 
 ///|
-/// Words asked of a thing that can take them where it is (a row's title renamed): on a touch device asked over the
-/// page as `ask` does (the keyboard rising over the list would cover the row), on a computer where it is: `here` makes
+/// Words asked of a thing that can take them where it is (a row's title renamed): with touch asked over the
+/// page as `ask` does (the keyboard rising over the list would cover the row), with keyboard and mouse where it is: `here` makes
 /// the thing its own field (Rename.tsx TitleInput), which says the words itself.
 pub fn ask_here(
   title : String,
@@ -318,7 +318,7 @@ pub fn ask_here(
   placeholder? : String = "",
   hint? : String = "",
 ) -> Unit {
-  if touch_system() {
+  if native_input() is Finger {
     ask(title, action, run, value~, placeholder~, hint~)
   } else {
     here()
@@ -359,9 +359,9 @@ pub fn presented(c : @ui.Ctx, alone? : Bool = false) -> Unit {
   presented_alone.val = alone
   presented_how.clear()
   let (ww, _) = c.window_size()
-  // a sheet on a touch device short of the Large tier, the web's otherwise (docs/architecture.md): by the screen, never
+  // a sheet with touch short of the Large tier, the web's otherwise (docs/architecture.md): by the screen, never
   // the hand
-  let sheet = touch_system() && layout(ww) != Large
+  let sheet = (native_input() is Finger) && layout(ww) != Large
   let gone : Array[Int] = []
   for i, p in presented_now.copy() {
     let was = p.open

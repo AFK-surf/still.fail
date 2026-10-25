@@ -450,8 +450,8 @@ fn row_menu(c : @ui.Ctx, src : Source, item : ChatItem, id : Int, x : Double, y 
   items.push(
     Some(
       @sf.menu_item_of(@sf.t("web-main.chat.rename"), icon="edit", fn() {
-        // asked where the presenters ask it: on a computer the row's title its own field (Rename.tsx TitleInput), on a
-        // touch device over the page (mobile/Home.tsx ask)
+        // asked where the presenters ask it: with keyboard and mouse the row's title its own field (Rename.tsx TitleInput), on a
+        // touch over the page (mobile/Home.tsx ask)
         @sf.ask_here(
           @sf.t("android-chat.rename.title"),
           @sf.t("common.save"),

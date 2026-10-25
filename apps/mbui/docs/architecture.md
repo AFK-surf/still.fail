@@ -1,8 +1,8 @@
 # One app: the screen, the input, pages and the shell
 
 still.fail's mbui app is one app on every device (the user, 2026-10-24: 「应该得打成同一个 app 了」). There is no phone
-app and desktop app. How it is laid out follows the screen: its kind (a touch device or a computer) and its size, in
-three tiers. How it answers the hand follows the input, and only that: the input never decides what is shown, where,
+app and desktop app. How it is laid out follows the screen, in three tiers, and the native input (touch, or keyboard and
+mouse, as the app was started). How it answers the hand follows the input, and only that: the input never decides what is shown, where,
 or how big (the user, 2026-10-25: 「布局不是按屏幕类型和尺寸来的，而是跟操作方式有关……我怀疑是系统性问题」). A tablet given a
 trackpad, a laptop touched on its screen, stays laid out as it was. Each page exists once and is drawn into whichever
 tier it lands in, on either kind of screen, with either hand.
@@ -10,35 +10,51 @@ tier it lands in, on either kind of screen, with either hand.
 This replaces the earlier "the desktop and the phone are two apps" (two page sets: `sfapp`'s, ported from the Kotlin
 app, and `sfdesk`'s, ported from the web's desktop files). The way from here to there is at the end.
 
+## The terms (术语)
+
+Four things decide how the app looks and answers, each with one name. PR descriptions, the docs and what is said to
+people use these words and no others: not 电脑版, 手机版, 桌面端, 移动端 or 触屏设备, nor "the desktop app", "the
+phone app", "a touch device", "the screen's kind".
+
+| 术语 | Term | Read by | What it decides |
+|---|---|---|---|
+| 屏幕 | the screen | `@sf.layout(width)` | Three tiers, 小屏 / 中屏 / 大屏 (`Small`, `Medium`, `Large`), plus the special screens: a fold half open with its crease across lays a chat out as 小屏 does, a phone is used upright only. How the panes are arranged and where something opened goes. |
+| 原生操控 | the native input | `@sf.native_input()` | Touch (`Finger`) or keyboard and mouse (`Mouse`), as the app was started, the same the whole run. The theme's sizes (words, row heights, what a press reaches), what shows only under a pointer and how else it is reached, what Enter does, scroll bars; with the screen's tier, how a menu or a pick shows (a sheet or beside what opened it) and how search is opened (the field over the list or ⌘K). |
+| 当前操控 | the current input | `@ui.pointing()` | Touch or keyboard and mouse as it is used at the moment; it may change while the app runs. How a thing answers the hand alone (`c.lit`, how a menu is asked for, tips, drags); never what is shown, where or how big. |
+| 页面宽窄 | a page's width | `@sf.look()` | 窄排法 / 宽排法 (`Narrow`, `Wide`): how a page arranges itself in the box it is given, by that box's width. |
+
+Sizes (words, row heights, touch targets) follow the native input, not the tier: a tablet's 大屏 has touch's sizes, a
+computer's narrow window keyboard and mouse's.
+
 ## The screen and the input, each read in one place
 
 | What | Read by | What it is |
 |---|---|---|
-| The screen's kind | `@sf.touch_system()` (sf/tokens.mbt) | A touch device (a phone, a tablet: iOS, Android) or a computer (macOS, Windows). The platform's, the same for the whole run; a Tester's by its `platform`. |
+| The native input | `@sf.native_input()` (sf/tokens.mbt) | Touch (`Finger`: a phone, a tablet, iOS and Android, for now) or keyboard and mouse (`Mouse`: macOS, Windows), as the app was started, the same for the whole run; a Tester's by its `platform`. |
 | The tier | `@sf.layout(width)` (sf/tokens.mbt) | `Small`, `Medium`, `Large`, by the window's width in points on every screen (600, 840): which way up it is held, its height and its size say nothing of the panes, the height only how much of them shows. The one exception the crease: a fold half open, crease across, is `Small`'s chat. Held while the app holds the device sideways (`@hostapi.sideways()`). |
-| The input | `@ui.pointing()` | `Finger` or `Mouse`. It may change while the app runs. |
+| The current input | `@ui.pointing()` | `Finger` or `Mouse`. It may change while the app runs. |
 
-A phone is used upright only (a touch device whose short side is under 600 points: a phone, a fold's outer screen):
+A phone is used upright only (touch as its native input and its short side under 600 points: a phone, a fold's outer screen):
 Android's activity asks for portrait there (`Host.upright`), an iPhone supports portrait alone (ios_app.m `mb_upright`).
 The app turning it itself is the exception (a film full screen, a station's screen: `@hostapi.set_sideways(true)`); back
 upright after. A tablet and an opened fold's inner screen turn as they are held.
 
-- **The layout is the screen's.** Its kind and its tier, and a page's own width (below), decide everything about what
+- **The layout is the screen's and the native input's.** The native input and the tier, and a page's own width (below), decide everything about what
   is shown, where and how big. Nothing else does: `wide_on`, `@settings.wide`, `t.narrow`, the viewer host's `narrow`
   and `set_web_lines(wide)` go, and so does every use of the input for any of these.
   - **The tier:** how the shell arranges the panes, and where something opened goes (pushed, a pane, a side tab).
-  - **The kind:**
-    - the look: the theme's palette, type scale and row heights, and touch targets (44 at least on a touch device);
-      a touch device's is the phone's, a computer's the web's. The panes side by side are told apart by their grounds in
+  - **The native input:**
+    - the look: the theme's palette, type scale and row heights, and touch targets (44 at least with touch);
+      touch's is the phone's, keyboard and mouse's the web's. The panes side by side are told apart by their grounds in
       both, as the web's: the sidebar a step under the page's ground (touch: the page's beige `bg`, the sidebar a step
       under it, what is chosen in it a step under that);
-    - what a page offers to reach things: on a touch device the search field at the top of the chats' list, on a
-      computer ⌘K;
-    - the keyboard: on a computer Enter sends and the composer takes the focus as a chat opens; on a touch device Enter
-      makes a new line and nothing raises the keyboard unasked.
-  - **Both:** how a menu, a pick or a confirm shows (Presenters, below): a sheet on a touch device short of Large,
+    - what a page offers to reach things: with touch the search field at the top of the chats' list, with keyboard
+      and mouse ⌘K;
+    - the keyboard: with keyboard and mouse Enter sends and the composer takes the focus as a chat opens; with touch
+      Enter makes a new line and nothing raises the keyboard unasked.
+  - **Both:** how a menu, a pick or a confirm shows (Presenters, below): a sheet with touch short of Large,
     else a popover or a dialog. And where ⌘K's search shows: its panel over the window, or in `Small` the search page.
-- **The input only says how a thing answers the hand.** Changing hands changes none of the layout:
+- **The current input only says how a thing answers the hand.** Changing hands changes none of the layout:
   - feedback: `c.lit` lights on hover with a mouse and on press with a finger;
   - what a pointer over a thing shows (`c.hovered`: a row's time, its 归档), which a finger reaches otherwise (the
     row's menu);
@@ -60,28 +76,28 @@ The same on a phone, a tablet and a computer: each page's content, its blocks an
 and its words; the parts it is made of; the palette, the corner ladder, the icons, the kinds of motion and the type's
 hierarchy; the presenters and the shell's ways.
 
-What differs comes of two things alone, the screen's kind and a width, and none of it is decided in a page:
+What differs comes of two things alone, the native input and a width, and none of it is decided in a page:
 
 | What differs | By | Decided in |
 |---|---|---|
-| Sizes: the type, row heights, density, touch targets (44 at least on a touch device) | the screen's kind | the theme, chosen once (`@sf.begin`) |
-| What only a pointer's hover would show (a row's 归档, its time, its ⋯): on a touch device always there, or on a long press | the screen's kind | the library's parts (sf/hand.mbt) |
-| A menu, a pick, a confirm: a sheet from the foot, or a popover or a dialog | the screen's kind and the tier | the presenters |
-| Reaching things: the search field over the chats' list or ⌘K; the bottom bar or the rail | the screen's kind and the tier | the shell |
-| Enter makes a new line or sends; the keyboard raised as a chat opens or not | the screen's kind | the library's fields |
-| Scroll bars: none on a touch device | the screen's kind | the library (`scroll_bar.mbt`) |
+| Sizes: the type, row heights, density, touch targets (44 at least with touch) | the native input | the theme, chosen once (`@sf.begin`) |
+| What only a pointer's hover would show (a row's 归档, its time, its ⋯): with touch always there, or on a long press | the native input | the library's parts (sf/hand.mbt) |
+| A menu, a pick, a confirm: a sheet from the foot, or a popover or a dialog | the native input and the tier | the presenters |
+| Reaching things: the search field over the chats' list or ⌘K; the bottom bar or the rail | the native input and the tier | the shell |
+| Enter makes a new line or sends; the keyboard raised as a chat opens or not | the native input | the library's fields |
+| Scroll bars: none with touch | the native input | the library (`scroll_bar.mbt`) |
 | The panes: one stack, the tape, columns | the tier (the window's width) | the shell |
 | A page's anatomy: narrow, under 640 (back over a large title, its rows grouped on inset cards under their headings), or wide (its head, one column at most 760 in the middle, sections with their titles, lists and cards) | the page's own width | the library's parts |
 
 So:
-- **A phone:** Small, a page at a time, laid out narrow, a touch device's sizes, sheets, the bottom bar, swiped back,
+- **A phone:** Small, a page at a time, laid out narrow, touch's sizes, sheets, the bottom bar, swiped back,
   upright.
 - **A tablet:** the tape held upright (Medium), columns on its side (Large); each pane laid out by its own width (a
-  narrow one narrow); a touch device's sizes and targets; sheets on the tape, popovers in columns; the rail; turned as
+  narrow one narrow); touch's sizes and targets; sheets on the tape, popovers in columns; the rail; turned as
   it is held.
 - **A computer:** columns (Large), laid out wide, the web's sizes and density, popovers and dialogs, ⌘K and the keys,
-  what a pointer's hover shows. A window made narrow takes the tape or the stack and the narrow anatomy, at a
-  computer's sizes.
+  what a pointer's hover shows. A window made narrow takes the tape or the stack and the narrow anatomy, at
+  keyboard and mouse's sizes.
 
 ## Three kinds of UI code
 
@@ -93,7 +109,7 @@ frame around them), and the **presenters**:
 - `@sf.menu`, `@sf.pick`, `@sf.panel` (a small panel of rows or fields), `@sf.confirm`, `@sf.ask`.
   - A sheet spans the window, not the pane that opened it: on the tape it is over every panel.
 - A page says what it shows; the presenter decides how:
-  - on a touch device in Small or Medium, it shows as a bottom sheet;
+  - with touch in Small or Medium, it shows as a bottom sheet;
   - otherwise, as a popover anchored to what opened it (menu, pick, panel) or a centred dialog (confirm, ask).
 - One host draws them all, over the shell. Today's hosts become it: the app's `sheet.mbt`, `decide.mbt`'s `dui.sheet`,
   `settings/sheet.mbt`, and sfdesk's dialogs.
@@ -118,11 +134,11 @@ settings page, each place, sign-in, the landing. There is no phone copy and desk
 - **Its box:** it draws into the box it is given. `c.width` and `c.height` are its pane's; it never subtracts a rail
   or a sidebar itself.
 - **What it reads:** its own width for its arrangement (columns that drop, tools into ⋯), its anatomy through the
-  library's parts, and nothing of the screen's kind: what differs by it is the theme's, the parts', the presenters'
-  and the shell's (the table above). A page that needs something to differ by the screen asks the library for a part
-  that does it, and the part holds the difference for every page; no page draws a touch device's piece and a
-  computer's piece under an `if`. detlint's `page-screen` counts what reads `@sf.touch_system()` in the pages
-  (`pages.roots`), each file's bar only falling, to 0. The input reaches it only through the library's primitives
+  library's parts, and nothing of the native input: what differs by it is the theme's, the parts', the presenters'
+  and the shell's (the table above). A page that needs something to differ by the native input asks the library for a part
+  that does it, and the part holds the difference for every page; no page draws touch's piece and
+  keyboard and mouse's piece under an `if`. detlint's `page-screen` counts what reads `@sf.native_input()` in the pages
+  (`pages.roots`), each file's bar only falling, to 0. The current input reaches it only through the library's primitives
   (above). Never the tier, and never `@ui.pointing()` itself.
 - **Opening things:** it says what to open: a page (`Page`), or a detail of the chat (a history, a service, a
   visualization, jobs, letters, files). The shell decides where that goes. A page never pushes onto the stack or moves
@@ -171,7 +187,7 @@ One shell. It arranges the same panes in every tier:
 - **What a page is given:** its box (width and height) and its insets (where its bar's back goes, the room under it:
   a tape panel's own inset, the keyboard). A page does not work these out from the tier.
 - **What it owns:**
-  - reading the screen's kind and the tier;
+  - reading the native input and the tier;
   - the stack's motion, the tape and the columns;
   - back, the bars, the rail and the window's inset;
   - the presenters' host, toasts and the keys (⌘K, ⌘/, the core's keymap);
@@ -193,11 +209,11 @@ One shell. It arranges the same panes in every tier:
 
 ## Tests
 
-- **Each page** is tested in the Tester at a width of each tier, on a touch device and on a computer (the Tester's
-  `platform`), each with its usual hand.
+- **Each page** is tested in the Tester at a width of each tier, with touch and with keyboard and mouse (the
+  Tester's `platform`), each with its usual hand.
   - And once with the other hand on each (`Tester::new(pointing=…)`): what is laid out is the same, box for box; only
     how it answers differs.
-  - The platform also says the tier on a touch device and the core's `client.device`, and a replay recorded on one
+  - The platform also says the tier with touch and the core's `client.device`, and a replay recorded on one
     platform keeps it.
 - **The screenshots** (`screens.sh`) cover the three tiers.
 - **Replays** recorded at one tier keep their traces. A flow that only one tier has (the bottom bar, the tape) is that
@@ -208,7 +224,7 @@ One shell. It arranges the same panes in every tier:
 
 1. **The screen and the input read once.** This is the shell's work (the chat 按屏幕分三档布局). The hidden axes go:
    `wide_on`, `@settings.wide`, the viewer's `narrow`.
-   - To do (2026-10-25): what was put on the input that is the layout's goes back to the screen's kind: `@sf.begin`'s
+   - To do (2026-10-25): what was put on the input that is the layout's goes back to the native input: `@sf.begin`'s
      theme and density, the presenters' sheet, and every page's own read of `@ui.pointing()` for its look, its rows or
      what it offers (the search field). The pages then read the input only through the library's primitives, and
      detlint's fence holds it.
@@ -251,7 +267,7 @@ One shell. It arranges the same panes in every tier:
        is one (`filter_menu`), each bar's button opening it. The bars over the lists (Home's top bar, the sidebar's
        band) are left for the places' chooser and the shell.
      - Done: the page of a device waiting in the workspace's lock (sfpages' `lock_wait.mbt`, `pair_steps` also
-       设置 › 安全's): the web's mobile screen on a touch device, its desktop page on a computer; the shell puts it in
+       设置 › 安全's): the web's mobile screen with touch, its desktop page with keyboard and mouse; the shell puts it in
        the page's place (laid out Small under Home's bar, over the navigation bar).
 
    Each merged page is drawn in all three tiers with both inputs and tested so, its old copies are deleted, and its

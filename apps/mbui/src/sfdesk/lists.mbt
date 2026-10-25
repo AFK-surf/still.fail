@@ -587,7 +587,7 @@ fn todo_shown(src : Source, w : Workspace) -> Bool {
 
 ///|
 /// The band's height over the lists: its top row, 新建对话's (6 + a row + 2; in the closed bar 6 + a row + 6), 待处理's
-/// when there (2 + a row + 8); a row as high as the theme's band (32; a touch device's the search field's 38).
+/// when there (2 + a row + 8); a row as high as the theme's band (32; touch's the search field's 38).
 fn band_h(src : Source, w : Workspace) -> Double {
   side_top_h() +
   band_new_top +

@@ -1,9 +1,9 @@
-// The layout is the screen's, never the hand's (docs/architecture.md): each page on a touch device and on a computer,
+// The layout is the screen's, never the hand's (docs/architecture.md): each page with touch and with keyboard and mouse,
 // in a window of each tier, drawn pointed at by a finger and by a mouse, lays out the same boxes; only how they answer
 // the hand differs.
 
 ///|
-/// The windows: a touch device's (Android's) and a computer's (a Mac's), each at a width of each tier.
+/// The windows: touch's (Android's) and keyboard and mouse's (a Mac's), each at a width of each tier.
 let hand_windows : Array[(String, Double, Double, Int)] = [
   ("touch small", 390.0, 844.0, 2),
   ("touch medium", 720.0, 900.0, 2),

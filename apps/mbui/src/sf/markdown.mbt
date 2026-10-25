@@ -1023,7 +1023,7 @@ pub fn code_block(c : @ui.Ctx, code : String, lang : String, colours? : String? 
   // whatever the layout
   let block_radius = row_corner
   let key_inset = capsule_in(block_radius, code_key_h)
-  let over = !touch_system()
+  let over = native_input() is Mouse
   let block = c.id("sf-code-block/" + code)
   let bar = fn() {
     c.box(

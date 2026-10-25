@@ -27,7 +27,7 @@ priv struct Config {
   // an app's component library (web/ui's): its packages, and what they may import (prefixes); nothing else of the app
   library : Array[String]
   library_imports : Array[String]
-  // an app's pages: where the hand (@ui.pointing()) is never read (page-hand), nor the screen's kind (page-screen)
+  // an app's pages: where the current input (@ui.pointing()) is never read (page-hand), nor the native input (page-screen)
   pages : Array[String]
   // what of one arrangement a page may not draw itself (page-look): names (a style's, a part's, a branch's), and the
   // files that frame the pages and name those pieces for them (not counted)
@@ -221,8 +221,8 @@ fn lint_mbt(
     if c.name == "pointing" && c.kind == "pkg" && c.qual == "@ui" && !in_t && under(f.rel, cfg.pages) {
       add("page-hand", c.at, f.line_text(c.at))
     }
-    // a page reading the screen's kind
-    if c.name == "touch_system" && c.kind == "pkg" && c.qual == "@sf" && !in_t && under(f.rel, cfg.pages) {
+    // a page reading the native input (what the app was started with: touch, or keyboard and mouse)
+    if c.name == "native_input" && c.kind == "pkg" && c.qual == "@sf" && !in_t && under(f.rel, cfg.pages) {
       add("page-screen", c.at, f.line_text(c.at))
     }
     // a page taking a part from the settings' older copy where the library has the one

@@ -1,4 +1,4 @@
-// Sharing a chat on a computer (sfpages xshare.mbt, ChatPage.tsx ShareDialog: the presenters' dialog): from the chat's info, the workspaces
+// Sharing a chat with keyboard and mouse (sfpages xshare.mbt, ChatPage.tsx ShareDialog: the presenters' dialog): from the chat's info, the workspaces
 // it may be shared with, ticked as it is shared; 完成 tells the core (chat.xshare).
 
 ///|

@@ -1157,7 +1157,7 @@ fn switch_look_for(small : Bool) -> (@ui.Ctx, @kit.SwitchState) -> Unit {
 }
 
 ///|
-/// A switch's size by the screen, the theme's rows' (Rows: a finger's 44 by 26 on a touch device, the web's 36 by 22 on
+/// A switch's size by the screen, the theme's rows' (Rows: a finger's 44 by 26 with touch, the web's 36 by 22 on
 /// a computer); small, 26 by 16.
 fn switch_size(small : Bool) -> (Double, Double) {
   if small {
@@ -1248,7 +1248,7 @@ fn wide_switch_row(
 ///|
 /// One of several to tick (a list a choice of some of: ChatPage.tsx ShareDialog's rows, the phone's PickRow): its box,
 /// then what it is (`note` quieter under it), the whole row pressed to tick it or not, its ground lit under the hand. Its
-/// room, its words and its box the theme's rows' (Rows: a finger's on a touch device, a list row's on a computer). What
+/// room, its words and its box the theme's rows' (Rows: a finger's with touch, a list row's with keyboard and mouse). What
 /// it is now.
 pub fn check_row(c : @ui.Ctx, key : String, label : String, on : Bool, note? : String = "", disabled? : Bool = false) -> Bool {
   let id = c.id(key + "/row")
@@ -1286,7 +1286,7 @@ pub fn check_row(c : @ui.Ctx, key : String, label : String, on : Bool, note? : S
 /// A tick row's room (check_row): 12 by 10 in, its box 12 before its words, a row's corner, the hover grey under the
 /// hand; as high at least, its words and its box as the theme's rows (Rows). Its box stands clear of the row's corners,
 /// as far in from its start as the row is round: in the row's middle, as high as both its corners reach, no box of a
-/// tick could be concentric with them (a computer's 18 in a 40 row: 11 from its top and foot, as round as 9.2 there,
+/// tick could be concentric with them (keyboard and mouse's 18 in a 40 row: 11 from its top and foot, as round as 9.2 there,
 /// a circle), so it stands alone, its own corner.
 // kept across runs: a value (no field of it changes)
 let check_row_box : @ui.Style = @ui.css("row w=Full px=S3 py=S2_5 gap=S3 align=ACenter hovered{bg=Hover} pressed{bg=Hover}").then(
@@ -1791,7 +1791,7 @@ pub fn input(
   small? : Bool = false,
   field? : @ui.Field,
 ) -> @kit.Field {
-  // (its words the body's, as tall as the theme's controls: the web's on a computer, a finger's on a touch device)
+  // (its words the body's, as tall as the theme's controls: the web's with keyboard and mouse, a finger's with touch)
   let t = theme()
   @kit.text_field(c, key, placeholder~, secret~, disabled~, size=t.t.body, line=t.t.body_line, field?, look=fn(c, s, editor) {
     let hot = s.hovered || s.focused
@@ -1906,7 +1906,7 @@ let input_box_small_hot : @ui.Style = input_box_small.then(@ui.css("border_color
 /// A choice among a few (parts.tsx Select): closed, a pill as a one-line field is (input_box: the theme's control
 /// height and body words), what is chosen in it cut short, the placeholder subtle, a chevron at its end; pressed (or
 /// Enter, Space), its options through the presenters (@sf.pick: beside it a menu's, the arrows, letters and Enter;
-/// a sheet of rows on a touch device), the chosen checked, `hints` a quieter note at an option's end. `options`: each
+/// a sheet of rows with touch), the chosen checked, `hints` a quieter note at an option's end. `options`: each
 /// value and its words; `choose` is given the one chosen.
 pub fn select(
   c : @ui.Ctx,
@@ -2827,7 +2827,7 @@ let option_row_corner : Double = 18.0
 ///|
 /// An option's measures, the theme's for the screen (decided once: docs/architecture.md): its number's disc a list
 /// item's mark, as far in from the row's top and side as makes it concentric with the row (its corner less the disc's
-/// half); its label in the controls' words, what it leads to in the meta's. A computer's as the web's
+/// half); its label in the controls' words, what it leads to in the meta's. Keyboard and mouse's as the web's
 /// (Decisions.css.ts choice: a 20 disc 8 in, 13 on 20 over 12 on 18); a phone's or a tablet's a size up (a 22 disc 7
 /// in, 15 on 22 over 13 on 18).
 priv struct OptionType {
@@ -2988,10 +2988,10 @@ let dialog_title_one : @ui.TextStyle = dialog_title.then(one_line)
 /// A page that waits on something (cloud/Security.tsx SecurityWaiting, mobile/Security.tsx SecurityWaitingScreen):
 /// its mark (`mark`, an icon's name), what it waits for (`title`, `lead`), then what can be done meanwhile (`body`); its parts 14 apart,
 /// centred. On a touch screen the phone's (mWaiting: in the middle of its height, 28 in at its sides, the mark 44, the
-/// title bold); on a computer the desktop page's (waiting: 110 down, 460 wide at most, 24 in, the mark 40, the title
+/// title bold); with keyboard and mouse the desktop page's (waiting: 110 down, 460 wide at most, 24 in, the mark 40, the title
 /// 600).
 pub fn waiting_page(c : @ui.Ctx, mark : String, title : String, lead : String, body : () -> Unit) -> Unit {
-  let touch = touch_system()
+  let touch = native_input() is Finger
   c.box(style=if touch { wait_room_touch } else { wait_room }, fn() {
     if !touch {
       c.box(style=@ui.style(h=Fixed(wait_top)), fn() {  }) |> ignore
@@ -3056,7 +3056,7 @@ let wait_lead : @ui.TextStyle = @ui.text_style(size=Meta, leading=L7, color=Mute
 ///|
 /// The way into an app, signed out (the web's cloud/gate.tsx SignInPage; SignIn.kt SignInScreen), in the box it is
 /// given: its picture (`art`, a drawable), what it is (`title`, `note`), its button (`label`; `busy` while it is under
-/// way, not pressed again), what to know of it (`foot`). A computer's the picture and the button alone, no wider than
+/// way, not pressed again), what to know of it (`foot`). Keyboard and mouse's the picture and the button alone, no wider than
 /// the desktop app's (asked for, 2026-10-23); a touch screen's all of it, the button across its page. True on the frame
 /// after the button was pressed.
 pub fn way_in(
@@ -3068,7 +3068,7 @@ pub fn way_in(
   foot : String,
   busy? : Bool = false,
 ) -> Bool {
-  let bare = !touch_system()
+  let bare = native_input() is Mouse
   let id = c.id("sign-in")
   let pressed = c.clicked(id) && !busy
   c.box(style=sign_in_box, fn() {

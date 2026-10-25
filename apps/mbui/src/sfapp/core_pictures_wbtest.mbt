@@ -94,7 +94,7 @@ test "a row's people (sfpages' RowAside, a finger's 18): each 3 over the one bef
     "creator": { "id": "mo" },
   })
   let ground = 0x123456FFL
-  // (a touch device's theme, as the app's frame begins it: its chats' list's faces)
+  // (touch's theme, as the app's frame begins it: its chats' list's faces)
   let t = @ui.Tester::new(
     fn(c) {
       @sf.begin(c) |> ignore

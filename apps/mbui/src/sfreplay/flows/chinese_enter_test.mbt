@@ -1,5 +1,5 @@
 // 04-chinese-enter (e2e/traces/chinese-enter.trace): Chinese through the input method (composed, then committed),
-// ⇧Enter a new line, not a send (recorded on a computer, where Enter sends: a phone's Enter, a new line, is the unit
+// ⇧Enter a new line, not a send (recorded with keyboard and mouse, where Enter sends: a phone's Enter, a new line, is the unit
 // tests', composer_wbtest.mbt); both lines sent as one message.
 
 ///|

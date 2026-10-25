@@ -30,7 +30,7 @@ let side_top_web : Double = 8.0
 let side_full : @ui.Style = @ui.css("w=Full")
 
 ///|
-/// A row of one line of a sidebar's list (Sidebar.css.ts navRow; a touch device's SidebarList.css.ts phone: the theme's
+/// A row of one line of a sidebar's list (Sidebar.css.ts navRow; touch's SidebarList.css.ts phone: the theme's
 /// chats' list's `side_row`): the pointer's ground on hover, the selected one's ground when it is the page in view. True
 /// on the frame after a press.
 pub fn nav_row(c : @ui.Ctx, key : String, on : Bool, body : () -> Unit, align? : @ui.Align = ACenter) -> Bool {
@@ -82,7 +82,7 @@ fn band_row_h() -> Double {
 
 ///|
 /// A row's words, as long as there is room (`color`: the words' own by default): a list's title's (the theme's chats'
-/// list's: 13 on 20 on a computer, 16 on 22 on a touch device).
+/// list's: 13 on 20 with keyboard and mouse, 16 on 22 with touch).
 pub fn nav_words(c : @ui.Ctx, words : String, color? : Int64) -> Unit {
   let base = @sf.theme().chat_list.title
   let look = match color {

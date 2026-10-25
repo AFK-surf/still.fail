@@ -134,7 +134,7 @@ fn screen_page(c : @ui.Ctx, src : Source, at : ScreenAt) -> Unit {
     s.own_stream()
     // on a phone or a tablet, a page of the station's browser is laid out for the stage it is shown on, as this
     // device's own browser would lay it out (the station takes no notice of it for other screens)
-    if @sf.touch_system() && u.box_w > 0.0 && u.box_h > 0.0 && s.fit is None {
+    if (@sf.native_input() is Finger) && u.box_w > 0.0 && u.box_h > 0.0 && s.fit is None {
       s.fit = Some((u.box_w, u.box_h, c.scale))
     }
     if shown {

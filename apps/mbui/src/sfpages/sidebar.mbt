@@ -209,7 +209,7 @@ fn chats_pane(c : @ui.Ctx, src : Source, w : Workspace, filter : String, frame :
   // the lines over its days (its room under the bar, what the frame puts at its top, its states), then its days', then
   // its foot
   let lines : Array[Line] = [Top]
-  // its search at its top where the screen has no keys for ⌘K (a touch device's: the theme's), out of view until
+  // its search at its top where the screen has no keys for ⌘K (touch's: the theme's), out of view until
   // scrolled to (Home.kt top), while it has rows to look in
   if !@sf.theme().chat_list.keys {
     match view {
@@ -348,7 +348,7 @@ fn open_chat() -> ChatRef? {
 }
 
 ///|
-/// The room over a list under its bar and at its foot with a computer's lists (navScroll: 4, 12; the decisions' pane's
+/// The room over a list under its bar and at its foot with keyboard and mouse's lists (navScroll: 4, 12; the decisions' pane's
 /// too).
 pub let lists_top_in : Double = 4.0
 

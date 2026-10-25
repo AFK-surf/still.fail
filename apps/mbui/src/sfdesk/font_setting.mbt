@@ -4,7 +4,7 @@
 // right under that, where the eye is as a face is chosen; the place's faces in a group, each row its name and a line
 // of it drawn in itself (how far it has come, what failed, its size before it is here, at its end; the chosen one
 // checked). A row pointed at is tried in the chat first (where there is a pointer: c.lit). This machine's own faces
-// (where the host lists them: a computer's) are one row more, opening a list of them to find one in. What is chosen
+// (where the host lists them: keyboard and mouse's) are one row more, opening a list of them to find one in. What is chosen
 // is the device's (`prefs.set {fonts}`). Its page (fonts_page) and 外观's wide section (appearance.mbt) hold it.
 
 ///|
@@ -124,7 +124,7 @@ fn fonts_blocks(c : @ui.Ctx, core : Core) -> Array[() -> Unit] {
           }
           face_row(c, core, place, id, id, text(fv, "name"), face, chosen == id, status, bad)
         }
-        // a face of this machine's own, where the host lists them (a computer's)
+        // a face of this machine's own, where the host lists them (keyboard and mouse's)
         if @ui.local_font_families() != "" {
           local_face_row(c, core, place, chosen)
         }

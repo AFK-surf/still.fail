@@ -1,12 +1,12 @@
 // A chat relayed to a channel (docs/relay.md; web/src/Relay.tsx useRelay, RelayDialog, and the phone's RelaySheet in
 // mobile/Chat.tsx; Relay.css.ts), one on every screen: from a chat's row's menu, its title bar's panel or its info, the
-// picking opens through the presenters (a dialog with 取消 and 接力 at its foot, a sheet from the foot on a touch device
+// picking opens through the presenters (a dialog with 取消 and 接力 at its foot, a sheet from the foot with touch
 // short of Large). It offers the channels and groups one of the station's connects' bots is in (the chat's own bot as
 // it opens, another picked above), those relayed to before first, found by typing; one picked, with a note if wanted,
 // 接力 has the station start the conversation there and the chat's agent go on in it too, and the panel goes with a
 // toast saying where. A Slack message's link typed (pasted) into the search offers that message's thread instead. What
 // it offers, and in what order, is the core's (sfbase relay.mbt, relay-pick.ts). The search takes the focus as it opens
-// on a computer, not on a touch device (where that would bring the keyboard up over the list: useRelay's `focus`).
+// with keyboard and mouse, not with touch (where that would bring the keyboard up over the list: useRelay's `focus`).
 
 ///|
 /// The editor to be given the focus as it is next drawn (the search as it opens, the note once a place is picked:
@@ -23,7 +23,7 @@ fn relay_focus_reset() -> Unit {
 /// Relays chat `thread` of `r`'s station: its places asked for (sfbase relay.mbt), the picking presented from `from`.
 pub fn open_relay(src : Source, r : ChatRef, thread : Double, from~ : @sf.Anchor) -> Unit {
   relay_open(src, r.station, thread)
-  relay_focus.val = if @sf.touch_system() { "" } else { "relay/search" }
+  relay_focus.val = if @sf.native_input() is Finger { "" } else { "relay/search" }
   @sf.panel(
     @sf.t("web-main.relay.title"),
     fn(c, _) {
