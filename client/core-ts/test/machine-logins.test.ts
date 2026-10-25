@@ -153,7 +153,7 @@ test("a page that gives a code to paste back: the person's on the card (not wait
 
 test("a login the station's own browser can do: its button's words (back to it while its tab is open), its page opened there by the station, the screen to view answered", async () => {
   const inStation = { ...loopback, browser: true };
-  const { host, core, push } = await started({ ...base(), "GET /machine-logins": { logins: [inStation] } });
+  const { host, core, push } = await started({ ...base(), "GET /machine-logins": { logins: [inStation, device] } });
   const asked: { method: string; path: string }[] = [];
   stationReplies(host, (req) => {
     const path = req.url.replace("https://stillfail.test/admin/api", "");

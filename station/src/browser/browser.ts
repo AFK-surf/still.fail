@@ -19,6 +19,8 @@ const FIRST_PAUSE_MS = 1000;
 const MAX_PAUSE_MS = 60_000;
 /// How often its last use is written down (for the station process after this one), at most.
 const NOTE_MS = 60_000;
+/// How long whether there is a Chrome on the machine is taken to stay as it was found.
+const INSTALLED_MS = 60_000;
 
 export type BrowserStatus = {
   running: boolean;
@@ -65,6 +67,8 @@ export class StationBrowser {
   #closed = false;
   /// Which session opened each tab (owners.ts).
   readonly #owners: Owners;
+  /// Whether a Chrome was found on the machine, and when it was looked for.
+  #installed: { at: number; is: boolean } | null = null;
 
   constructor(o: BrowserOptions) {
     this.#o = o;
@@ -100,9 +104,12 @@ export class StationBrowser {
     return this.#up?.tabs.list() ?? [];
   }
 
-  /// Whether it can be had here: it runs, or there is a Chrome on the machine to start.
+  /// Whether it can be had here: it runs, or there is a Chrome on the machine to start (looked for again a minute on).
   available(): boolean {
-    return this.#up !== null || (this.#o.chrome.installed?.() ?? true);
+    if (this.#up !== null) return true;
+    const now = this.#fibers.now();
+    if (this.#installed === null || now - this.#installed.at >= INSTALLED_MS) this.#installed = { at: now, is: this.#o.chrome.installed?.() ?? true };
+    return this.#installed.is;
   }
 
   /// A tab of the station's own (no session's) at `url`, the browser started if it is not running: its target id, once

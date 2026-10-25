@@ -77,9 +77,8 @@ export function parseScreen(name: string, params: unknown, bytes?: Uint8Array): 
       const peek = get(params, "peek") === true;
       // The stage a phone shows it on: a tab of the station's browser laid out for it (none for a preview).
       const f = get(params, "fit");
-      const fit = !peek && finite(get(f, "width")) && finite(get(f, "height")) && finite(get(f, "scale")) && get(f, "width") > 0 && get(f, "height") > 0 && get(f, "scale") > 0
-        ? { width: Math.round(get(f, "width")), height: Math.round(get(f, "height")), scale: get(f, "scale") }
-        : null;
+      const [w, h, scale] = [get(f, "width"), get(f, "height"), get(f, "scale")];
+      const fit = !peek && finite(w) && finite(h) && finite(scale) && w > 0 && h > 0 && scale > 0 ? { width: Math.round(w), height: Math.round(h), scale } : null;
       return {
         kind: "view",
         station,

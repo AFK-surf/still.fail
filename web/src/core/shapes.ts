@@ -1131,6 +1131,13 @@ export interface LoginJob {
 	error?: string;
 	startedAt: number;
 	expiresAt: number;
+	/**
+	 * Its page can be opened in the station's own browser now (`profile.loginBrowser`, `login.browser`); absent from a
+	 * station that cannot (no Chrome, or from before).
+	 */
+	browser?: boolean;
+	/** The screen of the tab its page is open in, in the station's browser, while it is: 回到 … 的浏览器. */
+	screen?: string;
 }
 
 export interface ProfileTrouble {
@@ -4151,6 +4158,18 @@ export interface MachineLoginShown {
 	codeUrl?: string;
 	/** Loopback: the port its callback comes to. */
 	port?: number;
+	/**
+	 * Its browser step can be done in the station's own browser (`machineLogin.browser`); absent where it cannot (no
+	 * Chrome there, a station from before, a read-only viewer).
+	 */
+	browser?: boolean;
+	/** The screen of the tab its page is open in, in the station's browser, while it is. */
+	screen?: string;
+	/**
+	 * What the button to the station's browser says: 在 dev-prod 的浏览器中打开, or 回到 dev-prod 的浏览器 while its tab is
+	 * open. Absent with `browser`.
+	 */
+	browserText?: string;
 	/** The command waits on a prompt: its agent answers it (等 agent 回答命令的问题). */
 	waiting: boolean;
 	/**
