@@ -468,3 +468,12 @@ test "a message said just after the chat opened comes in with the list gliding a
   assert_true(y0 - y1 > 20.0, msg="glided up after it: \{y0} → \{y1}")
   fix_clock.val = None
 }
+
+///|
+test "a login card in a chat on a phone: as tall as what it holds, the next message right under it" {
+  let t = chat_tester("chat-login")
+  t.frame()
+  let (_, by, _, bh) = t.rect_of("在浏览器里登录").unwrap()
+  let (_, ny, _, _) = t.rect_of("5 分钟前").unwrap()
+  assert_true(ny - (by + bh) < 60.0, msg="room between the card's key and the next message: \{ny - (by + bh)}")
+}

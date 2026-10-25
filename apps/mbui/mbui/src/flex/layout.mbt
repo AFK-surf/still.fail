@@ -1145,6 +1145,11 @@ fn layout_flex(
       // flex base size
       let basis_style = resolve_of(cs.basis_k, cs.basis_v, inner_main)
       let main_style = if row { cb.w } else { cb.h }
+      // (a container sized by what it holds counts a growing item at the more of its flex basis and what it holds, as
+      // Chrome sizes one: flex: 1 1 0 words in a fit-content card are as wide as they are, not nothing; flex: 1 1 200
+      // with nothing in it still 200)
+      let grows_in_unknown = cs.grow > 0.0 && !known(inner_main)
+      let mut declared = undef
       let mut basis = if known(basis_style) && cs.basis_k != LEN_AUTO {
         if cs.box_sizing == ContentBox {
           basis_style + (if row { cb.pbw() } else { cb.pbh() })
@@ -1155,6 +1160,10 @@ fn layout_flex(
         main_style
       } else {
         undef
+      }
+      if grows_in_unknown && known(basis_style) && cs.basis_k != LEN_AUTO {
+        declared = basis
+        basis = undef
       }
       if !known(basis) {
         // size from content: cross known if fixed or stretched in a known line
@@ -1187,6 +1196,9 @@ fn layout_flex(
         }
         let ch = out_h.val
         basis = if row { cw } else { ch }
+        if known(declared) {
+          basis = fmax(basis, declared)
+        }
       }
       let pb_main = if row { cb.pbw() } else { cb.pbh() }
       f.unsafe_set(i + PB_MAIN, pb_main)
