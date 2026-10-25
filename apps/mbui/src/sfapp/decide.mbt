@@ -17,8 +17,6 @@ priv enum Sheet {
   JobOf(ChatRef, String)
   /// renaming the chat (ChatInfo.kt askTitle): its thread and its name as it was
   Rename(ChatRef, Double?, String)
-  /// sharing the chat with the viewer's other workspaces (ChatInfo.kt openShare): its thread
-  XShare(ChatRef, Double?)
   /// what can be done to an agent's context (AgentSheet.kt openContext): its session
   ContextOf(ChatRef, String)
   /// asking before an agent's context is cleared (AgentSheet.kt, PageParts.kt confirm): its session
@@ -111,7 +109,6 @@ fn decide_reset() -> Unit {
   dui.out = None
   dui.out_dir = 0
   dui.out_from = 0.0
-  xsharing_reset()
 }
 
 // ── what comes and goes under a post ────────────────────────────────────
@@ -369,7 +366,6 @@ fn sheets(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
     JobsOf(r) => jobs_sheet(c, src, r)
     JobOf(r, id) => job_sheet(c, src, r, id)
     Rename(r, thread, was) => rename_sheet(c, src, r, thread, was)
-    XShare(r, thread) => xshare_sheet(c, src, r, thread)
     ContextOf(r, key) => context_sheet(c, src, r, key)
     ClearContext(r, key) => clear_context_sheet(c, src, r, key)
     LettersOf(r, thread) => letters_sheet(c, src, r, thread)

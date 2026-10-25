@@ -11,8 +11,6 @@ pub fn overlays(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
   // the rail's menu, and what can be added beside it while it is changed (rail.mbt)
   rail_overlays(c, src, w)
   attention_panel(c, src, w)
-  // a chat shared with the viewer's other workspaces (share_dialog.mbt)
-  share_dialog(c, src)
   // a chat made public (publish.mbt)
   @sfpages.publish_layer(c, src)
   // a file open over the window (sfbase viewer_frame.mbt)

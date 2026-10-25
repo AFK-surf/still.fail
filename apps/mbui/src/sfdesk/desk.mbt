@@ -17,7 +17,6 @@ fn init {
 pub fn reset() -> Unit {
   @sfpages.reset()
   wide_reset()
-  share_dialog_reset()
   context_reset()
   switcher_reset()
   browse_reset()

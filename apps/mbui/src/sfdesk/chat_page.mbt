@@ -677,7 +677,7 @@ fn chat_info(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef, v : ChatView
         info_row(c, "info-pop/xshare", "users", @sf.t("web-pages.chat.xshare"), text(share, "text")) &&
         flag(share, "may") {
         chat_own.info_open = false
-        open_share(src, r, Some(id))
+        @sfpages.open_xshare(src, r, Some(id), from=Unanchored)
       }
       if publish is Some(_) && info_row(c, "info-pop/publish", "web", @sf.t("web-pages.chat.publish"), "") && flag(publish, "may") {
         chat_own.info_open = false
