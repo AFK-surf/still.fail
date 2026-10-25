@@ -19,7 +19,7 @@ fn memories_page(c : @ui.Ctx, core : Core, here : Here, frame : PageFrame) -> Un
     Narrow =>
       body.push(fn() {
         if topic.value is None {
-          @settings.waiting_cards(
+          waiting_cards(
             c,
             error=match topic.error {
               Some(e) => error_text(e)
@@ -106,7 +106,7 @@ fn memory_view(c : @ui.Ctx, core : Core, look : Look, address : String, names : 
   let read = memory_of(c, core, address)
   guard read.value is Some(_) else {
     match look {
-      Narrow => @settings.waiting_cards(c, error=if read.error == "" { "" } else { @sf.t("web-main.memory.failed", args=[("error", read.error)]) })
+      Narrow => waiting_cards(c, error=if read.error == "" { "" } else { @sf.t("web-main.memory.failed", args=[("error", read.error)]) })
       Wide =>
         if read.error == "" {
           @sf.wait_line(c, @sf.t("common.reading"))
@@ -238,9 +238,10 @@ fn memory_row(
 }
 
 ///|
-/// What a narrow page's section says where it has nothing (mMemoryNote: 24 in, 8 under).
+/// What a narrow page's section says where it has nothing (mMemoryNote: 24 from the page's sides, 12 in its room; 8
+/// under).
 // kept across runs: a value (no field of it changes)
-let mem_narrow_none : @ui.Style = @ui.css("w=Full px=S6 pb=S2")
+let mem_narrow_none : @ui.Style = @ui.css("w=Full px=S3 pb=S2")
 
 ///|
 // kept across runs: a value (no field of it changes)

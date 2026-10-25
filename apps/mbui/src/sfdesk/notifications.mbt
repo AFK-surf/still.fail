@@ -148,21 +148,15 @@ fn notify_page(c : @ui.Ctx, core : Core, here : Here, frame : PageFrame) -> Unit
   } else {
     notify_kinds.iter().find_first(fn(k) { on && kind_banner(notify, k) }).unwrap_or("wait")
   }
-  // (narrow: 12 from the page's sides, as its cards are; the preview as wide as what is left)
-  let side = fn(body : () -> Unit) {
-    match look {
-      Narrow => c.box(style=np_narrow, body) |> ignore
-      Wide => body()
-    }
-  }
+  // (narrow: as wide as the page's room, 12 from its sides; @sf.pg_room)
   let preview_w = match look {
     Narrow => c.width - 2.0 * np_narrow_in
     Wide => desk_column(c)
   }
-  blocks.push(fn() { side(fn() { notify_preview(c, core, here, notify, on, shown_kind, preview_w) }) })
+  blocks.push(fn() { notify_preview(c, core, here, notify, on, shown_kind, preview_w) })
   blocks.push(fn() {
     @sf.section(c, @sf.t("web-pages.notifications.ways.title"), heads=true, note=if look == Wide { @sf.t("web-pages.notifications.noteDevice") } else { "" }, fn() {
-      side(fn() { c.box(style=way_tiles, fn() {
+      c.box(style=way_tiles, fn() {
         // a banner: the system's word asked first, or its settings opened where it refused
         let action = match permission {
           "denied" => @sf.t("web-pages.notifications.enable.open")
@@ -188,7 +182,7 @@ fn notify_page(c : @ui.Ctx, core : Core, here : Here, frame : PageFrame) -> Unit
           }
         }
       })
-      |> ignore })
+      |> ignore
       if look == Narrow {
         @sf.page_note(c, @sf.t("web-pages.notifications.noteDevice"))
       }
@@ -196,7 +190,7 @@ fn notify_page(c : @ui.Ctx, core : Core, here : Here, frame : PageFrame) -> Unit
   })
   blocks.push(fn() {
     @sf.section(c, @sf.t("web-pages.notifications.kinds.title"), heads=true, fn() {
-      side(fn() { c.box(style=kinds_card, fn() {
+      c.box(style=kinds_card, fn() {
         for i, kind in notify_kinds {
           if i > 0 {
             c.box(style=kind_rule, fn() {  }) |> ignore
@@ -204,12 +198,12 @@ fn notify_page(c : @ui.Ctx, core : Core, here : Here, frame : PageFrame) -> Unit
           kind_row(c, core, here, notify, kind, on, dock)
         }
       })
-      |> ignore })
+      |> ignore
     })
   })
   blocks.push(fn() {
     @sf.section(c, @sf.t("web-pages.notifications.more.title"), heads=true, fn() {
-      side(fn() { c.box(style=more_card, fn() {
+      c.box(style=more_card, fn() {
         let preview = flag(notify, "preview") || field(notify, "preview") is None
         let now = @sf.switch_row(
           c,
@@ -243,18 +237,14 @@ fn notify_page(c : @ui.Ctx, core : Core, here : Here, frame : PageFrame) -> Unit
           c.text(@sf.t("web-pages.notifications.sound", args=[("name", "still.fail")]), style=sound_words) |> ignore
         }
       })
-      |> ignore })
+      |> ignore
     })
   })
   look_page(c, core, frame, "notify", @sf.t("web-pages.settings.nav.notifications"), blocks)
 }
 
 ///|
-/// The narrow page's blocks 12 from its sides, as its cards are.
-// kept across runs: a value (no field of it changes)
-let np_narrow : @ui.Style = @ui.css("w=Full px=S3")
-
-///|
+/// The narrow page's room at its sides (@sf.pg_room).
 let np_narrow_in : Double = 12.0
 
 ///|

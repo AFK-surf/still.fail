@@ -571,10 +571,10 @@ let cn_more : @ui.Style = @ui.css("w=S8 h=S8 radius=Xl align=ACenter justify=JCe
 
 
 ///|
-/// Narrow: the filter 12 from the page's sides, 10 under; a row's line under its name (the secondary's, on one line);
+/// Narrow: the filter in the page's room, 10 under; a row's line under its name (the secondary's, on one line);
 /// how it is at its end, its dot before the words.
 // kept across runs: a value (no field of it changes)
-let cn_filter_room_narrow : @ui.Style = @ui.css("w=Full px=S3 pb=S2_5 align=AStart")
+let cn_filter_room_narrow : @ui.Style = @ui.css("w=Full pb=S2_5 align=AStart")
 
 ///|
 // kept across runs: a value (no field of it changes)

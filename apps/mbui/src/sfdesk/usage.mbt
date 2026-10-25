@@ -45,13 +45,7 @@ fn usage_page(c : @ui.Ctx, core : Core, here : Here, frame : PageFrame) -> Unit 
   let body : Array[() -> Unit] = []
   match (v, topic.error) {
     (Some(_), _) =>
-      body.push(fn() {
-        match look {
-          // (narrow: 12 from the page's sides, as its cards are)
-          Narrow => c.box(style=ug_narrow, fn() { usage_body(c, core, look, v) }) |> ignore
-          Wide => usage_body(c, core, look, v)
-        }
-      })
+      body.push(fn() { usage_body(c, core, look, v) })
     (None, Some(e)) =>
       body.push(fn() {
         c.text(@sf.t("web-pages.settings.usage.failed", args=[("error", error_text(e))]), style=desk_note_bad) |> ignore
@@ -475,12 +469,8 @@ fn usage_notes(c : @ui.Ctx, v : Json?) -> Unit {
 // ── styles (Usage.css.ts) ───────────────────────────────────────────────
 
 ///|
-/// The narrow page's body 12 from its sides, its chart and lists each on a card of the ladder's (its words 20 in;
-/// what lies in its corners, a share's bar, the lists' choice, round by the ladder's there: mbui works it out).
-// kept across runs: a value (no field of it changes)
-let ug_narrow : @ui.Style = @ui.css("w=Full px=S3")
-
-///|
+/// The narrow page's chart and lists each on a card of the ladder's (its words 20 in; what lies in its corners, a
+/// share's bar, the lists' choice, round by the ladder's there: mbui works it out).
 // kept across runs: a value (no field of it changes)
 let ug_narrow_card : @ui.Style = @ui.css("w=Full p=S5 radius=Xl3 bg=Card")
 

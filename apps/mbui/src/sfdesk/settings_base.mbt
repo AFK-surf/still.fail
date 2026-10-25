@@ -62,7 +62,6 @@ using @settings {
   vault_said,
   vault_scopes,
   vault_serial,
-  waiting_cards,
   workspace_view,
   you,
   type Asked,

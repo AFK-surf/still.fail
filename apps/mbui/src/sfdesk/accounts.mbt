@@ -2020,9 +2020,9 @@ fn models_body(c : @ui.Ctx, core : Core, look : Look, address : String, p : Json
 }
 
 ///|
-/// 跳过 and 完成 on a narrow page, over its list: 12 from its sides, 10 under them, 10 apart, at the end.
+/// 跳过 and 完成 on a narrow page, over its list: in the page's room, 10 under them, 10 apart, at the end.
 // kept across runs: a value (no field of it changes)
-let pf_pick_foot : @ui.Style = @ui.css("row w=Full px=S3 pb=S2_5 gap=S2_5 justify=JEnd")
+let pf_pick_foot : @ui.Style = @ui.css("row w=Full pb=S2_5 gap=S2_5 justify=JEnd")
 
 ///|
 /// Its two buttons at the head's end (pickModelsActions: 8 apart).
