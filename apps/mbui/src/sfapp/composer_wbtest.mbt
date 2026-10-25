@@ -547,3 +547,47 @@ test "a swipe from the left edge with ＋'s sheet up does not take the chat away
   t.run_for(@ui.nav_push_ms)
   assert_eq(app.nav.depth(), 2)
 }
+
+///|
+test "words sent fly to their own row though an older page with the viewer's messages comes in before the core has them" {
+  reset()
+  let clock : Ref[Double] = { val: 0.0 }
+  fix_clock.val = Some(fn() { clock.val })
+  let base = fixture("chat")
+  // the core's answer to the send held back: what was sent is not in its view yet
+  let held : Array[() -> Unit] = []
+  let src : Source = {
+    ..base,
+    call: fn(name, params, done) {
+      if name == "chat.send" {
+        held.push(fn() { (base.call)(name, params, done) })
+      } else {
+        (base.call)(name, params, done)
+      }
+    },
+  }
+  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0, platform=2)
+  t.run_for(@ui.nav_push_ms)
+  t.tap_text("发消息")
+  t.type_text("刚发的这一句")
+  tap_send(t)
+  // an older page read meanwhile (the reader was near the top a moment ago): the viewer's own messages in it, none of
+  // them what was just sent
+  (src.call)("chat.older", { "station": "ws1/st1", "session": "s-c1" }, fn(_) {  })
+  t.draw()
+  t.draw()
+  match send_flight.val {
+    Some(f) => assert_true(f.placed, msg="flying to \{f.key}")
+    None => fail("nothing flies")
+  }
+  assert_true(t.find("刚发的这一句") is Some(_))
+  // the core has it now: still its row
+  for h in held {
+    h()
+  }
+  t.draw()
+  t.draw()
+  assert_true(t.find("刚发的这一句") is Some(_))
+  fix_clock.val = None
+}
