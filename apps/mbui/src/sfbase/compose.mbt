@@ -393,8 +393,8 @@ pub fn writing_starting(src : Source, w : Writing, on : Bool) -> Unit {
 
 ///|
 /// What is written taken away to be sent (`composer.take`): the draft empty at once; `done` gets what the core took,
-/// as it goes (its words with the links and the paths named after them, the files that are up, the quotes, the ids of
-/// those still going up).
+/// as it goes (its words with the links and the paths named after them, the files that are up, the quotes, those still
+/// going up), sent as it says: its files as they were when it took them, not as this page last drew them.
 pub fn writing_take(src : Source, w : Writing, done : (Json?) -> Unit) -> Unit {
   w.taken = Some((w.text, w.quotes, w.files))
   writing_act(

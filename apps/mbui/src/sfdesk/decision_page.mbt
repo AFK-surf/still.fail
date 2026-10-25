@@ -325,7 +325,6 @@ fn zou_answer(c : @ui.Ctx, src : Source, w : Workspace, x : Json, draft : String
             toast_later(read_only_words)
             return
           }
-          let going = @sfpages.going_up(wr)
           zou_leave(c, x, 3)
           writing_take(src, wr, fn(taken) {
             guard taken is Some(_) else { return }
@@ -337,6 +336,7 @@ fn zou_answer(c : @ui.Ctx, src : Source, w : Workspace, x : Json, draft : String
               "attachments": Json::array(items(taken, "attachments")),
               "quotes": Json::array(items(taken, "quotes")),
             }
+            let going = items(taken, "uploads")
             if going.length() > 0 {
               params["uploads"] = Json::array(going)
             }
