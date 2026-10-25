@@ -302,7 +302,7 @@ fn frame_body(c : Ctx, w : Double, h : Double, scale : Double, t : Double) -> Do
   }
   let t2 = h_now()
   c.ninst = 0
-  tops.clear()
+  dr.tops.clear()
   c.segs.clear()
   text_runs.runs.clear()
   c.next_hit_ids.clear()
