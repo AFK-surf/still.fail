@@ -6,7 +6,7 @@
 
 int mb_atlas_size = 2048;
 // the numbers of an instance (src/ui/scene.mbt)
-#define MB_INST 40
+#define MB_INST 52
 
 static id<MTLDevice> dev;
 static id<MTLCommandQueue> queue;
@@ -37,10 +37,11 @@ static double last_gpu = -1;
 static NSString *shader_src = @
 "#include <metal_stdlib>\n"
 "using namespace metal;\n"
-"// scene.mbt's 40 numbers: clip, rc and rs the rounded rect it is cut to (its rect x0 y0 x1 y1, its corners' radii,\n"
+"// scene.mbt's 52 numbers: clip, rc and rs the rounded rect it is cut to (its rect x0 y0 x1 y1, its corners' radii,\n"
 "// how smooth they are); rot how it is turned (radians, about rot.yz; its clip where it is drawn when rot.w is 1); rr\n"
-"// a box's corners' radii (top left, top right, bottom right, bottom left)\n"
-"struct Inst { float4 rect; float4 p; float4 color; float4 c2; float4 clip; float4 pad; float4 rc; float4 rs; float4 rot; float4 rr; };\n"
+"// a box's corners' radii (top left, top right, bottom right, bottom left); oclip, orc, ors the rounded clip outside\n"
+"// its own that its own cuts through, as clip, rc, rs (none where orc is 0)\n"
+"struct Inst { float4 rect; float4 p; float4 color; float4 c2; float4 clip; float4 pad; float4 rc; float4 rs; float4 rot; float4 rr; float4 oclip; float4 orc; float4 ors; };\n"
 "struct U { float2 vp; float scale; float pad; };\n"
 "// glass: where a point's backdrop is in the blurred copy (uv = p * map.xy + map.zw, kept in uvc), a liquid group's\n"
 "// bounds, shapes and corners, how many\n"
@@ -121,6 +122,11 @@ MB_CORNER_SL
 "    cover = clip_cover(cp, I.clip, I.rc, I.rs, u.scale);\n"
 "    if (cover <= 0.0) discard_fragment();\n"
 "  } else if (cp.x < I.clip.x || cp.y < I.clip.y || cp.x > I.clip.z || cp.y > I.clip.w) discard_fragment();\n"
+"  // and by the clip outside it, where it has one (a pane round an image's frame in its corner)\n"
+"  if (max(max(I.orc.x, I.orc.y), max(I.orc.z, I.orc.w)) > 0.0) {\n"
+"    cover *= clip_cover(cp, I.oclip, I.orc, I.ors, u.scale);\n"
+"    if (cover <= 0.0) discard_fragment();\n"
+"  }\n"
 "  int kind = int(I.p.y + 0.5);\n"
 "  float4 col = I.color;\n"
 "  if (kind == 1 || kind == 3 || kind == 7) {\n"
@@ -188,11 +194,11 @@ MB_CORNER_SL
 "    float a;\n"
 "    if (I.p.x > 0.0) {\n"
 "      float d = 1e9;\n"
-"      for (int i = first; i < first + n; i++) d = min(d, mb_seg_dist(sg[(base + i / 6) * 10 + mb_seg_slot(i)], I.rect, p));\n"
+"      for (int i = first; i < first + n; i++) d = min(d, mb_seg_dist(sg[(base + i / 6) * 13 + mb_seg_slot(i)], I.rect, p));\n"
 "      a = clamp(0.5 - (d - I.p.x) * u.scale, 0.0, 1.0);\n"
 "    } else {\n"
 "      float4 w = float4(0.0);\n"
-"      for (int i = first; i < first + n; i++) w += mb_path_rows(sg[(base + i / 6) * 10 + mb_seg_slot(i)], I.rect, p, u.scale);\n"
+"      for (int i = first; i < first + n; i++) w += mb_path_rows(sg[(base + i / 6) * 13 + mb_seg_slot(i)], I.rect, p, u.scale);\n"
 "      a = mb_path_cover(w, I.c2.z);\n"
 "    }\n"
 "    return (float4(col.rgb, 1.0) * col.a * a) * cover;\n"

@@ -15,7 +15,7 @@
   const U = {}, PU = {};
   let cssW = 0, cssH = 0, dpr = 1;
   // the numbers of an instance (src/ui/scene.mbt)
-  const INST = 40;
+  const INST = 52;
   let f32 = new Float32Array(INST * 4096);
   let pending = false;
   window.__logs = [];
@@ -143,11 +143,14 @@
   layout(location=7) in vec4 a_rs;
   layout(location=8) in vec4 a_rot;
   layout(location=9) in vec4 a_rr;
+  layout(location=10) in vec4 a_oclip;
+  layout(location=11) in vec4 a_orc;
+  layout(location=12) in vec4 a_ors;
   uniform vec2 u_vp;
   uniform vec4 u_gb;
   out vec2 v_pos; out vec2 v_cpos;
   flat out vec4 v_rect; flat out vec4 v_p; flat out vec4 v_color; flat out vec4 v_c2; flat out vec4 v_clip; flat out vec4 v_pad;
-  flat out vec4 v_rc; flat out vec4 v_rs; flat out vec4 v_rr;
+  flat out vec4 v_rc; flat out vec4 v_rs; flat out vec4 v_rr; flat out vec4 v_oclip; flat out vec4 v_orc; flat out vec4 v_ors;
   void main() {
     int vid = gl_VertexID;
     vec2 corner = vec2((vid == 1 || vid == 4 || vid == 5) ? 1.0 : 0.0, (vid == 2 || vid == 3 || vid == 5) ? 1.0 : 0.0);
@@ -163,12 +166,13 @@
     if (a_rot.x != 0.0) { vec2 d = pos - a_rot.yz; float c = cos(a_rot.x), s = sin(a_rot.x); at = a_rot.yz + vec2(c * d.x - s * d.y, s * d.x + c * d.y); }
     gl_Position = vec4(at.x / u_vp.x * 2.0 - 1.0, 1.0 - at.y / u_vp.y * 2.0, 0.0, 1.0);
     v_pos = pos; v_cpos = a_rot.w > 0.5 ? at : pos; v_rect = a_rect; v_p = a_p; v_color = a_color; v_c2 = a_c2; v_clip = a_clip; v_pad = a_pad; v_rc = a_rc; v_rs = a_rs; v_rr = a_rr;
+    v_oclip = a_oclip; v_orc = a_orc; v_ors = a_ors;
   }`;
   const FS = `#version 300 es
   precision highp float;
   in vec2 v_pos; in vec2 v_cpos;
   flat in vec4 v_rect; flat in vec4 v_p; flat in vec4 v_color; flat in vec4 v_c2; flat in vec4 v_clip; flat in vec4 v_pad;
-  flat in vec4 v_rc; flat in vec4 v_rs; flat in vec4 v_rr;
+  flat in vec4 v_rc; flat in vec4 v_rs; flat in vec4 v_rr; flat in vec4 v_oclip; flat in vec4 v_orc; flat in vec4 v_ors;
   uniform float u_scale;
   uniform sampler2D u_atlas;
   uniform sampler2D u_img;
@@ -180,7 +184,7 @@
   uniform vec4 u_shape[8];
   uniform vec4 u_rad[2];
   uniform int u_n;
-  // the pieces of the frame's shapes (src/ui/shape.mbt: the instances of kind 12 after every one drawn), 2040 fours
+  // the pieces of the frame's shapes (src/ui/shape.mbt: the instances of kind 12 after every one drawn), 2041 fours
   // (204 instances) a row
   uniform highp sampler2D u_segs;
   out vec4 o;
@@ -366,11 +370,11 @@
       float a;
       if (v_p.x > 0.0) {
         float d = 1e9;
-        for (int i = first; i < first + n; i++) { int t = (i / 6) * 10 + mb_seg_slot(i); d = min(d, mb_seg_dist(texelFetch(u_segs, ivec2(t % 2040, t / 2040), 0), v_rect, p)); }
+        for (int i = first; i < first + n; i++) { int t = (i / 6) * 13 + mb_seg_slot(i); d = min(d, mb_seg_dist(texelFetch(u_segs, ivec2(t % 2041, t / 2041), 0), v_rect, p)); }
         a = clamp(0.5 - (d - v_p.x) * u_scale, 0.0, 1.0);
       } else {
         vec4 w = vec4(0.0);
-        for (int i = first; i < first + n; i++) { int t = (i / 6) * 10 + mb_seg_slot(i); w += mb_path_rows(texelFetch(u_segs, ivec2(t % 2040, t / 2040), 0), v_rect, p, u_scale); }
+        for (int i = first; i < first + n; i++) { int t = (i / 6) * 13 + mb_seg_slot(i); w += mb_path_rows(texelFetch(u_segs, ivec2(t % 2041, t / 2041), 0), v_rect, p, u_scale); }
         a = mb_path_cover(w, v_c2.z);
       }
       o = vec4(col.rgb, 1.0) * col.a * a;
@@ -493,6 +497,11 @@
       cover = clip_cover(cp, v_clip, v_rc, v_rs, u_scale);
       if (cover <= 0.0) discard;
     } else if (cp.x < v_clip.x || cp.y < v_clip.y || cp.x > v_clip.z || cp.y > v_clip.w) discard;
+    // and by the clip outside it, where it has one (scene.mbt 40-51: a pane round an image's frame in its corner)
+    if (max(max(v_orc.x, v_orc.y), max(v_orc.z, v_orc.w)) > 0.0) {
+      cover *= clip_cover(cp, v_oclip, v_orc, v_ors, u_scale);
+      if (cover <= 0.0) discard;
+    }
     shade(p);
     o *= cover;
   }`;
@@ -567,10 +576,10 @@
     gl.bindVertexArray(vao);
     instBuf = gl.createBuffer();
     gl.bindBuffer(gl.ARRAY_BUFFER, instBuf);
-    for (let i = 0; i < 10; i++) {
+    for (let i = 0; i < INST / 4; i++) {
       const loc = i;
       // instance layout: rect, p, color, c2, clip, pad, the clip's corners' radii, how smooth, how it is turned, a box's
-      // corners' radii (vec4 each)
+      // corners' radii, the outer clip's rect, corners' radii and how smooth (vec4 each)
       gl.enableVertexAttribArray(loc);
       gl.vertexAttribPointer(loc, 4, gl.FLOAT, false, INST * 4, i * 16);
       gl.vertexAttribDivisor(loc, 1);
@@ -726,14 +735,14 @@
   }
 
   // The pieces of the frame's shapes (src/ui/shape.mbt: the instances of kind 12 after every one drawn), for the
-  // shader to read (u_segs): a float texture of SEGS_ROW fours a row (204 instances' 10), as many rows as they take.
-  const SEGS_ROW = 2040;
+  // shader to read (u_segs): a float texture of SEGS_ROW fours a row (157 instances' 13), as many rows as they take.
+  const SEGS_ROW = 2041;
   let segsTex = null, segsRows = 0;
   function segsUpload(n) {
     let d = n;
     while (d > 0 && Math.round(f32[(d - 1) * INST + 5]) === 12) d--;
     if (d === n) return;
-    const rows = Math.ceil((n - d) * 10 / SEGS_ROW);
+    const rows = Math.ceil((n - d) * (INST / 4) / SEGS_ROW);
     gl.activeTexture(gl.TEXTURE3);
     if (!segsTex || rows > segsRows) {
       if (segsTex) gl.deleteTexture(segsTex);
@@ -787,7 +796,7 @@
           mainState();
         }
         if (shows) {
-          for (let i = 0; i < 10; i++) gl.vertexAttribPointer(i, 4, gl.FLOAT, false, INST * 4, start * INST * 4 + i * 16);
+          for (let i = 0; i < INST / 4; i++) gl.vertexAttribPointer(i, 4, gl.FLOAT, false, INST * 4, start * INST * 4 + i * 16);
           // liquid: the group as one shape, drawn once
           gl.drawArraysInstanced(gl.TRIANGLES, 0, 6, Math.round(f32[start * INST + 5]) === 6 ? 1 : end - start);
         }
@@ -802,7 +811,7 @@
       }
       gl.activeTexture(gl.TEXTURE1);
       gl.bindTexture(gl.TEXTURE_2D, im && im.tex ? im.tex : atlasTex);
-      for (let i = 0; i < 10; i++) gl.vertexAttribPointer(i, 4, gl.FLOAT, false, INST * 4, start * INST * 4 + i * 16);
+      for (let i = 0; i < INST / 4; i++) gl.vertexAttribPointer(i, 4, gl.FLOAT, false, INST * 4, start * INST * 4 + i * 16);
       if (h) gl.disable(gl.BLEND);
       gl.drawArraysInstanced(gl.TRIANGLES, 0, 6, end - start);
       if (h) gl.enable(gl.BLEND);

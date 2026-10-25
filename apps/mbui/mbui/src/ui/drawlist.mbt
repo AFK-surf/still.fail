@@ -8,10 +8,11 @@
 // places and image ids are each renderer's own.
 //
 // The format, a line each, numbers as MoonBit writes doubles (exact), in this order:
-//   mbui-dl 4|5|6                 (6: an instance's 40 numbers, a box's corners each its own 36-39, written only where
-//                                 some box's are not one; 5: 36, how it is turned 32-35, written only where something
-//                                 is turned; 4: 32, how smooth its clip's corners are 28-31; 3 had 28, its clip's
-//                                 corners' radii 24-27, round; 2 had 24)
+//   mbui-dl 4|5|6|7               (7: an instance's 52 numbers, the rounded clip outside its own that its own cuts
+//                                 through 40-51, written only where something has one; 6: 40, a box's corners each its
+//                                 own 36-39, written only where some box's are not one; 5: 36, how it is turned 32-35,
+//                                 written only where something is turned; 4: 32, how smooth its clip's corners are
+//                                 28-31; 3 had 28, its clip's corners' radii 24-27, round; 2 had 24)
 //   window W H SCALE              the window in points, its device pixels a point
 //   clear R G B                   what is under everything (0-1), as this frame was presented
 //   glyph N SIZE WEIGHT STYLE CLUSTER "TEXT"
@@ -25,7 +26,7 @@
 //                                 (Tester::drawlist_images)
 //   bytes N BASE64                those bytes, when the list is to carry them (Tester::drawlist(bytes=true)): a list a
 //                                 renderer draws by itself, with no files beside it
-//   i N0 … N31                    an instance (scene.mbt: its 32 numbers, 36 or 40), in drawing order, but a glyph's 12 its
+//   i N0 … N31                    an instance (scene.mbt: its 32 numbers, 36, 40 or 52), in drawing order, but a glyph's 12 its
 //                                 glyph's N (13 0) and an image's 20 its image's N; 16-19 and 24-27 the rounded
 //                                 rect it is cut to (its rect, its corners' radii: top left, top right, bottom right,
 //                                 bottom left), 28-31 how smooth those corners are (smooth.mbt)
@@ -196,9 +197,11 @@ fn drawlist_of(c : Ctx, bytes? : Bool = false) -> String {
     _ => ()
   }
   let sb = StringBuilder()
-  // (a box's corners each its own: 6 and its 40 numbers; turned: 5 and 36; else 4 and 32, as before anything turned)
+  // (an outer clip: 7 and its 52 numbers; a box's corners each its own: 6 and 40; turned: 5 and 36; else 4 and 32, as
+  // before anything turned)
   let mut turned = false
   let mut each = false
+  let mut outer = false
   for k in 0..<c.ninst {
     let o = k * inst_size
     if c.inst[o + 32] != 0.0 {
@@ -208,16 +211,23 @@ fn drawlist_of(c : Ctx, bytes? : Bool = false) -> String {
     if c.inst[o + 36] != r || c.inst[o + 37] != r || c.inst[o + 38] != r || c.inst[o + 39] != r {
       each = true
     }
+    if inst_has_outer(c.inst, o) {
+      outer = true
+    }
   }
-  let numbers = if each {
+  let numbers = if outer {
     inst_size
+  } else if each {
+    40
   } else if turned {
     36
   } else {
     32
   }
   sb.write_string(
-    if each {
+    if outer {
+      "mbui-dl 7\n"
+    } else if each {
       "mbui-dl 6\n"
     } else if turned {
       "mbui-dl 5\n"
