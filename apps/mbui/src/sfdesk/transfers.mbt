@@ -159,13 +159,13 @@ fn transfer_row(c : @ui.Ctx, src : Source, x : Json, go : (DriveAt) -> Unit) -> 
     })
     |> ignore
     c.box(style=ftransfer_actions, fn() {
-      if flag(j, "active") && @sf.icon_button(c, "close", key="files/transfer/cancel/" + tid, label=@sf.t("web-pages.files.cancelTransfer")) {
+      if flag(j, "active") && @sf.panel_icon_button(c, "files/transfer/cancel/" + tid, "close", @sf.t("web-pages.files.cancelTransfer")) {
         call("drive.transfer.cancel")
       }
-      if state == "failed" && @sf.icon_button(c, "retry", key="files/transfer/retry/" + tid, label=@sf.t("web-pages.drive.retry")) {
+      if state == "failed" && @sf.panel_icon_button(c, "files/transfer/retry/" + tid, "retry", @sf.t("web-pages.drive.retry")) {
         call("drive.transfer.retry")
       }
-      if state == "done" && @sf.button(c, @sf.t("web-pages.files.show"), key="files/transfer/show/" + tid, tone=Ghost) {
+      if state == "done" && @sf.panel_button(c, "files/transfer/show/" + tid, @sf.t("web-pages.files.show")) {
         ftransfers.open = false
         go({ station, root: Some(text(j, "toRoot")), path: text(j, "toPath") })
       }
@@ -203,10 +203,10 @@ fn download_row(c : @ui.Ctx, src : Source, d : Json) -> Unit {
     })
     |> ignore
     c.box(style=ftransfer_actions, fn() {
-      if flag(j, "active") && @sf.icon_button(c, "close", key="files/download/cancel/" + did, label=@sf.t("web-main.file.cancelDownload")) {
+      if flag(j, "active") && @sf.panel_icon_button(c, "files/download/cancel/" + did, "close", @sf.t("web-main.file.cancelDownload")) {
         c.tell("files/download/cancel/" + did, fn() { download_cancel(src, did) })
       }
-      if failed && @sf.icon_button(c, "retry", key="files/download/retry/" + did, label=@sf.t("web-main.file.retryDownload")) {
+      if failed && @sf.panel_icon_button(c, "files/download/retry/" + did, "retry", @sf.t("web-main.file.retryDownload")) {
         c.tell("files/download/retry/" + did, fn() { download_retry(src, did) })
       }
     })
@@ -246,9 +246,10 @@ let ftransfers_chip_going_words : @ui.TextStyle = @ui.text_style(size=Meta, colo
 let ftransfers_chip_failed_words : @ui.TextStyle = @ui.text_style(size=Meta, color=Danger, wrap=false)
 
 ///|
-/// A transfer (transfer: its mark 18, its words, its keys; 8 in, 8 apart, a line over it).
+/// A transfer (transfer: its mark 18, its words, its keys; 8 apart, a line over it): what it holds as far in as a
+/// small panel's words (a row's padding in from the panel's), 8 over and under.
 // kept across runs: a value (no field of it changes)
-let ftransfer_row : @ui.Style = @ui.css("row w=Full p=S2 gap=S2 align=AStart")
+let ftransfer_row : @ui.Style = @ui.css("row w=Full px=S2_5 py=S2 gap=S2 align=AStart")
 
 ///|
 // kept across runs: a value (no field of it changes)

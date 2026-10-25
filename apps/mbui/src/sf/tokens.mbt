@@ -2054,14 +2054,14 @@ pub let panel_in : @ui.Radius = rounded(small_panel_inner(r_menu))
 
 ///|
 /// The `@` menu over the desktop's composer (ChatRef.css.ts refMenu: a small panel, padded panel_pad) and its rows'
-/// corner (refItem: concentric with it), its rows at their lowest (38: round by the ladder's next step, not capsules).
+/// corner (refItem: concentric with it), its rows at their lowest (a menu's row's: capsules in its corners).
 pub let ref_menu_corner : @ui.Radius = rounded(r_menu)
 
 ///|
 pub let ref_item_corner : @ui.Radius = panel_in
 
 ///|
-pub let ref_item_min_h : @ui.Len = Fixed(38.0)
+pub let ref_item_min_h : @ui.Len = Fixed(menu_row_min)
 
 
 ///|

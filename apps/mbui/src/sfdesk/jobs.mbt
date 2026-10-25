@@ -247,9 +247,10 @@ fn jobs_clear(c : @ui.Ctx, src : Source, station : String, view : Json?, inset? 
 }
 
 ///|
-/// A group's head (jobsHead): its name, what the core notes of it lighter after it.
-fn jobs_head(c : @ui.Ctx, name : String, note : String) -> Unit {
-  c.box(style=jobs_head_box, fn() {
+/// A group's head (jobsHead): its name, what the core notes of it lighter after it; in the popover (`inset`) where its
+/// rows' words are, a small panel's heading.
+fn jobs_head(c : @ui.Ctx, name : String, note : String, inset? : Bool = false) -> Unit {
+  c.box(style=if inset { jobs_head_inset } else { jobs_head_box }, fn() {
     c.text(name, style=jobs_head_words) |> ignore
     if note != "" {
       c.text(note, style=jobs_head_note) |> ignore
@@ -286,7 +287,7 @@ pub fn jobs_popover(
   c.box(style=jobs_list, fn() {
     if services.length() > 0 {
       c.box(style=jobs_group, fn() {
-        jobs_head(c, @sf.t("web-main.jobs.services"), text(view, "servicesNote"))
+        jobs_head(c, @sf.t("web-main.jobs.services"), text(view, "servicesNote"), inset=true)
         for j in services {
           let jv = Some(j)
           let id = text(jv, "id")
@@ -304,7 +305,7 @@ pub fn jobs_popover(
     }
     if plain.length() > 0 {
       c.box(style=jobs_group, fn() {
-        jobs_head(c, @sf.t("web-main.jobs.jobs"), text(view, "jobsNote"))
+        jobs_head(c, @sf.t("web-main.jobs.jobs"), text(view, "jobsNote"), inset=true)
         for j in plain {
           let jv = Some(j)
           let id = text(jv, "id")
@@ -349,7 +350,7 @@ pub fn jobs_popover(
   })
   |> ignore
   if shown.length() == 0 {
-    c.text(@sf.t("web-main.jobs.quiet"), style=jobs_quiet) |> ignore
+    c.box(style=jobs_quiet_at, fn() { c.text(@sf.t("web-main.jobs.quiet"), style=jobs_quiet) |> ignore }) |> ignore
   }
   c.box(style=jobs_foot, fn() {
     let all = c.id("jobs-pop/all")
@@ -753,6 +754,12 @@ let job_action_hot : @ui.TextStyle = @ui.text_style(size=Meta, color=Fg, wrap=fa
 let jobs_head_box : @ui.Style = @ui.css("row w=Full pt=S2 px=S3 pb=S1 gap=S1_5 align=AEnd")
 
 ///|
+/// In the popover: a small panel's heading, its words as far in as its rows' (a row's padding) and as far under what
+/// is over them as a row's words (at the panel's top, where a menu's first item's words are), 4 over its rows.
+// kept across runs: a value (no field of it changes)
+let jobs_head_inset : @ui.Style = @ui.css("row w=Full pt=S1_5 px=S2_5 pb=S1 gap=S1_5 align=AEnd")
+
+///|
 // kept across runs: a value (no field of it changes)
 let jobs_head_words : @ui.TextStyle = @ui.text_style(size=Meta, weight=Medium, color=Muted, wrap=false)
 
@@ -784,13 +791,18 @@ let jobs_fold : @ui.Style = @ui.css("w=Full")
 let jobs_fold_body : @ui.Style = @ui.css("w=Full mb=S1 pt=S1 pr=S2 pb=S2 pl=S8 bg=Hover radius=Inner")
 
 ///|
-/// Nothing now (jobsQuiet): 8 over, 32 at its start, 13 muted.
+/// Nothing now (jobsQuiet): 8 over, in the names' column (as the foot's words: jobs_all), 13 muted.
 // kept across runs: a value (no field of it changes)
 let jobs_quiet : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, w=Full)
 
 ///|
+// kept across runs: a value (no field of it changes)
+let jobs_quiet_at : @ui.Style = @ui.style(w=Full, pt=S2, pl=@sf.room_of(@sf.text_in + 8.0 + 12.0))
+
+///|
 /// The popover's foot (jobsFoot): 6 under its groups, 4 apart; all of them a row 38 high, its words in the names'
-/// column (the panel's words' 10 and a dot's 20), muted, the words' ink on the pointer's ground; clearing beside it.
+/// column (a row's padding, its dot's 8 and the 12 after it: job_row_inset, job_row_on), muted, the words' ink on the
+/// pointer's ground; clearing beside it.
 // kept across runs: a value (no field of it changes)
 let jobs_foot : @ui.Style = @ui.css("row w=Full mt=S1_5 gap=S1 align=ACenter")
 
@@ -800,7 +812,7 @@ let jobs_all : @ui.Style = @ui.style(
   row=true,
   w=@sf.grow,
   h=@sf.jobs_row_h,
-  pl=S8,
+  pl=@sf.room_of(@sf.text_in + 8.0 + 12.0),
   pr=S2_5,
   align=ACenter,
   radius=Inner,

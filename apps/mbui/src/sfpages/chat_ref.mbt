@@ -213,19 +213,20 @@ let ref_logo_size : Double = 14.0
 let ref_chip_icon : Double = 11.0
 
 ///|
-/// The menu (refMenu): a small panel's list padded 6 in the composer's corner (32), its rows concentric, glass, a
-/// light shadow, 320 high at most, scrolling.
+/// The menu (refMenu): a small panel's list, padded as one (panel_pad), its rows concentric, glass, a light shadow,
+/// 320 high at most, scrolling.
 // kept across runs: a value (no field of it changes)
-let ref_menu_box : @ui.Style = @ui.style(p=S1_5, radius=@sf.ref_menu_corner, shadow=Sm)
+let ref_menu_box : @ui.Style = @ui.style(p=@sf.room_of(@sf.panel_pad), radius=@sf.ref_menu_corner, shadow=Sm)
 
 ///|
 /// (refMenu: maxHeight 320)
 let ref_menu_max : Double = 320.0
 
 ///|
-/// Its head (refHead): 6 over and under, 10 in, 6 between, the meta size, muted (refQuery: the words typed, the text's).
+/// Its head (refHead): a small panel's heading (its words a row's padding in, as far under its top as a row's words, 4
+/// over the chats), 6 between, the meta size, muted (refQuery: the words typed, the text's).
 // kept across runs: a value (no field of it changes)
-let ref_head : @ui.Style = @ui.css("row w=Full px=S2_5 py=S1_5 gap=S1_5")
+let ref_head : @ui.Style = @ui.css("row w=Full px=S2_5 pt=S1_5 pb=S1 gap=S1_5")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -245,7 +246,7 @@ let ref_empty : @ui.Style = @ui.css("w=Full px=S2_5 py=S1_5")
 let ref_empty_words : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, w=Full)
 
 ///|
-/// A chat (refItem): its mark in 16, its title, when; 10 apart, 38 high at least, 8 by 10 in, concentric with the
+/// A chat (refItem): its mark in 16, its title, when; 10 apart, a menu's row (as high, as far in), concentric with the
 /// menu; the one chosen on the hover's ground.
 // kept across runs: a value (no field of it changes)
 let ref_item : @ui.Style = @ui.style(
@@ -253,7 +254,7 @@ let ref_item : @ui.Style = @ui.style(
   w=Full,
   min_h=@sf.ref_item_min_h,
   px=S2_5,
-  py=S2,
+  py=@sf.room_of(@sf.menu_row_over),
   gap=S2_5,
   align=ACenter,
   radius=@sf.ref_item_corner,

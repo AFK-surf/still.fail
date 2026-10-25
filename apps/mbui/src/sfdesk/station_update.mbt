@@ -161,13 +161,14 @@ let update_label : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color=A
 let update_label_trouble : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color=Danger, wrap=false)
 
 ///|
-/// Its head (head): its words 10 in and 10 down, 2 apart; its close in the corner, 8 after them.
+/// Its head (head): its words a row's padding in and as far down as a menu's first item's words (menu_row_over), 2
+/// apart; its close in the corner, 8 after them.
 // kept across runs: a value (no field of it changes)
 let update_head : @ui.Style = @ui.css("row w=Full pl=S2_5 gap=S2 align=AStart")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let update_words : @ui.Style = @ui.style(w=@sf.grow, pt=S2_5, gap=S0_5)
+let update_words : @ui.Style = @ui.style(w=@sf.grow, pt=@sf.room_of(@sf.menu_row_over), gap=S0_5)
 
 ///|
 // kept across runs: a value (no field of it changes)

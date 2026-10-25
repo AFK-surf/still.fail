@@ -426,7 +426,8 @@ fn station_rows(c : @ui.Ctx, src : Source, w : Workspace, v : Json?, close : () 
       @sfbase.pick_new(src, w.id, { "station": Json::string(text(st, "id")) })
       close()
     }
-    let row = c.box(style=station_row, id~, fn() {
+    // (its words on the panel's words' line wherever it is drawn: @sf.panel_row_in)
+    let row = c.box(style=station_row.then(@sf.panel_row_in()), id~, fn() {
       @sf.station_icon(c, text(st, "emoji"), text(st, "icon"), station_row_mark, p.text)
       c.box(style=station_row_words, fn() {
         c.text(text(st, "name"), style=station_row_name) |> ignore

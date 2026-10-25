@@ -558,7 +558,10 @@ fn chat_info(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef, v : ChatView
     })
     |> ignore
   }
-  c.box(style=info_facts, fn() {
+  // (its first fact's words as far under the panel's top as a menu's first item's: the fact's row taller than its
+  // line, centred in it)
+  let over = @sf.menu_row_over - (info_fact_h - @sf.theme().t.ui_line) / 2.0
+  c.box(style=info_facts.then(@ui.style(pt=@sf.room_of(over))), fn() {
     fact(@sf.t("web-pages.chat.info.from"), fn() {
       match text(chat, "place") {
         "" => c.text(@sf.t("web-pages.chat.info.native", args=[("name", "still.fail")]), style=info_words) |> ignore
@@ -970,11 +973,14 @@ let jobs_alarm_restart : @ui.Style = @ui.css("w=S2_5 h=S2_5 radius=Full bg=Warn 
 /// 28 high and 6 apart, as far from the next as the rows under them are (32 and 2: pengxiao, 2026-10-25, the panel's
 /// rows unevenly apart).
 // kept across runs: a value (no field of it changes)
-let info_facts : @ui.Style = @ui.css("w=Full px=S2_5 pt=S2_5 gap=S1_5")
+let info_facts : @ui.Style = @ui.css("w=Full px=S2_5 gap=S1_5")
+
+///|
+let info_fact_h : Double = 28.0
 
 ///|
 // kept across runs: a value (no field of it changes)
-let info_fact : @ui.Style = @ui.css("row w=Full min_h=S7 gap=S3 align=ACenter")
+let info_fact : @ui.Style = @ui.style(row=true, w=Full, min_h=Fixed(info_fact_h), gap=S3, align=ACenter)
 
 ///|
 // kept across runs: a value (no field of it changes)

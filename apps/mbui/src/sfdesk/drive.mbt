@@ -453,7 +453,7 @@ fn folder_view(c : @ui.Ctx, src : Source, f : FolderOf, head~ : () -> Unit, foot
       menu.push(Some(@sf.menu_item_of(@sf.t("web-pages.drive.upload"), icon="upload", fn() { dv_upload(c, at) })))
     }
     for by in ["name", "time", "size", "kind"] {
-      menu.push(Some(@sf.menu_item_of(@sf.t("web-pages.drive.sortBy." + by), icon=if a.by == by { "check" } else { "" }, fn() {
+      menu.push(Some(@sf.menu_item_of(@sf.t("web-pages.drive.sortBy." + by), chosen=a.by == by, fn() {
         b.arrange_as(c, src, by~, down=false)
       })))
     }
@@ -800,7 +800,7 @@ pub fn folder_actions(c : @ui.Ctx, src : Source, f : FolderOf, style? : @ui.Styl
   let a = b.arrangement()
   let more : Array[@sf.MenuItem?] = []
   for by in ["name", "time", "size", "kind"] {
-    more.push(Some(@sf.menu_item_of(@sf.t("web-pages.drive.sortBy." + by), icon=if a.by == by { "check" } else { "" }, fn() {
+    more.push(Some(@sf.menu_item_of(@sf.t("web-pages.drive.sortBy." + by), chosen=a.by == by, fn() {
       b.arrange_as(c, src, by~, down=false)
     })))
   }
