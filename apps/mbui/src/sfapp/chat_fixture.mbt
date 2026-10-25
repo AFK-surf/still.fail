@@ -900,6 +900,10 @@ fn fixture_chat_call(f : Fixture, name : String, params : Json) -> Result[Json, 
           was = o
         }
       }
+      // (words with 重发不了 in them fail again: their file's source gone, as the core says it)
+      if text(Some(was), "text").contains("重发不了") {
+        return Some(Err({ "code": "upload", "message": "a.jpg 的上传源已丢失，请在新消息中重新添加附件。" }))
+      }
       fc.outbox.retain(fn(o) { text(Some(o), "id") != id })
       fc.outbox.push(outgoing_json(id, was, "retried", ""))
       f.version += 1

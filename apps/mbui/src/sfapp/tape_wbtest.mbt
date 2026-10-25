@@ -520,3 +520,41 @@ test "on the tape a page's head is a chat's bar: its title where a chat's stands
     }
   }
 }
+
+///|
+test "on the tape 新建对话 in the sidebar brings its page over, as ⌘N does" {
+  // an opened fold's inner screen upright, a finger
+  let t = tape_chat(2, 690.0, 840.0, width="medium", height="medium")
+  assert_eq(@sfdesk.wide.tape_at, @sfdesk.TapePane::Side)
+  t.tap_text("新建对话")
+  assert_true(app.nav.top() is NewChat)
+  t.run_for(@sfdesk.side_move_ms)
+  assert_eq(@sfdesk.wide.tape_at, @sfdesk.TapePane::Page)
+  // back: the sidebar again
+  t.back()
+  t.run_for(@sfdesk.side_move_ms)
+  assert_eq(@sfdesk.wide.tape_at, @sfdesk.TapePane::Side)
+  @sfdesk.new_chat()
+  t.run_for(@sfdesk.side_move_ms)
+  assert_eq(@sfdesk.wide.tape_at, @sfdesk.TapePane::Page)
+}
+
+///|
+test "on the tape a finger's search at the lists' top: tucked under the band at first, pulled down whole under it" {
+  // an opened fold's inner screen upright, its system bars over it
+  let t = tape_chat(2, 750.0, 830.0, width="medium", height="medium")
+  t.post(@hostapi.system_channel, "{\"bars\":{\"top\":36,\"bottom\":24,\"left\":0,\"right\":0}}")
+  t.run_for(@sfdesk.side_move_ms)
+  // the band's foot: 新建对话's row and the 2 under it
+  let band_foot = fn() {
+    let (_, y, _, h) = said_at(t, "新建对话").unwrap()
+    y + h + 2.0
+  }
+  let (_, y, _, h) = said_at(t, "搜索全部内容").unwrap()
+  assert_true(y + h <= band_foot(), msg="the search at \{y}..\{y + h}, the band to \{band_foot()}")
+  let (rx, ry) = t.find("首页的列表改成按天分组").unwrap()
+  t.drag(rx, ry, rx, ry + 400.0)
+  t.run_for(t.rest_of("a list") - t.time())
+  let (_, y, _, _) = said_at(t, "搜索全部内容").unwrap()
+  assert_true(y >= band_foot(), msg="the search from \{y}, the band to \{band_foot()}")
+}
