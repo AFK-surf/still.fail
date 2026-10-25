@@ -704,6 +704,37 @@ pub fn Ctx::take_back(self : Ctx, f : () -> Unit) -> Unit {
 }
 
 ///|
+/// A step of back as a gesture goes (Ctx::follow_back): begun at x (from the edge it came from, its time), moved to x,
+/// let go at x (back if it went far enough or fast enough: whose back it is decides, as a stack does), called off; or
+/// back now (the system decided, from where the gesture had it, or a back with no gesture: a back key, ⌘[).
+pub(all) enum BackStep {
+  Began(Double, Double)
+  Moved(Double, Double)
+  LetGo(Double, Double)
+  CalledOff
+  Back
+} derive(Eq, Show, Debug)
+
+///|
+/// Back taken by what is drawn over the stack, on the frames it calls this, after the stack is drawn, followed as it
+/// goes (Ctx::take_back's, step by step): the system's back gesture (Android's predictive back, from either edge: x
+/// from the edge it came from, as a stack's page follows it) and a back with no gesture come to `f` as their steps;
+/// for what moves back with the finger as a stack's page does without being one (a tape's panels). No edge swipe of
+/// its own.
+pub fn Ctx::follow_back(self : Ctx, f : (BackStep) -> Unit) -> Unit {
+  self.back_next = Some(fn(kind, x, _w, t) {
+    match kind {
+      0 => f(Began(x, t))
+      1 => f(Moved(x, t))
+      2 => f(LetGo(x, t))
+      3 => f(CalledOff)
+      _ => f(Back)
+    }
+  })
+  self.back_node_next = -1
+}
+
+///|
 /// The top page of `nav` alone, in place, nothing sliding and nothing swiped back: a desktop's pane beside a sidebar,
 /// whose pages are the same stack as a phone's (Ctx::nav draws it so on a narrow window). A page gone is forgotten
 /// (its widgets' state, `on_leave` told) as Ctx::nav forgets it; one moving is put where it was going.

@@ -2,14 +2,14 @@
 # classes expanded in width and compact in height, a finger. The same steps as tape.drive.
 system {"size_class":{"width":"expanded","height":"compact"}}
 timeout 20000
-until 发消息
+until 新建对话
 wait 1000
 tap 首页的列表改成按天分组
 wait 1300
-tapxy -90 200
-wait 1300
 back
 wait 1300
-tapxy -90 200
+tapxy -24 200
+wait 1300
+back
 wait 1300
 exit

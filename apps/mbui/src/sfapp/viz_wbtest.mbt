@@ -265,11 +265,11 @@ test "on the tape what shows of a visualization's page beside the sidebar in use
   t.view_says(page, "{\"emberViz\":true,\"type\":\"height\",\"height\":5000}")
   t.frame()
   t.frame()
-  // the sidebar in use at first, the page showing beside it
+  // the sidebar in use at first, a strip of the page showing beside it
   assert_eq(@sfdesk.wide.tape_at, @sfdesk.TapePane::Side)
   let (x, y, w, h) = view_rect(t, page).unwrap()
-  let edge = @sfdesk.rail_w + 240.0
-  assert_true(x + w > edge + 20.0, msg="the page \{x} \{w}, the sidebar's edge \{edge}")
+  let edge = 690.0 - @sfdesk.tape_shows
+  assert_true(x + w > edge + 20.0, msg="the page \{x} \{w}, the strip from \{edge}")
   // (in the middle of what the window shows of it)
   let (px, py) = (dmax(x, edge) + 10.0, (dmax(y, 0.0) + dmin(y + h, 840.0)) / 2.0)
   // tapped: the cover's (the chat's page comes over), the page told nothing of it

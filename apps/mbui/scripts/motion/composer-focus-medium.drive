@@ -3,9 +3,9 @@
 # from the shape it had to the new one, its foot where it is (docs/motion.md: moved or reshaped, for its cause).
 system {"size_class":{"width":"medium","height":"medium"}}
 timeout 20000
-until 发消息
+until 新建对话
 wait 600
-tapxy -80 420
+tapxy -24 420
 wait 900
 tap 发消息
 wait 900

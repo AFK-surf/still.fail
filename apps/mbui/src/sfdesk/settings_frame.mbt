@@ -173,6 +173,7 @@ fn settings_side(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
       }
       // (the way back is the frame's, not one of the list's rows: a group's room between them)
       @sf.list_apart(c)
+      // (a row's page in place of the one open; on the tape brought over to show it)
       @sfpages.settings_side_rows(c, core, here, lit, fn(r) {
         while app.nav.depth() > 1 {
           if !app.nav.pop() {
@@ -180,6 +181,7 @@ fn settings_side(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
           }
         }
         app.nav.push(Setting(r))
+        show_page()
       })
     })
   })

@@ -121,7 +121,10 @@ fn stations_side(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
         let s = Some(s)
         let address = text(s, "station")
         let on = picked == Some(Route::Station(address))
-        station_side_row(c, src, s, on, i + 1 < listed.length(), fn() { place_pick["stations"] = Route::Station(address) })
+        station_side_row(c, src, s, on, i + 1 < listed.length(), fn() {
+          place_pick["stations"] = Route::Station(address)
+          show_page()
+        })
       }
     })
   })
@@ -224,6 +227,7 @@ fn profiles_side(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
             more~,
           ) {
           place_pick["profiles"] = route
+          show_page()
         }
       }
       // each station's own logins, not profiles yet
@@ -257,6 +261,7 @@ fn profiles_side(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
               more=j + 1 < offers.length(),
             ) {
             app.nav.push(Setting(Route::NewProfile(station)))
+            show_page()
           }
         }
       }

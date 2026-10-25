@@ -135,8 +135,10 @@ fn open_job(c : @ui.Ctx, src : Source, job : Json?) -> Unit {
 }
 
 ///|
-/// A chat gone to from beside the list (a job's row): its page the one open, the chats' place under it.
+/// A chat gone to from beside the list (a job's row): its page the one open, the chats' place under it; on the tape
+/// brought over to show it (show_page), the chat already open too.
 fn open_chat_ref(r : ChatRef) -> Unit {
+  show_page()
   match app.nav.top() {
     Chat(open) if open.station == r.station && open.session == r.session => return
     _ => ()

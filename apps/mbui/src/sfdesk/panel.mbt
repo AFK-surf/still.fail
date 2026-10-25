@@ -437,20 +437,8 @@ pub fn side_open_for(src : Source, w : Workspace, p : Page) -> SideOf? {
 }
 
 ///|
-/// How wide a chat's side panel is on the tape (laid out Medium), a window `window` wide: its own (the width dragged,
-/// else 38% of the window and 360 at least, as side_width's), at most what the window leaves past what shows of the
-/// page beside it (`peek`) and the gaps round it (`apart`).
-pub fn tape_side_width(window : Double, peek : Double, apart : Double) -> Double {
-  let wanted = match panel_own.width {
-    Some(w) => w
-    None => dmax(360.0, (window * 0.38).floor())
-  }
-  dmax(0.0, dmin(wanted, window - peek - apart))
-}
-
-///|
 /// The side panel `side` on the tape, a panel of its own beside the page's: a chat's tabs as its view has them, a new
-/// chat's Station 文件; its edge not dragged (its width the tape's: tape_side_width).
+/// chat's Station 文件; its edge not dragged (its width the tape's: frame.mbt tape_one_beside).
 pub fn tape_side(c : @ui.Ctx, src : Source, w : Workspace, side : SideOf) -> Unit {
   side_over.val = true
   side_on_tape.val = true

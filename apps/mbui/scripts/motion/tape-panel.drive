@@ -4,15 +4,15 @@
 # panel's edge at its right), the panel's edge tapped (over again), back twice (the page, then the sidebar).
 system {"size_class":{"width":"medium","height":"medium"}}
 timeout 20000
-until 发消息
+until 新建对话
 wait 1000
-tapxy -80 420
+tapxy -24 420
 wait 1300
 tap icon:panel-open
 wait 1500
 back
 wait 1300
-tapxy -60 420
+tapxy -24 420
 wait 1300
 back
 wait 1300

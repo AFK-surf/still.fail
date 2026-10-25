@@ -16,6 +16,15 @@ fn files_page_tester(w : Double, h : Double, platform : Int) -> @ui.Tester {
 }
 
 ///|
+/// On the tape (laid out Medium, the sidebar in use at first), what shows of the page tapped: the page over.
+fn files_page_over(t : @ui.Tester, w : Double, h : Double) -> Unit {
+  if @sfdesk.wide.tape && @sfdesk.wide.tape_at != @sfdesk.TapePane::Page {
+    t.tap(w - @sfdesk.tape_shows / 2.0, h / 2.0)
+    t.run_for(@sfdesk.side_move_ms)
+  }
+}
+
+///|
 /// The leftmost place `words` are drawn at (the page's, not a list's beside it, where both say them: the rightmost).
 fn rightmost(t : @ui.Tester, words : String) -> (Double, Double) {
   t.locate(words).fold(init=(-1.0e9, 0.0), fn(a, p) { if p.0 > a.0 { p } else { a } })
@@ -27,6 +36,7 @@ test "文件's page narrow in every frame: what the folder holds in a line, its 
     let (w, h, platform) = size
     let at = "\{w} \{platform}"
     let t = files_page_tester(w, h, platform)
+    files_page_over(t, w, h)
     assert_true(t.find("2 个文件夹 · 7 个文件") is Some(_), msg=at)
     // narrow: no tabs; its ways those its room has (columns where two fit side by side: not a phone's)
     if w < 400.0 {
@@ -39,12 +49,6 @@ test "文件's page narrow in every frame: what the folder holds in a line, its 
       t.tap(x, y)
     }
     t.run_for(@ui.nav_push_ms)
-    // (on a tablet's tape, a press on the panel not in use only brings it over: pressed again, it opens)
-    if !(app.nav.top() is Drive({ path: "设计稿", .. })) {
-      let (x, y) = rightmost(t, "设计稿")
-      t.tap(x, y)
-      t.run_for(@ui.nav_push_ms)
-    }
     match app.nav.top() {
       Drive(d) => assert_eq(d.path, "设计稿", msg=at)
       _ => fail(at + ": no folder open")
@@ -89,11 +93,11 @@ test "a narrow folder's row held with a finger: what can be done to it in a shee
   // (held, it does not open)
   assert_true(viewer.val is None)
   let m = files_page_tester(720.0, 900.0, 0)
-  // (laid out Medium, the sidebar in use: a right click on the page beside it brings it over, as a press does, and
-  // asks nothing of what it holds)
-  let (x, y) = rightmost(m, "季度数据.csv")
-  m.right_click(x, y)
+  // (laid out Medium, the sidebar in use: a right click on what shows of the page beside it brings it over, as a
+  // press does, and asks nothing of what it holds)
+  m.right_click(720.0 - @sfdesk.tape_shows / 2.0, 450.0)
   m.run_for(@sfdesk.side_move_ms)
+  assert_eq(@sfdesk.wide.tape_at, @sfdesk.TapePane::Page)
   assert_false(@sf.presenting())
   let (x, y) = rightmost(m, "季度数据.csv")
   m.right_click(x, y)
