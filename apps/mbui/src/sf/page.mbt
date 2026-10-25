@@ -1522,8 +1522,9 @@ let dl_number : @ui.TextStyle = @ui.text_style(size=code_big_size, weight=Semibo
 let dl_unit : @ui.TextStyle = @ui.text_style(size=Meta, leading=L6, weight=Medium, color=Muted, wrap=false)
 
 ///|
-/// Its ten cells (quotaDialCells: 4 over and 6 under; a cell 8 by 14, 2 apart, round 2, the neutral ground; narrow 6
-/// wide).
+/// Its ten cells (quotaDialCells: 4 over and 6 under; a cell 8 by 14, 2 apart, round 2; narrow 6 wide), those not lit
+/// in the line's colour: the least a mark with nothing in it is drawn, seen on the card they are on (the neutral
+/// ground under words was not: 1.03 to 1 in the dark, 2026-10-26).
 // kept across runs: a value (no field of it changes)
 let dl_cells_wide : @ui.Style = @ui.css("row gap=SPx pt=S1 pb=S1_5")
 
@@ -1533,11 +1534,11 @@ let dl_cells_narrow : @ui.Style = @ui.css("row gap=S0_5 pt=S1 pb=S1_5")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let dl_cell_wide : @ui.Style = @ui.css("w=S2 h=S3_5 radius=Sm bg=Neutral mr=SPx")
+let dl_cell_wide : @ui.Style = @ui.css("w=S2 h=S3_5 radius=Sm bg=Line mr=SPx")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let dl_cell_narrow : @ui.Style = @ui.css("w=S1_5 h=S3_5 radius=Sm bg=Neutral")
+let dl_cell_narrow : @ui.Style = @ui.css("w=S1_5 h=S3_5 radius=Sm bg=Line")
 
 ///|
 // kept across runs: a value (no field of it changes)

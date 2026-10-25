@@ -175,6 +175,11 @@ pub fn Ctx::cycle(self : Ctx, period : Double, resident? : Bool = false, loc~ : 
     self.cycling = true
     return 0.0
   }
+  // (a frame measured for contrast: each loop at its start, a breath whole, a spinner's first spoke lit, as it is seen
+  // at its strongest: contrast.mbt)
+  if inst_owners.on {
+    return 0.0
+  }
   let at = if resident {
     let step = (self.now / cycle_step_ms).floor()
     self.wake_at_time((step + 1.0) * cycle_step_ms, later=true)

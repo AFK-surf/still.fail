@@ -315,8 +315,9 @@ function mermaidDocument(code: string): string {
   try { mermaid = (await import("${MERMAID}")).default; } catch (e) { post({ type: "failed", message: ${JSON.stringify(t("web-main.viz.mermaidFailed"))} }); }
   // Mermaid reads hex and rgb only: still.fail's oklch tokens are resolved to rgb through a canvas pixel.
   const pixel = document.createElement("canvas").getContext("2d", { willReadFrequently: true });
-  const rgb = (color) => { pixel.clearRect(0, 0, 1, 1); pixel.fillStyle = "#000"; pixel.fillStyle = color; pixel.fillRect(0, 0, 1, 1); const [r, g, b] = pixel.getImageData(0, 0, 1, 1).data; return "rgb(" + r + ", " + g + ", " + b + ")"; };
-  const v = (name) => { const value = getComputedStyle(document.documentElement).getPropertyValue(name).trim(); return name === "--font-sans" ? value : rgb(value); };
+  // (laid over the page's ground: a colour at an opacity, as --muted is, the colour it comes to there)
+  const rgb = (color, under) => { pixel.clearRect(0, 0, 1, 1); for (const c of [under, color]) { if (!c) continue; pixel.fillStyle = "#000"; pixel.fillStyle = c; pixel.fillRect(0, 0, 1, 1); } const [r, g, b] = pixel.getImageData(0, 0, 1, 1).data; return "rgb(" + r + ", " + g + ", " + b + ")"; };
+  const v = (name) => { const root = getComputedStyle(document.documentElement), value = root.getPropertyValue(name).trim(); return name === "--font-sans" ? value : rgb(value, name === "--background" ? null : root.getPropertyValue("--background").trim()); };
   const chart = document.getElementById("chart");
   let n = 0, waiting = false;
   async function draw() {

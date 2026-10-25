@@ -2024,8 +2024,9 @@ let desk_load_track : @ui.Style = @ui.style(w=Fixed(desk_load_w))
 let desk_load_w : Double = 180.0
 
 ///|
-/// The hairline: the ink at 8%, how far read in the accent at 70%.
-let desk_hairline_share : Double = 0.08
+/// The hairline: the ink at 14% (the line's step: what is drawn with nothing in it, contrast.mbt), how far read in the
+/// accent at 70%.
+let desk_hairline_share : Double = 0.14
 
 ///|
 let desk_hairline_fill : Double = 0.7

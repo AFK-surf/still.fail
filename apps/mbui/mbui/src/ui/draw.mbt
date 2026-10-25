@@ -880,6 +880,9 @@ fn Ctx::raise_tops(self : Ctx) -> Unit {
     a[to] = v
     to = to + 1
   }
+  if inst_owners.on {
+    inst_owners_raised(dr.tops, self.ninst)
+  }
   dr.tops.clear()
 }
 
@@ -946,6 +949,11 @@ pub fn Ctx::draw_drawing(self : Ctx, d : Drawing, rel : Int, look : Look) -> Uni
     a[b + 15] = if a[b + 5] == 0.0 { a[b + 15] * look.alpha } else { a[b + 15] }
   }
   self.ninst = i0 + count
+  if inst_owners.on {
+    for k in i0..<self.ninst {
+      inst_owned(k)
+    }
+  }
   let ox = n.x + d.x + look.ox * d.w
   let oy = n.y + d.y + look.oy * d.h
   // what it was clipped to is what cuts it now

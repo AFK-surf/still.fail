@@ -3,7 +3,7 @@
 // drawn: motion reduced only takes the time out of motion). A new part of the app with a
 // story is measured with no more written here. Builds the stories once (as a page, not module by module: the dev server's per-module transforms were most of
 // the time on CI's four cores) and serves the build. PLAYWRIGHT_MODULE selects Playwright (PLAYWRIGHT_CHANNEL a Chrome the
-// machine has, as CI's); SHOTS keeps a picture of each story; ONLY=<id,…> opens only those; REPORT=1 lists what is off
+// machine has, as CI's); SHOTS keeps a picture of each story (and of it in the dark theme); ONLY=<id,…> opens only those; REPORT=1 lists what is off
 // instead of failing; PAGES how many are opened at once (6); SHARD=<i>/<n> only the i-th of every n (CI's jobs side by side).
 import assert from 'node:assert/strict';
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
@@ -11,7 +11,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { build, preview } from 'vite';
-import { corners, drawn, panels } from './measure.mjs';
+import { contrast, corners, drawn, panels } from './measure.mjs';
 const playwright = await import(process.env.PLAYWRIGHT_MODULE || 'playwright');
 const out = process.env.SHOTS;
 // (how far the page's own time runs on after each step: the longest of its motions and of what waits on them)
@@ -158,7 +158,7 @@ try {
     return agent;
   })();
   /** A page with the story in it, taken to its state by its steps; whether it got there. */
-  const open = async (story, page, cdp) => {
+  const open = async (story, page, cdp, theme = 'light') => {
     // What the story before it kept in the browser gone (its storage, its cookies, the pointer over it, a finger's
     // emulation, motion reduced): only what the context's cache holds stays. Opened in the page the one before was in
     // (a document of its own), the app's scripts compiled once a page rather than once a story: a story opened in 266 ms
@@ -176,7 +176,7 @@ try {
     const errors = [];
     const onError = (e) => errors.push(e.message);
     page.on('pageerror', onError);
-    await page.goto(`${base}?story=${story.id}&theme=light`);
+    await page.goto(`${base}?story=${story.id}&theme=${theme}`);
     await settle(page, 1000);
     let reached = true;
     for (const step of story.steps) {
@@ -211,7 +211,10 @@ try {
     if (reached) {
       const c = await page.evaluate(corners);
       const p = await page.evaluate(panels);
+      // (contrast in the light theme here; the dark one's once the story is opened again in it, below)
+      const k = await page.evaluate(contrast);
       for (const w of [...c.wrong, ...p.wrong]) wrong.push(`${story.id}: ${w}`);
+      for (const w of k.wrong) wrong.push(`${story.id} (light): ${w}`);
       // Motion reduced and not, twice each, on the page held still (the demo's chats ended where they are): drawn the same
       // (it only takes the time out of motion). A difference follows the setting both times: what changes on a switch
       // whichever way (a bar woken by the pointer the page's change moves over again) or with time is not its doing; nor
@@ -258,7 +261,22 @@ try {
         for (const w of [...c2.wrong, ...p2.wrong]) { wrong.push(`${story.id} (scrolled to the end): ${w}`); more++; }
         if (out && more) await page.screenshot({ path: `${out}/${story.id}-end.png` });
       }
-      console.log(`${story.id}: ${c.measured} corner(s), ${p.surfaces} panel(s) measured${scrolled ? `, again scrolled to the end` : ''}; ${c.wrong.length + p.wrong.length + more} off`);
+      // And in the dark theme, opened again in it: what is drawn faint on its ground (the cells of a machine's gauge on
+      // its card, 2026-10-26) is so in one theme and not the other.
+      done();
+      const dark = await open(story, page, cdp, 'dark');
+      let faint = k.wrong.length;
+      if (dark.reached) {
+        const kd = await page.evaluate(contrast);
+        for (const w of kd.wrong) wrong.push(`${story.id} (dark): ${w}`);
+        faint += kd.wrong.length;
+        if (out) await page.screenshot({ path: `${out}/${story.id}-dark.png` });
+      }
+      dark.done();
+      for (const e of dark.errors) console.log(`${story.id} (dark): page error ${e}`);
+      console.log(`${story.id}: ${c.measured} corner(s), ${p.surfaces} panel(s), contrast in both themes measured${scrolled ? `, again scrolled to the end` : ''}; ${c.wrong.length + p.wrong.length + more + faint} off`);
+      for (const e of errors) console.log(`${story.id}: page error ${e}`);
+      return;
     }
     done();
     for (const e of errors) console.log(`${story.id}: page error ${e}`);

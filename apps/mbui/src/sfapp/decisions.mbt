@@ -114,9 +114,9 @@ fn waiting_cards(c : @ui.Ctx, error : Json?) -> Unit {
         |> ignore
       None => ()
     }
-    let breath = if error is None { @sf.breath(c) } else { 0.6 }
+    let breath = @sf.breath(c, failed=error is Some(_))
     for _ in 0..<2 {
-      c.box(w=Fill(1.0), h=Px(132.0), radius=20.0, bg=t.p.neutral_bg, opacity=breath, fn() {  }) |> ignore
+      c.box(w=Fill(1.0), h=Px(132.0), radius=20.0, bg=t.p.line, opacity=breath, fn() {  }) |> ignore
     }
   })
   |> ignore

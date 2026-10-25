@@ -1193,6 +1193,22 @@ fn drive_steps(c : Ctx) -> Unit {
         }
         next()
       }
+      // what the frame shows too faint on what it lies on (contrast.mbt), a line each: a frame drawn with whose each
+      // thing drawn is kept, then said
+      "contrast" =>
+        if inst_owners.on {
+          inst_owners.on = false
+          for f in c.contrast_faults_drawn(contrast_mark_least) {
+            h_log("DRIVE CONTRAST " + f)
+          }
+          next()
+        } else {
+          inst_owners.on = true
+          inst_owners.owner.clear()
+          inst_owners.painting = -1
+          c.owe_next()
+          return
+        }
       "exit" => {
         drive_end(0)
         return

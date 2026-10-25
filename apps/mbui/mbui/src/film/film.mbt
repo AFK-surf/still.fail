@@ -69,8 +69,9 @@ pub fn film(
       "0" => Some(false)
       _ => None
     },
-    // (the app's words in the language the film says: MBUI_LOCALE, as a device's)
-    env=[("MBUI_TEXT_RECORD", "1"), ("MBUI_LOCALE", arg("MBUI_LOCALE"))],
+    // (the app's words in the language the film says: MBUI_LOCALE, as a device's; MBUI_DARK=1, an app's own reading of
+    // it (sffix's fixture choosing its dark theme) as a program's)
+    env=[("MBUI_TEXT_RECORD", "1"), ("MBUI_LOCALE", arg("MBUI_LOCALE")), ("MBUI_DARK", arg("MBUI_DARK"))],
     live={ host, turn: fn() { spin(1.0) } },
     window_corner~,
   )

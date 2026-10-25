@@ -11,8 +11,9 @@ import { STILL, stillLoop } from "./styles/still.ts";
 export const LATER_MS = 400;
 const later = `${appearKeyframes} 0s linear ${LATER_MS}ms both`;
 
-// 1 → 0.5 and back in 1.4s; still for reduced motion (and faded, still, when what is waited on failed). A light
-// sweeping over them was tried and judged busier (2026-10-17).
+// 1 → 0.5 and back in 1.4s; still for reduced motion (and still, whole, when what is waited on failed: the red words
+// over them say so; faded to 0.6 they were drawn too faint to be seen, docs/ui-panels.md 对比度). A light sweeping over
+// them was tried and judged busier (2026-10-17).
 const breathe = keyframes({ "0%, 100%": { opacity: 1 }, "50%": { opacity: 0.5 } });
 
 export const wait = style({ position: "relative", display: "flex", flexDirection: "column", minHeight: 0 });
@@ -34,9 +35,10 @@ export const line = style({
 });
 export const shapes = style({
   animation: `${breathe} 1.4s ease-in-out infinite`,
-  selectors: { "&[data-still]": { animation: "none", opacity: 0.6 }, [`${STILL} &`]: stillLoop() },
+  selectors: { "&[data-still]": { animation: "none" }, [`${STILL} &`]: stillLoop() },
 });
-const bar = { display: "block", background: vars.neutralBg, borderRadius: "999px" } as const;
+// (in the line's grey, as what is drawn with nothing in it: docs/ui-panels.md 对比度)
+const bar = { display: "block", background: vars.line, borderRadius: "999px" } as const;
 export const row = style({
   display: "flex", alignItems: "center", gap: "12px", height: "66px", padding: "0 16px 0 22px", boxSizing: "border-box",
   selectors: { "&[data-dense]": { height: "40px", padding: "0 10px" } },
@@ -54,7 +56,9 @@ export const card = style({ ...bar, borderRadius: vars.rCard, cornerShape: vars.
 
 export const track = style({
   position: "relative", display: "block", flex: "none", height: "3px", borderRadius: "999px", overflow: "hidden",
-  background: `color-mix(in srgb, ${vars.accent} 18%, transparent)`,
+  // (what is empty of it in the line's grey, as what is drawn with nothing in it: seen on any ground, docs/ui-panels.md
+  // 对比度; the accent at 18% was 1.2 to 1 on white)
+  background: vars.line,
 });
 const sweep = keyframes({ from: { transform: "translateX(-100%)" }, to: { transform: "translateX(250%)" } });
 export const progress = style({

@@ -369,7 +369,7 @@ fn meter_dials(c : @ui.Ctx, meters : Array[Json]) -> Unit {
         |> ignore
         c.box(dir=Row, pt=4.0, pb=6.0, gap=2.0, fn() {
           for i in 0..<10 {
-            c.box(w=Px(7.0), h=Px(14.0), radius=2.0, bg=if i < lit { tone } else { t.p.chip }, fn() {  }) |> ignore
+            c.box(w=Px(7.0), h=Px(14.0), radius=2.0, bg=if i < lit { tone } else { t.p.line }, fn() {  }) |> ignore
           }
         })
         |> ignore

@@ -76,10 +76,11 @@ export const note = style({
 export const loadTrack = style({ width: "180px" });
 export const cut = style({ margin: "2em 0 0", color: "var(--r-muted)", fontSize: vars.textMeta, fontFamily: vars.fontBody, textIndent: "0" });
 
-/** With the bars away, how far through it is: a hairline along the bottom, in the accent. */
+/** With the bars away, how far through it is: a hairline along the bottom, in the accent, on the ink at 14% (the line's
+ * step, what is drawn with nothing in it: docs/ui-panels.md 对比度). */
 export const hairline = style({
   position: "absolute", left: "0", right: "0", bottom: "0", height: "2px", pointerEvents: "none",
-  background: "color-mix(in srgb, var(--r-ink) 8%, transparent)", transition: `opacity 200ms ${vars.easeOut}`,
+  background: "color-mix(in srgb, var(--r-ink) 14%, transparent)", transition: `opacity 200ms ${vars.easeOut}`,
   selectors: { [`${reader}[data-bars] &`]: { opacity: "0" } },
 });
 globalStyle(`${hairline} > span`, { position: "absolute", inset: "0", background: "color-mix(in srgb, var(--r-accent) 70%, transparent)", transformOrigin: "left" });

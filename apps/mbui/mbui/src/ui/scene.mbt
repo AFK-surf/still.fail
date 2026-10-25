@@ -369,6 +369,9 @@ fn Ctx::push_inst(
   a[b + 37] = radius
   a[b + 38] = radius
   a[b + 39] = radius
+  if inst_owners.on {
+    inst_owned(self.ninst)
+  }
   self.ninst = self.ninst + 1
 }
 
@@ -583,7 +586,15 @@ fn Ctx::paint(self : Ctx, i : Int, alpha_in : Double) -> Unit {
     self.raise_tops()
   }
   let h0 = self.next_hit_ids.length()
+  // (whose each instance is, where a test asks: contrast.mbt)
+  let was = inst_owners.painting
+  if inst_owners.on {
+    inst_owners.painting = i
+  }
   self.paint_node(i, alpha_in)
+  if inst_owners.on {
+    inst_owners.painting = was
+  }
   if layer {
     self.raise_tops()
   }

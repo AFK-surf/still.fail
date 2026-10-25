@@ -21,6 +21,8 @@ pub(all) struct Palette {
   text : Int64
   muted : Int64
   subtle : Int64
+  /// what is drawn to be seen with nothing in it (a line, a gauge's empty cell, a placeholder's block, a grip): the
+  /// ink at an opacity, as far off whatever it lies on (mbui's Theme `line`)
   line : Int64
   line_strong : Int64
   hover : Int64
@@ -43,7 +45,7 @@ pub(all) struct Palette {
   amber_bg : Int64
   /// a station online (--online: a status dot, parts.css.ts statusDot)
   online : Int64
-  /// placeholders' grey (waiting), a quiet pill's ground
+  /// a quiet ground under what is in it (a pill's, a bubble's): the ink at an opacity, a step off whatever it lies on
   neutral_bg : Int64
   overlay : Int64
   shadow : Int64
@@ -724,7 +726,7 @@ let wide_light : Palette = {
   text: 0x24272BFFL,
   muted: 0x646970FFL,
   subtle: 0x73787DFFL,
-  line: 0xE3E1DEFFL,
+  line: 0x322D2424L,
   line_strong: 0xC1C4C9FFL,
   hover: 0x26211711L,
   selected: 0xEBE7E1FFL,
@@ -741,7 +743,7 @@ let wide_light : Palette = {
   blue_bg: 0xEAF2FFFFL,
   amber_bg: 0xFEF4E0FFL,
   online: 0x45B164FFL,
-  neutral_bg: 0xEDEFF1FFL,
+  neutral_bg: 0x24272B13L,
   overlay: 0x13161B33L,
   shadow: 0x13161B1AL,
   primary: 0x24272BFFL,
@@ -766,7 +768,7 @@ let wide_dark : Palette = {
   text: 0xE9E9EAFFL,
   muted: 0xA3A5A9FFL,
   subtle: 0x8C8F94FFL,
-  line: 0x2D2E32FFL,
+  line: 0xE9E9EA19L,
   line_strong: 0x3D3F44FFL,
   hover: 0xFFFFFF0DL,
   selected: 0x323338FFL,
@@ -783,7 +785,7 @@ let wide_dark : Palette = {
   blue_bg: 0x1F2E47FFL,
   amber_bg: 0x403012FFL,
   online: 0x45B164FFL,
-  neutral_bg: 0x2A2B2FFFL,
+  neutral_bg: 0xE9E9EA0EL,
   overlay: 0x00000080L,
   shadow: 0x00000073L,
   primary: 0xECEDEDFFL,
@@ -809,7 +811,7 @@ let narrow_light : Palette = {
   // the greys and the red Android's (Theme.kt Light), what the app on a phone matches, not the narrow web's
   muted: 0x626469FFL,
   subtle: 0x7C7E81FFL,
-  line: 0xE7E3DCFFL,
+  line: 0x322D2424L,
   accent: 0xE5704AFFL,
   accent_text: 0xB9471FFFL,
   accent_bg: 0xFBE6DCFFL,
@@ -818,7 +820,7 @@ let narrow_light : Palette = {
   warn_ink: 0x98691EFFL,
   red: 0xBF3E2CFFL,
   // its placeholders in its bubbles' grey, a step darker than the page
-  neutral_bg: 0xE8E4DCFFL,
+  neutral_bg: 0x322D2413L,
   card: 0xFFFFFFFFL,
   // Android's C.chip (Theme.kt), what the app on a phone matches, not the narrow web's EFECE6
   chip: 0xE8E4DCFFL,
@@ -840,7 +842,7 @@ let narrow_dark : Palette = {
   muted: 0x9A9DA3FFL,
   // Android's (Theme.kt Dark)
   subtle: 0x84888FFFL,
-  line: 0x34353AFFL,
+  line: 0xECECED1FL,
   accent: 0xEF7A55FFL,
   accent_text: 0xF6A383FFL,
   accent_bg: 0x4A2F25FFL,
@@ -848,7 +850,7 @@ let narrow_dark : Palette = {
   green_ink: 0x5CC08AFFL,
   warn_ink: 0xD9962BFFL,
   red: 0xEB6B58FFL,
-  neutral_bg: 0x313237FFL,
+  neutral_bg: 0xECECED1BL,
   card: 0x26272BFFL,
   chip: 0x313237FFL,
   // the sidebar a step under the page's ground, as the web's dark one under its canvas (1F2023 → 19191B)

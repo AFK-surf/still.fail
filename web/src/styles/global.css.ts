@@ -55,7 +55,11 @@ globalStyle(":root", {
     "--text": "oklch(27% .009 255)",
     "--muted": "oklch(52% .012 255)",
     "--subtle": "oklch(57% .01 255)",
-    "--line": "oklch(91% .005 85)",
+    // What is drawn to be seen with nothing in it, at its faintest (a line, a gauge's empty cell, a placeholder's block):
+    // the ink at an opacity, so it stands as far off whatever it lies on (the page, a card, a menu), at least 1.25 to 1
+    // (docs/ui-panels.md 对比度); an opaque grey was that on the page alone (a station's empty cells on its card, 1.03 to
+    // 1 in the dark, 2026-10-26). The same on the canvas as the grey it was.
+    "--line": "rgb(50 45 36 / .141)",
     "--line-strong": "oklch(82% .008 255)",
     "--hover": "oklch(25% .02 85 / .065)",
     "--selected": "oklch(93% .009 85)",
@@ -72,7 +76,8 @@ globalStyle(":root", {
     "--amber-bg": "oklch(97% .028 85)",
     "--red": "oklch(48% .15 22)",
     "--red-bg": "oklch(97% .02 22)",
-    "--neutral-bg": "oklch(95% .004 255)",
+    // A quiet ground under what is in it (a pill, a bubble), a step off whatever it lies on as --line is, fainter.
+    "--neutral-bg": "rgb(36 39 43 / .075)",
     "--overlay": "oklch(20% .01 255 / .2)",
     "--shadow": "oklch(20% .01 255 / .10)",
     "--primary": "#24272b",
@@ -116,7 +121,7 @@ globalStyle(":root:not([data-theme=\"light\"])", {
         "--text": "#e9e9ea",
         "--muted": "#a3a5a9",
         "--subtle": "#8c8f94",
-        "--line": "#2d2e32",
+        "--line": "rgb(233 233 234 / .098)",
         "--line-strong": "#3d3f44",
         "--hover": "rgb(255 255 255 / .05)",
         "--selected": "#323338",
@@ -133,7 +138,7 @@ globalStyle(":root:not([data-theme=\"light\"])", {
         "--amber-bg": "oklch(32% .05 80)",
         "--red": "oklch(74% .14 22)",
         "--red-bg": "oklch(30% .05 22)",
-        "--neutral-bg": "#2a2b2f",
+        "--neutral-bg": "rgb(233 233 234 / .055)",
         "--overlay": "oklch(0% 0 0 / .5)",
         "--shadow": "oklch(0% 0 0 / .45)",
         "--primary": "#eceded",
@@ -155,7 +160,7 @@ globalStyle(":root[data-theme=\"dark\"]", {
     "--text": "#e9e9ea",
     "--muted": "#a3a5a9",
     "--subtle": "#8c8f94",
-    "--line": "#2d2e32",
+    "--line": "rgb(233 233 234 / .098)",
     "--line-strong": "#3d3f44",
     "--hover": "rgb(255 255 255 / .05)",
     "--selected": "#323338",
@@ -172,7 +177,7 @@ globalStyle(":root[data-theme=\"dark\"]", {
     "--amber-bg": "oklch(32% .05 80)",
     "--red": "oklch(74% .14 22)",
     "--red-bg": "oklch(30% .05 22)",
-    "--neutral-bg": "#2a2b2f",
+    "--neutral-bg": "rgb(233 233 234 / .055)",
     "--overlay": "oklch(0% 0 0 / .5)",
     "--shadow": "oklch(0% 0 0 / .45)",
     "--primary": "#eceded",

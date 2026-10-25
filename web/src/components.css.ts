@@ -43,13 +43,14 @@ export const quotaChip = style({
     "&[data-small]": { height: "16px", padding: "0 5px", fontSize: vars.textCaption },
   },
 });
-/** How full: a quiet grey while there is plenty, its level's colour faintly once it runs low (the accent, moving, for a
- * download). */
+/** How full: a quiet grey while there is plenty, its level's colour faintly once it runs low (the accent's ink, moving,
+ * for a download). At 28%: as far off the chip's ground as what is drawn with nothing in it, on whatever the chip lies
+ * on (docs/ui-panels.md 对比度; at 20% an amber fill was 1.24 to 1 on a menu's grey, the accent's light orange less). */
 export const quotaChipFill = style({
-  position: "absolute", top: "0", bottom: "0", left: "0", background: vars.muted, opacity: 0.22, pointerEvents: "none",
+  position: "absolute", top: "0", bottom: "0", left: "0", background: vars.muted, opacity: 0.28, pointerEvents: "none",
   selectors: {
-    [`${quotaChip}:is([data-level="amber"], [data-level="red"], [data-level="progress"]) > &`]: { background: "currentColor", opacity: 0.2 },
-    [`${quotaChip}[data-level="progress"] > &`]: { transition: "width .5s ease-out" },
+    [`${quotaChip}:is([data-level="amber"], [data-level="red"]) > &`]: { background: "currentColor" },
+    [`${quotaChip}[data-level="progress"] > &`]: { background: vars.accentText, transition: "width .5s ease-out" },
   },
 });
 /** Its number in the text's colour while there is plenty (the muted grey over the fill read too faint); in its colour
@@ -93,7 +94,9 @@ export const peopleMore = style({
   fontSize: vars.textCaption, color: vars.muted, paddingLeft: "6px", boxShadow: "none !important",
 });
 globalStyle(`${quotaDialNumber} small`, { fontSize: "0.55em", fontWeight: "500", marginLeft: "1px", color: vars.muted });
-globalStyle(`${quotaDialCells} i`, { width: "8px", height: "14px", borderRadius: "2px", background: vars.neutralBg });
+// (those not lit in the line's grey, what is drawn with nothing in it: seen on any ground, a card's too; the neutral
+// grey under words was not, 2026-10-26)
+globalStyle(`${quotaDialCells} i`, { width: "8px", height: "14px", borderRadius: "2px", background: vars.line });
 // Three across a phone: the cells a little narrower, so ten of them fit a third of it.
 globalStyle(`${quotaDials}[data-row] ${quotaDial}`, { minWidth: "0" });
 globalStyle(`${quotaDials}[data-row] ${quotaDialCells}`, { gap: "2px" });

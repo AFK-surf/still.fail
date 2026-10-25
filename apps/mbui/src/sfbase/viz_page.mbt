@@ -354,13 +354,13 @@ pub fn viz_file_of(
 }
 
 ///|
-/// Its place while it comes: 120 high, its corners Smooth 12, the bubble's grey, 8 under it.
+/// Its place while it comes: 120 high, its corners Smooth 12, a placeholder's grey (the line's), 8 under it.
 // kept across runs: a value (no field of it changes)
 pub let viz_wait_under : @ui.Style = @ui.css("w=Full pb=S2")
 
 ///|
 // kept across runs: a value (no field of it changes)
-pub let viz_wait : @ui.Style = @ui.style(w=Full, h=@sf.viz_wait_h, radius=Xl, bg=Neutral)
+pub let viz_wait : @ui.Style = @ui.style(w=Full, h=@sf.viz_wait_h, radius=Xl, bg=Line)
 
 ///|
 /// The page and the ways under it, 4 under them.
@@ -549,8 +549,9 @@ pub fn viz_mermaid_document(code : String, full? : Bool = false) -> String {
   viz_tr("android-misc.viz.mermaidFailed") +
   "\" }); }\n" +
   "  const pixel = document.createElement(\"canvas\").getContext(\"2d\", { willReadFrequently: true });\n" +
-  "  const rgb = (color) => { pixel.clearRect(0, 0, 1, 1); pixel.fillStyle = \"#000\"; pixel.fillStyle = color; pixel.fillRect(0, 0, 1, 1); const [r, g, b] = pixel.getImageData(0, 0, 1, 1).data; return \"rgb(\" + r + \", \" + g + \", \" + b + \")\"; };\n" +
-  "  const v = (name) => { const value = getComputedStyle(document.documentElement).getPropertyValue(name).trim(); return name === \"--font-sans\" ? value : rgb(value); };\n" +
+  "  // (laid over the page's ground: a colour at an opacity, as --muted is, the colour it comes to there)\n" +
+  "  const rgb = (color, under) => { pixel.clearRect(0, 0, 1, 1); for (const c of [under, color]) { if (!c) continue; pixel.fillStyle = \"#000\"; pixel.fillStyle = c; pixel.fillRect(0, 0, 1, 1); } const [r, g, b] = pixel.getImageData(0, 0, 1, 1).data; return \"rgb(\" + r + \", \" + g + \", \" + b + \")\"; };\n" +
+  "  const v = (name) => { const root = getComputedStyle(document.documentElement), value = root.getPropertyValue(name).trim(); return name === \"--font-sans\" ? value : rgb(value, name === \"--background\" ? null : root.getPropertyValue(\"--background\").trim()); };\n" +
   "  const chart = document.getElementById(\"chart\");\n" +
   "  let n = 0, waiting = false, width = 0;\n" +
   "  const fit = (w) => Math.min(1, chart.clientWidth / w);\n" +
