@@ -265,10 +265,10 @@ fn ref_card(c : @ui.Ctx, key : String, r : DraftRef) -> Unit {
       padx=10.0,
       pady=8.0,
       gap=10.0,
-      style=files_card(),
+      // (named by its path: no ground, outlined; going as the file: the page's own, as every waiting card's)
+      style=if named { files_card() } else { files_card().then(@sf.composer_card) },
       border=if named { 1.0 } else { 0.0 },
       border_color=@sf.alpha(t.p.text, 0.22),
-      bg=if named { 0L } else { ink().neutral },
       align=ACenter,
       id=card,
       fn() {

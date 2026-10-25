@@ -2326,7 +2326,6 @@ fn pasted_card(
   locked : Bool,
 ) -> Int {
   let t = @sf.theme()
-  let k = ink()
   let busy = f.done is None && f.error is None
   let action = c.id("composer/paste-action/\{f.id}")
   let can_retry = f.error is Some(_) && !src.read_only
@@ -2352,8 +2351,8 @@ fn pasted_card(
     pt=8.0,
     pb=8.0,
     gap=10.0,
-    style=files_card(),
-    bg=k.neutral,
+    // (off the capsule's frosted ground: the page's own, as every waiting card's, @sf.composer_card)
+    style=files_card().then(@sf.composer_card),
     align=ACenter,
     fn() {
       if busy {
@@ -2412,7 +2411,6 @@ fn pasted_card(
 /// size or how it goes.
 fn file_tile(c : @ui.Ctx, f : Pending, again? : Int = 0) -> Int {
   let t = @sf.theme()
-  let k = ink()
   let busy = f.done is None && f.error is None
   // a link shared in (share-in.ts): its title and its site, drawn as a file is; tapped, it opens (Composer.kt LinkCard)
   let link = field(f.done, "link")
@@ -2427,8 +2425,8 @@ fn file_tile(c : @ui.Ctx, f : Pending, again? : Int = 0) -> Int {
     padx=10.0,
     pady=8.0,
     gap=10.0,
-    style=files_card(),
-    bg=k.neutral,
+    // (off the capsule's frosted ground: the page's own, as every waiting card's, @sf.composer_card)
+    style=files_card().then(@sf.composer_card),
     align=ACenter,
     id=if link is Some(_) { open } else { 0 },
     fn() {

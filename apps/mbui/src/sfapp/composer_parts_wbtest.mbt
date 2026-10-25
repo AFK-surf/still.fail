@@ -109,6 +109,30 @@ test "what waits to go has its ✕ hung on its corner, its centre on the curve, 
 }
 
 ///|
+test "a waiting file's card stands off the composer's frosted ground, on the page's own with a faint shadow, on a phone and a computer alike" {
+  // (the user, 2026-10-16: 附件有点难以分辨; @sf.composer_card)
+  for platform in [2, 0] {
+    let calls : Array[Made] = []
+    let made : Ref[Source?] = Ref(None)
+    let t = fake_core(calls, made~, platform~)
+    let src = made.val.unwrap()
+    @sfbase.writing_add(src, @sfbase.writing(src, "ws1/st1:s-c1"), "ws1/st1", "build.log", @utf8.encode("夜里的构建日志"))
+    t.draw()
+    t.run_for(@sfpages.morph_ms)
+    let (x, y, w, h) = match t.query(Group, label="build.log") {
+      Some(g) => g.rect
+      None => fail("no card for build.log (platform \{platform})")
+    }
+    let near = fn(a : Double, b : Double) { (a - b).abs() < 0.5 }
+    // (the page's: the canvas on a computer, the warm paper on a phone)
+    let ground = @sf.theme().p.bg
+    let drawn = t.drawn_rects().filter(fn(r) { near(r.0, x) && near(r.1, y) && near(r.2, w) && near(r.3, h) })
+    assert_true(drawn.iter().any(fn(r) { r.4 == ground }), msg="its ground (platform \{platform}): \{drawn.map(fn(r) { r.4 })}, the page's \{ground}")
+    assert_true(t.drawn_shadows().iter().any(fn(s) { near(s.0, x) && near(s.2, w) }), msg="no shadow under it (platform \{platform})")
+  }
+}
+
+///|
 test "an archived chat's restore failing says why under it, in red; tapped again it is tried again" {
   let calls : Array[Made] = []
   let t = fake_core(calls, over=fn(name, tp) {
