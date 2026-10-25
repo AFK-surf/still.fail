@@ -1749,7 +1749,17 @@ pub fn dialog(
         }
         // what it holds scrolls in itself when the dialog would be taller than the window leaves it (dialogBody's
         // overflow: auto, its minimum 0): its title and its buttons stay
-        c.capped(key + "/body", c.height, shrinks=true, fn() { c.box(style=dialog_body, inner) |> ignore }) |> ignore
+        c.capped(key + "/body", c.height, shrinks=true, fn() {
+          c.box(style=dialog_body, fn() {
+            // (its rows told they are in a dialog: dialog_rows)
+            let was = in_dialog.val
+            in_dialog.val = true
+            inner()
+            in_dialog.val = was
+          })
+          |> ignore
+        })
+        |> ignore
         match footer {
           Some(f) => c.box(style=dialog_foot.then(dialog_corner_foot(dialog_pad)), f) |> ignore
           None => c.box(style=dialog_end, fn() {  }) |> ignore
@@ -1833,6 +1843,28 @@ let dialog_foot : @ui.Style = @ui.css("row w=Full justify=JEnd align=ACenter gap
 ///|
 /// A dialog's sides' room (24).
 let dialog_pad : Double = 24.0
+
+///|
+/// Whether a dialog's body is being drawn (dialog), what its rows reach out by (dialog_rows).
+// kept across runs: said by dialog round the body it draws, false between
+let in_dialog : Ref[Bool] = { val: false }
+
+///|
+/// A list of rows `row_h` high, each pressed as a whole (a station to pick), and each row: in a dialog the rows round as
+/// their height, the list out past the dialog's words at its sides and foot to where the last row stands concentric with
+/// its foot corners (capsule_in), each row's words back on the words' line; elsewhere (a sheet's, a small panel's) as
+/// the list and its rows are. One corner for all of them, the last's in the corners concentric, never that one's alone.
+pub fn dialog_rows(row_h : Double) -> (@ui.Style, @ui.Style) {
+  if !in_dialog.val {
+    return (no_style, no_style)
+  }
+  let out = capsule_in(dialog_r, row_h) - dialog_pad
+  (@ui.style(mx=room(out), mb=room(out)), @ui.style(radius=Full, px=room(-out)))
+}
+
+///|
+// kept across runs: a value (no field of it changes)
+let no_style : @ui.Style = @ui.css("")
 
 ///|
 /// With none, 24 under what it holds.

@@ -25,18 +25,18 @@ fn Node::grounded(self : Node) -> Bool {
 
 ///|
 /// Whether node `n` has a ground in a state it is not in now, whatever it shows in this frame: one its style gives it
-/// pointed at, pressed, chosen or focused (state_ground), or, a press target rounded, the one it draws as it is lit (a
-/// button's hover or press ground drawn from Ctx::lit); not a row pressed as a whole (pressed_row: a container of what
-/// is in it). The corner rule holds it as one with a ground, so a ground seen only under the hand is held to the rule
-/// as one at rest is, not only when a test happens to point at it (the user, 2026-10-25: a row's 归档 under the pointer
-/// stood off the row's corner, not found).
+/// pointed at, pressed, chosen or focused (state_ground), a row pressed as a whole too (its ground under the pointer in
+/// its container's corner as any other's: the user, 2026-10-26, a dialog's last row lit, its corners not alike, not
+/// found); or, a press target rounded, not a row, the one it draws as it is lit (a button's hover or press ground drawn
+/// from Ctx::lit). The corner rule holds it as one with a ground, so a ground seen only under the hand is held to the
+/// rule as one at rest is, not only when a test happens to point at it (the user, 2026-10-25: a row's 归档 under the
+/// pointer stood off the row's corner, not found).
 fn Node::lit_ground(self : Node) -> Bool {
   self.kind == kind_box &&
   self.opacity > 0.01 &&
   self.fw > 0.0 &&
   self.fh > 0.0 &&
-  !self.pressed_row() &&
-  (self.state_ground || (self.id != 0 && self.hit && self.radius >= 0.5))
+  (self.state_ground || (!self.pressed_row() && self.id != 0 && self.hit && self.radius >= 0.5))
 }
 
 ///|
