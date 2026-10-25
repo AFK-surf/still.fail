@@ -114,6 +114,10 @@ pub(all) struct Theme {
   /// how far apart two things that light up under the hand stand at least (the spacing rules, gaps.mbt: the web's
   /// sidebar rows 2); 0: not held
   lit_apart : Double
+  /// how far in from the sides of the box with a ground round it a row that lights up under the hand stands, where it
+  /// runs across it (the spacing rules, gaps.mbt rule 7: still.fail's 6, a menu's rows in its panel, a list's in its
+  /// card); 0: not held
+  lit_reach : Double
   /// the height of a line of words that say none, a size of words (1.4: CSS's `line-height: 1.4`, still.fail's
   /// apps'); 0: the host's own (its system's, about 1.42)
   text_line : Double
@@ -270,6 +274,7 @@ pub fn Theme::light() -> Theme {
     corner_ladder: [],
     corner_fit: None,
     lit_apart: 0.0,
+    lit_reach: 0.0,
     tabular: false,
   }
 }
@@ -425,6 +430,7 @@ pub fn Theme::ios_light() -> Theme {
     corner_ladder: [],
     corner_fit: None,
     lit_apart: 0.0,
+    lit_reach: 0.0,
     tabular: false,
   }
 }
@@ -694,6 +700,9 @@ pub fn Ctx::with_theme(self : Ctx, t : Theme, body : () -> Unit) -> Unit {
   }
   if t.lit_apart > 0.0 {
     self.lit_apart = t.lit_apart
+  }
+  if t.lit_reach > 0.0 {
+    self.lit_reach = t.lit_reach
   }
   body()
   self.theme = saved

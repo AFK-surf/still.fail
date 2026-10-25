@@ -344,7 +344,7 @@
   "web-mobile.profiles.addModelPlaceholder": "按名称添加模型",
   "web-mobile.profiles.addedMachine": "已添加 Profile，使用此机器的登录",
   "web-mobile.profiles.adding": "已登录，正在添加",
-  "web-mobile.profiles.background": "新消息到达时，将正在执行的命令转到后台",
+  "web-mobile.profiles.background": "新消息到达时，后台运行当前命令",
   "web-mobile.profiles.backgroundOff": "新消息需等正在执行的命令或 subagent 结束后才会被读取。",
   "web-mobile.profiles.backgroundOn": "命令和 subagent 转到后台继续运行，agent 立即读取消息。",
   "web-mobile.profiles.blockedText": "此账号已被服务商停用。",

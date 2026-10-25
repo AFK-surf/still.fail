@@ -422,6 +422,7 @@ fn frame_build(c : Ctx, w : Double, h : Double) -> Int {
   c.lit_asked.clear()
   c.hand_chooses.clear()
   c.lit_apart = c.theme.lit_apart
+  c.lit_reach = c.theme.lit_reach
   c.window_corner = window_corner()
   // (what an earlier build of this frame said to tell outside is let go: this one says it again, or not)
   c.tells.clear()

@@ -161,9 +161,9 @@ let ws_list : @ui.Style = @ui.css("w=Full h=Full pb=S6 clip")
 let ws_current : @ui.Style = @ui.css("w=Full px=S3 pt=S1 pb=S4")
 
 ///|
-/// A list card (Workspaces.kt RowsCard): its rows 8 in, the list card's corner, on the chips' grey.
+/// A list card (Workspaces.kt RowsCard): its rows list_pad in, the list card's corner, on the chips' grey.
 // kept across runs: a value (no field of it changes)
-let ws_card : @ui.Style = @ui.style(w=Full, p=S2, radius=@sf.list_card_radius, clip=true)
+let ws_card : @ui.Style = @ui.style(w=Full, p=@sf.list_room, radius=@sf.list_card_radius, clip=true)
 
 ///|
 /// Signing in another account and a new one: 8 under the list, 16 over the foot.
@@ -251,9 +251,9 @@ let ws_row_on_card : @ui.Style = @ui.css("w=Full")
 let ws_row : @ui.Style = @ui.css("row w=Full px=S2 py=S3 gap=S3 align=ACenter")
 
 ///|
-/// On a card: the card's 8 in already, 12 more (its words card_pad, 20, from the card's edge).
+/// On a card: the card's list_pad in already, a row's room more (list_words_room: its words 16 from the card's edge).
 // kept across runs: a value (no field of it changes)
-let ws_row_card : @ui.Style = @ui.css("row w=Full px=S3 py=S3 gap=S3 align=ACenter")
+let ws_row_card : @ui.Style = @ui.css("row w=Full py=S3 gap=S3 align=ACenter").then(@ui.style(px=@sf.list_words_room))
 
 ///|
 /// A workspace's mark or its letter in a square 24 across: the mark 22, the letter 15 semibold, muted; an icon 20, the

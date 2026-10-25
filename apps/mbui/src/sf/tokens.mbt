@@ -207,6 +207,12 @@ pub let corner_ladder : Array[Double] = [pane_corner, card_corner, r_menu, row_c
 pub let lit_apart : Double = 2.0
 
 ///|
+/// How far in from the sides of what holds it a row that lights up under the hand stands, where it runs across it
+/// (Theme::lit_reach, the spacing rules' 7): a small panel's padding, so a menu's rows, a list card's and a card of
+/// options' alike (docs/ui-panels.md 列表卡; the user, 2026-10-26: a card of options' grounds 10 in, 「6px 就差不多了」).
+pub let lit_reach : Double = panel_pad
+
+///|
 /// What the corner rule may make of what lies in a container's corner to be concentric with it (docs/ui-panels.md 圆角
 /// 阶梯, 适应范围; the theme's Theme::corner_fit): a corner 6 at least (squarer reads as square) and the ladder's
 /// outermost at most, standing 4 to 16 from the container's edges. The outermost container is the window, its corner
@@ -567,9 +573,10 @@ pub fn foot_reach(height : Double, start? : Double, words_first? : Bool = false)
 }
 
 ///|
-/// The ladder's steps and inset as a style's: a card's corner, a row's or a block's, a small block's; the inset;
-/// what a card's words stand in from a list's rows (card_pad less the inset); what a card's corner keeps clear past
-/// its words (its corner less card_pad).
+/// The ladder's steps and inset as a style's: a card's corner, a row's or a block's, a small block's; the inset; a
+/// list card's padding (list_pad) and its rows' words' room in them (a row's own, text_in: list_pad and that from the
+/// card's edge, 16, as a menu's words in its panel); what a card's corner keeps clear past its words (its corner less
+/// card_pad).
 pub let card_radius : @ui.Radius = rounded(card_corner)
 
 ///|
@@ -582,7 +589,10 @@ pub let small_radius : @ui.Radius = rounded(small_corner)
 pub let inset_room : @ui.Space = room(corner_inset)
 
 ///|
-pub let list_words_room : @ui.Space = room(card_pad - corner_inset)
+pub let list_room : @ui.Space = room(list_pad)
+
+///|
+pub let list_words_room : @ui.Space = room(text_in)
 
 ///|
 pub let corner_clear_room : @ui.Space = room(card_corner - card_pad)
@@ -637,8 +647,9 @@ pub let command_box_corner : Double = row_corner
 pub let button_h : Double = 36.0
 
 ///|
-/// A card of pressable rows: the rows this far in (the ladder's inset), each round by row_corner.
-pub let list_pad : Double = corner_inset
+/// A card of pressable rows (a list card, a card of options): the rows this far in, as a menu's are in its panel
+/// (lit_reach), each round by the ladder's row corner concentric with the card's (list_card_corner).
+pub let list_pad : Double = lit_reach
 
 ///|
 /// A settings row's icon, before its name (SettingParts.kt ROW_ICON).
@@ -1288,14 +1299,18 @@ pub let large_title_tracking : @ui.Tracking = Exact(-0.6)
 pub let message_line : @ui.Leading = Exact(24.75)
 
 ///|
-/// A list card's corner: concentric round its rows (row_corner, list_pad in), as Android works it out (Parts.kt:640
-/// LIST_CARD_CORNER = concentricOut(LIST_ROW_CORNER 18, LIST_PAD 8)); its rows take theirs from it (radius=Inner).
-pub let list_card_radius : @ui.Radius = surface(list_pad, row_corner).radius()
+/// A list card's corner: concentric round its rows (row_corner, list_pad in: 22.8, the ladder's small panels' step, a
+/// column of rows as a small panel is; docs/ui-panels.md 圆角阶梯), as Android works it out (Parts.kt:640
+/// LIST_CARD_CORNER = concentricOut(LIST_ROW_CORNER, LIST_PAD)); its rows take theirs from it (radius=Inner).
+pub let list_card_corner : Double = surface_corner(list_pad, row_corner)
+
+///|
+pub let list_card_radius : @ui.Radius = rounded(list_card_corner)
 
 ///|
 /// A long list's card, drawn a row at a time (page.mbt group_row: the card's corner), and a row's ground at its ends:
 /// concentric in it, list_pad in.
-pub let group_corner : Double = card_corner
+pub let group_corner : Double = list_card_corner
 
 ///|
 pub let group_row_end_radius : @ui.Radius = rounded(inner_corner(group_corner, list_pad))
@@ -1382,6 +1397,7 @@ pub fn ui_theme() -> @ui.Theme {
     corner_ladder,
     corner_fit: Some(corner_fit),
     lit_apart,
+    lit_reach,
     // the app's own words with digits all one width, as the web's root (`font-variant-numeric: tabular-nums`): a
     // percentage, a time running, a count keep their width as they change; what people wrote keeps the font's own
     tabular: true,

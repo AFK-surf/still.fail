@@ -776,9 +776,9 @@ fn rows_card(c : @ui.Ctx, body : () -> Unit) -> Unit {
 let on_card : Ref[Bool] = Ref(false)
 
 ///|
-/// A list card: a card of the ladder's, its rows its inset in (LIST_PAD), round by its next step (LIST_ROW_CORNER).
+/// A list card: its rows list_pad in (as a menu's in its panel), round by the ladder's row corner, concentric with it.
 // kept across runs: a value (no field of it changes)
-let list_ground : @ui.Style = @ui.style(w=Full, p=@sf.inset_room, radius=@sf.list_card_radius, bg=Card, clip=true)
+let list_ground : @ui.Style = @ui.style(w=Full, p=@sf.list_room, radius=@sf.list_card_radius, bg=Card, clip=true)
 
 ///|
 /// A row of a list card (Parts.kt ListRow): its ground concentric with the card's (LIST_ROW_CORNER), what it holds
@@ -860,21 +860,21 @@ let card_piece_room : @ui.Style = @ui.css("w=Full px=S3")
 let wide_card_piece_room : @ui.Style = @ui.css("w=Full px=S4")
 
 ///|
-/// A list card's piece: its rows 8 in from its sides (LIST_PAD); 8 above the card's first, under its last.
+/// A list card's piece: its rows list_pad in from its sides; as far above the card's first, under its last.
 // kept across runs: a value (no field of it changes)
-let list_piece_ground : @ui.Style = @ui.style(w=Full, px=@sf.inset_room)
+let list_piece_ground : @ui.Style = @ui.style(w=Full, px=@sf.list_room)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let list_piece_first : @ui.Style = @ui.style(w=Full, px=@sf.inset_room, pt=@sf.inset_room)
+let list_piece_first : @ui.Style = @ui.style(w=Full, px=@sf.list_room, pt=@sf.list_room)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let list_piece_last : @ui.Style = @ui.style(w=Full, px=@sf.inset_room, pb=@sf.inset_room)
+let list_piece_last : @ui.Style = @ui.style(w=Full, px=@sf.list_room, pb=@sf.list_room)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let list_ground_open : @ui.Style = @ui.style(w=Full, p=@sf.inset_room)
+let list_ground_open : @ui.Style = @ui.style(w=Full, p=@sf.list_room)
 
 ///|
 /// A list card's piece's ground: the card's, its corners (LIST_CARD_CORNER).
@@ -887,19 +887,21 @@ let list_piece_fill : @ui.Style = @ui.style(w=Full, h=Full, radius=@sf.list_card
 let list_piece_patch : @ui.Style = @ui.css("w=Full h=Full bg=Card")
 
 ///|
-/// A row of a card's piece: ListRow's line, its corner the card's less 8 said (LIST_ROW_CORNER 18, Xl2 on the scale:
-/// what `Inner` works out on a whole card; a piece's ground is no container of it, squared where it is no end of it).
+/// A row of a card's piece: ListRow's line, its corner the ladder's row corner said (18, Xl2 on the scale: what `Inner`
+/// works out on a whole card; a piece's ground is no container of it, squared where it is no end of it).
 // kept across runs: a value (no field of it changes)
 let list_piece_line : @ui.Style = list_line.then(@ui.css("radius=Xl2"))
 
 ///|
-/// The wide frame's row (pages.css.ts listRow): 52 high at least, 10 by 12 in, the field's corner under the pointer.
+/// The wide frame's row (pages.css.ts listRow): 52 high at least, 10 over and under, its words a row's room in
+/// (list_words_room), the field's corner under the pointer.
 // kept across runs: a value (no field of it changes)
 let wide_list_line : @ui.Style = @ui.css("row w=Full min_h=S12 py=S2_5 gap=S3 radius=Inner align=ACenter hovered{bg=Hover}")
   .then(@ui.style(px=@sf.list_words_room))
 
 ///|
-/// ListRow's line: 12 and 12 in, 12 apart, rounded concentric with its card.
+/// ListRow's line: its words a row's room in all round (list_words_room: 16 from the card's edge, as a menu's), 12
+/// apart, rounded concentric with its card.
 // kept across runs: a value (no field of it changes)
 let list_line : @ui.Style = @ui.css("row w=Full gap=S3 radius=Inner align=ACenter").then(
   @ui.style(p=@sf.list_words_room),

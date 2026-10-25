@@ -212,6 +212,12 @@ test "a sheet asking goes down on the sheet's spring, only drawn: its 保存 tap
   sheet_rested(t, "sf-present")
   t.draw()
   assert_true(t.find("没改成的名字") is None)
+  // (the sheet sinking takes no press: the tap is the page's under it, which opens what stands there, a row of the
+  // profile's: back on the profile, its name)
+  if t.find(name) is None {
+    t.back()
+    nav_rested(t)
+  }
   assert_true(t.find(name) is Some(_))
 }
 

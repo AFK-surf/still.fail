@@ -440,6 +440,8 @@ pub struct Ctx {
   // kept lit while the hand is on another (gaps.mbt)
   hand_chooses : Set[Int]
   mut lit_apart : Double
+  // how far in from the sides of what holds it a row that lights up stands (Theme::lit_reach): gaps.mbt's rule 7
+  mut lit_reach : Double
   // what is shown only while lit (Ctx::lit_shown) shown everywhere at once: a test's (Tester::lit_all_faults)
   mut lit_all : Bool
   // every id lit by the hand at once (Ctx::lit, and Ctx::hovered where the pointing is a mouse's): a test's, to hold
@@ -656,6 +658,7 @@ fn Ctx::new() -> Ctx {
     lit_asked: Set::new(),
     hand_chooses: Set::new(),
     lit_apart: 0.0,
+    lit_reach: 0.0,
     lit_all: false,
     lit_every: false,
     window_corner: 0.0,

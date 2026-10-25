@@ -528,8 +528,8 @@ let rows_head_wide : @ui.Style = @ui.css("w=Full px=S3 pt=S3 pb=S2 gap=S1_5")
 ///|
 /// A row of rows together drawn one at a time (a long list's, each laid out as it comes into view), as `group` holds
 /// them: narrow, on its share of a rounded card (ListCard, ListRow: 12 in from the box's sides, the first and last
-/// carrying its corners, 10 under the last; each row 8 in from the card's sides, and from its top on the first, its
-/// bottom on the last; its ground concentric with the card's, lit under the pointer or a finger's press (`id`; 0:
+/// carrying its corners, 10 under the last; each row list_pad in from the card's sides, and from its top on the first,
+/// its bottom on the last; its ground concentric with the card's, lit under the pointer or a finger's press (`id`; 0:
 /// none, the row lights itself), rippling under a finger); wide, the row alone, on the page.
 pub fn group_row(c : @ui.Ctx, first : Bool, last : Bool, body : () -> Unit, id? : Int = 0) -> Unit {
   let ground = if id != 0 && c.lit(id) { Some(theme().p.hover) } else { None }
@@ -640,21 +640,21 @@ let group_square : @ui.Style = @ui.style(w=Full, h=Fixed(group_square_h), bg=Car
 let group_square_h : Double = group_corner * 2.0
 
 ///|
-/// A row's room on its card: 8 in from its sides, and from its top on the first, its bottom on the last.
+/// A row's room on its card: list_pad in from its sides, and from its top on the first, its bottom on the last.
 // kept across runs: a value (no field of it changes)
-let group_row_mid : @ui.Style = @ui.css("w=Full px=S2")
+let group_row_mid : @ui.Style = @ui.style(w=Full, px=list_room)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let group_row_first : @ui.Style = @ui.css("w=Full px=S2 pt=S2")
+let group_row_first : @ui.Style = @ui.style(w=Full, px=list_room, pt=list_room)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let group_row_last : @ui.Style = @ui.css("w=Full px=S2 pb=S2")
+let group_row_last : @ui.Style = @ui.style(w=Full, px=list_room, pb=list_room)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let group_row_only : @ui.Style = @ui.css("w=Full p=S2")
+let group_row_only : @ui.Style = @ui.style(w=Full, p=list_room)
 
 ///|
 /// A row's own ground (lit): its corner the row's, concentric with the card's at its ends.
@@ -1770,9 +1770,9 @@ pub let pg_card_room : @ui.Style = @ui.css("w=Full pb=S2_5")
 let pg_barred_head : @ui.Style = pg_card_room.then(@ui.css("pt=S2"))
 
 ///|
-/// ListCard: its rows 8 in, its corner concentric round theirs.
+/// ListCard: its rows list_pad in, its corner concentric round theirs.
 // kept across runs: a value (no field of it changes)
-let pg_card : @ui.Style = @ui.style(w=Full, p=inset_room, radius=list_card_radius, bg=Card, clip=true)
+let pg_card : @ui.Style = @ui.style(w=Full, p=list_room, radius=list_card_radius, bg=Card, clip=true)
 
 ///|
 /// A choice of a few on a narrow page: as far from what follows as a card is (pg_card_room's 10), a page's block.
@@ -1795,8 +1795,8 @@ pub let pg_note : @ui.TextStyle = secondary.then(full_words)
 pub let pg_note_bad : @ui.TextStyle = pg_note.then(bad)
 
 ///|
-/// A row of a card (ListRow): 12 by 12 in, what it holds 12 apart, its ground concentric with the card's; lit under
-/// the pointer, or a finger's press.
+/// A row of a card (ListRow): its words a row's room in all round (list_words_room: 16 from the card's edge, as a
+/// menu's), what it holds 12 apart, its ground concentric with the card's; lit under the pointer, or a finger's press.
 // kept across runs: a value (no field of it changes)
 pub let pg_row : @ui.Style = @ui.css("row w=Full gap=S3 radius=Inner align=ACenter hovered{bg=Hover}").then(
   @ui.style(p=list_words_room),
@@ -1994,9 +1994,9 @@ pub let desk_words : @ui.TextStyle = @ui.text_style(size=Ui, leading=L6, color=F
 pub let desk_muted : @ui.TextStyle = @ui.text_style(size=Meta, leading=L6, color=Muted, w=Full)
 
 ///|
-/// A list on a wide page: a list card (the narrow page's ListCard, at the column's edges: 10 in, its rows 2 apart),
-/// each row 52 high at least, 10 by 10 in, its parts 12 apart, its corner concentric with the card's; one that opens on
-/// the pointer's ground; its title in 500, what is under it the meta's 12 muted, red where it is wrong; a chevron 16.
+/// A list on a wide page: a list card (the narrow page's ListCard, at the column's edges: list_pad in, its rows 2
+/// apart), each row 52 high at least, 10 by 10 in, its parts 12 apart, its corner concentric with the card's; one that
+/// opens on the pointer's ground; its title in 500, what is under it the meta's 12 muted, red where it is wrong; a chevron 16.
 pub let desk_row_least : Double = 52.0
 
 ///|
@@ -2007,7 +2007,7 @@ pub let desk_mark : Double = 14.0
 
 ///|
 // kept across runs: a value (no field of it changes)
-pub let desk_list : @ui.Style = @ui.style(w=Full, p=inset_room, gap=S0_5, radius=list_card_radius, bg=Card)
+pub let desk_list : @ui.Style = @ui.style(w=Full, p=list_room, gap=S0_5, radius=list_card_radius, bg=Card)
 
 ///|
 pub let desk_list_out : Double = 12.0
@@ -2209,8 +2209,8 @@ let head_mark_wide_side : Double = 48.0
 let head_mark_narrow_side : Double = 40.0
 
 ///|
-/// What stands in a wide list that is not one of its rows: as far in as its rows' words (10 in its card's 10), 10 over
-/// and under.
+/// What stands in a wide list that is not one of its rows: as far in as its rows' words (list_words_room in its
+/// card's list_pad), 10 over and under.
 // kept across runs: a value (no field of it changes)
 let wide_in_list : @ui.Style = @ui.css("w=Full py=S2_5").then(@ui.style(px=list_words_room))
 

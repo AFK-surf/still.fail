@@ -257,14 +257,22 @@ let bar_place_words : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, wra
 let bar_add_words : @ui.TextStyle = @ui.text_style(size=Meta, color=Subtle, wrap=false)
 
 ///|
-/// The "−" that takes a place out: 20 round, on the neutral wash, 6 in from its slot's top right corner (the slot
-/// round it there: bar_slot).
+/// The "−" that takes a place out: 20 round, on the neutral wash, in from its slot's top right corner as far as makes
+/// it concentric with its card's corner where the slot is the last (capsule_in: the group's corner less its half, less
+/// the card's list_pad the slot is in; the slot round it there: bar_slot).
 // kept across runs: a value (no field of it changes)
 let bar_remove : @ui.Style = @ui.css("w=S5 h=S5 radius=Full bg=Neutral align=ACenter justify=JCenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let bar_remove_at : @ui.Style = @ui.css("w=Full p=S1_5 align=AEnd")
+let bar_remove_at : @ui.Style = @ui.style(
+  w=Full,
+  p=@sf.room_of(@sf.capsule_in(@sf.group_corner, bar_remove_side) - @sf.list_pad),
+  align=AEnd,
+)
+
+///|
+let bar_remove_side : Double = 20.0
 
 ///|
 let bar_remove_mark : Double = 12.0
