@@ -189,6 +189,14 @@ pub let corner_ladder : Array[Double] = [pane_corner, card_corner, row_corner, s
 pub let corner_fit : @ui.CornerFit = { least: 6.0, most: pane_corner, near: 4.0, far: 16.0 }
 
 ///|
+/// The tape's one line (laid out Medium): how far under its panels' tops their first row's round buttons stand, as far
+/// as a bar's (32 across) are concentric with the ladder's pane corner (34 less their half, 18): every bar of the tape
+/// (tape_bar_over) and the sidebar's first row on it, whatever a panel's own corners are (the user, 2026-10-25: a page's
+/// bar and the sidebar's first row each where it stood alone, not on one line). The ladder's own place for its own
+/// corner, past the corner rule's ranges (corner_fit, for what follows a corner it does not choose: a window's).
+pub let tape_line : Double = pane_corner - 32.0 / 2.0
+
+///|
 /// Whether a corner `k` round is one corner_fit lets what lies in a corner have.
 fn corner_fits(k : Double) -> Bool {
   k >= corner_fit.least - 0.5 && k <= corner_fit.most + 0.5
@@ -291,18 +299,6 @@ pub fn pane_top_right() -> Double? {
   match pane_round.val {
     Some(k) => Some(k[1])
     None => None
-  }
-}
-
-///|
-/// How far under the top of the panel of its own the view is built in (pane_round) a page laid out as a phone's starts
-/// its rows (its back, its large title, a head of its own: 10 to 16 in from its sides, less than the panel's top
-/// corners are round): the rounder top corner's height, the rows under it as clear of the corners as of the sides, as
-/// a phone's page starts under its status bar, clear of the screen's round corners. None in a window's whole: 0.
-pub fn pane_head_room() -> Double {
-  match pane_round.val {
-    Some(k) => dmax(k[0], k[1])
-    None => 0.0
   }
 }
 
@@ -1560,25 +1556,56 @@ pub let wide_bar_h_size : @ui.Len = Fixed(wide_bar_h)
 pub let wide_bar_h : Double = 45.0
 
 ///|
-/// A page's bar in a panel of the tape (laid out Medium, its corners pane_round): what stands in the panel's top right
-/// corner (its buttons, 32 across, capsules and circles) as far from its top and side as makes them concentric with it
-/// (capsule_fit), else where they stand in the wide frame (`alone` at its end); its bar as much taller over them
-/// (`tape_bar_over`), as much in at its end (`tape_bar_end`).
+/// A page's bar in a panel of the tape (laid out Medium, its corners pane_round): its buttons (32 across) on the tape's
+/// one line, where they are concentric with the ladder's pane corner, its bar as much taller over them
+/// (`tape_bar_over`: every bar of the tape and the sidebar's first row on it); at its end as far in as makes the last
+/// concentric with the panel's top right corner (capsule_fit), else clear of it (as far in as it is round, or where it
+/// stands in the wide frame, `alone`, if that is further: nothing of the bar's in a corner it can not be concentric
+/// with: a Mac's page at the window's edge, its corner the window's) (`tape_bar_end`); a round button at its start (a
+/// settings page's back) so in its top left one (`tape_bar_start`).
 pub fn tape_bar_end(alone : Double) -> Double {
   match pane_top_right() {
-    Some(k) => capsule_fit(k, 32.0, alone)
+    Some(k) => line_end_in(k, alone)
+    None => alone
+  }
+}
+
+///|
+pub fn tape_bar_start(alone : Double) -> Double {
+  match pane_round.val {
+    Some(k) => line_end_in(k[0], alone)
+    None => alone
+  }
+}
+
+///|
+/// How far in from its side the round button ending a row on the tape's line (a bar's, the sidebar's first row's filter)
+/// stands in a corner `corner` round (tape_bar_end, tape_bar_start): on the line in the ladder's pane corner,
+/// concentric with it; in one that follows the window (too square for a button there) clear of it.
+pub fn line_end_in(corner : Double, alone : Double) -> Double {
+  if (corner - pane_corner).abs() <= 0.5 {
+    tape_line
+  } else if capsule_fits(corner, 32.0) {
+    capsule_in(corner, 32.0)
+  } else {
+    dmax(alone, corner)
+  }
+}
+
+///|
+/// How far in from its start a bar whose first thing stands wherever the room left puts it (the files' bar: what is done
+/// to the folder, at its end) keeps clear of the panel's top left corner: as far in as it is round, or `alone`, if that
+/// is further.
+pub fn tape_bar_clear_start(alone : Double) -> Double {
+  match pane_round.val {
+    Some(k) => dmax(alone, k[0])
     None => alone
   }
 }
 
 ///|
 pub fn tape_bar_over() -> Double {
-  let d = capsule_in(pane_top_right().unwrap_or(pane_corner), 32.0)
-  if place_fits(d) {
-    dmax(0.0, d - (wide_bar_h - hairline_h - 32.0) / 2.0)
-  } else {
-    0.0
-  }
+  dmax(0.0, tape_line - (wide_bar_h - hairline_h - 32.0) / 2.0)
 }
 
 ///|

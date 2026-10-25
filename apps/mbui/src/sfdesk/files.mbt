@@ -151,7 +151,7 @@ pub fn files_shell(
     if @ui.window_inset() {
       c.window_drag(bar)
     }
-    c.box(style=bar_box, id=bar, fn() {
+    c.box(style=if @sf.in_pane() { bar_box_tape() } else { bar_box }, id=bar, fn() {
       // the tabs as Safari's compact ones; one tab alone has none (as Finder's window): only the bar's buttons
       if tabs.tabs.length() > 1 {
         tab_row(c, stations, tabs, pane_at, fn(act, id) { show(act, None, Some(id), None) })
@@ -331,6 +331,26 @@ let page_box : @ui.Style = @ui.css("w=Full h=Full bg=Bg")
 /// The bar (bar): 44 high, what is on it at its end, 12 in, a line under it.
 // kept across runs: a value (no field of it changes)
 let bar_box : @ui.Style = @ui.css("row w=Full h=S11 px=S3 gap=S1 align=ACenter justify=JEnd")
+
+///|
+/// The same in a panel of its own on the tape, as a page's bar there: on the tape's one line (@sf.tape_bar_over), its
+/// last button in the panel's top right corner concentric with it where it can be, else clear of it (tape_bar_end);
+/// what it starts with (where the room left puts it) clear of the top left one (tape_bar_clear_start).
+fn bar_box_tape() -> @ui.Style {
+  let over = @sf.tape_bar_over()
+  bar_box.then(
+    @ui.style(
+      h=Fixed(bar_h + over),
+      pt=@sf.room_of(over),
+      pl=@sf.room_of(@sf.tape_bar_clear_start(bar_in)),
+      pr=@sf.room_of(@sf.tape_bar_end(bar_in)),
+    ),
+  )
+}
+
+///|
+/// The bar's height (bar_box: S11).
+let bar_h : Double = 44.0
 
 ///|
 // kept across runs: a value (no field of it changes)

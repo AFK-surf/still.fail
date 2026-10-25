@@ -61,7 +61,10 @@ pub let narrow_most : Double = 640.0
 /// the frame's own bar names it already (a place's top page: no title of its own, `named_actions` given what it does).
 /// `lead`: what it is for, under its title; `about`: the same said by a mark beside the title (wide); `actions`: what
 /// it does, at its title's end; `head`: a head of its own in place of the title, which says its name (a station's, an
-/// account's); `small`: what the page is of, over its large title (narrow: LargeTitle's small line).
+/// account's); `small`: what the page is of, over its large title (narrow: LargeTitle's small line). `barred`: a bar of
+/// the frame's over it holds its title, back and what it does (a panel of its own on the tape, a chat's bar there:
+/// sfdesk pane_page): what it shows (a head of its own, what it is for, what it holds) right under that, nothing of
+/// those drawn here nor room kept for them.
 pub fn page(
   c : @ui.Ctx,
   key : String,
@@ -78,6 +81,7 @@ pub fn page(
   actions? : () -> Unit,
   head? : () -> Unit,
   small? : String = "",
+  barred? : Bool = false,
 ) -> Unit {
   let l = look_for(c.width)
   // (what it holds drawn as its list lays it out, maybe after this returns: each block says its look as it is drawn)
@@ -88,11 +92,56 @@ pub fn page(
   }
   with_look(l, fn() {
     match l {
+      _ if barred => barred_page(c, key, l, content, foot, lead, head)
       Wide => wide_page(c, key, title, content, on_back, back, top, foot, lead, about, actions, head)
       Narrow =>
         narrow_page(c, key, title, content, on_back, back, top, foot, named, named_actions, lead, actions, head, small)
     }
   })
+}
+
+///|
+/// Under a bar of the frame's that holds its title, back and what it does (`page`'s `barred`): a head of its own (as
+/// the arrangement has a head's room, 8 or 16 under the bar), what it is for, what it holds, laid out as `l` lays them.
+fn barred_page(
+  c : @ui.Ctx,
+  key : String,
+  l : Look,
+  content : Array[() -> Unit],
+  foot : Double,
+  lead : String,
+  head : (() -> Unit)?,
+) -> Unit {
+  let blocks : Array[() -> Unit] = []
+  match head {
+    Some(h) => blocks.push(fn() { c.box(style=if l == Narrow { pg_barred_head } else { desk_first }, h) |> ignore })
+    None => ()
+  }
+  if lead != "" {
+    blocks.push(fn() {
+      c.box(style=if l == Narrow { pg_lead_box } else { desk_barred_lead }, fn() {
+        c.text(lead, style=if l == Narrow { pg_lead } else { desk_muted }) |> ignore
+      })
+      |> ignore
+    })
+  }
+  match l {
+    Narrow => {
+      for b in content {
+        blocks.push(b)
+      }
+      let room = pg_foot + foot
+      blocks.push(fn() { c.box(style=@ui.style(w=Full, h=Fixed(room)), fn() {  }) |> ignore })
+      c.list("settings/" + key, blocks.length(), 80.0, fn(i) { (blocks[i])() }) |> ignore
+    }
+    Wide => {
+      for i, b in content {
+        let first = i == 0 && blocks.length() == 0
+        blocks.push(fn() { c.box(style=if first { desk_first } else { desk_block }, fn() { b() }) |> ignore })
+      }
+      desk_lanes(c, key, blocks, foot~)
+    }
+  }
 }
 
 ///|
@@ -111,13 +160,20 @@ pub fn page_wide(
   about? : String = "",
   actions? : () -> Unit,
   head? : () -> Unit,
+  barred? : Bool = false,
 ) -> Unit {
   let content = content.map(fn(b) { fn() { with_look(Wide, b) } })
   let head = match head {
     Some(h) => Some(fn() { with_look(Wide, h) })
     None => None
   }
-  with_look(Wide, fn() { wide_page(c, key, title, content, on_back, back, top, foot, lead, about, actions, head) })
+  with_look(Wide, fn() {
+    if barred {
+      barred_page(c, key, Wide, content, foot, lead, head)
+    } else {
+      wide_page(c, key, title, content, on_back, back, top, foot, lead, about, actions, head)
+    }
+  })
 }
 
 ///|
@@ -140,16 +196,9 @@ fn narrow_page(
   small : String,
 ) -> Unit {
   let blocks : Array[() -> Unit] = []
-  // under what stands over it (a status bar), and in a panel of its own under the panel's top corners
-  let top = if top > pane_head_room() { top } else { pane_head_room() }
+  // under what stands over it (a status bar)
   if top > 0.0 {
     blocks.push(fn() { c.box(style=@ui.style(w=Full, h=Fixed(top)), fn() {  }) |> ignore })
-  }
-  // in a panel of its own (the tape's) with no back over its title (the sidebar beside it the way back) and no bar
-  // naming it: the room a page's bar takes there over it, so the title stands where what the page beside it shows
-  // starts, not against the panel's top
-  if back is None && !named && in_pane() {
-    blocks.push(fn() { c.box(style=@ui.style(w=Full, pt=under_bar_room()), fn() {  }) |> ignore })
   }
   match back {
     Some(label) =>
@@ -1029,6 +1078,11 @@ let pg_heading : @ui.TextStyle = body.then(strong)
 pub let pg_card_room : @ui.Style = @ui.css("w=Full px=S3 pb=S2_5")
 
 ///|
+/// A head of its own under a bar of the frame's (barred_page), narrow: in the page's room as its cards, 8 under the bar.
+// kept across runs: a value (no field of it changes)
+let pg_barred_head : @ui.Style = pg_card_room.then(@ui.css("pt=S2"))
+
+///|
 /// ListCard: its rows 8 in, its corner concentric round theirs.
 // kept across runs: a value (no field of it changes)
 let pg_card : @ui.Style = @ui.style(w=Full, p=inset_room, radius=list_card_radius, bg=Card, clip=true)
@@ -1208,6 +1262,11 @@ let desk_block : @ui.Style = @ui.css("w=Full px=S4")
 ///|
 // kept across runs: a value (no field of it changes)
 let desk_first : @ui.Style = desk_block.then(@ui.css("pt=S4"))
+
+///|
+/// What the page is for under a bar of the frame's (barred_page), wide: in the column, as its blocks, 16 under the bar.
+// kept across runs: a value (no field of it changes)
+let desk_barred_lead : @ui.Style = desk_first
 
 ///|
 // kept across runs: a value (no field of it changes)

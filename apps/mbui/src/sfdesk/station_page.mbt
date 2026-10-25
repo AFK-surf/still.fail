@@ -49,7 +49,7 @@ fn station_page(c : @ui.Ctx, core : Core, here : Here, frame : PageFrame, addres
           }
           blocks.append(body)
           // its head says its name: no title over it (StationSettings: Head, then Body)
-          look_page(c, core, frame, "station/" + address, text(s, "name"), blocks, head=fn() {
+          look_page(c, core, frame, "station/" + address, text(s, "name"), blocks, small=@sf.t("android-misc.bar.place.stations"), head=fn() {
             station_head(c, core, here, s, manager)
           })
         }
