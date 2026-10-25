@@ -72,21 +72,26 @@ function EmptyWindow() {
 function LongList() {
   const pane = useRef<HTMLDivElement>(null);
   const [first, setFirst] = useState(151);
+  const adaptive = new URLSearchParams(location.search).get('mode') === 'adaptive';
   const made = useVirtualModel('long-pagination-check', 20);
+  const opened = useRef(false);
+  if (adaptive && !opened.current) { made.model.goto('m:161', 'start'); opened.current = true; }
   const items = Array.from({ length: 201 - first }, (_, i) => ({ key: 'm:' + (first + i), estimate: 100 }));
   const list = useVirtualList(pane, made, items, { short: true });
   useLoadNear(list, 'top', first > 1, first, async () => {
     window.loads.push(first);
+    if (adaptive) await new Promise<void>(resolve => { window.answer = resolve; });
     setFirst(n => n - 50);
-  });
+  }, () => !adaptive || window.allowAhead);
   Object.assign(window, { model: list.model, last: first, committed: list.committed });
   return <div id="pane" ref={pane} style={{ height: 650, width: 390, overflow: 'auto', overflowAnchor: 'none', display: 'flex', flexDirection: 'column', gap: 20, padding: 24, boxSizing: 'border-box' }}>
     {list.layout.rows.map((row, i) => <React.Fragment key={row.key}>{list.above(row, i === 0)}<div data-vk={row.key} style={{ flex: 'none', height: 100 }}>{row.key}</div></React.Fragment>)}{list.after()}
   </div>;
 }
 window.loads = [];
+window.allowAhead = false;
 const mode = new URLSearchParams(location.search).get('mode');
-createRoot(document.getElementById('root')!).render(mode === 'long' ? <LongList /> : mode === 'window' || mode === 'switch' ? <EmptyWindow /> : <List />);
+createRoot(document.getElementById('root')!).render(mode === 'long' || mode === 'adaptive' ? <LongList /> : mode === 'window' || mode === 'switch' ? <EmptyWindow /> : <List />);
 `, { flag: 'wx' });
   writeFileSync(html, '<meta name="viewport" content="width=device-width, initial-scale=1"><div id="root"></div><script type="module" src="/chat-pagination-check.tsx"></script>', { flag: 'wx' });
   server = await createServer({ configFile: false, cacheDir: fileURLToPath(new URL("../../node_modules/.vite-chat-pagination", import.meta.url)), optimizeDeps: { entries: [fileURLToPath(html)] }, root: fileURLToPath(new URL('../../web', import.meta.url)), plugins: [react(), vanillaExtractPlugin()], resolve: { alias: [uiAlias] }, server: { host: '127.0.0.1', port: 0 } });
@@ -151,6 +156,32 @@ createRoot(document.getElementById('root')!).render(mode === 'long' ? <LongList 
   });
   await page.waitForFunction(() => window.last === 51, null, { polling: 50 });
   assert.deepEqual(await state(), { loads: [151, 101], last: 51 }, 'a scroll replacing visible rows still fetches the next page');
+  await page.goto(server.resolvedUrls.local[0] + 'chat-pagination-check.html?mode=adaptive');
+  await page.waitForFunction(() => window.model);
+  await page.clock.runFor(1000);
+  await page.waitForFunction(() => window.committed());
+  assert.deepEqual((await state()).loads, [], 'opening more than a pane from the edge does not fetch');
+  const scroll = top => page.evaluate(top => {
+    const pane = document.querySelector('#pane'); pane.scrollTop = top; pane.dispatchEvent(new Event('scroll'));
+  }, top);
+  await scroll(1199);
+  await page.clock.runFor(16);
+  await scroll(1000);
+  await page.clock.runFor(16);
+  assert.equal((await state()).loads.length, 0, 'unsafe record-window trimming vetoes extra lookahead');
+  await page.evaluate(() => { window.allowAhead = true; });
+  await scroll(950);
+  await page.clock.runFor(16);
+  await page.waitForFunction(() => window.loads.length === 1);
+  assert.equal(await page.evaluate(() => model.toStart > model.paneHeight), true, 'fast scroll fetches before the one-pane threshold');
+  await scroll(900);
+  await page.clock.runFor(16);
+  assert.equal((await state()).loads.length, 1, 'in-flight prefetch owns its cursor');
+  await page.evaluate(() => window.answer());
+  await page.clock.runFor(1000);
+  await page.waitForFunction(() => window.last === 101 && window.committed());
+  assert.equal((await state()).loads.length, 1, 'prefetch anchor restoration does not cascade into another page');
+  console.log('PASS fast-scroll prefetch before the edge, one request, restored anchor');
   // The new list must measure and commit its first visible message after the
   // switch. Let frames run and wait for that result, rather than sample mid-page.
   await page.clock.resume();

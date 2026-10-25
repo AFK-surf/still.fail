@@ -15,6 +15,7 @@ import { ScreenCard, ScreenName } from "./screen/ScreenLink.tsx";
 import { AdbCard, AdbName } from "./AdbLink.tsx";
 import { bareLinks } from "./bareLinks.ts";
 import { nameOf } from "../../client/core-ts/src/placed.ts";
+import { codeChunks } from "./codeChunks.ts";
 import { runsOf } from "../../client/core-ts/src/highlight.ts";
 import type { MathDrawing } from "../../client/core-ts/src/mathDrawing.ts";
 import { core } from "./core/react.ts";
@@ -47,6 +48,8 @@ export function Code({ text, language, ink }: { text: string; language?: string 
     return () => { active = false; };
   }, [ink, text, language]);
   const colours = ink !== undefined ? ink : read?.text === text && read.language === language ? read.ink : null;
+  const coloured = useMemo(() => colours && text.length <= 16000
+    ? runsOf(text, colours).map(([words, scope], i) => <span key={i} className={css.ink[scope]}>{words}</span>) : null, [text, colours]);
   const copy = () => {
     void navigator.clipboard.writeText(text).then(() => {
       setCopied(true);
@@ -61,10 +64,53 @@ export function Code({ text, language, ink }: { text: string; language?: string 
           {copied ? <Check size={12} /> : <Copy size={12} />}{copied ? t("common.copied") : t("common.copy")}
         </button>
       </div>
-      <pre className={css.codePre}><code>{colours ? runsOf(text, colours).map(([words, scope], i) => <span key={i} className={css.ink[scope]}>{words}</span>) : text}</code></pre>
+      <pre className={css.codePre}><code>{colours && text.length > 16000 ? <LongCode text={text} ink={colours} /> : coloured ?? text}</code></pre>
     </div>
   );
 }
+
+/** Plain text is present even far offscreen: browser find, selection, and copying still see the whole block.
+ * Highlight each group once, close to the viewport. Keep it coloured as text arrives, so an unchanged line's text
+ * nodes (and the reader's selection) survive. Defer newly coloured nodes while a selection touches the block. */
+function LongCode({ text, ink }: { text: string; ink: string }) {
+  const chunks = useMemo(() => codeChunks(text, ink), [text, ink]);
+  const root = useRef<HTMLSpanElement>(null);
+  const [painted, setPainted] = useState(() => new Set<number>());
+  useEffect(() => {
+    const el = root.current;
+    if (!el) return;
+    const waiting = new Set<number>();
+    const apply = () => {
+      const selection = window.getSelection();
+      if (selection && !selection.isCollapsed && selection.containsNode(el, true)) return;
+      if (!waiting.size) return;
+      const add = [...waiting];
+      waiting.clear();
+      setPainted(old => add.every(i => old.has(i)) ? old : new Set([...old, ...add]));
+    };
+    if (typeof IntersectionObserver === "undefined") {
+      chunks.forEach((_, i) => waiting.add(i));
+      apply();
+      return;
+    }
+    const observer = new IntersectionObserver(entries => {
+      for (const entry of entries) if (entry.isIntersecting) {
+        waiting.add(Number((entry.target as HTMLElement).dataset.codeChunk));
+        observer.unobserve(entry.target);
+      }
+      apply();
+    }, { rootMargin: "800px 0px" });
+    for (const child of el.children) observer.observe(child);
+    document.addEventListener("selectionchange", apply);
+    return () => { observer.disconnect(); document.removeEventListener("selectionchange", apply); };
+  }, [chunks]);
+  return <span ref={root}>{chunks.map((chunk, i) => <CodePart key={i} chunk={chunk} index={i} painted={painted.has(i)} />)}</span>;
+}
+const CodePart = memo(function CodePart({ chunk, index, painted }: { chunk: ReturnType<typeof codeChunks>[number]; index: number; painted: boolean }) {
+  return <span data-code-chunk={index}>{painted
+    ? chunk.runs.map(([words, scope], i) => <span key={i} className={css.ink[scope]}>{words}</span>)
+    : chunk.text}</span>;
+});
 
 /** The plain text of drawn children. */
 function textOf(node: ReactNode): string {
