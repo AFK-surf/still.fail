@@ -17,6 +17,8 @@ type Slot = { worker: Worker; busy: number; held: Map<number, string>; idle?: ()
 
 /// How many sessions' readers are remembered (the most recently read).
 const HOMES = 4096;
+/// How long after the store changes its log is written into the database (`checkpointSoon`): at most this often.
+const CHECKPOINT_MS = 2_000;
 
 export class Readers {
   private slots: Slot[] = [];
@@ -25,6 +27,9 @@ export class Readers {
   private waiting = new Map<number, { resolve: (text: string) => void; reject: (error: Error) => void }>();
   private next = 0;
   private closed = false;
+  /// A checkpoint is armed or running (`checkpointSoon`), and the store changed again since it was armed.
+  private checkpointing = false;
+  private again = false;
   private readonly data: string;
   private readonly size: number;
   /// People's names as their credentials say them (the admin API's `deps.names`), given to every read.
@@ -97,6 +102,25 @@ export class Readers {
     return new Promise((resolve, reject) => {
       this.waiting.set(id, { resolve, reject });
       slot.worker.postMessage({ id, op, args, lang, names: [...this.names], processes: [...this.processes()], clientKeys: [...this.clientKeys()] } satisfies Ask);
+    });
+  }
+
+  /// The store changed: what its log (the WAL) holds is written into the database shortly, by a reader (worker.ts
+  /// `checkpoint`), one at a time, at most once a CHECKPOINT_MS. The main thread does not (store.ts): there it held
+  /// every device while it reached the disk.
+  checkpointSoon() {
+    if (this.closed) return;
+    if (this.checkpointing) return void (this.again = true);
+    this.checkpointing = true;
+    this.again = false;
+    wall.after(CHECKPOINT_MS, () => {
+      if (this.closed) return;
+      this.read("checkpoint", {}, "en")
+        .catch((error) => log.warn("readers", "the database's log not written into it", { error: (error as Error).message }))
+        .finally(() => {
+          this.checkpointing = false;
+          if (this.again) this.checkpointSoon();
+        });
     });
   }
 

@@ -29,7 +29,7 @@ import { ErrorReports, builtKey } from "./ops/telemetry.ts";
 import { answer, langOfBrowser } from "./ops/loopback.ts";
 import { ownPorts } from "./ops/own.ts";
 import { version } from "./ops/version.ts";
-import { AdbShares, AdminApi, AgentsSide, AdminHost, ControlPlane, Events, Grants, Helper, HelperFolders, Key, MeshNative, MeshSide, ModulePackages, Modules, Own, Parts, Paths, Peers, Previous, Readers, ScreenRegistry, StationConfig, StationDrive, Store, Up } from "./services.ts";
+import { AdbShares, AdminApi, AgentsSide, AdminHost, CheckpointsLive, ControlPlane, Events, Grants, Helper, HelperFolders, Key, MeshNative, MeshSide, ModulePackages, Modules, Own, Parts, Paths, Peers, Previous, Readers, ScreenRegistry, StationConfig, StationDrive, Store, Up } from "./services.ts";
 import { ModulesLive } from "./modules/live.ts";
 import { VaultLive } from "./vault/module.ts";
 import { AdbLive } from "./adb/module.ts";
@@ -147,7 +147,7 @@ function run() {
   // still.fail Helper, one for the screens and the drive, and one look at its grants.
   const base = Layer.mergeAll(Key.layer, Readers.layer, Store.layer, MeshNative.layer, Up.layer, ScreenRegistry.layer.pipe(Layer.provideMerge(Grants.layer), Layer.provideMerge(Helper.layer))).pipe(Layer.provideMerge(paths));
   const parts = ControlPlane.layer.pipe(Layer.provideMerge(base));
-  const station = Layer.mergeAll(MeshLive, Loopback(control), AwakeLive, ModulesLive).pipe(
+  const station = Layer.mergeAll(MeshLive, Loopback(control), AwakeLive, ModulesLive, CheckpointsLive).pipe(
     // The station's parts in its own process (parts.ts), made before the mesh answers anyone: each says what it adds.
     Layer.provideMerge(Layer.mergeAll(VaultLive, AdbLive, BrowserLive, LinksLive, FeedbackLive, AgentHomeLive, PublishLive, LoginsLive, DriveTransfersLive, UsageLive, ResourcesLive, SearchLive, SlackLive, FeishuLive)),
     Layer.provideMerge(AdminApi.layer),

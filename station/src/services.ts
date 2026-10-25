@@ -100,6 +100,19 @@ export class Readers extends Context.Service<Readers, ReaderPool>()("stillfail/R
   );
 }
 
+/// The store's log written into the database by the readers as the store changes (read/pool.ts `checkpointSoon`), not
+/// by the main thread (store.ts).
+export const CheckpointsLive = Layer.effectDiscard(
+  Effect.gen(function* () {
+    const store = yield* Store;
+    const readers = yield* Readers;
+    yield* Effect.acquireRelease(
+      Effect.sync(() => store.subscribe(() => readers.checkpointSoon())),
+      (off) => Effect.sync(off),
+    );
+  }),
+);
+
 /// The station's store (stillfail.db, archive/): what is written, on this thread; the readers read the same file.
 export class Store extends Context.Service<Store, StationStore>()("stillfail/Store") {
   static readonly layer = Layer.effect(

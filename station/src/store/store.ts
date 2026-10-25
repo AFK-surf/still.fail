@@ -58,6 +58,11 @@ export { SCHEMA_VERSION } from "./schema.ts";
 export { writeCompressed } from "./archive.ts";
 export type { UsageCall, UsageFile, UsageFor, UsageGroup, UsageTurn } from "./usage.ts";
 
+/// How much of the database the main connection keeps in memory, in KiB.
+const CACHE_KIB = 32 * 1024;
+/// How long the log may grow, in pages, before the main connection writes it into the database itself: well past what
+/// the readers' checkpoints let it come to.
+const WAL_PAGES = 10_000;
 /// Archived threads whose entries are kept decompressed, the most recently read last.
 const ARCHIVE_CACHE = 32;
 /// How many of a job's notices are kept.
@@ -110,6 +115,14 @@ export class Store {
       // the database never damaged (WAL). Each live step of an agent commits a few times; with each its own flush to
       // disk, a machine short of memory and disk time held the main thread on them.
       db.exec("PRAGMA busy_timeout = 5000; PRAGMA journal_mode = WAL; PRAGMA synchronous = NORMAL;");
+      // What this connection reads stays in its own memory (CACHE_KIB), not SQLite's 2 MB: on a machine short of memory
+      // the system's file cache is the first to go, and each page read again from the disk there took some 50 ms (ccvm,
+      // 2026-10-25: the main thread read 1,700 pages in six minutes, some of them six times over). This connection
+      // writes alone, so what it keeps stays good across the readers' reads.
+      // The log (the WAL) is written into the database off the main thread, by a reader (read/pool.ts `checkpoint`).
+      // Left to SQLite, this connection did it itself at every thousandth page: one commit held every device for the
+      // 6 s that took on ccvm (2026-10-25). Here only if the readers' fall behind, at WAL_PAGES.
+      db.exec(`PRAGMA cache_size = -${CACHE_KIB}; PRAGMA wal_autocheckpoint = ${WAL_PAGES};`);
       const hasTables = db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'sessions'").get() !== undefined;
       if (hasTables) {
         const version = (db.prepare("PRAGMA user_version").get() as Json).user_version;
