@@ -1709,7 +1709,8 @@ let first_actions : @ui.Style = @ui.css("row w=Full gap=S2 align=ACenter justify
 /// button follow its edge: DIALOG_PAD), a small panel's ground and line, a deep shadow. Its title (22, 600) 25 under
 /// its top beside the close button (round, 32: `close_label`, none when ""), `description` 6 under it (13, muted),
 /// what `body` holds 18 under that (its parts 16 apart; none of that room where it holds nothing), and `footer`'s
-/// buttons at its end 24 under it, 8 apart.
+/// buttons at its end 24 under it, 8 apart; what it holds `column_in` in from its padding (a panel's dialog's: on its
+/// words' line, panel_centred).
 /// Whether it is open now (closed by its close button too).
 pub fn dialog(
   c : @ui.Ctx,
@@ -1723,6 +1724,7 @@ pub fn dialog(
   w? : Double,
   close_label? : String = "",
   step? : String = "",
+  column_in? : Double = 0.0,
 ) -> Bool {
   let closed = Ref(false)
   let w = w.unwrap_or(if wide { dialog_wide_w } else { dialog_w })
@@ -1777,7 +1779,9 @@ pub fn dialog(
         // corners on purpose (dialog_rows, dialog_foot_rows) is not cut short of them.
         c.capped(key + "/body", c.height, shrinks=true, mx=-dialog_pad, padx=dialog_pad, fn() {
           // (holding nothing this time, none of its room: its title and what it says straight over its buttons)
-          c.box(style=if footer is None { dialog_body_end } else { dialog_body }, gone_empty=true, fn() {
+          // (what it holds `column_in` in from its padding: a panel's dialog's, on its words' line)
+          let column = @ui.style(px=room(column_in))
+          c.box(style=(if footer is None { dialog_body_end } else { dialog_body }).then(column), gone_empty=true, fn() {
             // (its rows told they are in a dialog: dialog_rows)
             let was = in_dialog.val
             in_dialog.val = true
@@ -1885,8 +1889,10 @@ pub fn dialog_rows(row_h : Double) -> (@ui.Style, @ui.Style) {
   if !in_dialog.val {
     return (no_style, no_style)
   }
+  // (from its column: its padding, and the room a panel's dialog stands what it holds in from that, column_in_now)
   let out = capsule_in(dialog_r, row_h) - dialog_pad
-  (@ui.style(mx=room(out), mb=room(out)), @ui.style(radius=Full, px=room(-out)))
+  let side = out - column_in_now.val
+  (@ui.style(mx=room(side), mb=room(out)), @ui.style(radius=Full, px=room(-side)))
 }
 
 ///|
@@ -1974,8 +1980,8 @@ pub fn input(
     c.box(
       id=s.id,
       style=match (small, hot) {
-        (false, false) => input_box.then(control_height())
-        (false, true) => input_box_hot.then(control_height())
+        (false, false) => input_box.then(control_height()).then(field_corner())
+        (false, true) => input_box_hot.then(control_height()).then(field_corner())
         (true, false) => input_box_small
         (true, true) => input_box_small_hot
       },
@@ -1992,8 +1998,23 @@ fn control_height() -> @ui.Style {
 }
 
 ///|
-/// Lines to type in (controls.css.ts input as a textarea: --r-field round, not a pill; 12 by 7 in, the strong grey's
-/// line, the field's hover grey pointed at or written in, on the canvas; its words 14 on lines 1.6 of them), at least
+/// A field's corner, one for all of them: half its controls' height (Theme::control_h), so a one-line field is a
+/// capsule and lines to type in (textarea) are one grown taller, its corners its ends'.
+pub fn field_round() -> Double {
+  theme().control_h / 2.0
+}
+
+///|
+/// A field's corner as a style (field_round).
+fn field_corner() -> @ui.Style {
+  @ui.style(radius=rounded(field_round()))
+}
+
+///|
+/// Lines to type in (controls.css.ts input as a textarea): a one-line field grown taller, round as its ends are
+/// (field_round, not the web's --r-field: its first line clears that round), its words as far in as its (16) and 8
+/// under its top; the strong grey's line, the field's hover grey pointed at or written in, on the canvas; its words 14
+/// on lines 1.6 of them, at least
 /// `rows` lines high and growing to `most`; `field`: what it holds, the view's own; `corner`, the ladder's where it
 /// stands (first in a card, on its words' inset in its corners: the small block's 10). What is in it now.
 pub fn textarea(
@@ -2011,7 +2032,8 @@ pub fn textarea(
   let mut words = ""
   let tall = match corner {
     Some(k) => @ui.style(min_h=Fixed(rows.to_double() * textarea_line + textarea_in), radius=rounded(k))
-    None => @ui.style(min_h=Fixed(rows.to_double() * textarea_line + textarea_in))
+    // (a field's corner, as a one-line field's ends: field_round)
+    None => field_corner().then(@ui.style(min_h=Fixed(rows.to_double() * textarea_line + textarea_in)))
   }
   c.box(id=box_id, style=(if hot { textarea_box_hot } else { textarea_box }).then(tall), fn() {
     words = c.editor(
@@ -2042,7 +2064,7 @@ let textarea_in : Double = 16.0
 
 ///|
 // kept across runs: a value (no field of it changes)
-let textarea_box : @ui.Style = @ui.css("w=Full px=S3 py=S2 radius=Xl bg=Surface border=B1 border_color=Border")
+let textarea_box : @ui.Style = @ui.css("w=Full px=S4 py=S2 bg=Surface border=B1 border_color=Border")
 
 ///|
 // kept across runs: a value (no field of it changes)
