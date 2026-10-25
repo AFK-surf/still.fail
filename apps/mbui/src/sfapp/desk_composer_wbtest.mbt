@@ -8,11 +8,13 @@ fn desk_composer_tester(
   spec_of? : (ComposerFor) -> @sfpages.ComposerSpec = default_spec,
   pointing? : @ui.Pointing = Mouse,
   platform? : Int = 0,
+  over? : (String, Topic) -> Topic = fn(_, t) { t },
 ) -> (@ui.Tester, Source) {
   reset()
   let base = fixture("chat")
   let src : Source = {
     ..base,
+    topic: fn(name, params) { over(name, (base.topic)(name, params)) },
     call: fn(name, params, done) {
       calls.push({ name, params, bytes: None, done, heard: None })
       (base.call)(name, params, done)
@@ -254,6 +256,48 @@ test "desk composer: a file waiting and no words, Enter sends it (as send does)"
   t.enter()
   t.frame()
   assert_eq(named(calls, "chat.send").length(), 1)
+}
+
+///|
+test "desk composer: a file up after the page last heard of it goes once as Enter sends it: as the core took it (composer.take), not as the page drew it" {
+  let calls : Array[Made] = []
+  // the draft as the page last heard of it, its file going up, while the core's word that it is up is on its way
+  let heard : Ref[Topic?] = Ref(None)
+  let (t, src) = desk_composer_tester(calls, over=fn(name, now) {
+    match heard.val {
+      Some(before) if name == "composer" => before
+      _ => now
+    }
+  })
+  desk_focus(t)
+  let w = @sfbase.writing(src, "ws1/st1:s-c1")
+  @sfbase.writing_add(src, w, "ws1/st1", "notes.txt", b"abc")
+  t.frame()
+  // (the fixture's core has it up at once)
+  let now = (src.topic)("composer", { "key": Json::string("ws1/st1:s-c1") })
+  let going = items(now.value, "files").map(fn(f) {
+    guard f is Object(m) else { f }
+    let g = m.copy()
+    g.remove("done")
+    g["sent"] = Json::number(0.0)
+    Json::object(g)
+  })
+  guard now.value is Some(Object(v)) else { abort("no draft") }
+  let before = v.copy()
+  before["files"] = Json::array(going)
+  before["uploading"] = Json::boolean(true)
+  heard.val = Some({ value: Some(Json::object(before)), error: None, version: now.version + 1 })
+  t.frame()
+  let drawn = @sfbase.writing(src, "ws1/st1:s-c1").files
+  assert_eq(drawn.length(), 1)
+  assert_true(field(Some(drawn[0]), "done") is None)
+  t.enter()
+  t.frame()
+  let sends = named(calls, "chat.send")
+  assert_eq(sends.length(), 1)
+  let p = Some(sends[0].params)
+  assert_eq(items(p, "attachments").map(fn(a) { text(Some(a), "name") }), ["notes.txt"])
+  assert_eq(items(p, "uploads").length(), 0)
 }
 
 ///|

@@ -647,8 +647,11 @@ export class Composers {
     }
   }
 
-  /// What is written, taken to be sent (the words trimmed), the composer left empty; `restore` puts it back.
-  take(key: string): { text: string; attachments: J[]; quotes: J[]; files: string[]; version: number } {
+  /// What is written, taken to be sent (the words trimmed), the composer left empty; `restore` puts it back. Its files
+  /// as they are at this moment, each one way: up, as the station keeps it (`attachments`), or still going up
+  /// (`uploads`: its message waits for it). The page sends them as said here, not as it last drew them: one up in
+  /// between went as both, and twice.
+  take(key: string): { text: string; attachments: J[]; quotes: J[]; uploads: { id: string; name: string; size: number }[]; version: number } {
     const s = this.#state(key);
     const taken = { text: s.text, quotes: s.quotes, files: s.files, id: this.#id(s) };
     s.taken = taken;
@@ -668,7 +671,7 @@ export class Composers {
       text: [taken.text.trim(), ...links.map(linkWords), ...paths.map((f) => pathWords(f.ref!))].filter((w) => w !== "").join("\n"),
       attachments: sent.flatMap((f) => (f.done ? [f.done] : [])),
       quotes: taken.quotes.map(({ author, text, comment, ts, role, file }) => ({ author, text, comment: comment.trim(), ...(ts ? { ts } : {}), ...(role ? { role } : {}), ...(file ? { file } : {}) })),
-      files: sent.map((f) => f.id),
+      uploads: sent.filter((f) => !f.done && !f.error).map(({ id, name, size }) => ({ id, name, size })),
       version,
     };
   }

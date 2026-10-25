@@ -784,7 +784,6 @@ fn new_send(
   }
   let words = d.text.trim(chars=" \n\t").to_string()
   let up = d.files.filter_map(fn(f) { field(Some(f), "done") })
-  let going = going_up(d)
   // (its words where they were typed while the chat is made, its files where their tiles were: carried)
   @sfbase.flight_carry_start(
     c,
@@ -821,6 +820,7 @@ fn new_send(
         "attachments": Json::array(items(taken, "attachments")),
         "quotes": Json::array(items(taken, "quotes")),
       }
+      let going = items(taken, "uploads")
       if going.length() > 0 {
         params["uploads"] = Json::array(going)
       }

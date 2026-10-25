@@ -1078,9 +1078,9 @@ fn flying_files(c : @ui.Ctx, w : Writing) -> Array[FlyingFile] {
 /// What is written sent into chat `r` (`v` its view: its thread, what is in it now; sendDraft, draft.ts send): in the
 /// list and flying there in the frame it is sent, before the core has it (sent_local: the rule), the composer empty at
 /// once; then what the core took (`composer.take`: the words with the links and the paths after them, the files up,
-/// the quotes) goes (`chat.send`), the files still going up named so it waits for them. Not taken in at all (the core
-/// refused it, or went away with it): back in the composer unless something new is written there, saying why; one the
-/// station did not take waits in the outbox, which says so.
+/// the quotes, those still going up as it took them, which it waits for) goes (`chat.send`). Not taken in at all (the
+/// core refused it, or went away with it): back in the composer unless something new is written there, saying why; one
+/// the station did not take waits in the outbox, which says so.
 pub fn send_in_chat(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView, w : Writing) -> Unit {
   if src.read_only {
     toast_later(read_only_words)
@@ -1088,7 +1088,6 @@ pub fn send_in_chat(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView, w : Wr
   }
   let words = w.text.trim(chars=" \n\t").to_string()
   let up = w.files.filter_map(fn(f) { field(Some(f), "done") })
-  let going = going_up(w)
   let rk = r.station + "\u{1}" + r.session
   let row = sent_local(rk, Some(v), words, up)
   // its words take off from the field as they are (before it is emptied), its room held till they let go of it
@@ -1122,6 +1121,7 @@ pub fn send_in_chat(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView, w : Wr
       "attachments": Json::array(items(taken, "attachments")),
       "quotes": Json::array(items(taken, "quotes")),
     }
+    let going = items(taken, "uploads")
     if going.length() > 0 {
       params["uploads"] = Json::array(going)
     }
@@ -1178,20 +1178,6 @@ pub fn composer_room(c : @ui.Ctx, draft : String) -> Double {
   } else {
     now
   }
-}
-
-///|
-/// The files of draft `w` still going up, as a message sent before they are up names them (`uploads`: the core sends
-/// it once they are).
-pub fn going_up(w : Writing) -> Array[Json] {
-  w.files.filter_map(fn(f) {
-    let o = Some(f)
-    if field(o, "done") is None && text(o, "error") == "" && field(o, "ref") is None && field(o, "link") is None {
-      Some(Json::object({ "id": Json::string(text(o, "id")), "name": Json::string(text(o, "name")), "size": Json::number(number(o, "size")) }))
-    } else {
-      None
-    }
-  })
 }
 
 ///|

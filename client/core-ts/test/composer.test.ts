@@ -740,6 +740,29 @@ test("an_upload_finishing_between_the_click_and_take_still_resolves_the_submitte
   t.core.close();
 });
 
+test("taken_each_file_is_said_once_as_it_is_then_up_or_still_going_up_and_goes_once", async () => {
+  const t = await queuedUpload();
+  const take = async (id: number) => {
+    call(t.core, t.ui, id, "composer.take", { key: "ws/st:k" });
+    await t.host.settle();
+    return answers(t.host.takeEmitted(), id)?.ok as J;
+  };
+  // Still going up: named, for its message to wait for.
+  const going = await take(950);
+  assert.deepEqual([going.attachments, going.uploads], [[], t.uploads]);
+  // Put back and up meanwhile (the page not told yet): taken again, it is the station's file, and only that.
+  await t.ask("restore", { key: "ws/st:k", error: null });
+  t.finish();
+  await t.settle();
+  const up = await take(951);
+  assert.deepEqual([up.attachments, up.uploads], [[t.saved], []]);
+  // Sent as taken, it goes once.
+  t.send(501, { attachments: up.attachments, uploads: up.uploads });
+  await t.settle();
+  assert.deepEqual(t.posted[0].attachments, [t.saved]);
+  t.core.close();
+});
+
 test("a_message_waits_for_every_upload_and_keeps_already_uploaded_attachments", async () => {
   const t = await queuedUpload();
   const second = Deferred.makeUnsafe<J, CoreError>();
@@ -821,7 +844,7 @@ test("a_file_dragged_in_is_named_by_its_path_until_switched_to_a_file_which_then
   await t.ask("mode", { key: "ws/st:k", id: "b", mode: "path" });
   const taken = t.core.inner.composers.take("ws/st:k");
   assert.equal(taken.text, "看看这个\nMini 上的文件：/Users/me/b.mp4\nStudio 上的文件夹：/Users/me/src");
-  assert.deepEqual([taken.attachments.map((f: J) => f.path), taken.files], [["/data/uploads/a.mp4", "/data/uploads/proj.zip"], ["a", "d"]]);
+  assert.deepEqual([taken.attachments.map((f: J) => f.path), taken.uploads], [["/data/uploads/a.mp4", "/data/uploads/proj.zip"], []]);
   t.core.close();
 });
 

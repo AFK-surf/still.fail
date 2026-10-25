@@ -169,7 +169,17 @@ fn fix_compose_call(f : Fixture, name : String, params : Json) -> Result[Json, J
           "text": Json::string(taken),
           "attachments": Json::array(files.filter_map(fn(x) { field(Some(x), "done") })),
           "quotes": Json::array(quotes),
-          "files": [],
+          // those still going up, as they are now (none: the fixture's are up as they are added)
+          "uploads": Json::array(
+            files.filter_map(fn(x) {
+              let o = Some(x)
+              if field(o, "done") is None && text(o, "error") == "" && field(o, "link") is None && text(field(o, "ref"), "mode") != "path" {
+                Some(Json::object({ "id": Json::string(text(o, "id")), "name": Json::string(text(o, "name")), "size": Json::number(number(o, "size")) }))
+              } else {
+                None
+              }
+            }),
+          ),
           "version": Json::number(w.version.to_double()),
         }),
       )
