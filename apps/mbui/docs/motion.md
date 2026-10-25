@@ -94,7 +94,7 @@ of them. Their numbers are the web's at the same place (paths from the repositor
 | 3 | the composer to another page | 340 ms ease-out (`@sf.composer_page_ms`) | web/src/dock.tsx, web/src/styles/global.css.ts:257 (the view transition) |
 | 3 | a layout switched: the sidebar, a side panel, the tape | 380 ms ease-out (`@sf.move_state_ms`) | `moveState`, web/ui/src/motion.ts:287 |
 | 3 | rows making way, the agent's line among them | spring 0.28 s (`@sf.move_spring`) | `MOVE`, web/src/listMotion.ts |
-| 4 | words sent | 520 ms on the flight's curve (0.6, 0, 0.2, 1) | web/src/madeChat.ts:329-331 (sfbase/flight.mbt) |
+| 4 | words sent | 520 ms on the flight's curve (0.6, 0, 0.2, 1), set alike and broken into lines alike in the field and in the message (the theme's `words`, the composer's width), so moved, in pieces: what is on one line in both, each from where it was typed to where the message has it | web/src/madeChat.ts:329-331 (sfbase/flight.mbt); ChatHost.kt `pieces`, SendText.kt |
 | 4 | the composer under words sent: as tall as it was till they are a quarter of the way, then down as a shape | `@sf.shape_ms` from then | ChatHost.kt `hold` (the web keeps only the list's foot, dock.tsx) |
 | 4 | the composer's hint under words sent: gone at once, back once they are out of its field | 200 ms on the arrival's curve (`@sf.hint_back_ms`) | web/src/madeChat.css.ts:19-20 |
 | 4 | a picture into the viewer and back | 320 ms `--m-ease`; back 280 ms | none on the web, which fades it in over 140 ms (web/src/FilePreview.css.ts); Android's FilePreview.kt (sfbase/viewer.mbt) |
@@ -121,6 +121,11 @@ of them. Their numbers are the web's at the same place (paths from the repositor
   flight over 80%, settling from 24%) is left only on sfapp's old composer, which sends nothing of its own now.
 - The composer going to another page: 340 ms, the web's for it (the view transition), not a layout switched's 380: it
   is the composer moving with its page, not the page's layout changing.
+- Words sent keep the shape they were typed in, so that sending them only moves them (Android's SendText.kt, the
+  user 2026-10-26: 「从第一性原理出发」): the composer sets them as a message does (the theme's `words`, a phone's 15 on
+  24.75, not the web's 16 on 21, which is there so that iOS's browser does not zoom into a field), and the viewer's
+  bubble is as wide as the composer sets them, not the web's 78% of the column and 560 at most; the web flies a copy
+  of the message from the size they were typed at instead, their lines jumping as it takes them.
 
 ## The way there
 

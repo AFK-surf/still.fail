@@ -81,11 +81,13 @@ pub(all) struct Type {
   heading : Double
   heading_line : Double
   display : Double
-  /// what is typed (textInput: the phone's 16, as iOS zooms into less; the computer's 14), on its line
-  input : Double
-  input_line : Double
-  /// what a person wrote, read in a message (msgPlain, PersonWords): the body's size on its line; a phone's on a
-  /// message's line, as the agent's Markdown beside it (Chat.kt: 15 on 24.75)
+  /// what a person writes, as it is typed in the composer, as it flies when sent and as it is read in its message
+  /// (msgPlain, PersonWords): set alike in all three, so that sending it only moves it (SendText.kt: "the field,
+  /// flying words and own messages share their typography and line breaks"; the breaks: the viewer's bubble as wide as
+  /// the composer sets them, sfpages message.mbt mine_most); the body's size on its line, a phone's on a message's
+  /// line as the agent's Markdown beside it (Chat.kt: 15 on 24.75). Not the web's 16 for what is typed on a phone,
+  /// which is there so that iOS's browser does not zoom into it. In numbers, where a field takes them:
+  /// Ctx::style_size.
   words : @ui.TextStyle
 }
 
@@ -858,8 +860,6 @@ let wide_type : Type = {
   heading: 22.0,
   heading_line: 30.0,
   display: 28.0,
-  input: 14.0,
-  input_line: 21.0,
   // (the body's line, the web's --leading-body 22: msgPlain's 1.55 is 21.7, off the scale)
   words: @ui.text_style(size=Body, leading=L7, color=Fg),
 }
@@ -915,8 +915,6 @@ let narrow_type : Type = {
   ui_line: 22.0,
   body: 15.0,
   body_line: 22.0,
-  input: 16.0,
-  input_line: 21.0,
   words: message,
 }
 

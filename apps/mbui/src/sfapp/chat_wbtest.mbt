@@ -79,9 +79,9 @@ test "what the viewer quotes is over their bubble at the right, no wider than th
   assert_eq(quote.length(), 1)
   let (_, qx, _, qw, _, _) = quote[0]
   let (bx, _, bw, _) = t.rect_of("这里的高度是怎么估的？").unwrap()
-  // the card's words in from its start (11, its mark and 4 after it): the card starts no further left than 78% of
-  // the column from its right edge, as the bubble under it, and both end there
-  assert_true(qx - 26.0 >= 390.0 - 16.0 - 390.0 * 0.78 - 0.5)
+  // the card's words in from its start (11, its mark and 4 after it): the card starts no further left than the bubble
+  // under it may (as wide as the composer sets what is typed, its sides round it), and both end there
+  assert_true(qx - 26.0 >= 390.0 - 16.0 - (@sfpages.composer_words_width(390.0) + 2.0 * 14.0) - 0.5)
   assert_true(qx + qw <= 390.0 - 16.0 - 11.0 + 0.5)
   assert_true(bx + bw > 390.0 - 16.0 - 24.0)
 }

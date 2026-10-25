@@ -373,8 +373,8 @@ fn message_time(c : @ui.Ctx, key : String, time : Stamp?) -> Unit {
 }
 
 ///|
-/// What a person wrote (PersonWords): plain, as they wrote it, references to chats as their chips and web addresses
-/// as links.
+/// What a person wrote (PersonWords): plain, as they wrote it (set as it was typed: the theme's `words`), references to
+/// chats as their chips and web addresses as links.
 pub fn person_words(c : @ui.Ctx, words : String, key : String, found? : Array[String] = []) -> Unit {
   let p = @sf.theme().p
   c.rich(
@@ -390,10 +390,12 @@ pub fn person_words(c : @ui.Ctx, words : String, key : String, found? : Array[St
 }
 
 ///|
-/// How wide what the viewer sent may be at the column's end (msgMine msgBubble: 78% of the column, 560 at most): its
-/// bubble, and the quotes over it.
+/// How wide what the viewer sent may be at the column's end: its bubble, and the quotes over it. Its words break their
+/// lines where the composer broke them as they were typed (as wide as it sets them, the bubble's sides round them:
+/// SendText.kt, "the field, flying words and own messages share their typography and line breaks"), so that sending
+/// them only moves them; a column narrower than that has them as wide as it is.
 fn mine_most(c : @ui.Ctx) -> Double {
-  dmin(c.width * bubble_share, bubble_most)
+  composer_words_width(c.width) + 2.0 * bubble_side
 }
 
 ///|
@@ -406,6 +408,8 @@ fn mine_bubble(c : @ui.Ctx, here : MessageHere, words : String, key : String, fo
     Some(f) if f.placed => flight_ground_of(c, f)
     _ => 1.0
   }
+  // (the bubble, for what is drawn in it as it flies: flight_pieces_in)
+  let bubble_node = Ref::new(-1)
   let b = c.box(
     style=(if ground < 1.0 { bubble_bare } else { bubble }).then(@ui.style(max_w=Fixed(mine_most(c)))),
     fn() {
@@ -419,9 +423,18 @@ fn mine_bubble(c : @ui.Ctx, here : MessageHere, words : String, key : String, fo
         let g = c.layer(fn() { c.box(style=bubble_lit, fn() {  }) |> ignore })
         c.look(g, @ui.look(alpha=lit))
       }
-      person_words(c, words, key, found~)
+      // words sent flying here land on its words, piece by piece (sfbase's flight.mbt)
+      match flight {
+        Some(f) => {
+          let w = c.box(fn() { person_words(c, words, key, found~) })
+          flight_landing_words(c, f, w)
+          flight_pieces_in(c, f, bubble_node)
+        }
+        None => person_words(c, words, key, found~)
+      }
     },
   )
+  bubble_node.val = b
   match flight {
     Some(f) => flight_bubble(c, f, b)
     None => ()
@@ -868,11 +881,8 @@ let agent_mark_side : Double = 12.0
 let place_corner_side : Double = 9.0
 
 ///|
-/// The viewer's bubble (chat.css.ts msgMine msgBubble): 78% of the column, 560 at most.
-let bubble_share : Double = 0.78
-
-///|
-let bubble_most : Double = 560.0
+/// The viewer's bubble's sides (chat.css.ts msgMine msgBubble: `bubble`'s px=S3_5).
+let bubble_side : Double = 14.0
 
 
 ///|

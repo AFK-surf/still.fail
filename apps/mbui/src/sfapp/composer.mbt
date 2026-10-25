@@ -1264,8 +1264,6 @@ fn send_draft(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView, d : Draft) -
     flying,
     field=field_key,
     hold=fn(ms) { composer_hold(chat, room, ms) },
-    font=ct().font,
-    line=ct().line,
     desk=false,
   )
   ref_field_put(d, "")

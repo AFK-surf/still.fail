@@ -9,6 +9,14 @@
 // ms, Ease.Arrive). Their row never laid out (its page not shown, 2 s): the composer as it was. With motion reduced (or
 // in screenshots) none of it: the row is where it is.
 //
+// The words are set alike in the field and in their message, and break their lines alike (the theme's `words`, the
+// composer's width: SendText.kt), so that only where they are changes: from the frame their message is laid out they
+// go in pieces (ChatHost.kt Flight.pieces), what is on one line in the field and on one line in the message (a line
+// each, but where a column narrower than the composer breaks a long one anew), each from where it was typed to where
+// the message has it, as the bubble goes. Each piece is a copy of the message's words cut to it, so that it is what
+// the message draws there as they land; meanwhile the message's own words are not drawn. Words their message has some
+// other way (a reference to a chat a chip there) go as one block with their bubble.
+//
 // The files sent with them go from their tiles in the composer (ChatHost.kt FlyingFile, landingFile, files): drawn as
 // their tiles were where they were until the row is in the list, then each to its place in the message, across and up
 // as the words go: a picture's box growing from the tile's to the picture's own in the message (a letterboxed one's
@@ -39,13 +47,16 @@ pub(all) struct SendFlight {
   field_y : Double
   field_w : Double
   field_h : Double
-  /// the composer's room when sent (held a quarter of the way: `hold`, the composer's own, told how long), the words'
-  /// size and line as the field had them, and whether it is the desktop's (the web's flight: desk)
+  /// the composer's room when sent (held a quarter of the way: `hold`, the composer's own, told how long), and whether
+  /// it is the desktop's (the web's flight: desk)
   room : Double
   hold : (Double) -> Unit
-  font : Double
-  line : Double
   desk : Bool
+  /// the field's words as it laid them out (where each line starts, where each offset stood) and where the words sent
+  /// start in them (what came before them trimmed off): what their pieces go from (flight_pieces); None, they go as
+  /// one block
+  lines : @ui.FieldLines?
+  lead : Int
   /// the files sent with them, from their tiles
   files : Array[FlyingFile]
   /// its row's key (what was sent from here, then the core's row it became: chat.mbt row_keys), whether it is laid
@@ -97,8 +108,8 @@ let flight_fly : Double = 0.8
 let flight_settle : Double = 0.24
 
 ///|
-/// What is sent from the composer of chat `chat` takes off from its field (`field`, before it is emptied: its words'
-/// size and line `font`, `line`), to row `key` (in the list from now: sent_local). The composer (its box and its room)
+/// What is sent from the composer of chat `chat` takes off from its field (`field`, before it is emptied: its words set
+/// as the theme's `words`, as their message sets them), to row `key` (in the list from now: sent_local). The composer (its box and its room)
 /// is held as tall as it was until the words let go of it (`hold`, the composer's, told for how long), said now: at
 /// most their wait for the row. `desk`: the desktop's flight (the web's).
 pub fn flight_start(
@@ -111,8 +122,6 @@ pub fn flight_start(
   files : Array[FlyingFile],
   field~ : String,
   hold~ : (Double) -> Unit,
-  font~ : Double,
-  line~ : Double,
   desk~ : Bool,
 ) -> Unit {
   send_flight.val = None
@@ -122,6 +131,7 @@ pub fn flight_start(
   match c.field_words(field) {
     Some(((x, y), (rx, ry, w, h))) => {
       // the field's words as laid out (scrolled to its last lines when there were more than it holds), its room
+      let (lines, lead) = field_lines_of(c, field, words)
       send_flight.val = Some({
         chat,
         turns,
@@ -134,9 +144,9 @@ pub fn flight_start(
         field_h: h,
         room,
         hold,
-        font,
-        line,
         desk,
+        lines,
+        lead,
         files,
         key,
         placed: false,
@@ -157,16 +167,13 @@ pub fn flight_start(
 ///|
 /// A new chat's first words (and files) take off from its field (before it is emptied), carried (ChatHost.kt sending,
 /// carried): drawn where they were from now, while the chat is made; nothing held of the composer. `chat`: the new
-/// chat's draft's key, till flight_carry_into; its field, its words' size and line, the desktop's or not as
-/// flight_start's.
+/// chat's draft's key, till flight_carry_into; its field, the desktop's or not as flight_start's.
 pub fn flight_carry_start(
   c : @ui.Ctx,
   chat : String,
   words : String,
   files : Array[FlyingFile],
   field~ : String,
-  font~ : Double,
-  line~ : Double,
   desk~ : Bool,
 ) -> Unit {
   send_flight.val = None
@@ -193,9 +200,10 @@ pub fn flight_carry_start(
         field_h: h,
         room: 0.0,
         hold: fn(_) {  },
-        font,
-        line,
         desk,
+        // (carried with the list as its chat comes up: as one block)
+        lines: None,
+        lead: 0,
         files,
         key: "",
         placed: false,
@@ -451,11 +459,14 @@ pub let flight_carry_ms : Double = 480.0
 pub let flight_carry_after_ms : Double = 90.0
 
 ///|
-/// The words as they were typed, over the field, until their row is in the list (and the build it is first laid out
-/// in, where they go from: flight_bubble does not draw them then).
+/// The words sent (`chat`'s), as they were typed, over the field, until their row is in the list (and the build it is
+/// first laid out in: flight_bubble does not draw them then), their bubble flying whole after; none once their message
+/// has them as they were typed, which draws them in pieces from then (flight_pieces_in).
 pub fn flight_waiting(c : @ui.Ctx, chat : String) -> Unit {
   let t = @sf.theme()
   match flight_of(chat) {
+    // (in pieces: drawn in their bubble, flight_pieces_in)
+    Some(f) if flight_pieces(c, f) is Some(_) => ()
     Some(f) if !f.placed || f.placed_frame == c.frame_number() => {
       let l = c.layer(fn() {
         // the field's room where it was in the window, what is in it moved from its corner: moved from where it is
@@ -463,7 +474,7 @@ pub fn flight_waiting(c : @ui.Ctx, chat : String) -> Unit {
         let room = c.box(style=@ui.style(w=Fixed(f.field_w), h=Fixed(f.field_h), clip=true), fn() {
           let words = c.box(style=@sf.full_width, fn() {
             // as the field had them: in the face chosen for what people write (ChatHost.kt SendTextFaced)
-            c.rich([@ui.span(f.text)], key="flight/words", size=f.font, color=t.p.text, line=f.line, trim=true, w=Fill(1.0), words=true)
+            c.rich([@ui.span(f.text)], key="flight/words", style=t.t.words, trim=true, w=Fill(1.0), words=true)
             |> ignore
           })
           c.look(words, @ui.look(dx=f.from_x - f.field_x, dy=f.from_y - f.field_y))
@@ -481,6 +492,207 @@ pub fn flight_waiting(c : @ui.Ctx, chat : String) -> Unit {
 }
 
 ///|
+/// The words of the message the words sent go to, as its row lays them out (its words' box, marked so: flight_landing_words):
+/// where their pieces go.
+pub let flight_words_key : String = "flight/landing-words"
+
+///|
+/// The box holding the words of the message words sent go to (node `i`, in its bubble): kept where it is laid out and
+/// how (words_of, measured_rect), and not drawn while their pieces are (flight_pieces_in).
+pub fn flight_landing_words(c : @ui.Ctx, f : SendFlight, i : Int) -> Unit {
+  if f.carried {
+    return
+  }
+  c.words(i, flight_words_key)
+  @motion.measure(c, i, flight_words_key)
+  if flight_pieces(c, f) is Some(_) {
+    c.look(i, @ui.look(alpha=0.0))
+  }
+}
+
+///|
+/// A piece of the words sent (ChatHost.kt Piece): what is on one line both in the field and in their message, from
+/// `a` until `b` of them; where it stood in the field (its x and its line's top, in the window), and its room in the
+/// message's words (x, y, w, h, from their top left).
+pub(all) struct FlightPiece {
+  a : Int
+  b : Int
+  from : (Double, Double)
+  at : (Double, Double, Double, Double)
+}
+
+///|
+/// The words sent cut into the pieces that go on their own (ChatHost.kt Flight.pieces), with their message's words as
+/// laid out: what is on one line in the field and on one line in the message, each from where it was typed to where
+/// the message has it, set alike in both (the theme's `words`), so that only where each is changes. None until their
+/// message's words are laid out, or when those are not the words sent (a reference to a chat is a chip there), nor for
+/// a new chat's first words (they come up with its list): they go as one block.
+pub fn flight_pieces(c : @ui.Ctx, f : SendFlight) -> (Array[FlightPiece], @ui.WordsPiece)? {
+  guard f.lines is Some(lines) && !f.carried else { return None }
+  guard c.words_of(flight_words_key) is Some(w) &&
+    w.pieces.length() == 1 &&
+    w.text == f.text else {
+    return None
+  }
+  let wp = w.pieces[0]
+  let lay = wp.layout
+  let n = f.text.length()
+  // where a line starts in the field or in the message
+  let cuts : Array[Int] = [0, n]
+  for s in lines.starts {
+    let k = s - f.lead
+    if k > 0 && k < n && !cuts.contains(k) {
+      cuts.push(k)
+    }
+  }
+  for l in 0..<lay.line_count() {
+    let k = lay.line_range(l).0
+    if k > 0 && k < n && !cuts.contains(k) {
+      cuts.push(k)
+    }
+  }
+  cuts.sort()
+  let (_, ry, _, rh) = lines.room
+  let lh = lines.line_h()
+  let out : Array[FlightPiece] = []
+  let shown : Array[Bool] = []
+  for i in 0..<(cuts.length() - 1) {
+    let a = cuts[i]
+    // (without the break that ends its line)
+    let mut b = cuts[i + 1]
+    while b > a && is_break(f.text.unsafe_charcode_at(b - 1)) {
+      b = b - 1
+    }
+    if b <= a {
+      continue
+    }
+    match lay.rects(a, b) {
+      [r] => {
+        let (fx, fy) = lines.place(f.lead + a)
+        out.push({ a, b, from: (fx, fy), at: r })
+        // scrolled out of the field: not seen there
+        shown.push(fy + lh / 2.0 >= ry && fy + lh / 2.0 <= ry + rh)
+      }
+      // (not on one line in the message: as one block)
+      _ => return None
+    }
+  }
+  // what was scrolled out of the field comes with the first piece that showed, as the message lays it out by that
+  // (one block with it, not each from a place out of sight)
+  let mut first = -1
+  for i in 0..<shown.length() {
+    if shown[i] && first < 0 {
+      first = i
+    }
+  }
+  guard first >= 0 else { return None }
+  let by = out[first]
+  for i in 0..<out.length() {
+    let p = out[i]
+    if !shown[i] {
+      out[i] = { ..p, from: (by.from.0 + p.at.0 - by.at.0, by.from.1 + p.at.1 - by.at.1) }
+    }
+  }
+  Some((out, wp))
+}
+
+///|
+/// Whether a code unit ends a line (a break typed in the field, the message's own).
+fn is_break(u : Int) -> Bool {
+  u == 10 || u == 13
+}
+
+///|
+/// The words sent, in pieces (flight_pieces), drawn in their bubble (node `bubble`, in which this is built: what its
+/// row draws over everything as it flies, its ground under them as it comes in), over all it holds.
+pub fn flight_pieces_in(c : @ui.Ctx, f : SendFlight, bubble : Ref[Int]) -> Unit {
+  match flight_pieces(c, f) {
+    Some((pieces, w)) => {
+      let l = c.layer(fn() { flight_pieces_drawn(c, f, pieces, w, bubble) })
+      c.draw_only(l)
+    }
+    None => ()
+  }
+}
+
+///|
+/// Where a bubble words fly to sets out from, from the first line of the words as they were typed: its sides round
+/// them (the bubble's padding, sfpages message.mbt `bubble`).
+let bubble_in_x : Double = 14.0
+
+///|
+let bubble_in_y : Double = 8.0
+
+///|
+/// The words sent, as their message sets them: one copy of them for each piece, cut to its room there, from where it
+/// was in the field to where the message is laid out this frame (flown across and up as their bubble is), with the
+/// message's own runs (links as its), so that each piece is what the message draws there when they land. Drawn in
+/// the bubble, which is drawn off its place as it flies (flight_bubble): each piece placed in the window, less that.
+fn flight_pieces_drawn(
+  c : @ui.Ctx,
+  f : SendFlight,
+  pieces : Array[FlightPiece],
+  w : @ui.WordsPiece,
+  bubble : Ref[Int],
+) -> Unit {
+  let t = @sf.theme()
+  let flying = f.placed && f.placed_frame != c.frame_number()
+  let across = if flying { flight_across_of(c, f) } else { 0.0 }
+  let up = if flying { flight_up_of(c, f) } else { 0.0 }
+  let runs = message_runs(f.text, t.p.accent)
+  for k, p in pieces {
+    let (ax, ay, aw, ah) = p.at
+    let cut = c.box(style=@ui.style(w=Fixed(aw), h=Fixed(ah), clip=true), fn() {
+      let all = c.box(style=@ui.style(w=Fixed(w.w)), fn() {
+        c.rich(runs, key="flight/piece/\{k}", style=t.t.words, link_color=t.p.blue, words=true) |> ignore
+      })
+      c.look(all, @ui.look(dx=-ax, dy=-ay))
+    })
+    // where the message's words are laid out this frame (the list gliding meanwhile), not a frame behind; less how far
+    // off its place its bubble is drawn (flight_bubble: from the first line as typed, across and up)
+    @motion.placed(c, cut, fn() {
+      match @motion.measured_rect(c, flight_words_key) {
+        Some((wx, wy, _, _)) if bubble.val >= 0 => {
+          let (x, y, _, _) = c.node_rect(cut)
+          let (bx, by, _, _) = c.node_rect(bubble.val)
+          let ox = (f.from_x - bubble_in_x - bx) * (1.0 - across)
+          let oy = (f.from_y - bubble_in_y - by) * (1.0 - up)
+          let (fx, fy) = p.from
+          @ui.look(dx=fx + (wx + ax - fx) * across - x - ox, dy=fy + (wy + ay - fy) * up - y - oy)
+        }
+        _ => @ui.look(alpha=0.0)
+      }
+    })
+  }
+}
+
+///|
+/// The field's lines (`field`'s, as it laid them out) and where `words` start in them, after what came before them
+/// that was trimmed off; none when they are not there as they are.
+fn field_lines_of(c : @ui.Ctx, field : String, words : String) -> (@ui.FieldLines?, Int) {
+  match c.field_lines(field) {
+    Some(l) => {
+      let mut lead = 0
+      while lead < l.text.length() &&
+            (
+              l.text.unsafe_charcode_at(lead) == 32 ||
+              l.text.unsafe_charcode_at(lead) == 9 ||
+              is_break(l.text.unsafe_charcode_at(lead))
+            ) {
+        lead = lead + 1
+      }
+      if lead + words.length() <= l.text.length() &&
+        l.text.view(start_offset=lead, end_offset=lead + words.length()).to_string() == words {
+        (Some(l), lead)
+      } else {
+        (None, 0)
+      }
+    }
+    None => (None, 0)
+  }
+}
+
+///|
 /// The bubble of the row the words go to (node `i`, its words `pad` in from its corner): flown from the field to
 /// where it is, over the composer; its ground coming in.
 pub fn flight_bubble(c : @ui.Ctx, f : SendFlight, i : Int) -> Unit {
@@ -494,13 +706,16 @@ pub fn flight_bubble(c : @ui.Ctx, f : SendFlight, i : Int) -> Unit {
     return
   }
   if !f.placed || f.placed_frame == c.frame_number() {
-    // its first frame: not seen (the words are still drawn as typed, over the field)
-    c.look(i, @ui.look(alpha=0.0))
-    @motion.fly(c, i, f.from_x - 14.0, f.from_y - 8.0, px=0.0, py=0.0)
+    // its first frame: not seen while the words are still drawn as typed, over the field; in pieces, they are its
+    // own from it on (its ground not come in yet)
+    if flight_pieces(c, f) is None {
+      c.look(i, @ui.look(alpha=0.0))
+    }
+    @motion.fly(c, i, f.from_x - bubble_in_x, f.from_y - bubble_in_y, px=0.0, py=0.0)
     return
   }
   let p = flight_p(c, f)
-  @motion.fly(c, i, f.from_x - 14.0, f.from_y - 8.0, px=flight_across(p, f.desk), py=flight_up(p, f.desk))
+  @motion.fly(c, i, f.from_x - bubble_in_x, f.from_y - bubble_in_y, px=flight_across(p, f.desk), py=flight_up(p, f.desk))
 }
 
 ///|
