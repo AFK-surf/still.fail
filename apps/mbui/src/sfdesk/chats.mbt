@@ -19,10 +19,10 @@ fn lists_band(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
       c.box(style=side_full, fn() {
         // (on the tape over the search's field: its ground's edge on the field's, its icon and words on the field's)
         let over = if wide.tape { tape_new_over_search } else { 0.0 }
-        if nav_row(c, "side/new", is_new, fn() {
+        if band_row(c, "side/new", is_new, fn() {
             c.box(tx=-compose_in + over, fn() { @sf.icon(c, "compose", size=side_icon, color=t.p.muted) |> ignore })
             |> ignore
-            c.box(style=side_full, tx=over, fn() { nav_words(c, @sf.t("web-main.sidebar.newChat")) }) |> ignore
+            c.box(style=side_full, tx=over, fn() { band_words(c, @sf.t("web-main.sidebar.newChat")) }) |> ignore
           }) {
           new_chat()
         }

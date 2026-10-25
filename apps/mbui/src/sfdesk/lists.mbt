@@ -558,9 +558,9 @@ fn side_todo(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
     return
   }
   c.box(style=todo_box, fn() {
-    if nav_row(c, "side/attention", wide.attention_open, fn() {
+    if band_row(c, "side/attention", wide.attention_open, fn() {
         @sf.icon(c, "bell", size=16.0, color=t.p.muted) |> ignore
-        nav_words(c, @sf.t("web-main.attention.entry"))
+        band_words(c, @sf.t("web-main.attention.entry"))
         c.box(style=todo_slot, fn() {
           if n > 0 {
             c.box(style=todo_count, fn() { c.text(n.to_string(), style=todo_count_words) |> ignore }) |> ignore
