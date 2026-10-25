@@ -827,7 +827,8 @@ let jobs_all : @ui.Style = @ui.style(
   pl=@sf.room_of(jobs_names_in),
   pr=S2_5,
   align=ACenter,
-  radius=Inner,
+  // (in the popover's foot corner concentric with it; where it lies in none, as it scrolls under, a row's)
+  radius=InnerOr(@sf.row_radius),
   hovered=@ui.patch(bg=Hover),
 )
 

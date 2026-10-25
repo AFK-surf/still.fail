@@ -214,12 +214,19 @@ pub let lit_apart : Double = 2.0
 pub let corner_fit : @ui.CornerFit = { least: 6.0, most: pane_corner, near: 4.0, far: 16.0 }
 
 ///|
+/// The corner of the tape's panels (laid out Medium) where they stand alone: a little less round than the ladder's pane
+/// corner a dialog has (the user, 2026-10-25: 中屏的页面圆角想办法搞小一点点). Linked (tape_corners), what lies in their
+/// corners follows it there (a composer, a bar's buttons, the rail's grounds), round as that makes it; what is in the
+/// middle of a page keeps the ladder's.
+pub let tape_corner : Double = 30.0
+
+///|
 /// The tape's one line (laid out Medium): how far under its panels' tops their first row's round buttons stand, as far
-/// as a bar's (32 across) are concentric with the ladder's pane corner (34 less their half, 18): every bar of the tape
+/// as a bar's (32 across) are concentric with the tape's corner (30 less their half, 14): every bar of the tape
 /// (tape_bar_over) and the sidebar's first row on it, whatever a panel's own corners are (the user, 2026-10-25: a page's
-/// bar and the sidebar's first row each where it stood alone, not on one line). The ladder's own place for its own
-/// corner, past the corner rule's ranges (corner_fit, for what follows a corner it does not choose: a window's).
-pub let tape_line : Double = pane_corner - 32.0 / 2.0
+/// bar and the sidebar's first row each where it stood alone, not on one line). The tape's own place for its own
+/// corner (corner_fit, for what follows a corner it does not choose: a window's).
+pub let tape_line : Double = tape_corner - 32.0 / 2.0
 
 ///|
 /// Whether a corner `k` round is one corner_fit lets what lies in a corner have.
@@ -248,17 +255,17 @@ pub fn window_follow(alone : Double) -> @ui.CornerOf {
 
 ///|
 /// The corner of the tape's panels (laid out Medium) where they stand at the window's edge, linked to the window's,
-/// else the ladder's pane corner, as they stand alone (tape_corners: a panel's other corners the pane corner).
-pub let tape_edge : @ui.CornerOf = window_follow(pane_corner)
+/// else the tape's corner, as they stand alone (tape_corners: a panel's other corners the tape's).
+pub let tape_edge : @ui.CornerOf = window_follow(tape_corner)
 
 ///|
 /// A panel of the tape's corners (top left, top right, bottom right, bottom left), each linked to the one it is in: on
 /// the side it stands at the window's edge when it is in use (`left`: the sidebar's; `right`: the side panel's, the
-/// page's with none open beside it) the window's (tape_edge); the others, never in the window's corners, the ladder's
-/// pane corner. Whether the panel is in use now or on its way over: where it will be.
+/// page's with none open beside it) the window's (tape_edge); the others, never in the window's corners, the tape's
+/// corner. Whether the panel is in use now or on its way over: where it will be.
 pub fn tape_corners(left~ : Bool, right~ : Bool) -> FixedArray[@ui.CornerOf] {
-  let l = if left { tape_edge } else { Own(pane_corner) }
-  let r = if right { tape_edge } else { Own(pane_corner) }
+  let l = if left { tape_edge } else { Own(tape_corner) }
+  let r = if right { tape_edge } else { Own(tape_corner) }
   [l, r, r, l]
 }
 
@@ -365,7 +372,15 @@ pub fn foot_capsule(height : Double, side : Double, foot : Double) -> (Double, D
       } else {
         foot
       }
-      (if fits_l { at_l } else { side }, if fits_r { at_r } else { side }, b)
+      // (an end that cannot follow its corner as far in as one that does: the capsule as far from both its sides)
+      let alone = if fits_l {
+        at_l
+      } else if fits_r {
+        at_r
+      } else {
+        side
+      }
+      (if fits_l { at_l } else { alone }, if fits_r { at_r } else { alone }, b)
     }
   }
 }
@@ -428,9 +443,16 @@ pub fn foot_fit(left : Double, right : Double, inset : Double, least? : Double =
 /// followed a window's its send could not).
 pub fn pane_foot_in(holds? : Double = 0.0) -> Double {
   match pane_radii() {
-    Some(k) => foot_fit(k[3], k[2], corner_inset, least=holds_least(holds))
+    Some(k) => foot_fit(k[3], k[2], foot_inset(dmax(k[3], k[2])), least=holds_least(holds))
     None => corner_inset
   }
+}
+
+///|
+/// Where a card stands in from a panel's corner `corner` round to be a card's corner of the ladder's there (the
+/// ladder's inset in a pane corner's 34, 10; in the tape's 30, 5): its corner its own wherever it follows the panel's.
+fn foot_inset(corner : Double) -> Double {
+  dmax(corner_fit.near, (corner - card_corner) * @ui.smooth_scale)
 }
 
 ///|
@@ -446,13 +468,24 @@ pub fn holds_least(holds : Double) -> Double {
 
 ///|
 /// The foot corners (left, right) of a box `alone` round standing across a panel's foot as far in as pane_foot_in, in
-/// its foot corners: each that corner followed (concentric with it where the theme's ranges let it, else `alone`);
-/// None in a window's whole (what lies in its corners mbui works out: InnerOr).
+/// its foot corners: each that corner followed (concentric with it where the theme's ranges let it, else `alone`),
+/// but `alone` where following it would leave the box too square for a circle `holds` across in its own corner there
+/// to follow it in turn (holds_least: a composer's send in a Mac window's corner); None in a window's whole (what lies
+/// in its corners mbui works out: InnerOr).
 pub fn pane_foot_corners(alone : Double, holds? : Double = 0.0) -> (@ui.CornerOf, @ui.CornerOf)? {
   match pane_round.val {
     Some(k) => {
       let d = pane_foot_in(holds~)
-      Some((Follow(k[3], d, alone), Follow(k[2], d, alone)))
+      let least = holds_least(holds)
+      let link = fn(from : @ui.CornerOf) -> @ui.CornerOf {
+        let f : @ui.CornerOf = Follow(from, d, alone)
+        if f.follows() && f.radius() < least - 0.5 {
+          Own(alone)
+        } else {
+          f
+        }
+      }
+      Some((link(k[3]), link(k[2])))
     }
     None => None
   }
@@ -1712,13 +1745,13 @@ pub let bar_key_side : Double = 32.0
 
 ///|
 /// A page's bar in a panel of the tape (laid out Medium, its corners pane_round): its buttons (32 across) on the tape's
-/// one line, where they are concentric with the ladder's pane corner, its bar as much taller over them
+/// one line, where they are concentric with the tape's corner, its bar as much taller over them
 /// (`tape_bar_over`: every bar of the tape and the sidebar's first row on it); at its end as far in as makes the last
 /// concentric with the panel's top right corner (capsule_fit), else clear of it (as far in as it is round, or where it
 /// stands in the wide frame, `alone`, if that is further: nothing of the bar's in a corner it can not be concentric
 /// with: a Mac's page at the window's edge, its corner the window's) (`tape_bar_end`); a round button at its start (a
-/// settings page's back) so in its top left one (`tape_bar_start`); `side` the last's height (a round button's 32, a
-/// finger's 44: line_end_in; a capsule's of words, its own).
+/// settings page's back) so in its top left one (`tape_bar_start`); `side` the last's height (a round button's 32:
+/// line_end_in; a capsule's of words, its own).
 pub fn tape_bar_end(alone : Double, side? : Double = bar_key_side) -> Double {
   match pane_top_right() {
     Some(k) => line_end_in(k, alone, side~)
@@ -1736,11 +1769,11 @@ pub fn tape_bar_start(alone : Double, side? : Double = bar_key_side) -> Double {
 
 ///|
 /// How far in from its side the round button ending a row on the tape's line (a bar's, the sidebar's first row's filter)
-/// stands in a corner `corner` round (tape_bar_end, tape_bar_start), `side` across (a bar's 32, a finger's 44): on the
-/// line in the ladder's pane corner, concentric with it (tape_line: a finger's as far in as makes it so, its middle on
-/// the line as a mouse's is); in one that follows the window (too square for a button there) clear of it.
+/// stands in a corner `corner` round (tape_bar_end, tape_bar_start), `side` across (a bar's 32; a capsule of words its
+/// height): on the line in the tape's corner, concentric with it (tape_line: a taller one as far in as makes it so, its
+/// middle on the line); in one that follows the window (too square for a button there) clear of it.
 pub fn line_end_in(corner : Double, alone : Double, side? : Double = bar_key_side) -> Double {
-  if (corner - pane_corner).abs() <= 0.5 || capsule_fits(corner, side) {
+  if (corner - tape_corner).abs() <= 0.5 || capsule_fits(corner, side) {
     capsule_in(corner, side)
   } else {
     dmax(alone, corner)

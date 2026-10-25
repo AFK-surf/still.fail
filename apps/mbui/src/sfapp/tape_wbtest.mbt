@@ -295,7 +295,7 @@ fn composer_in_panel(t : @ui.Tester) -> (Double, Double)? {
   guard bs.search_by(fn(b) { b.kind == "editor" }) is Some(e) else { return None }
   let ed = bs[e]
   for b in bs {
-    if b.radius == @sf.pane_corner && b.x <= ed.x && ed.x + ed.w <= b.x + b.w {
+    if b.radius == @sf.tape_corner && b.x <= ed.x && ed.x + ed.w <= b.x + b.w {
       return Some((ed.x - b.x, b.y + b.h - ed.y))
     }
   }
@@ -355,9 +355,9 @@ test "on the tape the page panel's corner is its own: the composer and its butto
   let t = tape_chat(2, 690.0, 840.0, width="medium", height="medium")
   t.tap(650.0, 400.0)
   t.run_for(@sfdesk.side_move_ms * 2.0)
-  // (a square window: the panels' corners all the ladder's)
-  assert_eq(@sf.tape_edge.radius(), @sf.pane_corner)
-  let panel = @sf.pane_corner
+  // (a square window: the panels' corners all the tape's)
+  assert_eq(@sf.tape_edge.radius(), @sf.tape_corner)
+  let panel = @sf.tape_corner
   // one line: a capsule (its half: a pill in the panel's corner keeps its own, as round as the panel's less the inset
   // where its buttons are keyboard and mouse's 32), its buttons round in its ends; the screen's buttons (a touch screen's
   // larger), the same shape
@@ -371,8 +371,10 @@ test "on the tape the page panel's corner is its own: the composer and its butto
   t.type_text("第一行\n第二行\n第三行")
   t.run_for(@sfpages.morph_ms)
   guard composer_corners(t) is Some((k, s, _)) else { fail("no composer") }
-  // (the ladder's: the panel's corner a step in, a card's; its buttons round in its corners, the inset in)
-  assert_eq(k, @ui.concentric(panel, @sfpages.composer_side()))
+  // (the ladder's: the panel's corner a step in, a card's, 5 in; its buttons round in its corners, the inset in)
+  let five = (panel - @sf.card_corner) * @ui.smooth_scale
+  assert_eq(@sf.foot_fit(panel, panel, five, least=@sf.holds_least(side)), five)
+  assert_eq(k, @ui.concentric(panel, five))
   assert_eq(k, @sf.card_corner)
   assert_eq(s, side / 2.0)
   assert_eq(t.corner_faults(), [])
@@ -389,7 +391,7 @@ fn composer_and_panel(t : @ui.Tester) -> (@ui.Laid, @ui.Laid)? {
   let mut panel : @ui.Laid? = None
   let mut box : @ui.Laid? = None
   for b in bs {
-    if round(b) && b.radius == @sf.pane_corner {
+    if round(b) && b.radius == @sf.tape_corner {
       panel = Some(b)
     }
     if round(b) && b.glass {
@@ -412,7 +414,7 @@ test "on a Mac's tape each panel's corners follow the window's where it stands a
   // the window's 16, 6 in: 11.2
   let edge = @ui.concentric(16.0, 6.0)
   assert_eq(@sf.tape_edge.radius(), edge)
-  let pane = @sf.pane_corner
+  let pane = @sf.tape_corner
   // the sidebar in use: its left corners at the window's, the page's right ones past its right edge as they will be
   // there
   guard composer_and_panel(t) is Some((_, page)) else { fail("no composer in a panel") }
@@ -423,14 +425,15 @@ test "on a Mac's tape each panel's corners follow the window's where it stands a
   )
   assert_eq(t.corner_faults(), [])
   // the page brought over, its composer taking the cursor (keyboard and mouse's): a box, its foot's left corner
-  // following the panel's 34 (10 in: the ladder's card corner, its ＋ in it concentric with it); its right not the
+  // following the panel's 30 (5 in: the ladder's card corner, its ＋ in it concentric with it); its right not the
   // window's 11.2, which its send could not follow in turn (the user, 2026-10-25: the corner followed, the send did not),
   // standing alone there, the send in it as in its other corners
   t.tap(650.0, 400.0)
   t.run_for(@sfdesk.side_move_ms * 2.0)
   guard composer_and_panel(t) is Some((k, p)) else { fail("no composer in a panel") }
-  let d = @sf.foot_fit(pane, edge, @sf.corner_inset, least=@sf.holds_least(32.0))
-  assert_true((d - @sf.corner_inset).abs() < 0.01, msg="the box's place: \{d}")
+  let five = (pane - @sf.card_corner) * @ui.smooth_scale
+  let d = @sf.foot_fit(pane, edge, five, least=@sf.holds_least(32.0))
+  assert_true((d - five).abs() < 0.01, msg="the box's place: \{d}")
   let at = (k.x - p.x, p.x + p.w - (k.x + k.w), p.y + p.h - (k.y + k.h))
   assert_true(near4((at.0, at.1, at.2, 0.0), (d, d, d, 0.0)), msg="the box from the panel's edges: \{at}")
   assert_true(
@@ -438,15 +441,15 @@ test "on a Mac's tape each panel's corners follow the window's where it stands a
     msg="the box's corners: \{k.radii}",
   )
   assert_eq(t.corner_faults(), [])
-  // let go of: a capsule, its left end concentric with the panel's 34 (10 in), its right in the window's 11.2, too
-  // square for it, the ladder's 10 in as alone; the box's place to the capsule's in the one change of shape
+  // let go of: a capsule, its left end concentric with the panel's 30 (6 in), its right in the window's 11.2, too
+  // square for it, as far in as the left; the box's place to the capsule's in the one change of shape
   t.ctx().blur()
   // (let go of from the next frame on; its change of shape over by twice its length after that)
   t.run_for(@sfpages.let_go_ms + 2.0 * @sfpages.morph_ms)
   guard composer_and_panel(t) is Some((k, p)) else { fail("no composer in a panel") }
-  let ten = @sf.corner_inset
+  let six = @sf.capsule_in(pane, 48.0)
   let at = (k.x - p.x, p.x + p.w - (k.x + k.w), p.y + p.h - (k.y + k.h))
-  assert_true(near4((at.0, at.1, at.2, 0.0), (ten, ten, ten, 0.0)), msg="the capsule from the panel's edges: \{at}")
+  assert_true(near4((at.0, at.1, at.2, 0.0), (six, six, six, 0.0)), msg="the capsule from the panel's edges: \{at}")
   assert_eq(t.corner_faults(), [])
 }
 
@@ -630,11 +633,12 @@ test "on the tape a panel's ground goes behind or comes in front with the tape's
 ///|
 test "on the tape the sidebar's rows stand in a side column's line, their words as 新建对话's; a phone's 22 from the screen's edge" {
   let t = tape_chat(2, 750.0, 830.0, width="medium", height="medium")
-  // the sidebar's panel 6 from the window's edge, its list from 8 into the rail inside its line (1): a row's ground
-  // as far in as 新建对话's (band_in), its words without a mark before them as far from it (band_pad)
+  // the sidebar's panel 6 from the window's edge, its list from 8 into the rail, the rail as much wider as its places
+  // stand further in than its 8 (concentric with the panel's corner): a row's ground as far in as 新建对话's (band_in),
+  // its words without a mark before them as far from it (band_pad)
   let l = @sf.theme().chat_list
   let (x, _, _, _) = t.rect_of("Slack 里问的报销流程").unwrap()
-  assert_eq(x, @sfdesk.closed_bar_in + @sfdesk.rail_w - 8.0 + 1.0 + l.band_in + l.band_pad)
+  assert_eq(x, @sfdesk.closed_bar_in + @sfdesk.rail_w - 8.0 + (@sf.rail_in_tape() - 8.0) + l.band_in + l.band_pad)
   let p = tape_chat(2, 390.0, 844.0, width="compact", height="medium")
   p.run_for(@ui.nav_push_ms)
   p.back()
