@@ -277,6 +277,12 @@ if part ts; then
     added 'web/src/*.css.ts' 'web/ui/*.css.ts' | grep -E '[bB]order[A-Za-z]*Radius: *([`"][^`"]*([5-9]|[1-9][0-9]+)(\.[0-9]+)?px|([5-9]|[1-9][0-9]+)\b)' \
       | grep -vE 'Radius: *("999px"|999\b)|own corner:' > "$tmp/corners" || true
     step "no corner of its own (in what this adds)" sh -c "! grep . '$tmp/corners'"
+    # One light for the pointer in what a change adds (docs/ui-panels.md 悬停): a hover lays the ink, `vars.hover` (lit.ts
+    # `litOver` over a ground of its own), or takes a solid ground a step towards the page (`vars.primaryHover`, a colour
+    # 85% mixed with the canvas); never a colour, a tint or a filter of its own. One that must says why with "own hover:".
+    added 'web/src/*.css.ts' 'web/ui/*.css.ts' | grep -E ':hover[^{]*\{[^}]*(background(Color)?|filter): *' \
+      | grep -vE '(background(Color)?): *(vars\.hover|vars\.primaryHover|ink|"none"|"transparent")\b|85%, \$\{vars\.canvas\}|own hover:' > "$tmp/hovers" || true
+    step "one light for the pointer (in what this adds)" sh -c "! grep . '$tmp/hovers'"
     # No margin taken back by hand: a ground reaching past its words, a corner, a column, a centring is one of
     # styles/align.ts's (bleedX, surface, columns, centred…), so its numbers are said once (a var's own negative may be).
     step "no hand-written negative margins" sh -c '! git grep -nE "margin[A-Za-z]*: *(-[0-9]|[\"\`][^\"\`]*[ (]-[0-9]|[\"\`]-[0-9])" -- "web/src/*.css.ts" "web/ui/*.css.ts" | grep -v "calc(-1 \* var("'

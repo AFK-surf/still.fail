@@ -3,6 +3,11 @@ import { vars } from "../styles/tokens.css.ts";
 import { VIEWER_BAR } from "./ViewerBar.css.ts";
 import { panel as panelGround } from "../styles/glass.ts";
 
+// The pointer's light in the reader (docs/ui-panels.md 悬停): its words' ink faint, over what a thing is, as the app's
+// `vars.hover` (styles/lit.ts) is on its pages; `inkOver` over a ground of its own (a chip's, a tool turned on).
+const ink = "color-mix(in srgb, var(--r-ink, currentColor) 7%, transparent)";
+const inkOver = { backgroundImage: `linear-gradient(${ink}, ${ink})` };
+
 /**
  * The papers, of still.fail's own grounds: the phone's warm page and its night (mobile/styles/root.css.ts), the desktop's
  * white canvas. Each sets the reader's ink, the bars' raised ground and the accent on it.
@@ -99,7 +104,7 @@ export const top = style({
 export const back = style({
   display: "flex", alignItems: "center", gap: "2px", height: "36px", padding: "0 10px 0 4px", border: "0", background: "none",
   color: "var(--r-ink)", fontSize: vars.textUi, cursor: "pointer", borderRadius: `calc(12px * ${vars.cornerScale})`, maxWidth: "180px",
-  selectors: { "&:hover": { background: "color-mix(in srgb, var(--r-ink) 7%, transparent)" } },
+  selectors: { "&:hover": { background: ink } },
 });
 globalStyle(`${back} span`, { overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" });
 globalStyle(`${reader}[data-narrow] ${back} span`, { display: "none" });
@@ -122,7 +127,7 @@ export const chip = style({
   selectors: {
     "&:disabled": { opacity: ".35", cursor: "default" },
   },
-  "@media": { "(hover: hover)": { selectors: { "&:hover:not(:disabled)": { background: "color-mix(in srgb, var(--r-ink, currentColor) 12%, transparent)" } } } },
+  "@media": { "(hover: hover)": { selectors: { "&:hover:not(:disabled)": inkOver } } },
 });
 
 export const trackRow = style({ display: "grid", gridTemplateColumns: "minmax(0, 1fr) 40px", alignItems: "center", gap: "10px" });
@@ -147,9 +152,9 @@ export const tool = style({
   display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: "3px", height: "50px",
   border: "0", borderRadius: `calc(14px * ${vars.cornerScale})`, cornerShape: vars.cornerShape, background: "none", color: "var(--r-ink)",
   fontSize: vars.textCaption, cursor: "pointer",
-  selectors: { "&[data-on]": { background: "color-mix(in srgb, var(--r-ink) 7%, transparent)" } },
-  // A finger leaves no hover behind it.
-  "@media": { "(hover: hover)": { selectors: { "&:hover": { background: "color-mix(in srgb, var(--r-ink) 7%, transparent)" } } } },
+  selectors: { "&[data-on]": { background: ink } },
+  // A finger leaves no hover behind it. (On, pressing it turns it off: the ink over its own.)
+  "@media": { "(hover: hover)": { selectors: { "&:hover": { background: ink }, "&[data-on]:hover": inkOver } } },
 });
 
 /** What was found, and the steps through it: a capsule under the top bar. */
@@ -176,7 +181,7 @@ export const panelRow = style({
   display: "block", width: "100%", boxSizing: "border-box", padding: "10px 12px", border: "0", background: "none", color: "inherit",
   textAlign: "left", fontSize: vars.textUi, borderRadius: vars.rOption, cornerShape: vars.cornerShape, cursor: "pointer",
   selectors: {
-    "&:hover": { background: "color-mix(in srgb, currentColor 6%, transparent)" },
+    "&:hover": { background: ink },
     "&[data-current]": { color: `var(--m-accent-ink, ${vars.accentText})`, fontWeight: "500" },
   },
 });
@@ -228,8 +233,8 @@ export const topEnd = style({ display: "flex", justifyContent: "flex-end" });
 export const topButton = style({
   display: "grid", placeItems: "center", width: "36px", height: "36px", padding: "0", border: "0", borderRadius: `calc(12px * ${vars.cornerScale})`,
   background: "none", color: "var(--r-ink)", cursor: "pointer",
-  selectors: { "&[data-on]": { background: "color-mix(in srgb, var(--r-ink) 7%, transparent)" } },
-  "@media": { "(hover: hover)": { selectors: { "&:hover": { background: "color-mix(in srgb, var(--r-ink) 7%, transparent)" } } } },
+  selectors: { "&[data-on]": { background: ink } },
+  "@media": { "(hover: hover)": { selectors: { "&:hover": { background: ink }, "&[data-on]:hover": inkOver } } },
 });
 /** Beside a panel's title: how many chapters, how far read. */
 export const headNote = style({ marginLeft: "auto", marginRight: "8px", fontSize: vars.textMeta, color: `var(--m-muted, ${vars.muted})`, fontWeight: "400" });
@@ -252,7 +257,7 @@ globalStyle(`${sizeRow} b`, { textAlign: "center", fontWeight: "600", fontVarian
 export const sizeKey = style({
   height: "32px", minWidth: "44px", padding: "0 10px", border: "0", borderRadius: `calc(12px * ${vars.cornerScale} - 4px)`, cornerShape: vars.cornerShape, background: "none", color: "inherit",
   fontSize: vars.textUi, fontWeight: "600", cursor: "pointer",
-  selectors: { "&:disabled": { opacity: ".35", cursor: "default" }, "&:hover:not(:disabled)": { background: "color-mix(in srgb, currentColor 8%, transparent)" } },
+  selectors: { "&:disabled": { opacity: ".35", cursor: "default" }, "&:hover:not(:disabled)": { background: ink } },
 });
 /** A setting along a hairline with a knob (line height, margin): its name, the line, its value. */
 export const sliderRow = style({ display: "grid", gridTemplateColumns: "48px minmax(0, 1fr) 48px", alignItems: "center", gap: "10px" });

@@ -1,5 +1,6 @@
 import { globalStyle, style } from "@vanilla-extract/css";
 import { vars } from "@stillfail/ui/styles/tokens.css.ts";
+import { litOver } from "@stillfail/ui/styles/lit.ts";
 import { settledLine } from "./Decisions.css.ts";
 import { pillInner, surfaceCorner, TEXT_IN, PANEL_PILL } from "@stillfail/ui/styles/align.ts";
 
@@ -91,7 +92,7 @@ export const cardStep = style({
   background: `color-mix(in srgb, ${vars.text} 7%, transparent)`, color: vars.text, font: "inherit", fontSize: vars.textUi, fontWeight: 500,
   cursor: "pointer",
   selectors: {
-    "&:hover": { background: `color-mix(in srgb, ${vars.text} 11%, transparent)` },
+    "&:hover": litOver,
     "&[data-next]": { background: vars.primary, color: vars.onPrimary },
     "&[data-next]:hover": { background: vars.primaryHover },
   },

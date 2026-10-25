@@ -169,7 +169,8 @@ export const msgAgent = style({
   padding: "0", border: "0", background: "none", font: "inherit", fontWeight: "600", color: vars.text, textDecoration: "none",
   cursor: "pointer",
   selectors: {
-    "&:hover": { color: vars.accent },
+    // Words that are already the text's or the accent's colour, pointed at: underlined (docs/ui-panels.md 悬停).
+    "&:hover": { textDecoration: "underline", textUnderlineOffset: "3px" },
   },
 });
 export const attachBtn = style({

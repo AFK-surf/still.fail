@@ -2,6 +2,7 @@
 // list's first one, a column's edge. What the pages put around them is the app's (web/src/ui.css.ts after this one).
 import { globalStyle, style } from "@vanilla-extract/css";
 import { vars } from "./styles/tokens.css.ts";
+import { litOver } from "./styles/lit.ts";
 import { panel } from "./styles/glass.ts";
 import { dialogInKeyframes, fadeKeyframes } from "./styles/keyframes.css.ts";
 import { iconBtn } from "./styles/page.css.ts";
@@ -319,7 +320,7 @@ export const panelButton = style({
     '&[data-tone="quiet"]': { color: vars.muted },
     '&[data-tone="quiet"]:hover:not(:disabled)': { color: vars.text },
     '&[data-tone="filled"]': { background: vars.accentBg, color: vars.accentText },
-    '&[data-tone="filled"]:hover:not(:disabled)': { background: `color-mix(in srgb, ${vars.accent} 22%, transparent)` },
+    '&[data-tone="filled"]:hover:not(:disabled)': litOver,
     "&:disabled": { opacity: .5, cursor: "default" },
   },
 });

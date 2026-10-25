@@ -2,6 +2,7 @@
 // glass that fades, a timeline, the buttons in its corners.
 import { globalStyle, style } from "@vanilla-extract/css";
 import { vars } from "../styles/tokens.css.ts";
+import { litOver } from "../styles/lit.ts";
 import { pictureGlass as glass } from "../styles/glass.ts";
 import { iconBtn } from "../styles/page.css.ts";
 
@@ -61,7 +62,7 @@ export const vvRate = style({
   background: `color-mix(in srgb, ${vars.text} 10%, transparent)`, color: vars.text, fontFamily: vars.fontMono, fontSize: vars.textMeta, fontWeight: "600",
   cursor: "pointer", cornerShape: vars.cornerShape,
   selectors: {
-    "&:hover": { background: `color-mix(in srgb, ${vars.text} 18%, transparent)` },
+    "&:hover": litOver,
   },
 });
 

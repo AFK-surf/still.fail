@@ -4,6 +4,7 @@ import { style } from "@vanilla-extract/css";
 import { centredY, surfaceCorner } from "@stillfail/ui/styles/align.ts";
 import { cardLook } from "../styles/pages.css.ts";
 import { vars } from "@stillfail/ui/styles/tokens.css.ts";
+import { litOver } from "@stillfail/ui/styles/lit.ts";
 
 export const muted = style({ color: vars.muted });
 
@@ -57,8 +58,10 @@ export const tile = style({
   transition: `border-color ${vars.dur} ${vars.easeOut}`,
   selectors: {
     "&[data-on]": { borderColor: vars.accent },
+    // Pressed, each turns its way on or off (or goes where the system allows it): pointed at, the ink over its card's
+    // ground, the one asking for the system's leave as the others (docs/ui-panels.md 悬停).
+    "&:hover:not(:disabled)": litOver,
     "&[data-action]": { borderColor: `color-mix(in srgb, ${vars.red} 55%, transparent)` },
-    "&[data-action]:hover": { background: vars.redBg },
     "&:disabled": { cursor: "default", opacity: "0.5" },
   },
 });

@@ -4,6 +4,7 @@
 // link, the card moves with no fade at all.
 import { globalStyle, keyframes, style } from "@vanilla-extract/css";
 import { vars } from "@stillfail/ui/styles/tokens.css.ts";
+import { litOver } from "@stillfail/ui/styles/lit.ts";
 import { panelCard, popover } from "@stillfail/ui/styles/controls.css.ts";
 import { IN, PANEL_PAD, PANEL_PILL, TEXT_IN, pillInner } from "@stillfail/ui/styles/align.ts";
 
@@ -131,7 +132,7 @@ export const fileChip = style({
   background: `color-mix(in srgb, ${vars.muted} 13%, transparent)`, color: vars.text, fontFamily: vars.fontMono, fontSize: "0.88em",
   lineHeight: "inherit", cursor: "pointer", verticalAlign: "baseline", textAlign: "left",
   selectors: {
-    "&:hover": { background: `color-mix(in srgb, ${vars.muted} 24%, transparent)` },
+    "&:hover": litOver,
     // A directory opens nothing (but in Finder, on this machine): its card is all there is.
     "&[data-dir]:not([data-opens])": { cursor: "default" },
   },

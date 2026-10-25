@@ -82,7 +82,8 @@ export const jobAction = style({
   borderRadius: `calc(8px * ${vars.cornerScale})`, background: "none", color: vars.muted, font: "inherit",
   fontSize: vars.textMeta, cursor: "pointer", cornerShape: vars.cornerShape,
   selectors: {
-    "&:hover:not(:disabled)": { background: vars.selected, color: vars.text },
+    // (over its row's light: a step more)
+    "&:hover:not(:disabled)": { background: vars.hover, color: vars.text },
     "&:disabled": { cursor: "progress" },
   },
 });
