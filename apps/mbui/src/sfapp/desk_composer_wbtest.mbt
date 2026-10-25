@@ -341,6 +341,21 @@ test "desk composer: an image sent while it goes up is among its message's files
   assert_eq(row.attachments.map(fn(a) { (a.name, a.path, a.upload) }), [("照片.png", "upload:" + id, id)])
   assert_true(sent_picture("ws1/st1", row.attachments[0]) is Some(_))
   assert_eq(row.uploads.map(fn(u) { u.0 }), ["build.log"])
+  // it flies there as the upload it is (file_key: its path the station's once it is up), drawn where its tile was as
+  // its tile, a picture, until it sets off; not a card
+  let flying = match send_flight.val {
+    Some(f) => f.files
+    None => fail("nothing flies")
+  }
+  assert_eq(flying.map(fn(ff) { ff.key }), ["upload:" + id])
+  assert_true(flying[0].picture != "")
+  let face = @ui.Tester::new(fn(_) { (flying[0].face)() }, w=200.0, h=200.0)
+  // (its bytes again: a tester of its own starts with none)
+  @ui.add_image(flying[0].picture, png_head())
+  face.draw()
+  assert_true(face.find("照片.png") is None)
+  assert_eq(face.image_loads().length(), 1)
+  send_flight.val = None
 }
 
 ///|

@@ -843,6 +843,26 @@ fn remove_label(v : Json?, name : String) -> String {
 }
 
 ///|
+/// A picture's tile (56): darkened with a spinner while it goes up, ↻ over it when it failed (`again` what a tap there
+/// is). Its node; `id` what a tap on it is.
+fn picture_tile(c : @ui.Ctx, picture : String, pending : Bool, error : String, id? : Int = 0, again? : Int = 0) -> Int {
+  c.box(style=if error != "" { thumb_failed } else { thumb_box }, id~, fn() {
+    c.image(picture, w=Px(thumb_side), h=Px(thumb_side), fit=FitCover) |> ignore
+    if pending {
+      c.layer(fn() { c.box(style=thumb_veil, fn() { @sf.spinner(c, size=@sf.theme().round.glyph) |> ignore }) |> ignore })
+      |> ignore
+    }
+    if error != "" {
+      c.layer(fn() {
+        c.box(style=thumb_veil, id=again, fn() { @sf.icon(c, "refresh", size=retry_icon, color=on_veil) |> ignore })
+        |> ignore
+      })
+      |> ignore
+    }
+  })
+}
+
+///|
 /// A picture waiting (composerThumb): its own picture from here, a turning ring over it while it goes up, red-edged
 /// when it failed (↻ over it); its ✕ on its corner (@sf.with_corner_remove); its name its tip.
 fn composer_picture(
@@ -862,20 +882,7 @@ fn composer_picture(
   // (its picture's box, its ✕ hung on its corner as every waiting file's)
   let tile = Ref(-1)
   let removed = @sf.with_corner_remove(c, key, @sf.t("web-main.file.remove", args=[("name", name)]), thumb_corner, w=thumb_side, fn() {
-    tile.val = c.box(style=if error != "" { thumb_failed } else { thumb_box }, id=thumb, fn() {
-      c.image(picture, w=Px(thumb_side), h=Px(thumb_side), fit=FitCover) |> ignore
-      if pending {
-        c.layer(fn() { c.box(style=thumb_veil, fn() { @sf.spinner(c, size=@sf.theme().round.glyph) |> ignore }) |> ignore })
-        |> ignore
-      }
-      if error != "" {
-        c.layer(fn() {
-          c.box(style=thumb_veil, id=again, fn() { @sf.icon(c, "refresh", size=retry_icon, color=on_veil) |> ignore })
-          |> ignore
-        })
-        |> ignore
-      }
-    })
+    tile.val = picture_tile(c, picture, pending, error, id=thumb, again~)
   })
   if removed {
     writing_remove(src, w, id)
@@ -1114,29 +1121,51 @@ fn going_files(w : Writing) -> Array[Json] {
 }
 
 ///|
+/// The files of a draft that are up, as its message has them: one put up from here naming its upload (`upload`), as
+/// the core's row does (file_key).
+fn up_files(w : Writing) -> Array[Json] {
+  w.files.filter_map(fn(f) {
+    match field(Some(f), "done") {
+      Some(Object(done)) if @sfbase.writing_put_here(text(Some(f), "id")) => {
+        let a = done.copy()
+        a["upload"] = Json::string(text(Some(f), "id"))
+        Some(Json::object(a))
+      }
+      done => done
+    }
+  })
+}
+
+///|
 /// The files of a draft that are up, and its images still going up (drawn where they land from their pictures here:
-/// sent_local), flying as it is sent, each from its tile (ChatHost.kt sending): from where its card or its picture is
-/// (its box's, keyed composer/file/<id>).
+/// sent_local), flying as it is sent to what each is in its message (file_key: one put up from here, or still going up,
+/// its upload; any other its path), each from its tile (ChatHost.kt sending): from where its card or its picture is
+/// (its box's, keyed composer/file/<id>), drawn there as the composer draws it until it sets off.
 fn flying_files(c : @ui.Ctx, w : Writing) -> Array[FlyingFile] {
   let going = going_files(w).map(fn(f) { text(Some(f), "id") })
   w.files.filter_map(fn(f) {
     let v = Some(f)
     let id = text(v, "id")
-    let path = match field(v, "done") {
+    let key = match field(v, "done") {
+      Some(_) if @sfbase.writing_put_here(id) => @sfbase.upload_path(id)
       Some(done) => text(Some(done), "path")
       None if going.contains(id) && file_kind(text(v, "name")) == "image" => @sfbase.upload_path(id)
       None => ""
     }
     match c.rect_of(c.id("composer/file/" + id)) {
-      Some(from) if path != "" => {
+      Some(from) if key != "" => {
         let picture = writing_pictures.get(id).unwrap_or("")
         Some({
-          path,
+          key,
           from,
           picture,
           face: fn() {
             let c = @ui.current()
-            @sf.file_card(c, "flying/" + id, text(v, "name"), number(v, "size")) |> ignore
+            if picture != "" {
+              picture_tile(c, picture, field(v, "done") is None, "") |> ignore
+            } else {
+              @sf.file_card(c, "flying/" + id, text(v, "name"), number(v, "size")) |> ignore
+            }
           },
         })
       }
@@ -1158,9 +1187,8 @@ pub fn send_in_chat(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView, w : Wr
     return
   }
   let words = w.text.trim(chars=" \n\t").to_string()
-  let up = w.files.filter_map(fn(f) { field(Some(f), "done") })
   let rk = r.station + "\u{1}" + r.session
-  let row = sent_local(rk, Some(v), words, up, going=going_files(w))
+  let row = sent_local(rk, Some(v), words, up_files(w), going=going_files(w))
   // its words take off from the field as they are (before it is emptied), its room held till they let go of it
   let room = @motion.measured(c, "composer/foot").unwrap_or(0.0)
   // its files that are up fly too, each from its tile (ChatHost.kt sending)

@@ -789,7 +789,7 @@ fn outgoing_json(id : String, params : Json, state : String, error : String) -> 
   let o : Map[String, Json] = {
     "id": Json::string(id),
     "text": Json::string(text(p, "text")),
-    "attachments": Json::array(items(p, "attachments")),
+    "attachments": Json::array(fix_own(items(p, "attachments"))),
     "quotes": Json::array(items(p, "quotes")),
     "createdAt": 0,
     "state": Json::string(state),
@@ -798,6 +798,26 @@ fn outgoing_json(id : String, params : Json, state : String, error : String) -> 
     o["error"] = Json::string(error)
   }
   Json::object(o)
+}
+
+///|
+/// The files put up from here (`composer.add` with their bytes), by where the station keeps each: the upload each was,
+/// which every message it goes with says (views.ts uploadOf).
+let fix_put_up : Map[String, String] = {}
+
+///|
+/// A message's files as the core draws them: one put up from here naming its upload (views.ts drawn's `own`).
+fn fix_own(files : Array[Json]) -> Array[Json] {
+  files.map(fn(a) {
+    match (a, fix_put_up.get(text(Some(a), "path"))) {
+      (Object(m), Some(id)) => {
+        let o = m.copy()
+        o["upload"] = Json::string(id)
+        Json::object(o)
+      }
+      _ => a
+    }
+  })
 }
 
 ///|
@@ -827,7 +847,7 @@ fn fix_deliver(session : String, id : String) -> Unit {
       "ts": Json::string("sent\{fix_serial.val}"),
       // the outbox entry it was, as the core says it (views.ts: a message sent from here keeps its outbox row)
       "outgoing": Json::string(id),
-      "attachments": Json::array(items(Some(params), "attachments")),
+      "attachments": Json::array(fix_own(items(Some(params), "attachments"))),
       "quotes": Json::array(items(Some(params), "quotes")),
     }),
   )
@@ -953,6 +973,9 @@ fn fixture_chat_call(f : Fixture, name : String, params : Json) -> Result[Json, 
             "path": Json::string("uploads/" + id + "/" + name),
             "size": Json::number(number(o, "size")),
           },
+        }
+        if field(o, "blob") is Some(_) {
+          fix_put_up["uploads/" + id + "/" + name] = id
         }
         // (pasted words: what the core said of them; a station's file: where it is; kept with the file as
         // composer.ts keeps them)

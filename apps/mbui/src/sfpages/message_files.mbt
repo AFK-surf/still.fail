@@ -19,7 +19,7 @@ pub fn message_files(
     return
   }
   // as wide as where it is at most (the column's, as laid out: c.width is the pane's), the pane's until it is laid out
-  let at = c.id("msg-files/" + here.station + "/" + list[0].path)
+  let at = c.id("msg-files/" + here.station + "/" + @sfbase.file_key(list[0]))
   let room = match c.laid_size(at) {
     Some((w, _)) if w > 0.0 => w
     _ => c.width
@@ -51,7 +51,7 @@ pub fn message_files(
           // (as wide as laid out for it: a card does not give way to the picture beside it)
           let item = c.box(style=@ui.style(w=Fixed(widths[i])), fn() { file_item(c, src, here, list[i], widths[i], by~) })
           match flight_here(here) {
-            Some(f) => flight_landing(c, f, item, list[i].path, share=landing_share(list[i]))
+            Some(f) => flight_landing(c, f, item, @sfbase.file_key(list[i]), share=landing_share(list[i]))
             None => ()
           }
         }
@@ -192,7 +192,7 @@ fn file_item(c : @ui.Ctx, src : Source, here : MessageHere, a : Attachment, w : 
 /// cannot be had says so. Pressed, the preview; right-clicked, 复制图片.
 fn image_item(c : @ui.Ctx, src : Source, here : MessageHere, a : Attachment, w : Double, by~ : (String, String, String)?) -> Unit {
 
-  let open = c.id("msg-file/" + a.path)
+  let open = c.id("msg-file/" + @sfbase.file_key(a))
   let owner = owner_of(here, a)
   let (bw, bh, letterbox) = image_box(a, image_least)
   let h = bh * w / bw
@@ -277,13 +277,13 @@ fn image_box_style(w : Double, h : Double, shown : Bool) -> @ui.Style {
 /// mark in its middle, its name at its foot over a dark band; while the core downloads it, how far there over a bar.
 fn video_item(c : @ui.Ctx, src : Source, here : MessageHere, a : Attachment, w : Double) -> Unit {
 
-  let open = c.id("msg-file/" + a.path)
+  let open = c.id("msg-file/" + @sfbase.file_key(a))
   let owner = owner_of(here, a)
   if c.clicked(open) {
     open_file(here, a)
   }
   c.cursor(open, Hand)
-  @sf.tip(c, "msg-file/" + a.path, open, a.name)
+  @sf.tip(c, "msg-file/" + @sfbase.file_key(a), open, a.name)
   let (bw, bh, letterbox) = image_box(a, video_least)
   let h = bh * w / bw
   let thumb = here.station + "/" + owner + "/" + a.path
@@ -330,7 +330,7 @@ fn card_item(c : @ui.Ctx, src : Source, here : MessageHere, a : Attachment) -> U
   let dl = download_of(src, here.station, owner, stored_name(a.path))
   let active = flag(dl, "active")
   let failed = text(dl, "state") == "failed"
-  let key = "msg-card/" + a.path
+  let key = "msg-card/" + @sfbase.file_key(a)
   let done = @sf.file_card(
     c,
     key,

@@ -70,6 +70,19 @@ pub fn upload_path(id : String) -> String {
 }
 
 ///|
+/// The file a message's file is, here (the web's Files, keyed `upload ?? path`): one put up from here its upload, which
+/// the core says of every one (`upload`), the same before it is up and after, whatever its path; any other the path its
+/// station keeps it at. What tells its files apart as its row goes from what was sent from here to the core's outbox
+/// entry and on to its message: what flies to each (flight.mbt), each one's box.
+pub fn file_key(a : Attachment) -> String {
+  if a.upload != "" {
+    upload_path(a.upload)
+  } else {
+    a.path
+  }
+}
+
+///|
 /// The files still going up with words sent from here (each its id, name, size and an image's size: the uploads of
 /// `composer.take`), as their row draws them until the core's has them (views.ts goingUp): an image among the
 /// message's files, named by its upload; any other a card saying how far (name, size, sent).
@@ -99,8 +112,8 @@ fn going_up(going : Array[Json]) -> (Array[Json], Array[(String, Int, Int)]) {
 
 ///|
 /// Words sent from chat `rk` (its station and session; `v` its view, None for one just made) are in its list now,
-/// before the core has them (LocalSent), with its files up (`files`) and those still going up (`going`: going_up). Its
-/// key, for what flies there (flight.mbt).
+/// before the core has them (LocalSent), with its files up (`files`, each one put up from here naming its upload as the
+/// core's row will: file_key) and those still going up (`going`: going_up). Its key, for what flies there (flight.mbt).
 pub fn sent_local(rk : String, v : ChatView?, words : String, files : Array[Json], going? : Array[Json] = []) -> String {
   local_sent_n.val += 1
   let id = "local:\{local_sent_n.val}"

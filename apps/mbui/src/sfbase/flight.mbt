@@ -61,11 +61,12 @@ pub(all) struct SendFlight {
 }
 
 ///|
-/// A file sent with the words (ChatHost.kt FlyingFile): the station's path its message has it by, its tile in the
-/// composer (x, y, w, h in the window), a picture's key ("" a card), and the tile as the composer drew it (what is
-/// drawn where it was while the row is not in the list).
+/// A file sent with the words (ChatHost.kt FlyingFile): the file it is in its message (file_key: one put up from here
+/// its upload, from before it is up on; any other the station's path), its tile in the composer (x, y, w, h in the
+/// window), a picture's key ("" a card), and the tile as the composer drew it (what is drawn where it was while the row
+/// is not in the list).
 pub(all) struct FlyingFile {
-  path : String
+  key : String
   from : (Double, Double, Double, Double)
   picture : String
   face : () -> Unit
@@ -267,7 +268,7 @@ pub fn flight_carry_anchor(f : SendFlight) -> String {
   if f.text != "" {
     "flight/carry"
   } else {
-    "flight/to/" + f.files[0].path
+    "flight/to/" + f.files[0].key
   }
 }
 
@@ -512,9 +513,9 @@ pub fn flight_hint_away(c : @ui.Ctx, chat : String) -> Bool {
 }
 
 ///|
-/// The file of the flight with `path`, if one flies there.
-pub fn flight_file_of(f : SendFlight, path : String) -> FlyingFile? {
-  f.files.iter().find_first(fn(x) { x.path == path })
+/// The file of the flight that is file `key` (file_key), if one flies there.
+pub fn flight_file_of(f : SendFlight, key : String) -> FlyingFile? {
+  f.files.iter().find_first(fn(x) { x.key == key })
 }
 
 ///|
@@ -530,11 +531,11 @@ pub fn flight_files(c : @ui.Ctx, chat : String) -> Unit {
     for ff in f.files {
       let (fx, fy, fw, fh) = ff.from
       let landing = if f.placed && f.placed_frame != c.frame_number() {
-        @motion.measured_rect(c, "flight/to/" + ff.path)
+        @motion.measured_rect(c, "flight/to/" + ff.key)
       } else {
         None
       }
-      let to = "flight/to/" + ff.path
+      let to = "flight/to/" + ff.key
       let (sw, sh) = landing_shares.get(to).unwrap_or((1.0, 1.0))
       match landing {
         Some((_, _, bw, bh)) if ff.picture != "" => {
@@ -580,17 +581,17 @@ pub fn flight_files(c : @ui.Ctx, chat : String) -> Unit {
 }
 
 ///|
-/// A file of the message words were sent to (node `i`, the box it is laid out in), while a file flies there
-/// (ChatHost.kt landingFile): where it is, kept for the picture flying to it (drawn there by flight_files, not here),
-/// and the `share` of the box its picture takes (a letterboxed one's, centred); a card, carried from its tile on the
-/// words' way, grown from the tile's size to its own.
-pub fn flight_landing(c : @ui.Ctx, f : SendFlight, i : Int, path : String, share? : (Double, Double) = (1.0, 1.0)) -> Unit {
-  let ff = match flight_file_of(f, path) {
+/// A file of the message words were sent to (node `i`, the box it is laid out in; the file it is, `key`: file_key),
+/// while a file flies there (ChatHost.kt landingFile): where it is, kept for the picture flying to it (drawn there by
+/// flight_files, not here), and the `share` of the box its picture takes (a letterboxed one's, centred); a card,
+/// carried from its tile on the words' way, grown from the tile's size to its own.
+pub fn flight_landing(c : @ui.Ctx, f : SendFlight, i : Int, key : String, share? : (Double, Double) = (1.0, 1.0)) -> Unit {
+  let ff = match flight_file_of(f, key) {
     Some(ff) => ff
     None => return
   }
-  @motion.measure(c, i, "flight/to/" + path)
-  landing_shares["flight/to/" + path] = share
+  @motion.measure(c, i, "flight/to/" + key)
+  landing_shares["flight/to/" + key] = share
   let (fx, fy, fw, fh) = ff.from
   if ff.picture != "" || !f.placed || f.placed_frame == c.frame_number() {
     // its first frame (and a picture all the way): not seen here
@@ -599,7 +600,7 @@ pub fn flight_landing(c : @ui.Ctx, f : SendFlight, i : Int, path : String, share
   }
   let up = flight_up_of(c, f)
   // from the tile's size: by the larger of its two shares of its own (Compose's crop to the box)
-  let s0 = match @motion.measured_rect(c, "flight/to/" + path) {
+  let s0 = match @motion.measured_rect(c, "flight/to/" + key) {
     Some((_, _, ew, eh)) if ew > 0.0 && eh > 0.0 => dmax(fw / ew, fh / eh)
     _ => 1.0
   }

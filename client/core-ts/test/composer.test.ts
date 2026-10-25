@@ -526,6 +526,18 @@ test("an_image_sent_while_going_up_keeps_its_shape_and_its_message_says_which_up
   t.core.close();
 });
 
+// A file put up from here is one file to the pages from the first, by its upload: one up before its message was sent
+// said only its path, one up after said its upload too, and an image sent as it finished going up changed what it was
+// while it flew into its message, drawn back in the composer as a card (mbui, 2026-10-26).
+test("a_file_up_before_its_message_takes_it_says_which_upload_it_was_all_the_same", async () => {
+  const t = await queuedUpload();
+  t.finish();
+  await t.settle();
+  assert.equal(v(t.values, 1).files[0].done.path, "/u/slow.txt");
+  assert.equal(t.local.uploadOf("ws/st", "/sessions/x/uploads/slow.txt"), "slow");
+  t.core.close();
+});
+
 test("an_image_sent_before_the_page_heard_its_size_goes_with_its_size_all_the_same", async () => {
   const t = await queuedUpload();
   // A PNG: its size is read from its header as it is added.

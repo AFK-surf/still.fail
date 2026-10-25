@@ -46,6 +46,13 @@ let writing_went : Map[String, (String, String, Bytes)] = {}
 let writing_stations : Map[String, String] = {}
 
 ///|
+/// Whether file `id` of a draft was put up from here (picked or pasted here: writing_add), which every message it goes
+/// with says (Attachment.upload: file_key).
+pub fn writing_put_here(id : String) -> Bool {
+  writing_stations.contains(id)
+}
+
+///|
 /// The files added here, counted (each its own id).
 let writing_n : Ref[Int] = { val: 0 }
 
