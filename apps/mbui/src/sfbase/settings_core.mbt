@@ -63,13 +63,9 @@ pub fn settings_core_of(
     notify_ask: fn() { ask_from_switch() },
     push_sync: fn(wanted) { if !src.read_only { push_sync(src, wanted) } },
     under: fn() {
-      let pages = app.nav.pages()
-      if pages.length() < 2 {
-        return ""
-      }
-      match pages[pages.length() - 2] {
-        Home => "chats"
-        Settings | Setting(@settings.Route::Home) => "settings"
+      match app.nav.under() {
+        Some(Home) => "chats"
+        Some(Settings | Setting(@settings.Route::Home)) => "settings"
         _ => ""
       }
     },

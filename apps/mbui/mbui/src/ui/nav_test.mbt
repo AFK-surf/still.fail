@@ -187,6 +187,42 @@ test "the system's back gesture (predictive back) follows, then goes or not" {
 }
 
 ///|
+test "a page asks the stack where it stands: the root under a page sliding in over it is still the root, one leaving keeps its own" {
+  let nav = @ui.Nav::new(0)
+  // each page's under as it was last built
+  let told : Map[Int, Int?] = {}
+  let t = @ui.Tester::new(fn(c) {
+    c.nav(nav, fn(i) {
+      told[i] = nav.under()
+      c.text("title \{i}", wrap=false) |> ignore
+    })
+    |> ignore
+  })
+  nav.push(1)
+  t.draw()
+  t.run_for(@ui.nav_push_ms / 2.0)
+  // both built as page 1 slides in: the root with none under it, though the stack is two deep
+  assert_eq(told.get(0), Some(None))
+  assert_eq(told.get(1), Some(Some(0)))
+  // outside them, the top's
+  assert_eq(nav.under(), Some(0))
+  t.run_for(nav.rest() - t.time())
+  nav.push(2)
+  t.draw()
+  t.run_for(nav.rest() - t.time())
+  // back: page 2 leaving still has page 1 under it, page 1 coming back the root
+  told.clear()
+  nav.pop() |> ignore
+  t.draw()
+  t.run_for(@ui.nav_push_ms / 2.0)
+  assert_eq(told.get(2), Some(Some(1)))
+  assert_eq(told.get(1), Some(Some(0)))
+  t.run_for(nav.rest() - t.time())
+  assert_eq(nav.under(), Some(0))
+  t.assert_idle()
+}
+
+///|
 test "nav_flat: the top page alone, in place; a page left is forgotten and told" {
   let left : Array[String] = []
   let nav = @ui.Nav::new("home", on_leave=fn(p) { left.push(p) })

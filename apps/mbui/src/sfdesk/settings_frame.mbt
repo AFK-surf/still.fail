@@ -10,18 +10,17 @@ fn setting_page(c : @ui.Ctx, src : Source, w : Workspace, route : Route) -> Unit
   let core = settings_core(src, w)
   let here = @settings.here_of(core, w.id, w.name)
   // a page under another of them shows back (the sidebar is the way to the others)
-  let stack = app.nav.pages()
-  let deep = stack.length() >= 2 && stack[stack.length() - 2] is Setting(_)
+  let under = app.nav.under()
+  let deep = under is Some(Setting(_))
   settings_deep.val = deep
   // (the settings' pages not ported yet read it too)
   @settings.wide_deep.val = deep
   // a page merged for every frame: back over it only under another settings page or a place of the rail's (a connect's
   // under 连接; the sidebar is the way to the others)
   let frame : PageFrame = {
-    back: if deep || (stack.length() >= 2 && stack[stack.length() - 2] is Place(_)) {
-      Some(back_label(stack[stack.length() - 2]))
-    } else {
-      None
+    back: match under {
+      Some(u) if u is (Setting(_) | Place(_)) => Some(back_label(u))
+      _ => None
     },
     top: 0.0,
     foot: 0.0,

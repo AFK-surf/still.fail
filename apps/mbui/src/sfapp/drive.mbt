@@ -12,7 +12,7 @@ pub fn files_page(c : @ui.Ctx, src : Source, w : Workspace, place? : Bool = fals
   let lenders = @sfdesk.pin_stations(src, w.id)
   c.box(w=Fill(1.0), h=Fill(1.0), bg=t.p.bg, fn() {
     if !place {
-      let back = match under_page() {
+      let back = match app.nav.under() {
         Some(Home) => tr("android-misc.bar.place.chats")
         _ => tr("android-settings.title")
       }
@@ -56,17 +56,6 @@ pub fn files_lend(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
 }
 
 ///|
-/// The page under the top one, if any.
-fn under_page() -> Page? {
-  let pages = app.nav.pages()
-  if pages.length() >= 2 {
-    Some(pages[pages.length() - 2])
-  } else {
-    None
-  }
-}
-
-///|
 /// 文件's top bar as a place's (PlacePage.kt TopGlassBar): settings, its name.
 fn files_top_bar(c : @ui.Ctx) -> Unit {
   let t = @sf.theme()
@@ -94,8 +83,7 @@ fn files_top_bar(c : @ui.Ctx) -> Unit {
 /// pinned), in the stack's frame (back to the page under it, under the status bar, over the navigation bar), a folder
 /// gone into pushed over it (or back to it where it is in the stack already).
 pub fn drive_page(c : @ui.Ctx, src : Source, w : Workspace, at : DriveAt) -> Unit {
-  let pages = app.nav.pages()
-  let back = if pages.length() >= 2 { Some(drive_back_label(src, w, pages[pages.length() - 2])) } else { None }
+  let back = app.nav.under().map(fn(under) { drive_back_label(src, w, under) })
   @sfdesk.files_station(
     c,
     src,
