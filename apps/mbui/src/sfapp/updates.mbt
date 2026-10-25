@@ -30,7 +30,8 @@ fn up(key : String, args? : Array[(String, String)] = []) -> String {
 
 ///|
 /// Home's update key (Home.kt, the library's update_key): a newer build that brings something the changelog says,
-/// the size of the bar's other keys; while it downloads, how far it is in its place. Tapped, it is installed.
+/// the size of the bar's other keys; while it comes, how far under its mark, as on every screen. Tapped, it is
+/// installed.
 fn update_button(c : @ui.Ctx, src : Source) -> Unit {
   let progress = update_progress()
   let offered = match update.available {
@@ -41,13 +42,9 @@ fn update_button(c : @ui.Ctx, src : Source) -> Unit {
     return
   }
   let said = up("android-chat.home.update", args=[("version", text(update.available, "versionName"))])
-  let short = match progress.find(" ") {
-    Some(i) => progress.view(start_offset=i + 1).to_owned()
-    None => if progress != "" { "…" } else { "" }
-  }
   let failed = update.phase == "failed"
   let why = if failed { update_error("") } else { "" }
-  if @sf.update_key(c, "home-update", 34.0, 20.0, if progress != "" { progress } else { said }, why, short, failed, update_busy()) {
+  if @sf.update_key(c, "home-update", 34.0, 20.0, if progress != "" { progress } else { said }, why, update_part(), failed, update_under_way()) {
     update_install(src)
   }
 }

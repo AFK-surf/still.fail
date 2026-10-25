@@ -218,6 +218,29 @@ pub fn update_busy() -> Bool {
 }
 
 ///|
+/// Whether an update is under way, as the update key shows it: still.fail cloud asked again before it is downloaded,
+/// downloading, going on after the network came back, being installed.
+pub fn update_under_way() -> Bool {
+  update.installing || update_busy()
+}
+
+///|
+/// How far the update under way has come (0 to 1) while it downloads and the host says how far; None otherwise (asked
+/// again first, going on after the network came back, being installed: how far is not known).
+pub fn update_part() -> Double? {
+  if update.phase != "downloading" {
+    return None
+  }
+  let v = try Some(@json.parse(@ui.update_state())) catch { _ => None }
+  let p = number(v, "percent")
+  if p >= 0.0 {
+    Some(p / 100.0)
+  } else {
+    None
+  }
+}
+
+///|
 /// Asked once the app is signed in (MainActivity's check at the start).
 pub fn update_first(src : Source) -> Unit {
   if !update.asked {

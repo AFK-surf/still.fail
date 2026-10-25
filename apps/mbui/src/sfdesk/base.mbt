@@ -112,6 +112,8 @@ using @sfbase {
   toast_later,
   update,
   update_busy,
+  update_under_way,
+  update_part,
   update_error,
   update_install,
   update_progress,
