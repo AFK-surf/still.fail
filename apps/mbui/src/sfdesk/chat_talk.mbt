@@ -31,10 +31,6 @@ pub fn chat_talk(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef, pane : I
     }
   }
   over()
-  // come to from a new chat: what it showed fading under the composer (switch.mbt)
-  if view is Some(_) {
-    switch_veil(c)
-  }
   // a row of the 文件 tab carried over the pane: frosted under the composer (chat_layers.mbt)
   if view is Some(_) {
     drop_hint(c, pane)

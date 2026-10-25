@@ -140,8 +140,9 @@ list's turns, words flying, everything in the hand). Each step below is a PR; a 
    swiped away (sfpages/chat_row.mbt:879), the bar's 令 (sfapp/bar.mbt:1261).
 7. **Presets.** `src/sf/motion.mbt` holds the table above; every motion uses a preset; one curve enum; the copies in
    sfapp that nothing calls go (emit_flyer.mbt, flash.mbt, `composer_page*`, …).
-8. **The page crossfade** between a new chat and a chat on a computer (sfdesk/switch.mbt) goes: the new chat's scene
-   leaves by its own way up, the chat is there at once, the composer moves to its foot.
+8. **The page crossfade** between a new chat and a chat on a computer (sfdesk/switch.mbt). Done: the new chat's scene
+   leaves by its own way up (as one become its chat does), what comes in is there at once, the composer moves between
+   their places.
 
 The inventory's list, site by site, is in the chat that made this (still.fail chat c-70f465c94a, 动效盘点.md); it is
 not kept here, as it goes out of date with each step.
