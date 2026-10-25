@@ -83,65 +83,38 @@ let picture : (String, Int) -> String = @sfapp.core_pictures(fn(url, done) {
 
 ///|
 /// Chats' images as their messages show them (`station.file` with `thumb`: the station's thumbnail where it keeps one),
-/// asked once each, kept as images: "" while one comes, "!" when it could not be had.
-let chat_files : Map[String, String] = {}
+/// and videos' stills (`station.poster`): "" while one comes, "!" when it could not be had (@sfbase.ChatImages: one
+/// whose station could not be reached asked again).
+let chat_images : @sfbase.ChatImages = @sfbase.ChatImages::new()
 
 ///|
 fn chat_file(station : String, key : String, name : String) -> String {
-  let id = station + "\u{1}" + key + "\u{1}" + name
-  match chat_files.get(id) {
-    Some(k) => k
-    None => {
-      chat_files[id] = ""
-      let params : Map[String, Json] = {
-        "station": Json::string(station),
-        "key": Json::string(key),
-        "name": Json::string(name),
-        "thumb": Json::boolean(true),
-      }
-      @core.call_bytes("station.file", params=Json::object(params), on_done=fn(r) {
-        match r {
-          Ok((_, Some(bytes))) if bytes.length() > 0 => {
-            // its name at the end: a scripted run finds it by it (`tap img:NAME`)
-            let k = "mem:chat-file/\{@ui.stable_hash(id)}/\{id.length()}/\{name}"
-            @ui.add_image(k, bytes)
-            chat_files[id] = k
-          }
-          _ => chat_files[id] = "!"
-        }
-      })
-      ""
-    }
+  let id = @sfbase.file_image_id(station, key, name)
+  let params : Map[String, Json] = {
+    "station": Json::string(station),
+    "key": Json::string(key),
+    "name": Json::string(name),
+    "thumb": Json::boolean(true),
   }
+  // its name at the end: a scripted run finds it by it (`tap img:NAME`)
+  chat_images.get(station, id, "mem:chat-file/\{@ui.stable_hash(id)}/\{id.length()}/\{name}", fn(done) {
+    @core.call_bytes("station.file", params=Json::object(params), on_done=done)
+  })
 }
 
 ///|
-/// A video of a chat's still as its station makes it (`station.poster`), asked once: its key once here, "" while it
-/// comes, "!" when there is none (the station could not make one, or is from before posters).
+/// A video of a chat's still as its station makes it (`station.poster`): its key once here, "" while it comes, "!"
+/// when there is none (the station could not make one, or is from before posters).
 fn chat_poster(station : String, key : String, name : String) -> String {
-  let id = station + "\u{1}" + key + "\u{1}" + name + "\u{1}poster"
-  match chat_files.get(id) {
-    Some(k) => k
-    None => {
-      chat_files[id] = ""
-      let params : Map[String, Json] = {
-        "station": Json::string(station),
-        "key": Json::string(key),
-        "name": Json::string(name),
-      }
-      @core.call_bytes("station.poster", params=Json::object(params), on_done=fn(r) {
-        match r {
-          Ok((_, Some(bytes))) if bytes.length() > 0 => {
-            let k = "mem:chat-poster/\{@ui.stable_hash(id)}/\{id.length()}/\{name}"
-            @ui.add_image(k, bytes)
-            chat_files[id] = k
-          }
-          _ => chat_files[id] = "!"
-        }
-      })
-      ""
-    }
+  let id = @sfbase.poster_image_id(station, key, name)
+  let params : Map[String, Json] = {
+    "station": Json::string(station),
+    "key": Json::string(key),
+    "name": Json::string(name),
   }
+  chat_images.get(station, id, "mem:chat-poster/\{@ui.stable_hash(id)}/\{id.length()}/\{name}", fn(done) {
+    @core.call_bytes("station.poster", params=Json::object(params), on_done=done)
+  })
 }
 
 ///|
@@ -286,6 +259,7 @@ let core_source : @sfapp.Source = {
   fatal: fn() { @core.fatal() },
   file: chat_file,
   poster: chat_poster,
+  images: chat_images,
   now: fn() { @ui.wall_ms() },
   leave: fn(name, params) { @core.unsubscribe(@core.subscribe(name, params~)) },
   read_only,

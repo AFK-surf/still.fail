@@ -5,8 +5,9 @@
 // the same every time, no backend, no wall clock.
 
 ///|
-/// Chats' images as the core gives them (`station.file`), asked once each.
-let images : Map[String, String] = {}
+/// Chats' images as the core gives them (`station.file`, `station.poster`): one whose station could not be reached
+/// asked again (@sfbase.ChatImages).
+let images : @sfbase.ChatImages = @sfbase.ChatImages::new()
 
 ///|
 /// Pictures by their address as the app's own are (src/stillfail: @sfapp.core_pictures, one that could not be had
@@ -46,23 +47,8 @@ fn init {
 ///|
 /// `name`: the image's as src/stillfail names it (its key), so a scripted run's `img:NAME` and the host's answers kept
 /// with the run's text (a picture's sizes, by its source) are the same here.
-fn image(call : String, params : Json, key : String, name : String) -> String {
-  match images.get(key) {
-    Some(k) => k
-    None => {
-      images[key] = ""
-      @core.call_bytes(call, params~, on_done=fn(r) {
-        match r {
-          Ok((_, Some(bytes))) if bytes.length() > 0 => {
-            @ui.add_image(name, bytes)
-            images[key] = name
-          }
-          _ => images[key] = "!"
-        }
-      })
-      ""
-    }
-  }
+fn image(station : String, id : String, call : String, params : Json, name : String) -> String {
+  images.get(station, id, name, fn(done) { @core.call_bytes(call, params~, on_done=done) })
 }
 
 ///|
@@ -159,8 +145,8 @@ pub fn source() -> @sfapp.Source {
         "name": Json::string(name),
         "thumb": Json::boolean(true),
       }
-      let id = station + "\u{1}" + key + "\u{1}" + name
-      image("station.file", Json::object(params), "file " + id, "mem:chat-file/\{@ui.stable_hash(id)}/\{id.length()}/\{name}")
+      let id = @sfbase.file_image_id(station, key, name)
+      image(station, id, "station.file", Json::object(params), "mem:chat-file/\{@ui.stable_hash(id)}/\{id.length()}/\{name}")
     },
     poster: fn(station, key, name) {
       let params : Map[String, Json] = {
@@ -168,9 +154,10 @@ pub fn source() -> @sfapp.Source {
         "key": Json::string(key),
         "name": Json::string(name),
       }
-      let id = station + "\u{1}" + key + "\u{1}" + name + "\u{1}poster"
-      image("station.poster", Json::object(params), "poster " + id, "mem:chat-poster/\{@ui.stable_hash(id)}/\{id.length()}/\{name}")
+      let id = @sfbase.poster_image_id(station, key, name)
+      image(station, id, "station.poster", Json::object(params), "mem:chat-poster/\{@ui.stable_hash(id)}/\{id.length()}/\{name}")
     },
+    images,
     now: fn() { @ui.wall_ms() },
     leave: fn(name, params) { @core.unsubscribe(@core.subscribe(name, params~)) },
     read_only: false,

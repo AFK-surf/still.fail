@@ -42,6 +42,9 @@ pub(all) struct Source {
   /// a video of a chat's still as the station makes it (`station.poster`: its first frame, a small JPEG), by the same
   /// three; an image's key once it is here, "" while it comes, "!" when the station has none
   poster : (String, String, String) -> String
+  /// what became of those pictures, each by its id (file_image_id, poster_image_id): which failed for want of their
+  /// station, to be asked again (chat_images.mbt)
+  images : ChatImages
   /// the time of day, in milliseconds since 1970 (how long an agent's turn has run)
   now : () -> Double
   /// a topic no page shows any more (`unsubscribe`)

@@ -34,6 +34,15 @@ pub fn chat_list(
   let draft = r.station + ":" + r.session
   // what a message's menu left to do (menus.mbt)
   menus_frame(c)
+  // its pictures that could not be had for want of its station asked again: as the chat comes into view (not drawn the
+  // frame before), and as its station is reached again
+  let frame = c.frame_number()
+  match lists_drawn.get(key) {
+    Some(f) if f == frame || f == frame - 1 => ()
+    _ => src.images.again(r.station)
+  }
+  lists_drawn[key] = frame
+  src.images.seen(r.station, !v.offline)
   let lf = list_frame(
     c,
     r,
@@ -467,8 +476,14 @@ pub fn find_forget() -> Unit {
 }
 
 ///|
+/// The frame each chat's list was last drawn in (chat_list): one not drawn the frame before is coming into view.
+// kept across runs: put back by list_reset (reset)
+let lists_drawn : Map[String, Int] = {}
+
+///|
 /// What the list keeps of its own, let go (the package's reset).
 fn list_reset() -> Unit {
+  lists_drawn.clear()
   flashing_now.val = ("", 0.0)
   ask_turns.clear()
   find_around.val = -1.0

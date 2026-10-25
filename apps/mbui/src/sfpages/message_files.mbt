@@ -185,10 +185,6 @@ fn image_item(c : @ui.Ctx, src : Source, here : MessageHere, a : Attachment, w :
 
   let open = c.id("msg-file/" + a.path)
   let owner = owner_of(here, a)
-  if c.clicked(open) {
-    open_file(here, a)
-  }
-  c.cursor(open, Hand)
   let (bw, bh, letterbox) = image_box(a, image_least)
   let h = bh * w / bw
   let sent = sent_picture(here.station, a)
@@ -196,6 +192,17 @@ fn image_item(c : @ui.Ctx, src : Source, here : MessageHere, a : Attachment, w :
     Some(k) => k
     None => (src.file)(here.station, owner, stored_name(a.path))
   }
+  // could not be had for want of its station (not its station having none): pressed, asked again
+  let unreached = key == "!" && sent is None &&
+    src.images.unreached(@sfbase.file_image_id(here.station, owner, stored_name(a.path)))
+  if c.clicked(open) {
+    if unreached {
+      src.images.again(here.station)
+    } else {
+      open_file(here, a)
+    }
+  }
+  c.cursor(open, Hand)
   // where it is, for the preview to fly from and back into; hidden while the preview is its picture
   let thumb = here.station + "/" + owner + "/" + a.path
   note_thumb(c, thumb, open, @sf.message_file_corner, letterbox~)
@@ -226,7 +233,8 @@ fn image_item(c : @ui.Ctx, src : Source, here : MessageHere, a : Attachment, w :
     if key == "!" {
       c.box(style=no_preview_box, fn() {
         @sf.icon(c, "read", size=no_preview_icon, color=@sf.theme().p.muted) |> ignore
-        c.text(@sf.t("web-main.file.noPreview"), style=no_preview_words) |> ignore
+        c.text(@sf.t(if unreached { "web-main.file.loadAgain" } else { "web-main.file.noPreview" }), style=no_preview_words)
+        |> ignore
       })
       |> ignore
     } else if letterbox {
