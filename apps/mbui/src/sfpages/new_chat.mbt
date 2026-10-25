@@ -414,7 +414,8 @@ fn take_asked(what : String) -> Bool {
 
 ///|
 /// Where a new chat runs (the mobile pickStation, NewChat.kt pickStation): the workspace's stations up now, each its
-/// mark, its name and what it is, the one it starts on checked; picked, the core has it (`newChat.pick`).
+/// mark beside its name, the one it starts on checked, and what the stations' list says of it (station_facts.mbt: its
+/// agents at work, what is left of its machine, how this device reaches it); picked, the core has it (`newChat.pick`).
 fn station_rows(c : @ui.Ctx, src : Source, w : Workspace, v : Json?, close : () -> Unit) -> Unit {
   let p = @sf.theme().p
   let current = text(field(v, "station"), "station")
@@ -428,17 +429,22 @@ fn station_rows(c : @ui.Ctx, src : Source, w : Workspace, v : Json?, close : () 
     }
     // (its words on the panel's words' line wherever it is drawn: @sf.panel_row_in)
     let row = c.box(style=station_row.then(@sf.panel_row_in()), id~, fn() {
-      @sf.station_icon(c, text(st, "emoji"), text(st, "icon"), station_row_mark, p.text)
-      c.box(style=station_row_words, fn() {
-        c.text(text(st, "name"), style=station_row_name) |> ignore
-        if text(st, "summary") != "" {
-          c.text(text(st, "summary"), style=station_row_note) |> ignore
-        }
+      c.box(style=station_row_mark_box, fn() {
+        @sf.station_icon(c, text(st, "emoji"), text(st, "icon"), station_row_mark, p.text)
       })
       |> ignore
-      if text(st, "station") == current {
-        @sf.icon(c, "check", size=new_mark, color=p.accent) |> ignore
-      }
+      c.box(style=station_row_words, fn() {
+        c.box(style=station_row_head, fn() {
+          c.text(text(st, "name"), style=station_row_name) |> ignore
+          station_state(c, st)
+          if text(st, "station") == current {
+            @sf.icon(c, "check", size=new_mark, color=p.accent) |> ignore
+          }
+        })
+        |> ignore
+        station_figures(c, src, st)
+      })
+      |> ignore
       @sf.press_ripple(c, id, @sf.row_corner)
     })
     c.semantics(row, Button, id~, label=text(st, "name"), check=if text(st, "station") == current { On } else { Off })
@@ -1032,19 +1038,25 @@ let new_capsule_in_row : @ui.Style = @ui.css("row h=S7 px=S2 gap=S1_5 align=ACen
 ///|
 /// A station's row in its pick (PickRow): its mark, its name over what it is, a check; 12 by 8 in.
 // kept across runs: a value (no field of it changes)
-let station_row : @ui.Style = @ui.css("row w=Full px=S2 py=S3 gap=S3 align=ACenter radius=Lg")
+let station_row : @ui.Style = @ui.css("row w=Full px=S2 py=S3 gap=S3 align=AStart radius=Lg")
+
+///|
+/// Its mark beside its name's line (as high as it: L6), in its middle.
+// kept across runs: a value (no field of it changes)
+let station_row_mark_box : @ui.Style = @ui.css("h=S6 align=ACenter justify=JCenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
 let station_row_words : @ui.Style = @ui.style(w=@sf.grow)
 
 ///|
+/// Its name's line: its name, as long as there is room, then how it is and its check.
 // kept across runs: a value (no field of it changes)
-let station_row_name : @ui.TextStyle = @ui.text_style(size=Body, leading=L6, color=Fg, wrap=false, w=Cut)
+let station_row_head : @ui.Style = @ui.css("row w=Full gap=S2 align=ACenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let station_row_note : @ui.TextStyle = @ui.text_style(size=Meta, leading=L4, color=Muted)
+let station_row_name : @ui.TextStyle = @ui.text_style(size=Body, leading=L6, color=Fg, wrap=false, w=@sf.grow)
 
 ///|
 /// newChat: what it holds in the middle of the pane; newChatInner: its parts 10 apart, centred.
