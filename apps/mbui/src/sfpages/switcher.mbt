@@ -406,7 +406,8 @@ fn pickable(l : FindLine) -> Bool {
 /// The search's list in the box it is given, for workspace `w`: what the words in the field find and what of `offered`
 /// can be done by them; with nothing typed the latest chats where `idle_chats`. `most`: as tall as its lines up to so
 /// much (⌘K's panel), else the box's height. `close`: what the frame does as a line opens (⌘K closes; the phone's page
-/// stays under the chat). ↑ / ↓ choose a line. `at`: where its list stands (a panel's, ⌘K's, as a side column's; the
+/// stays under the chat). ↑ / ↓ choose a line. `width`: how wide the box its lines are laid in is (what a line goes by
+/// to say who, where and when under its words: found_stacked). `at`: where its list stands (a panel's, ⌘K's, as a side column's; the
 /// phone's search across the whole screen), its lines in and rounded so.
 pub fn finder_list(
   c : @ui.Ctx,
@@ -416,6 +417,7 @@ pub fn finder_list(
   close : () -> Unit,
   idle_chats? : Bool = false,
   most? : Double,
+  width~ : Double,
   at? : @sf.ListAt = Side,
 ) -> Unit {
   let f = @sf.theme().chat_list
@@ -466,7 +468,8 @@ pub fn finder_list(
     Some(Array(a)) => a.length() > 1
     _ => false
   }
-  let est = lines.fold(init=0.0, fn(h, l) { h + finder_h(l, f.found) })
+  let stacked = found_stacked(width)
+  let est = lines.fold(init=0.0, fn(h, l) { h + finder_h(l, f.found, stacked) })
   let h : @ui.Size = match most {
     Some(m) => Px(dmin(m, est))
     None => Fill(1.0)
@@ -492,7 +495,7 @@ pub fn finder_list(
       if f.keys && c.lit(id) {
         finder.chosen = k
       }
-      found_line(c, lk, id, line, f.keys && k == finder.chosen, several, at)
+      found_line(c, lk, id, line, f.keys && k == finder.chosen, several, at, stacked)
     },
     h~,
   )
@@ -521,13 +524,14 @@ fn finder_key(line : FindLine) -> String {
 }
 
 ///|
-/// A line's height, as the list first takes it (the theme's: one line, two, a heading, quiet words).
-fn finder_h(l : FindLine, f : @sf.Found) -> Double {
+/// A line's height, as the list first takes it (the theme's: one line, two, a heading, quiet words; `stacked`: who,
+/// where and when under its words, two).
+fn finder_h(l : FindLine, f : @sf.Found, stacked : Bool) -> Double {
   match l {
     Head(_) => f.head_h
     Message(_) => f.two_h
-    Item(it) => if it.text == "" { f.row_h } else { f.two_h }
-    Chat(ch) => if ch.found is Some(_) { f.two_h } else { f.row_h }
+    Item(it) => if it.text == "" && !stacked { f.row_h } else { f.two_h }
+    Chat(ch) => if ch.found is Some(_) || stacked { f.two_h } else { f.row_h }
     Note(_) | Wait(_, _) | Said(_) => f.quiet_h
     _ => f.row_h
   }
@@ -558,7 +562,8 @@ fn quiet_line(c : @ui.Ctx, line : FindLine, at : @sf.ListAt) -> Unit {
 /// words) where it says one. A chat its agent's maker, a message its chat's; a station its mark; something else its
 /// kind's icon; a command its icon, its keys at its end; 全部结果 and 查看更多 in the link's ink. `chosen`: by the keys,
 /// on the words' tint; pressed, rippled where a finger presses. `several`: more than one station, so where is said.
-/// `list_at`: where its list stands, the line in and rounded so (@sf.found_row_in).
+/// `list_at`: where its list stands, the line in and rounded so (@sf.found_row_in). `narrow`: its list too narrow for
+/// who, where and when beside its words (found_stacked).
 fn found_line(
   c : @ui.Ctx,
   key : String,
@@ -567,15 +572,31 @@ fn found_line(
   chosen : Bool,
   several : Bool,
   list_at : @sf.ListAt,
+  narrow : Bool,
 ) -> Unit {
   let t = @sf.theme()
   let f = t.chat_list.found
-  let two = match line {
-    Message(_) => true
-    Item(it) => it.text != ""
-    Chat(ch) => ch.found is Some(_)
-    _ => false
+  // who, where and when (`meta`), said at the end of its words
+  let meta = match line {
+    Chat(ch) =>
+      @sf.join_meta([
+        if ch.archived { @sf.t("web-main.switcher.archived") } else { "" },
+        if several { ch.item.station_name } else { "" },
+        ch.item.ago,
+      ])
+    Message(m) => @sf.join_meta([m.by, m.ago])
+    Item(it) => @sf.join_meta([if it.kind != "station" && several { it.station_name } else { "" }, it.ago])
+    _ => ""
   }
+  // where the line is narrow, who, where and when go under its words, its first line all theirs (found_stacked)
+  let stacked = meta != "" && narrow
+  let two = stacked ||
+    (match line {
+      Message(_) => true
+      Item(it) => it.text != ""
+      Chat(ch) => ch.found is Some(_)
+      _ => false
+    })
   let mark = fn(icon : String) {
     c.box(style=f.mark, fn() { @sf.icon(c, icon, size=f.icon, color=t.p.muted) |> ignore }) |> ignore
   }
@@ -587,9 +608,8 @@ fn found_line(
     }
   }
   // its words: the first line (`first`), and under it `under` where there is one; who, where and when (`meta`) at the
-  // first line's end where the line is wide enough to leave the words found theirs, else at the end of the line under
-  // it, beside where it is (by the line's width, as a file's row puts its size and time under its name)
-  let stacked = two && c.width < found_stack_below
+  // first line's end where the line is wide enough to leave the words theirs, else at the end of the line under it,
+  // beside where it is (`stacked`)
   let words = fn(first : () -> Unit, meta : String, under : () -> Unit) {
     let said = fn() {
       if meta != "" {
@@ -616,7 +636,6 @@ fn found_line(
     })
     |> ignore
   }
-  let at = fn(station : String) { if several { station } else { "" } }
   c.box(style=(if two { f.two } else { f.row }).then(@sf.found_row_in(list_at)), selected=chosen, id~, fn() {
     match line {
       Back => {
@@ -633,11 +652,6 @@ fn found_line(
       }
       Chat(ch) => {
         picture(ch.item)
-        let meta = @sf.join_meta([
-          if ch.archived { @sf.t("web-main.switcher.archived") } else { "" },
-          at(ch.item.station_name),
-          ch.item.ago,
-        ])
         match ch.found {
           Some(found) =>
             words(fn() { @sf.found_line(c, "sw/" + key, found, ch.marks, f.words, t.p.text) }, meta, fn() {
@@ -648,7 +662,7 @@ fn found_line(
       }
       Message(m) => {
         picture(m.chat)
-        words(fn() { @sf.found_line(c, "sw/" + key, m.text, m.marks, f.words, t.p.text) }, @sf.join_meta([m.by, m.ago]), fn() {
+        words(fn() { @sf.found_line(c, "sw/" + key, m.text, m.marks, f.words, t.p.text) }, meta, fn() {
           c.text(m.chat.title, style=f.under) |> ignore
         })
       }
@@ -661,7 +675,6 @@ fn found_line(
         } else {
           mark(if it.kind == "file" && it.dir { "folder" } else { @sf.kind_icon(it.kind) })
         }
-        let meta = @sf.join_meta([if it.kind != "station" { at(it.station_name) } else { "" }, it.ago])
         words(fn() { c.text(it.title, style=f.title) |> ignore }, meta, fn() {
           if it.text != "" {
             @sf.found_line(c, "sw/i/" + key, it.text, it.marks, f.under_words, t.p.text)
@@ -676,6 +689,13 @@ fn found_line(
 }
 
 ///|
-/// Narrower than this, a line of two says who, where and when under its first line, beside where it is: its first line
-/// all the words found's (as a file's row puts its size and time under its name narrower than its row_stack_below).
+/// Narrower than this, a line says who, where and when under its first line (beside where it is, where it says one):
+/// its first line all its words' (a chat's title, the words found), one line or two (as a file's row puts its size and
+/// time under its name narrower than its row_stack_below).
 let found_stack_below : Double = 440.0
+
+///|
+/// Whether a line in a list `width` wide says who, where and when under its words.
+fn found_stacked(width : Double) -> Bool {
+  width < found_stack_below
+}

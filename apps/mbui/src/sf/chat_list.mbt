@@ -230,8 +230,17 @@ pub(all) enum ListAt {
 /// ground its whole width.
 pub fn list_line(at : ListAt) -> @ui.Style {
   match at {
-    Side => @ui.style(w=Full, px=room(theme().chat_list.band_in))
+    Side => @ui.style(w=Full, px=room(list_line_in(at)))
     Whole => full_width
+  }
+}
+
+///|
+/// How far in from each side of its box a list's lines stand (list_line).
+pub fn list_line_in(at : ListAt) -> Double {
+  match at {
+    Side => theme().chat_list.band_in
+    Whole => 0.0
   }
 }
 
