@@ -1,4 +1,4 @@
-// Painting: the laid-out tree becomes a flat list of instances (40 floats
+// Painting: the laid-out tree becomes a flat list of instances (52 floats
 // each) that every renderer draws with one shader:
 //   0-3 rect x y w h · 4 radius (a box's: the roundest of its corners,
 //   36-39) · 5 kind · 6 border width · 7 blur
@@ -17,7 +17,11 @@
 //   (one from outside what turned: where it is drawn). · 36-39 a box's
 //   corners' radii (kinds 0, 2, 4, 5, 9: top left, top right, bottom right,
 //   bottom left, each as smooth as its rect has room for; all 4 where they
-//   are one).
+//   are one). · 40-51 the rounded clip outside its own that its own cuts
+//   through (clip_stack: a pane round an image's rounded frame scrolled into
+//   its corner): its rect x0 y0 x1 y1 (40-43), its corners' radii (44-47)
+//   and how smooth each is (48-51), as 16-19 and 24-31; none where 44-47 are
+//   all 0. What it covers is both clips' cover.
 // kinds: 0 rounded rect, 1 glyph (alpha mask), 2 shadow (12 > 0: only
 // outside its box, which is 13 above it), 3 color glyph, 4 image (12-15 its
 // uv rect, 0-1), 5 frosted glass, 6 liquid glass, 7 a glyph in liquid glass
@@ -31,7 +35,7 @@
 // six to an instance, none drawn).
 
 ///|
-let inst_size = 40
+let inst_size = 52
 
 ///|
 fn Ctx::grow(self : Ctx) -> Unit {
@@ -52,17 +56,24 @@ fn Ctx::grow(self : Ctx) -> Unit {
 /// Within other clips, the rule for where they meet: their rects' intersection, each of its corners as round as the
 /// clips whose corner it is (both's: the rounder), square where it is no clip's corner. So a rect inside a rounded
 /// clip (a list in a card, down to its foot) keeps the card's corners where they are its own, and a rounded clip in
-/// a rounded clip is right wherever the inner lies within the outer or shares its corners. The error: where one
-/// clip's edge cuts through another's rounded corner, not at its corner (a card scrolled part way out of a list, its
-/// corner's curve across the list's edge), that corner is square, showing what lies between the curve and the
-/// corner (at most (1 - π/4) r² of it); no stencil is kept.
+/// a rounded clip is right wherever the inner lies within the outer or shares its corners. Where one clip's edge cuts
+/// through another's rounded corner, not at its corner (an image's rounded frame scrolled into a pane's corner, its
+/// edge across the pane's curve), the intersection's corner there is square: so the level keeps that other clip too,
+/// whole (its outer: 12 numbers more, instances' 40-51), and what is painted in it is cut by both, exactly. One
+/// outer a level: the outermost such clip (a level whose clip has an outer passes it on, whatever it cuts itself),
+/// so what is drawn never leaves a pane or a window's rounded corners; a clip between the two (a card in the pane,
+/// round the frame) keeps the old error where the frame cuts through its corner (a square corner there, at most
+/// (1 - π/4) r² of it); no stencil is kept.
 // kept across runs: every clip a paint pushes it pops in the same paint, so between frames only its base level is
 // left, the same in every run
-let clip_stack : Array[Double] = [0.0, 0.0, 1.0e9, 1.0e9, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+let clip_stack : Array[Double] = [
+  0.0, 0.0, 1.0e9, 1.0e9, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
+  0.0,
+]
 
 ///|
-/// The numbers a level of `clip_stack` has.
-let clip_n = 12
+/// The numbers a level of `clip_stack` has: its own clip's 12, then its outer's (none: its radii 0).
+let clip_n = 24
 
 ///|
 /// Where the clip painted in now starts in `clip_stack`.
@@ -96,7 +107,10 @@ fn push_clip(x0 : Double, y0 : Double, x1 : Double, y1 : Double) -> Unit {
 }
 
 ///|
-/// A clip pushed: its rect (x0 y0 x1 y1), its corners' radii and how smooth each is (top left, then clockwise).
+/// A clip pushed: its rect (x0 y0 x1 y1), its corners' radii and how smooth each is (top left, then clockwise); its
+/// outer the clip it is in's where that has one, else the clip it is in where it cuts through a rounded corner of it
+/// (clip_cuts), else none. `outer_kept`: the clip it is in's outer, whatever it cuts (a clip pushed where what it
+/// holds is laid out, not where it is drawn: a look's, draw.mbt).
 fn push_clip_r(
   x0 : Double,
   y0 : Double,
@@ -104,7 +118,17 @@ fn push_clip_r(
   y1 : Double,
   r : (Double, Double, Double, Double),
   sm : (Double, Double, Double, Double),
+  outer_kept? : Bool = false,
 ) -> Unit {
+  let k = clip_top()
+  let has_outer = clip_has_outer(k)
+  let from = if has_outer || outer_kept || !clip_cuts(k, x0, y0, x1, y1, r) {
+    // (its outer's numbers, or none)
+    k + 12
+  } else {
+    // (the clip it is in, whole)
+    k
+  }
   clip_stack.push(x0)
   clip_stack.push(y0)
   clip_stack.push(x1)
@@ -117,6 +141,61 @@ fn push_clip_r(
   clip_stack.push(sm.1)
   clip_stack.push(sm.2)
   clip_stack.push(sm.3)
+  for j in 0..<12 {
+    clip_stack.push(clip_stack[from + j])
+  }
+}
+
+///|
+/// No clip pushed, nor any outer: what is painted till it is popped is over everything (an editor's handles).
+fn push_unclipped() -> Unit {
+  for v in [-1.0e9, -1.0e9, 1.0e9, 1.0e9] {
+    clip_stack.push(v)
+  }
+  for _ in 0..<20 {
+    clip_stack.push(0.0)
+  }
+}
+
+///|
+/// Whether the level at `k` has an outer clip (its radii not all 0).
+fn clip_has_outer(k : Int) -> Bool {
+  let s = clip_stack
+  s[k + 16] > 0.0 || s[k + 17] > 0.0 || s[k + 18] > 0.0 || s[k + 19] > 0.0
+}
+
+///|
+/// Whether a clip of rect (x0 y0 x1 y1), its corners `r`, pushed in the clip at `k` cuts through one of that clip's
+/// rounded corners: reaches into the square that corner's curve lies in (as far as a smooth corner's curve goes in,
+/// smooth.mbt) other than by being that corner as round or rounder, its own corner there.
+fn clip_cuts(k : Int, x0 : Double, y0 : Double, x1 : Double, y1 : Double, r : (Double, Double, Double, Double)) -> Bool {
+  let s = clip_stack
+  let own = [r.0, r.1, r.2, r.3]
+  for j in 0..<4 {
+    let rr = s[k + 4 + j]
+    if rr <= 0.0 {
+      continue
+    }
+    let reach = rr * (1.0 + (smooth_scale - 1.0) * s[k + 8 + j])
+    let left = j == 0 || j == 3
+    let top = j < 2
+    let cx = if left { s[k] } else { s[k + 2] }
+    let cy = if top { s[k + 1] } else { s[k + 3] }
+    // the square from the corner `reach` in
+    let (zx0, zx1) = if left { (cx, cx + reach) } else { (cx - reach, cx) }
+    let (zy0, zy1) = if top { (cy, cy + reach) } else { (cy - reach, cy) }
+    if x1 <= zx0 || x0 >= zx1 || y1 <= zy0 || y0 >= zy1 {
+      continue
+    }
+    // its own corner there, the same corner, as round: the clip's curve within its own
+    let ox = if left { x0 } else { x1 }
+    let oy = if top { y0 } else { y1 }
+    if ox == cx && oy == cy && own[j] >= rr {
+      continue
+    }
+    return true
+  }
+  false
 }
 
 ///|
@@ -266,6 +345,10 @@ fn Ctx::push_inst(
   a[b + 29] = clip_stack[k + 9]
   a[b + 30] = clip_stack[k + 10]
   a[b + 31] = clip_stack[k + 11]
+  // the clip outside it its own cuts through, if any (40-51)
+  for j in 0..<12 {
+    a[b + 40 + j] = clip_stack[k + 12 + j]
+  }
   a[b + 20] = 0.0 // the image it shows, if any
   // a rect's or frosted glass's notch (none); liquid glass and glyphs in it set theirs after
   a[b + 21] = 0.0

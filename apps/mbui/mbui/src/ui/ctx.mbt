@@ -1527,12 +1527,19 @@ fn finger_reach(
 ///|
 /// Whether (x, y), in hit target `k`'s rect, is within the rounded corners of what cut it (`clips`, Ctx::hit_clips):
 /// a corner as round, and as smooth, as the renderers cut it (smooth.mbt sd_corner; its radius at most half the clip's
-/// shorter side).
+/// shorter side); and within its outer clip's too, where it has one (clip_stack: a pane round a rounded frame).
 fn in_round_clip(clips : Array[Double], k : Int, x : Double, y : Double) -> Bool {
   let b = k * clip_n
   if b + clip_n > clips.length() {
     return true
   }
+  let outer = clips[b + 16] > 0.0 || clips[b + 17] > 0.0 || clips[b + 18] > 0.0 || clips[b + 19] > 0.0
+  in_round_rect(clips, b, x, y) && (!outer || in_round_rect(clips, b + 12, x, y))
+}
+
+///|
+/// Whether (x, y) is within the rounded rect of `clips` at `b` (a clip_stack clip's 12 numbers) at its corners.
+fn in_round_rect(clips : Array[Double], b : Int, x : Double, y : Double) -> Bool {
   let (x0, y0, x1, y1) = (clips[b], clips[b + 1], clips[b + 2], clips[b + 3])
   let hx = dmax((x1 - x0) / 2.0, 0.0)
   let hy = dmax((y1 - y0) / 2.0, 0.0)

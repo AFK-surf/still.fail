@@ -265,3 +265,86 @@ test "what a box that does not cut holds past its own rect is drawn where it sho
     .map(fn(a) { ((a[8] * 255.0).round().to_int(), a[0]) })
   assert_eq(shown, [(6, -50.0), (7, 50.0), (8, 150.0)])
 }
+
+///|
+/// A pane 200 square at (20, 20), rounded 30 and cutting what it holds; in it two frames rounded 8 that cut theirs,
+/// filled red (tapped: `taps`) and blue: the red one's top left corner (30, 22) in the pane's corner, the blue one in
+/// its middle.
+fn pane_frames(taps : Ref[Int]) -> (Ctx) -> Unit {
+  fn(c) {
+    c.box(pad=20.0, align=AStart, fn() {
+      c.box(w=Px(200.0), h=Px(200.0), radius=30.0, clip=true, fn() {
+        c.box(w=Px(60.0), h=Px(40.0), radius=8.0, clip=true, left=10.0, top=2.0, fn() {
+          let id = c.id("frame")
+          if c.clicked(id) {
+            taps.val = taps.val + 1
+          }
+          c.box(w=Fill(1.0), h=Fill(1.0), bg=red, id~, fn() { () }) |> ignore
+        })
+        |> ignore
+        c.box(w=Px(60.0), h=Px(40.0), radius=8.0, clip=true, left=80.0, top=80.0, fn() {
+          c.box(w=Fill(1.0), h=Fill(1.0), bg=0x0000FFFFL, fn() { () }) |> ignore
+        })
+        |> ignore
+      })
+      |> ignore
+    })
+    |> ignore
+  }
+}
+
+///|
+test "a rounded clip cutting through another's corner: what it holds cut by both, the other whole as its outer (40-51)" {
+  let taps = Ref(0)
+  let t = Tester::new(pane_frames(taps), w=260.0, h=260.0)
+  t.draw()
+  let a = rect_of_color(red)
+  // its own clip: the frame's rect, its corners its own (the pane's curve crosses its edges, at no corner of it)
+  assert_eq([a[16], a[17], a[18], a[19]], [30.0, 22.0, 90.0, 62.0])
+  assert_eq([a[24], a[25], a[26], a[27]], [8.0, 8.0, 8.0, 8.0])
+  // and the pane's, whole: its rect, its corners, as smooth as it is
+  assert_eq([a[40], a[41], a[42], a[43]], [20.0, 20.0, 220.0, 220.0])
+  assert_eq([a[44], a[45], a[46], a[47]], [30.0, 30.0, 30.0, 30.0])
+  assert_eq([a[48], a[49], a[50], a[51]], [1.0, 1.0, 1.0, 1.0])
+  // the one in the pane's middle reaches into none of its corners: no outer
+  let b = rect_of_color(0x0000FFFFL)
+  assert_eq([b[44], b[45], b[46], b[47]], [0.0, 0.0, 0.0, 0.0])
+  // the draw list says it (mbui-dl 7, 52 numbers)
+  assert_true(t.drawlist().has_prefix("mbui-dl 7\n"))
+  // a press in the frame but past the pane's curve misses it; within both, it reaches it
+  t.tap(31.0, 23.0)
+  t.draw()
+  assert_eq(taps.val, 0)
+  t.tap(60.0, 40.0)
+  t.draw()
+  assert_eq(taps.val, 1)
+}
+
+///|
+test "an outer clip kept as what holds it is pushed again: the outermost a frame cuts through, not the one between" {
+  let t = Tester::new(
+    fn(c) {
+      c.box(pad=20.0, align=AStart, fn() {
+        // the pane, a card in its corner (cutting through its curve), a frame in the card's corner (cutting through
+        // the card's): the frame's outer the pane, the card's curve the old error's
+        c.box(w=Px(200.0), h=Px(200.0), radius=30.0, clip=true, fn() {
+          c.box(w=Px(120.0), h=Px(120.0), radius=20.0, clip=true, left=6.0, top=6.0, fn() {
+            c.box(w=Px(40.0), h=Px(40.0), radius=4.0, clip=true, left=2.0, top=2.0, fn() {
+              c.box(w=Fill(1.0), h=Fill(1.0), bg=red, fn() { () }) |> ignore
+            })
+            |> ignore
+          })
+          |> ignore
+        })
+        |> ignore
+      })
+      |> ignore
+    },
+    w=260.0,
+    h=260.0,
+  )
+  t.draw()
+  let a = rect_of_color(red)
+  assert_eq([a[40], a[41], a[42], a[43]], [20.0, 20.0, 220.0, 220.0])
+  assert_eq([a[44], a[45], a[46], a[47]], [30.0, 30.0, 30.0, 30.0])
+}

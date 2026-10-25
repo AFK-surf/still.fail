@@ -998,7 +998,7 @@ fn Ctx::paint_editor(self : Ctx, n : Node, alpha : Double) -> Unit {
     st.handle_x = x
     st.handle_y = y
     let r = handle_r
-    push_clip(-1.0e9, -1.0e9, 1.0e9, 1.0e9)
+    push_unclipped()
     let (outer, _, _) = clip_at(clip_top())
     let i0 = self.ninst
     self.emit_rect(x, y, 2.0 * r, 2.0 * r, r, st.caret_color, 0.0, 0L, alpha)
@@ -1022,7 +1022,7 @@ fn Ctx::paint_editor(self : Ctx, n : Node, alpha : Double) -> Unit {
     st.sel_bx = st.ox + bx
     st.sel_by = st.oy + (bl + 1).to_double() * tl.line_h
     st.sel_on = true
-    push_clip(-1.0e9, -1.0e9, 1.0e9, 1.0e9)
+    push_unclipped()
     // the start's: the circle to the tip's left, its square corner at the tip
     self.emit_rect(st.sel_ax - 2.0 * r, st.sel_ay, 2.0 * r, 2.0 * r, r, st.caret_color, 0.0, 0L, alpha)
     self.emit_rect(st.sel_ax - r, st.sel_ay, r, r, 0.0, st.caret_color, 0.0, 0L, alpha)

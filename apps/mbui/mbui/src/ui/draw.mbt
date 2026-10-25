@@ -548,6 +548,8 @@ fn Ctx::drawn_paint(self : Ctx, i : Int, alpha : Double) -> Bool {
       oy + (c3 - dy - oy) / look.sy,
       (outer_r.0 / sm, outer_r.1 / sm, outer_r.2 / sm, outer_r.3 / sm),
       outer_s,
+      // (where it is laid out, not where it is drawn: its outer the one where it is drawn, as it is)
+      outer_kept=true,
     )
   }
   if cutting {
@@ -643,7 +645,9 @@ fn Ctx::drawn_paint(self : Ctx, i : Int, alpha : Double) -> Bool {
 ///|
 /// Instances `i0` to `i1` moved and scaled: about (`ox`, `oy`) by `sx`, `sy`, then by `dx`, `dy`; what their subtree
 /// cut them to moves with them (its corners' radii scaled as their radii are, as smooth), within what cut the node itself
-/// (`outer`, its corners rounded by `outer_r`, as smooth as `outer_s`).
+/// (`outer`, its corners rounded by `outer_r`, as smooth as `outer_s`: the clip painted in now). Their outer clips
+/// (40-51, clip_stack) as a level's are: the one painted in now's where it has one; else that clip itself where theirs,
+/// moved, cuts through a rounded corner of it; else their own from their subtree, moved with them.
 fn Ctx::transform_insts(
   self : Ctx,
   i0 : Int,
@@ -662,8 +666,21 @@ fn Ctx::transform_insts(
   let (c0, c1, c2, c3) = outer
   let scales = sx != 1.0 || sy != 1.0
   let sm = dmin(sx, sy)
+  let here = clip_top()
   for k in i0..<i1 {
     let b = k * inst_size
+    // an outer from its subtree (not the one painted in now's): moved with it
+    if inst_has_outer(a, b) && !inst_outer_is(a, b, here + 12) {
+      a[b + 40] = ox + (a[b + 40] - ox) * sx + dx
+      a[b + 41] = oy + (a[b + 41] - oy) * sy + dy
+      a[b + 42] = ox + (a[b + 42] - ox) * sx + dx
+      a[b + 43] = oy + (a[b + 43] - oy) * sy + dy
+      if scales {
+        for j in 44..<48 {
+          a[b + j] = a[b + j] * sm
+        }
+      }
+    }
     a[b] = ox + (a[b] - ox) * sx + dx
     a[b + 1] = oy + (a[b + 1] - oy) * sy + dy
     // turned already (a look inside this one's): where it turns about moves as its rect does
@@ -696,18 +713,42 @@ fn Ctx::transform_insts(
           a[b + j] = a[b + j] * sm
         }
       }
-      clamp_inst_clip(
-        a,
-        b,
-        ox + (a[b + 16] - ox) * sx + dx,
-        oy + (a[b + 17] - oy) * sy + dy,
-        ox + (a[b + 18] - ox) * sx + dx,
-        oy + (a[b + 19] - oy) * sy + dy,
-        outer,
-        outer_r,
-        outer_s,
-      )
+      let m0 = ox + (a[b + 16] - ox) * sx + dx
+      let m1 = oy + (a[b + 17] - oy) * sy + dy
+      let m2 = ox + (a[b + 18] - ox) * sx + dx
+      let m3 = oy + (a[b + 19] - oy) * sy + dy
+      if clip_has_outer(here) {
+        inst_outer_from(a, b, here + 12)
+      } else if clip_cuts(here, m0, m1, m2, m3, (a[b + 24], a[b + 25], a[b + 26], a[b + 27])) {
+        inst_outer_from(a, b, here)
+      }
+      clamp_inst_clip(a, b, m0, m1, m2, m3, outer, outer_r, outer_s)
     }
+  }
+}
+
+///|
+/// Whether instance `b` (in `a`) has an outer clip (40-51: its radii not all 0).
+fn inst_has_outer(a : FixedArray[Double], b : Int) -> Bool {
+  a[b + 44] > 0.0 || a[b + 45] > 0.0 || a[b + 46] > 0.0 || a[b + 47] > 0.0
+}
+
+///|
+/// Whether instance `b`'s outer clip is the clip at `k` in clip_stack (its 12 numbers).
+fn inst_outer_is(a : FixedArray[Double], b : Int, k : Int) -> Bool {
+  for j in 0..<12 {
+    if a[b + 40 + j] != clip_stack[k + j] {
+      return false
+    }
+  }
+  true
+}
+
+///|
+/// Instance `b`'s outer clip made the clip at `k` in clip_stack (its 12 numbers).
+fn inst_outer_from(a : FixedArray[Double], b : Int, k : Int) -> Unit {
+  for j in 0..<12 {
+    a[b + 40 + j] = clip_stack[k + j]
   }
 }
 
@@ -844,6 +885,8 @@ pub fn Ctx::draw_drawing(self : Ctx, d : Drawing, rel : Int, look : Look) -> Uni
     }
     a[b] = a[b] + n.x
     a[b + 1] = a[b + 1] + n.y
+    // (its outer clip the one painted in now's, as what it was cut to is what cuts it now: transform_insts)
+    inst_outer_from(a, b, clip_top() + 12)
     clamp_inst_clip(a, b, a[b + 16] + n.x, a[b + 17] + n.y, a[b + 18] + n.x, a[b + 19] + n.y, cut, cut_r, cut_s)
     a[b + 11] = a[b + 11] * look.alpha
     a[b + 15] = if a[b + 5] == 0.0 { a[b + 15] * look.alpha } else { a[b + 15] }

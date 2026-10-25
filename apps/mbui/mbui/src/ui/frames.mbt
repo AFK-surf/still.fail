@@ -88,7 +88,11 @@ fn drawn_hash() -> Int64 {
       if j >= 24 && j < 36 && x == 0.0 {
         continue
       }
-      if j >= 36 && x == c.inst[k * inst_size + 4] {
+      if j >= 36 && j < 40 && x == c.inst[k * inst_size + 4] {
+        continue
+      }
+      // (its outer clip only where it has one: drawn as before they were kept elsewhere)
+      if j >= 40 && !inst_has_outer(c.inst, k * inst_size) {
         continue
       }
       h = hash_mix(h, (x * 64.0).round().to_int64())
