@@ -99,7 +99,10 @@ for t in ${TARGETS:-native}; do
     # (all of them among its own): squeeze's 32 s process on CI, the same screens opened again, gone, 2026-10-25)
     # (the squeeze sweep again with what people wrote at its longest, squeeze_said_wbtest.mbt: every screen once more,
     # a process of its own)
-    sweeps=(src/sfapp/screens_wbtest.mbt:1 src/sfapp/corners_wbtest.mbt:2 src/sfapp/squeeze_said_wbtest.mbt:1)
+    # (contrast's, every screen in every window in the dark theme, contrast_wbtest.mbt: left among the pages, their
+    # process went from 96 s to 129 on CI and the app part's run with it, 2026-10-26; a process of its own)
+    sweeps=(src/sfapp/screens_wbtest.mbt:1 src/sfapp/corners_wbtest.mbt:2 src/sfapp/squeeze_said_wbtest.mbt:1
+      src/sfapp/contrast_wbtest.mbt:1)
     pages=()
     for f in "${files[@]}"; do [[ " ${sweeps[*]} " = *" $f:"* ]] || pages+=("$f"); done
     for w in "${sweeps[@]}"; do
