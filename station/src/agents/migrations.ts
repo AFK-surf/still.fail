@@ -80,6 +80,7 @@ export const NOTES: [number, string][] = [
   [73, "When the station's disk runs low, archived chats' workspaces are emptied before their week is up, the longest archived first (the files sent in each chat stay): push or move elsewhere what must outlive a chat before it ends."],
   [74, "Hermes Agent is available on stations with Hermes 0.21.7 or newer, its ACP and MCP dependencies installed, and a configured Hermes profile: chat_create takes runtime \"hermes\". Its provider and model are configured in that profile's Hermes home or explicit variables; incoming messages wait for its current turn to end."],
   [75, "Chats begun in direct messages are no longer private (note 72 is undone): every chat of the workspace is listed, read and searched by its members and agents as any other, and chat_create from one opens anywhere."],
+  [76, "Formulas never go inside `code` or a code block (every client shows them there as their source). In Slack and Feishu, where math is plain text, write them readably in Unicode (p′ = Σᵢ wᵢ Mᵢ p), not as TeX source."],
 ];
 
 /// The latest note's number: what a session that knows everything has been told.
