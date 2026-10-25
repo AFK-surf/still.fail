@@ -10,7 +10,7 @@ import { isAbsolute, join } from "node:path";
 import { createZstdDecompress } from "node:zlib";
 import * as store from "../read/store.ts";
 import type { MessageRow, SessionRow, Store } from "../read/store.ts";
-import { homesFirst, type ReadState, timelineOf, transcriptPaths, type TimelineEntry } from "../read/transcript.ts";
+import { homesFirst, type ReadState, sessionPlaces, timelineOf, transcriptPaths, type TimelineEntry } from "../read/transcript.ts";
 import { readFrom } from "../usage/counter.ts";
 import { agentHomeOf, memory } from "../read/memory.ts";
 import { runtimeKind } from "../agents/runtime.ts";
@@ -133,7 +133,7 @@ function historyText(e: TimelineEntry): string | null {
 export function transcriptFiles(s: Store, session: SessionRow, profiles: Profiles): { paths: string[]; runtime: NonNullable<ReturnType<typeof runtimeKind>> } | null {
   const runtime = runtimeKind(session.runtime) ?? null;
   if (runtime === null || store.runtimeSessions(s, session.key).length === 0) return null;
-  const { paths } = transcriptPaths(runtime, s.dataDir, homesFirst(profiles, session.profile), store.runtimeSessions(s, session.key));
+  const { paths } = transcriptPaths(runtime, s.dataDir, homesFirst(profiles, session.profile), store.runtimeSessions(s, session.key), sessionPlaces(session));
   return { paths, runtime };
 }
 

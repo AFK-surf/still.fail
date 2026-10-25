@@ -9,7 +9,7 @@ import { PlaceRefused } from "../ops/places.ts";
 import { log } from "../ops/log.ts";
 import { tr, type Lang, stationLang } from "../ops/i18n.ts";
 import { type MachineSession, type Roots, rolloutOf, rolloutsIn } from "../read/machine.ts";
-import { homesFirst, readTimeline, sharedTranscripts, transcriptPaths } from "../read/transcript.ts";
+import { homesFirst, readTimeline, sessionPlaces, sharedTranscripts, transcriptPaths } from "../read/transcript.ts";
 import { forgetMarks, marksDir } from "../read/transcripts.ts";
 import { AUTO, type Attachment, MANUAL, type Quote, STILLFAIL_SURFACE, type ThreadRow } from "../store/store.ts";
 import type { SessionChange } from "./accounts.ts";
@@ -319,7 +319,7 @@ export async function deleteSession(hub: Hub, key: string) {
   hub.live.forget(key);
   const { dataDir, profiles } = hub.config();
   const runtime = runtimeNamed(row.runtime);
-  const transcripts = runtime ? transcriptPaths(runtime, dataDir, homesFirst(profiles, row.profile), hub.store.runtimeSessions(key)).paths : [];
+  const transcripts = runtime ? transcriptPaths(runtime, dataDir, homesFirst(profiles, row.profile), hub.store.runtimeSessions(key), sessionPlaces(row)).paths : [];
   hub.store.deleteSession(key);
   hub.closed(key);
   rmSync(transcriptCopy(hub, key), { force: true });
