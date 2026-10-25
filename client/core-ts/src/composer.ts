@@ -20,7 +20,7 @@ import { StationAddr } from "./station/addr.ts";
 import { isObject } from "./util.ts";
 import { FileSource, isBlob } from "./file-source.ts";
 import { sentKeptId } from "./drive-kept.ts";
-import { headerSize } from "./imageSize.ts";
+import { shownSize } from "./imageSize.ts";
 import { localId } from "./ids.ts";
 
 type J = any;
@@ -472,8 +472,8 @@ export class Composers {
       change({ sent });
       inner.views.local.uploadChanged(f.id, { sent });
     };
-    // An image's size, read while it goes up: every page holds its place from the first (the outbox's row too, before it
-    // is up, even when it was sent before its size was read), and it travels with the file.
+    // An image's or a film's size, read while it goes up: every page holds its place from the first (the outbox's row
+    // too, before it is up, even when it was sent before its size was read), and it travels with the file.
     // Another station's file: read from there a part at a time, as a picked one is read from the page.
     const elsewhere = f.drive?.station !== undefined && f.drive.station !== station ? f.drive : null;
     const blob = f.blob ?? (elsewhere ? remoteSource(inner, elsewhere as { station: string; root: string; path: string }, f.size) : undefined);
@@ -489,16 +489,17 @@ export class Composers {
       );
       return;
     }
-    // Its header first (a few bytes, at once); decoded only when that does not say. The desktop's core has the page's
-    // file as a FileSource (file-port.ts), read a part at a time: its header is read the same way, and it is decoded
-    // whole, here, only where this can.
-    const decoded = (b: Blob | FileSource) => typeof createImageBitmap === "function"
+    // What its bytes say first (a few of them, at once: imageSize.ts); an image is decoded only when they do not say,
+    // and only where this can (Hermes cannot). The desktop's and the phone's cores have the file as a FileSource
+    // (file-port.ts, the host's), read a part at a time: the same way here.
+    const decoded = (b: Blob | FileSource) => typeof createImageBitmap === "function" && b.type.startsWith("image/")
       ? (isBlob(b) ? Promise.resolve(b) : Promise.all(Array.from({ length: Math.ceil(b.size / PART) }, (_, i) => b.slice(i * PART, (i + 1) * PART).arrayBuffer()))
         .then((parts) => new Blob(parts, { type: b.type })))
         .then((whole) => createImageBitmap(whole)).then((m) => { const s = { width: m.width, height: m.height }; m.close(); return s; })
       : null;
-    const sizing: Promise<{ width: number; height: number } | null> = (isBlob(blob) || blob instanceof FileSource) && blob.type.startsWith("image/")
-      ? blob.slice(0, 64).arrayBuffer().then((head) => headerSize(new Uint8Array(head)) ?? decoded(blob)).then((s) => {
+    const shown = (b: Blob | FileSource) => shownSize((start, end) => b.slice(start, end).arrayBuffer().then((part) => new Uint8Array(part)), b.size);
+    const sizing: Promise<{ width: number; height: number } | null> = (isBlob(blob) || blob instanceof FileSource) && (blob.type.startsWith("image/") || blob.type.startsWith("video/"))
+      ? shown(blob).then((s) => s ?? decoded(blob)).then((s) => {
         if (s) {
           if (this.#uploads.get(f.id) === upload) this.#sizes.set(f.id, s);
           change(s);
@@ -569,7 +570,7 @@ export class Composers {
     }));
   }
 
-  /// An image's size as read here (`{}` while it is not), for a message that takes it.
+  /// An image's or a film's size as read here (`{}` while it is not), for a message that takes it.
   sizeOf(id: string): { width?: number; height?: number } {
     return this.#sizes.get(id) ?? {};
   }

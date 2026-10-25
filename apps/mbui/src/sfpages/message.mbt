@@ -722,7 +722,8 @@ pub fn quotes(
         role=q.role,
         comment=q.comment,
         jump=q.ts != "" && here.go is Some(_),
-        picture?=own.map(fn(a) { fn() { file_item(c, src, here, a, quote_picture_most, by=None) } }),
+        // (its own box, as the message's files have theirs: at most as wide as the card has room)
+        picture?=own.map(fn(a) { fn() { message_files(c, src, here, [a], false) } }),
       )
       match here.go {
         Some(go) if done.jumped && seq >= 0.0 => go(seq)
@@ -859,9 +860,6 @@ let bubble_share : Double = 0.78
 ///|
 let bubble_most : Double = 560.0
 
-///|
-/// A quote's own picture at most this high in its card (quoteCardPicture).
-let quote_picture_most : Double = 120.0
 
 ///|
 /// A message's spinner, small (Spinner inline).

@@ -10,9 +10,10 @@
 //
 // The files sent with them go from their tiles in the composer (ChatHost.kt FlyingFile, landingFile, files): drawn as
 // their tiles were where they were until the row is in the list, then each to its place in the message, across and up
-// as the words go: a picture's box growing from the tile's to its own, the picture cropped to it as it is (opening out
-// from the tile's square crop), its corner from the composer's (18) to its own (10); any other file's card carried
-// there, from the tile's size to its own. Sent with no words, the row comes in where it is, its files flying into it,
+// as the words go: a picture's box growing from the tile's to the picture's own in the message (a letterboxed one's
+// share of its box), the picture cropped to it as it is (opening out from the tile's square crop), on no ground and
+// with a file's corner, as the tile and the message draw it; any other file's card carried there, from the tile's size
+// to its own. Sent with no words, the row comes in where it is, its files flying into it,
 // and the composer's hint stays.
 //
 // A new chat's first words are carried (ChatHost.kt Flight.carried, web madeChat.ts): drawn where they were typed from
@@ -74,11 +75,9 @@ pub(all) struct FlyingFile {
 pub let send_flight : Ref[SendFlight?] = { val: None }
 
 ///|
-/// A tile's corner in the composer and a picture's in a message, which a flying picture's goes from and to.
-let flight_tile_corner : Double = 18.0
-
-///|
-let flight_file_corner : Double = 10.0
+/// Where in its box in the message each file flying there lands (flight_landing's `share`, by its landing's key): the
+/// share of the box's width and height its picture takes, centred.
+let landing_shares : Map[String, (Double, Double)] = {}
 
 ///|
 /// How long the words take to their place, the share of it they fly (the rest they settle), and from when they
@@ -522,7 +521,7 @@ pub fn flight_file_of(f : SendFlight, path : String) -> FlyingFile? {
 ///|
 /// Each file sent (ChatHost.kt FlightLayer, files): as its tile was, where it was, until the row is in the list; then a
 /// picture from there to its place in the message (where the message's own box is laid out: flight_landing), its box
-/// growing to its own and its corner to the message's. Over the composer and the list, drawn only.
+/// growing to its picture's there (a letterboxed one's share of it). Over the composer and the list, drawn only.
 pub fn flight_files(c : @ui.Ctx, chat : String) -> Unit {
   let f = match flight_of(chat) {
     Some(f) if f.files.length() > 0 => f
@@ -536,24 +535,27 @@ pub fn flight_files(c : @ui.Ctx, chat : String) -> Unit {
       } else {
         None
       }
+      let to = "flight/to/" + ff.path
+      let (sw, sh) = landing_shares.get(to).unwrap_or((1.0, 1.0))
       match landing {
-        Some((_, _, ew, eh)) if ff.picture != "" => {
+        Some((_, _, bw, bh)) if ff.picture != "" => {
           let across = flight_across_of(c, f)
           let up = flight_up_of(c, f)
+          let (ew, eh) = (bw * sw, bh * sh)
           let w = fw + (ew - fw) * up
           let h = fh + (eh - fh) * up
-          let r = flight_tile_corner + (flight_file_corner - flight_tile_corner) * up
-          // (its ground the neutral one, cut to its corner with the picture)
+          // (on no ground and with a file's corner, as its tile and its message draw it: sfpages composer.mbt,
+          // message_files.mbt)
           let pic = c.box(style=@ui.style(w=Fixed(w), h=Fixed(h)), fn() {
-            c.image(ff.picture, w=Px(w), h=Px(h), fit=FitCover, radius=r, bg=@sf.theme().p.neutral_bg) |> ignore
+            c.image(ff.picture, w=Px(w), h=Px(h), fit=FitCover, radius=@sf.message_file_corner, bg=0L) |> ignore
           })
           // between its tile and its place as this frame lays it out, a new chat's list drawn up with it
           // (flight_carry_shift): with the list as it moves, not a frame behind; moved from where it is laid out (its
           // layer's corner, wherever the chat is in the window)
-          let to = "flight/to/" + ff.path
           @motion.placed(c, pic, fn() {
             match @motion.measured_rect(c, to) {
-              Some((ex, ey, _, _)) => {
+              Some((bx, by, bw, bh)) => {
+                let (ex, ey) = (bx + bw * (1.0 - sw) / 2.0, by + bh * (1.0 - sh) / 2.0)
                 let ey = ey + flight_carry_shift(c, chat)
                 let (px, py, _, _) = c.node_rect(pic)
                 @ui.look(dx=fx + (ex - fx) * across - px, dy=fy + (ey - fy) * up - py)
@@ -580,14 +582,16 @@ pub fn flight_files(c : @ui.Ctx, chat : String) -> Unit {
 
 ///|
 /// A file of the message words were sent to (node `i`, the box it is laid out in), while a file flies there
-/// (ChatHost.kt landingFile): where it is, kept for the picture flying to it (drawn there by flight_files, not here);
-/// a card, carried from its tile on the words' way, grown from the tile's size to its own.
-pub fn flight_landing(c : @ui.Ctx, f : SendFlight, i : Int, path : String) -> Unit {
+/// (ChatHost.kt landingFile): where it is, kept for the picture flying to it (drawn there by flight_files, not here),
+/// and the `share` of the box its picture takes (a letterboxed one's, centred); a card, carried from its tile on the
+/// words' way, grown from the tile's size to its own.
+pub fn flight_landing(c : @ui.Ctx, f : SendFlight, i : Int, path : String, share? : (Double, Double) = (1.0, 1.0)) -> Unit {
   let ff = match flight_file_of(f, path) {
     Some(ff) => ff
     None => return
   }
   @motion.measure(c, i, "flight/to/" + path)
+  landing_shares["flight/to/" + path] = share
   let (fx, fy, fw, fh) = ff.from
   if ff.picture != "" || !f.placed || f.placed_frame == c.frame_number() {
     // its first frame (and a picture all the way): not seen here

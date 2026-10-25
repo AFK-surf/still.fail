@@ -2849,15 +2849,21 @@ pub fn file_viewer_reset() -> Unit {
 }
 
 ///|
-/// A video's still as the viewer left it, else the station's poster (or its first frame drawn here when the station
-/// made none): its image's key ("" none). `thumb`: its thumbnail's id.
+/// A video's still as the viewer left it; else, one sent from here, the host's picture of it as it was picked (the
+/// composer's tile's: going up and gone up alike, as an image sent from here is drawn: sent_picture); else the
+/// station's poster (or its first frame drawn here when the station made none): its image's key ("" none). `thumb`:
+/// its thumbnail's id.
 pub fn video_still(c : @ui.Ctx, src : Source, station : String, owner : String, a : Attachment, thumb : String) -> String {
   match pv_frames.get(thumb) {
     Some((k, _)) => k
     None =>
-      match (src.poster)(station, owner, base_name(a.path)) {
-        "!" => first_frame(c, src, station, owner, a, thumb)
-        k => k
+      match sent_picture(station, a) {
+        Some(k) => k
+        None =>
+          match (src.poster)(station, owner, base_name(a.path)) {
+            "!" => first_frame(c, src, station, owner, a, thumb)
+            k => k
+          }
       }
   }
 }

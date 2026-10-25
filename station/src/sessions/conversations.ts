@@ -31,7 +31,7 @@ import {
 } from "./args.ts";
 import { callApi } from "./chat.ts";
 import type { Hub } from "./hub.ts";
-import { imageSize } from "./image-size.ts";
+import { shownSize } from "./image-size.ts";
 import { dir as thumbsDir, keep } from "../drive/thumbs.ts";
 import { INTERNAL_CONNECT } from "./internal.ts";
 import { namedLocalPaths, prepare } from "./local-links.ts";
@@ -187,9 +187,8 @@ export async function attach(hub: Hub, key: string, paths: string[], into: strin
       .join("");
     const copy = join(dir, `${stamp}-${safe}`);
     copyFileSync(path, copy);
-    const lower = name.toLowerCase();
-    const image = [".png", ".jpg", ".jpeg", ".gif", ".webp"].some((e) => lower.endsWith(e));
-    const size = image ? imageSize(copy) : null;
+    // a picture or a film as it is shown, so pages hold its place
+    const size = shownSize(copy);
     const attachment: Attachment = { name, path: copy, size: meta.size };
     if (size) [attachment.width, attachment.height] = size;
     return attachment;
