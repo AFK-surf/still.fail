@@ -1,17 +1,18 @@
 import { globalStyle, style } from "@vanilla-extract/css";
 import { vars } from "@stillfail/ui/styles/tokens.css.ts";
 import { tiles } from "../Usage.css.ts";
+import { inputRow } from "../styles/additions.css.ts";
 
 export const identityNameInput = style({ fontSize: vars.textTitle, fontWeight: "600", maxWidth: "360px" });
 export const envTable = style({ display: "grid", gap: "8px" });
-export const envRow = style({
+export const envRow = style([inputRow, {
   display: "grid", gridTemplateColumns: "minmax(120px, 1fr) minmax(140px, 1.5fr) auto", gap: "8px",
   "@media": {
     "(max-width: 700px)": {
       gridTemplateColumns: "1fr",
     },
   },
-});
+}]);
 export const signIn = style({});
 /** Codex's device sign-in: the code, large, then the one button that copies it and opens the page it goes into. */
 export const deviceCode = style({ display: "grid", justifyItems: "start", gap: "10px" });
