@@ -234,14 +234,9 @@ let search_grow : @ui.Style = @ui.style(w=@sf.grow)
 let search_cancel : @ui.TextStyle = @ui.text_style(size=Xl, color=Link, wrap=false)
 
 ///|
+/// What the words find, under the field: its lines where a pane's are (pane_line), the rest of its height.
 // kept across runs: a value (no field of it changes)
 let search_list_box : @ui.Style = @ui.style(w=Full, h=@sf.grow)
-
-///|
-/// The same on a computer's screen: its rows (sfpages' finder, a mouse's: rounded grounds) as far in from the
-/// sidebar's sides as the lists' lines under it (line_mouse, Sidebar.css.ts navScroll), not flush with its edge.
-// kept across runs: a value (no field of it changes)
-let search_list_mouse : @ui.Style = search_list_box.then(line_mouse)
 
 // ── Home's field ───────────────────────────────────────────────────────
 
@@ -326,9 +321,9 @@ fn search_page(c : @ui.Ctx, src : Source, w : Workspace, inset : Double) -> Unit
                   placeholder=@sf.t("android-chat.search.field"),
                   font_size=16.0,
                   max_lines=1,
-                  // the keyboard's search key (Search.kt: ImeAction.Search); a keyboard's Enter opens the line chosen
+                  // the keyboard's search key (Search.kt: ImeAction.Search), giving the words up as a keyboard's
+                  // Enter does: the line chosen opened where one is shown chosen (finder_enter)
                   ime_action=@hostapi.ime_action_search,
-                  enter_sends=!@sf.touch_system(),
                   plain=true,
                   color=t.p.text,
                   placeholder_color=t.p.muted,
@@ -369,7 +364,7 @@ fn search_page(c : @ui.Ctx, src : Source, w : Workspace, inset : Double) -> Unit
       })
       |> ignore
       // what the words find (sfpages' finder): a row opened, its page over this one, back to it
-      let lb = c.box(style=if @sf.touch_system() { search_list_box } else { search_list_mouse }, fn() {
+      let lb = c.box(style=search_list_box.then(@sf.pane_line()), fn() {
         finder_list(c, src, w, search.offered, close, idle_chats=search.summoned)
       })
       c.look(lb, { ..@ui.still_look, alpha: u })

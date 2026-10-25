@@ -197,7 +197,8 @@ fn view(c : @ui.Ctx) -> Unit {
       align=AEnd,
       bg=0xFFFFFFFFL,
       fn() {
-        let r = c.editor("composer", placeholder="输入消息，回车发送", field=app.draft)
+        // (Enter sends here with a finger too: the demo says so in its placeholder)
+        let r = c.editor("composer", placeholder="输入消息，回车发送", enter_sends=true, field=app.draft)
         if c.button("发送") || r.submitted is Some(_) {
           let st = app.draft.take()
           if st.length() > 0 {
