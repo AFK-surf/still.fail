@@ -12,6 +12,16 @@
 // (.25, .46, .45, .94) over what is left of 280 ms (120 at least), else it
 // comes back in 200 ms.
 //
+// A page brought in (pushed, risen, gone back to) is built whole in the frame its slide starts in, which may take longer
+// than the display's frame (its words shaped, its rows laid out for the first time): its slide's clock does not run
+// while that frame is late to the screen (the host says how late: @hostapi.frame_late), up to nav_late_most, so it
+// moves from where that frame drew it at the display's pace, no step skipped, the wait before it moves instead
+// (UIKit's and Android's transitions build the page before they start too).
+//
+// While a page slides in, the one it covers takes no press (drawn only, as UIKit's and Android's transitions keep
+// touches from the page underneath): a press where its button still shows goes to the page coming, or to nothing;
+// going back, the page leaving takes none.
+//
 // Only the top page is built while nothing moves; the pages under it keep
 // what their widgets hold (a list's scroll, a field's words), each page's
 // ids in a scope of its own, until the page leaves the stack: then it is
@@ -79,7 +89,7 @@ struct Nav[P] {
   // when the motion started (-1: at its first frame), how long, how
   mut t0 : Double
   mut dur : Double
-  mut curve : Curve
+  mut curve : Ease
   // a finger's: where it started, how fast it went (px per ms), its track
   // (for how fast, scroll.mbt)
   mut x0 : Double
@@ -96,6 +106,19 @@ struct Nav[P] {
   mut wait_from : Double
   mut waited : Bool
   mut held_most : Double
+  // a slide bringing a page in, its start moved on by how late its first frame reached the screen: whether it is still
+  // to be, and that frame's time (-1: not drawn yet)
+  mut waits_late : Bool
+  mut late_at : Double
+  // drawn flat (Ctx::nav_flat): the page drawn there last (in frame `flat_frame`), and the page put on top since,
+  // waited for (Nav::shows_when, asked in frame `flat_asked`) from `flat_from`, `flat_most` ms at most
+  mut flat_shown : NavPage[P]?
+  mut flat_frame : Int
+  mut flat_ready : () -> Bool
+  mut flat_most : Double
+  mut flat_asked : Int
+  mut flat_for : Int
+  mut flat_from : Double
 }
 
 ///|
@@ -129,6 +152,15 @@ pub fn[P] Nav::new(
     wait_from: -1.0,
     waited: false,
     held_most: 0.0,
+    waits_late: false,
+    late_at: -1.0,
+    flat_shown: None,
+    flat_frame: -1,
+    flat_ready: fn() { true },
+    flat_most: 0.0,
+    flat_asked: -1,
+    flat_for: -1,
+    flat_from: -1.0,
   }
 }
 
@@ -163,7 +195,14 @@ pub fn[P] Nav::offset(self : Nav[P]) -> Double {
 }
 
 ///|
-fn[P] Nav::go(self : Nav[P], mode : Int, p1 : Double, dur : Double, curve : Curve) -> Unit {
+fn[P] Nav::go(
+  self : Nav[P],
+  mode : Int,
+  p1 : Double,
+  dur : Double,
+  curve : Ease,
+  brings? : Bool = false,
+) -> Unit {
   wake()
   self.mode = mode
   self.p0 = self.p
@@ -175,6 +214,9 @@ fn[P] Nav::go(self : Nav[P], mode : Int, p1 : Double, dur : Double, curve : Curv
   self.t0 = if in_frame.val { g().now } else { -1.0 }
   self.wait_from = -1.0
   self.waited = false
+  // (a page brought in: its start moved on by how late its first frame is to the screen)
+  self.waits_late = brings
+  self.late_at = -1.0
   // said once, as it sets out: frames until it is there
   self.asked = g().frame_no
   g().moving(self.mover, self as &Moving, what="a stack's slide")
@@ -257,6 +299,11 @@ pub let nav_let_go_min_ms : Double = 120.0
 let nav_held : Double = -2.0
 
 ///|
+/// The most a slide bringing a page in waits for its first frame to reach the screen (still.fail's LOCAL_MS, as long
+/// as a page opening waits for what it shows): later than that, it moves on from its time.
+pub let nav_late_most : Double = 100.0
+
+///|
 /// The page just pushed slides in once it has what it shows (`ready`, asked while it waits: the core has answered for it), `most` ms at most
 /// after it was pushed (still.fail's App.kt: a page opening waits LOCAL_MS for what the core has on the device, never
 /// for a station), not first as its loading look swapped for it a frame or two later: till then nothing moves, the
@@ -281,6 +328,8 @@ pub fn[P] Nav::comes_when(self : Nav[P], ready : () -> Bool, most : Double) -> U
     self.waited = true
     if self.t0 == nav_held {
       self.t0 = c.now
+      // (its first frame this one, the page built with what it shows)
+      self.late_at = -1.0
       c.moving(self.mover, self as &Moving, what="a stack's slide")
     }
     return
@@ -291,12 +340,23 @@ pub fn[P] Nav::comes_when(self : Nav[P], ready : () -> Bool, most : Double) -> U
 }
 
 ///|
+/// Drawn flat (Ctx::nav_flat), the page put on top shows once it has what it shows (`ready`), `most` ms at most after
+/// it was put there (pushed, or in place of the one on top): till then the page that showed before stays, as it was,
+/// not the new one's loading look swapped for it a frame or two later (still.fail's LOCAL_MS, as Nav::comes_when holds
+/// a slide). Asked each frame its stack is drawn, before Ctx::nav_flat.
+pub fn[P] Nav::shows_when(self : Nav[P], ready : () -> Bool, most : Double) -> Unit {
+  self.flat_ready = ready
+  self.flat_most = most
+  self.flat_asked = g().frame_no
+}
+
+///|
 /// Pushes `page`: it slides in over the one on top.
 pub fn[P] Nav::push(self : Nav[P], page : P) -> Unit {
   self.settle()
   self.pages.push(nav_page(page))
   self.p = 1.0
-  self.go(1, 0.0, nav_push_ms, Standard)
+  self.go(1, 0.0, nav_push_ms, Standard, brings=true)
 }
 
 ///|
@@ -308,7 +368,7 @@ pub fn[P] Nav::rise(self : Nav[P], page : P) -> Unit {
   e.rise = true
   self.pages.push(e)
   self.p = 1.0
-  self.go(1, 0.0, nav_rise_ms, Arrive)
+  self.go(1, 0.0, nav_rise_ms, Arrive, brings=true)
 }
 
 ///|
@@ -342,8 +402,8 @@ pub fn[P] Nav::pop(self : Nav[P]) -> Bool {
   self.leaving = self.pages.pop()
   self.topped()
   match self.leaving {
-    Some(e) if e.rise => self.go(2, 1.0, nav_rise_ms, Arrive)
-    _ => self.go(2, 1.0, nav_push_ms, Standard)
+    Some(e) if e.rise => self.go(2, 1.0, nav_rise_ms, Arrive, brings=true)
+    _ => self.go(2, 1.0, nav_push_ms, Standard, brings=true)
   }
   true
 }
@@ -448,7 +508,26 @@ pub fn[P] Ctx::nav(
     }
     // (over at the end it says, t0 + dur, to the bit: (t0 + dur - t0) / dur can fall short of 1 by a rounding, and a
     // frame drawn at the very end it declared would leave it a hair short of it, still sliding)
-    let t = if nav.dur <= 0.0 || self.now >= nav.t0 + nav.dur { 1.0 } else { (self.now - nav.t0) / nav.dur }
+    // a page brought in: its first frame drawn from where it starts (any built again at its moment with it); the next
+    // told how late that one was to the screen
+    if nav.waits_late {
+      if nav.late_at < 0.0 {
+        nav.late_at = self.now
+      } else if self.now > nav.late_at {
+        nav.waits_late = false
+        let late = dmin(h_frame_late(), nav_late_most)
+        if late > 0.0 {
+          nav.t0 = nav.t0 + late
+          self.moving(nav.mover, nav as &Moving, what="a stack's slide")
+        }
+      }
+    }
+    // (from where it starts until its start: a start moved on by how late its first frame was)
+    let t = if nav.dur <= 0.0 || self.now >= nav.t0 + nav.dur {
+      1.0
+    } else {
+      dmax((self.now - nav.t0) / nav.dur, 0.0)
+    }
     nav.p = nav.p0 + (nav.p1 - nav.p0) * nav.curve.at(dmin(t, 1.0))
     if t >= 1.0 {
       nav.settle()
@@ -484,15 +563,17 @@ pub fn[P] Ctx::nav(
   let before_edge = self.back_edge_next
   let leaving = nav.leaving is Some(_)
   let i = self.box(w=Fill(1.0), h=Fill(1.0), clip=true, fn() {
+    // (pushed: the page it covers takes nothing from the moment it is pushed)
     match under {
-      Some(e) => self.nav_layer(e, if rising { 0.0 } else { way * (p - 1.0) }, 0.0, bg, page)
+      Some(e) => self.nav_layer(e, if rising { 0.0 } else { way * (p - 1.0) }, 0.0, bg, page, inert=nav.mode == 1)
       None => ()
     }
     // what the top page takes back for (a sheet, a menu, a step of its own, a stack in it) goes back before the stack
     // does, as Android's BackHandler in a page is asked before the pages' own; the page under it, one leaving, take none
     self.back_next = None
     self.back_node_next = -1
-    self.nav_layer(top, if rising { 0.0 } else { way * p }, if rising { p * self.height } else { 0.0 }, bg, page)
+    // (going back: the page leaving takes nothing)
+    self.nav_layer(top, if rising { 0.0 } else { way * p }, if rising { p * self.height } else { 0.0 }, bg, page, inert=leaving)
   })
   if self.back_next is Some(_) && !leaving {
     ()
@@ -537,6 +618,7 @@ fn[P] Ctx::nav_layer(
   drop : Double,
   bg : Int64,
   page : (P) -> Unit,
+  inert? : Bool = false,
 ) -> Unit {
   let i = self.box(w=Fill(1.0), h=Fill(1.0), bg~, ty=drop, fn() {
     let saved = self.owner
@@ -549,6 +631,9 @@ fn[P] Ctx::nav_layer(
   })
   self.nodes[i].layer = true
   self.nodes[i].slide = slide
+  if inert {
+    self.draw_only(i)
+  }
 }
 
 ///|
@@ -623,21 +708,54 @@ pub fn Ctx::take_back(self : Ctx, f : () -> Unit) -> Unit {
 /// whose pages are the same stack as a phone's (Ctx::nav draws it so on a narrow window). A page gone is forgotten
 /// (its widgets' state, `on_leave` told) as Ctx::nav forgets it; one moving is put where it was going.
 pub fn[P] Ctx::nav_flat(self : Ctx, nav : Nav[P], page : (P) -> Unit, bg? : Int64 = 0L) -> Int {
-  for e in nav.gone {
-    self.forget(e.serial)
-    (nav.on_leave)(e.page)
-  }
-  nav.gone.clear()
   if nav.mode != 0 || nav.leaving is Some(_) {
     nav.settle()
   }
   let top = nav.pages[nav.pages.length() - 1]
+  // the page put on top since the last frame drawn, waited for while that one stays (Nav::shows_when)
+  // (shown here as the last frame was drawn, or in this frame's build before: else no page shows to stay)
+  let held = match nav.flat_shown {
+    Some(shown) if shown.serial != top.serial &&
+      nav.flat_asked == self.frame_no &&
+      nav.flat_frame >= self.frame_no - 1 => {
+      if nav.flat_for != top.serial {
+        nav.flat_for = top.serial
+        nav.flat_from = self.now
+      }
+      if self.now < nav.flat_from + nav.flat_most && !(nav.flat_ready)() {
+        self.wake_at_time(nav.flat_from + nav.flat_most)
+        Some(shown)
+      } else {
+        None
+      }
+    }
+    _ => None
+  }
+  // what left the stack forgotten (and told), but the page that stays shown while the new one is waited for
+  let kept : Array[NavPage[P]] = []
+  for e in nav.gone {
+    match held {
+      Some(h) if h.serial == e.serial => kept.push(e)
+      _ => {
+        self.forget(e.serial)
+        (nav.on_leave)(e.page)
+      }
+    }
+  }
+  nav.gone.clear()
+  nav.gone.append(kept)
+  let drawn = held.unwrap_or(top)
+  nav.flat_frame = self.frame_no
+  if held is None {
+    nav.flat_shown = Some(top)
+    nav.flat_for = -1
+  }
   self.box(w=Fill(1.0), h=Fill(1.0), clip=true, bg~, fn() {
     let saved = self.owner
     let saved_stint = self.stint
-    self.owner = top.serial
-    self.stint = top.stint
-    self.scope(top.serial, fn() { page(top.page) })
+    self.owner = drawn.serial
+    self.stint = drawn.stint
+    self.scope(drawn.serial, fn() { page(drawn.page) })
     self.owner = saved
     self.stint = saved_stint
   })

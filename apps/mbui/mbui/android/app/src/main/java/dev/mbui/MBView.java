@@ -49,8 +49,8 @@ public class MBView extends GLSurfaceView implements GLSurfaceView.Renderer {
         density = c.getResources().getDisplayMetrics().density;
         setEGLContextClientVersion(3);
         setEGLConfigChooser(8, 8, 8, 8, 0, 0);
-        // On top of the window, translucent: native views (NativeViews: a player, a page) sit under it and show
-        // through the holes the app paints (transparent, kind 9); everywhere else each frame is opaque.
+        // On top of the window, translucent: the app over another app (OverActivity) draws over that app, nothing of
+        // its own ground; native views (NativeViews: a player, a page) are drawn in it, by their pictures.
         getHolder().setFormat(android.graphics.PixelFormat.TRANSLUCENT);
         setZOrderOnTop(true);
         setPreserveEGLContextOnPause(true);
@@ -88,6 +88,7 @@ public class MBView extends GLSurfaceView implements GLSurfaceView.Renderer {
 
     @Override
     public void onSurfaceCreated(GL10 gl, EGLConfig config) {
+        drawingThread();
         Native.surfaceCreated();
         MBText.reset();
         mine = ++setUp;
@@ -105,6 +106,10 @@ public class MBView extends GLSurfaceView implements GLSurfaceView.Renderer {
     }
 
     private double lastFrame;
+    // the frame before's vsync (0: none, or it had none), and whether it asked for this one as it ended (this one's vsync
+    // then the first after its work was done)
+    private long lastVsync;
+    private boolean askedAtEnd;
 
     // A picture at a declared moment (Host.shotAt, --ei shot_at MS: scripts/shots.sh android): the run's frames are on
     // a clock of their own, 1/60 s a frame from 0, as a stable run's on macOS (mac_app.m) and the browser's
@@ -121,7 +126,9 @@ public class MBView extends GLSurfaceView implements GLSurfaceView.Renderer {
     private void shotFrame(float w, float h) {
         double t = shotClock;
         takeBacks(Long.MAX_VALUE);
-        Native.frame(w, h, density, t);
+        Native.frame(w, h, density, t, 0);
+        // (a run to a moment: the native views' frames put where they show at once)
+        NativeViews.framed(false);
         Script.frameDrawn();
         if (shotTaken) return;
         shotFrames++;
@@ -170,6 +177,7 @@ public class MBView extends GLSurfaceView implements GLSurfaceView.Renderer {
         // a view not the host's (its activity paused under another of the app's: an OverActivity's draws), kept as it
         // last drew: one thread draws the app at a time
         if (Host.view != this) return;
+        boolean app = appWanted.getAndSet(false), pictured = picturesOnly.getAndSet(false);
         // another view set the drawing up in its own context since this one did (an OverActivity came and went): set
         // up again here, at this view's size
         if (mine != setUp) {
@@ -177,7 +185,10 @@ public class MBView extends GLSurfaceView implements GLSurfaceView.Renderer {
             MBText.reset();
             Native.resize(getWidth(), getHeight());
             mine = ++setUp;
+            app = true;
         }
+        // the native views' pictures come since the last frame, for this one to draw where it shows them
+        NativeViews.latch();
         // the soft keyboard's height off the bottom (Host.imeBottom, as it moves): the app lays out above it, the
         // surface keeps its size (resizing it with each step of the keyboard's motion would be far too slow)
         float w = getWidth() / density, h = Math.max(1, getHeight() - Host.imeBottom) / density;
@@ -185,16 +196,121 @@ public class MBView extends GLSurfaceView implements GLSurfaceView.Renderer {
             shotFrame(w, h);
             return;
         }
+        // only a view's picture changed (pictureFrame): the last frame drawn again with it, the app not asked; a frame
+        // the app or the system asked for is the app's
+        if (pictured && !app) {
+            Native.redraw();
+            NativeViews.framed(false);
+            askedAtEnd = false;
+            return;
+        }
+        long began = System.nanoTime();
         // the vsync's time; a frame the system asked for (a resize) has none, and time never goes back
         long v = vsyncNanos;
-        double now = v != 0 ? v / 1e6 : System.nanoTime() / 1e6;
+        double now = v != 0 ? v / 1e6 : began / 1e6;
         if (now < lastFrame) now = lastFrame;
         lastFrame = now;
+        // how late the frame before reached the screen (@hostapi.frame_late): asked for as it ended, this one's vsync is
+        // the first after its work was done, so the display's frames that passed past the one it was drawn for are how
+        // late it was, on the vsyncs' grid; 0 where it was asked for otherwise (its vsync perhaps one during that work),
+        // or either has no vsync
+        double late = 0;
+        if (v != 0 && lastVsync != 0 && askedAtEnd) {
+            long frames = Math.round((double) (v - lastVsync) / framePeriod);
+            if (frames > 1) late = (frames - 1) * framePeriod / 1e6;
+        }
+        lastVsync = v;
         // the system's back said before this frame's vsync (back(), below); what was said after it, the next frame's
-        boolean later = takeBacks(v != 0 ? v : System.nanoTime());
-        boolean more = Native.frame(w, h, density, now);
+        boolean later = takeBacks(v != 0 ? v : began);
+        boolean more = Native.frame(w, h, density, now, late);
+        askedAtEnd = more || later;
         if (more || later) wantFrame();
+        // (the native views moved in it: their frames follow once they rest)
+        NativeViews.framed(more || later);
         Script.frameDrawn();
+        frameWorked(System.nanoTime() - began);
+    }
+
+    // ---- the drawing thread, as the system's own ----
+
+    /**
+     * This thread builds, lays out and draws every frame: what Compose's UI thread and HWUI's RenderThread do between
+     * them. GLSurfaceView makes it a plain thread (nice 0), while the system raises the app in front's UI thread and
+     * RenderThread (THREAD_PRIORITY_TOP_APP_BOOST, or SCHED_FIFO) and its scheduler and governor favour them: a frame
+     * here could wait behind the core's thread, pictures decoding and the system's own work, on whatever core and clock
+     * the phone gave it. Raised as a display thread, and its work per frame told to the system (ADPF's
+     * PerformanceHintManager, as HWUI tells its frames' since Android 12) against the display's frame, so the CPUs it
+     * runs on are clocked for it.
+     */
+    private void drawingThread() {
+        try {
+            android.os.Process.setThreadPriority(android.os.Process.THREAD_PRIORITY_URGENT_DISPLAY);
+        } catch (RuntimeException e) {
+            Host.log("drawing thread: priority: " + e);
+        }
+        // (a session per thread: GLSurfaceView starts another as the view is shown again)
+        int tid = android.os.Process.myTid();
+        if (android.os.Build.VERSION.SDK_INT < 31 || tid == hintTid) return;
+        if (hints != null) hints.close();
+        hints = null;
+        hintTid = tid;
+        android.os.PerformanceHintManager pm = getContext().getSystemService(android.os.PerformanceHintManager.class);
+        long target = framePeriod;
+        try {
+            hints = pm == null ? null : pm.createHintSession(new int[] {tid}, target);
+        } catch (RuntimeException e) {
+            Host.log("drawing thread: hints: " + e);
+        }
+        hintTarget = target;
+    }
+
+    /** The system told what this thread's work over a frame (null: Android before 12, or a phone without ADPF). */
+    private android.os.PerformanceHintManager.Session hints;
+    private int hintTid;
+    private long hintTarget;
+    /** The display's frame (ns), read as the view is shown and as the display changes its rate (main thread). */
+    private volatile long framePeriod = 16_666_667L;
+
+    private final android.hardware.display.DisplayManager.DisplayListener displays =
+            new android.hardware.display.DisplayManager.DisplayListener() {
+                @Override public void onDisplayAdded(int id) {}
+
+                @Override public void onDisplayRemoved(int id) {}
+
+                @Override public void onDisplayChanged(int id) {
+                    readFramePeriod();
+                }
+            };
+
+    private void readFramePeriod() {
+        android.view.Display d = getDisplay();
+        if (d != null && d.getRefreshRate() > 1) framePeriod = (long) (1e9 / d.getRefreshRate());
+    }
+
+    @Override
+    protected void onAttachedToWindow() {
+        super.onAttachedToWindow();
+        readFramePeriod();
+        android.hardware.display.DisplayManager dm = getContext().getSystemService(android.hardware.display.DisplayManager.class);
+        if (dm != null) dm.registerDisplayListener(displays, Host.main);
+    }
+
+    @Override
+    protected void onDetachedFromWindow() {
+        android.hardware.display.DisplayManager dm = getContext().getSystemService(android.hardware.display.DisplayManager.class);
+        if (dm != null) dm.unregisterDisplayListener(displays);
+        super.onDetachedFromWindow();
+    }
+
+    /** A frame's work done (GL thread): how long it took, against the display's frame as it is now. */
+    private void frameWorked(long nanos) {
+        if (hints == null) return;
+        long target = framePeriod;
+        if (target != hintTarget) {
+            hintTarget = target;
+            hints.updateTargetWorkDuration(target);
+        }
+        if (nanos > 0) hints.reportActualWorkDuration(nanos);
     }
 
     // ---- the system's back ----
@@ -258,10 +374,26 @@ public class MBView extends GLSurfaceView implements GLSurfaceView.Renderer {
     /** A frame at the next vsync (from any thread). */
     void wantFrame() {
         if (shotTaken) return;
+        appWanted.set(true);
         if (!wanted.compareAndSet(false, true)) return;
         if (Looper.myLooper() == Looper.getMainLooper()) postVsync.run();
         else Host.main.post(postVsync);
     }
+
+    /**
+     * A native view's new picture to show (NativeViews.Picture, from any thread): the last frame drawn again at the next
+     * vsync, with it, unless the app has asked for a frame by then.
+     */
+    void pictureFrame() {
+        if (shotTaken) return;
+        picturesOnly.set(true);
+        if (!wanted.compareAndSet(false, true)) return;
+        if (Looper.myLooper() == Looper.getMainLooper()) postVsync.run();
+        else Host.main.post(postVsync);
+    }
+
+    /** A frame asked of the app (wantFrame), or only for a view's picture (pictureFrame), since the last was drawn. */
+    private final AtomicBoolean appWanted = new AtomicBoolean(), picturesOnly = new AtomicBoolean();
 
     /** Runs r on the GL thread and asks for a frame. */
     void toGL(Runnable r) {
@@ -392,7 +524,8 @@ public class MBView extends GLSurfaceView implements GLSurfaceView.Renderer {
         CharSequence t = clip.getItemAt(0).coerceToText(getContext());
         if (t == null || t.length() == 0) return;
         String s = t.toString();
-        toGL(() -> Native.text(0, s, 0, 0));
+        // (text kind 8: put in as typed, a step of its own to undo)
+        toGL(() -> Native.text(8, s, 0, 0));
     }
 
     /** A key with the focus a key catcher's (Device.catching): its named keys and shortcuts as keys, a character as
@@ -418,9 +551,15 @@ public class MBView extends GLSurfaceView implements GLSurfaceView.Renderer {
             if (Host.imeActive) paste();
             return true;
         }
+        int sk = shortcutKey(e);
+        if (sk != 0) {
+            int mods = Device.keyMods(e);
+            toGL(() -> Native.key(sk, mods));
+            return true;
+        }
         int k = keyCode(code);
         if (k != 0) {
-            int mods = e.isShiftPressed() ? 1 : 0;
+            int mods = Device.keyMods(e);
             toGL(() -> Native.key(k, mods));
             return true;
         }
@@ -431,6 +570,24 @@ public class MBView extends GLSurfaceView implements GLSurfaceView.Renderer {
             return true;
         }
         return super.onKeyDown(code, e);
+    }
+
+    /** A letter or digit with Ctrl or Meta held (a hardware keyboard's shortcut, which types no character): Ctrl+A, C
+     * and X the field's select all, copy and cut (12, 13, 14, as Windows' host sends them), any other the app's or the
+     * field's key as 1000 + the character (Ctrl+Z, Ctrl+Y to undo and do again, Ctrl+K); 0 for none. */
+    static int shortcutKey(KeyEvent e) {
+        if (!e.isCtrlPressed() && !e.isMetaPressed()) return 0;
+        int k = e.getKeyCode();
+        int ch;
+        if (k >= KeyEvent.KEYCODE_A && k <= KeyEvent.KEYCODE_Z) ch = 'a' + (k - KeyEvent.KEYCODE_A);
+        else if (k >= KeyEvent.KEYCODE_0 && k <= KeyEvent.KEYCODE_9) ch = '0' + (k - KeyEvent.KEYCODE_0);
+        else return 0;
+        if (e.isCtrlPressed()) {
+            if (ch == 'a') return 12;
+            if (ch == 'c') return 13;
+            if (ch == 'x') return 14;
+        }
+        return 1000 + ch;
     }
 
     static int keyCode(int code) {
@@ -565,9 +722,10 @@ public class MBView extends GLSurfaceView implements GLSurfaceView.Renderer {
             }
             if (e.getKeyCode() == KeyEvent.KEYCODE_PASTE) { view.paste(); return true; }
             int k = keyCode(e.getKeyCode());
+            if (k == 0) k = shortcutKey(e);
             if (k != 0) {
-                int mods = e.isShiftPressed() ? 1 : 0;
-                view.toGL(() -> Native.key(k, mods));
+                int kk = k, mods = Device.keyMods(e);
+                view.toGL(() -> Native.key(kk, mods));
                 return true;
             }
             int ch = e.getUnicodeChar();
@@ -810,7 +968,7 @@ public class MBView extends GLSurfaceView implements GLSurfaceView.Renderer {
             }
             int k = keyCode(e.getKeyCode());
             if (k != 0) {
-                int mods = e.isShiftPressed() ? 1 : 0;
+                int mods = Device.keyMods(e);
                 view.toGL(() -> Native.key(k, mods));
                 return true;
             }

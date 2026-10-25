@@ -21,7 +21,9 @@ src/ui      the framework (MoonBit, target independent)
   layout.mbt  flexbox subset (row/column, gap, padding, align, justify, fill)
   text.mbt    shaping cache, line breaking (UAX #14), caret geometry, lines
               reordered right to left (UAX #9), words of joining scripts
-              and ligatures drawn whole
+              and ligatures drawn whole; each glyph's place in the host's
+              atlas (hostapi's atlas.mbt: plots, the one drawn from longest
+              ago emptied as it fills)
   rich.mbt    rich text: runs (bold, italic, code, links, strike…) in one
               paragraph, wrapped as one text; offsets, carets and rects
   nav.mbt     a stack of pages: pushed and popped sliding, swiped back from
@@ -53,12 +55,12 @@ src/text    Unicode text segmentation (target independent, no host calls)
 src/host    the platform boundary
   host_native.mbt / host_js.mbt   the same API over C and over JS
   apple_render.m  Metal renderer (macOS and iOS)
-  apple_text.m    Core Text shaping and glyph atlas (macOS and iOS)
+  apple_text.m    Core Text shaping and glyphs, put in the atlas where MoonBit says (macOS and iOS)
   apple_film.m    a film's frames written into an MP4 (AVFoundation; src/film)
   mac_app.m       AppKit window, NSTextInputClient
   ios_app.m       UIKit view, UITextInput (built by scripts/ios.sh)
   win_render.cpp  Direct3D 11 renderer (WARP without a GPU)
-  win_text.cpp    DirectWrite shaping, Direct2D glyphs into the same atlas
+  win_text.cpp    DirectWrite shaping, Direct2D glyphs, put in the atlas where MoonBit says
   win_app.c       Win32 window, per-monitor DPI, IMM32 input method
 web/        browser host: WebGL2, canvas-2D text, hidden textarea for IME
 src/demo    the demo: a chat screen with 10,000 messages

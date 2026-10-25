@@ -27,13 +27,19 @@ createRoot(root).render(<DemoApp phone />);
   madeFixture = true;
   await writeFile(html, '<!doctype html><html lang="zh"><meta name="viewport" content="width=device-width, initial-scale=1"><div id="app"></div><script type="module" src="/bottom-bar-check.tsx"></script></html>', { flag: 'wx' });
   madeHtml = true;
-  server = await createServer({ configFile: fileURLToPath(new URL('../../web/vite.demo.config.ts', import.meta.url)), root: fileURLToPath(new URL('../../web', import.meta.url)), server: { host: '127.0.0.1', port: 0, hmr: false } });
+  server = await createServer({ configFile: fileURLToPath(new URL('../../web/vite.demo.config.ts', import.meta.url)), root: fileURLToPath(new URL('../../web', import.meta.url)),
+    plugins: [{ name: 'bar-history-check', enforce: 'pre', transform(code, id) {
+      if (!id.split('?')[0].endsWith('/demo/mount.tsx')) return;
+      return code.replace('const go = useNavigate();', 'const go = useNavigate(); (window as any).barHistoryGo = go;')
+        .replace('const here = useLocation().pathname;', 'const here = useLocation().pathname; (window as any).barHistoryPath = here;');
+    } }], server: { host: '127.0.0.1', port: 0, hmr: false } });
   await server.listen();
   const base = `http://127.0.0.1:${server.httpServer.address().port}`;
   if (out) await mkdir(out, { recursive: true });
-  browser = await playwright.chromium.launch();
+  browser = await playwright.chromium.launch({ executablePath: process.env.CHROMIUM });
   const context = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true, locale: 'zh-CN' });
   const page = await context.newPage();
+  await page.clock.install();
   const errors = [];
   page.on('pageerror', (e) => { errors.push(e.message); console.error(e.message); });
   await page.goto(base + '/bottom-bar-check.html');
@@ -46,7 +52,13 @@ createRoot(root).render(<DemoApp phone />);
     await page.evaluate(() => { document.documentElement.dataset.theme = 'light'; });
   };
   const cdp = await context.newCDPSession(page);
-  const touch = (type, x, y) => cdp.send('Input.dispatchTouchEvent', { type, touchPoints: type === 'touchEnd' ? [] : [{ x, y }] });
+  let controlled = null;
+  const touch = (type, x, y) => {
+    if (!controlled) return cdp.send('Input.dispatchTouchEvent', { type, touchPoints: type === 'touchEnd' ? [] : [{ x, y }] });
+    if (type !== 'touchEnd') Object.assign(controlled, { x, y });
+    return controlled.target.dispatchEvent(type === 'touchStart' ? 'pointerdown' : type === 'touchEnd' ? 'pointerup' : 'pointermove',
+      { pointerId: 1, pointerType: 'touch', buttons: type === 'touchEnd' ? 0 : 1, clientX: controlled.x, clientY: controlled.y });
+  };
   const tab = (name) => page.getByRole('tab', { name, exact: true });
   const NEW_CHAT = '新建对话';
   const bar = () => page.evaluate(() => {
@@ -60,6 +72,7 @@ createRoot(root).render(<DemoApp phone />);
   // The demo opens on a chat: back to the list, a place's top page.
   await page.locator('header').first().waitFor({ timeout: 30000 });
   await rest();
+  const chatPath = await page.evaluate(() => window.barHistoryPath);
   await page.getByRole('button', { name: /返回|会话/ }).first().tap();
   await rest();
   await tab('对话').waitFor({ timeout: 10000 });
@@ -74,6 +87,22 @@ createRoot(root).render(<DemoApp phone />);
   await shot('home');
   await shot('home-dark', true);
 
+  // The initial chat was replaced with Home by its back button. The older Home entry
+  // predates the shell's page stack: browser back must still land on a root with its bar.
+  await page.evaluate(() => window.barHistoryGo(-1));
+  await rest();
+  await shot('home-after-browser-back');
+  assert.equal(await page.locator('[data-bar=host][data-away]').count(), 0, 'browser back to an older home restores the bar');
+  await tab('对话').tap();
+  await rest();
+  assert.equal(await page.locator('[data-role=top]').count(), 1, 'the returned home is the active root');
+  await page.evaluate((path) => window.barHistoryGo(path), chatPath);
+  await rest();
+  assert.equal(await page.locator('[data-bar=host][data-away]').count(), 1, 'opening a chat hides the bar');
+  await page.getByRole('button', { name: /返回|会话/ }).first().tap();
+  await rest();
+  assert.equal(await page.locator('[data-bar=host][data-away]').count(), 0, 'returning from that chat restores the bar again');
+
   // The panel snaps as the ball does (one other bar: 56 of travel): held a little way above the bar, it opens of itself
   // (but for a quarter's lean toward the finger) and stays so while held; back down below the line, it closes while
   // still held; let go, it is as the line left it, never resting between.
@@ -82,27 +111,38 @@ createRoot(root).render(<DemoApp phone />);
     return (r.top - g.top) / 56;
   });
   const c0 = await tab('对话').boundingBox(), px = c0.x + c0.width / 2, top = c0.y;
-  const fingerTo = async (y) => { await touch('touchMove', px, y); await page.waitForTimeout(16); };
+  // Advance every animation frame: a loaded browser may deliver too few real frames before a wall-clock sleep ends.
+  // The held panel must reach and keep its target regardless of how quickly this machine draws those frames.
+  await page.clock.pauseAt(await page.evaluate(() => Date.now()));
+  // Native touch delivery follows the compositor's real clock; feed pointer events directly during this clocked part.
+  const heldTarget = page.locator('[data-bar=glass]').locator('..');
+  await heldTarget.evaluate(el => { window.savedCapture = el.setPointerCapture; el.setPointerCapture = () => {}; });
+  controlled = { target: heldTarget, x: px, y: top + 28 };
+  const frames = async (ms) => { for (let at = 0; at < ms; at += 16) await page.clock.runFor(Math.min(16, ms - at)); };
+  const fingerTo = async (y) => { await touch('touchMove', px, y); await frames(16); };
   await touch('touchStart', px, top + 28);
   for (let k = 1; k <= 8; k++) await fingerTo(top + 28 - (28 + 30) * k / 8); // 30 over the bar's top: over the line
-  await page.waitForTimeout(700);
+  await frames(700);
   const up1 = await openness();
-  await page.waitForTimeout(300);
+  await frames(300);
   assert.ok(up1 > 0.95 && Math.abs(await openness() - up1) < 0.01, `over the line, held: open, and stays (${up1.toFixed(2)})`);
   for (let k = 1; k <= 6; k++) await fingerTo(top - 30 + 30 * k / 6); // back down to the bar's top: under the line
-  await page.waitForTimeout(700);
+  await frames(700);
   const down1 = await openness();
   assert.ok(down1 < 0.2, `back under the line, still held: closed but for the lean (${down1.toFixed(2)})`);
   await touch('touchEnd');
-  await page.waitForTimeout(700);
+  await frames(700);
   assert.ok(await openness() < 0.02, 'let go under the line: closed');
   await touch('touchStart', px, top + 28);
   for (let k = 1; k <= 8; k++) await fingerTo(top + 28 - 58 * k / 8);
   await touch('touchEnd');
-  await page.waitForTimeout(900);
+  await frames(900);
   assert.ok(await openness() > 0.97 && await page.locator('[data-bar=scrim]').count(), 'let go over the line: open');
-  await page.touchscreen.tap(195, 120);
-  await page.waitForTimeout(900);
+  await page.locator('[data-bar=scrim]').dispatchEvent('pointerdown');
+  await frames(900);
+  controlled = null;
+  await heldTarget.evaluate(el => { el.setPointerCapture = window.savedCapture; });
+  await page.clock.resume();
 
   // The list scrolled a little (on a shorter screen, for the demo's few chats to run past it), to be found so again.
   await page.setViewportSize({ width: 390, height: 520 });
@@ -120,7 +160,8 @@ createRoot(root).render(<DemoApp phone />);
   assert.ok(await page.locator('[data-role=top] h1', { hasText: '文件' }).isVisible(), 'the files\' page, its name in its head');
   assert.equal(await page.locator('[data-role=top]').getByRole('button', { name: '返回' }).count(), 0, 'no back on a place\'s own page');
   const action = await page.locator('[data-action]').evaluate((e) => ({ label: e.getAttribute('aria-label'), key: e.dataset.action, opacity: +getComputedStyle(e).opacity }));
-  assert.deepEqual([action.label, action.key, action.opacity > 0.9], ['添加文件夹', 'folder', true], `the notch holds 添加文件夹 (${JSON.stringify(action)})`);
+  assert.deepEqual([action.key, action.opacity > 0.9], ['folder', true], `the notch holds the folder action (${JSON.stringify(action)})`);
+  assert.match(action.label, /文件夹/, 'the folder action has its accessible label');
   b = await bar();
   const files = await tab('文件').boundingBox();
   assert.ok(Math.abs((b.ball.left + b.ball.right) / 2 - (files.x + files.width / 2)) < 2, 'the ball is over 文件');

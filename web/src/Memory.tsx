@@ -21,32 +21,17 @@ import { t } from "./i18n.ts";
 
 export type { SkillFile, StationMemory as Memory } from "./api.ts";
 
-/** A station's memory as both screens list it: the global memory's parts (all of it in one, from a core before
- * them), the projects', the team's other skills and the station's own. */
+/** A station's memory as both screens list it: the global memory's parts (the core's), the projects', the team's
+ * other skills and the station's own (each skill's `group`, the core's). */
 export function memoryParts(memory: Memory): { sections: MemorySection[]; projects: SkillFile[]; skills: SkillFile[]; builtin: SkillFile[] } {
-  const text = memory.global.text.trim();
-  const sections = memory.global.sections?.length ? memory.global.sections : text ? [{ title: t("web-main.memory.global"), text, note: "" }] : [];
+  const sections = memory.global.sections ?? [];
   return {
     sections,
-    projects: memory.skills.filter((s) => s.project),
-    skills: memory.skills.filter((s) => !s.project && !s.builtin),
-    builtin: memory.skills.filter((s) => !s.project && s.builtin),
+    projects: memory.skills.filter((s) => s.group === "project"),
+    skills: memory.skills.filter((s) => s.group === "skill"),
+    builtin: memory.skills.filter((s) => s.group === "builtin"),
   };
 }
-
-/** What a skill is for in a line, for its row (the core's; a core before it: when it applies, whole). */
-export const skillBrief = (skill: SkillFile) => skill.brief ?? skill.about ?? skill.description;
-
-/** A skill's pages as they are picked: its SKILL.md (总览) and each other file. */
-export function skillPages(skill: SkillFile): { key: string; label: string; size?: string | undefined; text: string }[] {
-  return [
-    { key: "", label: t("web-main.memory.overview"), text: (skill.body ?? skill.text) || t("web-main.memory.empty") },
-    ...(skill.files ?? []).map((f) => ({ key: f.name, label: f.label ?? f.name, size: f.size, text: f.text || t("web-main.memory.empty") })),
-  ];
-}
-
-/** What kind of memory a skill is, as its page's subtitle says. */
-export const skillKind = (skill: SkillFile) => t(skill.project ? "web-main.memory.projects" : skill.builtin ? "web-main.memory.builtin" : "web-main.memory.skill");
 
 /** What each part of the memory is, as both screens say it (the phone's page is ./mobile/Memory.tsx). */
 export const MEMORY_TEXT = {
@@ -124,7 +109,7 @@ export function MemoryView({ station, to }: { station: string; to: (page: string
   if (!memory) return <Waiting count={5} error={error ? MEMORY_TEXT.failed(error) : null} />;
   const { sections, projects, skills, builtin } = memoryParts(memory);
   const skillRow = (s: SkillFile) => (
-    <MemoryRow key={s.name} to={to(`skill/${encodeURIComponent(s.name)}`)} title={s.name} sub={skillBrief(s) || t("web-main.memory.noWhen")} value={s.size}
+    <MemoryRow key={s.name} to={to(`skill/${encodeURIComponent(s.name)}`)} title={s.name} sub={s.line ?? ""} value={s.size}
       tags={<SkillTags skill={s} station={station} className={css.memoryTag} />} />
   );
   return (
@@ -189,12 +174,12 @@ export function MemoryDoc({ station, name, at, file, pick }: { station: string; 
   }
   const skill = memory.skills.find((s) => s.name === name);
   if (!skill) return <p className={shellCss.muted}>{t("web-main.memory.gone")}</p>;
-  const pages = skillPages(skill);
+  const pages = skill.pages ?? [];
   const i = Math.max(0, pages.findIndex((p) => p.key === file));
   return (
     <>
       <div className={`${pagesCss.card} ${css.memoryHead}`}>
-        <div className={css.memoryWhen}><b>{skillKind(skill)} · {t("web-main.memory.when")}</b>{(skill.about ?? skill.description) || t("web-main.memory.noWhen")}</div>
+        <div className={css.memoryWhen}><b>{skill.kindText} · {t("web-main.memory.when")}</b>{skill.whenText}</div>
         <SkillShare skill={skill} station={station} changed={reload} />
       </div>
       <DocChips items={pages.map((p) => ({ label: p.label, note: p.size }))} picked={i} onPick={(n) => pick("file", pages[n]!.key)} className={css.memoryChips} chip={css.memoryChip} />

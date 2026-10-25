@@ -18,7 +18,10 @@ import { Hub } from "../src/sessions/hub.ts";
 import { InternalChat } from "../src/sessions/internal.ts";
 import { Store, newMessage } from "../src/store/store.ts";
 import { digest } from "../src/read/digest.ts";
+import { openStore } from "../src/read/store.ts";
+import { chatRows, chats } from "../src/read/views.ts";
 import { isDeepStrictEqual } from "node:util";
+import { fileAway } from "./archived-before.ts";
 import { FakeDriver, settle } from "./hub-fakes.ts";
 
 const viewer = { sub: "u", email: "a@x", name: "A", role: "member", workspace: "w", device: "d" };
@@ -327,11 +330,15 @@ test("stopping, evicting, warming and changing a session", async () => {
 
     assert.deepEqual(await r.ask("POST", `/sessions/${made.key}/settings`, { fast: "yes" }), [400, { error: en("station.admin.badFast") }]);
     assert.equal((await r.ask("POST", "/sessions/nope/settings", { model: "opus" }))[0], 400);
-    assert.deepEqual(await r.ask("POST", `/sessions/${made.key}/settings`, { model: "opus", profile: "cc" }), [200, { ok: true }]);
+    assert.deepEqual(await r.ask("POST", `/sessions/${made.key}/settings`, { model: "opus", profile: "cc" }), [200, { ok: true, profile: "cc" }]);
     const row = r.store.getSession(made.key)!;
     assert.deepEqual([row.model, row.profile, row.profilePinned], ["opus", "cc", true]);
-    assert.deepEqual(await r.ask("POST", `/sessions/${made.key}/settings`, { profile: null }), [200, { ok: true }]);
+    assert.deepEqual(await r.ask("POST", `/sessions/${made.key}/settings`, { profile: null }), [200, { ok: true, profile: "cc" }]);
     assert.equal(r.store.getSession(made.key)!.profilePinned, false);
+    // Kept to it again, then given back to the station to pick again.
+    await r.ask("POST", `/sessions/${made.key}/settings`, { profile: "cc" });
+    assert.deepEqual(await r.ask("POST", `/sessions/${made.key}/settings`, { repick: true }), [200, { ok: true, profile: "cc" }]);
+    assert.deepEqual([r.store.getSession(made.key)!.profile, r.store.getSession(made.key)!.profilePinned], ["cc", false]);
   } finally {
     await r.close();
   }
@@ -562,7 +569,86 @@ test("several reads in one: each answered as its GET is, in their order, only th
   }
 });
 
-test("an archived chat is listed from its file, and anew once it is archived again", async () => {
+test("a session at work: the station follows it, its summary says how long its transcript is, and what comes after a point is read in brief", async () => {
+  const r = rig();
+  try {
+    const [, made] = await r.ask("POST", "/sessions", { runtime: "claude", title: "a" });
+    const key = made.key;
+    const dir = join(r.data, "homes", "cc", "projects", "p");
+    mkdirSync(dir, { recursive: true });
+    const said = (text: string, id: string) => `${JSON.stringify({ type: "assistant", timestamp: "2026-10-24T00:00:00Z", message: { id, content: [{ type: "text", text }] } })}\n`;
+    writeFileSync(join(dir, "rs1.jsonl"), ["one", "two", "three", "four", "five"].map((t, i) => said(t, `m${i}`)).join(""));
+    r.store.ranIn(key, "rs1", "cc");
+    r.store.setRuntimeSessionId(key, "rs1");
+    // Where the reads find its profile's home.
+    writeFileSync(join(r.data, "config.json"), JSON.stringify({ profiles: [{ id: "cc", runtime: "claude", home: join(r.data, "homes", "cc") }] }));
+    const summary = async () => (await r.ask("GET", `/sessions/${encodeURIComponent(key)}`))[1].session;
+    assert.equal((await summary()).transcriptLength, undefined, "not read at work yet: not said");
+    // At work: followed, read, its length kept where its summary reads it.
+    r.store.setRunning(key, true);
+    assert.deepEqual(r.hub.live.held(), [key]);
+    assert.equal((await summary()).transcriptLength, 5);
+    const timeline = async (query: [string, string][]) => (await r.ask("GET", `/sessions/${encodeURIComponent(key)}/timeline`, undefined, query))[1];
+    const texts = (t: any) => [t.start, t.entries.map((e: any) => e.text), t.end];
+    assert.deepEqual(texts(await timeline([["after", "1"], ["limit", "2"], ["brief", "1"]])), [2, ["three", "four"], 5]);
+    assert.deepEqual(texts(await timeline([["after", "4"], ["brief", "1"]])), [5, [], 5]);
+    assert.deepEqual(texts(await timeline([["before", "1000000000000000"], ["limit", "2"], ["brief", "1"]])), [3, ["four", "five"], 5]);
+    assert.deepEqual(texts(await timeline([["from", "0"], ["to", "1"], ["brief", "1"]])), [0, ["one", "two"], 5]);
+  } finally {
+    await r.close();
+  }
+});
+
+test("a session's summary says what its calls used as its live view told it, so a device knows it of one at rest", async () => {
+  const r = rig();
+  try {
+    const [, made] = await r.ask("POST", "/sessions", { runtime: "claude", title: "a" });
+    const key = made.key;
+    const dir = join(r.data, "homes", "cc", "projects", "p");
+    mkdirSync(dir, { recursive: true });
+    const said = (id: string, input: number) =>
+      `${JSON.stringify({ type: "assistant", timestamp: "2026-10-24T00:00:00Z", message: { id, model: "claude-opus-5-5", content: [{ type: "text", text: id }], usage: { input_tokens: input, cache_read_input_tokens: 100, output_tokens: 7 } } })}\n`;
+    writeFileSync(join(dir, "rs1.jsonl"), said("m1", 1) + said("m2", 2));
+    r.store.ranIn(key, "rs1", "cc");
+    r.store.setRuntimeSessionId(key, "rs1");
+    writeFileSync(join(r.data, "config.json"), JSON.stringify({ profiles: [{ id: "cc", runtime: "claude", home: join(r.data, "homes", "cc") }] }));
+    const summary = async () => (await r.ask("GET", `/sessions/${encodeURIComponent(key)}`))[1].session;
+    assert.equal((await summary()).usage, undefined, "no call read yet: not said");
+    r.store.setRunning(key, true);
+    const usage = (await summary()).usage;
+    assert.deepEqual([usage.modelCalls, usage.inputTokens, usage.cachedTokens, usage.outputTokens, usage.contextTokens, usage.model], [2, 203, 200, 14, 102, "claude-opus-5-5"]);
+    r.store.setRunning(key, false);
+    const listed = (await r.ask("GET", "/sessions"))[1].find((s: any) => s.key === key);
+    assert.deepEqual(listed.usage, usage, "the list says it as the session does");
+  } finally {
+    await r.close();
+  }
+});
+
+test("the sidebar items a change can touch are read as the whole sidebar has them, and only they", async () => {
+  const r = rig();
+  try {
+    const made: any[] = [];
+    for (const title of ["a", "b", "c"]) made.push((await r.ask("POST", "/sessions", { runtime: "claude", title }))[1]);
+    // b brought into a's chat: a's item has both; c alone.
+    assert.equal((await r.ask("POST", `/threads/${made[0].thread.id}/sessions`, { session: made[1].key }))[0], 200);
+    r.store.insertMessage(newMessage(made[0].thread.id, "1.2", "person", "a@x", "hi"));
+    const store = openStore(r.data);
+    const whole = chats(store, viewer, false);
+    const byId = new Map(whole.map((row: any) => [String(row.id), row]));
+    for (const [sessions, threads] of [[[made[1].key], []], [[], [made[0].thread.id]], [[made[2].key], []]] as [string[], number[]][]) {
+      const some = chatRows(store, viewer, sessions, threads);
+      assert.ok(some.rows.length > 0 && some.rows.length < whole.length, JSON.stringify(some.scope));
+      for (const row of some.rows) assert.deepEqual(row, byId.get(String(row.id)));
+      for (const row of some.rows) assert.ok(some.scope.includes(String(row.id)));
+    }
+    store.db.close();
+  } finally {
+    await r.close();
+  }
+});
+
+test("an archived chat is listed as it was, from the database or from the file a station before wrote it out to", async () => {
   const r = rig();
   try {
     const [, made] = await r.ask("POST", "/sessions", { runtime: "claude", title: "a" });
@@ -570,18 +656,20 @@ test("an archived chat is listed from its file, and anew once it is archived aga
     r.store.insertMessage(newMessage(id, "1.2", "person", "a@x", "first"));
     const listed = async () => ((await r.ask("GET", "/threads"))[1] as any[]).find((t) => t.id === id);
     const before = await listed();
-    // Archived: its entries go to its file, and the lists read it from there (once: a second list is the same).
+    // Archived: its entries stay in the database, and the lists read it as before.
     const file = join(r.data, "archive", "threads", `${id}.jsonl.zst`);
     assert.equal((await r.ask("POST", `/sessions/${made.key}/archive`))[0], 200);
-    assert.ok(existsSync(file));
+    assert.ok(!existsSync(file));
     const archived = await listed();
     assert.deepEqual([archived.last, archived.lastMessage.text, archived.unread, archived.people], [before.last, "first", before.unread, before.people]);
+    // Written out to its file by a station before: read from there the same (once: a second list is the same).
+    fileAway(r.store, id);
     assert.deepEqual(await listed(), archived);
-    // Brought back by what is said in it and archived again: listed as its new file has it.
+    assert.deepEqual(await listed(), archived);
+    // Brought back by what is said in it and archived again: listed as it is now.
     r.store.insertMessage(newMessage(id, "1.3", "person", "b@x", "second"));
     assert.ok(!existsSync(file));
     assert.equal((await r.ask("POST", `/sessions/${made.key}/archive`))[0], 200);
-    assert.ok(existsSync(file));
     const again = await listed();
     assert.deepEqual([again.last, again.lastMessage.text, again.people.map((p: any) => p.email)], [archived.last + 1, "second", ["a@x", "b@x"]]);
   } finally {

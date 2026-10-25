@@ -30,6 +30,7 @@
 //   pasten N TEXT               TEXT repeated to N characters, pasted
 //   wheel DY                    the list under the middle of the window scrolled by DY
 //   wheelat DY TEXT             the list under the lowest TEXT scrolled by DY, a mouse wheel's notches (eased in)
+//   wheelxat DX TEXT            what scrolls sideways under the lowest TEXT scrolled by DX, a wheel's (a trackpad's)
 //   move X Y                    the pointer moved there, no button down (negative: from the right, the bottom)
 //   hover TEXT                  the pointer moved onto the lowest TEXT, where the frame has it
 //   rightclick TEXT             a secondary click (a context menu's) on the lowest TEXT, where the frame has it
@@ -37,6 +38,9 @@
 //                               home, end, pageup, pagedown, backspace, a character; cmd+ (⌘ on macOS, Ctrl
 //                               elsewhere), ctrl+, alt+, shift+ (cmd+k, shift+enter, alt+down)
 //   resize W H                  the window's content resized to W by H (the host's own window, where it can)
+//   system JSON                 under a Tester (a film's run), the system says JSON on its channel as a host says it
+//                               (@hostapi.system_channel: a size class, the hinge and its fold, the bars), taken at
+//                               the next frame; a real host's system says its own, and the run fails
 //   drag X Y DX DY [MS]         a finger down at X Y (negative: from the right, the bottom), moved by DX DY over MS
 //                               (300 by default), a move a frame, then lifted there
 //   dragon DX DY MS TEXT        the same from the lowest TEXT on screen, where the frame has it
@@ -1012,7 +1016,7 @@ fn drive_steps(c : Ctx) -> Unit {
         }
         h_clipboard_set(words)
         if !h_drive(3, "") {
-          on_text(0, words, 0, 0)
+          on_text(text_paste, words, 0, 0)
         }
         acted()
         return
@@ -1034,8 +1038,8 @@ fn drive_steps(c : Ctx) -> Unit {
         acted()
         return
       }
-      "hover" | "rightclick" | "wheelat" => {
-        let (dy, what) = if cmd == "wheelat" {
+      "hover" | "rightclick" | "wheelat" | "wheelxat" => {
+        let (dy, what) = if cmd == "wheelat" || cmd == "wheelxat" {
           match arg.find(" ") {
             Some(i) =>
               (
@@ -1043,7 +1047,7 @@ fn drive_steps(c : Ctx) -> Unit {
                 arg.unsafe_substring(start=i + 1, end=arg.length()),
               )
             None => {
-              drive_fail(c, d, "wheelat DY TEXT")
+              drive_fail(c, d, cmd + " D TEXT")
               return
             }
           }
@@ -1051,7 +1055,7 @@ fn drive_steps(c : Ctx) -> Unit {
           (0.0, arg)
         }
         // (a wheel goes to the list under the words, whatever lies over them; a hover or a click is the finger's)
-        let at = if cmd == "wheelat" { on_screen(c, what) } else { reachable(c, what) }
+        let at = if cmd == "wheelat" || cmd == "wheelxat" { on_screen(c, what) } else { reachable(c, what) }
         if at.length() == 0 {
           if waited > d.timeout {
             drive_fail(c, d, not_reachable(c, what, d.timeout))
@@ -1066,6 +1070,7 @@ fn drive_steps(c : Ctx) -> Unit {
             on_pointer(0, x, y, 2)
             on_pointer(2, x, y, 2)
           }
+          "wheelxat" => on_wheel(x, y, dy, 0.0, 4)
           _ => on_wheel(x, y, 0.0, dy, 4)
         }
         acted()
@@ -1084,6 +1089,17 @@ fn drive_steps(c : Ctx) -> Unit {
             return
           }
         }
+      "system" => {
+        match fake.val {
+          Some(f) => fake_post(f, @hostapi.system_channel, arg, None)
+          None => {
+            drive_fail(c, d, "system: only a Tester's system says what a script tells it")
+            return
+          }
+        }
+        acted()
+        return
+      }
       "resize" => {
         let wh = arg.split(" ").map(fn(v) { number(v.to_string()) }).to_array()
         if wh.length() < 2 {
@@ -1114,6 +1130,20 @@ fn drive_steps(c : Ctx) -> Unit {
         }
       "log" => {
         h_log("DRIVE LOG " + arg)
+        next()
+      }
+      // what the frame shows squeezed (squeeze.mbt), a line each
+      "squeeze" => {
+        for f in c.squeeze_faults() {
+          h_log("DRIVE SQUEEZE " + f)
+        }
+        next()
+      }
+      // what the frame shows breaking the corner rule (corners.mbt), a line each
+      "corners" => {
+        for f in c.corner_faults() {
+          h_log("DRIVE CORNER " + f)
+        }
         next()
       }
       "exit" => {

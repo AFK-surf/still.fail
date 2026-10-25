@@ -47,6 +47,12 @@ extern "js" fn js_text_key(text : String, size : Double, weight : Int, style : I
 extern "js" fn js_glyph(key : Int, out : FixedArray[Double]) -> Unit =
   #|(k, o) => globalThis.__mbhost.glyph(k, o)
 
+extern "js" fn js_glyph_put(key : Int, x : Int, y : Int) -> Unit =
+  #|(k, x, y) => globalThis.__mbhost.glyphPut(k, x, y)
+
+extern "js" fn js_atlas_size(colour : Bool) -> Int =
+  #|(c) => globalThis.__mbhost.atlasSize(c)
+
 extern "js" fn js_atlas_generation() -> Int =
   #|() => globalThis.__mbhost.atlasGeneration()
 
@@ -71,6 +77,11 @@ extern "js" fn js_present(
 ///|
 extern "js" fn ffi_text_menu(shown : Int, x : Double, y : Double, w : Double, h : Double, can : Int) -> Unit =
   #|(s, x, y, w, h, c) => { if (globalThis.__mbhost && globalThis.__mbhost.textMenu) globalThis.__mbhost.textMenu(s, x, y, w, h, c) }
+
+///|
+/// (a browser's page has no menu bar of the app's)
+extern "js" fn ffi_edit_can(can : Int) -> Unit =
+  #|(c) => {}
 
 ///|
 extern "js" fn js_set_ime(
@@ -172,6 +183,12 @@ fn event_time() -> Double {
 }
 
 ///|
+/// How late the frame before reached the screen: a browser's are not told (@hostapi.frame_late).
+fn frame_late() -> Double {
+  0.0
+}
+
+///|
 /// The system: 0 macOS, 1 iOS, 2 Android, 3 Windows, 4 a browser.
 fn platform() -> Int {
   4
@@ -220,6 +237,23 @@ fn glyph(key : Int, out : FixedArray[Double]) -> Unit {
 }
 
 ///|
+fn glyph_put(key : Int, x : Int, y : Int) -> Unit {
+  js_glyph_put(key, x, y)
+}
+
+///|
+fn atlas_size(colour : Bool) -> Int {
+  js_atlas_size(colour)
+}
+
+///|
+/// (the page draws a glyph as it is first asked for: nothing ahead)
+fn glyphs_ahead(keys : FixedArray[Int], n : Int) -> Unit {
+  ignore(keys)
+  ignore(n)
+}
+
+///|
 /// A font file (at `path`: a URL the page can fetch) made part of face `face` (style.mbt), for `weight` (0: variable,
 /// every weight). The page loads it as it can (FontFace): drawn in it once loaded (atlas_generation moves on then).
 fn face_add(face : Int, path : String, weight : Int) -> Bool {
@@ -236,6 +270,19 @@ fn face_add_bytes(face : Int, data : Bytes, weight : Int) -> Bool {
 /// Face `face` given up.
 fn face_clear(face : Int) -> Unit {
   js_face_clear(face)
+}
+
+///|
+/// (a browser's faces are the files given: no family of the machine's)
+fn face_add_family(face : Int, family : String) -> Bool {
+  ignore(face)
+  ignore(family)
+  false
+}
+
+///|
+fn local_font_families() -> String {
+  ""
 }
 
 ///|
@@ -271,6 +318,12 @@ fn set_ime(
 ///|
 fn clipboard_set(s : String) -> Unit {
   js_clipboard_set(s)
+}
+
+///|
+/// A picture on the clipboard (@hostapi.clipboard_set_image): a page's runs put none.
+fn clipboard_set_image(data : Bytes) -> Unit {
+  ignore(data)
 }
 
 ///|
@@ -378,6 +431,12 @@ fn system_dark() -> Bool {
 ///|
 fn font_scale() -> Double {
   1.0
+}
+
+///|
+/// What the app was started to be used with (see host_native.mbt): a browser cannot tell (0: the platform's, @ui).
+fn native_pointing() -> Int {
+  0
 }
 
 ///|
@@ -758,8 +817,8 @@ extern "js" fn js_view_read_next(id : Int, out : FixedArray[Double]) -> Int =
   #|(i, o) => { const H = globalThis.__mbhost; return H && H.viewReadNext ? H.viewReadNext(i, o) : 0 }
 
 ///|
-extern "js" fn js_view_read_answer(id : Int, req : Int, data : Bytes, total : Double) -> Unit =
-  #|(i, r, d, t) => { const H = globalThis.__mbhost; if (H && H.viewReadAnswer) H.viewReadAnswer(i, r, d, t) }
+extern "js" fn js_view_read_answer(id : Int, req : Int, data : Bytes, total : Double, more : Bool) -> Unit =
+  #|(i, r, d, t, m) => { const H = globalThis.__mbhost; if (H && H.viewReadAnswer) H.viewReadAnswer(i, r, d, t, m) }
 
 ///|
 fn view_open(kind : Int, arg : String) -> Int {
@@ -804,8 +863,8 @@ fn view_read_next(id : Int, out : FixedArray[Double]) -> Int {
 }
 
 ///|
-fn view_read_answer(id : Int, req : Int, data : Bytes, total : Double) -> Unit {
-  js_view_read_answer(id, req, data, total)
+fn view_read_answer(id : Int, req : Int, data : Bytes, total : Double, more : Bool) -> Unit {
+  js_view_read_answer(id, req, data, total, more)
 }
 
 ///|
@@ -946,6 +1005,23 @@ fn window_inset() -> Bool {
 }
 
 ///|
+/// The window filling the screen (see host_native.mbt): a browser's page has none of its own.
+fn full_screen() -> Bool {
+  false
+}
+
+///|
+fn set_full_screen(on : Bool) -> Unit {
+  ignore(on)
+}
+
+///|
+/// A browser's page: its corners square (@hostapi.window_corner).
+fn window_corner() -> Double {
+  0.0
+}
+
+///|
 /// The window dragged by the app's top row (see host_native.mbt): a browser's page cannot move its window.
 fn window_drag() -> Unit {
   ()
@@ -955,6 +1031,61 @@ fn window_drag() -> Unit {
 /// The pointer's shape (see host_native.mbt): the canvas's CSS cursor.
 fn set_cursor(kind : Int) -> Unit {
   js_set_cursor(kind)
+}
+
+///|
+/// (no icon of the app's in a browser to put a number on)
+fn set_badge(n : Int) -> Unit {
+  ignore(n)
+}
+
+///|
+/// (no menu bar of the system's in a browser)
+fn menu_setup(json : String) -> Unit {
+  ignore(json)
+}
+
+///|
+/// (no station of this machine's to manage from a browser)
+fn local_station() -> String {
+  ""
+}
+
+///|
+fn local_station_act(a : String) -> Unit {
+  ignore(a)
+}
+
+///|
+/// (no dock in a browser)
+fn dock_available() -> Bool {
+  false
+}
+
+///|
+/// (the keys held are not read here)
+fn mods_held() -> Int {
+  0
+}
+
+///|
+fn dock_send(l : String) -> Unit {
+  ignore(l)
+}
+
+///|
+fn dock_stop() -> Unit {
+  ()
+}
+
+///|
+fn dock_kept() -> String {
+  ""
+}
+
+///|
+fn dock_keep(j : String) -> Unit {
+  ignore(j)
 }
 
 ///|

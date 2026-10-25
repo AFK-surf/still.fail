@@ -12,11 +12,11 @@ import { Clock, Effect, Fiber, Queue } from "effect";
 import { liveClock } from "../ops/fibers.ts";
 import { createReadStream, existsSync } from "node:fs";
 import { type FileHandle, open, readdir, realpath, stat } from "node:fs/promises";
-import { basename, dirname, join } from "node:path";
+import { basename, dirname, join, sep } from "node:path";
 import { createZstdDecompress } from "node:zlib";
 import { log } from "../ops/log.ts";
-import { parseIso, transcriptPath } from "../read/transcript.ts";
-import type { SessionRow, Store, UsageCall, UsageFile, UsageFor, UsageTurn } from "../store/store.ts";
+import { parseIso, sharedTranscripts, transcriptDir, transcriptPaths } from "../read/transcript.ts";
+import type { SessionRow, Store, UsageCall, UsageFile, UsageFor } from "../store/store.ts";
 import type { RuntimeKind } from "../agents/runtime.ts";
 
 /// Calls a little before a session was made (the runtime's clock against the station's) are still its own.
@@ -69,7 +69,7 @@ export function callsOf(runtime: Runtime, text: string, subagent: boolean, state
       runtime === "claude" ? line.includes('"usage"')
       : runtime === "dsh" ? line.startsWith('{"type":"assistant/message"') && line.includes('"usage"')
       : runtime === "grok" ? line.startsWith('{"type":"stillfail/usage"')
-      : runtime === "cursor" || runtime === "devin" ? line.includes('"type":"usage"')
+      : runtime === "cursor" || runtime === "devin" || runtime === "hermes" ? line.includes('"type":"usage"')
       : line.includes("token_count") || line.includes("turn_context") || line.includes("session_meta");
     if (!wanted) continue;
     let r: unknown;
@@ -91,7 +91,7 @@ export function callsOf(runtime: Runtime, text: string, subagent: boolean, state
         input: n(get(usage, "input")), cacheRead: n(get(usage, "cacheRead")), cacheWrite: n(get(usage, "cacheWrite")), cacheWriteLong: 0,
         output: n(get(usage, "output")),
       });
-    } else if (runtime === "cursor" || runtime === "devin") {
+    } else if (runtime === "cursor" || runtime === "devin" || runtime === "hermes") {
       // What the station's driver kept of each Cursor turn (agents/cursor-bridge.mjs): the SDK's counts, input apart
       // from the cache's; of each Devin turn the same (agents/devin.ts).
       const usage = get(r, "usage");
@@ -271,8 +271,11 @@ async function* packedFrom(path: string, offset: number): AsyncGenerator<Part> {
 /// read_from: what a file holds past `offset`, up to its last whole line, in parts with where each ends. A file now
 /// shorter than `offset` was written anew: it is read from its start (calls already recorded stay once). A file put
 /// away (only its `.zst` there) is read decompressed.
+/// Whether a transcript is put away: only its `.zst` there.
+const putAway = async (path: string): Promise<boolean> => !(await exists(path)) && (await exists(packed(path)));
+
 export async function* readFrom(path: string, offset: number): AsyncGenerator<Part> {
-  if (!(await exists(path)) && (await exists(packed(path)))) {
+  if (await putAway(path)) {
     yield* packedFrom(path, offset);
     return;
   }
@@ -440,6 +443,10 @@ export class UsageCounter {
   #unsubscribe: (() => void) | null = null;
   #abort = new AbortController();
   #clock: Clock.Clock;
+  /// The sessions the read under way recorded new calls of.
+  #counted = new Set<string>();
+  /// What was read of each transcript (usage_files): the store's at the first read, and what this counter wrote since.
+  #files: Map<string, UsageFile> | null = null;
 
   constructor(options: UsageCounterOptions) {
     this.#store = options.store;
@@ -537,11 +544,15 @@ export class UsageCounter {
     const last = this.#last;
     this.#first = last === 0;
     const store = this.#store;
-    const sessions: SessionRow[] = store.listSessions();
     const wanted: Set<string> | null = last === 0 ? null : new Set(store.usageActiveSessions(last - MARGIN_MS));
-    const known = store.usageFiles();
+    // Every session the first time; then those that ran since, by their rows (a read comes every few seconds while
+    // agents work: not every session ever).
+    const sessions: SessionRow[] = wanted === null ? store.listSessions() : [...wanted].flatMap((key) => store.getSession(key) ?? []);
+    // What was read of each transcript: as the store has it the first time, then as this counter wrote it (it alone does).
+    const known = (this.#files ??= store.usageFiles());
     const config = this.#config();
     let added = 0;
+    this.#counted.clear();
     // Claude Code: each session's project directory (named after where it runs), in the shared transcripts and in any
     // profile's own.
     const distinct = async (roots: string[]) => {
@@ -556,8 +567,24 @@ export class UsageCounter {
       }
       return out;
     };
-    const claudeRoots = await distinct([join(config.dataDir, "transcripts", "claude"), ...config.profiles.map((p) => join(p.home, "projects"))]);
-    const codexRoots = await distinct([join(config.dataDir, "transcripts", "codex"), ...config.profiles.map((p) => join(p.home, "sessions"))]);
+    // Where each runtime's transcripts are: the shared place, then each profile's home's.
+    const ways = (runtime: Runtime) => [sharedTranscripts(config.dataDir, runtime), ...config.profiles.map((p) => join(p.home, transcriptDir(runtime)))];
+    // How far a transcript was read, however it was reached then: one read through a home's own directory before is
+    // reached through the shared place once that directory is a link there (sessions/agent-home.ts `linkTranscripts`).
+    const readBefore = (path: string, runtime: Runtime): UsageFile | undefined => {
+      const had = known.get(path);
+      if (had !== undefined) return had;
+      const roots = ways(runtime);
+      const root = roots.find((r) => path.startsWith(r + sep));
+      if (root === undefined) return undefined;
+      for (const r of roots) {
+        const was = known.get(r + path.slice(root.length));
+        if (was !== undefined) return was;
+      }
+      return undefined;
+    };
+    const claudeRoots = await distinct(ways("claude"));
+    const codexRoots = await distinct(ways("codex"));
     const seenFiles = new Set<string>();
     for (const s of sessions) {
       if (wanted !== null && !wanted.has(s.key)) continue;
@@ -565,13 +592,12 @@ export class UsageCounter {
       const project = claudeProject(s.cwd ?? s.workspace);
       const only = s.cwd !== null ? s.runtimeSessionId : null;
       if (s.cwd !== null && only === null) continue;
-      const turns: { of: UsageTurn[] | null } = { of: null };
       for (const root of claudeRoots) {
         for (const [path, subagent] of await claudeFiles(join(root, project), only)) {
           const real = await canonical(path);
           if (seenFiles.has(real)) continue;
           seenFiles.add(real);
-          added += await this.#readFile(path, "claude", subagent, s, known, turns);
+          added += await this.#readFile(path, "claude", subagent, s, readBefore(path, "claude"));
         }
       }
     }
@@ -580,15 +606,23 @@ export class UsageCounter {
     for (const root of codexRoots) await rolloutsIn(root, found);
     const rollouts = [...new Set(found)];
     if (rollouts.length > 0) {
-      const codex = sessions.filter((s) => s.runtime === "codex");
-      const turnsOf = new Map<string, { of: UsageTurn[] | null }>();
+      // A new one is matched among the sessions read, then (it may be one that ran before the last read) among every
+      // Codex session, asked only then: one matched to none is passed over for good.
+      let codex = sessions.filter((s) => s.runtime === "codex");
+      let every = wanted === null;
+      const match = (meta: [string | null, string | null]) => codex.find((s) => s.runtimeSessionId === meta[0] || (s.cwd === null && s.workspace === meta[1]))?.key ?? null;
       for (const path of rollouts) {
-        const file = known.get(path);
+        const file = readBefore(path, "codex");
         let session: string | null;
         if (file !== undefined) session = file.session;
         else {
           const meta = await codexMeta(path);
-          session = meta === null ? null : (codex.find((s) => s.runtimeSessionId === meta[0] || (s.cwd === null && s.workspace === meta[1]))?.key ?? null);
+          session = meta === null ? null : match(meta);
+          if (session === null && meta !== null && !every) {
+            codex = store.listSessions().filter((s) => s.runtime === "codex");
+            every = true;
+            session = match(meta);
+          }
         }
         if (session === null) {
           if (file === undefined) {
@@ -598,48 +632,49 @@ export class UsageCounter {
               size = (await stat(path)).size;
             } catch {}
             store.recordUsage(path, { session: null, offset: size, model: null }, "codex", []);
+            known.set(path, { session: null, offset: size, model: null });
           }
           continue;
         }
         if (wanted !== null && !wanted.has(session) && file !== undefined) continue;
         const s = codex.find((c) => c.key === session);
         if (s === undefined) continue;
-        let turns = turnsOf.get(session);
-        if (turns === undefined) turnsOf.set(session, (turns = { of: null }));
-        added += await this.#readFile(path, "codex", false, s, known, turns);
+        added += await this.#readFile(path, "codex", false, s, file);
       }
     }
-    // DeepSeek Harness: each runtime session's own file, looked for in every profile's home (dsh.ts); Grok Build: what the
+    // DeepSeek Harness: each runtime session's own file, found as its history finds it (dsh.ts); Grok Build: what the
     // station kept of its turns beside each one's transcript (grok.ts); Cursor and Devin: their transcripts, the
     // station's own (cursor.ts, devin.ts).
+    const homes = config.profiles.map((p) => p.home);
     for (const s of sessions) {
-      if ((s.runtime !== "dsh" && s.runtime !== "grok" && s.runtime !== "cursor" && s.runtime !== "devin") || (wanted !== null && !wanted.has(s.key))) continue;
+      if ((s.runtime !== "dsh" && s.runtime !== "grok" && s.runtime !== "cursor" && s.runtime !== "devin" && s.runtime !== "hermes") || (wanted !== null && !wanted.has(s.key))) continue;
       const runtime = s.runtime;
-      const turns: { of: UsageTurn[] | null } = { of: null };
       for (const id of store.runtimeSessions(s.key)) {
-        for (const p of config.profiles) {
-          const transcript = transcriptPath(runtime, p.home, id);
-          const path = transcript !== null && runtime === "grok" ? join(dirname(transcript), "stillfail-usage.jsonl") : transcript;
-          if (path === null || (runtime === "grok" && !existsSync(path))) continue;
-          const real = await canonical(path);
-          if (seenFiles.has(real)) continue;
-          seenFiles.add(real);
-          added += await this.#readFile(path, runtime, false, s, known, turns);
-        }
+        const transcript = transcriptPaths(runtime, config.dataDir, homes, [id]).paths[0];
+        const path = transcript !== undefined && runtime === "grok" ? join(dirname(transcript), "stillfail-usage.jsonl") : transcript;
+        if (path === undefined || (runtime === "grok" && !existsSync(path))) continue;
+        const real = await canonical(path);
+        if (seenFiles.has(real)) continue;
+        seenFiles.add(real);
+        added += await this.#readFile(path, runtime, false, s, readBefore(path, runtime));
       }
     }
     this.#last = started;
     this.#first = false;
     if (added > 0) {
       if (last === 0) log.info("usage", "usage read from every transcript", { calls: added, ms: this.#clock.currentTimeMillisUnsafe() - started });
-      store.usageChanged();
+      store.usageChanged([...this.#counted]);
     }
     return added;
   }
 
   /// Reads one transcript of `session` on from where it was left, and records its calls, a part at a time.
-  async #readFile(path: string, runtime: Runtime, subagent: boolean, session: SessionRow, known: Map<string, UsageFile>, turns: { of: UsageTurn[] | null }): Promise<number> {
-    const before = known.get(path) ?? { session: null, offset: 0, model: null };
+  async #readFile(path: string, runtime: Runtime, subagent: boolean, session: SessionRow, was: UsageFile | undefined): Promise<number> {
+    // A transcript put away (only its `.zst` there) was read before it was: its session is archived and idle, and it is
+    // restored before its runtime writes in it again. Read again as the station starts, every one was decompressed
+    // whole at each start (10.8 s on ccvm, 2026-10-24, the station slow to answer meanwhile). One never read is read once.
+    if (this.#first && was !== undefined && (await putAway(path))) return 0;
+    const before = was ?? { session: null, offset: 0, model: null };
     const state: CallState = { model: before.model, codexId: null };
     let added = 0;
     let first = true;
@@ -652,8 +687,8 @@ export class UsageCounter {
       }
       // What ran before the station had the session (a terminal's, continued here) is not the station's.
       const calls = callsOf(runtime, part.text, subagent, state).filter((c) => c.at >= session.createdAt - SKEW_MS);
-      turns.of ??= this.#store.usageTurns(session.key);
-      const of = turns.of;
+      // The turns they were made in, those alone (store/usage.ts usageTurns).
+      const of = calls.length === 0 ? [] : this.#store.usageTurns(session.key, calls.reduce((m, c) => Math.min(m, c.at), Infinity), calls.reduce((m, c) => Math.max(m, c.at), -Infinity));
       const withFor: [UsageCall, UsageFor][] = calls.map((c) => {
         // The turn it was made in: the last to start before it (the first, for one before them all).
         let lo = 0;
@@ -665,7 +700,10 @@ export class UsageCounter {
         }
         return [c, of[Math.max(lo - 1, 0)]!.of];
       });
-      added += this.#store.recordUsage(path, { session: session.key, offset: part.offset, model: state.model }, runtime, withFor);
+      const recorded = this.#store.recordUsage(path, { session: session.key, offset: part.offset, model: state.model }, runtime, withFor);
+      this.#files?.set(path, { session: session.key, offset: part.offset, model: state.model });
+      if (recorded > 0) this.#counted.add(session.key);
+      added += recorded;
       await breathe();
     }
     return added;

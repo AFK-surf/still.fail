@@ -2,7 +2,8 @@
 // wide at size 10.
 
 ///|
-/// A list of rows, the second holding a line 600 wide that scrolls sideways.
+/// A list of rows, the second holding a line 600 wide that scrolls sideways; pressed by a finger (a mouse's press along
+/// its foot is its scroll bar's: scroll_bar.mbt).
 fn sideways_view(at : Ref[Double]) -> @ui.Tester {
   @ui.Tester::new(
     fn(c) {
@@ -22,6 +23,7 @@ fn sideways_view(at : Ref[Double]) -> @ui.Tester {
     },
     w=300.0,
     h=300.0,
+    platform=2,
   )
 }
 
@@ -96,6 +98,42 @@ test "sideways: flung, it slows by a way solved once: at rest at a time of its o
   assert_eq(m8, m16)
   assert_eq(e8, e16)
   assert_true(e16 > m16)
+}
+
+///|
+test "sideways: a finger landing on one stops the list flinging by under it, as anywhere else on the list (Android)" {
+  // every row a line that scrolls sideways (a chat's tables and code blocks)
+  let t = @ui.Tester::new(
+    fn(c) {
+      c.list("rows", 200, 40.0, fn(_) {
+        c.sideways("wide", fn() { c.rich([@ui.plain("x".repeat(120))], size=10.0, wrap=false) |> ignore })
+        |> ignore
+      })
+      |> ignore
+    },
+    w=300.0,
+    h=300.0,
+    platform=2,
+  )
+  t.draw()
+  // flung up: a quick move up the rows, let go
+  t.touch(0, 150.0, 280.0)
+  for k in 1..=12 {
+    t.advance(@ui.drag_step_ms / 2.0)
+    t.touch(1, 150.0, 280.0 - 20.0 * k.to_double())
+  }
+  t.touch(2, 150.0, 40.0)
+  t.run_for(5.0 * @ui.drag_step_ms)
+  assert_true(t.list_moving())
+  let at = t.list_offset()
+  // a finger down on a row (on its line) and up where it came down: the list stops there
+  t.touch(0, 150.0, 150.0)
+  t.frame()
+  t.touch(2, 150.0, 150.0)
+  t.frame()
+  t.draw()
+  assert_false(t.list_moving())
+  assert_eq(t.list_offset(), at)
 }
 
 ///|
@@ -206,4 +244,79 @@ test "sideways to its end: a path's end in view as it is first laid out and as i
   path.val = "a".repeat(100) + "b".repeat(40)
   t.draw()
   assert_eq(at.val, 400.0)
+}
+
+///|
+/// A strip of tabs (`words`, size 10) filling a box 300 wide, sideways: each tab an equal share, never narrower than
+/// its words; the one keyed `shown` (its index) brought into view.
+fn strip_view(words : Ref[Array[String]], at : Ref[Double], shown? : Ref[Int] = Ref::new(-1)) -> @ui.Tester {
+  @ui.Tester::new(
+    fn(c) {
+      at.val = c.sideways_at("tabs")
+      let show = if shown.val >= 0 { c.id("tab/\{shown.val}") } else { 0 }
+      c.sideways("tabs", fill=true, show~, fn() {
+        c.box(dir=Row, w=Fill(1.0), h=Px(20.0), keep=true, fn() {
+          for k, w in words.val {
+            c.box(dir=Row, w=Fill(1.0), keep=true, id=c.id("tab/\{k}"), fn() {
+              c.text(w, size=10.0, wrap=false) |> ignore
+            })
+            |> ignore
+          }
+        })
+        |> ignore
+      })
+      |> ignore
+    },
+    w=300.0,
+    h=100.0,
+  )
+}
+
+///|
+test "sideways filling: what it holds as wide as the box where it needs no more, its parts sharing it; wider, scrolled" {
+  let words = Ref::new(["ab", "cd"])
+  let at = Ref::new(0.0)
+  let t = strip_view(words, at)
+  t.draw()
+  // two of 10 in 300: 150 each
+  assert_eq(t.rect_of("ab").unwrap().0, 0.0)
+  assert_eq(t.rect_of("cd").unwrap().0, 150.0)
+  // three of 200: 600, each whole, dragged as far as its end
+  words.val = ["a".repeat(40), "b".repeat(40), "c".repeat(40)]
+  t.draw()
+  assert_eq(t.rect_of("bbbb").unwrap().0, 200.0)
+  t.drag(290.0, 10.0, 0.0, 10.0)
+  t.drag(290.0, 10.0, 0.0, 10.0)
+  t.draw()
+  assert_eq(at.val, 300.0)
+  assert_eq(t.rect_of("cccc").unwrap().0, 100.0)
+}
+
+///|
+test "sideways show: the part brought into view as it is first shown and as another is asked, scrolled as little as that takes" {
+  let words = Ref::new(["a".repeat(40), "b".repeat(40), "c".repeat(40)])
+  let at = Ref::new(0.0)
+  let shown = Ref::new(2)
+  let t = strip_view(words, at, shown~)
+  t.draw()
+  // the last (400 to 600) in view at once: its end at the box's
+  assert_eq(t.rect_of("cccc").unwrap().0, 100.0)
+  // the first: back to its start; the second (200 to 400): its end at the box's, no further
+  shown.val = 0
+  t.draw()
+  assert_eq(t.rect_of("aaaa").unwrap().0, 0.0)
+  shown.val = 1
+  t.draw()
+  assert_eq(t.rect_of("aaaa").unwrap().0, -100.0)
+  // the first again: back as far as its start
+  shown.val = 0
+  t.draw()
+  assert_eq(t.rect_of("aaaa").unwrap().0, 0.0)
+  // dragged away from where it was shown, it stays where the finger left it while the same part is asked
+  t.drag(290.0, 10.0, 190.0, 10.0)
+  t.draw()
+  assert_true(at.val > 0.0)
+  let left = at.val
+  t.draw()
+  assert_eq(at.val, left)
 }

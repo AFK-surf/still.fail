@@ -6,56 +6,51 @@
 ///|
 /// The page: the theme's ground; 全屏, black as a video is.
 // kept across runs: a value (no field of it changes)
-let screen_page_box : @ui.Style = @ui.style(w=Full, h=Full, bg=Bg)
+let screen_page_box : @ui.Style = @ui.css("w=Full h=Full bg=Bg")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let screen_page_full : @ui.Style = @ui.style(w=Full, h=Full, bg=Theater)
+let screen_page_full : @ui.Style = @ui.css("w=Full h=Full bg=Theater")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let screen_fill : @ui.Style = @ui.style(w=Full, h=Full)
+let screen_fill : @ui.Style = @ui.css("w=Full h=Full")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let screen_fill_w : @ui.Style = @ui.style(w=Full)
+let screen_fill_w : @ui.Style = @ui.css("w=Full")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let screen_row : @ui.Style = @ui.style(row=true, w=Full, h=Full)
+let screen_row : @ui.Style = @ui.css("row w=Full h=Full")
 
 ///|
 /// Over the frame's top, in its middle, 12 down (接管 sideways and 全屏).
 // kept across runs: a value (no field of it changes)
-let screen_top_center : @ui.Style = @ui.style(w=Full, pt=S3, align=ACenter)
+let screen_top_center : @ui.Style = @ui.css("w=Full pt=S3 align=ACenter")
 
 ///|
 /// Over the frame's foot, in its middle, 8 up (the keys row while the keyboard is up).
 // kept across runs: a value (no field of it changes)
-let screen_foot_center : @ui.Style = @ui.style(w=Full, h=Full, p=S2, align=ACenter, justify=JEnd)
+let screen_foot_center : @ui.Style = @ui.css("w=Full h=Full p=S2 align=ACenter justify=JEnd")
 
 ///|
 /// Over the frame's top right corner, 12 in (全屏's folded tools).
 // kept across runs: a value (no field of it changes)
-let screen_top_end : @ui.Style = @ui.style(w=Full, p=S3, align=AEnd)
+let screen_top_end : @ui.Style = @ui.css("w=Full p=S3 align=AEnd")
 
 ///|
 /// 接管 upright, under the bar: 12 from the sides, 4 over and under.
 // kept across runs: a value (no field of it changes)
-let take_over_place : @ui.Style = @ui.style(w=Full, px=S3, py=S1, align=ACenter)
+let take_over_place : @ui.Style = @ui.css("w=Full px=S3 py=S1 align=ACenter")
 
 // ── buttons ───────────────────────────────────────────────────────────────
 
 ///|
 /// A round button (40), the ink at 10% under it while it is on.
 // kept across runs: a value (no field of it changes)
-let round_button_box : @ui.Style = @ui.style(
-  w=S10,
-  h=S10,
-  radius=Full,
-  align=ACenter,
-  justify=JCenter,
-  selected=@ui.patch(bg=A(Fg, O10)),
+let round_button_box : @ui.Style = @ui.css(
+  #|w=S10 h=S10 radius=Full align=ACenter justify=JCenter selected{bg=A(Fg,O10)}
 )
 
 ///|
@@ -64,17 +59,17 @@ let round_icon : Double = 20.0
 ///|
 /// Upright: the bar, 56 high, 6 in at its start and 10 at its end, 8 between.
 // kept across runs: a value (no field of it changes)
-let screen_bar : @ui.Style = @ui.style(row=true, w=Full, h=S14, pl=S1_5, pr=S2_5, gap=S2, align=ACenter)
+let screen_bar : @ui.Style = @ui.css("row w=Full h=S14 pl=S1_5 pr=S2_5 gap=S2 align=ACenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let screen_bar_words : @ui.Style = @ui.style(w=Full)
+let screen_bar_words : @ui.Style = @ui.css("w=Full")
 
 ///|
 /// The title (15 on 20, semibold), the line under it (12 on 16, muted); one line each.
 // kept across runs: a value (no field of it changes)
 let screen_title_words : @ui.TextStyle = @ui.text_style(
-  size=Lg,
+  size=Ui,
   leading=L6,
   weight=Semibold,
   color=Fg,
@@ -83,43 +78,36 @@ let screen_title_words : @ui.TextStyle = @ui.text_style(
 
 ///|
 // kept across runs: a value (no field of it changes)
-let screen_line_words : @ui.TextStyle = @ui.text_style(size=Xs, leading=L4, color=Muted, wrap=false)
+let screen_line_words : @ui.TextStyle = @ui.text_style(size=Caption, leading=L4, color=Muted, wrap=false)
 
 ///|
 /// 只看 / 控制 (Parts.kt Seg at 32 high, its corner 16, 2 in): a track of the ink at 6%, the chosen one on a light
 /// thumb with a hairline round it, its word in the ink (the other muted), 10 in from each side.
 // kept across runs: a value (no field of it changes)
-let seg_track : @ui.Style = @ui.style(row=true, h=S8, p=S0_5, radius=Xl1_5, bg=Tint)
+let seg_track : @ui.Style = @ui.css("row h=S8 p=S0_5 radius=Xl1_5 bg=Tint")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let seg_item : @ui.Style = @ui.style(h=Full, px=S2_5, align=ACenter, justify=JCenter)
+let seg_item : @ui.Style = @ui.css("h=Full px=S2_5 align=ACenter justify=JCenter")
 
 ///|
 /// The thumb: lifted out of the track (white; the dark theme's 0x3A3B40) with a hairline round it (the line's colour,
 /// 0.5), concentric with the track.
 // kept across runs: a value (no field of it changes)
-let seg_thumb : @ui.Style = @ui.style(radius=Inner, bg=Lifted, border=B0_5, border_color=Line)
+let seg_thumb : @ui.Style = @ui.css("radius=Inner bg=Lifted border=B0_5 border_color=Line")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let seg_on_words : @ui.TextStyle = @ui.text_style(size=Sm, color=Fg, wrap=false)
+let seg_on_words : @ui.TextStyle = @ui.text_style(size=Meta, color=Fg, wrap=false)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let seg_off_words : @ui.TextStyle = @ui.text_style(size=Sm, color=Muted, wrap=false)
+let seg_off_words : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, wrap=false)
 
 ///|
 /// 全屏's tools: a capsule floating still, a round button 4 in from its edge, 4 between.
 // kept across runs: a value (no field of it changes)
-let full_tools_box : @ui.Style = @ui.style(
-  p=S1,
-  gap=S1,
-  align=ACenter,
-  radius=Xl4,
-  bg=Floating,
-  shadow=Sm,
-)
+let full_tools_box : @ui.Style = @ui.css("p=S1 gap=S1 align=ACenter radius=Xl4 bg=Floating shadow=Sm")
 
 // ── the rail ──────────────────────────────────────────────────────────────
 
@@ -130,21 +118,21 @@ let rail_box : @ui.Style = @ui.style(w=@sf.rail_w, h=Full, py=S2, gap=S1, align=
 
 ///|
 // kept across runs: a value (no field of it changes)
-let rail_people : @ui.Style = @ui.style()
+let rail_people : @ui.Style = @ui.css("")
 
 ///|
 /// The count of the others on it: over the button's top right, 4 out and 2 up.
 // kept across runs: a value (no field of it changes)
-let rail_badge_place : @ui.Style = @ui.style(w=Full, align=AEnd)
+let rail_badge_place : @ui.Style = @ui.css("w=Full align=AEnd")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let rail_badge : @ui.Style = @ui.style(min_w=S3_5, h=S3_5, radius=Full, bg=Fg, align=ACenter, justify=JCenter)
+let rail_badge : @ui.Style = @ui.css("min_w=S3_5 h=S3_5 radius=Full bg=Fg align=ACenter justify=JCenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
 let rail_badge_words : @ui.TextStyle = @ui.text_style(
-  size=Xs3,
+  size=Caption,
   weight=Semibold,
   color=Bg,
   center=true,
@@ -154,7 +142,7 @@ let rail_badge_words : @ui.TextStyle = @ui.text_style(
 ///|
 /// The line said, beside the rail (64 from its start) over its foot (8 up), 280 at most.
 // kept across runs: a value (no field of it changes)
-let rail_say_place : @ui.Style = @ui.style(w=Full, h=Full, pl=S16, pb=S2, justify=JEnd)
+let rail_say_place : @ui.Style = @ui.css("w=Full h=Full pl=S16 pb=S2 justify=JEnd")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -169,31 +157,25 @@ let rail_say_box : @ui.Style = @ui.style(
 
 ///|
 // kept across runs: a value (no field of it changes)
-let rail_say_words : @ui.TextStyle = @ui.text_style(size=Sm, leading=L5, color=Fg, max_lines=2)
+let rail_say_words : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color=Fg, max_lines=2)
 
 // ── the foot and the keys row ─────────────────────────────────────────────
 
 ///|
 /// Upright, under the frame: 56 high, 8 from the sides, 6 between.
 // kept across runs: a value (no field of it changes)
-let screen_foot : @ui.Style = @ui.style(row=true, w=Full, h=S14, px=S2, gap=S1_5, align=ACenter)
+let screen_foot : @ui.Style = @ui.css("row w=Full h=S14 px=S2 gap=S1_5 align=ACenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let keys_row_box : @ui.Style = @ui.style(row=true, gap=S1, align=ACenter)
+let keys_row_box : @ui.Style = @ui.css("row gap=S1 align=ACenter")
 
 ///|
-/// A key: 36 high, 40 wide at least, round, 10 in; the ink at 6%, or the ink while it is held.
+/// A key: 36 high, 40 wide at least, round, 10 in, its words or mark in a row (never squeezed: a key short of room
+/// leaves whole); the ink at 6%, or the ink while it is held.
 // kept across runs: a value (no field of it changes)
-let row_key_box : @ui.Style = @ui.style(
-  h=S9,
-  min_w=S10,
-  px=S2_5,
-  radius=Full,
-  bg=Tint,
-  align=ACenter,
-  justify=JCenter,
-  selected=@ui.patch(bg=Fg),
+let row_key_box : @ui.Style = @ui.css(
+  #|row h=S9 min_w=S10 px=S2_5 radius=Full bg=Tint align=ACenter justify=JCenter selected{bg=Fg}
 )
 
 ///|
@@ -202,7 +184,7 @@ let key_icon : Double = 18.0
 ///|
 // kept across runs: a value (no field of it changes)
 let row_key_words : @ui.TextStyle = @ui.text_style(
-  size=Base,
+  size=Ui,
   leading=L4_75,
   weight=Semibold,
   color=Fg,
@@ -216,60 +198,62 @@ let row_key_on_words : @ui.TextStyle = row_key_words.then(@ui.text_style(color=B
 ///|
 /// The keys row floating over the frame: a capsule 4 round it.
 // kept across runs: a value (no field of it changes)
-let keys_capsule_box : @ui.Style = @ui.style(p=S1, radius=Full, bg=Floating, shadow=Sm)
+let keys_capsule_box : @ui.Style = @ui.css("p=S1 radius=Full bg=Floating shadow=Sm")
 
 // ── 接管 ─────────────────────────────────────────────────────────────────
 
 ///|
-/// Who drives it and 接管: a capsule floating still, 480 at most, 14 in at its start and 6 elsewhere, 10 between.
+/// Who drives it and 接管: a capsule floating still, 480 at most, one line high (44: 接管 6 in), its dot and 接管 in its
+/// ends concentric with them (@sf.capsule_in), 10 between.
 // kept across runs: a value (no field of it changes)
 let take_over_box : @ui.Style = @ui.style(
   row=true,
   max_w=@sf.take_over_max,
-  pl=S3_5,
+  pl=@sf.capsule_end_room(take_over_h, take_over_dot_side),
   pr=S1_5,
   py=S1_5,
   gap=S2_5,
   align=ACenter,
-  radius=Xl3,
+  radius=Full,
   bg=Floating,
   shadow=Sm,
 )
 
 ///|
 // kept across runs: a value (no field of it changes)
-let take_over_dot : @ui.Style = @ui.style(w=S2, h=S2, radius=Full, bg=Warn)
+let take_over_dot : @ui.Style = @ui.css("w=S2 h=S2 radius=Full bg=Warn")
+
+///|
+/// The capsule's height: 接管's 32 and 6 over and under it; its dot's (8: S2).
+let take_over_h : Double = 44.0
+
+///|
+let take_over_dot_side : Double = 8.0
 
 ///|
 // kept across runs: a value (no field of it changes)
-let take_over_words_box : @ui.Style = @ui.style()
+let take_over_words_box : @ui.Style = @ui.css("w=Cut")
 
 ///|
 // kept across runs: a value (no field of it changes)
 let take_over_words : @ui.TextStyle = @ui.text_style(
-  size=Base,
+  size=Ui,
   leading=L4_75,
   weight=Semibold,
   color=Fg,
-  max_lines=2,
+  wrap=false,
+  w=Cut,
 )
 
 ///|
 /// 接管: the main solid button (the ink, the page's colour on it), 32 high, 14 in, its corner 16.
 // kept across runs: a value (no field of it changes)
-let take_over_button : @ui.Style = @ui.style(
-  h=S8,
-  px=S3_5,
-  radius=Xl1_5,
-  bg=Fg,
-  align=ACenter,
-  justify=JCenter,
-)
+let take_over_button : @ui.Style = @ui.css("h=S8 px=S3_5 radius=Full bg=Fg align=ACenter justify=JCenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
 let take_over_button_words : @ui.TextStyle = @ui.text_style(
-  size=Base,
+  size=Ui,
   leading=L4_75,
   weight=Semibold,
   color=Bg,
@@ -280,30 +264,30 @@ let take_over_button_words : @ui.TextStyle = @ui.text_style(
 
 ///|
 // kept across runs: a value (no field of it changes)
-let stage_box : @ui.Style = @ui.style(w=Full, h=Full, clip=true)
+let stage_box : @ui.Style = @ui.css("w=Full h=Full clip")
 
 ///|
 /// The frame as it was, faded while the view is on its way back (40%).
 // kept across runs: a value (no field of it changes)
-let frame_faded : @ui.Style = @ui.style(opacity=O40)
+let frame_faded : @ui.Style = @ui.css("opacity=O40")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let frame_clear : @ui.Style = @ui.style()
+let frame_clear : @ui.Style = @ui.css("")
 
 ///|
 /// Over: the screen's place gone dark, what happened in its middle.
 // kept across runs: a value (no field of it changes)
-let over_box : @ui.Style = @ui.style(clip=true, align=ACenter, justify=JCenter)
+let over_box : @ui.Style = @ui.css("clip align=ACenter justify=JCenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let stage_center : @ui.Style = @ui.style(w=Full, h=Full, align=ACenter, justify=JCenter)
+let stage_center : @ui.Style = @ui.css("w=Full h=Full align=ACenter justify=JCenter")
 
 ///|
 /// Over the frame's foot: 16 in, 420 at most, 8 between.
 // kept across runs: a value (no field of it changes)
-let stage_foot : @ui.Style = @ui.style(w=Full, h=Full, p=S4, align=ACenter, justify=JEnd)
+let stage_foot : @ui.Style = @ui.css("w=Full h=Full p=S4 align=ACenter justify=JEnd")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -312,43 +296,25 @@ let stage_foot_column : @ui.Style = @ui.style(w=Full, max_w=@sf.phone_max, gap=S
 ///|
 /// Why 控制 does not drive it: floating still, 14 and 8 in, an icon (16) 8 before the words (13 on 18, three lines).
 // kept across runs: a value (no field of it changes)
-let undriven_box : @ui.Style = @ui.style(
-  row=true,
-  px=S3_5,
-  py=S2,
-  gap=S2,
-  align=ACenter,
-  radius=Xl2,
-  bg=Floating,
-  shadow=Sm,
-)
+let undriven_box : @ui.Style = @ui.css("row px=S3_5 py=S2 gap=S2 align=ACenter radius=Xl2 bg=Floating shadow=Sm")
 
 ///|
 let undriven_icon : Double = 16.0
 
 ///|
 // kept across runs: a value (no field of it changes)
-let undriven_words : @ui.TextStyle = @ui.text_style(size=Sm, leading=L5, color=Muted, max_lines=3)
+let undriven_words : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color=Muted, max_lines=3)
 
 ///|
 /// On its way (Waiting.kt WaitPill floating over the frame): 24 round it, the capsule floating still with no ground of
 /// its own, 12 and 6 in, the spinner (12) 8 before the words (13 on 18, the ink, two lines).
 // kept across runs: a value (no field of it changes)
-let wait_pill_box : @ui.Style = @ui.style(
-  row=true,
-  px=S3,
-  py=S1_5,
-  gap=S2,
-  align=ACenter,
-  radius=Full,
-  bg=Floating,
-  shadow=Sm,
-)
+let wait_pill_box : @ui.Style = @ui.css("row px=S3 py=S1_5 gap=S2 align=ACenter radius=Full bg=Floating shadow=Sm")
 
 ///|
 /// Not shown yet (a wait is said once it has been a moment), its room kept.
 // kept across runs: a value (no field of it changes)
-let unseen : @ui.Style = @ui.style(opacity=O0)
+let unseen : @ui.Style = @ui.css("opacity=O0")
 
 ///|
 let wait_spinner : Double = 12.0
@@ -356,7 +322,7 @@ let wait_spinner : Double = 12.0
 ///|
 // kept across runs: a value (no field of it changes)
 let wait_pill_words : @ui.TextStyle = @ui.text_style(
-  size=Sm,
+  size=Meta,
   leading=L5,
   color=Fg,
   center=true,
@@ -371,7 +337,7 @@ let ended_box : @ui.Style = @ui.style(p=S6, max_w=@sf.ended_max, gap=S1, align=A
 ///|
 // kept across runs: a value (no field of it changes)
 let ended_title : @ui.TextStyle = @ui.text_style(
-  size=Xl,
+  size=Title,
   leading=L7,
   weight=Semibold,
   color=OnVeil,
@@ -380,7 +346,7 @@ let ended_title : @ui.TextStyle = @ui.text_style(
 
 ///|
 // kept across runs: a value (no field of it changes)
-let ended_why : @ui.TextStyle = @ui.text_style(size=Sm, leading=L5, color=A(OnVeil, O70), center=true)
+let ended_why : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color=A(OnVeil, O70), center=true)
 
 ///|
 /// 重新打开 (Controls.kt Button at 34 high, 16 in, 12 more under the words): the ink with the page's colour on it in
@@ -397,63 +363,63 @@ let again_solid : @ui.Style = @ui.style(
 
 ///|
 // kept across runs: a value (no field of it changes)
-let again_soft : @ui.Style = again_solid.then(@ui.style(bg=Neutral))
+let again_soft : @ui.Style = again_solid.then(@ui.css("bg=Neutral"))
 
 ///|
 // kept across runs: a value (no field of it changes)
-let again_solid_words : @ui.TextStyle = @ui.text_style(size=Base, weight=Semibold, color=Bg, wrap=false)
+let again_solid_words : @ui.TextStyle = @ui.text_style(size=Ui, weight=Semibold, color=Bg, wrap=false)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let again_soft_words : @ui.TextStyle = @ui.text_style(size=Base, weight=Semibold, color=Fg, wrap=false)
+let again_soft_words : @ui.TextStyle = @ui.text_style(size=Ui, weight=Semibold, color=Fg, wrap=false)
 
 // ── the files sent ────────────────────────────────────────────────────────
 
 ///|
 /// The files' panel: floating still, as wide as the foot, its corner 8 and a key's half (25).
 // kept across runs: a value (no field of it changes)
-let drops_box : @ui.Style = @ui.style(w=Full, radius=Around, bg=Floating, shadow=Sm, clip=true)
+let drops_box : @ui.Style = @ui.css("w=Full radius=Around bg=Floating shadow=Sm clip")
 
 ///|
 /// A file's row: 18 in at its start, 8 elsewhere, 12 between.
 // kept across runs: a value (no field of it changes)
-let drop_row_box : @ui.Style = @ui.style(row=true, w=Full, pl=S4_5, pr=S2, py=S2, gap=S3)
+let drop_row_box : @ui.Style = @ui.css("row w=Full pl=S4_5 pr=S2 py=S2 gap=S3")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let drop_icon_box : @ui.Style = @ui.style(pt=SPx)
+let drop_icon_box : @ui.Style = @ui.css("pt=SPx")
 
 ///|
 let drop_icon : Double = 20.0
 
 ///|
 // kept across runs: a value (no field of it changes)
-let drop_words : @ui.Style = @ui.style(w=Full)
+let drop_words : @ui.Style = @ui.css("w=Full")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let drop_name : @ui.TextStyle = @ui.text_style(size=Lg, leading=L6, weight=Semibold, color=Fg, wrap=false)
+let drop_name : @ui.TextStyle = @ui.text_style(size=Ui, leading=L6, weight=Semibold, color=Fg, wrap=false)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let drop_path_words : @ui.TextStyle = @ui.text_style(size=Xs, leading=L4, color=Muted, max_lines=2)
+let drop_path_words : @ui.TextStyle = @ui.text_style(size=Caption, leading=L4, color=Muted, max_lines=2)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let drop_failed_words : @ui.TextStyle = @ui.text_style(size=Xs, leading=L4, color=Danger, max_lines=3)
+let drop_failed_words : @ui.TextStyle = @ui.text_style(size=Caption, leading=L4, color=Danger, max_lines=3)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let drop_going_words : @ui.TextStyle = @ui.text_style(size=Xs, leading=L4, color=Muted, wrap=false)
+let drop_going_words : @ui.TextStyle = @ui.text_style(size=Caption, leading=L4, color=Muted, wrap=false)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let drop_buttons : @ui.Style = @ui.style(row=true, pt=S2, gap=S2)
+let drop_buttons : @ui.Style = @ui.css("row pt=S2 gap=S2")
 
 ///|
 /// How far it has got: a track of the ink at 8%, 3 high, 5 under the words, filled in the accent.
 // kept across runs: a value (no field of it changes)
-let drop_track_place : @ui.Style = @ui.style(w=Full, pt=S1_25)
+let drop_track_place : @ui.Style = @ui.css("w=Full pt=S1_25")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -468,7 +434,7 @@ let drop_track : @ui.Style = @ui.style(
 
 ///|
 // kept across runs: a value (no field of it changes)
-let drop_track_fill : @ui.Style = @ui.style(h=Full, radius=Full, bg=Accent)
+let drop_track_fill : @ui.Style = @ui.css("h=Full radius=Full bg=Accent")
 
 ///|
 /// A small round key at a row's end (34).
@@ -498,4 +464,118 @@ let soft_button_box : @ui.Style = @ui.style(
 
 ///|
 // kept across runs: a value (no field of it changes)
-let soft_button_words : @ui.TextStyle = @ui.text_style(size=Base, weight=Semibold, color=Fg, wrap=false)
+let soft_button_words : @ui.TextStyle = @ui.text_style(size=Ui, weight=Semibold, color=Fg, wrap=false)
+
+// ── how the view goes (screen_panel.mbt) ─────────────────────────────────
+
+///|
+/// Under the title, live: the signal mark, how long it has been seen, the core's line, 6 apart.
+// kept across runs: a value (no field of it changes)
+let screen_line_row : @ui.Style = @ui.css("row w=Full h=S4 gap=S1_5 align=ACenter")
+
+///|
+/// How long it has been seen (12 on 16, muted, its figures as wide as each other).
+// kept across runs: a value (no field of it changes)
+let screen_time_words : @ui.TextStyle = @ui.text_style(
+  size=Caption,
+  leading=L4,
+  color=Muted,
+  wrap=false,
+  tabular=true,
+)
+
+///|
+/// The signal mark's bars side by side, 2 apart, standing on its foot.
+// kept across runs: a value (no field of it changes)
+let bars_row : @ui.Style = @ui.css("row gap=S0_5 align=AEnd")
+
+///|
+/// Its bars: 4 wide, 4, 8 and 12 high, rounded.
+// kept across runs: a value (no field of it changes)
+let bar_low : @ui.Style = @ui.css("w=S1 h=S1 radius=Sm")
+
+///|
+// kept across runs: a value (no field of it changes)
+let bar_mid : @ui.Style = @ui.css("w=S1 h=S2 radius=Sm")
+
+///|
+// kept across runs: a value (no field of it changes)
+let bar_high : @ui.Style = @ui.css("w=S1 h=S3 radius=Sm")
+
+///|
+/// The view's figures (the web's netPanel: 280 wide, 10 between its parts).
+let net_panel_w : Double = 280.0
+
+///|
+// kept across runs: a value (no field of it changes)
+let net_panel_box : @ui.Style = @ui.css("w=Full px=S2_5 py=S2 gap=S2_5")
+
+///|
+/// Its head: the mark at 20, the round trip beside it (15, semibold), 10 apart.
+// kept across runs: a value (no field of it changes)
+let net_head_box : @ui.Style = @ui.css("row w=Full gap=S2_5 align=ACenter")
+
+///|
+// kept across runs: a value (no field of it changes)
+let net_head_words : @ui.TextStyle = @ui.text_style(size=Ui, weight=Semibold, color=Fg, wrap=false, tabular=true)
+
+///|
+/// A group of its figures, a row each 4 apart: set apart from the one before by its room (6 more than the panel's 10
+/// between its parts), no line over it (only a menu's parts are set apart by one).
+// kept across runs: a value (no field of it changes)
+let net_group_box : @ui.Style = @ui.css("w=Full pt=S1_5")
+
+///|
+// kept across runs: a value (no field of it changes)
+let net_rows : @ui.Style = @ui.css("w=Full gap=S1")
+
+///|
+/// A figure's row: its name in a column 88 wide, its value beside it, 12 apart.
+// kept across runs: a value (no field of it changes)
+let net_row_box : @ui.Style = @ui.css("row w=Full gap=S3")
+
+///|
+let net_name_w : Double = 88.0
+
+///|
+// kept across runs: a value (no field of it changes)
+let net_row_name : @ui.Style = @ui.style(w=Fixed(net_name_w))
+
+///|
+// kept across runs: a value (no field of it changes)
+let net_name_words : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, wrap=false)
+
+///|
+// kept across runs: a value (no field of it changes)
+let net_value_words : @ui.TextStyle = @ui.text_style(size=Meta, color=Fg, tabular=true)
+
+// ── 控制中心 (screen_panel.mbt) ───────────────────────────────────────────
+
+///|
+/// A choice of it (画质, 缩放): a segmented row in by a panel row's padding.
+// kept across runs: a value (no field of it changes)
+let center_choice : @ui.Style = @ui.css("w=Full px=S2_5 py=S1")
+
+///|
+/// The combos' tiles: rows of three, 8 apart, in by a panel row's padding.
+// kept across runs: a value (no field of it changes)
+let tiles_box : @ui.Style = @ui.css("w=Full px=S2_5 py=S1 gap=S2")
+
+///|
+// kept across runs: a value (no field of it changes)
+let tiles_row : @ui.Style = @ui.css("row w=Full gap=S2")
+
+///|
+/// A tile: its icon over its name, on the ink at 6% (8% pressed), 64 high, its corner 12.
+// kept across runs: a value (no field of it changes)
+let tile_box : @ui.Style = @ui.style(w=@sf.grow).then(
+  @ui.css("h=S16 gap=S1_5 radius=Xl bg=Tint align=ACenter justify=JCenter pressed{bg=Hover}"),
+)
+
+///|
+// kept across runs: a value (no field of it changes)
+let tile_gap : @ui.Style = @ui.style(w=@sf.grow).then(@ui.css("h=S16"))
+
+///|
+// kept across runs: a value (no field of it changes)
+let tile_words : @ui.TextStyle = @ui.text_style(size=Caption, color=Fg, wrap=false)

@@ -3,7 +3,10 @@
 // output, in the helper's messages (station/src/screens/desktop.ts `TO_HELPER`, native/helper's ScreenView.swift):
 //
 //   stillfail-screen status   one JSON line: {ok, display: {id, width, height}, capture} (the main display, in pixels)
-//   stillfail-screen view     a JSON line {codec: "h264"|"jpeg", maxWidth, maxHeight, bitrate?, encoder?: "software"},
+//   stillfail-screen scale [percent]
+//                             one JSON line: the main display's scale {percent, recommended, steps: [percent…]}, set to
+//                             `percent` first when it is given (one of its steps); or {error}
+//   stillfail-screen view     a JSON line {codec: "h265"|"h264"|"jpeg", maxWidth, maxHeight, bitrate?, encoder?: "software"},
 //                             then messages
 //                             (a kind byte, the payload's length in 4 bytes big-endian, the payload) both ways until
 //                             its input ends:
@@ -14,12 +17,17 @@
 //        4 clipboard 1 byte flags (bit 0: paste with Ctrl+V), 1 byte type (1 text, 2 PNG), the bytes
 //        5 watch     1 byte       1: say each copy made on the machine from now on (message 5 out), 0: stop
 //        6 reveal    UTF-8        a file's path, shown selected in Explorer
-//   out  1 info      JSON     first: {width, height, encoder}, or {error, code: "capture"|"display"|"encoder"}
-//        2 config    4 bytes width, 4 bytes height, then the avcC (none for JPEG): before the first frame and whenever
+//        7 rate      4 bytes      bits a second (big-endian) to encode at from the next frame on
+//        8 bounds    JSON         {maxWidth, maxHeight}: the pictures from now on fitted into these
+//   out  1 info      JSON     first: {width, height, encoder, codec} (h265 where asked and the hardware has it), or
+//                             {error, code: "capture"|"display"|"encoder"}
+//        2 config    4 bytes width, 4 bytes height, then the avcC or hvcC (none for JPEG): before the first frame and whenever
 //                             it changes
 //        3 frame     1 byte flags (bit 0: key frame), 8 bytes timestamp (µs), then the frame (AVCC, or one JPEG)
 //        4 event     JSON     what the station logs
 //        5 clipboard 1 byte type (1 text, 2 PNG), the bytes: what was copied, while watched
+//        6 cursor    JSON     {x, y, shape}: the pointer (0..1 of the display, a CSS cursor's name; "none" hidden) as it
+//                             moves or changes; a video's pictures leave it out, a JPEG's have it drawn in
 //
 // Windows.Graphics.Capture captures the main display (the cursor drawn in, no border), a picture only when the screen
 // changed; the GPU's video processor scales it into the view's bounds as NV12 (or BGRA for a JPEG); Media Foundation
@@ -28,16 +36,21 @@
 
 #[cfg_attr(not(windows), allow(dead_code))]
 mod avc;
+#[cfg_attr(not(windows), allow(dead_code))]
+mod hevc;
 #[cfg(windows)]
 mod capture;
 #[cfg(windows)]
 mod clipboard;
+#[cfg(windows)]
+mod cursor;
 #[cfg(windows)]
 mod encode;
 #[cfg(windows)]
 mod image;
 #[cfg(windows)]
 mod input;
+mod scale;
 #[cfg(windows)]
 mod view;
 
@@ -101,13 +114,18 @@ fn main() {
     view::dpi_aware();
     match std::env::args().nth(1).as_deref() {
         Some("status") => println!("{}", view::status()),
+        // The main display's scale; with a percent, set to it first.
+        Some("scale") => match std::env::args().nth(2) {
+            Some(percent) => println!("{}", percent.parse().map(scale::set).unwrap_or_else(|_| serde_json::json!({ "error": "not a percent" }))),
+            None => println!("{}", scale::read()),
+        },
         Some("view") => {
             let mut input = std::io::stdin().lock();
             let Some(request) = request_line(&mut input) else { std::process::exit(2) };
             view::run(&request, &mut input, Out::new());
         }
         _ => {
-            eprintln!("usage: stillfail-screen status | view");
+            eprintln!("usage: stillfail-screen status | view | scale [percent]");
             std::process::exit(2);
         }
     }

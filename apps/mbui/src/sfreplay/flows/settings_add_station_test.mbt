@@ -1,13 +1,11 @@
 // 80-add-station (e2e/traces/settings-add-station.trace: Studio against the local still.fail): Settings → Station → ＋,
 // a new machine named, 生成命令 (workspace.enroll); the runner enrolled a second station with the command (the cloud's
-// stations say it joined); 完成, its page → "…" → 从 workspace 移除 (workspace.removeStation), gone from the list.
+// stations say it joined); 完成, its page → "…" → 从 workspace 移除 (its menu and the asking first the presenters') (workspace.removeStation), gone from the list.
 
 ///|
 test "80-add-station" {
   @sfreplay.orders(fn(seed) raise {
-    // (the station's page asked for its logins and its workspaces as the run had it, all in one page; they are its
-    // 设置's now, which this flow does not open: those asks dropped, with what came for them)
-    let f = @sfreplay.Flow::start(@sfreplay.trace("settings-add-station"), seed~, drop=["machineLogins", "memberships"])
+    let f = @sfreplay.Flow::start(@sfreplay.trace("settings-add-station"), seed~)
     f.tap("icon:settings")
     f.run_to(@ui.nav_rest())
     f.tap("=Station")
@@ -29,11 +27,12 @@ test "80-add-station" {
     f.see("=e2e-080726-b")
     f.tap("=e2e-080726-b")
     f.run_to(@ui.nav_rest())
-    f.see("在此 station 上")
+    f.see("概览")
+    // its ⋯ and the asking first are the presenters' (sheets on a phone)
     f.tap("icon:more")
-    f.run_to(@kit.sheet_rest("settings-sheet"))
-    f.tap("从 workspace 移除")
-    f.run_to(@kit.sheet_rest("settings-sheet"))
+    f.run_to(@kit.sheet_rest("sf-present"))
+    f.tap("=从 workspace 移除")
+    f.run_to(@kit.sheet_rest("sf-present"))
     f.see("移除「e2e-080726-b」")
     f.tap("=移除 station")
     // said as the cloud answers (its toast's time its own: looked at as it shows), the page going back
@@ -48,7 +47,7 @@ test "80-add-station" {
     f.see("=studio")
     f.gone("e2e-080726-b")
     // the confirming sheet gone down behind the page (at rest already when the page's way back took longer)
-    let down = @kit.sheet_rest("settings-sheet")
+    let down = @kit.sheet_rest("sf-present")
     if down > f.t.time() {
       f.run_to(down)
     }

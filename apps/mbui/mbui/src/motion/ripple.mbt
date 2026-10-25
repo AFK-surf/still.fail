@@ -24,8 +24,8 @@ priv struct Ripple {
 }
 
 ///|
-/// The ripples going, by the id of what was pressed.
-// kept across runs: each is dropped once it has faded (a ripple is over in under a second)
+/// The ripples going, by the id of what was pressed (put back by layer.mbt's reset: a test that ended with one going
+/// left it to the next Tester's box of the same id, its Anim not at rest, screens_wbtest's home-sheet, 2026-10-24).
 let ripples : Map[Int, Array[Ripple]] = {}
 
 ///|
@@ -91,9 +91,14 @@ pub fn ripple(
   // a finger down on it, or a tap let go before the press showed: a ripple from where it went down
   if (down || tapped) && !list.iter().any(fn(r) { !r.lifted }) {
     let (px, py, _) = c.pointer()
+    // (where it is laid this frame; a list's row, laid as the list is, after its build: where it was laid last)
     let (bx, by) = match c.laid_rect(id) {
       Some((x, y, _, _)) => (x, y)
-      None => (px, py)
+      None =>
+        match c.rect_of(id) {
+          Some((x, y, _, _)) => (x, y)
+          None => (px, py)
+        }
     }
     let p = Anim::new(0.0)
     p.name = "ripple"

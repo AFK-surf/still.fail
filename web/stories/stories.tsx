@@ -14,7 +14,7 @@ import { driveFile } from "../src/drive/viewerFile.ts";
 import { DrivePreview } from "../src/mobile/Drive.tsx";
 import { FilePreview } from "../src/FilePreview.tsx";
 import { useToast } from "@stillfail/ui/toast.tsx";
-import { ComposerExtras, FileCard, MineBubble, MineMessage } from "../src/Chat.tsx";
+import { ComposerExtras, FileCard, MessageFileCard, MineBubble, MineMessage } from "../src/Chat.tsx";
 import type { Draft, Pending } from "../src/draft.ts";
 import * as composerCss from "../src/styles/composer.css.ts";
 import * as conversationCss from "../src/styles/conversation.css.ts";
@@ -32,12 +32,12 @@ import { LoginCard, LoginsSection } from "../src/MachineLogins.tsx";
 import * as pagesCss from "../src/styles/pages.css.ts";
 import type { DemoExtension } from "../src/demo/mount.tsx";
 import { shown as fontsShown } from "../../client/core-ts/src/fonts.ts";
-import type { ChatMessage, ChatView, ShareInView, StationView } from "../src/core/shapes.ts";
+import type { ChatMessage, ChatView, DownloadShown, ShareInView, StationView } from "../src/core/shapes.ts";
 import { stamp } from "../src/demo/fixtures.ts";
 import { markdown } from "../../client/core-ts/src/markdown.ts";
 import type { Shared } from "../src/shareIn.ts";
 import { ScreenViewer } from "../src/screen/ScreenViewer.tsx";
-import { OUTDATED, SCREENS_LACKING, adbLinksDemo, screenLinksDemo, screensDemo, type ViewStory } from "./screens.ts";
+import { OUTDATED, SCREENS_LACKING, adbLinksDemo, screenLinksDemo, screensDemo, simulatorLinkDemo, type ViewStory } from "./screens.ts";
 import { LONG_COMMAND, libraryDemo, vaultDemo } from "./vault.ts";
 import { filesDemo, TRANSFERS } from "./files.ts";
 import { cursorPickDemo, installDemo, installFlowDemo, kimiMethodDemo } from "./install.ts";
@@ -48,7 +48,7 @@ import { softwareDemo } from "./software.ts";
 import { lockDemo } from "./lock.ts";
 import { feishuConnectDemo, feishuFlowDemo } from "./feishu.ts";
 import { relaysDemo } from "./relays.ts";
-import { relayDemo, TWO_BOTS } from "./relay.ts";
+import { ccDemo, relayDemo, TWO_BOTS } from "./relay.ts";
 import { Console } from "../src/admin/console.tsx";
 import { ACCOUNT } from "../src/demo/station.ts";
 import { ModelTriple } from "../src/ModelTriple.tsx";
@@ -61,7 +61,8 @@ import PICTURE_URL from "./assets/story-picture.png?url";
 
 /**
  * What takes a story to its state, as the tests do it (Playwright's selectors); shown beside it in the gallery. `hold`:
- * a finger held on the middle of it as long as a long press, then lifted.
+ * a finger held on the middle of it as long as a long press, then lifted. A step's `move` comes first: what the pointer
+ * wakes (a playing video's controls, gone again once it rests) is pressed before it has rested.
  */
 export interface Step { click?: string; rightClick?: string; hover?: string; key?: string; move?: [number, number]; text?: string; hold?: string }
 export interface Story {
@@ -131,6 +132,31 @@ const addModel: DemoExtension = {
     return { ...o, profiles: o.profiles.map((p) => ({ ...p, canAddModel: true })) };
   },
 };
+/** Hermes' ACP catalog on an environment profile, before any model is enabled. */
+const hermesModels: DemoExtension = {
+  then: (t, value) => {
+    if (!value || typeof value !== "object") return undefined;
+    const shown = (p: Record<string, unknown>) => ({
+      ...p, name: "Hermes Agent", runtime: "hermes", runtimes: ["hermes"], machine: false,
+      access: { kind: "env" }, model: null, models: [], quota: null, login: null, env: [],
+      canAddModel: true, available: ["openai-api:smoke-model", "openrouter:anthropic/claude-sonnet-4.6"],
+      names: {"openai-api:smoke-model":"openai-api:smoke-model", "openrouter:anthropic/claude-sonnet-4.6":"Sonnet 4.6"},
+      makers: {}, series: [{name:"Sonnet",models:["openrouter:anthropic/claude-sonnet-4.6"]},{name:"其他",models:["openai-api:smoke-model"]}],
+      modelsText: "已启用 0 / 2 个模型", modelsReading: false, checkText: "可用", checkTone: "green", checkLine: "2 个模型", trouble: null,
+      kindText: "自定义环境变量", providerName: null, loginCommand: "",
+      home: "/Users/lin/.stillfail/homes/hermes", check: { state: "ok", detail: "可用，2 个模型", checkedAt: Date.now(), models: ["openai-api:smoke-model", "openrouter:anthropic/claude-sonnet-4.6"] },
+    });
+    if (t.topic === "overview") {
+      const o = value as {profiles: Record<string,unknown>[]};
+      return {...o, profiles: o.profiles.map(shown)};
+    }
+    if (t.topic === "profiles") {
+      const o = value as {items: Record<string,unknown>[]};
+      return {...o, items: o.items.map(e => ({...e, group: "key", groupTitle: "其他", profile: shown(e.profile as Record<string,unknown>)}))};
+    }
+    return undefined;
+  },
+};
 /** The demo's profile as an OpenCode Go one on an OpenCode account (accounts/console.ts): signed in, or being signed in
  *  again (`signingIn`: the device code is up). */
 const openCode = (signingIn: boolean): DemoExtension => ({
@@ -171,13 +197,14 @@ const kimiCode: DemoExtension = {
     };
   },
 };
-/** The demo's profile as a Claude subscription being signed in again: Claude's page is up and its code is pasted back. */
-const claudeSignIn: DemoExtension = {
+/** The demo's profile as a Claude subscription being signed in again: Claude's page is up and its code is pasted back;
+ * `inStation`, where the station's own browser can open it too (docs/remote-login.md). */
+const claudeSigningIn = (inStation = false): DemoExtension => ({
   then: (t, value) => {
     if (t.topic !== "overview" || !value || typeof value !== "object") return undefined;
     const o = value as { profiles: Record<string, unknown>[] };
     const at = Date.UTC(2026, 9, 19, 3, 0);
-    const login = { profile: "machine-claude", runtime: "claude", state: "needs_code", url: "https://claude.ai/oauth/authorize?code=true&client_id=still.fail", startedAt: at, expiresAt: at + 600_000 };
+    const login = { profile: "machine-claude", runtime: "claude", state: "needs_code", url: "https://claude.ai/oauth/authorize?code=true&client_id=still.fail", startedAt: at, expiresAt: at + 600_000, ...(inStation ? { browser: true } : {}) };
     return {
       ...o,
       profiles: o.profiles.map((p) => ({
@@ -186,7 +213,8 @@ const claudeSignIn: DemoExtension = {
       })),
     };
   },
-};
+});
+const claudeSignIn = claudeSigningIn();
 /** The workspace's list with an account of each kind, a section each, its mark before its title. */
 const everyKind: DemoExtension = {
   then: (t, value) => {
@@ -348,10 +376,12 @@ const fullStation = (): DemoExtension => together(
 );
 /** One of the demo station's screens seen, its view going as `story` says (screens.ts), alone on the window; `h264`: in
  * H.264 where the browser encodes it. */
-const screenView = (story: ViewStory, phone = false, h264 = false): Pick<Story, "render" | "demo"> => ({
+const screenView = (story: ViewStory, phone = false, h264 = false, screen = "desktop"): Pick<Story, "render" | "demo"> => ({
   demo: screensDemo(story, undefined, h264),
-  render: () => stage(<ScreenViewer station="demo/local" screen="desktop" backLabel="返回" onBack={noop} onWindow={phone ? undefined : noop} phone={phone} />),
+  render: () => stage(<ScreenViewer station="demo/local" screen={screen} backLabel="返回" onBack={noop} onWindow={phone ? undefined : noop} phone={phone} />),
 });
+/** A simulator booted on the demo station (an iPhone's home screen), seen as `screenView`'s. */
+const SIMULATOR = "simulator:8A1704F6-57D2-40B0-A330-B98038CB17C3";
 /** With a mouse, the pointer brought to the bar at the top. */
 const toTheBar: Step[] = [{ move: [640, 20] }];
 /** A chat row of the demo's, the made-up ones copied from (kept from its first view, whatever is typed later). */
@@ -637,6 +667,22 @@ function OutboxUpload() {
   );
 }
 
+/** A chat's file the core downloads (chatDownloads.ts): how far on its card, its sheet filling as an upload's does; one
+ * that failed, why. */
+function FileDownloads() {
+  const size = 52_428_800;
+  const of = (state: DownloadShown["state"], loaded: number, statusText: string): DownloadShown =>
+    ({ id: `s|k|${state}`, station: "s", key: "k", name: "dist.zip", size, loaded, progress: loaded / size, state, active: state !== "failed", statusText, startedAt: 0 });
+  const file = { name: "dist.zip", size, path: "work/dist.zip" };
+  return (
+    <div style={{ padding: 40, maxWidth: 820, display: "grid", gap: 12, justifyItems: "start" }}>
+      {[null, of("going", 22_020_096, "正在下载 42% · 50 MB"), of("waiting", 10_485_760, "等待连接 station · 20%"), of("failed", 0, "下载失败：无法连接 station")].map((d) => (
+        <MessageFileCard key={d?.state ?? "none"} file={file} download={d} onOpen={noop} onCancel={noop} onRetry={noop} />
+      ))}
+    </div>
+  );
+}
+
 /** A chat's file opened (its preview), from what is here already: it opens in the viewer of its kind. */
 function AttachmentDemo({ name, url, type }: { name: string; url: string; type: string }) {
   const [local, setLocal] = useState<{ blob: Blob; url: string } | null>(null);
@@ -736,6 +782,7 @@ export const stories: Story[] = [
   { id: "math", group: "对话", title: "数学公式 · 行内与独立", render: () => stage(<div className={conversationCss.markdown} style={{ maxWidth: 720, width: "100%", padding: 24 }}><Prose>{MATH}</Prose></div>) },
   { id: "code-colours", group: "对话", title: "代码块 · 各语言的颜色", render: () => stage(<div className={conversationCss.markdown} style={{ maxWidth: 720, padding: 24 }}><MdView md={CODE_COLOURS.md} source={CODE_COLOURS.text} /></div>) },
   { id: "outbox-upload", group: "对话", title: "发出后还在上传的附件", render: () => stage(<OutboxUpload />) },
+  { id: "file-downloads", group: "对话", title: "下载中的附件", render: () => stage(<FileDownloads />) },
   { id: "runtime-missing", group: "对话", title: "缺少运行时 · 安装", app: true, demo: installDemo("missing") },
   { id: "runtime-installing", group: "对话", title: "缺少运行时 · 正在安装", app: true, demo: installDemo("installing") },
   { id: "runtime-install-failed", group: "对话", title: "缺少运行时 · 安装失败", app: true, demo: installDemo("failed") },
@@ -771,7 +818,16 @@ export const stories: Story[] = [
   { id: "app-chat-history", group: "应用", title: "执行历史", app: true, steps: [{ click: '[aria-label$="的执行历史"]' }] },
   { id: "app-chat-history-turns", group: "应用", title: "执行历史 · 一轮一轮", app: true, steps: [{ click: '[aria-label$="的执行历史"]' }], demo: historyTurns },
   { id: "app-chat-side", group: "应用", title: "对话 · 侧栏打开", app: true, steps: [{ click: '[aria-label="打开侧栏"]' }] },
+  // A tab's × pointed at, behind and in front: the tab stays lit, the × a step more (docs/ui-panels.md 悬停).
+  { id: "app-chat-side-tab-close", group: "应用", title: "对话 · 侧栏标签的 × 悬停", app: true, demo: letters, steps: [{ click: '[aria-label$="的执行历史"]' }, { click: '[aria-label="对话信息"]' }, { click: "text=agent 往来" }, { hover: '[class*="sideTabWrap"]:first-child [class*="sideTabClose"]' }] },
+  { id: "app-chat-side-front-close", group: "应用", title: "对话 · 侧栏当前标签的 × 悬停", app: true, demo: letters, steps: [{ click: '[aria-label$="的执行历史"]' }, { click: '[aria-label="对话信息"]' }, { click: "text=agent 往来" }, { hover: '[class*="sideTabWrap"]:last-child [class*="sideTabClose"]' }] },
   { id: "app-chat-relay", group: "应用", title: "对话 · 接力到频道", app: true, demo: relayDemo(), steps: [{ click: '[aria-label="对话信息"]' }, { click: "text=接力到频道…" }] },
+  { id: "app-chat-cc", group: "应用", title: "对话 · 抄送", app: true, demo: ccDemo() },
+  { id: "app-chat-cc-on", group: "应用", title: "对话 · 抄送 · 勾了一个", app: true, demo: ccDemo([21]) },
+  { id: "app-chat-cc-open", group: "应用", title: "对话 · 抄送 · 写字时", app: true, demo: ccDemo(), steps: [{ click: "textarea" }] },
+  { id: "app-chat-cc-open-on", group: "应用", title: "对话 · 抄送 · 写字时勾了一个", app: true, demo: ccDemo([21]), steps: [{ click: "textarea" }] },
+  { id: "app-chat-cc-menu", group: "应用", title: "对话 · 抄送 · 选到哪", app: true, demo: ccDemo([21]), steps: [{ click: "textarea" }, { click: "text=抄送" }] },
+  { id: "phone-chat-cc-on", group: "手机", title: "对话 · 抄送 · 勾了一个", app: true, phone: true, demo: ccDemo([21]) },
   { id: "app-chat-relay-picked", group: "应用", title: "对话 · 接力到频道 · 选中一个", app: true, demo: relayDemo(), steps: [{ click: '[aria-label="对话信息"]' }, { click: "text=接力到频道…" }, { text: "#cue-dev" }] },
   { id: "app-chat-relay-all", group: "应用", title: "对话 · 接力到频道 · 显示全部", app: true, demo: relayDemo(), steps: [{ click: '[aria-label="对话信息"]' }, { click: "text=接力到频道…" }, { text: "显示全部 10 个" }] },
   { id: "app-chat-relay-bot", group: "应用", title: "对话 · 接力到频道 · 换一个 bot", app: true, demo: relayDemo(), steps: [{ click: '[aria-label="对话信息"]' }, { click: "text=接力到频道…" }, { click: '[aria-label="用哪个 bot"] button:nth-child(2)' }] },
@@ -816,11 +872,13 @@ export const stories: Story[] = [
   { id: "app-profile-workspaces", group: "应用", title: "Profile · 也给加入的 workspace 用", app: true, demo: profileFor(false), steps: [{ click: '[aria-label="Profile"]' }, { text: "lin@acme.dev" }] },
   { id: "app-profile-workspaces-on", group: "应用", title: "Profile · 已开放给加入的 workspace", app: true, demo: profileFor(true), steps: [{ click: '[aria-label="Profile"]' }, { text: "lin@acme.dev" }] },
   { id: "app-profile-add-model", group: "应用", title: "Profile · 按名称添加模型", app: true, demo: addModel, steps: [{ click: '[aria-label="Profile"]' }, { text: "lin@acme.dev" }] },
+  { id: "app-profile-hermes-models", group: "应用", title: "Hermes · 读取模型和按名称添加", app: true, demo: hermesModels, steps: [{ click: '[aria-label="Profile"]' }, { text: "Hermes Agent" }] },
   { id: "app-profile-opencode", group: "应用", title: "Profile · OpenCode Go 账号登录", app: true, demo: openCode(false), steps: [{ click: '[aria-label="Profile"]' }, { text: "lin@acme.dev" }] },
   { id: "app-profile-opencode-signing-in", group: "应用", title: "Profile · OpenCode Go 重新登录（设备码）", app: true, demo: openCode(true), steps: [{ click: '[aria-label="Profile"]' }, { text: "lin@acme.dev" }] },
   { id: "app-profile-kimi-signing-in", group: "应用", title: "Profile · Kimi Code 重新登录（设备码）", app: true, demo: kimiCode, steps: [{ click: '[aria-label="Profile"]' }, { text: "lin@acme.dev" }] },
   { id: "app-profile-supergrok", group: "应用", title: "Profile · SuperGrok 订阅（Grok Build）", app: true, demo: superGrok(false), steps: [{ click: '[aria-label="Profile"]' }, { text: "lin@acme.dev" }] },
   { id: "app-profile-claude-signing-in", group: "应用", title: "Profile · Claude 订阅重新登录（贴回代码）", app: true, demo: claudeSignIn, steps: [{ click: '[aria-label="Profile"]' }, { text: "lin@acme.dev" }] },
+  { id: "app-profile-claude-signing-in-station", group: "应用", title: "Profile · Claude 订阅重新登录 · 「其他方式」打开", app: true, demo: claudeSigningIn(true), steps: [{ click: '[aria-label="Profile"]' }, { text: "lin@acme.dev" }, { click: '[aria-label="其他方式"]' }] },
   { id: "app-profile-add-install", group: "应用", title: "添加 Profile · SuperGrok · 先安装 Grok Build", app: true, demo: installFlowDemo("missing"), steps: [{ click: '[aria-label="Profile"]' }, { text: "添加 Profile" }] },
   { id: "app-profile-add-installing", group: "应用", title: "添加 Profile · SuperGrok · 正在安装 Grok Build", app: true, demo: installFlowDemo("installing"), steps: [{ click: '[aria-label="Profile"]' }, { text: "添加 Profile" }] },
   { id: "app-profile-supergrok-signing-in", group: "应用", title: "Profile · SuperGrok 重新登录（设备码）", app: true, demo: superGrok(true), steps: [{ click: '[aria-label="Profile"]' }, { text: "lin@acme.dev" }] },
@@ -831,6 +889,7 @@ export const stories: Story[] = [
   { id: "app-profile-pick-models-reading", group: "应用", title: "添加 Profile · 选择模型 · 正在读取", app: true, demo: pickModelsDemo(true), steps: [{ click: '[aria-label="Profile"]' }, { text: "添加 Profile" }, { text: ADD }] },
   { id: "app-profile-pick-models", group: "应用", title: "添加 Profile · 选择模型", app: true, demo: pickModelsDemo(false), steps: [{ click: '[aria-label="Profile"]' }, { text: "添加 Profile" }, { text: ADD }] },
   { id: "app-profile-add-devin", group: "应用", title: "添加 Profile · 选择服务商（Cursor、Devin 只有订阅）", app: true, demo: cursorPickDemo(true), steps: [{ click: '[aria-label="Profile"]' }, { text: "添加 Profile" }] },
+  { id: "app-profile-add-hermes", group: "应用", title: "添加 Profile · Hermes Agent · 环境变量", app: true, demo: cursorPickDemo(true, true), steps: [{ click: '[aria-label="Profile"]' }, { text: "添加 Profile" }] },
   { id: "app-profile-devin", group: "应用", title: "Profile · Devin 订阅", app: true, demo: devinAccount(false), steps: [{ click: '[aria-label="Profile"]' }, { text: "lin@acme.dev" }] },
   { id: "app-profile-devin-signing-in", group: "应用", title: "Profile · Devin 重新登录（贴回代码）", app: true, demo: devinAccount(true), steps: [{ click: '[aria-label="Profile"]' }, { text: "lin@acme.dev" }] },
   { id: "pick-workspace-models", group: "选模型", title: "模型 · 本机、借用的、可借用的", render: () => borrowStory(false), steps: [{ click: "text=Opus 5.5" }] },
@@ -891,6 +950,11 @@ export const stories: Story[] = [
   { id: "login-card-loopback-listening", group: "登录", title: "卡片 · 回环 · 等浏览器回来", render: loginCard("listening"), demo: logins() },
   { id: "login-card-loopback-taken", group: "登录", title: "卡片 · 回环 · 本机端口被占用", render: loginCard("taken"), demo: logins() },
   { id: "login-card-device", group: "登录", title: "卡片 · 设备码", render: loginCard("device"), demo: logins() },
+  { id: "login-card-in-station", group: "登录", title: "卡片 · 回环 · 也能在 station 的浏览器里做（桌面）", render: loginCard("inStation"), demo: logins() },
+  { id: "login-card-in-station-web", group: "登录", title: "卡片 · 回环 · 网页：在 station 的浏览器里做", render: loginCard("inStation"), demo: logins({ canRelay: false }) },
+  { id: "login-card-in-station-more", group: "登录", title: "卡片 · 回环 · 「其他方式」打开", render: loginCard("inStation"), demo: logins(), steps: [{ click: "[data-login-more]" }] },
+  { id: "login-card-in-station-taken", group: "登录", title: "卡片 · 回环 · 本机端口被占：在 station 的浏览器里做", render: loginCard("inStationTaken"), demo: logins() },
+  { id: "login-card-in-station-open", group: "登录", title: "卡片 · 回环 · station 浏览器的标签页开着", render: loginCard("inStationOpen"), demo: logins(), steps: [{ click: "[data-login-more]" }] },
   { id: "login-card-paste", group: "登录", title: "卡片 · 打开网址，再贴回页面给的码", render: loginCard("paste"), demo: logins() },
   { id: "login-card-paste-phone", group: "登录", title: "卡片 · 贴码 · 手机", phone: true, render: loginCard("paste", 12), demo: logins() },
   { id: "login-card-checking", group: "登录", title: "卡片 · 码已贴回，正在确认", render: loginCard("checking"), demo: logins() },
@@ -998,6 +1062,9 @@ export const stories: Story[] = [
   { id: "vault-card-hour", group: "密钥", title: "对话里的申请 · 最长 1 小时的条目", app: true, demo: vaultDemo("waiting", { lasts: "hour" }) },
   { id: "vault-card-granted", group: "密钥", title: "对话里的申请 · 已批准", app: true, demo: vaultDemo("on", { status: "granted", scope: "chat" }) },
   { id: "vault-card-denied", group: "密钥", title: "对话里的申请 · 长命令 · 已拒绝", app: true, demo: vaultDemo("on", { status: "denied", command: LONG_COMMAND }) },
+  { id: "vault-save-card", group: "密钥", title: "agent 申请存入", app: true, demo: vaultDemo("waiting", { save: true }) },
+  { id: "vault-save-card-off", group: "密钥", title: "agent 申请存入 · 密钥库尚未开启", app: true, demo: vaultDemo("off", { save: true }) },
+  { id: "vault-save-card-kept", group: "密钥", title: "agent 申请存入 · 已存入", app: true, demo: vaultDemo("on", { save: true, status: "granted" }) },
   { id: "vault-card-long", group: "密钥", title: "对话里的申请 · 长命令", app: true, demo: vaultDemo("waiting", { command: LONG_COMMAND }) },
   { id: "phone-vault-web", group: "密钥", title: "手机 · 网页只看名字", app: true, phone: true, demo: vaultDemo("web"), steps: toPhoneVault },
   { id: "phone-vault-no-lock", group: "密钥", title: "手机 · 先打开安全模式", app: true, phone: true, demo: vaultDemo("noLock"), steps: toPhoneVault },
@@ -1073,10 +1140,15 @@ export const stories: Story[] = [
   { id: "reader-md", group: "文件", title: "阅读器 · Markdown", render: () => stage(<Reader file={driveFile(at(note.name), note)} markdown backLabel="下载" onBack={noop} />) },
   { id: "reader-phone", group: "文件", title: "阅读器 · 手机", phone: true, render: () => stage(<Reader file={driveFile(at(novel.name), novel)} markdown={false} backLabel="下载" onBack={noop} />) },
   { id: "player", group: "文件", title: "播放器", render: () => stage(<Player file={driveFile(at(clips[0]!.name), clips[0]!)} siblings={folder} backLabel="下载" onBack={noop} onGo={noop} />), steps: [{ move: [640, 400] }] },
-  { id: "player-list", group: "文件", title: "播放器 · 选集", render: () => stage(<Player file={driveFile(at(clips[0]!.name), clips[0]!)} siblings={folder} backLabel="下载" onBack={noop} onGo={noop} />), steps: [{ click: '[aria-label="选集"]' }, { move: [500, 400] }] },
+  { id: "player-list", group: "文件", title: "播放器 · 选集", render: () => stage(<Player file={driveFile(at(clips[0]!.name), clips[0]!)} siblings={folder} backLabel="下载" onBack={noop} onGo={noop} />), steps: [{ move: [640, 400], click: '[aria-label="选集"]' }, { move: [500, 400] }] },
   { id: "player-phone", group: "文件", title: "播放器 · 手机", phone: true, render: () => stage(<Player file={driveFile(at(clips[0]!.name), clips[0]!)} siblings={folder} backLabel="下载" onBack={noop} onGo={noop} />) },
   { id: "attachment-md", group: "文件", title: "附件 · Markdown", render: () => stage(<AttachmentDemo name="orders-慢查询.md" url={NOTE_URL} type="text/markdown" />) },
   { id: "attachment-video", group: "文件", title: "附件 · 视频", render: () => stage(<AttachmentDemo name="发版录屏 1014.mp4" url={CLIP_URL} type="video/mp4" />), steps: [{ move: [640, 400] }] },
+  // Playing, the pointer on its timeline: its controls, the time where it points.
+  { id: "attachment-video-controls", group: "文件", title: "附件 · 视频 · 控件", render: () => stage(<AttachmentDemo name="发版录屏 1014.mp4" url={CLIP_URL} type="video/mp4" />), steps: [{ move: [640, 400], hover: '[role=slider][aria-label="位置"]' }] },
+  // Paused: looked at closely, its frames' keys, the frame's time to the millisecond, which of how many, the camera.
+  { id: "attachment-video-paused", group: "文件", title: "附件 · 视频 · 暂停逐帧", render: () => stage(<AttachmentDemo name="发版录屏 1014.mp4" url={CLIP_URL} type="video/mp4" />), steps: [{ move: [640, 400] }, { key: "k" }, { click: '[aria-label="下一帧"]' }, { hover: 'canvas[aria-label^="第"]' }] },
+  { id: "attachment-video-phone", group: "文件", title: "附件 · 视频 · 手机", phone: true, render: () => stage(<AttachmentDemo name="发版录屏 1014.mp4" url={CLIP_URL} type="video/mp4" />) },
   // A phone's recording, taller than the window is: all of it in the window, not cut off at the top and the bottom.
   { id: "attachment-video-tall", group: "文件", title: "附件 · 竖屏视频", render: () => stage(<AttachmentDemo name="手机录屏 1017.mp4" url={TALL_CLIP_URL} type="video/mp4" />), steps: [{ move: [640, 400] }] },
   { id: "attachment-picture", group: "文件", title: "附件 · 图片", render: () => stage(<AttachmentDemo name="login-375.png" url={PICTURE_URL} type="image/png" />), steps: [{ move: [640, 400] }] },
@@ -1100,6 +1172,11 @@ export const stories: Story[] = [
   { id: "screen-denied", group: "屏幕", title: "屏幕 · 没有权限", ...screenView("denied") },
   { id: "screen-failed", group: "屏幕", title: "屏幕 · 没连上", ...screenView("failed") },
   { id: "screen-phone", group: "屏幕", title: "屏幕 · 手机", phone: true, ...screenView("live", true) },
+  { id: "screen-simulator", group: "屏幕", title: "屏幕 · iOS 模拟器", ...screenView("live", false, false, SIMULATOR), steps: [{ hover: '[aria-label="多任务"]' }] },
+  { id: "screen-simulator-phone", group: "屏幕", title: "屏幕 · iOS 模拟器 · 手机", phone: true, ...screenView("live", true, false, SIMULATOR) },
+  { id: "screen-stats", group: "屏幕", title: "屏幕 · 连接统计（采集方式、硬编）", ...screenView("live", false, true), steps: [...toTheBar, { click: '[aria-label="连接"]' }] },
+  { id: "screen-scale", group: "屏幕", title: "屏幕 · Windows · 控制中心 › 缩放", ...screenView("windows"), steps: [...toTheBar, { click: 'button:has-text("控制中心")' }, { click: '[role="menuitem"]:has-text("缩放")' }] },
+  { id: "screen-phone-scale", group: "屏幕", title: "屏幕 · Windows · 手机 · 缩放", phone: true, ...screenView("windows", true), steps: [{ click: '[aria-label="缩放"]' }] },
   { id: "screen-phone-full", group: "屏幕", title: "屏幕 · 手机 · 全屏", phone: true, ...screenView("live", true), steps: [{ click: '[aria-label="全屏"]' }] },
   { id: "screen-phone-full-tools", group: "屏幕", title: "屏幕 · 手机 · 全屏 · 工具", phone: true, ...screenView("live", true), steps: [{ click: '[aria-label="全屏"]' }, { click: '[aria-label="工具"]' }] },
   { id: "screen-phone-command", group: "屏幕", title: "屏幕 · 手机 · 按住 ⌘", phone: true, ...screenView("live", true), steps: [{ click: '[aria-label="Command"]' }] },
@@ -1116,6 +1193,8 @@ export const stories: Story[] = [
   { id: "app-screen-tab-menu", group: "屏幕", title: "station · 浏览器标签页 · 控制中心", app: true, demo: screensDemo(), steps: [{ click: '[aria-label^="Station"]' }, { click: 'a[href$="/screen/browser%3A7F3A9C"]' }, { click: 'button:has-text("控制中心")' }] },
   { id: "app-chat-screen-links", group: "屏幕", title: "对话里的屏幕链接", app: true, demo: screenLinksDemo },
   { id: "phone-chat-screen-links", group: "屏幕", title: "手机 · 对话里的屏幕链接", app: true, phone: true, demo: screenLinksDemo },
+  { id: "app-chat-simulator-link", group: "屏幕", title: "对话里的模拟器链接 · 在侧边打开", app: true, demo: simulatorLinkDemo, steps: [{ hover: 'text=iOS 模拟器 · 1179×2556' }] },
+  { id: "app-chat-simulator-side", group: "屏幕", title: "模拟器在对话侧边", app: true, demo: simulatorLinkDemo, steps: [{ hover: 'a[href*="simulator"]' }, { click: '[aria-label="在侧边打开"]' }] },
   { id: "app-chat-adb-link", group: "屏幕", title: "对话里的共享调试链接", app: true, demo: adbLinksDemo(false) },
   { id: "phone-chat-adb-link", group: "屏幕", title: "手机 · 对话里的共享调试链接（已共享）", app: true, phone: true, demo: adbLinksDemo(true) },
   { id: "phone-station-screens", group: "屏幕", title: "手机 · station 的屏幕", app: true, phone: true, demo: screensDemo(), steps: [{ click: '[aria-label="返回"]' }, { click: '[aria-label="设置"]' }, { text: "Station" }, { text: "Studio" }] },
@@ -1181,6 +1260,7 @@ export const stories: Story[] = [
   { id: "phone-profile-kimi-signing-in", group: "手机", title: "Profile · Kimi Code 重新登录（设备码）", app: true, phone: true, demo: kimiCode, steps: [{ click: '[aria-label="返回"]' }, { click: '[aria-label="Profile"]' }, { text: "lin@acme.dev" }] },
   { id: "phone-profile-supergrok", group: "手机", title: "Profile · SuperGrok 订阅（Grok Build）", app: true, phone: true, demo: superGrok(false), steps: [{ click: '[aria-label="返回"]' }, { click: '[aria-label="Profile"]' }, { text: "lin@acme.dev" }] },
   { id: "phone-profile-claude-signing-in", group: "手机", title: "Profile · Claude 订阅重新登录（贴回代码）", app: true, phone: true, demo: claudeSignIn, steps: [{ click: '[aria-label="返回"]' }, { click: '[aria-label="Profile"]' }, { text: "lin@acme.dev" }] },
+  { id: "phone-profile-claude-signing-in-station", group: "手机", title: "Profile · Claude 订阅重新登录 ·「其他方式」打开", app: true, phone: true, demo: claudeSigningIn(true), steps: [{ click: '[aria-label="返回"]' }, { click: '[aria-label="Profile"]' }, { text: "lin@acme.dev" }, { click: '[aria-label="其他方式"]' }] },
   { id: "phone-profile-supergrok-signing-in", group: "手机", title: "Profile · SuperGrok 重新登录（设备码）", app: true, phone: true, demo: superGrok(true), steps: [{ click: '[aria-label="返回"]' }, { click: '[aria-label="Profile"]' }, { text: "lin@acme.dev" }] },
   { id: "phone-profile-add-kimi", group: "手机", title: "添加 Profile · Kimi：订阅 Kimi Code 或 API key", app: true, phone: true, demo: kimiMethodDemo(), steps: [{ click: '[aria-label="返回"]' }, { click: '[aria-label="Profile"]' }, { click: '[aria-label="添加 Profile"]' }] },
   { id: "phone-profile-add-cursor", group: "手机", title: "添加 Profile · 选择服务商（Cursor 只有订阅）", app: true, phone: true, demo: cursorPickDemo(), steps: [{ click: '[aria-label="返回"]' }, { click: '[aria-label="Profile"]' }, { click: '[aria-label="添加 Profile"]' }] },

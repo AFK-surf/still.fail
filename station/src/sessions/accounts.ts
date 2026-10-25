@@ -7,7 +7,7 @@ import { log } from "../ops/log.ts";
 import { tr, type Lang, stationLang } from "../ops/i18n.ts";
 import type { Store } from "../store/store.ts";
 import { type HubConfig, type Profile, runs, runtimeNamed, runtimeTitle, sameModel, spelling } from "./config.ts";
-import { availableEfforts, COMPACTED_FROM, cheapToLeave, commonEfforts, type ProfileHealth, pickProfile, serves, urgency, usable, windowsOf } from "./pool.ts";
+import { availableEfforts, cheapToLeave, commonEfforts, type ProfileHealth, pickProfile, serves, urgency, usable, windowsOf } from "./pool.ts";
 import type { RuntimeKind } from "../agents/runtime.ts";
 
 /// How long a profile a turn ran into the allowance of is passed over when its allowance is not read again.
@@ -18,17 +18,20 @@ const COMPACTIONS_EVERY_MS = 60 * 60 * 1000;
 /// How many of a session's last calls say whether it compacted lately.
 const CALLS_LOOKED_AT = 200;
 
-/// How a session runs from its next turn on. A field left out: unchanged; null: back to the default.
-export type SessionChange = { profile?: string | null; model?: string | null; effort?: string | null; fast?: boolean | null };
+/// How a session runs from its next turn on. A field left out: unchanged; null: back to the default. `repick`: back to the
+/// station's choice (no profile given), its account picked again now, as a new session's would be (`Accounts.repick`).
+export type SessionChange = { profile?: string | null; model?: string | null; effort?: string | null; fast?: boolean | null; repick?: boolean };
 
 /// A profile as a session's runtime starts on it, with its spelling of the session's model.
 export type RunOn = Profile & { spelling(model: string): string | null };
 
+const withSpelling = (p: Profile): RunOn => ({ ...p, spelling: (model: string) => spelling(p, model) });
+
 export type AccountsDeps = {
   config(): HubConfig;
   store: Store;
-  /// The profiles of sessions with a process now (their load).
-  running(): string[];
+  /// The profiles of sessions with a process now (their load), `except`'s left out.
+  running(except?: string): string[];
   /// Its time.
   clock: Clock.Clock;
   /// Whether session `key` may run on a profile: one allowed in its workspace (docs/multi-workspace.md); absent: any.
@@ -66,9 +69,10 @@ export class Accounts {
     return health;
   }
 
-  /// Chooses the profile a session runs on (pool.ts).
-  pick(candidates: Profile[], model: string | null | undefined, strict: boolean): Profile {
-    const running = this.deps.running();
+  /// Chooses the profile a session runs on (pool.ts); `except`: the session it is chosen for, whose own process is not
+  /// counted.
+  pick(candidates: Profile[], model: string | null | undefined, strict: boolean, except?: string): Profile {
+    const running = this.deps.running(except);
     const profile = pickProfile(candidates, model, { health: (id) => this.healthOf(id), load: (id) => running.filter((p) => p === id).length, lastPicked: (id) => this.picked.get(id) ?? 0, now: () => this.deps.clock.currentTimeMillisUnsafe() }, strict);
     this.picked.set(profile.id, this.deps.clock.currentTimeMillisUnsafe());
     return profile;
@@ -94,7 +98,6 @@ export class Accounts {
     const candidates = all.filter((p) => this.allows(key, p));
     // Profiles there are, none of them for its workspace: said so, for people to allow one.
     if (candidates.length === 0 && all.length > 0) throw new Error(tr(stationLang(), "station.session.noProfileHere", { runtime: runtimeTitle(runtime) }));
-    const withSpelling = (p: Profile): RunOn => ({ ...p, spelling: (model: string) => spelling(p, model) });
     // Kept to it by hand: that one, whatever it says. Otherwise its own while it can run it: usable, and with its model
     // enabled.
     const current = candidates.find((p) => p.id === row.profile);
@@ -116,37 +119,63 @@ export class Accounts {
     return withSpelling(next);
   }
 
+  /// Session `key`, left to the station, has its account picked again now, as a new session's would be: among those of
+  /// its runtime allowed in its workspace, its own process not counted on the one it is on (pool.ts). The one it is on
+  /// stays when it is still the pool's choice; on another it goes on afresh (afresh.ts).
+  repick(key: string): void {
+    const { store } = this.deps;
+    const row = store.getSession(key);
+    if (!row) throw new Error(`unknown session ${key}`);
+    const runtime = runtimeNamed(row.runtime);
+    if (!runtime) throw new Error(`session ${key} runs an unknown runtime ${row.runtime}`);
+    const candidates = this.deps.config().profiles.filter((p) => p.runtimes.includes(runtime) && this.allows(key, p));
+    if (candidates.length === 0) throw new Error(tr(stationLang(), "station.session.noProfileHere", { runtime: runtimeTitle(runtime) }));
+    const next = this.pick(candidates, row.model, false, key);
+    store.setSessionProfile(key, next.id, false);
+    if (next.id !== row.profile) log.info("hub", "session's account picked again", { session: key, from: row.profile, to: next.id });
+  }
+
   /// Whether session `key` loses little by going on afresh on another account (pool.ts `cheapToLeave`).
   private cheapToLeave(key: string): boolean {
     const now = this.deps.clock.currentTimeMillisUnsafe();
     const { store } = this.deps;
-    if (this.compactions === null || now - this.compactions[0] > COMPACTIONS_EVERY_MS) this.compactions = [now, store.compactionPoints(now - COMPACTIONS_OVER_MS, COMPACTED_FROM)];
+    if (this.compactions === null || now - this.compactions[0] > COMPACTIONS_EVERY_MS) this.compactions = [now, store.compactionPoints(now - COMPACTIONS_OVER_MS)];
     return cheapToLeave(store.lastContexts(key, CALLS_LOOKED_AT), this.compactions[1]);
   }
 
-  /// A turn of the session ran into its profile's allowance: that profile is passed over for now, and a session left to
-  /// the station moves to another of its runtime's that can run it now. The names of the one left and the one taken
-  /// when it moved; null when it is kept to its profile or none other can.
-  spend(key: string): [string, string] | null {
+  /// Profile `id` as a session's runtime runs on it; null when the station no longer has it.
+  profile(id: string): RunOn | null {
+    const profile = this.deps.config().profiles.find((p) => p.id === id);
+    return profile ? withSpelling(profile) : null;
+  }
+
+  /// A turn of the session ran into the allowance of `ranOn`, the profile its process was started on (null: the
+  /// session's own): that profile is passed over for now, and a session left to the station moves to another of its
+  /// runtime's that can run it now; one moved off it while the turn ran (changed by hand, its profile deleted) goes on
+  /// where it was moved. The names of the one left and the one taken when it moved; null when it is kept to its profile
+  /// or none other can.
+  spend(key: string, ranOn: string | null): [string, string] | null {
     const { store } = this.deps;
     const row = store.getSession(key);
     if (!row) throw new Error(`unknown session ${key}`);
-    this.spent.set(row.profile, this.deps.clock.currentTimeMillisUnsafe());
+    const left = ranOn ?? row.profile;
+    this.spent.set(left, this.deps.clock.currentTimeMillisUnsafe());
+    const config = this.deps.config();
+    const name = (id: string) => config.profiles.find((p) => p.id === id)?.name ?? id;
+    if (row.profile !== left) return [name(left), name(row.profile)];
     if (row.profilePinned) return null;
     const runtime = runtimeNamed(row.runtime);
     if (!runtime) return null;
-    const config = this.deps.config();
     // As the pool: those with its model enabled, or, when none has (a connect's binding from before models were
     // enabled), all of its runtime's.
     const all = config.profiles.filter((p) => p.runtimes.includes(runtime) && this.allows(key, p));
     const strict = all.some((p) => serves(p, row.model));
-    const candidates = all.filter((p) => p.id !== row.profile && (!strict || serves(p, row.model)) && usable(this.healthOf(p.id)));
+    const candidates = all.filter((p) => p.id !== left && (!strict || serves(p, row.model)) && usable(this.healthOf(p.id)));
     if (candidates.length === 0) return null;
     const next = this.pick(candidates, row.model, false);
     store.setSessionProfile(key, next.id, false);
-    log.info("hub", "allowance ran out; session taken on by another profile", { session: key, from: row.profile, to: next.id });
-    const from = config.profiles.find((p) => p.id === row.profile)?.name ?? row.profile;
-    return [from, next.name];
+    log.info("hub", "allowance ran out; session taken on by another profile", { session: key, from: left, to: next.id });
+    return [name(left), next.name];
   }
 
   /// When the profile of session `key`, which ran into its allowance, is expected to run again: the last refill of its
@@ -186,8 +215,8 @@ export class Accounts {
     const name = runtimeTitle(runtime);
     const config = this.deps.config();
     const nonEmpty = (v: string | null | undefined) => (v === undefined ? undefined : v === null || v === "" ? null : v);
-    // A profile given keeps the session to it; null gives the choice back to the station.
-    const wantedProfile = nonEmpty(change.profile);
+    // A profile given keeps the session to it; null (or picked again) gives the choice back to the station.
+    const wantedProfile = change.repick === true && (change.profile === undefined || change.profile === null) ? null : nonEmpty(change.profile);
     const newModel = nonEmpty(change.model);
     const newEffort = nonEmpty(change.effort);
     if (change.fast !== undefined && change.fast !== null && runtime !== "codex") throw new Error(t("station.session.fastOpenAiOnly"));
@@ -215,6 +244,6 @@ export class Accounts {
       if (!efforts.includes(effort)) throw new Error(t("station.profile.efforts", { runtime: name, efforts: efforts.join(t("station.list.separator")) }));
     }
     const profile = wantedProfile !== undefined ? wantedProfile : remodel ? null : undefined;
-    return { row, model, effort, profile };
+    return { row, model, effort, profile, repick: change.repick === true && profile === null };
   }
 }

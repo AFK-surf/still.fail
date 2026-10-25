@@ -16,6 +16,7 @@ import { SOCKET_PING, SOCKET_PING_MS, type DbRange, type Host, type HttpRequest,
 import { t } from "../i18n.ts";
 import type { ClientId, CoreMessage } from "../protocol.ts";
 import { service } from "../trace.ts";
+import { collate } from "./collate.ts";
 
 /// Shared values frozen where they are shared (util.ts `checkShared`): the web's development build turns it on.
 export { checkShared } from "../util.ts";
@@ -220,6 +221,10 @@ export class WebHost implements Host {
     this.#testChannel = testChannel;
     this.#sqlite = sqlite;
     if (report) this.report = report;
+  }
+
+  collate(names: readonly string[]): number[] {
+    return collate(names);
   }
 
   cloudOrigin(): string {

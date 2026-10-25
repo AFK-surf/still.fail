@@ -1,0 +1,12 @@
+# The chats' list on a phone (for the old and new side by side): a row held for its menu, let be; the filter's menu.
+timeout 20000
+until 今天
+wait 800
+hold 900 夜里的构建又失败了
+wait 1400
+tapxy 195 120
+wait 900
+tapxy -33 25
+wait 1400
+tapxy 195 120
+wait 900

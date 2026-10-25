@@ -33,3 +33,10 @@ runs:
         echo "RUST_TEST_THREADS=4" >> "$GITHUB_ENV"
         # The Node the station runs on (.node-version), ahead of ~/.local/bin's: what it is checked and built with.
         echo "$(sh scripts/node-here.sh)" >> "$GITHUB_PATH"
+        # The actions' archives the runners take instead of downloading them (.github/action-archives.sh): those of
+        # refs that moved since, once an hour at most; one that cannot be had is downloaded by the runner as before.
+        archives="$HOME/stillfail-ci/action-archives"
+        if [ -z "$(find "$archives/.filled" -mmin -60 2>/dev/null)" ]; then
+          mkdir -p "$archives" && touch "$archives/.filled"
+          sh .github/action-archives.sh . "$archives" || echo "::warning::the action archive cache was not filled"
+        fi

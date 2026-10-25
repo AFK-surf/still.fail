@@ -1,9 +1,9 @@
 # A photo and a file from ＋'s sheet (文件; MBUI_PICK_FILES answers the panel), each put up in parts at once, then sent.
+#env MBUI_POINTING=finger
 timeout 60000
 tap 端到端测试
 until =studio
 until 发消息
-answered draft.get
 tap icon:plus
 until =文件
 shot 1-sheet

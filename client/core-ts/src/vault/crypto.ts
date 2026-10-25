@@ -41,7 +41,15 @@ export type Plain = { kind: Kind; name: string; fields: Record<string, string>; 
 export type Request = {
   id: string; ws: string; vault: string; item: string; session: string; chat: string; mode: Mode; reason: string;
   command?: string; hosts?: string[]; box: string; at: number; status: "pending" | "granted" | "denied" | "expired";
+  /// The plain library's item's owner, or whom a secret to keep is for (their email).
+  owner?: string;
+  /// An agent asking to keep a secret (secret_save, docs/vault.md agent 存入): the item as it is to be listed, written
+  /// under `item` into `vault` (empty: one of the person's own, made when they have none).
+  save?: Save;
+  /// Its fields, sealed by the station that asked to each of the person's devices set up (`saveContext`).
+  sealed?: { device: string; box: string; secret: string }[];
 };
+export type Save = { kind: Kind; name: string; modes: Mode[]; hosts: string[]; env?: string; username?: string; public_key?: string };
 export type Grant = { v: 1; ws: string; request: string; vault: string; item: string; mode: Mode; hosts: string[]; scope: Scope; exp: number; secret: string; at: number; sig: Sig };
 export type Deny = { v: 1; ws: string; request: string; at: number; sig: Sig };
 
@@ -56,6 +64,8 @@ export const TAG = {
 export const keyContext = (ws: string, vault: string, epoch: number) => `stillfail-vault-key/1\0${ws}\0${vault}\0${epoch}`;
 export const itemContext = (ws: string, vault: string, id: string, version: number, epoch: number) => `stillfail-vault-item/1\0${ws}\0${vault}\0${id}\0${version}\0${epoch}`;
 export const grantContext = (ws: string, request: string) => `stillfail-vault-grant/1\0${ws}\0${request}`;
+/// The seal's context for a secret an agent asks to keep, sealed to one of its owner's devices.
+export const saveContext = (ws: string, request: string) => `stillfail-vault-save/1\0${ws}\0${request}`;
 
 const concat = (...parts: Uint8Array[]) => {
   const out = new Uint8Array(parts.reduce((n, p) => n + p.length, 0));

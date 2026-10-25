@@ -202,16 +202,20 @@ of a folder within one station by the disk's own clone.
 - Topic `drive {station, root, path}`: the folder (`DriveFolder`), kept on the
   device (a station document), read again each time it is shown, and while shown
   again each time the station says something in it changed (`GET /drive/watch`); each entry
-  with its `kind` (what opens it: folder, video, audio, image, markdown, text,
-  code, csv, html, pdf, subtitle, other), `sizeText`, `timeText`, and the
-  folder's `countText`. A folder the station refuses (gone, out of its root) is
+  with its `kind` (folder, video, audio, image, markdown, text, code, csv,
+  html, pdf, subtitle, other: its mark), what a press on it does (`opens`:
+  `folder` entered, `read`, `play`, `preview` as a chat's files are, else
+  `save`), `sizeText`, `timeText`, and the folder's `countText`. A folder the station refuses (gone, out of its root) is
   let go and its error shown.
 - Topic `drivePlace {station, root, path}`: where a file was left on this device
   (`{at, of, changed}`: a text's offset, a video's time in ms), null before.
 - Operations: `drive.setRoots {roots}`, `drive.folders {path?}`,
   `drive.mkdir {root, path}`, `drive.rename {root, from, to}`,
   `drive.remove {root, path}`; each change reads its folders again before it
-  answers.
+  answers. A name typed for a file or folder is asked first (`drive.check
+  {text}`: `{problem}`, in words, null where it may be: not empty, no slash, not
+  `.` or `..`); one kept beside another of its name (an upload's 保留两者) is
+  named as the station keeps both (`drive.name {…, beside: true}`: `a 2.txt`).
 - Calls: `drive.read {station, root, path, offset, length, progress?, stream?,
   keep?, mtime?, size?}` → `{type, total, mtime}`, the part as the answer's bytes
   (docs/client-core.md Protocol; with `progress`, values `{loaded}`, the part's
@@ -234,6 +238,17 @@ of a folder within one station by the disk's own clone.
 - Calls: `drive.transfer {from: {station, root, path, names}, to: {station, root, path}, move?, conflicts?}`: another
   station's files granted there first (`POST /drive/grant`), then copied where they go (`POST /drive/transfers`); one
   within a station asked of it alone; `drive.transfer.cancel {station, id}`, `drive.transfer.retry {station, id}`.
+- How it is browsed, the same for every client (views/browse.ts; what follows
+  from what, drive-browse.ts; docs/client-core.md has each): view `driveBrowse
+  {owner, place, view, station, root, path, write?}` (a place's folders in the
+  order kept on the device, what is chosen there, a tree's folders open, the
+  columns' widths, the keys that act now) and `drive.browse` (a press, a key, a
+  letter typed: what is chosen after it and what the client does), `drive.arrange`
+  (the order, hidden files), `drive.name` (a new folder's name, a copy kept
+  beside another), `drive.moves` (the renames a drag makes); the files' page's
+  tabs, topic `filesTabs {workspace}` and `files.tabs`; a folder typed by its path,
+  `files.go`; the stations with a drive, this machine's first, `stations` with
+  `drive` and `here`. A client draws them and does what is answered.
 - A station from before the drive has no `drive` in its overview: the clients
   offer nothing for it. One from before `anywhere` lends only its pinned folders.
 - Into a chat's message (composer.ts): a file or folder dragged into the
@@ -257,14 +272,15 @@ dragged out carries the file and its path. A chat's 文件 tab
 (web/src/pages/DriveTab.tsx) browses every station's files beside the chat, to
 drag into the composer or add to the message; a new chat has the same tab
 (open there, it stays open in the chat its first message makes). On both, a folder is worked
-as in Finder (web/src/drive/browse.ts): a press chooses a row (⌘ adds or takes one
+as in Finder (the core's `driveBrowse` and `drive.browse`, drawn by web/src/drive/browse.ts): a press chooses a row (⌘ adds or takes one
 away, ⇧ the ones between), a double click or ⌘↓ opens it, ⌘↑ goes up, the arrows
 move (→ and ← into and out of a folder in columns and a tree), typed letters go to
 a name, ⏎ changes a name in place, space previews, ⌘⌫ deletes what is chosen,
 ⌘⇧N makes a folder (named as Finder names one, its name then changed). Hidden
 files (a name starting with `.`) show only after ⌘⇧. ; the order (name, time,
 size or kind, by the list's heads or the folder's right-click menu) and whether
-they show are the person's, on the device (prefs `driveViews`). A column's edge is
+they show are the person's, on the device (prefs `driveViews`); names go in the order the device's language reads
+them (the host's `collate`: 中文 by pinyin), by hand where it has none. A column's edge is
 dragged as Finder's: that column wider or narrower (kept while the page is), with ⌥
 every column (kept on the device, `driveViews.column`), a double click as wide as its
 longest name. On the files' page what is

@@ -14,7 +14,7 @@ const STATION = (station: string) => ({ station });
 import { FakeHost, jsonResponse } from "../src/testing.ts";
 import { account, apply, call, nowS, readsOf, subscribe, v } from "./helpers.ts";
 import { run } from "./run.ts";
-import { base, overview, session, started, stationHost, stationReplies, threadView } from "./station-fixture.ts";
+import { Status, base, entry, overview, session, started, stationHost, stationReplies, threadView } from "./station-fixture.ts";
 import { apply as applyOps } from "../src/delta.ts";
 import { conform } from "../src/conform.ts";
 import { CoreError } from "../src/error.ts";
@@ -187,7 +187,7 @@ test("a_chat_opening_is_one_trace_its_requests_carry_and_ember_cloud_gets", asyn
   const said = host.takeEmitted().map(([, m]) => m as J);
   assert.ok(said.some((m) => m.id === 1 && "value" in m), JSON.stringify(said).slice(0, 500));
   assert.equal(host.requests.length, before, "opening a chat asks nothing");
-  const reads = ["/events", "/overview", "/sessions", "/threads", "/chats", "/jobs"].map((p) => host.requests.find((r) => r.url === `https://stillfail.test/admin/api${p}`)!);
+  const reads = ["/events?running=1", "/overview", "/sessions", "/threads", "/chats", "/jobs"].map((p) => host.requests.find((r) => r.url === `https://stillfail.test/admin/api${p}`)!);
   const parents = reads.map((r) => header(r, "traceparent")!);
   const trace = parents[0].slice(3, 35);
   assert.ok(parents.every((p) => p.slice(3, 35) === trace && p.endsWith("-01")), JSON.stringify(parents));
@@ -405,6 +405,51 @@ test("a_decision_is_answered_in_its_chat_set_aside_on_the_device_and_dismissed_o
   core.close();
 });
 
+test("a_decision_dismissed_is_off_the_page_at_once_and_back_when_its_station_refuses_and_the_wide_page_shows_the_one_picked", async () => {
+  const card = (thread: number, seq: number, at: number) => {
+    const options = [{ label: "合", recommended: true }, { label: "先不改" }];
+    return { id: `k${thread}`, session: `k${thread}`, thread, title: `t${thread}`, agents: [], lastActiveAt: at, decision: { seq, options, card: { type: "options", options, assignee: "a@x.com" }, message: { seq, thread, ts: `9.00000${seq}`, authorKind: "agent", author: `k${thread}`, authorName: "Claude", text: "合吗？", attachments: [], quotes: [], declared: null, createdAt: at, editedAt: null }, before: [] } };
+  };
+  let refuse = true;
+  const { host, core } = await started({ ...base(), "GET /chats": [card(7, 4, 1000), card(8, 6, 2000), card(9, 2, 3000)] });
+  stationReplies(host, (req) => (req.method === "PUT" && req.url.endsWith("/threads/7/dismissed") ? (refuse ? new Status(403, { error: "不行" }) : {}) : undefined));
+  const ui = core.connect();
+  const values = new Map<number, J>();
+  const answers = new Map<number, J>();
+  const said: J[] = [];
+  const read = async () => {
+    await host.time.pass(1000);
+    for (const [, message] of host.takeEmitted()) {
+      const m = message as J;
+      if (m.id === 1) said.push(m);
+      if ("ok" in m || "error" in m) answers.set(m.id, m);
+      else if ("value" in m) values.set(m.id, m.value);
+      else if ("delta" in m) values.set(m.id, applyOps(values.get(m.id), m.delta));
+    }
+    const d = values.get(1);
+    assert.ok(d?.items, JSON.stringify(said).slice(0, 2000));
+    return { order: d.items.map((i: J) => i.thread), shown: d.shown === undefined ? null : d.items[d.shown].thread };
+  };
+  subscribe(core, ui, 1, { topic: "decisions", workspace: "ws" });
+  assert.deepEqual(await read(), { order: [7, 8, 9], shown: 7 });
+  // Picked on the wide page: shown while it is there.
+  call(core, ui, 2, "decision.show", { workspace: "ws", station: "ws/st", thread: 8, seq: 6 });
+  assert.deepEqual(await read(), { order: [7, 8, 9], shown: 8 });
+  // Set aside, last; the one now in its place shows.
+  call(core, ui, 3, "decision.defer", { station: "ws/st", thread: 8, seq: 6 });
+  assert.deepEqual(await read(), { order: [7, 9, 8], shown: 9 });
+  // Dismissed and refused: back where it was.
+  call(core, ui, 4, "decision.dismiss", { station: "ws/st", thread: 7, seq: 4 });
+  assert.deepEqual((await read()).order, [7, 9, 8]);
+  assert.ok("error" in answers.get(4));
+  // Taken: off; the one shown stays.
+  refuse = false;
+  call(core, ui, 5, "decision.dismiss", { station: "ws/st", thread: 7, seq: 4 });
+  assert.deepEqual(await read(), { order: [9, 8], shown: 9 });
+  assert.ok("ok" in answers.get(5));
+  core.close();
+});
+
 test("an_app_of_its_own_names_the_device_by_itself_not_by_still_fail", async () => {
   // still.fail mbui (apps/mbui) runs this core too: those approving its device tell it apart from still.fail's own app
   const { host, core } = await started();
@@ -437,6 +482,48 @@ test("an_iphone_app_is_a_phone_named_by_its_model_and_its_messages_say_it", asyn
   call(core, ui, 4, "chat.send", { station: "ws/st", thread: 7, text: "hi" });
   await host.settle();
   assert.equal(posted(host)[0].client, "ios 0.1.3700");
+  core.close();
+});
+
+test("a_chat_whose_agent_is_in_slack_threads_copies_what_is_sent_to_those_ticked", async () => {
+  const { host, core } = await started({
+    ...base(),
+    "GET /threads": [{ ...threadView(7, 0), cc: [
+      { thread: 21, surface: "slack:T1", channel: "C1", threadTs: "1.0", channelName: "still-fail" },
+      { thread: 22, surface: "feishu:fs", channel: "oc_1", threadTs: "2.0", channelName: "产品讨论" },
+    ] }],
+    "GET /threads/7/entries?limit=50": { first: 1, last: 0, entries: [] },
+  });
+  stationReplies(host, (req) => (req.method === "POST" && req.url.endsWith("/threads/7/messages") ? { n: 1 } : undefined));
+  const ui = core.connect();
+  const values = new Map();
+  subscribe(core, ui, 1, { topic: "chat", station: "ws/st", thread: 7 });
+  await host.settle();
+  apply(host, values);
+  // None ticked until ticked: a message goes to the chat alone.
+  assert.deepEqual(v(values, 1).cc, [
+    { thread: 21, place: "#still-fail", via: "slack", on: false },
+    { thread: 22, place: "产品讨论", via: "feishu", on: false },
+  ]);
+  call(core, ui, 2, "chat.send", { station: "ws/st", thread: 7, text: "here" });
+  await host.settle();
+  assert.equal(posted(host)[0].cc, undefined);
+  // Both ticked: the chat says so, and what is sent goes to both.
+  call(core, ui, 3, "chat.cc", { station: "ws/st", thread: 7, to: 21, on: true });
+  call(core, ui, 4, "chat.cc", { station: "ws/st", thread: 7, to: 22, on: true });
+  await host.settle();
+  apply(host, values);
+  assert.deepEqual(v(values, 1).cc.map((o: J) => o.on), [true, true]);
+  call(core, ui, 5, "chat.send", { station: "ws/st", thread: 7, text: "there too" });
+  await host.settle();
+  assert.deepEqual(posted(host)[1].cc, [21, 22]);
+  // One unticked.
+  call(core, ui, 6, "chat.cc", { station: "ws/st", thread: 7, to: 21, on: false });
+  call(core, ui, 7, "chat.send", { station: "ws/st", thread: 7, text: "to feishu" });
+  await host.settle();
+  apply(host, values);
+  assert.deepEqual(v(values, 1).cc.map((o: J) => o.on), [false, true]);
+  assert.deepEqual(posted(host)[2].cc, [22]);
   core.close();
 });
 
@@ -731,6 +818,35 @@ test("a_sessions_model_control_says_what_changes_and_saves_it_on_the_station", a
   // The machine's own sessions come each with its line.
   const listed = await ask(host, core, ui, 6, "machineSessions.list", { station: "ws/st" });
   assert.ok(String(listed.sessions[0].meta).startsWith("Codex · ~/src/x · "), JSON.stringify(listed));
+  core.close();
+});
+
+test("a_sessions_account_is_picked_again_beside_auto_and_says_which", async () => {
+  const { host, core } = await choosing();
+  let picked = "p2";
+  stationReplies(host, (req) => (req.method === "POST" && req.url.endsWith("/sessions/k1/settings") ? { ok: true, profile: picked } : undefined));
+  const ui = core.connect();
+  subscribe(core, ui, 1, { topic: "pick", station: "ws/st", of: "session:k1" });
+  await host.settle();
+  const values = new Map();
+  apply(host, values);
+  // On p1, with p2 able to take it: picked again beside 自动.
+  assert.equal(v(values, 1).repick, "重新分配");
+  // Kept to p1 in the panel, another depth too: the account gives way to the station's pick, the depth stays drafted.
+  await ask(host, core, ui, 2, "pick.set", { station: "ws/st", of: "session:k1", profile: "p1", effort: "high" });
+  assert.deepEqual(await ask(host, core, ui, 3, "pick.repick", { station: "ws/st", of: "session:k1" }), { profile: "p2", said: "已改用 p2@x.com" });
+  assert.deepEqual(stationPosted(host, "/sessions/k1/settings"), [{ profile: null, repick: true }]);
+  apply(host, values);
+  assert.deepEqual([v(values, 1).draft.profile ?? null, v(values, 1).draft.effort], [null, "high"]);
+  // The station keeps it where it was: said so.
+  picked = "p1";
+  assert.equal((await ask(host, core, ui, 4, "pick.repick", { station: "ws/st", of: "session:k1" })).said, "仍使用 p1@x.com");
+  // A new chat's control has nothing to pick again.
+  subscribe(core, ui, 5, { topic: "pick", station: "ws/st", of: "new" });
+  await host.settle();
+  apply(host, values);
+  assert.equal(v(values, 5).repick ?? null, null);
+  await assert.rejects(ask(host, core, ui, 6, "pick.repick", { station: "ws/st", of: "new" }));
   core.close();
 });
 
@@ -1048,11 +1164,12 @@ test("a_new_chat_is_there_at_once_and_what_is_sent_to_it_goes_in_once_the_statio
   core.close();
 });
 
-test("a_chat_made_here_is_titled_by_what_was_sent_until_its_station_has_a_message_in_it", async () => {
-  // Made, and read by its station before the message sent with it is in it: its station calls it what it calls a chat
-  // with nothing said in it yet (the page went from the words sent to （暂无消息） and back as the chat was made).
-  const made = { ...threadView(7, 0), title: "（暂无消息）", createdBy: "a@x.com" };
-  const { host, core } = await started({ ...base(), "GET /threads": [made], "GET /chats": [{ id: "7", thread: 7, session: "k1", title: "（暂无消息）", agents: [], lastActiveAt: 1 }], "GET /threads/7/entries?limit=50": { first: 1, last: 0, entries: [] } });
+test("a_chat_made_here_is_a_new_chat_all_along_until_it_is_named", async () => {
+  // Sent from a new chat, its page was called by the words sent, then (made, read by its station before the message was
+  // in it) what the station called a chat with nothing said in it, then by the words again as the station had them:
+  // the bar's title went and came. It is a new chat, as its station calls it, until people or its agent name it.
+  const made = { ...threadView(7, 0), createdBy: "a@x.com" };
+  const { host, core } = await started({ ...base(), "GET /threads": [made], "GET /chats": [{ id: "7", thread: 7, session: "k1", title: "新对话", agents: [], lastActiveAt: 1 }], "GET /threads/7/entries?limit=50": { first: 1, last: 0, entries: [] } });
   stationReplies(host, (req) => {
     const path = req.url.replace("https://stillfail.test/admin/api", "");
     if (req.method === "POST" && path === "/sessions") return { key: "k1", thread: made };
@@ -1064,16 +1181,69 @@ test("a_chat_made_here_is_titled_by_what_was_sent_until_its_station_has_a_messag
   subscribe(core, ui, 1, { topic: "chat", station: "ws/st", thread: 7 });
   await host.settle();
   apply(host, values);
-  assert.equal(v(values, 1).title, "（暂无消息）");
   const key = String((await ask(host, core, ui, 2, "chat.create", { station: "ws/st", runtime: "claude", model: "opus" })).key);
-  call(core, ui, 3, "chat.send", { station: "ws/st", session: key, text: "\n修一下登录\n就是那个按钮" });
-  await host.settle();
-  await host.settle();
   subscribe(core, ui, 4, { topic: "chat", station: "ws/st", session: key });
   await host.settle();
   apply(host, values);
-  // Its first line with words, by its thread and by the key it was asked for with.
-  assert.deepEqual([v(values, 1).title, v(values, 4).title], ["修一下登录", "修一下登录"]);
+  const titles = [v(values, 1).title, v(values, 4).title];
+  call(core, ui, 3, "chat.send", { station: "ws/st", session: key, text: "\n修一下登录\n就是那个按钮" });
+  await host.settle();
+  await host.settle();
+  apply(host, values);
+  titles.push(v(values, 1).title, v(values, 4).title);
+  // by its thread and by the key it was asked for with, before what is sent to it and after: the same
+  assert.deepEqual(titles, ["新对话", "新对话", "新对话", "新对话"]);
+  core.close();
+});
+
+test("a_new_chats_lists_read_before_its_agent_began_and_come_after_it_was_told_at_work_keep_it_at_work", async () => {
+  // What a new chat changes is read again as its first message goes: the station as it was then, its agent not at work
+  // yet. On a slow link that came after the station told the agent at work, and had it at rest again: no activity, no
+  // mark, for the whole of its turn (2026-10-25). What was told after a read was asked is no older than what it brings.
+  const made = { ...threadView(9, 0), createdBy: "a@x.com", sessions: [{ thread: 9, session: "ember:c-1", connect: "ember", joinedAt: 1 }] };
+  const atRest = session("ember:c-1");
+  const working = { ...atRest, process: "running", running: true, turns: 1, lastTurn: { id: "t1", kind: "input", startedAt: 5, endedAt: null } };
+  const row = (id: string, session: string, thread: number, agents: J[]) => ({ id, session, thread, title: "新对话", agents, last: null, unread: false, mine: true, lastActiveAt: thread, connect: null, origin: null });
+  const answers: J = { ...base(), "GET /chats": [row("7", "k1", 7, [])] };
+  const s = await started(answers);
+  const { host, core } = s;
+  // The station as it is at each moment: what a read is answered with is what it had as it was asked.
+  const now = (agent: J) => {
+    answers["GET /sessions"] = [session("k1"), agent];
+    answers["GET /sessions/ember%3Ac-1"] = { session: agent, threads: [], turns: agent.lastTurn ? [agent.lastTurn] : [], jobs: [] };
+    answers["GET /chats"] = [row("7", "k1", 7, []), row("9", "ember:c-1", 9, [agent])];
+  };
+  answers["GET /threads/9"] = { ...made, last: 1 };
+  stationReplies(host, (req) => {
+    const path = req.url.replace("https://stillfail.test/admin/api", "");
+    if (req.method === "POST" && path === "/sessions") return { key: "ember:c-1", thread: made };
+    if (req.method === "POST" && path === "/threads/9/messages") return { n: 1 };
+    return undefined;
+  });
+  const ui = core.connect();
+  const values = new Map();
+  subscribe(core, ui, 1, { topic: "chats", scope: "ws" });
+  await host.settle();
+  // A slow link: the lists, asked as the chat is made, come long after.
+  const release = [host.hold("/admin/api/changed/sessions"), host.hold("/admin/api/changed/chats")];
+  now(atRest);
+  const key = String((await ask(host, core, ui, 2, "chat.create", { station: "ws/st", runtime: "claude", model: "opus" })).key);
+  call(core, ui, 3, "chat.send", { station: "ws/st", session: key, text: "修一下登录" });
+  await host.settle();
+  s.push("thread", { id: 9, entries: [{ ...entry(1, "修一下登录"), thread: 9 }] });
+  // Its agent begins: the station tells it, and has it so from now.
+  now(working);
+  s.push("session", working);
+  s.push("chat", row("9", "ember:c-1", 9, [working]));
+  await host.settle();
+  subscribe(core, ui, 4, { topic: "chat", station: "ws/st", thread: 9 });
+  await host.settle();
+  // The lists come, as the station had them before it began.
+  for (const r of release) r();
+  await host.settle();
+  apply(host, values);
+  const item = v(values, 1).days.flatMap((d: J) => d.items).find((i: J) => i.id === "9");
+  assert.deepEqual([v(values, 4).agents[0].status, item?.state], ["running", "run"]);
   core.close();
 });
 

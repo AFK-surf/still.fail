@@ -1,12 +1,18 @@
 // A station's drive in the core (docs/drive.md): a folder read as it is shown and kept on the device, said refused
-// when the station refuses it, read again after a change of it; parts of a file written with what the station has.
+// when the station refuses it, said why where it could not be read and nothing is held (the station down, no answer in
+// time, failing), read again after a change of it and as its station is back; parts of a file written with what the
+// station has.
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { apply as applyDelta } from "../src/delta.ts";
 import { EVICT_AFTER_MS } from "../src/store.ts";
-import { kindOf } from "../src/drive.ts";
+import { kindOf, opensOf } from "../src/drive.ts";
+import { wordsAnswer } from "../src/words.ts";
 import { apply, answers, call, subscribe, v } from "./helpers.ts";
-import { started, stationReplies, status } from "./station-fixture.ts";
+import { started, stationLater, stationReplies, status } from "./station-fixture.ts";
+import { HostError } from "../src/error.ts";
+import { t } from "../src/i18n.ts";
+import { JSON_IDLE_MS } from "../src/station/requests.ts";
 
 const ST = "ws/st";
 const ROOT = "/Users/a/Movies";
@@ -33,6 +39,8 @@ test("a folder is read as it is shown, kept on the device, and shown with its ki
   apply(host, values);
   const shown = v(values, 1);
   assert.deepEqual(shown.entries.map((e: any) => [e.name, e.kind, e.sizeText]), [["Season 1", "folder", ""], ["E2.mp4", "video", "3.0 MB"], ["notes.md", "markdown", "120 B"]]);
+  // what a press on each does: entered, played, read
+  assert.deepEqual(shown.entries.map((e: any) => e.opens), ["folder", "play", "read"]);
   assert.match(shown.entries[1].timeText, /^\d{4}\/\d{1,2}\/\d{1,2}$/);
   assert.equal(shown.countText, "1 个文件夹 · 2 个文件");
   // Shown again: what is held at once, and read again (the station says nothing of its disk).
@@ -74,6 +82,60 @@ test("a folder the station refuses says why, though one was held", async () => {
   const error = emitted.map(([, m]) => m as any).filter((m) => m.id === 1 && "error" in m).at(-1);
   assert.equal(error?.error.message, "文件或文件夹不存在");
   core.close();
+});
+
+/// What a topic said last of why it shows nothing, if it did.
+const said = (emitted: [unknown, unknown][], id: number): string | undefined =>
+  emitted.map(([, m]) => m as any).filter((m) => m.id === id && ("error" in m || "value" in m)).at(-1)?.error?.message;
+
+test("a folder its station does not answer, nothing of it held, says why rather than waiting on", async () => {
+  const { host, core } = await started();
+  // The station takes the read and never answers it: no answer in time.
+  stationLater(host, (req) => (req.url.includes("/admin/api/drive/list?") ? new Promise(() => {}) : undefined));
+  const ui = core.connect();
+  subscribe(core, ui, 1, { topic: "drive", station: ST, root: ROOT, path: "Desktop" });
+  await host.time.pass(JSON_IDLE_MS + 1000, 1000);
+  assert.equal(said(host.takeEmitted(), 1), t("core-logic.mesh.timed_out"));
+  // Failing: said too, and read again as it is shown again.
+  stationLater(host, () => undefined);
+  stationReplies(host, (req) => (req.url.includes("/admin/api/drive/list?") ? status(500, { error: "still.fail Helper did not start", code: "io" }) : undefined));
+  core.receive(ui, { kind: "unsubscribe", id: 1, unsubscribe: true });
+  await host.time.pass(EVICT_AFTER_MS + 500, 500);
+  subscribe(core, ui, 2, { topic: "drive", station: ST, root: ROOT, path: "Desktop" });
+  await host.settle();
+  assert.equal(said(host.takeEmitted(), 2), "still.fail Helper did not start");
+  stationReplies(host, (req) => (req.url.includes("/admin/api/drive/list?") ? folder([["a.txt", false, 1]], 1) : undefined));
+  call(core, ui, 3, "drive.refresh", { station: ST, root: ROOT, path: "Desktop" });
+  await host.settle();
+  const values = new Map();
+  apply(host, values);
+  assert.deepEqual(v(values, 2).entries.map((e: any) => e.name), ["a.txt"]);
+  core.close();
+});
+
+test("a folder of a station that is down, nothing of it held, says so, and is read as the station is back", async () => {
+  const s = await started();
+  let down = true;
+  stationLater(s.host, (req) => (down && req.url.includes("/admin/api") ? Promise.reject(new HostError("连不上")) : undefined));
+  s.gate.stream = "fail";
+  s.end();
+  await s.host.time.pass(60_000, 1000);
+  assert.equal((s.core.inner.stations.link(ST)?.state as { state: string }).state, "offline");
+  stationReplies(s.host, (req) => (req.url.includes("/admin/api/drive/list?") ? folder([["a.txt", false, 1]], 1) : undefined));
+  const ui = s.core.connect();
+  subscribe(s.core, ui, 1, { topic: "drive", station: ST, root: ROOT, path: "Desktop" });
+  await s.host.time.pass(1000, 250);
+  assert.equal(said(s.host.takeEmitted(), 1), t("core-views.station.unreachable", { name: "studio" }));
+  // Back: the folder shown is read, not left to the next time it is shown.
+  down = false;
+  s.gate.stream = "open";
+  const n = s.streams.length;
+  for (let waited = 0; s.streams.length <= n && waited < 20 * 60_000; waited += 250) await s.host.time.pass(250, 250);
+  await s.host.time.pass(2000, 250);
+  const values = new Map();
+  apply(s.host, values);
+  assert.deepEqual(v(values, 1).entries.map((e: any) => e.name), ["a.txt"]);
+  s.core.close();
 });
 
 test("a change of the drive reads again the folders it touched, before it answers", async () => {
@@ -175,4 +237,18 @@ test("the reader's settings are the core's: whole, each in its bounds, one chang
   apply(host, values);
   assert.deepEqual(v(values, 1).reader, { size: 32, line: 1.9, margin: 22, face: "sans", indent: true, paper: "follow" });
   core.close();
+});
+
+test("what a press on an entry does, by its kind: entered, read, played, previewed, else saved", () => {
+  const of = (name: string) => opensOf(kindOf(name));
+  assert.deepEqual(["notes.txt", "README", "a.md", "film.mkv", "song.flac", "shot.png", "doc.pdf", "main.rs", "data.csv", "page.html", "a.srt", "archive.zip"].map(of),
+    ["read", "read", "read", "play", "play", "preview", "preview", "preview", "preview", "preview", "preview", "save"]);
+  assert.equal(opensOf("folder"), "folder");
+});
+
+test("a name typed for a file or folder: empty, a slash, . or .. said in words; anything else none", () => {
+  const problem = (name: string) => (wordsAnswer("drive.check", name, name.length, "") as { problem: string | null }).problem;
+  assert.equal(problem("  "), "名称不能为空");
+  for (const bad of ["a/b", "a\\b", ".", ".."]) assert.equal(problem(bad), "名称不能包含 / 或 \\", bad);
+  for (const fine of ["新建文件夹", ".hidden", "a.b.c", " 两头有空格 "]) assert.equal(problem(fine), null, fine);
 });

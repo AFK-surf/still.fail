@@ -30,12 +30,12 @@ export const MODS = { alt: 1, ctrl: 2, meta: 4, shift: 8 } as const;
 export const COMPUTER = {
   name: "computer",
   description:
-    "Operate one of this station's screens yourself (the `screen` tool lists them: desktop, browser:<tab>): take a screenshot, click, move, drag, scroll, type text, press keys. Coordinates are pixels of the latest screenshot of that screen (each result says its size and how it maps to the screen). Every action returns a fresh screenshot unless screenshot=false. For web pages prefer the browser's DevTools (the `browser` tool: Playwright/chrome-devtools-mcp read the page itself); use this for native apps and what DevTools cannot reach. While a person is controlling the screen your input is refused: wait, or ask them in the chat. When you are stuck (a sign-in, a captcha, a permission), give the person the screen's link from the `screen` tool with chat_post kind=need_human.",
+    "Operate one of this station's screens yourself (the `screen` tool lists them: desktop, browser:<tab>, simulator:<udid>, an iOS Simulator booted here, touched where you click): take a screenshot, click, move, drag, scroll, type text, press keys. Coordinates are pixels of the latest screenshot of that screen (each result says its size and how it maps to the screen). Every action returns a fresh screenshot unless screenshot=false. For web pages prefer the browser's DevTools (the `browser` tool: Playwright/chrome-devtools-mcp read the page itself); use this for native apps and what DevTools cannot reach. While a person is controlling the screen your input is refused: wait, or ask them in the chat. When you are stuck (a sign-in, a captcha, a permission), give the person the screen's link from the `screen` tool with chat_post kind=need_human.",
   inputSchema: {
     type: "object",
     properties: {
       action: { type: "string", enum: ["screenshot", "click", "move", "drag", "scroll", "type", "key", "wait"], description: "What to do (default screenshot)" },
-      screen: { type: "string", description: "The screen's id from the `screen` tool: desktop, browser:<targetId>" },
+      screen: { type: "string", description: "The screen's id from the `screen` tool: desktop, browser:<targetId>, simulator:<udid>" },
       x: { type: "number", description: "click, move, scroll: the point, in screenshot pixels from the left" },
       y: { type: "number", description: "click, move, scroll: the point, in screenshot pixels from the top" },
       button: { type: "string", enum: ["left", "right", "middle"], description: "click, drag: the mouse button (default left)" },

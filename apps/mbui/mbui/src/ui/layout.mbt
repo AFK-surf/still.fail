@@ -12,6 +12,11 @@ fn Ctx::editor_display(self : Ctx, n : Node) -> String {
 }
 
 ///|
+/// How much of words cut short (`w=Cut`) their row keeps before a part of it leaves (Ctx::box `drop`): four of their
+/// size, or all of them where they are fewer.
+let cut_kept_ems : Double = 4.0
+
+///|
 /// The text laid out in `max_w`. The engine asks for a few widths per frame;
 /// greedy wrapping gives the same lines for any width from the widest line
 /// up to the one it was laid out in, so one layout serves them all, frame
@@ -31,6 +36,7 @@ fn Node::text_layout(self : Node, max_w : Double) -> TextLayout {
     line=self.line_h,
     trim=self.line_trim,
     spacing=self.spacing,
+    style=self.words_style(),
   )
   let tl = if self.wrap && self.max_lines > 0 && tl.line_start.length() > self.max_lines {
     cut_to_lines(self, tl, max_w)
@@ -43,10 +49,20 @@ fn Node::text_layout(self : Node, max_w : Double) -> TextLayout {
 }
 
 ///|
+/// The style bits a text's words are shaped in: its digits all one width where it says so (Ctx::text `tabular`).
+fn Node::words_style(self : Node) -> Int {
+  if self.tabular {
+    @hostapi.style_tabular
+  } else {
+    0
+  }
+}
+
+///|
 /// One-line text cut to fit `w`, ending in an ellipsis.
 fn ellipsized(n : Node, tl : TextLayout, w : Double) -> TextLayout {
   let s = tl.shaped
-  let dots = layout_text("…", n.font_size, n.weight, 1.0e9, false, line=n.line_h, trim=n.line_trim, spacing=n.spacing)
+  let dots = layout_text("…", n.font_size, n.weight, 1.0e9, false, line=n.line_h, trim=n.line_trim, spacing=n.spacing, style=n.words_style())
   let room = w - dots.w
   let mut end = 0
   while end < s.starts.length() && tl.xs[end] + s.adv[end] <= room {
@@ -58,7 +74,7 @@ fn ellipsized(n : Node, tl : TextLayout, w : Double) -> TextLayout {
   }
   let cut = if end < s.starts.length() { s.starts[end] } else { s.len }
   let text = n.text.view(end_offset=cut).to_string() + "…"
-  layout_text(text, n.font_size, n.weight, 1.0e9, false, line=n.line_h, trim=n.line_trim, spacing=n.spacing)
+  layout_text(text, n.font_size, n.weight, 1.0e9, false, line=n.line_h, trim=n.line_trim, spacing=n.spacing, style=n.words_style())
 }
 
 ///|
@@ -71,7 +87,7 @@ fn cut_to_lines(n : Node, tl : TextLayout, w : Double) -> TextLayout {
   let s = tl.shaped
   let count = s.starts.length()
   let a = tl.line_start[n.max_lines - 1]
-  let dots = layout_text("…", n.font_size, n.weight, 1.0e9, false, line=n.line_h, trim=n.line_trim, spacing=n.spacing)
+  let dots = layout_text("…", n.font_size, n.weight, 1.0e9, false, line=n.line_h, trim=n.line_trim, spacing=n.spacing, style=n.words_style())
   let room = w - dots.w
   let mut x = 0.0
   let mut end = a
@@ -85,7 +101,7 @@ fn cut_to_lines(n : Node, tl : TextLayout, w : Double) -> TextLayout {
   }
   let cut = if end < count { s.starts[end] } else { s.len }
   let text = n.text.view(end_offset=cut).to_string() + "…"
-  layout_text(text, n.font_size, n.weight, w, true, line=n.line_h, trim=n.line_trim, spacing=n.spacing)
+  layout_text(text, n.font_size, n.weight, w, true, line=n.line_h, trim=n.line_trim, spacing=n.spacing, style=n.words_style())
 }
 
 ///|
@@ -117,7 +133,8 @@ fn leaf_size(
     let tl = n.text_layout(max_w)
     (if wm == Exactly || (wm == AtMost && n.wrap && soft_wrapped(tl.line_end, tl.shaped.cu)) { w } else { tl.w }, tl.h)
   } else if n.kind == kind_rich {
-    match n.rich_layout(max_w) {
+    // (on one line, as wide as it is, as Ctx::text's words: cut, where it is, as it is placed narrower)
+    match n.rich_layout(if n.wrap { max_w } else { 1.0e9 }) {
       Some(rl) => (if wm == Exactly || (wm == AtMost && n.wrap && soft_wrapped(rl.line_end, rl.cu)) { w } else { rl.w }, rl.h)
       None => (0.0, 0.0)
     }
@@ -267,6 +284,27 @@ fn Ctx::flex_tree(self : Ctx, i : Int, pdir : Int) -> Int {
     s.set_padding_bottom(Pt(pad_b))
     ch = true
   }
+  // margins (CSS's: below 0 too)
+  let mar_l = len(n.mar_l)
+  if pt_differs(s.margin_left_kind(), s.margin_left_value(), mar_l) {
+    s.set_margin_left(Pt(mar_l))
+    ch = true
+  }
+  let mar_t = len(n.mar_t)
+  if pt_differs(s.margin_top_kind(), s.margin_top_value(), mar_t) {
+    s.set_margin_top(Pt(mar_t))
+    ch = true
+  }
+  let mar_r = len(n.mar_r)
+  if pt_differs(s.margin_right_kind(), s.margin_right_value(), mar_r) {
+    s.set_margin_right(Pt(mar_r))
+    ch = true
+  }
+  let mar_b = len(n.mar_b)
+  if pt_differs(s.margin_bottom_kind(), s.margin_bottom_value(), mar_b) {
+    s.set_margin_bottom(Pt(mar_b))
+    ch = true
+  }
   let gap = len(n.gap)
   // (a row in lines: `line_gap` between its lines where said)
   let lines = if n.flow && n.line_gap >= 0.0 { len(n.line_gap) } else { gap }
@@ -318,15 +356,21 @@ fn Ctx::flex_tree(self : Ctx, i : Int, pdir : Int) -> Int {
     s.set_max_height(if has_max_h { Pt(max_h) } else { Auto })
     ch = true
   }
-  let has_min_w = n.min_w > 0.0
-  let min_w = len(n.min_w)
-  if opt_differs(s.min_width_kind(), s.min_width_value(), has_min_w, min_w) {
-    s.set_min_width(if has_min_w { Pt(min_w) } else { Auto })
-    ch = true
-  }
   let has_max_w = n.max_w < 1.0e9
   let max_w = len(n.max_w)
-  if opt_differs(s.max_width_kind(), s.max_width_value(), has_max_w, max_w) {
+  // (words on one line in a column, and what is said to be cut short there: never wider than the column, cut with an
+  // ellipsis where it is narrower, whatever the column's alignment; as CSS's block with its overflow hidden. A max said
+  // as well is that where the column has the room and the column's where it has less, CSS's min(100%, 560px): a card
+  // as wide as its words up to 560 is not 560 in a column of 360)
+  let capped = pdir == 2 &&
+    (n.w is Cut || (n.kind == kind_text && !n.wrap && !(n.w is Px(_))))
+  if capped {
+    let (k, v) = if has_max_w { (@flex.LEN_WITHIN, max_w) } else { (@flex.LEN_PCT, 100.0) }
+    if s.max_width_kind() != k || s.max_width_value() != v {
+      s.set_max_width(if has_max_w { Within(max_w) } else { Pct(100.0) })
+      ch = true
+    }
+  } else if opt_differs(s.max_width_kind(), s.max_width_value(), has_max_w, max_w) {
     s.set_max_width(if has_max_w { Pt(max_w) } else { Auto })
     ch = true
   }
@@ -341,11 +385,20 @@ fn Ctx::flex_tree(self : Ctx, i : Int, pdir : Int) -> Int {
   let mut hpx = 0.0
   let mut has_w = false
   let mut has_h = false
+  // the width (and height) said as a share of the parent's (NaN: not)
+  let mut wpct = 0.0 / 0.0
+  let mut hpct = 0.0 / 0.0
   match n.w {
     Px(p) => {
       wpx = p
       has_w = true
+      // (a least said below it: that width where its row has it, down to the least where it has less, as CSS's width
+      // in a flex row with its min-width)
+      if in_row && n.min_w > 0.0 && n.min_w < p {
+        shrink = 1.0
+      }
     }
+    Pct(p) => wpct = p
     Fill(k) =>
       if in_row {
         grow = k
@@ -358,14 +411,18 @@ fn Ctx::flex_tree(self : Ctx, i : Int, pdir : Int) -> Int {
       if in_row && !n.keep && !((n.kind == kind_text || n.kind == kind_rich) && !n.wrap) {
         shrink = 1.0
       }
+    Cut => if in_row { shrink = 1.0 }
   }
   // a pager's pages lie over each other, moved sideways as they turn
   let over = n.pager != 0 || n.layer
+  // put where it is said in its parent (CSS's position: absolute), out of the flow
+  let at = !over && n.placed_at()
   match n.h {
     Px(p) => {
       hpx = p
       has_h = true
     }
+    Pct(p) => hpct = p
     Fill(k) =>
       if in_col {
         grow = k
@@ -374,7 +431,7 @@ fn Ctx::flex_tree(self : Ctx, i : Int, pdir : Int) -> Int {
       } else if in_row {
         stretch = true
       }
-    Auto => ()
+    Auto | Cut => ()
   }
   // Fill across, held to a max there, in what centres or ends what it holds: as wide (high) as that up to its max, and
   // placed as the parent places its children, as Compose's fillMaxWidth().widthIn(max) in a centred Column; stretched
@@ -401,9 +458,11 @@ fn Ctx::flex_tree(self : Ctx, i : Int, pdir : Int) -> Int {
   if in_row && n.in_sideways && n.w is Auto {
     shrink = 0.0
   }
-  // in a row of lines, as wide as it is: what does not fit goes on the next line
-  if in_row && n.parent >= 0 && self.nodes[n.parent].flow {
-    shrink = 0.0
+  // (in a row of lines, what does not fit goes on the next line; one wider than a line alone is cut to it as far as
+  // what it holds may give way, never below its least: CSS's flex-wrap)
+  // what scrolls in itself, kept to the room its column has left (Ctx::capped `shrinks`)
+  if in_col && n.shrinks {
+    shrink = 1.0
   }
   if s.shrink != shrink {
     s.shrink = shrink
@@ -418,7 +477,15 @@ fn Ctx::flex_tree(self : Ctx, i : Int, pdir : Int) -> Int {
     s.set_basis(if basis0 { Pt(0.0) } else { Auto })
     ch = true
   }
-  let als : @flex.Align = if stretch { Stretch } else { Auto }
+  // (cut short, never grown: in a column that stretches what it holds, at its start as wide as what it holds; in one
+  // that centres or ends them, placed as it places them)
+  let als : @flex.Align = if stretch {
+    Stretch
+  } else if in_col && n.w is Cut && n.parent >= 0 && self.nodes[n.parent].align is AStretch {
+    FlexStart
+  } else {
+    Auto
+  }
   if s.align_self != als {
     s.align_self = als
     ch = true
@@ -433,6 +500,11 @@ fn Ctx::flex_tree(self : Ctx, i : Int, pdir : Int) -> Int {
       s.set_width(Pct(100.0))
       ch = true
     }
+  } else if !wpct.is_nan() {
+    if !(s.width_kind() == @flex.LEN_PCT && s.width_value() == wpct) {
+      s.set_width(Pct(wpct))
+      ch = true
+    }
   } else {
     let w = len(wpx)
     if opt_differs(s.width_kind(), s.width_value(), has_w, w) {
@@ -445,6 +517,11 @@ fn Ctx::flex_tree(self : Ctx, i : Int, pdir : Int) -> Int {
       s.set_height(Pct(100.0))
       ch = true
     }
+  } else if !hpct.is_nan() {
+    if !(s.height_kind() == @flex.LEN_PCT && s.height_value() == hpct) {
+      s.set_height(Pct(hpct))
+      ch = true
+    }
   } else {
     let h = len(hpx)
     if opt_differs(s.height_kind(), s.height_value(), has_h, h) {
@@ -452,14 +529,53 @@ fn Ctx::flex_tree(self : Ctx, i : Int, pdir : Int) -> Int {
       ch = true
     }
   }
-  let pos : @flex.PositionType = if over { Absolute } else { Relative }
+  let pos : @flex.PositionType = if over || at { Absolute } else { Relative }
   if s.position != pos {
     s.position = pos
-    s.set_inset_left(if over { Pt(0.0) } else { Auto })
-    s.set_inset_top(if over { Pt(0.0) } else { Auto })
+    ch = true
+  }
+  // a layer from its parent's top left; one put where it is said, from the edges said (len: on whole pixels too)
+  let inset = fn(v : Double, layer : Double) -> Double {
+    if over {
+      layer
+    } else if at && !v.is_nan() {
+      len(v)
+    } else {
+      0.0 / 0.0
+    }
+  }
+  let in_l = inset(n.at_l, 0.0)
+  if opt_differs(s.inset_left_kind(), s.inset_left_value(), !in_l.is_nan(), in_l) {
+    s.set_inset_left(if in_l.is_nan() { Auto } else { Pt(in_l) })
+    ch = true
+  }
+  let in_t = inset(n.at_t, 0.0)
+  if opt_differs(s.inset_top_kind(), s.inset_top_value(), !in_t.is_nan(), in_t) {
+    s.set_inset_top(if in_t.is_nan() { Auto } else { Pt(in_t) })
+    ch = true
+  }
+  let in_r = inset(n.at_r, 0.0 / 0.0)
+  if opt_differs(s.inset_right_kind(), s.inset_right_value(), !in_r.is_nan(), in_r) {
+    s.set_inset_right(if in_r.is_nan() { Auto } else { Pt(in_r) })
+    ch = true
+  }
+  let in_b = inset(n.at_b, 0.0 / 0.0)
+  if opt_differs(s.inset_bottom_kind(), s.inset_bottom_value(), !in_b.is_nan(), in_b) {
+    s.set_inset_bottom(if in_b.is_nan() { Auto } else { Pt(in_b) })
     ch = true
   }
   let mut up = 0
+  // (what it holds needs across at least, Node's `least`: its row's sum and how many, the widest under it; whether
+  // its row may leave something out and what its ⋯ needs)
+  let mut sum = 0.0
+  let mut placed_in = 0
+  let mut widest = 0.0
+  let mut droppable = false
+  let mut more_need = -1.0
+  let mut fits = false
+  // (the same, what it holds keeping what its row's fit keeps of it: Node's `fit_least`)
+  let mut fsum = 0.0
+  let mut fwidest = 0.0
   let k = n.kind
   if k == kind_text ||
     k == kind_rich ||
@@ -482,7 +598,9 @@ fn Ctx::flex_tree(self : Ctx, i : Int, pdir : Int) -> Int {
         n.lk_trim != n.line_trim ||
         n.lk_wrap != n.wrap ||
         n.lk_spacing != n.spacing ||
-        n.lk_max_lines != n.max_lines {
+        n.lk_tabular != n.tabular ||
+        n.lk_max_lines != n.max_lines ||
+        n.lk_shaped != words_shaped_in.val {
         n.lk_text = n.text
         n.lk_size = n.font_size
         n.lk_weight = n.weight
@@ -490,7 +608,9 @@ fn Ctx::flex_tree(self : Ctx, i : Int, pdir : Int) -> Int {
         n.lk_trim = n.line_trim
         n.lk_wrap = n.wrap
         n.lk_spacing = n.spacing
+        n.lk_tabular = n.tabular
         n.lk_max_lines = n.max_lines
+        n.lk_shaped = words_shaped_in.val
         n.full = None
         ch = true
       }
@@ -525,11 +645,38 @@ fn Ctx::flex_tree(self : Ctx, i : Int, pdir : Int) -> Int {
     }
     let kids = f.children
     let pd = if n.dir == Row { 1 } else { 2 }
+    let along = n.dir == Row && !n.flow
     let mut j = 0
     let mut c = n.first
     while c >= 0 {
       let cn = self.nodes[c]
       let r = self.flex_tree(c, pd)
+      // what it needs across at least, with what is beside it in its row (all of it) or under it (the widest): what it
+      // may leave out apart, its ⋯ with it where it may
+      if !(cn.layer || cn.portal || cn.pager != 0 || cn.placed_at()) {
+        let margins = self.on_px(cn.mar_l, whole) + self.on_px(cn.mar_r, whole)
+        let need = cn.least + margins
+        let fneed = cn.fit_least + margins
+        if along && cn.drop > 0 {
+          droppable = true
+        } else if along && cn.drop == -1 {
+          more_need = need
+        } else if along {
+          if placed_in > 0 {
+            sum = sum + gap
+            fsum = fsum + gap
+          }
+          sum = sum + need
+          fsum = fsum + fneed
+          placed_in = placed_in + 1
+        } else {
+          widest = dmax(widest, need)
+          fwidest = dmax(fwidest, fneed)
+        }
+        if cn.drop != 0 {
+          fits = true
+        }
+      }
       if (r & 1) != 0 {
         ch = true
       }
@@ -558,6 +705,113 @@ fn Ctx::flex_tree(self : Ctx, i : Int, pdir : Int) -> Int {
       kids.truncate(j)
       ch = true
     }
+  }
+  // left out of its row where it has not the room (Ctx::box `drop`), and a row that leaves something out
+  if s.drop != n.drop {
+    s.drop = n.drop
+    ch = true
+  }
+  let fits = fits && n.dir == Row && !n.flow
+  if fits {
+    self.fit_rows = self.fit_rows + 1
+  }
+  if s.fits != fits {
+    s.fits = fits
+    ch = true
+  }
+  // the least it is laid out across in a row: what it holds needs, where it is sized by that (a box with no width of
+  // its own, words on one line in a row); one sized by the room it is given (Fill, a share) or cut by it (`clip`,
+  // `sideways`) takes what it is given, what it holds squeezed in it where that is too little (Tester::squeeze_faults)
+  let mut least = match n.w {
+    // (giving way down to a least said below it: that)
+    Px(p) => if n.min_w > 0.0 && n.min_w < p { 0.0 } else { len(p) }
+    Pct(_) | Cut => 0.0
+    // (one said to keep what it holds: never less than that needs, the rest of its row squeezed first)
+    Fill(_) if !(n.keep && k == kind_box) => 0.0
+    Fill(_) | Auto =>
+      if k == kind_box {
+        if n.clip || n.sideways {
+          0.0
+        } else {
+          // (one said to keep what it holds: what its row's fit keeps of it, words cut short in it four of their size,
+          // so what is beside it gives way before they are cut further)
+          let kept = n.w is Fill(_) && n.keep
+          let (held, widest_held) = if kept { (fsum, fwidest) } else { (sum, widest) }
+          let row = if more_need >= 0.0 && droppable {
+            held + (if placed_in > 0 { gap } else { 0.0 }) + more_need
+          } else {
+            held
+          }
+          dmax(row, widest_held) + pad_l + pad_r
+        }
+      } else if k == kind_text && pdir == 1 && !n.wrap {
+        // (in a row; in a column, cut to the column's width)
+        n.text_layout(1.0e9).w + pad_l + pad_r
+      } else {
+        0.0
+      }
+  }
+  let said_min = len(n.min_w)
+  // (a least that gives way to the parent's room is not what it needs: how much room that is, the layout knows)
+  if n.min_w > 0.0 && !n.min_w_within {
+    least = dmax(least, said_min)
+  }
+  if n.max_w < 1.0e9 {
+    least = dmin(least, len(n.max_w))
+  }
+  n.least = least
+  // what its row's fit (Ctx::box drop) keeps of it before a part of the row leaves: words cut short four of their size
+  // (all of them, fewer; all of them said to be kept: Ctx::text `keep`), what holds them as it holds them; else its
+  // least
+  let mut fit_least = if k == kind_text && n.w is Cut && !n.wrap {
+    let whole = n.text_layout(1.0e9).w
+    (if n.keep { whole } else { dmin(whole, cut_kept_ems * n.font_size) }) + pad_l + pad_r
+  } else if k == kind_box && (n.w is Auto || (n.w is Fill(_) && n.keep)) && !(n.clip || n.sideways) {
+    let row = if more_need >= 0.0 && droppable {
+      fsum + (if placed_in > 0 { gap } else { 0.0 }) + more_need
+    } else {
+      fsum
+    }
+    dmax(row, fwidest) + pad_l + pad_r
+  } else {
+    least
+  }
+  if n.min_w > 0.0 && !n.min_w_within {
+    fit_least = dmax(fit_least, said_min)
+  }
+  if n.max_w < 1.0e9 {
+    fit_least = dmin(fit_least, len(n.max_w))
+  }
+  fit_least = dmax(fit_least, least)
+  n.fit_least = fit_least
+  let fit_need = if fit_least > least + 0.01 { fit_least } else { 0.0 / 0.0 }
+  if !(s.fit_need == fit_need || (s.fit_need.is_nan() && fit_need.is_nan())) {
+    s.fit_need = fit_need
+    ch = true
+  }
+  // in a row, sized by what it holds: never narrower than that needs (CSS's min-width: auto); else as said
+  let within = n.min_w > 0.0 && n.min_w_within
+  let min_w = if in_row && !over && !at && (n.w is Auto || (n.w is Fill(_) && n.keep)) {
+    if within {
+      dmax(least, said_min)
+    } else {
+      least
+    }
+  } else if n.min_w > 0.0 {
+    said_min
+  } else {
+    0.0
+  }
+  let has_min_w = min_w > 0.0
+  // (said to give way to the parent's room: that much where the parent has it, all of the parent's where it has less)
+  if within {
+    if s.min_width_kind() != @flex.LEN_WITHIN || s.min_width_value() != min_w {
+      s.set_min_width(Within(min_w))
+      ch = true
+    }
+  } else if opt_differs(s.min_width_kind(), s.min_width_value(), has_min_w, min_w) {
+    s.set_min_width(if has_min_w { Pt(min_w) } else { Auto })
+    ch = true
   }
   if n.pager != 0 {
     up = 2
@@ -681,15 +935,38 @@ fn Ctx::commit(self : Ctx, i : Int, px : Double, py : Double, gen : Int) -> Unit
       Some(st) => {
         let tl = layout_text(st.shown(), n.font_size, n.weight, iw, true, line=n.line_h, trim=n.line_trim, style=faces_style(st.words, 0))
         st.tl = Some(tl)
-        // taller than the field: scrolled so that the caret's line shows
-        let (_, cl) = tl.caret(st.caret + st.marked.length())
+        // taller than the field: scrolled so that the caret's line shows; a field of more lines, where it was scrolled
+        // to (the wheel, a finger, its bar: Ctx::editor) until the caret or the words change
+        let (_, cl) = st.place_of(tl, st.caret + st.marked.length())
         let top = cl.to_double() * tl.line_h
-        if top - st.scroll < 0.0 {
-          st.scroll = top
-        } else if top + tl.line_h - st.scroll > ih {
-          st.scroll = top + tl.line_h - ih
+        let most = dmax(0.0, tl.h - ih)
+        let sw = sideways.get(n.id)
+        let was = match sw {
+          Some(s) => s.x
+          None => st.scroll
         }
-        st.scroll = dmax(0.0, dmin(st.scroll, tl.h - ih))
+        let now = (st.caret, st.anchor, st.text.length() + st.marked.length())
+        st.scroll = was
+        if sw is None || now != st.followed {
+          st.followed = now
+          if top - st.scroll < 0.0 {
+            st.scroll = top
+          } else if top + tl.line_h - st.scroll > ih {
+            st.scroll = top + tl.line_h - ih
+          }
+        }
+        st.scroll = dmax(0.0, dmin(st.scroll, most))
+        match sw {
+          Some(s) => {
+            s.max = most
+            s.x = st.scroll
+            // (brought to the caret where its bar was drawn: it scrolled)
+            if st.scroll != was && self.bar_drawn(n.id) is Some(_) {
+              self.sideways_scrolled(s)
+            }
+          }
+          None => ()
+        }
         st.ox = ix
         st.oy = iy - st.scroll
       }

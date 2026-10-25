@@ -3,7 +3,7 @@
 // the global memory by its parts and a row for each skill, each opening a page of its own to be read.
 import { useState } from "react";
 import { useParams, useSearchParams } from "react-router";
-import { DocChips, MEMORY_TEXT, SkillShare, SkillTags, memoryParts, skillBrief, skillKind, skillPages, useMemory, type SkillFile } from "../Memory.tsx";
+import { DocChips, MEMORY_TEXT, SkillShare, SkillTags, memoryParts, useMemory, type SkillFile } from "../Memory.tsx";
 import { Prose } from "../Prose.tsx";
 import { useStation } from "../station.tsx";
 import { useApp } from "./app.tsx";
@@ -47,7 +47,7 @@ export function MemoryScreen() {
   const [builtinOpen, setBuiltinOpen] = useState(false);
   const go = (page: string) => app.push(app.at(`/s/${id}/memory/${page}`));
   const skillRow = (s: SkillFile) => (
-    <MemoryRow key={s.name} title={s.name} sub={skillBrief(s) || t("web-main.memory.noWhen")} value={s.size} onClick={() => go(`skill/${encodeURIComponent(s.name)}`)}
+    <MemoryRow key={s.name} title={s.name} sub={s.line ?? ""} value={s.size} onClick={() => go(`skill/${encodeURIComponent(s.name)}`)}
       tags={<SkillTags skill={s} station={station.address} className={css.mMemoryTag} />} />
   );
   const parts = memory && memoryParts(memory);
@@ -90,7 +90,7 @@ export function MemoryDocScreen() {
   const [at, setAt] = useState(() => Number(q.get("at") ?? 0));
   const skill = name === undefined ? null : memory?.skills.find((s) => s.name === name);
   const doc = (text: string) => <Card><div className={`${rootCss.wide} ${conversationCss.markdown} ${css.mMemoryDoc}`}><Prose>{text}</Prose></div></Card>;
-  const sub = name === undefined ? t("web-main.memory.global.when") : skill ? skillKind(skill) : undefined;
+  const sub = name === undefined ? t("web-main.memory.global.when") : skill ? skill.kindText : undefined;
   let body: React.ReactNode;
   if (!memory) body = <Waiting fill shape="cards" count={1} error={error ? MEMORY_TEXT.failed(error) : undefined} />;
   else if (name === undefined) {
@@ -104,12 +104,12 @@ export function MemoryDocScreen() {
     );
   } else if (!skill) body = <Gone text={t("web-main.memory.gone")} />;
   else {
-    const pages = skillPages(skill);
+    const pages = skill.pages ?? [];
     const i = Math.min(at, pages.length - 1);
     body = (
       <>
         <Card>
-          <div className={css.mMemoryWhen}><b>{t("web-main.memory.when")}</b>{(skill.about ?? skill.description) || t("web-main.memory.noWhen")}</div>
+          <div className={css.mMemoryWhen}><b>{t("web-main.memory.when")}</b>{skill.whenText}</div>
           {!skill.builtin && skill.share?.role !== "user" && <div className={css.mMemoryShare}><SkillShare skill={skill} station={station.address} changed={reload} /></div>}
         </Card>
         <DocChips items={pages.map((p) => ({ label: p.label, note: p.size }))} picked={i} onPick={setAt} className={css.mMemoryChips} chip={css.mMemoryChip} />

@@ -36,6 +36,8 @@ struct Shaped {
   mut lay_line : Double
   mut lay_trim : Bool
   mut lay_wrap : Bool
+  // the last frame it was asked for in (shapes_thin)
+  mut used : Int
 }
 
 ///|
@@ -64,6 +66,9 @@ struct Glyph {
   ox : Double
   oy : Double
   color : Bool
+  // its plot in the atlas (@hostapi.Atlas; -1: nothing to draw), and whether that is colour glyphs' own
+  plot : Int
+  in_colour : Bool
 }
 
 ///|
@@ -85,7 +90,16 @@ struct TextCache {
   // on whole pixels
   metrics : Map[Int64, (Double, Double, Double, Double, Double, Bool)]
   glyphs : Map[Int, Glyph]
+  // where they are in the host's atlas, and in colour glyphs' own (made as the first is asked for, at the size the
+  // host's has; colour glyphs' none where the host keeps them with the others)
+  mut atlas : @hostapi.Atlas?
+  mut colour_atlas : @hostapi.Atlas?
+  // the glyphs of what was shaped in this frame that it has not drawn yet, for the host to draw ahead (glyphs_ahead)
+  fresh : Array[Int]
   mut generation : Int
+  // the frame being drawn, and the last that let go of what was shaped longest ago (shapes_thin)
+  mut frame : Int
+  mut thinned : Int
   buf : FixedArray[Double]
   gbuf : FixedArray[Double]
 }
@@ -96,26 +110,49 @@ let text_cache : TextCache = {
   shaped: 0,
   metrics: Map::new(),
   glyphs: Map::new(),
+  atlas: None,
+  colour_atlas: None,
+  fresh: [],
   generation: -1,
+  frame: 0,
+  thinned: -1,
   buf: FixedArray::make(4 * 8192, 0.0),
   gbuf: FixedArray::make(8, 0.0),
 }
 
 ///|
-fn check_atlas() -> Unit {
+/// A frame begins: what it shapes and draws from the atlas is kept through it. What the host drew and measured
+/// before, forgotten where it is gone (@hostapi.atlas_generation).
+fn text_frame() -> Unit {
+  text_cache.frame = text_cache.frame + 1
+  for a in [text_cache.atlas, text_cache.colour_atlas] {
+    match a {
+      Some(a) => a.next_frame()
+      None => ()
+    }
+  }
   let g = h_atlas_generation()
   if g != text_cache.generation {
-    // (a host moves it on as its atlas starts over, and as a face it was given is here: a page's, loaded later than
-    // asked; what was measured in the face before is forgotten with the glyphs)
+    // (a host moves it on as its faces or its scale change, a face it was given is here (a page's, loaded later than
+    // asked), its atlas is lost: what was measured in the face before is forgotten with the glyphs)
     let first = text_cache.generation < 0
     text_cache.generation = g
-    text_cache.glyphs.clear()
+    glyphs_forget()
     if !first {
       clear_shapes()
       text_cache.fonts.clear()
       text_cache.metrics.clear()
     }
   }
+}
+
+///|
+/// Every glyph forgotten, and where it was in the atlas: drawn again as it is next asked for.
+fn glyphs_forget() -> Unit {
+  text_cache.glyphs.clear()
+  text_cache.fresh.clear()
+  text_cache.atlas = None
+  text_cache.colour_atlas = None
 }
 
 ///|
@@ -139,6 +176,42 @@ fn han_metrics(size : Double, weight : Int, style? : Int = 0) -> (Double, Double
 }
 
 ///|
+/// Lines set as a browser sets them (Blink's LayoutNG), not as Android does: by the first font's ascent and descent
+/// alone, each on a whole point, what is left of the line halved and rounded down above them (FontHeight::AddLeading);
+/// what falls back to another font (Chinese) on the same baseline. A frame set as a web page is (a desktop's window,
+/// as the desktop app's pages) says so (set_web_lines).
+let web_lines : Ref[Bool] = Ref(false)
+
+///|
+/// Whether lines are set as a browser sets them from now on (web_lines); the layouts made the other way let go.
+pub fn set_web_lines(on : Bool) -> Unit {
+  if web_lines.val != on {
+    web_lines.val = on
+    for f in text_cache.fonts {
+      for _, s in f.map {
+        s.lay = None
+      }
+    }
+  }
+}
+
+///|
+/// A line's ascent and descent as it is set (`cjk`: Chinese in it): the first font's, the taller of it and the font Han
+/// falls back to with Chinese in it, as Android measures a line by the fonts it draws in; as a browser sets it
+/// (web_lines), the first font's alone, each on a whole point.
+fn line_metrics(size : Double, weight : Int, cjk : Bool, style? : Int = 0) -> (Double, Double) {
+  let (a, d, _) = font_metrics(size, weight, style~)
+  if web_lines.val {
+    (a.round(), d.round())
+  } else if cjk {
+    let (ha, hd) = han_metrics(size, weight, style~)
+    (dmax(a, ha), dmax(d, hd))
+  } else {
+    (a, d)
+  }
+}
+
+///|
 /// Whether the host sets a line of words on whole device pixels, as Android's StaticLayout does (its font metrics
 /// whole pixels too): the sixth number it answers of font_metrics, 1. A host that does not say does not.
 fn whole_pixel_lines(size : Double, weight : Int, style? : Int = 0) -> Bool {
@@ -147,6 +220,8 @@ fn whole_pixel_lines(size : Double, weight : Int, style? : Int = 0) -> Bool {
 
 ///|
 fn all_metrics(size : Double, weight : Int, style : Int) -> (Double, Double, Double, Double, Double, Bool) {
+  // (the font's figures change no line of it: its metrics are the same either way)
+  let style = style & @hostapi.style_tabular.lnot()
   // (the size in tenths, the weight, the style's bits: faces and all, each in a field of its own)
   let key = (((size * 10.0).to_int() * 1000 + weight).to_int64() << 12) | (style & 4095).to_int64()
   match text_cache.metrics.get(key) {
@@ -212,6 +287,10 @@ fn set_line(
   px : Bool,
   trim? : Bool = false,
 ) -> (Double, Double, Double) {
+  // as a browser: the room halved, rounded down above; a font taller than its line overflows it, the line as asked
+  if web_lines.val {
+    return (line, asc + ((line - asc - desc) / 2.0).floor(), 0.0)
+  }
   let sc = if sc > 0.0 { sc } else { 1.0 }
   let pitch = if px { (line * sc - 1.0e-6).ceil() / sc } else { line }
   let room = pitch - asc - desc
@@ -244,6 +323,48 @@ fn font_shapes(size : Double, weight : Int, style : Int, spacing : Double) -> Ma
 }
 
 ///|
+/// The most strings kept shaped: past it, what was asked for longest ago is let go (shapes_thin).
+let shapes_most : Int = 6000
+
+///|
+/// The half of what is shaped that was asked for longest ago let go, never what this frame asked for: shaped again if
+/// it is asked for again. (Every shape let go at once, a frame shaped again everything on the screen.)
+fn shapes_thin() -> Unit {
+  if text_cache.thinned == text_cache.frame {
+    return
+  }
+  text_cache.thinned = text_cache.frame
+  let used = []
+  for f in text_cache.fonts {
+    for _, s in f.map {
+      used.push(s.used)
+    }
+  }
+  if used.is_empty() {
+    return
+  }
+  used.sort()
+  let cut = used[used.length() / 2]
+  let mut kept = 0
+  for f in text_cache.fonts {
+    let gone = []
+    for t, s in f.map {
+      if s.used < cut || (s.used == cut && cut < text_cache.frame) {
+        gone.push(t)
+        // (a shape and its last layout refer to each other: clear_shapes)
+        s.lay = None
+      } else {
+        kept = kept + 1
+      }
+    }
+    for t in gone {
+      f.map.remove(t)
+    }
+  }
+  text_cache.shaped = kept
+}
+
+///|
 fn clear_shapes() -> Unit {
   for f in text_cache.fonts {
     // a shape and its last layout refer to each other (reference counts
@@ -257,16 +378,40 @@ fn clear_shapes() -> Unit {
 }
 
 ///|
+/// Whether `text` has a digit in it: words with none are shaped the same with their digits all one width
+/// (@hostapi.style_tabular) as without, in the same font, their glyphs the same (shape asks it of the host only where
+/// it changes something, the glyphs of the rest kept once).
+fn has_digit(text : String) -> Bool {
+  for i in 0..<text.length() {
+    let c = text.at(i).to_int()
+    if c >= 48 && c <= 57 {
+      return true
+    }
+  }
+  false
+}
+
+///|
 /// With `spacing` (letter spacing, as Android's: each cluster's advance has it, half before its piece and half
 /// after), shaped with no ligatures (@hostapi.style_no_ligatures): a ligature's letters would not be spaced.
 fn shape(text : String, size : Double, weight : Int, style? : Int = 0, spacing? : Double = 0.0) -> Shaped {
   let style = if spacing != 0.0 { style | @hostapi.style_no_ligatures } else { style }
+  // (digits all one width only where they would not be: the code face's are, and words with none have none)
+  let style = if (style & @hostapi.style_tabular) != 0 &&
+    ((style & @hostapi.style_mono) != 0 || !has_digit(text)) {
+    style & @hostapi.style_tabular.lnot()
+  } else {
+    style
+  }
   let shapes = font_shapes(size, weight, style, spacing)
   match shapes.get(text) {
-    Some(s) => s
+    Some(s) => {
+      s.used = text_cache.frame
+      s
+    }
     None => {
-      if text_cache.shaped > 6000 {
-        clear_shapes()
+      if text_cache.shaped > shapes_most {
+        shapes_thin()
       }
       let out = text_cache.buf
       let m = if text.length() == 0 {
@@ -439,9 +584,16 @@ fn shape(text : String, size : Double, weight : Int, style? : Int = 0, spacing? 
         lay_line: 0.0,
         lay_trim: false,
         lay_wrap: false,
+        used: text_cache.frame,
       }
       shapes[text] = s
       text_cache.shaped = text_cache.shaped + 1
+      // its glyphs not drawn yet: drawn ahead unless this frame draws them (glyphs_ahead)
+      for k in keys {
+        if k >= 0 && text_cache.fresh.length() < glyphs_ahead_most && !text_cache.glyphs.contains(k) {
+          text_cache.fresh.push(k)
+        }
+      }
       s
     }
   }
@@ -598,23 +750,126 @@ fn bidi_offset_at(
 }
 
 ///|
-fn glyph(key : Int) -> Glyph {
+/// The most glyphs a frame asks its host to draw ahead.
+let glyphs_ahead_most : Int = 4096
+
+///|
+/// The glyphs of what the frame shaped and did not draw (a page pushed, still off the screen; the lines below what a
+/// list shows), handed to the host as the frame's painting is over, to draw them ahead, off the frames' thread: there
+/// when they come into view, a frame or more later, not all drawn in the frame they first show in. What is drawn is the
+/// same; only when the work is done changes (@hostapi.glyphs_ahead).
+fn glyphs_ahead() -> Unit {
+  let fresh = text_cache.fresh
+  if fresh.is_empty() {
+    return
+  }
+  let keys = FixedArray::make(fresh.length(), 0)
+  let mut n = 0
+  for k in fresh {
+    if !text_cache.glyphs.contains(k) {
+      keys[n] = k
+      n = n + 1
+    }
+  }
+  fresh.clear()
+  if n > 0 {
+    h_glyphs_ahead(keys, n)
+  }
+}
+
+///|
+/// A glyph with nothing to draw (nothing in it, too large for the atlas, or no room in it for now).
+// kept across runs: a value (no field of it changes)
+let no_glyph : Glyph = {
+  u: 0.0,
+  v: 0.0,
+  gw: 0.0,
+  gh: 0.0,
+  ox: 0.0,
+  oy: 0.0,
+  color: false,
+  plot: -1,
+  in_colour: false,
+}
+
+///|
+/// The glyphs in the atlas by their places ("u v", as an instance has them): their keys.
+fn glyph_keys() -> Map[String, Int] {
+  let at : Map[String, Int] = {}
+  text_cache.glyphs.each(fn(key, g) { if g.plot >= 0 { at["\{g.u} \{g.v}"] = key } })
+  at
+}
+
+///|
+/// The host's atlas a glyph goes in as its glyphs are placed in it: colour glyphs' own (`colour`, where the host keeps
+/// one), else the words'; how far across past its place in it the glyph is said (@hostapi.colour_atlas_u).
+fn atlas_for(colour : Bool) -> (@hostapi.Atlas, Int) {
+  if colour {
+    let a = match text_cache.colour_atlas {
+      Some(a) => a
+      None => {
+        let a = @hostapi.Atlas::new(h_atlas_size(true))
+        text_cache.colour_atlas = Some(a)
+        a
+      }
+    }
+    if a.sized() {
+      return (a, @hostapi.colour_atlas_u)
+    }
+  }
+  match text_cache.atlas {
+    Some(a) => (a, 0)
+    None => {
+      let a = @hostapi.Atlas::new(h_atlas_size(false))
+      text_cache.atlas = Some(a)
+      (a, 0)
+    }
+  }
+}
+
+///|
+/// Glyph `key` as it is drawn at `sc` pixels a point: where it is in the atlas, drawn from in this frame. One not in it
+/// is drawn by the host and put there (its pixels its size at `sc`), in place of the glyphs drawn from longest ago where
+/// it is full (@hostapi.Atlas); with no room while this frame is drawn, it is not drawn in it (asked for again by the
+/// next).
+fn glyph(key : Int, sc : Double) -> Glyph {
   match text_cache.glyphs.get(key) {
-    Some(g) => g
+    Some(g) => {
+      if g.plot >= 0 {
+        atlas_for(g.in_colour).0.drawn(g.plot)
+      }
+      g
+    }
     None => {
       let o = text_cache.gbuf
       h_glyph(key, o)
-      let g = {
-        u: o[0],
-        v: o[1],
-        gw: o[2],
-        gh: o[3],
-        ox: o[4],
-        oy: o[5],
-        color: o[6] > 0.5,
+      let color = o[6] > 0.5
+      let (a, across) = atlas_for(color)
+      let w = (o[2] * sc).round().to_int()
+      let h = (o[3] * sc).round().to_int()
+      if !a.holds(w, h) {
+        text_cache.glyphs[key] = no_glyph
+        return no_glyph
       }
-      text_cache.glyphs[key] = g
-      g
+      match a.place(key, w, h, fn(k) { text_cache.glyphs.remove(k) }) {
+        Some((plot, x, y)) => {
+          h_glyph_put(key, x + across, y)
+          let g = {
+            u: (x + across).to_double(),
+            v: y.to_double(),
+            gw: o[2],
+            gh: o[3],
+            ox: o[4],
+            oy: o[5],
+            color,
+            plot,
+            in_colour: across > 0,
+          }
+          text_cache.glyphs[key] = g
+          g
+        }
+        None => no_glyph
+      }
     }
   }
 }
@@ -722,7 +977,7 @@ fn layout_text(
   let lines = line_start.length()
   // a line as high as asked, the glyphs in its middle; measured by the first line's fonts, as Android measures them
   // (Chinese in it: the CJK font's, taller), the lines after it set in the same place
-  let (asc, desc, own_h) = font_metrics(size, weight)
+  let (_, _, own_h) = font_metrics(size, weight)
   let mut cjk = false
   if lines > 0 {
     for c in line_start[0]..<line_end[0] {
@@ -732,12 +987,7 @@ fn layout_text(
       }
     }
   }
-  let (asc, desc) = if cjk {
-    let (ha, hd) = han_metrics(size, weight)
-    (dmax(asc, ha), dmax(desc, hd))
-  } else {
-    (asc, desc)
-  }
+  let (asc, desc) = line_metrics(size, weight, cjk)
   let (line_h, ascent, extra) = set_line(
     if line > 0.0 {
       line
@@ -843,6 +1093,61 @@ fn TextLayout::offset_at(self : TextLayout, x : Double, y : Double) -> Int {
     s.len
   } else {
     s.starts[b]
+  }
+}
+
+///|
+/// The line starting at offset `off` that the one before wraps into (no line break between them), or -1: where an
+/// offset is the end of one line and the start of the next.
+fn TextLayout::wrapped_into(self : TextLayout, off : Int) -> Int {
+  let s = self.shaped
+  for l in 1..<self.line_start.length() {
+    let c = self.line_start[l]
+    if c < s.starts.length() && s.starts[c] == off {
+      return if s.hard_end(c - 1) { -1 } else { l }
+    }
+  }
+  -1
+}
+
+///|
+/// The caret's place (x, line) at offset `off`, as TextLayout::caret; with `up`, where a line wraps into the next
+/// there, at the end of the line before instead of the next one's start (where a move to that line's end, or the
+/// pointer past it, put the caret).
+fn TextLayout::caret_side(self : TextLayout, off : Int, up : Bool) -> (Double, Int) {
+  let l = if up { self.wrapped_into(off) } else { -1 }
+  if l > 0 {
+    let s = self.shaped
+    return (caret_after(self.xs, s.adv, self.lv, self.line_end[l - 1] - 1), l - 1)
+  }
+  self.caret(off)
+}
+
+///|
+/// The offset nearest to `x` on line `line`, and whether a caret there shows on that line where the line wraps into
+/// the next at it (caret_side's `up`): past the line's end, where its words go on on the next.
+fn TextLayout::offset_on(self : TextLayout, x : Double, line : Int) -> (Int, Bool) {
+  let off = self.offset_at(x, (line.to_double() + 0.5) * self.line_h)
+  (off, line + 1 < self.line_start.length() && self.wrapped_into(off) == line + 1)
+}
+
+///|
+/// The start (`d` -1) or the end (1) of the line the caret at `off` shows on (`up`: caret_side's), and whether the
+/// caret there shows on it as caret_side's `up` says: its end before its line break, or where it wraps into the next,
+/// the next one's start shown at its own end.
+fn TextLayout::line_end_at(self : TextLayout, off : Int, up : Bool, d : Int) -> (Int, Bool) {
+  let (_, line) = self.caret_side(off, up)
+  let (a, b) = self.line_range(line)
+  let s = self.shaped
+  let e = self.line_end[line]
+  if d < 0 {
+    (a, false)
+  } else if line + 1 >= self.line_start.length() {
+    (b, false)
+  } else if e > 0 && s.hard_end(e - 1) {
+    (s.starts[e - 1], false)
+  } else {
+    (b, true)
   }
 }
 

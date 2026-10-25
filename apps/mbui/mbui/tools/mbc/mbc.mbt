@@ -134,13 +134,15 @@ fn compiler_kind(cc : Array[Bytes]) -> (Int, Bool) {
 }
 
 ///|
-/// ThinLTO (MBC_LTO=thin, the default with clang; 0 turns it off): the split loses the inlining across units that
-/// the whole file had, ThinLTO's link brings it back, its backends in parallel. The link's flags, or None.
+/// ThinLTO, or MSVC's /GL and /LTCG, only when asked (MBC_LTO=thin): the inlining across units the split loses,
+/// brought back at the link. Not by default: mbui's bench (scripts/bench.sh, Studio) drew its scenes in the same time
+/// with it and without (process CPU 107-111 µs a frame either way), while its link was most of a build of a changed
+/// app: 57 s of Android's, 66 s of Windows' (LTCG made 28% of the functions again for a 116-line change), 2026-10-24.
+/// The link's flags, or None.
 fn lto_for(cc : Array[Bytes], j : Int) -> Array[Bytes]? {
   match getenv("MBC_LTO") {
-    Some(v) if v == b"0" || v == b"off" || v == b"no" || v.length() == 0 =>
-      return None
-    _ => ()
+    Some(v) if v == b"thin" || v == b"1" || v == b"on" => ()
+    _ => return None
   }
   let (kind, apple) = compiler_kind(cc)
   if kind == 0 {
@@ -537,6 +539,27 @@ fn Job::to_store(self : Job, store : Bytes, deps : Array[Bytes]) -> Unit {
 }
 
 ///|
+/// An object already up to date here, said used in MBC_STORE as one taken from it is (put there when it is not):
+/// what the store keeps is what a run used (CI prunes the rest), and a build over a restored _build compiled only
+/// what changed and took nothing from the store, so main's store kept only those, 54 units of 376 (40125500788),
+/// and a branch restoring it compiled the other 250 again (240 s, 40125788155, 2026-10-24)
+fn Job::keep_in_store(self : Job, store : Bytes) -> Unit {
+  let d = self.store_dir(store)
+  if is_dir(d) {
+    let _ = c_touch(d)
+    return
+  }
+  match read_file(self.stamp()) {
+    Some(s) => {
+      let deps = lines(s)[2:].to_array().map(fn(l) { sub(l, 0, find_byte(l, b'\x1f', 0)) })
+      deps.push(self.src)
+      self.to_store(store, deps)
+    }
+    None => ()
+  }
+}
+
+///|
 /// The command compiling `src` to `obj`, and its depfile (none with MSVC)
 fn compile_args(
   cc : Array[Bytes],
@@ -588,6 +611,10 @@ fn run_jobs_c(jobs0 : Array[Job], j : Int, label : Bytes) -> Array[Bytes] {
   for x in jobs {
     if x.up_to_date() {
       x.cached = true
+      match store {
+        Some(s) => x.keep_in_store(s)
+        None => ()
+      }
       continue
     }
     let _ = c_remove(x.stamp())
@@ -1664,13 +1691,49 @@ fn cmd_wrap(args : Array[String]) -> Unit {
     return
   }
   let out = out.unwrap()
+  // a test program its build said has no tests (MBC_EMPTY_TESTS: "pkg/name.kind …", apps/mbui/scripts/test.sh): moon
+  // builds a package's internal, blackbox and whitebox programs whatever it has, each the whole app, and runs only
+  // those with tests. Not compiled: in its place a file that is no program, so that one run anyway fails, said
+  // (sfapp's two empty ones were 27 s of the app part's compile, sfreplay's 29 s of the replay part's, 2026-10-24)
+  match getenv("MBC_EMPTY_TESTS") {
+    Some(list) =>
+      for e in split_words(list) {
+        if ends(out, cat([b"/", e, b".exe"])) {
+          let _ = write_file(out, b"mbc: a test program with no tests (MBC_EMPTY_TESTS), not built\n")
+          log("\{str(e)}: no tests, not built")
+          c_exit(0)
+          return
+        }
+      }
+    None => ()
+  }
   let c_file = wargs[cs[0]]
   let objdir = cat([sub(out, 0, out.length() - 4), b".mbc"])
   makedirs(objdir)
-  let flags = if msvc {
+  let flags0 = if msvc {
     msvc_compile_flags(wargs[:])
   } else {
     gnu_compile_flags(wargs[:])
+  }
+  // a test program of a few tests compiled less optimised (MBC_LIGHT_TESTS: "pkg/name.kind …", its level
+  // MBC_LIGHT_OPT, -O0 by default, apps/mbui/scripts/test.sh): what it tests is the code, not how fast it runs. (The
+  // library's and the settings' three, against -O2 on Studio: compiled in 9 s for 13, run as fast, 2026-10-25; -O1 12 s)
+  let mut light = false
+  match getenv("MBC_LIGHT_TESTS") {
+    Some(list) if !msvc =>
+      for e in split_words(list) {
+        if ends(out, cat([b"/", e, b".exe"])) {
+          light = true
+        }
+      }
+    _ => ()
+  }
+  let flags = if light {
+    let f = flags0.filter(fn(x) { !starts(x, b"-O") })
+    f.push(getenv("MBC_LIGHT_OPT").unwrap_or(b"-O0"))
+    f
+  } else {
+    flags0
   }
   let init_flags = default_init_flags(msvc)
   let j = match getenv("MBC_JOBS") {
@@ -1720,24 +1783,36 @@ fn cmd_shim(args : Array[String]) -> Unit {
     }
     // moon takes MSVC's lib.exe and link.exe from beside the cl.exe it finds: the same forwarder for them, each
     // running the command line in its .txt (cl's: mbc wrap over the real cl; lib's and link's: the real ones)
+    //
+    // Made again only when what it is made of changed, by content (its source, the real cl's file): moon builds anew
+    // every C its compiler's mtime is newer than, and a checkout's mtimes are all new. By mtime, every CI run made it
+    // again (~7 s) and with it every stub and moon's runtime (35 cl runs, ahead of moonc on the runner's four cores)
+    // whose objects the cache had kept (still.fail's mbui.yml, 2026-10-24). /Brepro: the same source, the same .exe.
     let exe = path_join(d, b"mbc-cl.exe")
     let src = path_join(home(), b"mbc-cl.c")
-    let stale = match (stat(exe), stat(src)) {
-      (Some(e), Some(s)) => e.1 < s.1
-      _ => true
-    }
-    if stale {
+    let made_of = path_join(d, b"mbc-cl.exe.src")
+    let key = cat([
+      file_hash(src).unwrap_or(b"no source"),
+      b" ",
+      tool_identity([real]),
+    ])
+    if !is_file(exe) || read_file(made_of) != Some(key) {
       let (code, said) = run_capture([
         real,
         b"/nologo",
         b"/O1",
+        b"/Brepro",
         src,
         cat([b"/Fe", exe]),
         cat([b"/Fo", path_join(d, b"mbc-cl.obj")]),
+        b"/link",
+        b"/Brepro",
       ])
       if code != 0 {
         fatal("mbc-cl.c did not compile:\n\{str(said)}")
       }
+      let _ = write_file(made_of, key)
+
     }
     let lines_of : Array[(Bytes, Array[Bytes])] = [
       (b"cl", [self_exe.val, b"wrap", b"--real", real, b"--"]),

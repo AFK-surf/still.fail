@@ -1,10 +1,10 @@
-// The still.fail core in Hermes, for the mbui app on Windows (engine.h): Android's engine
-// (apps/android/core/src/main/cpp/engine.cpp) with its JNI taken out. One thread per core runs the Hermes runtime and
-// its loop (tasks posted to it, timers due, microtasks drained after each); the core's script gets `__native`, whose
-// calls go to the Rust shell (client/shell: HTTP, still.fail cloud's socket, files and the accounts' SQLite, TCP, iroh)
-// and whose answers come back as tasks; what the core says, and the calls only the app can do (`secure.*`, `listen.*`),
-// go to the host (sf_engine_host). A JS error that escapes, or a bug the core reports, ends the core as on Android:
-// `{"fatal": …}`, and the host starts another.
+// The still.fail core in Hermes, for the mbui app on Windows and Android (engine.h; once still.fail's Kotlin app's
+// engine, with its JNI taken out). One thread per core runs the Hermes runtime and its loop (tasks posted to it, timers
+// due, microtasks drained after each); the core's script gets `__native`, whose calls go to the Rust shell
+// (client/shell: HTTP, still.fail cloud's socket, files and the accounts' SQLite, TCP, iroh) and whose answers come back
+// as tasks; what the core says, and the calls only the app can do (`secure.*`, `listen.*`; on Android `picked.*` too),
+// go to the host (sf_engine_host). A JS error that escapes, or a bug the core reports, ends the core: `{"fatal": …}`,
+// and the host starts another.
 #ifdef _WIN32
 #include <windows.h>
 #include <bcrypt.h>
@@ -13,12 +13,14 @@
 #include <pthread.h>
 #include <stdlib.h>
 #include <sys/time.h>
+#include <time.h>
 #endif
 
 #include <atomic>
 #include <chrono>
 #include <condition_variable>
 #include <cstdio>
+#include <cstdlib>
 #include <cstring>
 #include <deque>
 #include <functional>
@@ -26,6 +28,7 @@
 #include <memory>
 #include <mutex>
 #include <string>
+#include <thread>
 #include <unordered_map>
 
 #include <hermes/hermes.h>
@@ -43,6 +46,9 @@ uint8_t* sf_shell_call_sync(const void* shell, const char* op, const uint8_t* js
 void sf_free(uint8_t* ptr, size_t len);
 void sf_shell_stop(void* shell);
 int32_t sf_utc_offset_min(double at_ms);
+#ifdef __ANDROID__
+uint8_t* sf_shell_stats(size_t* out_len);
+#endif
 }
 
 namespace {
@@ -61,10 +67,35 @@ double wallMs() {
 #endif
 }
 
-/// Milliseconds on the clock the timers run on, which never goes back.
+/// Milliseconds on a clock that never goes back.
 double steadyMs() {
   using namespace std::chrono;
   return double(duration_cast<microseconds>(steady_clock::now().time_since_epoch()).count()) / 1000.0;
+}
+
+/// Milliseconds on the clock the timers run on: on Android CLOCK_BOOTTIME, which goes on while the phone sleeps (a
+/// 10 s wait begun before a sleep is over after it, as the Rust core's `sleep` had it with the wall clock); elsewhere
+/// the steady one.
+double timerMs() {
+#ifdef __ANDROID__
+  timespec t{};
+  clock_gettime(CLOCK_BOOTTIME, &t);
+  return double(t.tv_sec) * 1000.0 + double(t.tv_nsec) / 1e6;
+#else
+  return steadyMs();
+#endif
+}
+
+/// Whether `op` is a call only the app can do (the host's app_call), not the shell's.
+bool appCall(const std::string& op) {
+  if (op.rfind("secure.", 0) == 0 || op.rfind("listen.", 0) == 0) return true;
+  // a file the app saved where the person keeps files, read back (the core's downloads: hosts/bridge.ts kept.read)
+  if (op.rfind("kept.", 0) == 0) return true;
+#ifdef __ANDROID__
+  // a picked file's parts as it goes up (the app reads them from the system's content)
+  if (op.rfind("picked.", 0) == 0) return true;
+#endif
+  return false;
 }
 
 void randomBytes(uint8_t* p, size_t n) {
@@ -241,7 +272,7 @@ class Engine {
         data = b.size(rt) ? b.data(rt) : &none;
         size = b.size(rt);
       }
-      if (op.rfind("secure.", 0) == 0 || op.rfind("listen.", 0) == 0) {
+      if (appCall(op)) {
         if (host_.app_call) host_.app_call(host_.ctx, id, op.c_str(), json.data(), json.size(), hasBytes ? data : nullptr, size);
         else completed(id, "", "unsupported", "", false);
         return jsi::Value::undefined();
@@ -252,6 +283,14 @@ class Engine {
     fn("callSync", 2, [this](jsi::Runtime& rt, const jsi::Value&, const jsi::Value* a, size_t) -> jsi::Value {
       std::string op = a[0].asString(rt).utf8(rt);
       std::string json = a[1].asString(rt).utf8(rt);
+      // what only the app answers (its system's order of names): the host's, when it gives one
+      if (host_.app_sync && op.rfind("text.", 0) == 0) {
+        if (char* said = host_.app_sync(host_.ctx, op.c_str(), json.data(), json.size())) {
+          jsi::String s = jsi::String::createFromUtf8(rt, reinterpret_cast<const uint8_t*>(said), std::strlen(said));
+          std::free(said);
+          return s;
+        }
+      }
       size_t len = 0;
       uint8_t* out = sf_shell_call_sync(shell_, op.c_str(), reinterpret_cast<const uint8_t*>(json.data()), json.size(), &len);
       jsi::String s = jsi::String::createFromUtf8(rt, out, len);
@@ -288,7 +327,7 @@ class Engine {
     });
     fn("setTimer", 2, [this](jsi::Runtime&, const jsi::Value&, const jsi::Value* a, size_t) -> jsi::Value {
       uint64_t id = uint64_t(a[0].asNumber());
-      double due = steadyMs() + a[1].asNumber();
+      double due = timerMs() + a[1].asNumber();
       std::lock_guard<std::mutex> lock(mutex_);
       timers_[id] = due;
       dues_.emplace(due, id);
@@ -317,6 +356,7 @@ class Engine {
   }
 
   void run() {
+    if (host_.thread) host_.thread(host_.ctx);
     double t0 = steadyMs();
     shell_ = sf_shell_start(dataDir_.c_str(), &Engine::onComplete, gate_);
     if (!shell_) {
@@ -324,7 +364,12 @@ class Engine {
     }
     std::unique_ptr<facebook::hermes::HermesRuntime> rt;
     if (!dead_) {
+#ifdef __ANDROID__
+      // (with Intl, which hermes-android has, and registered for sampling: sf_engine_profile)
+      auto config = ::hermes::vm::RuntimeConfig::Builder().withMicrotaskQueue(true).withEnableBlockScoping(true).withIntl(true).withEnableSampleProfiling(true).build();
+#else
       auto config = ::hermes::vm::RuntimeConfig::Builder().withMicrotaskQueue(true).withEnableBlockScoping(true).build();
+#endif
       rt = facebook::hermes::makeHermesRuntime(config);
       try {
         double t1 = steadyMs();
@@ -364,13 +409,14 @@ class Engine {
             break;
           }
           if (!dues_.empty()) {
-            double left = dues_.begin()->first - steadyMs();
+            double left = dues_.begin()->first - timerMs();
             if (left <= 0) {
               timer = dues_.begin()->second;
               timers_.erase(timer);
               dues_.erase(dues_.begin());
               break;
             }
+            // (waits on the steady clock: a sleep in between is caught up on as soon as it wakes)
             wake_.wait_for(lock, std::chrono::microseconds(int64_t(left * 1000)));
           } else {
             wake_.wait(lock);
@@ -417,8 +463,38 @@ struct sf_engine {
   std::unique_ptr<Engine> engine;
 };
 
+#ifdef __ANDROID__
+/// Hermes's methods that Android answers in Java (String's normalize, localeCompare and toLocale…Case, Date's and
+/// Number's toLocaleString, Intl) find their Java classes (Hermes's AndroidUnicodeUtils, its Intl ones) by FindClass
+/// the first time one runs, and keep them. On the core's thread, made here and not by Java, FindClass looks in the
+/// system's class loader, which has none of the app's: the class is not found and the core ends (a formula's first
+/// letter: MathJax's isLatinOrGreekChar, normalize("NFD")). Each run once in a runtime of its own, on the app's thread
+/// that starts the first engine (android_core.c: the UI's, or a push's), finds and keeps them for every engine after
+/// (NativeLoader set up and fbjni loaded first: CoreHost.java).
+static void findJavaClasses(const sf_engine_host& host) {
+  static std::once_flag once;
+  std::call_once(once, [&host] {
+    static const std::string touch =
+        "'\\u00e9'.normalize('NFD'); 'a'.localeCompare('b'); 'A'.toLocaleLowerCase(); 'a'.toLocaleUpperCase();"
+        "new Date(0).toLocaleString(); (1.5).toLocaleString();"
+        "new Intl.Collator().compare('a', 'b'); new Intl.DateTimeFormat().format(0); new Intl.NumberFormat().format(1);";
+    try {
+      auto config = ::hermes::vm::RuntimeConfig::Builder().withIntl(true).build();
+      std::unique_ptr<facebook::hermes::HermesRuntime> rt = facebook::hermes::makeHermesRuntime(config);
+      rt->evaluateJavaScript(std::make_shared<jsi::StringBuffer>(touch), "classes.js");
+    } catch (const std::exception& e) {
+      std::string why = std::string("Hermes's Java classes not found: ") + e.what();
+      if (host.log) host.log(host.ctx, 3, why.data(), why.size());
+    }
+  });
+}
+#endif
+
 extern "C" SF_ENGINE_API sf_engine* sf_engine_start(const uint8_t* script, size_t script_len, const char* script_url, const char* data_dir,
                                                     const char* cloud_origin, int beta, const char* os, const sf_engine_host* host) {
+#ifdef __ANDROID__
+  findJavaClasses(*host);
+#endif
   auto* e = new sf_engine{std::make_unique<Engine>(std::string(reinterpret_cast<const char*>(script), script_len), script_url ? script_url : "core.hbc",
                                                    data_dir, cloud_origin, beta != 0, os ? os : "windows", *host)};
   if (!e->engine->start()) {
@@ -442,3 +518,29 @@ extern "C" SF_ENGINE_API void sf_engine_stop(sf_engine* e) {
   e->engine->stop();
   delete e;
 }
+
+#ifdef __ANDROID__
+extern "C" SF_ENGINE_API void sf_engine_profile(int seconds, const char* path) {
+  auto* root = jsi::castInterface<facebook::hermes::IHermesRootAPI>(facebook::hermes::makeHermesRootAPI());
+  if (!root) return;
+  root->enableSamplingProfiler();
+  std::thread([root, seconds, out = std::string(path)] {
+    std::this_thread::sleep_for(std::chrono::seconds(seconds));
+    root->dumpSampledTraceToFile(out);
+    root->disableSamplingProfiler();
+  }).detach();
+}
+
+extern "C" SF_ENGINE_API char* sf_engine_shell_stats(size_t* len) {
+  size_t n = 0;
+  uint8_t* out = sf_shell_stats(&n);
+  char* copy = static_cast<char*>(malloc(n + 1));
+  if (copy) {
+    std::memcpy(copy, out, n);
+    copy[n] = 0;
+  }
+  sf_free(out, n);
+  *len = copy ? n : 0;
+  return copy;
+}
+#endif

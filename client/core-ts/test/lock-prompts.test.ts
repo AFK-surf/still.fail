@@ -158,3 +158,31 @@ test("an approval the cloud answers too many requests for is asked again a while
   await r.ask("lock.confirm", { workspace: "ws", device: PHONE, code: shortCode(PHONE) });
   assert.deepEqual(r.cloud.posted.map((p) => [p.ws, p.kind, p.id]), [["ws", "device", PHONE]]);
 });
+
+test("the lock says its devices, people and waiting devices in words, as every page shows them", async () => {
+  // This app signs; the other member's older web page is in it too; their phone waits to be confirmed.
+  const older = { id: "ed25519:" + "cd".repeat(32), sub: "s2", kind: "web", label: "", endpoints: ["e1"] };
+  const r = await rig((me) => ({ ws: genesis("ws", me, true, [], {}, ME, [older]) }));
+  r.cloud.requests.set("ws", [phoneRequest]);
+  const v = await (await r.watch({ topic: "lock", workspace: "ws" }))();
+  const owner = v.members.find((m: { sub: string }) => m.sub === "s1");
+  const other = v.members.find((m: { sub: string }) => m.sub === "s2");
+  assert.deepEqual([owner.roleText, other.roleText], ["Owner", "成员"]);
+  assert.deepEqual(owner.devices.map((d: { nameText: string; metaText: string }) => [d.nameText, d.metaText]), [["this", "客户端 · 受信任 · 此设备"]]);
+  assert.deepEqual(other.devices.map((d: { nameText: string; metaText: string }) => [d.nameText, d.metaText]), [["旧版客户端", "网页版"]]);
+  assert.equal(other.nameText, other.name || "b@x.com");
+  assert.deepEqual(v.requests.map((x: { whoText: string; deviceText: string }) => [x.deviceText]), [["Pixel 8"]]);
+  assert.equal(v.requests[0].whoText, v.requests[0].name || "b@x.com");
+});
+
+test("turning the lock on says what it would sign in words: this device first, its people", async () => {
+  const r = await rig(() => ({}));
+  const draft = await r.watch({ topic: "lockDraft", workspace: "ws" });
+  await r.host.time.pass(5_000);
+  const d = await draft();
+  const mine = d.devices.find((x: { current: boolean }) => x.current);
+  assert.ok(mine, JSON.stringify(d));
+  assert.equal(mine.nameText, `${mine.person} · 此设备`);
+  assert.equal(mine.howText, "客户端 · 受信任");
+  assert.ok(d.members.every((m: { roleText: string }) => m.roleText !== ""));
+});

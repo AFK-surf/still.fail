@@ -1,6 +1,7 @@
 // An agent in brief, over its avatar (AgentCard.tsx), in the hover cards' language (Hover.css.ts).
 import { globalStyle, style } from "@vanilla-extract/css";
 import { vars } from "@stillfail/ui/styles/tokens.css.ts";
+import { litOver } from "@stillfail/ui/styles/lit.ts";
 
 export const agentCard = style({ display: "flex", flexDirection: "column", gap: "8px", minWidth: "0", width: "288px", maxWidth: "100%" });
 export const head = style({ display: "flex", alignItems: "center", gap: "10px", minWidth: "0" });
@@ -9,7 +10,7 @@ export const name = style({ flex: "1 1 auto", minWidth: "0", fontWeight: "500", 
 export const stop = style({
   flex: "none", display: "inline-flex", alignItems: "center", gap: "5px", height: "24px", padding: "0 10px", border: "0", borderRadius: "999px",
   background: vars.redBg, color: vars.red, font: "inherit", fontSize: vars.textMeta, fontWeight: "500", cursor: "pointer",
-  selectors: { "&:hover": { background: `color-mix(in srgb, ${vars.red} 22%, transparent)` } },
+  selectors: { "&:hover": litOver },
 });
 
 /** Where it stands, in words, after a dot in its tone; three lines at most (a need or a failure can be long). */
@@ -49,7 +50,7 @@ export const tile = style({
 /** Its context's tile when something can be done to it: pressed as a button is, its name ending in ›. */
 export const tileButton = style({
   border: "0", textAlign: "left", font: "inherit", cursor: "pointer",
-  selectors: { "&:hover": { background: vars.selected }, "&[data-state=open]": { background: vars.selected } },
+  selectors: { "&:hover, &[data-state=open]": litOver },
 });
 export const tileName = style({ display: "flex", alignItems: "center", gap: "2px", minWidth: "0" });
 globalStyle(`${tileName} > span`, { minWidth: "0", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" });

@@ -1,22 +1,33 @@
 // Slice 8 over a fake core: the fixture's topics (decide_fixture.mbt's modes), its calls kept for the test to look at.
 
 ///|
-/// The app over the fixture in `mode` (its pages opened as sffix opens them), its calls kept in `calls` and answered.
-fn decide_core(calls : Array[Made], mode : String) -> @ui.Tester {
+/// The app over the fixture in `mode` (its pages opened as sffix opens them), its calls kept in `calls` and answered;
+/// in a desktop's window when `wide`.
+fn decide_core(calls : Array[Made], mode : String, wide? : Bool = false) -> @ui.Tester {
   reset()
   let base = fixture(mode)
   let src : Source = {
     ..base,
     call: fn(name, params, done) {
       calls.push({ name, params, bytes: None, done, heard: None })
-      done(Ok(Json::object({})))
+      // the 奏 page's taken by the made-up core (its queue as the core keeps it); a chat's answered, nothing more
+      // (and a call's parts as the core makes them, kept: history.tool)
+      if mode.has_prefix("decisions") || name == "history.tool" {
+        (base.call)(name, params, done)
+      } else {
+        done(Ok(Json::object({})))
+      }
     },
   }
   if mode.has_prefix("chat") {
     open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
   }
   open_fixture(mode)
-  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0)
+  let t = if wide {
+    @ui.Tester::new(fn(c) { view(c, src) }, w=1280.0, h=800.0, platform=0)
+  } else {
+    @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0, platform=2)
+  }
   // the pages opened slid in
   t.run_for(@ui.nav_push_ms)
   t
@@ -58,7 +69,8 @@ test "忽略 lets the ask go (decision.dismiss), gone at once" {
   t.tap_text("忽略")
   assert_eq(named(calls, "decision.dismiss").length(), 1)
   // let go at once (what it showed only drawn as it closes up)
-  assert_eq(dui.gone.length(), 1)
+  t.frame()
+  assert_eq(@sfpages.dismissed.length(), 1)
   // (not idle yet: its room closes on the rows' spring, close_gap, till mbui#25 declares its end)
 }
 
@@ -104,6 +116,38 @@ test "the history: a group opens to its steps, a step to its call and what came 
   // the last tap's ripple shown whole, its way in and out
   t.run_for(@motion.ripple_tap_ms)
   t.assert_idle()
+}
+
+///|
+test "the desk's chat: 忽略 under an agent's need with no card lets it go (decision.dismiss)" {
+  let calls : Array[Made] = []
+  let t = decide_core(calls, "chat-need", wide=true)
+  // under the need, the chat's last post, past the card's own
+  let (x, y) = t.find_last("忽略").unwrap()
+  let (_, need_y) = t.find("你在手机上试一下新的列表，有问题截个图给我。").unwrap()
+  assert_true(y > need_y)
+  t.tap(x, y)
+  let made = named(calls, "decision.dismiss")
+  assert_eq(made.length(), 1)
+  assert_eq(number(Some(made[0].params), "seq"), 12.0)
+}
+
+///|
+test "the desk's history beside a chat: a group opens to its steps, a step to its call and what came back" {
+  let calls : Array[Made] = []
+  let t = decide_core(calls, "chat-history-side", wide=true)
+  assert_true(t.find("moon test -p ui -f list_test.mbt") is None)
+  t.tap_text("读了 src/ui/list.mbt 等 2 个文件，跑了测试")
+  t.tap_text("跑一遍列表的测试")
+  // what the core made of the call and what came back (history.tool, answered as it was asked after that frame): the
+  // next frame shows the command, its timeout, its output
+  t.frame()
+  assert_true(t.find("moon test -p ui -f list_test.mbt") is Some(_))
+  assert_true(t.find("120000") is Some(_))
+  assert_true(t.find("Total tests: 9, passed: 9, failed: 0.") is Some(_))
+  // a step closed again
+  t.tap_text("跑一遍列表的测试")
+  assert_true(t.find("Total tests: 9, passed: 9, failed: 0.") is None)
 }
 
 ///|
@@ -171,62 +215,24 @@ test "the 奏 page: the card turns as it is moved across, 4° a width about its 
 }
 
 ///|
-test "a call is drawn by what it is" {
-  assert_eq(command_of({ "command": ["bash", "-lc", "ls -la"] }), Some("ls -la"))
-  assert_eq(command_of({ "cmd": "git status" }), Some("git status"))
-  match parse_call("{\"a\": \"abc") {
-    Some(_) => fail("cut short without its marker")
-    None => ()
-  }
-  match parse_call("{\"a\": \"abc\n… (12 more characters)") {
-    Some(Object(m)) => assert_eq(m.get("a"), Some(Json::string("abc…")))
-    _ => fail("not closed")
-  }
-  assert_eq(read_lines("    12→one\n    13→two\nmore", false), Some("one\ntwo"))
-  assert_eq(plain_brief("## 标题\n- 一项 **重点**\n```sh\nls\n```"), "标题 一项 重点 ls")
-  match command_output("Wall time: 1.2s\nProcess exited with code 0\nOutput:\nok") {
-    Some((said, out)) => {
-      assert_eq(said.length(), 2)
-      assert_eq(out, "ok")
-    }
-    None => fail("no output read")
-  }
+test "a chat's link" {
   assert_eq(chat_link("ws1/st1", "ember:c-1"), "https://app.still.fail/o/ws1/st1/ember%3Ac-1")
 }
 
 ///|
-test "the chat's sheet and an agent's card as tall as Android reckons what they show (ChatInfo.kt, AgentSheet.kt fit)" {
-  // an agent with turns, a job, a note besides a quota's: its head 22 + 52, its lines and figures 72 + 76, the note 8 +
-  // 20, 12, four rows of 40, the foot 24
-  let a : Json = {
-    "jobs": [{ "id": "j" }],
-    "turns": [{ "text": "3 步" }],
-    "attention": [{ "kind": "quota" }, { "kind": "failed" }],
-  }
-  assert_eq(agent_sheet_fit(Some(a)), 446.0)
-  // two agents (56 each), 置顶 and Slack and archive and the two always (40 each), its public links (may, two: 40 each
-  // and 10), the head 22 + 84 and the foot 10 + 30
-  let chat : Json = {
-    "agents": [{ "id": 1 }, { "id": 2 }],
-    "pinned": true,
-    "slackUrl": "https://slack.example/x",
-    "publish": { "may": true, "links": [{ "id": "a" }, { "id": "b" }] },
-  }
-  assert_eq(chat_info_fit(Some(chat), None), 588.0)
-  // the sheets drawn that tall over the navigation bar, at rest
+test "the chat's sheet and an agent's card as tall as what they show: their last row in it, no room under it to spare" {
   let calls : Array[Made] = []
-  for mode in ["chat-info", "chat-agent"] {
+  // (the chat's last: its public links' last, Bob's)
+  for case in [("chat-info", "2 天前 · Bob", chat_info_foot), ("chat-agent", "后台", agent_sheet_foot)] {
+    let (mode, last, foot) = case
     let t = decide_core(calls, mode)
     sheet_rested(t, "decide-sheet")
-    let (_, _, _, sh) = t.get(@ui.Dialog).rect
-    let chat = (fixture(mode).topic)("chat", chat_params({ station: "ws1/st1", session: "s-c1", title: "", station_name: "" })).value
-    let want = if mode == "chat-info" {
-      let (view, _, _) = view_of_chat(fixture(mode), { station: "ws1/st1", session: "s-c1", title: "", station_name: "" })
-      chat_info_fit(chat, view)
-    } else {
-      agent_sheet_fit(agent_json(chat, "s-c1"))
-    }
-    assert_true((sh - want - nav_foot()).abs() < 0.5, msg="\{mode}: \{sh} for \{want}")
+    let (_, sy, _, sh) = t.get(@ui.Dialog).rect
+    let (_, ly, _, lh) = t.rect_of(last).unwrap()
+    // under its last row's words: the rest of its row (and its card's padding), the sheet's foot, the bar's
+    let under = sy + sh - (ly + lh)
+    assert_true(under >= foot + nav_foot() && under < foot + nav_foot() + 40.0, msg="\{mode}: \{under} under \{last}")
+    assert_true(sh < 844.0 * @sf.sheet_most, msg="\{mode}: \{sh}")
   }
 }
 
@@ -276,7 +282,7 @@ test "the history's post: where it went with its platform's mark, in the accent'
 }
 
 ///|
-test "接力到频道: the places the station's bots are in, one picked, relayed there with a note (Relay.kt)" {
+test "接力到频道 on a phone: the pages' relay as a sheet, the places the bots are in, one picked, relayed there (chat.relay)" {
   reset()
   let calls : Array[Made] = []
   let base = fixture("chat-info")
@@ -301,18 +307,22 @@ test "接力到频道: the places the station's bots are in, one picked, relayed
       match name {
         "chat.relayPlaces" => done(Ok(places))
         "chat.relay" => done(Ok({ "place": "#dev" }))
+        // (what the sheet shows of them, the core's: kept, src/sfkept)
+        "chat.relayView" => (base.call)(name, params, done)
         _ => done(Ok(Json::object({})))
       }
     },
   }
   open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
   open_fixture("chat-info")
-  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0)
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0, platform=2)
   t.run_for(@ui.nav_push_ms)
   t.tap_text("接力到频道…")
   assert_eq(named(calls, "chat.relayPlaces").length(), 1)
-  // (the info sheet goes, the relay sheet comes up, to where it rests)
-  t.run_for(@kit.sheet_rest("decide-sheet") - t.time())
+  // (the info sheet goes, the relay's sheet comes up, to where it rests: the presenters')
+  t.run_for(@kit.sheet_rest("sf-present") - t.time())
+  // (with touch nothing takes the keyboard's focus as it opens: the keyboard would come up over the places)
+  assert_true(!t.ctx().field_focused(), msg="a field focused as the relay opened on a phone")
   assert_true(t.find("接力到频道") is Some(_))
   assert_true(t.find("#dev") is Some(_))
   assert_true(t.find("🔒 #ops") is Some(_))
@@ -332,12 +342,9 @@ test "接力到频道: the places the station's bots are in, one picked, relayed
   assert_eq(relayed.length(), 1)
   assert_eq(text(Some(relayed[0].params), "connect"), "slack-1")
   assert_eq(text(Some(relayed[0].params), "channel"), "C1")
+  // the sheet gone, where it went said
+  t.frame()
+  assert_true(t.find("开头附一句（可选）") is None)
+  assert_true(t.find("已接力到 #dev") is Some(_))
 }
 
-///|
-test "接力: a pasted Slack message's link offers that thread, nothing else to pick" {
-  assert_true(slack_link("https://star.slack.com/archives/C0123ABC/p1729580000123456"))
-  assert_false(slack_link("https://star.slack.com/archives/C0123ABC"))
-  assert_false(slack_link("https://star.slack.com/archives/c0123abc/p1729580000123456"))
-  assert_false(slack_link("ops"))
-}

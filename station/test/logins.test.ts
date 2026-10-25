@@ -17,7 +17,8 @@ import { COLS, QUIET_MS, STALL_MS, TIMEOUT_MS } from "../src/logins/run.ts";
 import { routes } from "../src/api/routes/logins.ts";
 import { act, endedNotice, loginTools, promptNotice, screenFor } from "../src/tools/login.ts";
 import { WINDOWS, platform } from "../src/platform/index.ts";
-import { approval, script, temp, upon } from "./accounts-fakes.ts";
+import { approval, fakeBrowser, script, temp, upon } from "./accounts-fakes.ts";
+import type { LoginPages } from "../src/logins/pages.ts";
 import { settle, testClock } from "./hub-fakes.ts";
 
 type Json = any;
@@ -101,13 +102,13 @@ test("a login's program by its name, past env, its variables and what only runs 
 
 /// A machine for logins: a temp HOME, a bin/ for the stand-ins, Node on PATH (for the stand-ins written in it), the
 /// system's tools; a Logins on a TestClock.
-function machine() {
+function machine(pages?: LoginPages) {
   const home = temp("logins");
   const bin = join(home, "bin");
   mkdirSync(bin, { recursive: true });
   const env = { HOME: home, PATH: `${bin}:${dirname(process.execPath)}:/usr/bin:/bin:/usr/sbin:/sbin`, LANG: "en_US.UTF-8" };
   const time = testClock();
-  const logins = new Logins({ data: join(home, "data"), env: () => env, clock: time.clock, lang: () => "zh" });
+  const logins = new Logins({ data: join(home, "data"), env: () => env, clock: time.clock, lang: () => "zh", ...(pages ? { pages } : {}) });
   const changed = (wake: () => void) => logins.changes(wake);
   /// Waits until the login is so (each change looked at).
   const until = (id: string, ok: (l: Login) => boolean, what: string) => upon(changed, () => { const l = logins.get(id); return l && ok(l) ? l : undefined; }, what);
@@ -513,6 +514,63 @@ for (const [host, mode] of [["::1", "get"], ["127.0.0.1", "get"], ["127.0.0.1", 
     }
   });
 }
+
+test("a login's page opened in the station's browser: the page its command opened, one tab however often asked, its browser back to the command here with nothing relayed, the tab closed as it ends", { skip: skipped }, async () => {
+  const b = fakeBrowser();
+  const m = machine(b.pages);
+  script(join(m.bin, "fakeloop"), LOOPBACK);
+  const by = { email: "b@x.com", name: "李四" };
+  try {
+    const login = await m.logins.start(["fakeloop", "127.0.0.1", "get"], m.by);
+    const waiting = await m.until(login.id, (l) => l.step === "loopback", "loopback");
+    assert.deepEqual([waiting.browser, waiting.screen], [true, undefined]);
+    assert.equal(await m.logins.openPage(login.id, by), "browser:T1");
+    assert.deepEqual([...b.tabs.values()], [waiting.url], "the page it opened, which comes back to it here");
+    await m.until(login.id, (l) => l.screen === "browser:T1", "its tab told");
+    // Asked again (from another device): the same tab, brought forward.
+    assert.equal(await m.logins.openPage(login.id), "browser:T1");
+    assert.deepEqual(b.fronted, ["T1"]);
+    // A read-only member is not told of it.
+    const limited = Logins.limited(m.logins.get(login.id)!);
+    assert.deepEqual([limited.browser, limited.screen], [undefined, undefined]);
+    // Closed by a person: told, and opened again when asked.
+    b.gone("T1");
+    await m.until(login.id, (l) => l.screen === undefined, "its tab gone");
+    assert.equal(await m.logins.openPage(login.id, by), "browser:T2");
+    // The station's browser comes back to the command on this machine itself.
+    const back = waiting.callback!;
+    await fetch(`http://127.0.0.1:${back.port}${back.path}?code=c0de&state=s3cret`);
+    const done = await m.until(login.id, (l) => l.state === "done", "done");
+    assert.deepEqual([done.screen, done.browser, done.doneBy], [undefined, undefined, by], "who finished it: whose browser step it was");
+    assert.equal(b.tabs.size, 0, "its tab closed as it ended");
+    await assert.rejects(m.logins.openPage(login.id), (e: unknown) => e instanceof Refused && e.status === 409);
+  } finally {
+    await m.logins.close();
+  }
+});
+
+test("a device code's page opens with its code where the service gives one; a station with no Chrome offers none", { skip: skipped }, async () => {
+  const b = fakeBrowser();
+  const m = machine(b.pages);
+  script(join(m.bin, "fakecode"), `#!/bin/sh\necho "Visit https://vercel.com/oauth/device?user_code=ABCD-EFGH"\nread forever\n`);
+  const none = machine(fakeBrowser(() => {}, false).pages);
+  script(join(none.bin, "fakecode"), `#!/bin/sh\necho "Visit https://vercel.com/oauth/device?user_code=ABCD-EFGH"\nread forever\n`);
+  try {
+    const login = await m.logins.start("fakecode", m.by);
+    await m.until(login.id, (l) => l.step === "device" && l.browser === true, "device");
+    await m.logins.openPage(login.id);
+    assert.deepEqual([...b.tabs.values()], ["https://vercel.com/oauth/device?user_code=ABCD-EFGH"]);
+    m.logins.cancel(login.id);
+    assert.equal(b.tabs.size, 0);
+    const there = await none.logins.start("fakecode", none.by);
+    const device = await none.until(there.id, (l) => l.step === "device", "device");
+    assert.equal(device.browser, undefined);
+    await assert.rejects(none.logins.openPage(there.id), (e: unknown) => e instanceof Refused && e.status === 501);
+  } finally {
+    await m.logins.close();
+    await none.logins.close();
+  }
+});
 
 test("a callback is refused when the port is not the command's, or the command has ended", { skip: skipped }, async () => {
   const m = machine();

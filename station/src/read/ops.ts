@@ -1,10 +1,11 @@
 // What the readers answer, by name: each module of reads adds its own. Every op runs in a reader thread over a
 // read-only store, with the request's language set (`setSpoken`), and returns a JSON value.
 import type { Store } from "./store.ts";
-import { chats, entries } from "./views.ts";
+import { chatRows, chats, entries } from "./views.ts";
 import { usageOps } from "./ops-usage.ts";
 import { sessionOps } from "./ops-sessions.ts";
 import { saidNotices, turnNotices } from "./notices.ts";
+import { runtimeList } from "./runtime-view.ts";
 import { changedOf } from "./digest.ts";
 import { publishDraft } from "./publish.ts";
 
@@ -12,6 +13,7 @@ export type ReadOp = (store: Store, args: any) => unknown;
 
 export const ops: Record<string, ReadOp> = {
   chats: (store, a) => chats(store, a.viewer, a.archived),
+  chatRows: (store, a) => chatRows(store, a.viewer, a.sessions, a.threads),
   entries: (store, a) => entries(store, a.viewer, a.thread, a.params),
   ...usageOps,
   ...sessionOps,
@@ -20,5 +22,5 @@ export const ops: Record<string, ReadOp> = {
   /// A chat as a published snapshot would show it (api/routes/publish.ts).
   publishDraft: (store, a) => publishDraft(store, a, a.lang),
   /// What of a list (the read `op` with `args`) a client holding `held` does not hold as it is (POST /changed/<list>).
-  changed: (store, a) => changedOf(ops[a.op]!(store, a.args), a.id, a.held),
+  changed: (store, a) => changedOf(runtimeList(a.op, ops[a.op]!(store, a.args), a.runtimes), a.id, a.held),
 };

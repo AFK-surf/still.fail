@@ -6,6 +6,7 @@ import type {
   Maker, Person, RowAgent, RuntimeKind, Session, Stamp,
 } from "../core/shapes.ts";
 import { markdown } from "../../../client/core-ts/src/markdown.ts";
+import { noticeOf } from "../../../client/core-ts/src/notice.ts";
 
 const MINUTE = 60_000;
 
@@ -84,7 +85,7 @@ export function message(chat: DemoChat, by: Who, text: string, at?: number): Cha
   const base = { seq, thread: chat.thread, ts: `${at / 1000}`, text, attachments: [], quotes: [], createdAt: at, system: false, waiting: false, ...(now ? { said: true } : {}), time: { createdAt: stamp(at) } };
   const m = chat.model;
   if (by === "agent") return { ...base, authorKind: "agent", author: chat.key, mine: false, declared: "final", by: { name: m.name, agent: chat.key, maker: m.maker, runtime: m.runtime } };
-  if (by === "ember") return { ...base, authorKind: "ember", author: "ember", mine: false, system: true, by: { name: "still.fail" } };
+  if (by === "ember") return { ...base, authorKind: "ember", author: "ember", mine: false, system: true, notice: noticeOf(text, false), by: { name: "still.fail" } };
   if (by === "me") return { ...base, authorKind: "person", author: "local", authorName: "你", mine: true, by: { name: "你" } };
   return { ...base, authorKind: "person", author: by.id, authorName: by.name, mine: false, by: { name: by.name, ...(by.shown.picture ? { picture: by.shown.picture } : {}) } };
 }

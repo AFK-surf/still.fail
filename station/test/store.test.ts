@@ -8,10 +8,14 @@ import { DatabaseSync } from "node:sqlite";
 import { after, test } from "node:test";
 import { zstdDecompressSync } from "node:zlib";
 import {
-  AUTO, type AuthorKind, type EntryRow, type JobRow, MANUAL, type NewMessage, SCHEMA_VERSION, Store, type StoreChange, newMessage,
+  ANY_RUNNING, AUTO, type AuthorKind, CARD_BEFORE, CLOSED_SINCE, type EntryRow, JOBS_RUNNING, JOBS_UP, type JobRow, LATEST_DECISIONS, LIVE_SESSIONS, LOGIN_CARDS,
+  MANUAL, type NewMessage, OPTIONS_BEFORE, RUNNING_SESSIONS, SAID_SINCE, SCHEMA_VERSION, SESSION_COUNTS, SESSION_JOBS, SESSION_OF_RUNTIME, STATS_OF, Store, type StoreChange, newMessage,
 } from "../src/store/store.ts";
 import { MERGED, SCHEMA } from "../src/store/schema.ts";
+import { ACTIVE_SESSIONS, TAKEN_SINCE, TURNS_BETWEEN, TURNS_FROM } from "../src/store/usage.ts";
 import * as read from "../src/read/store.ts";
+import { fileAway } from "./archived-before.ts";
+import { testClock } from "./hub-fakes.ts";
 
 const dirs: string[] = [];
 const stores: Store[] = [];
@@ -133,6 +137,12 @@ test("a thread is a log, edits are entries of their own", () => {
   assert.deepEqual(merged, [[1, "1.1 edited", true], [2, "1.2 edited", true], [3, "1.3", false], [6, "new", false]]);
   assert.deepEqual(store.messagesBefore(thread.id, 3, 1).map((m) => m.ts), ["1.2"]);
   assert.equal(store.lastMessage(thread.id)!.declared, "final");
+  store.editMessage("slack:T1", "C1", "1.1", "1.1", "1.1 again");
+  assert.equal(store.messagesBefore(thread.id, 2, 1)[0]!.text, "1.1 again", "the latest edit");
+  // Each message's latest edit is found at once by the index of edits, as the station's SQLite (node's) plans it, not by
+  // going back over the whole thread.
+  const plan = (store.db.prepare("EXPLAIN QUERY PLAN SELECT * FROM merged WHERE thread = ? AND n = ?").all(thread.id, 1) as { detail: string }[]).map((r) => r.detail);
+  assert.ok(plan.some((d) => d.includes("entries_edits (thread=? AND target=?)")), plan.join(" | "));
 });
 
 test("a message still pending reaches the agent as it reads at delivery", () => {
@@ -182,7 +192,7 @@ test("reads move forward only and unread counts skip the viewer's own", () => {
   assert.deepEqual(store.listThreads("me@x", null, null).map((t) => t.thread.id), [slack.id, thread.id], "the latest said first");
 });
 
-test("archiving writes a thread out to a zstd file and back", () => {
+test("an archived thread keeps its entries in the database; one a station before wrote out to its file is read from it, and brought back", () => {
   const archive = tempdir();
   const store = open(":memory:", archive);
   session(store, "a");
@@ -201,8 +211,12 @@ test("archiving writes a thread out to a zstd file and back", () => {
   const file = join(archive, "threads", `${own.id}.jsonl.zst`);
 
   store.setArchived("a", true, MANUAL);
-  assert.ok(existsSync(file), "every session of it is archived");
-  assert.ok(!existsSync(join(archive, "threads", `${shared.id}.jsonl.zst`)), "b still takes part");
+  assert.ok(!existsSync(file), "archived, its entries stay where they are");
+  assert.deepEqual(store.entriesAfter(own.id, 0), entries);
+  assert.deepEqual(store.listThreads("local", null, own.id)[0], before);
+
+  // As a station before archived it: written out to its file, out of the database.
+  assert.equal(fileAway(store, own.id), file);
   const text = zstdDecompressSync(readFileSync(file)).toString("utf8");
   // The shape the Rust station writes (serde's EntryRow): its archives read here, and back.
   assert.ok(text.split("\n")[0]!.startsWith(`{"thread":${own.id},"n":1,"kind":"message","target":null,"ts":"2.2","authorKind":"person"`), text);
@@ -219,8 +233,9 @@ test("archiving writes a thread out to a zstd file and back", () => {
   assert.ok(!existsSync(file), "shown again: back in the database");
   assert.deepEqual(store.entriesAfter(own.id, 0), entries);
 
-  // Someone writing in an archived thread brings it back first.
+  // Someone writing in one written out brings it back first.
   store.setArchived("a", true, MANUAL);
+  fileAway(store, own.id);
   const h = heard(store);
   assert.deepEqual(say(store, own.id, "2.4", "person", "local", "还在吗"), [3, true]);
   assert.ok(!existsSync(file));
@@ -229,15 +244,58 @@ test("archiving writes a thread out to a zstd file and back", () => {
   assert.deepEqual(appended, [[3]]);
   h.stop();
 
-  // Deleting the session removes an archived thread's file with it.
+  // Those written out are brought back a few at a time, the oldest first, as they read from their files.
   store.setArchived("a", true, MANUAL);
   store.setArchived("b", true, MANUAL);
-  assert.ok(existsSync(join(archive, "threads", `${shared.id}.jsonl.zst`)));
+  const sharedEntries = store.entriesAfter(shared.id, 0);
+  fileAway(store, shared.id);
+  fileAway(store, own.id);
+  assert.deepEqual(store.bringInArchived(1), { brought: 1, left: 1 });
+  assert.ok(!existsSync(join(archive, "threads", `${shared.id}.jsonl.zst`)) && existsSync(file));
+  assert.deepEqual(store.bringInArchived(5), { brought: 1, left: 0 });
+  assert.deepEqual(store.bringInArchived(5), { brought: 0, left: 0 });
+  assert.ok(!existsSync(file));
+  assert.deepEqual([store.entriesAfter(shared.id, 0), store.entriesAfter(own.id, 0).length], [sharedEntries, 3]);
+
+  // Deleting the session removes an archived thread's file with it.
+  fileAway(store, own.id);
   const removed = heard(store);
   store.deleteSession("a");
   assert.deepEqual(removed.changes.flatMap((c) => (c.type === "threadRemoved" ? [c.id] : [])), [own.id]);
   assert.ok(!existsSync(file));
   assert.deepEqual(store.entriesAfter(shared.id, 0).map((e) => e.text), ["hi"], "b's archived thread stays");
+});
+
+test("what lists say of a thread and a session is kept as its messages are written, and goes with them", () => {
+  const store = memory();
+  session(store, "a");
+  const thread = store.openThread("ember", "EMBER", "1.1", null, null);
+  store.joinThread(thread.id, "a", "ember");
+  const state = () => store.db.prepare("SELECT last_n, said_n, person_n, letters FROM thread_state WHERE thread = ?").get(thread.id);
+  const people = () => store.db.prepare("SELECT author, first_n FROM thread_people WHERE thread = ? ORDER BY first_n").all(thread.id).map((r: any) => [r.author, r.first_n]);
+  assert.equal(state(), undefined);
+  const [first] = say(store, thread.id, "1.2", "person", "x@a", "先看看日志");
+  store.deliver(thread.id, first, ["a"]);
+  say(store, thread.id, "1.3", "agent", "a", "在看");
+  store.insertMessage({ ...newMessage(thread.id, "1.4", "agent", "b", "来自 [备份](https://x/o/w/s/b)：\n\n好了"), letter: { way: "in", title: "备份", link: "https://x/o/w/s/b" } });
+  const [second] = say(store, thread.id, "1.5", "person", "y@a", "我也看");
+  store.deliver(thread.id, second, ["a"]);
+  say(store, thread.id, "1.6", "person", "x@a", "好");
+  assert.deepEqual({ ...(state() as object) }, { last_n: 5, said_n: 5, person_n: 1, letters: 1 });
+  assert.deepEqual(people(), [["x@a", 1], ["y@a", 4]]);
+  // An edit is an entry of its own: the last, nothing else; what is said of the message as merged is its new words.
+  store.editMessage("ember", "EMBER", "1.1", "1.2", "先看看今天的日志");
+  assert.deepEqual({ ...(state() as object) }, { last_n: 6, said_n: 5, person_n: 1, letters: 1 });
+  const [listed] = store.listThreads("x@a", null, thread.id);
+  assert.deepEqual([listed!.firstText, listed!.lastMessage?.text, listed!.letters, listed!.people], ["先看看今天的日志", "好", 1, ["x@a", "y@a"]]);
+  assert.equal(store.sessionStats("a").get("a")!.firstText, "先看看今天的日志");
+  // The first message given goes: the next given is the first.
+  store.db.prepare("DELETE FROM deliveries WHERE thread = ? AND n = ?").run(thread.id, first);
+  assert.equal(store.sessionStats("a").get("a")!.firstText, "我也看");
+  // The thread goes: what was kept of it with it.
+  store.db.prepare("DELETE FROM entries WHERE thread = ?").run(thread.id);
+  assert.equal(state(), undefined);
+  assert.deepEqual(people(), []);
 });
 
 test("what two chats' agents wrote each other is neither a chat's unread nor what lists show of it, archived or not", () => {
@@ -262,8 +320,10 @@ test("what two chats' agents wrote each other is neither a chat's unread nor wha
   // This chat's own agent quoting one in the chat says it in the chat.
   say(store, thread.id, "1.7", "agent", "a", "来自 [备份](https://x/o/w/s/b)：\n\n照它说的改了");
   for (const threads of lists()) assert.deepEqual(threads.map((t) => [t.lastMessage?.ts, t.unread, t.letters]), [["1.7", 3, 3]]);
-  // Archived, read from its file: the same.
+  // Archived: the same; written out to its file by a station before, read from it: the same.
   store.setArchived("a", true, MANUAL);
+  for (const threads of lists()) assert.deepEqual(threads.map((t) => [t.lastMessage?.ts, t.unread, t.letters]), [["1.7", 3, 3]]);
+  fileAway(store, thread.id);
   for (const threads of lists()) assert.deepEqual(threads.map((t) => [t.lastMessage?.ts, t.unread, t.letters]), [["1.7", 3, 3]]);
   reader.db.close();
 });
@@ -280,8 +340,10 @@ test("letters from before they were marked are marked as the column comes, by th
   say(store, thread.id, "1.4", "agent", "a", "来自 [备份](https://x/o/w/s/b)：\n\n照它说的改了");
   say(store, thread.id, "1.5", "agent", "b", "由 [备份](https://x/o/w/s/b) 开的 chat：\n\n看看备份");
   store.close();
-  // As a station from before letters left it.
+  // As a station from before letters left it (from before the lists' kept state too, whose trigger reads the column).
   const db = new DatabaseSync(path);
+  db.exec("DROP TRIGGER thread_state_add; DROP TRIGGER thread_state_drop; DROP TRIGGER session_first_add; DROP TRIGGER session_first_drop");
+  db.exec("DROP TABLE thread_state; DROP TABLE thread_people; DROP TABLE session_first");
   db.exec("DROP VIEW merged; DROP INDEX entries_letters; ALTER TABLE entries DROP COLUMN letter");
   db.close();
   const again = open(path);
@@ -312,6 +374,7 @@ test("an archived thread whose file is lost reads as empty, and is counted on fr
   say(store, kept.id, "2.2", "person", "local", "还有这个");
   store.setRead("local", lost.id, 3);
   store.setArchived("a", true, MANUAL);
+  fileAway(store, lost.id);
   assert.deepEqual(store.lostArchives(), []);
   rmSync(archiveFile(store, lost.id));
   assert.deepEqual(store.lostArchives(), [lost.id]);
@@ -403,6 +466,30 @@ test("the store announces what changed", () => {
   assert.equal(h.changes.length, 8, "unsubscribed");
 });
 
+test("a session's chat is named by the thread said in last, as the lists have it, read by its rows alone", async () => {
+  const time = testClock();
+  await time.adjust(Date.parse("2026-10-25T00:00:00Z"));
+  const store = Store.open(":memory:", null, time.clock);
+  stores.push(store);
+  session(store, "a");
+  assert.equal(store.sessionChat("a"), null);
+  const slack = store.openThread("slack", "C1", "1.1", null, null);
+  const own = store.openThreadOf("ember", "EMBER", "2.1", null, null, "a");
+  store.joinThread(slack.id, "a", "slack");
+  store.joinThread(own.id, "a", "ember");
+  say(store, slack.id, "1.2", "person", "u1", "看一下构建");
+  await time.adjust(1000);
+  say(store, own.id, "2.2", "person", "local", "hi");
+  const named = () => [store.sessionChat("a")!.thread.id, store.sessionChat("a")!.firstText];
+  // The still.fail chat said in last: its words are not asked (its title is its own, or 新对话).
+  assert.deepEqual(named(), [own.id, null]);
+  assert.equal(store.listThreads("", "a", null)[0]!.thread.id, own.id);
+  await time.adjust(1000);
+  say(store, slack.id, "1.3", "agent", "a", "好");
+  assert.deepEqual(named(), [slack.id, "看一下构建"]);
+  assert.equal(store.listThreads("", "a", null)[0]!.thread.id, slack.id);
+});
+
 test("a session's own chat is archived with it, a chat of its own alone; anything new said brings them back", () => {
   const store = memory();
   session(store, "a");
@@ -428,7 +515,7 @@ test("a session's own chat is archived with it, a chat of its own alone; anythin
   store.setThreadHidden(other.id, true, AUTO);
   assert.ok(thread(other.id).hiddenAt !== null);
   assert.equal(row().archivedAt, null, "its sessions stay");
-  assert.ok(existsSync(archiveFile(store, other.id)), "out of lists: in its archive file");
+  assert.ok(!existsSync(archiveFile(store, other.id)), "out of lists, its entries stay in the database");
   assert.deepEqual(store.entriesAfter(other.id, 0).map((e) => e.text), ["hi", "done"]);
   // Someone writes in it: shown again.
   say(store, other.id, "2.4", "person", "local", "again");
@@ -507,7 +594,7 @@ test("a database made before clients gains the column and a message keeps its ap
   assert.deepEqual(clients(), [null, "android 0.1.1123"]);
   assert.equal(store.pendingMessages("a")[0]!.message.client, "android 0.1.1123");
   store.setArchived("a", true, MANUAL);
-  assert.ok(existsSync(archiveFile(store, thread.id)));
+  fileAway(store, thread.id);
   assert.deepEqual(clients(), [null, "android 0.1.1123"]);
   store.setArchived("a", false, MANUAL);
   assert.deepEqual(clients(), [null, "android 0.1.1123"]);
@@ -677,6 +764,25 @@ test("an options card is kept as options too, and a choice that closes it ends t
   h.stop();
 });
 
+test("the cards answered lately of some threads alone are those the whole station's has in them", () => {
+  const data = tempdir();
+  const store = open(join(data, "stillfail.db"));
+  session(store, "a");
+  const card = { type: "options", options: [{ label: "x" }] };
+  const threads = ["1", "2"].map((ts) => {
+    const t = store.openThread("ember", "EMBER", `${ts}.0`, null, null);
+    store.joinThread(t.id, "a", "ember");
+    store.insertMessage({ ...newMessage(t.id, `${ts}.1`, "agent", "a", "?"), card });
+    say(store, t.id, `${ts}.2`, "person", "me@x", "x");
+    return t.id;
+  });
+  const reader = read.openStore(data);
+  const whole = read.answersSince(reader, 0);
+  assert.deepEqual(whole.map((a) => a.question.thread).sort(), [...threads].sort());
+  assert.deepEqual(read.answersSince(reader, 0, [threads[1]!]), whole.filter((a) => a.question.thread === threads[1]));
+  assert.deepEqual(read.answersSince(reader, 0, []), []);
+});
+
 test("an agent withdraws its own card only", () => {
   const store = memory();
   session(store, "a");
@@ -773,6 +879,96 @@ test("jobs: started, said, ended and cleared", () => {
   h.stop();
 });
 
+test("usage: the sessions at work are found by when their turns ended, once each, not by reading every turn", () => {
+  const store = memory();
+  for (const key of ["a", "b", "c"]) session(store, key);
+  store.startTurn("t1", "a", "input");
+  store.startTurn("t2", "b", "input");
+  store.endTurn("t2", "completed", null, null, null);
+  store.startTurn("t3", "b", "input");
+  store.endTurn("t3", "completed", null, null, null);
+  store.startTurn("t4", "b", "job");
+  assert.deepEqual(store.usageActiveSessions(0).sort(), ["a", "b"]);
+  assert.deepEqual(store.usageActiveSessions(Number.MAX_SAFE_INTEGER).sort(), ["a", "b"], "running ones whenever");
+});
+
+test("what the station asks again and again is planned by an index, never a scan of what grows with time", () => {
+  const store = memory();
+  // As the station's SQLite (node's) plans each: a scan only of an index that holds the sessions shown or running, the
+  // login cards, or of the small one that counts sessions (or of what a subquery found); a table, or an index of every
+  // turn, job or entry, never.
+  const planned: [string, unknown[]][] = [
+    [ACTIVE_SESSIONS, [0]], [LIVE_SESSIONS, []], [ANY_RUNNING, []], [RUNNING_SESSIONS, []], [JOBS_RUNNING, []], [JOBS_UP, []], [SESSION_JOBS, ["a"]],
+    [STATS_OF, ["a"]], [SESSION_COUNTS, []], [LATEST_DECISIONS, [0]], [CLOSED_SINCE, [0]], [LOGIN_CARDS, ["%l1%"]], [CARD_BEFORE, [1, 9]], [OPTIONS_BEFORE, [1, 9]],
+    [TURNS_FROM, ["a", 0]], [TURNS_BETWEEN, ["a", 0, 9]], [TAKEN_SINCE, ["a", "ember", 0]], [SESSION_OF_RUNTIME, ["claude", "r1"]], [SAID_SINCE, [1, 0]],
+  ];
+  const scans = /^SCAN (?!CONSTANT ROW$|\(subquery-\d+\)$|\w+ USING (?:COVERING )?INDEX (?:sessions_live|sessions_running|sessions_by_connect|entries_login_cards)\b)/;
+  const plans = new Map<string, string[]>();
+  for (const [sql, args] of planned) {
+    const plan = (store.db.prepare(`EXPLAIN QUERY PLAN ${sql}`).all(...(args as never[])) as { detail: string }[]).map((r) => r.detail);
+    assert.ok(!plan.some((d) => scans.test(d)), `${sql}\n  ${plan.join(" | ")}`);
+    plans.set(sql, plan);
+  }
+  // The latest card before a message: by the index of cards, not by going back over the thread to it.
+  assert.ok(plans.get(CARD_BEFORE)!.some((d) => d.includes("entries_cards")), plans.get(CARD_BEFORE)!.join(" | "));
+  assert.ok(plans.get(OPTIONS_BEFORE)!.some((d) => d.includes("entries_options")), plans.get(OPTIONS_BEFORE)!.join(" | "));
+  assert.ok(plans.get(SAID_SINCE)!.some((d) => d.includes("entries_people_since (thread=? AND at>?)")), plans.get(SAID_SINCE)!.join(" | "));
+  // Each session's latest check of the last days: from the index of their times alone.
+  assert.ok(plans.get(LATEST_DECISIONS)!.some((d) => d.includes("COVERING INDEX decision_checks_lately")), plans.get(LATEST_DECISIONS)!.join(" | "));
+  // The turns the usage counter reads at each part of a transcript: those of its calls' time alone.
+  assert.ok(plans.get(TURNS_BETWEEN)!.some((d) => d.includes("turns_by_session (session_key=? AND started_at>? AND started_at<?)")), plans.get(TURNS_BETWEEN)!.join(" | "));
+  assert.ok(plans.get(TAKEN_SINCE)!.some((d) => d.includes("deliveries_taken (session=? AND delivered_at>?)")), plans.get(TAKEN_SINCE)!.join(" | "));
+  // What each says.
+  session(store, "a");
+  session(store, "b");
+  store.setArchived("b", true, MANUAL);
+  assert.deepEqual(store.liveSessions().map((s) => s.key), ["a"]);
+  assert.deepEqual(store.sessionCounts(), [{ connect: "ds", ws: null, n: 2 }]);
+  assert.equal(store.anyRunning(), false);
+  store.startTurn("t1", "a", "input");
+  const stats = store.statsOf(["a", "missing"]);
+  assert.deepEqual([...stats.keys()], ["a"]);
+  assert.deepEqual([stats.get("a")!.turns, stats.get("a")!.pending, stats.get("a")!.firstText, stats.get("a")!.lastTurn?.kind], [1, 0, null, "input"]);
+  // In use: shown, or at work though archived.
+  assert.deepEqual(store.sessionsInUse().map((s) => s.key), ["a"]);
+  store.setRunning("b", true);
+  assert.deepEqual(store.runningSessions().map((s) => s.key), ["b"]);
+  assert.deepEqual(store.sessionsInUse().map((s) => s.key), ["a", "b"]);
+  store.setRunning("a", true);
+  assert.deepEqual(store.sessionsInUse().map((s) => s.key).sort(), ["a", "b"], "each once");
+  // The session that went on with a runtime's session: by its current one, or one it ran in before.
+  store.setRuntimeSessionId("a", "r2");
+  store.ranIn("b", "r1", null);
+  assert.equal(store.sessionOfRuntime("claude", "r2")?.key, "a");
+  assert.equal(store.sessionOfRuntime("claude", "r1")?.key, "b");
+  assert.equal(store.sessionOfRuntime("codex", "r1"), null, "another runtime's");
+  assert.equal(store.sessionOfRuntime("claude", "r9"), null);
+});
+
+test("usage: where a model's context was compacted is kept as calls are recorded, and made once from those before", () => {
+  const path = join(tempdir(), "stillfail.db");
+  let store = open(path);
+  session(store, "a");
+  const call = (id: string, at: number, sent: number, model = "m", subagent = false) =>
+    [{ id, at, model, subagent, fast: false, input: sent, cacheRead: 0, cacheWrite: 0, cacheWriteLong: 0, output: 1 }, { turn: null, person: null, thread: null, profile: "cc" }] as const;
+  store.recordUsage("/t.jsonl", { session: "a", offset: 1, model: "m" }, "claude", [
+    call("c1", 1000, 120_000),
+    call("s1", 1500, 5_000, "m", true), // a sub-agent's: not the session's context
+    call("c2", 2000, 30_000), // compacted from 120 000
+    call("c3", 3000, 40_000), // not compacted: up
+    call("c4", 4000, 90_000, "other"), // another model: not compared
+    call("c5", 5000, 20_000, "other"), // compacted from 90 000
+    call("c6", 6000, 10_000, "other"), // under COMPACTED_FROM before: not
+  ] as never);
+  assert.deepEqual([...store.compactionPoints(0)].sort(), [["m", 120_000], ["other", 90_000]]);
+  assert.deepEqual([...store.compactionPoints(4500)], [["other", 90_000]], "those since");
+  // A database from before them: made from the calls it has, as it opens.
+  store.db.exec("DROP TRIGGER usage_compactions_add; DROP TABLE usage_compactions;");
+  store.close();
+  store = open(path);
+  assert.deepEqual([...store.compactionPoints(0)].sort(), [["m", 120_000], ["other", 90_000]]);
+});
+
 test("usage: a call is recorded once, its output grown; turns tell whom they were for", () => {
   const store = memory();
   session(store, "a");
@@ -785,10 +981,65 @@ test("usage: a call is recorded once, its output grown; turns tell whom they wer
   const [g] = store.usageGroups(0, 2000, 0);
   assert.deepEqual([g!.calls, g!.output, g!.fast, g!.day], [1, 9, true, "1970-01-01"]);
   assert.equal(store.usageSince(), 1000);
-  assert.deepEqual(store.usageTurns("a").map((t) => [t.id, t.of.person, t.of.thread, t.of.profile]), [["t1", "me@x", 3, "cc"]]);
+  assert.deepEqual(store.usageTurns("a", 0, 2000).map((t) => [t.id, t.of.person, t.of.thread, t.of.profile]), [["t1", "me@x", 3, "cc"]]);
   assert.deepEqual(store.usageActiveSessions(0), ["a"]);
   const h = heard(store);
-  store.usageChanged();
-  assert.deepEqual(h.changes, [{ type: "usage" }]);
+  store.usageChanged(["a"]);
+  assert.deepEqual(h.changes, [{ type: "usage", sessions: ["a"] }]);
+  h.stop();
+});
+
+test("usage: a session's calls added up by the database, those from before the totals and those an older station records too", () => {
+  const path = join(tempdir(), "usage.db");
+  const of = { turn: null, person: null, thread: null, profile: null };
+  const call = (id: string, model: string | null, output: number) => ({ id, at: 1000, model, subagent: false, fast: false, input: 1, cacheRead: 2, cacheWrite: 3, cacheWriteLong: 4, output });
+  const first = open(path);
+  session(first, "a");
+  first.recordUsage("/a.jsonl", { session: "a", offset: 1, model: "m" }, "claude", [[call("c1", "m", 5), of], [call("c2", null, 1), of]]);
+  first.close();
+  // A database from before the totals: what was recorded is added up as it is opened.
+  const before = new DatabaseSync(path);
+  before.exec("DROP TRIGGER usage_totals_add; DROP TRIGGER usage_totals_grow; DROP TRIGGER usage_totals_drop; DROP TABLE usage_totals;");
+  before.close();
+  const store = open(path);
+  // A call's output grown, a new call, and one recorded by a station process from before the totals.
+  store.recordUsage("/a.jsonl", { session: "a", offset: 2, model: "m" }, "claude", [[call("c1", "m", 9), of], [call("c3", "m", 2), of]]);
+  const older = new DatabaseSync(path);
+  older.exec("INSERT INTO usage (id, at, session, runtime, model, input, cache_read, cache_write, cache_write_long, output) VALUES ('c4', 1000, 'a', 'claude', 'm', 1, 2, 3, 4, 7)");
+  older.close();
+  assert.deepEqual(
+    store.usageOfSession("a").map((g) => [g.runtime, g.model, g.calls, g.input, g.cacheRead, g.cacheWrite, g.cacheWriteLong, g.output]),
+    [["claude", null, 1, 1, 2, 3, 4, 1], ["claude", "m", 3, 3, 6, 9, 12, 18]],
+  );
+  assert.deepEqual(store.usageOfSession("b"), []);
+});
+
+test("a session's usage as its summary says it: kept as told, a change told as the session's only once it rests", () => {
+  const data = tempdir();
+  const store = open(join(data, "stillfail.db"));
+  session(store, "a");
+  const h = heard(store);
+  const usage = { modelCalls: 2, inputTokens: 30, cachedTokens: 20, outputTokens: 4, model: "m", contextTokens: 15, contextWindow: null };
+  store.setRunning("a", true);
+  h.changes.length = 0;
+  store.setSessionUsage("a", usage);
+  assert.deepEqual(h.changes, [], "at work: its stream tells it");
+  assert.deepEqual(store.sessionUsage("a"), usage);
+  store.setRunning("a", false);
+  h.changes.length = 0;
+  store.setSessionUsage("a", usage);
+  assert.deepEqual(h.changes, [], "the same: nothing");
+  store.setSessionUsage("a", { ...usage, modelCalls: 3, cost: 0.5 });
+  assert.deepEqual(h.changes, [{ type: "session", key: "a" }], "at rest: told as the session's");
+  store.setSessionUsage("a", { ...usage, modelCalls: 4 }, true);
+  assert.deepEqual(h.changes.length, 1, "quiet: not told");
+  store.setSessionUsage("gone", usage);
+  assert.equal(store.sessionUsage("gone"), null, "no session: none kept");
+  assert.deepEqual(store.sessionsWithoutUsage(), []);
+  session(store, "b");
+  assert.deepEqual(store.sessionsWithoutUsage(), ["b"]);
+  const reader = read.openStore(data);
+  assert.deepEqual([...read.sessionUsages(reader, null)], [["a", { ...usage, modelCalls: 4 }]]);
+  assert.deepEqual([...read.sessionUsages(reader, "b")], []);
   h.stop();
 });

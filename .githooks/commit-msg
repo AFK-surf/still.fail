@@ -1,7 +1,7 @@
 #!/bin/sh
 # Nothing merged into main undone by this commit (scripts/undone.sh): here, where its message (`Reverts <sha>`) is known.
 [ -n "${STILLFAIL_SKIP_CHECKS:-${EMBER_SKIP_CHECKS:-}}" ] && exit 0
-# No `Changelog: none` (scripts/changelog.ts): a commit with nothing to tell writes no Changelog line.
+# The changelog's trailers (scripts/changelog.ts): no `Changelog: none`, and the parts people see it in said.
 node "$(git rev-parse --show-toplevel)/scripts/changelog.ts" --refuse "$1" || exit 1
 git rev-parse -q --verify HEAD > /dev/null || exit 0
 exec sh "$(git rev-parse --show-toplevel)/scripts/undone.sh" HEAD index "$1"

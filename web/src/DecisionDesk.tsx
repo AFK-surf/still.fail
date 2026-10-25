@@ -34,11 +34,8 @@ export function openedAt(el: HTMLElement): void {
 /** Whether 奏 in the sidebar's foot was just pressed: its rows come out of it, and the sidebar does not slide. */
 export const openedRecently = (): boolean => !!openedFrom && performance.now() - openedFrom.at < 1000;
 
-/**
- * The question a decision asks, uncut (the row clamps it to two lines): what its agent said it needs, else its post's
- * first line; from a core before `question`, its line without 奏 · (Decision · in English).
- */
-const question = (d: DecisionItem) => d.question || d.text.replace(/^(?:奏|Decision) · /, "") || d.title;
+/** The question a decision asks, uncut (the row clamps it to two lines): the core's `question`. */
+const question = (d: DecisionItem) => d.question || d.title;
 
 type Desk = ReturnType<typeof useDesk>;
 const DeskContext = createContext<Desk | null>(null);
@@ -61,29 +58,26 @@ function useDeskContext(): Desk {
 
 function useDesk(workspace: string) {
   const queue = useDecisionQueue(workspace);
-  const { items, replying } = queue;
-  // The one picked, by key; once it is gone, the one now where it was.
-  const [picked, setPicked] = useState<string | null>(null);
-  const was = useRef(0);
-  const found = items.findIndex((d) => keyOf(d) === picked);
-  const index = found >= 0 ? found : Math.min(was.current, items.length - 1);
-  const d = index >= 0 ? items[index] : undefined;
-  was.current = Math.max(index, 0);
+  const { view, items, replying } = queue;
+  // The one shown is the core's (`shown`: the one picked, else the one now in its place); one being replied to stays.
+  const listed = view.value?.items ?? [];
+  const shown = view.value?.shown;
+  const d = replying ?? (shown != null ? listed[shown] : undefined);
+  const index = d ? items.findIndex((x) => keyOf(x) === keyOf(d)) : -1;
   const [turn, setTurn] = useState(0);
   const [arriving, setArriving] = useState(false);
   const host = useRef<HTMLDivElement>(null);
   const card = useRef<HTMLDivElement>(null);
 
-  const pick = (next: DecisionItem | undefined, arrive = false) => {
-    if (!next) return;
-    setPicked(keyOf(next));
+  /** Another comes in its place (even the same again: set aside, the only one). */
+  const next = (arrive: boolean) => {
     setArriving(arrive);
     setTurn((t) => t + 1);
   };
-  /** The one in its place once `from` has gone (or moved to the back): the next, else the one before. */
-  const after = (from: DecisionItem) => {
-    const rest = items.filter((x) => keyOf(x) !== keyOf(from));
-    return rest[Math.min(index, rest.length - 1)];
+  const pick = (to: DecisionItem | undefined) => {
+    if (!to) return;
+    queue.show(to);
+    next(false);
   };
   const leave = (to: "left" | "right" | "up") => {
     if (card.current && host.current) flyOff(card.current, host.current, to, `.${deckCss.scroll}`);
@@ -93,20 +87,18 @@ function useDesk(workspace: string) {
     defer() {
       if (!d || replying) return;
       leave("left");
-      // Set aside, it goes to the back: the next is the one now in its place (itself if it is the only one).
-      pick(after(d) ?? d, true);
+      next(true);
       queue.defer(d);
     },
     dismiss() {
       if (!d || replying) return;
       leave("right");
-      pick(after(d), true);
+      next(true);
       queue.dismiss(d);
     },
-    answered(one: DecisionItem) {
+    answered() {
       leave("up");
-      pick(after(one));
-      queue.answered(one);
+      next(false);
     },
     step(by: number) {
       if (!items.length) return false;
@@ -141,7 +133,7 @@ export function DecisionRows({ active, page }: { active: boolean; page: string }
       {items.map((x, i) => (
         <div key={keyOf(x)} data-flip={keyOf(x)} role="listitem" className={css.item}>
           {i === firstAside && <div className={css.group}>{t("web-main.decisions.defer")}</div>}
-          <button type="button" className={css.row} aria-current={(here && x === d) || undefined} data-aside={queue.isAside(x) || undefined}
+          <button type="button" className={css.row} aria-current={(here && !!d && keyOf(x) === keyOf(d)) || undefined} data-aside={queue.isAside(x) || undefined}
             onMouseDown={(e) => e.preventDefault()} onClick={() => choose(x)}>
             <span className={css.question}>{question(x)}</span>
             <span className={css.meta}>
@@ -194,12 +186,12 @@ export function DecisionPage({ onOpen }: { onOpen: (path: string) => void }) {
               <div className={deckCss.scroll}>
                 <div className={deckCss.column}>
                   <DecisionMessages d={d} inline={false} />
-                  <DecisionPicks d={d} onAnswered={() => answered(d)} onOpen={() => onOpen(path)} />
+                  <DecisionPicks d={d} onAnswered={answered} onOpen={() => onOpen(path)} />
                 </div>
               </div>
               <DecisionFoot>
                 <div className={deckCss.footColumn}>
-                  <DecisionAnswer d={d} mobile={false} onAnswered={() => answered(d)} onReplying={(sending) => setReplying(sending ? d : null)} />
+                  <DecisionAnswer d={d} mobile={false} onAnswered={answered} onReplying={(sending) => setReplying(sending ? d : null)} />
                 </div>
               </DecisionFoot>
             </div>

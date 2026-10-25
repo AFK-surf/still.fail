@@ -15,11 +15,21 @@ const IDLE_MS = 60_000;
 /// `held`: the reads it is answering, by id, with their ops (said when it fails).
 type Slot = { worker: Worker; busy: number; held: Map<number, string>; idle?: () => void };
 
+/// How many sessions' readers are remembered (the most recently read).
+const HOMES = 4096;
+/// How long after the store changes its log is written into the database (`checkpointSoon`): at most this often.
+const CHECKPOINT_MS = 2_000;
+
 export class Readers {
   private slots: Slot[] = [];
+  /// The reader each session's history was last read in (`timeline`).
+  private homes = new Map<string, Slot>();
   private waiting = new Map<number, { resolve: (text: string) => void; reject: (error: Error) => void }>();
   private next = 0;
   private closed = false;
+  /// A checkpoint is armed or running (`checkpointSoon`), and the store changed again since it was armed.
+  private checkpointing = false;
+  private again = false;
   private readonly data: string;
   private readonly size: number;
   /// People's names as their credentials say them (the admin API's `deps.names`), given to every read.
@@ -74,8 +84,17 @@ export class Readers {
   /// The answer, as JSON text.
   read(op: string, args: unknown, lang: Ask["lang"]): Promise<string> {
     if (this.closed) return Promise.reject(new HttpError(502, "station stopping"));
+    // A session's history read where it was read before: that reader keeps where its reading stands in memory, another
+    // reads it from disk (read/transcripts.ts).
+    const session = (op === "timeline" || op === "transcriptState") && typeof (args as { key?: unknown })?.key === "string" ? (args as { key: string }).key : null;
+    const home = session !== null ? this.homes.get(session) : undefined;
     const free = this.slots.find((s) => s.busy === 0);
-    const slot = free ?? (this.slots.length < this.size ? this.start() : this.slots.reduce((a, b) => (b.busy < a.busy ? b : a)));
+    const slot = home !== undefined && this.slots.includes(home) ? home : (free ?? (this.slots.length < this.size ? this.start() : this.slots.reduce((a, b) => (b.busy < a.busy ? b : a))));
+    if (session !== null) {
+      this.homes.delete(session);
+      this.homes.set(session, slot);
+      while (this.homes.size > HOMES) this.homes.delete(this.homes.keys().next().value!);
+    }
     slot.idle?.();
     const id = this.next++;
     slot.busy++;
@@ -83,6 +102,25 @@ export class Readers {
     return new Promise((resolve, reject) => {
       this.waiting.set(id, { resolve, reject });
       slot.worker.postMessage({ id, op, args, lang, names: [...this.names], processes: [...this.processes()], clientKeys: [...this.clientKeys()] } satisfies Ask);
+    });
+  }
+
+  /// The store changed: what its log (the WAL) holds is written into the database shortly, by a reader (worker.ts
+  /// `checkpoint`), one at a time, at most once a CHECKPOINT_MS. The main thread does not (store.ts): there it held
+  /// every device while it reached the disk.
+  checkpointSoon() {
+    if (this.closed) return;
+    if (this.checkpointing) return void (this.again = true);
+    this.checkpointing = true;
+    this.again = false;
+    wall.after(CHECKPOINT_MS, () => {
+      if (this.closed) return;
+      this.read("checkpoint", {}, "en")
+        .catch((error) => log.warn("readers", "the database's log not written into it", { error: (error as Error).message }))
+        .finally(() => {
+          this.checkpointing = false;
+          if (this.again) this.checkpointSoon();
+        });
     });
   }
 

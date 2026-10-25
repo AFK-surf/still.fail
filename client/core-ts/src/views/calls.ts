@@ -6,6 +6,7 @@ import { Deferred, Effect } from "effect";
 import type { Inner } from "../core.ts";
 import { handlers, hooks } from "../core/execute.ts";
 import type { Call } from "../core/calls.ts";
+import * as chatTabs from "../chat-tabs.ts";
 import * as decisions from "../decisions.ts";
 import { CoreError, asCoreError } from "../error.ts";
 import { t } from "../i18n.ts";
@@ -65,6 +66,20 @@ export class ViewCalls {
 
   get #local() {
     return this.#views.local;
+  }
+
+  /// The chat a side panel's tabs are kept by (`<station>:<session>`, or its thread's id), as its view has it now, and
+  /// its session; none for one not shown (a workspace's new chat's, `new:<workspace>`).
+  #chatOf(key: string): [J, string | null] {
+    const at = key.indexOf(":");
+    const station = at > 0 ? key.slice(0, at) : "";
+    if (!station.includes("/")) return [null, null];
+    const rest = key.slice(at + 1);
+    // As its pages subscribe to it: by its agent's key, or by its thread.
+    const bySession = this.#views.ok({ topic: "chat", station, session: rest }) ?? this.#views.ok({ topic: "chat", station, thread: null, session: rest });
+    if (bySession !== undefined) return [bySession, rest];
+    const thread = /^[0-9]+$/.test(rest) ? (this.#views.ok({ topic: "chat", station, thread: Number(rest) }) ?? this.#views.ok({ topic: "chat", station, thread: Number(rest), session: null })) : undefined;
+    return [thread ?? null, null];
   }
 
   /// Posts an outgoing message into a chat: it leaves the outbox as the chat's entries reach it; a failure leaves it
@@ -225,12 +240,19 @@ export class ViewCalls {
     const local = this.#local;
     const views = this.#views;
     const send = (station: string, thread: number, message: J, ctx: SpanContext | null) => {
+      // Copied to the chat's Slack and Feishu threads ticked (`chat.cc`).
+      const ccTo = views.ccTo(station, thread);
+      if (ccTo.length > 0) message.cc = ccTo;
       const id = views.outboxAdd(station, thread, message);
       return this.deliver(station, thread, id, ctx);
     };
     handlers.chatSend = (_inner, call, _p, _at, ctx) => {
       const c = call as Of<"chatSend">;
       return Effect.andThen(parse(c.station), Effect.suspend(() => send(c.station, c.thread, outgoing(inner, c.station, c.text, c.attachments, c.quotes, c.client, c.uploads), ctx)));
+    };
+    handlers.chatCc = (_inner, call) => {
+      const c = call as Of<"chatCc">;
+      return Effect.andThen(parse(c.station), Effect.sync(() => (views.setCc(c.station, c.thread, c.to, c.on), null)));
     };
     handlers.chatCreate = (_inner, call) => {
       const c = call as Of<"chatCreate">;
@@ -277,7 +299,10 @@ export class ViewCalls {
     handlers.chatDiscard = (_inner, call) => {
       const c = call as Of<"chatDiscard">;
       return Effect.sync(() => {
+        const uploads = local.outboxGet(c.station, c.thread, c.id)?.uploads;
         local.outboxRemove(c.station, c.thread, c.id);
+        // its files no longer going up for it, nor kept
+        if (uploads?.length) inner.composers.release(uploads);
         return null;
       });
     };
@@ -297,11 +322,11 @@ export class ViewCalls {
         return Effect.fail(CoreError.invalid(t("core-misc.call.no_chat")));
       });
     };
-    handlers.chatDiscardIn = (_inner, call) => {
+    handlers.chatDiscardIn = (_inner, call, progress, at, ctx) => {
       const c = call as Of<"chatDiscardIn">;
       return Effect.suspend((): Effect.Effect<unknown, CoreError> => {
         const pending = local.pendingThread(c.station, c.session);
-        if (typeof pending === "number") local.outboxRemove(c.station, pending, c.id);
+        if (typeof pending === "number") return handlers.chatDiscard!(inner, { kind: "chatDiscard", station: c.station, thread: pending, id: c.id }, progress, at, ctx);
         else if (pending === null) local.pendingDiscard(c.session, c.id);
         else if (local.firstWaits(c.station, c.session)) local.firstDiscard(c.station, c.session, c.id);
         else return Effect.fail(CoreError.invalid(t("core-misc.call.no_chat")));
@@ -368,6 +393,22 @@ export class ViewCalls {
         return yield* send(c.station, c.thread, outgoing(inner, c.station, text, c.attachments, [...quotes, ...arr(c.quotes)], null, c.uploads), ctx);
       });
     };
+    handlers.decisionDismiss = (_inner, call, progress, at, ctx) => {
+      const c = call as Of<"decisionDismiss">;
+      return Effect.gen(function* () {
+        local.letGo(c.station, c.thread, c.seq);
+        const result = yield* Effect.result(handlers.op!(inner, { kind: "op", op: c.op }, progress, at, ctx));
+        local.letGoEnded(c.station, c.thread, c.seq, result._tag === "Success", inner.data.rowsRev(c.station));
+        return yield* settle(result);
+      });
+    };
+    handlers.decisionShow = (_inner, call) => {
+      const c = call as Of<"decisionShow">;
+      return Effect.sync(() => {
+        views.showDecision(c.workspace, c.station, c.thread, c.seq);
+        return null;
+      });
+    };
     handlers.chatRef = (_inner, call) => {
       const c = call as Of<"chatRef">;
       return Effect.sync(() => ({ mark: refs.mark(inner.data, c.base ?? inner.host.cloudOrigin(), c.station, c.id, c.title, c.into) }));
@@ -388,6 +429,19 @@ export class ViewCalls {
         const result = yield* Effect.result(handlers.op!(inner, { kind: "op", op: c.op }, progress, at, ctx));
         inner.data.endModels(station, c.id);
         return yield* settle(result);
+      });
+    };
+    handlers.chatTabs = (_inner, call) => {
+      const c = call as Of<"chatTabs">;
+      return Effect.try({
+        try: () => {
+          const kept = get(get(inner.data.get({ topic: "prefs" }), "chatTabs"), c.chat);
+          const [chat, session] = this.#chatOf(c.chat);
+          const next = chatTabs.changed(kept, arr(get(chat, "agents")), get(chat, "noChat") === true, session, { action: c.action, tab: c.tab, auto: c.auto });
+          if (next !== null) prefs.set(inner.data, { chatTabs: { [c.chat]: next } }, false, inner.host.nowMs());
+          return null;
+        },
+        catch: asCoreError,
       });
     };
     hooks.updateNoticeOpen = (_inner, station, open) => views.updateNoticeOpen(station, open);

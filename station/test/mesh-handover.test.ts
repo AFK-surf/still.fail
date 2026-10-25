@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test, type TestContext } from "node:test";
-import { Effect, Fiber, Layer } from "effect";
+import { Effect, Fiber, Layer, Stream, SubscriptionRef } from "effect";
 import { MeshLive } from "../src/mesh/mesh.ts";
 import { Net } from "../src/jobs/load.ts";
 import { AdbShares, AdminApi, ControlPlane, Key, MeshNative, MeshSide, Own, Parts, Peers, Previous, ScreenRegistry, StationConfig, Store, Up } from "../src/services.ts";
@@ -20,34 +20,62 @@ function startup(t: TestContext, bindAddr: string | undefined) {
   const previous = Promise.withResolvers<void>();
   const built = Promise.withResolvers<void>();
   const binding = Promise.withResolvers<void>();
+  const accepting = Promise.withResolvers<void>();
   let calls = 0;
+  let presence = false;
+  // The cloud's state as the mesh reads it once bound: a workspace, no relays, no other stations.
+  const cloud = { state: { workspace_name: "ws" }, relays: () => [], memberships: () => [], peersCurrent: false, listen: () => () => {}, toolCalls: null };
   const inputs = Layer.mergeAll(
     Layer.succeed(MeshSide)({ net: new Net(), peers: { route: null }, outside: null, forwarded: () => false, runtimes: () => [] }),
-    Layer.succeed(Previous)({ gone: previous.promise }),
-    Layer.succeed(Own)(null!),
-    Layer.succeed(Peers)(null!),
+    Layer.succeed(Previous)({ pid: null, gone: previous.promise }),
+    Layer.succeed(Own)({ paths: () => [] } as never),
+    Layer.succeed(Peers)({ attach: () => {} } as never),
     Layer.succeed(Parts)(new StationParts()),
-    Layer.succeed(StationConfig)(null!),
-    Layer.succeed(ControlPlane)({ state: { state: {}, relays: () => [] } } as never),
+    Layer.succeed(StationConfig)({ raw: () => null } as never),
+    Layer.succeed(ControlPlane)({
+      state: cloud,
+      changes: Stream.never,
+      presence: Effect.sync(() => (presence = true)).pipe(Effect.andThen(Effect.never)),
+      spec: () => ({ name: "still.fail cloud", tools: false }),
+      credential: () => undefined,
+    } as never),
     Layer.succeed(Key)({ seed: Buffer.alloc(32) } as never),
     Layer.succeed(MeshNative)({ bind: async (options: Parameters<Mesh["bind"]>[0]) => {
       calls++;
       binding.resolve();
       const endpoint = await memoryMesh().bind(options);
-      // Stay before control-plane presence: no real sockets or timers in this scheduling regression.
+      // Its relay link never up: no real sockets or timers in this scheduling regression.
       endpoint.online = () => new Promise<void>(() => {});
+      const accept = endpoint.accept.bind(endpoint);
+      endpoint.accept = () => {
+        accepting.resolve();
+        return accept();
+      };
       return endpoint;
     } } as unknown as Mesh),
     Layer.succeed(Store)(null!), Layer.succeed(AdminApi)(null!),
-    Layer.succeed(Up)(null!), Layer.succeed(AdbShares)(null!), Layer.succeed(ScreenRegistry)(null!),
+    Layer.succeed(Up)(Effect.runSync(SubscriptionRef.make(true))), Layer.succeed(AdbShares)(null!), Layer.succeed(ScreenRegistry)(null!),
   );
   const running = Effect.runFork(Effect.scoped(Effect.gen(function* () {
     yield* Layer.build(MeshLive.pipe(Layer.provide(inputs)));
     built.resolve();
     yield* Effect.never;
   })));
-  return { previous, built, binding, running, calls: () => calls };
+  return { previous, built, binding, accepting, running, calls: () => calls, presence: () => presence };
 }
+
+test("a station takes its members' connections before its relay link is up, and goes online at the cloud only after", { timeout: 10_000 }, async (t) => {
+  const s = startup(t, "0.0.0.0:0");
+  try {
+    await s.built.promise;
+    await s.accepting.promise;
+    await settle();
+    assert.equal(s.presence(), false);
+  } finally {
+    await Effect.runPromise(Fiber.interrupt(s.running));
+    s.previous.resolve();
+  }
+});
 
 test("startup can signal ready while the old station still owns its mesh port", async (t) => {
   const s = startup(t, "0.0.0.0:4770");

@@ -157,6 +157,38 @@ test "max_lines: a paragraph cut after that many lines, the last ending in an el
 }
 
 ///|
+test "on one line: cut with an ellipsis where its column is narrower, as Ctx::text's words; whole again where it has the room" {
+  let w = Ref(60.0)
+  let t = @ui.Tester::new(
+    fn(c) {
+      c.column(w=Px(w.val), fn() {
+        c.rich([@ui.plain("ab "), @ui.bold("cd"), @ui.plain(" ef gh ij kl mn op")], size=10.0, wrap=false) |> ignore
+        c.rich([@ui.plain("xy "), @ui.bold("zw")], size=10.0, wrap=false) |> ignore
+      })
+      |> ignore
+    },
+    w=300.0,
+    h=300.0,
+  )
+  let lines = t.lines_of("ab")
+  assert_eq(lines.length(), 1)
+  assert_true(lines[0].has_prefix("ab cd ef"))
+  assert_true(lines[0].has_suffix("…"))
+  match t.rich_of("ab") {
+    Some((rl, _, _)) => assert_true(rl.w <= 60.0, msg="\{rl.w} wide in 60")
+    None => fail("no ab")
+  }
+  // the bold run is where it was
+  assert_eq(t.run_rects("cd").length(), 1)
+  // what fits is not cut
+  assert_eq(t.lines_of("xy"), ["xy zw"])
+  // the column wide enough: all of it
+  w.val = 200.0
+  t.frame()
+  assert_eq(t.lines_of("ab"), ["ab cd ef gh ij kl mn op"])
+}
+
+///|
 test "the same words in runs whose ranges moved (as many runs): drawn in the runs as they are now" {
   let red = 0xFF0000FFL
   let ink = 0x000000FFL
@@ -207,4 +239,25 @@ test "a paragraph cut after its max_lines, drawn again in later frames as it was
   assert_eq(t.drawn_glyphs().map(fn(g) { g.2 }), first)
   assert_eq(first.filter(fn(k) { k == red }).length(), 2)
   assert_true(t.lines_of("ab")[0].has_suffix("…"))
+}
+
+///|
+test "a label's ground: its own room, height and corner, and room after it off the ground" {
+  let label : @ui.Ground = { room: 0.6, height: 2.0, corner: 0.5, after: 0.4 }
+  let t = rich_view(
+    [@ui.span("ab", bg=0x11111111L, ground=Some(label)), @ui.plain("cd "), @ui.span("ef", bg=0x22222222L)],
+    200.0,
+  )
+  // "ab" is 10 wide: 6 of room either side on its ground and 4 after it, so "cd" starts 26 in
+  let (ax, _, aw, _) = t.run_rects("ab")[0]
+  let (cx, _, _, _) = t.run_rects("cd")[0]
+  assert_eq(aw, 26.0)
+  assert_eq(cx - ax, 26.0)
+  let grounds = t.drawn_rects().filter(fn(r) { r.4 == 0x11111111L })
+  assert_eq(grounds.length(), 1)
+  // 22 wide (not under the room after it), 20 high, centred where a code run's ground beside it is
+  let (gx, gy, gw, gh, _) = grounds[0]
+  assert_eq((gx, gw, gh), (ax, 22.0, 20.0))
+  let (_, py, _, ph, _) = t.drawn_rects().filter(fn(r) { r.4 == 0x22222222L })[0]
+  assert_true((gy + gh / 2.0 - (py + ph / 2.0)).abs() < 0.001)
 }

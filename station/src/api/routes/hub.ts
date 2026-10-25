@@ -28,11 +28,12 @@ import {
   say,
 } from "../../sessions/lifecycle.ts";
 import { relay, relayPlaces } from "../../sessions/relay.ts";
+import { cc } from "../../sessions/cc.ts";
 import { shown } from "../../jobs/jobs.ts";
 import { withLock, workspaceFile } from "../../sessions/archive.ts";
 import { roomOf } from "../../sessions/footprint.ts";
 import { dir as thumbsDir, keep } from "../../drive/thumbs.ts";
-import { imageSize } from "../../sessions/image-size.ts";
+import { shownSize } from "../../sessions/image-size.ts";
 import { wall } from "../../ops/fibers.ts";
 import { sessionSeen } from "../seen.ts";
 import { runtimeKind } from "../../agents/runtime.ts";
@@ -338,10 +339,10 @@ export const routes = (tools: Tools): Route[] => {
         }
       }
       if (owner === undefined || !exists(path)) throw new Refused(400, tr(r.lang, "station.files.notUploaded"));
-      // Its size as the sender read it; else, for a PNG, GIF or WebP, as its header says (a sender that could not read
-      // it, as the desktop's could not). Not a JPEG's: its header does not say which way up it is shown.
+      // Its size as the sender read it; else, for a picture or a film, as its header says (a sender that could not read
+      // it: the desktop's could not, nor a phone's core a JPEG's or any film's, image-size.ts).
       const read = [dimension(o.width), dimension(o.height)];
-      const [width, height] = read[0] !== undefined && read[1] !== undefined ? read : /\.(png|gif|webp)$/i.test(path) ? (imageSize(path) ?? read) : read;
+      const [width, height] = read[0] !== undefined && read[1] !== undefined ? read : (shownSize(path) ?? read);
       const name = str(o.name) ?? path.slice(owner.dir.length + 1);
       const size = typeof o.size === "number" && o.size > 0 ? Math.min(Math.trunc(o.size), Number.MAX_SAFE_INTEGER) : 0;
       const attachment: Attachment = { name: chars(name, 200), path, size };
@@ -421,7 +422,7 @@ export const routes = (tools: Tools): Route[] => {
           const id = text(i.id);
           const roots = machineRoots();
           // Only Claude Code's and Codex's terminal sessions are read (read/machine.ts).
-          const found = kind === "dsh" || kind === "grok" || kind === "cursor" || kind === "devin" ? null : findMachineSession(roots, kind, id);
+          const found = kind === "dsh" || kind === "grok" || kind === "cursor" || kind === "devin" || kind === "hermes" ? null : findMachineSession(roots, kind, id);
           if (found === null) throw new Refused(404, tr(r.lang, "station.admin.noLocalSession", { id }));
           const [key, chat] = await as(400, () => continueMachineSession(a.hub, roots, found, r.viewer.email, r.lang, r.viewer.home === false ? r.viewer.workspace : null));
           log.info("admin", "machine session continued from the admin page", { session: key, from: id, by: r.viewer.email });
@@ -544,12 +545,15 @@ export const routes = (tools: Tools): Route[] => {
               if (effort !== undefined) change.effort = effort;
               // A profile's id keeps the session to it; null gives the choice back to the station.
               if (typeof i.profile === "string" || i.profile === null) change.profile = i.profile;
+              // Given back to the station and its account picked again now.
+              if (i.repick === true) change.repick = true;
               if ("fast" in i) {
                 if (i.fast !== null && typeof i.fast !== "boolean") throw new Refused(400, tr(r.lang, "station.admin.badFast"));
                 change.fast = i.fast;
               }
               await as(400, () => configure(a.hub, key, change, r.lang));
-              return ok({ ok: true });
+              // With the profile it runs on now (picked again: the one picked).
+              return ok({ ok: true, profile: a.hub.store.getSession(key)?.profile ?? null });
             }
           }
         }),
@@ -592,6 +596,10 @@ export const routes = (tools: Tools): Route[] => {
           const client = typeof i.client === "string" ? chars([...i.client.trim()].filter((c) => !/\p{Cc}/u.test(c)).join(""), 80) : "";
           const kept = await keep(files, thumbsDir(a.hub.config().dataDir));
           const n = say(a.hub, t.id, r.viewer.email, said, kept, quotes, client === "" ? null : client);
+          // Copied to the Slack and Feishu threads of the chat its sender picked (docs/relay.md "抄送"): after the answer,
+          // not waited on.
+          const ccTo = Array.isArray(i.cc) ? i.cc.filter((x: unknown): x is number => typeof x === "number") : [];
+          if (ccTo.length > 0) void cc(a.hub, t.id, r.viewer.name.trim() || r.viewer.email, said, kept, ccTo);
           // Answering from the decisions page means the question was read, even without opening its chat. Stop at that
           // card: later messages may not have been seen.
           if (answeredCard !== null) s.setRead(r.viewer.email, t.id, answeredCard);

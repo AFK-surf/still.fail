@@ -6,7 +6,8 @@
 // checks what it is asked (each workspace's member credential, with the cloud keys of the lock as checked here; that
 // this device approves there, for that person), shows the code (`lockPrompts` `pairing`, wherever the person is) and
 // signs a `device` entry in each of those workspaces once the new device proves it typed it; turned away (`lockPrompt.
-// deny`), after PAIR_TRIES wrong codes, or PAIR_WAIT_MS, it signs nothing.
+// deny`), after PAIR_TRIES wrong codes, or PAIR_WAIT_MS, it signs nothing. Its prompt closed (`lockPrompt.hide`), it
+// is no longer shown and the code still holds: a person closes it once they have read the code.
 //
 // A new device (`lock.pair`, its waiting page): dials them all, and once one or more show a code, proves the code typed
 // (`lock.pairCode`) to each; the one whose code it was approves it. `me.pair` says how far it got.
@@ -14,7 +15,8 @@
 // The wire, a line of JSON each way at a time on one stream: new → `hello {workspaces: [{ws, credential}], kind, label,
 // sign_key}`; trusted → `code {workspaces}` (the ones it approves) or `no {error}`; new → `pake {y}`; trusted → `pake
 // {y, mac}`; new → `confirm {mac}` when the trusted one's MAC is right, else `wrong`; trusted → `approved {workspaces,
-// failed}`, or `wrong {left}` / `no`.
+// failed}`, or `wrong {left}` / `no`. A `no` says why: `tries` (out of them), `denied` (turned away there), `late` (the
+// code too old), `bad_share`; a trusted device from before `late` closes the stream then with no word.
 import { ed25519 } from "@noble/curves/ed25519.js";
 import { Deferred, Effect } from "effect";
 import type { Inner } from "../core.ts";
@@ -29,7 +31,7 @@ import * as prefs from "../prefs.ts";
 import { get, hex, isObject, parseJson, utf8 } from "../util.ts";
 import { fromB64url } from "../vault/crypto.ts";
 import { checkLock } from "../vault/lock-check.ts";
-import { Lock, baseOf, fold, held, nameOf, pairs, read, signerKnown, signerOf, view } from "./lock.ts";
+import { Lock, baseOf, deviceText, fold, held, nameOf, pairs, read, signerKnown, signerOf, view } from "./lock.ts";
 
 // deno-lint-ignore no-explicit-any
 type J = any;
@@ -79,7 +81,8 @@ export function credentialOf(token: string, keys: unknown, ws: string, device: s
 // ── the trusted device ──
 
 /// A new device showing this one's code: who, where it asks, the code, how to turn it away.
-type Asking = { device: string; name: string; email: string; kind: "app" | "web"; label: string; signKey: string | null; code: string; at: number; places: { ws: string; sub: string; account: string }[]; away: Deferred.Deferred<void> };
+/// `hidden`: its prompt closed here, the code still good.
+type Asking = { device: string; name: string; email: string; kind: "app" | "web"; label: string; signKey: string | null; code: string; at: number; places: { ws: string; sub: string; account: string }[]; hidden: boolean; away: Deferred.Deferred<void> };
 
 const askings = new WeakMap<Inner, Map<string, Asking>>();
 const askingsOf = (inner: Inner) => {
@@ -156,7 +159,7 @@ export function serveTrusted(inner: Inner, peer: string, me: string, d: Duplex):
     const asking: Asking = {
       device: peer, name: who.name, email: who.email, kind, label: (str(get(hello.value, "label")) ?? "").slice(0, 120),
       signKey: kind === "app" ? str(get(hello.value, "sign_key")) : null, code: pairCode((b) => inner.host.randomBytes(b)),
-      at: Math.floor(inner.host.nowMs() / 1000), places, away: Deferred.makeUnsafe<void>(),
+      at: Math.floor(inner.host.nowMs() / 1000), places, hidden: false, away: Deferred.makeUnsafe<void>(),
     };
     all.set(peer, asking);
     told(inner);
@@ -174,7 +177,8 @@ export function serveTrusted(inner: Inner, peer: string, me: string, d: Duplex):
             Effect.as(Effect.sleep(PAIR_WAIT_MS), { late: true } as const),
           ]);
           if ("away" in next) return yield* d.send({ t: "no", error: "denied" });
-          if ("late" in next || next.m === null || !isObject(next.m)) return;
+          if ("late" in next) return yield* d.send({ t: "no", error: "late" });
+          if (next.m === null || !isObject(next.m)) return;
           const m = next.m;
           if (m.t === "pake") {
             if (tries >= PAIR_TRIES) return yield* d.send({ t: "no", error: "tries" });
@@ -220,12 +224,15 @@ function approve(inner: Inner, a: Asking): Effect.Effect<J> {
   });
 }
 
-/// The `lockPrompts` topic's `pairing`: the new devices showing this one's code, oldest first.
+/// The `lockPrompts` topic's `pairing`: the new devices showing this one's code, oldest first, but those whose prompt
+/// was closed.
 function shown(inner: Inner): J[] {
   return [...askingsOf(inner).values()]
+    .filter((a) => !a.hidden)
     .sort((a, b) => a.at - b.at)
     .map((a) => ({
       device: a.device, name: a.name, email: a.email, kind: a.kind, label: a.label, code: a.code, created_at: a.at,
+      deviceText: deviceText(a),
       workspaces: a.places.map((p) => {
         const v = view(inner, p.ws);
         return { id: p.ws, name: nameOf(inner, p.ws), emoji: str(get(v, "emoji")), icon: str(get(v, "icon")) };
@@ -236,6 +243,15 @@ function shown(inner: Inner): J[] {
 function deny(inner: Inner, device: string): void {
   const a = askingsOf(inner).get(device);
   if (a) Deferred.doneUnsafe(a.away, Effect.void);
+}
+
+/// Its prompt closed: no longer shown, the code good until it is typed, turned away, or too old. Asked again (a new
+/// connection), the new device shows a new code, put up again.
+function hide(inner: Inner, device: string): void {
+  const a = askingsOf(inner).get(device);
+  if (!a || a.hidden) return;
+  a.hidden = true;
+  told(inner);
 }
 
 // ── the new device ──
@@ -346,10 +362,12 @@ function prove(inner: Inner, typed: string): Effect.Effect<unknown, CoreError> {
     const results = yield* Effect.forEach([...y.met.values()], (m) => Effect.map(Effect.result(tryOne(inner, m, base, code)), (r) => [m, r] as const), { concurrency: "unbounded" });
     let approved: J | null = null;
     let left = 0;
+    const ends: string[] = [];
     for (const [m, r] of results) {
       if (r._tag === "Success" && "approved" in r.success) approved = r.success.approved;
       else if (r._tag === "Success" && "left" in r.success) left = Math.max(left, r.success.left);
       else {
+        if (r._tag === "Failure") ends.push(r.failure.code);
         m.d.close();
         y.met.delete(m.id);
       }
@@ -363,32 +381,50 @@ function prove(inner: Inner, typed: string): Effect.Effect<unknown, CoreError> {
       y.left = left;
     } else {
       y.state = "failed";
-      y.error = t("core-misc.lock.pairTries");
+      y.error = endedText(ends);
     }
     changed(inner, y);
-    if (approved === null) return yield* Effect.fail(new CoreError("pair_wrong", y.state === "wrong" ? t("core-misc.lock.pairWrong", { n: left }) : t("core-misc.lock.pairTries")));
+    if (approved === null) return yield* Effect.fail(y.state === "wrong" ? new CoreError("pair_wrong", t("core-misc.lock.pairWrong", { n: left })) : new CoreError("pair_ended", y.error ?? ""));
     return approved;
   });
 }
 
-/// One trusted device: the code proved, its answer.
+/// What the new device says once no trusted device takes a code any more, as they ended (`tryOne`'s errors): one
+/// turned it away, ran out of tries, kept the code too long; else none could be reached.
+function endedText(ends: string[]): string {
+  if (ends.includes("pair_denied")) return t("core-misc.lock.pairDenied");
+  if (ends.includes("pair_tries")) return t("core-misc.lock.pairTries");
+  if (ends.includes("pair_late")) return t("core-misc.lock.pairLate");
+  return t("core-misc.lock.pairGone");
+}
+
+/// A trusted device's answer that ends it (`no {error}`, or the stream's end): why, as an error's code.
+function ended(answer: unknown): CoreError {
+  const why = isObject(answer) && answer.t === "no" ? str(answer.error) : null;
+  if (why === "tries") return new CoreError("pair_tries", "the trusted device took its last try");
+  if (why === "denied") return new CoreError("pair_denied", "turned away on the trusted device");
+  if (why === "late") return new CoreError("pair_late", "the trusted device's code is too old");
+  return new CoreError("pair_gone", "the trusted device gave up");
+}
+
+/// One trusted device: the code proved, its answer; ended there, why (`ended`).
 export function tryOne(inner: Inner, m: Met, base: string, code: string): Effect.Effect<{ approved: J } | { left: number }, CoreError> {
   return Effect.gen(function* () {
     const p = pakeStart(code, pairSession(base, m.id, m.workspaces), (b) => inner.host.randomBytes(b));
     yield* m.d.send({ t: "pake", y: hex(p.share) });
     const r = yield* m.d.next();
-    if (!isObject(r) || r.t !== "pake") return yield* Effect.fail(new CoreError("pair", "the trusted device gave up"));
+    if (!isObject(r) || r.t !== "pake") return yield* Effect.fail(ended(r));
     const keys = pakeKeys(p, unhex(str(r.y) ?? ""), "new");
     if (keys !== null && sameMac(keys.theirs, unhex(str(r.mac) ?? ""))) {
       yield* m.d.send({ t: "confirm", mac: hex(keys.mine) });
       const a = yield* m.d.next();
       if (isObject(a) && a.t === "approved") return { approved: a };
-      return yield* Effect.fail(new CoreError("pair", "the trusted device gave up"));
+      return yield* Effect.fail(ended(a));
     }
     yield* m.d.send({ t: "wrong" });
     const w = yield* m.d.next();
     if (isObject(w) && w.t === "wrong" && typeof w.left === "number" && w.left > 0) return { left: w.left };
-    return yield* Effect.fail(new CoreError("pair", "the trusted device gave up"));
+    return yield* Effect.fail(ended(w));
   });
 }
 
@@ -405,6 +441,7 @@ export function install(_inner: Inner): void {
   pairs.shown = shown;
   pairs.mine = mine;
   pairs.deny = deny;
+  pairs.hide = hide;
   pairs.run = (inner, name, _ws, params) => {
     if (name === "pair") return begin(inner);
     if (name === "pairCode") return prove(inner, str(params.code) ?? "");

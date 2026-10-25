@@ -65,12 +65,17 @@ not wait for, ask for or announce a "lock" on a machine, and do not queue behind
 load, and if a machine is busy pick another or start anyway when nothing better is free: the station queues it.
 
 A station runs other stations' tasks through its own queue. When it is busy, `start` answers with `queue` (its place
-and why it waits: busy CPUs, memory under pressure, another screen task) and the task starts by itself when there is
-room: one by one, each next only once the last has got going and the CPUs have room, none while the memory is under
+and why it waits: busy CPUs, memory under pressure, the screen another task's) and the task starts by itself when there
+is room: one by one, each next only once the last has got going and the CPUs have room, none while the memory is under
 pressure. A task started beside others gets `STILLFAIL_CPUS` (and `MAKEFLAGS`, `CARGO_BUILD_JOBS`,
 `CMAKE_BUILD_PARALLEL_LEVEL` when not set) with how many CPUs are free: pass it to tools that take every core
-otherwise. Give `screen: true` at prepare for a task that opens windows or uses the screen (GUI tests, simulators,
-emulators, screenshots): those run one at a time. You end `waiting` as for any task; its end is told as usual.
+otherwise. You end `waiting` as for any task; its end is told as usual.
+
+The screen (windows, GUI tests, simulators, emulators, screenshots of what is on it) is one task's at a time. Run just
+the command that uses it as `stillfail-job screen <command>…`: it waits while another task has the screen, has it while
+that command runs, and gives it back when it ends, so the builds and tests around it run beside the other tasks. A
+script that knows it opens windows may do this itself (mbui's do). `screen: true` at prepare has the screen for the
+whole task instead: only for a task that uses it from start to end. What draws offscreen needs neither.
 
 Memory: nothing is stopped for using much. When something you run (a task, a job, a command in your own shell) uses
 more than an eighth of the machine's memory, or the memory comes under pressure, you are told; stop or shrink it if

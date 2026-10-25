@@ -9,12 +9,12 @@ test "51-sheets-sinking" {
     let f = @sfreplay.Flow::start(@sfreplay.trace("sheets-sinking"), seed~)
     f.see("端到端测试")
     f.tap("=Dev")
-    f.run_to(@kit.sheet_rest("sheet"))
+    f.run_to(@kit.sheet_rest("sf-present"))
     // its scrim tapped: it sinks, only drawn; the bar's 文件 tapped under it as it goes
     f.tap_at(195.0, 120.0)
     f.tap("icon:folder")
     f.see("=文件")
-    f.run_to(@kit.sheet_rest("sheet"))
+    f.run_to(@kit.sheet_rest("sf-present"))
     f.gone("切换 workspace")
     f.tap("icon:chats")
     f.run_for(@sfapp.switch_side_ms)
@@ -34,6 +34,9 @@ test "51-sheets-sinking" {
     f.run_to(@kit.sheet_rest("decide-sheet"))
     f.see("穿过下去的面板 082939")
     f.gone("正在发送")
+    // the test station's agent answers with a failure (no model there), its notice offering 上报: looked for, so the run
+    // ends once it is in, as the replay does (else whether its row was built before the end is the run's luck)
+    f.see("上报")
     f.end()
   })
 }

@@ -19,7 +19,7 @@ export const policyWords = style({
   margin: 0, paddingBlock: 8, ...bleedX(10), fontSize: vars.textUi, lineHeight: "1.6", whiteSpace: "pre-wrap", overflowWrap: "anywhere",
   textAlign: "left", background: "none", border: "none", color: "inherit", font: "inherit", cursor: "pointer",
   borderRadius: vars.rField, cornerShape: vars.cornerShape, transition: `background ${vars.dur} ${vars.easeOut}`,
-  selectors: { "&:hover:not(:disabled)": { background: vars.list }, "&:disabled": { cursor: "default" } },
+  selectors: { "&:hover:not(:disabled)": { background: vars.hover }, "&:disabled": { cursor: "default" } },
 });
 export const policyText = style({ resize: "vertical", lineHeight: "1.6" });
 export const policyGroup = style({ display: "grid", gap: 2, justifyItems: "start" });
@@ -28,7 +28,7 @@ export const option = style({
   display: "flex", alignItems: "baseline", gap: 12, paddingBlock: 8, ...bleedX(10), width: "calc(100% + 20px)", textAlign: "left",
   background: "none", border: "none", color: "inherit", font: "inherit", cursor: "pointer", minWidth: 0,
   borderRadius: vars.rField, cornerShape: vars.cornerShape, transition: `background ${vars.dur} ${vars.easeOut}`,
-  selectors: { "&:hover:not(:disabled)": { background: vars.list }, "&:disabled": { cursor: "default" } },
+  selectors: { "&:hover:not(:disabled)": { background: vars.hover }, "&:disabled": { cursor: "default" } },
 });
 export const optionName = style({ flex: "0 0 120px", fontSize: vars.textUi });
 export const optionRubric = style({ flex: "1", minWidth: 0, fontSize: vars.textMeta, color: vars.muted, lineHeight: "1.5" });

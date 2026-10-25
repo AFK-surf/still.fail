@@ -36,6 +36,13 @@ pub(all) struct Palette {
   warn_ink : Int64
   red : Int64
   red_bg : Int64
+  /// the grounds of a pill in a tone (parts.css.ts pill: --green-bg, --blue-bg, --amber-bg; the amber's ink is
+  /// warn_ink)
+  green_bg : Int64
+  blue_bg : Int64
+  amber_bg : Int64
+  /// a station online (--online: a status dot, parts.css.ts statusDot)
+  online : Int64
   /// placeholders' grey (waiting), a quiet pill's ground
   neutral_bg : Int64
   overlay : Int64
@@ -74,6 +81,21 @@ pub(all) struct Type {
   heading : Double
   heading_line : Double
   display : Double
+  /// what is typed (textInput: the phone's 16, as iOS zooms into less; the computer's 14), on its line
+  input : Double
+  input_line : Double
+  /// what a person wrote, read in a message (msgPlain, PersonWords): the body's size on its line; a phone's on a
+  /// message's line, as the agent's Markdown beside it (Chat.kt: 15 on 24.75)
+  words : @ui.TextStyle
+}
+
+///|
+/// A round control standing in a field's capsule (the composer's ＋ and send: mPlus, mSend; attachBtn, sendBtn): how
+/// wide it shows and its glyph's size (a finger reaches it from round it as it reaches any target smaller than the
+/// system's least: @ui's finger_reach).
+pub(all) struct Round {
+  side : Double
+  glyph : Double
 }
 
 ///|
@@ -83,54 +105,500 @@ pub(all) struct Theme {
   narrow : Bool
   p : Palette
   t : Type
+  /// what a row is on this screen (Rows)
+  rows : Rows
+  /// how tall a control is at least (a field, a select): the web's 36 with keyboard and mouse; with touch a finger's 44,
+  /// what a press needs
+  control_h : Double
+  /// what a page's bar of keys is on this screen (Bars)
+  bars : Bars
+  /// the round controls standing in a field's capsule (Round)
+  round : Round
+  /// what a list's item is on this screen (Items)
+  items : Items
+  /// what a chats' list is on this screen (ChatList: its rows' sizes and density, by the native input alone): not
+  /// `items`, a list's one-line row (files, picks), but the chats' own anatomy (two lines, faces, the state line, the
+  /// days' headings, its panes' motion)
+  chat_list : ChatList
+}
+
+///|
+/// A page's bar of keys (page_bar.mbt) on the screen in force: its keys round, `key` across with a `icon` icon, its
+/// capsule `field` high. The web's and the phone's alike (PreviewBar's iconBtn 28, its icons 14, previewAddress 30;
+/// Preview.kt the same): a finger reaches a key from round it (finger_reach), so a phone's are drawn no larger.
+pub(all) struct Bars {
+  key : Double
+  icon : Double
+  field : Double
+}
+
+///|
+/// A row's roles on the screen in force (docs/architecture.md, the same on every screen and what differs): how high it
+/// is at least, its title's words and its note's, a tick's box, a short field and a switch in it. Touch's: a
+/// finger's (48; the phone's mRowTitle, its body's 15, the scale's Lg on 21, its mRowNote 13; a box 22, a field 72 by
+/// 36, a switch 44 by 26, its mSwitch); keyboard and mouse's: a list row's (40; the web's SwitchRow title, 13 on 20, its note
+/// 12; a box 18, a field 52 by 28, a switch 36 by 22).
+pub(all) struct Rows {
+  least : @ui.Len
+  /// a row of a picker or a menu in a small panel at least: keyboard and mouse's 34 (a menu's row), a finger's 44
+  pick : Double
+  title : @ui.TextStyle
+  /// what is said under a row's title (its note), muted
+  note : @ui.TextStyle
+  check : Double
+  /// a short field in a row (a number typed: a page's width)
+  field_w : @ui.Len
+  field_h : @ui.Len
+  check_corner : Double
+  switch_w : Double
+  switch_h : Double
+}
+
+///|
+/// A list's item on the screen in force (a folder's entries, the folders pinned): how high it is at least, its name's
+/// words and what is said of it (its size, its time: muted), its kind's mark. Touch's: a finger's (48; the
+/// phone's mRow: its name the body's 15 on 20, mMeta 12 on 16, the mark 22); keyboard and mouse's: the web's Drive row (44, with
+/// room for its ⋯; its name 13, its meta 12, KindIcon 20).
+pub(all) struct Items {
+  least : Double
+  name : @ui.TextStyle
+  meta : @ui.TextStyle
+  mark : Double
 }
 
 // ---------------------------------------------------------------------------
 // Measures (docs/ui-panels.md; styles/align.ts, pages.css.ts)
 
-///|
-/// A small panel's padding: as far as what has a ground of its own (a row,
-/// a button) stands from its edge.
-pub let panel_pad : Double = 6.0
+// (a small panel's padding, its words' room and its pills: align.mbt panel_pad, text_in, panel_pill)
 
 ///|
-/// Words stand in from a row's ground by this, so a panel's words and its
-/// rows' words are on one line, panel_pad + text_in from its edge.
-pub let text_in : Double = 10.0
+/// The corner ladder (docs/ui-panels.md「圆角阶梯」): the few corners nested things are round by, outermost first, each
+/// the one before it concentric `corner_inset` in (smooth.mbt concentric: that over 1.25 less): a pane of the frame
+/// (the tape's panels laid out Medium, a dialog), a card (a page's card, a sheet, the composer), a row or a block on a
+/// card, a small block on a row. What has a ground and lies in a container's corner stands `corner_inset` in from both
+/// its edges and is round by the next step (mbui works its corner out: corners.mbt), or is a capsule or a circle `its
+/// half less than the container's corner` in. The theme's (Theme::corner_ladder): screen tests hold every corner with
+/// something in it, and what is there, to these.
+pub let pane_corner : Double = 34.0
 
 ///|
-/// A small panel's buttons: pills this high (24), and its icon buttons
-/// circles as wide.
-pub let panel_pill : Double = 24.0
+pub let corner_inset : Double = 10.0
+
+///|
+pub let card_corner : Double = @ui.concentric(pane_corner, corner_inset)
+
+///|
+pub let row_corner : Double = @ui.concentric(card_corner, corner_inset)
+
+///|
+pub let small_corner : Double = @ui.concentric(row_corner, corner_inset)
+
+///|
+// kept across runs: a value (no field of it changes)
+pub let corner_ladder : Array[Double] = [pane_corner, card_corner, r_menu, row_corner, small_corner]
+
+///|
+/// How far apart two things that light up under the hand stand at least (Theme::lit_apart, the spacing rules): the
+/// web's sidebar rows (Sidebar.css.ts navRow, `& + &` 2 over the one before), so two lit grounds never read as one.
+pub let lit_apart : Double = 2.0
+
+///|
+/// What the corner rule may make of what lies in a container's corner to be concentric with it (docs/ui-panels.md 圆角
+/// 阶梯, 适应范围; the theme's Theme::corner_fit): a corner 6 at least (squarer reads as square) and the ladder's
+/// outermost at most, standing 4 to 16 from the container's edges. The outermost container is the window, its corner
+/// the system's (@ui.window_corner: a Mac's 16, Windows 11's 8, square filling the screen): what none of these makes
+/// concentric with what it lies in stands as it would alone, the ladder's own.
+// kept across runs: a value (no field of it changes)
+pub let corner_fit : @ui.CornerFit = { least: 6.0, most: pane_corner, near: 4.0, far: 16.0 }
+
+///|
+/// The tape's one line (laid out Medium): how far under its panels' tops their first row's round buttons stand, as far
+/// as a bar's (32 across) are concentric with the ladder's pane corner (34 less their half, 18): every bar of the tape
+/// (tape_bar_over) and the sidebar's first row on it, whatever a panel's own corners are (the user, 2026-10-25: a page's
+/// bar and the sidebar's first row each where it stood alone, not on one line). The ladder's own place for its own
+/// corner, past the corner rule's ranges (corner_fit, for what follows a corner it does not choose: a window's).
+pub let tape_line : Double = pane_corner - 32.0 / 2.0
+
+///|
+/// Whether a corner `k` round is one corner_fit lets what lies in a corner have.
+fn corner_fits(k : Double) -> Bool {
+  k >= corner_fit.least - 0.5 && k <= corner_fit.most + 0.5
+}
+
+///|
+/// Whether `d` from a container's edges is a place corner_fit lets what lies in its corner stand.
+fn place_fits(d : Double) -> Bool {
+  d >= corner_fit.near - 0.5 && d <= corner_fit.far + 0.5
+}
+
+///|
+/// How far from the window's edges what stands along them does (the tape's panels, the closed bar: shell.css.ts dock's
+/// 6).
+pub let window_in : Double = 6.0
+
+///|
+/// The corner of what stands `window_in` from the window's edges in its corners (the tape's panels where they stand at
+/// its edge, the closed bar), linked to the window's (@ui.CornerOf: the window's less that where corner_fit lets it be
+/// so, a Mac's 16: 11.2), else `alone` (a square window, Windows 11's 8: too square for it).
+pub fn window_follow(alone : Double) -> @ui.CornerOf {
+  Follow(Window, window_in, alone)
+}
+
+///|
+/// The corner of the tape's panels (laid out Medium) where they stand at the window's edge, linked to the window's,
+/// else the ladder's pane corner, as they stand alone (tape_corners: a panel's other corners the pane corner).
+pub let tape_edge : @ui.CornerOf = window_follow(pane_corner)
+
+///|
+/// A panel of the tape's corners (top left, top right, bottom right, bottom left), each linked to the one it is in: on
+/// the side it stands at the window's edge when it is in use (`left`: the sidebar's; `right`: the side panel's, the
+/// page's with none open beside it) the window's (tape_edge); the others, never in the window's corners, the ladder's
+/// pane corner. Whether the panel is in use now or on its way over: where it will be.
+pub fn tape_corners(left~ : Bool, right~ : Bool) -> FixedArray[@ui.CornerOf] {
+  let l = if left { tape_edge } else { Own(pane_corner) }
+  let r = if right { tape_edge } else { Own(pane_corner) }
+  [l, r, r, l]
+}
+
+///|
+/// Corners `k` (top left, then round it) as a style's corner, each linked to where it comes from.
+pub fn corners_radius(k : FixedArray[@ui.CornerOf]) -> @ui.Radius {
+  LinkedEach(k[0], k[1], k[2], k[3])
+}
+
+///|
+/// Corners `k`'s radii now (top left, then round it).
+pub fn corner_radii(k : FixedArray[@ui.CornerOf]) -> FixedArray[Double] {
+  k.map(fn(c) { c.radius() })
+}
+
+///|
+/// The sidebar's panel on the tape: at the window's left edge in use.
+pub fn tape_side_corners() -> FixedArray[@ui.CornerOf] {
+  tape_corners(left=true, right=false)
+}
+
+///|
+/// Where a capsule `height` high stands in a corner `corner` round: as far in as makes it concentric (capsule_in) where
+/// corner_fit lets it stand there, else `alone`, where it stands with no corner to follow (a panel too square for it).
+pub fn capsule_fit(corner : Double, height : Double, alone : Double) -> Double {
+  let d = capsule_in(corner, height)
+  if place_fits(d) {
+    d
+  } else {
+    alone
+  }
+}
+
+///|
+/// Whether a capsule `height` high may stand concentric in a corner `corner` round (capsule_fit: corner_fit lets it
+/// stand as far in as that takes).
+pub fn capsule_fits(corner : Double, height : Double) -> Bool {
+  place_fits(capsule_in(corner, height))
+}
+
+///|
+/// `x` as a style's room (room, for the frame's packages).
+pub fn room_of(x : Double) -> @ui.Space {
+  room(x)
+}
+
+///|
+/// The same in a corner `corner` round, as a style's room `less` the room it has already.
+pub fn capsule_fit_room(corner : Double, height : Double, alone : Double, less? : Double = 0.0) -> @ui.Space {
+  room(capsule_fit(corner, height, alone) - less)
+}
+
+///|
+/// The corners of the panel of its own the view is built in (the tape's, laid out Medium: tape_corners; top left, then
+/// round it), None in a window's whole: what a page stands in that panel's foot or top corners stands where it is
+/// concentric with the corner it is in (`foot_capsule`, `pane_foot_in`, `pane_top_right`).
+// kept across runs: said by the frame round each panel of its own it builds
+pub let pane_round : Ref[FixedArray[Double]?] = Ref(None)
+
+///|
+/// The top right corner of the panel of its own the view is built in (pane_round), None in a window's whole.
+pub fn pane_top_right() -> Double? {
+  match pane_round.val {
+    Some(k) => Some(k[1])
+    None => None
+  }
+}
+
+///|
+/// Whether the page being built is in a panel of its own (pane_round): what stands in its corners stands concentric
+/// with the panel's.
+pub fn in_pane() -> Bool {
+  pane_round.val is Some(_)
+}
+
+///|
+/// Where a capsule `height` high across a page's foot (a wide button) stands from the panel's left, its right and its
+/// foot: in a panel of its own (pane_round), each end in the foot corner it is in, as far in as makes it concentric
+/// with it where corner_fit lets it stand there (capsule_fit), its foot as far in as such an end (the left's, where
+/// both are: the right's apart from it there alone); an end that cannot, `side` in, as alone; none, `side` and `foot`
+/// in, as in a window's whole.
+pub fn foot_capsule(height : Double, side : Double, foot : Double) -> (Double, Double, Double) {
+  match pane_round.val {
+    None => (side, side, foot)
+    Some(k) => {
+      let at_l = capsule_in(k[3], height)
+      let at_r = capsule_in(k[2], height)
+      let fits_l = place_fits(at_l)
+      let fits_r = place_fits(at_r) && (!fits_l || (at_r - at_l).abs() <= 0.5)
+      let b = if fits_l {
+        at_l
+      } else if fits_r {
+        at_r
+      } else {
+        foot
+      }
+      (if fits_l { at_l } else { side }, if fits_r { at_r } else { side }, b)
+    }
+  }
+}
+
+///|
+/// Where a smooth box (a card, a block) stands in a corner `corner` round, `inset` in by the ladder: as far in and as
+/// round as makes it concentric with it, the place nearest `inset` where corner_fit lets it stand and have the corner
+/// that takes; where none does (a corner too square for one, or too round), `inset` in and `alone` round, as it would
+/// stand alone. (How far in, its corner.)
+pub fn box_fit(corner : Double, inset : Double, alone : Double) -> (Double, Double) {
+  match fit_places(corner) {
+    Some((nearest, furthest)) => {
+      let d = dmin(dmax(inset, nearest), furthest)
+      (d, @ui.concentric(corner, d))
+    }
+    None => (inset, alone)
+  }
+}
+
+///|
+/// The places a smooth box may stand in a corner `corner` round where its corner, concentric there, is one corner_fit
+/// lets it have (further in, squarer): the nearest and the furthest; None where none is (a corner too square for one,
+/// or too round).
+fn fit_places(corner : Double) -> (Double, Double)? {
+  let nearest = dmax(corner_fit.near, (corner - corner_fit.most) * @ui.smooth_scale)
+  let furthest = dmin(corner_fit.far, (corner - corner_fit.least) * @ui.smooth_scale)
+  if nearest > furthest {
+    None
+  } else {
+    Some((nearest, furthest))
+  }
+}
+
+///|
+/// How far a smooth box across a foot (a composer, a card) stands in from the sides and foot of a panel whose foot
+/// corners are `left` and `right` round, `inset` in by the ladder: one place for both, the nearest `inset` where it is
+/// concentric with each it may follow (fit_places: in both's places; where one is too square or too round for it, that
+/// corner left to stand alone by, the other's), else `inset`, as it stands alone. Its corners there mbui works out
+/// (concentric where it lies in a corner, its own where not).
+pub fn foot_fit(left : Double, right : Double, inset : Double) -> Double {
+  let span = match (fit_places(left), fit_places(right)) {
+    (Some((a, b)), Some((c, d))) if dmax(a, c) <= dmin(b, d) => Some((dmax(a, c), dmin(b, d)))
+    // (the two's places apart: the squarer's, the rounder then standing alone where it cannot follow)
+    (Some(l), Some(r)) => Some(if left <= right { l } else { r })
+    (Some(l), None) => Some(l)
+    (None, Some(r)) => Some(r)
+    (None, None) => None
+  }
+  match span {
+    Some((nearest, furthest)) => dmin(dmax(inset, nearest), furthest)
+    None => inset
+  }
+}
+
+///|
+/// How far in from the sides and foot of what is built a box at its foot stands (a composer, a card): the ladder's
+/// inset in a window's whole; in a panel of its own (pane_round), where foot_fit puts it in the panel's foot corners.
+pub fn pane_foot_in() -> Double {
+  match pane_round.val {
+    Some(k) => foot_fit(k[3], k[2], corner_inset)
+    None => corner_inset
+  }
+}
+
+///|
+/// A card across the foot of what is built (a side panel's job picked): as far in from its sides and foot as
+/// pane_foot_in, a card's corner (in the panel's foot corners concentric with them: mbui works them out).
+pub fn pane_foot_card() -> @ui.Style {
+  let d = pane_foot_in()
+  @ui.style(mx=room(d), mb=room(d), radius=rounded(card_corner))
+}
+
+///|
+/// How far in from a corner of the ladder's `corner` a capsule or a circle `height` high stands, concentric with it
+/// (ui-panels.md: 外圆角 = 距离 + 半高).
+pub fn capsule_in(corner : Double, height : Double) -> Double {
+  corner - height / 2.0
+}
+
+///|
+/// How far in a capsule `height` high stands from a card's sides and foot where it is in the card's foot corners (a
+/// button, a field there: concentric with the card's corner), and its ground reaching past the card's words (card_pad
+/// in) to there: across the card, or at its start with its words where they were (`words_in`: its own padding).
+pub fn card_foot_in(height : Double) -> Double {
+  capsule_in(card_corner, height)
+}
+
+///|
+/// What scrolls in a small panel held to the room it has (@kit.in_room's `reach`): its box out across the panel's
+/// padding, so that it and its bar reach the panel's sides; what it holds (`style`) back in as far.
+pub fn held_reach() -> @ui.Style {
+  @ui.style(w=Full, mx=room(-panel_pad))
+}
+
+///|
+pub fn held_in() -> @ui.Style {
+  @ui.style(w=Full, px=room(panel_pad))
+}
+
+///|
+pub fn foot_across(height : Double) -> @ui.Style {
+  @ui.style(mx=room(card_foot_in(height) - card_pad))
+}
+
+///|
+pub fn foot_start(height : Double, words_in : Double) -> @ui.Style {
+  @ui.style(ml=room(card_foot_in(height) - card_pad), pl=room(words_in + card_pad - card_foot_in(height)))
+}
+
+///|
+/// A card's rows `row_h` high, each with something `end_h` high in its middle at its end (a key's button): reaching into
+/// the card's padding over the first and under the last by as much as that stands in from a row's top and foot, so the
+/// first's and the last's stand in the card's corners as far from both its edges (round by the ladder's there: mbui
+/// works it out).
+pub fn card_rows_reach(row_h : Double, end_h : Double) -> @ui.Style {
+  @ui.style(my=room((end_h - row_h) / 2.0))
+}
+
+///|
+/// A block (a command's box, a table) across a card's foot, its ground reaching past the card's words to the
+/// ladder's inset: round by the ladder's next step there.
+pub let block_across : @ui.Style = @ui.style(mx=room(corner_inset - card_pad))
+
+///|
+/// A card's foot with a capsule `height` high in its corners: as far in as makes it concentric (card_foot_in).
+pub fn foot_pad(height : Double) -> @ui.Style {
+  @ui.style(pb=room(card_foot_in(height)))
+}
+
+///|
+/// A card's first row with a capsule `height` high at its start (a field, a button): reaching past the card's words to
+/// where it stands concentric with its top corner (card_foot_in), at its start and its top.
+pub fn head_reach(height : Double) -> @ui.Style {
+  let out = room(card_foot_in(height) - card_pad)
+  @ui.style(ml=out, mt=out)
+}
+
+///|
+/// What follows the capsule in such a row, at its start where the row runs on to another line: back where the card's
+/// words stand (as far in as head_reach took the row out).
+pub fn head_back(height : Double) -> @ui.Style {
+  @ui.style(ml=room(card_pad - card_foot_in(height)))
+}
+
+///|
+/// A card's last row with capsules `height` high at its ends (a card card_pad in, as a page's): reaching past the
+/// card's words to where they stand concentric with its foot corners (card_foot_in), at both its sides and its foot;
+/// `start`: what leads it is that high instead (a field before a button: the row as high as the higher, the lower in
+/// its middle stands as much further from the foot as it is less high, each concentric with its corner); `words_first`:
+/// words lead it (where the card's words stand), only its end reaching.
+pub fn foot_reach(height : Double, start? : Double, words_first? : Bool = false) -> @ui.Style {
+  let out = room(card_foot_in(height) - card_pad)
+  if words_first {
+    return @ui.style(mr=out, mb=out)
+  }
+  let lead = start.unwrap_or(height)
+  let under = room(card_foot_in(dmax(height, lead)) - card_pad)
+  @ui.style(ml=room(card_foot_in(lead) - card_pad), mr=out, mb=under)
+}
+
+///|
+/// The ladder's steps and inset as a style's: a card's corner, a row's or a block's, a small block's; the inset;
+/// what a card's words stand in from a list's rows (card_pad less the inset); what a card's corner keeps clear past
+/// its words (its corner less card_pad).
+pub let card_radius : @ui.Radius = rounded(card_corner)
+
+///|
+pub let row_radius : @ui.Radius = rounded(row_corner)
+
+///|
+pub let small_radius : @ui.Radius = rounded(small_corner)
+
+///|
+pub let inset_room : @ui.Space = room(corner_inset)
+
+///|
+pub let list_words_room : @ui.Space = room(card_pad - corner_inset)
+
+///|
+pub let corner_clear_room : @ui.Space = room(card_corner - card_pad)
+
+///|
+/// How far in from a corner of `corner` a capsule `height` high stands concentric with it (capsule_in), as a style's
+/// room; `less`, less what already stands between (a row's own inset, a line over it).
+pub fn capsule_room(corner : Double, height : Double, less? : Double = 0.0) -> @ui.Space {
+  room(capsule_in(corner, height) - less)
+}
+
+///|
+/// How far in from a capsule's ends (`outer` high) one `height` high stands in it, concentric with them (a dot, a
+/// button in a capsule's end), as a style's room.
+pub fn capsule_end_room(outer : Double, height : Double) -> @ui.Space {
+  room(capsule_in(outer / 2.0, height))
+}
+
+///|
+/// `more` under the system's bar at the window's top (a phone's status bar; 0 where the host lays the app out under it):
+/// where what floats at the top of a layer over the whole window stands.
+pub fn system_top_room(more : Double) -> @ui.Space {
+  room(more + @ui.system_bars().top)
+}
+
+///|
+/// How far under a page's bar what is drawn from the page's top stands (the bar 45, in a panel of its own as much taller
+/// as puts its buttons in the panel's corner concentric with it: tape_bar_over).
+pub fn under_bar_room() -> @ui.Space {
+  room(wide_bar_h + (if in_pane() { tape_bar_over() } else { 0.0 }))
+}
+
+///|
+/// Where a page's capsule `height` high stands at its foot (foot_capsule): in from its panel's sides by as much more
+/// than the page's own `side` room as makes each end concentric with the corner it is in (a margin, `side` less that),
+/// and over its foot.
+pub fn foot_corner(height : Double, side : Double, foot : Double) -> @ui.Style {
+  let (l, r, b) = foot_capsule(height, side, foot)
+  @ui.style(ml=room(l - side), mr=room(r - side), pb=room(b))
+}
 
 ///|
 /// A page card of words: this in from every side.
 pub let card_pad : Double = 20.0
 
 ///|
-/// A command's box's corner: its copy button's (8), 10 in from its edges, concentric (Settings.kt COMMAND_BOX_CORNER).
-pub let command_box_corner : Double = concentric_out(8.0, 10.0)
+/// A command's box's corner: a block's on a card, its copy button corner_inset in from its corner.
+pub let command_box_corner : Double = row_corner
 
 ///|
-/// A card's corner with nothing in its corners.
-pub let card_corner : Double = 22.0
-
-///|
-/// A button's height (36), whose half a card's corner takes when one is in
-/// its corner: card_pad + 18.
+/// A button's height (36): a capsule, capsule_in(card_corner, 36) in from a card's corner where it stands in one.
 pub let button_h : Double = 36.0
 
 ///|
-/// A card of pressable rows: the rows this far in, each with row_corner,
-/// the card's corner theirs and this together.
-pub let list_pad : Double = 8.0
-
-///|
-pub let row_corner : Double = 18.0
+/// A card of pressable rows: the rows this far in (the ladder's inset), each round by row_corner.
+pub let list_pad : Double = corner_inset
 
 ///|
 /// A settings row's icon, before its name (SettingParts.kt ROW_ICON).
 pub let row_icon : Double = 22.0
+
+///|
+/// A finger's list row in from its box's left (SidebarList.css.ts phone: a chat row's 22).
+pub let phone_row_in : @ui.Space = room(22.0)
+
+///|
+/// An empty list's illustration and words in from its sides (Home.kt Empty: 30).
+pub let empty_in : @ui.Space = room(30.0)
 
 ///|
 /// The account's picture and the workspace's mark, each on its card atop settings (SettingsHome.kt): 46.
@@ -155,13 +623,13 @@ pub let workspace_tile_mark : Double = 26.0
 ///|
 /// A workspace's first letter in its square, where it has no mark: 22 on a line of 22 (Xl3, L7: SettingsHome.kt's
 /// lineHeight, near the account's initial beside it, half its picture), semibold, muted (Rail.css.ts workspaceItem).
-pub let workspace_letter : @ui.TextStyle = @ui.text_style(size=Xl3, leading=L7, weight=Semibold, color=Muted, wrap=false)
+pub let workspace_letter : @ui.TextStyle = @ui.text_style(size=Heading, leading=L7, weight=Semibold, color=Muted, wrap=false)
 
 ///|
 /// A chip whose ground fills from the left (an allowance's, a machine's load, a download's: Parts.kt FILL_CHIP_CORNER):
-/// near a capsule's on its 20 (a small one's 16 a capsule); in a list row's corner, 12 in, the row's corner is
-/// concentric round it (concentric_out(8.4, 12) = row_corner).
-pub let fill_chip_corner : Double = 8.4
+/// round by the ladder's small corner (a small one's 16 a capsule); in a card's or a row's corner concentric with it
+/// (mbui works it out).
+pub let fill_chip_corner : Double = small_corner
 
 ///|
 /// Corners (--r-*): a field's, a card's, a dialog's, the nav's, a menu's,
@@ -175,18 +643,23 @@ pub let r_card : Double = 20.0
 pub let r_dialog : Double = 32.0
 
 ///|
-pub let r_menu : Double = 20.0
+/// (a small panel's: a menu, a popover, a hover's card: its rows, capsules 34 high (menu_row_min), its padding in and
+/// concentric with it, panel_pad + 17 = 23: the ladder's small panels (corner_ladder). What stands further in in it
+/// is round by the ladder's next steps as a card's is: a taller row at its padding 18, what has a ground on its
+/// words' line 10.)
+pub let r_menu : Double = panel_pad + menu_row_min / 2.0
 
 ///|
 pub let r_option : Double = 12.0
 
 ///|
-/// --dur, for hovers and small changes.
-pub let dur_ms : Double = 140.0
+/// Where a desktop's window, which no system classes, goes from one layout to the next (layout): the widths at which
+/// Android's WindowSizeClass goes from compact to medium and from medium to expanded, so a window as wide is laid out
+/// alike whatever the system.
+pub let medium_from : Double = 600.0
 
 ///|
-/// Below this width the narrow screen's ground and type (the web's 700px).
-pub let narrow_below : Double = 700.0
+pub let large_from : Double = 840.0
 
 // ---------------------------------------------------------------------------
 
@@ -213,6 +686,10 @@ let wide_light : Palette = {
   warn_ink: 0x7F5306FFL,
   red: 0xA12F35FFL,
   red_bg: 0xFFF0EFFFL,
+  green_bg: 0xE7F6EDFFL,
+  blue_bg: 0xEAF2FFFFL,
+  amber_bg: 0xFEF4E0FFL,
+  online: 0x45B164FFL,
   neutral_bg: 0xEDEFF1FFL,
   overlay: 0x13161B33L,
   shadow: 0x13161B1AL,
@@ -251,6 +728,10 @@ let wide_dark : Palette = {
   warn_ink: 0xE6B55DFFL,
   red: 0xF68482FFL,
   red_bg: 0x442322FFL,
+  green_bg: 0x1B3426FFL,
+  blue_bg: 0x1F2E47FFL,
+  amber_bg: 0x403012FFL,
+  online: 0x45B164FFL,
   neutral_bg: 0x2A2B2FFFL,
   overlay: 0x00000080L,
   shadow: 0x00000073L,
@@ -291,6 +772,11 @@ let narrow_light : Palette = {
   // Android's C.chip (Theme.kt), what the app on a phone matches, not the narrow web's EFECE6
   chip: 0xE8E4DCFFL,
   hover: 0x24272B0FL,
+  // the sidebar beside the page (a tablet's Medium and Large): a step under the page's ground as the web's is under
+  // its canvas (FFFFFF → F6F5F1), the panes told apart by their grounds; what is chosen in it a step under that, as
+  // the web's (F6F5F1 → EBE7E1). The web's own, over this page's beige, were the page's colour
+  sidebar: 0xECE9E1FFL,
+  selected: 0xE1DBD1FFL,
 }
 
 ///|
@@ -314,6 +800,8 @@ let narrow_dark : Palette = {
   neutral_bg: 0x313237FFL,
   card: 0x26272BFFL,
   chip: 0x313237FFL,
+  // the sidebar a step under the page's ground, as the web's dark one under its canvas (1F2023 → 19191B)
+  sidebar: 0x151517FFL,
   hover: 0xECECED14L,
 }
 
@@ -332,7 +820,62 @@ let wide_type : Type = {
   heading: 22.0,
   heading_line: 30.0,
   display: 28.0,
+  input: 14.0,
+  input_line: 21.0,
+  // (the body's line, the web's --leading-body 22: msgPlain's 1.55 is 21.7, off the scale)
+  words: @ui.text_style(size=Body, leading=L7, color=Fg),
 }
+
+///|
+/// A control's height (Theme::control_h): the web's (controls.css.ts input, select: 36), a finger's (44).
+let wide_control_h : Double = 36.0
+
+///|
+let narrow_control_h : Double = 44.0
+
+///|
+/// What a thing pressed takes at least, by the screen (docs/architecture.md: touch targets 44 at least on a touch
+/// device): there, 44 by 44 at least, what it shows in its middle; with keyboard and mouse nothing more. For a button.
+pub fn finger_least() -> @ui.Style {
+  if theme().narrow {
+    finger_square
+  } else {
+    finger_none
+  }
+}
+
+///|
+/// As finger_least, its height alone: for a row, which is as wide as its list.
+pub fn finger_least_h() -> @ui.Style {
+  if theme().narrow {
+    finger_high
+  } else {
+    finger_none
+  }
+}
+
+///|
+/// How wide and high a button finger_least gives is (its side: what stands in a corner concentric with it): `web`'s
+/// with keyboard and mouse, 44 at least with touch.
+pub fn finger_side(web : Double) -> Double {
+  if theme().narrow {
+    dmax(web, narrow_control_h)
+  } else {
+    web
+  }
+}
+
+///|
+// kept across runs: a value (no field of it changes)
+let finger_square : @ui.Style = @ui.style(min_w=Fixed(narrow_control_h), min_h=Fixed(narrow_control_h))
+
+///|
+// kept across runs: a value (no field of it changes)
+let finger_high : @ui.Style = @ui.style(min_h=Fixed(narrow_control_h))
+
+///|
+// kept across runs: a value (no field of it changes)
+let finger_none : @ui.Style = @ui.css("")
 
 ///|
 /// The phone's: a size up, as Android's.
@@ -345,6 +888,73 @@ let narrow_type : Type = {
   ui_line: 22.0,
   body: 15.0,
   body_line: 22.0,
+  input: 16.0,
+  input_line: 21.0,
+  words: message,
+}
+
+///|
+/// The computer's round controls (attachBtn, sendBtn: 32, the arrow 16).
+let wide_round : Round = { side: 32.0, glyph: 16.0 }
+
+///|
+/// The phone's (mPlus, mSend: 36, both glyphs 18).
+let narrow_round : Round = { side: 36.0, glyph: 18.0 }
+
+///|
+/// It: `side` round, what it shows in its middle.
+pub fn round_face() -> @ui.Style {
+  let r = theme().round
+  @ui.style(w=Fixed(r.side), h=Fixed(r.side), radius=InnerOr(Full), align=ACenter, justify=JCenter)
+}
+
+///|
+let bars_drawn : Bars = { key: 28.0, icon: 14.0, field: 30.0 }
+
+///|
+// kept across runs: a value (no field of it changes)
+let wide_items : Items = {
+  least: 44.0,
+  name: @ui.text_style(size=Ui, color=Fg, wrap=false),
+  meta: @ui.text_style(size=Meta, color=Muted, wrap=false),
+  mark: 20.0,
+}
+
+///|
+// kept across runs: a value (no field of it changes)
+let narrow_items : Items = {
+  least: 48.0,
+  name: @ui.text_style(size=Ui, leading=L6, color=Fg, wrap=false),
+  meta: @ui.text_style(size=Meta, leading=L4, color=Muted, wrap=false),
+  mark: 22.0,
+}
+
+///|
+let wide_rows : Rows = {
+  least: Fixed(40.0),
+  pick: menu_row_min,
+  title: @ui.text_style(size=Ui, leading=L6, color=Fg),
+  note: @ui.text_style(size=Meta, leading=L5, color=Muted),
+  check: 18.0,
+  field_w: Fixed(52.0),
+  field_h: Fixed(28.0),
+  check_corner: 6.0,
+  switch_w: 36.0,
+  switch_h: 22.0,
+}
+
+///|
+let narrow_rows : Rows = {
+  least: Fixed(48.0),
+  pick: narrow_control_h,
+  title: @ui.text_style(size=Body, color=Fg),
+  note: @ui.text_style(size=Ui, leading=L5, color=Muted),
+  check: 22.0,
+  field_w: Fixed(72.0),
+  field_h: Fixed(36.0),
+  check_corner: 7.0,
+  switch_w: 44.0,
+  switch_h: 26.0,
 }
 
 ///|
@@ -352,7 +962,18 @@ let dark_set : Ref[Bool?] = { val: None }
 
 ///|
 let current : Ref[Theme] = {
-  val: { dark: false, narrow: false, p: wide_light, t: wide_type },
+  val: {
+    dark: false,
+    narrow: false,
+    p: wide_light,
+    t: wide_type,
+    rows: wide_rows,
+    control_h: wide_control_h,
+    bars: bars_drawn,
+    round: wide_round,
+    items: wide_items,
+    chat_list: mouse_chat_list,
+  },
 }
 
 ///|
@@ -363,26 +984,100 @@ pub fn set_dark(dark : Bool?) -> Unit {
 }
 
 ///|
-/// Whether the system is a phone's or a tablet's (iOS, Android), whose app is still.fail's Android app at any width
-/// (an opened foldable, a phone on its side): its own theme and pages, never the desktop's.
-pub fn touch_system() -> Bool {
-  let p = @ui.platform()
-  p == 1 || p == 2
+/// The native input (原生操控: docs/architecture.md, the terms): touch (`Finger`) or keyboard and mouse (`Mouse`), as
+/// the app is started, the same the whole run: the theme's sizes (words, rows, what a press reaches), how what shows
+/// only under a pointer is reached, what Enter does, scroll bars, and with the screen's tier how the presenters show
+/// (a sheet or beside what opened it) and how search is opened (a field over the list or ⌘K). As the host tells it at
+/// launch (@ui.native_pointing: an iPad started with a pointer, Android with a mouse or a touchpad, keyboard and mouse;
+/// Windows with a touch screen and no mouse, touch), the platform's where it cannot. How things answer the hand of the
+/// moment is not this: the current input, @ui.pointing.
+pub fn native_input() -> @ui.Pointing {
+  @ui.native_pointing()
 }
 
 ///|
-/// The theme for this frame, from the window's width (a phone's or a tablet's always its own): call at the top of a
-/// view.
+/// How the app's panes are laid out, by the screen alone: how much room its window has and what kind of screen it is.
+/// Never by what it is pointed with (@ui.pointing): each is pointed at with a mouse or a finger alike.
+pub(all) enum Layout {
+  /// one page at a time, the whole window (a phone held upright, a narrow window)
+  Small
+  /// the panes side by side as on a large screen, more of them than the window shows: the one in use whole, those
+  /// beside it showing past its edges, one tapped coming over before what it holds answers (sfdesk's frame.mbt)
+  Medium
+  /// the panes side by side, all of them shown: the rail and the sidebar, the page, the page's side panel
+  Large
+} derive(Eq, Show, Debug)
+
+///|
+/// The layout of a window `width` wide, in points, on every screen alike (medium_from, large_from): neither which way up
+/// it is held, nor its height, nor how large it is says how many panes there are (the user, 2026-10-25); the height
+/// only how much of them shows. One thing else: a fold half open on its back half is Small (a chat across the window,
+/// its composer under the fold: sfapp's tabletop.mbt). While
+/// the app has the device turned sideways itself (a film, a station's screen over all of it: @hostapi.sideways), the
+/// one it had as it turned: the screen is the same, only what is over all of it turned.
+pub fn layout(width : Double) -> Layout {
+  let now = screen_layout(width)
+  if !@hostapi.sideways() {
+    layout_held.val = None
+    return now
+  }
+  match layout_held.val {
+    Some(held) => held
+    None => {
+      layout_held.val = Some(now)
+      now
+    }
+  }
+}
+
+///|
+/// The layout as the app turned the device sideways (layout), while it has it so.
+// kept across runs: let go as the device is upright again
+let layout_held : Ref[Layout?] = Ref(None)
+
+///|
+/// The layout by the screen alone (layout).
+fn screen_layout(width : Double) -> Layout {
+  // a fold half open, its crease across: a chat over the crease, whatever its width (the one thing other than the width)
+  if (native_input() is Finger) && @ui.system_tabletop() is Some(_) {
+    return Small
+  }
+  if width < medium_from {
+    Small
+  } else if width < large_from {
+    Medium
+  } else {
+    Large
+  }
+}
+
+///|
+/// The theme for this frame, by the screen (docs/architecture.md: the layout follows the screen, never the hand): on a
+/// touch the phone's (its palette, its type a finger's size: Android's app, a tablet's too), with keyboard and mouse the
+/// web's. Laid out Small the phone's with keyboard and mouse too, as its pages are the phone's, which carry its palette in places
+/// (sfapp messages.mbt `ink`) until they and the web's are one (the way there 4): call at the top of a view.
 pub fn begin(c : @ui.Ctx) -> Theme {
   let dark = dark_set.val.unwrap_or(false)
-  let narrow = c.width < narrow_below || touch_system()
+  let narrow = (native_input() is Finger) || layout(c.window_size().0) is Small
   let p = match (narrow, dark) {
     (false, false) => wide_light
     (false, true) => wide_dark
     (true, false) => narrow_light
     (true, true) => narrow_dark
   }
-  current.val = { dark, narrow, p, t: if narrow { narrow_type } else { wide_type } }
+  current.val = {
+    dark,
+    narrow,
+    p,
+    t: if narrow { narrow_type } else { wide_type },
+    rows: if narrow { narrow_rows } else { wide_rows },
+    control_h: if narrow { narrow_control_h } else { wide_control_h },
+    bars: bars_drawn,
+    round: if narrow { narrow_round } else { wide_round },
+    items: if narrow { narrow_items } else { wide_items },
+    // (keyboard and mouse's window made narrow keeps keyboard and mouse's chats' list: the narrow anatomy at keyboard and mouse's sizes)
+    chat_list: if native_input() is Finger { touch_chat_list } else { mouse_chat_list },
+  }
   current.val
 }
 
@@ -396,6 +1091,34 @@ pub fn link_ink() -> Int64 {
     t.p.accent_text
   }
 }
+
+///|
+/// What `body` draws on ground `bg` in place of the page's: the palette's and the styles' `Bg` both (a panel behind
+/// the one in use on the tape: behind_ground).
+pub fn with_ground(c : @ui.Ctx, bg : Int64, body : () -> Unit) -> Unit {
+  let was = current.val
+  current.val = { ..was, p: { ..was.p, bg, } }
+  c.with_theme({ ..c.theme(), bg, }, body)
+  current.val = was
+}
+
+///|
+/// The ground of a panel behind the one in use (the tape's): the page's a step darker, what is on it as it is
+/// (pengxiao, 2026-10-25: which one is in use told apart, the words of the others as readable); `k` of the way there.
+pub fn behind_ground(k? : Double = 1.0) -> Int64 {
+  let t = current.val
+  let veil = if t.dark { behind_dark } else { behind_light }
+  // (`k` of the way there: as a panel goes behind or comes in front with the tape's move)
+  let a = ((veil & 0xFFL).to_double() * k).round().to_int64()
+  over(t.p.bg, (veil & 0xFFFFFF00L) | a)
+}
+
+///|
+/// How much darker it is: black at 4% on paper, at 35% in the dark.
+let behind_light : Int64 = 0x0000000AL
+
+///|
+let behind_dark : Int64 = 0x00000059L
 
 ///|
 /// The theme `begin` picked.
@@ -453,6 +1176,14 @@ pub fn mix(a : Int64, share : Double, b : Int64) -> Int64 {
 /// title, Parts.kt:527), Xl2 17 (back, Parts.kt:491), Xl3 22 (a title, bold: Security.kt:473, NewChat.kt:183,
 /// Usage.kt:130, Workspaces.kt:191), Xl4 32 (a large title, Parts.kt:559).
 pub let text_scale : @ui.TextScale = {
+  // (the roles: each screen's own, Type's, set by ui_theme: text_roles)
+  caption: (11.0, 16.0),
+  meta: (12.0, 18.0),
+  ui: (13.0, 20.0),
+  body: (14.0, 22.0),
+  title: (16.0, 24.0),
+  heading: (22.0, 30.0),
+  display: (28.0, 36.0),
   xs3: (10.0, 14.0),
   xs2: (11.0, 15.4),
   xs: (12.0, 16.8),
@@ -463,6 +1194,23 @@ pub let text_scale : @ui.TextScale = {
   xl2: (17.0, 23.8),
   xl3: (22.0, 30.8),
   xl4: (32.0, 44.8),
+}
+
+///|
+/// The scale with the type's roles this screen has (Type: the web's text-caption … text-display, web/ui
+/// tokens.css.ts; a phone's a size up), each on its own line: what a style says by a role (TextSize Caption …
+/// Display) is the same size the web's says by it.
+fn text_roles(t : Type) -> @ui.TextScale {
+  {
+    ..text_scale,
+    caption: (t.caption, t.caption_line),
+    meta: (t.meta, t.meta_line),
+    ui: (t.ui, t.ui_line),
+    body: (t.body, t.body_line),
+    title: (t.title, t.title_line),
+    heading: (t.heading, t.heading_line),
+    display: (t.display, text_scale.display.1),
+  }
 }
 
 ///|
@@ -502,19 +1250,22 @@ pub let large_title_tracking : @ui.Tracking = Exact(-0.6)
 pub let message_line : @ui.Leading = Exact(24.75)
 
 ///|
-/// A card with a button (a capsule) in its corner: concentric with it, card_pad and the button's half (Parts.kt:607
-/// Card foot: CARD_PAD + BUTTON_HEIGHT 38 / 2): worked out as Android does, no step of the scale.
-pub let card_foot_radius : @ui.Radius = Exact(card_pad + 19.0)
-
-///|
 /// A list card's corner: concentric round its rows (row_corner, list_pad in), as Android works it out (Parts.kt:640
 /// LIST_CARD_CORNER = concentricOut(LIST_ROW_CORNER 18, LIST_PAD 8)); its rows take theirs from it (radius=Inner).
-pub let list_card_radius : @ui.Radius = Exact(concentric_out(row_corner, list_pad))
+pub let list_card_radius : @ui.Radius = surface(list_pad, row_corner).radius()
+
+///|
+/// A long list's card, drawn a row at a time (page.mbt group_row: the card's corner), and a row's ground at its ends:
+/// concentric in it, list_pad in.
+pub let group_corner : Double = card_corner
+
+///|
+pub let group_row_end_radius : @ui.Radius = rounded(inner_corner(group_corner, list_pad))
 
 ///|
 /// A card with a Seg (rounded 10) in its top corners: concentric with it (Usage.kt:204 concentricOut(10, CARD_PAD)):
 /// worked out as Android does, no step of the scale.
-pub let seg_card_radius : @ui.Radius = Exact(concentric_out(10.0, card_pad))
+pub let seg_card_radius : @ui.Radius = surface(card_pad, 10.0).radius()
 
 ///|
 /// The usage page's days (Usage.kt Days): the plot 150 high (PLOT), a bar 16 wide at most (BAR), how far a line of the
@@ -554,17 +1305,6 @@ pub let code_edge : @ui.Color = A(Fg, Exact(0.18))
 pub let phone_max : @ui.Len = Fixed(420.0)
 
 ///|
-/// The latest chats raised on a wide screen (Wide.kt Recent): 340 wide, 560 tall at most.
-pub let recent_w : @ui.Len = Fixed(340.0)
-
-///|
-pub let recent_max_h : @ui.Len = Fixed(560.0)
-
-///|
-/// The button that raises them (Wide.kt Recent): 52 across, as tall as the composer on one line.
-pub let recent_button : @ui.Len = Fixed(52.0)
-
-///|
 /// A bar's round button (Parts.kt NavButton): 34 across.
 pub let nav_button_side : @ui.Len = Fixed(34.0)
 
@@ -586,7 +1326,7 @@ pub fn ui_theme() -> @ui.Theme {
   // a link's ink as Android's C.link (Theme.kt): the accent's darker ink on paper, the accent itself in the dark
   {
     ..base,
-    text: text_scale,
+    text: text_roles(t.t),
     leading: leading_scale,
     radii,
     link: if t.dark { base.accent } else { base.accent_text },
@@ -594,9 +1334,19 @@ pub fn ui_theme() -> @ui.Theme {
     // lighter ones: what a style's Muted and Subtle say there
     muted: if t.narrow { t.p.muted } else { base.muted },
     subtle: if t.narrow { t.p.subtle } else { base.subtle },
+    // the panes' grounds the palette's (touch's sidebar a step under its beige page, what is chosen a step
+    // under that): what a style's Sidebar and Selected say, not mbui's narrow theme's, which has the web's
+    sidebar: t.p.sidebar,
+    selected: t.p.selected,
     // a line of words that say none 1.4 of their size, as the web's root (`line-height: 1.4`) and Android's (Theme.kt
     // WebType: 1.4.em)
     text_line: 1.4,
+    corner_ladder,
+    corner_fit: Some(corner_fit),
+    lit_apart,
+    // the app's own words with digits all one width, as the web's root (`font-variant-numeric: tabular-nums`): a
+    // percentage, a time running, a count keep their width as they change; what people wrote keeps the font's own
+    tabular: true,
   }
 }
 
@@ -629,6 +1379,18 @@ pub let tag_max : @ui.Len = Fixed(104.0)
 pub let ref_row_min_h : @ui.Len = Fixed(44.0)
 
 ///|
+/// The sign-in page's (SignIn.kt): its title 28, bold, on the font's own line (28.sp), off the scale between Xl3's
+/// 22 and Xl4's 32; its sides 30 (padding(horizontal = 30.dp)), between S7's 28 and S8's 32.
+pub let sign_in_title_size : @ui.TextSize = Exact(28.0, 39.2)
+
+///|
+pub let sign_in_side : @ui.Space = Exact(30.0)
+
+///|
+/// A picking row's line under its words (Controls.kt PickRow: 12.sp on 17.sp), between L4's 16 and L5's 18.
+pub let pick_sub_line : @ui.Leading = Exact(17.0)
+
+///|
 /// The search (Search.kt): its field 38 high (FIELD) on the ink at 6%; a row found 66 high (HitRow, ItemRow; 50 an item
 /// with no line of words), its first line 22; what a row found says starts 22 in.
 pub let search_field_h : @ui.Len = Fixed(38.0)
@@ -651,6 +1413,10 @@ pub let found_start : @ui.Space = Exact(22.0)
 ///|
 /// What takes the room left in a row or a column (Compose's `weight(1f)`).
 pub let grow : @ui.Len = Grow(1.0)
+
+///|
+/// The models' column of a model's picker beside what goes with it (NewChat.kt openRunPicker: weight(1.35f)).
+pub let models_grow : @ui.Len = Grow(1.35)
 
 ///|
 /// Words on one line given the room left in their row, cut there with an ellipsis (Compose's Text with maxLines = 1
@@ -679,20 +1445,33 @@ pub let viz_paper_dark : @ui.Color = Exact(0x26272BFFL)
 pub let viz_full_in : @ui.Space = S4_5
 
 ///|
-/// Marking a service's page (Preview.kt MarkMode, MarksOver, Note): its bar 30 high, 3 in at its end, 添加到对话's
-/// icon and words 5 apart; the dot's ring 13; the edit key's ground the accent's 14%, the ring's 22%, an open mark's
-/// 8%; what floats over the page frosted thick (the surface at 94%; dark, surface2's); a pin's number 11; what is said
-/// of a mark 26 high.
-pub let mark_bar_h : @ui.Len = Fixed(30.0)
+/// Marking a service's page (Preview.kt MarkMode, MarksOver, Note): its bar 30 high (a capsule), 添加到对话 (24 high)
+/// and the dot's ring (13) in its ends where they are concentric with them (capsule_end_room: 3 in at its end, 8.5 at
+/// its start), 添加到对话's icon and words 5 apart; the edit key's ground the accent's 14%, the ring's 22%, an open
+/// mark's 8%; what floats over the page frosted thick (the surface at 94%; dark, surface2's); a pin's number 11; what is
+/// said of a mark 26 high.
+pub let mark_bar_h : @ui.Len = Fixed(mark_bar_side)
 
 ///|
-pub let mark_bar_end : @ui.Space = Exact(3.0)
+let mark_bar_side : Double = 30.0
+
+///|
+pub let mark_bar_end : @ui.Space = capsule_end_room(mark_bar_side, mark_put_side)
+
+///|
+let mark_put_side : Double = 24.0
+
+///|
+pub let mark_bar_start : @ui.Space = capsule_end_room(mark_bar_side, mark_ring_side)
 
 ///|
 pub let mark_put_gap : @ui.Space = space_5
 
 ///|
-pub let mark_ring : @ui.Len = Fixed(13.0)
+pub let mark_ring : @ui.Len = Fixed(mark_ring_side)
+
+///|
+let mark_ring_side : Double = 13.0
 
 ///|
 pub let mark_key_on : @ui.Color = A(Accent, Exact(0.14))
@@ -726,9 +1505,42 @@ pub let custom_field_w : @ui.Len = Fixed(72.0)
 ///|
 pub let custom_field_r : @ui.Radius = Exact(10.0)
 
+///|
+/// The same field with keyboard and mouse (ViewportSize.css.ts field: 52 wide).
+pub let custom_field_dense_w : @ui.Len = Fixed(52.0)
+
 // ---------------------------------------------------------------------------
 // A station's screen, seen and driven (Android app/remote/ScreenViewer.kt): its sizes off the steps, as Android says
 // them.
+
+///|
+/// A sidebar's row, every sidebar's (Sidebar.css.ts navRow, navSession; SidebarList.css.ts item): the ladder's row
+/// (row_corner), as a list card's rows and a menu's are. The web's nav corner (12, as a field's and an option's) is a
+/// row's; on the ladder a row is 18, so a one-line row (32) is round at its ends as a menu's row is, and a chat's (54)
+/// as a list card's.
+pub let side_row_radius : @ui.Radius = row_radius
+
+///|
+/// A chat's row in the wide frame's sidebar (Sidebar.css.ts navSession: two lines, 20 and 18, 2 apart, 7 above and
+/// under).
+pub let side_row_h : @ui.Len = Fixed(54.0)
+
+///|
+/// A person's picture after the first at a sidebar row's end (RowPicture.css.ts: 16 across, 3 over the one before):
+/// the room it takes.
+pub let side_face_step : @ui.Len = Fixed(13.0)
+
+///|
+/// The same at a finger's row's end (mobile/Home.tsx RowAside size 18): 15 the room after the first, the starter's ring
+/// 22 across (2 past the face's ground).
+pub let touch_face_step : @ui.Len = Fixed(15.0)
+
+///|
+pub let touch_face_ring : @ui.Len = Fixed(22.0)
+
+///|
+/// The dot before a chat that wants the viewer in 待处理's panel (Attention.css.ts dot): 7 across.
+pub let attention_dot : @ui.Len = Fixed(7.0)
 
 ///|
 /// The side rail (60), a file's key (34), a progress track's height (3), the bounds of what floats over the frame
@@ -780,7 +1592,6 @@ pub let face_status_most : @ui.Len = Fixed(140.0)
 /// A Slack app's icon as it is in its look (SlackApp.kt AppLook: 72 square), off the scale.
 pub let app_icon_side : @ui.Len = Fixed(72.0)
 
-
 ///|
 /// A choice's line on a card (Parts.kt PickLine): 11 over and under (as files_gap), rounded 10 (as custom_field_r),
 /// its check in a room 18 wide at its end.
@@ -800,4 +1611,648 @@ pub let face_ink : Int64 = 0xFFFFFFFFL
 /// A sheet's grabber (Sheet.kt SheetGrab): 38 × 5, round at its ends (its 3 capped at half its height, as every
 /// renderer draws it; its colour the palette's line, said where it is drawn).
 // kept across runs: a value (no field of it changes)
-pub let sheet_grabber : @ui.Style = @ui.style(w=Fixed(38.0), h=Fixed(5.0), radius=Full)
+pub let sheet_grabber : @ui.Style = @ui.css("w=Fixed(38.0) h=Fixed(5.0) radius=Full")
+
+///|
+/// A tip's widest (the web's parts.css.ts tooltip: 300).
+pub let tip_max : @ui.Len = Fixed(300.0)
+
+///|
+/// A login card's on a desktop's width (the web's MachineLogins.css.ts card): 360 at least where there is the room
+/// (min(100%, 360px)), and its corner its padding and its × pill's half (8 + 12: the web's card's 20, as a
+/// visualization's).
+pub let login_card_least : @ui.Len = Within(360.0)
+
+///|
+/// An agent's request about a vault item as its card in a chat (the web's VaultAsk.css.ts card): as wide as what it
+/// says, 320 at least where there is the room (min(100%, 320px)), 560 at most and never wider than the room (min(100%,
+/// 560px): a Cut box's max in a column).
+// kept across runs: a value (no field of it changes)
+pub let ask_card_room : @ui.Style = @ui.css("w=Cut min_w=Within(320) max_w=Fixed(560)")
+
+///|
+pub let login_card_corner : @ui.Radius = rounded(card_corner)
+
+///|
+/// A file's card in a message on a desktop's width (the web's Chat.css.ts fileCard): its sheet (30 by 36) 7 in from its
+/// side, as the sheet's own 9.75 less the 2.75 it is drawn in (FILE_CARD_PAD); its corner the sheet's room and its own
+/// 3.25 (MESSAGE_FILE_CORNER, 13), a message's pictures' too.
+pub let file_sheet_in : @ui.Space = files_row_end
+
+///|
+pub let file_sheet_w : @ui.Len = Fixed(30.0)
+
+///|
+pub let file_sheet_h : @ui.Len = Fixed(36.0)
+
+///|
+/// A file card's own button (Chat.css.ts fileCardRemove: 22 round).
+pub let file_card_button : @ui.Len = Fixed(22.0)
+
+///|
+/// A name over a message at its widest (Chat.css.ts msgHead msgName: 240).
+pub let name_max : @ui.Len = Fixed(240.0)
+
+///|
+/// A small square button beside a line (the web's activityStop, a file card's remove: 22).
+pub let small_button : @ui.Len = Fixed(22.0)
+
+///|
+/// The pill offering to quote what is picked (the web's Chat.css.ts quotePop: 26 high).
+pub let quote_pop_h : @ui.Len = Fixed(26.0)
+
+///|
+/// The widest a page is laid out as the web's narrow app lays its pages out (max-width 640, where its narrow app takes
+/// over): wider, as its desktop pages are. A page's own width, not the tier (docs/architecture.md Pages).
+pub let page_narrow_most : Double = 640.0
+
+///|
+/// A choice standing over the composer (the web's mobile NewChat.css.ts mChooser: 30 high, a capsule of the
+/// composer's glass), the widest a station's name in it is.
+pub let glass_chooser_h : @ui.Len = Fixed(30.0)
+
+///|
+pub let glass_chooser_station_most : @ui.Len = Fixed(128.0)
+
+///|
+/// A page's bar in the wide frame (the web's sidebar.css.ts pageBar: 45 high).
+pub let wide_bar_h_size : @ui.Len = Fixed(wide_bar_h)
+
+///|
+pub let wide_bar_h : Double = 45.0
+
+///|
+/// A page's bar in a panel of the tape (laid out Medium, its corners pane_round): its buttons (32 across) on the tape's
+/// one line, where they are concentric with the ladder's pane corner, its bar as much taller over them
+/// (`tape_bar_over`: every bar of the tape and the sidebar's first row on it); at its end as far in as makes the last
+/// concentric with the panel's top right corner (capsule_fit), else clear of it (as far in as it is round, or where it
+/// stands in the wide frame, `alone`, if that is further: nothing of the bar's in a corner it can not be concentric
+/// with: a Mac's page at the window's edge, its corner the window's) (`tape_bar_end`); a round button at its start (a
+/// settings page's back) so in its top left one (`tape_bar_start`).
+pub fn tape_bar_end(alone : Double) -> Double {
+  match pane_top_right() {
+    Some(k) => line_end_in(k, alone)
+    None => alone
+  }
+}
+
+///|
+pub fn tape_bar_start(alone : Double) -> Double {
+  match pane_round.val {
+    Some(k) => line_end_in(k[0], alone)
+    None => alone
+  }
+}
+
+///|
+/// How far in from its side the round button ending a row on the tape's line (a bar's, the sidebar's first row's filter)
+/// stands in a corner `corner` round (tape_bar_end, tape_bar_start): on the line in the ladder's pane corner,
+/// concentric with it; in one that follows the window (too square for a button there) clear of it.
+pub fn line_end_in(corner : Double, alone : Double) -> Double {
+  if (corner - pane_corner).abs() <= 0.5 {
+    tape_line
+  } else if capsule_fits(corner, 32.0) {
+    capsule_in(corner, 32.0)
+  } else {
+    dmax(alone, corner)
+  }
+}
+
+///|
+/// How far in from its start a bar whose first thing stands wherever the room left puts it (the files' bar: what is done
+/// to the folder, at its end) keeps clear of the panel's top left corner: as far in as it is round, or `alone`, if that
+/// is further.
+pub fn tape_bar_clear_start(alone : Double) -> Double {
+  match pane_round.val {
+    Some(k) => dmax(alone, k[0])
+    None => alone
+  }
+}
+
+///|
+pub fn tape_bar_over() -> Double {
+  dmax(0.0, tape_line - (wide_bar_h - hairline_h - 32.0) / 2.0)
+}
+
+///|
+pub fn tape_bar_over_room() -> @ui.Space {
+  room(tape_bar_over())
+}
+
+///|
+/// A bar's line under it (its pb: SPx).
+let hairline_h : Double = 1.0
+
+///|
+/// A card over what the pointer rests on (the web's Hover.css.ts card: 320 wide; a tile's 220 at least), and an
+/// agent's in it (AgentCard.css.ts: 288).
+pub let hover_card_w : @ui.Len = Fixed(320.0)
+
+///|
+pub let hover_tile_least : @ui.Len = Fixed(220.0)
+
+///|
+pub let agent_card_w : @ui.Len = Fixed(288.0)
+
+///|
+/// parts.tsx's measures off the scale (parts.css.ts, own.css.ts, styles/spinner.css.ts): a switch (36 by 22, its thumb
+/// 2 in; small 26 by 16), a pill (22 high, 9 in), a status dot's ring (1.5), a section's note (3 under its title, 52em
+/// of its 12 at most), the first one (480 at most, its line 34em of its 13), a spinner (14; in a line of small text 12).
+pub let switch_w : Double = 36.0
+
+///|
+pub let switch_h : Double = 22.0
+
+///|
+pub let switch_small_w : Double = 26.0
+
+///|
+pub let switch_small_h : Double = 16.0
+
+///|
+pub let switch_in : Double = 2.0
+
+///|
+pub let pill_h : Double = 22.0
+
+///|
+pub let pill_in : Double = 9.0
+
+///|
+pub let status_ring : Double = 1.5
+
+///|
+pub let section_note_gap : Double = 3.0
+
+///|
+pub let section_note_most : @ui.Len = Fixed(624.0)
+
+///|
+pub let first_most : @ui.Len = Fixed(480.0)
+
+///|
+pub let first_lead_most : @ui.Len = Fixed(442.0)
+
+///|
+pub let spinner_size : Double = 14.0
+
+///|
+pub let spinner_inline : Double = 12.0
+
+///|
+/// A dialog's widths (parts.css.ts dialog 520, dialogWide 640), how far short of the window's it stays at most (32),
+/// and its close button (32 round).
+pub let dialog_w : Double = 520.0
+
+///|
+pub let dialog_wide_w : Double = 640.0
+
+///|
+pub let dialog_margin : Double = 32.0
+
+///|
+pub let dialog_close : Double = 32.0
+
+///|
+/// A dialog's corner (DIALOG_PAD 24 and a pill's half height 18) and shadow (0 24px 64px: a blur's deviation half its
+/// CSS radius).
+pub let dialog_r : Double = pane_corner
+
+///|
+pub let dialog_shadow : Double = 32.0
+
+///|
+pub let dialog_shadow_y : Double = 24.0
+
+///|
+/// A select (parts.css.ts select: 200 wide by default; its chevron 14), choices 8 apart; a confirm (dialogAlert, 420
+/// wide); a small panel's icon button's icon (16); a chooser's chevron (12); a copy's check (1.6 s).
+pub let select_w : Double = 200.0
+
+///|
+pub let select_chevron : Double = 14.0
+
+///|
+pub let choice_gap : Double = 8.0
+
+///|
+pub let confirm_w : Double = 420.0
+
+///|
+pub let panel_icon_size : Double = 16.0
+
+///|
+pub let chooser_chevron : Double = 12.0
+
+///|
+/// A menu's item at least (controls.css.ts menuItem: 34 high), a capsule its panel's padding in from its corner,
+/// concentric with it (capsule_in(r_menu, 34) = panel_pad: what r_menu is made of).
+pub let menu_row_min : Double = 34.0
+
+///|
+/// Over and under a menu's item's line of words (20): as high as menu_row_min (menuItem: 7).
+pub let menu_row_over : Double = 7.0
+
+///|
+/// Where a small panel's button (a 24 pill or circle: panel_pill) stands at the end of a menu's row: in the row's
+/// capsule end, concentric with it, past the row's padding to there, the row no taller for it (a row of words is as
+/// high, its ＋ or × in it or not).
+pub let menu_row_end : @ui.Style = @ui.style(
+  mr=room(capsule_in(menu_row_min / 2.0, panel_pill) - text_in),
+  my=room((menu_row_min - 2.0 * menu_row_over - panel_pill) / 2.0),
+)
+
+///|
+/// A line between a small panel's parts (@sf.menu_rule): 1 high, as wide as where it is, the words' ink faintly (in
+/// dark the panel is lighter than the page: its line a groove; kit's menu_rule_look).
+pub let rule_line : @ui.Style = @ui.css("w=Full h=SPx")
+
+///|
+pub fn rule_ink(c : @ui.Ctx) -> Int64 {
+  @ui.alpha(c.theme().fg, 0.12)
+}
+
+///|
+/// Nothing under it, no ring round it.
+pub let no_ground : Int64 = 0L
+
+///|
+pub let no_ring : Double = 0.0
+
+///|
+/// A length off the scale, as a style's room (padding, margins: below 0 for a margin): align.mbt's.
+fn room(x : Double) -> @ui.Space {
+  Exact(x)
+}
+
+///|
+/// A corner off the scale, as a style's: align.mbt's.
+fn rounded(x : Double) -> @ui.Radius {
+  Exact(x)
+}
+
+///|
+/// The waiting shapes (waiting.css.ts): a row 66 high, 22 in at its start, its title 13 and line 10 high 10 apart, its
+/// picture 22; dense 10 in, the bars 0.6 as long, 10 and 8 high, 7 apart; a message's bubble 18 round, 70% of the
+/// width at most.
+pub let wait_row_h : Double = 66.0
+
+///|
+pub let wait_row_in : Double = 22.0
+
+///|
+pub let wait_row_gap : Double = 10.0
+
+///|
+pub let wait_title_h : Double = 13.0
+
+///|
+pub let wait_line_h : Double = 10.0
+
+///|
+pub let wait_picture : Double = 22.0
+
+///|
+pub let wait_dense_in : Double = 10.0
+
+///|
+pub let wait_dense_share : Double = 0.6
+
+///|
+pub let wait_title_dense : Double = 10.0
+
+///|
+pub let wait_line_dense : Double = 8.0
+
+///|
+pub let wait_dense_gap : Double = 7.0
+
+///|
+pub let wait_bubble_r : Double = 18.0
+
+///|
+pub let wait_bubble_share : Double = 0.7
+
+///|
+/// A toast (toast.css.ts): 9 in over and under its words, 20 round, 560 wide at most, 24 over the window's foot, a
+/// floating shadow (0 8px 24px), coming in from 8 below.
+pub let toast_py : Double = 9.0
+
+///|
+pub let toast_r : Double = 20.0
+
+///|
+pub let toast_max : Double = 560.0
+
+///|
+pub let toast_bottom : Double = 24.0
+
+///|
+pub let toast_shadow : Double = 12.0
+
+///|
+pub let toast_shadow_y : Double = 8.0
+
+///|
+pub let toast_rise : Double = 8.0
+
+
+///|
+/// A column's edge (parts.css.ts resizeHandle, own.css.ts): a strip 7 wide, 4 of it past the column's edge; its bar 5
+/// wide, 24 high and 48 on the strip; its line 8 short of the strip's ends, in 40 steps of its fade; dragged once 3
+/// from where it went down.
+pub let handle_w : Double = 7.0
+
+///|
+pub let handle_out : Double = 4.0
+
+///|
+pub let edge_bar_w : Double = 5.0
+
+///|
+pub let edge_line_steps : Int = 40
+
+///|
+pub let handle_slop : Double = 3.0
+
+///|
+/// A tip that follows the pointer along an edge (usePointerTip): 300 ms after the pointer comes, 14 beside it.
+pub let edge_tip_ms : Double = 300.0
+
+///|
+pub let edge_tip_gap : Double = 14.0
+
+// ---------------------------------------------------------------------------
+// The desktop's sidebar and rail (sfdesk: ember web/src/Rail.css.ts, ChatMark.css.ts, styles/shell.css.ts)
+
+///|
+/// A chat's marks' colours, bright in both themes (ChatMark.css.ts: #3b82f6 done and waiting on the viewer, #e5484d to
+/// be seen now and its halo at 25%, #f2b01e at work).
+pub let mark_blue : @ui.Color = Exact(0x3B82F6FFL)
+
+///|
+pub let mark_red : @ui.Color = Exact(0xE5484DFFL)
+
+///|
+pub let mark_halo : @ui.Color = A(mark_red, O25)
+
+///|
+pub let mark_yellow : Int64 = 0xF2B01EFFL
+
+///|
+/// The rail's places 8 from its edges open (Rail.css.ts rail: 9 under the last, its 38s 9 in; here where they stand in
+/// the closed bar, 6 + its 2, so folding moves none and their grounds, 12 in, are concentric with a Mac window's corner
+/// as the bar's are through it: rail_ground_radius).
+pub let rail_in : @ui.Space = room(8.0)
+
+///|
+/// The same as the sidebar's panel on the tape (laid out Medium, its left corners tape_side_corners'): the places in
+/// its left corners (a 38 to press, its ground 30 round in its middle) as far in as makes their grounds concentric with
+/// them; where the corner is too square for a circle (it follows a Mac window's), as far in as makes a ground's corner
+/// there concentric with it (box_fit: the grounds boxes as round, rail_ground_radius); else 9 as open.
+pub fn rail_in_tape() -> Double {
+  let ground_in = (38.0 - rail_ground_side) / 2.0
+  let corner = tape_side_corners()[3].radius()
+  let d = capsule_in(corner, rail_ground_side)
+  if place_fits(d) {
+    d - ground_in
+  } else {
+    box_fit(corner, 9.0 + ground_in, 0.0).0 - ground_in
+  }
+}
+
+///|
+pub fn rail_in_tape_room() -> @ui.Space {
+  room(rail_in_tape())
+}
+
+///|
+/// How far past the composer's padding its round controls stand in its foot corners (a margin, below 0 where they are
+/// larger than its padding leaves room for: a phone's 36), concentric with its corner as round ones are (capsule_in).
+pub fn composer_round_off() -> @ui.Space {
+  room(composer_round_in() - composer_pad)
+}
+
+///|
+/// How far in from the composer's box its round controls stand in its foot corners (composer_round_off).
+pub fn composer_round_in() -> Double {
+  capsule_in(card_corner, theme().round.side)
+}
+
+///|
+/// The composer's padding as a style's (composer_pad).
+pub let composer_pad_room : @ui.Space = room(composer_pad)
+
+///|
+/// Where a dialog's buttons stand in its foot corner (the theme's button: a capsule): as far from its foot and its side
+/// as makes the last concentric with its corner (dialog_r), the row reaching past its sides' room `pad` to there.
+pub fn dialog_corner_foot(pad : Double) -> @ui.Style {
+  let at = capsule_in(dialog_r, button_height())
+  @ui.style(pb=room(at), mr=room(at - pad))
+}
+
+///|
+/// Where a small panel's buttons stand in its foot corner (the theme's button: a capsule): as far from its foot and its
+/// side as makes the last concentric with its corner (r_menu), the row reaching past its padding (panel_pad) to there.
+pub fn panel_corner_foot() -> @ui.Style {
+  let at = room(capsule_in(r_menu, button_height()) - panel_pad)
+  @ui.style(mr=at, mb=at)
+}
+
+///|
+/// A place's ground in the rail (a place's, a workspace's): 30 round, so where it stands in a panel's corner it is
+/// concentric with it (Rail.css.ts item, workspaceItem: 9 round, the web's).
+pub let rail_ground_side : Double = 30.0
+
+///|
+/// Its corner, all its places' grounds one (one layer, one corner: the web's 9 each), `ground_in` from the edges of the
+/// rail's corner `corner` (the closed bar's, the tape's sidebar panel's): linked to it, concentric with it; where that
+/// is as round as the ground's half, a circle (a corner round enough for one: a pane's 34, 19 in; a bar's 21, 6 in).
+pub fn rail_ground_radius(corner : @ui.CornerOf, ground_in : Double, alone? : Double = small_corner) -> @ui.Radius {
+  let link : @ui.CornerOf = Follow(corner, ground_in, alone)
+  // (as round as its half or rounder there, a circle: a corner round enough for one)
+  if link.radius() >= rail_ground_side / 2.0 - 0.5 {
+    Full
+  } else {
+    Linked(link)
+  }
+}
+
+///|
+/// A small panel's corner (a menu's, a popover's: r_menu) as a style's, for one drawn by a style of its own.
+pub let panel_radius : @ui.Radius = rounded(r_menu)
+
+///|
+/// What sits in a small panel's corner (--panel-in: a menu's rows, a popover's), concentric with the panel's.
+pub let panel_in : @ui.Radius = rounded(small_panel_inner(r_menu))
+
+///|
+/// The `@` menu over the desktop's composer (ChatRef.css.ts refMenu: a small panel, padded panel_pad) and its rows'
+/// corner (refItem: concentric with it), its rows at their lowest (a menu's row's: capsules in its corners).
+pub let ref_menu_corner : @ui.Radius = rounded(r_menu)
+
+///|
+pub let ref_item_corner : @ui.Radius = panel_in
+
+///|
+pub let ref_item_min_h : @ui.Len = Fixed(menu_row_min)
+
+
+///|
+/// The closed bar's corner, `window_in` from the window's left, top and foot, its places' grounds `ground_in` from its
+/// edges: all four one, a strip along the window's edge (laid out Large; not one of the Medium tape's panes side by
+/// side, whose corners at the window's edge alone follow it: tape_corners): linked to the window's (window_follow),
+/// else as round as makes its places' grounds concentric with it (as narrow as the rail, a capsule's
+/// end by that; shown a while as wide as the sidebar, no rounder: not a pane's 34). Where it follows the window, too
+/// square for a ground's circle, its grounds are boxes as round as makes them concentric with it (rail_ground_radius).
+pub fn closed_bar_corner(ground_in : Double) -> @ui.Radius {
+  Linked(closed_bar_of(ground_in))
+}
+
+///|
+/// The same as a link.
+pub fn closed_bar_of(ground_in : Double) -> @ui.CornerOf {
+  window_follow(ground_in + rail_ground_side / 2.0)
+}
+
+
+
+///|
+/// The sidebar's edge's look 3 in its strip (Rail.css.ts edge: its line 6 in, its bar 4 in, the library's 7 wide).
+pub let edge_in : @ui.Space = room(3.0)
+
+///|
+/// A chat's row in the sidebar 7 in from its top and foot (Sidebar.css.ts navSession: padding 7 10).
+pub let row_in : @ui.Space = room(7.0)
+
+///|
+/// An agent's mark (the web's ui.css.ts agentMark): its corner .3 of its side, a 28 one's 8.4 (an agent's card).
+pub let agent_mark_28_corner : @ui.Radius = rounded(28.0 * 0.3)
+
+
+///|
+/// (a 16 one's, 4.8: a line of an agent's history's details)
+pub let agent_mark_16_corner : @ui.Radius = rounded(16.0 * 0.3)
+
+///|
+/// A chat's jobs (the web's Jobs.css.ts): a job's action 26 high, the popover's foot's rows 38.
+pub let job_action_h : @ui.Len = Fixed(26.0)
+
+///|
+pub let jobs_row_h : @ui.Len = Fixed(38.0)
+
+
+///|
+/// A tab of a chat's side panel (the web's ChatPage.css.ts sideTab: 30 high).
+pub let side_tab_h : @ui.Len = Fixed(side_tab_side)
+
+///|
+pub let side_tab_side : Double = 30.0
+
+///|
+/// A device's code read aloud, large (Security.css.ts bigCode): the web's display size, 28, its line 1.3 of it, off
+/// the scale; its letters 6 apart.
+pub let code_big_size : @ui.TextSize = Exact(28.0, 36.4)
+
+///|
+pub let code_big_tracking : @ui.Tracking = Exact(6.0)
+
+///|
+/// A chat's bar (the web's ChatPage.css.ts): its station's tag 160 wide at most, 7 in; an agent's station's part 140 at
+/// most, in by .19 of its 20 tile and 1.
+pub let chat_station_most : @ui.Len = Fixed(160.0)
+
+///|
+pub let chat_station_in : @ui.Space = room(7.0)
+
+///|
+pub let agent_station_most : @ui.Len = Fixed(140.0)
+
+///|
+pub let agent_station_in : @ui.Space = room(20.0 * 0.19 + 1.0)
+
+///|
+/// A person in a chat's stack of people (the web's later.css.ts peopleStack): 16 ringed 1.5.
+pub let person_ringed : @ui.Len = Fixed(19.0)
+
+///|
+/// The people a day's usage is split by, in the order the core's usage view ranks them (the web's Usage.css.ts, the
+/// phone's Usage.kt): four of their own in light and in dark, the first still.fail's accent.
+// kept across runs: a table, never written
+let usage_light : Array[Int64] = [0xEF6A3CFFL, 0x2A78D6FFL, 0x1BAF7AFFL, 0x4A3AA7FFL]
+
+///|
+// kept across runs: a table, never written
+let usage_dark : Array[Int64] = [0xE0602FFFL, 0x3987E5FFL, 0x199E70FFL, 0x9085E9FFL]
+
+///|
+/// The `i`th person's colour in the theme shown.
+pub fn usage_series(i : Int) -> Int64 {
+  (if theme().dark { usage_dark } else { usage_light })[i % 4]
+}
+
+///|
+/// An agent's history's steps (the web's History.css.ts, ToolStep.css.ts): the turn's rail 9.5 in, how much of a wait
+/// has gone a bar 3 high; a diff's line 22 in, its mark 9.
+pub let history_rail_in : @ui.Space = room(9.5)
+
+///|
+pub let wait_bar_h : @ui.Len = Fixed(3.0)
+
+///|
+pub let diff_line_in : @ui.Space = room(22.0)
+
+///|
+pub let diff_mark_in : @ui.Space = room(9.0)
+
+///|
+/// A message's picture out in the margin before its words (align.ts columns.avatar: 29), 3 down (Chat.css.ts msgRow >
+/// msgAvatar).
+pub let message_avatar_out : @ui.Space = room(-29.0)
+
+///|
+pub let message_avatar_down : @ui.Space = room(3.0)
+
+///|
+/// A message's head in past its picture where the picture is over its start (Chat.css.ts inlineHeads: 25).
+pub let message_head_in : @ui.Space = room(25.0)
+
+///|
+/// An agent's activity line out in the margin with the messages' pictures (align.ts columns.activity: its 24 picture
+/// and the 11 beside it, 35 before the words).
+pub let activity_out : @ui.Space = room(-35.0)
+
+///|
+/// Narrow (columns.activityNarrow): 9 out into the list's 16.
+pub let activity_out_narrow : @ui.Space = room(-9.0)
+
+///|
+/// What says a chat is archived or its station down, over its composer (Chat.css.ts offlineNotice: 760 at most, 64
+/// less than the pane).
+pub let notice_w : @ui.Len = Fixed(760.0)
+
+///|
+/// 奏 with none left: its column (DecisionsIdle.css.ts column: 560 at most); a card's way to its chat (Decisions.css.ts
+/// elsewhere: 38 high).
+pub let idle_column_w : @ui.Len = Fixed(560.0)
+
+///|
+pub let elsewhere_h : @ui.Len = Fixed(38.0)
+
+///|
+/// A service's address in its bar beside the chat (Preview.css.ts previewAddress: 30 high).
+pub let preview_address_h : @ui.Len = Fixed(30.0)
+
+///|
+/// A message's video (Chat.css.ts msgVideo, msgVideoPlay, msgVideoName): black under its still, black at 65% under its
+/// play mark and its name, which are white.
+pub let video_ground : @ui.Color = Data(0x000000FFL)
+
+///|
+pub let video_shade : @ui.Color = Data(0x000000A6L)
+
+///|
+pub let white_ink : @ui.Color = Data(0xFFFFFFFFL)
+
+///|
+pub let white : Int64 = 0xFFFFFFFFL

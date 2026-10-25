@@ -198,3 +198,140 @@ test "a tap taken into state in the build that sees it holds when the frame is b
   assert_eq(y, 40.0 + 80.0 + 80.0)
   t.assert_idle()
 }
+
+///|
+/// The builds of each frame, by its number.
+fn builds_a_frame(seen : Map[Int, Int], c : @ui.Ctx) -> Unit {
+  let f = c.frame_number()
+  seen[f] = seen.get(f).unwrap_or(0) + 1
+}
+
+///|
+test "a list dragged that the view reads nothing of is built once a frame" {
+  let seen : Map[Int, Int] = {}
+  let t = @ui.Tester::new(
+    fn(c) {
+      builds_a_frame(seen, c)
+      c.list("rows", 60, 40.0, fn(_) { c.box(w=Fill(1.0), h=Px(40.0), fn() {  }) |> ignore }) |> ignore
+    },
+    w=200.0,
+    h=300.0,
+  )
+  seen.clear()
+  // rows come into view and leave it at every other step of the drag
+  t.drag(100.0, 280.0, 100.0, 20.0, steps=13)
+  assert_true(t.visible().0 > 0)
+  for f, n in seen {
+    assert_eq((f, n), (f, 1))
+  }
+}
+
+///|
+test "a list's rows in view read as the view builds are this frame's, built again as they change" {
+  let t = @ui.Tester::new(
+    fn(c) {
+      let first = match c.list_info("rows") {
+        Some(i) => i.first
+        None => -1
+      }
+      c.column(h=Fill(1.0), fn() {
+        c.text("first \{first}", wrap=false) |> ignore
+        c.list("rows", 60, 40.0, fn(_) { c.box(w=Fill(1.0), h=Px(40.0), fn() {  }) |> ignore }) |> ignore
+      })
+      |> ignore
+    },
+    w=200.0,
+    h=300.0,
+  )
+  t.drag(100.0, 280.0, 100.0, 20.0, steps=13)
+  // what is drawn says the row the list shows first in that very frame, not the one the frame before showed
+  let first = t.visible().0
+  assert_true(first > 0)
+  assert_true(t.rect_of("first \{first}") is Some(_))
+}
+
+///|
+test "what is built from a list's end alone is built again as it gets there, not at every step before" {
+  let seen : Map[Int, Int] = {}
+  let t = @ui.Tester::new(
+    fn(c) {
+      builds_a_frame(seen, c)
+      let end = match c.list_info_as("rows", fn(i) { i.map(fn(i) { i.at_end }) }) {
+        Some(i) => i.at_end
+        None => false
+      }
+      c.column(h=Fill(1.0), fn() {
+        c.text(if end { "at its end" } else { "on its way" }, wrap=false) |> ignore
+        c.list("rows", 12, 40.0, fn(_) { c.box(w=Fill(1.0), h=Px(40.0), fn() {  }) |> ignore }) |> ignore
+      })
+      |> ignore
+    },
+    w=200.0,
+    h=300.0,
+  )
+  assert_true(t.rect_of("on its way") is Some(_))
+  seen.clear()
+  // to its end in a drag, rows coming and going on the way: built again only in the frame it gets there, drawn
+  // there as at its end
+  t.drag(100.0, 280.0, 100.0, 20.0, steps=13)
+  assert_true(t.at_end())
+  assert_true(t.rect_of("at its end") is Some(_))
+  assert_eq(seen.values().filter(fn(n) { n > 1 }).count(), 1)
+}
+
+///|
+test "words kept on a row dragged that nothing reads are built once a frame" {
+  let seen : Map[Int, Int] = {}
+  let t = @ui.Tester::new(
+    fn(c) {
+      builds_a_frame(seen, c)
+      c.list("rows", 60, 40.0, fn(i) {
+        let b = c.box(w=Fill(1.0), h=Px(40.0), fn() { c.rich([@ui.plain("row \{i}")], size=10.0) |> ignore })
+        // (as a message's under a finger is kept, for a long press to pick from)
+        if i == 3 {
+          c.words(b, "w")
+        }
+      })
+      |> ignore
+    },
+    w=200.0,
+    h=300.0,
+  )
+  seen.clear()
+  // the row moves with the list, in view all the way
+  t.drag(100.0, 280.0, 100.0, 200.0, steps=4)
+  assert_true(t.ctx().words_of("w") is Some(_))
+  for f, n in seen {
+    assert_eq((f, n), (f, 1))
+  }
+}
+
+///|
+test "what a box shows across: its innermost parts that show something, inside it, but those of a box named" {
+  let seen : Array[(Double, Double)?] = []
+  let t = @ui.Tester::new(
+    fn(c) {
+      let page = c.id("page")
+      seen.push(c.shown_across(page, but="bar"))
+      c.box(dir=Row, w=Px(300.0), h=Px(200.0), id=page, fn() {
+        c.column(fn() {
+          // its bar, across it whole: not counted
+          c.box(w=Px(300.0), moves="bar", fn() { c.text("the bar across", wrap=false) |> ignore }) |> ignore
+          // a ground reaching past what is in it: only the words in it count
+          c.box(w=Px(260.0), h=Px(40.0), pl=40.0, bg=0x112233FFL, fn() { c.text("shown", wrap=false) |> ignore })
+          |> ignore
+        })
+        |> ignore
+      })
+      |> ignore
+    },
+    w=400.0,
+    h=300.0,
+  )
+  // the first frame asks before anything was laid out: none; the next, the words', from their left at 40
+  assert_eq(seen[0], None)
+  t.frame()
+  let (x, _, w, _) = t.rect_of("shown").unwrap()
+  assert_eq(seen[seen.length() - 1], Some((x, x + w)))
+  assert_eq(x, 40.0)
+}

@@ -1,16 +1,19 @@
 // What lies over the page (Radix's Portal, DismissableLayer and FocusScope in one): a layer built where the view
 // asks for it, among what it belongs to, but laid over the whole window and drawn and tapped over everything built
 // outside a layer, layers opened later over those opened before. A layer is dismissed (Overlay::dismissed, the view
-// closes it: it is the view's to keep open or not) by Escape and by the system's back when it is the topmost, and by
-// a press outside what it holds (outside each layer over it too: a press in a dialog dismisses the menu open over
-// it, not the dialog), unless the press is on its anchor (the button that toggles it). A modal layer covers the page
-// with a ground of its own (a scrim) that takes every press and wheel the layer does not, and hides the page from the
-// semantics tree; one that traps the focus keeps Tab among what it holds. As it opens, the focus goes into it (its
-// first focusable, or what it says); as it goes (no longer built, or inert: leaving, its exit drawn), the focus goes
-// back where it was when it opened (its anchor), unless it went elsewhere meanwhile.
+// closes it: it is the view's to keep open or not) by Escape when it is the topmost Escape dismisses (one that it does
+// not, over it, without the keys, passed: a toast), by the system's back when it is the topmost, and by a press
+// outside what it holds (outside each layer over it too: a press in a dialog dismisses the menu open over it, not the
+// dialog), unless the press is on its anchor (the button that toggles it). A modal layer covers the page with a
+// ground of its own (a scrim) that takes every press and wheel the layer does not, hides the page from the semantics
+// tree, and has the keys (what is built under it reads none, a field there given the focus does not keep it); one
+// that traps the focus keeps Tab among what it holds. As it opens, the focus goes into it (its first focusable, or
+// what it says); as it goes (no longer built, or inert: leaving, its exit drawn), the focus goes back where it was
+// when it opened (its anchor), unless it went elsewhere meanwhile.
 //
 // Where a layer's content goes, by an anchor (a popover by its button), is Ctx::place's (Radix's Popper): on a side
-// of it, along it, flipped to the other side and moved along to stay in the window.
+// of it, along it, flipped to the other side and moved to stay in the window (over the anchor where neither side has
+// the room); only what is taller than the window is made shorter (Ctx::place_most).
 
 ///|
 /// Why a layer was dismissed.
@@ -138,6 +141,13 @@ pub fn Ctx::overlay(
 }
 
 ///|
+/// Box `i` (one with an id) stops the wheel: one turned over it scrolls nothing laid under it (the page under a
+/// popover's panel that is not modal), only what scrolls in it. A modal layer's ground does so all over the window.
+pub fn Ctx::stop_wheel(self : Ctx, i : Int) -> Unit {
+  self.nodes[i].stops_wheel = true
+}
+
+///|
 /// The layer `id` dismissed (as though by `why`): a view's own close button for a layer it closes the same way. Told
 /// as the frame is built, it is built again with it.
 pub fn Ctx::dismiss(self : Ctx, id : Int, why? : Dismiss = Escape) -> Unit {
@@ -246,19 +256,48 @@ fn Ctx::in_layer(self : Ctx, l : Layer, x : Double, y : Double) -> Bool {
 /// As the frame starts: Escape to the topmost layer; a press since the last frame dismisses the layers it was outside
 /// of, from the top down to the first it was in (or a modal one: what is under that never saw it).
 fn Ctx::layer_keys(self : Ctx) -> Unit {
-  let top = self.top_layer()
-  match top {
-    Some(l) =>
+  // a dismissal of a layer the last frame did not build (the view closed it its own way meanwhile) is let go: opened
+  // again, the layer is not dismissed by it
+  let stale : Array[Int] = []
+  self.dismissals.each(fn(id, _) {
+    if !self.last_layers.iter().any(fn(l) { l.id == id }) {
+      stale.push(id)
+    }
+  })
+  for id in stale {
+    self.dismissals.remove(id)
+  }
+  // the keys this frame the topmost open layer's that has them: a modal one (a menu, a dialog, a sheet, a file over
+  // the window), one the focus is in — not the page's under it, as a modal layer takes its presses. One over it that
+  // has none (a toast, a tip) leaves them to it; one the focus stayed outside of (a field's suggestions, a menubar's
+  // menu opened by the pointer: the field, the bar, move in it) leaves them where the focus is.
+  let open = self.last_layers.filter(fn(l) { !l.inert }).rev()
+  self.keys_layer = match open.iter().find_first(fn(l) { l.modal || self.focus_in_layer(l.id) }) {
+    Some(l) => l.id
+    None => 0
+  }
+  // Escape the topmost's it dismisses, down to where the keys go: one that is not dismissed by it and has no keys (a
+  // toast) leaves it to those under it; one that has the keys and is not (a file over the window) to what it holds,
+  // its own Escape (what it shows closed first)
+  for l in open {
+    if l.escape {
       for k in 0..<desk.keys.length() {
         let (code, mods, taken) = desk.keys[k]
         if code == key_escape && !taken {
-          if l.escape {
-            self.dismissals[l.id] = Escape
-          }
+          self.dismissals[l.id] = Escape
           desk.keys[k] = (code, mods, true)
         }
       }
-    None => ()
+      // (an Escape that dismissed it is its, gone for everything else: not even what reads the keys a field took
+      // sees it, a page's own Escape under it)
+      if self.dismissals.get(l.id) == Some(Escape) {
+        desk.keys.retain(fn(k) { k.0 != key_escape })
+      }
+      break
+    }
+    if l.id == self.keys_layer {
+      break
+    }
   }
   match self.press_down {
     Some((x, y)) => {
@@ -287,17 +326,59 @@ fn Ctx::layer_keys(self : Ctx) -> Unit {
 }
 
 ///|
-/// The topmost layer of the last frame that is not leaving.
-fn Ctx::top_layer(self : Ctx) -> Layer? {
-  let mut k = self.last_layers.length() - 1
-  while k >= 0 {
-    let l = self.last_layers[k]
-    if !l.inert {
-      return Some(l)
-    }
-    k = k - 1
+/// Whether the focus is in layer `id` (or one built in it), as the frame before built them.
+fn Ctx::focus_in_layer(self : Ctx, id : Int) -> Bool {
+  if self.focus == 0 {
+    return false
   }
-  None
+  match self.last_focusables.iter().find_first(fn(f) { f.id == self.focus }) {
+    Some(f) => {
+      let mut at = f.layer
+      for _ in 0..<64 {
+        if at == id {
+          return true
+        }
+        match self.last_layers.iter().find_first(fn(l) { l.id == at }) {
+          Some(l) if at != 0 => at = l.parent
+          _ => return false
+        }
+      }
+      false
+    }
+    None => false
+  }
+}
+
+///|
+/// Whether what is being built now reads the keys: it is in the layer they go to (or one built in it), or none takes
+/// them.
+fn Ctx::keys_here(self : Ctx) -> Bool {
+  if self.keys_layer == 0 {
+    return true
+  }
+  let mut at = self.layer_cur
+  // (up the layers it was built in, as this frame and the one before built them)
+  for _ in 0..<64 {
+    if at == self.keys_layer {
+      return true
+    }
+    if at == 0 {
+      return false
+    }
+    let parent = match self.layers.iter().find_first(fn(l) { l.id == at }) {
+      Some(l) => Some(l.parent)
+      None =>
+        match self.last_layers.iter().find_first(fn(l) { l.id == at }) {
+          Some(l) => Some(l.parent)
+          None => None
+        }
+    }
+    match parent {
+      Some(p) => at = p
+      None => return false
+    }
+  }
+  false
 }
 
 ///|
@@ -395,9 +476,42 @@ fn Ctx::layers_focus(self : Ctx) -> Unit {
       self.focus = back
     }
   }
+  // a field given the focus this frame under the topmost modal layer (a page's composer taking the cursor as its chat
+  // is first drawn under a file over the window) does not keep it: hidden there, it would take what is typed over it
+  // (Radix's FocusScope: nothing outside a trapped scope takes the focus); it goes back to what had it
+  if self.focus != self.focus_before && self.editors.contains(self.focus) {
+    let modal = self.layers.filter(fn(l) { l.modal && !l.inert }).last()
+    match (modal, self.focusables.iter().find_first(fn(f) { f.id == self.focus })) {
+      (Some(m), Some(f)) if !self.layer_built_in(f.layer, m.id) => self.focus = self.focus_before
+      _ => ()
+    }
+  }
   if self.focus != had {
     self.read_changed("the focus, into a layer or back from one")
   }
+}
+
+///|
+/// Whether layer `l` is `outer` or was built in it, as this frame built them (as the last did, for one not built yet).
+fn Ctx::layer_built_in(self : Ctx, l : Int, outer : Int) -> Bool {
+  let mut at = l
+  for _ in 0..<64 {
+    if at == outer {
+      return true
+    }
+    if at == 0 {
+      return false
+    }
+    at = match self.layers.iter().find_first(fn(x) { x.id == at }) {
+      Some(x) => x.parent
+      None =>
+        match self.last_layer(at) {
+          Some(x) => x.parent
+          None => 0
+        }
+    }
+  }
+  false
 }
 
 ///|
@@ -462,10 +576,19 @@ pub fn Ctx::laid_out(self : Ctx, id : Int) -> (Double, Double, Double, Double)? 
 }
 
 ///|
+/// How tall what Ctx::place puts by an anchor can be, kept `padding` inside the window: the window's height less that
+/// at each end. What has not the room on its side goes to the other where that has more; what has it on neither is
+/// moved to stay in the window, over its anchor; only what is taller than this is to be made shorter, what it holds
+/// scrolling (Radix's Popper: flip, then shift, then size). Never under 0.
+pub fn Ctx::place_most(self : Ctx, padding? : Double = 8.0) -> Double {
+  dmax(self.height - 2.0 * padding, 0.0)
+}
+
+///|
 /// Where content `w` by `h` goes by an anchor (x, y, w, h, in the window), Radix's Popper: on `side`, `offset` away,
 /// lined up `along` it (moved `along_offset` further), kept `padding` inside the window (`flip`: to the other side when
-/// it does not fit on its own and fits better there; moved along the side to stay in). Its top left, and the side it
-/// went on.
+/// it does not fit on its own and fits better there; moved along the side to stay in, and over the anchor where it
+/// fits on neither: Radix's shift on both axes). Its top left, and the side it went on.
 pub fn Ctx::place(
   self : Ctx,
   anchor : (Double, Double, Double, Double),
@@ -537,13 +660,11 @@ pub fn Ctx::place(
     Left => (ax - offset - w, line(ay, ah, h) + along_offset)
     Right => (ax + aw + offset, line(ay, ah, h) + along_offset)
   }
-  // moved along to stay in the window (never past its start)
+  // moved along to stay in the window, and across where neither side has the room for it: over its anchor rather
+  // than out of the window (never past its start)
   let keep = fn(v : Double, len : Double, max : Double) {
     dmax(padding, dmin(v, max - padding - len))
   }
-  let (x, y) = match side {
-    Top | Bottom => (keep(x, w, vw), y)
-    Left | Right => (x, keep(y, h, vh))
-  }
+  let (x, y) = (keep(x, w, vw), keep(y, h, vh))
   (x, y, side)
 }

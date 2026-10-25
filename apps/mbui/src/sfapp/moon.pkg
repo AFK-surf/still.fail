@@ -11,10 +11,12 @@ import {
   "mbui/motion",
   "stillfail/sf",
   "stillfail/gallery",
-  "stillfail/player",
   "mbui/hostapi",
   "mbui/zip",
   "stillfail/sfapp/settings",
+  "stillfail/sfbase",
+  "stillfail/sfdesk",
+  "stillfail/sfpages",
 }
 
-import { "stillfail/sfkept" } for "wbtest"
+import { "stillfail/sfkept", "stillfail/sfscreens" } for "wbtest"

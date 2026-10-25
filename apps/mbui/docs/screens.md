@@ -1,9 +1,9 @@
-# The screens' tests (src/sfscreens)
+# The screens' tests (src/sfapp/screens_wbtest.mbt)
 
 still.fail's 87 screens (sffix's fixture modes, the screenshots' screens) are drawn in mbui's Tester over the text the
 Mac recorded for each (screens/text-mac.textrec, Mini1's), at the times the Mac drew its frames, to the frame its
 picture is of. Each is checked to be idle there, and to break the corner rule (mbui's `Tester::corner_faults`) as many
-times as src/sfscreens/corners_known_wbtest.mbt says: one more fails, one fewer fails too until the count there comes
+times as src/sfapp/corners_known_wbtest.mbt says: one more fails, one fewer fails too until the count there comes
 down (in the PR that fixed it).
 
 What a screen draws is not compared with mbui's own drawing of it: no kept draw list, no frame of the Mac's, no

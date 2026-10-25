@@ -14,6 +14,7 @@ const get = (v: unknown, k: string): J => getU(v, k);
 const trimmed = (v: unknown): string | null => (typeof v === "string" && v.trim() !== "" ? v.trim() : null);
 const lines = (text: string): string[] => text.split("\n").map((l) => l.replace(/\r$/, "").trim());
 
+/// A card on the 奏 page by its station, chat and post (also how the prefs keep it set aside).
 export function deferralKey(station: string, thread: number, seq: number): string {
   return `${station}\t${thread}\t${seq}`;
 }
@@ -76,8 +77,8 @@ export function cardShown(card: J): J {
   return v;
 }
 
-/// A vault request as its card says it (station/src/vault/secrets.ts): which item, why, the command, how; and once
-/// decided, how. Null for a card from before it said so (its post's words say it).
+/// A vault request as its card says it (station/src/vault/secrets.ts): which item, why, the command, how (or, one to
+/// keep a secret, what it is); and once decided, how. Null for a card from before it said so (its post's words say it).
 function vaultAsk(v: J): J | null {
   const name = trimmed(get(v, "name"));
   const mode = trimmed(get(v, "mode"));
@@ -85,10 +86,19 @@ function vaultAsk(v: J): J | null {
   const out: J = { name, reason: str(get(v, "reason")) ?? "", mode, hosts: arr(get(v, "hosts")).filter((h) => typeof h === "string") };
   const command = trimmed(get(v, "command"));
   if (command !== null) out.command = command;
+  // Another station its commands run on (or a secret to keep was read on), by name.
+  const station = trimmed(get(v, "station"));
+  if (station !== null) out.station = station;
   const status = trimmed(get(get(v, "outcome"), "status"));
   if (status !== null) out.status = status;
   const scope = trimmed(get(get(v, "outcome"), "scope"));
   if (scope !== null) out.scope = scope;
+  // A request to keep a secret (secret_save): what kind, the account it is for.
+  const kind = trimmed(get(get(v, "save"), "kind"));
+  if (kind !== null) {
+    const username = trimmed(get(get(v, "save"), "username"));
+    out.save = { kind, ...(username !== null ? { username } : {}) };
+  }
   return out;
 }
 
@@ -363,6 +373,29 @@ export function reply(card: J, text: string, hasExtras: boolean): [string, J[]] 
   if (!(k === "text" || k === "options") || (text.trim() === "" && !hasExtras)) return null;
   const q = quoteOf(card);
   return q === null ? null : [text.trim(), q];
+}
+
+/// The decision the wide 奏 page shows, kept between its views: its key (null: none picked yet; "": the one in the place
+/// of the one set aside) and where in the list it was last.
+export type Shown = { key: string | null; at: number };
+
+/// Picked (`decision.show`): shown from now on.
+export function picked(was: Shown, key: string): Shown {
+  return { key, at: was.at };
+}
+
+/// Set aside (`decision.defer`): if it is the one shown, the one then in its place shows (itself if it is the only one).
+export function setAside(was: Shown, key: string): Shown {
+  return was.key === key ? { key: "", at: was.at } : was;
+}
+
+/// Where the one shown is in the list's `keys`: the one picked while it is there, else the one now where it was (the
+/// last when the list got shorter), which is then the one shown (`next`, kept for the next view); null for none.
+/// Nothing picked yet, the first shows, whichever it is.
+export function shownIn(was: Shown, keys: string[]): { at: number | null; next: Shown } {
+  const found = was.key === null ? -1 : keys.indexOf(was.key);
+  const at = found >= 0 ? found : Math.min(was.at, keys.length - 1);
+  return { at: at >= 0 ? at : null, next: { key: was.key !== null && at >= 0 ? keys[at]! : was.key, at: Math.max(at, 0) } };
 }
 
 /// The order of the 奏 page: not set aside first (oldest asked first), then set aside (latest last).

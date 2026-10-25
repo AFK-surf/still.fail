@@ -10,7 +10,7 @@
 // Pull-driven: Chrome casts a frame only once those before it are acknowledged (it keeps at most two out), and a frame
 // is acknowledged only when the one after it is asked for (`next`), so a slow viewer slows the casting rather than
 // having frames pile up. Of two waiting, the newer is given and the older let go.
-import { type Clip, type Frame, type FrameConfig, type ScreenInput, type ScreenView, type ViewOptions, CLIP_TEXT_MAX } from "../screens/source.ts";
+import { type Clip, type Frame, type FrameConfig, type ScreenInput, type ScreenVideo, type ScreenView, type ViewOptions, CLIP_TEXT_MAX } from "../screens/source.ts";
 import type { Cdp, CdpEvent } from "./cdp.ts";
 
 /// The page's viewport in CSS pixels, as Page.getLayoutMetrics says it (what the screencast's frames show); null when
@@ -23,6 +23,9 @@ export function viewportOf(m: any): { width: number; height: number } | null {
 
 /// JPEG quality of the cast frames.
 const QUALITY = 70;
+/// The most pixels a CSS pixel is drawn with for a phone it is laid out for (`fit`): sharp on any phone, and frames a
+/// third the size of a 3× phone's own.
+const FIT_SCALE_MOST = 2;
 /// At most this many frames are held unacknowledged (as Chrome sends at most).
 const HELD = 2;
 /// A press this soon after the last, this near it and of the same button, adds to its click count (a double click).
@@ -190,6 +193,13 @@ export class TabView implements ScreenView {
   #unlisten: () => void;
   /// A preview's (ViewOptions.peek): the tab is not brought forward for it, so what is behind another casts nothing.
   #peek = false;
+  /// Laid out for the viewer's phone (ViewOptions.fit) until it ends.
+  #fitted = false;
+
+  /// Chrome's own screencast, a JPEG a picture.
+  video(): ScreenVideo {
+    return { capture: "Chrome screencast", encoder: "JPEG" };
+  }
 
   constructor(p: ViewParts) {
     this.#p = p;
@@ -197,13 +207,23 @@ export class TabView implements ScreenView {
     void p.cdp.closed.then(() => this.#end());
   }
 
-  /// Starts casting; `viewport`: the page's size before the first frame says it.
+  /// Starts casting; `viewport`: the page's size before the first frame says it. Laid out for the viewer's phone
+  /// (`fit`): its size and scale, and a phone's ways (Chrome's device emulation on the view's own session, which goes
+  /// with it), and cast as large as that.
   async start(options: ViewOptions, viewport?: { width: number; height: number }) {
     if (viewport) this.#viewport = viewport;
     this.#peek = options.peek === true;
     const { cdp, session } = this.#p;
     await cdp.send("Page.enable", {}, session);
-    if (!viewport) {
+    const fit = options.fit && !this.#peek ? options.fit : undefined;
+    let bounds = { maxWidth: options.maxWidth, maxHeight: options.maxHeight };
+    if (fit) {
+      const scale = Math.min(fit.scale, FIT_SCALE_MOST);
+      await cdp.send("Emulation.setDeviceMetricsOverride", { width: fit.width, height: fit.height, deviceScaleFactor: scale, mobile: true }, session);
+      this.#viewport = { width: fit.width, height: fit.height };
+      this.#fitted = true;
+      bounds = { maxWidth: fit.width * scale, maxHeight: fit.height * scale };
+    } else if (!viewport) {
       const v = viewportOf(await cdp.send("Page.getLayoutMetrics", {}, session).catch(() => null));
       // The tab's size is its viewport's: told now, not only when a frame says another.
       if (v) {
@@ -214,7 +234,7 @@ export class TabView implements ScreenView {
     if (!this.#peek) await this.front();
     await cdp.send(
       "Page.startScreencast",
-      { format: "jpeg", quality: QUALITY, maxWidth: Math.max(1, Math.round(options.maxWidth)), maxHeight: Math.max(1, Math.round(options.maxHeight)), everyNthFrame: 1 },
+      { format: "jpeg", quality: QUALITY, maxWidth: Math.max(1, Math.round(bounds.maxWidth)), maxHeight: Math.max(1, Math.round(bounds.maxHeight)), everyNthFrame: 1 },
       session,
     );
   }
@@ -331,6 +351,8 @@ export class TabView implements ScreenView {
     if (this.#ended) return;
     const { cdp, session } = this.#p;
     void cdp.send("Page.stopScreencast", {}, session).catch(() => {});
+    // As it was laid out before (its session going takes it away too; said, for a Chrome that would keep it).
+    if (this.#fitted) void cdp.send("Emulation.clearDeviceMetricsOverride", {}, session).catch(() => {});
     void cdp.send("Target.detachFromTarget", { sessionId: session }).catch(() => {}).finally(() => cdp.close());
     this.#end();
   }

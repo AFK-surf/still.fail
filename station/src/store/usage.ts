@@ -61,16 +61,38 @@ export function recordUsage(db: DatabaseSync, path: string, file: UsageFile, run
   return added;
 }
 
+/// The turns running, then those ended since `?` (usageActiveSessions).
+export const ACTIVE_SESSIONS = "SELECT session_key FROM turns WHERE ended_at IS NULL UNION ALL SELECT session_key FROM turns WHERE ended_at >= ?";
+
 /// usage_active_sessions: sessions whose transcripts may have grown since `since`: a turn running, or ended since then.
 export function usageActiveSessions(db: DatabaseSync, since: number): string[] {
-  return (db.prepare("SELECT DISTINCT session_key FROM turns WHERE ended_at IS NULL OR ended_at >= ?").all(since) as Json[]).map((r) => r.session_key);
+  // Each half by the index on when turns ended, the sessions made distinct here: asked as one OR, or as a UNION or a
+  // DISTINCT, the station's SQLite (node's, 3.53; not the sqlite3 command's) answers it in order of session by reading
+  // every turn of the station's, 33 s on ccvm with its pages put out (2026-10-25).
+  const rows = db.prepare(ACTIVE_SESSIONS).all(since) as Json[];
+  return [...new Set(rows.map((r) => r.session_key as string))];
 }
 
-/// usage_turns: a session's turns, oldest first, each with whom it worked for. Turns from before stations said so are
-/// worked out: a turn that answered messages is for the first person whose message it took, in that message's thread;
-/// any other goes on with the work of the one before. What is still unknown is the session's: its creator, its own chat,
-/// its profile.
-export function usageTurns(db: DatabaseSync, session: string): UsageTurn[] {
+/// Where `usageTurns` begins for calls from `?2` on: the last of the session's turns to start by then (the first of all,
+/// for calls before them all).
+export const TURNS_FROM = `SELECT IFNULL((SELECT MAX(started_at) FROM turns WHERE session_key = ?1 AND started_at <= ?2),
+  (SELECT MIN(started_at) FROM turns WHERE session_key = ?1)) AS at`;
+/// A session's turns that began from `?2` until `?3`, oldest first, by the index on them (schema.ts turns_by_session).
+export const TURNS_BETWEEN = "SELECT id, kind, started_at, profile, person, thread FROM turns WHERE session_key = ?1 AND started_at >= ?2 AND started_at <= ?3 ORDER BY started_at";
+/// The people's messages a session took from `?3` on, as they were delivered (schema.ts deliveries_taken).
+export const TAKEN_SINCE = `SELECT d.delivered_at AS at, CASE WHEN t.surface = ?2 THEN e.author ELSE 'slack:' || ts.connect || ':' || e.author END AS who, e.thread AS thread
+  FROM deliveries d JOIN entries e ON e.thread = d.thread AND e.n = d.n JOIN threads t ON t.id = d.thread
+  JOIN thread_sessions ts ON ts.thread = d.thread AND ts.session = d.session
+  WHERE d.session = ?1 AND d.delivered_at IS NOT NULL AND d.delivered_at >= ?3 AND e.author_kind = 'person' ORDER BY d.delivered_at`;
+
+/// usage_turns: the turns of a session calls made from `from` until `until` (ms) were made in, oldest first, each with
+/// whom it worked for: the last to begin by `from` (the first of all, for calls before them all) and those after it
+/// until `until`. A few rows, by the index on them: the usage counter asks at each part of a transcript it reads (every
+/// few seconds while agents work), and read whole, a long session's thousand turns were each read where they lie.
+/// A turn says whom it worked for as it began (store.ts startTurnFor). One from before turns said so is worked out: a
+/// turn that answered messages is for the first person whose message it took, in that message's thread; any other goes
+/// on with the work of the one before. What is still unknown is the session's: its creator, its own chat, its profile.
+export function usageTurns(db: DatabaseSync, session: string, from: number, until: number): UsageTurn[] {
   const row = db.prepare("SELECT created_by, profile FROM sessions WHERE key = ?").get(session) as Json;
   const creator: string | null = row ? row.created_by : null;
   const profile: string = row ? row.profile : "";
@@ -78,19 +100,11 @@ export function usageTurns(db: DatabaseSync, session: string): UsageTurn[] {
     .prepare("SELECT id FROM threads WHERE home = ?1 UNION ALL SELECT thread FROM (SELECT thread FROM thread_sessions WHERE session = ?1 ORDER BY joined_at LIMIT 1) LIMIT 1")
     .get(session) as Json;
   const home: number | null = homeRow ? homeRow.id : null;
-  const turns = db.prepare("SELECT id, kind, started_at, profile, person, thread FROM turns WHERE session_key = ? ORDER BY started_at").all(session) as Json[];
+  const begins: number | null = (db.prepare(TURNS_FROM).get(session, from) as Json).at;
+  const turns = begins === null ? [] : (db.prepare(TURNS_BETWEEN).all(session, begins, Math.max(begins, until)) as Json[]);
   // The people's messages the session took, as they were delivered (only needed for turns from before).
   const delivered: [number, string, number][] = turns.some((t) => t.person === null)
-    ? (
-        db
-          .prepare(
-            `SELECT d.delivered_at AS at, CASE WHEN t.surface = ?2 THEN e.author ELSE 'slack:' || ts.connect || ':' || e.author END AS who, e.thread AS thread
-             FROM deliveries d JOIN entries e ON e.thread = d.thread AND e.n = d.n JOIN threads t ON t.id = d.thread
-             JOIN thread_sessions ts ON ts.thread = d.thread AND ts.session = d.session
-             WHERE d.session = ?1 AND d.delivered_at IS NOT NULL AND e.author_kind = 'person' ORDER BY d.delivered_at`,
-          )
-          .all(session, STILLFAIL_SURFACE) as Json[]
-      ).map((r) => [r.at, r.who, r.thread])
+    ? (db.prepare(TAKEN_SINCE).all(session, STILLFAIL_SURFACE, begins) as Json[]).map((r) => [r.at, r.who, r.thread])
     : [];
   const out: UsageTurn[] = [];
   let next = 0;
@@ -121,16 +135,10 @@ export function lastContexts(db: DatabaseSync, session: string, limit: number): 
 }
 
 /// Where each model's context was compacted on this station since `since`: the most a main-thread call sent before
-/// the next, on the same account and model, sent under half of it (at least `least` before).
-export function compactionPoints(db: DatabaseSync, since: number, least: number): Map<string, number> {
-  const rows = db
-    .prepare(
-      `SELECT model, MAX(before) AS point FROM (
-         SELECT model, profile, ${CONTEXT} AS context, LAG(${CONTEXT}) OVER w AS before, LAG(profile) OVER w AS was, LAG(model) OVER w AS of
-         FROM usage WHERE at >= ?1 AND subagent = 0 WINDOW w AS (PARTITION BY session ORDER BY at))
-       WHERE before >= ?2 AND context * 2 < before AND profile IS was AND model IS of AND model IS NOT NULL GROUP BY model`,
-    )
-    .all(since, least) as Json[];
+/// the next, on the same account and model, sent under half of it (at least COMPACTED_FROM before), as the database
+/// keeps them (schema.ts USAGE_COMPACTIONS): a few rows, by their time's index.
+export function compactionPoints(db: DatabaseSync, since: number): Map<string, number> {
+  const rows = db.prepare("SELECT model, MAX(point) AS point FROM usage_compactions WHERE at >= ? GROUP BY model").all(since) as Json[];
   return new Map(rows.map((r) => [r.model, r.point]));
 }
 
@@ -155,14 +163,14 @@ export function usageGroups(db: DatabaseSync, from: number, to: number, utcOffse
 }
 
 /// A session's calls, added up by model (its day, thread, person and profile left empty): what its execution details
-/// show of it.
+/// show of it. As the database keeps them added up (schema.ts USAGE_TOTALS): asked each time the live view of a session
+/// at work tells its usage.
 export function usageOfSession(db: DatabaseSync, session: string): UsageGroup[] {
   return (
     db
       .prepare(
-        `SELECT runtime, model, fast, COUNT(*) AS calls, SUM(input) AS input, SUM(cache_read) AS cache_read,
-           SUM(cache_write) AS cache_write, SUM(cache_write_long) AS cache_write_long, SUM(output) AS output
-         FROM usage WHERE session = ?1 GROUP BY runtime, model, fast`,
+        `SELECT runtime, NULLIF(model, '') AS model, fast, calls, input, cache_read, cache_write, cache_write_long, output
+         FROM usage_totals WHERE session = ?1 AND calls > 0 ORDER BY runtime, model, fast`,
       )
       .all(session) as Json[]
   ).map((r) => ({

@@ -16,7 +16,7 @@ fn cards_core(calls : Array[Made], mode? : String = "chat") -> @ui.Tester {
   }
   open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
   open_cards_fixture(mode)
-  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0)
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0, platform=2)
   // the chat pushed in over Home
   t.run_for(@ui.nav_push_ms)
   t
@@ -30,8 +30,10 @@ fn options_gone_ms() -> Double {
 
 ///|
 /// When the first row's card's options start to close, once answered: their turn after the answer's coming in (and
-/// the list after it), declared once the answer is in the list and the list has set out after it (two frames on).
+/// the list after it), declared once the answer is in the list and the list has set out after it: the answer taken
+/// in, its turn come, then the frame after (the list's glide after it laid out in its turn's frame).
 fn close_turn_start(t : @ui.Tester) -> Double raise {
+  t.draw()
   t.draw()
   t.draw()
   let at = turns_of("ws1/st1\u{1}s-c1").start_of("ask/ts8")
@@ -79,6 +81,8 @@ test "an option answered: the options go, how it went comes in their place, the 
   assert_true(t.find("把首页和聊天页的截图都更新") is None)
   assert_true(t.find("你 选择了「一起换」") is Some(_))
   assert_true(t.find("忽略") is None)
+  // (the pictures over the cards come in on their own clock: sfpages message_files.mbt)
+  t.run_for(@sfpages.reveal_ms)
   t.assert_idle()
 }
 
@@ -100,6 +104,8 @@ test "the options' room closes on the rows' spring, a little late, and the line 
   // and their room closed
   t.run_for(options_gone_ms())
   assert_true(t.find("把首页和聊天页的截图都更新") is None)
+  // (the pictures over the cards come in on their own clock: sfpages message_files.mbt)
+  t.run_for(@sfpages.reveal_ms)
   t.assert_idle()
 }
 
@@ -119,5 +125,7 @@ test "忽略: it and the ask go at once (decision.dismiss), drawn going, then go
   assert_true(t.find("忽略") is None)
   // the ask's room closed after it
   t.run_for(options_gone_ms())
+  // (the chat's pictures brushed in once decoded: sfpages message_files.mbt)
+  t.run_for(@sfpages.reveal_ms)
   t.assert_idle()
 }

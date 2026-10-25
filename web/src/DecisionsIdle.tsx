@@ -33,7 +33,7 @@ export function DecisionsIdle({ view, onOpen }: { view: DecisionsView; onOpen: (
             <h3 className={css.sectionTitle}>{t("web-main.decisions.idle.workingTitle")}</h3>
             {working.map((w) => (
               <button key={`${w.station}/${w.session}`} type="button" className={css.row} onClick={() => onOpen(chatPath(w.station, w.session))}>
-                <span className={css.busy} aria-hidden="true" />
+                <span className={css.busy} data-spokes="" aria-hidden="true" />
                 <span className={css.words}>
                   <span className={css.main}>{w.title}</span>
                   <span className={css.meta}>{w.line}</span>

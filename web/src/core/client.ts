@@ -52,7 +52,8 @@ export type Topic =
   | { topic: "adminRelays"; account: string; range?: "day" | "week" }
   // Views: put together by the core from the topics above.
   | { topic: "chats"; scope: string; mine: boolean; watching?: boolean }
-  | { topic: "stations"; scope: string }
+  // With `drive`: those with a drive, this machine's (`here`) first.
+  | { topic: "stations"; scope: string; drive?: boolean; here?: string }
   // This device's connection to a station with every figure: sampled while subscribed, so only where they are drawn
   // (the list says only how it is reached, `way`).
   | { topic: "stationNet"; station: string }
@@ -105,6 +106,10 @@ export type Topic =
   // What the agents of a scope's stations spent over its last `days` (7 or 30), by day, person, chat, profile and model
   // (client/core-ts/src/views/usage.ts). A core from before it answers an error.
   | { topic: "usage"; scope: string; days?: number }
+  // What the settings say of the scope as a whole: how many stations have the automatic decisions on
+  // (client/core-ts/src/views/settings.ts).
+  | { topic: "settings"; scope: string }
+  | { topic: "resources"; scope: string; station?: string }
   // A job as it is now (kept current by its events).
   | { topic: "job"; station: string; id: string }
   // A folder of a station's drive (docs/drive.md): `root` one of its roots' paths, `path` under it ("" the root itself).
@@ -112,6 +117,11 @@ export type Topic =
   | { topic: "drive"; station: string; root: string; path: string }
   // Where a file of a drive was left on this device (a text's offset, a video's time in ms): null before.
   | { topic: "drivePlace"; station: string; root: string; path: string }
+  // A folder of a drive as a place on this device shows it: its order, what is chosen, a tree's folders open, its
+  // columns' widths, the keys that act (client/core-ts/src/views/browse.ts; `place` the page's own name for it).
+  | { topic: "driveBrowse"; owner: string; place: string; view: string; station: string; root: string; path: string; write?: boolean }
+  // The files' page's tabs on this device: null before any.
+  | { topic: "filesTabs"; workspace: string }
   // How its person likes it on this device, and what the device is (prefs.ts).
   | { topic: "prefs" }
   // What people set going on this device and the core has not finished: each call that changes something, until it
@@ -147,6 +157,8 @@ export type Topic =
   | { topic: "vaults"; workspace: string }
   | { topic: "vaultItems"; workspace: string; vault: string }
   | { topic: "driveTransfers"; workspace: string }
+  // A chat's files being downloaded to this device (client/core-ts views/downloads.ts), how far each has come.
+  | { topic: "downloads" }
   | { topic: "vaultUses"; workspace: string; vault: string; item: string };
 
 /** A chat as a page shows it (`client.focus`): by its thread, or its key before it has one; `end`: its end in view. */

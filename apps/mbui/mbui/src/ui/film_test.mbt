@@ -1,11 +1,12 @@
 ///|
 /// A host with text and pictures of its own, unlike the fake's (Latin half an em, glyphs 6 × 10, pictures 400 × 300):
-/// each UTF-16 unit a cluster 7 wide and its own glyph, 5 × 9 at an atlas place by its code; every picture 160 × 80,
-/// decoded at half that once it has had a turn. What it is given and asked noted.
+/// each UTF-16 unit a cluster 7 wide and its own glyph, 5 × 9, put in its atlas 1024 a side where it is told; every
+/// picture 160 × 80, decoded at half that once it has had a turn. What it is given and asked noted.
 priv struct FilmHost {
   faces : Array[Int]
   turns : Ref[Int]
   freed : Array[Int]
+  put : Array[(Int, Int, Int)]
 }
 
 ///|
@@ -34,13 +35,28 @@ impl @hostapi.Host for FilmHost with text_key(_, text, _, _, _) {
 
 ///|
 impl @hostapi.Host for FilmHost with glyph(_, key, out) {
-  out[0] = key.to_double() * 5.0
+  ignore(key)
+  out[0] = 0.0
   out[1] = 0.0
   out[2] = 5.0
   out[3] = 9.0
   out[4] = 0.0
   out[5] = -9.0
   out[6] = 0.0
+}
+
+///|
+impl @hostapi.Host for FilmHost with glyph_put(self, key, x, y) {
+  self.put.push((key, x, y))
+}
+
+///|
+impl @hostapi.Host for FilmHost with atlas_size(_, colour) {
+  if colour {
+    0
+  } else {
+    1024
+  }
 }
 
 ///|
@@ -80,7 +96,7 @@ let film_picture : Int = 7
 
 ///|
 test "a Tester over a live host: the words laid out and drawn by its text, the faces given to it, the pictures decoded there" {
-  let host = FilmHost::{ faces: [], turns: Ref::new(0), freed: [] }
+  let host = FilmHost::{ faces: [], turns: Ref::new(0), freed: [], put: [] }
   let made = Ref::new(false)
   let t = @ui.Tester::new(
     fn(c) {
@@ -104,26 +120,37 @@ test "a Tester over a live host: the words laid out and drawn by its text, the f
     None => fail("abc not laid out")
   }
   assert_eq(host.faces, [@hostapi.face_code])
-  // drawn by its glyphs, at its atlas's places; the picture its own, decoded after a turn
+  // drawn by its glyphs, from where in its atlas each was put; the picture its own, decoded after a turn
   let (inst, n, _) = t.presented()
-  let places : Array[Double] = []
+  let places : Array[(Int, Int, Int)] = []
   let pictures : Array[Int?] = []
   for k in 0..<n {
     let kind = inst[k * inst_numbers + 5]
     if kind == 1.0 {
-      places.push(inst[k * inst_numbers + 12])
+      places.push((places.length(), inst[k * inst_numbers + 12].to_int(), inst[k * inst_numbers + 13].to_int()))
     } else if kind == 4.0 {
       pictures.push(t.live_image(inst[k * inst_numbers + 20].to_int()))
     }
   }
-  assert_eq(places, ['a'.to_int(), 'b'.to_int(), 'c'.to_int()].map(fn(c) { c.to_double() * 5.0 }))
+  // (each where it was put last: the face given as it was first drawn, it was drawn again)
+  let last : Map[Int, (Int, Int)] = {}
+  for p in host.put {
+    last[p.0] = (p.1, p.2)
+  }
+  assert_eq(
+    places,
+    ['a', 'b', 'c'].mapi(fn(i, ch) {
+      let (x, y) = last.get(ch.to_int()).unwrap_or((-1, -1))
+      (i, x, y)
+    }),
+  )
   assert_eq(pictures, [Some(film_picture)])
   assert_true(host.turns.val > 0)
 }
 
 ///|
 /// The numbers of an instance (scene.mbt).
-let inst_numbers = 36
+let inst_numbers = 52
 
 ///|
 test "a run filmed: every frame of the film once, in order, from the Tester's first, each the last drawn by its moment" {

@@ -26,7 +26,8 @@
 //   deleteItem {vault, item}      an item deleted
 //   open {item}                   an item's plaintext (asks the person, unless its vault is unlocked)
 //   recover {words}               this device keyed into one's vaults by the recovery words
-//   approve {request, scope}      an agent's request granted: the item sealed to it, signed
+//   approve {request, scope}      an agent's request granted: the item sealed to it, signed; a request to keep a
+//                                 secret (secret_save) approved: written into one's vault (`scope` unused)
 //   setLasts {vault, lasts}       the longest grant of the vault's items that say none (its owner signs; the plain
 //                                 library's told to each station keeping it)
 //   deny {request}                turned down, signed
@@ -50,11 +51,13 @@ import type { SpanContext } from "../trace.ts";
 import { get, isObject, utf8 } from "../util.ts";
 import {
   type BoxCert, type Deny, type Grant, type Item, type Listing, type Plain, type Request, type Scope, type Vault,
-  SCOPES, TAG, allows, boxPublic, decrypt, encryptWith, fromWords, grantContext, itemContext, keyContext, openSeal, recoveryPair, sealWith, sign, signedOk, toWords,
+  SCOPES, TAG, allows, boxPublic, decrypt, encryptWith, fromWords, grantContext, itemContext, keyContext, openSeal, recoveryPair, saveContext, sealWith, sign, signedOk, toWords,
 } from "../vault/crypto.ts";
 import { type Checked, checkLock } from "../vault/lock-check.ts";
 import { ofAddress } from "../workspace.ts";
 import { stamp } from "../present.ts";
+import type { VaultOutcome } from "./local.ts";
+import { howText, itemWords, kindText, modeText, shownFields, statusWords } from "../vault-words.ts";
 
 // deno-lint-ignore no-explicit-any
 type J = any;
@@ -139,6 +142,8 @@ function changeItems(inner: Inner, ws: string, vault: string, f: (items: Record<
 
 function invalidate(inner: Inner, ws: string): void {
   inner.store.invalidateAll((t) => (t.topic === "vaults" || t.topic === "vaultItems" || t.topic === "vaultUses") && t.workspace === ws);
+  // (the requests' cards in the chats and on the 奏 page: shown again where how they are answered here changed)
+  inner.views?.vaultChanged(ws);
 }
 
 const view = (inner: Inner, ws: string): J => inner.data.shared({ topic: "workspace", workspace: ws });
@@ -205,6 +210,7 @@ export function install(inner: Inner): void {
       const pub = yield* Effect.orElseSucceed(inner.host.storageGet(BOX_PUB), () => null);
       m.box = pub ? new TextDecoder().decode(pub) : null;
       inner.store.invalidateAll((t) => t.topic === "vaults" || t.topic === "vaultItems");
+      inner.views?.vaultChanged(null);
     }),
   );
 }
@@ -469,6 +475,40 @@ const unlocked = (inner: Inner, v: Vault) => (mem(inner).keys.get(keyOf(v))?.unt
 /// Whether this host keeps keys as an app does, in the system's secure storage.
 const able = (inner: Inner) => inner.host.appKeys === true && typeof inner.host.secureGet === "function" && typeof inner.host.secureSet === "function";
 
+/// How an agent's request a card names (`card.vault`; `save`: one to keep a secret) is answered on this device, from the
+/// vault as this core holds it: what a chat's card, and the 奏 page's, show at its foot with the message itself (views.ts),
+/// never asking for more. `elsewhere`: approved only in an app that keeps keys (the plain library's anywhere); `setUp`:
+/// a secret to keep while this device's vault is not on (开启密钥库 first); else `approve`, a use given for `lasts` at the
+/// longest (the item's, else its vault's; a request not held yet, as one with none said).
+export type AskAnswer = { answer: "approve" | "setUp" | "elsewhere"; lasts?: Scope };
+
+export function askAnswers(inner: Inner, ws: string, asks: { request: string; save: boolean }[]): AskAnswer[] {
+  const lock = lockOf(inner, ws);
+  const plain = lock instanceof CoreError;
+  if (!able(inner) && !plain) return asks.map(() => ({ answer: "elsewhere" }));
+  const h = held(inner, ws);
+  // (this device's box certificate the lock vouches for, its key the one kept here: as the `vaults` topic's setUp)
+  let setUp: boolean | undefined;
+  const isSetUp = (): boolean => {
+    if (setUp !== undefined) return setUp;
+    if (lock instanceof CoreError) return (setUp = false);
+    const self = me(lock, signerOf(inner));
+    const cert = self !== null ? h.boxes[self.device] : undefined;
+    return (setUp = cert !== undefined && certOwner(lock, cert) !== null && cert.box === mem(inner).box);
+  };
+  return asks.map(({ request, save }): AskAnswer => {
+    if (save) return { answer: !plain && !isSetUp() ? "setUp" : "approve" };
+    const r = h.requests[request];
+    const lasts =
+      r === undefined
+        ? "chat"
+        : r.vault === PLAIN
+          ? (h.plain[r.item]?.listing?.lasts ?? h.plainLasts?.lasts ?? "chat")
+          : (items(inner, ws, r.vault)[r.item]?.listing?.lasts ?? h.vaults[r.vault]?.lasts ?? "chat");
+    return { answer: "approve", lasts };
+  });
+}
+
 /// The `vaults` topic.
 export function vaultsView(inner: Inner, ws: string): J {
   const h = held(inner, ws);
@@ -483,6 +523,9 @@ export function vaultsView(inner: Inner, ws: string): J {
   const requestRow = (r: Request, itemName: string | null, vaultName: string, lasts: Scope) => ({
     id: r.id, vault: r.vault, vaultName, item: r.item, itemName, lasts,
     session: r.session, chat: r.chat, station: h.asked[r.id] ?? null, mode: r.mode, reason: r.reason, command: r.command ?? null, hosts: r.hosts ?? [], at: r.at,
+    howText: howText(r.mode, r.hosts ?? []),
+    // A secret an agent asks to keep: what kind, and the account it is for.
+    ...(r.save ? { save: { kind: r.save.kind, ...(r.save.username ? { username: r.save.username } : {}) } } : {}),
   });
   const personal = t("core-misc.vault.personal");
   // No security mode: the plain library, one vault on the station keeping most of its items (or the first keeping one).
@@ -497,8 +540,8 @@ export function vaultsView(inner: Inner, ws: string): J {
     const requests = Object.values(h.requests)
       .filter((r) => r.status === "pending" && r.vault === PLAIN)
       .sort((a, b) => a.at - b.at)
-      .map((r) => requestRow(r, h.plain[r.item]?.name ?? null, personal, h.plain[r.item]?.listing?.lasts ?? h.plainLasts?.lasts ?? "chat"));
-    return { ...base, plain: true, vaults: row, requests };
+      .map((r) => requestRow(r, r.save?.name ?? h.plain[r.item]?.name ?? null, personal, h.plain[r.item]?.listing?.lasts ?? h.plainLasts?.lasts ?? "chat"));
+    return { ...base, plain: true, vaults: row, requests, ...statusWords(row, requests) };
   }
   const self = me(lock, signerOf(inner));
   const vouched = certs(inner, ws, lock);
@@ -520,15 +563,16 @@ export function vaultsView(inner: Inner, ws: string): J {
         recoverable: v.recovery !== undefined, lasts: v.lasts ?? "chat",
       };
     });
+  // (a secret to keep is told only to whom it is for: it may be meant for no vault yet)
   const requests = Object.values(h.requests)
-    .filter((r) => r.status === "pending" && h.vaults[r.vault] !== undefined && sub !== null && h.vaults[r.vault]!.members.includes(sub))
+    .filter((r) => r.status === "pending" && (r.save !== undefined || (h.vaults[r.vault] !== undefined && sub !== null && h.vaults[r.vault]!.members.includes(sub))))
     .sort((a, b) => a.at - b.at)
     .map((r) => {
       const listing = items(inner, ws, r.vault)[r.item]?.listing;
-      return requestRow(r, listing?.name ?? null, h.vaults[r.vault]!.name, listing?.lasts ?? h.vaults[r.vault]!.lasts ?? "chat");
+      return requestRow(r, r.save?.name ?? listing?.name ?? null, h.vaults[r.vault]?.name ?? personal, listing?.lasts ?? h.vaults[r.vault]?.lasts ?? "chat");
     });
   // What is left of the plain library from before security mode, to be moved into the person's vault.
-  return { ...base, canSign: self !== null, setUp: mine !== undefined && mine.box === m.box, vaults, requests, ...(plainItems.length > 0 ? { plainLeft: plainItems.length } : {}) };
+  return { ...base, canSign: self !== null, setUp: mine !== undefined && mine.box === m.box, vaults, requests, ...statusWords(vaults, requests), ...(plainItems.length > 0 ? { plainLeft: plainItems.length } : {}) };
 }
 
 const clockOf = (inner: Inner) => {
@@ -546,6 +590,8 @@ function usesOf(inner: Inner, ws: string, vault: string): J[] {
     .sort((a, b) => b.at - a.at)
     .map((u) => ({
       item: u.item, at: stamp(u.at * 1000, clock), session: u.session, station: u.station, chatTitle: u.chatTitle, mode: u.mode, command: u.command, hosts: u.hosts,
+      // how, in a line: the command it ran (and its way), else how it was given
+      howText: typeof u.command === "string" && u.command !== "" ? `${u.command} · ${modeText(u.mode)}` : howText(u.mode, u.hosts ?? []),
       ...(u.denied ? { denied: true } : {}),
     }));
 }
@@ -572,6 +618,7 @@ function plainItemsView(inner: Inner, ws: string): J {
       listed: i.listing !== undefined, modes: i.listing?.modes ?? [], hosts: i.listing?.hosts ?? [], env: i.listing?.env ?? null, lasts: i.listing?.lasts ?? null,
       ...(last.has(i.id) ? { lastUse: last.get(i.id) } : {}),
     }))
+    .map((r) => ({ ...r, ...itemWords(r, held(inner, ws).plainLasts?.lasts) }))
     .sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : a.id < b.id ? -1 : 1));
   return { vault: PLAIN, name: t("core-misc.vault.personal"), open: true, items: list };
 }
@@ -602,6 +649,7 @@ export function itemsView(inner: Inner, ws: string, id: string): J {
         ...(last.has(i.id) ? { lastUse: last.get(i.id) } : {}),
       };
     })
+    .map((r) => ({ ...r, ...itemWords(r, v.lasts) }))
     .sort((a, b) => ((a.name ?? "") < (b.name ?? "") ? -1 : (a.name ?? "") > (b.name ?? "") ? 1 : a.id < b.id ? -1 : 1));
   return { vault: id, name: v.name, open: key !== null, items: list };
 }
@@ -648,7 +696,10 @@ function run(inner: Inner, c: Of, ctx: SpanContext | null): Effect.Effect<unknow
     case "deleteItem":
       return p("vault") === PLAIN ? v.deletePlain(p("item")) : v.deleteItem(p("vault"), p("item"));
     case "open":
-      return held(inner, c.workspace).plain[p("item")] ? v.openPlain(p("item")) : v.open(p("item"));
+      // (with its fields as its page shows them, and its kind in a word)
+      return (held(inner, c.workspace).plain[p("item")] ? v.openPlain(p("item")) : v.open(p("item"))).pipe(
+        Effect.map((o) => ({ ...(o as J), shown: shownFields(get(o, "plain")), kindText: kindText(get(get(o, "plain"), "kind")) })),
+      );
     case "migrate":
       return v.migrate();
     case "recover":
@@ -723,8 +774,7 @@ class Vaults {
   #boxKey(reason: string): Effect.Effect<Uint8Array, CoreError> {
     const inner = this.#inner;
     return Effect.gen(function* () {
-      // The host says why in its words (`user_cancelled`, `no_device_lock`, `not_in_front`, …): the code a page goes by.
-      const priv = yield* Effect.mapError(inner.host.secureGet!(BOX_KEY, { user: true, reason }), (e) => new CoreError(/^[a-z][a-z_]*$/.test(e.message) ? e.message : "vault_refused", e.message));
+      const priv = yield* Effect.mapError(inner.host.secureGet!(BOX_KEY, { user: true, reason }), (e) => CoreError.refused(e, "vault_refused"));
       if (priv === null || priv.length !== 32) return yield* fail("vault_not_set_up", t("core-misc.vault.notSetUp"));
       return priv;
     });
@@ -797,7 +847,7 @@ class Vaults {
         const priv = new Uint8Array(32);
         inner.host.randomBytes(priv);
         pub = boxPublic(priv);
-        yield* Effect.mapError(inner.host.secureSet!(BOX_KEY, priv, { user: true }), asCoreError);
+        yield* Effect.mapError(inner.host.secureSet!(BOX_KEY, priv, { user: true }), (e) => CoreError.refused(e, "vault_refused"));
         yield* Effect.mapError(inner.host.storageSet(BOX_PUB, utf8(pub)), asCoreError);
       }
       mem(inner).box = pub;
@@ -1052,12 +1102,13 @@ class Vaults {
       if (!["once", "hour", "chat"].includes(scope)) return yield* Effect.fail(CoreError.invalid("scope: once, hour or chat"));
       // The plain library's: its owner says so, nothing to open or sign (the station holds the value).
       const asked = yield* self.#request(id);
+      if (asked.r.save) return yield* self.#keepSaved(asked.r, asked.station);
       if (asked.r.vault === PLAIN) {
         const { r, station } = asked;
         const h = held(inner, self.ws);
         if (!allows(h.plain[r.item]?.listing?.lasts ?? h.plainLasts?.lasts, scope)) return yield* fail("vault_scope", t("core-misc.vault.scopeTooLong"));
         yield* self.#station(station, "POST", "/vault/plain/grants", { request: r.id, scope });
-        self.#settled(r.id);
+        self.#settled(r.id, { status: "granted", scope });
         return { request: r.id, scope };
       }
       const { lock, signer, self: who } = yield* self.#ready();
@@ -1078,8 +1129,84 @@ class Vaults {
         signer,
       );
       yield* self.#station(station, "POST", "/vault/grants", grant);
-      self.#settled(r.id);
+      self.#settled(r.id, { status: "granted", scope });
       return { request: r.id, scope, exp: grant.exp };
+    });
+  }
+
+  /// A secret an agent asked to keep, approved. The plain library's is written by the station that asked. A vault's is
+  /// opened with this device's box key (that station sealed it to the person's devices set up), written under the
+  /// request's item id into one of their vaults this device holds a key to (the one asked for first, their own next; a
+  /// new one when they have none), its copy brought to that station, which is then told where it went, with the grant
+  /// that lets the asking chat use it. Either way the chat that asked may use it at once.
+  #keepSaved(r: Request, station: string): Effect.Effect<unknown, CoreError> {
+    const self = this;
+    return Effect.gen(function* () {
+      const inner = self.#inner;
+      const s = r.save!;
+      if (r.vault === PLAIN) {
+        yield* self.#station(station, "POST", "/vault/plain/saves", { request: r.id });
+        self.#settled(r.id, { status: "granted" });
+        return { request: r.id, item: r.item };
+      }
+      const { lock, signer, self: who } = yield* self.#ready();
+      const sealed = (r.sealed ?? []).find((x) => x.device === who.device);
+      if (!sealed) return yield* fail("vault_no_key", t("core-misc.vault.notSealedHere"));
+      const priv = yield* self.#boxKey(t("core-misc.vault.reason.save", { name: s.name }));
+      if (boxPublic(priv) !== sealed.box) return yield* fail("vault_no_key", t("core-misc.vault.notSealedHere"));
+      const body = yield* Effect.try({
+        try: () => {
+          const fields = JSON.parse(new TextDecoder().decode(openSeal(priv, sealed.secret, saveContext(self.ws, r.id))));
+          return {
+            plain: plainOf({ kind: s.kind, name: s.name, fields, domains: [], notes: "" }),
+            listing: listingOf({ name: s.name, kind: s.kind, modes: s.modes, hosts: s.hosts, ...(s.env ? { env: s.env } : {}) }),
+          };
+        },
+        catch: asCoreError,
+      });
+      const keyedHere = (v: Vault) => trusted(lock, v) && v.members.includes(who.sub) && v.keys.some((k) => k.cert.device === who.device && k.cert.box === sealed.box);
+      const h = held(inner, self.ws);
+      const theirs = Object.values(h.vaults).filter(keyedHere).sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : a.id < b.id ? -1 : 1));
+      let v = (h.vaults[r.vault] && keyedHere(h.vaults[r.vault]!) ? h.vaults[r.vault] : undefined) ?? theirs.find((x) => x.owner === who.sub) ?? theirs[0];
+      if (!v) {
+        const made = (yield* self.create(t("core-misc.vault.personal"), null)) as { id: string };
+        v = held(inner, self.ws).vaults[made.id];
+        if (!v) return yield* fail("vault_unknown", t("core-misc.vault.unknown"));
+      }
+      const vault = v;
+      // Its key: kept unsealed a while, else opened with the box key just read (the person is asked once).
+      const kept = mem(inner).keys.get(keyOf(vault));
+      const wrapped = vault.keys.find((k) => k.cert.device === who.device)!.wrapped;
+      const key = kept && kept.until > inner.host.nowMs() ? kept.key : yield* Effect.try({ try: () => openSeal(priv, wrapped, keyContext(self.ws, vault.id, vault.epoch)), catch: asCoreError });
+      self.#keep(vault, key);
+      // Written once: an approval tried again after the station was not told finds it there.
+      const had = items(inner, self.ws, vault.id)[r.item];
+      if (had?.deleted) return yield* fail("vault_unknown", t("core-misc.vault.unknownItem"));
+      if (had === undefined) {
+        const nonce = new Uint8Array(12);
+        inner.host.randomBytes(nonce);
+        const ct = encryptWith(key, utf8(JSON.stringify(body.plain)), itemContext(self.ws, vault.id, r.item, 0, vault.epoch), nonce);
+        const next = sign({ v: 1 as const, ws: self.ws, vault: vault.id, id: r.item, version: 0, epoch: vault.epoch, ct, ...(body.listing ? { listing: body.listing } : {}), at: nowS(inner) }, TAG.item, signer);
+        yield* self.#putItem(next, vault);
+      }
+      // Keeping it lets the chat that asked use it, for as long as the vault's items are given: its grant sealed to the
+      // request's box (a station from before boxes none: no grant then).
+      const scope = SCOPES.filter((x) => allows(body.listing?.lasts ?? vault.lasts, x)).at(-1)!;
+      const now = nowS(inner);
+      const eph = new Uint8Array(32);
+      inner.host.randomBytes(eph);
+      const grant: Grant | null = r.box
+        ? sign(
+            { v: 1 as const, ws: self.ws, request: r.id, vault: vault.id, item: r.item, mode: r.mode, hosts: r.mode === "proxy" ? (r.hosts ?? s.hosts) : [], scope, exp: now + GRANT_SECS[scope], secret: sealWith(r.box, utf8(JSON.stringify(body.plain)), grantContext(self.ws, r.id), eph), at: now },
+            TAG.grant,
+            signer,
+          )
+        : null;
+      // The station that asked holds its copy before it is told.
+      yield* spread(inner, `${self.ws}/${station}`);
+      yield* self.#station(station, "POST", "/vault/saves", { request: r.id, vault: vault.id, ...(grant ? { grant } : {}) });
+      self.#settled(r.id, { status: "granted", ...(grant ? { scope } : {}) });
+      return { request: r.id, vault: vault.id, item: r.item, ...(grant ? { scope } : {}) };
     });
   }
 
@@ -1090,14 +1217,14 @@ class Vaults {
       if (asked.r.vault === PLAIN) {
         const { r, station } = asked;
         yield* self.#station(station, "POST", "/vault/plain/denials", { request: r.id });
-        self.#settled(r.id);
+        self.#settled(r.id, { status: "denied" });
         return { request: r.id };
       }
       const { signer } = yield* self.#ready();
       const { r, station } = yield* self.#request(id);
       const deny: Deny = sign({ v: 1 as const, ws: self.ws, request: r.id, at: nowS(self.#inner) }, TAG.deny, signer);
       yield* self.#station(station, "POST", "/vault/denials", deny);
-      self.#settled(r.id);
+      self.#settled(r.id, { status: "denied" });
       return { request: r.id };
     });
   }
@@ -1213,8 +1340,10 @@ class Vaults {
     });
   }
 
-  /// A request answered here: no longer waiting (the station says so too, as it tells it).
-  #settled(id: string): void {
+  /// A request answered here (how: `outcome`): no longer waiting (the station says so too, as it tells it), its card off
+  /// the 奏 page, how it went on its card in its chat at once.
+  #settled(id: string, outcome: VaultOutcome): void {
+    this.#inner.views?.local.vaultDecided(id, outcome);
     change(this.#inner, this.ws, (h) => {
       delete h.requests[id];
       delete h.asked[id];

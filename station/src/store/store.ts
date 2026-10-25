@@ -17,23 +17,54 @@ import { dirname, join } from "node:path";
 import { DatabaseSync, type SQLInputValue, type StatementSync } from "node:sqlite";
 import { liveClock } from "../ops/fibers.ts";
 import { type Lang, stationLang, tr } from "../ops/i18n.ts";
-import { archiveText, readArchive, threadFile, writeCompressed } from "./archive.ts";
+import { readArchive, threadFile } from "./archive.ts";
 import {
   type Attachment, type AutoTitle, type CardAnswer, type ChatShare, type EntryRow, type JobNotice, type JobRow, type Json, type Membership,
   type MessageRow, type NewMessage, type NewSession, type Opened, type PendingMessage, type Published, type ProcessRow, type ProfileStatus,
   type Quote, type SessionRow, type SessionStats, type SessionThread, type StoreChange, type ThreadRow, type ThreadSummary,
   type TurnFor, type TurnRow, type TurnSummary, type WidgetModel, AUTO, XSHARE_IDLE_MS, I64_MAX, MANUAL, STILLFAIL_SURFACE, attachment,
   byBytes, cardOf, jsonList, mergeEntries, optionsCard, parsed, quote, takeChars, toEntry, toJob, toMembership,
-  LETTER_SQL, isLetter, liveShare, shareLive, toChatShare, toMessage, toOpened, toPublished, toSession, toSessionThread, toThread, toTurnSummary,
+  CC_THREADS_SQL, LETTER_SQL, isLetter, liveShare, shareLive, toChatShare, toMessage, toOpened, toPublished, toSession, toSessionThread, toThread, toTurnSummary, JOBS_RUNNING, SESSION_JOBS, CARD_BEFORE, OPTIONS_BEFORE, CLOSED_SINCE, SESSION_OF_RUNTIME, PEOPLE_AT,
 } from "./rows.ts";
-import { SCHEMA, SCHEMA_VERSION, addArchiveColumns, addAutoTitleColumns, addClientColumn, addLetterColumn, addQueueColumns, addSizeColumn, addWatchColumn, addWorkspaceColumns } from "./schema.ts";
+import { SCHEMA, SCHEMA_VERSION, addArchiveColumns, addListState, addThreadIndexes, addUsageCompactions, addAutoTitleColumns, addClientColumn, addLetterColumn, addQueueColumns, addSizeColumn, addUsageTotals, addWatchColumn, addWorkspaceColumns } from "./schema.ts";
 import * as usage from "./usage.ts";
+import { timed } from "./timed.ts";
+
+// What the station's own periodic work asks, each by an index (schema.ts): their plans are tested to scan no table
+// (and rows.ts JOBS_RUNNING and SESSION_JOBS, the readers' too).
+export { JOBS_RUNNING, SESSION_JOBS };
+export const LIVE_SESSIONS = "SELECT * FROM sessions WHERE archived_at IS NULL ORDER BY last_active_at DESC";
+export const SESSION_COUNTS = "SELECT connect, ws, COUNT(*) AS n FROM sessions GROUP BY connect, ws";
+export const ANY_RUNNING = "SELECT 1 AS r FROM sessions WHERE running = 1 LIMIT 1";
+export const RUNNING_SESSIONS = "SELECT * FROM sessions WHERE running = 1";
+export const JOBS_UP = "SELECT * FROM (SELECT * FROM jobs WHERE state = 'running' UNION ALL SELECT * FROM jobs WHERE state = 'exited' AND port IS NOT NULL) ORDER BY started_at DESC";
+export const STATS_OF = `SELECT
+    (SELECT COUNT(*) FROM turns t WHERE t.session_key = s.key) AS turns,
+    (SELECT COUNT(*) FROM deliveries d WHERE d.session = s.key AND d.delivered_at IS NULL) AS pending,
+    l.kind, l.outcome, l.declared, l.wait_seconds, l.wait_for, l.need, l.about_thread, l.about_n, l.about_ts, l.detail, l.started_at, l.ended_at
+  FROM sessions s
+  LEFT JOIN turns l ON l.id = (SELECT id FROM turns t2 WHERE t2.session_key = s.key ORDER BY t2.started_at DESC LIMIT 1)
+  WHERE s.key = ?`;
+
+// Each session's latest check of the last days (the archive policy's view) and a login's end (closeLoginCards), each by
+// an index of its own (and rows.ts CARD_BEFORE, OPTIONS_BEFORE, CLOSED_SINCE: each list of chats', the readers' too).
+// The checks are grouped by `+session`: by `session`, the station's SQLite went over every check in order of session.
+export { CARD_BEFORE, CLOSED_SINCE, OPTIONS_BEFORE };
+export const LATEST_DECISIONS =
+  "SELECT id, session, created_at, result FROM decision_checks WHERE id IN (SELECT MAX(id) FROM decision_checks WHERE created_at >= ? GROUP BY +session) ORDER BY created_at, id";
+export const LOGIN_CARDS =
+  "SELECT thread, n, author FROM entries WHERE kind = 'message' AND author_kind = 'agent' AND card LIKE '%\"login\"%' AND card LIKE ? AND NOT EXISTS (SELECT 1 FROM closed_cards c WHERE c.thread = entries.thread AND c.n = entries.n)";
 
 export * from "./rows.ts";
 export { SCHEMA_VERSION } from "./schema.ts";
 export { writeCompressed } from "./archive.ts";
 export type { UsageCall, UsageFile, UsageFor, UsageGroup, UsageTurn } from "./usage.ts";
 
+/// How much of the database the main connection keeps in memory, in KiB.
+const CACHE_KIB = 32 * 1024;
+/// How long the log may grow, in pages, before the main connection writes it into the database itself: well past what
+/// the readers' checkpoints let it come to.
+const WAL_PAGES = 10_000;
 /// Archived threads whose entries are kept decompressed, the most recently read last.
 const ARCHIVE_CACHE = 32;
 /// How many of a job's notices are kept.
@@ -59,6 +90,8 @@ export class Store {
   #archived: [number, EntryRow[]][] = [];
   #listeners: ((change: StoreChange) => void)[] = [];
   #statements = new Map<string, StatementSync>();
+  /// How many times the decision checks or the archive policy were written in this process (decisionsVersion).
+  #decisions = 0;
 
   /// Its time: what the rows say things happened at (a TestClock in tests).
   readonly clock: Clock.Clock;
@@ -77,9 +110,21 @@ export class Store {
     const memory = path === ":memory:";
     if (!memory) mkdirSync(dirname(path), { recursive: true });
     // Busy for a moment (another process reading, the WAL recovered after a crash): waited for, from the first statement.
-    const db = new DatabaseSync(path, { timeout: 5000 });
+    // On the main thread, what takes long is said (timed.ts).
+    const db = timed(new DatabaseSync(path, { timeout: 5000 }));
     try {
-      db.exec("PRAGMA busy_timeout = 5000; PRAGMA journal_mode = WAL;");
+      // A commit waits for the log's write, not for the disk: what the last moments before a power cut wrote may be lost,
+      // the database never damaged (WAL). Each live step of an agent commits a few times; with each its own flush to
+      // disk, a machine short of memory and disk time held the main thread on them.
+      db.exec("PRAGMA busy_timeout = 5000; PRAGMA journal_mode = WAL; PRAGMA synchronous = NORMAL;");
+      // What this connection reads stays in its own memory (CACHE_KIB), not SQLite's 2 MB: on a machine short of memory
+      // the system's file cache is the first to go, and each page read again from the disk there took some 50 ms (ccvm,
+      // 2026-10-25: the main thread read 1,700 pages in six minutes, some of them six times over). This connection
+      // writes alone, so what it keeps stays good across the readers' reads.
+      // The log (the WAL) is written into the database off the main thread, by a reader (read/pool.ts `checkpoint`).
+      // Left to SQLite, this connection did it itself at every thousandth page: one commit held every device for the
+      // 6 s that took on ccvm (2026-10-25). Here only if the readers' fall behind, at WAL_PAGES.
+      db.exec(`PRAGMA cache_size = -${CACHE_KIB}; PRAGMA wal_autocheckpoint = ${WAL_PAGES};`);
       const hasTables = db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'sessions'").get() !== undefined;
       if (hasTables) {
         const version = (db.prepare("PRAGMA user_version").get() as Json).user_version;
@@ -89,6 +134,7 @@ export class Store {
       }
       db.exec(SCHEMA);
       addArchiveColumns(db);
+      addThreadIndexes(db);
       addLetterColumn(db);
       addClientColumn(db);
       addAutoTitleColumns(db);
@@ -96,6 +142,9 @@ export class Store {
       addQueueColumns(db);
       addSizeColumn(db);
       addWorkspaceColumns(db);
+      addUsageTotals(db);
+      addUsageCompactions(db);
+      addListState(db);
       db.exec(`PRAGMA user_version = ${SCHEMA_VERSION}`);
     } catch (e) {
       db.close();
@@ -217,6 +266,35 @@ export class Store {
     return this.#all("SELECT * FROM sessions ORDER BY last_active_at DESC").map(toSession);
   }
 
+  /// The sessions shown (not archived), the latest active first: what the station's own periodic work goes over. The
+  /// archived only grow with time; each is looked at again as it is shown.
+  liveSessions(): SessionRow[] {
+    return this.#all(LIVE_SESSIONS).map(toSession);
+  }
+
+  /// The sessions running a turn now (archived ones too).
+  runningSessions(): SessionRow[] {
+    return this.#all(RUNNING_SESSIONS).map(toSession);
+  }
+
+  /// The sessions in use: shown, or running a turn (one archived while at work too).
+  sessionsInUse(): SessionRow[] {
+    const live = this.liveSessions();
+    const keys = new Set(live.map((s) => s.key));
+    return [...live, ...this.runningSessions().filter((s) => !keys.has(s.key))];
+  }
+
+  /// How many sessions each connect has, in each workspace (null: the home one's), archived ones too: from the index
+  /// alone, not every session's row.
+  sessionCounts(): { connect: string; ws: string | null; n: number }[] {
+    return this.#all(SESSION_COUNTS).map((r) => ({ connect: r.connect, ws: r.ws ?? null, n: r.n }));
+  }
+
+  /// Whether any session runs a turn now.
+  anyRunning(): boolean {
+    return this.#one(ANY_RUNNING) !== undefined;
+  }
+
   /// Says the sessions of workspace `from` (null: those that say none, the home one's) are `to`'s (null: the home
   /// one's): when the station's home workspace changes (docs/multi-workspace.md).
   setSessionsWs(from: string | null, to: string | null): void {
@@ -268,6 +346,37 @@ export class Store {
   /// null: none now (its context cleared by hand); those it ran in stay in `runtime_sessions`.
   setRuntimeSessionId(key: string, id: string | null): void {
     this.#updateSession(key, "UPDATE sessions SET runtime_session_id = ?1 WHERE key = ?2", id, key);
+  }
+
+  /// How many entries the session's transcript has, as just read (sessions/live.ts): its summary says it from then on.
+  /// Not a change of the session (nothing is told for it): the summary told next carries it.
+  setTranscriptLength(key: string, n: number): void {
+    this.#run("INSERT INTO transcript_lengths (session, n) VALUES (?1, ?2) ON CONFLICT (session) DO UPDATE SET n = excluded.n", key, n);
+  }
+
+  /// What a session's calls used, as just told or counted (sessions/live.ts, usage/module.ts): its summary says it from
+  /// then on. While it works its stream tells each change and the summary told next carries it; at rest (the count of
+  /// its last turn comes in after it ended) the change is the session's, told as one unless `quiet`.
+  setSessionUsage(key: string, usage: Json, quiet = false): void {
+    const json = JSON.stringify(usage);
+    if (this.#one("SELECT usage FROM session_usage WHERE session = ?", key)?.usage === json) return;
+    const session = this.getSession(key);
+    if (session === null) return;
+    this.#with((changes) => {
+      this.#run("INSERT INTO session_usage (session, usage) VALUES (?1, ?2) ON CONFLICT (session) DO UPDATE SET usage = excluded.usage", key, json);
+      if (!quiet && !session.running) changes.push({ type: "session", key });
+    });
+  }
+
+  /// What a session's calls used as last kept (`setSessionUsage`); null before any.
+  sessionUsage(key: string): Json | null {
+    const r = this.#one("SELECT usage FROM session_usage WHERE session = ?", key);
+    return r ? JSON.parse(r.usage) : null;
+  }
+
+  /// The sessions of which no usage is kept yet.
+  sessionsWithoutUsage(): string[] {
+    return this.#all("SELECT key FROM sessions WHERE key NOT IN (SELECT session FROM session_usage)").map((r) => r.key as string);
   }
 
   /// A runtime session the session runs in, on `profile` (null: not known, a profile it had is kept).
@@ -445,6 +554,13 @@ export class Store {
   }
 
   /// The runtime sessions the session has run in, the first first, ending with the one it runs in now.
+  /// The session that went on with `runtime`'s session `id` (its current one, or one it ran in before), the latest
+  /// active if more did; null if none did.
+  sessionOfRuntime(runtime: string, id: string): SessionRow | null {
+    const r = this.#one(SESSION_OF_RUNTIME, runtime, id);
+    return r === undefined ? null : this.getSession(r.key);
+  }
+
   runtimeSessions(key: string): string[] {
     const current = this.getSession(key)?.runtimeSessionId ?? null;
     const ids: string[] = this.#all("SELECT id FROM runtime_sessions WHERE session_key = ? ORDER BY at, rowid", key).map((r) => r.id);
@@ -466,8 +582,8 @@ export class Store {
     this.#run("UPDATE sessions SET last_active_at = ? WHERE key = ?", this.now(), key);
   }
 
-  /// Hides a session from lists, or shows it again, with its own chat (ThreadRow.home); `by` is MANUAL or AUTO. A thread
-  /// out of lists goes out to its archive file; showing it again brings it back.
+  /// Hides a session from lists, or shows it again, with its own chat (ThreadRow.home); `by` is MANUAL or AUTO. Its
+  /// threads' entries stay where they are (in the database); one an older station wrote out to a file is brought back.
   setArchived(key: string, archived: boolean, by: string): void {
     this.#with((changes) => this.#setArchived(key, archived, by, changes));
   }
@@ -553,6 +669,8 @@ export class Store {
         this.#run("DELETE FROM jobs WHERE session_key = ?", key);
         this.#run("DELETE FROM widget_states WHERE session = ?", key);
         this.#run("DELETE FROM pins WHERE session = ?", key);
+        this.#run("DELETE FROM transcript_lengths WHERE session = ?", key);
+        this.#run("DELETE FROM session_usage WHERE session = ?", key);
         this.#run("DELETE FROM sessions WHERE key = ?", key);
         for (const thread of threads) {
           if (this.#one("SELECT 1 FROM thread_sessions WHERE thread = ? LIMIT 1", thread) !== undefined) {
@@ -678,6 +796,11 @@ export class Store {
     return r ? toSessionThread(r) : null;
   }
 
+  /// The threads a still.fail chat can copy people's messages to (rows.ts CC_THREADS_SQL).
+  ccThreads(thread: number): SessionThread[] {
+    return this.#all(CC_THREADS_SQL, thread).map(toSessionThread);
+  }
+
   /// The threads a session takes part in, most recently joined first, with the connect it posts through in each.
   sessionThreads(session: string): SessionThread[] {
     return this.#all(
@@ -700,6 +823,20 @@ export class Store {
 
   /// Threads with their sessions, last entry, latest message and the viewer's unread count, most recently said in
   /// first: those of one session, one thread, or all.
+  /// What a session's chat is called by: its thread said in last (as `listThreads` orders them) and, for one whose title may
+  /// come from them (not a still.fail chat's: read/views.ts `titleOf`), its first person's words. Null when it has none.
+  /// A row's lookups, not a list's: titles are asked of every chat a list of checks names.
+  sessionChat(session: string): { thread: ThreadRow; firstText: string | null } | null {
+    const r = this.#one(
+      `SELECT t.* FROM thread_sessions m JOIN threads t ON t.id = m.thread WHERE m.session = ?
+       ORDER BY (SELECT e.at FROM entries e WHERE e.thread = t.id ORDER BY e.n DESC LIMIT 1) DESC, t.created_at DESC, t.id DESC LIMIT 1`,
+      session,
+    );
+    if (!r) return null;
+    const thread = toThread(r);
+    return { thread, firstText: thread.surface === STILLFAIL_SURFACE ? null : this.#firstText(thread.id) };
+  }
+
   listThreads(viewer: string, session: string | null, thread: number | null): ThreadSummary[] {
     const base = "SELECT t.*, COALESCE(r.n, 0) AS read_n FROM threads t LEFT JOIN reads r ON r.thread = t.id AND r.viewer = ?1";
     const rows =
@@ -741,7 +878,7 @@ export class Store {
       const keys = new Set(this.threadSessions(thread).map((m) => m.session));
       return mergeEntries(this.#archivedEntries(thread)).filter((m) => isLetter(m, keys)).length;
     }
-    return this.#one(`SELECT COUNT(*) AS c FROM entries WHERE thread = ? AND kind = 'message' AND ${LETTER_SQL}`, thread).c;
+    return this.#one("SELECT letters FROM thread_state WHERE thread = ?", thread)?.letters ?? 0;
   }
 
   /// The thread's latest message that is not a letter (rows.ts isLetter), for lists: what they show and sort by.
@@ -750,7 +887,7 @@ export class Store {
       const keys = new Set(this.threadSessions(thread).map((m) => m.session));
       return mergeEntries(this.#archivedEntries(thread)).findLast((m) => !isLetter(m, keys)) ?? null;
     }
-    const r = this.#one(`SELECT * FROM merged WHERE thread = ? AND NOT ${LETTER_SQL} ORDER BY n DESC LIMIT 1`, thread);
+    const r = this.#one("SELECT m.* FROM thread_state t JOIN merged m ON m.thread = t.thread AND m.n = t.said_n WHERE t.thread = ?", thread);
     return r ? toMessage(r) : null;
   }
 
@@ -807,6 +944,12 @@ export class Store {
     });
   }
 
+  /// Changes each time a decision check or the archive policy is written here: what is made of them (the overview's
+  /// automatic decisions) is made again only then.
+  decisionsVersion(): number {
+    return this.#decisions;
+  }
+
   recentDecisions(): Json[] {
     return this.#all("SELECT id, session, created_at, result FROM decision_checks ORDER BY id DESC LIMIT 30").map((r) => ({
       id: r.id, session: r.session, at: r.created_at, detail: parsed(r.result) ?? null,
@@ -818,6 +961,7 @@ export class Store {
     this.#with((changes) => {
       this.#run("INSERT INTO decision_checks(session, created_at, result) VALUES (?, ?, ?)", session, this.now(), JSON.stringify(result));
       changes.push({ type: "decisionChecks" });
+      this.#decisions++;
     });
   }
 
@@ -827,9 +971,10 @@ export class Store {
     return row ? (parsed(row.result) ?? null) : null;
   }
 
-  /// The checks recorded since `since` (ms), oldest first.
-  decisionsSince(since: number): Json[] {
-    return this.#all("SELECT id, session, created_at, result FROM decision_checks WHERE created_at >= ? ORDER BY id", since).map((r) => ({
+  /// Each session's latest check of those recorded since `since` (ms), the oldest first: what the archive policy's view
+  /// counts (accounts/index.ts, sessions/archive-policy.ts).
+  latestDecisionsSince(since: number): Json[] {
+    return this.#all(LATEST_DECISIONS, since).map((r) => ({
       id: r.id, session: r.session, at: r.created_at, detail: parsed(r.result) ?? null,
     }));
   }
@@ -849,6 +994,7 @@ export class Store {
     this.#with((changes) => {
       this.#run("INSERT INTO archive_policy(at, policy, author, summary, ws) VALUES (?, ?, ?, ?, ?)", this.now(), JSON.stringify(policy), JSON.stringify(author), summary, ws);
       changes.push({ type: "decisionChecks" });
+      this.#decisions++;
     });
   }
 
@@ -1002,7 +1148,7 @@ export class Store {
       const authors: [string, number][] =
         r.archived_at !== null
           ? this.#archivedEntries(r.id).filter((e) => e.kind === "message" && e.authorKind === "person").map((e) => [e.author, e.at])
-          : this.#all("SELECT author, MIN(at) AS at FROM entries WHERE thread = ? AND kind = 'message' AND author_kind = 'person' GROUP BY author", r.id).map((a) => [a.author, a.at]);
+          : this.#all(PEOPLE_AT, r.id).map((a) => [a.author, a.at]);
       const refs = firsts.get(r.session) ?? new Map<string, number>();
       firsts.set(r.session, refs);
       for (const [author, at] of authors) {
@@ -1141,8 +1287,8 @@ export class Store {
     const out: CardAnswer[] = [];
     const said = this.#all("SELECT thread, n FROM entries WHERE author_kind = 'person' AND kind = 'message' AND at >= ?", since);
     const askedBefore = (thread: number, n: number): number | null => {
-      const card: number | null = this.#one("SELECT max(n) AS n FROM entries WHERE thread = ? AND n < ? AND kind = 'message' AND card IS NOT NULL", thread, n).n;
-      const options: number | null = this.#one("SELECT max(n) AS n FROM entries WHERE thread = ? AND n < ? AND kind = 'message' AND options IS NOT NULL", thread, n).n;
+      const card: number | null = this.#one(CARD_BEFORE, thread, n).n;
+      const options: number | null = this.#one(OPTIONS_BEFORE, thread, n).n;
       // Option's max: None below any Some.
       return card === null ? options : options === null ? card : Math.max(card, options);
     };
@@ -1167,7 +1313,7 @@ export class Store {
       const a = toMessage(answer);
       out.push({ question: found[0], card: found[1], by: a.author, at: a.createdAt, answer: a });
     }
-    for (const { thread, n, viewer: by, at } of this.#all("SELECT thread, n, viewer, at FROM closed_cards WHERE at >= ?", since)) {
+    for (const { thread, n, viewer: by, at } of this.#all(CLOSED_SINCE, since)) {
       const found = cardAt(thread, n);
       if (!found) continue;
       // Withdrawn by its own agent: no one answered it.
@@ -1230,10 +1376,7 @@ export class Store {
   /// the agent itself). The sessions whose cards they were.
   closeLoginCards(login: string): string[] {
     return this.#with((changes) => {
-      const rows = this.#all(
-        "SELECT thread, n, author FROM entries WHERE kind = 'message' AND author_kind = 'agent' AND card LIKE '%\"login\"%' AND card LIKE ? AND NOT EXISTS (SELECT 1 FROM closed_cards c WHERE c.thread = entries.thread AND c.n = entries.n)",
-        `%"login":${JSON.stringify(login)}%`,
-      );
+      const rows = this.#all(LOGIN_CARDS, `%"login":${JSON.stringify(login)}%`);
       for (const r of rows) {
         this.#run("INSERT OR IGNORE INTO closed_cards (thread, n, viewer, at) VALUES (?, ?, ?, ?)", r.thread, r.n, r.author, this.now());
         changes.push({ type: "thread", id: r.thread, entries: [] });
@@ -1317,7 +1460,9 @@ export class Store {
   /// message started goes on with the work of the one before it, so it is theirs.
   startTurnFor(id: string, session: string, kind: string, by: TurnFor): void {
     this.#with((changes) => {
-      const before = (column: string) => `(SELECT ${column} FROM turns WHERE session_key = ?2 AND ${column} IS NOT NULL ORDER BY started_at DESC LIMIT 1)`;
+      // The latest turn's alone (by the index on them): each says it, so one with none had none before it to say. Asked
+      // for the latest that says it, a session that never had anyone's read back over every turn it had (1.4 s on ccvm).
+      const before = (column: string) => `(SELECT ${column} FROM turns WHERE session_key = ?2 ORDER BY started_at DESC LIMIT 1)`;
       this.#run(
         `INSERT INTO turns (id, session_key, kind, started_at, profile, person, thread) VALUES (?1, ?2, ?3, ?4, ?5, COALESCE(?6, ${before("person")}), COALESCE(?7, ${before("thread")}))`,
         id, session, kind, this.now(), by.profile, by.person, by.thread,
@@ -1384,13 +1529,24 @@ export class Store {
     return this.#all("SELECT * FROM turns WHERE session_key = ? ORDER BY started_at", session).map((r) => ({ id: r.id, summary: toTurnSummary(r) }));
   }
 
+  /// For each of `keys` that is a session: its turn count, latest turn and undelivered messages as sessionStats says them,
+  /// but not the first message it heard (`firstText` null: a read of its deliveries and their messages each). Each a
+  /// row's lookups, for the station's own periodic work over the sessions at hand, not every session ever.
+  statsOf(keys: Iterable<string>): Map<string, SessionStats> {
+    const out = new Map<string, SessionStats>();
+    for (const key of new Set(keys)) {
+      const r = this.#one(STATS_OF, key);
+      if (r !== undefined) out.set(key, { turns: r.turns, pending: r.pending, firstText: null, lastTurn: r.started_at === null ? null : toTurnSummary(r) });
+    }
+    return out;
+  }
+
   /// Per session (or for one): turn count, the latest turn, undelivered messages and the first one it heard.
   sessionStats(key: string | null): Map<string, SessionStats> {
     const sql = `SELECT s.key,
          (SELECT COUNT(*) FROM turns t WHERE t.session_key = s.key) AS turns,
          (SELECT COUNT(*) FROM deliveries d WHERE d.session = s.key AND d.delivered_at IS NULL) AS pending,
-         (SELECT substr(m.text, 1, 300) FROM deliveries d JOIN merged m ON m.thread = d.thread AND m.n = d.n
-           WHERE d.session = s.key ORDER BY d.rowid LIMIT 1) AS first_text,
+         (SELECT substr(m.text, 1, 300) FROM session_first f JOIN merged m ON m.thread = f.thread AND m.n = f.n WHERE f.session = s.key) AS first_text,
          l.kind, l.outcome, l.declared, l.wait_seconds, l.wait_for, l.need, l.about_thread, l.about_n, l.about_ts, l.detail, l.started_at, l.ended_at
        FROM sessions s
        LEFT JOIN turns l ON l.id = (SELECT id FROM turns t2 WHERE t2.session_key = s.key ORDER BY t2.started_at DESC LIMIT 1)
@@ -1500,9 +1656,23 @@ export class Store {
     return r ? toJob(r) : null;
   }
 
-  /// A session's jobs (all sessions' with null), newest first.
+  /// The jobs running, and the services stopped on their own that hold their port (an exited one with a port), the
+  /// latest first: what a session has up.
+  jobsUp(): JobRow[] {
+    return this.#all(JOBS_UP).map(toJob);
+  }
+
+  /// A session's jobs (all sessions' with null), newest first. A session's by its index: asked as one statement for
+  /// both (`?1 IS NULL OR session_key = ?1`), each read every job the station ever ran (5 s on ccvm with its pages put
+  /// out, 2026-10-25).
   listJobs(session: string | null): JobRow[] {
-    return this.#all("SELECT * FROM jobs WHERE ?1 IS NULL OR session_key = ?1 ORDER BY started_at DESC", session).map(toJob);
+    return (session === null ? this.#all("SELECT * FROM jobs ORDER BY started_at DESC") : this.#all(SESSION_JOBS, session)).map(toJob);
+  }
+
+  /// The jobs running now, as listJobs gives them (by the index on their state: the queue reads them at each look, and
+  /// each second a command waits for the screen, jobs/jobs.ts `line`).
+  jobsRunning(): JobRow[] {
+    return this.#all(JOBS_RUNNING).map(toJob);
   }
 
   /// How many jobs are running now: other stations' tasks here (`remote_…`, jobs/remote.ts), web services (a port) and
@@ -1623,13 +1793,13 @@ export class Store {
   }
 
   /// Where each model's context was compacted on this station since `since` (store/usage.ts).
-  compactionPoints(since: number, least: number): Map<string, number> {
-    return usage.compactionPoints(this.db, since, least);
+  compactionPoints(since: number): Map<string, number> {
+    return usage.compactionPoints(this.db, since);
   }
 
-  /// Tells whoever follows the store that calls were recorded.
-  usageChanged(): void {
-    this.#send([{ type: "usage" }]);
+  /// Tells whoever follows the store that calls of `sessions` were recorded.
+  usageChanged(sessions: string[]): void {
+    this.#send([{ type: "usage", sessions }]);
   }
 
   /// Sessions whose transcripts may have grown since `since`: a turn running, or ended since then.
@@ -1637,9 +1807,10 @@ export class Store {
     return usage.usageActiveSessions(this.db, since);
   }
 
-  /// A session's turns, oldest first, each with whom it worked for (store/usage.ts says how).
-  usageTurns(session: string): usage.UsageTurn[] {
-    return usage.usageTurns(this.db, session);
+  /// The turns of a session calls made from `from` until `until` (ms) were made in, oldest first, each with whom it
+  /// worked for (store/usage.ts says how).
+  usageTurns(session: string, from: number, until: number): usage.UsageTurn[] {
+    return usage.usageTurns(this.db, session, from, until);
   }
 
   /// The calls from `from` until `to` (ms), added up by day in the asker's time zone and by thread, person, profile and
@@ -1707,10 +1878,7 @@ export class Store {
         .map((e) => e.author)
         .filter((a) => !seen.has(a) && (seen.add(a), true));
     } else {
-      authors = this.#all(
-        "SELECT author, MIN(n) AS first FROM entries WHERE thread = ? AND kind = 'message' AND author_kind = 'person' GROUP BY author ORDER BY first",
-        thread,
-      ).map((r) => r.author);
+      authors = this.#all("SELECT author FROM thread_people WHERE thread = ? ORDER BY first_n", thread).map((r) => r.author);
     }
     if (surface === STILLFAIL_SURFACE) return authors;
     return connect === null ? [] : authors.map((a) => `slack:${connect}:${a}`);
@@ -1722,7 +1890,7 @@ export class Store {
       const m = mergeEntries(this.#archivedEntries(thread)).find((m) => m.authorKind === "person");
       return m ? takeChars(m.text, 300) : null;
     }
-    return this.#one("SELECT substr(text, 1, 300) AS t FROM merged WHERE thread = ? AND author_kind = 'person' ORDER BY n LIMIT 1", thread)?.t ?? null;
+    return this.#one("SELECT substr(m.text, 1, 300) AS t FROM thread_state s JOIN merged m ON m.thread = s.thread AND m.n = s.person_n WHERE s.thread = ?", thread)?.t ?? null;
   }
 
   #messageAt(thread: number, ts: string): MessageRow | null {
@@ -1760,7 +1928,7 @@ export class Store {
       this.#run("UPDATE threads SET hidden_at = ?, hidden_by = ? WHERE home = ?", archived ? now : null, archived ? by : null, key);
     });
     for (const t of this.sessionThreads(key)) {
-      this.#fileAway(t.thread.id);
+      this.#bringIn(t.thread.id);
       changes.push({ type: "thread", id: t.thread.id, entries: [] });
     }
     changes.push({ type: "session", key });
@@ -1774,7 +1942,7 @@ export class Store {
       const shown = by === MANUAL ? now : null;
       this.#run("UPDATE threads SET hidden_at = NULL, hidden_by = NULL, shown_at = COALESCE(?, shown_at) WHERE id = ?", shown, thread);
     }
-    this.#fileAway(thread);
+    this.#bringIn(thread);
     changes.push({ type: "thread", id: thread, entries: [] });
   }
 
@@ -1788,12 +1956,9 @@ export class Store {
     return !shown;
   }
 
-  /// Writes a thread out to its archive file when it went out of lists, or brings it back when it came back.
-  #fileAway(thread: number): void {
-    const out = this.#outOfLists(thread);
-    const filed = this.#isArchived(thread);
-    if (out && !filed) this.#archiveThread(thread);
-    else if (!out && filed) this.#restoreThread(thread);
+  /// Brings a thread an older station wrote out to its archive file back into the database.
+  #bringIn(thread: number): void {
+    if (this.#isArchived(thread)) this.#restoreThread(thread);
   }
 
   /// Something new said in a thread brings what it is about back into lists: the chat, if the station archived it
@@ -1824,6 +1989,23 @@ export class Store {
   }
 
   // ── archive ──
+  //
+  // A chat out of every list keeps its entries in the database, as one in a list does: they are a few KB each (all of
+  // ccvm's 26,000 come to some 20 MB), and every list read all of them alone, by an index, in some 10 ms. Stations before
+  // wrote each such thread's entries out to `archive/threads/<id>.jsonl.zst` and took them out of the database
+  // (`threads.archived_at`): then every list read each of those files (some 850 on ccvm, decompressed again whenever a
+  // reader had let go of what it kept of them), and a thread said in again was read back first. Those files are read as
+  // they are until each is brought back (`bringInArchived`, a few at a time after the station starts; at once when one
+  // is said in or shown again).
+
+  /// Brings back into the database up to `most` of the threads an older station wrote out to their archive files,
+  /// the oldest first: how many it brought, and how many are left. Their entries are the same, so what clients keep of
+  /// them stays true.
+  bringInArchived(most: number): { brought: number; left: number } {
+    const ids = this.#all("SELECT id FROM threads WHERE archived_at IS NOT NULL ORDER BY id LIMIT ?", most).map((r) => r.id as number);
+    for (const id of ids) this.#restoreThread(id);
+    return { brought: ids.length, left: this.#one("SELECT COUNT(*) AS c FROM threads WHERE archived_at IS NOT NULL").c };
+  }
 
   /// The archived threads whose file is not there (lost with the disk it was on): each reads as one with no entries.
   lostArchives(): number[] {
@@ -1841,24 +2023,8 @@ export class Store {
     return threadFile(this.#archiveDir, thread);
   }
 
-  /// Writes a thread's entries out to its archive file (one entry per line, zstd) and deletes their rows. Entries never
-  /// change, so the file is the thread as it was and what clients keep of it stays true.
-  #archiveThread(thread: number): void {
-    const entries = this.#all("SELECT * FROM entries WHERE thread = ? ORDER BY n", thread).map(toEntry);
-    const path = this.#threadFile(thread);
-    writeCompressed(path, archiveText(entries));
-    try {
-      this.#tx(() => {
-        this.#run("DELETE FROM entries WHERE thread = ?", thread);
-        this.#run("UPDATE threads SET archived_at = ? WHERE id = ?", this.now(), thread);
-      });
-    } catch (e) {
-      rmSync(path, { force: true });
-      throw e;
-    }
-  }
-
-  /// Loads an archived thread's entries back into the database and removes its file.
+  /// Loads an archived thread's entries back into the database and removes its file (one lost: none, and the thread is
+  /// counted on from what was read and delivered of it, `#lastKnown`).
   #restoreThread(thread: number): void {
     const entries = this.#archivedEntries(thread);
     this.#tx(() => {

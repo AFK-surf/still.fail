@@ -3,8 +3,10 @@
 // changed there; the least lately read let go past their bound; counted with what else the device keeps, and let go.
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { Effect } from "effect";
+import { Effect, Fiber } from "effect";
+import type { Inner } from "../src/core.ts";
 import { DriveKept, keptId } from "../src/drive-kept.ts";
+import { keptFirst } from "../src/station/calls.ts";
 import { FakeHost } from "../src/testing.ts";
 import { answers, call } from "./helpers.ts";
 import { Raw, started, stationReplies, status } from "./station-fixture.ts";
@@ -109,12 +111,12 @@ test("a video's parts are kept as played, a stream's too; the page of what the d
   const again = t.host.takeEmitted().map(([, m]) => m as { id?: number; bytes?: Uint8Array }).filter((m) => m.id === 4 && m.bytes !== undefined);
   assert.deepEqual(again.flatMap((m) => [...m.bytes!]), [...bytesOf(8, 40)]);
   assert.equal(reads(t.host), 2);
-  // what was not played: from the station
+  // what was not played: from the station, from where what was played stops (32: 30 and 31 kept)
   await read(t, ui, 5, "film.mp4", 30, 12, said, "played");
   assert.equal(reads(t.host), 3);
   call(t.core, ui, 6, "cache.usage", {});
   await t.host.settle();
-  assert.equal((answers(t.host.takeEmitted(), 6)?.ok as { drive: number }).drive, 16 + 8 + 12);
+  assert.equal((answers(t.host.takeEmitted(), 6)?.ok as { drive: number }).drive, 16 + 8 + 10);
   call(t.core, ui, 7, "drive.kept.clear", {});
   await t.host.settle();
   assert.ok(answers(t.host.takeEmitted(), 7)?.ok === null);
@@ -127,9 +129,121 @@ test("a video's parts are kept as played, a stream's too; the page of what the d
   t.core.close();
 });
 
+test("a part partly kept: what is kept goes first, only the rest of it is asked of the station", async () => {
+  const t = await started();
+  drive(t.host, new Map<string, File>([["film.mp4", { bytes: bytesOf(64), mtime: 7 }]]));
+  const ui = t.core.connect();
+  const said = { mtime: 7, size: 64 };
+  const asked = () =>
+    t.host.requests.filter((r) => r.url.includes("/drive/read?")).map((r) => {
+      const q = new URL(r.url).searchParams;
+      return [Number(q.get("offset")), Number(q.get("length"))];
+    });
+  await read(t, ui, 1, "film.mp4", 16, 16, said, "played");
+  // on from what was played: the station asked from where what is kept stops
+  const on = await read(t, ui, 2, "film.mp4", 16, 32, said, "played");
+  assert.deepEqual(asked(), [[16, 16], [32, 16]]);
+  assert.deepEqual([...on.bytes], [...bytesOf(32, 16)]);
+  assert.deepEqual(on.ok, { type: "text/plain", total: 64, mtime: 7 });
+  // as it streams: what is kept handed on first, then what the station brings
+  call(t.core, ui, 3, "drive.read", { station: ST, root: ROOT, path: "film.mp4", offset: 40, length: 16, stream: true, keep: "played", ...said });
+  await t.host.settle();
+  const streamed = t.host.takeEmitted().map(([, m]) => m as { id?: number; bytes?: Uint8Array }).filter((m) => m.id === 3 && m.bytes !== undefined);
+  assert.deepEqual(streamed.flatMap((m) => [...m.bytes!]), [...bytesOf(16, 40)]);
+  assert.deepEqual(asked().at(-1), [48, 8]);
+  // all of it kept now: the station not asked again
+  await read(t, ui, 4, "film.mp4", 16, 40, said, "played");
+  assert.equal(asked().length, 3);
+  t.core.close();
+});
+
+test("a part partly kept of a file changed on the station: read whole again from it, not put after what was kept", async () => {
+  const t = await started();
+  const files = new Map<string, File>([["a.txt", { bytes: bytesOf(10), mtime: 1000 }]]);
+  drive(t.host, files);
+  const ui = t.core.connect();
+  const was = { mtime: 1000, size: 10 };
+  await read(t, ui, 1, "a.txt", 0, 6, was);
+  files.set("a.txt", { bytes: bytesOf(12, 50), mtime: 3000 });
+  const got = await read(t, ui, 2, "a.txt", 0, 10, was);
+  assert.deepEqual([...got.bytes], [...bytesOf(10, 50)]);
+  assert.deepEqual(got.ok, { type: "text/plain", total: 12, mtime: 3000 });
+  assert.equal(reads(t.host), 3, "the rest, then the part whole again");
+  await read(t, ui, 3, "a.txt", 0, 6, was);
+  assert.equal(reads(t.host), 4, "what was kept of it gone");
+  t.core.close();
+});
+
+test("a part read stopped short (let go of, or broken off) keeps what came of it", async () => {
+  const kept: [number, number[]][] = [];
+  const taken: number[][] = [];
+  const inner = { runner: { fork: (e: Effect.Effect<void>) => Effect.runFork(e) } } as unknown as Inner;
+  const reading = keptFirst<{ type: string; total: number }, { type: string; total: number; bytes: Uint8Array }>(
+    inner,
+    { offset: 10, length: 20 },
+    100,
+    { type: "video/mp4", bytes: bytesOf(4, 10) },
+    undefined,
+    (piece) => taken.push([...piece]),
+    (at, _length, _before, take, said) =>
+      Effect.gen(function* () {
+        said({ type: "video/mp4", total: 100 });
+        take(bytesOf(5, at));
+        return yield* Effect.never;
+      }),
+    (_head, at, bytes) => Effect.sync(() => void kept.push([at, [...bytes]])),
+    (head) => head.total === 100,
+  );
+  await Effect.runPromise(
+    Effect.gen(function* () {
+      const fiber = yield* Effect.forkChild(reading);
+      yield* Effect.yieldNow;
+      yield* Fiber.interrupt(fiber);
+    }),
+  );
+  // what was kept went first, then the station's first piece; that piece kept where it is in the file
+  assert.deepEqual(taken, [[...bytesOf(4, 10)], [...bytesOf(5, 14)]]);
+  assert.deepEqual(kept, [[14, [...bytesOf(5, 14)]]]);
+});
+
+test("a part streamed to a player stops as the player lets go of it, or its page goes: nothing more of it comes", async () => {
+  const t = await started();
+  drive(t.host, new Map<string, File>([["film.mp4", { bytes: bytesOf(64), mtime: 7 }]]));
+  const said = { mtime: 7, size: 64 };
+  const part = (ui: number, id: number) => call(t.core, ui, id, "drive.read", { station: ST, root: ROOT, path: "film.mp4", offset: 0, length: 64, stream: true, keep: "played", ...said });
+  const of = (id: number) => t.host.takeEmitted().map(([, m]) => m as { id: number; error?: { code: string }; bytes?: Uint8Array }).filter((m) => m.id === id);
+  // The station slow to answer it, the player gone elsewhere meanwhile: it says so, and nothing of it comes after.
+  const ui = t.core.connect();
+  const release = t.host.hold("&length=64");
+  part(ui, 1);
+  await t.host.settle();
+  t.core.receive(ui, { kind: "cancel", id: 1, cancel: true });
+  await t.host.settle();
+  release();
+  await t.host.settle();
+  assert.deepEqual(of(1).map((m) => m.error?.code ?? (m.bytes ? "bytes" : "answer")), ["cancelled"]);
+  assert.equal(t.core.inner.calls.size, 0);
+  // Its page gone: the same.
+  const other = t.core.connect();
+  const again = t.host.hold("&length=64");
+  part(other, 2);
+  await t.host.settle();
+  t.core.disconnect(other);
+  await t.host.settle();
+  again();
+  await t.host.settle();
+  assert.deepEqual(of(2).map((m) => m.error?.code ?? (m.bytes ? "bytes" : "answer")), ["cancelled"]);
+  assert.equal(t.core.inner.calls.size, 0);
+  // One not let go of brings all of it.
+  part(ui, 3);
+  await t.host.settle();
+  assert.deepEqual(of(3).flatMap((m) => [...(m.bytes ?? [])]), [...bytesOf(64)]);
+  t.core.close();
+});
+
 test("past their bound the least lately read go, never the one just read nor one being written", async () => {
   const host = new FakeHost();
-  const kept = new DriveKept(host, { file: 10, played: 100, chat: Number.POSITIVE_INFINITY });
+  const kept = new DriveKept(host, { file: 10, played: 100, chat: Number.POSITIVE_INFINITY, sent: 100, outbox: Number.POSITIVE_INFINITY });
   const run = <A>(e: Effect.Effect<A>) => Effect.runPromise(e);
   const ids = ["one", "two", "three"].map((n) => keptId(ST, ROOT, n));
   for (const id of ids) {

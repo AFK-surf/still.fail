@@ -1,18 +1,20 @@
 // What the screen's bar has (ScreenViewer.tsx) with a mouse, beside 只看/控制, as a remote desktop's window has it: how
 // the view goes (a signal mark and how long it has been seen; pressed, the whole of it under the round trip), and 控制中心, a menu of what can be done with the view: 画质 (how
-// large a picture is asked for), 组合键 (the keys this device's own system would take for itself: ⌘Tab, Alt+Tab, the
+// large a picture is asked for), 缩放 (the screen's own display scale, where its station changes it: Windows), 组合键 (the keys this device's own system would take for itself: ⌘Tab, Alt+Tab, the
 // Windows key…, sent to the screen), sending files, a window of its own, 全屏, and 断开.
 import { useEffect, useRef, useState, type MutableRefObject, type ReactNode } from "react";
 import { DropdownMenu, Popover } from "radix-ui";
-import type { ScreenViewState, StationNet } from "../core/shapes.ts";
-import { Chat, Check, ChevronDown, ChevronRight, Close, Expand, External, Keyboard, Monitor, Shrink, Sliders, Trash, Upload } from "@stillfail/ui/icons.tsx";
+import type { ScreenScale, ScreenViewState, StationNet } from "../core/shapes.ts";
+import { Chat, Check, ChevronDown, ChevronRight, Close, Expand, External, Keyboard, Monitor, Shrink, Sliders, TextSize, Trash, Upload } from "@stillfail/ui/icons.tsx";
 import * as controlsCss from "@stillfail/ui/styles/controls.css.ts";
+import { Keys } from "../ui.tsx";
 import { t } from "../i18n.ts";
-import type { Quality } from "./frames.ts";
+import type { DecodeStats, Quality } from "./frames.ts";
 import * as css from "./ScreenViewer.css.ts";
 
-/** What came of the view so far: frames and their bytes (counted as they come; read each second while shown). */
-export type Meter = { frames: number; bytes: number };
+/** What came of the view so far: frames and their bytes (counted as they come; read each second while shown), and how
+ * the page's decoder goes. */
+export type Meter = { frames: number; bytes: number; decode?: () => DecodeStats };
 
 /** A key sent with modifiers (bit 0 Alt, 1 Ctrl, 2 Meta, 3 Shift: input.ts), as the screen's system names it. */
 export type Combo = { name: string; keys: string; key: string; code: string; mods: number };
@@ -65,14 +67,22 @@ function useRate(meter: MutableRefObject<Meter>, on: boolean): { fps: number; bp
 
 /** How the view goes, as a remote desktop's window says it: the signal mark (its bars and colour as the round trip is)
  * and how long it has been seen; pressed, the whole of it under the round trip: frames and bits a second, packets
- * lost; the way and the station's system; the picture's size and codec. */
+ * lost; the way and the station's system; the picture's size and codec, what captures it and whether it is encoded on
+ * the hardware. */
 export function NetChip({ net, shown, meter, os }: { net: StationNet | null; shown: Omit<ScreenViewState, "cursor"> | null; meter: MutableRefObject<Meter>; os: string | undefined }) {
   const [open, setOpen] = useState(false);
   const rate = useRate(meter, open);
   const since = useSince();
   const level = net?.rtt?.level;
+  // Read again each second while open (the rate's ticks draw it anew).
+  const decode = open ? meter.current.decode?.() : undefined;
+  const [copied, setCopied] = useState(false);
   const groups: [string, ReactNode][][] = [
     [
+      [t("web-pages.screen.stat.frameLatency"), shown?.latency ? `${shown.latency.frame} ms` : "—"],
+      [t("web-pages.screen.stat.beforeSent"), shown?.latency ? `${shown.latency.before} ms` : "—"],
+      [t("web-pages.screen.stat.decode"), decode?.ms != null
+        ? <>{decode.ms} ms{decode.held > 0 && <span className={css.figure} data-level="amber">{` · ${t("web-pages.screen.stat.held", { count: decode.held })}`}</span>}</> : "—"],
       [t("web-pages.screen.stat.fps"), rate ? String(Math.round(rate.fps)) : "—"],
       [t("web-pages.screen.stat.bitrate"), rate ? bitrate(rate.bps) : "—"],
       [t("web-pages.screen.stat.loss"), net?.loss ? <span className={css.figure} data-level={net.loss.level}>{net.loss.text}</span> : "0%"],
@@ -83,7 +93,10 @@ export function NetChip({ net, shown, meter, os }: { net: StationNet | null; sho
     ],
     [
       [t("web-pages.screen.stat.picture"), shown?.width && shown.height ? `${shown.width}×${shown.height}` : "—"],
-      [t("web-pages.screen.stat.codec"), shown?.codec ? (shown.codec === "h264" ? "H.264" : shown.codec.toUpperCase()) : "—"],
+      [t("web-pages.screen.stat.codec"), shown?.codec ? (shown.codec === "h264" ? "H.264" : shown.codec === "h265" ? "H.265" : shown.codec.toUpperCase()) : "—"],
+      [t("web-pages.screen.stat.capture"), shown?.video?.capture ?? "—"],
+      [t("web-pages.screen.stat.encoder"), shown?.video?.hardware === undefined ? "—"
+        : <span title={shown.video.encoder}>{t(shown.video.hardware ? "web-pages.screen.stat.hardware" : "web-pages.screen.stat.software")}</span>],
     ],
   ];
   return (
@@ -106,6 +119,15 @@ export function NetChip({ net, shown, meter, os }: { net: StationNet | null; sho
               {group.map(([k, v]) => <div key={k}><dt>{k}</dt><dd>{v}</dd></div>)}
             </dl>
           ))}
+          <button type="button" className={css.netCopy} onClick={() => {
+            // Everything above as figures (no screen, no names), for a report.
+            const said = {
+              rtt: net?.rtt?.text, loss: net?.loss?.text ?? "0%", path: net?.path, system: os, fps: rate ? Math.round(rate.fps) : null,
+              bps: rate ? Math.round(rate.bps) : null, picture: shown?.width ? `${shown.width}x${shown.height}` : null, codec: shown?.codec,
+              latency: shown?.latency ?? null, video: shown?.video ?? null, decode: decode ?? null, agent: navigator.userAgent,
+            };
+            void navigator.clipboard?.writeText(JSON.stringify(said)).then(() => { setCopied(true); setTimeout(() => setCopied(false), 1500); }, () => {});
+          }}>{t(copied ? "web-pages.screen.stat.copied" : "web-pages.screen.stat.copy")}</button>
         </Popover.Content>
       </Popover.Portal>
     </Popover.Root>
@@ -135,10 +157,50 @@ function Bars({ level, size = 14 }: { level: string | undefined; size?: number }
   );
 }
 
-/** 控制中心: what can be done with the view, as a menu (画质 and 组合键 open beside it). */
-export function ControlCenter({ quality, onQuality, combos, onCombo, onSend, onWindow, full, onFull, chat, onClose, onLeave }: {
+/** A scale as the menu says it: 150%, and 推荐 beside the one its system recommends. */
+function scaleWords(percent: number, scale: ScreenScale): string {
+  return percent === scale.recommended ? t("web-pages.screen.scaleRecommended", { percent }) : `${percent}%`;
+}
+
+/** The scale's steps as radio items, the one now checked. */
+function ScaleItems({ scale, onScale, item }: { scale: ScreenScale; onScale: (percent: number) => void; item: string }) {
+  return (
+    <DropdownMenu.RadioGroup value={String(scale.percent)} onValueChange={(v) => onScale(Number(v))}>
+      {scale.steps.map((p) => (
+        <DropdownMenu.RadioItem key={p} value={String(p)} className={item}>
+          <span className={css.menuCheck}><DropdownMenu.ItemIndicator><Check size={14} /></DropdownMenu.ItemIndicator></span>
+          <span className={css.menuWords}>{scaleWords(p, scale)}</span>
+        </DropdownMenu.RadioItem>
+      ))}
+    </DropdownMenu.RadioGroup>
+  );
+}
+
+/** A phone's 缩放: its button in the viewer's foot, the steps above it. */
+export function ScaleButton({ scale, onScale, className }: { scale: ScreenScale; onScale: (percent: number) => void; className: string }) {
+  const item = `${controlsCss.menuItem} ${css.menuItem}`;
+  return (
+    <DropdownMenu.Root modal={false}>
+      <DropdownMenu.Trigger className={className} aria-label={t("web-pages.screen.scale")}><TextSize size={18} /></DropdownMenu.Trigger>
+      <DropdownMenu.Portal>
+        <DropdownMenu.Content className={`${controlsCss.popover} ${controlsCss.menuList} ${css.menu}`} side="top" sideOffset={6} collisionPadding={8} onCloseAutoFocus={(e) => e.preventDefault()}>
+          <ScaleItems scale={scale} onScale={onScale} item={item} />
+        </DropdownMenu.Content>
+      </DropdownMenu.Portal>
+    </DropdownMenu.Root>
+  );
+}
+
+/** 控制中心: what can be done with the view, as a menu (画质, 缩放 and 组合键 open beside it). */
+export function ControlCenter({ quality, onQuality, codec, onCodec, scale, onScale, combos, onCombo, onSend, onWindow, full, onFull, chat, onClose, onLeave }: {
   quality: Quality;
   onQuality: (q: Quality) => void;
+  /** The codec asked: the best both ends have, or H.264 only. */
+  codec: "auto" | "h264";
+  onCodec: (c: "auto" | "h264") => void;
+  /** The screen's display scale, while driving one whose station changes it. */
+  scale?: ScreenScale | undefined;
+  onScale: (percent: number) => void;
   /** None while it is not driven. */
   combos: Combo[];
   onCombo: (c: Combo) => void;
@@ -183,6 +245,38 @@ export function ControlCenter({ quality, onQuality, combos, onCombo, onSend, onW
               </DropdownMenu.SubContent>
             </DropdownMenu.Portal>
           </DropdownMenu.Sub>
+          <DropdownMenu.Sub>
+            <DropdownMenu.SubTrigger className={item}>
+              <Monitor size={16} /><span className={css.menuWords}>{t("web-pages.screen.codec")}</span>
+              <span className={css.menuEnd}>{t(`web-pages.screen.codec.${codec}`)}</span><ChevronRight size={14} />
+            </DropdownMenu.SubTrigger>
+            <DropdownMenu.Portal>
+              <DropdownMenu.SubContent className={list} sideOffset={6} collisionPadding={8}>
+                <DropdownMenu.RadioGroup value={codec} onValueChange={(v) => onCodec(v as "auto" | "h264")}>
+                  {(["auto", "h264"] as const).map((c) => (
+                    <DropdownMenu.RadioItem key={c} value={c} className={item}>
+                      <span className={css.menuCheck}><DropdownMenu.ItemIndicator><Check size={14} /></DropdownMenu.ItemIndicator></span>
+                      <span className={css.menuWords}>{t(`web-pages.screen.codec.${c}`)}</span>
+                      <span className={css.menuEnd}>{t(`web-pages.screen.codecHint.${c}`)}</span>
+                    </DropdownMenu.RadioItem>
+                  ))}
+                </DropdownMenu.RadioGroup>
+              </DropdownMenu.SubContent>
+            </DropdownMenu.Portal>
+          </DropdownMenu.Sub>
+          {scale && (
+            <DropdownMenu.Sub>
+              <DropdownMenu.SubTrigger className={item}>
+                <TextSize size={16} /><span className={css.menuWords}>{t("web-pages.screen.scale")}</span>
+                <span className={css.menuEnd}>{scale.percent}%</span><ChevronRight size={14} />
+              </DropdownMenu.SubTrigger>
+              <DropdownMenu.Portal>
+                <DropdownMenu.SubContent className={list} sideOffset={6} collisionPadding={8}>
+                  <ScaleItems scale={scale} onScale={onScale} item={item} />
+                </DropdownMenu.SubContent>
+              </DropdownMenu.Portal>
+            </DropdownMenu.Sub>
+          )}
           {combos.length > 0 && (
             <DropdownMenu.Sub>
               <DropdownMenu.SubTrigger className={item}>
@@ -193,7 +287,7 @@ export function ControlCenter({ quality, onQuality, combos, onCombo, onSend, onW
                   {combos.map((c) => (
                     <DropdownMenu.Item key={c.keys} className={item} onSelect={() => onCombo(c)}>
                       <span className={css.menuWords}>{c.name}</span>
-                      <span className={css.menuKeys}>{c.keys.split(" ").map((k) => <kbd key={k}>{k}</kbd>)}</span>
+                      <Keys caps={c.keys.split(" ")} />
                     </DropdownMenu.Item>
                   ))}
                 </DropdownMenu.SubContent>

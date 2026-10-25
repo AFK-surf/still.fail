@@ -1,0 +1,14 @@
+# A station's page on the desktop (sfdesk station_page.mbt, the web's cloud/StationPage.tsx): MBUI_WIN=1280x800 over
+# the made-up chat. Station from the rail (its first station's page); its parts: 设置, 软件与设备, back to 概览.
+timeout 30000
+until 发消息
+wait 600
+tapxy 27 157
+wait 1500
+tap =设置
+wait 1500
+tap 软件与设备
+wait 1500
+tap 概览
+wait 1200
+exit

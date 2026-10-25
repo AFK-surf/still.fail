@@ -1,5 +1,6 @@
 import { globalStyle, style } from "@vanilla-extract/css";
 import { vars } from "./tokens.css.ts";
+import { litOver } from "./lit.ts";
 import { panel } from "./glass.ts";
 import { popKeyframes } from "./keyframes.css.ts";
 import { command, field } from "../parts.css.ts";
@@ -12,7 +13,8 @@ export const btn = style({
   color: vars.text, fontSize: vars.textUi, fontWeight: "500", whiteSpace: "nowrap", cursor: "pointer",
   transition: `background ${vars.dur} ${vars.easeOut}, border-color ${vars.dur} ${vars.easeOut}`,
   selectors: {
-    "&:hover:not(:disabled)": { background: vars.hover },
+    // Its canvas kept under the ink (lit.ts): on a card's grey it is the button it was, a step on.
+    "&:hover:not(:disabled)": litOver,
     "&:disabled": { opacity: ".45", cursor: "default" },
     "&[aria-busy=\"true\"]": { cursor: "progress", opacity: ".7" },
   },
@@ -29,7 +31,8 @@ export const btnDanger = style({ color: vars.red });
 export const btnDangerSolid = style({
   background: vars.red, borderColor: vars.red, color: "#fff",
   selectors: {
-    "&:hover:not(:disabled)": { background: `color-mix(in srgb, ${vars.red} 85%, black)` },
+    // A solid ground pointed at: a step towards the page, as the primary's (docs/ui-panels.md 悬停).
+    "&:hover:not(:disabled)": { background: `color-mix(in srgb, ${vars.red} 85%, ${vars.canvas})` },
   },
 });
 /** A solid button's call under way: the ring where its icon goes (14, as everywhere) in its text's colour. */
@@ -124,6 +127,8 @@ export const chooser = style({
 export const chooserMenu = style({});
 export const chooserItem = style({ display: "flex", alignItems: "center", gap: "6px" });
 export const chooserCheck = style({});
+/** A check at its row's end (ChooserItem `checkEnd`): pushed there. */
+export const chooserCheckEnd = style({ marginLeft: "auto" });
 export const chooserChevron = style({});
 globalStyle(chooserCheck, { width: "14px", display: "inline-grid", placeItems: "center", flex: "none" });
 globalStyle(chooserMenu, { maxHeight: "360px", overflowY: "auto", minWidth: "220px" });

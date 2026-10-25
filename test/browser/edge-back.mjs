@@ -76,7 +76,7 @@ for (const engine of (process.env.ENGINES || 'chromium,webkit').split(',')) {
   };
   const open = async path => {
     await page.evaluate(path => window.reviewApp.push(path), path);
-    await page.waitForFunction(path => window.reviewApp.current === path, path);
+    await page.waitForFunction(path => window.location.pathname === path, path);
     await settle();
   };
   const gesture = async (points, cancel = false) => {
@@ -106,7 +106,7 @@ for (const engine of (process.env.ENGINES || 'chromium,webkit').split(',')) {
   };
   try {
     await page.goto(base + '/edge-back-check.html');
-    await page.waitForFunction(() => window.reviewApp?.current === '/w/demo');
+    await page.waitForFunction(() => window.location.pathname === '/w/demo');
     await open('/w/demo/one');
     const prevented = await page.evaluate(() => {
       const e = new Event('touchstart', { bubbles: true, cancelable: true });
@@ -129,21 +129,21 @@ for (const engine of (process.env.ENGINES || 'chromium,webkit').split(',')) {
     await gesture([[8, 210], [60, 210]], true);
     assert.equal(await page.evaluate(() => window.reviewClicks), 0, 'pointer cancel never clicks');
     await gesture([[8, 28]]);
-    await page.waitForFunction(() => window.reviewApp.current === '/w/demo');
+    await page.waitForFunction(() => window.location.pathname === '/w/demo');
     await settle();
     await open('/w/demo/one');
     await open('/w/demo/two');
     await gesture([[8, 340], [70, 340], [140, 340], [230, 340]]);
-    await page.waitForFunction(() => window.reviewApp.current === '/w/demo/one');
+    await page.waitForFunction(() => window.location.pathname === '/w/demo/one');
     await settle();
     await open('/w/demo/two');
     await page.evaluate(() => { window.reviewMoves = []; window.reviewUA = true; history.back(); });
-    await page.waitForFunction(() => window.reviewApp.current === '/w/demo/one');
+    await page.waitForFunction(() => window.location.pathname === '/w/demo/one');
     await frames(page);
     assert.deepEqual(await page.evaluate(() => window.reviewMoves), [], 'UA transition is not animated again');
     await open('/w/demo/two');
     await page.evaluate(() => { window.reviewMoves = []; history.back(); });
-    await page.waitForFunction(() => window.reviewApp.current === '/w/demo/one');
+    await page.waitForFunction(() => window.location.pathname === '/w/demo/one');
     await frames(page);
     assert.ok((await page.evaluate(() => window.reviewMoves)).includes('in'), 'ordinary back still animates');
     await settle();

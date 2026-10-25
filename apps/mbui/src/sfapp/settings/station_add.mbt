@@ -61,8 +61,8 @@ fn station_ids(core : Core, here : Here) -> Array[String]? {
 
 ///|
 /// A place's primary action (PlaceAction: the bar's notch, a pushed page's ＋), None where it has none now: Station's
-/// adds a station (its owners and admins, once its stations are read), Profile's a profile and 连接's a connect (once a
-/// station is online).
+/// adds a station (its owners and admins, once its stations are read), Profile's a profile (once a station is online).
+/// 连接's is its page's (src/sfdesk connects.mbt connects_add).
 pub fn place_action(core : Core, here : Here, place : String) -> (() -> Unit)? {
   match place {
     "stations" =>
@@ -70,25 +70,19 @@ pub fn place_action(core : Core, here : Here, place : String) -> (() -> Unit)? {
         Some(ids) if manager_of(core, here) == Some(true) => Some(fn() { open_add_station(core, here, ids) })
         _ => None
       }
-    // a profile or a connect is added on a station online (the only one, without asking)
-    "profiles" | "connects" => {
+    // a profile is added on a station online (the only one, without asking)
+    "profiles" => {
       let online = online_stations(core, here)
       if online.length() == 0 {
         return None
       }
-      let go = fn(station : String) {
-        if place == "profiles" {
-          (core.push)(NewProfile(station))
-        } else {
-          open_new_connect(core, station)
-        }
-      }
+      let go = fn(station : String) { (core.push)(NewProfile(station)) }
       Some(fn() {
         if online.length() == 1 {
           go(text(Some(online[0]), "station"))
         } else {
           open_pick_station(
-            tr(if place == "profiles" { "android-settings.profile.add" } else { "android-settings.flow.title" }),
+            tr("android-settings.profile.add"),
             online,
             go,
           )
@@ -112,14 +106,11 @@ fn open_add_station(_core : Core, here : Here, known : Array[String], existing? 
     // the choice stays at the top; only what is under it scrolls
     if offered && adding.made is None {
       c.box(w=Fill(1.0), pl=20.0, pr=20.0, pb=10.0, fn() {
-        let i = seg(
+        let i = @sf.segmented(
           c,
           "add-kind",
           [tr("web-pages.settings.stations.kindNew"), tr("web-pages.settings.stations.kindExisting")],
           if adding.existing { 1 } else { 0 },
-          fill=true,
-          height=34.0,
-          radius=17.0,
         )
         adding.existing = i == 1
       })
@@ -134,7 +125,7 @@ fn open_add_station(_core : Core, here : Here, known : Array[String], existing? 
             c.box(w=Fill(1.0), pl=20.0, pr=20.0, pb=10.0, fn() {
               c.text(
                 fill("android-settings.station.addNote", [("app", "still.fail")]),
-                size=14.0,
+                size=@sf.theme().t.meta,
                 color=@sf.theme().p.muted,
                 w=Fill(1.0),
                 line=20.0,
@@ -203,8 +194,8 @@ fn join_existing(c : @ui.Ctx, core : Core, here : Here, rows : Array[Json], load
     c.box(w=Fill(1.0), h=Fill(1.0), fn() {
       let blocks : Array[() -> Unit] = [
         fn() {
-          c.box(w=Fill(1.0), padx=20.0, pb=10.0, fn() {
-            c.text(tr("web-pages.settings.stations.existingLead"), size=14.0, color=t.p.muted, w=Fill(1.0), line=20.0)
+          c.box(w=Fill(1.0), pb=10.0, fn() {
+            c.text(tr("web-pages.settings.stations.existingLead"), size=t.t.meta, color=t.p.muted, w=Fill(1.0), line=20.0)
             |> ignore
           })
           |> ignore
@@ -212,11 +203,11 @@ fn join_existing(c : @ui.Ctx, core : Core, here : Here, rows : Array[Json], load
       ]
       if rows.length() == 0 {
         blocks.push(fn() {
-          c.box(w=Fill(1.0), padx=20.0, pb=10.0, fn() {
+          c.box(w=Fill(1.0), pb=10.0, fn() {
             if loading {
               wait_line(c, tr("common.reading"))
             } else {
-              c.text(tr("web-pages.settings.stations.existingNone"), size=14.0, color=t.p.muted, w=Fill(1.0), line=20.0)
+              c.text(tr("web-pages.settings.stations.existingNone"), size=t.t.meta, color=t.p.muted, w=Fill(1.0), line=20.0)
               |> ignore
             }
           })
@@ -230,51 +221,44 @@ fn join_existing(c : @ui.Ctx, core : Core, here : Here, rows : Array[Json], load
           let mark = fn() { station_mark(c, v, 15.0, t.p.text) }
           let marked = @sf.has_station_mark(text(v, "emoji"), text(v, "icon"))
           if took_it(s) {
-            pick_row(c, "join/" + id, text(v, "name"), sub=tr("web-pages.settings.stations.joinedRow"), checked=true, mark?=if marked {
+            @sf.choice_row(c, "join/" + id, true, text(v, "name"), note=tr("web-pages.settings.stations.joinedRow"), lead?=if marked {
               Some(mark)
             } else {
               None
             })
             |> ignore
-          } else if pick_row(
-              c,
-              "join/" + id,
-              text(v, "name"),
-              sub=text(v, "line"),
-              checked=match chosen {
+          } else if @sf.choice_row(c, "join/" + id, match chosen {
                 Some(ch) => text(Some(ch), "station") == id
                 None => false
-              },
-              enabled=!busy && !flag(v, "needsLock"),
-              mark?=if marked {
+              }, text(v, "name"), note=text(v, "line"), disabled=!(!busy && !flag(v, "needsLock")), lead?=if marked {
                 Some(mark)
               } else {
                 None
-              },
-            ) {
+              }) {
             adding.picked = id
             adding.error = ""
           }
         })
       }
       blocks.push(fn() {
-        c.box(w=Fill(1.0), padx=20.0, pt=10.0, gap=10.0, fn() {
-          c.text(tr("web-pages.settings.stations.softIsolation"), size=12.0, color=t.p.muted, w=Fill(1.0), line=17.0)
+        c.box(w=Fill(1.0), pt=10.0, gap=10.0, fn() {
+          c.text(tr("web-pages.settings.stations.softIsolation"), size=t.t.caption, color=t.p.muted, w=Fill(1.0), line=17.0)
           |> ignore
           if adding.error != "" {
-            c.text(adding.error, size=13.0, color=t.p.red, w=Fill(1.0), line=18.0) |> ignore
+            c.text(adding.error, size=t.t.meta, color=t.p.red, w=Fill(1.0), line=18.0) |> ignore
           }
         })
         |> ignore
       })
-      scroll_page(c, "join-station/" + adding.serial.to_string(), blocks)
+      // (in the sheet's column, its rows reaching out across its sides: @sf.sheet_column)
+      scroll_page(c, "join-station/" + adding.serial.to_string(), blocks.map(fn(b) { fn() { @sf.sheet_column(c, b) } }))
     })
     |> ignore
     c.box(dir=Row, w=Fill(1.0), padx=20.0, pt=10.0, pb=24.0, gap=8.0, justify=JEnd, fn() {
-      if button(c, "join-close", tr(if adding.took.length() == 0 { "common.cancel" } else { "common.done" }), false) {
+      if @sf.button(c, tr(if adding.took.length() == 0 { "common.cancel" } else { "common.done" }), key="join-close") {
         close_sheet()
       }
-      if button(c, "join-go", tr("web-pages.settings.stations.joinAction"), true, busy~, enabled=chosen is Some(_)) {
+      if @sf.button(c, tr("web-pages.settings.stations.joinAction"), key="join-go", tone=Primary, busy=busy, disabled=chosen is None) {
         match chosen {
           Some(s) => {
             adding.error = ""
@@ -337,17 +321,17 @@ fn add_station_steps(
   c.box(w=Fill(1.0), gap=10.0, fn() {
     match (adding.made, joined) {
       (None, _) => {
-        c.text(label, size=13.0, weight=600, color=t.p.text, w=Fill(1.0), line=18.0) |> ignore
+        c.text(label, size=t.t.meta, weight=600, color=t.p.text, w=Fill(1.0), line=18.0) |> ignore
         let name = field_box(c, "station-name/" + adding.serial.to_string(), placeholder).trim(chars=" \t\n").to_owned()
         if adding.error != "" {
-          c.text(adding.error, size=13.0, color=t.p.red, w=Fill(1.0), line=18.0) |> ignore
+          c.text(adding.error, size=t.t.meta, color=t.p.red, w=Fill(1.0), line=18.0) |> ignore
         }
         c.box(dir=Row, w=Fill(1.0), pt=6.0, gap=8.0, justify=JEnd, fn() {
-          if cancel && button(c, "add-cancel", tr("common.cancel"), false) {
+          if cancel && @sf.button(c, tr("common.cancel"), key="add-cancel") {
             c.blur()
             close_sheet()
           }
-          if button(c, "add-make", tr("android-settings.station.make"), true, busy~, enabled=name != "") {
+          if @sf.button(c, tr("android-settings.station.make"), key="add-make", tone=Primary, busy=busy, disabled=name == "") {
             c.blur()
             adding.error = ""
             (core.call)(
@@ -367,21 +351,21 @@ fn add_station_steps(
       (Some(_), Some(s)) => {
         c.box(dir=Row, w=Fill(1.0), padx=12.0, pady=10.0, gap=8.0, radius=12.0, bg=@sf.alpha(t.p.green, 0.12), align=ACenter, fn() {
           @sf.icon(c, "check", size=16.0, color=t.p.green) |> ignore
-          c.text(fill("android-settings.station.joined", [("name", text(Some(s), "name"))]), size=14.0, color=t.p.green, w=Fill(1.0), line=20.0)
+          c.text(fill("android-settings.station.joined", [("name", text(Some(s), "name"))]), size=t.t.ui, color=t.p.green, w=Fill(1.0), line=20.0)
           |> ignore
         })
         |> ignore
         c.box(dir=Row, w=Fill(1.0), justify=JEnd, fn() {
-          if button(c, "add-done", tr("common.done"), true) {
+          if @sf.button(c, tr("common.done"), key="add-done", tone=Primary) {
             done()
           }
         })
         |> ignore
       }
       (Some((install, _)), None) => {
-        c.text(tr("android-settings.station.run"), size=14.0, color=t.p.text, w=Fill(1.0), line=20.0) |> ignore
+        c.text(tr("android-settings.station.run"), size=t.t.ui, color=t.p.text, w=Fill(1.0), line=20.0) |> ignore
         command_box(c, core, install)
-        c.text(fill("android-settings.station.runNote", [("app", "still.fail")]), size=13.0, color=t.p.muted, w=Fill(1.0), line=18.0)
+        c.text(fill("android-settings.station.runNote", [("app", "still.fail")]), size=t.t.meta, color=t.p.muted, w=Fill(1.0), line=18.0)
         |> ignore
         wait_line(c, tr("android-settings.station.waiting"))
       }
@@ -391,9 +375,12 @@ fn add_station_steps(
 }
 
 ///|
-/// A command to run elsewhere, with a button that copies it (Settings.kt CommandBox): on surface2, its corner taken from
-/// its button's, 10 in from its edges.
-fn command_box(c : @ui.Ctx, core : Core, words : String) -> Unit {
+/// A command to run elsewhere, with a button that copies it (Settings.kt CommandBox): on surface2, a block of the
+/// ladder's (round by its row corner), its copy button the ladder's inset in from its top and end, as tall as two of
+/// its lines and its inset under them (so with one or two lines as far from its foot too), round by the ladder's next
+/// step there (mbui works it out). `reach`: in a card's foot corners, how it reaches past the card's words
+/// (block_across).
+fn command_box(c : @ui.Ctx, core : Core, words : String, reach? : @ui.Style) -> Unit {
   let t = @sf.theme()
   let id = c.id("command-copy")
   if hit(c, id) {
@@ -401,30 +388,31 @@ fn command_box(c : @ui.Ctx, core : Core, words : String) -> Unit {
     (core.say)(tr("common.copied"))
   }
   c.box(
+    style=reach.unwrap_or(@ui.style()),
     dir=Row,
     w=Fill(1.0),
     pl=12.0,
-    pr=10.0,
-    pt=10.0,
-    pb=10.0,
+    pr=@sf.corner_inset,
+    pt=@sf.corner_inset,
+    pb=@sf.corner_inset,
     gap=8.0,
     radius=@sf.command_box_corner,
     bg=t.p.card2,
     border=1.0,
     border_color=t.p.line,
     fn() {
-      c.box(w=Fill(1.0), fn() { mono(c, words, size=12.0, line=18.0, wrap=true) }) |> ignore
+      c.box(w=Fill(1.0), fn() { mono(c, words, size=12.0, line=command_line, wrap=true) }) |> ignore
       c.box(
-        w=Px(32.0),
-        h=Px(32.0),
-        radius=8.0,
+        w=Px(command_copy),
+        h=Px(command_copy),
+        radius=@sf.small_corner,
         bg=t.p.chip,
         align=ACenter,
         justify=JCenter,
         id~,
         fn() {
           @sf.icon(c, "copy", size=16.0, color=t.p.text) |> ignore
-          @motion.ripple(c, id, 8.0)
+          @motion.ripple(c, id, @sf.small_corner)
         },
       )
       |> ignore
@@ -432,6 +420,13 @@ fn command_box(c : @ui.Ctx, core : Core, words : String) -> Unit {
   )
   |> ignore
 }
+
+///|
+/// A command's line, and its copy button: two of its lines high.
+let command_line : Double = 18.0
+
+///|
+let command_copy : Double = command_line * 2.0
 
 ///|
 /// A workspace with no station (FirstStation): what a station is, then, for its owners and admins, its first one added
@@ -442,9 +437,9 @@ fn first_station(c : @ui.Ctx, core : Core, here : Here) -> Unit {
   let w = workspace_view(core, here)
   c.box(w=Fill(1.0), pad=30.0, gap=10.0, align=ACenter, fn() {
     @sf.drawable(c, if t.dark { "illus_no_station_dark" } else { "illus_no_station" }, 240.0) |> ignore
-    c.text(tr("android-settings.station.first"), size=17.0, weight=600, color=t.p.text, center=true, w=Fill(1.0))
+    c.text(tr("android-settings.station.first"), size=t.t.title, weight=600, color=t.p.text, center=true, w=Fill(1.0))
     |> ignore
-    c.text(tr("android-settings.station.firstNote"), size=14.0, color=t.p.muted, center=true, w=Fill(1.0), line=20.0)
+    c.text(tr("android-settings.station.firstNote"), size=t.t.meta, color=t.p.muted, center=true, w=Fill(1.0), line=20.0)
     |> ignore
     c.box(w=Fill(1.0), pt=8.0, gap=12.0, fn() {
       match w.value {
@@ -460,7 +455,7 @@ fn first_station(c : @ui.Ctx, core : Core, here : Here) -> Unit {
           )
         Some(_) if !(text(w.value, "role") == "owner" || text(w.value, "role") == "admin") =>
           c.box(w=Fill(1.0), padx=12.0, pady=10.0, radius=12.0, bg=@sf.alpha(warn, 0.12), fn() {
-            c.text(tr("android-settings.station.wait"), size=13.0, color=t.p.text, w=Fill(1.0), line=19.5) |> ignore
+            c.text(tr("android-settings.station.wait"), size=t.t.meta, color=t.p.text, w=Fill(1.0), line=19.5) |> ignore
           })
           |> ignore
         Some(_) => {

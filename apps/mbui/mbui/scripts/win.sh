@@ -109,7 +109,10 @@ case "${1:-build}" in
     LOG=$(cygpath -w "$PWD/out/mbc.log")
     code=0
     B=$M; [ -z "$APPMOD" ] || B=$AM
-    (cd $B && export PATH="$SHIM:$PATH" MBC_LOG="$LOG" MBC_VERBOSE=1 && time moon build --target native $FLAG src/$PKG) || code=$?
+    # (its warnings a line each, not rendered: moon renders them, ~600-1100 with their sources, after the last task,
+    # 5-10 s of the runner's one core with nothing else of the build left, as moon's --trace shows, still.fail's CI,
+    # 2026-10-24)
+    (cd $B && export PATH="$SHIM:$PATH" MBC_LOG="$LOG" MBC_VERBOSE=1 && time moon build --no-render --target native $FLAG src/$PKG) || code=$?
     cat out/mbc.log 2>/dev/null || echo "win.sh: moon ran no command through scripts/mbc (out/mbc/win)"
     [ $code = 0 ] || exit $code
     ls -la $EXE ;;

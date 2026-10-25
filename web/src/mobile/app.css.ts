@@ -1,6 +1,7 @@
 import { globalStyle, keyframes, style } from "@vanilla-extract/css";
 import { vars } from "@stillfail/ui/styles/tokens.css.ts";
 import { mScroll } from "./styles/pages.css.ts";
+import { deck as decisionDeck } from "../Decisions.css.ts";
 import { mFromLeftKeyframes, mFromRightKeyframes, mRiseInKeyframes, mRiseOutKeyframes, mToLeftKeyframes, mToRightKeyframes } from "@stillfail/ui/styles/keyframes.css.ts";
 
 // Another place on the bottom bar: its page comes in from 30 toward the way the ball goes (a place further right, from
@@ -37,7 +38,7 @@ export const mPage = style({
 // As wide as Safari's own edge gesture reaches in, which a touch here keeps from starting (app.tsx EdgeStrip).
 // A page under the one on top is kept as it was left, not drawn: what moves on it (spinners, a station's glyph
 // breathing, images' waiting blots) stands still meanwhile rather than being worked out every frame unseen.
-globalStyle(`${mPage}[data-role="under"] *, ${mPage}[data-role="under"] *::before, ${mPage}[data-role="under"] *::after`, {
+globalStyle(`${mPage}:is([data-role="under"], [data-role="kept"]) *, ${mPage}:is([data-role="under"], [data-role="kept"]) *::before, ${mPage}:is([data-role="under"], [data-role="kept"]) *::after`, {
   animationPlayState: "paused !important" as "paused",
 });
 export const mEdge = style({
@@ -107,6 +108,7 @@ export const mGrab = style({
 export const mSheetHead = style({ display: "flex", alignItems: "center", padding: "4px 18px 10px" });
 export const mMenuLayer = style({ zIndex: "55" });
 export const mMenu = style({
+  userSelect: "none", WebkitUserSelect: "none", WebkitTouchCallout: "none",
   position: "absolute", borderRadius: `calc(14px * ${vars.cornerScale})`, cornerShape: vars.cornerShape,
   background: "var(--m-surface)",
   boxShadow: "0 12px 36px rgba(0, 0, 0, .25)", overflow: "hidden", transformOrigin: "0 0", opacity: "0",
@@ -147,3 +149,6 @@ globalStyle(`${mMenu} button`, {
 // A place's top page has the bottom bar over its foot (Bar.tsx): what scrolls on it clears the bar (56 + 22) and its
 // primary action in the notch (令, a ＋), which stands 32 over it, with 16 to spare.
 globalStyle(`${mPage}[data-root] ${mScroll}`, { paddingBottom: "calc(var(--m-foot) + 126px)" });
+// The decision deck has its own scroller and floating reply/hint: keep the whole deck above the bar.
+// Its footer already includes the safe area, so only the bar's room is added here.
+globalStyle(`${mPage}[data-root] ${decisionDeck}`, { marginBottom: "126px" });

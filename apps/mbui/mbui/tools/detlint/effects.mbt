@@ -84,10 +84,43 @@ fn Eff::handler_param(self : Eff, key : String, i : Int) -> Bool {
       c.item == dc.item && c.kind == "bare" && !c.is_def && c.name == name
     })
     .map(fn(c) { c.at })
-  let got = sites.length() > 0 && sites.iter().all(fn(k) { self.exempt(df, k) })
+  // given on whole, not called, to what runs it later (build_effect.later: settings' confirm(…, run) handing `run` to
+  // @sf.confirm): a handler too
+  let body = df.items[dc.item]
+  let passed = []
+  let mut bare_other = false
+  for k in header_end(df, body)..<body.end {
+    let t = df.toks[k]
+    if t.kind != "ident" || t.text != name || (k > 0 && df.toks[k - 1].text == ".") {
+      continue
+    }
+    if k + 1 < df.toks.length() && df.toks[k + 1].kind == "op" && df.toks[k + 1].text == "(" {
+      continue
+    }
+    if self.given_later(df, dc.item, k) {
+      passed.push(k)
+    } else {
+      bare_other = true
+    }
+  }
+  let got = (sites.length() > 0 || passed.length() > 0) &&
+    !(passed.length() > 0 && bare_other) &&
+    sites.iter().all(fn(k) { self.exempt(df, k) })
   self.asking.remove(hk)
   self.handlers[hk] = got
   got
+}
+
+///|
+/// Whether the token at k (in item `item`) is a whole argument of a call that runs what it is given later
+/// (build_effect.later).
+fn Eff::given_later(self : Eff, f : MbtFile, item : Int, k : Int) -> Bool {
+  f.calls.iter().any(fn(c) {
+    c.item == item &&
+    c.kind == "pkg" &&
+    self.cfg.effect_later.contains("\{c.qual}.\{c.name}") &&
+    c.args.iter().any(fn(a) { a.1.length() == 1 && a.1[0] == k })
+  })
 }
 
 ///|
@@ -146,6 +179,11 @@ fn Eff::later(self : Eff, f : MbtFile, o : Int) -> Bool {
   }
   if callee.kind == "ident" && later_calls.contains(callee.text) {
     return true
+  }
+  // given to what runs it later (build_effect.later: an app's presenters)
+  match self.calls_at.get(at_key(f.rel, p - 1)) {
+    Some(call) if call.kind == "pkg" && self.cfg.effect_later.contains("\{call.qual}.\{call.name}") => return true
+    _ => ()
   }
   // given to an app's function that calls it only under an input (a button's own callback)
   match self.calls_at.get(at_key(f.rel, p - 1)) {

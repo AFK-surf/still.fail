@@ -12,6 +12,9 @@ test "the menus page under a Tester over mini1_menus's kept text draws, frame fo
     for line in t.drawn_text().split("\n") {
       println("TDUMP " + line.to_owned())
     }
+    for f in frames {
+      println("REHASH mini1_menus \{f.0} \{f.2}")
+    }
   }
   assert_true(frames.length() > 0)
   assert_eq(t.text_missing(), [])

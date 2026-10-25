@@ -33,7 +33,7 @@ test "a bare address tapped is handed to the system; one to a chat opens it here
 }
 
 ///|
-test "a link held still: its menu (打开链接, 复制链接), the link not followed" {
+test "a link held still: its menu (打开链接, 复制链接: the presenters' sheet), the link not followed" {
   let calls : Array[Made] = []
   let t = fake_core(calls)
   scroll_run_clear(t, "example.com/bench/list") |> ignore
@@ -42,17 +42,21 @@ test "a link held still: its menu (打开链接, 复制链接), the link not fol
   t.run_for(long_press_ms)
   t.release(x + w / 2.0, y + h / 2.0)
   assert_eq(t.opened().length(), 0)
+  // (its menu, the presenters': a sheet with a finger, in)
+  t.run_for(@kit.sheet_rest("sf-present") - t.time())
   assert_true(t.find("打开链接") is Some(_))
   // felt as it opened, once (Links.kt: LongPress)
   assert_eq(t.haptics(), [@ui.Haptic::LongPress])
   // no words picked by the same press
   assert_eq(pk.ts, "")
   t.tap_text("复制链接")
+  t.frame()
+  t.frame()
   assert_eq(t.clipboard(), "https://example.com/bench/list")
   assert_true(t.find("已复制链接") is Some(_))
-  assert_true(!link_menu.open)
-  // gone on the menus' spring
-  t.run_for(@motion.menu_spring.duration(1.0, 0.0, 0.0))
+  assert_true(!@sf.presenting())
+  // gone as the sheet goes
+  t.run_for(@kit.sheet_rest("sf-present") - t.time())
   assert_true(t.find("打开链接") is None)
 }
 
@@ -93,7 +97,7 @@ fn links_core(
   if mode.has_prefix("chat") {
     open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
   }
-  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0)
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0, platform=2)
   t.run_for(@ui.nav_push_ms)
   t
 }
@@ -227,13 +231,10 @@ test "a history's link with an entry: its page over the chat, that entry's item 
     _ => fail("not the history")
   }
   t.run_for(@ui.nav_push_ms)
-  // entries 11–15: the third item (h3), marked
-  assert_eq(history_marked.val.1, "h3")
-  assert_eq(history_placed.get("history/ws1/st1/s-c1"), Some(false))
-  t.run_for(history_shade_ms)
-  assert_true(history_mark(t.ctx(), "history/ws1/st1/s-c1").get() > 0.99)
-  t.run_for(history_mark_ms)
-  assert_true(history_mark(t.ctx(), "history/ws1/st1/s-c1").get() < 0.01)
+  // entries 11–15: the third item (h3), marked (sfpages' history_steps.mbt), its mark gone after
+  assert_eq(@sfpages.history_marked().1, "h3")
+  t.run_for(@sfpages.steps_marked_ms)
+  t.assert_idle()
 }
 
 ///|
@@ -245,7 +246,8 @@ test "an entry before what is loaded: the page before asked for first" {
   app.nav.push(History(chat_ref("ws1/st1", "s-c1"), "s-c1", Some(0)))
   t.run_for(@ui.nav_push_ms)
   assert_eq(named(calls, "history.older").length(), 1)
-  assert_true(!history_placed.contains("history/ws1/st1/s-c1"))
+  // (nothing gone to yet: what it goes to comes with the page before)
+  assert_eq(@sfpages.history_marked().1, "")
 }
 
 ///|
@@ -354,7 +356,7 @@ test "a login's page on this device: the notice that holds the app up says which
     },
   }
   open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
-  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0)
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0, platform=2)
   t.run_for(@ui.nav_push_ms)
   t.tap_text("在浏览器里登录")
   assert_eq(named(calls, "machineLogin.open").length(), 1)

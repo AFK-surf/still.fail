@@ -15,6 +15,8 @@ extern "C" fn ffi_now() -> Double = "mb_host_now"
 
 extern "C" fn ffi_event_time() -> Double = "mb_host_event_time"
 
+extern "C" fn ffi_frame_late() -> Double = "mb_host_frame_late"
+
 extern "C" fn ffi_platform() -> Int = "mb_host_platform"
 
 extern "C" fn ffi_request_frame() -> Unit = "mb_host_request_frame"
@@ -49,6 +51,13 @@ extern "C" fn ffi_text_key(
 #borrow(out)
 extern "C" fn ffi_glyph(key : Int, out : FixedArray[Double]) -> Unit = "mb_host_glyph"
 
+extern "C" fn ffi_glyph_put(key : Int, x : Int, y : Int) -> Unit = "mb_host_glyph_put"
+
+extern "C" fn ffi_atlas_size(colour : Int) -> Int = "mb_host_atlas_size"
+
+#borrow(keys)
+extern "C" fn ffi_glyphs_ahead(keys : FixedArray[Int], n : Int) -> Unit = "mb_host_glyphs_ahead"
+
 #borrow(path)
 extern "C" fn ffi_face_add(face : Int, path : String, weight : Int) -> Int = "mb_host_face_add"
 
@@ -56,6 +65,13 @@ extern "C" fn ffi_face_clear(face : Int) -> Unit = "mb_host_face_clear"
 
 #borrow(data)
 extern "C" fn ffi_face_add_bytes(face : Int, data : Bytes, weight : Int) -> Int = "mb_host_face_add_bytes"
+
+///|
+#borrow(family)
+extern "C" fn ffi_face_add_family(face : Int, family : String) -> Int = "mb_host_face_add_family"
+
+///|
+extern "C" fn ffi_local_font_families() -> String = "mb_host_local_font_families"
 
 extern "C" fn ffi_atlas_generation() -> Int = "mb_host_atlas_generation"
 
@@ -71,6 +87,9 @@ extern "C" fn ffi_present(
 ///|
 extern "C" fn ffi_text_menu(shown : Int, x : Double, y : Double, w : Double, h : Double, can : Int) -> Unit = "mb_host_text_menu"
 
+///|
+extern "C" fn ffi_edit_can(can : Int) -> Unit = "mb_host_edit_can"
+
 #borrow(text)
 extern "C" fn ffi_set_ime(
   active : Int,
@@ -85,6 +104,10 @@ extern "C" fn ffi_set_ime(
 
 #borrow(s)
 extern "C" fn ffi_clipboard_set(s : String) -> Unit = "mb_host_clipboard_set"
+
+///|
+#borrow(data)
+extern "C" fn ffi_clipboard_image(data : Bytes) -> Unit = "mb_host_clipboard_image"
 
 ///|
 #borrow(s)
@@ -135,6 +158,9 @@ extern "C" fn ffi_system_dark() -> Int = "mb_host_system_dark"
 
 ///|
 extern "C" fn ffi_font_scale() -> Double = "mb_host_font_scale"
+
+///|
+extern "C" fn ffi_native_pointing() -> Int = "mb_host_native_pointing"
 
 ///|
 extern "C" fn ffi_a11y_on() -> Int = "mb_host_a11y_on"
@@ -199,10 +225,26 @@ extern "C" fn ffi_window_setup(min_w : Double, min_h : Double, w : Double, h : D
 extern "C" fn ffi_window_inset() -> Int = "mb_host_window_inset"
 
 ///|
+extern "C" fn ffi_full_screen() -> Int = "mb_host_full_screen"
+
+///|
+extern "C" fn ffi_set_full_screen(on : Int) -> Unit = "mb_host_set_full_screen"
+
+///|
+extern "C" fn ffi_window_corner() -> Double = "mb_host_window_corner"
+
+///|
 extern "C" fn ffi_window_drag() -> Unit = "mb_host_window_drag"
 
 ///|
 extern "C" fn ffi_set_cursor(kind : Int) -> Unit = "mb_host_set_cursor"
+
+///|
+extern "C" fn ffi_set_badge(n : Int) -> Unit = "mb_host_set_badge"
+
+///|
+#borrow(json)
+extern "C" fn ffi_menu_setup(json : String) -> Unit = "mb_host_menu_setup"
 
 ///|
 /// The desktop's window as the app wants it, said before `run`: its first size (`w` by `h`; MBUI_WIN=<w>x<h> still
@@ -221,6 +263,24 @@ fn window_inset() -> Bool {
 }
 
 ///|
+/// Whether the window fills the screen now (macOS's full screen).
+fn full_screen() -> Bool {
+  ffi_full_screen() != 0
+}
+
+///|
+/// The window made to fill the screen, or back (macOS's full screen).
+fn set_full_screen(on : Bool) -> Unit {
+  ffi_set_full_screen(if on { 1 } else { 0 })
+}
+
+///|
+/// How round the system draws the window's corners now (@hostapi.window_corner).
+fn window_corner() -> Double {
+  ffi_window_corner()
+}
+
+///|
 /// The press under way moves the window (a press on the app's own top row, @ui's Ctx::window_drag): the host's from
 /// here, as its title bar's would be.
 fn window_drag() -> Unit {
@@ -232,6 +292,83 @@ fn window_drag() -> Unit {
 /// 5 an open hand. Nothing where there is no pointer.
 fn set_cursor(kind : Int) -> Unit {
   ffi_set_cursor(kind)
+}
+
+///|
+fn set_badge(n : Int) -> Unit {
+  ffi_set_badge(n)
+}
+
+///|
+fn menu_setup(json : String) -> Unit {
+  ffi_menu_setup(json)
+}
+
+///|
+extern "C" fn ffi_local_station() -> String = "mb_host_local_station"
+
+///|
+#borrow(a)
+extern "C" fn ffi_local_station_act(a : String) -> Unit = "mb_host_local_station_act"
+
+///|
+fn local_station() -> String {
+  ffi_local_station()
+}
+
+///|
+fn local_station_act(a : String) -> Unit {
+  ffi_local_station_act(a)
+}
+
+///|
+extern "C" fn ffi_dock_available() -> Int = "mb_host_dock_available"
+
+///|
+extern "C" fn ffi_mods_held() -> Int = "mb_host_mods_held"
+
+///|
+fn mods_held() -> Int {
+  ffi_mods_held()
+}
+
+///|
+#borrow(l)
+extern "C" fn ffi_dock_send(l : String) -> Unit = "mb_host_dock_send"
+
+///|
+extern "C" fn ffi_dock_stop() -> Unit = "mb_host_dock_stop"
+
+///|
+extern "C" fn ffi_dock_kept() -> String = "mb_host_dock_kept"
+
+///|
+#borrow(j)
+extern "C" fn ffi_dock_keep(j : String) -> Unit = "mb_host_dock_keep"
+
+///|
+fn dock_available() -> Bool {
+  ffi_dock_available() != 0
+}
+
+///|
+fn dock_send(l : String) -> Unit {
+  ffi_dock_send(l)
+}
+
+///|
+fn dock_stop() -> Unit {
+  ffi_dock_stop()
+}
+
+///|
+fn dock_kept() -> String {
+  ffi_dock_kept()
+}
+
+///|
+fn dock_keep(j : String) -> Unit {
+  ffi_dock_keep(j)
 }
 
 ///|
@@ -276,6 +413,12 @@ fn utc_offset_min(at_ms : Double) -> Int {
 /// are handled together); negative when the host doesn't say.
 fn event_time() -> Double {
   ffi_event_time()
+}
+
+///|
+/// How late the frame before reached the screen (@hostapi.frame_late).
+fn frame_late() -> Double {
+  ffi_frame_late()
 }
 
 ///|
@@ -336,6 +479,23 @@ fn glyph(key : Int, out : FixedArray[Double]) -> Unit {
 }
 
 ///|
+fn glyph_put(key : Int, x : Int, y : Int) -> Unit {
+  ffi_glyph_put(key, x, y)
+}
+
+///|
+fn atlas_size(colour : Bool) -> Int {
+  ffi_atlas_size(if colour { 1 } else { 0 })
+}
+
+///|
+/// The glyphs of the first `n` of `keys` drawn ahead, off the frames' thread (Android's MBText.ahead, Apple's
+/// apple_text.m); Windows draws a glyph as it is first asked for.
+fn glyphs_ahead(keys : FixedArray[Int], n : Int) -> Unit {
+  ffi_glyphs_ahead(keys, n)
+}
+
+///|
 /// A font file (TrueType or OpenType, at `path`) made part of face `face` (style.mbt: face_ui, face_text, face_code,
 /// or 4 to 15 for what names it), for `weight` (0: a variable file, every weight from it). False when the host could
 /// not read it as a font (the face as it was). What was shaped or drawn before is the host's to forget
@@ -354,6 +514,16 @@ fn face_add_bytes(face : Int, data : Bytes, weight : Int) -> Bool {
 /// Face `face` given up: what was in it is in the system's face again.
 fn face_clear(face : Int) -> Unit {
   ffi_face_clear(face)
+}
+
+///|
+fn face_add_family(face : Int, family : String) -> Bool {
+  ffi_face_add_family(face, family) != 0
+}
+
+///|
+fn local_font_families() -> String {
+  ffi_local_font_families()
 }
 
 ///|
@@ -389,6 +559,12 @@ fn set_ime(
 ///|
 fn clipboard_set(s : String) -> Unit {
   ffi_clipboard_set(s)
+}
+
+///|
+/// A picture put on the system's clipboard (@hostapi.clipboard_set_image).
+fn clipboard_set_image(data : Bytes) -> Unit {
+  ffi_clipboard_image(data)
 }
 
 ///|
@@ -519,6 +695,11 @@ fn system_dark() -> Bool {
 ///|
 fn font_scale() -> Double {
   ffi_font_scale()
+}
+
+///|
+fn native_pointing() -> Int {
+  ffi_native_pointing()
 }
 
 ///|
@@ -799,10 +980,12 @@ extern "C" fn nt_state(what : Int) -> Int = "mb_host_notice_state"
 /// 0: a notification tapped (its `opens`), once; 1: the push token; 2: a push delivered, once
 extern "C" fn nt_text(what : Int) -> String = "mb_host_notice_text"
 
-// Native views over the canvas (src/ui/native.mbt): a system view (a video player, a web page) the host keeps in the
-// window under the app's surface, shown through a hole the app paints in it (instances of kind 9: transparent,
-// written without blending), so what the app paints after the hole draws over the view (a bar, a video's controls)
-// and what it paints over its edges clips it. Ids are the host's own, from 1; 0 where the host has none of that kind.
+// Native views in the canvas (src/ui/native.mbt): a system view (a video player, a web page) the app paints where it
+// shows (an instance of kind 9, its image the view's: @hostapi.view_tex_base), so what the app paints after it draws
+// over the view (a bar, a video's controls) and what it paints over its edges clips it. macOS, iOS and Windows keep
+// the view in the window under the app's surface and leave the canvas clear there (transparent, written without
+// blending), a hole it shows through; Android draws the view's picture there (NativeViews.Picture). Ids are the
+// host's own, from 1; 0 where the host has none of that kind.
 
 ///|
 #borrow(arg)
@@ -839,7 +1022,7 @@ extern "C" fn ffi_view_read_next(id : Int, out : FixedArray[Double]) -> Int = "m
 
 ///|
 #borrow(data)
-extern "C" fn ffi_view_read_answer(id : Int, req : Int, data : Bytes, total : Double) -> Unit = "mb_host_view_read_answer"
+extern "C" fn ffi_view_read_answer(id : Int, req : Int, data : Bytes, total : Double, more : Int) -> Unit = "mb_host_view_read_answer"
 
 ///|
 extern "C" fn ffi_view_site_next(id : Int) -> String = "mb_host_view_site_next"
@@ -966,35 +1149,35 @@ fn view_close(id : Int) -> Unit {
 }
 
 ///|
-/// A player told: `op` 1 play, 2 pause, 3 to `value` ms (the frame there, exactly), 4 at `value` times its speed; a
-/// site: 5 back, 6 forward, 7 reload, 8 laid out at its rect over `value` and drawn at `value` times (a viewport's
-/// own size shown smaller).
+/// A player told: `op` 1 play, 2 pause, 3 to `value` ms (the frame there, exactly), 4 at `value` times its speed, 11
+/// to about `value` ms at once (the nearest key frame: nothing before it decoded); a site: 5 back, 6 forward, 7
+/// reload, 8 laid out at its rect over `value` and drawn at `value` times (a viewport's own size shown smaller).
 fn view_control(id : Int, op : Int, value : Double) -> Unit {
   ffi_view_control(id, op, value)
 }
 
 ///|
 /// How the view stands: -1 failed (a file the player cannot play, a page that cannot load), 0 opening, 1 ready.
-/// `out` (10): its length in ms (-1 not known), where it is (ms), playing (1), the picture's own width and height
-/// (pixels), the bytes it has been given, whether a frame has been drawn (a page: loaded), buffering (1), how far on it
-/// has what it needs to play (ms; 0 not said), played to its end (1).
+/// `out` (10): its length in ms (-1 not known), where it is (ms), playing (1; and while it seeks within what it has, if
+/// it is to play), the picture's own width and height (pixels), the bytes it has been given, whether a frame has been
+/// drawn (a page: loaded), buffering (1: to play and waiting on bytes still to come through the app, not a seek
+/// within what it has, nor one while paused), how far on it has what it needs to play (ms; 0 not said), played to its
+/// end (1).
 fn view_info(id : Int, out : FixedArray[Double]) -> Int {
   ffi_view_info(id, out)
 }
 
 ///|
-/// A read the player waits on: its id (0: none waiting), `out` [0] its offset, [1] how many bytes it wants. Each is
-/// answered once (`view_read_answer`); the host asks for a frame when one comes.
+/// A read the player waits on: its id (0: none waiting), `out` [0] its offset, [1] how many bytes it wants; or minus
+/// the id of one it let go of (@hostapi.view_read_next).
 fn view_read_next(id : Int, out : FixedArray[Double]) -> Int {
   ffi_view_read_next(id, out)
 }
 
 ///|
-/// Read `req`'s answer: the bytes from its offset (at most as many as it wanted; fewer is fine, none only at the
-/// file's end), `total` the file's whole size (-1 not known: Apple's player needs it, so give it); -2: it could not be
-/// read (the player fails).
-fn view_read_answer(id : Int, req : Int, data : Bytes, total : Double) -> Unit {
-  ffi_view_read_answer(id, req, data, total)
+/// Read `req`'s next bytes, as they come, `more` while more of it comes (@hostapi.view_read_answer).
+fn view_read_answer(id : Int, req : Int, data : Bytes, total : Double, more : Bool) -> Unit {
+  ffi_view_read_answer(id, req, data, total, if more { 1 } else { 0 })
 }
 
 // PDFs drawn by the system (Android's PdfRenderer, Core Graphics' CGPDF), page by page into images.

@@ -1,11 +1,16 @@
 // A sheet from the bottom (not one of Radix's: Vaul's Drawer; still.fail's phone sheets, its Android Sheet.kt
 // SheetHost): whether it is open the view's. Modal: the page under it dimmed (its scrim in over 300 ms, CSS's ease),
-// out of the semantics tree and taking no press, Tab kept in it, the focus back where it was as it goes. It rises on a
+// out of the semantics tree and taking no press, Tab kept in it (no field given the focus as it opens: the keyboard
+// would come up over it), the focus back where it was as it goes. It rises on a
 // spring (critically damped, a third of a second) and sinks away on it. Its top (`drag_h` high: the grabber and the
 // head) drags it: a sheet with `detents` (shares of the window) settles at the one it is let go nearer, going on at
 // the finger's speed, and closes let go under `close_below`; a tap on its grabber goes to the other end; one without
 // only goes down, closing past 80, else back. Escape, the back and a press on the page above it close it. When what it
 // shows asks for another height, it goes there on the spring.
+
+///|
+/// How short a sheet with detents is dragged at most.
+let sheet_least_h : Double = 120.0
 
 ///|
 /// What a sheet's look is given: its scrim's share (0 … 1, how far in it is), its height (on the spring), how far
@@ -37,13 +42,6 @@ pub(all) struct Sheet {
 }
 
 ///|
-/// still.fail's sheet spring (Motion.kt SheetSpring: motionSpring(0.32), critically damped): its stiffness.
-let sheet_k : Double = {
-  let w = 2.0 * 3.141592653589793 / (1.2 * 0.32)
-  w * w
-}
-
-///|
 /// How long a sheet's scrim takes to fade in or out (ms).
 pub let sheet_scrim_ms : Double = 300.0
 
@@ -54,9 +52,11 @@ fn scrim_fade() -> @motion.Spec {
 }
 
 ///|
-/// A sheet's spring at rest at `x` (at rest within half a point).
+/// A sheet's spring at rest at `x`: still.fail's (@motion.sheet_spring, Motion.kt SheetSpring: motionSpring(0.32),
+/// critically damped, at rest within half a point).
 fn sheet_spring(x : Double) -> @ui.SpringPath {
-  @ui.SpringPath::new(x, k=sheet_k, c=2.0 * sheet_k.sqrt(), rest=0.5)
+  guard @motion.sheet_spring is Spring(_, k, rest, _) else { abort("the sheet's spring is a spring") }
+  @ui.SpringPath::new(x, k~, c=2.0 * k.sqrt(), rest~)
 }
 
 ///|
@@ -68,10 +68,11 @@ priv struct SheetKept {
   mut held : Double
   /// how much of its scrim shows (0 … 1), fading in and out over sheet_scrim_ms
   fade : @motion.Anim
-  /// open last frame; drawn (until it has sunk away); the height it was asked for last
+  /// open last frame; drawn (until it has sunk away); the height it was asked for last; the frame it was opened in
   mut was_open : Bool
   mut shown : Bool
   mut asked : Double
+  mut opened : Int
 }
 
 ///|
@@ -109,6 +110,7 @@ pub fn sheet(
         was_open: false,
         shown: false,
         asked: -1.0,
+        opened: -1,
       }
       kit.val.sheets[id] = s
       s
@@ -116,7 +118,8 @@ pub fn sheet(
   }
   let mut now = open
   let mut dragged : SheetDrag? = None
-  // opened: from below at its height; asked another height while open: there on the spring
+  // opened: from below at its height; asked another height while open (what it holds laid out another height, the
+  // window another): that height at once, as it is laid out (placed by its size, not chased to it)
   if open && !s.was_open {
     if !s.shown || s.below.value_at(c) > 1.0 {
       s.h.put(target)
@@ -129,8 +132,16 @@ pub fn sheet(
     s.fade.animate(1.0, scrim_fade())
     s.shown = true
     s.asked = target
+    s.opened = c.frame_number()
   } else if open && target != s.asked {
-    s.h.go_at(c, target)
+    if s.opened == c.frame_number() {
+      // (opened this frame, its height known only as this frame lays out what it holds: from below at that)
+      s.h.put(target)
+      s.below.put(target)
+      s.below.go_at(c, 0.0)
+    } else if s.held < 0.0 {
+      s.h.put(target)
+    }
     s.asked = target
   }
   if !s.shown {
@@ -146,7 +157,10 @@ pub fn sheet(
       if dy != 0.0 {
         let from = if s.held >= 0.0 { s.held } else { s.h.value_at(c) }
         let top = if draggable { total * detents.fold(init=0.0, fn(a, b) { dmax(a, b) }) } else { target }
-        let to = dclamp(from - dy, 120.0, top)
+        // (one with detents no shorter than its least drag keeps; one without follows the finger down all the way,
+        // however short it is: else one shorter than that and 80 could never be dragged closed)
+        let least = if draggable { sheet_least_h } else { 0.0 }
+        let to = dclamp(from - dy, least, top)
         s.held = to
         s.h.put(to)
       }
@@ -207,7 +221,9 @@ pub fn sheet(
     s.was_open = false
     return { open: false, shown: false, dragged }
   }
-  let o = c.overlay(key, modal=true, scrim=@ui.alpha(scrim.unwrap_or(th.scrim), scrim_t), inert=!now, fn() {
+  // (Tab kept in it, but no field in it given the focus as it opens: a sheet is a touch screen's, where a field
+  // focused brings the keyboard up over what the sheet shows; one that asks for words gives its field the focus itself)
+  let o = c.overlay(key, modal=true, initial_focus=0, scrim=@ui.alpha(scrim.unwrap_or(th.scrim), scrim_t), inert=!now, fn() {
     let i = c.box(w=Fill(1.0), h=Px(hx), ty=total - hx + bx, fn() {
       look(c, { t: scrim_t, h: hx, below: bx }, fn() {
         // behind what it shows (its buttons take their taps), over the sheet (it takes the drags): what lies on it

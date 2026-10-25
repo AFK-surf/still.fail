@@ -2,7 +2,7 @@
 # The checks for what changed. Two kinds:
 #   quick: what a commit or push touches, in seconds (icons, TypeScript); the git hooks (.githooks) run it, on
 #          whoever commits or pushes, so merging stays quick.
-#   full:  that, the tests, cloud's tests, the core's tests, the web against the real iroh wasm, Rust and Android:
+#   full:  that, the tests, cloud's tests, the core's tests, the web against the real iroh wasm, Rust:
 #          minutes. Run before a deploy (~/bin/ember-deploy on studio runs it on what the deploy carries).
 #
 #   sh scripts/check.sh commit        quick, on what is staged (pre-commit)
@@ -10,11 +10,12 @@
 #   sh scripts/check.sh full <range>  full, on what the range changed
 #   sh scripts/check.sh all           full, as if every file changed
 #
-# STILLFAIL_CHECK_PART="<part> …" (ts, browser, station, core, android) runs only those parts of it: ts the icons, the clients'
+# STILLFAIL_CHECK_PART="<part> …" (ts, browser, station, core) runs only those parts of it: ts the icons, the clients'
 # types and bindings, TypeScript, release notes and the tests run by node (web, scripts, cloud, the core: client/core-ts);
 # browser the web in Chrome (its stories measured, the message list's motion watched; STILLFAIL_BROWSER="stories <i>/<n>"
 # or "motion <i>/<n>" one share of it); station the station (station/, its typecheck and tests) and its native parts' own tests
-# (station/native); core client/'s Rust (the core's native shells: iroh for the web and Android's IO); android the app.
+# (station/native); core client/'s Rust (the core's native shells: iroh for the web and Android's IO). (The Android app
+# in Kotlin, apps/android, frozen since 2026-10-23: no part checks it.)
 # Unset: all of them.
 #
 # The steps run side by side, each as soon as what it needs is there (a directory's node_modules: `prep`); each one's
@@ -215,14 +216,14 @@ if part ts; then
 
   # The clients' types and the UIs' operation bindings are made from the core's (client/core-ts/src/shapes/schema.ts,
   # src/ops.ts): checked in, and never other than what those make.
-  if touches '^client/core-ts/(src/shapes/|src/ops\.ts$|scripts/(shapes|operations)\.ts$)|^web/src/core/(shapes|operations)\.ts$|/data/(Shapes|Operations)\.kt$'; then
+  if touches '^client/core-ts/(src/shapes/|src/ops\.ts$|scripts/(shapes|operations)\.ts$)|^web/src/core/(shapes|operations)\.ts$'; then
     prep core deps client/core-ts
     step "clients' types" after core node client/core-ts/scripts/shapes.ts --check
     step "operation bindings" after core node client/core-ts/scripts/operations.ts --check
   fi
 
-  if touches '^design/(station-)?icons/|^scripts/icons\.py$|^web/ui/src/icons\.tsx$|/ui/Icons\.kt$'; then
-    step icons python3 scripts/icons.py --check
+  if touches '^design/(station-)?icons/|^apps/mbui/(tools/icons/|scripts/icons$)|^web/ui/src/icons\.tsx$'; then
+    step icons bash apps/mbui/scripts/icons . --check
   fi
   # Every CI job may take 10 minutes at most, and says so (timeout-minutes).
   if touches '^\.github/workflows/|^scripts/ci-timeouts\.py$'; then
@@ -230,23 +231,18 @@ if part ts; then
   fi
   # The UIs never make a request of a station or still.fail cloud themselves: they name what they want done
   # (client/core-ts/src/ops.ts), and the core, which knows what it changes, brings every topic that shows it up to date.
-  # The phone's corners are Smooth (ui/Corners.kt: the web's superellipse), not RoundedCornerShape, in what a change adds
-  # (a capsule's 50%, or a line that says why with "own corner:", aside).
-  if touches '^apps/android/'; then
-    added 'apps/android/*.kt' | grep 'RoundedCornerShape(' | grep -vE 'RoundedCornerShape\(50\)|own corner:' > "$tmp/android-corners" || true
-    step "phone corners smooth (in what this adds)" sh -c "! grep . '$tmp/android-corners'"
-    # Its lazy lists are ui/ListKeys.kt's, whose keys cannot crash it (a key used twice is told and keyed apart).
-    step "phone lists keyed safely" sh -c "! git grep -nE 'androidx\\.compose\\.foundation\\.lazy\\.(\\*|LazyColumn|LazyRow)\\b' -- 'apps/android/**/src/main/**' ':!apps/android/shared/src/main/kotlin/fail/still/android/ui/ListKeys.kt'"
+  # The Android app in Kotlin (apps/android) is frozen since 2026-10-23, as asked: nothing in it is added or changed
+  # (its AGENTS.md says so; taken out is let through); the Android app developed is apps/mbui. (CI's plan holds it too.)
+  if [ "$mode" != all ] && touches '^apps/android/'; then
+    case "$mode" in
+      commit) git diff --cached --name-only --diff-filter=d -- apps/android ;;
+      *) git diff --name-only --diff-filter=d "$range" -- apps/android ;;
+    esac | grep -vxE 'apps/android/(AGENTS|CLAUDE)\.md' > "$tmp/android-frozen" || true
+    step "the Kotlin Android app frozen (apps/android: change apps/mbui instead)" sh -c "! grep . '$tmp/android-frozen'"
   fi
-  # The pages' modules keep their order themselves (docs/client-core.md: :settings, :chat on it, :drive on both); in
-  # :app, the remote screens (remote/) and the share sheet (share/) are on none of the drive, and the remote screens on
-  # no page either. What they share is in :shared.
-  if touches '^apps/android/app/'; then
-    k=apps/android/app/src/main/kotlin/fail/still/android
-    step "phone packages one way" sh -c "! git grep -n 'fail\\.still\\.android\\.drive\\.' -- $k/remote $k/share && ! git grep -n 'fail\\.still\\.android\\.screens\\.' -- $k/remote"
-  fi
-  if touches '^(web/src|web/ui|apps/desktop/src|apps/android)/'; then
-    step "no requests from the UIs" sh -c '! git grep -nE "(station|cloud)\.request" -- web/src web/ui apps/desktop/src apps/android'
+  # (its own checks gone with it; this one on the mbui app's code in its place)
+  if touches '^(web/src|web/ui|apps/desktop/src|apps/mbui/src)/'; then
+    step "no requests from the UIs" sh -c '! git grep -nE "(station|cloud)\.request" -- web/src web/ui apps/desktop/src apps/mbui/src'
   fi
   # The design system (web/ui, @stillfail/ui) stands on its own: nothing of the app's (web/src: its core, station,
   # cloud, preferences), so the share page and anything else can draw with it. The app gives it what it needs (words,
@@ -281,6 +277,12 @@ if part ts; then
     added 'web/src/*.css.ts' 'web/ui/*.css.ts' | grep -E '[bB]order[A-Za-z]*Radius: *([`"][^`"]*([5-9]|[1-9][0-9]+)(\.[0-9]+)?px|([5-9]|[1-9][0-9]+)\b)' \
       | grep -vE 'Radius: *("999px"|999\b)|own corner:' > "$tmp/corners" || true
     step "no corner of its own (in what this adds)" sh -c "! grep . '$tmp/corners'"
+    # One light for the pointer in what a change adds (docs/ui-panels.md 悬停): a hover lays the ink, `vars.hover` (lit.ts
+    # `litOver` over a ground of its own), or takes a solid ground a step towards the page (`vars.primaryHover`, a colour
+    # 85% mixed with the canvas); never a colour, a tint or a filter of its own. One that must says why with "own hover:".
+    added 'web/src/*.css.ts' 'web/ui/*.css.ts' | grep -E ':hover[^{]*\{[^}]*(background(Color)?|filter): *' \
+      | grep -vE '(background(Color)?): *(vars\.hover|vars\.primaryHover|ink|"none"|"transparent")\b|85%, \$\{vars\.canvas\}|own hover:' > "$tmp/hovers" || true
+    step "one light for the pointer (in what this adds)" sh -c "! grep . '$tmp/hovers'"
     # No margin taken back by hand: a ground reaching past its words, a corner, a column, a centring is one of
     # styles/align.ts's (bleedX, surface, columns, centred…), so its numbers are said once (a var's own negative may be).
     step "no hand-written negative margins" sh -c '! git grep -nE "margin[A-Za-z]*: *(-[0-9]|[\"\`][^\"\`]*[ (]-[0-9]|[\"\`]-[0-9])" -- "web/src/*.css.ts" "web/ui/*.css.ts" | grep -v "calc(-1 \* var("'
@@ -321,7 +323,7 @@ if part ts; then
     step "desktop: its executables' own UUIDs" node --test apps/desktop/test/after-pack.test.ts; fi
   # The TypeScript core (docs/core-ts.md): its own tsconfig.
   if touches "$ts_core"; then prep core deps client/core-ts; step "typecheck: core-ts" after core sh -c 'cd client/core-ts && pnpm exec tsgo --noEmit'; fi
-  if touches "$ts_core|^client/math/|^apps/mbui/src/sf/math_font\\.mbt$"; then prep core deps client/core-ts; step "shared math alphabet" after core node client/core-ts/scripts/math-font.ts --check; fi
+  if touches "$ts_core|^client/math/|^apps/mbui/src/sf/math_glyphs\\.mbt$"; then prep core deps client/core-ts; step "shared math alphabet" after core node client/core-ts/scripts/math-font.ts --check; fi
   if touches "$ts_core|^client/fixtures/math\\.json$|^apps/mbui/src/sf/math\\.json$"; then prep core deps client/core-ts; step "shared math fixture" after core node client/core-ts/scripts/math-fixture.ts --check; fi
   # The core's pure answers the mbui app's runs without a core keep (apps/mbui/src/sfkept), as the core answers them now.
   if touches "$ts_core|^apps/mbui/src/sfkept/kept\\.mbt$"; then prep core deps client/core-ts; step "kept core answers" after core node client/core-ts/scripts/kept-answers.ts --check; fi
@@ -342,10 +344,11 @@ if [ $full = 1 ]; then
   # docs/ui-panels.md), then what moves in a chat's message list watched frame by frame (test/browser/list-settle.mjs,
   # docs/list-motion.md), a viewer's bar dragging the window only while pointed at (test/browser/viewer-bar.mjs, the motion's last share)
   # nothing dragging it under a folded sidebar shown a while (test/browser/peek-drag.mjs, there too)
-  # and a chat's side panel giving way to the chat once the window narrows (test/browser/side-panel-width.mjs, there too):
+  # a chat's side panel giving way to the chat once the window narrows (test/browser/side-panel-width.mjs, there too)
+  # and a station's screen driven by a mouse, keys and fingers (test/browser/screen-input.mjs, there too):
   # on a Chrome the machine has (CI's Linux runners have one). On CI shared out between jobs side by
   # side (STILLFAIL_BROWSER): on one of GitHub's four cores it all took ~3 minutes (2026-10-15).
-  if part browser && { touches '^web/' || touches '^test/browser/(stories|measure|list-settle|viewer-bar|peek-drag|side-panel-width|chat-pagination)\.mjs$'; }; then
+  if part browser && { touches '^web/' || touches '^test/browser/(stories|measure|list-settle|viewer-bar|peek-drag|side-panel-width|chat-pagination|screen-input)\.mjs$'; }; then
     if command -v google-chrome >/dev/null 2>&1; then
       prep root deps .
       wasm_pkg
@@ -355,8 +358,8 @@ if [ $full = 1 ]; then
       share=${STILLFAIL_BROWSER#* }; [ "$share" = "${STILLFAIL_BROWSER:-}" ] && share=1/1
       case "${STILLFAIL_BROWSER:-}" in
         stories*) step "web: stories measured (${STILLFAIL_BROWSER#stories })" after root after core sh -c "$chrome SHARD='${STILLFAIL_BROWSER#stories }'; node test/browser/stories.mjs" ;;
-        motion*) step "web: the message list's motion watched ($share), a viewer's bar kept" after root after core sh -c "$chrome SHARD='$share'; node test/browser/list-settle.mjs && { [ '${share%/*}' != '${share#*/}' ] || { node test/browser/viewer-bar.mjs && node test/browser/peek-drag.mjs && node test/browser/side-panel-width.mjs && node test/browser/chat-pagination.mjs; }; }" ;;
-        *) step "web: stories measured, the message list's motion watched, a viewer's bar kept" after root after core sh -c "$chrome; node test/browser/stories.mjs && node test/browser/list-settle.mjs && node test/browser/viewer-bar.mjs && node test/browser/peek-drag.mjs && node test/browser/side-panel-width.mjs && node test/browser/chat-pagination.mjs" ;;
+        motion*) step "web: the message list's motion watched ($share), a viewer's bar kept" after root after core sh -c "$chrome SHARD='$share'; node test/browser/list-settle.mjs && { [ '${share%/*}' != '${share#*/}' ] || { node test/browser/viewer-bar.mjs && node test/browser/peek-drag.mjs && node test/browser/side-panel-width.mjs && node test/browser/chat-pagination.mjs && node test/browser/screen-input.mjs; }; }" ;;
+        *) step "web: stories measured, the message list's motion watched, a viewer's bar kept" after root after core sh -c "$chrome; node test/browser/stories.mjs && node test/browser/list-settle.mjs && node test/browser/viewer-bar.mjs && node test/browser/peek-drag.mjs && node test/browser/side-panel-width.mjs && node test/browser/chat-pagination.mjs && node test/browser/screen-input.mjs" ;;
       esac
     else
       later "web: stories measured, the message list's motion watched (no Chrome here)"
@@ -405,36 +408,6 @@ if [ $full = 1 ]; then
   # The core's native shells (client/shell for Android, client/iroh-wasm for the web).
   if part core && touches '^client/(shell|iroh-wasm)/|^client/Cargo\.(toml|lock)$|^vendor/'; then
     if has cargo; then remembered "Rust: client" "client vendor" heavy cargo_test client --workspace -q; else later "Rust: client"; fi
-  fi
-  # Its shell and engine prebuilt (apps/android/build.py): only a JDK and the SDK needed. Built as build 1, not the
-  # commits' count: a number new each commit is in its BuildConfig and manifest, and with it everything was compiled and
-  # linted anew, where the build CI keeps of it (pipeline.yml) leaves all but what changed up to date.
-  # What it is built from, and so what runs it: apps/android/carries.sh. STILLFAIL_CHECK_APK=1 (a branch's CI)
-  # makes the debug app in the same Gradle run, as evidence it builds: one build, not a second job doing it again;
-  # only for a change to how it is put together (its Gradle files, manifests, resources, prebuilt parts), as code that
-  # compiles packs the same way: dexing its libraries anew took ~2 of a check's 5 minutes on CI's four cores (2026-10-17).
-  if [ -n "${STILLFAIL_CHECK_APK:-}" ] && ! touches '^apps/android/(.*\.gradle\.kts|gradle/|gradle\.properties|.*/AndroidManifest\.xml|.*/res/|.*/jniLibs/)|^client/(shell|engine)/|^scripts/native\.ts$'; then STILLFAIL_CHECK_APK=; fi
-  if part android && printf '%s\n' "$changed" | sh apps/android/carries.sh; then
-    sdk=${ANDROID_HOME:-$HOME/Library/Android/sdk}
-    if [ -d "$sdk/platforms" ]; then
-      # STILLFAIL_ANDROID=build (its Kotlin, its instrumented tests' Kotlin too, so a part they use moved or hidden is
-      # caught here and not when someone next runs them; unit tests and the debug app) or lint: one share of it (CI's two jobs side
-      # by side, lint the longest part); unset, all of it.
-      # Lint only for a change it can find anything in (apps/android/lints.sh): not the core's or the shell's alone.
-      build=":app:compileDebugKotlin :app:compileDebugAndroidTestKotlin :app:testDebugUnitTest :core:testDebugUnitTest :shared:testDebugUnitTest :chat:testDebugUnitTest :drive:testDebugUnitTest ${STILLFAIL_CHECK_APK:+:app:assembleDebug}"
-      lint=""
-      if printf '%s\n' "$changed" | sh apps/android/lints.sh; then lint=":app:lintDebug :core:lintDebug :shared:lintDebug :settings:lintDebug :chat:lintDebug :drive:lintDebug"; fi
-      case "${STILLFAIL_ANDROID:-}" in
-        build) what="Android: build and tests${STILLFAIL_CHECK_APK:+, the debug app}"; tasks=$build ;;
-        lint) what="Android: lint"; tasks=$lint ;;
-        *) what="Android${lint:+ (and lint)}${STILLFAIL_CHECK_APK:+ (and the debug app)}"; tasks="$build $lint" ;;
-      esac
-      if [ -z "$lint" ] && [ "${STILLFAIL_ANDROID:-}" = lint ]; then step "Android: lint (nothing it reads changed)" true
-      else
-        # shellcheck disable=SC2086 # the tasks are words
-        remembered "$what" "apps/android client web/src/viz web/public/avatars scripts/native.ts scripts/icons.py design/icons design/station-icons package.json pnpm-lock.yaml" heavy env ORG_GRADLE_PROJECT_stillfailBuild=1 python3 apps/android/build.py --tasks $tasks
-      fi
-    else later "Android"; fi
   fi
 fi
 

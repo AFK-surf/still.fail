@@ -19,7 +19,7 @@ import { addProfilePath } from "./pages/AddProfile.tsx";
 import { ModelTriple } from "./ModelTriple.tsx";
 import { Illustration } from "./brand.tsx";
 import { track } from "./telemetry.ts";
-import { keepTabs } from "./chatTabs.ts";
+import { changeTabs } from "./chatTabs.ts";
 import { usePrefs } from "./prefs.ts";
 import { useShortcut } from "./keymap.ts";
 import { DriveTab } from "./pages/DriveTab.tsx";
@@ -62,13 +62,17 @@ export function NewChat({ scope, onCreated }: { scope: string; onCreated(station
     const held: Station = { id: stationId, name: "", base: stationBase(address), address, online: true, settings: `/w/${scope}/settings` };
     // Laid out as the page will be (the composer's place held, the words under it), so nothing moves when it comes.
     return (
-      <div className={css.newChat}><div className={css.newChatInner}>
-        <Illustration name="new-chat" /><h1 className={css.newChatTitle}>{t("web-main.newChat.title")}</h1><p className={css.newChatSub}>{t("web-main.newChat.subChosen")}</p>
+      <div className={css.newChat}><div className={`${css.newChatInner} ${css.newChatTall}`}>
+        <div className={css.newChatScene}>
+          <Illustration name="new-chat" /><h1 className={css.newChatTitle}>{t("web-main.newChat.title")}</h1><p className={css.newChatSub}>{t("web-main.newChat.subChosen")}</p>
+        </div>
         {/* The composer itself (dock.tsx), locked until there is a station to write to: it goes on from the page before
             without leaving the screen for as long as the stations take to come (the first time the page is opened). */}
         <ComposerSlot variant="new" station={held} draftKey={`new:${held.address}`} thread={null} sessionKey={null} placeholder={t("web-main.newChat.placeholder")} locked roomy />
-        {error ? <p className={`${css.newChatStatus} ${controlsCss.fieldError}`}>{error}</p>
-          : <WaitLine text={t("common.readingStations")} className={css.newChatStatus} />}
+        <div className={css.newChatUnder}>
+          {error ? <p className={`${css.newChatStatus} ${controlsCss.fieldError}`}>{error}</p>
+            : <WaitLine text={t("common.readingStations")} className={css.newChatStatus} />}
+        </div>
       </div></div>
     );
   }
@@ -124,9 +128,8 @@ function NewChatOn({ choice, view, station, stations, onStation, pickCombo, crea
   const open = drive && kept?.tabs.includes(FILES) ? [FILES] : [];
   const side = useSidePanel(open, open[0] ?? null);
   const setFiles = (on: boolean) => {
-    const next = on ? [FILES] : [];
-    side.changing(next);
-    keepTabs(tabsKey, { tabs: next, active: on ? FILES : null });
+    side.changing(on);
+    changeTabs(tabsKey, on ? "open" : "close", FILES);
   };
   useShortcut("panel.close", open.length ? () => setFiles(false) : null);
   const drop = useChatDrop(draftKey, station.address);
@@ -150,7 +153,8 @@ function NewChatOn({ choice, view, station, stations, onStation, pickCombo, crea
         carry(`${station.address}:${key}`);
         // Made here, the chat opens without its agent's history beside: it is opened from the agent when wanted. The
         // files open here stay open beside it.
-        keepTabs(`${station.address}:${key}`, open.length ? { tabs: [FILES], active: FILES } : { tabs: [], active: null });
+        changeTabs(`${station.address}:${key}`, "clear");
+        if (open.length) changeTabs(`${station.address}:${key}`, "open", FILES);
         onCreated(station.address, key);
       }} />
   );
@@ -194,26 +198,31 @@ function NewChatOn({ choice, view, station, stations, onStation, pickCombo, crea
           </header>
         )}
         <div className={css.newChat}>
-          <div className={css.newChatInner}>
+          <div className={`${css.newChatInner} ${css.newChatTall}`}>
             {/* What leaves as the chat comes (../madeChat.ts): the scene above the composer out of view, what is by it where it is. */}
-            <Illustration name="new-chat" data-made-leave="up" />
-            <h1 className={css.newChatTitle} data-made-leave="up">{t("web-main.newChat.title")}</h1>
-            <p className={css.newChatSub} data-made-leave="up">{<StationInWords station={station.address} text={t("web-main.newChat.sub", { name: station.name || t("web-main.newChat.thisMachine") })} />}</p>
-            {/* Its station went down as it was written in (the network went): the page stays, said so, with 重试. */}
-            {choice.down && <p className={css.spentNotice} role="status" data-made-leave="up">{<StationInWords station={station.address} text={t("web-main.newChat.down", { name: station.name || t("web-main.newChat.thisMachine") })} />} <RetryPill /></p>}
-            {/* Chosen anyway (it is the person's call), but said: what is sent waits for its quota. */}
-            {choice.spent && <p className={css.spentNotice} role="status" data-made-leave="up">{choice.spent}</p>}
+            <div className={css.newChatScene}>
+              <Illustration name="new-chat" data-made-leave="up" />
+              <h1 className={css.newChatTitle} data-made-leave="up">{t("web-main.newChat.title")}</h1>
+              <p className={css.newChatSub} data-made-leave="up">{<StationInWords station={station.address} text={t("web-main.newChat.sub", { name: station.name || t("web-main.newChat.thisMachine") })} />}</p>
+            </div>
             {composer}
-            <FrequentCombos items={choice.frequent} onPick={pickCombo} />
-            {/* What it waits for, in a line of its own under the composer, kept whether or not there is anything to say. */}
-            {/* Also what to do on a station with no profile of its own but models it could borrow. */}
-            <p className={css.newChatStatus} data-made-leave="fade">{choice.waiting || !choice.model ? (choice.problem ?? "") : ""}</p>
-            {/* Out of the page's flow: it comes once the station has said what there is, and would move the composer. */}
-            <div className={css.newChatOffer} data-made-leave="fade">
-              <MachineSessions name={station.name} models={view.models} onContinued={(key) => {
-                keepTabs(`${station.address}:${key}`, { tabs: [], active: null });
-                onCreated(station.address, key);
-              }} />
+            {/* What differs by the station and what is picked on it, under the composer: it moves nothing over it. */}
+            <div className={css.newChatUnder}>
+              {/* Its station went down as it was written in (the network went): the page stays, said so, with 重试. */}
+              {choice.down && <p className={css.spentNotice} role="status" data-made-leave="fade">{<StationInWords station={station.address} text={t("web-main.newChat.down", { name: station.name || t("web-main.newChat.thisMachine") })} />} <RetryPill /></p>}
+              {/* Chosen anyway (it is the person's call), but said: what is sent waits for its quota. */}
+              {choice.spent && <p className={css.spentNotice} role="status" data-made-leave="fade">{choice.spent}</p>}
+              <FrequentCombos items={choice.frequent} onPick={pickCombo} />
+              {/* What it waits for, in a line of its own under the composer, kept whether or not there is anything to say. */}
+              {/* Also what to do on a station with no profile of its own but models it could borrow. */}
+              <p className={css.newChatStatus} data-made-leave="fade">{choice.waiting || !choice.model ? (choice.problem ?? "") : ""}</p>
+              {/* It comes once the station has said what there is. */}
+              <div data-made-leave="fade">
+                <MachineSessions name={station.name} models={view.models} onContinued={(key) => {
+                  changeTabs(`${station.address}:${key}`, "clear");
+                  onCreated(station.address, key);
+                }} />
+              </div>
             </div>
           </div>
         </div>

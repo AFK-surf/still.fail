@@ -3,9 +3,8 @@
 // 文档 and a disk that is gone, its home browsable; MBA (away) lends 照片. Its folders take what the pages do to them
 // (rename, delete, a new folder, a file put up) while the app runs. Every word in it is made up.
 //
-// MBUI_FIXTURE: files (文件), drive (Studio's 文档), drive-sub (a folder in it), drive-chosen (two of it chosen),
-// drive-entry (a file's sheet), drive-upload (files going up, one whose name is taken, one failed), drive-download (a
-// file and a folder being downloaded: their rows' progress), drive-empty, reader
+// MBUI_FIXTURE: files (文件), drive (Studio's 文档), drive-sub (a folder in it), drive-upload (files going up, one whose
+// name is taken, one failed), drive-download (a file and a folder being downloaded), drive-empty, reader
 // (a novel read), reader-bars (with its bars), reader-contents, reader-layout, reader-md (a Markdown file read);
 // chat-station-files (＋'s Station 文件 in a folder, a file ticked), chat-station-ref (a station's file in the draft),
 // chat-station-file (one sent as a file, a folder as a zip going up), chat-station-sheet (its card's sheet).
@@ -15,6 +14,21 @@ let fix_home : String = "/Users/lin"
 
 ///|
 let fix_docs : String = "/Users/lin/文档"
+
+///|
+/// Studio's as a member sees it (drive-roots): its two folders pinned (备份盘 missing), nothing else browsed.
+fn fixture_station_member() -> Json {
+  {
+    "viewer": { "via": "mesh", "role": "member" },
+    "drive": {
+      "roots": [
+        { "path": fix_docs, "name": "文档", "state": "ok" },
+        { "path": "/Volumes/备份盘", "name": "备份盘", "state": "missing" },
+      ],
+      "transfers": true,
+    },
+  }
+}
 
 ///|
 fn fixture_station_drive(up : Bool) -> Json {
@@ -27,16 +41,19 @@ fn fixture_station_drive(up : Bool) -> Json {
           { "path": "/Volumes/备份盘", "name": "备份盘", "state": "missing" },
         ],
         "anywhere": true,
+        "transfers": true,
         "home": fix_home,
         "trash": true,
         "watch": true,
         "zip": true,
       },
+      // its disk: 380 GB of 1 TB left
+      "disk": { "freeBytes": 380000000000.0, "totalBytes": 1000000000000.0 },
     }
   } else {
     {
       "viewer": { "via": "mesh", "role": "owner" },
-      "drive": { "roots": [{ "path": "/Users/lin/照片", "name": "照片", "state": "ok" }] },
+      "drive": { "roots": [{ "path": "/Users/lin/照片", "name": "照片", "state": "ok" }], "transfers": true },
     }
   }
 }
@@ -52,14 +69,23 @@ fn fix_entry(name : String, dir : Bool, size : Int, time : String) -> Json {
     "mtime": Json::number(1792300000000.0 - size.to_double()),
     "type": "",
     "kind": Json::string(kind),
-    "sizeText": Json::string(if dir { "" } else { file_size(size.to_double()) }),
+    "sizeText": Json::string(if dir { "" } else { @sf.file_size(size.to_double()) }),
     "timeText": Json::string(time),
   }
 }
 
 ///|
+/// A made-up file's extension, lower case (what its kind is made up from).
+fn fix_ext(name : String) -> String {
+  match name.rev_find(".") {
+    Some(i) if i > 0 => name.view(start_offset=i + 1).to_owned().to_lower()
+    _ => ""
+  }
+}
+
+///|
 fn fix_kind(name : String) -> String {
-  match dv_ext(name) {
+  match fix_ext(name) {
     "md" => "markdown"
     "txt" | "log" => "text"
     "png" | "jpg" | "jpeg" | "heic" => "image"
@@ -143,10 +169,16 @@ fn fix_folder_json(root : String, path : String) -> Json {
 let fix_places : Map[String, Json] = {}
 
 ///|
+/// The copies asked (`drive.transfer`), as the `driveTransfers` topic shows them, newest first: each copying, 38% on.
+let fix_transfers : Array[Json] = []
+
+///|
 fn fixture_drive_topic(f : Fixture, name : String, params : Map[String, Json]) -> Json? {
   let p = Some(Json::object(params))
   match name {
     "workspace" => Some({ "id": "ws1", "name": "星火工作室", "manager": true, "role": "owner" })
+    "driveTransfers" =>
+      Some({ "supported": true, "loaded": true, "transfers": Json::array(fix_transfers.copy()) })
     "drive" =>
       if f.mode == "drive-loading" {
         None
@@ -172,10 +204,55 @@ fn fixture_drive_topic(f : Fixture, name : String, params : Map[String, Json]) -
 }
 
 ///|
+/// A copy asked (`drive.transfer`), shown in the `driveTransfers` topic as going: 38% on.
+fn fix_transfer(params : Json) -> Unit {
+  let p = Some(params)
+  let from = field(p, "from")
+  let to = field(p, "to")
+  let names = items(from, "names").map(fn(n) {
+    match n {
+      String(s) => s
+      _ => ""
+    }
+  })
+  let title = names.get(0).unwrap_or("")
+  let way = dv_name(dv_absolute(text(to, "root"), text(to, "path")))
+  fix_transfers.insert(0, {
+    "id": Json::string("t\{fix_transfers.length() + 1}"),
+    "station": Json::string(text(to, "station")),
+    "stationName": "MBA",
+    "fromStation": Json::string(text(from, "station")),
+    "fromStationName": "Studio",
+    "fromRoot": Json::string(text(from, "root")),
+    "fromPath": Json::string(text(from, "path")),
+    "names": Json::array(names.map(fn(n) { Json::string(n) })),
+    "toRoot": Json::string(text(to, "root")),
+    "toPath": Json::string(text(to, "path")),
+    "toText": Json::string("MBA › " + way),
+    "title": Json::string(title),
+    "move": Json::boolean(flag(p, "move")),
+    "state": "copying",
+    "active": true,
+    "progress": 0.38,
+    "total": 50541773,
+    "copied": 19205873,
+    "count": 1,
+    "files": 1,
+    "statusText": "18.3 MB / 48.2 MB",
+    "createdAt": 1792300000000,
+  })
+}
+
+///|
 fn fixture_drive_call(f : Fixture, name : String, params : Json) -> Result[Json, Json]? {
   let p = Some(params)
   let root = text(p, "root")
   match name {
+    "drive.transfer" => {
+      fix_transfer(params)
+      f.version += 1
+      Some(Ok(Json::object({})))
+    }
     "drive.rename" => {
       let from = text(p, "from")
       let to = text(p, "to")
@@ -257,7 +334,13 @@ fn fixture_drive_call(f : Fixture, name : String, params : Json) -> Result[Json,
           { "name": "项目", "path": "/Users/lin/项目" },
           { "name": "下载", "path": "/Users/lin/下载", "unreadable": true },
         ],
-        "places": [{ "name": "外接硬盘", "path": "/Volumes/外接硬盘", "disk": true }],
+        // (as a station offers them: its home, the home's own folders, its disks)
+        "places": [
+          { "name": "主目录", "path": fix_home },
+          { "name": "文档", "path": "/Users/lin/文档" },
+          { "name": "下载", "path": "/Users/lin/下载", "unreadable": true },
+          { "name": "外接硬盘", "path": "/Volumes/外接硬盘", "disk": true },
+        ],
       }
       Some(Ok(answer))
     }
@@ -347,31 +430,24 @@ pub fn open_drive_fixture(mode : String) -> Unit {
   let docs : DriveAt = { station: "ws1/st1", root: Some(fix_docs), path: "" }
   match mode {
     "files" => app.nav.push(Files)
-    "drive" | "drive-loading" | "drive-chosen" | "drive-entry" | "drive-upload" | "drive-download" => {
+    // a station's folders pinned, as a member sees them (its drive's page with no folder asked; chat_fixture.mbt)
+    "drive-roots" => {
+      app.nav.push(Files)
+      app.nav.push(Drive({ ..docs, root: None }))
+    }
+    "drive" | "drive-loading" | "drive-upload" | "drive-download" => {
       app.nav.push(Files)
       app.nav.push(Drive(docs))
-      let key = folder_key("ws1/st1", fix_docs, "")
-      // a file being downloaded, a folder being zipped for it (keep.mbt): their rows' progress
+      // a file being downloaded, a folder being zipped for it (the core's downloads, downloads_fixture.mbt): their rows'
+      // progress (keep.mbt)
       if mode == "drive-download" {
-        dv_fetches[dv_fetch_key("ws1/st1", fix_docs, "首页截图.png")] = 40
-        dv_fetches[dv_fetch_key("ws1/st1", fix_docs, "设计稿")] = 0
-      }
-      if mode == "drive-chosen" {
-        dv.chosen[key] = ["长篇小说.txt", "首页截图.png"]
-      }
-      if mode == "drive-entry" {
-        dv.chosen[key] = ["长篇小说.txt"]
-        dv.sheet = Entry(
-          { ..docs, root: Some(fix_docs) },
-          dv_entry(fix_entry("长篇小说.txt", false, novel_text().length() * 3, "14:05")),
-          fix_folder(fix_docs, "").map(fn(e) { text(Some(e), "name") }),
-        )
+        fix_drive_downloads("ws1/st1", fix_docs)
       }
       if mode == "drive-upload" {
         let up = fn(name : String, size : Int, sent : Int, state : String, error : String) {
-          dv.serial += 1
-          dv.uploads.push({
-            serial: dv.serial,
+          ups.serial += 1
+          ups.uploads.push({
+            serial: ups.serial,
             station: "ws1/st1",
             root: fix_docs,
             dir: "",
@@ -387,7 +463,7 @@ pub fn open_drive_fixture(mode : String) -> Unit {
         up("旅行照片.zip", 6291456, 2621440, "going", "")
         up("长篇小说.txt", 2048, 0, "taken", "")
         up("会议录音.m4a", 3145728, 0, "failed", "station 已离线")
-        dv.pumping = true
+        ups.pumping = true
       }
     }
     "drive-sub" => {
@@ -405,73 +481,28 @@ pub fn open_drive_fixture(mode : String) -> Unit {
       app.nav.push(Files)
       app.nav.push(Drive(docs))
       app.nav.push(DriveRead(at))
-      let r = reading_for(reader_key(at))
+      let r = @sf.reading_for(reader_key(at))
       if mode != "reader" && mode != "reader-md" {
         r.chrome = true
       }
       if mode == "reader-contents" {
-        r.panel = Contents
+        r.panel = @sf.ReaderPanel::Contents
         r.contents_put = false
       }
       if mode == "reader-layout" {
-        r.panel = Layout
+        r.panel = @sf.ReaderPanel::Layout
         r.contents_put = false
       }
     }
-    // the first row's chat (opened by sffix for chat… modes): ＋'s Station 文件 in 文档, a file ticked; a station's file
-    // in the draft
-    "chat-station-files" => {
-      sfs.open = true
-      sfs.draft = "ws1/st1:s-c1"
-      sfs.place = Some({ station: "ws1/st1", station_name: "Studio", root: fix_docs, root_name: "文档", path: "" })
-      let r = draft_ref("ws1/st1", "Studio", fix_docs, "发布清单.md", "发布清单.md", false, size=4210.0)
-      sfs.ticked[r.station + "\n" + r.path] = r
-    }
+    // (chat-station-files: ＋'s Station 文件 put up as the app's source is made, fixture_station_files)
     // (chat-attach-row: put in before the draft's kept files are read, so it is the first of the files' row)
     "chat-station-ref" | "chat-attach-row" =>
-      draft_refs["ws1/st1:s-c1"] = [draft_ref("ws1/st1", "Studio", fix_docs, "发布清单.md", "发布清单.md", false, size=4210.0)]
-    // one sent as a file (staged on the chat's station: up), a folder as a zip still going; a card's sheet open
+      fix_draft_ref("ws1/st1:s-c1", "发布清单.md", false, 4210.0, "path", true)
+    // one sent as a file (up at the chat's station), a folder as a zip still going; a card's sheet open
+    // (open_fixture_src)
     "chat-station-file" | "chat-station-sheet" => {
-      let file = draft_ref("ws1/st1", "Studio", fix_docs, "发布清单.md", "发布清单.md", false, size=4210.0)
-      file.mode = "file"
-      file.up = Some({
-        id: 9001,
-        name: "发布清单.md",
-        size: 4210,
-        image: "",
-        width: 0,
-        height: 0,
-        pasted: None,
-        local: None,
-        done: Some({ "name": "发布清单.md", "path": "uploads/发布清单.md", "size": 4210 }),
-        sent: 4210,
-        error: None,
-        core_id: "",
-        retry: false,
-        retrying: false,
-      })
-      let folder = draft_ref("ws1/st1", "Studio", fix_docs, "设计稿", "设计稿", true)
-      folder.mode = "file"
-      folder.up = Some({
-        id: 9002,
-        name: "设计稿.zip",
-        size: 0,
-        image: "",
-        width: 0,
-        height: 0,
-        pasted: None,
-        local: None,
-        done: None,
-        sent: 0,
-        error: None,
-        core_id: "",
-        retry: false,
-        retrying: false,
-      })
-      draft_refs["ws1/st1:s-c1"] = [file, folder]
-      if mode == "chat-station-sheet" {
-        sfs.ref = Some(("ws1/st1:s-c1", file))
-      }
+      fix_draft_ref("ws1/st1:s-c1", "发布清单.md", false, 4210.0, "file", true)
+      fix_draft_ref("ws1/st1:s-c1", "设计稿", true, 0.0, "file", false)
     }
     // the player (play_fixture.mbt), a service's page (service_fixture.mbt)
     _ => {
@@ -480,4 +511,30 @@ pub fn open_drive_fixture(mode : String) -> Unit {
       open_share_fixture(mode)
     }
   }
+}
+
+///|
+/// Studio's 文档/`name` in draft `key` as ＋'s Station 文件 puts it there (writing_drop: composer.add, the file with
+/// where it is, `mode` how it goes: "path", named by it; "file", sent as one), up already (`done`, as the fixture's
+/// composer.add has it) or still going.
+fn fix_draft_ref(key : String, name : String, dir : Bool, size : Double, mode : String, done : Bool) -> Unit {
+  let path = fix_docs + "/" + name
+  let one : Map[String, Json] = {
+    "id": Json::string("ref-" + name),
+    "name": Json::string(name),
+    "size": Json::number(size),
+    "ref": {
+      "station": "ws1/st1",
+      "stationName": "Studio",
+      "path": Json::string(path),
+      "dir": Json::boolean(dir),
+      "mode": Json::string(mode),
+    },
+    "drive": { "station": "ws1/st1", "root": Json::string(fix_docs), "path": Json::string(name) },
+  }
+  if done {
+    one["sent"] = Json::number(size)
+    one["done"] = { "name": Json::string(name), "path": Json::string("uploads/" + name), "size": Json::number(size) }
+  }
+  fix_composers[key] = fix_composers.get(key).unwrap_or([]) + [Json::object(one)]
 }

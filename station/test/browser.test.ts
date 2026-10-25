@@ -21,6 +21,7 @@ import WebSocket, { WebSocketServer } from "ws";
 import { TabView, jpegSize, keyCode, keyEvent, toViewport } from "../src/browser/view.ts";
 import { makeScreens } from "../src/screens/source.ts";
 import { browserTools, howTo } from "../src/tools/browser.ts";
+import { asked } from "../src/mesh/screens.ts";
 
 const dirs: string[] = [];
 const scratch = () => {
@@ -202,6 +203,39 @@ test("a view ends when its tab goes: a waiting next is null, and so is every one
   cdp.emit("Target.detachedFromTarget", { sessionId: "S", targetId: "T" });
   assert.equal(await waiting, null);
   assert.equal(await v.next(), null);
+});
+
+test("a view laid out for the viewer's phone: its size and scale on the view's own session, cast as large as that, and let go as it ends", async () => {
+  const cdp = new FakeCdp();
+  const v = new TabView({ cdp, session: "S", targetId: "T", now: () => 0 });
+  await v.start({ maxWidth: 1920, maxHeight: 1080, codecs: ["jpeg"], fit: { width: 390, height: 844, scale: 3 } });
+  assert.deepEqual(cdp.of("Emulation.setDeviceMetricsOverride").map((x) => [x.params, x.sessionId]), [[{ width: 390, height: 844, deviceScaleFactor: 2, mobile: true }, "S"]]);
+  const cast = cdp.of("Page.startScreencast")[0]!.params;
+  assert.deepEqual([cast.maxWidth, cast.maxHeight], [780, 1688], "as large as the phone shows it, at most twice its CSS pixels");
+  // A tap lands where it is on the phone's page.
+  await v.input({ t: "pointer", kind: "down", x: 0.5, y: 0.25, buttons: 1 });
+  const press = cdp.of("Input.dispatchMouseEvent")[0]!.params;
+  assert.deepEqual([press.x, press.y], [195, 211]);
+  v.close();
+  await turn();
+  assert.equal(cdp.of("Emulation.clearDeviceMetricsOverride").length, 1);
+  // A preview, or a view with no phone to lay out for, leaves the page as it is.
+  for (const options of [{ peek: true, fit: { width: 390, height: 844, scale: 3 } }, {}]) {
+    const other = new FakeCdp();
+    const w = new TabView({ cdp: other, session: "S", targetId: "T", now: () => 0 });
+    await w.start({ maxWidth: 1280, maxHeight: 720, codecs: ["jpeg"], ...options }, { width: 1200, height: 800 });
+    w.close();
+    await turn();
+    assert.equal(other.of("Emulation.setDeviceMetricsOverride").length + other.of("Emulation.clearDeviceMetricsOverride").length, 0);
+  }
+});
+
+test("a view's ask: the phone it is laid out for only when it drives the screen, and only a phone's size", () => {
+  const fit = { width: 390, height: 844, scale: 3 };
+  assert.deepEqual(asked({ codecs: ["jpeg"], control: true, fit }).fit, fit);
+  assert.equal(asked({ codecs: ["jpeg"], control: false, fit }).fit, undefined, "only looking: the page stays as others see it");
+  assert.equal(asked({ codecs: ["jpeg"], control: true, peek: true, fit }).fit, undefined);
+  for (const bad of [{ ...fit, width: 50 }, { ...fit, height: 9000 }, { ...fit, scale: 0 }, { ...fit, scale: "3" }, null]) assert.equal(asked({ codecs: ["jpeg"], control: true, fit: bad }).fit, undefined, JSON.stringify(bad));
 });
 
 test("closing a view stops its cast and its connection", async () => {
@@ -388,6 +422,12 @@ function fakeChrome() {
       c.answers["Browser.close"] = () => {
         queueMicrotask(() => c.close());
         return {};
+      };
+      // A new tab: its id answered, then told of (as Chrome may).
+      c.answers["Target.createTarget"] = (p) => {
+        const targetId = `N${c.of("Target.createTarget").length}`;
+        setImmediate(() => c.emit("Target.targetCreated", { targetInfo: { targetId, type: "page", title: "", url: p.url, attached: false } }));
+        return { targetId };
       };
       made.push(c);
       return c;
@@ -578,6 +618,29 @@ test("whose each tab is outlives the station process, and is forgotten for tabs 
   assert.equal(owners.of("A"), "chat-1", "A is still there");
   assert.equal(new Owners(dir).of("Z"), undefined, "Z closed while no station watched");
   t.close();
+});
+
+test("a tab of the station's own: opened at a page (the browser started for it) once it is among the screens, brought forward, closed when asked", async () => {
+  const chrome = fakeChrome();
+  const { clock: c } = clock();
+  const screens = makeScreens();
+  const b = new StationBrowser({ later: () => () => {}, dir: scratch(), chrome: chrome.host, clock: c, screens });
+  assert.equal(b.available(), true, "a Chrome is there to start");
+  const id = await b.openTab("https://claude.ai/oauth/authorize?x=1");
+  const cdp = chrome.made[0]!;
+  assert.deepEqual(cdp.of("Target.createTarget").map((x) => x.params), [{ url: "https://claude.ai/oauth/authorize?x=1" }]);
+  assert.ok(screens.get(`browser:${id}`), "among the screens by the time it is given");
+  assert.equal(b.hasTab(id), true);
+  assert.equal(b.tabs().find((t) => t.id === id)?.session, undefined, "no session's");
+  await b.front(id);
+  assert.deepEqual(cdp.of("Target.activateTarget").map((x) => x.params), [{ targetId: id }]);
+  await b.closeTab(id);
+  assert.deepEqual(cdp.of("Target.closeTarget").map((x) => x.params), [{ targetId: id }]);
+  await b.closeTab("no-such-tab");
+  assert.equal(cdp.of("Target.closeTarget").length, 1);
+  await b.close();
+  const none = new StationBrowser({ later: () => () => {}, dir: scratch(), chrome: { ...chrome.host, installed: () => false }, clock: c });
+  assert.equal(none.available(), false);
 });
 
 test("a chat archived closes the tabs it opened, and only those", async () => {

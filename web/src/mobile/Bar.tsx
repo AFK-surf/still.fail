@@ -14,8 +14,10 @@
 //   place: it (in another bar: that bar too); elsewhere, as the finger left it. A bar switch lands untouched.
 // - Choosing another bar, the panel closes like a window over a stack of bars: the stack slides down until the chosen
 //   bar is where the bar is, what is not chosen goes out at the glass's edges. Nothing fades.
+import { springStep } from "@stillfail/ui/spring.ts";
+import { useFrameDraw } from "./gesture.ts";
 import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
-import type { ComponentType } from "react";
+import type { ComponentType, ReactNode } from "react";
 import { Archive, Chart, Chats, Folder, Im, Ling, Plus, Quota, Zou, type IconProps } from "@stillfail/ui/icons.tsx";
 import { railLabel } from "../Rail.tsx";
 import { prefs, setPrefs, usePrefs } from "../prefs.ts";
@@ -75,8 +77,9 @@ class Spring {
   jump(at: number): void { this.value = at; this.target = at; this.velocity = 0; }
   get moving(): boolean { return this.velocity !== 0 || this.value !== this.target; }
   step(dt: number): void {
-    this.velocity += (-this.tension * (this.value - this.target) - this.damping * this.velocity) * dt;
-    this.value += this.velocity * dt;
+    const next = springStep(this.value, this.velocity, this.target, this.tension, this.damping, dt);
+    this.value = next.value;
+    this.velocity = next.velocity;
     if (Math.abs(this.velocity) < 0.01 && Math.abs(this.value - this.target) < 0.01) this.jump(this.target);
   }
 }
@@ -139,11 +142,12 @@ export function BottomBar({ scope, place, shown, go, onPanel }: BottomBarProps) 
   const said = glyph.asleep ? status?.text ?? "" : chats?.glyph?.label ?? "";
   const stationsSaid = chats?.trouble ? t("web-mobile.home.stationTrouble", { said, trouble: chats.trouble.text }) : t("web-mobile.home.station", { said });
   const labelOf = (key: BarPlace) => (key === "stations" && said ? stationsSaid : railLabel(key));
-  const icon = (key: BarPlace, size = 28) => {
-    if (key === "stations") return <StationGlyph counts={glyph} size={size} />;
-    const I = ICONS[key]!;
-    return <I size={size} />;
-  };
+  // Spring frames do not redraw each icon (especially the station's animated SVG).
+  const icons = useMemo(() => ({
+    ...Object.fromEntries(Object.entries(ICONS).map(([key, I]) => [key, <I size={28} />])),
+    stations: <StationGlyph counts={glyph} size={28} />,
+  }) as Partial<Record<BarPlace, ReactNode>>, [glyph.online, glyph.dim, glyph.failing, glyph.working, glyph.asleep, glyph.connecting]);
+  const icon = (key: BarPlace) => icons[key];
 
   const wrap = useRef<HTMLDivElement>(null);
   const [w, setW] = useState(0);
@@ -157,11 +161,19 @@ export function BottomBar({ scope, place, shown, go, onPanel }: BottomBarProps) 
     return () => o.disconnect();
   }, []);
 
-  // ---- springs, stepped by one frame loop; the bar is drawn again each frame one of them moves
+  // ---- springs, stepped by one frame loop; only the outline changing redraws the bar
   const s = useRef<{ o: Spring; k: Spring; held: Spring; x: Spring; y: Spring } | null>(null);
   s.current ??= { o: new Spring(0), k: new Spring(0), held: new Spring(0), x: new Spring(0), y: new Spring(0) };
   const sp = s.current;
   const [, tick] = useState(0);
+  const ball = useRef<HTMLDivElement>(null);
+  const drawBall = useRef<() => void>(() => {});
+  const drawShape = useRef<() => void>(() => {});
+  const swapping = useRef(false);
+  const glass = useRef<HTMLDivElement>(null), rowPanel = useRef<HTMLDivElement>(null), actionButton = useRef<HTMLButtonElement>(null);
+  const rim = useRef<SVGPathElement>(null), gradient = useRef<SVGLinearGradientElement>(null);
+  const shadowInside = useRef<SVGRectElement>(null), shadowShape = useRef<SVGRectElement>(null);
+  const tabEls = useRef(new Map<string, HTMLButtonElement>());
   const loop = useRef({ raf: 0, last: 0 });
   // What the panel's spring is to do once it is still (a bar being chosen: chosen). Done at once if cut short: left
   // undone, the bar would stay half switched.
@@ -170,13 +182,16 @@ export function BottomBar({ scope, place, shown, go, onPanel }: BottomBarProps) 
     if (loop.current.raf) return;
     loop.current.last = performance.now();
     const frame = (now: number) => {
-      const dt = Math.min(0.032, Math.max(0.001, (now - loop.current.last) / 1000));
+      const dt = Math.max(0, (now - loop.current.last) / 1000);
       loop.current.last = now;
       const all = Object.values(sp);
+      // Outline and ball draw directly. Only a changing stack still needs a React commit.
+      const reshaping = sp.o.moving || sp.k.moving;
       const instant = reducedMotion();
       for (const spring of all) if (instant) spring.jump(spring.target); else if (spring.moving) spring.step(dt);
       if (!sp.o.moving && panelDone.current) { const done = panelDone.current; panelDone.current = null; done(); }
-      tick((n) => n + 1);
+      drawBall.current();
+      if (reshaping) { drawShape.current(); if (swapping.current) tick((n) => n + 1); }
       loop.current.raf = all.some((spring) => spring.moving) ? requestAnimationFrame(frame) : 0;
     };
     loop.current.raf = requestAnimationFrame(frame);
@@ -185,11 +200,13 @@ export function BottomBar({ scope, place, shown, go, onPanel }: BottomBarProps) 
 
   // ---- the panel (only with more than one bar)
   const [open, setOpenState] = useState(false);
+  const opened = useRef(open);
+  const setOpen = (next: boolean) => { opened.current = next; setOpenState(next); };
   const panel = (next: boolean, then?: () => void, config?: [number, number]) => {
     const before = panelDone.current;
     panelDone.current = then ?? null;
     before?.();
-    setOpenState(next);
+    setOpen(next);
     onPanel?.(next);
     const [tension, damping] = config ?? (next ? [260, 17] : [320, 26]);
     sp.o.to(next ? 1 : 0, tension, damping);
@@ -259,6 +276,7 @@ export function BottomBar({ scope, place, shown, go, onPanel }: BottomBarProps) 
 
   // ---- choosing another bar: the stack slides down inside the closing glass, the ball riding the place chosen
   const [swap, setSwap] = useState<{ i: number; n: number; from: number; key: BarPlace | null; done?: boolean } | null>(null);
+  swapping.current = swap !== null;
   const pickSet = (i: number, key: BarPlace | null) => {
     if (swap) return;
     setSwap({ i, n: others.indexOf(i), from: Math.max(0.2, sp.o.value), key });
@@ -294,20 +312,19 @@ export function BottomBar({ scope, place, shown, go, onPanel }: BottomBarProps) 
   // ---- the finger
   // `panel`: the finger has the panel: open above a line over the bar, closed below it, leaning a quarter of the way
   // toward the finger (o0 at the finger's start, from its y), as the ball keeps to a place.
-  const press = useRef({ x: 0, y: 0, taken: false, panel: false, o0: 0, slid: false });
+  const press = useRef({ x: 0, y: 0, taken: false, panel: false, o0: 0, slid: false, left: 0, top: 0 });
   const UP = 24, DOWN = 16; // the line: crossed upward 24 over the bar's top, back below 16 over it
-  const local = (e: ReactPointerEvent) => { const b = wrap.current!.getBoundingClientRect(); return { x: e.clientX - b.left, y: e.clientY - b.top }; };
+  type Point = Pick<ReactPointerEvent, "clientX" | "clientY" | "buttons" | "pointerId">;
+  const local = (e: Point) => ({ x: e.clientX - press.current.left, y: e.clientY - press.current.top });
   const down = (e: ReactPointerEvent) => {
-    press.current = { x: e.clientX, y: e.clientY, taken: false, panel: sp.o.value > 0.02 || open, o0: sp.o.value, slid: false };
+    moves.cancel();
+    const box = wrap.current!.getBoundingClientRect();
+    press.current = { x: e.clientX, y: e.clientY, taken: false, panel: sp.o.value > 0.02 || open, o0: sp.o.value, slid: false, left: box.left, top: box.top };
   };
-  const move = (e: ReactPointerEvent) => {
+  const moves = useFrameDraw<Point>((e) => {
     // A bar switch landing: it lands untouched; the finger is the finger's once it has.
     if (swap) return;
     const p = press.current;
-    if (!p.taken && e.buttons !== 0 && Math.hypot(e.clientX - p.x, e.clientY - p.y) > 8) {
-      p.taken = true;
-      wrap.current!.setPointerCapture(e.pointerId);
-    }
     if (!p.taken) return;
     const at = local(e), several = others.length > 0;
     if (several) {
@@ -316,8 +333,8 @@ export function BottomBar({ scope, place, shown, go, onPanel }: BottomBarProps) 
       if (p.panel) {
         // Open or closed by the line (a little apart each way, so it does not flicker on it); never in between but
         // for the lean toward the finger.
-        const snapped = open ? (above < DOWN ? 0 : 1) : (above > UP ? 1 : 0);
-        if ((snapped === 1) !== open) { setOpenState(snapped === 1); onPanel?.(snapped === 1); }
+        const snapped = opened.current ? (above < DOWN ? 0 : 1) : (above > UP ? 1 : 0);
+        if ((snapped === 1) !== opened.current) { setOpen(snapped === 1); onPanel?.(snapped === 1); }
         const raw = p.o0 + (p.y - e.clientY - (p.o0 > 0.02 ? 0 : 8)) / travel;
         const lean = Math.max(0, Math.min(1.1, snapped + (raw - snapped) * LEAN));
         const [tension, damping] = snapped ? [260, 17] : [320, 26];
@@ -326,8 +343,19 @@ export function BottomBar({ scope, place, shown, go, onPanel }: BottomBarProps) 
       }
     }
     setFinger({ x: at.x, y: several && p.panel ? Math.max(rowMid(0), Math.min(barMid, at.y)) : null });
+  });
+  const move = (e: ReactPointerEvent) => {
+    if (swap) return;
+    const p = press.current;
+    if (!p.taken && e.buttons !== 0 && Math.hypot(e.clientX - p.x, e.clientY - p.y) > 8) {
+      p.taken = true;
+      wrap.current!.setPointerCapture(e.pointerId);
+    }
+    if (p.taken) moves.set({ clientX: e.clientX, clientY: e.clientY, buttons: e.buttons, pointerId: e.pointerId });
   };
   const up = (e: ReactPointerEvent) => {
+    if (press.current.taken) moves.set({ clientX: e.clientX, clientY: e.clientY, buttons: e.buttons, pointerId: e.pointerId });
+    moves.flush();
     if (swap) return;
     const p = press.current;
     if (!p.taken) return;
@@ -339,15 +367,15 @@ export function BottomBar({ scope, place, shown, go, onPanel }: BottomBarProps) 
     if (p.panel) {
       p.panel = false;
       // Let go on a place in the rows, the panel open: that bar, that place.
-      if (open && at.y < rowTop - 4 && sp.o.value >= 0.85) {
+      if (opened.current && at.y < rowTop - 4 && sp.o.value >= 0.85) {
         const n = Math.max(0, Math.min(others.length - 1, Math.floor((at.y - OVER) / ROW))), i = others[n]!;
         const xs = centres(w, 0, sets[i]!.length);
         pickSet(i, sets[i]![nearest(xs, at.x)]!);
         return;
       }
       // Elsewhere: as the line left it, without the lean (on the bar, closed, and the place under the finger).
-      panel(open);
-      if (!open && at.y >= rowTop - 4) { const key = items[nearest(final, at.x)]!; if (key !== place) go(key); }
+      panel(opened.current);
+      if (!opened.current && at.y >= rowTop - 4) { const key = items[nearest(final, at.x)]!; if (key !== place) go(key); }
       return;
     }
     const key = items[nearest(final, at.x)]!;
@@ -357,6 +385,7 @@ export function BottomBar({ scope, place, shown, go, onPanel }: BottomBarProps) 
   // The finger taken from the bar without its lifting (the browser took the gesture): let go of, nothing chosen; the
   // panel as the line left it.
   function lost() {
+    moves.cancel();
     const p = press.current;
     p.taken = false;
     setFinger(null);
@@ -379,15 +408,36 @@ export function BottomBar({ scope, place, shown, go, onPanel }: BottomBarProps) 
   const shape = w ? outline(w, 0, PANEL - clipTop, notch) : "";
   const slot = w ? (w - 2 * C0) / 3 : 0;
   const shadowMask = useId().replace(/[^\w-]/g, "");
-  const held = sp.held.value;
   const ballShown = ai >= 0 || finger !== null || ballOn !== null;
-  const bx = sp.x.value, by = sp.y.value;
-  // Stretched along its way by its speed (px a frame), its leading edge ahead; round as it stops.
-  const v = sp.x.velocity / 60;
-  const stretch = Math.min(36, Math.abs(v) * 1.6);
-  const ballW = BALL + stretch, ballH = BALL - Math.min(6, stretch * 0.2);
-  const ballLeft = bx - BALL / 2 - (v < 0 ? stretch : 0);
+  const ballStyle = () => {
+    const v = sp.x.velocity / 60;
+    const stretch = Math.min(36, Math.abs(v) * 1.6);
+    const width = BALL + stretch, height = BALL - Math.min(6, stretch * 0.2);
+    const left = sp.x.value - BALL / 2 - (v < 0 ? stretch : 0);
+    return {
+      width: `${width}px`, height: `${height}px`, borderRadius: `${height / 2}px`,
+      opacity: ballShown ? "1" : "0",
+      transform: `translate3d(${left}px, ${sp.y.value - height / 2}px, 0) scale(${(1 + 0.06 * sp.held.value) * (ballShown ? 1 : 0.6)})`,
+    };
+  };
+  drawBall.current = () => { if (ball.current) Object.assign(ball.current.style, ballStyle()); };
   const lit = cand ? (cand.set === cur ? cand.key : null) : place;
+  drawShape.current = () => {
+    const o = sp.o.value, k = sp.k.value * (1 - Math.min(1, o * 2));
+    const top = Math.max(0, OVER + travel * (1 - o)), cy = -LIFT * k, radius = (DROP / 2 + GAP) * k;
+    const cut = radius > 0.5 && w ? notchCut(w / 2, 0, cy, radius, FILLET) : null;
+    const edge = radius > 0.5 && w ? notchCut(w / 2, top, cy, radius, FILLET) : null;
+    if (glass.current) { glass.current.style.top = `${top}px`; glass.current.style.clipPath = w ? `path("${outline(w, 0, PANEL - top, cut)}")` : ""; }
+    gradient.current?.setAttribute("y1", String(top)); gradient.current?.setAttribute("y2", String(top + R));
+    for (const el of [shadowInside.current, shadowShape.current]) if (el) { el.setAttribute("y", String(top)); el.setAttribute("height", String(PANEL - top)); }
+    rim.current?.setAttribute("d", edge?.edge ?? "");
+    if (rowPanel.current) Object.assign(rowPanel.current.style, { opacity: String(swap ? 0 : rowsLook(o).alpha), transform: `translate3d(0, ${rowsLook(o).dy}px, 0)`, pointerEvents: open && o > 0.6 ? "auto" : "none" });
+    const xs = centres(w, k, items.length);
+    items.forEach((key, j) => { const el = tabEls.current.get(key); if (el) el.style.left = `${xs[j]! - slot / 2}px`; });
+    if (actionButton.current) Object.assign(actionButton.current.style, { transform: `translate(-50%, ${cy - DROP / 2}px) scale(${Math.max(0.001, k)})`, opacity: String(Math.min(1, k * 3)), pointerEvents: k > 0.9 && action ? "auto" : "none" });
+  };
+  useLayoutEffect(() => { drawShape.current(); drawBall.current(); });
+
 
   return (
     <>
@@ -400,22 +450,22 @@ export function BottomBar({ scope, place, shown, go, onPanel }: BottomBarProps) 
           {w > 0 && (
             <svg className={css.mBarShadow} width={w} height={PANEL} aria-hidden="true">
               <defs>
-                <linearGradient id={`${shadowMask}f`} gradientUnits="userSpaceOnUse" x1={0} y1={clipTop} x2={0} y2={clipTop + R}>
+                <linearGradient ref={gradient} id={`${shadowMask}f`} gradientUnits="userSpaceOnUse" x1={0} y1={clipTop} x2={0} y2={clipTop + R}>
                   <stop offset={0} stopColor="#000" />
                   <stop offset={1} stopColor="#fff" />
                 </linearGradient>
                 <mask id={shadowMask} maskUnits="userSpaceOnUse" x={-40} y={-40} width={w + 80} height={PANEL + 80}>
                   <rect x={-40} y={-40} width={w + 80} height={PANEL + 80} fill={`url(#${shadowMask}f)`} />
-                  <rect x={0} y={clipTop} width={w} height={PANEL - clipTop} rx={R} fill="#000" />
+                  <rect ref={shadowInside} x={0} y={clipTop} width={w} height={PANEL - clipTop} rx={R} fill="#000" />
                 </mask>
               </defs>
-              <g mask={`url(#${shadowMask})`}><rect className={css.mBarShadowShape} x={0} y={clipTop} width={w} height={PANEL - clipTop} rx={R} /></g>
+              <g mask={`url(#${shadowMask})`}><rect ref={shadowShape} className={css.mBarShadowShape} x={0} y={clipTop} width={w} height={PANEL - clipTop} rx={R} /></g>
             </svg>
           )}
           {/* Rounded as its outline is, so its lit rim (an inset shadow) runs round the ends too; the outline cuts the notch. */}
-          <div className={css.mBarGlass} data-bar="glass" style={{ top: clipTop, borderRadius: R, clipPath: shape ? `path("${shape}")` : undefined }} />
+          <div ref={glass} className={css.mBarGlass} data-bar="glass" style={{ top: clipTop, borderRadius: R, clipPath: shape ? `path("${shape}")` : undefined }} />
           {w > 0 && others.length > 0 && (
-            <div className={css.mBarRows} data-bar="rows" style={{ top: 0, height: rowTop, opacity: swap ? 0 : rowsLook(o).alpha, transform: `translateY(${rowsLook(o).dy}px)`, pointerEvents: open && o > 0.6 ? "auto" : "none" }}>
+            <div ref={rowPanel} className={css.mBarRows} data-bar="rows" style={{ top: 0, height: rowTop, opacity: swap ? 0 : rowsLook(o).alpha, transform: `translateY(${rowsLook(o).dy}px)`, pointerEvents: open && o > 0.6 ? "auto" : "none" }}>
               {others.map((i, n) => {
                 const xs = centres(w, 0, sets[i]!.length);
                 return (
@@ -435,15 +485,15 @@ export function BottomBar({ scope, place, shown, go, onPanel }: BottomBarProps) 
           )}
           <div className={css.mBarRow} role="tablist" style={{ top: rowTop, pointerEvents: "auto" }}>
             {w > 0 && !swap && items.map((key, j) => (
-              <button key={key} type="button" role="tab" data-tab={key} aria-selected={place === key} className={css.mBarPlace} style={{ left: now[j]! - slot / 2, width: slot }}
+              <button ref={el => { if (el) tabEls.current.set(key, el); else tabEls.current.delete(key); }} key={key} type="button" role="tab" data-tab={key} aria-selected={place === key} className={css.mBarPlace} style={{ left: now[j]! - slot / 2, width: slot }}
                 data-on={lit === key || undefined} aria-label={labelOf(key)} onClick={() => tapPlace(key)}>
                 {icon(key)}
                 {dots[key] && <span className={css.mBarDot} data-tone={dots[key]} />}
               </button>
             ))}
           </div>
-          {notchAt && <svg className={css.mBarNotchRim} width={w} height={PANEL} aria-hidden="true"><path d={notchAt.edge} /></svg>}
-          <button type="button" className={css.mBarLing} aria-label={drawn.current?.label ?? t("web-mobile.home.newChat")} data-action={drawn.current?.key}
+          {w > 0 && <svg className={css.mBarNotchRim} width={w} height={PANEL} aria-hidden="true"><path ref={rim} d={notchAt?.edge ?? ""} /></svg>}
+          <button ref={actionButton} type="button" className={css.mBarLing} aria-label={drawn.current?.label ?? t("web-mobile.home.newChat")} data-action={drawn.current?.key}
             style={{ top: rowTop, transform: `translate(-50%, ${cy - DROP / 2}px) scale(${Math.max(0.001, k)})`, opacity: Math.min(1, k * 3), pointerEvents: k > 0.9 && action ? "auto" : "none" }}
             onPointerDown={(e) => e.stopPropagation()} onClick={() => action?.run()}>
             {/* Another icon (令, a ＋) for another page's action pops in, the circle staying; another ＋ is the same icon, still. */}
@@ -463,10 +513,7 @@ export function BottomBar({ scope, place, shown, go, onPanel }: BottomBarProps) 
             </div>
           )}
           {w > 0 && (
-            <div className={css.mBarBall} data-bar="ball" style={{
-              left: ballLeft, top: by - ballH / 2, width: ballW, height: ballH,
-              borderRadius: ballH / 2, opacity: ballShown ? 1 : 0, transform: `scale(${(1 + 0.06 * held) * (ballShown ? 1 : 0.6)})`,
-            }} />
+            <div ref={ball} className={css.mBarBall} data-bar="ball" style={ballStyle()} />
           )}
         </div>
       </div>

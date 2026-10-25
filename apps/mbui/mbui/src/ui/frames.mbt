@@ -10,8 +10,9 @@ fn hash_mix(h : Int64, v : Int64) -> Int64 {
 
 ///|
 /// What the last frame drew, as one number (FNV-1a): every instance drawn (where, how large, its kind and colour, in
-/// 1/64 px and 1/255 steps) and the laid-out tree with its words and carets (`dump`). The same steps give the same
-/// number on every run and every machine.
+/// 1/64 px and 1/255 steps; a glyph by its key, a picture by its number, not where the host keeps them) and the
+/// laid-out tree with its words and carets (`dump`). The same steps give the same number on every run and every
+/// machine, whatever was drawn before.
 pub fn Tester::frame_hash(self : Tester) -> Int64 {
   ignore(self)
   drawn_hash()
@@ -31,10 +32,11 @@ fn drawn_text() -> String {
   let sb = StringBuilder()
   dump_node(sb, 0, 0)
   let named = image_numbers(c)
+  let keys = glyph_keys()
   for k in 0..<c.ninst {
     sb.write_string("inst")
     for j in 0..<inst_size {
-      sb.write_string(" \{(inst_named(c, named, k, j) * 64.0).round().to_int64()}")
+      sb.write_string(" \{(inst_named(c, named, keys, k, j) * 64.0).round().to_int64()}")
     }
     if c.inst[k * inst_size + 5] == 4.0 {
       let s = stream_drawn(c.inst[k * inst_size + 20].to_int())
@@ -65,11 +67,19 @@ fn image_numbers(c : Ctx) -> Map[Int, Int] {
 }
 
 ///|
-/// Instance `k`'s number `j` as compared: a picture's id its number as first drawn.
-fn inst_named(c : Ctx, named : Map[Int, Int], k : Int, j : Int) -> Double {
+/// Instance `k`'s number `j` as compared: a picture's id its number as first drawn; a glyph's place in the atlas (12,
+/// 13) its key (`keys`: text.mbt glyph_keys) and 0, where it is there being what was drawn before.
+fn inst_named(c : Ctx, named : Map[Int, Int], keys : Map[String, Int], k : Int, j : Int) -> Double {
   let b = k * inst_size
-  if j == 20 && c.inst[b + 5] == 4.0 {
+  let kind = c.inst[b + 5]
+  if j == 20 && kind == 4.0 {
     named.get(c.inst[b + 20].to_int()).unwrap_or(-1).to_double()
+  } else if (j == 12 || j == 13) && (kind == 1.0 || kind == 3.0 || kind == 7.0) {
+    if j == 13 {
+      0.0
+    } else {
+      keys.get("\{c.inst[b + 12]} \{c.inst[b + 13]}").unwrap_or(-1).to_double()
+    }
   } else {
     c.inst[b + j]
   }
@@ -80,11 +90,20 @@ fn drawn_hash() -> Int64 {
   let c = g()
   let mut h = -3750763034362895579L
   let named = image_numbers(c)
+  let keys = glyph_keys()
   for k in 0..<c.ninst {
     for j in 0..<inst_size {
-      let x = inst_named(c, named, k, j)
-      // (a clip's corners' radii only where it has them: a picture with no rounded clip hashed as before they were kept)
-      if j >= 24 && x == 0.0 {
+      let x = inst_named(c, named, keys, k, j)
+      // (a clip's corners' radii only where it has them: a picture with no rounded clip hashed as before they were kept;
+      // a box's corners only where they are each its own, not all its radius)
+      if j >= 24 && j < 36 && x == 0.0 {
+        continue
+      }
+      if j >= 36 && j < 40 && x == c.inst[k * inst_size + 4] {
+        continue
+      }
+      // (its outer clip only where it has one: drawn as before they were kept elsewhere)
+      if j >= 40 && !inst_has_outer(c.inst, k * inst_size) {
         continue
       }
       h = hash_mix(h, (x * 64.0).round().to_int64())
@@ -128,6 +147,16 @@ fn log_drawn(w : Double, h : Double, scale : Double, t : Double) -> Unit {
       }
     }
   }
+}
+
+///|
+/// The frame drawn last (those drawn at this moment) reached the screen `ms` later than its time, as a host says of a
+/// frame that took longer than the display's frame to build (@hostapi.frame_late), in the next frame drawn after this
+/// moment: a slide whose first frame that was moves on that much later (nav.mbt).
+pub fn Tester::frame_late(self : Tester, ms : Double) -> Unit {
+  self.fake.late = ms
+  self.fake.late_after = self.fake.time
+  self.fake.late_frame = -1
 }
 
 ///|
@@ -235,6 +264,21 @@ pub fn Tester::replay_frames(self : Tester, log : String) -> Array[(Int, String,
         replay_message(self.fake, line)
       }
       continue
+    }
+    // how late the host said the frame before was, said again for the frame it said it in (hostcall.mbt's
+    // h_frame_late): the next drawn
+    match line.find("LATE ") {
+      Some(i) =>
+        match num(line.view(start_offset=i + 5).to_owned()) {
+          Some(late) => {
+            self.fake.late = late
+            self.fake.late_after = self.fake.time
+            self.fake.late_frame = -1
+            continue
+          }
+          None => ()
+        }
+      None => ()
     }
     guard line.find("DRAWHASH ") is Some(i) else { continue }
     framed = true

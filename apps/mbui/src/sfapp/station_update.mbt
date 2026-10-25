@@ -24,20 +24,20 @@ fn update_anchor_reset() -> Unit {
 ///|
 /// The control's dot and word, 5 apart, at least 32 high.
 // kept across runs: a value (no field of it changes)
-let update_control_row : @ui.Style = @ui.style(row=true, min_h=S8, gap=S1_25, align=ACenter)
+let update_control_row : @ui.Style = @ui.css("row min_h=S8 gap=S1_25 align=ACenter")
 
 ///|
 /// Its dot (6, round) and its word (12 on 18), in the accent's ink; red when it is in trouble.
 // kept across runs: a value (no field of it changes)
-let update_dot : @ui.Style = @ui.style(w=S1_5, h=S1_5, radius=Full, bg=AccentText)
+let update_dot : @ui.Style = @ui.css("w=S1_5 h=S1_5 radius=Full bg=AccentText")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let update_dot_trouble : @ui.Style = update_dot.then(@ui.style(bg=Danger))
+let update_dot_trouble : @ui.Style = update_dot.then(@ui.css("bg=Danger"))
 
 ///|
 // kept across runs: a value (no field of it changes)
-let update_label : @ui.TextStyle = @ui.text_style(size=Xs, color=AccentText, leading=L5, wrap=false)
+let update_label : @ui.TextStyle = @ui.text_style(size=Caption, color=AccentText, leading=L5, wrap=false)
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -111,17 +111,15 @@ let update_dot_center : Double = 3.0
 let update_arrow_keep : Double = 30.0
 
 ///|
-/// The popover (24 round, raised, a soft shadow): 14 in on the left, 8 on the right, 12 over and 10 under; its rows 8
-/// apart.
+/// The popover (a small panel's corner, raised, a soft shadow), what is in it a panel's padding in from every side (its
+/// close button in its top corner and 立即更新 in its foot corner, concentric with them); its words where a card's
+/// stand (as the desktop's, sfdesk/station_update.mbt), its rows 8 apart.
 // kept across runs: a value (no field of it changes)
 let update_pop : @ui.Style = @ui.style(
   w=Full,
-  pl=S3_5,
-  pr=S2,
-  pt=S3,
-  pb=S2_5,
+  p=@sf.room_of(@sf.panel_pad),
   gap=S2,
-  radius=Xl4,
+  radius=@sf.panel_radius,
   bg=Raised,
   shadow=@sf.update_raised.cast(),
 )
@@ -129,72 +127,68 @@ let update_pop : @ui.Style = @ui.style(
 ///|
 /// Its head: what is said and its close button, 8 apart.
 // kept across runs: a value (no field of it changes)
-let update_head : @ui.Style = @ui.style(row=true, w=Full, gap=S2, align=AStart)
+let update_head : @ui.Style = @ui.css("row w=Full pl=S2_5 gap=S2 align=AStart")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let update_words : @ui.Style = @ui.style(w=Full, gap=SPx)
+let update_words : @ui.Style = @ui.css("w=Full pt=S2_5 gap=SPx")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let update_name_row : @ui.Style = @ui.style(row=true, gap=S2, align=ACenter)
+let update_name_row : @ui.Style = @ui.css("row gap=S2 align=ACenter")
 
 ///|
 /// The station's name, or what is said where there is none (13 on 19, medium, the ink).
 // kept across runs: a value (no field of it changes)
-let update_name : @ui.TextStyle = @ui.text_style(size=Sm, weight=Medium, color=Fg, leading=L4_75, wrap=false)
+let update_name : @ui.TextStyle = @ui.text_style(size=Meta, weight=Medium, color=Fg, leading=L4_75, wrap=false)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let update_said : @ui.TextStyle = @ui.text_style(size=Sm, weight=Medium, color=Fg, leading=L4_75, w=Full)
+let update_said : @ui.TextStyle = @ui.text_style(size=Meta, weight=Medium, color=Fg, leading=L4_75, w=Full)
 
 ///|
 /// What more is said (12, muted; on 16.8, Xs's own, for Android's 17: off the scale's lines).
 // kept across runs: a value (no field of it changes)
-let update_detail : @ui.TextStyle = @ui.text_style(size=Xs, color=Muted, w=Full)
+let update_detail : @ui.TextStyle = @ui.text_style(size=Caption, color=Muted, w=Full)
 
 ///|
 /// The versions it goes between (11 on 16, the code face, muted, on one line).
 // kept across runs: a value (no field of it changes)
-let update_versions : @ui.TextStyle = @ui.text_style(size=Xs2, color=Muted, leading=L4, wrap=false)
+let update_versions : @ui.TextStyle = @ui.text_style(size=Caption, color=Muted, leading=L4, wrap=false)
 
 ///|
-/// Its close button: 32, round, 4 up.
+/// Its close button: 32, round.
 // kept across runs: a value (no field of it changes)
-let update_close : @ui.Style = @ui.style(
-  w=S8,
-  h=S8,
-  radius=Full,
-  align=ACenter,
-  justify=JCenter,
+let update_close : @ui.Style = @ui.css("w=S8 h=S8 radius=Full align=ACenter justify=JCenter")
+
+///|
+/// The versions (where its words stand) and 立即更新 (in its foot corner, concentric with it), 12 apart.
+// kept across runs: a value (no field of it changes)
+let update_foot : @ui.Style = @ui.css("row w=Full pl=S2_5 gap=S3 align=ACenter").then(
+  @ui.style(
+    pr=@sf.capsule_room(@sf.r_menu, update_now_h, less=@sf.panel_pad),
+    pb=@sf.capsule_room(@sf.r_menu, update_now_h, less=@sf.panel_pad),
+  ),
 )
 
 ///|
-/// The versions and 立即更新, 12 apart.
-// kept across runs: a value (no field of it changes)
-let update_foot : @ui.Style = @ui.style(row=true, w=Full, pr=SPx, gap=S3, align=ACenter)
+/// 立即更新: a pill 28 high on the accent's ground, 12 in, its spinner and word 4 apart.
+let update_now_h : Double = 28.0
 
 ///|
-/// 立即更新: a pill on the accent's ground, 12 and 6 in, its spinner and word 4 apart.
 // kept across runs: a value (no field of it changes)
-let update_now : @ui.Style = @ui.style(
-  row=true,
-  px=S3,
-  py=S1_5,
-  gap=S1,
-  radius=Full,
-  bg=AccentBg,
-  align=ACenter,
+let update_now : @ui.Style = @ui.css("row px=S3 gap=S1 radius=Full bg=AccentBg align=ACenter").then(
+  @ui.style(h=Fixed(update_now_h)),
 )
 
 ///|
 // kept across runs: a value (no field of it changes)
-let update_now_words : @ui.TextStyle = @ui.text_style(size=Xs, weight=Medium, color=AccentText, wrap=false)
+let update_now_words : @ui.TextStyle = @ui.text_style(size=Caption, weight=Medium, color=AccentText, wrap=false)
 
 ///|
-/// How far the update is, 4 short of its right.
+/// How far the update is, where its words stand.
 // kept across runs: a value (no field of it changes)
-let update_progress_room : @ui.Style = @ui.style(w=Full, pr=S1)
+let update_progress_room : @ui.Style = @ui.css("w=Full px=S2_5")
 
 ///|
 /// The popover under the control while the core says it is open, in mbui's layer over the page (modal, its ground
@@ -264,7 +258,7 @@ fn station_update_popover(c : @ui.Ctx, src : Source, station : String, notice : 
           |> ignore
           if text(notice, "tone") == "busy" && opt_text(notice, "station") is Some(_) {
             c.box(style=update_progress_room, fn() {
-              @sf.progress(c, opt_number(notice, "percent").map(fn(p) { p / 100.0 }))
+              @sf.progress(c, "station-update/" + text(notice, "station"), opt_number(notice, "percent").map(fn(p) { p / 100.0 }))
             })
             |> ignore
           }

@@ -1,0 +1,4 @@
+# The wide frame of a device waiting to be confirmed in the workspace's lock (sfdesk/security.mbt security_waiting).
+timeout 20000
+until 等待批准此设备
+wait 800

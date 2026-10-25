@@ -3,14 +3,16 @@
 import * as brand from "./brand.ts";
 import * as fonts from "./fonts.ts";
 import { conform } from "./conform.ts";
+import { railView } from "./rail.ts";
 import type { Data } from "./data.ts";
 import { CoreError } from "./error.ts";
 import { fromLocale, follows, setCurrent, t, tr, type Lang } from "./i18n.ts";
+import * as keymap from "./keymap.ts";
 import { ofAddress } from "./workspace.ts";
 import { equal, isObject } from "./util.ts";
 
-const FIELDS = ["onlyMine", "onlyWatching", "onlyDecisions", "listFilter", "appearance", "motion", "rowPicture", "absoluteTime", "language", "keys", "workspace", "lastChat", "chatTabs", "dropFiles", "dropAs", "archiveHint", "screenTouch", "screenQuality", "driveViews", "filesTabs", "driveFavorites", "resume", "invite", "badge", "badgeKinds", "reader", "lockNotice", "rail", "rails", "bars", "barsBy", "fonts", "previewSizes", "previewFolded"];
-const MAPS = ["listFilter", "keys", "lastChat", "chatTabs", "dropFiles", "driveViews", "filesTabs", "driveFavorites", "resume", "lockNotice", "rails", "barsBy", "previewSizes"];
+const FIELDS = ["onlyMine", "onlyWatching", "onlyDecisions", "listFilter", "appearance", "motion", "rowPicture", "absoluteTime", "language", "keys", "workspace", "lastChat", "chatTabs", "dropFiles", "dropAs", "archiveHint", "screenTouch", "screenQuality", "screenCodec", "driveViews", "filesTabs", "driveFavorites", "resume", "invite", "badge", "badgeKinds", "reader", "lockNotice", "rail", "rails", "bars", "barsBy", "fonts", "previewSizes", "sidebars", "trouble"];
+const MAPS = ["listFilter", "keys", "lastChat", "chatTabs", "dropFiles", "driveViews", "filesTabs", "driveFavorites", "resume", "lockNotice", "rails", "barsBy", "previewSizes", "sidebars", "trouble"];
 const TABS_KEPT = 200;
 const DEFERRED_KEPT = 200;
 const PREFS = { topic: "prefs" };
@@ -81,11 +83,12 @@ export function barsOf(v: unknown): { sets: string[][]; current: number } {
   return { sets, current: Math.min(sets.length - 1, Math.max(0, n)) };
 }
 
-/// The prefs as they go out: the reader's settings whole, the bottom bars (each workspace's too), and the faces.
+/// The prefs as they go out: the reader's settings whole, the bottom bars (each workspace's too), the faces, and the
+/// keymap and the rail.
 export function shown(v: unknown): unknown {
   if (!isObject(v)) return v;
   const by = isObject(v.barsBy) ? Object.fromEntries(Object.entries(v.barsBy).map(([ws, b]) => [ws, barsOf(b)])) : {};
-  return { ...v, reader: readerOf(v.reader), bars: barsOf(v.bars), barsBy: by, fonts: fonts.chosen(v.fonts), faces: fonts.shown(v.fonts) };
+  return { ...v, reader: readerOf(v.reader), bars: barsOf(v.bars), barsBy: by, fonts: fonts.chosen(v.fonts), faces: fonts.shown(v.fonts), keymap: keymap.view(v), railView: railView(v) };
 }
 
 /// What is kept, as kept (no defaults filled in).
@@ -131,6 +134,12 @@ export function set(data: Data, patch: unknown, fill: boolean, now: number): voi
         }
         // A workspace's bottom bars, kept as they read (as `bars`).
         if (field === "barsBy") entry = barsOf(entry);
+        // An action's keys, each a binding as the keymap has it (keymap.ts); one that is none is refused.
+        if (field === "keys") {
+          const keys = Array.isArray(entry) ? entry.map(keymap.binding) : [null];
+          if (keys.includes(null)) throw CoreError.invalid(t("core-misc.params.invalid", { error: `keys.${key}` }));
+          entry = [...new Set(keys)];
+        }
         if (field === "chatTabs" && isObject(entry)) {
           const last = Object.values(map).reduce<number>((m, v) => (isObject(v) && typeof v.at === "number" ? Math.max(m, v.at) : m), 0);
           entry = { ...entry, at: Math.max(now, last + 1) };
@@ -159,7 +168,10 @@ export function set(data: Data, patch: unknown, fill: boolean, now: number): voi
   if ("archiveHint" in prefs && !["off", "done", "reviewed"].includes(prefs.archiveHint as string)) throw CoreError.invalid(t("core-misc.params.invalid", { error: "archiveHint" }));
   if ("screenTouch" in prefs && prefs.screenTouch !== "direct" && prefs.screenTouch !== "pad") throw CoreError.invalid(t("core-misc.params.invalid", { error: "screenTouch" }));
   if ("screenQuality" in prefs && !["smooth", "hd", "original"].includes(prefs.screenQuality as string)) throw CoreError.invalid(t("core-misc.params.invalid", { error: "screenQuality" }));
+  if ("screenCodec" in prefs && prefs.screenCodec !== "h264") throw CoreError.invalid(t("core-misc.params.invalid", { error: "screenCodec" }));
   if (isObject(prefs.previewSizes) && Object.values(prefs.previewSizes).some((v) => typeof v !== "string" || !/^[0-9]{1,4}(x[0-9]{1,4})?$/.test(v))) throw CoreError.invalid(t("core-misc.params.invalid", { error: "previewSizes" }));
+  if (isObject(prefs.sidebars) && Object.values(prefs.sidebars).some((v) => typeof v !== "string" || !/^([0-9]{1,4}|[0-9]{1,4},closed|closed)$/.test(v))) throw CoreError.invalid(t("core-misc.params.invalid", { error: "sidebars" }));
+  if (isObject(prefs.trouble) && (Object.keys(prefs.trouble).some((k) => !/\n(seen|gone)$/.test(k)) || Object.values(prefs.trouble).some((v) => v !== null && (typeof v !== "string" || v.length > 2000)))) throw CoreError.invalid(t("core-misc.params.invalid", { error: "trouble" }));
   if ("badgeKinds" in prefs && prefs.badgeKinds !== null && !isObject(prefs.badgeKinds)) throw CoreError.invalid(t("core-misc.params.invalid", { error: "badgeKinds" }));
   if ("language" in prefs && !(prefs.language === "zh" || prefs.language === "en")) throw CoreError.invalid(t("core-misc.params.language"));
   withLang(prefs);
@@ -240,7 +252,8 @@ export function device(data: Data, facts: unknown): void {
   const b = build === "" ? "" : ` ${build}`;
   const from = app === "web" ? `web${b} (${phone ? "phone" : "pc"})` : `${app}${b}`;
   const prefs = kept(data);
-  const told: Map_ = { app, phone, handoff: app === "web" && !phone, sentFrom: from };
+  // `mac`: keys are said as on a Mac (⌘, ⌥), as an Apple device's keyboard has them (keymap.ts)
+  const told: Map_ = { app, phone, handoff: app === "web" && !phone, sentFrom: from, mac: app === "ios" || has(["Mac OS X", "iPhone", "iPad"]) };
   const locale = said("locale");
   if (locale !== "") told.locale = locale;
   prefs.device = told;

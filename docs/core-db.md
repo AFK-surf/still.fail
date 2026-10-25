@@ -37,7 +37,7 @@ instead.
 | `slack_app` | station, connect | confirmed | `/connects/:id/slack-app` |
 | `list` | station, list (`chats`, `archived`, `sessions`, `threads`, `jobs`) | confirmed, rev | a list read at all (an empty one is not one never read); how often a station's chats changed |
 | `chat` | station, archived, id | ord, thread, session, client_key, last_active, pinned_at, unread, mine, running, tone, asks, desk | `/chats`, `/chats?archived=1`, `chat`/`chat-removed`/`read` events |
-| `session` | station, key | listed, ord, last_active, process, connect, archived_at, turns; `summary`, `detail` | `/sessions`, `/sessions/:key`, `session` events |
+| `session` | station, key | listed, ord, last_active, process, connect, archived_at, turns; `summary`, `detail` (its turns, jobs and threads; read, it says its session as `summary` does, which the lists and events keep current) | `/sessions`, `/sessions/:key`, `session` events |
 | `thread` | station, id | listed, last, read, unread, sort_at, created_at, surface, first_member | `/threads`, `/threads/:id`, a session's detail, `thread`/`read` events |
 | `thread_member` | station, session, thread | — | each thread's `sessions` |
 | `entry` | station, thread, n | — | `/threads/:id/entries`, `thread` events |
@@ -50,15 +50,18 @@ instead.
 | `said` (+ `said_index`, FTS5 trigram) | id; station, thread, seq | n, at, text | each message's latest words, kept by triggers on `entry` (`ensureSaid`): what ⌘K's search finds |
 | `log_use` | kind, station, id | opened, evicted | when a log's chat was last opened here, whether its items were let go for room (`ensureKept`) |
 | `file_kept` | station, session, name, kind (`thumb`, `poster`) | type, size, used; `bytes` (base64: they are small, and given beside the answer) | an image's thumbnail and a video's poster as the station sent them (`station.file` with `thumb`, `station.poster`): a file sent never changes, and a chat opened again shows them without reading them again (`ensureFilesKept`) |
+| `md_kept` | station, key (markdown.ts `mdKey`: the reading, the length, the text's hashes) | of (`t:<thread>`, `s:<session>`), size, used; `json` (the tree) | the trees of what agents said as markdown.ts reads them: reading a page of agents' replies was the most of opening a chat in Hermes, so each is read once on the device (`ensureMdKept`); the latest replies of chats spoken in lately are read ahead as they come (md-ahead.ts) |
 
-`said` and `log_use` are made where missing at every open, `file_kept` as the first file is kept, not by a migration
+`said` and `log_use` are made where missing at every open, `file_kept` and `md_kept` as the first is kept, not by a migration
 (the version stays, so an older core still writes the database; `said`'s triggers keep it current under it too). The
 room an account's database takes is kept within `KEPT` (data.ts, 256 MB): past it, the items of the logs not shown,
 least recently used first (opened here, or last active), transcripts before entries, go down to 80% of it, their words
 with them; a log let go is not synced again until its chat is opened. `file_kept` has room of its own (account.ts
 `FILES_KEPT`, 64 MB of base64, none over 1 MB): past it, the least lately shown go down to 80% of it (when one was
 shown is noted at most once a day, as noting it writes its row again); they count with their session's first chat in
-`cache.usage` and go with it in `cache.clear`.
+`cache.usage` and go with it in `cache.clear`. `md_kept` too (`MD_KEPT`, 32 M characters of JSON), with the chat or the
+agent it was read for. A tree kept is read only by the reading that made it (`MD_READING`, in its key): a core that reads
+Markdown otherwise reads afresh.
 
 Indexes: `chat (archived, pinned_at DESC, last_active DESC)` (a list's first screen across stations), by thread, by
 session, the rows at work (`running`), those that ask something or are unread (`tone`/`asks`), those the 奏 page
@@ -90,6 +93,13 @@ A row that did not change is not written: a list read again compares each row's 
 held and writes the ones that differ; rows keep their place (`ord`, REAL) where the new order keeps them, so a chat put
 on top writes that chat alone. Events update rows in place (a session's summary, a thread's read position), never
 rewrite a list.
+
+What a read brings and what a stream tells are the same data, put in the same rows; what decides between them is their
+order, not where they came from. A read answers the station as it was at some moment after it was asked, so what the
+stream told after it was asked is no older: once what the read brought is written, that is written again on top, as it
+came (`station/retold.ts`, sync.ts `#retell`). Before, the later of the two won: a new chat's lists, read again as its
+first message went and answered after the station had told its agent at work, had it at rest again, its activity and
+mark gone for the whole of that turn.
 
 There is one writer by construction:
 
@@ -147,7 +157,13 @@ Topics read what they show by query, when they go out; nothing is loaded at star
 - The workspace marks read only the rows that ask something or are unread (`tone`/`asks`); the 奏 page only the rows
   it lists (`desk`); the station sync the rows at work (`running`).
 - A chat's page reads its window of entries by range (`entry` between two `n`), a transcript its latest page; a gap is
-  found from the numbers held.
+  found from the numbers held. Hot logs keep a sorted in-memory number index (`db/log-index.ts`), updated as records
+  are written: appends add only the new numbers, backfills merge, rewrites truncate. Span/count reads use that index,
+  and the highest hole is found by binary search (`channels/fill.ts`), rather than copying and walking the entire
+  history on each message. A window whose parsed records are all cached also skips reading their JSON from SQLite.
+  The indices are disposable and bounded by 128 logs and 1,000,000 numbers per account, least recently used first;
+  a miss reads SQLite. Log removal and transaction rollback invalidate them with the record caches. Callers treat
+  the numbers as read-only; the index can update them as a write arrives.
 - Notices hear the rows a write changed, before and after (a station's first rows are where they start from).
 
 Startup answers the first view from the database before any network: the accounts' databases are opened, the
@@ -209,3 +225,26 @@ chat list's first value with rows, "whole" when it held all 40 000; three runs e
 - Web bundle: SQLite's WASM build adds 215 KB of JS and 869 KB of wasm (65 KB + 402 KB gzipped), loaded by the tab
   running the core only; the worker grew 46 KB (12 KB gzipped). The build also emits 246 KB of the package's files
   that are never loaded (its Worker1 API and the `opfs` VFS's proxy).
+
+### A chat opened (2026-10-25)
+
+Studio, the core in Hermes as the apps run it (`apps/mbui/scripts/core.sh chat-open`: core/chatopen.m on the engine of
+src/host/apple_core.mm), offline, over `bench/chat-open.ts seed`: one station of 300 chats, 20 of them with 120
+entries, the agents' replies parts of this repository's docs (a chat's page ~80 000 characters, its view 140–220 KB of
+JSON). From `subscribe` to the chat's first value, the first ten chats, the app started anew over what an earlier run
+kept (the core's own memory empty):
+
+| | k0 | k1 | k2 | k3 | k4–k9 (their replies shared with k0–k3) |
+|---|---|---|---|---|---|
+| before (the Markdown read again each start) | 246 ms | 183 ms | 91 ms | 153 ms | 13–46 ms |
+| `md_kept` (read once on the device) | 26 ms | 24 ms | 19 ms | 25 ms | 13–23 ms |
+
+Reading the agents' Markdown was the most of it (micromark in Hermes, which has no JIT: some 300 KB/s here, a phone
+slower); the rest is the view made and sent. Opened again within the minute the core keeps a view: ~2 ms either way.
+
+Markdown is read by markdown-it since (mdRead.ts; `apps/mbui/scripts/core.sh md-parse`, Hermes on Studio, the bench's
+59 replies, 186 466 characters): `parse` whole 2.11 M characters a second, a chat's page of 80 000 in 38 ms, where
+micromark read 0.35 M a second, 228 ms. Over this station's 2 098 agents' replies, the trees with their words read
+out are the same as micromark's; what differs, in the docs' hard-wrapped lines only: a code span broken over lines
+is one line (CommonMark's space for its line break), a table row has its header's cells (GFM's: missing ones empty,
+more dropped), a `\r\n` in words is a line break.

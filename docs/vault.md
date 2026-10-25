@@ -120,6 +120,30 @@ sequenceDiagram
 
 每次申请、批准、拒绝、使用（时间、chat、方式、目标域名或命令，不含值）都写进 station 的 `vault_audit`，并作为一条系统消息显示在那个 chat 里。在库的页面能按条目查。记录按库同步给成员的设备（第一期只存在 station 上，同步下来放到界面那一步做）。
 
+## agent 存入（2026-10-24 用户定）
+
+chat EMBER/1792782824.926000（「当然是 agent 申请添加我来审批」）。agent 手上有了以后还要用的凭据（用 `op`/`bw` 读出的密码、人给的 token、自己建的 key），由 agent 申请存进库，人在卡片上批准，不让人自己去 app 里填。
+
+- **工具** `secret_save {name, kind, reason, command | value, username?, public_key?, modes?, hosts?, env?}`：存给这个 chat 的发起人。值优先用 `command` 给：station 在 session 的工作目录里 `sh -c` 跑它，标准输出（去掉末尾一个换行，最多 64 KB）就是值，agent 看不到；失败时只回 stderr，且把输出逐字遮掉。`value` 只给 agent 本来就拿着的值。`modes` 默认：有 `hosts` 用代理，SSH 钥匙用 ssh，其余用环境变量。
+- **申请**：还是 `vault_requests` 里的一条 Request，多 `save`（条目的 listing 加上不是秘密的 `username`、`public_key`）和 `owner`（发起人的 email，由他决定）；`item` 是 station 先分配好的条目 id，`vault` 是打算放进的库：
+  - 加锁：发起人自己的、他某台已设置设备有钥匙的库（自己是 owner 的优先），没有就空着。值用 `seal` 封给他每台已设置设备的箱钥匙（锁里验过的证书），上下文 `stillfail-vault-save/1\0<ws>\0<request>`，存在 `sealed: [{device, box, secret}]` 里；station 不存原值。
+  - 不加锁：`vault` 是 `plain`。
+  - 两种都把原值留在 station 内存里直到有结果（重启就忘，agent 重新申请）：不加锁的批准时由 station 写进明文库；加锁的在他之后才设置的设备发布箱钥匙证书时（`PUT vault/boxes`）补封给那台设备，申请重新推送。
+- **卡片**：options 卡片「存入密钥库 / 拒绝」，assignee 是发起人，`vault` 字段多 `save: {kind, username?}`；客户端据此画成「想存入」而不是「想使用」，批准行是「存入 / 拒绝」。他在这个 workspace 里还没开启密钥库（加锁但这台设备没设置、或者一个库都没有）时，卡片上是「开启密钥库」，进「密钥」页走原来的开启流程（抄恢复码），回来再存入。
+- **批准**：`vault.approve {request}`（scope 不用）。加锁：用这台设备的箱钥匙打开给它的那份（过一次生物识别），选库（申请指定的、这台设备有钥匙的优先，其次自己的，没有就建一个「个人」库），用请求里的 `item` 写第 0 版（已经写过就不再写），把副本送到提出申请的 station，再 `POST vault/saves {request, vault}`；station 核对那个库里确有这个条目、名字对得上，记为 granted。不加锁：`POST vault/plain/saves {request}`，station 用内存里的值写进明文库、推 `vault-plain`。拒绝和别的申请一样走 `vault/denials`、`vault/plain/denials`（存入的申请由发起人决定，不看库成员）。
+- **之后**：存进去的条目和人自己加的一样，agent 用时照样 `secret_use` → 卡片 → `secret_run`。存入的申请不算条目的使用记录（`uses` 里不列）。
+- **主动提**：内置 skill `stillfail-vault`，agent 的指令里也有一句：要读密码管理器、人贴了凭据、自己建了 key、写的脚本要登录某处时，先提议存进库再用；他的库没开启时照样调 `secret_save`，卡片会请他开启。`secret_list` 会说他的库开没开。
+
+## 在另一台 station 上用（2026-10-24）
+
+有些凭据只在别的 station 上用得上：路由器只有家里的 Studio 连得到，1Password 只在 Studio 的桌面 app 里登录着。`secret_run` 原来只在 agent 自己那台 station 上跑，这些就用不上。
+
+- `secret_use {…, station}`：这次授权的命令在那台 station 上跑。申请里记 `runOn: {id, name}`，卡片多一行「运行在：Studio」（`vault.station`）；批准的人知道值会送到哪台机器。
+- `secret_run {grant, command, station?}`：授权带 `runOn` 的，命令到那台跑，在这个 chat 在那台的目录里（和 station_task 同一个，`remote/sessions/<id>/work`，`cwd` 是它下面的路径）；`station` 只能不写或写同一台，写别的就拒绝。没带 `runOn` 的授权不能拿去别处跑。
+- `secret_save {…, command, station}`：在那台跑 `command` 取值（比如 Studio 上的 `op read`），值回到 agent 所在的 station 再封给人的设备；卡片的「来源」写在哪台跑的。
+- **传法**：走 station 之间的连接（iroh，端到端加密），请求 `vault.run` / `vault.capture`，带 `secret`（这条的 fields）、方式、域名、命令；对方立刻回 `{started: true}`，跑完再反过来问一次 `vault.done {id, result}`（连接上一次请求只等 30 秒，命令可能跑几分钟）。对方用自己的代理、ssh-agent 或环境变量跑，输出照样按原值遮掉；值只在那条命令跑着的时候在对方进程里，不写盘。
+- **信任**：对方是同一个 workspace 的 station，本来就能替这个 chat 跑任意命令（station_task），多给的只是这一次的值，卡片上写明了是哪台。旧 station 不认 `vault.*`，回错，agent 被告知要先更新那台。
+
 ## 人用的密码库（第二期以后）
 
 - app 里加一个「密钥」页：库、条目、搜索、复制（30 秒后清剪贴板）、生成密码、TOTP。网页版只列名字。
@@ -253,7 +277,7 @@ agent → station（MCP 工具，在 `stillfail` 服务器里）：
 
 先不做命令行（`stillfail-secret run`）：要往 agent 的 PATH 里放东西、还要让 Codex 的进程也能证明自己是哪个 session，MCP 工具这两件都现成。以后需要在管道里用再加。
 
-申请卡片就是普通的 options 卡片（「仅本次 / 本对话 1 小时内 / 本对话直到归档 / 拒绝」，只列到条目的 `lasts`，assignee 是库 owner），多一个字段 `vault: {request, name, reason, command?, mode, hosts}`。新客户端看到这个字段就换成批准界面（选项 → 指纹 → `vault.approve`/`vault.deny`），网页和桌面把这条消息画成一张申请卡（web/src/VaultAsk.tsx：条目名、方式、理由、命令，下面是批准行）；老客户端照普通卡片显示，点了只是发一句话，agent 不会因此拿到授权（工具说明里写了只认授权）。批准、拒绝或过期后 station 收回这张卡片，并往这条消息追加一条文字不变的 edit，卡片里加上 `vault.outcome: {status, scope?}`，申请卡底部就换成「已批准 · 仅本次」「已拒绝」「已过期」。
+申请卡片就是普通的 options 卡片（「仅本次 / 本对话 1 小时内 / 本对话直到归档 / 拒绝」，只列到条目的 `lasts`，assignee 是库 owner），多一个字段 `vault: {request, name, reason, command?, mode, hosts}`。新客户端看到这个字段就换成批准界面（选项 → 指纹 → `vault.approve`/`vault.deny`），网页和桌面把这条消息画成一张申请卡（web/src/VaultAsk.tsx：条目名、方式、理由、命令，下面是批准行）；老客户端照普通卡片显示，点了只是发一句话，agent 不会因此拿到授权（工具说明里写了只认授权）。批准、拒绝或过期后 station 收回这张卡片，并往这条消息追加一条文字不变的 edit，卡片里加上 `vault.outcome: {status, scope?}`，申请卡底部就换成「已批准 · 仅本次」「已拒绝」「已过期」。卡片底部怎么答由 core 随这条消息一起给（`vaultAsk.answer`：`approve` / `setUp` / `elsewhere`，用的话还有 `lasts`），按它手里常驻的库算，客户端只画消息、不为卡片另订 `vaults`（2026-10-25 用户：「状态常驻在 core 里，ui 只应该找 core 要个状态」）；在这台设备上批了或拒了，core 当场把这张卡片的 `status`/`scope` 改成结果，不等 station 收回卡片。
 
 ### keeper
 
@@ -304,4 +328,4 @@ agent → station（MCP 工具，在 `stillfail` 服务器里）：
 - 一个 workspace 默认建一个「共享」库，还是每人一个「个人」库加按需建共享库（1Password 的做法是后者）。
 - 代理模式的 CA：每个会话一个，还是每台 station 一个。每个会话一个更干净，但要在 agent 启动时就生成，并写进它的环境变量。
 - 已经在用 1Password、Bitwarden 的人：要不要把它们当成「来源」接进来，也就是 agent 的申请由手机上的 still.fail app 批准，值从对方的库里取。好处是不用搬家，坏处是要做对方的 SDK，零知识也得由对方保证。
-- agent 能不能自己写入库（比如注册了一个服务，把拿到的 token 存回来）。写入也要人批准吗？
+- ~~agent 能不能自己写入库~~：能，要人批准（见「agent 存入」）。

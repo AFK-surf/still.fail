@@ -1,0 +1,10 @@
+# The rail's ＋ over the workspaces, 新建 workspace chosen (sfdesk/new_workspace.mbt, workspace.tsx NewWorkspaceDialog).
+timeout 20000
+until 整理发布清单
+wait 300
+move 28 656
+wait 300
+tapxy 28 656
+wait 700
+tap 新建 workspace
+wait 1200

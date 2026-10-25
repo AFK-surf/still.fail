@@ -15,8 +15,9 @@ priv struct ScreenRig {
   cancelled : Array[Int]
   /// how the fake core answers a call (None: as the fixture does)
   answer : Ref[(String, Json) -> Result[Json, Json]?]
-  /// the prefs' `screenTouch`
+  /// the prefs' `screenTouch`, `screenQuality`
   touch : Ref[String]
+  quality : Ref[String]
 }
 
 ///|
@@ -26,7 +27,14 @@ let rig_w : Double = 1280.0
 let rig_h : Double = 720.0
 
 ///|
-fn screen_rig(w? : Double = 390.0, h? : Double = 844.0, dark? : Bool = false, touch? : String = "") -> ScreenRig {
+fn screen_rig(
+  w? : Double = 390.0,
+  h? : Double = 844.0,
+  dark? : Bool = false,
+  touch? : String = "",
+  platform? : Int = 0,
+  until_gone? : Bool = false,
+) -> ScreenRig {
   reset()
   let base = fixture(if dark { "home-dark" } else { "home" })
   let calls : Array[(String, Json, Bytes?)] = []
@@ -34,6 +42,7 @@ fn screen_rig(w? : Double = 390.0, h? : Double = 844.0, dark? : Bool = false, to
   let cancelled : Array[Int] = []
   let answer : Ref[(String, Json) -> Result[Json, Json]?] = Ref(fn(_, _) { None })
   let touch_ = Ref(touch)
+  let quality_ = Ref("")
   let ask = fn(name : String, params : Json, bytes : Bytes?, done : (Result[Json, Json]) -> Unit, fallback : () -> Unit) {
     calls.push((name, params, bytes))
     match (answer.val)(name, params) {
@@ -50,12 +59,17 @@ fn screen_rig(w? : Double = 390.0, h? : Double = 844.0, dark? : Bool = false, to
     ..base,
     topic: fn(name, params) {
       let tp = (base.topic)(name, params)
-      if name == "prefs" && touch_.val != "" {
+      if name == "prefs" && (touch_.val != "" || quality_.val != "") {
         let m = match tp.value {
           Some(Object(m)) => m.copy()
           _ => {}
         }
-        m["screenTouch"] = Json::string(touch_.val)
+        if touch_.val != "" {
+          m["screenTouch"] = Json::string(touch_.val)
+        }
+        if quality_.val != "" {
+          m["screenQuality"] = Json::string(quality_.val)
+        }
         { ..tp, value: Some(Json::object(m)) }
       } else {
         tp
@@ -66,6 +80,11 @@ fn screen_rig(w? : Double = 390.0, h? : Double = 844.0, dark? : Bool = false, to
         match field(Some(params), "screenTouch") {
           Some(String(v)) => touch_.val = v
           Some(Null) => touch_.val = ""
+          _ => ()
+        }
+        match field(Some(params), "screenQuality") {
+          Some(String(v)) => quality_.val = v
+          Some(Null) => quality_.val = ""
           _ => ()
         }
       }
@@ -84,11 +103,11 @@ fn screen_rig(w? : Double = 390.0, h? : Double = 844.0, dark? : Bool = false, to
     },
     cancel: fn(id) { cancelled.push(id) },
   }
-  let t = @ui.Tester::new(fn(c) { view(c, src) }, w~, h~)
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, w~, h~, platform~)
   t.draw()
-  app.nav.push(Screen({ station: "ws-1/st-1", screen: "browser:tab-1", title: "Chrome" }))
+  app.nav.push(Screen({ station: "ws-1/st-1", screen: "browser:tab-1", title: "Chrome", until_gone }))
   nav_rested(t)
-  { t, calls, views, cancelled, answer, touch: touch_ }
+  { t, calls, views, cancelled, answer, touch: touch_, quality: quality_ }
 }
 
 ///|
@@ -152,6 +171,7 @@ fn ScreenRig::state(
   line? : String,
   clipboard? : Array[String],
   drop? : Json,
+  more? : Map[String, Json] = {},
 ) -> Unit {
   let m : Map[String, Json] = {
     "phase": Json::string(phase),
@@ -195,6 +215,9 @@ fn ScreenRig::state(
     Some(d) => m["drop"] = d
     None => ()
   }
+  for k, v in more {
+    m[k] = v
+  }
   self.say(Json::object({ "state": Json::object(m) }))
 }
 
@@ -237,6 +260,19 @@ fn ScreenRig::tap_label(self : ScreenRig, label : String) -> Unit {
     Some((x, y)) => self.t.tap(x, y)
     None => abort("nothing labelled " + label)
   }
+}
+
+///|
+/// Key `label` of the keys row pressed: in the row, else (the row short of room for it) the row turned to it by its
+/// ⋯, then back.
+fn ScreenRig::press_key(self : ScreenRig, label : String) -> Unit {
+  if self.labelled(label) is Some(_) {
+    self.tap_label(label)
+    return
+  }
+  self.tap_label(tr("common.more"))
+  self.tap_label(label)
+  self.tap_label(tr("common.more"))
 }
 
 ///|
@@ -379,9 +415,9 @@ test "a trackpad moves the pointer and clicks where it points; two fingers tappe
   assert_true(r.t.haptics().contains(@ui.ContextClick))
   // ⌘ held, then Tab: ⌘Tab; Tab again goes alone
   let from = r.inputs().length()
-  r.tap_label("Command")
-  r.tap_label("Tab")
-  r.tap_label("Tab")
+  r.press_key("Command")
+  r.press_key("Tab")
+  r.press_key("Tab")
   let keys = r.inputs()[from:].to_array()
   assert_eq(keys.length(), 4)
   assert_eq(text(Some(keys[0]), "code"), "Tab")
@@ -406,7 +442,7 @@ test "the keyboard: words committed go as text, Enter between lines; with ⌘ he
   let ins = r.inputs()
   assert_eq(text(Some(ins[0]), "t"), "text")
   assert_eq(text(Some(ins[0]), "text"), "hi 你好")
-  r.tap_label("Command")
+  r.press_key("Command")
   r.t.type_text("c")
   let k = r.inputs()[1:].to_array()
   assert_eq(k.length(), 2)
@@ -420,10 +456,35 @@ test "the keyboard: words committed go as text, Enter between lines; with ⌘ he
 }
 
 ///|
-test "全屏: the screen alone, sideways, its tools folded into one button; opened, the same tools; 退出全屏 upright" {
+test "the keys row short of room on a phone: Esc and the arrows in it, the least used out; its ⋯ turns it to them, a modifier held there stays in it once back" {
   let r = screen_rig()
   r.live(others=[])
-  r.tap_label("全屏")
+  assert_true(r.labelled("Esc") is Some(_))
+  assert_true(r.labelled(tr("android-misc.screen.key.left")) is Some(_))
+  assert_true(r.labelled(tr("android-misc.screen.key.option")) is None)
+  // turned: the keys that were out, Esc not among them
+  r.tap_label(tr("common.more"))
+  assert_true(r.labelled(tr("android-misc.screen.key.option")) is Some(_))
+  assert_true(r.labelled("Esc") is None)
+  r.tap_label(tr("android-misc.screen.key.option"))
+  // back: ⌥ held, in the row with Esc
+  r.tap_label(tr("common.more"))
+  assert_true(r.labelled("Esc") is Some(_))
+  let opt = r.t.get(@ui.Button, label=tr("android-misc.screen.key.option"))
+  assert_eq(opt.pressed, Some(true))
+  // nothing over another, nothing cut
+  assert_eq(r.t.squeeze_faults(), [])
+  screen_done(r.t)
+}
+
+///|
+test "全屏 (控制中心's upright): the screen alone, sideways, its tools folded into one button; opened, the same tools; 退出全屏 upright" {
+  let r = screen_rig()
+  r.live(others=[])
+  assert_true(r.labelled("全屏") is None)
+  open_center(r)
+  r.t.tap_text("全屏")
+  r.t.run_for(@kit.presence_out_ms + @sf.later_ms)
   r.t.resize(844.0, 390.0)
   r.t.draw()
   let u = r.ui()
@@ -439,7 +500,7 @@ test "全屏: the screen alone, sideways, its tools folded into one button; open
   r.t.resize(390.0, 844.0)
   r.t.draw()
   assert_true(!r.ui().full)
-  assert_true(r.labelled("全屏") is Some(_))
+  assert_true(r.labelled("控制中心") is Some(_))
   screen_done(r.t)
 }
 
@@ -577,6 +638,38 @@ test "over: ended, outdated, gone, denied said in the screen's place; 重新打�
 }
 
 ///|
+test "on a phone a page of the station's browser is laid out for the stage it is shown on, and a tap is where it is; one opened for a login goes back by itself once its tab is gone" {
+  let r = screen_rig(platform=2, until_gone=true)
+  let u = r.ui()
+  let fit = field(Some(r.told("screen.view")[0]), "fit")
+  assert_true(u.box_w > 0.0 && u.box_h > 0.0)
+  assert_eq(number(fit, "width"), u.box_w.round())
+  assert_eq(number(fit, "height"), u.box_h.round())
+  assert_true(number(fit, "scale") > 0.0)
+  r.live()
+  assert_true(!r.sess().pad(r.sess().src), msg="driven directly, as the phone's own browser")
+  // its tab closed as the login ended: back to where it was opened from
+  r.state("gone", others=[], message="此屏幕已不存在")
+  r.finish()
+  nav_rested(r.t)
+  assert_true(!(app.nav.top() is Screen(_)))
+  r.t.draw()
+  screen_done(r.t)
+}
+
+///|
+test "a computer lays nothing out for itself; a screen opened from its list stays once it is gone" {
+  let r = screen_rig()
+  assert_true(field(Some(r.told("screen.view")[0]), "fit") is None)
+  r.live()
+  r.state("gone", others=[], message="此屏幕已不存在")
+  r.finish()
+  nav_rested(r.t)
+  assert_true(app.nav.top() is Screen(_))
+  screen_done(r.t)
+}
+
+///|
 test "the call itself failed: said with the core's words; 重新打开 there" {
   let r = screen_rig()
   r.finish(error={ "code": "offline", "message": "station 不在线" })
@@ -607,10 +700,10 @@ fn driven(r : ScreenRig) -> Unit {
 }
 
 ///|
-test "driving it: 发送文件 and 粘贴 beside the keyboard; 粘贴 sends the device's clipboard; refused, said; empty, said" {
+test "driving it: 粘贴 beside the keyboard (发送文件 in 控制中心); 粘贴 sends the device's clipboard; refused, said; empty, said" {
   let r = screen_rig()
   driven(r)
-  assert_true(r.labelled("发送文件") is Some(_))
+  assert_true(r.labelled("发送文件") is None)
   assert_true(r.labelled("粘贴手机剪贴板") is Some(_))
   assert_true(r.labelled("键盘") is Some(_))
   r.t.clipboard_gives("hello from the phone")
@@ -672,7 +765,7 @@ test "the device's picture pasted as PNG; past 8 MB said, not sent; a text-only 
   assert_eq(sent.length(), 1)
   assert_eq(field(Some(sent[0].1), "png"), Some(Json::boolean(true)))
   assert_eq(sent[0].2, Some(png))
-  r.t.clipboard_gives_clip({ text: "", picture: TooLarge })
+  r.t.clipboard_gives_clip({ text: "", picture: TooLarge, files: [] })
   r.tap_label("粘贴手机剪贴板")
   r.t.draw()
   assert_true(r.t.find("图片过大，上限 8 MB") is Some(_))
@@ -706,7 +799,7 @@ test "a station from before the clipboard and files, or only looking: neither of
 }
 
 ///|
-test "files go onto the machine one after another, the first under a free name; then their paths pasted or shown" {
+test "files go onto the machine one after another, the first beside the one of its name there, as the station keeps both; then their paths pasted or shown" {
   let r = screen_rig()
   driven(r)
   r.answer.val = fn(name, p) {
@@ -729,13 +822,16 @@ test "files go onto the machine one after another, the first under a free name; 
     Some(Ok(Json::object(a)))
   }
   r.t.picks([("季度报告.pdf", Bytes::make(300 * 1024, b'\x01')), ("notes.txt", b"still.fail\n")])
-  r.tap_label("发送文件")
+  // 控制中心's 发送文件
+  open_center(r)
+  r.t.tap_text("发送文件")
+  r.t.run_for(@sf.later_ms)
   r.t.draw()
   r.t.draw()
-  assert_true(r.t.find("/Users/alice/Downloads/季度报告 (1).pdf") is Some(_))
+  assert_true(r.t.find("/Users/alice/Downloads/季度报告 2.pdf") is Some(_))
   assert_true(r.t.find("/Users/alice/Downloads/notes.txt") is Some(_))
   r.t.tap_text("粘贴路径")
-  assert_eq(text(Some(r.told("screen.clipboard")[0]), "text"), "/Users/alice/Downloads/季度报告 (1).pdf")
+  assert_eq(text(Some(r.told("screen.clipboard")[0]), "text"), "/Users/alice/Downloads/季度报告 2.pdf")
   let reveals = r.t.locate("在访达中显示")
   let (rx, ry) = reveals[1]
   r.t.tap(rx, ry)

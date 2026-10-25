@@ -1,0 +1,19 @@
+# A control answering the hand on a computer (docs/motion.md, kind 7): MBUI_WIN=1280x800 over the made-up chat. ⌘,
+# then 密钥, a secret's page: the pointer on 编辑 and away, its ground in and out over --dur.
+timeout 30000
+until 发消息
+wait 600
+key cmd+,
+wait 1000
+tap 密钥
+wait 1500
+move 800 500
+wheel 900
+wait 900
+tap GitHub token
+wait 1500
+hover 编辑
+wait 500
+move 800 700
+wait 600
+exit

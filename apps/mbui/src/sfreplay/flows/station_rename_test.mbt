@@ -1,12 +1,11 @@
 // 35-station-rename (e2e/traces/station-rename.trace): Settings → Station → the test station's page → "…" → 重命名:
-// the new name in the bar and the list at once (station.rename); named back after.
+// the new name on its page and in the list at once (station.rename); named back after. Its menu and the name asked are
+// the presenters' (sheets on a phone).
 
 ///|
 test "35-station-rename" {
   @sfreplay.orders(fn(seed) raise {
-    // (the station's page asked for its logins and its workspaces as the run had it, all in one page; they are its
-    // 设置's now, which this flow does not open: those asks dropped, with what came for them)
-    let f = @sfreplay.Flow::start(@sfreplay.trace("station-rename"), seed~, drop=["machineLogins", "memberships"])
+    let f = @sfreplay.Flow::start(@sfreplay.trace("station-rename"), seed~)
     f.see("端到端测试")
     f.tap("icon:settings")
     f.run_for(@ui.nav_push_ms)
@@ -14,21 +13,21 @@ test "35-station-rename" {
     f.run_for(@ui.nav_push_ms)
     f.tap("=studio")
     f.run_for(@ui.nav_push_ms)
-    f.see("在此 station 上")
+    f.see("概览")
     for name in ["e2e-082939", "studio"] {
       f.tap("icon:more")
-      f.run_to(@kit.sheet_rest("settings-sheet"))
+      f.run_to(@kit.sheet_rest("sf-present"))
       // (the menu's 重命名, the higher: the rename sheet before may still be sinking under it, its title the same words;
       // the words alone, not 已重命名 said above the menu by the rename before, which a scripted run took for it)
       f.tap("=重命名", top=true)
-      f.run_to(@kit.sheet_rest("settings-sheet"))
+      f.run_to(@kit.sheet_rest("sf-present"))
       f.see("station 名称")
       f.clear()
       f.type_text(name)
       f.tap("=保存")
       // said as the rename is answered (settings' act), which may come before the new name is shown or after
       f.see("已重命名")
-      f.run_to(@kit.sheet_rest("settings-sheet"))
+      f.run_to(@kit.sheet_rest("sf-present"))
       f.see("=" + name)
     }
     // 已重命名 said for its time from the frame that took the last rename's answer, then gone (at a slower pace the name

@@ -15,6 +15,7 @@ import { ScreenCard, ScreenName } from "./screen/ScreenLink.tsx";
 import { AdbCard, AdbName } from "./AdbLink.tsx";
 import { bareLinks } from "./bareLinks.ts";
 import { nameOf } from "../../client/core-ts/src/placed.ts";
+import { codeChunks } from "./codeChunks.ts";
 import { runsOf } from "../../client/core-ts/src/highlight.ts";
 import type { MathDrawing } from "../../client/core-ts/src/mathDrawing.ts";
 import { core } from "./core/react.ts";
@@ -47,6 +48,8 @@ export function Code({ text, language, ink }: { text: string; language?: string 
     return () => { active = false; };
   }, [ink, text, language]);
   const colours = ink !== undefined ? ink : read?.text === text && read.language === language ? read.ink : null;
+  const coloured = useMemo(() => colours && text.length <= 16000
+    ? runsOf(text, colours).map(([words, scope], i) => <span key={i} className={css.ink[scope]}>{words}</span>) : null, [text, colours]);
   const copy = () => {
     void navigator.clipboard.writeText(text).then(() => {
       setCopied(true);
@@ -61,10 +64,53 @@ export function Code({ text, language, ink }: { text: string; language?: string 
           {copied ? <Check size={12} /> : <Copy size={12} />}{copied ? t("common.copied") : t("common.copy")}
         </button>
       </div>
-      <pre className={css.codePre}><code>{colours ? runsOf(text, colours).map(([words, scope], i) => <span key={i} className={css.ink[scope]}>{words}</span>) : text}</code></pre>
+      <pre className={css.codePre}><code>{colours && text.length > 16000 ? <LongCode text={text} ink={colours} /> : coloured ?? text}</code></pre>
     </div>
   );
 }
+
+/** Plain text is present even far offscreen: browser find, selection, and copying still see the whole block.
+ * Highlight each group once, close to the viewport. Keep it coloured as text arrives, so an unchanged line's text
+ * nodes (and the reader's selection) survive. Defer newly coloured nodes while a selection touches the block. */
+function LongCode({ text, ink }: { text: string; ink: string }) {
+  const chunks = useMemo(() => codeChunks(text, ink), [text, ink]);
+  const root = useRef<HTMLSpanElement>(null);
+  const [painted, setPainted] = useState(() => new Set<number>());
+  useEffect(() => {
+    const el = root.current;
+    if (!el) return;
+    const waiting = new Set<number>();
+    const apply = () => {
+      const selection = window.getSelection();
+      if (selection && !selection.isCollapsed && selection.containsNode(el, true)) return;
+      if (!waiting.size) return;
+      const add = [...waiting];
+      waiting.clear();
+      setPainted(old => add.every(i => old.has(i)) ? old : new Set([...old, ...add]));
+    };
+    if (typeof IntersectionObserver === "undefined") {
+      chunks.forEach((_, i) => waiting.add(i));
+      apply();
+      return;
+    }
+    const observer = new IntersectionObserver(entries => {
+      for (const entry of entries) if (entry.isIntersecting) {
+        waiting.add(Number((entry.target as HTMLElement).dataset.codeChunk));
+        observer.unobserve(entry.target);
+      }
+      apply();
+    }, { rootMargin: "800px 0px" });
+    for (const child of el.children) observer.observe(child);
+    document.addEventListener("selectionchange", apply);
+    return () => { observer.disconnect(); document.removeEventListener("selectionchange", apply); };
+  }, [chunks]);
+  return <span ref={root}>{chunks.map((chunk, i) => <CodePart key={i} chunk={chunk} index={i} painted={painted.has(i)} />)}</span>;
+}
+const CodePart = memo(function CodePart({ chunk, index, painted }: { chunk: ReturnType<typeof codeChunks>[number]; index: number; painted: boolean }) {
+  return <span data-code-chunk={index}>{painted
+    ? chunk.runs.map(([words, scope], i) => <span key={i} className={css.ink[scope]}>{words}</span>)
+    : chunk.text}</span>;
+});
 
 /** The plain text of drawn children. */
 function textOf(node: ReactNode): string {
@@ -194,8 +240,15 @@ const attrsOf = (node: Kind): Record<string, unknown> => ((Array.isArray(node[1]
 const kidsOf = (node: Kind): MdNode[] => (Array.isArray(node[1]) ? node[1] : []);
 const str = (v: unknown): string | undefined => (typeof v === "string" ? v : undefined);
 const ALIGN = new Set(["left", "right", "center"]);
+/** A table's cell keeps its words on one line while they are this short (in ems of its font); a longer one wraps, this
+ * wide at least. */
+const LINE = 14;
+const WIDE = /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Hangul}\u3000-\u303f\uff01-\uff60\uffe0-\uffe6]/u;
+/** About how wide words are on one line, in ems: a CJK or full-width character about one, any other about half. */
+const emsOf = (words: string) => [...words].reduce((n, c) => n + (WIDE.test(c) ? 1 : 0.55), 0);
 
-const mdText = (node: MdNode, cx: Cx): string => (isWords(node) ? wordsOf(node, cx.source) : kidsOf(node).map((k) => mdText(k, cx)).join(""));
+/** A node's words, inline code's too. */
+const mdText = (node: MdNode, cx: Cx): string => (isWords(node) ? wordsOf(node, cx.source) : node[0] === "code" ? wordsOf(attrsOf(node).content, cx.source) : kidsOf(node).map((k) => mdText(k, cx)).join(""));
 
 function drawMd(node: MdNode, key: number, cx: Cx): ReactNode {
   if (isWords(node)) return wordsOf(node, cx.source);
@@ -246,13 +299,18 @@ function drawMd(node: MdNode, key: number, cx: Cx): ReactNode {
         if (!r || isWords(r)) return null;
         return <tr key={i}>{kidsOf(r).map((cell, j) => {
           if (isWords(cell)) return null;
-          const style = ALIGN.has(String(align[j])) ? { textAlign: align[j] as "left" } : undefined;
+          // No column narrower than its widest cell's words on one line, or LINE of them where they are longer (nor
+          // than a word of them; its padding besides): the browser would else squeeze a CJK column to a character or
+          // two a line.
+          const style: CSSProperties = emsOf(mdText(cell, cx)) < LINE ? { whiteSpace: "nowrap" } : { minWidth: `${LINE}em`, boxSizing: "content-box" };
+          if (ALIGN.has(String(align[j]))) style.textAlign = align[j] as "left";
           const inner = kidsOf(cell).map((k, n) => drawMd(k, n, cx));
           return cell[0] === "th" ? <th key={j} style={style}>{inner}</th> : <td key={j} style={style}>{inner}</td>;
         })}</tr>;
       };
-      // A table wider than the message scrolls sideways within it, its cells keeping their words whole.
-      return <div key={key} className={css.tableScroll}><table><thead>{row(head, 0)}</thead>{rows.length > 0 && <tbody>{rows.map((r, i) => row(r, i))}</tbody>}</table></div>;
+      // A table wider than the message scrolls sideways within it, its cells keeping their words whole; its frame is
+      // the table's, scrolling with it.
+      return <div key={key} className={css.tableScroll}><div className={css.tableFrame}><table><thead>{row(head, 0)}</thead>{rows.length > 0 && <tbody>{rows.map((r, i) => row(r, i))}</tbody>}</table></div></div>;
     }
     case "hr": return <hr key={key} />;
     case "b": return <strong key={key}>{kids()}</strong>;

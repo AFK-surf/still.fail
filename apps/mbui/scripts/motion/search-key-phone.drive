@@ -1,0 +1,11 @@
+# The search on a phone: words typed, then the keyboard's search key (Enter): nothing opens, the field keeps its words.
+timeout 20000
+until 今天
+wheel -300
+wait 600
+tap 搜索全部内容
+wait 900
+type 签名
+wait 1600
+enter
+wait 1200

@@ -25,7 +25,7 @@ import { Gone, NavBar } from "./parts.tsx";
 import { Waiting } from "@stillfail/ui/waiting.tsx";
 import * as pagesCss from "./styles/pages.css.ts";
 import { StationScreen, StationsScreen } from "./Stations.tsx";
-import { NewProfileScreen, PickModelsScreen, ProfileAccountScreen, ProfileScreen, ProfilesScreen } from "./Profiles.tsx";
+import { NewProfileScreen, PickModelsScreen, ProfileAccountScreen, ProfileModelsScreen, ProfileScreen, ProfilesScreen } from "./Profiles.tsx";
 import { AboutScreen, AppearanceScreen, LanguageScreen, SettingsScreen } from "./Settings.tsx";
 import { FontScreen } from "./Fonts.tsx";
 import { ChangelogScreen } from "./Changelog.tsx";
@@ -104,6 +104,7 @@ export function MobileWorkspace({ entry }: { entry: Entry }) {
       <Route path="s/:station/connects/:id/run" element={<InStation stations={stations}><ConnectRunScreen /></InStation>} />
       <Route path="s/:station/settings/accounts/:id" element={<InStation stations={stations}><ProfileScreen /></InStation>} />
       <Route path="s/:station/settings/accounts/:id/models" element={<InStation stations={stations}><PickModelsScreen /></InStation>} />
+      <Route path="s/:station/settings/accounts/:id/models/edit" element={<InStation stations={stations}><ProfileModelsScreen /></InStation>} />
       <Route path="s/:station/profiles/new" element={<InStation stations={stations}><NewProfileScreen /></InStation>} />
       {/* What the narrow app has no page for (the desktop's settings, a station's bare address) is the list. */}
       <Route path="*" element={<Navigate to={`/w/${entry.id}`} replace />} />

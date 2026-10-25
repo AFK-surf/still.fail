@@ -95,14 +95,36 @@ pub fn Space::px(self : Space) -> Double {
 }
 
 ///|
-/// A width or a height: what it holds (`Hug`, the default), all of the parent's (`Full`), a share of what is left
-/// along the parent's main axis (`Grow(k)`), a spacing token, or `Fixed(v)` (a value worked out as the view builds: a
-/// list's width; in a token file, a value off the scale).
+/// What a spacing token comes to as a margin: as `px`, and an `Exact` below 0 too (CSS's margins: one taking back a
+/// padding, a list reaching past its column), not NaN.
+pub fn Space::margin_px(self : Space) -> Double {
+  match self {
+    Exact(v) => {
+      if v != v {
+        abort("style: a margin's Exact is NaN")
+      }
+      v
+    }
+    s => s.px()
+  }
+}
+
+///|
+/// A width or a height: what it holds (`Hug`, the default; `Cut` cut short where its row has less), all of the parent's (`Full`), a share of what is left
+/// along the parent's main axis (`Grow(k)`), a share of the parent's room in percent (`Pct(p)`, CSS's 50%; a size only,
+/// not a bound), a spacing token, or `Fixed(v)` (a value worked out as the view builds: a list's width; in a token
+/// file, a value off the scale); as a least across (`min_w`), `Within(v)`: `v` where the parent has the room, all of it
+/// where it has less (CSS's `min(100%, 320px)`).
 pub(all) enum Len {
   Hug
+  /// as wide as what it holds, cut short where its row has less (words on one line in an ellipsis)
+  Cut
   Full
   Grow(Double)
   Fixed(Double)
+  Pct(Double)
+  /// a least across: as many points where the parent has the room, all of the parent's where it has less
+  Within(Double)
   S0
   SPx
   S0_5
@@ -192,9 +214,12 @@ fn Len::space(self : Len) -> Space? {
 fn Len::size(self : Len) -> Size {
   match self {
     Hug => Auto
+    Cut => Cut
     Full => Fill(1.0)
     Grow(k) => Fill(k)
+    Pct(p) => Pct(exact_ok(p, "Len Pct"))
     Fixed(v) => Px(exact_ok(v, "Len"))
+    Within(v) => abort("style: Within(\{v}) is a least across (min_w), not a size")
     l => Px(l.space().unwrap().px())
   }
 }
@@ -203,8 +228,9 @@ fn Len::size(self : Len) -> Size {
 /// A length as a bound (min_w, max_w…): `Hug` none (`none_is`), `Full` none as well.
 fn Len::bound(self : Len, none_is : Double) -> Double {
   match self {
-    Hug | Full | Grow(_) => none_is
-    Fixed(v) => exact_ok(v, "Len")
+    Hug | Cut | Full | Grow(_) => none_is
+    Pct(p) => abort("style: a bound is not a share (Pct(\{p}))")
+    Fixed(v) | Within(v) => exact_ok(v, "Len")
     l => l.space().unwrap().px()
   }
 }
@@ -212,7 +238,9 @@ fn Len::bound(self : Len, none_is : Double) -> Double {
 ///|
 /// A corner, the theme's scale (Tailwind's names, and Xl1_5 between Xl and Xl2, Xl4 past Xl3), a pill (`Full`: half the shorter side), or `Inner`: the corner of
 /// the rounded container it lies in less how far in it lies, so that what lies in a container's corner is concentric
-/// with it by how it is written (worked out once laid out: corners.mbt's corners_after_layout); `Around` the other way
+/// with it by how it is written (worked out once laid out: corners.mbt's corners_after_layout); `InnerOr(r)` the same
+/// where it lies in a rounded container's corner and `r` where it lies in none (the web's innerOr: a capsule standing
+/// alone that, in a panel's corner, follows the panel's, which so is the panel's own to choose); `Around` the other way
 /// round, the container's own corner from what lies in it.
 pub(all) enum Radius {
   Sharp
@@ -227,16 +255,39 @@ pub(all) enum Radius {
   Xl4
   Full
   Inner
+  InnerOr(Radius)
   /// the other way from `Inner`: the corner round what lies in its corner, worked out once laid out (a circle or a
   /// capsule there: its distance from the two edges and its own corner; a smooth one: smooth.mbt concentric_out)
   Around
   Exact(Double)
+  /// each corner its own (top left, top right, bottom right, bottom left: CSS's border-radius of four): a panel whose
+  /// corners in the window's follow it and the others stand alone
+  Corners(Double, Double, Double, Double)
+  /// a corner linked to where it comes from (corner_of.mbt: the window's, another followed so far in): all four
+  Linked(CornerOf)
+  /// the same each its own (top left, then round it)
+  LinkedEach(CornerOf, CornerOf, CornerOf, CornerOf)
 } derive(Eq, Show, Debug)
 
 ///|
-/// A size of words with its line's height, the theme's scale (Tailwind's names, and Xs2, Xs3 under Xs, as Xl2, Xl3
-/// over Xl), or `Exact(size, line)`.
+/// A size of words with its line's height: by what the words are (`Caption` … `Display`: the theme's roles, as a
+/// design system's type tokens say them, each its own size on each screen), the theme's scale (Tailwind's names, and
+/// Xs2, Xs3 under Xs, as Xl2, Xl3 over Xl), or `Exact(size, line)`.
 pub(all) enum TextSize {
+  /// the smallest words: a time, a count on a badge, a small status
+  Caption
+  /// what is said about something: a row's second line, a note, a hint
+  Meta
+  /// an interface's words: a menu's, a button's, a row's title in a panel
+  Ui
+  /// what is read: a message, a paragraph
+  Body
+  /// a title: a page's, a bar's, a list's row
+  Title
+  /// a heading over a page's body
+  Heading
+  /// the largest: a page's one word on its own
+  Display
   Xs3
   Xs2
   Xs
@@ -425,6 +476,14 @@ pub(all) enum Color {
   /// a quiet wash under what comes onto it (still.fail's Android app's way of the web's --hover: a screen's preview
   /// before its picture, ScreenLinks.kt; the offline note, Chat.kt), the same on every width
   Wash
+  /// a sidebar's ground beside the page (still.fail's Sidebar.css.ts vars.sidebar): what stands in it is cut out of it
+  /// (a row's people's pictures, RowPicture.css.ts --mark-around)
+  Sidebar
+  /// a list's ground, a step off the page (still.fail's --list): what a row of words to press lights to under the
+  /// pointer (AutomaticDecisions.css.ts policyWords)
+  ListGround
+  /// a field's edge pointed at or written in, a column's edge in hand (still.fail's --field-hover)
+  FieldHover
   A(Color, Opacity)
   Over(Color, Color)
   Exact(Int64)
@@ -434,11 +493,13 @@ pub(all) enum Color {
 } derive(Eq, Show, Debug)
 
 ///|
-/// An edge's width (Tailwind's border widths, and a hairline: B0_5).
+/// An edge's width (Tailwind's border widths, and a hairline: B0_5; B1_5 a ring a little firmer than a line, as a dot
+/// looked at is drawn round).
 pub(all) enum Stroke {
   B0
   B0_5
   B1
+  B1_5
   B2
   B4
   B8
@@ -450,6 +511,7 @@ fn Stroke::px(self : Stroke) -> Double {
     B0 => 0.0
     B0_5 => 0.5
     B1 => 1.0
+    B1_5 => 1.5
     B2 => 2.0
     B4 => 4.0
     B8 => 8.0

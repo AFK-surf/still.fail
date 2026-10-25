@@ -34,7 +34,7 @@ fn screen_links_core(
     topic: fn(name, params) { over(name, (base.topic)(name, params)) },
   }
   open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
-  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0)
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0, platform=2)
   t.run_for(@ui.nav_push_ms)
   t
 }
@@ -204,6 +204,8 @@ test "a tab's preview: asked for while its card is on the screen, cancelled as i
   assert_eq(again.length(), 1)
   assert_true(text(Some(streams[again[0] - 1].params), "view") != first_view)
   t.run_for(t.rest_of("a list") - t.time())
+  // (the chat's pictures brushed in once decoded: sfpages message_files.mbt)
+  t.run_for(@sfpages.reveal_ms)
   t.assert_idle()
 }
 

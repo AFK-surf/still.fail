@@ -47,7 +47,7 @@ export const count = style({ margin: "0 12px 8px", color: vars.muted, fontSize: 
 export const entry = style({
   position: "relative", borderRadius: vars.rField, cornerShape: vars.cornerShape, transition: `background ${vars.dur} ${vars.easeOut}`,
   selectors: {
-    "&:hover, &:has([data-state=open])": { background: vars.list },
+    "&:hover, &:has([data-state=open])": { background: vars.hover },
     // Chosen (a press, the keys), and in columns the folder open on the way to the next column.
     "&:has(> [data-chosen])": { background: vars.selected },
     "&:has(> [data-along])": { background: vars.list },
@@ -73,7 +73,7 @@ export const row = style({
 
     // A folder lent, or one of the station's to pick: no columns of sizes and times.
     [`${list} > &, [role=dialog] &`]: { gridTemplateColumns: "20px minmax(0, 1fr) 16px", minHeight: "44px" },
-    [`${list} > &:hover, [role=dialog] &:hover`]: { background: vars.list },
+    [`${list} > &:hover, [role=dialog] &:hover`]: { background: vars.hover },
   },
 });
 export const icon = style({ color: vars.muted, flex: "none" });
@@ -154,7 +154,8 @@ export const pickRow = style({
   display: "grid", gridTemplateColumns: "18px minmax(0, 1fr) auto", alignItems: "center", columnGap: "10px", boxSizing: "border-box", width: "100%",
   minHeight: "40px", padding: "6px 10px", border: "0", background: "none", color: vars.text, textAlign: "left", fontSize: vars.textUi, cursor: "pointer",
   borderRadius: vars.rField, cornerShape: vars.cornerShape,
-  selectors: { "&:hover": { background: vars.list }, "&[data-here]": { background: vars.list, fontWeight: 600 } },
+  // (the folder it is in: the selected grey, which a press there changes nothing of)
+  selectors: { "&:hover": { background: vars.hover }, "&[data-here]": { background: vars.selected, fontWeight: 600 } },
 });
 globalStyle(`${pickRow} > span:last-child:not(:nth-child(2))`, { fontSize: vars.textCaption, whiteSpace: "nowrap" });
 /** Why a folder to pick is not lent, under its name: the name keeps its room however narrow the column. */

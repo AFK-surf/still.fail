@@ -165,6 +165,7 @@ static void ime_composition(LPARAM lp) {
 
 // ---- clipboard ----
 
+// The clipboard's words pasted (text kind 8: put in as typed, a step of its own to undo).
 static void paste(void) {
   if (!OpenClipboard(hwnd)) return;
   HANDLE h = GetClipboardData(CF_UNICODETEXT);
@@ -176,7 +177,7 @@ static void paste(void) {
       if (!(p[i] == '\r' && p[i + 1] == '\n')) s[k++] = p[i];
     GlobalUnlock(h);
     CloseClipboard();
-    if (k) send_text(0, s, (int)k, 0, 0);
+    if (k) send_text(8, s, (int)k, 0, 0);
     free(s);
     return;
   }
@@ -203,7 +204,17 @@ static void key_down(WPARAM vk) {
       case 'A': code = 12; break;
       case 'C': code = 13; break;
       case 'X': code = 14; break;
-      case 'V': paste(); return;
+      case 'V':
+        // a picture on it (PNG, or a bitmap; not files dropped there): the app's Ctrl+V (1000 + v), which reads the
+        // clipboard for it (@hostapi.clip_read), as a page's paste takes a picture as a file; else its words
+        if (!IsClipboardFormatAvailable(CF_HDROP) &&
+            (IsClipboardFormatAvailable(RegisterClipboardFormatW(L"PNG")) || IsClipboardFormatAvailable(CF_DIB) ||
+             IsClipboardFormatAvailable(CF_DIBV5) || IsClipboardFormatAvailable(CF_BITMAP))) {
+          mb_cb.key(1000 + 'v', mods);
+        } else {
+          paste();
+        }
+        return;
     }
     // any other Ctrl key with a character: the app's shortcut (1000 + the character, lower case)
     if (!code) {
@@ -290,8 +301,10 @@ static void wheel(WPARAM wp, LPARAM lp, int horizontal) {
   // a notch is WHEEL_DELTA; a line 100/3 points, as a browser scrolls (100 a notch of three lines), eased in by the
   // app (phase 4)
   double d = GET_WHEEL_DELTA_WPARAM(wp) / (double)WHEEL_DELTA * lines * (100.0 / 3.0);
-  if (horizontal) mb_cb.wheel(p.x / scale, p.y / scale, d, 0, 4);
-  else mb_cb.wheel(p.x / scale, p.y / scale, 0, -d, 4);
+  // what is held with it, above the phase (ui's wheel_mod_*: a precision touchpad's pinch comes as Ctrl and the wheel)
+  int mods = (GetKeyState(VK_SHIFT) < 0 ? 1 : 0) | (GetKeyState(VK_CONTROL) < 0 ? 2 : 0) | (GetKeyState(VK_MENU) < 0 ? 4 : 0);
+  if (horizontal) mb_cb.wheel(p.x / scale, p.y / scale, d, 0, 4 | (mods << 4));
+  else mb_cb.wheel(p.x / scale, p.y / scale, 0, -d, 4 | (mods << 4));
 }
 
 static LRESULT CALLBACK wndproc(HWND h, UINT msg, WPARAM wp, LPARAM lp) {
@@ -588,6 +601,9 @@ int32_t mb_host_utc_offset_min(double at_ms) {
 
 double mb_host_event_time(void) { return -1; }
 
+// (how late the frame before reached the screen: not told here)
+double mb_host_frame_late(void) { return 0; }
+
 int32_t mb_host_platform(void) { return 3; }
 
 void mb_host_request_frame(void) { want_frame = 1; }
@@ -639,6 +655,9 @@ void mb_host_text_menu(int32_t shown, double x, double y, double w, double h, in
   (void)shown, (void)x, (void)y, (void)w, (void)h, (void)can;
 }
 
+// no menu bar of the app's here
+void mb_host_edit_can(int32_t can) { (void)can; }
+
 void mb_host_clipboard_set(moonbit_string_t s) {
   int n = Moonbit_array_length(s), k = 0;
   // other Windows programs expect CR LF
@@ -664,6 +683,29 @@ void mb_host_clipboard_set(moonbit_string_t s) {
 void mb_host_clipboard_secret(moonbit_string_t s, double clear_ms) {
   (void)clear_ms;
   mb_host_clipboard_set(s);
+}
+
+// A picture on the clipboard (@hostapi.clipboard_set_image): a PNG's bytes under the "PNG" format other programs paste
+// (Office, browsers, Paint.NET); what is not a PNG is put nowhere.
+void mb_host_clipboard_image(moonbit_bytes_t data) {
+  int n = Moonbit_array_length(data);
+  static const unsigned char sig[8] = {0x89, 'P', 'N', 'G', '\r', '\n', 0x1a, '\n'};
+  if (n < 8 || memcmp(data, sig, 8) != 0) return;
+  UINT png = RegisterClipboardFormatW(L"PNG");
+  HGLOBAL h = GlobalAlloc(GMEM_MOVEABLE, (size_t)n);
+  if (!png || !h) {
+    if (h) GlobalFree(h);
+    return;
+  }
+  memcpy(GlobalLock(h), data, (size_t)n);
+  GlobalUnlock(h);
+  if (!OpenClipboard(hwnd)) {
+    GlobalFree(h);
+    return;
+  }
+  EmptyClipboard();
+  if (!SetClipboardData(png, h)) GlobalFree(h);
+  CloseClipboard();
 }
 
 
@@ -755,6 +797,31 @@ void mb_host_set_app_state(void (*f)(int32_t)) { (void)f; }
 int32_t mb_host_system_dark(void) { return 0; }
 // Words as the app sizes them (@hostapi.font_scale): the system's text scale not read here yet.
 double mb_host_font_scale(void) { return 1.0; }
+// What the app was started to be used with (@hostapi.native_pointing): touch where the machine has a touch screen ready
+// and no mouse, or is in tablet mode (a convertible folded flat: SM_CONVERTIBLESLATEMODE 0); else keyboard and mouse.
+#ifndef SM_DIGITIZER
+#define SM_DIGITIZER 94
+#endif
+#ifndef SM_CONVERTIBLESLATEMODE
+#define SM_CONVERTIBLESLATEMODE 0x2003
+#endif
+#ifndef NID_INTEGRATED_TOUCH
+#define NID_INTEGRATED_TOUCH 0x01
+#endif
+#ifndef NID_EXTERNAL_TOUCH
+#define NID_EXTERNAL_TOUCH 0x02
+#endif
+#ifndef NID_READY
+#define NID_READY 0x80
+#endif
+int32_t mb_host_native_pointing(void) {
+  int digitizer = GetSystemMetrics(SM_DIGITIZER);
+  int touch = (digitizer & NID_READY) && (digitizer & (NID_INTEGRATED_TOUCH | NID_EXTERNAL_TOUCH));
+  if (!touch) return 2;
+  int mouse = GetSystemMetrics(SM_MOUSEPRESENT);
+  int slate = GetSystemMetrics(SM_CONVERTIBLESLATEMODE) == 0;
+  return (!mouse || slate) ? 1 : 2;
+}
 // The app's widgets for the system's accessibility (@hostapi.a11y_on, a11y_tree): not told here yet.
 int32_t mb_host_a11y_on(void) { return 0; }
 void mb_host_a11y_tree(moonbit_string_t s) { (void)s; }
@@ -866,6 +933,25 @@ void mb_host_window_setup(double min_w, double min_h, double w, double h, int32_
 
 // The system's title bar holds the window's buttons: none in the app's top row.
 int32_t mb_host_window_inset(void) { return 0; }
+// A window filling the screen (@hostapi.full_screen): not one of this host's.
+int32_t mb_host_full_screen(void) { return 0; }
+void mb_host_set_full_screen(int32_t on) { (void)on; }
+
+// How round the system draws the window's corners (@hostapi.window_corner): Windows 11's 8 (its build 22000 on: the
+// rounding DWM gives every window that does not ask otherwise), none maximised; Windows 10's are square.
+double mb_host_window_corner(void) {
+  static int build = -1;
+  if (build < 0) {
+    build = 0;
+    typedef LONG(WINAPI * rtl_get_version)(OSVERSIONINFOW *);
+    HMODULE nt = GetModuleHandleW(L"ntdll.dll");
+    rtl_get_version get = nt ? (rtl_get_version)(void *)GetProcAddress(nt, "RtlGetVersion") : NULL;
+    OSVERSIONINFOW v = {sizeof v};
+    if (get && get(&v) == 0) build = (int)v.dwBuildNumber;
+  }
+  if (build < 22000 || !hwnd || IsZoomed(hwnd)) return 0;
+  return 8;
+}
 
 // The press under way moves the window (the app's top row), as the title bar's would.
 void mb_host_window_drag(void) {
@@ -874,6 +960,23 @@ void mb_host_window_drag(void) {
 }
 
 // The pointer's shape (@hostapi.set_cursor), shown at once where it is over the window.
+// The number on the app's icon (@hostapi.set_badge): none on Windows here (its taskbar's overlay is not drawn yet).
+void mb_host_set_badge(int32_t n) { (void)n; }
+// The menu bar (@hostapi.menu_setup): none on Windows (its windows' own menus are not the app's).
+void mb_host_menu_setup(moonbit_string_t json) { (void)json; }
+// (this machine's station: managed from the macOS app only)
+moonbit_string_t mb_host_local_station(void) { return moonbit_make_string_raw(0); }
+void mb_host_local_station_act(moonbit_string_t a) { (void)a; }
+// (the desktop's dock: the macOS app's only)
+int32_t mb_host_dock_available(void) { return 0; }
+
+// The keys held now (@hostapi.mods_held), as a key's are told.
+int32_t mb_host_mods_held(void) { return mods_now(); }
+void mb_host_dock_send(moonbit_string_t l) { (void)l; }
+void mb_host_dock_stop(void) {}
+moonbit_string_t mb_host_dock_kept(void) { return moonbit_make_string_raw(0); }
+void mb_host_dock_keep(moonbit_string_t j) { (void)j; }
+
 void mb_host_set_cursor(int32_t kind) {
   cursor_kind = kind;
   POINT p;

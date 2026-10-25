@@ -13,7 +13,18 @@ export const mProfileNote = style({ padding: "8px 24px", fontSize: vars.textMeta
 export const mPickFoot = style({ display: "flex", gap: "10px", flex: "none", padding: "10px 16px calc(var(--m-foot) + 12px)" });
 globalStyle(`${mPickFoot} > button`, { flex: "1", justifyContent: "center" });
 export const mRowQuota = style({ display: "flex", marginTop: "6px" });
-export const mCheckPill = style({ marginLeft: "0", fontSize: vars.textCaption });
+/** An account at the top of its card: where it stands, then (in trouble) why and what to do, 12 apart. */
+export const mAccount = style({ display: "flex", flexDirection: "column", gap: "12px", flex: "1", minWidth: "0" });
+/** Its state under its line: a dot, its words and when it was checked; coloured only when something is off. */
+export const mAccountState = style({
+  display: "inline-flex", alignItems: "center", gap: "6px",
+  selectors: { '&[data-tone="red"]': { color: "var(--m-red)" }, '&[data-tone="amber"]': { color: "var(--m-warn)" } },
+});
+/** What a trouble says and its buttons, 10 apart. */
+export const mTrouble = style({ display: "flex", flexDirection: "column", alignItems: "flex-start", gap: "10px" });
+globalStyle(`${mTrouble} > p`, { margin: "0" });
+/** When an allowance was read: 12 under its windows. */
+export const mQuotaRead = style({ margin: "12px 0 0", fontSize: vars.textCaption, color: "var(--m-muted)" });
 export const mDeviceCode = style({
   alignSelf: "flex-start", padding: "8px 14px", borderRadius: `calc(10px * ${vars.cornerScale})`, cornerShape: vars.cornerShape,
   background: "var(--m-chip)",
@@ -53,6 +64,12 @@ export const mStepN = style({
   borderRadius: "50%", background: "var(--m-chip)", fontSize: vars.textCaption, fontWeight: "600",
 });
 export const mStepBody = style({ paddingLeft: "30px" });
+/** A step's page button, and after it the ⋯ of the other way of opening the page (the station's browser): as high, round. */
+export const mStepButtons = style({ display: "flex", alignItems: "center", gap: "8px" });
+export const mStepMore = style({
+  display: "inline-flex", alignItems: "center", justifyContent: "center", flex: "none", width: "38px", height: "38px", padding: 0,
+  border: 0, borderRadius: "999px", background: "var(--m-chip)", color: "var(--m-ink)", cursor: "pointer",
+});
 /** The code's field and what sends it, on one line. */
 export const mCodeRow = style({ display: "flex", alignItems: "center", gap: "8px" });
 /** A sign-in card with its buttons at its foot (or the code's field and what sends it): they sit in its bottom corners,

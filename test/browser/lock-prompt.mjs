@@ -1,7 +1,8 @@
 // A new device met face to face puts this one's code up wherever the person is (web/src/cloud/Security.tsx
 // SecurityPrompt, web/src/mobile/Security.tsx): a dialog on the desktop, a sheet on a phone, kept up as pages change,
 // naming every workspace it asks into (one not open among them), with no way to approve it here (only typing the code
-// there does); done there, it goes; closed by hand, it is turned away (`lockPrompt.deny`).
+// there does); done there, it goes; closed by hand (its code read), it is put away and the code still holds
+// (`lockPrompt.hide`); 拒绝 turns it away (`lockPrompt.deny`).
 // Runs the demo's app with its made-up core (a `lockPrompts` topic added to it here), without a station or network
 // data.
 // PLAYWRIGHT_MODULE selects Playwright (PLAYWRIGHT_CHANNEL a browser of the machine's); SHOTS optionally keeps pictures.
@@ -14,7 +15,7 @@ const out = process.env.SHOTS;
 const fixture = new URL('../../web/lock-prompt-check.tsx', import.meta.url);
 const html = new URL('../../web/lock-prompt-check.html', import.meta.url);
 // The demo's core, with the new devices showing a code (window.__prompts) and the lock calls kept (window.__calls);
-// `lockPrompt.deny` puts it up no more, as the core does.
+// `lockPrompt.deny` and `lockPrompt.hide` put it up no more, as the core does.
 const withLock = {
   name: 'demo-lock',
   enforce: 'pre',
@@ -22,8 +23,8 @@ const withLock = {
     if (!id.endsWith('/src/demo/mount.tsx')) return;
     return code
       .replace('    default:\n      if (import.meta.env.DEV)', '    case "lockPrompts": return (globalThis as any).__prompts ?? null;\n    default:\n      if (import.meta.env.DEV)')
-      .replace(/function answer\(name: string, params: Record<string, unknown>[^{]*\{/, (head) => head + '\n  if (name.startsWith("lock")) { ((globalThis as any).__calls ??= []).push([name, params]); if (name === "lockPrompt.deny") { (globalThis as any).__prompts = { pairing: [] }; setTimeout(publish, 0); } return null; }')
-      .replace('setTopicSource(valueOf);', 'setTopicSource(valueOf);\n(globalThis as any).__publish = () => publish();');
+      .replace(/function answer\(name: string, params: Record<string, unknown>[^{]*\{/, (head) => head + '\n  if (name.startsWith("lock")) { ((globalThis as any).__calls ??= []).push([name, params]); if (name === "lockPrompt.deny" || name === "lockPrompt.hide") { (globalThis as any).__prompts = { pairing: [] }; setTimeout(publish, 0); } return null; }')
+      .replace(/^setTopicSource\(.*$/m, (line) => `${line}\n(globalThis as any).__publish = () => publish();`);
   },
 };
 // Asking into two workspaces of the person's: 日常 is not the one open.
@@ -74,8 +75,8 @@ createRoot(root).render(<DemoApp phone={location.search.includes('phone')} />);
     // Its mark (an emoji) beside its name.
     for (const name of ['3720', '☀️日常']) assert.ok(await page.getByText(name, { exact: true }).isVisible(), `it names ${name}`);
     assert.equal(await page.getByRole('button', { name: /批准/ }).count(), 0, 'nothing here approves it');
-    const denied = async () => (await page.evaluate(() => globalThis.__calls ?? [])).filter(([n]) => n === 'lockPrompt.deny').map(([, p]) => p.device);
-    assert.deepEqual(await denied(), [], 'not turned away just for coming up');
+    const asked = async (call) => (await page.evaluate(() => globalThis.__calls ?? [])).filter(([n]) => n === call).map(([, p]) => p.device);
+    assert.deepEqual(await asked('lockPrompt.deny'), [], 'not turned away just for coming up');
     if (out) await page.screenshot({ path: `${out}/${phone ? 'phone' : 'desktop'}.png` });
     if (out) {
       await page.evaluate(() => { document.documentElement.dataset.theme = 'dark'; });
@@ -85,14 +86,23 @@ createRoot(root).render(<DemoApp phone={location.search.includes('phone')} />);
     // Done on the new device: gone here.
     await page.evaluate((l) => { globalThis.__prompts = l; globalThis.__publish(); }, lock([]));
     await title.waitFor({ state: 'hidden', timeout: 5000 });
-    // Another comes: up again; closed by hand, it is turned away.
-    await page.evaluate((l) => { globalThis.__prompts = l; globalThis.__publish(); }, lock([request]));
-    await title.waitFor({ timeout: 5000 });
-    await page.waitForTimeout(600);
+    // Another comes: up again; closed by hand once its code is read, it is put away, not turned away.
+    const again = async () => {
+      await page.evaluate((l) => { globalThis.__prompts = l; globalThis.__publish(); }, lock([request]));
+      await title.waitFor({ timeout: 5000 });
+      await page.waitForTimeout(600);
+    };
+    await again();
     if (phone) await page.touchscreen.tap(195, 60);
     else await page.keyboard.press('Escape');
     await title.waitFor({ state: 'hidden', timeout: 5000 });
-    assert.deepEqual(await denied(), [request.device], 'closed by hand: turned away');
+    assert.deepEqual(await asked('lockPrompt.hide'), [request.device], 'closed by hand: put away');
+    assert.deepEqual(await asked('lockPrompt.deny'), [], 'closed by hand: not turned away');
+    // Again: 拒绝 turns it away.
+    await again();
+    await page.getByRole('button', { name: '拒绝', exact: true }).click();
+    await title.waitFor({ state: 'hidden', timeout: 5000 });
+    assert.deepEqual(await asked('lockPrompt.deny'), [request.device], '拒绝: turned away');
     assert.deepEqual(errors, []);
     await context.close();
     console.log(`ok: ${phone ? 'phone' : 'desktop'}`);

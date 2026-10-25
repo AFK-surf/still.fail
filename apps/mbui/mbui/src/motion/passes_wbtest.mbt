@@ -5,6 +5,8 @@ fn rows_built_twice(extra : Ref[Bool]) -> @ui.Tester {
   @ui.Tester::new(
     fn(c) {
       c.column(fn() {
+        // (the box above is what the rows move for, in the build it is in)
+        let cause = if extra.val { "above" } else { "plain" }
         if extra.val {
           c.box(h=Px(10.0), fn() { c.text("above") |> ignore }) |> ignore
           extra.val = false
@@ -13,7 +15,7 @@ fn rows_built_twice(extra : Ref[Bool]) -> @ui.Tester {
         }
         for k in ["a", "b", "c"] {
           let n = c.box(w=Fill(1.0), h=Px(40.0), fn() { c.text("row " + k) |> ignore })
-          layout(c, n, "row/" + k, listed=false)
+          layout(c, n, "row/" + k, by=cause)
         }
       })
       |> ignore
@@ -76,7 +78,7 @@ test "a frame built twice whose rows did move: moved once, from where the last f
         }
         for k in ["a", "b"] {
           let n = c.box(w=Fill(1.0), h=Px(40.0), fn() { c.text("row " + k) |> ignore })
-          layout(c, n, "row/" + k, listed=false, spec=tween(push_ms, ease=Linear))
+          layout(c, n, "row/" + k, by="\{top.val}", spec=tween(push_ms, ease=Linear))
         }
       })
       |> ignore

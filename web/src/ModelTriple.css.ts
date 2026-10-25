@@ -88,6 +88,14 @@ export const runPickerOption = style({
   },
 });
 globalStyle(`${runPickerOption}[aria-pressed="true"] > ${runCheck}, ${runPickerOption}[aria-pressed="true"] ${runCheck}`, { visibility: "visible" });
+/** 自动 with what picks again at its end: one row, its ground the row's (under the pointer and while picked). */
+export const runPickerAuto = style({
+  display: "flex", alignItems: "center", borderRadius: inner, cornerShape: vars.cornerShape,
+  selectors: { "&:hover, &:has(> [aria-pressed=\"true\"])": { background: vars.hover } },
+});
+globalStyle(`${runPickerAuto} > ${runPickerOption}`, { flex: "1", minWidth: "0", background: "none" });
+/** Picking again: a small panel's pill at the row's end, as far in as it is from the row's top and foot. */
+export const runRepick = style({ marginRight: "8px" });
 export const runPickerNote = style({ margin: `0 ${TEXT_IN}px 6px`, fontSize: vars.textMeta, color: vars.amber });
 /** The picker's own buttons: a small panel's small pills (ui.css.ts panelButton). */
 export const btnSm = style({ height: "24px", padding: "0 10px", fontSize: vars.textMeta, borderRadius: "999px", cornerShape: "round" });

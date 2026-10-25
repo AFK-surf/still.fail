@@ -6,43 +6,43 @@
 ///|
 /// The list: all of the page under its bar, the filter over what scrolls.
 // kept across runs: a value (no field of it changes)
-let model_list_page : @ui.Style = @ui.style(w=Full, h=Full)
+let model_list_page : @ui.Style = @ui.css("w=Full h=Full")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let model_from_seen : @ui.Style = @ui.style(opacity=O100)
+let model_from_seen : @ui.Style = @ui.css("opacity=O100")
 
 ///|
 /// The filter's room: 18 from the sides, 8 over it and 4 under.
 // kept across runs: a value (no field of it changes)
-let model_filter_room : @ui.Style = @ui.style(w=Full, px=S4_5, pt=S2, pb=S1)
+let model_filter_room : @ui.Style = @ui.css("w=Full px=S4_5 pt=S2 pb=S1")
 
 ///|
 /// A series' name (Controls.kt GroupLabel: 13, muted, 14 over it and 4 under), at the rows' words.
 // kept across runs: a value (no field of it changes)
-let model_group_room : @ui.Style = @ui.style(w=Full, px=S5, pt=S3_5, pb=S1)
+let model_group_room : @ui.Style = @ui.css("w=Full px=S5 pt=S3_5 pb=S1")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let model_group_words : @ui.TextStyle = @ui.text_style(size=Sm, color=Muted)
+let model_group_words : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted)
 
 ///|
 /// None matching (14, muted, 16 over and under).
 // kept across runs: a value (no field of it changes)
-let model_none_room : @ui.Style = @ui.style(w=Full, px=S5, py=S4)
+let model_none_room : @ui.Style = @ui.css("w=Full px=S5 py=S4")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let model_none_words : @ui.TextStyle = @ui.text_style(size=Base, color=Muted, w=Full)
+let model_none_words : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, w=Full)
 
 ///|
 /// Where a model comes from, small: half seen while it is not usable here yet.
 // kept across runs: a value (no field of it changes)
-let model_from_faint : @ui.Style = @ui.style(opacity=O50)
+let model_from_faint : @ui.Style = @ui.css("opacity=O50")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let model_from_words : @ui.TextStyle = @ui.text_style(size=Xs, color=Muted, wrap=false)
+let model_from_words : @ui.TextStyle = @ui.text_style(size=Caption, color=Muted, wrap=false)
 
 ///|
 /// The model the core's `picked` names: by its own name, else among the names it also goes by (optionOf).
@@ -110,14 +110,7 @@ fn model_list(
           // not usable here till borrowed: faint, until it is the one picked
           let faint = text(mv, "availability") == "borrowable" && !is_on
           let from = field(mv, "fromStation")
-          if pick_row(
-              c,
-              key + "/" + model,
-              text(mv, "name"),
-              checked=is_on,
-              color=if faint { t.p.muted } else { t.p.text },
-              mark=fn() { @sf.maker_mark(c, text(field(mv, "maker"), "id"), runtime, 18.0) |> ignore },
-              tag?=match from {
+          if @sf.choice_row(c, key + "/" + model, is_on, text(mv, "name"), ink=if faint { t.p.muted } else { t.p.text }, lead=fn() { @sf.maker_mark(c, text(field(mv, "maker"), "id"), runtime, 18.0) |> ignore }, tag?=match from {
                 Some(Object(_)) =>
                   Some(fn() {
                     c.box(style=if faint { model_from_faint } else { model_from_seen }, fn() {
@@ -130,8 +123,7 @@ fn model_list(
                     |> ignore
                   })
                 _ => None
-              },
-            ) {
+              }) {
             on_pick(model)
           }
         })

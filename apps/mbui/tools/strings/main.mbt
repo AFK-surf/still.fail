@@ -8,8 +8,12 @@
 // A key the English catalog lacks fails it, named: its words go in the catalog (both languages), not here.
 
 ///|
-/// The packages with tables of words, from the repository.
-let packages : Array[String] = ["apps/mbui/src/sfapp", "apps/mbui/src/sfapp/settings"]
+/// The packages with tables of words, from the repository, and where else what each says is: sfbase's words (a service's
+/// page, a visualization's: its tables named `…_zh`) are said through the app's `fill`, so sfapp's English has them.
+let packages : Array[(String, Array[String])] = [
+  ("apps/mbui/src/sfapp", ["apps/mbui/src/sfbase"]),
+  ("apps/mbui/src/sfapp/settings", []),
+]
 
 ///|
 fn fail(why : String) -> Unit {
@@ -19,7 +23,7 @@ fn fail(why : String) -> Unit {
 
 ///|
 /// The keys of the tables of words in `dir`'s files (not its tests, not the English it writes), in the order they come.
-fn table_keys(dir : String) -> Array[String] {
+fn table_keys(dir : String, zh_only? : Bool = false) -> Array[String] {
   let names = @sys.list_dir(dir).filter(fn(n) {
     n.has_suffix(".mbt") && !n.has_suffix("_test.mbt") && !n.has_suffix("_wbtest.mbt") && n != "strings_en.mbt"
   })
@@ -33,7 +37,8 @@ fn table_keys(dir : String) -> Array[String] {
       let line = raw.to_string()
       if !table {
         table = (line.has_prefix("let ") || line.has_prefix("pub let ")) &&
-          line.contains(": Map[String, String] = {")
+          line.contains(": Map[String, String] = {") &&
+          (!zh_only || line.contains("_zh :"))
         continue
       }
       if line.has_prefix("}") {
@@ -113,7 +118,8 @@ fn main {
     }
   }
   let missing : Array[String] = []
-  for pkg in packages {
+  for p in packages {
+    let (pkg, also) = p
     let dir = @sys.join(repo, pkg)
     let words : Array[(String, String)] = []
     let put : Map[String, Bool] = {}
@@ -123,7 +129,11 @@ fn main {
         words.push((k, v))
       }
     }
-    for key in table_keys(dir) {
+    let keys = table_keys(dir)
+    for more in also {
+      keys.append(table_keys(@sys.join(repo, more), zh_only=true))
+    }
+    for key in keys {
       match en.get(key) {
         Some(String(s)) => add(key, s)
         Some(Object(o)) =>
@@ -164,6 +174,7 @@ fn main {
     out.write_string(
       "/// This package's words in English (`.one`: a count's when it is one), as `tr` says them when @sf.language() is \"en\".\n",
     )
+    out.write_string("// kept across runs: a table, never written\n")
     out.write_string("let en : Map[String, String] = {\n")
     for w in words {
       out.write_string("  " + quoted(w.0) + ": " + quoted(w.1) + ",\n")

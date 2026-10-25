@@ -1,8 +1,8 @@
-// A station's variables (settings/station_parts.mbt open_agent_env; Stations.kt AgentEnvSheet): the field shows the
+// A station's variables (src/sfdesk station_page.mbt station_env_editor, in its page's 设置): the field shows the
 // core's draft as it changes while nothing typed here waits on it.
 
 ///|
-test "the variables' field follows the core's text that comes after the sheet opened" {
+test "the variables' field follows the core's text that comes after the page opened" {
   reset()
   let env : Ref[(String, Int)] = Ref(("", 1))
   let base = fixture("settings")
@@ -29,21 +29,19 @@ test "the variables' field follows the core's text that comes after the sheet op
       }
     },
   }
-  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0)
-  open_setting("station:ws1/st1")
+  // in the page's 设置, its variables' editor in it (a manager's), the page tall enough for all of it
+  @settings.station_parts["ws1/st1"] = "settings"
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=2400.0, platform=2)
+  t.draw()
+  app.nav.push(Settings)
+  app.nav.push(Setting(@settings.Route::Station("ws1/st1")))
   t.draw()
   t.run_for(@ui.nav_push_ms)
-  // in the page's 设置
-  station_part(t, "设置")
-  shown_on_page(t, "编辑变量")
-  t.tap_text("编辑变量")
-  t.run_for(@kit.sheet_rest("settings-sheet") - t.time())
-  assert_true(@settings.sheet_up(), msg="the sheet up")
   // opened on the text before a save the core tells a moment later
   assert_false(t.dump().contains("\"E2E_A=1\""))
   env.val = ("E2E_A=1", 2)
   t.draw()
   t.draw()
   // (the field's words: the drawn tree's editor holds them)
-  assert_true(t.dump().contains("\"E2E_A=1\""), msg="the core's text, come after the sheet opened, in the field")
+  assert_true(t.dump().contains("\"E2E_A=1\""), msg="the core's text, come after the page opened, in the field")
 }

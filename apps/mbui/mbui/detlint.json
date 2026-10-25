@@ -90,14 +90,14 @@
       "src/effectdemo/demo.mbt": 3,
       "src/kit/button.mbt": 9,
       "src/kit/checkbox.mbt": 8,
-      "src/kit/dialog.mbt": 20,
+      "src/kit/dialog.mbt": 19,
       "src/kit/disclosure.mbt": 13,
       "src/kit/field.mbt": 7,
       "src/kit/form.mbt": 4,
       "src/kit/look.mbt": 3,
-      "src/kit/menu.mbt": 33,
+      "src/kit/menu.mbt": 31,
       "src/kit/password.mbt": 3,
-      "src/kit/popover.mbt": 11,
+      "src/kit/popover.mbt": 10,
       "src/kit/progress.mbt": 8,
       "src/kit/radio.mbt": 6,
       "src/kit/select.mbt": 13,
@@ -135,7 +135,7 @@
       "src/kit/look.mbt": 2,
       "src/kit/menu.mbt": 16,
       "src/kit/password.mbt": 2,
-      "src/kit/popover.mbt": 4,
+      "src/kit/popover.mbt": 3,
       "src/kit/progress.mbt": 9,
       "src/kit/radio.mbt": 5,
       "src/kit/select.mbt": 7,
@@ -166,6 +166,7 @@
       "src/webdemo/main.mbt": 12
     },
     "style-exact": {},
+    "style-text": {},
     "build-effect": {
       "src/kitdemo/gallery/markscheck.mbt": 3,
       "src/kitdemo/gallery/textcheck.mbt": 1,
@@ -183,7 +184,18 @@
       "src/host/mac_app.m": 2,
       "src/host/win_app.c": 1,
       "web/host.js": 1
-    }
+    },
+    "library-import": {},
+    "reset-wire": {},
+    "page-hand": {},
+    "page-screen": {},
+    "page-look": {},
+    "follow-layout": {},
+    "motion-read": {
+      "src/kit/sheet.mbt": 1,
+      "src/kit/time.mbt": 1
+    },
+    "page-old-part": {}
   },
   "excused": {
     "frame-request": {},
@@ -209,11 +221,24 @@
     "builtin-hash": {},
     "hash-order": {},
     "globals": {},
-    "style-literal": {},
+    "style-literal": {
+      "src/ui/style_css.mbt": 4
+    },
     "box-loose": {},
-    "style-exact": {},
+    "style-exact": {
+      "src/ui/style_css.mbt": 4
+    },
+    "style-text": {},
     "build-effect": {},
     "unsettled-ok": {},
-    "host-delay": {}
+    "host-delay": {},
+    "library-import": {},
+    "reset-wire": {},
+    "page-hand": {},
+    "page-screen": {},
+    "page-look": {},
+    "follow-layout": {},
+    "motion-read": {},
+    "page-old-part": {}
   }
 }

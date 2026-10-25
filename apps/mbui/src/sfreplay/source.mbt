@@ -5,8 +5,9 @@
 // the same every time, no backend, no wall clock.
 
 ///|
-/// Chats' images as the core gives them (`station.file`), asked once each.
-let images : Map[String, String] = {}
+/// Chats' images as the core gives them (`station.file`, `station.poster`): one whose station could not be reached
+/// asked again (@sfbase.ChatImages).
+let images : @sfbase.ChatImages = @sfbase.ChatImages::new()
 
 ///|
 /// Pictures by their address as the app's own are (src/stillfail: @sfapp.core_pictures, one that could not be had
@@ -46,22 +47,33 @@ fn init {
 ///|
 /// `name`: the image's as src/stillfail names it (its key), so a scripted run's `img:NAME` and the host's answers kept
 /// with the run's text (a picture's sizes, by its source) are the same here.
-fn image(call : String, params : Json, key : String, name : String) -> String {
-  match images.get(key) {
-    Some(k) => k
-    None => {
-      images[key] = ""
-      @core.call_bytes(call, params~, on_done=fn(r) {
-        match r {
-          Ok((_, Some(bytes))) if bytes.length() > 0 => {
-            @ui.add_image(name, bytes)
-            images[key] = name
-          }
-          _ => images[key] = "!"
+fn image(station : String, id : String, call : String, params : Json, name : String) -> String {
+  images.get(station, id, name, fn(done) { @core.call_bytes(call, params~, on_done=done) })
+}
+
+///|
+/// The prefs of a tape from a core before the rail was the core's (prefs `railView`, core-ts rail.ts): the rail as the
+/// real core draws it from what those prefs keep (`rail`, `rails`), kept (src/sfkept), a pure function of them.
+fn with_rail_view(v : Json?) -> Json? {
+  match v {
+    Some(Object(m)) if !m.contains("railView") => {
+      let kept : Map[String, Json] = {}
+      for k in ["rail", "rails"] {
+        match m.get(k) {
+          Some(x) => kept[k] = x
+          None => ()
         }
-      })
-      ""
+      }
+      match @sfkept.answer("railView", Json::object(kept), None) {
+        Some(Ok((rail, _))) => {
+          let out = m.copy()
+          out["railView"] = rail
+          Some(Json::object(out))
+        }
+        _ => v
+      }
     }
+    _ => v
   }
 }
 
@@ -71,14 +83,26 @@ pub fn source() -> @sfapp.Source {
   {
     topic: fn(name, params) {
       let s = @core.subscribe(name, params~)
-      { value: s.value, error: s.error, version: s.version }
+      let value = if name == "prefs" { with_rail_view(s.value) } else { s.value }
+      { value, error: s.error, version: s.version }
     },
     // The core's pure calls (`markdown`, `code.ink`, `reader.*`) answered as the real core answered them, kept
     // (src/sfkept): tapes older than a call have none of it, and it is a pure function of what is asked, not made up
-    // here. Any other ask the tape does not have still diverges.
+    // here. Any other ask the tape does not have still diverges; ⌘K's `commands.find` is the tape's (it says it in the
+    // run's language, which only the run knows).
     call: fn(name, params, done) {
+      if name == "commands.find" {
+        @core.call(name, params~, on_done=done)
+        return
+      }
       match @sfkept.answer(name, params, None) {
-        Some(Ok((v, _))) => done(Ok(v))
+        Some(Ok((v, _))) => {
+          // (the tape told it was asked, its answer to it let go: the run's ask of it, if the run asked, is had)
+          @core.call(name, params~, on_done=fn(_) {  })
+          done(Ok(v))
+        }
+        // (one always answered here, not kept yet: said on the output for scripts/kept, never the run's to give)
+        Some(Err(e)) if @sfkept.has(name, params) => done(Err(e))
         _ => @core.call(name, params~, on_done=done)
       }
     },
@@ -121,8 +145,8 @@ pub fn source() -> @sfapp.Source {
         "name": Json::string(name),
         "thumb": Json::boolean(true),
       }
-      let id = station + "\u{1}" + key + "\u{1}" + name
-      image("station.file", Json::object(params), "file " + id, "mem:chat-file/\{@ui.stable_hash(id)}/\{id.length()}/\{name}")
+      let id = @sfbase.file_image_id(station, key, name)
+      image(station, id, "station.file", Json::object(params), "mem:chat-file/\{@ui.stable_hash(id)}/\{id.length()}/\{name}")
     },
     poster: fn(station, key, name) {
       let params : Map[String, Json] = {
@@ -130,9 +154,10 @@ pub fn source() -> @sfapp.Source {
         "key": Json::string(key),
         "name": Json::string(name),
       }
-      let id = station + "\u{1}" + key + "\u{1}" + name + "\u{1}poster"
-      image("station.poster", Json::object(params), "poster " + id, "mem:chat-poster/\{@ui.stable_hash(id)}/\{id.length()}/\{name}")
+      let id = @sfbase.poster_image_id(station, key, name)
+      image(station, id, "station.poster", Json::object(params), "mem:chat-poster/\{@ui.stable_hash(id)}/\{id.length()}/\{name}")
     },
+    images,
     now: fn() { @ui.wall_ms() },
     leave: fn(name, params) { @core.unsubscribe(@core.subscribe(name, params~)) },
     read_only: false,

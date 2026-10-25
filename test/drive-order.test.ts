@@ -1,10 +1,12 @@
+// The order a folder's entries are shown in and the names a change gives, as the core works them out for every client
+// (client/core-ts/src/drive-browse.ts; its topic and calls: client/core-ts/test/drive-browse.test.ts).
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { arrange, freeName, movesOf, type Arrangement } from "../web/src/drive/order.ts";
+import { arrange, freeName, movesOf, type Arrangement } from "../client/core-ts/src/drive-browse.ts";
 import type { DriveEntry } from "../web/src/core/shapes.ts";
 
 const entry = (name: string, dir = false, size = 0, mtime = 0): DriveEntry =>
-  ({ name, dir, size, mtime, type: "", kind: dir ? "folder" : name.endsWith(".md") ? "markdown" : "other", sizeText: "", timeText: "" }) as DriveEntry;
+  ({ name, dir, size, mtime, type: "", kind: dir ? "folder" : name.endsWith(".md") ? "markdown" : "other", opens: dir ? "folder" : name.endsWith(".md") ? "read" : "save", sizeText: "", timeText: "" }) as DriveEntry;
 const names = (es: DriveEntry[]) => es.map((e) => e.name);
 const by = (a: Partial<Arrangement>): Arrangement => ({ by: "name", down: false, hidden: false, ...a });
 

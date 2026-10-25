@@ -1,0 +1,17 @@
+# 外观 on the desktop (sfdesk appearance.mbt, font_setting.mbt; the web's pages/Appearance.tsx, FontSetting.tsx):
+# MBUI_WIN=1280x800 over the made-up chat. ⌘, then 外观: its sections, 字体's places one after another, down the page.
+timeout 30000
+until 发消息
+wait 600
+key cmd+,
+wait 1000
+tap 外观
+wait 1500
+tap 正文
+wait 900
+tap 代码
+wait 900
+move 800 500
+wheel 600
+wait 1500
+exit

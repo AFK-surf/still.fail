@@ -1,8 +1,12 @@
 // What the agents spent, the machine's own sessions, the agents' memory, the machine itself, and the retired footprint
-// (admin/mod.rs: GET /usage, /machine-sessions, /machine-sessions/:runtime/:id, /memory, /host, /footprint).
+// (admin/mod.rs: GET /usage, /machine-sessions, /machine-sessions/:runtime/:id, /memory, /host, /footprint), and what
+// still.fail uses of the machine (GET /resources, POST /resources/processes/:pid/end).
 import { type Request, type Answer, error, json, param, percentDecode } from "../request.ts";
 import type { Route, Tools } from "../admin.ts";
 import { memory } from "../../read/memory.ts";
+import { cpus, totalmem } from "node:os";
+import { NotEndable, type ResourceWatch } from "../../resources/watch.ts";
+import { log } from "../../ops/log.ts";
 
 const I64_MIN = -9223372036854775808n;
 const I64_MAX = 9223372036854775807n;
@@ -92,6 +96,76 @@ export const usageRoutes = ({ read }: Tools, reading: () => boolean): Route[] =>
       const tz = number(r, "tz") ?? 0n;
       const clamped = tz < -1440n ? -1440n : tz > 1440n ? 1440n : tz;
       return read(r, "usage", { lang: r.lang, from: String(from), to: String(to), tz: String(clamped), reading: reading(), viewer: r.viewer });
+    },
+  },
+];
+
+/// GET /resources, the resources part's (resources/module.ts): what still.fail uses of this machine now, by whose and
+/// process, and the last minutes' totals (resources/watch.ts), the chats named. A chat the asker
+/// does not see (another workspace's) is the agents', none of its processes endable. Asked, the station looks often for
+/// a while. POST /resources/processes/:pid/end ({session}): ends a process of a chat the asker sees (watch.ts `end`).
+/// `watch`: none where processes are not read (not macOS).
+export const resourceRoutes = ({ read }: Tools, watch: ResourceWatch | null): Route[] => [
+  {
+    method: "GET",
+    pattern: /^\/resources$/,
+    handle: async (r: Request): Promise<Answer> => {
+      await watch?.want();
+      const shot = watch?.snapshot() ?? { at: null, everyMs: 0, counted: false, net: false, disk: false, total: { cpu: 0, memory: 0, netIn: 0, netOut: 0, diskRead: 0, diskWrite: 0 }, groups: [], history: [] };
+      const sessions = [...new Set(shot.groups.flatMap((g) => (g.session ? [g.session] : [])))];
+      const named = await read(r, "resourceChats", { sessions, viewer: r.viewer });
+      if (named.status !== 200) return named;
+      const chats = JSON.parse((named.body as Buffer).toString("utf8")) as Record<string, { thread: number | null; title: string | null } | null>;
+      const seen = (key: string) => !key.startsWith("chat:") || chats[key.slice(5)] != null;
+      // Chats not seen: the agents' (their processes together).
+      const groups: typeof shot.groups = [];
+      for (const g of shot.groups) {
+        if (seen(g.key)) {
+          groups.push(g);
+          continue;
+        }
+        const agents = groups.find((d) => d.key === "agents");
+        if (agents) {
+          agents.cpu += g.cpu;
+          agents.memory += g.memory;
+          agents.netIn += g.netIn;
+          agents.netOut += g.netOut;
+          agents.diskRead += g.diskRead;
+          agents.diskWrite += g.diskWrite;
+          agents.processes = [...agents.processes, ...g.processes.map((p) => ({ ...p, endable: false }))];
+        } else groups.push({ ...g, key: "agents", kind: "agents", session: null, processes: g.processes.map((p) => ({ ...p, endable: false })) });
+      }
+      const shown = Object.fromEntries(Object.entries(chats).filter(([, c]) => c != null));
+      // The machine, for what is used to be said against.
+      return json(200, JSON.stringify({ ...shot, groups, chats: shown, machine: { cores: cpus().length, memory: totalmem() } }));
+    },
+  },
+  {
+    method: "POST",
+    pattern: /^\/resources\/processes\/(\d+)\/end$/,
+    handle: async (r: Request, [rawPid]: string[]): Promise<Answer> => {
+      if (!watch) return error(404, "processes are not read here");
+      let session: unknown;
+      try {
+        session = r.body.length > 0 ? (JSON.parse(r.body.toString("utf8")) as { session?: unknown }).session : undefined;
+      } catch {
+        return error(400, "invalid JSON");
+      }
+      if (typeof session !== "string" || session === "") return error(400, "session required");
+      // Its chat as the asker sees it: none (another workspace's), no such process for them.
+      const named = await read(r, "resourceChats", { sessions: [session], viewer: r.viewer });
+      if (named.status !== 200) return named;
+      const chats = JSON.parse((named.body as Buffer).toString("utf8")) as Record<string, unknown>;
+      if (chats[session] == null) return error(404, "no such process");
+      const pid = Number(rawPid);
+      try {
+        const ended = await watch.end(pid, session);
+        log.info("resources", "a chat's process ended from its station's page", { pid, name: ended.name, session, by: r.viewer.email });
+        return json(200, JSON.stringify({ pid, ...ended }));
+      } catch (e) {
+        if (e instanceof NotEndable) return error(409, e.message);
+        throw e;
+      }
     },
   },
 ];

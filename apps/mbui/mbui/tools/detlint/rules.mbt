@@ -5,8 +5,9 @@ let rule_names : Array[String] = [
   "frame-request", "settle", "flow-wait", "script-wait", "page-settle", "device-shot",
   "host-import", "frame-wait", "at-rest-wait", "frame-count", "literal-time", "stable-mode",
   "retired-api", "app-clock", "wall-clock", "engine-math", "poll", "host-read", "builtin-hash",
-  "hash-order", "globals", "style-literal", "box-loose", "style-exact", "build-effect",
-  "unsettled-ok", "host-delay",
+  "hash-order", "globals", "style-literal", "box-loose", "style-exact", "style-text", "build-effect",
+  "unsettled-ok", "host-delay", "library-import", "reset-wire", "page-hand", "page-screen", "page-look", "follow-layout",
+  "motion-read", "page-old-part",
 ]
 
 ///|
@@ -32,11 +33,20 @@ let rule_words : Map[String, String] = {
   "builtin-hash": "a value made from MoonBit's own hash (seeded anew in each process, not the same on js and native): @ui.stable_hash",
   "hash-order": "a @hashmap / @hashset, its order the process's hash's: a Map (in the order put), or sort it",
   "globals": "a mutable global its package's reset does not put back, nor says `// kept across runs: why`",
+  "page-hand": "a page reads the current input (@ui.pointing()): what it shows, where and how big is the native input's and the screen's (@sf.native_input(), the tier, its own width); how it answers the hand is the library's primitives' (c.lit, c.menu_asked, the app's own: still.fail's sf/hand.mbt)",
+  "page-screen": "a page reads the native input (@sf.native_input(): touch, or keyboard and mouse, as the app was started): what differs by it is the theme's, the library's parts', the presenters' and the shell's; a page that needs it asks the library for a part that holds it for every page",
+  "page-look": "a page draws one arrangement's piece itself (narrow_*, desk_*, its own branch on Narrow or Wide): its parts are the library's (a page's parts, src/sf page.mbt), which the page's frame lays out by its width, the same page on every screen",
+  "page-old-part": "a page takes a part from an older copy of it (@settings.button, pick_row, provider_mark, wide_head, quota_chips, meter_chip): the library has the one, after the web's (@sf.button, choice_row, provider_logo, page_head, quota_chips, meter_chip)",
+  "reset-wire": "a global its package's reset sets to something other than its `let`'s value: a wire (a hook given what does the work), which reset sets only as a Tester starts, never in the app; set it once in the package's `fn init`, and keep it across runs",
   "style-literal": "a number where a style is said (a box's or words' look, @ui.style…), or an Exact(…) outside the token files: name it with a token (docs/style.md)",
   "box-loose": "a box or words said by their loose look (pad=, bg=, size=…): say it as a named style (style=)",
   "style-exact": "a value off the theme's scale (Exact(…)), in a token file too: only goes down",
+  "style-text": "a named style (a top-level let, a .then(…) of one) said as a call whose properties are all tokens and numbers: moonc makes each @ui.style(…) call ~5-10 KB of C run as the app starts; write it as its text, @ui.css(\"…\") (printed after `write:`). @ui.style(…) is for a style naming a variable or worked out, and inside functions (docs/style.md)",
   "build-effect": "a view tells outside while it builds (a core's call, a host's effect): a frame is built again while what it read changes, and a build let go of tells all the same; say it in Ctx::after_build (once the frame's builds are over, as the last says it), or in the event's own handler",
   "unsettled-ok": "a test leaves out its end's idle check (unsettled_ok=…: what still moves or asks, until it says its end): counted so the ones left only go",
+  "library-import": "a package of the app's component library (detlint.json `library`) imports what is not the framework's nor said to be its own (the app's pages, its core, a station's, the cloud's): what it needs of the app, the app gives it as it starts (a function it sets: @sf.set_shortcuts)",
+  "follow-layout": "a motion follows what the layout measured (a node's size or place, the window's, the keyboard's): what changed it is not its cause; tell the motion at its cause, with what it moves for (@motion.layout's `by`), and what its container does to it is no motion of its own (the app's docs/motion.md)",
+  "motion-read": "the app reads whether a motion runs (moving()): what is shown, what takes a press, when state is let go follow from the cause and the motion's declared end (ends()); what only draws by it says so on its line (det-ok)",
   "host-delay": "a host does something a fixed time later (postDelayed, dispatch_after, SetTimer, setTimeout): do it on the event it waits for (a callback, a listener, the system's word); a time the app asked for (its wake) says so on its line (det-ok)",
 }
 

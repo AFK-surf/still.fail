@@ -791,6 +791,11 @@ test "a list's running sums are its rows' heights added up" {
     follow_item: -1,
     follow_margin: 0.0,
     built: -1,
+    glide_shows: false,
+    bar: Bar::new(),
+    laid: -1,
+    began: (0, 0.0, 0.0, false),
+    left: (0, 0.0, 0.0, false),
     scroll_asked: (-1, 0, 0.0),
     fling: 0,
     fling_v: 0.0,
@@ -814,6 +819,7 @@ test "a list's running sums are its rows' heights added up" {
         sel: false,
         theme: Theme::light(),
         direction: Ltr,
+        layer: 0,
   }
   let mut seed = 7
   let next = fn(n : Int) -> Int {

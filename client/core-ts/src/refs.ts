@@ -5,6 +5,7 @@
 import type { Data } from "./data.ts";
 import { t } from "./i18n.ts";
 import { encode } from "./ops.ts";
+import { REF_MARK } from "./refLinks.ts";
 import { ofAddress } from "./workspace.ts";
 import { arr as arrU, get as getU } from "./util.ts";
 
@@ -84,7 +85,7 @@ export function mark(data: Data, base: string, station: string, id: string, full
 export function marked(data: Data, station: string, text: string): string[] {
   const all = links(data, ofAddress(station));
   const out: string[] = [];
-  for (const m of text.matchAll(/@\[([^\]\n]{1,120})\]/g)) {
+  for (const m of text.matchAll(REF_MARK)) {
     const hit = [...all].reverse().find(([x]) => x === m[1]);
     if (hit && !out.includes(hit[1])) out.push(hit[1]);
   }

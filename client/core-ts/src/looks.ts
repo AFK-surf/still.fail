@@ -105,8 +105,8 @@ export function stationLine(online: boolean, host: J): string {
   return m !== "" ? m : t(online ? "core-logic.looks.station.online" : "core-logic.looks.station.offline");
 }
 
-/// A station's answer as the clients show it: the agents' memory with each skill's text as people read it, the
-/// global memory in its parts, and how long each is.
+/// A station's answer as the clients show it: the agents' memory with each skill's text as people read it, what kind it
+/// is, when it is read and its pages, the global memory in its parts, and how long each is.
 export function answer(method: string, path: string, value: J): void {
   if (method !== "GET" || path !== "/memory") return;
   const global = get(value, "global");
@@ -142,6 +142,16 @@ export function answer(method: string, path: string, value: J): void {
     }
     skill.files = files;
     skill.size = size(bytes);
+    // Which part of the list it is under, and what its page and its row say: what kind it is, when it is read (its row's line), its pages to pick between (its
+    // SKILL.md, 总览, then each other file).
+    skill.group = project ? "project" : get(skill, "builtin") === true ? "builtin" : "skill";
+    skill.kindText = t(skill.group === "project" ? "core-logic.memory.kind.project" : skill.group === "builtin" ? "core-logic.memory.kind.builtin" : "core-logic.memory.kind.skill");
+    skill.whenText = skill.about !== "" ? skill.about : t("core-logic.memory.no_when");
+    skill.line = skill.brief !== "" ? skill.brief : t("core-logic.memory.no_when");
+    skill.pages = [
+      { key: "", label: t("core-logic.memory.overview"), text: skill.body !== "" ? skill.body : t("core-logic.memory.empty") },
+      ...files.map((f) => ({ key: f.name, label: f.label, size: f.size, text: strOf(f, "text") !== "" ? strOf(f, "text") : t("core-logic.memory.empty") })),
+    ];
   }
 }
 

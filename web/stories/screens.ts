@@ -4,6 +4,7 @@
 // encodes it), so the canvas is drawn as a station's would be. 只看/控制 switches as the core would, at once.
 import type { DemoExtension } from "../src/demo/mount.tsx";
 import type { AdbCard, ScreenCard, ScreensView, ScreenViewState } from "../src/core/shapes.ts";
+import simulatorUrl from "./assets/simulator-home.jpg?url";
 
 const LINK = "/w/demo/s/local/screen";
 
@@ -52,6 +53,27 @@ export const screenLinksDemo: DemoExtension = {
   },
 };
 
+/** A simulator booted on the demo station, as its list and a link's card say it. */
+const SIMULATOR: ScreensView["screens"][number] = {
+  id: "simulator:8A1704F6-57D2-40B0-A330-B98038CB17C3", kind: "simulator", title: "iPhone 15 Pro · iOS 17.0", width: 1179, height: 2556, viewers: [],
+  line: "iOS 模拟器 · 1179×2556", link: `${LINK}/simulator%3A8A1704F6-57D2-40B0-A330-B98038CB17C3`,
+};
+/** The chat's first agent message linking a simulator it built the app on (src/screen/ScreenLink.tsx), its card live:
+ *  opened beside the chat from its corner, seen and driven there (src/pages/ChatPage.tsx). */
+export const simulatorLinkDemo: DemoExtension = {
+  stream: (name, params, emit, signal) => (name === "screen.view" ? play("live", false, params, emit, signal) : undefined),
+  topic: (t) => (t.topic === "screenCard" ? { kind: "simulator", title: SIMULATOR.title, line: SIMULATOR.line, link: SIMULATOR.link, gone: false, peek: true, width: SIMULATOR.width, height: SIMULATOR.height } satisfies ScreenCard
+    : t.topic === "screens" ? { ...SCREENS, screens: [...SCREENS.screens, SIMULATOR] } : undefined),
+  call: (name, p) => (name === "screen.input" ? (heard.push(p.input), null) : name === "screen.ack" || name === "screen.keyframe" || name === "screen.control" ? null : undefined),
+  then: (t, value) => {
+    if (t.topic !== "chat" || !value) return undefined;
+    const chat = value as { messages: { authorKind: string; text: string }[] };
+    const first = chat.messages.findIndex((m) => m.authorKind === "agent");
+    const said = ["装好了，在模拟器上开着，你直接点：", `https://app.still.fail${SIMULATOR.link}`, "登录页的按钮我改成了蓝色。"].join("\n\n");
+    return { ...chat, messages: chat.messages.map((m, i) => (i === first ? { ...m, text: said } : m)) };
+  },
+};
+
 /** A link to the demo station's 共享调试 as an agent posts it (src/AdbLink.tsx), on the web (which cannot lend its adb) or as a phone lent there says it. */
 export function adbLinksDemo(lent: boolean): DemoExtension {
   const card: AdbCard = lent
@@ -77,7 +99,9 @@ export function adbLinksDemo(lent: boolean): DemoExtension {
 export type ViewStory = "connecting" | "live" | "readOnly" | "undrivable" | "agent" | "reconnecting" | "ended" | "outdated" | "gone" | "denied" | "failed"
   /** Driving it with its clipboard and files (docs/remote-screens.md "Clipboard and files"): a copy made on it this browser
    *  would not write itself (offered), a file dragged over it, files dropped and on their way, and there. */
-  | "copied" | "dragging" | "sending" | "sent";
+  | "copied" | "dragging" | "sending" | "sent"
+  /** Driving a Windows station's desktop: its display's scale offered (300%, 150% recommended), set as chosen. */
+  | "windows";
 const TRANSFER: ViewStory[] = ["copied", "dragging", "sending", "sent"];
 /** Where the demo station puts a file dropped on its screen. */
 const DROP = { folder: "/Users/zhangsan/Downloads", reveal: true };
@@ -214,6 +238,15 @@ async function asJpeg(): Promise<Sent> {
   return { codec: "jpeg", frames };
 }
 
+/** A booted iPhone's home screen (a real one's, `simctl io screenshot`), as a simulator's view sends it: one JPEG. */
+async function simulatorJpeg(): Promise<Sent & { width: number; height: number }> {
+  const bytes = new Uint8Array(await (await fetch(simulatorUrl)).arrayBuffer());
+  const picture = await createImageBitmap(new Blob([bytes], { type: "image/jpeg" }));
+  const size = { width: picture.width, height: picture.height };
+  picture.close();
+  return { codec: "jpeg", frames: [{ key: true, ts: 0, bytes }], ...size };
+}
+
 /** The same as H.264 (Baseline, AVCC: length-prefixed NALs, the avcC beside the config), where the browser encodes it. */
 async function asH264(): Promise<Sent | null> {
   const config: VideoEncoderConfig = { codec: "avc1.42E032", width: W, height: H, avc: { format: "avc" }, bitrate: 3_000_000, framerate: 10, latencyMode: "realtime" };
@@ -281,13 +314,21 @@ function lineOf(s: ScreenViewState, agent: boolean): string {
 async function play(story: ViewStory, h264: boolean, params: Record<string, unknown>, emit: (value: unknown, bytes?: Uint8Array) => void, signal: AbortSignal): Promise<null> {
   const may = story !== "readOnly";
   const browser = String(params.screen).startsWith("browser:");
+  const simulator = String(params.screen).startsWith("simulator:");
   const state: ScreenViewState = {
-    phase: "connecting", title: browser ? "登录 · GitHub" : "桌面", kind: browser ? "browser" : "desktop",
+    phase: "connecting", title: browser ? "登录 · GitHub" : simulator ? "iPhone 15 Pro · iOS 17.0" : "桌面", kind: browser ? "browser" : simulator ? "simulator" : "desktop",
     control: may && params.control !== false, may, others: ["张三"], controllers: [], takeOver: false, line: "",
   };
   // An agent drives it as it opens: the core opens it to look (no `control` asked), 接管 at hand.
   const agent = story === "agent";
   if (TRANSFER.includes(story)) Object.assign(state, { clipboard: ["text", "png"], drop: DROP });
+  // How its pictures are made, as a station says it: a Mac's desktop on the hardware encoder, a Windows one's, a tab's.
+  state.video = browser ? { capture: "Chrome screencast", encoder: "JPEG" }
+    : simulator ? { capture: "CoreSimulator", encoder: "hardware, low latency, H264_ConstrainedBaseline_AutoLevel, 1613520 bps", hardware: true }
+    : story === "windows" ? { capture: "Windows.Graphics.Capture", encoder: "NVIDIA HEVC Encoder MFT, H.265 main, 1500000 bps", hardware: true }
+    : { capture: "ScreenCaptureKit", encoder: "hardware, low latency, HEVC_Main_AutoLevel, 1500000 bps", hardware: true };
+  state.latency = { frame: 46, before: 9 };
+  if (story === "windows") state.scale = { percent: 300, recommended: 150, steps: [100, 125, 150, 175, 200, 225, 250, 300, 350] };
   if (agent) Object.assign(state, { control: false, others: [AGENT, "张三"], controllers: [AGENT], takeOver: true });
   const say = () => { state.line = lineOf(state, agent); emit({ state: { ...state, others: [...state.others], controllers: [...(state.controllers ?? [])] } }); };
   const name = String(params.view);
@@ -306,14 +347,15 @@ async function play(story: ViewStory, h264: boolean, params: Record<string, unkn
   // Live: the config, then frames (here: a few, the password being typed), in H.264 where both ends have it.
   await wait(200, signal);
   const codecs = Array.isArray(params.codecs) ? params.codecs : ["jpeg"];
-  const sent = (h264 && codecs.includes("h264") ? await asH264() : null) ?? await asJpeg();
+  const sent: Sent & { width?: number; height?: number } = simulator ? await simulatorJpeg() : (h264 && codecs.includes("h264") ? await asH264() : null) ?? await asJpeg();
   if (signal.aborted) throw cancelled();
   seen.codec = sent.codec;
-  emit({ config: { codec: sent.codec, width: W, height: H } }, sent.description);
+  const width = sent.width ?? W, height = sent.height ?? H;
+  emit({ config: { codec: sent.codec, width, height } }, sent.description);
   for (const [i, f] of sent.frames.entries()) {
     emit({ frame: { key: f.key, ts: f.ts } }, f.bytes);
     if (i === 0) {
-      Object.assign(state, { phase: "live", codec: sent.codec, width: W, height: H, cursor: { x: 0.5, y: 0.565, shape: "default" } });
+      Object.assign(state, { phase: "live", codec: sent.codec, width, height, ...(simulator ? {} : { cursor: { x: 0.5, y: 0.565, shape: "default" } }) });
       // Seen, but not driven: the station lacks Accessibility.
       if (story === "undrivable") Object.assign(state, { control: false, access: NO_CONTROL });
       say();
@@ -364,7 +406,14 @@ export function screensDemo(story: ViewStory = "live", list: ScreensView = SCREE
         }
         return null;
       }
-      if (name === "screen.input") { heard.push(p.input); return null; }
+      if (name === "screen.input") {
+        heard.push(p.input);
+        // The display's scale set: said back as the station says it.
+        const input = p.input as { t?: string; percent?: number } | undefined;
+        const v = views.get(String(p.view));
+        if (input?.t === "scale" && v?.state.scale && typeof input.percent === "number") { v.state.scale = { ...v.state.scale, percent: input.percent }; v.say(); }
+        return null;
+      }
       if (name === "screen.clipboard") { heard.push({ clipboard: p }); return null; }
       if (name === "drive.upload.part") {
         // Sent: each whole at once. On its way: the small one there, the large one a third of the way and no further.

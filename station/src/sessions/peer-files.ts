@@ -12,7 +12,7 @@ import { CHUNK, hash } from "../jobs/remote.ts";
 import { withLock, workspaceFile } from "./archive.ts";
 import { roomOf } from "./footprint.ts";
 import type { Hub } from "./hub.ts";
-import { imageSize } from "./image-size.ts";
+import { shownSize } from "./image-size.ts";
 import { Refused } from "./neighbours.ts";
 import { fromBefore, named, reachable } from "./others.ts";
 
@@ -34,8 +34,6 @@ const MAX_SENT = 50 * 1024 * 1024;
 /// A file sent along that its message never claimed is removed after this long.
 const STAGED_MS = 24 * 3600 * 1000;
 
-const IMAGES = [".png", ".jpg", ".jpeg", ".gif", ".webp"];
-
 /// A name as a file in uploads is named: stamped, nothing that leaves the directory.
 function uploadName(hub: Hub, name: string): string {
   const stamp = iso(hub.now()).slice(0, 19).replace(/[:.]/g, "-");
@@ -45,10 +43,10 @@ function uploadName(hub: Hub, name: string): string {
   return `${stamp}-${safe}`;
 }
 
-/// An attachment as messages keep it: images measured, so pages hold their place.
+/// An attachment as messages keep it: pictures and films measured, so pages hold their place.
 function attachment(name: string, path: string, size: number): Attachment {
   const found: Attachment = { name, path, size };
-  const measured = IMAGES.some((e) => name.toLowerCase().endsWith(e)) ? imageSize(path) : null;
+  const measured = shownSize(path);
   if (measured) [found.width, found.height] = measured;
   return found;
 }

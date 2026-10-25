@@ -25,7 +25,6 @@ import * as barsCss from "./styles/bars.css.ts";
 import * as settingsCss from "./styles/settings.css.ts";
 import * as listsCss from "./styles/lists.css.ts";
 import * as partsCss from "./styles/parts.css.ts";
-import * as historyCss from "./styles/history.css.ts";
 import * as css from "./Profiles.css.ts";
 import * as connectsCss from "./Connects.css.ts";
 import * as sheetsCss from "./styles/sheets.css.ts";
@@ -34,6 +33,7 @@ import * as chatCss from "./styles/chat.css.ts";
 import { NAME } from "../channel.ts";
 import { t } from "../i18n.ts";
 import { StationMark } from "../StationMark.tsx";
+import { useInStation } from "../screen/InStation.tsx";
 import { StationInWords, StationNamedAt } from "../StationNamed.tsx";
 function useApi() {
   const station = useStation();
@@ -203,6 +203,29 @@ export function ProfileAccountScreen() {
 
 /** Sharing a profile with the workspace's other stations (as the desktop's ShareSection): a switch; once on, where a
  * subscription is signed in (moved from here) and which stations may use it. A copy of another station's says whose. */
+/**
+ * Whom a profile is shared with, one card under 分享: the station's other workspaces whose chats may use it, the
+ * workspace's other stations (a copy of another station's, whose it is). None of either to say, no section.
+ */
+function Sharing({ p }: { p: Profile }) {
+  const station = useStation();
+  const overview = useOverview(station.address).value;
+  const m = useMemberships(station.address).value;
+  const copy = p.share?.role === "user";
+  const workspaces = !copy && !!m?.manages && m.workspaces.some((w) => !w.home);
+  if (!workspaces && !overview?.sharing) return null;
+  return (
+    <>
+      <SectionHeader title={t("web-pages.profiles.share.title")} start={24} />
+      <ListCard>
+        {workspaces && <WorkspaceRows p={p} />}
+        {overview?.sharing && <ShareRows p={p} />}
+      </ListCard>
+    </>
+  );
+}
+
+/** Its sharing with the workspace's other stations: rows of its 分享 card (Sharing). */
 function ShareRows({ p }: { p: Profile }) {
   const app = useApp();
   const sheet = useStationSheet();
@@ -221,8 +244,6 @@ function ShareRows({ p }: { p: Profile }) {
     const host = stations.find((x) => x.id === p.share!.host)?.name ?? p.share.host.slice(0, 8);
     return (
       <>
-        <SectionHeader title={t("web-pages.profiles.share.title")} start={24} />
-        <ListCard>
           <ListRow onClick={lender ? () => app.push(app.at(`/s/${lender.stationId}/settings/accounts/${encodeURIComponent(lender.profileId)}`)) : undefined}>
             <span className={`${partsCss.mGrow} ${listsCss.mRowText}`}>
               <span className={listsCss.mRowTitle}>{t("web-main.memory.share.from", { station: host })}</span>
@@ -231,7 +252,6 @@ function ShareRows({ p }: { p: Profile }) {
             </span>
             {lender && <ChevronRight size={14} className={partsCss.mSubtle} />}
           </ListRow>
-        </ListCard>
       </>
     );
   }
@@ -253,8 +273,6 @@ function ShareRows({ p }: { p: Profile }) {
   ) });
   return (
     <>
-      <SectionHeader title={t("web-pages.profiles.share.title")} start={24} />
-      <ListCard>
         <ListRow onClick={sharing ? undefined : () => act(api.shareProfile(p.id, !shared, null), t("web-pages.profiles.share.switch"), shared ? t("web-pages.profiles.share.unshared") : t("web-pages.profiles.share.shared"))}>
           <span className={`${partsCss.mGrow} ${listsCss.mRowText}`}>
             <span className={listsCss.mRowTitle}>{t("web-pages.profiles.share.switch")}</span>
@@ -281,7 +299,6 @@ function ShareRows({ p }: { p: Profile }) {
             <ChevronRight size={14} className={partsCss.mSubtle} />
           </ListRow>
         )}
-      </ListCard>
     </>
   );
 }
@@ -432,26 +449,33 @@ function ProfilePage({ p }: { p: Profile }) {
   const refreshing = useDoing("profile.quota", { station: station.address, id: p.id });
   const checkFailed = useDoingFailed("profile.check", { station: station.address, id: p.id });
   const quotaFailed = useDoingFailed("profile.quota", { station: station.address, id: p.id });
-  const signingIn = !!p.login && ["starting", "needs_code", "needs_approval", "verifying"].includes(p.login.state);
   const keyed = KEYED.has(p.access.kind) && !p.access.login;
   // A copy of another station's: shown, used, changed only there.
   const copy = p.share?.role === "user";
-  const signs = !copy && (p.access.kind === "subscription" || !!p.access.login) && !p.machine;
-  const detail = p.check ? p.check.detail.replace(/^可用[，,]\s*/, "") : t("web-mobile.profiles.notChecked");
+  const signs = !copy && signsIn(p);
+  const detail = p.check ? p.checkLine ?? "" : t("web-mobile.profiles.notChecked");
   const checked = p.check?.time?.checkedAt ? t("web-mobile.profiles.checkedAgo", { ago: p.check.time.checkedAt.ago }) : "";
-  const line = detail !== p.checkText ? detail + checked : checked.replace(/^ · /, "");
+  // What it is now in a line: what is wrong (its trouble's title), else what its check said beyond its words, else they;
+  // under it a dot of its tone, its words (when that line is not they) and when it was checked, coloured only when off.
+  const first = p.trouble?.title || (detail && detail !== p.checkText ? detail : p.checkText);
+  const said = first !== p.checkText;
+  const under = said ? p.checkText + checked : checked.replace(/^ · /, "");
   const head = (
-    <>
-      <ProviderMark runtime={p.runtime} kind={p.access.kind} mark={p.providerMark} size={26} />
-      <span className={partsCss.mGrow}>
-        <span className={`${historyCss.mPill} ${css.mCheckPill}`} data-tone={p.checkTone}>{p.checkText}</span>
-        {/* What the check said beyond its pill (需要登录 under 需要登录 says nothing more), and when. */}
-        {line && <span className={`${listsCss.mRowNote} ${settingsCss.mWrap}`}>{line}</span>}
-        {(checking || refreshing) && <span className={`${listsCss.mRowNote} ${chatCss.mWaiting}`}><Spinner inline />{checking ? t("web-mobile.versions.checking") : t("web-mobile.profiles.refreshingQuota")}</span>}
-        {!checking && checkFailed !== undefined && <span className={`${listsCss.mRowNote} ${chatCss.mWaiting} ${partsCss.mRed}`}><FailedMark error={checkFailed} size={12} />{t("web-mobile.profiles.checkFailed", { error: checkFailed })}</span>}
-        {!refreshing && quotaFailed !== undefined && <span className={`${listsCss.mRowNote} ${chatCss.mWaiting} ${partsCss.mRed}`}><FailedMark error={quotaFailed} size={12} />{t("web-mobile.profiles.quotaFailed", { error: quotaFailed })}</span>}
+    <span className={css.mAccount}>
+      <span className={settingsCss.mProfileHead}>
+        <ProviderMark runtime={p.runtime} kind={p.access.kind} mark={p.providerMark} size={26} />
+        <span className={partsCss.mGrow}>
+          <span className={`${listsCss.mRowTitle} ${settingsCss.mWrap}`}>{first}</span>
+          {(checking || under) && <span className={`${listsCss.mRowNote} ${css.mAccountState}`} data-tone={said ? p.checkTone : undefined}>
+            <Presence state={toneDot(p.checkTone)} />{checking ? <><Spinner inline />{t("web-mobile.versions.checking")}</> : under}
+          </span>}
+          {!checking && checkFailed !== undefined && <span className={`${listsCss.mRowNote} ${chatCss.mWaiting} ${partsCss.mRed}`}><FailedMark error={checkFailed} size={12} />{t("web-mobile.profiles.checkFailed", { error: checkFailed })}</span>}
+          {!refreshing && quotaFailed !== undefined && <span className={`${listsCss.mRowNote} ${chatCss.mWaiting} ${partsCss.mRed}`}><FailedMark error={quotaFailed} size={12} />{t("web-mobile.profiles.quotaFailed", { error: quotaFailed })}</span>}
+        </span>
       </span>
-    </>
+      {/* In trouble: why and what to do, on the same card. */}
+      {p.trouble && <Trouble p={p} />}
+    </span>
   );
   return (
     <div className={pagesCss.mScreen}>
@@ -459,7 +483,7 @@ function ProfilePage({ p }: { p: Profile }) {
         trailing={copy ? undefined : <NavButton icon={More} label={t("common.more")} onClick={() => sheet({ height: 0.5, content: () => <ProfileMenu p={p} /> })} />} />
       <div className={`${pagesCss.mScroll} ${settingsCss.mStationPage}`}>
         {/* Where it stands, on the account's one card: a subscription's heads its sign-in, a key's its key. */}
-        {signs ? <SignIn p={p} needed={p.check?.state === "login" || signingIn} head={head} />
+        {signs ? <SignIn p={p} head={head} />
           : keyed && !copy ? (
             <ListCard>
               <div className={`${settingsCss.mProfileHead} ${css.mHeadRow}`}>{head}</div>
@@ -467,18 +491,13 @@ function ProfilePage({ p }: { p: Profile }) {
             </ListCard>
           )
           : <div className={`${listsCss.mCard} ${settingsCss.mProfileHead}`}>{head}</div>}
-        {p.trouble && <ProfileRecovery p={p} />}
         {p.trouble?.action !== "quota" && <Quota p={p} />}
-        {overview?.sharing && <ShareRows p={p} />}
-        {!copy && <WorkspaceRows p={p} />}
-        {!copy && p.fast != null && <><SectionHeader title={t("web-mobile.profiles.run")} start={24} /><ListCard><FastRow p={p} /></ListCard></>}
-        {!copy && <Models p={p} put={(models) => api.putProfile(p.id, { models })} />}
-        {/* A station older than the setting says nothing of it. */}
-        {!copy && p.runtimes.includes("claude") && p.backgroundOnMessage !== undefined && (
+        {p.access.kind === "env" && !copy && (
           <>
-            <SectionHeader title={t("web-mobile.profiles.run")} start={24} />
+            <SectionHeader title={t("web-mobile.profiles.env")} start={24} />
             <ListCard>
-              <BackgroundRow p={p} put={(on) => api.putProfile(p.id, { backgroundOnMessage: on })} />
+              {p.env.map((e) => <ListRow key={e.key}><span className={`${partsCss.mGrow} ${listsCss.mRowText}`}><span className={`${listsCss.mRowTitle} ${css.mMono}`}>{e.key}</span><span className={`${listsCss.mRowNote} ${css.mMono}`}>{e.value}</span></span></ListRow>)}
+              <ListRow onClick={() => sheet({ height: 0.8, draggable: true, content: () => <EnvSheet p={p} /> })}><span className={`${partsCss.mAccent} ${listsCss.mRowTitle}`}>{t("web-mobile.profiles.editEnv")}</span></ListRow>
             </ListCard>
           </>
         )}
@@ -491,15 +510,10 @@ function ProfilePage({ p }: { p: Profile }) {
             </ListRow>
           ))}
         </ListCard>
-        {p.access.kind === "env" && !copy && (
-          <>
-            <SectionHeader title={t("web-mobile.profiles.env")} start={24} />
-            <ListCard>
-              {p.env.map((e) => <ListRow key={e.key}><span className={`${partsCss.mGrow} ${listsCss.mRowText}`}><span className={`${listsCss.mRowTitle} ${css.mMono}`}>{e.key}</span><span className={`${listsCss.mRowNote} ${css.mMono}`}>{e.value}</span></span></ListRow>)}
-              <ListRow onClick={() => sheet({ height: 0.8, draggable: true, content: () => <EnvSheet p={p} /> })}><span className={`${partsCss.mAccent} ${listsCss.mRowTitle}`}>{t("web-mobile.profiles.editEnv")}</span></ListRow>
-            </ListCard>
-          </>
-        )}
+        {/* A decision model's models are said, not picked. */}
+        {!copy && p.decisionOnly && <Models p={p} put={(models) => api.putProfile(p.id, { models })} />}
+        {!copy && <RunRows p={p} />}
+        <Sharing p={p} />
         <div style={{ height: 30 }} />
       </div>
     </div>
@@ -528,8 +542,11 @@ function KeyRows({ p }: { p: Profile }) {
   );
 }
 
-/** The core supplies the diagnosis and next step; the view opens the existing operation or editor. */
-function ProfileRecovery({ p }: { p: Profile }) {
+/**
+ * What is wrong with a profile in trouble and its next step, on its account's card under where it stands (whose first
+ * line its title is): the core supplies the diagnosis; the view opens the existing operation or editor.
+ */
+function Trouble({ p }: { p: Profile }) {
   const app = useApp();
   const sheet = useStationSheet();
   const station = useStation();
@@ -547,11 +564,10 @@ function ProfileRecovery({ p }: { p: Profile }) {
     else if (issue.action === "quota") act(api.refreshQuota(p.id), t("web-mobile.profiles.what.quota"), t("web-mobile.profiles.quotaUpdated"));
     else act(api.checkProfile(p.id), t("web-mobile.profiles.what.check"), t("web-mobile.profiles.checked"));
   };
-  return <>
-    <SectionHeader title={issue.title} start={24} />
-    <div className={`${listsCss.mCard} ${settingsCss.mFormGroup}`}>
-      <p className={`${partsCss.mSmall} ${settingsCss.mWrap}`}>{issue.detail}</p>
-      <p className={`${partsCss.mMuted} ${partsCss.mSmall}`}>{issue.next}</p>
+  return (
+    <div className={css.mTrouble}>
+      {issue.detail && <p className={`${partsCss.mSmall} ${settingsCss.mWrap}`}>{issue.detail}</p>}
+      {issue.next && <p className={`${partsCss.mMuted} ${partsCss.mSmall}`}>{issue.next}</p>}
       {!station.online && <p className={`${partsCss.mMuted} ${partsCss.mSmall}`}>{<StationInWords station={station.address} text={t("web-mobile.profiles.stationOffline", { station: station.name })} />}</p>}
       {issue.action === "command" && <CommandBox text={p.loginCommand} />}
       {issue.action !== "login" && <LinkButton label={issue.label} enabled={station.online}
@@ -559,14 +575,20 @@ function ProfileRecovery({ p }: { p: Profile }) {
       {["key", "env"].includes(issue.action) && <LinkButton label={t("web-mobile.profiles.recheck")} enabled={station.online} busy={checking} failed={checkFailed}
         onClick={() => act(api.checkProfile(p.id), t("web-mobile.profiles.what.check"), t("web-mobile.profiles.checked"))} />}
     </div>
-  </>;
+  );
 }
 
-/** Renaming, checking, refreshing its allowance, deleting it (stopping one on the machine's login); not while a connect uses it. */
+/**
+ * Renaming, checking (its allowance read again with it), signing its account in again or by hand on the machine while
+ * its card asks for neither (signed in and well), deleting it (stopping one on the machine's login); not while a connect
+ * uses it.
+ */
 function ProfileMenu({ p }: { p: Profile }) {
   const app = useApp();
   const api = useApi();
+  const start = useStartSignIn(p);
   const station = useStation().address;
+  const signing = useDoing("profile.login", { station, id: p.id });
   const failed = (key: string) => (e: Error) => app.toast(t(key, { error: e.message }));
   // The sheet closes at once; the profile's card says it is under way (ProfilePage), and these rows if opened again.
   const checking = useDoing("profile.check", { station, id: p.id });
@@ -579,8 +601,17 @@ function ProfileMenu({ p }: { p: Profile }) {
       <SheetHead title={p.name} />
       <div className={sheetsCss.mSheetScroll}>
         {!p.machine && <PickRow label={t("web-mobile.stations.rename")} onClick={() => ask(app, { title: t("web-mobile.profiles.renameTitle"), value: p.name, placeholder: t("web-mobile.workspaces.name"), action: t("common.save"), atOnce: "web-main.rename.failed", run: (name) => api.putProfile(p.id, { name }).then(() => app.toast(t("web-mobile.workspace.renamed"))) })} />}
-        <PickRow label={t("web-mobile.profiles.recheck")} busy={checking} failed={checkFailed} onClick={() => { app.sheet(null); api.checkProfile(p.id).then(() => app.toast(t("web-mobile.profiles.checked")), failed("web-mobile.profiles.checkFailed")); }} />
-        <PickRow label={t("web-mobile.profiles.refreshQuota")} busy={refreshing} failed={quotaFailed} onClick={() => { app.sheet(null); api.refreshQuota(p.id).then(() => app.toast(t("web-mobile.profiles.quotaRefreshed")), failed("web-mobile.profiles.quotaFailed")); }} />
+        {/* Checked again with its allowance read again: whether it works and how much is left, as of now. */}
+        <PickRow label={t("web-mobile.profiles.recheck")} busy={checking || refreshing} failed={checkFailed ?? quotaFailed} onClick={() => {
+          app.sheet(null);
+          api.checkProfile(p.id).then(() => app.toast(t("web-mobile.profiles.checked")), failed("web-mobile.profiles.checkFailed"));
+          if (p.quota && p.quota.state !== "unsupported") api.refreshQuota(p.id).catch(failed("web-mobile.profiles.quotaFailed"));
+        }} />
+        {signsIn(p) && !signInAsked(p) && <>
+          <PickRow label={t("web-mobile.profiles.relogin")} busy={signing} onClick={() => { app.sheet(null); start(); }} />
+          {/* OpenCode's has no command to run by hand. */}
+          {p.loginCommand && <PickRow label={t("web-mobile.profiles.manualShort")} onClick={() => app.sheet({ height: 0.36, content: () => <ManualSignIn command={p.loginCommand} /> })} />}
+        </>}
         <PickRow label={p.machine ? t("web-mobile.connects.disable") : t("web-mobile.profiles.delete")} accent onClick={() => confirm(app, p.machine ? {
           title: t("web-mobile.profiles.disableAsk", { name: p.name }), text: t("web-mobile.profiles.disableText", { name: NAME }), action: t("web-mobile.connects.disable"), danger: true, atOnce: "web-mobile.connects.disableFailed",
           run: () => { app.pop(); return api.deleteProfile(p.id).then(() => app.toast(t("web-mobile.profiles.disabled"))); },
@@ -593,10 +624,52 @@ function ProfileMenu({ p }: { p: Profile }) {
   );
 }
 
+/** The command to sign a profile's account in on the machine by hand, in a sheet of its own (from its "…"). */
+function ManualSignIn({ command }: { command: string }) {
+  return (
+    <>
+      <SheetGrab />
+      <SheetHead title={t("web-mobile.profiles.manualShort")} />
+      <div className={`${sheetsCss.mSheetScroll} ${sheetsCss.mForm}`}><CommandBox text={command} /></div>
+    </>
+  );
+}
+
 /**
  * Which of the workspaces the station joined may run their chats on it (as the desktop's WorkspacesSection), a
  * switch each: for its home workspace's owners and admins, once the station is in more than one.
  */
+/**
+ * Which of a profile's models may be used, on a screen of their own from its 运行's 模型 row
+ * (s/<station>/settings/accounts/<id>/models/edit): how many are on under its title, then the models themselves.
+ */
+export function ProfileModelsScreen() {
+  const app = useApp();
+  const api = useApi();
+  const station = useStation();
+  const { id = "" } = useParams();
+  const overview = useOverview(station.address);
+  const p = overview.value?.profiles.find((x) => x.id === id);
+  const title = t("web-pages.profiles.models");
+  if (!p) {
+    return (
+      <div className={pagesCss.mScreen}>
+        <NavBar back="Profile" onBack={app.pop} title={title} />
+        {overview.value ? <Gone text={t("web-mobile.profiles.notFound")} /> : <Waiting fill shape="cards" error={overview.error?.message} />}
+      </div>
+    );
+  }
+  return (
+    <div className={pagesCss.mScreen}>
+      <NavBar back={p.name} onBack={app.pop} title={title} sub={p.models.length > 0 ? <span className={barsCss.mNavbarNote}>{t("web-mobile.profiles.pickModels.selected", { n: p.models.length })}</span> : undefined} />
+      <div className={pagesCss.mScroll}>
+        <Models p={p} put={(models) => api.putProfile(p.id, { models })} page />
+      </div>
+    </div>
+  );
+}
+
+/** The station's other workspaces whose chats may use the profile too, a switch each: rows of its 分享 card (Sharing). */
 function WorkspaceRows({ p }: { p: Profile }) {
   const api = useApi();
   const station = useStation();
@@ -608,8 +681,6 @@ function WorkspaceRows({ p }: { p: Profile }) {
   if (joined.length === 0) return null;
   return (
     <>
-      <SectionHeader title={t("web-pages.profiles.workspaces.title")} start={24} />
-      <ListCard>
         {joined.map((w) => {
           const on = now.includes(w.workspace);
           return (
@@ -624,12 +695,42 @@ function WorkspaceRows({ p }: { p: Profile }) {
             </ListRow>
           );
         })}
+    </>
+  );
+}
+
+/**
+ * How it runs, one card under 运行: which of its models may be used (a row to their page: how many of how many on), its
+ * subscription's default Fast, and commands put to the background as a new message comes (Claude Code's; a station
+ * older than the setting says nothing of it).
+ */
+function RunRows({ p }: { p: Profile }) {
+  const app = useApp();
+  const api = useApi();
+  const station = useStation();
+  const picks = !p.decisionOnly;
+  const background = p.runtimes.includes("claude") && p.backgroundOnMessage !== undefined;
+  if (!picks && p.fast == null && !background) return null;
+  const all = (p.available ?? []).length;
+  return (
+    <>
+      <SectionHeader title={t("web-mobile.profiles.run")} start={24} />
+      <ListCard>
+        {picks && (
+          <ListRow onClick={() => app.push(`${stationBase(station.address)}/settings/accounts/${encodeURIComponent(p.id)}/models/edit`)}>
+            <span className={`${partsCss.mGrow} ${listsCss.mRowTitle}`}>{t("web-pages.profiles.models")}</span>
+            {p.modelsSaving != null && <Spinner inline />}
+            <span className={listsCss.mRowNote}>{all > 0 ? `${p.models.length} / ${all}` : `${p.models.length}`}</span>
+            <ChevronRight size={14} className={partsCss.mSubtle} />
+          </ListRow>
+        )}
+        {p.fast != null && <FastRow p={p} />}
+        {background && <BackgroundRow p={p} put={(on) => api.putProfile(p.id, { backgroundOnMessage: on })} />}
       </ListCard>
     </>
   );
 }
 
-/** Its allowance, window by window: what is left and when it refills; why it cannot be read, when the provider says. */
 function FastRow({ p }: { p: Profile }) {
   const api = useApi();
   const station = useStation();
@@ -644,35 +745,44 @@ function FastRow({ p }: { p: Profile }) {
   </ListRow>;
 }
 
+/**
+ * Its allowance, the card under its account's, no title over it (its windows say what they are): window by window what
+ * is left and when it refills, its credits, its resets; when it was read under them (read again from the page's "…" with
+ * its check). One that could not be read says why; none to read (a key's), no card.
+ */
 function Quota({ p }: { p: Profile }) {
   const app = useApp();
   const api = useApi();
   const station = useStation();
+  const refreshing = useDoing("profile.quota", { station: station.address, id: p.id });
   const busy = useDoing("profile.resetQuota", { station: station.address, id: p.id });
   const error = useDoingFailed("profile.resetQuota", { station: station.address, id: p.id });
   const windows = p.quota?.state === "ok" ? p.quota.windows : [];
   const trouble = quotaTrouble(p.quota);
   if (trouble) {
     return (
-      <>
-        <SectionHeader title={t("web-mobile.profiles.quota")} trailing={p.quota?.time?.checkedAt ? t("web-mobile.profiles.quotaChecked", { ago: p.quota.time.checkedAt.ago }) : undefined} start={24} />
-        <ListCard>
-          <ListRow>
-            <span className={`${partsCss.mGrow} ${listsCss.mRowText}`}>
-              <span className={listsCss.mRowTitle}><Presence state={p.quota?.state === "blocked" ? "error" : "offline"} /> {p.quota?.state === "blocked" ? t("web-mobile.history.blocked") : t("web-mobile.profiles.noQuota")}</span>
-              <span className={`${listsCss.mRowNote} ${settingsCss.mWrap}`}>{trouble}</span>
-            </span>
-          </ListRow>
-        </ListCard>
-      </>
+      <ListCard>
+        <ListRow>
+          <span className={`${partsCss.mGrow} ${listsCss.mRowText}`}>
+            <span className={listsCss.mRowTitle}><Presence state={p.quota?.state === "blocked" ? "error" : "offline"} /> {p.quota?.state === "blocked" ? t("web-mobile.history.blocked") : t("web-mobile.profiles.noQuota")}</span>
+            <span className={`${listsCss.mRowNote} ${settingsCss.mWrap}`}>{trouble}</span>
+          </span>
+        </ListRow>
+      </ListCard>
     );
   }
   if (!windows.length && !p.quota?.creditsText && p.quota?.resetCount == null) return null;
   return (
     <>
-      <SectionHeader title={t("web-mobile.profiles.quota")} trailing={p.quota?.time?.checkedAt ? t("web-mobile.profiles.quotaChecked", { ago: p.quota.time.checkedAt.ago }) : undefined} start={24} />
       <ListCard>
-        {!!windows.length && <div className={css.mQuotaDials}><QuotaBars quota={p.quota} /></div>}
+        {!!windows.length && (
+          <div className={css.mQuotaDials}>
+            <QuotaBars quota={p.quota} />
+            {/* When it was read, under them (being read: said so). */}
+            {refreshing ? <WaitLine className={css.mQuotaRead} text={t("web-mobile.profiles.refreshingQuota")} />
+              : p.quota?.time?.checkedAt && <p className={css.mQuotaRead}>{t("web-mobile.profiles.quotaChecked", { ago: p.quota.time.checkedAt.ago })}</p>}
+          </div>
+        )}
         {p.quota?.creditsText && <ListRow><span className={`${partsCss.mGrow} ${listsCss.mRowTitle}`}>{t("web-mobile.profiles.credits")}</span><span className={listsCss.mRowNote}>{p.quota.creditsText}</span></ListRow>}
         {p.quota?.resetCount != null && <ListRow onClick={p.quota.resetCount > 0 && !busy ? () => confirm(app, {
           title: t("web-mobile.profiles.resetAsk"), text: t("web-mobile.profiles.resetText", { name: p.name, reset: p.quota?.resetText ?? "" }), action: t("web-mobile.profiles.resetAction"), atOnce: "web-mobile.profiles.resetFailed",
@@ -738,7 +848,7 @@ function BackgroundRow({ p, put }: { p: Profile; put: (on: boolean) => Promise<u
 }
 
 /** Which of its models may be used: one per line, a filter when there are many, and all / none of what is shown. */
-function Models({ p, put, bare = false }: { p: Profile; put: (models: string[]) => Promise<unknown>; bare?: boolean }) {
+function Models({ p, put, bare = false, page = false }: { p: Profile; put: (models: string[]) => Promise<unknown>; bare?: boolean; page?: boolean }) {
   const station = useStation();
   const api = useApi();
   const act = useAct();
@@ -751,7 +861,7 @@ function Models({ p, put, bare = false }: { p: Profile; put: (models: string[]) 
   const models = p.models;
   const busy = p.modelsSaving != null;
   const ask = (models: string[]) => act(put(models), t("web-mobile.profiles.what.models"));
-  const save = (next: string[]) => ask([...new Set(next)].sort());
+  const save = (next: string[]) => ask(next);
   const filtered = !!filter.trim();
   const [typed, setTyped] = useState("");
   const adding = useDoing("profile.addModel", { station: station.address, id: p.id });
@@ -768,8 +878,9 @@ function Models({ p, put, bare = false }: { p: Profile; put: (models: string[]) 
   }
   return (
     <>
-      {/* On the step after it is added (PickModelsScreen) the screen says what these are. */}
-      {!bare && <SectionHeader title={t(busy ? "web-mobile.profiles.modelsSaving" : "web-mobile.profiles.models", { on: models.length, n: all.length })} start={24} />}
+      {/* On the step after it is added (PickModelsScreen) the screen says what these are; on their own page
+          (ProfileModelsScreen) its title how many are on. */}
+      {!bare && !page && <SectionHeader title={t(busy ? "web-mobile.profiles.modelsSaving" : "web-mobile.profiles.models", { on: models.length, n: all.length })} start={24} />}
       {!bare && <p className={css.mProfileNote}>{all.length === 0 ? t("web-mobile.profiles.modelsEmpty") : t("web-mobile.profiles.modelsNote")}</p>}
       <div className={`${settingsCss.mProfileTools} ${settingsCss.mProfileLinks}`}>
         <button type="button" className={partsCss.mLink} disabled={checking} onClick={() => act(api.checkProfile(p.id), t("web-mobile.profiles.what.refreshModels"), t("web-mobile.profiles.checkDone"))}>
@@ -810,15 +921,39 @@ function Models({ p, put, bare = false }: { p: Profile; put: (models: string[]) 
   );
 }
 
-/** A subscription's sign-in: run on the station's machine, the browser steps relayed here. */
-function SignIn({ p, needed, head }: { p: Profile; needed: boolean; head: ReactNode }) {
+const SIGNING_IN = ["starting", "needs_code", "needs_approval", "verifying"];
+/** Whether a profile is signed in to its account from here (a subscription's, or one on an account: OpenCode Go's,
+ *  Kimi Code's), not on the machine's own login. */
+const signsIn = (p: Profile) => (p.access.kind === "subscription" || !!p.access.login) && !p.machine;
+/** Whether its account is to be signed in to: its check says so, or a sign-in is under way. */
+const signInNeeded = (p: Profile) => p.check?.state === "login" || (!!p.login && SIGNING_IN.includes(p.login.state));
+/** Whether its sign-in's card asks for one (its buttons): needed, or the last one failed. Signed in and well, it is
+ *  asked for from its "…" (ProfileMenu) instead. */
+const signInAsked = (p: Profile) => signInNeeded(p) || p.login?.state === "failed";
+
+/** Its sign-in begun on the station; one that could not begin, said so. */
+function useStartSignIn(p: Profile) {
   const app = useApp();
   const api = useApi();
+  return () => { api.startLogin(p.id).catch((e: Error) => app.toast(t("web-mobile.profiles.startLoginFailed", { error: e.message }))); };
+}
+
+/**
+ * A subscription's sign-in: run on the station's machine, the browser steps relayed here. Signed in and well, the
+ * card only says where it stands (signing in again is in its "…"), and while one asked from there starts, the wait for
+ * its link.
+ */
+function SignIn({ p, head }: { p: Profile; head: ReactNode }) {
+  const app = useApp();
+  const api = useApi();
+  const start = useStartSignIn(p);
   const job = p.login;
-  const active = !!job && ["starting", "needs_code", "needs_approval", "verifying"].includes(job.state);
+  const active = !!job && SIGNING_IN.includes(job.state);
+  const needed = signInNeeded(p);
   const provider = p.access.kind === "opencode-go" ? "OpenCode" : p.access.provider === "kimi-code" ? "Kimi" : p.runtime === "claude" ? "Claude" : p.runtime === "grok" ? "Grok" : p.runtime === "cursor" ? "Cursor" : p.runtime === "devin" ? "Devin" : "ChatGPT";
   const busy = useDoing("profile.login", { station: useStation().address, id: p.id });
   const cancelling = useDoing("profile.cancelLogin", { station: useStation().address, id: p.id });
+  const inStationBusy = useDoing("profile.loginBrowser", { station: useStation().address, id: p.id });
   const [manual, setManual] = useState(false);
   const previous = useRef(job?.state);
   useEffect(() => {
@@ -838,20 +973,19 @@ function SignIn({ p, needed, head }: { p: Profile; needed: boolean; head: ReactN
           </button>
         )}
       </div>
-      {active ? <LoginSteps job={job} provider={provider} send={(code) => api.loginCode(p.id, code)} /> : (
+      {active ? <LoginSteps job={job} provider={provider} send={(code) => api.loginCode(p.id, code)} inStation={{ ask: () => api.loginBrowser(p.id), busy: inStationBusy }} /> : signInAsked(p) ? (
         <>
-          {/* Signed in: the pill above says so; only what was off, or how it is done, in words. */}
+          {/* What was off, or how it is done, in words. */}
           {job?.state === "failed" ? <p className={`${partsCss.mError} ${partsCss.mSmall}`}>{t("web-mobile.profiles.loginFailed", { error: job.error ?? "" })}</p>
             : needed ? <p className={`${partsCss.mMuted} ${partsCss.mSmall}`}>{t("web-mobile.profiles.loginWhere", { name: NAME })}</p> : null}
           <div className={css.mSignInActions}>
-            <Button label={job?.state === "done" || !needed ? t("web-mobile.profiles.relogin") : t("web-mobile.workspaces.signIn")} primary={needed && job?.state !== "done"} busy={busy}
-              onClick={() => { api.startLogin(p.id).catch((e: Error) => app.toast(t("web-mobile.profiles.startLoginFailed", { error: e.message }))); }} />
+            <Button label={job?.state === "done" || !needed ? t("web-mobile.profiles.relogin") : t("web-mobile.workspaces.signIn")} primary={needed && job?.state !== "done"} busy={busy} onClick={start} />
             {/* OpenCode's has no command to run by hand. */}
             {p.loginCommand && <LinkButton label={t("web-mobile.profiles.manualShort")} onClick={() => setManual(!manual)} />}
           </div>
           {manual && p.loginCommand && <CommandBox text={p.loginCommand} />}
         </>
-      )}
+      ) : busy ? <WaitLine text={t("web-mobile.profiles.loginLink", { provider })} /> : null}
     </div>
   );
 }
@@ -875,9 +1009,33 @@ function InstallStep({ install }: { install: RuntimeInstall }) {
   );
 }
 
-/** What the person does in the browser for a sign-in under way: open the page and paste the code back (Claude, Devin), copy the code and open the page (Codex), or only open the page and confirm there (Cursor). */
-function LoginSteps({ job, provider, send }: { job: LoginJob | null | undefined; provider: string; send: (code: string) => Promise<unknown> }) {
+/** What the person does in the browser for a sign-in under way: open the page and paste the code back (Claude, Devin), copy the code and open the page (Codex), or only open the page and confirm there (Cursor). Where its job says the
+ * station has a browser of its own (`browser`), the same page there (`inStation`: what asks the station to open it),
+ * seldom used: in a ⋯ after the page's button (docs/ui-panels.md: what is used least goes into the row's ⋯). Its tab's
+ * view opens here (screen/InStation.tsx); Claude's comes back to its command there, with no code to paste. */
+function LoginSteps({ job, provider, send, inStation }: {
+  job: LoginJob | null | undefined; provider: string; send: (code: string) => Promise<unknown>; inStation?: { ask(): Promise<unknown>; busy: boolean } | undefined;
+}) {
   const app = useApp();
+  const station = useStation();
+  const open = useInStation(station.address);
+  // The same page in the station's browser (回到 … while its tab is open), in a ⋯ after the page's button.
+  const label = t(job?.screen !== undefined ? "common.login.backToStation" : "common.login.openInStation", { station: station.name });
+  const otherWays = t("common.login.otherWays");
+  const stationStep = inStation && job?.browser ? (
+    <button type="button" className={css.mStepMore} aria-label={otherWays} disabled={inStation.busy}
+      onClick={() => app.sheet({ height: 0.25, content: () => (
+        <>
+          <SheetGrab />
+          <SheetHead title={otherWays} />
+          <div className={sheetsCss.mSheetScroll}>
+            <PickRow label={label} onClick={() => { app.sheet(null); open(inStation.ask, label); }} />
+          </div>
+        </>
+      ) })}>
+      <More size={18} />
+    </button>
+  ) : null;
   const [code, setCode] = useState("");
   const operation = useAction(send, () => setCode(""));
   const busy = operation.busy;
@@ -892,7 +1050,10 @@ function LoginSteps({ job, provider, send }: { job: LoginJob | null | undefined;
     return (
       <>
         <p className={`${partsCss.mMuted} ${partsCss.mSmall}`}>{t("web-mobile.profiles.cursorNote")}</p>
-        <Button label={t("web-mobile.profiles.openAuth")} primary onClick={() => void window.open(job.url!, "_blank", "noopener")} />
+        <span className={css.mStepButtons}>
+          <Button label={t("web-mobile.profiles.openAuth")} primary onClick={() => void window.open(job.url!, "_blank", "noopener")} />
+          {stationStep}
+        </span>
       </>
     );
   }
@@ -902,8 +1063,11 @@ function LoginSteps({ job, provider, send }: { job: LoginJob | null | undefined;
         <span className={css.mDeviceCode}>{job.userCode}</span>
         <p className={`${partsCss.mMuted} ${partsCss.mSmall}`}>{provider === "OpenCode" ? t("web-mobile.profiles.opencodeNote") : provider === "Kimi" ? t("web-mobile.profiles.kimiNote") : provider === "Grok" ? t("web-mobile.profiles.grokNote") : t("web-mobile.profiles.codexNote", { name: NAME })}</p>
         {/* OpenCode's and Kimi's pages have the code in their address: only compared there, not copied. */}
-        <Button label={filled ? t("web-mobile.profiles.openAuth") : copied ? t("web-mobile.profiles.reopen") : t("web-mobile.profiles.copyOpen")} primary
-          onClick={() => { if (filled) return void window.open(job.url!, "_blank", "noopener"); void navigator.clipboard.writeText(job.userCode!).then(() => setCopied(true), () => app.toast(t("web-mobile.profiles.copyCodeFailed"))).finally(() => window.open(job.url!, "_blank", "noopener")); }} />
+        <span className={css.mStepButtons}>
+          <Button label={filled ? t("web-mobile.profiles.openAuth") : copied ? t("web-mobile.profiles.reopen") : t("web-mobile.profiles.copyOpen")} primary
+            onClick={() => { if (filled) return void window.open(job.url!, "_blank", "noopener"); void navigator.clipboard.writeText(job.userCode!).then(() => setCopied(true), () => app.toast(t("web-mobile.profiles.copyCodeFailed"))).finally(() => window.open(job.url!, "_blank", "noopener")); }} />
+          {stationStep}
+        </span>
       </>
     );
   }
@@ -913,7 +1077,7 @@ function LoginSteps({ job, provider, send }: { job: LoginJob | null | undefined;
     return (
       <>
         <p className={css.mStep}><span className={css.mStepN}>1</span>{provider === "Devin" ? t("web-mobile.profiles.step1ShortDevin", { name: NAME }) : t("web-mobile.profiles.step1Short", { name: NAME })}</p>
-        <span className={css.mStepBody}><Button label={t("web-mobile.profiles.openAuth")} primary={!code.trim()} onClick={() => void window.open(job.url!, "_blank", "noopener")} /></span>
+        <span className={`${css.mStepBody} ${css.mStepButtons}`}><Button label={t("web-mobile.profiles.openAuth")} primary={!code.trim()} onClick={() => void window.open(job.url!, "_blank", "noopener")} />{stationStep}</span>
         <p className={css.mStep}><span className={css.mStepN}>2</span>{t("web-mobile.profiles.step2Short")}</p>
         {error && <p className={partsCss.mError}>{error}</p>}
         <div className={css.mCodeRow}>
@@ -993,6 +1157,7 @@ export function NewProfileScreen() {
   }, [d?.tile?.id, d?.step, kind]); // eslint-disable-line react-hooks/exhaustive-deps
   const [login, setLogin] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const inStationBusy = useDoing("login.browser", { station: station.address, id: login ?? "" });
   const pending = login ? overview?.logins.find((l) => l.id === login) : undefined;
   // What the plan signs in to (the core's): a runtime's subscription, or OpenCode's account for OpenCode Go.
   const runtime = d?.signIn?.runtime ?? (d?.tile?.runtime === "codex" || d?.tile?.runtime === "grok" || d?.tile?.runtime === "cursor" || d?.tile?.runtime === "devin" ? d.tile.runtime : "claude");
@@ -1048,7 +1213,8 @@ export function NewProfileScreen() {
               <p className={partsCss.mError}>{error ?? pending?.error ?? job?.error ?? t("web-mobile.profiles.loginIncomplete")}</p>
               <Button label={t("web-mobile.profiles.restart")} primary={false} onClick={() => { if (login) api.dropLogin(login).catch(dropped); setLogin(null); setError(null); void begin(); }} />
             </>
-          ) : <LoginSteps job={job} provider={provider} send={(code) => api.newLoginCode(login!, code)} />
+          ) : <LoginSteps job={job} provider={provider} send={(code) => api.newLoginCode(login!, code)}
+            inStation={login ? { ask: () => api.newLoginBrowser(login), busy: inStationBusy } : undefined} />
         ) : (
           <ConnectForm key={d.tile?.id} d={d} edit={edit} busy={submitting}
             onSubmit={() => { submit().then(({ id }) => go(id, t("web-mobile.profiles.verifiedAdded")), () => undefined); }} />
@@ -1137,7 +1303,7 @@ export function MachineLoginOffers({ logins, onSignIn, inForm = false }: { login
         {offers.map((l) => {
           const blocked = l.quota?.state === "blocked";
           const trouble = quotaTrouble(l.quota);
-          const plan = l.plan ? `${l.plan[0]!.toUpperCase()}${l.plan.slice(1)}` : null;
+          const plan = l.planText || null;
           return (
             <ListRow key={l.runtime}>
               <ProviderMark runtime={l.runtime} kind="subscription" size={18} />

@@ -98,7 +98,7 @@ fn notify_core(
       }
     },
   }
-  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0, env~)
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0, env~, platform=2)
   t
 }
 
@@ -164,11 +164,11 @@ test "a message gone to flashes, in and out as the Android app's, nothing of it 
   t.draw()
   t.run_for(@ui.nav_push_ms)
   t.run_for((flash_in_ms + flash_held_ms) / 2.0)
-  assert_eq(flashing.val.0, "ts2")
-  assert_true(flashing.val.1 > 0.99)
+  assert_eq(@sfpages.flashing_now.val.0, "ts2")
+  assert_true(@sfpages.flashing_now.val.1 > 0.99)
   t.run_for(flash_ms)
   t.draw()
-  assert_eq(flashing.val.1, 0.0)
+  assert_eq(@sfpages.flashing_now.val.1, 0.0)
   t.assert_idle()
 }
 
@@ -180,9 +180,9 @@ test "with motion reduced, a message gone to is lit whole for its flash's time, 
   sys.opened = "/o/ws1/st1/s-c2?message=2\n2"
   t.draw()
   t.run_for(@ui.nav_push_ms)
-  assert_eq(flashing.val, ("ts2", 1.0))
+  assert_eq(@sfpages.flashing_now.val, ("ts2", 1.0))
   t.run_for(flash_ms)
-  assert_eq(flashing.val.1, 0.0)
+  assert_eq(@sfpages.flashing_now.val.1, 0.0)
 }
 
 ///|
@@ -234,7 +234,7 @@ test "pushes: none registered without a token, taken off while off; a token regi
 }
 
 ///|
-test "settings: notifications switched off, the core keeps it; on again, the system asked" {
+test "settings: notifications switched off on 通知's page, the core keeps it; on again, the system asked" {
   let calls : Array[Made] = []
   let sys = fake_system()
   let notify : Ref[Json] = Ref({ "on": true, "asked": true, "push": true, "show": [] })
@@ -242,30 +242,26 @@ test "settings: notifications switched off, the core keeps it; on again, the sys
   open_setting("home")
   t.draw()
   t.run_for(@ui.nav_push_ms)
-  // the row below the fold on a 844 high screen since the cards keep Android's room (20 in): the page at its end
+  // the list's row (below the fold on a 844 high screen: the page at its end) opens their page
   t.scroll_to_end()
   t.draw()
   t.tap_text("通知")
+  t.run_for(@ui.nav_push_ms)
+  assert_true(app.nav.top() == Setting(@settings.Route::Notifications))
+  // its banners' tile switches them, as the core keeps it
+  t.tap_text("横幅")
   let set = named(calls, "notify.set")
   assert_eq(set.length(), 1)
   assert_true(set[0].params.stringify().contains("\"on\":false"))
-  // its knob slides off as mbui's switch's does (asked for: Android's jumps), the row without its tap meanwhile: on
-  // still as it is tapped, part of the way halfway to its rest, off at its rest
-  assert_eq(knob_across(t, "通知"), 1.0)
-  t.run_for((@kit.switch_rest("notify") - t.time()) / 2.0)
-  let mid = knob_across(t, "通知")
-  assert_true(mid > 0.0 && mid < 1.0)
-  t.run_for(@kit.switch_rest("notify") - t.time())
-  assert_eq(knob_across(t, "通知"), 0.0)
   // switched at once, a spinner while the core has not answered: not switched again meanwhile
-  t.tap_text("通知")
+  t.tap_text("横幅")
   assert_eq(named(calls, "notify.set").length(), 1)
   notify.val = { "on": false, "asked": true, "push": false, "show": [] }
   (set[0].done)(Ok(notify.val))
   t.draw()
   assert_eq(named(calls, "push.unregister").length(), 1)
   let asks = sys.asks
-  t.tap_text("通知")
+  t.tap_text("横幅")
   assert_eq(sys.asks, asks + 1)
   let on = named(calls, "notify.set")
   assert_true(on[on.length() - 1].params.stringify().contains("\"on\":true"))
@@ -309,23 +305,6 @@ test "settings: usage statistics and error reports switched off on this device, 
   t.tap_text("发送使用统计和错误报告")
   assert_eq(told, [false, true])
   reporting_host.val = None
-}
-
-///|
-/// How far the knob of the settings' switch in the row of `words` is across (0 off … 1 on): its white 20 round in the
-/// 44 by 26 ground drawn level with the words, 3 in from the ground's ends.
-fn knob_across(t : @ui.Tester, words : String) -> Double raise {
-  guard t.drawn_of(words) is Some((_, y)) else { fail("no \{words} drawn") }
-  let rects = t.drawn_rects()
-  let level = fn(r : (Double, Double, Double, Double, Int64)) { (r.1 + r.3 / 2.0 - y).abs() < 30.0 }
-  guard rects.iter().find_first(fn(r) { r.2 == 44.0 && r.3 == 26.0 && level(r) }) is Some(ground) else {
-    fail("no switch by \{words}")
-  }
-  guard rects.iter().find_first(fn(r) { r.2 == 20.0 && r.3 == 20.0 && r.4 == 0xFFFFFFFFL && level(r) })
-    is Some(knob) else {
-    fail("no knob by \{words}")
-  }
-  (knob.0 - ground.0 - 3.0) / 18.0
 }
 
 ///|

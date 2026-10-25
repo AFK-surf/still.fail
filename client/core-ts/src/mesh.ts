@@ -9,7 +9,7 @@
 // All of it runs as fibers (rule 1): an opening is a Deferred everyone asking for the same address meanwhile waits on, a
 // link's renewal and its first answer are fibers in the core's scope, a race and a hedge are fibers started as the UI
 // comes back, measuring and the day's tally are fibers on the clock.
-import { Clock, Deferred, Effect, Fiber, Semaphore } from "effect";
+import { Clock, Deferred, Effect, Fiber, type Result, Semaphore } from "effect";
 import type { Credential } from "./cloud.ts";
 import type { Inner } from "./core.ts";
 import { CoreError, asCoreError } from "./error.ts";
@@ -95,6 +95,10 @@ export const SPEED_MIN_BYTES = 512 * 1024;
 export const TYPICAL_BYTES = 256 * 1024;
 /// How long the speed seen on a way counts; then it is found out again, from the replies that come through it.
 export const SPEED_KEPT_MS = 6 * 3600_000;
+/// How long the fastest a way was seen at holds against slower replies after it (one slower that came beside others on
+/// the way, or as the station read slowly); past it, a slower reply says how fast the way is now: it got slower (a
+/// line more crowded, a hop further), and is no longer taken to be as fast as it once was.
+export const SPEED_FRESH_MS = 10 * 60_000;
 /// A reply head is a line of JSON; anything longer is not a station talking.
 const MAX_HEAD = 64 * 1024;
 /// How many links in a row a read is asked again on when each is found gone under it.
@@ -112,7 +116,8 @@ export type CredentialSource = (device: string, fresh: boolean) => Effect.Effect
 export type Measured = { measuring: boolean; relays: [string, number | null][]; moved: string | null };
 
 type Day = { day: number; rx: number; tx: number };
-/// The fastest a way to a station was seen bringing a reply (bytes a second), and when that was first seen.
+/// How fast a way to a station was seen bringing a reply (bytes a second; the fastest within SPEED_FRESH_MS of it), and
+/// when.
 type Speed = { bps: number; at: number };
 
 /// A relay as a key: its URL as written out again, so `https://r` and `https://r/` are one.
@@ -376,10 +381,14 @@ export class Link {
     return this.#lock.withPermits(1)(f(this.#control));
   }
 
+  /// A request's stream, its head and body sent and its reply's head read. Given up before that head (its asker gone, a
+  /// read let go of; or failed), the stream goes at once: the station stops what it is sending on it, which no one
+  /// would read.
   #open(head: J, finish: boolean, body: Uint8Array | null, wrote?: (sent: number) => void): Effect.Effect<[IrohStream, Lines, J], CoreError> {
     const sent = (e: { message: string }) => meshError(t("core-logic.mesh.request_unsent", { error: e.message }));
+    let opened: IrohStream | null = null;
     return Effect.gen({ self: this }, function* () {
-      const stream = yield* Effect.mapError(this.conn.openBi(), sent);
+      const stream = (opened = yield* Effect.mapError(this.conn.openBi(), sent));
       yield* Effect.mapError(stream.write(utf8(`${JSON.stringify(head)}\n`)), sent);
       // A body that is told of goes a step at a time, each said as the stream takes it (as far as the link lets it).
       if (body !== null && body.length > 0 && wrote) {
@@ -402,7 +411,7 @@ export class Link {
       const status = reply?.status;
       if (typeof status !== "number" || !Number.isInteger(status) || status < 0 || status > 65535) return yield* Effect.fail(meshError(t("core-logic.mesh.reply_no_status")));
       return [stream, lines, reply] as [IrohStream, Lines, J];
-    });
+    }).pipe(Effect.onExit((exit) => (exit._tag === "Success" ? Effect.void : Effect.sync(() => opened?.reset(0)))));
   }
 
   static #body(stream: IrohStream, lines: Lines): Pull<Uint8Array> {
@@ -723,7 +732,8 @@ export class Mesh {
   }
 
   /// A reply of `bytes` from a station came through `relay` in `ms` (from its first bytes to its end). The fastest seen
-  /// counts: a reply also comes slower than its way could bring it (others at once, the station reading slowly).
+  /// lately counts (SPEED_FRESH_MS): a reply also comes slower than its way could bring it (others at once, the station
+  /// reading slowly); one seen before that is not kept against how the way brings replies now.
   noteSpeed(addr: string, relay: string, bytes: number, ms: number): void {
     if (bytes < SPEED_MIN_BYTES || ms <= 0) return;
     const bps = (bytes / ms) * 1000;
@@ -731,12 +741,19 @@ export class Mesh {
     const of = (this.#speeds[stationId(addr)] ??= {});
     const key = relayKey(relay);
     const was = of[key];
-    if (was !== undefined && now - was.at < SPEED_KEPT_MS && was.bps >= bps) return;
-    of[key] = { bps, at: was !== undefined && now - was.at < SPEED_KEPT_MS ? was.at : now };
+    if (was !== undefined && now - was.at < SPEED_FRESH_MS && was.bps >= bps) return;
+    of[key] = { bps, at: now };
     for (const [id, relays] of Object.entries(this.#speeds)) {
       for (const [r, s] of Object.entries(relays)) if (now - s.at >= SPEED_KEPT_MS) delete relays[r];
       if (Object.keys(relays).length === 0) delete this.#speeds[id];
     }
+    this.#env.runner.fork(Effect.ignore(this.#env.host.storageSet(SPEED_KEY, toJsonBytes(this.#speeds))));
+  }
+
+  /// The speeds seen on every way let go (the device on another network now).
+  #forgetSpeeds(): void {
+    if (Object.keys(this.#speeds).length === 0) return;
+    for (const id of Object.keys(this.#speeds)) delete this.#speeds[id];
     this.#env.runner.fork(Effect.ignore(this.#env.host.storageSet(SPEED_KEY, toJsonBytes(this.#speeds))));
   }
 
@@ -1583,6 +1600,9 @@ export class Mesh {
         const wake = yield* this.#env.wakes.next;
         if (!wake.suspectsConnections()) continue;
         this.#env.runner.fork(this.#endpoint.networkChange());
+        // On another network, the speeds seen on the last say nothing of how fast each way is from here (a laptop taken
+        // from home would keep the relay it was fast through there, however slowly it brings replies now): found anew.
+        if (wake.network) this.#forgetSpeeds();
         // On another network now, perhaps the station's: its LAN addresses are worth a try again.
         this.#lanTried.clear();
         for (const [addr, link] of this.#openLinks()) {
@@ -1846,7 +1866,8 @@ export class MeshWire implements StationWire {
         // (`hedgeAfter`), or on the link put in its place if its link is replaced meanwhile: the first answer taken.
         const started = mesh.now();
         const asked = yield* Effect.forkChild(Effect.result(ask(link)));
-        const answer = Effect.flatMap(Fiber.join(asked), (r) => (r._tag === "Success" ? Effect.succeed(r.success) : Effect.fail(r.failure)));
+        // An answer come too late to be taken: its stream let go (the station stops sending what no one reads).
+        const late = ([, reply]: [Link, Reply]) => reply.cancel();
         // The other way, as there is one by then (the ways dialled with the link may come through after it).
         const slow = Effect.gen(function* () {
           yield* Effect.sleep(mesh.hedgeAfter(key, link));
@@ -1890,10 +1911,10 @@ export class MeshWire implements StationWire {
         } else if ("replaced" in first) {
           // Replaced while under way: asked again on the new one at once, the first answer taken.
           const again = Effect.flatMap(mesh.link(key, credentials, theirs), ask);
-          answered = yield* firstAnswer(answer, again);
+          answered = yield* firstAnswer(asked, again, late);
         } else {
           // Slow on its way: asked on the next best as well. Answered there first, its way is told how long it kept it.
-          answered = yield* firstAnswer(answer, ask(first.slow));
+          answered = yield* firstAnswer(asked, ask(first.slow), late);
           if (answered[0] !== link) mesh.outran(key, link, mesh.now() - started);
         }
       } else {
@@ -1974,16 +1995,21 @@ export class MeshWire implements StationWire {
   }
 }
 
-/// Whichever of two attempts answers; one that fails leaves it to the other.
-function firstAnswer<A>(a: Effect.Effect<A, CoreError>, b: Effect.Effect<A, CoreError>): Effect.Effect<A, CoreError> {
+/// Whichever answers of an attempt under way (`asked`) and another (`b`); one that fails leaves it to the other. Once
+/// one is taken the other is stopped, and an answer it had meanwhile goes to `release`: no one reads it.
+function firstAnswer<A>(asked: Fiber.Fiber<Result.Result<A, CoreError>>, b: Effect.Effect<A, CoreError>, release: (answer: A) => void): Effect.Effect<A, CoreError> {
   return Effect.gen(function* () {
-    const fa = yield* Effect.forkChild(Effect.result(a));
     const fb = yield* Effect.forkChild(Effect.result(b));
-    const first = yield* Effect.raceFirst(Effect.map(Fiber.join(fa), (r) => ["a", r] as const), Effect.map(Fiber.join(fb), (r) => ["b", r] as const));
-    if (first[1]._tag === "Success") return first[1].success;
-    const other = yield* Fiber.join(first[0] === "a" ? fb : fa);
-    if (other._tag === "Success") return other.success;
-    return yield* Effect.fail(other.failure);
+    const [other, r] = yield* Effect.raceFirst(Effect.map(Fiber.join(asked), (r) => [fb, r] as const), Effect.map(Fiber.join(fb), (r) => [asked, r] as const));
+    if (r._tag === "Success") {
+      yield* Fiber.interrupt(other);
+      const late = yield* Effect.exit(Fiber.join(other));
+      if (late._tag === "Success" && late.value._tag === "Success") release(late.value.success);
+      return r.success;
+    }
+    const left = yield* Fiber.join(other);
+    if (left._tag === "Success") return left.success;
+    return yield* Effect.fail(left.failure);
   });
 }
 

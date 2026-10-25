@@ -7,11 +7,12 @@ import { COMPOSER_INNER, composerBox } from "./styles/composer.css.ts";
 import { tokenStart } from "./pages/Connect.css.ts";
 import { msgAvatar, msgMine, msgWaiting } from "./styles/chat.css.ts";
 import { onboardingCard } from "./cloud/settings.css.ts";
+import { tableScroll } from "./Prose.css.ts";
 import { glass } from "@stillfail/ui/styles/glass.ts";
-import { columns, outsetStart } from "@stillfail/ui/styles/align.ts";
+import { bleedX, columns, outsetStart } from "@stillfail/ui/styles/align.ts";
 import { spinner } from "@stillfail/ui/styles/spinner.css.ts";
 import { STILL, stillAtOnce, stillLoop } from "@stillfail/ui/styles/still.ts";
-import { segments, spokesStep, wholeRing } from "@stillfail/ui/styles/spokes.ts";
+import { segments, spokesTurn, wholeRing } from "@stillfail/ui/styles/spokes.ts";
 
 export const msgName = style({ fontWeight: "600" });
 /** A chat's list of messages, on either screen (the wide screen's pane, the phone's page): what quotes jump within. */
@@ -119,7 +120,7 @@ export const reportSends = style({ margin: "0", fontSize: vars.textUi, color: va
  */
 export const composerText = style({
   flex: "1", minHeight: "20px", maxHeight: "min(480px, 40dvh)", padding: "6px 8px 4px", border: "0", outline: "none",
-  resize: "none", background: "transparent", font: "inherit", fontFamily: vars.fontText, fontSize: vars.textInput, lineHeight: "1.5",
+  resize: "none", background: "transparent", font: "inherit", fontFamily: vars.fontText, fontVariantNumeric: "normal", fontSize: vars.textInput, lineHeight: "1.5",
   color: vars.text, textWrap: "wrap",
   vars: { "--more-above": "0px", "--more-below": "0px" },
   selectors: {
@@ -168,7 +169,8 @@ export const msgAgent = style({
   padding: "0", border: "0", background: "none", font: "inherit", fontWeight: "600", color: vars.text, textDecoration: "none",
   cursor: "pointer",
   selectors: {
-    "&:hover": { color: vars.accent },
+    // Words that are already the text's or the accent's colour, pointed at: underlined (docs/ui-panels.md 悬停).
+    "&:hover": { textDecoration: "underline", textUnderlineOffset: "3px" },
   },
 });
 export const attachBtn = style({
@@ -242,6 +244,12 @@ export const msgMain = style({
     },
   },
 });
+/**
+ * A message's own table (not one in a list item or a quote) scrolls through the room its list leaves beside the words
+ * too, where that room is only the page's margin (`--list-gutter`, set by such a list: the phone's; the wide screen's
+ * holds the avatars): scrolled, it runs to the screen's edge, and at either end it lines up with the words.
+ */
+globalStyle(`${msgMain} > ${markdown} > ${tableScroll}`, { ...bleedX("var(--list-gutter, 0px)"), maxWidth: "calc(100% + 2 * var(--list-gutter, 0px))" });
 export const msgAvatarAgent = style({
   background: vars.neutralBg,
   // Slack's mark on its corner (msgAvatarSlack) is out past its round.
@@ -298,6 +306,15 @@ export const refInfoChat = style({ display: "flex", alignItems: "center", justif
 export const fileCardName = style({
   display: "flex", minWidth: "0", fontSize: vars.textUi, lineHeight: "20px", whiteSpace: "nowrap",
 });
+/**
+ * A message's file card with a button of its own beside the one that opens it (a download's ✕ or ↻): laid over the
+ * room the card keeps for it at its end (`fileCardSlot`, as wide as fileCardRemove), where the composer's card has its
+ * own.
+ */
+export const fileCardHold = style({ position: "relative", display: "inline-flex", maxWidth: "100%" });
+export const fileCardSlot = style({ width: "22px", height: "22px", flex: "none" });
+// (the card's right padding: later.css.ts fileCard)
+export const fileCardAction = style({ position: "absolute", top: "50%", right: "10px", transform: "translateY(-50%)" });
 export const fileCardRemove = style({
   display: "grid", placeItems: "center", width: "22px", height: "22px", padding: "0", border: "0", borderRadius: "50%",
   background: "none", color: vars.muted, cursor: "pointer", flex: "none",
@@ -432,13 +449,14 @@ export const activityAvatar = style({
  */
 export const activityRing = style({
   position: "absolute", inset: "-3px", pointerEvents: "none",
-  background: vars.accent, mask: `${segments} center / 100% no-repeat`, animation: spokesStep,
+  background: vars.accent, mask: `${segments} center / 100% no-repeat`, willChange: "rotate",
   selectors: {
-    [`${agentActivity}[data-waiting] &`]: { background: vars.line, maskImage: wholeRing, animation: "none" },
+    [`${agentActivity}[data-waiting] &`]: { background: vars.line, maskImage: wholeRing },
     [`${agentActivity}[data-leaving] &`]: { opacity: "0", transition: "opacity 160ms" },
     [`${STILL} &`]: stillLoop(),
   },
 });
+spokesTurn(activityRing);
 export const activityTail = style({
   display: "flex", alignItems: "center", gap: "8px", minWidth: "0", maxWidth: "100%",
   selectors: {
@@ -464,9 +482,27 @@ export const avatarFlying = style({
 export const composerChoices = style({
   display: "flex", alignItems: "center", gap: "4px", flex: "1 1 auto", minWidth: "0", marginRight: "auto",
   selectors: {
-    [`${composerBox}:not([data-multiline]) &`]: { order: "1" },
+    // On one line (a chat's composer, its 抄送 there): before send, at its own width, the words taking the rest.
+    [`${composerBox}:not([data-multiline]) &`]: { flex: "none", marginRight: "0" },
   },
 });
+/** Where what is sent is copied, said (Chat.tsx CcChooser): on one line only, while some thread is ticked; nothing to press. */
+export const ccState = style({
+  display: "inline-flex", alignItems: "center", gap: "8px", padding: "0 8px", whiteSpace: "nowrap",
+  fontSize: vars.textMeta, color: vars.muted,
+  selectors: {
+    [`${composerBox}[data-multiline] &`]: { display: "none" },
+  },
+});
+/** Its chooser (Chat.tsx CcChooser): in the row under the words once the composer is opened to write. */
+export const ccSwitch = style({
+  display: "contents",
+  selectors: {
+    [`${composerBox}:not([data-multiline]) &`]: { display: "none" },
+  },
+});
+/** A thread it is copied to: its platform's mark and its place. */
+export const ccPlace = style({ display: "inline-flex", alignItems: "center", gap: "4px" });
 export const msgFlash = style({});
 export const quoteCards = style({
   selectors: {
@@ -674,6 +710,8 @@ export const msgVideoName = style({
   position: "absolute", bottom: "0", left: "0", right: "0", padding: "6px 8px",
   background: "rgba(0, 0, 0, 0.65)", fontSize: vars.textMeta, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
 });
+/** Under its words while the core downloads it (chatDownloads.ts): how far, 4 below them. */
+export const msgVideoBar = style({ display: "block", marginTop: "4px" });
 
 export const msgVideoUnavailable = style({
   position: "absolute", inset: "0 0 30px", display: "flex", flexDirection: "column",

@@ -69,7 +69,7 @@ fn edited_core(
   }
   open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
   open_fixture(mode)
-  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0)
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0, platform=2)
   t.run_for(@ui.nav_push_ms)
   t
 }
@@ -107,7 +107,11 @@ test "a failure the viewer may report: 上报 asks first, then reports it and sa
     "chat",
     fn(name, v) {
       if name == "chat" {
-        with_chat_message(v, 9.0, [("text", "⚠️ 这一轮没跑完。"), ("reportable", true)])
+        with_chat_message(v, 9.0, [
+          ("text", "⚠️ 这一轮没跑完。"),
+          ("notice", { "failed": true, "words": "这一轮没跑完" }),
+          ("reportable", true),
+        ])
       } else {
         v
       }
@@ -122,11 +126,11 @@ test "a failure the viewer may report: 上报 asks first, then reports it and sa
   }
   t.tap_text("上报")
   t.frame()
-  assert_true(@settings.sheet_up(), msg="asked first")
+  assert_true(@sf.presenting(), msg="asked first")
   assert_true(named(calls, "chat.report").length() == 0)
-  // the sheet risen: its own declared end (a tap while it moves is what is under it's)
-  t.run_for(@kit.sheet_rest("settings-sheet") - t.time())
-  // the sheet's own 上报: its words alone on their node (the notice's is in a rich line of its own)
+  // (with a mouse: the web's confirm, come in)
+  t.run_for(@kit.presence_in_ms)
+  // the confirm's own 上报: its words alone on their node (the notice's is in a rich line of its own)
   let (x, y) = words_node(t, "上报").unwrap()
   t.tap(x, y)
   t.frame()
@@ -146,6 +150,7 @@ test "a notice that a runtime is missing: its word installs it (software.update)
     if name == "chat" {
       with_chat_message(v, 9.0, [
         ("text", "Studio 上没有 codex。"),
+        ("notice", { "failed": false, "words": "Studio 上没有 codex" }),
         ("install", { "runtime": "codex", "state": "missing", "title": "codex", "action": "安装" }),
       ])
     } else {
@@ -170,7 +175,11 @@ test "a notice about a profile: what went wrong (after its ：) leads to the pro
   let calls : Array[Made] = []
   let t = edited_core(calls, "chat", fn(name, v) {
     if name == "chat" {
-      with_chat_message(v, 9.0, [("profile", "p1")])
+      // (the core says where the profile's link begins: after the ：)
+      with_chat_message(v, 9.0, [
+        ("profile", "p1"),
+        ("notice", { "failed": true, "words": "Studio 上 codex 的登录已失效：请在设置里重新登录", "linkAt": 22 }),
+      ])
     } else {
       v
     }
@@ -207,12 +216,15 @@ test "a Slack user's name in a history: 这是我 binds them to the viewer (slac
   }
   let t = edited_core(calls, "history", fn(name, v) {
     if name == "history" {
-      with_fields(v, [("items", Json::array(items(Some(v), "items").map(slack_from)))])
+      // (that item alone: the steps open at their newest, and it in view)
+      with_fields(v, [("items", Json::array(items(Some(v), "items").map(slack_from)[:1].to_array()))])
     } else {
       v
     }
   })
   t.tap_text("林小满")
+  // its menu, the presenters' sheet with a finger, up
+  t.run_for(@kit.sheet_rest("sf-present") - t.time())
   assert_true(t.find("这是我") is Some(_), msg="its menu")
   t.tap_text("这是我")
   let sent = named(calls, "slack.identity")

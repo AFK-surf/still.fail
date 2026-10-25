@@ -19,11 +19,13 @@ pub fn ClipRead::id(self : ClipRead) -> Int {
 
 ///|
 /// What the clipboard held: its words ("" none), what of a picture it held (`clip_none`, `clip_png`: `png` its bytes,
-/// `clip_too_large`, `clip_unreadable`).
+/// `clip_too_large`, `clip_unreadable`), the files on it (copied in macOS's Finder, or by an app that copies a picture
+/// as its file: each its name and bytes; a picture's icon beside them is not its picture).
 pub(all) struct ClipGot {
   text : String
   picture : Int
   png : Bytes
+  files : Array[(String, Bytes)]
 }
 
 ///|
@@ -56,9 +58,14 @@ pub let clip_source_max : Int = 32 * 1024 * 1024
 pub let clip_pixels_max : Int = 16 * 1024 * 1024
 
 ///|
-/// The clipboard read: its words, and its picture as PNG (Android: the primary clip's first item, its text or what it
-/// says as text, a picture by its content URI where the clip's or the URI's type is image/*; macOS's and iOS's
-/// pasteboard; Windows: its words; a browser's where the page may). None where the host cannot.
+/// The most of a file on the clipboard read (one larger is left out), as of a file picked (still.fail's composer).
+pub let clip_file_max : Int = 1024 * 1024 * 1024
+
+///|
+/// The clipboard read: its words, its picture as PNG, its files (Android: the primary clip's first item, its text or
+/// what it says as text, a picture by its content URI where the clip's or the URI's type is image/*; macOS's
+/// pasteboard, a picture of any kind it holds, its files' URLs read whole, at most `clip_file_max` each, a folder left
+/// out; iOS's pasteboard; Windows: its words; a browser's where the page may). None where the host cannot.
 pub fn clip_read() -> ClipRead? {
   match cl_read() {
     0 => None
@@ -72,13 +79,14 @@ pub fn ClipRead::got(self : ClipRead) -> ClipGot? {
   match cl_state(self.id) {
     0 => None
     1 => {
-      let got = { text: cl_text(self.id), picture: cl_picture(self.id), png: cl_png(self.id) }
+      let files = Array::makei(cl_files(self.id), fn(i) { (cl_file_name(self.id, i), cl_file(self.id, i)) })
+      let got = { text: cl_text(self.id), picture: cl_picture(self.id), png: cl_png(self.id), files }
       cl_end(self.id)
       Some(got)
     }
     _ => {
       cl_end(self.id)
-      Some({ text: "", picture: clip_unreadable, png: Bytes::new(0) })
+      Some({ text: "", picture: clip_unreadable, png: Bytes::new(0), files: [] })
     }
   }
 }

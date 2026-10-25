@@ -12,11 +12,11 @@ test "the named curves are CSS's cubic-beziers (Compose's CubicBezierEasing)" {
   let ts = [0.1, 0.25, 0.5, 0.75, 0.9]
   // worked out by bisection on the curves' own polynomials
   let want = [
-    (@motion.Standard, [0.025863015, 0.23658736, 0.775561311, 0.959367737, 0.994353929]),
-    (@motion.Arrive, [0.396693549, 0.767284301, 0.946079462, 0.991108187, 0.998830259]),
-    (@motion.Out, [0.359122765, 0.727373396, 0.929578821, 0.987468037, 0.998286622]),
-    (@motion.Flight, [0.010913674, 0.095832729, 0.70468533, 0.956226683, 0.994219017]),
-    (@motion.Css, [0.094796306, 0.408510591, 0.802403388, 0.960458978, 0.994316477]),
+    (@ui.Standard, [0.025863015, 0.23658736, 0.775561311, 0.959367737, 0.994353929]),
+    (@ui.Arrive, [0.396693549, 0.767284301, 0.946079462, 0.991108187, 0.998830259]),
+    (@ui.Out, [0.359122765, 0.727373396, 0.929578821, 0.987468037, 0.998286622]),
+    (@ui.Flight, [0.010913674, 0.095832729, 0.70468533, 0.956226683, 0.994219017]),
+    (@ui.Css, [0.094796306, 0.408510591, 0.802403388, 0.960458978, 0.994316477]),
   ]
   for w in want {
     let (curve, ys) = w
@@ -24,8 +24,8 @@ test "the named curves are CSS's cubic-beziers (Compose's CubicBezierEasing)" {
       assert_true(near(curve.at(t), ys[i], 1.0e-6), msg="\{curve} at \{t}: \{curve.at(t)} not \{ys[i]}")
     }
   }
-  assert_eq(@motion.Standard.at(0.0), 0.0)
-  assert_eq(@motion.Standard.at(1.0), 1.0)
+  assert_eq(@ui.Standard.at(0.0), 0.0)
+  assert_eq(@ui.Standard.at(1.0), 1.0)
 }
 
 ///|
@@ -96,7 +96,7 @@ test "a tween goes by whole milliseconds on its curve, after its delay" {
   let (x0, _) = s.value_at(50.0, dur, 0.0, 10.0, 0.0)
   assert_eq(x0, 0.0)
   let (x1, _) = s.value_at(250.9, dur, 0.0, 10.0, 0.0)
-  assert_true(near(x1, 10.0 * @motion.Standard.at(150.0 / 300.0), 1.0e-9))
+  assert_true(near(x1, 10.0 * @ui.Standard.at(150.0 / 300.0), 1.0e-9))
   let (x2, v2) = s.value_at(400.0, dur, 0.0, 10.0, 0.0)
   assert_eq((x2, v2), (10.0, 0.0))
 }
@@ -190,7 +190,7 @@ test "a spring told anew mid-way goes on as fast as it went" {
 }
 
 ///|
-test "a keyed node moved by its layout is drawn from where it was, then goes there" {
+test "a keyed node moved for its cause is drawn from where it was, then goes there" {
   let before = Ref::new(true)
   let mut id = 0
   let t = @ui.Tester::new(fn(c) {
@@ -200,7 +200,7 @@ test "a keyed node moved by its layout is drawn from where it was, then goes the
         c.box(w=Px(50.0), h=Px(40.0), fn() {  }) |> ignore
       }
       let i = c.box(w=Px(50.0), h=Px(20.0), bg=0xFF0000FFL, id~, fn() {  })
-      @motion.layout(c, i, "moved", listed=false)
+      @motion.layout(c, i, "moved", by="\{before.val}")
     })
     |> ignore
   })
@@ -224,6 +224,101 @@ test "a keyed node moved by its layout is drawn from where it was, then goes the
 }
 
 ///|
+test "a keyed node moved by what holds it, its cause the same, is in its new place at once" {
+  let above = Ref::new(40.0)
+  let t = @ui.Tester::new(fn(c) {
+    c.column(fn() {
+      c.box(w=Px(50.0), h=Px(above.val), fn() {  }) |> ignore
+      let i = c.box(w=Px(50.0), h=Px(20.0), bg=0xFF0000FFL, fn() {  })
+      @motion.layout(c, i, "held", by="its words")
+    })
+    |> ignore
+  })
+  assert_eq(drawn_y(t, 0xFF0000FFL), 40.0)
+  // what is over it shrinks (a window resized, a keyboard): nothing it moves for changed
+  above.val = 0.0
+  t.frame()
+  assert_eq(drawn_y(t, 0xFF0000FFL), 0.0)
+  assert_eq(@motion.layout_rest("held"), -1.0)
+  t.assert_idle()
+}
+
+///|
+/// A move told for its cause (its tween's length), and a moment within it.
+let caused_ms : Double = 200.0
+
+///|
+let caused_midway_ms : Double = 100.0
+
+///|
+test "a keyed node on its way, moved by what holds it, goes on with its own move from its new place" {
+  let above = Ref::new(40.0)
+  let words = Ref::new("one line")
+  let t = @ui.Tester::new(fn(c) {
+    c.column(fn() {
+      c.box(w=Px(50.0), h=Px(above.val), fn() {  }) |> ignore
+      let i = c.box(w=Px(50.0), h=Px(20.0), bg=0xFF0000FFL, fn() {  })
+      @motion.layout(c, i, "both", spec=@motion.tween(caused_ms, ease=Linear), by=words.val)
+    })
+    |> ignore
+  })
+  // moved up 40 for its cause: drawn where it was, then on its way
+  above.val = 0.0
+  words.val = "two lines"
+  t.frame()
+  assert_eq(drawn_y(t, 0xFF0000FFL), 40.0)
+  t.run_for(caused_midway_ms)
+  let mid = drawn_y(t, 0xFF0000FFL)
+  assert_true(mid > 0.0 && mid < 40.0, msg="\{mid}")
+  let end = @motion.layout_rest("both")
+  // what holds it puts it 10 lower, its cause the same: those 10 at once, the rest of its own move as it was (neither
+  // started again nor put at its end)
+  above.val = 10.0
+  t.frame()
+  let off = drawn_y(t, 0xFF0000FFL) - 10.0
+  assert_true(off > 0.0 && off <= mid, msg="\{off} \{mid}")
+  assert_eq(@motion.layout_rest("both"), end)
+  t.run_for(end - t.time())
+  assert_eq(drawn_y(t, 0xFF0000FFL), 10.0)
+  t.assert_idle()
+}
+
+///|
+test "a keyed node driven to its place, moved again on the way, goes on from where it is drawn" {
+  let above = Ref::new(40.0)
+  let drive = Ref::new(-1.0)
+  let t = @ui.Tester::new(fn(c) {
+    c.column(fn() {
+      c.box(w=Px(50.0), h=Px(above.val), fn() {  }) |> ignore
+      let i = c.box(w=Px(50.0), h=Px(20.0), bg=0xFF0000FFL, fn() {  })
+      @motion.layout(c, i, "driven", drive=drive.val)
+    })
+    |> ignore
+  })
+  assert_eq(drawn_y(t, 0xFF0000FFL), 40.0)
+  // put up by 40: drawn where it was, half way there as the app's progress goes
+  above.val = 0.0
+  drive.val = 0.0
+  t.frame()
+  assert_eq(drawn_y(t, 0xFF0000FFL), 40.0)
+  drive.val = 0.5
+  t.frame()
+  assert_eq(drawn_y(t, 0xFF0000FFL), 20.0)
+  // its place moves down 10 on the way (what is over it grown back a little): drawn where it was, not put by the move
+  // as if it began there
+  above.val = 10.0
+  t.frame()
+  assert_eq(drawn_y(t, 0xFF0000FFL), 20.0)
+  // the rest of its way to its new place by what is left of the progress
+  drive.val = 0.75
+  t.frame()
+  assert_eq(drawn_y(t, 0xFF0000FFL), 15.0)
+  drive.val = 1.0
+  t.frame()
+  assert_eq(drawn_y(t, 0xFF0000FFL), 10.0)
+}
+
+///|
 test "layout_rest: a keyed node's move ends when its spring says, the same whenever asked; -1 at rest" {
   let before = Ref::new(true)
   let t = @ui.Tester::new(fn(c) {
@@ -232,7 +327,7 @@ test "layout_rest: a keyed node's move ends when its spring says, the same whene
         c.box(w=Px(50.0), h=Px(40.0), fn() {  }) |> ignore
       }
       let i = c.box(w=Px(50.0), h=Px(20.0), bg=0xFF0000FFL, fn() {  })
-      @motion.layout(c, i, "moved", listed=false)
+      @motion.layout(c, i, "moved", by="\{before.val}")
     })
     |> ignore
   })
@@ -666,6 +761,48 @@ test "an Anim's start is the frame it is told in, whoever asks its end then or b
 }
 
 ///|
+/// A moment just after a list's rows changed (within what was once a window of 150 ms in which any move counted).
+let just_after_ms : Double = 50.0
+
+///|
+test "a list's row moved by something else just after its rows changed is in its new place at once" {
+  let keys = Ref::new(["a", "b", "c"])
+  let tall_a = Ref::new(false)
+  let t = @ui.Tester::new(
+    fn(c) {
+      let ks = keys.val
+      @motion.list_keys(c, "rows", ks.map(fn(k) { "row/" + k })) |> ignore
+      c.list("rows", ks.length(), 40.0, fn(i) {
+        let k = ks[i]
+        let h = if k == "a" && tall_a.val { 80.0 } else { 40.0 }
+        let n = c.box(w=Fill(1.0), h=Px(h), bg=if k == "c" { 0xFF0000FFL } else { 0x202020FFL }, fn() {
+          c.text(k) |> ignore
+        })
+        @motion.layout(c, n, "row/" + k)
+      })
+      |> ignore
+    },
+    w=200.0,
+    h=400.0,
+  )
+  assert_eq(drawn_y(t, 0xFF0000FFL), 80.0)
+  // b goes: c closes over it, on its way for the list's change
+  keys.val = ["a", "c"]
+  t.draw()
+  t.run_for(@motion.layout_rest("row/c") - t.time())
+  assert_eq(drawn_y(t, 0xFF0000FFL), 40.0)
+  // the rows change again, and just after a row over c grows (its words came, not the list's change): c is pushed
+  // down by those 40 at once
+  keys.val = ["a", "c", "d"]
+  t.draw()
+  t.run_for(just_after_ms)
+  tall_a.val = true
+  t.frame()
+  assert_eq(drawn_y(t, 0xFF0000FFL), 80.0)
+  assert_eq(@motion.layout_rest("row/c"), -1.0)
+}
+
+///|
 test "layout_rest: a list's row gone, when its copy has left; its copy said to move by its key" {
   let keys = Ref::new(["a", "b", "c"])
   let t = @ui.Tester::new(
@@ -855,4 +992,219 @@ test "a chain with motion reduced: each there at once, its end the moment it was
     assert_true(s.ends() <= t.time())
   }
   t.assert_idle()
+}
+
+///|
+/// The rect drawn in `color`: x, y, w, h.
+fn drawn_box(t : @ui.Tester, color : Int64) -> (Double, Double, Double, Double) {
+  let rs = t.drawn_rects().filter(fn(r) { r.4 == color })
+  if rs.is_empty() {
+    (-1.0, -1.0, -1.0, -1.0)
+  } else {
+    (rs[0].0, rs[0].1, rs[0].2, rs[0].3)
+  }
+}
+
+///|
+/// A shape changed for its cause (its tween's length), and a moment within it.
+let reshape_ms : Double = 200.0
+
+///|
+let reshape_midway_ms : Double = 100.0
+
+///|
+test "a box reshaped for its cause: what it holds there at once, its ground from the shape it had to the new one" {
+  let lines = Ref::new(1)
+  let t = @ui.Tester::new(fn(c) {
+    c.column(fn() {
+      let b = c.box(w=Px(100.0), h=Px(20.0 * lines.val.to_double()), bg=0xFF0000FFL, fn() {
+        c.box(w=Px(10.0), h=Px(10.0), bg=0x00FF00FFL, fn() {  }) |> ignore
+      })
+      @motion.reshape(c, b, "box", by="\{lines.val} lines", spec=@motion.tween(reshape_ms, ease=Linear))
+    })
+    |> ignore
+  })
+  assert_eq(drawn_box(t, 0xFF0000FFL), (0.0, 0.0, 100.0, 20.0))
+  // a second line: laid out 40 high at once (what it holds where it now is), its ground still 20 as the move sets out
+  lines.val = 2
+  t.frame()
+  assert_eq(drawn_box(t, 0xFF0000FFL).3, 20.0)
+  assert_eq(drawn_box(t, 0x00FF00FFL), (0.0, 0.0, 10.0, 10.0))
+  t.run_for(reshape_midway_ms)
+  let mid = drawn_box(t, 0xFF0000FFL).3
+  assert_true(mid > 20.0 && mid < 40.0, msg="\{mid}")
+  t.run_for(@motion.layout_rest("box") - t.time())
+  assert_eq(drawn_box(t, 0xFF0000FFL).3, 40.0)
+  t.assert_idle()
+}
+
+///|
+/// A box 100 wide gone 100 down for its cause, from 20 high to 60, with (`there`) what it did not hold before in its
+/// foot: 10 square at its left, under 50 of room; keyed.
+fn moved_box(there : Ref[Bool], carry : Bool) -> @ui.Tester {
+  @ui.Tester::new(fn(c) {
+    c.column(fn() {
+      c.box(w=Px(10.0), h=Px(if there.val { 100.0 } else { 0.0 }), fn() {  }) |> ignore
+      let b = c.box(w=Px(100.0), h=Px(if there.val { 60.0 } else { 20.0 }), bg=0xFF0000FFL, fn() {
+        if there.val {
+          c.box(w=Px(10.0), h=Px(50.0), fn() {  }) |> ignore
+          let n = c.box(w=Px(10.0), h=Px(10.0), bg=0x00FF00FFL, fn() {  })
+          @motion.layout(c, n, "box/new", spec=@motion.tween(reshape_ms, ease=Linear), by="\{there.val}")
+        }
+      })
+      @motion.reshape(c, b, "box", by="\{there.val}", spec=@motion.tween(reshape_ms, ease=Linear), carry~)
+    })
+    |> ignore
+  })
+}
+
+///|
+test "a box gone with what it holds (carry): what is new in it carried on its ground, as far from its nearer edges, until it is there" {
+  let there = Ref::new(false)
+  let t = moved_box(there, true)
+  there.val = true
+  t.frame()
+  // its ground as it was (0, 0, 100 by 20), what is new in it at that ground's foot
+  assert_eq(drawn_box(t, 0xFF0000FFL), (0.0, 0.0, 100.0, 20.0))
+  assert_eq(drawn_box(t, 0x00FF00FFL), (0.0, 10.0, 10.0, 10.0))
+  // half way: the ground 50 down, 40 high; still at its foot
+  t.run_for(reshape_midway_ms)
+  assert_eq(drawn_box(t, 0xFF0000FFL), (0.0, 50.0, 100.0, 40.0))
+  assert_eq(drawn_box(t, 0x00FF00FFL), (0.0, 80.0, 10.0, 10.0))
+  assert_true(@motion.layout_rest("box/new") > t.time())
+  t.run_for(@motion.layout_rest("box") - t.time())
+  assert_eq(drawn_box(t, 0x00FF00FFL), (0.0, 150.0, 10.0, 10.0))
+  t.assert_idle()
+}
+
+///|
+test "a box changed in its place (no carry): what is new in it is in its place from the first" {
+  let there = Ref::new(false)
+  let t = moved_box(there, false)
+  there.val = true
+  t.frame()
+  assert_eq(drawn_box(t, 0xFF0000FFL), (0.0, 0.0, 100.0, 20.0))
+  assert_eq(drawn_box(t, 0x00FF00FFL), (0.0, 150.0, 10.0, 10.0))
+  t.run_for(@motion.layout_rest("box") - t.time())
+  t.assert_idle()
+}
+
+///|
+/// The corners of the first plain rectangle of `color` the last frame drew, each its own (top left, then round it).
+fn drawn_corners(t : @ui.Tester, color : Int64) -> (Double, Double, Double, Double) {
+  let rs = t.drawn_rect_corners().filter(fn(r) { r.4 == color })
+  if rs.is_empty() {
+    (-1.0, -1.0, -1.0, -1.0)
+  } else {
+    rs[0].5
+  }
+}
+
+///|
+test "a box reshaped for its cause: each of its ground's corners goes its own way from the shape it had" {
+  let lines = Ref::new(1)
+  let t = @ui.Tester::new(fn(c) {
+    c.column(fn() {
+      // (one line: all four 10; two: its foot's corners each its own, as a composer's across a panel's foot)
+      let radius : @ui.Radius = if lines.val == 1 { Exact(10.0) } else { Corners(10.0, 10.0, 2.0, 18.0) }
+      let b = c.box(
+        style=@ui.style(radius~),
+        w=Px(100.0),
+        h=Px(20.0 * lines.val.to_double()),
+        bg=0xFF0000FFL,
+        fn() {  },
+      )
+      @motion.reshape(c, b, "box", by="\{lines.val} lines", spec=@motion.tween(reshape_ms, ease=Linear))
+    })
+    |> ignore
+  })
+  assert_eq(drawn_corners(t, 0xFF0000FFL), (10.0, 10.0, 10.0, 10.0))
+  lines.val = 2
+  t.frame()
+  assert_eq(drawn_corners(t, 0xFF0000FFL), (10.0, 10.0, 10.0, 10.0))
+  // midway: its top corners as they were, its foot's each on its way to its own, as far along as the other
+  t.run_for(reshape_midway_ms)
+  let (tl, tr, br, bl) = drawn_corners(t, 0xFF0000FFL)
+  assert_eq((tl, tr), (10.0, 10.0))
+  assert_true(br > 2.0 && br < 10.0 && bl > 10.0 && bl < 18.0, msg="\{(br, bl)}")
+  assert_true((10.0 - br - (bl - 10.0)).abs() < 0.001, msg="\{(br, bl)}")
+  t.run_for(@motion.layout_rest("box") - t.time())
+  assert_eq(drawn_corners(t, 0xFF0000FFL), (10.0, 10.0, 2.0, 18.0))
+  t.assert_idle()
+}
+
+///|
+test "a box resized by what holds it, its cause the same, has its ground its new shape at once" {
+  let w = Ref::new(100.0)
+  let t = @ui.Tester::new(fn(c) {
+    c.column(fn() {
+      let b = c.box(w=Px(w.val), h=Px(20.0), bg=0xFF0000FFL, fn() {  })
+      @motion.reshape(c, b, "box", by="one line", spec=@motion.tween(reshape_ms, ease=Linear))
+    })
+    |> ignore
+  })
+  w.val = 60.0
+  t.frame()
+  assert_eq(drawn_box(t, 0xFF0000FFL), (0.0, 0.0, 60.0, 20.0))
+  assert_eq(@motion.layout_rest("box"), -1.0)
+  t.assert_idle()
+}
+
+///|
+test "placed: drawn where what it reads is as this frame lays it out, never a frame behind" {
+  let room = Ref::new(0.0)
+  let t = @ui.Tester::new(fn(c) {
+    c.column(fn() {
+      c.box(w=Px(10.0), h=Px(room.val), fn() {  }) |> ignore
+      let target = c.box(w=Px(10.0), h=Px(10.0), bg=0xFF0000FFL, fn() {  })
+      @motion.measure(c, target, "target")
+      c.layer(fn() {
+        let b = c.box(w=Px(10.0), h=Px(10.0), bg=0x00FF00FFL, fn() {  })
+        // 20 under the target, wherever that is
+        @motion.placed(c, b, fn() {
+          match @motion.measured_rect(c, "target") {
+            Some((x, y, _, _)) => @ui.look(dx=x, dy=y + 20.0)
+            None => @ui.look(alpha=0.0)
+          }
+        })
+      })
+      |> ignore
+    })
+    |> ignore
+  })
+  assert_eq(drawn_box(t, 0x00FF00FFL), (0.0, 20.0, 10.0, 10.0))
+  // the target moved by what is over it: in the same frame, where it now is
+  room.val = 50.0
+  t.frame()
+  assert_eq(drawn_box(t, 0xFF0000FFL).1, 50.0)
+  assert_eq(drawn_box(t, 0x00FF00FFL), (0.0, 70.0, 10.0, 10.0))
+}
+
+///|
+test "an Anim is over at the end it declared as it was told, whoever asks and however its frames fall" {
+  let a = @motion.Anim::new(0.0)
+  let seen : Array[Bool] = []
+  let t = @ui.Tester::new(fn(c) {
+    ignore(c)
+    seen.push(a.over())
+    c.box(fn() {  }) |> ignore
+  })
+  // never told: over
+  assert_true(seen[seen.length() - 1])
+  // told in a frame: not over till its end (200 ms on), over from then
+  let told = Ref::new(false)
+  let t2 = @ui.Tester::new(fn(c) {
+    if !told.val {
+      told.val = true
+      a.animate(1.0, @motion.tween(reshape_ms, ease=Linear))
+    }
+    seen.push(a.over())
+    c.box(fn() {  }) |> ignore
+  })
+  assert_false(seen[seen.length() - 1])
+  t2.run_for(reshape_midway_ms)
+  assert_false(a.over())
+  t2.run_for(reshape_ms - reshape_midway_ms)
+  assert_true(a.over())
+  ignore(t)
 }

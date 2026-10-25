@@ -19,7 +19,8 @@ import { draftAt } from "./refs.ts";
 import { StationAddr } from "./station/addr.ts";
 import { isObject } from "./util.ts";
 import { FileSource, isBlob } from "./file-source.ts";
-import { headerSize } from "./imageSize.ts";
+import { outboxKeptId, sentKeptId } from "./drive-kept.ts";
+import { shownSize } from "./imageSize.ts";
 import { localId } from "./ids.ts";
 
 type J = any;
@@ -49,7 +50,8 @@ export type ComposerRef = { station: string; stationName: string; path: string; 
 /// A file handed to the core to send up: the page's id for it, and the file itself (`blob`), or where it is in a
 /// station's drive (`drive`: the chat's station copies it among its uploads; another station's is read from there and
 /// sent up as a picked one would be). A folder named by its path has neither.
-export type FileIn = { id: string; name: string; size: number; blob?: Blob | FileSource; pasted?: J; drive?: { station?: string; root: string; path: string }; ref?: ComposerRef };
+/// `kept`: its bytes are those kept on the device as it went up before (`outbox`, drive-kept.ts), not kept again.
+export type FileIn = { id: string; name: string; size: number; blob?: Blob | FileSource; pasted?: J; drive?: { station?: string; root: string; path: string }; ref?: ComposerRef; kept?: boolean };
 
 type State = {
   /// Cached only for the account database it was read from.
@@ -85,6 +87,27 @@ export const MAX_FILE = 1024 * 1024 * 1024;
 const PART = 4 * 1024 * 1024;
 /// How much more of a file has gone before it is said again, at the least.
 const SENT_STEP = 64 * 1024;
+/// The biggest image kept on the device as it is sent up (`keepSent`).
+const KEEP_SENT_MOST = 64 * 1024 * 1024;
+/// The biggest file kept on the device as it goes up with a message (`outbox`, drive-kept.ts): a bigger one whose
+/// source the app no longer has (it ended meanwhile) fails, to be added again.
+const KEEP_OUTBOX_MOST = 256 * 1024 * 1024;
+
+/// An image sent up from here, kept on the device as it is, a part at a time, under the name its station keeps it by
+/// (drive-kept.ts `sent`): its chat shows it, and opens it, from here, not read back from the station it went to. One
+/// that could not be read again whole is not kept (its chat reads it from its station).
+function keepSent(inner: Inner, station: string, path: string, blob: Blob | FileSource, size: number): Effect.Effect<void> {
+  const name = path.split("/").at(-1)!;
+  const id = sentKeptId(station, name);
+  const keep = Effect.gen(function* () {
+    for (let at = 0; at < size; at += PART) {
+      const bytes = new Uint8Array(yield* Effect.tryPromise({ try: () => blob.slice(at, at + PART).arrayBuffer(), catch: asCoreError }));
+      if (bytes.length !== Math.min(PART, size - at)) return yield* Effect.fail(new CoreError("upload", t("core-misc.composer.upload_missing", { name })));
+      yield* inner.driveKept.keep(id, "sent", 0, size, blob.type, at, bytes);
+    }
+  });
+  return Effect.flatMap(Effect.result(keep), (kept) => (kept._tag === "Failure" ? inner.driveKept.forget(id) : Effect.void));
+}
 
 const topicOf = (key: string): Topic => ({ topic: "composer", key });
 const empty = (db?: AccountDb): State => ({ db, edited: 0, joined: null, text: "", rev: 0, quotes: [], focus: null, files: [], starting: false, error: null, version: 0, taken: null, id: "" });
@@ -453,8 +476,8 @@ export class Composers {
       change({ sent });
       inner.views.local.uploadChanged(f.id, { sent });
     };
-    // An image's size, read while it goes up: every page holds its place from the first (the outbox's row too, before it
-    // is up, even when it was sent before its size was read), and it travels with the file.
+    // An image's or a film's size, read while it goes up: every page holds its place from the first (the outbox's row
+    // too, before it is up, even when it was sent before its size was read), and it travels with the file.
     // Another station's file: read from there a part at a time, as a picked one is read from the page.
     const elsewhere = f.drive?.station !== undefined && f.drive.station !== station ? f.drive : null;
     const blob = f.blob ?? (elsewhere ? remoteSource(inner, elsewhere as { station: string; root: string; path: string }, f.size) : undefined);
@@ -470,16 +493,36 @@ export class Composers {
       );
       return;
     }
-    // Its header first (a few bytes, at once); decoded only when that does not say. The desktop's core has the page's
-    // file as a FileSource (file-port.ts), read a part at a time: its header is read the same way, and it is decoded
-    // whole, here, only where this can.
-    const decoded = (b: Blob | FileSource) => typeof createImageBitmap === "function"
+    // What its bytes say first (a few of them, at once: imageSize.ts); an image is decoded only when they do not say,
+    // and only where this can (Hermes cannot). The desktop's and the phone's cores have the file as a FileSource
+    // (file-port.ts, the host's), read a part at a time: the same way here.
+    const decoded = (b: Blob | FileSource) => typeof createImageBitmap === "function" && b.type.startsWith("image/")
       ? (isBlob(b) ? Promise.resolve(b) : Promise.all(Array.from({ length: Math.ceil(b.size / PART) }, (_, i) => b.slice(i * PART, (i + 1) * PART).arrayBuffer()))
         .then((parts) => new Blob(parts, { type: b.type })))
         .then((whole) => createImageBitmap(whole)).then((m) => { const s = { width: m.width, height: m.height }; m.close(); return s; })
       : null;
-    const sizing: Promise<{ width: number; height: number } | null> = (isBlob(blob) || blob instanceof FileSource) && blob.type.startsWith("image/")
-      ? blob.slice(0, 64).arrayBuffer().then((head) => headerSize(new Uint8Array(head)) ?? decoded(blob)).then((s) => {
+    const shown = (b: Blob | FileSource) => shownSize((start, end) => b.slice(start, end).arrayBuffer().then((part) => new Uint8Array(part)), b.size);
+    // A file from here kept whole on the device, with what it is, read through beside its going up (not as it goes: the
+    // app ended part way up, what had gone was all there was, and its message failed all the same, pengxiao
+    // 2026-10-25): its message goes on from it should the app end before it is sent (`fromKept`). Kept already when it
+    // is that; no more once it is up or let go.
+    const noted = { station, name: f.name, size: f.size, type: f.blob?.type ?? "" };
+    const keeping = f.blob !== undefined && f.kept !== true && f.size > 0 && f.size <= KEEP_OUTBOX_MOST;
+    if (keeping) {
+      const source = f.blob!;
+      const going = () => this.#uploads.get(f.id) === upload && upload.file !== null;
+      inner.runner.fork(Effect.gen(function* () {
+        yield* inner.driveKept.noteUpload(f.id, noted);
+        for (let at = 0; at < f.size && going(); at += PART) {
+          const bytes = yield* Effect.orElseSucceed(Effect.tryPromise({ try: () => source.slice(at, at + PART).arrayBuffer(), catch: asCoreError }), () => null);
+          if (bytes === null || !going()) return;
+          yield* inner.driveKept.keep(outboxKeptId(f.id), "outbox", 0, f.size, noted.type, at, new Uint8Array(bytes));
+        }
+      }));
+    }
+    const kept = keeping || f.kept === true;
+    const sizing: Promise<{ width: number; height: number } | null> = (isBlob(blob) || blob instanceof FileSource) && (blob.type.startsWith("image/") || blob.type.startsWith("video/"))
+      ? shown(blob).then((s) => s ?? decoded(blob)).then((s) => {
         if (s) {
           if (this.#uploads.get(f.id) === upload) this.#sizes.set(f.id, s);
           change(s);
@@ -512,8 +555,17 @@ export class Composers {
         else have = told.have;
         went(told.file !== undefined ? f.size : have);
       }
+      // Kept before its message can name it, so its chat neither reads it back nor waits for it.
+      const path = isObject(saved) ? saved.path : undefined;
+      if (local && local.type.startsWith("image/") && f.size <= KEEP_SENT_MOST && typeof path === "string") yield* keepSent(inner, station, path, local, f.size);
       const size = yield* Effect.promise(() => sizing);
       if (size) saved = { ...saved, ...size };
+      // What its station said written down for its message (before the message can take it and let it go), the bytes
+      // no longer needed.
+      if (kept) {
+        yield* inner.driveKept.noteUpload(f.id, { ...noted, done: saved });
+        yield* inner.driveKept.forget(outboxKeptId(f.id));
+      }
       return saved;
     });
     inner.runner.fork(
@@ -538,7 +590,7 @@ export class Composers {
   uploaded(station: string, files: { id: string; name: string }[], retry = false): Effect.Effect<J[], CoreError> {
     return Effect.forEach(files, (f) => Effect.suspend(() => {
       let upload = this.#uploads.get(f.id);
-      if (!upload || upload.station !== station) return Effect.fail(new CoreError("upload", t("core-misc.composer.upload_missing", { name: f.name })));
+      if (!upload || upload.station !== station) return this.#fromKept(station, f);
       if (retry && upload.error && upload.file) {
         this.#upload("", station, upload.file);
         upload = this.#uploads.get(f.id)!;
@@ -547,7 +599,30 @@ export class Composers {
     }));
   }
 
-  /// An image's size as read here (`{}` while it is not), for a message that takes it.
+  /// A message's file this core did not set going (the app ended since), from what was kept of it as it went: what its
+  /// station said once it was up, else sent up again from its bytes kept whole; else it fails, to be added again.
+  #fromKept(station: string, f: { id: string; name: string }): Effect.Effect<J, CoreError> {
+    const inner = this.#inner;
+    const missing = new CoreError("upload", t("core-misc.composer.upload_missing", { name: f.name }));
+    return Effect.gen({ self: this }, function* () {
+      const noted = yield* inner.driveKept.uploadNoted(f.id);
+      if (!isObject(noted) || noted.station !== station || typeof noted.size !== "number") return yield* Effect.fail(missing);
+      if (noted.done !== undefined && noted.done !== null) return noted.done as J;
+      const id = outboxKeptId(f.id);
+      const size = noted.size;
+      const type = typeof noted.type === "string" ? noted.type : "";
+      if (!(yield* inner.driveKept.whole(id, size))) return yield* Effect.fail(missing);
+      const read = (start: number, end: number) => Effect.runPromise(inner.driveKept.read(id, 0, size, start, end - start)).then((got) => {
+        if (got === null) throw missing;
+        return got.bytes.buffer.slice(got.bytes.byteOffset, got.bytes.byteOffset + got.bytes.byteLength) as ArrayBuffer;
+      });
+      // (another call for it meanwhile: the one it set going)
+      if (!this.#uploads.has(f.id)) this.#upload("", station, { id: f.id, name: f.name, size, blob: new FileSource(size, type, read, () => {}), kept: true });
+      return yield* Deferred.await(this.#uploads.get(f.id)!.done);
+    });
+  }
+
+  /// An image's or a film's size as read here (`{}` while it is not), for a message that takes it.
   sizeOf(id: string): { width?: number; height?: number } {
     return this.#sizes.get(id) ?? {};
   }
@@ -568,11 +643,15 @@ export class Composers {
       const source = this.#uploads.get(f.id)?.file?.blob;
       if (source instanceof FileSource) source.close();
       this.#uploads.delete(f.id);
+      this.#inner.runner.fork(this.#inner.driveKept.dropUpload(f.id));
     }
   }
 
-  /// What is written, taken to be sent (the words trimmed), the composer left empty; `restore` puts it back.
-  take(key: string): { text: string; attachments: J[]; quotes: J[]; files: string[]; version: number } {
+  /// What is written, taken to be sent (the words trimmed), the composer left empty; `restore` puts it back. Its files
+  /// as they are at this moment, each one way: up, as the station keeps it (`attachments`), or still going up
+  /// (`uploads`: its message waits for it). The page sends them as said here, not as it last drew them: one up in
+  /// between went as both, and twice.
+  take(key: string): { text: string; attachments: J[]; quotes: J[]; uploads: { id: string; name: string; size: number }[]; version: number } {
     const s = this.#state(key);
     const taken = { text: s.text, quotes: s.quotes, files: s.files, id: this.#id(s) };
     s.taken = taken;
@@ -592,7 +671,7 @@ export class Composers {
       text: [taken.text.trim(), ...links.map(linkWords), ...paths.map((f) => pathWords(f.ref!))].filter((w) => w !== "").join("\n"),
       attachments: sent.flatMap((f) => (f.done ? [f.done] : [])),
       quotes: taken.quotes.map(({ author, text, comment, ts, role, file }) => ({ author, text, comment: comment.trim(), ...(ts ? { ts } : {}), ...(role ? { role } : {}), ...(file ? { file } : {}) })),
-      files: sent.map((f) => f.id),
+      uploads: sent.filter((f) => !f.done && !f.error).map(({ id, name, size }) => ({ id, name, size })),
       version,
     };
   }

@@ -1,11 +1,16 @@
-// Native views over the canvas: a system view the host keeps under the app's surface (a video player, a web page),
-// shown through a hole the app paints where it is (an instance of kind 9: transparent, written without blending).
-// What is painted after the hole draws over the view (a bar, a video's controls, frosted or not); what is painted
-// around it, or a clip, hides the rest of it. The host places the view where its node was painted, every frame it
-// moves, and hides it on the frames it is not painted (a page gone under another, scrolled away).
+// Native views in the canvas: a system view (a video player, a web page) the app paints where it shows, an instance
+// of kind 9 whose image is the view's (@hostapi.view_tex_base + its id) and whose c2 is the part of its content seen.
+// A host that keeps its views under the app's surface (macOS, iOS, Windows, the browser) leaves the canvas clear there
+// (transparent, written without blending): a hole it shows through. Android draws each view into a picture of its own
+// and draws that there, in the frame, so a view moves with a list in step with what is around it. What is painted
+// after it draws over the view (a bar, a video's controls, frosted or not); what is painted around it, or a clip, hides
+// the rest of it. The host places the view where its node was painted, every frame it moves (where it takes a touch),
+// and hides it on the frames it is not painted (a page gone under another, scrolled away).
 //
 // A video's bytes come only through the app: the player asks for ranges (`view_read_next`), the view's `read`
-// fetches them (still.fail: `station.file.part`, `drive.read` through the core) and answers.
+// fetches them (still.fail: `station.file.part`, `drive.read` through the core) and answers each as its bytes come
+// (the player goes on with the first of them while the rest is on its way), and stops reading one the player let go
+// of (it went elsewhere) or the view's that closes.
 //
 // Hosts: Android (NativeViews.java: Media3's ExoPlayer on a TextureView, a WebView), macOS and iOS (apple_views.m:
 // AVPlayerLayer, WKWebView), the browser (web/host.js: <video>, a sandboxed <iframe>), Windows (win_views.cpp: WebView2,
@@ -19,7 +24,9 @@
 /// A native view: a player or a page.
 pub struct NativeView {
   priv id : Int
-  priv read : ((Double, Int, (Bytes, Double) -> Unit) -> Unit)?
+  priv read : ((Double, Int, (Bytes, Double, Bool) -> Unit) -> () -> Unit)?
+  /// its reads under way, by the host's number for each: how each is let go of
+  priv reading : Map[Int, () -> Unit]
   priv info : FixedArray[Double]
   priv mut state : Int
   /// the frame it was last painted in, and where: content x y w h, clip x0 y0 x1 y1
@@ -48,6 +55,10 @@ pub struct NativeView {
   priv too_slow : String
   priv mut touch : Touch
   priv mut keeps_cookies : Bool
+  /// how many presses' rects the frame had when it was painted (those after it are drawn over it), and the rects of
+  /// those over it the host was last told (`covers`)
+  priv mut hits_before : Int
+  priv mut told_covers : String
 }
 
 ///|
@@ -166,7 +177,7 @@ let read_out : FixedArray[Double] = FixedArray::make(2, 0.0)
 fn NativeView::make(
   kind : Int,
   arg : String,
-  read : ((Double, Int, (Bytes, Double) -> Unit) -> Unit)?,
+  read : ((Double, Int, (Bytes, Double, Bool) -> Unit) -> () -> Unit)?,
   serve? : ((SiteRequest, SiteReply) -> Unit)? = None,
   leave? : (String) -> Unit = fn(_) {  },
   said? : ((String) -> Unit)? = None,
@@ -180,7 +191,10 @@ fn NativeView::make(
     too_slow,
     touch: All,
     keeps_cookies: false,
+    hits_before: 0,
+    told_covers: "",
     read,
+    reading: {},
     serve,
     leave,
     replies: {},
@@ -220,11 +234,13 @@ fn NativeView::make(
 
 ///|
 /// A player of the video (or audio) of MIME type `type_`, its bytes read through `read(offset, length, answer)`:
-/// `answer(bytes, total)` with the bytes from `offset` (at most `length`, fewer is fine, none only at the end) and the
-/// file's whole size (-1 not known; -2: it could not be read). Paused until `play`.
+/// `answer(bytes, total, more)` with its next bytes as they come, from `offset` on (all of them at most `length`,
+/// fewer is fine, none only at the end), the file's whole size (-1 not known; -2: it could not be read) and whether
+/// more of it comes (the last answer may bring none). What `read` gives back stops the read: called when the player
+/// lets go of it or the view closes before its last answer (nothing more of it is taken). Paused until `play`.
 pub fn NativeView::video(
   type_ : String,
-  read : (Double, Int, (Bytes, Double) -> Unit) -> Unit,
+  read : (Double, Int, (Bytes, Double, Bool) -> Unit) -> () -> Unit,
 ) -> NativeView {
   NativeView::make(1, type_, Some(read))
 }
@@ -364,6 +380,12 @@ pub fn NativeView::close(self : NativeView) -> Unit {
     return
   }
   self.closed = true
+  // its reads under way stopped: nothing more of them is wanted
+  let reading = self.reading.values().collect()
+  self.reading.clear()
+  for stop in reading {
+    stop()
+  }
   if self.id != 0 {
     h_view_close(self.id)
     open_views.retain(fn(v) { !physical_equal(v, self) })
@@ -485,6 +507,17 @@ pub fn NativeView::seek(self : NativeView, ms : Double) -> Unit {
 }
 
 ///|
+/// To about `ms` in, at once: the nearest point the player can show without working through the frames before it (a
+/// key frame: Android's CLOSEST_SYNC, Apple's seek with any tolerance), for a jump (±15 s, a tap on the timeline) where
+/// the very frame does not matter and waiting for it would; `seek` goes to the very frame.
+pub fn NativeView::seek_near(self : NativeView, ms : Double) -> Unit {
+  if self.id != 0 && !self.closed {
+    h_view_control(self.id, 11, ms)
+    self.info[1] = ms
+  }
+}
+
+///|
 /// A finger along its timeline (`on`), until it is let go (`false`): its seeks come one after another, each shown
 /// before the next is taken up and those asked meanwhile skipped but the last, its sound off meanwhile (Android: Media3's
 /// scrubbing mode; Apple's host takes its seeks one at a time always). Without it each seek gives up the one before,
@@ -492,6 +525,14 @@ pub fn NativeView::seek(self : NativeView, ms : Double) -> Unit {
 pub fn NativeView::scrub(self : NativeView, on : Bool) -> Unit {
   if self.id != 0 && !self.closed {
     h_view_control(self.id, 9, if on { 1.0 } else { 0.0 })
+  }
+}
+
+///|
+/// How loud it plays, 0 (none) to 1 (as it is): a host with no say over it (a page's) plays it as it is.
+pub fn NativeView::volume(self : NativeView, volume : Double) -> Unit {
+  if self.id != 0 && !self.closed {
+    h_view_control(self.id, 10, volume)
   }
 }
 
@@ -627,43 +668,53 @@ fn Ctx::paint_native(self : Ctx, i : Int, n : Node) -> Unit {
   if x1 <= x0 || y1 <= y0 {
     return
   }
-  // the hole: where the content is, within that, on whole device pixels (no edge row half covered)
+  // where it shows: where the content is, within that, on whole device pixels (no edge row half covered)
   let snap = fn(v : Double) { device_px(v, self.scale) }
   let hx0 = snap(dmax(x, x0))
   let hy0 = snap(dmax(y, y0))
   let hx1 = snap(dmin(x + w, x1))
   let hy1 = snap(dmin(y + h, y1))
-  if hx1 > hx0 && hy1 > hy0 {
+  let cx = snap(x)
+  let cy = snap(y)
+  let cw = snap(x + w) - cx
+  let ch = snap(y + h) - cy
+  if hx1 > hx0 && hy1 > hy0 && cw > 0.0 && ch > 0.0 {
     // round: the content's own rounded rect, cut by the clips it is painted in (its corners where the content's are,
     // not where the clip cuts it)
     let round = radius > 0.0
+    let (sx, sy, sw, sh) = if round {
+      (cx, cy, cw, ch)
+    } else {
+      (hx0, hy0, hx1 - hx0, hy1 - hy0)
+    }
+    // (its image the view's, the part of its content there: a host that draws the view's picture draws that)
     self.push_inst(
-      if round { snap(x) } else { hx0 },
-      if round { snap(y) } else { hy0 },
-      if round { snap(x + w) - snap(x) } else { hx1 - hx0 },
-      if round { snap(y + h) - snap(y) } else { hy1 - hy0 },
+      sx,
+      sy,
+      sw,
+      sh,
       radius,
       9.0,
       0.0,
       0.0,
-      0L,
+      0xFFFFFFFFL,
       1.0,
-      0.0,
-      0.0,
-      0.0,
-      0.0,
+      (sx - cx) / cw,
+      (sy - cy) / ch,
+      sw / cw,
+      sh / ch,
     )
+    self.inst[(self.ninst - 1) * inst_size + 20] = (@hostapi.view_tex_base + v.id).to_double()
   }
   // (by build: a frame built again paints again, and what the last build did not paint is not shown)
   v.painted = self.build_no
-  // (its content on whole device pixels too, as its hole is: placed between pixels, the row its edge half covers
-  // shows what is under the canvas, a line along the picture's edge)
-  let cx0 = snap(x)
-  let cy0 = snap(y)
-  v.at[0] = cx0
-  v.at[1] = cy0
-  v.at[2] = snap(x + w) - cx0
-  v.at[3] = snap(y + h) - cy0
+  v.hits_before = self.next_hit_ids.length()
+  // (its content on whole device pixels too, as where it shows is: placed between pixels, the row its edge half
+  // covers shows what is under the canvas, a line along the picture's edge)
+  v.at[0] = cx
+  v.at[1] = cy
+  v.at[2] = cw
+  v.at[3] = ch
   v.at[4] = snap(x0)
   v.at[5] = snap(y0)
   v.at[6] = snap(x1)
@@ -711,6 +762,9 @@ fn Ctx::sync_views(self : Ctx) -> Unit {
         }
       }
     }
+    if shown {
+      v.tell_covers(self)
+    }
     if moved {
       for j in 0..<9 {
         v.told[j] = v.at[j]
@@ -757,18 +811,81 @@ fn Ctx::sync_views(self : Ctx) -> Unit {
       Some(read) =>
         for _ in 0..<64 {
           let req = h_view_read_next(v.id, read_out)
-          if req <= 0 {
+          if req == 0 {
             break
           }
-          let id = v.id
-          read(read_out[0], read_out[1].to_int(), fn(data, total) {
-            if !v.closed {
-              h_view_read_answer(id, req, data, total)
+          // one the player let go of: stopped, its answers taken no more
+          if req < 0 {
+            match v.reading.get(-req) {
+              Some(stop) => {
+                v.reading.remove(-req)
+                stop()
+              }
+              None => ()
             }
+            continue
+          }
+          let id = v.id
+          // (answered to its end, or let go of: nothing more of it handed on)
+          let ended = Ref(false)
+          let gone = Ref(false)
+          let stop = read(read_out[0], read_out[1].to_int(), fn(data, total, more) {
+            if ended.val || gone.val || v.closed {
+              return
+            }
+            if !more {
+              ended.val = true
+              v.reading.remove(req)
+            }
+            h_view_read_answer(id, req, data, total, more)
           })
+          if !ended.val {
+            v.reading[req] = fn() {
+              gone.val = true
+              stop()
+            }
+          }
         }
       None => ()
     }
+  }
+}
+
+///|
+/// The most rects of presses over a view the host is told (`covers`).
+let covers_most : Int = 32
+
+///|
+/// Where what takes a press is drawn over the view (painted after it: a menu, a panel raised over the page, its
+/// ground that puts it away, a bar's button over a page scrolled under it): a finger there is the canvas's, not the
+/// page's, as the app's own presses go to what is on top. The host is told them as they change (view_tell 4: "x0 y0
+/// x1 y1 …" in points, the window's; "" none), each cut to where the view is seen.
+fn NativeView::tell_covers(self : NativeView, c : Ctx) -> Unit {
+  let v = self
+  let (vx0, vy0, vx1, vy1) = (v.at[4], v.at[5], v.at[6], v.at[7])
+  let out = StringBuilder()
+  let mut n = 0
+  let rects = c.next_hit_rects
+  for j in v.hits_before..<c.next_hit_ids.length() {
+    if n >= covers_most {
+      break
+    }
+    let x0 = dmax(rects[j * 4], vx0)
+    let y0 = dmax(rects[j * 4 + 1], vy0)
+    let x1 = dmin(rects[j * 4 + 2], vx1)
+    let y1 = dmin(rects[j * 4 + 3], vy1)
+    if x1 > x0 && y1 > y0 {
+      if n > 0 {
+        out.write_string(" ")
+      }
+      out.write_string("\{x0} \{y0} \{x1} \{y1}")
+      n += 1
+    }
+  }
+  let said = out.to_string()
+  if said != v.told_covers {
+    v.told_covers = said
+    h_view_tell(v.id, 4, said)
   }
 }
 
@@ -1062,6 +1179,30 @@ let captures : Map[Int, Bool] = Map([])
 let wheels : Map[Int, Double] = Map([])
 
 ///|
+/// The wheel's sideways part over a box that keeps it, and what was held with it last.
+let wheels_x : Map[Int, Double] = Map([])
+
+///|
+let wheel_mods : Map[Int, Int] = Map([])
+
+///|
+/// What a wheel came with (`wheel_of`'s third): ⇧, ⌃, ⌥, ⌘ held, and a trackpad's pinch (a wheel with ⌃, as a browser
+/// gives a pinch: a page zooms by it, no list scrolls).
+pub let wheel_mod_shift : Int = 1
+
+///|
+pub let wheel_mod_ctrl : Int = 2
+
+///|
+pub let wheel_mod_alt : Int = 4
+
+///|
+pub let wheel_mod_cmd : Int = 8
+
+///|
+pub let wheel_mod_pinch : Int = 16
+
+///|
 /// The box of `id` (given to it this frame) takes the pointer: a finger dragging on it keeps it pressed (`pressed`,
 /// `pointer`: a pan), nothing under it scrolls, and the wheel over it is kept for `wheel`.
 pub fn capture(c : Ctx, id : Int) -> Unit {
@@ -1073,6 +1214,8 @@ pub fn capture(c : Ctx, id : Int) -> Unit {
 /// What the wheel moved over `id` since last asked (its dy, as a list would scroll by it).
 pub fn wheel(c : Ctx, id : Int) -> Double {
   ignore(c)
+  wheels_x.remove(id)
+  wheel_mods.remove(id)
   match wheels.get(id) {
     Some(d) => {
       wheels.remove(id)
@@ -1080,6 +1223,20 @@ pub fn wheel(c : Ctx, id : Int) -> Double {
     }
     None => 0.0
   }
+}
+
+///|
+/// What the wheel moved over `id` since last asked, both ways (dx, dy, as a list would scroll by them), and what was
+/// held with it last (wheel_mod_*): a picture pans by it, and zooms with ⌃ or ⌘ (or a pinch).
+pub fn wheel_of(c : Ctx, id : Int) -> (Double, Double, Int) {
+  ignore(c)
+  let dx = wheels_x.get(id).unwrap_or(0.0)
+  let dy = wheels.get(id).unwrap_or(0.0)
+  let mods = wheel_mods.get(id).unwrap_or(0)
+  wheels.remove(id)
+  wheels_x.remove(id)
+  wheel_mods.remove(id)
+  (dx, dy, mods)
 }
 
 ///|

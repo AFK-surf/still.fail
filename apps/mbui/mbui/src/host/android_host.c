@@ -38,25 +38,26 @@ static jclass host_cls, text_cls, images_cls, login_cls, picks_cls, views_cls, p
 static jmethodID m_reduce_motion;
 static jmethodID m_text_menu;
 static jmethodID m_request_frame, m_wake_after, m_set_ime, m_clipboard, m_log, m_bench,
-    m_exit, m_metrics, m_shape, m_glyph, m_generation, m_img_load, m_img_free, m_img_reload, m_bl_start, m_bl_port,
+    m_exit, m_metrics, m_shape, m_glyph, m_glyph_put, m_generation, m_img_load, m_img_free, m_img_reload, m_bl_start, m_bl_port,
     m_bl_open, m_bl_back, m_bl_end, m_back_enabled, m_pk_start, m_pk_state, m_pk_count, m_pk_name, m_pk_bytes, m_pk_info,
     m_pk_end, m_drive, m_ref_begin, m_ref_text, m_ref_end, m_ref_frame, m_text_key, m_v_open, m_v_place, m_v_close,
     m_v_control, m_v_info, m_v_read_next, m_v_read_answer, m_v_site_next, m_v_site_body, m_v_site_head,
     m_v_site_chunk, m_v_site_end, m_v_site_state, m_v_site_load, m_v_tell, m_pdf_open, m_pdf_pages, m_pdf_size, m_pdf_load, m_pdf_close,
-    m_save, m_system_dark, m_font_scale, m_a11y_on, m_a11y_tree, m_set_dark, m_nt_show, m_nt_cancel, m_nt_state, m_nt_text, m_set_sideways, m_word_at,
+    m_save, m_system_dark, m_font_scale, m_native_pointing, m_a11y_on, m_a11y_tree, m_set_dark, m_nt_show, m_nt_cancel, m_nt_state, m_nt_text, m_set_sideways, m_word_at,
     m_open_url, m_open_tab, m_hold_words, m_clipboard_secret, m_over_done, m_text_scale, m_img_hold, m_img_pump;
 static jclass updates_cls, shares_cls, keeps_cls, holds_cls;
 static jclass gallery_cls, marks_cls;
 static void device_init(JNIEnv *env);  // android_device.h
 static jmethodID m_mk_start, m_mk_state, m_mk_png;
-static jmethodID m_face_add, m_face_add_bytes, m_face_clear;
+static jmethodID m_face_add, m_face_add_bytes, m_face_clear, m_ahead, m_flush;
 static jmethodID m_cs_known, m_cs_decode;
-static jmethodID m_v_text, m_v_still;
+static jmethodID m_v_text, m_v_still, m_v_lost;
 static jmethodID m_ga_access, m_ga_ask, m_ga_answers, m_ga_read, m_ga_state, m_ga_rows, m_ga_end, m_pk_photo;
 static jmethodID m_kp_begin, m_kp_append, m_kp_finish, m_kp_state, m_kp_where, m_kp_end;
 static jmethodID m_up_version, m_up_install, m_up_state, m_up_package, m_sh_share, m_sh_in, m_sh_file;
 static mb_back_fn back_cb;
 static jdoubleArray shape_buf, small_buf;
+static jintArray ahead_buf;
 static int want_frame;
 // A run to a declared moment (MBView's shotFrame, Native.ownClock): the app's clock is its frames', the time the
 // frame being drawn (or the last one) was given.
@@ -95,6 +96,7 @@ JNIEXPORT jint JNI_OnLoad(JavaVM *v, void *reserved) {
   m_drive = (*env)->GetStaticMethodID(env, host_cls, "drive", "(ILjava/lang/String;)I");
   m_system_dark = (*env)->GetStaticMethodID(env, host_cls, "systemDark", "()Z");
   m_font_scale = (*env)->GetStaticMethodID(env, host_cls, "fontScale", "()F");
+  m_native_pointing = (*env)->GetStaticMethodID(env, host_cls, "nativePointing", "()I");
   m_a11y_on = (*env)->GetStaticMethodID(env, host_cls, "a11yOn", "()Z");
   m_a11y_tree = (*env)->GetStaticMethodID(env, host_cls, "a11yTree", "(Ljava/lang/String;)V");
   m_set_dark = (*env)->GetStaticMethodID(env, host_cls, "setDark", "(Z)V");
@@ -114,11 +116,14 @@ JNIEXPORT jint JNI_OnLoad(JavaVM *v, void *reserved) {
   m_metrics = (*env)->GetStaticMethodID(env, text_cls, "fontMetrics", "(DII[D)V");
   m_shape = (*env)->GetStaticMethodID(env, text_cls, "shape", "(Ljava/lang/String;DII[D)I");
   m_glyph = (*env)->GetStaticMethodID(env, text_cls, "glyph", "(I[D)V");
+  m_glyph_put = (*env)->GetStaticMethodID(env, text_cls, "glyphPut", "(III)V");
   m_generation = (*env)->GetStaticMethodID(env, text_cls, "atlasGeneration", "()I");
   m_text_key = (*env)->GetStaticMethodID(env, text_cls, "textKey", "(Ljava/lang/String;DII)I");
   m_face_add = (*env)->GetStaticMethodID(env, text_cls, "faceAdd", "(ILjava/lang/String;I)Z");
   m_face_add_bytes = (*env)->GetStaticMethodID(env, text_cls, "faceAddBytes", "(I[BI)Z");
   m_face_clear = (*env)->GetStaticMethodID(env, text_cls, "faceClear", "(I)V");
+  m_ahead = (*env)->GetStaticMethodID(env, text_cls, "ahead", "([II)V");
+  m_flush = (*env)->GetStaticMethodID(env, text_cls, "flush", "()V");
   m_ref_begin = (*env)->GetStaticMethodID(env, text_cls, "refBegin", "(DDDI)V");
   m_ref_text = (*env)->GetStaticMethodID(env, text_cls, "refText", "(Ljava/lang/String;DIIDDI[D)V");
   m_ref_end = (*env)->GetStaticMethodID(env, text_cls, "refEnd", "(Ljava/lang/String;)Z");
@@ -171,10 +176,11 @@ JNIEXPORT jint JNI_OnLoad(JavaVM *v, void *reserved) {
   m_v_open = (*env)->GetStaticMethodID(env, views_cls, "open", "(ILjava/lang/String;)I");
   m_v_place = (*env)->GetStaticMethodID(env, views_cls, "place", "(IFFFFFFFFFZ)V");
   m_v_close = (*env)->GetStaticMethodID(env, views_cls, "close", "(I)V");
+  m_v_lost = (*env)->GetStaticMethodID(env, views_cls, "lost", "()V");
   m_v_control = (*env)->GetStaticMethodID(env, views_cls, "control", "(IID)V");
   m_v_info = (*env)->GetStaticMethodID(env, views_cls, "info", "(I[D)I");
   m_v_read_next = (*env)->GetStaticMethodID(env, views_cls, "readNext", "(I[D)I");
-  m_v_read_answer = (*env)->GetStaticMethodID(env, views_cls, "readAnswer", "(II[BD)V");
+  m_v_read_answer = (*env)->GetStaticMethodID(env, views_cls, "readAnswer", "(II[BDZ)V");
   m_v_site_next = (*env)->GetStaticMethodID(env, views_cls, "siteNext", "(I)Ljava/lang/String;");
   m_v_site_body = (*env)->GetStaticMethodID(env, views_cls, "siteBody", "(II)[B");
   m_v_site_head = (*env)->GetStaticMethodID(env, views_cls, "siteHead", "(IIILjava/lang/String;)V");
@@ -202,6 +208,7 @@ JNIEXPORT jint JNI_OnLoad(JavaVM *v, void *reserved) {
   m_nt_text = (*env)->GetStaticMethodID(env, notices_cls, "text", "(I)Ljava/lang/String;");
   shape_buf = (*env)->NewGlobalRef(env, (*env)->NewDoubleArray(env, 4 * 8192));
   small_buf = (*env)->NewGlobalRef(env, (*env)->NewDoubleArray(env, 16));
+  ahead_buf = (*env)->NewGlobalRef(env, (*env)->NewIntArray(env, 4096));
   device_init(env);
   return JNI_VERSION_1_6;
 }
@@ -233,12 +240,17 @@ typedef struct {
 static mb_image *imgs;  // by id; ids are not reused
 static int nimgs, img_cap;
 
-// a stream's texture (Streams.java; its instances' image is MB_STREAM_TEX + its id: src/hostapi/stream.mbt), below
+// a stream's texture (Streams.java; its instances' image is MB_STREAM_TEX + its id: src/hostapi/stream.mbt), and a
+// native view's picture (NativeViews.Picture; MB_VIEW_TEX + its id: src/hostapi/host.mbt view_tex_base), below
 #define MB_STREAM_TEX 4194304
+#define MB_VIEW_TEX 8388608
 static GLuint stream_tex(int id);
 static void streams_lost(JNIEnv *env);
+static GLuint view_tex(int id);
+static void views_lost(JNIEnv *env);
 
 static GLuint image_tex(int id) {
+  if (id > MB_VIEW_TEX) return view_tex(id - MB_VIEW_TEX);
   if (id > MB_STREAM_TEX) return stream_tex(id - MB_STREAM_TEX);
   return id > 0 && id < nimgs && imgs[id].state == 1 ? imgs[id].tex : 0;
 }
@@ -253,6 +265,7 @@ static void images_lost(JNIEnv *env) {
   for (int i = 0; i < nimgs; i++) imgs[i].tex = 0;
   (*env)->CallStaticVoidMethod(env, images_cls, m_img_reload);
   streams_lost(env);
+  views_lost(env);
 }
 
 static int image_new(void) {
@@ -269,7 +282,14 @@ static int image_new(void) {
 // Renderer: the same instances and shader as Metal and WebGL2.
 
 // the numbers of an instance (src/ui/scene.mbt)
-#define MB_INST 36
+#define MB_INST 52
+// the glyphs' atlases, square, what goes where in them MoonBit's (hostapi's atlas.mbt): the words' (a byte a texel,
+// how much of it the glyph covers: drawn in the text's colour; as many bytes as one RGBA atlas half as wide) and colour
+// glyphs' (RGBA: an emoji's own). A colour glyph's place across is MB_ATLAS_COLOR_U past its place in its atlas (what
+// MoonBit says of it, @hostapi.colour_atlas_u): the shader takes the atlas by it, as Apple's does.
+#define MB_ATLAS 4096
+#define MB_ATLAS_COLOR 1024
+#define MB_ATLAS_COLOR_U 16384
 
 static const char *VS =
     "#version 300 es\n"
@@ -282,11 +302,15 @@ static const char *VS =
     "layout(location=6) in vec4 a_rc;\n"
     "layout(location=7) in vec4 a_rs;\n"
     "layout(location=8) in vec4 a_rot;\n"
+    "layout(location=9) in vec4 a_rr;\n"
+    "layout(location=10) in vec4 a_oclip;\n"
+    "layout(location=11) in vec4 a_orc;\n"
+    "layout(location=12) in vec4 a_ors;\n"
     "uniform vec2 u_vp;\n"
     "uniform vec4 u_gb;\n"
     "out vec2 v_pos; out vec2 v_cpos;\n"
     "flat out vec4 v_rect; flat out vec4 v_p; flat out vec4 v_color; flat out vec4 v_c2; flat out vec4 v_clip; flat out vec4 v_pad;\n"
-    "flat out vec4 v_rc; flat out vec4 v_rs;\n"
+    "flat out vec4 v_rc; flat out vec4 v_rs; flat out vec4 v_rr; flat out vec4 v_oclip; flat out vec4 v_orc; flat out vec4 v_ors;\n"
     "void main() {\n"
     "  int vid = gl_VertexID;\n"
     "  vec2 corner = vec2((vid == 1 || vid == 4 || vid == 5) ? 1.0 : 0.0, (vid == 2 || vid == 3 || vid == 5) ? 1.0 : 0.0);\n"
@@ -301,7 +325,8 @@ static const char *VS =
     "  vec2 at = pos;\n"
     "  if (a_rot.x != 0.0) { vec2 d = pos - a_rot.yz; float c = cos(a_rot.x), s = sin(a_rot.x); at = a_rot.yz + vec2(c * d.x - s * d.y, s * d.x + c * d.y); }\n"
     "  gl_Position = vec4(at.x / u_vp.x * 2.0 - 1.0, 1.0 - at.y / u_vp.y * 2.0, 0.0, 1.0);\n"
-    "  v_pos = pos; v_cpos = a_rot.w > 0.5 ? at : pos; v_rect = a_rect; v_p = a_p; v_color = a_color; v_c2 = a_c2; v_clip = a_clip; v_pad = a_pad; v_rc = a_rc; v_rs = a_rs;\n"
+    "  v_pos = pos; v_cpos = a_rot.w > 0.5 ? at : pos; v_rect = a_rect; v_p = a_p; v_color = a_color; v_c2 = a_c2; v_clip = a_clip; v_pad = a_pad; v_rc = a_rc; v_rs = a_rs; v_rr = a_rr;\n"
+    "  v_oclip = a_oclip; v_orc = a_orc; v_ors = a_ors;\n"
     "}\n";
 
 static const char *FS =
@@ -309,28 +334,29 @@ static const char *FS =
     "precision highp float;\n"
     "in vec2 v_pos; in vec2 v_cpos;\n"
     "flat in vec4 v_rect; flat in vec4 v_p; flat in vec4 v_color; flat in vec4 v_c2; flat in vec4 v_clip; flat in vec4 v_pad;\n"
-    "flat in vec4 v_rc; flat in vec4 v_rs;\n"
+    "flat in vec4 v_rc; flat in vec4 v_rs; flat in vec4 v_rr; flat in vec4 v_oclip; flat in vec4 v_orc; flat in vec4 v_ors;\n"
     "uniform float u_scale;\n"
     "uniform sampler2D u_atlas;\n"
+    "uniform sampler2D u_catlas;\n"
     "uniform sampler2D u_img;\n"
     "// glass (src/ui/glass.mbt): the blurred copy under it and where a point is in it (uv = p * u_map.xy + u_map.zw, kept\n"
     "// in u_uvc), a liquid group's shapes and corners, how many\n"
-    "uniform sampler2D u_bd;\n"
+    "uniform highp sampler2D u_bd;\n"
     "uniform vec4 u_map;\n"
     "uniform vec4 u_uvc;\n"
     "uniform vec4 u_shape[8];\n"
     "uniform vec4 u_rad[2];\n"
     "uniform int u_n;\n"
-    "// the pieces of the frame's shapes (src/ui/shape.mbt: the instances of kind 12 after every one drawn), 2043 fours\n"
-    "// (227 instances) a row\n"
+    "// the pieces of the frame's shapes (src/ui/shape.mbt: the instances of kind 12 after every one drawn), 2041 fours\n"
+    "// (157 instances) a row\n"
     "uniform highp sampler2D u_segs;\n"
     "out vec4 o;\n"
     "#define float2 vec2\n"
     "#define float4 vec4\n"
     MB_CORNER_SL
-    "float sd_rr(vec2 p, vec4 r, float rad) {\n"
+    "float sd_rr(vec2 p, vec4 r, vec4 rad) {\n"
     "  vec2 hs = r.zw * 0.5;\n"
-    "  return mb_sd_box(p - r.xy - hs, hs, rad, 1e9);\n"
+    "  return mb_sd_box(p - r.xy - hs, hs, mb_corner_of(p - r.xy - hs, rad), 1e9);\n"
     "}\n"
     "// a notch cut into the top edge (scene.mbt 21-23): a circle about the top's middle (pad.y below it, pad.z its radius),\n"
     "// met by the edge through fillets (pad.w): the rounded intersection with what is outside the circle\n"
@@ -350,7 +376,7 @@ static const char *FS =
     "  float d = 1e9;\n"
     "  for (int i = 0; i < 8; i++) {\n"
     "    if (i >= u_n) break;\n"
-    "    d = smin_k(d, sd_rr(p, u_shape[i], u_rad[i / 4][i % 4]), k);\n"
+    "    d = smin_k(d, sd_rr(p, u_shape[i], vec4(u_rad[i / 4][i % 4])), k);\n"
     "  }\n"
     "  return d;\n"
     "}\n"
@@ -371,7 +397,8 @@ static const char *FS =
     "// what it shows at p, as if uncut\n"
     "void shade(vec2 p) {\n"
     "  int kind = int(v_p.y + 0.5);\n"
-    "  if (kind == 9) { vec2 hh = v_rect.zw * 0.5; float rr = min(v_p.x, min(hh.x, hh.y)); vec2 q = abs(p - v_rect.xy - hh) - hh + rr; if (length(max(q, 0.0)) + min(max(q.x, q.y), 0.0) - rr > 0.0) discard; o = vec4(0.0); return; }\n"
+    "  // where a native view shows: its picture (NativeViews.Picture), the part of it c2 says, cut to its corners\n"
+    "  if (kind == 9) { vec2 hh = v_rect.zw * 0.5; float rr = min(mb_corner_of(p - v_rect.xy - hh, v_rr), min(hh.x, hh.y)); vec2 q = abs(p - v_rect.xy - hh) - hh + rr; float a = clamp(0.5 - (length(max(q, 0.0)) + min(max(q.x, q.y), 0.0) - rr) * u_scale, 0.0, 1.0); if (a <= 0.0) discard; o = texture(u_img, v_c2.xy + clamp((p - v_rect.xy) / v_rect.zw, 0.0, 1.0) * v_c2.zw) * a; return; }\n"
     "  vec4 col = v_color;\n"
     "  if (kind == 11) {\n"
     "    // a band of a shape (src/ui/shape.mbt): c2.y of its pieces from c2.x; p.x half its stroke's width (0: a fill,\n"
@@ -380,11 +407,11 @@ static const char *FS =
     "    float a;\n"
     "    if (v_p.x > 0.0) {\n"
     "      float d = 1e9;\n"
-    "      for (int i = first; i < first + n; i++) { int t = (i / 6) * 9 + mb_seg_slot(i); d = min(d, mb_seg_dist(texelFetch(u_segs, ivec2(t % 2043, t / 2043), 0), v_rect, p)); }\n"
+    "      for (int i = first; i < first + n; i++) { int t = (i / 6) * 13 + mb_seg_slot(i); d = min(d, mb_seg_dist(texelFetch(u_segs, ivec2(t % 2041, t / 2041), 0), v_rect, p)); }\n"
     "      a = clamp(0.5 - (d - v_p.x) * u_scale, 0.0, 1.0);\n"
     "    } else {\n"
     "      vec4 w = vec4(0.0);\n"
-    "      for (int i = first; i < first + n; i++) { int t = (i / 6) * 9 + mb_seg_slot(i); w += mb_path_rows(texelFetch(u_segs, ivec2(t % 2043, t / 2043), 0), v_rect, p, u_scale); }\n"
+    "      for (int i = first; i < first + n; i++) { int t = (i / 6) * 13 + mb_seg_slot(i); w += mb_path_rows(texelFetch(u_segs, ivec2(t % 2041, t / 2041), 0), v_rect, p, u_scale); }\n"
     "      a = mb_path_cover(w, v_c2.z);\n"
     "    }\n"
     "    o = vec4(col.rgb, 1.0) * col.a * a;\n"
@@ -399,8 +426,15 @@ static const char *FS =
     "    return;\n"
     "  }\n"
     "  if (kind == 1 || kind == 3 || kind == 7) {\n"
-    "    vec2 uv = (v_c2.xy + (p - v_rect.xy) / v_rect.zw * v_c2.zw) / 2048.0;\n"
-    "    vec4 t = texture(u_atlas, uv);\n"
+    "    // within its own cell (c2: where in the atlas, in texels; a colour glyph's 16384 across past its place in theirs),\n"
+    "    // however its rect is stretched or turned: a sample past the cell's edge texels would blend in what lies beside\n"
+    "    // it (another glyph, one left there before). The words' atlas has a glyph's cover alone: white, premultiplied, as\n"
+    "    // the colour one would have it\n"
+    "    bool colour = v_c2.x >= 16384.0;\n"
+    "    vec2 at = vec2(v_c2.x - (colour ? 16384.0 : 0.0), v_c2.y);\n"
+    "    vec2 uv = clamp(at + (p - v_rect.xy) / v_rect.zw * v_c2.zw, at + 0.5, at + v_c2.zw - 0.5);\n"
+    "    vec4 t = colour ? textureLod(u_catlas, uv / vec2(textureSize(u_catlas, 0)), 0.0)\n"
+    "                    : vec4(textureLod(u_atlas, uv / vec2(textureSize(u_atlas, 0)), 0.0).r);\n"
     "    if (kind == 7) {\n"
     "      // inked by how light what is under its glass is, looked at round the glass's middle\n"
     "      vec2 c = v_pad.yz; float r = v_pad.w * 0.5;\n"
@@ -439,6 +473,7 @@ static const char *FS =
     "    // the edge shaded, more on the side away from the light, so the shape reads over a light ground too\n"
     "    c *= 1.0 - v_c2.x * band * (0.1 + 0.25 * max(-ndl, 0.0));\n"
     "    c = c + (1.0 - c) * clamp(spec, 0.0, 1.0);\n"
+    "    c += mb_dither(p * u_scale) / 255.0;\n"
     "    o = vec4(c, 1.0) * (a * v_c2.w);\n"
     "    return;\n"
     "  }\n"
@@ -446,7 +481,9 @@ static const char *FS =
     "  vec2 c = v_rect.xy + hs;\n"
     "  // worked out as near the curve as its cover, its edge or its blur reaches\n"
     "  float band = 1.0 + 2.0 / u_scale + (kind == 2 ? max(v_p.w, 0.5) : max(v_p.z, 0.0));\n"
-    "  float d = mb_sd_box(p - c, hs, v_p.x, band);\n"
+    "  // (its corner by p: v_rr, each its own)\n"
+    "  float rad = mb_corner_of(p - c, v_rr);\n"
+    "  float d = mb_sd_box(p - c, hs, rad, band);\n"
     "  if (kind == 0 || kind == 5) d = notch_cut(d, p, v_rect, v_pad);\n"
     "  if (kind == 4) {\n"
     "    vec2 uv = v_c2.xy + clamp((p - v_rect.xy) / v_rect.zw, 0.0, 1.0) * v_c2.zw;\n"
@@ -455,10 +492,11 @@ static const char *FS =
     "  }\n"
     "  if (kind == 2) {\n"
     "    // as Core Animation's: the shape blurred, sigma its radius (corner.sl mb_shadow)\n"
-    "    float a = mb_shadow(p - c, hs, v_p.x, max(v_p.w, 0.25));\n"
+    "    float a = mb_shadow(p - c, hs, rad, max(v_p.w, 0.25));\n"
     "    // glass's: only outside its box (c2.y above it)\n"
     "    if (v_c2.x > 0.5) {\n"
-    "      float db = mb_sd_box(p - c + vec2(0.0, v_c2.y), hs, v_p.x, band);\n"
+    "      vec2 q = p - c + vec2(0.0, v_c2.y);\n"
+    "      float db = mb_sd_box(q, hs, mb_corner_of(q, v_rr), band);\n"
     "      a *= clamp(0.5 + db * u_scale, 0.0, 1.0);\n"
     "    }\n"
     "    o = vec4(col.rgb, 1.0) * col.a * a;\n"
@@ -473,12 +511,14 @@ static const char *FS =
     "    g3 = g3 * (1.0 - col.a) + col.rgb * col.a;\n"
     "    if (v_c2.x + v_c2.y + v_c2.z > 0.0) {\n"
     "      float edge = clamp(0.5 + (d + 0.5) * u_scale, 0.0, 1.0);\n"
-    "      float lit = clamp(0.5 + notch_cut(sd_rr(p - 0.5, v_rect, v_p.x), p - 0.5, v_rect, v_pad) * u_scale, 0.0, 1.0);\n"
-    "      float back = clamp(0.5 + notch_cut(sd_rr(p + 0.5, v_rect, v_p.x), p + 0.5, v_rect, v_pad) * u_scale, 0.0, 1.0);\n"
+    "      float lit = clamp(0.5 + notch_cut(sd_rr(p - 0.5, v_rect, v_rr), p - 0.5, v_rect, v_pad) * u_scale, 0.0, 1.0);\n"
+    "      float back = clamp(0.5 + notch_cut(sd_rr(p + 0.5, v_rect, v_rr), p + 0.5, v_rect, v_pad) * u_scale, 0.0, 1.0);\n"
     "      g3 = mix(g3, vec3(1.0), v_c2.x * edge);\n"
     "      g3 = mix(g3, vec3(1.0), v_c2.y * lit);\n"
     "      g3 = mix(g3, vec3(1.0), v_c2.z * back);\n"
     "    }\n"
+    "    // dithered as it is written to 8 bits, so its slopes do not band (corner.sl mb_dither)\n"
+    "    g3 += mb_dither(p * u_scale) / 255.0;\n"
     "    o = vec4(g3, 1.0) * (a * v_c2.w);\n"
     "    return;\n"
     "  }\n"
@@ -498,6 +538,11 @@ static const char *FS =
     "    cover = clip_cover(cp, v_clip, v_rc, v_rs, u_scale);\n"
     "    if (cover <= 0.0) discard;\n"
     "  } else if (cp.x < v_clip.x || cp.y < v_clip.y || cp.x > v_clip.z || cp.y > v_clip.w) discard;\n"
+    "  // and by the clip outside it, where it has one (scene.mbt 40-51: a pane round an image's frame in its corner)\n"
+    "  if (max(max(v_orc.x, v_orc.y), max(v_orc.z, v_orc.w)) > 0.0) {\n"
+    "    cover *= clip_cover(cp, v_oclip, v_orc, v_ors, u_scale);\n"
+    "    if (cover <= 0.0) discard;\n"
+    "  }\n"
     "  shade(p);\n"
     "  o *= cover;\n"
     "}\n";
@@ -514,7 +559,7 @@ static const char *PFS =
     "precision highp float;\n"
     "// The backdrop's passes: u_a.xy the source's texel, u_a.z 1 halving (dual Kawase's down), 2 a Gaussian along u_b.zw\n"
     "// of deviation u_a.w (texels); u_b.xy the last texel's centre of what the source holds\n"
-    "uniform sampler2D u_src;\n"
+    "uniform highp sampler2D u_src;\n"
     "uniform vec4 u_a;\n"
     "uniform vec4 u_b;\n"
     "out vec4 o;\n"
@@ -549,12 +594,12 @@ static const char *PFS =
     "  o = s / wsum;\n"
     "}\n";
 
-static GLuint prog, vao, vbo, atlas, post;
-static GLint u_vp, u_scale, u_atlas, u_img, u_bd, u_map, u_uvc, u_gb, u_shape, u_rad, u_n, pu_src, pu_a, pu_b;
+static GLuint prog, vao, vbo, atlas, catlas, post;
+static GLint u_vp, u_scale, u_atlas, u_catlas, u_img, u_bd, u_map, u_uvc, u_gb, u_shape, u_rad, u_n, pu_src, pu_a, pu_b;
 static float *fbuf;
 // the pieces of the frame's shapes (src/ui/shape.mbt: the instances of kind 12 after every one drawn), for the shader
-// to read (u_segs): a float texture of SEGS_ROW fours a row (227 instances' 9), as many rows as they take
-#define SEGS_ROW 2043
+// to read (u_segs): a float texture of SEGS_ROW fours a row (157 instances' 13), as many rows as they take
+#define SEGS_ROW 2041
 static GLint u_segs;
 static GLuint segs_tex;
 static int segs_rows;
@@ -588,6 +633,7 @@ JNIEXPORT void JNICALL Java_dev_mbui_Native_surfaceCreated(JNIEnv *env, jclass c
   u_vp = glGetUniformLocation(prog, "u_vp");
   u_scale = glGetUniformLocation(prog, "u_scale");
   u_atlas = glGetUniformLocation(prog, "u_atlas");
+  u_catlas = glGetUniformLocation(prog, "u_catlas");
   u_img = glGetUniformLocation(prog, "u_img");
   u_bd = glGetUniformLocation(prog, "u_bd");
   u_map = glGetUniformLocation(prog, "u_map");
@@ -611,24 +657,31 @@ JNIEXPORT void JNICALL Java_dev_mbui_Native_surfaceCreated(JNIEnv *env, jclass c
   glBindVertexArray(vao);
   glGenBuffers(1, &vbo);
   glBindBuffer(GL_ARRAY_BUFFER, vbo);
-  for (int i = 0; i < 9; i++) {
+  for (int i = 0; i < MB_INST / 4; i++) {
     glEnableVertexAttribArray(i);
     glVertexAttribPointer(i, 4, GL_FLOAT, GL_FALSE, MB_INST * 4, (void *)(intptr_t)(i * 16));
     glVertexAttribDivisor(i, 1);
   }
-  glGenTextures(1, &atlas);
-  glBindTexture(GL_TEXTURE_2D, atlas);
-  glTexStorage2D(GL_TEXTURE_2D, 1, GL_RGBA8, 2048, 2048);
-  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+  // the words' atlas a byte a texel, colour glyphs' four (MB_ATLAS above)
+  GLuint *texs[2] = {&atlas, &catlas};
+  for (int k = 0; k < 2; k++) {
+    glGenTextures(1, texs[k]);
+    glBindTexture(GL_TEXTURE_2D, *texs[k]);
+    if (k == 0) glTexStorage2D(GL_TEXTURE_2D, 1, GL_R8, MB_ATLAS, MB_ATLAS);
+    else glTexStorage2D(GL_TEXTURE_2D, 1, GL_RGBA8, MB_ATLAS_COLOR, MB_ATLAS_COLOR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+  }
   glEnable(GL_BLEND);
   glBlendFunc(GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
   images_lost(env);
 }
 
 JNIEXPORT jint JNICALL Java_dev_mbui_Native_atlasTexture(JNIEnv *env, jclass c) { return (jint)atlas; }
+
+JNIEXPORT jint JNICALL Java_dev_mbui_Native_colourAtlasTexture(JNIEnv *env, jclass c) { return (jint)catlas; }
 
 JNIEXPORT void JNICALL Java_dev_mbui_Native_resize(JNIEnv *env, jclass c, jint w, jint h) {
   fb_w = w;
@@ -639,7 +692,10 @@ JNIEXPORT void JNICALL Java_dev_mbui_Native_resize(JNIEnv *env, jclass c, jint w
 // Glass (src/ui/glass.mbt): when the instances reach a run of glass (slot 20 negative: the capture it shares), what
 // is drawn so far under it (its rects with room for the blur round them) is copied out of the surface, halved down
 // to where the blur is a few texels wide (dual Kawase's downsample, at most 1/8), blurred there by a Gaussian of what
-// deviation is left, and drawn through. Level j is 1/2^j of the surface, [4] a Gaussian's first half.
+// deviation is left, and drawn through. Level j is 1/2^j of the surface, [4] a Gaussian's first half. Level 0, the
+// copy, has 8 bits a channel as the surface has; what the passes write keeps 10 (RGB10_A2, in as many bytes): at 8 each
+// pass rounds the frost's slow slopes into flat steps, a texel of the last level 8 pixels wide on the screen (a blur
+// under 4 pixels, too narrow to halve, is written back into the copy: it leaves no slope that wide).
 
 typedef struct { GLuint t, fb; int w, h; } level;
 static level lv[5];
@@ -656,11 +712,11 @@ static void glass_lost(void) {
   lv_w = lv_h = 0;
 }
 
-static level level_tex(int w, int h) {
+static level level_tex(GLenum format, int w, int h) {
   level l = {0, 0, w > 0 ? w : 1, h > 0 ? h : 1};
   glGenTextures(1, &l.t);
   glBindTexture(GL_TEXTURE_2D, l.t);
-  glTexStorage2D(GL_TEXTURE_2D, 1, GL_RGBA8, l.w, l.h);
+  glTexStorage2D(GL_TEXTURE_2D, 1, format, l.w, l.h);
   glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
   glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
   glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
@@ -680,8 +736,9 @@ static void ensure_levels(int w, int h) {
     }
   lv_w = w > lv_w ? w : lv_w;
   lv_h = h > lv_h ? h : lv_h;
-  for (int j = 0; j < 4; j++) lv[j] = level_tex((lv_w + (1 << j) - 1) >> j, (lv_h + (1 << j) - 1) >> j);
-  lv[4] = level_tex(lv_w, lv_h);
+  for (int j = 0; j < 4; j++)
+    lv[j] = level_tex(j == 0 ? GL_RGBA8 : GL_RGB10_A2, (lv_w + (1 << j) - 1) >> j, (lv_h + (1 << j) - 1) >> j);
+  lv[4] = level_tex(GL_RGB10_A2, lv_w, lv_h);
   glBindFramebuffer(GL_FRAMEBUFFER, 0);
 }
 
@@ -786,6 +843,9 @@ static void main_state(void) {
   glBindBuffer(GL_ARRAY_BUFFER, vbo);
   glUniform2f(u_vp, (float)cur_w, (float)cur_h);
   glUniform1f(u_scale, (float)cur_scale);
+  glActiveTexture(GL_TEXTURE4);
+  glBindTexture(GL_TEXTURE_2D, catlas);
+  glUniform1i(u_catlas, 4);
   glActiveTexture(GL_TEXTURE0);
   glBindTexture(GL_TEXTURE_2D, atlas);
   glUniform1i(u_atlas, 0);
@@ -817,7 +877,7 @@ static void segs_upload(int32_t count) {
   int32_t d = count;
   while (d > 0 && (int)(fbuf[(d - 1) * MB_INST + 5] + 0.5f) == 12) d--;
   if (d == count) return;
-  int rows = (int)(((size_t)(count - d) * 9 + SEGS_ROW - 1) / SEGS_ROW);
+  int rows = (int)(((size_t)(count - d) * (MB_INST / 4) + SEGS_ROW - 1) / SEGS_ROW);
   glActiveTexture(GL_TEXTURE3);
   if (!segs_tex || rows > segs_rows) {
     if (segs_tex) glDeleteTextures(1, &segs_tex);
@@ -832,7 +892,36 @@ static void segs_upload(int32_t count) {
   glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, SEGS_ROW, rows, GL_RGBA, GL_FLOAT, fbuf + (size_t)d * MB_INST);
 }
 
+// The frame presented last, kept (in fbuf): its instances and its ground, drawn again as a native view's picture
+// changes (Native.redraw), the app not asked.
+static int32_t kept_count;
+static double kept_r, kept_g, kept_b;
+static void draw_kept(void);
+
 void mb_host_present(double *buf, int32_t count, double r, double g, double b) {
+  // the glyphs placed in the atlas as the frame was painted, uploaded before it is drawn (MBText.flush)
+  JNIEnv *env = env_();
+  (*env)->CallStaticVoidMethod(env, text_cls, m_flush);
+  size_t n = (size_t)(count > 0 ? count : 0) * MB_INST;
+  // (and a row of the shapes' pieces more: segs_upload reads whole rows)
+  if (fcap < n + SEGS_ROW * 4) {
+    fcap = n * 2 + SEGS_ROW * 4;
+    fbuf = realloc(fbuf, fcap * sizeof(float));
+  }
+  for (size_t i = 0; i < n; i++) fbuf[i] = (float)buf[i];
+  kept_count = count;
+  kept_r = r;
+  kept_g = g;
+  kept_b = b;
+  draw_kept();
+}
+
+// (MBView.onDrawFrame, GL thread: only a native view's picture changed since the last frame)
+JNIEXPORT void JNICALL Java_dev_mbui_Native_redraw(JNIEnv *env, jclass c) { draw_kept(); }
+
+static void draw_kept(void) {
+  int32_t count = kept_count;
+  double r = kept_r, g = kept_g, b = kept_b;
   glBindFramebuffer(GL_FRAMEBUFFER, target_fb);
   glViewport(0, 0, fb_w, fb_h);
   if (over_other) glClearColor(0, 0, 0, 0);
@@ -849,12 +938,6 @@ void mb_host_present(double *buf, int32_t count, double r, double g, double b) {
   glViewport(0, vy0, fb_w, vhp);
   if (count <= 0) return;
   size_t n = (size_t)count * MB_INST;
-  // (and a row of the shapes' pieces more: segs_upload reads whole rows)
-  if (fcap < n + SEGS_ROW * 4) {
-    fcap = n * 2 + SEGS_ROW * 4;
-    fbuf = realloc(fbuf, fcap * sizeof(float));
-  }
-  for (size_t i = 0; i < n; i++) fbuf[i] = (float)buf[i];
   segs_upload(count);
   bd_tex = 0;
   memset(gmap, 0, sizeof gmap);
@@ -866,16 +949,15 @@ void mb_host_present(double *buf, int32_t count, double r, double g, double b) {
   glBindBuffer(GL_ARRAY_BUFFER, vbo);
   glBufferData(GL_ARRAY_BUFFER, n * sizeof(float), fbuf, GL_STREAM_DRAW);
   main_state();
-  // one draw per run of instances showing the same image (slot 20; 0: none, the atlas stands in), or sharing one
-  // capture of glass (negative); GLES has no base instance, so the attributes start at the run instead
-  // (and per run of holes, kind 9: where a native view shows, written transparent with no blending, NativeViews.java)
+  // one draw per run of instances showing the same image (slot 20; 0: none, the atlas stands in; a native view's
+  // picture where it shows, kind 9: nothing until it has one), or sharing one capture of glass (negative); GLES has no
+  // base instance, so the attributes start at the run instead
   int32_t start = 0;
   int bound = 0, shows = 0;
   while (start < count) {
     int tid = (int)fbuf[start * MB_INST + 20];
-    int hole = (int)(fbuf[start * MB_INST + 5] + 0.5f) == 9;
     int32_t end = start + 1;
-    while (end < count && (int)fbuf[end * MB_INST + 20] == tid && ((int)(fbuf[end * MB_INST + 5] + 0.5f) == 9) == hole) end++;
+    while (end < count && (int)fbuf[end * MB_INST + 20] == tid) end++;
     if (tid < 0) {
       if (tid != bound) {
         shows = capture(fbuf, start, end, count);
@@ -883,7 +965,7 @@ void mb_host_present(double *buf, int32_t count, double r, double g, double b) {
         main_state();
       }
       if (shows) {
-        for (int i = 0; i < 9; i++)
+        for (int i = 0; i < MB_INST / 4; i++)
           glVertexAttribPointer(i, 4, GL_FLOAT, GL_FALSE, MB_INST * 4, (void *)(intptr_t)(start * MB_INST * 4 + i * 16));
         // liquid: the group as one shape, drawn once
         glDrawArraysInstanced(GL_TRIANGLES, 0, 6, (int)(fbuf[start * MB_INST + 5] + 0.5f) == 6 ? 1 : end - start);
@@ -892,14 +974,12 @@ void mb_host_present(double *buf, int32_t count, double r, double g, double b) {
       continue;
     }
     GLuint t = tid ? image_tex(tid) : atlas;
-    if (t) {  // 0: lost with the context, decoding again
+    if (t) {  // 0: lost with the context, decoding again; a stream's or a view's with no picture yet
       glActiveTexture(GL_TEXTURE1);
       glBindTexture(GL_TEXTURE_2D, t);
-      for (int i = 0; i < 9; i++)
+      for (int i = 0; i < MB_INST / 4; i++)
         glVertexAttribPointer(i, 4, GL_FLOAT, GL_FALSE, MB_INST * 4, (void *)(intptr_t)(start * MB_INST * 4 + i * 16));
-      if (hole) glDisable(GL_BLEND);
       glDrawArraysInstanced(GL_TRIANGLES, 0, 6, end - start);
-      if (hole) glEnable(GL_BLEND);
     }
     start = end;
   }
@@ -1002,8 +1082,12 @@ JNIEXPORT void JNICALL Java_dev_mbui_Native_start(JNIEnv *env, jclass c) {
   mbui_main(1, argv);  // runs MoonBit's main, which registers the callbacks
 }
 
+// how late the frame before reached the screen, as MBView said with this one (mb_host_frame_late)
+static double frame_late;
+
 JNIEXPORT jboolean JNICALL Java_dev_mbui_Native_frame(JNIEnv *env, jclass c, jfloat w, jfloat h,
-                                                     jfloat scale, jdouble now) {
+                                                     jfloat scale, jdouble now, jdouble late) {
+  frame_late = late;
   cur_w = w;
   cur_h = h;
   cur_scale = scale;
@@ -1025,6 +1109,8 @@ JNIEXPORT void JNICALL Java_dev_mbui_Native_pointer(JNIEnv *env, jclass c, jint 
 }
 
 double mb_host_event_time(void) { return event_time; }
+
+double mb_host_frame_late(void) { return frame_late; }
 
 int32_t mb_host_platform(void) { return 2; }
 
@@ -1149,6 +1235,13 @@ void mb_host_a11y_tree(moonbit_string_t s) {
 double mb_host_font_scale(void) {
   JNIEnv *env = env_();
   return (double)(*env)->CallStaticFloatMethod(env, host_cls, m_font_scale);
+}
+
+// What the app was started to be used with (@hostapi.native_pointing): Host.nativePointing (a mouse or a touchpad among
+// the input devices: keyboard and mouse; else touch).
+int32_t mb_host_native_pointing(void) {
+  JNIEnv *env = env_();
+  return (int32_t)(*env)->CallStaticIntMethod(env, host_cls, m_native_pointing);
 }
 
 // The app drawn dark or light (@hostapi.set_dark): the status and navigation bars' icons light on it or dark (Host.setDark).
@@ -1330,6 +1423,25 @@ void mb_host_glyph(int32_t key, double *out) {
   (*env)->GetDoubleArrayRegion(env, small_buf, 0, 7, out);
 }
 
+// The glyph drawn last put in the atlas at x, y (uploaded with the frame's others before it is drawn: MBText.flush).
+void mb_host_glyph_put(int32_t key, int32_t x, int32_t y) {
+  JNIEnv *env = env_();
+  (*env)->CallStaticVoidMethod(env, text_cls, m_glyph_put, key, x, y);
+}
+
+// The side of the words' atlas, or of colour glyphs' (MB_ATLAS above).
+int32_t mb_host_atlas_size(int32_t colour) { return colour ? MB_ATLAS_COLOR : MB_ATLAS; }
+
+// The glyphs shaped and not drawn yet (text.mbt glyphs_ahead): MBText draws them on a thread of its own, for glyph to
+// find drawn.
+void mb_host_glyphs_ahead(int32_t *keys, int32_t n) {
+  JNIEnv *env = env_();
+  if (n > 4096) n = 4096;
+  if (n <= 0) return;
+  (*env)->SetIntArrayRegion(env, ahead_buf, 0, n, (const jint *)keys);
+  (*env)->CallStaticVoidMethod(env, text_cls, m_ahead, ahead_buf, n);
+}
+
 int32_t mb_host_atlas_generation(void) {
   JNIEnv *env = env_();
   return (*env)->CallStaticIntMethod(env, text_cls, m_generation);
@@ -1377,10 +1489,17 @@ void mb_host_set_ime(int32_t active, double x, double y, double w, double h, moo
 }
 
 // The system's floating text menu over a field's words, or put away (Host.textMenu: ActionMode.TYPE_FLOATING).
+// no menu bar of the app's here
+void mb_host_edit_can(int32_t can) { (void)can; }
+
 void mb_host_text_menu(int32_t shown, double x, double y, double w, double h, int32_t can) {
   JNIEnv *env = env_();
   (*env)->CallStaticVoidMethod(env, host_cls, m_text_menu, shown ? JNI_TRUE : JNI_FALSE, x, y, w, h, can);
 }
+
+// A picture on the clipboard (@hostapi.clipboard_set_image): none here (Android's clipboard takes a picture only as a
+// content URI another app can read).
+void mb_host_clipboard_image(moonbit_bytes_t data) { (void)data; }
 
 void mb_host_clipboard_set(moonbit_string_t s) {
   JNIEnv *env = env_();
@@ -1699,10 +1818,36 @@ void mb_host_pick_end(int32_t id) {
 }
 
 // ---------------------------------------------------------------------------
-// Native views over the canvas (host_native.mbt `view_*`): dev.mbui.NativeViews keeps them in a layer under the GL
-// surface (which is on top and translucent: they show through the holes the app paints, kind 9), a video player
-// (Media3's ExoPlayer, its bytes read through the app) or a WebView. Called on the GL thread; NativeViews moves to the
-// main thread what must run there.
+// Native views in the canvas (host_native.mbt `view_*`): dev.mbui.NativeViews keeps them in a layer under the GL
+// surface, a video player (Media3's ExoPlayer, its bytes read through the app) or a WebView, each drawing into a
+// picture of its own (NativeViews.Picture), which the frame draws where the app paints the view (kind 9, its image
+// MB_VIEW_TEX + its id: present). Called on the GL thread; NativeViews moves to the main thread what must run there.
+
+static GLuint *view_texs;  // by id
+static int view_cap;
+
+static GLuint view_tex(int id) { return id > 0 && id < view_cap ? view_texs[id] : 0; }
+
+static void views_lost(JNIEnv *env) {
+  for (int i = 0; i < view_cap; i++) view_texs[i] = 0;
+  (*env)->CallStaticVoidMethod(env, views_cls, m_v_lost);
+  if ((*env)->ExceptionCheck(env)) {
+    (*env)->ExceptionDescribe(env);
+    (*env)->ExceptionClear(env);
+  }
+}
+
+JNIEXPORT void JNICALL Java_dev_mbui_NativeViews_texture(JNIEnv *env, jclass c, jint id, jint tex) {
+  if (id <= 0) return;
+  if (id >= view_cap) {
+    int cap = view_cap ? view_cap : 16;
+    while (cap <= id) cap *= 2;
+    view_texs = realloc(view_texs, (size_t)cap * sizeof *view_texs);
+    memset(view_texs + view_cap, 0, (size_t)(cap - view_cap) * sizeof *view_texs);
+    view_cap = cap;
+  }
+  view_texs[id] = (GLuint)tex;
+}
 
 static jbyteArray jbytes(JNIEnv *env, moonbit_bytes_t data) {
   jsize n = Moonbit_array_length(data);
@@ -1815,10 +1960,10 @@ void mb_host_view_tell(int32_t id, int32_t what, moonbit_string_t text) {
   (*env)->DeleteLocalRef(env, t);
 }
 
-void mb_host_view_read_answer(int32_t id, int32_t req, moonbit_bytes_t data, double total) {
+void mb_host_view_read_answer(int32_t id, int32_t req, moonbit_bytes_t data, double total, int32_t more) {
   JNIEnv *env = env_();
   jbyteArray b = jbytes(env, data);
-  (*env)->CallStaticVoidMethod(env, views_cls, m_v_read_answer, id, req, b, total);
+  (*env)->CallStaticVoidMethod(env, views_cls, m_v_read_answer, id, req, b, total, (jboolean)(more != 0));
   (*env)->DeleteLocalRef(env, b);
 }
 
@@ -2073,8 +2218,32 @@ void mb_host_window_setup(double min_w, double min_h, double w, double h, int32_
   (void)min_w; (void)min_h; (void)w; (void)h; (void)inset;
 }
 int32_t mb_host_window_inset(void) { return 0; }
+// A window filling the screen (@hostapi.full_screen): not one of this host's.
+int32_t mb_host_full_screen(void) { return 0; }
+void mb_host_set_full_screen(int32_t on) { (void)on; }
+// How round the window's corners are (@hostapi.window_corner): the app fills the screen, whose own corners (40 and
+// more) are rounder than anything by them could follow within the corner rule's ranges: said as none.
+double mb_host_window_corner(void) { return 0; }
 void mb_host_window_drag(void) {}
 void mb_host_set_cursor(int32_t kind) { (void)kind; }
+void mb_host_set_badge(int32_t n) { (void)n; }
+// The menu bar (@hostapi.menu_setup): none here.
+void mb_host_menu_setup(moonbit_string_t json) { (void)json; }
+// (this machine's station: managed from the macOS app only)
+moonbit_string_t mb_host_local_station(void) { return moonbit_make_string_raw(0); }
+// (the phone's faces are the files given: no family of the machine's, no list of them)
+int32_t mb_host_face_add_family(int32_t face, moonbit_string_t family) { (void)face; (void)family; return 0; }
+moonbit_string_t mb_host_local_font_families(void) { return moonbit_make_string_raw(0); }
+void mb_host_local_station_act(moonbit_string_t a) { (void)a; }
+// (the desktop's dock: the macOS app's only)
+int32_t mb_host_dock_available(void) { return 0; }
+
+// The keys held now (@hostapi.mods_held): none read here.
+int32_t mb_host_mods_held(void) { return 0; }
+void mb_host_dock_send(moonbit_string_t l) { (void)l; }
+void mb_host_dock_stop(void) {}
+moonbit_string_t mb_host_dock_kept(void) { return moonbit_make_string_raw(0); }
+void mb_host_dock_keep(moonbit_string_t j) { (void)j; }
 
 // ---------------------------------------------------------------------------
 // Streams (src/hostapi/stream.mbt): dev.mbui.Streams decodes (MediaCodec, BitmapFactory) and draws each frame the app

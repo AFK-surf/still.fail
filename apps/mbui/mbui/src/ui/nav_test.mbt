@@ -159,6 +159,8 @@ test "a press on the edge that moves up and down scrolls the list, and a tap the
   let nav = @ui.Nav::new(0)
   let t = @ui.Tester::new(nav_view(nav))
   t.tap_text("open 1")
+  // (on page 1, slid in: the page it covers takes no press while it comes)
+  t.run_for(nav.rest() - t.time())
   t.drag(10.0, 600.0, 12.0, 300.0)
   t.draw()
   assert_eq(nav.depth(), 2)
@@ -294,6 +296,72 @@ test "a push whose end is a hair past one of the display's frames is run to its 
 }
 
 ///|
+/// How late a slide's first frame is to the screen in these tests: a frame two and a half of the display's long.
+let test_first_late_ms : Double = 40.0
+
+///|
+/// A first frame far later than a slide waits for (nav_late_most).
+let test_first_very_late_ms : Double = 500.0
+
+///|
+test "a page pushed whose first frame is late to the screen moves from where that frame drew it, at the display's pace" {
+  // the same push, its first frame on time
+  let on_time_nav = @ui.Nav::new(0)
+  let on_time = @ui.Tester::new(nav_view(on_time_nav))
+  on_time.tap_text("open 1")
+  let tapped = on_time.time()
+  on_time.run_for(@ui.nav_push_ms / 2.0)
+  let half = on_time.rect_of("title 1").unwrap().0
+  // its first frame (the tap's, the page built in it) 40 ms late to the screen, as the host says in the next
+  let nav = @ui.Nav::new(0)
+  let t = @ui.Tester::new(nav_view(nav))
+  t.tap_text("open 1")
+  assert_eq(t.time(), tapped)
+  t.frame_late(test_first_late_ms)
+  t.run_for(@ui.first_frame_ms)
+  // it has not moved yet: where its first frame drew it, at its start
+  assert_true(t.rect_of("title 1") is None || t.rect_of("title 1").unwrap().0 >= 390.0)
+  assert_eq(nav.rest(), tapped + test_first_late_ms + @ui.nav_push_ms)
+  // from then, as the one on time from its frame
+  t.run_for(tapped + test_first_late_ms + @ui.nav_push_ms / 2.0 - t.time())
+  // (to the last bits a start moved on rounds otherwise)
+  assert_true((t.rect_of("title 1").unwrap().0 - half).abs() < 1.0e-6)
+  t.run_for(nav.rest() - t.time())
+  assert_eq(t.rect_of("title 1").unwrap().0, 0.0)
+  t.assert_idle()
+}
+
+///|
+test "a page pushed whose first frame is very late to the screen waits nav_late_most at most" {
+  let nav = @ui.Nav::new(0)
+  let t = @ui.Tester::new(nav_view(nav))
+  t.tap_text("open 1")
+  let tapped = t.time()
+  t.frame_late(test_first_very_late_ms)
+  t.run_for(@ui.first_frame_ms)
+  assert_eq(nav.rest(), tapped + @ui.nav_late_most + @ui.nav_push_ms)
+  t.run_for(nav.rest() - t.time())
+  assert_eq(t.rect_of("title 1").unwrap().0, 0.0)
+  t.assert_idle()
+}
+
+///|
+test "a page gone back to whose first frame is late to the screen moves from where that frame drew it" {
+  let nav = @ui.Nav::new(0)
+  let t = @ui.Tester::new(nav_view(nav))
+  t.tap_text("open 1")
+  t.run_for(nav.rest() - t.time())
+  t.back()
+  let back = t.time()
+  t.frame_late(test_first_late_ms)
+  t.run_for(@ui.first_frame_ms)
+  assert_eq(nav.rest(), back + test_first_late_ms + @ui.nav_push_ms)
+  t.run_for(nav.rest() - t.time())
+  assert_eq(t.rect_of("title 0").unwrap().0, 0.0)
+  t.assert_idle()
+}
+
+///|
 /// The stack's view, its pushes waiting for what the page shows (`ready`) at most `most` ms.
 fn nav_wait_view(nav : @ui.Nav[Int], ready : Ref[Bool], most : Double) -> (@ui.Ctx) -> Unit {
   let page = nav_view(nav)
@@ -342,4 +410,110 @@ test "a page pushed whose data never comes slides in once it has waited the most
   t.run_for(test_page_wait_ms + @ui.nav_push_ms)
   assert_eq(t.rect_of("title 1").unwrap().0, 0.0)
   t.assert_idle()
+}
+
+///|
+test "a page covered by one sliding in takes no press: one where its button still shows goes to the page coming or to nothing; going back, the page leaving takes none" {
+  let nav = @ui.Nav::new(0)
+  let pressed : Array[Int] = []
+  let t = @ui.Tester::new(fn(c) {
+    c.nav(
+      nav,
+      fn(i) {
+        c.column(w=Fill(1.0), h=Fill(1.0), fn() {
+          c.text("title \{i}", wrap=false) |> ignore
+          if c.button("press \{i}") {
+            pressed.push(i)
+          }
+        })
+        |> ignore
+      },
+      bg=0xFFFFFFFFL,
+    )
+    |> ignore
+  })
+  // pushed: a little way in, page 0's button still showing to the left of page 1's
+  nav.push(1)
+  t.draw()
+  t.run_for(@ui.nav_push_ms / 10.0)
+  let (x, y, w, h) = t.rect_of("press 0").unwrap()
+  assert_true(x + w > 0.0)
+  t.tap((if x > 0.0 { x } else { 0.0 }) + 2.0, y + h / 2.0)
+  assert_eq(pressed, [])
+  // (and from the moment it is pushed: its first frame, before anything has moved)
+  nav.pop() |> ignore
+  t.draw()
+  t.run_for(nav.rest() - t.time())
+  nav.push(1)
+  t.draw()
+  let (x, y, w, h) = t.rect_of("press 0").unwrap()
+  t.tap(x + w / 2.0, y + h / 2.0)
+  assert_eq(pressed, [])
+  t.run_for(nav.rest() - t.time())
+  // at rest, the page on top takes its presses
+  let (x, y, w, h) = t.rect_of("press 1").unwrap()
+  t.tap(x + w / 2.0, y + h / 2.0)
+  assert_eq(pressed, [1])
+  // going back: halfway, page 1 leaving takes nothing where its button still shows
+  nav.pop() |> ignore
+  t.draw()
+  t.run_for(@ui.nav_push_ms / 2.0)
+  let (x, y, _, h) = t.rect_of("press 1").unwrap()
+  t.tap(x + 2.0, y + h / 2.0)
+  // (page 0 coming may be under it: its own press is its)
+  assert_eq(pressed.filter(fn(i) { i == 1 }).length(), 1)
+  t.run_for(nav.rest() - t.time())
+  t.assert_idle()
+}
+
+///|
+/// A flat stack's view (Ctx::nav_flat), its pages put on top waiting for what they show (`ready`) at most `most` ms.
+fn flat_wait_view(nav : @ui.Nav[String], ready : Ref[Bool], most : Double) -> (@ui.Ctx) -> Unit {
+  fn(c) {
+    nav.shows_when(fn() { ready.val }, most)
+    c.nav_flat(nav, fn(p) { c.text(p, wrap=false) |> ignore }) |> ignore
+  }
+}
+
+///|
+test "nav_flat: a page put on top shows once it has what it shows, the page before staying as it was and told it left only then" {
+  let left : Array[String] = []
+  let nav = @ui.Nav::new("page one", on_leave=fn(p) { left.push(p) })
+  let ready = Ref::new(false)
+  let t = @ui.Tester::new(flat_wait_view(nav, ready, test_page_wait_ms))
+  t.draw()
+  nav.replace("page two")
+  t.draw()
+  assert_true(t.find("page one") is Some(_) && t.find("page two") is None)
+  assert_eq(left, [])
+  ready.val = true
+  t.draw()
+  assert_true(t.find("page two") is Some(_) && t.find("page one") is None)
+  assert_eq(left, ["page one"])
+  t.assert_idle()
+}
+
+///|
+test "nav_flat: a page put on top whose data never comes shows once it has waited the most" {
+  let nav = @ui.Nav::new("page one")
+  let ready = Ref::new(false)
+  let t = @ui.Tester::new(flat_wait_view(nav, ready, test_page_wait_ms))
+  t.draw()
+  nav.push("page two")
+  t.draw()
+  t.run_for(test_page_wait_ms / 2.0)
+  assert_true(t.find("page one") is Some(_) && t.find("page two") is None)
+  t.run_for(test_page_wait_ms)
+  assert_true(t.find("page two") is Some(_))
+  t.assert_idle()
+}
+
+///|
+test "nav_flat: not asked to wait (Nav::shows_when), a page put on top shows at once" {
+  let nav = @ui.Nav::new("page one")
+  let t = @ui.Tester::new(fn(c) { c.nav_flat(nav, fn(p) { c.text(p, wrap=false) |> ignore }) |> ignore })
+  t.draw()
+  nav.push("page two")
+  t.draw()
+  assert_true(t.find("page two") is Some(_))
 }

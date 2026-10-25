@@ -2,6 +2,7 @@
 // came after schema version 12 without changing it, added in place on open (add_*_columns), the same way and in the
 // same order as the Rust station does, so either station opens what the other kept.
 import type { DatabaseSync } from "node:sqlite";
+import { COMPACTED_FROM } from "./rows.ts";
 
 /// Bump on schema changes. A database of another version is refused: there is one station, and its data is moved by
 /// hand when the schema changes (no migrations are kept in the code).
@@ -32,6 +33,13 @@ CREATE TABLE IF NOT EXISTS decision_checks (
   created_at INTEGER NOT NULL,
   result TEXT NOT NULL
 );
+-- A session's latest check (review.ts undecided, for every done chat) and those of the last days (the archive policy's
+-- view, in every overview): without them each scanned every check.
+CREATE INDEX IF NOT EXISTS decision_checks_session ON decision_checks (session, id);
+CREATE INDEX IF NOT EXISTS decision_checks_at ON decision_checks (created_at);
+-- Each session's latest check of the last days (store.ts LATEST_DECISIONS): from the index alone, and then only the
+-- rows of those latest (ccvm: 1,025 checks of 210 sessions in a week).
+CREATE INDEX IF NOT EXISTS decision_checks_lately ON decision_checks (created_at, session);
 CREATE TABLE IF NOT EXISTS sessions (
   key TEXT PRIMARY KEY,
   connect TEXT NOT NULL,
@@ -55,6 +63,12 @@ CREATE TABLE IF NOT EXISTS sessions (
   shown_at INTEGER,
   cwd TEXT
 );
+-- The sessions shown (store.ts LIVE_SESSIONS): what the station's own periodic work goes over; the archived ones only grow.
+CREATE INDEX IF NOT EXISTS sessions_live ON sessions (last_active_at) WHERE archived_at IS NULL;
+-- The sessions running (store.ts ANY_RUNNING, RUNNING_SESSIONS).
+CREATE INDEX IF NOT EXISTS sessions_running ON sessions (key) WHERE running = 1;
+-- The sessions someone started lately (store.ts modelsUsedBy: the models they chose, as a chat is opened for them).
+CREATE INDEX IF NOT EXISTS sessions_by_creator ON sessions (created_by, created_at);
 CREATE TABLE IF NOT EXISTS threads (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   surface TEXT NOT NULL,
@@ -81,6 +95,8 @@ CREATE TABLE IF NOT EXISTS thread_sessions (
   PRIMARY KEY (thread, session)
 );
 CREATE INDEX IF NOT EXISTS thread_sessions_session ON thread_sessions (session);
+-- The threads at an address on any surface (store.ts threadsAt: session_send to a thread by its channel and ts).
+CREATE INDEX IF NOT EXISTS threads_at ON threads (channel, thread_ts);
 CREATE TABLE IF NOT EXISTS entries (
   thread INTEGER NOT NULL,
   n INTEGER NOT NULL,
@@ -102,7 +118,16 @@ CREATE TABLE IF NOT EXISTS entries (
   PRIMARY KEY (thread, n)
 );
 CREATE UNIQUE INDEX IF NOT EXISTS entries_ts ON entries (thread, ts) WHERE ts IS NOT NULL;
-CREATE INDEX IF NOT EXISTS entries_target ON entries (thread, target) WHERE target IS NOT NULL;
+-- A message's latest edit (the merged view, at each message any list or page reads): by the thread, the message and
+-- the edit's own number, found at once. With (thread, target) alone, node's SQLite (3.53) took the latest from the
+-- primary key instead, going back over the whole thread for a message never edited: every message read had a long
+-- chat's every page read with it, 5 to 8 s on ccvm with its pages put out (2026-10-25).
+CREATE INDEX IF NOT EXISTS entries_edits ON entries (thread, target, n) WHERE target IS NOT NULL;
+-- A thread's people's messages since a time (rows.ts SAID_SINCE: the cards they answered, of the sidebar items a change
+-- touched): without it each went over the thread's every entry.
+CREATE INDEX IF NOT EXISTS entries_people_since ON entries (thread, at) WHERE author_kind = 'person' AND kind = 'message';
+-- The login cards (store.ts closeLoginCards, as a login ends): without it each read every entry of the station's.
+CREATE INDEX IF NOT EXISTS entries_login_cards ON entries (thread, n) WHERE card LIKE '%"login"%';
 CREATE TABLE IF NOT EXISTS deliveries (
   thread INTEGER NOT NULL,
   n INTEGER NOT NULL,
@@ -112,6 +137,9 @@ CREATE TABLE IF NOT EXISTS deliveries (
 );
 CREATE INDEX IF NOT EXISTS deliveries_pending ON deliveries (session) WHERE delivered_at IS NULL;
 CREATE INDEX IF NOT EXISTS deliveries_session ON deliveries (session, thread);
+-- What a session took lately, as it was delivered (usage.ts TAKEN_SINCE: whom a turn from before turns said so worked
+-- for, as the usage counter reads its calls).
+CREATE INDEX IF NOT EXISTS deliveries_taken ON deliveries (session, delivered_at) WHERE delivered_at IS NOT NULL;
 CREATE TABLE IF NOT EXISTS reads (
   viewer TEXT NOT NULL,
   thread INTEGER NOT NULL,
@@ -147,6 +175,9 @@ CREATE TABLE IF NOT EXISTS turns (
 -- A session's turns, by when they started: every list of chats and sessions counts each session's turns and takes its
 -- latest (sessionStats); without it each scanned every turn of every session (some 160 ms a list on a busy station).
 CREATE INDEX IF NOT EXISTS turns_by_session ON turns (session_key, started_at);
+-- The turns running or ended lately (usage.ts usageActiveSessions, at each read of the usage counter: every few seconds
+-- while agents work): without it each read scanned every turn of the station's.
+CREATE INDEX IF NOT EXISTS turns_ended ON turns (ended_at);
 CREATE TABLE IF NOT EXISTS processes (
   pgid INTEGER PRIMARY KEY,
   started_at INTEGER NOT NULL,
@@ -174,6 +205,11 @@ CREATE TABLE IF NOT EXISTS jobs (
   size TEXT
 );
 CREATE INDEX IF NOT EXISTS jobs_by_session ON jobs (session_key);
+-- The jobs running (store.ts runningJobs, JOBS_RUNNING: every station_list that asks how busy this one is, the
+-- memory's watch every ten seconds, who keeps watch), and the services stopped on their own that hold their port
+-- (JOBS_UP: what keeps a session from being archived): without them each looked at every job the station ever ran.
+CREATE INDEX IF NOT EXISTS jobs_state ON jobs (state);
+CREATE INDEX IF NOT EXISTS jobs_up ON jobs (state, port);
 CREATE TABLE IF NOT EXISTS job_notices (
   job_id TEXT NOT NULL,
   at INTEGER NOT NULL,
@@ -241,6 +277,8 @@ CREATE TABLE IF NOT EXISTS closed_cards (
   at INTEGER NOT NULL,
   PRIMARY KEY (thread, n)
 );
+-- The cards closed lately (store.ts answersSince, at each list of chats).
+CREATE INDEX IF NOT EXISTS closed_cards_at ON closed_cards (at);
 -- What the agents spent (store/usage.rs): one row per model call their runtimes recorded, read from the transcripts,
 -- with whom and what it was for as it was then. Kept when its session goes: it was spent all the same.
 CREATE TABLE IF NOT EXISTS usage (
@@ -262,6 +300,8 @@ CREATE TABLE IF NOT EXISTS usage (
   output INTEGER NOT NULL
 );
 CREATE INDEX IF NOT EXISTS usage_at ON usage (at);
+-- A session's calls (session_usage, accounts.ts lastContexts) read without the rest.
+CREATE INDEX IF NOT EXISTS usage_session ON usage (session, at);
 -- The runtime sessions a session has run in, the first first, each with the profile it last ran on. The latest is
 -- sessions.runtime_session_id; one before it was left for a new one (its account changed), and its history goes on
 -- from theirs.
@@ -272,6 +312,10 @@ CREATE TABLE IF NOT EXISTS runtime_sessions (
   at INTEGER NOT NULL,
   PRIMARY KEY (session_key, id)
 );
+-- The session that went on with a runtime's session, by its id (rows.ts SESSION_OF_RUNTIME: a machine's session gone
+-- on with, Codex's fast mode).
+CREATE INDEX IF NOT EXISTS runtime_sessions_by_id ON runtime_sessions (id);
+CREATE INDEX IF NOT EXISTS sessions_by_runtime_id ON sessions (runtime_session_id) WHERE runtime_session_id IS NOT NULL;
 -- How far each transcript has been read for it.
 CREATE TABLE IF NOT EXISTS usage_files (
   path TEXT PRIMARY KEY,
@@ -326,6 +370,19 @@ CREATE TABLE IF NOT EXISTS relayed_to (
   channel TEXT NOT NULL,
   at INTEGER NOT NULL,
   PRIMARY KEY (connect, channel)
+);
+-- How many entries each session's transcript has, as the station last read it while the session was at work
+-- (sessions/live.ts): its summary says so, and a device that missed some of them knows to read them.
+CREATE TABLE IF NOT EXISTS transcript_lengths (
+  session TEXT PRIMARY KEY,
+  n INTEGER NOT NULL
+);
+-- What each session's calls used (read/tail.ts TranscriptUsage, as JSON), as its live view last told it or the usage
+-- counter counted it since (sessions/live.ts, usage/module.ts): its summary says it, so a device knows what an agent at
+-- rest used without following it.
+CREATE TABLE IF NOT EXISTS session_usage (
+  session TEXT PRIMARY KEY,
+  usage TEXT NOT NULL
 );
 `;
 
@@ -382,6 +439,14 @@ export function addArchiveColumns(db: DatabaseSync): void {
      WHERE home IN (SELECT key FROM sessions WHERE archived_at IS NOT NULL);
      COMMIT;`,
   );
+}
+
+/// The indexes on the threads' columns that came with homes (addArchiveColumns), made once those are there: a session's
+/// own chat (store.ts homeChat, usage.ts usageTurns: each part of a transcript the usage counter reads), and the chats
+/// of their own the auto-archiving goes over, without reading every thread.
+export function addThreadIndexes(db: DatabaseSync): void {
+  db.exec(`CREATE INDEX IF NOT EXISTS threads_home ON threads (home) WHERE home IS NOT NULL;
+    CREATE INDEX IF NOT EXISTS threads_own ON threads (surface) WHERE home IS NULL AND hidden_at IS NULL;`);
 }
 
 /// add_client_column: the column a message's app came with (entries.client) and those after it, and the `merged` view
@@ -465,9 +530,185 @@ export function addSizeColumn(db: DatabaseSync): void {
   if (!has(db, "jobs", "size")) db.exec("ALTER TABLE jobs ADD COLUMN size TEXT");
 }
 
+/// What each session's calls add up to, by runtime, model ('' for none) and speed (store/usage.ts `usageOfSession`): kept
+/// by the database itself as calls are recorded (or their output grows), whatever station process records them. A
+/// session's usage is a few rows, where adding up its calls read every one of them, scattered over the table: some
+/// 20,000 for a long chat, seconds of reading on a machine short of memory, on the main thread, each time the live view
+/// of a session at work told its usage (ccvm, 2026-10-24: the station stopped answering for up to a minute).
+const USAGE_TOTALS = `
+CREATE TABLE usage_totals (
+  session TEXT NOT NULL,
+  runtime TEXT NOT NULL,
+  model TEXT NOT NULL,
+  fast INTEGER NOT NULL,
+  calls INTEGER NOT NULL,
+  input INTEGER NOT NULL,
+  cache_read INTEGER NOT NULL,
+  cache_write INTEGER NOT NULL,
+  cache_write_long INTEGER NOT NULL,
+  output INTEGER NOT NULL,
+  PRIMARY KEY (session, runtime, model, fast)
+) WITHOUT ROWID;
+INSERT INTO usage_totals
+  SELECT session, runtime, COALESCE(model, ''), fast, COUNT(*), SUM(input), SUM(cache_read), SUM(cache_write), SUM(cache_write_long), SUM(output)
+  FROM usage NOT INDEXED GROUP BY session, runtime, COALESCE(model, ''), fast;
+CREATE TRIGGER usage_totals_add AFTER INSERT ON usage BEGIN
+  INSERT INTO usage_totals VALUES (NEW.session, NEW.runtime, COALESCE(NEW.model, ''), NEW.fast, 1, NEW.input, NEW.cache_read, NEW.cache_write, NEW.cache_write_long, NEW.output)
+  ON CONFLICT (session, runtime, model, fast) DO UPDATE SET calls = calls + 1, input = input + excluded.input, cache_read = cache_read + excluded.cache_read,
+    cache_write = cache_write + excluded.cache_write, cache_write_long = cache_write_long + excluded.cache_write_long, output = output + excluded.output;
+END;
+CREATE TRIGGER usage_totals_grow AFTER UPDATE OF output ON usage WHEN NEW.output <> OLD.output BEGIN
+  UPDATE usage_totals SET output = output + NEW.output - OLD.output
+  WHERE session = NEW.session AND runtime = NEW.runtime AND model = COALESCE(NEW.model, '') AND fast = NEW.fast;
+END;
+CREATE TRIGGER usage_totals_drop AFTER DELETE ON usage BEGIN
+  UPDATE usage_totals SET calls = calls - 1, input = input - OLD.input, cache_read = cache_read - OLD.cache_read, cache_write = cache_write - OLD.cache_write,
+    cache_write_long = cache_write_long - OLD.cache_write_long, output = output - OLD.output
+  WHERE session = OLD.session AND runtime = OLD.runtime AND model = COALESCE(OLD.model, '') AND fast = OLD.fast;
+END;
+`;
+
+/// The usage totals (USAGE_TOTALS), made once from the calls recorded before them, in the same transaction as the
+/// triggers that keep them from then on: no call is counted twice or missed. The making reads the table through once, in
+/// order (a second or two for 300,000 calls).
+export function addUsageTotals(db: DatabaseSync): void {
+  const made = () => db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'usage_totals'").get() !== undefined;
+  if (made()) return;
+  db.exec("BEGIN IMMEDIATE");
+  try {
+    if (!made()) db.exec(USAGE_TOTALS);
+    db.exec("COMMIT");
+  } catch (e) {
+    db.exec("ROLLBACK");
+    throw e;
+  }
+}
+
+/// What a main-thread call sent, all of it (store/usage.ts CONTEXT).
+const SENT = (row: string) => `${row}.input + ${row}.cache_read + ${row}.cache_write + ${row}.cache_write_long`;
+
+/// Where a model's context was compacted, at each call it was (pool.ts `cheapToLeave` asks the last days' most): the
+/// call's time and model, and what the call before it sent. Made once from the calls recorded before (what
+/// compactionPoints worked out from every call of the last days, by a window over them, each time it was asked: 4 s
+/// on ccvm, 2026-10-25), and kept by a trigger as each main-thread call is recorded: the session's call before it,
+/// looked up by its index.
+const USAGE_COMPACTIONS = `
+CREATE TABLE usage_compactions (
+  at INTEGER NOT NULL,
+  model TEXT NOT NULL,
+  point INTEGER NOT NULL
+);
+CREATE INDEX usage_compactions_at ON usage_compactions (at);
+INSERT INTO usage_compactions
+  SELECT at, model, before FROM (
+    SELECT at, model, profile, ${SENT("u")} AS context, LAG(${SENT("u")}) OVER w AS before, LAG(profile) OVER w AS was, LAG(model) OVER w AS of
+    FROM usage u WHERE subagent = 0 WINDOW w AS (PARTITION BY session ORDER BY at))
+  WHERE before >= ${COMPACTED_FROM} AND context * 2 < before AND profile IS was AND model IS of AND model IS NOT NULL;
+CREATE TRIGGER usage_compactions_add AFTER INSERT ON usage WHEN NEW.subagent = 0 AND NEW.model IS NOT NULL BEGIN
+  INSERT INTO usage_compactions
+    SELECT NEW.at, NEW.model, p.context FROM (
+      SELECT ${SENT("b")} AS context, b.profile, b.model FROM usage b
+      WHERE b.session = NEW.session AND b.subagent = 0 AND b.at < NEW.at ORDER BY b.at DESC LIMIT 1) p
+    WHERE p.context >= ${COMPACTED_FROM} AND (${SENT("NEW")}) * 2 < p.context AND p.profile IS NEW.profile AND p.model IS NEW.model;
+END;
+`;
+
+/// The compactions (USAGE_COMPACTIONS), made once from the calls recorded before, in the same transaction as the
+/// trigger that keeps them from then on (as addUsageTotals).
+export function addUsageCompactions(db: DatabaseSync): void {
+  const made = () => db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'usage_compactions'").get() !== undefined;
+  if (made()) return;
+  db.exec("BEGIN IMMEDIATE");
+  try {
+    if (!made()) db.exec(USAGE_COMPACTIONS);
+    db.exec("COMMIT");
+  } catch (e) {
+    db.exec("ROLLBACK");
+    throw e;
+  }
+}
+
+/// What lists say of each thread and session, kept as what they are made of is written, not read out of every message
+/// each time a list is made (every sidebar, every GET /threads and /sessions, every event a viewer is told):
+/// - thread_state: a thread's last entry, its latest message that is not a letter (`said_n`), the first a person
+///   said (`person_n`), and how many letters it has. Entries only grow, and a thread's go together.
+/// - thread_people: who wrote in a thread, each with the first message they wrote there.
+/// - session_first: the first message a session was given (its delivery the earliest made).
+/// Made once from what is there, in the same transaction as the triggers that keep them from then on (as
+/// usage_totals), after the letters were marked (addLetterColumn).
+const LIST_STATE = `
+CREATE TABLE thread_state (
+  thread INTEGER PRIMARY KEY,
+  last_n INTEGER NOT NULL,
+  said_n INTEGER,
+  person_n INTEGER,
+  letters INTEGER NOT NULL
+);
+CREATE TABLE thread_people (
+  thread INTEGER NOT NULL,
+  author TEXT NOT NULL,
+  first_n INTEGER NOT NULL,
+  PRIMARY KEY (thread, author)
+) WITHOUT ROWID;
+CREATE TABLE session_first (
+  session TEXT PRIMARY KEY,
+  thread INTEGER NOT NULL,
+  n INTEGER NOT NULL
+) WITHOUT ROWID;
+INSERT INTO thread_state
+  SELECT thread, MAX(n), MAX(CASE WHEN kind = 'message' AND letter IS NULL THEN n END),
+    MIN(CASE WHEN kind = 'message' AND author_kind = 'person' THEN n END), COUNT(CASE WHEN kind = 'message' AND letter IS NOT NULL THEN 1 END)
+  FROM entries GROUP BY thread;
+INSERT INTO thread_people
+  SELECT thread, author, MIN(n) FROM entries WHERE kind = 'message' AND author_kind = 'person' GROUP BY thread, author;
+INSERT INTO session_first
+  SELECT session, thread, n FROM (SELECT session, thread, n, MIN(rowid) FROM deliveries GROUP BY session);
+CREATE TRIGGER thread_state_add AFTER INSERT ON entries BEGIN
+  INSERT INTO thread_state VALUES (NEW.thread, NEW.n,
+      CASE WHEN NEW.kind = 'message' AND NEW.letter IS NULL THEN NEW.n END,
+      CASE WHEN NEW.kind = 'message' AND NEW.author_kind = 'person' THEN NEW.n END,
+      CASE WHEN NEW.kind = 'message' AND NEW.letter IS NOT NULL THEN 1 ELSE 0 END)
+  ON CONFLICT (thread) DO UPDATE SET
+    last_n = MAX(last_n, excluded.last_n),
+    said_n = CASE WHEN excluded.said_n IS NULL THEN said_n WHEN said_n IS NULL THEN excluded.said_n ELSE MAX(said_n, excluded.said_n) END,
+    person_n = CASE WHEN excluded.person_n IS NULL THEN person_n WHEN person_n IS NULL THEN excluded.person_n ELSE MIN(person_n, excluded.person_n) END,
+    letters = letters + excluded.letters;
+  INSERT INTO thread_people SELECT NEW.thread, NEW.author, NEW.n WHERE NEW.kind = 'message' AND NEW.author_kind = 'person'
+  ON CONFLICT (thread, author) DO UPDATE SET first_n = MIN(first_n, excluded.first_n);
+END;
+CREATE TRIGGER thread_state_drop AFTER DELETE ON entries BEGIN
+  DELETE FROM thread_state WHERE thread = OLD.thread;
+  DELETE FROM thread_people WHERE thread = OLD.thread;
+END;
+CREATE TRIGGER session_first_add AFTER INSERT ON deliveries BEGIN
+  INSERT OR IGNORE INTO session_first VALUES (NEW.session, NEW.thread, NEW.n);
+END;
+CREATE TRIGGER session_first_drop AFTER DELETE ON deliveries
+  WHEN EXISTS (SELECT 1 FROM session_first WHERE session = OLD.session AND thread = OLD.thread AND n = OLD.n) BEGIN
+  DELETE FROM session_first WHERE session = OLD.session;
+  INSERT OR IGNORE INTO session_first SELECT session, thread, n FROM deliveries WHERE session = OLD.session ORDER BY rowid LIMIT 1;
+END;
+`;
+
+/// The lists' kept state (LIST_STATE), made once, with its triggers (as addUsageTotals).
+export function addListState(db: DatabaseSync): void {
+  const made = () => db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'thread_state'").get() !== undefined;
+  if (made()) return;
+  db.exec("BEGIN IMMEDIATE");
+  try {
+    if (!made()) db.exec(LIST_STATE);
+    db.exec("COMMIT");
+  } catch (e) {
+    db.exec("ROLLBACK");
+    throw e;
+  }
+}
+
 /// The columns a station in several workspaces came with (docs/multi-workspace.md): which workspace a session's chat
 /// is in (sessions.ws) and whose archive policy a row is (archive_policy.ws); NULL is the station's home workspace.
 export function addWorkspaceColumns(db: DatabaseSync): void {
   if (!has(db, "sessions", "ws")) db.exec("ALTER TABLE sessions ADD COLUMN ws TEXT");
   if (!has(db, "archive_policy", "ws")) db.exec("ALTER TABLE archive_policy ADD COLUMN ws TEXT");
+  // The sessions counted by connect and workspace (store.ts SESSION_COUNTS, in every overview): from the index alone.
+  db.exec("CREATE INDEX IF NOT EXISTS sessions_by_connect ON sessions (connect, ws)");
 }

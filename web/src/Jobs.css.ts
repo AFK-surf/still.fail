@@ -82,7 +82,8 @@ export const jobAction = style({
   borderRadius: `calc(8px * ${vars.cornerScale})`, background: "none", color: vars.muted, font: "inherit",
   fontSize: vars.textMeta, cursor: "pointer", cornerShape: vars.cornerShape,
   selectors: {
-    "&:hover:not(:disabled)": { background: vars.selected, color: vars.text },
+    // (over its row's light: a step more)
+    "&:hover:not(:disabled)": { background: vars.hover, color: vars.text },
     "&:disabled": { cursor: "progress" },
   },
 });
@@ -143,6 +144,7 @@ export const jobDetailCommand = style({
 });
 export const jobDetailNotices = style({ flex: "1", minHeight: "0", overflowY: "auto", padding: "8px 10px 0 0" });
 export const jobOutput = style({
+  overscrollBehaviorY: "none",
   flex: "1", minHeight: "0", margin: "4px 0 8px", paddingRight: "8px", overflow: "auto",
   font: `11.5px/1.6 ${vars.fontMono}`, color: vars.text, whiteSpace: "pre-wrap", overflowWrap: "anywhere",
 });

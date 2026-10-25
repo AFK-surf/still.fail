@@ -1,0 +1,10 @@
+# The connects' filter (settings/connects.mbt band_filter): its button at the bar's end, then 我的 chosen.
+# MBUI_FIXTURE=settings-connects.
+timeout 20000
+until 连接
+wait 600
+tapxy -77 22
+until 我的
+wait 900
+tap 我的
+wait 900

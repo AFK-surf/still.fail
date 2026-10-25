@@ -1,0 +1,13 @@
+# A chat's file downloaded by the core (MBUI_FIXTURE=chat-download, downloads_fixture.mbt): 发布包.zip opened from its
+# card, 下载 asked; the preview closed while it comes, its card saying how far (a ring in its mark's place), kept once
+# all of it is here.
+timeout 20000
+until 发布包.zip
+wait 600
+tap 发布包.zip
+until =下载
+wait 800
+tap =下载
+wait 1200
+back
+wait 4500

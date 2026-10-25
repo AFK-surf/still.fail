@@ -1,0 +1,572 @@
+// What is being written to a chat as the core keeps it (ember web/src/draft.ts useDraft; the core's composer.ts, the
+// `composer` topic, by the draft's key: `<station>:<chat>`, `new:<station>` a new chat there): its words, the
+// passages it quotes, the files going up to the station (the core sends them up and says how far), whether it can be
+// sent, what went wrong. Each chat has its own while the page shows another; the core keeps each on the device as the
+// chat's draft. This only shows it and says what is done to it: what is typed is the page's at once (and told to the
+// core as it is typed), the rest as the page has done it until the core has it too.
+
+///|
+/// A draft as the page has it: its words (the field's, at once), and the rest as the core last said it, or as the page
+/// did it while the core has not answered (`pending` calls under way, the core's `version` they were answered at,
+/// the `rev` of the core's own words shown, the topic's version adopted).
+pub(all) struct Writing {
+  key : String
+  field : @ui.Field
+  mut text : String
+  mut quotes : Array[Json]
+  mut files : Array[Json]
+  mut focus : String
+  mut starting : Bool
+  mut error : String
+  mut ready : Bool
+  mut uploading : Bool
+  mut pending : Int
+  mut acked : Double
+  mut seen_rev : Double
+  mut adopted : Int
+  /// what `take` took, put back by `restore`
+  mut taken : (String, Array[Json], Array[Json])?
+}
+
+///|
+/// Each draft by its key, as the page has it.
+pub let writings : Map[String, Writing] = {}
+
+///|
+/// The pictures of the files picked or pasted here, by their id: shown at once from their bytes (until the file leaves
+/// the draft), and the station each went up to with its bytes (one sent to another station goes up again there).
+pub let writing_pictures : Map[String, String] = {}
+
+///|
+let writing_went : Map[String, (String, String, Bytes)] = {}
+
+///|
+/// The station each file added here goes up to, by its id.
+// kept across runs: put back by writings_reset (sfbase's reset)
+let writing_stations : Map[String, String] = {}
+
+///|
+/// The files added here, counted (each its own id).
+let writing_n : Ref[Int] = { val: 0 }
+
+///|
+pub fn writings_reset() -> Unit {
+  quoted_into.clear()
+  files_put.clear()
+  writing_stations.clear()
+  shared_into.clear()
+  writings.clear()
+  writing_pictures.clear()
+  writing_went.clear()
+  writing_n.val = 0
+}
+
+///|
+/// The draft `key`, as the core says it now unless the page has done something it has not answered yet.
+pub fn writing(src : Source, key : String) -> Writing {
+  let w = match writings.get(key) {
+    Some(w) => w
+    None => {
+      let w : Writing = {
+        key,
+        field: @ui.Field::new(),
+        text: "",
+        quotes: [],
+        files: [],
+        focus: "",
+        starting: false,
+        error: "",
+        ready: false,
+        uploading: false,
+        pending: 0,
+        acked: 0.0,
+        seen_rev: -1.0,
+        adopted: -1,
+        taken: None,
+      }
+      writings[key] = w
+      w
+    }
+  }
+  let t = (src.topic)("composer", { "key": Json::string(key) })
+  writing_adopt(w, t.value, t.version)
+  w
+}
+
+///|
+/// The core's value shown, unless the page has done something it has not answered yet; its own words (a new `rev`:
+/// read back, taken, put back, carried on) into the field.
+fn writing_adopt(w : Writing, v : Json?, version : Int) -> Unit {
+  guard v is Some(Object(_)) else { return }
+  if w.pending > 0 || number(v, "version") < w.acked || w.adopted == version {
+    return
+  }
+  w.adopted = version
+  w.quotes = items(v, "quotes")
+  w.files = items(v, "files")
+  // a picture picked here, up: its message drawn from it as picked, by the name the station keeps it under (sent.mbt)
+  for f in w.files {
+    let o = Some(f)
+    match (writing_pictures.get(text(o, "id")), writing_stations.get(text(o, "id")), field(o, "done")) {
+      (Some(picture), Some(station), Some(done)) if text(Some(done), "path") != "" =>
+        sent_pictures[sent_key(station, text(Some(done), "path"))] = picture
+      _ => ()
+    }
+  }
+  w.focus = text(v, "focus")
+  w.starting = flag(v, "starting")
+  w.error = text(v, "error")
+  w.ready = flag(v, "ready")
+  w.uploading = flag(v, "uploading")
+  let rev = number(v, "rev")
+  if rev != w.seen_rev {
+    w.seen_rev = rev
+    w.text = text(v, "text")
+    w.field.set(w.text)
+  }
+}
+
+///|
+/// Has the core do `what` to the draft (`composer.<what>`), what the page shows of it meanwhile done by `show`; `done`
+/// its answer.
+fn writing_act(
+  src : Source,
+  w : Writing,
+  what : String,
+  params : Map[String, Json],
+  show? : (Writing) -> Unit = fn(_) {  },
+  done? : (Result[Json, Json]) -> Unit = fn(_) {  },
+  bytes? : Bytes,
+) -> Unit {
+  if src.read_only {
+    toast_later(read_only_words)
+    return
+  }
+  show(w)
+  w.pending += 1
+  params["key"] = Json::string(w.key)
+  let answered = fn(r : Result[Json, Json]) {
+    w.pending -= 1
+    match r {
+      Ok(a) =>
+        match field(Some(a), "version") {
+          Some(Number(n, ..)) => w.acked = if n > w.acked { n } else { w.acked }
+          _ => ()
+        }
+      Err(_) => ()
+    }
+    done(r)
+  }
+  match bytes {
+    Some(b) => (src.call_bytes)("composer." + what, Json::object(params), b, answered)
+    None => (src.call)("composer." + what, Json::object(params), answered)
+  }
+}
+
+///|
+/// What is typed, told to the core as it is typed (`composer.text`).
+pub fn writing_text(src : Source, w : Writing, words : String) -> Unit {
+  if words == w.text {
+    return
+  }
+  w.text = words
+  writing_act(src, w, "text", { "text": Json::string(words) })
+}
+
+///|
+/// A file picked or pasted (`pasted`: long words kept as a file, what the core says of them) going up to `station`
+/// (`composer.add`, its bytes beside the call): shown at once, a picture from its bytes.
+pub fn writing_add(src : Source, w : Writing, station : String, name : String, bytes : Bytes, pasted? : Json) -> Unit {
+  writing_n.val += 1
+  let id = "f" + upload_id(w.key + "\u{1}" + file_seed(station, name, bytes), writing_n.val)
+  if pasted is None {
+    match @pixels.image_size(bytes) {
+      Some(_) => {
+        let key = "mem:writing/" + id
+        @ui.add_image(key, bytes)
+        writing_pictures[id] = key
+        // its message drawn from it, as picked, sent before it is up (it names its upload: sent.mbt)
+        sent_pictures["upload\u{1}" + id] = key
+      }
+      None => ()
+    }
+  }
+  writing_went[id] = (station, name, bytes)
+  writing_stations[id] = station
+  let blob : Map[String, Json] = {
+    "hostBytes": [0, Json::number(bytes.length().to_double())],
+    "type": Json::string(file_type(name)),
+  }
+  let one : Map[String, Json] = {
+    "id": Json::string(id),
+    "name": Json::string(name),
+    "size": Json::number(bytes.length().to_double()),
+    "blob": Json::object(blob),
+  }
+  match pasted {
+    Some(p) => one["pasted"] = p
+    None => ()
+  }
+  let shown : Map[String, Json] = {
+    "id": Json::string(id),
+    "name": Json::string(name),
+    "size": Json::number(bytes.length().to_double()),
+  }
+  match pasted {
+    Some(p) => shown["pasted"] = p
+    None => ()
+  }
+  writing_act(
+    src,
+    w,
+    "add",
+    { "station": Json::string(station), "files": Json::array([Json::object(one)]) },
+    show=fn(w) { w.files = w.files + [Json::object(shown)] },
+    bytes~,
+  )
+}
+
+///|
+/// A file the host holds, too big to be read whole (a video: @hostapi.Picked.held), into the draft: the core sends it
+/// up to `station`, reading it from the host a part at a time as it goes (`composer.add` with `blob: {hostFile, size,
+/// type}`: still.fail's Android app's PickedFiles.kt); its tile the host's picture of it (a video's still).
+pub fn writing_add_held(src : Source, w : Writing, station : String, f : @hostapi.Picked) -> Unit {
+  writing_n.val += 1
+  let id = "f" + upload_id(w.key + "\u{1}held\u{1}" + station + "\u{1}" + f.name + "\u{1}\{f.size}", writing_n.val)
+  if f.src != "" {
+    writing_pictures[id] = f.src
+    sent_pictures["upload\u{1}" + id] = f.src
+  }
+  writing_stations[id] = station
+  let one : Map[String, Json] = {
+    "id": Json::string(id),
+    "name": Json::string(f.name),
+    "size": Json::number(f.size),
+    "blob": Json::object({
+      "hostFile": Json::number(f.held.to_double()),
+      "size": Json::number(f.size),
+      "type": Json::string(file_type(f.name)),
+    }),
+  }
+  let shown : Map[String, Json] = {
+    "id": Json::string(id),
+    "name": Json::string(f.name),
+    "size": Json::number(f.size),
+  }
+  writing_act(
+    src,
+    w,
+    "add",
+    { "station": Json::string(station), "files": Json::array([Json::object(one)]) },
+    show=fn(w) { w.files = w.files + [Json::object(shown)] },
+  )
+}
+
+///|
+/// A file the system picked (or shared into the app) into the draft: held by the host (writing_add_held), or its bytes
+/// (writing_add).
+pub fn writing_add_picked(src : Source, w : Writing, station : String, f : @hostapi.Picked) -> Unit {
+  if f.held != 0 {
+    writing_add_held(src, w, station, f)
+  } else {
+    writing_add(src, w, station, f.name, f.bytes)
+  }
+}
+
+///|
+/// Files shared into the app from another (Android's share sheet), waiting for their chat's composer to take them, by
+/// its draft's key.
+// kept across runs: put back by writings_reset (sfbase's reset)
+pub let shared_into : Map[String, Array[@hostapi.Picked]] = {}
+
+///|
+/// The station files' picker (＋ → Station 文件) put up for draft `key` (`src` what it reads the stations by): sfdesk's
+/// station_files_pick; what is ticked there comes into the draft as files_into does.
+// kept across runs: what the app says once as it starts
+pub let station_files_asked : Ref[(Source, String) -> Unit] = Ref(fn(_, _) {  })
+
+///|
+/// Files and folders dragged in from where they are (a station's files: `ref` with its station, its name and path, a
+/// folder or not; `drive` where it is in that station's drive), named by their path unless this chat takes files
+/// dragged in as files (the core's `composer.add`, nothing of them going up yet).
+pub fn writing_drop(src : Source, d : Writing, station : String, dropped : Array[Json], as_files : Bool) -> Unit {
+  let files = dropped.map(fn(x) {
+    writing_n.val += 1
+    let v = Some(x)
+    let r = match field(v, "ref") {
+      Some(Object(m)) => m.copy()
+      _ => {}
+    }
+    r["mode"] = Json::string(if as_files && !flag(Some(Json::object(r)), "dir") { "file" } else { "path" })
+    let one : Map[String, Json] = {
+      "id": Json::string("f" + upload_id(d.key + "\u{1}" + text(v, "name"), writing_n.val)),
+      "name": Json::string(text(v, "name")),
+      "size": Json::number(number(v, "size")),
+      "ref": Json::object(r),
+    }
+    match field(v, "drive") {
+      Some(Object(_) as dr) => one["drive"] = dr
+      _ => ()
+    }
+    Json::object(one)
+  })
+  writing_act(src, d, "add", { "station": Json::string(station), "files": Json::array(files) }, show=fn(d) {
+    d.files = d.files + files
+  })
+}
+
+///|
+/// A file dragged in, named by its path or sent as a file (`composer.mode`).
+pub fn writing_mode(src : Source, w : Writing, id : String, mode : String) -> Unit {
+  writing_act(src, w, "mode", { "id": Json::string(id), "mode": Json::string(mode) })
+}
+
+///|
+/// A file out of the draft (`composer.remove`), its picture let go.
+pub fn writing_remove(src : Source, w : Writing, id : String) -> Unit {
+  writing_pictures.remove(id)
+  writing_went.remove(id)
+  writing_act(src, w, "remove", { "id": Json::string(id) }, show=fn(w) {
+    w.files = w.files.filter(fn(f) { text(Some(f), "id") != id })
+  })
+}
+
+///|
+/// A file that failed to go up, sent up again (`composer.retry`).
+pub fn writing_retry(src : Source, w : Writing, id : String) -> Unit {
+  writing_act(src, w, "retry", { "id": Json::string(id) })
+}
+
+///|
+/// A passage quoted (its `author`, `text`, its message's `ts` and `role`), its comment line asking for the focus; or an
+/// image of a message (`file`: it goes again with the message as the station has it, among the files by `quoted-<id>`).
+pub fn writing_quote(src : Source, w : Writing, quote : Json, file? : Json) -> Unit {
+  writing_n.val += 1
+  let id = "q" + writing_n.val.to_string()
+  let p : Map[String, Json] = { "id": Json::string(id), "quote": quote, "focus": Json::boolean(true) }
+  match file {
+    Some(f) => {
+      p["attachment"] = f
+      p["fileId"] = Json::string("quoted-" + id)
+    }
+    None => ()
+  }
+  writing_act(src, w, "quote", p, show=fn(w) { w.focus = id })
+}
+
+///|
+/// What is said about a quote (`composer.comment`).
+pub fn writing_comment(src : Source, w : Writing, id : String, words : String) -> Unit {
+  writing_act(src, w, "comment", { "id": Json::string(id), "comment": Json::string(words) })
+}
+
+///|
+/// A quote let go (`composer.unquote`).
+pub fn writing_unquote(src : Source, w : Writing, id : String) -> Unit {
+  writing_act(src, w, "unquote", { "id": Json::string(id) }, show=fn(w) {
+    w.quotes = w.quotes.filter(fn(q) { text(Some(q), "id") != id })
+    if w.focus == id {
+      w.focus = ""
+    }
+  })
+}
+
+///|
+/// A quote's comment line has the focus it asked for (`composer.focused`).
+pub fn writing_focused(src : Source, w : Writing) -> Unit {
+  writing_act(src, w, "focused", {}, show=fn(w) { w.focus = "" })
+}
+
+///|
+/// What went wrong said in the draft, or no longer (`composer.error`).
+pub fn writing_error(src : Source, w : Writing, error : String) -> Unit {
+  writing_act(src, w, "error", { "error": if error == "" { Json::null() } else { Json::string(error) } }, show=fn(w) {
+    w.error = error
+  })
+}
+
+///|
+/// A new chat being made for the message, or no longer (`composer.starting`).
+pub fn writing_starting(src : Source, w : Writing, on : Bool) -> Unit {
+  writing_act(src, w, "starting", { "starting": Json::boolean(on) }, show=fn(w) { w.starting = on })
+}
+
+///|
+/// What is written taken away to be sent (`composer.take`): the draft empty at once; `done` gets what the core took,
+/// as it goes (its words with the links and the paths named after them, the files that are up, the quotes, those still
+/// going up), sent as it says: its files as they were when it took them, not as this page last drew them.
+pub fn writing_take(src : Source, w : Writing, done : (Json?) -> Unit) -> Unit {
+  w.taken = Some((w.text, w.quotes, w.files))
+  writing_act(
+    src,
+    w,
+    "take",
+    {},
+    show=fn(w) {
+      w.text = ""
+      w.field.set("")
+      w.quotes = []
+      w.files = []
+      w.focus = ""
+      w.error = ""
+      w.ready = false
+    },
+    done=fn(r) {
+      match r {
+        Ok(v) => done(Some(v))
+        Err(_) => done(None)
+      }
+    },
+  )
+}
+
+///|
+/// What `take` took put back (a chat that could not be made, a message never sent), saying why; with `unless_written`,
+/// only while nothing new is written there (`composer.restore`).
+pub fn writing_restore(src : Source, w : Writing, error : String, unless_written? : Bool = false) -> Unit {
+  if unless_written && (w.text.trim(chars=" \n\t").to_string() != "" || w.files.length() > 0 || w.quotes.length() > 0) {
+    return
+  }
+  let kept = w.taken
+  w.taken = None
+  writing_act(
+    src,
+    w,
+    "restore",
+    {
+      "error": if error == "" { Json::null() } else { Json::string(error) },
+      "unlessWritten": Json::boolean(unless_written),
+    },
+    show=fn(w) {
+      match kept {
+        Some((words, quotes, files)) => {
+          w.text = words
+          w.field.set(words)
+          w.quotes = quotes
+          w.files = files
+        }
+        None => ()
+      }
+      w.error = error
+    },
+  )
+}
+
+///|
+/// What is written in `from` goes on into `to` (a new chat becoming the chat it made, or its station changed): `from`
+/// left empty (`composer.carry`).
+pub fn writing_carry(src : Source, from : String, to : String) -> Unit {
+  let w = writing(src, from)
+  writing_act(src, w, "carry", { "to": Json::string(to) })
+}
+
+///|
+/// The station a file added here went up to and its bytes, while it is in a draft (sent to another station, it goes up
+/// again there).
+pub fn writing_went_to(id : String) -> (String, String, Bytes)? {
+  writing_went.get(id)
+}
+
+///|
+/// What a file is by its name's ending, for the core (a picture's size is read from its head as it goes up): "" when
+/// not known.
+pub fn file_type(name : String) -> String {
+  let lower = name.to_lower()
+  let ends = fn(e : String) { lower.has_suffix(e) }
+  if ends(".png") {
+    "image/png"
+  } else if ends(".jpg") || ends(".jpeg") {
+    "image/jpeg"
+  } else if ends(".gif") {
+    "image/gif"
+  } else if ends(".webp") {
+    "image/webp"
+  } else if ends(".heic") {
+    "image/heic"
+  } else if ends(".mp4") || ends(".m4v") {
+    "video/mp4"
+  } else if ends(".mov") {
+    "video/quicktime"
+  } else if ends(".webm") {
+    "video/webm"
+  } else if ends(".3gp") {
+    "video/3gpp"
+  } else if ends(".pdf") {
+    "application/pdf"
+  } else if ends(".txt") {
+    "text/plain"
+  } else {
+    ""
+  }
+}
+
+///|
+/// A file as the core gives it (Attachment), kept by `owner`'s workspace.
+pub fn attachment_json(a : Attachment, owner : String) -> Json {
+  let o : Map[String, Json] = {
+    "name": Json::string(a.name),
+    "path": Json::string(a.path),
+    "size": Json::number(a.size),
+  }
+  if a.width > 0.0 && a.height > 0.0 {
+    o["width"] = Json::number(a.width)
+    o["height"] = Json::number(a.height)
+  }
+  if a.thumbhash != "" {
+    o["thumbhash"] = Json::string(a.thumbhash)
+  }
+  if owner != "" {
+    o["owner"] = Json::string(owner)
+  }
+  Json::object(o)
+}
+
+///|
+/// A message's file quoted into a chat's draft (a picture's menu, 引用): by the draft's key, whose (`author`), the
+/// message's `ts`, its role, the file as the core gives it; taken by whichever composer the draft's is, as it is next
+/// drawn (its quote with the file in its card, the file going again with the message as the station has it).
+pub fn quote_file_into(draft : String, author : String, ts : String, role : String, file : Json) -> Unit {
+  let list = quoted_into.get(draft).unwrap_or([])
+  list.push((author, ts, role, file))
+  quoted_into[draft] = list
+}
+
+///|
+/// Files (a 文件 row) put into a chat's message from elsewhere (the files' tab: 添加到消息, a row let go on the chat), by
+/// the chat's key; taken by its composer as it is next drawn (files_taken).
+pub fn files_into(chat : String, d : Dragged) -> Unit {
+  files_put.push((chat, d))
+}
+
+///|
+/// What was put into the chat `chat`'s message since it was last asked, taken.
+pub fn files_taken(chat : String) -> Array[Dragged] {
+  let out = files_put.filter(fn(x) { x.0 == chat }).map(fn(x) { x.1 })
+  files_put.retain(fn(x) { x.0 != chat })
+  out
+}
+
+///|
+// kept across runs: put back by writings_reset (sfbase's reset)
+let files_put : Array[(String, Dragged)] = []
+
+///|
+/// What a row dragged now carries, as the frame that drags it says (sfdesk's drag.mbt), for a composer it goes over.
+// kept across runs: what the app says once as it starts
+pub let drag_carried : Ref[() -> Dragged?] = Ref(fn() { None })
+
+///|
+/// The chat before (-1) or after (1) the one open, gone to by a composer's ↑ or ↓ (empty, focused), as the shell
+/// says as the app starts (its list's order); none while the shell has the arrows itself (its switcher open).
+// kept across runs: what the app says once as it starts
+pub let neighbour_go : Ref[(Source, Workspace, Int) -> Unit] = Ref(fn(_, _, _) {  })
+
+///|
+/// Whether the shell has the arrows now (neighbour_go).
+// kept across runs: what the app says once as it starts
+pub let neighbour_held : Ref[() -> Bool] = Ref(fn() { false })
+
+///|
+/// The files quoted, by draft key, not yet taken by a composer.
+// kept across runs: put back by writings_reset (sfbase's reset)
+pub let quoted_into : Map[String, Array[(String, String, String, Json)]] = {}

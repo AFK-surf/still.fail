@@ -37,16 +37,16 @@ test "an image opens fitted, its bar over it; a double tap zooms in, another bac
   t.tap(195.0, 422.0)
   t.advance(double_tap_ms / 2.0)
   t.tap(195.0, 422.0)
-  // (its glide: zoom_glide_ms from the tap)
-  t.run_for(zoom_glide_ms)
+  // (its glide: @kit.zoom_glide_ms from the tap)
+  t.run_for(@kit.zoom_glide_ms)
   assert_true((v.zoom.scale - 1.525).abs() < 0.01)
   // (the next two taps a double tap of their own)
   t.run_for(double_tap_ms)
   t.tap(195.0, 422.0)
   t.advance(double_tap_ms / 2.0)
   t.tap(195.0, 422.0)
-  // (its glide: zoom_glide_ms from the tap)
-  t.run_for(zoom_glide_ms)
+  // (its glide: @kit.zoom_glide_ms from the tap)
+  t.run_for(@kit.zoom_glide_ms)
   assert_true((v.zoom.scale - 366.0 / 600.0).abs() < 0.001)
   // back closes it at once (only drawn going, back into its thumbnail or fading out), the chat under it again
   t.back()
@@ -58,16 +58,17 @@ test "an image opens fitted, its bar over it; a double tap zooms in, another bac
 }
 
 ///|
-test "a video plays in a native view, its bytes read through the core; its controls over it" {
+test "a video plays in the one player (@sf.player_view), its bytes read through the core; its controls over it" {
   let t = preview_tester("video")
   assert_true(t.views().iter().any(fn(l) { l.has_prefix("open 1 1 ") }))
   assert_true(t.views().contains("control 1 1 0"))
-  // 1280 × 720 fitted: (390 - 24) wide, in the middle
+  // 1280 × 720 edge to edge on the black, in the middle
   let holes = t.holes()
   assert_eq(holes.length(), 1)
-  let (x, _, w, h) = holes[0]
-  assert_eq(x, 12.0)
-  assert_true((w - 366.0).abs() < 0.5 && (h - 366.0 * 720.0 / 1280.0).abs() < 0.5)
+  let (x, y, w, h) = holes[0]
+  assert_eq(x, 0.0)
+  assert_true((w - 390.0).abs() < 0.5 && (h - 390.0 * 720.0 / 1280.0).abs() < 0.5)
+  assert_true((y + h / 2.0 - 422.0).abs() < 1.0)
   // its frames' times asked of the host and counted, once it says them (three frames a 30th of a second apart)
   assert_true(t.views().iter().any(fn(l) { l.has_prefix("control 1 20 ") }))
   assert_true(t.view_said("{\"view\":{\"view\":1,\"what\":1,\"text\":\"0,33.333,66.667\"}}"))
@@ -102,13 +103,12 @@ test "a video in the chat: the station's still of it (its poster) on the black, 
     owner: "s-c1",
     upload: "",
   }
-  let here : Here = { station: "ws1/st1", session: "s-c1", view: chat_view(Json::object({})) }
-  let t = @ui.Tester::new(fn(c) { file_item(c, src, here, a, 300.0) }, w=390.0, h=844.0)
+  let t = @ui.Tester::new(fn(c) { chat_file(c, src, a) }, w=390.0, h=844.0)
   t.draw()
   t.run_for(@ui.image_fade_ms)
   assert_eq(asked[0], "ws1/st1 s-c1 演示录屏.mp4")
   // 16:9 in 300 wide (image_box: 360 × 203 at most), covering its box
-  let (bw, bh, _) = image_box(a, 96.0)
+  let (bw, bh, _) = @sfpages.image_box(a, @sfpages.video_least)
   let h = bh * 300.0 / bw
   assert_true(
     t.drawn_images().iter().any(fn(i) { (i[2] - 300.0).abs() < 0.5 && (i[3] - h).abs() < 0.5 }),
@@ -147,8 +147,8 @@ fn ten_frames() -> (@ui.Tester, Double, Double, Double) raise {
     t.view_said("{\"view\":{\"view\":1,\"what\":1,\"text\":\"0,100,200,300,400,500,600,700,800,900\"}}"),
   )
   t.draw()
-  let (x, y, w, h) = t.ctx().rect_of(t.ctx().id("preview/timeline")).unwrap()
-  (t, x + 6.0, w - 12.0, y + h / 2.0)
+  let (x, y, w, h) = t.ctx().rect_of(t.ctx().id("preview-media/timeline")).unwrap()
+  (t, x + @sf.player_track_inset, w - 2.0 * @sf.player_track_inset, y + h / 2.0)
 }
 
 ///|
@@ -176,19 +176,23 @@ test "a video's timeline dragged: paused, the player told a finger is on it, a s
     .any(fn(r) { (r.2 - 12.0).abs() < 0.5 && (r.3 - 12.0).abs() < 0.5 && (r.0 + 6.0 - (x0 + span * 0.7)).abs() < 0.5 }),
   )
   assert_true(!t.views().contains("control 1 9 0"))
-  // let go further on than its last move (the two in one frame): to the frame there first (900 ms), then told so
+  // let go further on than its last move (the two in one frame): to the frame there first (900 ms), then told so, and
+  // played on as it played when the finger came
+  let plays = t.views().filter(fn(l) { l == "control 1 1 0" }).length()
   t.release(x0 + span * 0.95, mid)
   assert_eq(seeks(), ["control 1 3 200", "control 1 3 700", "control 1 3 900"])
   let log = t.views()
   assert_true(log.search("control 1 3 900").unwrap() < log.search("control 1 9 0").unwrap())
+  assert_eq(log.filter(fn(l) { l == "control 1 1 0" }).length(), plays + 1)
 }
 
 ///|
-test "a video's timeline tapped: paused at the frame there, no finger along it told" {
+test "a video's timeline tapped: to about the frame there at once (the nearest key frame), played on as it was, no finger along it told" {
   let (t, x0, span, mid) = ten_frames()
-  t.tap(x0 + span * 0.5, mid)
-  assert_true(t.views().contains("control 1 2 0"))
-  assert_true(t.views().contains("control 1 3 500"))
+  t.tap(x0 + span * 0.55, mid)
+  assert_true(t.views().contains("control 1 11 500"))
+  assert_true(!t.views().iter().any(fn(l) { l.has_prefix("control 1 3 ") }))
+  assert_true(!t.views().contains("control 1 2 0"))
   assert_true(!t.views().iter().any(fn(l) { l.has_prefix("control 1 9 ") }))
 }
 
@@ -201,18 +205,19 @@ test "a video's ‹ and › go to a frame's very start, a frame on from the one 
     let (x, y, w, h) = t.ctx().rect_of(t.ctx().id(key)).unwrap()
     t.tap(x + w / 2.0, y + h / 2.0)
   }
+  // (paused, the player's ±15 s are its frames' keys)
   // › from the first: to the second's start, as the file has it (no ms rounded up: past it is the third's)
-  tap_button("preview/next")
+  tap_button("preview-media/frame-on")
   assert_true(t.views().contains("control 1 3 33.333"))
   // the player there says 33 (whole ms): that is the second still, so › goes to the third
   t.set_player(1, position=33.0)
   t.draw()
-  tap_button("preview/next")
+  tap_button("preview-media/frame-on")
   assert_true(t.views().contains("control 1 3 66.667"))
   // and ‹ from the third (66) back to the second
   t.set_player(1, position=66.0)
   t.draw()
-  tap_button("preview/prev")
+  tap_button("preview-media/frame-back")
   assert_eq(t.views().filter(fn(l) { l == "control 1 3 33.333" }).length(), 2)
 }
 
@@ -231,10 +236,9 @@ fn video_in_chat() -> @ui.Tester {
     owner: "s-c1",
     upload: "",
   }
-  let here : Here = { station: "ws1/st1", session: "s-c1", view: chat_view(Json::object({})) }
   let t = @ui.Tester::new(
     fn(c) {
-      file_item(c, src, here, a, 300.0)
+      chat_file(c, src, a)
       preview(c, src)
     },
     w=390.0,
@@ -266,12 +270,12 @@ test "a video flies from its thumbnail in the chat, its still flying; the player
   t.run_for(fly_open_ms / 2.0)
   assert_eq(t.holes().length(), 0)
   assert_eq(pv_hidden.val, "ws1/st1/s-c1/uploads/fx/演示录屏.mp4")
-  assert_true(t.drawn_images().iter().any(fn(i) { i[2] > 300.0 && i[2] < 366.0 }))
-  // in: the player's picture where the still was, fitted (390 - 24 wide)
+  assert_true(t.drawn_images().iter().any(fn(i) { i[2] > 300.0 && i[2] < 390.0 }))
+  // in: the player's picture where the still was, edge to edge
   t.run_for(fly_open_ms)
   assert_eq(pv_hidden.val, "")
   assert_eq(t.holes().length(), 1)
-  assert_true((t.holes()[0].2 - 366.0).abs() < 0.5)
+  assert_true((t.holes()[0].2 - 390.0).abs() < 0.5)
 }
 
 ///|
@@ -340,8 +344,7 @@ fn posterless(size : Double) -> @ui.Tester {
     owner: "s-c1",
     upload: "",
   }
-  let here : Here = { station: "ws1/st1", session: "s-c1", view: chat_view(Json::object({})) }
-  let t = @ui.Tester::new(fn(c) { file_item(c, src, here, a, 300.0) }, w=390.0, h=844.0)
+  let t = @ui.Tester::new(fn(c) { chat_file(c, src, a) }, w=390.0, h=844.0)
   t.draw()
   t
 }
@@ -415,22 +418,22 @@ test "an APK told of: 安装 first, handed to the system's installer once its by
 }
 
 ///|
-test "an APK asked for: 正在读取 till the core says how much has come, then that out of its size over a bar (FileProgress)" {
+test "an APK asked for: downloaded by the core, how far it has come in its words over a bar (FileProgress) as it tells it" {
   reset()
-  let said : Ref[((Json) -> Unit)?] = Ref::new(None)
-  let src : Source = { ..fixture("chat-preview-apk"), read_going: fn(_, _, on_value, _) { said.val = Some(on_value) } }
+  let src = fixture("chat-preview-apk")
   let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0)
   open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
   t.draw()
   t.run_for(fly_open_ms)
   t.tap_text("下载")
   t.frame()
-  // asked of the core, nothing said yet of how far it has got
-  assert_true(t.find("正在读取") is Some(_))
-  assert_true(t.find("下载") is None)
-  (said.val.unwrap())({ "loaded": Json::number(4096.0), "total": Json::number(8192.0) })
-  t.frame()
-  assert_true(t.find("正在读取 4 KB / 8 KB") is Some(_))
+  // asked of the core, nothing of it here yet
+  assert_true(t.find("正在下载 0% · 8 KB") is Some(_))
+  // (its 下载 no longer there)
+  assert_true(!t.words().iter().any(fn(w) { w.0 == "下载" }))
+  // half of it here (the fixture's core: a twentieth each step)
+  t.run_for(fix_download_step_ms * 10.0)
+  assert_true(t.find("正在下载 50% · 8 KB") is Some(_))
 }
 
 ///|
@@ -501,6 +504,110 @@ test "a swipe past a fifth of the stage goes to the next; a short one comes back
   t.drag(300.0, 422.0, 260.0, 422.0)
   assert_eq(viewer.val.unwrap().file.name, "界面草图.png")
   t.drag(300.0, 422.0, 100.0, 422.0)
+  assert_eq(viewer.val.unwrap().file.name, "第二版.png")
+}
+
+///|
+/// The pictures drawn in the last frame (x, y, w, h), left to right.
+fn drawn_pictures(t : @ui.Tester) -> Array[(Double, Double, Double, Double)] {
+  let out = t.drawn_images().map(fn(i) { (i[0], i[1], i[2], i[3]) })
+  out.sort_by(fn(a, b) { a.0.compare(b.0) })
+  out
+}
+
+///|
+test "the frame a swipe is let go in shows both pictures where the finger left them, never this one where the next comes" {
+  for way in [(300.0, 100.0), (100.0, 300.0)] {
+    let t = preview_tester("step")
+    if way.0 < way.1 {
+      // from the second, back toward the first
+      t.drag(300.0, 422.0, 100.0, 422.0)
+      t.run_for(t.rest_of("preview/strip") - t.time())
+    }
+    let from = viewer.val.unwrap().file.name
+    t.hold_drag(way.0, 422.0, way.1, 422.0)
+    let held = drawn_pictures(t)
+    t.touch(2, way.1, 422.0)
+    t.frame()
+    assert_true(viewer.val.unwrap().file.name != from)
+    let drawn = drawn_pictures(t)
+    assert_eq(drawn.length(), held.length())
+    for i, d in drawn {
+      let h = held[i]
+      assert_true(
+        (d.0 - h.0).abs() < 0.001 &&
+        (d.1 - h.1).abs() < 0.001 &&
+        (d.2 - h.2).abs() < 0.001 &&
+        (d.3 - h.3).abs() < 0.001,
+      )
+    }
+  }
+}
+
+///|
+/// The viewer's image zoomed in by a double tap in its middle (2.5 times fitted: 915 × 610 on the 390 × 844 stage, 262.5
+/// to go either way across), the next taps a double tap of their own.
+fn zoom_in_middle(t : @ui.Tester) -> @kit.Zoom raise {
+  t.tap(195.0, 422.0)
+  t.advance(double_tap_ms / 2.0)
+  t.tap(195.0, 422.0)
+  t.run_for(@kit.zoom_glide_ms)
+  t.run_for(double_tap_ms)
+  let z = viewer.val.unwrap().zoom
+  assert_true(z.zoomed())
+  z
+}
+
+///|
+test "zoomed in, let go moving it goes on that way, slowing, to its edge; a finger on it stops it and taps nothing" {
+  let t = preview_tester("image")
+  let v = viewer.val.unwrap()
+  let z = zoom_in_middle(t)
+  // a quick move left (60 in 50 ms), let go: on after the finger, three of its moves' time later well on
+  t.drag(250.0, 422.0, 190.0, 422.0, steps=3)
+  let let_go = z.x
+  assert_true(let_go < 0.0)
+  t.run_for(3.0 * @ui.input_step_ms)
+  assert_true(z.x < let_go - 20.0)
+  // a finger down on it: it stops there, and the bars stay as they were
+  let awake = v.awake
+  t.touch(0, 195.0, 422.0)
+  t.draw()
+  let held = z.x
+  t.touch(2, 195.0, 422.0)
+  t.draw()
+  t.run_for(@kit.zoom_fling_ms)
+  assert_eq(z.x, held)
+  assert_eq(v.awake, awake)
+  // flung harder: it stops at its edge (its right edge at the stage's), when its way said it ends
+  t.drag(250.0, 422.0, 130.0, 422.0, steps=3)
+  t.run_for(z.fling_x.ends_at() - t.time())
+  let (x, _, w, _) = z.rect().unwrap()
+  assert_true((x + w - 390.0).abs() < 0.001)
+  t.run_for(@kit.zoom_fling_ms)
+  assert_true((z.rect().unwrap().0 - x).abs() < 0.001)
+}
+
+///|
+test "zoomed in, dragged on past its edge the next comes in; a quick move that came to its edge on the way comes back" {
+  let t = preview_tester("step")
+  let z = zoom_in_middle(t)
+  // quick (95 a move), from its middle: to its edge and 22.5 past, let go there: back, and it stays at its edge
+  t.drag(385.0, 422.0, 5.0, 422.0, steps=4)
+  t.run_for(t.rest_of("preview/strip") - t.time())
+  assert_eq(viewer.val.unwrap().file.name, "界面草图.png")
+  let (x, _, w, _) = z.rect().unwrap()
+  assert_true((x + w - 390.0).abs() < 0.001)
+  // from its edge, a short quick move on: the next
+  t.drag(300.0, 422.0, 260.0, 422.0, steps=2)
+  assert_eq(viewer.val.unwrap().file.name, "第二版.png")
+}
+
+///|
+test "zoomed in, dragged slowly far past its edge: the next" {
+  let t = preview_tester("step")
+  zoom_in_middle(t) |> ignore
+  t.drag(385.0, 422.0, 5.0, 422.0, steps=20)
   assert_eq(viewer.val.unwrap().file.name, "第二版.png")
 }
 
@@ -592,6 +699,8 @@ test "a picture of the chat grows from its thumbnail; back closes it at once and
   assert_true(last < 0.5)
   assert_true(pv_leaving.val is None)
   assert_eq(pv_hidden.val, "")
+  // (the chat's other pictures brushed in once decoded: sfpages message_files.mbt)
+  t.run_for(@sfpages.reveal_ms)
   t.assert_idle()
 }
 
@@ -606,8 +715,9 @@ test "marking a picture of a long name: the bar's 取消, download and 添加到
   t.draw()
   let (px, _, pw, _) = t.rect_of("添加到对话").unwrap()
   let (cx, _, cw, _) = t.rect_of("取消").unwrap()
-  // the bar 8 in from the window's right, 6 inside it the × (32), 4 before it the pill, its words 12 inside it
-  assert_true(px + pw <= 390.0 - 8.0 - 6.0 - 32.0 - 4.0 - 12.0 + 0.5, msg="添加到对话 inside its ground, clear of ×")
+  // the bar 8 in from the window's right (fpHead under 640), 6 inside it the × (32), 2 before it the pill, its words
+  // 12 inside it
+  assert_true(px + pw <= 390.0 - 8.0 - 6.0 - 32.0 - 2.0 - 12.0 + 0.5, msg="添加到对话 inside its ground, clear of ×")
   assert_true(cw >= 24.0, msg="取消 whole")
   assert_true(cx + cw <= px, msg="取消 before 添加到对话")
   match t.rect_of("web-open-2") {
@@ -651,4 +761,39 @@ test "marking: a box's pin up and right of its corner wherever the marks before 
   // the card says it, what it is under it
   assert_true(t.find("这里对齐") is Some(_))
   marks_leave()
+}
+
+///|
+test "a desktop's video opened over its chat has the keys: Space plays it each time, the chat's composer under it never taking them" {
+  reset()
+  let src = fixture("chat-preview-video")
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=1280.0, h=800.0, platform=0)
+  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
+  t.draw()
+  t.run_for(fly_open_ms)
+  assert_true(viewer.val is Some(_))
+  let played = fn() { t.views().filter(fn(l) { l == "control 1 1 0" }).length() }
+  let before = played()
+  // (the chat's own Space, with no field focused, puts the cursor in its composer: not under the film)
+  t.key(@ui.key_space)
+  assert_false(t.ctx().field_focused())
+  t.key(@ui.key_space)
+  assert_false(t.ctx().field_focused())
+  assert_eq(played(), before + 2)
+}
+
+///|
+/// A chat's file `a` as its message draws it (sfpages' message_files), in a column 300 wide.
+fn chat_file(c : @ui.Ctx, src : Source, a : Attachment) -> Unit {
+  let here : @sfpages.MessageHere = {
+    station: "ws1/st1",
+    session: "s-c1",
+    view: chat_view(Json::object({})),
+    go: None,
+    inline: true,
+    gutter: 0.0,
+    list: None,
+    core: None,
+  }
+  c.box(style=@ui.style(w=Fixed(300.0)), fn() { @sfpages.message_files(c, src, here, [a], false) }) |> ignore
 }

@@ -1,6 +1,7 @@
 // 外观 › 字体 (FontSetting.tsx): the places' switch, the faces as tiles, a chat as they set it.
 import { globalStyle, style } from "@vanilla-extract/css";
 import { vars } from "@stillfail/ui/styles/tokens.css.ts";
+import { litOver } from "@stillfail/ui/styles/lit.ts";
 import { PANEL_PAD, TEXT_IN } from "@stillfail/ui/styles/align.ts";
 import { CARD_PAD, cardGround, cardLook } from "./styles/pages.css.ts";
 
@@ -13,7 +14,7 @@ export const tile = style({
   padding: "12px 10px", border: "0", borderRadius: vars.rCard, cornerShape: vars.cornerShape, background: cardGround, color: vars.text,
   cursor: "pointer", font: "inherit", transition: `box-shadow ${vars.dur} ${vars.easeOut}, background ${vars.dur} ${vars.easeOut}`,
   selectors: {
-    "&:hover": { background: `color-mix(in oklab, ${vars.text} 7%, ${vars.canvas})` },
+    "&:hover": litOver,
     '&[aria-pressed="true"]': { boxShadow: `inset 0 0 0 1.5px ${vars.accent}` },
     "&:focus-visible": { outline: `2px solid ${vars.fieldFocus}`, outlineOffset: "2px" },
   },
@@ -55,7 +56,7 @@ export const preview = style({
   fontFamily: vars.fontBody, color: vars.text,
 });
 export const previewMine = style({ display: "flex", justifyContent: "flex-end" });
-export const previewWords = style({ fontFamily: vars.fontText, fontSize: vars.textBody, lineHeight: "1.55" });
+export const previewWords = style({ fontFamily: vars.fontText, fontVariantNumeric: "normal", fontSize: vars.textBody, lineHeight: "1.55" });
 export const previewName = style({ fontSize: vars.textUi, fontWeight: "600", color: vars.accentText });
 // On the settings' grey card, the bubble and the code on the page's own ground, as a chat has them.
 globalStyle(`${preview} ${previewMine} > *, ${preview} pre`, { background: vars.canvas });

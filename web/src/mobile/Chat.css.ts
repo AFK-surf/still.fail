@@ -117,7 +117,7 @@ export const mPlus = style({
 });
 export const mComposerField = style({
   flex: "1", minWidth: "0", minHeight: "36px", boxSizing: "border-box", margin: "0", padding: "7px 14px 7px 0",
-  border: "0", background: "transparent", color: "var(--m-ink)", font: "inherit", fontFamily: vars.fontText, fontSize: vars.textInput, lineHeight: "21px",
+  border: "0", background: "transparent", color: "var(--m-ink)", font: "inherit", fontFamily: vars.fontText, fontVariantNumeric: "normal", fontSize: vars.textInput, lineHeight: "21px",
   resize: "none", outline: "none", textWrap: "wrap",
   selectors: {
     "&::placeholder": { color: "var(--m-subtle)" },
@@ -143,6 +143,7 @@ export const mJobHead = style({ display: "flex", alignItems: "flex-start", gap: 
 export const mJobBody = style({});
 export const mJobNotices = style({ display: "grid", gap: "12px", fontSize: vars.textUi, overflowY: "auto" });
 export const mJobOutput = style({
+  overscrollBehaviorY: "none",
   margin: "0", padding: "12px 14px", maxHeight: "50vh", overflow: "auto", borderRadius: `calc(16px * ${vars.cornerScale})`,
   cornerShape: vars.cornerShape,
   background: "color-mix(in srgb, var(--m-ink) 5%, transparent)",

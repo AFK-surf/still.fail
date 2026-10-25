@@ -6,7 +6,7 @@ fn share_tester(mode : String) -> @ui.Tester {
   reset()
   let src = fixture(mode)
   open_drive_fixture(mode)
-  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0)
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0, platform=2)
   // the fixture's pages in
   nav_rested(t)
   t
@@ -92,7 +92,7 @@ test "over another app, the sheet closed: the app goes once it has sunk away, ba
   lower_sheet()
   t.frame()
   assert_eq(t.overs_done(), [])
-  sheet_rested(t, "sheet")
+  sheet_rested(t, "sf-present")
   t.frame()
   assert_eq(t.overs_done(), [false])
 }
@@ -105,10 +105,10 @@ test "over another app signed out: to sign in in the app first, 打开 still.fai
   share_in.env_taken = true
   raise_sheet(ShareSheet)
   share_in.raised = true
-  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0)
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0, platform=2)
   t.post(@hostapi.system_channel, "{\"over\":true}")
   t.frame()
-  sheet_rested(t, "sheet")
+  sheet_rested(t, "sf-present")
   assert_true(t.find("先在 still.fail 里登录，再来分享") is Some(_))
   t.tap_text("打开 still.fail")
   assert_eq(t.overs_done(), [true])
@@ -120,7 +120,7 @@ fn over_toast_foot(foot : Double) -> Double raise {
   let t = share_tester("share-in")
   t.post(@hostapi.system_channel, "{\"over\":true,\"bars\":{\"top\":24,\"bottom\":\{foot},\"left\":0,\"right\":0}}")
   t.frame()
-  sheet_rested(t, "sheet")
+  sheet_rested(t, "sf-present")
   app.toast = "发到了"
   app.toast_n += 1
   t.frame()

@@ -14,11 +14,13 @@ import { CodexDriver } from "../agents/codex.ts";
 import { DshDriver } from "../agents/dsh.ts";
 import { GrokDriver } from "../agents/grok.ts";
 import { CursorDriver } from "../agents/cursor.ts";
+import { HermesDriver } from "../agents/hermes.ts";
 import { DevinDriver } from "../agents/devin.ts";
-import { Jobs, notifyEndpoint } from "../jobs/jobs.ts";
+import { Jobs, notifyEndpoint, screenEndpoint } from "../jobs/jobs.ts";
 import { liveMemory } from "../jobs/memory.ts";
 import { Remote, followRoster } from "../jobs/remote.ts";
 import { ConfigFile } from "../ops/config.ts";
+import { DISK_EVERY_MS, DISK_LOW_BYTES, diskFree } from "../ops/disk.ts";
 import { lentFile, placeIn, sandboxConfig, sandboxed } from "../agents/sandbox.ts";
 import type { Control } from "../ops/launcher.ts";
 import { log } from "../ops/log.ts";
@@ -56,11 +58,11 @@ import type { Viewer } from "../mesh/credential.ts";
 import type { Lang } from "../ops/i18n.ts";
 import { type Updates, makeUpdates } from "../updates/updates.ts";
 import { hubConfig } from "./config.ts";
-import { inBrief } from "./live.ts";
+import type { TailState } from "../read/tail.ts";
 import { ColdRooms } from "./cold.ts";
 import { Hub } from "./hub.ts";
 import { InternalChat } from "./internal.ts";
-import { autoArchive, expireArchived } from "./lifecycle.ts";
+import { autoArchive, expireArchived, relieveArchived } from "./lifecycle.ts";
 import { fromPeer, sender } from "./messages.ts";
 import { CREATE, NOTICE, createForPeer, noticeForPeer } from "./opened.ts";
 import { chatsTouched, forPeer, READ } from "./others.ts";
@@ -73,6 +75,9 @@ const encode = encodeURIComponent;
 
 /// How often the sandboxes nothing runs in are looked for (hub.ts `sweepSandboxes`).
 const SWEEP_MS = 3 * 60_000;
+/// How many threads archived to files are brought back into the database at a time, a second apart (store.ts
+/// `bringInArchived`): each a file read and its entries written, the main thread's.
+const BRING_IN = 20;
 
 export type AgentsParts = {
   /// The agents' predecessor-exit wait, also used before binding the mesh socket.
@@ -178,6 +183,7 @@ export const AgentsLive = (control: Control) =>
       // In sandboxes a subscription's login stays here: each process there is lent a short-lived one, as a borrowed
       // subscription's is (agents/sandbox.ts).
       const lentToSandbox = (p: any) => !borrowed(p) && p?.access?.kind === "subscription" && sandboxed(data);
+      const hermes = new HermesDriver({ data });
       const codex = new CodexDriver({
         data,
         currentProfile: (id) => settings().profiles.find((p) => p.id === id),
@@ -192,6 +198,7 @@ export const AgentsLive = (control: Control) =>
       const connectViews = new Map<string, ConnectView>();
       let slackView: SlackView | undefined;
       const along: Along[] = [];
+      const cold = new ColdRooms(() => hub);
       const hub = new Hub({
         config: settings,
         store,
@@ -217,12 +224,13 @@ export const AgentsLive = (control: Control) =>
           new GrokDriver({ data }),
           new CursorDriver({ data }),
           new DevinDriver({ data }),
+          hermes,
         ],
         mcpUrl: () => door?.url ?? "",
         internal: new InternalChat(),
         link: pageOf,
         workspaces: () => cloud.memberships().map((m) => m.workspace),
-        cold: new ColdRooms(() => hub),
+        cold,
         places,
       });
       // No turn until the agents' door is open: a runtime started before has no MCP endpoint, and Codex does not
@@ -414,7 +422,7 @@ export const AgentsLive = (control: Control) =>
         return cloud.state?.peers.find((x) => x?.id === host)?.name ?? host ?? null;
       };
       const accounts: Accounts = makeAccounts({
-        data, store, config, hub, reviewUndecided: () => startReview(hub), codex: () => codex as any, following: () => events.inUse() || hub.anyRunning(), checkOnStart: true,
+        data, store, config, hub, reviewUndecided: () => startReview(hub), codex: () => codex as any, hermes: () => hermes, following: () => events.inUse() || hub.anyRunning(), checkOnStart: true,
         workspaces: () => hub.workspaces(),
         shared: { status: (p) => sharing!.status(p), view: (p) => sharing?.profileView(p) ?? null, hostName },
       });
@@ -442,14 +450,25 @@ export const AgentsLive = (control: Control) =>
       // And the fields the station's parts add (parts.ts).
       const view = async (viewer: Viewer, lang: Lang) => ({ ...((await platformView(viewer, lang)) as object), ...(await parts.overviewOf(viewer, lang)) });
 
+      hub.live.heldTold = (key, message) => events.heldTold(key, message);
+      // A transcript's past is read by the readers, which keep where its reading stands (read/transcripts.ts): the live
+      // view goes on from there, and gives a listener what it lacks from them, none of it read on the main thread.
+      hub.live.history = {
+        state: async (key) => (JSON.parse(await readers.read("transcriptState", { key }, "zh")) as { states: TailState[] | null }).states,
+        page: async (key, before, limit, brief) => JSON.parse(await readers.read("timeline", { key, before: String(before), limit: String(limit), lang: "zh", ...(brief ? { brief: "1" } : {}) }, "zh")),
+      };
+      hub.followRunning();
       // The readers say what runs, and which chats clients made: the hub's.
       readers.processes = () => hub.processes();
       readers.clientKeys = () => hub.clientKeys();
       events.follow({
         live: (key, from, last, send, brief) => {
-          const id = hub.live.subscribe(key, from, last, brief ? inBrief(send) : send);
+          const id = hub.live.subscribe(key, from, last, send, brief);
           return () => hub.live.unsubscribe(key, id);
         },
+        // The sessions at work, followed by the station itself: told to the streams that follow them, in brief.
+        held: () => hub.live.held(),
+        heldNow: (key) => hub.live.now(key),
         overview: view,
         processState: (key) => hub.processState(key),
         followed: () => accounts.followed(),
@@ -549,15 +568,16 @@ export const AgentsLive = (control: Control) =>
         // remembered (the agents left running know it), 4750 on the machine's own data directory, any free one.
         const named = config.raw()?.http?.port;
         const notified = (authorization: string | undefined, body: Buffer) => notifyEndpoint(jobs, authorization, body);
-        if (control.mcpFd !== undefined) door = await openAgentsDoor({ fd: control.mcpFd }, mcp, notified, peerRoute, partRoutes);
+        const screened = (authorization: string | undefined, body: Buffer) => screenEndpoint(jobs, authorization, body);
+        if (control.mcpFd !== undefined) door = await openAgentsDoor({ fd: control.mcpFd }, mcp, notified, peerRoute, partRoutes, screened);
         // Behind the launcher's entrance (launcher.ts `ports`): any port here, its port the one agents are told.
-        else if (control.ports) door = await openAgentsDoor({ port: 0, shown: control.ports.mcp }, mcp, notified, peerRoute, partRoutes);
+        else if (control.ports) door = await openAgentsDoor({ port: 0, shown: control.ports.mcp }, mcp, notified, peerRoute, partRoutes, screened);
         else {
           const remembered = rememberedMcpPort(data);
           const tries = portsToTry(named === undefined ? undefined : Number(named), remembered, 4750, ownData(data));
           for (const [i, port] of tries.entries()) {
             try {
-              door = await openAgentsDoor({ port }, mcp, notified, peerRoute, partRoutes);
+              door = await openAgentsDoor({ port }, mcp, notified, peerRoute, partRoutes, screened);
               break;
             } catch (error) {
               // The one remembered is passed over whatever keeps it; the usual one only when it is taken.
@@ -625,6 +645,49 @@ export const AgentsLive = (control: Control) =>
         time.after(Math.min(3_600_000, next === null ? Infinity : next - hub.now()), emptying);
       };
       time.after(300_000, emptying);
+
+      // The disk of the station's data low: the mirrors of other stations' tasks not in use go, then archived
+      // workspaces before their time (ops/disk.ts).
+      const relieving = async () => {
+        const free = () => {
+          try {
+            return diskFree(data);
+          } catch {
+            return Infinity;
+          }
+        };
+        try {
+          if (free() < DISK_LOW_BYTES) {
+            await remote.relieve(hub.now());
+            await relieveArchived(hub, free);
+          }
+        } catch (error) {
+          log.warn("hub", "making room on the disk failed", { error: (error as Error).message });
+        }
+        time.after(DISK_EVERY_MS, relieving);
+      };
+      time.after(DISK_EVERY_MS, relieving);
+
+      // The threads a station before wrote out to their archive files, back into the database a few at a time
+      // (store.ts `bringInArchived`), once the devices have come back from the start.
+      let broughtIn = 0;
+      const bringingIn = () => {
+        let left: number;
+        try {
+          const step = store.bringInArchived(BRING_IN);
+          broughtIn += step.brought;
+          left = step.left;
+        } catch (error) {
+          log.warn("store", "archived threads not brought back into the database", { error: (error as Error).message });
+          return;
+        }
+        if (left > 0) time.after(1_000, bringingIn);
+        else if (broughtIn > 0) log.info("store", "the threads archived to files are back in the database", { n: broughtIn });
+      };
+      time.after(120_000, bringingIn);
+
+      // What the Rust station's archiving left (the transcripts kept twice): once, when the devices have come back.
+      time.after(180_000, () => cold.finishLegacyCopies());
 
       // The archive review turned on, or given another model: the done chats no decision has answered are reviewed then,
       // not only the ones that end all_done from now on; and once after the start (the profiles' checks read by then).

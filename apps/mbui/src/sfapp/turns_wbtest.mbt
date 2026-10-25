@@ -27,6 +27,7 @@ test "turns: a row comes in at once when none plays; a change asked after it wai
     },
     w=100.0,
     h=100.0,
+    platform=2,
   )
   t.draw()
   t.draw()
@@ -66,6 +67,7 @@ test "turns: the next waits for the list at rest (its glide's declared end), not
     },
     w=100.0,
     h=100.0,
+    platform=2,
   )
   t.draw()
   t.draw()
@@ -86,7 +88,7 @@ test "a decision answered: its options close in their turn after the answer has 
   let src = fixture("chat")
   open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
   open_fixture("chat")
-  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0)
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0, platform=2)
   t.run_for(@ui.nav_push_ms)
   t.move(195.0, 400.0)
   for _ in 0..<6 {
@@ -102,10 +104,12 @@ test "a decision answered: its options close in their turn after the answer has 
   // your answer came in its turn first (the reader at the end), the options still there meanwhile
   assert_true(rd.admitted.contains("m:ts108"))
   assert_eq(tu.shown.get("ask/ts8"), Some(true))
-  // their turn: after your answer's (its rise), the list at rest after it
+  // their turn: after your answer's (its rise), the list at rest after it (known once the list has set out after it,
+  // as the frame your answer came in lays it out)
+  t.draw()
   t.draw()
   let at = tu.start_of("ask/ts8")
-  assert_true(at >= tu.started_at("m:ts108") + row_turn_ms && at < @double.infinity)
+  assert_true(at >= tu.started_at("m:ts108") + @sf.enter_ms && at < @double.infinity)
   t.run_for(at - t.time())
   assert_eq(tu.shown.get("ask/ts8"), Some(false))
   assert_eq(tu.started_at("ask/ts8"), at)
@@ -130,7 +134,7 @@ test "turns: words sent wait for nothing (a row before them, a list never at res
       match phase.val {
         0 => {
           tu.admit(c, "a", row_turn_ms)
-          tu.send(c)
+          tu.send(c, flight_wait_ms + flight_ms)
           tu.admit(c, "b", row_turn_ms)
           phase.val = 1
         }
@@ -140,6 +144,7 @@ test "turns: words sent wait for nothing (a row before them, a list never at res
     },
     w=100.0,
     h=100.0,
+    platform=2,
   )
   t.draw()
   t.draw()

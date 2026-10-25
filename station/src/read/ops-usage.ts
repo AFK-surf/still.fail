@@ -4,11 +4,12 @@ import type { ReadOp } from "./ops.ts";
 import { hostInfo } from "./host.ts";
 import { machineSession, machineSessions } from "./machine.ts";
 import { memory } from "./memory.ts";
-import { usage } from "./usage.ts";
+import { resourceChats, usage } from "./usage.ts";
 
 export const usageOps: Record<string, ReadOp> = {
   // `reading`: the counter's readingAll (absent: true).
   usage: (store, a) => usage(store, a.lang, BigInt(a.from), BigInt(a.to), BigInt(a.tz), typeof a.reading === "boolean" ? a.reading : true, a.viewer ?? null),
+  resourceChats: (store, a) => resourceChats(store, a.sessions ?? [], a.viewer ?? null),
   machineSessions: (store) => machineSessions(store),
   machineSession: (store, a) => machineSession(store, a.lang, a.runtime, a.id, a.limit),
   memory: (store) => memory(store.dataDir),

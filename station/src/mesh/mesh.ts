@@ -60,10 +60,17 @@ export const MeshLive = Layer.effectDiscard(
       yield* Effect.acquireRelease(Effect.sync(() => side.net.attach(() => endpoint.home())), (off) => Effect.sync(off));
       yield* Effect.forkScoped(keepRelays(endpoint, side.net));
       // Online at the cloud only once a relay can reach the station: a device that saw "online" and connected before
-      // the relay link was up had its first packets dropped (~3 s of retransmits).
-      const online = yield* Effect.timeoutOption(Effect.promise(() => endpoint.online()), "15 seconds");
-      if (Option.isNone(online)) log.warn("mesh", `no relay link after 15 s; going online at ${plane.spec().name} anyway`);
-      yield* Effect.forkScoped(plane.presence);
+      // the relay link was up had its first packets dropped (~3 s of retransmits). Its members' connections are taken
+      // meanwhile (below): those that reach it already (on its LAN, or by a relay it is on) are not kept waiting. Taken
+      // only after this, every device lost the station some 7 s at each update (ccvm, 2026-10-24: its relay link took
+      // that long, 32 updates that day).
+      yield* Effect.forkScoped(
+        Effect.gen(function* () {
+          const online = yield* Effect.timeoutOption(Effect.promise(() => endpoint.online()), "15 seconds");
+          if (Option.isNone(online)) log.warn("mesh", `no relay link after 15 s; going online at ${plane.spec().name} anyway`);
+          yield* plane.presence;
+        }),
+      );
       // The workspace's other stations: asked through this endpoint, their tasks stopped once they are not in it.
       // And the stations of other workspaces chats are shared with or from (xshare/index.ts).
       const call = peerCall(endpoint, cloud.state, undefined, { reaches: (target, workspace) => side.outside?.reaches(target, workspace) === true });

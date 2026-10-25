@@ -1,15 +1,15 @@
 // The write side over a COPY of a real station's data (the Rust station's ~/.stillfail, or $STILLFAIL_COMPAT_DATA): it
 // opens as it is (version 12, nothing added), reads as read/store.ts reads it, and a write cycle leaves the database as
-// the Rust schema has it, with archive files byte for byte as the Rust wrote them. Skipped where there is no station.
+// the Rust schema has it, the threads the Rust wrote out to archive files brought back as they read. Skipped where there
+// is no station.
 // The live database is never opened: the copy is made with cp (db, -wal, -shm, archive/threads) and removed after.
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { cpSync, existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { cpSync, existsSync, mkdtempSync, rmSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { after, test } from "node:test";
-import { zstdDecompressSync } from "node:zlib";
 import * as read from "../src/read/store.ts";
 import { SCHEMA } from "../src/store/schema.ts";
 import { MANUAL, Store, newMessage, turnSummaryJson } from "../src/store/store.ts";
@@ -44,9 +44,14 @@ function shape(path: string): string[] {
 /// Columns the TS station adds to tables the Rust station made (schema.ts), by table: a station's in several workspaces
 /// (docs/multi-workspace.md). A table's latest first: each is taken off the end of its table's SQL in turn.
 const ADDED: [string, string][] = [["sessions", "ws"], ["archive_policy", "ws"], ["entries", "letter"], ["entries", "runtime"], ["jobs", "size"], ["jobs", "screen"], ["jobs", "queued"]];
-/// What those columns bring with them: an index of its own, and the `merged` view saying the column (letters).
-const ADDED_INDEXES = ["entries_letters"];
+/// What those columns bring with them: an index of its own (letters; the sessions counted by connect and workspace; the
+/// threads' homes), and the `merged` view saying the column (letters).
+const ADDED_INDEXES = ["entries_letters", "sessions_by_connect", "threads_home", "threads_own"];
 const MERGED_ADDS = [", m.letter"];
+/// Tables the TS station makes as it opens (schema.ts `addUsageTotals`, `addUsageCompactions`): each with its columns,
+/// and the indexes and triggers that keep it (named after it).
+const MADE = ["usage_totals", "usage_compactions", "thread_state", "thread_people", "session_first"];
+const made = (l: string) => MADE.some((t) => l.startsWith(`table ${t}:`) || l.startsWith(`  ${t}.`) || l.startsWith(`trigger ${t}_`) || l.startsWith(`index ${t}_`));
 
 const noToken = <T extends { token: string }>(r: T) => {
   const { token: _, ...rest } = r;
@@ -79,7 +84,7 @@ test("a copy of a real station's data opens, reads the same, and takes a write c
     // Ignore only newly added columns; columns already present must still survive opening.
     const now = opened.filter((l) => !mine(l) || before.includes(l)).map(plain);
     assert.deepEqual(was.filter((l) => !now.includes(l)), [], "nothing changed or gone");
-    const added = now.filter((l) => !was.includes(l));
+    const added = now.filter((l) => !was.includes(l) && !made(l));
     for (const line of added) {
       const name = /^(?:table|index) (\w+):/.exec(line)?.[1] ?? /^  (\w+)\./.exec(line)?.[1];
       assert.ok(name && new RegExp(`CREATE (TABLE|INDEX) IF NOT EXISTS ${name} `).test(SCHEMA), `only the Rust SCHEMA's own: ${line.split("\n")[0]}`);
@@ -113,6 +118,22 @@ test("a copy of a real station's data opens, reads the same, and takes a write c
         assert.deepEqual(store.lastMessage(t.id), read.lastMessage(r, t.id));
         assert.deepEqual(store.pendingCard(t.id), read.pendingCard(r, t.id));
       }
+      // What lists say of each thread and session, kept (schema.ts LIST_STATE), as their messages say it.
+      const rows = (sql: string) => store.db.prepare(sql).all().map((x) => JSON.stringify(x));
+      assert.deepEqual(
+        rows("SELECT thread, last_n, said_n, person_n, letters FROM thread_state ORDER BY thread"),
+        rows(`SELECT thread, MAX(n) AS last_n, MAX(CASE WHEN kind = 'message' AND letter IS NULL THEN n END) AS said_n,
+          MIN(CASE WHEN kind = 'message' AND author_kind = 'person' THEN n END) AS person_n,
+          COUNT(CASE WHEN kind = 'message' AND letter IS NOT NULL THEN 1 END) AS letters FROM entries GROUP BY thread ORDER BY thread`),
+      );
+      assert.deepEqual(
+        rows("SELECT thread, author, first_n FROM thread_people ORDER BY thread, author"),
+        rows("SELECT thread, author, MIN(n) AS first_n FROM entries WHERE kind = 'message' AND author_kind = 'person' GROUP BY thread, author ORDER BY thread, author"),
+      );
+      assert.deepEqual(
+        rows("SELECT session, thread, n FROM session_first ORDER BY session"),
+        rows("SELECT d.session, d.thread, d.n FROM deliveries d WHERE d.rowid = (SELECT MIN(rowid) FROM deliveries x WHERE x.session = d.session) ORDER BY d.session"),
+      );
     } finally {
       r.db.close();
     }
@@ -150,37 +171,44 @@ test("a copy of a real station's data opens, reads the same, and takes a write c
       assert.equal(store.lastTurn(live.session)!.ending, "all_done");
     }
 
-    // An archived session's threads, written by the Rust station: brought back, then written out again byte for byte.
+    // An archived session's threads, written out to their files by the Rust station: brought back as it is shown again,
+    // and archived again, left in the database.
     const archived = store.db
       .prepare(
         `SELECT s.key FROM sessions s WHERE s.archived_at IS NOT NULL AND EXISTS (SELECT 1 FROM thread_sessions ts JOIN threads t ON t.id = ts.thread
            WHERE ts.session = s.key AND t.archived_at IS NOT NULL) ORDER BY s.archived_at DESC LIMIT 3`,
       )
       .all() as any[];
-    if (archived.length === 0) t.diagnostic("no archived session with archived threads: the byte-for-byte check did not run");
+    if (archived.length === 0) t.diagnostic("no archived session with archived threads: bringing them back was not run");
     for (const { key } of archived) {
-      const files = new Map<number, Buffer>();
-      for (const t of store.sessionThreads(key)) {
-        const file = join(dir, "archive", "threads", `${t.thread.id}.jsonl.zst`);
-        if (existsSync(file)) files.set(t.thread.id, zstdDecompressSync(readFileSync(file)));
-      }
-      const entries = new Map([...files.keys()].map((id) => [id, store.entriesAfter(id, 0)]));
+      const files = new Set<number>();
+      for (const t of store.sessionThreads(key)) if (existsSync(join(dir, "archive", "threads", `${t.thread.id}.jsonl.zst`))) files.add(t.thread.id);
+      const entries = new Map([...files].map((id) => [id, store.entriesAfter(id, 0)]));
       const by = store.getSession(key)!.archivedBy ?? MANUAL;
       store.setArchived(key, false, MANUAL);
-      for (const id of files.keys()) {
-        if (store.getThread(id)!.hiddenAt !== null) continue;
+      for (const id of files) {
         assert.ok(!existsSync(join(dir, "archive", "threads", `${id}.jsonl.zst`)), "brought back into the database");
         assert.deepEqual(store.entriesAfter(id, 0), entries.get(id));
       }
       store.setArchived(key, true, by);
-      for (const [id, text] of files) {
-        const file = join(dir, "archive", "threads", `${id}.jsonl.zst`);
-        assert.ok(existsSync(file));
-        assert.ok(zstdDecompressSync(readFileSync(file)).equals(text), `thread ${id} written out as the Rust wrote it`);
+      for (const id of files) {
+        assert.ok(!existsSync(join(dir, "archive", "threads", `${id}.jsonl.zst`)), "archived again, left in the database");
+        assert.deepEqual(store.entriesAfter(id, 0), entries.get(id));
       }
     }
 
-    // A chat hidden by hand and shown again: out to its file and back.
+    // Every other thread the Rust station wrote out: brought back a few at a time, each as it read from its file.
+    const filed = (store.db.prepare("SELECT id FROM threads WHERE archived_at IS NOT NULL ORDER BY id").all() as any[]).map((r) => r.id as number);
+    const fromFiles = new Map(filed.map((id) => [id, store.entriesAfter(id, 0)]));
+    let left = filed.length;
+    while (left > 0) left = store.bringInArchived(100).left;
+    for (const [id, entries] of fromFiles) {
+      assert.ok(!existsSync(join(dir, "archive", "threads", `${id}.jsonl.zst`)));
+      assert.deepEqual(store.entriesAfter(id, 0), entries, `thread ${id}`);
+    }
+    assert.deepEqual(store.lostArchives(), []);
+
+    // A chat hidden by hand and shown again: its entries where they were.
     const chat = store.db
       .prepare("SELECT id FROM threads t WHERE hidden_at IS NULL AND archived_at IS NULL AND EXISTS (SELECT 1 FROM entries e WHERE e.thread = t.id) ORDER BY id DESC LIMIT 1")
       .get() as any;
@@ -188,7 +216,7 @@ test("a copy of a real station's data opens, reads the same, and takes a write c
     {
       const entries = store.entriesAfter(chat.id, 0);
       store.setThreadHidden(chat.id, true, MANUAL);
-      assert.ok(existsSync(join(dir, "archive", "threads", `${chat.id}.jsonl.zst`)));
+      assert.ok(!existsSync(join(dir, "archive", "threads", `${chat.id}.jsonl.zst`)));
       assert.deepEqual(store.entriesAfter(chat.id, 0), entries);
       store.setThreadHidden(chat.id, false, MANUAL);
       assert.deepEqual(store.entriesAfter(chat.id, 0), entries);

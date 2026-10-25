@@ -97,6 +97,40 @@ test("a Worker restart cannot reset the anonymous relay byte budget", { timeout:
   }
 });
 
+test("a read of the relay's counters that fails does not count its traffic twice", { timeout: 10000 }, async () => {
+  const h = await harness({ noGoogle: true });
+  try {
+    const relays: any = await h.mf.getDurableObjectNamespace("RELAY", "relay");
+    const budgets: any = await h.mf.getDurableObjectNamespace("RELAY_BUDGET", "relay");
+    const relay = relays.get(relays.idFromName("primary"));
+    const budget = budgets.get(budgets.idFromName("primary"));
+    const gib = 1024 ** 3;
+    await relay.carried(gib);
+    await budget.poll();
+    await relay.failReads();
+    await budget.poll();
+    await relay.carried(gib);
+    await budget.poll();
+    assert.equal((await budget.statistics()).bytes, 2 * gib);
+  } finally {
+    await h.close();
+  }
+});
+
+test("a day's budget counted before reads kept their place starts over", { timeout: 10000 }, async () => {
+  const h = await harness({ noGoogle: true });
+  try {
+    const budgets: any = await h.mf.getDurableObjectNamespace("RELAY_BUDGET", "relay");
+    await budgets.get(budgets.idFromName("primary")).exhaustedBefore();
+    const response = await h.fetch("/relay", { headers: upgrade });
+    assert.equal(response.status, 101);
+    response.webSocket!.accept();
+    response.webSocket!.close();
+  } finally {
+    await h.close();
+  }
+});
+
 test("the relays handed out: still.fail's first, then RELAY_URLS, each once", () => {
   const env = { PUBLIC_ORIGIN: "https://app.still.fail" };
   assert.deepEqual(relays(env), { relay_url: "https://app.still.fail", relay_urls: ["https://app.still.fail"], relay_names: {} });

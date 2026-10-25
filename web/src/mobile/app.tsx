@@ -9,13 +9,15 @@
 // Wider (WIDE: an opened foldable, a phone on its side), the pages are the screen's whole width, and a button at its
 // bottom left, level with the composer (which starts beside it), opens the latest chats over the page: another chat
 // from there takes the place of the one open.
+import { GestureVelocity } from "@stillfail/ui/frames.ts";
+import { useFrameDraw } from "./gesture.ts";
 import { transitionTo } from "../ui.tsx";
 import { said, ToastTo } from "@stillfail/ui/toast.tsx";
 import { Words } from "@stillfail/ui/words.tsx";
 import { StationWordsIn } from "../StationNamed.tsx";
 import { afterBack, useBackClose } from "@stillfail/ui/backClose.ts";
 import { backPage } from "../backPage.ts";
-import { createContext, memo, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
+import { Activity, createContext, memo, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 import { useLocation, useNavigate, useNavigationType, type Location } from "react-router";
 import type { Account } from "../cloud/accounts.ts";
 import { NavBack } from "./parts.tsx";
@@ -169,6 +171,12 @@ export function MobileShell({ entry, routes, recent, over }: { entry: Entry; rou
     if (type === "POP" && at >= 0) {
       next = pages.slice(0, at + 1);
       forward = false;
+    } else if (type === "POP" && placeOfPath(location.pathname, home) !== null) {
+      // History can return to a place from before this shell mounted (or before its root was
+      // replaced by a bar switch). It is a root again, not another page over the old stack:
+      // keeping that stack would leave the bottom bar hidden on the place's own page.
+      next = [page];
+      forward = false;
     } else if (type === "REPLACE" && (location.state as { fresh?: boolean } | null)?.fresh) {
       // Another chat from the latest chats: a page of its own in place of the one that was open. A place switched to
       // on the bar: its page as it was left, if it was.
@@ -279,22 +287,20 @@ export function MobileShell({ entry, routes, recent, over }: { entry: Entry; rou
   // through a render of the shell; a render meanwhile draws them where this says.
   const dragged = useRef(0);
   const pageEls = useRef(new Map<string, HTMLDivElement>());
-  const step = useRef(0);
-  const follow = () => {
-    if (step.current) return;
-    step.current = requestAnimationFrame(() => {
-      step.current = 0;
-      if (!swiping.current) return;
-      const { top, pages } = now.current;
-      const page = pageEls.current.get(top.key), under = pages.at(-2) && pageEls.current.get(pages.at(-2)!.key);
-      if (page) page.style.transform = `translateX(${dragged.current}px)`;
-      if (under) under.style.transform = `translateX(calc(-30% + ${dragged.current * 0.3}px))`;
-    });
-  };
+  const speed = useRef(new GestureVelocity());
+  const follow = useFrameDraw<number>((dx) => {
+    if (!swiping.current) return;
+    const { top, pages } = now.current;
+    const page = pageEls.current.get(top.key), under = pages.at(-2) && pageEls.current.get(pages.at(-2)!.key);
+    if (page) page.style.transform = `translate3d(${dx}px, 0, 0)`;
+    if (under) under.style.transform = `translate3d(calc(-30% + ${dx * 0.3}px), 0, 0)`;
+  });
   const swipeProps = home_ ? {} : {
     onPointerDown: (e: React.PointerEvent<HTMLDivElement>) => {
       if (e.pointerType !== "touch" || sheet || reader) return;
       swiping.current = { x: e.clientX, y: e.clientY, at: e.timeStamp, dx: 0, tapped: true };
+      follow.cancel();
+      speed.current.reset(e.clientX, e.timeStamp);
       dragged.current = 0;
       // The page and the one under it made ready to move as the finger lands (each a layer of its own, the one under
       // drawn), not on its first move: that move would wait for both to be drawn.
@@ -308,16 +314,19 @@ export function MobileShell({ entry, routes, recent, over }: { entry: Entry; rou
       // A drag stays a drag even when it is vertical or the finger comes back to where it started.
       if (Math.hypot(e.clientX - s.x, e.clientY - s.y) >= 6) s.tapped = false;
       dragged.current = s.dx;
-      follow();
+      speed.current.push(e.clientX, e.timeStamp);
+      follow.set(s.dx);
     },
     onPointerUp: (e: React.PointerEvent<HTMLDivElement>) => {
       const s = swiping.current;
-      swiping.current = null;
-      cancelAnimationFrame(step.current);
-      step.current = 0;
       if (!s) return;
+      s.dx = Math.max(0, e.clientX - s.x);
       dragged.current = s.dx;
-      const flung = s.dx > 40 && s.dx / Math.max(1, e.timeStamp - s.at) > 0.6;
+      speed.current.push(e.clientX, e.timeStamp);
+      follow.set(s.dx);
+      follow.flush();
+      swiping.current = null;
+      const flung = s.dx > 40 && speed.current.speed(e.timeStamp) > 600;
       if (s.dx > window.innerWidth / 3 || flung) {
         // Held where it is (and the page under it) until the back lands, then on from there (the effect above): not
         // sprung back meanwhile, nor started over.
@@ -336,7 +345,7 @@ export function MobileShell({ entry, routes, recent, over }: { entry: Entry; rou
         under?.closest<HTMLElement>("button, a[href], [role=button]")?.click();
       }
     },
-    onPointerCancel: () => { swiping.current = null; cancelAnimationFrame(step.current); step.current = 0; dragged.current = 0; setSwipe(null); },
+    onPointerCancel: () => { swiping.current = null; follow.cancel(); dragged.current = 0; setSwipe(null); },
   };
 
   // The page leaving on the way back is no longer in the list; it is drawn until it has gone.
@@ -358,7 +367,7 @@ export function MobileShell({ entry, routes, recent, over }: { entry: Entry; rou
             if (kept(p)) {
               return (
                 <div key={p.key} className={css.mPage} data-role="kept" data-root="" style={{ visibility: "hidden", pointerEvents: "none" }} inert aria-hidden="true">
-                  <RootPage.Provider value><PageBody location={p.location} routes={routes} /></RootPage.Provider>
+                  <Activity mode="hidden"><RootPage.Provider value><PageBody location={p.location} routes={routes} /></RootPage.Provider></Activity>
                 </div>
               );
             }
@@ -383,9 +392,13 @@ export function MobileShell({ entry, routes, recent, over }: { entry: Entry; rou
             return (
               <div key={p.key} ref={(el) => { if (el) pageEls.current.set(p.key, el); else pageEls.current.delete(p.key); }} className={css.mPage} data-role={role} data-way={inMove ? way : undefined} data-forward={moving?.forward || undefined}
                 data-swiping={(swipe !== null && isTop) || undefined} data-place-in={comingIn ? comingIn.n : undefined} data-root={(p.key === rootKey && placeOfPath(p.location.pathname, home) !== null) || undefined} style={style}>
-                <RootPage.Provider value={p.key === rootKey && placeOfPath(p.location.pathname, home) !== null}>
-                  <PageBody location={p.location} routes={routes} />
-                </RootPage.Provider>
+                {/* Keep the page's state, but stop its subscriptions and observers while covered. A peek
+                    resumes before the first swipe frame so both pages can move with the finger. */}
+                <Activity mode={role === "under" ? "hidden" : "visible"}>
+                  <RootPage.Provider value={p.key === rootKey && placeOfPath(p.location.pathname, home) !== null}>
+                    <PageBody location={p.location} routes={routes} />
+                  </RootPage.Provider>
+                </Activity>
               </div>
             );
           })}
@@ -440,7 +453,7 @@ const PageBody = memo(function PageBody({ location, routes }: { location: Locati
 
 // ── the sheet ──────────────────────────────────────────────────────────
 
-interface Drag { draggable: boolean; start: (y: number) => void; move: (y: number) => void; end: () => void; tap: () => void }
+interface Drag { draggable: boolean; start: (y: number) => void; move: (y: number) => void; end: () => void; cancel: () => void; tap: () => void }
 const SheetDragContext = createContext<Drag | null>(null);
 
 /**
@@ -510,23 +523,23 @@ function SheetHost({ spec, close }: { spec: SheetSpec | null; close: () => void 
   }, [spec, close]);
   const from = useRef({ y: 0, h: 0, moved: false });
   /** The finger's last moves, for how fast it was going when let go (height per second: up is positive). */
-  const trail = useRef<{ y: number; t: number }[]>([]);
+  const trail = useRef(new GestureVelocity());
+  const fingers = useFrameDraw<number>(value => height.current!.jump(value));
   if (!shown) return null;
   const h = () => height.current!.value;
   const follow = (y: number, most: number) => {
     from.current.moved = true;
     const now = performance.now();
-    trail.current = [...trail.current.filter((p) => now - p.t < 100), { y, t: now }];
-    height.current!.jump(Math.max(120, Math.min(most, from.current.h + from.current.y - y)));
+    trail.current.push(y, now);
+    fingers.set(Math.max(120, Math.min(most, from.current.h + from.current.y - y)));
   };
-  const speed = () => {
-    const [first, last] = [trail.current[0], trail.current.at(-1)];
-    return first && last && last.t > first.t ? ((first.y - last.y) / (last.t - first.t)) * 1000 : 0;
-  };
+  const speed = () => -trail.current.speed(performance.now());
   const settle = (to: number) => height.current!.to(to, { type: "spring", visualDuration: 0.32, bounce: 0, velocity: speed() });
   const grab = (y: number) => {
+    fingers.cancel();
+    height.current!.jump(h());
     from.current = { y, h: h(), moved: false };
-    trail.current = [{ y, t: performance.now() }];
+    trail.current.reset(y, performance.now());
     // Making a scrolled body's viewport taller can clamp its scrollTop before the finger has even moved. Keep
     // resizing that sheet as it moves, so taking hold cannot jump the reader to a different part of the list.
     resizing.current = !!sheet.current && [...sheet.current.querySelectorAll("*")].some((el) => el.scrollTop > 0);
@@ -540,6 +553,7 @@ function SheetHost({ spec, close }: { spec: SheetSpec | null; close: () => void 
     start: grab,
     move: (y) => follow(y, total() * 0.94),
     end: () => {
+      fingers.flush();
       setDragging(false);
       atRest();
       if (!from.current.moved) return;
@@ -547,7 +561,8 @@ function SheetHost({ spec, close }: { spec: SheetSpec | null; close: () => void 
       if (f < 0.3) close();
       else settle(total() * (f > 0.72 ? 0.94 : 0.55));
     },
-    tap: () => { trail.current = []; settle(total() * (h() > total() * 0.9 ? 0.55 : 0.94)); },
+    cancel: () => { fingers.flush(); setDragging(false); trail.current.reset(0, performance.now()); settle(from.current.h); atRest(); },
+    tap: () => { trail.current.reset(0, performance.now()); settle(total() * (h() > total() * 0.9 ? 0.55 : 0.94)); },
   };
   // With a finger the sheet's top (its grabber and head) drags it: a draggable sheet between half and full height or
   // down to close; any other down to close, or back to its height.
@@ -564,6 +579,8 @@ function SheetHost({ spec, close }: { spec: SheetSpec | null; close: () => void 
     },
     onPointerUp: (e: React.PointerEvent<HTMLDivElement>) => {
       if (!e.currentTarget.hasPointerCapture(e.pointerId)) return;
+      if (from.current.moved) follow(e.clientY, shown.draggable ? total() * 0.94 : base);
+      fingers.flush();
       setDragging(false);
       atRest();
       if (!from.current.moved) return;
@@ -571,6 +588,7 @@ function SheetHost({ spec, close }: { spec: SheetSpec | null; close: () => void 
       if (base - h() > 80) close();
       else settle(base);
     },
+    onPointerCancel: (e: React.PointerEvent<HTMLDivElement>) => { if (e.currentTarget.hasPointerCapture(e.pointerId)) drag.cancel(); },
   };
   return (
     <div className={css.mOverlay} data-open={open || undefined}>
@@ -590,6 +608,7 @@ export function SheetGrab() {
     <div className={css.mGrab} data-draggable={drag?.draggable || undefined}
       onPointerDown={(e) => {
         if (!drag?.draggable) return;
+        e.stopPropagation();
         down.current = e.clientY;
         e.currentTarget.setPointerCapture(e.pointerId);
         drag.start(e.clientY);
@@ -598,10 +617,11 @@ export function SheetGrab() {
       onPointerUp={(e) => {
         const moved = down.current !== null && Math.abs(e.clientY - down.current) > 3;
         down.current = null;
+        if (moved) drag?.move(e.clientY);
         drag?.end();
         if (!moved && drag?.draggable) drag.tap();
       }}
-      onPointerCancel={() => { down.current = null; drag?.end(); }}>
+      onPointerCancel={() => { down.current = null; drag?.cancel(); }}>
       <span />
     </div>
   );

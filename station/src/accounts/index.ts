@@ -16,10 +16,12 @@
 //   shortly after start and every few hours (console.ts).
 // - a Kimi Code profile signed in to Kimi: its token (minutes) renewed with half its life left, looked at every minute
 //   (kimi.ts).
+import { HERMES_MODEL_LIMIT } from "../agents/hermes.ts";
 import { runtimeKind, runtimeLabel } from "../agents/runtime.ts";
 import type { Clock } from "effect";
 import { randomBytes } from "node:crypto";
-import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, statSync } from "node:fs";
+import { access as accessFile, readFile, stat } from "node:fs/promises";
 import { hostname } from "node:os";
 import { join } from "node:path";
 import type { Env, MachineToken } from "../agents/machine-logins.ts";
@@ -41,14 +43,14 @@ import { titleOf } from "../read/views.ts";
 import { currentPolicy, LEGACY_OPTIONS, savePolicy } from "../sessions/archive-policy.ts";
 import { Fibers, wall } from "../ops/fibers.ts";
 import { checkAutomaticDecisions } from "./check.ts";
-import { readConsole, RenewRefused, renewToken, writeConsole } from "./console.ts";
-import { CURSOR } from "./cursor.ts";
+import { CONSOLE_FILE, consoleIn, readConsole, RenewRefused, renewToken, writeConsole } from "./console.ts";
+import { CURSOR, authFile as cursorAuthFile, cursorIn } from "./cursor.ts";
 import { KIMI_AUTH, kimiDue, readKimi, renewKimiToken, writeKimi } from "./kimi.ts";
 import { type LoginCommands, type LoginJob, LoginManager } from "./login.ts";
-import { codexClaims, type MachineLogin, MachineLogins } from "./machine.ts";
+import { codexClaimsIn, type MachineLogin, MachineLogins } from "./machine.ts";
 import { adopted, OUTDATED, uncheckOutdated } from "./models.ts";
 import { claudeOAuthToken } from "./oauth.ts";
-import { accessKinds, checkProfile, cursorEmail, devinEmail, grokEmail, keyed, loginCommand, needsKey, type ProfileCheck, type ProfileQuota, runtimesFor, runtimesOf, URLS, type Urls } from "./profiles.ts";
+import { accessKinds, checkProfile, devinAccountFile, devinNotedIn, grokAuthFile, grokEmailIn, keyed, loginCommand, needsKey, type ProfileCheck, type ProfileQuota, runtimesFor, runtimesOf, URLS, type Urls } from "./profiles.ts";
 import { checkQuota, lentCodexUsage, machineUsage } from "./quota.ts";
 
 export { checkConfig } from "./check.ts";
@@ -62,6 +64,8 @@ const QUOTA_EVERY_MS = 5 * 60_000;
 /// last less than this, so it is not swapped soon after.
 const HANDED_MARGIN_MS = 3600_000;
 const CHECK_ON_START_MS = 3_000;
+/// How long what a profile's home says (`HomeSays`) is shown as last read before it is read again (off the thread).
+const HOMES_EVERY_MS = 10_000;
 /// An OpenCode Console token (30 days) is renewed when it has less than this left, looked at this often: renewing ends
 /// the token the runtimes were given, so it is done seldom, long before it would run out.
 const CONSOLE_RENEW_BEFORE_MS = 7 * 86_400_000;
@@ -106,6 +110,8 @@ export type AccountsDeps = {
   };
   /// The codex driver, once there.
   codex?: () => CodexAccess | undefined;
+  /// Hermes reports its configured providers and model IDs in ACP session/new (no model turn).
+  hermes?: () => { models(profile: Profile): Promise<string[]> } | undefined;
   /// Whether someone follows the events or a turn runs (allowances are asked again on a round only then).
   following?: () => boolean;
   /// The station's environment (where the machine's logins are, and the CLIs found); process.env by default.
@@ -151,6 +157,35 @@ const named = (runtime: Runtime) => runtimeLabel(runtime);
 /// A copy of a profile another station shares (share/index.ts): edited, checked and signed in only there.
 export const borrowed = (p: Json): boolean => isObject(p?.share) && p.share.borrowed === true;
 
+/// What a profile's home says, as the overview shows it: whether it is there, and whose account its files say (a
+/// subscription's, or a console sign-in's).
+type HomeSays = { exists: boolean; email: string | null };
+
+/// What a profile's home is read for: the home, and what in it says whose account it is.
+function homeAsked(p: Json): { home: string; runtime: Runtime; files: "account" | "console" | null } {
+  const files = accessKind(p) === "subscription" ? (borrowed(p) ? null : "account") : isObject(p.access) && p.access.login === true ? "console" : null;
+  return { home: String(p.home ?? ""), runtime: p.runtime, files };
+}
+
+/// `homeAsked`'s answer, read on the thread (a profile not read before).
+function homeSaysNow(p: Json): HomeSays {
+  const { home, runtime, files } = homeAsked(p);
+  const email = files === "account" ? accountEmail(runtime, home) : files === "console" ? (readConsole(home)?.email ?? null) : null;
+  return { exists: existsSync(home), email };
+}
+
+/// `homeAsked`'s answer, read off the thread (fs/promises).
+async function homeSaysSoon(p: Json): Promise<HomeSays> {
+  const { home, runtime, files } = homeAsked(p);
+  const email =
+    files === "account"
+      ? await accountEmailSoon(runtime, home)
+      : files === "console"
+        ? ((await readFile(join(home, CONSOLE_FILE), "utf8").then(consoleIn, () => null))?.email ?? null)
+        : null;
+  return { exists: await accessFile(home).then(() => true, () => false), email };
+}
+
 export class Accounts {
   readonly logins: LoginManager;
   readonly machine: MachineLogins | null;
@@ -160,6 +195,15 @@ export class Accounts {
   /// OpenCode Console and Kimi tokens being renewed, by profile (a refresh token is spent once).
   private renewing = new Map<string, Promise<void>>();
   private pending = new Map<string, Pending>();
+  /// What each profile's home said when last read (`HomeSays`), by profile, with what it was read for: the overview is
+  /// made again at each change for each viewer, and read every profile's files on the thread each time (a few dozen
+  /// calls; seconds on a machine short of memory). Read again off the thread as it is made, at most every
+  /// HOMES_EVERY_MS, and as a sign-in ends.
+  private homes = new Map<string, { asked: string; says: HomeSays }>();
+  private homesRead = 0;
+  private homesReading = false;
+  /// Bumped as a sign-in changes what a home says: a reading begun before is not kept.
+  private homesChanged = 0;
   private listeners = new Set<() => void>();
   private background: Fibers;
   private stops: (() => void)[] = [];
@@ -218,6 +262,9 @@ export class Accounts {
     // A finished sign-in changes what the profile can do; it is checked again right away.
     this.stops.push(
       this.logins.changes((id) => {
+        // What its home says, read anew at the next view.
+        this.homes.delete(id);
+        this.homesChanged++;
         const pending = this.pending.has(id);
         if (pending) this.pendingChanged(id);
         const job = this.logins.get(id);
@@ -506,7 +553,8 @@ export class Accounts {
     this.keepCheck(id, check);
     // What the automatic decisions can use is found once the profile is made: a request to add does not wait on that.
     const profile = this.profile(id);
-    if (profile) {
+    if (profile?.runtime === "hermes") this.afterSignIn(id);
+    else if (profile) {
       this.background.spawn(async () => {
         const decision = await this.discoverFn(profile, check);
         // A profile edited or removed meanwhile does not inherit what was found for the one it was.
@@ -865,6 +913,17 @@ export class Accounts {
         log.warn("accounts", "could not list codex model capabilities", { profile: id, error: (e as Error).message });
       }
     }
+    if (profile.runtime === "hermes" && this.deps.hermes?.()) {
+      try {
+        check.models = await this.deps.hermes()!.models(profile);
+        check.state = check.models.length > 0 ? "ok" : "unknown";
+        check.detail = tr(lang, check.models.length >= HERMES_MODEL_LIMIT ? "station.profile.hermesModelsLimited" : check.models.length > 0 ? "station.profile.works" : "station.profile.hermesModelsEmpty", { n: check.models.length, limit: HERMES_MODEL_LIMIT });
+      } catch (e) {
+        check.models = this.checks.get(id)?.models ?? null;
+        check.state = "unknown";
+        check.detail = tr(lang, "station.profile.hermesModelsFailed", { error: (e as Error).message });
+      }
+    }
     check.decision = await this.discoverFn(profile, check);
     // A profile edited during the probe does not inherit the previous account's capabilities.
     const now = this.profile(id);
@@ -1074,8 +1133,8 @@ export class Accounts {
 
   /// What the session's chat is called in the chat list; its key only where it has no chat.
   private chatTitleOf(session: string): string {
-    const summary = this.deps.store.listThreads("", session, null)[0];
-    if (summary) return titleOf(summary.thread, summary.firstText, null);
+    const chat = this.deps.store.sessionChat(session);
+    if (chat) return titleOf(chat.thread, chat.firstText, null);
     return this.deps.store.getSession(session)?.title ?? session;
   }
 
@@ -1117,7 +1176,7 @@ export class Accounts {
     const policy = currentPolicy(store);
     const saved = store.archivePolicy();
     const latest = new Map<string, Json>();
-    for (const row of store.decisionsSince(store.now() - POLICY_DAYS * 86_400_000)) if (typeof row.session === "string") latest.set(row.session, row);
+    for (const row of store.latestDecisionsSince(store.now() - POLICY_DAYS * 86_400_000)) if (typeof row.session === "string") latest.set(row.session, row);
     const byOption = new Map<string, Json[]>();
     let failed = 0;
     for (const [session, row] of [...latest.entries()].reverse()) {
@@ -1127,7 +1186,7 @@ export class Accounts {
         continue;
       }
       const list = byOption.get(picked) ?? [];
-      list.push({ session, title: title(session), at: row.at, recommended: row.detail?.accepted === true });
+      list.push({ session, at: row.at, recommended: row.detail?.accepted === true });
       byOption.set(picked, list);
     }
     const by = saved?.change.by;
@@ -1135,7 +1194,8 @@ export class Accounts {
       text: policy.policy,
       options: policy.options.map((o) => {
         const chats = byOption.get(o.id) ?? [];
-        return { ...o, count: chats.length, chats: chats.slice(0, POLICY_CHATS) };
+        // Named only as shown: each name is a lookup of the chat's (a week's checks came to 210 chats on ccvm).
+        return { ...o, count: chats.length, chats: chats.slice(0, POLICY_CHATS).map(({ session, ...c }) => ({ session, title: title(session), ...c })) };
       }),
       days: POLICY_DAYS,
       checked: latest.size,
@@ -1167,7 +1227,9 @@ export class Accounts {
     const config = hubConfig(raw, this.deps.data);
     const joined = viewer !== undefined && viewer.home === false ? viewer.workspace : null;
     const others = this.joined();
+    this.readHomesSoon(config.profiles);
     const views = config.profiles.map((p) => {
+      const says = this.homeSays(p);
       const kind = accessKind(p);
       const a: Json = isObject(p.access) ? p.access : {};
       const via = profileVia(p);
@@ -1184,7 +1246,7 @@ export class Accounts {
       }
       return {
         id: p.id, name: p.name, runtime: p.runtime, runtimes: p.runtimes,
-        email: kind === "subscription" ? this.email(p) : a.login === true ? (readConsole(p.home)?.email ?? null) : null,
+        email: kind === "subscription" ? this.email(p, says) : a.login === true ? says.email : null,
         // A provider's key says `env` where an older core reads it; the provider next to it tells a newer core it is not.
         access: {
           kind: kind === "api-provider" ? "env" : kind, key: mask(String(a.key ?? "").trim()),
@@ -1192,7 +1254,7 @@ export class Accounts {
           // Its key is the token of a sign-in to the OpenCode Console or to Kimi (signed in again, not replaced).
           login: (kind === "opencode-go" || kimiSignedIn(p)) && a.login === true,
         },
-        home: p.home, homeExists: existsSync(p.home), model: p.model ?? null, models: p.models,
+        home: p.home, homeExists: says.exists, model: p.model ?? null, models: p.models,
         env,
         // Connects whose sessions can run on it: of its runtime, and its models have theirs.
         usedBy: config.connects.filter((c) => p.runtimes.includes(c.bind.runtime) && serves(p, c.bind.model)).map((c) => c.id),
@@ -1223,10 +1285,47 @@ export class Accounts {
   /// The account a subscription profile is signed in as: a borrowed one's as its host said, one on the machine's login
   /// the machine's (Claude's is in the keychain, not its home), the rest their home's. The workspace's list tells the
   /// same account on several stations by it.
-  private email(p: Json): string | null {
+  private email(p: Json, says: HomeSays): string | null {
     if (borrowed(p)) return typeof (p.share as Json)?.email === "string" ? (p.share as Json).email : null;
-    if (p.machine === true) return this.machineLogins().find((l) => l.runtime === p.runtime)?.email ?? accountEmail(p.runtime, p.home);
-    return accountEmail(p.runtime, p.home);
+    if (p.machine === true) return this.machineLogins().find((l) => l.runtime === p.runtime)?.email ?? says.email;
+    return says.email;
+  }
+
+  /// What profile `p`'s home says, as last read; read on the thread the first time (or once what it is read for changed).
+  private homeSays(p: Profile): HomeSays {
+    const asked = JSON.stringify(homeAsked(p));
+    const kept = this.homes.get(p.id);
+    if (kept?.asked === asked) return kept.says;
+    const says = homeSaysNow(p);
+    this.homes.set(p.id, { asked, says });
+    return says;
+  }
+
+  /// Every profile's home read again off the thread, once HOMES_EVERY_MS have passed since the last time; what changed
+  /// is told (the overview is made again).
+  private readHomesSoon(profiles: Profile[]): void {
+    const now = this.background.now();
+    if (this.homesReading || now - this.homesRead < HOMES_EVERY_MS) return;
+    this.homesReading = true;
+    this.homesRead = now;
+    void (async () => {
+      let changed = false;
+      for (const p of profiles) {
+        const asked = JSON.stringify(homeAsked(p));
+        const since = this.homesChanged;
+        const says = await homeSaysSoon(p).catch(() => null);
+        const kept = this.homes.get(p.id);
+        // Not shown yet (read on the thread when it is), or changed meanwhile: left as it is.
+        if (says === null || kept === undefined || kept.asked !== asked || this.homesChanged !== since) continue;
+        if (kept.says.exists === says.exists && kept.says.email === says.email) continue;
+        this.homes.set(p.id, { asked, says });
+        changed = true;
+      }
+      return changed;
+    })()
+      .then((changed) => changed && this.changed())
+      .catch(() => {})
+      .finally(() => (this.homesReading = false));
   }
 
   /// The overview's `logins`: sign-ins for new profiles.
@@ -1270,21 +1369,72 @@ function lastOfRuntime(raw: Json, runtime: Runtime, id: string, lang: Lang) {
 
 /// The account a subscription home is signed in as, when its files say: Codex's id token, Claude's account record.
 export function accountEmail(runtime: Runtime, home: string): string | null {
-  if (runtime === "grok") return grokEmail(home);
-  if (runtime === "cursor") return cursorEmail(home);
-  if (runtime === "devin") return devinEmail(home);
-  if (runtime === "codex") {
-    const claims = codexClaims(home);
-    const email = claims?.email ?? claims?.["https://api.openai.com/profile"]?.email;
-    return typeof email === "string" ? email : null;
-  }
-  for (const file of [join(home, ".claude.json"), join(home, "claude.json")]) {
+  for (const file of accountFiles(runtime, home)) {
+    let stamp: string;
     try {
-      const email = JSON.parse(readFileSync(file, "utf8"))?.oauthAccount?.emailAddress;
-      if (typeof email === "string") return email;
-    } catch {}
+      const st = statSync(file.path);
+      stamp = `${st.size}:${st.mtimeMs}`;
+    } catch {
+      continue;
+    }
+    const email = emailKept(file, stamp, () => readFileSync(file.path, "utf8"));
+    if (email !== null) return email;
   }
   return null;
+}
+
+/// `accountEmail` without holding the station's thread (fs/promises), for what is read again as the overview is made.
+export async function accountEmailSoon(runtime: Runtime, home: string): Promise<string | null> {
+  for (const file of accountFiles(runtime, home)) {
+    let stamp: string;
+    try {
+      const st = await stat(file.path);
+      stamp = `${st.size}:${st.mtimeMs}`;
+    } catch {
+      continue;
+    }
+    const kept = emails.get(file.path);
+    const text = kept?.stamp === stamp ? null : await readFile(file.path, "utf8").catch(() => null);
+    const email = emailKept(file, stamp, () => text ?? "");
+    if (email !== null) return email;
+  }
+  return null;
+}
+
+/// Where a home keeps whose account it is signed in to, by its runtime, and how each file says it, in the order looked
+/// at.
+type AccountFile = { path: string; email: (text: string) => string | null };
+function accountFiles(runtime: Runtime, home: string): AccountFile[] {
+  if (runtime === "grok") return [{ path: grokAuthFile(home), email: grokEmailIn }];
+  if (runtime === "cursor") return [{ path: cursorAuthFile(home), email: (text) => cursorIn(text)?.email ?? null }];
+  if (runtime === "devin") return [{ path: devinAccountFile(home), email: devinNotedIn }];
+  if (runtime === "codex") {
+    const email = (text: string) => {
+      const claims = codexClaimsIn(text);
+      const said = claims?.email ?? claims?.["https://api.openai.com/profile"]?.email;
+      return typeof said === "string" ? said : null;
+    };
+    return [{ path: join(home, "auth.json"), email }];
+  }
+  const email = (text: string) => {
+    const said = JSON.parse(text)?.oauthAccount?.emailAddress;
+    return typeof said === "string" ? said : null;
+  };
+  return [join(home, ".claude.json"), join(home, "claude.json")].map((path) => ({ path, email }));
+}
+
+/// What each account file says, read again only once it changed (its size or time): Claude's is megabytes Claude Code
+/// rewrites as it goes, and every overview asks it of every profile.
+const emails = new Map<string, { stamp: string; email: string | null }>();
+function emailKept(file: AccountFile, stamp: string, text: () => string): string | null {
+  const kept = emails.get(file.path);
+  if (kept?.stamp === stamp) return kept.email;
+  let email: string | null = null;
+  try {
+    email = file.email(text());
+  } catch {}
+  emails.set(file.path, { stamp, email });
+  return email;
 }
 
 /// A slug for an id: lower case, runs of anything else as one dash, at most `max` long.

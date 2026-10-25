@@ -6,9 +6,12 @@
 // answered here, as android_core.c's CoreHost and apple_core.mm do:
 //   secure.* (ember hosts/bridge.ts): what the core keeps out of the files it syncs (the lock's signing seed, a vault's
 //     key), sealed with DPAPI for this Windows user (CryptProtectData, no prompt ever) in files of <data>\secure, one a
-//     key (its UTF-8 in hex). secure.get {key, user} -> {} + the bytes, or {none: true}; secure.set {key, user} + the
-//     bytes -> {}; secure.delete {key} -> {}; asking the person (`user`, secure.ask: Windows Hello) is unsupported yet,
-//     as on Android and Apple.
+//     key (its UTF-8 in hex, `.user` after a `user` one's: read only as it was kept). secure.get {key, user} -> {} + the
+//     bytes, or {none: true}; secure.set {key, user} + the bytes -> {}; secure.delete {key} -> {}; secure.ask {reason}
+//     -> {}. Nothing asks the person here yet (Windows Hello): a `user` value is as safe as the Windows login, and
+//     secure.ask says yes at once, as still.fail's Electron app did on Windows (client/core-ts host.ts `secureAsk`).
+//   kept.read {at, start, end} -> {} + the bytes, or {none: true}: a file the app saved (its path, as mb_host_keep_where
+//     said it) read back, bytes start to end (the core's downloads: drive-kept.ts `saved`).
 //   listen.* (a login's loopback listener, mbui's win_listen.c): listen.open {port, host} -> {id, port};
 //     listen.next {id} -> {request, method, path, headers} + the body, or {end: true}; listen.respond {id, request,
 //     status, headers} + the body -> {}; listen.close {id} -> {}.
@@ -200,14 +203,14 @@ static int jtrue(const char *p) { return p && strncmp(p, "true", 4) == 0; }
 
 // ── secure.* ──
 
-// <data>\secure\<the key's UTF-8 in hex>
-static WCHAR *secure_path(const char *key) {
+// <data>\secure\<the key's UTF-8 in hex>, `.user` after a `user` one's
+static WCHAR *secure_path(const char *key, int user) {
   size_t n = wcslen(W.secure_dir), k = strlen(key);
-  WCHAR *p = malloc((n + 2 + 2 * k) * sizeof(WCHAR));
+  WCHAR *p = malloc((n + 7 + 2 * k) * sizeof(WCHAR));
   memcpy(p, W.secure_dir, n * sizeof(WCHAR));
   p[n] = L'\\';
   for (size_t i = 0; i < k; i++) swprintf(p + n + 1 + 2 * i, 3, L"%02x", (unsigned char)key[i]);
-  p[n + 1 + 2 * k] = 0;
+  wcscpy_s(p + n + 1 + 2 * k, 6, user ? L".user" : L"");
   return p;
 }
 
@@ -219,8 +222,8 @@ static DATA_BLOB entropy(void) {
 }
 
 // 1 and the bytes, 0 none, -1 failed (why in `why`).
-static int secure_get(const char *key, uint8_t **out, size_t *len, char *why, size_t wl) {
-  WCHAR *path = secure_path(key);
+static int secure_get(const char *key, int user, uint8_t **out, size_t *len, char *why, size_t wl) {
+  WCHAR *path = secure_path(key, user);
   HANDLE f = CreateFileW(path, GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING, 0, NULL);
   free(path);
   if (f == INVALID_HANDLE_VALUE) {
@@ -250,14 +253,14 @@ static int secure_get(const char *key, uint8_t **out, size_t *len, char *why, si
   return 1;
 }
 
-static int secure_set(const char *key, const uint8_t *bytes, size_t blen, char *why, size_t wl) {
+static int secure_set(const char *key, int user, const uint8_t *bytes, size_t blen, char *why, size_t wl) {
   SHCreateDirectoryExW(NULL, W.secure_dir, NULL);
   DATA_BLOB in = {(DWORD)blen, (BYTE *)bytes}, sealed = {0}, e = entropy();
   if (!CryptProtectData(&in, L"still.fail mbui core", &e, NULL, NULL, CRYPTPROTECT_UI_FORBIDDEN, &sealed)) {
     snprintf(why, wl, "secure.set: not sealed (%lu)", GetLastError());
     return 0;
   }
-  WCHAR *path = secure_path(key);
+  WCHAR *path = secure_path(key, user);
   size_t n = wcslen(path);
   WCHAR *tmp = malloc((n + 5) * sizeof(WCHAR));
   swprintf(tmp, n + 5, L"%ls.new", path);
@@ -274,31 +277,35 @@ static int secure_set(const char *key, const uint8_t *bytes, size_t blen, char *
   return ok;
 }
 
+// Both values under `key`, whichever there is.
 static void secure_delete(const char *key) {
-  WCHAR *path = secure_path(key);
-  DeleteFileW(path);
-  free(path);
+  for (int user = 0; user < 2; user++) {
+    WCHAR *path = secure_path(key, user);
+    DeleteFileW(path);
+    free(path);
+  }
 }
 
 static void core_secure(uint64_t id, const char *op, const char *json, const uint8_t *bytes, size_t blen) {
   char *key = jstr(jget(json, "key"));
+  int user = jtrue(jget(json, "user"));
   char why[200] = "";
-  if (strcmp(op, "secure.ask") == 0 || jtrue(jget(json, "user"))) {
-    answer(id, NULL, "unsupported", NULL, 0);
+  if (strcmp(op, "secure.ask") == 0) {
+    answer(id, "{}", NULL, NULL, 0);
   } else if (!key || !*key) {
     snprintf(why, sizeof why, "%s: no key", op);
     answer(id, NULL, why, NULL, 0);
   } else if (strcmp(op, "secure.get") == 0) {
     uint8_t *out = NULL;
     size_t len = 0;
-    int got = secure_get(key, &out, &len, why, sizeof why);
+    int got = secure_get(key, user, &out, &len, why, sizeof why);
     if (got > 0) answer(id, "{}", NULL, out, len);
     else if (got == 0) answer(id, "{\"none\":true}", NULL, NULL, 0);
     else answer(id, NULL, why, NULL, 0);
     if (out) SecureZeroMemory(out, len), free(out);
   } else if (strcmp(op, "secure.set") == 0) {
     static const uint8_t none = 0;
-    if (secure_set(key, bytes ? bytes : &none, bytes ? blen : 0, why, sizeof why)) answer(id, "{}", NULL, NULL, 0);
+    if (secure_set(key, user, bytes ? bytes : &none, bytes ? blen : 0, why, sizeof why)) answer(id, "{}", NULL, NULL, 0);
     else answer(id, NULL, why, NULL, 0);
   } else if (strcmp(op, "secure.delete") == 0) {
     secure_delete(key);
@@ -315,16 +322,20 @@ static void secure_test(void) {
   char why[200] = "";
   uint8_t *out = NULL;
   size_t len = 0;
-  int set = secure_set("mbui-secure-test", seed, sizeof seed, why, sizeof why);
-  int got = secure_get("mbui-secure-test", &out, &len, why, sizeof why);
+  int set = secure_set("mbui-secure-test", 0, seed, sizeof seed, why, sizeof why);
+  int got = secure_get("mbui-secure-test", 0, &out, &len, why, sizeof why);
   int same = got == 1 && len == sizeof seed && memcmp(out, seed, len) == 0;
   free(out);
   out = NULL;
-  secure_delete("mbui-secure-test");
-  int gone = secure_get("mbui-secure-test", &out, &len, why, sizeof why) == 0;
+  // read only as it was kept: asked as the person's, it is none
+  int apart = secure_get("mbui-secure-test", 1, &out, &len, why, sizeof why) == 0;
   free(out);
-  fprintf(stderr, "SECURE_TEST %s (set %d, read back %d, deleted %d)%s%s\n", set && same && gone ? "ok" : "FAILED", set, same, gone,
-          why[0] ? ": " : "", why);
+  out = NULL;
+  secure_delete("mbui-secure-test");
+  int gone = secure_get("mbui-secure-test", 0, &out, &len, why, sizeof why) == 0;
+  free(out);
+  fprintf(stderr, "SECURE_TEST %s (set %d, read back %d, apart %d, deleted %d)%s%s\n", set && same && apart && gone ? "ok" : "FAILED", set,
+          same, apart, gone, why[0] ? ": " : "", why);
 }
 
 // ── listen.* ──
@@ -517,6 +528,45 @@ static void on_say(void *ctx, const char *json, size_t len, const uint8_t *bytes
   if (W.on_message) W.on_message(json, len, bytes, blen, W.ctx);
 }
 
+// ── kept.read ──
+
+static void core_kept(uint64_t id, const char *op, const char *json) {
+  if (strcmp(op, "kept.read") != 0) {
+    answer(id, NULL, "unsupported", NULL, 0);
+    return;
+  }
+  char *at = jstr(jget(json, "at"));
+  double start = 0, end = 0;
+  if (!at || !jnum(jget(json, "start"), &start) || !jnum(jget(json, "end"), &end) || end < start || end - start > 64.0 * 1024 * 1024) {
+    free(at);
+    answer(id, NULL, "kept.read: at, start and end", NULL, 0);
+    return;
+  }
+  WCHAR *path = wide(at);
+  free(at);
+  HANDLE f = CreateFileW(path, GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
+  free(path);
+  if (f == INVALID_HANDLE_VALUE) {
+    answer(id, "{\"none\":true}", NULL, NULL, 0);
+    return;
+  }
+  size_t want = (size_t)(end - start), got = 0;
+  uint8_t *buf = malloc(want ? want : 1);
+  LARGE_INTEGER at_byte;
+  at_byte.QuadPart = (LONGLONG)start;
+  int ok = SetFilePointerEx(f, at_byte, NULL, FILE_BEGIN);
+  while (ok && got < want) {
+    DWORD n = 0;
+    DWORD ask = (DWORD)((want - got) > 0x7fffffff ? 0x7fffffff : (want - got));
+    if (!ReadFile(f, buf + got, ask, &n, NULL) || n == 0) break;
+    got += n;
+  }
+  CloseHandle(f);
+  if (!ok) answer(id, "{\"none\":true}", NULL, NULL, 0);
+  else answer(id, "{}", NULL, buf, got);
+  free(buf);
+}
+
 static void on_app_call(void *ctx, uint64_t id, const char *op, const char *json, size_t len, const uint8_t *bytes, size_t blen) {
   (void)ctx;
   char *j = malloc(len + 1);
@@ -524,6 +574,7 @@ static void on_app_call(void *ctx, uint64_t id, const char *op, const char *json
   j[len] = 0;
   if (tracing()) fprintf(stderr, "[core trace] -> %llu %s %.*s (here)\n", (unsigned long long)id, op, (int)(len < 120 ? len : 120), j);
   if (strncmp(op, "secure.", 7) == 0) core_secure(id, op, j, bytes, blen);
+  else if (strncmp(op, "kept.", 5) == 0) core_kept(id, op, j);
   else core_listen(id, op, j, bytes, blen);
   free(j);
 }

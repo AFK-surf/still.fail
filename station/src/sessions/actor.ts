@@ -88,8 +88,9 @@ export type SessionDeps = {
   /// The profile a session's runtime starts on now: its own while usable, else another that can take it on (`holding`:
   /// its process has work going in the background, kept on an account nearly full).
   runOn(key: string, holding?: boolean): Profile & { spelling?(model: string): string | null };
-  /// A turn ran into its profile's allowance: the profile left and the one moved to, when it moved.
-  spend(key: string): [string, string] | null;
+  /// A turn ran into the allowance of `ranOn`, the profile its process was started on (null: the session's own): the
+  /// profile left and the one moved to, when it moved.
+  spend(key: string, ranOn: string | null): [string, string] | null;
   /// When session `key`'s profile, its allowance run out, is expected to run again (absent: in an hour).
   refillsAt?(key: string): number;
   mcpUrl(): string;
@@ -633,11 +634,11 @@ export class SessionActor {
   }
 
   /// Takes up a session the previous station left (its snapshot), on its runtime session when the driver took that up:
-  /// as the generation the caller opened it as (`nextGeneration`, whose `listener` the driver was given).
-  adopt(snap: Snapshot, agent: AgentSession | null) {
+  /// as the generation the caller opened it as (`nextGeneration`, whose `listener` the driver was given), running on
+  /// `profile`, the one its process was started on.
+  adopt(snap: Snapshot, agent: AgentSession | null, profile: string) {
     this.agent = agent ? { generation: this.generation, session: agent } : null;
-    // Taken up on the profile the session has (hub.ts takeUp runs it there).
-    this.profile = agent ? (this.deps.store.getSession(this.key)?.profile ?? null) : null;
+    this.profile = agent ? profile : null;
     this.turn = snap.turn && {
       id: snap.turn.id,
       authRetried: snap.turn.authRetried,
@@ -1127,7 +1128,7 @@ export class SessionActor {
       // Left to the station, it moves to another account and goes on there; otherwise it waits for a change.
       let moved: [string, string] | null = null;
       try {
-        moved = this.deps.spend(this.key);
+        moved = this.deps.spend(this.key, this.profile);
       } catch (error) {
         log.warn("session", "could not move off a spent profile", { session: this.key, error: (error as Error).message });
       }

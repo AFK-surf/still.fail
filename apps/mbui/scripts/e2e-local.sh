@@ -73,6 +73,30 @@ detach() { exec python3 -c 'import os, sys; os.setsid(); os.execvp(sys.argv[1], 
 die() { echo "e2e: $*" >&2; exit 1; }
 listening() { lsof -nP -iTCP:$1 -sTCP:LISTEN >/dev/null 2>&1; }
 alive() { [ -f $RUN/$1.pid ] && kill -0 $(cat $RUN/$1.pid) 2>/dev/null; }
+# the station's directory is the machine's one (a trace's own path, the same for every run that records it): a run
+# holds it from its up to its down, its claim $STATION.held (a link to its WORK, made at once); another run's up waits
+# for that run's end, its down leaves it alone. A claim whose run's cloud is gone (ended without down) is no one's.
+HELD=$STATION.held
+held_by_other() {
+  local w
+  w=$(readlink "$HELD" 2>/dev/null) || return 1
+  [ "$w" != "$WORK" ] && [ -f "$w/run/cloud.pid" ] && kill -0 $(cat "$w/run/cloud.pid") 2>/dev/null
+}
+claim() {
+  until ln -s "$WORK" "$HELD" 2>/dev/null; do
+    [ "$(readlink "$HELD" 2>/dev/null)" = "$WORK" ] && return 0
+    if held_by_other; then
+      local w=$(readlink "$HELD")
+      say "$STATION is the run's of $w: waiting for its end"
+      # (its cloud's end, its down's: kqueue's, chk logwait --pid)
+      local rc=0
+      "$MBUI_DIR/scripts/chk" logwait --pid $(cat "$w/run/cloud.pid") --deadline 7200 > /dev/null 2>&1 || rc=$?
+      [ $rc != 2 ] || die "$STATION still the run's of $w after 2 h"
+    else
+      rm -f "$HELD"
+    fi
+  done
+}
 # waits for an event, not a time (scripts/waitfor.mjs: the file system's events, or a command's output); its first
 # argument the most it is given, in s, before it fails
 waitfor() { local s=$1; shift; node "$D/waitfor.mjs" --deadline $s "$@" > /dev/null; }
@@ -193,6 +217,7 @@ EOF
   [ -n "$token" ] || die "no enrollment in the cloud's log"
   # the station: its own data and HOME, the fake runtimes first on PATH (e2e/fake's claude, which posts cards and
 # tool steps, over ember's), no discovery on the LAN
+  claim
   rm -rf $STATION $WORK/peer $WORK/peer-home && mkdir -p $STATION/data/homes/cc $STATION/home $STATION/app/node/bin
   ln -s $E/station/dist $STATION/app/station
   ln -s "$(command -v node)" $STATION/app/node/bin/node
@@ -237,6 +262,12 @@ stop() {
 }
 
 down() {
+  # (the station's directory another run's: only what this run started, by its own pids)
+  if held_by_other; then
+    stop second; stop station; stop cloud; stop relay
+    say "down ($STATION left to the run of $(readlink "$HELD"))"
+    return 0
+  fi
   second_down >/dev/null 2>&1 || true
   stop station
   # whatever of the test station is left (its node, runner): only processes on its own data directory
@@ -248,6 +279,7 @@ down() {
   for p in $( (lsof -tnP -iTCP:$((PORT + 7)) -sTCP:LISTEN; pgrep -f -- "-m http\.server ") 2>/dev/null | sort -u); do
     lsof -a -p $p -d cwd -Fn 2>/dev/null | grep -qE "^n(/private)?$STATION/" && kill $p 2>/dev/null
   done
+  rm -f "$HELD"
   stop cloud
   pkill -f "$E/cloud/node_modules" 2>/dev/null || true
   stop relay

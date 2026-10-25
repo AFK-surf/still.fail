@@ -1,5 +1,6 @@
 // 85-vault-item (e2e/traces/settings-vault-item.trace): 密钥 → ＋ → Token: a name, its value, agents by the proxy to a
-// host, 保存 (vault.putItem); its page, 显示 (vault.open); 编辑 → 删除 (vault.deleteItem).
+// host, 保存 (vault.putItem); its page, 编辑 (vault.open, then its editor) → 删除 (vault.deleteItem). 添加, the editor
+// and asking first are the presenters' (a sheet on a phone).
 
 ///|
 test "85-vault-item" {
@@ -11,31 +12,39 @@ test "85-vault-item" {
     f.run_to(@ui.nav_rest())
     f.see("未加锁")
     f.tap("icon:plus")
-    f.run_to(@kit.sheet_rest("settings-sheet"))
+    f.run_to(@kit.sheet_rest("sf-present"))
     f.tap("=Token")
     f.see("添加密钥")
-    f.tap("例如 GitHub")
+    f.tap("=GitHub token")
     f.type_text("e2e-080726")
-    f.tap("ghp_")
+    f.tap("ghp_…")
     f.type_text("ghp_madeup_080726_value")
     f.tap("=允许 agent 申请")
-    // 限定域名's field, under the fold of the editor's sheet
-    f.wheel_at("限定域名", 300.0)
-    f.tap("api.github.com, uploads.github.com")
+    // the editor taller than a sheet's most now (as it is laid out, the frame after): the sheet that tall, what it
+    // holds scrolling in it
+    f.until(fn() { @kit.sheet_rest("sf-present") > f.t.time() })
+    f.run_to(@kit.sheet_rest("sf-present"))
+    // 限定域名's field, under the fold of the editor's sheet: what it holds scrolled (the wheel over the window's middle,
+    // the sheet's)
+    f.wheel(300.0)
+    f.tap("api.github.com, *.example.com")
     f.type_text("api.example.test")
     f.tap("=保存")
-    f.run_to(@kit.sheet_rest("settings-sheet"))
+    f.answered("vault.putItem", 1)
+    f.run_to(@kit.sheet_rest("sf-present"))
+    // the secrets under the longest grant's choices, down the page
+    f.wheel_at("默认最长授权", 500.0)
     f.see("=e2e-080726")
     f.tap("=e2e-080726")
     f.run_to(@ui.nav_rest())
-    f.tap("=显示")
+    // 编辑 opens it first (vault.open), then its editor on what it holds
     f.tap("icon:edit")
-    f.run_to(@kit.sheet_rest("settings-sheet"))
+    f.answered("vault.open", 1)
+    f.run_to(@kit.sheet_rest("sf-present"))
     f.see("限定域名")
-    // 删除这一条 under the fold, past 最长授权 (Vault.kt's editor)
-    f.wheel_at("限定域名", 300.0)
+    // 删除 at the sheet's foot, in reach however tall what it holds
     f.tap("=删除")
-    f.run_to(@kit.sheet_rest("settings-sheet"))
+    f.run_to(@kit.sheet_rest("sf-present"))
     f.see("删除「e2e-080726」")
     f.tap("=删除")
     // the page goes back once the station has deleted it
@@ -43,7 +52,7 @@ test "85-vault-item" {
     f.run_to(@ui.nav_rest())
     f.gone("=e2e-080726")
     // the confirming sheet gone down behind the page (at rest already when the page's pop took longer)
-    let down = @kit.sheet_rest("settings-sheet")
+    let down = @kit.sheet_rest("sf-present")
     if down > f.t.time() {
       f.run_to(down)
     }

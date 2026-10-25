@@ -342,6 +342,14 @@ pub fn Tester::locate(self : Tester, what : String) -> Array[(Double, Double)] {
 }
 
 ///|
+/// Where `what` is on screen that a finger reaches (not under what lies over it: a sheet, a scrim), as a scripted run's
+/// tap finds it (drive.mbt reachable): the same press in a test as in the run.
+pub fn Tester::reachable(self : Tester, what : String) -> Array[(Double, Double)] {
+  ignore(self)
+  reachable(g(), what)
+}
+
+///|
 /// The focused field's words ("" when none is focused).
 pub fn Tester::field_words(self : Tester) -> String {
   ignore(self)
@@ -353,7 +361,7 @@ pub fn Tester::field_words(self : Tester) -> String {
 /// as the system gives a paste; the frames it causes drawn.
 pub fn Tester::paste(self : Tester, words : String) -> Unit {
   h_clipboard_set(words)
-  on_text(0, words, 0, 0)
+  on_text(text_paste, words, 0, 0)
   self.draw()
 }
 

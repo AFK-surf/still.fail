@@ -39,6 +39,11 @@ test("days_split_by_who_and_lists_ranked_by_cost", () => {
   assert.deepEqual([daily.length, daily[6].label, daily[6].today], [7, "10/2", true]);
   assert.deepEqual(v.series, [{ key: "a@x", name: "阿一" }, { key: "b@x", name: "你" }]);
   assert.deepEqual(daily[6].parts, [4.0, 0.0]);
+  // what the chart says of a day, the core's: its name where picked, its date under its bar, each part's share
+  assert.deepEqual([daily[6].name, daily[5].name, daily[5].tick, v.many], ["今天", "10/1", "10/1", false]);
+  assert.deepEqual(daily[6].shares, [1, 0]);
+  // (10/1's spending has no price: nothing to share)
+  assert.deepEqual(daily[5].shares, [0, 0]);
   const list = (k: number) => v.lists[k].items;
   const people = list(0);
   assert.deepEqual([people[0].title, people[0].shareText, people[0].person.shown.picture], ["阿一", "100%", "https://p/a"]);
@@ -50,6 +55,14 @@ test("days_split_by_who_and_lists_ranked_by_cost", () => {
   const models = list(3);
   assert.deepEqual([models[0].title, models[1].sub], ["Opus 5.5", "无价目，不计入费用"]);
   assert.deepEqual(v.notes, ["4 次调用的模型无价目，未计入费用"]);
+});
+
+test("thirty_days_say_a_date_a_week_under_their_bars", () => {
+  const v = usageView([{ address: "ws/st", name: "studio", online: true, value: ok(station([row("2026-10-02", "a@x", 7, "cc", "claude-opus-5-5", 1, 1.0)])) }], 30, NOW, 480, { id: "a@x", email: "a@x" }, []);
+  assert.equal(v.many, true);
+  const ticks = v.daily.map((d: any) => d.tick);
+  assert.deepEqual([ticks.length, ticks[29], ticks[28], ticks[22], ticks[21]], [30, "今天", "", "9/25", ""]);
+  assert.equal(v.daily[28].shares.every((x: number) => x === 0), true);
 });
 
 test("price_tables_keep_station_rates_separate_and_handle_older_stations", () => {

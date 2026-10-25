@@ -10,7 +10,7 @@ import { core, useCall, useTopic, useTopicSelect, useTopics, type TopicState } f
 import { CoreError } from "./core/client.ts";
 import { scopeOf, useOnlyMine, useStation, type Me } from "./station.tsx";
 import type { AgentCardView, ArchiveView, Attachment, ChatJobsView, ChatLettersView, ChatSearchView, ChatsView, Quote, SearchView, ChatView, ConnectsView, HistoryView, Host, JoinableView, Live, MembershipsView, Overview, ProfilesView, Session, Stamp, StationView, StatusView, ChatThread } from "./core/shapes.ts";
-import type { AccessKind, ConnectMode, Job, LoginJob, ProfileCheck, Quota, RuntimeKind, SlackAppLinks, SlackIdentity } from "./core/shapes.ts";
+import type { AccessKind, ConnectMode, Job, LoginJob, ProfileCheck, Quota, RuntimeKind, SlackAppLinks, SlackGroupSection, SlackIdentity } from "./core/shapes.ts";
 import type { ChatPublished, PublishPreview } from "./core/shapes.ts";
 import type { SlackPerson } from "./cloud/adding.ts";
 import { t } from "./i18n.ts";
@@ -69,11 +69,12 @@ export interface SlackAppSettings {
   groups: Record<SlackGroup, boolean>;
 }
 
-export type SlackAppView =
+/** `sections`: its permissions as its form shows them (the core's). */
+export type SlackAppView = { sections: SlackGroupSection[] } & (
   | { state: "no_app"; appId: null; links: null; settings: null; groups: SlackGroup[]; error?: string }
   | { state: "no_config_token"; appId: string; links: SlackAppLinks; settings: null; groups: SlackGroup[] }
   | { state: "ok"; appId: string; links: SlackAppLinks; settings: SlackAppSettings; groups: SlackGroup[] }
-  | { state: "error"; appId: string; links: SlackAppLinks; settings: null; groups: SlackGroup[]; error: string };
+  | { state: "error"; appId: string; links: SlackAppLinks; settings: null; groups: SlackGroup[]; error: string });
 
 // ── what the core gives: generated from client/core-ts/src/shapes/schema.ts (core/shapes.ts), nothing hand-written ──
 
@@ -130,6 +131,11 @@ export function useArchiveView(scope: string, q = "", limit = 0): TopicState<Arc
 
 export function useStations(scope: string): TopicState<StationView[]> {
   return useTopic<StationView[]>({ topic: "stations", scope });
+}
+
+/** The workspace's stations with a drive, this machine's (`here`) first, then as the workspace lists them. */
+export function useDriveStations(scope: string, here: string | null = null): TopicState<StationView[]> {
+  return useTopic<StationView[]>({ topic: "stations", scope, drive: true, ...(here ? { here } : {}) });
 }
 
 /** The stations 添加 station offers to add to a workspace as they are: those of the viewer's other workspaces whose home
@@ -496,17 +502,21 @@ export function stationApi(t: StationCall) {
     startLogin: (profile: string) => ops.profileLogin<{ job: LoginJob }>({ id: profile }),
     cancelLogin: (profile: string) => ops.profileCancelLogin<{ job: LoginJob | null }>({ id: profile }),
     loginCode: (profile: string, code: string) => ops.profileLoginCode<{ job: LoginJob }>({ id: profile, code }),
+    /** The sign-in's page opened in the station's own browser: the screen of its tab, to view. */
+    loginBrowser: (profile: string) => ops.profileLoginBrowser<{ screen: string }>({ id: profile }),
     /** A subscription (or, `access` opencode-go, an OpenCode Console account) signed in before its profile exists; the
      *  station makes the profile when it succeeds. */
     newLogin: (runtime: RuntimeKind, access?: string | null) => ops.loginNew<{ id: string; job: LoginJob }>({ runtime, ...(access ? { access } : {}) }),
     newLoginCode: (id: string, code: string) => ops.loginCode<{ job: LoginJob }>({ id, code }),
+    newLoginBrowser: (id: string) => ops.loginBrowser<{ screen: string }>({ id }),
     dropLogin: (id: string) => ops.loginDrop<{ ok: true }>({ id }),
     /** A profile on the machine's own login of `runtime` (one kept in a file). */
     useMachineLogin: (runtime: RuntimeKind) => ops.profileUseMachineLogin<{ id: string; overview: Overview }>({ runtime }),
     /** A keyed profile, made only once its key is checked. */
     addProfile: (input: { runtime?: RuntimeKind; access: { kind: AccessKind; key?: string; provider?: string; endpoint?: string } }) => ops.profileAdd<{ id: string; overview: Overview }>(input),
-    putSlackApp: (connect: string, input: Partial<SlackAppSettings> & { icon?: string }) =>
-      ops.connectPutSlackApp<{ permissionsUpdated: boolean; iconError: string | null; links: SlackAppLinks }>({ connect, input }),
+    /** `from`: the settings the form started from (only what differs from them is written). */
+    putSlackApp: (connect: string, input: Partial<SlackAppSettings> & { icon?: string }, from?: SlackAppSettings) =>
+      ops.connectPutSlackApp<{ permissionsUpdated: boolean; iconError: string | null; links: SlackAppLinks }>({ connect, input, ...(from ? { from } : {}) }),
     /** Makes a Slack app with the workspace's configuration token (still.fail's manifest, Socket Mode on), for a connect to come. */
     /** `install`: Slack's install link, when the app is installed through OAuth (a station in still.fail cloud); `state` names it. */
     /** The app is kept on the station, waiting for its connect (the overview's `slackApps`); this says which it is. */

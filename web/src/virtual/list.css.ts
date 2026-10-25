@@ -1,5 +1,9 @@
 import { globalStyle, style } from "@vanilla-extract/css";
 
+/** Virtual lists own their anchor. Native rubber-banding must not compete with their scrollTop corrections.
+ * Apply from the shared hook so Home, chat, history and future virtual panes follow the same rule. */
+export const pane = style({ selectors: { "&&": { overscrollBehaviorY: "none", overflowAnchor: "none" } } });
+
 /** The room of the items not made (list.tsx): as tall as it says, the list's gap on the sides it has a neighbour taken back. */
 export const spacer = style({
   flex: "none", padding: "0", pointerEvents: "none",

@@ -33,3 +33,16 @@ test "file links: an escaped link to a picture opens it in the preview" {
   t.run_for(@ui.nav_push_ms)
   assert_true(t.find("界面草图.png") is Some(_))
 }
+
+///|
+test "a table's cells of the message's pictures (MBUI_FIXTURE=chat-table-images): the pictures, not their names" {
+  let t = chat_tester("chat-table-images")
+  t.frame()
+  assert_eq(table_images_answer.view(start_offset=7, end_offset=11).to_string(), "手机网页")
+  assert_true(t.find("手机网页") is Some(_))
+  assert_true(t.find("phone.png") is None)
+  // the picture itself, opening in the preview
+  t.click(Button, label=@sf.t("web-main.file.view", args=[("name", "phone.png")]))
+  t.run_for(@ui.nav_push_ms)
+  assert_true(t.find("phone.png") is Some(_))
+}

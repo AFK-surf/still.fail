@@ -4,139 +4,6 @@
 // places of the bottom bar (bar.mbt) are the pages at the stack's root, switched in place.
 
 ///|
-/// A page of the stack.
-pub(all) enum Page {
-  Home
-  /// a chat (chat.mbt)
-  Chat(ChatRef)
-  /// the archived chats (from the filter's menu)
-  Archived
-  /// settings (the gear)
-  Settings
-  /// 文件: every station's folders lent (drive.mbt)
-  Files
-  /// a page of a station's drive: its roots, or a folder (drive.mbt)
-  Drive(DriveAt)
-  /// a text of a drive, read (drive_reader.mbt)
-  DriveRead(DriveAt)
-  /// a video or a song of a drive, played (play.mbt)
-  DrivePlay(DriveAt)
-  /// a web service an agent started, its page (service.mbt): its station, its job
-  Service(String, String)
-  /// a visualization as a page of its own (Preview.kt PreviewFileScreen): its station, the session that keeps it, its
-  /// path and its name
-  PreviewFile(String, String, String, String)
-  /// the decisions waiting for the viewer, one at a time (奏: decisions.mbt); the bar's 奏 place
-  Decisions
-  /// an agent's execution history (history.mbt): its chat, its session, the transcript entry it opens at (a link's
-  /// `entry`; None: its newest)
-  History(ChatRef, String, Int?)
-  /// an entry of a history opened in full: the line it was under, its words
-  Words(String, String)
-  /// a new chat (newchat.mbt), rising from the bottom; it becomes the chat it makes, in place
-  NewChat
-  /// a place of the bottom bar's other than the chats, 奏 and 文件 (stations, profiles, connects, usage, archive):
-  /// its page at the stack's root
-  Place(String)
-  /// a page under settings (src/sfapp/settings: me, appearance, stations, the workspace…)
-  Setting(@settings.Route)
-  /// a station's screen, seen and driven (screen_view.mbt), over the app as Android's ScreenActivity is
-  Screen(ScreenAt)
-} derive(Eq)
-
-///|
-/// A station's screen to view: its station (`<workspace>/<station>`), its id there, and its title until the core says
-/// one (the link's own, or the row's it was opened from; "" none).
-pub(all) struct ScreenAt {
-  station : String
-  screen : String
-  title : String
-} derive(Eq)
-
-///|
-priv struct App {
-  mut nav : @ui.Nav[Page]
-  /// the workspace switched to here, before the core's prefs say it
-  mut picked : String
-  /// the list's filter chosen here, by workspace, before the prefs say it
-  filters : Map[String, String]
-  /// the filter's menu open
-  mut menu : Bool
-  /// a place switched to on the bar: from which side (1 from the right, -1 the left, 0 from no side)
-  mut switch_way : Int
-  /// a row held: its id, and whether it has been held long (its time on @kit.after)
-  mut held : Int
-  mut held_long : Bool
-  /// what was said last of a write (a toast), and which saying it is (one said again is a new one)
-  mut toast : String
-  mut toast_n : Int
-}
-
-///|
-let app : App = {
-  nav: new_nav(),
-  picked: "",
-  filters: {},
-  menu: false,
-  switch_way: 0,
-  held: 0,
-  held_long: false,
-  toast: "",
-  toast_n: 0,
-}
-
-///|
-/// What a page left leaves behind: a chat's topic and what it told the core.
-let left_pages : Array[Page] = []
-
-///|
-fn new_nav() -> @ui.Nav[Page] {
-  // settings are to the left of the list, as the gear is at its top left: they come in from the left and go back
-  // that way (App.kt transition, swipe)
-  @ui.Nav::new(Home, from_left=fn(p) { p is Settings }, on_leave=fn(p) {
-    left_pages.push(p)
-    match p {
-      Setting(r) => @settings.left(r)
-      Archived => @settings.left(@settings.Route::Archive)
-      Settings => @settings.left(@settings.Route::Home)
-      // a place of the bar's whose page is the settings' (bar.mbt place_page)
-      Place(name) =>
-        match @settings.route_of(name) {
-          Some(r) => @settings.left(r)
-          None => ()
-        }
-      _ => ()
-    }
-  })
-}
-
-///|
-/// A page of the settings opened over Home from the start (screenshots of them, a scripted run): by its name
-/// (@settings.route_of).
-pub fn open_setting(name : String) -> Unit {
-  match @settings.route_of(name) {
-    Some(@settings.Route::Home) => app.nav.push(Settings)
-    Some(r) => {
-      app.nav.push(Settings)
-      app.nav.push(Setting(r))
-    }
-    None => ()
-  }
-}
-
-///|
-/// A chat opened over Home from the start (a link, a scripted run).
-pub fn open_chat(r : ChatRef) -> Unit {
-  app.nav.push(Chat(r))
-}
-
-///|
-/// A page pushed over Home from the start (a scripted run; the bottom bar's places until there is one).
-pub fn open_page(p : Page) -> Unit {
-  app.nav.push(p)
-}
-
-///|
 /// reset() called by hand since the last Tester started: what the test set after it (its clock, its system) is the
 /// next Tester's to start from, not forgotten again as it starts.
 let reset_by_hand : Ref[Bool] = Ref(false)
@@ -145,6 +12,9 @@ let reset_by_hand : Ref[Bool] = Ref(false)
 /// Every Tester starts from the app as at the start (mbui's on_reset), whatever ran before it in the process: what is
 /// kept here from one Tester to the next would be an input the test does not give.
 fn init {
+  // ＋'s Station 文件 (a composer's, sfpages): the station files' picker (sfdesk's station_pick.mbt). Said once, as the
+  // app starts (reset runs only as a Tester starts: a wire set there is never set in the app)
+  station_files_asked.val = @sfdesk.station_files_pick
   @ui.on_reset(fn() {
     if !reset_by_hand.val {
       reset()
@@ -160,33 +30,17 @@ fn init {
 fn reset() -> Unit {
   @sf.set_language(None)
   files_cornered.val = false
-  felt_menu.val = -1
-  felt_past.clear()
-  felt_holds.clear()
   image_quoted_at.val = -1
-  attention.told = false
-  picture_pick.val = None
   bar_glyph.val = None
   bar_stations_said.val = ""
-  attention.visible = false
-  attention.focused = false
-  attention.workspace = ""
-  attention.src = None
-  app.nav = new_nav()
-  home_rows.val = []
+  // the stack and what the app keeps of it (src/sfbase)
+  @sfbase.reset()
+  // the desktop's own (src/sfdesk)
+  @sfdesk.reset()
   steadies.clear()
-  app.picked = ""
-  app.filters.clear()
   sheet_host.kind = NoSheet
-  sheet_host.shown = NoSheet
-  sheet_host.accounts = false
+  sheet_host.serial = 0
   bar_reset()
-  fresh.became = None
-  fresh.made = ""
-  fresh.made_sig = ""
-  fresh.sent = false
-  fresh.starting = false
-  fresh.scene = None
   new_fix.station = "st1"
   new_fix.model = "claude-opus-5-5"
   new_fix.runtime = "claude"
@@ -196,40 +50,16 @@ fn reset() -> Unit {
   new_fix.d_effort = "high"
   new_fix.d_profile = ""
   new_fix.made = 0
-  app.switch_way = 0
+  new_fix.reading = 0
   bar_timing.val = None
-  reporting_host.val = None
   bar_timed.val = None
-  app.menu = false
-  app.held = 0
-  app.held_long = false
-  reset_row_menu()
-  login_cards_reset()
+  home_sheet_at_start.val = false
   update_anchor_reset()
-  landing_reset()
-  new_ws_reset()
-  news_reset()
-  app.toast = ""
-  read_views.clear()
-  read_chats.clear()
-  readings.clear()
-  kept_places.clear()
-  left_pages.clear()
-  playing.clear()
-  play_srcs.clear()
   screens_open.clear()
   screens_made.val = 0
   screen_uis.clear()
   screen_fix_mode.val = ""
   peeks_reset()
-  service_pages.clear()
-  svc_viewports.clear()
-  viz_loads.clear()
-  viz_frames.clear()
-  viz_heights.clear()
-  viz_full.val = None
-  viz_unmade.clear()
-  service_files.clear()
   share_in.shared = None
   share_in.files = []
   share_in.raised = false
@@ -241,26 +71,14 @@ fn reset() -> Unit {
   share_in.error = ""
   share_in.query = ""
   share_in.find.set("")
-  share_over.val = false
   share_closing.val = false
-  update.available = None
-  update.asked = false
-  update.checking = false
-  update.installing = false
-  update.phase = "idle"
-  update.source = None
-  update_version.val = 0
-  svc_folded.val = None
-  svc_keep.val = fn(_) {  }
   splash_waited.val = false
   drafts.clear()
-  sent_pictures.clear()
   cui.attach = false
   cui.picking = None
   cui.picking_for = ""
   cui.outside = false
   cui.restore_error.clear()
-  sharing.val = None
   cui.room_for = ("", None)
   cui.cap_id = 0
   cui.content_id = 0
@@ -268,117 +86,174 @@ fn reset() -> Unit {
   pick_reset()
   fix_chats.clear()
   fix_timers.clear()
+  fix_downloads.clear()
   fix_due.clear()
   fix_unsaid.clear()
   fix_drafts.clear()
   fix_composers.clear()
+  fix_writes.clear()
   fix_xshared.clear()
   fix_decided.clear()
   fix_replied.clear()
-  emits.clear()
-  turns_by.clear()
+  fix_vault.val = ""
   dv_reset()
   decide_reset()
-  close_now()
   @settings.reset()
-  go_tos.clear()
-  ref_fields.clear()
-  go_to_words.clear()
   found_marking.val = ("", [], 0.0)
   find_marking.val = []
-  search_reset()
   ask_turns.clear()
-  flash_held.val = false
-  notices_reset()
-  faces_reset()
-  links_reset()
   wide_reset()
+  invite_reset()
+  // the library's viewers: the texts read, the films played, a desktop's player's 选集 and the pointer it last saw
+  @sf.viewer_reset()
+  // the menu open (@sf.menu_of, context_items)
+  @sf.parts_reset()
+  outside_reset()
+  attach_reset()
+  // the menu bar given (menu_bar.mbt)
   // the made-up chats and their station (chat_fixture.mbt, service_fixture.mbt, drive_fixture.mbt)
   kept_chats.clear()
   fixture_pictures.clear()
   fix_threads.clear()
+  fix_browse_reset()
   fix_ctx.val = None
   fix_clock.val = None
   fix_serial.val = 0
   fix_stream_ids.val = 0
   // Home (home.mbt), the host told (above), a chat's page and what is in it
-  open_titled.val = ""
-  shown_days.clear()
-  marks_seen.clear()
-  told_bars.val = None
-  told_dark.val = None
-  send_flight.val = None
-  local_sent_n.val = 0
   flying.val = None
-  absolute_times.val = false
   opened_notices.clear()
+  tool_parts.clear()
   flashing.val = ("", 0.0)
-  flash_row.val = None
-  at_end_env.val = -1
   bench_on.val = -1
   boxed_n.val = 0
-  run_picker_opened.val = false
-  run_picker_saving.val = false
-  svc_hold.val = -1.0
   // the composer: its ids counted from the start, what waits for it
   next_pending.val = 1
   quote_fields.clear()
   rename_field.set("")
   rename_given.val = ""
-  relay_reset()
-  marked_into.clear()
-  shared_into.clear()
   share_files_made.val = 0
-  recent.open = false
-  recent.answers = -1
-  recent.access = NoGallery
-  recent.reading = None
-  recent.photos = []
-  // the viewer (preview.mbt, preview_marks.mbt: marks_leave above)
-  marking.color = 0xE5704AFFL
-  marking.next_id = 1
-  marking.to_draft = false
-  marking.job_name = ""
-  marking.write_field.set("")
-  marking.note_field.set("")
-  pv_thumbs.clear()
-  pv_frames.clear()
   fix_fetches.clear()
-  pv_frames_n.val = 0
-  pv_first.clear()
-  pv_hidden.val = ""
-  pv_read.clear()
-  pv_strip.leaving = None
-  pv_strip.pinned = None
-  pv_strip.near.clear()
-  near_asked.clear()
-  viewer_awake_env.val = -1
-  src_now.val = fn() { 0.0 }
   // a drive's files, a text read (keep.mbt, drive_reader.mbt)
-  dv_fetches.clear()
-  keepings.clear()
-  // the wide frame's keys (wide_keys.mbt)
-  focus_composer.val = false
-  switcher_query.val = ""
-  switcher_field.set("")
-  rename_for.val = ""
-  side_rename_field.set("")
-  rename_seen.val = false
   reset_by_hand.val = true
+}
+
+///|
+/// What the app's own doings ask of the pages (sfbase shell.mbt): home and what is over the pages put their sheets
+/// down too, an invitation's link shows its sheet, the screens live in their cards stop as the app goes behind.
+fn pages_shell() -> Shell {
+  {
+    home,
+    close_overlays,
+    open_invite,
+    behind: peeks_stop_all,
+    open: open_where,
+    detail: detail_where,
+    back: back_where,
+  }
+}
+
+///|
+/// What back does where the layout has it (the tiers' table, docs/architecture.md): the wide frame's (sfdesk's
+/// wide_back); laid out Small, a page of the stack popped, a place's top page other than the chats back to the chats
+/// in place (from no side), none at the chats' (the system's: the app left).
+fn back_where() -> (() -> Unit)? {
+  let c = @ui.current()
+  if @sfdesk.is_wide(c) {
+    return @sfdesk.wide_back()
+  }
+  if app.nav.depth() > 1 {
+    Some(fn() { app.nav.pop() |> ignore })
+  } else if app.nav.top() != Home {
+    Some(fn() { go_place(c, "chats", [], -1) })
+  } else {
+    None
+  }
+}
+
+///|
+/// Page `p` opened where the layout has it (the pane table, docs/architecture.md): on the wide frame the page pushed,
+/// a chat's detail asked as a page (its history, a service, a file) laid beside its chat by the frame (sfdesk's
+/// main_page); laid out Small on the phone's stack (a new chat risen from the foot).
+fn open_where(p : Page) -> Unit {
+  if !@sfdesk.is_wide(@ui.current()) {
+    stack_open(p)
+    return
+  }
+  match p {
+    Chat(r) => open_chat_beside(r)
+    NewChat => new_chat_beside()
+    // the settings: their list the sidebar's, the page of its first row beside it
+    Settings => @sfdesk.open_settings_at(@sfdesk.settings_landing)
+    _ => app.nav.push(p)
+  }
+}
+
+///|
+/// A new chat on the wide frame (新建对话, ⌘N): the page pane's, in place of what was there, the chats the place in view;
+/// one there already, nothing.
+fn new_chat_beside() -> Unit {
+  if app.nav.top() is NewChat {
+    return
+  }
+  while app.nav.depth() > 1 {
+    if !app.nav.pop() {
+      break
+    }
+  }
+  if app.nav.top() != Home {
+    app.nav.replace(Home)
+  }
+  app.nav.push(NewChat)
+}
+
+///|
+/// Chat `r` opened on the wide frame, from anywhere (a list's row, a search's, ⌘K, a link): the chat in the page pane
+/// already, nothing; else the chats the place in view (from settings or another place), and the chat in the page
+/// pane in place of whatever was there, never over it: the stack then holds the list and the chat alone (laid out
+/// Medium, back from it goes to the list).
+fn open_chat_beside(r : ChatRef) -> Unit {
+  // (the chat in the page pane: the stack's last chat, the chats the place in view; what is laid beside it, its
+  // detail asked as a page, stays)
+  if @sfdesk.lit_place() == "chats" && !app.nav.pages().contains(Archived) {
+    let pages = app.nav.pages()
+    for k = pages.length() - 1; k >= 0; k = k - 1 {
+      match pages[k] {
+        Chat(open) if open.station == r.station && open.session == r.session => return
+        Chat(_) => break
+        _ => ()
+      }
+    }
+  }
+  while app.nav.depth() > 1 {
+    if !app.nav.pop() {
+      break
+    }
+  }
+  if app.nav.top() != Home {
+    app.nav.replace(Home)
+  }
+  app.nav.push(Chat(r))
+}
+
+///|
+/// Chat `r`'s detail `tab` opened where the layout has it: on the wide frame its side panel's tab, toggled; laid out
+/// Small the page it is (an agent's history, what the pages' message rows ask).
+fn detail_where(src : Source, r : ChatRef, tab : String) -> Unit {
+  if @sfdesk.is_wide(@ui.current()) {
+    @sfdesk.side_toggle(src, r, tab)
+  } else {
+    app.nav.push(History(r, tab, None))
+  }
 }
 
 ///|
 /// Back to Home (the stack's root), the sheets and the menu closed.
 fn home() -> Unit {
   lower_sheet()
-  app.menu = false
   dui.sheet = None
   dui.leaving = None
-  while app.nav.depth() > 1 {
-    if !app.nav.pop() {
-      break
-    }
-  }
+  nav_home()
 }
 
 ///|
@@ -403,28 +278,45 @@ fn pages_left(src : Source) -> Unit {
 }
 
 ///|
+/// A page of the stack, all of what it is given.
+// kept across runs: a value (no field of it changes)
+let page_whole : @ui.Style = @ui.css("w=Full h=Full")
+
+///|
 /// The app over `src`: call each frame.
 pub fn view(c : @ui.Ctx, src : Source) -> Unit {
   fix_ctx.val = Some(c)
-  appearance(src)
-  faces(src)
+  shell.val = pages_shell()
+  // the Mac's menu bar, in the app's words (menu_bar.mbt); an item of the pages' chosen is read as its keys by the
+  // frame after the menu said it (@settings.ask_action), and asked no more once that frame is built
+  menu_bar(c, src)
+  c.after_build("menu-asked", fn() { @settings.action_asked_done() })
+  appearance(src, page_dark(src))
+  faces(src, @sfdesk.is_wide(c))
   // pictures put up by their address come as the core gives them (a GIF among them moves)
   @sf.picture_of.val = fn(url, frame) { (src.picture)(url, frame) }
+  // a tip's keys, as the core's prefs set them (sfdesk's keys.mbt)
+  @sf.set_shortcuts(@sfdesk.tip_keys(src))
+  // the library's words, the app's catalog's; what its viewers ask of the page (viewer_host.mbt)
+  @sf.set_words(fill)
+  @sf.set_viewer_host(viewer_host_of(c, src))
+  // a chat's file downloaded by the core, all here: kept where the system keeps downloads, whatever page shows
+  // (downloads.mbt)
+  downloads_frame(c, src)
   let t = @sf.begin(c)
   // under it all, the app's ground (what shows under the keyboard as it moves, the frame before the page follows it)
   // (the palette's colours are 0xRRGGBBAA; what the host clears to is said as 0xAARRGGBB, a window's background)
   c.set_clear((t.p.bg >> 8) & 0xFFFFFFL)
-  // a desktop's width: the web app's wide frame (wide.mbt); a phone's or a tablet's as wide (an opened foldable, a
-  // phone on its side): Android's, the pages the whole width with the latest chats at a corner (corners.mbt); below
-  // them the phone's pages
-  wide_on.val = is_wide(c)
-  corners_on.val = is_corners(c)
-  @settings.wide.val = wide_on.val
-  @settings.no_bar.val = corners_on.val
+  // laid out Medium or Large (@sf.layout: the screen's room and kind, never what it is pointed with): the web app's
+  // wide frame (sfdesk's frame.mbt: on a tape, Medium); Small, the phone's pages
+  let wide = @sfdesk.is_wide(c)
+  // the wide frame's lines set as the desktop app's pages set them (a browser's way)
+  @ui.set_web_lines(wide)
+  @settings.wide.val = wide
   @settings.status_top.val = status_top()
   @settings.nav_foot.val = nav_foot()
-  @settings.bar_room.val = if has_bar() { bar_room } else { 0.0 }
-  linger_tick(c, src)
+  @settings.bar_room.val = bar_room_now()
+  linger_tick(c, src, in_front=app_in_front())
   // the screens live in their cards (screen_links.mbt): which are on the screen, their frames acknowledged
   peeks_frame(c, src)
   // pages left: where they were left told once the frame's builds are over (a later build would see them left too)
@@ -433,7 +325,8 @@ pub fn view(c : @ui.Ctx, src : Source) -> Unit {
   }
   // everything in still.fail's theme, as this frame's palette has it (light or dark, a phone's or a desktop's): the
   // styles' roles (@sf styles.mbt, the pages' own) its ink, its sizes, its corners; the one place it is put
-  c.with_theme(@sf.ui_theme(), fn() { view_in(c, src, t) })
+  // beside what the system has at the window's sides (sides.mbt)
+  c.with_theme(@sf.ui_theme(), fn() { beside_sides(c, fn() { view_in(c, src, t) }) })
 }
 
 ///|
@@ -448,12 +341,15 @@ fn view_in(c : @ui.Ctx, src : Source, t : @sf.Theme) -> Unit {
     match (accounts.value, (src.fatal)()) {
       (_, Some(why)) => splash(c, Some(why), true)
       (Some(Array(list)), _) if list.length() == 0 => {
-        sign_in_page(c, src)
+        // the sign-in page inside the bars (SignIn.kt: windowInsetsPadding(systemBars)) (sfpages' gate.mbt)
+        within_bars(c, fn() { @sfpages.sign_in_page(c, src) })
         // an invitation's link opened signed out: its sheet over the page, saying to sign in first (links.mbt)
         if !link_later.is_empty() {
           c.tell("links", fn() { signed_out_links(src) })
         }
-        sheet_layer(c, fn(kind) { if kind == InviteLink { invite_sheet(c, src) } })
+        sheet_contents(fn(kind) { if kind == InviteLink { invite_sheet(c, src) } })
+        // the library's menus, sheets and dialogs (src/sf presenters.mbt), over the page
+        @sf.presented(c)
       }
       (Some(Array(_)), _) => signed_in(c, src)
       (_, _) =>
@@ -477,22 +373,7 @@ fn view_in(c : @ui.Ctx, src : Source, t : @sf.Theme) -> Unit {
 fn signed_in(c : @ui.Ctx, src : Source) -> Unit {
   let t = @sf.theme()
   let ws = (src.topic)("workspaces", {})
-  let prefs = (src.topic)("prefs", {})
-  let (all, answered, invited) = workspaces_of(ws.value)
-  let kept = if app.picked != "" {
-    app.picked
-  } else {
-    text(prefs.value, "workspace")
-  }
-  let current = match all.iter().find_first(fn(w) { w.id == kept }) {
-    Some(w) => Some(w)
-    None =>
-      if all.length() > 0 && (kept == "" || answered) {
-        Some(all[0])
-      } else {
-        None
-      }
-  }
+  let (current, all, answered, invited) = workspace_in_view(src)
   match current {
     Some(w) => {
       // (told once the frame's builds are over, as the last saw the app and the workspace)
@@ -502,6 +383,10 @@ fn signed_in(c : @ui.Ctx, src : Source) -> Unit {
       c.after_build("notices", fn() { notices_frame(src, w) })
       // the core and the workspace links are opened against, as the frame ends (links.mbt)
       c.after_build("links", fn() { links_frame(src, w) })
+      // the number on the app's icon (app_frame.mbt)
+      badge_frame(c, src, w)
+      // the desktop's dock (dock.mbt): every workspace's chats that want the person, on the screen's edge
+      dock_frame(c, src, all)
       // a link the system opened the app with, told once: what the core says of it shown by the frame after (Ctx::tell)
       if !link_later.is_empty() {
         c.tell("links-given", fn() { links_given(src) })
@@ -513,68 +398,96 @@ fn signed_in(c : @ui.Ctx, src : Source) -> Unit {
       share_in_frame(c)
       // files being kept on the device, said once kept (keep.mbt)
       keeps_frame(c)
-      if wide_on.val {
-        // the rail, the sidebar and the page beside it (wide.mbt); what opens over them after them
-        wide_frame(c, src, w, all, invited)
+      // the app's keys, in every tier (sfdesk's keys.mbt): what is the wide frame's alone does nothing laid out Small
+      @sfdesk.keys(c, src, w)
+      if @sfdesk.is_wide(c) {
+        // a page opened in the pane shows once the core has given what it shows, the one before staying till then
+        // (LOCAL_MS at most), as a page pushed on a phone slides in then
+        app.nav.shows_when(fn() { pane_ready(src, app.nav.top()) }, page_local_ms)
+        // the wide frame's keys (sfdesk's keys.mbt), then the rail, the sidebar and the page beside it (sfdesk's
+        // frame.mbt); what opens over them after them
+        @sfdesk.frame(c, src, w, all, invited)
         // a station's screen: over the whole window, as Android's ScreenActivity is over the app
         match app.nav.top() {
           Screen(at) =>
-            c.layer(fn() { screen_page(c, src, at.station, at.screen, at.title) }) |> ignore
+            c.layer(fn() { screen_page(c, src, at) }) |> ignore
+          // a drive's text read, a film played: over the whole window too, as the web's pages of a file opened
+          // (Drive.css.ts opened: fixed over everything)
+          DriveRead(at) => c.layer(fn() { reader_page(c, src, at) }) |> ignore
+          DrivePlay(at) => c.layer(fn() { play_page(c, src, at) }) |> ignore
           _ => ()
         }
-        wide_overlays(c, src, w)
+        // what opens over them (sfdesk's overlays.mbt)
+        @sfdesk.overlays(c, src, w)
+        // the player sideways (a phone on its side for a film): back turns it upright first
+        play_back(c)
         pick_back(c)
-        preview(c, src)
         viz_full_layer(c, src)
       } else {
         // a page opened slides in once the core has given what it shows (App.kt Pages: LOCAL_MS at most)
         app.nav.comes_when(fn() { page_ready(src, app.nav.top()) }, page_local_ms)
+        // pointed at with a mouse (a desktop's narrow window): the wheel and the trackpad scroll the lists and a drag
+        // picks words, as on the wide frame's page; a finger drags the lists and holds to pick (pick.mbt)
+        let finger = @ui.pointing() is Finger
+        c.mouse_drags_lists(finger)
         let page_took = c.took_back(fn() {
-          c.nav(app.nav, fn(page) { page_view(c, src, w, all, invited, page) }, bg=t.p.bg) |> ignore
+          let pages = fn() {
+            c.nav(
+              app.nav,
+              fn(page) {
+                // what moves in the page of its own (the composer) takes its place from the page's foot, as the wide
+                // frame's pane says (sfdesk's frame.mbt): the page sliding in or out, a keyboard making it shorter,
+                // move none of it (it goes with the page, at once)
+                let whole = c.box(style=page_whole, fn() { page_view(c, src, w, all, invited, page) })
+                @motion.scope(c, whole, bottom=true)
+              },
+              bg=t.p.bg,
+            )
+            |> ignore
+            // ⌘K's search over a page other than the lists (sfdesk's keys.mbt, sfpages' search.mbt), under the bars
+            @sfpages.search_over(c, src, w, status_top())
+          }
+          if finger {
+            pages()
+          } else {
+            c.selectable(color=@sf.alpha(t.p.blue, 0.28), pages)
+          }
         })
-        // a place's top page other than the chats, with nothing over it or in it taking back: back goes to the chats,
-        // in place
+        // at the stack's root, with nothing over it or in it taking back: the shell's back (back_where: a place's
+        // top page other than the chats back to the chats, in place); above it the stack's own (Ctx::nav: swiped from
+        // the edge, the back key), which pops as back_where does
         let root = app.nav.top()
-        if app.nav.depth() == 1 && root != Home && !page_took && !app.menu && !sheet_open() {
-          c.on_back(fn() { go_place(c, "chats", [], -1) })
+        if app.nav.depth() == 1 && !page_took && !app.menu && !sheet_open() && !@sf.presenting() {
+          match @sfbase.back_step() {
+            Some(f) => c.on_back(f)
+            None => ()
+          }
         }
         // the player sideways: back turns it upright first
         play_back(c)
         // words picked in a chat, a link's menu: back lets go of them first (pick.mbt)
         pick_back(c)
-        if corners_on.val {
-          // wide, no bottom bar: the latest chats and the new-chat button at the corners (Wide.kt WideCorners)
-          wide_corners(c, src, w)
-        } else {
-          // the bottom bar: on a place's top page with nothing over it; none while this device waits to be confirmed
-          // in the workspace's safe mode (its Home is the wait: lock_gate; App.kt PlaceBar)
-          let waiting = root == Home && @settings.lock_waiting(settings_core(src, w), w.id)
-          bottom_bar(
-            c,
-            src,
-            w,
-            place_of(root),
-            app.nav.depth() == 1 && place_of(root) is Some(_) && !search_bar_away() && !waiting,
-          )
-        }
+        // the bottom bar: on a place's top page with nothing over it; none while this device waits to be confirmed in
+        // the workspace's safe mode (its Home is the wait: lock_gate; App.kt PlaceBar)
+        let waiting = root == Home && @settings.lock_waiting(settings_core(src, w), w.id)
+        bottom_bar(
+          c,
+          src,
+          w,
+          place_of(root),
+          app.nav.depth() == 1 && place_of(root) is Some(_) && !@sfpages.search_bar_away() && !waiting,
+        )
         // a file open over the pages (preview.mbt), under the menu, the sheet and the toasts
         preview(c, src)
+        // the chat being made public (sfpages' publish.mbt)
+        @sfpages.publish_layer(c, src)
         // a visualization over the whole screen (viz.mbt)
         viz_full_layer(c, src)
-        filter_menu(c, src, w)
-        // a row's menu, held long (home_menu.mbt)
-        home_row_menu(c, src)
       }
-      sheet_layer(c, fn(kind) {
+      sheet_contents(fn(kind) {
         match kind {
-          Workspaces => workspaces_sheet(c, src, w, all)
-          PickStation(scope) => pick_station_sheet(c, src, scope)
-          RunPicker(station) => run_picker_sheet(c, src, station)
-          LoadOf(station, port) => load_sheet(c, src, station, port)
-          PageSizes(key) => page_sizes_sheet(c, key)
           ShareSheet => share_in_sheet(c, src, w)
           InviteLink => invite_sheet(c, src)
-          NewWorkspace => new_workspace_sheet(c, src)
           NoSheet => ()
         }
       })
@@ -584,11 +497,23 @@ fn signed_in(c : @ui.Ctx, src : Source) -> Unit {
       // (App.kt LockPrompts): put up when no other sheet is
       @settings.lock_prompts(settings_core(src, w), !sheet_open() && dui.sheet is None)
       @settings.overlay(c, settings_core(src, w))
+      // ⌘K's panel and ⌘/'s shortcuts, in every tier over the pages, under the presenters (sfdesk's switcher.mbt,
+      // shortcuts.mbt)
+      @sfdesk.switcher(c, src, w)
+      @sfdesk.keys_dialog(c, src)
+      // the library's menus, picks, panels, confirms and questions (src/sf presenters.mbt), over all of those
+      @sf.presented(c)
       toast(c)
     }
     None =>
       if ws.value is Some(_) && answered {
-        no_workspace(c, src, ws.value)
+        // the landing inside the bars (Workspaces.kt Landing: windowInsetsPadding(systemBars.union(keyboard)))
+        // (sfpages' cloud_app.mbt); an invitation's link pasted (用邀请链接加入): its sheet over the page
+        within_bars(c, fn() { @sfpages.no_workspace(c, src, ws.value, open_invite_link) })
+        sheet_contents(fn(kind) { if kind == InviteLink { invite_sheet(c, src) } })
+        // the library's presenters over it (the sheet among them: src/sf presenters.mbt), then the toasts
+        @sf.presented(c)
+        toast(c)
       } else {
         let failed = match ws.error {
           Some(e) => Some(text(Some(e), "message"))
@@ -661,7 +586,7 @@ fn page_view(
         Decisions => decisions_page(c, src, w)
         History(r, key, entry) => history_page(c, src, r, key, entry)
         Words(head, words) => words_page(c, src, head, words)
-        Screen(at) => screen_page(c, src, at.station, at.screen, at.title)
+        Screen(at) => screen_page(c, src, at)
       }
       // the page runs under the status bar; it keeps the paper behind its icons, moving with it (App.kt: the list, a
       // place's top page with the bar and a chat have frosted bars there instead; a book and a film their own)
@@ -676,6 +601,15 @@ fn page_view(
         })
         |> ignore
       }
+      // in a window with its buttons in the app's top row, their band drags it (as a title bar does)
+      if @ui.window_inset() && !@sfdesk.is_wide(c) {
+        c.layer(fn() {
+          let id = c.id("window-band")
+          c.window_drag(id)
+          c.box(style=@ui.style(w=Full, h=Fixed(window_band)), id~, fn() {  }) |> ignore
+        })
+        |> ignore
+      }
     },
   )
   |> ignore
@@ -686,58 +620,51 @@ fn page_view(
 /// coming in from the side the ball goes to (App.kt placeSwitch); the same place again changes nothing. `sets`, `cur`:
 /// the bar it is chosen in (none: from no side).
 fn go_place(c : @ui.Ctx, place : String, sets : Array[Array[String]], cur : Int) -> Unit {
-  let page = match place {
-    "chats" => Home
-    "files" => Files
-    "decisions" => Decisions
-    p => Place(p)
-  }
-  if app.nav.depth() == 1 && app.nav.top() == page {
-    return
-  }
-  lower_sheet()
-  app.menu = false
   let from = match place_of(app.nav.top()) {
     Some(p) => p
     None => ""
   }
-  // (timed from here: BarTiming)
-  bar_placed(from, place)
+  // the side it comes in from: the bar's order now
   let bar_now = if cur >= 0 && cur < sets.length() { sets[cur] } else { [] }
   let a = bar_now.search(from).unwrap_or(-1)
   let b = bar_now.search(place).unwrap_or(-1)
-  app.switch_way = if a < 0 || b < 0 || a == b {
+  let way = if a < 0 || b < 0 || a == b {
     0
   } else if b > a {
     1
   } else {
     -1
   }
-  // it comes in from here (Arrive)
+  // the shell's (sfbase's shell.mbt), then the bar's own: timed from here (BarTiming), the page coming in from its side
+  // (Arrive)
+  if !@sfbase.go_place(place, way~) {
+    return
+  }
+  bar_placed(from, place)
   let fade = place_switch(c)
   fade.snap(0.0)
-  fade.animate(1.0, @motion.tween(if app.switch_way == 0 { switch_fade_ms } else { switch_side_ms }, ease=Arrive))
-  while app.nav.depth() > 1 {
-    if !app.nav.pop() {
-      break
-    }
-  }
-  app.nav.replace(page)
+  fade.animate(1.0, @motion.tween(if way == 0 { switch_fade_ms } else { switch_side_ms }, ease=Arrive))
 }
 
 ///|
-/// A picture the settings asked the system's picker for (a station's or workspace's mark, a Slack app's icon), and who
-/// takes it: through the framework, so a Tester's picker is the test's (Tester::picks).
-let picture_pick : Ref[(@ui.Pick, (Bytes?) -> Unit)?] = Ref(None)
-
-///|
-/// A page of the settings (src/sfapp/settings), over the workspace in view.
+/// A page of the settings, over the workspace in view, in the stack's frame: back to the page under it, under the status
+/// bar, over the navigation bar. One not merged yet: the phone's copy (src/sfapp/settings).
 fn setting_page(c : @ui.Ctx, src : Source, w : Workspace, r : @settings.Route) -> Unit {
-  let core = settings_core(src, w)
-  // in the wide frame, a page under another of them shows back (the sidebar is the way to the others)
   let pages = app.nav.pages()
-  @settings.wide_deep.val = pages.length() >= 2 && pages[pages.length() - 2] is Setting(_)
-  @settings.page(c, core, @settings.here_of(core, w.id, w.name), r)
+  let frame : PageFrame = {
+    back: if pages.length() >= 2 {
+      Some(@sfdesk.back_label(pages[pages.length() - 2]))
+    } else {
+      None
+    },
+    top: status_top(),
+    foot: nav_foot(),
+    named: false,
+  }
+  if !@sfdesk.setting_route(c, src, w, r, frame) {
+    let core = settings_core(src, w)
+    @settings.page(c, core, @settings.here_of(core, w.id, w.name), r)
+  }
 }
 
 ///|
@@ -750,11 +677,22 @@ fn lock_gate(c : @ui.Ctx, src : Source, w : Workspace, bar? : Bool) -> Bool {
   if !@settings.lock_waiting(core, w.id) {
     return true
   }
+  // (sfpages' page, in the box the frame gives it: over the navigation bar)
+  let page = fn() {
+    c.box(style=gate_fill, fn() {
+      c.box(style=@ui.style(w=Full, h=@sf.grow), fn() {
+        @sfpages.lock_wait_page(c, core, @settings.here_of(core, w.id, w.name))
+      })
+      |> ignore
+      c.box(style=@ui.style(w=Full, h=Fixed(nav_foot())), fn() {  }) |> ignore
+    })
+    |> ignore
+  }
   match bar {
-    None => @settings.lock_wait_page(c, core, @settings.here_of(core, w.id, w.name))
+    None => page()
     Some(invited) =>
       c.box(style=gate_fill, fn() {
-        c.layer(fn() { @settings.lock_wait_page(c, core, @settings.here_of(core, w.id, w.name)) }) |> ignore
+        c.layer(page) |> ignore
         c.layer(fn() { top_bar(c, src, w, None, "all", invited) }) |> ignore
       })
       |> ignore
@@ -765,128 +703,16 @@ fn lock_gate(c : @ui.Ctx, src : Source, w : Workspace, bar? : Bool) -> Bool {
 ///|
 /// The waiting page and Home's top bar over it, the screen's whole.
 // kept across runs: a value (no field of it changes)
-let gate_fill : @ui.Style = @ui.style(w=Full, h=Full)
+let gate_fill : @ui.Style = @ui.css("w=Full h=Full")
 
 ///|
-/// What the settings' pages read and call, and how they move: the core as the app has it (Source), the app's stack.
+/// What the settings' pages read and call, and how they move, as the phone has them: the core as the app has it, its
+/// stack, its own way home (its sheets put down) and a station's login as its card.
 fn settings_core(src : Source, w : Workspace) -> @settings.Core {
-  // a picture asked of the system's picker for a mark: its answer given (the host asks for a frame as it answers)
-  match picture_pick.val {
-    Some((p, done)) =>
-      match p.files() {
-        Some(files) => {
-          picture_pick.val = None
-          done(files.get(0).map(fn(f) { f.bytes }))
-        }
-        None => ()
-      }
-    None => ()
-  }
-  {
-    topic: fn(name, params) {
-      let t = (src.topic)(name, params)
-      { value: t.value, error: t.error, version: t.version }
-    },
-    call: fn(name, params, done) { (src.call)(name, params, done) },
-    push: fn(r) {
-      match r {
-        @settings.Route::Home => app.nav.push(Settings)
-        _ => app.nav.push(Setting(r))
-      }
-    },
-    pop: fn() { app.nav.pop() |> ignore },
-    home: fn() { home() },
-    open_chat: fn(station, session, title) {
-      // its station's name, as the chats' rows have it
-      let stations = (src.topic)("stations", { "scope": Json::string(w.id) })
-      let mut name = ""
-      match stations.value {
-        Some(Array(a)) =>
-          for x in a {
-            if text(Some(x), "station") == station {
-              name = text(Some(x), "name")
-            }
-          }
-        _ => ()
-      }
-      app.nav.push(Chat({ station, session, title, station_name: name }))
-    },
-    open_drive: fn(station) { app.nav.push(Drive({ station, root: None, path: "" })) },
-    sign_in: fn() { (src.sign_in)() },
-    say: fn(words) {
-      app.toast = words
-      app.toast_n += 1
-    },
-    picture: fn(url, frame) { (src.picture)(url, frame) },
-    now: src.now,
-    notify_ask: fn() { ask_from_switch() },
-    push_sync: fn(wanted) { if !src.read_only { push_sync(src, wanted) } },
-    under: fn() {
-      let pages = app.nav.pages()
-      if pages.length() < 2 {
-        return ""
-      }
-      match pages[pages.length() - 2] {
-        Home => "chats"
-        Settings | Setting(@settings.Route::Home) => "settings"
-        _ => ""
-      }
-    },
-    version_words: fn() { update_row_words() },
-    version_tap: fn() { update_row_tapped(src) },
-    // the system's browser (LocalUriHandler.openUri); nothing took it, said so (android-misc.link.cantOpen)
-    open_link: fn(url) {
-      if !@ui.open_url(url) {
-        app.toast = tr("android-misc.link.cantOpen")
-        app.toast_n += 1
-      }
-    },
-    pick_picture: fn(done) {
-      match @ui.pick(@hostapi.PickKind::Photos) {
-        Some(p) => {
-          picture_pick.val = Some((p, done))
-          true
-        }
-        None => false
-      }
-    },
-    bars: fn() { bars_in(src, w.id) },
-    set_bars: fn(sets, cur) { set_bars(src, w.id, sets, cur) },
-    place_icon: fn(c, place, color) {
-      if place == "stations" {
-        // one station on, as no station is meant (BarSettings.kt Still)
-        let still : @sf.GlyphCounts = { online: 1, dim: 0, failing: 0, working: 0, asleep: false, connecting: 0 }
-        @sf.station_glyph(c, still, 28.0, color, @sf.theme().p.red) |> ignore
-      } else {
-        @sf.icon(c, place_icon(place), size=28.0, color~) |> ignore
-      }
-    },
-    reporting: fn() { reporting_host.val.map(fn(h) { (h.get)() }) },
-    set_reporting: fn(on) {
-      match reporting_host.val {
-        Some(h) => (h.set)(on)
-        None => ()
-      }
-    },
-    login_card: fn(c, station, id, marked) { login_card(c, src, station, id, marked~, fill=true) },
-    face_preview: fn(id, index, variable) { face_preview(src, id, index, variable) },
-    face_here: face_here,
-    face_failed: face_failed,
-    own_code_face: own_code_preview,
-  }
+  settings_core_of(src, w, home~, login_card=fn(c, station, id, marked) {
+    @sfpages.login_card(c, settings_core(src, w), station, id, marked~)
+  })
 }
-
-///|
-/// Whether usage statistics and error reports go out from this device, as the host keeps it (src/stillfail
-/// reports.mbt: Android's Crashes.reporting, the app's prefs); None where nothing is sent anyway: no settings row then.
-pub(all) struct ReportingHost {
-  get : () -> Bool
-  set : (Bool) -> Unit
-}
-
-///|
-/// The host's, set once as the app starts (src/stillfail main); None under a Tester (reset), unless its test sets one.
-pub let reporting_host : Ref[ReportingHost?] = Ref(None)
 
 ///|
 /// How long a place switched to on the bar takes to come in: fading in from no side, from the side the ball goes to.
@@ -902,74 +728,78 @@ fn place_switch(c : @ui.Ctx) -> @motion.Anim {
 }
 
 ///|
-/// Light or dark, as this device is set (the prefs' `appearance`, Appearance.kt), or as the system is (@hostapi.system_dark)
-/// when it follows it; the host told when it changes (its bars follow).
-fn appearance(src : Source) -> Unit {
-  let prefs = (src.topic)("prefs", {}).value
-  // the words' language too, the core's (its `lang`: as chosen, else the device's), I18n.kt's follow
-  @sf.set_language(if prefs is Some(_) { Some(text(prefs, "lang")) } else { None })
-  let dark = @settings.dark(prefs, @ui.system_dark())
-  @sf.set_dark(Some(dark))
-  // (the host told once the prefs are read: not the system's first, then the one chosen)
-  if prefs is Some(_) && told_dark.val != Some(dark) {
-    told_dark.val = Some(dark)
-    // (said on the log for scripted runs: e2e/flows checks the theme was taken)
-    @hostapi.log(if dark { "theme: dark" } else { "theme: light" })
-  }
-  // the system bars follow the page under them: the player's and a picture's or a video's in the viewer are dark
-  // whatever the theme, a reader's as dark as its paper
-  let bars = match page_dark(src) {
-    Some(d) => d
-    None => dark
-  }
-  // (told once the frame's builds are over, as the last saw the page)
-  if prefs is Some(_) && told_bars.val != Some(bars) {
-    @ui.current().after_build("bars", fn() {
-      if told_bars.val != Some(bars) {
-        told_bars.val = Some(bars)
-        @hostapi.set_dark(bars)
-      }
-    })
-  }
-}
-
-///|
-let told_bars : Ref[Bool?] = Ref(None)
-
-///|
-let told_dark : Ref[Bool?] = Ref(None)
-
-///|
 /// What a write said (Sheet.kt ToastHost), mbui's toast (@kit.toaster) in still.fail's look: over the foot, clear of
 /// the bar and the action standing over it (bar_room above it), in ink, 2.6 s (paused while the pointer is on it),
 /// coming in and going out; one said again is a new one.
 fn toast(c : @ui.Ctx) -> Unit {
   let t = @sf.theme()
+  let action = if app.toast != "" { app.toast_action } else { "" }
+  let duration = if action != "" { toast_action_ms } else { toast_ms }
+  // its action's button the toaster's (the focus on it holds the toast)
+  let action_id = c.id("toast/t\{app.toast_n}/action")
+  // pressed: done, and the toast goes
+  let acted = fn() {
+    let run = app.toast_run
+    app.toast = ""
+    app.toast_action = ""
+    app.toast_run = fn() {  }
+    run()
+  }
+  // the wide frame's the web's (the library's: @sf.toast_look, 24 over the window's foot, what an unconfirmed write
+  // did said as not known)
+  if @sfdesk.is_wide(c) {
+    let said = if app.toast != "" { [@kit.toast("t\{app.toast_n}", @sf.toast_said(app.toast))] } else { [] }
+    let mut pressed = false
+    let r = @kit.toaster(c, "toast", said, duration~, bottom=@sf.toast_bottom, look=fn(c, s, _action, _close) {
+      let live = s.toast.id == "t\{app.toast_n}"
+      if @sf.toast_look(c, s, action=if live { action } else { "" }, action_id~) {
+        pressed = true
+      }
+    })
+    if pressed {
+      acted()
+    } else if app.toast != "" && r.open.is_empty() {
+      app.toast = ""
+    }
+    return
+  }
   let said = if app.toast != "" { [@kit.toast("t\{app.toast_n}", app.toast)] } else { [] }
   // (above the navigation bar the view reaches under: Sheet.kt's navigationBars padding)
   let foot = nav_foot()
-  let r = @kit.toaster(c, "toast", said, duration=toast_ms, bottom=bar_room + foot, look=fn(c, s, _action, _close) {
+  let mut pressed = false
+  let r = @kit.toaster(c, "toast", said, duration~, bottom=bar_room + foot, look=fn(c, s, _action, _close) {
     let k = if s.t > 1.0 { 1.0 } else if s.t < 0.0 { 0.0 } else { s.t }
+    let live = s.toast.id == "t\{app.toast_n}"
     c.box(padx=16.0, pady=10.0, bg=t.p.text, radius=18.0, opacity=k, tx=s.dx, fn() {
-      c.text(s.toast.title, size=14.0, color=t.p.bg, line=20.0) |> ignore
+      let words = fn() { c.text(s.toast.title, size=t.t.ui, color=t.p.bg, line=20.0) |> ignore }
+      if live && action != "" {
+        c.box(style=@sf.toast_row, fn() {
+          words()
+          if @sf.toast_button(c, action_id, action) {
+            pressed = true
+          }
+        })
+        |> ignore
+      } else {
+        words()
+      }
     })
     |> ignore
   })
-  if app.toast != "" && r.open.is_empty() {
+  if pressed {
+    acted()
+  } else if app.toast != "" && r.open.is_empty() {
     app.toast = ""
   }
 }
 
 ///|
-/// How long a toast stays (paused while the pointer is on it).
-pub let toast_ms : Double = 2600.0
+/// How long a toast stays (paused while the pointer is on it): the library's (toast.tsx).
+pub let toast_ms : Double = @sf.toast_ms
 
 ///|
-fn say(c : @ui.Ctx, words : String) -> Unit {
-  ignore(c)
-  app.toast = words
-  app.toast_n += 1
-}
+/// How long a toast offering something to do stays (an archive's 撤销): the library's.
+pub let toast_action_ms : Double = @sf.toast_action_ms
 
 ///|
 /// The app starting, or waiting for what every page needs (Parts.kt Splash): still.fail's mark floating; what it
@@ -1011,7 +841,7 @@ fn splash(c : @ui.Ctx, label : String?, now : Bool) -> Unit {
         Some(s) => {
           let shown = now || splash_waited.val
           c.box(opacity=if shown { 1.0 } else { 0.0 }, fn() {
-            c.text(s, size=13.0, color=t.p.muted, center=true, line=18.0)
+            c.text(s, size=t.t.meta, color=t.p.muted, center=true, line=18.0)
             |> ignore
           })
           |> ignore
@@ -1036,102 +866,6 @@ let splash_float_ms : Double = 1800.0
 let splash_waited : Ref[Bool] = { val: false }
 
 ///|
-/// Signed out (SignIn.kt SignInScreen): the illustration, what still.fail is for, and 登录或注册.
-fn sign_in_page(c : @ui.Ctx, src : Source) -> Unit {
-  // inside the bars (SignIn.kt: windowInsetsPadding(systemBars))
-  within_bars(c, fn() { sign_in_body(c, src) })
-}
-
-///|
-fn sign_in_body(c : @ui.Ctx, src : Source) -> Unit {
-  let t = @sf.theme()
-  let busy = (src.signing_in)()
-  c.box(
-    w=Fill(1.0),
-    h=Fill(1.0),
-    padx=30.0,
-    pady=40.0,
-    gap=12.0,
-    align=ACenter,
-    justify=JCenter,
-    fn() {
-      @sf.drawable(
-        c,
-        if t.dark {
-          "illus_sign_in_dark"
-        } else {
-          "illus_sign_in"
-        },
-        dmin(300.0, c.width - 60.0),
-      )
-      |> ignore
-      c.box(pt=10.0, fn() {
-        c.text(
-          tr("android-settings.signIn.title"),
-          size=28.0,
-          weight=700,
-          color=t.p.text,
-          wrap=false,
-        )
-        |> ignore
-      })
-      |> ignore
-      c.text(
-        tr("android-settings.signIn.note"),
-        size=15.0,
-        color=t.p.muted,
-        center=true,
-        w=Fill(1.0),
-        line=21.0,
-      )
-      |> ignore
-      c.box(h=Px(6.0), fn() {  }) |> ignore
-      let id = c.id("sign-in")
-      if c.clicked(id) && !busy {
-        (src.sign_in)()
-      }
-      c.box(
-        dir=Row,
-        w=Fill(1.0),
-        h=Px(50.0),
-        radius=25.0,
-        bg=t.p.text,
-        align=ACenter,
-        justify=JCenter,
-        id~,
-        fn() {
-          c.text(
-            if busy {
-              tr("common.opening")
-            } else {
-              tr("android-settings.signIn.google")
-            },
-            size=16.0,
-            weight=600,
-            color=t.p.bg,
-            wrap=false,
-          )
-          |> ignore
-          // SignIn.kt: clip(CircleShape).clickable
-          if !busy {
-            @motion.ripple(c, id, 25.0)
-          }
-        },
-      )
-      |> ignore
-      c.text(
-        tr("android-settings.signIn.many"),
-        size=12.0,
-        color=t.p.muted,
-        wrap=false,
-      )
-      |> ignore
-    },
-  )
-  |> ignore
-}
-
-///|
 fn dmin(a : Double, b : Double) -> Double {
   if a < b {
     a
@@ -1150,127 +884,9 @@ fn dmax(a : Double, b : Double) -> Double {
 }
 
 ///|
-/// What this app last told the core of its attention (`client.focus`): shown, in front, the workspace in view; and
-/// where to tell it again when the system says the app left the front between frames.
-priv struct Attention {
-  mut told : Bool
-  mut visible : Bool
-  mut focused : Bool
-  mut workspace : String
-  mut src : Source?
-}
-
-///|
-let attention : Attention = {
-  told: false,
-  visible: false,
-  focused: false,
-  workspace: "",
-  src: None,
-}
-
-///|
-/// Tells the core where this app's attention is, as the Android app's activity and App.kt do: shown and in front or
-/// not (`client.focus {visible, focused}`, as the system says: @ui.app_visible, app_focused) and the workspace in view
-/// (`workspace`); a chat's own place (`chat`, `left`) is chat.mbt's. Only a change is told. What is read follows from
-/// it: the core marks a chat read only while a page in view (visible) shows its end, and shows no notice of a chat
-/// one in front shows.
-fn attend(src : Source, workspace : String) -> Unit {
-  if attention.src is None {
-    // the system's say between frames (Android's activity pausing: no frame comes after it)
-    @ui.on_app_change(fn(_, _) {
-      match attention.src {
-        Some(s) => {
-          attend(s, attention.workspace)
-          // the screens live in their cards stopped as the app goes behind (ScreenLinks.kt Peek: under STARTED)
-          if !@ui.app_visible() {
-            peeks_stop_all(s)
-          }
-        }
-        None => ()
-      }
-      notices_app_change(@ui.app_visible())
-    })
-  }
-  attention.src = Some(src)
-  let visible = @ui.app_visible()
-  let focused = @ui.app_focused()
-  if attention.told &&
-    visible == attention.visible &&
-    focused == attention.focused &&
-    workspace == attention.workspace {
-    return
-  }
-  attention.told = true
-  attention.visible = visible
-  attention.focused = focused
-  attention.workspace = workspace
-  let params : Map[String, Json] = {
-    "visible": Json::boolean(visible),
-    "focused": Json::boolean(focused),
-    "workspace": Json::string(workspace),
-  }
-  (src.call)("client.focus", Json::object(params), fn(_) {  })
-}
-
-///|
-/// What the system said between frames (@hostapi.system_channel; its handler set as the package starts, before the first
-/// frame takes what came with the app's start), to the core: back on screen after `away` ms off it, the
-/// core gives up requests that went out before and reconnects links gone quiet (MainActivity.kt wake: `client.wake
-/// {away}`, client/core-ts src/wake.ts), and a newer build is asked for again (onStart's checkUpdates); the default
-/// network changed, every link it had is taken for dead (NetworkWatch: `client.wake {away: 0, network: true}`).
-fn system_said(json : String) -> Unit {
-  let said = @hostapi.system_said(json)
-  for s in said {
-    match s {
-      // a link the system opened the app with (links.mbt): opened once the app can (signed in, its workspace known)
-      Link(url) => link_later.push(url)
-      // shown over another app, or in its own window again (share.mbt)
-      Over(over) => share_over.val = over
-      // (how far the bars reach in over the view: mbui keeps it, @ui.system_bars, bars.mbt)
-      _ => ()
-    }
-  }
-  let src = match attention.src {
-    Some(s) => s
-    None => return
-  }
-  if src.read_only {
-    return
-  }
-  for s in said {
-    match s {
-      Shown(away~) => {
-        (src.call)("client.wake", { "away": Json::number(away) }, fn(_) {  })
-        update_check(src, false)
-      }
-      // a package handed to the system's installer could not be installed (FilePreview.kt install's toast)
-      InstallAllow(..) => toast_later(pv_fill("android-chat.file.allowInstall", [("app", "still.fail")]))
-      InstallFailed(error~, ..) => toast_later(pv_fill("android-chat.file.installFailed", [("error", error)]))
-      Network =>
-        (src.call)(
-          "client.wake",
-          { "away": Json::number(0.0), "network": Json::boolean(true) },
-          fn(_) {  },
-        )
-      _ => ()
-    }
-  }
-}
-
-///|
-/// The system's say has its handler before the first frame (what is posted as the app starts, a link it was opened
-/// with, would be left with none).
-fn init {
-  @ui.on_message(@hostapi.system_channel, fn(json, _) { system_said(json) })
-  // what the phone has for 共享调试, as its host says by itself (the app's Android: AdbShare.java)
-  @ui.on_message("native:adb.phone", fn(json, _) { @settings.adb_phone_said(json) })
-}
-
-///|
-/// How long a page opening waits for what the core has on the device (App.kt LOCAL_MS, web motion.ts): never for a
-/// station.
-let page_local_ms : Double = 100.0
+/// How long a page opening waits for what the core has on the device (App.kt LOCAL_MS, the library's: motion.ts): never
+/// for a station.
+let page_local_ms : Double = @sf.local_ms
 
 ///|
 /// Whether the core has answered (a value or why not) for what page `p` shows as it opens (App.kt opening): a chat,
@@ -1281,5 +897,41 @@ fn page_ready(src : Source, p : Page) -> Bool {
     Chat(r) => answered((src.topic)("chat", chat_params(r)))
     History(r, key, _) => answered((src.topic)("chat", chat_params(r))) && answered((src.topic)("history", history_params(r, key)))
     _ => true
+  }
+}
+
+///|
+/// Whether the core has answered for what the wide frame's pane shows of page `p`: a chat; an agent's history, a
+/// service and a file asked as pages are their chat's with them beside it (sfdesk's frame.mbt main_page), the chat
+/// shown already, what is beside it waited for in its tab; any other page is not waited for.
+fn pane_ready(src : Source, p : Page) -> Bool {
+  match p {
+    Chat(r) => {
+      let t = (src.topic)("chat", chat_params(r))
+      t.value is Some(_) || t.error is Some(_)
+    }
+    _ => true
+  }
+}
+
+///|
+fn wide_reset() -> Unit {
+  @sfdesk.side_slide_reset()
+  @sfpages.find_forget()
+  find_around.val = -1.0
+}
+
+///|
+/// The system's side of still.fail (before @ui.run). The desktop's window: 1280 by 820 at first, as still.fail's
+/// desktop app opens (apps/desktop main.ts), its size not kept (the desktop app keeps none either); at least 360 by
+/// 560, a phone's page below the breakpoint; on macOS its title bar the app's (its buttons in its top row, as the
+/// desktop app's hiddenInset: the rail's and the sidebar's tops, a phone's page under their band), on Windows the
+/// system's. On a phone the app is
+/// Android's whatever the phone: on iOS too its lists fling and give at their edges as Android's,
+/// its fields take a tap, draw their caret and handles and pick words as Android's (@ui.feel_as).
+pub fn host_setup() -> Unit {
+  @hostapi.window_setup(360.0, 560.0, 1280.0, 820.0, inset=true)
+  if @ui.platform() == 1 {
+    @ui.feel_as(2)
   }
 }

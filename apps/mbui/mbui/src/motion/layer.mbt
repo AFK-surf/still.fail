@@ -84,11 +84,11 @@ pub fn Trans::at(self : Trans, pf : Double, pm : Double) -> @ui.Look {
 priv struct Moving {
   node : Int
   mut key : Int
-  /// layout animation: by `spec`; `gate` 1 only while its list's rows changed lately; `drive` ≥ 0: the move goes by
-  /// that progress the app gives (0 → 1)
+  /// layout animation: by `spec`, when its cause changed (`by`: what it moves for, as said this build; "" none) or, in
+  /// a list told its rows, as they change; `drive` ≥ 0: the move goes by that progress the app gives (0 → 1)
   mut flip : Bool
   mut spec : Spec
-  mut gate : Int
+  mut by : String
   mut drive : Double
   /// in a list, by where it shows in the list's view rather than in its content (what the list's scrolling moves too)
   mut screen : Bool
@@ -99,12 +99,20 @@ priv struct Moving {
   mut exit : Trans?
   /// `enter` asked by the app (entering): it comes in the first frame it is built, whatever its list says
   mut fresh : Bool
-  /// a height to keep (reveal's content, measure)
-  mut measure : Bool
+  /// what its size and place in the window are kept as (reveal's content, measure; 0: nothing), apart from `key`, so
+  /// that a node measured can move by its layout too, in its list or scope
+  mut kept : Int
   /// a frame its keyed nodes' places are taken in (scope): 1 from its top left, 2 from its bottom left
   mut scope : Int
   /// flown from (x, y, scale), how far across, down and grown
   mut fly : (Double, Double, Double, Double, Double, Double)?
+  /// its own ground changes shape for its cause (reshape), by `spec`
+  mut reshape : Bool
+  /// reshape: it goes from where it was with what it holds (laid out for another place: the web's morph), what is new
+  /// in it carried on its ground
+  mut carry : Bool
+  /// how it is drawn, worked out once this frame is laid out (placed)
+  mut placed : (() -> @ui.Look)?
 }
 
 ///|
@@ -121,10 +129,12 @@ priv struct Rec {
   mut vy : Double
   ox : Anim
   oy : Anim
-  /// what the app drives a move by: where the move started from
+  /// what the app drives a move by: its offset as if the progress were 0 (it is drawn off its place by that times what
+  /// is left of the progress), and the progress it was last drawn at
   mut fx : Double
   mut fy : Double
   mut driven : Bool
+  mut drove : Double
   mut enter : Trans?
   ef : Anim
   em : Anim
@@ -143,8 +153,58 @@ priv struct Rec {
   mut was_seen : Int
   mut was_ox : Double
   mut was_oy : Double
-  /// a build of this frame moved it (its offsets set from was_ox, was_oy)
+  /// what it moved for (layout's `by`) as last laid out, and as the frame before laid it out
+  mut by : String
+  mut was_by : String
+  /// and its drive then, if driven
+  mut was_driven : Bool
+  mut was_fx : Double
+  mut was_fy : Double
+  /// a build of this frame moved it (its offsets set from was_ox, was_oy, or the drive then)
   mut moved_now : Bool
+  /// reshape: the shape its ground set out from (x, y in its list or scope, w, h, its corners: top left, then round
+  /// it), how far it has gone there (0 → 1), its corners as last laid out; and the same as the frame before left them
+  mut gx : Double
+  mut gy : Double
+  mut gw : Double
+  mut gh : Double
+  mut gr : (Double, Double, Double, Double)
+  gp : Anim
+  mut rad : (Double, Double, Double, Double)
+  mut was_w : Double
+  mut was_h : Double
+  mut was_rad : (Double, Double, Double, Double)
+  mut was_gx : Double
+  mut was_gy : Double
+  mut was_gw : Double
+  mut was_gh : Double
+  mut was_gr : (Double, Double, Double, Double)
+  mut was_gp : Double
+  /// a build of this frame set its ground off anew
+  mut g_now : Bool
+  /// whether its ground set off as last with what it holds (reshape's `carry`)
+  mut g_carry : Bool
+  /// a node new in a shape gone with what it holds, carried on its ground (reshape's `carry`): that shape's key (0:
+  /// none), and the edges of it it keeps to (1: its right, rather than its left; 2: its foot, rather than its top)
+  mut on : Int
+  mut on_edges : Int
+}
+
+///|
+/// Corners `r` (top left, then round it) as a box `w` by `h` draws them: each no more than half its shorter side.
+fn corners_in(r : (Double, Double, Double, Double), w : Double, h : Double) -> (Double, Double, Double, Double) {
+  let half = dmin(w, h) / 2.0
+  (dmin(r.0, half), dmin(r.1, half), dmin(r.2, half), dmin(r.3, half))
+}
+
+///|
+/// Corners `a` gone `p` of the way to `b`, each its own.
+fn corners_mix(
+  a : (Double, Double, Double, Double),
+  b : (Double, Double, Double, Double),
+  p : Double,
+) -> (Double, Double, Double, Double) {
+  (a.0 + (b.0 - a.0) * p, a.1 + (b.1 - a.1) * p, a.2 + (b.2 - a.2) * p, a.3 + (b.3 - a.3) * p)
 }
 
 ///|
@@ -162,6 +222,7 @@ fn Rec::new() -> Rec {
     fx: 0.0,
     fy: 0.0,
     driven: false,
+    drove: 0.0,
     enter: None,
     ef: Anim::new(1.0),
     em: Anim::new(1.0),
@@ -176,18 +237,43 @@ fn Rec::new() -> Rec {
     was_seen: -10,
     was_ox: 0.0,
     was_oy: 0.0,
+    by: "",
+    was_by: "",
+    was_driven: false,
+    was_fx: 0.0,
+    was_fy: 0.0,
     moved_now: false,
+    gx: 0.0,
+    gy: 0.0,
+    gw: 0.0,
+    gh: 0.0,
+    gr: (0.0, 0.0, 0.0, 0.0),
+    gp: Anim::new(1.0),
+    rad: (0.0, 0.0, 0.0, 0.0),
+    was_w: 0.0,
+    was_h: 0.0,
+    was_rad: (0.0, 0.0, 0.0, 0.0),
+    was_gx: 0.0,
+    was_gy: 0.0,
+    was_gw: 0.0,
+    was_gh: 0.0,
+    was_gr: (0.0, 0.0, 0.0, 0.0),
+    was_gp: 1.0,
+    g_now: false,
+    g_carry: false,
+    on: 0,
+    on_edges: 0,
   }
 }
 
 ///|
-/// A list's rows by key, as last told (list_keys): when they last changed, which came in, which went ahead of others,
-/// until when the rest wait to close over what left.
+/// A list's rows by key, as last told (list_keys): the frame they last changed in, which came in, which went ahead of
+/// others, until when the rest wait to close over what left.
 priv struct ListMo {
   mut keys : Array[Int]
   /// the same, as given (what a row's copy is named by as it leaves)
   mut names : Array[String]
-  mut changed_at : Double
+  mut changed_frame : Int
   mut close_until : Double
   arrived : Map[Int, Double]
   lifted : Map[Int, Double]
@@ -262,6 +348,7 @@ fn reset() -> Unit {
   mo.lists.clear()
   mo.ghosts.clear()
   anims.clear()
+  ripples.clear()
   reset_fx()
   motion_log.val = -1
 }
@@ -328,16 +415,19 @@ fn moving_of(c : @ui.Ctx, i : Int) -> Moving {
     key: 0,
     flip: false,
     spec: row_spring,
-    gate: 0,
+    by: "",
     drive: -1.0,
     screen: false,
     name: "",
     enter: None,
     exit: None,
     fresh: false,
-    measure: false,
+    kept: 0,
     scope: 0,
     fly: None,
+    reshape: false,
+    carry: false,
+    placed: None,
   }
   mo.stamp[i] = build
   mo.at[i] = mo.entries.length()
@@ -357,18 +447,20 @@ fn entry_of(c : @ui.Ctx, i : Int) -> Moving? {
 }
 
 ///|
-/// Node `i` keyed `key` moves to its place when its place changes (Motion's `layout`, FLIP): drawn where it was, it
-/// goes by `spec` to where it is now, carrying on from wherever it had got to. In a list told its rows (list_keys),
-/// only as they change (`listed`: the list's own layout, a width or an item over the rows growing, is taken at once),
-/// and `enter` is how a row new to it comes in, `exit` how one gone leaves (a copy of it where it was). `drive` (0 →
-/// 1, from the frame it moved): the move goes by that progress instead of `spec`. `screen`: in a list, by where it
-/// shows in the list's view.
+/// Node `i` keyed `key` moves to its new place for its cause (Motion's `layout`, FLIP, set off by what moved it):
+/// `by` is what it moves for (its words, its page, the row over it: any value naming that state); in the frame `by`
+/// changes, it is drawn where it was and goes by `spec` to where it is now, carrying on from wherever it had got to. A
+/// row of a list told its rows (list_keys) that names no cause of its own moves for their change. Moved by nothing it
+/// moves for (a window resized, a keyboard, a pane made narrower), it is put in its new place at once, a move of its
+/// own going on as it was: no difference found between frames moves anything (docs/motion.md of the app). `enter` is how a row new to its list comes in, `exit` how one gone leaves (a copy of it where it was).
+/// `drive` (0 → 1, from the frame it moved): the move goes by that progress instead of `spec`. `screen`: in a list, by
+/// where it shows in the list's view.
 pub fn layout(
   c : @ui.Ctx,
   i : Int,
   key : String,
   spec? : Spec = row_spring,
-  listed? : Bool = true,
+  by? : String = "",
   enter? : Trans,
   exit? : Trans,
   drive? : Double = -1.0,
@@ -380,7 +472,9 @@ pub fn layout(
   e.flip = true
   e.screen = screen
   e.spec = spec
-  e.gate = if listed { 1 } else { 0 }
+  if by != "" {
+    e.by = by
+  }
   if enter is Some(_) {
     e.enter = enter
   }
@@ -392,13 +486,17 @@ pub fn layout(
 
 ///|
 /// Node `i` keyed `key`, kept from frame to frame (what it came in by goes on; in a list told its rows, one gone
-/// leaves by `exit`, a copy of it).
-pub fn keyed(c : @ui.Ctx, i : Int, key : String, exit? : Trans) -> Unit {
+/// leaves by `exit`, a copy of it). `by`: what it would move for, kept each frame, so a layout motion it is given in a
+/// later frame knows whether that changed (layout's `by`).
+pub fn keyed(c : @ui.Ctx, i : Int, key : String, exit? : Trans, by? : String = "") -> Unit {
   let e = moving_of(c, i)
   e.name = key
   e.key = motion_key(key)
   if exit is Some(_) {
     e.exit = exit
+  }
+  if by != "" {
+    e.by = by
   }
 }
 
@@ -411,6 +509,36 @@ pub fn entering(c : @ui.Ctx, i : Int, key : String, enter : Trans) -> Unit {
   e.key = motion_key(key)
   e.enter = Some(enter)
   e.fresh = true
+}
+
+///|
+/// Node `i` keyed `key` changes shape for its cause (the web's morph.ts `grow`): in the frame `by` (what it changes for:
+/// its words, its files, its being opened) changes, what it holds is laid out as it ends at once, and its own ground
+/// (its colour, glass, shadow, border and corners) goes by `spec` from the shape it showed to the one it is laid out
+/// in, carrying on from wherever it had got to. What in it moves with it says so itself (`layout` with the same `by`);
+/// what is new in it is in its place from the first. With `carry` (laid out for another place: the web's morph.ts
+/// `morph`, a composer gone to another page), it goes from where it was with what it holds: a keyed node in it new to
+/// it while its ground is on its way (not built the frame before: a part the other place has and this did not) is
+/// carried on that ground, as far from its nearer edges as it is laid out, until the ground is there. Moved or resized
+/// by nothing it changes for (a window, a keyboard), its ground is where it is laid out at once, a change of its own
+/// going on from there. Only drawn so: tapped where it is laid out.
+pub fn reshape(
+  c : @ui.Ctx,
+  i : Int,
+  key : String,
+  by~ : String,
+  spec~ : Spec,
+  carry? : Bool = false,
+) -> Unit {
+  let e = moving_of(c, i)
+  e.name = key
+  e.key = motion_key(key)
+  e.reshape = true
+  e.carry = carry
+  e.spec = spec
+  if by != "" {
+    e.by = by
+  }
 }
 
 ///|
@@ -446,11 +574,21 @@ pub fn scope(c : @ui.Ctx, i : Int, bottom? : Bool = false) -> Unit {
 }
 
 ///|
+/// Node `i` drawn by `at`, worked out once this frame is laid out: what `at` reads of where things are (measured,
+/// measured_rect) is where this frame has them then, not where the frame before did. For what is drawn where real
+/// things are while they move (a picture flying between rows of a list that glides meanwhile, a list drawn up behind
+/// what carries it): it goes with them in the same frame, never a frame behind. Over its own look. Only drawn so:
+/// tapped where it is laid out.
+pub fn placed(c : @ui.Ctx, i : Int, at : () -> @ui.Look) -> Unit {
+  let e = moving_of(c, i)
+  e.placed = Some(at)
+}
+
+///|
 /// Node `i`'s height is kept as `key`'s (measured reads it).
 pub fn measure(c : @ui.Ctx, i : Int, key : String) -> Unit {
   let e = moving_of(c, i)
-  e.key = motion_key("measure\u{1}" + key)
-  e.measure = true
+  e.kept = motion_key("measure\u{1}" + key)
 }
 
 ///|
@@ -491,6 +629,28 @@ fn scope_above(c : @ui.Ctx, i : Int) -> Moving? {
 }
 
 ///|
+/// The shape node `i` is in that goes from where it was with what it holds (reshape's `carry`), if any: its entry and
+/// what is kept of it.
+fn carrier(c : @ui.Ctx, i : Int) -> (Moving, Rec)? {
+  let mut p = c.node_parent(i)
+  while p >= 0 {
+    if c.node_is_list(p) {
+      return None
+    }
+    match entry_of(c, p) {
+      Some(e) if e.reshape =>
+        return match mo.recs.get(e.key) {
+          Some(r) => Some((e, r))
+          None => None
+        }
+      _ => ()
+    }
+    p = c.node_parent(p)
+  }
+  None
+}
+
+///|
 /// When the node keyed `key` (layout, entering) is at its place and in (whole ms, the frames' clock): the latest of
 /// its move's ends and its entrance's (Anim::ends_at); a row gone from its list, when its copy has left (its fade's
 /// and its move's ends); before now (-1) when it is at rest or the key is not known; +inf when told to move in the
@@ -505,7 +665,14 @@ pub fn layout_rest(key : String) -> Double {
     }
   }
   match mo.recs.get(k) {
-    Some(r) => [r.ox, r.oy, r.ef, r.em].each(at)
+    Some(r) => {
+      [r.ox, r.oy, r.ef, r.em, r.gp].each(at)
+      // (carried on a shape's ground: until that is there)
+      match mo.recs.get(r.on) {
+        Some(ar) if r.on != 0 => at(ar.gp)
+        _ => ()
+      }
+    }
     None => ()
   }
   for gh in mo.ghosts {
@@ -524,8 +691,10 @@ pub fn layout_rest(key : String) -> Double {
 /// of the rows of list `list` (as given to Ctx::list in the same scope) in order. The first time nothing moves, nor
 /// the first time again after a frame it was not built in (Android's list composed anew: its page come back to). As
 /// they change: rows new to it come in (layout's `enter`), rows gone that showed leave by a copy (its `exit`), rows
-/// that went ahead of others pass over them (lifted), the rest close over what left 100 ms late, and for 150 ms the
-/// rows' moves are the list's change (moved to on their springs); otherwise rows are put in their places at once.
+/// that went ahead of others pass over them (lifted), the rest close over what left 100 ms late, and in the frame of the
+/// change the rows' moves are the list's (moved to on their springs); otherwise rows are put in their places at once:
+/// the list's rows laid out in that frame (frame_body builds it again while what it read changes), no window of time
+/// after it lets in a move another cause made.
 /// `liftable`: which keys can go over others (not a day's heading). Its answer is the list's id (for lifted, from its
 /// rows).
 pub fn list_keys(
@@ -538,6 +707,15 @@ pub fn list_keys(
   let id = c.id(list)
   let now = c.now()
   let frame = c.frame_number()
+  // the very names of the frame before (a list that keeps them while it is the same): nothing to work out again, as
+  // many as it has rows
+  match mo.lists.get(id) {
+    Some(l) if physical_equal(l.names, keys) => {
+      l.seen = frame
+      return id
+    }
+    _ => ()
+  }
   let ks = keys.map(motion_key)
   let lm = match mo.lists.get(id) {
     Some(l) => l
@@ -545,7 +723,7 @@ pub fn list_keys(
       let l = {
         keys: ks,
         names: keys,
-        changed_at: -1.0e9,
+        changed_frame: -1,
         close_until: -1.0e9,
         arrived: {},
         lifted: {},
@@ -571,7 +749,7 @@ pub fn list_keys(
     lm.unghost.clear()
     return id
   }
-  lm.changed_at = now
+  lm.changed_frame = frame
   let old : Map[Int, Int] = {}
   for i, k in before {
     old[k] = i
@@ -708,15 +886,17 @@ pub fn lifted(c : @ui.Ctx, list : Int, key : String) -> Double {
 ///|
 /// Something shown or hidden as `shown` says (Motion's AnimatePresence, Compose's AnimatedVisibility): coming by
 /// `enter`, going by `exit` (by default the way it came), turned back mid-way from where it is. Its look while it
-/// shows (for @ui.Ctx::look), None once it has gone (then it need not be built). The first time it is as it is,
-/// without motion. While it goes it is only drawn: build it under `leaving`. `start_at`: when what changed it happened
-/// (the frames' clock), its motion from then rather than from this frame.
+/// shows (for @ui.Ctx::look), None once it has gone (then it need not be built). The first time it is asked it is as
+/// it is, without motion, unless `initial` (Motion's: shown then, it comes in by `enter` as it would later: a panel
+/// opened by what it is asked for the first time). While it goes it is only drawn: build it under `leaving`.
+/// `start_at`: when what changed it happened (the frames' clock), its motion from then rather than from this frame.
 pub fn presence(
   c : @ui.Ctx,
   key : String,
   shown : Bool,
   enter? : Trans = trans(fade=0.0),
   exit? : Trans,
+  initial? : Bool = false,
   start_at? : Double,
 ) -> @ui.Look? {
   let out = match exit {
@@ -724,8 +904,9 @@ pub fn presence(
     None => enter
   }
   let to = if shown { 1.0 } else { 0.0 }
-  let f = anim(c, key + "\u{1}fade", to)
-  let m = anim(c, key + "\u{1}move", to)
+  let from = if initial { 0.0 } else { to }
+  let f = anim(c, key + "\u{1}fade", from)
+  let m = anim(c, key + "\u{1}move", from)
   let t = if shown { enter } else { out }
   match start_at {
     Some(at) => {
@@ -790,8 +971,7 @@ pub fn reveal(
     fn() {
       let inner = c.box(w=Fill(1.0), align~, body)
       let e = moving_of(c, inner)
-      e.key = k
-      e.measure = true
+      e.kept = k
     },
   )
   ignore(outer)
@@ -816,14 +996,38 @@ fn after_layout(c : @ui.Ctx) -> Unit {
   }
   let still = c.still()
   let scrolled : Map[Int, Double] = {}
-  for e in mo.entries {
+  // (shapes first: what is carried on one's ground is placed by where that is this frame)
+  let order = mo.entries.filter(fn(e) { e.reshape })
+  if !order.is_empty() {
+    for e in mo.entries {
+      if !e.reshape {
+        order.push(e)
+      }
+    }
+  }
+  for e in if order.is_empty() { mo.entries } else { order } {
     let (nx, ny, nw, nh) = c.node_rect(e.node)
     let app_look = c.look_of(e.node)
     let mut look = app_look
     // its own move (for the log: what it is drawn from beside its scope's)
     let mut flip_dy = 0.0
+    if e.kept != 0 {
+      let r = match mo.recs.get(e.kept) {
+        Some(r) => r
+        None => {
+          let r = Rec::new()
+          mo.recs[e.kept] = r
+          r
+        }
+      }
+      r.x = nx
+      r.y = ny
+      r.w = nw
+      r.h = nh
+      r.seen = frame
+    }
     if e.key != 0 {
-      let li = if e.measure { -1 } else { c.list_above(e.node) }
+      let li = c.list_above(e.node)
       let (ref, rx, ry) = if li >= 0 {
         let (lx, ly, _, _) = c.node_rect(li)
         let (pl, pt, _, _) = c.node_pad(li)
@@ -837,7 +1041,7 @@ fn after_layout(c : @ui.Ctx) -> Unit {
         }
         (c.node_id(li), nx - lx - pl, ny - ly - pt + s)
       } else {
-        match (if e.measure { None } else { scope_above(c, e.node) }) {
+        match scope_above(c, e.node) {
           Some(sc) => {
             let (sx, sy, _, sh) = c.node_rect(sc.node)
             let oy = if sc.scope == 2 { sy + sh } else { sy }
@@ -856,6 +1060,7 @@ fn after_layout(c : @ui.Ctx) -> Unit {
           r.oy.name = said
           r.ef.name = said
           r.em.name = said
+          r.gp.name = said
           mo.recs[e.key] = r
           r
         }
@@ -872,7 +1077,22 @@ fn after_layout(c : @ui.Ctx) -> Unit {
         r.oy.step(c)
         r.was_ox = r.ox.get()
         r.was_oy = r.oy.get()
+        r.was_driven = r.driven
+        r.was_by = r.by
+        r.was_fx = r.fx
+        r.was_fy = r.fy
         r.moved_now = false
+        r.was_w = r.w
+        r.was_h = r.h
+        r.was_rad = r.rad
+        r.gp.step(c)
+        r.was_gp = r.gp.get()
+        r.was_gx = r.gx
+        r.was_gy = r.gy
+        r.was_gw = r.gw
+        r.was_gh = r.gh
+        r.was_gr = r.gr
+        r.g_now = false
       }
       let lm = if li >= 0 { mo.lists.get(ref) } else { None }
       let was_seen = r.was_seen >= frame - 1 && r.was_ref == ref
@@ -887,7 +1107,9 @@ fn after_layout(c : @ui.Ctx) -> Unit {
       let undo = fn() {
         if r.moved_now {
           r.moved_now = false
-          r.driven = false
+          r.driven = r.was_driven
+          r.fx = r.was_fx
+          r.fy = r.was_fy
           r.ox.value = r.was_ox
           r.oy.value = r.was_oy
           if r.was_ox == 0.0 { r.ox.snap(0.0) } else { r.ox.animate(0.0, e.spec) }
@@ -904,21 +1126,42 @@ fn after_layout(c : @ui.Ctx) -> Unit {
           undo()
         }
         if dx.abs() > 0.5 || dy.abs() > 0.5 {
-          // in a list told its rows: only as they change (else it is the list's own layout, taken at once)
-          let changed = match lm {
-            Some(l) => e.gate != 1 || c.now() - l.changed_at < 150.0
-            None => true
+          // moved for its cause: a progress the app drives it by, what it names changed since the frame before, or (it
+          // naming none) its list's rows; else what holds it moved it, taken at once
+          let changed = e.drive >= 0.0 ||
+            (if e.by != "" {
+              r.was_by != "" && e.by != r.was_by
+            } else {
+              match lm {
+                Some(l) => l.changed_frame == frame
+                None => false
+              }
+            })
+          // what is left of the progress driving it now, and where it is drawn off its place as the frame begins: on
+          // the drive it was on (the same progress, gone on to now) or its spring; a move carries on from there
+          let left = if e.drive >= 0.0 { 1.0 - dclamp(e.drive, 0.0, 1.0) } else { 0.0 }
+          let (cx, cy) = if r.was_driven {
+            let l = if e.drive >= 0.0 { left } else { 1.0 - r.drove }
+            (r.was_fx * l, r.was_fy * l)
+          } else {
+            (r.was_ox, r.was_oy)
           }
-          if still || !changed {
+          if still || (e.drive >= 0.0 && left <= 0.0) {
             r.ox.snap(0.0)
             r.oy.snap(0.0)
             r.driven = false
             r.moved_now = false
+          } else if !changed {
+            // what holds it moved it: there at once, a move of its own going on as it was
+            undo()
           } else if e.drive >= 0.0 {
-            r.fx = r.was_ox + dx
-            r.fy = r.was_oy + dy
+            // the rest of its way by what is left of the progress (a move as it sets off: all of it)
+            r.fx = (cx + dx) / left
+            r.fy = (cy + dy) / left
             r.driven = true
             r.moved_now = true
+            r.ox.snap(0.0)
+            r.oy.snap(0.0)
           } else {
             // closing over a row gone: a little late, unless it went ahead
             let delay = match lm {
@@ -933,9 +1176,9 @@ fn after_layout(c : @ui.Ctx) -> Unit {
             }
             r.driven = false
             r.moved_now = true
-            r.ox.value = r.was_ox + dx
+            r.ox.value = cx + dx
             r.ox.animate(0.0, spec)
-            r.oy.value = r.was_oy + dy
+            r.oy.value = cy + dy
             r.oy.animate(0.0, spec)
           }
         }
@@ -968,8 +1211,64 @@ fn after_layout(c : @ui.Ctx) -> Unit {
         }
         _ => ()
       }
+      // its ground on its way from the shape it had to the one it is laid out in, for its cause (reshape)
+      if e.reshape {
+        let to_r = corners_in(c.node_radii(e.node), nw, nh)
+        let caused = e.by != "" && r.was_by != "" && e.by != r.was_by
+        let changed_shape = (r.was_x - rx).abs() > 0.5 ||
+          (r.was_y - ry).abs() > 0.5 ||
+          (r.was_w - nw).abs() > 0.5 ||
+          (r.was_h - nh).abs() > 0.5
+        let p0 = r.was_gp
+        if still || !was_seen {
+          r.gp.snap(1.0)
+          r.g_now = false
+        } else if caused && changed_shape {
+          // from the shape it showed as the frame began (on its way, or as it was laid out)
+          let wr = corners_in(r.was_rad, r.was_w, r.was_h)
+          r.gx = r.was_gx + (r.was_x - r.was_gx) * p0
+          r.gy = r.was_gy + (r.was_y - r.was_gy) * p0
+          r.gw = r.was_gw + (r.was_w - r.was_gw) * p0
+          r.gh = r.was_gh + (r.was_h - r.was_gh) * p0
+          r.gr = corners_mix(r.was_gr, wr, p0)
+          r.gp.snap(0.0)
+          r.gp.animate(1.0, e.spec)
+          r.g_now = true
+          r.g_carry = e.carry
+        } else {
+          // what holds it moved or resized it: where it set out from as far off its new shape as it was off its old,
+          // its way going on as it was (a build before this one set it off anew: back as the frame began)
+          r.gx = r.was_gx + (rx - r.was_x)
+          r.gy = r.was_gy + (ry - r.was_y)
+          r.gw = r.was_gw + (nw - r.was_w)
+          r.gh = r.was_gh + (nh - r.was_h)
+          r.gr = r.was_gr
+          if r.g_now {
+            r.g_now = false
+            r.gp.snap(p0)
+            if p0 < 1.0 {
+              r.gp.animate(1.0, e.spec)
+            }
+          }
+        }
+        let p = r.gp.get()
+        if p < 1.0 {
+          let ox = nx - rx
+          let oy = ny - ry
+          c.draw_ground(
+            e.node,
+            ox + r.gx + (rx - r.gx) * p,
+            oy + r.gy + (ry - r.gy) * p,
+            r.gw + (nw - r.gw) * p,
+            r.gh + (nh - r.gh) * p,
+            corners_mix(r.gr, to_r, p),
+          )
+        }
+      }
+      r.rad = c.node_radii(e.node)
       r.x = rx
       r.y = ry
+      r.by = e.by
       r.vy = vy
       r.w = nw
       r.h = nh
@@ -983,9 +1282,44 @@ fn after_layout(c : @ui.Ctx) -> Unit {
         Some(_) => ()
         None => r.drawing.insts.clear()
       }
+      // carried on the ground of a shape gone with what it holds, new in it as that set off (reshape's carry): placed
+      // by that ground, as far from its nearer edges as it is laid out, until the ground is there
+      if r.on == 0 && !was_seen && !still && !e.reshape {
+        match carrier(c, e.node) {
+          Some((a, ar)) if ar.g_carry && ar.gp.get() < 1.0 => {
+            let (ax, ay, aw, ah) = c.node_rect(a.node)
+            r.on = a.key
+            r.on_edges = (if nx + nw / 2.0 > ax + aw / 2.0 { 1 } else { 0 }) +
+              (if ny + nh / 2.0 > ay + ah / 2.0 { 2 } else { 0 })
+          }
+          _ => ()
+        }
+      }
+      let (cx, cy) = match mo.recs.get(r.on) {
+        Some(ar) if r.on != 0 && ar.seen == frame && ar.gp.get() < 1.0 => {
+          let p = ar.gp.get()
+          let gx = ar.gx + (ar.x - ar.gx) * p
+          let gy = ar.gy + (ar.y - ar.gy) * p
+          let gw = ar.gw + (ar.w - ar.gw) * p
+          let gh = ar.gh + (ar.h - ar.gh) * p
+          // (its own moves none meanwhile: where it is drawn is the ground's)
+          r.ox.snap(0.0)
+          r.oy.snap(0.0)
+          r.driven = false
+          (
+            if r.on_edges % 2 == 1 { gx + gw - ar.x - ar.w } else { gx - ar.x },
+            if r.on_edges >= 2 { gy + gh - ar.y - ar.h } else { gy - ar.y },
+          )
+        }
+        _ => {
+          r.on = 0
+          (0.0, 0.0)
+        }
+      }
       // its look: on the way to its place, coming in
       let (ox, oy) = if r.driven && e.drive >= 0.0 {
         let p = dclamp(e.drive, 0.0, 1.0)
+        r.drove = p
         if p >= 1.0 {
           r.driven = false
         }
@@ -997,6 +1331,8 @@ fn after_layout(c : @ui.Ctx) -> Unit {
       } else {
         (r.ox.get(), r.oy.get())
       }
+      let ox = ox + cx
+      let oy = oy + cy
       if ox != 0.0 || oy != 0.0 {
         look = look.then({ ..@ui.still_look, dx: ox, dy: oy })
         flip_dy = oy
@@ -1032,6 +1368,13 @@ fn after_layout(c : @ui.Ctx) -> Unit {
       )
     }
   }
+  // what is drawn where things are this frame (placed): once every place this frame lays out is kept
+  for e in mo.entries {
+    match e.placed {
+      Some(at) => c.set_look(e.node, c.look_of(e.node).then(at()))
+      None => ()
+    }
+  }
   forget_recs(c)
 }
 
@@ -1043,7 +1386,11 @@ fn forget_recs(c : @ui.Ctx) -> Unit {
     return
   }
   let old : Array[Int] = []
-  mo.recs.each(fn(k, r) { if frame - r.seen > 90 && !r.ox.running && !r.oy.running { old.push(k) } })
+  mo.recs.each(fn(k, r) {
+    if frame - r.seen > 90 && !r.ox.running && !r.oy.running && !r.gp.running {
+      old.push(k)
+    }
+  })
   for k in old {
     mo.recs.remove(k)
   }

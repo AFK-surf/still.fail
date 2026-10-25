@@ -130,10 +130,12 @@ pub(all) enum ClipPicture {
 } derive(Eq, Show, Debug)
 
 ///|
-/// What the clipboard held: its words ("" none) and its picture.
+/// What the clipboard held: its words ("" none), its picture, its files (copied in macOS's Finder, or by an app that
+/// copies a picture as its file: each its name and bytes, @hostapi.ClipGot's).
 pub(all) struct Clipboard {
   text : String
   picture : ClipPicture
+  files : Array[(String, Bytes)]
 } derive(Eq, Show, Debug)
 
 ///|
@@ -268,7 +270,7 @@ fn clipboard_of(h : @hostapi.ClipGot) -> Clipboard {
   } else {
     NoPicture
   }
-  { text: h.text, picture }
+  { text: h.text, picture, files: h.files }
 }
 
 ///|
@@ -287,6 +289,11 @@ fn clip_said(c : Clipboard) -> Unit {
     "text": Json::string(c.text),
     "picture": Json::string(kind),
     "png": Json::string(png),
+  }
+  if c.files.length() > 0 {
+    m["files"] = Json::array(
+      c.files.map(fn(f) { Json::object({ "name": Json::string(f.0), "bytes": Json::string(@codec.hex(f.1)) }) }),
+    )
   }
   tape_line("CLIPSAID " + Json::object(m).stringify())
 }
@@ -309,7 +316,18 @@ fn clip_of_line(line : String) -> Clipboard? {
     "unreadable" => Unreadable
     _ => NoPicture
   }
-  Some({ text: str("text"), picture })
+  let files = match m.get("files") {
+    Some(Array(fs)) =>
+      fs.filter_map(fn(f) {
+        guard f is Object(fm) else { return None }
+        match (fm.get("name"), fm.get("bytes")) {
+          (Some(String(name)), Some(String(hex))) => Some((name, @codec.from_hex(hex)))
+          _ => None
+        }
+      })
+    _ => []
+  }
+  Some({ text: str("text"), picture, files })
 }
 
 ///|
@@ -331,13 +349,20 @@ fn fake_clip_give(f : FakeHost, clip : Clipboard) -> Unit {
 /// taken from the next frame, as a host's answer comes at a frame's boundary. Until a read is answered, the app is not
 /// at rest.
 pub fn Tester::clipboard_gives(self : Tester, text : String) -> Unit {
-  fake_clip_give(self.fake, { text, picture: NoPicture })
+  fake_clip_give(self.fake, { text, picture: NoPicture, files: [] })
 }
 
 ///|
 /// The same, the clipboard holding a picture (`png`, as the host gives it: PNG's bytes), and `text` beside it.
 pub fn Tester::clipboard_gives_png(self : Tester, png : Bytes, text? : String = "") -> Unit {
-  fake_clip_give(self.fake, { text, picture: Png(png) })
+  fake_clip_give(self.fake, { text, picture: Png(png), files: [] })
+}
+
+///|
+/// The same, the clipboard holding files (their names and bytes, as Finder copies them), and `text` beside them (what
+/// Finder puts there too: their names).
+pub fn Tester::clipboard_gives_files(self : Tester, files : Array[(String, Bytes)], text? : String = "") -> Unit {
+  fake_clip_give(self.fake, { text, picture: NoPicture, files })
 }
 
 ///|
@@ -437,6 +462,11 @@ let text_state = 5
 ///|
 /// The host's event saying the soft keyboard was put away by the person: the field lets go of the focus.
 let text_keyboard_gone = 7
+
+///|
+/// The host's text event putting in the clipboard's words (a paste: ⌘V, the edit menu's): as kind 0 puts in what is
+/// typed, but a step of its own to undo, not one with the typing about it (editor_undo.mbt).
+let text_paste = 8
 
 ///|
 fn h_ime_action(kind : Int) -> Unit {

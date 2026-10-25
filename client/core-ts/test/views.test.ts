@@ -14,8 +14,8 @@ import { Runner } from "../src/runtime.ts";
 import { EVICT_AFTER_MS, Store, type Source, type Value } from "../src/store.ts";
 import { FakeHost } from "../src/testing.ts";
 import { attention, choices, runnableOn } from "../src/views/models.ts";
-import { Views, betaOffered, blockedUnder, chatDerive, down, shownMessage } from "../src/views/views.ts";
-import { installView } from "../src/present.ts";
+import { Views, betaOffered, blockedUnder, chatDerive, down, noticeOf, shownMessage } from "../src/views/views.ts";
+import { installView, profile as presentProfile } from "../src/present.ts";
 
 holdLanguage();
 // deno-lint-ignore no-explicit-any
@@ -210,7 +210,7 @@ function deciding(id: string, th: number, seq: number, at: number, dismissed: bo
 const ids = (v: J): string[] => v.days.flatMap((d: J) => d.items.map((i: J) => i.id));
 
 /// A value without what the clients show of it: what a view puts together, alone.
-const SHOWN = new Set(["trouble", "settled", "archivable", "stateText", "face", "line", "available", "offered", "connection", "glyph", "note", "time", "statusText", "tone", "badgeText", "titleText", "agentText", "maker", "runtimeText", "processText", "efforts", "modeText", "modeShort", "runText", "presence", "checkText", "checkTone", "preview", "makers", "mark", "order", "left", "level", "refills", "shown", "processesText", "by", "waiting", "since", "originText", "originKind", "summary", "modelsText"]);
+const SHOWN = new Set(["trouble", "settled", "archivable", "stateText", "face", "line", "available", "offered", "connection", "glyph", "note", "time", "statusText", "tone", "badgeText", "titleText", "agentText", "maker", "runtimeText", "processText", "efforts", "modeText", "modeShort", "runText", "presence", "checkText", "checkTone", "preview", "makers", "mark", "order", "left", "level", "refills", "shown", "processesText", "by", "waiting", "since", "originText", "originKind", "summary", "modelsText", "stateBusy", "problems", "changes", "modeWords", "modeLabel", "modeSentence", "placeText"]);
 function plain(v: J): J {
   if (Array.isArray(v)) return v.map(plain);
   if (v !== null && typeof v === "object") return Object.fromEntries(Object.entries(v).filter(([k, x]) => !SHOWN.has(k) && x !== null && x !== undefined).map(([k, x]) => [k, plain(x)]));
@@ -365,6 +365,93 @@ test("the_decisions_page_lists_those_waiting_for_the_viewer_set_aside_last", asy
   assert.deepEqual([v.items[1].deferred, v.items[0].deferred], [true, undefined]);
 });
 
+test("the_wide_decisions_page_shows_the_one_picked_and_once_it_goes_or_is_set_aside_the_one_in_its_place", async () => {
+  const t = setup();
+  const u = ui();
+  t.subscribe(1, { topic: "decisions", workspace: "ws" });
+  t.set(workspace(), oneStation());
+  t.set(prefs(), {});
+  t.set(link("ws/st"), { state: "online" });
+  const now = t.host.nowMs();
+  // Oldest asked first: k1, k2, k3, k4.
+  const all = [deciding("k1", 1, 5, now - 4000, false), deciding("k2", 2, 5, now - 3000, false), deciding("k3", 3, 5, now - 2000, false), deciding("k4", 4, 5, now - 1000, false)];
+  t.set(rows("ws/st"), all);
+  await t.read(u, 1);
+  const shown = () => (u.value.shown === undefined ? null : u.value.items[u.value.shown].session);
+  // None picked: the first.
+  assert.equal(shown(), "k1");
+  t.views.showDecision("ws", "ws/st", 3, 5);
+  await t.read(u, 1);
+  assert.equal(shown(), "k3");
+  // One before it goes: still the one picked, wherever it now is.
+  t.set(rows("ws/st"), all.slice(1));
+  await t.read(u, 1);
+  assert.deepEqual([shown(), u.value.shown], ["k3", 1]);
+  // The one picked goes (answered elsewhere): the one now in its place.
+  t.set(rows("ws/st"), [all[1], all[3]]);
+  await t.read(u, 1);
+  assert.equal(shown(), "k4");
+  // Set aside, it goes last and the one now in its place shows: here the one before it (it was last).
+  t.set(rows("ws/st"), all);
+  t.views.showDecision("ws", "ws/st", 2, 5);
+  await t.read(u, 1);
+  t.views.decisionDeferred("ws/st", 2, 5);
+  t.set(prefs(), { decisionsDeferred: { [decisions.deferralKey("ws/st", 2, 5)]: now } });
+  await t.read(u, 1);
+  assert.deepEqual(u.value.items.map((i: J) => i.session), ["k1", "k3", "k4", "k2"]);
+  assert.equal(shown(), "k3");
+  // The only one, set aside: itself again.
+  t.set(prefs(), {});
+  t.set(rows("ws/st"), [all[0]]);
+  t.views.showDecision("ws", "ws/st", 1, 5);
+  t.views.decisionDeferred("ws/st", 1, 5);
+  t.set(prefs(), { decisionsDeferred: { [decisions.deferralKey("ws/st", 1, 5)]: now } });
+  await t.read(u, 1);
+  assert.equal(shown(), "k1");
+  // None left: none shown.
+  t.set(rows("ws/st"), []);
+  await t.read(u, 1);
+  assert.equal(u.value.shown, undefined);
+});
+
+test("a_decision_let_go_from_here_is_off_the_page_at_once_and_back_if_its_station_refused", async () => {
+  const t = setup();
+  const u = ui();
+  t.subscribe(1, { topic: "decisions", workspace: "ws" });
+  t.set(workspace(), oneStation());
+  t.set(prefs(), {});
+  t.set(link("ws/st"), { state: "online" });
+  const now = t.host.nowMs();
+  const k1 = deciding("k1", 1, 5, now - 2000, false);
+  const k2 = deciding("k2", 2, 5, now - 1000, false);
+  k2.decision.card = { type: "options", options: k2.decision.options, assignee: "me@x.com", vault: { request: "r_1" } };
+  t.set(rows("ws/st"), [k1, k2]);
+  await t.read(u, 1);
+  const order = () => u.value.items.map((i: J) => i.session);
+  assert.deepEqual(order(), ["k1", "k2"]);
+  const local = t.views.local;
+  // Let go: off at once; refused, back.
+  local.letGo("ws/st", 1, 5);
+  await t.read(u, 1);
+  assert.deepEqual(order(), ["k2"]);
+  local.letGoEnded("ws/st", 1, 5, false, t.data.rowsRev("ws/st"));
+  await t.read(u, 1);
+  assert.deepEqual(order(), ["k1", "k2"]);
+  // Taken: off until the station's rows change (they then say it is dismissed).
+  local.letGo("ws/st", 1, 5);
+  local.letGoEnded("ws/st", 1, 5, true, t.data.rowsRev("ws/st"));
+  await t.read(u, 1);
+  assert.deepEqual(order(), ["k2"]);
+  t.set(rows("ws/st"), [deciding("k1", 1, 5, now - 2000, true), k2]);
+  await t.read(u, 1);
+  assert.deepEqual(order(), ["k2"]);
+  assert.equal(local.lettingGo("ws/st", 1, 5), false);
+  // A vault request decided here: its card is off.
+  local.vaultDecided("r_1", { status: "granted", scope: "once" });
+  await t.read(u, 1);
+  assert.deepEqual(order(), []);
+});
+
 test("the_decisions_page_has_the_starters_unassigned_cards_and_needs_without_one", async () => {
   const t = setup();
   const u = ui();
@@ -469,6 +556,7 @@ test("a_rows_decision_is_its_line_and_mark_and_counts_for_the_workspace", async 
   assert.deepEqual([m.badge, m.badgeCounts, m.workspaces.ws.badge], [1, "attention", 1]);
   assert.deepEqual(m.workspaces.ws.items.map((i: J) => [i.kind, i.session, i.seq, i.stationName, i.seen ?? false]), [["wait", "k1", 5, "studio", false], ["wait", "k3", 4, "studio", true]]);
   assert.equal(m.workspaces.ws.items[0].text, "奏 · k1 要合吗？", "its row's line");
+  assert.equal(m.workspaces.ws.items[0].what, "k1 要合吗？", "the same without its lead");
 });
 
 // A message that did not go was said only in its chat, below what the agent last said: the list showed the agent's
@@ -1040,6 +1128,13 @@ test("connects_lists_every_online_stations_connects", async () => {
   assert.deepEqual([v.wait.reading, v.wait.failing.map((f: J) => [f.station, f.message])], [false, [["ws/b", "连不上"]]]);
   assert.equal(v.items[0].connect.createdBy.shown.display, "你");
   assert.equal(v.items[0].connect.statusText, "未连接 Slack");
+  // where it is reached and how it runs, in words; the ways it could be switched to, each with what that does
+  assert.deepEqual([v.items[0].connect.placeText, v.items[0].connect.modeLabel], ["Slack", "每个 thread 一个会话"]);
+  assert.deepEqual(v.items[0].changes.map((c: J) => [c.mode, c.requireMention, c.changed, c.effects.length]), [
+    ["multi-session", true, false, 0],
+    ["single-session", true, true, 2],
+    ["single-session", false, true, 3],
+  ]);
   const mine = ui();
   t.subscribe(2, { topic: "connects", scope: "ws", mine: true });
   await t.read(mine, 2);
@@ -1426,7 +1521,8 @@ test("a_sent_message_shows_until_the_chat_has_it", async () => {
   views.local.outboxState("ws/a", 7, id, null);
   views.outboxSent("ws/a", 7, id, 6);
   await t.read(u, 1);
-  assert.equal(u.value.outbox[0].seq, 6);
+  // The station took it: sent, kept until its entry comes.
+  assert.deepEqual([u.value.outbox[0].seq, u.value.outbox[0].state], [6, "sent"]);
   t.store.update(pageOf("ws/a", 7), (p) => ({ ...(p as J), entries: [...(p as J).entries, entry(6, "你好")], last: 6 }));
   await t.host.time.pass(100);
   const sent = t.host.takeEmitted();
@@ -1438,6 +1534,39 @@ test("a_sent_message_shows_until_the_chat_has_it", async () => {
   const other = views.outboxAdd("ws/b", 1, { text: "x" });
   views.outboxSent("ws/b", 1, other, 1);
   assert.equal(views.local.outboxGet("ws/b", 1, other), undefined);
+});
+
+// An image sent before it was up showed as a file card that turned into its picture once up (mbui, 2026-10-26): it is
+// among the message's files from the first, in its shape, named by its upload; any other file going up stays a card.
+test("an_image_sent_while_going_up_is_among_its_messages_files_at_once", async () => {
+  const t = setup();
+  const u = ui();
+  t.subscribe(1, chatTopic("ws/a", 7));
+  t.set(threads("ws/a"), [thread(7, [], t.host.nowMs())]);
+  t.set(pageOf("ws/a", 7), page(5, ["早"], null));
+  await t.read(u, 1);
+  const up = { name: "a.txt", path: "/w/uploads/a.txt", size: 2 };
+  const id = t.views.outboxAdd("ws/a", 7, { text: "看看", attachments: [up], quotes: [], uploads: [
+    { id: "u1", name: "shot.PNG", size: 300, width: 1200, height: 800, sent: 100 },
+    { id: "u2", name: "notes.pdf", size: 50, sent: 10 },
+  ] });
+  await t.read(u, 1);
+  let [o] = u.value.outbox;
+  assert.deepEqual(o.attachments, [up, { name: "shot.PNG", path: "upload:u1", size: 300, width: 1200, height: 800, upload: "u1" }]);
+  assert.deepEqual(o.uploads.map((f: J) => [f.id, f.sent]), [["u2", 10]]);
+  assert.equal(o.waits, "正在上传");
+  // Up: the station's file in its place, still drawn from here (its upload); nothing left going up.
+  t.views.local.outboxUploaded("ws/a", 7, id, [{ name: "shot.PNG", path: "/w/uploads/shot.png", size: 300, width: 1200, height: 800 }, { name: "notes.pdf", path: "/w/uploads/notes.pdf", size: 50 }]);
+  await t.read(u, 1);
+  [o] = u.value.outbox;
+  assert.deepEqual(o.attachments.map((f: J) => [f.path, f.upload]), [["/w/uploads/a.txt", undefined], ["/w/uploads/shot.png", "u1"], ["/w/uploads/notes.pdf", "u2"]]);
+  assert.deepEqual([o.uploads, o.waits], [undefined, undefined]);
+  // Failed, it says so, not that it is going up.
+  const failed = t.views.outboxAdd("ws/a", 7, { text: "再看", attachments: [], quotes: [], uploads: [{ id: "u3", name: "b.jpg", size: 9 }] });
+  t.views.local.outboxState("ws/a", 7, failed, "连不上");
+  await t.read(u, 1);
+  const f = u.value.outbox.find((m: J) => m.id === failed);
+  assert.deepEqual([f.attachments.map((a: J) => a.path), f.uploads, f.waits], [["upload:u3"], undefined, undefined]);
 });
 
 // The UIs keep an outgoing message's id past the core that gave it (a restarted core, the page still up): the Android
@@ -1466,9 +1595,10 @@ test("a_chat_asked_for_here_shows_at_once_and_becomes_its_stations_under_the_sam
   const first = local.pendingQueue(key, { text: "修一下登录\n细节…", attachments: [], quotes: [] })!;
   await both();
   v = screen.value;
-  assert.deepEqual([v.title, v.outbox[0].id, v.outbox[0].state], ["修一下登录", first, "sending"]);
+  // named by no one yet: a new chat, its page and its row, not the words sent (as its station calls it)
+  assert.deepEqual([v.title, v.outbox[0].id, v.outbox[0].state], ["新对话", first, "sending"]);
   let items = list.value.days[0].items;
-  assert.deepEqual([items[0].id, items[0].pending, items[0].title], [key, true, "修一下登录"]);
+  assert.deepEqual([items[0].id, items[0].pending, items[0].title], [key, true, "新对话"]);
   local.pendingFailed(key, "no claude profile configured");
   await both();
   const out = screen.value.outbox;
@@ -1514,26 +1644,26 @@ test("the_stations_row_covers_a_chat_made_here_before_its_answer_comes", async (
   local.pendingTry(key);
   const idsOf = (): [string, string][] => list.value.days.flatMap((d: J) => d.items).map((i: J) => [i.id ?? "", i.title ?? ""]);
   await t.read(list, 2);
-  assert.ok(idsOf().some(([i, ti]) => i === key && ti === "修一下登录"));
+  assert.ok(idsOf().some(([i, ti]) => i === key && ti === "新对话"));
   const theirs = { ...row("ember:c-2", t.host.nowMs()), mine: true, thread: 8, title: "新对话" };
   t.set(rows("ws/st"), [old, theirs]);
   await t.read(list, 2);
   const cmp = (a: [string, string], b: [string, string]) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0);
-  assert.deepEqual(idsOf().sort(cmp), [["ember:c-0", "ember:c-0 的标题"], ["ember:c-2", "新对话"], [key, "修一下登录"]].sort(cmp as never));
+  assert.deepEqual(idsOf().sort(cmp), [["ember:c-0", "ember:c-0 的标题"], ["ember:c-2", "新对话"], [key, "新对话"]].sort(cmp as never));
   assert.equal(local.pendingTry(key)?.[1].clientKey, key);
   const made: J = { ...row("ember:c-1", t.host.nowMs()), mine: true, thread: 9, title: "新对话", clientKey: key };
   t.set(rows("ws/st"), [old, theirs, made]);
   await t.read(list, 2);
-  const expected: [string, string][] = [["ember:c-0", "ember:c-0 的标题"], ["ember:c-1", "修一下登录"], ["ember:c-2", "新对话"]];
+  const expected: [string, string][] = [["ember:c-0", "ember:c-0 的标题"], ["ember:c-1", "新对话"], ["ember:c-2", "新对话"]];
   assert.deepEqual(idsOf().sort(cmp), expected);
   local.pendingMade(key, "ember:c-1", 9);
   await t.read(list, 2);
   assert.deepEqual(idsOf().sort(cmp), expected);
   made.last = { seq: 1, text: "修一下登录", authorKind: "person", author: "Me@x.com", createdAt: Math.trunc(t.host.nowMs()) };
-  made.title = "修一下登录（站上的）";
+  made.title = "登录按钮";
   t.set(rows("ws/st"), [old, theirs, made]);
   await t.read(list, 2);
-  assert.ok(idsOf().some(([i, ti]) => i === "ember:c-1" && ti === "修一下登录（站上的）"));
+  assert.ok(idsOf().some(([i, ti]) => i === "ember:c-1" && ti === "登录按钮"));
 });
 
 test("a_chat_made_here_keeps_its_first_message_until_its_page_has_the_entry", async () => {
@@ -1871,4 +2001,59 @@ test("what_the_core_keeps_and_shares_is_never_written_on_whatever_a_chat_holds",
     });
     assert.equal(uis[0][0].value.messages.length, drawn.page.entries.filter((e: J) => e.kind === "message").length, said);
   }
+});
+
+test("a_station_says_how_it_is_and_what_is_wrong_with_it_in_the_cores_words", async () => {
+  // StationCards.tsx's state() and problems() were the web's own (and its 15 s silence a timer of the page's): the
+  // core's now, for the web's station page and the desktop app's alike.
+  const t = setup();
+  const list = ui();
+  t.subscribe(1, { topic: "stations", scope: "ws" });
+  t.set(workspace(), stations(t.nowS()));
+  await t.read(list, 1);
+  t.set(link("ws/a"), { state: "online" });
+  t.set(link("ws/b"), { state: "offline" });
+  t.set(link("ws/c"), { state: "offline" });
+  await t.read(list, 1);
+  const of = (st: string) => (list.value as J[]).find((s) => s.station === st);
+  // up, not read yet: connecting, nothing wrong yet
+  assert.deepEqual([of("ws/a").stateText, of("ws/a").stateBusy, of("ws/a").problems], ["正在连接", false, []]);
+  // away: when it was last online, red; never online, amber
+  assert.ok(of("ws/b").stateText.endsWith("在线"), of("ws/b").stateText);
+  assert.deepEqual(of("ws/b").problems.map((p: J) => [p.key, p.level]), [["away", "red"]]);
+  assert.deepEqual([of("ws/c").stateText, of("ws/c").problems.map((p: J) => [p.key, p.level])], ["尚未上线", [["away", "amber"]]]);
+  // up and no host reading for 15 s: silent
+  await t.host.time.pass(15_000);
+  await t.read(list, 1);
+  assert.deepEqual(of("ws/a").problems.map((p: J) => [p.key, p.level]), [["silent", "amber"]]);
+  // its host read and its agents at work: busy, nothing wrong
+  t.set(hostOf("ws/a"), hostInfo("studio"));
+  t.set(overview("ws/a"), { ...overviewOf([], []), counts: { sessions: 2, running: 2, warm: 0 } });
+  await t.read(list, 1);
+  assert.deepEqual([of("ws/a").stateText, of("ws/a").stateBusy, of("ws/a").problems], ["2 个 agent 正在运行", true, []]);
+});
+
+test("a_profile_says_what_it_is_who_signs_it_in_and_its_last_check_in_the_cores_words", () => {
+  // Accounts.tsx worked these out itself (ACCESS labels, signInProvider, the check's detail without 可用): the core's
+  // now, for the web's page and the desktop app's.
+  const sub = presentProfile(profile("p1", { check: { state: "ok", detail: "可用，Claude Max", models: [] } }));
+  assert.deepEqual([sub.kindText, sub.signInProvider, sub.checkLine], ["订阅账号", "Claude", "Claude Max"]);
+  const codex = presentProfile(profile("p2", { runtime: "codex", runtimes: ["codex"] }));
+  assert.deepEqual([codex.signInProvider, codex.checkLine], ["ChatGPT", "尚未检查"]);
+  const machine = presentProfile(profile("p3", { machine: true }));
+  assert.equal(machine.kindText, "终端里的登录");
+  const go = presentProfile(profile("p4", { access: { kind: "opencode-go", key: "" } }));
+  assert.deepEqual([go.kindText, go.signInProvider], ["OpenCode Go", "OpenCode"]);
+  // the station's detail in English starts with its Works, as the Chinese with 可用
+  const en = presentProfile(profile("p5", { check: { state: "ok", detail: "Works, 3 models", models: [] } }));
+  assert.equal(en.checkLine, "3 models");
+});
+
+test("still.fail's notice is shown as a line: a failure's mark taken off, no closing 。, a profile's link after its ：", () => {
+  assert.deepEqual(noticeOf("⚠️ 运行失败：额度用完了。", false), { failed: true, words: "运行失败：额度用完了" });
+  assert.deepEqual(noticeOf("已切换模型", false), { failed: false, words: "已切换模型" });
+  assert.deepEqual(noticeOf("⚠️ 登录 Work 失败：令牌过期。 ", true), { failed: true, words: "登录 Work 失败：令牌过期", linkAt: 11 });
+  assert.deepEqual(noticeOf("登录失败", true), { failed: false, words: "登录失败" });
+  const m = shownMessage({ authorKind: "stillfail", author: "stillfail", text: "⚠️ 出错了。", seq: 3 }, [], {}, [], [], [], null);
+  assert.deepEqual(m.notice, { failed: true, words: "出错了" });
 });

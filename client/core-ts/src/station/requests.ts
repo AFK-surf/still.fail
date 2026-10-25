@@ -1,5 +1,6 @@
 // Requests to a station's admin API over its wire (station/transport.rs): each a span of the trace it is made in, with
 // what it is waited on as (status.ts), its write key, its language; files, uploads and previews.
+import { RUNTIMES } from "../format.ts";
 import { Effect, Scope } from "effect";
 import { Decompress } from "fzstd";
 import type { Inner } from "../core.ts";
@@ -24,6 +25,8 @@ export const EVENT_STREAM = "text/event-stream";
 /// An events stream's answer when the station told first what came after the `since` it was asked (station/src/api/
 /// events.ts RESUMED): nothing is read again.
 export const RESUMED = "stillfail-resumed";
+/// A stream's answer when it follows the sessions at work itself (api/events.ts FOLLOWS): `running`.
+export const FOLLOWS = "stillfail-follows";
 /// What every request asks its answer compressed as (`accept-encoding`), but a preview's (its page reads what the service
 /// sent): zstd, an event stream flushed after each event and compressed against the last megabyte of it (station/src/mesh/
 /// compress.ts). On a slow link the bytes are the wait: JSON goes to a fifth or less, an events stream to a tenth. A
@@ -33,6 +36,11 @@ export const ZSTD = "zstd";
 export const UPLOAD_WHOLE_MAX = 50 * 1024 * 1024;
 /// How long a preview's WebSocket may take to open.
 export const SOCKET_OPEN_MS = 30_000;
+/// JSON reads may be slow, but cannot own a scheduler slot forever without receiving bytes.
+export const JSON_IDLE_MS = 60_000;
+const within = <A, E, R>(work: Effect.Effect<A, E, R>, ms: number) => ms > 0
+  ? Effect.timeoutOrElse(work, { duration: ms, orElse: () => Effect.fail(new CoreError("timeout", t("core-logic.mesh.timed_out"))) })
+  : work;
 
 /// A station's non-2xx answer as an error.
 /// A station's refusal: its `code` where it says one (the vault's, `vault_needs_lock`…), else `http_<status>`.
@@ -60,7 +68,7 @@ const PART_STEP = 64 * 1024;
 
 /// A reply's body as the station wrote it: decompressed as it comes when it came compressed (fzstd, the same on every
 /// host), each piece as soon as it is whole (an event stream's, event by event).
-function plain(reply: WireReply): Pull<Uint8Array> {
+function plain(reply: WireReply, partial = true): Pull<Uint8Array> {
   if (replyHeader(reply, "content-encoding") !== ZSTD) return reply.body;
   const out: Uint8Array[] = [];
   const decompress = new Decompress((data) => {
@@ -76,13 +84,18 @@ function plain(reply: WireReply): Pull<Uint8Array> {
       try {
         decompress.push(chunk ?? empty, ended);
       } catch (error) {
-        // Cut off short of its end (a stream let go of): what came is all there is.
-        if (ended) continue;
+        // Live streams can end between flushed blocks; a finite JSON reply must end its frame.
+        if (ended && partial) continue;
         return yield* Effect.fail(new HostError(t("core-logic.mesh.read_failed", { error: (error as Error).message })));
       }
     }
   });
   return { take };
+}
+
+/// A reply head's header `name` (lower case), if it has it.
+function headerOf(headers: [string, string][], name: string): string | undefined {
+  return headers.find(([k]) => k.toLowerCase() === name)?.[1];
 }
 
 /// A station's answer to a path it has no route for (`no route GET /…`): a station from before that route.
@@ -120,6 +133,7 @@ export class Requests {
     span.set("stillfail.station", station.station);
     if (bodySize > 0) span.set("http.request.body.size", bodySize);
     const h: [string, string][] = [...headers, ["traceparent", span.context.traceparent()], [LANG_HEADER, current()]];
+    if (!path.startsWith("/preview/")) h.push(["stillfail-runtimes", RUNTIMES.join(",")]);
     if (!path.startsWith("/preview/") && !headers.some(([k]) => k.toLowerCase() === "accept-encoding")) h.push(["accept-encoding", ZSTD]);
     // A write carries a key of its own: a station that keeps writes to once does it once however often it arrives.
     const m = method.toUpperCase();
@@ -134,8 +148,10 @@ export class Requests {
   /// One whole request: its status, its reply's head, its body. `quiet`: in the background, not said to be waited on.
   /// `heard`: how much of the body has come, now and then as it comes (every PART_STEP); `wrote`: how much of what is
   /// sent has gone, as it goes (a wire that sends it whole says nothing); `sink`: a 2xx answer's body handed over as it
-  /// comes, in pieces of PART_STEP (the last smaller), not kept (the body given is empty).
-  exchange(station: StationAddr, method: string, path: string, headers: [string, string][], body: Uint8Array, quiet: boolean, ctx: SpanContext | null, heard?: (loaded: number) => void, wrote?: (sent: number) => void, sink?: (piece: Uint8Array) => void): Effect.Effect<{ status: number; headers: [string, string][]; body: Uint8Array }, CoreError> {
+  /// comes, in pieces of PART_STEP (the last smaller), not kept (the body given is empty); `onHead`: the reply's status
+  /// and head as they come, before its body. `json`: validate finite compression/JSON and bound each idle wait.
+  exchange(station: StationAddr, method: string, path: string, headers: [string, string][], body: Uint8Array, quiet: boolean, ctx: SpanContext | null, heard?: (loaded: number) => void, wrote?: (sent: number) => void, sink?: (piece: Uint8Array) => void, onHead?: (status: number, headers: [string, string][]) => void, json = false): Effect.Effect<{ status: number; headers: [string, string][]; body: Uint8Array; json?: unknown }, CoreError> {
+    const idleMs = json ? JSON_IDLE_MS : 0;
     return Effect.scoped(
       Effect.gen({ self: this }, function* () {
         const status = this.#status(station);
@@ -143,11 +159,12 @@ export class Requests {
         const [span, head] = this.#head(station, method, path, headers, body.length, ctx);
         const result = yield* Effect.result(
           Effect.gen({ self: this }, function* () {
-            const reply = yield* this.wire.request(station, head, body, wrote);
+            const reply = yield* within(this.wire.request(station, head, body, wrote), idleMs);
             answered(span, reply);
+            onHead?.(reply.status, reply.headers);
             // What came over the link is counted (and said in the span); what it says, decompressed.
             let came = 0;
-            const counted = { ...reply, body: { take: Effect.tap(reply.body.take, (chunk) => Effect.sync(() => chunk && ((came += chunk.length), waiting ? waiting.received(chunk.length) : status.received(null, chunk.length)))) } };
+            const counted = { ...reply, body: { take: Effect.tap(within(reply.body.take, idleMs), (chunk) => Effect.sync(() => chunk && ((came += chunk.length), waiting ? waiting.received(chunk.length) : status.received(null, chunk.length)))) } };
             let loaded = 0;
             let told = 0;
             // An error's body is read as any other's: what it says is the error.
@@ -159,7 +176,7 @@ export class Requests {
               held.length = 0;
               heldBytes = 0;
             };
-            const bytes = yield* readAll(plain(counted), (chunk) => {
+            const bytes = yield* readAll(plain(counted, !json), (chunk) => {
               loaded += chunk.length;
               if (heard && loaded - told >= PART_STEP) heard((told = loaded));
               if (give) {
@@ -170,8 +187,12 @@ export class Requests {
             hand();
             span.set("http.response.body.size", came);
             if (came !== loaded) span.set("stillfail.body.decompressed", loaded);
+            const parsed = json ? parseJson(bytes) : undefined;
+            if (json && parsed === undefined && reply.status >= 200 && reply.status < 300 && reply.status !== 204 && reply.status !== 205) {
+              return yield* Effect.fail(new CoreError("bad_response", t("station.core.invalidReply")));
+            }
             if (reply.status >= 200 && reply.status < 300) this.onAnswered(station);
-            return { status: reply.status, headers: reply.headers, body: bytes };
+            return { status: reply.status, headers: reply.headers, body: bytes, ...(json ? { json: parsed } : {}) };
           }).pipe(Effect.ensuring(Effect.sync(() => waiting?.end()))),
         );
         if (result._tag === "Failure") {
@@ -190,10 +211,9 @@ export class Requests {
     const bytes = body === undefined || body === null ? empty : toJsonBytes(body);
     const headers: [string, string][] = body === undefined || body === null ? [] : [["content-type", "application/json"]];
     if (options.headers) headers.push(...options.headers);
-    return Effect.flatMap(this.exchange(station, method, path, headers, bytes, options.quiet ?? false, options.ctx ?? null), (r) => {
-      // Like the web's `response.json().catch(() => ({}))`.
-      const parsed = parseJson(r.body);
-      const data = parsed === undefined ? {} : parsed;
+    return Effect.flatMap(this.exchange(station, method, path, headers, bytes, options.quiet ?? false, options.ctx ?? null, undefined, undefined, undefined, undefined, true), (r) => {
+      // Parsed inside the exchange: invalid JSON also fails its request span.
+      const data = r.json === undefined ? {} : r.json;
       return r.status >= 200 && r.status < 300 ? Effect.succeed(data as unknown) : Effect.fail(httpError(r.status, data));
     });
   }
@@ -352,10 +372,16 @@ export class Requests {
 
   /// GET /sessions/:key/parts?name=&offset=&length=: a part of a file and its whole size, for a big one fetched a part at
   /// a time (onto the disk) rather than whole. `unsupported` from a station from before parts (it has no such route).
-  /// `heard`: the part's bytes so far, as they come; `sink`: its bytes handed over as they come, not kept (`bytes` empty).
-  filePart(station: StationAddr, key: string, name: string, offset: number, length: number, ctx: SpanContext | null, heard?: (loaded: number) => void, sink?: (piece: Uint8Array) => void): Effect.Effect<{ type: string; total: number; bytes: Uint8Array }, CoreError> {
+  /// `heard`: the part's bytes so far, as they come; `sink`: its bytes handed over as they come, not kept (`bytes` empty);
+  /// `said`: what the station says it is, as its answer begins (before its bytes).
+  filePart(station: StationAddr, key: string, name: string, offset: number, length: number, ctx: SpanContext | null, heard?: (loaded: number) => void, sink?: (piece: Uint8Array) => void, said?: (head: { type: string; total: number }) => void): Effect.Effect<{ type: string; total: number; bytes: Uint8Array }, CoreError> {
     const path = `/sessions/${encode(key)}/parts?name=${encode(name)}&offset=${offset}&length=${length}`;
-    return Effect.flatMap(this.exchange(station, "GET", path, [], empty, false, ctx, heard, undefined, sink), (r) => {
+    const onHead = said && ((status: number, headers: [string, string][]) => {
+      if (status !== 200) return;
+      const total = Number(headerOf(headers, "stillfail-total"));
+      if (Number.isSafeInteger(total)) said({ type: headerOf(headers, "content-type") ?? "", total });
+    });
+    return Effect.flatMap(this.exchange(station, "GET", path, [], empty, false, ctx, heard, undefined, sink, onHead), (r) => {
       if (r.status === 404 && isNoRoute(r.body)) return Effect.fail(new CoreError("unsupported", t("station.core.fileOldStation"), 404));
       if (r.status !== 200) {
         const data = parseJson(r.body);
@@ -389,10 +415,16 @@ export class Requests {
   }
 
   /// GET /drive/read?root=&path=&offset=&length=: a part of a file of the station's drive, its whole size and time.
-  /// `heard`, `sink`: as filePart's.
-  driveRead(station: StationAddr, root: string, path: string, offset: number, length: number, ctx: SpanContext | null, heard?: (loaded: number) => void, sink?: (piece: Uint8Array) => void): Effect.Effect<{ type: string; total: number; mtime: number | null; bytes: Uint8Array }, CoreError> {
+  /// `heard`, `sink`, `said`: as filePart's.
+  driveRead(station: StationAddr, root: string, path: string, offset: number, length: number, ctx: SpanContext | null, heard?: (loaded: number) => void, sink?: (piece: Uint8Array) => void, said?: (head: { type: string; total: number; mtime: number | null }) => void): Effect.Effect<{ type: string; total: number; mtime: number | null; bytes: Uint8Array }, CoreError> {
     const asked = `/drive/read?root=${encode(root)}&path=${encode(path)}&offset=${offset}&length=${length}`;
-    return Effect.flatMap(this.exchange(station, "GET", asked, [], empty, false, ctx, heard, undefined, sink), (r) => {
+    const onHead = said && ((status: number, headers: [string, string][]) => {
+      if (status !== 200) return;
+      const total = Number(headerOf(headers, "stillfail-total"));
+      const mtime = Number(headerOf(headers, "stillfail-mtime"));
+      if (Number.isSafeInteger(total)) said({ type: headerOf(headers, "content-type") ?? "", total, mtime: Number.isSafeInteger(mtime) ? mtime : null });
+    });
+    return Effect.flatMap(this.exchange(station, "GET", asked, [], empty, false, ctx, heard, undefined, sink, onHead), (r) => {
       if (r.status === 404 && isNoRoute(r.body)) return Effect.fail(new CoreError("unsupported", t("station.core.driveOldStation"), 404));
       if (r.status !== 200) {
         const data = parseJson(r.body);

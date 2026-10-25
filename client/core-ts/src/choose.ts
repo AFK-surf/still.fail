@@ -382,21 +382,23 @@ export class Choose implements Owner {
 
   // ── a model control ──
 
-  #now(station: string, o: Of): [J[], J, J, boolean, boolean] | undefined {
+  /// What a control runs on now: its options, its value, the account it is on, whether its runtime is fixed, whether it
+  /// names its account only when asked to, and how many accounts could run it (a chat's: its runtime's with its model).
+  #now(station: string, o: Of): [J[], J, J, boolean, boolean, number] | undefined {
     const overview = () => this.#env.store.get({ topic: "overview", station });
     const now = this.#env.now();
     switch (o.kind) {
       case "new": {
         const [options, r] = this.#onStation(station);
         if (overview() === undefined) return undefined;
-        return [options, picked(r), null, false, true];
+        return [options, picked(r), null, false, true, 0];
       }
       case "connectNew": {
         const ov = overview();
         if (ov === undefined) return undefined;
         const options = models(ov, now);
         const r = resolve(options, this.#adding.get(`${station}\u0001${o.form}`) ?? {});
-        return [options, picked(r), null, false, false];
+        return [options, picked(r), null, false, false, 0];
       }
       case "connect": {
         const ov = overview();
@@ -405,7 +407,7 @@ export class Choose implements Owner {
         if (connect === undefined) throw new CoreError("http_404", t("core-logic.choose.error.no_connect"), 404);
         const bind = connect.bind;
         const options = models(ov, now).filter((m) => arr(m.runtimes).some((r) => equal(r, get(bind, "runtime"))));
-        return [options, { model: text(get(bind, "model")), runtime: get(bind, "runtime") ?? null, effort: text(get(bind, "effort")), profile: text(get(bind, "profile")) }, null, true, false];
+        return [options, { model: text(get(bind, "model")), runtime: get(bind, "runtime") ?? null, effort: text(get(bind, "effort")), profile: text(get(bind, "profile")) }, null, true, false, 0];
       }
       case "session": {
         const agent = this.#env.agent(station, o.key);
@@ -414,7 +416,7 @@ export class Choose implements Owner {
         const pinned = get(s, "profilePinned") === true;
         const value = { model: text(get(s, "model")), runtime: get(s, "runtime") ?? null, effort: text(get(s, "effort")), fast: get(s, "fast") ?? null, profile: pinned ? text(get(s, "profile")) : null };
         const current = isObject(agent.account) ? agent.account : null;
-        return [arr(agent.choices), value, current, true, false];
+        return [arr(agent.choices), value, current, true, false, arr(agent.profiles).length];
       }
     }
   }
@@ -457,7 +459,7 @@ export class Choose implements Owner {
     const o = of(oName);
     const now = this.#now(station, o);
     if (now === undefined) return undefined;
-    const [own, value, current, fixed, quiet] = now;
+    const [own, value, current, fixed, quiet, runnable] = now;
     const options = this.#withWorkspace(station, own, fixed && typeof value.runtime === "string" ? value.runtime : null);
     const draft = this.#drafts.get(topicKey(topic)) ?? {};
     const pickedOf = (field: string) => text(field in draft ? draft[field] : get(value, field));
@@ -523,6 +525,8 @@ export class Choose implements Owner {
     const whoLevel = dropped ? "amber" : profile === null && kept === null ? low : null;
     const currentName = typeof get(current, "name") === "string" ? current.name : "";
     const autoNote = current !== null && kept === null ? t("core-logic.choose.account.now", { name: currentName }) : t("core-logic.choose.account.auto_note");
+    // A chat's account picked again now (`pick.repick`), beside 自动: when another could take it.
+    const repick = current !== null && runnable > 1 ? t("core-logic.choose.account.repick") : null;
     const optionName = option !== undefined && typeof option.name === "string" ? option.name : null;
     const nameOf = (x: string | null): string | null => {
       if (x === null) return null;
@@ -582,6 +586,7 @@ export class Choose implements Owner {
         who,
         whoLevel,
         autoNote,
+        repick,
         changed,
         was,
         becomes,
@@ -658,6 +663,36 @@ export class Choose implements Owner {
     this.#drafts.delete(topicKey(topic));
     this.#changed();
     return saved;
+  }
+
+  /// `pick.repick`: a chat's account given back to the station and picked again now, as a new chat's would be (the
+  /// account drafted in its panel gives way; its other picks stay drafted). The request, and what its answer says: the
+  /// account picked, the one it was on or another.
+  repick(station: string, oName: string): [ops.Request, (answer: J) => J] {
+    const o = of(oName);
+    const topic: Topic = { topic: "pick", station, of: oName };
+    const view = this.#pick(topic, station, oName);
+    if (view === undefined) throw CoreError.invalid(t("core-logic.choose.error.no_options_yet"));
+    if ("err" in view) throw view.err;
+    const v = view.ok as J;
+    if (o.kind !== "session" || v.repick === null) throw CoreError.invalid(t("core-logic.choose.repick.none"));
+    const op = ops.request("session.settings", { station, key: o.key, profile: null, repick: true });
+    if (op === null) throw CoreError.invalid("session.settings");
+    const agent = this.#env.agent(station, o.key);
+    const was = get(get(agent, "account"), "id");
+    const names = new Map(arr(get(agent, "profiles")).map((p) => [p.id, typeof p.name === "string" ? p.name : p.id]));
+    const draft = this.#drafts.get(topicKey(topic));
+    if (draft !== undefined && "profile" in draft) {
+      delete draft.profile;
+      this.#changed();
+    }
+    const said = (answer: J): J => {
+      const id = text(get(answer, "profile"));
+      // A station from before picking again: given back to it, nothing said.
+      if (id === null) return { profile: null, said: null };
+      return { profile: id, said: t(id === was ? "core-logic.choose.repick.same" : "core-logic.choose.repick.moved", { name: names.get(id) ?? id }) };
+    };
+    return [op, said];
   }
 
   /// `pick.borrow`: the station that has the picked model's account shares its profile with this one (its allow list

@@ -1,5 +1,5 @@
 // Claude Code, Codex, DeepSeek Harness, Grok Build and Devin on this machine (Cursor's SDK: updates.ts readCursor) (the Rust station's updates.rs): where the station's PATH finds
-// them, how each is updated the way it was installed (`claude update`, Devin's installer, npm, Homebrew, Vite+, Codex's
+// them, how each is updated the way it was installed (`claude update`, Devin's installer, npm, Homebrew, winget, Vite+, Codex's
 // standalone installer) or installed when it is not there, and running those commands.
 import { existsSync, lstatSync, readdirSync, readlinkSync, realpathSync, unlinkSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -27,8 +27,9 @@ export const kindPackage = (k: Kind) => (k === "claude" ? "@anthropic-ai/claude-
 export const DEVIN_MANIFEST = "https://static.devin.ai/cli/current/manifest.json";
 
 /// How an update is done: a program and its arguments; for an npm install on a machine that has no npm, the Node it is
-/// done with, installed first.
-export type How = { program: string; args: string[]; node?: OwnNode };
+/// done with, installed first; the exit code with which the program says it has no update it can apply (winget's), not
+/// that it failed.
+export type How = { program: string; args: string[]; node?: OwnNode; noUpdate?: number };
 
 /// A Node as nodejs.org builds it, for what npm installs where the machine has none (as Zed does for its language
 /// servers): `version` (the one the station runs on), unpacked at `at` (<data>/node/<dist>), its commands in `bin`.
@@ -121,11 +122,12 @@ export function howToUpdate(kind: Kind, found: Found, env: Env): How | Unable {
   const realPath = found.real.split(platform.paths.separator).join("/");
   const name = kindName(kind);
   if (kind === "station") return new Unable("");
+  if (kind === "hermes") return new Unable("station.updates.hermesExternal");
   // The Devin CLI's installer keeps its versions under its data directory (devin/cli/_versions), the command a link to
   // the current one: the installer again fetches the latest and switches it (`devin update` wants a terminal: without
   // one it ends at once, nothing done).
   if (kind === "devin") return realPath.includes("/devin/cli/_versions/") ? platform.devinInstall : new Unable("station.updates.devinElsewhere", { path: realPath });
-  // A package manager's shim of this machine's kind (Windows: Vite+'s beside vp.exe, npm's .cmd in its prefix).
+  // A package manager's of this machine's kind (Windows: winget's, Vite+'s shim beside vp.exe, npm's .cmd in its prefix).
   const shim = platform.shimUpdate(found, kindPackage(kind), env);
   if (shim === "no-npm") return new Unable("station.updates.noNpm", { name });
   if (shim !== null) return shim;
@@ -201,6 +203,7 @@ CODEX_HOME="$1" CODEX_INSTALL_DIR="$2" CODEX_NON_INTERACTIVE=1 sh -c "$installer
 /// none, `node`'s: installed first), Devin by its own installer (into ~/.local/bin too).
 export function howToInstall(kind: Kind, env: Env, node: OwnNode | null = null): How | Unable {
   if (kind === "station") return new Unable("");
+  if (kind === "hermes") return new Unable("station.updates.hermesExternal");
   if (kind === "claude") return platform.claudeInstall;
   if (kind === "devin") return platform.devinInstall;
   // DeepSeek Harness is an npm package (it runs on the Node npm is of: 22.19 or newer).
@@ -253,8 +256,9 @@ export class NotFinished extends Error {}
 /// Runs a command to its end: whether it succeeded, and what it said (stdout and stderr), each line told as it is said.
 /// Out of any repository (npm and claude look around them) and in its own process group (npm's children end with it
 /// when it runs too long). The environment is exactly `env`.
-export function runLines(program: string, args: string[], env: Env, timeoutMs: number, onLine: (line: string) => void = () => {}, lang: Lang = "zh"): Promise<[boolean, string]> {
-  return runBoth(program, args, env, timeoutMs, onLine, lang).then(([ok, said]) => [ok, said]);
+/// Its exit code too (none for a signal), unsigned as Windows has it (winget's 0x8A15002B, not negative).
+export function runLines(program: string, args: string[], env: Env, timeoutMs: number, onLine: (line: string) => void = () => {}, lang: Lang = "zh"): Promise<[boolean, string, number | null]> {
+  return runBoth(program, args, env, timeoutMs, onLine, lang).then(([ok, said, , , code]) => [ok, said, code === null ? null : code >>> 0]);
 }
 
 /// Runs a command to its end as `runLines` does; what it said as `run` has it: stdout, then stderr.
@@ -262,7 +266,7 @@ export function run(program: string, args: string[], env: Env, timeoutMs: number
   return runBoth(program, args, env, timeoutMs, () => {}, lang).then(([ok, , out, err]) => [ok, out + err]);
 }
 
-function runBoth(program: string, args: string[], env: Env, timeoutMs: number, onLine: (line: string) => void, lang: Lang): Promise<[boolean, string, string, string]> {
+function runBoth(program: string, args: string[], env: Env, timeoutMs: number, onLine: (line: string) => void, lang: Lang): Promise<[boolean, string, string, string, number | null]> {
   return new Promise((resolve, reject) => {
     const clean: Record<string, string> = {};
     for (const [k, v] of Object.entries(env)) if (v !== undefined) clean[k] = v;
@@ -305,7 +309,7 @@ function runBoth(program: string, args: string[], env: Env, timeoutMs: number, o
     });
     child.on("close", (code) => {
       timer();
-      void ends.then(() => resolve([code === 0, said, whole[0]!, whole[1]!]));
+      void ends.then(() => resolve([code === 0, said, whole[0]!, whole[1]!, code]));
     });
   });
 }

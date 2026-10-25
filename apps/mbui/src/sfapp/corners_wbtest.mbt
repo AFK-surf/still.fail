@@ -1,110 +1,122 @@
-// A phone's or a tablet's wide screen (corners.mbt) over the fixture: Android's (Wide.kt), not the desktop's frame. A
-// film turned sideways makes a phone's screen this wide.
+// The corner rule (mbui's Tester::corner_faults; still.fail's docs/ui-panels.md「所有带圆角的东西」「圆角阶梯」: what
+// lies in a rounded container's corner as far from both its edges and concentric with it, the corners of both the
+// ladder's) on every screen sffix opens, in the narrowest window of each layout and a wide desktop's, in both of the
+// app's languages, over the Tester's own text (the faults a screen has its own, the same on every machine). Each keeps
+// to the bar corners_everywhere_known says (the faults it still has): one more fails, and one less until the bar is
+// lowered there. A screen not listed has none. scripts/corners.sh shows the same screens in a Mac's text, as
+// pictures, what breaks the rule outlined. The same frame of each screen in squeeze_windows and squeeze_modes is held to
+// its squeeze bar too (squeeze_wbtest.mbt): a screen is opened once for both. (The screens' own tests, screens_wbtest.mbt, hold the phone's screens in
+// the Mac's text to corners_known.)
 
 ///|
-/// Where the widget said as `label` is (x, y, w, h).
-fn said_at(t : @ui.Tester, label : String) -> (Double, Double, Double, Double)? {
-  for s in t.semantics() {
-    if s.label == label && !s.hidden {
-      return Some(s.rect)
+/// The windows: the narrowest of each layout (squeeze_windows: a phone's, a finger's Medium, a desktop's Medium, a
+/// tablet's Large) and a wide desktop's (Large, its dialogs and pages at their widest); the desktop's on a Mac (its
+/// window's corners 16: what lies in them follows them) and on Windows 11 (8: too square to follow, so standing as
+/// alone, as in a square window) (test_window_corner).
+let corner_windows : Array[(String, Double, Double, Int, String)] = [
+  ("phone", 360.0, 740.0, 2, ""),
+  ("touch", 600.0, 900.0, 2, "medium"),
+  ("desk", 600.0, 760.0, 0, ""),
+  ("desk-win", 600.0, 760.0, 3, ""),
+  ("tablet", 840.0, 900.0, 2, "expanded"),
+  ("wide", 1280.0, 800.0, 0, ""),
+  ("wide-win", 1280.0, 800.0, 3, ""),
+]
+
+///|
+/// The screens: every mode sffix opens (fixture.mbt open_fixture_mode, settings/fixture.mbt fixture_page).
+let corner_modes : Array[String] = [
+  // (webdemo: the web's demo workspace, its chats' rows with people's faces, which chat's fixture has none)
+  "webdemo", "home", "home-bars", "home-jobs", "home-sheet", "home-news", "landing", "landing-invited", "blocked", "place",
+  "switcher", "switcher-found", "keys-dialog", "search", "search-jobs", "search-results", "chat", "chat-agent",
+  "chat-agent-unsaid", "chat-answering", "chat-attach", "chat-attach-row", "chat-cards", "chat-compose", "chat-download", "chat-failed",
+  "chat-file-links", "chat-find", "chat-flash", "chat-flash-mine", "chat-history-side", "chat-info", "chat-job",
+  "chat-jobs", "chat-jobs-pop", "chat-jobs-side", "chat-letters", "chat-letters-info", "chat-letters-open",
+  "chat-letters-pop", "chat-letters-side", "chat-link-menu", "chat-loading", "chat-login", "chat-long", "chat-md",
+  "chat-model-pop", "chat-need", "chat-peek", "chat-pick", "chat-preview-apk", "chat-preview-audio",
+  "chat-preview-code", "chat-preview-csv", "chat-preview-html", "chat-preview-image", "chat-preview-md",
+  "chat-preview-none", "chat-preview-pdf", "chat-preview-step", "chat-preview-swipe", "chat-preview-video",
+  "chat-publish", "chat-quote", "chat-screens", "chat-sending", "chat-station-file", "chat-station-files",
+  "chat-station-ref", "chat-station-sheet", "chat-tabs-side", "chat-update", "chat-viz", "chat-working", "decisions", "decisions-idle", "decisions-text", "archived",
+  "history", "history-details", "drive", "drive-roots", "drive-download", "drive-empty", "drive-loading", "drive-sub", "drive-upload",
+  "files", "files-clash", "files-columns", "files-list", "files-preview", "files-split", "files-transfers",
+  "files-tree", "place-stations", "place-profiles", "reader", "reader-bars", "reader-contents", "reader-layout", "reader-md", "newchat", "newchat-files",
+  "newchat-model", "newchat-profiles", "newchat-reading", "newchat-station", "player-audio", "player-ended",
+  "player-opening", "player-video", "service", "service-restart", "service-sized", "service-stopped", "share-in",
+  "share-in-files", "share-in-stations", "lock-checking", "lock-code", "lock-failed", "lock-finding", "lock-nocode",
+  "lock-none", "lock-refused", "lock-security", "lock-waiting", "lock-wrong", "screen-agent-driving",
+  "screen-agent-paused", "screen-clipboard-driving", "screen-clipboard-old-station", "screen-connecting",
+  "screen-denied", "screen-ended", "screen-failed", "screen-files-done", "screen-files-going", "screen-full",
+  "screen-full-tools", "screen-gone", "screen-live", "screen-not-drivable", "screen-outdated", "screen-read-only",
+  "screen-reconnecting", "screen-trackpad", "screen-trackpad-command", "settings-home", "settings-appearance",
+  "settings-me", "settings-me-reading", "settings-workspace", "settings-security", "settings-vault",
+  "settings-vault-item", "settings-stations", "settings-station", "settings-station-offline", "settings-station-env", "settings-station-processes",
+  "settings-station-mark", "settings-station-lower", "settings-station-versions", "settings-stations-add",
+  "settings-stations-existing", "settings-stations-command", "settings-first-station", "settings-adb",
+  "settings-profiles", "settings-profile", "settings-profile-quota", "settings-profile-models",
+  "settings-profile-lower", "settings-profile-login", "settings-profile-login-failed", "settings-profile-quota-failed",
+  "settings-profile-blocked", "settings-profile-signin", "settings-profile-key", "settings-new-profile",
+  "settings-connects", "settings-connect", "settings-connect-menu", "settings-connect-mode", "settings-connect-run",
+  "settings-new-connect", "settings-new-connect-platform", "settings-new-connect-scan", "settings-new-connect-app",
+  "settings-slack-app", "settings-memory", "settings-memory-doc", "settings-usage", "settings-archive", "settings-kept",
+  "settings-kept-many", "settings-vault-off", "settings-vault-plain", "settings-vault-words", "settings-vault-add",
+  "settings-vault-editor", "settings-vault-recover", "settings-lock-prompt", "settings-add-people",
+  "settings-workspace-mark", "settings-local-fonts", "settings-policy", "settings-policy-text",
+  "settings-policy-option", "settings-security-confirm", "settings-security-join", "settings-security-off",
+  "settings-run", "settings-run-models", "settings-run-accounts", "settings-fonts", "settings-fonts-code",
+  "settings-decisions", "settings-completion", "settings-bars", "settings-changelog", "settings-prices",
+  "settings-notify-off", "settings-notify-denied",
+]
+
+///|
+/// `lang`'s screens in every window, each against its bars: the corners' and, the squeeze's ones, the squeeze's.
+fn corners_check(lang : String) -> Unit raise {
+  let wrong : Array[String] = []
+  let gaps : Array[String] = []
+  for win in corner_windows {
+    let squeezed = squeeze_windows.contains(win.0)
+    for mode in corner_modes {
+      let at = "\{win.0}-\{lang} \{mode}"
+      let t = screen_in(mode, win, lang)
+      let faults = t.corner_faults()
+      for f in t.gap_faults() {
+        gaps.push("\{at}: \{f}")
+      }
+      let known = corners_everywhere_known.get(at).unwrap_or(0)
+      if faults.length() != known {
+        wrong.push(
+          "\{at}: \{faults.length()} corners break the rule, \{known} known (" +
+          (if faults.length() < known {
+            "fewer: its bar comes down in corners_known_wbtest.mbt"
+          } else {
+            "more than its bar: stand it where it is concentric, or round its container by the ladder's"
+          }) +
+          ")\n  " +
+          faults.join("\n  "),
+        )
+      }
+      if squeezed && squeeze_modes.contains(mode) {
+        if squeeze_wrong(at, t.squeeze_faults()) is Some(w) {
+          wrong.push(w)
+        }
+      }
     }
   }
-  None
-}
-
-///|
-/// The widget said as `label` tapped in its middle.
-fn tap_said(t : @ui.Tester, label : String) -> Unit raise {
-  match said_at(t, label) {
-    Some((x, y, w, h)) => t.tap(x + w / 2.0, y + h / 2.0)
-    None => fail("nothing said \{label}")
+  match gaps_wrong(lang, gaps) {
+    Some(w) => wrong.push(w)
+    None => ()
+  }
+  if wrong.length() > 0 {
+    fail(wrong.join("\n"))
   }
 }
 
 ///|
-test "a phone turned sideways for a film: the player the whole screen, no rail nor list beside it; upright, the phone's" {
-  reset()
-  let src = fixture("player-video")
-  open_drive_fixture("player-video")
-  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0, platform=2)
-  nav_rested(t)
-  tap_said(t, "全屏")
-  // the host turns the phone for it (Host.setSideways: landscape)
-  t.resize(844.0, 390.0)
-  assert_true(corners_on.val)
-  assert_false(wide_on.val)
-  assert_true(app.nav.top() is DrivePlay(_))
-  // its back key at the screen's own left edge, not beside a rail and a list; nothing at its corners
-  let (bx, _, _, _) = said_at(t, "返回").unwrap()
-  assert_true(bx < rail_w, msg="the player's back at \{bx}")
-  assert_true(said_at(t, "最近会话") is None)
-  assert_true(said_at(t, "退出全屏") is Some(_))
-  // back turns it upright first (Player.kt BackHandler(sideways)), the host turning the phone back
-  t.back()
-  t.resize(390.0, 844.0)
-  assert_false(corners_on.val)
-  assert_true(app.nav.top() is DrivePlay(_))
-  assert_true(said_at(t, "全屏") is Some(_))
+test "corners and squeeze: every screen in every window keeps the corner rule and fits, in Chinese" {
+  corners_check("zh")
 }
 
 ///|
-test "a chat on a wide phone: the screen's width, a finger drags its list, the latest chats beside the composer" {
-  reset()
-  let src = fixture("chat")
-  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
-  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=844.0, h=390.0, platform=2)
-  t.run_for(@ui.nav_push_ms)
-  assert_true(corners_on.val)
-  assert_false(wide_on.val)
-  // the composer starts beside the latest chats' button (ChatHost.kt besideRecent)
-  let (fx, _) = t.find("发消息").unwrap()
-  assert_true(fx > beside_recent, msg="the composer's words at \{fx}")
-  let (rx, _, rw, _) = said_at(t, "最近会话").unwrap()
-  assert_true(rx + rw < beside_recent)
-  // a finger's drag down the list moves it (the desktop's frame took drags from the finger)
-  let rd = readings.get("ws1/st1\u{1}s-c1").unwrap()
-  assert_true(!rd.jump)
-  t.drag(422.0, 80.0, 422.0, 330.0)
-  t.drag(422.0, 80.0, 422.0, 330.0)
-  assert_true(rd.jump)
-  t.run_for(ask_lift_ms)
-  if t.list_moving() {
-    t.tap(422.0, 200.0)
-  }
-  // the latest chats raised over the page: the one open there; the whole list at their foot is Home
-  tap_said(t, "最近会话")
-  assert_true(t.find("全部会话") is Some(_))
-  assert_true(t.find("整理发布清单") is Some(_))
-  t.tap_text("全部会话")
-  nav_rested(t)
-  assert_true(app.nav.top() == Home)
-  assert_true(t.find("全部会话") is None)
-  // Home's corner: 奏 and the new-chat button; no bottom bar
-  assert_true(said_at(t, "新建对话") is Some(_))
-  assert_true(said_at(t, "最近会话") is None)
-  assert_false(bar_tabs(t))
-  // upright: the phone's bottom bar again, no corners
-  t.resize(390.0, 844.0)
-  t.run_for(bar_show_ms)
-  assert_false(corners_on.val)
-  assert_true(bar_tabs(t))
-}
-
-///|
-/// Whether the bottom bar's places are on the screen.
-fn bar_tabs(t : @ui.Tester) -> Bool {
-  t.semantics().iter().any(fn(s) { s.role == @ui.Role::Tab && !s.hidden })
-}
-
-///|
-test "a desktop as wide has its own frame; a tablet's and a phone's do not" {
-  for p in [(0, true), (3, true), (1, false), (2, false)] {
-    let (platform, frame) = p
-    reset()
-    let src = fixture("home")
-    let t = @ui.Tester::new(fn(c) { view(c, src) }, w=1024.0, h=768.0, platform~)
-    t.draw()
-    assert_eq(wide_on.val, frame, msg="platform \{platform}")
-    assert_eq(corners_on.val, !frame, msg="platform \{platform}")
-  }
+test "corners and squeeze: every screen in every window keeps the corner rule and fits, in English" {
+  corners_check("en")
 }

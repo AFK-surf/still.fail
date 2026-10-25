@@ -11,13 +11,15 @@
 // Reads: a row asked for by key is kept (by identity, frozen) until it is written; a station's list a view shows (its
 // chats, sessions, threads, jobs) is loaded by one indexed query the first time it is asked for and from then on kept
 // current by the writer, row by row, until no topic reads it. Nothing is loaded at start.
+import { lowerBound, upperBound } from "../ordered.ts";
+import { LogIndex, LogIndices } from "./log-index.ts";
 import { Deferred, Effect, type Fiber, Queue } from "effect";
 import type { Sql, SqlRow, SqlValue } from "../host.ts";
 import { SqlError, sqlError } from "../host.ts";
 import { topicKey, type Topic } from "../protocol.ts";
 import type { Runner } from "../runtime.ts";
 import { equal, isObject } from "../util.ts";
-import { ensureFilesKept, ensureKept, ensureSaid, ensureSlackSaid, migrate, versionOf } from "./schema.ts";
+import { ensureFilesKept, ensureKept, ensureMdKept, ensureSaid, ensureSlackSaid, migrate, versionOf } from "./schema.ts";
 import { readItem, type Said } from "../elsewhere.ts";
 
 // deno-lint-ignore no-explicit-any
@@ -209,6 +211,11 @@ const FILES_KEPT = 64 * 1024 * 1024;
 const FILES_KEPT_TO = 0.8;
 const FILE_KEPT_MOST = 1024 * 1024;
 const FILE_SHOWN_EVERY = 86_400_000;
+/// The trees of agents' words kept (`md_kept`, in characters of their JSON), as file_kept's: at most this much, let go
+/// to MD_KEPT_TO of it past that, when one was shown noted at most once in MD_SHOWN_EVERY.
+const MD_KEPT = 32 * 1024 * 1024;
+const MD_KEPT_TO = 0.8;
+const MD_SHOWN_EVERY = 86_400_000;
 
 /// The tables of what this device did itself: written again on their own when a burst could not be (a full disk).
 const PRECIOUS = /^(INSERT|DELETE|UPDATE)[^(]*\b(outbox|pending|first|changing|draft|workspace_pref)\b/i;
@@ -243,6 +250,7 @@ export class AccountDb {
   #waiting: Deferred.Deferred<void>[] = [];
   readonly #cache = new Cache(4096);
   readonly #logCache = new Cache(8192);
+  readonly #logIndices = new LogIndices();
   readonly #lists = new Map<string, Collection>();
   #closed = false;
   /// Told after each burst is written, with what it changed.
@@ -280,6 +288,7 @@ export class AccountDb {
       }
       // Made as the first file is kept: a database that keeps none has no room taken for it.
       this.#filesKept = sql.all("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'file_kept'").length > 0;
+      this.#mdKept = sql.all("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'md_kept'").length > 0;
     } else if (this.sql.all("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'said'").length > 0) {
       this.#said = "scan";
     }
@@ -343,6 +352,7 @@ export class AccountDb {
       // What was read is not what is kept any more.
       this.#cache.clear();
       this.#logCache.clear();
+      this.#logIndices.clear();
       this.#lists.clear();
       const again = [...this.#unwritten, ...precious];
       this.#unwritten = [];
@@ -406,6 +416,7 @@ export class AccountDb {
   }
 
   #tellLog(table: string, station: string, id: string): void {
+    this.#logIndices.delete(K(table, station, id));
     this.#changes.logs.set(K(table, station, id), [table, station, id]);
     if (table === "slack") this.#slackNames.delete(station);
   }
@@ -894,15 +905,14 @@ export class AccountDb {
       again = detail === undefined || !sameTurns(get(detail, "turns"), summary);
       // One more turn, or the last one gone on, as the summary says it: put in place, not all its turns read again.
       const placed = again && detail !== undefined && placeTurn(detail, summary);
-      if (placed) again = false;
-      // Its detail shows it as it is now too.
-      if (detail !== undefined && (placed || JSON.stringify(detail.session) !== json)) {
-        detail.session = summary;
+      if (placed) {
+        again = false;
         this.#run("UPDATE session SET detail = ? WHERE station = ? AND key = ?", [JSON.stringify(detail), station, key]);
         this.#tellSession(station, key);
       }
       if (r && r[1] === json && r[2] === listed) return;
-      this.#putSummary(station, key, summary, json, listed, ord, r !== undefined, false);
+      // Its detail shows it as it is now too (`detail`).
+      this.#putSummary(station, key, summary, json, listed, ord, r !== undefined, detail !== undefined);
     });
     return again;
   }
@@ -932,18 +942,20 @@ export class AccountDb {
     });
   }
 
-  /// A session's detail as a topic shows it: its summary, turns and jobs as read (the summary as events since say), and
-  /// its threads as their rows are now: those it read as its own and those whose members it is among.
+  /// A session's detail as a topic shows it: its turns and jobs as read, its summary as the station last said it (in its
+  /// list or an event: one summary, so a field a station says since is in both; read with the detail alone, the detail's),
+  /// and its threads as their rows are now: those it read as its own and those whose members it is among.
   detail(station: string, key: string): J {
     const ck = K("detail", station, key);
     const hit = this.#cache.get(ck);
     if (hit !== undefined) return hit ?? undefined;
-    const r = this.sql.all("SELECT detail FROM session WHERE station = ? AND key = ?", [station, key])[0];
+    const r = this.sql.all("SELECT detail, summary FROM session WHERE station = ? AND key = ?", [station, key])[0];
     if (!r || r[0] === null) {
       this.#cache.set(ck, null);
       return undefined;
     }
     const detail = parse(r[0]);
+    if (r[1] !== null) detail.session = parse(r[1]);
     detail.threads = this.#detailThreads(station, key, Array.isArray(detail.threadIds) ? detail.threadIds : []);
     delete detail.threadIds;
     const v = frozen(detail);
@@ -1352,6 +1364,12 @@ export class AccountDb {
     return was;
   }
 
+  /// When a log was last opened here (`opened`), null when it never was.
+  lastOpened(kind: "entry" | "transcript", station: string, id: string): number | null {
+    const v = this.sql.all("SELECT opened FROM log_use WHERE kind = ? AND station = ? AND id = ?", [kind, station, id])[0]?.[0];
+    return typeof v === "number" ? v : null;
+  }
+
   /// The logs held, of `kind`, least recently used first: by when their chat was last opened here or last said
   /// something (an agent's: last active), whichever is later.
   logsByUse(kind: "entry" | "transcript", limit: number): { station: string; id: string }[] {
@@ -1388,15 +1406,35 @@ export class AccountDb {
   // ── a thread's entries and a session's transcript ──
 
   /// The numbers of a log's items held, in order.
-  logNumbers(table: "entry" | "transcript", station: string, id: string): number[] {
+  logNumbers(table: "entry" | "transcript", station: string, id: string): readonly number[] {
+    const cacheKey = K(table, station, id);
+    const hit = this.#logIndices.get(cacheKey);
+    if (hit) return hit.numbers;
     const [key, col] = table === "entry" ? ["thread", "n"] : ["session", "i"];
-    return this.sql.all(`SELECT ${col} FROM ${table} WHERE station = ? AND ${key} = ? ORDER BY ${col}`, [station, table === "entry" ? Number(id) : id]).map((r) => r[0] as number);
+    const numbers = this.sql.all(`SELECT ${col} FROM ${table} WHERE station = ? AND ${key} = ? ORDER BY ${col}`, [station, table === "entry" ? Number(id) : id]).map((r) => r[0] as number);
+    this.#logIndices.set(cacheKey, new LogIndex(numbers));
+    return numbers;
   }
 
   /// A log's items `from ..= to` held, by number.
   logRange(table: "entry" | "transcript", station: string, id: string, from: number, to: number): Map<number, J> {
     const [key, col] = table === "entry" ? ["thread", "n"] : ["session", "i"];
     const out = new Map<number, J>();
+    const index = this.#logIndices.get(K(table, station, id));
+    if (index) {
+      const numbers = index.numbers;
+      const first = lowerBound(numbers, from);
+      const end = upperBound(numbers, to);
+      for (let i = first; i < end; i++) {
+        const n = numbers[i]!;
+        const item = this.#logCache.get(K(table, station, id, n));
+        if (item === undefined) break;
+        out.set(n, item);
+      }
+      // A hot window is already parsed: do not copy its JSON strings out of SQLite on every view update.
+      if (out.size === Math.max(0, end - first)) return out;
+      out.clear();
+    }
     const rows = this.sql.all(`SELECT ${col}, json FROM ${table} WHERE station = ? AND ${key} = ? AND ${col} BETWEEN ? AND ? ORDER BY ${col}`, [station, table === "entry" ? Number(id) : id, from, to]);
     for (const r of rows) {
       const n = r[0] as number;
@@ -1416,6 +1454,8 @@ export class AccountDb {
 
   /// The highest and lowest numbers a log holds, and how many (null when it holds none).
   logSpan(table: "entry" | "transcript", station: string, id: string): { min: number; max: number; count: number } | null {
+    const index = this.#logIndices.get(K(table, station, id));
+    if (index) return index.span;
     const [key, col] = table === "entry" ? ["thread", "n"] : ["session", "i"];
     const r = this.sql.all(`SELECT min(${col}), max(${col}), count(*) FROM ${table} WHERE station = ? AND ${key} = ?`, [station, table === "entry" ? Number(id) : id])[0];
     return r && r[2] !== 0 ? { min: r[0] as number, max: r[1] as number, count: r[2] as number } : null;
@@ -1423,6 +1463,8 @@ export class AccountDb {
 
   /// How many of `from ..= to` a log holds.
   logCount(table: "entry" | "transcript", station: string, id: string, from: number, to: number): number {
+    const index = this.#logIndices.get(K(table, station, id));
+    if (index) return index.count(from, to);
     const [key, col] = table === "entry" ? ["thread", "n"] : ["session", "i"];
     return (this.sql.all(`SELECT count(*) FROM ${table} WHERE station = ? AND ${key} = ? AND ${col} BETWEEN ? AND ?`, [station, table === "entry" ? Number(id) : id, from, to])[0]?.[0] as number) ?? 0;
   }
@@ -1432,6 +1474,10 @@ export class AccountDb {
   putLog(table: "entry" | "transcript", station: string, id: string, items: [number, J][], cutAfter: number | null = null, keep = false): void {
     if (items.length === 0 && cutAfter === null) return;
     this.#write(() => {
+      const cacheKey = K(table, station, id);
+      const index = this.#logIndices.get(cacheKey);
+      // A failed SQL write must never leave a cached index of a different transaction state.
+      this.#logIndices.delete(cacheKey);
       const [key, col] = table === "entry" ? ["thread", "n"] : ["session", "i"];
       const k: SqlValue = table === "entry" ? Number(id) : id;
       let changed = false;
@@ -1466,6 +1512,10 @@ export class AccountDb {
         if (said) this.#tellLog("slack", station, id);
       }
       if (changed) this.#tellLog(table, station, id);
+      if (index) {
+        index.put(written.map(([n]) => n), cutAfter);
+        this.#logIndices.set(cacheKey, index);
+      }
     });
   }
 
@@ -1608,6 +1658,67 @@ export class AccountDb {
     });
   }
 
+  // ── the trees of what agents said (markdown.ts) ──
+
+  /// Whether `md_kept` is there (made as the first tree is kept), and what its trees take (counted at the first kept).
+  #mdKept = false;
+  #mdSize: number | null = null;
+
+  /// Whether the tree of the text keyed `key` is kept here.
+  hasMd(station: string, key: string): boolean {
+    if (!this.#mdKept) return false;
+    try {
+      return this.sql.all("SELECT 1 FROM md_kept WHERE station = ? AND key = ?", [station, key]).length > 0;
+    } catch {
+      this.#mdKept = false;
+      return false;
+    }
+  }
+
+  /// The tree of the text keyed `key` (its JSON), noted as shown `at`; null when it is not kept.
+  keptMd(station: string, key: string, at: number): string | null {
+    if (!this.#mdKept) return null;
+    let r: SqlRow | undefined;
+    try {
+      r = this.sql.all("SELECT used, json FROM md_kept WHERE station = ? AND key = ?", [station, key])[0];
+    } catch {
+      // Not made after all (the write that made it could not be kept): made again with the next one kept.
+      this.#mdKept = false;
+      return null;
+    }
+    if (r === undefined) return null;
+    if (at - Number(r[0]) >= MD_SHOWN_EVERY) this.#write(() => this.sql.run("UPDATE md_kept SET used = ? WHERE station = ? AND key = ?", [at, station, key]));
+    return String(r[1]);
+  }
+
+  /// Keeps the tree of the text keyed `key`, read for `of` (a chat, `t:<thread>`; an agent, `s:<session>`); past
+  /// MD_KEPT, the least lately shown go.
+  keepMd(station: string, of: string, key: string, json: string, at: number): void {
+    if (this.readOnly) return;
+    this.#write(() => {
+      if (!this.#mdKept) {
+        ensureMdKept(this.sql);
+        this.#mdKept = true;
+      }
+      // (what all of them take, counted once and then kept count of: a tree is kept with each reply read)
+      this.#mdSize ??= Number(this.sql.all("SELECT coalesce(sum(size), 0) FROM md_kept")[0]?.[0] ?? 0);
+      const was = Number(this.sql.all("SELECT size FROM md_kept WHERE station = ? AND key = ?", [station, key])[0]?.[0] ?? 0);
+      this.sql.run("INSERT OR REPLACE INTO md_kept (station, key, of, size, used, json) VALUES (?, ?, ?, ?, ?, ?)", [station, key, of, json.length, at, json]);
+      this.#mdSize += json.length - was;
+      if (this.#mdSize <= MD_KEPT) return;
+      for (const r of this.sql.all("SELECT station, key, size FROM md_kept ORDER BY used")) {
+        if (this.#mdSize <= MD_KEPT * MD_KEPT_TO) break;
+        this.sql.run("DELETE FROM md_kept WHERE station = ? AND key = ?", [r[0], r[1]]);
+        this.#mdSize -= Number(r[2] ?? 0);
+      }
+    });
+  }
+
+  /// The chats a station's agents last spoke in, the latest first, from `since` on: at most `most`.
+  recentThreads(station: string, since: number, most: number): number[] {
+    return this.sql.all("SELECT thread FROM chat WHERE station = ? AND archived = 0 AND thread IS NOT NULL AND last_active >= ? ORDER BY last_active DESC LIMIT ?", [station, since, most]).map((r) => r[0] as number);
+  }
+
   /// What this database keeps of each chat (a thread): its entries, its sessions' transcripts and what it shows small, in
   /// characters of their JSON (near enough their bytes), with its title and sessions; what a session has counted with
   /// its first thread. For the device's page of what it keeps (`cache.usage`).
@@ -1636,6 +1747,13 @@ export class AccountDb {
         if (thread !== undefined) of(r[0] as string, thread).bytes += Number(r[2] ?? 0);
       }
     }
+    if (this.#mdKept) {
+      for (const r of this.sql.all("SELECT station, of, sum(size) FROM md_kept GROUP BY station, of")) {
+        const [station, at] = [r[0] as string, r[1] as string];
+        const thread = at.startsWith("t:") ? Number(at.slice(2)) : firstThread.get(`${station}\0${at.slice(2)}`);
+        if (thread !== undefined && Number.isInteger(thread)) of(station, thread).bytes += Number(r[2] ?? 0);
+      }
+    }
     for (const row of out.values()) {
       const json = this.sql.all("SELECT json FROM thread WHERE station = ? AND id = ?", [row.station, row.thread])[0]?.[0];
       const title = json === undefined ? undefined : (parse(json) as { title?: unknown })?.title;
@@ -1653,6 +1771,10 @@ export class AccountDb {
       this.#forgetEntries(station, thread);
       for (const session of sessions) if (this.sql.run("DELETE FROM transcript WHERE station = ? AND session = ?", [station, session]) > 0) this.#tellLog("transcript", station, session);
       if (this.#filesKept) for (const session of sessions) this.sql.run("DELETE FROM file_kept WHERE station = ? AND session = ?", [station, session]);
+      if (this.#mdKept) {
+        for (const of of [`t:${thread}`, ...sessions.map((s) => `s:${s}`)]) this.sql.run("DELETE FROM md_kept WHERE station = ? AND of = ?", [station, of]);
+        this.#mdSize = null;
+      }
     });
   }
 
@@ -1677,9 +1799,14 @@ export class AccountDb {
       if (this.#hasSlackSaid()) this.sql.run("DELETE FROM slack_said WHERE station = ?", [station]);
       this.#slackNames.delete(station);
       if (this.#filesKept) this.sql.run("DELETE FROM file_kept WHERE station = ?", [station]);
+      if (this.#mdKept) {
+        this.sql.run("DELETE FROM md_kept WHERE station = ?", [station]);
+        this.#mdSize = null;
+      }
       for (const key of [...this.#evicted]) if (key.split("\u0001")[1] === station) this.#evicted.delete(key);
       this.#cache.clear();
       this.#logCache.clear();
+      this.#logIndices.clear();
       for (const key of [...this.#lists.keys()]) if (key.endsWith(`\u0001${station}`)) this.#lists.delete(key);
       for (const topic of ["overview", "footprint", "stationUsage", "chatRows", "archivedRows", "sessions", "threads", "jobs"]) this.#tell({ topic, station });
     });

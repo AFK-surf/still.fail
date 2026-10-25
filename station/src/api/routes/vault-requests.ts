@@ -8,6 +8,10 @@
 // vault/plain (a version; security mode on, only a deletion: the items are moved into the viewer's vault), PUT
 // vault/plain/lasts ({lasts, at}: the longest grant of the viewer's items that say none), and POST vault/plain/grants and
 // vault/plain/denials (its requests decided by the item's owner, not signed: nothing here is encrypted).
+//
+// A secret an agent asked to keep (secret_save, docs/vault.md agent 存入), approved: POST vault/saves `{request, vault}`
+// once the viewer's app wrote it into their vault (and brought its copy here), POST vault/plain/saves `{request}` to
+// write it into their plain library here. Turned down: vault/denials or vault/plain/denials, as any request.
 import type { LockState } from "../../cloud/lock.ts";
 import type { Deny, Grant } from "../../vault/crypto.ts";
 import { type PlainItem, type PlainStore, plainOk, shown } from "../../vault/plain.ts";
@@ -68,6 +72,15 @@ export const routes = ({ secrets, plain, lock, events }: VaultRequestsDeps): Rou
       },
     },
     {
+      // A secret an agent asked to keep, written into the viewer's vault by their app: `{request, vault}`.
+      method: "POST",
+      pattern: /^\/vault\/saves$/,
+      handle: async (r) => {
+        const l = locked(r);
+        return l === null ? NEEDS_LOCK() : decide(r, (o) => secrets.saved(l, r.viewer.sub, o));
+      },
+    },
+    {
       method: "GET",
       pattern: /^\/vault\/uses$/,
       handle: async (r) => json(200, JSON.stringify({ uses: secrets.uses(r.viewer.workspace, locked(r), param(r, "vault") ?? "", r.viewer) })),
@@ -116,11 +129,23 @@ export const routes = ({ secrets, plain, lock, events }: VaultRequestsDeps): Rou
         if (why !== null) return refuse(400, "vault_invalid", why);
         plain.put(next);
         const kept = plain.item(ws, next.id)!;
-        events?.tell("vault-plain", shown(kept), `vault-plain\0${kept.id}`, (v) => v.workspace === ws && v.email.toLowerCase() === kept.owner);
+        events?.tell("vault-plain", shown(kept), `vault-plain\0${kept.id}`, { workspace: ws, email: kept.owner });
         return json(200, JSON.stringify({ item: shown(kept) }));
       },
     },
     { method: "POST", pattern: /^\/vault\/plain\/grants$/, handle: async (r) => decide(r, (o) => secrets.grantPlain(r.viewer.workspace, locked(r), r.viewer.email, o)) },
     { method: "POST", pattern: /^\/vault\/plain\/denials$/, handle: async (r) => decide(r, (o) => secrets.denyPlain(r.viewer.workspace, r.viewer.email, o)) },
+    {
+      // A secret an agent asked to keep, approved by whoever it is for: written into their plain library here.
+      method: "POST",
+      pattern: /^\/vault\/plain\/saves$/,
+      handle: async (r) =>
+        decide(r, (o) => {
+          const kept = secrets.savedPlain(r.viewer.workspace, locked(r), r.viewer.email, o);
+          if (typeof kept === "string") return kept;
+          events?.tell("vault-plain", shown(kept), `vault-plain\0${kept.id}`, { workspace: kept.ws, email: kept.owner });
+          return null;
+        }),
+    },
   ];
 };

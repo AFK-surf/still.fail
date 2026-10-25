@@ -1,5 +1,7 @@
 // Kept from a real host's run (mini1_overlays: MBUI_TEXT_RECORD=1 MBUI_DRAW_LOG=1 MBUI_SCREEN=overlays MBUI_WIN=960x720, platform 0),
 // made by scripts/chk textrec: not edited by hand.
+// Its frames' hashes since made again by a Tester over this text (scripts/chk textrec --rehash): a change to
+// what mbui draws, not to the host's.
 
 ///|
 let run_mini1_overlays : String =
@@ -155,4 +157,4 @@ let run_mini1_overlays : String =
   #|TEXTREC {"g":100,"r":[1089,0,9,11,-1,-9,0]}
   #|TEXTREC {"g":108,"r":[1099,0,9,11,-1,-10,0]}
   #|ENV {"motion":0,"glass":0,"dark":1,"inset":0}
-  #|DRAWHASH 1 0 960 720 1 -632650393229777248 1
+  #|DRAWHASH 1 0 960 720 1 -8361672888386231297 1

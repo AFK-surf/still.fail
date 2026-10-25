@@ -98,7 +98,13 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.IntRect
+import androidx.compose.ui.unit.LayoutDirection
+import androidx.compose.ui.window.Popup
+import androidx.compose.ui.window.PopupPositionProvider
+import androidx.compose.ui.window.PopupProperties
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -486,9 +492,46 @@ private fun FullTools(session: ScreenSession, typing: Boolean, keyboard: () -> U
             ) { session.control(!session.controlling) }
             if (session.driving) PadButton(session, tools)
             ClipButtons(session, tools)
+            ScaleButton(session)
             if (session.driving) RoundButton(Icons.Keyboard, t("android-misc.screen.keyboard"), pressed = typing, onClick = keyboard)
             FullButton(tools)
         }
+    }
+}
+
+/**
+ * 缩放: the screen's display scale (a Windows station's), its steps in a list over the button (under it when it is
+ * high on the screen), the one now checked, 推荐 beside the one its system recommends.
+ */
+@Composable
+private fun ScaleButton(session: ScreenSession) {
+    val scale = session.scale ?: return
+    var open by remember { mutableStateOf(false) }
+    Box {
+        RoundButton(Icons.TextSize, t("android-misc.screen.scale"), pressed = open) { open = !open }
+        if (open) Popup(popupPositionProvider = AboveOrBelow, onDismissRequest = { open = false }, properties = PopupProperties(focusable = true)) {
+            Column(Modifier.width(168.dp).shadow(18.dp, Smooth(20.dp)).clip(Smooth(20.dp)).background(C.surface).padding(6.dp)) {
+                for (step in scale.steps) {
+                    Row(
+                        Modifier.fillMaxWidth().clip(Smooth(14.dp)).clickable { open = false; session.setScale(step) }.padding(horizontal = 10.dp, vertical = 11.dp),
+                        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween,
+                    ) {
+                        Text(if (step == scale.recommended) t("android-misc.screen.scaleRecommended", "percent" to step.toString()) else "$step%", fontSize = 15.sp, color = C.ink)
+                        if (step == scale.percent) IconIn(Icons.Check, 16.dp) else Box(Modifier.size(16.dp))
+                    }
+                }
+            }
+        }
+    }
+}
+
+/** A list over its button, or under it when the button is in the window's upper half. */
+private object AboveOrBelow : PopupPositionProvider {
+    override fun calculatePosition(anchorBounds: IntRect, windowSize: IntSize, layoutDirection: LayoutDirection, popupContentSize: IntSize): IntOffset {
+        val x = (anchorBounds.center.x - popupContentSize.width / 2).coerceIn(0, (windowSize.width - popupContentSize.width).coerceAtLeast(0))
+        val below = anchorBounds.center.y < windowSize.height / 2
+        val y = if (below) anchorBounds.bottom else anchorBounds.top - popupContentSize.height
+        return IntOffset(x, y.coerceIn(0, (windowSize.height - popupContentSize.height).coerceAtLeast(0)))
     }
 }
 
@@ -506,6 +549,7 @@ private fun Foot(session: ScreenSession, held: HeldKeys, typing: Boolean, keyboa
     ) {
         PadButton(session, tools)
         KeysRow(session, held, Modifier.weight(1f))
+        ScaleButton(session)
         RoundButton(Icons.Keyboard, t("android-misc.screen.keyboard"), pressed = typing, onClick = keyboard)
     }
 }
@@ -578,6 +622,7 @@ private fun Rail(session: ScreenSession, typing: Boolean, keyboard: () -> Unit, 
             ) { session.control(!session.controlling) }
             if (session.driving) PadButton(session, tools)
             ClipButtons(session, tools)
+            ScaleButton(session)
             if (session.driving) RoundButton(Icons.Keyboard, t("android-misc.screen.keyboard"), pressed = typing, onClick = keyboard)
             if (open(session)) FullButton(tools)
         }
@@ -689,7 +734,8 @@ private fun Stage(session: ScreenSession, zoom: ViewZoom, pad: PadPointer, dropA
                 contentAlignment = Alignment.Center,
             ) { Ended(session, phase) }
             // Drawn over the frame at its own size, however zoomed: where the trackpad has it, else where the station says.
-            else Pointer({ if (padNow) pad.at else session.state?.cursor?.let { Offset(it.x.toFloat(), it.y.toFloat()) } }, { zoom.shown(fitNow) })
+            // (None where the station's own is hidden.)
+            else Pointer({ if (padNow) pad.at else session.state?.cursor?.takeIf { it.shape != "none" }?.let { Offset(it.x.toFloat(), it.y.toFloat()) } }, { zoom.shown(fitNow) })
         }
         Over(session, phase, Modifier.align(Alignment.Center))
         Column(
@@ -791,14 +837,15 @@ private fun Texture(session: ScreenSession) {
 
 /**
  * Where the pointer is (`at`, 0..1 of the frame drawn at `shown` on the stage; read as it is drawn, it moves without
- * the page composed again): an arrow, white with a dark edge, its tip there.
+ * the page composed again): an arrow, white with a dark edge, its tip there; as large as a pointer on the screen looks at
+ * the frame's size (a 90th of its width), 10 to 18.5 dp.
  */
 @Composable
 private fun Pointer(at: () -> Offset?, shown: () -> Rect) {
     Canvas(Modifier.fillMaxSize()) {
         val at = at() ?: return@Canvas
         val shown = shown()
-        val k = 1.dp.toPx()
+        val k = (shown.width / 90f / 18.5f).coerceIn(10.dp.toPx() / 18.5f, 1.dp.toPx())
         val arrow = Path().apply {
             moveTo(0f, 0f); lineTo(0f, 16 * k); lineTo(4 * k, 12.5f * k); lineTo(7 * k, 18.5f * k)
             lineTo(9.5f * k, 17.5f * k); lineTo(6.5f * k, 11.5f * k); lineTo(11.5f * k, 11.5f * k); close()

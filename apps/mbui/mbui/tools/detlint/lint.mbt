@@ -21,6 +21,20 @@ priv struct Config {
   effect_fields : Array[String]
   effect_calls : Array[String]
   effect_methods : Array[String]
+  // package functions that keep what they are given and run it later, never as they are called (an app's presenters:
+  // @sf.confirm(…, fn() { … })): a closure given to one is a callback
+  effect_later : Array[String]
+  // an app's component library (web/ui's): its packages, and what they may import (prefixes); nothing else of the app
+  library : Array[String]
+  library_imports : Array[String]
+  // an app's pages: where the current input (@ui.pointing()) is never read (page-hand), nor the native input (page-screen)
+  pages : Array[String]
+  // what of one arrangement a page may not draw itself (page-look): names (a style's, a part's, a branch's), and the
+  // files that frame the pages and name those pieces for them (not counted)
+  one_look : Array[String]
+  page_frames : Array[String]
+  // the parts a page used to take from an older copy (`@settings.button`, …), the library's now (page-old-part)
+  old_parts : Array[String]
 }
 
 ///|
@@ -58,6 +72,13 @@ fn Config::new(d : @rjson.Value) -> Config {
     effect_fields: strs(be.get("fields"), ["call", "subscribe"]),
     effect_calls: strs(be.get("calls"), build_effect_calls),
     effect_methods: strs(be.get("methods"), build_effect_methods),
+    effect_later: strs(be.get("later"), []),
+    library: strs(sect(d, "library").get("roots"), []),
+    library_imports: strs(sect(d, "library").get("imports"), ["mbui/", "moonbitlang/"]),
+    pages: strs(sect(d, "pages").get("roots"), []),
+    one_look: strs(sect(d, "pages").get("one_look"), []),
+    page_frames: strs(sect(d, "pages").get("frames"), []),
+    old_parts: strs(sect(d, "pages").get("old_parts"), []),
   }
 }
 
@@ -102,6 +123,14 @@ fn lint_mbt(
     out.push(finding(rule, f.rel, toks[k].line, what))
   }
 
+  // a page drawing one arrangement's piece itself (not in its tests, nor in the files that frame the pages)
+  if under(f.rel, cfg.pages) && !under(f.rel, cfg.page_frames) && cfg.one_look.length() > 0 {
+    for k, tk in toks {
+      if tk.kind == "ident" && cfg.one_look.contains(tk.text) && !f.in_test(k) {
+        add("page-look", k, f.line_text(k))
+      }
+    }
+  }
   for c in f.calls {
     // the interfaces given up: neither defined nor called, anywhere
     if retired.contains(c.name) &&
@@ -187,6 +216,43 @@ fn lint_mbt(
     // a target waited on until it holds still
     if hold_still.contains(c.name) && (c.kind == "method" || c.kind == "bare") {
       add("at-rest-wait", c.at, f.line_text(c.at))
+    }
+    // a page reading the hand (its tests may say which hand they are)
+    if c.name == "pointing" && c.kind == "pkg" && c.qual == "@ui" && !in_t && under(f.rel, cfg.pages) {
+      add("page-hand", c.at, f.line_text(c.at))
+    }
+    // a page reading the native input (what the app was started with: touch, or keyboard and mouse)
+    if c.name == "native_input" && c.kind == "pkg" && c.qual == "@sf" && !in_t && under(f.rel, cfg.pages) {
+      add("page-screen", c.at, f.line_text(c.at))
+    }
+    // a page taking a part from the settings' older copy where the library has the one
+    if c.kind == "pkg" && c.qual == "@settings" && cfg.old_parts.contains(c.name) && !in_t && under(f.rel, cfg.pages) {
+      add("page-old-part", c.at, f.line_text(c.at))
+    }
+    // a motion following what the layout measured: a place or a size moves for its cause, not because what it was
+    // laid out at changed (the app's docs/motion.md)
+    match follow_target(f, c, returns) {
+      Some(n) if !in_t => {
+        let pos = c.args.filter(fn(a) { a.0 is None })
+        if n < pos.length() {
+          match reads_layout(f, pos[n].1, item) {
+            Some(q) => add("follow-layout", c.at, "\{f.line_text(c.at)}   (follows: \{q})")
+            None => ()
+          }
+        }
+      }
+      _ => ()
+    }
+    // whether a motion runs, read by the app: what is shown, what takes a press, when state goes follow from the
+    // cause and the motion's declared end (what only draws by it says so on its line, det-ok)
+    if c.name == "moving" &&
+      c.kind == "method" &&
+      c.args.length() == 0 &&
+      app &&
+      !in_t &&
+      !(f.recv_type(c.at, returns) is Some("Tester")) &&
+      !moving_listed(f, c.at) {
+      add("motion-read", c.at, f.line_text(c.at))
     }
     // the app as it is screenshotted is not the app
     if c.name == "stable" &&
@@ -434,7 +500,8 @@ fn run_until_still(f : MbtFile) -> Array[Int] {
 // what a box and words look like said loosely (Ctx::box, row, column, layer, text, rich): box-loose; a number in
 // them, or anywhere in a style's constructors (style.mbt), style-literal
 let box_look : Array[String] = [
-  "dir", "w", "h", "pad", "padx", "pady", "pl", "pr", "pt", "pb", "gap", "align", "justify", "bg",
+  "dir", "w", "h", "pad", "padx", "pady", "pl", "pr", "pt", "pb", "m", "mx", "my", "ml", "mr", "mt", "mb",
+  "gap", "align", "justify", "bg",
   "radius", "border", "border_color", "shadow", "shadow_color", "shadow_y", "min_w", "max_w",
   "min_h", "max_h", "clip", "opacity",
 ]
@@ -504,6 +571,30 @@ fn lint_style(f : MbtFile, cfg : Config, out : Array[Finding]) -> Unit {
       }
     }
   }
+  // a style said as text (@ui.css("w=Grow(1.0) radius=Exact(9.0)")): what is in it counts as it does in style(…),
+  // each Exact(…) once (its numbers not again), each other number once
+  for c in f.calls {
+    if c.is_def ||
+      f.in_test(c.at) ||
+      c.name != "css" ||
+      !((c.kind == "pkg" && c.qual == "@ui") || c.kind == "bare") {
+      continue
+    }
+    for a in c.args {
+      for i in a.1 {
+        if toks[i].kind == "str" {
+          for what in css_literals(toks[i].text) {
+            if what == "Exact" {
+              add("style-exact", i, f.line_text(c.at))
+            }
+            if !tokens_file {
+              add("style-literal", i, f.line_text(c.at))
+            }
+          }
+        }
+      }
+    }
+  }
   if tokens_file {
     return
   }
@@ -538,6 +629,57 @@ fn lint_style(f : MbtFile, cfg : Config, out : Array[Finding]) -> Unit {
       }
     }
   }
+}
+
+///|
+/// What a style's text says off the scale: "Exact" for each Exact(…) (what is in its parentheses not again), "num"
+/// for each other number (one that starts after no name's letter or digit: not S1_25's, O35's).
+fn css_literals(text : String) -> Array[String] {
+  let out = []
+  let s = text.to_array()
+  let n = s.length()
+  fn word(c : Char) -> Bool {
+    (c >= 'a' && c <= 'z') ||
+    (c >= 'A' && c <= 'Z') ||
+    (c >= '0' && c <= '9') ||
+    c == '_' ||
+    c == '.'
+  }
+  let mut i = 0
+  while i < n {
+    let c = s[i]
+    let after_word = i > 0 && word(s[i - 1])
+    if c == 'E' &&
+      !after_word &&
+      i + 5 < n &&
+      s[i + 1] == 'x' &&
+      s[i + 2] == 'a' &&
+      s[i + 3] == 'c' &&
+      s[i + 4] == 't' &&
+      s[i + 5] == '(' {
+      out.push("Exact")
+      let mut depth = 0
+      i += 5
+      while i < n {
+        if s[i] == '(' {
+          depth += 1
+        } else if s[i] == ')' {
+          depth -= 1
+          if depth == 0 {
+            break
+          }
+        }
+        i += 1
+      }
+    } else if c >= '0' && c <= '9' && !after_word {
+      out.push("num")
+      while i + 1 < n && word(s[i + 1]) {
+        i += 1
+      }
+    }
+    i += 1
+  }
+  out
 }
 
 ///|
@@ -593,6 +735,106 @@ fn literal_time(f : MbtFile, idx : Array[Int]) -> Bool {
     return false
   }
   rest.iter().any(fn(t) { t.kind == "num" })
+}
+
+///|
+/// Which positional argument of call `c` is the target a motion follows: an Anim's or a Value's `follow(target, …)`,
+/// `@motion.animate(c, key, target)` and `@kit.animate`'s, `Ctx::spring(key, target)`; None for any other call.
+fn follow_target(f : MbtFile, c : Call, returns : Map[String, String]) -> Int? {
+  if c.kind == "method" && c.name == "follow" {
+    Some(0)
+  } else if c.kind == "pkg" && c.name == "animate" && (c.qual == "@motion" || c.qual == "@kit") {
+    Some(2)
+  } else if c.kind == "method" && c.name == "spring" && f.recv_type(c.at, returns) is Some("Ctx") {
+    Some(1)
+  } else {
+    None
+  }
+}
+
+///|
+/// Whether the `moving()` at `k` is a Tester's list of what moves (`for m in t.moving()`, `t.moving().iter()`), not
+/// whether a motion runs.
+fn moving_listed(f : MbtFile, k : Int) -> Bool {
+  let toks = f.toks
+  // its call's closing bracket, and what follows it
+  let o = k + 1
+  if o < toks.length() && toks[o].text == "(" && toks[o].end >= 0 {
+    let after = toks[o].end + 1
+    if after < toks.length() && toks[after].text == "." {
+      return true
+    }
+  }
+  // `in` before its receiver (a chain of names and dots)
+  let mut j = k - 1
+  while j > 0 && (toks[j].text == "." || toks[j].kind == "ident") {
+    j -= 1
+  }
+  j >= 0 && toks[j].text == "in"
+}
+
+///|
+/// What the layout measures, as read by a view: a node's size or place, the window's, the keyboard's.
+let layout_reads : Array[String] = [
+  "measured", "measured_rect", "laid_size", "laid_rect", "laid_out", "rect_of", "node_rect", "drawn_rect",
+  "drawn_at", "window_size", "ime_inset", "list_place", "list_row_height", "row_height",
+]
+
+///|
+/// Whether tokens `idx` (an argument) read what the layout measures: a call of one of layout_reads, or a name bound
+/// in the same item (`let x = …`) to what calls one; what it reads, if so.
+fn reads_layout(f : MbtFile, idx : Array[Int], item : Int) -> String? {
+  let toks = f.toks
+  let direct = fn(ii : Array[Int]) -> String? {
+    for i in ii {
+      let t = toks[i]
+      if t.kind == "ident" &&
+        i + 1 < toks.length() &&
+        toks[i + 1].text == "(" &&
+        layout_reads.contains(t.text) {
+        return Some(t.text)
+      }
+    }
+    None
+  }
+  match direct(idx) {
+    Some(q) => return Some(q)
+    None => ()
+  }
+  if item < 0 || idx.length() == 0 {
+    return None
+  }
+  let lo = f.items[item].start
+  for i in idx {
+    let t = toks[i]
+    if t.kind != "ident" || (i + 1 < toks.length() && toks[i + 1].text == "(") || (i > 0 && toks[i - 1].text == ".") {
+      continue
+    }
+    // the nearest `let name =` before the argument, its value to the end of its line
+    let mut j = idx[0] - 1
+    while j > lo {
+      let at_let = toks[j].text == t.text &&
+        j + 1 < toks.length() &&
+        (toks[j + 1].text == "=" || toks[j + 1].text == ":") &&
+        (toks[j - 1].text == "let" || (toks[j - 1].text == "mut" && j > 1 && toks[j - 2].text == "let"))
+      if at_let {
+        let line = toks[j].line
+        let rhs : Array[Int] = []
+        let mut k = j + 1
+        while k < toks.length() && toks[k].line == line {
+          rhs.push(k)
+          k += 1
+        }
+        match direct(rhs) {
+          Some(q) => return Some(t.text + " = " + q + "()")
+          None => ()
+        }
+        break
+      }
+      j -= 1
+    }
+  }
+  None
 }
 
 ///|
@@ -739,6 +981,8 @@ fn lint_globals(files : Array[MbtFile], cfg : Config, out : Array[Finding]) -> U
     said[p] = Map::new()
   }
   let seen : Map[String, Unit] = Map::new()
+  // what reset sets a global's value to (NAME.val = …, its package's, or @pkg.NAME.val = …): (pkg, name, value)
+  let sets : Array[(String, String, String)] = []
   let todo = roots.copy()
   while true {
     let (pkg, name) = match todo.pop() {
@@ -757,6 +1001,49 @@ fn lint_globals(files : Array[MbtFile], cfg : Config, out : Array[Finding]) -> U
         }
         if !(i > 0 && body[i - 1].text == ".") { // a field of the same name is not the global
           said[pkg][t.text] = ()
+        }
+        // NAME.val = VALUE (@pkg.NAME.val = VALUE): what reset sets it to, to its line's end at its own depth
+        if i + 3 < body.length() &&
+          body[i + 1].text == "." &&
+          body[i + 2].text == "val" &&
+          body[i + 3].text == "=" &&
+          (i == 0 || body[i - 1].text != "." || (i >= 2 && body[i - 2].kind == "at")) {
+          let owner = if i >= 2 && body[i - 1].text == "." && body[i - 2].kind == "at" {
+            alias.get(body[i - 2].text.view(start_offset=1).to_string())
+          } else {
+            Some(pkg)
+          }
+          let value : Array[String] = []
+          let mut depth = 0
+          let mut k = i + 4
+          while k < body.length() {
+            let v = body[k]
+            if depth == 0 && value.length() > 0 && v.line > body[k - 1].line {
+              break
+            }
+            if v.text == "(" || v.text == "[" || v.text == "{" {
+              depth += 1
+            } else if v.text == ")" || v.text == "]" || v.text == "}" {
+              if depth == 0 {
+                break
+              }
+              depth -= 1
+            }
+            value.push(v.text)
+            k += 1
+          }
+          // (a wire: what does the work, a function named (f, @pkg.f) or given (fn …); a value put back, made by a
+          // call or said, is state, not a wire)
+          let wire = value.length() > 0 &&
+            (
+              value[0] == "fn" ||
+              (value.length() == 1 && body[i + 4].kind == "ident" && !["true", "false", "None"].contains(value[0])) ||
+              (value.length() == 3 && body[i + 4].kind == "at" && value[1] == ".")
+            )
+          match owner {
+            Some(o) if wire => sets.push((o, t.text, value.join(" ")))
+            _ => ()
+          }
         }
         if i + 1 < body.length() && body[i + 1].text == "(" {
           let q = if i >= 2 && body[i - 1].text == "." && body[i - 2].kind == "at" {
@@ -779,6 +1066,62 @@ fn lint_globals(files : Array[MbtFile], cfg : Config, out : Array[Finding]) -> U
           }
         }
       }
+    }
+  }
+  // a Ref's value as its let gives it (Ref(V), Ref::new(V), { val: V }), by (pkg, name)
+  let firsts : Map[String, (MbtFile, Int, String)] = Map::new()
+  for l in lets {
+    let (pkg, f, it) = l
+    let ts = f.toks[it.start:@cmp.minimum(it.end + 1, f.toks.length())].to_array()
+    match ts.search_by(fn(t) { t.text == "=" }) {
+      Some(e) => {
+        let v = ts[e + 1:].to_array()
+        let inner = if v.length() >= 3 && v[0].text == "Ref" && v[1].text == "(" {
+          Some(2)
+        } else if v.length() >= 5 && v[0].text == "Ref" && v[1].text == "::" && v[2].text == "new" && v[3].text == "(" {
+          Some(4)
+        } else if v.length() >= 4 && v[0].text == "{" && v[1].text == "val" && v[2].text == ":" {
+          Some(3)
+        } else {
+          None
+        }
+        match inner {
+          Some(s) => {
+            let out : Array[String] = []
+            let mut depth = 0
+            for t in v[s:] {
+              if t.text == "(" || t.text == "[" || t.text == "{" {
+                depth += 1
+              } else if t.text == ")" || t.text == "]" || t.text == "}" {
+                if depth == 0 {
+                  break
+                }
+                depth -= 1
+              }
+              out.push(t.text)
+            }
+            let name = match ts.search_by(fn(t) { t.text == "let" }) {
+              Some(k) if k + 1 < ts.length() => ts[k + 1].text
+              _ => ""
+            }
+            firsts[reader_key(pkg, name)] = (f, it.line, out.join(" "))
+          }
+          None => ()
+        }
+      }
+      None => ()
+    }
+  }
+  let wired : Map[String, Unit] = Map::new()
+  for s in sets {
+    let (pkg, name, value) = s
+    let key = reader_key(pkg, name)
+    match firsts.get(key) {
+      Some((f, line, first)) if first != value && !wired.contains(key) => {
+        wired[key] = ()
+        out.push(finding("reset-wire", f.rel, line, "\{name}: reset sets `\{value}`, its let `\{first}`"))
+      }
+      _ => ()
     }
   }
   for l in lets {
@@ -863,5 +1206,197 @@ fn lint_globals(files : Array[MbtFile], cfg : Config, out : Array[Finding]) -> U
         "\{name} : \{if tytext == "" { "(inferred)" } else { tytext }}",
       ),
     )
+  }
+}
+
+///|
+/// what `style(…)` (and a state's `patch(…)`) says, as its text says it (src/ui/style_css.mbt): every one of them
+let css_props : Array[String] = [
+  "row", "w", "h", "min_w", "max_w", "min_h", "max_h", "p", "px", "py", "pl", "pr", "pt", "pb", "m", "mx", "my", "ml",
+  "mr", "mt", "mb", "gap", "align", "justify", "bg", "radius", "border", "border_color", "shadow", "clip", "opacity",
+]
+
+///|
+let css_states : Array[String] = [
+  "narrow", "dark", "selected", "hovered", "focused", "pressed", "disabled",
+]
+
+///|
+/// A token's name, not a constant's: a constructor called (`Fixed(`, `A(`), or a name with a small letter (`Full`,
+/// `ACenter`, `SPx`), or capitals and then digits (`S4`, `S1_25`, `O35`, `B0_5`). A `const` is in capitals and
+/// underscores (`ROW_H`): a variable, as a lowercase name is.
+fn css_token_name(s : String, called : Bool) -> Bool {
+  let cs = s.to_array()
+  if cs.length() == 0 || cs[0] < 'A' || cs[0] > 'Z' {
+    return false
+  }
+  if called || cs.iter().any(fn(c) { c >= 'a' && c <= 'z' }) {
+    return true
+  }
+  let mut i = 0
+  while i < cs.length() && cs[i] >= 'A' && cs[i] <= 'Z' {
+    i += 1
+  }
+  i < cs.length() &&
+  cs[i] >= '0' &&
+  cs[i] <= '9' &&
+  cs[i:].iter().all(fn(c) { (c >= '0' && c <= '9') || c == '_' })
+}
+
+///|
+/// A property's value as a style's text says it (`Fixed(14.0)`, `A(Fg,O35)`, `true`), or None when it is not all
+/// literal: a variable, a field, a call of a function, an operator, another package's name. `@ui.` and `Type::`
+/// before a token are left out (the text reads a token as its property's type has it).
+fn css_value(f : MbtFile, idx : Array[Int]) -> String? {
+  let toks = f.toks
+  let out = StringBuilder::new()
+  let mut n = 0
+  while n < idx.length() {
+    let i = idx[n]
+    let t = toks[i]
+    let next = if n + 1 < idx.length() { Some(toks[idx[n + 1]]) } else { None }
+    match t.kind {
+      "at" =>
+        if t.text == "@ui" && next is Some(d) && d.text == "." {
+          n += 2
+          continue
+        } else {
+          return None
+        }
+      "ident" =>
+        if t.text == "true" || t.text == "false" {
+          out.write_string(t.text)
+        } else if next is Some(d) && d.text == "::" && css_token_name(t.text, true) {
+          n += 2
+          continue
+        } else if css_token_name(t.text, next is Some(d) && d.text == "(") {
+          out.write_string(t.text)
+        } else {
+          return None
+        }
+      "num" => {
+        // as its text reads it: an Int64's L, a UInt's U left out
+        let mut s = t.text
+        while s.has_suffix("L") || s.has_suffix("U") {
+          s = s.view(end_offset=s.length() - 1).to_string()
+        }
+        out.write_string(s)
+      }
+      "op" =>
+        if t.text == "(" || t.text == ")" || t.text == "," || t.text == "-" {
+          out.write_string(t.text)
+        } else {
+          return None
+        }
+      _ => return None
+    }
+    n += 1
+  }
+  if idx.length() == 0 {
+    None
+  } else {
+    Some(out.to_string())
+  }
+}
+
+///|
+/// A `style(…)`'s arguments (a state's `patch(…)`'s, with states false) as a style's text, or None when one is not
+/// all literal: `row h=S7 px=S2 hovered{bg=Hover}`
+fn css_of_args(
+  f : MbtFile,
+  args : Array[(String?, Array[Int])],
+  states : Bool,
+) -> String? {
+  let toks = f.toks
+  let items = []
+  for a in args {
+    let (label, idx) = a
+    guard label is Some(lb) else { return None }
+    if states && css_states.contains(lb) {
+      // patch(…) or @ui.patch(…), all of the value
+      let at = if idx.length() >= 3 && toks[idx[0]].kind == "at" { 2 } else { 0 }
+      if !(
+          at < idx.length() &&
+          (at == 0 || (toks[idx[0]].text == "@ui" && toks[idx[1]].text == ".")) &&
+          toks[idx[at]].text == "patch" &&
+          at + 1 < idx.length() &&
+          toks[idx[at + 1]].text == "(" &&
+          toks[idx[at + 1]].end == idx[idx.length() - 1]
+        ) {
+        return None
+      }
+      guard css_of_args(f, f.args_of(idx[at + 1]), false) is Some(inner) else {
+        return None
+      }
+      items.push("\{lb}{\{inner}}")
+    } else if css_props.contains(lb) {
+      guard css_value(f, idx) is Some(v) else { return None }
+      if lb == "row" || lb == "clip" {
+        match v {
+          "true" => items.push(lb)
+          "false" => items.push(lb + "=false")
+          _ => return None
+        }
+      } else {
+        items.push("\{lb}=\{v}")
+      }
+    } else {
+      return None
+    }
+  }
+  Some(items.join(" "))
+}
+
+///|
+/// style-text: a `style(…)` in a top-level `let` (a named style, a `.then(…)` of one) whose properties are all
+/// tokens and numbers is to be its text, `@ui.css("…")` (docs/style.md): moonc makes each such call ~5-10 KB of C in
+/// `moonbit_init`, run as the app starts, built again on every build (2026-10-24). One naming a variable, worked
+/// out, or in a function stays `style(…)`. Bare `style(` is counted where the `let` says `Style` (mbui's own
+/// package).
+fn lint_style_text(f : MbtFile, out : Array[Finding]) -> Unit {
+  if f.test_file {
+    return
+  }
+  let toks = f.toks
+  for c in f.calls {
+    if c.is_def || c.name != "style" || c.item < 0 || f.in_test(c.at) {
+      continue
+    }
+    let it = f.items[c.item]
+    if it.kind != "let" {
+      continue
+    }
+    let ok = if c.kind == "pkg" {
+      c.qual == "@ui"
+    } else if c.kind == "bare" {
+      let mut said = false
+      let mut k = it.start
+      while k < c.at && toks[k].text != "=" {
+        if toks[k].kind == "ident" && toks[k].text == "Style" {
+          said = true
+        }
+        k += 1
+      }
+      said
+    } else {
+      false
+    }
+    if !ok {
+      continue
+    }
+    match css_of_args(f, c.args, true) {
+      Some(text) => {
+        let pre = if c.kind == "pkg" { "@ui." } else { "" }
+        out.push(
+          finding(
+            "style-text",
+            f.rel,
+            toks[c.at].line,
+            "\{f.line_text(c.at)}   write: \{pre}css(\"\{text}\")",
+          ),
+        )
+      }
+      None => ()
+    }
   }
 }

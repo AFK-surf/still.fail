@@ -4,10 +4,10 @@
 test "the account: 注销账号 at its foot asks first, saying what goes" {
   let t = settings_tester("me")
   shown_on_page(t, "注销账号")
-  assert_true(!@settings.sheet_up())
+  assert_true(!@sf.presenting())
   t.tap_text("注销账号")
   t.frame()
-  assert_true(@settings.sheet_up(), msg="asked first")
+  assert_true(@sf.presenting(), msg="asked first")
   assert_true(t.find("注销后无法恢复") is Some(_))
 }
 
@@ -22,13 +22,19 @@ test "关于: 服务条款 and 隐私政策 open still.fail's pages" {
 }
 
 ///|
-/// The page scrolled down until `words` are well inside the window (the list builds rows a little past its foot too).
+/// The page scrolled until `words` are well inside the window: down while they are past it or not built yet (the list
+/// builds rows a little past its foot too), up while they are under the page's bar or over it.
 fn shown_on_page(t : @ui.Tester, words : String) -> Unit {
   t.move(195.0, 400.0)
   for _ in 0..<10 {
     match t.find(words) {
+      Some((_, y)) if y < shown_top => t.wheel(195.0, 400.0, -300.0)
       Some((_, y)) if y < 700.0 => break
       _ => t.wheel(195.0, 400.0, 300.0)
     }
   }
 }
+
+///|
+/// Where the page's own rows start under its bar, in its window (390 by 844): what is over it is not to be pressed.
+let shown_top : Double = 120.0

@@ -10,6 +10,7 @@
 // runtime has just compacted its context, or is about to (`cheapToLeave`).
 // Also the reasoning levels a model offers (shapes reasoning.rs), which the pool's accounts decide.
 import { type Profile, runs, sameModel } from "./config.ts";
+import { COMPACTED_FROM } from "../store/rows.ts";
 
 type Json = any;
 
@@ -74,8 +75,8 @@ export function urgency(quota: Json | null | undefined, now: number): Urgency {
 }
 
 /// A context falling under half of what the call before sent (at least this much), on the same account and model, was
-/// compacted.
-export const COMPACTED_FROM = 50_000;
+/// compacted (store/rows.ts, where the database keeps where it was: schema.ts USAGE_COMPACTIONS).
+export { COMPACTED_FROM };
 /// How near a session's context is to where its model is compacted (compactionPoints) to be about to be.
 const NEAR_COMPACTION = 0.75;
 
@@ -143,7 +144,7 @@ export function fallbackEfforts(runtime: string): string[] {
   // Grok Build's models offer these (grok.ts); a model's own list comes with it.
   if (runtime === "grok") return ["low", "medium", "high", "xhigh"];
   // Cursor's models say their effort in the model's own name (id[reasoning=…], agents/cursor.ts): none apart.
-  if (runtime === "cursor") return [];
+  if (runtime === "cursor" || runtime === "hermes") return [];
   // Devin's are its models' thinking levels (agents/devin.ts); a model's own list comes with it.
   if (runtime === "devin") return ["low", "medium", "high", "xhigh", "max"];
   return ["low", "medium", "high", "xhigh", "max"];

@@ -2,13 +2,13 @@
 // than the one its conversation last ran on. A prompt cache is an account's own, so taking the conversation up there
 // would have the whole of it read again at full price; instead the agent reads back what it needs (session_history,
 // chat_history). The runtime sessions a session ran in are kept in order (store `runtime_sessions`), and its history
-// reads them as one (live.ts ChainTail).
+// reads them as one (read/tail.ts ChainTail).
 import { copyFileSync, existsSync, mkdirSync } from "node:fs";
 import { basename, dirname, join } from "node:path";
 import { afresh, cleared, threadAddress } from "../agents/instructions.ts";
 import type { Profile } from "../agents/runtime.ts";
 import { log } from "../ops/log.ts";
-import { transcriptPath } from "../read/transcript.ts";
+import { homesFirst, transcriptPaths } from "../read/transcript.ts";
 import type { Hub } from "./hub.ts";
 
 /// What a session going on on `to` is told when it starts afresh rather than take up runtime session `id`, last run on
@@ -29,8 +29,8 @@ export function toldCleared(hub: Hub, key: string): string {
 /// (<project>/<session>/subagents/agent-<id>.jsonl, with its .meta.json). The ids copied.
 export function carrySubagents(hub: Hub, from: string, to: string, on: Profile, ids: string[]): string[] {
   if (ids.length === 0 || on.runtime !== "claude") return [];
-  const homes = [on.home, ...hub.config().profiles.map((p) => p.home).filter((h) => h !== on.home)];
-  const main = homes.map((home) => transcriptPath("claude", home, from)).find((p) => p != null);
+  const { dataDir, profiles } = hub.config();
+  const main = transcriptPaths("claude", dataDir, homesFirst(profiles, on.id), [from]).paths[0];
   if (!main) return [];
   const source = join(dirname(main), from, "subagents");
   // The same project's in the home it starts in (the shared one, where homes share their transcripts).

@@ -1,7 +1,9 @@
 // 94-station-file-sent (e2e/traces/station-file-sent.trace: Studio against the local still.fail): a station's file
-// sent as a file: ＋ → Station 文件, a file of the lent folder ticked, 添加; its card tapped: its sheet, 发送方式 文件:
+// sent as a file: ＋ → Station 文件, a file of the lent folder ticked, 添加; its card tapped: its panel, 发送方式 文件:
 // staged on the chat's own station (drive.stage), the card says its size once up; sent with words: the message
 // carries it as an attachment, not its path (chat.send's attachments: Flow::end has it asked as the run asked it).
+// (its folder lent first: e2e/flows/15-drive-lend)
+// before it: 15-drive-lend
 
 ///|
 test "94-station-file-sent" {
@@ -12,31 +14,28 @@ test "94-station-file-sent" {
     f.see("=studio")
     f.see("发消息")
     f.tap("icon:plus")
-    f.run_to(@kit.sheet_rest("attach-sheet"))
+    f.run_to(@kit.sheet_rest("sf-present"))
     f.tap("Station 文件")
-    // the ＋ sheet going down as the places' comes up (the drive's sheets over a page of their own: dv_sheet_frame's
-    // "dv-reader-sheet"): on to the later's rest
-    let down = @kit.sheet_rest("attach-sheet")
-    let up = @kit.sheet_rest("dv-reader-sheet")
-    f.run_to(if up > down { up } else { down })
+    // the ＋ sheet gone, the picker's up (the library's panel: sfdesk's station_pick.mbt)
+    f.run_to(@kit.sheet_rest("sf-present"))
     f.tap("=e2e-082940")
     f.see("小说-e2e.txt")
     f.tap("小说-e2e.txt")
     f.see("添加 1 个")
     f.tap("添加 1 个")
-    f.run_to(@kit.sheet_rest("dv-reader-sheet"))
+    f.run_to(@kit.sheet_rest("sf-present"))
     f.gone("所有位置")
     f.see("studio · 路径")
-    f.tap("小说-e2e.txt")
-    // (its sheet rises from the frame after)
+    // its card pressed: how it goes, the presenters' sheet (the composer's composer_ref.mbt)
+    f.tap("=小说-e2e")
     f.t.draw()
-    f.run_to(@kit.sheet_rest("dv-reader-sheet"))
+    f.run_to(@kit.sheet_rest("sf-present"))
     f.see("发送方式")
     f.tap("=文件")
     f.see("此对话默认发送文件")
-    // a tap above the sheet closes it
-    f.tap_at(195.0, 120.0)
-    f.run_to(@kit.sheet_rest("dv-reader-sheet"))
+    // back closes it
+    f.back()
+    f.run_to(@kit.sheet_rest("sf-present"))
     f.gone("发送方式")
     f.see("KB")
     f.tap("发消息")

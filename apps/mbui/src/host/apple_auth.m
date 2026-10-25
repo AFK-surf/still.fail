@@ -1,4 +1,5 @@
-// A sign-in's browser page, for the macOS and iOS hosts: ASWebAuthenticationSession opens still.fail cloud's login
+// A sign-in's browser page, for the iOS host (macOS's signs in on @hostapi.browser_login, in the default browser:
+// ASWebAuthenticationSession is Safari's there whatever the browser chosen): ASWebAuthenticationSession opens still.fail cloud's login
 // page (auth.begin's url) and gives back the URL the cloud sends the browser to on the app's scheme
 // (stillfail://auth/callback?…), with no CFBundleURLTypes registration: another installed still.fail app owning the
 // scheme does not take the callback from us (core/README.md, Login). The session shares the browser's cookies, so a

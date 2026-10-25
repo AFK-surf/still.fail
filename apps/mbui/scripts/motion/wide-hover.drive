@@ -1,0 +1,8 @@
+# The wide frame: the pointer resting on an agent's picture beside its message, then on its mark in the chat's bar.
+timeout 20000
+until 发消息
+wait 600
+move 389 612
+wait 1400
+move 900 420
+wait 400

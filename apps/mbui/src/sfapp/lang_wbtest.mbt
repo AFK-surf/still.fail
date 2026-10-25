@@ -18,7 +18,7 @@ fn lang_tester(mode : String, locale : String, lang? : String) -> @ui.Tester {
       }
     },
   }
-  @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0, env=[("MBUI_LOCALE", locale)])
+  @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0, env=[("MBUI_LOCALE", locale)], platform=2)
 }
 
 ///|
@@ -68,7 +68,7 @@ fn catalog_keys(table : Map[String, String]) -> Array[String] {
 ///|
 test "every word of this package's tables has its English (scripts/strings)" {
   let lacking = []
-  for table in [zh, drive_zh, zh_decide, zh_wide, zh_links, zh_screen, pv_zh, svc_zh, share_zh, up_zh, viz_zh] {
+  for table in [zh, drive_zh, zh_decide, zh_wide, zh_links, zh_screen, pv_zh, svc_zh, share_zh, up_zh, viz_zh, menu_zh] {
     for k in catalog_keys(table) {
       if !en.contains(k) {
         lacking.push(k)

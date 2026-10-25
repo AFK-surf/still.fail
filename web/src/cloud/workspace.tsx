@@ -2,7 +2,7 @@
 // place. The core reaches each station and puts the workspace's views
 // together (docs/client-core.md); a page opened from the sidebar talks to the
 // station the item belongs to (StationContext).
-import { stationLoginPage, StationSettings, StationsFirst, StationsNav, useStationsSide } from "./StationPage.tsx";
+import { ProcessesFirst, stationLoginPage, StationSettings, StationsFirst, StationsNav, useStationsSide } from "./StationPage.tsx";
 import { ShareInPanel } from "../ShareIn.tsx";
 import { Check, ChevronsUpDown, Plus, Settings, UserPlus } from "@stillfail/ui/icons.tsx";
 import { NewChat } from "../NewChat.tsx";
@@ -197,6 +197,7 @@ export const WorkspaceShell = memo(function WorkspaceShell({ entry }: { entry: W
             <Route path="settings/memory/:station/skill/:name" element={<MemoryDocSettings entry={entry} />} />
             <Route path="settings/usage/prices" element={<UsagePricesSettings entry={entry} />} />
             <Route path="settings/usage" element={<UsageSettings entry={entry} />} />
+            <Route path="settings/resources" element={<ProcessesFirst entry={entry} />} />
             <Route path="settings/stations/:station/footprint" element={<Navigate to={`/w/${entry.id}/settings/stations`} replace />} />
             <Route path="settings/leave" element={<Navigate to={`/w/${entry.id}/settings/workspace`} replace />} />
             <Route path="s/:station/*" element={<StationPages stations={known && stations} />} />

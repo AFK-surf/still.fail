@@ -48,7 +48,7 @@ fn found_centre(c : @ui.Ctx, rd : Reading, list : String) -> Unit {
       rd.found_centre = false
       let ranges = @sf.find_words(w.text, rd.found_words)
       // (⌘F's: the time the reader is at in it)
-      let k = if wide.find_chat != "" { wide.find_k } else { 0 }
+      let k = if @sfpages.find_chat() != "" { @sfpages.find_k() } else { 0 }
       match ranges.get(if k < ranges.length() { k } else { 0 }) {
         Some((a, b)) =>
           match w.rects(a, b).get(0) {
@@ -112,7 +112,7 @@ fn found_strokes(
           let right = p.x - bx + rx + rw + 2.0
           let y = p.y - by + lay.line_y[line] + lay.line_base[line] + 4.0
           c.box(tx=left - cx, ty=y - cy, fn() {
-            let ink = if faint { @sf.alpha(t.p.accent, find_faint) } else { t.p.accent }
+            let ink = if faint { @sf.alpha(t.p.accent, @sfpages.find_faint) } else { t.p.accent }
             @sf.hand_stroke(c, @sf.message_stroke, right - left, part, ink) |> ignore
           })
           |> ignore

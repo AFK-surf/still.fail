@@ -3,7 +3,7 @@ import { type ReactNode, useEffect, useId, useState } from "react";
 import { Link } from "react-router";
 import { useStations } from "./api.ts";
 import { useCall, useTopic } from "./core/react.ts";
-import type { ArchiveOptionView, ArchivePolicyDraft, ArchivePolicyView, AutomaticDecisionDraft, AutomaticDecisionView } from "./core/shapes.ts";
+import type { ArchiveOptionView, ArchivePolicyDraft, ArchivePolicyView, AutomaticDecisionDraft, AutomaticDecisionView, SettingsView } from "./core/shapes.ts";
 import { useAct, useToast } from "@stillfail/ui/toast.tsx";
 import { useDoing, useDoingFailed } from "./doing.ts";
 import { Button, Dialog, Field, Segmented, StatusDot, Switch, Spinner, Waiting, WaitLine } from "./ui.tsx";
@@ -18,12 +18,11 @@ import * as css from "./AutomaticDecisions.css.ts";
 
 /** Start with the decision point; each point opens the stations that configure it. */
 export function AutomaticDecisions({ workspace }: { workspace: string }) {
-  const stations = useStations(workspace).value;
-  const on = stations?.filter(s => s.overview?.automaticDecisions?.settings.completion?.enabled).length ?? 0;
+  const settings = useTopic<SettingsView>({ topic: "settings", scope: workspace }).value;
   return <div className={css.content}><ul className={pages.list}><li>
     <Link className={pages.listRow} to={`/w/${workspace}/settings/automatic-decisions/completion`}>
       <span className={pages.listRowText}><span className={pages.listRowTitle}>{t("web-pages.automaticDecisions.completion")}</span><span className={css.note}>{t("web-pages.automaticDecisions.completionNote")}</span></span>
-      {stations && <span className={css.note}>{on ? t("web-pages.automaticDecisions.stationsOn", {n: on}) : t("web-pages.automaticDecisions.off")}</span>}
+      {settings && <span className={css.note}>{settings.decisionsText}</span>}
       <ChevronRight size={16} className={css.note} />
     </Link>
   </li></ul></div>;

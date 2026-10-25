@@ -136,16 +136,17 @@ fn glyph_layer(d : String, fill : Int64, stroke : Int64, width : Double, even_od
 }
 
 ///|
-/// The robot's blink: once in 2.6 s (the web's), a declared endless decoration (Ctx::cycle).
+/// The robot's blink: once in 2.6 s (the web's), a declared endless decoration (Ctx::cycle, resident).
 let glyph_blink_period : Double = 2600.0
 
 ///|
-/// A link on its way: its arc's breath, 1.4 s, a declared endless decoration.
+/// A link on its way: its arc's breath, 1.4 s, a declared endless decoration (resident).
 let glyph_breath_period : Double = 1400.0
 
 ///|
 /// The stations' glyph `size` square in `tint` (failing ones' dots in `red`). It blinks while a station works and an
-/// arc breathes while a link is on its way (endless decorations, Ctx::cycle); still with motion reduced.
+/// arc breathes while a link is on its way (endless decorations, Ctx::cycle: resident, up as long as Home is, so on the
+/// one clock's steps); still with motion reduced.
 pub fn station_glyph(c : @ui.Ctx, g : GlyphCounts, size : Double, tint : Int64, red : Int64) -> Int {
   let (arcs, dots) = glyph_layout(g)
   let still = @ui.reduced_motion()
@@ -153,7 +154,7 @@ pub fn station_glyph(c : @ui.Ctx, g : GlyphCounts, size : Double, tint : Int64, 
   // a blink: open most of the time, shut for a moment (2.6 s, shut at 93%: down over 130 ms, up over 182)
   let mut eye = 1.0
   if blinking > 0 && !still {
-    let t = c.cycle(glyph_blink_period) * glyph_blink_period
+    let t = c.cycle(glyph_blink_period, resident=true) * glyph_blink_period
     if t >= 2288.0 {
       eye = if t < 2418.0 {
         1.0 - 0.9 * (t - 2288.0) / 130.0
@@ -166,7 +167,7 @@ pub fn station_glyph(c : @ui.Ctx, g : GlyphCounts, size : Double, tint : Int64, 
   // a link on its way: its arc breathes between the track and ink (1.4 s), held halfway with motion reduced
   let mut pulse = 0.5
   if arcs.iter().any(fn(a) { a.pulse }) && !still {
-    let p = c.cycle(glyph_breath_period) * 2.0
+    let p = c.cycle(glyph_breath_period, resident=true) * 2.0
     let p = if p < 1.0 { p } else { 2.0 - p }
     let eased = standard_at(p)
     pulse = ((glyph_track + (0.85 - glyph_track) * eased) * 20.0).round() / 20.0
@@ -221,4 +222,24 @@ fn standard_at(t : Double) -> Double {
     }
   }
   bez(0.0, 1.0, (lo + hi) / 2.0)
+}
+
+///|
+/// A rounded frame `w` by `h` (its corner `r`) drawn as dashes `line` wide in `color` (CSS's `dashed`: a dash three of
+/// its widths, a gap two, spread to come round evenly), its line's middle on the frame; what stands by it is under.
+pub fn dashed_frame(c : @ui.Ctx, w : Double, h : Double, r : Double, line : Double, color : Int64) -> Int {
+  let path = StringBuilder()
+  for o in @ui.dashed_outlines(w, h, r, line) {
+    let pts = o.0
+    for i in 0..<(pts.length() / 2) {
+      path.write_string(if i == 0 { " M" } else { " L" })
+      path.write_string("\{num(pts[2 * i] + line / 2.0)} \{num(pts[2 * i + 1] + line / 2.0)}")
+    }
+  }
+  let d : @pixels.Vector = {
+    w: w + line,
+    h: h + line,
+    layers: [glyph_layer(path.to_string(), 0L, color, line)],
+  }
+  draw_drawable(c, "dashed/\{w}/\{h}/\{r}/\{line}/\{color}", d, w + line, None)
 }

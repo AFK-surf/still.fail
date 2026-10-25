@@ -15,8 +15,17 @@ priv struct SettingsFixture {
   mut auto : Bool
   /// the mode's page has no station (settings-first-station)
   mut none : Bool
-  /// the subscription signing in (settings-profile-login)
-  mut login : Bool
+  /// the subscription's sign-in: "" none, "needs_code" under way (settings-profile-login), "failed"
+  /// (settings-profile-login-failed)
+  mut login : String
+  /// the sign-in's page can be opened in the station's own browser (settings-profile-login-station,
+  /// settings-new-profile-login-station)
+  mut login_station : Bool
+  /// a new profile's page at an Anthropic plan's sign-in, waiting for the code (settings-new-profile-login…)
+  mut new_login : Bool
+  /// Claude 主账号's trouble: "" none, "quota" its allowance unreadable (settings-profile-quota-failed), "blocked"
+  /// its allowance used up (settings-profile-blocked), "login" to be signed in to again (settings-profile-signin)
+  mut trouble : String
   /// the vault not set up on this device (settings-vault-off)
   mut vault_off : Bool
   /// secrets of lin's still in plain text from before security mode (settings-vault-plain), until encrypted
@@ -27,8 +36,11 @@ priv struct SettingsFixture {
   mut resets_used : Int
   /// the models named by hand on ChatGPT 团队 (`profile.addModel`)
   models_added : Array[String]
-  /// a new device of lin's asking to be let in with this one's code (settings-lock-prompt), until turned away
+  /// a new device of lin's asking to be let in with this one's code (settings-lock-prompt), until turned away or its
+  /// prompt closed
   mut pairing : Bool
+  /// how its prompt went: "deny" (turned away), "hide" (closed, the code still good), "" while it is up
+  mut pair_ended : String
   /// the bytes of the drives' files kept (`cache.usage`'s `drive`), until let go (`drive.kept.clear`)
   mut drive_kept : Double
   /// the chats' files kept let go (`cache.file.clear`), by name
@@ -43,13 +55,17 @@ let fx : SettingsFixture = {
   marks: {},
   auto: false,
   none: false,
-  login: false,
+  login: "",
+  login_station: false,
+  new_login: false,
+  trouble: "",
   vault_off: false,
   plain_left: 0,
   skills_shared: {},
   resets_used: 0,
   models_added: [],
   pairing: false,
+  pair_ended: "",
   drive_kept: fx_drive_kept,
   kept_cleared: [],
 }
@@ -87,10 +103,12 @@ priv struct FixtureOpen {
   mut list : String
   mut block : Int
   mut frames : Int
+  /// a dialog of the desktop's pages to put up (src/sfdesk: fixture_desk), "" none
+  mut desk : String
 }
 
 ///|
-let fixture_open : FixtureOpen = { sheet: "", list: "", block: 0, frames: 0 }
+let fixture_open : FixtureOpen = { sheet: "", list: "", block: 0, frames: 0, desk: "" }
 
 ///|
 /// The new connect's step its fixture shows (MBUI_FIXTURE=settings-new-connect: team; -platform, -scan: Feishu's).
@@ -112,14 +130,19 @@ fn fixture_reset() -> Unit {
   fx.marks.clear()
   fx.auto = false
   fx.none = false
-  fx.login = false
+  fx.login = ""
+  fx.login_station = false
+  fx.new_login = false
+  fx.trouble = ""
   fx.vault_off = false
   fx.plain_left = 0
   fx.pairing = false
+  fx.pair_ended = ""
   fixture_open.sheet = ""
   fixture_open.list = ""
   fixture_open.block = 0
   fixture_open.frames = 0
+  fixture_open.desk = ""
   fx_connect_step.val = "team"
 }
 
@@ -127,6 +150,12 @@ fn fixture_reset() -> Unit {
 /// How often the made-up settings changed: added to the fixture's own version.
 pub fn fixture_version() -> Int {
   fx.version
+}
+
+///|
+/// How the new device's prompt went (`lockPrompt.deny` "deny", `lockPrompt.hide` "hide"; "" while it is up).
+pub fn fixture_pair_ended() -> String {
+  fx.pair_ended
 }
 
 ///|
@@ -147,41 +176,66 @@ pub fn fixture_page(mode : String) -> String {
   match m {
     "settings-station-mark" => up("mark", "", 0)
     // the page's 设置 (its variables' sheet up over it), its 软件与设备
-    "settings-station-env" => {
-      station_parts["ws1/st1"] = 1
-      up("env", "", 0)
-    }
+    "settings-station-env" => station_parts["ws1/st1"] = "settings"
+    // its 进程: what still.fail uses of the machine
+    "settings-station-processes" => station_parts["ws1/st1"] = "processes"
     "settings-station-lower" => {
-      station_parts["ws1/st1"] = 1
+      station_parts["ws1/st1"] = "settings"
       up("", "settings/station/ws1/st1", 0)
     }
     "settings-station-versions" => {
-      station_parts["ws1/st1"] = 2
+      station_parts["ws1/st1"] = "machine"
       up("", "settings/station/ws1/st1", 0)
     }
     "settings-stations-add" => up("add", "", 0)
     "settings-stations-existing" => up("add-existing", "", 0)
     "settings-stations-command" => up("add-command", "", 0)
     "settings-first-station" => fx.none = true
-    "settings-profile-menu" => up("profile-menu", "", 0)
     "settings-profile-lower" => up("", "settings/profile/ws1/st1/cc", 2)
-    // ChatGPT 团队's quota with its resets, its models (many, a filter, one to name by hand)
-    "settings-profile-models" => up("", "settings/profile/ws1/st1/cx", 7)
+    // ChatGPT 团队's models on their page (many, a filter, one to name by hand)
+    "settings-profile-models" => up("", "settings/profile-models/ws1/st1/cx", 0)
     "settings-profile-login" => {
-      fx.login = true
+      fx.login = "needs_code"
       up("", "settings/profile/ws1/st1/cc", 0)
     }
-    "settings-connect-menu" => up("connect-menu", "", 0)
-    "settings-connect-mode" => up("connect-mode", "", 0)
+    "settings-profile-login-station" => {
+      fx.login = "needs_code"
+      fx.login_station = true
+      up("", "settings/profile/ws1/st1/cc", 0)
+    }
+    "settings-new-profile-login" => fx.new_login = true
+    "settings-new-profile-login-station" => {
+      fx.new_login = true
+      fx.login_station = true
+    }
+    "settings-profile-login-failed" => {
+      fx.login = "failed"
+      up("", "settings/profile/ws1/st1/cc", 0)
+    }
+    "settings-profile-quota-failed" => fx.trouble = "quota"
+    "settings-profile-blocked" => fx.trouble = "blocked"
+    "settings-profile-signin" => fx.trouble = "login"
+    // a connect's page; its way of making sessions asked (src/sfdesk connect.mbt's dialog)
+    "settings-connect-menu" => ()
+    "settings-connect-mode" => fixture_open.desk = "connect-mode"
     "settings-vault-off" => fx.vault_off = true
     "settings-vault-plain" => fx.plain_left = 2
     "settings-lock-prompt" => fx.pairing = true
     "settings-vault-words" => recovery_words["ws1"] = fx_words()
-    "settings-vault-add" => up("vault-add", "", 0)
-    "settings-vault-editor" => up("vault-editor", "", 0)
-    "settings-vault-recover" => up("vault-recover", "", 0)
+    "settings-vault-add" => fixture_open.desk = "vault-add"
+    "settings-vault-editor" => fixture_open.desk = "vault-editor"
+    "settings-vault-recover" => fixture_open.desk = "vault-recover"
     "settings-add-people" => up("add-people", "", 0)
     "settings-workspace-mark" => up("workspace-mark", "", 0)
+    // 外观's 本机字体 open (src/sfdesk font_setting.mbt local_tile: the families the host lists)
+    "settings-local-fonts" => fixture_open.desk = "local-fonts"
+    // the desktop's archive policy with a dialog up (src/sfdesk automatic_decisions.mbt): its words, an option of the
+    // station's; its 安全 with one (security.mbt): a device's code to confirm, MBA to take in, turning it off
+    "settings-policy-text" => fixture_open.desk = "policy-text"
+    "settings-policy-option" => fixture_open.desk = "policy-option"
+    "settings-security-confirm" => fixture_open.desk = "lock-confirm"
+    "settings-security-join" => fixture_open.desk = "lock-join"
+    "settings-security-off" => fixture_open.desk = "lock-off"
     // the run's models listed (model_list.mbt): more than 8, by series, one of another station's to borrow
     "settings-run-models" => {
       fx_many_models.val = true
@@ -199,26 +253,30 @@ pub fn fixture_page(mode : String) -> String {
     "settings-new-connect-app" => fx_connect_step.val = "app"
     _ => fx_connect_step.val = "team"
   }
+  // a new connect's dialog over 连接 (src/sfdesk new_connect.mbt), at the step said above
+  if m.has_prefix("settings-new-connect") {
+    fixture_open.desk = "new-connect"
+  }
   match m {
     "settings" => "home"
-    "settings-station-mark" | "settings-station-env" | "settings-station-lower" | "settings-station-versions" =>
+    "settings-station-mark" | "settings-station-env" | "settings-station-processes" | "settings-station-lower" | "settings-station-versions" =>
       "station:ws1/st1"
     "settings-stations-add" | "settings-stations-existing" | "settings-stations-command" | "settings-first-station" =>
       "stations"
     "settings-adb" => "adb:ws1/st1"
-    "settings-profile-menu" | "settings-profile-lower" | "settings-profile-login" => "profile:ws1/st1#cc"
-    "settings-new-profile" => "new-profile:ws1/st1"
+    "settings-profile-menu" | "settings-profile-lower" | "settings-profile-login" | "settings-profile-login-station" =>
+      "profile:ws1/st1#cc"
+    "settings-new-profile" | "settings-new-profile-hermes" | "settings-new-profile-login" | "settings-new-profile-login-station" => "new-profile:ws1/st1"
     "settings-connect-menu" | "settings-connect-mode" => "connect:ws1/st1#k1"
-    "settings-connect-run" => "connect-run:ws1/st1#k1"
+    "settings-connect-run" | "settings-slack-app" => "connect:ws1/st1#k1"
     "settings-new-connect" | "settings-new-connect-platform" | "settings-new-connect-scan" | "settings-new-connect-app" =>
-      "new-connect:ws1/st1"
-    "settings-slack-app" => "slack-app:ws1/st1#k1"
+      "connects"
     "settings-vault-off" | "settings-vault-words" | "settings-vault-add" | "settings-vault-editor" => "vault"
     "settings-vault-recover" | "settings-vault-plain" => "vault"
     "settings-vault-item" => "vault-item:v1#it1"
     "settings-decisions" => "decisions-settings"
     "settings-completion" => "completion"
-    "settings-policy" => "policy:ws1/st1"
+    "settings-policy" | "settings-policy-text" | "settings-policy-option" => "policy:ws1/st1"
     "settings-bars" => "bars"
     "settings-kept" | "settings-kept-many" => "kept"
     "settings-changelog" => "changelog"
@@ -226,13 +284,18 @@ pub fn fixture_page(mode : String) -> String {
     "settings-prices" => "prices:7"
     "settings-run" | "settings-run-models" | "settings-run-accounts" => "run:ws1/st1#s-c1"
     "settings-add-people" | "settings-workspace-mark" => "workspace"
+    "settings-local-fonts" => "fonts"
+    "settings-security-confirm" | "settings-security-join" | "settings-security-off" => "security"
     "settings-notify-off" | "settings-lock-prompt" => "home"
     "settings-station" => "station:ws1/st1"
     "settings-station-offline" => "station:ws1/st2"
     "settings-memory" => "memory:ws1/st1"
     "settings-memory-doc" => "memory-doc:ws1/st1#发布流程"
-    "settings-profile" => "profile:ws1/st1#cc"
-    "settings-profile-quota" | "settings-profile-models" => "profile:ws1/st1#cx"
+    "settings-profile" | "settings-profile-quota-failed" | "settings-profile-blocked" | "settings-profile-signin" =>
+      "profile:ws1/st1#cc"
+    "settings-profile-key" => "profile:ws1/st1#k2"
+    "settings-profile-quota" => "profile:ws1/st1#cx"
+    "settings-profile-models" => "profile-models:ws1/st1#cx"
     "settings-me-reading" => "me"
     "settings-connect" => "connect:ws1/st1#k1"
     _ =>
@@ -288,6 +351,8 @@ fn fx_profile(id : String, name : String, kind : String, tone : String, check : 
     "loginCommand": "",
     "checkText": str(check),
     "checkTone": str(tone),
+    // (the core's words of it: present.ts profile)
+    "signInProvider": str(if group == "chatgpt" { "ChatGPT" } else { "Claude" }),
     "group": str(group),
     "groupTitle": str(title),
     "makers": obj([]),
@@ -317,13 +382,45 @@ fn fx_profile(id : String, name : String, kind : String, tone : String, check : 
   for kv in more {
     p[kv.0] = kv.1
   }
+  // (the core's words of it: present.ts profile, as it is after `more`)
+  let pv = Some(Json::object(p))
+  if !p.contains("kindText") {
+    p["kindText"] = str(
+      if flag(pv, "machine") {
+        "终端里的登录"
+      } else if text(pv, "providerName") != "" {
+        text(pv, "providerName")
+      } else {
+        match kind {
+          "subscription" => "订阅账号"
+          "anthropic-api" => "Anthropic API"
+          "opencode-go" => "OpenCode Go"
+          "api-provider" => "API 服务商"
+          "env" => "自定义环境变量"
+          _ => ""
+        }
+      },
+    )
+  }
+  p["checkLine"] = str(
+    match field(pv, "check") {
+      Some(Object(_)) => text(field(pv, "check"), "detail").replace(old="可用，", new="")
+      _ => "尚未检查"
+    },
+  )
   Json::object(p)
+}
+
+///|
+/// The made-up station's profiles (Studio's), for the chats' fixture's overview of it too: one made-up world.
+pub fn fixture_profiles() -> Array[Json] {
+  fx_profiles()
 }
 
 ///|
 fn fx_profiles() -> Array[Json] {
   [
-    fx_profile("cc", "Claude 主账号", "subscription", "green", "可用", "claude", "Claude 订阅", [
+    fx_profile("cc", "Claude 主账号", "subscription", fx_cc_tone(), "可用", "claude", "Claude 订阅", fx_cc_with([
       ("share", obj([("id", str("sh1")), ("role", str("host")), ("host", str("st1")), ("users", ["st2"])])),
       ("fast", Json::boolean(false)),
       ("backgroundOnMessage", Json::boolean(true)),
@@ -331,20 +428,21 @@ fn fx_profiles() -> Array[Json] {
       ("loginCommand", str("claude setup-token")),
       (
         "login",
-        if fx.login {
-          obj([
-            ("profile", str("cc")),
-            ("runtime", str("claude")),
-            ("state", str("needs_code")),
-            ("url", str("https://claude.example/oauth/authorize")),
-            ("startedAt", Json::number(0.0)),
-            ("expiresAt", Json::number(0.0)),
-          ])
-        } else {
-          Json::null()
+        match fx.login {
+          "" => Json::null()
+          "failed" =>
+            obj([
+              ("profile", str("cc")),
+              ("runtime", str("claude")),
+              ("state", str("failed")),
+              ("error", str("授权码已过期")),
+              ("startedAt", Json::number(0.0)),
+              ("expiresAt", Json::number(0.0)),
+            ])
+          state => fx_login_job("cc", state)
         },
       ),
-    ]),
+    ])),
     fx_profile("cx", "ChatGPT 团队", "subscription", "green", "可用", "chatgpt", "ChatGPT 订阅", fx_cx_more()),
     fx_profile("k2", "备用 key", "anthropic-api", "red", "没能使用", "key", "API key", [
       ("trouble", obj([("title", str("key 已失效")), ("detail", str("服务商拒绝了这个 key")), ("next", str("")), ("action", str("key")), ("label", str(""))])),
@@ -352,6 +450,43 @@ fn fx_profiles() -> Array[Json] {
       ("usedBy", []),
     ]),
   ]
+}
+
+///|
+/// Claude 主账号's dot as its trouble has it (fx.trouble).
+fn fx_cc_tone() -> String {
+  match fx.trouble {
+    "login" | "blocked" => "red"
+    _ => "green"
+  }
+}
+
+///|
+/// Claude 主账号's own (`more`) and its trouble (fx.trouble) as the core says it (present.ts profileTrouble), with what
+/// its check and its allowance say then.
+fn fx_cc_with(more : Array[(String, Json)]) -> Array[(String, Json)] {
+  let issue = fn(title : String, detail : String, next : String, action : String, label : String) {
+    ("trouble", obj([("title", str(title)), ("detail", str(detail)), ("next", str(next)), ("action", str(action)), ("label", str(label))]))
+  }
+  more..append(match fx.trouble {
+    "quota" =>
+      [
+        issue("额度查询失败", "请求超时，已中止", "查不到额度不代表账号不能用。先重新查询；还是失败，再按返回的原因检查登录或网络。", "quota", "重新查询额度"),
+        ("quota", obj([("state", str("unavailable")), ("detail", str("请求超时，已中止")), ("windows", []), ("checkedAt", Json::number(0.0))])),
+      ]
+    "blocked" =>
+      [
+        issue("额度已用完", "本周额度已用完", "等额度恢复，或换一个账号。", "quota", "重新查询额度"),
+        ("quota", obj([("state", str("blocked")), ("detail", str("本周额度已用完")), ("windows", []), ("checkedAt", Json::number(0.0))])),
+      ]
+    "login" =>
+      [
+        issue("需要重新登录", "登录已过期", "", "login", "登录"),
+        ("check", obj([("state", str("login")), ("detail", str("登录已过期")), ("checkedAt", Json::number(0.0)), ("time", obj([("checkedAt", stamp_of("5 分钟前"))]))])),
+        ("checkText", str("需要登录")),
+      ]
+    _ => []
+  })
 }
 
 ///|
@@ -410,11 +545,142 @@ fn fx_connect(id : String, name : String, presence : String, status : String, mo
     ("sessions", Json::number(4.0)),
     ("statusText", str(status)),
     ("presence", str(presence)),
-    ("modeText", str(mode_label(mode))),
+    ("modeText", str(if mode == "multi-session" { "每个 thread 一个会话" } else { "所有 thread 共用一个会话" })),
     ("modeShort", str("")),
     ("runtimeText", str("Claude Code")),
     ("runText", str("")),
     ("modelName", str("Opus 5.5")),
+    // (the core's words of it: present.ts connect)
+    ("placeText", str("星火")),
+    ("modeLabel", str(if mode == "multi-session" { "每个 thread 一个会话" } else { "所有 thread 共用一个会话" })),
+    (
+      "modeSentence",
+      str(
+        if mode == "multi-session" {
+          "在 thread 中 @ 它即开启一个新会话，该 thread 的后续消息都进入此会话"
+        } else {
+          "它看到的所有 thread 都进入同一个会话，适合长期值守的助手仅在被 @ 时唤醒。"
+        },
+      ),
+    ),
+    ("modeWords", fx_mode_words(false)),
+  ])
+}
+
+///|
+/// How a connect's ways are said, as the core says them (present.ts modeWords): a Feishu one's in its groups' words.
+fn fx_mode_words(feishu : Bool) -> Json {
+  if feishu {
+    obj([
+      ("multi", obj([("label", str("每个群一个会话")), ("description", str("在群里 @ 它开始，之后群里的消息都交给这个会话；@ 它说「新会话」另开一个，话题群的每个话题各一个会话"))])),
+      ("single", obj([("label", str("所有群共用一个会话")), ("description", str("它所在的群和私聊都进入同一个会话，适合长期值守的助手"))])),
+      ("mentionOn", str("被 @ 后，同一个群里的后续消息无需再 @。")),
+      ("mentionOff", str("它所在的群里的每条消息都会进入会话。")),
+    ])
+  } else {
+    obj([
+      ("multi", obj([("label", str("每个 thread 一个会话")), ("description", str("在 thread 中 @ 它即开启一个新会话，该 thread 的后续消息都进入此会话"))])),
+      ("single", obj([("label", str("所有 thread 共用一个会话")), ("description", str("它看到的所有 thread 都进入同一个会话，适合长期值守的助手"))])),
+      ("mentionOn", str("被 @ 的 thread 中，后续回复无需再 @。")),
+      ("mentionOff", str("频道中它可见的每条消息都会进入会话。")),
+    ])
+  }
+}
+
+///|
+/// A Slack app's permissions as the core says them (present.ts slackSections).
+fn fx_sections() -> Json {
+  [
+    obj([
+      ("title", str("消息")),
+      (
+        "groups",
+        [
+          fx_group("base", "读取和回复消息", "", fixed=true),
+          fx_group("public", "在未加入的公开频道发言", ""),
+          fx_group("dm", "主动发私信", ""),
+          fx_group("customize", "使用自定义名称和头像发消息", ""),
+          fx_group("reactions", "表情回应、置顶和书签", ""),
+        ],
+      ),
+    ]),
+    obj([
+      ("title", str("频道和群")),
+      (
+        "groups",
+        [
+          fx_group("channels", "创建和管理频道", ""),
+          fx_group("topics", "修改频道话题和邀请成员", ""),
+          fx_group("connect", "Slack Connect 跨组织频道", "接受邀请需要由能批准 Slack Connect 的人（默认为管理员）安装 app；发送邀请也受工作区设置限制，且仅限付费版"),
+        ],
+      ),
+    ]),
+    obj([
+      ("title", str("文件和文档")),
+      (
+        "groups",
+        [
+          fx_group("files", "读写文件", ""),
+          fx_group("canvases", "读写 canvas", ""),
+          fx_group("lists", "读写列表", ""),
+        ],
+      ),
+    ]),
+    obj([
+      ("title", str("成员和搜索")),
+      (
+        "groups",
+        [
+          fx_group("people", "查看成员资料", ""),
+          fx_group("usergroups", "管理用户组和发起通话", "创建用户组、修改成员需要工作区设置允许，很多工作区仅限管理员；用户组仅限付费版"),
+          fx_group("search", "搜索消息、文件和成员", ""),
+        ],
+      ),
+    ]),
+    obj([
+      ("title", str("其他")),
+      (
+        "groups",
+        [
+          fx_group("extras", "链接预览、提醒和状态", ""),
+          fx_group("more", "状态、元数据和斜杠命令", ""),
+        ],
+      ),
+    ]),
+  ]
+}
+
+///|
+/// A group of a Slack app's permissions, as the core says it (`admin`: what only Slack's admins allow, "" none).
+fn fx_group(id : String, label : String, admin : String, fixed? : Bool = false) -> Json {
+  obj([
+    ("id", str(id)),
+    ("label", str(label)),
+    ("description", str(label)),
+    ("admin", if admin == "" { Json::null() } else { str(admin) }),
+    ("tip", str(if admin == "" { label } else { label + " " + admin })),
+    ("fixed", Json::boolean(fixed)),
+  ])
+}
+
+///|
+/// The ways a multi-session connect could be switched to, as the core says them (present.ts modeChanges).
+fn fx_mode_changes() -> Json {
+  let change = fn(mode : String, mention : Bool, changed : Bool, effects : Array[String], action : String) {
+    obj([
+      ("mode", str(mode)),
+      ("requireMention", Json::boolean(mention)),
+      ("changed", Json::boolean(changed)),
+      ("effects", Json::array(effects.map(str))),
+      ("action", str(action)),
+    ])
+  }
+  let single = "此后它收到的消息都将进入同一个会话；现有各 thread 的会话不再接收新消息，包括这些 thread 中的回复。记录会保留。"
+  let fresh = "下一条消息将开始新的单会话；也可在切换后选择已有会话。"
+  Json::array([
+    change("multi-session", true, false, [], "确认更改"),
+    change("single-session", true, true, [single, fresh], "改为单会话"),
+    change("single-session", false, true, [single, fresh, "无需 @：它可见的所有频道和私信中的每条消息都会发送给 agent，用量会明显增加。"], "改为单会话"),
   ])
 }
 
@@ -434,7 +700,14 @@ fn fx_station(address : String) -> Json {
       ("online", Json::boolean(true)),
       ("link", obj([("state", str("online"))])),
       ("runtimes", []),
-      ("models", []),
+      // what its profiles have turned on (Claude 主账号's: Opus 5.5 and Sonnet 5, on claude)
+      (
+        "models",
+        [
+          obj([("model", str("claude-opus-5-5")), ("name", str("Opus 5.5")), ("family", str("Opus")), ("maker", obj([("id", str("anthropic"))])), ("runtimes", ["claude"])]),
+          obj([("model", str("claude-sonnet-5")), ("name", str("Sonnet 5")), ("family", str("Sonnet")), ("maker", obj([("id", str("anthropic"))])), ("runtimes", ["claude"])]),
+        ],
+      ),
       (
         "host",
         obj([
@@ -477,6 +750,8 @@ fn fx_station(address : String) -> Json {
         obj([
           ("connects", [fx_connect("k1", "星火助手", "online", "在线", "multi-session")]),
           ("profiles", Json::array(fx_profiles())),
+          // a new profile's sign-in under way (settings-new-profile-login…)
+          ("logins", if fx.new_login { [obj([("id", str("login-new")), ("runtime", str("claude")), ("job", fx_login_job("login-new", "needs_code"))])] } else { [] }),
           ("processesText", str("2 个 agent 进程 · claude 1.2 GB")),
           ("slackApps", []),
           ("drive", obj([("roots", [{ "path": "~/项目", "name": "项目", "state": "ok" }, { "path": "~/文档", "name": "文档", "state": "ok" }]), ("all", Json::boolean(false))])),
@@ -495,6 +770,9 @@ fn fx_station(address : String) -> Json {
                 ("updatable", Json::boolean(true)),
                 ("state", str("idle")),
                 ("checkedAt", Json::number(1.0)),
+                // (the core's words of it: present.ts software)
+                ("shownText", str("0.1.1288")),
+                ("tipText", str("")),
               ]),
               obj([
                 ("id", str("claude")),
@@ -506,6 +784,8 @@ fn fx_station(address : String) -> Json {
                 ("updatable", Json::boolean(true)),
                 ("state", str("idle")),
                 ("checkedAt", Json::number(1.0)),
+                ("shownText", str("2.1.4")),
+                ("tipText", str("已是最新")),
               ]),
               obj([
                 ("id", str("codex")),
@@ -515,6 +795,8 @@ fn fx_station(address : String) -> Json {
                 ("updatable", Json::boolean(true)),
                 ("state", str("idle")),
                 ("checkedAt", Json::number(1.0)),
+                ("shownText", str("未安装")),
+                ("tipText", str("")),
               ]),
             ],
           ),
@@ -545,8 +827,37 @@ fn fx_station(address : String) -> Json {
           (
             "machineLogins",
             [
-              obj([("runtime", str("codex")), ("installed", Json::boolean(true)), ("loggedIn", Json::boolean(true)), ("email", str("lin@example.com")), ("plan", str("plus")), ("usable", Json::boolean(true)), ("text", str("")), ("offered", Json::boolean(true))]),
+              obj([("runtime", str("codex")), ("installed", Json::boolean(true)), ("loggedIn", Json::boolean(true)), ("email", str("lin@example.com")), ("plan", str("plus")), ("planText", str("Plus")), ("usable", Json::boolean(true)), ("text", str("")), ("offered", Json::boolean(true))]),
             ],
+          ),
+          (
+            "archiving",
+            // (the core's words and choices, as it gives them: archiving.ts in the core)
+            obj([
+              ("days", Json::number(1.0)),
+              ("slackDays", Json::number(3.0)),
+              ("reviewed", Json::boolean(false)),
+              ("canEdit", Json::boolean(true)),
+              ("mode", str("idle")),
+              ("summaryText", str("空闲就归档 · 1 天 · Slack：3 天")),
+              ("daysOffered", [Json::number(1.0), Json::number(3.0), Json::number(7.0), Json::number(30.0)]),
+              ("slackDaysOffered", [Json::number(0.0), Json::number(3.0), Json::number(7.0), Json::number(30.0)]),
+              ("daysOfferedText", [str("1 天"), str("3 天"), str("7 天"), str("30 天")]),
+              ("slackDaysOfferedText", [str("不归档"), str("3 天"), str("7 天"), str("30 天")]),
+              ("reviewOn", Json::boolean(true)),
+              ("reviewText", str("已开启 · GPT-6 mini")),
+              ("stalled", Json::boolean(false)),
+              ("lineText", str("空闲就归档 · 1 天 · Slack：3 天")),
+              (
+                "modes",
+                [
+                  obj([("mode", str("off")), ("label", str("不自动归档")), ("days", Json::number(0.0)), ("reviewed", Json::boolean(false)), ("allowed", Json::boolean(true))]),
+                  obj([("mode", str("idle")), ("label", str("空闲就归档")), ("days", Json::number(1.0)), ("reviewed", Json::boolean(false)), ("allowed", Json::boolean(true))]),
+                  obj([("mode", str("reviewed")), ("label", str("按模型判断")), ("days", Json::number(1.0)), ("reviewed", Json::boolean(true)), ("allowed", Json::boolean(true))]),
+                ],
+              ),
+              ("modeNote", str("空闲超过下面的天数就归档。只看状态，不读内容：chat 里提到但没做完的事，它看不出来。")),
+            ]),
           ),
           (
             "automaticDecisions",
@@ -656,6 +967,10 @@ fn fx_usage(days : Int) -> Json {
         ("callsText", str((cost * 12.0).to_int().to_string() + " 次调用")),
         ("parts", [Json::number(a), Json::number(b), Json::number(rest)]),
         ("partsText", [str("$" + a.to_int().to_string()), str("$" + b.to_int().to_string()), str("$" + rest.to_int().to_string())]),
+        // (what the core says of it: views/usage.ts)
+        ("name", str(if i == days - 1 { "今天" } else { "10/" + (i + 1).to_string() })),
+        ("tick", str(if i == days - 1 { "今天" } else if days <= 10 || (days - 1 - i) % 7 == 0 { "10/" + (i + 1).to_string() } else { "" })),
+        ("shares", [Json::number(0.6), Json::number(0.3), Json::number(0.1)]),
       ]),
     )
   }
@@ -689,6 +1004,7 @@ fn fx_usage(days : Int) -> Json {
     ),
     ("series", [obj([("key", str("lin@example.com")), ("name", str("林"))]), obj([("key", str("ana@example.com")), ("name", str("Ana"))]), obj([("key", str("")), ("name", str("其他"))])]),
     ("daily", Json::array(daily)),
+    ("many", Json::boolean(days > 10)),
     ("max", Json::number(27.0)),
     // (the scale the core works out for it: views/usage.ts scale)
     ("top", Json::number(30.0)),
@@ -765,6 +1081,8 @@ fn fx_memory() -> Json {
           ("about", str("发布新版本时")),
           ("size", str("3 KB")),
           ("files", [obj([("name", str("checklist.md")), ("text", str("- 签名\n- 截图")), ("label", str("checklist")), ("size", str("1 KB"))])]),
+          // (the core's words of it: looks.ts)
+          ("group", str("project")), ("kindText", str("项目记忆")), ("whenText", str("发布新版本时")), ("line", str("发布新版本时")), ("pages", [obj([("key", str("")), ("label", str("总览")), ("text", str("## 步骤\n\n1. 改版本号\n2. 写更新说明\n3. 打包并上传"))]), obj([("key", str("checklist.md")), ("label", str("checklist")), ("size", str("1 KB")), ("text", str("- 签名\n- 截图"))])]),
           (
             "share",
             if fx.skills_shared.get("发布流程").unwrap_or(true) {
@@ -781,9 +1099,10 @@ fn fx_memory() -> Json {
           ("builtin", Json::boolean(false)),
           ("text", str("每周五下午写。")),
           ("size", str("1 KB")),
+          ("group", str("skill")), ("kindText", str("Skill")), ("whenText", str("写周报时用的格式")), ("line", str("写周报时用的格式")), ("pages", [obj([("key", str("")), ("label", str("总览")), ("text", str("每周五下午写。"))])]),
         ]),
-        obj([("name", str("pdf")), ("description", str("读写 PDF")), ("project", Json::boolean(false)), ("builtin", Json::boolean(true)), ("text", str(""))]),
-        obj([("name", str("xlsx")), ("description", str("读写表格")), ("project", Json::boolean(false)), ("builtin", Json::boolean(true)), ("text", str(""))]),
+        obj([("name", str("pdf")), ("description", str("读写 PDF")), ("project", Json::boolean(false)), ("builtin", Json::boolean(true)), ("text", str("")), ("group", str("builtin")), ("kindText", str("station 内置")), ("whenText", str("读写 PDF")), ("line", str("读写 PDF")), ("pages", [obj([("key", str("")), ("label", str("总览")), ("text", str("（空）"))])])]),
+        obj([("name", str("xlsx")), ("description", str("读写表格")), ("project", Json::boolean(false)), ("builtin", Json::boolean(true)), ("text", str("")), ("group", str("builtin")), ("kindText", str("station 内置")), ("whenText", str("读写表格")), ("line", str("读写表格")), ("pages", [obj([("key", str("")), ("label", str("总览")), ("text", str("（空）"))])])]),
       ],
     ),
   ])
@@ -871,6 +1190,7 @@ pub fn fixture_topic(mode : String, name : String, params : Map[String, Json]) -
                   ("kind", str("android")),
                   ("label", str("Pixel 9")),
                   ("code", str("482915")),
+                  ("deviceText", str("Pixel 9")),
                   ("created_at", Json::number(0.0)),
                   ("workspaces", [obj([("id", str("ws1")), ("name", str("星火工作室"))]), obj([("id", str("ws2")), ("name", str("个人"))])]),
                 ]),
@@ -896,6 +1216,8 @@ pub fn fixture_topic(mode : String, name : String, params : Map[String, Json]) -
           ("known", Json::boolean(true)),
         ]),
       )
+    // what still.fail uses of Studio's machine (the `resources` view): a chat's agent and the station
+    "resources" => Some(fx_resources())
     "adbShare" =>
       Some(obj([("sharing", Json::boolean(false)), ("phase", str("idle")), ("tunnels", Json::number(0.0))]))
     "joinable" =>
@@ -927,7 +1249,8 @@ pub fn fixture_topic(mode : String, name : String, params : Map[String, Json]) -
           ),
         ]),
       )
-    "profileFlow" => Some(fx_profile_flow())
+    "profileFlow" if fx.new_login => Some(fx_profile_flow_plan())
+    "profileFlow" => Some(fx_profile_flow(hermes=mode == "settings-new-profile-hermes"))
     "pick" if text(Some(Json::object(params)), "of").has_prefix("session:") => Some(fx_session_pick())
     "connectFlow" if fx_connect_step.val != "team" && fx_connect_step.val != "app" =>
       Some(fx_feishu_flow(fx_connect_step.val))
@@ -965,6 +1288,8 @@ pub fn fixture_topic(mode : String, name : String, params : Map[String, Json]) -
             ],
           ),
           ("chosen", obj([("teamId", str("T1")), ("name", str("星火"))])),
+          ("modeWords", fx_mode_words(fx_connect_step.val.has_prefix("feishu"))),
+          ("sections", fx_sections()),
         ]),
       )
     "slackApp" =>
@@ -984,6 +1309,8 @@ pub fn fixture_topic(mode : String, name : String, params : Map[String, Json]) -
               ("groups", obj([("base", Json::boolean(true)), ("public", Json::boolean(true)), ("dm", Json::boolean(true)), ("files", Json::boolean(true))])),
             ]),
           ),
+          // its permissions as the core says them (present.ts slackSections)
+          ("sections", fx_sections()),
         ]),
       )
     "vaultUses" =>
@@ -992,8 +1319,8 @@ pub fn fixture_topic(mode : String, name : String, params : Map[String, Json]) -
           (
             "uses",
             [
-              obj([("at", stamp_of("昨天")), ("session", str("s-c1")), ("station", str("st1")), ("chatTitle", str("整理发布清单")), ("mode", str("proxy")), ("hosts", ["api.github.com"]), ("command", str("git push origin main"))]),
-              obj([("at", stamp_of("3 天前")), ("session", str("s-c4")), ("station", str("st1")), ("chatTitle", str("给设置页加一个深色模式开关")), ("mode", str("proxy")), ("hosts", []), ("denied", Json::boolean(true))]),
+              obj([("at", stamp_of("昨天")), ("session", str("s-c1")), ("station", str("st1")), ("chatTitle", str("整理发布清单")), ("mode", str("proxy")), ("hosts", ["api.github.com"]), ("command", str("git push origin main")), ("howText", str("git push origin main · 代理"))]),
+              obj([("at", stamp_of("3 天前")), ("session", str("s-c4")), ("station", str("st1")), ("chatTitle", str("给设置页加一个深色模式开关")), ("mode", str("proxy")), ("hosts", []), ("denied", Json::boolean(true)), ("howText", str("代理"))]),
             ],
           ),
         ]),
@@ -1001,7 +1328,33 @@ pub fn fixture_topic(mode : String, name : String, params : Map[String, Json]) -
     "decisionForm" =>
       Some(obj([("enabled", Json::boolean(true)), ("model", str("gpt-6-mini")), ("dirty", Json::boolean(false)), ("pending", Json::boolean(false))]))
     "policyForm" =>
-      Some(obj([("policy", str("做完、没有待办的对话归档；还在等人回复或有后续计划的留下。")), ("options", []), ("dirty", Json::boolean(false)), ("pending", Json::boolean(false))]))
+      Some(
+        obj([
+          ("policy", str("做完、没有待办的对话归档；还在等人回复或有后续计划的留下。")),
+          // the station's options, each its draft's key its id
+          (
+            "options",
+            [
+              obj([("key", str("o1")), ("id", str("o1")), ("name", str("已完成")), ("rubric", str("任务做完，没有后续")), ("archive", Json::boolean(true))]),
+              obj([("key", str("o2")), ("id", str("o2")), ("name", str("被放弃")), ("rubric", str("明确不再继续")), ("archive", Json::boolean(true))]),
+              obj([("key", str("o3")), ("id", str("o3")), ("name", str("等回复")), ("rubric", str("在等某人的答复")), ("archive", Json::boolean(false))]),
+            ],
+          ),
+          ("dirty", Json::boolean(false)),
+          ("pending", Json::boolean(false)),
+        ]),
+      )
+    // what the settings say of the workspace (the core's views/settings.ts): Studio's completion rule on
+    "settings" =>
+      Some(
+        obj([
+          ("decisionsOn", Json::number(1.0)),
+          ("decisionsText", str("1 台 station 已启用")),
+          // (Studio reviews, MBA is offline: nothing to say of the hint)
+          ("hintNoReview", Json::boolean(false)),
+          ("hintReviewText", str("")),
+        ]),
+      )
     "changelog" =>
       Some(
         obj([
@@ -1021,7 +1374,7 @@ pub fn fixture_topic(mode : String, name : String, params : Map[String, Json]) -
                         "entries",
                         [
                           obj([("version", Json::number(2.0)), ("versionName", str("0.1.1300")), ("text", []), ("lines", [obj([("kind", str("new")), ("label", str("新增")), ("text", str("设置里可以添加 station 和 Profile"))])]), ("has", Json::boolean(false)), ("note", str("更新后可用")), ("mine", Json::boolean(true))]),
-                          obj([("version", Json::number(1.0)), ("versionName", str("0.1.1288")), ("text", []), ("lines", [obj([("kind", str("fix")), ("label", str("修复")), ("text", str("对话列表偶尔重复显示同一行"))])]), ("has", Json::boolean(true)), ("note", str("")), ("mine", Json::boolean(true))]),
+                          obj([("version", Json::number(1.0)), ("versionName", str("0.1.1288")), ("text", []), ("lines", [obj([("kind", str("fix")), ("label", str("修复")), ("text", str("对话列表偶尔把同一行显示两次，滑到底再滑回来也不会消失"))])]), ("has", Json::boolean(true)), ("note", str("")), ("mine", Json::boolean(true))]),
                         ],
                       ),
                     ]),
@@ -1070,6 +1423,7 @@ pub fn fixture_topic(mode : String, name : String, params : Map[String, Json]) -
                 ),
                 ("candidates", []),
                 ("running", Json::number(0.0)),
+                ("changes", fx_mode_changes()),
               ]),
               obj([
                 ("station", str("ws1/st1")),
@@ -1078,6 +1432,7 @@ pub fn fixture_topic(mode : String, name : String, params : Map[String, Json]) -
                 ("sessions", []),
                 ("candidates", []),
                 ("running", Json::number(0.0)),
+                ("changes", Json::array([])),
               ]),
             ],
           ),
@@ -1111,6 +1466,8 @@ pub fn fixture_topic(mode : String, name : String, params : Map[String, Json]) -
                 ("code", str("482 917")),
                 ("created_at", Json::number(0.0)),
                 ("yours", Json::boolean(false)),
+                ("whoText", str("Ana")),
+                ("deviceText", str("Pixel 9")),
                 ("time", obj([("created_at", stamp_of("2 分钟前"))])),
               ]),
             ],
@@ -1124,11 +1481,13 @@ pub fn fixture_topic(mode : String, name : String, params : Map[String, Json]) -
                 ("name", str("林")),
                 ("role", str("owner")),
                 ("you", Json::boolean(true)),
+                ("nameText", str("林")),
+                ("roleText", str("Owner")),
                 (
                   "devices",
                   [
-                    obj([("id", str("d1")), ("kind", str("app")), ("label", str("这台手机")), ("signs", Json::boolean(true)), ("older", Json::boolean(false)), ("mine", Json::boolean(true)), ("renewSoon", Json::boolean(false)), ("recent", Json::boolean(false))]),
-                    obj([("id", str("d2")), ("kind", str("web")), ("label", str("")), ("signs", Json::boolean(false)), ("older", Json::boolean(false)), ("mine", Json::boolean(false)), ("daysLeft", Json::number(4.0)), ("renewSoon", Json::boolean(true)), ("recent", Json::boolean(false))]),
+                    obj([("id", str("d1")), ("kind", str("app")), ("label", str("这台手机")), ("signs", Json::boolean(true)), ("older", Json::boolean(false)), ("mine", Json::boolean(true)), ("renewSoon", Json::boolean(false)), ("recent", Json::boolean(false)), ("nameText", str("这台手机")), ("metaText", str("客户端 · 受信任 · 此设备"))]),
+                    obj([("id", str("d2")), ("kind", str("web")), ("label", str("")), ("signs", Json::boolean(false)), ("older", Json::boolean(false)), ("mine", Json::boolean(false)), ("daysLeft", Json::number(4.0)), ("renewSoon", Json::boolean(true)), ("recent", Json::boolean(false)), ("nameText", str("网页版")), ("metaText", str("网页版 · 剩余 4 天"))]),
                   ],
                 ),
               ]),
@@ -1138,7 +1497,9 @@ pub fn fixture_topic(mode : String, name : String, params : Map[String, Json]) -
                 ("name", str("Ana")),
                 ("role", str("admin")),
                 ("you", Json::boolean(false)),
-                ("devices", [obj([("id", str("d3")), ("kind", str("app")), ("label", str("MacBook")), ("signs", Json::boolean(true)), ("older", Json::boolean(false)), ("mine", Json::boolean(false)), ("renewSoon", Json::boolean(false)), ("recent", Json::boolean(false))])]),
+                ("nameText", str("Ana")),
+                ("roleText", str("管理员")),
+                ("devices", [obj([("id", str("d3")), ("kind", str("app")), ("label", str("MacBook")), ("signs", Json::boolean(true)), ("older", Json::boolean(false)), ("mine", Json::boolean(false)), ("renewSoon", Json::boolean(false)), ("recent", Json::boolean(false)), ("nameText", str("MacBook")), ("metaText", str("客户端 · 受信任"))])]),
               ]),
             ],
           ),
@@ -1191,16 +1552,21 @@ pub fn fixture_topic(mode : String, name : String, params : Map[String, Json]) -
                 ("item", str("it1")),
                 ("itemName", str("GitHub token")),
                 ("session", str("s-c1")),
+                ("station", str("st1")),
                 ("chat", str("c1")),
                 ("mode", str("proxy")),
                 ("reason", str("要把发布清单推到仓库")),
                 ("command", str("git push origin main")),
                 ("hosts", ["api.github.com"]),
+                ("howText", str("代理 · 限 api.github.com")),
                 ("at", Json::number(0.0)),
               ]),
             ],
           ),
           ("refused", []),
+          // (the core's words of it: its one request waits)
+          ("statusText", str("1 个待批准")),
+          ("statusBad", Json::boolean(true)),
         ]),
       )
     "vaultItems" =>
@@ -1212,9 +1578,9 @@ pub fn fixture_topic(mode : String, name : String, params : Map[String, Json]) -
           (
             "items",
             [
-              obj([("id", str("it1")), ("version", Json::number(1.0)), ("at", Json::number(0.0)), ("name", str("GitHub token")), ("kind", str("token")), ("listed", Json::boolean(true)), ("modes", ["proxy"]), ("hosts", ["api.github.com"]), ("lastUse", obj([("at", stamp_of("昨天")), ("session", str("s-c1")), ("mode", str("proxy")), ("hosts", [])]))]),
-              obj([("id", str("it2")), ("version", Json::number(1.0)), ("at", Json::number(0.0)), ("name", str("部署机")), ("kind", str("ssh_key")), ("listed", Json::boolean(true)), ("modes", ["ssh"]), ("hosts", [])]),
-              obj([("id", str("it3")), ("version", Json::number(1.0)), ("at", Json::number(0.0)), ("kind", str("login")), ("listed", Json::boolean(false)), ("modes", []), ("hosts", [])]),
+              obj([("id", str("it1")), ("version", Json::number(1.0)), ("at", Json::number(0.0)), ("name", str("GitHub token")), ("kind", str("token")), ("listed", Json::boolean(true)), ("modes", ["proxy"]), ("hosts", ["api.github.com"]), ("lastUse", obj([("at", stamp_of("昨天")), ("session", str("s-c1")), ("mode", str("proxy")), ("hosts", [])])), ("kindText", str("Token")), ("shut", [obj([("key", str("value")), ("label", str("值")), ("value", str("••••••••••••••••••••")), ("secret", Json::boolean(true)), ("mono", Json::boolean(true))])]), ("agentText", str("允许 agent 申请 · 代理 · api.github.com")), ("lineText", str("昨天使用")), ("howText", str("代理 · 限 api.github.com")), ("lastsText", str("跟随默认 · 直到对话归档"))]),
+              obj([("id", str("it2")), ("version", Json::number(1.0)), ("at", Json::number(0.0)), ("name", str("部署机")), ("kind", str("ssh_key")), ("listed", Json::boolean(true)), ("modes", ["ssh"]), ("hosts", []), ("kindText", str("SSH 密钥")), ("shut", [obj([("key", str("private_key")), ("label", str("私钥")), ("value", str("••••••••••••••••••••")), ("secret", Json::boolean(true)), ("mono", Json::boolean(true))])]), ("agentText", str("允许 agent 申请 · ssh-agent")), ("lineText", str("允许 agent 申请 · ssh-agent")), ("howText", str("ssh-agent")), ("lastsText", str("跟随默认 · 直到对话归档"))]),
+              obj([("id", str("it3")), ("version", Json::number(1.0)), ("at", Json::number(0.0)), ("kind", str("login")), ("listed", Json::boolean(false)), ("modes", []), ("hosts", []), ("kindText", str("登录")), ("shut", [obj([("key", str("username")), ("label", str("用户名")), ("value", str("••••••••••")), ("secret", Json::boolean(false)), ("mono", Json::boolean(false))]), obj([("key", str("password")), ("label", str("密码")), ("value", str("••••••••••••")), ("secret", Json::boolean(true)), ("mono", Json::boolean(true))])]), ("agentText", str("仅自己可见")), ("lineText", str("仅自己可见")), ("howText", str("")), ("lastsText", str("跟随默认 · 直到对话归档"))]),
             ],
           ),
         ]),
@@ -1274,7 +1640,17 @@ pub fn fixture_topic(mode : String, name : String, params : Map[String, Json]) -
     "notify" => {
       // notifications off (slice 10's settings-notify-off)
       let on = !mode.has_prefix("settings-notify-off")
-      Some(obj([("on", Json::boolean(on)), ("asked", Json::boolean(true)), ("push", Json::boolean(false)), ("show", [])]))
+      Some(
+        obj([
+          ("on", Json::boolean(on)),
+          ("asked", Json::boolean(true)),
+          ("push", Json::boolean(false)),
+          ("show", []),
+          ("kinds", obj([("wait", Json::boolean(true)), ("failed", Json::boolean(true)), ("done", str("away")), ("message", Json::boolean(false))])),
+          ("preview", Json::boolean(true)),
+          ("permission", str(if mode.has_prefix("settings-notify-denied") { "denied" } else { "granted" })),
+        ]),
+      )
     }
     "doing" => Some(obj([("doing", [])]))
     "lockDraft" =>
@@ -1285,9 +1661,27 @@ pub fn fixture_topic(mode : String, name : String, params : Map[String, Json]) -
           ("canSign", Json::boolean(true)),
           ("owner", Json::boolean(true)),
           ("ready", Json::boolean(true)),
-          ("members", [me]),
-          ("devices", []),
-          ("stations", []),
+          (
+            "members",
+            [
+              obj([("sub", str("u1")), ("email", str("lin@example.com")), ("name", str("林")), ("role", str("owner")), ("nameText", str("林")), ("roleText", str("Owner"))]),
+              obj([("sub", str("u2")), ("email", str("ana@example.com")), ("name", str("Ana")), ("role", str("admin")), ("nameText", str("Ana")), ("roleText", str("管理员"))]),
+            ],
+          ),
+          (
+            "devices",
+            [
+              obj([("id", str("d1")), ("person", str("林")), ("kind", str("app")), ("label", str("这台手机")), ("older", Json::boolean(false)), ("current", Json::boolean(true)), ("on", Json::boolean(true)), ("fixed", Json::boolean(true)), ("nameText", str("林 · 此设备")), ("howText", str("客户端 · 受信任"))]),
+              obj([("id", str("d3")), ("person", str("Ana")), ("kind", str("app")), ("label", str("MacBook")), ("older", Json::boolean(false)), ("current", Json::boolean(false)), ("on", Json::boolean(true)), ("fixed", Json::boolean(false)), ("nameText", str("Ana · MacBook")), ("howText", str("客户端"))]),
+            ],
+          ),
+          (
+            "stations",
+            [
+              obj([("id", str("st1")), ("name", str("Studio")), ("version", str("0.1.4600")), ("state", str("ok")), ("on", Json::boolean(true)), ("fixed", Json::boolean(false))]),
+              obj([("id", str("st2")), ("name", str("MBA")), ("state", str("offline")), ("on", Json::boolean(false)), ("fixed", Json::boolean(true)), ("stateText", str("离线 · 上线后可在此保护"))]),
+            ],
+          ),
         ]),
       )
     _ => None
@@ -1332,9 +1726,10 @@ pub fn fixture_call(name : String, params : Json) -> Result[Json, Json]? {
       fx.version += 1
       Some(Ok(obj([])))
     }
-    // the new device turned away: no longer asking
-    "lockPrompt.deny" => {
+    // the new device turned away, or its prompt closed: no longer shown
+    "lockPrompt.deny" | "lockPrompt.hide" => {
       fx.pairing = false
+      fx.pair_ended = if name == "lockPrompt.deny" { "deny" } else { "hide" }
       fx.version += 1
       Some(Ok(obj([])))
     }
@@ -1407,6 +1802,12 @@ pub fn fixture_call(name : String, params : Json) -> Result[Json, Json]? {
       Some(Ok(obj([])))
     "agentEnv.form.open" | "agentEnv.form.edit" | "agentEnv.form.drop" | "agentEnv.form.save" => Some(Ok(obj([])))
     "profile.quota" | "profile.check" | "profile.put" => Some(Ok(obj([])))
+    // the subscription's sign-in begun: as settings-profile-login has it, waiting on the code
+    "profile.login" => {
+      fx.login = "needs_code"
+      fx.version += 1
+      Some(Ok(obj([])))
+    }
     "profile.resetQuota" => {
       fx.resets_used += 1
       fx.version += 1
@@ -1418,6 +1819,8 @@ pub fn fixture_call(name : String, params : Json) -> Result[Json, Json]? {
       Some(Ok(obj([])))
     }
     // the drafts' forms (a new profile's, a new connect's, the decisions' and the archive policy's), opened and edited
+    // an Anthropic plan's sign-in for a new profile, begun (settings-new-profile-login…)
+    "login.new" if fx.new_login => Some(Ok(obj([("id", str("login-new")), ("job", fx_login_job("login-new", "needs_code"))])))
     "profile.flow.open" | "profile.flow.edit" | "profile.flow.drop" | "connect.flow.open" | "connect.flow.edit"
     | "connect.flow.drop" | "automaticDecisions.form.open" | "automaticDecisions.form.edit"
     | "automaticDecisions.form.drop" | "automaticDecisions.policy.open" | "automaticDecisions.policy.drop" =>
@@ -1478,8 +1881,8 @@ fn waiting_lock(mode : String) -> Json {
     (
       "requests",
       [
-        obj([("device", str("d-me")), ("sub", str("u1")), ("email", str("lin@example.com")), ("name", str("林")), ("kind", str("app")), ("label", str("still.fail mbui Android · OPPO PLP110")), ("code", str("Q4K-7PM")), ("created_at", Json::number(0.0)), ("yours", Json::boolean(true)), ("time", obj([("created_at", stamp_of("1 分钟前"))]))]),
-        obj([("device", str("d9")), ("sub", str("u2")), ("email", str("ana@example.com")), ("name", str("Ana")), ("kind", str("app")), ("label", str("Pixel 9")), ("code", str("482 917")), ("created_at", Json::number(0.0)), ("yours", Json::boolean(false)), ("time", obj([("created_at", stamp_of("2 分钟前"))]))]),
+        obj([("device", str("d-me")), ("sub", str("u1")), ("email", str("lin@example.com")), ("name", str("林")), ("kind", str("app")), ("label", str("still.fail mbui Android · OPPO PLP110")), ("code", str("Q4K-7PM")), ("created_at", Json::number(0.0)), ("yours", Json::boolean(true)), ("whoText", str("林")), ("deviceText", str("still.fail mbui Android · OPPO PLP110")), ("time", obj([("created_at", stamp_of("1 分钟前"))]))]),
+        obj([("device", str("d9")), ("sub", str("u2")), ("email", str("ana@example.com")), ("name", str("Ana")), ("kind", str("app")), ("label", str("Pixel 9")), ("code", str("482 917")), ("created_at", Json::number(0.0)), ("yours", Json::boolean(false)), ("whoText", str("Ana")), ("deviceText", str("Pixel 9")), ("time", obj([("created_at", stamp_of("2 分钟前"))]))]),
       ],
     ),
     (
@@ -1491,13 +1894,24 @@ fn waiting_lock(mode : String) -> Json {
           ("name", str("林")),
           ("role", str("owner")),
           ("you", Json::boolean(true)),
-          ("devices", [obj([("id", str("d1")), ("kind", str("app")), ("label", str("still.fail Android · OPPO PLP110")), ("signs", Json::boolean(true)), ("older", Json::boolean(false)), ("mine", Json::boolean(false)), ("renewSoon", Json::boolean(false)), ("recent", Json::boolean(false))])]),
+          ("nameText", str("林")),
+          ("roleText", str("Owner")),
+          ("devices", [obj([("id", str("d1")), ("kind", str("app")), ("label", str("still.fail Android · OPPO PLP110")), ("signs", Json::boolean(true)), ("older", Json::boolean(false)), ("mine", Json::boolean(false)), ("renewSoon", Json::boolean(false)), ("recent", Json::boolean(false)), ("nameText", str("still.fail Android · OPPO PLP110")), ("metaText", str("客户端 · 受信任"))])]),
         ]),
       ],
     ),
     ("stations", []),
     ("renew", []),
   ])
+}
+
+///|
+/// The dialog of the desktop's pages a fixture's mode puts up ("" none), taken once: the desktop's page puts it up
+/// once it is drawn with what it needs.
+pub fn fixture_desk() -> String {
+  let d = fixture_open.desk
+  fixture_open.desk = ""
+  d
 }
 
 ///|
@@ -1513,27 +1927,6 @@ fn fixture_sheet(core : Core, here : Here) -> Unit {
       let s = Some(fx_station("ws1/st1"))
       open_mark_pick(core, text(s, "name"), text(s, "emoji"), text(s, "icon"), "", fn(_, _, _) {  })
     }
-    "env" => open_agent_env(core, "ws1/st1")
-    "profile-menu" => {
-      let p = fx_profiles()[0]
-      open_profile_menu(core, "ws1/st1", Some(p))
-    }
-    "connect-menu" | "connect-mode" => {
-      let item = obj([
-        ("station", str("ws1/st1")),
-        ("connect", fx_connect("k1", "星火助手", "online", "在线", "multi-session")),
-        ("candidates", []),
-        ("running", Json::number(2.0)),
-      ])
-      if what == "connect-menu" {
-        open_connect_menu(core, here, "ws1/st1", Some(item))
-      } else {
-        open_mode(core, "ws1/st1", Some(item))
-      }
-    }
-    "vault-add" => open_vault_add(core, here)
-    "vault-editor" => open_vault_editor(core, "ws1", "v1", None, kind="token")
-    "vault-recover" => open_vault_recover(core, "ws1")
     "add-people" => open_add_people(core, here, workspace_view(core, here).value)
     "workspace-mark" => open_mark_pick(core, "星火工作室", "", "glyph:rocket:orange", "", fn(_, _, _) {  })
     "add" | "add-existing" | "add-command" => {
@@ -1571,35 +1964,86 @@ fn fx_words() -> Array[String] {
 }
 
 ///|
+/// A subscription's sign-in under way in `state` (a profile's, or a new one's by its login's id): its page, and that
+/// the station's own browser can open it where the fixture says so.
+fn fx_login_job(profile : String, state : String) -> Json {
+  let o = [
+    ("profile", str(profile)),
+    ("runtime", str("claude")),
+    ("state", str(state)),
+    ("url", str("https://claude.example/oauth/authorize")),
+    ("startedAt", Json::number(0.0)),
+    ("expiresAt", Json::number(0.0)),
+  ]
+  if fx.login_station {
+    o.push(("browser", Json::boolean(true)))
+  }
+  obj(o)
+}
+
+///|
+/// A new profile's draft at an Anthropic plan's sign-in (`profileFlow`, settings-new-profile-login…): 连接 Anthropic.
+fn fx_profile_flow_plan() -> Json {
+  obj([
+    ("step", str("connect")),
+    ("station", str("ws1/st1")),
+    ("title", str("连接 Anthropic")),
+    ("hint", str("")),
+    ("method", str("plan")),
+    ("tile", obj([("id", str("anthropic")), ("name", str("Anthropic")), ("kind", str("subscription")), ("runtime", str("claude")), ("mark", str("anthropic"))])),
+    ("signIn", obj([("runtime", str("claude")), ("provider", str("Claude")), ("access", str(""))])),
+    ("groups", []),
+    ("choices", []),
+    ("showEndpoint", Json::boolean(false)),
+    ("endpoint", str("")),
+    ("protocols", []),
+    ("showKey", Json::boolean(false)),
+    ("key", str("")),
+    ("keyLabel", str("")),
+    ("canSubmit", Json::boolean(false)),
+    ("pending", Json::boolean(false)),
+    ("submitLabel", str("")),
+    ("usesLine", str("")),
+  ])
+}
+
+///|
 /// A new profile's draft at its first step (`profileFlow`): the providers by group.
-fn fx_profile_flow() -> Json {
+fn fx_profile_flow(hermes? : Bool = false) -> Json {
   let provider = fn(id : String, name : String, group : String, runtime : String, mark : String) {
     obj([("id", str(id)), ("name", str(name)), ("group", str(group)), ("kind", str("api-provider")), ("runtime", str(runtime)), ("mark", str(mark))])
+  }
+  let groups : Array[Json] = [
+    obj([
+      ("id", str("labs")),
+      ("title", str("模型厂商")),
+      (
+        "providers",
+        [
+          provider("openai", "OpenAI", "labs", "codex", "openai"),
+          provider("anthropic", "Anthropic", "labs", "claude", "anthropic"),
+          provider("deepseek", "DeepSeek", "labs", "", "deepseek"),
+          provider("kimi", "Kimi", "labs", "", "kimi"),
+        ],
+      ),
+    ]),
+    obj([("id", str("gateways")), ("title", str("中转站")), ("providers", [provider("openrouter", "OpenRouter", "gateways", "", "openrouter")])]),
+  ]
+  if hermes {
+    groups.push(obj([
+      ("id", str("local")), ("title", str("自定义变量")),
+      ("providers", [obj([
+        ("id", str("env-hermes")), ("name", str("Hermes Agent")), ("group", str("local")),
+        ("kind", str("env")), ("runtime", str("hermes")),
+      ])]),
+    ]))
   }
   obj([
     ("step", str("pick")),
     ("station", str("ws1/st1")),
     ("title", str("选择服务商")),
     ("hint", str("订阅和 API key 都在这里添加，选择服务商开始")),
-    (
-      "groups",
-      [
-        obj([
-          ("id", str("labs")),
-          ("title", str("模型厂商")),
-          (
-            "providers",
-            [
-              provider("openai", "OpenAI", "labs", "codex", "openai"),
-              provider("anthropic", "Anthropic", "labs", "claude", "anthropic"),
-              provider("deepseek", "DeepSeek", "labs", "", "deepseek"),
-              provider("kimi", "Kimi", "labs", "", "kimi"),
-            ],
-          ),
-        ]),
-        obj([("id", str("gateways")), ("title", str("中转站")), ("providers", [provider("openrouter", "OpenRouter", "gateways", "", "openrouter")])]),
-      ],
-    ),
+    ("groups", Json::array(groups)),
     ("choices", []),
     ("showEndpoint", Json::boolean(false)),
     ("endpoint", str("")),
@@ -1683,6 +2127,7 @@ fn fx_session_pick() -> Json {
     ("becomes", ["Opus 5.5", "high", "自动 · Claude 主账号"]),
     ("accountText", str("自动分配")),
     ("accountNote", str("Claude 主账号 · 5 小时窗口已用 62%")),
+    ("repick", str("重新分配")),
     // (RunnableProfile: its kind, its runtime, its allowance)
     (
       "accounts",
@@ -1785,4 +2230,111 @@ fn fx_qr(n : Int) -> Json {
     rows.push(str(row.to_string()))
   }
   obj([("size", Json::number(n.to_double())), ("rows", Json::array(rows))])
+}
+
+///|
+/// A use, its figures and each said (ResourceUse): CPU, memory, the network's and the disk's rates.
+fn fx_use(cpu : Double, memory : Double, net : Double, disk : Double, texts : (String, String, String, String)) -> Json {
+  let (cpu_text, memory_text, net_text, disk_text) = texts
+  obj([
+    ("cpu", Json::number(cpu)),
+    ("memory", Json::number(memory)),
+    ("netIn", Json::number(net / 2.0)),
+    ("netOut", Json::number(net / 2.0)),
+    ("net", Json::number(net)),
+    ("diskRead", Json::number(disk)),
+    ("diskWrite", Json::number(0.0)),
+    ("disk", Json::number(disk)),
+    ("cpuText", str(cpu_text)),
+    ("memoryText", str(memory_text)),
+    ("netText", str(net_text)),
+    ("diskText", str(disk_text)),
+  ])
+}
+
+///|
+/// What still.fail uses of Studio's machine now (ResourcesView), as a busy Mac says it: its four totals with what is
+/// under each (the network and the disk both read), two chats' agents (one titled at length) and the station, each with
+/// its processes.
+fn fx_resources() -> Json {
+  let process = fn(key : String, pid : Double, name : String, endable : Bool, u : Json) {
+    obj([("key", str(key)), ("pid", Json::number(pid)), ("name", str(name)), ("endable", Json::boolean(endable)), ("use", u)])
+  }
+  let tile = fn(key : String, label : String, value : String, sub : String, points : Array[Double]) {
+    obj([("key", str(key)), ("label", str(label)), ("value", str(value)), ("sub", str(sub)), ("points", Json::array(points.map(Json::number(_))))])
+  }
+  let chat = fx_use(25.9, 59.0e6, 0.0, 2.9e6, ("25.9%", "59 MB", "0 B/s", "2.9 MB/s"))
+  let notes = fx_use(14.1, 980.0e6, 0.0, 13.0e3, ("14.1%", "980 MB", "0 B/s", "13 KB/s"))
+  let station = fx_use(2.8, 363.0e6, 56.0e3, 0.0, ("2.8%", "363 MB", "56 KB/s", "0 B/s"))
+  obj([
+    ("wait", obj([("reading", Json::boolean(false)), ("text", str("")), ("failing", [])])),
+    ("empty", Json::boolean(false)),
+    ("net", Json::boolean(true)),
+    ("disk", Json::boolean(true)),
+    ("everyMs", Json::number(5000.0)),
+    (
+      "tiles",
+      [
+        tile("cpu", "CPU", "20.5%", "占 12 核的 2%", [12.0, 18.0, 15.0, 22.0, 20.5]),
+        tile("memory", "内存", "508 MB", "占 64 GB 的 1%", [480.0, 495.0, 500.0, 504.0, 508.0]),
+        tile("disk", "磁盘", "↓ 2.9 MB/s", "↑ 13 KB/s", [9.0, 1.0, 1.2, 0.9, 2.9]),
+        tile("net", "网络", "↓ 1.6 KB/s", "↑ 410 B/s", [0.8, 2.4, 1.1, 1.9, 1.6]),
+      ],
+    ),
+    ("kinds", [obj([("key", str("chat")), ("label", str("对话"))]), obj([("key", str("station")), ("label", str("Station"))])]),
+    (
+      "groups",
+      [
+        obj([
+          ("key", str("chat:c1")),
+          ("kind", str("chat")),
+          ("title", str("修一下登录")),
+          ("kindText", str("对话")),
+          ("chat", obj([("station", str("ws1/st1")), ("session", str("s1"))])),
+          ("station", str("ws1/st1")),
+          ("session", str("s1")),
+          ("use", chat),
+          (
+            "processes",
+            [
+              process("p1", 4211.0, "claude", false, fx_use(12.0, 41.0e6, 0.0, 1.9e6, ("12.0%", "41 MB", "0 B/s", "1.9 MB/s"))),
+              process("p2", 4290.0, "node", true, fx_use(13.9, 18.0e6, 0.0, 1.0e6, ("13.9%", "18 MB", "0 B/s", "1.0 MB/s"))),
+            ],
+          ),
+        ]),
+        obj([
+          ("key", str("chat:c2")),
+          ("kind", str("chat")),
+          ("title", str("把发版日志按平台分开写清楚，再给每一条补上改前改后的截图")),
+          ("kindText", str("对话")),
+          ("chat", obj([("station", str("ws1/st1")), ("session", str("s2"))])),
+          ("station", str("ws1/st1")),
+          ("session", str("s2")),
+          ("use", notes),
+          ("processes", [process("p4", 5120.0, "claude", false, notes)]),
+        ]),
+        obj([
+          ("key", str("station")),
+          ("kind", str("station")),
+          ("title", str("Station")),
+          ("kindText", str("")),
+          ("station", str("ws1/st1")),
+          ("use", station),
+          ("processes", [process("p3", 812.0, "stillfail", false, station)]),
+        ]),
+      ],
+    ),
+    (
+      "stations",
+      [
+        obj([
+          ("station", str("ws1/st1")),
+          ("net", Json::boolean(true)),
+          ("use", fx_use(20.5, 508.0e6, 1.6e3, 2.9e6, ("20.5%", "508 MB", "1.6 KB/s", "2.9 MB/s"))),
+        ]),
+      ],
+    ),
+    ("notes", []),
+    ("basis", str("按 Activity Monitor 的口径：CPU 100% 是一个核")),
+  ])
 }

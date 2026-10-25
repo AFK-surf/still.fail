@@ -1,9 +1,13 @@
 // Text with Core Text: shaping into grapheme clusters with their advances,
-// and rasterizing each cluster into the RGBA atlas when it is first drawn.
+// and rasterizing each cluster as it is asked for (drawn ahead, off the
+// frames' thread, where it was shaped a frame before), put where MoonBit says
+// (hostapi's atlas.mbt) in an atlas: the words' (their cover, a byte a texel)
+// or colour glyphs' (RGBA).
 #import "apple.h"
 #import <CoreGraphics/CoreGraphics.h>
 #import <ImageIO/ImageIO.h>
 #include <math.h>
+#include <pthread.h>
 
 double mb_text_scale = 2.0;
 
@@ -11,8 +15,7 @@ typedef struct {
   double size;
   int weight;
   int style;  // 1 slanted, 2 the code face
-  int done;
-  double u, v, w, h, ox, oy;
+  double w, h, ox, oy;
   int color;
   // where the shaper put the cluster's glyph in its line, past where it starts on its own (a CJK bracket after
   // another, set half a width closer)
@@ -24,7 +27,6 @@ static NSMutableArray<NSString *> *texts;
 static glyph_entry *entries;
 static int n_entries, cap_entries;
 static NSMutableDictionary<NSString *, id> *fonts;
-static int pack_x, pack_y, pack_h;
 static int generation;
 
 moonbit_string_t mb_string_from_ns(NSString *s) {
@@ -78,8 +80,17 @@ static int face_id(int style) {
   return face_descs[1].count ? 1 : 0;
 }
 
-// Face `face` at this size and weight: its file for the nearest weight, a variable one at the weight itself.
-static CTFontRef face_font(int face, double size, int weight) {
+// Digits all one width (style.mbt style_tabular), as UIFont's monospacedDigitSystemFont.
+static NSDictionary *tabular_figures(void) {
+  return @{
+    (__bridge id)kCTFontFeatureTypeIdentifierKey : @(kNumberSpacingType),
+    (__bridge id)kCTFontFeatureSelectorIdentifierKey : @(kMonospacedNumbersSelector),
+  };
+}
+
+// Face `face` at this size and weight: its file for the nearest weight, a variable one at the weight itself; its digits
+// all one width where `tabular`.
+static CTFontRef face_font(int face, double size, int weight, bool tabular) {
   NSArray<NSNumber *> *ws = face_weights[face];
   NSUInteger best = 0;
   int bestd = INT_MAX;
@@ -97,17 +108,33 @@ static CTFontRef face_font(int face, double size, int weight) {
     // 'wght': the variable file at this weight
     at = CTFontDescriptorCreateCopyWithVariation(d, (__bridge CFNumberRef)@(0x77676874), (CGFloat)weight);
   }
-  CTFontRef f = CTFontCreateWithFontDescriptor(at ? at : d, size, NULL);
+  // the app's words and what people wrote with the web's alternates (global.css.ts: font-feature-settings "cv11",
+  // "ss01": Inter's single-storey a, its open digits; a face without them is as it is)
+  CTFontDescriptorRef feat = NULL;
+  NSMutableArray *fs = [NSMutableArray new];
+  if (face == 1 || face == 2) {
+    [fs addObject:@{(__bridge id)kCTFontOpenTypeFeatureTag : @"cv11", (__bridge id)kCTFontOpenTypeFeatureValue : @1}];
+    [fs addObject:@{(__bridge id)kCTFontOpenTypeFeatureTag : @"ss01", (__bridge id)kCTFontOpenTypeFeatureValue : @1}];
+  }
+  if (tabular) [fs addObject:tabular_figures()];
+  if (fs.count) {
+    feat = CTFontDescriptorCreateCopyWithAttributes(at ? at : d,
+                                                    (__bridge CFDictionaryRef)@{(__bridge id)kCTFontFeatureSettingsAttribute : fs});
+  }
+  CTFontRef f = CTFontCreateWithFontDescriptor(feat ? feat : at ? at : d, size, NULL);
+  if (feat) CFRelease(feat);
   if (at) CFRelease(at);
   return f;
 }
 
+// what is asked to be drawn ahead (below), let go
+static void ahead_forget(void);
+
 // What was shaped and drawn before a face changed: forgotten (MoonBit drops its glyphs as the generation moves on).
 static void faces_changed(void) {
   [fonts removeAllObjects];
+  ahead_forget();
   last_size = -1;
-  for (int i = 0; i < n_entries; i++) entries[i].done = 0;
-  pack_x = pack_y = pack_h = 0;
   generation++;
 }
 
@@ -146,6 +173,62 @@ int32_t mb_host_face_add_bytes(int32_t face, moonbit_bytes_t data, int32_t weigh
   return 1;
 }
 
+// A family's weight as CSS says it (100 … 900), from Core Text's (-1 … 1; AppKit's NSFontWeight constants).
+static int css_weight(double w) {
+  static const double ct[] = {-0.8, -0.6, -0.4, 0.0, 0.23, 0.3, 0.4, 0.56, 0.62};
+  int best = 3;
+  for (int i = 0; i < 9; i++) {
+    if (fabs(ct[i] - w) < fabs(ct[best] - w)) best = i;
+  }
+  return (best + 1) * 100;
+}
+
+// Face `face` set in the family installed here named `family`: its upright styles, each for its weight (a family's
+// italics are not what its words take).
+int32_t mb_host_face_add_family(int32_t face, moonbit_string_t family) {
+  if (face <= 0 || face >= MB_FACES) return 0;
+  NSDictionary *attrs = @{(id)kCTFontFamilyNameAttribute : mb_ns_from_string(family)};
+  CTFontDescriptorRef base = CTFontDescriptorCreateWithAttributes((__bridge CFDictionaryRef)attrs);
+  CFArrayRef ds = CTFontDescriptorCreateMatchingFontDescriptors(base, NULL);
+  CFRelease(base);
+  if (!ds) return 0;
+  NSMutableArray *descs = [NSMutableArray new];
+  NSMutableArray<NSNumber *> *weights = [NSMutableArray new];
+  for (CFIndex i = 0; i < CFArrayGetCount(ds); i++) {
+    CTFontDescriptorRef d = (CTFontDescriptorRef)CFArrayGetValueAtIndex(ds, i);
+    NSDictionary *traits = (__bridge_transfer NSDictionary *)CTFontDescriptorCopyAttribute(d, kCTFontTraitsAttribute);
+    uint32_t symbolic = [traits[(id)kCTFontSymbolicTrait] unsignedIntValue];
+    if (symbolic & kCTFontItalicTrait) continue;
+    [descs addObject:(__bridge id)d];
+    [weights addObject:@(css_weight([traits[(id)kCTFontWeightTrait] doubleValue]))];
+  }
+  CFRelease(ds);
+  if (descs.count == 0) return 0;
+  face_descs[face] = descs;
+  face_weights[face] = weights;
+  faces_changed();
+  return 1;
+}
+
+// The font families installed here, as a JSON array of their names (the system's hidden ones, named with a dot first,
+// left out); "" on iOS (no list of them to the app).
+moonbit_string_t mb_host_local_font_families(void) {
+#if TARGET_OS_OSX
+  @autoreleasepool {
+    NSArray<NSString *> *names = (__bridge_transfer NSArray *)CTFontManagerCopyAvailableFontFamilyNames();
+    NSMutableArray<NSString *> *shown = [NSMutableArray new];
+    for (NSString *n in names) {
+      if (![n hasPrefix:@"."]) [shown addObject:n];
+    }
+    [shown sortUsingSelector:@selector(localizedCaseInsensitiveCompare:)];
+    NSData *json = [NSJSONSerialization dataWithJSONObject:shown options:0 error:nil];
+    return mb_string_from_ns(json ? [[NSString alloc] initWithData:json encoding:NSUTF8StringEncoding] : @"");
+  }
+#else
+  return mb_string_from_ns(@"");
+#endif
+}
+
 void mb_host_face_clear(int32_t face) {
   if (face <= 0 || face >= MB_FACES || !face_descs[face].count) return;
   [face_descs[face] removeAllObjects];
@@ -161,8 +244,21 @@ static CTFontRef font_for(double size, int weight, int style) {
   id f = fonts[k];
   if (!f) {
     int face = face_id(style);
-    CTFontRef base = face ? face_font(face, size, weight) : NULL;
-    if (!base) base = (style & 4) && !(style & 2) ? serif_font(size, weight) : mb_platform_font(size, weight, (style & 2) != 0);
+    CTFontRef base = face ? face_font(face, size, weight, (style & 32) != 0) : NULL;
+    if (!base) {
+      base = (style & 4) && !(style & 2) ? serif_font(size, weight) : mb_platform_font(size, weight, (style & 2) != 0);
+      if (style & 32) {
+        // digits all one width (style.mbt style_tabular)
+        CTFontDescriptorRef d = CTFontDescriptorCreateWithAttributes(
+            (__bridge CFDictionaryRef)@{(__bridge id)kCTFontFeatureSettingsAttribute : @[ tabular_figures() ]});
+        CTFontRef t = CTFontCreateCopyWithAttributes(base, 0.0, NULL, d);
+        CFRelease(d);
+        if (t) {
+          CFRelease(base);
+          base = t;
+        }
+      }
+    }
     if (style & 1) {
       CTFontRef it = CTFontCreateCopyWithSymbolicTraits(base, 0, NULL, kCTFontTraitItalic, kCTFontTraitItalic);
       if (it) {
@@ -223,7 +319,7 @@ static int intern_at(NSString *cluster, double size, int weight, int style, doub
     entries = realloc(entries, sizeof(glyph_entry) * cap_entries);
   }
   int id_ = n_entries++;
-  entries[id_] = (glyph_entry){size, weight, style, 0, 0, 0, 0, 0, 0, 0, 0, dx};
+  entries[id_] = (glyph_entry){size, weight, style, 0, 0, 0, 0, 0, dx};
   [texts addObject:cluster];
   keys[k] = @(id_);
   return id_;
@@ -500,13 +596,28 @@ int32_t mb_host_shape(moonbit_string_t text, double size, int32_t weight, int32_
 
 int32_t mb_host_atlas_generation(void) { return generation; }
 
-static void rasterize(int key) {
-  glyph_entry *e = &entries[key];
-  e->done = 1;
-  NSString *cluster = texts[key];
-  CTFontRef f = font_for(e->size, e->weight, e->style);
-  CTLineRef line = make_line(cluster, f, e->style);
-  double sc = mb_text_scale;
+// The side of the words' atlas, or of colour glyphs' (apple.h).
+int32_t mb_host_atlas_size(int32_t colour) { return colour ? MB_ATLAS_COLOR_SIDE : MB_ATLAS_SIDE; }
+
+// A cluster's picture: drawn in white at `sc` pixels a point, a pixel of room round it (no pixels: nothing to draw),
+// on whichever thread draws it, from its font alone; where it is from the pen (b, points, on whole pixels), whether it
+// is drawn from a colour font, and where Core Text put its glyphs in its line on their own (iso: for a cluster set
+// closer, glyph_entry's dx; NAN none).
+@interface MBDrawn : NSObject
+@property(nonatomic) uint8_t *px;
+@property(nonatomic) int pw, ph;
+@property(nonatomic) CGRect b;
+@property(nonatomic) int color;
+@property(nonatomic) double iso;
+@end
+@implementation MBDrawn
+- (void)dealloc { free(_px); }
+@end
+
+static MBDrawn *draw_cluster(NSString *cluster, CTFontRef f, int style, BOOL closer, double sc) {
+  MBDrawn *d = [MBDrawn new];
+  d.iso = NAN;
+  CTLineRef line = make_line(cluster, f, style);
   // is it drawn from a color font (emoji)? slanted, from a face with no italic?
   int color = 0, oblique = 0;
   const double slant = 0.2126;  // tan 12°
@@ -516,7 +627,7 @@ static void rasterize(int key) {
     CTFontRef rf = CFDictionaryGetValue(CTRunGetAttributes(run), kCTFontAttributeName);
     CTFontSymbolicTraits traits = rf ? CTFontGetSymbolicTraits(rf) : 0;
     if (traits & kCTFontTraitColorGlyphs) color = 1;
-    if ((e->style & 1) && !color && !(traits & kCTFontTraitItalic)) oblique = 1;
+    if ((style & 1) && !color && !(traits & kCTFontTraitItalic)) oblique = 1;
   }
   CGRect b = CTLineGetBoundsWithOptions(line, kCTLineBoundsUseGlyphPathBounds);
   if (color || b.size.width <= 0 || b.size.height <= 0) {
@@ -542,19 +653,7 @@ static void rasterize(int key) {
   int pw = x1 - x0, ph = y1 - y0;
   if (pw <= 0 || ph <= 0 || pw > 512 || ph > 512) {
     CFRelease(line);
-    return;
-  }
-  if (pack_x + pw + 1 > mb_atlas_size) {
-    pack_x = 0;
-    pack_y += pack_h + 1;
-    pack_h = 0;
-  }
-  if (pack_y + ph + 1 > mb_atlas_size) {
-    // full: start over; MoonBit drops its glyph cache when the generation changes
-    for (int i = 0; i < n_entries; i++) entries[i].done = 0;
-    e->done = 1;
-    pack_x = pack_y = pack_h = 0;
-    generation++;
+    return d;
   }
   size_t bpr = (size_t)pw * 4;
   uint8_t *px = calloc(bpr * ph, 1);
@@ -566,14 +665,14 @@ static void rasterize(int key) {
   CGContextSetTextMatrix(ctx, oblique ? CGAffineTransformMake(1, 0, slant, 1, 0, 0) : CGAffineTransformIdentity);
   CGContextSetTextPosition(ctx, -b.origin.x, -b.origin.y);
   CTLineDraw(line, ctx);
-  mb_atlas_upload(pack_x, pack_y, pw, ph, px);
-  e->u = pack_x;
-  e->v = pack_y;
-  e->w = pw / sc;
-  e->h = ph / sc;
-  e->ox = b.origin.x;
-  if (e->dx != 0) {
-    // moved by as much as its glyphs sit further right in the line than they do on their own
+  if (!color) {
+    // (drawn in white: its cover alone is kept, the words' atlas's byte a texel)
+    uint8_t *a = malloc((size_t)pw * ph);
+    for (size_t i = 0; i < (size_t)pw * ph; i++) a[i] = px[i * 4 + 3];
+    free(px);
+    px = a;
+  }
+  if (closer) {
     double iso = NAN;
     for (CFIndex r = 0; r < CFArrayGetCount(runs); r++) {
       CTRunRef run = CFArrayGetValueAtIndex(runs, r);
@@ -584,16 +683,179 @@ static void rasterize(int key) {
         if (isnan(iso) || pos[g].x < iso) iso = pos[g].x;
       free(pos);
     }
-    e->ox += e->dx - (isnan(iso) ? 0 : iso);
+    d.iso = iso;
   }
-  e->oy = -(b.origin.y + b.size.height);
-  e->color = color;
-  pack_x += pw + 1;
-  if (ph > pack_h) pack_h = ph;
+  d.px = px;
+  d.pw = pw;
+  d.ph = ph;
+  d.b = b;
+  d.color = color;
   CGContextRelease(ctx);
   CGColorSpaceRelease(cs);
-  free(px);
   CFRelease(line);
+  return d;
+}
+
+// the glyph drawn last (mb_host_glyph), its picture until it is put in its atlas (mb_host_glyph_put)
+static int held_key = -1;
+static MBDrawn *held;
+
+// The glyph of `key` from its picture (drawn at mb_text_scale): its box, and the picture held for mb_host_glyph_put
+// (where it goes in its atlas is MoonBit's: hostapi's atlas.mbt).
+static void place(int key, MBDrawn *d) {
+  glyph_entry *e = &entries[key];
+  held = nil;
+  held_key = -1;
+  e->w = e->h = 0;
+  if (!d.px) return;
+  held = d;
+  held_key = key;
+  double sc = mb_text_scale;
+  CGRect b = d.b;
+  e->w = d.pw / sc;
+  e->h = d.ph / sc;
+  e->ox = b.origin.x;
+  // moved by as much as its glyphs sit further right in the line than they do on their own
+  if (e->dx != 0) e->ox += e->dx - (isnan(d.iso) ? 0 : d.iso);
+  e->oy = -(b.origin.y + b.size.height);
+  e->color = d.color;
+}
+
+// ---- drawing ahead: the glyphs a frame shaped and did not draw (text.mbt glyphs_ahead), drawn on a queue of their
+// own, as Android's MBText draws them on a thread of its own; each taken as it is first asked for, from what was
+// drawn ahead: waited for while the queue draws it, drawn here when the queue has not begun it ----
+
+enum { AHEAD_ASKED, AHEAD_DRAWING, AHEAD_DRAWN, AHEAD_GONE };
+
+// One glyph asked to be drawn ahead: what it is drawn from (set before the queue has it, not changed after); its state
+// and its picture under ahead_lock.
+@interface MBAhead : NSObject
+@property(nonatomic) int key;
+@property(nonatomic, copy) NSString *cluster;
+@property(nonatomic, strong) id font;  // a CTFontRef
+@property(nonatomic) int style;
+@property(nonatomic) BOOL closer;
+@property(nonatomic) double scale;
+@property(nonatomic) int state;
+@property(nonatomic, strong) MBDrawn *drawn;
+@end
+@implementation MBAhead
+@end
+
+// The most glyphs asked for or drawn ahead and not placed yet (the oldest drawn let go past it).
+#define AHEAD_MOST 1024
+static pthread_mutex_t ahead_lock = PTHREAD_MUTEX_INITIALIZER;
+static pthread_cond_t ahead_drawn = PTHREAD_COND_INITIALIZER;
+static dispatch_queue_t ahead_q;
+// (the frames' thread's) what was asked for and not placed yet, by key, and in the order asked: the queue draws them
+// in that order
+static NSMutableDictionary<NSNumber *, MBAhead *> *ahead_of;
+static NSMutableOrderedSet<MBAhead *> *ahead_order;
+
+static void draw_ahead(MBAhead *a) {
+  pthread_mutex_lock(&ahead_lock);
+  BOOL go = a.state == AHEAD_ASKED;
+  if (go) a.state = AHEAD_DRAWING;
+  pthread_mutex_unlock(&ahead_lock);
+  if (!go) return;
+  MBDrawn *d;
+  @autoreleasepool {
+    d = draw_cluster(a.cluster, (__bridge CTFontRef)a.font, a.style, a.closer, a.scale);
+  }
+  pthread_mutex_lock(&ahead_lock);
+  a.drawn = d;
+  a.state = AHEAD_DRAWN;
+  pthread_cond_broadcast(&ahead_drawn);
+  pthread_mutex_unlock(&ahead_lock);
+}
+
+// The oldest asked, let go if it is drawn (the queue draws about in the order asked: hardly any is when it is not);
+// false when not.
+static BOOL drop_oldest_drawn(void) {
+  MBAhead *a = ahead_order.firstObject;
+  if (!a) return NO;
+  pthread_mutex_lock(&ahead_lock);
+  BOOL drawn = a.state == AHEAD_DRAWN;
+  if (drawn) a.drawn = nil;
+  pthread_mutex_unlock(&ahead_lock);
+  if (!drawn) return NO;
+  [ahead_of removeObjectForKey:@(a.key)];
+  [ahead_order removeObjectAtIndex:0];
+  return YES;
+}
+
+// Everything asked for let go: the faces changed, and what is drawn in them with it.
+static void ahead_forget(void) {
+  if (!ahead_order.count) return;
+  pthread_mutex_lock(&ahead_lock);
+  for (MBAhead *a in ahead_order) {
+    if (a.state == AHEAD_ASKED) a.state = AHEAD_GONE;
+    a.drawn = nil;
+  }
+  pthread_mutex_unlock(&ahead_lock);
+  [ahead_of removeAllObjects];
+  [ahead_order removeAllObjects];
+}
+
+void mb_host_glyphs_ahead(int32_t *keys, int32_t n) {
+  @autoreleasepool {
+    if (!ahead_q) {
+      ahead_q = dispatch_queue_create(
+          "mbui glyphs", dispatch_queue_attr_make_with_qos_class(DISPATCH_QUEUE_SERIAL, QOS_CLASS_USER_INITIATED, 0));
+      ahead_of = [NSMutableDictionary new];
+      ahead_order = [NSMutableOrderedSet new];
+    }
+    NSMutableArray<MBAhead *> *asked = nil;
+    for (int32_t i = 0; i < n; i++) {
+      int k = keys[i];
+      if (k < 0 || k >= n_entries || ahead_of[@(k)]) continue;
+      if (ahead_order.count >= AHEAD_MOST && !drop_oldest_drawn()) break;
+      glyph_entry *e = &entries[k];
+      MBAhead *a = [MBAhead new];
+      a.key = k;
+      a.cluster = texts[k];
+      a.font = (__bridge id)font_for(e->size, e->weight, e->style);
+      a.style = e->style;
+      a.closer = e->dx != 0;
+      a.scale = mb_text_scale;
+      a.state = AHEAD_ASKED;
+      ahead_of[@(k)] = a;
+      [ahead_order addObject:a];
+      if (!asked) asked = [NSMutableArray new];
+      [asked addObject:a];
+    }
+    // (each batch after the one before, its glyphs over the cores there are: a page's few hundred drawn in the time
+    // a frame or two takes, not one after another)
+    if (asked) dispatch_async(ahead_q, ^{
+      dispatch_apply(asked.count, DISPATCH_APPLY_AUTO, ^(size_t i) { draw_ahead(asked[i]); });
+    });
+  }
+}
+
+// What was drawn ahead of `key` at the scale of now, taken; nil when it was not (asked and not begun: no longer asked,
+// drawn here).
+static MBDrawn *drawn_ahead(int key) {
+  MBAhead *a = ahead_of[@(key)];
+  if (!a) return nil;
+  [ahead_of removeObjectForKey:@(key)];
+  [ahead_order removeObject:a];
+  pthread_mutex_lock(&ahead_lock);
+  // (left to the queue, which passes over it)
+  if (a.state == AHEAD_ASKED) a.state = AHEAD_GONE;
+  while (a.state == AHEAD_DRAWING) pthread_cond_wait(&ahead_drawn, &ahead_lock);
+  MBDrawn *d = a.state == AHEAD_DRAWN ? a.drawn : nil;
+  a.drawn = nil;
+  pthread_mutex_unlock(&ahead_lock);
+  return d && a.scale == mb_text_scale ? d : nil;
+}
+
+static void rasterize(int key) {
+  MBDrawn *d = drawn_ahead(key);
+  if (!d) {
+    glyph_entry *e = &entries[key];
+    d = draw_cluster(texts[key], font_for(e->size, e->weight, e->style), e->style, e->dx != 0, mb_text_scale);
+  }
+  place(key, d);
 }
 
 void mb_host_glyph(int32_t key, double *out) {
@@ -602,16 +864,26 @@ void mb_host_glyph(int32_t key, double *out) {
       for (int i = 0; i < 7; i++) out[i] = 0;
       return;
     }
-    if (!entries[key].done) rasterize(key);
+    rasterize(key);
     glyph_entry *e = &entries[key];
-    out[0] = e->u;
-    out[1] = e->v;
+    out[0] = 0;
+    out[1] = 0;
     out[2] = e->w;
     out[3] = e->h;
     out[4] = e->ox;
     out[5] = e->oy;
     out[6] = e->color;
   }
+}
+
+// The glyph drawn last put in its atlas, its top left at x, y: a colour glyph's MB_ATLAS_COLOR_U across past its
+// place in theirs (apple.h).
+void mb_host_glyph_put(int32_t key, int32_t x, int32_t y) {
+  int colour = x >= MB_ATLAS_COLOR_U;
+  if (key != held_key || !held.px || colour != held.color) return;
+  mb_atlas_upload(colour, x - (colour ? MB_ATLAS_COLOR_U : 0), y, held.pw, held.ph, held.px);
+  held = nil;
+  held_key = -1;
 }
 
 // ---------------------------------------------------------------------------

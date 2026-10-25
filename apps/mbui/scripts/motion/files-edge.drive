@@ -1,0 +1,20 @@
+# The files' columns' edge (DriveViews.tsx ColumnEdge: the library's edge, @sf.handle_drag, edge_look, edge_tip):
+# MBUI_FIXTURE=drive MBUI_WIN=1280x800. The pointer over the column (its edge's bar shows), onto the edge (the bar
+# longer, the line along it, its words by the pointer a moment later), the edge dragged 80 wider and let go, the pointer
+# away and over the column again.
+timeout 20000
+until 设计稿
+wait 600
+hover 设计稿
+wait 900
+move 572 420
+wait 1200
+move 572 520
+wait 600
+drag 572 520 80 0 600
+wait 900
+move 1000 700
+wait 600
+hover 会议记录
+wait 900
+exit

@@ -36,7 +36,17 @@ the gallery: every component in its states, light beside dark (`APP=kitdemo`, `M
    label="Save")`, `Tester::click`, `Tester::act`, `Tester::semantics_dump`), not by coordinates. A modal hides what
    is under it; `Ctx::hidden_from_semantics` hides decoration. The tree is made to be handed to VoiceOver, TalkBack
    and UI Automation later (roles and actions are theirs; an action comes to its widget as input does).
-7. **Each component is tested and shown**: behaviour with a Tester (pointer, touch, keys, its value given from
+7. **The hand is one thing, the layout another.** How a component answers the person's hand goes by
+   `@ui.pointing()` alone (a finger on a phone's or a tablet's system, a mouse or a trackpad on a desktop's): a
+   finger hovers over nothing (`Ctx::hovered` is a mouse's; a lifted finger is nowhere): what a hover lights, its press
+   lights (`Ctx::lit`, the web's `:active` with a coarse pointer: a style's `hovered` patch, a widget's hovered look);
+   a tooltip shows as it holds the trigger, a hover card opens so (or by a tap, `tap`), as Android's; it asks for a menu
+   by holding (`Ctx::menu_asked`), reaches what is smaller than a fingertip from round it (48 across, iOS's 44: the
+   target it touches keeps it, a row's small button wins over the row), and is shown what a mouse is shown only by
+   resting on it. The window's size and the
+   system's size classes decide the layout and nothing of this: a tablet drawn as a desktop's wide frame is still
+   pointed at with a finger, a narrow desktop window still with a mouse.
+8. **Each component is tested and shown**: behaviour with a Tester (pointer, touch, keys, its value given from
    outside, disabled), its semantics asserted, and its states in the gallery, light and dark, as screenshots
    (`scripts/shots.sh kit`, goldens `goldens/mac-kit-*.png`).
 
@@ -55,6 +65,32 @@ the gallery: every component in its states, light beside dark (`APP=kitdemo`, `M
   anchor (Popper: side, along, offset, flip, kept in the window).
 - `Ctx::with_direction(Rtl)` (DirectionProvider): rows run from the right, start padding is the right, the arrows
   that move along a row swap, a popover's start is its right.
+
+## Scroll bars (src/ui/scroll_bar.mbt)
+
+Everything that scrolls has the same bar, drawn by mbui, with no call of its own: a list (`Ctx::list`), a box kept
+to a height (`Ctx::capped`), a box scrolled sideways (`Ctx::sideways`; boxes scrolled as one, `across`, one bar along
+the foot of the list they are in), a field of more lines than it shows (`Ctx::editor` with `max_lines` over 1: its
+words scroll in it as a capped box's do, by the wheel, a finger and its bar, the caret's line brought into view only
+as the caret or the words change). It is still.fail's web's (`web/src/scrollbars.ts`), a mouse's:
+
+- **Look.** A thumb 3 wide, round, 2 in from the edge it runs along (the right, or the foot of what scrolls
+  sideways), the theme's words' colour at 26%, 45% while the pointer is on it or holds it; at least 28 long. Over
+  what scrolls, taking no room from it, drawn in its clip after what it holds: what lies over what scrolls lies over
+  its bar too.
+- **Where.** Along what of its edge shows: clear of what floats over its top and its foot and 8 more
+  (`Ctx::floats_over(box)`, said by the box that floats: a page's bar, a composer, a sidebar's bands; and the system's
+  bars over the window's edges), and of the rounding of the corners it is cut by. Where that leaves less than two
+  thumbs, along all of the edge.
+- **When.** While what it is for scrolls, whatever moves it (a finger, the wheel, the keys, a fling, its thumb, the
+  app sending it to a row or gliding it to its end, rows come at the end it follows), and `scrollbar_hold_ms` (900)
+  after; it comes in and fades out over `scrollbar_fade_ms` (200, ease-out). Not where it is first put: sent
+  somewhere before its bar was ever drawn (just shown, its rows just come), it shows none. With a mouse also while
+  the pointer is along its edge (12 in from it) or holds its thumb, and as long after it leaves or lets go.
+- **The hand.** With a mouse its thumb (and 4 round it) is a target as any (what lies over it takes the press): held,
+  dragged, it scrolls what it is for as far as the thumb moves along its track; nothing under it is pressed, no words
+  are picked, the focus stays. A finger has none (`@ui.pointing()` Finger: on a touch screen what scrolls moving
+  under it says enough; the user, 2026-10-25), and presses what is under the edge.
 
 ## Time and motion (src/kit/time.mbt)
 
@@ -94,8 +130,8 @@ The gallery's page for each is `MBUI_SCREEN=<page>`.
 | Dialog | `@kit.dialog(c, key, open, title, description?, modal?) -> Changed[Bool]`: in the window's middle; Escape, the back, a press outside, its close button close it | overlays |
 | AlertDialog | `@kit.alert_dialog(c, key, open, title, action, cancel?, danger?) -> Alert`: opens on cancel; a press outside leaves it | overlays |
 | Popover | `@kit.popover(c, key, open, anchor, side?, along?) -> Changed[Bool]`: by its trigger, the focus in it | overlays |
-| HoverCard | `@kit.hover_card(c, key, trigger, open_delay?, close_delay?) -> Bool`: a mouse resting on its trigger | overlays |
-| Tooltip | `@kit.tooltip(c, key, trigger, text, delay?, skip?) -> Bool`: the pointer resting, or the keyboard's focus at once | overlays |
+| HoverCard | `@kit.hover_card(c, key, trigger, open_delay?, close_delay?, tap?) -> Bool`: a mouse resting on its trigger; a finger holding it (or tapping it, `tap`) | overlays |
+| Tooltip | `@kit.tooltip(c, key, trigger, text, delay?, skip?) -> Bool`: the pointer resting, the keyboard's focus at once, a finger holding the trigger | overlays |
 | Toast | `@kit.toaster(c, key, toasts, duration?) -> Toasts`: at the bottom of the window in its middle, paused under the pointer, swiped away (F8 waits for the hosts' function keys) | overlays |
 | DropdownMenu | `@kit.dropdown_menu(c, key, open, trigger, entries) -> Menu`: entries by `menu_item`, `menu_check`, `menu_radio`, `menu_sub`, `menu_separator`, `menu_label`; letters typed find an item | menus |
 | ContextMenu | `@kit.context_menu(c, key, area, entries) -> Menu`: a right click or a long press, at the pointer | menus |

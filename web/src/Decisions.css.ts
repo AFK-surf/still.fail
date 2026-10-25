@@ -1,6 +1,7 @@
 import { globalStyle, keyframes, style } from "@vanilla-extract/css";
 import { composerWrap } from "./styles/cloud.css.ts";
 import { vars } from "@stillfail/ui/styles/tokens.css.ts";
+import { litOver } from "@stillfail/ui/styles/lit.ts";
 import { glass } from "@stillfail/ui/styles/glass.ts";
 import { CARD_PAD, LIST_PAD, ROW_CORNER, listCardLook } from "./styles/pages.css.ts";
 
@@ -61,11 +62,12 @@ export const option = style({
   position: "relative", display: "grid", gap: "0", width: "100%", boxSizing: "border-box", padding: "9px 14px",
   border: "0", borderRadius: vars.rField, cornerShape: vars.cornerShape, background: chip, color: vars.text,
   fontFamily: "inherit", textAlign: "left", cursor: "pointer", WebkitTapHighlightColor: "transparent",
-  transition: `filter ${vars.dur}, opacity ${vars.dur}`,
+  transition: `opacity ${vars.dur}`,
   selectors: {
-    "&:hover:not(:disabled)": { filter: "brightness(.96)" },
+    "&:hover:not(:disabled)": litOver,
     "&[data-recommended]": { background: accent, color: "#fff" },
-    "&[data-recommended]:hover:not(:disabled)": { filter: "none", opacity: ".88" },
+    // A solid ground pointed at: a step towards the page (docs/ui-panels.md 悬停).
+    "&[data-recommended]:hover:not(:disabled)": { background: `color-mix(in srgb, ${accent} 85%, ${vars.canvas})` },
     "&:disabled": { cursor: "default" },
     // The other one is under way: this one steps back.
     "&:disabled:not([data-busy])": { opacity: ".5" },
@@ -199,5 +201,5 @@ export const elsewhere = style({
   display: "block", width: "100%", height: "38px", padding: "0 14px", border: "0", borderRadius: vars.rField,
   cornerShape: vars.cornerShape, background: chip, color: vars.text, fontFamily: "inherit", fontSize: vars.textUi,
   fontWeight: "500", cursor: "pointer",
-  selectors: { "&:hover": { filter: "brightness(.96)" } },
+  selectors: { "&:hover": litOver },
 });

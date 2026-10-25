@@ -22,6 +22,8 @@ const next = () => counter++;
 export class FakeChat implements ChatSurface {
   bot: string;
   posts: [ThreadRef, string][] = [];
+  /// Messages changed in place: where, which, to what.
+  edits: [ThreadRef, string, string][] = [];
   /// What it was told the agent is doing, per thread ("" once done).
   statuses: [string, string | null, string][] = [];
   calls: [string, Json][] = [];
@@ -59,6 +61,11 @@ export class FakeChat implements ChatSurface {
     this.files.push(files.map((f) => f.name));
     this.posts.push([thread, message]);
     return `${9_000_000 + next()}.000200`;
+  }
+  async edit(thread: ThreadRef, ts: string, message: string) {
+    if (message.length > 3500) return false;
+    this.edits.push([thread, ts, message]);
+    return true;
   }
   async download(file: InboundFile) {
     this.downloads.push(file.id);

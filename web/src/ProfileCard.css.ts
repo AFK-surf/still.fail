@@ -20,7 +20,7 @@ export const profileCard = style({
 export const profileCardLink = style({
   transition: `background ${vars.dur} ${vars.easeOut}`,
   selectors: {
-    "&:hover": { background: vars.list },
+    "&:hover": { background: vars.hover },
   },
 });
 export const profileCardWhy = style({ display: "inline-flex", cursor: "help", borderRadius: "999px" });

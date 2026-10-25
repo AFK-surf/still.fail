@@ -6,6 +6,7 @@
 // The browser's own selection is off for a finger there (Chat.css.ts): on a phone it fights the list's scrolling and
 // brings menus of its own. A mouse selects as ever (../Chat.tsx useSelectionQuote). The Android app's is its
 // screens/MessagePick.kt.
+import { latestFrame } from "@stillfail/ui/frames.ts";
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode, type RefObject } from "react";
 import type { Quote } from "../api.ts";
 import { Copy, Quote as QuoteIcon } from "@stillfail/ui/icons.tsx";
@@ -39,9 +40,12 @@ export function usePick(list: RefObject<HTMLElement | null>, onQuote: (quote: Om
   const start = useRef<HTMLSpanElement>(null);
   const end = useRef<HTMLSpanElement>(null);
   const bar = useRef<HTMLDivElement>(null);
+  const paint = useRef<HTMLDivElement>(null);
+  const dragging = useRef<(() => void) | null>(null);
   const now = useRef({ picked, held });
   now.current = { picked, held };
-  const letGo = () => { setPicked(null); setHeld(false); };
+  const letGo = () => { dragging.current?.(); setPicked(null); setHeld(false); };
+  useEffect(() => () => dragging.current?.(), []);
 
   /** The words of the message picked in, as the list draws them now (none while its row is not drawn). */
   const wordsNow = (): HTMLElement | null => {
@@ -54,7 +58,7 @@ export function usePick(list: RefObject<HTMLElement | null>, onQuote: (quote: Om
   // scrolls or draws again: what it places, it places itself rather than through a render.
   const place = () => {
     const el = list.current, host = el?.parentElement, p = now.current.picked, registry = highlights();
-    const parts = [start.current, end.current, bar.current];
+    const parts = [start.current, end.current, bar.current, paint.current];
     const hide = () => { for (const x of parts) if (x) x.style.visibility = "hidden"; };
     const words = p ? wordsNow() : null;
     if (!el || !host || !p || !words) { registry?.delete(HIGHLIGHT); hide(); return; }
@@ -66,6 +70,18 @@ export function usePick(list: RefObject<HTMLElement | null>, onQuote: (quote: Om
     // Placed in what the list is placed in; shown only where the list is seen: not under the bar over its top (its
     // scroll padding), nor the composer over its foot (its padding there).
     const base = host.getBoundingClientRect(), box = el.getBoundingClientRect(), style = getComputedStyle(el);
+    // Paint the passage with ordinary elements, so it stays visible independently of CSS Highlight support.
+    // Clip to the list, and omit parent rectangles duplicated by inline Markdown ranges.
+    if (paint.current) {
+      paint.current.style.visibility = "";
+      paint.current.replaceChildren(...rects.filter((r, i) => !rects.some((q, j) => j !== i && q.left <= r.left && q.right >= r.right && q.top <= r.top && q.bottom >= r.bottom && (q.width > r.width || q.height > r.height || j < i))).map((r) => {
+        const mark = document.createElement("span");
+        const y = Math.max(r.top, box.top), bottom = Math.min(r.bottom, box.bottom);
+        const x = Math.max(r.left, box.left), right = Math.min(r.right, box.right);
+        mark.style.cssText = `position:absolute;left:${x - base.left}px;top:${y - base.top}px;width:${Math.max(0, right - x)}px;height:${Math.max(0, bottom - y)}px`;
+        return mark;
+      }));
+    }
     const top = box.top + (parseFloat(style.scrollPaddingTop) || 0), bottom = box.bottom - (parseFloat(style.paddingBottom) || 0);
     const handle = (h: HTMLElement | null, line: DOMRect, x: number) => {
       if (!h) return;
@@ -171,7 +187,9 @@ export function usePick(list: RefObject<HTMLElement | null>, onQuote: (quote: Om
       const span = w.start >= anchor.start ? { start: anchor.start, end: Math.max(anchor.end, w.end) } : { start: w.start, end: anchor.end };
       setPicked((p) => p && { ...p, span });
     };
+    const moves = latestFrame<{ x: number; y: number }>(point => widen(point.x, point.y));
     const finish = () => {
+      moves.flush();
       clearTimeout(timer);
       if (anchor) { setHeld(false); swallow = performance.now() + 400; }
       anchor = null;
@@ -192,7 +210,7 @@ export function usePick(list: RefObject<HTMLElement | null>, onQuote: (quote: Om
       if (!touch || !from) return;
       if (anchor) {
         if (e.cancelable) e.preventDefault();
-        widen(touch.clientX, touch.clientY);
+        moves.set({ x: touch.clientX, y: touch.clientY });
       } else if (Math.hypot(touch.clientX - from.x, touch.clientY - from.y) > STILL) {
         clearTimeout(timer);
         from = null;
@@ -209,6 +227,7 @@ export function usePick(list: RefObject<HTMLElement | null>, onQuote: (quote: Om
     el.addEventListener("touchcancel", finish);
     el.addEventListener("click", onClick, true);
     return () => {
+      moves.cancel();
       clearTimeout(timer);
       el.removeEventListener("touchstart", onTouchStart);
       el.removeEventListener("touchmove", onTouchMove);
@@ -222,32 +241,51 @@ export function usePick(list: RefObject<HTMLElement | null>, onQuote: (quote: Om
   const drag = (which: "start" | "end") => (e: React.PointerEvent<HTMLElement>) => {
     e.stopPropagation();
     e.preventDefault();
+    if (!e.isPrimary || e.button !== 0 || dragging.current) return;
     const p = now.current.picked;
     if (!p) return;
     const el = e.currentTarget;
     el.setPointerCapture(e.pointerId);
+    setHeld(true);
     const box = el.getBoundingClientRect();
     const grab = { x: e.clientX - (box.left + box.width / 2), y: e.clientY - (box.top + box.height / 2) };
     const ends = { ...p.span };
-    const move = (ev: PointerEvent) => {
+    let moved = false;
+    const moves = latestFrame<Pick<PointerEvent, "clientX" | "clientY" | "pointerId">>((ev) => {
       const words = wordsNow();
-      if (!words) return;
-      setHeld(true);
-      const at = offsetAt(words, ev.clientX - grab.x, ev.clientY - grab.y);
+      if (!words || ev.pointerId !== e.pointerId) return;
+      if (!moved && Math.hypot(ev.clientX - e.clientX, ev.clientY - e.clientY) < 3) return;
+      moved = true;
+      // The handle overlaps the caret being queried; let WebKit hit the words beneath it.
+      const handles = [start.current, end.current];
+      for (const h of handles) if (h) h.style.pointerEvents = "none";
+      let at: number | null;
+      try { at = offsetAt(words, ev.clientX - grab.x, ev.clientY - grab.y); }
+      finally { for (const h of handles) if (h) h.style.pointerEvents = ""; }
       if (at === null) return;
-      if (which === "start") ends.start = Math.min(at, ends.end - 1);
-      else ends.end = Math.max(at, ends.start + 1);
+      // Keep the last valid endpoint when crossing the other handle; forcing a one-code-unit span can split emoji.
+      if (which === "start") { if (at >= ends.end) return; ends.start = at; }
+      else { if (at <= ends.start) return; ends.end = at; }
       setPicked((q) => q && { ...q, span: { ...ends } });
-    };
-    const up = () => {
+    });
+    const move = (ev: PointerEvent) => { if (ev.pointerId === e.pointerId) moves.set({ clientX: ev.clientX, clientY: ev.clientY, pointerId: ev.pointerId }); };
+    const finish = () => {
+      moves.cancel();
       el.removeEventListener("pointermove", move);
       el.removeEventListener("pointerup", up);
       el.removeEventListener("pointercancel", up);
+      el.removeEventListener("lostpointercapture", up);
+      dragging.current = null;
+      if (el.hasPointerCapture(e.pointerId)) el.releasePointerCapture(e.pointerId);
       setHeld(false);
     };
+    // Only the pointer that grabbed this handle may finish it, including capture lost on cancellation.
+    const up = (ev: PointerEvent) => { if (ev.pointerId === e.pointerId) { if (ev.type === "pointerup") { move(ev); moves.flush(); } finish(); } };
+    dragging.current = finish;
     el.addEventListener("pointermove", move);
     el.addEventListener("pointerup", up);
     el.addEventListener("pointercancel", up);
+    el.addEventListener("lostpointercapture", up);
   };
 
   if (!picked) return null;
@@ -265,10 +303,11 @@ export function usePick(list: RefObject<HTMLElement | null>, onQuote: (quote: Om
   const everything = picked.span.start === 0 && picked.span.end >= length;
   return (
     <>
+      <div ref={paint} data-pick-paint="" className={css.mPickedPaint} aria-hidden="true" />
       <span ref={start} className={css.mHandle} data-end="start" data-pick="" onPointerDown={drag("start")} />
       <span ref={end} className={css.mHandle} data-end="end" data-pick="" onPointerDown={drag("end")} />
       {!held && (
-        <div ref={bar} className={css.mPickBar} data-pick="">
+        <div ref={bar} className={css.mPickBar} data-pick="" onContextMenu={(e) => e.preventDefault()}>
           <button type="button" onClick={quote}><QuoteIcon size={15} />{t("web-main.chat.quote")}</button>
           <button type="button" onClick={copy}><Copy size={15} />{t("common.copy")}</button>
           {!everything && <button type="button" onClick={() => setPicked({ ...picked, span: { start: 0, end: length } })}>{t("web-mobile.annotate.selectAll")}</button>}

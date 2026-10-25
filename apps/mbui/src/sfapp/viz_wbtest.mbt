@@ -68,8 +68,8 @@ test "a placed HTML file is drawn in its message, 120 high, covered until it has
   assert_true(w > 300.0)
   // in a list: an upright drag on it moves the list
   assert_true(t.views().iter().any(fn(l) { l.has_prefix("touch \{page} vertical ") }))
-  // what it says of its height: taken (at most 1200), and the page shown (heard as a frame is painted: the next one
-  // has it)
+  // what it says of its height: taken, however tall (a long post's last part not cut off), and the page shown (heard
+  // as a frame is painted: the next one has it)
   t.view_says(page, "{\"emberViz\":true,\"type\":\"height\",\"height\":231.4}")
   t.frame()
   t.frame()
@@ -78,12 +78,34 @@ test "a placed HTML file is drawn in its message, 120 high, covered until it has
   t.view_says(page, "{\"emberViz\":true,\"type\":\"height\",\"height\":5000}")
   t.frame()
   t.frame()
-  assert_eq(view_rect(t, page).unwrap().3, 1200.0)
+  assert_eq(view_rect(t, page).unwrap().3, 5000.0)
   // what is not a message of the bridge's is let go
   t.view_says(page, "not json")
   t.view_says(page, "{\"type\":\"height\",\"height\":\"tall\"}")
   t.frame()
-  assert_eq(view_rect(t, page).unwrap().3, 1200.0)
+  assert_eq(view_rect(t, page).unwrap().3, 5000.0)
+}
+
+///|
+test "a page that grows a little with each height it is given (100vh) is held where it got to; shorter, it follows" {
+  let t = chat_tester("chat-viz")
+  t.frame()
+  let (page, _) = viz_views(t)
+  t.view_says(page, "{\"emberViz\":true,\"type\":\"height\",\"height\":300}")
+  for i in 1..=100 {
+    t.view_says(page, "{\"emberViz\":true,\"type\":\"height\",\"height\":\{300 + i * 10}}")
+  }
+  t.frame()
+  t.frame()
+  // 60 times running it followed, then held
+  assert_eq(view_rect(t, page).unwrap().3, 900.0)
+  t.view_says(page, "{\"emberViz\":true,\"type\":\"height\",\"height\":2000}")
+  t.frame()
+  assert_eq(view_rect(t, page).unwrap().3, 900.0)
+  t.view_says(page, "{\"emberViz\":true,\"type\":\"height\",\"height\":400}")
+  t.frame()
+  t.frame()
+  assert_eq(view_rect(t, page).unwrap().3, 400.0)
 }
 
 ///|
@@ -108,8 +130,10 @@ test "words a visualization asks to send go into the composer, said so; the pers
   let (page, _) = viz_views(t)
   t.view_says(page, "{\"emberViz\":true,\"type\":\"followup\",\"prompt\":\"  把周五的发布挪到周四 \"}")
   t.frame()
-  let d = drafts.get("ws1/st1:s-c1").unwrap()
-  assert_eq(d.text, "把周五的发布挪到周四")
+  // (left for the chat's composer, whichever frame's: taken as it is next drawn)
+  t.frame()
+  let d = @sfbase.writings.get("ws1/st1:s-c1").unwrap()
+  assert_eq(d.field.text(), "把周五的发布挪到周四")
   t.frame()
   assert_true(t.find("已添加到输入框，确认后发送") is Some(_))
 }
@@ -179,6 +203,37 @@ test "a mermaid chart is drawn as a page of its own; one that will not draw is s
 }
 
 ///|
+test "under a mermaid chart: the whole screen, the chart as written to pinch, its touches its own; back closes it" {
+  let t = chat_tester("chat-viz")
+  t.frame()
+  let (_, chart) = viz_views(t)
+  // drawn (a line of it, so what is under it is above the composer)
+  t.view_says(chart, "{\"emberViz\":true,\"type\":\"height\",\"height\":40}")
+  t.frame()
+  t.frame()
+  let (x, y, w, h) = view_rect(t, chart).unwrap()
+  // one 22 box under it, at its right
+  t.tap(x + w - 11.0, y + h + 2.0 + 11.0)
+  t.frame()
+  assert_true(t.find("Mermaid") is Some(_))
+  let mut full = 0
+  for k, f in viz_frames {
+    if k.has_prefix("full/mermaid/") {
+      full = f.view.id()
+      // fitted to the screen, the page moving it under the fingers
+      assert_true(f.html.contains("const FULL = true"))
+      assert_true(f.html.contains("touch-action:none"))
+    }
+  }
+  assert_true(full != 0)
+  assert_false(t.views().iter().any(fn(l) { l.has_prefix("touch \{full} ") }))
+  t.back()
+  t.frame()
+  assert_true(t.find("Mermaid") is None)
+  assert_true(t.views().contains("close \{full}"))
+}
+
+///|
 test "a visualization's document: a fragment in the stylesheet with its tokens and what it kept; a whole page as written" {
   let doc = viz_document("<p>hi</p>", Some({ "a": "<b>" }), true, 0xF7F6F3FFL)
   assert_true(doc.has_prefix("<!doctype html><html data-theme=\"dark\">"))
@@ -193,4 +248,37 @@ test "a visualization's document: a fragment in the stylesheet with its tokens a
   let page = viz_page_document("<!doctype html><html><head><title>t</title></head><body></body></html>")
   assert_true(page.has_prefix("<!doctype html><html><head><meta http-equiv=\"Content-Security-Policy\""))
   assert_true(page.contains("<title>t</title>"))
+}
+
+///|
+test "on the tape what shows of a visualization's page beside the sidebar in use takes the presses there, not the page" {
+  reset()
+  let src = fixture("chat-viz")
+  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
+  // an opened fold's inner screen upright, a finger: laid out Medium
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=690.0, h=840.0, platform=2)
+  say_room(t, "medium", "medium")
+  t.run_for(@ui.nav_push_ms)
+  assert_true(@sfdesk.wide.tape)
+  let (page, _) = viz_views(t)
+  // as tall as it may be: the chat's page under all of what shows of it
+  t.view_says(page, "{\"emberViz\":true,\"type\":\"height\",\"height\":5000}")
+  t.frame()
+  t.frame()
+  // the sidebar in use at first, the page showing beside it
+  assert_eq(@sfdesk.wide.tape_at, @sfdesk.TapePane::Side)
+  let (x, y, w, h) = view_rect(t, page).unwrap()
+  let edge = @sfdesk.rail_w + 240.0
+  assert_true(x + w > edge + 20.0, msg="the page \{x} \{w}, the sidebar's edge \{edge}")
+  // (in the middle of what the window shows of it)
+  let (px, py) = (dmax(x, edge) + 10.0, (dmax(y, 0.0) + dmin(y + h, 840.0)) / 2.0)
+  // tapped: the cover's (the chat's page comes over), the page told nothing of it
+  t.tap(px, py)
+  assert_eq(@sfdesk.wide.tape_at, @sfdesk.TapePane::Page)
+  assert_false(t.views().iter().any(fn(l) { l.has_prefix("finger \{page} ") }))
+  // over and in use: the page takes a finger there again
+  t.run_for(@sfdesk.side_move_ms)
+  let (x, y, w, h) = view_rect(t, page).unwrap()
+  t.tap(x + w / 2.0, (dmax(y, 0.0) + dmin(y + h, 840.0)) / 2.0)
+  assert_true(t.views().iter().any(fn(l) { l.has_prefix("finger \{page} down") }))
 }

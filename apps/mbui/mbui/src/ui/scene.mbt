@@ -1,6 +1,7 @@
-// Painting: the laid-out tree becomes a flat list of instances (28 floats
+// Painting: the laid-out tree becomes a flat list of instances (52 floats
 // each) that every renderer draws with one shader:
-//   0-3 rect x y w h · 4 radius · 5 kind · 6 border width · 7 blur
+//   0-3 rect x y w h · 4 radius (a box's: the roundest of its corners,
+//   36-39) · 5 kind · 6 border width · 7 blur
 //   8-11 color rgba · 12-15 border color, or the glyph's atlas rect
 //   16-19 clip x0 y0 x1 y1 · 20 image id · 21-23 a notch in its top edge
 //   (kinds 0 and 5: its circle's middle below the top, its radius, its
@@ -13,7 +14,14 @@
 //   clockwise on the screen, about the point 33, 34; everything else above
 //   (its rect, its clip) as before it is turned, the renderers turning
 //   where it is drawn and nothing of how; 35 1: its clip is not turned
-//   (one from outside what turned: where it is drawn).
+//   (one from outside what turned: where it is drawn). · 36-39 a box's
+//   corners' radii (kinds 0, 2, 4, 5, 9: top left, top right, bottom right,
+//   bottom left, each as smooth as its rect has room for; all 4 where they
+//   are one). · 40-51 the rounded clip outside its own that its own cuts
+//   through (clip_stack: a pane round an image's rounded frame scrolled into
+//   its corner): its rect x0 y0 x1 y1 (40-43), its corners' radii (44-47)
+//   and how smooth each is (48-51), as 16-19 and 24-31; none where 44-47 are
+//   all 0. What it covers is both clips' cover.
 // kinds: 0 rounded rect, 1 glyph (alpha mask), 2 shadow (12 > 0: only
 // outside its box, which is 13 above it), 3 color glyph, 4 image (12-15 its
 // uv rect, 0-1), 5 frosted glass, 6 liquid glass, 7 a glyph in liquid glass
@@ -27,7 +35,7 @@
 // six to an instance, none drawn).
 
 ///|
-let inst_size = 36
+let inst_size = 52
 
 ///|
 fn Ctx::grow(self : Ctx) -> Unit {
@@ -48,17 +56,24 @@ fn Ctx::grow(self : Ctx) -> Unit {
 /// Within other clips, the rule for where they meet: their rects' intersection, each of its corners as round as the
 /// clips whose corner it is (both's: the rounder), square where it is no clip's corner. So a rect inside a rounded
 /// clip (a list in a card, down to its foot) keeps the card's corners where they are its own, and a rounded clip in
-/// a rounded clip is right wherever the inner lies within the outer or shares its corners. The error: where one
-/// clip's edge cuts through another's rounded corner, not at its corner (a card scrolled part way out of a list, its
-/// corner's curve across the list's edge), that corner is square, showing what lies between the curve and the
-/// corner (at most (1 - π/4) r² of it); no stencil is kept.
+/// a rounded clip is right wherever the inner lies within the outer or shares its corners. Where one clip's edge cuts
+/// through another's rounded corner, not at its corner (an image's rounded frame scrolled into a pane's corner, its
+/// edge across the pane's curve), the intersection's corner there is square: so the level keeps that other clip too,
+/// whole (its outer: 12 numbers more, instances' 40-51), and what is painted in it is cut by both, exactly. One
+/// outer a level: the outermost such clip (a level whose clip has an outer passes it on, whatever it cuts itself),
+/// so what is drawn never leaves a pane or a window's rounded corners; a clip between the two (a card in the pane,
+/// round the frame) keeps the old error where the frame cuts through its corner (a square corner there, at most
+/// (1 - π/4) r² of it); no stencil is kept.
 // kept across runs: every clip a paint pushes it pops in the same paint, so between frames only its base level is
 // left, the same in every run
-let clip_stack : Array[Double] = [0.0, 0.0, 1.0e9, 1.0e9, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+let clip_stack : Array[Double] = [
+  0.0, 0.0, 1.0e9, 1.0e9, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
+  0.0,
+]
 
 ///|
-/// The numbers a level of `clip_stack` has.
-let clip_n = 12
+/// The numbers a level of `clip_stack` has: its own clip's 12, then its outer's (none: its radii 0).
+let clip_n = 24
 
 ///|
 /// Where the clip painted in now starts in `clip_stack`.
@@ -92,7 +107,10 @@ fn push_clip(x0 : Double, y0 : Double, x1 : Double, y1 : Double) -> Unit {
 }
 
 ///|
-/// A clip pushed: its rect (x0 y0 x1 y1), its corners' radii and how smooth each is (top left, then clockwise).
+/// A clip pushed: its rect (x0 y0 x1 y1), its corners' radii and how smooth each is (top left, then clockwise); its
+/// outer the clip it is in's where that has one, else the clip it is in where it cuts through a rounded corner of it
+/// (clip_cuts), else none. `outer_kept`: the clip it is in's outer, whatever it cuts (a clip pushed where what it
+/// holds is laid out, not where it is drawn: a look's, draw.mbt).
 fn push_clip_r(
   x0 : Double,
   y0 : Double,
@@ -100,7 +118,17 @@ fn push_clip_r(
   y1 : Double,
   r : (Double, Double, Double, Double),
   sm : (Double, Double, Double, Double),
+  outer_kept? : Bool = false,
 ) -> Unit {
+  let k = clip_top()
+  let has_outer = clip_has_outer(k)
+  let from = if has_outer || outer_kept || !clip_cuts(k, x0, y0, x1, y1, r) {
+    // (its outer's numbers, or none)
+    k + 12
+  } else {
+    // (the clip it is in, whole)
+    k
+  }
   clip_stack.push(x0)
   clip_stack.push(y0)
   clip_stack.push(x1)
@@ -113,17 +141,70 @@ fn push_clip_r(
   clip_stack.push(sm.1)
   clip_stack.push(sm.2)
   clip_stack.push(sm.3)
+  for j in 0..<12 {
+    clip_stack.push(clip_stack[from + j])
+  }
 }
 
 ///|
-/// A node's clip pushed: its rect (`x`, `y`, `w`, `h`) rounded by `radius`, within the clip it is in.
-fn push_round_clip(
-  x : Double,
-  y : Double,
-  w : Double,
-  h : Double,
-  radius : Double,
-) -> Unit {
+/// No clip pushed, nor any outer: what is painted till it is popped is over everything (an editor's handles).
+fn push_unclipped() -> Unit {
+  for v in [-1.0e9, -1.0e9, 1.0e9, 1.0e9] {
+    clip_stack.push(v)
+  }
+  for _ in 0..<20 {
+    clip_stack.push(0.0)
+  }
+}
+
+///|
+/// Whether the level at `k` has an outer clip (its radii not all 0).
+fn clip_has_outer(k : Int) -> Bool {
+  let s = clip_stack
+  s[k + 16] > 0.0 || s[k + 17] > 0.0 || s[k + 18] > 0.0 || s[k + 19] > 0.0
+}
+
+///|
+/// Whether a clip of rect (x0 y0 x1 y1), its corners `r`, pushed in the clip at `k` cuts through one of that clip's
+/// rounded corners: reaches into the square that corner's curve lies in (as far as a smooth corner's curve goes in,
+/// smooth.mbt) other than by being that corner as round or rounder, its own corner there.
+fn clip_cuts(k : Int, x0 : Double, y0 : Double, x1 : Double, y1 : Double, r : (Double, Double, Double, Double)) -> Bool {
+  let s = clip_stack
+  let own = [r.0, r.1, r.2, r.3]
+  for j in 0..<4 {
+    let rr = s[k + 4 + j]
+    if rr <= 0.0 {
+      continue
+    }
+    let reach = rr * (1.0 + (smooth_scale - 1.0) * s[k + 8 + j])
+    let left = j == 0 || j == 3
+    let top = j < 2
+    let cx = if left { s[k] } else { s[k + 2] }
+    let cy = if top { s[k + 1] } else { s[k + 3] }
+    // the square from the corner `reach` in
+    let (zx0, zx1) = if left { (cx, cx + reach) } else { (cx - reach, cx) }
+    let (zy0, zy1) = if top { (cy, cy + reach) } else { (cy - reach, cy) }
+    if x1 <= zx0 || x0 >= zx1 || y1 <= zy0 || y0 >= zy1 {
+      continue
+    }
+    // its own corner there, the same corner, as round: the clip's curve within its own
+    let ox = if left { x0 } else { x1 }
+    let oy = if top { y0 } else { y1 }
+    if ox == cx && oy == cy && own[j] >= rr {
+      continue
+    }
+    return true
+  }
+  false
+}
+
+///|
+/// Node `n`'s clip pushed: its rect, its corners rounded as it draws them (radius_at), within the clip it is in.
+fn push_round_clip(n : Node) -> Unit {
+  let x = n.x
+  let y = n.y
+  let w = n.fw
+  let h = n.fh
   let k = clip_top()
   let s = clip_stack
   let x0 = dmax(x, s[k])
@@ -133,13 +214,12 @@ fn push_round_clip(
   // as round, and as smooth, as its ground's corners are (the renderers cap a radius at half the shorter side, and
   // smooth it as far as the box has room for)
   let room = dmin(w, h) / 2.0
-  let r = dmax(dmin(radius, room), 0.0)
-  let sm = smoothness(r, room)
   // where a corner is both's, the rounder
   let corner = fn(j : Int, cx : Double, cy : Double, ox : Double, oy : Double) {
     let (pr, ps) = clip_corner_r(k, j, cx, cy)
+    let r = dmax(dmin(n.radius_at(j), room), 0.0)
     if r > 0.0 && cx == ox && cy == oy && r >= pr {
-      (r, sm)
+      (r, smoothness(r, room))
     } else {
       (pr, ps)
     }
@@ -265,6 +345,10 @@ fn Ctx::push_inst(
   a[b + 29] = clip_stack[k + 9]
   a[b + 30] = clip_stack[k + 10]
   a[b + 31] = clip_stack[k + 11]
+  // the clip outside it its own cuts through, if any (40-51)
+  for j in 0..<12 {
+    a[b + 40 + j] = clip_stack[k + 12 + j]
+  }
   a[b + 20] = 0.0 // the image it shows, if any
   // a rect's or frosted glass's notch (none); liquid glass and glyphs in it set theirs after
   a[b + 21] = 0.0
@@ -275,7 +359,45 @@ fn Ctx::push_inst(
   a[b + 33] = 0.0
   a[b + 34] = 0.0
   a[b + 35] = 0.0
+  // its corners all `radius` (a box's each its own: corners_last)
+  a[b + 36] = radius
+  a[b + 37] = radius
+  a[b + 38] = radius
+  a[b + 39] = radius
   self.ninst = self.ninst + 1
+}
+
+///|
+/// The corners of node `n` (radius_at's) on the instance just emitted for it (its ground, its border, its shadow, its
+/// glass, its picture), where they are each their own: 36-39, and 4 the roundest.
+fn Ctx::corners_last(self : Ctx, n : Node) -> Unit {
+  self.corners_on(self.ninst - 1, n)
+}
+
+///|
+/// The same on instance `k`.
+fn Ctx::corners_on(self : Ctx, k : Int, n : Node) -> Unit {
+  match n.radii {
+    Some(r) => self.corners_each(k, r[0], r[1], r[2], r[3])
+    None => ()
+  }
+}
+
+///|
+/// The same with corners `r0` to `r3` (top left, then round it), the roundest its corner (4).
+fn Ctx::corners_last_each(self : Ctx, r0 : Double, r1 : Double, r2 : Double, r3 : Double) -> Unit {
+  self.corners_each(self.ninst - 1, r0, r1, r2, r3)
+}
+
+///|
+fn Ctx::corners_each(self : Ctx, k : Int, r0 : Double, r1 : Double, r2 : Double, r3 : Double) -> Unit {
+  let b = k * inst_size
+  let a = self.inst
+  a[b + 4] = dmax(dmax(r0, r1), dmax(r2, r3))
+  a[b + 36] = r0
+  a[b + 37] = r1
+  a[b + 38] = r2
+  a[b + 39] = r3
 }
 
 ///|
@@ -364,7 +486,7 @@ fn Ctx::emit_text(
     if top > cy1 || top + tl.line_h < cy0 {
       continue
     }
-    let g = glyph(key)
+    let g = glyph(key, sc)
     if g.gw <= 0.0 {
       continue
     }
@@ -421,7 +543,45 @@ fn span_color(spans : Array[(Int, Int, Int64)], off : Int, color : Int64) -> Int
 }
 
 ///|
+/// What node `n` holds, painted in turn (what goes over its siblings after them).
+fn Ctx::paint_held(self : Ctx, n : Node, alpha : Double) -> Unit {
+  let mut c = n.first
+  let mut over = false
+  while c >= 0 {
+    if dr.any && self.drawn_z(c) == 1 {
+      over = true
+    } else {
+      self.paint(c, alpha)
+    }
+    c = self.nodes[c].next
+  }
+  if over {
+    // what goes over its siblings, after them
+    c = n.first
+    while c >= 0 {
+      if self.drawn_z(c) == 1 {
+        self.paint(c, alpha)
+      }
+      c = self.nodes[c].next
+    }
+  }
+}
+
+///|
+/// Node `i` drawn, and what it holds: a hit target of its own holds the targets drawn in it (Ctx::hit_ends: what
+/// holds the one under the pointer is pointed at too, Ctx::hovered).
 fn Ctx::paint(self : Ctx, i : Int, alpha_in : Double) -> Unit {
+  let h0 = self.next_hit_ids.length()
+  self.paint_node(i, alpha_in)
+  let id = self.nodes[i].id
+  // (its own target the first it drew, if it took presses: none drawn before it)
+  if id != 0 && self.next_hit_ids.length() > h0 + 1 && self.next_hit_ids[h0] == id {
+    self.next_hit_ends[h0] = self.next_hit_ids.length()
+  }
+}
+
+///|
+fn Ctx::paint_node(self : Ctx, i : Int, alpha_in : Double) -> Unit {
   // drawn by its look, tapped as laid out (draw.mbt), when it has one
   if dr.any && self.drawn_paint(i, alpha_in) {
     return
@@ -436,10 +596,28 @@ fn Ctx::paint(self : Ctx, i : Int, alpha_in : Double) -> Unit {
   let cy0 = clip_stack[k + 1]
   let cx1 = clip_stack[k + 2]
   let cy1 = clip_stack[k + 3]
-  // cull what is outside the clip
+  // cull what is outside the clip: nothing of its own shows there, and nothing it cuts; what a box that does not cut
+  // holds may lie past the box (a row squeezed to the room it has, wider than that, moved sideways: ＋'s recent
+  // photos), each part of it culled where it is
   if (n.x > cx1 || n.y > cy1 || n.x + n.fw < cx0 || n.y + n.fh < cy0) &&
     !(dr.any && dr.mode != mode_hits && self.draw_carries(i)) {
+    if !n.clip && (n.kind == kind_box || n.kind == kind_scroll) {
+      self.paint_held(n, alpha)
+    }
     return
+  }
+  // its own ground drawn in another box (a shape on its way: draw_ground), what it holds where it is laid out
+  let laid = (n.x, n.y, n.fw, n.fh, n.radius, n.radii)
+  let ground = self.ground_of(i)
+  match ground {
+    Some((gx, gy, gw, gh, (r0, r1, r2, r3))) => {
+      n.x = gx
+      n.y = gy
+      n.fw = gw
+      n.fh = gh
+      n.set_radii(FixedArray::from_array([r0, r1, r2, r3]))
+    }
+    None => ()
   }
   match n.glass {
     Some(gl) => self.paint_glass(n, gl, alpha)
@@ -464,26 +642,47 @@ fn Ctx::paint(self : Ctx, i : Int, alpha_in : Double) -> Unit {
       0.0,
       0.0,
     )
+    self.corners_last(n)
   }
-  if (n.bg & 0xFFL) != 0L || n.border_w > 0.0 {
+  // its border over what it holds (drawn after it, below): the box's own edge, never covered by what is in it, as
+  // CSS's border is outside what a box holds (here it takes no room); with nothing in it, with its ground
+  let border_over = n.border_w > 0.0 &&
+    n.first >= 0 &&
+    (n.kind == kind_box || n.kind == kind_list || n.kind == kind_scroll)
+  // (a picture's is what shows until it is in, drawn with it: paint_image)
+  let bg = if n.kind == kind_image { 0L } else { n.bg }
+  if (bg & 0xFFL) != 0L || (n.border_w > 0.0 && !border_over) {
     self.emit_rect(
       n.x,
       n.y,
       n.fw,
       n.fh,
       n.radius,
-      n.bg,
-      n.border_w,
+      bg,
+      if border_over || n.dashed { 0.0 } else { n.border_w },
       n.border_c,
       alpha,
     )
     self.notch_last(n)
+    self.corners_last(n)
+    if n.dashed && n.border_w > 0.0 && !border_over {
+      self.emit_dashes(n.x, n.y, n.fw, n.fh, n.radius, n.border_w, n.border_c, alpha)
+    }
+  }
+  if ground is Some(_) {
+    n.x = laid.0
+    n.y = laid.1
+    n.fw = laid.2
+    n.fh = laid.3
+    n.radius = laid.4
+    n.radii = laid.5
   }
   if n.hit && n.id != 0 {
     self.push_hit(n.id, dmax(n.x, cx0), dmax(n.y, cy0), dmin(n.x + n.fw, cx1), dmin(n.y + n.fh, cy1))
   }
-  // a modal's ground: the wheel stops at it too (overlay.mbt)
-  if n.blocks && n.id != 0 {
+  // a modal's ground: the wheel stops at it too (overlay.mbt); and what says it stops it (Ctx::stop_wheel), what
+  // scrolls in it (laid in it, later) still taking it first
+  if (n.blocks || n.stops_wheel) && n.id != 0 {
     self.next_scroll_ids.push(n.id)
     self.next_scroll_rects.push(dmax(n.x, cx0))
     self.next_scroll_rects.push(dmax(n.y, cy0))
@@ -520,6 +719,17 @@ fn Ctx::paint(self : Ctx, i : Int, alpha_in : Double) -> Unit {
     return
   }
   if n.kind == kind_editor {
+    // its words more than it shows: what the wheel and a finger scroll there, as a box kept to a height (sideways.mbt)
+    match sideways.get(n.id) {
+      Some(sw) if sw.max > 0.0 => {
+        self.next_scroll_ids.push(n.id)
+        self.next_scroll_rects.push(dmax(n.x, cx0))
+        self.next_scroll_rects.push(dmax(n.y, cy0))
+        self.next_scroll_rects.push(dmin(n.x + n.fw, cx1))
+        self.next_scroll_rects.push(dmin(n.y + n.fh, cy1))
+      }
+      _ => ()
+    }
     self.paint_editor(n, alpha)
     return
   }
@@ -551,8 +761,12 @@ fn Ctx::paint(self : Ctx, i : Int, alpha_in : Double) -> Unit {
   }
   let clipped = n.clip
   if clipped {
-    push_round_clip(n.x, n.y, n.fw, n.fh, n.radius)
+    push_round_clip(n)
   }
+  // its scroll bar, where what it holds scrolls past it (scroll_bar.mbt): drawn over what it holds, in its clip;
+  // the bars of the boxes in its rows scrolled as one, along its foot
+  let bar = if n.kind == kind_list || (n.sideways && n.id != 0) { self.bar_at(n) } else { None }
+  let across_from = self.across_seen.length()
   let first_inst = self.ninst
   // liquid glass in a group: all of it first, so it merges; text in
   // adaptive liquid glass inked by what is under it
@@ -574,26 +788,7 @@ fn Ctx::paint(self : Ctx, i : Int, alpha_in : Double) -> Unit {
     // under its rows: what the motion package draws there (its rows gone, leaving)
     self.paint_underlay(i)
   }
-  let mut c = n.first
-  let mut over = false
-  while c >= 0 {
-    if dr.any && self.drawn_z(c) == 1 {
-      over = true
-    } else {
-      self.paint(c, alpha)
-    }
-    c = self.nodes[c].next
-  }
-  if over {
-    // what goes over its siblings, after them
-    c = n.first
-    while c >= 0 {
-      if self.drawn_z(c) == 1 {
-        self.paint(c, alpha)
-      }
-      c = self.nodes[c].next
-    }
-  }
+  self.paint_held(n, alpha)
   glass_paint.ink_x = ink.0
   glass_paint.ink_y = ink.1
   glass_paint.ink_r = ink.2
@@ -617,10 +812,35 @@ fn Ctx::paint(self : Ctx, i : Int, alpha_in : Double) -> Unit {
       _ => ()
     }
   }
+  match bar {
+    Some(b) => self.paint_bar(b, alpha)
+    None => ()
+  }
+  if n.kind == kind_list {
+    self.across_bars(n, across_from, alpha)
+  }
   if clipped {
     pop_clip()
   }
-  if n.kind == kind_list {
-    self.paint_scrollbar(n, alpha)
+  if border_over && n.dashed {
+    match ground {
+      Some((bx, by, bw, bh, (r0, r1, r2, r3))) =>
+        self.emit_dashes(bx, by, bw, bh, dmax(dmax(r0, r1), dmax(r2, r3)), n.border_w, n.border_c, alpha)
+      None => self.emit_dashes(n.x, n.y, n.fw, n.fh, n.radius, n.border_w, n.border_c, alpha)
+    }
+  } else if border_over {
+    match ground {
+      // (round its ground drawn in another box: that box's corners, each its own)
+      Some((bx, by, bw, bh, (r0, r1, r2, r3))) => {
+        self.emit_rect(bx, by, bw, bh, dmax(dmax(r0, r1), dmax(r2, r3)), 0L, n.border_w, n.border_c, alpha)
+        self.notch_last(n)
+        self.corners_last_each(r0, r1, r2, r3)
+      }
+      None => {
+        self.emit_rect(n.x, n.y, n.fw, n.fh, n.radius, 0L, n.border_w, n.border_c, alpha)
+        self.notch_last(n)
+        self.corners_last(n)
+      }
+    }
   }
 }

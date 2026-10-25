@@ -11,6 +11,7 @@
 #if TARGET_OS_IPHONE
 #import <UIKit/UIKit.h>
 #else
+#import <AppKit/AppKit.h>
 #include <spawn.h>
 extern char **environ;
 #endif
@@ -72,6 +73,10 @@ static void browser_login_took(void *ctx, const char *json, size_t len, const ui
   NSString *back = [NSString stringWithFormat:@"http://127.0.0.1:%d%@", login.port, path];
   dispatch_async(dispatch_get_main_queue(), ^{
     if (!login.back) login.back = back;
+#if !TARGET_OS_IPHONE
+    // the app in front again, over the browser (as the desktop app comes back from its sign-in)
+    [NSApp activateIgnoringOtherApps:YES];
+#endif
     mb_host_request_frame();
   });
 }

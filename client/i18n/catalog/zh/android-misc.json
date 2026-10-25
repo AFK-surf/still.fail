@@ -452,6 +452,8 @@
   "android-misc.screen.look": "只看",
   "android-misc.screen.drive": "控制",
   "android-misc.screen.keyboard": "键盘",
+  "android-misc.screen.scale": "缩放",
+  "android-misc.screen.scaleRecommended": "{percent}%（推荐）",
   "android-misc.screen.full": "全屏",
   "android-misc.screen.unfull": "退出全屏",
   "android-misc.screen.tools": "工具",
@@ -518,5 +520,6 @@
   "android-misc.permissions.request": "申请",
   "android-misc.permissions.requestWhat": "申请「{name}」",
   "android-misc.permissions.requestLabel": "申请「{name}」",
-  "android-misc.permissions.missing": "未允许"
+  "android-misc.permissions.missing": "未允许",
+  "android-misc.localStation.lead": "这台 Mac 上单独安装或手动启动的 station 在这里管理：启动、停止、重启，打开日志和数据。加入哪个 workspace 在各 workspace 的 Station 设置中设定。"
 }

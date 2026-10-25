@@ -3,9 +3,10 @@
 // It makes the chat the app's flows run in and says things in it, so the app sees a chat made and words come from
 // elsewhere; and it reads the chat back, as a check from outside the app.
 //
-//   node e2e/peer.ts setup                 the workspace, its station online, a chat made with its first words;
-//                                          prints CHAT <station> <session> <thread> (kept in $E2E_PEER_DATA/chat.json)
-//   node e2e/peer.ts create TITLE-WORDS    another chat, its first message TITLE-WORDS (Home's new row)
+//   node e2e/peer.ts setup                 the workspace, its station online, a chat made with its first words and
+//                                          named by them; prints CHAT <station> <session> <thread> (kept in
+//                                          $E2E_PEER_DATA/chat.json)
+//   node e2e/peer.ts create TITLE-WORDS    another chat, its first message TITLE-WORDS and named by them (Home's new row)
 //   node e2e/peer.ts send TEXT             TEXT said in the chat by this device
 //   node e2e/peer.ts sendfiles TEXT -- F…  TEXT said with files (from $E2E_FILES), each put up first in 4 MB parts
 //   node e2e/peer.ts createfiles TEXT -- F…  another chat, its first message TEXT with those files
@@ -144,28 +145,31 @@ async function signIn(): Promise<{ workspace: string; station: string }> {
   return { workspace, station };
 }
 
-/// A chat made on `station` with `text` its first words: its row once the station has it.
+/// A chat made on `station` with `text` its first words, named by them (what comes before what its agent is told to
+/// do, ` post:…`), as the flows know it by: a chat no one has named is 新对话, whatever is said in it. Its row once the
+/// station has it.
 async function make(workspace: string, station: string, text: string, attachments: J[] = []): Promise<{ session: string; thread: number; title: string }> {
   const { key } = await call("chat.create", { station, runtime: "claude" });
   console.error(`peer: chat.create on ${station}: ${key}`);
   const send = attachments.length > 0 ? { station, session: key, text, attachments } : { station, session: key, text };
   console.error(`peer: chat.send: ${JSON.stringify(await call("chat.send", send))}`);
-  const row = await until<{ session: string; thread: number; title: string }>({ topic: "chats", scope: workspace, mine: false }, (v) => {
+  // made, by the key it was asked for with, and its words in it (not gone before the station has them: the row shows
+  // them from this core's outbox already, and a process that ends then leaves them there, the station's thread empty)
+  const made = await until<{ session: string; thread: number }>({ topic: "chat", station, session: key }, (v) => {
+    const thread = v?.thread?.id;
+    if (typeof thread !== "number" || typeof v?.key !== "string" || !(v?.messages ?? []).some((m: J) => m.text === text)) return undefined;
+    return { session: v.key, thread };
+  }, 120_000);
+  const name = text.split(" post:")[0];
+  console.error(`peer: chat.rename: ${JSON.stringify(await call("chat.rename", { station, thread: made.thread, title: name }))}`);
+  return await until<{ session: string; thread: number; title: string }>({ topic: "chats", scope: workspace, mine: false }, (v) => {
     for (const d of v?.days ?? []) {
       for (const it of d.items ?? []) {
-        if (it.station === station && typeof it.thread === "number" && it.session && !String(it.session).startsWith("pending") &&
-          // its own words, whole where the row has them (a chat made before with the same lead may still be listed)
-          [it.last?.preview ?? "", it.title ?? ""].some((w: string) => w.includes(text.split(" post:")[0]))) {
-          return { session: it.session, thread: it.thread, title: it.title };
-        }
+        if (it.station === station && it.thread === made.thread && it.title === name) return { session: it.session, thread: it.thread, title: it.title };
       }
     }
     return undefined;
   }, 120_000);
-  // not gone before the station has the words: the row shows them from this core's outbox already, and a process that
-  // ends then leaves them there (the station's thread stays empty)
-  await until({ topic: "chat", station, thread: row.thread }, (v) => (v?.messages ?? []).some((m: J) => m.text === text) || undefined, 120_000);
-  return row;
 }
 
 const chatFile = join(dir, "chat.json");

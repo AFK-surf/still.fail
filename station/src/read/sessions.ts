@@ -20,13 +20,14 @@ import { watching } from "./store.ts";
 import * as store from "./store.ts";
 import type { AuthorKind, Json, SessionRow, Store, ThreadRow, ThreadSummary } from "./store.ts";
 import { setLang, tr } from "./spoken.ts";
-import { brief, readTimeline, transcriptPaths } from "./transcript.ts";
+import { homesFirst, sessionPlaces, transcriptPaths } from "./transcript.ts";
+import { chainOf, entriesOf, lengthOf, marksDir, stateOf } from "./transcripts.ts";
 import { HttpError, messageView } from "./views.ts";
 import { type Thumbnail, SMALL, dir as thumbsDir, idOf, kept, wanted as thumbWanted } from "../drive/thumbs.ts";
 import { parseUsize } from "./jobs.ts";
 import { agentHomeOf } from "./memory.ts";
 import { shown } from "./jobs.ts";
-import { runtimeKind } from "../agents/runtime.ts";
+import { type RuntimeKind, runtimeKind } from "../agents/runtime.ts";
 import { protectedPlace } from "../drive/fs.ts";
 import { realOutside } from "../ops/places.ts";
 import { platform } from "../platform/index.ts";
@@ -145,7 +146,7 @@ function sessionRow(s: Store, key: string): SessionRow {
   return row;
 }
 
-type Lists = { stats: Map<string, store.SessionStats>; bindings: Map<string, string[]>; participants: Map<string, string[]>; watches: Map<string, Json> };
+type Lists = { stats: Map<string, store.SessionStats>; bindings: Map<string, string[]>; participants: Map<string, string[]>; watches: Map<string, Json>; lengths: Map<string, number>; usages: Map<string, Json> };
 
 /// views.rs `summary_with`: a session for lists and events: its row (without the token), process state, counts and people.
 function summaryWith(s: Store, key: string, l: Lists): Json {
@@ -167,19 +168,27 @@ function summaryWith(s: Store, key: string, l: Lists): Json {
   // Keeping watch (jobs::watching): the pages say so.
   const watch = l.watches.get(key);
   if (watch !== undefined) v.watch = watch;
+  // How many entries its transcript has (GET /sessions/:key/timeline numbers them from 0): a device that holds fewer of
+  // the latest knows what it missed. None until the station has read it at work since it began to say so.
+  const length = l.lengths.get(key);
+  if (length !== undefined) v.transcriptLength = length;
+  // What its calls used (read/tail.ts TranscriptUsage): what its live view tells while it works, kept as it changes and
+  // counted since, so a device knows it of one at rest. None before a call.
+  const usage = l.usages.get(key);
+  if (usage !== undefined) v.usage = usage;
   return v;
 }
 
 /// views.rs `summary`: one session's.
 export function summary(s: Store, key: string): Json {
-  return summaryWith(s, key, { stats: store.sessionStats(s, key), bindings: store.listBindings(s), participants: store.participants(s, key), watches: watching(s) });
+  return summaryWith(s, key, { stats: store.sessionStats(s, key), bindings: store.listBindings(s), participants: store.participants(s, key), watches: watching(s), lengths: store.transcriptLengths(s, key), usages: store.sessionUsages(s, key) });
 }
 
 /// GET /sessions (views.rs `sessions`): the sessions shown in lists, or only the archived ones; those of one connect;
 /// those of the viewer's workspace (all of them for a read made for no one).
 export function sessions(s: Store, connect: string | null, archived: boolean, lang: Lang, viewer: InWorkspace | null = null): Json[] {
   setLang(lang);
-  const l: Lists = { stats: store.sessionStats(s, null), bindings: store.listBindings(s), participants: store.participants(s, null), watches: watching(s) };
+  const l: Lists = { stats: store.sessionStats(s, null), bindings: store.listBindings(s), participants: store.participants(s, null), watches: watching(s), lengths: store.transcriptLengths(s, null), usages: store.sessionUsages(s, null) };
   return store
     .listSessions(s)
     .filter((x) => (connect === null || x.connect === connect) && (x.archivedAt !== null) === archived && (viewer === null || sees(viewer, x.ws)))
@@ -228,6 +237,12 @@ function threadView(s: Store, t: ThreadSummary, shares: ReturnType<typeof store.
   // A Slack channel's name, as far as known.
   v.channelName = t.thread.surface === store.STILLFAIL_SURFACE ? null : knownChannel(s, t.sessions.map((m) => m.connect).find((c) => c !== INTERNAL_CONNECT) ?? null, t.thread.channel);
   v.creator = creator(s, t.thread.createdBy);
+  // A still.fail chat's Slack and Feishu threads, where what people send can be copied (docs/relay.md "抄送"), the one
+  // said in last first; left out when none.
+  if (t.thread.surface === store.STILLFAIL_SURFACE) {
+    const to = store.ccThreads(s, t.thread.id);
+    if (to.length > 0) v.cc = to.map((o) => ({ thread: o.thread.id, surface: o.thread.surface, channel: o.thread.channel, threadTs: o.thread.threadTs, channelName: knownChannel(s, o.connect, o.thread.channel) }));
+  }
   // Which other workspaces it is shared with (docs/chat-share.md), by the session key its link names.
   const shared = shares.get(t.thread.home ?? t.sessions[0]?.session ?? "");
   v.xshare = shared === undefined ? null : shared;
@@ -275,31 +290,49 @@ export function parseI64(text: string): number | null {
 
 /// GET /sessions/:key/timeline: transcript entries before those a page was sent: up to `limit` (200, from 1 to 1000)
 /// before entry `before` (0), and the index of the first (live.rs `before`); in brief (transcript.ts `brief`) with
-/// `brief=1`. `from` and `to` instead: those entries whole (both included, at most 1000), as one in brief is read again
-/// when it is opened. The transcript is found through the session's profile (hub.rs `locate`); none found: nothing.
-export function timeline(s: Store, key: string, beforeParam: string | undefined, limitParam: string | undefined, lang: Lang, fromParam?: string, toParam?: string, briefParam?: string): Json {
+/// `brief=1`. `after` instead: up to `limit` entries just after entry `after` (what a device that holds up to there has yet
+/// to have). `from` and `to` instead: those entries (both included, at most 1000), whole unless `brief=1`, as one in brief
+/// is read again when it is opened. `end`: how many entries the transcript has. The transcript is found through the
+/// session's profile (hub.rs `locate`); none found: nothing.
+export function timeline(s: Store, key: string, beforeParam: string | undefined, limitParam: string | undefined, lang: Lang, fromParam?: string, toParam?: string, briefParam?: string, afterParam?: string): Json {
   setLang(lang);
-  const row = sessionRow(s, key);
   const before = parseUsize(beforeParam) ?? 0;
   const limit = Math.min(Math.max(parseUsize(limitParam) ?? 200, 1), 1000);
-  const profile = configOf(s).profiles.find((p) => p.id === row.profile);
-  const runtime = runtimeKind(row.runtime) ?? null;
-  // None now (its context cleared) still reads those it ran in.
-  if (!profile || runtime === null || store.runtimeSessions(s, key).length === 0) return { start: 0, entries: [] };
-  // Those of the runtime sessions it ran in before come first (sessions/afresh.ts).
-  const homes = [profile.home, ...configOf(s).profiles.map((p) => p.home).filter((h) => h !== profile.home)];
-  const { paths } = transcriptPaths(runtime, homes, store.runtimeSessions(s, key));
-  const entries = paths.flatMap((path) => readTimeline(runtime, path));
+  const found = transcriptsOf(s, key);
+  if (found === null) return { start: 0, entries: [], end: 0 };
+  const { runtime, paths } = found;
+  // Read on to where they are written now, each stretch from the mark before it (read/transcripts.ts).
+  const chain = chainOf(runtime, paths, marksDir(s.dataDir));
+  const end = lengthOf(chain);
+  const between = (a: number, b: number) => entriesOf(runtime, chain, a, b, briefParam === "1");
   const from = parseUsize(fromParam);
   const to = parseUsize(toParam);
-  if (from !== null && to !== null) {
-    const last = Math.min(to, from + 999, entries.length - 1);
-    return { start: from, entries: entries.slice(from, last + 1) };
+  if (from !== null && to !== null) return { start: from, entries: between(from, Math.min(to, from + 999) + 1), end };
+  const after = parseUsize(afterParam);
+  if (after !== null) {
+    const start = Math.min(after + 1, end);
+    return { start, entries: between(start, start + limit), end };
   }
-  const end = Math.min(before, entries.length);
-  const start = Math.max(0, end - limit);
-  const page = entries.slice(start, end);
-  return { start, entries: briefParam === "1" ? page.map(brief) : page };
+  const upto = Math.min(before, end);
+  const start = Math.max(0, upto - limit);
+  return { start, entries: between(start, upto), end };
+}
+
+/// A session's transcripts (hub.rs `locate`): those of the runtime sessions it ran in before first (sessions/afresh.ts),
+/// and none now (its context cleared) still reads those it ran in; found whatever profile it is on now, if any. Null:
+/// none found.
+function transcriptsOf(s: Store, key: string): { runtime: RuntimeKind; paths: string[] } | null {
+  const row = sessionRow(s, key);
+  const runtime = runtimeKind(row.runtime) ?? null;
+  if (runtime === null || store.runtimeSessions(s, key).length === 0) return null;
+  return { runtime, paths: transcriptPaths(runtime, s.dataDir, homesFirst(configOf(s).profiles, row.profile), store.runtimeSessions(s, key), sessionPlaces(row)).paths };
+}
+
+/// Where the reading of a session's transcripts stands (read/transcripts.ts `stateOf`), for its live view to go on from
+/// (sessions/live.ts): no read of the transcripts' past on the station's main thread. `states` null: none found.
+export function transcriptState(s: Store, key: string): Json {
+  const found = transcriptsOf(s, key);
+  return { states: found === null ? null : stateOf(found.runtime, found.paths, marksDir(s.dataDir)) };
 }
 
 /// GET /sessions/:key/transcript: where its runtime keeps the session's transcript on this machine (the current runtime
@@ -307,11 +340,9 @@ export function timeline(s: Store, key: string, beforeParam: string | undefined,
 export function transcriptFile(s: Store, key: string, lang: Lang): Json {
   setLang(lang);
   const row = sessionRow(s, key);
-  const profile = configOf(s).profiles.find((p) => p.id === row.profile);
   const runtime = runtimeKind(row.runtime) ?? null;
-  if (!profile || runtime === null || row.runtimeSessionId === null) return { path: null };
-  const homes = [profile.home, ...configOf(s).profiles.map((p) => p.home).filter((h) => h !== profile.home)];
-  const { paths, current } = transcriptPaths(runtime, homes, store.runtimeSessions(s, key));
+  if (runtime === null || row.runtimeSessionId === null) return { path: null };
+  const { paths, current } = transcriptPaths(runtime, s.dataDir, homesFirst(configOf(s).profiles, row.profile), store.runtimeSessions(s, key), sessionPlaces(row));
   return { path: current ? paths.at(-1)! : null };
 }
 

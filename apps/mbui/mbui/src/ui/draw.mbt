@@ -127,6 +127,10 @@ priv struct Drawn {
   mut bottom : Double
   /// drawn only as its top this tall (-1 whole)
   mut top : Double
+  /// its own ground (its colour, glass, shadow, border and corners) drawn in this box (x, y, w, h, its corners: top
+  /// left, then round it) instead of where it is laid out: a shape on its way to its new one (motion's reshape); None
+  /// as laid out
+  mut ground : (Double, Double, Double, Double, (Double, Double, Double, Double))?
 }
 
 ///|
@@ -268,7 +272,17 @@ fn Ctx::drawn_of(self : Ctx, i : Int) -> Drawn {
   if dr.stamp[i] == dr.build && dr.at[i] >= 0 {
     return dr.entries[dr.at[i]]
   }
-  let e : Drawn = { node: i, look: still_look, z: 0, only: false, keep: None, keep_rel: -1, bottom: -1.0, top: -1.0 }
+  let e : Drawn = {
+    node: i,
+    look: still_look,
+    z: 0,
+    only: false,
+    keep: None,
+    keep_rel: -1,
+    bottom: -1.0,
+    top: -1.0,
+    ground: None,
+  }
   dr.stamp[i] = dr.build
   dr.at[i] = dr.entries.length()
   dr.entries.push(e)
@@ -339,6 +353,32 @@ pub fn Ctx::put_over(self : Ctx, i : Int, z? : Int = 1) -> Unit {
 /// scrim fading, a menu closing) is one.
 pub fn Ctx::draw_only(self : Ctx, i : Int) -> Unit {
   self.drawn_of(i).only = true
+}
+
+///|
+/// Node `i`'s own ground (its colour, glass, shadow, border and corners) drawn in the box at `x`, `y`, `w` by `h`
+/// with corners `radii` (top left, then round it: node_radii's) (the window's, before its look), what it holds where
+/// it is laid out: a box on its way from the shape it had to its new one (motion's reshape). Tapped where it is laid
+/// out.
+pub fn Ctx::draw_ground(
+  self : Ctx,
+  i : Int,
+  x : Double,
+  y : Double,
+  w : Double,
+  h : Double,
+  radii : (Double, Double, Double, Double),
+) -> Unit {
+  self.drawn_of(i).ground = Some((x, y, w, h, radii))
+}
+
+///|
+/// Where node `i`'s own ground is drawn this frame (draw_ground), if elsewhere than where it is laid out.
+fn Ctx::ground_of(self : Ctx, i : Int) -> (Double, Double, Double, Double, (Double, Double, Double, Double))? {
+  match self.drawn_entry(i) {
+    Some(e) => e.ground
+    None => None
+  }
 }
 
 ///|
@@ -487,6 +527,7 @@ fn Ctx::drawn_paint(self : Ctx, i : Int, alpha : Double) -> Bool {
   let i0 = self.ninst
   let h0 = self.next_hit_ids.length()
   let s0 = self.next_scroll_ids.length()
+  let b0 = self.next_bars.length()
   let sc = self.scale
   let ox = n.x + look.ox * n.fw
   let oy = n.y + look.oy * n.fh
@@ -507,6 +548,8 @@ fn Ctx::drawn_paint(self : Ctx, i : Int, alpha : Double) -> Bool {
       oy + (c3 - dy - oy) / look.sy,
       (outer_r.0 / sm, outer_r.1 / sm, outer_r.2 / sm, outer_r.3 / sm),
       outer_s,
+      // (where it is laid out, not where it is drawn: its outer the one where it is drawn, as it is)
+      outer_kept=true,
     )
   }
   if cutting {
@@ -538,10 +581,12 @@ fn Ctx::drawn_paint(self : Ctx, i : Int, alpha : Double) -> Bool {
   if dr.mode == mode_draw || !look.is_still() || e.z == 2 || e.only || cutting {
     // tapped as laid out, not here (drawn only, not at all)
     self.next_hit_ids.truncate(h0)
+    self.next_hit_ends.truncate(h0)
     self.next_hit_rects.truncate(h0 * 4)
     self.next_hit_clips.truncate(h0 * clip_n)
     self.next_scroll_ids.truncate(s0)
     self.next_scroll_rects.truncate(s0 * 4)
+    self.next_bars.truncate(b0)
   }
   if !look.is_still() {
     self.transform_insts(i0, self.ninst, ox, oy, look.sx, look.sy, dx, dy, outer, outer_r, outer_s)
@@ -601,7 +646,9 @@ fn Ctx::drawn_paint(self : Ctx, i : Int, alpha : Double) -> Bool {
 ///|
 /// Instances `i0` to `i1` moved and scaled: about (`ox`, `oy`) by `sx`, `sy`, then by `dx`, `dy`; what their subtree
 /// cut them to moves with them (its corners' radii scaled as their radii are, as smooth), within what cut the node itself
-/// (`outer`, its corners rounded by `outer_r`, as smooth as `outer_s`).
+/// (`outer`, its corners rounded by `outer_r`, as smooth as `outer_s`: the clip painted in now). Their outer clips
+/// (40-51, clip_stack) as a level's are: the one painted in now's where it has one; else that clip itself where theirs,
+/// moved, cuts through a rounded corner of it; else their own from their subtree, moved with them.
 fn Ctx::transform_insts(
   self : Ctx,
   i0 : Int,
@@ -620,8 +667,21 @@ fn Ctx::transform_insts(
   let (c0, c1, c2, c3) = outer
   let scales = sx != 1.0 || sy != 1.0
   let sm = dmin(sx, sy)
+  let here = clip_top()
   for k in i0..<i1 {
     let b = k * inst_size
+    // an outer from its subtree (not the one painted in now's): moved with it
+    if inst_has_outer(a, b) && !inst_outer_is(a, b, here + 12) {
+      a[b + 40] = ox + (a[b + 40] - ox) * sx + dx
+      a[b + 41] = oy + (a[b + 41] - oy) * sy + dy
+      a[b + 42] = ox + (a[b + 42] - ox) * sx + dx
+      a[b + 43] = oy + (a[b + 43] - oy) * sy + dy
+      if scales {
+        for j in 44..<48 {
+          a[b + j] = a[b + j] * sm
+        }
+      }
+    }
     a[b] = ox + (a[b] - ox) * sx + dx
     a[b + 1] = oy + (a[b + 1] - oy) * sy + dy
     // turned already (a look inside this one's): where it turns about moves as its rect does
@@ -633,6 +693,9 @@ fn Ctx::transform_insts(
       a[b + 2] = a[b + 2] * sx
       a[b + 3] = a[b + 3] * sy
       a[b + 4] = a[b + 4] * sm
+      for j in 36..<40 {
+        a[b + j] = a[b + j] * sm
+      }
       // a glass's (kinds 5, 6: glass.mbt) are its saturation and blur, not a border and a shadow
       if a[b + 5] != 5.0 && a[b + 5] != 6.0 {
         a[b + 6] = a[b + 6] * sm
@@ -651,18 +714,42 @@ fn Ctx::transform_insts(
           a[b + j] = a[b + j] * sm
         }
       }
-      clamp_inst_clip(
-        a,
-        b,
-        ox + (a[b + 16] - ox) * sx + dx,
-        oy + (a[b + 17] - oy) * sy + dy,
-        ox + (a[b + 18] - ox) * sx + dx,
-        oy + (a[b + 19] - oy) * sy + dy,
-        outer,
-        outer_r,
-        outer_s,
-      )
+      let m0 = ox + (a[b + 16] - ox) * sx + dx
+      let m1 = oy + (a[b + 17] - oy) * sy + dy
+      let m2 = ox + (a[b + 18] - ox) * sx + dx
+      let m3 = oy + (a[b + 19] - oy) * sy + dy
+      if clip_has_outer(here) {
+        inst_outer_from(a, b, here + 12)
+      } else if clip_cuts(here, m0, m1, m2, m3, (a[b + 24], a[b + 25], a[b + 26], a[b + 27])) {
+        inst_outer_from(a, b, here)
+      }
+      clamp_inst_clip(a, b, m0, m1, m2, m3, outer, outer_r, outer_s)
     }
+  }
+}
+
+///|
+/// Whether instance `b` (in `a`) has an outer clip (40-51: its radii not all 0).
+fn inst_has_outer(a : FixedArray[Double], b : Int) -> Bool {
+  a[b + 44] > 0.0 || a[b + 45] > 0.0 || a[b + 46] > 0.0 || a[b + 47] > 0.0
+}
+
+///|
+/// Whether instance `b`'s outer clip is the clip at `k` in clip_stack (its 12 numbers).
+fn inst_outer_is(a : FixedArray[Double], b : Int, k : Int) -> Bool {
+  for j in 0..<12 {
+    if a[b + 40 + j] != clip_stack[k + j] {
+      return false
+    }
+  }
+  true
+}
+
+///|
+/// Instance `b`'s outer clip made the clip at `k` in clip_stack (its 12 numbers).
+fn inst_outer_from(a : FixedArray[Double], b : Int, k : Int) -> Unit {
+  for j in 0..<12 {
+    a[b + 40 + j] = clip_stack[k + j]
   }
 }
 
@@ -799,6 +886,8 @@ pub fn Ctx::draw_drawing(self : Ctx, d : Drawing, rel : Int, look : Look) -> Uni
     }
     a[b] = a[b] + n.x
     a[b + 1] = a[b + 1] + n.y
+    // (its outer clip the one painted in now's, as what it was cut to is what cuts it now: transform_insts)
+    inst_outer_from(a, b, clip_top() + 12)
     clamp_inst_clip(a, b, a[b + 16] + n.x, a[b + 17] + n.y, a[b + 18] + n.x, a[b + 19] + n.y, cut, cut_r, cut_s)
     a[b + 11] = a[b + 11] * look.alpha
     a[b + 15] = if a[b + 5] == 0.0 { a[b + 15] * look.alpha } else { a[b + 15] }
@@ -854,6 +943,20 @@ pub fn Ctx::node_rect(self : Ctx, i : Int) -> (Double, Double, Double, Double) {
 }
 
 ///|
+/// Node `i`'s corner as laid out (its radius, no more than half its height for a capsule's; the roundest of its
+/// corners, where they are each their own: node_radii).
+pub fn Ctx::node_radius(self : Ctx, i : Int) -> Double {
+  self.nodes[i].radius
+}
+
+///|
+/// Node `i`'s corners as laid out, each its own (top left, then round it; a capsule's no more than half its height).
+pub fn Ctx::node_radii(self : Ctx, i : Int) -> (Double, Double, Double, Double) {
+  let n = self.nodes[i]
+  (n.radius_at(0), n.radius_at(1), n.radius_at(2), n.radius_at(3))
+}
+
+///|
 /// Node `i`'s parent node (-1 the root's).
 pub fn Ctx::node_parent(self : Ctx, i : Int) -> Int {
   self.nodes[i].parent
@@ -904,19 +1007,31 @@ pub fn Ctx::list_scrolled(self : Ctx, li : Int) -> Double {
 }
 
 ///|
-/// Whether motion is reduced (the host's setting, or MBUI_REDUCE_MOTION=1): every motion at its end at once.
+/// Whether motion is reduced (the app's own choice, else the host's setting; or MBUI_REDUCE_MOTION=1): every motion at
+/// its end at once.
 pub fn reduced_motion() -> Bool {
   if fake.val is Some(f) {
-    return f.reduce_motion || f.env.get("MBUI_REDUCE_MOTION") == Some("1")
+    return f.env.get("MBUI_REDUCE_MOTION") == Some("1") || motion_chosen.val.unwrap_or(f.reduce_motion)
   }
   if reduce_env.val < 0 {
     reduce_env.val = if @hostapi.env("MBUI_REDUCE_MOTION") == "1" { 1 } else { 0 }
   }
-  reduce_env.val == 1 || @hostapi.reduce_motion()
+  reduce_env.val == 1 || motion_chosen.val.unwrap_or_else(fn() { @hostapi.reduce_motion() })
 }
 
 ///|
 let reduce_env : Ref[Int] = { val: -1 }
+
+///|
+/// Motion as the app's own setting chooses it (Some(true): reduced, Some(false): not, whatever the system says), or
+/// None to follow the system's.
+pub fn set_motion_chosen(reduce : Bool?) -> Unit {
+  motion_chosen.val = reduce
+}
+
+///|
+// kept across runs: put back as the app reads its setting each frame (None until then)
+let motion_chosen : Ref[Bool?] = { val: None }
 
 ///|
 /// Motion reduced (the person's setting, or MBUI_REDUCE_MOTION=1): what moves is where it goes at once.

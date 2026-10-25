@@ -5,7 +5,7 @@
 
 ///|
 /// The new-profile pages open, by station: the draft's form, the sign-in it started (none: ""), why that failed.
-priv struct NewProfile {
+pub(all) struct NewProfile {
   form : String
   mut opened : Bool
   mut dropped : Bool
@@ -22,11 +22,11 @@ let new_profiles : Map[String, NewProfile] = Map([])
 
 ///|
 /// A count of drafts opened.
-let profile_forms : Ref[Int] = Ref(0)
+pub let profile_forms : Ref[Int] = Ref(0)
 
 ///|
 /// The draft of a new profile's page, made the first time it is drawn.
-fn new_profile_of(station : String) -> NewProfile {
+pub fn new_profile_of(station : String) -> NewProfile {
   match new_profiles.get(station) {
     Some(n) if !n.dropped => n
     _ => {
@@ -64,7 +64,7 @@ fn new_profile_left(core : Core, station : String) -> Unit {
 
 ///|
 /// The sign-in a new profile's page started let go, unless it made its profile.
-fn drop_login(core : Core, station : String, n : NewProfile) -> Unit {
+pub fn drop_login(core : Core, station : String, n : NewProfile) -> Unit {
   if n.login != "" {
     let made = match pending_login(core, station, n.login) {
       Some(l) => has(Some(l), "created")
@@ -80,7 +80,7 @@ fn drop_login(core : Core, station : String, n : NewProfile) -> Unit {
 
 ///|
 /// A sign-in under way on a station, by its id (its overview's `logins`).
-fn pending_login(core : Core, station : String, id : String) -> Json? {
+pub fn pending_login(core : Core, station : String, id : String) -> Json? {
   let all = (core.topic)("stations", { "scope": str(workspace_of(station)) }).value
   match all {
     Some(Array(a)) =>
@@ -94,7 +94,7 @@ fn pending_login(core : Core, station : String, id : String) -> Json? {
 
 ///|
 /// A plan's sign-in started for the page (`login.new` with what it signs in to).
-fn start_login(core : Core, station : String, n : NewProfile, runtime : String, access : String) -> Unit {
+pub fn start_login(core : Core, station : String, n : NewProfile, runtime : String, access : String) -> Unit {
   n.asked = true
   n.error = ""
   let p = [("station", str(station)), ("runtime", str(runtime))]
@@ -135,21 +135,12 @@ fn new_profile_page(c : @ui.Ctx, core : Core, here : Here, station : String) -> 
   let step = text(d, "step")
   let sign = field(d, "signIn")
   let tile = field(d, "tile")
-  let runtime = match opt_text(sign, "runtime") {
-    Some(r) => r
-    None =>
-      match text(tile, "runtime") {
-        "codex" | "grok" | "cursor" | "devin" as r => r
-        _ => "claude"
-      }
-  }
-  let provider = match opt_text(sign, "provider") {
-    Some(p) => p
-    None => provider_named(runtime)
-  }
+  // what the plan signs in to (the core's, at a plan's connect step): a runtime's subscription, or another account
+  let runtime = text(sign, "runtime")
+  let provider = text(sign, "provider")
   // a station without the runtime the plan signs in with installs it first (`install`): the sign-in starts after
   let install = field(d, "install")
-  let planning = step == "connect" && text(d, "method") == "plan" && !(install is Some(Object(_)))
+  let planning = step == "connect" && text(d, "method") == "plan" && !(install is Some(Object(_))) && sign is Some(Object(_))
   // a plan's sign-in starts when it is chosen
   if planning && !n.asked {
     // (once the frame's builds are over; start_login says it asked)
@@ -188,7 +179,7 @@ fn new_profile_page(c : @ui.Ctx, core : Core, here : Here, station : String) -> 
         Some(x) => x
         None => tr("android-settings.profile.add")
       },
-      sub=fn() { c.text(text(s, "name"), size=11.0, color=t.p.muted, wrap=false, line=16.0) |> ignore },
+      sub=fn() { c.text(text(s, "name"), size=t.t.caption, color=t.p.muted, wrap=false, line=16.0) |> ignore },
       on_back=leave,
     )
     guard d is Some(Object(_)) else {
@@ -203,10 +194,10 @@ fn new_profile_page(c : @ui.Ctx, core : Core, here : Here, station : String) -> 
     }
     let blocks : Array[() -> Unit] = []
     let pad = fn(f : () -> Unit) { c.box(w=Fill(1.0), padx=18.0, pt=8.0, gap=12.0, f) |> ignore }
-    let group_box = fn(f : () -> Unit) { c.box(w=Fill(1.0), radius=16.0, bg=t.p.card, clip=true, f) |> ignore }
+    let group_box = fn(f : () -> Unit) { rows_card(c, f) }
     if step == "pick" {
       blocks.push(fn() {
-        pad(fn() { c.text(text(d, "hint"), size=13.0, color=t.p.muted, w=Fill(1.0), line=18.0) |> ignore })
+        pad(fn() { c.text(text(d, "hint"), size=t.t.meta, color=t.p.muted, w=Fill(1.0), line=18.0) |> ignore })
       })
       // the machine's own logins not used yet: a profile on one needs no sign-in
       for b in machine_login_offers(c, core, station, field(s, "overview"), inset=18.0, fn(rt) {
@@ -218,14 +209,14 @@ fn new_profile_page(c : @ui.Ctx, core : Core, here : Here, station : String) -> 
         blocks.push(fn() {
           pad(fn() {
             c.box(w=Fill(1.0), pl=6.0, pt=6.0, fn() {
-              c.text(text(Some(g), "title"), size=13.0, color=t.p.muted, w=Fill(1.0), line=18.0) |> ignore
+              c.text(text(Some(g), "title"), size=t.t.meta, color=t.p.muted, w=Fill(1.0), line=18.0) |> ignore
             })
             |> ignore
             group_box(fn() {
               for p in items(Some(g), "providers") {
                 let pv = Some(p)
                 if list_row(c, key="provider/" + text(pv, "id"), fn() {
-                    provider_mark(
+                    @sf.provider_logo(
                       c,
                       match text(pv, "runtime") {
                         "" => "claude"
@@ -265,8 +256,8 @@ fn new_profile_page(c : @ui.Ctx, core : Core, here : Here, station : String) -> 
                   k => k
                 }
               }
-              if pick_row(c, "method/" + cid, text(cv, "title"), sub=text(cv, "hint"), mark=fn() {
-                  provider_mark(c, runtime, kind, 18.0, text(tile, "mark"))
+              if @sf.choice_row(c, "method/" + cid, false, text(cv, "title"), note=text(cv, "hint"), lead=fn() {
+                  @sf.provider_logo(c, runtime, kind, 18.0, text(tile, "mark"))
                 }) {
                 edit([("method", str(cid))])
               }
@@ -291,24 +282,38 @@ fn new_profile_page(c : @ui.Ctx, core : Core, here : Here, station : String) -> 
                   None => tr("android-settings.login.unfinished")
                 }
               },
-              size=13.0,
+              size=t.t.meta,
               color=t.p.red,
               w=Fill(1.0),
               line=18.0,
             )
             |> ignore
-            if button(c, "login-restart", tr("android-settings.login.restart"), false) {
+            if @sf.button(c, tr("android-settings.login.restart"), key="login-restart") {
               drop_login(core, station, n)
             }
           } else {
-            login_steps(c, core, station + "/new/" + n.login, job, provider, fn(code) {
-              if n.login != "" {
-                act(core, tr("android-settings.login.finish"), "login.code", obj([("station", str(station)), ("id", str(n.login)), ("code", str(code))]))
-              }
-            })
+            login_steps(
+              c,
+              core,
+              station + "/new/" + n.login,
+              job,
+              provider,
+              fn(code) {
+                if n.login != "" {
+                  act(core, tr("android-settings.login.finish"), "login.code", obj([("station", str(station)), ("id", str(n.login)), ("code", str(code))]))
+                }
+              },
+              in_station=(text(s, "name"), fn(what) {
+                if n.login != "" {
+                  act(core, what, "login.browser", obj([("station", str(station)), ("id", str(n.login))]), then=fn(v) {
+                    (core.open_screen)(station, text(Some(v), "screen"))
+                  })
+                }
+              }),
+            )
           }
           if text(d, "usesLine") != "" {
-            c.text(text(d, "usesLine"), size=13.0, color=t.p.muted, w=Fill(1.0), line=18.0) |> ignore
+            c.text(text(d, "usesLine"), size=t.t.meta, color=t.p.muted, w=Fill(1.0), line=18.0) |> ignore
           }
         })
       })
@@ -336,9 +341,9 @@ fn connect_form(
   let form = n.form
   let tile = field(d, "tile")
   let label = fn(words : String) {
-    c.text(words, size=13.0, weight=600, color=t.p.text, w=Fill(1.0), line=18.0) |> ignore
+    c.text(words, size=t.t.meta, weight=600, color=t.p.text, w=Fill(1.0), line=18.0) |> ignore
   }
-  let group_box = fn(f : () -> Unit) { c.box(w=Fill(1.0), radius=16.0, bg=t.p.card, clip=true, f) |> ignore }
+  let group_box = fn(f : () -> Unit) { rows_card(c, f) }
   let ekey = "profile-endpoint/" + form
   if !n.filled {
     n.filled = true
@@ -356,7 +361,7 @@ fn connect_form(
       edit([("endpoint", str(endpoint))])
     }
     match opt_text(d, "endpointHint") {
-      Some(h) => c.text(h, size=12.0, color=t.p.muted, w=Fill(1.0), line=17.0) |> ignore
+      Some(h) => c.text(h, size=t.t.caption, color=t.p.muted, w=Fill(1.0), line=17.0) |> ignore
       None => ()
     }
   }
@@ -365,7 +370,7 @@ fn connect_form(
     label(tr("web-mobile.profiles.region"))
     group_box(fn() {
       for r in regions {
-        if pick_row(c, "region/" + text(Some(r), "id"), text(Some(r), "label"), checked=text(Some(r), "id") == text(d, "region")) {
+        if @sf.choice_row(c, "region/" + text(Some(r), "id"), text(Some(r), "id") == text(d, "region"), text(Some(r), "label")) {
           edit([("region", str(text(Some(r), "id")))])
         }
       }
@@ -376,7 +381,7 @@ fn connect_form(
     label(tr("web-mobile.profiles.protocol"))
     group_box(fn() {
       for p in protocols {
-        if pick_row(c, "protocol/" + text(Some(p), "id"), text(Some(p), "label"), checked=text(Some(p), "id") == text(d, "protocol")) {
+        if @sf.choice_row(c, "protocol/" + text(Some(p), "id"), text(Some(p), "id") == text(d, "protocol"), text(Some(p), "label")) {
           edit([("protocol", str(text(Some(p), "id")))])
         }
       }
@@ -398,13 +403,13 @@ fn connect_form(
         }
     }
     match note {
-      Some((words, bad)) => c.text(words, size=12.0, color=if bad { t.p.red } else { t.p.muted }, w=Fill(1.0), line=17.0) |> ignore
+      Some((words, bad)) => c.text(words, size=t.t.caption, color=if bad { t.p.red } else { t.p.muted }, w=Fill(1.0), line=17.0) |> ignore
       None => ()
     }
   }
   let submitting = is_doing(core, ["profile.flow.submit"], [("station", station), ("form", form)])
   c.box(dir=Row, w=Fill(1.0), justify=JEnd, fn() {
-    if button(c, "profile-submit", text(d, "submitLabel"), true, busy=submitting || flag(d, "pending"), enabled=flag(d, "canSubmit")) {
+    if @sf.button(c, text(d, "submitLabel"), key="profile-submit", tone=Primary, busy=submitting || flag(d, "pending"), disabled=!flag(d, "canSubmit")) {
       c.blur()
       (core.call)("profile.flow.submit", obj([("station", str(station)), ("form", str(form))]), fn(r) {
         match r {
@@ -421,7 +426,7 @@ fn connect_form(
   })
   |> ignore
   if text(d, "usesLine") != "" {
-    c.text(text(d, "usesLine"), size=13.0, color=t.p.muted, w=Fill(1.0), line=18.0) |> ignore
+    c.text(text(d, "usesLine"), size=t.t.meta, color=t.p.muted, w=Fill(1.0), line=18.0) |> ignore
   }
 }
 
@@ -457,18 +462,11 @@ fn profile_account_page(c : @ui.Ctx, core : Core, here : Here, key : String) -> 
             join(
               [
                 text(p, "email"),
-                if flag(p, "machine") {
-                  tr("android-settings.profile.machine")
-                } else {
-                  match opt_text(p, "providerName") {
-                    Some(x) => x
-                    None => access_label(text(field(p, "access"), "kind"))
-                  }
-                },
+                text(p, "kindText"),
               ],
               " · ",
             ),
-            size=11.0,
+            size=t.t.caption,
             color=t.p.muted,
             wrap=false,
             line=16.0,
@@ -483,7 +481,7 @@ fn profile_account_page(c : @ui.Ctx, core : Core, here : Here, key : String) -> 
                 c.box(w=Fill(1.0), fn() {
                   c.box(dir=Row, gap=6.0, align=ACenter, fn() {
                     presence_dot(c, tone_dot(text(p, "checkTone")))
-                    c.text(text(p, "checkText"), size=15.0, color=t.p.text, wrap=false, line=21.0) |> ignore
+                    c.text(text(p, "checkText"), size=t.t.ui, color=t.p.text, wrap=false, line=21.0) |> ignore
                   })
                   |> ignore
                   c.text(
@@ -491,7 +489,7 @@ fn profile_account_page(c : @ui.Ctx, core : Core, here : Here, key : String) -> 
                       Some(x) => x
                       None => tr("android-settings.profile.notChecked")
                     },
-                    size=13.0,
+                    size=t.t.meta,
                     color=t.p.muted,
                     w=Fill(1.0),
                     line=18.0,
@@ -524,7 +522,7 @@ fn profile_account_page(c : @ui.Ctx, core : Core, here : Here, key : String) -> 
                           tone_dot(text(mv, "checkTone"))
                         },
                       )
-                      c.text(text(mv, "stationName"), size=15.0, color=t.p.text, wrap=false, line=21.0) |> ignore
+                      c.text(text(mv, "stationName"), size=t.t.ui, color=t.p.text, wrap=false, line=21.0) |> ignore
                     })
                     |> ignore
                     c.text(
@@ -533,7 +531,7 @@ fn profile_account_page(c : @ui.Ctx, core : Core, here : Here, key : String) -> 
                       } else {
                         tr("android-settings.profiles.stationOffline")
                       },
-                      size=13.0,
+                      size=t.t.meta,
                       color=t.p.muted,
                       w=Fill(1.0),
                       line=18.0,
@@ -559,13 +557,13 @@ fn profile_account_page(c : @ui.Ctx, core : Core, here : Here, key : String) -> 
 ///|
 /// A plan's sign-in on a station without the runtime it signs in with (InstallStep, core `install`): installing it
 /// first, how that stands, its button where the viewer may (`software.update`).
-fn install_step(c : @ui.Ctx, core : Core, station : String, install : Json?) -> Unit {
+pub fn install_step(c : @ui.Ctx, core : Core, station : String, install : Json?) -> Unit {
   let t = @sf.theme()
   let runtime = text(install, "runtime")
   let busy = is_doing(core, ["software.update"], [("station", station), ("id", runtime)])
   card(c, fn() {
     c.box(w=Fill(1.0), gap=10.0, fn() {
-      c.text(text(install, "title"), size=15.0, weight=600, color=t.p.text, w=Fill(1.0), line=21.0) |> ignore
+      c.text(text(install, "title"), size=t.t.ui, weight=600, color=t.p.text, w=Fill(1.0), line=21.0) |> ignore
       let detail = opt_text(install, "detail")
       c.text(
         match detail {
@@ -576,7 +574,7 @@ fn install_step(c : @ui.Ctx, core : Core, station : String, install : Json?) -> 
               None => tr("web-pages.profiles.installThenSignIn")
             }
         },
-        size=13.0,
+        size=t.t.meta,
         color=if detail is Some(_) { t.p.red } else { t.p.muted },
         w=Fill(1.0),
         line=18.0,

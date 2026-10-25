@@ -43,8 +43,8 @@ let spokenLang: Lang = "zh";
 export const setSpoken = (lang: Lang) => (spokenLang = lang);
 const tr = (key: string, args: Record<string, string> = {}) => translate(spokenLang, key, args);
 
-/// What a chat with nothing to be called by is called.
-export const noWords = () => tr("station.chat.noWords");
+/// What a chat with no name yet is called.
+export const untitled = () => tr("station.chat.untitled");
 
 // ---- Rust's whitespace (char::is_whitespace), for trim and split_whitespace ----
 
@@ -115,28 +115,26 @@ function given(thread: ThreadRow): string | null {
   return [thread.title, thread.autoTitle].filter((s): s is string => s !== null).map(trim).find((s) => s !== "") ?? null;
 }
 
-/// Whether a chat has a title of its own, or something a person said in it to take one from.
-function hasWords(t: ThreadSummary): boolean {
-  return given(t.thread) !== null || (t.firstText !== null && trim(t.firstText) !== "");
-}
-
 /// What a thread is called (title_of over a summary).
 export function chatTitle(t: ThreadSummary, channelName: string | null): string {
   return titleOf(t.thread, t.firstText, channelName);
 }
 
-/// What a thread is called: the name people gave it, else the one its agent gave it, else the first line a person
-/// wrote in it (Slack mentions left out, spaces collapsed), else its Slack channel (`#name`, 私信 for a direct message).
+/// What a thread is called: the name people gave it, else the one its agent gave it. A chat of still.fail's own is a
+/// new chat (新对话) until it has one, the same all along, not named by what is said in it as that comes in. A Slack
+/// or Feishu thread is called by the first line a person wrote in it (Slack mentions left out, spaces collapsed), else
+/// by its channel (`#name`, 私信 for a direct message).
 export function titleOf(thread: ThreadRow, firstText: string | null, channelName: string | null): string {
   const title = given(thread);
   if (title !== null) return title;
+  if (thread.surface === STILLFAIL_SURFACE) return untitled();
   const text = withoutMentions(firstText ?? "");
   const first = text.split("\n").map((line) => splitWhitespace(line).join(" ")).find((l) => l !== "");
   if (first !== undefined) return first;
   const name = channelName === null ? "" : trim(channelName);
   if (name !== "") return `#${name}`;
-  if (thread.surface !== STILLFAIL_SURFACE && thread.channel.startsWith("D")) return tr("station.chat.directMessage");
-  return noWords();
+  if (thread.channel.startsWith("D")) return tr("station.chat.directMessage");
+  return untitled();
 }
 
 /// `<@U…>` mentions taken out.
@@ -346,20 +344,53 @@ function needView(api: Api, thread: number, agents: Json[], dismissed: Set<strin
 
 // ---- the sidebar ----
 
+/// What a change of some sessions and threads can touch of a sidebar (`chats`), and what reading it takes: `rows`, the
+/// ids of the items it can change (an item's id is its first agent's key: the sessions changed, and the agents of the
+/// threads changed or theirs); `sessions` and `threads`, what those items are made of (their chats' agents, and the
+/// threads those take part in, the Slack ones they came from among them).
+export type Scope = { rows: Set<string>; sessions: Set<string>; threads: number[] };
+
+export function scopeOf(s: Store, sessions: string[], threads: number[]): Scope {
+  const members = (ids: Iterable<number>) => {
+    const out = new Set<string>();
+    for (const id of ids) for (const m of store.threadSessions(s, id)) out.add(m.session);
+    return out;
+  };
+  const touched = new Set([...threads, ...store.threadsOfSessions(s, sessions)]);
+  const rows = new Set([...sessions, ...members(touched)]);
+  const theirs = store.threadsOfSessions(s, [...rows]);
+  const agents = new Set([...rows, ...members(theirs)]);
+  return { rows, sessions: agents, threads: [...new Set([...touched, ...theirs, ...store.threadsOfSessions(s, [...agents])])] };
+}
+
+/// The sidebar items of `viewer` a change of `sessions` and `threads` can touch (`scopeOf`), as the whole sidebar has
+/// them, and the ids of those that can be touched (one not among the items now is gone from the sidebar).
+export function chatRows(station: Store, viewer: Viewer, sessions: string[], threads: number[]): Json {
+  const scope = scopeOf(apiOf(station).store, sessions, threads);
+  return { rows: chats(station, viewer, false, scope), scope: [...scope.rows] };
+}
+
 /// The viewer's sidebar: one kind of item, an agent (a shown session) merged with its internal chat. An agent in an
 /// internal chat is that chat's item; one with none yet is an item without a chat. A Slack thread is no item: it lends
 /// its agent's item a title (while the chat has no words of its own), the connect and the origin. `archived`: the
 /// archive's items instead, each with `archived: {at, by, alone}`. Each says when the viewer pinned it (`pinned`).
-export function chats(station: Store, viewer: Viewer, archived: boolean): Json[] {
+///
+/// `scope` (`scopeOf`): only the items whose ids it names (what a change of some sessions and threads can touch), read
+/// from what they are made of alone, each as the whole list has it.
+export function chats(station: Store, viewer: Viewer, archived: boolean, scope: Scope | null = null): Json[] {
   useNames(station);
   const api = apiOf(station);
   const s = api.store;
   const mine = isMine(api, viewer);
-  const stats = store.sessionStats(s, null);
-  // Only the chats of the viewer's workspace (docs/multi-workspace.md).
-  const sessions = store.listSessions(s).filter((x) => sees(viewer, x.ws));
+  // Only the chats of the viewer's workspace (docs/multi-workspace.md). For some items alone, the sessions they are made
+  // of alone: each change read every session the station ever had.
+  const sessions = (
+    scope === null
+      ? store.listSessions(s)
+      : [...scope.sessions].flatMap((key) => store.getSession(s, key) ?? []).sort((a, b) => b.lastActiveAt - a.lastActiveAt)
+  ).filter((x) => sees(viewer, x.ws));
   const shown = new Map(sessions.filter((x) => (x.archivedAt !== null) === archived).map((x) => [x.key, x]));
-  const order = sessions.filter((x) => (x.archivedAt !== null) === archived).map((x) => x.key);
+  const order = sessions.filter((x) => (x.archivedAt !== null) === archived && (scope === null || scope.rows.has(x.key))).map((x) => x.key);
   // In the archive, a chat of its own shows its agents whatever they are doing elsewhere.
   const all = new Map(sessions.map((x) => [x.key, x]));
   const listed = (t: ThreadSummary) => (t.thread.hiddenAt !== null) === archived;
@@ -380,7 +411,10 @@ export function chats(station: Store, viewer: Viewer, archived: boolean): Json[]
     if (watch !== undefined) v.watch = watch;
     return v;
   };
-  const threads = store.listThreads(s, viewer.email, null, null).filter((t) => t.sessions.some((m) => all.has(m.session)));
+  // The sidebar's own threads alone; the archive's, all of them.
+  const of = scope !== null ? scope.threads : archived ? null : store.threadsOfShown(s);
+  const threads = store.listThreads(s, viewer.email, null, of).filter((t) => t.sessions.some((m) => all.has(m.session)));
+  const stats = store.sessionStats(s, of === null ? null : [...new Set([...(scope?.sessions ?? shown.keys()), ...threads.flatMap((t) => t.sessions.map((m) => m.session))])]);
   // Per agent: the Slack thread it came from (the latest one it is in), and whether it has an internal chat.
   const origins = new Map<string, ThreadSummary>();
   const chatted = new Set<string>();
@@ -400,7 +434,7 @@ export function chats(station: Store, viewer: Viewer, archived: boolean): Json[]
   // The cards the viewer answered lately, by chat.
   const answered = new Map<number, Json[]>();
   if (!archived) {
-    for (const a of store.answersSince(s, store.nowMs() - ANSWERED_WITHIN)) {
+    for (const a of store.answersSince(s, store.nowMs() - ANSWERED_WITHIN, scope === null ? null : scope.threads)) {
       if (!mine(creator(a.by))) continue;
       const list = answered.get(a.question.thread) ?? [];
       list.push(answeredView(a));
@@ -417,7 +451,8 @@ export function chats(station: Store, viewer: Viewer, archived: boolean): Json[]
     const lastView = t.lastMessage === null ? null : messageView(t.lastMessage, names);
     const starters = agents.map((a) => creator(all.get(a.key)?.createdBy ?? null));
     const key = agents[0].key;
-    const title = from !== null && origin_ !== null && !hasWords(t) ? chatTitle(from, origin_.channelName) : chatTitle(t, null);
+    // with no name of its own, the Slack thread its agent came from names it
+    const title = from !== null && origin_ !== null && given(t.thread) === null ? chatTitle(from, origin_.channelName) : chatTitle(t, null);
     let last: Json = null;
     if (lastView !== null) {
       const text0 = trim(typeof lastView.text === "string" ? lastView.text : "");
@@ -488,7 +523,7 @@ export function chats(station: Store, viewer: Viewer, archived: boolean): Json[]
     const from = origins.get(key) ?? null;
     const origin_ = from === null ? null : origin(from);
     const own = x.title === null ? "" : trim(x.title);
-    const title = own !== "" ? own : from !== null && origin_ !== null ? chatTitle(from, origin_.channelName) : noWords();
+    const title = own !== "" ? own : from !== null && origin_ !== null ? chatTitle(from, origin_.channelName) : untitled();
     const starter = creator(x.createdBy);
     const row: Json = {
       id: key, session: key, thread: null,
@@ -517,7 +552,7 @@ export function chats(station: Store, viewer: Viewer, archived: boolean): Json[]
     const shared = typeof row.id === "string" ? shares.get(row.id) : undefined;
     if (shared) row.xshare = { to: shared.to.map((t) => t.workspace), write: shared.write };
   }
-  return rows;
+  return scope === null ? rows : rows.filter((row) => scope.rows.has(String(row.id)));
 }
 
 

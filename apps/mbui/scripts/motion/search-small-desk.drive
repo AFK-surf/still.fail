@@ -1,0 +1,12 @@
+# ⌘K in a phone-wide desktop window (Small), over a chat: the search's page, words typed, the keys choosing down.
+timeout 20000
+until 整理发布清单
+wait 600
+key cmd+k
+wait 800
+type 签名
+wait 1200
+key down
+wait 400
+key down
+wait 800

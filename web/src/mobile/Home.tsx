@@ -1,10 +1,11 @@
 // Home is the `chats` view as the Android app lists it (apps/android/…/screens/Home.kt): one kind of item, newest first
 // and grouped by day. A fixed head (settings · workspace · the filter · stations) and the new-chat button floating
 // at the bottom. The lists (all, mine, watching) are followed at once, side by side: switching slides from one to another with nothing to wait for.
+import { useFrameDraw } from "./gesture.ts";
 import { StationMark } from "../StationMark.tsx";
-import { memo, useCallback, useEffect, useLayoutEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
+import { Activity, memo, useCallback, useMemo, useEffect, useLayoutEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
 import { motionValue } from "motion";
-import { animate, MOVE, play, type AnimationPlaybackControls } from "@stillfail/ui/motion.ts";
+import { animate, MOVE, motionMs, play, type AnimationPlaybackControls } from "@stillfail/ui/motion.ts";
 import { stationApi, useChats, useSearch, useStationCall, useStations, type ChatItem, type ChatsView, type TopicState } from "../api.ts";
 import type { FoundMessage, SearchItem } from "../core/shapes.ts";
 import { jumpTo } from "../jumpTo.ts";
@@ -23,7 +24,7 @@ import { useWorkspaceMarks } from "../lastChat.ts";
 import { RowAside } from "../RowPicture.tsx";
 import { FirstStation } from "./Stations.tsx";
 import { OpenJobs } from "./OpenJobs.tsx";
-import { fileOpen } from "../searchOpen.ts";
+import { filesPath } from "../searchOpen.ts";
 import { ChangelogNews } from "./Changelog.tsx";
 import * as barsCss from "./styles/bars.css.ts";
 import { openWorkspaces } from "./Workspaces.tsx";
@@ -35,6 +36,8 @@ import * as pagesCss from "./styles/pages.css.ts";
 import * as partsCss from "./styles/parts.css.ts";
 import * as homeCss from "./styles/home.css.ts";
 import { Tip } from "../ui.tsx";
+import { useVirtualList, useVirtualModel } from "../virtual/list.tsx";
+import type { Item } from "../virtual/model.ts";
 import { useDoing, useDoingFailed } from "../doing.ts";
 import { t } from "../i18n.ts";
 
@@ -45,6 +48,19 @@ export function Home() {
   const mine = useChats(scope, true);
   const watching = useChats(scope, false, true);
   const [filter] = useChatFilter();
+  // Keep the departing pane alive through its slide; at rest only the chosen pane does UI work.
+  const [leaving, setLeaving] = useState<ChatFilter[]>([]);
+  const previous = useRef(filter);
+  useLayoutEffect(() => {
+    // Effects resume when Home is uncovered too: a transition interrupted by another page is over.
+    if (previous.current === filter) { setLeaving((was) => was.length ? [] : was); return; }
+    const from = previous.current;
+    setLeaving((was) => was.includes(from) ? was : [...was, from]);
+    previous.current = filter;
+    const timer = setTimeout(() => setLeaving([]), motionMs(240));
+    return () => clearTimeout(timer);
+  }, [filter]);
+  const awake = (pane: ChatFilter) => filter === pane || leaving.includes(pane) || previous.current === pane;
   const invited = useWorkspaces().value?.some((a) => a.invitations.length > 0) ?? false;
   // The other workspaces have something waiting: its dot by the name, before an invitation's.
   const marks = useWorkspaceMarks(scope);
@@ -63,9 +79,9 @@ export function Home() {
         <div className={css.mHomePanes} {...pull.handlers}><div className={css.mHomePane} style={{ display: "flex", flexDirection: "column" }}><FirstStation /></div></div>
       ) : (
         <div className={css.mHomePanes} data-filter={filter} {...pull.handlers}>
-          <ChatPane chats={all} filter="all" onSearch={search} />
-          <ChatPane chats={mine} filter="mine" onSearch={search} />
-          <ChatPane chats={watching} filter="watching" onSearch={search} />
+          <div className={css.mHomeSlide}><Activity mode={awake("all") ? "visible" : "hidden"}><ChatPane chats={all} filter="all" onSearch={search} /></Activity></div>
+          <div className={css.mHomeSlide}><Activity mode={awake("mine") ? "visible" : "hidden"}><ChatPane chats={mine} filter="mine" onSearch={search} /></Activity></div>
+          <div className={css.mHomeSlide}><Activity mode={awake("watching") ? "visible" : "hidden"}><ChatPane chats={watching} filter="watching" onSearch={search} /></Activity></div>
         </div>
       )}
       <div ref={pull.mark} className={`${css.mPull} ${pagesCss.mFloating}`} aria-hidden="true"><Refresh size={18} /></div>
@@ -220,22 +236,24 @@ function SearchPage({ from, onLeave, onClose }: { from: DOMRect; onLeave: () => 
   );
 }
 
-/** Where something a search found opens on the phone: its chat (a service), a station's page, the workspace's members. */
+/** Where something a search found opens on the phone (`SearchItem.open`, the core's): its chat (a service's page over
+ *  it), a station's page, the workspace's members, a place in a station's files. */
 function openFound(app: ReturnType<typeof useApp>, item: SearchItem): void {
-  const at = item.station.indexOf("/");
-  const id = encodeURIComponent(at < 0 ? item.station : item.station.slice(at + 1));
-  const chat = item.chat ? `${stationBase(item.station)}/chats/${encodeURIComponent(item.chat)}` : null;
-  switch (item.kind) {
-    case "job":
-      if (chat && item.job && item.port != null) return app.open(`${chat}/services/${encodeURIComponent(item.job)}`);
+  const open = item.open;
+  if (!open) return;
+  const at = open.station.indexOf("/");
+  const id = encodeURIComponent(at < 0 ? open.station : open.station.slice(at + 1));
+  const chat = open.chat ? `${stationBase(open.station)}/chats/${encodeURIComponent(open.chat)}` : null;
+  switch (open.to) {
+    case "service":
+      if (chat && open.job) return app.open(`${chat}/services/${encodeURIComponent(open.job)}`);
       break;
     case "station":
       return app.push(app.at(`/s/${id}/overview`));
-    case "member":
+    case "members":
       return app.push(app.at("/settings/members"));
-    case "file":
-      if (item.path) return app.push(fileOpen(app.at(`/s/${id}`), item));
-      break;
+    case "files":
+      return app.push(filesPath(app.at(`/s/${id}`), open));
   }
   if (chat) app.open(chat);
 }
@@ -351,29 +369,43 @@ const ChatPane = memo(function ChatPane({ chats, filter, onSearch }: { chats: To
   const view = chats.value;
   const scope = useApp().entry.id;
   const lead = view?.leading ?? "agents";
+  const pane = useRef<HTMLDivElement>(null);
+  const made = useVirtualModel(`home:${scope}:${filter}`, 0, false);
+  // Navigation starts at its head, unlike a conversation which follows its newest message.
+  const opened = useRef(false);
+  if (!opened.current) { made.model.goto("intro", "start"); opened.current = true; }
+  const content = useMemo(() => {
+    const items: Item[] = [{ key: "intro", estimate: 100 }];
+    const drawn = new Map<string, ReactNode>();
+    for (const day of view?.days ?? []) {
+      const head = `day:${day.daysAgo}`;
+      items.push({ key: head, estimate: 42 });
+      drawn.set(head, <SectionHeader title={day.label} />);
+      for (const item of day.items) {
+        const key = `${item.station}/${item.id}`;
+        // An archiving row folds to zero before the topic removes it: measure that motion.
+        items.push({ key, estimate: 66, ...(!item.archivable ? { exact: 66 } : {}) });
+        drawn.set(key, <ChatRow item={item} lead={lead} />);
+      }
+    }
+    return { items, drawn };
+  }, [view?.days, lead]);
+  const virtual = useVirtualList(pane, made, content.items, { cover: (lead) => lead, deferResize: true });
+  const intro = <>
+    {view && !view.note?.empty && <SearchField onOpen={onSearch} />}
+    <ChangelogNews />
+    {!view ? <Waiting text={t("web-mobile.home.reading")} error={chats.error?.message} /> : <>
+      {(view.note?.reading || !!view.note?.failing.length) && <Waiting note={view.note} text={t("web-mobile.home.reading")} count={view.note.reading ? 7 : 4} />}
+      {view.note?.empty && <Empty view={view} filter={filter} />}
+      <OpenJobs scope={scope} />
+    </>}
+  </>;
   return (
-    <div className={css.mHomePane}>
-      {/* The search, at the list's top: there once the list is scrolled to it. */}
-      {view && !view.note?.empty && <SearchField onOpen={onSearch} />}
-      {/* What the last update brought (./Changelog.tsx), until it is seen: even while the list is being read. */}
-      <ChangelogNews />
-      {/* Not even the stations known yet: the rows to come, and what is wrong if the list cannot be read (@stillfail/ui waiting.tsx). */}
-      {!view ? <Waiting text={t("web-mobile.home.reading")} error={chats.error?.message} /> : (
-        <>
-          {/* A station's link coming back is said on its rows; only with no rows to show does the list say it (the core's
-              `note`): what it waits on over the rows to come, or the stations it cannot read over faded ones. */}
-          {(view.note?.reading || !!view.note?.failing.length) && <Waiting note={view.note} text={t("web-mobile.home.reading")} count={view.note.reading ? 7 : 4} />}
-          {view.note?.empty && <Empty view={view} filter={filter} />}
-          {/* What is left up a long while on the stations (./OpenJobs.tsx): nothing while there is none. */}
-          <OpenJobs scope={scope} />
-          {view.days.map((day) => (
-            <section key={day.daysAgo}>
-              <SectionHeader title={day.label} />
-              {day.items.map((item) => <ChatRow key={`${item.station}/${item.id}`} item={item} lead={lead} />)}
-            </section>
-          ))}
-        </>
-      )}
+    <div ref={pane} className={css.mHomePane} data-home-pane={filter}>
+      {virtual.layout.rows.flatMap((row, i) => [virtual.above(row, i === 0),
+        <div key={row.key} data-vk={row.key} className={css.mHomeItem}>{row.key === "intro" ? intro : content.drawn.get(row.key)}</div>,
+      ])}
+      {virtual.after()}
     </div>
   );
 });
@@ -418,6 +450,7 @@ const ChatRow = memo(function ChatRow({ item, lead }: { item: ChatItem; lead: "a
   const failed = changeFailed ?? pinFailed;
   const menu = useRowMenu(item, busy);
   const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  useEffect(() => () => clearTimeout(timer.current), []);
   const longPressed = useRef(false);
   const holding = useRef(false);
   const touched = useRef(false);
@@ -435,7 +468,7 @@ const ChatRow = memo(function ChatRow({ item, lead }: { item: ChatItem; lead: "a
   };
   const path = `${stationBase(item.station)}/chats/${encodeURIComponent(item.id)}`;
   const open = useOpenPage(path);
-  // Nothing left in it (the core's `archivable`): archived with one tap, at the row's end.
+  // Nothing left in it (the core's `archivable`): swiped left, archived.
   const archivable = !!item.archivable && !item.offline && !item.pending;
   const row = (
     <button type="button" className={css.mChatRow} data-held={held || undefined} data-offline={item.offline ? true : undefined}
@@ -468,7 +501,7 @@ const ChatRow = memo(function ChatRow({ item, lead }: { item: ChatItem; lead: "a
       <span className={css.mChatLine2}>
         {/* Where it stands, when the core has words for it (奏 · …, 要你帮忙：…, 做完了), instead. */}
         <span className={css.mChatLast}>{stateLine(item)
-          ? <span className={css.mLast}><WaitingText slot alert={item.unsent === true} text={stateLine(item)!} className={css.mLastText} /></span>
+          ? <span className={css.mLast}><WaitingText slot alert={item.unsent === true} text={stateLine(item)!} lead={item.stateLead} leadText={item.stateLeadText} rest={item.stateRest} className={css.mLastText} /></span>
           : item.last && <LastMessage item={item} />}</span>
         <RowAside item={item} lead={lead} size={18} className={css.mRowAside} />
         <span className={css.mChatTime} data-shown={held || undefined}>{item.time?.lastActiveAt?.ago ?? ""}</span>
@@ -487,10 +520,9 @@ const TAKES = 0.35;
 const FLING = 0.6;
 
 /**
- * A row whose chat has nothing left in it (the core's `archivable`): 归档 in words at its start, and swiped left it is
- * archived. The row follows the finger, 归档 showing in ink where it uncovers; let go far enough or flung, it goes off and
- * the list closes over it, else it springs back. Read on the frame, which does not move (going up or down first is the
- * list's scrolling).
+ * A row whose chat has nothing left in it (the core's `archivable`): swiped left, it is archived. The row follows the
+ * finger, 归档 showing in ink where it uncovers; let go far enough or flung, it goes off and the list closes over it, else
+ * it springs back. Read on the frame, which does not move (going up or down first is the list's scrolling).
  */
 function SwipeArchive({ item, busy, onDrag, children }: { item: ChatItem; busy: boolean; onDrag: () => void; children: ReactNode }) {
   const archive = useRowArchive(item);
@@ -498,6 +530,7 @@ function SwipeArchive({ item, busy, onDrag, children }: { item: ChatItem; busy: 
   const slide = useRef<HTMLDivElement>(null);
   const under = useRef<HTMLDivElement>(null);
   const [x] = useState(() => motionValue(0));
+  const fingers = useFrameDraw<number>(value => x.set(value));
   const run = useRef<AnimationPlaybackControls | null>(null);
   const go = useRef<{ id: number; x: number; y: number; dragging: boolean; last: { x: number; t: number }[] } | null>(null);
   const swiped = useRef(false);
@@ -531,6 +564,8 @@ function SwipeArchive({ item, busy, onDrag, children }: { item: ChatItem; busy: 
   const end = (e: ReactPointerEvent<HTMLDivElement>, cancelled: boolean) => {
     const g = go.current;
     if (!g || g.id !== e.pointerId) return;
+    if (!cancelled && g.dragging) fingers.set(Math.min(0, e.clientX - g.x));
+    fingers.flush();
     go.current = null;
     const el = frame.current;
     if (!g.dragging || !el) return;
@@ -546,6 +581,7 @@ function SwipeArchive({ item, busy, onDrag, children }: { item: ChatItem; busy: 
     <div ref={frame} className={css.mChatRowWrap}
       onPointerDown={(e) => {
         if (e.pointerType === "mouse") return;
+        fingers.cancel();
         swiped.current = false;
         go.current = { id: e.pointerId, x: e.clientX, y: e.clientY, dragging: false, last: [{ x: e.clientX, t: e.timeStamp }] };
       }}
@@ -567,13 +603,12 @@ function SwipeArchive({ item, busy, onDrag, children }: { item: ChatItem; busy: 
         // Its speed over the last 80 ms.
         while (g.last.length > 2 && e.timeStamp - g.last[0]!.t > 80) g.last.shift();
         // Only to the left: to the right it stays where it is.
-        x.set(dx < 0 ? dx : 0);
+        fingers.set(dx < 0 ? dx : 0);
       }}
       onPointerUp={(e) => end(e, false)} onPointerCancel={(e) => end(e, true)}
       onClickCapture={(e) => { if (swiped.current) { swiped.current = false; e.preventDefault(); e.stopPropagation(); } }}>
       <div ref={under} className={css.mSwipeUnder} aria-hidden="true"><span>{t("web-mobile.home.archive")}</span></div>
       <div ref={slide} className={css.mSwipeSlide}>
-        <button type="button" className={css.mRowArchive} aria-label={t("web-mobile.home.archiveTitle", { title: item.title })} disabled={busy} onClick={() => archive()}>{t("web-mobile.home.archive")}</button>
         {children}
       </div>
     </div>
@@ -588,14 +623,14 @@ function useRowArchive(item: ChatItem) {
   const app = useApp();
   const api = stationApi(useStationCall(item.station));
   const go = () => api.archive(item, true).then(() => app.toast(t("web-mobile.home.archived")));
-  return (leave?: () => Promise<void>, stay?: () => void) => {
+  return (leave: () => Promise<void>, stay: () => void) => {
     if (item.watch) {
-      stay?.();
+      stay();
       confirm(app, { title: t("web-mobile.home.archiveAsk", { title: item.title }), text: item.watch.ask, action: t("web-mobile.home.archive"), run: go });
       return;
     }
-    void (leave ? leave() : Promise.resolve()).then(go).catch((error: unknown) => {
-      stay?.();
+    void leave().then(go).catch((error: unknown) => {
+      stay();
       app.toast(t("web-mobile.home.archiveFailed", { error: error instanceof Error ? error.message : String(error) }));
     });
   };

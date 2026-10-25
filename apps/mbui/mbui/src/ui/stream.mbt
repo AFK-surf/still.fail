@@ -474,6 +474,7 @@ fn Ctx::paint_stream(self : Ctx, i : Int, n : Node, alpha : Double) -> Bool {
     }
   }
   self.push_inst(x, y, w, h, n.radius, 4.0, 0.0, 0.0, 0xFFFFFFFFL, alpha, u0, v0, du, dv)
+  self.corners_last(n)
   self.inst[(self.ninst - 1) * inst_size + 20] = (@hostapi.stream_tex_base + s.id).to_double()
   true
 }

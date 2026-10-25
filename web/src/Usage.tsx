@@ -54,7 +54,7 @@ export function Tiles({ view, pricesPath }: { view: UsageView; pricesPath?: stri
  * numbers while it is (the wide screen); a click or a tap picks it.
  */
 export function DaysChart({ view }: { view: UsageView }) {
-  const many = view.daily.length > 10;
+  const many = view.many ?? false;
   const several = view.series.length > 1;
   const [picked, setPicked] = useState<string | null>(null);
   const [pointed, setPointed] = useState<string | null>(null);
@@ -63,7 +63,7 @@ export function DaysChart({ view }: { view: UsageView }) {
     <div>
       {day && (
         <div className={css.dayHead}>
-          <span className={css.dayName}>{day.today ? t("web-main.usage.today") : day.label}</span>
+          <span className={css.dayName}>{day.name}</span>
           <span className={css.dayFigures}><span className={css.dayCost}>{day.costText}</span><span className={css.dayCalls}>{day.callsText}</span></span>
         </div>
       )}
@@ -81,17 +81,16 @@ export function DaysChart({ view }: { view: UsageView }) {
         </div>
       </div>
       <div className={css.labels} data-many={many || undefined}>
-        {view.daily.map((d, i) => (
+        {view.daily.map((d) => (
           <span key={d.day} className={css.label} data-on={d.day === day?.day || undefined}>
-            {!many || d.today || (view.daily.length - 1 - i) % 7 === 0 ? (d.today ? t("web-main.usage.today") : d.label) : ""}
+            {d.tick}
           </span>
         ))}
       </div>
       {several && day && (
         <div className={css.dayRows}>
           {view.series.map((s, i) => {
-            const part = day.parts[i] ?? 0;
-            const share = day.cost > 0 ? Math.min(1, Math.max(part > 0 ? 0.01 : 0, part / day.cost)) : 0;
+            const share = day.shares?.[i] ?? 0;
             return (
               <div key={s.key} className={css.dayRow}>
                 <span className={`${css.dayDot} ${seriesClass(view.series, i)}`} />
@@ -201,12 +200,12 @@ export function PriceTables({ view }: { view: UsageView }) {
     {tables.map((table, i) => <section className={css.card} key={i}>
       <h2 className={css.priceStation}>{table.station}</h2>
       <p className={css.priceNote}>{table.note}</p>
-      {table.rows.length === 0 ? <p className={css.priceNote}>{t("web-main.usage.noModelUsage")}</p> : <div className={conversationCss.markdown} style={{ paddingTop: 8 }}><div className={proseCss.tableScroll} style={{ width: "100%" }}>
+      {table.rows.length === 0 ? <p className={css.priceNote}>{t("web-main.usage.noModelUsage")}</p> : <div className={conversationCss.markdown} style={{ paddingTop: 8 }}><div className={proseCss.tableScroll} style={{ width: "100%" }}><div className={proseCss.tableFrame} style={{ minWidth: "100%" }}>
         <table style={{ width: "100%" }}>
           <thead><tr><th scope="col">{t("web-main.model.models")}</th>{table.rows[0]?.rates.map((r) => <th scope="col" key={r.label}>{r.label}</th>)}</tr></thead>
           <tbody>{table.rows.map((row) => <tr key={row.model}><td>{row.model}</td>{row.rates.map((rate) => <td key={rate.label}>{rate.value}</td>)}</tr>)}</tbody>
         </table>
-      </div></div>}
+      </div></div></div>}
     </section>)}
   </div>;
 }

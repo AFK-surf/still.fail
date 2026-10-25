@@ -6,11 +6,12 @@ import { STILL, stillLoop } from "@stillfail/ui/styles/still.ts";
 export const mDot = style({
   width: "7px", height: "7px", borderRadius: "50%", background: "var(--m-accent)", flex: "none",
 });
-export const mHome = style({ position: "absolute", inset: "0" });
+// Home is navigation, not document text: iOS can expand a hold on an unselectable row to its selectable ancestor.
+export const mHome = style({ position: "absolute", inset: "0", userSelect: "none", WebkitUserSelect: "none", WebkitTouchCallout: "none" });
+globalStyle(`${mHome} input, ${mHome} textarea`, { userSelect: "text", WebkitUserSelect: "text", WebkitTouchCallout: "default" });
 export const mHomePanes = style({ position: "absolute", inset: "0", overflow: "hidden" });
-export const mHomePane = style({
-  position: "absolute", inset: "0", overflowY: "auto", overscrollBehavior: "contain",
-  padding: "calc(var(--m-top) + 58px) 0 calc(var(--m-foot) + 126px)", transition: "transform 240ms var(--m-standard)",
+export const mHomeSlide = style({
+  position: "absolute", inset: "0", transition: "transform 240ms var(--m-standard)",
   selectors: {
     "&:nth-child(2)": { transform: "translateX(100%)" },
     "&:nth-child(3)": { transform: "translateX(200%)" },
@@ -22,6 +23,14 @@ export const mHomePane = style({
     [`${mHomePanes}[data-filter=watching] &:nth-child(3)`]: { transform: "none" },
   },
 });
+export const mHomePane = style({
+  position: "absolute", inset: "0", display: "flex", flexDirection: "column", overflowY: "auto", overscrollBehavior: "contain",
+  // Pull-to-reload moves every Home pane, including FirstStation before there is a virtual list.
+  overscrollBehaviorY: "none",
+  overflowAnchor: "none", vars: { "--list-gap": "0px" },
+  padding: "calc(var(--m-top) + 58px) 0 calc(var(--m-foot) + 126px)",
+});
+export const mHomeItem = style({ flex: "none", display: "flow-root" });
 /**
  * A list pulled down from its top (./pull.ts): a frosted disc in the middle of the gap the list leaves under the bar,
  * its arrow turning as it opens, in the accent once letting go reloads, spinning as it does.
@@ -164,25 +173,14 @@ globalStyle(`${mRecentRows} ${mChatRow}[data-open] ${mChatTitle}`, { color: "var
 globalStyle(`${mNewChat}[data-small]`, { width: "32px", height: "32px" });
 
 /**
- * A row with 归档 at its start (the core's `archivable`, Home.tsx SwipeArchive): a frame that stays put, reading the swipe;
- * in it the row and its 归档 sliding together, and what they uncover on the right.
+ * A row swiped left to archive it (the core's `archivable`, Home.tsx SwipeArchive): a frame that stays put, reading the
+ * swipe; in it the row sliding, and what it uncovers on the right.
  */
 export const mChatRowWrap = style({
   position: "relative", overflowX: "clip", touchAction: "pan-y",
   selectors: { "&[data-leaving]": { overflow: "hidden", pointerEvents: "none" } },
 });
 export const mSwipeSlide = style({ position: "relative" });
-globalStyle(`${mChatRow}[data-archivable]`, { paddingLeft: "72px" });
-// Archive is wider than 归档.
-globalStyle(`:root[lang="en"] ${mChatRow}[data-archivable]`, { paddingLeft: "96px" });
-/** 归档 in words: a small chip, centred on the row's height, at its start. */
-export const mRowArchive = style({
-  position: "absolute", top: "0", bottom: "0", left: "14px", margin: "auto 0", height: "28px", padding: "0 12px",
-  border: "0", borderRadius: "14px", background: "var(--m-chip)", cursor: "pointer", WebkitTapHighlightColor: "transparent",
-  selectors: { "&:disabled": { opacity: ".4" }, "&:active:not(:disabled)": { filter: "brightness(.94)" } },
-});
-// The phone's buttons take their page's font (root.css.ts): its size and colour, as strong as that.
-globalStyle(`${mChatRowWrap} button${mRowArchive}`, { color: "var(--m-ink)", fontSize: vars.textMeta, lineHeight: "28px", fontWeight: "500" });
 /** What a row swiped left uncovers, as far as it has gone (slid in from the right, Home.tsx): 归档, in ink. */
 export const mSwipeUnder = style({
   position: "absolute", top: "0", bottom: "0", left: "0", right: "0", transform: "translateX(100%)", display: "flex", alignItems: "center",

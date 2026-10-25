@@ -69,8 +69,10 @@ pub fn Tester::census(self : Tester) -> Census {
         space[census_num(v)] = true
       }
     }
-    if n.radius > 0.0 {
-      radius[census_num(n.radius)] = true
+    for k in 0..<4 {
+      if n.radius_at(k) > 0.0 {
+        radius[census_num(n.radius_at(k))] = true
+      }
     }
     if (n.bg & 0xFFL) != 0L {
       color[census_hex(n.bg)] = true

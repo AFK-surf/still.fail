@@ -83,48 +83,36 @@ fn invitation_token(words : String) -> String? {
 ///|
 /// The sheet's body: in 20 from its sides, its parts 10 apart (InviteLinkSheet's Column).
 // kept across runs: a value (no field of it changes)
-let invite_body : @ui.Style = @ui.style(w=Full, h=Full, px=S5, gap=S2_5, clip=true)
+let invite_body : @ui.Style = @ui.css("w=Full h=Full px=S5 gap=S2_5 clip")
 
 ///|
 /// Its buttons at the end of a row, 8 apart, 6 over them and 24 under (InviteLinkSheet's Row).
 // kept across runs: a value (no field of it changes)
-let invite_buttons : @ui.Style = @ui.style(row=true, w=Full, pt=S1_5, pb=S6, gap=S2, justify=JEnd)
+let invite_buttons : @ui.Style = @ui.css("row w=Full pt=S1_5 pb=S6 gap=S2 justify=JEnd")
 
 ///|
 /// The field a link is pasted in (Controls.kt Field): the surface, a line round it, 12 round, 12 and 10 in.
 // kept across runs: a value (no field of it changes)
-let invite_field : @ui.Style = @ui.style(
-  w=Full,
-  px=S3,
-  py=S2_5,
-  radius=Xl,
-  bg=Card,
-  border=B1,
-  border_color=Line,
-)
+let invite_field : @ui.Style = @ui.css("w=Full px=S3 py=S2_5 radius=Xl bg=Card border=B1 border_color=Line")
 
 ///|
 /// What it says (14, muted), the account's label (13, semibold), why it failed (13, red).
 // kept across runs: a value (no field of it changes)
-let invite_lead : @ui.TextStyle = @ui.text_style(size=Base, color=Muted)
+let invite_lead : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let invite_label : @ui.TextStyle = @ui.text_style(size=Sm, weight=Semibold, color=Fg)
+let invite_label : @ui.TextStyle = @ui.text_style(size=Meta, weight=Semibold, color=Fg)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let invite_error : @ui.TextStyle = @ui.text_style(size=Sm, color=Danger)
+let invite_error : @ui.TextStyle = @ui.text_style(size=Meta, color=Danger)
 
 ///|
-/// A role in words (Accounts.kt ROLE_LABEL).
-fn role_words(role : String) -> String {
-  match role {
-    "owner" => "Owner"
-    "admin" => tr("android-misc.role.admin")
-    "member" => tr("android-misc.role.member")
-    r => r
-  }
+/// The invitation's sheet with no link yet: one to paste (Workspaces.kt openInviteLink): the landing's 用邀请链接加入.
+fn open_invite_link() -> Unit {
+  invite_reset()
+  raise_sheet(InviteLink)
 }
 
 ///|
@@ -168,7 +156,6 @@ fn invite_sheet(c : @ui.Ctx, src : Source) -> Unit {
     Some(tok) => invite.read.get(tok + "\u{1}" + sub)
     None => None
   }
-  @sf.sheet_grab(c)
   let buttons = fn(body : () -> Unit) {
     c.box(style=invite_buttons, body) |> ignore
   }
@@ -274,7 +261,7 @@ fn invite_sheet(c : @ui.Ctx, src : Source) -> Unit {
             } else {
               "android-misc.invite.invitedYouAs"
             },
-            [("inviter", inviter), ("role", role_words(text(Some(p), "role"))), ("email", email)],
+            [("inviter", inviter), ("role", @sfpages.role_words(text(Some(p), "role"))), ("email", email)],
           ),
         )
         if list.length() > 1 {
@@ -282,7 +269,7 @@ fn invite_sheet(c : @ui.Ctx, src : Source) -> Unit {
           c.box(style=@sf.full_width, fn() {
             for a in list {
               let s = text(Some(a), "sub")
-              if pick_row(c, "invite/as/" + s, text(Some(a), "email"), "", s == sub, None, "", Json::null()) {
+              if @sf.choice_row(c, "invite/as/" + s, s == sub, text(Some(a), "email")) {
                 invite.chosen = s
               }
             }
@@ -338,4 +325,16 @@ fn accept_invite(src : Source, token : String, sub : String, name : String) -> U
       Err(e) => invite.error = error_words(e)
     }
   })
+}
+
+///|
+/// The sheets and the menus over the pages closed, as a page opens from a link (AppState: sheet, menu null).
+fn close_overlays() -> Unit {
+  lower_sheet()
+  app.menu = false
+  match dui.sheet {
+    Some(s) => dui.leaving = Some(s)
+    None => ()
+  }
+  dui.sheet = None
 }

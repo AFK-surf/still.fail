@@ -52,31 +52,6 @@ fn decisions_capsule(c : @ui.Ctx, src : Source, w : Workspace, ground : Int64) -
 }
 
 ///|
-/// A decision's own key: its station, chat and post.
-fn decision_key(item : Json) -> String {
-  let v = Some(item)
-  seq_key(text(v, "station"), number(v, "thread"), number(v, "seq"))
-}
-
-///|
-/// The decisions as this device shows them (DecisionsLocal.shown): those answered or let go here gone, those set
-/// aside here last; what the core's list no longer has forgotten.
-fn shown_decisions(all : Array[Json]) -> Array[Json] {
-  let keys = all.map(decision_key)
-  dui.dgone.retain(fn(k) { keys.contains(k) })
-  dui.dlater.retain(fn(k) { keys.contains(k) })
-  let rest = all.filter(fn(i) { !dui.dgone.contains(decision_key(i)) })
-  let first = rest.filter(fn(i) { !dui.dlater.contains(decision_key(i)) })
-  for k in dui.dlater {
-    match rest.iter().find_first(fn(i) { decision_key(i) == k }) {
-      Some(i) => first.push(i)
-      None => ()
-    }
-  }
-  first
-}
-
-///|
 /// The page (DecisionsScreen): pushed, its bar's back to the chats; the deck, or none left, or what is being read.
 fn decisions_page(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
   let t = @sf.theme()
@@ -85,7 +60,9 @@ fn decisions_page(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
     Some(Object(_)) as v => v
     _ => None
   }
-  let shown = shown_decisions(items(view, "items"))
+  // as the core lists them: those answered, let go or decided here gone at once (back if that could not be done), those
+  // set aside last (client/core-ts decisions.ts)
+  let shown = items(view, "items")
   // the bar's 奏 at the stack's root: a place's top bar, room at its foot for the bar (slice 7's); else pushed
   let place = app.nav.depth() == 1
   c.box(w=Fill(1.0), h=Fill(1.0), bg=t.p.bg, fn() {
@@ -112,7 +89,7 @@ fn decisions_page(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
           deck_out(c, src, c.width, c.height)
           return
         }
-        deck(c, src, shown)
+        deck(c, src, shown, 0)
       })
       |> ignore
     })
@@ -124,7 +101,7 @@ fn decisions_page(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
 ///|
 /// What the page shows, 4 under its bar (Decisions.kt: Spacer(top), PlacePage.kt's `top` for a page pushed).
 // kept across runs: a value (no field of it changes)
-let decisions_body : @ui.Style = @ui.style(w=Full, h=Full, pt=S1)
+let decisions_body : @ui.Style = @ui.css("w=Full h=Full pt=S1")
 
 ///|
 /// Cards to come, breathing (Waiting.kt Waiting, WaitShape.Cards): what went wrong over them in red.
@@ -164,12 +141,12 @@ fn decisions_idle(c : @ui.Ctx, view : Json?, top : Double) -> Unit {
           @sf.drawable(c, if t.dark { "buddy_idle_dark" } else { "buddy_idle" }, 72.0) |> ignore
         }
         c.box(pt=8.0, fn() {
-          c.text(tr("android-misc.decisions.idle.title"), size=17.0, weight=600, color=t.p.text, wrap=false)
+          c.text(tr("android-misc.decisions.idle.title"), size=t.t.title, weight=600, color=t.p.text, wrap=false)
           |> ignore
         })
         |> ignore
         c.box(pt=4.0, fn() {
-          c.text(tr("android-misc.decisions.idle.note"), size=14.0, color=t.p.muted, wrap=false) |> ignore
+          c.text(tr("android-misc.decisions.idle.note"), size=t.t.meta, color=t.p.muted, wrap=false) |> ignore
         })
         |> ignore
         if today is Some(Object(_)) {
@@ -177,7 +154,7 @@ fn decisions_idle(c : @ui.Ctx, view : Json?, top : Double) -> Unit {
             let figure = fn(f : String, words : String) {
               c.box(align=ACenter, fn() {
                 c.text(f, size=20.0, weight=600, color=t.p.text, wrap=false) |> ignore
-                c.text(words, size=12.0, color=t.p.subtle, wrap=false) |> ignore
+                c.text(words, size=t.t.caption, color=t.p.subtle, wrap=false) |> ignore
               })
               |> ignore
             }
@@ -196,7 +173,7 @@ fn decisions_idle(c : @ui.Ctx, view : Json?, top : Double) -> Unit {
   ]
   let title = fn(words : String) {
     c.box(pl=10.0, pt=28.0, pb=4.0, fn() {
-      c.text(words, size=12.0, weight=500, color=t.p.subtle, wrap=false) |> ignore
+      c.text(words, size=t.t.caption, weight=500, color=t.p.subtle, wrap=false) |> ignore
     })
     |> ignore
   }
@@ -280,11 +257,11 @@ fn idle_row(c : @ui.Ctx, key : String, main : String, meta : String, at : String
       })
       |> ignore
       c.box(w=Fill(1.0), fn() {
-        c.text(main, size=15.0, weight=500, color=t.p.text, wrap=false) |> ignore
-        c.text(meta, size=13.0, color=t.p.subtle, wrap=false) |> ignore
+        c.text(main, size=t.t.ui, weight=500, color=t.p.text, wrap=false) |> ignore
+        c.text(meta, size=t.t.meta, color=t.p.subtle, wrap=false) |> ignore
       })
       |> ignore
-      c.text(at, size=12.0, color=t.p.subtle, wrap=false) |> ignore
+      c.text(at, size=t.t.caption, color=t.p.subtle, wrap=false) |> ignore
       // Decisions.kt IdleRow: clip(Smooth(10)).clickable
       @motion.ripple(c, id, 10.0)
     },
@@ -361,16 +338,16 @@ pub fn deck_rest() -> Double {
 }
 
 ///|
-/// `a` from 0 to 1 by `ms` on cubic-bezier(x1, y1, x2, y2), from now (said once: the framework draws it to its end).
-fn card_go(a : @motion.Anim, ms : Double, x1 : Double, y1 : Double, x2 : Double, y2 : Double) -> Unit {
+/// `a` from 0 to 1 by `ms` on `ease`, from now (said once: the framework draws it to its end).
+fn card_go(a : @motion.Anim, ms : Double, ease : @ui.Ease) -> Unit {
   a.snap(0.0)
-  a.animate(1.0, @motion.tween(ms, ease=Bezier(x1, y1, x2, y2)))
+  a.animate(1.0, @motion.tween(ms, ease~))
 }
 
 ///|
 /// The front one comes in.
 fn card_comes(c : @ui.Ctx) -> Unit {
-  card_go(card_arrive(c), card_arrive_ms, 0.2, 0.7, 0.2, 1.0)
+  card_go(card_arrive(c), card_arrive_ms, Out)
 }
 
 ///|
@@ -381,9 +358,9 @@ fn go_decision(c : @ui.Ctx, dir : Int, item : Json, after : () -> Unit) -> Unit 
   dui.out_dir = dir
   dui.out_from = dui.drag
   if dir == 2 {
-    card_go(card_out(c), card_up_ms, 0.55, 0.0, 0.85, 0.35)
+    card_go(card_out(c), card_up_ms, Bezier(0.55, 0.0, 0.85, 0.35))
   } else {
-    card_go(card_out(c), card_off_ms, 0.2, 0.0, 0.0, 1.0)
+    card_go(card_out(c), card_off_ms, Bezier(0.2, 0.0, 0.0, 1.0))
   }
   dui.drag = 0.0
   dui.going = 0
@@ -394,9 +371,9 @@ fn go_decision(c : @ui.Ctx, dir : Int, item : Json, after : () -> Unit) -> Unit 
 ///|
 /// The deck (Decisions.kt Deck): the decision in front, swiped where it rests (across first: the swipe; up or down
 /// first: the messages'); under it, as it moves, what letting it go that way does; the hint and where this one is.
-fn deck(c : @ui.Ctx, src : Source, shown : Array[Json]) -> Unit {
+fn deck(c : @ui.Ctx, src : Source, shown : Array[Json], at : Int) -> Unit {
   let t = @sf.theme()
-  let item = shown[0]
+  let item = shown[at]
   let key = decision_key(item)
   let n = shown.length()
   if dui.front != key {
@@ -418,18 +395,13 @@ fn deck(c : @ui.Ctx, src : Source, shown : Array[Json]) -> Unit {
   let width = dmax(fw, 1.0)
   let height = dmax(fh, 1.0)
   let vk = Some(item)
+  // (what could not be done: the core puts it back in its place)
   let say_failed = fn(what : String) {
-    fn(e : Json) {
-      dui.dgone.retain(fn(k) { k != key })
-      dui.dlater.retain(fn(k) { k != key })
-      toast_later(fill("android-misc.act.failed", [("what", what), ("error", error_words(e))]))
-    }
+    fn(e : Json) { toast_later(fill("android-misc.act.failed", [("what", what), ("error", error_words(e))])) }
   }
   let call = fn(name : String, what : String, extra : Map[String, Json]) {
     if src.read_only {
       toast_later(read_only_words)
-      dui.dgone.retain(fn(k) { k != key })
-      dui.dlater.retain(fn(k) { k != key })
       return
     }
     let p : Map[String, Json] = {
@@ -449,21 +421,13 @@ fn deck(c : @ui.Ctx, src : Source, shown : Array[Json]) -> Unit {
     })
   }
   let set_aside = fn() {
-    go_decision(c, -1, item, fn() {
-      dui.dlater.retain(fn(k) { k != key })
-      dui.dlater.push(key)
-      call("decision.defer", tr("android-misc.decisions.deferWhat"), {})
-    })
+    go_decision(c, -1, item, fn() { call("decision.defer", tr("android-misc.decisions.deferWhat"), {}) })
   }
   let dismiss = fn() {
-    go_decision(c, 1, item, fn() {
-      dui.dgone.push(key)
-      call("decision.dismiss", tr("android-misc.decisions.dismissWhat"), {})
-    })
+    go_decision(c, 1, item, fn() { call("decision.dismiss", tr("android-misc.decisions.dismissWhat"), {}) })
   }
   let answer = fn(o : Choice) {
     go_decision(c, 2, item, fn() {
-      dui.dgone.push(key)
       call("decision.answer", tr("android-misc.decisions.answerWhat"), { "option": Json::string(o.label) })
     })
   }
@@ -506,7 +470,7 @@ fn deck(c : @ui.Ctx, src : Source, shown : Array[Json]) -> Unit {
             // back where it rests
             dui.going = 3
             dui.going_from = at
-            card_go(card_back(c), card_back_ms, 0.2, 0.0, 0.0, 1.0)
+            card_go(card_back(c), card_back_ms, Bezier(0.2, 0.0, 0.0, 1.0))
           }
         }
       }
@@ -524,7 +488,8 @@ fn deck(c : @ui.Ctx, src : Source, shown : Array[Json]) -> Unit {
   // let go short: back where it rests
   if dui.going == 3 {
     let back = card_back(c)
-    if back.moving() {
+    // (till the end it declared as it set out)
+    if !back.over() {
       dui.drag = dui.going_from * (1.0 - back.get())
     } else {
       dui.going = 0
@@ -549,7 +514,7 @@ fn deck(c : @ui.Ctx, src : Source, shown : Array[Json]) -> Unit {
             fn() {
               c.text(
                 tr(if x > 0.0 { "android-misc.decisions.dismiss" } else { "android-misc.decisions.defer" }),
-                size=16.0,
+                size=t.t.title,
                 weight=600,
                 color=t.p.muted,
                 wrap=false,
@@ -584,10 +549,10 @@ fn deck(c : @ui.Ctx, src : Source, shown : Array[Json]) -> Unit {
     // the hint, and where this one is among them
     c.box(dir=Row, w=Fill(1.0), pl=16.0, pr=16.0, pt=8.0, pb=10.0, align=ACenter, fn() {
       c.box(w=Fill(1.0), fn() {
-        c.text(tr("android-misc.decisions.hint"), size=12.0, color=t.p.subtle, wrap=false) |> ignore
+        c.text(tr("android-misc.decisions.hint"), size=t.t.caption, color=t.p.subtle, wrap=false) |> ignore
       })
       |> ignore
-      c.text("1 / \{n}", size=12.0, color=t.p.subtle, wrap=false) |> ignore
+      c.text("\{at + 1} / \{n}", size=t.t.caption, color=t.p.subtle, wrap=false) |> ignore
     })
     |> ignore
   })
@@ -604,7 +569,8 @@ fn deck_out(c : @ui.Ctx, src : Source, width : Double, height : Double) -> Unit 
   }
   let t = @sf.theme()
   let a = card_out(c)
-  if !a.moving() {
+  // (gone at the end it declared as it set off)
+  if a.over() {
     dui.out = None
     return
   }
@@ -666,6 +632,18 @@ fn decision_face(
     }),
   )
   let here = { station, session, view }
+  // its messages as their chat draws them (sfpages' rows, as the desktop's 奏 page has them), out of its list: what
+  // they ask is answered at the card's foot
+  let rows_here : @sfpages.MessageHere = {
+    station,
+    session,
+    view,
+    go: None,
+    inline: c.width <= @sfpages.chat_narrow_w,
+    gutter: 0.0,
+    list: None,
+    core: None,
+  }
   let options = match choices_of(card, "options") {
     Some(o) if o.length() > 0 => o
     _ => choices_of(v, "options").unwrap_or([])
@@ -686,7 +664,7 @@ fn decision_face(
       align=ACenter,
       id=open,
       fn() {
-        c.box(fn() { c.text(text(v, "title"), size=13.0, color=t.p.muted, wrap=false) |> ignore })
+        c.box(fn() { c.text(text(v, "title"), size=t.t.meta, color=t.p.muted, wrap=false) |> ignore })
         |> ignore
         @sf.icon(c, "chevron-right", size=14.0, color=t.p.subtle) |> ignore
         // Decisions.kt: the row clickable
@@ -696,17 +674,19 @@ fn decision_face(
     |> ignore
     match opt_text(card, "assigneeText") {
       Some(a) =>
-        c.box(padx=16.0, pady=4.0, fn() { c.text(a, size=13.0, color=t.p.muted) |> ignore }) |> ignore
+        c.box(padx=16.0, pady=4.0, fn() { c.text(a, size=t.t.meta, color=t.p.muted) |> ignore }) |> ignore
       None => ()
     }
     c.box(w=Fill(1.0), h=Fill(1.0), fn() {
       let rows : Array[() -> Unit] = []
       for m in view.messages {
-        rows.push(fn() { said(c, src, here, m, [], decide=false) })
+        rows.push(fn() { @sfpages.message_row(c, src, rows_here, m) })
       }
       rows.push(fn() {
         match kind {
           // an agent's request for a vault item: approved here (Vault.kt), the 奏 page's the viewer's
+          // (one that says what it is: answered on its card, in the post above)
+          "options" if text(card, "vault") != "" && field(card, "vaultAsk") is Some(_) => ()
           "options" if text(card, "vault") != "" => {
             let ws = match station.find("/") {
               Some(i) => station.view(end_offset=i).to_string()
@@ -729,13 +709,13 @@ fn decision_face(
           }
           _ =>
             c.box(w=Fill(1.0), gap=8.0, fn() {
-              c.text(tr("android-misc.decisions.replyInChat"), size=13.0, color=t.p.muted) |> ignore
+              c.text(tr("android-misc.decisions.replyInChat"), size=t.t.meta, color=t.p.muted) |> ignore
               let go = c.id(pre + "go-reply")
               if live && c.clicked(go) {
                 open_decision_chat(v)
               }
               c.box(w=Fill(1.0), pady=12.0, radius=12.0, bg=t.p.text, align=ACenter, id=go, fn() {
-                c.text(tr("android-misc.decisions.goReply"), size=15.0, weight=500, color=t.p.bg, wrap=false)
+                c.text(tr("android-misc.decisions.goReply"), size=t.t.ui, weight=500, color=t.p.bg, wrap=false)
                 |> ignore
               })
               |> ignore
@@ -745,11 +725,21 @@ fn decision_face(
       })
       rows.push(fn() { c.box(h=Px(if replies { composer_room + 10.0 } else { 10.0 }), fn() {  }) |> ignore })
       c.list(pre + "messages/" + key, rows.length(), 90.0, fn(i) {
+        // (20 apart, as in the chat: the viewer's message sent soon after the one before it, joined_gap)
+        let joined = i < view.messages.length() && view.messages[i].joined
         c.box(
           w=Fill(1.0),
           pl=14.0,
           pr=14.0,
-          pt=if i == 0 { 10.0 } else if i == rows.length() - 1 { 0.0 } else { 20.0 },
+          pt=if i == 0 {
+            10.0
+          } else if i == rows.length() - 1 {
+            0.0
+          } else if joined {
+            joined_gap
+          } else {
+            gap
+          },
           fn() { (rows[i])() },
         )
         |> ignore
@@ -783,6 +773,7 @@ fn decision_composer(c : @ui.Ctx, src : Source, item : Json, key : String, place
     placeholder: if placeholder != "" { placeholder } else { tr("android-misc.decisions.placeholder") },
     send: fn(d) { decision_reply(c, src, item, key, d) },
     tools: None,
+    held: false,
   }))
 }
 
@@ -813,7 +804,7 @@ fn decision_reply(c : @ui.Ctx, src : Source, item : Json, key : String, d : Draf
   sent_draft(d, taken_files.length())
   save_draft(src, d)
   c.blur()
-  go_decision(c, 2, item, fn() { dui.dgone.push(key) })
+  go_decision(c, 2, item, fn() {  })
   let reply : Map[String, Json] = {
     "station": Json::string(text(v, "station")),
     "thread": Json::number(number(v, "thread")),
@@ -832,7 +823,6 @@ fn decision_reply(c : @ui.Ctx, src : Source, item : Json, key : String, d : Draf
     fn(res) {
       match res {
         Err(e) => {
-          dui.dgone.retain(fn(k) { k != key })
           if text(Some(e), "code") == "invalid_params" && draft_empty(d) {
             d.text = taken_text
             d.put_text = Some(taken_text)

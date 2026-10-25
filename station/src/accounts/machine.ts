@@ -163,7 +163,16 @@ async function codexLogin(env: Env, lang: Lang): Promise<MachineLogin> {
 /// The claims of a Codex home's id token (auth.json), when it has one.
 export function codexClaims(home: string): Json | undefined {
   try {
-    const auth = JSON.parse(readFileSync(join(home, "auth.json"), "utf8"));
+    return codexClaimsIn(readFileSync(join(home, "auth.json"), "utf8"));
+  } catch {
+    return undefined;
+  }
+}
+
+/// The claims of the id token an auth.json's text has (`codexClaims`).
+export function codexClaimsIn(text: string): Json | undefined {
+  try {
+    const auth = JSON.parse(text);
     const payload = String(auth?.tokens?.id_token ?? "").split(".")[1];
     if (!payload) return undefined;
     return JSON.parse(Buffer.from(payload.replace(/=+$/, ""), "base64url").toString("utf8"));

@@ -73,50 +73,9 @@ let closes : Double = 16.0
 let bar_room : Double = 56.0 + 22.0 + 16.0 + 32.0
 
 ///|
-/// Every place a bar can hold (the core's BAR_PLACES); the chats' family, whose pages have 令 in the notch.
-// kept across runs: a table, never written
-let places : Array[String] = [
-  "chats", "decisions", "files", "stations", "profiles", "connects", "usage", "archive",
-]
-
-///|
+/// The chats' family of places, whose pages have 令 in the notch.
 // kept across runs: a table, never written
 let chat_family : Array[String] = ["chats", "decisions", "archive"]
-
-///|
-/// The bars before the core has said (BARS_DEFAULT).
-fn default_bars() -> (Array[Array[String]], Int) {
-  ([["chats", "files", "profiles", "stations"], ["decisions", "usage", "connects", "archive"]], 0)
-}
-
-///|
-/// The bars whole, as the core keeps them (prefs.ts barsOf): each one to four known places, none twice; empty ones
-/// dropped; none left, the default ones; the one in view one of them.
-fn bars_of(v : Json?) -> (Array[Array[String]], Int) {
-  let sets : Array[Array[String]] = []
-  for s in items(v, "sets") {
-    let kept : Array[String] = []
-    match s {
-      Array(a) =>
-        for p in a {
-          match p {
-            String(k) if places.contains(k) && !kept.contains(k) && kept.length() < 4 =>
-              kept.push(k)
-            _ => ()
-          }
-        }
-      _ => ()
-    }
-    if kept.length() > 0 {
-      sets.push(kept)
-    }
-  }
-  if sets.length() == 0 {
-    return default_bars()
-  }
-  let cur = number(v, "current").to_int()
-  (sets, if cur < 0 { 0 } else if cur >= sets.length() { sets.length() - 1 } else { cur })
-}
 
 ///|
 /// The places' middles on a bar `w` wide holding `n` with the notch `k` open (Bar.kt barCentres).
@@ -543,13 +502,8 @@ fn Glide::anim(self : Glide) -> @motion.Anim {
 }
 
 ///|
-/// Sent to `target` over `ms` on `curve` (0 CSS's ease, 1 Arrive, 2 linear); nothing new when it is going there.
-fn Glide::go(self : Glide, target : Double, ms : Double, curve : Int) -> Unit {
-  let ease : @motion.Ease = match curve {
-    0 => Css
-    1 => Arrive
-    _ => Linear
-  }
+/// Sent to `target` over `ms` on `ease`; nothing new when it is going there.
+fn Glide::go(self : Glide, target : Double, ms : Double, ease : @ui.Ease) -> Unit {
   self.anim().follow(target, @motion.tween(ms, ease~))
   self.target = target
 }
@@ -742,7 +696,6 @@ fn bar_reset() -> Unit {
   bar.icon_was = ""
   back_glide(bar.icon_swap, 1.0)
   m_face.val = ""
-  bars_picked.val = None
   bar_clock.now = 0.0
 }
 
@@ -775,9 +728,10 @@ fn BarModel::sample(self : BarModel) -> Unit {
   for _, g in self.tints {
     g.sample()
   }
-  // a bar chosen: landed, the stack is where the bar is, drawn as the bar will be; it goes in this same frame
+  // a bar chosen: landed (its panel's spring at the rest it declared as it set out, closed), the stack is where the
+  // bar is, drawn as the bar will be; it goes in this same frame
   match self.swap {
-    Some(_) if !self.o.moving() && self.o.x <= 0.0 => self.swap = None
+    Some(_) if now >= self.o.end() && self.o.to <= 0.0 => self.swap = None
     _ => ()
   }
 }
@@ -841,42 +795,6 @@ fn BarModel::jump(self : BarModel) -> Unit {
 let m_face : Ref[String] = { val: "" }
 
 ///|
-/// The bars as switched here, before the prefs say it.
-let bars_picked : Ref[(Array[Array[String]], Int)?] = { val: None }
-
-///|
-/// The bars of workspace `ws`: switched here, else its own as the prefs keep them (`barsBy`), else everyone's (`bars`).
-fn bars_in(src : Source, ws : String) -> (Array[Array[String]], Int) {
-  match bars_picked.val {
-    Some(b) => b
-    None => {
-      let prefs = (src.topic)("prefs", {}).value
-      match field(field(prefs, "barsBy"), ws) {
-        Some(Object(_)) as b => bars_of(b)
-        _ =>
-          match field(prefs, "bars") {
-            Some(Object(_)) as b => bars_of(b)
-            _ => default_bars()
-          }
-      }
-    }
-  }
-}
-
-///|
-/// Another bar in view (AppState.setBars): shown at once, kept whole as the workspace's (`prefs.set {barsBy}`).
-fn set_bars(src : Source, ws : String, sets : Array[Array[String]], cur : Int) -> Unit {
-  bars_picked.val = Some((sets, cur))
-  let whole = Json::object({
-    "sets": Json::array(sets.map(fn(s) { Json::array(s.map(fn(p) { Json::string(p) })) })),
-    "current": Json::number(cur.to_double()),
-  })
-  let by : Map[String, Json] = Map([])
-  by[ws] = whole
-  (src.call)("prefs.set", Json::object({ "barsBy": Json::object(by) }), fn(_) {  })
-}
-
-///|
 /// A place's name (the bar's words for what a screen reader says, the place's page's title).
 fn place_label(place : String) -> String {
   tr("android-misc.bar.place." + place)
@@ -890,21 +808,6 @@ let bar_glyph : Ref[@sf.GlyphCounts?] = Ref(None)
 /// What Station's place says to a screen reader as the bar last read it (Places.kt stationsSaid: the stations in the
 /// core's words, what is wrong with them), "" before or when the core said nothing of them.
 let bar_stations_said : Ref[String] = Ref("")
-
-///|
-/// A place's icon (Places.kt placeIcon; Station's is the stations' glyph of their state once read, bar_glyph).
-fn place_icon(place : String) -> String {
-  match place {
-    "chats" => "chats"
-    "decisions" => "zou"
-    "files" => "folder"
-    "profiles" => "quota"
-    "connects" => "im"
-    "usage" => "chart"
-    "archive" => "archive"
-    _ => "server"
-  }
-}
 
 ///|
 /// The place a page is the top of (none: it is not a place's).
@@ -992,9 +895,10 @@ fn bar_glass(c : @ui.Ctx, w : Double, top : Double, bottom : Double, cy : Double
   let h = bottom - top
   let corner = dmin(rad, h / 2.0)
   match notch_lips(w, cy, r) {
-    None => at(c, 0.0, top, w, h, radius=corner, glass=@sf.glass_bottom_bar()) |> ignore
+    // (over what runs under it: the scroll bar there keeps clear of it)
+    None => c.floats_over(at(c, 0.0, top, w, h, radius=corner, glass=@sf.glass_bottom_bar()))
     Some((l, rr)) => {
-      at(
+      let glass = at(
         c,
         0.0,
         top,
@@ -1006,7 +910,7 @@ fn bar_glass(c : @ui.Ctx, w : Double, top : Double, bottom : Double, cy : Double
         notch_r=r,
         notch_fillet=fillet,
       )
-      |> ignore
+      c.floats_over(glass)
       // the notch's outline alone: the glass's outline grown by half the line, its line inside that, seen between
       // the lips and under the glass's top; its foot below the clip (else its bottom edge was a white line under the
       // bar's middle, between the lips)
@@ -1135,7 +1039,7 @@ fn tint_of(id : String, on : Bool) -> Double {
       g
     }
   }
-  g.go(if on { 1.0 } else { 0.0 }, tint_ms, 0)
+  g.go(if on { 1.0 } else { 0.0 }, tint_ms, Css)
   g.value
 }
 
@@ -1163,6 +1067,10 @@ fn bottom_bar(c : @ui.Ctx, src : Source, ws : Workspace, active : String?, shown
   // a folder (Files.kt), none on the others yet
   // (Station's ＋ adds a station, Profile's a profile, 连接's a connect: what the settings' page of the place says)
   let place_add = match active {
+    Some("connects") => {
+      let core = settings_core(src, ws)
+      @sfdesk.connects_add(src, core, @settings.here_of(core, ws.id, ws.name))
+    }
     Some(a) => @settings.place_action(settings_core(src, ws), @settings.here_of(settings_core(src, ws), ws.id, ws.name), a)
     None => None
   }
@@ -1194,7 +1102,7 @@ fn bottom_bar(c : @ui.Ctx, src : Source, ws : Workspace, active : String?, shown
   // there; a bar chosen is drawn as it was the frame it is chosen, and slides from the next)
   m.sample()
   // told each frame: shown or not, the notch as the place has it
-  m.vis.go(if shown { 1.0 } else { 0.0 }, if shown { bar_show_ms } else { bar_hide_ms }, 1)
+  m.vis.go(if shown { 1.0 } else { 0.0 }, if shown { bar_show_ms } else { bar_hide_ms }, Arrive)
   if !shown {
     if m.mode {
       m.open_panel(false)
@@ -1290,8 +1198,8 @@ fn bottom_bar(c : @ui.Ctx, src : Source, ws : Workspace, active : String?, shown
       Some({ key: Some(_), .. }) => true
       _ => false
     })
-  m.ball_alpha.go(if ball_shown { 1.0 } else { 0.0 }, ball_fade_ms, 0)
-  m.ball_scale.go(if ball_shown { 1.0 } else { 0.6 }, ball_grow_ms, 0)
+  m.ball_alpha.go(if ball_shown { 1.0 } else { 0.0 }, ball_fade_ms, Css)
+  m.ball_scale.go(if ball_shown { 1.0 } else { 0.6 }, ball_grow_ms, Css)
   // first drawn (or under reduced motion): everything where it goes, at once
   if !m.placed || c.still() {
     m.placed = true
@@ -1303,7 +1211,7 @@ fn bottom_bar(c : @ui.Ctx, src : Source, ws : Workspace, active : String?, shown
   }
   if m.swap is Some(_) {
     @motion.log_frame(c, "bar/swap", "value=\{m.o.x} to=\{m.o.to}")
-  } else if m.o.moving() {
+  } else if m.o.x != m.o.to {
     @motion.log_frame(c, "bar/panel", "value=\{m.o.x} to=\{m.o.to}")
   }
   if m.vis.value <= 0.0 && !shown {
@@ -1403,8 +1311,8 @@ fn bottom_bar(c : @ui.Ctx, src : Source, ws : Workspace, active : String?, shown
           body=fn() {
             // from one action to another with another icon (令 and a ＋): the icon swaps, the circle stays
             let v = swap_icon
-            let css : @motion.Ease = Css
-            let arrive : @motion.Ease = Arrive
+            let css : @ui.Ease = Css
+            let arrive : @ui.Ease = Arrive
             if bar.icon_was != "" {
               let p = css.at(dclamp(v * 300.0 / 120.0, 0.0, 1.0))
               let old = action_icon(c, bar.icon_was)
@@ -1589,7 +1497,7 @@ fn show_icon(c : @ui.Ctx, next : String, out : Bool) -> Double {
       bar.icon_was = m_face.val
       m_face.val = next
       sw.snap(0.0)
-      sw.go(1.0, icon_swap_ms, 2)
+      sw.go(1.0, icon_swap_ms, Linear)
     }
   }
   sw.sample()
@@ -1743,7 +1651,8 @@ fn bar_gesture(
     m.was_down = true
     m.y0 = py
     m.o0 = m.o.x
-    m.holds = multi && (m.o0 > 0.02 || (m.o.moving() && m.o.to > 0.0))
+    // (opening: short of the rest its spring declared as it set out, toward open)
+    m.holds = multi && (m.o0 > 0.02 || (bar_clock.now < m.o.end() && m.o.to > 0.0))
     m.from_open = m.holds
     m.open = m.o.to > 0.5
     if m.holds {
@@ -1849,45 +1758,37 @@ fn bar_gesture(
 /// A place's top page other than the chats (PlacePage.kt, with the bar under it): Home's top bar over it (settings,
 /// the place's name), what it shows the settings' page of it (src/sfapp/settings).
 fn place_page(c : @ui.Ctx, src : Source, w : Workspace, place : String) -> Unit {
-  // on a phone what it shows runs under the top bar, frosted over it (PlacePage.kt: `bar + 8.dp` down, scrolling
-  // under it); the wide frame's page bar stands above it
-  let over = !wide_on.val
+  // what it shows runs under the top bar, frosted over it (PlacePage.kt: `bar + 8.dp` down, scrolling under it)
   c.box(w=Fill(1.0), h=Fill(1.0), fn() {
-    if !over {
-      place_top_bar(c, place)
-    }
     // what it shows: the settings' page of the same place (src/sfapp/settings), in place of its own bar
     c.box(w=Fill(1.0), h=Fill(1.0), fn() {
       match @settings.route_of(place) {
         Some(r) => {
-          let core = settings_core(src, w)
-          let top = if over { status_top() + bar_h + 8.0 } else { 0.0 }
-          @settings.page(c, core, @settings.here_of(core, w.id, w.name), r, root=true, top~)
+          // under the top bar, which names it; over the bottom bar
+          let top = status_top() + bar_h + 8.0
+          let frame : PageFrame = { back: None, top, foot: nav_foot() + bar_room_now(), named: true }
+          if !@sfdesk.setting_route(c, src, w, r, frame) {
+            let core = settings_core(src, w)
+            @settings.page(c, core, @settings.here_of(core, w.id, w.name), r, root=true, top~)
+          }
         }
         None => ()
       }
     })
     |> ignore
-    if over {
-      c.layer(fn() { place_top_bar(c, place) }) |> ignore
-    }
+    c.layer(fn() { place_top_bar(c, place) }) |> ignore
   })
   |> ignore
 }
 
 ///|
 /// A place's top bar at the stack's root (PlacePage.kt TopGlassBar): settings, the place's name, the page's actions
-/// (`@settings.root_bar_actions`), a hairline under; frosted over what runs under it.
+/// (`@settings.root_bar_actions`); frosted over what runs under it, no line under it.
 fn place_top_bar(c : @ui.Ctx, place : String) -> Unit {
   let t = @sf.theme()
-  // the wide frame's page bar (wide_chat.mbt): the rail is the way to the others
-  if wide_on.val {
-    page_bar_wide(c, place_label(place), false, fn() {  }) |> ignore
-    return
-  }
   let actions = @settings.root_bar_actions.val
   @settings.root_bar_actions.val = None
-  c.box(w=Fill(1.0), glass=@sf.glass_bar(), fn() {
+  let glass_top = c.box(w=Fill(1.0), glass=@sf.glass_bar(), fn() {
     // under the status bar (TopGlassBar: windowInsetsPadding(statusBars), then TopBarHeight)
     c.box(dir=Row, w=Fill(1.0), pl=16.0, pr=16.0, pt=status_top(), min_h=top_bar_h(), gap=10.0, align=ACenter, fn() {
       if nav_button(c, "settings", 22.0, key="place-settings", said=tr("android-chat.home.settings")) {
@@ -1903,7 +1804,7 @@ fn place_top_bar(c : @ui.Ctx, place : String) -> Unit {
       }
     })
     |> ignore
-    c.box(w=Fill(1.0), h=Px(0.5), bg=t.p.line, fn() {  }) |> ignore
   })
-  |> ignore
+  // over what runs under it: the scroll bar there keeps clear of it
+  c.floats_over(glass_top)
 }

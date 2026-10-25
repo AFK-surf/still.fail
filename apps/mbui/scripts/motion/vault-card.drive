@@ -1,0 +1,9 @@
+# chat-vault's request to keep a password decided from its card: the card goes in its turn (fading to 90%, its room
+# closing on the rows' spring a little late), 未存入「UniFi UX7」 fading in in its place (sfpages decision.mbt
+# vault_ask_card).
+timeout 20000
+until =不存
+wait 800
+tap =不存
+until 未存入「UniFi UX7」
+wait 1200

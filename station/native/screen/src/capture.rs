@@ -120,7 +120,8 @@ pub struct Capture {
 }
 
 impl Capture {
-    pub fn start(gpu: &Gpu, monitor: HMONITOR, arrived: Sender<super::view::Msg>) -> Result<Capture> {
+    /// `cursor`: the pointer drawn in the pictures (a JPEG's: an agent's view); a video's leave it out (cursor.rs says it).
+    pub fn start(gpu: &Gpu, monitor: HMONITOR, arrived: Sender<super::view::Msg>, cursor: bool) -> Result<Capture> {
         let interop = windows::core::factory::<GraphicsCaptureItem, IGraphicsCaptureItemInterop>()?;
         let item: GraphicsCaptureItem = unsafe { interop.CreateForMonitor(monitor)? };
         let dxgi: IDXGIDevice = gpu.device.cast()?;
@@ -142,7 +143,7 @@ impl Capture {
             let _ = asked.join();
         }
         let session = pool.CreateCaptureSession(&item)?;
-        let _ = session.SetIsCursorCaptureEnabled(true);
+        let _ = session.SetIsCursorCaptureEnabled(cursor);
         let _ = session.SetIsBorderRequired(false);
         session.StartCapture()?;
         Ok(Capture { pool, session, device, size, token, item, closed, monitor })

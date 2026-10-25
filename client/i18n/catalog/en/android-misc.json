@@ -479,6 +479,8 @@
   "android-misc.screen.look": "View",
   "android-misc.screen.drive": "Control",
   "android-misc.screen.keyboard": "Keyboard",
+  "android-misc.screen.scale": "Scale",
+  "android-misc.screen.scaleRecommended": "{percent}% (recommended)",
   "android-misc.screen.full": "Full screen",
   "android-misc.screen.unfull": "Exit full screen",
   "android-misc.screen.tools": "Tools",
@@ -545,5 +547,6 @@
   "android-misc.permissions.request": "Request",
   "android-misc.permissions.requestWhat": "request {name}",
   "android-misc.permissions.requestLabel": "Request {name}",
-  "android-misc.permissions.missing": "Not allowed"
+  "android-misc.permissions.missing": "Not allowed",
+  "android-misc.localStation.lead": "The station installed or started on this Mac is managed here: start, stop or restart it, open its log and its data. Which workspace it joins is set in each workspace’s Station settings."
 }

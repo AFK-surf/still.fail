@@ -17,7 +17,8 @@ import { same } from "../stationPick.ts";
 import { BackLink, Button, ICON, Menu, MobileBack, Pill, Section, Segmented, StatusDot, Time, Waiting } from "../ui.tsx";
 import { SoftwareList } from "../Versions.tsx";
 import { WorkspaceMark } from "../WorkspaceMark.tsx";
-import { HostDetails, joinedText, LanKept, Net, problems, state, useLong, useStationNet } from "./StationCards.tsx";
+import { HostDetails, joinedText, LanKept, Net, silentOf, state, Uses, useStationNet } from "./StationCards.tsx";
+import { ResourcesBody, useResources } from "../Resources.tsx";
 import { useLanKept } from "../localNetwork.ts";
 import { MarkPick } from "./MarkPick.tsx";
 import { ProfileCard } from "../ProfileCard.tsx";
@@ -50,6 +51,8 @@ export function useStationsSide(): boolean {
 
 export const stationPage = (workspace: string, id: string) => `/w/${workspace}/settings/stations/${encodeURIComponent(id)}`;
 /** A station's page with a login's panel open over it (the link agents post: docs/remote-login.md). */
+/** Its 进程: what still.fail uses of the machine. */
+export const stationProcesses = (workspace: string, id: string) => `${stationPage(workspace, id)}?part=processes`;
 export const stationLoginPage = (workspace: string, id: string, login: string) => `${stationPage(workspace, id)}?login=${encodeURIComponent(login)}`;
 
 /** The sidebar's list: adding one in the band over it (a manager), then each station, how it is at its row's end. */
@@ -113,6 +116,12 @@ function brief(s: StationView): ReactNode {
 }
 
 /** `settings/stations` with the sidebar of their own: the first of them (there is no page of them all). */
+/** Where the resources page was (Settings > 资源, a link from before): the first station's 进程. */
+export function ProcessesFirst({ entry }: { entry: WorkspaceEntry }) {
+  const first = useStations(entry.id).value?.[0];
+  return first ? <Navigate to={stationProcesses(entry.id, first.id)} replace /> : <div className={`${pagesCss.page} ${pagesCss.pageNarrow}`}><Waiting shape="cards" text={t("common.readingStations")} /></div>;
+}
+
 export function StationsFirst({ entry }: { entry: WorkspaceEntry }) {
   const first = useStations(entry.id).value?.[0];
   return first ? <Navigate to={stationPage(entry.id, first.id)} replace /> : <div className={`${pagesCss.page} ${pagesCss.pageNarrow}`}><Waiting shape="cards" text={t("common.readingStations")} /></div>;
@@ -145,7 +154,7 @@ export function StationSettings({ entry }: { entry: WorkspaceEntry }) {
       {side ? <MobileBack to={back} label="Station" /> : <BackLink to={back} label="Station" />}
       <Head s={s} here={here} manager={manager} edits={edits} />
       {edits.dialogs}
-      <Body s={s} manager={manager} />
+      <Body s={s} manager={manager} workspace={entry.id} />
     </div>
   );
 }
@@ -158,9 +167,9 @@ function Head({ s, here, manager, edits }: { s: StationView; here: StoppedHere; 
   const [name, setName] = useState(s.name);
   useEffect(() => setName(s.name), [s.name]);
   const keep = () => { const to = name.trim(); if (!to) setName(s.name); else edits.rename(s, to); };
-  const silent = useLong(s.online && !s.host, 15_000);
+  const silent = silentOf(s);
   // Stopped here: its 启动 says what to do, not how to reach it again.
-  const wrong = here.stopped ? [] : problems(s, silent);
+  const wrong = here.stopped ? [] : s.problems;
   const items = edits.menu(s, manager, false);
   return (
     <>
@@ -196,11 +205,11 @@ function Head({ s, here, manager, edits }: { s: StationView; here: StoppedHere; 
 
 /** The page's parts, one shown at a time: how it is and what runs on it; what it is let do and set to; its software and
  * the machine. */
-type Part = "overview" | "settings" | "machine";
-const PARTS: Part[] = ["overview", "settings", "machine"];
+type Part = "overview" | "processes" | "settings" | "machine";
+const PARTS: Part[] = ["overview", "processes", "settings", "machine"];
 
 /** The rest of it in its parts (`?part=`, the overview by default), each section once there is something to show of it. */
-function Body({ s, manager }: { s: StationView; manager: boolean }) {
+function Body({ s, manager, workspace }: { s: StationView; manager: boolean; workspace: string }) {
   // A login's link (`/w/<ws>/s/<station>/login/<id>`, workspace.tsx) comes here with it: its card brought into view.
   const [search, setSearch] = useSearchParams();
   const asked = search.get("part") as Part | null;
@@ -212,17 +221,33 @@ function Body({ s, manager }: { s: StationView; manager: boolean }) {
         <Segmented<Part> label={t("web-pages.stations.page.parts")} value={part} onChange={show}
           options={PARTS.map((p) => ({ value: p, label: t(`web-pages.stations.page.part.${p}`) }))} />
       </div>
-      {part === "overview" && <Overview s={s} />}
+      {part === "overview" && <Overview s={s} workspace={workspace} />}
+      {part === "processes" && <Processes s={s} workspace={workspace} />}
       {part === "settings" && <Settings s={s} manager={manager} marked={search.get("login")} />}
       {part === "machine" && <Machine s={s} manager={manager} />}
     </>
   );
 }
 
+/** What still.fail uses of the machine, by chat and process, as Activity Monitor says it (../Resources.tsx). */
+function Processes({ s, workspace }: { s: StationView; workspace: string }) {
+  const resources = useResources(workspace, s.station);
+  if (!s.online) return <p className={css.memory}>{t("web-pages.stations.processesOffline")}</p>;
+  return (
+    <div className={css.processes}>
+      <p className={css.memory}>{t("web-pages.stations.processesLead")}</p>
+      {resources.value ? <ResourcesBody view={resources.value} />
+        : resources.error ? <p className={controlsCss.fieldError}>{t("web-pages.stations.processesFailed", { error: resources.error.message })}</p> : <Waiting shape="cards" />}
+    </div>
+  );
+}
+
 /** What is left of the machine (and what its agents take of it), and what runs on it: its screens, profiles, connects and
  * folders (its agents at work are in its head). */
-function Overview({ s }: { s: StationView }) {
+function Overview({ s, workspace }: { s: StationView; workspace: string }) {
   const navigate = useGo();
+  // What still.fail itself uses of the machine, opening the resources page: read (the station looking often) while shown.
+  const uses = useResources(workspace, s.station).value?.stations[0];
   const o = s.overview;
   const base = stationBase(s.station);
   const folders = o?.drive?.roots ?? [];
@@ -237,6 +262,7 @@ function Overview({ s }: { s: StationView }) {
             {net && <LanKept lan={net.lan} />}
             {/* What its agents' processes take of the memory. */}
             {o && o.processes.length > 0 && <p className={css.memory}>{o.processesText}</p>}
+            {uses && <Uses use={uses.use} net={uses.net} to={stationProcesses(workspace, s.id)} flush />}
           </div>
         </Section>
       )}

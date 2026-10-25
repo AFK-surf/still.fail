@@ -57,7 +57,7 @@ CREATE TABLE threads (
   title TEXT,
   created_by TEXT,
   created_at INTEGER NOT NULL,
-  archived_at INTEGER,                -- its entries are in its archive file (see Archiving)
+  archived_at INTEGER,                -- a station before wrote its entries out to its archive file (see Archiving)
   home TEXT,                          -- a page chat made for a session (its first there): archived and shown with it
   hidden_at INTEGER, hidden_by TEXT,  -- a chat archived from lists: with its home session, or alone
   shown_at INTEGER,                   -- as a session's shown_at
@@ -196,7 +196,7 @@ The archive and hide columns (`archived_by`, `shown_at`, `cwd`, `home`,
 - `POST /threads/:id/messages {text, attachments, quotes, client?}` — a person's
   message in a still.fail chat (Slack threads are written in Slack), answered
   with its `{ n }`; `client` is the app it was sent from ("android 0.1.1123"),
-  kept for the chat's agent (`client="…"` on its message) and not shown; attachments must be uploads of a session in the thread
+  kept for the chat's agent (`client="…"` on its message) and not shown; `cc: [thread id…]` copies it, after the answer, to those of the chat's Slack and Feishu threads ([relay.md](relay.md) "抄送"); attachments must be uploads of a session in the thread
   (`POST /sessions/:key/files`). `POST /threads {session, title?}` opens
   another chat on a session; `POST /threads/:id/sessions {session}` brings
   another session into a still.fail chat. `POST /sessions` (a new chat) makes the
@@ -204,19 +204,55 @@ The archive and hide columns (`archived_by`, `shown_at`, `cwd`, `home`,
   (the key the asking client shows the chat by until it is made) is said by
   the chat's sidebar item for ten minutes (in memory only): its `chat` event
   can reach the client before the answer does.
-- A session's transcript comes from `/events?live=<key>&from=N&last=200`
-  (entries from index N, no more than the last 200 — and the usage so far,
-  even when N is all of them — then as they are written; a watcher asking past
-  the end is told where it ends) and `GET /sessions/:key/timeline?before=&limit=`
-  (the pages before); the station keeps each watched transcript parsed
-  incrementally instead of re-reading the file per request. With `brief=1` on
-  either, entries come in brief, as an execution history shows them before a
+- A session at work is followed by the station itself, from when its
+  `running` goes on until two minutes after it goes off (`sessions/live.ts`
+  `running`, `HELD_AFTER_MS`): its steps and its transcript's entries as they
+  are written go to every `/events?running=1` stream whose viewer sees it, and
+  such a stream is told as it opens where each stands (no entry of before).
+  How many entries each transcript has is kept as it is read
+  (`transcript_lengths`), and its session's summary says it
+  (`transcriptLength`). So is what its calls used (`session_usage`, the
+  summary's `usage`): as the live view tells it, then as the usage counter
+  counts each session anew over what the live view last said of the rest (its
+  model, its context; before it said any, its last call's). The counted part
+  is read from `usage_totals`, which the database keeps added up per session,
+  runtime, model and speed as calls are recorded (triggers on `usage`): a few
+  rows each time it is told, not every call the session made. A change of a
+  session at rest (its last turn's count comes in after it ended) is told as
+  the session's; one at work is on its stream. A client from before follows a session by name, on
+  `/events?live=<key>&from=N&last=200` (entries from index N, no more than the
+  last 200 — and the usage so far, even when N is all of them — then as they are
+  written; a watcher asking past the end is told where it ends). The rest comes
+  from `GET /sessions/:key/timeline`: `?before=&limit=` (a page before),
+  `?after=&limit=` (what comes after an entry), `?from=&to=` (a stretch), each
+  answer saying how many entries there are (`end`). The live view reads none
+  of a transcript's past on the main thread: a session it starts to watch goes
+  on from where the reader that keeps its history stands (the `transcriptState`
+  read: offsets, counts and what a read keeps between lines, `read/tail.ts`
+  `snapshot`), counting what came before without keeping it, and a listener
+  that lacks some of it is given it from there (what is said meanwhile told
+  after). A transcript is read once (`read/transcripts.ts`): as a reader reads
+  it, it marks where every 256th entry starts (its byte offset, with what
+  reading keeps between lines there; or every 8 MB with an entry), and keeps
+  where its reading stands and its marks on disk
+  (`<data>/transcript-marks/<sha1 of its path>.json`, removed with its session),
+  so a reader that starts again (one goes after a minute idle, all of them at
+  every start of the station) reads on from there, not from the transcript's
+  start, and a page or a stretch, whole or in brief, is read from the mark
+  before it: no more than 256 entries or 8 MB before what was asked. An entry's
+  index is what reading counted, kept across starts; what is kept says the way
+  lines were read (`READING`, `read/transcript.ts`), and kept another way it is
+  read anew. The pool sends a session's reads to the reader that read it last,
+  which keeps it in memory. A transcript is read 4 MB at a time
+  (`read/tail.ts`), never as one buffer. With `brief=1` on either, entries come
+  in brief, as an execution history shows them before a
   step is opened (`read/transcript.ts` `brief`, marked `brief: true`): a call
   longer than 600 characters by the fields of its input that say what it does
   (`description`, `command`, `file_path`, … each at most 300; posts, states
   and Slack calls whole), a result without what it gave (Slack's answer kept to
   `ok` and `ts`), a thought by its first line. `?from=a&to=b` reads entries a
-  to b whole (both included, at most 1000), as such a step is opened.
+  to b (both included, at most 1000), whole as such a step is opened, in brief
+  with `brief=1` (a stretch a stream left out).
 - `GET /chats` — the viewer's sidebar items (The sidebar, below).
 - `POST /batch {gets}` — several reads in one: each path (with its query) is
   answered as its GET is, and the answer is `{ answers: [{ status, body }] }`
@@ -279,11 +315,12 @@ origin (the web's connect icon's tip: `Slack · <workspace> · #channel`, or
 `私信` for a direct message). An agent's Slack thread is the latest one it is
 in; a chat's is that of the first of its sessions that has one.
 
-- **title**: the chat's title, else the first line of the first thing a person
-  said in it (Slack mentions left out, spaces collapsed); with neither, its
-  Slack thread's (the same, then `#channel`, `私信`); else `新对话`.
-  Without a chat: the session's title, else its Slack thread's, else
-  `新对话`.
+- **title**: the name people gave the chat, else the one its agent gave it;
+  with neither, its Slack thread's (that thread's name, else the first line of
+  the first thing a person said in it, Slack mentions left out and spaces
+  collapsed, then `#channel`, `私信`); else `新对话`, the same until it is named
+  (not the words said in it as they come in). Without a chat: the session's
+  title, else its Slack thread's, else `新对话`.
 - **mine**: a chat the viewer started, wrote in, or is among the people of;
   without a chat, the viewer started the session or is among the people of
   its Slack thread. A person is the viewer by id (an email, or `local`), by
@@ -317,11 +354,16 @@ are those at the moment it opened.
   files sent in its chat (`uploads/`) are taken out of the archive onto the
   disk, the archive and everything else in the workspace are removed, and the
   git worktrees it locked are let go. Its transcripts and its threads stay, so
-  it goes on in its history, in an empty workspace.
+  it goes on in its history, in an empty workspace. With less than 20 GiB free
+  on the disk of the station's data (`ops/disk.ts`, looked at every five
+  minutes), once the mirrors of other stations' tasks not in use have gone,
+  archived workspaces are emptied the same way before their time, the longest
+  archived first, until there is that much again (`relieveArchived`); none
+  with `archivedWorkspaceDays` 0.
 - `DELETE /sessions/:key`: ends its process, deletes its rows (turns,
   deliveries, thread_sessions; threads left with no session, with their
-  entries or archive files, and reads), its workspace directory and its
-  transcript copy. The runtime's own transcript file is left alone (it is in
+  entries or archive files, and reads), its workspace directory and the Rust
+  station's copy of its transcript. The runtime's own transcript file is left alone (it is in
   the profile's home, which may be a person's own). `thread-removed` tells
   clients about each thread that went.
 
@@ -335,23 +377,32 @@ their whole thread (deleting a session removes threads left without one):
 
 ### Archiving
 
-When a thread goes out of every list (archived itself, or every session of it
-archived), its entries go to
-`<data>/archive/threads/<id>.jsonl.zst` (one entry per line, zstd) in one step with deleting their rows, and
-the thread row is marked archived (`archived_at`). Since entries never change,
-the file is the thread as it was, and clients' kept copies stay valid.
-Reading an archived thread reads the file (the same API and summaries,
-answered from the decompressed entries; the last 32 threads read are kept
-decompressed in memory). What lists show of each (its last entry, latest
-message, who wrote and when first, the first thing a person said, each
-message's author for unread counts) is read from its file once a reader
-and kept, by the file as it is (its size and when it was written: one
-archived again is another file): every list of chats, sessions and threads
-read each archived thread's file, some 400 on a busy station. A new entry — someone writing in it (an edit too), or a session of it shown again — loads it back into the
-database first and removes the file. Archiving a session also writes its
-transcript copy, `<data>/archive/transcripts/<session>.jsonl.zst` (the
-runtime's file, compressed); the runtime's own file in the profile's home is
-left as it is. Showing the session again or deleting it removes the copy.
+A thread out of every list (archived itself, or every session of it archived)
+keeps its entries in the database, as one in a list does: entries are small
+(all of ccvm's 26,000 come to some 20 MB), and every list reads what it shows
+of every thread by an index, some 10 ms for all of a station's (2026-10-25).
+
+Stations before wrote such a thread's entries out to
+`<data>/archive/threads/<id>.jsonl.zst` (one entry per line, zstd) in one step
+with deleting their rows, and marked the thread row (`archived_at`). Then every
+list of chats, sessions and threads read each archived thread's file (some 850
+on ccvm), decompressed again whenever a reader had let go of what it kept of
+them. Those files are read as they are (the same API and summaries, answered
+from the decompressed entries; what lists show of each read from its file once
+a reader and kept by the file as it is) until the station brings each back
+into the database: a few at a time, two minutes after it starts
+(`Store.bringInArchived`, 20 a second), and at once when one is said in (an
+edit too) or a session of it is shown again. Since entries never change, they
+are the same either way, and clients' kept copies stay valid. Bringing one back
+writes its entries into the database first and removes the file.
+
+An archived, idle session's transcripts are packed in place (cold storage,
+under Housekeeping). The Rust station instead wrote a copy of them,
+`<data>/archive/transcripts/<session>.jsonl.zst`, and left them as they were,
+so both stayed on the disk (1.4 GB on ccvm); a station packs those sessions'
+transcripts and lets go of the copy three minutes after it starts
+(`ColdRooms.finishLegacyCopies`, their workspaces left as they are). Nothing
+reads the copies; showing the session again or deleting it removes one too.
 
 ### In the client core
 
@@ -421,6 +472,26 @@ what their streams were told last (one telling, in each language, for all
 their streams, kept like the rest); a stream that starts afresh reads their
 sidebar before it answers, and is what their changes are told against from
 then on.
+
+A run is not one process: a station process that stops (a handover at an
+update, or a stop before the next start) writes what it keeps — the run, its
+numbers, the events kept, what each viewer's streams were told of their
+sidebar and overview, who followed last — and its pid to `run/events.json`
+(whole: a temporary file renamed), after the last it tells; keeping nothing
+(nobody followed for an hour), it removes any file there. The next process
+answers no stream before the one before it is gone; then it takes the file up
+and removes it, and goes on with the same run and numbers, making and keeping
+what it tells from then on as while nobody follows. What it was to tell before
+(a read mark, a message, a vault's request, while the one before still
+stopped) waits, and is told then, numbered on from what it took up. A stream
+that comes back to it is resumed as the old process would have resumed it. A
+crash leaves no file; a file older than an hour, one that does not read, or
+one by another process than the one `run/hub.json` named as it started (one
+that a process before it stopped waiting for after 40 s, written once that
+process had begun a run of its own) is not taken up but removed: a run of its
+own, and `missed`. (On ccvm, updated 32 times on 2026-10-24, every stream was told
+`missed` at each update, and every device read the whole station at once
+while the new process was starting.)
 
 Over the mesh, an answer is compressed for a client that asks
 (`accept-encoding: zstd`; station/src/mesh/compress.ts): JSON and text from

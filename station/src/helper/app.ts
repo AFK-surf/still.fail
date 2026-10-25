@@ -86,6 +86,8 @@ export class HelperApp {
   /// The watching connection being opened: whoever else wants the app watched meanwhile waits for it.
   #opening: Promise<void> | null = null;
   #quitting = false;
+  /// Where the release's copy was installed by this process (compared with it, or copied), once it was.
+  #installed: string | null = null;
   #revivals: number[] = [];
   readonly #backs = new Set<() => void>();
   readonly #listeners = new Set<(event: Record<string, unknown>) => void>();
@@ -221,7 +223,12 @@ export class HelperApp {
   }
 
   async #ensure() {
+    // The installed copy is compared with the release's (its code read, megabytes) once a process: the release is this
+    // process's own and only this replaces the copy. Up since, each request only asks it (the comparison, at every
+    // request, held the station's thread for a second on a machine short of memory, 2026-10-25).
+    if (this.#installed !== null && (await this.#hello())) return;
     const { path, replaced } = install(this.app, this.dir);
+    this.#installed = path;
     const up = await this.#hello();
     // Its code changed: the one running is the old one.
     if (up && replaced) await this.#ask({ op: "quit" }).catch(() => {});

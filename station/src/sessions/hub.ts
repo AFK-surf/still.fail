@@ -30,7 +30,7 @@ import { runnerId } from "../agents/process.ts";
 import { allLeft, existingRunners } from "../agents/runner.ts";
 import { log } from "../ops/log.ts";
 import { tr, stationLang } from "../ops/i18n.ts";
-import { iso, transcriptPaths } from "../read/transcript.ts";
+import { homesFirst, iso, sessionPlaces, transcriptPaths } from "../read/transcript.ts";
 import { type Attachment, MANUAL, type SessionRow, type Store, STILLFAIL_SURFACE, feishuSurface, slackSurface, type ThreadRow } from "../store/store.ts";
 import { Accounts } from "./accounts.ts";
 import { SessionActor, type SessionDeps, type Snapshot, openOptions } from "./actor.ts";
@@ -46,7 +46,7 @@ import { agentHomePaths, workspaceAgentHome } from "./agent-home.ts";
 import { carrySubagents, startsAfresh, toldCleared } from "./afresh.ts";
 import { serves } from "./pool.ts";
 import { settled } from "./opened.ts";
-import { imageSize } from "./image-size.ts";
+import { shownSize } from "./image-size.ts";
 
 type Json = any;
 
@@ -136,6 +136,8 @@ export class Hub {
   private runtimeMissing: (runtime: RuntimeKind) => void = () => {};
   /// What running turns are doing, for the pages' live view.
   readonly live: LiveHub;
+  /// Stops following the store's sessions starting and stopping (live.ts `running`).
+  private unlistenRunning: () => void = () => {};
   readonly actors = new Map<string, SessionActor>();
   /// When each idle process is next looked at for eviction.
   private deadlines = new Map<string, Fiber.Fiber<void>>();
@@ -149,6 +151,9 @@ export class Hub {
   readonly clientKeysMade = new Map<string, [string, number]>();
   /// Titles agents gave chats someone has open, waiting until they leave (titles.ts), by thread.
   readonly titles = new Map<number, string>();
+  /// Conversations a chat was relayed to whose agent has not posted there yet, by thread: the session and the station's
+  /// first message there, which that post goes into (relay.ts). Kept in memory: after a restart it is a reply.
+  readonly openings = new Map<number, { session: string; ts: string }>();
   /// One message at a time per thread: Slack sends a mention twice (app_mention and message), and both would make its
   /// session.
   readonly gates = new Map<string, { tail: Promise<void>; waiting: number }>();
@@ -172,23 +177,36 @@ export class Hub {
     this.accounts = new Accounts({
       config: () => this.config(),
       store: this.store,
-      running: () => [...this.actors.values()].filter((a) => a.processState() !== "cold").flatMap((a) => this.store.getSession(a.key)?.profile ?? []),
+      running: (except) => [...this.actors.values()].filter((a) => a.key !== except && a.processState() !== "cold").flatMap((a) => this.store.getSession(a.key)?.profile ?? []),
       clock: this.clock,
       allows: (key, profile) => allowedIn(profile, this.wsOf(key), this.workspaces()[0] ?? null),
     });
     this.live = new LiveHub(
       (key) => {
         const row = this.store.getSession(key);
-        const profile = row && this.config().profiles.find((p) => p.id === row.profile);
         const runtime = row && runtimeNamed(row.runtime);
-        if (!row || !profile || !runtime || this.store.runtimeSessions(key).length === 0) return null;
-        const homes = [profile.home, ...this.config().profiles.map((p) => p.home).filter((h) => h !== profile.home)];
-        const { paths, current } = transcriptPaths(runtime, homes, this.store.runtimeSessions(key));
+        if (!row || !runtime || this.store.runtimeSessions(key).length === 0) return null;
+        const { dataDir, profiles } = this.config();
+        const { paths, current } = transcriptPaths(runtime, dataDir, homesFirst(profiles, row.profile), this.store.runtimeSessions(key), sessionPlaces(row));
         return paths.length === 0 ? null : { runtime, paths, current };
       },
       this.clock,
     );
+    // The sessions at work are followed by the station itself (live.ts `running`): as the store says each starts and
+    // stops, and those at work now. Each transcript's length and each session's usage go where its summary reads them.
+    this.live.lengths = (key, n) => this.store.setTranscriptLength(key, n);
+    this.live.usages = (key, usage) => this.store.setSessionUsage(key, usage);
+    this.unlistenRunning = this.store.subscribe((change) => {
+      if (change.type === "session") this.live.running(change.key, this.store.getSession(change.key)?.running === true);
+      else if (change.type === "sessionRemoved") this.live.running(change.key, false);
+    });
     this.deps = this.sessionDeps();
+  }
+
+  /// The sessions at work as the station starts are followed (live.ts `running`): once where their history is read
+  /// is set (agents.ts), so none is read on the main thread.
+  followRunning() {
+    for (const row of this.store.runningSessions()) this.live.running(row.key, true);
   }
 
   config(): HubConfig {
@@ -382,19 +400,22 @@ export class Hub {
       log.warn("hub", "session handed over could not be taken up; it resumes the usual way", { session: row.key, error: (error as Error).message });
       return;
     }
+    // Its process runs on the profile it was started on (the one its runtime session last ran on), which the session may
+    // have been moved off since: taken up there, not moved, it moves before its next turn (actor.ts `ensureAgent`).
+    const ranOn = (row.runtimeSessionId ? this.store.ranOn(row.key, row.runtimeSessionId) : null) ?? row.profile;
     let agent: AgentSession | null = null;
     if (withProcess) {
       try {
         const driver = this.sessionDriver(snap.runtime);
         const generation = actor.nextGeneration();
-        agent = await driver.adopt(openOptions(row, this.accounts.runOn(row.key), this.deps), snap.agent, actor.listener(generation));
+        agent = await driver.adopt(openOptions(row, this.accounts.profile(ranOn) ?? this.accounts.runOn(row.key), this.deps), snap.agent, actor.listener(generation));
       } catch (error) {
         log.warn("hub", "a session's runtime could not be taken up; it resumes the usual way", { session: row.key, error: (error as Error).message });
       }
     }
     // Its runtime not taken up: a turn it had is resumed the usual way (recover).
     if (withProcess && !agent) return;
-    actor.adopt(snap, agent);
+    actor.adopt(snap, agent, ranOn);
     log.info("hub", "session taken up from the previous station", { session: row.key, withAgent: agent !== null });
     if (agent) {
       this.adopted.add(row.key);
@@ -524,7 +545,7 @@ export class Hub {
         const path = join(dir, `${iso(this.now()).slice(0, 19).replace(/[:.]/g, "-")}-${file.id}-${safe}`);
         writeFileSync(path, bytes);
         const attachment: Attachment = { name: file.name, path, size: bytes.length };
-        const size = /\.(png|jpe?g|gif|webp)$/i.test(file.name) ? imageSize(path) : null;
+        const size = shownSize(path);
         if (size) [attachment.width, attachment.height] = size;
         attachments.push(attachment);
       } catch (error) {
@@ -572,7 +593,7 @@ export class Hub {
   /// After a restart: resume cut-off turns (those not taken up with their runtime), then deliver whatever is still
   /// pending.
   recover() {
-    for (const row of this.store.listSessions().filter((s) => s.running)) {
+    for (const row of this.store.runningSessions()) {
       // Taken up from the previous station: its turn runs on.
       if (this.adopted.has(row.key) || !this.online(row)) continue;
       log.info("hub", "recovering a turn cut off by restart", { session: row.key });
@@ -814,6 +835,7 @@ export class Hub {
 
   async shutdown() {
     this.stopTimers();
+    this.unlistenRunning();
     this.live.close();
     await Promise.all([...this.actors.values()].map((a) => a.dispose()));
     await Promise.all([...this.drivers.values()].map((d) => d.shutdown()));
@@ -976,7 +998,7 @@ export class Hub {
       chat: (connect) => this.chatOf(connect),
       driver: (runtime) => this.sessionDriver(runtime),
       runOn: (key, holding) => this.accounts.runOn(key, holding),
-      spend: (key) => this.accounts.spend(key),
+      spend: (key, ranOn) => this.accounts.spend(key, ranOn),
       refillsAt: (key) => this.accounts.refillsAt(key),
       mcpUrl: () => (typeof this.options.mcpUrl === "string" ? this.options.mcpUrl : this.options.mcpUrl()),
       toSandbox: async (key) => {

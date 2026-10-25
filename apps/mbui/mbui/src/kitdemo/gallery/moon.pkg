@@ -5,6 +5,7 @@ import {
   "mbui/kit",
   "moonbitlang/core/json",
   "moonbitlang/core/encoding/utf8",
+  "moonbitlang/core/string",
 }
 
 import {

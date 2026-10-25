@@ -111,8 +111,20 @@ test("relaying starts the conversation there, makes it the agent's, says so wher
   await settle();
   const told = r.claude.last().prompts.at(-1)!;
   assert.ok(told.includes("C1/1700.000100") && told.includes("chat_post") && told.includes("@Bo could you look?"), told);
-  assert.equal(await r.call(key, "chat_post", { to: "C1/1700.000100", text: "Context: …" }), "Posted to C1/1700.000100.");
-  assert.deepEqual(r.chat.posts.at(-1), [{ channel: "C1", threadTs: "1700.000100" }, "Context: …"]);
+  assert.ok(told.includes("first message"), told);
+  // Its first post there goes into the station's first message, which people see without opening the thread.
+  const posts = r.chat.posts.length;
+  assert.equal(
+    await r.call(key, "chat_post", { to: "C1/1700.000100", text: "Context: …" }),
+    "Posted to C1/1700.000100 (added to the station's first message there, ts 1700.000100).",
+  );
+  assert.equal(r.chat.posts.length, posts, "not a reply");
+  assert.deepEqual(r.chat.edits, [[{ channel: "C1", threadTs: "1700.000100" }, "1700.000100", `${begun[0]![1]}\n\nContext: …`]]);
+  assert.deepEqual(r.said(there.id).map((m) => [m.authorKind, m.text]), [["ember", `${begun[0]![1]}\n\nContext: …`]]);
+  // The next is a reply.
+  assert.equal(await r.call(key, "chat_post", { to: "C1/1700.000100", text: "More" }), "Posted to C1/1700.000100.");
+  assert.deepEqual(r.chat.posts.at(-1), [{ channel: "C1", threadTs: "1700.000100" }, "More"]);
+  assert.equal(r.chat.edits.length, 1);
   await end();
   // A reply there reaches the agent, without mentioning it; the chat it came from still takes messages.
   await r.accept(message({ channel: "C1", threadTs: "1700.000100", ts: "1700.000200", user: "UBO", text: "looks fine", addressed: false }));
@@ -122,6 +134,24 @@ test("relaying starts the conversation there, makes it the agent's, says so wher
   sayIn(r.hub, thread.id, "ada@x.com", "and here too");
   await settle();
   assert.ok(r.claude.last().prompts.at(-1)!.includes("and here too"));
+  await r.close();
+});
+
+test("a relayed chat's first post is a reply where it would not fit in the station's first message, carries files, or is not the relaying agent's", async () => {
+  const { r } = relayRig();
+  const [key, thread] = newSession(r.hub, { runtime: "claude", createdBy: "ada@x.com" });
+  await relay(r.hub, thread, "Ada", { connect: "cl", channel: "C1" }, "");
+  await settle();
+  const long = "x".repeat(3500);
+  assert.equal(await r.call(key, "chat_post", { to: "C1/1700.000100", text: long }), "Posted to C1/1700.000100.");
+  assert.equal(r.chat.lastText(), long);
+  assert.equal(r.chat.edits.length, 0);
+  assert.equal(r.hub.openings.size, 0, "only the first post is taken");
+  // Another agent's post there is its own.
+  r.hub.openings.set(r.thread("C1", "1700.000100").id, { session: "someone-else", ts: "1700.000100" });
+  await r.call(key, "chat_post", { to: "C1/1700.000100", text: "short" });
+  assert.equal(r.chat.lastText(), "short");
+  assert.equal(r.chat.edits.length, 0);
   await r.close();
 });
 
@@ -179,6 +209,12 @@ test("Slack: the channels the bot is in, page by page; a conversation begins wit
     assert.deepEqual(await surface.begin("C1", long), { thread: { channel: "C1", threadTs: "1800.000001" }, ts: "1800.000001" });
     const posted = fake.calls("chat.postMessage");
     assert.deepEqual(posted.map((p) => [p.params.channel, p.params.thread_ts ?? null, p.params.text?.[0]]), [["C1", null, "a"], ["C1", "1800.000001", "b"]]);
+    // Its first message changed in place, when what it says fits in one message.
+    fake.answer("chat.update", { ok: true });
+    assert.equal(await surface.edit({ channel: "C1", threadTs: "1800.000002" }, "1800.000002", "opening\n\nsummary"), true);
+    assert.deepEqual(fake.calls("chat.update").map((p) => [p.params.channel, p.params.ts, p.params.text, JSON.parse(p.params.blocks!)[0].text]), [["C1", "1800.000002", "opening\n\nsummary", "opening\n\nsummary"]]);
+    assert.equal(await surface.edit({ channel: "C1", threadTs: "1800.000002" }, "1800.000002", long), false);
+    assert.equal(fake.calls("chat.update").length, 1);
     assert.equal(surface.permalink({ channel: "C1", threadTs: "1800.000001" }), null, "not before its workspace is known");
     assert.equal(surface.threadOf("https://acme.slack.com/archives/C1/p1800000001000100"), null);
     fake.answer("auth.test", { ok: true, url: "https://acme.slack.com/", team: "Acme", team_id: "T1", user_id: "UBOT" });

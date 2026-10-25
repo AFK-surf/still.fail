@@ -24,7 +24,11 @@ export type Effect =
   /// Folders of the station's drive under `root` (paths relative to it): read again where held or shown.
   | { kind: "drive"; root: string; paths: string[] }
   /// A station's logins (docs/remote-login.md): the login answered with is put in place at once.
-  | { kind: "machineLogins" };
+  | { kind: "machineLogins" }
+  /// A sign-in for a new profile (the overview's `logins`) started, given its code or dropped: as the station answered,
+  /// in place at once until the overview says as much. `id`: the login's (null: the answer names it, as it starts);
+  /// `from`: the state the step moves it on from (null: not listed yet).
+  | { kind: "login"; id: string | null; from: string | null };
 
 /// The request an operation makes.
 export type Request = {
@@ -67,7 +71,7 @@ export const PARAMS: Record<string, string> = {
   "session.compact": "key:string",
   "session.clear": "key:string",
   "session.delete": "key:string",
-  "session.settings": "key:string profile?:string model?:string effort?:string fast?:boolean",
+  "session.settings": "key:string profile?:string model?:string effort?:string fast?:boolean repick?:boolean",
   "chat.archive": "archived?:boolean session:string thread?:number",
   "chat.keep": "kept?:boolean thread:number",
   "chat.rename": "session?:string title?:string thread?:number",
@@ -98,7 +102,7 @@ export const PARAMS: Record<string, string> = {
   "connect.delete": "id:string",
   "connect.reconnect": "id:string",
   "connect.bindSession": "connect:string session?:string title?:string",
-  "connect.putSlackApp": "connect:string input?:json",
+  "connect.putSlackApp": "connect:string input?:json from?:json",
   "feishu.register": "domain?:string name?:string",
   "feishu.cancelRegistration": "id:string",
   "feishu.verify": "appId:string appSecret:string domain?:string",
@@ -130,12 +134,15 @@ export const PARAMS: Record<string, string> = {
   "login.new": "runtime?:string access?:string",
   "login.code": "id:string code?:string",
   "login.drop": "id:string",
+  "profile.loginBrowser": "id:string",
+  "login.browser": "id:string",
   "job.get": "id:string",
   "job.log": "id:string lines:number",
   "job.stop": "id:string",
   "screen.close": "screen:string",
   "job.clearEnded": "session:string",
   "memory.get": "",
+  "process.end": "pid:number session:string",
   "footprint.scan": "",
   "footprint.rebuild": "keys?:strings",
   "footprint.delete": "keys?:strings",
@@ -155,6 +162,7 @@ export const PARAMS: Record<string, string> = {
   "software.auto": "on?:boolean",
   "machineLogin.cancel": "id:string",
   "machineLogin.answer": "id:string text:string",
+  "machineLogin.browser": "id:string",
   "workspace.create": "name?:string invite_code?:string",
   "workspace.rename": "workspace:string name?:string emoji?:string icon?:string",
   "workspace.setRelays": "workspace:string relays?:strings",
@@ -306,7 +314,7 @@ function stationOp(name: string, params: unknown): Request | null {
     case "session.delete":
       return op("DELETE", () => `/sessions/${p.at("key")}`, null, session("key"));
     case "session.settings":
-      return op("POST", () => `/sessions/${p.at("key")}/settings`, p.pick(["profile", "model", "effort", "fast"]), session("key"));
+      return op("POST", () => `/sessions/${p.at("key")}/settings`, p.pick(["profile", "model", "effort", "fast", "repick"]), session("key"));
     case "chat.archive": {
       const method = p.bool("archived") ? "POST" : "DELETE";
       const fallback = op(method, () => `/sessions/${p.at("session")}/archive`, null, session("session"));
@@ -401,8 +409,16 @@ function stationOp(name: string, params: unknown): Request | null {
       return op("POST", () => `/connects/${p.at("id")}/reconnect`, null, connect("id"));
     case "connect.bindSession":
       return op("POST", () => `/connects/${p.at("connect")}/session`, p.pick(["session", "title"]), connect("connect"));
-    case "connect.putSlackApp":
-      return op("PUT", () => `/connects/${p.at("connect")}/slack-app`, p.has("input") ? p.v.input : {}, connect("connect"));
+    // `from`: the app's settings the form started from; only what differs from them is written (and a new icon).
+    case "connect.putSlackApp": {
+      const input = p.has("input") ? p.v.input : {};
+      const from = p.has("from") ? p.v.from : null;
+      const changed =
+        from !== null && typeof from === "object" && input !== null && typeof input === "object"
+          ? Object.fromEntries(Object.entries(input as Record<string, unknown>).filter(([k, v]) => k === "icon" || JSON.stringify(v) !== JSON.stringify((from as Record<string, unknown>)[k])))
+          : input;
+      return op("PUT", () => `/connects/${p.at("connect")}/slack-app`, changed, connect("connect"));
+    }
     // Feishu (and Lark) bots (docs/feishu.md): made by scanning (the station follows it, the overview's
     // `feishuRegistrations` says how it goes), an app of one's own checked, a connect added with either.
     case "feishu.register":
@@ -439,7 +455,7 @@ function stationOp(name: string, params: unknown): Request | null {
     case "profile.useMachineLogin":
       return op("POST", () => "/profiles/machine", p.pick(["runtime"]), OVERVIEW);
     case "profile.put":
-      return op("PUT", () => `/profiles/${p.at("id")}`, p.has("input") ? p.v.input : {}, OVERVIEW);
+      return op("PUT", () => `/profiles/${p.at("id")}`, profileInput(p.has("input") ? p.v.input : {}), OVERVIEW);
     case "profile.addModel":
       return op("PUT", () => `/profiles/${p.at("id")}`, { addModel: p.word("model") ?? "" }, OVERVIEW);
     case "profile.delete":
@@ -464,11 +480,18 @@ function stationOp(name: string, params: unknown): Request | null {
     case "profile.loginCode":
       return op("POST", () => `/profiles/${p.at("id")}/login-code`, p.pick(["code"]), OVERVIEW);
     case "login.new":
-      return op("POST", () => "/logins", p.pick(["runtime", "access"]), NONE);
+      return op("POST", () => "/logins", p.pick(["runtime", "access"]), { kind: "login", id: null, from: null });
+    // A code is taken only while its sign-in waits for one.
     case "login.code":
-      return op("POST", () => `/logins/${p.at("id")}/code`, p.pick(["code"]), NONE);
+      return op("POST", () => `/logins/${p.at("id")}/code`, p.pick(["code"]), { kind: "login", id: p.str("id"), from: "needs_code" });
     case "login.drop":
-      return op("DELETE", () => `/logins/${p.at("id")}`, null, NONE);
+      return op("DELETE", () => `/logins/${p.at("id")}`, null, { kind: "login", id: p.str("id"), from: null });
+    // A sign-in's page opened in the station's own browser (docs/remote-login.md, 在 station 的浏览器中登录), for the
+    // person to finish there: `{screen}`, the screen of its tab, to open. Its job says the tab from then on (`screen`).
+    case "profile.loginBrowser":
+      return op("POST", () => `/profiles/${p.at("id")}/login-browser`, null, NONE);
+    case "login.browser":
+      return op("POST", () => `/logins/${p.at("id")}/browser`, null, NONE);
     case "job.get":
       return op("GET", () => `/jobs/${p.at("id")}`, null, NONE);
     case "job.log":
@@ -483,6 +506,9 @@ function stationOp(name: string, params: unknown): Request | null {
       return op("DELETE", () => `/sessions/${p.at("session")}/jobs`, null, session("session"));
     case "memory.get":
       return op("GET", () => "/memory", null, NONE);
+    // A chat's process ended from its station's 进程 (resources/watch.ts `end`): the page reads it again in a moment.
+    case "process.end":
+      return op("POST", () => `/resources/processes/${p.u64("pid")}/end`, p.pick(["session"]), NONE);
     case "footprint.scan":
       return op("POST", () => "/footprint/scan", null, FOOTPRINT);
     case "footprint.rebuild":
@@ -531,6 +557,9 @@ function stationOp(name: string, params: unknown): Request | null {
     // What a login's page gave (a code), entered by the person from its card: the station types it into the command.
     case "machineLogin.answer":
       return op("POST", () => `/machine-logins/${p.at("id")}/answer`, p.pick(["text"]), { kind: "machineLogins" });
+    // Its page opened in the station's own browser, for the person to finish it there: `{screen}`, to open.
+    case "machineLogin.browser":
+      return op("POST", () => `/machine-logins/${p.at("id")}/browser`, null, NONE);
     default:
       return null;
   }
@@ -607,4 +636,13 @@ function cloudOp(name: string, params: unknown): Request | null {
     default:
       return null;
   }
+}
+
+/// A profile's change as the station takes it: the models it may use (`models`) each once, in order, however they were
+/// ticked.
+export function profileInput(input: unknown): unknown {
+  if (input === null || typeof input !== "object" || !Array.isArray((input as { models?: unknown }).models)) return input;
+  const given = (input as { models: unknown[] }).models;
+  const models = [...new Set(given.filter((m): m is string => typeof m === "string"))].sort();
+  return { ...(input as object), models };
 }

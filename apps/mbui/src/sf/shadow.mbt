@@ -44,10 +44,6 @@ let fall_per_elevation : Double = 0.6
 pub let floating : Raised = raised(1.0, ambient=0.3, spot=0.3)
 
 ///|
-/// The latest chats raised on a wide screen (Wide.kt Recent: shadow(14), black at 20% both).
-pub let recent_raised : Raised = raised(14.0, ambient=0.2, spot=0.2)
-
-///|
 /// A sheet's (Sheet.kt: shadow(24)), a menu's (Sheet.kt: shadow(18)).
 pub let sheet_raised : Raised = raised(24.0)
 
@@ -90,3 +86,7 @@ pub let update_raised : Raised = raised(12.0, ambient=0.08, spot=0.08)
 pub fn Raised::cast(self : Raised) -> @ui.Shadow {
   Cast(self.sigma, self.dy, self.color)
 }
+
+///|
+/// What a finger holds and moves along its row (a place on a bottom bar's card): lifted 6, black at 14% both.
+pub let held_raised : Raised = raised(6.0, ambient=0.14, spot=0.14)

@@ -1,5 +1,6 @@
-// 07-draft-restart (e2e/traces/draft-restart.trace, after 06-draft's run): the app started again, the draft is still
-// there (the core gives it back); emptied, it is gone (the core told).
+// 07-draft-restart (e2e/traces/draft-restart.trace): the app started again over words left in the field (its run's own:
+// e2e/flows/06-draft-left), the draft is still there (the core gives it back); emptied, it is gone (the core told).
+// before it: 06-draft-left
 
 ///|
 test "07-draft-restart" {
@@ -13,8 +14,8 @@ test "07-draft-restart" {
     f.field("还没发出去的草稿 082947")
     f.clear()
     f.field("")
-    // kept a moment after the change
-    f.run_for(@sfapp.draft_keep_ms)
+    // (the core told as it changed: composer.text)
+    f.answered("composer.text", 1)
     // the bar moved by what this did (the field focused, the chat left) at rest
     f.run_to(@sfapp.bar_rest())
     f.end()

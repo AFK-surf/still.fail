@@ -36,7 +36,7 @@ export const sends = style([popover, panelCard, pills, {
 /** Its head: where they go, and the way to put the panel away in its corner. */
 export const sendsHead = style({ display: "flex", alignItems: "center", gap: "6px", minHeight: `${PANEL_PILL}px` });
 export const sendsTitle = style({ flex: "1 1 auto", minWidth: "0", paddingInlineStart: "10px", color: vars.muted, fontSize: vars.textMeta, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" });
-export const sendsList = style({ display: "flex", flexDirection: "column", gap: "2px", minHeight: "0", overflowY: "auto" });
+export const sendsList = style({ overscrollBehaviorY: "none", display: "flex", flexDirection: "column", gap: "2px", minHeight: "0", overflowY: "auto" });
 
 /** One file: its name and how it goes (or where it went) under it; what can be done with it at its end. */
 export const send = style({

@@ -134,7 +134,9 @@ fn rich_chat(older : Int) -> Json {
     }
   }
   let messages : Array[Json] = [
-    msg(1, "ember", { "name": "still.fail" }, "Studio 上的 claude 已启动。", "3 小时前", {}),
+    msg(1, "ember", { "name": "still.fail" }, "Studio 上的 claude 已启动。", "3 小时前", {
+      "notice": { "failed": false, "words": "Studio 上的 claude 已启动" },
+    }),
     msg(2, "person", by_person("林"), "帮我把聊天页的列表做成虚拟列表，几千条消息也要滚得顺。", "3 小时前", {
       "mine": true,
       "author": "lin@example.com",
@@ -201,7 +203,9 @@ fn rich_chat(older : Int) -> Json {
       "decision": { "resolved": false },
       "asked": true,
     }),
-    msg(9, "ember", { "name": "still.fail" }, "⚠️ Studio 上 codex 的登录已失效：请在设置里重新登录。", "20 分钟前", {}),
+    msg(9, "ember", { "name": "still.fail" }, "⚠️ Studio 上 codex 的登录已失效：请在设置里重新登录。", "20 分钟前", {
+      "notice": { "failed": true, "words": "Studio 上 codex 的登录已失效：请在设置里重新登录" },
+    }),
     msg(10, "agent", claude, "推送截图前要先登录 gh。", "15 分钟前", {
       "card": { "type": "login", "login": "login-1" },
       "decision": { "resolved": false },
@@ -270,9 +274,10 @@ fn small_chat(title : String, session : String) -> Json {
 }
 
 ///|
-/// A chat just made from a new chat (`new:N`, newChat.create): no title yet, nothing said in it.
+/// A chat just made from a new chat (`new:N`, newChat.create): named by no one yet (新对话, as the core calls it),
+/// nothing said in it.
 fn made_chat(session : String) -> Json {
-  match small_chat("", session) {
+  match small_chat("新对话", session) {
     Object(m) => {
       let o = m.copy()
       o["messages"] = Json::array([])
@@ -402,10 +407,18 @@ fn fixture_chat_topic(f : Fixture, name : String, params : Map[String, Json]) ->
             with_viz_message(rich_chat(f.older))
           } else if f.mode == "chat-file-links" {
             with_file_links(rich_chat(f.older))
+          } else if f.mode == "chat-table-images" {
+            with_table_images(rich_chat(f.older))
           } else if f.mode == "chat-screens" {
             with_message(rich_chat(f.older), screens_answer)
+          } else if f.mode == "chat-need" {
+            with_need(rich_chat(f.older))
+          } else if f.mode == "chat-working" {
+            with_working(rich_chat(f.older))
           } else if f.mode == "chat-update" {
             with_station_update(rich_chat(f.older))
+          } else if f.mode == "chat-download" {
+            with_download_message(rich_chat(f.older))
           } else {
             rich_chat(f.older)
           }
@@ -442,13 +455,52 @@ fn fixture_chat_topic(f : Fixture, name : String, params : Map[String, Json]) ->
           "name": "Studio",
           "icon": "glyph:desktop",
           "summary": "Apple M2 Max · 2 个 agent 在工作",
+          // how it is, as the core says it (StationView stateText, problems)
+          "stateText": "2 个 agent 正在运行",
+          "stateBusy": true,
+          "problems": [],
+          "version": "0.1.4765",
           "online": true,
-          // its machine and network as its card (settings/station_peek.mbt) shows them
+          // its machine and network as its card (settings/station_peek.mbt) and its page (src/sfdesk
+          // station_page.mbt) show them
           "host": {
+            "identity": "Mac Studio · Apple M2 Max",
             "meters": [
-              { "short": "CPU", "left": 72, "level": "ok", "remaining": "空闲 72%" },
-              { "short": "内存", "left": 18, "level": "amber", "remaining": "剩 11.5 G" },
-              { "short": "磁盘", "left": 41, "level": "ok", "remaining": "剩 380 G" },
+              {
+                "short": "CPU",
+                "left": 72,
+                "level": "ok",
+                "remaining": "空闲 72%",
+                "big": "72",
+                "unit": "%",
+                "title": "CPU 空闲",
+                "total": "负载 3.1",
+              },
+              {
+                "short": "内存",
+                "left": 18,
+                "level": "amber",
+                "remaining": "剩 11.5 G",
+                "big": "11.5",
+                "unit": "GB",
+                "title": "内存剩",
+                "total": "共 64 GB",
+              },
+              {
+                "short": "磁盘",
+                "left": 41,
+                "level": "ok",
+                "remaining": "剩 380 G",
+                "big": "380",
+                "unit": "GB",
+                "title": "磁盘剩",
+                "total": "共 1 TB",
+              },
+            ],
+            "details": [
+              { "label": "主机名", "value": "studio.local" },
+              { "label": "系统", "value": "macOS 26.1 · arm64" },
+              { "label": "已运行", "value": "12 天" },
             ],
           },
           "net": {
@@ -460,13 +512,16 @@ fn fixture_chat_topic(f : Fixture, name : String, params : Map[String, Json]) ->
             "downTotal": "212 MB",
             "upTotal": "9.6 MB",
           },
-          "overview": fixture_station_drive(true),
+          // (drive-roots: a member's, who browses only the folders it pins)
+          "overview": if f.mode == "drive-roots" { fixture_station_member() } else { fixture_station_overview() },
         },
         {
           "station": "ws1/st2",
           "id": "st2",
           "name": "MBA",
           "icon": "glyph:laptop:teal",
+          "stateText": "3 小时前在线",
+          "problems": [{ "key": "away", "level": "red", "text": "离线：在该机器上打开 still.fail 即可重新连接" }],
           "online": false,
           "overview": fixture_station_drive(false),
         },
@@ -521,9 +576,10 @@ fn fixture_chat_topic(f : Fixture, name : String, params : Map[String, Json]) ->
     }
     // chat-login: the login's page to open in the browser, for one who may (its pill opens it in a tab over the app;
     // what apps/android's MbuiCompareTest pictures beside it)
-    "machineLogins" if f.mode == "chat-login" => Some({ "canLogin": true, "canRelay": true })
-    "machineLogin" if f.mode == "chat-login" =>
-      Some({
+    // chat-login-station: the same, where the station's own browser can open it too
+    "machineLogins" if f.mode == "chat-login" || f.mode == "chat-login-station" => Some({ "canLogin": true, "canRelay": true })
+    "machineLogin" if f.mode == "chat-login" || f.mode == "chat-login-station" => {
+      let l : Map[String, Json] = {
         "id": "login-1",
         "title": "在 Studio 上登录 gh",
         "state": "browser",
@@ -532,7 +588,13 @@ fn fixture_chat_topic(f : Fixture, name : String, params : Map[String, Json]) ->
         "domain": "github.com",
         "active": true,
         "statusText": "在浏览器里完成登录",
-      })
+      }
+      if f.mode == "chat-login-station" {
+        l["browser"] = Json::boolean(true)
+        l["browserText"] = Json::string("在 Studio 的浏览器中打开")
+      }
+      Some(Json::object(l))
+    }
     "machineLogin" =>
       Some({
         "id": "login-1",
@@ -541,6 +603,9 @@ fn fixture_chat_topic(f : Fixture, name : String, params : Map[String, Json]) ->
         "active": true,
         "statusText": "等你在浏览器里登录",
       })
+    // chat-working: its agent's step, said in more words than a phone's line has room for
+    "live" if f.mode == "chat-working" && text(Some(Json::object(params)), "key") == "s-c1" =>
+      Some({ "loaded": true, "activity": { "now": { "key": "call:1", "text": working_step } } })
     _ => fixture_drive_topic(f, name, params)
   }
 }
@@ -773,7 +838,12 @@ fn fix_deliver(session : String, id : String) -> Unit {
   fix_later(fix_answer_ms, fn() {
     fix_serial.val += 1
     fix_later(fix_turn_end_ms, fn() { fix_chat(session).working = -1.0 })
-    let first = paste_preview(words)
+    // (its first line, as a made-up agent would take it up)
+    let lead = words.trim(chars=" \n\r\t").to_string()
+    let first = match lead.find("\n") {
+      Some(i) => lead.view(end_offset=i).to_string()
+      None => lead
+    }
     let said = if first == "" {
       "收到文件了，我看一下。"
     } else {
@@ -797,6 +867,11 @@ fn fix_deliver(session : String, id : String) -> Unit {
 /// The fixture's writes in a chat (`chat.send`, `chat.retry`, `chat.discard`, `draft.get`, `draft.put`,
 /// `station.upload.part`, `session.warm`), and what the page tells (`client.focus`, `chat.place`): None for any other.
 fn fixture_chat_call(f : Fixture, name : String, params : Json) -> Result[Json, Json]? {
+  // what is written, as the core's composers keep it (compose_fixture.mbt)
+  match fix_compose_call(f, name, params) {
+    Some(r) => return Some(r)
+    None => ()
+  }
   let p = Some(params)
   let session = match text(p, "session") {
     "" =>
@@ -807,6 +882,9 @@ fn fixture_chat_call(f : Fixture, name : String, params : Json) -> Result[Json, 
     s => s
   }
   match name {
+    // the places the station's bots are in, for a chat relayed (relay.mbt, sfdesk relay.mbt)
+    "chat.relayPlaces" => Some(Ok(fix_relay_places()))
+    "chat.relay" => Some(Ok({ "place": "#dev" }))
     "chat.send" => {
       fix_serial.val += 1
       let id = "out\{fix_serial.val}"
@@ -823,6 +901,10 @@ fn fixture_chat_call(f : Fixture, name : String, params : Json) -> Result[Json, 
         if text(Some(o), "id") == id {
           was = o
         }
+      }
+      // (words with 重发不了 in them fail again: their file's source gone, as the core says it)
+      if text(Some(was), "text").contains("重发不了") {
+        return Some(Err({ "code": "upload", "message": "a.jpg 的上传源已丢失，请在新消息中重新添加附件。" }))
       }
       fc.outbox.retain(fn(o) { text(Some(o), "id") != id })
       fc.outbox.push(outgoing_json(id, was, "retried", ""))
@@ -861,7 +943,7 @@ fn fixture_chat_call(f : Fixture, name : String, params : Json) -> Result[Json, 
         let o = Some(one)
         let id = text(o, "id")
         let name = text(o, "name")
-        list.push({
+        let kept : Map[String, Json] = {
           "id": Json::string(id),
           "name": Json::string(name),
           "size": Json::number(number(o, "size")),
@@ -871,7 +953,16 @@ fn fixture_chat_call(f : Fixture, name : String, params : Json) -> Result[Json, 
             "path": Json::string("uploads/" + id + "/" + name),
             "size": Json::number(number(o, "size")),
           },
-        })
+        }
+        // (pasted words: what the core said of them; a station's file: where it is; kept with the file as
+        // composer.ts keeps them)
+        for k in ["pasted", "ref"] {
+          match field(o, k) {
+            Some(x) => kept[k] = x
+            None => ()
+          }
+        }
+        list.push(Json::object(kept))
       }
       fix_composers[key] = list
       f.version += 1
@@ -962,6 +1053,19 @@ fn fixture_chat_call(f : Fixture, name : String, params : Json) -> Result[Json, 
       }
       Some(Ok({ "chats": Json::array(chats) }))
     }
+    // those of them the viewer may share, shared with 星火工作室 (xshare.ts chat.outsideShare)
+    "chat.outsideShare" => {
+      let words = text(p, "text")
+      let mut shared = 0
+      for x in fix_outside {
+        let (id, title, may) = x
+        if may && words.contains("@[" + title + "]") && !fix_xshared.contains(id) {
+          fix_xshared[id] = true
+          shared += 1
+        }
+      }
+      Some(Ok({ "shared": Json::number(shared.to_double()) }))
+    }
     "chat.xshareAdd" => {
       let id = text(p, "id")
       if fix_outside.iter().any(fn(x) { x.0 == id && x.2 }) {
@@ -1028,7 +1132,8 @@ fn seeded_outbox(mode : String) -> Array[Json] {
 //
 // The fixture takes a card's answer as the core does (Decisions.kt): answered at once (the option picked, 你 选择了
 // 「…」 as how it went), let go at once (no longer asked). An option with 失败 in it fails. The modes chat-cards (the
-// card answered) and chat-answering (an option under way) open the first row's chat so (scripts/shots.sh cards).
+// card answered) and chat-answering (an option under way) open the first row's chat so (scripts/shots.sh cards);
+// chat-vault, with an agent asking to keep a password at its end, decided here as the core decides it.
 
 ///|
 /// How the first row's chat's cards stand as answered here: by seq, the card's decision.
@@ -1039,10 +1144,34 @@ let fix_decided : Map[Int, Json] = {}
 let fix_replied : Map[Int, String] = {}
 
 ///|
+/// How chat-vault's request to keep a password, at the chat's end, went once decided here ("": waiting).
+let fix_vault : Ref[String] = Ref("")
+
+///|
+/// chat-vault's last post: an agent asking to keep a password, its card as the core says it, answered here; decided,
+/// how it went.
+fn vault_post() -> Json {
+  let ask : Map[String, Json] = {
+    "name": "UniFi UX7",
+    "mode": "env",
+    "save": { "kind": "login", "username": "zzj" },
+    "answer": "approve",
+  }
+  if fix_vault.val != "" {
+    ask["status"] = Json::string(fix_vault.val)
+  }
+  msg(60, "agent", by_agent("Anthropic", "claude", "s-c1"), "要存入 UniFi UX7 的密码", "刚刚", {
+    "card": { "type": "options", "vault": "r-ux7", "vaultAsk": Json::object(ask) },
+    "createdAt": Json::number(1.0e9),
+  })
+}
+
+///|
 /// The chat `v` with what was answered here in it.
 fn with_cards(f : Fixture, v : Json, session : String) -> Json {
   let seeded = f.mode == "chat-cards"
-  if session != "s-c1" || (fix_decided.is_empty() && !seeded) {
+  let vault = f.mode == "chat-vault"
+  if session != "s-c1" || (fix_decided.is_empty() && !seeded && !vault) {
     return v
   }
   match v {
@@ -1068,6 +1197,10 @@ fn with_cards(f : Fixture, v : Json, session : String) -> Json {
           }
           _ => ()
         }
+      }
+      // chat-vault's request to keep a password, last
+      if vault {
+        all.push(vault_post())
       }
       // each answer's message, after the rest
       for seq, label in fix_replied {
@@ -1119,6 +1252,12 @@ fn fixture_card_call(f : Fixture, name : String, params : Json) -> Result[Json, 
       f.version += 1
       Some(Ok(Json::object({})))
     }
+    // chat-vault's request decided: how it went on its card at once, as the core puts it
+    "vault.approve" | "vault.deny" if text(p, "request") == "r-ux7" => {
+      fix_vault.val = if name == "vault.approve" { "granted" } else { "denied" }
+      f.version += 1
+      Some(Ok(Json::object({})))
+    }
     _ => None
   }
 }
@@ -1128,7 +1267,7 @@ fn fixture_card_call(f : Fixture, name : String, params : Json) -> Result[Json, 
 /// word picked, chat-link-menu's link held.
 pub fn open_cards_fixture(mode : String) -> Unit {
   match mode {
-    "chat-answering" => dui.doing["answer/" + seq_key("ws1/st1", 7.0, 8.0) + "/一起换"] = true
+    "chat-answering" => acting.doing["answer/" + seq_key("ws1/st1", 7.0, 8.0) + "/一起换"] = true
     // a word of the last post picked (its handles and its bar), once laid out (pick.mbt)
     "chat-pick" => {
       pk.ts = "ts11"
@@ -1252,6 +1391,48 @@ let file_links_md : Json = [
 ]
 
 ///|
+/// MBUI_FIXTURE=chat-table-images: a last message placing two of its pictures in a table's cells, a wide one and a
+/// tall one, escaped as the station sends them, its Markdown tree with it (table_images_md).
+fn with_table_images(v : Json) -> Json {
+  match v {
+    Object(m) => {
+      let o = m.copy()
+      let all = match m.get("messages") {
+        Some(Array(a)) => a.copy()
+        _ => []
+      }
+      all.push(
+        msg(12, "agent", by_agent("anthropic", "claude", "s-c1"), table_images_answer, "1 分钟前", {
+          "attachments": [file("web-folded.png", 1440, 900, 90000), file("phone.png", 780, 1688, 60000)],
+          "placed": ["web-folded.png", "phone.png"],
+          "md": table_images_md,
+          "ending": "all_done",
+        }),
+      )
+      o["messages"] = Json::array(all)
+      Json::object(o)
+    }
+    _ => v
+  }
+}
+
+///|
+let table_images_answer : String = "| 网页 | 手机网页 |\n|---|---|\n| ![](web%2Dfolded.png) | ![](phone.png) |\n"
+
+///|
+/// table_images_answer's tree as the core reads it (src/sfkept): its words by where they are in it.
+let table_images_md : Json = [
+  [
+    "table",
+    [
+      ["tr", [["th", [[2, 4]]], ["th", [[7, 11]]]]],
+      ["tr", [["td", [["img", { "src": "web%2Dfolded.png" }]]], ["td", [["img", { "src": "phone.png" }]]]]],
+    ],
+    { "align": [Json::null(), Json::null()] },
+  ],
+]
+
+///|
 /// MBUI_FIXTURE=chat-viz's visualization: a fragment, as the viz skill has agents write them.
 let fixture_viz_html : String =
   #|<div class="viz-card" style="padding:16px"><b>本周发布</b><p>周一 2 个、周三 1 个、周五 3 个</p>
@@ -1278,6 +1459,61 @@ fn with_message(v : Json, words : String) -> Json {
         }),
       )
       o["messages"] = Json::array(all)
+      Json::object(o)
+    }
+    _ => v
+  }
+}
+
+///|
+/// The chat `v` ending on an agent's need with no card ("chat-need"): what it asks, waiting for a person, nothing to
+/// pick (the core's `asked`).
+fn with_need(v : Json) -> Json {
+  match v {
+    Object(m) => {
+      let o = m.copy()
+      let all = match m.get("messages") {
+        Some(Array(a)) => a.copy()
+        _ => []
+      }
+      all.push(
+        msg(12, "agent", by_agent("anthropic", "claude", "s-c1"), "你在手机上试一下新的列表，有问题截个图给我。", "1 分钟前", {
+          "ending": "need_human",
+          "asked": true,
+        }),
+      )
+      o["messages"] = Json::array(all)
+      Json::object(o)
+    }
+    _ => v
+  }
+}
+
+// ── an agent at work on a long step (MBUI_FIXTURE=chat-working) ──────────
+
+///|
+/// What the agent of the first row's chat does now, as long as an agent's step may say it (its call's description).
+let working_step : String = "在 Studio 上跑整套检查：先编译 mbui 的原生测试，再逐个对比手机、平板和桌面三种宽度下的截图"
+
+///|
+/// The first row's chat with its agent at work on that step, three minutes in: there as the chat opens.
+fn with_working(v : Json) -> Json {
+  match v {
+    Object(m) => {
+      let o = m.copy()
+      o["agents"] = Json::array(
+        items(Some(v), "agents").map(fn(a) {
+          match a {
+            Object(am) => {
+              let w = am.copy()
+              w["status"] = Json::string("running")
+              w["since"] = Json::number(-200000.0)
+              Json::object(w)
+            }
+            _ => a
+          }
+        }),
+      )
       Json::object(o)
     }
     _ => v
@@ -1369,5 +1605,73 @@ fn with_station_update(v : Json) -> Json {
       Json::object(o)
     }
     _ => v
+  }
+}
+
+///|
+/// Studio's overview (fixture_station_drive's), with its software as the core says it (its versions, a newer Claude
+/// Code out) and what its agents' processes take.
+fn fixture_station_overview() -> Json {
+  let o = match fixture_station_drive(true) {
+    Object(m) => m
+    _ => {}
+  }
+  o["processes"] = [{ "pid": 4021, "rssBytes": 1200000000.0 }]
+  o["processesText"] = "2 个 agent 进程 · 1.1 GB"
+  // its profiles, as the workspace's list has them (the settings' fixture's)
+  o["profiles"] = Json::array(@settings.fixture_profiles())
+  o["updates"] = [
+    {
+      "id": "station",
+      "name": "Station",
+      "installed": true,
+      "version": "0.1.4765",
+      "latest": "0.1.4765",
+      "newer": false,
+      "channel": "stable",
+      "auto": true,
+      "updatable": true,
+      "state": "idle",
+      "checkedAt": 1792300000000.0,
+      "shownText": "0.1.4765",
+      "tipText": "已是最新",
+      "updatingText": "正在更新",
+      "failedText": "更新失败",
+    },
+    {
+      "id": "claude",
+      "name": "Claude Code",
+      "installed": true,
+      "version": "2.1.4",
+      "latest": "2.1.9",
+      "newer": true,
+      "updatable": true,
+      "state": "idle",
+      "checkedAt": 1792300000000.0,
+      "shownText": "2.1.4",
+      "tipText": "",
+      "updatingText": "正在更新",
+      "failedText": "更新失败",
+    },
+  ]
+  Json::object(o)
+}
+
+///|
+/// The places the made-up station's one bot is in (`chat.relayPlaces`): one relayed to before, a private one.
+fn fix_relay_places() -> Json {
+  {
+    "connects": [
+      {
+        "id": "slack-1",
+        "kind": "slack",
+        "name": "星火助手",
+        "team": "星火",
+        "places": [
+          { "id": "C1", "name": "dev", "kind": "channel", "used": 20 },
+          { "id": "C2", "name": "ops", "kind": "channel", "private": true },
+        ],
+      },
+    ],
   }
 }

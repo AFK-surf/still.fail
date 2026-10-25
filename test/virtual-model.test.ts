@@ -1,3 +1,4 @@
+import { chatPageAhead } from "../web/src/chatPaging.ts";
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { sizesOf, Virtual, type Item, type Layout } from "../web/src/virtual/model.ts";
@@ -507,4 +508,46 @@ test("virtual_following_goes_once_to_where_what_closes_leaves_it_and_keeps_follo
   assert.equal(v.where, v.target());
   // What the activity below went along with: the closing, all of it.
   assert.equal(v.closedBefore("m:30"), 60);
+});
+
+test("virtual_scroll_prediction_is_independent_of_event_frequency_and_limits_row_churn", () => {
+  const run = (hz: number) => {
+    const v = new Virtual({ gap: 0, overscan: 400, boost: 2400 });
+    v.setViewport(800, 390);
+    v.widen();
+    v.setItems(Array.from({ length: 1000 }, (_, i) => ({ key: String(i), estimate: 100, exact: 100 })));
+    v.goto("100", "start");
+    let previous = "", changed = 0;
+    for (let i = 1; i <= hz; i++) {
+      v.scrolled(10000 + 3000 * i / hz, i * 1000 / hz);
+      const layout = v.layout();
+      const keys = layout.rows.map(r => r.key).join(",");
+      if (keys !== previous) changed++;
+      previous = keys;
+      const start = layout.rows[0]!.index * 100;
+      const end = (layout.rows.at(-1)!.index + 1) * 100;
+      assert(start <= v.where && end >= v.where + 800, "no uncovered viewport between window steps");
+    }
+    assert(changed < 40, `render window changes ${changed} times, less than once per 60 Hz frame`);
+    assert.equal(v.loadAhead("top", 500), 800, "no speculative load behind the reader");
+    assert(Math.abs(v.loadAhead("bottom", 500) - 1800) < 0.01);
+    assert.equal(v.loadAhead("bottom", 5000), 2400, "prefetch is capped at three panes");
+    const keys = v.layout().rows.map(r => r.key);
+    v.rested();
+    assert.equal(v.loadAhead("bottom", 500), 800, "stale speed does not prefetch at rest");
+    return keys;
+  };
+  assert.deepEqual(run(60), run(120));
+});
+
+
+test("chat_prefetch_keeps_visible_records_when_the_opposite_page_will_be_trimmed", () => {
+  assert.equal(chatPageAhead("top", 1, 150, ["m:120"]), false, "a tall late message must not be trimmed by early older paging");
+  assert.equal(chatPageAhead("bottom", 1, 150, ["m:30"]), false);
+  assert.equal(chatPageAhead("top", 1, 150, ["m:30", "m:60"]), true);
+  assert.equal(chatPageAhead("bottom", 1, 150, ["m:100", "m:120"]), true);
+  assert.equal(chatPageAhead("top", 1, 150, ["m:60", "m:110"]), false, "all visible rows must stay");
+  assert.equal(chatPageAhead("top", 1, 150, ["e:letters"]), false, "unknown folded records use ordinary paging");
+  assert.equal(chatPageAhead("top", undefined, undefined, ["m:30"]), false);
+  assert.equal(chatPageAhead("top", 1, 1000, ["m:400"]), false, "a growing live window cannot use its midpoint as a safe bound");
 });

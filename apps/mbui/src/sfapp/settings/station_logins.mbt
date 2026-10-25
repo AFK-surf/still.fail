@@ -6,16 +6,16 @@
 ///|
 /// The cards under way: 12 from the page's sides, 10 under them, 2 apart.
 // kept across runs: a value (no field of it changes)
-let logins_active : @ui.Style = @ui.style(w=Full, px=S3, pb=S2_5, gap=S0_5)
+let logins_active : @ui.Style = @ui.css("w=Full px=S3 pb=S2_5 gap=S0_5")
 
 ///|
 /// What they are (13 on 19, muted), 24 in, 4 under.
 // kept across runs: a value (no field of it changes)
-let logins_lead_room : @ui.Style = @ui.style(w=Full, px=S6, pb=S1)
+let logins_lead_room : @ui.Style = @ui.css("w=Full px=S6 pb=S1")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let logins_lead_words : @ui.TextStyle = @ui.text_style(size=Sm, color=Muted, leading=L4_75, w=Full)
+let logins_lead_words : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, leading=L4_75, w=Full)
 
 ///|
 /// The station's logins, as blocks of its page.
@@ -84,7 +84,7 @@ let login_marked : Ref[(String, String, Bool)?] = Ref(None)
 pub fn mark_login(address : String, login : String) -> Unit {
   login_marked.val = Some((address, login, false))
   // its card is in the page's 设置
-  station_parts[address] = 1
+  station_parts[address] = "settings"
 }
 
 ///|

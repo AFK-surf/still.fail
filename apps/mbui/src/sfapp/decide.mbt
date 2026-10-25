@@ -17,16 +17,10 @@ priv enum Sheet {
   JobOf(ChatRef, String)
   /// renaming the chat (ChatInfo.kt askTitle): its thread and its name as it was
   Rename(ChatRef, Double?, String)
-  /// publishing the chat (Publish.kt openPublish): its station and thread
-  Publish(String, Double)
-  /// sharing the chat with the viewer's other workspaces (ChatInfo.kt openShare): its thread
-  XShare(ChatRef, Double?)
   /// what can be done to an agent's context (AgentSheet.kt openContext): its session
   ContextOf(ChatRef, String)
   /// asking before an agent's context is cleared (AgentSheet.kt, PageParts.kt confirm): its session
   ClearContext(ChatRef, String)
-  /// relaying the chat to a channel (Relay.kt openRelay): its thread
-  Relay(ChatRef, Double)
   /// what its agents and other chats' wrote each other (Letters.kt openLetters): its thread
   LettersOf(ChatRef, Double)
 }
@@ -34,14 +28,8 @@ priv enum Sheet {
 ///|
 /// What this slice keeps while the app runs.
 priv struct Decide {
-  /// what was set going and is not answered yet (AppState.isDoing), by its call and what it is of
-  doing : Map[String, Bool]
   /// asks let go here, before the core says so (Chat.kt AskDismiss `gone`), by station, thread and post
   gone : Map[String, Bool]
-  /// what failed a moment ago (the core's doing, `stage: failed`, kept 6 s: DoingMark's red mark), by its key, which
-  /// failure it is (failed_serial: each its own 6 s)
-  failed : Map[String, Int]
-  mut failed_n : Int
   /// the sheet open; the one going (its motion is @kit.sheet's)
   mut sheet : Sheet?
   mut leaving : Sheet?
@@ -58,15 +46,7 @@ priv struct Decide {
   mut history_tab : Int
   /// groups and steps of a history opened, by their key
   opened : Map[String, Bool]
-  /// a history's page before asked for, by its first item (once a page)
-  mut history_asked : String
-  /// the steps asked to be read whole (`history.detail`), and when the answer came, by their entries
-  detail_at : Map[String, Double]
-  /// the 奏 page: decisions answered or let go here (not shown) and set aside here (last), until the core's list
-  /// has them so (Decisions.kt DecisionsLocal)
-  dgone : Array[String]
-  dlater : Array[String]
-  /// the front decision: its key, how far across it is dragged, whether a finger has it (its moves and speed the
+  /// the 奏 page's front decision: its key, how far across it is dragged, whether a finger has it (its moves and speed the
   /// framework's drag's: decisions.mbt)
   mut front : String
   mut drag : Double
@@ -85,10 +65,7 @@ priv struct Decide {
 
 ///|
 let dui : Decide = {
-  doing: {},
   gone: {},
-  failed: {},
-  failed_n: 0,
   sheet: None,
   leaving: None,
   jobs_all: false,
@@ -97,10 +74,6 @@ let dui : Decide = {
   job_tab: 0,
   history_tab: 0,
   opened: {},
-  history_asked: "",
-  detail_at: {},
-  dgone: [],
-  dlater: [],
   front: "",
   drag: 0.0,
   held: false,
@@ -115,11 +88,8 @@ let dui : Decide = {
 ///|
 /// As at the start (tests).
 fn decide_reset() -> Unit {
-  under_ends.clear()
   deck_anims.clear()
-  dui.doing.clear()
   dui.gone.clear()
-  dui.failed.clear()
   dui.sheet = None
   dui.leaving = None
   dui.jobs_all = false
@@ -128,13 +98,8 @@ fn decide_reset() -> Unit {
   dui.job_tab = 0
   dui.history_tab = 0
   dui.opened.clear()
-  dui.history_asked = ""
   history_placed.clear()
   history_short.clear()
-  history_marked.val = ("", "")
-  dui.detail_at.clear()
-  dui.dgone.clear()
-  dui.dlater.clear()
   dui.front = ""
   dui.drag = 0.0
   dui.held = false
@@ -144,207 +109,9 @@ fn decide_reset() -> Unit {
   dui.out = None
   dui.out_dir = 0
   dui.out_from = 0.0
-  publish_reset()
-  xsharing_reset()
-}
-
-///|
-/// Says `words` in the toast from the next frame on (from a call's answer, between frames).
-fn toast_later(words : String) -> Unit {
-  app.toast = words
-  app.toast_n += 1
-}
-
-///|
-/// Has the core do something (AppState.act): `key` under way until it answers (its button's spinner), `done` said
-/// when it did, why not said when it could not (`failed` told then). Nothing with MBUI_READONLY=1.
-fn act(
-  src : Source,
-  what : String,
-  key : String,
-  call : String,
-  params : Json,
-  done? : String = "",
-  ok? : (Json) -> Unit = fn(_) {  },
-  failed? : () -> Unit = fn() {  },
-) -> Unit {
-  if src.read_only {
-    toast_later(read_only_words)
-    failed()
-    return
-  }
-  if key != "" {
-    dui.doing[key] = true
-    dui.failed.remove(key)
-  }
-  (src.call)(call, params, fn(res) {
-    if key != "" {
-      dui.doing.remove(key)
-    }
-    if key != "" && res is Err(_) {
-      // its 6 s from the frame that first shows it (failed_lately)
-      dui.failed[key] = failed_next()
-    }
-    match res {
-      Ok(v) => {
-        if done != "" {
-          toast_later(done)
-        }
-        ok(v)
-      }
-      Err(e) => {
-        let code = text(Some(e), "code")
-        toast_later(
-          fill(
-            if code == "unconfirmed" {
-              "android-misc.act.unconfirmed"
-            } else {
-              "android-misc.act.failed"
-            },
-            [("what", what), ("error", error_words(e))],
-          ),
-        )
-        failed()
-      }
-    }
-  })
-}
-
-///|
-/// What went wrong, in words (errorText): the core's message, else its code.
-fn error_words(e : Json) -> String {
-  match text(Some(e), "message") {
-    "" => text(Some(e), "code")
-    m => m
-  }
-}
-
-///|
-/// Whether `key` is under way (AppState.isDoing).
-fn doing(key : String) -> Bool {
-  dui.doing.contains(key)
-}
-
-///|
-/// How long what failed keeps its red mark (the core's doing keeps a failure 6 s).
-let failed_ms : Double = 6000.0
-
-///|
-/// Whether `key` failed within the last 6 s (AppState.failedOf); a frame asked for when its mark is to go.
-fn failed_lately(c : @ui.Ctx, key : String) -> Bool {
-  match dui.failed.get(key) {
-    // (its going is not what is shown waits for: a screenshot of it failing shows the mark)
-    Some(n) if @kit.after(c, "failed/\{key}/\{n}", true, failed_ms, later=true) => {
-      dui.failed.remove(key)
-      false
-    }
-    Some(_) => true
-    None => false
-  }
-}
-
-///|
-/// Each failure told its own number (dui.failed): the same key failing again is a new 6 s.
-fn failed_next() -> Int {
-  dui.failed_n += 1
-  dui.failed_n
-}
-
-///|
-fn seq_key(station : String, thread : Double, seq : Double) -> String {
-  station + "\t" + thread.to_int64().to_string() + "\t" + seq.to_int64().to_string()
 }
 
 // ── what comes and goes under a post ────────────────────────────────────
-
-///|
-/// ListMotion.kt closeGap: the room left closed by the rows' spring (critically damped, 350), a little late (100 ms).
-// kept across runs: a curve, never written
-let close_gap : @motion.Spec = @motion.spring(stiffness=350.0, threshold=0.002, delay=100.0)
-
-///|
-/// How long the archive buttons take to come and go (Chat.kt ArchiveEase's 280 ms), 忽略 too.
-pub let archive_ms : Double = 280.0
-
-///|
-/// ArchiveEase (Chat.kt): a quick start, a soft landing.
-// kept across runs: a curve, never written
-pub let archive_ease : @motion.Ease = Soft
-
-///|
-/// How small the archive buttons (and 忽略) are as they have come or gone: 85%.
-pub let archive_scale : Double = 0.85
-
-///|
-/// The archive buttons' curve and time (Chat.kt ArchiveEase, `archive_ms`): a quick start, a soft landing.
-// kept across runs: a curve, never written
-let archive_tween : @motion.Spec = @motion.tween(archive_ms, ease=archive_ease)
-
-///|
-/// The rooms under the posts as their motions were asked (under_post, by its key), kept to say when they are at rest.
-let under_ends : Map[String, @motion.Anim] = {}
-
-///|
-/// When what comes and goes under the posts (options, how a card went, 忽略, the archive buttons) is at rest, their
-/// rooms opening or closing on their springs and tweens (the frames' clock; -1: none moves; +inf: told to go, not
-/// started yet): a test runs to it.
-pub fn under_rest() -> Double {
-  let mut end = -1.0
-  under_ends.each(fn(_, a) { if a.ends_at() > end { end = a.ends_at() } })
-  end
-}
-
-///|
-/// What `body` builds under a post, shown or not as `shown` says (Compose's AnimatedVisibility with expandVertically /
-/// shrinkVertically from its top): coming by `enter` (None: there at once, EnterTransition.None) as its room opens by
-/// `open`, going by `exit` as its room closes by `close`; turned back mid-way from where it is; the first time as it
-/// is. Its room is laid out (`@motion.reveal`, as the Android app's shrinkVertically lays it out, so what is under it
-/// in the chat closes up); what is in it is only drawn while it goes (a tap is what is under it's). `start_at`: when
-/// it was changed in its turn (Turns::in_turn), its motion from then.
-fn under_post(
-  c : @ui.Ctx,
-  key : String,
-  shown : Bool,
-  enter? : @motion.Trans,
-  open? : @motion.Spec = archive_tween,
-  exit~ : @motion.Trans,
-  close? : @motion.Spec = archive_tween,
-  start_at? : Double,
-  body : () -> Unit,
-) -> Unit {
-  let to = if shown { 1.0 } else { 0.0 }
-  let h = @motion.anim(c, "under/" + key, to, global=true)
-  let look = match enter {
-    Some(e) => @motion.presence(c, "under-look/" + key, shown, enter=e, exit~, start_at?)
-    None => {
-      // there at once as it comes; going, by `exit`
-      if shown {
-        h.snap(1.0)
-      }
-      @motion.presence(c, "under-look/" + key, shown, enter=@motion.trans(spec=@motion.Snap(0.0)), exit~, start_at?)
-    }
-  }
-  match start_at {
-    Some(at) if h.target() != to => h.animate(to, if shown { open } else { close }, start_at=at)
-    _ => h.follow(to, if shown { open } else { close })
-  }
-  under_ends[key] = h
-  let share = h.get()
-  let look = match look {
-    Some(l) => l
-    None => if share <= 0.0 { return } else { @ui.look(alpha=0.0) }
-  }
-  if h.moving() {
-    @motion.log_frame(c, "under/" + key, "open=\{share} alpha=\{look.alpha} scale=\{look.sx}")
-  }
-  @motion.reveal(c, "under/" + key, share, fn() {
-    let i = c.box(w=Fill(1.0), body)
-    c.look(i, look)
-    @motion.leaving(c, i, shown)
-  })
-}
-
-// ── the cards in a chat ─────────────────────────────────────────────────
 
 ///|
 /// An option picked (Decisions.kt DecisionUnder → answerDecision): the core sends it as the viewer's message quoting
@@ -426,9 +193,10 @@ fn ask_dismiss(
     exit=@motion.trans(fade=0.0, scale=archive_scale, ox=0.0, oy=0.0, spec=archive_tween),
     start_at?=if at >= 0.0 { Some(at) } else { None },
     fn() {
+      // (6 under the options)
       c.box(pt=6.0, fn() {
         c.box(id=if shown { id } else { 0 }, fn() {
-          c.text(tr("android-chat.asks.dismiss"), size=12.0, color=t.p.muted, line=18.0) |> ignore
+          c.rich([@ui.span(tr("android-chat.asks.dismiss"))], size=t.t.caption, color=t.p.muted, line=18.0) |> ignore
         })
         |> ignore
       })
@@ -458,6 +226,8 @@ fn archive_chat(src : Source, r : ChatRef, v : ChatView) -> Unit {
     "chat.archive",
     Json::object(p),
     done=tr("android-chat.archived"),
+    done_action=tr("android-chat.archived.undo"),
+    done_run=@sfbase.archive_undo(src, p),
   )
 }
 
@@ -484,7 +254,7 @@ fn close_sheet(c : @ui.Ctx) -> Unit {
 ///|
 /// What a fitted sheet shows, as wide as it and as tall as what it holds (measured for the sheet's height).
 // kept across runs: a value (no field of it changes)
-let sheet_fitted : @ui.Style = @ui.style(w=Full)
+let sheet_fitted : @ui.Style = @ui.css("w=Full")
 
 ///|
 /// Under what a sheet shows, the navigation bar's room: what it shows kept above the bar, its ground going on down to
@@ -497,55 +267,57 @@ fn sheet_foot(c : @ui.Ctx) -> Unit {
 
 ///|
 /// A sheet from the bottom (Sheet.kt SheetHost, mbui's @kit.sheet): the scrim (black at 28%) closing it when tapped;
-/// the sheet `tall` high (its share of the screen), or with `fit` as tall as what it shows, or with `fit_to` that
-/// tall over the navigation bar (SheetSpec fit: Android's own reckoning of what it shows, what is more scrolling in it),
-/// at most 90%; its top corners 26 round, frosted over the page and the scrim (@sf.sheet_look); it rises and sinks on the
-/// sheet's spring, drawn only as it goes (a tap meanwhile is what is under it's). The decisions' sheets are one sheet:
-/// one asked in place of another goes to its height.
+/// the sheet `tall` high (its share of the screen), or with `fit` as tall as what it shows as this frame lays it out
+/// (read back: laid out another height, the frame is built again; `tall` before it is first laid out), at most nearly
+/// all of the screen (@sf.sheet_most, as the library's presenters), what is more scrolling in it; its top corners 26
+/// round, frosted over the page and the scrim (@sf.sheet_look); it rises and sinks on the sheet's spring, drawn only as
+/// it goes (a tap meanwhile is what is under it's), and is as tall as what it shows asks for as that changes, at once
+/// (placed by its size, not chased: docs/motion.md). The decisions' sheets are one sheet: one asked in place of another
+/// is its height.
 fn sheet_frame(
   c : @ui.Ctx,
   key : String,
   tall : Double,
   body : () -> Unit,
   fit? : Bool = false,
-  fit_to? : Double = 0.0,
   draggable? : Bool = false,
 ) -> Unit {
   let leaving = dui.sheet is None
-  // fitted: what it shows as laid out (the frame before); `tall`, its share, until that is known
-  let fit_key = "sheet-fit/" + key
-  let h = match (fit, @motion.measured(c, fit_key)) {
-    _ if fit_to > 0.0 => fit_to + nav_foot()
-    (true, Some(m)) => m
+  let fit_id = c.id("sheet-fit/" + key)
+  let grab_id = c.id("sheet-fit/" + key + "/grab")
+  let height_of = fn(id : Int) {
+    match c.laid_size(id) {
+      Some((_, h)) => Some(h)
+      None => None
+    }
+  }
+  let h = match (fit, height_of(fit_id)) {
+    (true, Some(m)) => height_of(grab_id).unwrap_or(0.0) + m + nav_foot()
     _ => tall
   }
   let r = @kit.sheet(
     c,
     "decide-sheet",
     !leaving,
-    h=dmin(h, c.height * 0.9),
-    // a draggable one between half (55%) and nearly all (94%) of the screen, a tap on its grabber to the other (Sheet.kt)
+    h=dmin(h, c.height * @sf.sheet_most),
+    // a draggable one between half (55%) and nearly all of the screen, a tap on its grabber to the other (Sheet.kt)
     detents=if draggable { sheet_detents } else { [] },
     scrim=@sf.sheet_scrim,
     look=@sf.sheet_look(),
     fn() {
-      if fit_to > 0.0 {
-        // the grabber, then what it shows scrolling in the room left over the navigation bar (Sheet.kt: the content's
+      if fit {
+        // the grabber, then what it shows laid out at what it needs (both read back for the sheet's height), in the
+        // room left over the navigation bar: all of it, or past the most it scrolls (Sheet.kt: the content's
         // Column(weight(1f).verticalScroll))
-        @sf.sheet_grab(c)
+        c.box(style=sheet_fitted, id=grab_id, taps=false, fn() { @sf.sheet_grab(c) }) |> ignore
         c.box(style=sheet_scrolled, fn() {
-          c.list("sheet-scroll/" + key, 1, fit_to, fn(_) { body() }) |> ignore
+          c.list("sheet-scroll/" + key, 1, tall, fn(_) {
+            c.box(style=sheet_fitted, id=fit_id, taps=false, fn() { body() }) |> ignore
+          })
+          |> ignore
         })
         |> ignore
         sheet_foot(c)
-      } else if fit {
-        // laid out at what it needs, kept for the next frame's height
-        let shown = c.box(style=sheet_fitted, fn() {
-          @sf.sheet_grab(c)
-          body()
-          sheet_foot(c)
-        })
-        @motion.measure(c, shown, fit_key)
       } else {
         // its share: what it shows may fill it (a list scrolling in it)
         @sf.sheet_grab(c)
@@ -563,21 +335,21 @@ fn sheet_frame(
 }
 
 ///|
-/// What a sheet reckoned by `fit_to` shows: the room between its grabber and its foot.
+/// What a fitted sheet shows between its grabber and its foot: the room left there.
 // kept across runs: a value (no field of it changes)
 let sheet_scrolled : @ui.Style = @ui.style(w=Full, h=@sf.grow)
 
 ///|
 /// Where a draggable sheet settles: half the screen and nearly all of it (Sheet.kt SheetHost: 0.55, 0.94).
 // kept across runs: a table, never written
-let sheet_detents : Array[Double] = [0.55, 0.94]
+let sheet_detents : Array[Double] = [0.55, @sf.sheet_most]
 
 ///|
 /// A sheet's head (Sheet.kt SheetHead): its title, 17 bold.
 fn sheet_head(c : @ui.Ctx, title : String) -> Unit {
   let t = @sf.theme()
   c.box(dir=Row, w=Fill(1.0), pl=18.0, pr=18.0, pt=4.0, pb=10.0, align=ACenter, fn() {
-    c.text(title, size=17.0, weight=700, color=t.p.text, wrap=false) |> ignore
+    c.text(title, size=t.t.title, weight=700, color=t.p.text, wrap=false) |> ignore
   })
   |> ignore
 }
@@ -596,11 +368,8 @@ fn sheets(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
     JobsOf(r) => jobs_sheet(c, src, r)
     JobOf(r, id) => job_sheet(c, src, r, id)
     Rename(r, thread, was) => rename_sheet(c, src, r, thread, was)
-    Publish(station, thread) => publish_sheet(c, src, station, thread)
-    XShare(r, thread) => xshare_sheet(c, src, r, thread)
     ContextOf(r, key) => context_sheet(c, src, r, key)
     ClearContext(r, key) => clear_context_sheet(c, src, r, key)
-    Relay(r, thread) => relay_sheet(c, src, r, thread)
     LettersOf(r, thread) => letters_sheet(c, src, r, thread)
   }
 }

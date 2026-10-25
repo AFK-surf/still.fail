@@ -53,6 +53,8 @@ jobs:
         shell: bash
         run: |
           export MOON_HOME="$RUNNER_TOOL_CACHE/moon-ci"; [ "${{ runner.os }}" != Windows ] || MOON_HOME=$(cygpath -u "$MOON_HOME")
+          # (the release the tool cache held is written over: .github/actions/mbui-moonbit restores what is put in)
+          rm -f "$MOON_HOME.key"
           if [ "${{ runner.os }}" = Windows ]; then
             MOON_HOME=$(cygpath -w "$MOON_HOME") powershell -NoProfile -Command "irm https://cli.moonbitlang.com/install/powershell.ps1 | iex"
           else

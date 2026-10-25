@@ -1,0 +1,26 @@
+# The wide frame's sidebar folded to the rail's bar and opened again, shown a while as the pointer comes on the bar
+# and folded again as it leaves (brand.tsx moveSidebar, Rail.tsx peekSidebar): MBUI_FIXTURE=webdemo MBUI_WIN=1280x800,
+# beside the web's own (the same steps, its stories' demo): 对话 pressed again (folded, shown a while: the pointer is on
+# the rail), the pointer away (folded again), on 文件 in the bar (shown a while), away, 对话 pressed in the bar (open).
+timeout 20000
+until 新建对话
+wait 600
+tap 把那个弄一下
+wait 900
+move 1000 700
+wait 300
+hover icon:chats
+wait 200
+tap icon:chats
+wait 900
+move 1000 400
+wait 1600
+hover icon:folder
+wait 900
+move 1000 400
+wait 1600
+hover icon:chats
+wait 200
+tap icon:chats
+wait 900
+exit

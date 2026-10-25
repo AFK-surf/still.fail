@@ -8,7 +8,7 @@ test "Home: a chat with news goes to the top on the rows' spring, the rows it pa
   let clock = Ref::new(0.0)
   fix_clock.val = Some(fn() { clock.val })
   let src = fixture("home-motion")
-  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0)
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0, platform=2)
   let (_, y_ci) = t.drawn_of("盯着 CI，绿了告诉我").unwrap()
   let (_, y_top) = t.drawn_of("整理发布清单").unwrap()
   // its news comes (the fixture's first step)
@@ -37,7 +37,7 @@ test "Home: a chat with news goes to the top on the rows' spring, the rows it pa
 ///|
 /// Whether a row of Home's list moves now: its place, its coming in, its passing over others, a copy of one gone.
 fn home_moving(t : @ui.Tester) -> Array[String] {
-  t.moving().filter(fn(m) { m.contains("a row lifted") || (m.contains("home/") && m.contains("\u{1}")) })
+  t.moving().filter(fn(m) { m.contains("a row lifted") || (m.contains("chats/") && m.contains("\u{1}")) })
 }
 
 ///|
@@ -47,7 +47,7 @@ test "Home: back from a chat to the list changed meanwhile, the list drawn as it
   let clock = Ref::new(0.0)
   fix_clock.val = Some(fn() { clock.val })
   let src = fixture("home-motion")
-  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0)
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0, platform=2)
   t.tap_text("整理发布清单")
   t.run_for(@ui.nav_push_ms)
   assert_true(t.find("搜索全部内容") is None)
@@ -118,7 +118,7 @@ test "Home: a new chat its station makes keeps its row (its clientKey): it neith
       }
     },
   }
-  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0)
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0, platform=2)
   assert_true(t.find("新会话的第一句") is Some(_))
   made.val = true
   // (the frame the list changes in: a row leaving or coming would be set going there)
@@ -136,9 +136,9 @@ test "Home: a row swiped off is archived once it has gone, and leaves no copy of
   ignore(x)
   t.drag(300.0, y + h / 2.0, 300.0 - 390.0 * 0.6, y + h / 2.0, steps=12)
   // going off: not archived yet
-  t.run_for(swipe_off_ms / 2.0)
+  t.run_for(@sfpages.swipe_off_ms / 2.0)
   assert_true(t.find("把旧的截图都换成新的") is Some(_))
-  t.run_for(swipe_off_ms)
+  t.run_for(@sfpages.swipe_off_ms)
   t.frame()
   assert_true(t.find("把旧的截图都换成新的") is None)
   // gone with no copy fading where it was; the rows under it close over the room
@@ -153,7 +153,7 @@ test "words sent fly from the field into their bubble" {
   fix_clock.val = Some(fn() { clock.val })
   let src = fixture("chat")
   open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
-  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0)
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0, platform=2)
   // the chat pushed in over Home
   t.run_for(@ui.nav_push_ms)
   t.tap_text("发消息")
@@ -203,7 +203,7 @@ test "Home: the first rows, after the list waited, come as they are and a tap on
       }
     },
   }
-  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0)
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0, platform=2)
   assert_true(t.find("整理发布清单") is None)
   // the list is read: its rows are there, drawn where they are laid out, from the first frame (as the e2e's drive
   // taps them: where they are, as soon as they are still)
@@ -234,34 +234,8 @@ test "send tapped while the composer grows goes at once, the field emptied" {
   assert_eq(after, "")
   // the words sent wait for their row, which this core never gives; the composer's room let go after
   t.run_for(flight_wait_ms + composer_morph_ms)
-  t.assert_idle()
-}
-
-///|
-test "＋'s sheet going down takes no tap: the field tapped meanwhile is the field's" {
-  // what the e2e caught: the field tapped while the sheet, let go of, still went down under its scrim
-  let calls : Array[Made] = []
-  let t = fake_core(calls)
-  t.tap(10.0 + 8.0 + 18.0, 844.0 - 10.0 - 8.0 - 18.0)
-  assert_true(cui.attach)
-  // the scrim, tapped: let go of (a frame, not settled: it is still going down)
-  t.touch(0, 195.0, 200.0)
-  t.touch(2, 195.0, 200.0)
-  t.frame()
-  assert_true(!cui.attach)
-  t.frame()
-  // still going down, drawn over the field
-  assert_true(t.find("文件") is Some(_))
-  t.tap_text("发消息")
-  let (active, _, _, _) = t.ime()
-  assert_true(active)
-  t.type_text("还在下去的时候")
-  tap_send(t)
-  let sent = named(calls, "chat.send")
-  assert_eq(sent.length(), 1)
-  assert_eq(text(Some(sent[0].params), "text"), "还在下去的时候")
-  // the words sent wait for their row, which this core never gives; the composer's room let go after
-  t.run_for(flight_wait_ms + composer_morph_ms)
+  // (its row under way: said so once it has been a while, sfpages chat_rows.mbt)
+  t.run_for(@sfpages.sending_shows_ms)
   t.assert_idle()
 }
 
@@ -289,6 +263,8 @@ test "a quote's line for a comment, tapped while the capsule grows round it, tak
   }
   // the words sent wait for their row, which this core never gives; the composer's room let go after
   t.run_for(flight_wait_ms + composer_morph_ms)
+  // (its row under way: said so once it has been a while, sfpages chat_rows.mbt)
+  t.run_for(@sfpages.sending_shows_ms)
   t.assert_idle()
 }
 
@@ -340,26 +316,25 @@ test "the chat's sheet going down: its own rows take no tap, the scrim none" {
 test "the workspaces' sheet sinking takes no tap: the bar's 文件 tapped under it opens its page" {
   let t = tester("home")
   t.tap_text("星火工作室")
-  assert_true(sheet_open())
+  assert_true(@sf.presenting())
   t.tap_once(195.0, 60.0)
   t.frame()
-  assert_true(!sheet_open())
+  assert_true(!@sf.presenting())
   // sinking, drawn over the bar
-  assert_true(sheet_host.shown != NoSheet)
+  assert_true(@sf.presented_drawn())
   let (xs, y) = bar_places_at()
   t.tap_once(xs[1], y)
   assert_true(app.nav.top() == Files)
 }
 
 ///|
-test "a drive sheet going down takes no tap: its 重命名 tapped meanwhile does nothing" {
+test "a row's sheet going down takes no tap: its 重命名 tapped meanwhile does nothing" {
   let t = drive_tester("drive")
   // the drive pushed in over Home
   t.run_for(@ui.nav_push_ms)
+  // held: what can be done to it, a sheet from the foot
   hold(t, "季度数据.csv")
-  let log = t.drive("tap icon:more\nuntil 重命名\n")
-  assert_true(log.contains("EXIT 0"))
-  t.draw()
+  assert_true(t.find("重命名") is Some(_))
   t.tap_once(195.0, 60.0)
   t.frame()
   assert_true(t.find("重命名") is Some(_))

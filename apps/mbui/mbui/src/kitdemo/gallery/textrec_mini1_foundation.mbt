@@ -1,5 +1,7 @@
 // Kept from a real host's run (mini1_foundation: MBUI_TEXT_RECORD=1 MBUI_DRAW_LOG=1 MBUI_SCREEN=foundation MBUI_WIN=960x720, platform 0),
 // made by scripts/chk textrec: not edited by hand.
+// Its frames' hashes since made again by a Tester over this text (scripts/chk textrec --rehash): a change to
+// what mbui draws, not to the host's.
 
 ///|
 let run_mini1_foundation : String =
@@ -131,11 +133,11 @@ let run_mini1_foundation : String =
   #|TEXTREC {"g":86,"r":[817,0,8,10,-1,-8,0]}
   #|TEXTREC {"g":87,"r":[826,0,8,10,-1,-8,0]}
   #|ENV {"motion":0,"glass":0,"dark":1,"inset":0}
-  #|DRAWHASH 1 7975553159.411293 960 720 1 -2328245597783873378 1
+  #|DRAWHASH 1 7975553159.411293 960 720 1 -9107841585550846374 1
   #|INPUT {"k":"app","t":7975553277.764668,"a":[0]}
-  #|DRAWHASH 2 7975553282.871835 960 720 1 -2328245597783873378 1
+  #|DRAWHASH 2 7975553282.871835 960 720 1 -9107841585550846374 1
   #|INPUT {"k":"pointer","t":7975553284.100711,"a":[1,56.26171875,429.5,0]}
-  #|DRAWHASH 3 7975553300.072585 960 720 1 -2328245597783873378 1
-  #|DRAWHASH 4 7975553316.727002 960 720 1 -2328245597783873378 1
+  #|DRAWHASH 3 7975553300.072585 960 720 1 -9107841585550846374 1
+  #|DRAWHASH 4 7975553316.727002 960 720 1 -9107841585550846374 1
   #|INPUT {"k":"pointer","t":7975553317.509377,"a":[1,86.20841002464294,495.5,0]}
-  #|DRAWHASH 5 7975553333.392752 960 720 1 -2328245597783873378 1
+  #|DRAWHASH 5 7975553333.392752 960 720 1 -9107841585550846374 1

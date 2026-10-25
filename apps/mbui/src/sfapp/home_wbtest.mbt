@@ -3,7 +3,7 @@
 fn tester(mode : String) -> @ui.Tester {
   reset()
   let src = fixture(mode)
-  @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0)
+  @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0, platform=2)
 }
 
 ///|
@@ -13,6 +13,32 @@ test "signed out: the sign-in page" {
   assert_true(t.find("登录或注册") is Some(_))
   assert_true(t.find("可同时登录多个账号，随时切换 workspace。") is Some(_))
   t.assert_idle()
+}
+
+///|
+test "signed out in a desktop's window: 登录或注册 alone, no wider than the desktop app's; a phone's across the page" {
+  reset()
+  let pressed = Ref::new(0)
+  let src : Source = { ..fixture("signin"), sign_in: fn() { pressed.val += 1 } }
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=1280.0, h=800.0, platform=0)
+  // no words but its own
+  assert_true(t.find("让 agent 持续工作") is None)
+  assert_true(t.find("可同时登录多个账号，随时切换 workspace。") is None)
+  let (x, y, w, h) = t.rect_of("登录或注册").unwrap()
+  let (mid, at) = (x + w / 2.0, y + h / 2.0)
+  // beside it, where it ended when it was as wide as the page: nothing
+  t.tap(mid - 160.0, at)
+  t.tap(mid + 160.0, at)
+  assert_eq(pressed.val, 0)
+  // on it, near its end
+  t.tap(mid + 140.0, at)
+  assert_eq(pressed.val, 1)
+  // a phone's: as wide as the page less its sides
+  reset()
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0, platform=2)
+  let (x, y, w, h) = t.rect_of("登录或注册").unwrap()
+  t.tap(x + w / 2.0 + 160.0, y + h / 2.0)
+  assert_eq(pressed.val, 2)
 }
 
 ///|
@@ -59,7 +85,7 @@ fn rows_lit(t : @ui.Tester, y? : Double = -1.0) -> Int {
   .drawn_rects()
   .filter(fn(r) {
     let (_, ry, _, rh, color) = r
-    color == ground && (rh - chat_row_h).abs() < 0.5 && (y < 0.0 || (ry <= y && y <= ry + rh))
+    color == ground && (rh - @sfpages.touch_row_h).abs() < 0.5 && (y < 0.0 || (ry <= y && y <= ry + rh))
   })
   .length()
 }
@@ -104,12 +130,12 @@ test "a row a finger scrolls the list from: not lit" {
 test "the workspaces' sheet: another workspace tapped is the one in view" {
   let t = tester("home")
   t.tap_text("星火工作室")
-  assert_true(sheet_open())
+  assert_true(@sf.presenting())
   assert_true(t.find("切换 workspace") is Some(_))
   assert_true(t.find("当前使用") is Some(_))
   assert_true(t.find("其他 workspace") is Some(_))
   t.tap_text("个人")
-  assert_true(!sheet_open())
+  assert_true(!@sf.presenting())
   assert_true(t.find("个人") is Some(_))
   // no station there yet: adding the first one is the page
   assert_true(t.find("添加第一台 station") is Some(_))
@@ -124,21 +150,12 @@ test "the filter: 我参与的 shows only the chats the viewer is in" {
   }
   // the filter's button, at the bar's right
   t.tap(390.0 - 16.0 - 17.0, 25.0)
+  t.run_for(@kit.sheet_rest("sf-present") - t.time())
   assert_true(t.find("监控中") is Some(_))
   t.tap_text("我参与的")
   assert_true(t.find("首页的列表改成按天分组") is Some(_))
   assert_true(t.find("夜里的构建又失败了") is Some(_))
   assert_true(t.find("和 Ana 一起看新版的引导页") is Some(_))
-}
-
-///|
-test "归档 at a row's start archives its chat" {
-  let t = tester("home")
-  t.scroll_to(12)
-  t.draw()
-  assert_true(t.find("把旧的截图都换成新的") is Some(_))
-  t.tap_text("归档")
-  assert_true(t.find("把旧的截图都换成新的") is None)
 }
 
 ///|
@@ -150,9 +167,9 @@ test "a row archived: an archivable row under it closes over it whole, its swipe
   let under = "把旧的截图都换成新的"
   let (_, y_was, _, h) = t.rect_of(under).unwrap()
   hold_row(t, "Slack 里问的报销流程")
-  // the menu's last item, a row (45) under 复制会话链接
-  let (lx, ly) = t.find("复制会话链接").unwrap()
-  t.tap(lx, ly + 45.0)
+  // the menu's 归档 (its last item)
+  let (lx, ly) = t.find_last("归档").unwrap()
+  t.tap(lx, ly)
   assert_true(t.find("Slack 里问的报销流程") is None)
   // laid out a row up at once, drawn where it was, all of it
   let (_, y_now, _, _) = t.rect_of(under).unwrap()
@@ -178,12 +195,28 @@ test "the list while it is read: no rows, the shapes" {
 }
 
 ///|
-test "state leads, in either language" {
-  assert_eq(lead_of("要你帮忙：看一下", ["要你帮忙"], ["：", ":"], true), Some(5))
-  assert_eq(lead_of("要你帮忙", ["要你帮忙"], ["：", ":"], true), Some(4))
-  assert_eq(lead_of("Needs you: look", ["Needs you"], ["：", ":"], true), Some(11))
-  assert_eq(lead_of("在等", ["在等"], ["："], false), None)
-  assert_eq(lead_of("做完了吗", ["做完了"], ["："], true), None)
+test "a state line's lead is the core's: an icon in its words' place with what follows; none, the words as they are" {
+  reset()
+  let t = @ui.Tester::new(
+    fn(c) {
+      c.box(w=Fill(1.0), fn() {
+        @sfpages.state_line(c, "a", c.id("a"), "要你帮忙：看一下", lead="need", rest="看一下")
+        // (words that look like a lead, said by none: as they are)
+        @sfpages.state_line(c, "b", c.id("b"), "要你帮忙看一眼")
+        @sfpages.state_line(c, "c", c.id("c"), "奏 · 用哪个？", lead="decision", lead_text="奏", rest=" · 用哪个？")
+      })
+      |> ignore
+    },
+    w=390.0,
+    h=120.0,
+    platform=2,
+  )
+  t.draw()
+  assert_true(t.find("看一下") is Some(_))
+  assert_true(t.find("要你帮忙：看一下") is None, msg="the lead said by its icon")
+  assert_true(t.find("要你帮忙看一眼") is Some(_))
+  assert_true(t.find("奏") is Some(_))
+  assert_true(t.find(" · 用哪个？") is Some(_))
 }
 
 ///|
@@ -199,14 +232,15 @@ test "Java's hashCode" {
 fn hold_row(t : @ui.Tester, title : String) -> Unit {
   let (x, y) = t.find(title).unwrap()
   t.press_at(x, y)
-  t.run_for(hold_ms)
+  // (a finger's press in a list shows a moment after it goes down: @ui.tap_indication_ms)
+  t.run_for(@ui.tap_indication_ms + @sfpages.hold_ms)
   t.release(x, y)
 }
 
 ///|
 test "a row held long: its menu (固定, 重命名, 复制会话链接, 归档), the chat not opened; 重命名 its sheet" {
   let calls : Array[Made] = []
-  let t = wide_tester(calls, w=390.0, h=844.0)
+  let t = wide_tester(calls, w=390.0, h=844.0, platform=2)
   hold_row(t, "夜里的构建又失败了")
   assert_eq(app.nav.depth(), 1)
   // felt as it opened, once
@@ -224,7 +258,7 @@ test "a row held long: its menu (固定, 重命名, 复制会话链接, 归档),
 ///|
 test "a row's menu: 复制会话链接 copies its link, 固定 pins it (chat.pin)" {
   let calls : Array[Made] = []
-  let t = wide_tester(calls, w=390.0, h=844.0)
+  let t = wide_tester(calls, w=390.0, h=844.0, platform=2)
   hold_row(t, "夜里的构建又失败了")
   t.tap_text("复制会话链接")
   assert_true(t.clipboard().has_prefix("[夜里的构建又失败了]("))
@@ -242,11 +276,11 @@ test "a row's menu: 复制会话链接 copies its link, 固定 pins it (chat.pin
 ///|
 test "a chat keeping watch is archived only once asked, in the core's words" {
   let calls : Array[Made] = []
-  let t = wide_tester(calls, w=390.0, h=844.0)
+  let t = wide_tester(calls, w=390.0, h=844.0, platform=2)
   hold_row(t, "盯着 CI，绿了告诉我")
-  // the menu's last item, a row (45) under 复制会话链接
-  let (lx, ly) = t.find("复制会话链接").unwrap()
-  t.tap(lx, ly + 45.0)
+  // the menu's 归档 (its last item)
+  let (lx, ly) = t.find_last("归档").unwrap()
+  t.tap(lx, ly)
   assert_eq(named(calls, "chat.archive").length(), 0)
   assert_true(t.find("归档「盯着 CI，绿了告诉我」？") is Some(_))
   assert_true(t.find("它会在归档里继续盯着。") is Some(_))
@@ -259,7 +293,7 @@ test "a chat keeping watch is archived only once asked, in the core's words" {
 ///|
 test "a row with nothing left in it, swiped left past a third: off, then archived (chat.archive); a short swipe archives nothing" {
   let calls : Array[Made] = []
-  let t = wide_tester(calls, w=390.0, h=844.0)
+  let t = wide_tester(calls, w=390.0, h=844.0, platform=2)
   t.scroll_to(12)
   t.draw()
   let (_, y) = t.find("把旧的截图都换成新的").unwrap()
@@ -275,7 +309,7 @@ test "a row with nothing left in it, swiped left past a third: off, then archive
   // across past a third of the row: it goes off, then is archived (Home.kt: the call once it has gone)
   t.drag(340.0, y, 120.0, y)
   assert_eq(named(calls, "chat.archive").length(), 0)
-  t.run_for(swipe_off_ms)
+  t.run_for(@sfpages.swipe_off_ms)
   assert_eq(named(calls, "chat.archive").length(), 1)
   // its line felt as it was passed, once (Home.kt: TextHandleMove)
   assert_eq(t.haptics(), [@ui.Haptic::TextHandleMove])
@@ -291,11 +325,7 @@ test "a row's state line tapped while it names a message opens the chat there; i
     "stateText": "监控中：每 5 分钟看一次主干的构建",
     "stateAbout": 12,
   })
-  // the row at 100: its title's line, then its state line
-  assert_eq(row_opens_at(item, 100.0, 100.0 + chat_line_top + 1.0), Some(12.0))
-  assert_eq(row_opens_at(item, 100.0, 100.0 + chat_line_top - 1.0), None)
-  assert_eq(row_opens_at({ ..item, unread: true }, 100.0, 100.0 + chat_line_top + 1.0), None)
-  assert_eq(row_opens_at({ ..item, state_about: None }, 100.0, 100.0 + chat_line_top + 1.0), None)
+  ignore(item)
   // in Home: tapped on its line, its chat
   let t = tester("home")
   t.tap_text("监控中：每 5 分钟看一次主干的构建")
@@ -314,10 +344,11 @@ test "a row's state line in red while a message of the viewer's in it did not go
   let t = @ui.Tester::new(
     fn(c) {
       red.val = @sf.theme().p.red
-      state_line(c, "有一条消息没发出去", alert=true)
+      @sfpages.state_line(c, "a", c.id("a"), "有一条消息没发出去", alert=true)
     },
     w=390.0,
     h=40.0,
+    platform=2,
   )
   t.draw()
   assert_true(t.drawn_glyphs().length() > 0)
@@ -325,10 +356,11 @@ test "a row's state line in red while a message of the viewer's in it did not go
   let t2 = @ui.Tester::new(
     fn(c) {
       muted.val = @sf.theme().p.muted
-      state_line(c, "有一条消息没发出去")
+      @sfpages.state_line(c, "a", c.id("a"), "有一条消息没发出去")
     },
     w=390.0,
     h=40.0,
+    platform=2,
   )
   t2.draw()
   assert_true(t2.drawn_glyphs().iter().all(fn(g) { g.2 == muted.val }))
@@ -351,7 +383,7 @@ test "the filter's other lists read once its menu opens; one picked slides in ov
       (base.topic)(name, params)
     },
   }
-  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0)
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0, platform=2)
   t.draw()
   let mine = fn() { read.iter().any(fn(k) { k.contains("\"mine\":true") }) }
   assert_false(mine())
@@ -359,16 +391,17 @@ test "the filter's other lists read once its menu opens; one picked slides in ov
   t.tap(390.0 - 16.0 - 17.0, 25.0)
   // (the menu open, built again from it)
   t.draw()
+  t.run_for(@kit.sheet_rest("sf-present") - t.time())
   assert_true(mine())
   t.tap_text("我参与的")
   // half way: the list switched from going out to the left, the one picked coming in from the right (where words
   // are drawn: their lists' looks move them)
   let drawn = fn() { t.words().filter(fn(w) { w.0 == "和 Ana 一起看新版的引导页" }).map(fn(w) { w.1 }) }
-  t.run_for(home_filter_ms / 2.0)
+  t.run_for(@sfpages.list_slide_ms / 2.0)
   let xs = drawn()
   assert_true(xs.length() == 2)
   assert_true(xs.iter().any(fn(x) { x < 0.0 }) && xs.iter().any(fn(x) { x > 22.0 }))
-  t.run_for(home_filter_ms)
+  t.run_for(@sfpages.list_slide_ms)
   // at rest: only the list picked, where a list is
   let xs = drawn()
   assert_eq(xs.length(), 1)
@@ -404,24 +437,75 @@ test "under it all the page's own ground, dark too (the host cleared to blue the
 }
 
 ///|
-test "the filter's menu as MenuHost: rows of 45, 6 over and under them; going, its scrim fades with it" {
+test "the filter's menu, a finger's: the presenters' sheet of 全部会话, 我参与的, 监控中, 奏 and 已归档, the list shown checked" {
   let t = tester("home")
-  let scrim = fn() { t.drawn_rects().filter(fn(r) { r.2 == 390.0 && r.3 == 844.0 && (r.4 & 0xFFFFFF00L) == 0L && (r.4 & 0xFFL) > 0L }) }
   t.tap(390.0 - 16.0 - 17.0, 25.0)
-  t.run_for(@kit.menu_in_ms + 200.0)
-  // under the button (8 down, 34 high) by 6, the rows 6 in (MENU_PAD), 45 each, their words 12 down in them
-  let top = 8.0 + 34.0 + 6.0
-  assert_eq(t.rect_of("我参与的").map(fn(r) { r.1 }), Some(top + 6.0 + 45.0 + 12.0))
-  let watching_row = fn() { t.rect_of("监控中").map(fn(r) { r.1 }) == Some(top + 6.0 + 45.0 * 2.0 + 12.0) }
-  assert_true(watching_row())
-  assert_eq(scrim().length(), 1)
-  // a tap beside it: the menu and its scrim leave together (MenuHost keeps both until both have gone)
-  t.tap(40.0, 700.0)
-  t.run_for(@kit.menu_out_ms)
-  assert_true(watching_row())
-  assert_eq(scrim().length(), 1)
-  // (its scale goes back on the menu's spring: drawn until that has ended too)
-  t.run_for(@motion.menu_spring.duration(1.0, 0.9, 0.0))
-  assert_false(watching_row())
-  assert_eq(scrim().length(), 0)
+  t.run_for(@kit.sheet_rest("sf-present") - t.time())
+  for words in ["全部会话", "我参与的", "监控中", "奏", "已归档"] {
+    assert_true(t.find(words) is Some(_), msg=words)
+  }
+  // 已归档: its page
+  t.tap_text("已归档")
+  t.run_for(@ui.nav_push_ms)
+  assert_true(app.nav.top() == Archived)
+}
+
+///|
+test "a chat archived from its row says so with 撤销, which asks it back into the list (chat.archive, archived false)" {
+  let calls : Array[Made] = []
+  let t = wide_tester(calls, w=390.0, h=844.0, platform=2)
+  hold_row(t, "夜里的构建又失败了")
+  let (lx, ly) = t.find_last("归档").unwrap()
+  t.tap(lx, ly)
+  assert_eq(named(calls, "chat.archive").length(), 1)
+  t.draw()
+  assert_true(t.find("夜里的构建又失败了") is None)
+  assert_true(t.find("已归档") is Some(_))
+  // (come in)
+  t.run_for(@kit.presence_in_ms)
+  t.tap_text("撤销")
+  let asked = named(calls, "chat.archive")
+  assert_eq(asked.length(), 2)
+  assert_eq(field(Some(asked[1].params), "archived"), Some(Json::boolean(false)))
+  assert_eq(text(Some(asked[1].params), "session"), text(Some(asked[0].params), "session"))
+  t.draw()
+  // the toast goes, said again once it is done
+  assert_true(t.find("撤销") is None)
+  assert_true(t.find("已恢复到列表") is Some(_))
+}
+
+///|
+test "a toast with 撤销 stays its longer time; one without, its 2.6 s" {
+  let calls : Array[Made] = []
+  let t = wide_tester(calls, w=390.0, h=844.0, platform=2)
+  hold_row(t, "夜里的构建又失败了")
+  let (lx, ly) = t.find_last("归档").unwrap()
+  t.tap(lx, ly)
+  t.draw()
+  t.run_for(toast_ms + 100.0)
+  assert_true(t.find("撤销") is Some(_))
+  t.run_for(@sf.toast_action_ms)
+  assert_true(t.find("撤销") is None)
+  assert_eq(named(calls, "chat.archive").length(), 1)
+}
+
+///|
+test "wide: a chat archived from its row with a mouse says so with 撤销 too, which asks it back (archived false)" {
+  let calls : Array[Made] = []
+  let t = wide_tester(calls)
+  let (x, y) = t.find("夜里的构建又失败了").unwrap()
+  t.move(x, y)
+  t.frame()
+  let (bx, by, bw, bh) = t.query(Button, label="归档「夜里的构建又失败了」").unwrap().rect
+  t.tap(bx + bw / 2.0, by + bh / 2.0)
+  assert_eq(named(calls, "chat.archive").length(), 1)
+  t.draw()
+  assert_true(t.find("已归档") is Some(_))
+  // (come in)
+  t.run_for(@kit.presence_in_ms)
+  t.tap_text("撤销")
+  let asked = named(calls, "chat.archive")
+  assert_eq(asked.length(), 2)
+  assert_eq(field(Some(asked[1].params), "archived"), Some(Json::boolean(false)))
+  assert_eq(text(Some(asked[1].params), "session"), text(Some(asked[0].params), "session"))
 }

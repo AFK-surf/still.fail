@@ -106,6 +106,13 @@ test "style: what the call says wins over the style's same property; coarser pad
 }
 
 ///|
+test "style: a margin below 0 as CSS's, an Exact one too (a list reaching past its column, a padding taken back)" {
+  let n = style_node(fn(c) { c.box(style=style(mx=Exact(-12.0), mt=Exact(-3.0), px=Exact(12.0)), fn() {  }) |> ignore })
+  assert_eq((n.mar_l, n.mar_r, n.mar_t, n.mar_b), (-12.0, -12.0, -3.0, 0.0))
+  assert_eq((n.pad_l, n.pad_r), (12.0, 12.0))
+}
+
+///|
 test "style: a box with no style is as before, every default" {
   let n = style_node(fn(c) { c.box(fn() {  }) |> ignore })
   assert_true(n.dir == Column && n.w == Auto && n.h == Auto)
@@ -148,7 +155,8 @@ test "style: the states' blocks laid on in their order, the later winning" {
     disabled=patch(opacity=O50, bg=Line),
   )
   let p = s.resolve(true, true, true, true, true, true, false)
-  assert_eq(p.bg, Some(Faint))
+  // (what answers the hand laid over the ground under it: Patch::lit_by)
+  assert_eq(p.bg, Some(Over(Over(Selected, Hover), Faint)))
   assert_eq(p.radius, Some(Md))
   assert_eq(p.border, Some(B2))
   let p = s.resolve(true, false, true, false, false, false, true)
@@ -167,16 +175,65 @@ test "style: pressed and hovered read the box's id, as Ctx::pressed and hovered 
   assert_eq(g().nodes[1].bg, th.card)
   t.move(10.0, 10.0)
   t.draw()
-  assert_eq(g().nodes[1].bg, th.faint)
+  assert_eq(g().nodes[1].bg, over(th.card, th.faint))
+  // (a finger's press lights it too: pressed over lit)
   t.touch(0, 10.0, 10.0)
   t.draw()
-  assert_eq(g().nodes[1].bg, th.line)
+  assert_eq(g().nodes[1].bg, over(over(th.card, th.faint), th.line))
   // without an id: the blocks do nothing
   let t = Tester::new(fn(c) { c.box(style=s, fn() {  }) |> ignore })
   t.move(10.0, 10.0)
   t.touch(0, 10.0, 10.0)
   t.draw()
   assert_eq(g().nodes[1].bg, th.card)
+}
+
+///|
+test "style: what answers the hand is a tint laid over the ground under it, the box's own or its selected one" {
+  let s = style(bg=Card, selected=patch(bg=Selected), hovered=patch(bg=Hover), pressed=patch(bg=Hover))
+  assert_eq(s.resolve(false, false, false, true, false, false, false).bg, Some(Over(Card, Hover)))
+  assert_eq(s.resolve(false, false, true, true, false, false, false).bg, Some(Over(Selected, Hover)))
+  assert_eq(s.resolve(false, false, false, true, false, true, false).bg, Some(Over(Over(Card, Hover), Hover)))
+  // with no ground of its own: the tint alone
+  let s = style(hovered=patch(bg=Hover))
+  assert_eq(s.resolve(false, false, false, true, false, false, false).bg, Some(Hover))
+  // a tint over a tint is the two as one tint, what is under them showing through
+  let th = Theme::light()
+  let two = over(th.hover, th.hover)
+  assert_true((two & 0xFFL) > (th.hover & 0xFFL) && (two & 0xFFL) < 0xFFL)
+  assert_eq(two & 0xFFFFFF00L, th.hover & 0xFFFFFF00L)
+}
+
+///|
+test "hover: what holds the one pointed at is pointed at too, as drawn; what lies over it is not in it" {
+  let lit = style(bg=Card, hovered=patch(bg=Hover))
+  let view = fn(c : Ctx) {
+    c.box(w=Px(200.0), h=Px(100.0), fn() {
+      // a tab (0 … 100) and its × (60 … 80) in it
+      c.box(style=lit, w=Px(100.0), h=Px(40.0), id=c.id("tab"), fn() {
+        c.box(style=lit, w=Px(20.0), h=Px(20.0), ml=60.0, mt=10.0, id=c.id("x"), fn() {  }) |> ignore
+      })
+      |> ignore
+      // something else over the end of the tab's room, not in it (80 … 120 across, drawn after it)
+      c.box(style=lit, w=Px(40.0), h=Px(40.0), left=80.0, top=0.0, id=c.id("over"), fn() {  }) |> ignore
+    })
+    |> ignore
+  }
+  let t = Tester::new(view, w=200.0, h=100.0)
+  t.draw()
+  let th = Theme::light()
+  assert_eq((g().nodes[2].bg, g().nodes[3].bg, g().nodes[4].bg), (th.card, th.card, th.card))
+  // the tab alone
+  t.move(20.0, 20.0)
+  assert_eq((g().nodes[2].bg, g().nodes[3].bg), (over(th.card, th.hover), th.card))
+  // its ×: both, the × a step more (its tint drawn over the tab's)
+  t.move(70.0, 20.0)
+  assert_eq((g().nodes[2].bg, g().nodes[3].bg), (over(th.card, th.hover), over(th.card, th.hover)))
+  assert_true(g().hover_in.length() == 1 && g().hovered(g().hover_in[0]))
+  // what lies over the tab's room: it alone
+  t.move(90.0, 20.0)
+  assert_eq((g().nodes[2].bg, g().nodes[4].bg), (th.card, over(th.card, th.hover)))
+  assert_eq(g().hover_in.length(), 0)
 }
 
 ///|
@@ -337,6 +394,71 @@ test "style: radius=Inner that cannot be concentric is drawn square and said, no
   let t = Tester::new(fn(c) { c.box(style=style(w=S20, h=S10, radius=Inner, bg=Faint), fn() {  }) |> ignore })
   t.draw()
   assert_true(t.corner_faults()[0].contains("in no rounded container"))
+}
+
+///|
+/// A capsule 44 high, `pad` in from a panel rounded `corner` at its sides and foot (`corner` 0: no panel, the capsule
+/// alone), holding a round button 32 across 6 in at its start: both `InnerOr(Full)`.
+fn capsule_in_panel(corner : Double, pad : Double) -> (Ctx) -> Unit {
+  let capsule = fn(c : Ctx) {
+    c.box(style=style(w=Full, h=Fixed(44.0), p=S1_5, radius=InnerOr(Full), bg=Faint), fn() {
+      c.box(style=style(w=S8, h=S8, radius=InnerOr(Full), bg=Card), fn() {  }) |> ignore
+    })
+    |> ignore
+  }
+  fn(c) {
+    c.box(pad=20.0, align=AStart, fn() {
+      if corner > 0.0 {
+        c.box(w=Px(300.0), h=Px(200.0), radius=corner, bg=0xEEEEEEFFL, pad~, justify=JEnd, fn() { capsule(c) })
+        |> ignore
+      } else {
+        c.box(w=Px(300.0), fn() { capsule(c) }) |> ignore
+      }
+    })
+    |> ignore
+  }
+}
+
+///|
+test "style: radius=InnerOr: alone its own corner; in a panel's corner the panel's, whatever the panel's is, and what lies in it the same" {
+  // alone: a capsule, and its button round
+  let t = Tester::new(capsule_in_panel(0.0, 0.0))
+  t.draw()
+  let c = g()
+  let (capsule, button) = (c.count - 2, c.count - 1)
+  assert_eq(c.nodes[capsule].corner(), 22.0)
+  assert_eq(c.nodes[button].corner(), 16.0)
+  assert_eq(t.corner_faults(), [])
+  // in the corner of a panel rounded as far in as the capsule's half height (12 + 22): a capsule still
+  let t = Tester::new(capsule_in_panel(34.0, 12.0))
+  t.draw()
+  let c = g()
+  assert_eq(c.nodes[capsule].corner(), 22.0)
+  assert_eq(c.nodes[button].corner(), 16.0)
+  assert_eq(t.corner_faults(), [])
+  // a panel less round: the capsule's foot corners, in the panel's, concentric with them, its top's (in none) round as
+  // alone; its button's in the capsule's foot corner concentric with it, the rest round; nothing rounder than what
+  // holds it where it lies in it
+  let t = Tester::new(capsule_in_panel(24.0, 12.0))
+  t.draw()
+  let c = g()
+  let foot = concentric(24.0, 12.0)
+  assert_eq(drawn4(c.nodes[capsule]), (22.0, 22.0, foot, foot))
+  assert_eq(drawn4(c.nodes[button]), (16.0, 16.0, 16.0, concentric(foot, 6.0)))
+  assert_eq(t.corner_faults(), [])
+  // nearer the panel's foot than its sides: its own corner kept, and said
+  let t = Tester::new(fn(c) {
+    c.box(pad=20.0, align=AStart, fn() {
+      c.box(w=Px(300.0), h=Px(200.0), radius=24.0, bg=0xEEEEEEFFL, padx=12.0, pb=4.0, justify=JEnd, fn() {
+        c.box(style=style(w=Full, h=Fixed(44.0), radius=InnerOr(Full), bg=Faint), fn() {  }) |> ignore
+      })
+      |> ignore
+    })
+    |> ignore
+  })
+  t.draw()
+  assert_eq(g().nodes[g().count - 1].corner(), 22.0)
+  assert_true(t.corner_faults().iter().any(fn(f) { f.contains("at different distances") }), msg=t.corner_faults().join("\n"))
 }
 
 ///|
@@ -547,4 +669,276 @@ test "style: Wash the same on every width, #322D24 at 6.5% (white at 5% in the d
   let th = Theme::light()
   assert_eq(th.text_size(Xs2), (11.0, 16.0))
   assert_eq(th.text_size(Xs3), (10.0, 14.0))
+}
+
+///|
+/// A card 26 round with `inner` (its corner `own`, `side` square) `inset` in from its top and left, under the light
+/// theme with `ladder` (none: any).
+fn corner_card(inset : Double, own : Double, side : Double, ladder? : Array[Double] = []) -> (Ctx) -> Unit {
+  fn(c) {
+    c.with_theme({ ..Theme::light(), corner_ladder: ladder }, fn() {
+      c.box(pad=20.0, align=AStart, fn() {
+        c.box(w=Px(300.0), h=Px(200.0), radius=26.0, bg=0xEEEEEEFFL, pl=inset, pt=inset, align=AStart, fn() {
+          c.box(w=Px(side), h=Px(side), radius=own, bg=0x333333FFL, fn() {  }) |> ignore
+        })
+        |> ignore
+      })
+      |> ignore
+    })
+  }
+}
+
+///|
+test "corners: what lies in a container's corner is concentric with it, whatever corner it was given" {
+  let t = Tester::new(corner_card(10.0, 4.0, 40.0))
+  t.draw()
+  assert_eq(g().nodes[3].radius, concentric(26.0, 10.0))
+  assert_eq(t.corner_faults(), [])
+  // out of its corner (further in than the container is round): its own
+  let t = Tester::new(corner_card(30.0, 4.0, 40.0))
+  t.draw()
+  assert_eq(g().nodes[3].radius, 4.0)
+  assert_eq(t.corner_faults(), [])
+}
+
+///|
+test "corners: a capsule in a container's corner keeps its shape, and is concentric only where it stands so" {
+  // 32 round 16, 10 in: the container's 26 is its distance and its half
+  let t = Tester::new(corner_card(10.0, 16.0, 32.0))
+  t.draw()
+  assert_eq(g().nodes[3].radius, 16.0)
+  assert_eq(t.corner_faults(), [])
+  // 4 in: it would want a corner of 20 round it
+  let t = Tester::new(corner_card(4.0, 16.0, 32.0))
+  t.draw()
+  assert_eq(g().nodes[3].radius, 16.0)
+  assert_eq(t.corner_faults().length(), 1)
+  // a box too small for the corner it would have keeps its own, and is said
+  let t = Tester::new(corner_card(4.0, 6.0, 30.0))
+  t.draw()
+  assert_eq(g().nodes[3].radius, 6.0)
+  assert_eq(t.corner_faults().length(), 1)
+}
+
+///|
+test "corners: with a ladder, a container with something in its corner and what is there are round by its steps" {
+  let ladder = [34.0, 26.0, 18.0, 10.0]
+  // 10 in: 18, the next step
+  let t = Tester::new(corner_card(10.0, 4.0, 40.0, ladder~))
+  t.draw()
+  assert_eq(t.corner_faults(), [])
+  // 14 in: concentric, but 14.8, no step (drawn so on purpose: not held to it as it is drawn)
+  let t = Tester::new(corner_card(14.0, 4.0, 40.0, ladder~), corners_held=false)
+  t.draw()
+  assert_eq(g().nodes[3].radius, concentric(26.0, 14.0))
+  assert_eq(t.corner_faults().length(), 1)
+  // a control's own part hugging its edge (2 in): concentric is all
+  let t = Tester::new(corner_card(2.0, 4.0, 60.0, ladder~))
+  t.draw()
+  assert_eq(t.corner_faults(), [])
+}
+
+///|
+/// A card 26 round with a box (`wide` wide, 60 tall, its corner 18: a table) in a strip scrolled sideways across it, 20
+/// in from its left and foot, as a page's words are.
+fn corner_strip(wide : Double) -> (Ctx) -> Unit {
+  fn(c) {
+    c.box(pad=20.0, align=AStart, fn() {
+      c.box(w=Px(300.0), h=Px(140.0), radius=26.0, bg=0xEEEEEEFFL, pad=20.0, justify=JEnd, fn() {
+        c.sideways("strip", fn() {
+          c.box(w=Px(wide), h=Px(60.0), radius=18.0, bg=0x333333FFL, fn() {  }) |> ignore
+        })
+        |> ignore
+      })
+      |> ignore
+    })
+    |> ignore
+  }
+}
+
+///|
+/// Node `n`'s corners as drawn (top left, then round it), each at most half its shorter side.
+fn drawn4(n : Node) -> (Double, Double, Double, Double) {
+  (n.corner_at(0), n.corner_at(1), n.corner_at(2), n.corner_at(3))
+}
+
+///|
+/// The box corner_strip draws (its ground).
+fn strip_box() -> Node {
+  let c = g()
+  for i in 0..<c.count {
+    if c.nodes[i].bg == 0x333333FFL {
+      return c.nodes[i]
+    }
+  }
+  abort("no box")
+}
+
+///|
+test "corners: in a strip scrolled sideways with nothing to scroll, a box lies where it is: in the card's corner, concentric" {
+  // as narrow as the strip: still, so the card's corner is its where it lies in it (its foot's left), its others its own
+  let t = Tester::new(corner_strip(200.0))
+  t.draw()
+  assert_eq(drawn4(strip_box()), (18.0, 18.0, 18.0, concentric(26.0, 20.0)))
+  assert_eq(t.corner_faults(), [])
+  // wider: it moves under the strip's edges, so where it is from the corner is not fixed; its own
+  let t = Tester::new(corner_strip(400.0))
+  t.draw()
+  t.draw()
+  assert_eq(strip_box().radius, 18.0)
+  assert_eq(t.corner_faults(), [])
+}
+
+///|
+/// still.fail's ranges (its Theme::corner_fit): a corner 6 to 34, standing 4 to 16 in.
+let fit_ranges : CornerFit = { least: 6.0, most: 34.0, near: 4.0, far: 16.0 }
+
+///|
+/// A panel `edge` in from the window's every edge, its corner 34 standing alone (its ground: `shade`), with what `inside`
+/// builds in it; the theme's ladder and ranges.
+fn window_panel(edge : Double, inside? : (Ctx) -> Unit = fn(_) {  }) -> (Ctx) -> Unit {
+  fn(c) {
+    c.with_theme({ ..Theme::light(), corner_ladder: [34.0, 26.0, 18.0, 10.0], corner_fit: Some(fit_ranges) }, fn() {
+      c.box(w=Fill(1.0), h=Fill(1.0), pad=edge, fn() {
+        c.box(w=Fill(1.0), h=Fill(1.0), radius=34.0, bg=0x333333FFL, fn() { inside(c) }) |> ignore
+      })
+      |> ignore
+    })
+  }
+}
+
+///|
+test "corners: the window is the outermost container: a panel 6 in from its corners round as the window's less that" {
+  // a Mac's window, 16 round: 6 in, 11.2, within the ranges
+  let t = Tester::new(window_panel(6.0), w=600.0, h=400.0, window_corner=16.0)
+  t.draw()
+  assert_eq(strip_box().radius, concentric(16.0, 6.0))
+  assert_eq(t.corner_faults(), [])
+  // Windows 11's 8: 6 in would leave 3.2, too square for the ranges, and nowhere in them squarer than 6: as alone
+  let t = Tester::new(window_panel(6.0), w=600.0, h=400.0, window_corner=8.0)
+  t.draw()
+  assert_eq(strip_box().radius, 34.0)
+  assert_eq(t.corner_faults(), [])
+  // square (filling the screen): no corner to follow
+  let t = Tester::new(window_panel(6.0), w=600.0, h=400.0)
+  t.draw()
+  assert_eq(strip_box().radius, 34.0)
+  assert_eq(t.corner_faults(), [])
+}
+
+///|
+test "corners: a box concentric only with a corner squarer than the ranges let it have keeps its own, and is said" {
+  // a box said `InnerOr` (a composer) the ladder's inset in from a Mac window's panel (11.2): concentric there it would
+  // be 3.2, as good as square; it keeps its own corner and the rule says where it would fit (6.5 in, 6 round)
+  let inside = fn(pad : Double) {
+    fn(c : Ctx) {
+      c.box(w=Fill(1.0), h=Fill(1.0), pad~, justify=JEnd, fn() {
+        c.box(style=style(w=Full, h=Fixed(80.0), radius=InnerOr(Exact(26.0)), bg=Faint), fn() {  }) |> ignore
+      })
+      |> ignore
+    }
+  }
+  let t = Tester::new(window_panel(6.0, inside=inside(10.0)), w=600.0, h=400.0, window_corner=16.0, corners_held=false)
+  t.draw()
+  let faults = t.corner_faults()
+  assert_true(faults.length() > 0 && faults.iter().all(fn(f) { f.contains("too far in to follow it") }), msg="\{faults}")
+  // standing there, it follows the panel
+  let t = Tester::new(window_panel(6.0, inside=inside(6.5)), w=600.0, h=400.0, window_corner=16.0)
+  t.draw()
+  assert_eq(t.corner_faults(), [])
+}
+
+///|
+test "corners: a mark smaller than the gap it would leave in a corner stands by its words, a bigger circle by the corner" {
+  // a card 26 round, a round thing `side` across 20 in from its top and start (a status dot before a name, an avatar)
+  let dot = fn(side : Double) {
+    fn(c : Ctx) {
+      c.with_theme({ ..Theme::light(), corner_ladder: [34.0, 26.0, 18.0, 10.0], corner_fit: Some(fit_ranges) }, fn() {
+        c.box(pad=20.0, align=AStart, fn() {
+          c.box(w=Px(300.0), h=Px(120.0), radius=26.0, bg=0xEEEEEEFFL, pad=20.0, fn() {
+            c.box(w=Px(side), h=Px(side), radius=side / 2.0, bg=0x333333FFL, fn() {  }) |> ignore
+          })
+          |> ignore
+        })
+        |> ignore
+      })
+    }
+  }
+  let t = Tester::new(dot(7.0), corners_held=false)
+  t.draw()
+  assert_eq(t.corner_faults(), [])
+  let t = Tester::new(dot(20.0), corners_held=false)
+  t.draw()
+  assert_eq(t.corner_faults().length(), 1)
+}
+
+///|
+test "corners: a panel beside the window's, past its side, follows the window's corner as it will when it comes over" {
+  // two panels on a strip as a Mac's 16 window lays them (6 from its top and foot), the second past the window's right
+  // edge: its right corners, at the window's right edge when it comes over, as round as the first's, 11.2, its left
+  // ones (never at the window's) the ladder's 34; what lies in its corners 6.5 in concentric with each (6 and 28.8:
+  // where its right ones have it, off the ladder there)
+  let follow = concentric(16.0, 6.0)
+  let tape = fn(c : Ctx) {
+    c.with_theme({ ..Theme::light(), corner_ladder: [34.0, 26.0, 18.0, 10.0], corner_fit: Some(fit_ranges) }, fn() {
+      c.box(w=Fill(1.0), h=Fill(1.0), fn() {
+        c.box(w=Px(588.0), h=Px(388.0), left=6.0, top=6.0, radius=follow, bg=0x333333FFL, fn() {  }) |> ignore
+        c.box(
+          style=style(radius=Corners(34.0, follow, follow, 34.0)),
+          w=Px(300.0),
+          h=Px(388.0),
+          left=602.0,
+          top=6.0,
+          bg=0x333333FFL,
+          pad=6.5,
+          fn() {
+          c.box(w=Fill(1.0), h=Fill(1.0), radius=concentric(follow, 6.5), bg=0xEEEEEEFFL, fn() {  }) |> ignore
+        })
+        |> ignore
+      })
+      |> ignore
+    })
+  }
+  let t = Tester::new(tape, w=600.0, h=400.0, window_corner=16.0)
+  t.draw()
+  assert_eq(t.corner_faults(), [])
+  // in a square window (no corner to follow) the same panel is one round off the ladder, said
+  let t = Tester::new(tape, w=600.0, h=400.0, corners_held=false)
+  t.draw()
+  assert_eq(t.corner_faults().length(), 1)
+}
+
+///|
+test "corners: what could follow a corner within the ranges, standing where it cannot, is said" {
+  // a circle 30 across 13 in from a 16 window's corner would stand 1 in to follow it: past the ranges, as alone
+  let circle = fn(c : Ctx) {
+    c.with_theme({ ..Theme::light(), corner_ladder: [34.0, 26.0, 18.0, 10.0], corner_fit: Some(fit_ranges) }, fn() {
+      c.box(w=Fill(1.0), h=Fill(1.0), pad=13.0, justify=JEnd, fn() {
+        c.box(w=Px(30.0), h=Px(30.0), radius=15.0, bg=0x333333FFL, fn() {  }) |> ignore
+      })
+      |> ignore
+    })
+  }
+  let t = Tester::new(circle, w=600.0, h=400.0, window_corner=16.0)
+  t.draw()
+  assert_eq(t.corner_faults(), [])
+  // a pill 24 high in a 26 card's top corner, in the middle of a short row there (a bar's button), 20 from its side and
+  // 22 from its top: in the corner, at different distances, though it could stand 14 from both
+  let pill = fn(c : Ctx) {
+    c.with_theme({ ..Theme::light(), corner_ladder: [34.0, 26.0, 18.0, 10.0], corner_fit: Some(fit_ranges) }, fn() {
+      c.box(pad=20.0, align=AStart, fn() {
+        c.box(w=Px(300.0), h=Px(200.0), radius=26.0, bg=0xEEEEEEFFL, pad=20.0, fn() {
+          c.box(dir=Row, w=Fill(1.0), h=Px(28.0), align=ACenter, justify=JEnd, fn() {
+            c.box(w=Px(80.0), h=Px(24.0), radius=12.0, bg=0x333333FFL, fn() {  }) |> ignore
+          })
+          |> ignore
+        })
+        |> ignore
+      })
+      |> ignore
+    })
+  }
+  let t = Tester::new(pill, corners_held=false)
+  t.draw()
+  assert_eq(t.corner_faults().length(), 1)
 }

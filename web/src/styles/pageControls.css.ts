@@ -12,14 +12,17 @@ import { stepActions } from "../pages/Connect.css.ts";
 
 /**
  * In a settings card (its grey ground and no line round it), a button that is not solid is its words and icon alone, its
- * words where the card's other words end (its padding taken back by its margin); hovered, a pill of its colour behind them.
+ * words where the card's other words end (its padding taken back by its margin); hovered, the hover ink behind them as
+ * everywhere (docs/ui-panels.md 悬停).
  */
 globalStyle(`${card} ${btn}:not(${btnPrimary}, ${btnDangerSolid})`, {
   borderColor: "transparent", background: "transparent", paddingBlock: "0", ...bleedX(12),
 });
 globalStyle(`${card} ${btn}:not(${btnPrimary}, ${btnDangerSolid}):hover:not(:disabled)`, {
-  background: "color-mix(in oklab, currentColor 10%, transparent)",
+  background: vars.hover,
 });
+// Beside fields, a button's ground lines up with theirs: the text-card bleed would pull it into the card's corner.
+globalStyle(`${card} ${inputRow} ${btn}`, { marginInline: 0 });
 globalStyle(`${inputRow} ${input}`, { flex: "1" });
 // A sign-in's steps: their numbers in their lines, so what is under them (the page's button, the code's field) stands
 // where the card's words do.

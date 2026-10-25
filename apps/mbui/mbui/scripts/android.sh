@@ -115,6 +115,16 @@ case "${1:-build}" in
       app_assets > $OUT/app-assets.log 2>&1 &
       HBC=$!
     fi
+    # The APK's dex (javac, then R8: a minute when the Java changed, 62 s of main's 192 s android job, 40126602560)
+    # needs nothing built here: begun now, beside moonc and cc, kept by what it is made of (scripts/apk); the APK's
+    # build at the end finds it kept
+    DEX=
+    if [ -f $PROJ/apk.json ]; then
+      n=${ORG_GRADLE_PROJECT_stillfailBuild:-1}
+      "$D/apk" build $PROJ/apk.json --variant $VARIANT --version-code $n --version-name 0.1.$n --abi $ABI \
+        --out $APK_FILE --dex-only > $OUT/apk-dex.log 2>&1 &
+      DEX=$!
+    fi
     # Gradle keeps what it merged from out/android/apk (the core's .so files, core.hbc) in its intermediates, and a
     # build of an app without the core after one with it would still pack them: built anew when that changes.
     if [ "$(cat $OUT/apk-kind 2>/dev/null)" != "$APP_KIND" ]; then rm -rf "${PROJ:?}/app/build"; fi
@@ -134,13 +144,14 @@ case "${1:-build}" in
     T2=$(now)
     if [ -n "$LIBS" ]; then wait $LIBS || { cat $OUT/app-libs.log; exit 1; }; cat $OUT/app-libs.log; fi
     T3=$(now)
-    # (ThinLTO's backends run here: scripts/mbc's link flags), unless the same command made libmbui.so of the same
+    # (ThinLTO's backends run here when MBC_LTO asks for them: scripts/mbc's link flags), unless the same command made libmbui.so of the same
     # objects and the core's .so files already (scripts/mbc link: by content)
     "$D/mbc" link --out=$SO --dep=$jni -- $CC -shared -o $SO $(cat $OUT/objs.txt) $(cat $OUT/link-flags.txt) \
       $APP_LINK -lGLESv3 -llog -lz -lm -Wl,--no-undefined
     T4=$(now)
     echo "libmbui.so $(size $SO) bytes in $(secs $T0 $T4) s"
     if [ -n "$HBC" ]; then wait $HBC || { cat $OUT/app-assets.log; exit 1; }; cat $OUT/app-assets.log; fi
+    if [ -n "$DEX" ]; then wait $DEX || { cat $OUT/apk-dex.log; exit 1; }; cat $OUT/apk-dex.log; fi
     T5=$(now)
     # (its failure is the build's: an APK of an earlier build must not pass for this one's)
     rm -f "${APK_OUT:?}"/*.apk

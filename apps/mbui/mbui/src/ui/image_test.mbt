@@ -97,6 +97,39 @@ test "contain letterboxes; a missing image draws only its background" {
 }
 
 ///|
+test "an image's background shows until it is in, and never under it once it is" {
+  let ground = 0x203040FFL
+  let t = @ui.Tester::new(
+    fn(c) {
+      c.row(fn() {
+        c.image("a.jpg", w=Px(56.0), h=Px(56.0), bg=ground) |> ignore
+        c.image("b.jpg", w=Px(56.0), h=Px(56.0), bg=ground) |> ignore
+      })
+      |> ignore
+    },
+    w=200.0,
+    h=100.0,
+    images=[("a.jpg", 400, 400), ("b.jpg", 400, 400)],
+    finish=false,
+  )
+  let grounds = fn() { t.drawn_rects().filter(fn(r) { r.4 == ground }).map(fn(r) { r.0 }) }
+  t.draw()
+  // decoding: each its background alone
+  assert_eq(t.drawn_images().length(), 0)
+  assert_eq(grounds(), [0.0, 56.0])
+  // a.jpg in, fading in over its background; b.jpg failed, its background kept
+  t.finish(1, 1)
+  t.finish(1, 2, ok=false)
+  t.draw()
+  assert_eq(t.drawn_images().length(), 1)
+  assert_eq(grounds(), [0.0, 56.0])
+  // a.jpg faded in: its picture alone, nothing under its edge to show through as a rim round it
+  t.run_for(@ui.image_fade_ms)
+  assert_eq(t.drawn_images()[0][8], 1.0)
+  assert_eq(grounds(), [56.0])
+}
+
+///|
 test "what is shown awaits the images it asked for until they are in, as the test says when" {
   let view = fn(c : @ui.Ctx) {
     c.column(fn() {

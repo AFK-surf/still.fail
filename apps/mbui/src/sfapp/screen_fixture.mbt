@@ -18,6 +18,8 @@
 //   screen-clipboard-driving            driving a station that carries the clipboard both ways and takes files
 //   screen-clipboard-old-station        driving a station from before the clipboard and files
 //   screen-files-going, -done (-dark)   two files sent to its machine: going (the first under a free name), then there
+//   screen-center, -stats (-dark)       driving a Windows desktop that changes its scale: 控制中心 open; the view's
+//                                       figures open
 
 ///|
 /// The fixture's screen mode ("" none), its dark taken off.
@@ -26,7 +28,7 @@ let screen_fix_mode : Ref[String] = Ref("")
 ///|
 /// The fixture's screen, as Android's test has it.
 // kept across runs: a value (no field of it changes)
-let screen_fix_at : ScreenAt = { station: "ws-1/st-1", screen: "browser:tab-1", title: "Chrome" }
+let screen_fix_at : ScreenAt = { station: "ws-1/st-1", screen: "browser:tab-1", title: "Chrome", until_gone: false }
 
 ///|
 /// MBUI_FIXTURE=screen-…: the screen's viewer over the chats.
@@ -56,6 +58,8 @@ fn open_screen_fixture(mode : String) -> Unit {
       u.full = true
       u.tools_open = true
     }
+    "screen-center" => u.asked_panel = "center"
+    "screen-stats" => u.asked_panel = "net"
     _ => ()
   }
 }
@@ -196,6 +200,22 @@ fn screen_fixture_stream(
     "screen-clipboard-driving" =>
       live(true, true, [], None, None, None, None, Some(["text", "png"]), Some(drop))
     "screen-clipboard-old-station" => live(true, true, [], None, None, None, None, None, None)
+    "screen-center" | "screen-stats" => {
+      live(true, true, [], None, None, None, None, Some(["text", "png"]), Some(drop))
+      let st = match screen_fix_state("live", true, true, [], "", None, None, None, None, Some(["text", "png"]), Some(drop)) {
+        Object(m) => m.copy()
+        _ => {}
+      }
+      st["title"] = Json::string("Windows 桌面")
+      st["kind"] = Json::string("desktop")
+      st["codec"] = Json::string("h264")
+      st["width"] = Json::number(1920.0)
+      st["height"] = Json::number(1080.0)
+      st["scale"] = { "percent": 125.0, "recommended": 150.0, "steps": [100.0, 125.0, 150.0, 175.0] }
+      st["latency"] = { "frame": 46.0, "before": 11.0 }
+      st["video"] = { "capture": "Windows.Graphics.Capture", "encoder": "NVENC", "hardware": true }
+      on_value({ "state": Json::object(st) }, None)
+    }
     "screen-files-going" | "screen-files-done" => {
       live(true, true, [], None, None, None, None, Some(["text", "png"]), Some(drop))
       screen_fix_drops(m == "screen-files-done")

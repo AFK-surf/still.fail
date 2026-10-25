@@ -26,26 +26,32 @@ export const switcher = style({
   cornerShape: vars.cornerShape, outline: "none",
 });
 export const hidden = style({ position: "absolute", width: 1, height: 1, overflow: "hidden", clip: "rect(0 0 0 0)" });
+// The search across the switcher's width, a line under it so the list scrolls away beneath it; its mark and its words
+// where a row's picture and title are (a row's words stand DIALOG_PAD in from the switcher's edge).
+export const searchBar = style({
+  flex: "none", display: "flex", alignItems: "center", gap: 10, height: 52, ...outset(EDGE), padding: `0 ${DIALOG_PAD}px`,
+  borderBottom: `1px solid ${vars.line}`, cursor: "text",
+});
+export const searchMark = style({ flex: "none", width: 20, color: vars.subtle });
 export const search = style({
-  flex: "none", height: 48, padding: "0 12px", border: 0, outline: "none", background: "none", color: vars.text,
+  flex: 1, minWidth: 0, height: "100%", padding: 0, border: 0, outline: "none", background: "none", color: vars.text,
   fontSize: vars.textTitle,
   selectors: { "&::placeholder": { color: vars.subtle } },
 });
-// Under the search, a little room; at its foot none: the last row's ground is as far from the foot as from the sides.
-// It reaches out to the switcher's edge (its rows where they were, in by its padding), so its scrollbar runs in the
-// room beside the rows, not over them, and stops short of the corner (scroll-padding-bottom: scrollbars.ts).
+// Between the search's line and the keys' line, a little room either side. It reaches out to the switcher's edge (its
+// rows where they were, in by its padding), so its scrollbar runs in the room beside the rows, not over them.
 export const results = style({
-  flex: 1, minHeight: 0, overflowY: "auto", ...outset(EDGE), padding: `4px ${EDGE}px 0`, scrollPaddingBottom: inner,
+  flex: 1, minHeight: 0, overflowY: "auto", ...outset(EDGE), padding: `6px ${EDGE}px`, scrollPaddingBlock: 6,
 });
 export const row = style({
   display: "flex", alignItems: "center", gap: 10, minHeight: ROW, padding: `8px ${DIALOG_PAD - EDGE}px`, borderRadius: inner,
   fontSize: vars.textUi, cursor: "pointer", userSelect: "none", cornerShape: vars.cornerShape,
   // A shade of the text, as the menus' rows are lit.
-  selectors: { '&[aria-selected="true"]': { background: `color-mix(in srgb, ${vars.text} 7%, transparent)` } },
+  selectors: { '&[aria-selected="true"]': { background: `color-mix(in srgb, ${vars.text} 9%, transparent)` } },
 });
 export const picture = style({ flex: "none", display: "grid", placeItems: "center", width: 20, height: 20 });
-// An action's row: a quiet ⌘ where a chat has its picture, its keys where a chat says where and when.
-export const actionMark = style({ color: vars.muted });
+// An action's row: its mark quieter than a chat's picture, its keys where a chat says where and when.
+export const actionMark = style({ color: vars.subtle });
 export const title = style({
   flex: 1, ...ellipsis,
   selectors: { "&[data-unread]": { fontWeight: 600 } },
@@ -65,3 +71,9 @@ export const hit = style({ background: "none", color: vars.text, fontWeight: 600
 export const more = style({ color: vars.muted });
 // What the list says under it: the stations not answered yet, those offline or too old to search.
 export const note = style({ margin: 0, padding: "8px 12px 10px", fontSize: vars.textMeta, color: vars.muted });
+// At its foot, the keys the list goes by: a line over them, as under the search.
+export const foot = style({
+  flex: "none", display: "flex", alignItems: "center", gap: 16, ...outset(EDGE), padding: `${EDGE}px ${DIALOG_PAD}px 0`,
+  borderTop: `1px solid ${vars.line}`, fontSize: vars.textMeta, color: vars.muted,
+});
+export const hint = style({ display: "flex", alignItems: "center", gap: 6 });

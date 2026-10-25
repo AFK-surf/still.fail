@@ -83,65 +83,38 @@ let picture : (String, Int) -> String = @sfapp.core_pictures(fn(url, done) {
 
 ///|
 /// Chats' images as their messages show them (`station.file` with `thumb`: the station's thumbnail where it keeps one),
-/// asked once each, kept as images: "" while one comes, "!" when it could not be had.
-let chat_files : Map[String, String] = {}
+/// and videos' stills (`station.poster`): "" while one comes, "!" when it could not be had (@sfbase.ChatImages: one
+/// whose station could not be reached asked again).
+let chat_images : @sfbase.ChatImages = @sfbase.ChatImages::new()
 
 ///|
 fn chat_file(station : String, key : String, name : String) -> String {
-  let id = station + "\u{1}" + key + "\u{1}" + name
-  match chat_files.get(id) {
-    Some(k) => k
-    None => {
-      chat_files[id] = ""
-      let params : Map[String, Json] = {
-        "station": Json::string(station),
-        "key": Json::string(key),
-        "name": Json::string(name),
-        "thumb": Json::boolean(true),
-      }
-      @core.call_bytes("station.file", params=Json::object(params), on_done=fn(r) {
-        match r {
-          Ok((_, Some(bytes))) if bytes.length() > 0 => {
-            // its name at the end: a scripted run finds it by it (`tap img:NAME`)
-            let k = "mem:chat-file/\{@ui.stable_hash(id)}/\{id.length()}/\{name}"
-            @ui.add_image(k, bytes)
-            chat_files[id] = k
-          }
-          _ => chat_files[id] = "!"
-        }
-      })
-      ""
-    }
+  let id = @sfbase.file_image_id(station, key, name)
+  let params : Map[String, Json] = {
+    "station": Json::string(station),
+    "key": Json::string(key),
+    "name": Json::string(name),
+    "thumb": Json::boolean(true),
   }
+  // its name at the end: a scripted run finds it by it (`tap img:NAME`)
+  chat_images.get(station, id, "mem:chat-file/\{@ui.stable_hash(id)}/\{id.length()}/\{name}", fn(done) {
+    @core.call_bytes("station.file", params=Json::object(params), on_done=done)
+  })
 }
 
 ///|
-/// A video of a chat's still as its station makes it (`station.poster`), asked once: its key once here, "" while it
-/// comes, "!" when there is none (the station could not make one, or is from before posters).
+/// A video of a chat's still as its station makes it (`station.poster`): its key once here, "" while it comes, "!"
+/// when there is none (the station could not make one, or is from before posters).
 fn chat_poster(station : String, key : String, name : String) -> String {
-  let id = station + "\u{1}" + key + "\u{1}" + name + "\u{1}poster"
-  match chat_files.get(id) {
-    Some(k) => k
-    None => {
-      chat_files[id] = ""
-      let params : Map[String, Json] = {
-        "station": Json::string(station),
-        "key": Json::string(key),
-        "name": Json::string(name),
-      }
-      @core.call_bytes("station.poster", params=Json::object(params), on_done=fn(r) {
-        match r {
-          Ok((_, Some(bytes))) if bytes.length() > 0 => {
-            let k = "mem:chat-poster/\{@ui.stable_hash(id)}/\{id.length()}/\{name}"
-            @ui.add_image(k, bytes)
-            chat_files[id] = k
-          }
-          _ => chat_files[id] = "!"
-        }
-      })
-      ""
-    }
+  let id = @sfbase.poster_image_id(station, key, name)
+  let params : Map[String, Json] = {
+    "station": Json::string(station),
+    "key": Json::string(key),
+    "name": Json::string(name),
   }
+  chat_images.get(station, id, "mem:chat-poster/\{@ui.stable_hash(id)}/\{id.length()}/\{name}", fn(done) {
+    @core.call_bytes("station.poster", params=Json::object(params), on_done=done)
+  })
 }
 
 ///|
@@ -286,6 +259,7 @@ let core_source : @sfapp.Source = {
   fatal: fn() { @core.fatal() },
   file: chat_file,
   poster: chat_poster,
+  images: chat_images,
   now: fn() { @ui.wall_ms() },
   leave: fn(name, params) { @core.unsubscribe(@core.subscribe(name, params~)) },
   read_only,
@@ -322,6 +296,21 @@ fn local_cloud(url : String) -> Bool {
 
 ///|
 fn main {
+  // MBUI_PLATFORM=android: run as a phone's system has it (a test's trace recorded again on a Mac on the system its
+  // Tester plays: scripts/rerecord.sh), and pointed at by a finger as a phone is; MBUI_POINTING=finger or mouse: pointed
+  // at so, whatever the system
+  match @ui.env("MBUI_PLATFORM") {
+    "android" => @ui.set_platform(Some(2))
+    "ios" => @ui.set_platform(Some(1))
+    "mac" => @ui.set_platform(Some(0))
+    "windows" => @ui.set_platform(Some(3))
+    _ => ()
+  }
+  match @ui.env("MBUI_POINTING") {
+    "finger" => @ui.set_pointing(Some(Finger))
+    "mouse" => @ui.set_pointing(Some(Mouse))
+    _ => ()
+  }
   // MBUI_CORE_TRACE=1: the app's conversation with its core kept on the log (CORETRACE …), for a Tester to give
   // again (src/core/replay.mbt). Only on a local cloud (MBUI_CLOUD on this machine: its made-up account): what a real
   // account's core says (its tokens, a vault's values) is never put on a log.
@@ -333,13 +322,18 @@ fn main {
     // first, what the app was started with (sfcore.begin reads it: the local cloud, its made-up account, what is asked
     // of signing in), for a replay's app to be started the same (src/sfreplay: Flow::start)
     let started : Map[String, Json] = {}
-    for name in @sfcore.started_by {
+    // (and where the host keeps downloads in a scripted run: what it says of a file kept, which the app tells the core)
+    for name in @sfcore.started_by + ["MBUI_DOWNLOADS_DIR"] {
       let v = @sfcore.env_text(name)
       if v != "" {
         started[name] = Json::string(v)
       }
     }
     @hostapi.log("CORETRACE " + Json::object({ "env": Json::object(started) }).stringify())
+    // and which station this machine is, as its host says it (@ui.local_station: what the files' page lists first), for
+    // a replay's host to say the same
+    let local = @json.parse(@ui.local_station()) catch { _ => Json::null() }
+    @hostapi.log("CORETRACE " + ({ "host": { "localStation": local } } : Json).stringify())
     // and what the host said of its views (a video's frames' times, a frame grabbed), at the core's clock, beside it
     @ui.trace_views(fn(m) { @core.trace_note(m) })
     // and each line of a scripted run's script as it began (`{"step":…}`), and a line that acts again as its input
@@ -382,7 +376,9 @@ fn main {
     @sfapp.open_decisions()
   }
   // where newer builds of the app come from (src/sfapp/updates.mbt): still.fail cloud's feed MBUI_UPDATE_FEED (the
-  // local cloud's in e2e); none by default, as this build ships apart from still.fail's own (its release elsewhere)
+  // local cloud's in e2e); none by default, as this build ships apart from still.fail's own (its release elsewhere).
+  // A beta's core (MBUI_BETA=1) asks the feed's beta, <feed>/beta, itself: the beta app's feed is android, not
+  // android/beta (which asked android/beta/beta, a 404)
   match @ui.env("MBUI_UPDATE_FEED") {
     "" => ()
     feed => {

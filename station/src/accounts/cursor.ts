@@ -25,12 +25,17 @@ export const authFile = (home: string) => join(cursorHome(home), "auth.json");
 
 export function readCursor(home: string): CursorLogin | null {
   try {
-    const j: Json = JSON.parse(readFileSync(authFile(home), "utf8"));
-    if (typeof j?.apiKey !== "string" || j.apiKey === "") return null;
-    return { apiKey: j.apiKey, email: typeof j.email === "string" && j.email !== "" ? j.email : null, keyName: typeof j.keyName === "string" ? j.keyName : "", createdAt: typeof j.createdAt === "number" ? j.createdAt : 0 };
+    return cursorIn(readFileSync(authFile(home), "utf8"));
   } catch {
     return null;
   }
+}
+
+/// What a sign-in's file says (`readCursor`).
+export function cursorIn(text: string): CursorLogin | null {
+  const j: Json = JSON.parse(text);
+  if (typeof j?.apiKey !== "string" || j.apiKey === "") return null;
+  return { apiKey: j.apiKey, email: typeof j.email === "string" && j.email !== "" ? j.email : null, keyName: typeof j.keyName === "string" ? j.keyName : "", createdAt: typeof j.createdAt === "number" ? j.createdAt : 0 };
 }
 
 export const writeCursor = (home: string, login: CursorLogin) => writePrivate(authFile(home), `${JSON.stringify(login, null, 2)}\n`);

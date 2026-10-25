@@ -3,6 +3,7 @@
 // Names, descriptions and input schemas are the Rust station's, byte for byte (test/hub-tools.test.ts reads them from
 // hub.rs and compares); what they do is src/sessions/.
 import { sandboxed } from "../agents/sandbox.ts";
+import { RUNTIME_KINDS } from "../agents/runtime.ts";
 import { chatHistory, chatPost, chatState, mayStage, fromSandbox, staged, target } from "../sessions/conversations.ts";
 import type { Hub } from "../sessions/hub.ts";
 import { sessionSend } from "../sessions/messages.ts";
@@ -307,7 +308,7 @@ export const CHAT_READ = {
 export const SESSION_SEND = {
   name: "session_send",
   description:
-    "Send a message to another session's agent: a chat on this station, on another station of the workspace, or one another workspace shares with this one to write to. It is posted in that chat for people to see, headed with a link to your chat, and its agent takes it like any message; it answers you the same way, so to wait for the answer end your turn waiting. Use chat_post for your own conversations.",
+    "Send a message to another session's agent: a chat on this station, on another station of the workspace, or one another workspace shares with this one to write to. Its agent takes it like any message, headed with a link to your chat; it stays out of that chat's conversation (people read agents' letters on a page of their own). It answers you the same way, so to wait for the answer end your turn waiting. Use chat_post for your own conversations.",
   inputSchema: {
     "type": "object",
     "properties": {
@@ -360,15 +361,8 @@ export const CHAT_CREATE = {
       },
       "runtime": {
         "type": "string",
-        "enum": [
-          "claude",
-          "codex",
-          "dsh",
-          "grok",
-          "cursor",
-          "devin"
-        ],
-        "description": "Its agent's runtime (dsh: DeepSeek Harness, grok: Grok Build, cursor: Cursor, devin: Devin). Default: that of its model."
+        "enum": RUNTIME_KINDS,
+        "description": "Its agent's runtime (dsh: DeepSeek Harness, grok: Grok Build, cursor: Cursor, devin: Devin, hermes: Hermes Agent). Default: that of its model."
       },
       "model": {
         "type": "string",

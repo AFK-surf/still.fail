@@ -18,7 +18,7 @@ import { useWorkspace } from "../cloud/api.ts";
 import { useGo } from "../go.ts";
 import { useDoing } from "../doing.ts";
 import { useAct } from "@stillfail/ui/toast.tsx";
-import type { DriveEntry, DriveRoot, StationView } from "../core/shapes.ts";
+import type { DriveArrangement, DriveEntry, DriveRoot, DriveSortBy, StationView } from "../core/shapes.ts";
 import { useTopicSelect } from "../core/react.ts";
 import { CoreError } from "../core/client.ts";
 import { Button, Confirm, Dialog, ICON, IconButton, Menu, Tip, type MenuItem, Spinner, Waiting, WaitLine } from "../ui.tsx";
@@ -26,7 +26,7 @@ import { Check, ChevronLeft, ChevronRight, Close, Copy, Disk, Server, Download, 
 import { KindIcon } from "../drive/KindIcon.tsx";
 import { Reader } from "@stillfail/ui/viewer/Reader.tsx";
 import { Player } from "@stillfail/ui/viewer/Player.tsx";
-import { cancel, download, joinPath, nameOf, openerOf, parentOf, refresh, retry, rootLabel, settle, sizeOf, upload, useFolder, useUploads, type At, type Upload as Up } from "../drive/model.ts";
+import { cancel, download, downloadZip, joinPath, nameOf, parentOf, refresh, retry, rootLabel, settle, sizeOf, upload, useFolder, useUploads, type At, type Upload as Up } from "../drive/model.ts";
 import { useDriveFile } from "../drive/viewerFile.ts";
 import { absoluteOf, childOf, drive, drivePath, filtered, folderName, rootTrouble, trailOf, useDrive, type DriveState, type PickFolder } from "../drive/useDrive.ts";
 import { carriesDrive, draggedNow, draggedOf, droppedOf, endDrag, startDrag } from "../drive/drag.ts";
@@ -39,10 +39,9 @@ import { StationSwitch } from "./FilesGo.tsx";
 import { CopyTo } from "./Transfers.tsx";
 import { DrivePane, type Previewed } from "./DrivePane.tsx";
 import { setPrefs, usePrefs } from "../prefs.ts";
-import { keptFront, paneUrl } from "../drive/tabs.ts";
+import { paneUrl, useFilesTabs } from "../drive/tabs.ts";
 import { useThisMachineAddress } from "../thisMachine.ts";
 import type { Dragged } from "../drive/drag.ts";
-import type { Arrangement, SortBy } from "../drive/order.ts";
 import { ColumnsView, modsOf, TreeView, useDriveView, useDropZone, ViewSwitch, type DropTarget, type RowOf, type RowProps, type Shown } from "./DriveViews.tsx";
 import { useToast } from "@stillfail/ui/toast.tsx";
 import { DrivePreview, FilterField, useFolders } from "../mobile/Drive.tsx";
@@ -78,14 +77,16 @@ export function DrivePage() {
 export function DriveHome({ scope }: { scope: string }) {
   const stations = useStations(scope).value;
   const add = useAddFolder(scope);
-  const kept = usePrefs((p) => p.filesTabs[scope]);
+  const [kept] = useFilesTabs(scope);
   const here = useThisMachineAddress();
-  const front = keptFront(kept);
+  const front = kept?.front ?? null;
   const mine = (stations ?? []).find((s) => s.station === here)?.overview?.drive;
   const first = (front ? paneUrl(front) : null) ?? lastFilesPage(scope)
     ?? (here && mine?.anywhere && mine.home ? drivePath(stationBase(here), mine.home) : null)
     ?? (stations ?? []).flatMap((s) => (s.overview?.drive?.roots ?? []).map((r) => drivePath(stationBase(s.station), r.path)))[0]
     ?? (stations ?? []).flatMap((s) => (s.overview?.drive?.anywhere && s.overview.drive.home ? [drivePath(stationBase(s.station), s.overview.drive.home)] : []))[0];
+  // The tabs not known yet: where they were left is waited for.
+  if (kept === undefined) return null;
   if (first) return <Navigate to={first} replace />;
   return (
     <div className={`${pagesCss.page} ${css.page}`}>
@@ -218,9 +219,7 @@ export function FolderView({ d, root, path, front = true }: { d: DriveState; roo
   };
   const [preview, setPreview] = useState<{ at: At; entries: readonly DriveEntry[]; entry: DriveEntry } | null>(null);
   const [view, setView] = useDriveView("page");
-  // Back where it was, as each folder was left (the page scrolls, the list in it); the folder kept for the rail's 文件
-  // to come back to.
-  const list = useKeptScroll<HTMLDivElement>("page", at, view, folder.value !== undefined || folder.error !== null, (el) => el.parentElement);
+  // The folder kept for the rail's 文件 to come back to.
   useEffect(() => { if (front) keepFilesPage(station.address.split("/")[0] ?? "", pathname + search); }, [front, station.address, pathname, search]);
   // Something dragged over the list (not over one of its folders): what a drop does there.
   const [dragging, setDragging] = useState<false | "copy" | "move" | "upload">(false);
@@ -246,7 +245,7 @@ export function FolderView({ d, root, path, front = true }: { d: DriveState; roo
   const openIn = (in_: At, e: DriveEntry, siblings: readonly DriveEntry[] = [e]) => {
     const full = joinPath(in_.path, e.name);
     keepOpened("page", in_, e.name);
-    switch (openerOf(e.kind)) {
+    switch (e.opens) {
       case "folder": return go(drivePath(station.base, root, full));
       case "read": return go(drivePath(station.base, root, full, "read"));
       case "play": return go(drivePath(station.base, root, full, "play"));
@@ -256,13 +255,16 @@ export function FolderView({ d, root, path, front = true }: { d: DriveState; roo
   };
   const save = (in_: At, e: DriveEntry) => act(download({ ...in_, path: joinPath(in_.path, e.name) }, e), t("web-pages.drive.downloadWhat"));
   // A picture or code previewed with those beside it, as shown, to step through.
-  const openRow = (in_: At, e: DriveEntry) => openIn(in_, e, in_.path === path ? browse.arranged(entries) : [e]);
+  const openRow = (in_: At, e: DriveEntry) => openIn(in_, e, in_.path === path ? browse.drawing.arranged(in_, entries) ?? [e] : [e]);
   const browse = useBrowse({
     owner: "page", view, at, write: d.write, act, open: openRow, preview: openRow,
     go: (p, replace) => go(drivePath(station.base, root, p), replace ? { replace: true } : undefined),
     remove,
   });
-  const shownEntries = browse.arranged(entries);
+  const arranged = browse.drawing.arranged(at, entries);
+  const shownEntries = arranged ?? [];
+  // Back where it was, as each folder was left (the page scrolls, the list in it), once its rows are drawn.
+  const list = useKeptScroll<HTMLDivElement>("page", at, view, (folder.value !== undefined && arranged !== undefined) || folder.error !== null, (el) => el.parentElement);
   // The preview beside the list (⌘⇧P): the one file chosen, as the folder it is in has it.
   const [previewing, setPreviewing] = usePreviewShown();
   const chosenIn = useFolder(station.address, previewing && browse.chosen.names.length === 1 ? root : null, browse.chosen.folder).value;
@@ -308,7 +310,7 @@ export function FolderView({ d, root, path, front = true }: { d: DriveState; roo
   const oneItems = (in_: At, e: DriveEntry): MenuItem[] => [
     { label: t("web-pages.drive.open"), onSelect: () => openIn(in_, e) },
     ...(!e.dir ? [{ label: t("web-pages.drive.download"), icon: Download, onSelect: () => save(in_, e) }]
-      : d.zip ? [{ label: t("web-pages.drive.downloadZip"), icon: Download, onSelect: () => act(drive.zip(in_, e).then((z) => download({ station: in_.station, root: z.root, path: z.path }, { name: z.name, size: z.size, type: "application/zip" })), t("web-pages.drive.downloadWhat")) }]
+      : d.zip ? [{ label: t("web-pages.drive.downloadZip"), icon: Download, onSelect: () => act(downloadZip({ ...in_, path: joinPath(in_.path, e.name) }), t("web-pages.drive.downloadWhat")) }]
       : []),
     { label: t("web-pages.drive.copyPath"), icon: Copy, onSelect: () => copyPath(absoluteOf(root, joinPath(in_.path, e.name))) },
     ...(e.dir && filesPage ? [
@@ -338,7 +340,7 @@ export function FolderView({ d, root, path, front = true }: { d: DriveState; roo
     dragged: () => browse.chosenWith(in_, e).map((x) => draggedOf(x.at, x.entry, stationName)),
     drop: e.dir ? into({ ...in_, path: joinPath(in_.path, e.name) }) : undefined,
   });
-  const shown: Shown = { rowOf, arranged: browse.arranged, dropOn: into, clear: browse.clear };
+  const shown: Shown = { ...browse.drawing, rowOf, dropOn: into, clear: browse.clear };
   const newFolder = () => act(browse.newFolder(at, entries), t("web-pages.drive.mkdirWhat"));
   const empty = <Empty text={t("web-pages.drive.emptyFolder")} action={d.write ? <Button icon={Upload} onClick={() => files.current?.click()}>{t("web-pages.drive.upload")}</Button> : undefined} />;
   const togglePreview = useRef(() => {});
@@ -458,11 +460,11 @@ export function FolderView({ d, root, path, front = true }: { d: DriveState; roo
           </>
         ) : folder.error ? (
           <div className={css.problem}><p className={controlsCss.fieldError}>{folder.error.message}</p><Button variant="ghost" icon={Retry} onClick={reload}>{t("web-pages.drive.retry")}</Button></div>
-        ) : !folder.value ? <Waiting count={8} /> : (
+        ) : !folder.value || !arranged ? <Waiting count={8} /> : (
           <>
             {uploads.map((u) => <UploadRow key={u.key} u={u} />)}
             {view === "list" && shownEntries.length > 0 && <ListHead arrangement={browse.arrangement} onSort={(by) => browse.arrangeAs(by === browse.arrangement.by ? { down: !browse.arrangement.down } : { by, down: false })} />}
-            {view === "tree" ? <TreeView key={path} owner="page" at={at} shown={shown} empty={uploads.length ? <></> : empty} />
+            {view === "tree" ? <TreeView key={path} at={at} shown={shown} empty={uploads.length ? <></> : empty} />
               : <>
                 {shownEntries.length === 0 && uploads.length === 0 && empty}
                 {shownEntries.map((e) => <DriveRow key={e.name} at={at} entry={e} row={rowOf(at, e)} />)}
@@ -606,8 +608,8 @@ function NameField({ name, dir, onDone }: { name: string; dir: boolean; onDone: 
 }
 
 /** Over a list, what its columns are, each ordering it (again: the other way). */
-function ListHead({ arrangement, onSort }: { arrangement: Arrangement; onSort: (by: SortBy) => void }) {
-  const head = (by: SortBy, label: string) => (
+function ListHead({ arrangement, onSort }: { arrangement: DriveArrangement; onSort: (by: DriveSortBy) => void }) {
+  const head = (by: DriveSortBy, label: string) => (
     <button type="button" data-on={arrangement.by === by || undefined} onClick={() => onSort(by)}>
       {label}{arrangement.by === by && <ChevronRight size={10} strokeWidth={2} style={{ transform: `rotate(${arrangement.down ? -90 : 90}deg)` }} />}
     </button>

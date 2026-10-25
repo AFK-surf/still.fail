@@ -5,6 +5,11 @@ import { Cause, Effect, type Clock, type Fiber } from "effect";
 import type { AccountView } from "./accounts.ts";
 import { type AccountProvider, type AccountProviderFactory, type AccountSessions, stillfailAccountProvider } from "./account-provider.ts";
 import * as brand from "./brand.ts";
+import * as commands from "./commands.ts";
+import { findGo } from "./chat-find.ts";
+import { relayView } from "./relay-pick.ts";
+import { wordsAnswer } from "./words.ts";
+import { toolCall, toolResult, type ToolPart } from "./tool-step.ts";
 import * as fonts from "./fonts.ts";
 import { parseCall, cancellable, callStation, counts, type Call } from "./core/calls.ts";
 import { execute, handlers, hooks } from "./core/execute.ts";
@@ -17,9 +22,11 @@ import { DriveKept } from "./drive-kept.ts";
 import { CoreError, asCoreError } from "./error.ts";
 import type { Host } from "./host.ts";
 import { t } from "./i18n.ts";
+import { markdown } from "./markdown.ts";
+import { AHEAD_AFTER_MS, MdAhead } from "./md-ahead.ts";
 import * as prefs from "./prefs.ts";
 import { Beside, parseClientMessage, type ClientId, type ClientMessage, type CoreMessage, type RequestId } from "./protocol.ts";
-import { Runner } from "./runtime.ts";
+import { laterSleep, Runner } from "./runtime.ts";
 import { stationId } from "./station/addr.ts";
 import { Status } from "./status.ts";
 import { Store } from "./store.ts";
@@ -58,6 +65,8 @@ import * as lockCalls from "./views/lock.ts";
 import * as pairing from "./views/pair.ts";
 import * as vaultCalls from "./views/vault.ts";
 import * as transferCalls from "./views/transfers.ts";
+import * as browseCalls from "./views/browse.ts";
+import * as downloads from "./views/downloads.ts";
 import { get, isObject } from "./util.ts";
 import { type CoreModule, type ModuleCall, installModules } from "./module.ts";
 
@@ -122,6 +131,8 @@ export class Inner {
   forms!: Forms;
   adb!: Adb;
   viewCalls!: ViewCalls;
+  /// This device's downloads of chats' files (views/downloads.ts).
+  downloads!: downloads.Downloads;
   router!: Router;
   /// The calls of the app's modules, by full name (module.ts), and the modules' names (their topics are `<name>.…`).
   moduleCalls = new Map<string, ModuleCall<any>>();
@@ -156,6 +167,8 @@ export class Core {
       // Everything the core asks of the host is given up or opened again when a UI comes back (wake.ts).
       inner.host = new WakingHost(host, inner.wakes);
       inner.driveKept = new DriveKept(inner.host);
+      // (the files kept for messages left behind a week)
+      inner.runner.fork(inner.driveKept.dropOldUploads());
       brand.setTestChannel(inner.host.testChannel());
       fonts.setOrigin(inner.host.cloudOrigin());
       inner.tracer = new Tracer(inner.host, inner.runner, options.sample ?? SAMPLE);
@@ -219,6 +232,11 @@ export class Core {
       inner.router.owners.push(inner.views);
       inner.viewCalls = new ViewCalls(inner, inner.views);
       inner.viewCalls.install();
+      // What agents said lately read ahead, kept on the device: a chat opens with its Markdown read (md-ahead.ts).
+      const ahead = new MdAhead(inner.data, inner.runner, () => inner.host.nowMs());
+      inner.data.onLogChange((table, station, id) => {
+        if (table === "entry") ahead.thread(station, Number(id));
+      });
       xshare.install(inner);
       memberships.install(inner);
       publish.install(inner);
@@ -226,6 +244,8 @@ export class Core {
       pairing.install(inner);
       vaultCalls.install(inner);
       transferCalls.install(inner);
+      browseCalls.install(inner);
+      downloads.install(inner);
       inner.attention = new Attention(inner, yield* Attend.load(inner.host));
       inner.router.owners.push(inner.attention);
       inner.router.after = (topic, value) => inner.attention.attended(topic, value);
@@ -234,6 +254,7 @@ export class Core {
       installShareIn(inner);
       inner.forms = installForms(inner);
       const asks = new Asks(inner.host, (app, from, to) => inner.changelog.brings(app, from, to));
+      asks.follow(inner.accounts);
       inner.adb = new Adb({
         host: inner.host,
         runner: inner.runner,
@@ -247,7 +268,33 @@ export class Core {
       inner.changelog = new Changelog(inner.host, inner.store, inner.data);
       inner.router.owners.push(inner.changelog);
       handlers.changelogSeen = () => Effect.sync(() => (inner.changelog.seen(), null));
+      handlers.historyTool = (_i, call) => {
+        const c = call as Extract<Call, { kind: "historyTool" }>;
+        // Markdown read here for the clients that draw its tree (markdown.ts), as everywhere else.
+        const withMd = (parts: ToolPart[]) => parts.map((part) => (part.kind === "markdown" ? { ...part, md: markdown(part.text) } : part));
+        return Effect.sync(() => ({
+          call: withMd(toolCall(c.name, c.call, c.said, t)),
+          result: c.result === null ? null : withMd(toolResult(c.name, c.call, c.result, c.failed, t)),
+        }));
+      };
+      handlers.words = (_i, call) => {
+        const c = call as Extract<Call, { kind: "words" }>;
+        return Effect.sync(() => wordsAnswer(c.what, c.text, c.caret, c.here));
+      };
+      handlers.chatFindGo = (_i, call) => {
+        const c = call as Extract<Call, { kind: "chatFindGo" }>;
+        return Effect.sync(() => findGo(c.hits, c.at, c.by, c.from, c.to, c.drawn));
+      };
+      handlers.relayView = (_i, call) => {
+        const c = call as Extract<Call, { kind: "relayView" }>;
+        return Effect.sync(() => relayView(c.connects, c.query, c.all, c.bot, t));
+      };
+      handlers.commandsFind = (_i, call) => {
+        const c = call as Extract<Call, { kind: "commandsFind" }>;
+        return Effect.sync(() => commands.find(c.query, c.offered, t));
+      };
       const fontFiles = new FontFiles(inner.host, inner.store, () => get(inner.data.get({ topic: "prefs" }), "fonts"));
+      fonts.setKeptAt((sha256) => fontFiles.at(sha256));
       inner.router.owners.push(fontFiles);
       handlers.fonts = (_i, call) => fontFiles.run((call as Extract<Call, { kind: "fonts" }>).call);
       hooks.device = (_inner, facts) => inner.changelog.device(facts);
@@ -280,8 +327,11 @@ export class Core {
       inner.provider.start();
       inner.cloudSync.start();
       inner.stations.reconcile();
+      // The chats spoken in latest, read ahead once what the first views ask has gone.
+      inner.runner.fork(Effect.andThen(laterSleep(AHEAD_AFTER_MS), Effect.sync(() => ahead.seed())));
       // What was on its way when the core last stopped goes on.
       inner.viewCalls.resume();
+      inner.downloads.resume();
       // What changed in still.fail: read now, and again each time an account's events socket opens.
       inner.scheduler.enqueue("cloud", "changelog", Priority.background, inner.changelog.read());
       inner.cloudSync.onOpen = () => inner.scheduler.enqueue("cloud", "changelog", Priority.background, inner.changelog.read());
@@ -449,7 +499,8 @@ export class Core {
         }),
       ),
     );
-    // Only a call that holds something open for its page can be stopped; any other runs to its end whoever waits.
+    // Only a call that holds something open for its page, or streams to it what it reads, can be stopped (cancellable);
+    // any other runs to its end whoever waits.
     const fiber = inner.runner.fork(run);
     if (stoppable) inner.calls.set(key, fiber as Fiber.Fiber<unknown, unknown>);
   }
@@ -495,3 +546,4 @@ export function entriesOf(me: unknown): string[] {
 export function gone(): CoreError {
   return new CoreError("closed", t("core-misc.core.closed"));
 }
+

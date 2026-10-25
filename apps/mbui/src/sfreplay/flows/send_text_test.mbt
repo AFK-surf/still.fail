@@ -16,7 +16,14 @@ test "03-send-text" {
     // a row already there (the agent's name over its answer: the chat's title has its words too): where it is across,
     // before the words go
     let said = "默认模型"
-    let x = f.t.drawn_of(said).unwrap().0
+    // (not there, said, and the steps after written all the same: a script written over a trace the app outgrew)
+    let x = match f.t.drawn_of(said) {
+      Some((at, _)) => at
+      None => {
+        f.check(false, "\{said} not drawn before the words go")
+        0.0
+      }
+    }
     f.tap("icon:arrow-up")
     // the field given up at once, as the words go
     f.check(f.t.field_words() == "", "the field after sending: \{f.t.field_words()}")

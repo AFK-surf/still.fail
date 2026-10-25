@@ -219,7 +219,8 @@ export function outsideRefs(inner: Inner, station: string, text: string): J[] {
 
 /// `chat.xshare`: shared with the workspaces ticked, and whether their agents may send. `chat.xshareAdd`: shared with one
 /// workspace more, as it was otherwise (a chat of another workspace referred to in a message, `outsideRefs`).
-/// `chat.outsideRefs`: what sending a text would share.
+/// `chat.outsideRefs`: what sending a text would share. `chat.outsideShare`: those of them the viewer may share, shared
+/// with the workspace it is written in (its station trusted first), all at once; one failing fails it.
 export function install(inner: Inner): void {
   handlers.chatXshare = (_inner, call, _progress, _at, ctx) => {
     const c = call as Of<"chatXshare">;
@@ -245,5 +246,15 @@ export function install(inner: Inner): void {
   handlers.chatOutsideRefs = (_inner, call) => {
     const c = call as Of<"chatOutsideRefs">;
     return Effect.sync(() => ({ chats: outsideRefs(inner, c.station, c.text) }));
+  };
+  handlers.chatOutsideShare = (_inner, call, progress, at, ctx) => {
+    const c = call as Of<"chatOutsideShare">;
+    const may = outsideRefs(inner, c.station, c.text).filter((o) => o.may === true);
+    const add = handlers.chatXshareAdd!;
+    return Effect.forEach(
+      may,
+      (o) => add(inner, { kind: "chatXshareAdd", station: o.station, id: o.id, workspace: ofAddress(c.station), prefer: c.station }, progress, at, ctx),
+      { concurrency: "unbounded", discard: true },
+    ).pipe(Effect.as({ shared: may.length }));
   };
 }

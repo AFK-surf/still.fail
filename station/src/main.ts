@@ -9,6 +9,7 @@
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { createServer } from "node:http";
 import type { AddressInfo } from "node:net";
+import { PerformanceObserver, monitorEventLoopDelay } from "node:perf_hooks";
 import { join } from "node:path";
 import { Effect, Fiber, Layer, SubscriptionRef } from "effect";
 import { enroll, id, joinWorkspace, lockCommand, staysIn, status } from "./cli.ts";
@@ -28,7 +29,7 @@ import { ErrorReports, builtKey } from "./ops/telemetry.ts";
 import { answer, langOfBrowser } from "./ops/loopback.ts";
 import { ownPorts } from "./ops/own.ts";
 import { version } from "./ops/version.ts";
-import { AdbShares, AdminApi, AgentsSide, AdminHost, ControlPlane, Events, Grants, Helper, HelperFolders, Key, MeshNative, MeshSide, ModulePackages, Modules, Own, Parts, Paths, Peers, Previous, Readers, ScreenRegistry, StationConfig, StationDrive, Store, Up } from "./services.ts";
+import { AdbShares, AdminApi, AgentsSide, AdminHost, CheckpointsLive, ControlPlane, Events, Grants, Helper, HelperFolders, Key, MeshNative, MeshSide, ModulePackages, Modules, Own, Parts, Paths, Peers, Previous, Readers, ScreenRegistry, StationConfig, StationDrive, Store, Up } from "./services.ts";
 import { ModulesLive } from "./modules/live.ts";
 import { VaultLive } from "./vault/module.ts";
 import { AdbLive } from "./adb/module.ts";
@@ -40,12 +41,16 @@ import { PublishLive } from "./publish/module.ts";
 import { LoginsLive } from "./logins/module.ts";
 import { DriveTransfersLive } from "./drive/module.ts";
 import { UsageLive } from "./usage/module.ts";
+import { ResourcesLive } from "./resources/module.ts";
 import { SearchLive } from "./search/module.ts";
 import { SlackLive } from "./slack/module.ts";
 import { FeishuLive } from "./feishu/module.ts";
 import { PROVIDERS, type Provider } from "./cloud/provider.ts";
 import { wall } from "./ops/fibers.ts";
 import { answerHeapRequests, heapCommand } from "./ops/heap.ts";
+import { timeFiles } from "./ops/file-waits.ts";
+import { longestWaits } from "./ops/waits.ts";
+import { takeQueries } from "./store/timed.ts";
 import { platform } from "./platform/index.ts";
 import { keepRunnerIn } from "./platform/processes.ts";
 
@@ -61,6 +66,9 @@ const data = dataDir(args);
 const command = args.find((a, i) => !a.startsWith("--") && !(i > 0 && args[i - 1].startsWith("--") && args[i - 1] !== "--with-parent"));
 /// Flags that take a value: what follows them is no command's argument.
 const VALUED = ["--data", "--provider", "--lock"];
+/// How often the main thread's longest hold is looked at, and from how long a hold is said.
+const HELD_EVERY_MS = 10_000;
+const HELD_MS = 1_000;
 
 // What it says on this machine is in the station's language (config.json `language`).
 try {
@@ -142,9 +150,9 @@ function run() {
   // still.fail Helper, one for the screens and the drive, and one look at its grants.
   const base = Layer.mergeAll(Key.layer, Readers.layer, Store.layer, MeshNative.layer, Up.layer, ScreenRegistry.layer.pipe(Layer.provideMerge(Grants.layer), Layer.provideMerge(Helper.layer))).pipe(Layer.provideMerge(paths));
   const parts = ControlPlane.layer.pipe(Layer.provideMerge(base));
-  const station = Layer.mergeAll(MeshLive, Loopback(control), AwakeLive, ModulesLive).pipe(
+  const station = Layer.mergeAll(MeshLive, Loopback(control), AwakeLive, ModulesLive, CheckpointsLive).pipe(
     // The station's parts in its own process (parts.ts), made before the mesh answers anyone: each says what it adds.
-    Layer.provideMerge(Layer.mergeAll(VaultLive, AdbLive, BrowserLive, LinksLive, FeedbackLive, AgentHomeLive, PublishLive, LoginsLive, DriveTransfersLive, UsageLive, SearchLive, SlackLive, FeishuLive)),
+    Layer.provideMerge(Layer.mergeAll(VaultLive, AdbLive, BrowserLive, LinksLive, FeedbackLive, AgentHomeLive, PublishLive, LoginsLive, DriveTransfersLive, UsageLive, ResourcesLive, SearchLive, SlackLive, FeishuLive)),
     Layer.provideMerge(AdminApi.layer),
     Layer.provideMerge(AgentsLive(control)),
     // The drive, the admin API's and the modules' local API's (modules/local.ts): the platform's, before the agents.
@@ -181,6 +189,43 @@ function run() {
     const readers = yield* Readers;
     // `stillfail heap`: a snapshot of this thread's heap, asked for from the command line.
     answerHeapRequests(data);
+    // The main thread held (a query of seconds, a long parse): said as it is let go, with how long. Every device's
+    // requests wait meanwhile; the slow queries say what held it (store/timed.ts). With no slow query, what the
+    // process did meanwhile says whether it worked (`cpuMs`, all its threads'), collected its garbage (`gcMs`, this
+    // thread's, and the longest pause), waited on pages of its memory read back from the disk (`pageFaults`), on files
+    // (`filesMs`, its synchronous calls of node:fs: ops/file-waits.ts) or on its statements (`queriesMs`, all of them,
+    // none slow: store/timed.ts); the longest of each by who made them.
+    const files = timeFiles();
+    const held = monitorEventLoopDelay({ resolution: 50 });
+    held.enable();
+    const gc = { ms: 0, longest: 0 };
+    new PerformanceObserver((list) => {
+      for (const e of list.getEntries()) {
+        gc.ms += e.duration;
+        gc.longest = Math.max(gc.longest, e.duration);
+      }
+    }).observe({ entryTypes: ["gc"] });
+    let cpu = process.cpuUsage();
+    let faults = process.resourceUsage().majorPageFault;
+    wall.every(HELD_EVERY_MS, () => {
+      const ms = held.max / 1e6;
+      const used = process.cpuUsage(cpu);
+      const faulted = process.resourceUsage().majorPageFault;
+      const waited = files.take();
+      const queried = takeQueries();
+      if (ms >= HELD_MS) {
+        log.warn("station", "the main thread was held", {
+          ms: Math.round(ms), cpuMs: Math.round((used.user + used.system) / 1000), gcMs: Math.round(gc.ms), gcLongestMs: Math.round(gc.longest), pageFaults: faulted - faults,
+          filesMs: Math.round(waited.ms), files: waited.calls, ...(waited.by.size > 0 ? { waitedOn: longestWaits(waited) } : {}),
+          queriesMs: Math.round(queried.ms), queries: queried.calls, ...(queried.by.size > 0 ? { queriedBy: longestWaits(queried) } : {}),
+        });
+      }
+      held.reset();
+      cpu = process.cpuUsage();
+      faults = faulted;
+      gc.ms = 0;
+      gc.longest = 0;
+    });
     wall.every(process.env.STILLFAIL_MEMLOG ? 10_000 : 600_000, () => {
       const m = process.memoryUsage();
       const mb = (v: number) => Math.round(v / 1048576);

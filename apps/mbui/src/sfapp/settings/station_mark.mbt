@@ -175,7 +175,7 @@ let mark_pictures : Ref[Int] = Ref(0)
 ///|
 /// The mark picker (openMarkPick) for `name`, whose mark is `emoji` and `icon` now: `save(emoji, icon)` sets one,
 /// `what` naming it should it fail ("" and "" take it away).
-fn open_mark_pick(
+pub fn open_mark_pick(
   core : Core,
   name : String,
   emoji : String,
@@ -194,10 +194,6 @@ fn open_mark_pick(
       })
     }
   }
-  let pick = fn(e : String, i : String) {
-    close_sheet()
-    set(e, i)
-  }
   let glyph = glyph_of(icon)
   let picture = icon.has_prefix("data:image/") ||
     icon.has_prefix("https://") ||
@@ -211,8 +207,32 @@ fn open_mark_pick(
   mark_pick.asking = false
   mark_pick.reading = ""
   let serial = mark_pick.serial
-  open_sheet(0.78, fn(c, core) {
+  // (a sheet of its own with touch, a dialog with keyboard and mouse: the presenters'; its grid scrolls in what is left)
+  @sf.panel(fill("android-settings.station.emojiTitle", [("name", name)]), from=Unanchored, tall=mark_tall, fn(c, close) {
+    // (filling its share, it lays out its own sides: a page's room)
+    c.box(style=mark_body, fn() { mark_pick_body(c, core, emoji, icon, glyph, picture, serial, set, close) }) |> ignore
+  })
+}
+
+///|
+/// What the picker holds, given what sets a mark and what closes it.
+fn mark_pick_body(
+  c : @ui.Ctx,
+  core : Core,
+  emoji : String,
+  icon : String,
+  glyph : (String, String)?,
+  picture : Bool,
+  serial : Int,
+  set : (String, String) -> Unit,
+  close : () -> Unit,
+) -> Unit {
+  {
     let t = @sf.theme()
+    let pick = fn(e : String, i : String) {
+      close()
+      set(e, i)
+    }
     // a picture too large as it is, read: made small and put up
     if mark_pick.reading != "" {
       match c.image_pixels(mark_pick.reading, mark_picture_read) {
@@ -230,62 +250,51 @@ fn open_mark_pick(
         }
       }
     }
-    sheet_head(c, fill("android-settings.station.emojiTitle", [("name", name)]))
     let emojis = mark_pick.emojis
     let typed_key = "mark-typed/" + serial.to_string()
     let query_key = "mark-query/" + serial.to_string()
-    // the fields, each frame's words (the one not shown keeps its own)
+    // the icons' side or the emoji's, and its field: an emoji pasted or typed, or words to find an icon by (the one
+    // not shown keeps its own)
     let mut query = ""
-    let head = fn() {
-      c.box(w=Fill(1.0), pl=18.0, pr=18.0, pb=10.0, gap=10.0, fn() {
-        let i = seg(c, "mark-side/" + serial.to_string(), [tr("android-settings.station.glyphs"), "Emoji"], if emojis { 1 } else { 0 }, fill=true, height=34.0, radius=17.0)
-        mark_pick.emojis = i == 1
-        if emojis {
-          let typed = field_box(c, typed_key, tr("android-settings.station.emojiPaste"))
-          match first_emoji(typed) {
-            Some(e) => {
-              field_of(typed_key).set("")
-              pick(e, "")
-            }
-            None => ()
-          }
-        } else {
-          query = field_box(c, query_key, tr("android-settings.station.glyphSearch"))
-        }
+    c.box(style=mark_head, fn() {
+      let i = @sf.segmented(c, "mark-side/" + serial.to_string(), [tr("android-settings.station.glyphs"), "Emoji"], if emojis {
+        1
+      } else {
+        0
       })
-      |> ignore
-    }
-    head()
+      mark_pick.emojis = i == 1
+      if emojis {
+        let typed = @sf.input(c, typed_key, placeholder=tr("android-settings.station.emojiPaste"), field=field_of(typed_key)).text
+        match first_emoji(typed) {
+          Some(e) => {
+            field_of(typed_key).set("")
+            pick(e, "")
+          }
+          None => ()
+        }
+      } else {
+        query = @sf.input(c, query_key, placeholder=tr("android-settings.station.glyphSearch"), field=field_of(query_key)).text
+      }
+    })
+    |> ignore
     // the icons' colour: the words' own first, then the marks'; the one picked ringed; it colours the grid, and the
     // icon it has, at once
     if !emojis {
-      c.box(dir=Row, w=Fill(1.0), pl=18.0, pr=18.0, pb=10.0, justify=JBetween, fn() {
+      c.box(style=mark_colours, fn() {
         for col in [""] + mark_colors {
           let of = mark_color(col).unwrap_or(t.p.text)
           let id = c.id("mark-color/" + col)
-          if hit(c, id) {
+          if c.clicked(id) {
             mark_pick.color = col
             match glyph {
-              Some((g, _)) =>
-                set(
-                  glyph_emoji(g),
-                  "glyph:" + g + (if col == "" { "" } else { ":" + col }),
-                )
+              Some((g, _)) => set(glyph_emoji(g), "glyph:" + g + (if col == "" { "" } else { ":" + col }))
               None => ()
             }
           }
-          c.box(
-            w=Px(32.0),
-            h=Px(32.0),
-            radius=16.0,
-            border=if col == mark_pick.color { 2.0 } else { 0.0 },
-            border_color=of,
-            align=ACenter,
-            justify=JCenter,
-            id~,
-            fn() { c.box(w=Px(18.0), h=Px(18.0), radius=9.0, bg=of, fn() {  }) |> ignore },
-          )
-          |> ignore
+          let ring = c.box(style=mark_colour, border=if col == mark_pick.color { mark_ring } else { 0.0 }, border_color=of, id~, fn() {
+            c.box(style=mark_colour_dot, bg=of, fn() {  }) |> ignore
+          })
+          c.semantics(ring, Button, id~, label=if col == "" { tr("android-settings.station.glyphs") } else { col }, selected=col == mark_pick.color)
         }
       })
       |> ignore
@@ -313,109 +322,181 @@ fn open_mark_pick(
       station_emoji
     }
     let tint = mark_color(mark_pick.color)
-    let rows = (offered.length() + 5) / 6
+    let rows = (offered.length() + mark_across - 1) / mark_across
     let blocks : Array[() -> Unit] = []
     if offered.length() == 0 {
-      blocks.push(fn() {
-        c.box(w=Fill(1.0), pady=24.0, fn() {
-          c.text(tr("android-settings.station.glyphNone"), size=15.0, color=t.p.muted, center=true, w=Fill(1.0)) |> ignore
-        })
-        |> ignore
-      })
+      blocks.push(fn() { @sf.page_note(c, tr("android-settings.station.glyphNone")) })
     }
     for r in 0..<rows {
       blocks.push(fn() {
-        // six to a row, wide enough for a thumb
-        c.box(dir=Row, w=Fill(1.0), pl=14.0, pr=14.0, pb=4.0, gap=4.0, fn() {
-          for k in 0..<6 {
-            let i = r * 6 + k
+        // six to a row, each as wide as a sixth of it (a thumb's), square
+        c.box(style=mark_row, fn() {
+          for k in 0..<mark_across {
+            let i = r * mark_across + k
             if i >= offered.length() {
-              c.box(w=Fill(1.0), fn() {  }) |> ignore
+              c.box(style=mark_cell_none, fn() {  }) |> ignore
               continue
             }
             let key = offered[i]
             let on = (if emojis { bare_emoji(key) } else { key }) == kept
             let id = c.id("mark/" + key)
-            if hit(c, id) {
+            if c.clicked(id) {
               if emojis {
                 pick(key, "")
               } else {
                 pick(glyph_emoji(key), "glyph:" + key + (if mark_pick.color == "" { "" } else { ":" + mark_pick.color }))
               }
             }
-            // square, as wide as a sixth of the row (Settings.kt: weight(1f).aspectRatio(1f)), rippled over its clip
-            c.box(
-              w=Fill(1.0),
-              aspect=1.0,
-              radius=14.0,
-              bg=if on { t.p.accent_bg } else { 0L },
-              align=ACenter,
-              justify=JCenter,
-              id~,
-              fn() {
-                if emojis {
-                  c.text(key, size=26.0, wrap=false, line=30.0) |> ignore
-                } else {
-                  @sf.station_mark(c, "", "glyph:" + key, 24.0, tint.unwrap_or(if on { t.p.accent } else { t.p.text }))
-                }
-                @motion.ripple(c, id, 14.0)
-              },
-            )
-            |> ignore
+            // (square: as tall as it is wide)
+            let cell = c.box(style=if on { mark_cell_on } else { mark_cell }, aspect=1.0, id~, fn() {
+              if emojis {
+                c.text(key, style=mark_emoji_words) |> ignore
+              } else {
+                @sf.station_mark(c, "", "glyph:" + key, mark_glyph, tint.unwrap_or(if on { t.p.accent } else { t.p.text }))
+              }
+              @sf.row_ripple(c, id)
+            })
+            c.semantics(cell, Button, id~, label=key, selected=on)
           }
         })
         |> ignore
       })
     }
+    // a picture put up, or none
     blocks.push(fn() {
-      c.box(w=Fill(1.0), pt=6.0, fn() {
-        if pick_row(
-            c,
-            "mark-picture",
-            tr(if picture { "android-settings.station.imageAnother" } else { "android-settings.station.image" }),
-            mark=fn() {
-              if picture {
-                @sf.station_mark(c, "", icon, 20.0, t.p.text)
-              } else {
-                @sf.icon(c, "image-upload", size=20.0, color=t.p.text) |> ignore
-              }
-            },
-          ) {
-          // the picture the system's picker answers with put up as the mark
-          let asked = (core.pick_picture)(fn(bytes) {
-            mark_pick.asking = false
-            match bytes {
-              Some(b) =>
-                match picture_mark(b) {
-                  Some(url) => pick("", url)
-                  None => {
-                    mark_pictures.val += 1
-                    mark_pick.reading = "mem:station-mark/\{mark_pictures.val}"
-                    @ui.add_image(mark_pick.reading, b)
-                  }
+      c.box(style=mark_foot, fn() {
+        @sf.group(c, fn() {
+          if @sf.link_row(
+              c,
+              "mark-picture",
+              tr(if picture { "android-settings.station.imageAnother" } else { "android-settings.station.image" }),
+              chevron=false,
+              lead=fn() {
+                if picture {
+                  @sf.station_mark(c, "", icon, mark_row_mark, t.p.text)
+                } else {
+                  @sf.icon(c, "image-upload", size=mark_row_mark, color=t.p.text) |> ignore
                 }
-              None => ()
+              },
+            ) {
+            // the picture the system's picker answers with put up as the mark
+            let asked = (core.pick_picture)(fn(bytes) {
+              mark_pick.asking = false
+              match bytes {
+                Some(b) =>
+                  match picture_mark(b) {
+                    Some(url) => pick("", url)
+                    None => {
+                      mark_pictures.val += 1
+                      mark_pick.reading = "mem:station-mark/\{mark_pictures.val}"
+                      @ui.add_image(mark_pick.reading, b)
+                    }
+                  }
+                None => ()
+              }
+            })
+            mark_pick.asking = asked
+            if !asked {
+              (core.say)(tr("android-settings.station.imageFailed"))
             }
-          })
-          mark_pick.asking = asked
-          if !asked {
-            (core.say)(tr("android-settings.station.imageFailed"))
           }
-        }
-        if @sf.has_station_mark(emoji, icon) &&
-          pick_row(c, "mark-none", tr("android-settings.station.emojiClear"), mark=fn() {
-            @sf.icon(c, "close", size=20.0, color=t.p.text) |> ignore
-          }) {
-          pick("", "")
-        }
-        gap(c, 24.0)
+          if @sf.has_station_mark(emoji, icon) &&
+            @sf.link_row(c, "mark-none", tr("android-settings.station.emojiClear"), chevron=false, lead=fn() {
+              @sf.icon(c, "close", size=mark_row_mark, color=t.p.text) |> ignore
+            }) {
+            pick("", "")
+          }
+        })
       })
       |> ignore
     })
-    c.box(w=Fill(1.0), h=Fill(1.0), fn() { scroll_page(c, "mark/" + serial.to_string() + (if emojis { "/e" } else { "/g" }), blocks) })
+    c.box(style=mark_grid_room, fn() {
+      c.list("mark/" + serial.to_string() + (if emojis { "/e" } else { "/g" }), blocks.length(), mark_row_est, fn(i) {
+        (blocks[i])()
+      })
+      |> ignore
+    })
     |> ignore
-  })
+  }
 }
+
+///|
+/// The picker's body: in a page's room, filling the sheet's share.
+// kept across runs: a value (no field of it changes)
+let mark_body : @ui.Style = @sf.pg_room.then(@ui.style(h=@sf.grow))
+
+///|
+/// The picker's share of the window (a sheet that tall; a dialog at most that tall).
+let mark_tall : Double = 0.78
+
+///|
+/// The side and its field over the grid, 10 apart, 10 under them.
+// kept across runs: a value (no field of it changes)
+let mark_head : @ui.Style = @ui.css("w=Full pb=S2_5 gap=S2_5")
+
+///|
+/// The colours across, as far apart as they go, 10 under them; each 32 round, ringed 2 in itself where picked, its
+/// dot 18.
+// kept across runs: a value (no field of it changes)
+let mark_colours : @ui.Style = @ui.css("row w=Full pb=S2_5 justify=JBetween")
+
+///|
+// kept across runs: a value (no field of it changes)
+let mark_colour : @ui.Style = @ui.css("w=S8 h=S8 radius=Full align=ACenter justify=JCenter")
+
+///|
+// kept across runs: a value (no field of it changes)
+let mark_colour_dot : @ui.Style = @ui.style(w=Fixed(mark_dot), h=Fixed(mark_dot), radius=Full)
+
+///|
+let mark_dot : Double = 18.0
+
+///|
+let mark_ring : Double = 2.0
+
+///|
+/// What scrolls: the grid's rows, then a picture or none, in what is left of it.
+// kept across runs: a value (no field of it changes)
+let mark_grid_room : @ui.Style = @ui.style(w=Full, h=@sf.grow)
+
+///|
+let mark_row_est : Double = 64.0
+
+///|
+/// Six to a row, 4 apart, 4 under each row.
+let mark_across : Int = 6
+
+///|
+// kept across runs: a value (no field of it changes)
+let mark_row : @ui.Style = @ui.css("row w=Full pb=S1 gap=S1")
+
+///|
+/// A cell: square, its corner the ladder's for a small block; the one it has on the accent's wash.
+// kept across runs: a value (no field of it changes)
+let mark_cell : @ui.Style = @ui.style(w=@sf.grow, radius=Xl2, align=ACenter, justify=JCenter)
+
+///|
+// kept across runs: a value (no field of it changes)
+let mark_cell_on : @ui.Style = mark_cell.then(@ui.css("bg=AccentBg"))
+
+///|
+// kept across runs: a value (no field of it changes)
+let mark_cell_none : @ui.Style = @ui.style(w=@sf.grow)
+
+///|
+// kept across runs: a value (no field of it changes)
+let mark_emoji_words : @ui.TextStyle = @ui.text_style(size=Heading, wrap=false)
+
+///|
+let mark_glyph : Double = 24.0
+
+///|
+/// A picture or none under the grid, 6 over them, 24 under.
+// kept across runs: a value (no field of it changes)
+let mark_foot : @ui.Style = @ui.css("w=Full pt=S1_5 pb=S6")
+
+///|
+let mark_row_mark : Double = 20.0
 
 ///|
 /// The emoji a glyph keeps beside it.

@@ -8,31 +8,6 @@
 // 自动决策
 
 ///|
-/// The automatic decisions (AutomaticDecisionsScreen): its rules, each a row to its page (one: completion).
-fn decisions_page(c : @ui.Ctx, core : Core) -> Unit {
-  scroll_page(c, "auto-decisions", [
-    fn() { top_back(c, core, tr("android-settings.title")) },
-    fn() { large_title(c, tr("web-pages.automaticDecisions.title")) },
-    fn() {
-      list_card(c, fn() {
-        if list_row(c, key="auto-completion", fn() {
-            c.box(w=Fill(1.0), gap=5.0, fn() {
-              c.text(tr("web-pages.automaticDecisions.completion"), size=15.0, color=@sf.theme().p.text, w=Fill(1.0), line=21.0)
-              |> ignore
-              c.text(tr("web-pages.automaticDecisions.completionShort"), size=13.0, color=@sf.theme().p.muted, w=Fill(1.0), line=18.0)
-              |> ignore
-            })
-            |> ignore
-            chevron(c)
-          }) {
-          (core.push)(AutoCompletion)
-        }
-      })
-    },
-  ])
-}
-
-///|
 /// A wait said in a line where a page's note goes.
 fn note_wait(c : @ui.Ctx, words : String, error? : Bool = false) -> Unit {
   c.box(w=Fill(1.0), pl=24.0, pr=24.0, pb=10.0, fn() { wait_line(c, words, error~) }) |> ignore
@@ -45,7 +20,7 @@ fn completion_page(c : @ui.Ctx, core : Core, here : Here) -> Unit {
   let topic = stations_of(core, here)
   let blocks : Array[() -> Unit] = [
     fn() { top_back(c, core, tr("web-pages.automaticDecisions.title")) },
-    fn() { large_title(c, tr("web-pages.automaticDecisions.completion")) },
+    fn() { large_title(c, tr("web-pages.automaticDecisions.completion"), about=tr("web-pages.automaticDecisions.completionNote")) },
   ]
   match topic.value {
     Some(Array(a)) => {
@@ -101,19 +76,7 @@ fn decision_panel(c : @ui.Ctx, core : Core, station : String, name : String, vie
   if !flag(view, "canEdit") {
     return [fn() { section_header(c, name, start=S6) }, fn() { page_note(c, tr("web-pages.automaticDecisions.adminOnly")) }]
   }
-  let form = match decision_forms.get(station) {
-    Some(f) => f
-    None => {
-      profile_forms.val += 1
-      let f = "mbui-decision-" + profile_forms.val.to_string()
-      decision_forms[station] = f
-      // (opened once the frame's builds are over: the build that first comes to it alone)
-      c.tell("decision-open/" + f, fn() {
-        act(core, tr("web-pages.automaticDecisions.configAction"), "automaticDecisions.form.open", obj([("station", str(station)), ("form", str(f)), ("input", obj([]))]))
-      })
-      f
-    }
-  }
+  let form = decision_form(c, core, station)
   let call = fn(action : String, input : Array[(String, Json)]) {
     act(
       core,
@@ -229,13 +192,13 @@ fn decision_panel(c : @ui.Ctx, core : Core, station : String, name : String, vie
         Some(Object(_)) as policy =>
           if list_row(c, key="auto-policy/" + station, fn() {
               c.box(w=Fill(1.0), gap=5.0, fn() {
-                c.text(tr("web-pages.archivePolicy.title"), size=15.0, color=t.p.text, w=Fill(1.0), line=21.0) |> ignore
+                c.text(tr("web-pages.archivePolicy.title"), size=t.t.body, color=t.p.text, w=Fill(1.0), line=21.0) |> ignore
                 c.text(
                   join(
                     [fill("web-pages.archivePolicy.optionCount", [("n", items(policy, "options").length().to_string())]), text(policy, "summaryText")],
                     " · ",
                   ),
-                  size=13.0,
+                  size=t.t.meta,
                   color=if count(policy, "failed") > 0 { t.p.red } else { t.p.muted },
                   w=Fill(1.0),
                   line=18.0,
@@ -254,7 +217,7 @@ fn decision_panel(c : @ui.Ctx, core : Core, station : String, name : String, vie
   if flag(d, "dirty") {
     out.push(fn() {
       c.box(dir=Row, w=Fill(1.0), padx=12.0, gap=12.0, align=ACenter, fn() {
-        if button(c, "auto-save/" + station, tr("web-pages.automaticDecisions.save"), true, busy=saving, enabled=!busy) {
+        if @sf.button(c, tr("web-pages.automaticDecisions.save"), key="auto-save/" + station, tone=Primary, busy=saving, disabled=busy) {
           call("save", [])
         }
         doing_mark(c, false, failed_of(core, ["automaticDecisions.form.save"], [("station", station), ("form", form)]))
@@ -267,7 +230,7 @@ fn decision_panel(c : @ui.Ctx, core : Core, station : String, name : String, vie
 
 ///|
 /// The drafts of the stations' archive policies open (`policyForm`), by station.
-let policy_forms : Map[String, String] = Map([])
+pub let policy_forms : Map[String, String] = Map([])
 
 ///|
 /// A station's archive policy (AutomaticDecisionPolicyScreen, ArchivePolicySection): its words and its options in two
@@ -280,7 +243,7 @@ fn policy_page(c : @ui.Ctx, core : Core, here : Here, station : String) -> Unit 
   let policy = field(view, "policy")
   let blocks : Array[() -> Unit] = [
     fn() { top_back(c, core, tr("web-pages.automaticDecisions.completion")) },
-    fn() { large_title(c, tr("web-pages.archivePolicy.title")) },
+    fn() { large_title(c, tr("web-pages.archivePolicy.title"), about=tr("web-pages.archivePolicy.textLead")) },
   ]
   if policy is Some(Object(_)) && flag(view, "canEdit") {
     let form = match policy_forms.get(station) {
@@ -363,11 +326,11 @@ fn policy_page(c : @ui.Ctx, core : Core, here : Here, station : String) -> Unit 
               None => ()
             }
             c.spacer()
-            if button(c, "policy-cancel", tr("web-pages.archivePolicy.cancel"), false) {
+            if @sf.button(c, tr("web-pages.archivePolicy.cancel"), key="policy-cancel") {
               c.blur()
               cancel()
             }
-            if button(c, "policy-save", tr("web-pages.archivePolicy.save"), true, enabled=flag(d, "dirty")) {
+            if @sf.button(c, tr("web-pages.archivePolicy.save"), key="policy-save", tone=Primary, disabled=!flag(d, "dirty")) {
               c.blur()
               save()
             }
@@ -377,7 +340,7 @@ fn policy_page(c : @ui.Ctx, core : Core, here : Here, station : String) -> Unit 
         if id == "" && key == "" {
           sheet_head(c, tr("web-pages.archivePolicy.title"))
           c.box(w=Fill(1.0), padx=20.0, gap=12.0, fn() {
-            c.text(tr("web-pages.archivePolicy.textLead"), size=13.0, color=t.p.muted, w=Fill(1.0), line=18.0) |> ignore
+            c.text(tr("web-pages.archivePolicy.textLead"), size=t.t.meta, color=t.p.muted, w=Fill(1.0), line=18.0) |> ignore
             let words = field_in("policy", text(d, "policy"), tr("web-pages.archivePolicy.title"), 8)
             if words != text(d, "policy") {
               call("edit", [("policy", str(words))], fn(_) {  })
@@ -413,18 +376,17 @@ fn policy_page(c : @ui.Ctx, core : Core, here : Here, station : String) -> Unit 
                 if r != text(ov2, "rubric") {
                   call("edit", [("option", str(okey)), ("rubric", str(r))], fn(_) {  })
                 }
-                let i = seg(
+                let i = @sf.segmented(
                   c,
                   "policy-archive/" + serial,
                   [tr("web-pages.archivePolicy.archive"), tr("web-pages.archivePolicy.keep")],
                   if flag(ov2, "archive") { 0 } else { 1 },
-                  fill=true,
                 )
                 if (i == 0) != flag(ov2, "archive") {
                   call("edit", [("option", str(okey)), ("archive", Json::boolean(i == 0))], fn(_) {  })
                 }
                 if count(ov, "count") > 0 {
-                  c.text(fill("web-pages.archivePolicy.chats", [("days", count(policy, "days").to_string())]), size=13.0, color=t.p.muted, w=Fill(1.0), line=18.0)
+                  c.text(fill("web-pages.archivePolicy.chats", [("days", count(policy, "days").to_string())]), size=t.t.meta, color=t.p.muted, w=Fill(1.0), line=18.0)
                   |> ignore
                 }
               })
@@ -436,7 +398,7 @@ fn policy_page(c : @ui.Ctx, core : Core, here : Here, station : String) -> Unit 
                   list_card(c, fn() {
                     for ch in items(ov, "chats") {
                       if list_row(c, key="policy-chat/" + text(Some(ch), "session"), fn() {
-                          c.text(text(Some(ch), "title"), style=row_title_words.then(@ui.text_style(size=Base))) |> ignore
+                          c.text(text(Some(ch), "title"), style=row_title_words.then(@ui.text_style(size=Ui))) |> ignore
                           chevron(c)
                         }) {
                         cancel()
@@ -495,7 +457,7 @@ fn policy_page(c : @ui.Ctx, core : Core, here : Here, station : String) -> Unit 
     blocks.push(fn() {
       list_card(c, fn() {
         if list_row(c, key=if busy { "" } else { "policy-text" }, fn() {
-            c.text(text(policy, "text"), size=14.0, color=t.p.text, w=Fill(1.0), line=22.0) |> ignore
+            c.text(text(policy, "text"), size=t.t.ui, color=t.p.text, w=Fill(1.0), line=22.0) |> ignore
           }) {
           open_one("", None)
         }
@@ -511,11 +473,11 @@ fn policy_page(c : @ui.Ctx, core : Core, here : Here, station : String) -> Unit 
             let ov = Some(o)
             if list_row(c, key=if busy { "" } else { "policy-option/" + text(ov, "id") }, fn() {
                 c.box(w=Fill(1.0), gap=3.0, fn() {
-                  c.text(text(ov, "name"), size=15.0, color=t.p.text, w=Fill(1.0), line=21.0) |> ignore
-                  c.text(text(ov, "rubric"), size=13.0, color=t.p.muted, w=Fill(1.0), line=18.0) |> ignore
+                  c.text(text(ov, "name"), size=t.t.body, color=t.p.text, w=Fill(1.0), line=21.0) |> ignore
+                  c.text(text(ov, "rubric"), size=t.t.meta, color=t.p.muted, w=Fill(1.0), line=18.0) |> ignore
                 })
                 |> ignore
-                c.text(count(ov, "count").to_string(), size=13.0, color=t.p.muted, wrap=false) |> ignore
+                c.text(count(ov, "count").to_string(), size=t.t.meta, color=t.p.muted, wrap=false) |> ignore
               }) {
               open_one(text(ov, "id"), ov)
             }
@@ -532,7 +494,7 @@ fn policy_page(c : @ui.Ctx, core : Core, here : Here, station : String) -> Unit 
       c.box(w=Fill(1.0), pl=24.0, pr=24.0, pt=4.0, pb=10.0, fn() {
         c.text(
           join([text(policy, "changeText"), text(policy, "summaryText")], " · "),
-          size=13.0,
+          size=t.t.meta,
           color=if count(policy, "failed") > 0 { t.p.red } else { t.p.muted },
           w=Fill(1.0),
           line=18.0,
@@ -588,16 +550,16 @@ fn decisions_left(core : Core, route : Route) -> Unit {
 
 ///|
 /// How many places a bar holds (BAR_SIZE).
-let bar_size : Int = 4
+pub let bar_size : Int = 4
 
 ///|
 /// Every place, in the picker's order (Places.kt PLACES).
 // kept across runs: a table of constants, never written
-let all_places : Array[String] = ["chats", "decisions", "files", "stations", "profiles", "connects", "usage", "archive"]
+pub let all_places : Array[String] = ["chats", "decisions", "files", "stations", "profiles", "connects", "usage", "archive"]
 
 ///|
 /// What settings' row says of the bars (barsValue): how many, or the one bar's places.
-fn bars_value(core : Core) -> String {
+pub fn bars_value(core : Core) -> String {
   let (sets, _) = (core.bars)()
   if sets.length() > 1 {
     fill("android-misc.bar.count", [("n", sets.length().to_string())])
@@ -608,7 +570,7 @@ fn bars_value(core : Core) -> String {
 
 ///|
 /// The bars kept whole (BarSettings.kt save): an empty one dropped, the one in view still the same bar after it.
-fn save_bars(core : Core, sets : Array[Array[String]], current : Int) -> Unit {
+pub fn save_bars(core : Core, sets : Array[Array[String]], current : Int) -> Unit {
   let mut cur = current
   let kept : Array[Array[String]] = []
   for i, s in sets {
@@ -626,300 +588,14 @@ fn save_bars(core : Core, sets : Array[Array[String]], current : Int) -> Unit {
 }
 
 ///|
-/// A bar just made on the page, empty until a place is added (the core keeps no empty bar).
-let bar_adding : Ref[Bool] = Ref(false)
+/// A bar just made on 下方栏's page (sfdesk bars.mbt), empty until a place is added (the core keeps no empty bar): let
+/// go of as the page is left.
+pub let bar_adding : Ref[Bool] = Ref(false)
 
 ///|
-/// 下方栏 (BarSettingsScreen): this device's bottom bars, each a card of its places (a place taken out with the "−" at its
-/// corner, one added from a sheet of them all, one held and moved sideways to change its order); a bar made the one in
-/// view, deleted, or a new one made.
-fn bars_page(c : @ui.Ctx, core : Core) -> Unit {
-  let t = @sf.theme()
-  let (made, cur) = (core.bars)()
-  let sets : Array[Array[String]] = made.copy()
-  if bar_adding.val {
-    sets.push([])
-  }
-  let pick_for = fn(i : Int) {
-    open_bar_pick(core, i, fn(place) {
-      let (now, ncur) = (core.bars)()
-      if i >= now.length() {
-        bar_adding.val = false
-        save_bars(core, now + [[place]], ncur)
-      } else {
-        save_bars(core, now.mapi(fn(n, s) { if n == i && !s.contains(place) && s.length() < bar_size { s + [place] } else { s } }), ncur)
-      }
-    })
-  }
-  let blocks : Array[() -> Unit] = [
-    fn() { top_back(c, core, tr("android-settings.title")) },
-    fn() { large_title(c, tr("android-misc.bar.title"), small=tr("android-misc.bar.small")) },
-    fn() { page_note(c, tr("android-misc.bar.note")) },
-  ]
-  for i, set in sets {
-    let is_made = i < made.length()
-    blocks.push(fn() {
-      c.box(dir=Row, w=Fill(1.0), pl=24.0, pr=24.0, pt=16.0, pb=6.0, align=ACenter, fn() {
-        c.text(fill("android-misc.bar.set", [("n", (i + 1).to_string())]), size=13.0, weight=600, color=t.p.text, wrap=false) |> ignore
-        if is_made && i == cur {
-          c.box(pl=8.0, fn() {
-            c.box(padx=7.0, pady=1.0, radius=9.0, bg=t.p.accent_bg, fn() {
-              c.text(tr("android-misc.bar.current"), size=11.0, weight=600, color=@sf.link_ink(), wrap=false) |> ignore
-            })
-            |> ignore
-          })
-          |> ignore
-        }
-        c.spacer()
-        if is_made && i != cur && tap_text(c, "bar-use/" + i.to_string(), tr("android-misc.bar.use"), size=13.0, room=true) {
-          save_bars(core, made, i)
-        }
-        if sets.length() > 1 {
-          c.box(pl=10.0, fn() {
-            if tap_text(
-                c,
-                "bar-delete/" + i.to_string(),
-                tr("android-misc.bar.delete"),
-                color=t.p.red,
-                size=13.0,
-                said=fill("android-misc.bar.deleteNamed", [("n", (i + 1).to_string())]),
-                room=true,
-              ) {
-              if !is_made {
-                bar_adding.val = false
-              } else {
-                let left : Array[Array[String]] = []
-                for n, x in made {
-                  if n != i {
-                    left.push(x)
-                  }
-                }
-                save_bars(core, left, if cur > i || cur >= left.length() { if cur - 1 < 0 { 0 } else { cur - 1 } } else { cur })
-              }
-            }
-          })
-          |> ignore
-        }
-      })
-      |> ignore
-    })
-    blocks.push(fn() { bar_card(c, core, i, set, made.length() == 1 && set.length() == 1, fn() { pick_for(i) }) })
-  }
-  blocks.push(fn() {
-    c.box(w=Fill(1.0), pt=14.0, fn() {
-      list_card(c, fn() {
-        if list_row(c, key="bar-new", fn() {
-            @sf.icon(c, "plus", size=20.0, color=t.p.accent) |> ignore
-            row_title(c, tr("android-misc.bar.new"), color=@sf.link_ink())
-          }) {
-          bar_adding.val = true
-          pick_for(made.length())
-        }
-      })
-    })
-    |> ignore
-  })
-  blocks.push(fn() { page_note(c, tr(if made.length() > 1 { "android-misc.bar.foot.many" } else { "android-misc.bar.foot.one" })) })
-  blocks.push(fn() { gap(c, 30.0) })
-  scroll_page(c, "bars", blocks)
-}
-
-///|
-/// How far a place held is moved along its bar (BarCard's `dx`: the finger's way past the slop), by its bar and its
-/// name, while a finger has it.
-let bar_moves : Map[String, Double] = {}
-
-///|
-/// A place held and moved sideways (BarCard): lifted 8% over the card's ground, 14 round, raised (shadow(6), black at
-/// 14% both).
-// kept across runs: a value (no field of it changes)
-let place_lifted : @sf.Raised = @sf.raised(6.0, ambient=0.14, spot=0.14)
-
-///|
-/// A place on its bar as it lies.
-// kept across runs: a value (no field of it changes)
-let place_slot : @ui.Style = @ui.style()
-
-///|
-/// A place held: on the card's ground, raised (place_lifted).
-// kept across runs: a value (no field of it changes)
-let place_held : @ui.Style = @ui.style(bg=Card, shadow=place_lifted.cast())
-
-///|
-/// A bar's card (BarCard): its places in four slots, each its icon over its name with a "−" at its corner (none on the
-/// last place of the only bar), one held and moved sideways put where it is let go (by how many slots it went), a
-/// screen reader's step moving it one along; with room left, a slot that adds one.
-fn bar_card(c : @ui.Ctx, core : Core, i : Int, set : Array[String], only : Bool, add : () -> Unit) -> Unit {
-  let t = @sf.theme()
-  // BarSettingsScreen's onMove: the place at `j` put at `to`
-  let move = fn(j : Int, to : Int) {
-    let (now, ncur) = (core.bars)()
-    if to != j && i < now.length() && j < now[i].length() && to >= 0 && to < now[i].length() {
-      let moved = now[i].copy()
-      let p = moved.remove(j)
-      moved.insert(to, p)
-      save_bars(core, now.mapi(fn(n, s) { if n == i { moved } else { s } }), ncur)
-    }
-  }
-  c.box(w=Fill(1.0), pl=12.0, pr=12.0, pb=10.0, fn() {
-    // 6 in (BarCard: padding(6))
-    c.box(dir=Row, w=Fill(1.0), pad=6.0, radius=20.0, bg=t.p.card, fn() {
-      for j, key in set {
-        let id = c.id("bar-slot/" + i.to_string() + "/" + key)
-        let held = i.to_string() + "/" + key
-        // the finger's (detectHorizontalDragGestures): lifted once it goes sideways past the slop, following it; let go,
-        // put by how many slots it went (a slot's width, Row's quarter)
-        c.drag_on(id, axis=Horizontal)
-        let lifted = match c.drag_of(id) {
-          Some(d) => {
-            let (dx, _) = d.take_move()
-            if d.down && d.moving {
-              bar_moves[held] = bar_moves.get(held).unwrap_or(0.0) + dx
-            }
-            if d.take_end() {
-              let went = bar_moves.get(held).unwrap_or(0.0)
-              bar_moves.remove(held)
-              match c.rect_of(id) {
-                Some((_, _, w, _)) if w > 0.0 => {
-                  let to = j + (went / w).round().to_int()
-                  move(j, if to < 0 { 0 } else if to >= set.length() { set.length() - 1 } else { to })
-                }
-                _ => ()
-              }
-            } else if !d.down {
-              bar_moves.remove(held)
-            }
-            d.down && d.moving
-          }
-          None => false
-        }
-        // a screen reader's (BarSettings.kt's actions 左移, 右移): one slot along
-        if c.action_asked(id, Decrement) && j > 0 {
-          move(j, j - 1)
-        }
-        if c.action_asked(id, Increment) && j < set.length() - 1 {
-          move(j, j + 1)
-        }
-        // the slot, and its "−" over it beside (not inside) what the finger holds: a press on the "−" is its own
-        // (14 round: Smooth(concentric(20, 6)), the card's corner 6 in)
-        let slot = c.box(
-          style=if lifted { place_held } else { place_slot },
-          w=Fill(1.0),
-          radius=14.0,
-          fn() {
-            let face = c.box(w=Fill(1.0), pt=12.0, pb=10.0, align=ACenter, id~, fn() {
-              c.box(gap=6.0, align=ACenter, fn() {
-                c.box(h=Px(30.0), justify=JCenter, fn() { (core.place_icon)(c, key, t.p.text) }) |> ignore
-                c.text(tr("android-misc.bar.place." + key), size=12.0, color=t.p.muted, wrap=false) |> ignore
-              })
-              |> ignore
-            })
-            c.semantics(face, Group, id~, label=tr("android-misc.bar.place." + key), actions=[Decrement, Increment])
-            if !only {
-              c.layer(align=ACenter, fn() {
-                let rid = c.id("bar-remove/" + i.to_string() + "/" + key)
-                if hit(c, rid) {
-                  let (now, ncur) = (core.bars)()
-                  save_bars(core, now.mapi(fn(n, s) { if n == i { s.filter(fn(p) { p != key }) } else { s } }), ncur)
-                }
-                // at the icon's top right: 8 over the top of what the slot holds, 12 under the slot's own top
-                // (BarSettings.kt: TopCenter of the slot's padded content, offset 16, -8)
-                let minus = c.box(w=Px(20.0), h=Px(20.0), radius=10.0, bg=t.p.chip, tx=16.0, ty=4.0, align=ACenter, justify=JCenter, id=rid, fn() {
-                  @sf.icon(c, "minus", size=12.0, color=t.p.muted) |> ignore
-                })
-                c.semantics(minus, Button, id=rid, label=fill("android-misc.bar.remove", [("name", tr("android-misc.bar.place." + key))]))
-              })
-              |> ignore
-            }
-          },
-        )
-        // held: where the finger has it, 8% bigger, over the other places (graphicsLayer, zIndex(2f))
-        if lifted {
-          c.look(slot, @ui.look(dx=bar_moves.get(held).unwrap_or(0.0), scale=1.08))
-          c.put_over(slot)
-        }
-      }
-      if set.length() < bar_size {
-        let aid = c.id("bar-add/" + i.to_string())
-        if hit(c, aid) {
-          add()
-        }
-        c.box(w=Fill(1.0), pt=12.0, pb=10.0, radius=16.0, align=ACenter, id=aid, fn() {
-          c.box(gap=6.0, align=ACenter, fn() {
-            // its ring held to the 30 it is in (BarSettings.kt asks 44 of a Box(size(30)): Compose's `size` takes the
-            // constraints it is given)
-            c.box(w=Px(30.0), h=Px(30.0), radius=15.0, border=1.5, border_color=t.p.line, align=ACenter, justify=JCenter, fn() {
-              @sf.icon(c, "plus", size=22.0, color=t.p.subtle) |> ignore
-            })
-            |> ignore
-            c.text(tr("android-misc.bar.add"), size=12.0, color=t.p.subtle, wrap=false) |> ignore
-          })
-          |> ignore
-        })
-        |> ignore
-      }
-      for _ in 0..<(bar_size - set.length() - 1) {
-        c.box(w=Fill(1.0), fn() {  }) |> ignore
-      }
-    })
-    |> ignore
-  })
-  |> ignore
-}
-
-
-///|
-/// The places to add to bar `i` (openPick): all of them, those in it already greyed (已在这一栏), none when it is full.
-fn open_bar_pick(_core : Core, i : Int, picked : (String) -> Unit) -> Unit {
-  open_sheet(0.6, fn(c, core) {
-    let t = @sf.theme()
-    let (now, _) = (core.bars)()
-    let set = now.get(i).unwrap_or([])
-    let full = set.length() >= bar_size
-    c.box(dir=Row, w=Fill(1.0), pl=18.0, pr=18.0, pt=4.0, pb=10.0, align=ACenter, fn() {
-      c.text(fill("android-misc.bar.pick.title", [("n", (i + 1).to_string())]), size=17.0, weight=700, color=t.p.text, wrap=false, w=Fill(1.0), line=24.0)
-      |> ignore
-      c.text(
-        if full {
-          tr("android-misc.bar.pick.full")
-        } else {
-          fill("android-misc.bar.pick.left", [("n", (bar_size - set.length()).to_string())])
-        },
-        size=13.0,
-        color=t.p.muted,
-        wrap=false,
-      )
-      |> ignore
-    })
-    |> ignore
-    c.box(w=Fill(1.0), h=Fill(1.0), fn() {
-      scroll_page(c, "bar-pick/" + i.to_string(), [
-        fn() {
-          for key in all_places {
-            let there = set.contains(key)
-            if pick_row(
-                c,
-                "bar-pick/" + key,
-                tr("android-misc.bar.place." + key),
-                sub=if there { tr("android-misc.bar.pick.there") } else { "" },
-                enabled=!there && !full,
-                mark=fn() {
-                  c.box(w=Px(28.0), h=Px(28.0), align=ACenter, justify=JCenter, opacity=if there || full { 0.4 } else { 1.0 }, fn() {
-                    (core.place_icon)(c, key, t.p.text)
-                  })
-                  |> ignore
-                },
-              ) {
-              close_sheet()
-              picked(key)
-            }
-          }
-        },
-      ])
-    })
-    |> ignore
-  })
-}
+/// How far a place held on 下方栏's page is moved along its bar (BarCard's `dx`: the finger's way past the slop), by
+/// its bar and its name, while a finger has it.
+pub let bar_moves : Map[String, Double] = {}
 
 // ---------------------------------------------------------------------------
 // 存储空间 (what this device keeps)
@@ -966,6 +642,17 @@ fn kept_read(c : @ui.Ctx, core : Core) -> Unit {
       }
     })
   })
+}
+
+///|
+/// What 本机缓存's row in the settings' list says (SettingsHome.kt: KeptFiles.read's total): the chats' kept data in
+/// all, once the core has said it ("" until then).
+pub fn kept_said(c : @ui.Ctx, core : Core) -> String {
+  kept_read(c, core)
+  match kept.chats {
+    Some(chats) => size_words(chats.fold(init=0.0, fn(s, x) { s + number(Some(x), "bytes") }))
+    None => ""
+  }
 }
 
 ///|
@@ -1025,7 +712,7 @@ fn size_row(
   let t = @sf.theme()
   list_row(c, key~, piece?, fn() {
     row_lines(c, title, sub)
-    c.text(size_words(size), size=14.0, color=t.p.muted, wrap=false) |> ignore
+    c.text(size_words(size), size=t.t.meta, color=t.p.muted, wrap=false) |> ignore
     if more {
       chevron(c)
     }
@@ -1195,7 +882,7 @@ fn kept_file_row(c : @ui.Ctx, core : Core, station : String, f : Json, piece : (
 ///|
 /// A kept file's bin (KeptFiles.kt: a 36 circle, its icon in its middle).
 // kept across runs: a value (no field of it changes)
-let kept_bin : @ui.Style = @ui.style(w=S9, h=S9, radius=Full, align=ACenter, justify=JCenter)
+let kept_bin : @ui.Style = @ui.css("w=S9 h=S9 radius=Full align=ACenter justify=JCenter")
 
 ///|
 /// A chat's (KeptChatScreen): what is kept of its messages, deleted when asked (`cache.clear`: read again from its
@@ -1276,207 +963,21 @@ fn kept_chat_page(c : @ui.Ctx, core : Core, station : String, thread : Int) -> U
   scroll_page(c, "kept/" + station + "/" + thread.to_string(), blocks)
 }
 
-// ---------------------------------------------------------------------------
-// 更新日志
-
 ///|
-/// The changelog's tab chosen ("" the first), and whether the news was said seen.
-priv struct ChangelogState {
-  mut part : String
-  mut seen : Bool
-}
-
-///|
-let changelog_state : ChangelogState = { part: "", seen: false }
-
-///|
-/// What changed in still.fail (ChangelogScreen), from the core's `changelog`: a tab a part, by day on cards, each change
-/// with where it is and whether this app has it; opened, what the last update brought is read (`changelog.seen`).
-fn changelog_page(c : @ui.Ctx, core : Core) -> Unit {
-  let t = @sf.theme()
-  let topic = (core.topic)("changelog", Map([]))
-  let v = topic.value
-  if has(v, "news") && !changelog_state.seen {
-    changelog_state.seen = true
-    // (told once the frame's builds are over)
-    c.tell("changelog.seen", fn() { (core.call)("changelog.seen", obj([]), fn(_) {  }) })
-  }
-  let tabs = items(v, "tabs")
-  let at = match tabs.search_by(fn(x) { text(Some(x), "part") == changelog_state.part }) {
-    Some(i) => i
-    None => 0
-  }
-  let tab = tabs.get(at)
-  let blocks : Array[() -> Unit] = [
-    fn() { top_back(c, core, tr("android-settings.title")) },
-    fn() { large_title(c, tr("android-settings.changelog.title")) },
-  ]
-  if has(v, "build") {
-    blocks.push(fn() { page_note(c, fill("android-settings.changelog.build", [("build", count(v, "build").to_string())])) })
-  }
-  if tab is Some(_) {
-    blocks.push(fn() {
-      c.box(w=Fill(1.0), pl=16.0, pr=16.0, pt=4.0, pb=2.0, fn() {
-        let i = seg(c, "changelog-tabs", tabs.map(fn(x) { text(Some(x), "label") }), at, fill=true, height=34.0)
-        if i != at {
-          changelog_state.part = text(Some(tabs[i]), "part")
-        }
+/// A station's rule's draft (`decisionForm`), opened once (by the frame's builds' end) and kept by station: the
+/// phone's completion page's and the desktop's (src/sfdesk automatic_decisions.mbt).
+pub fn decision_form(c : @ui.Ctx, core : Core, station : String) -> String {
+  match decision_forms.get(station) {
+    Some(f) => f
+    None => {
+      profile_forms.val += 1
+      let f = "mbui-decision-" + profile_forms.val.to_string()
+      decision_forms[station] = f
+      // (opened once the frame's builds are over: the build that first comes to it alone)
+      c.tell("decision-open/" + f, fn() {
+        act(core, tr("web-pages.automaticDecisions.configAction"), "automaticDecisions.form.open", obj([("station", str(station)), ("form", str(f)), ("input", obj([]))]))
       })
-      |> ignore
-    })
-  }
-  if v is None || flag(v, "loading") {
-    blocks.push(fn() {
-      waiting_cards(
-        c,
-        error=match topic.error {
-          Some(e) => error_text(e)
-          None => ""
-        },
-      )
-    })
-  } else if has(v, "error") {
-    blocks.push(fn() {
-      c.box(w=Fill(1.0), padx=24.0, pady=8.0, fn() {
-        c.text(text(v, "error"), size=14.0, color=t.p.red, w=Fill(1.0), line=20.0) |> ignore
-      })
-      |> ignore
-    })
-  } else {
-    let days = match tab {
-      Some(x) => items(Some(x), "days")
-      None => []
-    }
-    if days.length() == 0 {
-      blocks.push(fn() {
-        c.box(w=Fill(1.0), padx=24.0, pady=8.0, fn() {
-          c.text(tr("android-settings.changelog.empty"), size=14.0, color=t.p.muted, w=Fill(1.0), line=20.0) |> ignore
-        })
-        |> ignore
-      })
-    }
-    for day in days {
-      blocks.push(fn() { section_header(c, text(Some(day), "label"), start=S6) })
-      blocks.push(fn() {
-        list_card(c, fn() {
-          for e in items(Some(day), "entries") {
-            change_item(c, Some(e))
-          }
-        })
-      })
+      f
     }
   }
-  blocks.push(fn() { gap(c, 30.0) })
-  scroll_page(c, "changelog/" + at.to_string(), blocks)
-}
-
-///|
-/// One change (Change): each line led by its kind on a small tinted label (the accent's for something new), then its
-/// version and what is not out yet (in the accent: an update would bring it).
-fn change_item(c : @ui.Ctx, e : Json?) -> Unit {
-  let t = @sf.theme()
-  c.box(w=Fill(1.0), padx=16.0, pady=10.0, gap=2.0, fn() {
-    for l in items(e, "lines") {
-      let lv = Some(l)
-      let label = text(lv, "label")
-      if label == "" {
-        c.text(text(lv, "text"), size=15.0, color=t.p.text, w=Fill(1.0), line=21.0) |> ignore
-      } else {
-        let fresh = text(lv, "kind") == "new"
-        c.box(dir=Row, w=Fill(1.0), gap=6.0, fn() {
-          c.box(padx=6.0, radius=6.0, bg=if fresh { t.p.accent_bg } else { t.p.chip }, fn() {
-            c.text(label, size=13.0, color=if fresh { t.p.accent_text } else { t.p.muted }, wrap=false, line=19.0) |> ignore
-          })
-          |> ignore
-          c.text(text(lv, "text"), size=15.0, color=t.p.text, w=Fill(1.0), line=21.0) |> ignore
-        })
-        |> ignore
-      }
-    }
-    c.box(dir=Row, w=Fill(1.0), gap=10.0, fn() {
-      c.text(text(e, "versionName"), size=13.0, color=t.p.muted, wrap=false, line=18.0) |> ignore
-      if text(e, "note") != "" {
-        c.text(text(e, "note"), size=13.0, color=if field(e, "has") is Some(False) { t.p.accent_text } else { t.p.muted }, wrap=false, line=18.0)
-        |> ignore
-      }
-    })
-    |> ignore
-  })
-  |> ignore
-}
-
-// ---------------------------------------------------------------------------
-// 价格
-
-///|
-/// The prices the usage is counted at (UsagePricesScreen): each station's table, a row a model (its rates as the core
-/// words them).
-fn prices_page(c : @ui.Ctx, core : Core, here : Here, days : Int) -> Unit {
-  let t = @sf.theme()
-  let topic = (core.topic)("usage", { "scope": str(here.workspace), "days": Json::number(days.to_double()) })
-  let v = topic.value
-  let blocks : Array[() -> Unit] = [
-    fn() { top_back(c, core, tr("android-misc.usage.title")) },
-    fn() { large_title(c, tr("android-misc.usage.prices")) },
-    fn() { page_note(c, tr("android-misc.usage.prices.note")) },
-  ]
-  match v {
-    None =>
-      blocks.push(fn() {
-        waiting_cards(
-          c,
-          error=match topic.error {
-            Some(e) => fill("android-misc.usage.prices.loadFailed", [("error", error_text(e))])
-            None => ""
-          },
-        )
-      })
-    Some(_) => {
-      let tables = items(v, "prices")
-      let wait = field(v, "wait")
-      if tables.length() == 0 && note_waits(wait) {
-        blocks.push(fn() { waiting_cards(c, count=2, failing=failing_of(wait)) })
-      } else if tables.length() == 0 {
-        blocks.push(fn() { page_note(c, tr("android-misc.usage.prices.none")) })
-      }
-      for table in tables {
-        let tv = Some(table)
-        blocks.push(fn() {
-          card(c, fn() {
-            c.text(text(tv, "station"), size=16.0, weight=600, color=t.p.text, w=Fill(1.0), line=22.0) |> ignore
-            c.box(w=Fill(1.0), pt=8.0, pb=20.0, fn() {
-              c.text(text(tv, "note"), size=12.0, color=t.p.muted, w=Fill(1.0), line=17.0) |> ignore
-            })
-            |> ignore
-            let rows = items(tv, "rows")
-            if rows.length() == 0 {
-              c.text(tr("android-misc.usage.prices.noModels"), size=12.0, color=t.p.muted, w=Fill(1.0), line=17.0) |> ignore
-            } else {
-              // a table: the model, then each rate, the head under a hairline
-              let heads = [tr("android-misc.usage.prices.model")] + items(Some(rows[0]), "rates").map(fn(r) { text(Some(r), "label") })
-              let line = fn(cells : Array[String], head : Bool) {
-                c.box(dir=Row, w=Fill(1.0), pady=6.0, gap=8.0, fn() {
-                  for k, cell in cells {
-                    c.box(w=Fill(if k == 0 { 1.6 } else { 1.0 }), fn() {
-                      c.text(cell, size=13.0, weight=if head { 600 } else { 400 }, color=t.p.text, w=Fill(1.0), line=18.0) |> ignore
-                    })
-                    |> ignore
-                  }
-                })
-                |> ignore
-              }
-              line(heads, true)
-              c.box(w=Fill(1.0), h=Px(0.5), bg=t.p.line, fn() {  }) |> ignore
-              for r in rows {
-                line([text(Some(r), "model")] + items(Some(r), "rates").map(fn(x) { text(Some(x), "value") }), false)
-              }
-            }
-          })
-          |> ignore
-        })
-      }
-    }
-  }
-  blocks.push(fn() { gap(c, 30.0) })
-  scroll_page(c, "prices/" + days.to_string(), blocks)
 }

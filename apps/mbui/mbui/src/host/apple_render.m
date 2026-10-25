@@ -4,9 +4,8 @@
 #import <ImageIO/ImageIO.h>
 #import <CoreGraphics/CoreGraphics.h>
 
-int mb_atlas_size = 2048;
 // the numbers of an instance (src/ui/scene.mbt)
-#define MB_INST 36
+#define MB_INST 52
 
 static id<MTLDevice> dev;
 static id<MTLCommandQueue> queue;
@@ -14,7 +13,8 @@ static id<MTLRenderPipelineState> mpipe;
 static id<MTLRenderPipelineState> rpipe_off;
 // holes for native views (kind 9): written, not blended
 static id<MTLRenderPipelineState> hpipe;
-static id<MTLTexture> atlas;
+// the words' glyphs (R8) and colour glyphs (RGBA), square (apple.h)
+static id<MTLTexture> atlas, catlas;
 static CAMetalLayer *mlayer;
 static id<MTLBuffer> bufs[3];
 static size_t buf_cap[3];
@@ -26,10 +26,10 @@ static float *last_inst;
 static int32_t last_count;
 static size_t last_cap;
 static double last_bg[3];
-// glass (src/ui/glass.mbt): the passes that blur what is under it, the copies they work in (level j is 1/2^j of the
-// target, each as big as the target's at that level; tmp for a Gaussian's first half), the GPU's time of the last
-// frame done
-static id<MTLRenderPipelineState> ppipe;
+// glass (src/ui/glass.mbt): the passes that blur what is under it (into the copy, 8 bits a channel, and into the rest,
+// 10), the copies they work in (level j is 1/2^j of the target, each as big as the target's at that level; tmp for a
+// Gaussian's first half), the GPU's time of the last frame done
+static id<MTLRenderPipelineState> ppipe, ppipe_deep;
 static id<MTLTexture> lv[4], ltmp;
 static int lv_w, lv_h;
 static double last_gpu = -1;
@@ -37,9 +37,11 @@ static double last_gpu = -1;
 static NSString *shader_src = @
 "#include <metal_stdlib>\n"
 "using namespace metal;\n"
-"// scene.mbt's 36 numbers: clip, rc and rs the rounded rect it is cut to (its rect x0 y0 x1 y1, its corners' radii,\n"
-"// how smooth they are); rot how it is turned (radians, about rot.yz; its clip where it is drawn when rot.w is 1)\n"
-"struct Inst { float4 rect; float4 p; float4 color; float4 c2; float4 clip; float4 pad; float4 rc; float4 rs; float4 rot; };\n"
+"// scene.mbt's 52 numbers: clip, rc and rs the rounded rect it is cut to (its rect x0 y0 x1 y1, its corners' radii,\n"
+"// how smooth they are); rot how it is turned (radians, about rot.yz; its clip where it is drawn when rot.w is 1); rr\n"
+"// a box's corners' radii (top left, top right, bottom right, bottom left); oclip, orc, ors the rounded clip outside\n"
+"// its own that its own cuts through, as clip, rc, rs (none where orc is 0)\n"
+"struct Inst { float4 rect; float4 p; float4 color; float4 c2; float4 clip; float4 pad; float4 rc; float4 rs; float4 rot; float4 rr; float4 oclip; float4 orc; float4 ors; };\n"
 "struct U { float2 vp; float scale; float pad; };\n"
 "// glass: where a point's backdrop is in the blurred copy (uv = p * map.xy + map.zw, kept in uvc), a liquid group's\n"
 "// bounds, shapes and corners, how many\n"
@@ -66,9 +68,9 @@ static NSString *shader_src = @
 "  return o;\n"
 "}\n"
 MB_CORNER_SL
-"static float sd_rr(float2 p, float4 r, float rad) {\n"
+"static float sd_rr(float2 p, float4 r, float4 rad) {\n"
 "  float2 hs = r.zw * 0.5;\n"
-"  return mb_sd_box(p - r.xy - hs, hs, rad, 1e9);\n"
+"  return mb_sd_box(p - r.xy - hs, hs, mb_corner_of(p - r.xy - hs, rad), 1e9);\n"
 "}\n"
 "// a notch cut into the top edge (scene.mbt 21-23): a circle about the top's middle (pad.y below it, pad.z its radius),\n"
 "// met by the edge through fillets (pad.w): the rounded intersection with what is outside the circle\n"
@@ -89,7 +91,7 @@ MB_CORNER_SL
 "  int n = int(g.misc.x + 0.5);\n"
 "  for (int i = 0; i < 8; i++) {\n"
 "    if (i >= n) break;\n"
-"    d = smin_k(d, sd_rr(p, g.shape[i], g.rad[i / 4][i % 4]), k);\n"
+"    d = smin_k(d, sd_rr(p, g.shape[i], float4(g.rad[i / 4][i % 4])), k);\n"
 "  }\n"
 "  return d;\n"
 "}\n"
@@ -111,7 +113,7 @@ MB_CORNER_SL
 "}\n"
 "fragment float4 fmain(VOut in [[stage_in]], const device Inst* inst [[buffer(0)]],\n"
 "    constant U& u [[buffer(1)]], constant G& g [[buffer(2)]], texture2d<float> atlas [[texture(0)]],\n"
-"    texture2d<float> img [[texture(1)]], texture2d<float> bd [[texture(2)]]) {\n"
+"    texture2d<float> img [[texture(1)]], texture2d<float> bd [[texture(2)]], texture2d<float> catlas [[texture(3)]]) {\n"
 "  Inst I = inst[in.iid];\n"
 "  float2 p = in.p, cp = in.cp;\n"
 "  // cut to its clip: a rect's, hard; a rounded one's, covered as edges are\n"
@@ -120,12 +122,23 @@ MB_CORNER_SL
 "    cover = clip_cover(cp, I.clip, I.rc, I.rs, u.scale);\n"
 "    if (cover <= 0.0) discard_fragment();\n"
 "  } else if (cp.x < I.clip.x || cp.y < I.clip.y || cp.x > I.clip.z || cp.y > I.clip.w) discard_fragment();\n"
+"  // and by the clip outside it, where it has one (a pane round an image's frame in its corner)\n"
+"  if (max(max(I.orc.x, I.orc.y), max(I.orc.z, I.orc.w)) > 0.0) {\n"
+"    cover *= clip_cover(cp, I.oclip, I.orc, I.ors, u.scale);\n"
+"    if (cover <= 0.0) discard_fragment();\n"
+"  }\n"
 "  int kind = int(I.p.y + 0.5);\n"
 "  float4 col = I.color;\n"
 "  if (kind == 1 || kind == 3 || kind == 7) {\n"
 "    constexpr sampler s(filter::linear, coord::pixel);\n"
-"    float2 uv = I.c2.xy + (p - I.rect.xy) / I.rect.zw * I.c2.zw;\n"
-"    float4 t = atlas.sample(s, uv);\n"
+"    // within its own cell (c2: where in the atlas, in texels; a colour glyph's MB_ATLAS_COLOR_U across past its place\n"
+"    // in theirs), however its rect is stretched or turned: a sample past the cell's edge texels would blend in what\n"
+"    // lies beside it (another glyph, one left from before the atlas started over). The words' atlas has a glyph's\n"
+"    // cover alone: white, premultiplied, as the colour one would have it.\n"
+"    bool colour = I.c2.x >= 16384.0;\n"
+"    float2 at = float2(I.c2.x - (colour ? 16384.0 : 0.0), I.c2.y);\n"
+"    float2 uv = clamp(at + (p - I.rect.xy) / I.rect.zw * I.c2.zw, at + 0.5, at + I.c2.zw - 0.5);\n"
+"    float4 t = colour ? catlas.sample(s, uv) : float4(atlas.sample(s, uv).r);\n"
 "    if (kind == 1) return (float4(col.rgb, 1.0) * (t.a * col.a)) * cover;\n"
 "    if (kind == 7) {\n"
 "      // inked by how light what is under its glass is, looked at round the glass's middle\n"
@@ -166,6 +179,7 @@ MB_CORNER_SL
 "    // the edge shaded, more on the side away from the light, so the shape reads over a light ground too\n"
 "    c *= 1.0 - I.c2.x * band * (0.1 + 0.25 * max(-ndl, 0.0));\n"
 "    c = c + (1.0 - c) * clamp(spec, 0.0, 1.0);\n"
+"    c += mb_dither(p * u.scale) / 255.0;\n"
 "    return (float4(c, 1.0) * (a * I.c2.w)) * cover;\n"
 "  }\n"
 "  if (kind == 10) {\n"
@@ -183,11 +197,11 @@ MB_CORNER_SL
 "    float a;\n"
 "    if (I.p.x > 0.0) {\n"
 "      float d = 1e9;\n"
-"      for (int i = first; i < first + n; i++) d = min(d, mb_seg_dist(sg[(base + i / 6) * 9 + mb_seg_slot(i)], I.rect, p));\n"
+"      for (int i = first; i < first + n; i++) d = min(d, mb_seg_dist(sg[(base + i / 6) * 13 + mb_seg_slot(i)], I.rect, p));\n"
 "      a = clamp(0.5 - (d - I.p.x) * u.scale, 0.0, 1.0);\n"
 "    } else {\n"
 "      float4 w = float4(0.0);\n"
-"      for (int i = first; i < first + n; i++) w += mb_path_rows(sg[(base + i / 6) * 9 + mb_seg_slot(i)], I.rect, p, u.scale);\n"
+"      for (int i = first; i < first + n; i++) w += mb_path_rows(sg[(base + i / 6) * 13 + mb_seg_slot(i)], I.rect, p, u.scale);\n"
 "      a = mb_path_cover(w, I.c2.z);\n"
 "    }\n"
 "    return (float4(col.rgb, 1.0) * col.a * a) * cover;\n"
@@ -196,9 +210,11 @@ MB_CORNER_SL
 "  float2 c = I.rect.xy + hs;\n"
 "  // worked out as near the curve as its cover, its edge or its blur reaches\n"
 "  float band = 1.0 + 2.0 / u.scale + (kind == 2 ? max(I.p.w, 0.5) : max(I.p.z, 0.0));\n"
-"  float d = mb_sd_box(p - c, hs, I.p.x, band);\n"
+"  // (its corner by p: rr, each its own)\n"
+"  float rad = mb_corner_of(p - c, I.rr);\n"
+"  float d = mb_sd_box(p - c, hs, rad, band);\n"
 "  if (kind == 0 || kind == 5) d = notch_cut(d, p, I.rect, I.pad);\n"
-"  if (kind == 9) { float rr = min(I.p.x, min(hs.x, hs.y)); float2 q = abs(p - c) - hs + rr; if (length(max(q, 0.0)) + min(max(q.x, q.y), 0.0) - rr > 0.0) discard_fragment(); return (float4(0.0)) * cover; }\n"
+"  if (kind == 9) { float rr = min(rad, min(hs.x, hs.y)); float2 q = abs(p - c) - hs + rr; if (length(max(q, 0.0)) + min(max(q.x, q.y), 0.0) - rr > 0.0) discard_fragment(); return (float4(0.0)) * cover; }\n"
 "  if (kind == 4) {\n"
 "    constexpr sampler si(filter::linear, address::clamp_to_edge);\n"
 "    float2 uv = I.c2.xy + clamp((p - I.rect.xy) / I.rect.zw, 0.0, 1.0) * I.c2.zw;\n"
@@ -206,10 +222,11 @@ MB_CORNER_SL
 "  }\n"
 "  if (kind == 2) {\n"
 "    // as Core Animation's: the shape blurred, sigma its radius (corner.sl mb_shadow)\n"
-"    float a = mb_shadow(p - c, hs, I.p.x, max(I.p.w, 0.25));\n"
+"    float a = mb_shadow(p - c, hs, rad, max(I.p.w, 0.25));\n"
 "    // glass's: only outside its box (c2.y above it)\n"
 "    if (I.c2.x > 0.5) {\n"
-"      float db = mb_sd_box(p - c + float2(0.0, I.c2.y), hs, I.p.x, band);\n"
+"      float2 q = p - c + float2(0.0, I.c2.y);\n"
+"      float db = mb_sd_box(q, hs, mb_corner_of(q, I.rr), band);\n"
 "      a *= clamp(0.5 + db * u.scale, 0.0, 1.0);\n"
 "    }\n"
 "    return (float4(col.rgb, 1.0) * col.a * a) * cover;\n"
@@ -223,12 +240,14 @@ MB_CORNER_SL
 "    g3 = g3 * (1.0 - col.a) + col.rgb * col.a;\n"
 "    if (I.c2.x + I.c2.y + I.c2.z > 0.0) {\n"
 "      float edge = clamp(0.5 + (d + 0.5) * u.scale, 0.0, 1.0);\n"
-"      float lit = clamp(0.5 + notch_cut(sd_rr(p - 0.5, I.rect, I.p.x), p - 0.5, I.rect, I.pad) * u.scale, 0.0, 1.0);\n"
-"      float back = clamp(0.5 + notch_cut(sd_rr(p + 0.5, I.rect, I.p.x), p + 0.5, I.rect, I.pad) * u.scale, 0.0, 1.0);\n"
+"      float lit = clamp(0.5 + notch_cut(sd_rr(p - 0.5, I.rect, I.rr), p - 0.5, I.rect, I.pad) * u.scale, 0.0, 1.0);\n"
+"      float back = clamp(0.5 + notch_cut(sd_rr(p + 0.5, I.rect, I.rr), p + 0.5, I.rect, I.pad) * u.scale, 0.0, 1.0);\n"
 "      g3 = mix(g3, float3(1.0), I.c2.x * edge);\n"
 "      g3 = mix(g3, float3(1.0), I.c2.y * lit);\n"
 "      g3 = mix(g3, float3(1.0), I.c2.z * back);\n"
 "    }\n"
+"    // dithered as it is written to 8 bits, so its slopes do not band (corner.sl mb_dither)\n"
+"    g3 += mb_dither(p * u.scale) / 255.0;\n"
 "    return (float4(g3, 1.0) * (a * I.c2.w)) * cover;\n"
 "  }\n"
 "  float4 fill = float4(col.rgb, 1.0) * col.a;\n"
@@ -294,6 +313,17 @@ static id<MTLRenderPipelineState> make_pipe(id<MTLLibrary> lib, MTLPixelFormat f
   return p;
 }
 
+// An atlas `side` texels square: the words' a byte a texel, colour glyphs' four.
+static id<MTLTexture> atlas_texture(int color, int side) {
+  MTLTextureDescriptor *td = [MTLTextureDescriptor
+      texture2DDescriptorWithPixelFormat:color ? MTLPixelFormatRGBA8Unorm : MTLPixelFormatR8Unorm
+                                   width:(NSUInteger)side
+                                  height:(NSUInteger)side
+                               mipmapped:NO];
+  td.usage = MTLTextureUsageShaderRead;
+  return [dev newTextureWithDescriptor:td];
+}
+
 void mb_render_init(CAMetalLayer *layer) {
   dev = MTLCreateSystemDefaultDevice();
   queue = [dev newCommandQueue];
@@ -316,13 +346,11 @@ void mb_render_init(CAMetalLayer *layer) {
   pd.colorAttachments[0].pixelFormat = MTLPixelFormatBGRA8Unorm;
   ppipe = [dev newRenderPipelineStateWithDescriptor:pd error:&err];
   if (!ppipe) NSLog(@"post pipeline: %@", err);
-  MTLTextureDescriptor *td = [MTLTextureDescriptor
-      texture2DDescriptorWithPixelFormat:MTLPixelFormatRGBA8Unorm
-                                   width:mb_atlas_size
-                                  height:mb_atlas_size
-                               mipmapped:NO];
-  td.usage = MTLTextureUsageShaderRead;
-  atlas = [dev newTextureWithDescriptor:td];
+  pd.colorAttachments[0].pixelFormat = MTLPixelFormatRGB10A2Unorm;
+  ppipe_deep = [dev newRenderPipelineStateWithDescriptor:pd error:&err];
+  if (!ppipe_deep) NSLog(@"post pipeline: %@", err);
+  atlas = atlas_texture(0, MB_ATLAS_SIDE);
+  catlas = atlas_texture(1, MB_ATLAS_COLOR_SIDE);
   inflight = dispatch_semaphore_create(3);
 }
 
@@ -336,23 +364,27 @@ void mb_render_set_size(double w, double h, double scale) {
   if (!CGSizeEqualToSize(mlayer.drawableSize, want)) mlayer.drawableSize = want;
 }
 
-void mb_atlas_upload(int x, int y, int w, int h, const void *rgba) {
-  [atlas replaceRegion:MTLRegionMake2D(x, y, w, h) mipmapLevel:0 withBytes:rgba bytesPerRow:w * 4];
+void mb_atlas_upload(int color, int x, int y, int w, int h, const void *px) {
+  [(color ? catlas : atlas) replaceRegion:MTLRegionMake2D(x, y, w, h) mipmapLevel:0 withBytes:px
+                              bytesPerRow:(NSUInteger)w * (color ? 4 : 1)];
 }
 
 // ---------------------------------------------------------------------------
 // Glass: when the instances reach a run of glass (slot 20 negative: the capture it shares), what is drawn so far
 // under it (its rects with room for the blur round them) is copied out, halved down to where the blur is a few texels
 // wide (dual Kawase's downsample, at most 1/8), blurred there by a Gaussian of what deviation is left, and drawn
-// through.
+// through. Level 0, the copy, has 8 bits a channel as the target has; what the passes write keeps 10 (RGB10A2, in as
+// many bytes): at 8 each pass rounds the frost's slow slopes into flat steps, a texel of the last level 8 pixels wide
+// on the screen (a blur under 4 pixels, too narrow to halve, is written back into the copy: it leaves no slope that
+// wide).
 
 typedef struct { float map[4]; float uvc[4]; float gb[4]; float shape[8][4]; float rad[2][4]; float misc[4]; } GU;
 static GU gu;
 static id<MTLTexture> gtex;  // the blurred copy the glass in view shows
 
-static id<MTLTexture> level_tex(int w, int h) {
+static id<MTLTexture> level_tex(MTLPixelFormat format, int w, int h) {
   MTLTextureDescriptor *td = [MTLTextureDescriptor
-      texture2DDescriptorWithPixelFormat:MTLPixelFormatBGRA8Unorm width:(NSUInteger)(w > 0 ? w : 1)
+      texture2DDescriptorWithPixelFormat:format width:(NSUInteger)(w > 0 ? w : 1)
                                   height:(NSUInteger)(h > 0 ? h : 1) mipmapped:NO];
   td.usage = MTLTextureUsageRenderTarget | MTLTextureUsageShaderRead;
   td.storageMode = MTLStorageModePrivate;
@@ -363,8 +395,10 @@ static void ensure_levels(int w, int h) {
   if (lv_w >= w && lv_h >= h && lv[0]) return;
   lv_w = w > lv_w ? w : lv_w;
   lv_h = h > lv_h ? h : lv_h;
-  for (int j = 0; j < 4; j++) lv[j] = level_tex((lv_w + (1 << j) - 1) >> j, (lv_h + (1 << j) - 1) >> j);
-  ltmp = level_tex(lv_w, lv_h);
+  for (int j = 0; j < 4; j++)
+    lv[j] = level_tex(j == 0 ? MTLPixelFormatBGRA8Unorm : MTLPixelFormatRGB10A2Unorm, (lv_w + (1 << j) - 1) >> j,
+                      (lv_h + (1 << j) - 1) >> j);
+  ltmp = level_tex(MTLPixelFormatRGB10A2Unorm, lv_w, lv_h);
 }
 
 // one pass of the blur: src into dst's top left (w × h); mode 1 halving, 2 a Gaussian of deviation sg along (dx, dy)
@@ -375,7 +409,7 @@ static void post_pass(id<MTLCommandBuffer> cb, id<MTLTexture> src, int sw, int s
   rp.colorAttachments[0].loadAction = MTLLoadActionDontCare;
   rp.colorAttachments[0].storeAction = MTLStoreActionStore;
   id<MTLRenderCommandEncoder> e = [cb renderCommandEncoderWithDescriptor:rp];
-  [e setRenderPipelineState:ppipe];
+  [e setRenderPipelineState:dst.pixelFormat == MTLPixelFormatRGB10A2Unorm ? ppipe_deep : ppipe];
   [e setViewport:(MTLViewport){0, 0, (double)w, (double)h, 0, 1}];
   [e setScissorRect:(MTLScissorRect){0, 0, (NSUInteger)w, (NSUInteger)h}];
   float tw = 1.0f / (float)src.width, th = 1.0f / (float)src.height;
@@ -484,6 +518,7 @@ static id<MTLRenderCommandEncoder> begin_pass(id<MTLCommandBuffer> cb, id<MTLTex
   [enc setFragmentBytes:&u length:sizeof(u) atIndex:1];
   [enc setFragmentBytes:&gu length:sizeof(gu) atIndex:2];
   [enc setFragmentTexture:atlas atIndex:0];
+  [enc setFragmentTexture:catlas atIndex:3];
   [enc setFragmentTexture:(gtex ?: atlas) atIndex:2];
   return enc;
 }
@@ -525,9 +560,10 @@ static void encode(id<MTLCommandBuffer> cb, id<MTLTexture> target, id<MTLRenderP
       continue;
     }
     [enc setRenderPipelineState:(hole ? hpipe : p)];
-    id<MTLTexture> t = tid > MB_STREAM_TEX ? mb_stream_texture(tid - MB_STREAM_TEX) : tid ? mb_image_texture(tid) : nil;
+    // (a hole's image is its view's, src/hostapi/host.mbt view_tex_base + its id: the view is under the canvas here)
+    id<MTLTexture> t = hole ? nil : tid > MB_STREAM_TEX ? mb_stream_texture(tid - MB_STREAM_TEX) : tid ? mb_image_texture(tid) : nil;
     // (a stream with no frame of its own yet, or lost: nothing, not the atlas)
-    if (tid > MB_STREAM_TEX && !t) {
+    if (!hole && tid > MB_STREAM_TEX && !t) {
       start = end;
       continue;
     }
@@ -574,6 +610,14 @@ void mb_render_present(const double *inst, int32_t count, double r, double g, do
     last_gpu = (done.GPUEndTime - done.GPUStartTime) * 1000.0;
     dispatch_semaphore_signal(sem);
   }];
+  // (a layer that presents with its transaction: shown with the window's change it was drawn for, mac_app.m
+  // drawWithWindow; once its commands are scheduled, as Core Animation asks)
+  if (drawable && mlayer.presentsWithTransaction) {
+    [cb commit];
+    [cb waitUntilScheduled];
+    [drawable present];
+    return;
+  }
   if (drawable) [cb presentDrawable:drawable];
   [cb commit];
 }

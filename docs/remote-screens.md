@@ -25,7 +25,8 @@
   to Chrome's DevTools as it is, from which the station learns the tabs the session opens (a `Target.createTarget`
   asked on it and the `targetId` its answer gives; a tab one of those opens, by its `openerId`, is the session's too).
   It is kept in `<data>/browser/owners.json` beside the profile, so the next station process taking the browser up
-  still knows, and forgotten as a tab goes. The address stays when Chrome is started again or another station process
+  still knows, and forgotten as a tab goes. The station opens tabs of its own too, nobody's: a login's page for a person
+  to finish there (docs/remote-login.md, 在 station 的浏览器中登录; `StationBrowser.openTab`), closed as the login ends. The address stays when Chrome is started again or another station process
   takes the door (the door's socket is the launcher's), so a client that lost its connection connects to it again;
   connecting starts the browser if it is not running. Only programs on this machine reach it (the door's rule for
   `/peer`). A tab opened at Chrome's own port is nobody's. When a session is archived or deleted, the tabs it opened
@@ -38,11 +39,12 @@
 
 ### Sources (station/src/screens/source.ts)
 
-A `ScreenSource` is something a person can see and drive: `desktop` (the station machine's display) or `browser` (a tab
-of the station's browser). The `Screens` registry lists them and opens views. A view is pull-driven: the next frame is
-captured/encoded only when the previous ones were taken, so a slow link lowers the frame rate instead of queueing.
-Each source picks its codec among those the client accepts: the desktop is H.264 (hardware encoder), a browser tab may
-be JPEG (CDP screencast) or H.264. Clients decode both.
+A `ScreenSource` is something a person can see and drive: `desktop` (the station machine's display), `browser` (a tab
+of the station's browser) or `simulator` (an iOS Simulator booted on a Mac station, below). The `Screens` registry lists them and opens views. A view is pull-driven: the next frame is
+captured/encoded only when the pace (below) lets one go, so a slow link lowers the bit rate and then the frame rate
+instead of queueing. Each source picks its codec among those the client accepts: the desktop is H.265 where the client
+decodes it and the Mac encodes it, else H.264 (hardware encoder; Windows H.264 only), a browser tab JPEG (CDP
+screencast).
 
 The station's own users of a screen (the agents' computer-use tool) open views in the process with
 `ScreenHub.openAs(id, options, {name, control})` (station/src/screens/hub.ts): the view is the source's, with no member
@@ -73,6 +75,12 @@ JPEG frames are all key frames and their config has no `description`.
   With `"peek": true` it is a preview (a link's card in a chat, below): it only looks (`control` is false), is not in
   `viewers`, and brings no tab forward (a tab behind another casts nothing then); only of a screen the list says
   `peek` (a tab of the browser: the desktop's view wakes its display), else 501.
+  With `"fit": {width, height, scale}` (a phone's or a tablet's stage, in its CSS pixels, 200..2000 a side, and their
+  scale, 1..4; only with `control`) a tab of the browser is laid out for it while the view is open, as that device's own
+  browser would lay it out: Chrome's device emulation on the view's own CDP session (`Emulation.setDeviceMetricsOverride`
+  with `mobile`, the scale at most 2), cast as large as that; it goes with the view (cleared as it ends). Other sources
+  take no notice of it. Clients send it from a touch device's viewer, and a finger then taps such a tab where it is (no
+  trackpad).
   The station answers `{"status":200,"headers":{"content-type":"application/x-stillfail-screen"}}`, or an error status
   with `{error, access?}` (404 no such screen, 400 no codec it knows, 415 none it sends, 501 not supported here, 503
   not now: no grant, the capture failed), then both directions carry frames: a kind byte, the payload's length
@@ -80,12 +88,12 @@ JPEG frames are all key frames and their config has no `description`.
 
 | kind | direction | payload |
 |---|---|---|
-| 1 `config` | station → client | JSON `{codec:"h264"\|"jpeg", width, height, description?}`: `description` is the avcC (base64) for H.264. Sent first and whenever size or codec changes; the next video frame after it is a key frame. |
-| 2 `video` | station → client | 1 byte flags (bit 0: key frame), 8 bytes timestamp (µs, big-endian), then the frame: H.264 in AVCC (length-prefixed NALs), or one JPEG. |
-| 3 `state` | station → client | JSON `{cursor?: {x, y, shape}, title?, control?, access?, viewers?: [names], controlledBy?: [names], ended?: reason}`: first `{title, control, access?}` (`control`: whether this view's input is taken), then what changes; `ended`: `finished` (the client finished), `gone` (the source went), `stopping` (the station stops) |
+| 1 `config` | station → client | JSON `{codec:"h265"\|"h264"\|"jpeg", width, height, description?}`: `description` is the hvcC (H.265) or avcC (H.264), base64. Sent first and whenever size or codec changes; the next video frame after it is a key frame. |
+| 2 `video` | station → client | 1 byte flags (bit 0: key frame), 8 bytes timestamp (µs, big-endian), then the frame: H.265 or H.264 as length-prefixed NALs (parameter sets in the config only), or one JPEG. |
+| 3 `state` | station → client | JSON `{cursor?: {x, y, shape}, title?, control?, access?, viewers?: [names], controlledBy?: [names], scale?: {percent, recommended, steps}, video?: {capture, encoder?, hardware?}, latency?: {frame, before}, ended?: reason}`: first `{title, control, access?, video?}` (`video`: what captures the pictures and whether the encoder is the hardware's, for the statistics) (`control`: whether this view's input is taken), then what changes; `latency` each second while frames come (screen-pace.ts `FrameLatency`: ms from a picture's capture to its drawing on the device, and to its going out of the station); `scale`, to a view that drives a screen whose display scale is changed (Windows' desktop), as it opens and after each change it asked; `cursor`: the screen's pointer (0..1 of the frame, its shape a CSS cursor's name, `none` hidden) as it moves, from a source whose pictures leave it out (the desktop's video); `ended`: `finished` (the client finished), `gone` (the source went: the core says the view's phase is `gone` then, over for good, as for a screen no longer listed), `stopping` (the station stops) |
 | 4 `clipboard` | station → client | 1 byte type (1 text in UTF-8, 2 PNG), the content: the screen's clipboard each time it changes (a copy made on it), only to a view that drives it; not what it held as the view opened. |
-| 16 `input` | client → station | JSON, coordinates normalised to 0..1 of the frame: `{t:"pointer", x, y, buttons, kind:"down"\|"up"\|"move"}`, `{t:"wheel", x, y, dx, dy}`, `{t:"key", kind:"down"\|"up", key, code, mods}`, `{t:"text", text}` (IME/paste result), `{t:"reveal", path}` (the file manager showing a file dropped into the view; a screen whose `drop` says `reveal`) |
-| 17 `ack` | client → station | 8 bytes: the timestamp of the last frame it decoded. The station keeps at most 2 frames unacknowledged. |
+| 16 `input` | client → station | JSON, coordinates normalised to 0..1 of the frame: `{t:"pointer", x, y, buttons, kind:"down"\|"up"\|"move"}`, `{t:"wheel", x, y, dx, dy}`, `{t:"key", kind:"down"\|"up", key, code, mods}`, `{t:"text", text}` (IME/paste result), `{t:"scale", percent}` (the display's scale, one of the `steps` its `scale` said; from a view that drives it), `{t:"reveal", path}` (the file manager showing a file dropped into the view; a screen whose `drop` says `reveal`) |
+| 17 `ack` | client → station | 8 bytes: the timestamp of the last frame it decoded (drawn). What the station sends next goes by them (Pace, below). |
 | 18 `keyframe` | client → station | empty: decoder lost its state, send a key frame |
 | 19 `clipboard` | client → station | 1 byte flags (bit 0: paste it), 1 byte type (1 text, 2 PNG), the content: sets the screen's clipboard and, with paste, pastes it where its focus is. Only from a view that drives it, of a type its `clipboard` names; text at most 1 MB, a PNG 8 MB (a larger frame ends the view, as any client frame past its bound does) |
 
@@ -100,13 +108,52 @@ JPEG frames are all key frames and their config has no `description`.
   then rather than at QUIC's idle timeout, half a minute on (station/src/mesh/superseded.ts). Another live client
   with the same key (a tab of Chrome on Android) answers and keeps its own.
 
+### Pace (station/src/mesh/screen-pace.ts)
+
+How many frames are on the way and how large they are follows the client's `ack`s; nothing else is asked of the
+client, so any client that acknowledges what it drew is paced.
+
+- **Frames on the way.** Before the first `ack`, 2. Then frames go while the oldest not acknowledged has waited no
+  longer than the quickest round trip (sent → acknowledged) of the last 10 s and 15 ms, at most 16: a far link holds
+  as many frames as its round trip takes, so it carries 60 a second as a near one does (a fixed 2 gave 2 a round trip:
+  13 a second at 150 ms). Once the oldest waits longer, a queue is building in front of the link (frames larger than
+  it carries, a packet lost and sent again) and none goes until an `ack`.
+- **Bit rate.** A queue that stays longer than two round trips and 200 ms means the link carries less than the
+  frames: the source is asked (`ScreenView.rate`) for 85% of what went through in the last second, at least 300
+  kbit/s, again each round trip and 200 ms it stays. A packet lost and sent again holds the frames behind it for about
+  a round trip and then they all come: that lowers nothing. Once nothing queued for 1 s it goes up by 15% each 0.5 s,
+  to the source's own (`ownRate`: the picture's pixels × 3 a second, at least 1 Mbit/s). So a slow link gets as many
+  frames, smaller, rather than fewer and late.
+- **Start.** A view opens at 1.5 Mbit/s (`ViewOptions.bitrate`, the helper's `bitrate`) and goes up by half each 0.5 s
+  until it is first lowered: its first frame is a whole picture, its largest, and one at the source's own rate held a
+  1 Mbit/s link up for a second. Rate is lowered only once 0.5 s of acknowledgements say what went through.
+- **Size.** While the rate stays at a quarter or less of what the picture's size is encoded at for 3 s, the source is
+  asked for a picture fitted into 1280×720 (`ScreenView.bounds`; the helper's message 8): fewer pixels, each sharper,
+  where a 1080p picture at a few hundred kbit/s blurs its text. Once the smaller picture's rate stays at its own for
+  3 s, the view's own size again. Each change is a config and a key frame, as any change of size is. The desktop's helper changes its encoder's average bit rate from the
+  next frame (macOS: VideoToolbox's `AverageBitRate`; Windows: the encoder's `CODECAPI_AVEncCommonMeanBitRate`); a
+  browser tab's JPEGs keep theirs.
+- **H.265** where both ends have it: a Mac's hardware encoder (VideoToolbox), a Windows machine's hardware HEVC MFT
+  (Main; stillfail-screen builds the hvcC from the stream's VPS, SPS and PPS), decoded by WebCodecs on the web and by
+  MediaCodec's hardware decoder on Android. A client whose decoder fails on it before its first frame opens the view
+  again asking H.264 (for as long as the app or page runs).
+- **The link.** The mesh's QUIC uses BBR (station/native/mesh): random loss is not taken for a full link. Cubic,
+  before it, halved what went at each loss: at 1% loss and 40 ms, a screen fell to 24 frames a second and a file to
+  2.8 Mbit/s (BBR: 52, 31 Mbit/s).
+
+`station/side/screen-net.ts` measures it: a view over iroh through a proxy on this machine that delays, drops and
+limits the packets (a LAN, 40 ms, 150 ms, with loss, with a narrow link), the frames from a source of an encoder's
+sizes or (`SOURCE=helper`) still.fail Helper's made-up pictures encoded on the Mac's hardware; it says the frames a
+second drawn, how late (capture to drawn), the stalls over 200 ms and the bit rate that came.
+
 ### The desktop (station/src/screens/desktop.ts, station/native/helper; Windows: win-desktop.ts, station/native/screen)
 
 macOS and Windows (elsewhere it is listed with `access` saying it is not supported, and opens nothing). On macOS still.fail Helper
 (`still.fail Helper.app`, bundle id `fail.still.helper`, beside `mesh.node` in the release; docs/station-ts-native.md
-§4) does it: ScreenCaptureKit captures the main display scaled into `maxWidth`×`maxHeight`; VideoToolbox encodes H.264
-on the hardware encoder with low-latency rate control (constrained baseline, no reordering, AVCC with the avcC as
-`description`), a picture only when one is asked for and the screen changed (a still screen sends nothing), a key frame
+§4) does it: ScreenCaptureKit captures the main display scaled into `maxWidth`×`maxHeight`; VideoToolbox encodes on the
+hardware encoder with low-latency rate control, H.265 (Main, the hvcC as `description`) when the client takes it and the
+Mac has the encoder (the helper's `info` says which: a helper from before H.265 says nothing and makes H.264), else
+H.264 (constrained baseline, the avcC as `description`), no reordering, at the bit rate the pace asks; a picture only when one is asked for and the screen changed (a still screen sends nothing), a key frame
 on request; CGEvent posts the input (mouse with click counts, wheel in pixels, keys by their `code` as the Mac's virtual
 keys, text as Unicode). A view is a connection to the helper's socket. A display asleep is captured black but for the
 cursor: opening a view wakes it (as a person touching the Mac does) and keeps it on until the view ends (an IOKit
@@ -125,10 +172,11 @@ does it, with nothing to grant: the station runs in its person's session (the lo
 captured and driven. A view is a process of its own (`stillfail-screen view`, the helper's messages on its standard
 input and output, ended as its input is). One that ends by itself (the display went or another became the main one, the
 graphics driver started again, a crash) is started again and the view goes on from a key frame with its config; past
-three times a minute the view ends. Windows.Graphics.Capture captures the main display (the cursor drawn in, no
+three times a minute the view ends. Windows.Graphics.Capture captures the main display (the cursor left out of a video, drawn in a JPEG; no
 yellow border on Windows 11; a picture where nothing changed, by its dirty regions on 11 24H2 on, is not a new one); the
-GPU's video processor scales it into `maxWidth`×`maxHeight` as NV12; Media Foundation encodes H.264 on the hardware
-encoder (its MFT given the D3D11 textures; Microsoft's software encoder where there is none) with low latency
+GPU's video processor scales it into `maxWidth`×`maxHeight` as NV12; Media Foundation encodes H.265 (when the client takes it and the
+hardware has an HEVC encoder) or H.264 on the hardware encoder (its MFT given the D3D11 textures; Microsoft's software
+encoder where there is none) with low latency
 (constrained baseline, no B-frames, the parameter sets taken out of band into the avcC), a key frame on request; a view
 without H.264 gets WIC's JPEGs. SendInput posts the input: the pointer in the virtual desktop's absolute units, a page's
 wheel pixels as Windows' units (120 a notch, about a page's 100 pixels), keys by their `code` as the key's scan code
@@ -138,8 +186,46 @@ key), text as Unicode. Opening a view wakes a display gone to sleep (a pointer n
 (`SetThreadExecutionState`). What Windows keeps from any app in the session is not had: the sign-in and UAC's secure
 desktop are not captured, and windows of apps run as administrator take no input.
 
+The display's scale (Settings › Display › Scale) is a person's to change from the view, as UU Remote has it: on a phone
+the desktop's windows and text are made larger, readable at the phone's size. `stillfail-screen scale [percent]` reads
+the main display's (`{percent, recommended, steps}`) and sets it as Settings does (DisplayConfigSetDeviceInfo's DPI
+scale, relative to the recommended step; it takes at once, nobody signed out). The station tells a view that drives it
+the scale as it opens, sets it as asked (`{t:"scale", percent}`), and, once the last view of the desktop ended, puts it
+back as it was before the first change, so the machine is not left at a phone's scale. The clients offer it while
+driving: 控制中心 › 缩放 with a mouse, a button in the foot (and 全屏's tools) on a phone.
+
 The same app opens the drive's folders macOS protects (`files.*`, docs/drive.md): its window then shows only the rows
 asked for (`permissions.show {grants}`), a folder's row asking macOS's own prompt (the only way a folder is granted).
+
+### Simulators (station/src/screens/simulator.ts, sim-input.ts; native/helper's SimulatorView.swift)
+
+Each iOS Simulator booted on a Mac station is a screen, `simulator:<udid>`, titled with its device and runtime
+("iPhone 17 · iOS 26.2") and sized as its device type's screen (its `capabilities.plist`), for people to see and use the
+app they are building and for agents to drive it with the `computer` tool. Which are booted is `xcrun simctl list`'s,
+looked at again when CoreSimulator rewrites a device's `device.plist` (as it boots and shuts down: the station watches
+each device's folder, not what is below it, which a running device writes all the time) and as the screens are asked
+for; a device that shuts down leaves the list and its views end. A Mac without Xcode lists none.
+
+still.fail Helper does it (`simulator.view {udid, codec, maxWidth, maxHeight, bitrate?}`), with serve-sim's capture and
+input (vendor/serve-sim): the device's framebuffer read through CoreSimulator's IOSurface as it changes, each picture
+scaled into the view's bounds (VTPixelTransferSession) and encoded as the desktop's are (ScreenView.swift's encoders
+and messages: H.265/H.264 on the hardware encoder, or a JPEG a picture; a still screen sends nothing); the input goes
+to the device through SimulatorKit's HID client. Nothing of macOS's is granted for it and Simulator.app need not run;
+the view's statistics name its capture `CoreSimulator`. A Mac that is itself a virtual machine has no working
+hardware encoder for any view (the desktop's neither): JPEG views work there.
+
+The device is a touchscreen (sim-input.ts): the left button held is a finger (one going down within the bottom 3% or
+the top 2% of the screen is a system gesture: the home indicator's swipe, the pull down), a wheel a finger dragging,
+a key its USB HID usage by its `code` (modifiers only named in `mods`, as a phone's keys row sends them, pressed round
+it), typed text a US keyboard's keys and anything else pasted (the device's pasteboard set with `simctl pbcopy`, then
+⌘V). Simulator.app's shortcuts press its buttons: ⌘⇧H home, ⌃⌘⇧H the app switcher, ⌘L lock, ⌘K the software
+keyboard. The web viewer has them as buttons too (a column beside the device with a mouse, a row over the foot on a
+phone), and one more that saves the picture shown as a PNG (as large as the view is, not the device's own pixels).
+The device is not turned: SimulatorKit takes an orientation only through Simulator.app. The web client touches
+a simulator directly on a phone (no trackpad to choose), a finger held being the device's long press; the mbui app
+drives it as any screen for now (its 触控板 switched off for direct touch). No clipboard,
+cursor or dropped files yet. `station/side/screen-simulator.test.ts` makes and boots a simulator of its own, views it
+through the real helper and says how soon a picture follows a finger and the frames a second.
 
 ### Grants (station/src/helper/grants.ts, api/routes/permissions.ts)
 
@@ -208,14 +294,19 @@ The core (client/core-ts/src/screens.ts; docs/client-core.md, the `screens` topi
 station's list (read as its stream opens, then its `screens` events; in memory only) and opens views. A view's frames
 go to the page as they come, their bytes beside the JSON rather than in it (the web's worker transfers them, the
 desktop's utility process posts them on the page's port, Android's engine hands them to Kotlin with `emitBytes`); the
-page decodes (WebCodecs or `createImageBitmap` on the web, MediaCodec or a bitmap on Android) and acknowledges each
-frame it drew. What the page draws of the view (its phase, 只看/控制, who else is on it) the core says whole as it
+page decodes (WebCodecs or `createImageBitmap` on the web, which asks H.265 where WebCodecs plays it; MediaCodec or a
+bitmap on Android, which asks H.265 where it has a hardware decoder of it) and acknowledges each frame it drew. What the page draws of the view (its phase, 只看/控制, who else is on it) the core says whole as it
 changes; it opens the view again when the link drops or 只看/控制 changes. Opened with no `control` asked (a link, the
 station's page), it only looks while someone other than the viewer drives the screen (an agent at work, another
 person); the viewer's own views, however many the list names (another window, or those an app killed with the view
 open left), are not someone else. A station from before screens answers `GET /screens` 404: its list is empty and says
 it needs an update, and a link to one of its screens says so without opening a stream (such a station would take the
 stream for a request and wait for a body).
+
+The screen's pointer is one: the desktop's video leaves it out and the station says where it is (`cursor`). The page
+draws it, an arrow as large as a pointer on the screen looks at the picture's size (a 90th of its width, 10 to 18 px),
+except while this device's own mouse is over the picture and drives it: then that mouse is the pointer, shown in the
+screen's shape (a text cursor over text), and nothing is drawn. Hidden on the screen (`none`), neither is.
 
 On a phone (Android, the phone web) a finger drives a screen as a trackpad unless the device keeps `direct`
 (`prefs.screenTouch`, switched on the viewer's foot): one finger moves the pointer (relative, faster strokes further:
@@ -234,7 +325,7 @@ With a mouse (the desktop app, the web on a computer) the viewer's bar is always
 it, so the top of the screen (its windows' title bars) is never under it. Its line says 只看/控制 and who else is on it.
 Beside 只看/控制 (web/src/screen/ScreenPanel.tsx), as a remote desktop's window has them: a signal mark with this
 device's round trip to the station (the `stationNet` view, in its colour), which opens the view's figures (frames and
-bits a second as they came, packets lost, the way, the picture's size and codec); and 控制中心, a menu: 画质, the
+bits a second as they came, packets lost, the way, the picture's size and codec, what captures it and whether it is encoded on the hardware); and 控制中心, a menu: 画质, the
 picture's bounds this device asks for (`prefs.screenQuality`: 自动 as the window is, 流畅 1280×720, 高清 1920×1080, 原画
 the screen's own size; another opens the view again), 组合键 while driving (the keys this device's system keeps for
 itself, as the station's system names them: ⌘Tab, Alt+Tab, the Windows key…, each a key with its `mods`; Ctrl+Alt+Del
@@ -251,6 +342,11 @@ the list, `gone` once the list has it no more); within a sentence, its title. A 
 in its card: a preview view (JPEG, about the card's width in device pixels) while the card is on the screen and the
 app shown, each frame acknowledged half a second after the one before, so about two pictures a second; its mark until
 the first comes.
+
+On a chat's page (web: pages/ChatPage.tsx) a card not `gone` also opens its screen beside the chat, from a button at
+the end of its words: a tab of the side panel (`screen:["<station>","<id>"]`, client/core-ts/src/chat-tabs.ts), named
+as the card is, its viewer's bar only 只看/控制 and its tools, and a way to the screen's own page. Its view is open
+while its tab is in front, so someone debugging an app sees and drives its simulator while the chat goes on.
 
 ### Agents on a screen (station/src/tools/computer.ts)
 

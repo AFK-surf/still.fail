@@ -1,25 +1,27 @@
 // Cold storage through the hub (the Rust station's hub/tests.rs: archiving compresses owned history and restores it before
 // resuming, cleans what can be made again, keeps running jobs and shared projects, the auto-archive timer does not sweep;
-// a session archived long enough keeps only its history and the files sent in its chat).
+// a session archived long enough, or before its time while the disk is low, keeps only its history and the files sent in
+// its chat).
 import assert from "node:assert/strict";
 import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { test } from "node:test";
+import { DISK_LOW_BYTES } from "../src/ops/disk.ts";
 import { packed, workspaceArchive, workspaceFile } from "../src/sessions/archive.ts";
 import { ColdRooms } from "../src/sessions/cold.ts";
 import { sessionKey } from "../src/sessions/hub.ts";
 import { hubConfig } from "../src/sessions/config.ts";
-import { archive, autoArchive, deleteSession, expireArchived } from "../src/sessions/lifecycle.ts";
+import { archive, autoArchive, deleteSession, expireArchived, relieveArchived } from "../src/sessions/lifecycle.ts";
 import { TranscriptTail } from "../src/sessions/live.ts";
 import { writeCompressed } from "../src/store/archive.ts";
 import { MANUAL } from "../src/store/store.ts";
-import { Rig, message, reply, settle } from "./hub-fakes.ts";
+import { Rig, type Setup, message, reply, settle, testClock } from "./hub-fakes.ts";
 
 /// A rig whose hub keeps archived sessions cold, as the station's does.
-function coldRig(): [Rig, ColdRooms] {
+function coldRig(setup: Setup = {}): [Rig, ColdRooms] {
   let r!: Rig;
   const cold = new ColdRooms(() => r.hub);
-  r = new Rig({ cold });
+  r = new Rig({ ...setup, cold });
   return [r, cold];
 }
 
@@ -167,6 +169,31 @@ test("the auto-archive timer does not sweep previously archived workspaces", asy
   await r.close();
 });
 
+test("the Rust station's transcript copies are let go once the transcripts are packed, the workspace left as it is", { skip: process.platform === "win32" && "no station there ever left these copies" }, async () => {
+  const [r, cold] = coldRig();
+  const { key } = await idleSession(r);
+  const workspace = r.session(key).workspace;
+  mkdirSync(join(workspace, "node_modules"), { recursive: true });
+  writeFileSync(join(workspace, "source.rs"), "old archive");
+  const transcript = transcriptOf(r, key, '{"type":"user","message":{"content":"history"}}\n');
+  // Archived by the Rust station: its copy made, the transcript and the workspace left as they were.
+  const copy = join(r.store.archiveDir(), "transcripts", `${key}.jsonl.zst`);
+  writeCompressed(copy, "old redundant copy");
+  r.store.setArchived(key, true, MANUAL);
+  // A copy whose session is back in the lists stays.
+  const { key: shown } = await idleSession(r);
+  const shownCopy = join(r.store.archiveDir(), "transcripts", `${shown}.jsonl.zst`);
+  writeCompressed(shownCopy, "another copy");
+  await cold.finishLegacyCopies();
+  assert.ok(!existsSync(transcript) && existsSync(packed(transcript)), "the transcript packed in place");
+  assert.equal(new TranscriptTail("claude", transcript).read()[1][0]!.text, "history");
+  assert.ok(!existsSync(copy), "its copy let go");
+  assert.ok(existsSync(shownCopy));
+  assert.ok(existsSync(join(workspace, "node_modules")) && existsSync(join(workspace, "source.rs")), "the workspace left as it is");
+  assert.ok(!existsSync(workspaceArchive(dirname(workspace))));
+  await r.close();
+});
+
 test("deleting an archived session lets go of the git worktrees it locked and removes its directory", async () => {
   const [r] = coldRig();
   const { key } = await idleSession(r);
@@ -187,7 +214,7 @@ test("deleting an archived session lets go of the git worktrees it locked and re
 const DAY = 86_400_000;
 
 /// An idle session archived and packed, with work of its own, a file sent in its chat and a git worktree.
-async function packedSession(r: Rig) {
+async function packedSession(r: Rig, worktree = "project") {
   const { m, key } = await idleSession(r);
   const transcript = transcriptOf(r, key, '{"type":"user","message":{"content":"history"}}\n');
   const workspace = r.session(key).workspace;
@@ -195,10 +222,10 @@ async function packedSession(r: Rig) {
   writeFileSync(join(workspace, "uploads", "shot.png"), "a picture");
   mkdirSync(join(workspace, "app", "src"), { recursive: true });
   writeFileSync(join(workspace, "app", "src", "main.rs"), "work");
-  const gitdir = join(r.dir, "repo.git", "worktrees", "project");
+  const gitdir = join(r.dir, "repo.git", "worktrees", worktree);
   mkdirSync(gitdir, { recursive: true });
-  mkdirSync(join(workspace, "project"));
-  writeFileSync(join(workspace, "project", ".git"), `gitdir: ${gitdir}\n`);
+  mkdirSync(join(workspace, worktree));
+  writeFileSync(join(workspace, worktree, ".git"), `gitdir: ${gitdir}\n`);
   await archive(r.hub, key, true);
   await finishArchive(r, key);
   assert.ok(existsSync(workspaceArchive(dirname(workspace))));
@@ -249,11 +276,34 @@ test("a workspace archived long enough is emptied even when it was never packed,
   await r.close();
 });
 
+test("with the disk low, archived workspaces are emptied before their time, the longest archived first, until there is room", async () => {
+  const time = testClock();
+  const [r] = coldRig({ clock: time.clock });
+  await time.adjust(DAY);
+  const first = await packedSession(r, "first");
+  await time.adjust(DAY);
+  const second = await packedSession(r, "second");
+  const archived = (s: { workspace: string }) => existsSync(workspaceArchive(dirname(s.workspace)));
+  await relieveArchived(r.hub, () => DISK_LOW_BYTES);
+  assert.ok(archived(first) && archived(second), "room enough: nothing goes");
+  // Room again once the one archived first is emptied.
+  await relieveArchived(r.hub, () => (archived(first) ? DISK_LOW_BYTES - 1 : DISK_LOW_BYTES));
+  assert.deepEqual(readdirSync(first.workspace), ["uploads"]);
+  assert.equal(readFileSync(join(first.workspace, "uploads", "shot.png"), "utf8"), "a picture", "the files sent in its chat stay");
+  assert.ok(!existsSync(join(first.gitdir, "locked")), "its worktrees are let go");
+  assert.ok(archived(second), "the one archived later stays");
+  // Still low: the next goes too.
+  await relieveArchived(r.hub, () => DISK_LOW_BYTES - 1);
+  assert.deepEqual(readdirSync(second.workspace), ["uploads"]);
+  await r.close();
+});
+
 test("archivedWorkspaceDays 0 keeps archived workspaces", async () => {
   const [r] = coldRig();
   const { key, workspace } = await packedSession(r);
   r.config = hubConfig({ ...r.raw, archivedWorkspaceDays: 0 }, r.dir);
   assert.equal(await expireArchived(r.hub, r.session(key).archivedAt! + 365 * DAY), null);
+  await relieveArchived(r.hub, () => 0);
   assert.ok(existsSync(workspaceArchive(dirname(workspace))));
   assert.deepEqual(await workspaceFile(dirname(workspace), "app/src/main.rs"), Buffer.from("work"));
   await r.close();

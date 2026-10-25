@@ -1,5 +1,5 @@
 // This Windows machine's display as a screen source (`desktop`, docs/remote-screens.md): stillfail-screen
-// (station/native/screen) captures the main display with Windows.Graphics.Capture, encodes H.264 with Media
+// (station/native/screen) captures the main display with Windows.Graphics.Capture, encodes H.265 or H.264 with Media
 // Foundation (the hardware encoder where there is one), or a JPEG a picture for a view that takes no H.264, and posts
 // the input with SendInput. Each view is a process of its own, started with `view` and spoken to on its standard input
 // and output in still.fail Helper's messages (desktop.ts `HelperView`); it ends as its input does.
@@ -16,7 +16,7 @@ import { wall } from "../ops/fibers.ts";
 import { log } from "../ops/log.ts";
 import { type HelperPipe, HelperView } from "./desktop.ts";
 import { ScreenRefused } from "./hub.ts";
-import type { Clip, ClipType, Codec, Frame, ScreenAccess, ScreenInput, ScreenSource, ScreenView, ViewOptions } from "./source.ts";
+import type { Clip, ClipType, Codec, Frame, ScreenAccess, ScreenCursor, ScreenInput, ScreenScale, ScreenSource, ScreenVideo, ScreenView, ViewOptions } from "./source.ts";
 import { WinInput } from "./win-input.ts";
 
 export const SCREEN_BINARY = "stillfail-screen.exe";
@@ -33,6 +33,13 @@ export function screenBinary(env: NodeJS.ProcessEnv = process.env): string | nul
 
 /// What `stillfail-screen status` says: the main display in pixels, and whether Windows can capture it (10 1903 on).
 export type ScreenStatus = { display: { width: number; height: number }; capture: boolean };
+
+/// A scale as stillfail-screen says it, checked: null when it is not one.
+export function scaleOf(told: any): ScreenScale | null {
+  const n = (v: unknown) => typeof v === "number" && Number.isInteger(v) && v >= 100 && v <= 500;
+  if (told === null || typeof told !== "object" || !n(told.percent) || !n(told.recommended) || !Array.isArray(told.steps) || !told.steps.every(n)) return null;
+  return { percent: told.percent, recommended: told.recommended, steps: [...told.steps] };
+}
 
 /// How the process is started (a test's fake in tests).
 export type Start = (binary: string, args: string[]) => ChildProcess;
@@ -60,6 +67,10 @@ export class WindowsDesktop implements ScreenSource {
   #status: ScreenStatus | null = null;
   #looked = 0;
   #looking: Promise<void> | null = null;
+  /// The display's scale before a view first changed it, put back once the last view ends; null while unchanged.
+  #original: number | null = null;
+  /// Scale changes, one after another.
+  #scaling: Promise<unknown> = Promise.resolve();
 
   constructor(options: WindowsDesktopOptions) {
     this.#o = options;
@@ -86,11 +97,31 @@ export class WindowsDesktop implements ScreenSource {
 
   /// The display's size as Windows has it now (at most a moment old, unless `force`).
   refresh(force = false): Promise<void> {
-    const binary = this.#o.binary;
-    if (binary === null) return Promise.resolve();
+    if (this.#o.binary === null) return Promise.resolve();
     if (!force && wall.now() - this.#looked < FRESH_MS) return Promise.resolve();
-    this.#looking ??= new Promise<void>((resolve) => {
-      const child = (this.#o.start ?? start)(binary, ["status"]);
+    this.#looking ??= this.#ask(["status"])
+      .then(
+        (told) => {
+          const status: ScreenStatus = { display: { width: Number(told.display?.width) || 0, height: Number(told.display?.height) || 0 }, capture: told.capture !== false };
+          const before = this.#status;
+          this.#status = status;
+          if (before === null || before.display.width !== status.display.width || before.display.height !== status.display.height || before.capture !== status.capture) this.#o.changed();
+        },
+        (e) => log.warn("screens", "stillfail-screen did not say the display", { error: (e as Error).message }),
+      )
+      .finally(() => {
+        this.#looked = wall.now();
+        this.#looking = null;
+      });
+    return this.#looking;
+  }
+
+  /// What `stillfail-screen <args>` says (its one JSON line); throws what it said wrong.
+  #ask(args: string[]): Promise<any> {
+    const binary = this.#o.binary;
+    if (binary === null) return Promise.reject(new Error("stillfail-screen is not there"));
+    return new Promise((resolve, reject) => {
+      const child = (this.#o.start ?? start)(binary, args);
       let said = "";
       const unarm = wall.after(10_000, () => child.kill());
       child.stdout!.setEncoding("utf8").on("data", (chunk: string) => (said += chunk));
@@ -99,53 +130,87 @@ export class WindowsDesktop implements ScreenSource {
         if (finished) return;
         finished = true;
         unarm();
-        this.#looked = wall.now();
-        this.#looking = null;
         try {
           if (error) throw error;
           const told = JSON.parse(said);
-          const status: ScreenStatus = { display: { width: Number(told.display?.width) || 0, height: Number(told.display?.height) || 0 }, capture: told.capture !== false };
-          const before = this.#status;
-          this.#status = status;
-          if (before === null || before.display.width !== status.display.width || before.display.height !== status.display.height || before.capture !== status.capture) this.#o.changed();
+          if (typeof told?.error === "string") throw new Error(told.error);
+          resolve(told);
         } catch (e) {
-          log.warn("screens", "stillfail-screen did not say the display", { error: (e as Error).message });
+          reject(e as Error);
         }
-        resolve();
       };
       child.on("error", done);
       child.on("close", () => done());
       child.stdin?.end();
     });
-    return this.#looking;
+  }
+
+  /// As it is once the changes asked before are made.
+  scale(): Promise<ScreenScale | null> {
+    const read = this.#scaling.then(() => this.#ask(["scale"])).then(scaleOf, (error) => {
+      log.info("screens", "the display's scale was not had", { error: (error as Error).message });
+      return null;
+    });
+    this.#scaling = read;
+    return read;
+  }
+
+  setScale(percent: number): Promise<ScreenScale> {
+    const set = this.#scaling.then(async () => {
+      if (this.#original === null) {
+        const before = scaleOf(await this.#ask(["scale"]));
+        if (before === null) throw new Error("the display's scale was not had");
+        this.#original = before.percent;
+      }
+      const now = scaleOf(await this.#ask(["scale", String(Math.round(percent))]));
+      if (now === null) throw new Error("the display's scale was not had");
+      log.info("screens", "the display's scale set", { percent: now.percent, was: this.#original });
+      return now;
+    });
+    this.#scaling = set.catch(() => {});
+    return set;
+  }
+
+  /// The last view ended: the display's scale as it was before a view changed it.
+  #putBack() {
+    const original = this.#original;
+    if (original === null || this.#views.size > 0) return;
+    this.#original = null;
+    this.#scaling = this.#scaling.then(() =>
+      this.#ask(["scale", String(original)]).then(
+        () => log.info("screens", "the display's scale put back", { percent: original }),
+        (error) => log.warn("screens", "the display's scale was not put back", { percent: original, error: (error as Error).message }),
+      ),
+    );
   }
 
   async open(options: ViewOptions): Promise<ScreenView> {
     const binary = this.#o.binary;
     if (binary === null) throw new ScreenRefused(501, "station.screen.noHelper", {}, this.access());
-    // H.264 where it is taken (the hardware's, small); else a JPEG a picture (an agent's view, a client without H.264).
-    const codec: Codec | undefined = options.codecs.includes("h264") ? "h264" : options.codecs.includes("jpeg") ? "jpeg" : undefined;
+    // H.265 where it is taken (stillfail-screen makes it where the hardware has an encoder of it, else H.264: its info
+    // says which), H.264, else a JPEG a picture (an agent's view, a client without either).
+    const codec: Codec | undefined = (["h265", "h264", "jpeg"] as const).find((c) => options.codecs.includes(c));
     if (codec === undefined) throw new ScreenRefused(415, "station.screen.codec", { codec: "H.264, JPEG" });
     await this.refresh();
     if (this.#status?.capture === false) throw new ScreenRefused(501, "station.screen.unsupported", {}, this.access());
     const input = new WinInput();
-    const ask = { codec, maxWidth: options.maxWidth, maxHeight: options.maxHeight };
+    const ask = { codec, maxWidth: options.maxWidth, maxHeight: options.maxHeight, ...(options.bitrate ? { bitrate: Math.round(options.bitrate) } : {}) };
     let first: HelperView;
     try {
       first = await this.#start(binary, ask, input);
     } catch (error) {
       throw new ScreenRefused(503, "station.screen.failed", { said: (error as Error).message });
     }
-    const view: LastingView = new LastingView(first, () => this.#start(binary, ask, input), () => this.#views.delete(view));
+    const view: LastingView = new LastingView(first, () => this.#start(binary, ask, input), () => (this.#views.delete(view), this.#putBack()));
     this.#views.add(view);
     return view;
   }
 
   /// One process for a view, answering (its info had); fails with what it said.
-  async #start(binary: string, ask: { codec: Codec; maxWidth: number; maxHeight: number }, input: WinInput): Promise<HelperView> {
+  async #start(binary: string, ask: { codec: Codec; maxWidth: number; maxHeight: number; bitrate?: number }, input: WinInput): Promise<HelperView> {
     const child = (this.#o.start ?? start)(binary, ["view"]);
     child.stdin!.write(`${JSON.stringify(ask)}\n`);
-    const view = new HelperView(ask.codec, childPipe(child), () => {}, input);
+    const view = new HelperView(ask.codec, childPipe(child), () => {}, input, "Windows.Graphics.Capture");
     try {
       await view.ready;
       return view;
@@ -180,6 +245,12 @@ export class LastingView implements ScreenView {
   #restarting: Promise<boolean> | null = null;
   #heard: ((clip: Clip) => void) | null = null;
   #unwatch: (() => void) | null = null;
+  /// Who hears the pointer, heard again from a process started again.
+  #pointer: ((cursor: ScreenCursor) => void) | null = null;
+  #unpoint: (() => void) | null = null;
+  /// The bit rate and bounds asked last, asked again of a process started again.
+  #rate: number | null = null;
+  #bounds: [number, number] | null = null;
 
   constructor(view: HelperView, again: () => Promise<HelperView>, gone: () => void) {
     this.#view = view;
@@ -215,6 +286,9 @@ export class LastingView implements ScreenView {
       log.info("screens", "stillfail-screen ended by itself; started again");
       this.#view = view;
       if (this.#heard !== null) this.#unwatch = view.watchClipboard(this.#heard);
+      if (this.#pointer !== null) this.#unpoint = view.watchCursor(this.#pointer);
+      if (this.#rate !== null) view.rate(this.#rate);
+      if (this.#bounds !== null) view.bounds(...this.#bounds);
       return true;
     } catch (error) {
       log.warn("screens", "stillfail-screen did not start again", { error: (error as Error).message });
@@ -225,6 +299,20 @@ export class LastingView implements ScreenView {
 
   keyframe() {
     this.#view.keyframe();
+  }
+
+  video(): ScreenVideo {
+    return this.#view.video();
+  }
+
+  rate(bitsPerSecond: number) {
+    this.#rate = bitsPerSecond;
+    this.#view.rate(bitsPerSecond);
+  }
+
+  bounds(maxWidth: number, maxHeight: number) {
+    this.#bounds = [maxWidth, maxHeight];
+    this.#view.bounds(maxWidth, maxHeight);
   }
 
   input(event: ScreenInput): Promise<void> {
@@ -248,6 +336,17 @@ export class LastingView implements ScreenView {
 
   reveal(path: string): Promise<void> {
     return this.#view.reveal(path);
+  }
+
+  watchCursor(heard: (cursor: ScreenCursor) => void): () => void {
+    this.#pointer = heard;
+    this.#unpoint = this.#view.watchCursor(heard);
+    return () => {
+      if (this.#pointer !== heard) return;
+      this.#pointer = null;
+      this.#unpoint?.();
+      this.#unpoint = null;
+    };
   }
 
   close() {

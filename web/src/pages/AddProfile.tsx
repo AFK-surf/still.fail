@@ -7,6 +7,7 @@ import { Navigate, useNavigate, useParams, useSearchParams } from "react-router"
 import { useAction, useApi, useOverview, useStations } from "../api.ts";
 import { Plus } from "@stillfail/ui/icons.tsx";
 import { StationContext, stationBase } from "../station.tsx";
+import { useDoing } from "../doing.ts";
 import { useProfileFlow } from "../profileFlow.ts";
 import { useToast } from "@stillfail/ui/toast.tsx";
 import { BackLink, Button, Field, ProviderLogo, Segmented, Select, Waiting } from "../ui.tsx";
@@ -71,15 +72,16 @@ function Flow({ workspace, address, stations, onStation }: { workspace: string; 
   const overview = useOverview(address);
   const [login, setLogin] = useState<string | null>(null);
   const [code, setCode] = useState("");
-  // What the plan signs in to (the core's): a runtime's subscription, or OpenCode's account for OpenCode Go.
-  const runtime = d?.signIn?.runtime ?? (d?.tile?.runtime === "codex" || d?.tile?.runtime === "grok" || d?.tile?.runtime === "cursor" || d?.tile?.runtime === "devin" ? d.tile.runtime : "claude");
-  const signInTo = d?.signIn?.provider ?? (runtime === "claude" ? "Claude" : runtime === "grok" ? "Grok" : runtime === "cursor" ? "Cursor" : runtime === "devin" ? "Devin" : "ChatGPT");
+  // What the plan signs in to (the core's, at a plan's connect step): a runtime's subscription, or OpenCode's account
+  // for OpenCode Go.
+  const signIn = d?.signIn ?? null;
   const pending = login ? overview.value?.logins.find((l) => l.id === login) : undefined;
-  const start = useAction(() => api.newLogin(runtime, d?.signIn?.access), ({ id }) => setLogin(id));
+  const start = useAction(() => api.newLogin(signIn!.runtime, signIn!.access), ({ id }) => setLogin(id));
   const send = useAction(() => api.newLoginCode(login!, code), () => setCode(""));
+  const inStationBusy = useDoing("login.browser", { station: address, id: login ?? "" });
   const started = useRef(false);
   // A station without the runtime it signs in with installs it first (core `install`): the sign-in starts after.
-  const planning = d?.step === "connect" && d.method === "plan" && !d.install;
+  const planning = d?.step === "connect" && d.method === "plan" && !d.install && signIn !== null;
   useEffect(() => {
     if (planning && !started.current) { started.current = true; void start.run(); }
     if (!planning && started.current) { started.current = false; if (login && !pending?.created) void api.dropLogin(login).catch(() => undefined); setLogin(null); setCode(""); }
@@ -138,7 +140,8 @@ function Flow({ workspace, address, stations, onStation }: { workspace: string; 
         d.install ? <InstallStep install={d.install} />
         : pending?.error || pending?.job?.state === "failed" || pending?.job?.state === "cancelled"
           ? <div className={css.form}><p className={controlsCss.fieldError}>{pending?.error ?? pending?.job?.error ?? t("web-pages.profiles.signInUnfinished")}</p><Button onClick={() => { if (login) void api.dropLogin(login).catch(() => undefined); setLogin(null); void start.run(); }}>{t("web-pages.profiles.restart")}</Button></div>
-          : <div className={css.form}><LoginSteps job={pending?.job ?? null} provider={signInTo} code={code} setCode={setCode} send={() => void send.run()} sending={send.busy} sendError={send.error?.message ?? null} /></div>
+          : <div className={css.form}><LoginSteps job={pending?.job ?? null} provider={signIn?.provider ?? ""} code={code} setCode={setCode} send={() => void send.run()} sending={send.busy} sendError={send.error?.message ?? null}
+            inStation={login ? { ask: () => api.newLoginBrowser(login), busy: inStationBusy } : undefined} /></div>
       ) : (
         <ConnectForm key={d.tile?.id} d={d} edit={edit} submitting={submitting} onSubmit={() => void submit().then(added, () => undefined)} />
       )}

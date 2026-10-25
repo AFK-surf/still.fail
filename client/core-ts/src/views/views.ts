@@ -10,6 +10,7 @@ import type { Host } from "../host.ts";
 import type { Runner } from "../runtime.ts";
 import type { Store } from "../store.ts";
 import type { Owner } from "../core/routing.ts";
+import * as chatTabs from "../chat-tabs.ts";
 import * as decisions from "../decisions.ts";
 import { merge } from "../entries.ts";
 import { CoreError } from "../error.ts";
@@ -25,13 +26,17 @@ import { arr as arrU, deepFreeze, get as getU, isObject } from "../util.ts";
 import { ofAddress } from "../workspace.ts";
 import { presentHistory } from "../history.ts";
 import { archiveHintOf, type ArchiveHint } from "../prefs.ts";
-import { markdown } from "../markdown.ts";
-import { near, placeFiles } from "../placed.ts";
+import { markdown, type MdStore } from "../markdown.ts";
+import { withDrive } from "../drive-browse.ts";
+import { isImage, near, placeFiles } from "../placed.ts";
 import { archive } from "./archive.ts";
 import { Local, PENDING_PREFIX, type LocalChange } from "./local.ts";
+import { askAnswers } from "./vault.ts";
 import * as marks from "./marks.ts";
 import { usageView } from "./usage.ts";
+import { resourcesView } from "./resources.ts";
 import { workspaceProfiles } from "./profiles.ts";
+import { settingsView } from "./settings.ts";
 import { admin, sources as adminSources } from "./admin.ts";
 import { attention, choices, find, models, runnableOn, runtimes, servingIn } from "./models.ts";
 import * as brief from "./brief.ts";
@@ -53,7 +58,7 @@ const DAY_MS = 86_400_000;
 export const HEAD = 80;
 export const HEAD_FROM = 500;
 
-const VIEW_TOPICS = new Set(["chats", "chatSearch", "search", "stations", "profiles", "connects", "chat", "history", "agentCard", "stationNet", "archive", "workspaceMarks", "decisions", "chatJobs", "chatLetters", "imageNear", "longJobs", "usage", "adminList", "adminItem", "adminOverview", "adminRelays"]);
+const VIEW_TOPICS = new Set(["chats", "chatSearch", "search", "stations", "profiles", "connects", "chat", "history", "agentCard", "stationNet", "archive", "workspaceMarks", "decisions", "chatJobs", "chatLetters", "imageNear", "longJobs", "usage", "settings", "resources", "adminList", "adminItem", "adminOverview", "adminRelays"]);
 
 /// What a chat row's columns say that the views find rows by (db/account.ts): how urgent it is for its person
 /// (workspace marks), whether it asks something of them, whether the 奏 page lists it.
@@ -124,14 +129,26 @@ function withoutMentions(text: string): string {
   return out + rest;
 }
 
-/// What a chat is called: its title, else the first line a person wrote in it, else its Slack channel.
+/// What a chat is called, as its station calls it (read/views.ts titleOf): the name people gave it, else the one its
+/// agent gave it; a chat of still.fail's own is a new chat until it has one, the same all along; a Slack or Feishu
+/// thread the first line a person wrote in it, else its channel.
+/// Where a Slack or Feishu thread is, in words: #channel, 私信, the Feishu group; null for a still.fail chat.
+function placeName(surface: string, channel: string, channelName: string): string | null {
+  const feishu = surface.startsWith("feishu:") || format.isFeishuChat(channel);
+  if (feishu) return channelName || t("core-logic.format.thread.feishu");
+  if (surface === "ember" || surface === "stillfail" || surface === "") return null;
+  return channel.startsWith("D") ? t("core-views.direct_message") : `#${channelName || channel}`;
+}
+
 export function chatTitle(thread: J): string {
   const text = (name: string): string | null => {
     const v = get(thread, name);
     return typeof v === "string" && v.trim() !== "" ? v.trim() : null;
   };
-  const title = text("title");
+  const title = text("title") ?? text("autoTitle");
   if (title !== null) return title;
+  const surface = get(thread, "surface");
+  if (surface === "ember" || surface === "stillfail") return t("core-views.new_chat");
   const firstText = text("firstText");
   if (firstText !== null) {
     const first = withoutMentions(firstText)
@@ -141,10 +158,9 @@ export function chatTitle(thread: J): string {
     if (first !== undefined) return first;
   }
   const channel = text("channelName");
-  const surface = get(thread, "surface");
   // A Feishu chat is named as it is there (no #).
   if (channel !== null) return typeof surface === "string" && surface.startsWith("feishu:") ? channel : `#${channel}`;
-  if (!(surface === "ember" || surface === "stillfail") && text("channel")?.startsWith("D")) return t("core-views.direct_message");
+  if (text("channel")?.startsWith("D")) return t("core-views.direct_message");
   return t("core-views.new_chat");
 }
 
@@ -285,7 +301,10 @@ export function shownMessage(message: J, agents: J[], viewer: J, slackUsers: str
         runtime: get(session, "runtime") ?? str(m.authorRuntime) ?? null,
       };
     }
-  } else if (kind === "ember" || kind === "stillfail") m.by = { name: brandName() };
+  } else if (kind === "ember" || kind === "stillfail") {
+    m.by = { name: brandName() };
+    m.notice = noticeOf(str(m.text) ?? "", str(m.profile) !== null);
+  }
   else {
     const member = members_.find((x) => typeof get(x, "email") === "string" && x.email.toLowerCase() === author.toLowerCase());
     const name = present.memberName(members_, author) ?? saidName ?? (author === "local" ? t("core-views.local_author") : author);
@@ -298,6 +317,8 @@ export function shownMessage(message: J, agents: J[], viewer: J, slackUsers: str
 }
 
 import * as brand from "../brand.ts";
+import { noticeOf } from "../notice.ts";
+export { noticeOf };
 const brandName = () => brand.name();
 
 /// The Slack workspaces a station's connects are signed in to, by team: their names and links.
@@ -372,7 +393,7 @@ function connectSessions(connect: J, connects: J[], sessions: J[], threads: J[],
       return c;
     });
   const bound = sessions.find((s) => current !== null && strOf(s, "key") === current);
-  return { sessions: own, bound: bound !== undefined ? shown(bound) : null, candidates, running };
+  return { sessions: own, bound: bound !== undefined ? shown(bound) : null, candidates, running, changes: present.modeChanges(connect, running) };
 }
 
 /// What the views are put together with: the core's store and data, and what the accounts say of a workspace.
@@ -397,7 +418,20 @@ export type ViewsEnv = {
   homeName?: (workspace: string, id: string) => string | null;
   /// A topic a view watches shown again (its owner asked to bring it up to date, store.ts `resume`).
   resume?: (topic: Topic) => void;
+  /// How agents' requests about vault items are answered on this device, from the vault as the core holds it
+  /// (views/vault.ts askAnswers): each `{answer, lasts?}`, in the order asked.
+  vaultAnswers?: (workspace: string, asks: VaultAskOf[]) => J[];
 };
+
+/// An agent's request about a vault item a card names (`card.vault`), and whether it is one to keep a secret.
+export type VaultAskOf = { request: string; save: boolean };
+
+/// The request card `card` names and says what it asks (`vaultAsk`); null for any other.
+function vaultAskOf(card: J): VaultAskOf | null {
+  const request = typeof get(card, "vault") === "string" ? (card.vault as string) : null;
+  const ask = get(card, "vaultAsk");
+  return request === null || request === "" || !isObject(ask) ? null : { request, save: get(ask, "save") !== undefined };
+}
 
 /// The views' environment in a core.
 export function envOf(core: Inner): ViewsEnv {
@@ -420,6 +454,7 @@ export function envOf(core: Inner): ViewsEnv {
     xshareAsked: (station, session) => xshare.asked(core, station, session),
     revoking: (station, id) => publish.revoking(core, station, id),
     homeName: (workspace, id) => memberships.homeName(core, workspace, id),
+    vaultAnswers: (workspace, asks) => askAnswers(core, workspace, asks),
     relayName: (host) => {
       for (const account of core.accounts.list()) {
         const names = get(core.data.record("me", account.sub), "relay_names");
@@ -447,10 +482,18 @@ export class Views implements Owner {
   /// Per live view, the topics it watches.
   readonly #views = new Map<string, { topic: Topic; watches: Map<string, Watch> }>();
   readonly #updateNoticesOpen = new Set<string>();
+  /// The threads chats copy what is sent from here to (`ccOn`), by `<station> <thread> <to>`.
+  readonly #cc = new Set<string>();
   /// Views whose words count seconds (a chat's jobs): each computed again when they next change.
   readonly #again = new Map<string, Fiber.Fiber<unknown, unknown>>();
   /// The scopes whose stations' rows are being loaded (the list showed its first screen meanwhile).
   readonly #loading = new Set<string>();
+  /// Since when each station up has had no host reading (by address): unanswered that long, it is said to be silent.
+  readonly #hostless = new Map<string, number>();
+  /// The live views that show agents' requests about vault items (a chat's cards, the 奏 page's), by the view: the
+  /// requests, each in its workspace, and how they were answered here when it was made (`#vaultCard`), so that a change
+  /// of the vault shows it again only where it changes what the cards say (`vaultChanged`).
+  readonly #vaultShown = new Map<string, { topic: Topic; asks: { ws: string; ask: VaultAskOf }[]; said: string }>();
 
   constructor(core: ViewsEnv) {
     this.#core = core;
@@ -501,7 +544,67 @@ export class Views implements Owner {
     }
     const live = this.#views.get(key);
     this.#views.delete(key);
+    this.#vaultShown.delete(key);
     for (const w of live?.watches.values() ?? []) w.drop();
+  }
+
+  // ── agents' requests about vault items, on their cards ──
+
+  /// The vault of workspace `ws` (null: any) changed as this core holds it (views/vault.ts): the views whose cards it
+  /// answers otherwise now made again.
+  vaultChanged(ws: string | null): void {
+    for (const shown of [...this.#vaultShown.values()]) {
+      if (ws !== null && !shown.asks.some((a) => a.ws === ws)) continue;
+      const said = this.#vaultSaid(shown.asks);
+      if (said === shown.said) continue;
+      shown.said = said;
+      this.#core.store.invalidate(shown.topic);
+    }
+  }
+
+  #vaultSaid(asks: { ws: string; ask: VaultAskOf }[]): string {
+    return JSON.stringify(asks.map((a) => this.#core.vaultAnswers?.(a.ws, [a.ask])[0] ?? null));
+  }
+
+  /// Card `card` of a message in workspace `ws` as the clients draw it, an agent's request about a vault item it names
+  /// answered: how it is answered on this device (`vaultAsk.answer`, `lasts`: the vault as the core holds it, so the
+  /// card is whole with its message and no client asks for more), and, decided here, how it went before its station
+  /// says so (`status`, `scope`). Any other card as it is.
+  #vaultCard(card: J, ws: string): J {
+    const one = vaultAskOf(card);
+    if (one === null) return card;
+    const shown: J = { ...card.vaultAsk, ...(this.#core.vaultAnswers?.(ws, [one])[0] ?? {}) };
+    const done = this.local.vaultOutcome(one.request);
+    if (done !== undefined && shown.status === undefined) {
+      shown.status = done.status;
+      if (done.scope !== undefined) shown.scope = done.scope;
+    }
+    return { ...card, vaultAsk: shown };
+  }
+
+  /// The vault requests view `view` shows on `cards` (each in its workspace): kept while it shows any.
+  #vaultSeen(view: Topic, cards: [string, J][]): void {
+    const key = topicKey(view);
+    const asks = cards.flatMap(([ws, card]) => {
+      const ask = vaultAskOf(card);
+      return ask === null ? [] : [{ ws, ask }];
+    });
+    if (asks.length === 0 || !this.#views.has(key)) this.#vaultShown.delete(key);
+    else this.#vaultShown.set(key, { topic: view, asks, said: this.#vaultSaid(asks) });
+  }
+
+  /// A chat's view (`out`) with its messages' vault cards answered (`#vaultCard`).
+  #vaultCards<V extends Value | undefined>(view: Topic, out: V): V {
+    if (out === undefined || !("ok" in out) || !isObject(out.ok) || !Array.isArray(out.ok.messages)) {
+      this.#vaultSeen(view, []);
+      return out;
+    }
+    const ws = ofAddress(String(view.station ?? ""));
+    const cards = (out.ok.messages as J[]).flatMap((m): [string, J][] => (isObject(m) && vaultAskOf(get(m, "card")) !== null ? [[ws, m.card]] : []));
+    this.#vaultSeen(view, cards);
+    if (cards.length === 0) return out;
+    const messages = (out.ok.messages as J[]).map((m) => (isObject(m) && vaultAskOf(get(m, "card")) !== null ? { ...m, card: this.#vaultCard(m.card, ws) } : m));
+    return { ...out, ok: { ...(out.ok as J), messages } } as V;
   }
 
   #live(): Topic[] {
@@ -516,6 +619,7 @@ export class Views implements Owner {
     switch (change.kind) {
       case "outbox":
         for (const view of this.chatViews(change.station, change.thread)) this.#core.store.invalidate(view);
+        if (change.chat) return;
         // A card answered from here waits no more; a message that did not go marks its chat's row.
         this.#invalidate((v) => v.topic === "decisions" || v.topic === "workspaceMarks" || v.topic === "chats" || v.topic === "chatSearch" || v.topic === "search");
         return;
@@ -528,6 +632,14 @@ export class Views implements Owner {
       case "archiving":
         this.#invalidate((v) => v.topic === "chats" || v.topic === "workspaceMarks" || v.topic === "decisions");
         return;
+      case "letGo":
+        this.#invalidate((v) => v.topic === "decisions");
+        return;
+      case "vault": {
+        const showing = [...this.#vaultShown.values()].filter((s) => s.asks.some((a) => a.ask.request === change.request)).map((s) => topicKey(s.topic));
+        this.#invalidate((v) => v.topic === "decisions" || showing.includes(topicKey(v)));
+        return;
+      }
       case "changing":
         this.#invalidate((v) => ["chats", "chatSearch", "search", "archive", "workspaceMarks", "decisions"].includes(v.topic) || (v.topic === "chat" && v.station === change.station));
         return;
@@ -608,6 +720,7 @@ export class Views implements Owner {
       }
       case "stations":
       case "profiles":
+      case "settings":
         scope = view.scope as string;
         perStation = (s) => [{ topic: "link", station: s }, { topic: "overview", station: s }, { topic: "host", station: s }, { topic: "way", station: s }];
         break;
@@ -629,6 +742,11 @@ export class Views implements Owner {
       case "usage":
         scope = view.scope as string;
         perStation = (s) => [{ topic: "stationUsage", station: s }];
+        break;
+      case "resources":
+        scope = view.scope as string;
+        // One station's (its page's 进程), or every station's.
+        perStation = (s) => (view.station === undefined || view.station === s ? [{ topic: "stationResources", station: s }] : []);
         break;
       case "connects":
         scope = view.scope as string;
@@ -855,6 +973,10 @@ export class Views implements Owner {
     const workspace = this.ok({ topic: "workspace", workspace: ofAddress(station) }) ?? null;
     const role = get(workspace, "role");
     const manager = role === "owner" || role === "admin";
+    // Its side panel's tabs, as kept on this device for it by its page's key (chat-tabs.ts).
+    const session = typeof view.thread === "number" ? null : typeof view.session === "string" ? view.session : null;
+    const kept = get(get(prefs, "chatTabs"), `${station}:${session ?? view.thread}`);
+    v.tabs = chatTabs.tabsOf(kept, arr(v.agents), v.noChat === true, session);
     const dismissed = get(get(prefs, "stationUpdatesDismissed"), station);
     v.stationUpdate = looks.stationUpdate(overview, v, typeof dismissed === "string" ? dismissed : null, this.#updateNoticesOpen.has(station), manager, this.stationName(station));
     if (Array.isArray(v.outbox)) v.outbox = looks.outboxWaits(v.outbox, v.stationUpdate);
@@ -903,34 +1025,38 @@ export class Views implements Owner {
         }
         return { ok: found };
       }
-      case "stations":
-        return this.#stationsView(view.scope as string);
+      case "stations": {
+        // Asked with `drive`: those with a drive, this machine's (`here`) first (drive-browse.ts withDrive).
+        const stations = this.#stationsView(view.scope as string, view);
+        if (view.drive !== true || stations === undefined || !("ok" in stations)) return stations;
+        return { ok: withDrive(stations.ok as J[], typeof view.here === "string" ? view.here : null) };
+      }
       case "profiles": {
         const stations = this.#stationsView(view.scope as string);
         if (stations === undefined || !("ok" in stations)) return stations;
         return { ok: workspaceProfiles(stations.ok as J[]) };
       }
+      case "settings": {
+        const stations = this.#stationsView(view.scope as string);
+        if (stations === undefined || !("ok" in stations)) return stations;
+        return { ok: settingsView(stations.ok as J[]) };
+      }
       case "connects":
         return this.#connects(view.scope as string, view.mine === true);
       case "chat": {
         const station = view.station as string;
-        const draw = <V extends Value | undefined>(out: V) => drawn(out, (path) => this.local.uploadOf(station, path));
-        // A chat asked for here is titled by its first message until its station has a message in it, as its row is
-        // (Local.pendingRows): not by what the station calls a chat with nothing said in it yet, between the two.
-        const titled = <V extends Value | undefined>(out: V, at: { key?: string; thread?: number; session?: string }): V => {
-          if (out === undefined || !("ok" in out)) return out;
-          const v = out.ok as J;
-          if (arr(v.messages).length > 0) return out;
-          const title = this.local.firstTitle(station, at);
-          if (title !== null && title !== v.title) return { ok: { ...v, title } } as V;
-          return out;
+        // (its agents' Markdown read once on the device: kept by the chat it is read for)
+        const draw = <V extends Value | undefined>(out: V) => {
+          const thread = out !== undefined && "ok" in out ? u64(get(get(out.ok, "thread"), "id")) : null;
+          const of = thread !== null ? `t:${thread}` : typeof view.thread === "number" ? `t:${view.thread}` : `s:${String(view.session ?? "")}`;
+          return this.#vaultCards(view, drawn(out, (path) => this.local.uploadOf(station, path), this.#core.data.mdStore(station, of)));
         };
-        if (typeof view.thread === "number") return draw(titled(this.#chat(station, view.thread), { thread: view.thread }));
+        if (typeof view.thread === "number") return draw(this.#chat(station, view.thread));
         const session = typeof view.session === "string" ? view.session : null;
         if (session === null) return { err: CoreError.invalid(t("core-views.error.chat_needs_thread")) };
-        if (session.startsWith(PENDING_PREFIX)) return draw(titled(this.#pendingChat(station, session) ?? { err: new CoreError("http_404", t("core-views.error.no_chat"), 404) }, { key: session }));
+        if (session.startsWith(PENDING_PREFIX)) return draw(this.#pendingChat(station, session) ?? { err: new CoreError("http_404", t("core-views.error.no_chat"), 404) });
         const bound = this.boundThread(station, session);
-        const out = titled(bound !== null ? this.#chat(station, bound) : this.#unchatted(station, session), { session });
+        const out = bound !== null ? this.#chat(station, bound) : this.#unchatted(station, session);
         const waiting = this.local.firstOutbox(station, session);
         if (waiting.length === 0 || out === undefined || !("ok" in out)) return draw(out);
         const v = out.ok as J;
@@ -956,8 +1082,11 @@ export class Views implements Owner {
         return archive(this, this.local, view.scope as string, this.#core.host, typeof view.q === "string" ? view.q : "", typeof view.limit === "number" ? view.limit : 0);
       case "workspaceMarks":
         return marks.marks(this, this.local, typeof view.workspace === "string" ? view.workspace : null);
-      case "decisions":
-        return this.#decisions(view.workspace as string);
+      case "decisions": {
+        const out = this.#decisions(view.workspace as string);
+        this.#vaultSeen(view, out !== undefined && "ok" in out ? arr(get(out.ok, "items")).map((i): [string, J] => [ofAddress(str(i.station) ?? ""), i.card]) : []);
+        return out;
+      }
       case "chatJobs": {
         const chat = this.value({ topic: "chat", station: view.station, thread: view.thread ?? null, session: view.session ?? null });
         if (chat === undefined || !("ok" in chat)) return chat;
@@ -985,6 +1114,13 @@ export class Views implements Owner {
         const members_ = arr(get(this.ok({ topic: "workspace", workspace: scope }), "members"));
         const now = this.#core.host.nowMs();
         return { ok: usageView(sources, typeof view.days === "number" ? view.days : 7, now, this.#core.host.utcOffsetMin(now), this.me(scope), members_) };
+      }
+      case "resources": {
+        const stations = this.#stationsOr(view.scope as string);
+        if (stations === undefined || !Array.isArray(stations)) return stations as Value | undefined;
+        const sources = stations.filter((s) => view.station === undefined || s.address === view.station)
+          .map((s) => ({ address: s.address, name: s.name, online: s.online, value: s.online ? this.value({ topic: "stationResources", station: s.address }) : undefined }));
+        return { ok: resourcesView(sources, this.#core.host.nowMs(), looks.waitNote) };
       }
       case "longJobs": {
         const stations = this.#stationsOr(view.scope as string);
@@ -1065,8 +1201,7 @@ export class Views implements Owner {
         // Its station's emoji and icon only with several stations (with one, it says nothing).
         const mark = stations.length > 1 ? { emoji: s.emoji, icon: s.icon } : null;
         const sig = JSON.stringify([s.address, s.name, mark, s.online, link.state ?? null, link.cause ?? null, me, slackUsers, members_, watching, hint]);
-        for (const listedRaw of [...asked.rows, ...listed]) {
-          const raw = asked.titled.get(get(listedRaw, "id")) ?? listedRaw;
+        for (const raw of [...asked, ...listed]) {
           if (mine && get(raw, "mine") !== true) continue;
           if (this.local.beingArchived(s.address, raw)) continue;
           const shown = this.local.asChanging(s.address, raw);
@@ -1249,6 +1384,12 @@ export class Views implements Owner {
     if (line !== null) {
       row.stateText = line[0];
       if (line[1] !== null) row.stateAbout = line[1];
+      const lead = line[3];
+      if (lead !== null) {
+        row.stateLead = lead.kind;
+        if (lead.text !== undefined) row.stateLeadText = lead.text;
+        row.stateRest = lead.rest;
+      }
     }
     if (typeof raw.pinned === "number") pinnedAt.set(row, raw.pinned);
     return row;
@@ -1262,7 +1403,7 @@ export class Views implements Owner {
     const unsent = this.local.unsent(station, thread, row.pending === true && typeof row.clientKey === "string" ? row.clientKey : null);
     if (unsent === undefined) return row;
     const text = format.cleanText(format.plainText(str(unsent.text) ?? ""));
-    const { stateAbout: _stateAbout, ...rest } = row;
+    const { stateAbout: _stateAbout, stateLead: _stateLead, stateLeadText: _stateLeadText, stateRest: _stateRest, ...rest } = row;
     const marked: J = { ...rest, tone: "alert", unsent: true, stateText: t("core-views.unsent", { text: text === "" ? t("core-views.file") : text }) };
     deepFreeze(marked);
     const pinned = pinnedAt.get(row);
@@ -1299,10 +1440,12 @@ export class Views implements Owner {
 
   // ── stations and connects ──
 
-  #stationsView(scope: string): Value | undefined {
+  /// `view`: the topic asking, computed again when one of its stations has been silent long enough to say so.
+  #stationsView(scope: string, view?: Topic): Value | undefined {
     const stations = this.#stationsOr(scope);
     if (stations === undefined || !Array.isArray(stations)) return stations as Value | undefined;
     const c = this.#clock();
+    let silentNext = Infinity;
     const items = stations.map((s) => {
       const overview = this.ok({ topic: "overview", station: s.address });
       const hostRaw = this.ok({ topic: "host", station: s.address });
@@ -1324,6 +1467,16 @@ export class Views implements Owner {
       // How it is reached alone, not its figures (they change with each reading: the `stationNet` view has them).
       const way = this.ok({ topic: "way", station: s.address });
       const state = str(this.link(s.address).state);
+      // Up without a host reading for SILENT_MS: said to be silent (the cloud says it is up, nothing answers).
+      let silent = false;
+      if (s.online && host === null) {
+        const since = this.#hostless.get(s.address) ?? c.now;
+        this.#hostless.set(s.address, since);
+        silent = c.now - since >= SILENT_MS;
+        if (!silent) silentNext = Math.min(silentNext, since + SILENT_MS - c.now);
+      } else this.#hostless.delete(s.address);
+      const blocked = !s.online && cause === "lock" && typeof get(this.link(s.address), "message") === "string" ? (get(this.link(s.address), "message") as string) : null;
+      const running = u64(get(get(overview, "counts"), "running")) ?? 0;
       return {
         station: s.address,
         id: s.id,
@@ -1335,8 +1488,10 @@ export class Views implements Owner {
         line: !s.online && cause === "lock" ? t("core-views.station.lock_short") : looks.stationLine(s.online, host),
         online: s.online,
         reconnecting: s.online && state !== "online" && state !== "error",
+        ...stationState(s.online, blocked !== null, summary, typeof s.lastSeen === "number" ? s.lastSeen : null, overview !== undefined, running, c),
+        problems: stationProblems(s.online, silent, blocked, typeof s.lastSeen === "number"),
         // Down for a security mode: why, in place of the page's 离线 words.
-        ...(!s.online && cause === "lock" && typeof get(this.link(s.address), "message") === "string" ? { blocked: get(this.link(s.address), "message") } : {}),
+        ...(blocked !== null ? { blocked } : {}),
         lastSeen: s.lastSeen,
         version: s.version,
         link: this.link(s.address),
@@ -1350,6 +1505,7 @@ export class Views implements Owner {
         ...(s.joined ? { joined: true, home: this.#core.homeName?.(scope, s.id) ?? null } : {}),
       };
     });
+    if (view !== undefined) this.#againIn(view, silentNext);
     return { ok: items };
   }
 
@@ -1483,7 +1639,7 @@ export class Views implements Owner {
     const channel = strOf(thread, "channel");
     const feishu = surface.startsWith("feishu:") || format.isFeishuChat(channel);
     const slack = !(surface === "ember" || surface === "stillfail") && !feishu;
-    const place = feishu ? strOf(thread, "channelName") || t("core-logic.format.thread.feishu") : slack ? (channel.startsWith("D") ? t("core-views.direct_message") : `#${strOf(thread, "channelName") || channel}`) : null;
+    const place = placeName(surface, channel, strOf(thread, "channelName"));
     // A Feishu chat opens in Feishu (Lark's own app for its connect's).
     const feishuConnect = arr(get(this.ok({ topic: "overview", station }), "connects")).find((c) => `feishu:${strOf(c, "id")}` === surface);
     const feishuUrl = feishu ? format.feishuChatUrl(format.feishuApplink(str(get(get(feishuConnect, "feishu"), "domain"))), channel) : null;
@@ -1552,8 +1708,39 @@ export class Views implements Owner {
     }
     if (row !== undefined && present.archivable(row) && view.archived !== true) view.archivable = true;
     if (letters > 0) view.letters = letters;
+    // Its Slack and Feishu threads, where what is sent can be copied (`chat.cc`), each ticked or not.
+    const ccTo = arr(get(thread, "cc")).flatMap((o) => {
+      const to = u64(get(o, "thread"));
+      const place = placeName(strOf(o, "surface"), strOf(o, "channel"), strOf(o, "channelName"));
+      if (to === null || place === null) return [];
+      const via = strOf(o, "surface").startsWith("feishu:") || format.isFeishuChat(strOf(o, "channel")) ? "feishu" : "slack";
+      return [{ thread: to, place, via, on: this.ccOn(station, id, to) }];
+    });
+    if (ccTo.length > 0) view.cc = ccTo;
     return { ok: view };
   }
+
+  /// Whether what is sent to a chat from here is copied to its Slack or Feishu thread `to` (`chat.cc`): off until ticked,
+  /// for as long as the app runs.
+  ccOn(station: string, thread: number, to: number): boolean {
+    return this.#cc.has(`${station} ${thread} ${to}`);
+  }
+
+  /// The threads what is sent to a chat from here is copied to now.
+  ccTo(station: string, thread: number): number[] {
+    const prefix = `${station} ${thread} `;
+    return [...this.#cc].filter((k) => k.startsWith(prefix)).map((k) => Number(k.slice(prefix.length)));
+  }
+
+  /// Copying to a chat's thread `to` ticked or not: its pages show it.
+  setCc(station: string, thread: number, to: number, on: boolean): void {
+    const key = `${station} ${thread} ${to}`;
+    if (on === this.#cc.has(key)) return;
+    if (on) this.#cc.add(key);
+    else this.#cc.delete(key);
+    for (const view of this.chatViews(station, thread)) this.#core.store.invalidate(view);
+  }
+
 
   /// What a chat's agents and other chats' wrote each other (`chatLetters`), all of it as far as it is on the device
   /// (`whole` once all is): by the other chat, as lettersByChat has them, each named as the chat's page names its
@@ -1580,7 +1767,7 @@ export class Views implements Owner {
     });
     // Each chat's letters drawn as the chat's page draws its messages (their Markdown, their files).
     const chats = lettersByChat(letters).map((c) => {
-      const out = drawn({ ok: { agents, messages: c.letters } }, (path) => this.local.uploadOf(station, path));
+      const out = drawn({ ok: { agents, messages: c.letters } }, (path) => this.local.uploadOf(station, path), this.#core.data.mdStore(station, `t:${id}`));
       return { ...c, letters: arr(get(out.ok, "messages")) };
     });
     return { ok: { title: view.title, chats, whole: get(held.ok, "whole") === true } };
@@ -1648,13 +1835,12 @@ export class Views implements Owner {
       }
     }
     const outbox = chat.made ? structuredClone(this.local.outbox(station, chat.made[1])) : structuredClone(chat.queue);
-    const firstText = str(get(outbox[0], "text"))?.trim() ?? "";
-    const title = firstText !== "" ? (firstText.split("\n").map((l) => l.trim()).find((l) => l !== "") ?? t("core-views.new_chat")) : t("core-views.new_chat");
     return {
       ok: {
         me: this.me(ofAddress(station)),
         thread: null,
-        title,
+        // named by no one yet: what its station will call it till then (chatTitle)
+        title: t("core-views.new_chat"),
         people: [],
         agents: [],
         messages: [],
@@ -1791,8 +1977,10 @@ export class Views implements Owner {
     const members_ = arr(get(this.ok({ topic: "workspace", workspace: ofAddress(station) }), "members"));
     const workspaces = slackWorkspaces(overview);
     const now = this.#core.host.nowMs();
+    const md = this.#core.data.mdStore(station, `s:${key}`);
     return {
-      ok: presentHistory(live.ok, {
+      // What its calls used, from its stream while it works, else from its summary (brief.ts `usageNow`).
+      ok: presentHistory({ ...(live.ok as object), usage: brief.usageNow(session, live.ok) }, {
         workspaces,
         threads,
         members: members_,
@@ -1805,11 +1993,35 @@ export class Views implements Owner {
         offsetMin: this.#core.host.utcOffsetMin(now),
         now,
         stations: this.stationNames(ofAddress(station)),
+        ...(md !== undefined ? { md } : {}),
       }),
     };
   }
 
   // ── the 奏 page ──
+
+  /// The decision the wide 奏 page shows, by workspace (`decision.show`, decisions.ts Shown).
+  readonly #decisionShown = new Map<string, decisions.Shown>();
+
+  /// The one shown from now on (`decision.show`).
+  showDecision(workspace: string, station: string, thread: number, seq: number): void {
+    this.#decisionShown.set(workspace, decisions.picked(this.#decisionShown.get(workspace) ?? { key: null, at: 0 }, decisions.deferralKey(station, thread, seq)));
+    this.#invalidate((v) => v.topic === "decisions" && v.workspace === workspace);
+  }
+
+  /// Set aside (`decision.defer`): if it is the one shown, the one now in its place shows (itself if it is the only one).
+  decisionDeferred(station: string, thread: number, seq: number): void {
+    const key = decisions.deferralKey(station, thread, seq);
+    for (const [workspace, shown] of this.#decisionShown) this.#decisionShown.set(workspace, decisions.setAside(shown, key));
+  }
+
+  /// Where the one shown is in `items` (decisions.ts shownIn), kept for the next view; null for none.
+  #shownDecision(workspace: string, items: J[]): number | null {
+    const keys = items.map((d) => decisions.deferralKey(d.station, d.thread, d.seq));
+    const { at, next } = decisions.shownIn(this.#decisionShown.get(workspace) ?? { key: null, at: 0 }, keys);
+    this.#decisionShown.set(workspace, next);
+    return at;
+  }
 
   #decisions(scope: string): Value | undefined {
     const stations = this.#stationsOr(scope);
@@ -1855,10 +2067,13 @@ export class Views implements Owner {
         const thread = u64(row.thread);
         const seq = u64(d.seq);
         if (thread === null || seq === null) continue;
-        if (this.local.answered(s.address, thread, seq)) continue;
+        // Answered, let go or its vault request decided from here: gone at once (back if that could not be done).
+        if (this.local.answered(s.address, thread, seq) || this.local.lettingGo(s.address, thread, seq)) continue;
+        const shownCard = decisions.labelAssignee(decisions.cardShown(d.card), me, members_, row.creator);
+        if (typeof shownCard.vault === "string" && this.local.decidedVault(shownCard.vault)) continue;
+        const card = this.#vaultCard(shownCard, ofAddress(s.address));
         const agents = arr(row.agents).map((a) => ({ session: present.session(a) }));
         const shown = (m: J): J => ({ ...shownMessage(m, agents, me, slackUsers, members_, [], row.creator), waiting: false });
-        const card = decisions.labelAssignee(decisions.cardShown(d.card), me, members_, row.creator);
         const options = card.options ?? [];
         const message = shown(d.message);
         if (decisions.kind(d.card) === "options") message.options = structuredClone(options);
@@ -1896,7 +2111,9 @@ export class Views implements Owner {
     const at = (v: J, k: string) => (typeof v[k] === "number" ? v[k] : 0);
     answered.sort((a, b) => at(b, "answeredAt") - at(a, "answeredAt"));
     working.sort((a, b) => at(b, "lastActiveAt") - at(a, "lastActiveAt"));
-    return { ok: { items: ordered.map((i) => i[0]), count: ordered.length, wait: looks.waitNote(waiting, failing, ordered.length === 0), answered, working } };
+    const list = ordered.map((i) => i[0]);
+    const shown = this.#shownDecision(scope, list);
+    return { ok: { items: list, count: ordered.length, ...(shown !== null ? { shown } : {}), wait: looks.waitNote(waiting, failing, ordered.length === 0), answered, working } };
   }
 
   // ── workspace marks ──
@@ -1922,7 +2139,7 @@ const pinnedAt = new WeakMap<object, number>();
 /// outbox's) and which of them went up from here after it was sent (`uploadOf`: their pictures are still here), which of an agent's files its text places (placed.ts), and what its
 /// agents sent to Slack or were given there after it (`elsewhere`; the chat's own `elsewhere` keeps what came before
 /// its first message), and which of the viewer's go close together with their next one, its time under that one (`followed`, `joined`).
-function drawn<V extends Value | undefined>(out: V, uploadOf: (path: unknown) => string | undefined): V {
+function drawn<V extends Value | undefined>(out: V, uploadOf: (path: unknown) => string | undefined, md?: MdStore): V {
   if (out === undefined || !("ok" in out) || !isObject(out.ok)) return out;
   // Everything said here goes on copies: what the view is made of may be the core's kept values, frozen (a message's
   // files, the outbox's), and writing on one of them threw and took the core down.
@@ -1954,7 +2171,7 @@ function drawn<V extends Value | undefined>(out: V, uploadOf: (path: unknown) =>
     // A person's words are drawn as they wrote them and place nothing: their files are all below them. An agent's are
     // Markdown, read here (once: markdown.ts keeps it by the words).
     if (m.authorKind !== "person") {
-      out.md = markdown(str(m.text) ?? "");
+      out.md = markdown(str(m.text) ?? "", md);
       if (Array.isArray(files) && files.length > 0) {
         const { placed } = placeFiles(str(m.text) ?? "", files as J[]);
         if (placed.size > 0) out.placed = [...placed.keys()];
@@ -1963,7 +2180,7 @@ function drawn<V extends Value | undefined>(out: V, uploadOf: (path: unknown) =>
     return out;
   });
   view.messages = messages;
-  if (Array.isArray(view.outbox)) view.outbox = view.outbox.map((o: J) => (isObject(o) ? { ...o, attachments: own(o.attachments) } : o));
+  if (Array.isArray(view.outbox)) view.outbox = view.outbox.map((o: J) => (isObject(o) ? goingUp({ ...o, attachments: own(o.attachments) }) : o));
   const elsewhere = arr(view.elsewhere);
   if (elsewhere.length > 0) {
     const bySeq = new Map(messages.map((m) => [u64(m.seq), m]));
@@ -2000,5 +2217,48 @@ function drawn<V extends Value | undefined>(out: V, uploadOf: (path: unknown) =>
   return { ...out, ok: view } as V;
 }
 
+/// An outgoing message's files still going up (`uploads`) as its row draws them: an image among its files at once, in
+/// its place and shape, drawn from the picture this device has of it (`upload`; on no station yet, its path names the
+/// upload), as its message draws it once up, not a card that turns into it then; any other a card saying how far, as
+/// it is a card once up. While any goes up, 正在上传 under it (`waits`), unless something else holds it.
+function goingUp(o: J): J {
+  const { uploads, ...rest } = o as Record<string, unknown>;
+  const going = arr(uploads).filter((u) => isObject(u));
+  if (going.length === 0) return rest;
+  const images = going.filter((u) => isImage(str(u.name) ?? ""));
+  const shown = images.map((u) => ({ name: u.name, path: `upload:${u.id}`, size: u.size, ...(u.width && u.height ? { width: u.width, height: u.height } : {}), upload: u.id }));
+  const cards = going.filter((u) => !images.includes(u));
+  return {
+    ...rest,
+    attachments: [...arr(o.attachments), ...shown],
+    ...(cards.length > 0 ? { uploads: cards } : {}),
+    ...(o.state === "sending" && typeof o.waits !== "string" ? { waits: t("common.uploading") } : {}),
+  };
+}
+
 /// How far apart the viewer's messages sent one after another still go together, one time under the last.
 const FOLLOWED_MS = 5 * 60_000;
+
+/// How long a station up may go without a host reading before it is said to be silent (StationCards.tsx useLong's 15 s).
+const SILENT_MS = 15_000;
+
+/// How a station is in a few words, as its page's head and its card say it (StationCards.tsx state): down for a security
+/// mode, its line; away, when it was last online (or never); up, connecting until its overview is read, then its
+/// agents at work (`busy`) or idle.
+export function stationState(online: boolean, blocked: boolean, summary: string, lastSeen: number | null, read: boolean, running: number, c: present.Clock): { stateText: string; stateBusy: boolean } {
+  if (!online && blocked) return { stateText: summary, stateBusy: false };
+  if (!online) {
+    return { stateText: lastSeen !== null ? t("core-views.station.last_online", { time: format.relativeTime(lastSeen * 1000, c.now, c.offsetMin) }) : t("core-views.station.never_online"), stateBusy: false };
+  }
+  if (!read) return { stateText: t("core-views.station.connecting"), stateBusy: false };
+  return running > 0 ? { stateText: t("core-views.station.running_agents", { n: running }), stateBusy: true } : { stateText: t("core-views.station.idle"), stateBusy: false };
+}
+
+/// What may be wrong with a station, each in words, worst first (StationCards.tsx problems): silent though up, down for
+/// a security mode (why), away (red once it has been online, else amber: never connected).
+export function stationProblems(online: boolean, silent: boolean, blocked: string | null, seen: boolean): { key: string; level: string; text: string }[] {
+  if (online && silent) return [{ key: "silent", level: "amber", text: t("core-views.station.silent", { name: brand.name() }) }];
+  if (!online && blocked !== null) return [{ key: "blocked", level: "red", text: blocked }];
+  if (!online) return [{ key: "away", level: seen ? "red" : "amber", text: seen ? t("core-views.station.away", { name: brand.name() }) : t("core-views.station.never_connected", { name: brand.name() }) }];
+  return [];
+}

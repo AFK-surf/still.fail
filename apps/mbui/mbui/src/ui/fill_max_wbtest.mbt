@@ -110,3 +110,56 @@ test "fill across held to a max: a day's bar in the middle of its day, as wide a
     assert_eq((bx, bw), (dx, dw))
   }
 }
+
+///|
+/// A column `pw` wide starting what it holds, a box in it as wide as its words (`Cut`) and at least 320 within the
+/// column (`min_w=Within(320)`): where that box is.
+fn within_column(pw : Double, words : String) -> (Double, Double, Double, Double) raise {
+  let t = Tester::new(fn(c) {
+    c.box(w=Px(pw), align=AStart, fn() {
+      c.box(style=style(w=Cut, min_w=Within(320.0)), bg=fill_max_ink, pad=8.0, fn() {
+        c.text(words, size=14.0) |> ignore
+      })
+      |> ignore
+    })
+    |> ignore
+  })
+  t.draw()
+  rect_of_bg(fill_max_ink)
+}
+
+///|
+test "a least within the room: 320 where the column has it, the column's where it has less, its words' past it" {
+  let (_, _, w, _) = within_column(600.0, "Keep it")
+  assert_eq(w, 320.0)
+  let (_, _, w, _) = within_column(300.0, "Keep it")
+  assert_eq(w, 300.0)
+  let (_, _, w, _) = within_column(600.0, "Keep the token for the deploys of tomorrow, and of the day after it")
+  assert_true(w > 320.0 && w <= 600.0, msg="as wide as its words: \{w}")
+}
+
+///|
+/// A column `pw` wide starting what it holds, a box in it as wide as what it holds (`Cut`), at least 320 within the
+/// column and at most 560 (an agent's vault request in its chat), holding a command on one line: where that box is.
+fn within_most(pw : Double) -> (Double, Double, Double, Double) raise {
+  let command = "curl -s -X POST https://api.example.com/v1/datasets/_apl?format=tabular -H 'Authorization: Bearer $TOKEN' -d @query.json"
+  let t = Tester::new(fn(c) {
+    c.box(w=Px(pw), align=AStart, fn() {
+      c.box(style=style(w=Cut, min_w=Within(320.0), max_w=Fixed(560.0)), bg=fill_max_ink, pad=8.0, fn() {
+        c.box(w=Fill(1.0), fn() { c.text(command, size=14.0, wrap=false, w=Fill(1.0)) |> ignore }) |> ignore
+      })
+      |> ignore
+    })
+    |> ignore
+  })
+  t.draw()
+  rect_of_bg(fill_max_ink)
+}
+
+///|
+test "a most in a column: as said where the column has the room, the column's where it has less" {
+  let (_, _, w, _) = within_most(1000.0)
+  assert_eq(w, 560.0)
+  let (_, _, w, _) = within_most(360.0)
+  assert_eq(w, 360.0)
+}

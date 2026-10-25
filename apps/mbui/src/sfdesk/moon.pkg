@@ -1,0 +1,14 @@
+import {
+  "moonbitlang/core/json",
+  "mbui/ui",
+  "mbui/kit",
+  "mbui/hostapi",
+  "mbui/pixels",
+  "stillfail/sf",
+  "stillfail/sfbase",
+  "stillfail/sfapp/settings",
+  "mbui/motion",
+  "mbui/codec",
+  "stillfail/gallery",
+  "stillfail/sfpages",
+}

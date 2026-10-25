@@ -11,7 +11,7 @@ test "09-paste-long" {
     f.tap("发消息")
     f.paste_n(6000, "长段落粘贴测试。")
     // a text file of them in the draft, how long it is said; none of them in the field
-    f.see("6000 字符")
+    f.see(@sf.t("web-main.composer.pasteAttachment", args=[("count", @sf.grouped(6000.0))]))
     f.check(!f.t.field_words().contains("长段落"), "the long words in the field: \{f.t.field_words()}")
     f.gone("正在上传")
     f.type_text("附上一段长文字 201409")

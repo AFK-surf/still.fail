@@ -19,8 +19,12 @@ Object.assign(globalThis, {
   addEventListener: noop,
   removeEventListener: noop,
   // A document with no body: what the app would put on the page (the sidebar's buddy) is drawn in place (brand.tsx).
-  document: { documentElement: { dataset: { theme: "dark" }, hasAttribute: () => false }, body: null, getElementById: () => null, querySelector: () => null, addEventListener: noop, removeEventListener: noop },
+  document: { documentElement: { dataset: { theme: "dark" }, hasAttribute: () => false }, body: null, getElementById: () => null, getElementsByTagName: () => [], querySelector: () => null, addEventListener: noop, removeEventListener: noop },
 });
+
+// Node's own navigator says no appVersion, which MathJax reads as it loads (the core's formulas, client/core-ts's
+// math.ts: @mathjax/src's util/context.js, which then looks for its script among the document's): one that says it, empty.
+Object.defineProperty(globalThis, "navigator", { value: { userAgent: navigator.userAgent, language: navigator.language, languages: navigator.languages, platform: navigator.platform, hardwareConcurrency: navigator.hardwareConcurrency, appVersion: "" }, configurable: true });
 
 const dist = (path) => fileURLToPath(new URL(`../dist/${path}`, import.meta.url));
 const { render } = await import(pathToFileURL(dist("site-ssr/prerender.js")).href);

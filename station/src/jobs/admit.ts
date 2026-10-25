@@ -3,12 +3,21 @@
 // start at once. Nothing is estimated beforehand (a build takes more or less by its caches): what is measured decides.
 //
 // - With no task of the queue running, the first that waits starts, however busy the machine is: one always goes on.
-// - Another starts only once the last one started has had RAMP_MS to get going, and the CPUs were busy less than
-//   BUSY_MAX over the last BUSY_SPAN_MS: tasks come in one by one while there is room.
+// - Another starts only once the CPUs, looked at since the last one started (while that one still runs: one that
+//   ended has nothing more to show), were busy less than BUSY_MAX: tasks come in one by one while there is room.
+//   (A flat 30 s after each start held a task of an idle machine back minutes when several sessions each had one
+//   waiting, 2026-10-24: two a minute, the CPUs at 5%.)
 // - None starts while the system says its memory is under pressure (high or critical).
-// - A task that uses the screen (windows, a simulator, screenshots) starts only while no other such task runs.
+// - A task that uses the screen (windows, a simulator, screenshots) throughout starts only while no other task has the
+//   screen, and none of the commands that asked for it before it came waits for it.
 // - Which one: of the sessions that have tasks waiting, the one whose task last started longest ago (one never started
 //   first), its oldest task. A session that asks for ten does not keep the others behind them.
+//
+// The screen is one task's at a time; a task has it while it uses it: one prepared with `screen` for as long as it
+// runs, any other while a command of its holds it (`stillfail-job screen <command>`: a claim, below). A task that
+// takes pictures between builds and tests has it only for the pictures: the rest of it runs beside the others' (with
+// whole tasks having it, one that had drawn its pictures in 40 s held it minutes more for its tests, the others with
+// pictures to take waited 20 minutes and more in line, the CPUs a third busy, 2026-10-25).
 //
 // A task started with others running is told how many CPUs are free (STILLFAIL_CPUS, and the build tools' own
 // variables when its environment has none of them), so a build does not take every core for itself.
@@ -18,13 +27,13 @@ import type { Ticks } from "../read/host.ts";
 /// read.
 export type Pressure = "normal" | "high" | "critical";
 
-/// How long the last task started is left to get going before the CPUs are looked at for another.
-export const RAMP_MS = 30_000;
 /// The CPUs busy less than this over BUSY_SPAN_MS: there is room for another task.
 export const BUSY_MAX = 0.8;
 /// Over how long the CPUs are looked at, and how often.
 export const BUSY_SPAN_MS = 20_000;
 export const LOOK_MS = 5000;
+/// How long, at least, the CPUs are looked at after a task starts before another may (two looks: its load shows).
+export const RAMP_MS = 2 * LOOK_MS;
 
 export type Waiting = { id: string; session: string; screen: boolean; queuedAt: number };
 export type Started = { id: string; screen: boolean };
@@ -42,9 +51,10 @@ export class Busy {
     if (ticks !== null) this.seen.push({ at, ticks });
   }
 
-  /// The share (0–1) since the oldest ticks kept; null before they span half of BUSY_SPAN_MS.
-  share(): number | null {
-    const first = this.seen[0];
+  /// The share (0–1) since the oldest ticks kept, or the oldest noted at `since` or after; null before they span half
+  /// of BUSY_SPAN_MS.
+  share(since: number | null = null): number | null {
+    const first = since === null ? this.seen[0] : this.seen.find((s) => s.at >= since);
     const last = this.seen.at(-1);
     if (first === undefined || last === undefined || last.at - first.at < BUSY_SPAN_MS / 2) return null;
     const [b0, t0] = first.ticks;
@@ -56,6 +66,30 @@ export class Busy {
 
 export type Room = { busy: number | null; pressure: Pressure | null };
 
+/// A command's claim on the screen (`stillfail-job screen`): its job, the process that asked (the command's shell),
+/// when it first asked (the store's clock, as a task's queuedAt), and whether it has the screen now.
+export type Claim = { job: string; pid: number; at: number; held: boolean };
+
+/// What the claims say to the queue: whether one holds the screen, and when the first still waiting asked.
+export type Claims = { held: boolean; asked: number | null };
+
+export const claimsOf = (claims: readonly Claim[]): Claims => ({
+  held: claims.some((c) => c.held),
+  asked: claims.find((c) => !c.held)?.at ?? null,
+});
+
+/// The claims with the screen given out: to the first waiting while no task has it, and at once to a job's that has it
+/// already (`screenJobs`: those running that use it throughout; or a command of its own holds it), so a command inside
+/// another, or inside a task that has the screen throughout, does not wait for itself.
+export function served(claims: readonly Claim[], screenJobs: ReadonlySet<string>): Claim[] {
+  const having = new Set([...screenJobs, ...claims.filter((c) => c.held).map((c) => c.job)]);
+  return claims.map((c) => {
+    if (c.held || (having.size > 0 && !having.has(c.job))) return c;
+    having.add(c.job);
+    return { ...c, held: true };
+  });
+}
+
 /// The task to start now, if any, and else why the first waiting waits.
 export function pick(
   waiting: readonly Waiting[],
@@ -64,11 +98,13 @@ export function pick(
   now: number,
   lastStart: number | null,
   lastOf: (session: string) => number | null,
+  claims: Claims = { held: false, asked: null },
 ): { start: Waiting } | { wait: Why } | null {
   if (waiting.length === 0) return null;
   if (room.pressure === "high" || room.pressure === "critical") return { wait: "memory" };
-  const screenBusy = running.some((r) => r.screen);
-  const able = waiting.filter((w) => !(w.screen && screenBusy));
+  // (the screen another task's, or asked for by a command before this task came)
+  const screenBusy = running.some((r) => r.screen) || claims.held;
+  const able = waiting.filter((w) => !(w.screen && (screenBusy || (claims.asked !== null && claims.asked <= w.queuedAt))));
   if (able.length === 0) return { wait: "screen" };
   if (running.length > 0) {
     if (lastStart !== null && now - lastStart < RAMP_MS) return { wait: "busy" };

@@ -5,7 +5,7 @@ import { args, doing, epochMs, kindOf, type Known, tasksOf, told, toolName } fro
 import * as format from "./format.ts";
 import * as brand from "./brand.ts";
 import { t } from "./i18n.ts";
-import { markdown } from "./markdown.ts";
+import { markdown, type MdStore } from "./markdown.ts";
 import * as present from "./present.ts";
 import { money } from "./views/usage.ts";
 
@@ -29,6 +29,8 @@ export type Context = {
   now?: number;
   /// The workspace's stations' names by id, for the calls that work on one (station_task); absent: none known.
   stations?: ReadonlyMap<string, string>;
+  /// Where the trees of its Markdown are kept on the device (markdown.ts); absent: read here only.
+  md?: MdStore;
 };
 
 function kindKey(kind: string): string {
@@ -349,14 +351,14 @@ export function presentHistory(live: J, cx: Context): J {
             agent: task.agent,
             failed: task.status === "failed" || task.status === "killed",
             result: task.result,
-            md: task.result !== null ? markdown(task.result) : null,
+            md: task.result !== null ? markdown(task.result, cx.md) : null,
           })).concat(events.map((n) => ({
             text: n.line,
             agent: n.chat,
             failed: n.failed,
             result: n.more,
             // A job's output is a block of code, all of it.
-            md: n.more === null ? null : n.output ? (n.more === "" ? [] : [["pre", { code: [0, n.more.length] }]]) : markdown(n.more),
+            md: n.more === null ? null : n.output ? (n.more === "" ? [] : [["pre", { code: [0, n.more.length] }]]) : markdown(n.more, cx.md),
           }))),
           messages: messages.flatMap((m, k) => {
             // A job's own words, as it wrote them (drawn in a monospaced font); still.fail's of any other kind, as they are.
@@ -379,14 +381,14 @@ export function presentHistory(live: J, cx: Context): J {
         break;
       }
       case "text":
-        v = { kind: "text", text: s(timeline[item.i], "text"), md: markdown(s(timeline[item.i], "text")), subagent: flag(timeline[item.i], "subagent") };
+        v = { kind: "text", text: s(timeline[item.i], "text"), md: markdown(s(timeline[item.i], "text"), cx.md), subagent: flag(timeline[item.i], "subagent") };
         break;
       case "post": {
         const a = args(s(timeline[steps[item.step].call], "text")) ?? {};
         const text = (k: string): string | null => (typeof a[k] === "string" ? a[k] : null);
         const kind = text("kind");
         const said = mentions(text("text") ?? "", cx);
-        v = { kind: "post", text: said, md: markdown(said), place: place(text("to")), block: kind === "block" || kind === "need_help" || kind === "need_decision", failed: failedOf(steps[item.step]) };
+        v = { kind: "post", text: said, md: markdown(said, cx.md), place: place(text("to")), block: kind === "block" || kind === "need_help" || kind === "need_decision", failed: failedOf(steps[item.step]) };
         const ends = endsOf(kind);
         if (ends !== null && ends !== "waiting") v.ends = ends;
         break;
@@ -448,7 +450,10 @@ export function presentHistory(live: J, cx: Context): J {
     }
     const kind = v.kind ?? null;
     delete v.kind;
-    return { key: `e${base + first}`, entries: [base + first, base + last], body: { kind, content: v } } as J;
+    const out: J = { key: `e${base + first}`, entries: [base + first, base + last], body: { kind, content: v } };
+    // Its own work (its steps and thoughts, and the words it says to itself): what 只看收发 leaves out.
+    if (kind === "group" || kind === "text") out.work = true;
+    return out;
   });
 
   // Turns: each prompt that woke the agent (not one of a sub-agent's) begins one, on its item, saying when and what the
@@ -481,7 +486,7 @@ export function presentHistory(live: J, cx: Context): J {
   const pushedNow = pushed(live, cx.runtime);
   const liveSteps = pushedNow.liveSteps.map(({ id, text }) => ({ id, text }));
   const phase = pushedNow.phase;
-  const { usage, usageLine } = usageOf(live);
+  const { usage, usageLine } = usageOf(live?.usage);
   const loaded = flag(live, "loaded");
   let edge: string;
   let empty: boolean;
@@ -494,11 +499,10 @@ export function presentHistory(live: J, cx: Context): J {
   return { items: shown, live: liveSteps, phase, usage, usageLine, edge, empty, loaded, more: base > 0 };
 }
 
-/// What a session's calls used (its live `usage`), as its history shows it: label and value rows, and in a line; and on
-/// their own, what its card shows of it (views/brief.ts): the context it carries (how full its window is, when known)
-/// and the cost. Nothing before the station has counted any.
-export function usageOf(live: J): { usage: J[] | null; usageLine: string | null; context: string | null; contextPercent: number | null; cost: string | null } {
-  const u = live?.usage;
+/// What a session's calls used (views/brief.ts `usageNow`), as its history shows it: label and value rows, and in a
+/// line; and on their own, what its card shows of it (views/brief.ts): the context it carries (how full its window is,
+/// when known) and the cost. Nothing before the station has counted any.
+export function usageOf(u: J): { usage: J[] | null; usageLine: string | null; context: string | null; contextPercent: number | null; cost: string | null } {
   const isUsage = u !== null && typeof u === "object" && !Array.isArray(u);
   const n = (k: string): number => (isUsage && typeof u[k] === "number" ? u[k] : 0);
   // The context and the cost come from stations since; an older one's usage has neither.

@@ -1,0 +1,14 @@
+# A memory page on the desktop (sfdesk memory_doc.mbt, the web's Memory.tsx MemoryDoc): MBUI_WIN=1280x800 over the
+# made-up chat. ⌘, then 记忆, a skill's page, its other file.
+timeout 30000
+until 按空格输入
+wait 600
+key cmd+,
+wait 1000
+tap 记忆
+wait 1500
+tap 发布流程
+wait 1500
+tap checklist
+wait 1200
+exit

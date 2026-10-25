@@ -15,7 +15,7 @@
   const U = {}, PU = {};
   let cssW = 0, cssH = 0, dpr = 1;
   // the numbers of an instance (src/ui/scene.mbt)
-  const INST = 36;
+  const INST = 52;
   let f32 = new Float32Array(INST * 4096);
   let pending = false;
   window.__logs = [];
@@ -142,11 +142,15 @@
   layout(location=6) in vec4 a_rc;
   layout(location=7) in vec4 a_rs;
   layout(location=8) in vec4 a_rot;
+  layout(location=9) in vec4 a_rr;
+  layout(location=10) in vec4 a_oclip;
+  layout(location=11) in vec4 a_orc;
+  layout(location=12) in vec4 a_ors;
   uniform vec2 u_vp;
   uniform vec4 u_gb;
   out vec2 v_pos; out vec2 v_cpos;
   flat out vec4 v_rect; flat out vec4 v_p; flat out vec4 v_color; flat out vec4 v_c2; flat out vec4 v_clip; flat out vec4 v_pad;
-  flat out vec4 v_rc; flat out vec4 v_rs;
+  flat out vec4 v_rc; flat out vec4 v_rs; flat out vec4 v_rr; flat out vec4 v_oclip; flat out vec4 v_orc; flat out vec4 v_ors;
   void main() {
     int vid = gl_VertexID;
     vec2 corner = vec2((vid == 1 || vid == 4 || vid == 5) ? 1.0 : 0.0, (vid == 2 || vid == 3 || vid == 5) ? 1.0 : 0.0);
@@ -161,26 +165,27 @@
     vec2 at = pos;
     if (a_rot.x != 0.0) { vec2 d = pos - a_rot.yz; float c = cos(a_rot.x), s = sin(a_rot.x); at = a_rot.yz + vec2(c * d.x - s * d.y, s * d.x + c * d.y); }
     gl_Position = vec4(at.x / u_vp.x * 2.0 - 1.0, 1.0 - at.y / u_vp.y * 2.0, 0.0, 1.0);
-    v_pos = pos; v_cpos = a_rot.w > 0.5 ? at : pos; v_rect = a_rect; v_p = a_p; v_color = a_color; v_c2 = a_c2; v_clip = a_clip; v_pad = a_pad; v_rc = a_rc; v_rs = a_rs;
+    v_pos = pos; v_cpos = a_rot.w > 0.5 ? at : pos; v_rect = a_rect; v_p = a_p; v_color = a_color; v_c2 = a_c2; v_clip = a_clip; v_pad = a_pad; v_rc = a_rc; v_rs = a_rs; v_rr = a_rr;
+    v_oclip = a_oclip; v_orc = a_orc; v_ors = a_ors;
   }`;
   const FS = `#version 300 es
   precision highp float;
   in vec2 v_pos; in vec2 v_cpos;
   flat in vec4 v_rect; flat in vec4 v_p; flat in vec4 v_color; flat in vec4 v_c2; flat in vec4 v_clip; flat in vec4 v_pad;
-  flat in vec4 v_rc; flat in vec4 v_rs;
+  flat in vec4 v_rc; flat in vec4 v_rs; flat in vec4 v_rr; flat in vec4 v_oclip; flat in vec4 v_orc; flat in vec4 v_ors;
   uniform float u_scale;
   uniform sampler2D u_atlas;
   uniform sampler2D u_img;
   // glass (src/ui/glass.mbt): the blurred copy under it and where a point is in it (uv = p * u_map.xy + u_map.zw, kept
   // in u_uvc), a liquid group's shapes and corners, how many
-  uniform sampler2D u_bd;
+  uniform highp sampler2D u_bd;
   uniform vec4 u_map;
   uniform vec4 u_uvc;
   uniform vec4 u_shape[8];
   uniform vec4 u_rad[2];
   uniform int u_n;
-  // the pieces of the frame's shapes (src/ui/shape.mbt: the instances of kind 12 after every one drawn), 2043 fours
-  // (227 instances) a row
+  // the pieces of the frame's shapes (src/ui/shape.mbt: the instances of kind 12 after every one drawn), 2041 fours
+  // (204 instances) a row
   uniform highp sampler2D u_segs;
   out vec4 o;
   // corner.sl begin (scripts/chk corner-sl: not edited here)
@@ -223,6 +228,11 @@
     float tn = tn1 * t;
     float u = pow(1.0 + tn, 1.0 / n);
     return (hi * u - R) * (1.0 + tn) / (u * sqrt(1.0 + tn1 * tn1));
+  }
+  // Which of a box's corners' radii r (top left, top right, bottom right, bottom left: scene.mbt 36-39) p (from its
+  // middle) is drawn by: the one of its quarter's corner.
+  float mb_corner_of(float2 p, float4 r) {
+    return p.x < 0.0 ? (p.y < 0.0 ? r.x : r.w) : (p.y < 0.0 ? r.y : r.z);
   }
   // A box's own corners: r at most its shorter half, as smooth as its size has room for (band: mb_sd_corner's).
   float mb_sd_box(float2 p, float2 hs, float r, float band) {
@@ -296,10 +306,21 @@
     int s = i - (i / 6) * 6;
     return s + (s >= 1 ? 1 : 0) + (s >= 4 ? 1 : 0);
   }
+  // How far to move a smooth ground (glass's frost) at the pixel px (in pixels) before it is written to 8 bits a
+  // channel, in steps of 1/255: Skia's ordered dither (GrDitherEffect, an 8x8 Bayer matrix by the pixel's place), never
+  // half a step either way. Without it a slope of a few steps across a wide frost is written as flat bands, an edge where
+  // each step is (contour lines); with it each pixel is the step above or below as often as the slope is near it, and
+  // a value already on a step stays it.
+  float mb_dither(float2 px) {
+    int x = int(floor(px.x)) & 7;
+    int y = (int(floor(px.y)) & 7) ^ x;
+    int m = ((y & 1) << 5) | ((x & 1) << 4) | ((y & 2) << 2) | ((x & 2) << 1) | ((y & 4) >> 1) | ((x & 4) >> 2);
+    return float(m) / 64.0 - 63.0 / 128.0;
+  }
   // corner.sl end
-  float sd_rr(vec2 p, vec4 r, float rad) {
+  float sd_rr(vec2 p, vec4 r, vec4 rad) {
     vec2 hs = r.zw * 0.5;
-    return mb_sd_box(p - r.xy - hs, hs, rad, 1e9);
+    return mb_sd_box(p - r.xy - hs, hs, mb_corner_of(p - r.xy - hs, rad), 1e9);
   }
   // a notch cut into the top edge (scene.mbt 21-23): a circle about the top's middle (pad.y below it, pad.z its
   // radius), met by the edge through fillets (pad.w): the rounded intersection with what is outside the circle
@@ -319,7 +340,7 @@
     float d = 1e9;
     for (int i = 0; i < 8; i++) {
       if (i >= u_n) break;
-      d = smin_k(d, sd_rr(p, u_shape[i], u_rad[i / 4][i % 4]), k);
+      d = smin_k(d, sd_rr(p, u_shape[i], vec4(u_rad[i / 4][i % 4])), k);
     }
     return d;
   }
@@ -340,7 +361,7 @@
   // what it shows at p, as if uncut
   void shade(vec2 p) {
     int kind = int(v_p.y + 0.5);
-    if (kind == 9) { vec2 hh = v_rect.zw * 0.5; float rr = min(v_p.x, min(hh.x, hh.y)); vec2 q = abs(p - v_rect.xy - hh) - hh + rr; if (length(max(q, 0.0)) + min(max(q.x, q.y), 0.0) - rr > 0.0) discard; o = vec4(0.0); return; }
+    if (kind == 9) { vec2 hh = v_rect.zw * 0.5; float rr = min(mb_corner_of(p - v_rect.xy - hh, v_rr), min(hh.x, hh.y)); vec2 q = abs(p - v_rect.xy - hh) - hh + rr; if (length(max(q, 0.0)) + min(max(q.x, q.y), 0.0) - rr > 0.0) discard; o = vec4(0.0); return; }
     vec4 col = v_color;
     if (kind == 11) {
       // a band of a shape (src/ui/shape.mbt): c2.y of its pieces from c2.x; p.x half its stroke's width (0: a fill,
@@ -349,11 +370,11 @@
       float a;
       if (v_p.x > 0.0) {
         float d = 1e9;
-        for (int i = first; i < first + n; i++) { int t = (i / 6) * 9 + mb_seg_slot(i); d = min(d, mb_seg_dist(texelFetch(u_segs, ivec2(t % 2043, t / 2043), 0), v_rect, p)); }
+        for (int i = first; i < first + n; i++) { int t = (i / 6) * 13 + mb_seg_slot(i); d = min(d, mb_seg_dist(texelFetch(u_segs, ivec2(t % 2041, t / 2041), 0), v_rect, p)); }
         a = clamp(0.5 - (d - v_p.x) * u_scale, 0.0, 1.0);
       } else {
         vec4 w = vec4(0.0);
-        for (int i = first; i < first + n; i++) { int t = (i / 6) * 9 + mb_seg_slot(i); w += mb_path_rows(texelFetch(u_segs, ivec2(t % 2043, t / 2043), 0), v_rect, p, u_scale); }
+        for (int i = first; i < first + n; i++) { int t = (i / 6) * 13 + mb_seg_slot(i); w += mb_path_rows(texelFetch(u_segs, ivec2(t % 2041, t / 2041), 0), v_rect, p, u_scale); }
         a = mb_path_cover(w, v_c2.z);
       }
       o = vec4(col.rgb, 1.0) * col.a * a;
@@ -368,7 +389,10 @@
       return;
     }
     if (kind == 1 || kind == 3 || kind == 7) {
-      vec2 uv = (v_c2.xy + (p - v_rect.xy) / v_rect.zw * v_c2.zw) / ${ATLAS}.0;
+      // within its own cell (c2: where in the atlas, in texels), however its rect is stretched or turned: a sample
+      // past the cell's edge texels would blend in what lies beside it (another glyph, one left from before the
+      // atlas started over)
+      vec2 uv = clamp(v_c2.xy + (p - v_rect.xy) / v_rect.zw * v_c2.zw, v_c2.xy + 0.5, v_c2.xy + v_c2.zw - 0.5) / ${ATLAS}.0;
       vec4 t = texture(u_atlas, uv);
       if (kind == 7) {
         // inked by how light what is under its glass is, looked at round the glass's middle
@@ -408,6 +432,7 @@
       // the edge shaded, more on the side away from the light, so the shape reads over a light ground too
       c *= 1.0 - v_c2.x * band * (0.1 + 0.25 * max(-ndl, 0.0));
       c = c + (1.0 - c) * clamp(spec, 0.0, 1.0);
+      c += mb_dither(p * u_scale) / 255.0;
       o = vec4(c, 1.0) * (a * v_c2.w);
       return;
     }
@@ -415,7 +440,9 @@
     vec2 c = v_rect.xy + hs;
     // worked out as near the curve as its cover, its edge or its blur reaches
     float band = 1.0 + 2.0 / u_scale + (kind == 2 ? max(v_p.w, 0.5) : max(v_p.z, 0.0));
-    float d = mb_sd_box(p - c, hs, v_p.x, band);
+    // (its corner by p: v_rr, each its own)
+    float rad = mb_corner_of(p - c, v_rr);
+    float d = mb_sd_box(p - c, hs, rad, band);
     if (kind == 0 || kind == 5) d = notch_cut(d, p, v_rect, v_pad);
     if (kind == 4) {
       vec2 uv = v_c2.xy + clamp((p - v_rect.xy) / v_rect.zw, 0.0, 1.0) * v_c2.zw;
@@ -424,10 +451,11 @@
     }
     if (kind == 2) {
       // as Core Animation's: the shape blurred, sigma its radius (corner.sl mb_shadow)
-      float a = mb_shadow(p - c, hs, v_p.x, max(v_p.w, 0.25));
+      float a = mb_shadow(p - c, hs, rad, max(v_p.w, 0.25));
       // glass's: only outside its box (c2.y above it)
       if (v_c2.x > 0.5) {
-        float db = mb_sd_box(p - c + vec2(0.0, v_c2.y), hs, v_p.x, band);
+        vec2 q = p - c + vec2(0.0, v_c2.y);
+        float db = mb_sd_box(q, hs, mb_corner_of(q, v_rr), band);
         a *= clamp(0.5 + db * u_scale, 0.0, 1.0);
       }
       o = vec4(col.rgb, 1.0) * col.a * a;
@@ -442,12 +470,14 @@
       g3 = g3 * (1.0 - col.a) + col.rgb * col.a;
       if (v_c2.x + v_c2.y + v_c2.z > 0.0) {
         float edge = clamp(0.5 + (d + 0.5) * u_scale, 0.0, 1.0);
-        float lit = clamp(0.5 + notch_cut(sd_rr(p - 0.5, v_rect, v_p.x), p - 0.5, v_rect, v_pad) * u_scale, 0.0, 1.0);
-        float back = clamp(0.5 + notch_cut(sd_rr(p + 0.5, v_rect, v_p.x), p + 0.5, v_rect, v_pad) * u_scale, 0.0, 1.0);
+        float lit = clamp(0.5 + notch_cut(sd_rr(p - 0.5, v_rect, v_rr), p - 0.5, v_rect, v_pad) * u_scale, 0.0, 1.0);
+        float back = clamp(0.5 + notch_cut(sd_rr(p + 0.5, v_rect, v_rr), p + 0.5, v_rect, v_pad) * u_scale, 0.0, 1.0);
         g3 = mix(g3, vec3(1.0), v_c2.x * edge);
         g3 = mix(g3, vec3(1.0), v_c2.y * lit);
         g3 = mix(g3, vec3(1.0), v_c2.z * back);
       }
+      // dithered as it is written to 8 bits, so its slopes do not band (corner.sl mb_dither)
+      g3 += mb_dither(p * u_scale) / 255.0;
       o = vec4(g3, 1.0) * (a * v_c2.w);
       return;
     }
@@ -467,6 +497,11 @@
       cover = clip_cover(cp, v_clip, v_rc, v_rs, u_scale);
       if (cover <= 0.0) discard;
     } else if (cp.x < v_clip.x || cp.y < v_clip.y || cp.x > v_clip.z || cp.y > v_clip.w) discard;
+    // and by the clip outside it, where it has one (scene.mbt 40-51: a pane round an image's frame in its corner)
+    if (max(max(v_orc.x, v_orc.y), max(v_orc.z, v_orc.w)) > 0.0) {
+      cover *= clip_cover(cp, v_oclip, v_orc, v_ors, u_scale);
+      if (cover <= 0.0) discard;
+    }
     shade(p);
     o *= cover;
   }`;
@@ -479,7 +514,7 @@
   precision highp float;
   // The backdrop's passes: u_a.xy the source's texel, u_a.z 1 halving (dual Kawase's down), 2 a Gaussian along u_b.zw
   // of deviation u_a.w (texels); u_b.xy the last texel's centre of what the source holds
-  uniform sampler2D u_src;
+  uniform highp sampler2D u_src;
   uniform vec4 u_a;
   uniform vec4 u_b;
   out vec4 o;
@@ -541,9 +576,10 @@
     gl.bindVertexArray(vao);
     instBuf = gl.createBuffer();
     gl.bindBuffer(gl.ARRAY_BUFFER, instBuf);
-    for (let i = 0; i < 9; i++) {
+    for (let i = 0; i < INST / 4; i++) {
       const loc = i;
-      // instance layout: rect, p, color, c2, clip, pad, the clip's corners' radii, how smooth, how it is turned (vec4 each)
+      // instance layout: rect, p, color, c2, clip, pad, the clip's corners' radii, how smooth, how it is turned, a box's
+      // corners' radii, the outer clip's rect, corners' radii and how smooth (vec4 each)
       gl.enableVertexAttribArray(loc);
       gl.vertexAttribPointer(loc, 4, gl.FLOAT, false, INST * 4, i * 16);
       gl.vertexAttribDivisor(loc, 1);
@@ -563,15 +599,18 @@
   // When the instances reach a run of glass (slot 20 negative: the capture it shares), what is drawn so far under it
   // (its rects with room for the blur round them) is copied out of the canvas, halved down to where the blur is a
   // few texels wide (dual Kawase's downsample, at most 1/8), blurred there by a Gaussian of what deviation is left,
-  // and drawn through. Level j is 1/2^j of the canvas, tmp a Gaussian's first half.
+  // and drawn through. Level j is 1/2^j of the canvas, tmp a Gaussian's first half. Level 0, the copy, has 8 bits a
+  // channel as the canvas has; what the passes write keeps 10 (RGB10_A2, in as many bytes): at 8 each pass rounds the
+  // frost's slow slopes into flat steps, a texel of the last level 8 pixels wide on the screen (a blur under 4 pixels,
+  // too narrow to halve, is written back into the copy: it leaves no slope that wide).
   let lv = null, lvW = 0, lvH = 0, bdTex = null;
   const gmap = new Float32Array(4), guvc = new Float32Array(4), ggb = new Float32Array(4);
   const gshape = new Float32Array(32), grad = new Float32Array(8);
   let gn = 0;
-  function levelTex(w, h) {
+  function levelTex(format, w, h) {
     const t = gl.createTexture();
     gl.bindTexture(gl.TEXTURE_2D, t);
-    gl.texStorage2D(gl.TEXTURE_2D, 1, gl.RGBA8, Math.max(1, w), Math.max(1, h));
+    gl.texStorage2D(gl.TEXTURE_2D, 1, format, Math.max(1, w), Math.max(1, h));
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
@@ -586,8 +625,8 @@
     if (lv) for (const l of lv) { gl.deleteTexture(l.t); gl.deleteFramebuffer(l.fb); }
     lvW = Math.max(w, lvW); lvH = Math.max(h, lvH);
     lv = [];
-    for (let j = 0; j < 4; j++) lv.push(levelTex((lvW + (1 << j) - 1) >> j, (lvH + (1 << j) - 1) >> j));
-    lv.push(levelTex(lvW, lvH));
+    for (let j = 0; j < 4; j++) lv.push(levelTex(j === 0 ? gl.RGBA8 : gl.RGB10_A2, (lvW + (1 << j) - 1) >> j, (lvH + (1 << j) - 1) >> j));
+    lv.push(levelTex(gl.RGB10_A2, lvW, lvH));
     gl.bindFramebuffer(gl.FRAMEBUFFER, null);
   }
   function postPass(src, sw, sh, dst, w, h, mode, sg, dx, dy) {
@@ -696,14 +735,14 @@
   }
 
   // The pieces of the frame's shapes (src/ui/shape.mbt: the instances of kind 12 after every one drawn), for the
-  // shader to read (u_segs): a float texture of SEGS_ROW fours a row (227 instances' 9), as many rows as they take.
-  const SEGS_ROW = 2043;
+  // shader to read (u_segs): a float texture of SEGS_ROW fours a row (157 instances' 13), as many rows as they take.
+  const SEGS_ROW = 2041;
   let segsTex = null, segsRows = 0;
   function segsUpload(n) {
     let d = n;
     while (d > 0 && Math.round(f32[(d - 1) * INST + 5]) === 12) d--;
     if (d === n) return;
-    const rows = Math.ceil((n - d) * 9 / SEGS_ROW);
+    const rows = Math.ceil((n - d) * (INST / 4) / SEGS_ROW);
     gl.activeTexture(gl.TEXTURE3);
     if (!segsTex || rows > segsRows) {
       if (segsTex) gl.deleteTexture(segsTex);
@@ -757,22 +796,23 @@
           mainState();
         }
         if (shows) {
-          for (let i = 0; i < 9; i++) gl.vertexAttribPointer(i, 4, gl.FLOAT, false, INST * 4, start * INST * 4 + i * 16);
+          for (let i = 0; i < INST / 4; i++) gl.vertexAttribPointer(i, 4, gl.FLOAT, false, INST * 4, start * INST * 4 + i * 16);
           // liquid: the group as one shape, drawn once
           gl.drawArraysInstanced(gl.TRIANGLES, 0, 6, Math.round(f32[start * INST + 5]) === 6 ? 1 : end - start);
         }
         start = end;
         continue;
       }
-      // a stream's picture (STREAM_TEX + its id): nothing until a frame of its own shows
-      const im = tid > STREAM_TEX ? streams.get(tid - STREAM_TEX) : tid ? images.get(tid) : null;
-      if (tid > STREAM_TEX && !(im && im.tex)) {
+      // a stream's picture (STREAM_TEX + its id): nothing until a frame of its own shows; a hole's image is its
+      // view's (src/hostapi/host.mbt view_tex_base + its id), the element under the canvas here
+      const im = h ? null : tid > STREAM_TEX ? streams.get(tid - STREAM_TEX) : tid ? images.get(tid) : null;
+      if (!h && tid > STREAM_TEX && !(im && im.tex)) {
         start = end;
         continue;
       }
       gl.activeTexture(gl.TEXTURE1);
       gl.bindTexture(gl.TEXTURE_2D, im && im.tex ? im.tex : atlasTex);
-      for (let i = 0; i < 9; i++) gl.vertexAttribPointer(i, 4, gl.FLOAT, false, INST * 4, start * INST * 4 + i * 16);
+      for (let i = 0; i < INST / 4; i++) gl.vertexAttribPointer(i, 4, gl.FLOAT, false, INST * 4, start * INST * 4 + i * 16);
       if (h) gl.disable(gl.BLEND);
       gl.drawArraysInstanced(gl.TRIANGLES, 0, 6, end - start);
       if (h) gl.enable(gl.BLEND);
@@ -918,7 +958,7 @@
     if (!v || v.kind !== 1) return;
     if (op === 1) v.el.play().catch(() => {});
     else if (op === 2) v.el.pause();
-    else if (op === 3) v.el.currentTime = value / 1000;
+    else if (op === 3 || op === 11) v.el.currentTime = value / 1000;
     else if (op === 4) v.el.playbackRate = value;
     // a frame grabbed (op 21, or the one shown: 22): this host grabs none; failed, said so (viewText's 2: "-1", once)
     else if (op === 21 || op === 22) {
@@ -958,16 +998,21 @@
     out[1] = r.length;
     return r.id;
   };
-  H.viewReadAnswer = (id, req, data, total) => {
+  // a read's bytes as they come (more: more of it comes), the next read asked after its last answer
+  H.viewReadAnswer = (id, req, data, total, more) => {
     const v = views.get(id);
-    if (!v || !v.waiting.delete(req)) return;
+    const r = v && v.waiting.get(req);
+    if (!r) return;
+    if (!more || total === -2) v.waiting.delete(req);
     if (total === -2) { v.state = -1; ready(id, v, -1); H.requestFrame(); return; }
     const part = new Uint8Array(data);
     v.parts.push(part);
     v.have += part.length;
+    r.got = (r.got || 0) + part.length;
     v.info[5] = v.have;
     if (total >= 0) v.total = total;
-    if (part.length > 0 && (v.total < 0 || v.have < v.total)) return v.ask(v.have);
+    if (more) return;
+    if (r.got > 0 && (v.total < 0 || v.have < v.total)) return v.ask(v.have);
     v.url = URL.createObjectURL(new Blob(v.parts, { type: v.type }));
     v.el.src = v.url;
   };
@@ -1223,7 +1268,9 @@
   const advCache = new Map();
   const keys = new Map();
   const entries = [];
-  let packX = 0, packY = 0, packH = 0, generation = 0;
+  let generation = 0;
+  // the glyph drawn last (H.glyph), its picture until it is put in the atlas (H.glyphPut)
+  let held = null;
   const rc = document.createElement('canvas');
   const rctx = rc.getContext('2d', { willReadFrequently: true });
   // the faces given (faceAdd, style.mbt), loaded: each a family of its own ahead of the place's own
@@ -1247,8 +1294,7 @@
   // what was shaped and drawn before a face changed, forgotten (MoonBit drops its glyphs as the generation moves on)
   const facesChanged = () => {
     advCache.clear();
-    for (const e of entries) e.done = false;
-    packX = packY = packH = 0;
+    held = null;
     generation++;
   };
   // a face's file (a URL), for a weight (0: variable, all of them): drawn in once the page has loaded it
@@ -1299,7 +1345,7 @@
     let key = keys.get(kk);
     if (key === undefined) {
       key = entries.length;
-      entries.push({ c, size, weight, style, done: false });
+      entries.push({ c, size, weight, style });
       keys.set(kk, key);
     }
     return key;
@@ -1315,6 +1361,11 @@
     }
     return w;
   };
+
+  // digits all one width (style & 32, style.mbt style_tabular): a canvas has no font-variant-numeric, so each digit
+  // advances as the widest of the ten and is drawn centred in it (rasterize)
+  const isDigit = (c) => c.length === 1 && c >= '0' && c <= '9';
+  const tabWidth = (f) => Math.max(...'0123456789'.split('').map((d) => width(f, d)));
 
   H.shape = (text, size, weight, style, out) => {
     const f = font(size, weight, style);
@@ -1354,6 +1405,7 @@
         adv = Math.max(0, end - xs[i]);
       }
       if (blank(c)) word = i + 1;
+      if (style & 32 && isDigit(c)) adv = tabWidth(f);
       let key = -1;
       if (c === '\n') adv = 0;
       else if (c !== ' ' && c !== '\t') key = textKey(c, size, weight, style);
@@ -1367,9 +1419,13 @@
   };
 
   H.atlasGeneration = () => generation;
+  // (one atlas: colour glyphs in it with the others)
+  H.atlasSize = (colour) => colour ? 0 : ATLAS;
 
-  function rasterize(e) {
-    e.done = true;
+  // `e` drawn in white, a pixel round its bounds: its box (in `e`) and its picture, held for H.glyphPut (where it
+  // goes in the atlas is MoonBit's: hostapi's atlas.mbt)
+  function rasterize(e, key) {
+    held = null;
     const sc = dpr;
     mctx.font = font(e.size, e.weight, e.style);
     const m = mctx.measureText(e.c);
@@ -1383,13 +1439,6 @@
     const pw = l + r + 2 * pad, ph = a + d + 2 * pad;
     e.w = 0;
     if (pw <= 2 || ph <= 2 || pw > 512 || ph > 512) return;
-    if (packX + pw + 1 > ATLAS) { packX = 0; packY += packH + 1; packH = 0; }
-    if (packY + ph + 1 > ATLAS) {
-      for (const x of entries) x.done = false;
-      e.done = true;
-      packX = packY = packH = 0;
-      generation++;
-    }
     rc.width = pw;
     rc.height = ph;
     rctx.clearRect(0, 0, pw, ph);
@@ -1404,26 +1453,33 @@
     for (let i = 0; i < img.data.length && !color; i += 4) {
       if (img.data[i + 3] > 64 && Math.min(img.data[i], img.data[i + 1], img.data[i + 2]) < 224) color = 1;
     }
-    gl.bindTexture(gl.TEXTURE_2D, atlasTex);
-    gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, true);
-    gl.texSubImage2D(gl.TEXTURE_2D, 0, packX, packY, pw, ph, gl.RGBA, gl.UNSIGNED_BYTE, img);
-    e.u = packX;
-    e.v = packY;
+    held = { key, img, pw, ph };
     e.w = pw / sc;
     e.h = ph / sc;
     e.ox = -(l + pad) / sc;
+    if (e.style & 32 && isDigit(e.c)) {
+      const f = font(e.size, e.weight, e.style);
+      e.ox += (tabWidth(f) - width(f, e.c)) / 2;
+    }
     e.oy = -(a + pad) / sc;
     e.color = color;
-    packX += pw + 1;
-    packH = Math.max(packH, ph);
   }
 
   H.glyph = (key, out) => {
     const e = entries[key];
     if (!e) { for (let i = 0; i < 8; i++) out[i] = 0; return; }
-    if (!e.done) rasterize(e);
-    out[0] = e.u || 0; out[1] = e.v || 0; out[2] = e.w || 0; out[3] = e.h || 0;
+    rasterize(e, key);
+    out[0] = 0; out[1] = 0; out[2] = e.w || 0; out[3] = e.h || 0;
     out[4] = e.ox || 0; out[5] = e.oy || 0; out[6] = e.color || 0;
+  };
+
+  // the glyph drawn last put in the atlas, its top left at x, y
+  H.glyphPut = (key, x, y) => {
+    if (!held || held.key !== key) return;
+    gl.bindTexture(gl.TEXTURE_2D, atlasTex);
+    gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, true);
+    gl.texSubImage2D(gl.TEXTURE_2D, 0, x, y, held.pw, held.ph, gl.RGBA, gl.UNSIGNED_BYTE, held.img);
+    held = null;
   };
 
   // ---- the platform's own text drawing (textref_js.mbt, src/textdiff) ----
@@ -1524,7 +1580,9 @@
       const k = e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? cssH : 1;
       const [x, y] = pos(e);
       // lines (a mouse wheel's notches, as Firefox says them): eased in by the app (phase 4)
-      cb.wheel(x, y, e.deltaX * k, e.deltaY * k, e.deltaMode === 1 ? 4 : 0);
+      // what is held with it, above the phase (ui's wheel_mod_*: a trackpad's pinch comes as ctrl and the wheel)
+      const mods = (e.shiftKey ? 1 : 0) | (e.ctrlKey ? 2 : 0) | (e.altKey ? 4 : 0) | (e.metaKey ? 8 : 0);
+      cb.wheel(x, y, e.deltaX * k, e.deltaY * k, (e.deltaMode === 1 ? 4 : 0) | (mods << 4));
     }, { passive: false });
     const keymap = { Backspace: 1, Delete: 2, ArrowLeft: 3, ArrowRight: 4, ArrowUp: 5, ArrowDown: 6, Enter: 7, Home: 8, End: 9, PageUp: 15, PageDown: 16, Escape: 17, Tab: 18 };
     // the browser's own shortcuts left to it (reload, close, a new tab or window, the address bar, quit)
@@ -1731,6 +1789,10 @@
   H.clipPicture = (id) => (clips.get(id) || {}).picture || 0;
   H.clipText = (id) => (clips.get(id) || {}).text || '';
   H.clipPng = (id) => (clips.get(id) || {}).png || new Uint8Array(0);
+  // (a page reads no files off the clipboard: the browser's paste event has them, not navigator.clipboard)
+  H.clipFiles = () => 0;
+  H.clipFileName = () => '';
+  H.clipFile = () => new Uint8Array(0);
   H.clipEnd = (id) => { clips.delete(id); };
   H.clipSet = (text, png, label) => {
     const cl = navigator.clipboard;

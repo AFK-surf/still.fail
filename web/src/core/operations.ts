@@ -12,7 +12,7 @@ export interface OperationParams {
   "session.compact": { key: string };
   "session.clear": { key: string };
   "session.delete": { key: string };
-  "session.settings": { key: string; profile?: string | null | undefined; model?: string | null | undefined; effort?: string | null | undefined; fast?: boolean | null | undefined };
+  "session.settings": { key: string; profile?: string | null | undefined; model?: string | null | undefined; effort?: string | null | undefined; fast?: boolean | null | undefined; repick?: boolean | null | undefined };
   "chat.archive": { archived?: boolean | null | undefined; session: string; thread?: number | null | undefined };
   "chat.keep": { kept?: boolean | null | undefined; thread: number };
   "chat.rename": { session?: string | null | undefined; title?: string | null | undefined; thread?: number | null | undefined };
@@ -43,7 +43,7 @@ export interface OperationParams {
   "connect.delete": { id: string };
   "connect.reconnect": { id: string };
   "connect.bindSession": { connect: string; session?: string | null | undefined; title?: string | null | undefined };
-  "connect.putSlackApp": { connect: string; input?: unknown };
+  "connect.putSlackApp": { connect: string; input?: unknown; from?: unknown };
   "feishu.register": { domain?: string | null | undefined; name?: string | null | undefined };
   "feishu.cancelRegistration": { id: string };
   "feishu.verify": { appId: string; appSecret: string; domain?: string | null | undefined };
@@ -75,12 +75,15 @@ export interface OperationParams {
   "login.new": { runtime?: string | null | undefined; access?: string | null | undefined };
   "login.code": { id: string; code?: string | null | undefined };
   "login.drop": { id: string };
+  "profile.loginBrowser": { id: string };
+  "login.browser": { id: string };
   "job.get": { id: string };
   "job.log": { id: string; lines: number };
   "job.stop": { id: string };
   "screen.close": { screen: string };
   "job.clearEnded": { session: string };
   "memory.get": {  };
+  "process.end": { pid: number; session: string };
   "footprint.scan": {  };
   "footprint.rebuild": { keys?: string[] | null | undefined };
   "footprint.delete": { keys?: string[] | null | undefined };
@@ -100,6 +103,7 @@ export interface OperationParams {
   "software.auto": { on?: boolean | null | undefined };
   "machineLogin.cancel": { id: string };
   "machineLogin.answer": { id: string; text: string };
+  "machineLogin.browser": { id: string };
   "workspace.create": { name?: string | null | undefined; invite_code?: string | null | undefined };
   "workspace.rename": { workspace: string; name?: string | null | undefined; emoji?: string | null | undefined; icon?: string | null | undefined };
   "workspace.setRelays": { workspace: string; relays?: string[] | null | undefined };
@@ -213,12 +217,15 @@ export function bindStationOperations(call: Call) {
     loginNew: <T = unknown>(params: OperationParams["login.new"] = {}) => call("login.new", params) as Promise<T>,
     loginCode: <T = unknown>(params: OperationParams["login.code"]) => call("login.code", params) as Promise<T>,
     loginDrop: <T = unknown>(params: OperationParams["login.drop"]) => call("login.drop", params) as Promise<T>,
+    profileLoginBrowser: <T = unknown>(params: OperationParams["profile.loginBrowser"]) => call("profile.loginBrowser", params) as Promise<T>,
+    loginBrowser: <T = unknown>(params: OperationParams["login.browser"]) => call("login.browser", params) as Promise<T>,
     jobGet: <T = unknown>(params: OperationParams["job.get"]) => call("job.get", params) as Promise<T>,
     jobLog: <T = unknown>(params: OperationParams["job.log"]) => call("job.log", params) as Promise<T>,
     jobStop: <T = unknown>(params: OperationParams["job.stop"]) => call("job.stop", params) as Promise<T>,
     screenClose: <T = unknown>(params: OperationParams["screen.close"]) => call("screen.close", params) as Promise<T>,
     jobClearEnded: <T = unknown>(params: OperationParams["job.clearEnded"]) => call("job.clearEnded", params) as Promise<T>,
     memoryGet: <T = unknown>(params: OperationParams["memory.get"] = {}) => call("memory.get", params) as Promise<T>,
+    processEnd: <T = unknown>(params: OperationParams["process.end"]) => call("process.end", params) as Promise<T>,
     footprintScan: <T = unknown>(params: OperationParams["footprint.scan"] = {}) => call("footprint.scan", params) as Promise<T>,
     footprintRebuild: <T = unknown>(params: OperationParams["footprint.rebuild"] = {}) => call("footprint.rebuild", params) as Promise<T>,
     footprintDelete: <T = unknown>(params: OperationParams["footprint.delete"] = {}) => call("footprint.delete", params) as Promise<T>,
@@ -238,6 +245,7 @@ export function bindStationOperations(call: Call) {
     softwareAuto: <T = unknown>(params: OperationParams["software.auto"] = {}) => call("software.auto", params) as Promise<T>,
     machineLoginCancel: <T = unknown>(params: OperationParams["machineLogin.cancel"]) => call("machineLogin.cancel", params) as Promise<T>,
     machineLoginAnswer: <T = unknown>(params: OperationParams["machineLogin.answer"]) => call("machineLogin.answer", params) as Promise<T>,
+    machineLoginBrowser: <T = unknown>(params: OperationParams["machineLogin.browser"]) => call("machineLogin.browser", params) as Promise<T>,
   };
 }
 

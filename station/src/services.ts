@@ -6,7 +6,7 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 import { Admin } from "./api/admin.ts";
 import { Shares } from "./mesh/adb.ts";
-import { Events as EventStreams } from "./api/events.ts";
+import { Events as EventStreams, eventsHandoverFile } from "./api/events.ts";
 import { Host } from "./api/host.ts";
 import { jobSeen, sessionSeen, threadSeen } from "./api/seen.ts";
 import { outputAt, tail } from "./read/jobs.ts";
@@ -22,6 +22,7 @@ import { log } from "./ops/log.ts";
 import { platform } from "./platform/index.ts";
 import { ScreenHub } from "./screens/hub.ts";
 import { Desktop } from "./screens/desktop.ts";
+import { Simulators } from "./screens/simulator.ts";
 import { WindowsDesktop, screenBinary } from "./screens/win-desktop.ts";
 import { type Drive, dropFolder, stationDrive } from "./drive/drive.ts";
 import { ModuleSet } from "./modules/modules.ts";
@@ -33,7 +34,7 @@ import { HelperGrants } from "./helper/grants.ts";
 import { HelperFiles } from "./helper/files.ts";
 import { ConfigFile } from "./ops/config.ts";
 import { Own as OwnPaths } from "./ops/own.ts";
-import { previousGone } from "./ops/previous.ts";
+import { previousProcess } from "./ops/previous.ts";
 import { PeerBus } from "./mesh/bus.ts";
 import type { Outside } from "./mesh/peer.ts";
 import { Net } from "./jobs/load.ts";
@@ -98,6 +99,19 @@ export class Readers extends Context.Service<Readers, ReaderPool>()("stillfail/R
     }),
   );
 }
+
+/// The store's log written into the database by the readers as the store changes (read/pool.ts `checkpointSoon`), not
+/// by the main thread (store.ts).
+export const CheckpointsLive = Layer.effectDiscard(
+  Effect.gen(function* () {
+    const store = yield* Store;
+    const readers = yield* Readers;
+    yield* Effect.acquireRelease(
+      Effect.sync(() => store.subscribe(() => readers.checkpointSoon())),
+      (off) => Effect.sync(off),
+    );
+  }),
+);
 
 /// The station's store (stillfail.db, archive/): what is written, on this thread; the readers read the same file.
 export class Store extends Context.Service<Store, StationStore>()("stillfail/Store") {
@@ -167,12 +181,23 @@ export class ScreenRegistry extends Context.Service<ScreenRegistry, ScreenHub>()
         }),
         (stop) => Effect.sync(stop),
       );
+      // The iOS Simulators booted on this Mac, each a screen while it is (still.fail Helper's, as the desktop is).
+      yield* Effect.acquireRelease(
+        Effect.sync(() => {
+          const simulators = new Simulators({ screens: hub, helper });
+          void simulators.start();
+          const unrefresh = hub.refresher(() => simulators.refresh());
+          return () => (unrefresh(), simulators.close());
+        }),
+        (stop) => Effect.sync(stop),
+      );
       return hub;
     }),
   );
 }
 
-/// The event streams (GET /events): the store's changes, pushed.
+/// The event streams (GET /events): the store's changes, pushed. What they told goes on in the next process (a
+/// handover, or the next start), taken up once this one is gone.
 export class Events extends Context.Service<Events, EventStreams>()("stillfail/Events") {
   static readonly layer = Layer.effect(
     Events,
@@ -181,6 +206,8 @@ export class Events extends Context.Service<Events, EventStreams>()("stillfail/E
       const readers = yield* Readers;
       const admin = yield* AdminHost;
       const screens = yield* ScreenRegistry;
+      const { data } = yield* Paths;
+      const previous = yield* Previous;
       const events = new EventStreams({
         readers,
         subscribe: (listener) => store.subscribe(listener),
@@ -190,7 +217,11 @@ export class Events extends Context.Service<Events, EventStreams>()("stillfail/E
         outputAt,
         sessionExists: (key) => store.getSession(key) !== null,
         seen: (viewer, of) => ("session" in of ? sessionSeen(store, viewer, of.session) : "thread" in of ? threadSeen(store, viewer, of.thread) : jobSeen(store, viewer, of.job)),
+        handover: { file: eventsHandoverFile(data), previous },
       });
+      // Handed over as the station stops, after the parts made on it (the agents' side has handed over its sessions,
+      // the mesh let go of every stream): the last it tells is told by then.
+      yield* Effect.addFinalizer(() => Effect.promise(() => events.handOver()));
       // The screens as they change, and who is on them (`screens`).
       yield* Effect.acquireRelease(
         Effect.sync(() => screens.onChange(() => events.screens((lang) => screens.listed(lang)))),
@@ -275,13 +306,14 @@ export class Own extends Context.Service<Own, OwnPaths>()("stillfail/Own") {
   );
 }
 
-/// The station process before this one, gone (ops/previous.ts): what only one process may have waits on it. Looked for
-/// as this process starts, before it writes its own run/hub.json.
-export class Previous extends Context.Service<Previous, { readonly gone: Promise<void> }>()("stillfail/Previous") {
+/// The station process before this one (ops/previous.ts), and its end: what only one process may have waits on it, and
+/// what its event streams told is taken up from it alone (api/events.ts). Looked for as this process starts, before it
+/// writes its own run/hub.json.
+export class Previous extends Context.Service<Previous, { readonly pid: number | null; readonly gone: Promise<void> }>()("stillfail/Previous") {
   static readonly layer = Layer.effect(
     Previous,
     Effect.gen(function* () {
-      return { gone: previousGone(join((yield* Paths).data, "run")) };
+      return previousProcess(join((yield* Paths).data, "run"));
     }),
   );
 }

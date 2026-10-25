@@ -56,6 +56,7 @@ const UNDER = 12;
 
 export class Virtual {
   private items: Item[] = [];
+  private revision = 0;
   private at = new Map<string, number>();
   /** `tops[i]`: the top of item i from the first item's top; `tops[n]`: the last item's bottom. */
   private tops: number[] = [0];
@@ -81,7 +82,9 @@ export class Virtual {
   private short = false;
   /** The page takes the pane to where it follows step by step (`place`), not at once. */
   private gliding = false;
+  /** Pixels per millisecond, independent of scroll event frequency. */
   private velocity = 0;
+  private scrolledAt: number | null = null;
   /** How much taller the items measured are than they were estimated, in all; and the width it is settled for. */
   private scale = 1;
   private settled = -1;
@@ -115,9 +118,17 @@ export class Virtual {
 
   /** The list's items now. `trimmed`: some left an end as the list's window moved along (their room is not held). */
   setItems(items: Item[], trimmed = false): void {
+    // A scroll redraw hands in the same descriptions again. Keep the index and prefix heights until data changes.
+    const same = items.length === this.items.length && items.every((item, i) => {
+      const old = this.items[i]!;
+      return item.key === old.key && item.estimate === old.estimate && item.exact === old.exact && item.place === old.place;
+    });
     this.items = items;
-    this.at = new Map(items.map((item, i) => [item.key, i]));
-    this.retop();
+    if (!same) {
+      this.revision++;
+      this.at = new Map(items.map((item, i) => [item.key, i]));
+      this.retop();
+    }
     if (trimmed || !items.length) this.release();
     if (!items.length && this.anchor.kind !== "goto") this.anchor = { kind: "follow", to: null };
     this.settle();
@@ -174,14 +185,16 @@ export class Virtual {
     this.settle();
   }
   /** The pane was scrolled to `top`: by the reader, unless it is where this put it. */
-  scrolled(at: number): void {
+  scrolled(at: number, now = performance.now()): void {
     const top = at + this.drift;
     // Scrolled to an end of what the pane has while more is held past it: the pane is put where it should be now
     // (the scroll has nowhere to go on to).
     if ((this.drift > 0 && at <= 1) || (this.drift < 0 && at >= this.bottom() - this.drift - 1)) this.drift = 0;
     if (Math.abs(top - this.top) < 1) return;
     this.moving = true;
-    this.velocity = top - this.top;
+    const elapsed = this.scrolledAt === null ? 1000 / 60 : Math.max(1, now - this.scrolledAt);
+    this.velocity = (top - this.top) / elapsed;
+    this.scrolledAt = now;
     // Scrolled up, what was held is let go: it is not held again.
     if (top < this.top) this.release();
     this.top = top;
@@ -196,6 +209,7 @@ export class Virtual {
   /** The scroll came to rest: nothing more is made ahead of it, and the pane is put where it should be. */
   rested(): void {
     this.velocity = 0;
+    this.scrolledAt = null;
     this.moving = false;
     this.drift = 0;
   }
@@ -270,13 +284,18 @@ export class Virtual {
   /** The items to make, the room around them, and where the pane is scrolled. */
   layout(): Layout {
     const n = this.items.length;
-    const ahead = Math.min(this.boost, Math.abs(this.velocity) * 4);
+    const ahead = Math.min(this.boost, Math.abs(this.velocity) * 80);
     const past = this.wide ? this.overscan : 0;
-    const from = this.top - past - (this.velocity < 0 ? ahead : 0);
+    // Move the rendered window in half-overscan steps, not one row at a time. Round outward so it always covers
+    // the pane; exact opening positions and lists without overscan keep their old bounds.
+    const step = this.wide && this.overscan > 0 ? this.overscan / 2 : 0;
+    const start = this.top - past - (this.velocity < 0 ? ahead : 0);
+    const from = step ? Math.floor(start / step) * step : start;
     // Following, everything from the pane down to the list's end is made, however far below the pane it reaches for
     // now (a long message just come, the pane still on its way down): what stands after it (the agent's activity,
     // the next message) is there to be seen coming, and for what moves between them (a reply out of its avatar).
-    const to = this.anchor.kind === "follow" ? Number.POSITIVE_INFINITY : this.top + this.height + past + (this.velocity > 0 ? ahead : 0);
+    const endAt = this.top + this.height + past + (this.velocity > 0 ? ahead : 0);
+    const to = this.anchor.kind === "follow" ? Number.POSITIVE_INFINITY : step ? Math.ceil(endAt / step) * step : endAt;
     const made = new Set<number>();
     for (let i = this.firstReaching(from); i < n && this.topOf(i) < to; i++) made.add(i);
     for (const key of this.pins) { const i = this.at.get(key); if (i !== undefined) made.add(i); }
@@ -300,7 +319,15 @@ export class Virtual {
     const total = this.total();
     return { rows, after: total - this.lead - this.trail - end, scrollTop: this.top - this.drift, total: total - this.drift, drift: this.drift };
   }
+  /** Changes when row descriptions change; hidden history records leave it alone. */
+  get itemsVersion(): number { return this.revision; }
   get mode(): Anchor { return this.anchor; }
+  /** Start fetching in time to cover a recent request, plus time to commit its rows. Never more than three
+   * panes ahead, and only extend the edge the reader approaches (the other edge must not shuttle the window back). */
+  loadAhead(edge: "top" | "bottom", latency: number): number {
+    const speed = edge === "top" ? -this.velocity : this.velocity;
+    return Math.max(this.height, Math.min(this.height * 3, Math.max(0, speed) * (latency + 100)));
+  }
   /** How far the pane is from the end of what it scrolls, and from its start. */
   get toEnd(): number { return Math.max(0, this.bottom() - this.top); }
   get toStart(): number { return this.top; }
@@ -431,6 +458,7 @@ export class Virtual {
   private still(): void {
     this.moving = false;
     this.velocity = 0;
+    this.scrolledAt = null;
     this.drift = 0;
   }
   /** The pane put where its anchor says, after anything changed. */

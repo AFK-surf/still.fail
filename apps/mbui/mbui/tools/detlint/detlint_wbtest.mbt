@@ -77,6 +77,7 @@ test "style" {
         #|  c.text("c", style=title, max_lines=2, tracking=0.5) |> ignore
         #|}
         #|let clamp : @ui.TextStyle = @ui.text_style(max_lines=2, tracking=Tight)
+        #|let pill : @ui.Style = @ui.css("w=Grow(1.0) px=S1_25 bg=A(Fg,O35) radius=Exact(9.0)")
         #|
       ),
     ),
@@ -86,6 +87,7 @@ test "style" {
         #|
         #|pub let title : @ui.TextStyle = @ui.text_style(size=Exact(15.0, 21.0))
         #|pub let column_max : @ui.Len = Fixed(420.0)
+        #|pub let wide : @ui.Style = @ui.css("w=Fixed(420.0) radius=Exact(2.0)")
         #|
       ),
     ),
@@ -102,15 +104,17 @@ test "style" {
   ]
   // Exact(22.0) once (its number not again), Fixed's 14.0, pad 12.0, size 13.0, the colour: not the token file's,
   // nor the test's, nor aspect (not a look) nor id; tracking's 0.5; not max_lines (a count, not a look's value) in
-  // either
-  assert_eq(lines(lint_of(files, rule="style-literal", cfg~)), [2, 2, 4, 5, 5, 9])
+  // either; in a style's text Grow's 1.0 and the Exact (not S1_25's digits nor O35's), not the token file's
+  assert_eq(lines(lint_of(files, rule="style-literal", cfg~)), [2, 2, 4, 5, 5, 9, 12, 12])
   // the calls said loosely (pad=, size=, max_lines= and tracking=); a box with a style and behaviour alone (id,
   // aspect) is not
   assert_eq(lines(lint_of(files, rule="box-loose", cfg~)), [4, 5, 9])
   // every Exact made, in the token file too
   let exact = lint_of(files, rule="style-exact", cfg~).map(fn(f) { "\{f.file}:\{f.line}" })
   exact.sort_by(@rjson.str_cmp)
-  assert_eq(exact, ["src/app/tokens.mbt:2", "src/app/view.mbt:2"])
+  assert_eq(exact, [
+    "src/app/tokens.mbt:2", "src/app/tokens.mbt:4", "src/app/view.mbt:12", "src/app/view.mbt:2",
+  ])
   // the enum's declaration and a match's patterns are not values made
   let decl = [
     (
@@ -132,6 +136,69 @@ test "style" {
     ),
   ]
   found(decl, "style-exact", 0) |> ignore
+}
+
+///|
+test "style-text" {
+  let files = [
+    (
+      "src/app/look.mbt",
+      (
+        #|
+        #|let card : @ui.Style = @ui.style(row=true, h=S7, px=S2, radius=Lg, bg=A(Fg, O35), clip=false,
+        #|  hovered=@ui.patch(bg=Hover), w=Grow(1.0), shadow=Cast(4.0, -1.0, 0x00000033L))
+        #|let card_on : @ui.Style = card.then(@ui.style(bg=@ui.Accent, border_color=Color::Line))
+        #|let pane : @ui.Style = @ui.css("w=Full px=S2")
+        #|let grown : @ui.Style = @ui.style(w=@sf.grow, px=S2)
+        #|let sided : @ui.Style = @ui.style(w=Fixed(side_w))
+        #|let capped : @ui.Style = @ui.style(h=Fixed(ROW_H))
+        #|let lifted : @ui.Style = card.then(@ui.style(shadow=@sf.floating.cast()))
+        #|let pressing : @ui.Style = @ui.style(pressed=dim_patch)
+        #|let twice : @ui.Style = @ui.style(w=Fixed(2.0 * 7.0))
+        #|fn view(c : @ui.Ctx, wide : Bool) -> Unit {
+        #|  c.box(style=@ui.style(px=S2), fn() {  }) |> ignore
+        #|}
+        #|test "t" {
+        #|  let s = @ui.style(px=S2)
+        #|}
+        #|
+      ),
+    ),
+    (
+      "src/ui/kit_styles.mbt",
+      (
+        #|
+        #|let no_style : Style = style()
+        #|let row_style : Style = style(row=true, gap=S1)
+        #|let words : TextStyle = text_style(size=Lg)
+        #|let other = style(row=true)
+        #|
+      ),
+    ),
+    (
+      "src/app/look_test.mbt",
+      (
+        #|
+        #|let fixture : @ui.Style = @ui.style(px=S2)
+        #|
+      ),
+    ),
+  ]
+  // a named style all tokens and numbers, a .then(…)'s; in mbui's own package the bare style( where its let says
+  // Style. Not one naming a variable (@sf.grow, side_w, a constant ROW_H, a patch by name), a call, an operator, one
+  // in a function or a test, nor already text
+  let got = found(files, "style-text", 4)
+  assert_eq(got.map(fn(f) { "\{f.file}:\{f.line}" }), [
+    "src/app/look.mbt:2", "src/app/look.mbt:4", "src/ui/kit_styles.mbt:2", "src/ui/kit_styles.mbt:3",
+  ])
+  // what to write instead, printed
+  assert_has(
+    got[0].what,
+    "write: @ui.css(\"row h=S7 px=S2 radius=Lg bg=A(Fg,O35) clip=false hovered{bg=Hover} w=Grow(1.0) shadow=Cast(4.0,-1.0,0x00000033)\")",
+  )
+  assert_has(got[1].what, "write: @ui.css(\"bg=Accent border_color=Line\")")
+  assert_has(got[2].what, "write: css(\"\")")
+  assert_has(got[3].what, "write: css(\"row gap=S1\")")
 }
 
 ///|
@@ -547,6 +614,39 @@ test "host-import" {
 }
 
 ///|
+test "library-import" {
+  let cfg = Config::new(
+    @rjson.parse(
+      #|{"mbt": {"roots": ["src"]}, "library": {"roots": ["src/sf"], "imports": ["mbui/", "moonbitlang/", "app/sf", "app/kept"]}}
+      ,
+    ) catch {
+      _ => panic()
+    },
+  )
+  // the library importing the app's pages, its core
+  assert_eq(
+    lint_of(
+      [("src/sf/moon.pkg", "import {\n  \"mbui/ui\",\n  \"app/pages\",\n  \"app/core\",\n}\n")],
+      rule="library-import",
+      cfg~,
+    ).length(),
+    2,
+  )
+  // the framework, the core library, what it is said to have; the app's pages may import anything
+  assert_eq(
+    lint_of(
+      [
+        ("src/sf/moon.pkg", "import {\n  \"mbui/ui\",\n  \"moonbitlang/core/json\",\n}\n\nimport { \"app/kept\" } for \"test\"\n"),
+        ("src/pages/moon.pkg", "import {\n  \"app/core\",\n  \"app/sf\",\n}\n"),
+      ],
+      rule="library-import",
+      cfg~,
+    ).length(),
+    0,
+  )
+}
+
+///|
 test "page-settle" {
   found(
     [
@@ -942,6 +1042,81 @@ test "globals" {
 }
 
 ///|
+test "reset-wire" {
+  // a hook set by reset to what does the work (reset runs only as a Tester starts): one; put back as its let has it
+  // (false, Ref(false), Ref::new(false)), none
+  let got = found(
+    [
+      (
+        "src/app/state.mbt",
+        (
+          #|
+          #|///|
+          #|let open : Ref[Bool] = { val: false }
+          #|
+          #|///|
+          #|let asked : Ref[(String) -> Unit] = Ref(fn(_) {  })
+          #|
+          #|///|
+          #|let shown : Ref[Int] = Ref::new(0)
+          #|
+          #|///|
+          #|fn reset() -> Unit {
+          #|  open.val = false
+          #|  shown.val = 0
+          #|  asked.val = pick_open
+          #|}
+          #|
+          #|///|
+          #|fn pick_open(key : String) -> Unit {
+          #|  ignore(key)
+          #|}
+          #|
+        ),
+      ),
+    ],
+    "reset-wire",
+    1,
+  )
+  assert_true(got[0].what.contains("asked"))
+  found(
+    [
+      (
+        "src/app/state.mbt",
+        (
+          #|
+          #|///|
+          #|let shown : Ref[Int] = Ref::new(0)
+          #|
+          #|///|
+          #|let by_hand : Ref[Bool] = Ref(false)
+          #|
+          #|///|
+          #|fn reset() -> Unit {
+          #|  shown.val = 0
+          #|  // (state it marks, not a wire; one a call makes)
+          #|  by_hand.val = true
+          #|  made.val = make(1)
+          #|}
+          #|
+          #|///|
+          #|let made : Ref[Int] = Ref(make(0))
+          #|
+          #|///|
+          #|fn make(n : Int) -> Int {
+          #|  n
+          #|}
+          #|
+        ),
+      ),
+    ],
+    "reset-wire",
+    0,
+  )
+  |> ignore
+}
+
+///|
 test "build-effect" {
   let files = [
     (
@@ -1035,6 +1210,32 @@ test "build-effect: inputs it knows by shape" {
   // a choice other than what is kept, a code typed in, a button's callback, a press let go: the input's; a choice
   // as it stands each frame, a closure built as it is given, a seek on what is not the finger's: not
   assert_eq(lines(found(files, "build-effect", 3)), [17, 24, 34])
+}
+
+///|
+test "build-effect: what a presenter keeps runs later, and so does what is handed on to one" {
+  let files = [
+    (
+      "src/app/view.mbt",
+      (
+        #|
+        #|fn ask_first(title : String, run : () -> Unit) -> Unit {
+        #|  @sf.confirm(title, "", "go", run)
+        #|}
+        #|fn view(c : @ui.Ctx, src : Source, n : Int) -> Unit {
+        #|  if n > 0 {
+        #|    @sf.confirm("go?", "", "go", fn() { (src.call)("go", Json::null(), fn(_) {  }) })
+        #|    ask_first("go?", fn() { (src.call)("go", Json::null(), fn(_) {  }) })
+        #|    @sf.toast(fn() { (src.call)("built", Json::null(), fn(_) {  }) })
+        #|  }
+        #|}
+        #|
+      ),
+    ),
+  ]
+  let cfg = Config::new(@rjson.parse("{\"build_effect\": {\"later\": [\"@sf.confirm\"]}}"))
+  // a presenter's action, and one handed on to it whole: told once it is said; given to what is not one: as it builds
+  assert_eq(lines(found(files, "build-effect", 1, cfg~)), [9])
 }
 
 ///|
@@ -1416,4 +1617,129 @@ test "host-delay" {
     0,
   )
   |> ignore
+}
+
+///|
+test "page-hand" {
+  let cfg = Config::new(@rjson.parse("{\"pages\": {\"roots\": [\"src/pages\"]}}"))
+  // a page reading the hand; the library's and a page's test's not counted
+  found(
+    [
+      ("src/pages/row.mbt", "fn v() -> Unit {\n  let f = @ui.pointing() is Finger\n}\n"),
+      ("src/lib/hand.mbt", "pub fn by_finger() -> Bool {\n  @ui.pointing() is Finger\n}\n"),
+      ("src/pages/row_wbtest.mbt", "test \"t\" {\n  assert_true(@ui.pointing() is Mouse)\n}\n"),
+    ],
+    "page-hand",
+    1,
+    cfg~,
+  )
+  |> ignore
+}
+
+///|
+test "page-screen" {
+  let cfg = Config::new(@rjson.parse("{\"pages\": {\"roots\": [\"src/pages\"]}}"))
+  // a page reading the native input; the library's and a page's test's not counted
+  found(
+    [
+      ("src/pages/row.mbt", "fn v() -> Unit {\n  let f = @sf.native_input()\n}\n"),
+      ("src/sf/parts.mbt", "pub fn by_touch() -> Pointing {\n  @sf.native_input()\n}\n"),
+      ("src/pages/row_wbtest.mbt", "test \"t\" {\n  assert_true(@sf.native_input())\n}\n"),
+    ],
+    "page-screen",
+    1,
+    cfg~,
+  )
+  |> ignore
+}
+
+///|
+test "page-old-part" {
+  let cfg = Config::new(@rjson.parse("{\"pages\": {\"roots\": [\"src/pages\"], \"old_parts\": [\"button\"]}}"))
+  // a page taking the settings' older button; another of their parts, the library's button and a test's not counted
+  found(
+    [
+      ("src/pages/row.mbt", "fn v(c : Ctx) -> Unit {\n  @settings.button(c, \"k\", \"好\", true) |> ignore\n  @settings.field(c) |> ignore\n  @sf.button(c, \"好\") |> ignore\n}\n"),
+      ("src/pages/row_wbtest.mbt", "test \"t\" {\n  @settings.button(c, \"k\", \"好\", true) |> ignore\n}\n"),
+    ],
+    "page-old-part",
+    1,
+    cfg~,
+  )
+  |> ignore
+}
+
+///|
+test "page-look" {
+  let cfg = Config::new(
+    @rjson.parse(
+      "{\"pages\": {\"roots\": [\"src/pages\"], \"frames\": [\"src/pages/frame.mbt\"], \"one_look\": [\"desk_card\", \"Narrow\"]}}",
+    ),
+  )
+  // a page's own piece of one arrangement and its branch on one; the frame that names them, a page's test and other
+  // names not counted
+  found(
+    [
+      ("src/pages/row.mbt", "fn v(c : Ctx, l : Look) -> Unit {\n  if l == Narrow {\n    c.box(style=desk_card)\n  }\n  c.box(style=card)\n}\n"),
+      ("src/pages/frame.mbt", "let desk_card : Style = @sf.desk_card\n"),
+      ("src/pages/row_wbtest.mbt", "test \"t\" {\n  assert_true(look() == Narrow)\n}\n"),
+    ],
+    "page-look",
+    2,
+    cfg~,
+  )
+  |> ignore
+}
+
+///|
+test "follow-layout" {
+  // a follow of a measured size, through a name bound to one, an animate of the keyboard's; a follow of a state, a
+  // layout told its cause and a test's, not counted
+  let fs = found(
+    [
+      (
+        "src/app/composer.mbt",
+        "fn v(c : @ui.Ctx, a : @motion.Anim) -> Unit {\n" +
+        "  a.follow(@motion.measured(c, \"box\").unwrap_or(0.0), @motion.tween(260.0))\n" +
+        "  let h = c.laid_size(1).unwrap().1\n" +
+        "  a.follow(h, @motion.tween(260.0))\n" +
+        "  let lift = @motion.animate(c, \"lift\", c.ime_inset())\n" +
+        "  let on = @motion.animate(c, \"on\", if open { 1.0 } else { 0.0 })\n" +
+        "  a.follow(if open { 1.0 } else { 0.0 }, @motion.tween(140.0))\n" +
+        "  @motion.layout(c, 3, \"box\", by=words)\n" +
+        "}\n",
+      ),
+      (
+        "src/app/composer_wbtest.mbt",
+        "test \"t\" {\n  a.follow(@motion.measured(c, \"box\").unwrap_or(0.0), @motion.tween(260.0))\n}\n",
+      ),
+    ],
+    "follow-layout",
+    3,
+  )
+  assert_eq(lines(fs), [2, 4, 5])
+}
+
+///|
+test "motion-read" {
+  // the app reading whether a motion runs; a Tester's list of what moves, a test's and the framework's not counted
+  let cfg = Config::new(@rjson.parse("{\"mbt\": {\"framework\": [\"src/motion\"]}}"))
+  let fs = found(
+    [
+      (
+        "src/app/search.mbt",
+        "fn v(up : @motion.Anim, t : @ui.Tester) -> Unit {\n" +
+        "  if leaving && !up.moving() {\n    close()\n  }\n" +
+        "  for m in t.moving() {\n    println(m)\n  }\n" +
+        "  let told = self.t.moving().iter().any(fn(l) { l.contains(\"a\") })\n" +
+        "}\n",
+      ),
+      ("src/app/search_wbtest.mbt", "test \"t\" {\n  assert_true(up.moving())\n}\n"),
+      ("src/motion/anim.mbt", "pub fn Anim::running(self : Anim) -> Bool {\n  self.moving()\n}\n"),
+    ],
+    "motion-read",
+    1,
+    cfg~,
+  )
+  assert_eq(lines(fs), [2])
 }

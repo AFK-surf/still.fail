@@ -19,9 +19,16 @@ export const newChat = style({
 export const newChatInner = style({
   width: "100%", maxWidth: "720px", display: "grid", gap: "10px", justifyItems: "center", textAlign: "center",
 });
-/** Where the offer of the machine's sessions hangs, under the status line: it takes no room (NewChat.tsx). */
-export const newChatOffer = style({ position: "relative", height: "0", width: "100%" });
-globalStyle(`${newChatOffer} > *`, { position: "absolute", top: "0", left: "50%", transform: "translateX(-50%)", whiteSpace: "nowrap" });
+/**
+ * A page with its composer (NewChat.tsx): as tall as the page, the scene and the composer in its middle, what differs by
+ * the station and what is picked on it under the composer, from its foot down, as much room under it as over the scene
+ * (more where what is under needs it): it comes, goes and changes as another station is picked and moves nothing over it.
+ */
+export const newChatTall = style({
+  alignSelf: "stretch", gridTemplateRows: "1fr auto auto 1fr", gridTemplateAreas: `"." "scene" "composer" "under"`,
+});
+export const newChatScene = style({ gridArea: "scene", display: "grid", gap: "10px", justifyItems: "center" });
+export const newChatUnder = style({ gridArea: "under", alignSelf: "start", display: "grid", gap: "10px", justifyItems: "center", width: "100%" });
 export const newChatTitle = style({ margin: "0", fontSize: vars.textHeading, lineHeight: "34px", fontWeight: "600" });
 export const newChatStatus = style({});
 export const newChatHeld = style({ border: `1px solid ${vars.line}` });

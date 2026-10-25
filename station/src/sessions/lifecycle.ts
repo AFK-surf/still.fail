@@ -5,16 +5,18 @@
 import { copyFileSync, mkdirSync, renameSync, rmSync } from "node:fs";
 import { rm } from "node:fs/promises";
 import { basename, dirname, join, relative, sep } from "node:path";
+import { DISK_LOW_BYTES } from "../ops/disk.ts";
 import { PlaceRefused } from "../ops/places.ts";
 import { log } from "../ops/log.ts";
 import { tr, type Lang, stationLang } from "../ops/i18n.ts";
 import { type MachineSession, type Roots, rolloutOf, rolloutsIn } from "../read/machine.ts";
-import { readTimeline, transcriptPath } from "../read/transcript.ts";
+import { homesFirst, readTimeline, sessionPlaces, sharedTranscripts, transcriptPaths } from "../read/transcript.ts";
+import { forgetMarks, marksDir } from "../read/transcripts.ts";
 import { AUTO, type Attachment, MANUAL, type Quote, STILLFAIL_SURFACE, type ThreadRow } from "../store/store.ts";
 import type { SessionChange } from "./accounts.ts";
 import { unlockWorktrees, withLock } from "./archive.ts";
 import { roomOf } from "./footprint.ts";
-import { type Runtime, runs, runtimeTitle } from "./config.ts";
+import { type Runtime, runs, runtimeNamed, runtimeTitle } from "./config.ts";
 import { CLIENT_KEY_KEPT_MS, type Hub, connectOf, newChatKey, newSingleSessionKey, newToken } from "./hub.ts";
 import { INTERNAL_CHANNEL, INTERNAL_CONNECT } from "./internal.ts";
 
@@ -172,13 +174,15 @@ export function newSession(hub: Hub, options: NewChat, lang: Lang = stationLang(
 /// with all it had; its process ends so the change takes: at once when idle, else when the running turn is over, before
 /// the next one starts (nobody waits for the turn to end to change it). Another model starts over
 /// what went with the old one: its effort back to the runtime's default, its profile back to the station's choice
-/// (picked here, among those with the model enabled), unless given with it.
+/// (picked here, among those with the model enabled), unless given with it. Given back to the station to pick again
+/// (`repick`), its account is picked now as a new session's would be.
 export async function configure(hub: Hub, key: string, change: SessionChange, lang: Lang = stationLang()) {
-  const { row, model, effort, profile } = hub.accounts.change(key, change, lang);
+  const { row, model, effort, profile, repick } = hub.accounts.change(key, change, lang);
   if (profile !== undefined) hub.store.setSessionProfile(key, profile ?? row.profile, profile !== null);
   if (model !== row.model || effort !== row.effort) hub.store.setSessionModel(key, model, effort);
   if (change.fast !== undefined) hub.store.setSessionFast(key, change.fast);
-  if (profile === null) hub.accounts.runOn(key);
+  if (repick) hub.accounts.repick(key);
+  else if (profile === null) hub.accounts.runOn(key);
   await hub.changed(key);
   log.info("hub", "session changed", { session: key, profile: hub.store.getSession(key)?.profile ?? "", model, effort });
   // Its last turn stopped at the allowance: changed, it goes on by itself.
@@ -247,6 +251,27 @@ export async function expireArchived(hub: Hub, now: number): Promise<number | nu
   return next;
 }
 
+/// The disk of the station's data is low (ops/disk.ts): archived workspaces are emptied before archivedWorkspaceMs, the
+/// longest archived first, as `expireArchived` empties them, until `free` is DISK_LOW_BYTES again. None with
+/// archivedWorkspaceDays 0 (kept on purpose).
+export async function relieveArchived(hub: Hub, free: () => number): Promise<void> {
+  const { cold } = hub;
+  if (hub.config().archivedWorkspaceMs <= 0 || !cold.expire || !cold.holdsMore) return;
+  const archived = hub.store
+    .listSessions()
+    .filter((s) => s.archivedAt !== null)
+    .sort((a, b) => a.archivedAt! - b.archivedAt!);
+  for (const s of archived) {
+    if (free() >= DISK_LOW_BYTES) return;
+    try {
+      // Shown and archived again since, it is not the one looked at: `expire` leaves it.
+      if (await cold.holdsMore(s.key)) await cold.expire(s.key, s.archivedAt!);
+    } catch (error) {
+      log.warn("hub", "the workspace of an archived session was not emptied", { session: s.key, error: (error as Error).message });
+    }
+  }
+}
+
 /// Archives what has idled past autoArchiveMs (counted from its last activity, or from being shown again by hand) and is
 /// done: nothing running or waiting to be heard, no background job or service of its own still up (a watch above all),
 /// not stopped at a block for someone, nothing its chat's starter has not read, and no single-session connect feeding
@@ -267,8 +292,11 @@ export function autoArchive(hub: Hub, now: number): number | null {
   };
   const unread = (t: ThreadRow) => t.createdBy !== null && t.surface === STILLFAIL_SURFACE && store.unreadCount(t.createdBy, t.id) > 0;
   const bound = store.listBindings();
-  const stats = store.sessionStats(null);
-  const jobs = new Set(store.listJobs(null).filter((j) => j.state === "running" || (j.port !== null && j.state === "exited")).map((j) => j.sessionKey));
+  // Over the sessions shown and the chats of their own (and those chats' sessions), never every one ever archived.
+  const live = store.liveSessions();
+  const own = store.chatsOfTheirOwn();
+  const stats = store.statsOf([...live.map((s) => s.key), ...own.flatMap((t) => store.threadSessions(t.id).map((m) => m.session))]);
+  const jobs = new Set(store.jobsUp().map((j) => j.sessionKey));
   const working = (key: string) => {
     const row = store.getSession(key);
     if (!row) return true;
@@ -282,8 +310,8 @@ export function autoArchive(hub: Hub, now: number): number | null {
   const kept = store.keptChats(null);
   // Where only what the archive review recommended goes (`autoArchiveReviewed`): none while the review is off.
   const recommended = (thread: number) => !autoArchiveReviewed || (automaticDecisions.completion.enabled && store.archiveSuggested(thread));
-  for (const s of store.listSessions()) {
-    if (s.archivedAt !== null || bound.has(s.key) || pinned.has(s.key)) continue;
+  for (const s of live) {
+    if (bound.has(s.key) || pinned.has(s.key)) continue;
     const threads = store.sessionThreads(s.key);
     const slack = threads.length > 0 && threads.every((t) => t.thread.surface !== STILLFAIL_SURFACE);
     const done = idle([s.lastActiveAt, s.shownAt]) && !busy(s.key);
@@ -294,7 +322,7 @@ export function autoArchive(hub: Hub, now: number): number | null {
     log.info("hub", "archiving an idle session", { session: s.key });
     archiveBy(hub, s.key, true, AUTO);
   }
-  for (const t of store.chatsOfTheirOwn()) {
+  for (const t of own) {
     const said = store.lastMessage(t.id)?.createdAt ?? null;
     if (kept.has(t.id) || !idle([t.createdAt, said, t.shownAt]) || unread(t) || !recommended(t.id)) continue;
     if (store.threadSessions(t.id).some((m) => pinned.has(m.session) || busy(m.session))) continue;
@@ -304,22 +332,27 @@ export function autoArchive(hub: Hub, now: number): number | null {
   return next;
 }
 
-/// Deletes a session: its process ends, its rows go (with the threads only it was in) and its workspace directory and
-/// transcript copy with them. The runtime's transcript stays in the profile's home, which may be a person's own.
+/// Deletes a session: its process ends, its rows go (with the threads only it was in) and its workspace directory,
+/// transcript copy and what the readers kept of its transcripts' reading with them. The runtime's transcript stays in
+/// the profile's home, which may be a person's own.
 export async function deleteSession(hub: Hub, key: string) {
   const row = hub.store.getSession(key);
   if (!row) throw new Error(`unknown session ${key}`);
   const actor = hub.dropActor(key);
   await actor?.dispose();
   hub.live.forget(key);
+  const { dataDir, profiles } = hub.config();
+  const runtime = runtimeNamed(row.runtime);
+  const transcripts = runtime ? transcriptPaths(runtime, dataDir, homesFirst(profiles, row.profile), hub.store.runtimeSessions(key), sessionPlaces(row)).paths : [];
   hub.store.deleteSession(key);
   hub.closed(key);
   rmSync(transcriptCopy(hub, key), { force: true });
+  forgetMarks(marksDir(dataDir), transcripts);
   // Sessions made by the station keep their workspace in a directory of their own.
-  const sessions = join(hub.config().dataDir, "sessions");
+  const sessions = join(dataDir, "sessions");
   const own = basename(row.workspace) === "workspace" && (row.workspace + sep).startsWith(sessions + sep);
   const home = own ? dirname(row.workspace) : row.workspace;
-  const room = roomOf(hub.config().dataDir, row.workspace);
+  const room = roomOf(dataDir, row.workspace);
   if (room !== null) {
     // Git worktrees it archived are let go first, so `git worktree prune` can clean them up.
     await withLock(room, async () => {
@@ -366,7 +399,7 @@ export async function continueMachineSession(hub: Hub, roots: Roots, found: Mach
   const { store } = hub;
   const runtime = found.runtime;
   // One it went on in (a runtime session left for a new one included).
-  const going = store.listSessions().find((r) => r.runtime === runtime && store.runtimeSessions(r.key).includes(found.id));
+  const going = store.sessionOfRuntime(runtime, found.id);
   if (going) {
     const thread = store.homeChat(going.key);
     if (thread) {
@@ -387,7 +420,7 @@ export async function continueMachineSession(hub: Hub, roots: Roots, found: Mach
     throw e;
   }
   // Looked at again, in case it was continued meanwhile.
-  const already = store.listSessions().find((r) => r.runtime === runtime && store.runtimeSessions(r.key).includes(found.id));
+  const already = store.sessionOfRuntime(runtime, found.id);
   if (already) {
     const thread = store.homeChat(already.key);
     if (thread) return [already.key, thread];
@@ -400,11 +433,10 @@ export async function continueMachineSession(hub: Hub, roots: Roots, found: Mach
   const keptModel = found.model !== null && profiles.some((p) => p.models.includes(found.model!)) ? found.model : null;
   const profile = hub.accounts.pick(profiles, keptModel, false);
   const model = keptModel ?? profile.model ?? profile.models[0] ?? null;
-  const copy = copyTranscript(roots, found, join(config.dataDir, "transcripts", runtime));
-  // Where its execution history is when it comes here: its last entry, read as the history reads it (from the file the
-  // profile's home finds).
-  const read = transcriptPath(runtime, profile.home, found.id) ?? copy;
-  const entries = readTimeline(runtime, read).length;
+  const copy = copyTranscript(roots, found, sharedTranscripts(config.dataDir, runtime));
+  // Where its execution history is when it comes here: its last entry, read as the history reads it (from the shared
+  // place, read/transcript.ts `transcriptPaths`).
+  const entries = readTimeline(runtime, copy).length;
   const last = entries > 0 ? entries - 1 : null;
   const key = newChatKey();
   const workspace = join(config.dataDir, "sessions", INTERNAL_CONNECT, key.slice(INTERNAL_CONNECT.length + 1), "workspace");

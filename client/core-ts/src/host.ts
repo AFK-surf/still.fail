@@ -94,23 +94,38 @@ export interface Host {
   /// open. The host sends SOCKET_PING every SOCKET_PING_MS while it is.
   websocket(url: string, protocols: string[]): Effect.Effect<Pull<string>, HostError, Scope.Scope>;
 
+  /// Names in the order people read them in their language, as a file browser lists them (the system's collation:
+  /// case and accents aside, numbers by value; 中文 by pinyin): each one's place, equal ones the same. None, or null for
+  /// what the system cannot: the core orders them by hand (drive-browse.ts).
+  collate?(names: readonly string[]): number[] | null;
+
   /// Small persistent values by key: accounts, the device key, preferences.
   storageGet(key: string): Effect.Effect<Uint8Array | null, HostError>;
   storageSet(key: string, value: Uint8Array): Effect.Effect<void, HostError>;
   storageDelete(key: string): Effect.Effect<void, HostError>;
+  /// Where the value kept under `key` is, as a file of this device's: for what the app reads there itself (a face's
+  /// file given to the system by its path, not carried whole). Null while none is kept; none on a host whose values are
+  /// not files (a web page).
+  storagePath?(key: string): string | null;
+  /// Bytes `start` to `end` of a file the app saved where the person keeps files (`at`, as the system named it once it
+  /// was saved: a path, a content address); null when it is no longer there or cannot be read. A host without one (the
+  /// web: what the browser saved is out of the page's reach) keeps the device's copy of a download in its cache.
+  savedRead?(at: string, start: number, end: number): Effect.Effect<Uint8Array | null, HostError>;
 
-  /// Values the system keeps sealed (docs/vault.md, "设备上的钥匙"): an app's only (Android's Keystore; the desktop's
-  /// Electron safeStorage, its key in the macOS keychain or Windows' DPAPI); a web page has none. `user: true`: reading
-  /// it takes the person (biometrics or the device's credential; Touch ID on a Mac that has it), `reason` said in the
-  /// prompt; `user: false`: sealed at rest, read without asking. A value is read as it was kept: asked with the other
-  /// `user`, it fails. The host's errors say `user_cancelled` (the person said no), `no_device_lock` (no screen lock,
-  /// so nothing can need the person) or `not_in_front` (no screen to ask on) as their message.
+  /// Values the system keeps sealed (docs/vault.md, "设备上的钥匙"): an app's only (Android's Keystore; the Apple
+  /// Keychain; Windows' DPAPI; the Electron app's safeStorage); a web page has none. `user: true`: reading it takes the
+  /// person (biometrics or the device's credential: on Apple's systems Touch ID, Face ID or the device's password; the
+  /// Electron app's Touch ID on a Mac that has it), `reason` said in the prompt; `user: false`: sealed at rest, read
+  /// without asking. A value is read as it was kept: asked with the other `user`, it fails or is none. The host's errors
+  /// say `user_cancelled` (the person said no), `no_device_lock` (no screen lock, so nothing can need the person: keeping
+  /// a `user` value fails so too), `not_in_front` (no screen to ask on) or `key_invalidated` (Android: the screen lock
+  /// was taken off since) as their message (CoreError.refused says them in words).
   secureGet?(key: string, opts: { user: boolean; reason?: string }): Effect.Effect<Uint8Array | null, HostError>;
   secureSet?(key: string, value: Uint8Array, opts: { user: boolean }): Effect.Effect<void, HostError>;
   secureDelete?(key: string): Effect.Effect<void, HostError>;
   /// The person asked to say yes, as reading a `user: true` value asks them, `reason` in the prompt: before what they
-  /// should mean (turning the workspace lock off). Succeeds at once where nothing can ask (Windows, Linux, a Mac
-  /// without Touch ID); fails as `secureGet` does (`user_cancelled`, `no_device_lock`, `not_in_front`).
+  /// should mean (turning the workspace lock off). Succeeds at once where nothing can ask (Windows, Linux, the
+  /// Electron app on a Mac without Touch ID); fails as `secureGet` does (`user_cancelled`, `no_device_lock`, `not_in_front`).
   secureAsk?(reason: string): Effect.Effect<void, HostError>;
 
   /// An account's SQLite database by name (`account-<sub>`), made empty if it is not there: one file per signed-in

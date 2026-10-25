@@ -20,7 +20,7 @@ export const modeOf = (kind: string | null | undefined) => (kind === "feishu" ? 
 /** A key of words that differ for a Feishu connect (its `.feishu` twin) as `kind` has it. */
 export const kindKey = (key: string, kind: string | null | undefined) => (kind === "feishu" ? `${key}.feishu` : key);
 
-export const RUNTIME_LABEL: Record<RuntimeKind, string> = { claude: "Claude Code", codex: "Codex", dsh: "DeepSeek Harness", grok: "Grok Build", cursor: "Cursor", devin: "Devin" };
+export const RUNTIME_LABEL: Record<RuntimeKind, string> = { claude: "Claude Code", codex: "Codex", dsh: "DeepSeek Harness", grok: "Grok Build", cursor: "Cursor", devin: "Devin", hermes: "Hermes Agent" };
 
 export const ACCESS: Record<AccessKind, { label: string; description: string }> = {
   "subscription": { get label() { return t("web-main.access.subscription.label"); }, get description() { return t("web-main.access.subscription.description"); } },

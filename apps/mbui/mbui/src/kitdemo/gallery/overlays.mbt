@@ -46,7 +46,7 @@ fn overlays(c : @ui.Ctx) -> Unit {
     c.box(dir=Row, gap=12.0, align=AStart, fn() {
       @kit.dialog_look(
         c,
-        { title: "Edit profile", description: "How others see you.", t: shown, w: 200.0, closes: true },
+        { title: "Edit profile", description: "How others see you.", w: 200.0, closes: true },
         fn() {
           c.box(h=Px(t.control_h), radius=t.radius, border=1.0, border_color=t.border, padx=10.0, justify=JCenter, fn() {
             c.text("Ada Lovelace", size=t.font_sm, wrap=false) |> ignore
@@ -58,7 +58,7 @@ fn overlays(c : @ui.Ctx) -> Unit {
       )
       @kit.dialog_look(
         c,
-        { title: "Delete the chat?", description: "It cannot be undone.", t: shown, w: 200.0, closes: false },
+        { title: "Delete the chat?", description: "It cannot be undone.", w: 200.0, closes: false },
         fn() {
           c.box(dir=Row, gap=8.0, justify=JEnd, pt=8.0, fn() {
             @kit.button(c, "Cancel", key="g-cancel", variant=Outline) |> ignore
@@ -72,7 +72,7 @@ fn overlays(c : @ui.Ctx) -> Unit {
   })
   section(c, "Popover, hover card and tooltip", fn() {
     c.box(dir=Row, gap=12.0, align=AStart, fn() {
-      @kit.popover_look(c, { side: Bottom, t: shown }, fn() {
+      @kit.popover_look(c, { side: Bottom, room: c.height, panel: c.id("g-pop-filters") }, fn() {
         c.text("Filters", size=t.font_sm, weight=600, wrap=false) |> ignore
         c.box(dir=Row, gap=8.0, align=ACenter, fn() {
           @kit.checkbox(c, "g-unread", On, label="Unread") |> ignore
@@ -80,7 +80,7 @@ fn overlays(c : @ui.Ctx) -> Unit {
         })
         |> ignore
       })
-      @kit.popover_look(c, { side: Bottom, t: shown }, fn() {
+      @kit.popover_look(c, { side: Bottom, room: c.height, panel: c.id("g-pop-ada") }, fn() {
         c.box(dir=Row, gap=10.0, align=ACenter, fn() {
           @kit.avatar(c, "", "Ada Lovelace", size=36.0)
           c.box(gap=2.0, fn() {
@@ -92,7 +92,7 @@ fn overlays(c : @ui.Ctx) -> Unit {
         |> ignore
       })
       c.box(gap=6.0, align=ACenter, fn() {
-        @kit.tooltip_look(c, { side: Top, t: shown }, "Bold (⌘B)")
+        @kit.tooltip_look(c, { side: Top, room: c.height, panel: c.id("g-tip-bold") }, "Bold (⌘B)")
         @kit.button(c, "B", key="g-bold", variant=Outline) |> ignore
       })
       |> ignore

@@ -9,6 +9,7 @@
 ```
 Changelog: 修复：很长的对话标题会把侧栏撑宽
 Changelog: 新功能：会话可以置顶
+Changelog-parts: web, android
 Fixes: FB-12
 Session: ember:c-…
 ```
@@ -17,10 +18,9 @@ Session: ember:c-…
 - `Fixes: FB-n` 说这个提交修的是哪条反馈（可以写多个）。只写 `Fixes` 不写 `Changelog`，反馈照样会被标成已修复，但日志里不显示。
 - 这几行放在正文后面、整段都是 `Key: value` 的段落里。和 `Co-Authored-By:` 隔一个空行也读得到：scripts/changelog.ts 读标题之后每个这样的段落，不只 git 当成 trailer 的最后一段（以前只读最后一段，2026-10-01 到 10-08 有 37 个提交的条目因此没进日志）。
 - 版本是这个提交在 main 历史里的序号（`git rev-list --count`，各端的 `0.1.<n>` 就是它），不用手填。
-- 归哪一端，看提交改了哪些文件（scripts/changelog.ts `partsOf`）：`station/src/`、`station/native/` 归 station（之前的提交里 `mesh/` 也是），`web/` 归网页版（桌面 app 带着网页，也算），`client/` 归网页和安卓（`apps/android/not-carried.txt` 列的只归网页，`client/shell/` 只归安卓），`apps/android/` 归安卓，`apps/desktop/` 归桌面，`cloud/src/` 归云端（一部署就上线）。其余（官网、文档、脚本）不需要发版。
-  - 测试、安卓的 `carries.sh`/`not-carried.txt`、`client/core-ts/src/shapes/schema.ts` 和从它生成的类型，自己不让提交归到哪一端；提交只改了这些时才按上面的目录算。
-  - 界面文字（`client/i18n/catalog/`）各端的都打在 core 里，但只跟着代码走：同一个提交也改了代码，就只归代码到的那几端（桌面功能的文字不会让它出现在安卓的「已更新」里）；只改了文字，按文件名归：`android-*` 安卓，`web-*` 网页，`desktop` 桌面，`station`、`cloud` 各自，`core-*`、`common` 网页和安卓。
-- 写错了或漏写了：在 `docs/changelog-notes.json` 里按提交号（至少 7 位）补或改：`{ "<提交>": { "text": [...], "fixes": [...] } }`，它的 `text` 会替换提交里的那几行。
+- `Changelog-parts:` 说这些行是哪几端的人看得到的，由写这几行的 agent 决定（用户定，2026-10-24）：`station`、`web`、`android`、`desktop`、`cloud`，几端就用逗号隔开；不需要发版的（官网）写 `none`。按人在哪个 app 里看得到来写，不按改了哪些文件来写：桌面版的改动就算落在安卓也带着的共用代码里（`apps/mbui/src/sfapp/`、core），也只写 `desktop`；core 的改动只有手机上看得到，就只写 `android`。`web` 包括 Electron 桌面 app 里带的网页；`cloud` 是部署上线就生效的。写了 `Changelog` 或 `Fixes`、却没写 `Changelog-parts`，或者写了不认识的端名，commit-msg hook 和 CI（`--refuse`，查 PR 里的每个提交）都会拒掉。合并时 squash 提交的正文里也要写，CI 查不到它。
+  - 没写的提交（这条规则之前的那些）按改了哪些文件来算（scripts/changelog.ts `partsOf`）：`station/src/`、`station/native/`、`mesh/` 算 station；`web/` 算网页；`client/` 算网页和安卓（`apps/android/not-carried.txt` 里列的只算网页，`client/shell/` 只算安卓）；`apps/android/` 算安卓；`apps/desktop/` 算桌面；`apps/mbui/` 算安卓和桌面（宿主代码和 `src/sfdesk/` 这类桌面自己的页面只算各自那一端）；`cloud/src/` 算云端。测试、生成的类型、脚本、mbui 的录像和工具单独都不算哪一端。界面文字（`client/i18n/catalog/`）跟着同一个提交里的代码走；提交里只有文字时，按文件名来算。
+- 写错了或漏写了：在 `docs/changelog-notes.json` 里按提交号（至少 7 位）补或改：`{ "<提交>": { "text": [...], "fixes": [...], "parts": [...] } }`，它的 `text` 会替换提交里的那几行，`parts` 替换提交说的或按文件算出来的端。
 
 ## 正式版的日志：每次正式发布写一份
 

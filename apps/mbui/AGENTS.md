@@ -1,22 +1,94 @@
 # Working on still.fail's mbui app (for agents)
 
-The app is still.fail's Android app rebuilt in mbui, which is in this repository at `mbui/` (no pin: a change to
+The app is still.fail's Android app, rebuilt in mbui, which is in this repository at `mbui/` (no pin: a change to
 mbui and to the app is one pull request). mbui's own `mbui/AGENTS.md` applies here as well. In short, and what is
 particular to this app:
 
-## The standard is Android's app
+## The terms (术语)
 
-- What this app looks like and does is held to still.fail's Android app (`apps/android`), the original: sizes, radii,
-  colours, timings and behaviour are taken from its code (`apps/android/shared/.../ui/{Glass,Corners,Parts}.kt` and
-  the screen's own file), not chosen, and not checked against mbui's own earlier drawing. Nothing in this repository
-  compares mbui with itself (#881 took that out); do not bring it back.
+Four things decide how the app looks and answers (docs/architecture.md, the terms):
+
+- **屏幕** (the screen): 小屏 / 中屏 / 大屏 (`@sf.layout`: `Small`, `Medium`, `Large`), plus the special screens (a fold
+  half open, crease across: a chat laid out as 小屏's; a phone used upright only). How the panes are arranged.
+- **原生操控** (the native input, `@sf.native_input()`): touch or keyboard and mouse, as the app was started, the same
+  the whole run. The theme's sizes, what shows only under a pointer, Enter, scroll bars; with the tier, sheets or
+  popovers and the search field or ⌘K.
+- **当前操控** (the current input, `@ui.pointing()`): touch or keyboard and mouse at the moment; it may change. How a
+  thing answers the hand alone, never what is shown, where or how big.
+- **页面宽窄** (a page's width, `@sf.look()`): 窄排法 / 宽排法, by the width of the box a page is drawn in.
+
+Write PR descriptions and anything said to people in these words: not 电脑版, 手机版, 桌面端, 移动端 or 触屏设备.
+
+## The app, and the Kotlin one before it
+
+- Since 2026-10-23 this is the Android app that is developed: the beta channel's (the stable channel keeps the Kotlin
+  app at 0.1.4520 until it is said to become this one). The Kotlin app (`apps/android`) is frozen: not developed, not
+  built or checked by CI, and nothing is compared with it any more. New work is this app's own.
+- What it took from the Kotlin app (sizes, radii, colours, timings, behaviour: `apps/android/shared/.../ui/{Glass,
+  Corners,Parts}.kt` and each screen's file) stays as it is unless a change means to differ. Nothing in this
+  repository compares mbui with itself (#881 took that out); do not bring it back.
 - A change people can see (timing, rhythm, what is shown) says so in its PR with old and new side by side.
 
-## What is compared, and where
+## The component library
 
-- The app's screens are compared in the Tester: its draw list at the declared moment, over the same core JSON
-  Android's app draws (`client/fixtures/screens`). Pixels come from each host's offscreen render of that draw list
-  (`mbui-render-*`), and Android's own pictures (taken by `apps/android`'s tests) are the references.
+- The parts pages are made of are the library's, `src/sf` (docs/library.md): the counterpart of the web's `web/ui`,
+  one of its files for each of the web's. A part used by both the phone's pages and the desktop's lives there once and
+  both use it; a page keeps no copy of its own. The library imports nothing of the app (detlint's `library-import`):
+  what it needs of the app is given to it as the app starts.
+
+- A named style (a top-level `let`, and a `.then(…)` of one) whose properties are all tokens and numbers is written
+  as its text, `@ui.css("w=Full px=S2 hovered{bg=Hover}")`; `@ui.style(…)` is for one that names a variable or is
+  worked out (`w=@sf.grow`, `Fixed(side_w)`), and inside functions (mbui/docs/style.md). Why (2026-10-24): moonc made
+  each `@ui.style(…)` constant ~5-10 KB of C in the program's start, ~1400 of them ~11.8 MB of one function compiled
+  again on every build; as text each is a string read once at start-up. detlint's `style-text` forbids the other
+  way and prints the text to write.
+
+## One app: tiers, input, pages, shell
+
+- `docs/architecture.md` is how the app is built; read it before changing a page or the frame. In short:
+  - It is one app on every device (the user, 2026-10-24); there is no phone app and desktop app.
+  - Its layout follows the screen's tier (`@sf.layout`: Small, Medium, Large) and the native input
+    (`@sf.native_input()`). How it answers the hand follows the current input (`@ui.pointing()`), and only that: the
+    current input never decides what is shown, where or how big (2026-10-25).
+  - Each page exists once, drawn into the box it gets in any tier with either input. It opens things by saying what,
+    and shows menus and dialogs through the library's presenters. The shell arranges the panes per tier.
+- **Packages now, while the two page sets are merged:**
+  - `src/sf` is the component library (above).
+  - `src/sfbase` is the model: the core's topics and calls (`Source`), the views, the pages (`Page`, `app.nav`), the
+    app-level things, and the shared machinery. It imports the library and the settings' routes, nothing of the pages.
+  - `src/sfdesk` holds the pages ported from the web, and the Medium and Large frame.
+  - `src/sfapp` holds the pages ported from the Kotlin app and the Small frame. It takes `sfbase`'s names in by
+    `pub using` (`sfapp/base.mbt`) and calls `sfdesk`'s as `@sfdesk.…`.
+  - Both go into `sfpages` and `sfshell` as pages merge (`docs/architecture.md`, the way there).
+- **What doesn't change:**
+  - Something both need moves down into `sfbase` or the library, once.
+  - Logic is the core's, never a page's.
+  - Words are `@sf.t` (the app's tables).
+  - A page opens what it opens with `@sfbase.open_page(page)` and a chat's detail with `@sfbase.open_detail(src, chat,
+    tab)`: the shell's (sfbase's `Shell`) decides where it goes per layout. It never pushes onto `app.nav` itself.
+  - Don't add a branch on the tier inside a page. A page that needs another arrangement asks its own
+    width. Nor on the native input (`@sf.native_input()`): what differs by it is the theme's, the library
+    parts', the presenters' and the shell's (docs/architecture.md, the same on every screen and what differs); a page
+    that needs it asks the library for a part. Nor on `@ui.pointing()`: the hand reaches a page only through the
+    library's primitives (`c.lit`, `c.menu_asked`, tips).
+  - A page is designed once from what it is for; the web's two and the Kotlin app's are read for their reasons, not
+    copied or picked between. Merging two copies keeps neither and drops the other: the page is no worse on either
+    screen than its copy was there, shown before and after.
+
+## Motion
+
+- `docs/motion.md` says what moves and how; read it before adding or changing a motion. In short (the user,
+  2026-10-25):
+  - Every motion is one of nine kinds (in the hand, coming and going, moved or reshaped, flying, another page,
+    scrolled to, a control answering, waiting, emphasis), each set off one way, with the kind's presets.
+  - A place or a size moves only for its cause, from the frame of that cause. Nothing moves because its layout
+    differs from last frame's, and no measured size is a follow's target: what the window, the sidebar, a keyboard
+    or the tier does to a thing is no motion of its own.
+  - No time window is a cause, and no logic reads whether a motion runs.
+
+## What is checked, and where
+
+- The app's screens are tested in the Tester: its draw list at the declared moment.
 - No check runs the whole app on a device, an emulator, a simulator or a desktop window and compares its picture
   with a kept one: that is slow, and what it waits for is never the app's own. A device runs only the host's
   contracts (`mbui-host-*`), the render contracts, and a few end-to-end smoke flows that wait for named events; their

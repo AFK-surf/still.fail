@@ -28,15 +28,20 @@ test "a message's Markdown: its blocks, their margins collapsed, links and copy"
     },
     w=390.0,
     h=844.0,
+    // (a phone's: its words a finger's size)
+    platform=2,
   )
   // the heading first, its top margin dropped
   let (_, hy, _, _) = t.rect_of("今天的进度").unwrap()
   assert_eq(hy, 16.0)
-  // the paragraph 14 below the heading's bottom (the larger margin: the
-  // paragraph's own, its size 15)
+  // the paragraph 6 below the heading's bottom: the heading's margin under it, a paragraph none above (the web's
+  // .markdown h2 14 0 6, p 0 0 8, on every screen)
   let (_, hy2, _, hh) = t.rect_of("今天的进度").unwrap()
-  let (_, py, _, _) = t.rect_of("改好了").unwrap()
-  assert_eq(py - (hy2 + hh), 15.0)
+  let (_, py, _, ph) = t.rect_of("改好了").unwrap()
+  assert_eq(py - (hy2 + hh), 6.0)
+  // the list 8 below the paragraph: the paragraph's margin under it, a list none above
+  let (_, ly, _, _) = t.rect_of("第一项").unwrap()
+  assert_eq(ly - (py + ph), 8.0)
   // a tight list's items follow each other with no gap
   let (_, y1, _, h1) = t.rect_of("第一项").unwrap()
   let (_, y2, _, _) = t.rect_of("第二项").unwrap()
@@ -61,10 +66,10 @@ test "a table's cell of only the message's images: them side by side, 160 wide a
         @sf.markdown(
           c,
           "| 网页 | 手机网页 |\n|---|---|\n| ![](web%2Dfolded.png) | ![](phone.png) |\n",
-          cell_files=fn(name) {
+          files=fn(name) {
             // a wide one and a tall one
             let r = if name == "web-folded.png" { 2.0 } else { 0.5 }
-            Some((r, fn(w) { drawn.push((name, w)) }))
+            Some({ draw: fn() {  }, image: Some((r, fn(w) { drawn.push((name, w)) })) })
           },
         )
         |> ignore
@@ -78,6 +83,45 @@ test "a table's cell of only the message's images: them side by side, 160 wide a
   assert_eq(drawn, [("web-folded.png", 160.0), ("phone.png", 120.0)])
   assert_true(t.find("web") is None)
   assert_true(t.find("网页") is Some(_))
+}
+
+///|
+test "a table too wide for the message: its columns 14em, not squeezed; scrolled out over the page's margin to its end in line with the words" {
+  let long = "a long cell of words that would wrap to a word or two if squeezed into the message"
+  let t = @ui.Tester::new(
+    fn(c) {
+      @sf.begin(c) |> ignore
+      c.column(w=Fill(1.0), pad=16.0, fn() {
+        @sf.markdown(c, "| 一 | 二 | 三 |\n|---|---|---|\n| one \{long} | two \{long} | three \{long} |\n", bleed=16.0)
+        |> ignore
+      })
+      |> ignore
+    },
+    w=390.0,
+    h=844.0,
+  )
+  t.draw()
+  t.draw()
+  let column = 14.0 * 13.0 + 24.0
+  let (x1, y) = t.drawn_of("one a long").unwrap()
+  let (x2, _) = t.drawn_of("two a long").unwrap()
+  let (x3, _) = t.drawn_of("three a long").unwrap()
+  // at rest in line with the words (16 in), past the frame's line and the cell's 12; each column 14em of its words (13)
+  // and its cell's 24 either side, though the three are wider than the message
+  assert_eq(x1, 16.0 + 1.0 + 12.0)
+  assert_eq(x2 - x1, column)
+  assert_eq(x3 - x2, column)
+  // dragged to its end: the frame's right edge in line with the words' (16 in from the right)
+  for _ in 0..<4 {
+    t.drag(370.0, y + 5.0, 20.0, y + 5.0)
+    t.draw()
+  }
+  t.frame()
+  let (x3_end, _) = t.drawn_of("three a long").unwrap()
+  assert_eq(x3_end - 12.0 + column + 1.0, 390.0 - 16.0)
+  // what went left shows out to the screen's edge, not cut at the words' margin
+  let (shown, _, _, _) = t.shown_of("two a long").unwrap()
+  assert_eq(shown, 0.0)
 }
 
 ///|

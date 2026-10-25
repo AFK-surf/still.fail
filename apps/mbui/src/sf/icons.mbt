@@ -19,7 +19,18 @@ fn init {
     shapes_made.clear()
     copied_at.clear()
     dark_set.val = None
-    current.val = { dark: false, narrow: false, p: wide_light, t: wide_type }
+    current.val = {
+      dark: false,
+      narrow: false,
+      p: wide_light,
+      t: wide_type,
+      rows: wide_rows,
+      control_h: wide_control_h,
+      bars: bars_drawn,
+      round: wide_round,
+      items: wide_items,
+      chat_list: mouse_chat_list,
+    }
   })
 }
 
@@ -48,7 +59,7 @@ pub fn icon(c : @ui.Ctx, name : String, size? : Double = 16.0, color? : Int64) -
   let shapes = match shapes_made.get(key) {
     Some(s) => s
     None => {
-      let s = match icon_data.get(name) {
+      let s = match icon_numbers(name) {
         Some(d) => icon_shapes(d, size / 24.0, color)
         None => []
       }
@@ -57,6 +68,108 @@ pub fn icon(c : @ui.Ctx, name : String, size? : Double = 16.0, color? : Int64) -
     }
   }
   c.shapes(shapes, w=Px(size), h=Px(size), name="sf/" + key)
+}
+
+///|
+/// Of icon `name`, only its parts `parts` (their places among what it is drawn of, from 0: a line, a closed line, a
+/// fill with its holes), as `icon` draws it whole: what of it moves drawn apart from what stays (ChatMark.css.ts
+/// leadSlot's copies, each showing one part of the icon).
+pub fn icon_parts(c : @ui.Ctx, name : String, parts : Array[Int], size? : Double = 16.0, color? : Int64) -> Int {
+  let color = color.unwrap_or(theme().p.text)
+  let key = "icon/\{name}/\{parts}/\{size}/\{color}"
+  let shapes = match shapes_made.get(key) {
+    Some(s) => s
+    None => {
+      let s = match icon_numbers(name) {
+        Some(d) => icon_shapes(icon_data_parts(d, parts), size / 24.0, color)
+        None => []
+      }
+      shapes_made[key] = s
+      s
+    }
+  }
+  c.shapes(shapes, w=Px(size), h=Px(size), name="sf/" + key)
+}
+
+///|
+/// The entries of an icon's data that are its parts `parts` (a fill's holes, of no width, with the fill they cut).
+fn icon_data_parts(data : Array[Double], parts : Array[Int]) -> Array[Double] {
+  let out : Array[Double] = []
+  let mut i = 0
+  let mut part = -1
+  while i + 2 < data.length() {
+    let kind = data[i].to_int()
+    let w = data[i + 1]
+    let n = data[i + 2].to_int()
+    let end = i + 3 + 2 * n
+    if !(kind == 2 && w <= 0.0 && part >= 0) {
+      part = part + 1
+    }
+    if parts.contains(part) {
+      for k in i..<end {
+        out.push(data[k])
+      }
+    }
+    i = end
+  }
+  out
+}
+
+///|
+/// Icon `name`'s numbers, read from icon_data.mbt's text the first time it is asked for (as an array literal each, they
+/// were the design system's start-up code: 670 KB of C compiled on every build, 2026-10-24).
+fn icon_numbers(name : String) -> Array[Double]? {
+  match icon_read.get(name) {
+    Some(d) => Some(d)
+    None =>
+      match icon_data.get(name) {
+        Some(text) => {
+          let d = read_numbers(text)
+          icon_read[name] = d
+          Some(d)
+        }
+        None => None
+      }
+  }
+}
+
+///|
+let icon_read : Map[String, Array[Double]] = {}
+
+///|
+/// The numbers in `text`, each a space from the next, as icons.py writes them ("-12", "0.562"): its digits read as one
+/// whole number then divided by the point's power of ten, one rounding, so the same as the literal would be.
+fn read_numbers(text : String) -> Array[Double] {
+  let out : Array[Double] = []
+  let mut m = 0L
+  let mut neg = false
+  let mut point = false
+  let mut div = 1.0
+  let mut digits = false
+  for c in text + " " {
+    if c == ' ' {
+      if digits {
+        let v = m.to_double() / div
+        out.push(if neg { -v } else { v })
+      }
+      m = 0L
+      neg = false
+      point = false
+      div = 1.0
+      digits = false
+    } else if c == '-' {
+      neg = true
+    } else if c == '.' {
+      point = true
+    } else {
+      m = m * 10L + (c.to_int() - '0'.to_int()).to_int64()
+      digits = true
+      if point {
+        div = div * 10.0
+      }
+    }
+  }
+  out
 }
 
 ///|
@@ -96,46 +209,12 @@ fn icon_shapes(data : Array[Double], k : Double, color : Int64) -> Array[@ui.Sha
   out
 }
 
-///|
-/// The spinner's line: 2 wide (Waiting.kt Spinner: Stroke(2.dp)).
-let spin_stroke : Double = 2.0
-
-///|
-/// The spinner (styles/spinner.css.ts, Waiting.kt Spinner): a ring of line_strong, a quarter of it in the accent,
-/// turning in 0.8s; 14, or 12 in a line of small text. `sweep` (of a turn) and `period` for other rings that turn (a
-/// chat's mark at work: three quarters, 1.2s). Its lines drawn as they are every frame (mbui's Ctx::lines), only where
-/// the arc starts going round with the clock: nothing to make, nothing to wait for.
-pub fn spinner(
-  c : @ui.Ctx,
-  size? : Double = 14.0,
-  ring? : Int64,
-  arc? : Int64,
-  sweep? : Double = 0.25,
-  period? : Double = 800.0,
-) -> Int {
-  let t = theme()
-  let ring = ring.unwrap_or(t.p.line_strong)
-  let arc = arc.unwrap_or(t.p.accent)
-  let pi = 3.141592653589793
-  // the line's middle 1 in from the edge; the arc from a quarter before the top (the web's: a border whose top is
-  // the arc), turned by the clock
-  let mid = size / 2.0
-  let r = mid - spin_stroke / 2.0
-  let from = -0.75 * pi + c.cycle(period) * 2.0 * pi
-  c.lines(
-    [
-      @ui.line(@ui.arc(mid, mid, r, from=0.0, sweep=2.0 * pi), width=spin_stroke, color=ring),
-      @ui.line(@ui.arc(mid, mid, r, from~, sweep=sweep * 2.0 * pi), width=spin_stroke, color=arc),
-    ],
-    w=Px(size),
-    h=Px(size),
-  )
-}
 
 ///|
 /// What is at work steps round (Spokes.kt, the web's spokes.ts): eight, the brightest a step further every 100 ms,
-/// the others fading behind it. It steps, it does not turn: a frame for each step, none between.
-pub let spoke_step_ms : Double = 100.0
+/// the others fading behind it. It steps, it does not turn: a frame for each step, none between, on the clock every
+/// resident decoration steps on (@ui.cycle_step_ms).
+pub let spoke_step_ms : Double = @ui.cycle_step_ms
 
 ///|
 /// The spokes' strength from the brightest back (Spokes.kt SPOKE_ALPHA).

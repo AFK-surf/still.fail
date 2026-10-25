@@ -24,6 +24,9 @@ createRoot(document.getElementById('root')!).render(<Check/>);
   writeFileSync(html, '<div id="root"></div><script type="module" src="/src/space-hint-check.tsx"></script>', {flag:'wx'});
   browser = await chromium.launch({headless:true, ...(process.env.CHROMIUM_EXECUTABLE ? {executablePath:process.env.CHROMIUM_EXECUTABLE} : {})});
   const page = await browser.newPage();
+  // The keys are the core's (the prefs' keymap): its last value as the page keeps it, before the core answers.
+  await page.addInitScript(() => localStorage.setItem('stillfail.prefs', JSON.stringify({keymap: {changeable: false, mac: false, groups: [], workspace: [],
+    actions: [{action: 'composer.focus', group: 'chat', name: '', typing: 'no', keys: ['Space'], labels: ['Space'], text: 'Space', changed: false, listed: true}]}})));
   const errors=[]; page.on('pageerror', e=>errors.push(e.message));
   await page.goto(`${process.env.TEST_URL || 'http://127.0.0.1:5187'}/space-hint-check.html`);
   const hint = async expected => page.waitForFunction(expected=>document.querySelector('textarea')?.placeholder===expected,expected);

@@ -4,8 +4,18 @@ import { VIEWER_BAR } from "./ViewerBar.css.ts";
 import { pictureGlass as glass } from "../styles/glass.ts";
 import { vvBar } from "./media.css.ts";
 
-/** The player fills its page (the phone's, or the desktop's main pane), in the theme's colours as the chat's video viewer. */
+/** The player fills its page (the phone's, or the desktop's main pane): a song in the theme's colours. */
 export const player = style({ position: "absolute", inset: "0", userSelect: "none", WebkitUserSelect: "none" });
+/** A film on black, its bars and controls a deep tint with words near white, whatever the theme (as players show one;
+ *  the app's mbui player's media_ink). */
+globalStyle(`${player}[data-film]`, {
+  colorScheme: "dark",
+  vars: {
+    [vars.canvas]: "#000", [vars.raised]: "#121214", [vars.text]: "#f4f4f5", [vars.muted]: "rgb(255 255 255 / .6)",
+    [vars.subtle]: "rgb(255 255 255 / .45)", [vars.line]: "rgb(255 255 255 / .12)", [vars.lineStrong]: "rgb(255 255 255 / .2)",
+    [vars.hover]: "rgb(255 255 255 / .08)", [vars.selected]: "rgb(255 255 255 / .14)", [vars.shadow]: "oklch(0% 0 0 / .5)",
+  },
+});
 // One cell the stage's size: the picture's own height must not grow it (a phone's tall recording, cut off in a wide window).
 export const stage = style({ position: "absolute", inset: "0", display: "grid", gridTemplate: "minmax(0, 1fr) / minmax(0, 1fr)", placeItems: "center" });
 export const media = style({
@@ -107,3 +117,21 @@ export const pointed = style({
   background: "rgba(0, 0, 0, .75)", color: "#fff", fontFamily: vars.fontMono, fontSize: vars.textCaption, fontVariantNumeric: "tabular-nums",
   pointerEvents: "none", whiteSpace: "nowrap",
 });
+
+/** What a double tap did, a held finger's 2×, where a finger along it has gone: said a moment in the middle, a capsule. */
+export const said = style({
+  position: "absolute", zIndex: "3", inset: "0", display: "grid", placeItems: "center", pointerEvents: "none",
+});
+globalStyle(`${said} span`, {
+  ...glass, padding: "8px 16px", borderRadius: "999px", color: vars.text, fontSize: vars.textUi, fontVariantNumeric: "tabular-nums",
+});
+
+/** At its end, a small panel in the middle (controls.css.ts popover, its parts parts.tsx Panel*): the next one offered,
+ *  played in a few seconds counted down, or not. */
+export const ended = style({
+  position: "absolute", left: "50%", top: "50%", transform: "translate(-50%, -50%)", width: "min(100% - 48px, 320px)",
+});
+
+/** The speeds' menu: each a figure, the one it plays at checked. */
+export const speeds = style({ minWidth: "112px" });
+export const speed = style({ justifyContent: "space-between", fontFamily: vars.fontMono, fontVariantNumeric: "tabular-nums" });

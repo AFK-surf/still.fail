@@ -1,25 +1,8 @@
-// 97-video-frames (e2e/traces/video-frames.trace): a video's frames (VideoViewer.kt): alice's other device sends a
-// clip; opened, its frames' times read from the file (the host's player: 4 s at 30 a second, 120 frames); ‹ and › to
-// the one before and the very next, each as the player says it is there; 保存此帧: the frame showing grabbed by the
-// host and kept with the downloads, a PNG at the video's own size, named by the frame it is.
-
-///|
-/// The system's player of view `v` reads the clip as the run's did: its first two bytes, then `rest` from its start;
-/// each given through the core (station.file.part), the whole `total` long; then it is ready.
-fn clip_reads(f : @sfreplay.Flow, v : Int, rest : Int, total : Int) -> Unit raise {
-  let head = f.t.view_reads(v, 0.0, 2)
-  f.t.draw()
-  f.until(fn() { f.t.view_answers(v).iter().any(fn(a) { a.0 == head }) })
-  let all = f.t.view_reads(v, 0.0, rest)
-  f.t.draw()
-  f.until(fn() { f.t.view_answers(v).iter().any(fn(a) { a.0 == all }) })
-  let answers = f.t.view_answers(v)
-  f.check(answers.contains((head, 2, total.to_double())), "the clip's head: \{answers}")
-  f.check(answers.contains((all, rest, total.to_double())), "the clip read: \{answers}")
-  f.t.finish(2, v)
-  f.t.draw()
-  f.core()
-}
+// 97-video-frames (e2e/traces/video-frames.trace): a video's frames (the library's player, @sf.player_view): alice's
+// other device sends a clip; opened, it plays, its frames' times read from the file (the host's player: 4 s at 30 a
+// second, 120 frames); paused, which frame of how many, and its ±15 s become ‹ and ›: to the one before and the very
+// next, each as the player says it is there; 保存此帧: the frame showing grabbed by the host and kept with the
+// downloads, a PNG at the video's own size, named by the frame it is.
 
 ///|
 test "97-video-frames" {
@@ -37,19 +20,23 @@ test "97-video-frames" {
     f.run_to(@sfapp.preview_rest())
     // the system's player reads it through the core, then says its frames' times
     let v = opened_view(f)
-    clip_reads(f, v, 423168, 423168)
+    player_opened(f, v)
     player_told(f)
+    f.see("/ 0:04")
+    read_whole(f, v, 423168)
+    // paused, as the player says (its button 播放 again): the frame showing of how many
+    f.tap("icon:pause")
+    player_told(f)
+    f.see("icon:play")
     f.see("/ 120 帧")
-    // ‹ pauses on the frame before the one showing; again; › the very next: each shown as the player says it is there
+    // ‹ to the frame before the one showing; again; › the very next: each shown as the player says it is there
     f.tap("icon:chevron-left")
     player_told(f)
-    // paused, as the player says (its button 播放 again)
-    f.see("icon:play")
     f.tap("icon:chevron-left")
     player_told(f)
     f.tap("icon:chevron-right")
     player_told(f)
-    // 保存此帧 takes the frame of a player paused and ready (preview.mbt: the button on only then)
+    // 保存此帧 takes the frame of a player paused and ready (player.mbt: the button there only then)
     f.see("icon:play")
     f.tap("icon:camera")
     f.see("已保存到「下载」")

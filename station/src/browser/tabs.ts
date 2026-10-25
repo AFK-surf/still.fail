@@ -31,6 +31,8 @@ export type TabsParts = {
 /// Chrome tells of a tab's new address, not of its title, which the page sets after (Chrome 155): the titles are read
 /// again this long after a tab came or changed.
 const TITLES_AFTER_MS = [1000, 5000];
+/// How long a tab just created is waited for (`arrived`).
+const ARRIVE_MS = 3000;
 
 /// A tab as a screen source.
 class Tab implements ScreenSource {
@@ -89,6 +91,8 @@ export class Tabs {
   /// Past the tabs that were there at start (told as created): what comes now is the browser being used.
   #ready = false;
   #rereads: (() => void)[] = [];
+  /// Who waits for a tab to come (`arrived`), by its target id.
+  readonly #awaited = new Map<string, (() => void)[]>();
 
   constructor(p: TabsParts) {
     this.#p = p;
@@ -107,6 +111,28 @@ export class Tabs {
     return [...this.#tabs.values()].map(({ tab }) => {
       const session = this.ownerOf(tab.info.targetId);
       return { id: tab.info.targetId, title: tab.info.title, url: tab.info.url, attached: tab.info.attached, ...(session ? { session } : {}) };
+    });
+  }
+
+  /// Whether tab `targetId` is there.
+  has(targetId: string): boolean {
+    return this.#tabs.has(targetId);
+  }
+
+  /// Resolves once tab `targetId` is there (a tab just created: Chrome may answer before it tells of it), or after
+  /// `ms` all the same.
+  arrived(targetId: string, ms = ARRIVE_MS): Promise<void> {
+    if (this.#closed || this.#tabs.has(targetId)) return Promise.resolve();
+    return new Promise((resolve) => {
+      const stop = (this.#p.later ?? wall.after)(ms, () => done());
+      const done = () => {
+        stop();
+        const left = (this.#awaited.get(targetId) ?? []).filter((w) => w !== done);
+        if (left.length > 0) this.#awaited.set(targetId, left);
+        else this.#awaited.delete(targetId);
+        resolve();
+      };
+      this.#awaited.set(targetId, [...(this.#awaited.get(targetId) ?? []), done]);
     });
   }
 
@@ -147,6 +173,7 @@ export class Tabs {
     for (const view of [...this.#views]) view.close();
     for (const { remove } of this.#tabs.values()) remove();
     this.#tabs.clear();
+    for (const waiters of [...this.#awaited.values()]) for (const done of waiters) done();
   }
 
   async open(tab: Tab, options: ViewOptions): Promise<ScreenView> {
@@ -191,6 +218,7 @@ export class Tabs {
           const remove = this.#p.screens?.add(tab) ?? (() => {});
           this.#tabs.set(info.targetId, { tab, remove });
           void this.#measure(tab);
+          for (const done of this.#awaited.get(info.targetId) ?? []) done();
         }
         activity();
         return;

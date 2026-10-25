@@ -24,6 +24,10 @@ export class Station {
   idempotent = false;
   /// Each request it carried out (read whole, on a way not dead): its head.
   served: J[] = [];
+  /// How long each answer's head waits once its request is read (a station slow to answer: its main thread held).
+  lateMs = 0;
+  /// The paths of the requests the device let go of before their answers ended (their streams stopped by it).
+  letGo: string[] = [];
   /// Screen views (docs/remote-screens.md) as it served them: the head, what the client sent, the most frames it ever
   /// had sent and not acknowledged. A view sends `screenFrames` (a config first), each once fewer than 2 are
   /// unacknowledged, then ends.
@@ -135,6 +139,9 @@ export class Station {
       void (async () => {
         const c = { bytes: Buffer.alloc(0) };
         const head = await Station.readLine(stream, c);
+        // (stopped by the device before its answer's end: let go of)
+        let ended = false;
+        if (head !== null) void stream.stopped().then((code: number | null) => code !== null && !ended && this.letGo.push(JSON.parse(head).path), () => {});
         if (head !== null && JSON.parse(head).screen !== undefined) return this.#view(stream, JSON.parse(head), c.bytes);
         if (head !== null && JSON.parse(head).adb?.op === "share") {
           this.offers.push({ conn, head: JSON.parse(head) });
@@ -151,12 +158,14 @@ export class Station {
         if (dead()) return;
         const parsed = JSON.parse(head!);
         this.served.push(parsed);
+        if (this.lateMs > 0) await this.world.sleep(this.lateMs);
         const headers: J = { "content-type": "text/event-stream", "x-method": parsed.method };
         if (once) headers["stillfail-idempotent"] = "1";
         await stream.write(Buffer.from(`${JSON.stringify({ status: 200, headers })}\n`));
         // A large reply: how fast a way brings one.
         if (parsed.path === "/admin/api/big") {
           await stream.write(Buffer.alloc(1024 * 1024, 7)).catch(() => {});
+          ended = true;
           await stream.finish().catch(() => {});
           return;
         }
@@ -169,6 +178,7 @@ export class Station {
             return;
           }
         }
+        ended = true;
         await stream.finish().catch(() => {});
       })().catch(() => {});
     }

@@ -1,8 +1,9 @@
 // The device beyond the window, tried on a host (src/ui/device.mbt): a key catcher holds the focus from the start and
 // says on the log what it caught ("CAUGHT …"); words typed into it ending in "!" are commands: paste! reads the
-// clipboard ("CLIP …"), copytext! and copypng! write it (a one-pixel PNG), awake! and sleep! keep the screen on or let
-// it go, haptic! fires a long press's. The soft keyboard's height is said as it changes ("IME …"). The last line said is
-// on the screen too, for a scripted run's `until`: `APP=devicedemo scripts/android.sh build`, scripts/mac.sh.
+// clipboard ("CLIP …": its words, its picture, its files by name and size), copytext! and copypng! write it (a
+// one-pixel PNG), awake! and sleep! keep the screen on or let it go, haptic! fires a long press's. The soft keyboard's
+// height is said as it changes ("IME …"). The last line said is on the screen too, for a scripted run's `until`:
+// `APP=devicedemo scripts/android.sh build`, scripts/mac.sh.
 
 ///|
 /// A PNG of one pixel.
@@ -85,7 +86,8 @@ fn main {
           Some(clip) => {
             read.val = None
             // (shown by this frame: taken once, in its first build)
-            let line = "CLIP text=\{clip.text} picture=\{picture_said(clip.picture)}"
+            let files = clip.files.map(fn(f) { "\{f.0}:\{f.1.length()}" }).join(",")
+            let line = "CLIP text=\{clip.text} picture=\{picture_said(clip.picture)} files=\{files}"
             last.val = line
             c.tell("clip", fn() { @ui.log(line) })
           }

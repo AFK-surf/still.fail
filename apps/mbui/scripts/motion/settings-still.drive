@@ -1,0 +1,3 @@
+# A settings page as it opens (old and new side by side).
+timeout 20000
+wait 1500

@@ -2,6 +2,7 @@
 // the cloud's and the admin console's settings lists, which are drawn with the same rows.
 import { fallbackVar, globalStyle, style } from "@vanilla-extract/css";
 import { vars } from "@stillfail/ui/styles/tokens.css.ts";
+import { litOver } from "@stillfail/ui/styles/lit.ts";
 import { accountTrigger } from "./cloud/workspace.css.ts";
 import { dock, shell } from "./styles/shell.css.ts";
 import { kindIcon, kindMark } from "./ui.css.ts";
@@ -108,6 +109,12 @@ globalStyle(`${navTrack} > ${navScroll}`, { flex: "none", width: "20%", contain:
 // before it goes (it gets inert before the slide starts); the one it goes to shows at once (that has no transition).
 globalStyle(`${navTrack}:not([data-sliding]) > ${navScroll}[inert]`, { contentVisibility: "hidden", transition: "content-visibility 0s 240ms allow-discrete" });
 globalStyle(`${STILL} ${navTrack}:not([data-sliding]) > ${navScroll}[inert]`, stillAtOnce);
+// Not drawn is not stopped: a loop left running in a pane gone hidden (a row's spokes, its waiting dots) cannot go to
+// the compositor, so the page is woken for it every frame of the screen (120 a second), and every motion shown is
+// worked out again on each of those frames. So they end there, at once, while the pane is still drawn: once it is
+// hidden its style is not looked at again, and a rule coming then would never reach them (2026-10-24).
+const hiddenPane = `${navTrack}:not([data-sliding]) > ${navScroll}[inert]`;
+globalStyle(`${hiddenPane} *, ${hiddenPane} *::before, ${hiddenPane} *::after`, { animation: "none !important" });
 
 export const navFoot = style({ ...band, marginTop: "auto", padding: 8 });
 export const navFootRow = style({ display: "flex", alignItems: "center", gap: 4 });
@@ -268,7 +275,7 @@ export const waitingRetry = style({
   flex: "none", height: 22, padding: "0 10px", ...outsetEnd(4), borderRadius: 999, border: 0, cursor: "pointer",
   background: vars.hover, color: vars.text, fontSize: vars.textUi, display: "inline-flex", alignItems: "center", gap: 5,
   selectors: {
-    "&:hover:not(:disabled)": { background: vars.line },
+    "&:hover:not(:disabled)": litOver,
     "&:disabled": { cursor: "progress" },
     [`${stationRow} > &`]: { position: "absolute", right: 6, top: 5, marginRight: 0 },
   },

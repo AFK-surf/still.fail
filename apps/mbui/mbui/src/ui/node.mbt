@@ -7,6 +7,11 @@ pub(all) enum Size {
   Auto
   Px(Double)
   Fill(Double)
+  /// as wide as what it holds, cut short where its row has less room (words on one line end in an ellipsis: CSS's
+  /// min-width: 0 with text-overflow), not grown past that
+  Cut
+  /// a share of the parent's room inside its padding, in percent (CSS's `width: 50%`)
+  Pct(Double)
 } derive(Eq)
 
 ///|
@@ -74,6 +79,8 @@ struct Node {
   mut min_h : Double
   mut max_h : Double
   mut min_w : Double
+  /// its `min_w` gives way to the parent's room (Len's `Within`: CSS's `min(100%, …)`)
+  mut min_w_within : Bool
   mut max_w : Double
   mut pad_l : Double
   mut pad_t : Double
@@ -84,8 +91,16 @@ struct Node {
   mut justify : Justify
   mut bg : Int64
   mut radius : Double
+  // its corners each their own where they are not all `radius` (top left, top right, bottom right, bottom left, as
+  // drawn): said so (Radius::Corners), or worked out once laid out where some lie in a container's corners and others
+  // in none (corners.mbt); None where all four are `radius`
+  mut radii : FixedArray[Double]?
+  /// where its corners come from, each, where they are linked (Radius::Linked: the corner rule holds it to them)
+  mut links : FixedArray[CornerOf]?
   mut border_w : Double
   mut border_c : Int64
+  // its border drawn as dashes (Patch's `dashed`)
+  mut dashed : Bool
   mut shadow : Double
   // the shadow's colour and how far down it falls (-1: a third of its blur)
   mut shadow_c : Int64
@@ -124,6 +139,8 @@ struct Node {
   mut line_trim : Bool
   // added to each cluster's advance, half before and half after it (Android's letter spacing), in pixels
   mut spacing : Double
+  // digits all one width (@hostapi.style_tabular: Ctx::text `tabular`, the theme's where it says nothing)
+  mut tabular : Bool
   // wrapped words cut after this many lines, the last ending in an ellipsis (0: no limit)
   mut max_lines : Int
   mut fit : Fit
@@ -138,6 +155,19 @@ struct Node {
   mut pager : Int
   // laid over its parent rather than beside its siblings
   mut layer : Bool
+  // its margins (CSS's: outside its border, below 0 pulling what is beside it over it)
+  mut mar_l : Double
+  mut mar_t : Double
+  mut mar_r : Double
+  mut mar_b : Double
+  // where it is put in its parent, out of the flow, from the parent's edges, its padding not kept (CSS's position:
+  // absolute with left, top, right, bottom; NaN: not said); any said, it is placed so
+  mut at_l : Double
+  mut at_t : Double
+  mut at_r : Double
+  mut at_b : Double
+  // the name it is moved by (Ctx::move_state: the web's moveState's selector), "" none
+  mut moves : String
   // a row laid out right to left (built where Ctx::rtl)
   mut rtl : Bool
   // its width over its height, its height following its width (0: none; Ctx::box `aspect`)
@@ -146,12 +176,26 @@ struct Node {
   // takes every press and wheel that what lies over it does not (a modal's ground)
   mut portal : Bool
   mut blocks : Bool
+  // the wheel stops at it: what lies under it scrolls by no wheel over it (Ctx::stop_wheel: a popover's panel)
+  mut stops_wheel : Bool
   // what it holds laid out as wide as it is, scrolled sideways inside it (Ctx::sideways); built inside such a box's
   // content, at any depth (none of it shrinks to the box: Ctx::layout_node)
   mut sideways : Bool
   mut in_sideways : Bool
+  // kept to what is left of its column's room when that is short (Ctx::capped `shrinks`: CSS's flex-shrink with
+  // overflow: auto, a dialog's body under its maximum height), else as tall as what it holds
+  mut shrinks : Bool
   // as wide as its content in a row, not squeezed where the row is short (Ctx::box `keep`): only its siblings shrink
   mut keep : Bool
+  // left out of its row when the row has not the room (Ctx::box `drop`): k > 0 the k-th to go, -1 the row's ⋯ (there
+  // only while something of it is left out), 0 always there
+  mut drop : Int
+  // the least it is laid out across in a row, as worked out from what it holds (Ctx::flex_tree): narrower, what it
+  // holds would lie over what is beside it
+  mut least : Double
+  // what its row's fit keeps of it before a part of the row leaves (Ctx::box `drop`): its least, but words cut short
+  // keep four of their size, and what holds them so (layout.mbt cut_kept_ems)
+  mut fit_least : Double
   // a row that goes on in lines when what it holds does not fit (Ctx::box `flow`: Compose's FlowRow), what it holds
   // as wide as it is
   mut flow : Bool
@@ -160,6 +204,9 @@ struct Node {
   // what it is called where it shows no words of its own (an icon's button: Compose's contentDescription), found by
   // them as words are (Ctx::box `label`; a drive's or a test's `=WORDS`)
   mut label : String
+  // the name of what it stands for in another app's tree (Ctx::box `name`: a web page's class, `shellCss.dock`), read
+  // only by a tool comparing the two (Tester::boxes), "" none
+  mut name : String
   // layout results, absolute, in logical pixels, kept from frame to frame
   // in the slot (a subtree laid out as last frame is moved, not laid out)
   mut x : Double
@@ -178,7 +225,8 @@ struct Node {
   mut lines : Array[Line]
   // shapes drawn over its ground (Ctx::shapes: shape.mbt)
   mut shapes : Array[Shape]
-  // its runs as laid out when cut after its max_lines (the ellipsis a run of its own), else None: what is drawn
+  // its runs as laid out when cut after its max_lines, or on one line laid narrower than it is (the ellipsis a run of
+  // its own), else None: what is drawn
   mut rcut : Rich?
   mut rl : RichLayout?
   mut rl_max : Double
@@ -186,6 +234,9 @@ struct Node {
   mut rl_for : Rich?
   // list rows: index of the item this child shows
   mut item : Int
+  // held this far below the top of the list it is in as its row scrolls past, within its parent (Ctx::stick; NaN:
+  // where it is laid out)
+  mut stick : Double
   // its node in the flex engine, and how the engine measures it as a leaf
   fl : @flex.Node
   mut leaf : ((Double, @flex.MeasureMode, Double, @flex.MeasureMode) -> (
@@ -203,7 +254,10 @@ struct Node {
   mut lk_trim : Bool
   mut lk_wrap : Bool
   mut lk_spacing : Double
+  mut lk_tabular : Bool
   mut lk_max_lines : Int
+  // the faces as they were given when its words were laid out (faces.mbt words_shaped_in)
+  mut lk_shaped : Int
   mut lk_rich : Rich?
   mut lk_iw : Double
   mut lk_ih : Double
@@ -233,6 +287,7 @@ fn Node::new() -> Node {
     min_h: 0.0,
     max_h: 1.0e9,
     min_w: 0.0,
+    min_w_within: false,
     max_w: 1.0e9,
     pad_l: 0.0,
     pad_t: 0.0,
@@ -243,8 +298,11 @@ fn Node::new() -> Node {
     justify: JStart,
     bg: 0L,
     radius: 0.0,
+    radii: None,
+    links: None,
     border_w: 0.0,
     border_c: 0L,
+    dashed: false,
     shadow: 0.0,
     shadow_c: 0x0000002EL,
     shadow_y: -1.0,
@@ -269,6 +327,7 @@ fn Node::new() -> Node {
     line_h: 0.0,
     line_trim: false,
     spacing: 0.0,
+    tabular: false,
     max_lines: 0,
     fit: FitCover,
     fade: true,
@@ -277,16 +336,31 @@ fn Node::new() -> Node {
     page_no: -1,
     pager: 0,
     layer: false,
+    mar_l: 0.0,
+    mar_t: 0.0,
+    mar_r: 0.0,
+    mar_b: 0.0,
+    at_l: 0.0 / 0.0,
+    at_t: 0.0 / 0.0,
+    at_r: 0.0 / 0.0,
+    at_b: 0.0 / 0.0,
+    moves: "",
     rtl: false,
     aspect: 0.0,
     portal: false,
     blocks: false,
+    stops_wheel: false,
     sideways: false,
     in_sideways: false,
+    shrinks: false,
     keep: false,
+    drop: 0,
+    least: 0.0,
+    fit_least: 0.0,
     flow: false,
     line_gap: -1.0,
     label: "",
+    name: "",
     x: 0.0,
     y: 0.0,
     fw: 0.0,
@@ -302,6 +376,7 @@ fn Node::new() -> Node {
     rl_max: 0.0,
     rl_for: None,
     item: -1,
+    stick: 0.0 / 0.0,
     fl: @flex.Node::new(),
     leaf: None,
     lk_kind: -1,
@@ -312,7 +387,9 @@ fn Node::new() -> Node {
     lk_trim: false,
     lk_wrap: false,
     lk_spacing: 0.0,
+    lk_tabular: false,
     lk_max_lines: 0,
+    lk_shaped: -1,
     lk_rich: None,
     lk_iw: -1.0,
     lk_ih: -1.0,
@@ -345,19 +422,33 @@ fn Node::reset_rest(self : Node) -> Unit {
   self.page_no = -1
   self.pager = 0
   self.layer = false
+  self.mar_l = 0.0
+  self.mar_t = 0.0
+  self.mar_r = 0.0
+  self.mar_b = 0.0
+  self.at_l = 0.0 / 0.0
+  self.at_t = 0.0 / 0.0
+  self.at_r = 0.0 / 0.0
+  self.at_b = 0.0 / 0.0
+  self.moves = ""
   self.portal = false
   self.blocks = false
+  self.stops_wheel = false
   self.sideways = false
   self.in_sideways = false
+  self.shrinks = false
   self.keep = false
+  self.drop = 0
   self.flow = false
   self.line_gap = -1.0
   self.label = ""
+  self.name = ""
   self.rich = None
   self.lines = []
   self.shapes = []
   // (its cut runs go with its layout, kept with it: rl, rl_for)
   self.item = -1
+  self.stick = 0.0 / 0.0
 }
 
 ///|
@@ -371,6 +462,7 @@ fn Node::reset_look(self : Node) -> Unit {
   self.min_h = 0.0
   self.max_h = 1.0e9
   self.min_w = 0.0
+  self.min_w_within = false
   self.max_w = 1.0e9
   self.pad_l = 0.0
   self.pad_t = 0.0
@@ -381,8 +473,11 @@ fn Node::reset_look(self : Node) -> Unit {
   self.justify = JStart
   self.bg = 0L
   self.radius = 0.0
+  self.radii = None
+  self.links = None
   self.border_w = 0.0
   self.border_c = 0L
+  self.dashed = false
   self.shadow = 0.0
   self.shadow_c = 0x0000002EL
   self.shadow_y = -1.0
@@ -409,7 +504,45 @@ fn Node::reset_words(self : Node) -> Unit {
   self.line_h = 0.0
   self.line_trim = false
   self.spacing = 0.0
+  self.tabular = false
   self.max_lines = 0
+}
+
+///|
+/// Whether it is put in its parent by where it is said to be (`at_*`), out of the flow.
+fn Node::placed_at(self : Node) -> Bool {
+  !self.at_l.is_nan() || !self.at_t.is_nan() || !self.at_r.is_nan() || !self.at_b.is_nan()
+}
+
+///|
+/// Its corner `j` as drawn (0 top left, 1 top right, 2 bottom right, 3 bottom left: round it, as a clip's and an
+/// instance's are): its own where its corners are each theirs (radii), else `radius`.
+fn Node::radius_at(self : Node, j : Int) -> Double {
+  match self.radii {
+    Some(r) => r[j]
+    None => self.radius
+  }
+}
+
+///|
+/// Its corners made `r` (radius_at's order): all four one, `radius`; else each its own.
+fn Node::set_radii(self : Node, r : FixedArray[Double]) -> Unit {
+  if r[0] == r[1] && r[1] == r[2] && r[2] == r[3] {
+    self.radius = r[0]
+    self.radii = None
+  } else {
+    self.radius = dmax(dmax(r[0], r[1]), dmax(r[2], r[3]))
+    self.radii = Some(r)
+  }
+}
+
+///|
+/// Its corners as drawn (radius_at's order), a copy.
+fn Node::radii_now(self : Node) -> FixedArray[Double] {
+  match self.radii {
+    Some(r) => FixedArray::from_array([r[0], r[1], r[2], r[3]])
+    None => FixedArray::make(4, self.radius)
+  }
 }
 
 ///|

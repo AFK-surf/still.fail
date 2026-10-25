@@ -5,6 +5,20 @@
 /// seen by the next).
 let the_ctx : Ref[Ctx] = Ref(Ctx::new())
 
+
+///|
+/// The builds made so far, over every Ctx the program has had (a Tester's each its own): a build's number is never
+/// another's, so what is kept of one outside its Ctx (an app's own Field, given to an editor in a Tester before; a
+/// native view, a sideways box) is never taken for this build's.
+// kept across runs: a build's number is never one a run before had
+let builds_made : Ref[Int] = Ref(0)
+
+///|
+/// The number of the build beginning now (builds_made).
+fn next_build() -> Int {
+  builds_made.val = builds_made.val + 1
+  builds_made.val
+}
 ///|
 fn g() -> Ctx {
   the_ctx.val
@@ -150,6 +164,8 @@ let frame_hook : Ref[(() -> Unit)?] = Ref::new(None)
 fn frame_body(c : Ctx, w : Double, h : Double, scale : Double, t : Double) -> Double {
   c.width = w
   c.height = h
+  c.window_w = w
+  c.window_h = h
   // the theme set for this width (a phone's when narrower than its bound: Ctx::set_theme)
   c.pick_theme()
   if scale != c.scale {
@@ -187,7 +203,7 @@ fn frame_body(c : Ctx, w : Double, h : Double, scale : Double, t : Double) -> Do
   c.nav_rest = -1.0
   c.read_back_moved = false
   faces_from_env()
-  check_atlas()
+  text_frame()
   if bench.mode > 0 && c.bench_list != 0 && bench.frames >= 30 {
     c.scroll_list(c.bench_list, bench.speed)
   }
@@ -199,6 +215,8 @@ fn frame_body(c : Ctx, w : Double, h : Double, scale : Double, t : Double) -> Do
   fx_frame_start(c)
   // what is said to move, handed this frame's time, before the view reads where it is (motion_data.mbt)
   c.movers_sample()
+  // what the boxes moved by a move_state were shown as in the last frame: where a move set out now starts (move_state.mbt)
+  c.moves_frame_start()
   desk_frame_start()
   // the keys and presses since the last frame that move the focus, press what has it, dismiss a layer (focus.mbt,
   // overlay.mbt), before the view builds
@@ -220,11 +238,21 @@ fn frame_body(c : Ctx, w : Double, h : Double, scale : Double, t : Double) -> Do
     pass = pass + 1
     c.read_back_moved = false
     building.val = true
-    c.build_no = c.build_no + 1
+    c.build_no = next_build()
     root = frame_build(c, w, h)
+    let built_layers = c.layers.length()
     t1 = h_now()
     // lists build their rows while laid out, and those see clicks too
     c.layout(root, 0.0, 0.0, w, h) |> ignore
+    // a layer opened by what was built as it was laid out (a list's row: a hover card over what it holds) came after
+    // the page's layout: laid out over the window now, as one opened before it is; one opened in it, after it
+    let mut late = built_layers
+    while late < c.layers.length() {
+      c.layout(c.layers[late].node, 0.0, 0.0, w, h) |> ignore
+      late = late + 1
+    }
+    // what rows left out where they had not the room, drawn nowhere (readback.mbt)
+    c.left_out_after_layout()
     // what covers an item, over it as laid out now (cover.mbt)
     c.covers_after_layout()
     // the corners said `Inner`, from where they lie in their parents as laid out, the covers moved (corners.mbt)
@@ -242,6 +270,7 @@ fn frame_body(c : Ctx, w : Double, h : Double, scale : Double, t : Double) -> Do
     // (what this pass took of the inputs is taken: one built again sees none of them, the clicks, keys, menus and
     // actions since the last frame)
     c.clicked.clear()
+    c.double_clicked.clear()
     c.tapped = None
     desk.keys.clear()
     desk.menus.clear()
@@ -278,11 +307,16 @@ fn frame_body(c : Ctx, w : Double, h : Double, scale : Double, t : Double) -> Do
   c.next_hit_ids.clear()
   c.next_hit_rects.clear()
   c.next_hit_clips.clear()
+  c.next_hit_ends.clear()
   c.next_scroll_ids.clear()
   c.next_scroll_rects.clear()
+  c.next_bars.clear()
+  c.across_seen.clear()
   c.glass_frame()
   c.paint(root, 1.0)
   c.paint_overlays()
+  // what was shaped and not drawn, for the host to draw ahead while it presents this frame (text.mbt)
+  glyphs_ahead()
   c.emit_segs()
   c.sync_views()
   // what the widgets are, for a screen reader reading them (a11y.mbt)
@@ -310,6 +344,9 @@ fn frame_body(c : Ctx, w : Double, h : Double, scale : Double, t : Double) -> Do
   let hc = c.hit_clips
   c.hit_clips = c.next_hit_clips
   c.next_hit_clips = hc
+  let he = c.hit_ends
+  c.hit_ends = c.next_hit_ends
+  c.next_hit_ends = he
   // (what said its presses are another's, under a Tester: that one takes them there)
   c.check_press_owners()
   let si = c.scroll_ids
@@ -318,11 +355,16 @@ fn frame_body(c : Ctx, w : Double, h : Double, scale : Double, t : Double) -> Do
   let sr = c.scroll_rects
   c.scroll_rects = c.next_scroll_rects
   c.next_scroll_rects = sr
+  let bs = c.bars
+  c.bars = c.next_bars
+  c.next_bars = bs
   c.layers_frame_end()
   c.focus_frame_end()
   c.desk_frame_end()
+  c.bars_frame_end()
   c.sync_ime()
   c.sync_text_menu()
+  c.sync_edit_can()
   fx_frame_end(c)
   match frame_hook.val {
     Some(f) => f()
@@ -366,7 +408,15 @@ let building : Ref[Bool] = Ref::new(false)
 /// The view built (a pass of frame_body): what each build collects begins from nothing; the root, the window's size.
 fn frame_build(c : Ctx, w : Double, h : Double) -> Int {
   c.inners.clear()
+  c.inners_or.clear()
+  c.moves_build_start()
   c.arounds.clear()
+  c.corner_ladder = c.theme.corner_ladder
+  c.corner_fit = c.theme.corner_fit
+  c.lit_asked.clear()
+  c.hand_chooses.clear()
+  c.lit_apart = c.theme.lit_apart
+  c.window_corner = window_corner()
   // (what an earlier build of this frame said to tell outside is let go: this one says it again, or not)
   c.tells.clear()
   drawing_begin()
@@ -380,7 +430,9 @@ fn frame_build(c : Ctx, w : Double, h : Double) -> Int {
   c.group_cur = 0
   c.count = 0
   c.cur = -1
+  c.stuck.clear()
   c.press_owners.clear()
+  c.floating.clear()
   c.back_next = None
   c.back_node_next = -1
   let root = c.alloc(kind_box)
@@ -496,16 +548,29 @@ fn input_came() -> Unit {
 
 ///|
 fn on_pointer(kind : Int, x : Double, y : Double, button : Int) -> Unit {
-  took_input("pointer", h_event_time(), [kind.to_double(), x, y, button.to_double()])
+  // the keys held as it goes down, read once and kept with it (a replay hands the same on)
+  pointer_in(kind, x, y, button, if kind == 0 { mods_held() } else { 0 })
+}
+
+///|
+/// A pointer's event, with the keys held as it went down (0 for an event other than a press).
+fn pointer_in(kind : Int, x : Double, y : Double, button : Int, mods : Int) -> Unit {
+  took_input("pointer", h_event_time(), [kind.to_double(), x, y, button.to_double(), mods.to_double()])
   let c = g()
   // a second finger (4 down, 5 moved, 6 up: hosts with touch screens), for a pinch (native.mbt `second_pointer`)
   if kind >= 4 && kind <= 6 {
     on_second(kind, x, y)
+    // one of two lifted (which, the host does not say): the moves from here may be the other's, its own track
+    if kind == 6 {
+      track_x.reset()
+      track_y.reset()
+    }
     return
   }
   // the pointer gone out of the window (7); a secondary button (a right click: its menu's, nothing pressed)
   if kind == 7 {
     c.pointer_left()
+    c.bar_pointer(-1.0, -1.0)
     return
   }
   if button == 2 {
@@ -524,23 +589,64 @@ fn on_pointer(kind : Int, x : Double, y : Double, button : Int) -> Unit {
   }
   if kind == 0 {
     let target = hit_in(c.hit_ids, c.hit_rects, x, y)
+    // a scroll bar's thumb (a mouse's, scroll_bar.mbt): held from here, the press nothing else's (no tap, no words
+    // picked, the focus where it is)
+    if c.bar_press(target) {
+      c.press_down = Some((x, y))
+      c.down = true
+      c.active = 0
+      c.press_x = x
+      c.press_y = y
+      c.press_at = t
+      c.taken_at = t
+      c.last_x = x
+      c.last_y = y
+      c.last_t = t
+      c.press_chain.clear()
+      c.drag_scroll = 0
+      c.claimed = true
+      c.dragging = false
+      c.edge = 0
+      h_request_frame()
+      return
+    }
     // the app's own top row: the window is the host's to move from here (it takes the rest of the press)
     if desk_drags(target) {
       h_window_drag()
       return
     }
-    // words picked with the pointer (desktop.mbt), not in a field
-    if !c.editors.contains(target) {
-      select_press(x, y)
+    // how many presses in a row this one is (NSEvent's clickCount: a double click's second 2, a triple's third 3):
+    // one soon after the last (double_click_ms) and near it (double_click_slop) counts on from it
+    let (n, at, ax, ay) = c.press_run
+    c.clicks = if t - at <= double_click_ms &&
+      (x - ax).abs() <= double_click_slop &&
+      (y - ay).abs() <= double_click_slop {
+      n + 1
+    } else {
+      1
+    }
+    c.press_run = (c.clicks, t, x, y)
+    // words picked with the pointer (desktop.mbt), not in a field, nor on what keeps them (Ctx::keeps_selection);
+    // picking them lets go of what the focused field had picked, the focus staying its (focus.mbt): one thing picked
+    // in the window, as in a browser, and it is what ⌘C copies
+    if !c.editors.contains(target) && !keeps_selection_on(target) {
+      select_press(x, y, c.clicks)
+      match c.editors.get(c.focus) {
+        Some(st) if picked.base != 0 => st.anchor = st.caret
+        _ => ()
+      }
     }
     // what lies over the page sees it (overlay.mbt); the focus goes as a press moves it (focus.mbt)
     c.press_down = Some((x, y))
     c.focus_on_press(target)
+    c.press_mods = mods
     c.down = true
     c.active = target
     c.press_x = x
     c.press_y = y
     c.press_at = t
+    // (not taken yet: one taken before at the same moment is not this one)
+    c.taken_at = -1.0
     c.last_y = y
     c.last_x = x
     c.vel_x = 0.0
@@ -609,26 +715,43 @@ fn on_pointer(kind : Int, x : Double, y : Double, button : Int) -> Unit {
       }
     }
     c.press_late = h_feel() == 2 && c.drag_scroll != 0
-    match c.lists.get(c.drag_scroll) {
-      // a list moving on its own (flung, springing back from an end) is
-      // caught: the finger drags it from there, and presses nothing in it
-      Some(st) if st.moving() => {
-        c.claimed = true
-        for other in c.press_chain {
-          if other != c.drag_scroll {
-            drag_cancel(other)
-          }
+    // a list moving on its own (flung, springing back from an end) is caught wherever on it the finger lands, and the
+    // press presses nothing in it: the finger drags it from there at once; on what scrolls or drags its own way in it
+    // (a table or a code block that scrolls sideways, a row swiped across), stopped, the press goes the finger's way
+    // as ever (claim.mbt)
+    let mut caught = 0
+    if desk.mouse_drags {
+      for id in c.press_chain {
+        if caught == 0 && c.lists.get(id) is Some(st) && st.moving() {
+          caught = id
         }
+      }
+    }
+    match c.lists.get(caught) {
+      Some(st) => {
         st.catch_up()
-        st.held = true
-        c.dragging = true
+        if caught == c.drag_scroll {
+          c.claimed = true
+          for other in c.press_chain {
+            if other != c.drag_scroll {
+              drag_cancel(other)
+            }
+          }
+          st.held = true
+          c.dragging = true
+        }
+        // (no tap of anything, of a row's drag area or anywhere, once lifted)
         c.active = 0
+        c.taken_at = c.press_at
         c.edge = 0
         h_request_frame()
         return
       }
-      Some(st) => st.stop()
-      None => ()
+      None =>
+        match c.lists.get(c.drag_scroll) {
+          Some(st) => st.stop()
+          None => ()
+        }
     }
     c.editor_tap = 0
     match c.editors.get(target) {
@@ -638,12 +761,34 @@ fn on_pointer(kind : Int, x : Double, y : Double, button : Int) -> Unit {
       Some(st) => {
         c.focus = target
         c.editor_drag = true
-        place_caret(st, x, y, t)
+        // a press with Shift: what is picked widened to it; a double click's second the word there, a triple's the
+        // paragraph, the drag on from it going by them (a Mac's fields, a browser's)
+        if (mods & mod_shift_key) != 0 {
+          st.widen_by_pointer(x, y, t)
+        } else {
+          place_caret(st, x, y, t)
+          if c.clicks > 1 {
+            st.pick_at(if c.clicks == 2 { Words } else { Paragraphs })
+          }
+        }
       }
       None => if target == 0 { c.focus = 0 }
     }
   } else if kind == 1 {
-    c.hover = hit_in(c.hit_ids, c.hit_rects, x, y)
+    // a bar's thumb held: what it is for follows the pointer, nothing else sees it move
+    if c.bar_drag != 0 {
+      c.bar_drag_move(x, y)
+      c.last_x = x
+      c.last_y = y
+      c.last_t = t
+      h_request_frame()
+      return
+    }
+    // (a finger hovers over nothing: Pointing)
+    if pointing() is Mouse {
+      c.point_at(x, y)
+    }
+    c.bar_pointer(x, y)
     if c.down {
       track_x.add(t, x)
       track_y.add(t, y)
@@ -671,10 +816,11 @@ fn on_pointer(kind : Int, x : Double, y : Double, button : Int) -> Unit {
         c.active = 0
       } else if c.editor_drag {
         match c.editors.get(c.active) {
+          Some(st) if c.clicks > 1 && (c.press_mods & mod_shift_key) == 0 =>
+            st.widen_to(x, y, by=if c.clicks == 2 { Words } else { Paragraphs })
           Some(st) =>
             match st.tl {
-              Some(tl) =>
-                st.caret = imin(tl.offset_at(x - st.ox, y - st.oy), st.text.length())
+              Some(tl) => st.caret_to_point(tl, x, y)
               None => ()
             }
           None => ()
@@ -719,7 +865,16 @@ fn on_pointer(kind : Int, x : Double, y : Double, button : Int) -> Unit {
       c.last_x = x
       c.last_t = t
     }
-  } else if kind == 2 {
+  } else if kind == 2 || c.bar_drag != 0 {
+    // a bar's thumb let go (or the press cancelled): its bar shows a while more
+    if c.bar_drag != 0 {
+      c.bar_let_go()
+      c.down = false
+      c.dragging = false
+      c.active = 0
+      h_request_frame()
+      return
+    }
     if c.down {
       track_x.add(t, x)
       track_y.add(t, y)
@@ -731,6 +886,15 @@ fn on_pointer(kind : Int, x : Double, y : Double, button : Int) -> Unit {
     let target = hit_in(c.hit_ids, c.hit_rects, x, y)
     if c.active != 0 && target == c.active && !c.dragging {
       c.clicked.push(c.active)
+      // the second of two (Ctx::double_clicked): on the same, soon enough and near enough; then none is first
+      let (was, at, ax, ay) = c.last_click
+      if was == c.active && t - at <= double_click_ms && (x - ax).abs() <= double_click_slop &&
+        (y - ay).abs() <= double_click_slop {
+        c.double_clicked.push(c.active)
+        c.last_click = (0, 0.0, 0.0, 0.0)
+      } else {
+        c.last_click = (c.active, t, x, y)
+      }
     }
     // a tap wherever it lands (Ctx::tapped_anywhere), not a drag, not a press the app took
     if !c.dragging && c.taken_at != c.press_at {
@@ -749,7 +913,7 @@ fn on_pointer(kind : Int, x : Double, y : Double, button : Int) -> Unit {
         y,
         dclamp(track_x.velocity(), -max_fling, max_fling),
         dclamp(track_y.velocity(), -max_fling, max_fling),
-        false,
+        c.taken_at == c.press_at,
       )
     }
     if c.dragging {
@@ -969,6 +1133,9 @@ fn on_back(kind : Int, x : Double, _progress : Double, edge : Int) -> Unit {
 ///|
 fn on_wheel(x : Double, y : Double, dx : Double, dy : Double, phase : Int) -> Unit {
   took_input("wheel", h_event_time(), [x, y, dx, dy, phase.to_double()])
+  // what was held with it, above its phase (wheel_mod_*: ⇧ ⌃ ⌥ ⌘, and a trackpad's pinch as a wheel with ⌃ held)
+  let mods = phase / 16
+  let phase = phase % 16
   let c = g()
   let mut target = hit_in(c.scroll_ids, c.scroll_rects, x, y)
   // over what scrolls sideways: its sideways part moves it, the rest goes to the list it lies in
@@ -980,9 +1147,15 @@ fn on_wheel(x : Double, y : Double, dx : Double, dy : Double, phase : Int) -> Un
     target = outer_scroll(c, x, y)
   }
   if captures.contains(target) {
-    // a box that takes the pointer keeps the wheel (native.mbt `wheel`)
+    // a box that takes the pointer keeps the wheel (native.mbt `wheel`, `wheel_of`)
     wheels[target] = wheels.get(target).unwrap_or(0.0) + dy
+    wheels_x[target] = wheels_x.get(target).unwrap_or(0.0) + dx
+    wheel_mods[target] = mods
     h_request_frame()
+    return
+  }
+  // a pinch is what holds a page's own (a picture's zoom): no list scrolls by it
+  if (mods & wheel_mod_pinch) != 0 {
     return
   }
   if target != 0 {
@@ -1015,14 +1188,33 @@ fn key_in(code : Int, mods : Int) -> Unit {
   if catcher_key(c, code, mods) {
     return
   }
+  // ⌘Z, ⇧⌘Z (Ctrl+Z, Ctrl+Y elsewhere) with a field focused: its edits undone and done again (editor_undo.mbt)
+  let step = if c.editors.contains(c.focus) { step_of(code, mods, h_platform()) } else { None }
   // every key the app may read (Ctx::key_pressed), and whether the focused field takes it (the editor's own keys)
-  desk_key(code, mods, c.editors.contains(c.focus) && code < key_escape)
-  // ⌘C with no field focused: the words picked with the pointer
-  if code == key_copy && !c.editors.contains(c.focus) && selected_words() != "" {
+  desk_key(code, mods, c.editors.contains(c.focus) && (field_key(code) || step is Some(_)))
+  // ⌘V (Ctrl+V) as the app's key: the host saw files or a picture on the clipboard (mac_app.m, win_app.c), read for
+  // the field focused (Ctx::editor: them where it takes files, its words where it does not)
+  if code == key_of_char('v') && (mods & (mod_cmd | mod_ctrl)) != 0 && c.editors.contains(c.focus) {
+    match clipboard_read() {
+      Some(r) => desk.pasting = Some((c.focus, r))
+      None => ()
+    }
+  }
+  // ⌘C: the words picked with the pointer, unless the focused field has words of its own picked (a field keeps the
+  // focus through a press on the page's words, which lets go of what it had picked: the press above)
+  if code == key_copy && selected_words() != "" && !field_picks(c) {
     h_clipboard_set(selected_words())
     return
   }
-  if code >= key_escape {
+  match (c.editors.get(c.focus), step) {
+    (Some(st), Some(s)) => {
+      st.step(s, h_now())
+      h_request_frame()
+      return
+    }
+    _ => ()
+  }
+  if !field_key(code) {
     h_request_frame()
     return
   }
@@ -1094,7 +1286,7 @@ fn place_caret(st : EditorState, x : Double, y : Double, t : Double) -> Unit {
       if st.marked.length() > 0 {
         st.text_input(2, "", 0, 0, t)
       }
-      st.caret = imin(tl.offset_at(x - st.ox, y - st.oy), st.text.length())
+      st.caret_to_point(tl, x, y)
       st.anchor = st.caret
     }
     None => ()
@@ -1114,7 +1306,7 @@ fn handle_move(c : Ctx, x : Double, y : Double, t : Double) -> Unit {
       match st.tl {
         Some(tl) => {
           let tip = y - c.handle_dy
-          st.caret = imin(tl.offset_at(x - st.ox, tip - tl.line_h / 2.0 - st.oy), st.text.length())
+          st.caret_to_point(tl, x, tip - tl.line_h / 2.0)
           st.anchor = st.caret
           st.blink0 = t
           h_request_frame()

@@ -47,7 +47,8 @@ fn pace_of(seed : UInt) -> @core.Pace {
 /// The app over `trace` in a w × h window (a phone's by default; the wide flows' 1280 × 800), in the pass `seed`
 /// names (0: the strict one, as the run had it; else what is due at once in the order drawn from it, at that pass's
 /// pace: pace_of). `drop`: asks of the run's its timing made, by words in them
-/// (Replay::drop), each with what came for it.
+/// (Replay::drop), each with what came for it. `platform`: the system it is on (Tester::new's), by default by its width:
+/// a phone's (Android) narrower than medium_from, else the Mac.
 pub fn Flow::start(
   trace : String,
   seed? : UInt = 0,
@@ -55,6 +56,7 @@ pub fn Flow::start(
   w? : Double = 390.0,
   h? : Double = 844.0,
   env? : Array[(String, String)] = [],
+  platform? : Int,
 ) -> Flow {
   let r = @core.Replay::parse(trace)
   // (asks the run's timing made, with what came for them: each test says which and why)
@@ -71,7 +73,14 @@ pub fn Flow::start(
   // do not hang on the run's pace, and an older trace's asks have no wall clock to keep it by)
   r.pace(if seed == 0 && emit_path() != "" { @core.AtOnce } else { pace_of(seed) }, strict=seed == 0)
   r.attach()
-  emit_start(seed, w, h, env)
+  // (on the screen it was made on: a phone's window's runs a phone's, Android's, pointed at by a finger; a wider one's
+  // the Mac's, by a mouse, and keyboard and mouse's window made narrow (`platform` 0); the live run recording it again on a Mac
+  // plays that system too)
+  let platform = match platform {
+    Some(p) => p
+    None => if w < @sf.medium_from { 2 } else { 0 }
+  }
+  emit_start(seed, w, h, if platform == 2 { env + [("MBUI_PLATFORM", "android")] } else { env })
   // what the core says comes through mbui's queue, as the app's does (src/stillfail: sfcore.start)
   @ui.on_message("core", @core.receive)
   // (the app started with what the run's was: its trace's env, then what the test says of its own; a trace that does
@@ -82,9 +91,14 @@ pub fn Flow::start(
     )
   }
   // (and its host's answers as the run's gave them, where it kept them: a word's bounds as the system splits words)
+  // (on the system the run was on, its core told so: above)
   let t = match r.text() {
-    Some(text) => @ui.Tester::new(app, w~, h~, env=r.env() + env, text~)
-    None => @ui.Tester::new(app, w~, h~, env=r.env() + env)
+    Some(text) => @ui.Tester::new(app, w~, h~, env=r.env() + env, text~, platform~)
+    None => @ui.Tester::new(app, w~, h~, env=r.env() + env, platform~)
+  }
+  // (which station this machine is, as the run's host said)
+  if r.local_station() != "" {
+    t.set_local_station(r.local_station())
   }
   // (the time of day the run's: its first event that has happened here (the app's first ask, made as it started) at
   // the run's moment of it, going on with the frames' clock from there, @ui.wall_ms)
@@ -271,6 +285,14 @@ fn Flow::spots(self : Flow, what : String) -> Array[(Double, Double)] {
 }
 
 ///|
+/// Those of them a finger reaches, lowest first (Tester::reachable): where a tap goes, as a scripted run's does.
+fn Flow::reach_spots(self : Flow, what : String) -> Array[(Double, Double)] {
+  let at = self.t.reachable(what)
+  at.sort_by(fn(a, b) { b.1.compare(a.1) })
+  at
+}
+
+///|
 /// What the test says must hold here, `why` said when it does not: the test fails, as an assert would; but while it
 /// writes the steps as a scripted run over a trace the app has outgrown (FLOW_EMIT), said and the steps after it
 /// written all the same (Flow::fail).
@@ -376,9 +398,10 @@ pub fn Flow::field(self : Flow, words : String) -> Unit {
 /// The lowest `what` on screen (`top`: the highest) tapped, and what the core answers to it given.
 pub fn Flow::tap(self : Flow, what : String, top? : Bool = false) -> Unit {
   emit((if top { "tap1 " } else { "tap " }) + what)
-  // (as a scripted run's tap waits for what it taps to show: what came for it given first, Flow::until)
-  self.until(fn() { self.spots(what).length() > 0 })
-  let at = self.spots(what)
+  // (as a scripted run's tap waits for what it taps to show, where a finger reaches it, not under a sheet or a scrim:
+  // what came for it given first, Flow::until)
+  self.until(fn() { self.reach_spots(what).length() > 0 })
+  let at = self.reach_spots(what)
   if at.length() == 0 {
     self.fail("nothing to tap: " + what)
     return
@@ -544,8 +567,12 @@ pub fn Flow::end(self : Flow, unmade? : Array[String] = []) -> String {
       self.t.run_for(toast - self.t.time())
       continue
     }
-    // (the frame the last one left owed: what it asks (a page gone, its player's place told) answered too)
+    // (the frame the last one left owed: what it asks (a page gone, its player's place told) answered too; what it sets
+    // moving (a box laid out anew by what came last) run to its end as the others)
     self.t.draw()
+    if self.t.rest_of("") > self.t.time() {
+      continue
+    }
     // (and what is told to happen at a time of its own (a timer: an agent's activity lingering), to that time, as a
     // motion to its end; one that keeps telling itself again never ends: said, not run on)
     match self.t.next_wake() {
@@ -774,8 +801,11 @@ pub fn Flow::wheel_at(self : Flow, what : String, dy : Double) -> Unit {
   guard self.spot(what) is Some((x, y)) else { return }
   self.t.wheel(x, y, dy)
   self.core()
-  // the list's wheel eased to where it goes
-  self.run_to(self.t.rest_of("wheel ease"))
+  // the list's wheel eased to where it goes (a phone's lists, Android's, go there at once)
+  let eased = self.t.rest_of("wheel ease")
+  if eased > self.t.time() && eased < @double.infinity {
+    self.run_to(eased)
+  }
 }
 
 ///|
@@ -930,7 +960,7 @@ pub fn Flow::shrinks(
   self : Flow,
   what : String,
   to~ : Double,
-  ease~ : @motion.Ease,
+  ease~ : @ui.Ease,
   ms~ : Double,
   rest~ : Double,
 ) -> Unit {

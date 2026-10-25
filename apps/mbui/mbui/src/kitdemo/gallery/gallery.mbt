@@ -43,7 +43,7 @@ fn section(c : @ui.Ctx, title : String, body : () -> Unit) -> Unit {
 }
 
 ///|
-/// A row of what a section shows.
+/// A row of what a section shows, onto more lines where the page is narrower than it (a phone's half).
 fn line(c : @ui.Ctx, body : () -> Unit) -> Unit {
-  c.box(dir=Row, gap=8.0, align=ACenter, body) |> ignore
+  c.box(dir=Row, flow=true, gap=8.0, align=ACenter, body) |> ignore
 }

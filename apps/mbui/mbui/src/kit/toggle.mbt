@@ -99,7 +99,11 @@ pub(all) struct GroupState {
 /// A toggle group (see the file's head) of `items`, those of `value` pressed (its id `key`'s), named `label` for the
 /// semantics tree; `orientation` the arrows that move along it, round unless not `wrap`; one pressed at most sliding
 /// a thumb (`thumb` its look, given its width and height) to it when `slide`; `grow`: as wide as where it is, the
-/// items sharing its width. What is pressed now, and what happened to the group (`changed`; `clicked` when an item was).
+/// items sharing its width, none narrower than its look needs (its words whole: one that needs more than its share
+/// keeps that, the others sharing what is left, as CSS's flex: 1); `widths`: each item as wide as its first where the
+/// room is, giving way down to its second where there is less (CSS's width with its min-width: a row short of room
+/// takes alike from each, none past its least), its look as wide. What is pressed now, and what happened to the group
+/// (`changed`; `clicked` when an item was).
 pub fn toggle_group(
   c : @ui.Ctx,
   key : String,
@@ -112,6 +116,7 @@ pub fn toggle_group(
   label? : String = "",
   slide? : Bool = false,
   grow? : Bool = false,
+  widths? : Array[(Double, Double)] = [],
   look? : (@ui.Ctx, ToggleState) -> Unit,
   thumb? : (@ui.Ctx, Double, Double) -> Unit = group_thumb_look,
   ground? : (@ui.Ctx, GroupState, () -> Unit) -> Unit = group_look,
@@ -164,9 +169,18 @@ pub fn toggle_group(
             first: k == 0,
             last: k == items.length() - 1,
           }
-          let i = c.box(style=if grow { group_item_grow } else { group_item_own }, id=if off { 0 } else { iid }, fn() {
-            look(c, st)
-          })
+          let (w, least) = match widths.get(k) {
+            Some((w, least)) => (Some(@ui.Size::Px(w)), Some(least))
+            None => (None, None)
+          }
+          let i = c.box(
+            style=if grow { group_item_shared } else { group_item },
+            keep=grow,
+            id=if off { 0 } else { iid },
+            w?=w,
+            min_w?=least,
+            fn() { look(c, st) },
+          )
           nodes.push(i)
           if multiple {
             c.semantics(i, Button, id=iid, label=it.label, pressed=on, disabled=off, actions=pick(off, [], [Activate]))
@@ -296,8 +310,17 @@ pub fn group_item_look(c : @ui.Ctx, s : ToggleState) -> Unit {
 /// A group and its items as wide as what their looks draw, or (`grow`) the group as wide as where it is and each item
 /// an equal share of it.
 // kept across runs: a value (no field of it changes)
-let group_item_own : @ui.Style = @ui.style()
+let group_item_own : @ui.Style = @ui.css("")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let group_item_grow : @ui.Style = @ui.style(w=Full)
+let group_item_grow : @ui.Style = @ui.css("w=Full")
+
+///|
+/// An item: its look in its middle where it is taller than that (its row as tall as its tallest item's).
+// kept across runs: a value (no field of it changes)
+let group_item : @ui.Style = @ui.css("justify=JCenter")
+
+///|
+// kept across runs: a value (no field of it changes)
+let group_item_shared : @ui.Style = group_item.then(group_item_grow)

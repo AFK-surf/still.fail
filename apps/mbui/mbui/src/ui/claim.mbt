@@ -4,7 +4,9 @@
 // way the finger has gone past the slop, and further than across it, takes the press from there; the others let it
 // go (a drag area pressed: no tap, not ended). Whoever holds whom does not matter: a row swiped across in a list, a
 // card swiped across over the list in it. A press none takes is a tap. Taken at once, as it goes down: a drag area
-// that only holds (Hold: a scrim, a sheet's body), a list moving on its own (caught), or the only one there.
+// that only holds (Hold: a scrim, a sheet's body), a list moving on its own (caught), or the only one there. A list
+// moving on its own around what waits under the finger (a sideways box, a row swiped across) stops, and the press waits
+// as ever.
 // (What reaches the end of its way does not hand the rest on to what lies around it: no nested scroll yet.)
 
 ///|

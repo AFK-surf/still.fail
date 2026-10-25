@@ -20,6 +20,7 @@ import * as partsCss from "./styles/parts.css.ts";
 import * as rootCss from "./styles/root.css.ts";
 import { t } from "../i18n.ts";
 import { whenRowIn } from "../madeChat.ts";
+import type { ChatCcTo } from "../core/shapes.ts";
 
 // The composer's height, set at its page's root (MobileComposer), as that element's own; the room it leaves a chat's
 // list, a length worked out there and inherited (ChatHost.css.ts): one changing with the other only past a few lines.
@@ -48,6 +49,8 @@ export interface HostComposer {
   send(draft: Draft): void;
   /** Typing (a chat's agent is warmed). */
   type?(): void;
+  /** Its chat's Slack and Feishu threads, where what is sent can be copied (`chat.cc`): ＋'s menu ticks each. */
+  cc?: { to: ChatCcTo[]; toggle(to: ChatCcTo): void };
 }
 
 /** The same while the page is (what is typed changes `now` alone): the page above is not drawn again at each key. */
@@ -161,7 +164,7 @@ export function MobileComposer({ shown, draftKey, latest, draft, now, root, inli
   }, [root]);
   const { menu, bar, expanded } = useComposerBar({
     draft, draftKey, sessionKey: shown.session ?? null, placeholder: shown.placeholder, locked, noFiles,
-    onPlus: (plus) => openAttach(app, plus, upload, () => openStationFiles(app, shown.station, (items) => now.current.addDropped(items))), onType: () => latest.current?.type?.(), onSend: () => {
+    onPlus: (plus) => openAttach(app, plus, upload, () => openStationFiles(app, shown.station, (items) => now.current.addDropped(items)), latest.current?.cc), onType: () => latest.current?.type?.(), onSend: () => {
       // What it refers to of other workspaces is shared first, when the viewer says (Chat.tsx sendSharing).
       const spec = latest.current;
       if (spec) sendSharing(app, spec.station, now.current.text, () => spec.send(now.current));

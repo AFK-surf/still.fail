@@ -13,13 +13,27 @@
 pub(open) trait Host {
   window_setup(Self, Double, Double, Double, Double, Bool) -> Unit = _
   window_inset(Self) -> Bool = _
+  full_screen(Self) -> Bool = _
+  set_full_screen(Self, Bool) -> Unit = _
+  window_corner(Self) -> Double = _
   window_drag(Self) -> Unit = _
   set_cursor(Self, Int) -> Unit = _
+  set_badge(Self, Int) -> Unit = _
+  menu_setup(Self, String) -> Unit = _
+  local_station(Self) -> String = _
+  local_station_act(Self, String) -> Unit = _
+  dock_available(Self) -> Bool = _
+  dock_send(Self, String) -> Unit = _
+  dock_stop(Self) -> Unit = _
+  dock_kept(Self) -> String = _
+  dock_keep(Self, String) -> Unit = _
+  mods_held(Self) -> Int = _
   run(Self, String, FuncRef[(Double, Double, Double, Double) -> Unit], FuncRef[(Int, Double, Double, Int) -> Unit], FuncRef[(Double, Double, Double, Double, Int) -> Unit], FuncRef[(Int, Int) -> Unit], FuncRef[(Int, String, Int, Int) -> Unit]) -> Unit = _
   now(Self) -> Double = _
   wall_ms(Self) -> Double = _
   utc_offset_min(Self, Double) -> Int = _
   event_time(Self) -> Double = _
+  frame_late(Self) -> Double = _
   platform(Self) -> Int = _
   request_frame(Self) -> Unit = _
   wake_after(Self, Double) -> Unit = _
@@ -27,15 +41,22 @@ pub(open) trait Host {
   shape(Self, String, Double, Int, Int, FixedArray[Double]) -> Int = _
   text_key(Self, String, Double, Int, Int) -> Int = _
   glyph(Self, Int, FixedArray[Double]) -> Unit = _
+  glyph_put(Self, Int, Int, Int) -> Unit = _
+  atlas_size(Self, Bool) -> Int = _
+  glyphs_ahead(Self, FixedArray[Int], Int) -> Unit = _
   face_add(Self, Int, String, Int) -> Bool = _
   face_add_bytes(Self, Int, Bytes, Int) -> Bool = _
   face_clear(Self, Int) -> Unit = _
+  face_add_family(Self, Int, String) -> Bool = _
+  local_font_families(Self) -> String = _
   atlas_generation(Self) -> Int = _
   present(Self, FixedArray[Double], Int, Double, Double, Double) -> Unit = _
   set_ime(Self, Bool, Double, Double, Double, Double, String, Int, Int) -> Unit = _
   text_menu(Self, Bool, Double, Double, Double, Double, Int) -> Unit = _
+  edit_can(Self, Int) -> Unit = _
   clipboard_set(Self, String) -> Unit = _
   clipboard_set_secret(Self, String, Double) -> Unit = _
+  clipboard_set_image(Self, Bytes) -> Unit = _
   log(Self, String) -> Unit = _
   bench_mode(Self) -> Int = _
   set_outside(Self, FuncRef[(Int, Int, Int) -> Unit]) -> Bool = _
@@ -52,6 +73,7 @@ pub(open) trait Host {
   set_app_state(Self, FuncRef[(Int) -> Unit]) -> Unit = _
   system_dark(Self) -> Bool = _
   font_scale(Self) -> Double = _
+  native_pointing(Self) -> Int = _
   a11y_on(Self) -> Bool = _
   a11y_tree(Self, String) -> Unit = _
   set_dark(Self, Bool) -> Unit = _
@@ -83,7 +105,7 @@ pub(open) trait Host {
   view_control(Self, Int, Int, Double) -> Unit = _
   view_info(Self, Int, FixedArray[Double]) -> Int = _
   view_read_next(Self, Int, FixedArray[Double]) -> Int = _
-  view_read_answer(Self, Int, Int, Bytes, Double) -> Unit = _
+  view_read_answer(Self, Int, Int, Bytes, Double, Bool) -> Unit = _
   pdf_open(Self, Bytes) -> Int = _
   pdf_pages(Self, Int) -> Int = _
   pdf_page_size(Self, Int, Int, FixedArray[Double]) -> Unit = _
@@ -153,6 +175,9 @@ pub(open) trait Host {
   cl_picture(Self, Int) -> Int = _
   cl_text(Self, Int) -> String = _
   cl_png(Self, Int) -> Bytes = _
+  cl_files(Self, Int) -> Int = _
+  cl_file_name(Self, Int, Int) -> String = _
+  cl_file(Self, Int, Int) -> Bytes = _
   cl_end(Self, Int) -> Unit = _
   cl_set(Self, String, Bytes, String) -> Unit = _
   dv_copy_shown(Self) -> Int = _
@@ -178,12 +203,77 @@ impl Host with window_inset(_) {
 }
 
 ///|
+impl Host with full_screen(_) {
+  false
+}
+
+///|
+impl Host with set_full_screen(_, _) {
+  ()
+}
+
+///|
+impl Host with window_corner(_) {
+  0.0
+}
+
+///|
 impl Host with window_drag(_) {
   ()
 }
 
 ///|
 impl Host with set_cursor(_, _) {
+  ()
+}
+
+///|
+impl Host with set_badge(_, _) {
+  ()
+}
+
+///|
+impl Host with menu_setup(_, _) {
+  ()
+}
+
+///|
+impl Host with local_station(_) {
+  ""
+}
+
+///|
+impl Host with local_station_act(_, _) {
+  ()
+}
+
+///|
+impl Host with dock_available(_) {
+  false
+}
+
+///|
+impl Host with mods_held(_) {
+  0
+}
+
+///|
+impl Host with dock_send(_, _) {
+  ()
+}
+
+///|
+impl Host with dock_stop(_) {
+  ()
+}
+
+///|
+impl Host with dock_kept(_) {
+  ""
+}
+
+///|
+impl Host with dock_keep(_, _) {
   ()
 }
 
@@ -210,6 +300,11 @@ impl Host with utc_offset_min(_, _) {
 ///|
 impl Host with event_time(_) {
   -1.0
+}
+
+///|
+impl Host with frame_late(_) {
+  0.0
 }
 
 ///|
@@ -248,6 +343,21 @@ impl Host with glyph(_, _, _) {
 }
 
 ///|
+impl Host with glyph_put(_, _, _, _) {
+  ()
+}
+
+///|
+impl Host with atlas_size(_, _) {
+  0
+}
+
+///|
+impl Host with glyphs_ahead(_, _, _) {
+  ()
+}
+
+///|
 impl Host with face_add(_, _, _, _) {
   false
 }
@@ -260,6 +370,16 @@ impl Host with face_add_bytes(_, _, _, _) {
 ///|
 impl Host with face_clear(_, _) {
   ()
+}
+
+///|
+impl Host with face_add_family(_, _, _) {
+  false
+}
+
+///|
+impl Host with local_font_families(_) {
+  ""
 }
 
 ///|
@@ -283,12 +403,22 @@ impl Host with text_menu(_, _, _, _, _, _, _) {
 }
 
 ///|
+impl Host with edit_can(_, _) {
+  ()
+}
+
+///|
 impl Host with clipboard_set(_, _) {
   ()
 }
 
 ///|
 impl Host with clipboard_set_secret(_, _, _) {
+  ()
+}
+
+///|
+impl Host with clipboard_set_image(_, _) {
   ()
 }
 
@@ -380,6 +510,11 @@ impl Host with font_scale(_) {
 ///|
 impl Host with system_dark(_) {
   false
+}
+
+///|
+impl Host with native_pointing(_) {
+  0
 }
 
 ///|
@@ -528,7 +663,7 @@ impl Host with view_read_next(_, _, _) {
 }
 
 ///|
-impl Host with view_read_answer(_, _, _, _, _) {
+impl Host with view_read_answer(_, _, _, _, _, _) {
   ()
 }
 
@@ -878,6 +1013,21 @@ impl Host with cl_png(_, _) {
 }
 
 ///|
+impl Host with cl_files(_, _) {
+  0
+}
+
+///|
+impl Host with cl_file_name(_, _, _) {
+  ""
+}
+
+///|
+impl Host with cl_file(_, _, _) {
+  b""
+}
+
+///|
 impl Host with cl_end(_, _) {
   ()
 }
@@ -951,6 +1101,7 @@ let current : Ref[&Host] = { val: NoHost::{  } }
 /// Who answers from now on: the platform's (mbui/host's init, as the program starts), a Tester's fake.
 pub fn set_host(h : &Host) -> Unit {
   current.val = h
+  sideways_now.val = false
 }
 
 ///|
@@ -977,6 +1128,27 @@ pub fn window_inset() -> Bool {
 }
 
 ///|
+/// Whether the desktop's window fills the screen now (macOS's full screen). False where there is no such window.
+pub fn full_screen() -> Bool {
+  current.val.full_screen()
+}
+
+///|
+/// The desktop's window made to fill the screen, or back as it was (macOS's full screen, as its green button does).
+/// Nothing where there is no window to size.
+pub fn set_full_screen(on : Bool) -> Unit {
+  current.val.set_full_screen(on)
+}
+
+///|
+/// How round the system draws the window's corners now, in points: the outermost corner of all, what lies in it
+/// concentric with it as with any container's (@ui's corners.mbt). 0 where they are square (filling the screen,
+/// maximised, a browser's page, Windows 10) or where the system says nothing of them.
+pub fn window_corner() -> Double {
+  current.val.window_corner()
+}
+
+///|
 /// The press under way moves the window (a press on the app's own top row, @ui's Ctx::window_drag): the host's from
 /// here, as its title bar's would be.
 pub fn window_drag() -> Unit {
@@ -989,6 +1161,85 @@ pub fn window_drag() -> Unit {
 pub fn set_cursor(kind : Int) -> Unit {
   current.val.set_cursor(kind)
 }
+
+///|
+/// The number on the app's icon (macOS's Dock tile: what waits for the person); 0 none. Nothing where the system
+/// shows none.
+pub fn set_badge(n : Int) -> Unit {
+  current.val.set_badge(n)
+}
+
+///|
+/// The app's menus in the system's menu bar (macOS's), as JSON: an array of menus, each
+/// `{"title": …, "items": [item, …]}` (the first the app's own, its title the system's), an item
+/// `{"title": …, "role": …}` the system's own (`about`, `hide`, `hideOthers`, `showAll`, `quit`, `undo`, `redo`,
+/// `cut`, `copy`, `paste`, `selectAll`, `services`, `close`, `minimize`, `zoom`, `fullScreen`, `front`: their keys
+/// the system's),
+/// `{"title": …, "action": …, "keys"?: "Mod+Shift+H", "enabled"?: false}` the app's (chosen, said on `system_channel` as
+/// `{"menu": action}`; its keys shown, the app's to take), or `{"separator": true}`; a menu `"role": "window"` is the
+/// system's list of windows too, `"role": "actions"` one of the app's actions only (their keys never taken by the
+/// menu). Given again as what it shows changes. Nothing where the system has no menu bar.
+pub fn menu_setup(json : String) -> Unit {
+  current.val.menu_setup(json)
+}
+
+///|
+/// This machine's station as the system says it (macOS: its data ~/.stillfail, whether it runs and by what, its release,
+/// the workspace its data is in, what is being done to it and what failed last), as JSON; "" where there is none or no
+/// way to it.
+pub fn local_station() -> String {
+  current.val.local_station()
+}
+
+///|
+/// Something done to this machine's station: start, stop, restart (as `local_station` then says), log, folder (opened);
+/// `install {"origin", "token", "channel"}` (the station's installer with a workspace's one-time token: downloaded,
+/// joined, run as a service) and `update {"origin", "channel"}` (the installer with none: the station here brought up
+/// to the latest release, run as a service), `doing` while they run, as the others.
+pub fn local_station_act(action : String) -> Unit {
+  current.val.local_station_act(action)
+}
+
+///|
+/// Whether there is a dock here (macOS: the desktop's SwiftUI helper, apps/desktop/dock, on macOS 14 or later).
+pub fn dock_available() -> Bool {
+  current.val.dock_available()
+}
+
+///|
+/// The keys held down now that change what a press or a drag does (shift 1, control 2, option/alt 4, command 8: as a
+/// key's own modifiers are told): what a drag let go does by them (Finder's ⌥ a copy). None where there is no keyboard.
+pub fn mods_held() -> Int {
+  current.val.mods_held()
+}
+
+///|
+/// A line to the dock (one JSON object; the first starts it): what it says comes back a line each on channel
+/// `dock_channel`, {"type":"gone"} once it has ended.
+pub fn dock_send(line : String) -> Unit {
+  current.val.dock_send(line)
+}
+
+///|
+/// The dock stopped.
+pub fn dock_stop() -> Unit {
+  current.val.dock_stop()
+}
+
+///|
+/// The dock's settings as kept on this device (JSON; "" none), and kept.
+pub fn dock_kept() -> String {
+  current.val.dock_kept()
+}
+
+///|
+pub fn dock_keep(json : String) -> Unit {
+  current.val.dock_keep(json)
+}
+
+///|
+/// Where what the dock says comes (@ui.on_message).
+pub let dock_channel : String = "dock"
 
 ///|
 pub fn run(
@@ -1027,6 +1278,14 @@ pub fn utc_offset_min(at_ms : Double) -> Int {
 /// are handled together); negative when the host doesn't say.
 pub fn event_time() -> Double {
   current.val.event_time()
+}
+
+///|
+/// How much later than its time (the moment it was drawn for: the frame's `t`) the frame before this one reached the
+/// screen, in ms: 0 on time, as a host says where it cannot tell (a Tester's, a browser's), and where frames are not
+/// drawn one after the other (the first after a pause).
+pub fn frame_late() -> Double {
+  current.val.frame_late()
 }
 
 ///|
@@ -1082,8 +1341,40 @@ pub fn text_key(text : String, size : Double, weight : Int, style : Int) -> Int 
 }
 
 ///|
+/// Glyph `key` (a cluster `shape` or `text_key` gave) drawn, its picture held for `glyph_put`: in `out` 0 and 0 (where
+/// it goes in the atlas is the caller's: atlas.mbt), its picture's width and height in points (its pixels at the
+/// host's scale; 0: nothing to draw), where its top left is from the pen on the baseline, and 1 where it is in colours
+/// of its own (an emoji), else 0. Drawn again each time it is asked for: the caller asks for what its atlas lacks.
 pub fn glyph(key : Int, out : FixedArray[Double]) -> Unit {
   current.val.glyph(key, out)
+}
+
+///|
+/// The picture of glyph `key`, drawn by the `glyph` asked last, put in its atlas with its top left at pixel `x`, `y`
+/// (there before the next frame is drawn), over whatever was there: in colour glyphs' own atlas (where the host has
+/// one) `x` is `colour_atlas_u` past its place across in it, as its instances say it.
+pub fn glyph_put(key : Int, x : Int, y : Int) -> Unit {
+  current.val.glyph_put(key, x, y)
+}
+
+///|
+/// The side of the host's atlas the glyphs of its words are drawn from, in pixels, or (`colour`) of colour glyphs'
+/// own (an emoji's: 0, they are in the words' atlas with the others); 0: none.
+pub fn atlas_size(colour : Bool) -> Int {
+  current.val.atlas_size(colour)
+}
+
+///|
+/// How far across past its place in it a glyph in colour glyphs' own atlas is said, to the host (glyph_put) and in its
+/// instances (scene.mbt: its renderer takes the atlas by it).
+pub let colour_atlas_u : Int = 16384
+
+///|
+/// The glyphs of the first `n` of `keys`, shaped and not drawn yet (on a page still off the screen, or below what is
+/// shown), for the host to draw ahead, off the frames' thread, so that `glyph` finds them drawn when they come into
+/// view. What `glyph` answers is the same either way: only when the work is done changes. A host may do nothing.
+pub fn glyphs_ahead(keys : FixedArray[Int], n : Int) -> Unit {
+  current.val.glyphs_ahead(keys, n)
 }
 
 ///|
@@ -1091,6 +1382,20 @@ pub fn glyph(key : Int, out : FixedArray[Double]) -> Unit {
 /// or 4 to 15 for what names it), for `weight` (0: a variable file, every weight from it). False when the host could
 /// not read it as a font (the face as it was). What was shaped or drawn before is the host's to forget
 /// (atlas_generation moves on).
+/// Face `face` set in a family installed on this machine (`family`, as local_font_families names it): its every style
+/// the system's. False where the host has none of that name (or no way to it).
+pub fn face_add_family(face : Int, family : String) -> Bool {
+  current.val.face_add_family(face, family)
+}
+
+///|
+/// The font families installed on this machine, as a JSON array of their names, in the order of the user's
+/// language (the system's hidden ones left out); "" where the host has no way to them (a phone, a browser).
+pub fn local_font_families() -> String {
+  current.val.local_font_families()
+}
+
+///|
 pub fn face_add(face : Int, path : String, weight : Int) -> Bool {
   current.val.face_add(face, path, weight)
 }
@@ -1108,6 +1413,8 @@ pub fn face_clear(face : Int) -> Unit {
 }
 
 ///|
+/// Moves on as what the host drew and measured before is gone: its faces or its scale changed, its atlas lost (a new
+/// drawing surface). Never as its atlas fills: what goes where in it is the caller's (atlas.mbt).
 pub fn atlas_generation() -> Int {
   current.val.atlas_generation()
 }
@@ -1151,12 +1458,28 @@ pub let text_menu_paste : Int = 4
 pub let text_menu_select_all : Int = 8
 
 ///|
+/// What a field has to undo and to do again (edit_can's `can`, beside the four above).
+pub let text_menu_undo : Int = 16
+
+///|
+pub let text_menu_redo : Int = 32
+
+///|
 /// The system's floating menu for a field's words (Android's text toolbar: ActionMode.TYPE_FLOATING) `shown` over the
 /// window's rectangle (`x`, `y`, `w`, `h`: the words picked, or the caret), offering what `can` says (text_menu_*); or
 /// put away. What is chosen comes as the keys and the paste the field already takes (select all, copy, cut: keys 12,
 /// 13, 14; paste: the clipboard's words as text), the menu then gone. A host with none shows nothing.
 pub fn text_menu(shown : Bool, x : Double, y : Double, w : Double, h : Double, can : Int) -> Unit {
   current.val.text_menu(shown, x, y, w, h, can)
+}
+
+///|
+/// What the menu bar's editing items (a Mac's 编辑: 撤销, 重做, 剪切, 拷贝, 粘贴, 全选) can do now, said as it changes:
+/// text_menu_* (text_menu_undo, text_menu_redo with them) for the field with the focus, or copy for the words picked
+/// with the pointer where no field has it; an item it does not say is greyed, as the system's fields have theirs. A
+/// host with no menu bar does nothing with it.
+pub fn edit_can(can : Int) -> Unit {
+  current.val.edit_can(can)
 }
 
 ///|
@@ -1169,6 +1492,13 @@ pub fn clipboard_set(s : String) -> Unit {
 /// off `clear_ms` later unless something else was copied meanwhile (0: kept). Elsewhere as clipboard_set.
 pub fn clipboard_set_secret(s : String, clear_ms~ : Double) -> Unit {
   current.val.clipboard_set_secret(s, clear_ms)
+}
+
+///|
+/// A picture put on the system's clipboard (an image file's bytes: PNG, JPEG…), as a picture other apps paste. A host
+/// with no such clipboard (a browser's page, Android) puts nothing.
+pub fn clipboard_set_image(data : Bytes) -> Unit {
+  current.val.clipboard_set_image(data)
 }
 
 ///|
@@ -1297,6 +1627,15 @@ pub fn font_scale() -> Double {
 }
 
 ///|
+/// What the system was started to be used with (the native input), as the host can tell at launch: 1 touch (iOS and
+/// iPadOS with no pointing device, Android with no mouse or touchpad among its input devices, Windows with a touch
+/// screen and no mouse or in tablet mode), 2 keyboard and mouse (macOS; iOS and iPadOS with a pointer, Android with a
+/// mouse or a touchpad: DeX, ChromeOS; Windows otherwise), 0 where it cannot tell (the platform's then: @ui).
+pub fn native_pointing() -> Int {
+  current.val.native_pointing()
+}
+
+///|
 /// Whether the system is set to dark (macOS's appearance, Android's night mode, iOS's interface style, the browser's
 /// prefers-color-scheme): what an app that follows the system shows. Asked each frame; a host asks for a frame when
 /// it changes. Hosts that cannot tell say light.
@@ -1317,8 +1656,21 @@ pub fn set_dark(dark : Bool) -> Unit {
 /// Android does it (the activity's requested orientation, its window's insets controller), and iOS (the scene's
 /// orientations, the status bar and the home indicator hidden); elsewhere nothing turns.
 pub fn set_sideways(on : Bool) -> Unit {
+  sideways_now.val = on
   current.val.set_sideways(on)
 }
+
+///|
+/// Whether the app has the device turned sideways (set_sideways): its window as wide as it is because the app turned
+/// it, for a film or a screen over all of it, not because the screen is another kind (what a layout goes by is not this
+/// turn: still.fail's @sf.layout keeps the one it had).
+pub fn sideways() -> Bool {
+  sideways_now.val
+}
+
+///|
+// kept across runs: put back as a host is set
+let sideways_now : Ref[Bool] = { val: false }
 
 ///|
 /// Words (`text`), or a file of `data` named `name` (`mime`), handed to another app through the system's share sheet
@@ -1486,6 +1838,15 @@ pub fn view_open(kind : Int, arg : String) -> Int {
 }
 
 ///|
+/// What the image (scene.mbt's slot 20) of the instance the app paints where a native view shows (kind 9) is: this plus
+/// the view's id (exact in the renderers' 32-bit floats, above `stream_tex_base`'s). Its c2 says the part of the view's
+/// content it covers (u0 v0 du dv, shares of the content's rect). A host whose views are under its surface (macOS,
+/// iOS, Windows, the browser) leaves the canvas clear there, a hole the view shows through, and draws nothing of it; a
+/// host that draws each view into a picture of its own (Android: NativeViews.Picture) draws that part of it there, in
+/// the frame, so it moves as what is around it does.
+pub let view_tex_base : Int = 8388608
+
+///|
 /// Where the view shows, in the app's coordinates (logical pixels from the window's top left): its content in (x, y,
 /// w, h) (a video's picture is stretched to it), its corners round by `radius` (0: square), seen only within the clip
 /// (cx0, cy0)-(cx1, cy1); hidden when not `shown`. Told again whenever it moves (each frame it does).
@@ -1512,35 +1873,39 @@ pub fn view_close(id : Int) -> Unit {
 }
 
 ///|
-/// A player told: `op` 1 play, 2 pause, 3 to `value` ms (the frame there, exactly), 4 at `value` times its speed; a
-/// site: 5 back, 6 forward, 7 reload, 8 laid out at its rect over `value` and drawn at `value` times (a viewport's
-/// own size shown smaller).
+/// A player told: `op` 1 play, 2 pause, 3 to `value` ms (the frame there, exactly), 4 at `value` times its speed, 11
+/// to about `value` ms at once (the nearest key frame: nothing before it decoded); a site: 5 back, 6 forward, 7
+/// reload, 8 laid out at its rect over `value` and drawn at `value` times (a viewport's own size shown smaller).
 pub fn view_control(id : Int, op : Int, value : Double) -> Unit {
   current.val.view_control(id, op, value)
 }
 
 ///|
 /// How the view stands: -1 failed (a file the player cannot play, a page that cannot load), 0 opening, 1 ready.
-/// `out` (10): its length in ms (-1 not known), where it is (ms), playing (1), the picture's own width and height
-/// (pixels), the bytes it has been given, whether a frame has been drawn (a page: loaded), buffering (1), how far on it
-/// has what it needs to play (ms; 0 not said), played to its end (1).
+/// `out` (10): its length in ms (-1 not known), where it is (ms), playing (1; and while it seeks within what it has, if
+/// it is to play), the picture's own width and height (pixels), the bytes it has been given, whether a frame has been
+/// drawn (a page: loaded), buffering (1: to play and waiting on bytes still to come through the app, not a seek
+/// within what it has, nor one while paused), how far on it has what it needs to play (ms; 0 not said), played to its
+/// end (1).
 pub fn view_info(id : Int, out : FixedArray[Double]) -> Int {
   current.val.view_info(id, out)
 }
 
 ///|
-/// A read the player waits on: its id (0: none waiting), `out` [0] its offset, [1] how many bytes it wants. Each is
-/// answered once (`view_read_answer`); the host asks for a frame when one comes.
+/// A read the player waits on: its id (0: none waiting), `out` [0] its offset, [1] how many bytes it wants; or minus
+/// the id of one it let go of (it wants none of what is left of it: the app stops reading it, answers it no more).
+/// Each is answered as its bytes come (`view_read_answer`); the host asks for a frame when one comes.
 pub fn view_read_next(id : Int, out : FixedArray[Double]) -> Int {
   current.val.view_read_next(id, out)
 }
 
 ///|
-/// Read `req`'s answer: the bytes from its offset (at most as many as it wanted; fewer is fine, none only at the
-/// file's end), `total` the file's whole size (-1 not known: Apple's player needs it, so give it); -2: it could not be
-/// read (the player fails).
-pub fn view_read_answer(id : Int, req : Int, data : Bytes, total : Double) -> Unit {
-  current.val.view_read_answer(id, req, data, total)
+/// Read `req`'s next bytes, as they come: those after what it was answered before (all of them at most as many as it
+/// wanted; fewer is fine, none only at the file's end), `more` while more of it comes (its last answer may bring
+/// none); `total` the file's whole size (-1 not known: Apple's player needs it, so give it, at the latest with its
+/// last answer); -2: it could not be read (its last: the player fails).
+pub fn view_read_answer(id : Int, req : Int, data : Bytes, total : Double, more : Bool) -> Unit {
+  current.val.view_read_answer(id, req, data, total, more)
 }
 
 ///|
@@ -1930,6 +2295,21 @@ fn cl_text(id : Int) -> String {
 ///|
 fn cl_png(id : Int) -> Bytes {
   current.val.cl_png(id)
+}
+
+///|
+fn cl_files(id : Int) -> Int {
+  current.val.cl_files(id)
+}
+
+///|
+fn cl_file_name(id : Int, i : Int) -> String {
+  current.val.cl_file_name(id, i)
+}
+
+///|
+fn cl_file(id : Int, i : Int) -> Bytes {
+  current.val.cl_file(id, i)
 }
 
 ///|

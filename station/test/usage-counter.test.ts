@@ -13,6 +13,8 @@ import { cost, price, priceTable, sessionUsage } from "../src/read/usage.ts";
 import { iso, parseIso } from "../src/read/transcript.ts";
 import { type StoreChange, type UsageGroup, Store, newMessage } from "../src/store/store.ts";
 import { type CallState, UsageCounter, callsOf, claudeFiles, claudeProject, readFrom } from "../src/usage/counter.ts";
+import type { UsageCall, UsageFor } from "../src/store/usage.ts";
+import { keepUsage } from "../src/usage/module.ts";
 import { testClock } from "./hub-fakes.ts";
 
 const dirs: string[] = [];
@@ -210,6 +212,48 @@ test("each call is counted once, for whom its turn worked, where and on what", a
   assert.equal(r.store.usageGroups(0, MAX, 0).reduce((s, g) => s + g.calls, 0), 4);
 });
 
+test("each part's calls are put to the turns they were made in, those turns alone read", async () => {
+  const time = await today();
+  const pause = () => time.adjust(15);
+  const r = rig({ clock: time.clock });
+  const workspace = join(r.data, "sessions/ember/c-1/workspace");
+  session(r.store, "ember:c-1", workspace, r.store.now());
+  const chat = r.store.openThreadOf("ember", "ember", "1.0", null, "creator@x", "ember:c-1");
+  r.store.joinThread(chat.id, "ember:c-1", "ember");
+  // The turns read for each part: from when its first call was made until its last.
+  const real = r.store.usageTurns.bind(r.store);
+  const asked: [number, number][] = [];
+  r.store.usageTurns = (key: string, from: number, until: number) => (asked.push([from, until]), real(key, from, until));
+  await pause();
+  r.store.startTurnFor("t1", "ember:c-1", "input", { profile: "cc", person: "a@x", thread: chat.id });
+  const main = join(r.data, "transcripts/claude", claudeProject(workspace), "r1.jsonl");
+  let last = 0;
+  const at = () => (last = r.store.now() + 1);
+  append(main, [claudeLine("m1", at(), "claude-opus-5-5", usage(1, 0, 0, 0, 1))]);
+  assert.equal(await r.usage.read(), 1);
+  assert.deepEqual(asked.at(-1), [last, last]);
+  // The same turn going on: read on from where it was left.
+  await pause();
+  append(main, [claudeLine("m2", at(), "claude-opus-5-5", usage(2, 0, 0, 0, 1))]);
+  assert.equal(await r.usage.read(), 1);
+  assert.deepEqual(asked.at(-1), [last, last]);
+  // A turn begun (a job's notice: for whom the one before worked), and a message taken during it.
+  await pause();
+  r.store.startTurn("t2", "ember:c-1", "job");
+  append(main, [claudeLine("m3", at(), "claude-opus-5-5", usage(3, 0, 0, 0, 1))]);
+  assert.equal(await r.usage.read(), 1);
+  assert.deepEqual(asked.at(-1), [last, last]);
+  await pause();
+  const [n] = r.store.insertMessage(newMessage(chat.id, "2.0", "person", "b@x", "再看看"));
+  r.store.deliver(chat.id, n, ["ember:c-1"]);
+  r.store.markDelivered("ember:c-1", [[chat.id, n]]);
+  append(main, [claudeLine("m4", at(), "claude-opus-5-5", usage(4, 0, 0, 0, 1))]);
+  assert.equal(await r.usage.read(), 1);
+  assert.deepEqual(asked.at(-1), [last, last]);
+  // Each for whom its turn worked: the job's and the one during it for the person before.
+  assert.deepEqual(r.store.usageGroups(0, MAX, 0).map((g) => [g.calls, g.input, g.person, g.thread]), [[4, 10, "a@x", chat.id]]);
+});
+
 test("days are the asker's own", async () => {
   const r = rig();
   const workspace = join(r.data, "w");
@@ -260,6 +304,28 @@ test("compressed history keeps usage offsets and sub-agent discovery", async () 
   restore(main);
   appendFileSync(main, "third\n");
   assert.deepEqual(await readAll(main, 13), ["third\n", 19]);
+});
+
+test("as the station starts, a transcript put away after it was read is not read again; one never read is", async () => {
+  const r = rig();
+  const read = join(r.data, "w1");
+  const never = join(r.data, "w2");
+  session(r.store, "k1", read, 0);
+  session(r.store, "k2", never, 0);
+  const first = join(r.data, "transcripts/claude", claudeProject(read), "r1.jsonl");
+  append(first, [claudeLine("m1", 1000, "claude-opus-5-5", usage(1, 0, 0, 0, 1))]);
+  assert.equal(await r.usage.read(), 1);
+  // Put away with a call the count never saw: a station starting again reads it no more (were it decompressed, it would
+  // be counted).
+  append(first, [claudeLine("m2", 2000, "claude-opus-5-5", usage(2, 0, 0, 0, 2))]);
+  pack(first);
+  const second = join(r.data, "transcripts/claude", claudeProject(never), "r2.jsonl");
+  append(second, [claudeLine("m3", 3000, "claude-opus-5-5", usage(3, 0, 0, 0, 3))]);
+  pack(second);
+  const again = new UsageCounter({ store: r.store, config: () => ({ dataDir: r.data, profiles: [{ home: join(r.data, "homes/cc") }] }) });
+  counters.push(again);
+  assert.equal(await again.read(), 1);
+  assert.deepEqual(r.store.usageGroups(0, MAX, 0).map((g) => g.input).sort(), [1, 3]);
 });
 
 test("a large compressed file is read in parts from its offset, and from its start once shorter than that", async () => {
@@ -321,8 +387,8 @@ test("a turn's end is read shortly after, and the pages are told", async () => {
   await time.adjust(20);
   await time.begun(5);
   assert.equal(calls(), 1);
-  // Told once the read is over (the rows are there a moment before).
-  assert.ok(told.some((c) => c.type === "usage"));
+  // Told once the read is over (the rows are there a moment before), with the sessions it counted anew.
+  assert.deepEqual(told.filter((c) => c.type === "usage"), [{ type: "usage", sessions: ["k"] }]);
   await r.usage.stop();
 });
 
@@ -413,4 +479,25 @@ test("on a real station's copy, the calls counted are the Rust's", { skip: !exis
   rust.close();
   assert.deepEqual(ours, theirs);
   assert.equal(more, 0);
+});
+
+test("a session's summary says what its calls used: counted over what its live view told, else its last call's", () => {
+  const store = Store.open(":memory:", null);
+  stores.push(store);
+  store.insertSession({ key: "k", connect: "ds", runtime: "claude", profile: "cc", workspace: "/w/k", token: "k", createdAt: 1, lastActiveAt: 1 });
+  keepUsage(store, "k");
+  assert.equal(store.sessionUsage("k"), null, "no call: none");
+  const of = { turn: null, person: null, thread: null, profile: "cc" };
+  const call = (id: string, at: number, subagent: boolean, input: number): [UsageCall, UsageFor] =>
+    [{ id, at, model: subagent ? "claude-haiku-4-5" : "claude-opus-5-5", subagent, fast: false, input, cacheRead: 100, cacheWrite: 10, cacheWriteLong: 0, output: 5 }, of];
+  store.recordUsage("/t.jsonl", { session: "k", offset: 1, model: null }, "claude", [call("a", 1000, false, 1), call("b", 2000, false, 2), call("c", 3000, true, 50)]);
+  keepUsage(store, "k", true);
+  const kept = store.sessionUsage("k");
+  // Before its live view told any: the model and the context of its last call of its own (not a subagent's).
+  assert.deepEqual([kept.modelCalls, kept.inputTokens, kept.cachedTokens, kept.outputTokens, kept.model, kept.contextTokens, kept.contextWindow], [3, 383, 300, 15, "claude-opus-5-5", 112, null]);
+  assert.ok(kept.cost > 0);
+  // What its live view told of the rest stays (a window the runtime told), its calls as counted.
+  store.setSessionUsage("k", { ...kept, modelCalls: 2, contextTokens: 90, contextWindow: 1000 }, true);
+  keepUsage(store, "k", true);
+  assert.deepEqual([store.sessionUsage("k").modelCalls, store.sessionUsage("k").contextTokens, store.sessionUsage("k").contextWindow], [3, 90, 1000]);
 });

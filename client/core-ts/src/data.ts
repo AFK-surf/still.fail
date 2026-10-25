@@ -9,6 +9,7 @@ import { Effect, Fiber, Queue } from "effect";
 import { AccountDb, LIST_OF, type Changes, type Derive, type ListKind, type RowChange, frozen } from "./db/account.ts";
 import type { Host, Sql, SqlRow, SqlValue } from "./host.ts";
 import { HostError, SqlError, sqlError } from "./host.ts";
+import type { MdStore } from "./markdown.ts";
 import type { Topic } from "./protocol.ts";
 import type { Runner } from "./runtime.ts";
 import { equal, get, isObject, parseJson, toJsonBytes } from "./util.ts";
@@ -45,6 +46,16 @@ const PLACES_KEPT = 500;
 /// Whether a topic's value is held here.
 export function holds(topic: Topic): boolean {
   return HELD.has(topic.topic);
+}
+
+/// Where a station's overview has a sign-in for a new profile (`logins`): its job's state ("" with none); null, not
+/// listed.
+function loginAt(overview: unknown, id: string): string | null {
+  const logins = get(overview, "logins");
+  const login = Array.isArray(logins) ? logins.find((l) => isObject(l) && l.id === id) : undefined;
+  if (!isObject(login)) return null;
+  const state = get(login.job, "state");
+  return typeof state === "string" ? state : "";
 }
 
 /// The workspace a station's address is in.
@@ -247,6 +258,9 @@ type Opened = { db: AccountDb; sql: Sql } | { db: null; sql: Sql | null; error: 
 
 const NO_DERIVE: Derive = { tone: () => null, asks: () => false };
 
+/// How long a session counts as used lately once its chat or history was opened (`usedLately`).
+export const RECENT_MS = 3 * 86_400_000;
+
 export class Data {
   readonly #host: Host;
   readonly #runner: Runner;
@@ -258,6 +272,13 @@ export class Data {
   readonly #logChanged: ((table: string, station: string, id: string) => void)[] = [];
   readonly #chatsChanged: ((station: string, changes: RowChange[], first: boolean) => void)[] = [];
   readonly #modelEdits = new Map<string, [unknown, unknown]>();
+  /// Sign-ins for new profiles as their station answered a step of them (`login.new`, `login.code`), by station and
+  /// login: shown in its overview's `logins` while the overview still has the login where the step found it (`from`: the
+  /// state it moved on from; null, not listed yet). A code sent showed its field again, empty, until the station's next
+  /// overview came, most of a minute while the link came back (2026-10-25).
+  readonly #loginSteps = new Map<string, { id: string; job: unknown; from: string | null }>();
+  /// How far sessions' transcripts go as streams and reads said, past what their summaries say (`transcriptHead`).
+  readonly #transcriptHeads = new Map<string, number>();
   /// Values as typed, there at once and written a moment after their last change (drafts).
   readonly #soon = new Map<string, [Topic, unknown]>();
   #flushing = false;
@@ -540,7 +561,7 @@ export class Data {
     if (kind) return db.list(station, kind);
     switch (topic.topic) {
       case "overview":
-        if ([...this.#modelEdits.keys()].some((k) => k.startsWith(station + SEP))) return this.shown(topic);
+        if ([...this.#modelEdits.keys(), ...this.#loginSteps.keys()].some((k) => k.startsWith(station + SEP))) return this.shown(topic);
         return db.stationDoc(station, "overview");
       case "footprint":
         return db.stationDoc(station, "footprint");
@@ -599,7 +620,31 @@ export class Data {
         }
       }
     }
+    if (topic.topic === "overview" && isObject(value)) {
+      const station = String(topic.station);
+      for (const [key, step] of this.#loginSteps) {
+        if (!key.startsWith(station + SEP) || loginAt(value, step.id) !== step.from) continue;
+        const logins: unknown[] = Array.isArray(value.logins) ? value.logins : (value.logins = []);
+        const i = logins.findIndex((l) => isObject(l) && l.id === step.id);
+        if (i < 0) logins.push({ id: step.id, runtime: get(step.job, "runtime"), job: step.job, created: null, error: null });
+        else logins[i] = { ...(logins[i] as object), job: step.job };
+      }
+    }
     return value;
+  }
+
+  /// A step of a sign-in for a new profile as its station answered it (`job`), taken from the state `from` (null: the
+  /// login not listed yet): shown while the overview still has it there. No job (dropped): let go.
+  stepLogin(station: string, id: string, job: unknown, from: string | null): void {
+    const key = join([station, id]);
+    this.#loginSteps.delete(key);
+    if (isObject(job) && loginAt(this.#rawOverview({ topic: "overview", station }), id) === from) this.#loginSteps.set(key, { id, job, from });
+    this.#tell({ topic: "overview", station });
+  }
+
+  /// The steps an overview of the station has gone past (or that it no longer has where they were): let go.
+  #loginsMoved(station: string, overview: unknown): void {
+    for (const [key, step] of [...this.#loginSteps]) if (key.startsWith(station + SEP) && loginAt(overview, step.id) !== step.from) this.#loginSteps.delete(key);
   }
 
   beginModels(station: string, id: string, models: unknown): boolean {
@@ -660,6 +705,7 @@ export class Data {
       case "jobs":
         return db.setJobs(station, list, at);
       case "overview":
+        this.#loginsMoved(station, value);
         return db.putStationDoc(station, "overview", value, at, topic);
       case "footprint":
         return db.putStationDoc(station, "footprint", value, at, topic);
@@ -697,6 +743,14 @@ export class Data {
         ),
       ),
     );
+  }
+
+  /// What is held to be written a moment after its last change (setSoon), written now: the app's attention moved (a
+  /// chat left, the app put behind), and the app may be gone before the moment is.
+  flushSoon(): void {
+    const soon = [...this.#soon.values()];
+    this.#soon.clear();
+    for (const [t, v] of soon) this.set(t, v, false);
   }
 
   /// Changes a held document in place (an event); does nothing while nothing is known of it.
@@ -974,6 +1028,30 @@ export class Data {
     return this.of(station)?.summary(station, key);
   }
 
+  /// How far a session's transcript goes as far as is known (0: nothing says): its summary's `transcriptLength`, or
+  /// further where a stream or a read said so since (`raiseTranscript`, kept while the core runs: the next stream says
+  /// where each session at work stands again).
+  transcriptHead(station: string, key: string): number {
+    const length = get(this.summary(station, key), "transcriptLength");
+    const said = typeof length === "number" && Number.isInteger(length) && length > 0 ? length - 1 : 0;
+    return Math.max(said, this.#transcriptHeads.get(`${station}\n${key}`) ?? 0);
+  }
+
+  /// Whether a session was used here lately (its chat or its history opened within RECENT_MS): its transcript is then
+  /// kept whole, down to its first entry (channel-kinds.ts `whole`).
+  usedLately(station: string, key: string): boolean {
+    const db = this.of(station);
+    if (db === undefined) return false;
+    const since = this.#host.nowMs() - RECENT_MS;
+    const thread = db.threadOf(station, key);
+    return (db.lastOpened("transcript", station, key) ?? 0) >= since || (thread !== null && (db.lastOpened("entry", station, String(thread)) ?? 0) >= since);
+  }
+
+  raiseTranscript(station: string, key: string, n: number): void {
+    const k = `${station}\n${key}`;
+    if ((this.#transcriptHeads.get(k) ?? 0) < n) this.#transcriptHeads.set(k, n);
+  }
+
   detail(station: string, key: string): unknown {
     return this.of(station)?.detail(station, key);
   }
@@ -1054,7 +1132,7 @@ export class Data {
 
   // ── logs: a thread's entries, a session's transcript ──
 
-  logNumbers(table: "entry" | "transcript", station: string, id: string): number[] {
+  logNumbers(table: "entry" | "transcript", station: string, id: string): readonly number[] {
     return this.of(station)?.logNumbers(table, station, id) ?? [];
   }
 
@@ -1107,6 +1185,23 @@ export class Data {
   /// Keeps what a chat shows small (AccountDb.keepFile).
   keepFile(station: string, session: string, name: string, kind: string, type: string, bytes: string): void {
     this.of(station)?.keepFile(station, session, name, kind, type, bytes, this.#host.nowMs());
+  }
+
+  /// Where the trees of the Markdown `station`'s agents said for `of` (a chat, `t:<thread>`; an agent, `s:<session>`) are
+  /// kept on the device (AccountDb.keptMd): none without its account's database.
+  mdStore(station: string, of: string): MdStore | undefined {
+    const db = this.of(station);
+    if (db === undefined) return undefined;
+    return {
+      has: (key) => db.hasMd(station, key),
+      get: (key) => db.keptMd(station, key, this.#host.nowMs()),
+      put: (key, json) => db.keepMd(station, of, key, json, Math.floor(this.#host.nowMs())),
+    };
+  }
+
+  /// The chats `station`'s agents last spoke in (AccountDb.recentThreads).
+  recentThreads(station: string, since: number, most: number): number[] {
+    return this.of(station)?.recentThreads(station, since, most) ?? [];
   }
 
   /// What a host error is, as a note's detail.

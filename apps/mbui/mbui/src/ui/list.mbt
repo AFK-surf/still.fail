@@ -157,19 +157,6 @@ fn ease_end(total : Double) -> Double {
 }
 
 ///|
-/// How long a list's scroll bar shows after it was last scrolled (ms), then how long it fades out.
-pub let scrollbar_hold_ms : Double = 600.0
-
-///|
-pub let scrollbar_fade_ms : Double = 300.0
-
-///|
-/// Whether a list draws its scroll bar as it is scrolled: not on Android, whose lists (Compose's LazyColumn) have none.
-fn scrollbars_shown() -> Bool {
-  h_feel() != 2
-}
-
-///|
 /// When list `key` (asked where it is built) is at rest: its wheel's ease come, its fling and its overscroll over and
 /// its scroll bar gone (the frames' clock; before now: it is).
 pub fn Ctx::list_rest(self : Ctx, key : String) -> Double {
@@ -182,15 +169,32 @@ pub fn Ctx::list_rest(self : Ctx, key : String) -> Double {
 ///|
 /// List `st` scrolled now: its scroll bar shows (and then fades) from now, said as what moves.
 fn Ctx::scrolled(self : Ctx, st : ListState) -> Unit {
+  st.bar.wake(self.now, st.shown_until())
   st.last_scroll = self.now
   self.moving(st.ease_mover, st as &Moving, what="a list's wheel ease and scroll bar")
+}
+
+///|
+/// Whether list `id` showed scrolling past its view the frame before (its bar was drawn, shown or not): moved by the
+/// app now (sent to a row, to its end), it scrolls and its bar shows; else (just shown, its rows just come) it is put
+/// there.
+fn Ctx::list_shown(self : Ctx, id : Int) -> Bool {
+  self.bar_drawn(id) is Some(_)
+}
+
+///|
+/// List `id` (`st`) moved by the app (Ctx::list_scroll_to, list_to_end, a row come at the end it follows): scrolled,
+/// where it showed.
+fn Ctx::app_scrolled(self : Ctx, id : Int, st : ListState) -> Unit {
+  if self.list_shown(id) {
+    self.scrolled(st)
+  }
 }
 
 ///|
 /// What moves of a list by itself: a wheel's ease (at rest at its end), its fling and its overscroll going back (at
 /// their ends: scroll_path.mbt) and its scroll bar (gone once faded).
 impl Moving for ListState with rest_at(self, now, frame) {
-  ignore(now)
   // not built this frame: nothing shows it, at rest (shown again, it says so again: Ctx::list)
   if self.built != frame {
     return -1.0
@@ -198,10 +202,21 @@ impl Moving for ListState with rest_at(self, now, frame) {
   if self.glide && self.glide_t0 == @double.infinity {
     return @double.infinity
   }
-  let bar = self.shown_until() + (if scrollbars_shown() { scrollbar_hold_ms + scrollbar_fade_ms } else { 0.0 })
-  let eased = if self.ease == 0.0 { -1.0 } else { self.ease_t0 + ease_end(self.ease) }
-  let glided = if self.glide { self.glide_rest } else { -1.0 }
-  dmax(bar, dmax(eased, glided))
+  // (its own motions, and its bar's after them: a finger's list has none, its rest theirs)
+  let mut t = self.bar.rest(now, self.shown_until())
+  if self.ease != 0.0 {
+    t = dmax(t, self.ease_t0 + ease_end(self.ease))
+  }
+  if self.fling != 0 && self.vel != 0.0 {
+    t = dmax(t, self.fling_rest())
+  }
+  if self.over_state == 2 {
+    t = dmax(t, self.back_rest())
+  }
+  if self.glide {
+    t = dmax(t, self.glide_rest)
+  }
+  t
 }
 
 ///|
@@ -228,7 +243,8 @@ fn ListState::own_rest(self : ListState) -> Double {
 
 ///|
 /// Until when the list is scrolled, its scroll bar shown before it fades: its last scroll, the end of its fling or of
-/// its overscroll going back while one goes on.
+/// its overscroll going back while one goes on, of its glide to its end where it showed as that set out (+inf: one
+/// not set out yet).
 fn ListState::shown_until(self : ListState) -> Double {
   let mut t = self.last_scroll
   if self.fling != 0 && self.vel != 0.0 {
@@ -236,6 +252,9 @@ fn ListState::shown_until(self : ListState) -> Double {
   }
   if self.over_state == 2 {
     t = dmax(t, self.back_rest())
+  }
+  if self.glide && self.glide_shows {
+    t = dmax(t, if self.glide_t0 == @double.infinity { @double.infinity } else { self.glide_rest })
   }
   t
 }
@@ -334,6 +353,11 @@ pub fn Ctx::list(
         follow_item: -1,
         follow_margin: 0.0,
         built: -1,
+        glide_shows: false,
+        bar: Bar::new(),
+        laid: -1,
+        began: (0, 0.0, 0.0, false),
+        left: (0, 0.0, 0.0, false),
         scroll_asked: (-1, 0, 0.0),
         fling: 0,
         fling_v: 0.0,
@@ -357,6 +381,7 @@ pub fn Ctx::list(
         sel: false,
         theme: self.theme,
         direction: self.direction,
+        layer: self.layer_cur,
       }
       self.lists[id] = s
       self.own(id)
@@ -378,6 +403,7 @@ pub fn Ctx::list(
   st.sel = desk.selecting
   st.theme = self.theme
   st.direction = self.direction
+  st.layer = self.layer_cur
   // shown again (not built the frame before): what of it still moves says so again
   let back = st.built >= 0 && st.built < self.frame_no - 1
   // (built again in the same frame: its motion stepped once a frame, at the first)
@@ -392,10 +418,14 @@ pub fn Ctx::list(
     self.step_scroll(st)
   }
   // with `glide_on_growth`, rows come at the end while it is at its end: it glides after them from where it was
-  // (still.fail's Follow), rather than being put at its end at once
-  if self.list_grew(id, count) && glide_on_growth && st.stick_end && st.at_end && !self.still() {
-    st.at_end = false
-    self.glide_to_end(st)
+  // (still.fail's Follow), rather than being put at its end at once; put there, it scrolled all the same
+  if self.list_grew(id, count) && st.stick_end && st.at_end {
+    if glide_on_growth && !self.still() {
+      st.at_end = false
+      self.glide_to_end(id, st)
+    } else {
+      self.app_scrolled(id, st)
+    }
   }
   let i = self.alloc_part(kind_list, true, false)
   let n = self.nodes[i]
@@ -415,10 +445,11 @@ fn Ctx::build_row(self : Ctx, li : Int, st : ListState, k : Int) -> Int {
   let saved_owner = self.owner
   let (saved_w, saved_h) = (self.width, self.height)
   let saved_sel = desk.selecting
-  let (saved_theme, saved_dir) = (self.theme, self.direction)
+  let (saved_theme, saved_dir, saved_layer) = (self.theme, self.direction, self.layer_cur)
   desk.selecting = st.sel
   self.theme = st.theme
   self.direction = st.direction
+  self.layer_cur = st.layer
   self.cur = li
   self.id_seed = st.seed
   self.owner = st.owner
@@ -439,6 +470,7 @@ fn Ctx::build_row(self : Ctx, li : Int, st : ListState, k : Int) -> Int {
   desk.selecting = saved_sel
   self.theme = saved_theme
   self.direction = saved_dir
+  self.layer_cur = saved_layer
   r
 }
 
@@ -480,8 +512,20 @@ fn Ctx::place_list(
     None => return
   }
   st.vp_h = ih
-  // how it stood after the last layout (Ctx::list_info): what was built from that is drawn again if this one moves it
-  let was = (st.vis_first, st.vis_last, st.at_end, st.below)
+  // laid out again in the same frame (built again from what its layout read: readback.mbt), from where it stood as
+  // the frame's first layout of it began, unless something moved it since its last: a row laid there for the first
+  // time may have been laid at a height it does not keep (a fold's words whole until it knows how tall they are), and
+  // where the list stood said from that row would move what is in view by what the row lost (to the end, past it)
+  let now = (st.anchor, st.anchor_off, st.pending, st.at_end)
+  if st.laid == self.frame_no && now == st.left {
+    st.anchor = st.began.0
+    st.anchor_off = st.began.1
+    st.pending = st.began.2
+    st.at_end = st.began.3
+  } else {
+    st.began = now
+  }
+  st.laid = self.frame_no
   // rows built in the build phase (none, normally) are not shown
   n.first = -1
   n.last = -1
@@ -498,6 +542,8 @@ fn Ctx::place_list(
   let nan = 0.0 / 0.0
   let top_rows : Array[Int] = [] // above the pivot, nearest first
   let rows : Array[Int] = [] // the pivot and below
+  // what the rows built hold near the list's top (Ctx::stick): from where in `stuck`, each row's
+  let stuck_from = self.stuck.length()
   let lay = fn(k : Int, y : Double) -> (Int, Double) {
     let r = self.build_row(li, st, k)
     let h = self.layout(r, ix, y, iw, nan)
@@ -639,12 +685,8 @@ fn Ctx::place_list(
   }
   st.at_end = last == st.count - 1 && (pinned_end || bottom <= bottom_edge + 0.5)
   st.below = if last == st.count - 1 { bottom - bottom_edge } else { 1.0e9 }
-  // what the view built this frame read from the list as it stood (a way back to the end, the rows in view told):
-  // built again where this layout changed that (a scroll that took one frame, a wheel's or a key's, would otherwise
-  // be drawn with what was read before it)
-  if was != (st.vis_first, st.vis_last, st.at_end, st.below) {
-    self.read_changed("a list's rows in view, its end")
-  }
+  // (what the view built this frame read of how the list stood, a way back to the end, the rows in view told, is read
+  // back where it was read: Ctx::list_info; a list scrolled that nothing read builds nothing again)
   if st.glide {
     // how far it is above its end: the rows not laid out by their heights as known (measured, or estimated)
     let to_end = if last == st.count - 1 {
@@ -674,8 +716,12 @@ fn Ctx::place_list(
     if left < 1.0 {
       st.glide = false
       st.at_end = to_end < 1.0
+      if st.glide_shows {
+        st.last_scroll = dmax(st.last_scroll, self.now)
+      }
     }
   }
+  st.left = (st.anchor, st.anchor_off, st.pending, st.at_end)
   // a finger pulls past the end it reached; a fling stops there
   let drag = st.drag_pending
   st.drag_pending = 0.0
@@ -697,40 +743,51 @@ fn Ctx::place_list(
       self.shift(r, off)
     }
   }
+  self.stick_in(li, stuck_from, iy)
 }
 
 ///|
-fn Ctx::paint_scrollbar(self : Ctx, n : Node, alpha : Double) -> Unit {
-  match self.lists.get(n.id) {
-    Some(st) => {
-      let age = self.now - st.shown_until()
-      if !scrollbars_shown() || age > scrollbar_hold_ms + scrollbar_fade_ms || st.count == 0 {
-        return
-      }
-      let fade = if age < scrollbar_hold_ms { 1.0 } else { 1.0 - (age - scrollbar_hold_ms) / scrollbar_fade_ms }
-      let total = st.above(st.count)
-      let before = st.above(imin(st.anchor, st.count))
-      let vp = n.fh
-      if total <= vp + 1.0 {
-        return
-      }
-      let off = before + st.anchor_off
-      let th = dmax(28.0, vp * vp / total)
-      let ty = n.y + (off / (total - vp)) * (vp - th)
-      let a = (0.45 * fade * alpha * 255.0).to_int().to_int64()
-      self.emit_rect(
-        n.x + n.fw - 8.0,
-        dclamp(ty, n.y, n.y + vp - th),
-        5.0,
-        th,
-        2.5,
-        0x00000000L | a,
-        0.0,
-        0L,
-        0.0,
-      )
+/// The list node `i` is in (its nearest), or -1.
+fn Ctx::list_of(self : Ctx, i : Int) -> Int {
+  let mut p = self.nodes[i].parent
+  while p >= 0 && self.nodes[p].kind != kind_list {
+    p = self.nodes[p].parent
+  }
+  p
+}
+
+///|
+/// Node `i` held `top` below the top of the list it is in while its row scrolls past (CSS's `position: sticky` with
+/// `top`): laid out where it is, it goes down with the view's top as that passes it, never past the foot of its parent
+/// (what a long row keeps in view, its picture at the top of the list). Outside a list's rows it is where it is laid out.
+pub fn Ctx::stick(self : Ctx, i : Int, top : Double) -> Unit {
+  if i < 0 || i >= self.count {
+    return
+  }
+  self.nodes[i].stick = top
+  self.stuck.push(i)
+}
+
+///|
+/// What the rows of list `li` just placed hold near its top (`stuck` from `from`; a list in a row holds its own), its
+/// content starting at `top`: each where its parent lays it, then down to `top` and its own distance, as far as its
+/// parent's foot lets it.
+fn Ctx::stick_in(self : Ctx, li : Int, from : Int, top : Double) -> Unit {
+  for j in from..<self.stuck.length() {
+    let s = self.stuck[j]
+    let n = self.nodes[s]
+    if n.parent < 0 || n.stick != n.stick || self.list_of(s) != li {
+      continue
     }
-    None => ()
+    let p = self.nodes[n.parent]
+    // where its parent lays it (a subtree placed as before keeps where it was held last frame)
+    self.replace(s, p.x, p.y)
+    let held = top + n.stick - n.y
+    let room = p.y + p.fh - p.pad_b - n.fh - n.y
+    let dy = dmin(held, room)
+    if dy > 0.0 {
+      self.shift(s, dy)
+    }
   }
 }
 
@@ -744,12 +801,14 @@ pub fn Ctx::list_scroll_to(
   item : Int,
   offset? : Double = 0.0,
 ) -> Unit {
-  match self.lists.get(self.id(key)) {
+  let id = self.id(key)
+  match self.lists.get(id) {
     // (asked again as the frame is built again: done already)
     Some(st) if st.scroll_asked != (self.frame_no, item, offset) => {
       st.scroll_asked = (self.frame_no, item, offset)
       st.scroll_to(item)
       st.anchor_off = offset
+      self.app_scrolled(id, st)
       self.read_changed("a list scrolled to a row")
     }
     _ => ()
@@ -760,14 +819,16 @@ pub fn Ctx::list_scroll_to(
 /// Back to list `key`'s end: gliding there (what is left of the way e^(-t/list_glide_ms) of it, as still.fail's lists
 /// follow their newest; far from it, more than list_glide_rows rows, at once), or at once.
 pub fn Ctx::list_to_end(self : Ctx, key : String, glide? : Bool = true) -> Unit {
-  match self.lists.get(self.id(key)) {
+  let id = self.id(key)
+  match self.lists.get(id) {
     Some(st) => {
       st.follow_item = -1
       if glide {
         st.stop()
-        self.glide_to_end(st)
+        self.glide_to_end(id, st)
       } else {
         st.scroll_to_end()
+        self.app_scrolled(id, st)
       }
       self.read_changed("a list sent to its end")
     }
@@ -801,11 +862,17 @@ let list_glide_rows : Int = 12
 ///|
 /// List `st` sets out for its end (Ctx::list_to_end, a row come at its end): said once, as it sets out; its way is
 /// solved at its next layout, where it knows how far it is (step_glide).
-fn Ctx::glide_to_end(self : Ctx, st : ListState) -> Unit {
+fn Ctx::glide_to_end(self : Ctx, id : Int, st : ListState) -> Unit {
   if st.vis_last >= 0 && st.count - 1 - st.vis_last > list_glide_rows {
     st.scroll_to_end()
     st.glide = false
+    self.app_scrolled(id, st)
     return
+  }
+  // (its bar out from now till the glide's end, where it showed)
+  st.glide_shows = self.list_shown(id)
+  if st.glide_shows {
+    st.bar.wake(self.now, st.shown_until())
   }
   st.glide = true
   st.glide_t0 = @double.infinity
@@ -821,13 +888,16 @@ fn Ctx::step_glide(self : Ctx, st : ListState) -> Unit {
     return
   }
   if self.now >= st.glide_rest {
-    // there: its end, or the top of the row it follows (its goal as last laid out)
+    // there: its end, or the top of the row it follows (its goal as last laid out); its bar fades from then
     if st.follow_item >= 0 {
       st.pending = st.pending + st.glide_left
     } else {
       st.scroll_to_end()
     }
     st.glide = false
+    if st.glide_shows {
+      st.last_scroll = dmax(st.last_scroll, st.glide_rest)
+    }
     return
   }
   let want = st.glide_l0 * @dmath.exp(-(self.now - st.glide_t0) / list_glide_ms)
@@ -865,12 +935,79 @@ pub(all) struct ListInfo {
   /// glide over (its scroll bar's fading aside); inf while a finger holds it or a glide's way is not known yet (it
   /// sets out at its next layout); -1 at rest
   rest : Double
+  /// when its glide after what came (to its end, to a row it follows) is over, on the frames' clock: inf while its way
+  /// is not known yet, -1 none. What the reader's hand does (a finger holding it, a fling, a wheel) is not in it
+  glide_rest : Double
 }
 
 ///|
-/// How list `key` stood after the last layout; None before its first.
+/// How list `key` stood after the last layout; None before its first. Read as the view builds, it is read back
+/// (readback.mbt) by its rows in view and how far it is from its end: laid out otherwise this frame (a scroll that took
+/// one frame, a wheel's or a key's), the frame is built again from it. What is built from less of it says what
+/// (Ctx::list_info_as), and is built again only as that changes.
 pub fn Ctx::list_info(self : Ctx, key : String) -> ListInfo? {
-  match self.lists.get(self.id(key)) {
+  self.list_info_as(key, rows_and_end)
+}
+
+///|
+/// What Ctx::list_info is read back by: the rows in view, whether the list is at its end and how far from it.
+fn rows_and_end(i : ListInfo?) -> (Int, Int, Bool, Double)? {
+  match i {
+    Some(i) => Some((i.first, i.last, i.at_end, i.below))
+    None => None
+  }
+}
+
+///|
+/// How list `key` stood after the last layout, as Ctx::list_info, read back by what `made` makes of it alone: what
+/// the view builds from it only by whether it is at its end, or far from it, is built again as that changes, not at
+/// every step of a scroll.
+pub fn[T : Eq] Ctx::list_info_as(self : Ctx, key : String, made : (ListInfo?) -> T) -> ListInfo? {
+  let id = self.id(key)
+  let v = self.list_info_of(id)
+  if building.val {
+    let was = made(v)
+    self.info_reads.push((key, fn() { made(self.list_info_of(id)) != was }))
+  }
+  v
+}
+
+///|
+/// A list, to read later as it then stands and never read back: for what a frame works out of where it is once its
+/// builds are over and tells outside (Ctx::after_build: a reader's place, what they have seen whole), never for what it
+/// draws (that reads Ctx::list_info, list_place and list_row_height as it builds).
+pub struct ListReader {
+  priv ctx : Ctx
+  priv id : Int
+}
+
+///|
+/// List `key`, by its id where this is said (the scope it is built in), to read later (ListReader).
+pub fn Ctx::list_reader(self : Ctx, key : String) -> ListReader {
+  { ctx: self, id: self.id(key) }
+}
+
+///|
+/// How the list stands now (Ctx::list_info's).
+pub fn ListReader::info(self : ListReader) -> ListInfo? {
+  self.ctx.list_info_of(self.id)
+}
+
+///|
+/// Where the list is now (Ctx::list_place's).
+pub fn ListReader::place(self : ListReader) -> (Int, Double, Double)? {
+  self.ctx.list_place_of(self.id)
+}
+
+///|
+/// How tall row `item` is now (Ctx::list_row_height's).
+pub fn ListReader::row_height(self : ListReader, item : Int) -> Double? {
+  self.ctx.list_row_height_of(self.id, item)
+}
+
+///|
+fn Ctx::list_info_of(self : Ctx, id : Int) -> ListInfo? {
+  match self.lists.get(id) {
     Some(st) =>
       Some({
         count: st.count,
@@ -882,6 +1019,13 @@ pub fn Ctx::list_info(self : Ctx, key : String) -> ListInfo? {
         gliding: st.glide,
         following_row: st.follow_item >= 0,
         rest: st.own_rest(),
+        glide_rest: if !st.glide {
+          -1.0
+        } else if st.glide_t0 == @double.infinity {
+          @double.infinity
+        } else {
+          st.glide_rest
+        },
       })
     None => None
   }

@@ -5,9 +5,9 @@
 test "外观's 字体 row: the faces at a glance, opening the page: the places, a chat as they set it, the faces with their sizes" {
   let t = settings_tester("appearance")
   assert_true(t.find("字体") is Some(_))
-  // none chosen: the app's own
+  // none chosen: the app's own, the section's row
   assert_true(t.find("默认") is Some(_))
-  t.tap_text("字体")
+  t.tap_text("默认")
   t.run_for(@ui.nav_push_ms)
   // the places as a switch, the interface's in view
   for w in ["界面", "正文", "代码"] {
@@ -25,7 +25,7 @@ test "外观's 字体 row: the faces at a glance, opening the page: the places, 
   // each shown in itself: its preview given to a face of its own
   assert_true(@ui.face_given(preview_faces_from))
   // code's: the code faces, 默认 in the app's own (JetBrains Mono)
-  t.tap_text("代码")
+  tap_place(t, "代码")
   t.draw()
   assert_true(t.find("Fira Code") is Some(_))
   assert_true(t.find("91 kB") is Some(_))
@@ -36,7 +36,7 @@ test "外观's 字体 row: the faces at a glance, opening the page: the places, 
 ///|
 test "a face picked: kept as the device's, fetched, unzipped and checked, and what people write set in it; 跟随界面 puts it back" {
   let t = settings_tester("fonts")
-  t.tap_text("正文")
+  tap_place(t, "正文")
   t.draw()
   assert_true(t.find("跟随界面") is Some(_))
   assert_false(@ui.face_given(@hostapi.face_text))
@@ -61,4 +61,90 @@ test "a face being fetched: how far said on its row, the app's own standing in u
   assert_true(t.find("正在下载 42%") is Some(_))
   assert_false(face_here("noto-sans-sc"))
   assert_false(@ui.face_given(@hostapi.face_ui))
+}
+
+///|
+/// The made-up prefs with each place's face's files said kept here (`path`, as the core says it of those this device
+/// keeps: client/core-ts/src/fonts.ts setKeptAt), at `/data/` and the file's weight.
+fn kept_here(base : Source) -> Source {
+  {
+    ..base,
+    topic: fn(name, params) {
+      let t = (base.topic)(name, params)
+      if name == "prefs" {
+        match field(t.value, "faces") {
+          Some(Object(faces)) =>
+            for place in ["ui", "text", "code"] {
+              for f in items(faces.get(place), "files") {
+                match f {
+                  Object(m) => m["path"] = ("/data/" + number(Some(f), "weight").to_int().to_string()).to_json()
+                  _ => ()
+                }
+              }
+            }
+          _ => ()
+        }
+      }
+      t
+    },
+  }
+}
+
+///|
+test "a face kept here: given by where its files are the frame the prefs come, the first page set in it, nothing asked of the core" {
+  reset()
+  let base = fixture("home")
+  (base.call)("prefs.set", { "fonts": { "ui": "noto-sans-sc" } }, fn(_) {  })
+  let asked = Ref(0)
+  let src : Source = {
+    ..kept_here(base),
+    read_bytes: fn(name, params, done) {
+      if name == "fonts.file" {
+        asked.val += 1
+      }
+      (base.read_bytes)(name, params, done)
+    },
+  }
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0, platform=2)
+  t.draw()
+  assert_true(t.find("整理发布清单") is Some(_))
+  assert_true(face_here("noto-sans-sc"))
+  assert_true(@ui.face_given(@hostapi.face_ui))
+  assert_eq(asked.val, 0)
+}
+
+///|
+test "a face's file the host cannot read where it is: had through the core instead, unzipped and checked" {
+  reset()
+  let base = fixture("home")
+  // fetched, kept as fetched (gzipped): what the host cannot read as a face
+  (base.call)("fonts.fetch", { "id": "lxgw-wenkai" }, fn(_) {  })
+  (base.call)("prefs.set", { "fonts": { "text": "lxgw-wenkai" } }, fn(_) {  })
+  let asked = Ref(0)
+  let src : Source = {
+    ..kept_here(base),
+    read_bytes: fn(name, params, done) {
+      if name == "fonts.file" {
+        asked.val += 1
+      }
+      (base.read_bytes)(name, params, done)
+    },
+  }
+  // (the app from the frame its host is set so)
+  let on = Ref(false)
+  let t = @ui.Tester::new(fn(c) { if on.val { view(c, src) } }, w=390.0, h=844.0, platform=2)
+  t.set_unreadable_font("/data/500")
+  on.val = true
+  t.draw()
+  t.draw()
+  assert_eq(asked.val, 2)
+  assert_true(face_here("lxgw-wenkai"))
+  assert_true(@ui.face_given(@hostapi.face_text))
+}
+
+///|
+/// The places' choice's `place` tapped (its words drawn after what the page is for, which names them too).
+fn tap_place(t : @ui.Tester, place : String) -> Unit {
+  let (x, y) = t.find_last(place).unwrap()
+  t.tap(x, y)
 }

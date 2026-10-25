@@ -294,19 +294,38 @@ test "snap: in range, on the step from min" {
 }
 
 ///|
-test "progress: its value as a percentage and its range; not known, neither, and its band a cycle said (frames while shown)" {
+test "progress: its value as a percentage and its range; not known, neither, and its band a cycle said (a frame each frame while shown)" {
   let v : Ref[Double?] = Ref(Some(30.0))
-  let t = @ui.Tester::new(fn(c) { progress(c, v.val, max=60.0, label="Upload") })
+  let t = @ui.Tester::new(fn(c) { progress(c, "upload", v.val, max=60.0, label="Upload") })
   let p = t.get(@ui.ProgressBar, label="Upload")
   assert_eq(p.value, "50%")
   assert_eq(p.range, Some((0.0, 60.0, 30.0)))
   v.val = None
   t.draw()
   assert_eq(t.get(@ui.ProgressBar, label="Upload").range, None)
-  // a frame asked for each frame while it shows, said as a cycle: what never ends does not keep a test from idle
+  // a wait: a frame asked for each frame while it shows (Ctx::cycle), said as a cycle: what never ends does not keep a
+  // test from idle
   assert_true(t.ctx().wants_frame)
   assert_eq(t.cycles().length(), 1)
   t.assert_idle()
+}
+
+///|
+test "progress: told a value anew, it goes there over progress_ms from where it showed (there at once the first time); its value said at once" {
+  let v : Ref[Double?] = Ref(Some(30.0))
+  let shown : Ref[Double?] = Ref(None)
+  let t = @ui.Tester::new(fn(c) {
+    progress(c, "upload", v.val, max=60.0, label="Upload", look=fn(_, s) { shown.val = s.t })
+  })
+  assert_eq(shown.val, Some(0.5))
+  v.val = Some(60.0)
+  t.draw()
+  assert_eq(t.get(@ui.ProgressBar, label="Upload").value, "100%")
+  t.run_for(progress_ms / 2.0)
+  let half = shown.val.unwrap()
+  assert_true(half > 0.5 && half < 1.0, msg="\{half}")
+  t.run_for(progress_ms)
+  assert_eq(shown.val, Some(1.0))
 }
 
 ///|
@@ -471,6 +490,37 @@ test "toggle group that grows: as wide as where it is, its items equal shares" {
   let (_, _, aw, _) = t.get(@ui.Radio, label="A").rect
   let (_, _, bw, _) = t.get(@ui.Radio, label="Bbbbbb").rect
   assert_eq(aw, bw)
+}
+
+///|
+test "toggle group that grows, short of room for equal shares: an item as wide as its words need, the other the rest" {
+  let v : Ref[Array[String]] = Ref(["a"])
+  let long = "Bbbbbbbbbbbbbbbb"
+  let t = @ui.Tester::new(
+    fn(c) {
+      c.box(w=Px(200.0), fn() {
+        v.val = toggle_group(
+          c,
+          "g",
+          [item("a", label="A"), item("b", label=long)],
+          v.val,
+          grow=true,
+          label="G",
+          ground=fn(c, _, items) { c.box(dir=Row, w=Fill(1.0), items) |> ignore },
+        ).value
+      })
+      |> ignore
+    },
+    w=400.0,
+    h=200.0,
+  )
+  // its words whole, not cut to the half it would share
+  assert_eq(t.lines_of(long), [long])
+  let (ax, _, aw, _) = t.get(@ui.Radio, label="A").rect
+  let (bx, _, bw, _) = t.get(@ui.Radio, label=long).rect
+  assert_true(bw > 100.0)
+  assert_true(bx >= ax + aw - 0.5)
+  assert_true((ax + aw + bw - 200.0).abs() < 0.5)
 }
 
 ///|

@@ -4,7 +4,7 @@ fn chat_tester(mode : String) -> @ui.Tester {
   reset()
   let src = fixture(mode)
   open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
-  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0)
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0, platform=2)
   t.run_for(@ui.nav_push_ms)
   t
 }
@@ -19,7 +19,8 @@ test "a chat opens at its end: its bar, its last messages, the composer's room u
   assert_true(!bar.contains("林"))
   let (_, y) = t.find("做完了：列表、跳到最新的按钮").unwrap()
   // the last message over the composer's capsule
-  assert_true(y < 844.0 - 110.0 && y > 500.0)
+  let (_, field_y) = t.find("发消息").unwrap()
+  assert_true(y < field_y && y > 500.0)
   assert_true(t.find("发消息") is Some(_))
   // an options card, a login card, a failing notice
   assert_true(t.find("一起换") is Some(_))
@@ -41,7 +42,7 @@ test "scrolled up, the way to the newest shows; tapped, the list glides back to 
   // it comes up growing (its presence, "chat-jump"): tapped once it is there, as a person can only tap what shows
   t.run_for(t.rest_of("chat-jump") - t.time())
   // over the send button, the composer's room under it
-  t.tap(390.0 - 18.0 - 18.0, 844.0 - 112.0 - 18.0)
+  t.click(Button, label=@sf.t("web-main.chat.toLatest"))
   // back at its end by the list's own rest (mbui's list_to_end: a glide solved in time, or at once from further than
   // its rows; and its scroll bar faded): what it says of itself
   let rest = t.rest_of("a list")
@@ -51,6 +52,8 @@ test "scrolled up, the way to the newest shows; tapped, the list glides back to 
   }
   assert_true(t.find("做完了：列表、跳到最新的按钮") is Some(_))
   assert_true(!rd.jump)
+  // (the chat's pictures brushed in once decoded: sfpages message_files.mbt)
+  t.run_for(@sfpages.reveal_ms)
   t.assert_idle()
 }
 
@@ -59,11 +62,28 @@ test "the viewer's words on the right, everyone else's under their name" {
   let t = chat_tester("chat")
   t.move(195.0, 400.0)
   t.wheel(195.0, 400.0, -500.0)
-  // a bubble ending at the list's right edge (14 in), an agent's words from its left
+  // a bubble at the list's right (16 in: the web's narrow chatList), an agent's words from its left
   let (bx, _, bw, _) = t.rect_of("还有深色模式也看一下").unwrap()
-  assert_true(bx > 195.0 && (bx + bw - (390.0 - 14.0 - 14.0)).abs() < 1.0)
+  assert_true(bx > 195.0 && bx + bw <= 390.0 - 16.0 + 0.5 && bx + bw > 390.0 - 16.0 - 24.0)
   let (ax, _, _, _) = t.rect_of("高度先按 90 估").unwrap()
-  assert_eq(ax, 14.0)
+  assert_eq(ax, 16.0)
+}
+
+///|
+test "what the viewer quotes is over their bubble at the right, no wider than the bubble may be" {
+  let t = chat_tester("chat")
+  t.move(195.0, 400.0)
+  t.wheel(195.0, 400.0, -500.0)
+  // (the agent's words it quotes are in the chat too: the card's are after whose they are)
+  let quote = t.words().filter(fn(w) { w.0.has_prefix("Claude") && w.0.contains("其余的行按估计的高度占位") })
+  assert_eq(quote.length(), 1)
+  let (_, qx, _, qw, _, _) = quote[0]
+  let (bx, _, bw, _) = t.rect_of("这里的高度是怎么估的？").unwrap()
+  // the card's words in from its start (11, its mark and 4 after it): the card starts no further left than 78% of
+  // the column from its right edge, as the bubble under it, and both end there
+  assert_true(qx - 26.0 >= 390.0 - 16.0 - 390.0 * 0.78 - 0.5)
+  assert_true(qx + qw <= 390.0 - 16.0 - 11.0 + 0.5)
+  assert_true(bx + bw > 390.0 - 16.0 - 24.0)
 }
 
 ///|
@@ -109,6 +129,8 @@ test "a reference to another chat is its chip, and opens that chat" {
   if scrolled >= 0.0 {
     t.run_for(scrolled + @ui.scrollbar_hold_ms + @ui.scrollbar_fade_ms - t.time())
   }
+  // (the pictures of the chat under it brushed in once decoded: sfpages message_files.mbt)
+  t.run_for(@sfpages.reveal_ms)
   t.assert_idle()
 }
 
@@ -118,12 +140,14 @@ test "while the chat is read: its bar, the messages to come, the composer" {
   // (what it shows not come: it slid in once it had waited the most a page opening waits, App.kt LOCAL_MS)
   t.run_for(page_local_ms)
   assert_true(t.find("发消息") is Some(_))
-  assert_true(t.find("整理发布清单") is None)
+  // its bar with the title it was opened by (its row's), none of its messages
+  assert_true(t.find("整理发布清单") is Some(_))
+  assert_true(t.find("做完了：列表、跳到最新的按钮") is None)
 }
 
 ///|
 test "references and addresses in plain words" {
-  let runs = ref_runs("看 [首页](https://app.still.fail/w/ws1/s/st1/chats/s-c2) 和 https://example.com/a。")
+  let runs = message_runs("看 [首页](https://app.still.fail/w/ws1/s/st1/chats/s-c2) 和 https://example.com/a。", @sf.theme().p.accent)
   assert_eq(runs.length(), 6)
   assert_eq(runs[1].text, "@")
   assert_eq(runs[2].text, "首页")
@@ -145,12 +169,9 @@ test "images take their own proportions before they load" {
     owner: "",
     upload: "",
   }
-  assert_eq(image_box(a, 16.0), (139.0, 300.0, false))
-  assert_eq(image_box({ ..a, width: 1600.0, height: 900.0 }, 16.0), (360.0, 203.0, false))
-  assert_eq(image_box({ ..a, width: 0.0, height: 0.0 }, 16.0), (240.0, 160.0, false))
-  assert_eq(file_size(18432.0), "18 KB")
-  assert_eq(file_size(812000.0), "793 KB")
-  assert_eq(file_size(4.5 * 1048576.0), "4.5 MB")
+  assert_eq(@sfpages.image_box(a, @sfpages.image_least), (139.0, 300.0, false))
+  assert_eq(@sfpages.image_box({ ..a, width: 1600.0, height: 900.0 }, @sfpages.image_least), (360.0, 203.0, false))
+  assert_eq(@sfpages.image_box({ ..a, width: 0.0, height: 0.0 }, @sfpages.image_least), (240.0, 160.0, false))
   assert_eq(elapsed(200000.0), "3m 20s")
 }
 
@@ -159,14 +180,24 @@ test "images take their own proportions before they load" {
 test "a file card in the chat opens its preview" {
   reset()
   let src = fixture("chat")
-  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0)
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0, platform=2)
   open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
   // (the chat opened drawn at its moment, its push from there)
   t.draw()
   t.run_for(@ui.nav_push_ms)
   t.move(195.0, 400.0)
-  t.wheel(195.0, 400.0, -600.0)
-  t.tap_text("build.log")
+  // (up the list till its card shows: its name's stem, its extension after it)
+  let mut tries = 0
+  while t.find(".log") is None && tries < 12 {
+    t.wheel(195.0, 400.0, -300.0)
+    tries += 1
+  }
+  // (clear of the bar over the list's top)
+  match t.find(".log") {
+    Some((_, y)) if y < 200.0 => t.wheel(195.0, 400.0, y - 400.0)
+    _ => ()
+  }
+  t.tap_text(".log")
   assert_true(viewer.val is Some(_))
   assert_eq(viewer.val.unwrap().file.name, "build.log")
   // the preview flown open, its bars left alone till they rest
@@ -189,15 +220,15 @@ test "what waits to be decided and is out of view: a bell over the way to the en
   assert_true(rd.jump)
   // over the way to the end, once it has risen (the list, still flung, is stopped by a tap first: it takes that one)
   t.run_for(ask_lift_ms)
-  let (bx, by) = (390.0 - 18.0 - 18.0, 844.0 - composer_room_of(t.ctx()) - 2.0 - 44.0 - 18.0)
+  let bell = @sf.t("web-main.chat.asks.go")
   if t.list_moving() {
-    t.tap(bx, by)
+    t.click(Button, label=bell)
   }
   assert_true(!t.list_moving())
-  t.tap(bx, by)
+  t.click(Button, label=bell)
   assert_eq(rd.flash, "ts8")
   // the next tap goes to the next one's
-  assert_eq(ask_turns.get("ws1/st1\u{1}s-c1"), Some(1))
+  assert_eq(@sfpages.ask_turns.get("ws1/st1\u{1}s-c1"), Some(1))
 }
 
 ///|
@@ -256,6 +287,7 @@ test "a long title has what is left beside what follows it, which keeps its own 
     },
     w=390.0,
     h=200.0,
+    platform=2,
   )
   t.draw()
   let (tx, _, tw, _) = t.rect_of("端到端").unwrap()
@@ -276,9 +308,9 @@ test "a chat left lets go of all that holds its thread at the core: its view and
     ..base,
     leave: fn(name, params) { left.push((name, Json::object(params).stringify())) },
   }
-  let r = { station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" }
+  let r : ChatRef = { station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" }
   open_chat(r)
-  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0)
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0, platform=2)
   t.run_for(@ui.nav_push_ms)
   assert_eq(left, [])
   t.back()
@@ -307,8 +339,8 @@ test "left short of its end, a chat opens again where it was left, though the co
       (base.call)(name, params, done)
     },
   }
-  let r = { station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" }
-  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0)
+  let r : ChatRef = { station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" }
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0, platform=2)
   t.draw()
   open_chat(r)
   t.run_for(@ui.nav_push_ms)
@@ -390,4 +422,75 @@ test "opened short of its end, the core is told the messages shown whole: read u
   assert_true(seen >= 0.0)
   assert_true(seen < newest)
   ignore(t)
+}
+
+///|
+test "a table wider than the message on a phone: at rest in line with the words, slid sideways out to the screen's edge" {
+  let t = chat_tester("chat-md")
+  let cell = "只排可见的行"
+  let (x, y) = t.drawn_of(cell).unwrap()
+  // at rest in line with the words (the list's 16 in), past the frame's line and the cell's 12
+  assert_eq(x, 16.0 + 1.0 + 12.0)
+  // slid to its end, held still before it is let go (no fling)
+  t.press_at(360.0, y)
+  for step in 1..=8 {
+    t.move(360.0 - step.to_double() * 40.0, y)
+  }
+  t.run_for(long_press_ms)
+  t.release(40.0, y)
+  // what went left shows out to the screen's edge, not cut at the words' margin
+  let (shown, _, _, _) = t.shown_of(cell).unwrap()
+  assert_eq(shown, 0.0)
+}
+
+///|
+/// How soon after a chat is shown a message is said in it (the test's).
+let said_soon_ms : Double = 100.0
+
+///|
+test "a message said just after the chat opened comes in with the list gliding after it: no half second first" {
+  reset()
+  let clock : Ref[Double] = { val: 0.0 }
+  fix_clock.val = Some(fn() { clock.val })
+  let src = fixture("chat")
+  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0, platform=2)
+  t.run_for(@ui.nav_push_ms)
+  // a moment on (well within the half second the list once waited), someone says something in it (said while it
+  // shows: new to the list)
+  let words = "我也在看这个"
+  fix_later(1.0, fn() {
+    fix_chat("s-c1").sent.push(
+      msg(150, "person", by_person("安娜"), words, "刚刚", { "ts": Json::string("ana150"), "said": true }),
+    )
+  })
+  t.run_for(said_soon_ms)
+  clock.val = clock.val + 1.0
+  t.draw()
+  let mut from : Double? = None
+  let mut n = 0
+  while from is None && n < 60 {
+    t.frame()
+    from = t.drawn_of(words).map(fn(d) { d.1 })
+    n += 1
+  }
+  guard from is Some(y0) else { fail("「\{words}」 never came in") }
+  let rest = t.rest_of("a list")
+  if rest > t.time() && rest < @double.infinity {
+    t.run_for(rest - t.time())
+  }
+  t.run_for(@sf.enter_ms)
+  let (_, y1) = t.drawn_of(words).unwrap()
+  // (more than its rise in: the list went up after it)
+  assert_true(y0 - y1 > 20.0, msg="glided up after it: \{y0} → \{y1}")
+  fix_clock.val = None
+}
+
+///|
+test "a login card in a chat on a phone: as tall as what it holds, the next message right under it" {
+  let t = chat_tester("chat-login")
+  t.frame()
+  let (_, by, _, bh) = t.rect_of("在浏览器里登录").unwrap()
+  let (_, ny, _, _) = t.rect_of("5 分钟前").unwrap()
+  assert_true(ny - (by + bh) < 60.0, msg="room between the card's key and the next message: \{ny - (by + bh)}")
 }

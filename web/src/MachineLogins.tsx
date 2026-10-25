@@ -8,7 +8,11 @@
 // open goes straight to the browser (in the press, so a web page's browser lets it open); a loopback login's needs this
 // device to take the browser's callback back to the station, which only an app can (`canRelay`: the desktop app; the
 // Android app's card is its own, LoginCards.kt): the core listens, then answers what to open; this device's port taken,
-// the card says so. A step this client cannot do is said in the card.
+// the card says so. Where the station has a browser of its own (`browser`), the same step can be done there: its page
+// opened in a tab of the station's browser and that tab's view opened here (screen/InStation.tsx), a loopback's callback
+// coming back to the command there. Seldom used, it is in a ⋯ at the end of the step's button (docs/ui-panels.md: what
+// is used least goes into the row's ⋯); the step itself where this device cannot do it (a web page and a loopback) or
+// its port was taken just now. A step this client cannot do at all is said in the card.
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import type { MachineLoginShown, MachineLoginsView } from "./core/shapes.ts";
 import { useCall, useTopic } from "./core/react.ts";
@@ -16,12 +20,13 @@ import { Link } from "react-router";
 import { stationBase } from "./station.tsx";
 import { useDoing } from "./doing.ts";
 import { useThisMachineAddress } from "./thisMachine.ts";
-import { PanelIconButton, Section, Spinner } from "./ui.tsx";
+import { Menu, PanelIconButton, Section, Spinner } from "./ui.tsx";
 import { useAct } from "@stillfail/ui/toast.tsx";
-import { ArrowUpRight, Close, Key } from "@stillfail/ui/icons.tsx";
+import { ArrowUpRight, Close, Key, More } from "@stillfail/ui/icons.tsx";
 import * as pagesCss from "./styles/pages.css.ts";
 import * as css from "./MachineLogins.css.ts";
 import { t } from "./i18n.ts";
+import { useInStation } from "./screen/InStation.tsx";
 
 const loginsTopic = (station: string) => ({ topic: "machineLogins", station }) as const;
 const loginTopic = (station: string, id: string) => ({ topic: "machineLogin", station, id }) as const;
@@ -121,23 +126,32 @@ function ActiveCard({ station, login, canRelay }: { station: string; login: Mach
   const domain = login.domain ? <span className={css.cardStatus}>{t("web-main.logins.domain", { domain: login.domain })}</span> : null;
   // Its one button solid while it is the thing to do, a plain grey one once pressed here (as a pasted code's steps).
   const [pressed, setPressed] = useState(false);
+  // The same step in the station's own browser, for the step's ⋯ (or as the step).
+  const elsewhere = useStationWay(station, login);
   if (login.paste && login.url) return <PasteSteps station={station} login={login} />;
+  const more = elsewhere ? [elsewhere] : [];
   let said: ReactNode = waiting(login.statusText);
   let main: ReactNode = null;
   if (step === "device" && login.code) {
     said = <><span className={css.cardStatus}>{t("web-main.logins.device", { domain: login.domain ?? "" })}</span><CardCode code={login.code} /></>;
-    main = <StepButton label={t("web-main.logins.copyOpen")} solid={!pressed} onClick={() => { setPressed(true); copyAndOpen(login); }} />;
+    main = <StepButton label={t("web-main.logins.copyOpen")} solid={!pressed} more={more} onClick={() => { setPressed(true); copyAndOpen(login); }} />;
+  } else if (step === "loopback" && elsewhere && (!canRelay || login.relayText)) {
+    // This device cannot take the browser's callback (a web page), or its port was taken just now: the station's
+    // browser, which can, is the step (this device's again in its ⋯).
+    said = canRelay && login.relayText ? <><span className={css.cardStatusFailed}>{login.relayText}</span>{domain}</> : domain;
+    main = <StepButton label={elsewhere.label} solid busy={elsewhere.busy} data-login-station="" onClick={elsewhere.onSelect}
+      more={canRelay ? [{ label: t("web-main.logins.signIn"), onSelect: relay.open, busy: relay.busy }] : []} />;
   } else if (step === "loopback") {
     // A web page cannot take the browser's callback: said here, the page's host all the same.
     if (!canRelay) said = <><span className={css.cardStatus}>{t("web-main.logins.needsDesktop")}</span>{domain}</>;
     else {
       said = relay.opened ? waiting(t("web-main.logins.waitingBrowser"))
         : login.relayText ? <><span className={css.cardStatusFailed}>{login.relayText}</span>{domain}</> : domain;
-      main = <StepButton label={relay.opened ? t("web-main.logins.openAgain") : t("web-main.logins.signIn")} solid={!relay.opened} busy={relay.busy} onClick={relay.open} />;
+      main = <StepButton label={relay.opened ? t("web-main.logins.openAgain") : t("web-main.logins.signIn")} solid={!relay.opened} busy={relay.busy} more={more} onClick={relay.open} />;
     }
   } else if (step === "open" && login.url) {
     said = domain;
-    main = <StepButton label={t("web-main.logins.signIn")} solid={!pressed} onClick={() => { setPressed(true); openPage(login.url); }} />;
+    main = <StepButton label={t("web-main.logins.signIn")} solid={!pressed} more={more} onClick={() => { setPressed(true); openPage(login.url); }} />;
   }
   return (
     <>
@@ -145,6 +159,23 @@ function ActiveCard({ station, login, canRelay }: { station: string; login: Mach
       {main}
     </>
   );
+}
+
+/** Another way of doing a step, as its ⋯ has it. */
+type Way = { label: string; onSelect(): void; busy: boolean };
+
+/**
+ * The step in the station's own browser, where the station has one (none where it has not): its page opened in a tab
+ * there (the one open, if it is) and the tab's view opened here, gone back from once the login ends; called 回到 … 的浏览器
+ * while its tab is open.
+ */
+function useStationWay(station: string, login: MachineLoginShown): Way | null {
+  const call = useCall();
+  const open = useInStation(station);
+  const busy = useDoing("machineLogin.browser", { station, id: login.id });
+  if (!login.browser || !login.browserText) return null;
+  const label = login.browserText;
+  return { label, busy, onSelect: () => open(() => call("machineLogin.browser", { station, id: login.id }), label) };
 }
 
 /** 取消, as the card's ×: in its corner, concentric with it. */
@@ -171,6 +202,7 @@ function PasteSteps({ station, login }: { station: string; login: MachineLoginSh
   const call = useCall();
   const act = useAct();
   const sending = useDoing("machineLogin.answer", { station, id: login.id });
+  const elsewhere = useStationWay(station, login);
   const [opened, setOpened] = useState(false);
   const [typed, setTyped] = useState(false);
   const checking = login.state === "verifying";
@@ -179,7 +211,7 @@ function PasteSteps({ station, login }: { station: string; login: MachineLoginSh
     <>
       {/* Checked: said here, its spinner where 完成 was pressed. */}
       <span className={css.cardStatus}>{checking || !login.domain ? login.statusText : t("web-main.logins.pasteLead", { domain: login.domain })}</span>
-      <StepButton label={t("web-main.logins.openPage")} solid={!opened && !typed && !busy} external data-login-paste-open=""
+      <StepButton label={t("web-main.logins.openPage")} solid={!opened && !typed && !busy} external data-login-paste-open="" more={elsewhere ? [elsewhere] : []}
         onClick={() => { setOpened(true); openPage(login.url); }} />
       <CodeField busy={busy} onTyped={setTyped}
         send={(code) => act(call("machineLogin.answer", { station, id: login.id, text: code }), t("web-main.logins.answerWhat"))} />
@@ -230,14 +262,24 @@ function CardCode({ code }: { code: string }) {
 /**
  * A sign-in's step to press (its page, a code copied and its page): the card's width, solid while it is the next thing to
  * do, a plain grey one once it has been (the eye on to what follows). Android's profile sign-in has the same (Profiles.kt).
+ * `more`: the other ways of doing it, seldom used, in a ⋯ at its end.
  */
-function StepButton({ label, solid, busy = false, external = false, onClick, ...rest }: {
-  label: string; solid: boolean; busy?: boolean; external?: boolean; onClick(): void; [data: `data-${string}`]: string;
+function StepButton({ label, solid, busy = false, external = false, more = [], onClick, ...rest }: {
+  label: string; solid: boolean; busy?: boolean; external?: boolean; more?: Way[]; onClick(): void; [data: `data-${string}`]: string;
 }) {
-  return (
+  const button = (
     <button type="button" className={css.cardStep} data-next={solid || undefined} disabled={busy} aria-busy={busy || undefined} onClick={onClick} {...rest}>
       {busy && <Spinner inline />}{label}{external && <ArrowUpRight size={14} />}
     </button>
+  );
+  if (more.length === 0) return button;
+  const otherWays = t("common.login.otherWays");
+  return (
+    <span className={css.cardStepRow}>
+      {button}
+      <Menu label={otherWays} items={more.map((w) => ({ label: w.label, onSelect: w.onSelect, disabled: w.busy }))}
+        trigger={<button type="button" className={css.cardStepMore} aria-label={otherWays} title={otherWays} data-login-more=""><More size={14} /></button>} />
+    </span>
   );
 }
 

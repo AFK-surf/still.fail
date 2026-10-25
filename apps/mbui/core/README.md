@@ -35,11 +35,12 @@ makes goes to `out/core/` (ignored); the shell's intermediate build goes to `$CA
 scripts/core.sh deps                 # pnpm install --frozen-lockfile in client/core-ts
 scripts/core.sh hermes-apple         # Hermes for macOS and iOS, fetched once (out/core/hermes, a link into the cache)
 scripts/core.sh engine [TARGET]      # out/core/<target>/libmbui_core.a: src/host/apple_core.mm (when it changed)
-scripts/core.sh shell [TARGET]       # out/core/<target>/libstillfail_shell.a (+ shell-<target>.libs)
+scripts/core.sh shell [TARGET]       # out/core/<target>/libstillfail_shell.a (+ shell-<target>.libs), built here by cargo
 scripts/core.sh hermes               # out/core/core.hbc (ENTRY: core/hermes.ts, or core/media-hermes.ts)
-scripts/core.sh apple [TARGET]       # all four for an app, each when missing or stale (the media entry)
+scripts/core.sh apple [TARGET]       # all four for an app, each when missing or stale (the shell by its key; the media entry)
 scripts/core.sh smoke                # out/core/smoke built and run twice against https://app.still.fail
 scripts/core.sh listen               # listen.* with core/listen-test.js in the core's place
+scripts/core.sh exit                 # exit() with the core in a task (core/exit_test.m, core/exit-test.js)
 ```
 
 TARGET is aarch64-apple-darwin (the default), aarch64-apple-ios-sim or aarch64-apple-ios.
@@ -53,12 +54,13 @@ TARGET is aarch64-apple-darwin (the default), aarch64-apple-ios-sim or aarch64-a
   `apps/android/build.py` keeps hermesc), never committed; `out/core/hermes` links to it.
 - **The shell** is the crate's `cdylib` built as a static library (`cargo rustc --crate-type staticlib`), so ember's
   Cargo.toml is untouched. What it needs from the system (`-framework Security -framework CoreFoundation … -liconv`) is
-  what rustc prints as `native-static-libs`, kept in `out/core/shell-<target>.libs`. There is no prebuilt one for
-  Apple's targets (scripts/native.ts's `shell` part is Android's): it is built once per machine (≈ 1 min, sccache).
+  what rustc prints as `native-static-libs`, kept in `out/core/shell-<target>.libs`. `apple` takes it from
+  still.fail's natives (scripts/native.ts `shell-apple`, by the shell's sources: built once by CI's natives job, else
+  by native.ts here); `shell` builds it here (≈ 1 min with sccache, 4 without).
 - **The bytecode** is Android's exactly (`hermes`: esbuild to ES2020, Babel's class transform, hermesc 0.81.4 `-O
   -block-scoping`), kept with a stamp of its inputs.
 - **The engine** (`engine`): `src/host/apple_core.mm` compiled for the target (`-std=c++20 -fobjc-arc -fexceptions
-  -frtti`) against the tarball's headers into `libmbui_core.a`. moon does not see it: `scripts/mac.sh` touches the
+  -frtti`) against the tarball's headers into `libmbui_core.a` (1-2 s). moon does not see it: `scripts/mac.sh` touches the
   app's `core_engine.m` when it is made again, so the app is linked again.
 - The macOS apps find the framework where it is (`-rpath` to `out/core/hermes/…/macosx` from the executable, and
   `@executable_path/../Frameworks` for an app bundle); the iOS app carries it in `MBUI.app/Frameworks`.
@@ -70,7 +72,7 @@ stops the core and prints timings and the process's memory footprint.
 
 ## The engine (apple_core.mm)
 
-- Android's engine (`apps/android/core/src/main/cpp/engine.cpp`) without JNI, as `bench/hermes-host` is: one thread,
+- The app's engine (`apps/mbui/engine/engine.cpp`) as Apple's host has it, as `bench/hermes-host` is: one thread,
   `still.fail core`, with an 8 MB stack (the core's parsers recurse); a queue of tasks (`mb_core_send`, the shell's
   answers, the host's own) and the timers, under one lock and condition variable; after each task or timer the
   microtasks drained (`withMicrotaskQueue`). The runtime is `makeHermesRuntime` with the Android app's configuration
@@ -94,14 +96,22 @@ stops the core and prints timings and the process's memory footprint.
   `random(n)`.
 - The shell's answers come on tokio's threads; they go through a `Gate` (as engine.cpp's) closed by `mb_core_stop`, so
   an answer arriving after a stop is dropped instead of touching a dead core.
+- `exit()` (a host's `mb_host_exit`, AppKit's as the app quits) stops the core before anything is destroyed: its
+  statics' destructors (the core's mutex and queues, Hermes's) run after what atexit was given, and the first
+  `mb_core_start` gives it `mb_core_stop`. A core thread left in a task had locked a destroyed mutex or read freed
+  memory, and macOS reported the app as crashed (`scripts/core.sh exit` holds it).
 - `secure.*` and `listen.*` are the app's, not the shell's (on Android too): answered here (the Keychain, below;
-  apple_listen.m, under Login).
+  apple_listen.m, under Login). A `user` value (a vault's box key) and `secure.ask` take the person: LocalAuthentication's
+  device owner prompt (Touch ID, Face ID or the device's password, the core's `reason` in it), on a queue of its own so
+  the core goes on while they answer; the Keychain item is a `user` one's own account, given once they said yes. The
+  prompt is a gate, not the Keychain's access control (the data protection keychain's, which on macOS takes an
+  entitlement a Developer ID app has only with a provisioning profile). A device with no password: `no_device_lock`.
 - An exception that escapes to the engine, or the core's own `fatal`, sends `{"fatal": reason}` once; the host then
   stops this core and starts another (as Android does).
 - `on_message` runs on the core thread. The MoonBit host copies and hops to its UI thread (core_native.c), and must
   not wait on the UI thread for the core while the core waits for it.
-- `MBUI_SECURE_TEST=1` (src/coredemo) round-trips `secure.set`, `get`, `delete` and `get` again through the engine's
-  own Keychain code and logs `SECURE_TEST …`, as Android's CoreHost does.
+- `MBUI_SECURE_TEST=1` (src/coredemo) round-trips `secure.set`, `get` (and `get` as the person's: none, nobody asked),
+  `delete` and `get` again through the engine's own Keychain code and logs `SECURE_TEST …`, as Android's CoreHost does.
 - `MB_CORE_TRACE=1` prints every operation and its answer, `MB_CORE_DEBUG=1` the core's debug log; the start says
   what it took (`[core] Hermes: shell … ms, script … ms (… bytes), start … ms`).
 - Not yet: Hermes's sampling profiler (Android's `HermesNative.profile`), a debugger (the release framework has none;
@@ -165,8 +175,9 @@ Still to do: a macOS app bundle (`Contents/Resources/core.hbc`, `Contents/Framew
   is aarch64-apple-ios), linked with Hermes's xcframework slice, the app's `core_engine.m` (src/sfcore/apple_engine.m)
   and `src/core/core_native.c`. The app carries `core.hbc` and `Frameworks/hermes.framework` (React Native 0.81.4's,
   the simulator's slice; `@executable_path/Frameworks`), signed ad hoc.
-- `secure.*`: the Keychain (`kSecClassGenericPassword`, `AfterFirstUnlockThisDeviceOnly`), as on macOS; no file stand-in
-  (MBUI_KEYS_IN_FILES is a macOS development build's).
+- `secure.*`: the Keychain (`kSecClassGenericPassword`, `AfterFirstUnlockThisDeviceOnly`) and Face ID or the passcode
+  for a `user` one, as on macOS (`NSFaceIDUsageDescription` in ios/Info.plist); no file stand-in (MBUI_KEYS_IN_FILES is a
+  macOS development build's).
 - Sign-in: ASWebAuthenticationSession (`apple_auth.m`) with the `stillfail` scheme, as on macOS: the cloud's callback
   comes back to the session's handler, nothing registered.
 - The core's files: `Library/Application Support/<bundle id>/core` in the app's container (`MBUI_CORE_DATA` elsewhere:
@@ -183,25 +194,27 @@ What differs from macOS:
 
 ## Android
 
-Built (`APP=coredemo scripts/android.sh build`): the core runs in ember's own engine, as still.fail's Android app runs
-it, not in one of ours.
+Built (`APP=coredemo scripts/android.sh build`): the core runs in the app's engine, the one Windows' app runs too.
 
-- **Engine**: ember's `apps/android/core/src/main/cpp/engine.cpp`, prebuilt (`node scripts/native.ts path engine
-  android-arm64` in the ember checkout: `libstillfail_hermes.so`, `libjsi.so`, `libc++_shared.so`), on the shell
-  `libstillfail_shell.so` (`... path shell android-arm64`). Hermes itself (`libhermes.so`) and `libfbjni.so` come
-  from React Native 0.81.4's `hermes-android` and fbjni 0.7.0's AARs (Gradle's cache, else Maven Central). All go
-  into `out/android/apk/jniLibs`, which Gradle packs; nothing is committed.
+- **Engine**: `apps/mbui/engine/engine.cpp` (its C API `engine.h`), prebuilt for Android with the NDK's CMake
+  (`apps/mbui/engine/android`; `node scripts/native.ts path engine android-arm64` in the ember checkout:
+  `libstillfail_hermes.so`, `libjsi.so`, `libc++_shared.so`), on the shell `libstillfail_shell.so` (`... path shell
+  android-arm64`). Hermes itself (`libhermes.so`, and its headers for the engine's build) and `libfbjni.so` come from
+  React Native 0.81.4's `hermes-android` and fbjni 0.7.0's AARs (Gradle's cache, else Maven Central). All go into
+  `out/android/apk/jniLibs`, which Gradle packs; nothing is committed. (Until 2026-10-23 the engine was still.fail's
+  Kotlin app's, JNI and all, built in its tree: that app is frozen, and nothing here reads it.)
 - **Script**: `scripts/core.sh hermes` makes `out/core/core.hbc` as ember's `hermes-bundle.ts` does (esbuild, Babel's
   class transform, hermesc 0.81.4 to bytecode) from `core/hermes.ts` (still.fail alone) or, for coredemo by default,
   `core/media-hermes.ts` (with the media module). It goes into the APK's assets.
-- **Host** (`src/host/android_core.c`, included by `src/coredemo/android_engine.c`): calls the engine's
-  `Java_fail_still_core_HermesNative_*` entry points as C functions (none looks at its `this`), with a
-  `dev.mbui.CoreHost` (android/) as the listener the engine calls back on its thread: `onBytes`/`onFrame` (a message,
-  or one with bytes) go straight through core_native.c into mbui's queue (`mb_post`), which asks for the frame that
-  takes them. Timers are the engine's (CLOCK_BOOTTIME).
+- **Host** (`src/host/android_core.c`, included by `src/coredemo/android_engine.c`): starts the engine through its C
+  API (`sf_engine_start`, os `android`); what the core says (a message, or one with bytes) comes back on the core's
+  thread straight through core_native.c into mbui's queue (`mb_post`), which asks for the frame that takes it, and
+  the calls only the app does go to a `dev.mbui.CoreHost` (android/), which answers through `sf_engine_complete`.
+  Timers are the engine's (CLOCK_BOOTTIME on Android).
 - **`secure.*`**: CoreHost seals each value with AES-GCM under one Android Keystore key (alias
   `dev.mbui.core.secure`), a file per value in `<files>/core/secure`, the value's name as associated data.
-  `secure.ask` and `user: true` (biometrics) answer `"unsupported"`. `MBUI_SECURE_TEST=1` makes coredemo round-trip
+  `user: true` and `secure.ask`: the person asked (BiometricPrompt, biometrics or the screen lock; CoreHost's
+  `secureUser`). `MBUI_SECURE_TEST=1` makes coredemo round-trip
   `secure.set`, `secure.get` (the same bytes back, sealed on disk), `secure.delete` and `secure.get` again (`{none}`)
   through CoreHost's own answers and log `SECURE_TEST …`.
 - **`listen.*`**: `dev.mbui.Loopback` (android/), the twin of apple_listen.m and of ember's Loopback.kt: a
@@ -213,7 +226,7 @@ it, not in one of ours.
   `specialUse` foreground service, as ember's LoginRelay.kt) holds the process up so the cached apps freezer does not
   stop it answering the browser. `scripts/android.sh listen-test` runs it with core/listen-test.js in the core's place
   (a POST from the emulator's shell; then build again without it).
-- **Sign-in**: no browser session on Android (`@core.has_browser_session()` false), so coredemo's 登录 signs in on
+- **Sign-in**: no browser session on Android, macOS and Windows (`@core.has_browser_session()` false), so 登录 signs in on
   `@hostapi.browser_login` (`dev.mbui.BrowserLogin`): `auth.begin` with `http://127.0.0.1:<port>/oauth/callback`, the
   page in a Custom Tab (the Custom Tabs protocol's own intent extras, no androidx) on the app's task, the one GET to
   that path under that host taken and answered, then the app brought back in front (MainActivity is `singleTask`, as
@@ -244,7 +257,8 @@ memory).
   app's Apple stub): `mb_core_start` hands the engine the bytecode, the data directory and the host's calls; what the
   core says goes through core_native.c into mbui's queue (`mb_post`), which asks for the frame that takes it.
 - **`secure.*`**: sealed with DPAPI for the Windows user (CryptProtectData, never a prompt), a file per value in
-  `<data>\secure`. `secure.ask` and `user: true` (Windows Hello) answer `"unsupported"`. `MBUI_SECURE_TEST=1` round-trips
+  `<data>\secure` (a `user` one's with `.user` after it). Nothing asks the person yet (Windows Hello): `secure.ask` says
+  yes at once and a `user` value is as safe as the Windows login, as with the Electron app. `MBUI_SECURE_TEST=1` round-trips
   it once as the core starts (`SECURE_TEST …` on stderr).
 - **`listen.*`** and **sign-in**: on mbui's win_listen.c (Winsock); the app signs in on `@hostapi.browser_login`
   (win_browser_login.c: `$BROWSER`, else the system's browser), the CLI's loopback redirect, as on Android.
@@ -264,9 +278,10 @@ desktop app do (ember docs/client-core.md, "Sign-in"). The cloud accepts exactly
 (cloud/src/auth.ts `APP_REDIRECTS`, `validRedirect`). Two ways back:
 
 - **Custom scheme** (`stillfail://auth/callback`, what the smoke test asks for). Needs nothing from the core, only
-  the host: open the URL and catch the callback. On iOS and macOS `ASWebAuthenticationSession(url:,
+  the host: open the URL and catch the callback. On iOS `ASWebAuthenticationSession(url:,
   callbackURLScheme: "stillfail")` does both (no `CFBundleURLTypes` registration needed, the callback URL comes back
-  to its completion handler); otherwise register the scheme (`CFBundleURLTypes`; on macOS handle `kAEGetURL`, on iOS
+  to its completion handler; on macOS it is Safari's whatever the default browser, so the Mac signs in on the loopback
+  below, in the default browser, as the desktop app does); otherwise register the scheme (`CFBundleURLTypes`; on macOS handle `kAEGetURL`, on iOS
   `application:openURL:`). Then `mb_core_send({"id":…,"call":"auth.complete","params":{"query":"<query>"}})`.
   Built: `src/host/apple_auth.m` and `@core.sign_in`; `MBUI_AUTH_DRY=1` makes the session but does not start it (no one
   has signed in through it yet: a real sign-in is the person's to do). Caveat: another installed still.fail app
@@ -289,7 +304,5 @@ round: this device taking a station's login callback for it (`canRelay`; machine
 login cards). apple_core.mm answers it on the same listener, as Android's Loopback.kt does there; `scripts/core.sh
 listen` tests it with core/listen-test.js in the core's place (`scripts/android.sh listen-test` on Android's).
 
-`secure.*` is the other gap: at start the core asks `secure.get` twice (the lock's signing key `lock-signer`, and the
-vault's) and goes on without them (the smoke run shows it); after login, making a lock signer or opening a vault
-would fail with "unsupported". The Keychain (`kSecClassGenericPassword`, `kSecAttrAccessControl` with user presence
-when `user` is set; `secure.ask` → `LAContext evaluatePolicy`) answered through `complete` closes it.
+`secure.*` is answered here too (the Keychain, and LocalAuthentication's prompt for a `user` value and `secure.ask`:
+above).

@@ -18,39 +18,95 @@ import java.io.File;
 import java.io.FileOutputStream;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
+import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.LinkedHashSet;
 
 /**
  * Text with Android's own engine: grapheme clusters and their advances
  * (with kerning, from Paint.getTextRunAdvances), and each cluster rasterized
- * into the shared RGBA atlas the first time it is drawn. Called on the GL
- * thread only.
+ * as it is asked for, put where MoonBit says (its atlas.mbt: what goes where,
+ * and what makes room) in an atlas: the words' (their cover, a byte a texel)
+ * or colour glyphs' (RGBA). Called on the GL thread
+ * only, but for the drawing ahead (ahead): the glyphs shaped and not drawn
+ * yet, drawn on a thread of their own and taken when they are first asked
+ * for; what was put in a frame uploaded once, a row of the atlas at a time,
+ * before the frame is drawn (flush).
  */
 final class MBText {
-    static final int ATLAS = 2048;
-
     static final class Entry {
-        String text;
-        float size;
-        int weight;
-        int style;  // 1 italic, 2 the code face
-        boolean done;
-        double u, v, w, h, ox, oy;
-        int color;
+        final String text;
+        final float size;
+        final int weight;
+        final int style;  // 1 italic, 2 the code face
+        // drawn ahead (under `lock`): NONE, ASKED (in `asked`), DRAWING (by the thread ahead), DRAWN (`drawn`); the
+        // scale and the faces it is to be drawn at
+        int ahead;
+        Drawn drawn;
+        float askScale;
+        int askFaces;
+
+        Entry(String text, float size, int weight, int style) {
+            this.text = text;
+            this.size = size;
+            this.weight = weight;
+            this.style = style;
+        }
     }
 
-    static final HashMap<String, Integer> keys = new HashMap<>();
+    /** A cluster drawn in white, a pixel round its bounds (none: nothing to draw), at a scale, in the faces as they were. */
+    static final class Drawn {
+        Bitmap bmp;
+        final Rect b = new Rect();
+        int color;
+        float scale;
+        int faces;
+    }
+
+    /** A glyph put in an atlas this frame (colour glyphs' or the words'), its picture to be uploaded there (flush). */
+    static final class Placed {
+        final Bitmap bmp;
+        final int x, y;
+        final boolean colour;
+
+        Placed(Bitmap bmp, int x, int y, boolean colour) {
+            this.bmp = bmp;
+            this.x = x;
+            this.y = y;
+            this.colour = colour;
+        }
+    }
+
+    /** A colour glyph's place across is this far past its place in colour glyphs' atlas (android_host.c MB_ATLAS_COLOR_U). */
+    static final int COLOUR_U = 16384;
+
+    // each font's clusters (fontKey: its size, weight and style), their keys
+    static final HashMap<Long, HashMap<String, Integer>> keys = new HashMap<>();
     static final ArrayList<Entry> entries = new ArrayList<>();
-    static final HashMap<String, Paint> paints = new HashMap<>();
-    static int packX, packY, packH, generation;
+    static final HashMap<Long, Paint> paints = new HashMap<>();
+    static final ArrayList<Placed> placed = new ArrayList<>();
+    static int generation;
+    // the glyph drawn last (glyph), its picture until it is put in its atlas (glyphPut), and whether it is in colours
+    static int heldKey = -1;
+    static Bitmap held;
+    static boolean heldColour;
+    // moves on as the faces change: what was drawn in them before is drawn again
+    static int faces;
     static float[] adv = new float[1024];
+    static char[] chars = new char[1024];
     static final BreakIterator graphemes = BreakIterator.getCharacterInstance();
 
+    /** What was drawn before is gone (a new surface, its atlas empty; the faces or the scale changed): drawn again as it is asked for. */
     static void reset() {
-        for (Entry e : entries) e.done = false;
-        packX = packY = packH = 0;
         generation++;
+        dropHeld();
+        dropPlaced();
+    }
+
+    /** A font's key: its size's bits, its weight and its style. */
+    static long fontKey(float size, int weight, int style) {
+        return ((long) Float.floatToIntBits(size) << 32) | ((long) (weight & 0xFFFF) << 16) | (style & 0xFFFF);
     }
 
     /** The face of style bits: 2 the monospaced (code) face, 4 the serif one (Noto Serif, its CJK for Han), else the system's. */
@@ -113,14 +169,14 @@ final class MBText {
         }
     }
 
-    /** The typeface a style is drawn in at a weight: its face given, else the system's (face). */
-    static Typeface typeface(int style, int weight) {
+    /** The typeface a style is drawn in at a weight: its face given, else the system's (face). (On either thread: the faces given are changed on the GL thread.) */
+    static synchronized Typeface typeface(int style, int weight) {
         int f = faceId(style);
         Typeface given = f > 0 ? faceTypeface(f, weight, (style & 1) != 0) : null;
         return given != null ? given : Typeface.create(face(style), weight, (style & 1) != 0);
     }
 
-    static boolean take(int f, Object src, int weight) {
+    static synchronized boolean take(int f, Object src, int weight) {
         if (f <= 0 || f >= FACES) return false;
         // one Android can read as a font, or none taken
         try {
@@ -149,7 +205,7 @@ final class MBText {
         return take(f, b, weight);
     }
 
-    static void faceClear(int f) {
+    static synchronized void faceClear(int f) {
         if (f <= 0 || f >= FACES || !given(f)) return;
         faceFiles[f].clear();
         faceWeights[f].clear();
@@ -159,19 +215,29 @@ final class MBText {
     /** What was measured and drawn before a face changed: forgotten (MoonBit drops its glyphs as the generation moves on). */
     static void facesChanged() {
         paints.clear();
+        faces++;
         reset();
     }
 
     static Paint paint(float size, int weight, int style) {
-        String k = size + "/" + weight + "/" + style;
+        return paintIn(paints, size, weight, style);
+    }
+
+    /** The paint of a font at a size in pixels, kept in `paints` (the GL thread's, or the thread ahead's). */
+    static Paint paintIn(HashMap<Long, Paint> paints, float size, int weight, int style) {
+        long k = fontKey(size, weight, style);
         Paint p = paints.get(k);
         if (p == null) {
             p = new Paint(Paint.ANTI_ALIAS_FLAG | Paint.SUBPIXEL_TEXT_FLAG);
             p.setTypeface(typeface(style, weight));
             p.setTextSize(size);
             // ligatures as the system draws them: shape() tells MoonBit which clusters a ligature covers; none for
-            // words with letter spacing (style & 8), each cluster spaced on its own
-            if ((style & 8) != 0) p.setFontFeatureSettings("'liga' 0, 'clig' 0");
+            // words with letter spacing (style & 8), each cluster spaced on its own; digits all one width where
+            // style & 32 (style.mbt style_tabular)
+            String features = ((style & 8) != 0 ? "'liga' 0, 'clig' 0" : "")
+                    + ((style & 8) != 0 && (style & 32) != 0 ? ", " : "")
+                    + ((style & 32) != 0 ? "'tnum' 1" : "");
+            if (!features.isEmpty()) p.setFontFeatureSettings(features);
             p.setColor(Color.WHITE);
             paints.put(k, p);
         }
@@ -223,7 +289,10 @@ final class MBText {
         Paint p = paint((float) size * d, weight, style);
         int n = text.length();
         if (adv.length < n) adv = new float[n * 2];
-        char[] chars = text.toCharArray();
+        if (MBText.chars.length < n) MBText.chars = new char[n * 2];
+        char[] chars = MBText.chars;
+        text.getChars(0, n, chars, 0);
+        HashMap<String, Integer> font = clusters((float) size, weight, style);
         // a run at a time in its own direction (shaped left to right, Arabic came out in letters that do not join,
         // wider than the system draws the word)
         if (Bidi.requiresBidi(chars, 0, n)) {
@@ -263,7 +332,7 @@ final class MBText {
                 // (drawn on its own, "flex" came out "f ɭex")
                 key = -2;
             } else {
-                key = intern(text.substring(start, end), (float) size, weight, style);
+                key = intern(font, text.substring(start, end), (float) size, weight, style);
             }
             out[k * 4] = start;
             out[k * 4 + 1] = end - start;
@@ -274,23 +343,28 @@ final class MBText {
         return k;
     }
 
-    static int intern(String cluster, float size, int weight, int style) {
-        String k = cluster + '\u0001' + size + '\u0001' + weight + '\u0001' + style;
-        Integer id = keys.get(k);
+    /** A font's clusters and their keys. */
+    static HashMap<String, Integer> clusters(float size, int weight, int style) {
+        long k = fontKey(size, weight, style);
+        HashMap<String, Integer> m = keys.get(k);
+        if (m == null) {
+            m = new HashMap<>();
+            keys.put(k, m);
+        }
+        return m;
+    }
+
+    static int intern(HashMap<String, Integer> font, String cluster, float size, int weight, int style) {
+        Integer id = font.get(cluster);
         if (id != null) return id;
-        Entry e = new Entry();
-        e.text = cluster;
-        e.size = size;
-        e.weight = weight;
-        e.style = style;
-        entries.add(e);
-        keys.put(k, entries.size() - 1);
+        entries.add(new Entry(cluster, size, weight, style));
+        font.put(cluster, entries.size() - 1);
         return entries.size() - 1;
     }
 
     /** The key of a piece of text drawn whole (a word of a joining script, a ligature). */
     static int textKey(String text, double size, int weight, int style) {
-        return intern(text, (float) size, weight, style);
+        return intern(clusters((float) size, weight, style), text, (float) size, weight, style);
     }
 
     /**
@@ -308,58 +382,279 @@ final class MBText {
         return false;
     }
 
+    /**
+     * Glyph `key` drawn (ahead, else here), its picture held for glyphPut: in `out` 0, 0 (where it goes is MoonBit's),
+     * its size in points (0: nothing to draw), where its top left is from the pen, whether it is in colours of its own.
+     */
     static void glyph(int key, double[] out) {
-        if (key < 0 || key >= entries.size()) {
-            for (int i = 0; i < 7; i++) out[i] = 0;
-            return;
-        }
+        for (int i = 0; i < 7; i++) out[i] = 0;
+        dropHeld();
+        if (key < 0 || key >= entries.size()) return;
         Entry e = entries.get(key);
-        if (!e.done) rasterize(e);
-        out[0] = e.u;
-        out[1] = e.v;
-        out[2] = e.w;
-        out[3] = e.h;
-        out[4] = e.ox;
-        out[5] = e.oy;
-        out[6] = e.color;
+        float sc = density();
+        Drawn d = drawnAhead(e, sc);
+        if (d == null) d = draw(e, sc, paint(e.size * sc, e.weight, e.style), faces);
+        if (d.bmp == null) return;
+        int pad = 1;
+        heldKey = key;
+        held = d.bmp;
+        heldColour = d.color != 0;
+        out[2] = d.bmp.getWidth() / sc;
+        out[3] = d.bmp.getHeight() / sc;
+        out[4] = (d.b.left - pad) / sc;
+        out[5] = (d.b.top - pad) / sc;
+        out[6] = d.color;
     }
 
-    static void rasterize(Entry e) {
-        e.done = true;
-        e.w = 0;
-        float sc = density();
-        Paint p = paint(e.size * sc, e.weight, e.style);
-        Rect b = new Rect();
+    /**
+     * The glyph drawn last put in its atlas, its top left at x, y (a colour glyph's COLOUR_U across past its place in
+     * theirs): uploaded with the frame's others (flush).
+     */
+    static void glyphPut(int key, int x, int y) {
+        boolean colour = x >= COLOUR_U;
+        if (key != heldKey || held == null || colour != heldColour) return;
+        placed.add(new Placed(held, colour ? x - COLOUR_U : x, y, colour));
+        held = null;
+        heldKey = -1;
+    }
+
+    /** The glyph drawn last, not put in the atlas, let go. */
+    static void dropHeld() {
+        if (held != null) held.recycle();
+        held = null;
+        heldKey = -1;
+    }
+
+    /** `e` drawn in white a pixel round its bounds, at `sc` pixels a point with `p` (its font at that size): on either thread. */
+    static Drawn draw(Entry e, float sc, Paint p, int faces) {
+        Drawn d = new Drawn();
+        d.scale = sc;
+        d.faces = faces;
+        Rect b = d.b;
         p.getTextBounds(e.text, 0, e.text.length(), b);
         int pad = 1;
         int pw = b.width() + 2 * pad, ph = b.height() + 2 * pad;
-        if (b.width() <= 0 || b.height() <= 0 || pw > 512 || ph > 512) return;
-        if (packX + pw + 1 > ATLAS) {
-            packX = 0;
-            packY += packH + 1;
-            packH = 0;
-        }
-        if (packY + ph + 1 > ATLAS) {
-            for (Entry x : entries) x.done = false;
-            e.done = true;
-            packX = packY = packH = 0;
-            generation++;
-        }
+        if (b.width() <= 0 || b.height() <= 0 || pw > 512 || ph > 512) return d;
         Bitmap bmp = Bitmap.createBitmap(pw, ph, Bitmap.Config.ARGB_8888);
         Canvas c = new Canvas(bmp);
         c.drawText(e.text, pad - b.left, pad - b.top, p);
-        e.color = isColor(bmp) ? 1 : 0;
-        GLES30.glBindTexture(GLES30.GL_TEXTURE_2D, Native.atlasTexture());
-        GLUtils.texSubImage2D(GLES30.GL_TEXTURE_2D, 0, packX, packY, bmp);
-        bmp.recycle();
-        e.u = packX;
-        e.v = packY;
-        e.w = pw / sc;
-        e.h = ph / sc;
-        e.ox = (b.left - pad) / sc;
-        e.oy = (b.top - pad) / sc;
-        packX += pw + 1;
-        packH = Math.max(packH, ph);
+        d.color = isColor(bmp) ? 1 : 0;
+        d.bmp = bmp;
+        return d;
+    }
+
+    /**
+     * The glyphs put since the last frame was drawn, into their atlases before this one is: those put one after
+     * another on a shelf of one in one upload (side by side, a pixel apart, right of what the shelf had), not one each;
+     * one put anywhere else (another shelf, another plot, the other atlas) starts another. The words' atlas takes a
+     * glyph's cover alone (drawn in white: its alpha), a byte a texel. The texture bound on the unit active, as it was
+     * bound for each glyph before.
+     */
+    static void flush() {
+        int n = placed.size();
+        if (n == 0) return;
+        int bound = -1;
+        int i = 0;
+        while (i < n) {
+            Placed first = placed.get(i);
+            int j = i, right = first.x - 1, h = 0;
+            while (j < n && placed.get(j).colour == first.colour && placed.get(j).y == first.y
+                    && placed.get(j).x == right + 1) {
+                Placed g = placed.get(j);
+                right = g.x + g.bmp.getWidth();
+                h = Math.max(h, g.bmp.getHeight());
+                j++;
+            }
+            int tex = first.colour ? Native.colourAtlasTexture() : Native.atlasTexture();
+            if (tex != bound) {
+                GLES30.glBindTexture(GLES30.GL_TEXTURE_2D, tex);
+                bound = tex;
+            }
+            int w = right - first.x;
+            if (first.colour) {
+                if (j - i == 1) {
+                    GLUtils.texSubImage2D(GLES30.GL_TEXTURE_2D, 0, first.x, first.y, first.bmp);
+                } else {
+                    Bitmap row = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888);
+                    Canvas c = new Canvas(row);
+                    for (int k = i; k < j; k++) {
+                        Placed g = placed.get(k);
+                        c.drawBitmap(g.bmp, g.x - first.x, 0, null);
+                    }
+                    GLUtils.texSubImage2D(GLES30.GL_TEXTURE_2D, 0, first.x, first.y, row);
+                    row.recycle();
+                }
+            } else {
+                // each glyph's alpha where it lies in the row, nothing (0) round it
+                if (cover == null || cover.capacity() < w * h) {
+                    cover = ByteBuffer.allocateDirect(Math.max(w * h, 1 << 16)).order(ByteOrder.nativeOrder());
+                }
+                cover.clear();
+                for (int b = 0; b < w * h; b++) cover.put(b, (byte) 0);
+                for (int k = i; k < j; k++) {
+                    Placed g = placed.get(k);
+                    int gw = g.bmp.getWidth(), gh = g.bmp.getHeight();
+                    if (px.length < gw * gh) px = new int[gw * gh * 2];
+                    g.bmp.getPixels(px, 0, gw, 0, 0, gw, gh);
+                    int ox = g.x - first.x;
+                    for (int y = 0; y < gh; y++)
+                        for (int x = 0; x < gw; x++) cover.put(y * w + ox + x, (byte) (px[y * gw + x] >>> 24));
+                }
+                GLES30.glPixelStorei(GLES30.GL_UNPACK_ALIGNMENT, 1);
+                cover.position(0);
+                GLES30.glTexSubImage2D(GLES30.GL_TEXTURE_2D, 0, first.x, first.y, w, h, GLES30.GL_RED,
+                        GLES30.GL_UNSIGNED_BYTE, cover);
+                GLES30.glPixelStorei(GLES30.GL_UNPACK_ALIGNMENT, 4);
+            }
+            for (int k = i; k < j; k++) placed.get(k).bmp.recycle();
+            i = j;
+        }
+        placed.clear();
+    }
+
+    /** A glyph's pixels as they are read (flush), and a row's cover as it is uploaded: kept from one to the next. */
+    static int[] px = new int[4096];
+    static ByteBuffer cover;
+
+    /** What was put and not uploaded, let go: the atlas is gone (reset). */
+    static void dropPlaced() {
+        for (Placed g : placed) g.bmp.recycle();
+        placed.clear();
+    }
+
+    // ---- drawing ahead: the glyphs shaped and not drawn yet (text.mbt glyphs_ahead), on a thread of their own ----
+
+    static final int NONE = 0, ASKED = 1, DRAWING = 2, DRAWN = 3;
+    /** The most glyphs asked for or drawn ahead and not placed yet (the oldest drawn let go past it). */
+    static final int AHEAD_MOST = 1024;
+    static final Object lock = new Object();
+    // under lock: what the thread ahead is to draw, in the order asked; what it drew and is not placed yet, oldest first
+    static final ArrayDeque<Entry> asked = new ArrayDeque<>();
+    static final LinkedHashSet<Entry> drawnAhead = new LinkedHashSet<>();
+    static int aheadCount;
+    static Thread aheadThread;
+
+    /** The glyphs of keys[0..n) to draw ahead, at the scale and in the faces of now. GL thread. */
+    static void ahead(int[] ks, int n) {
+        float sc = density();
+        boolean any = false;
+        synchronized (lock) {
+            for (int i = 0; i < n; i++) {
+                int k = ks[i];
+                if (k < 0 || k >= entries.size()) continue;
+                Entry e = entries.get(k);
+                if (e.ahead != NONE) continue;
+                if (aheadCount >= AHEAD_MOST && !dropOldestDrawn()) break;
+                e.ahead = ASKED;
+                e.askScale = sc;
+                e.askFaces = faces;
+                asked.add(e);
+                aheadCount++;
+                any = true;
+            }
+            if (any) lock.notifyAll();
+        }
+        if (any && aheadThread == null) {
+            aheadThread = new Thread(MBText::drawAhead, "mbui glyphs");
+            aheadThread.setDaemon(true);
+            aheadThread.start();
+        }
+    }
+
+    /** The oldest glyph drawn ahead and not placed, let go (under lock): false when there is none. */
+    static boolean dropOldestDrawn() {
+        java.util.Iterator<Entry> it = drawnAhead.iterator();
+        if (!it.hasNext()) return false;
+        Entry e = it.next();
+        it.remove();
+        if (e.drawn != null && e.drawn.bmp != null) e.drawn.bmp.recycle();
+        e.drawn = null;
+        e.ahead = NONE;
+        aheadCount--;
+        return true;
+    }
+
+    /**
+     * What was drawn ahead of `e` at `sc` in the faces of now, taken; null when it was not (asked and not begun: no
+     * longer asked, drawn here). While the thread ahead draws it, waited for. GL thread.
+     */
+    static Drawn drawnAhead(Entry e, float sc) {
+        synchronized (lock) {
+            if (e.ahead == NONE) return null;
+            if (e.ahead == ASKED) {
+                // (left in `asked`: the thread ahead passes over it)
+                e.ahead = NONE;
+                aheadCount--;
+                return null;
+            }
+            while (e.ahead == DRAWING) {
+                try {
+                    lock.wait();
+                } catch (InterruptedException x) {
+                    Thread.currentThread().interrupt();
+                    return null;
+                }
+            }
+            if (e.ahead != DRAWN) return null;
+            Drawn d = e.drawn;
+            e.drawn = null;
+            e.ahead = NONE;
+            aheadCount--;
+            drawnAhead.remove(e);
+            if (d.scale != sc || d.faces != faces) {
+                if (d.bmp != null) d.bmp.recycle();
+                return null;
+            }
+            return d;
+        }
+    }
+
+    /** The thread ahead: each glyph asked for drawn with its own paints, as the GL thread would draw it. */
+    static void drawAhead() {
+        HashMap<Long, Paint> mine = new HashMap<>();
+        int mineFaces = -1;
+        while (true) {
+            Entry e;
+            float sc;
+            int f;
+            synchronized (lock) {
+                while (asked.isEmpty()) {
+                    try {
+                        lock.wait();
+                    } catch (InterruptedException x) {
+                        return;
+                    }
+                }
+                e = asked.poll();
+                if (e.ahead != ASKED) continue;
+                e.ahead = DRAWING;
+                sc = e.askScale;
+                f = e.askFaces;
+            }
+            Drawn d = null;
+            try {
+                if (f != mineFaces) {
+                    mine.clear();
+                    mineFaces = f;
+                }
+                d = draw(e, sc, paintIn(mine, e.size * sc, e.weight, e.style), f);
+            } catch (Throwable x) {
+                // (out of memory for its picture, as much as anything: let be, drawn on the GL thread when it is asked
+                // for; never left DRAWING for that thread to wait on)
+                Host.log("glyph ahead: " + x);
+            }
+            synchronized (lock) {
+                if (d == null) {
+                    e.ahead = NONE;
+                    aheadCount--;
+                } else {
+                    e.drawn = d;
+                    e.ahead = DRAWN;
+                    drawnAhead.add(e);
+                }
+                lock.notifyAll();
+            }
+        }
     }
 
     // ---- the platform's own text drawing (textref_native.mbt, for src/textdiff) ----

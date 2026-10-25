@@ -1,9 +1,9 @@
 // A message that refers (`@`) to chats of the viewer's other workspaces (docs/chat-share.md): before it goes, the
 // viewer is asked to share them with the workspace it is written in, so its agents can read them; shared (the core's
-// `chat.xshareAdd`), it is sent. What it refers to is the core's to tell (`chat.outsideRefs`), the asking the pages'.
+// `chat.outsideShare`), it is sent. What it refers to, and which of it the viewer may share, is the core's to tell
+// (`chat.outsideRefs`), the asking the pages'.
 import { useEffect, useState, type ReactNode } from "react";
 import { core } from "./core/react.ts";
-import { scopeOf } from "./station.tsx";
 import { Button, Dialog } from "./ui.tsx";
 import { failure } from "@stillfail/ui/toast.tsx";
 import * as css from "./ChatRef.css.ts";
@@ -19,9 +19,9 @@ export async function outsideOf(station: string, text: string): Promise<Outside[
   return answer.chats ?? [];
 }
 
-/** Shares those the viewer may share with the workspace of `station` (the one written on, told first). */
-export function shareOutside(chats: Outside[], station: string): Promise<unknown> {
-  return Promise.all(chats.filter((c) => c.may).map((c) => core().call("chat.xshareAdd", { station: c.station, id: c.id, workspace: scopeOf(station), prefer: station })));
+/** Shares those `text` refers to that the viewer may share with the workspace of `station` (the one written on, told first). */
+export function shareOutside(station: string, text: string): Promise<unknown> {
+  return core().call("chat.outsideShare", { station, text });
 }
 
 /** The chats asked about, each with whose it is, and those the viewer may not share said so. */
@@ -44,7 +44,7 @@ export function OutsideList({ chats }: { chats: Outside[] }) {
  * otherwise once the dialog's chats are shared, or the viewer sends anyway), the dialog `node` to place.
  */
 export function useOutsideShare(): { ask(station: string, text: string): Promise<boolean>; node: ReactNode } {
-  const [asking, setAsking] = useState<{ station: string; chats: Outside[]; answer(go: boolean): void } | null>(null);
+  const [asking, setAsking] = useState<{ station: string; text: string; chats: Outside[]; answer(go: boolean): void } | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const ask = async (station: string, text: string) => {
@@ -56,7 +56,7 @@ export function useOutsideShare(): { ask(station: string, text: string): Promise
     }
     if (chats.length === 0) return true;
     setError(null);
-    return new Promise<boolean>((answer) => setAsking({ station, chats, answer }));
+    return new Promise<boolean>((answer) => setAsking({ station, text, chats, answer }));
   };
   const close = (go: boolean) => {
     asking?.answer(go);
@@ -69,7 +69,7 @@ export function useOutsideShare(): { ask(station: string, text: string): Promise
     if (!sharable) return close(true);
     setBusy(true);
     try {
-      await shareOutside(asking.chats, asking.station);
+      await shareOutside(asking.station, asking.text);
       close(true);
     } catch (e) {
       setBusy(false);

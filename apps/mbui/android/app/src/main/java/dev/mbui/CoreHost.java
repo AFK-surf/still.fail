@@ -5,6 +5,9 @@ import android.security.keystore.KeyProperties;
 
 import android.system.Os;
 
+import com.facebook.soloader.nativeloader.NativeLoader;
+import com.facebook.soloader.nativeloader.SystemDelegate;
+
 import org.json.JSONArray;
 import org.json.JSONObject;
 
@@ -29,11 +32,10 @@ import javax.crypto.SecretKey;
 import javax.crypto.spec.GCMParameterSpec;
 
 /**
- * The still.fail core's listener (src/host/android_core.c): what ember's engine (its engine.cpp, prebuilt as
- * libstillfail_hermes.so) calls back with on the core's thread. What the core says goes straight back to C
- * ({@link #onBytes}, {@link #onFrame}); the calls only the app does ({@code secure.*}, {@code listen.*}) are answered
- * here on a thread of their own and handed to the engine's {@code complete}, which android_core.c binds to
- * {@link #complete}. One per running core.
+ * The still.fail core's calls only the app does (src/host/android_core.c, on the core's thread; the engine is
+ * apps/mbui/engine, prebuilt as libstillfail_hermes.so): {@code secure.*}, {@code listen.*}, {@code picked.*}, answered
+ * here on a thread of their own and handed to the engine's {@code sf_engine_complete}, which android_core.c binds to
+ * {@link #complete}. What the core says goes to C, not through here. One per running core.
  */
 final class CoreHost {
     // The device as the core names it to the people who approve it (sfcore's `client.device`, as still.fail's Android
@@ -47,6 +49,12 @@ final class CoreHost {
         } catch (Exception e) {
             Host.log("device model: " + e);
         }
+        // Hermes's Java side (String's normalize, Intl: AndroidUnicodeUtils, its Intl classes, fbjni's) loads its
+        // libraries through NativeLoader: not set up, a formula's first letter ended the core (engine.cpp findJavaClasses).
+        if (!NativeLoader.isInitialized()) NativeLoader.init(new SystemDelegate());
+        // fbjni set up by its own JNI_OnLoad (the JavaVM those calls go through): only a library loaded by name has it
+        // run, and libfbjni.so is otherwise only libhermes.so's dependency (its abort: "g_vm")
+        System.loadLibrary("fbjni");
         // (the app's library, src/host/android_core.c in it: loaded already where the app runs, not where a push
         // started the process)
         System.loadLibrary("mbui");
@@ -79,11 +87,7 @@ final class CoreHost {
         this.dataDir = dataDir;
     }
 
-    native void onBytes(byte[] json);
-
-    native void onFrame(byte[] json, byte[] bytes);
-
-    /** The engine's HermesNative.complete: {@code error} null when the call succeeded. */
+    /** The engine's sf_engine_complete: {@code error} null when the call succeeded. */
     static native void complete(long handle, long id, String json, String error, byte[] bytes);
 
     synchronized void started(long h) {
@@ -122,6 +126,25 @@ final class CoreHost {
                         default:
                             answer(id, null, "unsupported", null);
                     }
+                } catch (Throwable e) {
+                    if (tracing()) Host.log("core app call " + op + " -> error " + errorText(e));
+                    answer(id, null, op + ": " + (e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName()), null);
+                }
+            });
+            return;
+        }
+        if (op.startsWith("kept.")) {
+            // a file the app kept in Downloads read back (the core's downloads: hosts/bridge.ts kept.read)
+            pickedCalls.execute(() -> {
+                try {
+                    if (!op.equals("kept.read")) {
+                        answer(id, null, "unsupported", null);
+                        return;
+                    }
+                    JSONObject a = new JSONObject(new String(json, StandardCharsets.UTF_8));
+                    byte[] b = Keeps.read(a.getString("at"), a.getLong("start"), a.getLong("end"));
+                    if (b == null) answer(id, "{\"none\":true}", null, null);
+                    else answer(id, "{}", null, b);
                 } catch (Throwable e) {
                     if (tracing()) Host.log("core app call " + op + " -> error " + errorText(e));
                     answer(id, null, op + ": " + (e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName()), null);
@@ -748,6 +771,42 @@ final class CoreHost {
     }
 
     // ── for android_core.c, on the UI's (GL) thread ──
+
+    /**
+     * A call only the app answers, at once, on the core's thread (android_core.c engine_app_sync, the engine's app_sync):
+     * `text.collate {names}` the order people read the names in, the system's (ICU's collator in the device's language:
+     * 中文 by pinyin, case and accents aside, digits by their value), each name's place in it, equal names one place:
+     * {"value": [place, …]}. Null for anything else (the shell's answer), or a name that is no string (the core then
+     * orders them by hand).
+     */
+    static String sync(String op, String json) {
+        if (!"text.collate".equals(op)) return null;
+        try {
+            JSONArray names = new JSONObject(json).getJSONArray("names");
+            int n = names.length();
+            String[] s = new String[n];
+            Integer[] order = new Integer[n];
+            for (int i = 0; i < n; i++) {
+                Object v = names.get(i);
+                if (!(v instanceof String)) return null;
+                s[i] = (String) v;
+                order[i] = i;
+            }
+            android.icu.text.Collator c = android.icu.text.Collator.getInstance(android.icu.util.ULocale.getDefault());
+            c.setStrength(android.icu.text.Collator.PRIMARY);
+            if (c instanceof android.icu.text.RuleBasedCollator) ((android.icu.text.RuleBasedCollator) c).setNumericCollation(true);
+            java.util.Arrays.sort(order, (x, y) -> c.compare(s[x], s[y]));
+            int[] place = new int[n];
+            for (int k = 0; k < n; k++) {
+                place[order[k]] = k > 0 && c.compare(s[order[k - 1]], s[order[k]]) == 0 ? place[order[k - 1]] : k;
+            }
+            JSONArray out = new JSONArray();
+            for (int p : place) out.put(p);
+            return new JSONObject().put("value", out).toString();
+        } catch (Exception e) {
+            return null;
+        }
+    }
 
     /**
      * Where the core keeps its files: the app's own files, never another app's. Where still.fail's Android app kept its

@@ -228,6 +228,13 @@ test("surface: relaying lists the groups the bot is in, topic group or not; begi
     assert.equal(r.threads.topicRoot("fs", "omt_9"), "om_r1");
     await r.surface.post({ channel: "oc_t", threadTs: "omt_9" }, "摘要", []);
     assert.equal(r.fake.calls("POST", "/open-apis/im/v1/messages/om_r1/reply").length, 1);
+    // Its first message changed in place, when what it says fits in one card.
+    r.fake.answer("PATCH /open-apis/im/v1/messages/om_r1", { code: 0, data: {} });
+    assert.equal(await r.surface.edit({ channel: "oc_t", threadTs: "omt_9" }, "om_r1", "接力到这里\n\n摘要"), true);
+    const patched = r.fake.calls("PATCH", "/open-apis/im/v1/messages/om_r1");
+    assert.equal(JSON.parse(patched[0]!.body.content).body.elements[0].content, "接力到这里\n\n摘要");
+    assert.equal(await r.surface.edit({ channel: "oc_t", threadTs: "omt_9" }, "om_r1", `${"甲".repeat(6000)}\n\n乙`), false);
+    assert.equal(r.fake.calls("PATCH", "/open-apis/im/v1/messages/om_r1").length, 1);
     // A topic Feishu did not name in its answer is read back from the message.
     r.fake.answer("GET /open-apis/im/v1/messages/om_r2", { code: 0, data: { items: [{ message_id: "om_r2", thread_id: "omt_10" }] } });
     assert.deepEqual((await r.surface.begin("oc_t", "再接力")).thread, { channel: "oc_t", threadTs: "omt_10" });

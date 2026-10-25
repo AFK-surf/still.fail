@@ -44,6 +44,11 @@ impl @hostapi.Host for FakeHost with event_time(_) {
 }
 
 ///|
+impl @hostapi.Host for FakeHost with frame_late(_) {
+  h_frame_late()
+}
+
+///|
 impl @hostapi.Host for FakeHost with platform(_) {
   h_platform()
 }
@@ -79,6 +84,16 @@ impl @hostapi.Host for FakeHost with glyph(_, a0, a1) {
 }
 
 ///|
+impl @hostapi.Host for FakeHost with glyph_put(_, a0, a1, a2) {
+  h_glyph_put(a0, a1, a2)
+}
+
+///|
+impl @hostapi.Host for FakeHost with atlas_size(_, a0) {
+  h_atlas_size(a0)
+}
+
+///|
 impl @hostapi.Host for FakeHost with face_add(_, a0, a1, a2) {
   h_face_add(a0, a1, a2)
 }
@@ -91,6 +106,16 @@ impl @hostapi.Host for FakeHost with face_add_bytes(_, a0, a1, a2) {
 ///|
 impl @hostapi.Host for FakeHost with face_clear(_, a0) {
   h_face_clear(a0)
+}
+
+///|
+impl @hostapi.Host for FakeHost with face_add_family(_, a0, a1) {
+  h_face_add_family(a0, a1)
+}
+
+///|
+impl @hostapi.Host for FakeHost with local_font_families(_) {
+  local_font_families()
 }
 
 ///|
@@ -244,8 +269,8 @@ impl @hostapi.Host for FakeHost with view_read_next(_, a0, a1) {
 }
 
 ///|
-impl @hostapi.Host for FakeHost with view_read_answer(_, a0, a1, a2, a3) {
-  h_view_read_answer(a0, a1, a2, a3)
+impl @hostapi.Host for FakeHost with view_read_answer(_, a0, a1, a2, a3, a4) {
+  h_view_read_answer(a0, a1, a2, a3, a4)
 }
 
 ///|
@@ -276,6 +301,51 @@ impl @hostapi.Host for FakeHost with pdf_close(_, a0) {
 ///|
 impl @hostapi.Host for FakeHost with set_cursor(_, a0) {
   h_set_cursor(a0)
+}
+
+///|
+impl @hostapi.Host for FakeHost with set_badge(_, a0) {
+  set_badge(a0)
+}
+
+///|
+impl @hostapi.Host for FakeHost with local_station(_) {
+  local_station()
+}
+
+///|
+impl @hostapi.Host for FakeHost with local_station_act(_, a0) {
+  local_station_act(a0)
+}
+
+///|
+impl @hostapi.Host for FakeHost with dock_available(_) {
+  dock_available()
+}
+
+///|
+impl @hostapi.Host for FakeHost with mods_held(_) {
+  mods_held()
+}
+
+///|
+impl @hostapi.Host for FakeHost with dock_send(_, a0) {
+  dock_send(a0)
+}
+
+///|
+impl @hostapi.Host for FakeHost with dock_stop(_) {
+  dock_stop()
+}
+
+///|
+impl @hostapi.Host for FakeHost with dock_kept(_) {
+  dock_kept()
+}
+
+///|
+impl @hostapi.Host for FakeHost with dock_keep(_, a0) {
+  dock_keep(a0)
 }
 
 ///|
@@ -314,6 +384,21 @@ impl @hostapi.Host for FakeHost with window_inset(_) {
 }
 
 ///|
+impl @hostapi.Host for FakeHost with full_screen(_) {
+  full_screen()
+}
+
+///|
+impl @hostapi.Host for FakeHost with set_full_screen(_, on) {
+  h_set_full_screen(on)
+}
+
+///|
+impl @hostapi.Host for FakeHost with window_corner(_) {
+  window_corner()
+}
+
+///|
 impl @hostapi.Host for FakeHost with env(_, a0) {
   h_env(a0)
 }
@@ -325,6 +410,11 @@ impl @hostapi.Host for FakeHost with app_version(_) {
 ///|
 impl @hostapi.Host for FakeHost with clipboard_set_secret(_, s, clear_ms) {
   h_clipboard_secret(s, clear_ms)
+}
+
+///|
+impl @hostapi.Host for FakeHost with clipboard_set_image(_, data) {
+  h_clipboard_image(data)
 }
 
 ///|

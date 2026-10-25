@@ -9,7 +9,7 @@ export function fallback(runtime: string): string[] {
   if (runtime === "dsh") return ["low", "medium", "high", "max"];
   if (runtime === "grok") return ["low", "medium", "high", "xhigh", "max"];
   // Cursor sets no effort: its models are picked by name alone.
-  if (runtime === "cursor") return [];
+  if (runtime === "cursor" || runtime === "hermes") return [];
   // Devin's models are a family at its thinking levels: each model's own list comes with it (modelEfforts).
   return ["low", "medium", "high", "xhigh", "max"];
 }

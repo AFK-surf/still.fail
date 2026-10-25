@@ -5,6 +5,11 @@
 ///|
 struct FakeHost {
   mut time : Double
+  /// how late the frame drawn at `late_after` reached the screen, as said of it (Tester::frame_late, a run's LATE line):
+  /// what the first frame drawn after then says (frame `late_frame`, once it is drawn); every other frame's was on time
+  mut late : Double
+  mut late_after : Double
+  mut late_frame : Int
   /// the time of day (ms since 1970) at its clock's 0: what @ui.wall_ms says is it plus the clock (Tester::set_wall)
   mut wall : Double
   /// device pixels a point, as a host's window has them (2: a Retina screen; a recording host's, Tester::new(scale=))
@@ -18,15 +23,23 @@ struct FakeHost {
   mut ime_rect : (Double, Double, Double, Double)
   /// how many times the field was said to the host (set_ime)
   mut ime_told : Int
-  /// the floating text menu as the host was last told it (text_menu): shown, where, what it offers
+  /// the floating text menu as the host was last told it (text_menu): shown, where, what it offers; and what the menu
+  /// bar's editing items can do (edit_can; -1 not told)
   mut text_menu : (Bool, Double, Double, Double, Double, Int)
+  mut edit_can : Int
   mut clipboard : String
   /// the last words put there were a secret: taken off this long after (Ctx::copy_secret); -1 not a secret
   mut clipboard_secret : Double
+  /// the picture last put on the clipboard (its bytes' length; -1 none)
+  mut clipboard_image : Int
   // whether the app takes back (a page to go back to), as last told
   mut back_on : Bool
   // the system it plays (as @hostapi.platform: 0 macOS, 1 iOS, 2 Android)
   platform : Int
+  // what the person points with (Tester::new's `pointing`: by default its system's)
+  pointing : Pointing
+  // what the app was started to be used with (Tester::new's `native`: by default its system's)
+  native : Pointing
   // the system asks for less transparency (glass drawn solid)
   mut reduce_transparency : Bool
   // the person's setting for motion: reduced (Tester::set_reduce_motion; or the environment's MBUI_REDUCE_MOTION=1)
@@ -40,6 +53,9 @@ struct FakeHost {
   // what bold adds to a cluster's advance, in ems (0 by default: weight
   // changes nothing)
   mut bold : Double
+  // what the app's words' face (face_ui), once given, adds to a cluster's advance in what is set in it, in ems (0 by
+  // default: a face given measures as the system's)
+  mut ui_face : Double
   // native views: what was asked of them, a line each ("open 1 video/mp4", "place 1 0 0 390 220 shown"…)
   views : Array[String]
   mut view_ids : Int
@@ -55,12 +71,34 @@ struct FakeHost {
   /// the pointer's shape as last told (desktop.mbt), and how often the window was asked to be dragged
   mut cursor : Int
   mut window_drags : Int
+  /// the number on the app's icon as last told (@ui.set_badge)
+  mut badge : Int
+  /// this machine's station as its host would say it (Tester::set_local_station), what was done to it
+  mut local_station : String
+  local_acts : Array[String]
+  /// the font families installed as its host would say them (Tester::set_local_fonts), JSON; the families given to
+  /// faces, by face (@ui.face_add_family)
+  mut local_fonts : String
+  families_given : Map[Int, String]
+  /// the font files (by where they are) its host could not read as a font (Tester::set_unreadable_font)
+  unreadable_fonts : Array[String]
+  /// the dock: whether there is one, the lines sent to it, whether it was stopped, its settings as kept
+  mut dock_on : Bool
+  dock_lines : Array[String]
+  mut dock_stops : Int
+  mut dock_kept : String
+  /// the keys held down as the test says (Tester::hold_mods)
+  mut mods : Int
   /// the URLs handed to the system (Ctx::open_url), oldest first
   opened : Array[String]
   /// what the app reads of where it runs (hostread.mbt): the system dark, the window's buttons in the app's top row,
   /// the environment, the build's version code
   mut dark : Bool
   mut inset : Bool
+  /// the window filling the screen (Ctx::set_full_screen), as last made to
+  mut full : Bool
+  /// how round the system draws the window's corners (Tester::new's `window_corner`; none filling the screen)
+  window_corner : Double
   /// the system's size of words (font_scale: 1 as it is)
   mut font_scale : Double
   /// something reading the widgets out (a11y_on), and what it was last told they are (a11y.mbt)
@@ -89,10 +127,14 @@ struct FakeHost {
   picks : Array[@hostapi.Picked]
   pick_asks : Array[FakePick]
   keeps : Array[FakeKeep]
-  /// what its players ask of the app's bytes, not taken yet (Tester::view_reads), and what the app gave (hostmedia.mbt)
+  /// what its players ask of the app's bytes and let go of, not taken yet (Tester::view_reads, view_lets_go), and what
+  /// the app gave, piece by piece: the view, the read, how many bytes, the whole's length, whether more comes
+  /// (hostmedia.mbt)
   reads : Array[FakeRead]
   mut read_ids : Int
-  read_answers : Array[(Int, Int, Int, Double)]
+  read_answers : Array[(Int, Int, Int, Double, Bool)]
+  /// where each read the app took is from, by its view and number
+  read_from : Map[(Int, Int), Double]
   /// a player's state as the test set it (Tester::set_player): view_info's ten numbers
   players : Map[Int, FixedArray[Double]]
   /// what another app shares in (Tester::share_in), from the frame after it was told; its files' bytes
@@ -119,10 +161,12 @@ struct FakeHost {
   /// record of it): taken before the views' common queue (`site`)
   site_of : Map[Int, Array[String]]
   /// the native views: their kind, where each was last placed (its clip rect: x0 y0 x1 y1) and whether shown, and who
-  /// takes a finger on it (NativeView::touch: its mode, the slop)
+  /// takes a finger on it (NativeView::touch: its mode, the slop), and where what takes a press is drawn over it (its
+  /// rects: a finger there is the canvas's)
   view_kinds : Map[Int, Int]
   view_at : Map[Int, (Double, Double, Double, Double, Bool)]
   view_touch : Map[Int, (String, Double)]
+  view_covers : Map[Int, Array[Double]]
   /// a finger's press as the views take it (Tester's own presses): the view it is on, (0: the canvas's), where it went
   /// down, where it is
   mut touch_view : Int
@@ -271,6 +315,44 @@ fn h_utc_offset_min(at_ms : Double) -> Int {
 }
 
 ///|
+/// How much later than its time the frame before this one reached the screen (@hostapi.frame_late): a Tester's as
+/// said for this frame (Tester::frame_late, a run's LATE line), else on time.
+fn h_frame_late() -> Double {
+  match fake.val {
+    Some(f) => {
+      let c = g()
+      if f.late_after < 0.0 || c.now <= f.late_after {
+        return 0.0
+      }
+      if f.late_frame < 0 {
+        f.late_frame = c.frame_no
+      }
+      if f.late_frame == c.frame_no {
+        f.late
+      } else {
+        f.late_after = -1.0
+        0.0
+      }
+    }
+    None => {
+      let late = @hostapi.frame_late()
+      // (kept on the tape, before the frame's DRAWHASH, for a Tester to draw the run again by: Tester::replay_frames)
+      if late > 0.0 && taping() && late_taped.val != g().frame_no {
+        late_taped.val = g().frame_no
+        tape_line("LATE \{late}")
+      }
+      late
+    }
+  }
+}
+
+///|
+/// The frame whose lateness was kept on the tape last (h_frame_late).
+// kept across runs: a real host's alone, its frames numbered on from one run to the next (a Tester's lateness is not
+// taped)
+let late_taped : Ref[Int] = Ref(-1)
+
+///|
 /// When the input event being handled happened (the host's, else now).
 fn h_event_time() -> Double {
   match fake.val {
@@ -310,13 +392,13 @@ let host_platform : Ref[Int] = { val: -1 }
 fn h_feel() -> Int {
   match fake.val {
     Some(f) => f.platform
-    None => if feel_over.val >= 0 { feel_over.val } else { h_platform() }
+    None => if feel_over.val >= 0 { feel_over.val } else { platform() }
   }
 }
 
 ///|
 /// The system whose touches and fields the app has from now on (as @hostapi.platform numbers them: 1 iOS's, 2
-/// Android's), whatever it runs on: a list's fling, its edges' give and its scroll bar, a field's tap, caret, handles
+/// Android's), whatever it runs on: a list's fling and its edges' give, a field's tap, caret, handles
 /// and words picked by a finger. For an app held to one system's original on another (still.fail's Android app on
 /// iOS: 2). Its keys stay the system's own (⌘ on Apple's).
 pub fn feel_as(platform : Int) -> Unit {
@@ -420,6 +502,7 @@ fn h_shape(
           size
         }
         let adv = if weight >= 600 && c != 10 { adv + size * f.bold } else { adv }
+        let adv = if f.ui_face != 0.0 && c != 10 && in_ui_face(style) { adv + size * f.ui_face } else { adv }
         out[k * 4] = i.to_double()
         out[k * 4 + 1] = len.to_double()
         out[k * 4 + 2] = adv
@@ -443,6 +526,15 @@ fn h_shape(
       k
     }
   }
+}
+
+///|
+/// Whether words in `style` are set in the app's words' face (face_ui) as a host sets them: one is given and the style
+/// names no other (code's, the serif one, what people wrote's, one by its number).
+fn in_ui_face(style : Int) -> Bool {
+  face_given(@hostapi.face_ui) &&
+  @hostapi.face_of_style(style) == 0 &&
+  (style & (@hostapi.style_mono | @hostapi.style_serif | @hostapi.style_words)) == 0
 }
 
 ///|
@@ -491,11 +583,46 @@ fn h_glyph(key : Int, out : FixedArray[Double]) -> Unit {
 }
 
 ///|
+/// The picture of glyph `key`, drawn by the h_glyph asked last, put in the atlas at `x`, `y`: a fake host has no
+/// pictures.
+fn h_glyph_put(key : Int, x : Int, y : Int) -> Unit {
+  match fake.val {
+    Some({ live: Some(l), .. }) => l.host.glyph_put(key, x, y)
+    Some(_) => ()
+    None => @hostapi.glyph_put(key, x, y)
+  }
+}
+
+///|
+/// The side of a fake host's atlas: Android's and Windows' (its glyphs placed in it as a host's are), colour glyphs in
+/// it with the others.
+let fake_atlas_size : Int = 2048
+
+///|
+fn h_atlas_size(colour : Bool) -> Int {
+  match fake.val {
+    Some({ live: Some(l), .. }) => l.host.atlas_size(colour)
+    Some(_) => if colour { 0 } else { fake_atlas_size }
+    None => @hostapi.atlas_size(colour)
+  }
+}
+
+///|
+/// The glyphs of the first `n` of `keys` for the host to draw ahead (text.mbt glyphs_ahead): a Tester's hosts, fake
+/// or live, draw each as it is asked for.
+fn h_glyphs_ahead(keys : FixedArray[Int], n : Int) -> Unit {
+  match fake.val {
+    Some(_) => ()
+    None => @hostapi.glyphs_ahead(keys, n)
+  }
+}
+
+///|
 /// A face's file given to the host (faces.mbt); a Tester's fake host takes any (its words measured as ever).
 fn h_face_add(face : Int, path : String, weight : Int) -> Bool {
   match fake.val {
     Some({ live: Some(l), .. }) => l.host.face_add(face, path, weight)
-    Some(_) => true
+    Some(f) => !f.unreadable_fonts.contains(path)
     None => @hostapi.face_add(face, path, weight)
   }
 }
@@ -506,6 +633,18 @@ fn h_face_add_bytes(face : Int, data : Bytes, weight : Int) -> Bool {
     Some({ live: Some(l), .. }) => l.host.face_add_bytes(face, data, weight)
     Some(_) => data.length() > 0
     None => @hostapi.face_add_bytes(face, data, weight)
+  }
+}
+
+///|
+fn h_face_add_family(face : Int, family : String) -> Bool {
+  match fake.val {
+    Some({ live: Some(l), .. }) => l.host.face_add_family(face, family)
+    Some(f) => {
+      f.families_given[face] = family
+      true
+    }
+    None => @hostapi.face_add_family(face, family)
   }
 }
 
@@ -586,6 +725,14 @@ fn h_text_menu(shown : Bool, x : Double, y : Double, w : Double, h : Double, can
 }
 
 ///|
+fn h_edit_can(can : Int) -> Unit {
+  match fake.val {
+    Some(f) => f.edit_can = can
+    None => @hostapi.edit_can(can)
+  }
+}
+
+///|
 fn h_clipboard_set(s : String) -> Unit {
   match fake.val {
     Some(f) => {
@@ -593,6 +740,24 @@ fn h_clipboard_set(s : String) -> Unit {
       f.clipboard_secret = -1.0
     }
     None => @hostapi.clipboard_set(s)
+  }
+}
+
+///|
+/// The window made to fill the screen or back (@hostapi.set_full_screen); the fake host keeps it (@ui.full_screen).
+fn h_set_full_screen(on : Bool) -> Unit {
+  match fake.val {
+    Some(f) => f.full = on
+    None => @hostapi.set_full_screen(on)
+  }
+}
+
+///|
+/// A picture on the clipboard (@hostapi.clipboard_set_image); the fake host keeps how long it was (Tester::clipboard_image).
+fn h_clipboard_image(data : Bytes) -> Unit {
+  match fake.val {
+    Some(f) => f.clipboard_image = data.length()
+    None => @hostapi.clipboard_set_image(data)
   }
 }
 
@@ -1288,7 +1453,8 @@ let sites_told_state : Map[Int, String] = {}
 ///|
 /// What the app tells a view's host beyond its controls (native.mbt): `what` 1 a script to run in its page
 /// (NativeView::script), 2 who takes a finger on it (NativeView::touch: "all|through|pinch|vertical SLOP"), 3 a site's
-/// settings (`{"head_wait_ms":…,"backlog":…}`). The fake host notes each ("script 1 42 9a0b…", "touch 1 vertical 8",
+/// settings (`{"head_wait_ms":…,"backlog":…}`), 4 where what takes a press is drawn over it ("x0 y0 x1 y1 …": a
+/// finger there is the canvas's). The fake host notes each ("script 1 42 9a0b…", "touch 1 vertical 8",
 /// "settings 1 …") and runs a page's scripts as a host does: once its page is there (ready and not loading, or said
 /// something since it started), in the order sent.
 fn h_view_tell(id : Int, what : Int, text : String) -> Unit {
@@ -1309,6 +1475,15 @@ fn h_view_tell(id : Int, what : Int, text : String) -> Unit {
         }
         f.view_touch[id] = (parts.get(0).unwrap_or("all"), slop)
         f.views.push("touch \{id} \{text}")
+      } else if what == 4 {
+        let rects : Array[Double] = []
+        for p in text.split(" ") {
+          match (try Some(@json.parse(p.to_owned())) catch { _ => None }) {
+            Some(Number(n, ..)) => rects.push(n)
+            _ => ()
+          }
+        }
+        f.view_covers[id] = rects
       } else {
         f.views.push("settings \{id} \{text}")
       }
@@ -1558,16 +1733,40 @@ fn h_view_site_load(id : Int, path : String) -> Unit {
 fn h_view_read_next(id : Int, out : FixedArray[Double]) -> Int {
   match fake.val {
     Some(f) => fake_read_next(f, id, out)
-    None => @hostapi.view_read_next(id, out)
+    None => {
+      let req = @hostapi.view_read_next(id, out)
+      if req != 0 {
+        view_read_told(id, req, out)
+      }
+      req
+    }
   }
 }
 
 ///|
-fn h_view_read_answer(id : Int, req : Int, data : Bytes, total : Double) -> Unit {
+/// A player's ask of the app's bytes (`req`, `out`'s offset and length), or one it let go of (`req` below 0), told to
+/// the app's tracer as `{"read":{"view":N,"req":R,"offset":O,"length":L}}` (`{"read":{"view":N,"gone":R}}`): a run's
+/// player's reads, for a Tester's host to ask again where the run's did (Tester::view_said). Not on a tape (what
+/// mbui's own contracts replay asks none).
+fn view_read_told(id : Int, req : Int, out : FixedArray[Double]) -> Unit {
+  guard views_tracer.val is Some(t) else { return }
+  let read : Map[String, Json] = { "view": Json::number(id.to_double()) }
+  if req > 0 {
+    read["req"] = Json::number(req.to_double())
+    read["offset"] = Json::number(out[0])
+    read["length"] = Json::number(out[1])
+  } else {
+    read["gone"] = Json::number((-req).to_double())
+  }
+  t({ "read": Json::object(read) })
+}
+
+///|
+fn h_view_read_answer(id : Int, req : Int, data : Bytes, total : Double, more : Bool) -> Unit {
   outside_answered(id)
   match fake.val {
-    Some(f) => f.read_answers.push((id, req, data.length(), total))
-    None => @hostapi.view_read_answer(id, req, data, total)
+    Some(f) => f.read_answers.push((id, req, data.length(), total, more))
+    None => @hostapi.view_read_answer(id, req, data, total, more)
   }
 }
 

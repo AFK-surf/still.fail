@@ -135,7 +135,7 @@ export function savePolicy(store: Kept, input: unknown, by: PolicyAuthor, ws: st
 const VIEW_DAYS = 7;
 const VIEW_CHATS = 20;
 
-type Viewed = Kept & { decisionsSince(since: number): any[]; now(): number; getSession(key: string): { runtime: string } | null };
+type Viewed = Kept & { latestDecisionsSince(since: number): any[]; now(): number; getSession(key: string): { runtime: string } | null };
 
 /// A workspace's archive policy as the pages show it (accounts' `policyView`, for one workspace: docs/multi-workspace.md):
 /// its words, its options each with the chats of that workspace (`mine`) the checks of the last days put there (by
@@ -144,7 +144,7 @@ export function policyView(store: Viewed, ws: string | null, mine: (session: str
   const policy = currentPolicy(store, ws);
   const saved = store.archivePolicy(ws);
   const latest = new Map<string, any>();
-  for (const row of store.decisionsSince(store.now() - VIEW_DAYS * 86_400_000)) if (typeof row.session === "string" && mine(row.session)) latest.set(row.session, row);
+  for (const row of store.latestDecisionsSince(store.now() - VIEW_DAYS * 86_400_000)) if (typeof row.session === "string" && mine(row.session)) latest.set(row.session, row);
   const byOption = new Map<string, any[]>();
   let failed = 0;
   for (const [session, row] of [...latest.entries()].reverse()) {
@@ -154,7 +154,7 @@ export function policyView(store: Viewed, ws: string | null, mine: (session: str
       continue;
     }
     const list = byOption.get(picked) ?? [];
-    list.push({ session, title: title(session), at: row.at, recommended: row.detail?.accepted === true });
+    list.push({ session, at: row.at, recommended: row.detail?.accepted === true });
     byOption.set(picked, list);
   }
   const by = saved?.change.by;
@@ -162,7 +162,8 @@ export function policyView(store: Viewed, ws: string | null, mine: (session: str
     text: policy.policy,
     options: policy.options.map((o) => {
       const chats = byOption.get(o.id) ?? [];
-      return { ...o, count: chats.length, chats: chats.slice(0, VIEW_CHATS) };
+      // Named only as shown: each name is a lookup of the chat's (a week's checks came to 210 chats on ccvm).
+      return { ...o, count: chats.length, chats: chats.slice(0, VIEW_CHATS).map(({ session, ...c }) => ({ session, title: title(session), ...c })) };
     }),
     days: VIEW_DAYS,
     checked: latest.size,

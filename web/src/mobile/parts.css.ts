@@ -46,6 +46,10 @@ export const mSeg = style({
     "&[data-track]": { background: "color-mix(in srgb, var(--m-ink) 6%, transparent)" },
     // Not a capsule (parts.tsx Seg): the smooth corner, its thumb's too.
     "&[data-smooth]": { cornerShape: vars.cornerShape },
+    // Filling, where its options' words need more than its width: they scroll sideways in it, whole (parts.tsx Seg
+    // brings the chosen one into view).
+    "&[data-fill]": { overflowX: "auto", overscrollBehaviorX: "contain", scrollbarWidth: "none" },
+    "&[data-fill]::-webkit-scrollbar": { display: "none" },
   },
 });
 export const mSegRow = style({ position: "relative", display: "flex", height: "100%" });
@@ -53,7 +57,9 @@ export const mSegOption = style({
   border: "0", background: "none", padding: "0 10px", fontSize: `${vars.textMeta} !important`, color: "var(--m-muted) !important",
   whiteSpace: "nowrap", cursor: "pointer", position: "relative",
   selectors: {
-    [`${mSeg}[data-fill] &`]: { flex: "1", padding: "0 12px", fontSize: `${vars.textUi} !important` },
+    // Filling: an equal share each, never narrower than its words and 8 either side (a flex item's own minimum), so five
+    // parts' English words fit a phone's 320 whole.
+    [`${mSeg}[data-fill] &`]: { flex: "1", padding: "0 8px", fontSize: `${vars.textUi} !important` },
     "&[data-on]": { color: "var(--m-ink) !important" },
     [`${mSeg}:not([data-track]) &[data-on]`]: { fontWeight: "600" },
   },

@@ -2,8 +2,9 @@
 # The still.fail client core (client/core-ts of this repository) in Hermes on its Rust shell (client/shell), for the
 # Apple apps (src/host/apple_core.mm) and Android's (src/host/android_core.c on still.fail's prebuilt engine): builds the
 # pieces from the checkout and runs a headless smoke test. See core/README.md.
-#   scripts/core.sh deps | shell [TARGET] | hermes | hermes-script FILE [OUT] | hermes-apple | engine [TARGET] | apple [TARGET]
-#                   | smoke [build|run] | listen | login-test | vectors | sizes | clean | all
+#   scripts/core.sh deps | shell [TARGET] | hermes [apple] | hermes-kept [apple] | hermes-script FILE [OUT] | hermes-apple | engine [TARGET] | apple [TARGET]
+#                   | smoke [build|run] | listen | exit | sealed | collate | login-test | vectors | sizes | clean | all
+#                   | chat-open | md-parse
 # EMBER: the still.fail checkout (default: this one, scripts/env.sh); out/core/ gets everything built.
 # TARGET: a Rust target (default aarch64-apple-darwin; aarch64-apple-ios, aarch64-apple-ios-sim for iOS).
 set -e
@@ -56,6 +57,25 @@ shell() {
   echo "shell $target in $(since $t0) s: $(stat -f %z $OUT/$target/libstillfail_shell.a) bytes; links: $(libs $target)"
 }
 
+# The shell for TARGET as still.fail's natives have it for the shell's sources now (scripts/native.ts shell-apple, by
+# its key: built once on a Mac by CI's natives job, for macOS 11.0 and iOS 17.0; else as said by native.ts: built
+# there), copied only when it differs (an unchanged one keeps its mtime). Fails where native.ts cannot say (no node, a
+# checkout that is not git's).
+shell_prebuilt() {
+  local t dir
+  case $1 in
+    aarch64-apple-darwin) t=darwin-arm64 ;;
+    aarch64-apple-ios) t=ios-arm64 ;;
+    aarch64-apple-ios-sim) t=ios-sim-arm64 ;;
+    *) return 1 ;;
+  esac
+  dir=$(node "$EMBER/scripts/native.ts" path shell-apple $t) || return 1
+  mkdir -p $OUT/$1
+  cmp -s "$dir/libstillfail_shell.a" $OUT/$1/libstillfail_shell.a || cp "$dir/libstillfail_shell.a" $OUT/$1/ || return 1
+  cmp -s "$dir/libstillfail_shell.libs" $OUT/shell-$1.libs || cp "$dir/libstillfail_shell.libs" $OUT/shell-$1.libs || return 1
+  echo "shell $1: still.fail's natives, shell-apple $t ($dir)"
+}
+
 # The core for Hermes (every native host: src/host/apple_core.mm, src/host/android_core.c): out/core/core.hbc. Made as ember's
 # client/core-ts/scripts/hermes-bundle.ts makes it (esbuild to ES2020; Babel's class transform, as Hermes 0.81 has no
 # classes; then React Native 0.81.4's hermesc, the engine's Hermes, to bytecode), but from an entry of ours (ENTRY,
@@ -94,10 +114,46 @@ print(json.dumps({'entry': entry, 'hermesc': [hermesc, st(hermesc)], 'inputs': {
 PY
 }
 
+# HBC_CACHE (a directory: CI's, kept in the Actions cache by every job that makes the core): core.hbc kept there by
+# what it is made of, by content, and taken from there when that is the same. A checkout's mtimes are all new, so the
+# stamp above never holds on CI: each job made the core again, ~14 s of a CPU (Windows' 13.9 s beside cl compiling the
+# app, 2026-10-24, 40064767331). What it is made of: the trees of client/core-ts, media and web/public/avatars (the
+# buddies asks.ts imports) as committed, none of them changed in the checkout (else no key: made, not kept); this
+# module's core/; this script; the entry; hermesc itself (the bytecode is its Hermes's: Windows' is the engine's own).
+SHA=$(command -v sha256sum > /dev/null && echo sha256sum || echo "shasum -a 256")
+hbc_key() {
+  [ -n "${HBC_CACHE:-}" ] || return 1
+  local trees
+  trees=$(git -C "$EMBER" rev-parse HEAD:client/core-ts HEAD:media HEAD:web/public/avatars 2> /dev/null) || return 1
+  [ -z "$(git -C "$EMBER" status --porcelain -uno -- client/core-ts media web/public/avatars 2> /dev/null)" ] || return 1
+  { echo "$trees"
+    (cd "$ROOT/core" && find . -type f | LC_ALL=C sort | xargs $SHA)
+    $SHA < "$D/core.sh"
+    echo "${ENTRY#"$ROOT"/}"
+    $SHA < "$1"; } | $SHA | cut -c1-24
+}
+
+# Whether `hermes` (with apple: as `apple` makes it, its entry) would take core.hbc from HBC_CACHE, its key said:
+# CI asks before it fetches the packages (pnpm's store, core-ts's node_modules), which only a core made here needs
+# (deps: done by `hermes` itself then). Fetches hermesc when there is none, as `hermes` would.
+hermes_kept() {
+  local key
+  [ "${1:-}" != apple ] || ENTRY=${ENTRY:-$APPLE_ENTRY}
+  ENTRY=${ENTRY:-$ROOT/core/hermes.ts}
+  [ -n "${HBC_CACHE:-}" ] && key=$(hbc_key "$(hermesc)") && [ -f "$HBC_CACHE/$key.hbc" ] || { echo "hermes-kept: no core.hbc in HBC_CACHE for ${ENTRY#"$ROOT"/}${key:+ ($key)}"; return 1; }
+  echo "hermes-kept: core.hbc for ${ENTRY#"$ROOT"/} kept as $key (HBC_CACHE)"
+}
+
 hermes() {
-  have_deps
   local t0=$(now)
-  local hc="$(hermesc)"
+  local hc="$(hermesc)" key=
+  ENTRY=${ENTRY:-$ROOT/core/hermes.ts}
+  if key=$(hbc_key "$hc") && [ -f "$HBC_CACHE/$key.hbc" ]; then
+    cp -p "$HBC_CACHE/$key.hbc" $OUT/core.hbc && rm -f $OUT/core.hbc.stamp
+    echo "hermes: core.hbc kept as $key (HBC_CACHE), $(wc -c < $OUT/core.hbc | tr -d ' ') bytes"
+    return 0
+  fi
+  have_deps
   # the same inputs as the last build's: that build's core.hbc
   if [ -f $OUT/core.hbc ] && [ -f $OUT/core.hbc.stamp ] && [ "$(hbc_stamp "$hc" 2>/dev/null)" = "$(cat $OUT/core.hbc.stamp)" ]; then
     echo "hermes: core.hbc as it was (its inputs unchanged)"
@@ -122,7 +178,11 @@ writeFileSync(f, out.code);" $OUT/core-hermes.js) || { echo "hermes: class trans
   "$hc" -emit-binary -O -block-scoping -out $OUT/core.hbc $OUT/core-hermes.js \
     || { echo "hermes: hermesc failed"; rm -f $OUT/core.hbc; return 1; }
   hbc_stamp "$hc" > $OUT/core.hbc.stamp || rm -f $OUT/core.hbc.stamp
-  echo "hermes in $(since $t0) s: $(wc -c < $OUT/core-hermes.js | tr -d ' ') bytes of script, $(wc -c < $OUT/core.hbc | tr -d ' ') of bytecode"
+  echo "hermes in $(since $t0) s: $(wc -c < $OUT/core-hermes.js | tr -d ' ') bytes of script, $(wc -c < $OUT/core.hbc | tr -d ' ') of bytecode${key:+ (kept as $key)}"
+  if [ -n "$key" ]; then
+    mkdir -p "$HBC_CACHE" && cp -p $OUT/core.hbc "$HBC_CACHE/$key.hbc.tmp" && mv "$HBC_CACHE/$key.hbc.tmp" "$HBC_CACHE/$key.hbc"
+    ls -t "$HBC_CACHE"/*.hbc | tail -n +9 | xargs rm -f  # the newest 8
+  fi
 }
 
 # A plain script (no bundle, no Babel) as bytecode, OUT (default out/core/core.hbc, the core's place: Android's
@@ -172,7 +232,7 @@ hermes_fw() {
 # The core's engine for TARGET: src/host/apple_core.mm (Objective-C++: the core's thread and loop, Hermes and its JSI,
 # the shell's C ABI, secure.* and listen.*) as out/core/<target>/libmbui_core.a, which the apps with the core link
 # beside the shell's .a and Hermes's framework (src/stillfail/moon.pkg; the iOS build's hook). Made again only when its
-# sources (or this script) are newer.
+# sources (or this script) are newer: 1-2 s (mini1, 2026-10-24), not worth a native part of its own as the shell is.
 engine() {
   local target=${1:-aarch64-apple-darwin} cc
   hermes_apple || return 1
@@ -183,7 +243,7 @@ engine() {
     *) echo "engine: no target $target"; return 1 ;;
   esac
   local lib=$OUT/$target/libmbui_core.a
-  if [ -f $lib ] && [ $lib -nt src/host/apple_core.mm ] && [ $lib -nt src/host/core_api.h ] && [ $lib -nt "$D/core.sh" ]; then
+  if [ -f $lib ] && [ $lib -nt src/host/apple_core.mm ] && [ $lib -nt src/host/apple_collate.h ] && [ $lib -nt src/host/electron_sealed.h ] && [ $lib -nt src/host/core_api.h ] && [ $lib -nt src/host/listen_api.h ] && [ $lib -nt "$D/core.sh" ]; then
     return 0
   fi
   mkdir -p $OUT/$target
@@ -193,13 +253,19 @@ engine() {
   echo "engine $target: $lib ($(wc -c < $lib | tr -d ' ') bytes)"
 }
 
-# What an Apple app with the core needs for TARGET, each made when missing or stale: Hermes, the engine, the shell's .a
-# (built once: rebuild it with `shell`), the core's bytecode (ENTRY, by default the media app's entry, as Android's).
-apple() {
+# What an Apple app with the core needs for TARGET: Hermes, the engine (when stale), the shell's .a (still.fail's natives
+# by its key; where native.ts cannot say, the one here, else built by cargo: rebuild it with `shell`), the core's
+# bytecode (ENTRY, by default the media app's entry, as Android's). apple-native is what the app's link takes (all
+# but the bytecode, which only its bundle carries: scripts/mac.sh makes that beside the app's compile, `hermes apple`).
+APPLE_ENTRY=$ROOT/core/media-hermes.ts
+apple_native() {
   local target=${1:-aarch64-apple-darwin}
   engine $target || return 1
-  [ -f $OUT/$target/libstillfail_shell.a ] || shell $target || return 1
-  ENTRY=${ENTRY:-$ROOT/core/media-hermes.ts} hermes
+  shell_prebuilt $target || [ -f $OUT/$target/libstillfail_shell.a ] || shell $target
+}
+apple() {
+  apple_native "${1:-}" || return 1
+  ENTRY=${ENTRY:-$APPLE_ENTRY} hermes
 }
 
 # The shell's link line for TARGET, each library once (-framework X, -lY; clang adds -lSystem and -lobjc itself).
@@ -219,7 +285,7 @@ core_program() {
   apple $target || return 1
   clang -fobjc-arc -O2 -Wall -Isrc/host core/$1.m mbui/src/host/apple_listen.m $OUT/$target/libmbui_core.a \
     $OUT/$target/libstillfail_shell.a $(libs $target) -F$fw -framework hermes -Wl,-rpath,$fw -lc++ \
-    -framework Foundation -Wl,-dead_strip -o $OUT/$1
+    -framework LocalAuthentication -framework Foundation -Wl,-dead_strip -o $OUT/$1
 }
 
 # core/smoke.m + the engine, for macOS.
@@ -245,6 +311,42 @@ smoke_run() {
   return $code
 }
 
+# Chats opened from what the device holds, in Hermes (core/chatopen.m; client/core-ts/bench/chat-open.ts seeds the data):
+# from `subscribe` to each chat's first value, the first time, a moment after, after the core let its view go; run twice
+# on one data directory, the second as the app started anew.
+chat_open() {
+  core_program chatopen || return 1
+  local dir=$(mktemp -d /tmp/mbui-chat-open.XXXXXX) code=0
+  (cd $CORE_TS && node bench/chat-open.ts seed "$dir") || code=1
+  for run in first again; do
+    [ $code = 0 ] || break
+    echo "== $run run =="
+    MB_CORE_BUNDLE=$OUT/core.hbc $OUT/chatopen "$dir" || code=1
+  done
+  rm -rf "$dir"
+  return $code
+}
+
+# Markdown read in Hermes as the core reads it (client/core-ts/bench/md-parse.ts over the bench's replies), bundled as the
+# core is, run by Hermes's own command: characters read a second, and a chat's page (80 000 of them) in ms.
+md_parse() {
+  have_deps
+  hermes_apple || return 1
+  local o=$OUT/md-parse
+  mkdir -p $o
+  (cd $CORE_TS && node --input-type=module -e 'import { replies } from "./bench/replies.ts"; import { writeFileSync } from "node:fs"; writeFileSync(process.argv[1], "var TEXTS = " + JSON.stringify(replies()) + ";\n");' $o/texts.js) || return 1
+  NODE_PATH=$CORE_TS/node_modules $CORE_TS/node_modules/.bin/esbuild $CORE_TS/bench/md-parse.ts --bundle --format=iife --platform=neutral \
+    --main-fields=module,main --target=es2020 --minify --legal-comments=none --resolve-extensions=.ts,.js,.mjs --log-level=warning --outfile=$o/bench.js || return 1
+  (cd $CORE_TS && node --input-type=module -e "
+import { readFileSync, writeFileSync } from 'node:fs';
+import { transformSync } from '@babel/core';
+const f = process.argv[1];
+writeFileSync(f, transformSync(readFileSync(f, 'utf8'), { babelrc: false, configFile: false, compact: true, plugins: ['@babel/plugin-transform-classes'] }).code);" $o/bench.js) || return 1
+  cat $o/texts.js $o/bench.js > $o/run.js
+  "$(hermesc)" -emit-binary -O -block-scoping -out $o/run.hbc $o/run.js 2>&1 | grep -a "error:" && return 1
+  $OUT/hermes/bin/hermes $o/run.hbc
+}
+
 # listen.* (apple_core.mm on apple_listen.m) with core/listen-test.js (as bytecode) in the core's place: core/listen_test.m.
 listen_test() {
   core_program listen_test || return 1
@@ -253,6 +355,30 @@ listen_test() {
   MB_CORE_BUNDLE=$OUT/listen-test.hbc $OUT/listen_test "$dir" || code=1
   rm -rf "$dir"
   return $code
+}
+
+# exit() with the core's thread in a task (core/exit_test.m, with core/exit-test.js as bytecode in the core's place):
+# the core ends before the statics it runs on are destroyed (apple_core.mm's stop_at_exit).
+exit_test() {
+  core_program exit_test || return 1
+  hermes_script $ROOT/core/exit-test.js $OUT/exit-test.hbc || return 1
+  local dir=$(mktemp -d /tmp/mbui-core-exit.XXXXXX) code=0
+  MB_CORE_BUNDLE=$OUT/exit-test.hbc $OUT/exit_test "$dir" || code=1
+  rm -rf "$dir"
+  return $code
+}
+
+# What still.fail's desktop app (Electron's safeStorage) sealed, opened as the app built in its place opens it
+# (src/host/electron_sealed.h): core/sealed_test.m against files made as that app makes them. No core, no Keychain.
+sealed_test() {
+  clang -fobjc-arc -O2 -Wall -Isrc/host core/sealed_test.m -framework Foundation -o $OUT/sealed_test || return 1
+  $OUT/sealed_test
+}
+
+# The order people read names in (src/host/apple_collate.h, the core's text.collate): core/collate_test.m. No core.
+collate_test() {
+  clang -fobjc-arc -O2 -Wall -Isrc/host core/collate_test.m -framework Foundation -o $OUT/collate_test || return 1
+  $OUT/collate_test
 }
 
 # The core demo's login command (scripts/mac.sh login, MBUI_AUTH_LOGIN: still.fail's sign-in on the host's
@@ -319,12 +445,19 @@ sizes() {
 case "${1:-all}" in
   deps) deps ;;
   shell) shell "$2" ;;
-  hermes) hermes ;;
+  hermes) [ "${2:-}" != apple ] || ENTRY=${ENTRY:-$APPLE_ENTRY}; hermes ;;
+  hermes-kept) hermes_kept "${2:-}" ;;
   hermes-script) hermes_script "$2" "${3:-}" ;;
   hermes-apple) hermes_apple ;;
   engine) engine "${2:-aarch64-apple-darwin}" ;;
   apple) apple "${2:-aarch64-apple-darwin}" ;;
+  apple-native) apple_native "${2:-aarch64-apple-darwin}" ;;
   listen) listen_test ;;
+  chat-open) chat_open ;;
+  md-parse) md_parse ;;
+  exit) exit_test ;;
+  collate) collate_test ;;
+  sealed) sealed_test ;;
   login-test) login_test ;;
   smoke)
     case "${2:-all}" in
@@ -336,5 +469,5 @@ case "${1:-all}" in
   sizes) sizes ;;
   clean) rm -rf "$CARGO_TARGET_DIR"; echo "removed $CARGO_TARGET_DIR (out/core kept)" ;;
   all) deps; shell; smoke_build; smoke_run; sizes ;;
-  *) echo "usage: scripts/core.sh deps | shell [TARGET] | hermes | hermes-script FILE [OUT] | hermes-apple | engine [TARGET] | apple [TARGET] | smoke [build|run] | listen | login-test | vectors | sizes | clean | all"; exit 2 ;;
+  *) echo "usage: scripts/core.sh deps | shell [TARGET] | hermes [apple] | hermes-kept [apple] | hermes-script FILE [OUT] | hermes-apple | engine [TARGET] | apple [TARGET] | apple-native [TARGET] | smoke [build|run] | listen | exit | collate | login-test | vectors | sizes | chat-open | md-parse | clean | all"; exit 2 ;;
 esac

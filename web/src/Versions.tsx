@@ -105,19 +105,18 @@ export function useSoftware(station: string) {
 }
 
 /**
- * How a piece of software is said: its version as shown, what updating it is called, what is said about it on hover
- * (why it cannot be updated from here too, unless `noteTip` is false: the station page says that under it),
- * whether it is the test channel's (a 测试版 tag beside its version), and while it updates where that is (the station
- * says; one older than that, nothing more than 正在更新).
+ * How a piece of software is said, as the core says it (its `shownText`, `tipText`, `updatingText`, `failedText`):
+ * what updating it is called, why it cannot be updated from here on hover too (unless `noteTip` is false: the station
+ * page says that under it), whether it is the test channel's (a 测试版 tag beside its version).
  */
 export function describe(v: SoftwareVersion, noteTip = true): { shown: string; verb: string; failed: string; tip: string; updating: string; beta: boolean } {
   return {
-    shown: v.installed ? (v.version ?? (v.id === "station" ? t("web-main.versions.dev") : t("web-main.versions.unknown"))) : t("web-main.versions.notInstalled"),
+    shown: v.shownText ?? "",
     verb: v.installed ? t("web-main.versions.update") : t("web-main.versions.install"),
-    failed: v.installed ? t("web-main.versions.updateFailed") : t("web-main.versions.installFailed"),
-    tip: [noteTip ? v.note : null, v.installed && !v.newer && !v.downgrade && v.latest ? t("web-main.versions.latest") : null, v.installed && !v.latest && v.checkedAt ? t("web-main.versions.checkFailedRetry") : null].filter(Boolean).join(t("web-main.list.semicolon")),
+    failed: v.failedText ?? "",
+    tip: [noteTip ? v.note : null, v.tipText].filter(Boolean).join(t("web-main.list.semicolon")),
     beta: v.channel === "beta",
-    updating: v.progress ?? (v.installed ? t("web-main.versions.updating") : t("web-main.versions.installing")),
+    updating: v.updatingText ?? "",
   };
 }
 

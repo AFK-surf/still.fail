@@ -3,11 +3,13 @@
 ///|
 /// Home with the search open, its field come up (the list scrolled to it first: it starts out of view).
 fn search_tester() -> @ui.Tester {
-  let t = tester("home")
+  reset()
+  let src = fixture("home")
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0, platform=2)
   t.scroll_to(0)
   t.draw()
   t.tap_text("搜索全部内容")
-  t.run_for(search_in_ms)
+  t.run_for(@sfpages.search_in_ms)
   t
 }
 
@@ -31,10 +33,10 @@ test "the field tapped: the search opens over Home, its field focused, the bars 
   t.draw()
   let (_, from) = t.find("搜索全部内容").unwrap()
   t.tap_text("搜索全部内容")
-  assert_true(search.open)
+  assert_true(@sfpages.search_opened())
   // the bottom bar goes out of its way at once
-  assert_true(search_bar_away())
-  t.run_for(search_in_ms)
+  assert_true(@sfpages.search_bar_away())
+  t.run_for(@sfpages.search_in_ms)
   let (active, _, _, _) = t.ime()
   assert_true(active)
   // the keyboard's action key a search key (Search.kt: ImeAction.Search)
@@ -43,18 +45,18 @@ test "the field tapped: the search opens over Home, its field focused, the bars 
   let (_, to) = t.find("取消").unwrap()
   assert_true(to < from)
   t.type_text("签名")
-  assert_eq(search.query, "签名")
+  assert_eq(@sfpages.finder_query(), "签名")
   assert_true(t.find("对话") is Some(_))
   assert_true(t.find("签名证书续期") is Some(_))
   assert_true(t.find("消息") is Some(_))
   t.tap_text("取消")
-  assert_true(search.leaving)
-  assert_true(!search_bar_away())
-  t.run_for(search_out_ms)
+  assert_true(@sfpages.search_leaving())
+  assert_true(!@sfpages.search_bar_away())
+  t.run_for(@sfpages.search_out_ms)
   t.draw()
-  assert_true(!search.open)
+  assert_true(!@sfpages.search_opened())
   assert_true(t.find("取消") is None)
-  assert_eq(search.query, "")
+  assert_eq(@sfpages.finder_query(), "")
   t.run_for(@sf.strokes_ms(4))
   t.assert_idle()
 }
@@ -89,26 +91,26 @@ test "查看更多 lists that kind alone, from the top; 全部结果 and back go
   let t = search_tester()
   t.type_text("签名")
   t.tap_text("查看更多")
-  assert_eq(search.kind, "message")
+  assert_eq(@sfpages.finder_kind(), "message")
   t.draw()
   assert_true(t.find("全部结果") is Some(_))
   assert_true(t.find("我先把签名脚本跑一遍看看") is Some(_))
   assert_true(t.find("签名说明.md") is None)
   t.tap_text("全部结果")
-  assert_eq(search.kind, "")
+  assert_eq(@sfpages.finder_kind(), "")
   t.draw()
   assert_true(t.find("签名说明.md") is Some(_))
   // back: one kind first, then the search away
   t.tap_text("查看更多")
   assert_true(t.takes_back())
   t.back()
-  assert_eq(search.kind, "")
-  assert_true(search.open)
+  assert_eq(@sfpages.finder_kind(), "")
+  assert_true(@sfpages.search_opened())
   t.back()
-  assert_true(search.leaving)
-  t.run_for(search_out_ms)
+  assert_true(@sfpages.search_leaving())
+  t.run_for(@sfpages.search_out_ms)
   t.draw()
-  assert_true(!search.open)
+  assert_true(!@sfpages.search_opened())
   t.run_for(@sf.strokes_ms(4))
   t.assert_idle()
 }
@@ -168,42 +170,34 @@ test "nothing found; still being looked for, what could not be, what the core sa
 }
 
 ///|
-test "a file found: where it opens by its kind (Search.kt fileScreen)" {
+test "what was found opens where the core says (SearchItem.open): a file read, a service its chat and its page, a station its page" {
+  reset()
   let base : FoundItem = {
     kind: "file",
     key: "f",
     station: "s",
-    station_name: "",
+    station_name: "S",
     station_emoji: "",
     station_icon: "",
     title: "",
     text: "",
     marks: [],
-    chat: None,
-    chat_title: "",
-    job: None,
-    port: false,
-    path: Some("/a/b/c.txt"),
-    root: None,
-    rel: None,
+    chat_title: "那个对话",
     dir: false,
-    file_kind: "text",
     ago: "",
+    open: Some({ to: "files", station: "s", chat: None, job: None, root: Some("/a/b"), path: "c.txt", how: "read" }),
   }
-  assert_true(file_page(base) == Some(DriveRead({ station: "s", root: Some("/a/b"), path: "c.txt" })))
-  assert_true(file_page({ ..base, dir: true }) == Some(Drive({ station: "s", root: Some("/a/b/c.txt"), path: "" })))
-  assert_true(
-    file_page({ ..base, file_kind: "image" }) == Some(Drive({ station: "s", root: Some("/a/b"), path: "" })),
-  )
-  // found under a folder pinned: from it
-  assert_true(
-    file_page({ ..base, root: Some("/a"), rel: Some("b/c.txt"), file_kind: "video" }) ==
-    Some(DrivePlay({ station: "s", root: Some("/a"), path: "b/c.txt" })),
-  )
-  assert_true(
-    file_page({ ..base, root: Some("/a"), rel: Some("b/c.txt"), file_kind: "pdf" }) ==
-    Some(Drive({ station: "s", root: Some("/a"), path: "b" })),
-  )
+  open_found(base)
+  assert_true(app.nav.top() == DriveRead({ station: "s", root: Some("/a/b"), path: "c.txt" }))
+  open_found({ ..base, open: Some({ to: "files", station: "s", chat: None, job: None, root: Some("/a"), path: "b", how: "" }) })
+  assert_true(app.nav.top() == Drive({ station: "s", root: Some("/a"), path: "b" }))
+  open_found({ ..base, open: Some({ to: "service", station: "s", chat: Some("k"), job: Some("j"), root: None, path: "", how: "" }) })
+  assert_true(app.nav.top() == Service("s", "j"))
+  open_found({ ..base, open: Some({ to: "station", station: "s", chat: None, job: None, root: None, path: "", how: "" }) })
+  assert_true(app.nav.top() == Setting(@settings.Station("s")))
+  // opening nowhere: where it was
+  open_found({ ..base, open: None })
+  assert_true(app.nav.top() == Setting(@settings.Station("s")))
 }
 
 ///|
@@ -224,7 +218,7 @@ test "a chat opened from a found message: the words bold in it, stroked under, n
   let rd = reading_of("ws1/st1\u{1}s-c1")
   assert_eq(rd.found_at, "ts2")
   assert_eq(rd.flash, "")
-  assert_eq(found_words_of("ts2"), ["虚拟列表"])
+  assert_eq(rd.found_words, ["虚拟列表"])
   // bold where they are in the bubble
   match t.rich_of("帮我把聊天页的列表做成虚拟列表") {
     Some((rl, _, _)) => {
@@ -235,7 +229,8 @@ test "a chat opened from a found message: the words bold in it, stroked under, n
   }
   t.run_for(found_draw_ms)
   // still marked once drawn in: for as long as the chat shows
-  assert_eq(found_words_of("ts2"), ["虚拟列表"])
+  assert_eq(rd.found_at, "ts2")
+  assert_eq(rd.found_words, ["虚拟列表"])
   t.assert_idle()
 }
 
@@ -252,7 +247,8 @@ test "a search's words: where they are, case aside; runs cut and bold there" {
 /// The app as src/sffix opens `mode`, for a Tester (search-results, search-jobs).
 fn search_mode(mode : String) -> @ui.Tester {
   let src = fixture_app(mode)
-  @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0)
+  // (a phone's: a finger's search, in the lists)
+  @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0, platform=2)
 }
 
 ///|
@@ -270,7 +266,7 @@ test "as the Android app's SearchResultsTest: each kind, 查看更多 only where
   assert_true(t.find("mini 离线，其上的内容未搜索") is Some(_))
   t.tap_text("查看更多")
   t.draw()
-  assert_eq(search.kind, "job")
+  assert_eq(@sfpages.finder_kind(), "job")
   assert_true(t.find("全部结果") is Some(_))
   assert_true(t.find("node mock/登录.js :4000") is Some(_))
   assert_true(t.find("成员") is None)
@@ -309,7 +305,8 @@ fn ripples_at(t : @ui.Tester, x : Double, y : Double) -> Int {
 test "a chat the search found, pressed: rippled (Search.kt: ChatRowBody's clickable)" {
   let t = search_tester()
   t.type_text("签名")
-  let (x, y) = t.find("签名证书续期").unwrap()
+  // (the search's row, drawn over Home's, faded away under it)
+  let (x, y) = t.find_last("签名证书续期").unwrap()
   assert_eq(ripples_at(t, x, y), 0)
   t.press_at(x, y)
   t.run_for(@ui.tap_indication_ms + 100.0)

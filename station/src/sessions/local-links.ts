@@ -76,6 +76,22 @@ function localPath(destination: string): string | null {
   throw new Error(`local file link does not name a readable file: ${destination}; correct the path or write it as code instead of a link`);
 }
 
+/// A destination with no scheme that is neither from a root nor a fragment or a query (`films/a.mp4`, `report.pdf`):
+/// a path where the agent works, as `files` takes one.
+const isRelative = (destination: string) => destination !== "" && !/^[A-Za-z][A-Za-z0-9+.-]*:/.test(destination) && !/^[/\\#?]/.test(destination);
+
+/// A relative link's file: none when it names one of the message's files (`[report](report.pdf)` beside `files`, which
+/// the clients place by its name), else the one it names in the workspace. Naming neither, it is refused: no reader
+/// could open it.
+function inWorkspace(destination: string, paths: string[], workspace: string): string | null {
+  const decoded = percentDecode(destination);
+  const name = decoded.slice(decoded.lastIndexOf("/") + 1);
+  if (paths.some((p) => basename(p) === name)) return null;
+  const path = join(workspace, decoded);
+  if (isFile(path)) return path;
+  throw new Error(`local file link ${destination} names no file in the workspace (${workspace}) nor one of the message's files; give its absolute path or attach it with files, use a full URL (https://…), or write it as code`);
+}
+
 const PUNCT = /[!"#$%&'()*+,\-./:;<=>?@[\\\]^_`{|}~]/;
 
 /// A destination as pulldown-cmark gives it: without its `<>`, backslash escapes resolved.
@@ -302,7 +318,7 @@ function nativeOrNull(): Mesh | null {
 export function prepareHere(text: string, paths: string[], workspace: string): string {
   const replacements: [number, number, string][] = [];
   for (const link of links(text)) {
-    const path = localPath(link.destination);
+    const path = localPath(link.destination) ?? (isRelative(link.destination) ? inWorkspace(link.destination, paths, workspace) : null);
     if (path === null) continue;
     if (!link.inline) throw new Error(`local file link ${link.destination} must use inline Markdown: [label](path); it will be attached automatically`);
     const source = text.slice(link.start, link.end);

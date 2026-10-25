@@ -1,5 +1,6 @@
 import { globalStyle, style } from "@vanilla-extract/css";
 import { vars } from "@stillfail/ui/styles/tokens.css.ts";
+import { litOver } from "@stillfail/ui/styles/lit.ts";
 import { buddyHopKeyframes } from "@stillfail/ui/styles/keyframes.css.ts";
 import { list, pageNarrow } from "./styles/pages.css.ts";
 import { newChat } from "./NewChat.css.ts";
@@ -44,7 +45,7 @@ export const sidebarUpdate = style({
   font: "inherit", fontSize: vars.textMeta, fontWeight: "500", whiteSpace: "nowrap", background: vars.accentBg,
   color: vars.accentText, cursor: "pointer", WebkitAppRegion: "no-drag",
   selectors: {
-    "&:hover:not(:disabled)": { filter: "brightness(.96)" },
+    "&:hover:not(:disabled)": litOver,
     "&:disabled": { cursor: "progress" },
     "[data-sidebar=\"closed\"] &": { left: "50px", transform: "none" },
     "[data-desktop] &": { top: "11px" },

@@ -73,10 +73,10 @@ pub fn Ctx::words_of(self : Ctx, key : String) -> Words? {
 }
 
 ///|
-/// Once laid out: what each marked box holds, kept; the selections to draw. Words kept elsewhere than before (their
-/// box moved: a page sliding in, a list scrolled) are a layout read back that moved (Ctx::read_changed): what the
-/// app placed from them this frame (handles over a passage, words_of read while building) was placed where they were
-/// the pass before, and is placed again as the frame is built again.
+/// Once laid out: what each marked box holds, kept; the selections to draw. Words read as the view built (words_of)
+/// and kept elsewhere than before (their box moved: a page sliding in, a list scrolled) are a layout read back that
+/// moved (Ctx::read_changed): what the app placed from them this frame (handles over a passage) was placed where they
+/// were the pass before, and is placed again as the frame is built again. Words nothing read move with their box.
 fn Ctx::words_after_layout(self : Ctx) -> Unit {
   words_sel.clear()
   if words_marks.is_empty() {
@@ -118,7 +118,9 @@ fn Ctx::words_after_layout(self : Ctx) -> Unit {
       }
     }
     match words_kept.get(m.key) {
-      Some(was) if !same_place(was.pieces, pieces) => self.read_changed("words_of \"" + m.key + "\"")
+      // (read where they were as the view built: words not read move with their box, nothing built again)
+      Some(was) if !same_place(was.pieces, pieces) && self.words_reads.contains(m.key) =>
+        self.read_changed("words_of \"" + m.key + "\"")
       _ => ()
     }
     words_kept[m.key] = { text: sb.to_string(), pieces }
@@ -324,6 +326,12 @@ pub fn Ctx::take_press(self : Ctx) -> Unit {
   }
   self.active = 0
   self.taken_at = self.press_at
+  // what scrolls or is dragged under it lets it go, none of them to take it as it moves on (claim.mbt: a list round a
+  // code block held in it would take it up or down)
+  for id in self.press_chain {
+    drag_cancel(id)
+  }
+  self.claimed = true
   self.drag_scroll = 0
   self.dragging = false
   self.editor_drag = false

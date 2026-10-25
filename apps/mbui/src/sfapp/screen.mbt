@@ -46,6 +46,9 @@ priv struct ScreenSess {
   mut wants_control : Bool?
   /// a finger drives it as a trackpad (true) or directly, as chosen here before the prefs say
   mut pad_set : Bool?
+  /// the stage it is laid out for (its width and height, and this device's pixels to a point), on a phone or a tablet:
+  /// a page of the station's browser is laid out as this device's own browser would; None: as it is
+  mut fit : (Double, Double, Double)?
   /// the open call (the core's id of it); 0 while it is not open
   mut call : Int
   /// the last frame acknowledged
@@ -60,6 +63,12 @@ priv struct ScreenSess {
   mut pumping : Bool
   /// a paste under way
   mut pasting : Bool
+  /// the frames that came and their bytes, counted as they come (控制中心's 连接 reads a second's of them)
+  mut frames : Int
+  mut bytes : Int
+  /// the 画质 the open view was asked with (prefs `screenQuality`; "": as this device's screen is): another chosen
+  /// opens it again
+  mut asked : String
 }
 
 ///|
@@ -104,6 +113,7 @@ fn screen_sess(src : Source, station : String, screen : String) -> ScreenSess {
         shown_any: false,
         wants_control: None,
         pad_set: None,
+        fit: None,
         call: 0,
         acked: -1.0,
         stream: None,
@@ -112,6 +122,9 @@ fn screen_sess(src : Source, station : String, screen : String) -> ScreenSess {
         drops_serial: 0,
         pumping: false,
         pasting: false,
+        frames: 0,
+        bytes: 0,
+        asked: "",
       }
       screens_open[key] = s
       s
@@ -274,6 +287,31 @@ fn ScreenSess::undriven(self : ScreenSess) -> String? {
 }
 
 ///|
+/// The screen's display scale while this viewer drives one whose station changes it (Windows): now, the one its system
+/// recommends, the steps it takes (in percent, lowest first); None elsewhere, or while only looking.
+fn ScreenSess::scale(self : ScreenSess) -> (Int, Int, Array[Int])? {
+  if !self.driving() {
+    return None
+  }
+  match field(self.state, "scale") {
+    Some(Object(_)) as sc => {
+      let steps = items(sc, "steps").filter_map(fn(j) {
+        match j {
+          Number(n, ..) => Some(n.to_int())
+          _ => None
+        }
+      })
+      if steps.is_empty() {
+        None
+      } else {
+        Some((number(sc, "percent").to_int(), number(sc, "recommended").to_int(), steps))
+      }
+    }
+    _ => None
+  }
+}
+
+///|
 /// Where the station says its pointer is (0..1 of the frame), when it says.
 fn ScreenSess::cursor(self : ScreenSess) -> (Double, Double)? {
   match field(self.state, "cursor") {
@@ -301,17 +339,41 @@ fn ScreenSess::frame_size(self : ScreenSess) -> (Int, Int)? {
 
 ///|
 /// A finger drives it as a trackpad (it moves the pointer, a tap clicks where that points), or directly (a tap clicks
-/// where it is): as chosen here, else as this device keeps it (`prefs.screenTouch`).
+/// where it is): as chosen here, else directly on a page laid out for this device (`fit`: a tap is where it is, as in
+/// the device's own browser), else as this device keeps it (`prefs.screenTouch`).
 fn ScreenSess::pad(self : ScreenSess, src : Source) -> Bool {
   match self.pad_set {
     Some(on) => on
+    None if self.fit is Some(_) && text(self.state, "kind") == "browser" => false
     None => text((src.topic)("prefs", {}).value, "screenTouch") != "direct"
   }
 }
 
 ///|
+/// How large a picture this device asks for (prefs `screenQuality`, 控制中心's 画质): `smooth`, `hd`, `original`, or
+/// "" (as this device's screen is: screen_max_w × screen_max_h).
+fn screen_quality(src : Source) -> String {
+  match text((src.topic)("prefs", {}).value, "screenQuality") {
+    "smooth" | "hd" | "original" as q => q
+    _ => ""
+  }
+}
+
+///|
+/// The bounds a 画质 asks for (web/src/screen/frames.ts QUALITY): `original` the largest a view may ask (the screen's own
+/// size).
+fn quality_bounds(quality : String) -> (Int, Int) {
+  match quality {
+    "smooth" => (1280, 720)
+    "hd" => (1920, 1080)
+    "original" => (7680, 4320)
+    _ => (screen_max_w, screen_max_h)
+  }
+}
+
+///|
 /// Opens the view (again: after a pause, or 重新打开): `screen.view`, the frames it can decode said (H.264 where the
-/// host decodes it), as large as this device's screen at most.
+/// host decodes it), as large as 画质 asks.
 fn ScreenSess::open(self : ScreenSess, src : Source) -> Unit {
   if self.call != 0 {
     return
@@ -322,6 +384,9 @@ fn ScreenSess::open(self : ScreenSess, src : Source) -> Unit {
   }
   self.failure = None
   self.finished = false
+  let quality = screen_quality(src)
+  self.asked = quality
+  let (mw, mh) = quality_bounds(quality)
   let codecs = if @ui.h264_here() {
     [Json::string("h264"), Json::string("jpeg")]
   } else {
@@ -332,8 +397,17 @@ fn ScreenSess::open(self : ScreenSess, src : Source) -> Unit {
     "screen": Json::string(self.screen),
     "view": Json::string(self.view),
     "codecs": Json::array(codecs),
-    "maxWidth": Json::number(screen_max_w.to_double()),
-    "maxHeight": Json::number(screen_max_h.to_double()),
+    "maxWidth": Json::number(mw.to_double()),
+    "maxHeight": Json::number(mh.to_double()),
+  }
+  match self.fit {
+    Some((w, h, scale)) =>
+      params["fit"] = Json::object({
+        "width": Json::number(w.round()),
+        "height": Json::number(h.round()),
+        "scale": Json::number(scale),
+      })
+    None => ()
   }
   // not said until the person chooses: the core decides (only looking while another drives)
   match self.wants_control {
@@ -354,6 +428,16 @@ fn ScreenSess::open(self : ScreenSess, src : Source) -> Unit {
       }
     },
   )
+}
+
+///|
+/// 画质 chosen otherwise since the open view was asked: opened again with it, the frame on screen kept meanwhile.
+fn ScreenSess::asked_again(self : ScreenSess, src : Source) -> Unit {
+  if self.call == 0 || self.asked == screen_quality(src) {
+    return
+  }
+  self.pause(src)
+  self.open(src)
 }
 
 ///|
@@ -507,12 +591,15 @@ fn ScreenSess::take(self : ScreenSess, value : Json, bytes : Bytes?) -> Unit {
       // a frame that brings nothing to show (no bytes, no codec yet): taken, as far as the station is concerned
       match bytes {
         None => screen_ack(self.src, self, ts)
-        Some(b) =>
+        Some(b) => {
+          self.frames += 1
+          self.bytes += b.length()
           match (self.codec, self.stream) {
             (Some("h264"), Some(st)) => st.frame(b, key, ts)
             (Some("jpeg"), Some(st)) => st.jpeg(b, ts)
             _ => screen_ack(self.src, self, ts)
           }
+        }
       }
     }
     _ => ()

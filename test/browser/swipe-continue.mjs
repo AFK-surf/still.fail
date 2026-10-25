@@ -64,6 +64,7 @@ createRoot(root).render(<BrowserRouter><App /></BrowserRouter>);
         await page.clock.install({ time: new Date('2026-01-01T00:00:00Z') });
         await page.clock.pauseAt(new Date('2026-01-01T00:00:01Z'));
         await page.goto(base + '/swipe-continue-check.html');
+        if (route === 'reduce') await page.evaluate(() => document.documentElement.setAttribute('data-reduced-motion', ''));
         const until = async (predicate, message, argument) => {
           for (let frame = 0; frame < 60; frame++) {
             if (await page.evaluate(predicate, argument)) return;
@@ -71,7 +72,7 @@ createRoot(root).render(<BrowserRouter><App /></BrowserRouter>);
           }
           assert.fail(`${engine}/${route}: ${message}`);
         };
-        await until(() => window.reviewApp?.current === '/w/demo', 'fixture mounted');
+        await until(() => window.location.pathname === '/w/demo', 'fixture mounted');
         await page.addStyleTag({ content: '[data-role="in"], [data-role="out"] { animation-play-state: paused !important; }' });
         const settle = async () => {
           await page.evaluate(() => { for (const a of document.getAnimations()) a.finish(); });
@@ -80,13 +81,13 @@ createRoot(root).render(<BrowserRouter><App /></BrowserRouter>);
         };
         const open = async path => {
           await page.evaluate(path => window.reviewApp.push(path), path);
-          await until(path => window.reviewApp.current === path, 'route committed', path);
+          await until(path => window.location.pathname === path, 'route committed', path);
           await settle();
         };
         if (route === 'replaced') {
           await open('/w/demo/original');
           await page.evaluate(() => window.reviewNavigate('/w/demo/kept', { replace: true }));
-          await until(() => window.reviewApp.current === '/w/demo/kept', 'replacement committed');
+          await until(() => window.location.pathname === '/w/demo/kept', 'replacement committed');
         }
         await open('/w/demo/' + (['replaced', 'reduce', 'blocked'].includes(route) ? 'one' : route));
         const snapshot = () => page.evaluate(() => [...document.querySelectorAll('[data-role]')].map(el => ({ role: el.dataset.role, x: el.getBoundingClientRect().x, y: el.getBoundingClientRect().y, visibility: getComputedStyle(el).visibility, way: el.dataset.way })));
@@ -121,6 +122,7 @@ createRoot(root).render(<BrowserRouter><App /></BrowserRouter>);
         await page.evaluate(() => window.reviewRelease());
         await until(() => !document.querySelector('[data-swiping]'), 'swipe handed to navigation');
         if (route === 'reduce') {
+          await page.clock.runFor(16);
           const reduced = await snapshot();
           assert.equal(reduced.find(p => p.role === 'top').x, 0, 'reduced motion leaves no swipe transform');
           assert.ok(!reduced.some(p => p.role === 'out' || p.role === 'in'), 'reduced motion does not animate');

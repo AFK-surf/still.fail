@@ -1,6 +1,7 @@
 // The words of links.mbt and links_sheet.mbt (client/i18n/catalog/zh: android-misc, common), as the Android app has them.
 
 ///|
+// kept across runs: a table, never written
 let zh_links : Map[String, String] = {
   "android-misc.invite.byLink": "用邀请链接加入",
   "android-misc.invite.joinNamed": "加入「{name}」",

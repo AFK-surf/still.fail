@@ -3,13 +3,18 @@
 ///|
 /// The app over the settings' fixture, a page of them open (by its name, @settings.route_of); `shows`: a fixture mode
 /// of the settings' (MBUI_FIXTURE=settings-…) whose page this is, as it sets its fixture up (a step of a flow).
-fn settings_tester(page : String, mode? : String = "settings", shows? : String = "") -> @ui.Tester {
+fn settings_tester(
+  page : String,
+  mode? : String = "settings",
+  shows? : String = "",
+  platform? : Int = 0,
+) -> @ui.Tester {
   reset()
   if shows != "" {
     @settings.fixture_page(shows) |> ignore
   }
   let src = fixture(mode)
-  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0)
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0, platform~)
   open_setting(page)
   // the pages opened slide in from the frame that takes them
   t.draw()
@@ -65,13 +70,44 @@ test "settings: the account, the workspace's rows and how each stands, this devi
   // a tap on the account's card: the account
   t.tap_text("lin@example.com")
   t.run_for(@ui.nav_push_ms)
-  assert_true(t.find("lin@example.com · Google") is Some(_))
+  assert_true(t.find("lin@example.com · Google 账号") is Some(_))
   assert_true(t.find("Chrome · macOS") is Some(_))
   // the bottom bar going out of the way, on its own springs and glides, to where it rests
   t.run_for(bar.rest() - t.time())
   // the last tap's ripple shown whole, its way in and out
   t.run_for(@motion.ripple_tap_ms)
   t.assert_idle()
+}
+
+///|
+/// How late a phone's core gives each topic's first value, in the test below (round_trip): well after a page has slid
+/// in (@ui.nav_push_ms).
+let core_late_ms : Double = 600.0
+
+///|
+test "settings: the vault's row there before the core has said how it stands, the page under it not moved when it does" {
+  reset()
+  // a phone's core: each topic's first value a while late (the lock's read on Home already, the vaults' first by
+  // settings)
+  let src = round_trip(fixture("settings"), core_late_ms)
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=1600.0)
+  t.draw()
+  // Home, its topics one after another (the accounts, the workspaces, the workspace's)
+  t.run_for(core_late_ms * 5.0)
+  open_setting("home")
+  t.draw()
+  t.run_for(@ui.nav_push_ms)
+  // in, the core yet to answer: the rows there, their words not yet
+  assert_true(t.find("1/2 在线") is None)
+  assert_true(t.find("安全") is Some(_))
+  assert_true(t.find("密钥") is Some(_))
+  let at = t.find("外观").unwrap()
+  // answered (the workspace's view, then what its stations say): what each says, nothing under them moved
+  t.run_for(core_late_ms * 3.0)
+  t.draw()
+  assert_true(t.find("1/2 在线") is Some(_))
+  assert_true(t.find("1 个待批准") is Some(_))
+  assert_eq(t.find("外观").unwrap(), at)
 }
 
 ///|
@@ -113,37 +149,52 @@ test "appearance: 深色 chosen, the app is drawn dark at once and the core keep
 }
 
 ///|
+test "appearance: 动画 减少 chosen, motion is reduced at once whatever the system says; 不减少, it is not" {
+  let t = settings_tester("appearance")
+  assert_false(@ui.reduced_motion())
+  t.tap_text("减少")
+  t.draw()
+  assert_true(@ui.reduced_motion())
+  // the system's own reduced: 不减少 holds motion all the same, 跟随系统 follows it
+  t.set_reduce_motion(true)
+  t.tap_text("不减少")
+  t.draw()
+  assert_false(@ui.reduced_motion())
+  t.tap_text("跟随系统")
+  t.draw()
+  t.set_reduce_motion(false)
+}
+
+///|
 test "a station renamed from its page's …: the new name is the station's" {
   let t = settings_tester("stations")
   assert_true(t.find("Studio") is Some(_))
   assert_true(t.find("MBA") is Some(_))
   t.tap_text("Studio")
   t.run_for(@ui.nav_push_ms)
-  // its machine, large
-  assert_true(t.find("内存剩") is Some(_))
-  assert_true(t.find("在此 station 上") is Some(_))
-  // "…" at the bar's end
-  t.tap(357.0, 22.0)
-  t.tap_text("重命名")
-  assert_true(t.find("station 名称") is Some(_))
-  for _ in 0..<6 {
-    t.backspace()
-  }
-  t.type_text("工作室")
-  t.tap_text("保存")
+  // its page (src/sfdesk station_page.mbt), its overview first
+  assert_true(t.find("概览") is Some(_))
+  // its ⋯ (the presenters' menu, a sheet on a phone) → 重命名, the name asked
+  let log = t.drive(
+    "tap icon:more\nuntil 重命名\ntap =重命名\nuntil station 名称\nclear\ntype 工作室\ntap =保存\ngone 保存\n",
+  )
+  assert_true(log.contains("EXIT 0"), msg=log.join("\n"))
+  sheet_rested(t, "sf-present")
+  t.draw()
   assert_true(t.find("工作室") is Some(_))
-  // (not idle yet: the sheet is still sinking on its spring (kit/sheet.mbt), till mbui#25 declares its end)
 }
 
 ///|
-test "a settings sheet goes down on the sheet's spring, only drawn: its 保存 tapped meanwhile renames nothing" {
-  let t = settings_tester("stations")
-  // the station as the tests before left it
-  let name = if t.find("Studio") is Some(_) { "Studio" } else { "工作室" }
-  t.tap_text(name)
-  t.run_for(@ui.nav_push_ms)
-  t.tap(357.0, 22.0)
-  t.tap_text("重命名")
+test "a sheet asking goes down on the sheet's spring, only drawn: its 保存 tapped meanwhile renames nothing" {
+  // (touch's: keyboard and mouse's asks in a dialog, gone at once as it closes)
+  let t = settings_tester("profile:ws1/st1#cx", platform=2)
+  let name = "ChatGPT 团队"
+  assert_true(t.find(name) is Some(_))
+  // its rename (its name pressed, a phone's head's title): the name asked in the presenters' sheet (src/sfdesk
+  // accounts.mbt profile_head)
+  let (x, y) = t.find(name).unwrap()
+  t.tap(x, y)
+  sheet_rested(t, "sf-present")
   for _ in 0..<name.length() {
     t.backspace()
   }
@@ -157,10 +208,11 @@ test "a settings sheet goes down on the sheet's spring, only drawn: its 保存 t
   let (active, _, _, _) = t.ime()
   assert_true(!active)
   t.tap_once(sx, sy)
-  // down at once (only drawn as it sinks), the station's name as it was
-  assert_true(!@settings.sheet_up())
+  // down at once (only drawn as it sinks), the profile's name as it was
+  sheet_rested(t, "sf-present")
+  t.draw()
+  assert_true(t.find("没改成的名字") is None)
   assert_true(t.find(name) is Some(_))
-  // (not idle yet: the sheet is still sinking on its spring (kit/sheet.mbt), till mbui#25 declares its end)
 }
 
 ///|
@@ -198,17 +250,6 @@ test "the workspace: its people, those added, the invitations out" {
 }
 
 ///|
-test "security mode: a device waiting, confirmed in its sheet by its code" {
-  let t = settings_tester("security")
-  assert_true(t.find("安全") is Some(_))
-  assert_true(t.find("482 917") is Some(_))
-  t.tap_text("482 917")
-  assert_true(t.find("一致，批准") is Some(_))
-  assert_true(t.find("不一致，拒绝") is Some(_))
-  // (not idle yet: the sheet is still rising on kit's spring (kit/sheet.mbt), whose end it does not say)
-}
-
-///|
 test "memory: a station's global memory, its projects, a skill's page" {
   let t = settings_tester("memory:ws1/st1")
   assert_true(t.find("全局记忆") is Some(_))
@@ -228,7 +269,8 @@ test "memory: a station's global memory, its projects, a skill's page" {
 test "usage: the totals, the days, 30 天 picked" {
   let t = settings_tester("usage")
   assert_true(t.find("$118") is Some(_))
-  assert_true(t.find("整理发布清单") is Some(_))
+  // the lists, the people's first (the web's)
+  assert_true(t.find("68%") is Some(_))
   t.tap_text("30 天")
   assert_true(t.find("$486") is Some(_))
   // (not idle yet: a Ctx::spring still moves, till mbui#25 declares its end)
@@ -305,7 +347,9 @@ test "下方栏: a screen reader moves a place one slot along" {
 ///|
 test "添加成员: what is typed counts at once, 添加 lit by it" {
   let t = settings_tester("workspace")
-  t.tap(362.0, 22.0)
+  // (the ＋ at the title's end)
+  let (x, y, w, h) = t.query(Button, label="添加成员").unwrap().rect
+  t.tap(x + w / 2.0, y + h / 2.0)
   assert_true(t.find("添加成员") is Some(_))
   t.tap_text("name@example.com")
   t.type_text("he2@example.com")
@@ -320,7 +364,7 @@ test "添加成员: what is typed counts at once, 添加 lit by it" {
 
 ///|
 test "飞书: a new connect picks its platform first, Slack's and 飞书's said (FeishuConnect.kt)" {
-  let t = settings_tester("new-connect:ws1/st1", shows="settings-new-connect-platform")
+  let t = settings_tester("connects", mode="settings-new-connect-platform", shows="settings-new-connect-platform")
   assert_true(t.find("选择平台") is Some(_))
   assert_true(t.find("在 Slack 的频道和私信中使用") is Some(_))
   assert_true(t.find("在飞书的群和私聊中使用，含国际版 Lark") is Some(_))
@@ -331,9 +375,9 @@ test "飞书: a new connect picks its platform first, Slack's and 飞书's said 
 
 ///|
 test "飞书: scanning, its QR code drawn on white and 在飞书中打开 handed to the system" {
-  let t = settings_tester("new-connect:ws1/st1", shows="settings-new-connect-scan")
+  let t = settings_tester("connects", mode="settings-new-connect-scan", shows="settings-new-connect-scan")
   assert_true(t.find("使用飞书扫描二维码，按提示创建机器人") is Some(_))
-  assert_true(t.find("也可用另一台设备上的飞书扫码") is Some(_))
+  assert_true(t.find("本机已登录飞书时，也可直接打开") is Some(_))
   // the code's dark runs, black on the white square
   let dark = t.drawn_rects().filter(fn(r) { r.4 == 0x000000FFL })
   assert_true(dark.length() > 25)
@@ -345,7 +389,7 @@ test "飞书: scanning, its QR code drawn on white and 在飞书中打开 handed
 test "settings: the account's page has the accounts on this device on its one card (Me.kt): 退出登录 beside who it is" {
   let t = settings_tester("me")
   assert_true(t.find("此设备上的账号") is None)
-  let (_, name_y) = t.find("lin@example.com · Google").unwrap()
+  let (_, name_y) = t.find("lin@example.com · Google 账号").unwrap()
   let (_, out_y) = t.find("退出登录").unwrap()
   // on the account's own row, not on one of its own below it
   assert_true((out_y - name_y).abs() < row_h)
@@ -395,7 +439,7 @@ fn chip_fill(t : @ui.Tester, words : String) -> (Double, Double) {
   let rects = t.drawn_rects()
   let mut chip = (0.0, 0.0, 0.0, 0.0)
   for r in rects {
-    if (r.3 == 20.0 || r.3 == 16.0) && r.0 <= x && x <= r.0 + r.2 && r.1 <= y && y <= r.1 + r.3 && r.2 > chip.2 {
+    if (r.3 == @sf.fill_chip_h || r.3 == @sf.fill_chip_small_h) && r.0 <= x && x <= r.0 + r.2 && r.1 <= y && y <= r.1 + r.3 && r.2 > chip.2 {
       chip = (r.0, r.1, r.2, r.3)
     }
   }
@@ -464,16 +508,20 @@ test "an agent's allowance in its sheet filled as far as is left (QuotaChips): 5
 }
 
 ///|
-test "a subscription signing in: what to do said once, its page's step solid, then the code with 完成 in its field (Profiles.kt LoginSteps)" {
+test "a subscription signing in: what to do in the browser, then the code typed and 完成登录 sends it (Accounts.tsx LoginSteps)" {
   let t = settings_tester("profile:ws1/st1#cc", shows="settings-profile-login")
-  assert_true(t.find("在打开的页面用 still.fail 要使用的 Claude 账号登录，并同意授权") is Some(_))
-  assert_true(t.find("打开授权页面") is Some(_))
-  // nothing typed: no 完成 yet
-  assert_true(t.find("完成") is None)
+  let y = fn(words : String) { t.find(words).unwrap().1 }
+  // first on its page, under its head: what is under way, the browser's step, the code's field
+  assert_true(y("正在登录 Claude") > y("订阅有效") && y("额度") > y("正在登录 Claude"))
+  assert_true(t.find("打开授权页面，用 still.fail 要使用的 Claude 账号登录并同意授权") is Some(_))
+  assert_true(y("粘贴授权码") > y("打开授权页面"))
+  // nothing typed: 完成登录 there, but not to be pressed
+  assert_true(t.find("完成登录") is Some(_))
   t.tap_text("粘贴授权码")
   t.type_text("abc-123")
-  assert_true(t.find("完成") is Some(_))
-  // (and the way to sign in by hand, beside the button, once not signing in: 在机器上手动登录)
+  t.tap_text("完成登录")
+  t.draw()
+  assert_true(t.find("abc-123") is None, msg="sent, its field emptied")
 }
 
 ///|
@@ -582,17 +630,90 @@ test "the run's 账号: what 自动分配 means, then 自动分配 and each acco
 }
 
 ///|
-test "a subscription's page: where it stands at the head of its sign-in's card, 重新登录 with 在机器上手动登录 beside it (Profiles.kt SignIn)" {
-  let t = settings_tester("profile:ws1/st1#cc")
-  // one card for the account: its pill, then the button and the link beside it, no title over the card
-  let (_, pill_y) = t.find("可用").unwrap()
-  let (bx, by) = t.find("重新登录").unwrap()
-  let (mx, my) = t.find("在机器上手动登录").unwrap()
-  assert_true(by > pill_y)
-  assert_true((my - by).abs() < 2.0 && mx > bx)
-  assert_true(t.find("Claude 订阅") is None)
-  // the command to run by hand, under them once asked
-  t.tap_text("在机器上手动登录")
+/// A profile's page in a window tall enough for all of it (the order of what it holds read off at once).
+fn profile_whole(page : String) -> @ui.Tester {
+  reset()
+  let src = fixture("settings")
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=2400.0)
+  open_setting(page)
   t.draw()
+  t.run_for(@ui.nav_push_ms)
+  t
+}
+
+///|
+test "a profile's page: who it is and whether it works, then its allowance, what it spent, who uses it, its models, how it runs, sharing, its account" {
+  let t = profile_whole("profile:ws1/st1#cc")
+  let y = fn(words : String) { t.find(words).unwrap().1 }
+  // its head is its title: its name, what it is, its last check and when (no title over it)
+  assert_true(y("订阅账号 · 只在 Studio") > y("Claude 主账号"))
+  assert_true(y("订阅有效") > y("订阅账号 · 只在 Studio"))
+  assert_true(t.find("5 分钟前检查") is Some(_))
+  // then its parts by what it is come to for: how much is left and what it spent, who uses it, how it runs, whom it is
+  // shared with, the account itself
+  assert_true(y("额度") > y("订阅有效"))
+  assert_true(y("5 小时") > y("额度") && t.find("本周") is Some(_))
+  assert_true(y("近 7 天") > y("5 小时"))
+  assert_true(y("使用它的连接") > y("近 7 天"))
+  assert_true(y("选择模型（2 / 3）") > y("使用它的连接"))
+  assert_true(y("默认 Fast") > y("选择模型（2 / 3）"))
+  assert_true(y("分享给其他 station") > y("默认 Fast"))
+  assert_true(y("同时用于 个人") > y("分享给其他 station"))
+  assert_true(y("重新登录") > y("同时用于 个人"))
+  // its models chosen in place: the whole list under it, the one off too
+  assert_true(t.find("Haiku 5") is None)
+  t.tap_text("选择模型（2 / 3）")
+  t.draw()
+  assert_true(t.find("收起") is Some(_))
+  assert_true(t.find("Haiku 5") is Some(_))
+}
+
+///|
+test "a profile in trouble: what is wrong a pill in its head before what its check said; its key masked on its account's card" {
+  let t = profile_whole("profile:ws1/st1#k2")
+  let (px, py) = t.find("没能使用").unwrap()
+  let (cx, cy) = t.find("订阅有效").unwrap()
+  assert_true((py - cy).abs() < 2.0 && cx > px)
+  assert_true(t.find("sk-…a41f").unwrap().1 > t.find("API key").unwrap().1)
+}
+
+///|
+test "a subscription's page signed in: 重新登录 and the way by hand, rows of its account" {
+  let t = profile_whole("profile:ws1/st1#cc")
+  let (_, by) = t.find("重新登录").unwrap()
+  let (_, my) = t.find("也可以在服务器上手动登录").unwrap()
+  assert_true(my > by)
+  // the command to run by hand, shown once asked
+  assert_true(t.find("claude setup-token") is None)
+  t.tap_text("也可以在服务器上手动登录")
+  t.run_for(@ui.nav_rise_ms)
   assert_true(t.find("claude setup-token") is Some(_))
+  t.key(@ui.key_escape)
+  t.run_for(@ui.nav_rise_ms)
+  // 重新登录: begun on the station, its steps on the page
+  t.tap_text("重新登录")
+  t.draw()
+  t.draw()
+  t.draw()
+  assert_true(t.find("打开授权页面") is Some(_))
+}
+
+///|
+test "a subscription's sign-in that failed: why, then 重新登录 with the way by hand beside it (Accounts.tsx SignIn)" {
+  let t = settings_tester("profile:ws1/st1#cc", shows="settings-profile-login-failed")
+  shown_on_page(t, "也可以在服务器上手动登录")
+  let (_, why_y) = t.find("上次登录失败：授权码已过期").unwrap()
+  let (bx, by) = t.find("重新登录").unwrap()
+  let (mx, my) = t.find("也可以在服务器上手动登录").unwrap()
+  assert_true(by > why_y)
+  assert_true((my - by).abs() < 2.0 && mx > bx)
+}
+
+///|
+test "a connect's page: its model the one its station's profiles turned on, at its effort and account" {
+  let t = settings_tester("connect:ws1/st1#k1")
+  assert_true(t.find("星火助手") is Some(_))
+  assert_true(t.find("Opus 5.5") is Some(_))
+  assert_true(t.find("自动分配") is Some(_))
+  assert_true(t.find("尚未启用模型") is None)
 }

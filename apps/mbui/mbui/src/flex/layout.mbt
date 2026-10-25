@@ -66,6 +66,12 @@ fn resolve_of(k : Int, v : Double, base : Double) -> Double {
     v
   } else if k == LEN_PCT {
     pct(v, base)
+  } else if k == LEN_WITHIN {
+    if known(base) && base < v {
+      base
+    } else {
+      v
+    }
   } else {
     undef
   }
@@ -187,12 +193,12 @@ fn box_of(
     s.margin_right_k == LEN_PCT ||
     s.margin_top_k == LEN_PCT ||
     s.margin_bottom_k == LEN_PCT ||
-    s.width_k == LEN_PCT ||
-    s.min_width_k == LEN_PCT ||
-    s.max_width_k == LEN_PCT
-  let of_cb_h = s.height_k == LEN_PCT ||
-    s.min_height_k == LEN_PCT ||
-    s.max_height_k == LEN_PCT
+    s.width_k >= LEN_PCT ||
+    s.min_width_k >= LEN_PCT ||
+    s.max_width_k >= LEN_PCT
+  let of_cb_h = s.height_k >= LEN_PCT ||
+    s.min_height_k >= LEN_PCT ||
+    s.max_height_k >= LEN_PCT
   match into {
     Some(o) => {
       o.pad_l = pad_l
@@ -983,6 +989,13 @@ fn layout_flex(
   pool.count = 0
   pool.lines.clear()
   let flow = flow_children(node)
+  // a row that leaves out what it has not the room for (Style's `drop`), as it is in this room
+  let all = flow
+  let flow = if s.fits && row && known(avail_main) {
+    fit_flow(flow, avail_main, gap_main, cb_w, cb_h)
+  } else {
+    flow
+  }
   // laid out at the height it was measured to come to before that height
   // was known (in this compute, at this width), nothing in it depending on
   // it: its items where that measure put them
@@ -1133,10 +1146,16 @@ fn layout_flex(
       f.unsafe_set(i + CROSS_STYLE, cross_style)
       f.unsafe_set(i + ASCENT, 0.0)
       f.unsafe_set(i + GROW, cs.grow)
-      f.unsafe_set(i + SHRINK, cs.shrink)
+      // (what a row may leave out is kept whole while it is there)
+      f.unsafe_set(i + SHRINK, if s.fits && cs.drop != 0 { 0.0 } else { cs.shrink })
       // flex base size
       let basis_style = resolve_of(cs.basis_k, cs.basis_v, inner_main)
       let main_style = if row { cb.w } else { cb.h }
+      // (a container sized by what it holds counts a growing item at the more of its flex basis and what it holds, as
+      // Chrome sizes one: flex: 1 1 0 words in a fit-content card are as wide as they are, not nothing; flex: 1 1 200
+      // with nothing in it still 200)
+      let grows_in_unknown = cs.grow > 0.0 && !known(inner_main)
+      let mut declared = undef
       let mut basis = if known(basis_style) && cs.basis_k != LEN_AUTO {
         if cs.box_sizing == ContentBox {
           basis_style + (if row { cb.pbw() } else { cb.pbh() })
@@ -1147,6 +1166,10 @@ fn layout_flex(
         main_style
       } else {
         undef
+      }
+      if grows_in_unknown && known(basis_style) && cs.basis_k != LEN_AUTO {
+        declared = basis
+        basis = undef
       }
       if !known(basis) {
         // size from content: cross known if fixed or stretched in a known line
@@ -1179,6 +1202,9 @@ fn layout_flex(
         }
         let ch = out_h.val
         basis = if row { cw } else { ch }
+        if known(declared) {
+          basis = fmax(basis, declared)
+        }
       }
       let pb_main = if row { cb.pbw() } else { cb.pbh() }
       f.unsafe_set(i + PB_MAIN, pb_main)
@@ -1608,11 +1634,105 @@ fn layout_flex(
         zero(c)
       }
     }
+    // what its row left out, nowhere (its line said so), the rest on theirs
+    if s.fits {
+      let mut j = 0
+      for c in all {
+        if j < flow.length() && physical_equal(flow[j], c) {
+          j = j + 1
+          if c.line < 0 {
+            c.line = 0
+          }
+        } else {
+          left_out(c)
+        }
+      }
+    }
   }
   pool.count = 0
   depth.val = d
   out_h.val = fh
   fw
+}
+
+///|
+/// What of a row's items `flow` it keeps in `room` along it (its content box's width, `gap` between items): all of
+/// them but its ⋯ (Style's `drop` -1) where all take no more than that (what may leave as wide as what it holds, whole
+/// or not at all; the rest at least their width, else their min-width; with their margins); else its ⋯ too, and what
+/// it may leave out (`drop` k > 0) left out, the lowest k first (of the same k the last first), until the rest takes no
+/// more. What is put where it is said is kept, taking no room.
+fn fit_flow(flow : Array[Node], room : Double, gap : Double, cb_w : Double, cb_h : Double) -> Array[Node] {
+  let n = flow.length()
+  let need = Array::make(n, 0.0)
+  let mut total = 0.0
+  let mut count = 0
+  let mut more = -1
+  for j, c in flow {
+    if c.style.position == Absolute {
+      continue
+    }
+    let b = box_for(c, cb_w, cb_h)
+    // what may leave is there whole or not at all, and what never gives way (shrink 0: kept as wide as what it holds)
+    // is never narrower: each as wide as what it holds; the rest at least their least, or what the row keeps of them
+    // (fit_need: words cut short keep some of them)
+    let least = if known(b.min_w) { b.min_w } else { 0.0 }
+    let w = if c.style.drop != 0 || (c.style.shrink == 0.0 && !known(b.w)) {
+      size_node(c, undef, undef, undef, undef, cb_w, cb_h, false)
+    } else if known(b.w) {
+      b.w
+    } else if known(c.style.fit_need) {
+      fmax(least, c.style.fit_need)
+    } else {
+      least
+    }
+    need[j] = w + b.mar_l + b.mar_r
+    if c.style.drop == -1 {
+      more = j
+    } else {
+      total = total + need[j]
+      count = count + 1
+    }
+  }
+  let out = Array::make(n, true)
+  if more >= 0 {
+    out[more] = false
+  }
+  if total + gap * (count - 1).to_double() > room + 0.01 {
+    if more >= 0 {
+      out[more] = true
+      total = total + need[more]
+      count = count + 1
+    }
+    let mut left = 0
+    while total + gap * (count - 1).to_double() > room + 0.01 {
+      // the next to leave: the lowest k, the last of it
+      let mut pick = -1
+      for j, c in flow {
+        let k = c.style.drop
+        if out[j] && k > 0 && c.style.position != Absolute && (pick < 0 || k <= flow[pick].style.drop) {
+          pick = j
+        }
+      }
+      if pick < 0 {
+        break
+      }
+      out[pick] = false
+      total = total - need[pick]
+      count = count - 1
+      left = left + 1
+    }
+    // nothing it may leave out: no ⋯
+    if more >= 0 && left == 0 {
+      out[more] = false
+    }
+  }
+  let kept = []
+  for j, c in flow {
+    if out[j] {
+      kept.push(c)
+    }
+  }
+  kept
 }
 
 ///|
@@ -1642,6 +1762,28 @@ fn flow_children(node : Node) -> Array[Node] {
     }
   }
   out
+}
+
+///|
+/// Node `n` left out of its row (fit_flow): laid out nowhere, of no size, as this compute's layout of it and all it
+/// holds (what reads the results places it so), its last layout forgotten (laid out again as it comes back, where its
+/// positions were let go).
+fn left_out(n : Node) -> Unit {
+  n.line = -1
+  forget(n)
+}
+
+///|
+fn forget(n : Node) -> Unit {
+  n.left = 0.0
+  n.top = 0.0
+  n.width = 0.0
+  n.height = 0.0
+  n.p_ok = false
+  n.laid_gen = generation.val
+  for c in n.children {
+    forget(c)
+  }
 }
 
 ///|

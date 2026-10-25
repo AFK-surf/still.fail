@@ -10,7 +10,7 @@ import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { zstdDecompressSync } from "node:zlib";
 import { wall } from "../ops/fibers.ts";
-import { type InWorkspace, LETTER_SQL, type Letter, isLetter, liveShare, sees, toChatShare, withLetter } from "../store/rows.ts";
+import { CARD_BEFORE, CC_THREADS_SQL, CLOSED_SINCE, type InWorkspace, JOBS_RUNNING, LETTER_SQL, OPTIONS_BEFORE, SAID_SINCE, SESSION_JOBS, SESSION_OF_RUNTIME, PEOPLE_AT, type Letter, isLetter, liveShare, sees, toChatShare, withLetter } from "../store/rows.ts";
 
 export type Json = any;
 
@@ -348,6 +348,11 @@ export function listSessions(s: Store): SessionRow[] {
   return all(s, "SELECT * FROM sessions ORDER BY last_active_at DESC").map(toSession);
 }
 
+/// Store::sessionOfRuntime: the session that went on with `runtime`'s session `id`, the latest active if more did.
+export function sessionOfRuntime(s: Store, runtime: string, id: string): string | null {
+  return one(s, SESSION_OF_RUNTIME, runtime, id)?.key ?? null;
+}
+
 /// Store::runtimeSessions: the runtime sessions a session has run in, the first first, ending with its current one.
 export function runtimeSessions(s: Store, key: string): string[] {
   const current = getSession(s, key)?.runtimeSessionId ?? null;
@@ -356,6 +361,28 @@ export function runtimeSessions(s: Store, key: string): string[] {
     ids = all(s, "SELECT id FROM runtime_sessions WHERE session_key = ? ORDER BY at, rowid", key).map((r) => r.id);
   } catch {} // a database no station of this version has opened yet
   return current === null ? ids : [...ids.filter((id) => id !== current), current];
+}
+
+/// How many entries sessions' transcripts have, as the station last read them while they were at work (one, or every
+/// one known when `key` is null): none for a session not read since (or a database no station of this version opened).
+export function transcriptLengths(s: Store, key: string | null): Map<string, number> {
+  try {
+    const rows = key !== null ? all(s, "SELECT session, n FROM transcript_lengths WHERE session = ?", key) : all(s, "SELECT session, n FROM transcript_lengths");
+    return new Map(rows.map((r) => [r.session as string, Number(r.n)]));
+  } catch {
+    return new Map();
+  }
+}
+
+/// What sessions' calls used, as the station keeps it (store.ts `setSessionUsage`; one, or every one known when `key` is
+/// null): none for a session that has made no call (or a database no station of this version opened).
+export function sessionUsages(s: Store, key: string | null): Map<string, Json> {
+  try {
+    const rows = key !== null ? all(s, "SELECT session, usage FROM session_usage WHERE session = ?", key) : all(s, "SELECT session, usage FROM session_usage");
+    return new Map(rows.map((r) => [r.session as string, JSON.parse(r.usage as string)]));
+  } catch {
+    return new Map();
+  }
 }
 
 // ── threads ──
@@ -370,16 +397,43 @@ export function sessionThreads(s: Store, session: string): ThreadRow[] {
   return all(s, "SELECT t.* FROM thread_sessions ts JOIN threads t ON t.id = ts.thread WHERE ts.session = ? ORDER BY ts.joined_at DESC, ts.rowid DESC", session).map(toThread);
 }
 
+/// The threads a still.fail chat can copy people's messages to (rows.ts CC_THREADS_SQL), with the connect posting
+/// in each.
+export function ccThreads(s: Store, thread: number): { thread: ThreadRow; connect: string }[] {
+  return all(s, CC_THREADS_SQL, thread).map((r) => ({ thread: toThread(r), connect: r.connect }));
+}
+
 export function threadSessions(s: Store, thread: number): Membership[] {
   return all(s, "SELECT * FROM thread_sessions WHERE thread = ? ORDER BY joined_at, rowid", thread).map(toMembership);
 }
 
+/// The threads sessions take part in (each once).
+export function threadsOfSessions(s: Store, keys: string[]): number[] {
+  if (keys.length === 0) return [];
+  return all(s, `SELECT DISTINCT thread FROM thread_sessions WHERE session IN (${keys.map(() => "?").join(", ")})`, ...keys).map((r) => r.thread as number);
+}
+
+/// The threads the sidebar is made of (views.ts `chats`): those of the sessions in lists, and every thread of a session
+/// in one of those (the Slack threads their agents came from among them). The archive's others, most of a station's
+/// threads, are none of it.
+export function threadsOfShown(s: Store): number[] {
+  return all(
+    s,
+    `SELECT DISTINCT thread FROM thread_sessions WHERE session IN (SELECT session FROM thread_sessions WHERE thread IN (
+       SELECT ts.thread FROM thread_sessions ts JOIN sessions x ON x.key = ts.session WHERE x.archived_at IS NULL))`,
+  ).map((r) => r.thread as number);
+}
+
 /// Threads with their sessions, last entry, latest message and the viewer's unread count, most recently said in
-/// first: those of one session, one thread, or all.
-export function listThreads(s: Store, viewer: string, session: string | null, thread: number | null): ThreadSummary[] {
+/// first: those of one session, one thread (or those named), or all.
+export function listThreads(s: Store, viewer: string, session: string | null, thread: number | number[] | null): ThreadSummary[] {
   const base = "SELECT t.*, COALESCE(r.n, 0) AS read_n FROM threads t LEFT JOIN reads r ON r.thread = t.id AND r.viewer = ?1";
   const rows: Json[] =
-    thread !== null
+    Array.isArray(thread)
+      ? thread.length === 0
+        ? []
+        : all(s, `${base} WHERE t.id IN (${thread.map((_, i) => `?${i + 2}`).join(", ")})`, viewer, ...thread)
+      : thread !== null
       ? all(s, `${base} WHERE t.id = ?2`, viewer, thread)
       : session !== null
         ? all(s, `${base} WHERE t.id IN (SELECT thread FROM thread_sessions WHERE session = ?2)`, viewer, session)
@@ -407,10 +461,10 @@ export function listThreads(s: Store, viewer: string, session: string | null, th
   return summaries;
 }
 
-/// What lists show of an archived thread (its last entry, latest message, messages' authors, the first thing a person
-/// said), read from its file once: it does not change while archived, and archived again it is another file
-/// (`fileVersion`). Every list of chats, of sessions and of threads read each archived thread's file, some 400 on a busy
-/// station, past what ARCHIVE_CACHE keeps.
+/// What lists show of a thread a station before wrote out to its archive file (its last entry, latest message, messages'
+/// authors, the first thing a person said), read from its file once: it does not change while there, and written out
+/// again it is another file (`fileVersion`). Such files are read until the station brings each back into the database
+/// (store.ts `bringInArchived`); archiving writes none any more.
 export type ArchivedSummary = {
   version: string;
   last: number;
@@ -467,14 +521,14 @@ export function lastMessage(s: Store, thread: number, at?: number | null): Messa
 export function letterCount(s: Store, thread: number, at?: number | null): number {
   const archived = archivedSummary(s, thread, at);
   if (archived !== null) return archived.messages.filter((m) => m.letter).length;
-  return one(s, `SELECT COUNT(*) AS c FROM entries WHERE thread = ? AND kind = 'message' AND ${LETTER_SQL}`, thread).c;
+  return one(s, "SELECT letters FROM thread_state WHERE thread = ?", thread)?.letters ?? 0;
 }
 
 /// The thread's latest message that is not a letter (isLetter), for lists: what they show and sort by.
 export function lastSaid(s: Store, thread: number, at?: number | null): MessageRow | null {
   const archived = archivedSummary(s, thread, at);
   if (archived !== null) return archived.lastSaid === null ? null : { ...archived.lastSaid };
-  const r = one(s, `SELECT * FROM merged WHERE thread = ? AND NOT ${LETTER_SQL} ORDER BY n DESC LIMIT 1`, thread);
+  const r = one(s, "SELECT m.* FROM thread_state t JOIN merged m ON m.thread = t.thread AND m.n = t.said_n WHERE t.thread = ?", thread);
   return r ? toMessage(r) : null;
 }
 
@@ -509,11 +563,7 @@ function threadPeople(s: Store, thread: number, surface: string, at?: number | n
   if (archived !== null) {
     authors = archived.authors;
   } else {
-    authors = all(
-      s,
-      "SELECT author, MIN(n) AS first FROM entries WHERE thread = ? AND kind = 'message' AND author_kind = 'person' GROUP BY author ORDER BY first",
-      thread,
-    ).map((r) => r.author);
+    authors = all(s, "SELECT author FROM thread_people WHERE thread = ? ORDER BY first_n", thread).map((r) => r.author);
   }
   if (surface === STILLFAIL_SURFACE) return authors;
   return connect === null ? [] : authors.map((a) => `slack:${connect}:${a}`);
@@ -523,7 +573,7 @@ function threadPeople(s: Store, thread: number, surface: string, at?: number | n
 function firstText(s: Store, thread: number, at?: number | null): string | null {
   const archived = archivedSummary(s, thread, at);
   if (archived !== null) return archived.firstText;
-  const r = one(s, "SELECT substr(text, 1, 300) AS t FROM merged WHERE thread = ? AND author_kind = 'person' ORDER BY n LIMIT 1", thread);
+  const r = one(s, "SELECT substr(m.text, 1, 300) AS t FROM thread_state t JOIN merged m ON m.thread = t.thread AND m.n = t.person_n WHERE t.thread = ?", thread);
   return r ? r.t : null;
 }
 
@@ -676,12 +726,18 @@ export function askingMessage(s: Store, thread: number, about: number | null, du
 
 /// The cards answered since `since` (ms), whoever answered them: each a person's first message after a card, or a
 /// choice that closed it (closed_cards, by a person: not its agent withdrawing it).
-export function answersSince(s: Store, since: number): CardAnswer[] {
+export function answersSince(s: Store, since: number, threads: number[] | null = null): CardAnswer[] {
   const out: CardAnswer[] = [];
-  const said = all(s, "SELECT thread, n FROM entries WHERE author_kind = 'person' AND kind = 'message' AND at >= ?", since);
+  // Of some threads alone (the items of a sidebar a change touched), each by the index of its people's messages: every
+  // person's message of the last day and a half on the station, each with a few lookups, was some 2,600 statements.
+  const said: Json[] =
+    threads === null
+      ? all(s, "SELECT thread, n FROM entries WHERE author_kind = 'person' AND kind = 'message' AND at >= ?", since)
+      : threads.flatMap((thread) => all(s, SAID_SINCE, thread, since));
+  const of = threads === null ? null : new Set(threads);
   const askedBefore = (thread: number, n: number): number | null => {
-    const card: number | null = one(s, "SELECT max(n) AS n FROM entries WHERE thread = ? AND n < ? AND kind = 'message' AND card IS NOT NULL", thread, n).n;
-    const options: number | null = one(s, "SELECT max(n) AS n FROM entries WHERE thread = ? AND n < ? AND kind = 'message' AND options IS NOT NULL", thread, n).n;
+    const card: number | null = one(s, CARD_BEFORE, thread, n).n;
+    const options: number | null = one(s, OPTIONS_BEFORE, thread, n).n;
     // Option's max: None below any Some.
     return card === null ? options : options === null ? card : Math.max(card, options);
   };
@@ -706,7 +762,8 @@ export function answersSince(s: Store, since: number): CardAnswer[] {
     const a = toMessage(answer);
     out.push({ question: found[0], card: found[1], by: a.author, at: a.createdAt, answer: a });
   }
-  for (const { thread, n, viewer: by, at } of all(s, "SELECT thread, n, viewer, at FROM closed_cards WHERE at >= ?", since)) {
+  for (const { thread, n, viewer: by, at } of all(s, CLOSED_SINCE, since)) {
+    if (of !== null && !of.has(thread)) continue;
     const found = cardAt(thread, n);
     if (!found) continue;
     // Withdrawn by its own agent: no one answered it.
@@ -750,17 +807,18 @@ function turnSummary(r: Json, startedAt: number): TurnSummary {
 
 /// Per session (or for one): turn count, the latest turn (with its id: a client holding the turns puts it in place
 /// rather than read them all again), undelivered messages and the first one it heard.
-export function sessionStats(s: Store, key: string | null): Map<string, SessionStats> {
+/// Each session's counts and last turn: one's, those named (`keys`), or all (null).
+export function sessionStats(s: Store, key: string | string[] | null): Map<string, SessionStats> {
+  if (Array.isArray(key) && key.length === 0) return new Map();
   const sql = `SELECT s.key,
        (SELECT COUNT(*) FROM turns t WHERE t.session_key = s.key) AS turns,
        (SELECT COUNT(*) FROM deliveries d WHERE d.session = s.key AND d.delivered_at IS NULL) AS pending,
-       (SELECT substr(m.text, 1, 300) FROM deliveries d JOIN merged m ON m.thread = d.thread AND m.n = d.n
-         WHERE d.session = s.key ORDER BY d.rowid LIMIT 1) AS first_text,
+       (SELECT substr(m.text, 1, 300) FROM session_first f JOIN merged m ON m.thread = f.thread AND m.n = f.n WHERE f.session = s.key) AS first_text,
        l.id AS turn_id, l.kind, l.outcome, l.declared, l.wait_seconds, l.wait_for, l.need, l.about_thread, l.about_n, l.about_ts, l.detail, l.started_at, l.ended_at
      FROM sessions s
      LEFT JOIN turns l ON l.id = (SELECT id FROM turns t2 WHERE t2.session_key = s.key ORDER BY t2.started_at DESC LIMIT 1)
-     ${key !== null ? "WHERE s.key = ?" : ""}`;
-  const rows = key !== null ? all(s, sql, key) : all(s, sql);
+     ${Array.isArray(key) ? `WHERE s.key IN (${key.map(() => "?").join(", ")})` : key !== null ? "WHERE s.key = ?" : ""}`;
+  const rows = Array.isArray(key) ? all(s, sql, ...key) : key !== null ? all(s, sql, key) : all(s, sql);
   return new Map(
     rows.map((r) => [
       r.key as string,
@@ -779,7 +837,7 @@ const toJob = (r: Json): JobRow => ({
 
 /// A session's jobs (all sessions' with null), newest first.
 export function listJobs(s: Store, session: string | null): JobRow[] {
-  return all(s, "SELECT * FROM jobs WHERE ?1 IS NULL OR session_key = ?1 ORDER BY started_at DESC", session).map(toJob);
+  return (session === null ? all(s, "SELECT * FROM jobs ORDER BY started_at DESC") : all(s, SESSION_JOBS, session)).map(toJob);
 }
 
 /// A job's notices, newest first (at most `limit`).
@@ -791,7 +849,8 @@ export function jobNotices(s: Store, id: string, limit: number): { at: number; t
 /// when one last said something.
 export function watching(s: Store): Map<string, Json> {
   const by = new Map<string, JobRow[]>();
-  for (const job of listJobs(s, null).filter((j) => j.watch && j.state === "running")) {
+  // (The jobs running, by their state's index: every summary and list asks this, not every job ever.)
+  for (const job of all(s, JOBS_RUNNING).map(toJob).filter((j) => j.watch)) {
     by.set(job.sessionKey, [...(by.get(job.sessionKey) ?? []), job]);
   }
   const out = new Map<string, Json>();
@@ -929,7 +988,7 @@ export function participants(s: Store, session: string | null): Map<string, stri
     const authors: [string, number][] =
       r.archived_at !== null
         ? archivedSummary(s, r.id, r.archived_at)!.firstAt
-        : all(s, "SELECT author, MIN(at) AS at FROM entries WHERE thread = ? AND kind = 'message' AND author_kind = 'person' GROUP BY author", r.id).map((a) => [a.author, a.at]);
+        : all(s, PEOPLE_AT, r.id).map((a) => [a.author, a.at]);
     const refs = firsts.get(r.session) ?? new Map<string, number>();
     firsts.set(r.session, refs);
     for (const [author, at] of authors) {

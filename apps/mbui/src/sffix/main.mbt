@@ -17,17 +17,39 @@ fn main {
   if @ui.env("MBUI_DARK") == "1" {
     @sf.set_dark(Some(true))
   }
+  // MBUI_PLATFORM=android: a phone's screen, as a phone's system has it (its screens drawn on a Mac: scripts/screens.sh
+  // rec), and pointed at by a finger as a phone is; MBUI_POINTING=finger or mouse: pointed at so, whatever the system
+  match @ui.env("MBUI_PLATFORM") {
+    "android" => @ui.set_platform(Some(2))
+    "ios" => @ui.set_platform(Some(1))
+    "mac" => @ui.set_platform(Some(0))
+    "windows" => @ui.set_platform(Some(3))
+    _ => ()
+  }
+  match @ui.env("MBUI_POINTING") {
+    "finger" => @ui.set_pointing(Some(Finger))
+    "mouse" => @ui.set_pointing(Some(Mouse))
+    _ => ()
+  }
   let mode = @ui.env("MBUI_FIXTURE")
-  // json: a screen as the core's JSON gives it (MBUI_FIXTURE_JSON, or _B64: client/fixtures/screens, the file still.fail's
-  // Android app draws it from too; scripts/android-ref.sh), its pages opened as it says
+  // json: a screen as the core's JSON gives it (MBUI_FIXTURE_JSON, or _B64: src/sfapp/fixture_json.mbt), its pages opened
+  // as it says
   let src = if mode == "json" {
     @sfapp.fixture_json(@hostapi.env_text("MBUI_FIXTURE_JSON"))
   } else {
     let src = @sfapp.fixture(mode)
-    // what the mode opens over Home before the first frame (src/sfapp/fixture.mbt: src/sfscreens opens the same)
+    // MBUI_UPDATE=<version>: a newer build offered
+    if @ui.env("MBUI_UPDATE") != "" {
+      @sfapp.fixture_update(@ui.env("MBUI_UPDATE"))
+    }
+    // what the mode opens over Home before the first frame (src/sfapp/fixture.mbt: screens_wbtest.mbt opens the same)
     @sfapp.open_fixture_mode(mode)
+    @sfapp.open_fixture_src(mode, src)
     src
   }
+  // no machine of its own among the made-up stations (the files' places list this machine's first): as the Tester has
+  // none
+  @sfdesk.set_this_machine("")
   // the faces the app carries (code's JetBrains Mono), as the app has them
   @sf.give_faces()
   @sfapp.host_setup()

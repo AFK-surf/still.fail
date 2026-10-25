@@ -21,8 +21,6 @@ import type { LockDevice, LockPairing, LockPromptsView, LockRequest, LockStation
 
 // A function, not a table made as the module loads: words are the page's language when shown (and the site's
 // prerender loads this module before any language is set).
-const roleName = (role: string): string => ({ owner: "Owner", admin: "Admin", member: t("web-pages.roles.member"), viewer: t("web-pages.security.viewer") })[role] ?? role;
-
 export function useLock(workspace: string): LockView | undefined {
   return useTopic<LockView>({ topic: "lock", workspace }).value;
 }
@@ -33,11 +31,6 @@ export function useLockPrompts(): LockPromptsView | undefined {
 }
 
 /** A device's name as people know it: its label, or what kind of client it is. */
-export function deviceName(d: { kind: string; label: string; older?: boolean }): string {
-  if (d.older) return d.label || t("web-pages.security.olderClient");
-  return d.label || (d.kind === "web" ? t("web-pages.security.webDevice") : t("web-pages.security.appDevice"));
-}
-
 function DeviceIcon({ d }: { d: { kind: string } }) {
   const Icon = d.kind === "web" ? Web : Monitor;
   return <Icon size={16} strokeWidth={1.6} className={css.deviceIcon} />;
@@ -112,8 +105,8 @@ function On({ entry, lock }: { entry: WorkspaceEntry; lock: LockView }) {
             {lock.requests.map((r) => (
               <div key={r.device} className={css.row}>
                 <div className={css.rowText}>
-                  <span className={css.rowName}>{t("web-pages.security.newDeviceOf", { name: r.name || r.email })}</span>
-                  <span className={css.rowMeta}>{r.label || (r.kind === "web" ? t("web-pages.security.webDevice") : t("web-pages.security.appDevice"))} · <Time stamp={stamp(r, "created_at")} /></span>
+                  <span className={css.rowName}>{t("web-pages.security.newDeviceOf", { name: r.whoText })}</span>
+                  <span className={css.rowMeta}>{r.deviceText} · <Time stamp={stamp(r, "created_at")} /></span>
                 </div>
                 <span className={css.code}>{r.code}</span>
                 {lock.signs && <Button variant="primary" onClick={() => setChecking(r)}>{t("web-pages.security.check")}</Button>}
@@ -126,7 +119,7 @@ function On({ entry, lock }: { entry: WorkspaceEntry; lock: LockView }) {
         <div className={pagesCss.card}><div className={css.rows}>
           {lock.members.map((m) => (
             <div key={m.sub} className={css.rows}>
-              <div className={css.row}><div className={css.rowText}><span className={css.rowName}>{m.name || m.email}</span><span className={css.rowMeta}>{roleName(m.role)}</span></div></div>
+              <div className={css.row}><div className={css.rowText}><span className={css.rowName}>{m.nameText}</span><span className={css.rowMeta}>{m.roleText}</span></div></div>
               {m.devices.length > 0 && <div className={css.devices}>
                 {m.devices.map((d) => <DeviceRow key={d.id} entry={entry} d={d} canRenew={lock.signs} />)}
               </div>}
@@ -203,17 +196,10 @@ function DeviceRow({ entry, d, canRenew }: { entry: WorkspaceEntry; d: LockDevic
   const call = useCall();
   const act = useAct();
   const renewing = useDoing("lock.renew", { workspace: entry.id, device: d.id });
-  const meta = [
-    d.kind === "web" ? t("web-pages.security.web") : t("web-pages.security.app"),
-    d.signs ? t("web-pages.security.signs") : null,
-    d.mine ? t("web-pages.security.thisDevice") : null,
-    d.daysLeft != null ? t("web-pages.security.daysLeft", { n: d.daysLeft }) : null,
-    d.recent ? t("web-pages.security.recent") : null,
-  ].filter(Boolean).join(" · ");
   return (
     <div className={css.row}>
       <DeviceIcon d={d} />
-      <div className={css.rowText}><span>{deviceName(d)}</span><span className={d.renewSoon ? css.warn : css.rowMeta}>{meta}</span></div>
+      <div className={css.rowText}><span>{d.nameText}</span><span className={d.renewSoon ? css.warn : css.rowMeta}>{d.metaText}</span></div>
       {d.daysLeft != null && canRenew && <Button variant="ghost" busy={renewing} onClick={() => act(call("lock.renew", { workspace: entry.id, device: d.id }), t("web-pages.security.renew"), t("web-pages.security.renewed"))}>{t("web-pages.security.renew")}</Button>}
     </div>
   );
@@ -225,8 +211,8 @@ function ConfirmDevice({ entry, request, onClose }: { entry: WorkspaceEntry; req
   const act = useAct();
   const r = request;
   return (
-    <Dialog open={r !== null} onClose={onClose} title={r ? t("web-pages.security.confirmTitle", { name: r.name || r.email }) : ""}
-      description={r ? t("web-pages.security.confirmBody", { device: deviceName(r), name: r.name || r.email }) : ""}
+    <Dialog open={r !== null} onClose={onClose} title={r ? t("web-pages.security.confirmTitle", { name: r.whoText }) : ""}
+      description={r ? t("web-pages.security.confirmBody", { device: r.deviceText, name: r.whoText }) : ""}
       footer={r && <>
         <Button variant="ghost" onClick={() => { onClose(); act(call("lock.deny", { workspace: entry.id, device: r.device }), t("web-pages.security.denyDevice")); }}>{t("web-pages.security.deny")}</Button>
         <Button variant="primary" onClick={() => { onClose(); act(call("lock.confirm", { workspace: entry.id, device: r.device, code: r.code }), t("web-pages.security.confirmDevice"), t("web-pages.security.confirmed")); }}>{t("web-pages.security.confirm")}</Button>
@@ -241,14 +227,16 @@ function ConfirmDevice({ entry, request, onClose }: { entry: WorkspaceEntry; req
 
 /** A new device met face to face, showing a code of this one's to type there (the core's `lockPrompts`): put up wherever
  * the person is, the workspaces it asks to be let into named first. Nothing here approves it: only the code typed on
- * the new device does. Closed or turned away (`lockPrompt.deny`), the code is worth nothing; done there, it goes. */
+ * the new device does. Turned away (`lockPrompt.deny`), the code is worth nothing; closed (`lockPrompt.hide`), it is
+ * no longer shown and the code still holds, read by then; done there, it goes. */
 export function SecurityPrompt() {
   const call = useCall();
   const r = useLockPrompts()?.pairing[0] ?? null;
   const deny = () => { if (r) void call("lockPrompt.deny", { device: r.device }); };
+  const hide = () => { if (r) void call("lockPrompt.hide", { device: r.device }); };
   return (
-    <Dialog open={r !== null} onClose={deny} title={r ? t("web-pages.security.pairTitle", { name: r.name || r.email }) : ""}
-      description={r ? t("web-pages.security.pairBody", { device: deviceName(r) }) : ""}
+    <Dialog open={r !== null} onClose={hide} title={r ? t("web-pages.security.pairTitle", { name: r.name || r.email }) : ""}
+      description={r ? t("web-pages.security.pairBody", { device: r.deviceText }) : ""}
       footer={r && <Button variant="ghost" onClick={deny}>{t("web-pages.security.pairDeny")}</Button>}>
       {r && <>
         <PromptPlaces r={r} />
@@ -322,7 +310,7 @@ export function SecurityOpen({ entry }: { entry: WorkspaceEntry }) {
       {head}
       <Section title={t("web-pages.security.members")} actions={<span className={css.rowMeta}>{t("web-pages.security.peopleCount", { n: draft.members.length })}</span>}>
         <div className={pagesCss.card}><div className={css.rows}>
-          {draft.members.map((m) => <div key={m.sub} className={css.row}><div className={css.rowText}><span className={css.rowName}>{m.name || m.email}</span><span className={css.rowMeta}>{m.email}</span></div><span className={css.rowMeta}>{roleName(m.role)}</span></div>)}
+          {draft.members.map((m) => <div key={m.sub} className={css.row}><div className={css.rowText}><span className={css.rowName}>{m.nameText}</span><span className={css.rowMeta}>{m.email}</span></div><span className={css.rowMeta}>{m.roleText}</span></div>)}
         </div></div>
       </Section>
       <Section title={t("web-pages.security.devices")} actions={<span className={css.rowMeta}>{t("web-pages.security.devicesWhich")}</span>}>
@@ -330,8 +318,8 @@ export function SecurityOpen({ entry }: { entry: WorkspaceEntry }) {
           {draft.devices.map((d) => (
             <label key={d.id} className={css.row}>
               <input type="checkbox" className={css.check} checked={d.on} disabled={d.fixed} onChange={() => toggle(d.id)} />
-              <div className={css.rowText}><span className={css.rowName}>{d.person} · {d.current ? t("web-pages.security.thisDevice") : deviceName(d)}</span>
-                <span className={css.rowMeta}>{d.older ? t("web-pages.security.olderHow") : d.kind === "web" ? t("web-pages.security.web") : t("web-pages.security.app")}{d.current && d.kind === "app" ? ` · ${t("web-pages.security.signs")}` : ""}</span></div>
+              <div className={css.rowText}><span className={css.rowName}>{d.nameText}</span>
+                <span className={css.rowMeta}>{d.howText}</span></div>
               <span className={css.rowMeta}><Time stamp={stamp(d, "last_seen")} /></span>
             </label>
           ))}
@@ -343,7 +331,7 @@ export function SecurityOpen({ entry }: { entry: WorkspaceEntry }) {
             <label key={s.id} className={css.row}>
               <input type="checkbox" className={css.check} checked={s.on} disabled={s.fixed} onChange={() => toggle(s.id)} />
               <div className={css.rowText}><span className={css.rowName}><StationNamedAt station={`${entry.id}/${s.id}`} name={s.name} /></span>
-                {s.state !== "ok" && <span className={css.rowMeta}>{s.state === "asking" ? t("web-pages.security.asking") : s.state === "old" ? t("web-pages.security.tooOld") : t("web-pages.security.offline")}</span>}</div>
+                {s.stateText && <span className={css.rowMeta}>{s.stateText}</span>}</div>
               {s.version && <span className={s.state === "old" ? css.warn : css.rowMeta}>{s.version}</span>}
             </label>
           ))}

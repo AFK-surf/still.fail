@@ -1,8 +1,8 @@
 // What words the last frame drew and where, a line at a time: the words of the line (the spaces it ends or starts in
 // left out), the left of its first letter and the right of its last, its baseline, its line's top and bottom, in
 // points. Words are compared by where they stand, not by their pixels (a line set a fraction of a pixel apart differs
-// in every pixel along its edges, which says nothing of what is wrong but that): Tester::text_runs, and still.fail's
-// screens held to Android's app line by line (apps/mbui/scripts/android_ref.py texts). Kept only under a Tester.
+// in every pixel along its edges, which says nothing of what is wrong but that): Tester::text_runs. Kept only under a
+// Tester.
 
 ///|
 /// A line of words drawn (Tester::text_runs), in points.

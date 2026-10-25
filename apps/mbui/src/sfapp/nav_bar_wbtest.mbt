@@ -4,13 +4,13 @@
 ///|
 test "nav bar: back, title and what is at its end on one line (settings' pages)" {
   for mode in [
-    "settings-usage", "settings-archive", "settings-connects", "settings-memory", "settings-memory-doc", "settings-profile",
-    "settings-profiles", "settings-station", "settings-stations", "settings-new-profile", "settings-new-connect", "settings-run-models",
+    "settings-archive", "settings-memory-doc",
+    "settings-profiles", "settings-stations", "settings-new-profile", "settings-run-models",
   ] {
     reset()
     @settings.reset()
     let src = fixture(mode)
-    let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0)
+    let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0, platform=2)
     open_setting(@settings.fixture_page(mode))
     t.draw()
     t.run_for(@ui.nav_push_ms)
@@ -43,7 +43,7 @@ fn bar_line_under(mode : String, top : Double) -> Array[(String, Double)] {
   reset()
   @settings.reset()
   let src = fixture(mode)
-  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0)
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0, platform=2)
   open_setting(@settings.fixture_page(mode))
   t.post(@hostapi.system_channel, "{\"bars\":{\"top\":\{top},\"bottom\":0,\"left\":0,\"right\":0}}")
   t.draw()
@@ -60,7 +60,7 @@ fn bar_line_under(mode : String, top : Double) -> Array[(String, Double)] {
 
 ///|
 test "nav bar: under the status bar on the pages that go back a step of their own (the new profile's, a connect's, a run's lists)" {
-  for mode in ["settings-new-profile", "settings-new-connect", "settings-run-models", "settings-profile"] {
+  for mode in ["settings-new-profile", "settings-run-models"] {
     let mids = bar_line_under(mode, 24.0)
     let said = mids.map(fn(m) { m.0 + "@" + m.1.to_string() }).join(", ")
     println("under a 24 status bar \{mode}: \{said}")

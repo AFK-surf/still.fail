@@ -69,7 +69,7 @@ static size_t last_cap;
 static float last_bg[3];
 
 // the numbers of an instance (src/ui/scene.mbt)
-#define MB_INST 36
+#define MB_INST 52
 
 static const char *shader_src =
     "cbuffer U : register(b0) { float2 vp; float scale; float pad; };\n"
@@ -79,17 +79,18 @@ static const char *shader_src =
     "Texture2D atlas : register(t0);\n"
     "Texture2D img : register(t1);\n"
     "Texture2D bd : register(t2);\n"
-    "// the pieces of the frame's shapes (src/ui/shape.mbt: the instances of kind 12 after every one drawn), 9 fours each\n"
+    "// the pieces of the frame's shapes (src/ui/shape.mbt: the instances of kind 12 after every one drawn), 13 fours each\n"
     "Buffer<float4> segs : register(t3);\n"
     "SamplerState samp : register(s0);\n"
     "struct VIn { float4 rect : INST0; float4 p : INST1; float4 color : INST2; float4 c2 : INST3;\n"
     "  float4 clip : INST4; float4 pd : INST5; float4 rc : INST6; float4 rs : INST7; float4 rot : INST8;\n"
-    "  uint vid : SV_VertexID; };\n"
+    "  float4 rr : INST9; float4 oclip : INST10; float4 orc : INST11; float4 ors : INST12; uint vid : SV_VertexID; };\n"
     "struct VOut { float4 pos : SV_Position; float2 p : POS; float2 cp : CPOS;\n"
     "  nointerpolation float4 rect : INST0; nointerpolation float4 prm : INST1;\n"
     "  nointerpolation float4 color : INST2; nointerpolation float4 c2 : INST3;\n"
     "  nointerpolation float4 clip : INST4; nointerpolation float4 pd : INST5; nointerpolation float4 rc : INST6;\n"
-    "  nointerpolation float4 rs : INST7; };\n"
+    "  nointerpolation float4 rs : INST7; nointerpolation float4 rr : INST8;\n"
+    "  nointerpolation float4 oclip : INST9; nointerpolation float4 orc : INST10; nointerpolation float4 ors : INST11; };\n"
     "VOut vmain(VIn I) {\n"
     "  uint vid = I.vid;\n"
     "  float2 corner = float2((vid == 1 || vid == 4 || vid == 5) ? 1.0 : 0.0,\n"
@@ -107,13 +108,14 @@ static const char *shader_src =
     "    at = I.rot.yz + float2(c * d.x - s * d.y, s * d.x + c * d.y); }\n"
     "  VOut o;\n"
     "  o.pos = float4(at.x / vp.x * 2.0 - 1.0, 1.0 - at.y / vp.y * 2.0, 0.0, 1.0);\n"
-    "  o.p = pos; o.cp = I.rot.w > 0.5 ? at : pos; o.rect = I.rect; o.prm = I.p; o.color = I.color; o.c2 = I.c2; o.clip = I.clip; o.pd = I.pd; o.rc = I.rc; o.rs = I.rs;\n"
+    "  o.p = pos; o.cp = I.rot.w > 0.5 ? at : pos; o.rect = I.rect; o.prm = I.p; o.color = I.color; o.c2 = I.c2; o.clip = I.clip; o.pd = I.pd; o.rc = I.rc; o.rs = I.rs; o.rr = I.rr;\n"
+    "  o.oclip = I.oclip; o.orc = I.orc; o.ors = I.ors;\n"
     "  return o;\n"
     "}\n"
     MB_CORNER_SL
-    "float sd_rr(float2 p, float4 r, float rad) {\n"
+    "float sd_rr(float2 p, float4 r, float4 rad) {\n"
     "  float2 hs = r.zw * 0.5;\n"
-    "  return mb_sd_box(p - r.xy - hs, hs, rad, 1e9);\n"
+    "  return mb_sd_box(p - r.xy - hs, hs, mb_corner_of(p - r.xy - hs, rad), 1e9);\n"
     "}\n"
     "// a notch cut into the top edge (scene.mbt 21-23): a circle about the top's middle (pad.y below it, pad.z its radius),\n"
     "// met by the edge through fillets (pad.w): the rounded intersection with what is outside the circle\n"
@@ -134,7 +136,7 @@ static const char *shader_src =
     "  int n = int(gmisc.x + 0.5);\n"
     "  [loop] for (int i = 0; i < 8; i++) {\n"
     "    if (i >= n) break;\n"
-    "    d = smin_k(d, sd_rr(p, gshape[i], grad[i].x), k);\n"
+    "    d = smin_k(d, sd_rr(p, gshape[i], grad[i].xxxx), k);\n"
     "  }\n"
     "  return d;\n"
     "}\n"
@@ -161,8 +163,13 @@ static const char *shader_src =
     "    cover = clip_cover(cp, I.clip, I.rc, I.rs, scale);\n"
     "    if (cover <= 0.0) discard;\n"
     "  } else if (cp.x < I.clip.x || cp.y < I.clip.y || cp.x > I.clip.z || cp.y > I.clip.w) discard;\n"
+    "  // and by the clip outside it, where it has one (scene.mbt 40-51: a pane round an image's frame in its corner)\n"
+    "  if (max(max(I.orc.x, I.orc.y), max(I.orc.z, I.orc.w)) > 0.0) {\n"
+    "    cover *= clip_cover(cp, I.oclip, I.orc, I.ors, scale);\n"
+    "    if (cover <= 0.0) discard;\n"
+    "  }\n"
     "  int kind = int(I.prm.y + 0.5);\n"
-    "  if (kind == 9) { float2 hh = I.rect.zw * 0.5; float rr = min(I.prm.x, min(hh.x, hh.y)); float2 q = abs(p - I.rect.xy - hh) - hh + rr; if (length(max(q, 0.0)) + min(max(q.x, q.y), 0.0) - rr > 0.0) discard; return (float4(0.0, 0.0, 0.0, 0.0)) * cover; }\n"
+    "  if (kind == 9) { float2 hh = I.rect.zw * 0.5; float rr = min(mb_corner_of(p - I.rect.xy - hh, I.rr), min(hh.x, hh.y)); float2 q = abs(p - I.rect.xy - hh) - hh + rr; if (length(max(q, 0.0)) + min(max(q.x, q.y), 0.0) - rr > 0.0) discard; return (float4(0.0, 0.0, 0.0, 0.0)) * cover; }\n"
     "  float4 col = I.color;\n"
     "  if (kind == 11) {\n"
     "    // a band of a shape (src/ui/shape.mbt): c2.y of its pieces from c2.x; prm.x half its stroke's width (0: a fill,\n"
@@ -171,11 +178,11 @@ static const char *shader_src =
     "    float a;\n"
     "    if (I.prm.x > 0.0) {\n"
     "      float d = 1e9;\n"
-    "      for (int i = first; i < first + n; i++) d = min(d, mb_seg_dist(segs.Load((i / 6) * 9 + mb_seg_slot(i)), I.rect, p));\n"
+    "      for (int i = first; i < first + n; i++) d = min(d, mb_seg_dist(segs.Load((i / 6) * 13 + mb_seg_slot(i)), I.rect, p));\n"
     "      a = saturate(0.5 - (d - I.prm.x) * scale);\n"
     "    } else {\n"
     "      float4 w = float4(0.0, 0.0, 0.0, 0.0);\n"
-    "      for (int i = first; i < first + n; i++) w += mb_path_rows(segs.Load((i / 6) * 9 + mb_seg_slot(i)), I.rect, p, scale);\n"
+    "      for (int i = first; i < first + n; i++) w += mb_path_rows(segs.Load((i / 6) * 13 + mb_seg_slot(i)), I.rect, p, scale);\n"
     "      a = mb_path_cover(w, I.c2.z);\n"
     "    }\n"
     "    return (float4(col.rgb, 1.0) * col.a * a) * cover;\n"
@@ -188,7 +195,10 @@ static const char *shader_src =
     "    return (float4(col.rgb, 1.0) * col.a * saturate(0.5 - d * scale)) * cover;\n"
     "  }\n"
     "  if (kind == 1 || kind == 3 || kind == 7) {\n"
-    "    float2 uv = (I.c2.xy + (p - I.rect.xy) / I.rect.zw * I.c2.zw) / 2048.0;\n"
+    "    // within its own cell (c2: where in the atlas, in texels), however its rect is stretched or turned: a sample\n"
+    "    // past the cell's edge texels would blend in what lies beside it (another glyph, one left from before the atlas\n"
+    "    // started over)\n"
+    "    float2 uv = clamp(I.c2.xy + (p - I.rect.xy) / I.rect.zw * I.c2.zw, I.c2.xy + 0.5, I.c2.xy + I.c2.zw - 0.5) / 2048.0;\n"
     "    float4 t = atlas.SampleLevel(samp, uv, 0);\n"
     "    if (kind == 1) return (float4(col.rgb, 1.0) * (t.a * col.a)) * cover;\n"
     "    if (kind == 7) {\n"
@@ -228,13 +238,16 @@ static const char *shader_src =
     "    // the edge shaded, more on the side away from the light, so the shape reads over a light ground too\n"
     "    c *= 1.0 - I.c2.x * band * (0.1 + 0.25 * max(-ndl, 0.0));\n"
     "    c = c + (1.0 - c) * saturate(spec);\n"
+    "    c += mb_dither(p * scale) / 255.0;\n"
     "    return (float4(c, 1.0) * (a * I.c2.w)) * cover;\n"
     "  }\n"
     "  float2 hs = I.rect.zw * 0.5;\n"
     "  float2 c = I.rect.xy + hs;\n"
     "  // worked out as near the curve as its cover, its edge or its blur reaches\n"
     "  float band = 1.0 + 2.0 / scale + (kind == 2 ? max(I.prm.w, 0.5) : max(I.prm.z, 0.0));\n"
-    "  float d = mb_sd_box(p - c, hs, I.prm.x, band);\n"
+    "  // (its corner by p: rr, each its own)\n"
+    "  float rad = mb_corner_of(p - c, I.rr);\n"
+    "  float d = mb_sd_box(p - c, hs, rad, band);\n"
     "  if (kind == 0 || kind == 5) d = notch_cut(d, p, I.rect, I.pd);\n"
     "  if (kind == 4) {\n"
     "    float2 uv = I.c2.xy + saturate((p - I.rect.xy) / I.rect.zw) * I.c2.zw;\n"
@@ -242,10 +255,11 @@ static const char *shader_src =
     "  }\n"
     "  if (kind == 2) {\n"
     "    // as Core Animation's: the shape blurred, sigma its radius (corner.sl mb_shadow)\n"
-    "    float a = mb_shadow(p - c, hs, I.prm.x, max(I.prm.w, 0.25));\n"
+    "    float a = mb_shadow(p - c, hs, rad, max(I.prm.w, 0.25));\n"
     "    // glass's: only outside its box (c2.y above it)\n"
     "    if (I.c2.x > 0.5) {\n"
-    "      float db = mb_sd_box(p - c + float2(0.0, I.c2.y), hs, I.prm.x, band);\n"
+    "      float2 q = p - c + float2(0.0, I.c2.y);\n"
+    "      float db = mb_sd_box(q, hs, mb_corner_of(q, I.rr), band);\n"
     "      a *= saturate(0.5 + db * scale);\n"
     "    }\n"
     "    return (float4(col.rgb, 1.0) * col.a * a) * cover;\n"
@@ -260,12 +274,14 @@ static const char *shader_src =
     "    g3 = g3 * (1.0 - col.a) + col.rgb * col.a;\n"
     "    if (I.c2.x + I.c2.y + I.c2.z > 0.0) {\n"
     "      float edge = saturate(0.5 + (d + 0.5) * scale);\n"
-    "      float lit = saturate(0.5 + notch_cut(sd_rr(p - 0.5, I.rect, I.prm.x), p - 0.5, I.rect, I.pd) * scale);\n"
-    "      float back = saturate(0.5 + notch_cut(sd_rr(p + 0.5, I.rect, I.prm.x), p + 0.5, I.rect, I.pd) * scale);\n"
+    "      float lit = saturate(0.5 + notch_cut(sd_rr(p - 0.5, I.rect, I.rr), p - 0.5, I.rect, I.pd) * scale);\n"
+    "      float back = saturate(0.5 + notch_cut(sd_rr(p + 0.5, I.rect, I.rr), p + 0.5, I.rect, I.pd) * scale);\n"
     "      g3 = lerp(g3, float3(1.0, 1.0, 1.0), I.c2.x * edge);\n"
     "      g3 = lerp(g3, float3(1.0, 1.0, 1.0), I.c2.y * lit);\n"
     "      g3 = lerp(g3, float3(1.0, 1.0, 1.0), I.c2.z * back);\n"
     "    }\n"
+    "    // dithered as it is written to 8 bits, so its slopes do not band (corner.sl mb_dither)\n"
+    "    g3 += mb_dither(p * scale) / 255.0;\n"
     "    return (float4(g3, 1.0) * (a * I.c2.w)) * cover;\n"
     "  }\n"
     "  float4 fill = float4(col.rgb, 1.0) * col.a;\n"
@@ -424,12 +440,12 @@ static void make_pipeline(void) {
   ID3DBlob *vcode = compile("vmain", "vs_4_0"), *pcode = compile("fmain", "ps_4_0");
   dev->CreateVertexShader(vcode->GetBufferPointer(), vcode->GetBufferSize(), NULL, &vs);
   dev->CreatePixelShader(pcode->GetBufferPointer(), pcode->GetBufferSize(), NULL, &ps);
-  // the instance's nine float4s (scene.mbt): rect, p, color, c2, clip, pad, the clip's corners' radii, how smooth, how
-  // it is turned
-  D3D11_INPUT_ELEMENT_DESC el[9];
-  for (UINT i = 0; i < 9; i++)
+  // the instance's thirteen float4s (scene.mbt): rect, p, color, c2, clip, pad, the clip's corners' radii, how smooth,
+  // how it is turned, a box's corners' radii, the outer clip's rect, corners' radii and how smooth
+  D3D11_INPUT_ELEMENT_DESC el[13];
+  for (UINT i = 0; i < 13; i++)
     el[i] = {"INST", i, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, i * 16, D3D11_INPUT_PER_INSTANCE_DATA, 1};
-  dev->CreateInputLayout(el, 9, vcode->GetBufferPointer(), vcode->GetBufferSize(), &layout);
+  dev->CreateInputLayout(el, 13, vcode->GetBufferPointer(), vcode->GetBufferSize(), &layout);
   vcode->Release();
   pcode->Release();
   ID3DBlob *pv = compile("vpost", "vs_4_0", post_src), *pp = compile("fpost", "ps_4_0", post_src);
@@ -514,15 +530,18 @@ void mb_atlas_upload(int x, int y, int w, int h, const void *rgba) {
 // Glass: when the instances reach a run of glass (slot 20 negative: the capture it shares), what is drawn so far
 // under it (its rects with room for the blur round them) is copied out, halved down to where the blur is a few texels
 // wide (dual Kawase's downsample, at most 1/8), blurred there by a Gaussian of what deviation is left, and drawn
-// through.
+// through. Level 0, the copy, has 8 bits a channel as the target has; what the passes write keeps 10 (R10G10B10A2, in
+// as many bytes): at 8 each pass rounds the frost's slow slopes into flat steps, a texel of the last level 8 pixels
+// wide on the screen (a blur under 4 pixels, too narrow to halve, is written back into the copy: it leaves no slope
+// that wide).
 
-static level level_tex(int w, int h) {
+static level level_tex(DXGI_FORMAT format, int w, int h) {
   level l = {NULL, NULL, NULL, w > 0 ? w : 1, h > 0 ? h : 1};
   D3D11_TEXTURE2D_DESC td = {};
   td.Width = (UINT)l.w;
   td.Height = (UINT)l.h;
   td.MipLevels = td.ArraySize = 1;
-  td.Format = DXGI_FORMAT_B8G8R8A8_UNORM;
+  td.Format = format;
   td.SampleDesc.Count = 1;
   td.Usage = D3D11_USAGE_DEFAULT;
   td.BindFlags = D3D11_BIND_RENDER_TARGET | D3D11_BIND_SHADER_RESOURCE;
@@ -542,8 +561,10 @@ static void ensure_levels(int w, int h) {
     }
   lv_w = w > lv_w ? w : lv_w;
   lv_h = h > lv_h ? h : lv_h;
-  for (int j = 0; j < 4; j++) lv[j] = level_tex((lv_w + (1 << j) - 1) >> j, (lv_h + (1 << j) - 1) >> j);
-  lv[4] = level_tex(lv_w, lv_h);
+  for (int j = 0; j < 4; j++)
+    lv[j] = level_tex(j == 0 ? DXGI_FORMAT_B8G8R8A8_UNORM : DXGI_FORMAT_R10G10B10A2_UNORM, (lv_w + (1 << j) - 1) >> j,
+                      (lv_h + (1 << j) - 1) >> j);
+  lv[4] = level_tex(DXGI_FORMAT_R10G10B10A2_UNORM, lv_w, lv_h);
 }
 
 static void post_pass(level *src, int sw, int sh, level *dst, int w, int h, int mode, float sg, float dx, float dy) {
@@ -646,7 +667,7 @@ static int capture(ID3D11RenderTargetView *target, int pw, int ph, const float *
 }
 
 // The pieces of the frame's shapes (src/ui/shape.mbt: the instances of kind 12 after every one drawn), for the pixel
-// shader to read (segs, t3): as they are, 9 fours an instance.
+// shader to read (segs, t3): as they are, 13 fours an instance.
 static ID3D11Buffer *segs_buf;
 static ID3D11ShaderResourceView *segs_srv;
 static size_t segs_cap;
@@ -738,10 +759,12 @@ static void encode(ID3D11RenderTargetView *target, int pw, int ph, int32_t count
     int hole = (int)(f[start * MB_INST + 5] + 0.5f) == 9;
     end = start + 1;
     while (end < count && (int)f[end * MB_INST + 20] == tid && ((int)(f[end * MB_INST + 5] + 0.5f) == 9) == hole) end++;
-    ID3D11ShaderResourceView *t = tid > MB_STREAM_TEX ? (ID3D11ShaderResourceView *)mb_stream_srv(tid - MB_STREAM_TEX)
+    // (a hole's image is its view's, src/hostapi/host.mbt view_tex_base + its id: the view is under the canvas here)
+    ID3D11ShaderResourceView *t = hole ? atlas_srv
+                                  : tid > MB_STREAM_TEX ? (ID3D11ShaderResourceView *)mb_stream_srv(tid - MB_STREAM_TEX)
                                   : tid ? (ID3D11ShaderResourceView *)mb_image_srv(tid) : atlas_srv;
     // (a stream with no frame of its own yet: nothing, not the atlas)
-    if (tid > MB_STREAM_TEX && !t) {
+    if (!hole && tid > MB_STREAM_TEX && !t) {
       start = end;
       continue;
     }

@@ -11,7 +11,7 @@
 //
 // JSON is read with JSON.parse, so a value shows as JavaScript has it: a number written `1.0` shows `1`, a key that is
 // an integer comes first, a number past 2^53 rounds (serde_json keeps each as written). Transcripts rarely have them.
-import { closeSync, existsSync, openSync, readdirSync, readSync, statSync } from "node:fs";
+import { closeSync, existsSync, openSync, readdirSync, readSync, realpathSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { zstdDecompressSync } from "node:zlib";
 import { tr } from "./spoken.ts";
@@ -75,6 +75,14 @@ function withBrief(e: TimelineEntry, input: Json | undefined): TimelineEntry {
   return e;
 }
 
+/// Lines' bytes as text (str::from_utf8_lossy): a byte order mark stays, so a line starting with one is no record however
+/// lines are cut into what is decoded at once (here a line at a time, read/tail.ts a piece).
+export const utf8 = new TextDecoder("utf-8", { ignoreBOM: true });
+
+/// How lines are read into entries (`timelineOf`): a change to how many entries a line gives, or which, takes this one
+/// higher, so what was counted and marked of transcripts the way before is read anew (read/transcripts.ts).
+export const READING = 1;
+
 /**
  * An entry as an execution history shows it before it is opened (`brief: true` when anything was left out; the whole of
  * it is read again by its index when it is): a call by what says what it does, a result without what it gave (Slack's
@@ -105,7 +113,7 @@ export function brief(e: TimelineEntry): TimelineEntry {
 }
 
 /// archive.rs `storage`: the file, or its `.zst` once put away.
-const storage = (path: string) => (existsSync(path) ? path : `${path}.zst`);
+export const storage = (path: string) => (existsSync(path) ? path : `${path}.zst`);
 const isFile = (path: string) => {
   try {
     return statSync(path).isFile();
@@ -128,18 +136,62 @@ const entriesOf = (dir: string): string[] | null => {
   }
 };
 
-/// transcript_path: where a runtime keeps a session's transcript, if it is there.
+/// Where in a home a runtime keeps its transcripts: Claude Code's projects/, Codex's sessions/, DeepSeek Harness's
+/// dsh-sessions/ as dsh.ts sets it, Grok Build's grok/sessions/, Cursor's and Devin's cursor/sessions/ and devin/sessions/
+/// as cursor.ts and devin.ts keep them. In a home the station keeps it is a link to the runtime's shared place
+/// (`sharedTranscripts`, sessions/agent-home.ts `linkTranscripts`).
+export const transcriptDir = (runtime: string) => (runtime === "claude" ? "projects" : runtime === "codex" ? "sessions" : runtime === "grok" ? "grok/sessions" : runtime === "cursor" ? "cursor/sessions" : runtime === "devin" ? "devin/sessions" : runtime === "hermes" ? "hermes/sessions" : "dsh-sessions");
+
+/// The one place a runtime's transcripts are kept on the station, whichever account's home wrote them.
+export const sharedTranscripts = (dataDir: string, runtime: string) => join(dataDir, "transcripts", runtime);
+
+/// transcript_path: where a runtime keeps a session's transcript in a home, if it is there.
 export function transcriptPath(runtime: RuntimeKind, home: string, id: string): string | null {
-  if (runtime === "dsh") return dshTranscript(home, id);
-  if (runtime === "grok") return grokTranscript(home, id);
-  if (runtime === "cursor" || runtime === "devin") {
-    const path = join(home, runtime, "sessions", `${id}.jsonl`);
+  return transcriptIn(runtime, join(home, transcriptDir(runtime)), id);
+}
+
+/// The directory Claude Code keeps a working directory's transcripts in, in projects/ (its sanitizePath): each character
+/// but an ASCII letter or digit a dash. Past 200 characters it shortens the name and adds a hash of it: none said.
+export function claudeProject(cwd: string): string | null {
+  const name = cwd.replace(/[^a-zA-Z0-9]/g, "-");
+  return name.length <= 200 ? name : null;
+}
+
+/// Where a Claude session's transcript is in a directory of them when it ran in one of `places` (the session's working
+/// directories): looked for there alone, a file or two, not in every project's directory (the shared place has one for
+/// each chat the station ever had: 923 on ccvm, each looked at in turn on the main thread).
+function placedIn(runtime: RuntimeKind, dir: string, id: string, places: readonly string[]): string | null {
+  if (runtime !== "claude") return null;
+  for (const place of places) {
+    const project = claudeProject(place);
+    if (project === null) continue;
+    const path = join(dir, project, `${id}.jsonl`);
+    if (isFile(storage(path))) return path;
+  }
+  return null;
+}
+
+/// The Claude transcripts found in a project not of their session's places (it ran before the data directory moved, or
+/// in a terminal's directory), by directory and id: a transcript stays where it is (put away, its `.zst` beside), so each
+/// is looked for in every project once a process.
+const elsewhere = new Map<string, string>();
+
+/// Where a session's transcript is in a directory of the runtime's transcripts (a home's, `transcriptDir`, or the shared
+/// place), if it is there.
+function transcriptIn(runtime: RuntimeKind, dir: string, id: string): string | null {
+  if (runtime === "dsh") return dshTranscript(dir, id);
+  if (runtime === "grok") return grokTranscript(dir, id);
+  if (runtime === "cursor" || runtime === "devin" || runtime === "hermes") {
+    const path = join(dir, `${id}.jsonl`);
     return isFile(storage(path)) ? path : null;
   }
   if (runtime === "claude") {
-    for (const dir of entriesOf(join(home, "projects")) ?? []) {
-      const path = join(home, "projects", dir, `${id}.jsonl`);
-      if (isFile(storage(path))) return path;
+    const at = `${dir}\0${id}`;
+    const kept = elsewhere.get(at);
+    if (kept !== undefined && isFile(storage(kept))) return kept;
+    for (const project of entriesOf(dir) ?? []) {
+      const path = join(dir, project, `${id}.jsonl`);
+      if (isFile(storage(path))) return (elsewhere.set(at, path), path);
     }
     return null;
   }
@@ -157,13 +209,12 @@ export function transcriptPath(runtime: RuntimeKind, home: string, id: string): 
     }
     return null;
   };
-  return find(join(home, "sessions"));
+  return find(dir);
 }
 
 /// dsh's: the session's directory holds one file per format it was written in (session.v<N>.jsonl); the current is the
 /// highest N. Its directory is under one named for its working directory (any).
-function dshTranscript(home: string, id: string): string | null {
-  const root = join(home, "dsh-sessions");
+function dshTranscript(root: string, id: string): string | null {
   for (const dir of entriesOf(root) ?? []) {
     const files = (entriesOf(join(root, dir, id)) ?? [])
       .map((name) => [name, /^session\.v(\d+)\.jsonl$/.exec(name)?.[1]] as const)
@@ -174,9 +225,8 @@ function dshTranscript(home: string, id: string): string | null {
   return null;
 }
 
-/// Grok Build's: its home's sessions/<working directory, escaped>/<id>/chat_history.jsonl (agents/grok.ts).
-function grokTranscript(home: string, id: string): string | null {
-  const root = join(home, "grok", "sessions");
+/// Grok Build's: sessions/<working directory, escaped>/<id>/chat_history.jsonl in its home (agents/grok.ts).
+function grokTranscript(root: string, id: string): string | null {
   for (const dir of entriesOf(root) ?? []) {
     const path = join(root, dir, id, "chat_history.jsonl");
     if (isFile(storage(path))) return path;
@@ -184,20 +234,55 @@ function grokTranscript(home: string, id: string): string | null {
   return null;
 }
 
-/// The transcripts of a session's runtime sessions (`ids`, the first first, ending with its current one), each looked
-/// for in the homes given (its profile's first): a runtime session that ran on another account may have written into
-/// that account's home (one whose transcript directory is not the shared one, agent-home.ts `linkTranscripts`).
-/// `current` is whether the current one's is there: a runtime writes it only once its conversation has begun.
-export function transcriptPaths(runtime: RuntimeKind, homes: string[], ids: string[]): { paths: string[]; current: boolean } {
-  const found = ids.map((id) => {
-    for (const home of homes) {
-      const path = transcriptPath(runtime, home, id);
+/// Profiles' homes, `first`'s (a session's profile, if it still has one) first.
+export const homesFirst = (profiles: readonly { id: string; home: string }[], first: string | null): string[] => [
+  ...profiles.filter((p) => p.id === first).map((p) => p.home),
+  ...profiles.filter((p) => p.id !== first).map((p) => p.home),
+];
+
+/// The transcripts of a session's runtime sessions (`ids`, the first first, ending with its current one): each looked
+/// for in the runtime's shared place in data directory `dataDir`, where every home the station keeps has its runtimes
+/// write them, whichever account and home a runtime session ran on and whatever the config says now; then in each of
+/// `homes` (its profile's first) for a home that keeps its own (one outside the data directory that had transcripts in
+/// it before it was a profile's, agent-home.ts `linkTranscripts`). `current` is whether the current one's is there: a
+/// runtime writes it only once its conversation has begun. `places`: where the session works and worked (`sessionPlaces`),
+/// where a Claude transcript is looked for first, in every directory, before anywhere else in them.
+export function transcriptPaths(runtime: RuntimeKind, dataDir: string, homes: string[], ids: string[], places: readonly string[] = []): { paths: string[]; current: boolean } {
+  // Each directory once, however it is reached (a home's that links to the shared place is that place), the homes' made
+  // out only once one is to be looked in: nearly every transcript is in the shared place, the first.
+  const shared = sharedTranscripts(dataDir, runtime);
+  const ways = homes.map((home) => join(home, transcriptDir(runtime)));
+  const real = (dir: string): string | null => {
+    try {
+      return realpathSync(dir);
+    } catch {
+      return null;
+    }
+  };
+  let seen: Set<string> | null = null;
+  const dirs = [shared];
+  const dirAt = (i: number): string | undefined => {
+    while (dirs.length <= i && ways.length > 0) {
+      seen ??= new Set([real(shared) ?? shared]);
+      const dir = ways.shift()!;
+      const at = real(dir);
+      if (at !== null && !seen.has(at)) (seen.add(at), dirs.push(dir));
+    }
+    return dirs[i];
+  };
+  const inDirs = (look: (dir: string) => string | null): string | null => {
+    for (let i = 0; dirAt(i) !== undefined; i++) {
+      const path = look(dirs[i]!);
       if (path !== null) return path;
     }
     return null;
-  });
+  };
+  const found = ids.map((id) => inDirs((dir) => placedIn(runtime, dir, id, places)) ?? inDirs((dir) => transcriptIn(runtime, dir, id)));
   return { paths: found.filter((p) => p !== null), current: found.at(-1) != null };
 }
+
+/// Where a session works and worked, for `transcriptPaths`: the directory it was moved to, and its workspace.
+export const sessionPlaces = (row: { cwd: string | null; workspace: string }): string[] => (row.cwd !== null && row.cwd !== row.workspace ? [row.cwd, row.workspace] : [row.workspace]);
 
 function clip(text: string): string {
   const chars = Array.from(text);
@@ -234,7 +319,7 @@ export function timelineOf(runtime: RuntimeKind, record: Json, state: ReadState,
   if (runtime === "claude") claudeTimeline(record, state, out);
   else if (runtime === "dsh") dshTimeline(record, out);
   else if (runtime === "grok") grokTimeline(record, out);
-  else if (runtime === "cursor" || runtime === "devin") cursorTimeline(record, out);
+  else if (runtime === "cursor" || runtime === "devin" || runtime === "hermes") cursorTimeline(record, out);
   else codexTimeline(record, state, out);
 }
 
@@ -549,6 +634,8 @@ function codexTimeline(r: Json, state: ReadState, out: TimelineEntry[]) {
     const failed = said >= 0 && /^[1-9]/.test(text.slice(said + 25));
     out.push(result(!failed, callId, clip(text)));
     const count = callId === undefined ? 0 : (state.inner.get(callId) ?? 0);
+    // Done with: what is kept between lines (and at every mark, read/transcripts.ts) is the scripts still running.
+    if (callId !== undefined) state.inner.delete(callId);
     for (let i = 0; i < count; i++) out.push(result(!failed, `${callId ?? ""}#${i}`, tr("station.transcript.inScriptOutput")));
   }
 }
@@ -860,7 +947,7 @@ export function readTimeline(runtime: RuntimeKind, path: string): TimelineEntry[
   const state: ReadState = { inner: new Map() };
   const line = (bytes: Buffer) => {
     // str::lines: a line's \r before its \n goes; from_utf8_lossy.
-    const text = new TextDecoder("utf-8").decode(bytes.at(-1) === 0x0d ? bytes.subarray(0, -1) : bytes);
+    const text = utf8.decode(bytes.at(-1) === 0x0d ? bytes.subarray(0, -1) : bytes);
     if (text === "") return;
     let record: Json;
     try {

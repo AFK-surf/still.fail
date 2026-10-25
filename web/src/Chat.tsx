@@ -1,4 +1,5 @@
-import { useLoadNear } from "./virtual/load.ts";
+import { chatPageAhead } from "./chatPaging.ts";
+import { useLoadNear, usePagingEdges } from "./virtual/load.ts";
 export { useLoadNear } from "./virtual/load.ts";
 import { makePastedFile, pastedInfo, PASTE_THRESHOLD } from "./pastedText.ts";
 // still.fail's own chat with a session, after Zork's: your messages sit right in a
@@ -15,15 +16,17 @@ import { useApi, useChat, useChatSend, useLives, type ChatTo, type Outgoing, typ
 import { Mark } from "./brand.tsx";
 import { scopeOf, stationBase, usePerson, useStation } from "./station.tsx";
 import { chatOfLink } from "./chatRefs.ts";
+import { pastedRefs } from "../../client/core-ts/src/refLinks.ts";
 import { Hover, PathSession } from "./Peeks.tsx";
-import { Avatar, Button, Dialog, ElsewhereLogo, ICON, ModelLogo, Pill, Segmented, Spinner, Switch, SlackLogo, Time, Tip, transitionTo } from "./ui.tsx";
+import { Avatar, Button, Chooser, ChooserItem, Dialog, ElsewhereLogo, ICON, ModelLogo, Pill, Progress, Segmented, Spinner, Switch, SlackLogo, Time, Tip, transitionTo } from "./ui.tsx";
 import { ComposerSlot, useComposerHeight } from "./dock.tsx";
 import { chatPage } from "./chatPage.ts";
 import { Prose, withBareLinks } from "./Prose.tsx";
 import type { Md } from "./core/md.ts";
 import { placeFiles } from "../../client/core-ts/src/placed.ts";
 import { shortcutOf, useKeymap, usePageKeysAvailable, useShortcut } from "./keymap.ts";
-import { FileLink, FilePreview, fileHere, fileSize, Gallery, isImage, kindOf, useFileShown, useNear, useVideoStill } from "./FilePreview.tsx";
+import { FileLink, FilePreview, fileHere, fileSize, Gallery, isImage, kindOf, storedName, useFileShown, useNear, useVideoStill } from "./FilePreview.tsx";
+import { cancelDownload, retryDownload, useDownload } from "./chatDownloads.ts";
 import { imageBox } from "./imageBox.ts";
 import { thumbhashUrl } from "./thumbhash.ts";
 import { OpenFile, VizFile } from "./Viz.tsx";
@@ -40,7 +43,7 @@ import * as nav from "./Sidebar.css.ts";
 import * as sessionCss from "./styles/session.css.ts";
 import * as chatCss2 from "./styles/chat.css.ts";
 import * as conversationCss from "./styles/conversation.css.ts";
-import type { ChatAsk, ChatSentElsewhere, RuntimeInstall } from "./core/shapes.ts";
+import type { ChatAsk, ChatCcTo, ChatSentElsewhere, DownloadShown, NoticeShown, RuntimeInstall } from "./core/shapes.ts";
 import * as partsCss from "@stillfail/ui/parts.css.ts";
 import * as historyCss from "./History.css.ts";
 import * as css from "./Chat.css.ts";
@@ -162,8 +165,38 @@ function ChatShown({ chat, session, draftKey, made }: { chat: ChatView; session:
       {chat.offline && <p className={css.offlineNotice} role="status">{<StationInWords station={station.address} text={chat.offlineNote ?? (station.name ? t("web-main.chat.offline.named", { name: station.name }) : t("web-main.chat.offline"))} />}</p>}
       {/* The one composer of the chat pages sits here (dock.tsx), kept as the page changes. */}
       <ComposerSlot variant="chat" station={station} draftKey={draftKey} thread={to} sessionKey={keeper}
+        toolbar={chat.cc?.length && id !== null ? <CcChooser station={station.address} thread={id} to={chat.cc} /> : undefined}
         locked={!!chat.archived} offline={chat.offline} placeholder={chat.archived ? t("web-main.chat.archivedPlaceholder") : t("web-main.composer.placeholder")} />
     </section>
+  );
+}
+
+/**
+ * In a chat whose agents are in Slack or Feishu threads: which of them what is sent is copied to too (`chat.cc`), each
+ * thread's bot saying there who wrote it on still.fail. None until ticked; kept for the chat while the app runs. On one
+ * line (nothing written) the composer only says where it goes, quietly (each mark and place, by send); opened to write,
+ * its row has 抄送 (and where, once ticked), opening a menu of the threads to tick: several stay open to tick in turn,
+ * one closes once ticked.
+ */
+function CcChooser({ station, thread, to }: { station: string; thread: number; to: ChatCcTo[] }) {
+  const call = useCall();
+  const act = useAct();
+  const on = to.filter((o) => o.on);
+  const where = (o: ChatCcTo) => <span key={o.thread} className={css.ccPlace}><ElsewhereLogo kind={o.via} size={14} />{o.place}</span>;
+  return (
+    <>
+      {on.length > 0 && <span className={css.ccState} title={t("web-main.composer.ccOn", { place: on.map((o) => o.place).join("、") })}>{on.map(where)}</span>}
+      <span className={css.ccSwitch}>
+        <Chooser side="top" label={<>{t("web-main.composer.ccLabel")}{on.map(where)}</>}>
+          {to.map((o) => (
+            <ChooserItem key={o.thread} checked={o.on} stays={to.length > 1} checkEnd
+              onSelect={() => act(call("chat.cc", { station, thread, to: o.thread, on: !o.on }), t("web-main.composer.cc", { place: o.place }))}>
+              <ElsewhereLogo kind={o.via} size={14} />{o.place}
+            </ChooserItem>
+          ))}
+        </Chooser>
+      </span>
+    </>
   );
 }
 
@@ -254,31 +287,36 @@ function useKeeper(): (file: Attachment) => string | null {
  * it) the core says on the message.
  */
 export function ChatRows({ chat, rows, to }: { chat: ChatView; rows: ReturnType<typeof useMessageList>; to: ChatTo | null }) {
-  const { messages, shown, rowOf, caughtAgent, poseOf, virtual } = rows;
+  const { messages, shown, rowOf, caughtAgent, poseOf, virtual, olderPage, newerPage, canOlder, canNewer } = rows;
   // Where a decision's options answer: none while nothing can be sent.
   const thread = chat.offline || chat.archived ? null : chat.thread?.id ?? null;
   const locked = chat.offline || !!chat.archived;
   // What each item is: only those the list makes (virtual/list.tsx) are drawn.
+  const visible = new Set(virtual.layout.rows.map((r) => r.key));
   const drawn = new Map<string, () => ReactNode>();
-  const sent = (list: ChatSentElsewhere[] | undefined) => { for (const s of list ?? []) drawn.set(`e:${s.key}`, () => <SentElsewhere key={`e:${s.key}`} sent={s} />); };
-  drawn.set("older", () => <div key="older" data-vk="older" className={css.chatOlder} aria-hidden="true"><Spinner /></div>);
+  const sent = (list: ChatSentElsewhere[] | undefined) => { for (const s of list ?? []) if (visible.has(`e:${s.key}`)) drawn.set(`e:${s.key}`, () => <SentElsewhere key={`e:${s.key}`} sent={s} />); };
+  drawn.set("older", () => <div key="older" data-vk="older" className={css.chatOlder}>
+    {olderPage.failed ? <button type="button" className={css.msgUnsentBtn} onClick={olderPage.retry} aria-label={t("common.retry")}><Retry size={16} />{t("common.retry")}</button> : <Spinner />}
+  </div>);
   drawn.set("line", () => <div key="line" data-vk="line" className={css.chatUnreadLine} data-unread-line role="separator"><span>{t("web-main.chat.unreadLine")}</span></div>);
   sent(chat.elsewhere);
   for (const m of messages) {
-    drawn.set(`m:${m.seq}`, () => {
+    if (visible.has(`m:${m.seq}`)) drawn.set(`m:${m.seq}`, () => {
       const { enter, emitted, caught } = rowOf(m);
       return <MessageRow key={`m:${m.seq}`} message={m} enter={enter} emitted={emitted} caught={caught} thread={thread} />;
     });
     sent(m.elsewhere);
   }
   // The page after the window shown, while it is short of the chat's end (`chat.newer`), loading as the reader nears it.
-  drawn.set("newer", () => <div key="newer" data-vk="newer" className={css.chatNewer} aria-hidden="true"><Spinner /></div>);
+  drawn.set("newer", () => <div key="newer" data-vk="newer" className={css.chatNewer}>
+    {newerPage.failed ? <button type="button" className={css.msgUnsentBtn} onClick={newerPage.retry} aria-label={t("common.retry")}><Retry size={16} />{t("common.retry")}</button> : <Spinner />}
+  </div>);
   for (const o of chat.outbox) drawn.set(`o:${o.id}`, () => <OutboxRow key={`o:${o.id}`} o={o} to={to} locked={locked} />);
   // A reply comes whole, as a message: while an agent works, its activity (always the last thing in the chat) says what it does.
   for (const { agent, leaving } of shown) {
     drawn.set(`a:${agent.key}`, () => <Activity key={`a:${agent.key}`} agent={agent} leaving={leaving} caught={caughtAgent(agent.key)} pose={poseOf(agent.key)} stoppable={chat.agents.length > 1} />);
   }
-  const empty = messages.length === 0 && chat.outbox.length === 0 && !chat.elsewhere?.length;
+  const empty = messages.length === 0 && chat.outbox.length === 0 && !chat.elsewhere?.length && !canOlder && !canNewer;
   return (
     <ChatAgents.Provider value={chat.agents}>
     <ChatAgentKeys.Provider value={chat.agents.map((a) => a.session.key).join("\n")}>
@@ -316,17 +354,6 @@ function ToLatest({ station, thread, waiting, onClick }: { station: string; thre
 
 const SENDING_SHOWS_MS = 800;
 
-/**
- * What is sent from here, its images still going up among its files: each in its place and shape at once, drawn from
- * this device (as its message is, once up: `Attachment.upload`), not a card that turns into a picture later.
- */
-function upImages(o: Outgoing): Outgoing {
-  const going = o.uploads?.filter((f) => isImage(f.name)) ?? [];
-  if (!going.length) return o;
-  const shown = going.map((f): Attachment => ({ name: f.name, path: uploadImageKey(f.id), size: f.size, upload: f.id, ...(f.width && f.height ? { width: f.width, height: f.height } : {}) }));
-  return { ...o, attachments: [...(o.attachments ?? []), ...shown] };
-}
-
 /** A message sent from here that the chat does not show yet: on its way, or failed with a way to send it again or drop it. */
 function OutboxRow({ o, to, locked }: { o: Outgoing; to: ChatTo | null; locked: boolean }) {
   const sending = useChatSend();
@@ -345,8 +372,9 @@ function OutboxRow({ o, to, locked }: { o: Outgoing; to: ChatTo | null; locked: 
   const [delay] = useState(() => `${Math.max(0, showsAt - Date.now())}ms`);
   return (
     <MineMessage data-vk={`o:${o.id}`} data-author={t("web-main.chat.you")} data-role="person" data-enter data-unsent={o.state === "failed" || undefined} data-joined={o.joined || undefined}>
-      <MineWords message={upImages(o)} />
-      {o.uploads?.filter((f) => !isImage(f.name)).map((f) => <FileCard key={f.id} file={f} pending={o.state !== "failed"} sent={f.sent} error={o.state === "failed" ? o.error ?? null : null} />)}
+      {/* (its images still going up among its files already, drawn from this device: the core's) */}
+      <MineWords message={o} />
+      {o.uploads?.map((f) => <FileCard key={f.id} file={f} pending={o.state !== "failed"} sent={f.sent} error={o.state === "failed" ? o.error ?? null : null} />)}
       {o.state === "failed"
         // Not sent: said briefly, why in its tip; sending it again or dropping it right beside.
         ? <div className={css.msgUnsent}>
@@ -372,7 +400,9 @@ function OutboxRow({ o, to, locked }: { o: Outgoing; to: ChatTo | null; locked: 
           </div>
         // Another sent soon after it: that one says it is on its way.
         : o.followed ? null
-        : <span className={`${conversationCss.msgTime} ${chatCss2.msgWaiting} ${chatCss2.msgSending}`} data-shows-at={showsAt} style={{ animationDelay: delay }}><Spinner inline />{o.uploads?.length ? t("common.uploading") : o.waits ?? t("web-main.chat.sending")}</span>}
+        // The station took it: sent, its time under it as its message has it, until its message takes its place.
+        : o.state === "sent" ? <Time className={conversationCss.msgTime} stamp={o.time?.createdAt} />
+        : <span className={`${conversationCss.msgTime} ${chatCss2.msgWaiting} ${chatCss2.msgSending}`} data-shows-at={showsAt} style={{ animationDelay: delay }}><Spinner inline />{o.waits ?? t("web-main.chat.sending")}</span>}
     </MineMessage>
   );
 }
@@ -492,7 +522,7 @@ export function useMessageList(list: RefObject<HTMLDivElement | null>, chat: Cha
   // after a reload): the message at the top of the pane and where its top is, or none at its end. A core from before
   // `chat.place` does not know it.
   const seqOf = useRef(new Map<string, number>());
-  seqOf.current = new Map(messages.map((m) => [m.ts, m.seq]));
+  seqOf.current = useMemo(() => new Map(messages.map((m) => [m.ts, m.seq])), [messages]);
   const leave = (ts: string | null, offset: number | null) => {
     const seq = ts === null ? null : seqOf.current.get(ts);
     if (id !== null && seq !== undefined) void sending.place(id, seq, seq === null ? null : offset).catch(() => undefined);
@@ -537,7 +567,7 @@ export function useMessageList(list: RefObject<HTMLDivElement | null>, chat: Cha
   for (const o of chat.outbox) sentHere.current.add(o.text);
   // Only what is said while the chat shows comes in, and an activity only for an agent seen starting meanwhile: the
   // core decides both (attend.ts: `said`, `started`); the rest is there at once.
-  const said = new Set(messages.filter((m) => m.said).map((m) => m.seq));
+  const said = useMemo(() => new Set(messages.filter((m) => m.said).map((m) => m.seq)), [messages]);
   const saidHere = (seq: number) => said.has(seq);
   // Only an agent that has taken a message and runs is at work: until then the message itself says it waits.
   const atWork: AgentAtWork[] = chat.agents.filter((a) => a.status === "running").map(({ session, since, wait }) => (
@@ -548,18 +578,22 @@ export function useMessageList(list: RefObject<HTMLDivElement | null>, chat: Cha
   const shown = useLinger(atWork, emissions.keeps);
   emissions.take(messages, saidHere, new Set(shown.map((s) => s.agent.key)));
 
+  const emptyWindow = messages.length === 0 && !chat.elsewhere?.length;
+  const { older: canOlder, newer: canNewer } = usePagingEdges(emptyWindow, !!chat.more, short, place);
+
   // The list's items, in order: each a row of its own.
+  const heights = useMemo(() => new Map(messages.map((m) => [m.seq, tallOf(m)])), [messages]);
   const items: Item[] = [];
-  if (chat.more) items.push({ key: "older", estimate: 30, place: false });
+  if (canOlder) items.push({ key: "older", estimate: 30, place: false });
   for (const s of chat.elsewhere ?? []) items.push({ key: `e:${s.key}`, estimate: 64 });
   for (const m of messages) {
     if (m.seq === divider) items.push({ key: "line", estimate: 20 });
     // One waiting to come out of its avatar takes no room, not even the gap before it (the list measures it so): known,
     // not guessed, so that nothing below it moves for a guess and back for the fact.
-    items.push(emissions.stateOf(m.seq) === "held" ? { key: `m:${m.seq}`, estimate: 0, exact: -gap } : { key: `m:${m.seq}`, estimate: tallOf(m) });
+    items.push(emissions.stateOf(m.seq) === "held" ? { key: `m:${m.seq}`, estimate: 0, exact: -gap } : { key: `m:${m.seq}`, estimate: heights.get(m.seq)! });
     for (const s of m.elsewhere ?? []) items.push({ key: `e:${s.key}`, estimate: 64 });
   }
-  if (chat.newer) items.push({ key: "newer", estimate: 30, place: false });
+  if (canNewer) items.push({ key: "newer", estimate: 30, place: false });
   for (const o of chat.outbox) items.push({ key: `o:${o.id}`, estimate: 44 });
   for (const { agent } of shown) items.push({ key: `a:${agent.key}`, estimate: 24, place: false });
 
@@ -596,10 +630,15 @@ export function useMessageList(list: RefObject<HTMLDivElement | null>, chat: Cha
   // Without a chat there is nothing older (or newer) to load.
   const older = () => (id === null ? Promise.resolve() : sending.older(id));
   // Loaded as far as entries go, not messages: a page of what is not a message here (letters, edits) moves it too.
-  useLoadNear(virtual, "top", !!chat.more, chat.firstEntry ?? chat.messages[0]?.seq, older);
+  const ahead = (edge: "top" | "bottom") => {
+    const showing = model.showing();
+    const visible = showing ? Array.from({ length: showing.last - showing.first + 1 }, (_, i) => model.keyAt(showing.first + i)!) : [];
+    return chatPageAhead(edge, chat.firstEntry, chat.lastEntry, visible);
+  };
+  const olderPage = useLoadNear(virtual, "top", canOlder, chat.firstEntry ?? chat.messages[0]?.seq, older, () => ahead("top"));
   useJumpTo(list, virtual, station, id, messages, chat.more, older);
   const newer = () => (id === null ? Promise.resolve() : sending.newer(id));
-  useLoadNear(virtual, "bottom", short, chat.lastEntry ?? chat.messages.at(-1)?.seq, newer);
+  const newerPage = useLoadNear(virtual, "bottom", canNewer, chat.lastEntry ?? chat.messages.at(-1)?.seq, newer, () => ahead("bottom"));
   useShowing(virtual, station, chat, (seq) => (id === null ? Promise.resolve() : sending.read(id, seq)));
   const away = useAwayFromBottom(virtual);
   const toEnd = useToEnd(list, virtual, chat, () => (id === null ? Promise.resolve() : sending.latest(id)));
@@ -629,7 +668,7 @@ export function useMessageList(list: RefObject<HTMLDivElement | null>, chat: Cha
   const caughtAgent = (key: string) => (started.has(key) ? undefined : true);
   // Short of the end, the way there shows wherever the reader is, with how many wait there.
   const waiting = short ? chat.thread?.unread ?? 0 : 0;
-  return { messages, away: away || short, waiting, toEnd, shown, rowOf, caughtAgent, poseOf: emissions.poseOf, virtual };
+  return { olderPage, newerPage, canOlder, canNewer, messages, away: away || short, waiting, toEnd, shown, rowOf, caughtAgent, poseOf: emissions.poseOf, virtual };
 }
 
 /**
@@ -1010,7 +1049,7 @@ const MessageRow = memo(function MessageRow({ message: m, enter, emitted, caught
     );
   }
   // What still.fail itself says (a limit hit, a failure): a notice across the chat, not someone's message.
-  if (m.system) return <SystemNotice vk={`m:${m.seq}`} text={m.text} profile={m.profile} install={m.install} report={m.reportable ? { thread: m.thread, seq: m.seq } : undefined} time={m.time?.createdAt} ts={m.ts} enter={enter} caught={caught} />;
+  if (m.system) return <SystemNotice vk={`m:${m.seq}`} notice={m.notice ?? { failed: false, words: m.text }} profile={m.profile} install={m.install} report={m.reportable ? { thread: m.thread, seq: m.seq } : undefined} time={m.time?.createdAt} ts={m.ts} enter={enter} caught={caught} />;
   const who = m.by.name;
   const agent = m.by.here ? m.by.agent : undefined;
   const ask = m.card?.vaultAsk;
@@ -1024,9 +1063,10 @@ const MessageRow = memo(function MessageRow({ message: m, enter, emitted, caught
         : m.by.from ? <a href={m.by.from} className={`${css.msgName} ${css.msgAgent}`}>{who}</a>
         : <span className={css.msgName}>{who}</span>}>
       <Quotes quotes={m.quotes} files={m.attachments} />
-      {/* An agent's request for a vault item, as its card says it (VaultAsk.tsx): the card in place of its words. */}
+      {/* An agent's request about a vault item, as its card says it (VaultAsk.tsx): the card in place of its words,
+          answered or turned down on it (nothing to set aside: once decided it is a line). */}
       {ask
-        ? <VaultAsk message={m} ask={ask} rows={options}>{options && thread !== null && <AskDismiss thread={thread} seq={m.seq} asked={!!m.asked} answered={!!(m.decision?.resolved || m.decision?.dismissed)} />}</VaultAsk>
+        ? <VaultAsk message={m} ask={ask} rows={options} />
         : m.authorKind === "person"
         ? <>{m.text && <PersonWords text={m.text} />}<Files files={besideQuotes(m.quotes, m.attachments)} /></>
         : <ProseWithFiles text={m.text} md={m.md as Md | undefined} files={besideQuotes(m.quotes, m.attachments)} session={m.by.agent ?? null} from={m.by.from} />}
@@ -1124,13 +1164,10 @@ export function PersonWords({ text }: { text: string }) {
  * One saying the station does not have the chat's runtime, with none of the viewer's messages waiting for it (those say
  * it under them: BlockedLine), ends in installing it.
  */
-function SystemNotice({ text, profile, install, report, time, ts, enter, caught, vk }: { text: string; profile: string | undefined; install: RuntimeInstall | undefined; /** A failure the viewer may report (core `reportable`): its entry. */ report?: { thread: number; seq: number } | undefined; time: Stamp | undefined; ts: string | undefined; enter: true | undefined; caught: true | undefined; /** Its item's key in a list (virtual/list.tsx). */ vk?: string }) {
+function SystemNotice({ notice, profile, install, report, time, ts, enter, caught, vk }: { notice: NoticeShown; profile: string | undefined; install: RuntimeInstall | undefined; /** A failure the viewer may report (core `reportable`): its entry. */ report?: { thread: number; seq: number } | undefined; time: Stamp | undefined; ts: string | undefined; enter: true | undefined; caught: true | undefined; /** Its item's key in a list (virtual/list.tsx). */ vk?: string }) {
   const station = useStation();
-  const failed = /^⚠️\s*/u.exec(text);
-  const words = failed ? text.slice(failed[0].length) : text;
-  // A notice is a line of the UI, not prose: no 。 at its end (stations before 2026-09-30 wrote them as sentences).
-  const said = words.replace(/。\s*$/u, "");
-  const colon = profile ? said.indexOf("：") : -1;
+  // As the core says it (notice.ts): a line of the UI, a failure's ⚠️ taken for its red, where a profile's link begins.
+  const { failed, words: said, linkAt } = notice;
   const [open, setOpen] = useState(false);
   const toggle = () => setOpen((o) => !o);
   return (
@@ -1141,8 +1178,8 @@ function SystemNotice({ text, profile, install, report, time, ts, enter, caught,
         onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); toggle(); } }}>
         <div className={css.msgSystemLine}>
           <div className={conversationCss.markdown}>
-            {profile && colon >= 0
-              ? <p>{said.slice(0, colon + 1)}<Link className={css.msgSystemLink} to={`${stationBase(station.address)}/settings/accounts/${encodeURIComponent(profile)}`}>{said.slice(colon + 1)}</Link></p>
+            {profile && linkAt !== undefined
+              ? <p>{said.slice(0, linkAt)}<Link className={css.msgSystemLink} to={`${stationBase(station.address)}/settings/accounts/${encodeURIComponent(profile)}`}>{said.slice(linkAt)}</Link></p>
               : install ? <p>{said}<InstallAction install={install} /></p> : <Prose>{said}</Prose>}
           </div>
           {report && <ReportAction thread={report.thread} seq={report.seq} />}
@@ -1451,6 +1488,9 @@ function FileItem({ sessionKey, file }: { sessionKey: string | null; file: Attac
   const url = local ?? fetched.url;
   const failed = !local && fetched.failed;
   const [open, setOpen] = useState(false);
+  // Downloaded by the core (asked from its preview, chatDownloads.ts): how far, on its card (✕ calls it off, ↻ asks a
+  // failed one again) or a video's block.
+  const download = useDownload(station.address, image ? null : sessionKey, storedName(file));
   // An image seen before, or that comes at once, just shows; one that takes a while is brushed in from the top.
   const born = useRef(performance.now());
   const key = `${sessionKey}\n${file.path}`;
@@ -1478,7 +1518,9 @@ function FileItem({ sessionKey, file }: { sessionKey: string | null; file: Attac
           <span className={videoFailed ? css.msgVideoUnavailable : css.msgVideoPlay} aria-hidden="true">
             {videoFailed ? <><Read size={24} /><span>{t("web-main.file.noPreview")}</span><small>{fileSize(file.size)}</small></> : "▶"}
           </span>
-          <span className={css.msgVideoName}>{file.name}</span>
+          <span className={css.msgVideoName}>{download?.active
+            ? <>{download.statusText}<Progress part={download.progress} label={download.statusText} className={css.msgVideoBar} /></>
+            : file.name}</span>
         </button></Tip>
         {preview}
       </>
@@ -1513,9 +1555,30 @@ function FileItem({ sessionKey, file }: { sessionKey: string | null; file: Attac
   if (sessionKey === null) return look.card(file);
   return (
     <>
-      <button type="button" className={look.open} onClick={() => setOpen(true)} aria-label={t("web-main.file.view", { name: file.name })}>{look.card(file)}</button>
+      <MessageFileCard file={file} download={download} onOpen={() => setOpen(true)}
+        onCancel={cancelDownload} onRetry={retryDownload} />
       {preview}
     </>
+  );
+}
+
+/**
+ * A message's file as a card, opened by a press; while the core downloads it (`download`, chatDownloads.ts) a button
+ * of its own at its end calls that off (✕), once that failed asks it again (↻): beside the button that opens it, laid
+ * over the room the card keeps for it (a button holds no button).
+ */
+export function MessageFileCard({ file, download, onOpen, onCancel, onRetry }: {
+  file: Pick<Attachment, "name" | "size" | "path">; download: DownloadShown | null; onOpen: () => void; onCancel: (id: string) => void; onRetry: (id: string) => void;
+}) {
+  const act = download === null ? null
+    : download.active ? { label: t("web-main.file.cancelDownload"), icon: <Close size={12} />, run: () => onCancel(download.id) }
+    : download.state === "failed" ? { label: t("web-main.file.retryDownload"), icon: <Retry size={13} />, run: () => onRetry(download.id) }
+    : null;
+  return (
+    <span className={css.fileCardHold}>
+      <button type="button" className={look.open} onClick={onOpen} aria-label={t("web-main.file.view", { name: file.name })}>{look.card(file, download, act !== null)}</button>
+      {act && <Tip label={act.label}><button type="button" className={`${css.fileCardRemove} ${css.fileCardAction}`} aria-label={act.label} onClick={act.run}>{act.icon}</button></Tip>}
+    </span>
   );
 }
 
@@ -1554,7 +1617,7 @@ function Waiting({ hash, fit }: { hash: string | undefined; fit?: { width: strin
 }
 
 /** How the chat draws a file: an image's button, the box it takes before it loads and what shows until then; a file's card and its button. */
-const look = { image: css.msgImage, wait: css.msgImageWait, box: (f: Attachment, least?: number) => imageBox(f, least), open: css.fileCardOpen, card: (f: Attachment) => <FileCard file={f} /> };
+const look = { image: css.msgImage, wait: css.msgImageWait, box: (f: Attachment, least?: number) => imageBox(f, least), open: css.fileCardOpen, card: (f: Pick<Attachment, "name" | "size" | "path">, download?: DownloadShown | null, slot?: boolean) => <FileCard file={f} download={download} slot={slot} /> };
 
 const NO_MARK = { current: null };
 
@@ -1602,20 +1665,26 @@ export function FileTile({ name, dir = false, progress, error = false, land = fa
   );
 }
 
-export function FileCard({ file, onRemove, onRetry, pending, sent, error }: { file: Pick<Attachment, "name" | "size"> & { path?: string }; onRemove?: () => void; onRetry?: (() => void) | undefined; pending?: boolean; sent?: number | undefined; error?: string | null }) {
+/** `download`: the core's of it (chatDownloads.ts), how far in its size's place and filling its sheet as an upload does;
+ * failed, why, as an upload's failure. `slot`: room at its end for a button of its own laid over it (a message's
+ * ✕ or ↻, beside the button that opens it). */
+export function FileCard({ file, onRemove, onRetry, pending, sent, error, download, slot }: { file: Pick<Attachment, "name" | "size"> & { path?: string }; onRemove?: () => void; onRetry?: (() => void) | undefined; pending?: boolean; sent?: number | undefined; error?: string | null; download?: DownloadShown | null | undefined; slot?: boolean | undefined }) {
   // How far it has gone, once that is known.
   const going = pending && sent !== undefined && file.size > 0
     ? t("web-main.file.uploadingPart", { percent: Math.floor((sent / file.size) * 100), size: fileSize(file.size) })
     : t("common.uploading");
+  const coming = download?.active ? download : null;
+  const failed = error ?? (download?.state === "failed" ? download.statusText : null);
   return (
-    <Tip label={file.path ?? file.name} cut={!file.path}><span className={css.fileCard} data-card="" data-error={error ? true : undefined}>
-      <FileTile name={file.name} progress={pending ? (sent ?? 0) / Math.max(1, file.size) : undefined} error={!!error} land={!!onRemove} />
+    <Tip label={file.path ?? file.name} cut={!file.path}><span className={css.fileCard} data-card="" data-error={failed ? true : undefined}>
+      <FileTile name={file.name} progress={pending ? (sent ?? 0) / Math.max(1, file.size) : coming?.progress} error={!!failed} land={!!onRemove} />
       <span className={css.fileCardText}>
         <FileName name={file.name} />
-        <span className={css.fileCardMeta}>{error ?? (pending ? going : fileSize(file.size))}</span>
+        <span className={css.fileCardMeta}>{failed ?? (pending ? going : coming ? coming.statusText : fileSize(file.size))}</span>
       </span>
       {onRetry && <Tip label={t("web-main.composer.retryUpload")}><button type="button" className={css.fileCardRemove} aria-label={t("web-main.composer.retryUpload")} onClick={(e) => { e.stopPropagation(); onRetry(); }}><Retry size={13} /></button></Tip>}
       {onRemove && <button type="button" className={css.fileCardRemove} aria-label={t("web-main.file.remove", { name: file.name })} onClick={(e) => { e.stopPropagation(); onRemove(); }}><Close size={12} /></button>}
+      {slot && <span className={css.fileCardSlot} aria-hidden="true" />}
     </span></Tip>
   );
 }
@@ -1882,17 +1951,15 @@ export function useComposerText({ draft, input, draftKey, sessionKey, locked, no
   const here = useStation().address;
   const pasteReferences = (e: ClipboardEvent<HTMLTextAreaElement>) => {
     const pasted = e.clipboardData.getData("text/plain");
-    const found = here.includes("/") ? [...pasted.matchAll(/\[([^\]\n]{1,120})\]\((\S+?)\)/g)].flatMap((m) => {
-      const chat = chatOfLink(m[2]!);
-      return chat && scopeOf(chat.station) === scopeOf(here) ? [{ m, chat }] : [];
-    }) : [];
+    // (the core's reading of what is pasted: refLinks.ts pastedRefs)
+    const found = pastedRefs(pasted, here);
     if (found.length === 0) return;
     e.preventDefault();
     const el = e.currentTarget;
     const [start, end, before] = [el.selectionStart, el.selectionEnd, el.value];
-    const marks = found.map(async ({ m, chat }) => {
+    const marks = found.map(async (chat) => {
       try {
-        const { mark } = (await core().call("chat.ref", { station: chat.station, id: chat.id, title: m[1], base })) as { mark: string };
+        const { mark } = (await core().call("chat.ref", { station: chat.station, id: chat.id, title: chat.title, base })) as { mark: string };
         // A link to its execution history: the mark kept as that link, not the chat's.
         if (chat.history) {
           const at = chat.station.indexOf("/");
@@ -1901,12 +1968,12 @@ export function useComposerText({ draft, input, draftKey, sessionKey, locked, no
         }
         return mark;
       } catch {
-        return m[0];
+        return pasted.slice(chat.start, chat.end);
       }
     });
     void Promise.all(marks).then((made) => {
       let text = "", at = 0;
-      found.forEach(({ m }, i) => { text += pasted.slice(at, m.index) + made[i]; at = m.index + m[0].length; });
+      found.forEach((r, i) => { text += pasted.slice(at, r.start) + made[i]; at = r.end; });
       text += pasted.slice(at);
       // Typed on meanwhile: at the end.
       const now = input.current?.value ?? "";
@@ -1936,6 +2003,7 @@ export function useComposerText({ draft, input, draftKey, sessionKey, locked, no
     if (quote) draft.quote(quote, offer.quotedFile);
     else input.current?.focus();
   });
+  const fitInput = useRef<(() => void) | null>(null);
   // Grow with the text up to its lines, then scroll; the frame is never resized by hand. Its width changing re-wraps
   // the text (or the placeholder), so it is measured again then; below the limit it never scrolls. Sized before it is
   // drawn (and before the composer's change of shape reads where things end up).
@@ -1984,6 +2052,7 @@ export function useComposerText({ draft, input, draftKey, sessionKey, locked, no
       el.toggleAttribute("data-more-above", over && el.scrollTop > 1);
       el.toggleAttribute("data-more-below", over && el.scrollTop + el.clientHeight < el.scrollHeight - 1);
     };
+    fitInput.current = fit;
     fit();
     let width = el.clientWidth;
     const resize = new ResizeObserver(() => { if (el.clientWidth !== width) { width = el.clientWidth; fit(); } });
@@ -1996,8 +2065,10 @@ export function useComposerText({ draft, input, draftKey, sessionKey, locked, no
     const scrolled = () => { edges(); over(); };
     el.addEventListener("scroll", scrolled);
     window.addEventListener("resize", fit);
-    return () => { resize.disconnect(); moved.disconnect(); window.removeEventListener("resize", fit); el.removeEventListener("scroll", scrolled); probe.remove(); };
-  }, [text, lines, layout]); // eslint-disable-line react-hooks/exhaustive-deps
+    return () => { fitInput.current = null; resize.disconnect(); moved.disconnect(); window.removeEventListener("resize", fit); el.removeEventListener("scroll", scrolled); probe.remove(); };
+  }, [lines, layout]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Typing reuses the measure and its observers; only the text and the resulting size change.
+  useLayoutEffect(() => { fitInput.current?.(); }, [text]);
   const menu = reference && !locked && (
     <div className={refCss.refAnchor}>
       <ChatRefMenu query={reference.query} here={sessionKey} active={active} onPick={pickReference} found={(items) => { refItems.current = items; }} />
@@ -2668,7 +2739,7 @@ function Activity({ agent, leaving, caught, pose, stoppable }: { agent: AgentAtW
     <div ref={row} className={`${conversationCss.msg} ${css.agentActivity}`} data-vk={`a:${agent.key}`} data-transient="" data-agent={agent.key} data-caught={caught} data-away={pose.away || undefined} data-waiting={wait ? "" : undefined}>
       <div className={css.activityRow}>
       <button ref={line} type="button" className={css.activityLine} onClick={() => { if (chat) chatPage.history(chat, agent.key); }} aria-label={`${agent.who}：${now.current.text}`}>
-        <span className={css.activityAvatar} aria-hidden="true"><span className={`${chatCss2.msgAvatar} ${css.msgAvatarAgent}`}><ModelLogo maker={agent.maker} runtime={agent.runtime} size={12} /></span><span className={css.activityRing} /></span>
+        <span className={css.activityAvatar} aria-hidden="true"><span className={`${chatCss2.msgAvatar} ${css.msgAvatarAgent}`}><ModelLogo maker={agent.maker} runtime={agent.runtime} size={12} /></span><span className={css.activityRing} data-spokes="" /></span>
         <span ref={tail} className={css.activityTail}>
           <span className={css.activityNow}>
             {now.previous && <span key={`was-${now.n - 1}`} className={css.activityNowText} data-out="">{now.previous.text}</span>}

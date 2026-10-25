@@ -8,12 +8,16 @@ import { parseComposer, type ComposerAct } from "../composer.ts";
 import { conform } from "../conform.ts";
 import { type HeldCall, type ModuleCall, parseModuleCall } from "../module.ts";
 import type { KeepKind } from "../drive-kept.ts";
+import { CALLS as BROWSE_CALLS } from "../drive-browse.ts";
 import { CoreError } from "../error.ts";
 import { t } from "../i18n.ts";
+import * as keymap from "../keymap.ts";
 import * as ops from "../ops.ts";
 import type { Topic } from "../protocol.ts";
 import { draftAt } from "../refs.ts";
 import { StationAddr } from "../station/addr.ts";
+import type { FindAt, FindHit } from "../chat-find.ts";
+import { readConnects, type RelayConnect } from "../relay-pick.ts";
 import { fromBase64, get, isObject } from "../util.ts";
 import { orEmpty, read } from "./params.ts";
 
@@ -47,6 +51,10 @@ export type Call =
   | { kind: "decisionAnswer"; station: string; thread: number; seq: number; option: string }
   | { kind: "decisionReply"; station: string; thread: number; seq: number; text: string; attachments: unknown; uploads?: { id: string; name: string; size: number; width?: number; height?: number }[]; quotes: unknown }
   | { kind: "decisionDefer"; station: string; thread: number; seq: number }
+  | { kind: "decisionDismiss"; op: ops.Request; station: string; thread: number; seq: number }
+  | { kind: "decisionShow"; workspace: string; station: string; thread: number; seq: number }
+  /// A chat's side-panel tabs changed (chat-tabs.ts): by the key they are kept under, the tab.
+  | { kind: "chatTabs"; chat: string; action: "open" | "close" | "front" | "clear"; tab: string | null; auto: boolean }
   | { kind: "chatRetryIn"; station: string; session: string; id: string }
   | { kind: "chatDiscardIn"; station: string; session: string; id: string }
   | { kind: "chatRetry"; station: string; thread: number; id: string }
@@ -55,6 +63,7 @@ export type Call =
   | { kind: "chatNewer"; station: string; thread: number }
   | { kind: "chatLatest"; station: string; thread: number }
   | { kind: "chatPlace"; station: string; thread: number; seq: number | null; offset: number | null }
+  | { kind: "chatCc"; station: string; thread: number; to: number; on: boolean }
   | { kind: "chatAround"; station: string; thread: number; seq: number }
   | { kind: "chatFind"; station: string; thread: number; query: string; bring: boolean }
   | { kind: "historyOlder"; station: string; key: string }
@@ -109,6 +118,7 @@ export type Call =
   | { kind: "composer"; key: string; act: ComposerAct }
   | { kind: "chatRef"; station: string; id: string; title: string; base: string | null; into: string | null }
   | { kind: "chatOutsideRefs"; station: string; text: string }
+  | { kind: "chatOutsideShare"; station: string; text: string }
   | { kind: "chatXshareAdd"; station: string; id: string; workspace: string; prefer: string | null }
   /// A chat made public (views/publish.ts): what a snapshot would hold, one kept, one revoked.
   | { kind: "chatPublishPreview"; station: string; thread: number }
@@ -117,8 +127,19 @@ export type Call =
   | { kind: "chatRefsKeep"; links: [string, string][] }
   | { kind: "choose"; name: string; params: Record<string, unknown> }
   | { kind: "prefsSet"; patch: unknown; fill: boolean }
+  /// An action's keys changed on this device (keymap.ts): bindings as the keymap has them; null its own again; no
+  /// action, every one's.
+  | { kind: "keysSet"; action: string | null; keys: string[] | null }
   | { kind: "clientDevice"; facts: unknown }
   | { kind: "changelogSeen" }
+  | { kind: "commandsFind"; query: string; offered: unknown[] }
+  /// What a chat's relay picker shows (relay-pick.ts): the connects read, what was typed, all asked for, the bot picked.
+  | { kind: "relayView"; connects: RelayConnect[]; query: string; all: boolean; bot: string | null }
+  /// A history step's call and what came back, read by what they are (tool-step.ts).
+  | { kind: "historyTool"; name: string; call: string; result: string | null; failed: boolean; said: boolean }
+  /// Where a chat's find goes (chat-find.ts): what was found, where the reader is, which way, what the view shows.
+  | { kind: "chatFindGo"; hits: FindHit[]; at: FindAt | null; by: -1 | 0 | 1; from: number | null; to: number | null; drawn: Record<string, number> }
+  | { kind: "words"; what: "ref.at" | "ref.before" | "ref.marks" | "ref.pasted" | "paste.info" | "drive.check"; text: string; caret: number; here: string }
   /// A face's files on a device that keeps none of its own (font-files.ts): fetched, kept, given back.
   | { kind: "fonts"; call: FontsCall }
   | { kind: "ask"; ask: Ask }
@@ -131,13 +152,20 @@ export type Call =
   /// The vault (views/vault.ts): `vault.<name>` on a workspace, with what it takes.
   | { kind: "vault"; name: string; workspace: string; params: Record<string, unknown> }
   | { kind: "driveTransfer"; action: "start" | "cancel" | "retry"; params: Record<string, unknown> }
+  /// A station's files as they are browsed (views/browse.ts): `drive.browse` and the rest of drive-browse.ts's CALLS,
+  /// with what each takes.
+  | { kind: "browse"; name: string; params: Record<string, unknown> }
+  /// A chat's file downloaded to this device (views/downloads.ts): its params read there.
+  | { kind: "download"; action: "start" | "retry" | "take" | "read" | "done" | "cancel"; params: Record<string, unknown> }
   /// An app's module's call (module.ts): `<module>.<name>`, its params as the module checked them.
   | { kind: "module"; name: string; call: HeldCall };
 
-/// Whether a UI can cancel it (`{id, cancel}`), and one gone does: the calls that hold something open for a page.
+/// Whether a UI can cancel it (`{id, cancel}`), and one gone does: the calls that hold something open for a page, and
+/// those that hand it what they read as it comes (`stream`: a player's part of a file, let go of as it seeks elsewhere
+/// or closes), so that nothing no page waits for any more goes on coming over the network.
 export function cancellable(call: Call): boolean {
   if (call.kind === "module") return call.call.def.cancellable === true;
-  return (call.kind === "stationPreview" && call.stream) || call.kind === "previewSocket" || (call.kind === "screen" && call.call.kind === "view");
+  return ((call.kind === "stationPreview" || call.kind === "stationFilePart" || call.kind === "driveRead") && call.stream) || call.kind === "previewSocket" || (call.kind === "screen" && call.call.kind === "view");
 }
 
 function opStation(op: ops.Request): string | null {
@@ -215,11 +243,12 @@ export function counts(call: Call, name: string): boolean {
       return true;
     case "decisionAnswer":
     case "decisionReply":
+    case "decisionDismiss":
       return true;
     case "wake":
       return call.retry;
     case "choose":
-      return call.name === "pick.save" || call.name === "pick.borrow";
+      return call.name === "pick.save" || call.name === "pick.borrow" || call.name === "pick.repick";
     case "attend":
       return name === "notify.set";
     case "ask":
@@ -246,7 +275,7 @@ export const VAULT_CALLS = ["state", "lock", "setup", "create", "addDevice", "pu
 export const LOCK_CALLS = ["state", "open", "toggle", "dismiss", "request", "confirm", "deny", "addStation", "joinStation", "renew", "removeDevice", "disable", "pair", "pairCode", "pairCancel"];
 
 /// The calls on a new device showing this one's code (views/pair.ts, `lockPrompts`).
-export const LOCK_PROMPT_CALLS = ["deny", "state"];
+export const LOCK_PROMPT_CALLS = ["deny", "hide", "state"];
 
 function form(name: string, params: unknown, prefix: string, actions: string[]): { topic: Topic; action: string; patch: unknown } | null {
   if (!name.startsWith(prefix)) return null;
@@ -317,6 +346,12 @@ export function parseCall(name: string, params: unknown, bytes?: Uint8Array, mod
   // Copies into a station's drive (views/transfers.ts): its params read there.
   if (name === "drive.transfer" || name === "drive.transfer.cancel" || name === "drive.transfer.retry") {
     return { kind: "driveTransfer", action: name === "drive.transfer" ? "start" : name === "drive.transfer.cancel" ? "cancel" : "retry", params: isObject(params) ? (params as Record<string, unknown>) : {} };
+  }
+  // A station's files as they are browsed (views/browse.ts): their params read there.
+  if (BROWSE_CALLS.includes(name)) return { kind: "browse", name, params: isObject(params) ? (params as Record<string, unknown>) : {} };
+  // A chat's file downloaded to this device (views/downloads.ts): its params read there.
+  if (name === "download.start" || name === "download.retry" || name === "download.take" || name === "download.read" || name === "download.done" || name === "download.cancel") {
+    return { kind: "download", action: name.slice(9) as "start" | "retry" | "take" | "read" | "done" | "cancel", params: isObject(params) ? (params as Record<string, unknown>) : {} };
   }
   if (name.startsWith("vault.") && VAULT_CALLS.includes(name.slice(6))) {
     const p = read(params, [["workspace", S, "req"]]);
@@ -466,6 +501,29 @@ export function parseCall(name: string, params: unknown, bytes?: Uint8Array, mod
       }
       return { kind: "stationUpdateNotice", station: p.station as string, action, version };
     }
+    case "decision.show": {
+      const p = read(params, [
+        ["workspace", S, "req"],
+        ["station", S, "req"],
+        ["thread", "u64", "req"],
+        ["seq", "u64", "req"],
+      ]);
+      return { kind: "decisionShow", workspace: p.workspace as string, station: p.station as string, thread: p.thread as number, seq: p.seq as number };
+    }
+    case "chat.tabs.open":
+    case "chat.tabs.close":
+    case "chat.tabs.front":
+    case "chat.tabs.clear": {
+      const action = name.slice("chat.tabs.".length) as "open" | "close" | "front" | "clear";
+      const p = read(params, [
+        ["chat", S, "req"],
+        ["tab", S, action === "clear" ? "opt" : "req"],
+        ["auto", "bool", "opt"],
+      ]);
+      if (p.chat === "") throw CoreError.invalid(t("core-misc.params.missing", { field: "chat" }));
+      if (action !== "clear" && p.tab === "") throw CoreError.invalid(t("core-misc.params.missing", { field: "tab" }));
+      return { kind: "chatTabs", chat: p.chat as string, action, tab: action === "clear" ? null : (p.tab as string), auto: p.auto !== false };
+    }
     case "decision.defer": {
       const p = read(params, [
         ["station", S, "req"],
@@ -501,6 +559,15 @@ export function parseCall(name: string, params: unknown, bytes?: Uint8Array, mod
         ["offset", "f64", "opt"],
       ]);
       return { kind: "chatPlace", station: p.station as string, thread: p.thread as number, seq: p.seq as number | null, offset: p.offset as number | null };
+    }
+    case "chat.cc": {
+      const p = read(params, [
+        ["station", S, "req"],
+        ["thread", "u64", "req"],
+        ["to", "u64", "req"],
+        ["on", "bool", "req"],
+      ]);
+      return { kind: "chatCc", station: p.station as string, thread: p.thread as number, to: p.to as number, on: p.on as boolean };
     }
     case "chat.around": {
       const p = read(params, [
@@ -562,9 +629,10 @@ export function parseCall(name: string, params: unknown, bytes?: Uint8Array, mod
     case "newChat.migrate":
     case "pick.set":
     case "pick.save":
+    case "pick.repick":
     case "pick.borrow": {
       const p = orEmpty(params);
-      const needs = name === "newChat.pick" ? ["scope"] : name === "newChat.create" ? ["station"] : name === "pick.set" || name === "pick.save" || name === "pick.borrow" ? ["station", "of"] : [];
+      const needs = name === "newChat.pick" ? ["scope"] : name === "newChat.create" ? ["station"] : name.startsWith("pick.") ? ["station", "of"] : [];
       const missing = needs.find((f) => {
         const v = get(p, f);
         return typeof v !== "string" || v === "";
@@ -629,6 +697,13 @@ export function parseCall(name: string, params: unknown, bytes?: Uint8Array, mod
       ]);
       return { kind: "chatOutsideRefs", station: p.station as string, text: p.text as string };
     }
+    case "chat.outsideShare": {
+      const p = read(params, [
+        ["station", S, "req"],
+        ["text", S, "req"],
+      ]);
+      return { kind: "chatOutsideShare", station: p.station as string, text: p.text as string };
+    }
     case "chat.xshareAdd": {
       const p = read(params, [
         ["station", S, "req"],
@@ -676,10 +751,93 @@ export function parseCall(name: string, params: unknown, bytes?: Uint8Array, mod
       }
       return { kind: "prefsSet", patch, fill };
     }
+    case "keys.set": {
+      const p = read(params, [
+        ["action", S, "opt"],
+        ["keys", "strings", "opt"],
+      ]);
+      const action = p.action as string | null;
+      if (action !== null && !(action in keymap.ACTIONS)) throw CoreError.invalid(t("core-misc.params.invalid", { error: `action: ${action}` }));
+      if (action === null && p.keys !== null) throw CoreError.invalid(t("core-misc.params.invalid", { error: "action" }));
+      const keys = p.keys === null ? null : (p.keys as string[]).map((said) => {
+        const b = keymap.binding(said);
+        if (b === null) throw CoreError.invalid(t("core-misc.params.invalid", { error: `keys: ${said}` }));
+        return b;
+      });
+      return { kind: "keysSet", action, keys: keys && [...new Set(keys)] };
+    }
     case "client.device":
       return { kind: "clientDevice", facts: orEmpty(params) };
     case "changelog.seen":
       return { kind: "changelogSeen" };
+    case "history.tool": {
+      const p = read(params, [
+        ["name", S, "req"],
+        ["call", S, "req"],
+        ["result", S, "opt"],
+        ["failed", "bool", "default"],
+        ["said", "bool", "default"],
+      ]);
+      return { kind: "historyTool", name: p.name as string, call: p.call as string, result: p.result as string | null, failed: p.failed as boolean, said: p.said as boolean };
+    }
+    // What is written, read as every client reads it (refLinks.ts refAt, markBefore, marksIn, pastedRefs; pasted.ts;
+    // drive.ts nameProblem: a name typed for a file or folder, `text`).
+    case "ref.at":
+    case "ref.before":
+    case "ref.marks":
+    case "ref.pasted":
+    case "paste.info":
+    case "drive.check": {
+      const p = read(params, [
+        ["text", S, "default"],
+        ["caret", "f64", "opt"],
+        ["here", S, "default"],
+      ]);
+      const text = p.text as string;
+      const caret = p.caret === null ? text.length : Math.max(0, Math.min(text.length, Math.floor(p.caret as number)));
+      return { kind: "words", what: name as Extract<Call, { kind: "words" }>["what"], text, caret, here: p.here as string };
+    }
+    case "chat.find.go": {
+      const p = read(params, [
+        ["hits", "values", "default"],
+        ["at", "value", "opt"],
+        ["by", "value", "req"],
+        ["from", "f64", "opt"],
+        ["to", "f64", "opt"],
+        ["drawn", "value", "opt"],
+      ]);
+      const bad = (what: string) => CoreError.invalid(t("core-misc.params.invalid", { error: what }));
+      const num = (v: unknown, what: string) => {
+        if (typeof v !== "number" || !Number.isFinite(v)) throw bad(what);
+        return v;
+      };
+      const by = p.by;
+      if (by !== -1 && by !== 0 && by !== 1) throw bad("by");
+      const hits = (p.hits as unknown[]).map((h) => (isObject(h) ? { seq: num(h.seq, "hits"), count: num(h.count, "hits") } : (() => { throw bad("hits"); })()));
+      const at = p.at === null ? null : isObject(p.at) ? { seq: num(p.at.seq, "at"), k: num(p.at.k, "at") } : (() => { throw bad("at"); })();
+      const drawn: Record<string, number> = {};
+      if (p.drawn !== null) {
+        if (!isObject(p.drawn)) throw bad("drawn");
+        for (const [seq, n] of Object.entries(p.drawn)) drawn[seq] = num(n, "drawn");
+      }
+      return { kind: "chatFindGo", hits, at, by, from: p.from as number | null, to: p.to as number | null, drawn };
+    }
+    case "chat.relayView": {
+      const p = read(params, [
+        ["connects", "values", "default"],
+        ["query", S, "default"],
+        ["all", "bool", "opt"],
+        ["bot", S, "opt"],
+      ]);
+      return { kind: "relayView", connects: readConnects(p.connects), query: p.query as string, all: p.all === true, bot: p.bot as string | null };
+    }
+    case "commands.find": {
+      const p = read(params, [
+        ["query", S, "default"],
+        ["offered", "values", "default"],
+      ]);
+      return { kind: "commandsFind", query: p.query as string, offered: p.offered as unknown[] };
+    }
     case "fonts.fetch":
     case "fonts.preview": {
       const id = read(params, [["id", S, "req"]]).id as string;
@@ -940,6 +1098,11 @@ export function parseCall(name: string, params: unknown, bytes?: Uint8Array, mod
     const session = get(p, "session");
     const thread = get(p, "thread");
     return { kind: "chatArchive", op, thread: typeof thread === "number" && Number.isInteger(thread) && thread >= 0 ? thread : null, session: typeof session === "string" ? session : "", archived: get(p, "archived") === true };
+  }
+  if (name === "decision.dismiss") {
+    const p = orEmpty(params);
+    const op = ops.request(name, p)!;
+    return { kind: "decisionDismiss", op, station: "station" in op.target ? op.target.station : "", thread: get(p, "thread") as number, seq: get(p, "seq") as number };
   }
   if (name === "chat.rename" || name === "chat.pin" || name === "chat.keep") {
     const p = orEmpty(params);

@@ -1,6 +1,7 @@
 // What the stories show that the site's demo has none of (src/demo/mount.tsx extendDemo): a novel and a note to read,
 // a clip and a picture in a folder, the changelog's news. Made up here, the same every time.
 import type { DriveEntry, DriveKind, HistoryItem, HistoryStep, HistoryView, MachineLoginScreen, MachineLoginShown, MachineLoginsView } from "../src/core/shapes.ts";
+import { opensOf } from "../../client/core-ts/src/drive-kind.ts";
 import { markdown } from "../../client/core-ts/src/markdown.ts";
 import clipUrl from "./assets/story-clip.mp4?url";
 import pictureUrl from "./assets/story-picture.png?url";
@@ -64,7 +65,7 @@ const NOTE_BYTES = bytes(NOTE);
 const MTIME = Date.UTC(2026, 9, 15, 8);
 
 const entry = (name: string, kind: DriveKind, size: number, type: string): DriveEntry =>
-  ({ name, dir: false, size, mtime: MTIME, type, kind, sizeText: "", timeText: "10/15" });
+  ({ name, dir: false, size, mtime: MTIME, type, kind, opens: opensOf(kind), sizeText: "", timeText: "10/15" });
 
 /** The folder the stories' files are in, as the drive lists it. */
 export const AT = { station: "local", root: "/Users/lin/Downloads" } as const;
@@ -221,6 +222,24 @@ export const LOGINS: Record<string, MachineLoginShown> = {
   }),
   taken: login("taken", "gcloud auth login", {
     step: "loopback", port: 8085, domain: "accounts.google.com", relayText: "本机 8085 端口被占用",
+    url: "https://accounts.google.com/o/oauth2/auth?response_type=code&client_id=32555940559.apps.googleusercontent.com&redirect_uri=http%3A%2F%2Flocalhost%3A8085%2F",
+    statusText: "等你打开浏览器",
+  }),
+  // The station has a browser of its own: the same step there (docs/remote-login.md, 在 station 的浏览器中登录); its
+  // tab open, back to it.
+  inStation: login("inStation", "gcloud auth login", {
+    step: "loopback", port: 8085, domain: "accounts.google.com", browser: true, browserText: "在 Studio 的浏览器中打开",
+    url: "https://accounts.google.com/o/oauth2/auth?response_type=code&client_id=32555940559.apps.googleusercontent.com&redirect_uri=http%3A%2F%2Flocalhost%3A8085%2F",
+    statusText: "等你打开浏览器",
+  }),
+  // This device's port taken just now: the station's browser is the step.
+  inStationTaken: login("inStationTaken", "gcloud auth login", {
+    step: "loopback", port: 8085, domain: "accounts.google.com", relayText: "本机 8085 端口被占用", browser: true, browserText: "在 Studio 的浏览器中打开",
+    url: "https://accounts.google.com/o/oauth2/auth?response_type=code&client_id=32555940559.apps.googleusercontent.com&redirect_uri=http%3A%2F%2Flocalhost%3A8085%2F",
+    statusText: "等你打开浏览器",
+  }),
+  inStationOpen: login("inStationOpen", "gcloud auth login", {
+    step: "loopback", port: 8085, domain: "accounts.google.com", browser: true, browserText: "回到 Studio 的浏览器", screen: "browser:T1",
     url: "https://accounts.google.com/o/oauth2/auth?response_type=code&client_id=32555940559.apps.googleusercontent.com&redirect_uri=http%3A%2F%2Flocalhost%3A8085%2F",
     statusText: "等你打开浏览器",
   }),

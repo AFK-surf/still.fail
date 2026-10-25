@@ -43,7 +43,13 @@ of a test (src/ui/motion_data.mbt).
 - Springs are solved, not stepped (`SpringPath`: under-, critically and over-damped in closed form, at rest by an
   envelope bound). Sent elsewhere mid-way, a spring goes on from where it is, as fast as it goes.
 - Logic waits for no motion's end. What leaves is told at once and drawn from what it was (a page popped, a sheet
-  closed: being changed so; where it is not yet, the code says so).
+  closed: being changed so; where it is not yet, the code says so). Nor does logic read whether a motion runs: what
+  is shown, what takes a press, when state is let go follow from the cause and the motion's declared end.
+- A motion is set off by its cause, in the frame of its cause, and says so: never found by comparing frames. A place
+  or a size moves because what it moves for changed (typed words, a page gone to, a row come in), not because its
+  laid-out box differs from last frame's, and no measured size is a follow's target; a box moved by what holds it (a
+  window resized, a keyboard, a pane made narrower) is laid out there at once. No time window is a cause ("moves within
+  150 ms of a change are the change's"): a window lets in whatever falls into it.
 - What follows another's layout is placed in the same layout, never chased by a motion: a segmented choice's thumb is
   laid out over its item (`Ctx::cover`), so a page sliding in or a window resized moves it with the item, in the same
   frame. Only another item chosen is a motion, between the items' places as laid out at each frame.
@@ -51,7 +57,12 @@ of a test (src/ui/motion_data.mbt).
   anchor) is placed as it is laid out, from the size it is laid out at (`Ctx::place_by_size`; the anchor's place this
   frame: `Ctx::laid_out`): there in its first frame, not measured in one frame and placed in the next.
 - What never ends while shown (a spinner, a band of unknown progress, a breath) is a cycle: its phase is a function
-  of the frames' clock (`Ctx::cycle`), drawn a frame each frame while something shown reads it.
+  of the frames' clock (`Ctx::cycle`). A wait, gone when what it waits for comes, is drawn a frame each frame while
+  something shown reads it. One that stays up for as long as something elsewhere lasts (`resident`: a station's
+  glyph blinking while it works) is at the step of one clock (a step each `cycle_step_ms`, 100, for all of them),
+  drawn a frame each step, none between: drawn each of the display's frames it redrew the whole window 60 to 120
+  times a second for hours. A moving picture is drawn a frame as its next frame comes (`Ctx::loop_at`); a player
+  playing each frame (a cycle of 0).
 - What changes every so often while shown (a run's time said each second) is periodic: `Ctx::every(period)` gives the
   periods passed and a frame at the next one's start, none between; a test's idle lists it (`Tester::periodic`), as it
   does a cycle, and is not broken by it.
@@ -161,8 +172,8 @@ Nothing else in a build tells outside (detlint's build-effect): those two are it
   MBUI_TEXT_RECORD=1), made a Tester's test by scripts/chk textrec and run in the same job: every frame's hash the
   same, or it fails with the first frame as the host drew it (MBUI_DRAW_DUMP=1) beside the Tester's. `text` gives
   kitdemo MBUI_TEXTCHECK=NAME (src/kitdemo/gallery/textcheck.mbt): every metrics, shaping, whole-word key and glyph box of the
-  kept run NAME asked of the host again, in the order the run first asked them (so the host hands out glyph keys and
-  atlas places in the same order), each answer written as the log writes it (its JSON) and compared to the kept one
+  kept run NAME asked of the host again, in the order the run first asked them (so the host hands out glyph keys in
+  the same order; where a glyph goes in the atlas is the app's, hostapi's atlas.mbt, and not compared), each answer written as the log writes it (its JSON) and compared to the kept one
   to the character; what differs is listed, and the run fails saying how to record it again. A kept run is
   `src/kitdemo/gallery/textrec_NAME.mbt` (its data, built into kitdemo so a host can ask it again) and
   `textrec_NAME_wbtest.mbt` (its replay, in CI's test job with every kept run); `textrec_runs.txt` lists the runs kept (an explicit list: what a working directory happens to hold, a CI run's own `ci_HOST`, is never listed), `textrec_runs.mbt` is made from it, and CI checks the two and the runs git keeps agree (`scripts/chk textrec --check`).
@@ -191,9 +202,11 @@ Nothing else in a build tells outside (detlint's build-effect): those two are it
   (`draw_marks` is None there), so they have no such contract.
 - **Image decoding** is checked apart: each host's decoded pixels of a fixed set of images, to the byte.
 - **The system's own views** (a web page, a video) are outside mbui's drawing: only where and how large they are
-  placed is checked (a Tester's `views`). The app puts a view's content, its clip and the hole it shows through on
-  whole device pixels by one rule (src/ui/native.mbt `device_px`), so their edges meet on the same pixel row: put
-  between pixels, the row its edge half covers would show what is under the canvas (a line along a video's picture).
+  placed is checked (a Tester's `views`), and what part of each the frame shows where (`hole_parts`: a host that
+  draws a view's picture itself, Android, draws that part of it there). The app puts a view's content, its clip and
+  where it shows (the hole it shows through, or its picture) on whole device pixels by one rule (src/ui/native.mbt
+  `device_px`), so their edges meet on the same pixel row: put between pixels, the row its edge half covers would
+  show what is under the canvas (a line along a video's picture).
   **The native views' contract** (`scripts/host_contract.sh HOST views`, a step of each host's workflow): kitdemo's
   MBUI_VIEWCHECK places a video's view between pixels (src/kitdemo/gallery/viewcheck.mbt); where the app told the host to
   put it (VIEWTOLD, device pixels) is where the host says it put it (VIEWAT, each host's own: its views' code), on

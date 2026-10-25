@@ -83,7 +83,7 @@ export const listRow = style({
   borderRadius: vars.rField, cornerShape: vars.cornerShape, fontSize: vars.textUi,
   transition: `background ${vars.dur} ${vars.easeOut}`,
   selectors: {
-    "&:hover": { background: vars.list },
+    "&:hover": { background: vars.hover },
   },
 });
 export const listRowText = style({ flex: "1", display: "grid", gap: "2px", minWidth: "0" });

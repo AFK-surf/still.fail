@@ -118,9 +118,9 @@ still.fail 直接提供 HTTP MCP，不为每个会话额外起进程：
 
 **归档**
 - 空闲超过 `autoArchiveDays`（默认 1 天）且已结束的会话和对话自动归档（没有在跑、没有待投递、没有停在 block、发起人没有未读、没有单会话连接绑着）；只在 Slack 里的会话空闲超过 `slackArchiveDays`（默认 3 天）时停在 block 也归档；也可以手动归档。
-- 归档的会话从列表隐藏，空闲进程结束，运行时会话记录另存一份 zstd 压缩副本（`archive/transcripts/<key>.jsonl.zst`）；运行时自己目录里的原文件不动。
-- thread 的会话全部归档后，它的消息写成 `archive/threads/<id>.jsonl.zst` 并从库里删除；读时从文件读。
-- 归档满 `archivedWorkspaceDays`（默认 7 天）后，会话工作区只留聊天里发过的文件，其余删掉；执行历史和聊天记录保留。
+- 归档的会话从列表隐藏，空闲进程结束，工作区和运行时会话记录就地压缩（冷存）。Rust 版 station 归档时另存一份压缩副本（`archive/transcripts/<key>.jsonl.zst`）、原文件不动，两份都占盘；station 启动三分钟后把这些会话的记录就地压缩、删掉副本。
+- thread 的会话全部归档后，它的消息照旧留在库里（消息很小，所有对话的消息靠索引一次读完约 10 ms）。以前的 station 会把这样的 thread 写成 `archive/threads/<id>.jsonl.zst` 并从库里删除，每次列表都要读这些文件；station 启动两分钟后把它们分批搬回库里，有人在里面说话或会话重新显示时立刻搬回。
+- 归档满 `archivedWorkspaceDays`（默认 7 天）后，会话工作区只留聊天里发过的文件，其余删掉；执行历史和聊天记录保留。station 数据所在的盘剩不到 20G 时提前清，归档最早的先清，直到剩够 20G。
 - 有人在 thread 里说话，或手动恢复，就恢复成活跃状态。细节见 [station-storage.md](station-storage.md)。
 - 原计划归档为 `archive/<月份>/<key>.tar.zst`（会话记录 + 元数据一起打包，删除原文件，唤醒时解压回原路径），已改为上面的做法。
 - 删除会话时，删掉它的 workspace 目录和压缩副本；运行时的会话记录留在原处。
@@ -135,7 +135,7 @@ still.fail 直接提供 HTTP MCP，不为每个会话额外起进程：
 ## 12. 存储
 
 - SQLite，一个库（`stillfail.db`，旧版的 `ember.db` 启动时自动迁移）：sessions、threads、thread_sessions、entries、deliveries、reads、turns、processes、jobs、job_notices、bindings、profile_status、identities。表结构和变更通知见 [station-storage.md](station-storage.md)。
-- 运行时会话记录按 runtime 放在 `<数据目录>/transcripts/<runtime>`，每个 profile 目录里的 `projects/`（Claude）/ `sessions/`（Codex）链接到那里。
+- 运行时会话记录按 runtime 放在 `<数据目录>/transcripts/<runtime>`，每个 profile 目录里的 `projects/`（Claude）/ `sessions/`（Codex）等链接到那里（启动时和 config 每次变化时做）。所以记录属于 station 而不是账号：换账号能接着用，profile 换了目录或被删掉，执行历史照样从这里读到。已经是真实目录的（链接之前运行时自己建的），先把里面每个文件硬链接过去（还在写它的运行时接着写的是同一个文件），再换成链接；`<数据目录>/homes/` 下不再属于任何 profile 的目录也一样。数据目录外的 profile 目录里已有的记录是用户自己的，不动，从那里读。
 
 ## 13. 可观测性
 

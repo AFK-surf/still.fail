@@ -301,17 +301,23 @@ export function usageView(sources: Source[], daysAsked: number, now: number, off
   const series: J[] = top.map(([key, name]) => ({ key, name }));
   if (rest) series.push({ key: "", name: t("core-views.usage.others") });
   const today = localDay(now, offset);
-  const daily = [...byDay].map(([day, [sum, split]]) => {
+  // Too many days for each to say its date under its bar: today's and one a week back from the last.
+  const many = byDay.size > 10;
+  const daily = [...byDay].map(([day, [sum, split]], i) => {
     const parts = top.map(([k]) => split.get(k) ?? 0);
     if (rest) {
       let other = 0;
       for (const [k, v] of split) if (!top.some(([x]) => x === k)) other += v;
       parts.push(other);
     }
+    const name = day === today ? t("core-views.usage.today") : dayLabel(day);
     return {
       day,
       label: dayLabel(day),
       today: day === today,
+      name,
+      tick: !many || day === today || (byDay.size - 1 - i) % 7 === 0 ? name : "",
+      shares: parts.map((p) => (sum.cost > 0 ? Math.min(1, Math.max(p > 0 ? 0.01 : 0, p / sum.cost)) : 0)),
       cost: sum.cost,
       costText: sum.costText(),
       calls: sum.calls,
@@ -342,7 +348,7 @@ export function usageView(sources: Source[], daysAsked: number, now: number, off
   }
   if (total.unpriced > 0) notes.push(t("core-views.usage.note.unpriced", { n: count(total.unpriced) }));
   const { top: scaleTop, ticks } = scale(max);
-  return { days, prices: priceTables(sources, first, today), wait: waitNote(waiting, failing, total.calls === 0), empty: total.calls === 0, tiles, series, daily, max, top: scaleTop, ticks, lists, notes, basis: t("core-views.usage.basis") };
+  return { days, prices: priceTables(sources, first, today), wait: waitNote(waiting, failing, total.calls === 0), empty: total.calls === 0, tiles, series, daily, many, max, top: scaleTop, ticks, lists, notes, basis: t("core-views.usage.basis") };
 }
 
 export { tr };

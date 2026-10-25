@@ -1,8 +1,9 @@
 // Markdown read once, here, for every client: an agent's words come to the clients parsed, as a compact tree (`Md`), so
 // no client parses a message itself, and the same words are read once however many views and clients show them (a
-// cache by the text). GitHub's flavour as the web read it before (micromark, as react-markdown did): tables,
-// strikethrough, task lists; a bare web address is linked where a reader sees it end (bareLinks.ts), not at the next
-// space as GFM's own finding does, and `www.…` and e-mail addresses stay text.
+// cache by the text). GitHub's flavour as the web read it before (micromark, as react-markdown did), read by
+// markdown-it (mdRead.ts: six times as fast in Hermes, the phones' engine): tables, strikethrough, task lists; a bare
+// web address is linked where a reader sees it end (bareLinks.ts), not at the next space as GFM's own finding does,
+// and `www.…` and e-mail addresses stay text.
 //
 // The tree (the shape of Cue's, clients/packages/core/src/markdown/tree.ts there): a run of words is where it stands in
 // the text (`[start, end]`, mdWords.ts), so the words go to the clients once, in the text beside the tree; or the words
@@ -17,36 +18,69 @@
 // Math uses the existing pre/code nodes with `math: true`: $$ or \[ blocks and \( inline spans. Other clients can still
 // show the TeX as code. Escaped dollars and dollars inside code keep Markdown's usual meaning.
 // Raw HTML is left out, as the web left it out. An address is as written: a client keeps what it may open.
-import { fromMarkdown } from "mdast-util-from-markdown";
-import { mathFromMarkdown } from "mdast-util-math";
-import { mathSyntax } from "./mathSyntax.ts";
-import { gfmStrikethroughFromMarkdown } from "mdast-util-gfm-strikethrough";
-import { gfmTableFromMarkdown } from "mdast-util-gfm-table";
-import { gfmTaskListItemFromMarkdown } from "mdast-util-gfm-task-list-item";
-import { gfmStrikethrough } from "micromark-extension-gfm-strikethrough";
-import { gfmTable } from "micromark-extension-gfm-table";
-import { gfmTaskListItem } from "micromark-extension-gfm-task-list-item";
 import { bareLinks } from "./bareLinks.ts";
 import { ink } from "./highlight.ts";
 import { mathDrawing } from "./math.ts";
 import { type MdWords, wordsOf } from "./mdWords.ts";
+import { type Node, read } from "./mdRead.ts";
 
 export type MdNode = MdWords | [kind: string] | [kind: string, children: MdNode[]] | [kind: string, attributes: Record<string, unknown>] | [kind: string, children: MdNode[], attributes: Record<string, unknown>];
 export type Md = MdNode[];
 
-// mdast as far as it is read here.
-type Node = { type: string; position?: { start: { offset?: number }; end: { offset?: number } }; children?: Node[]; value?: string; depth?: number; lang?: string | null; ordered?: boolean | null; start?: number | null; spread?: boolean | null; checked?: boolean | null; align?: (string | null)[] | null; url?: string; title?: string | null; alt?: string | null; identifier?: string; label?: string | null; referenceType?: string };
+/// Where trees are kept past this run (an account's database: `md_kept`), by their text's key (`mdKey`), as JSON.
+export type MdStore = { has(key: string): boolean; get(key: string): string | null; put(key: string, json: string): void };
 
-/// The tree of `text`: read once while it is kept (the latest texts, up to `KEPT_CHARS` of them).
-export function markdown(text: string): Md {
+/// How the trees kept are read: another number whenever what `parse` makes of a text changes (a test holds it to the
+/// trees of a set of texts: markdown.test.ts), so a tree kept by a core before is read afresh, not shown.
+export const MD_READING = 2;
+
+/// A text's key among the trees kept: the reading, its length and two FNV-1a hashes of it (64 bits).
+export function mdKey(text: string): string {
+  let a = 0x811c9dc5;
+  let b = 0x01000193 ^ text.length;
+  for (let i = 0; i < text.length; i++) {
+    const c = text.charCodeAt(i);
+    a = Math.imul(a ^ c, 0x01000193);
+    b = Math.imul(b ^ c, 0x0100019d);
+  }
+  return `${MD_READING}.${text.length}.${(a >>> 0).toString(36)}.${(b >>> 0).toString(36)}`;
+}
+
+/// The tree of `text`: read once while it is kept here (the latest texts, up to `KEPT_CHARS` of them), and, given
+/// `store`, once on the device: read from it where it was kept, else kept in it. In Hermes (the phones' engine) a
+/// chat's page of agents' Markdown took ~0.3 s to read on a Mac Studio's core, the most of opening the chat
+/// (bench/chat-open.ts): a chat opened the first time since the app started read it all again.
+export function markdown(text: string, store?: MdStore): Md {
   const hit = kept.get(text);
   if (hit) {
     kept.delete(text);
     kept.set(text, hit);
     return hit.md;
   }
-  const md = parse(text);
-  const cost = text.length + JSON.stringify(md).length;
+  const key = store ? mdKey(text) : "";
+  const stored = store?.get(key) ?? null;
+  let md: Md | null = null;
+  if (stored !== null) {
+    try {
+      md = JSON.parse(stored) as Md;
+    } catch {
+      // Not a tree after all: read afresh, kept again.
+    }
+  }
+  const fresh = md === null;
+  md ??= parse(text);
+  const json = fresh || store === undefined ? JSON.stringify(md) : stored!;
+  if (fresh && store) store.put(key, json);
+  remember(text, md, text.length + json.length);
+  return md;
+}
+
+/// Whether `text`'s tree is read and kept here this run.
+export function markdownHere(text: string): boolean {
+  return kept.has(text);
+}
+
+function remember(text: string, md: Md, cost: number): void {
   kept.set(text, { md, cost });
   keptChars += cost;
   for (const [old, entry] of kept) {
@@ -54,7 +88,6 @@ export function markdown(text: string): Md {
     kept.delete(old);
     keptChars -= entry.cost;
   }
-  return md;
 }
 
 /// Bound the trees as well as their source: a short formula may have many placed glyphs.
@@ -64,10 +97,7 @@ let keptChars = 0;
 
 /// Parsed afresh (`markdown` keeps it).
 export function parse(text: string): Md {
-  const root = fromMarkdown(text, {
-    extensions: [gfmStrikethrough(), gfmTable(), gfmTaskListItem(), mathSyntax],
-    mdastExtensions: [gfmStrikethroughFromMarkdown(), gfmTableFromMarkdown(), gfmTaskListItemFromMarkdown(), mathFromMarkdown()],
-  }) as Node;
+  const root = read(text);
   const defs = new Map<string, Node>();
   collect(root, defs);
   return blocks(root.children ?? [], { defs, inLink: false, source: text });

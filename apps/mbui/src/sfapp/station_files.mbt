@@ -1,13 +1,12 @@
 // A station's files put into a message (ember apps/android chat/screens/StationFiles.kt, as the phone's web does it:
-// web/src/mobile/StationFiles.tsx): ＋'s Station 文件 opens the places (each station's home, for a member who browses
-// every folder, and its folders lent), a folder entered by a tap, the way back as crumbs; files ticked (and the folder
-// shown, as a whole), then 添加. Each goes into the draft named by its path (which station has it, and where: the
-// message says so in a line of its own, `common.pathOn`; nothing goes up), or as a file where the chat says so
-// (此对话默认发送文件, the core's prefs `dropFiles` by the chat's key, else `dropAs`); its card, tapped, opens its sheet
-// (发送方式: 路径 or 文件, a folder of the chat's own station as a zip; the chat's say). A file goes up as the station
-// stages it (`drive.stage`) on the chat's own station, else read from the station that has it (`drive.read`) and put
-// up to the chat's (`station.upload.part`, as ＋'s files go). Not here yet: keeping them with the draft on the device.
-
+// web/src/mobile/StationFiles.tsx), the draft's side: what ＋'s Station 文件 (sfdesk's station_pick.mbt, the one picker
+// of every frame) put into it comes in by files_into. Each goes into the draft named by its path (which station has
+// it, and where: the message says so in a line of its own, `common.pathOn`; nothing goes up), or as a file where the
+// chat says so (此对话默认发送文件, the core's prefs `dropFiles` by the chat's key, else `dropAs`); its card, tapped,
+// opens its sheet (发送方式: 路径 or 文件, a folder of the chat's own station as a zip; the chat's say). A file goes up
+// as the station stages it (`drive.stage`) on the chat's own station, else read from the station that has it
+// (`drive.read`) and put up to the chat's (`station.upload.part`, as ＋'s files go). Not here yet: keeping them with
+// the draft on the device.
 ///|
 /// A file or folder of a station's in a draft, named by its path.
 priv struct DraftRef {
@@ -210,287 +209,14 @@ fn ref_upload(key : String, id : Int) -> Bool {
 }
 
 ///|
-/// A place of a station's drive being browsed: the station, a root, a path under it.
-priv struct SfPlace {
-  station : String
-  station_name : String
-  root : String
-  root_name : String
-  path : String
-}
-
-///|
-/// The sheet: open (for which draft, the chat's station), where it is, what is ticked (by station and path).
+/// A station file's card tapped: its sheet (the draft's key, the file), closed (drawn sinking away until it has gone).
 priv struct StationFilesUi {
-  mut open : Bool
-  /// closed, drawn sinking away until it has gone
-  mut closing : Bool
-  mut draft : String
-  mut place : SfPlace?
-  ticked : Map[String, DraftRef]
-  /// a station file's card tapped: its sheet (the draft's key, the file), closed (drawn sinking away until it has gone)
   mut ref : (String, DraftRef)?
   mut ref_closing : Bool
 }
 
 ///|
-let sfs : StationFilesUi = {
-  open: false,
-  closing: false,
-  draft: "",
-  place: None,
-  ticked: Map([]),
-  ref: None,
-  ref_closing: false,
-}
-
-///|
-/// ＋'s Station 文件 tapped: the places, for the draft `key`.
-fn station_files_open(c : @ui.Ctx, key : String) -> Unit {
-  ignore(c)
-  sfs.open = true
-  sfs.closing = false
-  sfs.draft = key
-  sfs.place = None
-  sfs.ticked.clear()
-}
-
-///|
-fn station_files_close(c : @ui.Ctx) -> Unit {
-  ignore(c)
-  sfs.open = false
-  sfs.closing = true
-}
-
-///|
-/// The sheet over the chat (StationFiles.kt openStationFiles): 86% of the screen, the way, the places or a folder,
-/// 取消 and 添加.
-fn station_files_sheet(c : @ui.Ctx, src : Source, w : String, key : String) -> Unit {
-  let closing = !sfs.open
-  if closing && !sfs.closing {
-    return
-  }
-  if sfs.draft != key {
-    return
-  }
-  let t = @sf.theme()
-  dv_sheet_frame(
-    c,
-    tr("web-pages.chat.files"),
-    c.height * 0.86,
-    closing~,
-    // (the reader's sheet: one of its own over the chat, not the drive's)
-    reader=true,
-    close=Some(fn() { station_files_close(c) }),
-    gone=fn() { sfs.closing = false },
-    fn() {
-      sf_crumbs(c)
-      c.box(w=Fill(1.0), h=Fill(1.0), clip=true, fn() {
-        match sfs.place {
-          None => sf_places(c, src, w)
-          Some(p) => sf_folder(c, src, p)
-        }
-      })
-      |> ignore
-      let n = sfs.ticked.length()
-      c.box(dir=Row, w=Fill(1.0), pl=20.0, pr=20.0, pt=8.0, pb=16.0, gap=8.0, justify=JEnd, fn() {
-        if dv_button(c, "sf/cancel", tr("common.cancel"), primary=false) {
-          station_files_close(c)
-        }
-        if dv_button(
-            c,
-            "sf/add",
-            if n == 0 {
-              tr("web-mobile.files.add")
-            } else {
-              fill("web-mobile.files.addCount", [("n", "\{n}")])
-            },
-            primary=true,
-            enabled=n > 0,
-          ) {
-          let have = refs_of(key)
-          // as files where the chat says so (a folder only named); the composer puts those up (ref_send_up)
-          let as_files = drops_as_files(src, key)
-          for _, r in sfs.ticked {
-            if !have.iter().any(fn(x) { x.station == r.station && x.path == r.path }) {
-              have.push({ ..r, mode: if as_files && !r.dir { "file" } else { "path" }, up: None })
-            }
-          }
-          draft_refs[key] = have
-          station_files_close(c)
-        }
-      })
-      |> ignore
-      ignore(t)
-    },
-  )
-}
-
-///|
-/// The way to the folder shown: all the places, then its station's place and the folders under it; each a way back.
-fn sf_crumbs(c : @ui.Ctx) -> Unit {
-  let t = @sf.theme()
-  let steps : Array[(String, SfPlace?)] = [(tr("web-mobile.files.places"), None)]
-  match sfs.place {
-    Some(p) => {
-      steps.push((p.station_name + " · " + p.root_name, Some({ ..p, path: "" })))
-      let mut so_far = ""
-      for part in p.path.split("/") {
-        if part != "" {
-          so_far = dv_join(so_far, part.to_owned())
-          steps.push((part.to_owned(), Some({ ..p, path: so_far })))
-        }
-      }
-    }
-    None => ()
-  }
-  // scrolled across when long, its end in view (StationFiles.kt: horizontalScroll, scrollTo(maxValue))
-  c.box(style=sf_way_room, fn() {
-    c.sideways("sf-way", to_end=steps.length().to_string(), fn() {
-      c.box(dir=Row, min_h=28.0, pl=17.0, pr=20.0, align=ACenter, fn() {
-        for i, step in steps {
-          let (name, to) = step
-          if i > 0 {
-            @sf.icon(c, "chevron-right", size=12.0, color=t.p.subtle) |> ignore
-          }
-          let last = i == steps.length() - 1
-          let id = c.id("sf-way/\{i}")
-          if !last && c.clicked(id) {
-            sfs.place = to
-          }
-          c.box(padx=3.0, pady=3.0, radius=6.0, id=if last { 0 } else { id }, fn() {
-            c.text(name, size=14.0, weight=if last { 600 } else { 400 }, color=if last { t.p.text } else { t.p.muted }, wrap=false)
-            |> ignore
-          })
-          |> ignore
-        }
-      })
-      |> ignore
-    })
-    |> ignore
-  })
-  |> ignore
-}
-
-///|
-/// The way's room: 8 over the list under it (StationFiles.kt:145).
-// kept across runs: a value (no field of it changes)
-let sf_way_room : @ui.Style = @ui.style(w=Full, pb=S2)
-
-///|
-/// Each station's places (StationFiles.kt Places): its home (for a member who browses every folder), then its folders
-/// lent, under its name (离线 beside it while away).
-fn sf_places(c : @ui.Ctx, src : Source, w : String) -> Unit {
-  let t = @sf.theme()
-  let (list, error) = dv_stations(src, w)
-  match list {
-    None => {
-      waiting(c, 5, None, error)
-      return
-    }
-    _ => ()
-  }
-  let stations = list.unwrap_or([]).filter(fn(s) { s.drive })
-  if stations.length() == 0 {
-    c.box(padx=20.0, pady=12.0, fn() {
-      c.text(tr("web-main.rail.filesNone"), size=13.0, color=t.p.muted, w=Fill(1.0)) |> ignore
-    })
-    |> ignore
-    return
-  }
-  let rows : Array[(DvStation, String, String, Bool)?] = []
-  for s in stations {
-    rows.push(Some((s, "", "", false)))
-    if s.anywhere && s.home != "" {
-      rows.push(Some((s, s.home, tr("web-pages.drive.home"), true)))
-    }
-    for r in s.roots {
-      rows.push(Some((s, r.path, r.name, false)))
-    }
-  }
-  rows.push(None)
-  c.list("sf-places", rows.length(), 48.0, fn(i) {
-    match rows[i] {
-      None => c.box(h=Px(8.0), fn() {  }) |> ignore
-      Some((s, "", _, _)) =>
-        dv_section(c, s.name, trailing=if s.online { "" } else { tr("web-pages.stations.offline") })
-      Some((s, path, name, home)) =>
-        if dv_pick_row(c, "sf-place/" + s.station + "|" + path, name, sub=path, icon=if home { "server" } else { "folder" }) {
-          sfs.place = Some({ station: s.station, station_name: s.name, root: path, root_name: name, path: "" })
-        }
-    }
-  })
-  |> ignore
-}
-
-///|
-/// A folder (StationFiles.kt FolderRows): itself to tick as a whole, then what is in it (a folder entered, a file
-/// ticked).
-fn sf_folder(c : @ui.Ctx, src : Source, p : SfPlace) -> Unit {
-  let t = @sf.theme()
-  let topic = (src.topic)("drive", {
-    "station": Json::string(p.station),
-    "root": Json::string(p.root),
-    "path": Json::string(p.path),
-  })
-  let (sort, hidden) = dv_views(src)
-  let shown = dv_arranged(items(topic.value, "entries").map(dv_entry), sort, hidden)
-  let whole = draft_ref(p.station, p.station_name, p.root, p.path, if p.path == "" { p.root_name } else { dv_name(p.path) }, true)
-  let tick_key = fn(r : DraftRef) { r.station + "\n" + r.path }
-  let toggle = fn(r : DraftRef) {
-    if sfs.ticked.contains(tick_key(r)) {
-      sfs.ticked.remove(tick_key(r))
-    } else {
-      sfs.ticked[tick_key(r)] = r
-    }
-  }
-  let n = if topic.value is Some(_) { shown.length() + 2 } else { 3 }
-  c.list("sf-folder/" + p.station + "|" + p.root + "|" + p.path, n, 48.0, fn(i) {
-    if i == 0 {
-      if dv_pick_row(c, "sf-whole", tr("web-mobile.files.wholeFolder"), sub=whole.path, icon="folder", checked=sfs.ticked.contains(tick_key(whole))) {
-        toggle(whole)
-      }
-      c.box(w=Fill(1.0), padx=20.0, pady=4.0, fn() {
-        c.box(w=Fill(1.0), h=Px(1.0), bg=t.p.line, fn() {  }) |> ignore
-      })
-      |> ignore
-    } else if i == n - 1 {
-      c.box(h=Px(8.0), fn() {  }) |> ignore
-    } else if topic.value is None {
-      match topic.error {
-        Some(e) =>
-          c.box(padx=20.0, pady=12.0, fn() {
-            c.text(dv_error(e), size=13.0, color=t.p.red, w=Fill(1.0)) |> ignore
-          })
-          |> ignore
-        None => waiting(c, 5, None, None)
-      }
-    } else if shown.length() == 0 {
-      c.box(padx=20.0, pady=12.0, fn() {
-        c.text(tr("web-pages.drive.emptyFolder"), size=13.0, color=t.p.muted, w=Fill(1.0)) |> ignore
-      })
-      |> ignore
-    } else {
-      let e = shown[i - 1]
-      let r = draft_ref(p.station, p.station_name, p.root, dv_join(p.path, e.name), e.name, e.dir, size=e.size)
-      if e.dir {
-        if dv_pick_row(c, "sf-e/" + e.name, e.name, sub=e.time_text, icon=dv_kind_icon(e.kind)) {
-          sfs.place = Some({ ..p, path: dv_join(p.path, e.name) })
-        }
-      } else if dv_pick_row(
-          c,
-          "sf-e/" + e.name,
-          e.name,
-          sub=dv_words([if e.size_text == "" { file_size(e.size) } else { e.size_text }, e.time_text], " · "),
-          icon=dv_kind_icon(e.kind),
-          checked=sfs.ticked.contains(tick_key(r)),
-        ) {
-        toggle(r)
-      }
-    }
-  })
-  |> ignore
-}
+let sfs : StationFilesUi = { ref: None, ref_closing: false }
 
 ///|
 /// A station file in the draft (StationFiles.kt RefCard), in the files' row (draft_files_row): its name and where it is (named by its path:
@@ -525,24 +251,24 @@ fn ref_card(c : @ui.Ctx, key : String, r : DraftRef) -> Unit {
       Some(p) =>
         match (p.error, p.done) {
           (Some(e), _) => e
-          (_, Some(done)) => file_size(number(Some(done), "size"))
+          (_, Some(done)) => @sf.file_size(number(Some(done), "size"))
           _ => uploading_text(p)
         }
       None => tr("common.uploading")
     }
   }
-  // (as far down as a picture's tile in the files' row; as wide as it is, never squeezed)
-  c.box(w=Px(file_card_w), pt=picture_remove_out, fn() {
+  // (its remove button over its corner as a picture's, their tops in line; as wide as it is, never squeezed)
+  with_remove(c, remove, file_card_w, tr("web-main.file.remove", args=[("name", name)]), fn() {
     let tile = c.box(
       dir=Row,
       w=Px(file_card_w),
       padx=10.0,
       pady=8.0,
       gap=10.0,
-      style=files_card(),
+      // (named by its path: no ground, outlined; going as the file: as every waiting card's, @sf.composer_card)
+      style=if named { files_card() } else { files_card().then(@sf.composer_card()) },
       border=if named { 1.0 } else { 0.0 },
       border_color=@sf.alpha(t.p.text, 0.22),
-      bg=if named { 0L } else { ink().neutral },
       align=ACenter,
       id=card,
       fn() {
@@ -552,18 +278,16 @@ fn ref_card(c : @ui.Ctx, key : String, r : DraftRef) -> Unit {
           @sf.icon(c, if r.dir && named { "folder" } else { "read" }, size=16.0, color=t.p.muted) |> ignore
         }
         c.box(w=Fill(1.0), fn() {
-          c.text(name, size=15.0, color=t.p.text, wrap=false, line=20.0) |> ignore
-          c.text(note, size=11.0, color=if failed is Some(_) && !named { t.p.red } else { t.p.muted }, wrap=false, line=16.0)
+          c.text(name, size=t.t.ui, color=t.p.text, wrap=false, line=20.0) |> ignore
+          c.text(note, size=t.t.caption, color=if failed is Some(_) && !named { t.p.red } else { t.p.muted }, wrap=false, line=16.0)
           |> ignore
         })
         |> ignore
-        card_close(c, remove)
       },
     )
     // where it is, for it to fly from when sent as a file (flight.mbt)
     @motion.measure(c, tile, "composer/tile/ref/\{r.order}")
   })
-  |> ignore
 }
 
 ///|
@@ -584,26 +308,27 @@ fn ref_sheet(c : @ui.Ctx, src : Source, key : String, station : String) -> Unit 
     Some(i) if i > 0 => r.path.view(end_offset=i).to_owned()
     _ => r.path
   }
-  let rows = if !r.dir || zips { 2 } else { 1 }
   dv_sheet_frame(
     c,
     r.name,
-    dv_fit(rows) + 30.0,
+    // (before what it holds is first laid out: built again at once, as tall as it is)
+    c.height * 0.5,
+    fit=true,
     closing~,
     reader=true,
-    close=Some(fn() { sfs.ref_closing = true }),
+    close=fn() { sfs.ref_closing = true },
     gone=fn() {
       sfs.ref = None
       sfs.ref_closing = false
     },
     fn() {
       c.box(w=Fill(1.0), pl=20.0, pr=20.0, pb=14.0, fn() {
-        c.text(r.station_name + " · " + folder, size=13.0, color=t.p.muted, w=Fill(1.0)) |> ignore
+        c.text(r.station_name + " · " + folder, size=t.t.meta, color=t.p.muted, w=Fill(1.0)) |> ignore
       })
       |> ignore
       if !r.dir || zips {
         c.box(w=Fill(1.0), pl=20.0, pr=20.0, pb=14.0, gap=8.0, fn() {
-          c.text(tr("web-main.file.sendAs"), size=13.0, color=t.p.muted) |> ignore
+          c.text(tr("web-main.file.sendAs"), size=t.t.meta, color=t.p.muted) |> ignore
           let now = if r.mode == "path" { 0 } else { 1 }
           // the two halves of the sheet's width (Seg fill = true), inside the track's 2 each side
           let picked = @sf.segmented(
@@ -631,7 +356,7 @@ fn ref_sheet(c : @ui.Ctx, src : Source, key : String, station : String) -> Unit 
       }
       c.box(w=Fill(1.0), pl=20.0, pr=20.0, pb=14.0, fn() {
         c.box(dir=Row, w=Fill(1.0), padx=14.0, pady=10.0, gap=12.0, radius=14.0, bg=t.p.chip, align=ACenter, id~, fn() {
-          c.text(tr("web-main.file.chatAsFiles"), size=14.0, weight=600, color=t.p.text, w=Fill(1.0)) |> ignore
+          c.text(tr("web-main.file.chatAsFiles"), size=t.t.ui, weight=600, color=t.p.text, w=Fill(1.0)) |> ignore
           // the settings' switch (PageParts.kt Switch)
           @settings.switch(c, "ref/chat-files", chat)
         })
@@ -640,4 +365,42 @@ fn ref_sheet(c : @ui.Ctx, src : Source, key : String, station : String) -> Unit 
       |> ignore
     },
   )
+}
+
+///|
+/// A station's files from its 文件 tab (src/sfdesk/drive_tab.mbt: 添加到消息, or dragged onto the chat) into draft `key`, as
+/// the web's droppedFrom: each named by its path, or as a file where the chat says so (a folder only named); what is
+/// already in it not twice.
+fn refs_put(src : Source, key : String, items : Array[Dragged]) -> Unit {
+  if items.is_empty() {
+    return
+  }
+  let have = refs_of(key)
+  let as_files = drops_as_files(src, key)
+  for i in items {
+    if have.iter().any(fn(x) { x.station == i.station && x.path == i.abs }) {
+      continue
+    }
+    let name = if i.station_name != "" { i.station_name } else { station_name_by(src, i.station) }
+    let r = draft_ref(i.station, name, i.root, i.path, i.name, i.dir, size=i.size)
+    have.push({ ..r, mode: if as_files && !i.dir { "file" } else { "path" } })
+  }
+  draft_refs[key] = have
+}
+
+///|
+/// A station's name by its address (`<workspace>/<station>`), as the workspace's stations say it ("" not known).
+fn station_name_by(src : Source, station : String) -> String {
+  let (list, _) = dv_stations(src, workspace_of(station))
+  match list.unwrap_or([]).iter().find_first(fn(s) { s.station == station }) {
+    Some(s) => s.name
+    None => ""
+  }
+}
+
+///|
+/// Whether any of the workspace's stations lends its files (ChatSide.tsx useStationDrive): then a chat has its 文件 tab.
+fn drive_in(src : Source, ws : String) -> Bool {
+  let (list, _) = dv_stations(src, ws)
+  list.unwrap_or([]).iter().any(fn(s) { s.drive })
 }

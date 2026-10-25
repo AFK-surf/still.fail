@@ -1,6 +1,6 @@
-// 43-notify-off (e2e/traces/notify-off.trace): Settings → 通知 switched off (notify.set {on: false}; the core takes this
-// device's pushes off the accounts: push.unregister): a card asked on the other device then shows no notice;
-// switched on again (notify.set {on: true}).
+// 43-notify-off (e2e/traces/notify-off.trace): Settings → 通知 → its banners switched off (notify.set {on: false}; the
+// core takes this device's pushes off the accounts: push.unregister): a card asked on the other device then shows no
+// notice; switched on again (notify.set {on: true}).
 
 ///|
 test "43-notify-off" {
@@ -15,6 +15,12 @@ test "43-notify-off" {
     f.run_to_rest("a list's")
     f.see("=通知")
     f.tap("=通知")
+    f.run_for(@ui.nav_push_ms)
+    f.see("提醒方式")
+    // (its tile, the topmost 横幅: the kinds' rows under it say 横幅 too)
+    f.tap("=横幅", top=true)
+    f.back()
+    f.run_for(@ui.nav_push_ms)
     f.back()
     f.run_for(@ui.nav_push_ms)
     f.see("端到端测试")
@@ -30,7 +36,10 @@ test "43-notify-off" {
     f.run_to_rest("a list's")
     f.see("=通知")
     f.tap("=通知")
-    // switched on again: as the core has it once it answered (its switch says so at once, before), for the runs after
+    f.run_for(@ui.nav_push_ms)
+    f.see("提醒方式")
+    f.tap("=横幅", top=true)
+    // switched on again: as the core has it once it answered (its tile says so at once, before), for the runs after
     f.answered("notify.set", 2)
     f.end()
   })

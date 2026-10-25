@@ -9,17 +9,6 @@ export const toastInKeyframes = keyframes({ "from": { opacity: "0", transform: "
 export const splashFloatKeyframes = keyframes({ "50%": { transform: "translateY(-5px)" } });
 export const appearKeyframes = keyframes({ "from": { opacity: "0" }, "to": { opacity: "1" } });
 export const spinKeyframes = keyframes({ "to": { transform: "rotate(360deg)" } });
-/**
- * A chat row's watching radar (ChatMark.css.ts leadSlot): its dot beats, then its arcs light up in turn, inner then outer,
- * a signal going out while they stay where they are; then they dim and rest till the next.
- */
-export const leadBeatKeyframes = keyframes({ "0%": { transform: "scale(1)" }, "8%": { transform: "scale(1.35)" }, "22%, 100%": { transform: "scale(1)" } });
-export const leadLitKeyframes = keyframes({ "0%": { opacity: ".3" }, "10%": { opacity: "1" }, "32%, 100%": { opacity: ".3" } });
-/**
- * A chat row's waiting dots (ChatMark.css.ts leadSlot): one breath, in and out in the first
- * half of the loop, then still until the next, so it rests between breaths rather than going on and on.
- */
-export const leadBreatheKeyframes = keyframes({ "0%, 52%, 100%": { opacity: ".35" }, "23%": { opacity: "1" } });
 export const jobBreatheKeyframes = keyframes({ "50%": { opacity: ".35" } });
 export const jobLiveKeyframes = keyframes({ "0%, 100%": { transform: "scale(.6)", opacity: ".35" }, "50%": { transform: "scale(1.15)", opacity: "0" } });
 export const msgSendingShowKeyframes = keyframes({ "from": { visibility: "hidden" }, "to": { visibility: "visible" } });

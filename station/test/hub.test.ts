@@ -3,12 +3,14 @@
 // the Rust station's hub/tests.rs, on a real Store, a fake chat platform and fake runtimes.
 import { CONNECTION_LOST, keyPart, placeIn, sandboxConfig, sandboxName } from "../src/agents/sandbox.ts";
 import assert from "node:assert/strict";
-import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { test } from "node:test";
 import { GO_ON_AFTER_AUTH, GO_ON_AFTER_LOST, GO_ON_AFTER_REFILL, GO_ON_AFTER_SPENT, NUDGE, TOOLS_LOST } from "../src/agents/instructions.ts";
 import { latest } from "../src/agents/migrations.ts";
 import { classifyResult } from "../src/agents/claude.ts";
+import { homesFirst, transcriptPaths } from "../src/read/transcript.ts";
+import { marksDir, stateOf } from "../src/read/transcripts.ts";
 import { sessionKey } from "../src/sessions/hub.ts";
 import { addToThread, autoArchive, archive, archiveBy, archiveChat, bindSingle, configure, deleteSession, newSession, openChat, say as sayIn } from "../src/sessions/lifecycle.ts";
 import { AUTO, MANUAL } from "../src/store/store.ts";
@@ -1169,7 +1171,7 @@ test("a pending message edited before delivery reaches the agent as edited", asy
   await r.close();
 });
 
-test("deleting a session ends its process and removes its workspace and the threads only it was in", async () => {
+test("deleting a session ends its process and removes its workspace, the threads only it was in and what the readers kept of its transcript's reading", async () => {
   const r = new Rig();
   const m = message();
   await r.accept(m);
@@ -1180,6 +1182,10 @@ test("deleting a session ends its process and removes its workspace and the thre
   const transcript = join(r.config.profiles[0]!.home, "projects", "x", `${row.runtimeSessionId}.jsonl`);
   mkdirSync(dirname(transcript), { recursive: true });
   writeFileSync(transcript, "{}\n");
+  // Read as a reader reads it (read/sessions.ts `transcriptState`).
+  const marks = marksDir(r.config.dataDir);
+  stateOf("claude", transcriptPaths("claude", r.config.dataDir, homesFirst(r.config.profiles, row.profile), r.store.runtimeSessions(key)).paths, marks);
+  assert.equal(readdirSync(marks).length, 1);
   assert.ok(existsSync(row.workspace));
   await deleteSession(r.hub, key);
   assert.ok(r.claude.last().disposed);
@@ -1188,6 +1194,7 @@ test("deleting a session ends its process and removes its workspace and the thre
   assert.ok(!existsSync(row.workspace));
   assert.ok(!existsSync(dirname(row.workspace)));
   assert.ok(existsSync(transcript));
+  assert.deepEqual(readdirSync(marks), []);
   await r.close();
 });
 
@@ -1486,6 +1493,41 @@ test("a session changes profile, model and effort by hand, and is taken on by an
   await r.accept({ ...say("<@UBOT> and the tests"), threadTs: m.threadTs });
   await settle();
   assert.equal(r.session(key).profile, "cc");
+  await r.close();
+});
+
+test("a session given back to the station has its account picked again as a new one's would be, its own process not counted", async () => {
+  const r = new Rig();
+  const m = say("<@UBOT> fix the build");
+  await r.accept(m);
+  await settle();
+  const key = sessionKey("cl", "C1", m.threadTs);
+  // Both run its model (opus, its connect's).
+  r.edit((raw) => {
+    raw.profiles[0].models = ["opus"];
+    raw.profiles.push({ ...raw.profiles[0], id: "cc2", name: "another" });
+  });
+  const used = (cc: number, cc2: number) =>
+    r.hub.accounts.setHealth((id) => ({ quota: { state: "ok", windows: [{ label: "5h", usedPercent: id === "cc" ? cc : cc2, resetsAt: null }], detail: null, checkedAt: 0 } }));
+  const on = () => [r.session(key).profile, r.session(key).profilePinned];
+  await r.call(key, "chat_post", { to: `C1/${m.threadTs}`, text: "done", kind: "final" });
+  r.claude.last().complete();
+  await settle();
+  assert.equal(r.session(key).profile, "cc");
+  // Its process stays on cc: counted, cc would look the busier one, and it would move for nothing.
+  used(30, 40);
+  await configure(r.hub, key, { repick: true });
+  assert.deepEqual(on(), ["cc", false]);
+  // Kept to cc2 by hand, then given back: it stays there until picked again, when the pool's choice takes it.
+  await configure(r.hub, key, { profile: "cc2" });
+  await configure(r.hub, key, { profile: null });
+  assert.deepEqual(on(), ["cc2", false]);
+  await configure(r.hub, key, { profile: "cc2" });
+  await configure(r.hub, key, { repick: true });
+  assert.deepEqual(on(), ["cc", false]);
+  // With a profile given, that one is kept to.
+  await configure(r.hub, key, { profile: "cc2", repick: true });
+  assert.deepEqual(on(), ["cc2", true]);
   await r.close();
 });
 
@@ -1848,6 +1890,64 @@ test("an account spent with none to move to is said once; what wakes it waits fo
   agent.complete();
   await settle();
   assert.ok(matches(agent.prompts[4]!, ["a job ended", "another job ended"]), agent.prompts[4]);
+  await r.close();
+});
+
+test("taken up by the next station, a process runs on the account it was started on, whose allowance it spends; it moves before its next turn", async () => {
+  const time = testClock();
+  const r = new Rig({ clock: time.clock });
+  r.edit((raw) => {
+    raw.profiles[0].models = ["opus"];
+    raw.profiles.push({ ...raw.profiles[0], id: "cc2", name: "second" });
+  });
+  const now = time.clock.currentTimeMillisUnsafe();
+  const full = { quota: { state: "ok", windows: [{ label: "每周", usedPercent: 100, resetsAt: now + 24 * 60 * 60 * 1000, minutes: 10080 }], detail: null, checkedAt: now } };
+  // Both start on the first account, the second full for now.
+  r.hub.accounts.setHealth((id) => (id === "cc2" ? full : {}));
+  const busy = message();
+  const idle = message();
+  await r.accept(busy);
+  await r.accept(idle);
+  await settle();
+  const [busyOld, idleOld] = r.claude.sessions;
+  const busyKey = busyOld!.options.route;
+  const idleKey = idleOld!.options.route;
+  assert.ok(busyOld!.options.profile.id === "cc" && idleOld!.options.profile.id === "cc");
+  idleOld!.complete();
+  await settle();
+  await r.call(idleKey, "chat_state", { kind: "all_done", done: "answered" });
+  idleOld!.complete();
+  await settle();
+  await r.hub.handOver();
+  // The next station finds the first account full and the second refilled.
+  const claude = new FakeDriver("claude");
+  const hub = r.newHub({ chats: (id) => (id === "cl" ? r.chat : undefined), drivers: [claude, new FakeDriver("codex")], internal: false });
+  hub.accounts.setHealth((id) => (id === "cc" ? full : {}));
+  await hub.takeUp();
+  hub.recover();
+  await settle();
+  const busyTaken = claude.sessions.find((s) => s.sessionId === busyOld!.sessionId)!;
+  const idleTaken = claude.sessions.find((s) => s.sessionId === idleOld!.sessionId)!;
+  assert.ok(busyTaken.options.profile.id === "cc" && idleTaken.options.profile.id === "cc", "taken up where their processes run");
+  assert.ok(r.session(busyKey).profile === "cc" && r.session(idleKey).profile === "cc", "not moved by being taken up");
+  // The running turn runs into the first account's allowance: the second takes it on.
+  busyTaken.end({ kind: "failed", reason: classifyResult("usage limit reached"), message: "You've hit your weekly limit · resets Oct 26 at 9pm" });
+  await settle();
+  assert.ok(busyTaken.disposed);
+  const busyNext = claude.last();
+  assert.equal(busyNext.options.profile.id, "cc2");
+  assert.equal(r.session(busyKey).profile, "cc2");
+  assert.ok(matches(busyNext.prompts[0]!, [GO_ON_AFTER_SPENT]), busyNext.prompts[0]);
+  assert.ok(r.chat.texts().every((t) => !t.includes("额度")), "it just goes on, saying nothing");
+  // The idle one, given a message, leaves its process on the full account first.
+  await hub.accept("cl", reply(idle, "9999.5", "<@UBOT> one more", { addressed: true }));
+  await settle();
+  assert.ok(idleTaken.disposed);
+  assert.deepEqual(idleTaken.prompts, []);
+  const idleNext = claude.last();
+  assert.equal(idleNext.options.profile.id, "cc2");
+  assert.ok(idleNext.prompts[0]!.includes("one more"), idleNext.prompts[0]);
+  await hub.shutdown();
   await r.close();
 });
 

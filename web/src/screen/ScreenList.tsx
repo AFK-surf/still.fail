@@ -6,7 +6,7 @@ import { useState } from "react";
 import { Link } from "react-router";
 import { useCall, useTopic } from "../core/react.ts";
 import type { ScreenItem, ScreensView } from "../core/shapes.ts";
-import { Chat, ChevronRight, Close, Monitor, Web, type IconProps } from "@stillfail/ui/icons.tsx";
+import { Chat, ChevronRight, Close, Devices, Monitor, Web, type IconProps } from "@stillfail/ui/icons.tsx";
 import { failure, useToast } from "@stillfail/ui/toast.tsx";
 import { IconButton } from "@stillfail/ui/parts.tsx";
 import { useGo } from "../go.ts";
@@ -34,7 +34,7 @@ export const lacks = (s: ScreenItem) => !!s.access && (!s.access.capture || !s.a
 
 /** A screen's mark: a display for the machine's desktop, the globe for a tab of its browser. */
 export function ScreenMark({ kind, ...props }: { kind: string } & IconProps) {
-  return kind === "browser" ? <Web {...props} /> : <Monitor {...props} />;
+  return kind === "browser" ? <Web {...props} /> : kind === "simulator" ? <Devices {...props} /> : <Monitor {...props} />;
 }
 
 /**

@@ -59,11 +59,18 @@ export type Change = {
 
 /// What changed here, for the views to show it anew.
 export type LocalChange =
-  | { kind: "outbox"; station: string; thread: number }
+  /// `chat`: what changed shows in the chat alone (a message the station took), not in any list.
+  | { kind: "outbox"; station: string; thread: number; chat?: true }
   | { kind: "pending"; key: string }
   | { kind: "first"; station: string; key: string }
   | { kind: "changing"; station: string }
-  | { kind: "archiving" };
+  | { kind: "archiving" }
+  | { kind: "letGo" }
+  /// A vault request decided here (`request`): its card off the 奏 page, how it went on its card in its chat.
+  | { kind: "vault"; request: string };
+
+/// How a vault request decided here went, as its station restates its card (station/src/vault/secrets.ts #settle).
+export type VaultOutcome = { status: "granted" | "denied"; scope?: "once" | "hour" | "chat" };
 
 /// The name a station keeps an upload under: the last part of its path, wherever it is moved.
 const keptName = (path: string) => path.split("/").at(-1)!;
@@ -93,6 +100,11 @@ export class Local {
   readonly #uploadedFrom = new Map<string, string>();
   /// Messages sent from here that their station has taken: station, thread, seq.
   readonly #sentIn: [string, number, number][] = [];
+  /// Cards let go from here (`decision.dismiss`): station, thread, seq, and once the station took it how often its rows
+  /// had changed then (data.rowsRev).
+  readonly #lettingGo: { station: string; thread: number; seq: number; done?: number }[] = [];
+  /// Vault requests decided here (their cards' `vault`) and how: the latest few.
+  readonly #vaultDecided: { request: string; outcome: VaultOutcome }[] = [];
   onChange: (change: LocalChange) => void = () => {};
   onMade: (station: string, key: string) => void = () => {};
 
@@ -256,33 +268,28 @@ export class Local {
     return sends;
   }
 
-  /// The rows of the chats asked for here on a station that its rows do not have yet (see views.rs `pending_rows`),
-  /// and of those it has, the ones still without a message titled as their first message here (by id).
-  pendingRows(station: string): { rows: J[]; titled: Map<string, J> } {
+  /// The rows of the chats asked for here on a station that its rows do not have yet (see views.rs `pending_rows`).
+  pendingRows(station: string): J[] {
     const out: J[] = [];
-    const titled = new Map<string, J>();
     for (const [key, chat] of this.#pending) {
       if (chat.station !== station) continue;
-      const first = this.#firstOf(chat);
-      const title = firstLine(first);
       const theirs: J = chat.made ? this.#data.chat(station, chat.made[0]) : this.#data.chatOfClientKey(station, key);
       if (theirs !== undefined) {
         if (chat.made && !chat.listed) {
           chat.listed = true;
           this.#savePending(key);
         }
-        const last = get(theirs, "last");
-        if (title !== null && (last === undefined || last === null)) titled.set(theirs.id, { ...theirs, title });
         continue;
       }
       if (chat.listed) continue;
-      if (first === undefined && chat.made === null) continue;
+      if (this.#firstOf(chat) === undefined && chat.made === null) continue;
       const [id, thread] = chat.made ? [chat.made[0], chat.made[1]] : [key, null];
       const row: J = {
         id,
         session: id,
         thread,
-        title: title ?? t("core-views.new_chat"),
+        // named by no one yet: what its station will call it till then (views.ts chatTitle)
+        title: t("core-views.new_chat"),
         agents: [],
         last: null,
         unread: false,
@@ -295,18 +302,7 @@ export class Local {
       if (chat.made === null) row.pending = true;
       out.push(row);
     }
-    return { rows: out, titled };
-  }
-
-  /// What a chat asked for here is titled while its station has no message in it yet (as its row is: pendingRows):
-  /// the first line of its first message here, by its key or, once made, its thread or its agent's key.
-  firstTitle(station: string, at: { key?: string; thread?: number; session?: string }): string | null {
-    for (const [key, chat] of this.#pending) {
-      if (chat.station !== station) continue;
-      if (key !== at.key && (chat.made === null || (chat.made[1] !== at.thread && chat.made[0] !== at.session))) continue;
-      return firstLine(this.#firstOf(chat));
-    }
-    return null;
+    return out;
   }
 
   #firstOf(chat: Pending): J {
@@ -507,15 +503,15 @@ export class Local {
     this.onChange({ kind: "outbox", station, thread });
   }
 
-  /// The station has the message as entry `seq`: it stays until the chat's entries reach it. `shown`: whether a page
-  /// shows the chat (else it goes now, but for a chat asked for here, whose page is on its way to it).
+  /// The station has the message as entry `seq`: it is `sent`, and stays until the chat's entries reach it. `shown`:
+  /// whether a page shows the chat (else it goes now, but for a chat asked for here, whose page is on its way to it).
   outboxSent(station: string, thread: number, id: string, seq: number, shown: boolean): void {
     this.#sentIn.push([station, thread, seq]);
     if (this.#sentIn.length > 256) this.#sentIn.shift();
     const madeHere = [...this.#pending.values()].some((c) => c.station === station && c.made?.[1] === thread);
     if (!madeHere && !shown) return this.outboxRemove(station, thread, id);
-    this.#outboxPut(station, thread, this.outbox(station, thread).map((m) => (m.id === id ? { ...m, seq } : m)));
-    this.onChange({ kind: "outbox", station, thread });
+    this.#outboxPut(station, thread, this.outbox(station, thread).map((m) => (m.id === id ? { ...m, seq, state: "sent" } : m)));
+    this.onChange({ kind: "outbox", station, thread, chat: true });
   }
 
   outboxRemove(station: string, thread: number, id: string): void {
@@ -565,6 +561,46 @@ export class Local {
     return this.outbox(station, thread).some((m) => m.state !== "failed") || this.#sentIn.some(([s, t, n]) => s === station && t === thread && n > seq);
   }
 
+  /// A card let go from here (`decision.dismiss`): off the 奏 page at once. Refused (`ok` false), it is back; taken,
+  /// it stays off until its station's rows change from how they were then (`rev`), which then say it is dismissed.
+  letGo(station: string, thread: number, seq: number): void {
+    this.#lettingGo.push({ station, thread, seq });
+    this.onChange({ kind: "letGo" });
+  }
+
+  letGoEnded(station: string, thread: number, seq: number, ok: boolean, rev: number): void {
+    const i = this.#lettingGo.findIndex((l) => l.station === station && l.thread === thread && l.seq === seq && l.done === undefined);
+    if (i < 0) return;
+    if (ok) this.#lettingGo[i] = { ...this.#lettingGo[i], done: rev };
+    else {
+      this.#lettingGo.splice(i, 1);
+      this.onChange({ kind: "letGo" });
+    }
+  }
+
+  /// Whether the card at `seq` in a chat is let go from here.
+  lettingGo(station: string, thread: number, seq: number): boolean {
+    return this.#lettingGo.some((l) => l.station === station && l.thread === thread && l.seq === seq);
+  }
+
+  /// A vault request approved or turned down here (`outcome`): its card is off the 奏 page, and its card in its chat says
+  /// how it went, at once (its station says so as it tells it).
+  vaultDecided(request: string, outcome: VaultOutcome): void {
+    if (this.decidedVault(request)) return;
+    this.#vaultDecided.push({ request, outcome });
+    if (this.#vaultDecided.length > 64) this.#vaultDecided.shift();
+    this.onChange({ kind: "vault", request });
+  }
+
+  decidedVault(request: string): boolean {
+    return this.vaultOutcome(request) !== undefined;
+  }
+
+  /// How a vault request decided here went (none: not decided here).
+  vaultOutcome(request: string): VaultOutcome | undefined {
+    return this.#vaultDecided.find((d) => d.request === request)?.outcome;
+  }
+
   // ── archiving and changing ──
 
   archiving(station: string, thread: number | null, session: string, on: boolean): void {
@@ -607,6 +643,10 @@ export class Local {
 
   /// Lets go of what is done that its station's rows have had since (they changed after it answered).
   settle(station: string, rev: number): void {
+    for (let i = this.#lettingGo.length - 1; i >= 0; i--) {
+      const l = this.#lettingGo[i];
+      if (l.station === station && l.done !== undefined && l.done !== rev) this.#lettingGo.splice(i, 1);
+    }
     for (let i = this.#changing.length - 1; i >= 0; i--) {
       const c = this.#changing[i];
       if (c.station !== station || c.done === undefined) continue;
@@ -681,11 +721,6 @@ export class Local {
 export function sentAs(entry: J): J {
   const message: J = { text: entry.text ?? null, attachments: entry.attachments ?? null, quotes: entry.quotes ?? null };
   if (typeof entry.client === "string") message.client = entry.client;
+  if (Array.isArray(entry.cc) && entry.cc.length > 0) message.cc = entry.cc;
   return message;
-}
-
-/// A message's first line with words, as a chat made by it is titled until its station has it.
-function firstLine(message: J): string | null {
-  const text = String(get(message, "text") ?? "").trim();
-  return text.split("\n").map((l) => l.trim()).find((l) => l !== "") ?? null;
 }

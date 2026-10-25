@@ -44,6 +44,16 @@ struct ListState {
   mut follow_margin : Double
   // the frame it was last built in (one not built is shown by nothing: at rest)
   mut built : Int
+  // gliding to its end where it showed as the glide set out: its scroll bar shows meanwhile (not where it is put)
+  mut glide_shows : Bool
+  // its scroll bar (scroll_bar.mbt)
+  bar : Bar
+  // the frame it was last laid out in; where it stood as that frame's first layout of it began and where that frame's
+  // last left it (the row it is anchored to, how far into it, what was scrolled not laid yet, whether at its end): laid
+  // out again in that frame, it is laid from where it began, unless something moved it since (Ctx::place_list)
+  mut laid : Int
+  mut began : (Int, Double, Double, Bool)
+  mut left : (Int, Double, Double, Bool)
   // the last scroll to a row asked of it (Ctx::list_scroll_to): the frame, the row and the offset (asked again as the
   // frame is built again, the same: done already)
   mut scroll_asked : (Int, Int, Double)
@@ -85,6 +95,9 @@ struct ListState {
   // as it is laid out, are built in them, as what is built beside the list is
   mut theme : Theme
   mut direction : Direction
+  // the layer it was built in (Ctx::overlay, 0 the page): its rows, built as it is laid out, are of it as what is built
+  // beside the list is (the keys they read, the focus they take)
+  mut layer : Int
 }
 
 ///|
@@ -103,7 +116,7 @@ struct EditorState {
   mut handle_y : Double
   /// Android's: words picked by a finger (a long press, a double tap, all selected from the menu): the selection's two
   /// handles shown, and where their tips were drawn last (`sel_on` false: not drawn); the word a long press picked
-  /// first, which sliding on widens from
+  /// first (or a double click's, the paragraph a triple click's), which sliding on widens from
   mut sel_handles : Bool
   mut sel_on : Bool
   mut sel_ax : Double
@@ -124,13 +137,22 @@ struct EditorState {
   mut oy : Double
   mut submitted : String?
   mut pref_x : Double
-  /// how far its words are scrolled up (taller than the field: the caret's line kept in view)
+  /// the caret, where one line wraps into the next at it, shows at the end of the line before (a move to a line's end
+  /// or the pointer past it put it there), not at the next one's start: while the caret is at this offset; -1 none
+  mut upstream : Int
+  /// how far its words are scrolled up (taller than the field: scrolled by the wheel, a finger or its bar, as a box kept
+  /// to a height is, sideways.mbt; the caret's line brought into view as the caret or the words change), and the caret, the
+  /// anchor and how long the words were when it was last brought there
   mut scroll : Double
+  mut followed : (Int, Int, Int)
   /// what was put in at once that was `limit` characters or more, not put in (a long paste the app takes instead)
   mut pasted : String?
   mut limit : Int
-  /// Enter sends (the words go to `submitted`); else it is a new line
+  /// Enter sends (the words go to `submitted`, none too, and stay in it); else it is a new line
   mut enter_sends : Bool
+  /// the keys it leaves to the app, pressed with nothing held (a menu the field offers, chosen in by ↑ / ↓, picked
+  /// from by Enter: the web's preventDefault on them)
+  mut leaves : Array[Int]
   /// the input method's action key for it (@hostapi.ime_action_*: a search field's)
   mut ime_action : Int
   /// its look, as the last frame said it: the line's height (0: the font's), the words', the placeholder's, the
@@ -152,6 +174,12 @@ struct EditorState {
   /// the caret's blinking starts again (shown at once) the next time the editor is built: the app wrote what it holds
   /// (Field::new, set, take)
   mut blink_again : Bool
+  /// the person's edits kept to undo, each the field as it was before it (its words, anchor and caret), the last last;
+  /// those undone, to do again; and the field as the last typing left it, which typing from there goes on in (none:
+  /// something else was done since) (editor_undo.mbt)
+  undos : Array[(String, Int, Int)]
+  redos : Array[(String, Int, Int)]
+  mut typed : (String, Int, Int)?
   /// the frame it was last built in and the editor's key and id then: a Field given to a second editor (another id) in
   /// one frame is told
   mut built_frame : Int
@@ -168,6 +196,9 @@ pub struct Ctx {
   id_stack : Array[Int]
   mut width : Double
   mut height : Double
+  /// the window's size this frame (width, height: the box being built's, Ctx::sized)
+  mut window_w : Double
+  mut window_h : Double
   mut scale : Double
   /// whether the host sets things on whole device pixels (whole_px_layout), as the frame began
   mut whole_px : Bool
@@ -177,8 +208,10 @@ pub struct Ctx {
   mut frame_no : Int
   /// the system's size of words this frame (font_scale): every word's size and line times it, as Compose's sp
   mut font_scale : Double
-  /// how many times a frame has been built (frame_body's passes, over every frame): what is said of a build, said
-  /// again by the next (motion's keyed nodes, by node: another pass's nodes are other nodes)
+  /// how much smaller words are drawn where they are now (Ctx::words_smaller: 1 none), times the system's size
+  mut words_k : Double
+  /// the build's number (frame_body's passes, over every frame, counted over the program: app.mbt builds_made): what is
+  /// said of a build, said again by the next (motion's keyed nodes, by node: another pass's nodes are other nodes)
   mut build_no : Int
   /// how many sideways boxes' content is being built now (Ctx::sideways): what is made in it is marked in_sideways
   mut sideways_depth : Int
@@ -195,6 +228,8 @@ pub struct Ctx {
   /// (Ctx::wake_in's): what Tester::assert_idle says of what is left
   mut frame_by : SourceLoc?
   mut wake_by : SourceLoc?
+  /// what is held near the top of a list as its row scrolls past (Ctx::stick), in the order built this frame
+  stuck : Array[Int]
   // hit targets of the last frame, in paint order, and those being collected
   mut hit_ids : Array[Int]
   mut hit_rects : Array[Double]
@@ -204,18 +239,42 @@ pub struct Ctx {
   // rounded clip cut away misses it
   mut hit_clips : Array[Double]
   mut next_hit_clips : Array[Double]
+  // what each hit target holds as it was drawn: one past the last target drawn in it (its own index and one, holding
+  // none), for what holds the one under the pointer to be pointed at too (Ctx::hovered)
+  mut hit_ends : Array[Int]
+  mut next_hit_ends : Array[Int]
   mut scroll_ids : Array[Int]
   mut scroll_rects : Array[Double]
   mut next_scroll_ids : Array[Int]
   mut next_scroll_rects : Array[Double]
+  /// the scroll bars the last frame drew, and those being drawn (scroll_bar.mbt): where each runs, for the pointer;
+  /// boxes scrolled as one seen in the rows being drawn (their id, x and width), drawn along their list; what floats
+  /// over what scrolls, built this frame (Ctx::floats_over); the bar the pointer is along the edge of, and the one
+  /// whose thumb it holds (0 none)
+  mut bars : Array[BarAt]
+  mut next_bars : Array[BarAt]
+  across_seen : Array[(Int, Double, Double)]
+  floating : Array[Int]
+  mut bar_near : Int
+  mut bar_drag : Int
   // pointer
   mut px : Double
   mut py : Double
   mut down : Bool
   mut hover : Int
+  /// what holds the one under the pointer (`hover`), as the last frame drew them, outermost first (Ctx::hovered)
+  hover_in : Array[Int]
   mut active : Int
   mut focus : Int
   clicked : Array[Int]
+  /// what was clicked twice since the last frame, the second within double_click_ms of the first and where it was
+  /// (Ctx::double_clicked); the last click (its id, when, where), for the next to be the second of two
+  double_clicked : Array[Int]
+  mut last_click : (Int, Double, Double, Double)
+  /// how many presses in a row the last one was (NSEvent's clickCount: 2 a double click's second), and how many, when
+  /// and where, for the next to count on from
+  mut clicks : Int
+  mut press_run : (Int, Double, Double, Double)
   mut drag_scroll : Int
   /// what scrolls or is dragged under the press, innermost first (claim.mbt): until one claims it (`claimed`), the
   /// press is none of theirs; `drag_scroll` is the innermost meanwhile
@@ -231,12 +290,17 @@ pub struct Ctx {
   /// when the pointer's latest event (down, moved, up) came, its own time (Ctx::pointer_at)
   mut pointer_t : Double
   mut held_told : Double
+  /// what a press told held long (Ctx::long_press) was on, and in which frame
+  mut held_on : Int
+  mut held_frame : Int
   /// the press as frames see it (Ctx::press, press.mbt): as the frame it was last worked out in saw it, whether a
   /// frame saw it down, when one first did
   mut press_seen : Press
   mut press_seen_frame : Int
   mut press_was_down : Bool
   mut press_seen_at : Double
+  /// the keys held as the pointer last went down (Press::mods)
+  mut press_mods : Int
   /// a tap this frame (a press let go without dragging, not taken by the app: Ctx::tapped_anywhere), and the press
   /// the app took (Ctx::take_press)
   mut tapped : (Double, Double)?
@@ -258,8 +322,10 @@ pub struct Ctx {
   mut word_drag : Int
   /// the last tap on a field as it lifted (its id, when, where): a second soon after picks the word there
   mut last_tap : (Int, Double, Double, Double)
-  /// what the host was last told of the floating text menu (text_menu)
+  /// what the host was last told of the floating text menu (text_menu), and of what the menu bar's editing items can
+  /// do (edit_can; -1 nothing yet)
   mut menu_sig : String
+  mut edit_can_told : Int
   mut handle_dy : Double
   // persistent widget state
   lists : Map[Int, ListState]
@@ -293,10 +359,22 @@ pub struct Ctx {
   laid_reads : Map[Int, ((Double, Double, Double, Double)?, SourceLoc)]
   size_reads : Map[Int, ((Double, Double)?, SourceLoc)]
   place_reads : Map[Int, (String, (Int, Double, Double)?)]
+  /// lists' places read as the view built (Ctx::list_info, list_info_as): each list's key, and whether what was made
+  /// of its place is not what it makes of it now
+  info_reads : Array[(String, () -> Bool)]
   row_reads : Map[(Int, Int), (String, Double?)]
   words_reads : Map[String, Bool]
+  /// the boxes whose rows left them out as last laid out (Ctx::box `drop`), by id, and those the view asked about as
+  /// it built (Ctx::left_out: what it was told); how many rows laid out this pass may leave something out
+  left_ids : Map[Int, Bool]
+  left_reads : Map[Int, (Bool, SourceLoc)]
+  mut fit_rows : Int
   laid_watch : Map[Int, Int]
   laid_rects : Map[Int, (Double, Double, Double, Double)]
+  /// the boxes whose parts shown across are asked (Ctx::shown_across): when last, and the name of the boxes whose parts
+  /// are left out; what the last layout showed across in each
+  shown_watch : Map[Int, (Int, String)]
+  shown_spans : Map[Int, (Double, Double)]
   /// the boxes whose presses another takes (Ctx::presses_to), by node: that one's id and where it was said
   press_owners : Map[Int, (Int, SourceLoc)]
   mut nav_rest : Double
@@ -333,11 +411,33 @@ pub struct Ctx {
   mut narrow_below : Double
   mut narrow : Bool
   // the boxes built this frame whose corner is `Inner` (style.mbt): worked out once laid out (corners.mbt), and
-  // those that could not be (Tester::corner_faults says them)
+  // those that could not be (Tester::corner_faults says them); of them, those `InnerOr`, their own corner where they lie
+  // in no container's
   inners : Array[Int]
+  inners_or : Array[Int]
+  // what move_state moves (move_state.mbt): the moves going on; what each box named to be moved was shown as, this
+  // frame (its build so far) and the last; how many boxes of each name this build has built
+  move_runs : Array[MoveRun]
+  mut shown_now : Map[String, MoveShown]
+  mut shown_last : Map[String, MoveShown]
+  move_seen : Map[String, Int]
   // the boxes built this frame whose corner is `Around`: worked out from what lies in their corner (corners.mbt)
   arounds : Array[Int]
   inner_faults : Array[String]
+  // the corner ladder of the theme the view was built under (Theme::corner_ladder: the frame's, or one put in force
+  // over it with with_theme that says one), what corner_faults holds corners to
+  mut corner_ladder : Array[Double]
+  // what the corner rule may make of what lies in a container's corner (Theme::corner_fit), and how round the system
+  // draws the window's corners this frame (window_corner: the outermost container, corners.mbt)
+  mut corner_fit : CornerFit?
+  // the ids whose look asked this frame whether the hand is on them (Ctx::lit) or were drawn selected: what lights
+  // up, and how far apart such things stand (Theme::lit_apart): the spacing rules' (gaps.mbt)
+  lit_asked : Set[Int]
+  // the ids whose choice the hand moves this frame (Ctx::hand_on: the one chosen follows the pointer), so chosen is not
+  // kept lit while the hand is on another (gaps.mbt)
+  hand_chooses : Set[Int]
+  mut lit_apart : Double
+  mut window_corner : Double
   mut direction : Direction
   // what the widgets built this frame say they are (semantics.mbt), and how deep in a part hidden from it the view
   // builds; the actions asked of them (by the host's accessibility, a test) for the next frame, and this frame's
@@ -371,6 +471,9 @@ pub struct Ctx {
   /// (Ctx::tell)
   told : Array[(Int, () -> Unit)]
   mut layer_cur : Int
+  /// the layer the keys go to this frame (the topmost open one that takes them, as the frame before built it; 0: the
+  /// page): what is built under it reads none (Ctx::key_pressed, Ctx::keys)
+  mut keys_layer : Int
   dismissals : Map[Int, Dismiss]
   layer_return : Map[Int, Int]
   mut press_down : (Double, Double)?
@@ -400,6 +503,8 @@ fn Ctx::new() -> Ctx {
     id_stack: [],
     width: 800.0,
     height: 600.0,
+    window_w: 800.0,
+    window_h: 600.0,
     scale: 2.0,
     whole_px: false,
     now: 0.0,
@@ -407,6 +512,7 @@ fn Ctx::new() -> Ctx {
     last_now: -1.0,
     frame_no: 0,
     font_scale: 1.0,
+    words_k: 1.0,
     build_no: 0,
     sideways_depth: 0,
     epoch: 0,
@@ -416,23 +522,37 @@ fn Ctx::new() -> Ctx {
     frame_rest: false,
     frame_by: None,
     wake_by: None,
+    stuck: [],
     hit_ids: [],
     hit_rects: [],
     next_hit_ids: [],
     next_hit_rects: [],
     hit_clips: [],
     next_hit_clips: [],
+    hit_ends: [],
+    next_hit_ends: [],
     scroll_ids: [],
     scroll_rects: [],
     next_scroll_ids: [],
     next_scroll_rects: [],
+    bars: [],
+    next_bars: [],
+    across_seen: [],
+    floating: [],
+    bar_near: 0,
+    bar_drag: 0,
     px: -1.0,
     py: -1.0,
     down: false,
     hover: 0,
+    hover_in: [],
     active: 0,
     focus: 0,
     clicked: [],
+    double_clicked: [],
+    last_click: (0, 0.0, 0.0, 0.0),
+    clicks: 0,
+    press_run: (0, -1.0e9, 0.0, 0.0),
     drag_scroll: 0,
     press_chain: [],
     claimed: true,
@@ -442,10 +562,13 @@ fn Ctx::new() -> Ctx {
     press_late: false,
     pointer_t: 0.0,
     held_told: -1.0,
+    held_on: 0,
+    held_frame: -1,
     press_seen: no_press,
     press_seen_frame: -1,
     press_was_down: false,
     press_seen_at: -1.0,
+    press_mods: 0,
     tapped: None,
     taken_at: -1.0,
     press_y: 0.0,
@@ -461,6 +584,7 @@ fn Ctx::new() -> Ctx {
     word_drag: 0,
     last_tap: (0, -1.0e9, 0.0, 0.0),
     menu_sig: "",
+    edit_can_told: -1,
     handle_dy: 0.0,
     lists: Map::new(),
     editors: Map::new(),
@@ -479,10 +603,16 @@ fn Ctx::new() -> Ctx {
     laid_reads: Map::new(),
     size_reads: Map::new(),
     place_reads: Map::new(),
+    info_reads: [],
     row_reads: Map::new(),
     words_reads: Map::new(),
+    left_ids: Map::new(),
+    left_reads: Map::new(),
+    fit_rows: 0,
     laid_watch: Map::new(),
     laid_rects: Map::new(),
+    shown_watch: Map::new(),
+    shown_spans: Map::new(),
     press_owners: Map::new(),
     nav_rest: -1.0,
     clear: (0.961, 0.961, 0.969),
@@ -506,7 +636,18 @@ fn Ctx::new() -> Ctx {
     narrow_below: 700.0,
     narrow: false,
     inners: [],
+    inners_or: [],
+    move_runs: [],
+    shown_now: {},
+    shown_last: {},
+    move_seen: {},
     arounds: [],
+    corner_ladder: [],
+    corner_fit: None,
+    lit_asked: Set::new(),
+    hand_chooses: Set::new(),
+    lit_apart: 0.0,
+    window_corner: 0.0,
     inner_faults: [],
     direction: Ltr,
     sems: [],
@@ -528,6 +669,7 @@ fn Ctx::new() -> Ctx {
     tells: [],
     told: [],
     layer_cur: 0,
+    keys_layer: 0,
     dismissals: Map::new(),
     layer_return: Map::new(),
     press_down: None,
@@ -634,11 +776,16 @@ fn Ctx::with_parent(self : Ctx, i : Int, body : () -> Unit) -> Unit {
 /// width over its height, the side not said following the other (CSS's aspect-ratio). Built where the direction is
 /// right to left (Ctx::rtl), a row runs from the right and its left and right padding swap. `keep`: in a row, as wide
 /// as its content even where the row is short of room, its siblings squeezed instead (as Compose's Row measures what
-/// has no weight whole, a weight(1f, fill = false) sibling given the rest: a bar's title cut short, not its buttons).
+/// has no weight whole, a weight(1f, fill = false) sibling given the rest: a bar's title cut short, not its buttons);
+/// one that takes what its row leaves (`Fill`), never less than what it holds needs (CSS's flex: 1).
+/// `drop` k > 0: there whole (as wide as what it holds) or left out of its row when the row has not the room, the
+/// lowest k first (of the same k the last in the row first), laid out nowhere and not drawn (Ctx::left_out says so, for
+/// a ⋯ that offers it instead); `more`: the row's ⋯, there only while something of it is left out.
 /// `flow`: a row that goes on in lines when what it holds does not fit, each thing in it as wide as it is, `gap` apart
 /// along the line and between the lines, or `line_gap` between the lines (Compose's FlowRow and its two spacedBy).
 /// `label`: what it is called where it shows no words (an icon's button, as Compose's contentDescription), found by
-/// them whole as words are (a drive's `=WORDS`, Tester::locate).
+/// them whole as words are (a drive's `=WORDS`, Tester::locate). `name`: what it stands for in another app's tree (the
+/// web page's class it is ported from, `shellCss.dock`), read only by a tool comparing the two (Tester::boxes).
 ///
 /// `style` (style.mbt) says how it looks, its state blocks picked by its own state: pressed, hovered, focused by `id`
 /// (as Ctx::pressed, hovered, focus_shown read them), `selected` and `disabled` as said, dark and narrow by the theme
@@ -646,6 +793,13 @@ fn Ctx::with_parent(self : Ctx, i : Int, body : () -> Unit) -> Unit {
 /// says is as without either (no padding, no ground). A padding below 0 is not said (Ctx::row passes -1). With an
 /// `id` it takes the presses on its room (the innermost box with an id under the finger does); `taps` false: the id
 /// only names it (to measure it, Ctx::laid_size; to move it by a look), what holds it taking the presses there.
+///
+/// What CSS says of a box and the flex engine lays out anyway: margins (`m`, `mx`, `my`, `ml`, `mr`, `mt`, `mb`, below
+/// 0 too, the finer over the coarser as the padding), a size as a share of the parent's (`Pct`), and `left`, `top`,
+/// `right`, `bottom`: any said, it is out of the flow, put that far from its parent's edges, the parent's padding not
+/// kept (CSS's position: absolute, its parent the one it is placed in), drawn and pressed in the order it was built;
+/// both of a pair said and no size across, it reaches from one to the other. `moves`: the name Ctx::move_state moves
+/// it by.
 pub fn Ctx::box(
   self : Ctx,
   style? : Style,
@@ -661,6 +815,18 @@ pub fn Ctx::box(
   pr? : Double,
   pt? : Double,
   pb? : Double,
+  m? : Double,
+  mx? : Double,
+  my? : Double,
+  ml? : Double,
+  mr? : Double,
+  mt? : Double,
+  mb? : Double,
+  left? : Double,
+  top? : Double,
+  right? : Double,
+  bottom? : Double,
+  moves? : String = "",
   gap? : Double,
   align? : Align,
   justify? : Justify,
@@ -686,16 +852,22 @@ pub fn Ctx::box(
   notch_fillet? : Double = 0.0,
   aspect? : Double = 0.0,
   keep? : Bool = false,
+  drop? : Int = 0,
+  more? : Bool = false,
   shadow_out? : Bool = false,
   flow? : Bool = false,
   line_gap? : Double = -1.0,
   label? : String = "",
+  name? : String = "",
   id? : Int = 0,
   taps? : Bool = true,
   body : () -> Unit,
 ) -> Int {
   let i = self.alloc_part(kind_box, false, false)
   let n = self.nodes[i]
+  if selected && id != 0 {
+    self.lit_asked.add(id)
+  }
   // the style's look in this node's states, the tokens looked up in the theme in force
   let st : Patch = match style {
     None => no_patch
@@ -704,7 +876,7 @@ pub fn Ctx::box(
         self.narrow,
         self.theme.dark,
         selected,
-        id != 0 && self.hovered(id),
+        id != 0 && self.lit(id),
         id != 0 && self.focus_shown(id),
         id != 0 && self.pressed(id),
         disabled,
@@ -722,10 +894,12 @@ pub fn Ctx::box(
   n.rtl = self.direction == Rtl
   n.aspect = aspect
   n.keep = keep
+  n.drop = if more { -1 } else { drop }
   n.shadow_out = shadow_out
   n.flow = flow
   n.line_gap = line_gap
   n.label = label
+  n.name = name
   n.w = first(
     w,
     match st.w {
@@ -756,7 +930,26 @@ pub fn Ctx::box(
   }
   n.pad_t = first(said(pt), first(py, first(opt_px(st.pt), s_y))).unwrap_or(0.0)
   n.pad_b = first(said(pb), first(py, first(opt_px(st.pb), s_y))).unwrap_or(0.0)
+  // margins as the padding: one side said over both, both over all four, said here over the style's (below 0 too)
+  let mx = first(mx, m)
+  let my = first(my, m)
+  let sm_x = opt_margin(first(st.mx, st.m))
+  let sm_y = opt_margin(first(st.my, st.m))
+  n.mar_l = first(ml, first(mx, first(opt_margin(st.ml), sm_x))).unwrap_or(0.0)
+  n.mar_r = first(mr, first(mx, first(opt_margin(st.mr), sm_x))).unwrap_or(0.0)
+  if n.rtl {
+    let l = n.mar_l
+    n.mar_l = n.mar_r
+    n.mar_r = l
+  }
+  n.mar_t = first(mt, first(my, first(opt_margin(st.mt), sm_y))).unwrap_or(0.0)
+  n.mar_b = first(mb, first(my, first(opt_margin(st.mb), sm_y))).unwrap_or(0.0)
+  n.at_l = left.unwrap_or(0.0 / 0.0)
+  n.at_t = top.unwrap_or(0.0 / 0.0)
+  n.at_r = right.unwrap_or(0.0 / 0.0)
+  n.at_b = bottom.unwrap_or(0.0 / 0.0)
   n.min_w = first(min_w, opt_bound(st.min_w, 0.0)).unwrap_or(0.0)
+  n.min_w_within = min_w is None && st.min_w is Some(Within(_))
   n.max_w = first(max_w, opt_bound(st.max_w, 1.0e9)).unwrap_or(1.0e9)
   n.min_h = first(min_h, opt_bound(st.min_h, 0.0)).unwrap_or(0.0)
   n.max_h = first(max_h, opt_bound(st.max_h, 1.0e9)).unwrap_or(1.0e9)
@@ -787,9 +980,30 @@ pub fn Ctx::box(
       None => None
     },
   ).unwrap_or(0.0)
-  // a corner said `Inner` (and not said here): worked out once laid out (corners.mbt)
+  // each corner its own (`Corners`); else all four `radius` (the node's look is not reset before a box sets it: none
+  // of a box's before it in this place kept)
+  n.radii = None
+  n.links = None
+  if radius is None {
+    match st.radius {
+      Some(r) => {
+        match r.each() {
+          Some(each) => n.set_radii(each)
+          None => ()
+        }
+        // (where they come from, for the corner rule to hold it to: corner_faults)
+        n.links = r.links()
+      }
+      None => ()
+    }
+  }
+  // a corner said `Inner` (and not said here): worked out once laid out (corners.mbt); `InnerOr`, its own till then
   if radius is None && st.radius is Some(Inner) {
     self.inners.push(i)
+  }
+  if radius is None && st.radius is Some(InnerOr(_)) {
+    self.inners.push(i)
+    self.inners_or.push(i)
   }
   // `Around`: from what lies in its corner, once laid out
   if radius is None && st.radius is Some(Around) {
@@ -803,6 +1017,7 @@ pub fn Ctx::box(
     },
   ).unwrap_or(0.0)
   n.border_c = first(border_color, opt_color(th, st.border_color)).unwrap_or(0L)
+  n.dashed = st.dashed.unwrap_or(false)
   n.shadow = first(shadow, sh_blur).unwrap_or(0.0)
   n.clip = first(clip, st.clip).unwrap_or(false)
   n.tx = tx
@@ -828,6 +1043,11 @@ pub fn Ctx::box(
     // it, not it, which would take every press on its room that nothing in it takes)
     n.hit = taps
   }
+  // moved by a move_state (move_state.mbt): what it is shown as while the move lasts, where it was to where it is built
+  if moves != "" {
+    n.moves = moves
+    self.move_node(i)
+  }
   self.with_parent(i, body)
   i
 }
@@ -838,6 +1058,14 @@ fn said(v : Double?) -> Double? {
   match v {
     Some(x) if x >= 0.0 => v
     _ => None
+  }
+}
+
+///|
+fn opt_margin(v : Space?) -> Double? {
+  match v {
+    Some(v) => Some(v.margin_px())
+    None => None
   }
 }
 
@@ -957,9 +1185,12 @@ pub fn Ctx::spacer(self : Ctx) -> Unit {
 ///|
 /// Words, in the theme's colour unless `color`. `style` (style.mbt) says how they look, its dark and narrow blocks by
 /// the theme; what is said here besides wins over the style's same property (a size said here keeps the style's line).
-/// `tracking`: letter spacing in pixels; `max_lines`: wrapped words cut after that many lines, ending in an ellipsis.
+/// `tracking`: letter spacing in pixels; `max_lines`: wrapped words cut after that many lines, ending in an ellipsis;
+/// `tabular`: digits all one width, a number keeping its width as it changes (the theme's `tabular` where unsaid).
 /// `trim`: a font taller than the line not padded beyond its own reach where a host sets lines on whole pixels (as
 /// Compose sets words in a TextStyle of their own; else as a theme's words: set_line).
+/// `keep`: words cut short (`w=Cut`) in a row that may leave a part of it out (Ctx::box `drop`) kept whole till all
+/// it may leave has left, cut only then (a way's last folder, its name before the folders over it).
 pub fn Ctx::text(
   self : Ctx,
   s : String,
@@ -974,6 +1205,8 @@ pub fn Ctx::text(
   center? : Bool,
   tracking? : Double,
   max_lines? : Int,
+  tabular? : Bool,
+  keep? : Bool = false,
 ) -> Int {
   let st = self.text_patch(style)
   let (s_size, s_line) = self.text_sizes(st)
@@ -995,6 +1228,8 @@ pub fn Ctx::text(
     (None, None) => 0.0
   }
   n.max_lines = first(max_lines, st.max_lines).unwrap_or(0)
+  n.tabular = first(tabular, st.tabular).unwrap_or(self.theme.tabular)
+  n.keep = keep
   i
 }
 
@@ -1049,6 +1284,20 @@ let no_text_patch : TextPatch = text_patch()
 // Interaction
 
 ///|
+/// Whether `id` was clicked twice in a row since the last frame (a desktop's double click: the second within
+/// double_click_ms of the first, both on it, as near as double_click_slop). Its first click was `clicked` too.
+pub fn Ctx::double_clicked(self : Ctx, id : Int) -> Bool {
+  id != 0 && self.double_clicked.contains(id)
+}
+
+///|
+/// How soon after the first the second of two clicks is (macOS's default: 500 ms), and how near it (4).
+pub let double_click_ms : Double = 500.0
+
+///|
+pub let double_click_slop : Double = 4.0
+
+///|
 pub fn Ctx::clicked(self : Ctx, id : Int) -> Bool {
   // (what a click changes is drawn by the next frame wherever it was seen, as every input's: on_frame; the Activate
   // a screen reader asks of it is one: semantics.mbt)
@@ -1068,8 +1317,67 @@ pub fn Ctx::set_clear(self : Ctx, color : Int64) -> Unit {
 }
 
 ///|
+/// Whether a mouse's pointer rests on `id`, or on what is drawn in it (a finger hovers over nothing: Pointing): a
+/// tab's ×, a row's buttons pointed at, the tab and the row are still pointed at (the web's `:hover`, which holds for
+/// what holds it). For what only a resting pointer is shown; a look that answers the hand on it is Ctx::lit.
 pub fn Ctx::hovered(self : Ctx, id : Int) -> Bool {
-  self.hover == id
+  self.hover == id || (id != 0 && self.hover_in.contains(id))
+}
+
+///|
+/// Whether `id` is lit by the hand on it: a mouse's pointer resting on it or on what is in it (Ctx::hovered), a finger
+/// pressing it, itself (the web's `:hover` with a fine pointer, `:active` with a coarse one). What a style's `hovered`
+/// patch and a widget's hovered look go by.
+pub fn Ctx::lit(self : Ctx, id : Int) -> Bool {
+  if id != 0 {
+    self.lit_asked.add(id)
+  }
+  self.hand_at(id)
+}
+
+///|
+/// Whether the hand is on `id` as Ctx::lit has it, where what it changes is not `id`'s look but what is chosen (the
+/// pointer over a found line choosing it, as the keys do: the one chosen shown so, one at a time). Not a look that
+/// lights up: the spacing rules hold what asks Ctx::lit (gaps.mbt).
+pub fn Ctx::hand_on(self : Ctx, id : Int) -> Bool {
+  if id != 0 {
+    self.hand_chooses.add(id)
+  }
+  self.hand_at(id)
+}
+
+///|
+/// Whether the hand is on `id`: a mouse's pointer resting on it or on what is in it, a finger pressing it.
+fn Ctx::hand_at(self : Ctx, id : Int) -> Bool {
+  match pointing() {
+    Mouse => self.hovered(id)
+    Finger => self.pressed(id)
+  }
+}
+
+///|
+/// The pointer at (x, y), as the last frame drew what is there: the topmost hit target under it, and what holds that
+/// one (Ctx::hovered).
+fn Ctx::point_at(self : Ctx, x : Double, y : Double) -> Unit {
+  let k = hit_at(self.hit_ids, self.hit_rects, self.hit_clips, x, y)
+  self.hover = if k >= 0 { self.hit_ids[k] } else { 0 }
+  self.hover_in.clear()
+  for j in 0..<k {
+    let id = self.hit_ids[j]
+    if j < self.hit_ends.length() &&
+      self.hit_ends[j] > k &&
+      id != self.hover &&
+      !self.hover_in.contains(id) {
+      self.hover_in.push(id)
+    }
+  }
+}
+
+///|
+/// The pointer over nothing (gone from the window, a finger lifted).
+fn Ctx::point_nowhere(self : Ctx) -> Unit {
+  self.hover = 0
+  self.hover_in.clear()
 }
 
 ///|
@@ -1108,6 +1416,16 @@ fn Ctx::read_changed(self : Ctx, what : String, loc~ : SourceLoc) -> Unit {
 }
 
 ///|
+/// What the view built from changed as it was built, by what it took of the pointer (a column's edge dragged: the
+/// column, built before its edge, built at the width it had): the frame is built again from it before it is drawn, as
+/// for what mbui's own parts change (Ctx::read_changed), so what the pointer moved is under it in the frame it moved in.
+/// Said only when it did change: the frame built again finds it as it is now and says nothing.
+#callsite(autofill(loc))
+pub fn Ctx::built_from_changed(self : Ctx, what : String, loc~ : SourceLoc) -> Unit {
+  self.read_changed(what, loc~)
+}
+
+///|
 /// A motion set out between frames (Ctx::set_out): a frame is owed to show it, the host told now, as a frame asked
 /// between frames is.
 fn Ctx::owe_frame(self : Ctx) -> Unit {
@@ -1141,7 +1459,7 @@ pub fn Ctx::request_frame(self : Ctx, loc~ : SourceLoc) -> Unit {
 ///|
 /// The window's size in logical pixels (w, h), as this frame lays it out: what a dialog is put in the middle of.
 pub fn Ctx::window_size(self : Ctx) -> (Double, Double) {
-  (self.width, self.height)
+  (self.window_w, self.window_h)
 }
 
 ///|
@@ -1164,8 +1482,13 @@ pub fn Ctx::moment(self : Ctx) -> Double {
 /// `t` (ms) in whole ms, as a motion's and the runtime's time go: rounded down, a moment summed one way or another
 /// (1316.9999999999998 for 1317) the same.
 pub fn whole_ms(t : Double) -> Double {
-  (t + 1.0e-6).floor()
+  (t + same_moment_ms).floor()
 }
+
+///|
+/// How far apart two moments summed one way and another may be and still be the same one (whole_ms; a motion done
+/// by it at its end, the next of a chain from that end: Anim::animate's start_at).
+pub let same_moment_ms : Double = 1.0e-6
 
 ///|
 pub fn Ctx::frame_ms(self : Ctx) -> Double {
@@ -1186,8 +1509,17 @@ pub fn Ctx::pointer_at(self : Ctx) -> Double {
 }
 
 ///|
-fn hit_in(ids : Array[Int], rects : Array[Double], x : Double, y : Double) -> Int {
-  let clips = if physical_equal(rects, g().hit_rects) { g().hit_clips } else { [] }
+/// How fast the pointer went at its latest event (points per ms, across and down; at most a fling's fastest): what a
+/// list let go flings at (Compose's VelocityTracker over the press's events, by their own times), for what else a
+/// finger lets go of moving (a picture zoomed in).
+pub fn Ctx::pointer_velocity(self : Ctx) -> (Double, Double) {
+  ignore(self)
+  (dclamp(track_x.velocity(), -max_fling, max_fling), dclamp(track_y.velocity(), -max_fling, max_fling))
+}
+
+///|
+/// Which of the hit targets `rects` (in paint order, cut by `clips`) is topmost at (x, y): its index, -1 none.
+fn hit_at(ids : Array[Int], rects : Array[Double], clips : Array[Double], x : Double, y : Double) -> Int {
   let mut k = ids.length() - 1
   while k >= 0 {
     let r = k * 4
@@ -1196,22 +1528,110 @@ fn hit_in(ids : Array[Int], rects : Array[Double], x : Double, y : Double) -> In
       y >= rects[r + 1] &&
       y < rects[r + 3] &&
       in_round_clip(clips, k, x, y) {
-      return ids[k]
+      break
     }
     k = k - 1
   }
-  0
+  k
+}
+
+///|
+fn hit_in(ids : Array[Int], rects : Array[Double], x : Double, y : Double) -> Int {
+  let targets = physical_equal(rects, g().hit_rects)
+  let clips = if targets { g().hit_clips } else { [] }
+  let k = hit_at(ids, rects, clips, x, y)
+  // a finger: what is smaller than a fingertip is reached from round it (Pointing)
+  if targets && pointing() is Finger {
+    match finger_reach(ids, rects, clips, k, x, y) {
+      Some(id) => return id
+      None => ()
+    }
+  }
+  if k >= 0 {
+    ids[k]
+  } else {
+    0
+  }
+}
+
+///|
+/// The least a finger's target is across, each way: the system's (Android's 48 dp, Compose's
+/// minimumInteractiveComponentSize; iOS's 44 pt).
+fn finger_target() -> Double {
+  if h_platform() == 1 {
+    44.0
+  } else {
+    48.0
+  }
+}
+
+///|
+/// What a finger at (x, y) reaches that it does not touch (Compose's minimum touch target): a target smaller than
+/// finger_target, grown to it round its middle (not drawn so, nor laid out), drawn over `top` (the target the finger
+/// is on, -1 none) and within it (a row's small button, not the row's neighbour: the one touched keeps it), within
+/// what cuts it; of several, the nearest.
+fn finger_reach(
+  ids : Array[Int],
+  rects : Array[Double],
+  clips : Array[Double],
+  top : Int,
+  x : Double,
+  y : Double,
+) -> Int? {
+  let least = finger_target()
+  let mut best : Int? = None
+  let mut best_d = 1.0e9
+  for k in (top + 1)..<ids.length() {
+    let r = k * 4
+    let (x0, y0, x1, y1) = (rects[r], rects[r + 1], rects[r + 2], rects[r + 3])
+    let (w, h) = (x1 - x0, y1 - y0)
+    if w <= 0.0 || h <= 0.0 || (w >= least && h >= least) {
+      continue
+    }
+    let gx = dmax(0.0, (least - w) / 2.0)
+    let gy = dmax(0.0, (least - h) / 2.0)
+    if x < x0 - gx || x >= x1 + gx || y < y0 - gy || y >= y1 + gy {
+      continue
+    }
+    // within what cuts it (a list's edge), and within what the finger is on
+    let b = k * clip_n
+    if b + clip_n <= clips.length() &&
+      (x < clips[b] || x >= clips[b + 2] || y < clips[b + 1] || y >= clips[b + 3]) {
+      continue
+    }
+    if top >= 0 {
+      let t = top * 4
+      if x0 < rects[t] || y0 < rects[t + 1] || x1 > rects[t + 2] || y1 > rects[t + 3] {
+        continue
+      }
+    }
+    let dx = dmax(0.0, dmax(x0 - x, x - x1))
+    let dy = dmax(0.0, dmax(y0 - y, y - y1))
+    let d = dx * dx + dy * dy
+    if d < best_d {
+      best_d = d
+      best = Some(ids[k])
+    }
+  }
+  best
 }
 
 ///|
 /// Whether (x, y), in hit target `k`'s rect, is within the rounded corners of what cut it (`clips`, Ctx::hit_clips):
 /// a corner as round, and as smooth, as the renderers cut it (smooth.mbt sd_corner; its radius at most half the clip's
-/// shorter side).
+/// shorter side); and within its outer clip's too, where it has one (clip_stack: a pane round a rounded frame).
 fn in_round_clip(clips : Array[Double], k : Int, x : Double, y : Double) -> Bool {
   let b = k * clip_n
   if b + clip_n > clips.length() {
     return true
   }
+  let outer = clips[b + 16] > 0.0 || clips[b + 17] > 0.0 || clips[b + 18] > 0.0 || clips[b + 19] > 0.0
+  in_round_rect(clips, b, x, y) && (!outer || in_round_rect(clips, b + 12, x, y))
+}
+
+///|
+/// Whether (x, y) is within the rounded rect of `clips` at `b` (a clip_stack clip's 12 numbers) at its corners.
+fn in_round_rect(clips : Array[Double], b : Int, x : Double, y : Double) -> Bool {
   let (x0, y0, x1, y1) = (clips[b], clips[b + 1], clips[b + 2], clips[b + 3])
   let hx = dmax((x1 - x0) / 2.0, 0.0)
   let hy = dmax((y1 - y0) / 2.0, 0.0)
@@ -1244,6 +1664,8 @@ fn Ctx::push_hit(
   y1 : Double,
 ) -> Unit {
   self.next_hit_ids.push(id)
+  // (holding none till what is drawn in it is: Ctx::paint)
+  self.next_hit_ends.push(self.next_hit_ids.length())
   self.next_hit_rects.push(x0)
   self.next_hit_rects.push(y0)
   self.next_hit_rects.push(x1)
@@ -1343,6 +1765,88 @@ pub fn Ctx::open_url(self : Ctx, url : String) -> Bool {
 }
 
 ///|
+/// The number on the app's icon (@hostapi.set_badge: macOS's Dock tile), 0 none. Under a Tester: kept (Tester::badge).
+pub fn set_badge(n : Int) -> Unit {
+  match fake.val {
+    Some(f) => f.badge = n
+    None => @hostapi.set_badge(n)
+  }
+}
+
+///|
+/// This machine's station as the system says it (@hostapi.local_station), JSON; "" none. Under a Tester: as it is set
+/// (Tester::set_local_station).
+pub fn local_station() -> String {
+  match fake.val {
+    Some(f) => f.local_station
+    None => @hostapi.local_station()
+  }
+}
+
+///|
+/// Something done to this machine's station (@hostapi.local_station_act). Under a Tester: kept (Tester::local_acts).
+pub fn local_station_act(action : String) -> Unit {
+  match fake.val {
+    Some(f) => f.local_acts.push(action)
+    None => @hostapi.local_station_act(action)
+  }
+}
+
+///|
+/// Whether there is a dock here (@hostapi.dock_available). Under a Tester: as it is set (Tester::set_dock).
+pub fn dock_available() -> Bool {
+  match fake.val {
+    Some(f) => f.dock_on
+    None => @hostapi.dock_available()
+  }
+}
+
+///|
+/// The keys held down now (@hostapi.mods_held: mod_shift_key, mod_ctrl, mod_alt, mod_cmd). Under a Tester: as it holds
+/// them (Tester::hold_mods).
+pub fn mods_held() -> Int {
+  match fake.val {
+    Some(f) => f.mods
+    None => @hostapi.mods_held()
+  }
+}
+
+///|
+/// A line to the dock (@hostapi.dock_send). Under a Tester: kept (Tester::dock_lines).
+pub fn dock_send(line : String) -> Unit {
+  match fake.val {
+    Some(f) => f.dock_lines.push(line)
+    None => @hostapi.dock_send(line)
+  }
+}
+
+///|
+/// The dock stopped (@hostapi.dock_stop).
+pub fn dock_stop() -> Unit {
+  match fake.val {
+    Some(f) => f.dock_stops = f.dock_stops + 1
+    None => @hostapi.dock_stop()
+  }
+}
+
+///|
+/// The dock's settings as kept on this device (@hostapi.dock_kept), and kept (dock_keep).
+pub fn dock_kept() -> String {
+  match fake.val {
+    Some(f) => f.dock_kept
+    None => @hostapi.dock_kept()
+  }
+}
+
+///|
+pub fn dock_keep(json : String) -> Unit {
+  match fake.val {
+    Some(f) => f.dock_kept = json
+    None => @hostapi.dock_keep(json)
+  }
+}
+
+///|
 /// `url` handed to the system, outside a frame (an answer that came between frames): as Ctx::open_url.
 pub fn open_url(url : String) -> Bool {
   h_open_url(url)
@@ -1394,6 +1898,20 @@ pub fn open_tab(url : String) -> Bool {
 pub fn Ctx::copy_text(self : Ctx, s : String) -> Unit {
   ignore(self)
   h_clipboard_set(s)
+}
+
+///|
+/// The desktop's window made to fill the screen, or back as it was (@hostapi.set_full_screen).
+pub fn Ctx::set_full_screen(self : Ctx, on : Bool) -> Unit {
+  ignore(self)
+  h_set_full_screen(on)
+}
+
+///|
+/// Puts the picture `data` (an image file's bytes) on the system's clipboard, as a picture other apps paste.
+pub fn Ctx::copy_image(self : Ctx, data : Bytes) -> Unit {
+  ignore(self)
+  h_clipboard_image(data)
 }
 
 ///|

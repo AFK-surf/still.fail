@@ -3,6 +3,8 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { holdLanguage } from "../src/i18n.ts";
+import { profile as shownProfile } from "../src/present.ts";
+import { runtimes } from "../src/views/models.ts";
 import { workspaceProfiles } from "../src/views/profiles.ts";
 
 holdLanguage();
@@ -105,4 +107,13 @@ test("two profiles of one station signed in to the same account: the station sai
   assert.equal(view.items.length, 1);
   assert.equal(view.items[0].members.length, 3, "each profile still a member");
   assert.equal(view.items[0].where, "已在 studio、mini 登录");
+});
+
+test("Hermes profiles can name models and expose a selected model to new chats", () => {
+  const base = { id: "hm", name: "Hermes", runtime: "hermes", runtimes: ["hermes"], access: {kind:"env"}, models: [], env: [] };
+  assert.equal(shownProfile(base).canAddModel, true);
+  const listed = shownProfile({...base, check: {state:"ok",models:["openrouter:model-a"],detail:""}});
+  assert.ok(listed.available.includes("openrouter:model-a"));
+  const selected = {...base,models:["openrouter:model-a"]};
+  assert.deepEqual(runtimes({profiles:[selected]}),[{runtime:"hermes",models:["openrouter:model-a"]}]);
 });

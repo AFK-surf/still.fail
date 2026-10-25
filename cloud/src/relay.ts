@@ -18,7 +18,13 @@ export type Quota = {
   frames?: number;
   /** The relay process's own counters when last read (relayCounters): traffic since then is what they grew by. */
   seen?: Counters;
+  /** How the day's traffic was counted (COUNTING); a count from before it is not believed. */
+  counting?: number;
 };
+
+/** Before this (2026-10-25) a failed read forgot `seen`, and the next read added all the process had counted since it
+ * started once more: the day's budget ran out hours early. A day counted that way may hold traffic twice and starts over. */
+const COUNTING = 2;
 
 /** How often traffic is read from the relay process while connections are open; the daily budget may overshoot by what flows in this time. */
 const POLL_MS = 60_000;
@@ -36,11 +42,12 @@ export class RelayBudget extends DurableObject<Env> {
   /** Connections admitted in the last DIAL_MS, with the relay's accept count then: those not yet accepted still count. */
   private pending: { at: number; accepts: number }[] = [];
 
-  private load(): Quota {
+  protected load(): Quota {
     const now = nowSeconds();
-    const q = (this.quota ??= this.ctx.storage.kv.get<Quota>("quota") ?? { minute: Math.floor(now / 60), connects: 0, day: Math.floor(now / 86400), bytes: 0, at: now, frames: 0 });
     const minute = Math.floor(now / 60),
       day = Math.floor(now / 86400);
+    const kept = (this.quota ??= this.ctx.storage.kv.get<Quota>("quota"));
+    const q = (this.quota = kept?.counting === COUNTING ? kept : { minute, connects: 0, day, bytes: 0, at: now, frames: 0, counting: COUNTING });
     if (q.minute !== minute) {
       q.minute = minute;
       q.connects = 0;
@@ -69,13 +76,15 @@ export class RelayBudget extends DurableObject<Env> {
       /* not running, or starting: nothing to add */
     }
     const q = this.load();
+    // A read that fails keeps `seen`: the process may well go on (busy, not answering in time), and what it counted
+    // until then is in today's traffic already.
     if (counters) {
       // A restarted process counts from zero again.
       const seen = q.seen && counters.bytes >= q.seen.bytes && counters.frames >= q.seen.frames ? q.seen : { bytes: 0, frames: 0 };
       q.bytes += counters.bytes - seen.bytes;
       q.frames = (q.frames ?? 0) + counters.frames - seen.frames;
+      q.seen = counters;
     }
-    q.seen = counters ?? undefined;
     return counters;
   }
 

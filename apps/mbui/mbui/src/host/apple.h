@@ -35,8 +35,14 @@ int mb_render_snapshot(const char *path);
 // bands above and under the app's view (points) filled with `ground` (0xRRGGBB) in what snapshots write: a phone's
 // system bars round a scripted run's window (mac_app.m MBUI_SAFE)
 void mb_render_set_bands(double top, double bottom, uint32_t ground);
-void mb_atlas_upload(int x, int y, int w, int h, const void *rgba);
-extern int mb_atlas_size;
+// The glyphs' atlases, square, what goes where in them MoonBit's (hostapi's atlas.mbt): the words' (a byte a texel, how
+// much of it the glyph covers: drawn in the text's colour; as many bytes as one RGBA atlas half as wide) and colour
+// glyphs' (RGBA: an emoji's own). A colour glyph's place across is MB_ATLAS_COLOR_U past its place in its atlas (what
+// MoonBit says of it, @hostapi.colour_atlas_u): the shader takes the atlas by it.
+#define MB_ATLAS_SIDE 4096
+#define MB_ATLAS_COLOR_SIDE 1024
+#define MB_ATLAS_COLOR_U 16384
+void mb_atlas_upload(int color, int x, int y, int w, int h, const void *px);
 
 // images (apple_image.m): the texture of a decoded image, nil if not ready
 id<MTLTexture> mb_image_texture(int iid);

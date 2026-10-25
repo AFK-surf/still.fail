@@ -19,15 +19,20 @@ function alive(pid: number): boolean {
   }
 }
 
-/// Waits for the station process that held the sessions before (run/hub.json) to be gone.
-export async function previousGone(run: string) {
-  let pid = 0;
+/// The station process that held the sessions before (run/hub.json), and its end: `pid` none when none holds them (the
+/// one before let go of them as it stopped, or none ran), `gone` once it is gone or has been waited for long enough.
+export function previousProcess(run: string): { pid: number | null; gone: Promise<void> } {
+  let pid: unknown = null;
   try {
     pid = JSON.parse(readFileSync(join(run, "hub.json"), "utf8")).pid;
-  } catch {
-    return;
-  }
-  if (typeof pid !== "number" || pid === process.pid || !alive(pid)) return;
+  } catch {}
+  if (typeof pid !== "number" || pid === process.pid) return { pid: null, gone: Promise.resolve() };
+  return { pid, gone: gone(pid) };
+}
+
+/// Waits for process `pid` to be gone, PREVIOUS_LIMIT_MS at most.
+async function gone(pid: number) {
+  if (!alive(pid)) return;
   log.info("hub", "waiting for the previous station process to hand over", { pid });
   const until = wall.now() + PREVIOUS_LIMIT_MS;
   // A process's end can only be looked for (another program's: the machine's time): every 100 ms, for the seconds a

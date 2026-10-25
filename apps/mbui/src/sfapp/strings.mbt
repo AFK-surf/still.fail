@@ -4,8 +4,8 @@
 // the catalog's English: a word added here is run through it (lang_wbtest.mbt holds every key to have its English).
 
 ///|
+// kept across runs: a table, never written
 let zh : Map[String, String] = {
-  "android-chat.archive.named": "归档「{title}」",
   "android-settings.changelog.dismiss": "知道了",
   "web-main.list.separator": "、",
   // what this version cannot do on a device yet (composer.mbt, drive.mbt, screen_view.mbt, preview.mbt)
@@ -61,6 +61,7 @@ let zh : Map[String, String] = {
   "android-chat.annotate.selectAll": "全选",
   "android-chat.archive": "归档",
   "android-chat.archived": "已归档",
+  "android-chat.archived.undo": "撤销",
   "android-chat.asks.dismiss": "忽略",
   "android-chat.attach.camera": "拍照",
   "android-chat.attach.files": "文件",
@@ -220,25 +221,10 @@ let zh : Map[String, String] = {
   "web-main.outside.anyway": "仍然发送",
   "web-main.outside.failed": "分享失败：{error}",
   // a vault request on its card (vault_approval.mbt)
-  "android-settings.vault.approve.once": "仅本次",
-  "android-settings.vault.approve.onceDetail": "只给这一条命令用，下次还要再批准",
-  "android-settings.vault.approve.hour": "本对话 1 小时内",
-  "android-settings.vault.approve.hourDetail": "1 小时内这个对话可以反复使用，不用再批准",
-  "android-settings.vault.approve.chat": "本对话直到归档",
-  "android-settings.vault.approve.chatDetail": "这个对话归档或删除前都能用，最长 30 天",
-  "android-settings.vault.approve.deny": "拒绝",
-  "android-settings.vault.approve.denyDetail": "通知 agent 已拒绝",
-  "android-settings.vault.approve.what": "批准",
-  "android-settings.vault.approve.denyWhat": "拒绝",
-  "android-settings.vault.approve.inApp": "请在客户端批准",
-  "android-settings.vault.approve.decided": "此申请已处理",
   // a face's file not what it says (faces.mbt)
   "android-settings.fonts.damaged": "文件已损坏",
-  // a phone's or a tablet's wide screen (corners.mbt)
-  "android-misc.wide.all": "全部会话",
+  // the latest chats under a chat's composer on a device half open (tabletop.mbt)
   "android-misc.wide.empty": "暂无会话",
-  "android-misc.wide.newChat": "新建对话",
-  "android-misc.wide.recent": "最近会话",
 }
 
 ///|
@@ -256,8 +242,8 @@ fn english(key : String, args? : Array[(String, String)] = []) -> String? {
 
 ///|
 /// The words for `key`.
-pub fn tr(key : String) -> String {
-  if english(key) is Some(s) {
+pub fn tr(key : String, args? : Array[(String, String)] = []) -> String {
+  if english(key, args~) is Some(s) {
     return s
   }
   match zh.get(key) {
@@ -274,7 +260,21 @@ pub fn tr(key : String) -> String {
                 None =>
                   match zh_links.get(key) {
                     Some(s) => s
-                    None => zh_screen.get(key).unwrap_or(key)
+                    None =>
+                      match zh_screen.get(key) {
+                        Some(s) => s
+                        // (the preview's own words: the library's player says some of them)
+                        None =>
+                          match pv_zh.get(key) {
+                            Some(s) => s
+                            None =>
+                              match up_zh.get(key) {
+                                Some(s) => s
+                                // (the settings' own words: the desktop's settings pages say them too)
+                                None => @settings.said(key, args).unwrap_or(key)
+                              }
+                          }
+                      }
                   }
               }
           }
@@ -287,7 +287,7 @@ pub fn tr(key : String) -> String {
 pub fn fill(key : String, args : Array[(String, String)]) -> String {
   let mut s = match english(key, args~) {
     Some(w) => w
-    None => tr(key)
+    None => tr(key, args~)
   }
   for a in args {
     s = s.replace_all(old="{" + a.0 + "}", new=a.1)

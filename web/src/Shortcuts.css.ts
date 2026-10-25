@@ -2,6 +2,7 @@
 // key caps.
 import { style } from "@vanilla-extract/css";
 import { vars } from "@stillfail/ui/styles/tokens.css.ts";
+import { litOver } from "@stillfail/ui/styles/lit.ts";
 
 export const sheet = style({ display: "grid", gap: "18px" });
 export const group = style({ display: "grid", gap: "2px" });
@@ -20,7 +21,7 @@ export const record = style({
   color: vars.text, fontSize: vars.textUi, fontVariantNumeric: "tabular-nums", textAlign: "center", cursor: "pointer", cornerShape: vars.cornerShape,
   transition: `background ${vars.dur} ${vars.easeOut}`,
   selectors: {
-    "&:hover": { background: vars.selected },
+    "&:hover": litOver,
     "&[data-none]": { color: vars.subtle },
     "&[data-recording]": { background: vars.accentBg, color: vars.accentText },
   },

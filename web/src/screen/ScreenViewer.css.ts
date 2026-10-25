@@ -4,6 +4,7 @@
 // bars above and below the picture, which stays clear of them.
 import { globalStyle, style } from "@vanilla-extract/css";
 import { vars } from "@stillfail/ui/styles/tokens.css.ts";
+import { litOver } from "@stillfail/ui/styles/lit.ts";
 import { pictureGlass as glass } from "@stillfail/ui/styles/glass.ts";
 import { IN, PANEL_PAD, PANEL_PILL, TEXT_IN, centred, centredX, pillInner } from "@stillfail/ui/styles/align.ts";
 import { panelCard, popover } from "@stillfail/ui/styles/controls.css.ts";
@@ -62,7 +63,12 @@ export const canvas = style({ display: "block", width: "100%", height: "100%" })
 
 /** The station's pointer, where it says it is (none while a mouse here drives: it is that mouse's own). */
 export const cursor = style({ position: "absolute", left: "0", top: "0", width: "0", height: "0", pointerEvents: "none" });
-globalStyle(`${cursor} svg`, { display: "block", translate: "-4px -2px", filter: "drop-shadow(0 1px 1px rgba(0, 0, 0, .35))" });
+globalStyle(`${cursor} svg`, {
+  display: "block", width: "var(--pointer, 18px)", height: "var(--pointer, 18px)",
+  // The arrow's tip (4, 2 of its 18) on the point, at any size.
+  translate: "calc(var(--pointer, 18px) * -4 / 18) calc(var(--pointer, 18px) * -2 / 18)",
+  filter: "drop-shadow(0 1px 1px rgba(0, 0, 0, .35))",
+});
 
 /** Hears the keys while driving (an IME composes in it, a phone's keyboard comes up for it); never seen. */
 export const keys = style({
@@ -155,7 +161,7 @@ export const rowKey = style({
   display: "grid", placeItems: "center", flex: "1 1 0", minWidth: "0", height: "36px", padding: "0", border: "0", borderRadius: "999px",
   background: `color-mix(in srgb, ${vars.text} 6%, transparent)`, color: vars.text, cursor: "pointer",
   fontSize: vars.textMeta, fontWeight: "600", lineHeight: "1", whiteSpace: "nowrap",
-  selectors: { "&[aria-pressed=true]": { background: vars.text, color: vars.canvas } },
+  selectors: { "&[aria-pressed=true]": { background: vars.text, color: vars.canvas }, "&:disabled": { opacity: ".4", cursor: "default" } },
 });
 
 // ── a phone's 全屏 ──
@@ -198,6 +204,10 @@ export const netPanel = style([popover, panelCard, {
 }]);
 export const netHead = style({ display: "flex", alignItems: "center", gap: "10px", fontSize: vars.textBody, lineHeight: vars.leadingBody });
 globalStyle(`${netHead} > b`, { fontWeight: "600", fontVariantNumeric: "tabular-nums" });
+export const netCopy = style({
+  justifySelf: "start", padding: "0", border: "0", background: "none", color: vars.muted, font: "inherit", cursor: "pointer",
+  selectors: { "&:hover": { color: vars.text } },
+});
 export const netHeadMark = style({ display: "inline-grid", color: vars.muted, selectors: levels });
 export const netRows = style({
   display: "grid", gap: "4px", margin: "0", paddingTop: "10px",
@@ -222,10 +232,38 @@ export const menuWords = style({ flex: "1", minWidth: "0", whiteSpace: "nowrap" 
 /** What a row says at its end: the size chosen, a size's bounds. */
 export const menuEnd = style({ color: vars.muted, fontSize: vars.textMeta, fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap" });
 export const menuCheck = style({ display: "inline-grid", placeItems: "center", width: "16px", flex: "none" });
-/** A combo's keys, as keycaps. */
-export const menuKeys = style({ display: "flex", gap: "3px", flex: "none" });
-globalStyle(`${menuKeys} > kbd`, {
-  display: "inline-flex", alignItems: "center", justifyContent: "center", minWidth: "20px", height: "20px", padding: "0 5px", boxSizing: "border-box",
-  border: `1px solid color-mix(in srgb, ${vars.text} 18%, transparent)`, borderBottomWidth: "2px", borderRadius: "4px",
-  fontFamily: "inherit", fontSize: vars.textCaption, fontWeight: "500", lineHeight: "1", color: vars.muted,
+
+// ── a simulator's buttons, with a mouse ──
+
+/** A column of round buttons by the device's right edge (ScreenViewer.tsx place), as Simulator.app's own are beside it. */
+export const device = style({
+  position: "absolute", zIndex: "2", display: "flex", flexDirection: "column", gap: "8px",
+  selectors: { "[data-desktop] &": { WebkitAppRegion: "no-drag" } },
+});
+export const deviceButton = style({
+  display: "grid", placeItems: "center", width: "40px", height: "40px", padding: "0", border: "0", borderRadius: "50%",
+  background: `color-mix(in srgb, ${vars.text} 6%, transparent)`, color: vars.text, cursor: "pointer",
+  selectors: {
+    "&:hover:not(:disabled)": litOver,
+    "&:disabled": { opacity: ".4", cursor: "default" },
+  },
+});
+
+// ── beside a chat ──
+
+/** Its bar in a tab of a chat's side panel (named by the tab): 只看/控制 at the start, its tools and its own page at the end. */
+export const panelBar = style({
+  position: "absolute", zIndex: "3", top: "0", left: "0", right: "0", height: `${VIEWER_BAR}px`, boxSizing: "border-box",
+  display: "flex", alignItems: "center", justifyContent: "space-between", gap: "8px", padding: "0 8px 1px",
+  boxShadow: `inset 0 -1px 0 color-mix(in srgb, ${vars.line} 70%, transparent)`,
+});
+export const panelTools = style({ display: "flex", alignItems: "center", gap: "2px", minWidth: "0" });
+export const panelExpand = style({
+  display: "grid", placeItems: "center", flex: "none", width: "32px", height: "32px", padding: "0", border: "0",
+  borderRadius: vars.rOption, cornerShape: vars.cornerShape, background: "none", color: vars.muted, cursor: "pointer",
+  selectors: { "&:hover": { background: vars.hover, color: vars.text } },
+});
+/** 控制中心 as its icon alone where the panel is narrow (its words kept for a screen reader). */
+globalStyle(`${panelTools} [aria-haspopup="menu"] > span`, {
+  position: "absolute", width: "1px", height: "1px", overflow: "hidden", clipPath: "inset(50%)", whiteSpace: "nowrap",
 });

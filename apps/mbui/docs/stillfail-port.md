@@ -78,10 +78,10 @@ otherwise Home at the root of a `@ui.Nav` (src/sfapp, Home.kt and its parts):
   unread, the station's mark, unplugged or Slack; where it stands, with
   要你帮忙 / 做完了 / 在等 / 监控中 as icons and 奏 bold, or the last message;
   the agents' makers' marks and the people's faces, RowPicture.kt); the time
-  (`time.lastActiveAt.ago`) while a row is held; 归档 at a done row's start
-  (`chat.archive`); the search field at its top; while it is read, the rows to
-  come breathing (WaitShapes), what is wrong over them; the empty list's and
-  the first station's illustrations.
+  (`time.lastActiveAt.ago`) while a row is held; a done row swiped left to
+  archive it (`chat.archive`); the search field at its top; while it is read,
+  the rows to come breathing (WaitShapes), what is wrong over them; the empty
+  list's and the first station's illustrations.
 - A row tapped pushes its chat (its bar only: slice 4 fills it), swiped back
   from the left edge.
 - The workspace's name opens the workspaces' sheet: the one in use, the others
@@ -636,7 +636,8 @@ FileData; Zoom.kt):
   meanwhile, fitted with a margin (12, or 32 on a wide screen), a double tap to 2.5× the fitted size (at least 100%)
   around it and back, the bar's − / % / + (×1.25, the % back to fitted), two fingers pinching it round the point
   between them (Android tells mbui of a second finger now: pointer kinds 4, 5, 6, `Ctx::second_pointer`), a finger
-  panning it when larger, the wheel zooming round the pointer; a video played by the system's player in a native view (below), its bytes read through
+  panning it when larger (let go moving, it goes on at the finger's speed, slowing, to its edge; dragged on past its edge,
+  the one beside it comes in as a fitted swipe brings it), the wheel zooming round the pointer; a video played by the system's player in a native view (below), its bytes read through
   the core a part at a time (`station.file.part`, as the drive's DriveSource reads `drive.read`: never the whole file
   first, where the Android app's chat viewer fetches it to the disk before playing), its controls over its foot (where
   it is, to tap or drag along; a frame back, play, a frame on; which frame of how many; 1× 0.5× 0.25× 0.1×); a PDF's
@@ -658,8 +659,11 @@ FileData; Zoom.kt):
   is on top of the window and translucent (setZOrderOnTop), the views in a layer over it in the view tree (a page
   takes its touches) under it on the screen; the video is Media3's ExoPlayer (1.8.0, as the Android app's) on a
   TextureView whose transform puts the picture in its rect, reading through ViewSource (DriveSource.kt's window: 256 KB
-  first, doubling to 4 MB while reads run on, served from the window around the extractor's reopenings), each read
-  asked of the app (`view_read_next`) and answered from the core (`view_read_answer`); the page is a WebView with the
+  first, doubling to 4 MB while reads run on, kept on the disk while the view is open), each read asked of the app
+  (`view_read_next`) and answered from the core as its bytes come (`view_read_answer` piece by piece: the core's part
+  read with `stream`), the player going on with the first of them while the rest is on its way (on a slow link it
+  waits for what it needs, not for the 4 MB around it); a read no reader is on any more (a seek elsewhere) is let go
+  of, the app stopping the core's read; the page is a WebView with the
   Android app's HtmlPage settings (JavaScript on, no file or content access, no DOM storage, shouldOverrideUrlLoading
   true). macOS and iOS (apple_views.m): the Metal layer non-opaque over a views root, AVPlayerLayer with an
   AVAssetResourceLoaderDelegate on a scheme of its own reading through the same calls, WKWebView with a
@@ -912,9 +916,10 @@ VideoViewer.kt frameStarts, saveFrame, landscape; ImageMarks.kt):
   @hostapi.draw_marks: Android's Canvas, Core Graphics), then it is kept with the downloads or put in the chat's draft with
   a quote per numbered mark (图片 … 标注 n: where it is, on which image, what was said), and the viewer closes to the
   chat (已添加到对话，返回对话发送). Back steps out of a note, the words, the colours, the pick, then marking.
-- A video's frames: their times read from the file as the system reads it (mbui's NativeView::frames: Android's
-  MediaExtractor over the same reads as the player, Apple's sample cursor), so ‹ › step to the very next frame the file
-  has whatever its rate, and n / N 帧 counts them (正在读取帧 meanwhile; a 60th of a second where none are read). 保存此帧
+- A video's frames: their times read from the file's index (mbui's NativeView::frames: Android's Mp4Extractor reading
+  an MP4's or a QuickTime file's moov over the same reads as the player, Apple's sample cursor; never the samples, which
+  would be the whole video track read beside the player), so ‹ › step to the very next frame the file has whatever its
+  rate, and n / N 帧 counts them (正在读取帧 meanwhile; a 60th of a second where none are read). 保存此帧
   (paused): the frame showing grabbed at its own size (MediaMetadataRetriever, AVAssetImageGenerator) and kept with the
   downloads as name-n.png. 横屏: the phone turned for it, upright again as the viewer closes.
 - `APP=sffix MBUI_FIXTURE=chat-preview-step | chat-preview-swipe` (a second picture beside the first: the ways to it;
@@ -1010,8 +1015,9 @@ tests, the screenshots' app, and tapes older than those calls) has the real core
 (`kept.mbt`, made by `client/core-ts/scripts/kept-answers.ts`): an answer asked and not kept is said on the run's output
 and fails `scripts/test.sh`; `scripts/kept` runs the tests and has the core work out what they asked (`FRESH=1`: only
 what they ask now). The check script verifies the kept answers are the core's own. This adds no backend messages or elapsed time
-to the recordings. Formula glyphs are packaged once from `client/math/font.json`; messages carry only glyph IDs,
-positions, rules and any native text (see `client/math/README.md`).
+to the recordings. Formula glyphs are packaged once, their outlines packed and gzipped (`src/sf/math_glyphs.mbt`,
+made with `client/math/font.json` by `client/core-ts/scripts/math-font.ts`), not in the core, which has the glyphs'
+sizes alone; messages carry only glyph IDs, positions, rules and any native text (see `client/math/README.md`).
 
 A run is also kept to be seen again without a backend: with MBUI_CORE_TRACE=1 (only on a local cloud) the app logs
 every message between it and its core (CORETRACE lines on the flow's log, src/core/trace.mbt), `scripts/trace make
@@ -1183,10 +1189,13 @@ keyboard), and anything only a real agent runtime does.
 ## The PC (wide) frame (branch mbui-pc, 2026-10-19)
 
 On macOS and Windows the app is a desktop's window (@sfapp.host_setup: 1280×820 at first, as still.fail's desktop app
-opens, at least 360×560, its size not kept, the system's title bar). Above the web's breakpoint (701 wide) it is the web
-app's wide frame (web/src/cloud/workspace.tsx WorkspaceShell), src/sfapp/wide*.mbt; below it the phone's pages as
-before, live as the window is resized: both draw the same stack (app.nav) over the same topics, the wide frame its top
-page alone in its pane (@ui Ctx::nav_flat), the phone's sliding.
+opens, at least 360×560, its size not kept, the system's title bar). Laid out Medium or Large (@sf.layout, since
+2026-10-24: a desktop's window from 600 wide, Large from 840; a phone's or a tablet's by its size classes) it is the
+web app's wide frame (web/src/cloud/workspace.tsx WorkspaceShell), src/sfdesk/frame.mbt, Medium on a tape (the one in
+use whole, the other showing past its edge, a press there bringing it over); Small, the phone's pages as before, live
+as the window is resized: both draw the same stack (app.nav) over the same topics, the wide frame its top page alone in
+its pane (@ui Ctx::nav_flat), the phone's sliding. How things answer the hand goes by what points (@ui.pointing), never
+by the layout.
 
 - The rail (Rail.tsx: 56 wide; 待处理's panel, 对话, 文件, Station, Profile, 连接, 用量, as the prefs' `rails` keep them;
   the workspaces' squares, the one in view marked; settings), the sidebar beside it on the same ground (240, its edge
@@ -1275,14 +1284,23 @@ The app on iOS is Android's, as on an Android phone (2026-10-23):
   foot, the status bar's and the home indicator's room said as the system's `bars`, each page padded where Android's
   is (src/sfapp/bars.mbt); round it, and at launch, the page's paper (MBUIGround; the launch screen's Paper colour),
   the status bar's words to match (`@hostapi.set_dark`).
+- Its layout chosen by what the system says of the window, as on Android (src/hostapi/system.mbt `size_class`,
+  `fold`; @sf.layout): regular in width said as medium under 840 points and expanded from there, the web's wide frame
+  in the phone's theme, Medium on its tape, Large its sidebar ending on a fold that stands upright; the hinge
+  (UIHingeInteraction) and where its fold
+  divides the view (the view's division regions), iOS 27.1 on and built with its SDK (mbui.yml's ios job, on Xcode
+  27.1): half open with the fold across the view, a chat's page across it, its messages over the fold, its composer
+  and the latest chats under it (src/sfapp/tabletop.mbt).
+- From side to side too: the safe area's sides said as `bars` (an iPhone Duo's outer screen has its status bar down
+  its right side), the pages beside them on the page's paper (src/sfapp/sides.mbt).
 - The keyboard as Android's: the view keeps its size, the keyboard's top followed frame by frame as the system moves
   it (UIKeyboardLayoutGuide's motion read off a mark's presentation layer), the app laid out above it; the keyboard
   asked for plain text, no capitals or curly quotes of its own, its return key a new line (a search field's its search
   key); put away by the person (not the app), the field lets go of the focus.
 - Its touches and fields feel as Android's (@sfapp.host_setup: `@ui.feel_as(2)`): lists fling and give at their edges
-  as Compose's and show no scroll bar, a field takes a tap as it lifts, draws Compose's caret and handles, picks words
-  by a long press or a double tap, with the system's floating edit menu over them (UIEditMenuInteraction: 剪切, 拷贝,
-  粘贴, 全选, as Android's ActionMode).
+  as Compose's and show no scroll bar (a finger's: src/ui/scroll_bar.mbt), a field takes a tap as it
+  lifts, draws Compose's caret and handles, picks words by a long press or a double tap, with the system's floating
+  edit menu over them (UIEditMenuInteraction: 剪切, 拷贝, 粘贴, 全选, as Android's ActionMode).
 - Back: the left edge's swipe is the app's own (src/ui/nav.mbt), as on every host; iOS has no system back of its own.
 - `secure.*` in the Keychain; the sign-in through ASWebAuthenticationSession (`stillfail` scheme), as on macOS. A
   login card's page in Safari's view over the app (SFSafariViewController, Android's Custom Tab): the app stays in front

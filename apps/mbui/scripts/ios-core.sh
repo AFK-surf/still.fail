@@ -17,7 +17,7 @@ fi
 APP_EXTRA="--extra=src/core/core_native.c --extra=src/$PKG/core_engine.m"
 # the engine, the shell (and what it needs of the system: scripts/core.sh shell's native-static-libs for iOS), Hermes
 APP_LINK="out/core/$CORE_TARGET/libmbui_core.a out/core/$CORE_TARGET/libstillfail_shell.a -F$HERMES_SLICE -framework hermes \
-  -Wl,-rpath,@executable_path/Frameworks -lc++ -framework AuthenticationServices -framework Security \
+  -Wl,-rpath,@executable_path/Frameworks -lc++ -framework AuthenticationServices -framework Security -framework LocalAuthentication \
   -framework SystemConfiguration -framework Network -framework CoreFoundation -liconv -Wl,-dead_strip"
 
 app_libs() {

@@ -16,7 +16,8 @@
 // (a `Kind`), where its items are held (`Held`), how its station is asked (`Reach`), and how urgent each asking is.
 // Which read comes next is fill.ts, from the numbers held and how far the channel goes alone.
 import { Deferred, Effect } from "effect";
-import type { CoreError } from "../error.ts";
+import { CoreError } from "../error.ts";
+import { t } from "../i18n.ts";
 import { Priority } from "../sync/scheduler.ts";
 import type { SpanContext } from "../trace.ts";
 import * as fill from "./fill.ts";
@@ -33,6 +34,9 @@ export type Kind = {
   /// Whether all of it is brought onto the device and kept so (how far it goes is known, and it is read when behind);
   /// else its latest page is, and what is before as asked.
   readonly whole: boolean;
+  /// Of one not brought whole: whether it is kept whole from the lowest item held up to how far it goes (read when
+  /// behind there: what came after what is held, a hole a stream left), what is before that still as asked.
+  readonly holes?: boolean;
   /// How much of a batch of reads one of it takes.
   readonly cost: number;
   /// The task that reads a channel, as its station's lane names it (what a UI makes urgent goes by this name).
@@ -49,7 +53,7 @@ export type Channel = { readonly kind: Kind; readonly station: string; readonly 
 /// Where channels' items are held, and how far each is known to go.
 export type Held = {
   /// The numbers held of a channel, in order; the lowest and highest of them (null: none); how many of `from ..= to`.
-  numbers(channel: Channel): number[];
+  numbers(channel: Channel): readonly number[];
   span(channel: Channel): { min: number; max: number } | null;
   count(channel: Channel, from: number, to: number): number;
   /// Items into a channel, by number, in place of those held under the same numbers. `cutAfter`: nothing past it is
@@ -60,6 +64,11 @@ export type Held = {
   /// How far a channel goes as far as is known (0: nothing says), and that it goes at least to `n`.
   head(channel: Channel): number;
   raise(channel: Channel, n: number): void;
+  /// Of a kind kept whole from its lowest item held (`Kind.holes`): whether this one is, as its station can say how far
+  /// it goes and gives what a read asks in brief (one from before does neither: its latest page alone). None: it is.
+  holes?(channel: Channel): boolean;
+  /// Of those: whether this one is brought whole for now, down to its first item (a session used lately).
+  whole?(channel: Channel): boolean;
 };
 
 export type Answered = { _tag: "Success"; success: unknown } | { _tag: "Failure"; failure: CoreError };
@@ -135,16 +144,22 @@ export class Channels {
 
   // ── the rule ──
 
+  /// Whether a channel not brought whole is kept whole from its lowest item held (Kind.holes, Held.holes).
+  #holes(c: Channel): boolean {
+    return c.kind.holes === true && this.#held.holes?.(c) !== false;
+  }
+
   /// Whether the device is behind on a channel it holds some of: it goes further than what is held, or what is held has
   /// a hole. What is before all that is held is not that (brought in the background, or as asked), nor is a channel
   /// none of which is held (brought when a UI shows it, or in the background).
   behind(c: Channel): boolean {
-    return c.kind.whole && !this.#held.letGo(c) && fill.behind(this.#held.numbers(c), this.#held.head(c));
+    return (c.kind.whole || this.#holes(c)) && !this.#held.letGo(c) && fill.behind(this.#held.numbers(c), this.#held.head(c));
   }
 
   /// A channel the device is behind on is read until it is not: the one rule, for whatever said how far it goes.
   settle(c: Channel): void {
-    if (this.behind(c)) this.bring(c, Priority.shown, "latest");
+    // A thread's behind what is shown; another's in the background (what a UI shows of it is made urgent by its task).
+    if (this.behind(c)) this.bring(c, c.kind.whole ? Priority.shown : Priority.background, "latest");
   }
 
   /// Whether a channel's latest items are not on the device: none held, or it goes further.
@@ -160,7 +175,15 @@ export class Channels {
   next(c: Channel): fill.Read | null {
     if (this.#held.letGo(c)) return null;
     const held = this.#held.numbers(c);
-    if (!c.kind.whole) return held.length === 0 ? { latest: true } : null;
+    if (!c.kind.whole) {
+      if (held.length === 0) return { latest: true };
+      if (!this.#holes(c)) return null;
+      // What came after what is held, a hole in it; what is before all that is held only while it is brought whole
+      // (else gone back to as asked): the page before it, down to its first.
+      const read = fill.next(held, this.#held.head(c), c.kind.page);
+      if (read !== null && !("to" in read && read.to < held[0]!)) return read;
+      return held[0]! > c.kind.first && this.#held.whole?.(c) === true ? { before: held[0]! } : null;
+    }
     return fill.next(held, this.#held.head(c), c.kind.page);
   }
 
@@ -219,17 +242,6 @@ export class Channels {
     return read === null ? null : { path: c.kind.path(c.id, read), took: (answer) => this.#took(c, read, answer) };
   }
 
-  /// A message sent into the channel was given number `n`: it goes that far, and unless `n` is held what came after
-  /// what is held is read now, and waited on.
-  sent(c: Channel, n: number): Effect.Effect<void> {
-    return Effect.suspend(() => {
-      this.#held.raise(c, n);
-      if (this.#held.count(c, n, n) > 0) return Effect.void;
-      const asked = this.bring(c, Priority.asked, "latest");
-      return asked === null ? Effect.void : Effect.ignore(Deferred.await(asked));
-    });
-  }
-
   /// A push says the channel goes to `n` (its station's notice, through still.fail cloud, while the station's stream may
   /// be away): unless `n` is held, what came after what is held is read now, and waited on. With no `n` (an older
   /// station's notice), what came after what is held is asked, as after a stream that was away.
@@ -259,15 +271,21 @@ export class Channels {
     return Effect.suspend(() => {
       const from = Math.max(c.kind.first, before - c.kind.page);
       if (before <= c.kind.first || this.#held.count(c, from, before - 1) === before - from) return Effect.void;
-      return Effect.asVoid(this.read(c, { before }, options));
+      return Effect.flatMap(this.read(c, { before }, options), () =>
+        this.#held.count(c, before - 1, before - 1) === 1 ? Effect.void : this.#incomplete());
     });
+  }
+
+  #incomplete(): Effect.Effect<never, CoreError> {
+    return Effect.fail(new CoreError("bad_response", t("station.core.incompleteReply")));
   }
 
   /// Items `from ..= to` onto the device (a window moved there): read now, unless they are all held.
   range(c: Channel, from: number, to: number, options: { quiet: boolean; ctx?: SpanContext | null }): Effect.Effect<void, CoreError> {
     return Effect.suspend(() => {
       if (to < from || this.#held.count(c, from, to) === to - from + 1) return Effect.void;
-      return Effect.asVoid(this.read(c, { from, to }, options));
+      return Effect.flatMap(this.read(c, { from, to }, options), () =>
+        this.#held.count(c, from, to) === to - from + 1 ? Effect.void : this.#incomplete());
     });
   }
 }

@@ -2,6 +2,7 @@
 // followed, a deploy kept an eye on): what matters is whether each is still alive and what it last said
 // (`ember-job notify`), not how long it took. Status is a small dot before the name and a word on the line under it;
 // the title bar's popover shows what matters now, the 任务 tab beside the chat shows everything.
+import { outsideScroll, scrollToEnd } from "./scrollBounds.ts";
 import { chatPage } from "./chatPage.ts";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import type { ChatJobsView, Job, JobLogView } from "./core/shapes.ts";
@@ -249,11 +250,11 @@ function Output({ station, job }: { station: string; job: Job }) {
   const atEnd = useRef(true);
   useEffect(() => {
     const el = box.current;
-    if (el && atEnd.current) el.scrollTop = el.scrollHeight;
+    if (el && atEnd.current) scrollToEnd(el);
   }, [log?.text]);
   if (log === null) return <div className={css.jobOutput}><WaitLine /></div>;
   return (
-    <pre ref={box} className={css.jobOutput} onScroll={(e) => { const el = e.currentTarget; atEnd.current = el.scrollHeight - el.scrollTop - el.clientHeight < 24; }}>
+    <pre ref={box} className={css.jobOutput} onScroll={(e) => { const el = e.currentTarget; if (outsideScroll(el)) return; atEnd.current = el.scrollHeight - el.scrollTop - el.clientHeight < 24; }}>
       {log.text ? <TermText text={log.text} runs={log.runs} /> : t("web-main.jobs.noOutput")}
     </pre>
   );

@@ -1,7 +1,8 @@
 // The rail at the wide screen's left, in one block with the sidebar (styles/shell.css.ts dock), whose edge (SidebarEdge,
 // in the page's gutter by it) drags the sidebar's width and, pressed, closes or opens it (no button for it; its shortcut
 // still). In it the places the
-// person chose on this device (prefs `rail`, 外观's 侧边条: which, in what order; RAIL_DEFAULT when none was chosen):
+// person chose on this device (prefs `rail`, 外观's 侧边条: which, in what order; the default when none was chosen), as the
+// core has them (prefs `railView`: the places, their words, kinds and order; the page only draws them):
 // 对话 and the lists of chats beside it (我参与的, 监控中, the archive), 奏 (the word, as the desktop has always had it,
 // a dot while some wait for the viewer), 待处理 (what wants them in every workspace), 文件, the stations' glyph, Profile,
 // 连接, 用量; at its foot every workspace to switch to (each with what waits in it; a ＋ over them, as the pointer comes,
@@ -23,7 +24,8 @@ import { useSidebarMode, type SidebarMode } from "./station.tsx";
 import { AttentionEntry } from "./Attention.tsx";
 import { useWorkspaces } from "./cloud/api.ts";
 import * as chatMarkCss from "./ChatMark.css.ts";
-import { setPrefs, usePrefs } from "./prefs.ts";
+import { prefs, setPrefs, usePrefs } from "./prefs.ts";
+import type { RailOf, RailPlace, RailPlaceId } from "./core/shapes.ts";
 import * as controlsCss from "@stillfail/ui/styles/controls.css.ts";
 import { RailStations } from "./Sidebar.tsx";
 import { isPicture } from "./StationMark.tsx";
@@ -38,33 +40,16 @@ import { androidQr, download, downloadsOffered } from "./downloads.ts";
 import { t } from "./i18n.ts";
 import * as partsCss from "@stillfail/ui/parts.css.ts";
 
-/** Every place the rail can show, in the order the settings list them when none was chosen. */
-export const RAIL_ITEMS = ["chats", "mine", "watching", "archive", "decisions", "attention", "files", "stations", "profiles", "connects", "usage"] as const;
-export type RailItem = (typeof RAIL_ITEMS)[number];
-/** What it shows when none was chosen. */
-export const RAIL_DEFAULT: readonly RailItem[] = ["attention", "chats", "files", "stations", "profiles", "connects", "usage"];
+/** A place the rail can show (the core's: prefs `railView`, client/core-ts/src/prefs.ts). */
+export type RailItem = RailPlaceId;
 
-/** What the rail shows, in its order: as kept (what this build does not know left out). */
-export function railItems(kept: readonly string[] | null | undefined): RailItem[] {
-  if (!kept) return [...RAIL_DEFAULT];
-  return [...new Set(kept.filter((k): k is RailItem => (RAIL_ITEMS as readonly string[]).includes(k)))];
-}
+/** Before the core has said what the rail is (the prefs' copy here, from before it did): no places. */
+const NO_RAIL: RailOf = { items: [], hidden: [], changed: false };
+const NO_PLACES: RailPlace[] = [];
 
-/** A place's name, as the rail's tip and the settings say it. */
+/** A place's name, as the rail's tip and the settings say it (the core's words). */
 export function railLabel(item: RailItem): string {
-  switch (item) {
-    case "chats": return t("web-main.rail.chats");
-    case "mine": return t("web-main.filter.chats.mine");
-    case "watching": return t("web-main.filter.watching");
-    case "archive": return t("web-main.filter.archived");
-    case "decisions": return t("web-main.rail.decisions");
-    case "attention": return t("web-main.attention.entry");
-    case "files": return t("web-pages.drive.title");
-    case "stations": return "Station";
-    case "profiles": return "Profile";
-    case "connects": return t("web-pages.settings.nav.connects");
-    case "usage": return t("web-pages.settings.nav.usage");
-  }
+  return prefs().railView?.places.find((p) => p.id === item)?.label ?? item;
 }
 
 /** The icons of the places drawn as one (the stations' is their glyph, 奏 its word, the workspaces each its letter). */
@@ -84,16 +69,6 @@ export function placeOf(path: string): Place {
   if (/^\/w\/[^/]+\/(settings|s\/[^/]+\/settings)(\/|$)/.test(path)) return "settings";
   return "chats";
 }
-
-/** The lists of chats the rail can lead to, by the sidebar's mode they are. */
-const LISTS: Partial<Record<RailItem, SidebarMode>> = { chats: "all", mine: "mine", watching: "watching", decisions: "decisions", archive: "archive" };
-
-/** What can be put in the rail, by its kind, as the panel that adds them groups them. */
-const KINDS: { title: string; items: RailItem[] }[] = [
-  { title: "web-main.rail.kind.places", items: ["files", "stations", "profiles", "connects", "usage"] },
-  { title: "web-main.rail.kind.lists", items: ["chats", "mine", "watching", "archive", "decisions"] },
-  { title: "web-main.rail.kind.attention", items: ["attention"] },
-];
 
 /** Whether the rail is being changed (Rail's own menu, or 外观's button): the page's, not kept. */
 let editing = false;
@@ -126,14 +101,18 @@ function useExtra(): RailItem | null {
 function useScope(): string {
   return /^\/w\/([^/]+)/.exec(useLocation().pathname)?.[1] ?? "";
 }
-/** The rail kept for `scope`: its own, else the one all had before each had its own. */
-function useKeptRail(scope: string): string[] | undefined {
-  return usePrefs((p) => p.rails[scope] ?? p.rail);
+/** The rail kept for `scope`, as the core has it: its own, else the one all had before each had its own. */
+function useKeptRail(scope: string): RailOf {
+  return usePrefs((p) => p.railView?.by[scope] ?? p.railView?.all) ?? NO_RAIL;
+}
+/** Every place the rail can show, in the settings' order (the core's, with the list of chats each shows). */
+function useRailPlaces(): RailPlace[] {
+  return usePrefs((p) => p.railView?.places) ?? NO_PLACES;
 }
 
 /** What the rail has now, as the pages in it go by: the places kept, and the one left out of it in view. */
 export function useRailItems(): RailItem[] {
-  const items = railItems(useKeptRail(useScope()));
+  const items = useKeptRail(useScope()).items;
   const shown = useExtra();
   return shown && !items.includes(shown) ? [...items, shown] : items;
 }
@@ -150,9 +129,14 @@ export function Rail({ scope, workspace }: { scope: string; workspace: ReactNode
   const tones: Partial<Record<RailItem, string | undefined>> = { chats: here?.tone, mine: here?.mineTone, watching: here?.watchingTone };
   const kept = useKeptRail(scope);
   // The places kept (what is changed), and with them the one left out in view (what the pages go by).
-  const items = railItems(kept);
+  const items = kept.items;
   // Changed from the default (恢复默认 offered).
-  const changed = items.join() !== RAIL_DEFAULT.join();
+  const changed = kept.changed;
+  const view = usePrefs((p) => p.railView);
+  // The list of chats each of the lists shows in the sidebar (its mode).
+  const places = useRailPlaces();
+  const listOf = (item: RailItem): SidebarMode | undefined => places.find((p) => p.id === item)?.list;
+  const listed = (m: SidebarMode): RailItem | undefined => places.find((p) => p.list === m)?.id;
   sidebarScope = scope;
   const railed = useRailItems();
   const added = railed.find((i) => !items.includes(i)) ?? null;
@@ -311,14 +295,14 @@ export function Rail({ scope, workspace }: { scope: string; workspace: ReactNode
   const before = useRef<string | null>(null);
   useEffect(() => { if (!inSettings) before.current = location.pathname + location.search; }, [inSettings, location.pathname, location.search]);
   // A list of chats lit while the sidebar shows it; 对话 for one not in the rail.
-  const shownList = (Object.keys(LISTS) as RailItem[]).find((i) => LISTS[i] === mode && railed.includes(i)) ?? "chats";
-  const on = (item: RailItem) => LISTS[item] ? place === "chats" && shownList === item : place === item;
+  const shownList = places.find((p) => p.list === mode && railed.includes(p.id))?.id ?? "chats";
+  const on = (item: RailItem) => listOf(item) ? place === "chats" && shownList === item : place === item;
   // From the archive's own page (the newest archived chat's, none being there), back to the chats.
-  const toList = (item: RailItem) => () => { setMode(LISTS[item]!); if (place !== "chats" || location.pathname === archive) navigate(last); revealPressed(); };
+  const toList = (item: RailItem) => () => { setMode(listOf(item)!); if (place !== "chats" || location.pathname === archive) navigate(last); revealPressed(); };
   const toArchive = () => { setMode("archive"); navigate(archive); revealPressed(); };
   // A place left out of the rail in view: a list of chats or 奏 shown, the archive, the files. Station, Profile, 连接 and
   // 用量 left out are among the settings, so only as picked from the menu (go); gone once the page is elsewhere.
-  const inView: RailItem | null = place === "chats" ? (Object.keys(LISTS) as RailItem[]).find((i) => LISTS[i] === mode) ?? null
+  const inView: RailItem | null = place === "chats" ? listed(mode) ?? null
     : place === "files" ? place : null;
   const at = `${place} ${mode}`;
   const wasAt = useRef(at);
@@ -326,7 +310,7 @@ export function Rail({ scope, workspace }: { scope: string; workspace: ReactNode
     const moved = wasAt.current !== at;
     wasAt.current = at;
     if (inView && !items.includes(inView)) setExtra(inView);
-    else if (moved && extra && !(LISTS[extra] ? place === "chats" && mode === LISTS[extra] : place === extra)) setExtra(null);
+    else if (moved && extra && !(listOf(extra) ? place === "chats" && mode === listOf(extra) : place === extra)) setExtra(null);
   }, [at, inView, items.join()]); // eslint-disable-line react-hooks/exhaustive-deps
   // Picked from the rail's menu, one left out of it: there, and it at the rail's foot while it is.
   const go = (item: RailItem) => {
@@ -341,7 +325,7 @@ export function Rail({ scope, workspace }: { scope: string; workspace: ReactNode
     }
   };
   // What the menu offers to go to: what is left out of the rail, but the attention (a panel, not a place).
-  const away = RAIL_ITEMS.filter((i) => !items.includes(i) && i !== "attention" && i !== added);
+  const away = kept.hidden.filter((i) => i !== "attention" && i !== added);
   const link = (item: RailItem, to: string) => {
     const Icon = RAIL_ICONS[item]!;
     return (
@@ -385,7 +369,7 @@ export function Rail({ scope, workspace }: { scope: string; workspace: ReactNode
       case "usage": return link(item, `${settings}/usage`);
     }
   };
-  const hidden = KINDS.map((k) => ({ ...k, items: k.items.filter((i) => !items.includes(i)) })).filter((k) => k.items.length > 0);
+  const hidden = (view?.groups ?? []).map((g) => ({ ...g, items: g.places.filter((i) => kept.hidden.includes(i)) })).filter((k) => k.items.length > 0);
   const rail = (
     <nav className={css.rail} aria-label={t("web-main.rail.label")} data-editing={changing || undefined}
       // A tab pressed (after its place has come), or the pointer anywhere on the rail: the place's sidebar shown (reveal).
@@ -485,7 +469,7 @@ export function Rail({ scope, workspace }: { scope: string; workspace: ReactNode
               <DropdownMenu.Item className={controlsCss.menuItem} onSelect={() => keep(items.filter((i) => i !== pointed))}><Minus {...ICON} />{t("web-main.rail.remove", { name: railLabel(pointed) })}</DropdownMenu.Item>
             )}
             <DropdownMenu.Item className={controlsCss.menuItem} onSelect={() => editRail(true)}><Sliders {...ICON} />{t("web-main.rail.customize")}</DropdownMenu.Item>
-            {changed && <DropdownMenu.Item className={controlsCss.menuItem} onSelect={() => keep([...RAIL_DEFAULT])}><Retry {...ICON} />{t("web-main.rail.reset")}</DropdownMenu.Item>}
+            {changed && <DropdownMenu.Item className={controlsCss.menuItem} onSelect={() => keep([...(view?.default ?? [])])}><Retry {...ICON} />{t("web-main.rail.reset")}</DropdownMenu.Item>}
           </DropdownMenu.Content>
         </DropdownMenu.Portal>
       </DropdownMenu.Root>
@@ -500,7 +484,7 @@ export function Rail({ scope, workspace }: { scope: string; workspace: ReactNode
           <PanelHead title={t("web-main.rail.customize")} note={t("web-main.rail.customizeLead")} />
           {hidden.length === 0 && <PanelNote>{t("web-main.rail.allIn")}</PanelNote>}
           {hidden.map((k) => (
-            <PanelGroup key={k.title} label={t(k.title)}>
+            <PanelGroup key={k.kind} label={k.label}>
               {k.items.map((i) => {
                 const Icon = RAIL_ICONS[i];
                 return <PanelRow key={i} icon={Icon ? <Icon size={18} /> : i === "decisions" ? <span className={css.zouSmall}>奏</span> : null}

@@ -35,9 +35,110 @@ pub fn request_frame() -> Unit {
 }
 
 ///|
-/// The system: 0 macOS, 1 iOS, 2 Android, 3 Windows, 4 a browser (a Tester's `platform`).
+/// The system: 0 macOS, 1 iOS, 2 Android, 3 Windows, 4 a browser (a Tester's `platform`; a program's over its host's:
+/// set_platform).
 pub fn platform() -> Int {
-  h_platform()
+  match fake.val {
+    Some(_) => h_platform()
+    None => if said_platform.val >= 0 { said_platform.val } else { h_platform() }
+  }
+}
+
+///|
+/// The system a program says it plays, over its host's (set_platform); -1: its host's.
+// kept across runs: what the program says once as it starts, before any frame
+let said_platform : Ref[Int] = Ref(-1)
+
+///|
+/// The system this program plays from now on, over its host's (None: its host's again), as a Tester plays its
+/// `platform`: a run on one system made as another's (a phone's screens and flows recorded on a Mac: sffix's and the
+/// app's MBUI_PLATFORM). What the app reads of the system (platform, and by it the hand's default: pointing) and how its
+/// touches and fields feel (feel_as) are that system's; the host's own keys and window stay its own. A Tester's own is
+/// over it.
+pub fn set_platform(p : Int?) -> Unit {
+  said_platform.val = p.unwrap_or(-1)
+}
+
+///|
+/// What the person points with: a finger on the screen, or a mouse or a trackpad moving a pointer over it.
+pub(all) enum Pointing {
+  Finger
+  Mouse
+} derive(Eq, Show, Debug)
+
+///|
+/// What the person points with here (a Tester's: its `pointing`, by default its `platform`'s): a finger on a phone's or a tablet's system (iOS,
+/// Android), a mouse or a trackpad on a desktop's. The one source of how things answer a person's hand: whether
+/// anything is hovered (a finger hovers over nothing: Ctx::hovered, a tooltip, a hover card), how a menu is asked for
+/// (Ctx::menu_asked), what shows only to a pointer resting on it, how a press, a drag and Enter work. Never what the
+/// window's size or the system's size classes decide (the layout: how many panes, how wide, how large the words);
+/// never these by them.
+pub fn pointing() -> Pointing {
+  match fake.val {
+    Some(f) => f.pointing
+    None =>
+      match said_pointing.val {
+        Some(p) => p
+        None => platform_pointing(platform())
+      }
+  }
+}
+
+///|
+/// What the app was started to be used with (the native input), the same the whole run: a Tester's `native` (by
+/// default its system's); else, where a program plays another system (set_platform), that system's; else what the
+/// host can tell at launch (@hostapi.native_pointing: a pointer on an iPad, a mouse on Android, a touch screen and no
+/// mouse on Windows), its system's where it cannot. Read once, at the first ask. How things answer the hand of the
+/// moment is pointing's.
+pub fn native_pointing() -> Pointing {
+  match fake.val {
+    Some(f) => f.native
+    None =>
+      match native_input_read.val {
+        Some(p) => p
+        None => {
+          let p = if said_platform.val >= 0 {
+            platform_pointing(said_platform.val)
+          } else {
+            match @hostapi.native_pointing() {
+              1 => Finger
+              2 => Mouse
+              _ => platform_pointing(platform())
+            }
+          }
+          native_input_read.val = Some(p)
+          p
+        }
+      }
+  }
+}
+
+///|
+/// The native input as first read (native_pointing).
+// kept across runs: read once as the app starts, the same the whole run
+let native_input_read : Ref[Pointing?] = Ref(None)
+
+///|
+/// The hand a program says it is pointed at with, over its system's (set_pointing); None: its system's.
+// kept across runs: what the program says once as it starts, before any frame
+let said_pointing : Ref[Pointing?] = Ref(None)
+
+///|
+/// The hand this program is pointed at with from now on, over its system's (None: its system's again): a run on one
+/// system made as another's (a phone's screens drawn on a Mac, pointed at as a phone is: sffix's MBUI_POINTING). A
+/// Tester's own (Tester::new's `pointing`) is over it.
+pub fn set_pointing(p : Pointing?) -> Unit {
+  said_pointing.val = p
+}
+
+///|
+/// What a system is pointed at with: a finger on a phone's or a tablet's (iOS, Android), a mouse or a trackpad on a
+/// desktop's.
+fn platform_pointing(platform : Int) -> Pointing {
+  match platform {
+    1 | 2 => Finger
+    _ => Mouse
+  }
 }
 
 ///|
@@ -65,6 +166,26 @@ pub fn window_inset() -> Bool {
   match fake.val {
     Some(f) => f.inset
     None => @hostapi.window_inset()
+  }
+}
+
+///|
+/// Whether the desktop's window fills the screen now (@hostapi.full_screen; a Tester's as Ctx::set_full_screen last
+/// made it).
+pub fn full_screen() -> Bool {
+  match fake.val {
+    Some(f) => f.full
+    None => @hostapi.full_screen()
+  }
+}
+
+///|
+/// How round the system draws the window's corners now (@hostapi.window_corner; a Tester's `window_corner`, none while
+/// it fills the screen): the outermost container of all (corners.mbt).
+pub fn window_corner() -> Double {
+  match fake.val {
+    Some(f) => if f.full { 0.0 } else { f.window_corner }
+    None => @hostapi.window_corner()
   }
 }
 

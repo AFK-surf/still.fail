@@ -17,7 +17,7 @@
 import { totalmem } from "node:os";
 import type { Clock } from "effect";
 import { runnerId } from "../agents/process.ts";
-import { existingRunners } from "../agents/runner.ts";
+import { liveRunners, type RunnerInfo } from "../agents/runner.ts";
 import { RUNTIME_KINDS } from "../agents/runtime.ts";
 import { Fibers } from "../ops/fibers.ts";
 import { log } from "../ops/log.ts";
@@ -103,7 +103,8 @@ export type MemoryOptions = {
   /// The working directories of processes, for a command whose session its runtime does not say.
   cwds(pids: number[]): Promise<Map<number, string>>;
   jobs(): WatchedJob[];
-  agents(): WatchedAgent[];
+  /// The agents' runtimes (their runners' files, read off the station's thread).
+  agents(): Promise<WatchedAgent[]>;
   /// The session whose directory `dir` is in.
   sessionAt(dir: string): string | null;
   /// Tells a unit's agent: a job's through the job (another station's task: its notices), a command's its session's.
@@ -155,7 +156,7 @@ export class MemoryWatch {
     const pressed = pressure === "high" || pressure === "critical";
     const table = await this.#o.table(pressed).catch(() => null);
     if (table === null) return pressure;
-    const units = unitsOf(table, this.#o.jobs(), this.#o.agents(), this.#o.self).sort((a, b) => b.bytes - a.bytes);
+    const units = unitsOf(table, this.#o.jobs(), await this.#o.agents(), this.#o.self).sort((a, b) => b.bytes - a.bytes);
     await this.#whose(units);
     const present = new Set(units.map((u) => u.key));
     for (const key of this.#told.keys()) if (!present.has(key)) this.#told.delete(key);
@@ -231,34 +232,71 @@ export class MemoryWatch {
   }
 }
 
+/// The jobs running now, as the watches see them (the resources' too, resources/watch.ts).
+export function watchedJobs(store: Store): WatchedJob[] {
+  return store.jobsRunning().flatMap((j) => (j.pgid !== null ? [{ id: j.id, session: j.sessionKey, pgid: j.pgid, label: named(j) }] : []));
+}
+
+/// The session of `sessions` whose directory (its workspace, or where it runs) holds `dir`, the deepest; null for none.
+function sessionIn(sessions: { key: string; workspace: string; cwd: string | null }[], dir: string): string | null {
+  let best: { key: string; length: number } | null = null;
+  for (const s of sessions) {
+    for (const root of [s.workspace, s.cwd]) {
+      if (!root || !(dir === root || dir.startsWith(root.endsWith("/") ? root : `${root}/`))) continue;
+      if (best === null || root.length > best.length) best = { key: s.key, length: root.length };
+    }
+  }
+  return best?.key ?? null;
+}
+
+/// Which session each runner id is (a runner is a session's, its id made of the session's key, or a profile's, shared
+/// by its sessions): the sessions shown asked each time; every session ever only as a runner none of them names comes
+/// (an archived session's left on, a profile's), and what that found kept.
+export function runnerSessions(store: Store): (ids: string[]) => Map<string, string> {
+  let all: Map<string, string> | null = null;
+  const unnamed = new Set<string>();
+  const of = (sessions: { key: string }[]) => {
+    const whose = new Map<string, string>();
+    for (const s of sessions) for (const kind of RUNTIME_KINDS) whose.set(runnerId(kind, s.key), s.key);
+    return whose;
+  };
+  return (ids) => {
+    const whose = of(store.liveSessions());
+    const rest = ids.filter((id) => !whose.has(id));
+    if (rest.some((id) => !unnamed.has(id) && !all?.has(id))) {
+      all = of(store.listSessions());
+      for (const id of rest) if (!all.has(id)) unnamed.add(id);
+    }
+    for (const id of rest) {
+      const key = all?.get(id);
+      if (key !== undefined) whose.set(id, key);
+    }
+    return whose;
+  };
+}
+
+/// The runners alive (<data>/run/runners), each with its session (`whose`: runnerSessions).
+export async function runnersWithSessions(data: string, whose: (ids: string[]) => Map<string, string>): Promise<(RunnerInfo & { session: string | null })[]> {
+  const runners = await liveRunners(data);
+  const named = whose(runners.map((r) => r.id));
+  return runners.map((r) => ({ ...r, session: named.get(r.id) ?? null }));
+}
+
 /// The watch as the station runs it: over its jobs (`jobs`' store) and the commands of its runtimes (the runners of
 /// before and now, <data>/run/runners), on this machine's memory.
 export function liveMemory(o: { data: string; store: Store; jobs: Jobs; notify: (session: string, text: string) => void; clock?: Clock.Clock }): MemoryWatch {
   const { store } = o;
+  const whose = runnerSessions(store);
   return new MemoryWatch({
     clock: o.clock,
     pressure: () => platform.memoryPressure(),
     table: (exact) => platform.processTable(exact),
     totalBytes: () => totalmem(),
     cwds: (pids) => platform.cwds(pids),
-    jobs: () =>
-      store.listJobs(null).flatMap((j) => (j.state === "running" && j.pgid !== null ? [{ id: j.id, session: j.sessionKey, pgid: j.pgid, label: named(j) }] : [])),
-    agents: () => {
-      // A runner is a session's (its id made of the session's key) or a profile's, shared by its sessions (codex).
-      const whose = new Map<string, string>();
-      for (const s of store.listSessions()) for (const kind of RUNTIME_KINDS) whose.set(runnerId(kind, s.key), s.key);
-      return existingRunners(o.data).map((r) => ({ pid: r.pid, session: whose.get(r.id) ?? null }));
-    },
-    sessionAt: (dir) => {
-      let best: { key: string; length: number } | null = null;
-      for (const s of store.listSessions()) {
-        for (const root of [s.workspace, s.cwd]) {
-          if (!root || !(dir === root || dir.startsWith(root.endsWith("/") ? root : `${root}/`))) continue;
-          if (best === null || root.length > best.length) best = { key: s.key, length: root.length };
-        }
-      }
-      return best?.key ?? null;
-    },
+    jobs: () => watchedJobs(store),
+    agents: async () => (await runnersWithSessions(o.data, whose)).map((r) => ({ pid: r.pid, session: r.session })),
+    // Among the sessions shown first; every session ever only for a directory none of them has (an archived one's).
+    sessionAt: (dir) => sessionIn(store.liveSessions(), dir) ?? sessionIn(store.listSessions(), dir),
     tell: (unit, text) => {
       const job = unit.job !== null ? store.getJob(unit.job) : null;
       // Another station's task: its notices, which go back to the session that asked for it (jobs/remote.ts).

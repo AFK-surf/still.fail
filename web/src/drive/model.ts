@@ -5,7 +5,7 @@
 import { useMemo, useSyncExternalStore } from "react";
 import { core, topicNow, useTopic, type TopicState } from "../core/react.ts";
 import { CoreError } from "../core/client.ts";
-import type { DriveEntry, DriveFolder, DriveKind, DrivePlace, DriveRoot } from "../core/shapes.ts";
+import type { DriveEntry, DriveFolder, DrivePlace, DriveRoot } from "../core/shapes.ts";
 import { bytesOf } from "../api.ts";
 import { t } from "../i18n.ts";
 
@@ -99,31 +99,15 @@ export function readKept(at: At, entry: Pick<DriveEntry, "size" | "mtime">, type
   return kept;
 }
 
-/** Saves a file of the drive to this device (the browser's download), read whole first; `onProgress` as it comes. */
-export async function download(at: At, entry: Pick<DriveEntry, "size" | "name" | "type">, onProgress?: (got: Got) => void): Promise<void> {
-  const blob = await readWhole(at, entry.size, { type: entry.type || "application/octet-stream", ...(onProgress ? { onProgress } : {}) });
-  const a = document.createElement("a");
-  a.href = URL.createObjectURL(blob);
-  a.download = entry.name;
-  document.body.append(a);
-  a.click();
-  a.remove();
-  setTimeout(() => URL.revokeObjectURL(a.href), 60_000);
+/** Saves a file of the drive to this device: downloaded by the core (chatDownloads.ts), whatever becomes of the page,
+ * how far in the files' transfers, saved by the browser once all of it is here (chatDownloadsSaved.ts). */
+export async function download(at: At, entry: Pick<DriveEntry, "size" | "name" | "mtime">): Promise<void> {
+  await core().call("download.start", { station: at.station, root: at.root, path: at.path, name: entry.name, size: entry.size, mtime: entry.mtime });
 }
 
-// ── what opens an entry ────────────────────────────────────────────────
-
-/** How an entry is opened: entered, read in the reader, played, previewed as a chat's file is, or saved. */
-export type Opener = "folder" | "read" | "play" | "preview" | "save";
-
-export function openerOf(kind: DriveKind): Opener {
-  switch (kind) {
-    case "folder": return "folder";
-    case "text": case "markdown": return "read";
-    case "video": case "audio": return "play";
-    case "image": case "pdf": case "code": case "csv": case "html": case "subtitle": return "preview";
-    default: return "save";
-  }
+/** A folder of the drive saved to this device as a zip: the core has the station zip it, then downloads that. */
+export async function downloadZip(at: At): Promise<void> {
+  await core().call("download.start", { station: at.station, root: at.root, path: at.path, name: `${nameOf(at.path) || at.root}.zip`, zip: true });
 }
 
 // A folder's names as the viewers read them (@stillfail/ui viewer/names.ts).
@@ -131,15 +115,10 @@ export { compareNatural, sideSubtitle } from "@stillfail/ui/viewer/names.ts";
 
 // ── writing ────────────────────────────────────────────────────────────
 
-/** A name not among `taken`: `name (1).ext`, `name (2).ext`… */
-export function freeName(name: string, taken: ReadonlySet<string>): string {
-  if (!taken.has(name)) return name;
-  const dot = name.lastIndexOf(".");
-  const [stem, ext] = dot > 0 ? [name.slice(0, dot), name.slice(dot)] : [name, ""];
-  for (let n = 1; ; n++) {
-    const next = `${stem} (${n})${ext}`;
-    if (!taken.has(next)) return next;
-  }
+/** A name beside those `taken` in the folder (and those the folder holds), as the station keeps both: `a 2.txt`. */
+async function besideName(station: string, root: string, folder: string, name: string, taken: Iterable<string>): Promise<string> {
+  const { name: free } = await core().call("drive.name", { name, station, root, path: folder, taken: [...taken], beside: true }) as { name: string };
+  return free;
 }
 
 /** The names a folder has now, as the page holds it (and those on their way into it). */
@@ -210,13 +189,12 @@ export function upload(station: string, root: string, folder: string, files: Ite
 export function settle(key: string, replace: boolean): void {
   const u = uploads.find((x) => x.key === key);
   if (!u) return;
-  if (!replace) {
-    const taken = namesIn(u.station, u.root, u.folder);
-    taken.delete(u.name);
-    change(key, (x) => ({ ...x, name: freeName(x.name, new Set([...taken, x.name])) }));
-  }
   change(key, (x) => ({ ...x, state: "sending", sent: 0 }));
-  void send(key, replace);
+  if (replace) return void send(key, true);
+  void besideName(u.station, u.root, u.folder, u.name, namesIn(u.station, u.root, u.folder)).then((name) => {
+    change(key, (x) => ({ ...x, name }));
+    return send(key, false);
+  }, (e: unknown) => change(key, (x) => ({ ...x, state: "failed", error: e instanceof Error ? e.message : String(e) })));
 }
 
 /** Tried again from the start (one that failed). */
@@ -272,9 +250,10 @@ async function send(key: string, replace: boolean): Promise<void> {
         const names = tried.get(key) ?? new Set<string>();
         tried.set(key, names);
         names.add(name);
-        const free = freeName(first.name, new Set([...names, ...namesIn(station, root, folder)]));
-        change(key, (x) => ({ ...x, name: free, state: "sending", sent: 0 }));
-        void send(key, false);
+        void besideName(station, root, folder, first.name, [...names, ...namesIn(station, root, folder)]).then((free) => {
+          change(key, (x) => ({ ...x, name: free, state: "sending", sent: 0 }));
+          return send(key, false);
+        }, (err: unknown) => change(key, (x) => ({ ...x, state: "failed", error: err instanceof Error ? err.message : String(err) })));
         return;
       }
       if (held?.entries.some((x) => x.name === name && x.dir)) return settle(key, false);

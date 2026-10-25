@@ -1,10 +1,11 @@
 // Style values (docs/style.md): a box's (Style, its state blocks Patch) and words' (TextStyle, TextPatch); made with
-// `style(…)`, `patch(…)`, `text_style(…)`, `text_patch(…)`, put together with `then`. Every property is a token of
+// `style(…)`, `patch(…)`, `text_style(…)`, `text_patch(…)`, or a Style read from its text (`css("…")`, style_css.mbt:
+// what a named constant is said with), put together with `then`. Every property is a token of
 // style_tokens.mbt; one not said is the default (Ctx::box's, Ctx::text's) or what the style under it says.
 
 ///|
 /// What a box looks like, every property optional (None: not said here). Padding from the finer to the coarser: `pl`
-/// `pr` `pt` `pb` over `px` `py` over `p`.
+/// `pr` `pt` `pb` over `px` `py` over `p`; the margins (`m`…) the same.
 pub(all) struct Patch {
   row : Bool?
   w : Len?
@@ -20,6 +21,13 @@ pub(all) struct Patch {
   pr : Space?
   pt : Space?
   pb : Space?
+  m : Space?
+  mx : Space?
+  my : Space?
+  ml : Space?
+  mr : Space?
+  mt : Space?
+  mb : Space?
   gap : Space?
   align : Align?
   justify : Justify?
@@ -27,14 +35,17 @@ pub(all) struct Patch {
   radius : Radius?
   border : Stroke?
   border_color : Color?
+  /// its border drawn as dashes (CSS's `dashed`), not one line
+  dashed : Bool?
   shadow : Shadow?
   clip : Bool?
   opacity : Opacity?
-}
+} derive(Eq)
 
 ///|
 /// A box's style: what it looks like, and what it looks like instead in a state (each a Patch over it). The states
-/// are laid on in one order, the later winning: narrow, dark, selected, hovered, focused, pressed, disabled.
+/// are laid on in one order, the later winning: narrow, dark, selected, hovered, focused, pressed, disabled; the
+/// ground of `hovered` and `pressed` laid over the ground under it (Style::resolve).
 pub(all) struct Style {
   base : Patch
   narrow : Patch?
@@ -44,7 +55,7 @@ pub(all) struct Style {
   focused : Patch?
   pressed : Patch?
   disabled : Patch?
-}
+} derive(Eq)
 
 ///|
 /// A box's look, every property a token (style_tokens.mbt); a state's block in place of none.
@@ -63,6 +74,13 @@ pub fn patch(
   pr? : Space,
   pt? : Space,
   pb? : Space,
+  m? : Space,
+  mx? : Space,
+  my? : Space,
+  ml? : Space,
+  mr? : Space,
+  mt? : Space,
+  mb? : Space,
   gap? : Space,
   align? : Align,
   justify? : Justify,
@@ -70,6 +88,7 @@ pub fn patch(
   radius? : Radius,
   border? : Stroke,
   border_color? : Color,
+  dashed? : Bool,
   shadow? : Shadow,
   clip? : Bool,
   opacity? : Opacity,
@@ -89,6 +108,13 @@ pub fn patch(
     pr,
     pt,
     pb,
+    m,
+    mx,
+    my,
+    ml,
+    mr,
+    mt,
+    mb,
     gap,
     align,
     justify,
@@ -96,6 +122,7 @@ pub fn patch(
     radius,
     border,
     border_color,
+    dashed,
     shadow,
     clip,
     opacity,
@@ -119,6 +146,13 @@ pub fn style(
   pr? : Space,
   pt? : Space,
   pb? : Space,
+  m? : Space,
+  mx? : Space,
+  my? : Space,
+  ml? : Space,
+  mr? : Space,
+  mt? : Space,
+  mb? : Space,
   gap? : Space,
   align? : Align,
   justify? : Justify,
@@ -126,6 +160,7 @@ pub fn style(
   radius? : Radius,
   border? : Stroke,
   border_color? : Color,
+  dashed? : Bool,
   shadow? : Shadow,
   clip? : Bool,
   opacity? : Opacity,
@@ -153,6 +188,13 @@ pub fn style(
       pr,
       pt,
       pb,
+      m,
+      mx,
+      my,
+      ml,
+      mr,
+      mt,
+      mb,
       gap,
       align,
       justify,
@@ -160,6 +202,7 @@ pub fn style(
       radius,
       border,
       border_color,
+      dashed,
       shadow,
       clip,
       opacity,
@@ -203,6 +246,12 @@ pub fn Patch::then(self : Patch, o : Patch) -> Patch {
   let a_pr = if o.p is Some(_) || o.px is Some(_) { None } else { a.pr }
   let a_pt = if o.p is Some(_) || o.py is Some(_) { None } else { a.pt }
   let a_pb = if o.p is Some(_) || o.py is Some(_) { None } else { a.pb }
+  let a_mx = if o.m is Some(_) { None } else { a.mx }
+  let a_my = if o.m is Some(_) { None } else { a.my }
+  let a_ml = if o.m is Some(_) || o.mx is Some(_) { None } else { a.ml }
+  let a_mr = if o.m is Some(_) || o.mx is Some(_) { None } else { a.mr }
+  let a_mt = if o.m is Some(_) || o.my is Some(_) { None } else { a.mt }
+  let a_mb = if o.m is Some(_) || o.my is Some(_) { None } else { a.mb }
   {
     row: or_else(o.row, a.row),
     w: or_else(o.w, a.w),
@@ -218,6 +267,13 @@ pub fn Patch::then(self : Patch, o : Patch) -> Patch {
     pr: or_else(o.pr, a_pr),
     pt: or_else(o.pt, a_pt),
     pb: or_else(o.pb, a_pb),
+    m: or_else(o.m, a.m),
+    mx: or_else(o.mx, a_mx),
+    my: or_else(o.my, a_my),
+    ml: or_else(o.ml, a_ml),
+    mr: or_else(o.mr, a_mr),
+    mt: or_else(o.mt, a_mt),
+    mb: or_else(o.mb, a_mb),
     gap: or_else(o.gap, a.gap),
     align: or_else(o.align, a.align),
     justify: or_else(o.justify, a.justify),
@@ -225,6 +281,7 @@ pub fn Patch::then(self : Patch, o : Patch) -> Patch {
     radius: or_else(o.radius, a.radius),
     border: or_else(o.border, a.border),
     border_color: or_else(o.border_color, a.border_color),
+    dashed: or_else(o.dashed, a.dashed),
     shadow: or_else(o.shadow, a.shadow),
     clip: or_else(o.clip, a.clip),
     opacity: or_else(o.opacity, a.opacity),
@@ -267,19 +324,24 @@ fn Style::resolve(
   pressed : Bool,
   disabled : Bool,
 ) -> Patch {
+  // (whether each answers the hand: its ground laid over the one under it)
   let blocks = [
-    (self.narrow, narrow),
-    (self.dark, dark),
-    (self.selected, selected),
-    (self.hovered, hovered),
-    (self.focused, focused),
-    (self.pressed, pressed),
-    (self.disabled, disabled),
+    (self.narrow, narrow, false),
+    (self.dark, dark, false),
+    (self.selected, selected, false),
+    (self.hovered, hovered, true),
+    (self.focused, focused, false),
+    (self.pressed, pressed, true),
+    (self.disabled, disabled, false),
   ]
   let mut p = self.base
   for b in blocks {
     match b {
-      (Some(b), true) => p = p.then(b)
+      // what answers the hand (pointed at, pressed) is laid over the ground under it, the box's own or its
+      // selected one, not put in its place: a tint over any ground is a step more, a box pointed at in a box
+      // pointed at a step more again (the kit's `tinted`)
+      (Some(b), true, true) => p = p.lit_by(b)
+      (Some(b), true, false) => p = p.then(b)
       _ => ()
     }
   }
@@ -287,9 +349,21 @@ fn Style::resolve(
 }
 
 ///|
+/// `self` with a hand's state block `o` over it: what `o` says in place of what `self` does, but its ground over
+/// `self`'s.
+fn Patch::lit_by(self : Patch, o : Patch) -> Patch {
+  let p = self.then(o)
+  match (self.bg, o.bg) {
+    (Some(under), Some(top)) if under != Clear => { ..p, bg: Some(Over(under, top)) }
+    _ => p
+  }
+}
+
+///|
 /// What words look like, every property optional. `wrap=false`: one line, cut with an ellipsis; `max_lines`: wrapped
 /// words cut after that many lines, the last ending in an ellipsis; `tracking`: letter spacing; `leading`: the line's
-/// height in place of the size's own.
+/// height in place of the size's own; `tabular`: digits all one width, for a number that changes where it stands (a
+/// percentage, a time running: CSS's font-variant-numeric tabular-nums).
 pub(all) struct TextPatch {
   size : TextSize?
   weight : Weight?
@@ -300,6 +374,7 @@ pub(all) struct TextPatch {
   tracking : Tracking?
   max_lines : Int?
   leading : Leading?
+  tabular : Bool?
 }
 
 ///|
@@ -321,8 +396,9 @@ pub fn text_patch(
   tracking? : Tracking,
   max_lines? : Int,
   leading? : Leading,
+  tabular? : Bool,
 ) -> TextPatch {
-  { size, weight, color, w, center, wrap, tracking, max_lines, leading }
+  { size, weight, color, w, center, wrap, tracking, max_lines, leading, tabular }
 }
 
 ///|
@@ -336,10 +412,11 @@ pub fn text_style(
   tracking? : Tracking,
   max_lines? : Int,
   leading? : Leading,
+  tabular? : Bool,
   narrow? : TextPatch,
   dark? : TextPatch,
 ) -> TextStyle {
-  { base: { size, weight, color, w, center, wrap, tracking, max_lines, leading }, narrow, dark }
+  { base: { size, weight, color, w, center, wrap, tracking, max_lines, leading, tabular }, narrow, dark }
 }
 
 ///|
@@ -354,6 +431,7 @@ pub fn TextPatch::then(self : TextPatch, o : TextPatch) -> TextPatch {
     tracking: or_else(o.tracking, self.tracking),
     max_lines: or_else(o.max_lines, self.max_lines),
     leading: or_else(o.leading, self.leading),
+    tabular: or_else(o.tabular, self.tabular),
   }
 }
 

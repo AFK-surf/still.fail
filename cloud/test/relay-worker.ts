@@ -3,6 +3,7 @@
 import { DurableObject } from "cloudflare:workers";
 import worker, { RelayBudget as ProductionRelayBudget } from "../src/relay-worker";
 import { clock, nowSeconds } from "../src/auth";
+import { LIMITS } from "../src/limits";
 export default worker;
 
 declare const TEST_NOW_MS: number | null;
@@ -10,17 +11,17 @@ if (TEST_NOW_MS !== null) clock.now = () => TEST_NOW_MS;
 
 export class RelayBudget extends ProductionRelayBudget {
   exhaustBudget(kind: "bytes" | "frames" = "bytes") {
-    const now = nowSeconds();
     // The budget is counted in memory and written now and then: exhausting it means both.
-    this.quota = {
-      minute: Math.floor(now / 60),
-      day: Math.floor(now / 86400),
-      at: now,
-      connects: 0,
-      bytes: kind === "bytes" ? 5 * 1024 * 1024 * 1024 : 0,
-      frames: kind === "frames" ? 20_000_000 : 0,
-    };
-    this.ctx.storage.kv.put("quota", this.quota);
+    const q = this.load();
+    if (kind === "bytes") q.bytes = LIMITS.bytesPerDay;
+    else q.frames = LIMITS.framesPerDay;
+    this.ctx.storage.kv.put("quota", q);
+  }
+  /** A day's budget used up as counted before COUNTING (relay.ts), kept the way it was then. */
+  exhaustedBefore() {
+    const now = nowSeconds();
+    this.quota = undefined;
+    this.ctx.storage.kv.put("quota", { minute: Math.floor(now / 60), day: Math.floor(now / 86400), at: now, connects: 0, bytes: LIMITS.bytesPerDay, frames: 0 });
   }
   /** What the alarm does every minute while connections are open. */
   poll() {
@@ -37,6 +38,8 @@ export class Relay extends DurableObject<{ TEST_RELAY?: Fetcher }> {
   private arrivals: { n: number; resolve: () => void }[] = [];
   private closings: { n: number; resolve: () => void }[] = [];
   private destroyed = 0;
+  private bytes = 0;
+  private failing = 0;
   private accepts = 0;
   private disconnects = 0;
   private sockets = new Set<WebSocket>();
@@ -48,7 +51,19 @@ export class Relay extends DurableObject<{ TEST_RELAY?: Fetcher }> {
     this.sockets.clear();
   }
   metrics() {
-    return `relayserver_bytes_sent_total 0\nrelayserver_accepts_total ${this.accepts}\nrelayserver_disconnects_total ${this.disconnects}\n`;
+    if (this.failing > 0) {
+      this.failing--;
+      throw new Error("the relay process did not answer");
+    }
+    return `relayserver_bytes_sent_total ${this.bytes}\nrelayserver_accepts_total ${this.accepts}\nrelayserver_disconnects_total ${this.disconnects}\n`;
+  }
+  /** Traffic through it, as the process counts it. */
+  carried(bytes: number) {
+    this.bytes += bytes;
+  }
+  /** The next `n` reads of its counters fail, as while the process is too busy to answer. */
+  failReads(n = 1) {
+    this.failing = n;
   }
   destroyCount() {
     return this.destroyed;

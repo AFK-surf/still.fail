@@ -39,6 +39,11 @@
   "  float u = pow(1.0 + tn, 1.0 / n);\n" \
   "  return (hi * u - R) * (1.0 + tn) / (u * sqrt(1.0 + tn1 * tn1));\n" \
   "}\n" \
+  "// Which of a box's corners' radii r (top left, top right, bottom right, bottom left: scene.mbt 36-39) p (from its\n" \
+  "// middle) is drawn by: the one of its quarter's corner.\n" \
+  "float mb_corner_of(float2 p, float4 r) {\n" \
+  "  return p.x < 0.0 ? (p.y < 0.0 ? r.x : r.w) : (p.y < 0.0 ? r.y : r.z);\n" \
+  "}\n" \
   "// A box's own corners: r at most its shorter half, as smooth as its size has room for (band: mb_sd_corner's).\n" \
   "float mb_sd_box(float2 p, float2 hs, float r, float band) {\n" \
   "  float room = min(hs.x, hs.y);\n" \
@@ -110,5 +115,16 @@
   "int mb_seg_slot(int i) {\n" \
   "  int s = i - (i / 6) * 6;\n" \
   "  return s + (s >= 1 ? 1 : 0) + (s >= 4 ? 1 : 0);\n" \
+  "}\n" \
+  "// How far to move a smooth ground (glass's frost) at the pixel px (in pixels) before it is written to 8 bits a\n" \
+  "// channel, in steps of 1/255: Skia's ordered dither (GrDitherEffect, an 8x8 Bayer matrix by the pixel's place), never\n" \
+  "// half a step either way. Without it a slope of a few steps across a wide frost is written as flat bands, an edge where\n" \
+  "// each step is (contour lines); with it each pixel is the step above or below as often as the slope is near it, and\n" \
+  "// a value already on a step stays it.\n" \
+  "float mb_dither(float2 px) {\n" \
+  "  int x = int(floor(px.x)) & 7;\n" \
+  "  int y = (int(floor(px.y)) & 7) ^ x;\n" \
+  "  int m = ((y & 1) << 5) | ((x & 1) << 4) | ((y & 2) << 2) | ((x & 2) << 1) | ((y & 4) >> 1) | ((x & 4) >> 2);\n" \
+  "  return float(m) / 64.0 - 63.0 / 128.0;\n" \
   "}\n" \
   ""

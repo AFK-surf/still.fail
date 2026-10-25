@@ -1,35 +1,21 @@
 // A folder of a station's drive as the clients show it (the `drive` topic; docs/drive.md): each entry with what kind it
-// is (which viewer opens it, which mark it has), its size and time in words, and the folder's count in a line.
+// is (which mark it has) and what a press on it does, its size and time in words, and the folder's count in a line.
 import { bytes, clock, local, localDay } from "./format.ts";
 import { current, tr } from "./i18n.ts";
 import type { Clock } from "./present.ts";
 import { get, isObject } from "./util.ts";
+import { kindOf, opensOf, type DriveKind } from "./drive-kind.ts";
+
+export { kindOf, opensOf, type DriveKind, type DriveOpener } from "./drive-kind.ts";
 
 type J = any;
 
-/// What opens an entry: a folder is entered, video and audio play, text and Markdown are read, the rest is previewed
-/// as chat attachments are (image, pdf, code, csv, html) or handed to the system (other).
-export type DriveKind = "folder" | "video" | "audio" | "image" | "markdown" | "text" | "code" | "csv" | "html" | "pdf" | "subtitle" | "other";
-
-const EXT: Record<string, DriveKind> = {};
-const put = (kind: DriveKind, exts: string) => exts.split(" ").forEach((e) => (EXT[e] = kind));
-put("video", "mp4 m4v mov webm mkv avi ts m2ts flv wmv 3gp");
-put("audio", "mp3 m4a aac flac wav ogg opus wma");
-put("image", "png jpg jpeg gif webp svg heic bmp avif");
-put("markdown", "md markdown");
-put("text", "txt log text");
-put("code", "js mjs cjs ts tsx jsx json py rb go rs java kt kts swift c h cc cpp hpp cs php sh zsh bash fish ps1 sql yaml yml toml ini conf cfg xml css scss less lua pl r dart vue svelte gradle mk cmake");
-put("csv", "csv tsv");
-put("html", "html htm");
-put("pdf", "pdf");
-put("subtitle", "srt vtt ass ssa sub");
-
-/// What kind a file is, by its name.
-export function kindOf(name: string): DriveKind {
-  const dot = name.lastIndexOf(".");
-  const ext = dot <= 0 ? "" : name.slice(dot + 1).toLowerCase();
-  if (ext === "" && /^(readme|license|licence|changelog|makefile|dockerfile)$/i.test(name)) return "text";
-  return EXT[ext] ?? "other";
+/// What is wrong with a name a file or folder is given (empty, a slash, `.` or `..`), in words; null when nothing is.
+export function nameProblem(name: string): string | null {
+  const n = name.trim();
+  if (n === "") return tr(current(), "core-logic.drive.name.empty");
+  if (n.includes("/") || n.includes("\\") || n === "." || n === "..") return tr(current(), "core-logic.drive.name.bad");
+  return null;
 }
 
 /// A file's time: 14:05 today, 9/27 this year, 2024/9/27 before.
@@ -47,7 +33,8 @@ export function shown(raw: J, c: Clock): J {
     const dir = e.dir === true;
     const size = typeof e.size === "number" ? e.size : 0;
     const mtime = typeof e.mtime === "number" ? e.mtime : 0;
-    return { ...e, kind: dir ? "folder" : kindOf(String(get(e, "name") ?? "")), sizeText: dir ? "" : bytes(size), timeText: mtime > 0 ? driveTime(mtime, c) : "" };
+    const kind: DriveKind = dir ? "folder" : kindOf(String(get(e, "name") ?? ""));
+    return { ...e, kind, opens: opensOf(kind), sizeText: dir ? "" : bytes(size), timeText: mtime > 0 ? driveTime(mtime, c) : "" };
   });
   const folders = entries.filter((e: J) => e.dir).length;
   const files = entries.length - folders;

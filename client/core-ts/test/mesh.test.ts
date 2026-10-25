@@ -8,13 +8,13 @@
 import assert from "node:assert/strict";
 import { createSocket } from "node:dgram";
 import { suite, test as register, type TestOptions } from "node:test";
-import { Effect, Queue } from "effect";
+import { Effect, Fiber, Queue } from "effect";
 import type { Credential } from "../src/cloud.ts";
 import { CoreError } from "../src/error.ts";
 import { loadAddon, nodeIroh } from "../src/hosts/node-iroh.ts";
 import { holdLanguage } from "../src/i18n.ts";
 import type { Iroh } from "../src/iroh.ts";
-import { ALPN, clearlyBetter, cost, DEVICE_KEY, DIRECT_HOLD_MAX_MS, EXPLORE_MS, FORMER_ALPN, HEDGE_FLOOR_MS, KEEP_WAYS, LAN, Mesh, MeshWire, PING_TIMEOUT_MS, PROBE_MS, REDIAL_MAIN_MS, RENEW_MS, RETIRE_MS, SPEED_MIN_BYTES, TICK_MS, type CredentialSource, type Link } from "../src/mesh.ts";
+import { ALPN, clearlyBetter, cost, DEVICE_KEY, DIRECT_HOLD_MAX_MS, EXPLORE_MS, FORMER_ALPN, HEDGE_FLOOR_MS, KEEP_WAYS, LAN, Mesh, MeshWire, PING_TIMEOUT_MS, PROBE_MS, REDIAL_MAIN_MS, RENEW_MS, RETIRE_MS, SPEED_FRESH_MS, SPEED_MIN_BYTES, TICK_MS, type CredentialSource, type Link } from "../src/mesh.ts";
 import { Runner } from "../src/runtime.ts";
 import { StationAddr } from "../src/station/addr.ts";
 import { readAll, type RequestHead } from "../src/station/wire.ts";
@@ -774,6 +774,47 @@ sim("a_read_slow_on_its_way_is_answered_on_another", async (s) => {
   await close(s, station, mesh);
 });
 
+/// A read let go of while the station is slow to answer it (a player gone elsewhere, its view closed): its stream goes
+/// with it, and the station stops sending what no one would read.
+sim("a_read_let_go_of_before_its_answer_stops_the_station_sending_it", async (s) => {
+  const a = s.relay("https://a.relay.test/", { station: { ms: 10 } });
+  const { station, mesh, id: bare } = await onRelays(s, [a]);
+  const id = `w/${bare}`;
+  await reach(s, mesh, id);
+  const wire = wireOf(s, mesh);
+  station.lateMs = 5_000;
+  const read = Effect.scoped(Effect.flatMap(wire.request(StationAddr.parse(id), { method: "GET", path: "/admin/api/part", headers: [] }, new Uint8Array()), (r) => readAll(r.body)));
+  await s.run(
+    Effect.gen(function* () {
+      const reading = yield* Effect.forkChild(read);
+      yield* Effect.sleep(1_000);
+      yield* Fiber.interrupt(reading);
+    }),
+  );
+  await s.time.pass(10_000);
+  assert.deepEqual(station.letGo, ["/admin/api/part"]);
+  await close(s, station, mesh);
+});
+
+/// A read asked on another way as well, the station slow to answer it on both: once one answer is taken, the other
+/// attempt is let go of, not left to bring its answer to no one.
+sim("a_read_asked_on_two_ways_lets_go_of_the_one_not_taken", async (s) => {
+  const a = s.relay("https://a.relay.test/", { station: { ms: 10 } });
+  const b = s.relay("https://b.relay.test/", { station: { ms: 40 } });
+  const { station, mesh, id: bare } = await onRelays(s, [a, b]);
+  const id = `w/${bare}`;
+  await reach(s, mesh, id);
+  await s.time.pass(60_000);
+  const wire = wireOf(s, mesh);
+  station.lateMs = 3_000;
+  const status = await s.run(Effect.scoped(Effect.flatMap(wire.request(StationAddr.parse(id), { method: "GET", path: "/admin/api/part", headers: [] }, new Uint8Array()), (r) => Effect.map(readAll(r.body), () => r.status))));
+  assert.equal(status, 200);
+  assert.equal(station.served.filter((h) => h.path === "/admin/api/part").length, 2, "asked on both ways");
+  await s.time.pass(10_000);
+  assert.deepEqual(station.letGo, ["/admin/api/part"]);
+  await close(s, station, mesh);
+});
+
 /// Two ways as good as each other: the requests are not moved back and forth between them.
 sim("ways_as_good_as_each_other_are_not_swapped", async (s) => {
   const a = s.relay("https://a.relay.test/", { station: { ms: 20 } });
@@ -811,6 +852,35 @@ sim("requests_leave_a_way_found_slow_for_one_that_brings_replies_sooner", async 
   // And it stays on a.
   await s.time.pass(30 * 60_000);
   assert.ok(sameRelay(via(mesh, id), a), `${via(mesh, id)}`);
+  await close(s, station, mesh);
+});
+
+/// b brings replies fast, then slowly (its line to the device down to 256 KiB/s: more crowded, a hop further). Past
+/// SPEED_FRESH_MS the slower replies say how fast it is now, and the requests leave it for a, not held there for hours
+/// by how fast it once was. And a network change: what was seen is let go, to be found out again from there.
+sim("a_way_grown_slower_is_judged_by_how_it_brings_replies_now_and_a_new_network_by_its_own", async (s) => {
+  const a = s.relay("https://a.relay.test/", { station: { ms: 100 } });
+  const b = s.relay("https://b.relay.test/", { device: { ms: 60 } });
+  const { station, mesh, id: bare } = await onRelays(s, [b, a]);
+  const id = `w/${bare}`;
+  await reach(s, mesh, id);
+  const wire = wireOf(s, mesh);
+  const addr = StationAddr.parse(id);
+  const big = () => s.run(Effect.scoped(Effect.flatMap(wire.request(addr, { method: "GET", path: "/admin/api/big", headers: [] }, new Uint8Array()), (r) => readAll(r.body))));
+  await s.until(() => sameRelay(via(mesh, id), b), 5 * 60_000);
+  await big();
+  const fast = mesh.speed(id, b);
+  assert.ok(fast !== null, "how fast b is, seen");
+  await s.time.pass(SPEED_FRESH_MS);
+  s.relay(b, { device: { ms: 60, bps: 256 * 1024 } });
+  await big();
+  const now = mesh.speed(id, b);
+  assert.ok(now !== null && now < fast / 2, `b at ${now} B/s now, at ${fast} before`);
+  await s.until(() => sameRelay(via(mesh, id), a), 5 * 60_000);
+  // Elsewhere now: nothing seen on the last network counts.
+  s.wakes.wake(network(s.host));
+  await s.time.pass(TICK_MS);
+  assert.equal(mesh.speed(id, b), null);
   await close(s, station, mesh);
 });
 

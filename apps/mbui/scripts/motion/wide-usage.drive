@@ -1,0 +1,22 @@
+# 用量 on the desktop (sfdesk usage.mbt, the web's Usage.tsx): MBUI_WIN=1280x800 over the made-up chat. 用量 from the
+# rail; a day pointed at, another clicked; 30 天; the lists by chat, by model.
+timeout 30000
+until 发消息
+wait 600
+tap icon:chart
+wait 1500
+move 444 425
+wait 900
+tapxy 762 425
+wait 900
+move 1000 120
+wait 600
+tap 30 天
+wait 1500
+tap 7 天
+wait 900
+tap 按对话
+wait 1200
+tap 按模型
+wait 1200
+exit

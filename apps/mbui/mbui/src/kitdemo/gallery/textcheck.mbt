@@ -1,8 +1,9 @@
 // The text's contract (docs/determinism.md): a host's kept text (a run's TEXTREC lines, textrec_NAME.mbt) asked of the
 // host's text system again and compared, answer by answer. MBUI_TEXTCHECK=NAME on a real host: every metrics, shaping,
-// whole-word key and glyph box asked again, in the order the run asked them first (so the glyph keys and atlas places
-// the host hands out come in the same order), each answer written as the run's log writes it (its JSON) and compared to
-// what was kept, to the character: the same numbers to the last bit the log keeps. Each that differs is logged
+// whole-word key and glyph box asked again, in the order the run asked them first (so the glyph keys the host hands
+// out come in the same order; where a glyph goes in the atlas is not the host's to say: hostapi's atlas.mbt), each
+// answer written as the run's log writes it (its JSON) and compared to what was kept, to the character: the same
+// numbers to the last bit the log keeps. Each that differs is logged
 // (TEXTCHECK differs …), then `TEXTCHECK done NAME: N answers, K differ` and the app ends: 0 all the same, 1 not.
 // Pictures' and PDFs' answers (hostrec) are not text: skipped, and counted.
 
@@ -67,6 +68,14 @@ fn ask_again(m : Map[String, Json]) -> (String, Json)? {
     (_, _, _, Some(Number(key, ..) as head)) => {
       let out = FixedArray::make(7, 0.0)
       @hostapi.glyph(key.to_int(), out)
+      // (its place, which a run kept before its atlas was the app's said: not compared)
+      match m.get("r") {
+        Some(Array([Number(u, ..), Number(v, ..), ..])) => {
+          out[0] = u
+          out[1] = v
+        }
+        _ => ()
+      }
       Some(("g " + head.stringify(), nums(out, 7)))
     }
     _ => None

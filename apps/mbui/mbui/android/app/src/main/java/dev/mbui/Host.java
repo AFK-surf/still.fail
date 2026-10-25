@@ -6,6 +6,7 @@ import android.content.Context;
 import android.os.Handler;
 import android.os.Looper;
 import android.util.Log;
+import android.view.InputDevice;
 import android.view.WindowInsets;
 import android.view.WindowInsetsController;
 import android.view.inputmethod.InputMethodManager;
@@ -51,6 +52,17 @@ final class Host {
 
     static float fontScale() {
         return fontScale;
+    }
+
+    /** What the app was started to be used with (@hostapi.native_pointing): keyboard and mouse (2) where a mouse or a
+     * touchpad is among the input devices as it starts (DeX, ChromeOS, a mouse plugged in), else touch (1). */
+    static int nativePointing() {
+        for (int id : InputDevice.getDeviceIds()) {
+            InputDevice d = InputDevice.getDevice(id);
+            if (d == null || d.isVirtual()) continue;
+            if (d.supportsSource(InputDevice.SOURCE_MOUSE) || d.supportsSource(InputDevice.SOURCE_TOUCHPAD)) return 2;
+        }
+        return 1;
     }
 
     /** Whether a service reads the screen (@hostapi.a11y_on; A11y.on). */
@@ -104,10 +116,29 @@ final class Host {
                 if (on) c.hide(android.view.WindowInsets.Type.systemBars());
                 else c.show(android.view.WindowInsets.Type.systemBars());
             }
+            sideways = on;
             activity.setRequestedOrientation(on ? android.content.pm.ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
-                    : android.content.pm.ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED);
+                    : upright(activity.getResources().getConfiguration()));
             log(on ? "sideways: landscape, the system bars away" : "sideways: upright");
         });
+    }
+
+    /** Whether the app has turned the device sideways itself (setSideways), main thread. */
+    static boolean sideways;
+
+    /**
+     * Which way the activity asks to be held while the app has not turned it (setSideways off): a phone upright only
+     * (a touch device whose short side is under 600 dp: a phone, a fold's outer screen), a tablet or an opened fold's
+     * inner screen as the person turns it. Android 16 lets a large screen ignore it, as is meant.
+     */
+    static int upright(android.content.res.Configuration c) {
+        return c.smallestScreenWidthDp < 600 ? android.content.pm.ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+                : android.content.pm.ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED;
+    }
+
+    /** The activity's held way set again as its screen may have changed (made, a fold opened or closed), unless sideways. */
+    static void holdUpright(android.app.Activity a) {
+        if (!sideways) a.setRequestedOrientation(upright(a.getResources().getConfiguration()));
     }
 
     // The soft keyboard asked for and not shown yet (main thread). A show asked before the window has the focus, or

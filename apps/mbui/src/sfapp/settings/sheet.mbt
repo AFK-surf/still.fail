@@ -1,9 +1,9 @@
 // The settings' sheets (Sheet.kt SheetHost, one at a time): over the page from its foot, a share of the screen tall,
 // its top corners round, frosted over the page, the grabber at its top, the page under it darkened; a tap there
 // closes it. It comes up and goes down on the sheet's spring, the scrim in and out over 300 ms, and is only drawn as
-// it goes (a tap meanwhile is what is under it's). What asks for a
-// line (PageParts.kt ask: a station's new name), whether to go on (confirm), a station's actions, a device to confirm
-// into security mode, a member's role are drawn in it.
+// it goes (a tap meanwhile is what is under it's). A station's actions, a device to confirm into security mode, a
+// member's role are drawn in it. What asks for a line (ask) and whether to go on (confirm) are the library's
+// presenters (@sf.ask, @sf.confirm), put up in its place.
 
 ///|
 priv struct SheetHost {
@@ -48,13 +48,12 @@ fn close_sheet() -> Unit {
 ///|
 /// Whether a sheet of the settings is up (the system's back closes it first).
 pub fn sheet_up() -> Bool {
-  sheet.draw is Some(_) || menu.up
+  sheet.draw is Some(_)
 }
 
 ///|
 /// Closes the sheet that is up, as a tap beside it does (the system's back).
 pub fn close() -> Unit {
-  menu.up = false
   if sheet.draw is Some(_) {
     sheet.draw = None
     (sheet.on_close)()
@@ -64,7 +63,6 @@ pub fn close() -> Unit {
 ///|
 /// The sheet, over everything the app shows: call after the pages each frame.
 pub fn overlay(c : @ui.Ctx, core : Core) -> Unit {
-  menu_overlay(c)
   let up = sheet.draw is Some(_)
   if up {
     sheet.last = sheet.draw
@@ -89,7 +87,7 @@ pub fn overlay(c : @ui.Ctx, core : Core) -> Unit {
     fn() {
       c.scope(sheet.serial, fn() {
         @sf.sheet_grab(c)
-        c.box(w=Fill(1.0), h=Fill(1.0), fn() { draw(c, core) }) |> ignore
+        @sf.sheet_laid(fn() { c.box(w=Fill(1.0), h=Fill(1.0), fn() { draw(c, core) }) |> ignore })
       })
     },
   )
@@ -110,7 +108,7 @@ fn sheet_head(c : @ui.Ctx, title : String, lead? : () -> Unit) -> Unit {
       Some(f) => f()
       None => ()
     }
-    c.text(title, size=17.0, weight=700, color=t.p.text, wrap=false, w=Fill(1.0), line=24.0) |> ignore
+    c.text(title, size=t.t.title, weight=700, color=t.p.text, wrap=false, w=Fill(1.0), line=24.0) |> ignore
   })
   |> ignore
 }
@@ -121,7 +119,7 @@ fn sheet_head(c : @ui.Ctx, title : String, lead? : () -> Unit) -> Unit {
 let keyed_fields : Map[String, @ui.Field] = {}
 
 ///|
-fn field_of(key : String) -> @ui.Field {
+pub fn field_of(key : String) -> @ui.Field {
   match keyed_fields.get(key) {
     Some(f) => f
     None => {
@@ -151,10 +149,10 @@ fn field_box(
 }
 
 ///|
-/// Asks for a line (PageParts.kt ask): its title, the field (with `value` in it at first), a hint under it, then
-/// 取消 and `action`, which is there once the line has words and differs from `value`. The sheet closes at once and
-/// `run` goes on with the line, trimmed.
-fn ask(
+/// Asks for a line (PageParts.kt ask: @sf.ask, in place of the sheet up): its title, the field (with `value` in it at
+/// first), a hint under it, then 取消 and `action`, which can be pressed once the line has words and differs from
+/// `value`. Said, it closes and `run` goes on with the line, trimmed.
+pub fn ask(
   title : String,
   value : String,
   placeholder : String,
@@ -163,107 +161,27 @@ fn ask(
   hint? : String = "",
   secret? : Bool = false,
 ) -> Unit {
-  let key = "ask/" + (sheet.serial + 1).to_string()
-  let filled : Ref[Bool] = Ref(false)
-  // the line's words, `value` at first (this sheet's own)
-  let field = @ui.Field::new(text=value)
-  open_sheet(0.42, fn(c, _core) {
-    let t = @sf.theme()
-    if !filled.val {
-      filled.val = true
-      c.focus_editor(key)
-    }
-    sheet_head(c, title)
-    c.box(w=Fill(1.0), padx=20.0, gap=10.0, fn() {
-      let words = field_box(c, key, placeholder, secret~, field~).trim(chars=" \t\n").to_owned()
-      if hint != "" {
-        c.text(hint, size=12.0, color=t.p.muted, w=Fill(1.0), line=17.0) |> ignore
-      }
-      c.box(dir=Row, w=Fill(1.0), pt=6.0, pb=24.0, gap=8.0, justify=JEnd, fn() {
-        if button(c, "ask-cancel", tr("common.cancel"), false) {
-          c.blur()
-          close_sheet()
-        }
-        if button(c, "ask-go", action, true, enabled=words != "" && words != value) {
-          c.blur()
-          close_sheet()
-          run(words)
-        }
-      })
-      |> ignore
-    })
-    |> ignore
-  })
+  close_sheet()
+  @sf.ask(title, action, run, value~, placeholder~, hint~, secret~)
 }
 
 ///|
-/// Asks before something that cannot be undone (PageParts.kt confirm, with `what`): its title, what it does, 取消 and
-/// `action` (red when `danger`); the sheet closes at once and `run` goes on. The app's pages ask so too (a chat archived
-/// while it keeps watch).
+/// Asks before something that cannot be undone (PageParts.kt confirm: @sf.confirm, in place of the sheet up): its
+/// title, what it does, 取消 and `action` (red when `danger`). Said, it closes and `run` goes on.
 pub fn confirm(title : String, words : String, action : String, run : () -> Unit, danger? : Bool = false) -> Unit {
-  open_sheet(0.36, fn(c, _core) {
-    let t = @sf.theme()
-    sheet_head(c, title)
-    c.box(w=Fill(1.0), padx=20.0, gap=10.0, fn() {
-      c.text(words, size=14.0, color=t.p.muted, w=Fill(1.0), line=20.0) |> ignore
-      c.box(dir=Row, w=Fill(1.0), pt=6.0, pb=24.0, gap=8.0, justify=JEnd, fn() {
-        if button(c, "confirm-cancel", tr("common.cancel"), false) {
-          close_sheet()
-        }
-        if button(c, "confirm-go", action, true, danger~) {
-          close_sheet()
-          run()
-        }
-      })
-      |> ignore
-    })
-    |> ignore
-  })
+  close_sheet()
+  @sf.confirm(title, words, action, run, danger~)
 }
 
 ///|
-/// A menu from a button (Sheet.kt MenuHost, PlaceRows.kt BandFilter): 180 wide, its right edge under the button's,
-/// its items with a check on the one chosen; a tap beside it closes it.
-priv struct MenuHost {
-  mut items : Array[String]
-  mut selected : Int
-  mut x : Double
-  mut y : Double
-  mut pick : (Int) -> Unit
-  mut up : Bool
-}
-
-///|
-/// Its rows' ground menu_pad in from its edge, rounded menu_row, their words menu_words_in from its edge (MenuHost's
-/// MENU_PAD, MENU_ROW).
-let menu_pad : Double = 6.0
-
-///|
-let menu_row : Double = 14.0
-
-///|
-let menu_words_in : Double = 16.0
-
-///|
-let menu : MenuHost = { items: [], selected: -1, x: 0.0, y: 0.0, pick: fn(_) {  }, up: false }
-
-///|
-/// A button that opens a menu of `options` (BandFilter): the filter's icon, in the accent while not the first.
+/// A button that opens a pick of `options` (PlaceRows.kt BandFilter: the filter's icon, in the accent while not the
+/// first): @sf.pick, by it.
 fn band_filter(c : @ui.Ctx, key : String, options : Array[String], selected : Int, pick : (Int) -> Unit) -> Unit {
   let t = @sf.theme()
   let id = c.id(key)
   if hit(c, id) {
-    match c.rect_of(id) {
-      Some(r) => {
-        menu.items = options
-        menu.selected = selected
-        menu.x = r.0 + r.2 - 180.0
-        menu.y = r.1 + r.3 + 6.0
-        menu.pick = pick
-        menu.up = true
-      }
-      None => ()
-    }
+    let choices = options.mapi(fn(i, label) { @sf.choice(i.to_string(), label) })
+    @sf.pick("", choices, selected.to_string(), fn(k) { pick(int_of(k, 0)) }, from=Of(id))
   }
   c.box(
     w=Px(34.0),
@@ -277,53 +195,5 @@ fn band_filter(c : @ui.Ctx, key : String, options : Array[String], selected : In
       @motion.ripple(c, id, 17.0)
     },
   )
-  |> ignore
-}
-
-///|
-fn menu_overlay(c : @ui.Ctx) -> Unit {
-  if !menu.up {
-    return
-  }
-  let t = @sf.theme()
-  let scrim = c.id("settings-menu-scrim")
-  if hit(c, scrim) {
-    menu.up = false
-    return
-  }
-  c.layer(fn() { c.box(w=Fill(1.0), h=Fill(1.0), id=scrim, fn() {  }) |> ignore }) |> ignore
-  c.layer(fn() {
-    c.box(w=Px(180.0), tx=dmax(12.0, menu.x), ty=menu.y, pad=menu_pad, radius=@sf.concentric_out(menu_row, menu_pad), bg=t.p.card, shadow=@sf.menu_raised.sigma, shadow_y=@sf.menu_raised.dy, shadow_color=@sf.menu_raised.color, clip=true, fn() {
-      for i, label in menu.items {
-        let id = c.id("settings-menu/" + i.to_string())
-        if hit(c, id) {
-          menu.up = false
-          (menu.pick)(i)
-        }
-        c.box(
-          dir=Row,
-          w=Fill(1.0),
-          padx=menu_words_in - menu_pad,
-          pady=12.0,
-          align=ACenter,
-          justify=JBetween,
-          radius=menu_row,
-          id~,
-          fn() {
-            c.text(label, size=15.0, color=t.p.text, wrap=false, line=21.0) |> ignore
-            if i == menu.selected {
-              @sf.icon(c, "check", size=16.0, color=t.p.text) |> ignore
-            } else {
-              c.box(w=Px(16.0), h=Px(16.0), fn() {  }) |> ignore
-            }
-            // Sheet.kt MenuHost: clip(Smooth(MENU_ROW)).clickable
-            @motion.ripple(c, id, menu_row)
-          },
-        )
-        |> ignore
-      }
-    })
-    |> ignore
-  })
   |> ignore
 }

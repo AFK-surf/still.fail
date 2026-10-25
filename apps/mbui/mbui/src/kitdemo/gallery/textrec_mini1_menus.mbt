@@ -1,5 +1,7 @@
 // Kept from a real host's run (mini1_menus: MBUI_TEXT_RECORD=1 MBUI_DRAW_LOG=1 MBUI_SCREEN=menus MBUI_WIN=960x720, platform 0),
 // made by scripts/chk textrec: not edited by hand.
+// Its frames' hashes since made again by a Tester over this text (scripts/chk textrec --rehash): a change to
+// what mbui draws, not to the host's.
 
 ///|
 let run_mini1_menus : String =
@@ -121,4 +123,4 @@ let run_mini1_menus : String =
   #|TEXTREC {"g":67,"r":[763,0,9,10,-1,-8,0]}
   #|TEXTREC {"g":80,"r":[773,0,9,11,-1,-10,0]}
   #|ENV {"motion":0,"glass":0,"dark":1,"inset":0}
-  #|DRAWHASH 1 0 960 720 1 8536429397135972818 1
+  #|DRAWHASH 1 0 960 720 1 1673073336281363731 1

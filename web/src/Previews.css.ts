@@ -1,5 +1,6 @@
 import { globalStyle, style } from "@vanilla-extract/css";
 import { vars } from "@stillfail/ui/styles/tokens.css.ts";
+import { litOver } from "@stillfail/ui/styles/lit.ts";
 import { fadeInKeyframes } from "@stillfail/ui/styles/keyframes.css.ts";
 import { previewBar, previewFrame } from "./Preview.css.ts";
 import * as stageCss from "./PreviewStage.css.ts";
@@ -109,7 +110,7 @@ export const action = style({
   display: "grid", placeItems: "center", width: "24px", height: "24px", padding: "0", border: "0", borderRadius: "50%",
   color: vars.text, cursor: "pointer", boxShadow: "0 1px 4px rgb(0 0 0 / .08)",
   selectors: {
-    "&:hover": { background: vars.raised },
+    "&:hover": litOver,
   },
 });
 /** Tucked away: all of them in a glass capsule in the corner; pointed at, they are laid out over it. */

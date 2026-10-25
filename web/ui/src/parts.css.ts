@@ -2,6 +2,7 @@
 // list's first one, a column's edge. What the pages put around them is the app's (web/src/ui.css.ts after this one).
 import { globalStyle, style } from "@vanilla-extract/css";
 import { vars } from "./styles/tokens.css.ts";
+import { litOver } from "./styles/lit.ts";
 import { panel } from "./styles/glass.ts";
 import { dialogInKeyframes, fadeKeyframes } from "./styles/keyframes.css.ts";
 import { iconBtn } from "./styles/page.css.ts";
@@ -169,6 +170,14 @@ export const avatar = style({
 export const tooltip = style({});
 /** A tip's keys, after what it says: quieter. */
 export const tipKeys = style({ marginLeft: "8px", opacity: ".6" });
+/** Keys (parts.tsx Keys): each a cap, a shade of the text on whatever it stands, its foot a little deeper as a key's. */
+export const keys = style({ display: "inline-flex", alignItems: "center", gap: "3px", flex: "none" });
+export const cap = style({
+  display: "inline-grid", placeItems: "center", minWidth: "20px", height: "20px", padding: "0 5px", boxSizing: "border-box",
+  borderRadius: "4px", background: `color-mix(in srgb, ${vars.text} 6%, transparent)`,
+  boxShadow: `inset 0 -1px 0 color-mix(in srgb, ${vars.text} 12%, transparent)`, cornerShape: vars.cornerShape,
+  fontFamily: "inherit", fontSize: vars.textCaption, fontWeight: "500", lineHeight: "1", color: vars.muted, whiteSpace: "nowrap",
+});
 export const command = style({
   display: "flex", alignItems: "center", gap: "8px", padding: "6px 6px 6px 14px", borderRadius: vars.rField,
   background: vars.paper, cornerShape: vars.cornerShape,
@@ -319,7 +328,7 @@ export const panelButton = style({
     '&[data-tone="quiet"]': { color: vars.muted },
     '&[data-tone="quiet"]:hover:not(:disabled)': { color: vars.text },
     '&[data-tone="filled"]': { background: vars.accentBg, color: vars.accentText },
-    '&[data-tone="filled"]:hover:not(:disabled)': { background: `color-mix(in srgb, ${vars.accent} 22%, transparent)` },
+    '&[data-tone="filled"]:hover:not(:disabled)': litOver,
     "&:disabled": { opacity: .5, cursor: "default" },
   },
 });

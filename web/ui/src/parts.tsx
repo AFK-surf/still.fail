@@ -62,6 +62,16 @@ function TipKeys({ action }: { action: Shortcut }) {
   return keys ? <span className={partsCss.tipKeys}>{keys}</span> : null;
 }
 
+/** A binding as shown (⌘⇧H, Ctrl+Shift+H) split into its keys: each mark of a Mac's modifiers one, the rest by its +s. */
+export function capsOf(label: string): string[] {
+  return label.match(/[⌃⌥⇧⌘]|[^⌃⌥⇧⌘+]+/g) ?? [];
+}
+
+/** Keys that do something, each as a cap. */
+export function Keys({ caps, className }: { caps: string[]; className?: string }) {
+  return <span className={className ? `${partsCss.keys} ${className}` : partsCss.keys}>{caps.map((k, i) => <kbd key={i} className={partsCss.cap}>{k}</kbd>)}</span>;
+}
+
 /**
  * A tip over a control; with a `shortcut`, the keys that do the same follow what it says. The only way anything here
  * explains itself on hover: no native `title`. With no label it never opens, but keeps its place in the tree.
@@ -378,10 +388,12 @@ export function Chooser({ label, children, side = "bottom", className = controls
   );
 }
 
-export function ChooserItem({ checked, onSelect, children }: { checked: boolean; onSelect(): void; children: ReactNode }) {
+/** `stays`: the menu stays open as it is chosen (one of several ticked in turn). `checkEnd`: its check at the row's end. */
+export function ChooserItem({ checked, onSelect, stays = false, checkEnd = false, children }: { checked: boolean; onSelect(): void; stays?: boolean; checkEnd?: boolean; children: ReactNode }) {
+  const check = <span className={checkEnd ? `${controlsCss.chooserCheck} ${controlsCss.chooserCheckEnd}` : controlsCss.chooserCheck}>{checked && <Check size={14} />}</span>;
   return (
-    <DropdownMenu.Item className={`${controlsCss.menuItem} ${controlsCss.chooserItem}`} onSelect={onSelect}>
-      <span className={controlsCss.chooserCheck}>{checked && <Check size={14} />}</span>{children}
+    <DropdownMenu.Item className={`${controlsCss.menuItem} ${controlsCss.chooserItem}`} onSelect={(e) => { if (stays) e.preventDefault(); onSelect(); }}>
+      {!checkEnd && check}{children}{checkEnd && check}
     </DropdownMenu.Item>
   );
 }

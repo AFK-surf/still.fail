@@ -1,0 +1,51 @@
+// The spacing rules (mbui's Tester::gap_faults, gaps.mbt: 1 what lights up apart, 3 blocks never at 0 or over each
+// other, 4 what a box with a ground holds in from its edges and as far from both sides) on the same screens and windows
+// the corner rule is held on (corners_wbtest.mbt, each screen opened once for both). Each rule's faults, all screens
+// in all windows in a language, keep to the bar here: one more fails, and one less until the bar comes down to it.
+// Every fault is printed (`at: rule n: …`) when a count is off its bar.
+
+///|
+/// The faults each rule still has, in each language: they only fall.
+let gaps_known : Map[String, Int] = {
+  "zh rule 1": 0,
+  "zh rule 3": 0,
+  "zh rule 4": 130,
+  "en rule 1": 0,
+  "en rule 3": 0,
+  "en rule 4": 130,
+}
+
+///|
+/// What is off its bar in `lang`'s faults `gaps` (each `at: rule n: …`), None where each rule keeps to it.
+fn gaps_wrong(lang : String, gaps : Array[String]) -> String? {
+  let counts : Map[String, Int] = {}
+  for f in gaps {
+    for rule in ["rule 1", "rule 3", "rule 4"] {
+      if f.contains(": \{rule}: ") {
+        counts["\{lang} \{rule}"] = counts.get("\{lang} \{rule}").unwrap_or(0) + 1
+      }
+    }
+  }
+  let off : Array[String] = []
+  for rule in ["rule 1", "rule 3", "rule 4"] {
+    let key = "\{lang} \{rule}"
+    let have = counts.get(key).unwrap_or(0)
+    let known = gaps_known.get(key).unwrap_or(0)
+    if have != known {
+      off.push(
+        "\{key}: \{have} faults, \{known} known (" +
+        (if have < known {
+          "fewer: its bar comes down in gaps_known_wbtest.mbt"
+        } else {
+          "more than its bar: stand them apart (mbui's gaps.mbt says how)"
+        }) +
+        ")",
+      )
+    }
+  }
+  if off.is_empty() {
+    return None
+  }
+  println(gaps.join("\n"))
+  Some("the spacing rules off their bars:\n  " + off.join("\n  "))
+}

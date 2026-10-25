@@ -132,3 +132,40 @@ test "a ThumbHash drawn back as the reference does, and its proportions" {
   assert_eq(@pixels.thumbhash_ratio(hash), Some(5.0 / 7.0))
   assert_eq(@pixels.thumbhash(b"\x01\x02"), None)
 }
+
+///|
+/// An APP1 EXIF note saying `orientation`, its TIFF in Intel's byte order (`le`) or Motorola's.
+fn exif_note(orientation : Int, le : Bool) -> Array[Byte] {
+  let u16 = fn(n : Int) -> Array[Byte] {
+    if le {
+      [(n & 255).to_byte(), (n >> 8).to_byte()]
+    } else {
+      [(n >> 8).to_byte(), (n & 255).to_byte()]
+    }
+  }
+  let u32 = fn(n : Int) -> Array[Byte] {
+    if le {
+      u16(n & 0xFFFF) + u16(n >> 16)
+    } else {
+      u16(n >> 16) + u16(n & 0xFFFF)
+    }
+  }
+  let order : Array[Byte] = if le { [b'I', b'I'] } else { [b'M', b'M'] }
+  // its first directory: an image width, then the orientation (SHORT, one), no next
+  let tiff = order + u16(42) + u32(8) + u16(2) + u16(0x0100) + u16(3) + u32(1) + u16(20) + u16(0) +
+    u16(0x0112) + u16(3) + u32(1) + u16(orientation) + u16(0) + u32(0)
+  let body : Array[Byte] = [b'E', b'x', b'i', b'f', b'\x00', b'\x00'] + tiff
+  let len = body.length() + 2
+  [b'\xFF', b'\xE1', (len >> 8).to_byte(), (len & 255).to_byte()] + body
+}
+
+///|
+test "a JPEG's size as it is shown: its frame's, turned a quarter where its EXIF says" {
+  let a = @pixels.jpeg(20, 9, FixedArray::make(20 * 9 * 4, b'\xFF')).to_array()
+  let noted = fn(note : Array[Byte]) { Bytes::from_array(a[0:2].to_array() + note + a[2:].to_array()) }
+  assert_eq(@pixels.image_size(Bytes::from_array(a)), Some((20, 9)))
+  assert_eq(@pixels.image_size(noted(exif_note(6, true))), Some((9, 20)))
+  assert_eq(@pixels.image_size(noted(exif_note(8, false))), Some((9, 20)))
+  assert_eq(@pixels.image_size(noted(exif_note(3, true))), Some((20, 9)))
+  assert_eq(@pixels.image_size(noted(exif_note(1, false))), Some((20, 9)))
+}

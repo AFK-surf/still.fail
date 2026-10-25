@@ -1,8 +1,11 @@
 // A link to one of a station's screens in a message (an agent asking a person to take over: docs/remote-screens.md),
 // as the core's `screenCard` topic says it: on a line of its own, a card as a file's (what the screen is by its mark,
 // its title, the core's line about it), with the screen itself live above them where its station previews it (a tab
-// of its browser); within a sentence, its title where the link was.
-import { useEffect, useRef, useState, type ReactNode, type RefObject } from "react";
+// of its browser); within a sentence, its title where the link was. On a chat's page the card also opens the screen
+// beside the chat (OpenScreen: a tab of its side panel, `screen:[…]`), so it is seen and driven while the chat goes on.
+import { createContext, useContext, useEffect, useRef, useState, type ReactNode, type RefObject } from "react";
+import { PanelOpen } from "@stillfail/ui/icons.tsx";
+import { Tip } from "../ui.tsx";
 import { core, useTopic } from "../core/react.ts";
 import type { ScreenCard as Card } from "../core/shapes.ts";
 import { screenOfLink } from "../chatRefs.ts";
@@ -16,12 +19,35 @@ const PEEK_MS = 500;
 /** The picture a preview asks for, in device pixels at most: the card's width, twice over. */
 const PEEK_SIZE = 640;
 
+/** Opens a station's screen beside the chat (pages/ChatPage.tsx): none where there is no side panel (a phone's chat). */
+export const OpenScreen = createContext<((station: string, screen: string) => void) | null>(null);
+
+/** A screen's tab in a chat's side panel (client/core-ts/src/chat-tabs.ts `screen:[…]`): its station's address and its id. */
+export function screenTab(station: string, screen: string): string {
+  return `screen:${JSON.stringify([station, screen])}`;
+}
+/** The screen a side panel's tab is, from its key; null for any other tab. */
+export function screenOfTab(key: string): { station: string; screen: string } | null {
+  if (!key.startsWith("screen:")) return null;
+  try {
+    const v: unknown = JSON.parse(key.slice("screen:".length));
+    return Array.isArray(v) && typeof v[0] === "string" && typeof v[1] === "string" ? { station: v[0], screen: v[1] } : null;
+  } catch {
+    return null;
+  }
+}
+
+/** What a screen is, as a link's card says it (the core's `screenCard`): its kind and title, wherever it is named. */
+export function useScreenCard(station: string, screen: string): Card | null {
+  return useTopic<Card>({ topic: "screenCard", station, screen }).value ?? null;
+}
+
 function useCard(href: string): Card | null {
   const of = screenOfLink(href);
   return useTopic<Card>(of ? { topic: "screenCard", station: of.station, screen: of.screen } : null).value ?? null;
 }
 
-/** A screen's kind at a glance, as a file's sheet is drawn (Chat.tsx FileTile): a display, or the globe for a browser tab. */
+/** A screen's kind at a glance, as a file's sheet is drawn (Chat.tsx FileTile): a display, the globe for a browser tab, a phone for a simulator. */
 function ScreenTile({ kind }: { kind: string | undefined }) {
   return (
     <svg className={chatCss.fileTile} width="30" height="36" viewBox="0 0 30 36" aria-hidden="true">
@@ -34,6 +60,11 @@ function ScreenTile({ kind }: { kind: string | undefined }) {
         <>
           <rect x="3.75" y="8" width="22.5" height="15.5" rx="2.5" />
           <path d="M15 23.5V28.5M10.5 28.5H19.5" />
+        </>
+      ) : kind === "simulator" ? (
+        <>
+          <rect x="8.25" y="5.25" width="13.5" height="25.5" rx="3" />
+          <path d="M13.5 26.25H16.5" />
         </>
       ) : null}
     </svg>
@@ -107,10 +138,14 @@ function Peek({ station, screen, card }: { station: string; screen: string; card
   );
 }
 
-/** A link to a screen alone on its line: its card, opening its page (pages/ChatPage.tsx opens it in the app). `words`: the link's own, shown for its title. */
+/**
+ * A link to a screen alone on its line: its card, opening its page (pages/ChatPage.tsx opens it in the app); on a chat's
+ * page, a button over its corner opens it beside the chat instead. `words`: the link's own, shown for its title.
+ */
 export function ScreenCard({ href, words }: { href: string; words: ReactNode | null }) {
   const card = useCard(href);
   const of = screenOfLink(href);
+  const beside = useContext(OpenScreen);
   const live = card?.peek && !card.gone && of ? { card, of } : null;
   const text = (
     <span className={chatCss.fileCardText}>
@@ -118,7 +153,7 @@ export function ScreenCard({ href, words }: { href: string; words: ReactNode | n
       <span className={`${chatCss.fileCardMeta} ${css.screenCardLine}`}>{card?.line ?? " "}</span>
     </span>
   );
-  return (
+  const link = (
     <a className={`${chatCss.fileCardOpen} ${css.screenCard}`} href={href} data-gone={card?.gone || undefined}>
       {live ? (
         <span className={`${chatCss.fileCard} ${css.peekCard}`} data-card="">
@@ -132,6 +167,17 @@ export function ScreenCard({ href, words }: { href: string; words: ReactNode | n
         </span>
       )}
     </a>
+  );
+  if (!beside || !of || card?.gone) return link;
+  return (
+    <span className={css.cardWith}>
+      {link}
+      <Tip label={t("web-main.viz.side")}>
+        <button type="button" className={css.side} data-over={live ? "" : undefined} aria-label={t("web-main.viz.side")} onClick={() => beside(of.station, of.screen)}>
+          <PanelOpen size={14} strokeWidth={1.75} />
+        </button>
+      </Tip>
+    </span>
   );
 }
 

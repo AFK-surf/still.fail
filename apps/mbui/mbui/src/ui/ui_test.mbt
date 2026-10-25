@@ -57,8 +57,24 @@ test "the composer takes compositions, commits, deletes and submits" {
   assert_eq(text2, "你好世界")
   t.enter()
   assert_eq(sent, ["你好世界"])
+  // the words stay in it: emptying it as they go is the app's
   let (_, text3, _, _) = t.ime()
-  assert_eq(text3, "")
+  assert_eq(text3, "你好世界")
+}
+
+///|
+test "Enter in an empty field hands it on too: whether there is anything to send (a picture with no words) is the app's" {
+  let sent : Array[String] = []
+  let t = @ui.Tester::new(fn(c) {
+    let r = c.editor("composer", placeholder="type here")
+    match r.submitted {
+      Some(s) => sent.push(s)
+      None => ()
+    }
+  })
+  t.tap_text("type here")
+  t.enter()
+  assert_eq(sent, [""])
 }
 
 ///|

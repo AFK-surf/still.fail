@@ -7,13 +7,6 @@
 // (nothing lit) until a key or the pointer moves it.
 
 ///|
-/// How long a menu's panel takes to come in (ms), and to go out (a dropdown's and a context menu's): a tween each.
-pub let menu_in_ms : Double = 120.0
-
-///|
-pub let menu_out_ms : Double = 80.0
-
-///|
 /// What an entry of a menu is: an item that does something, one turned on or off (a checkbox item), one of a choice
 /// (a radio item: on or not), a line between parts, words heading a part, a submenu's item.
 pub(all) enum EntryKind {
@@ -107,6 +100,25 @@ priv struct PanelOut {
 }
 
 ///|
+/// A heading among a menu's items (Radix's Label), as mbui draws one: small, quiet, 10 in, 6 over and 4 under it.
+pub fn menu_heading_look(c : @ui.Ctx, label : String) -> Unit {
+  c.box(padx=10.0, pt=6.0, pb=4.0, fn() {
+    c.text(label, size=c.theme().font_sm, color=c.theme().muted, wrap=false) |> ignore
+  })
+  |> ignore
+}
+
+///|
+/// A line between parts of a menu, as mbui draws one: the words' colour faintly (in dark the panel is lighter than the
+/// page: its line a groove), 6 over and under it, 4 in.
+pub fn menu_rule_look(c : @ui.Ctx) -> Unit {
+  c.box(pady=6.0, padx=4.0, fn() {
+    c.box(h=Px(1.0), w=Fill(1.0), bg=@ui.alpha(c.theme().fg, 0.12), fn() {  }) |> ignore
+  })
+  |> ignore
+}
+
+///|
 /// The panel of menu `key` (built in its layer): by `anchor` (a rectangle in the window) on its `side`, `offset`
 /// away (by its size last frame), named `label`; a submenu's when `depth` > 0; a listbox (a select's) when `listbox`.
 fn menu_panel(
@@ -117,14 +129,15 @@ fn menu_panel(
   side : @ui.Side,
   along : @ui.Along,
   offset : Double,
-  t : Double,
+  shows : @ui.Look,
   label : String,
   depth : Int,
   listbox : Bool,
   min_w : Double,
   look : (@ui.Ctx, Double, () -> Unit) -> Unit,
   item_look : (@ui.Ctx, MenuItemState) -> Unit,
-  motion? : @ui.Look,
+  heading_look? : (@ui.Ctx, String) -> Unit = menu_heading_look,
+  rule_look? : (@ui.Ctx) -> Unit = menu_rule_look,
 ) -> PanelOut {
   let pid = c.id(key + "/panel")
   let ids = entries.mapi(fn(k, _) { part_id(pid, k) })
@@ -169,118 +182,112 @@ fn menu_panel(
     }
     typeahead(c, pid, entries, ids, live)
   }
-  let (ww, wh) = c.window_size()
-  let k = if t > 1.0 { 1.0 } else if t < 0.0 { 0.0 } else { t }
+  let (ww, _) = c.window_size()
   c.focusable(pid, keys=0)
-  let i = c.box(id=pid, opacity=dmax(k, 0.003), max_h=wh - 16.0, max_w=ww - 16.0, fn() {
+  // by its trigger, by its size as laid out (its first frame too), growing out of the side it went on (as this frame
+  // lays it out; its first, the side asked for); its entries within the window (in_room: scrolling only where they are
+  // more than it holds)
+  let went = went_side(c, pid, anchor, side, along, offset)
+  let i = c.box(id=pid, max_w=ww - 16.0, fn() {
     look(c, min_w, fn() {
-      c.roving(key + "/items", orientation=Vertical, wrap=false, fn() {
-        for n, e in entries {
-          match e.kind {
-            // a line of the words' colour faintly (in dark the panel is lighter than the page: its line a groove)
-            Rule =>
-              c.box(pady=6.0, padx=4.0, fn() {
-                c.box(h=Px(1.0), w=Fill(1.0), bg=@ui.alpha(c.theme().fg, 0.12), fn() {  }) |> ignore
-              })
-              |> ignore
-            Heading =>
-              c.box(padx=10.0, pt=6.0, pb=4.0, fn() {
-                c.text(e.label, size=c.theme().font_sm, color=c.theme().muted, wrap=false) |> ignore
-              })
-              |> ignore
-            _ => {
-              let iid = ids[n]
-              let r = c.interact(iid, disabled=e.disabled)
-              // the pointer moving onto it: the focus (unseen), and its submenu open or another's closed
-              if r.hovered && pointer_moved(c) && !e.disabled {
-                if !c.has_focus(iid) {
-                  c.focus_on(iid)
+      in_room(c, { side: went, room: c.place_most(), panel: pid }, key=key + "/room", fn() {
+        c.roving(key + "/items", orientation=Vertical, wrap=false, fn() {
+          for n, e in entries {
+            match e.kind {
+              Rule => rule_look(c)
+              Heading => heading_look(c, e.label)
+              _ => {
+                let iid = ids[n]
+                let r = c.interact(iid, disabled=e.disabled)
+                // the pointer moving onto it: the focus (unseen), and its submenu open or another's closed
+                if r.hovered && pointer_moved(c) && !e.disabled {
+                  if !c.has_focus(iid) {
+                    c.focus_on(iid)
+                  }
+                  sub = if e.kind is Sub(_) { n } else { -1 }
                 }
-                sub = if e.kind is Sub(_) { n } else { -1 }
-              }
-              let opens = if c.rtl() { @ui.key_code_left } else { @ui.key_code_right }
-              match e.kind {
-                Sub(_) =>
-                  if r.clicked || (c.has_focus(iid) && c.take_key(opens)) {
-                    sub = n
-                  }
-                _ => if r.clicked { chosen = Some(e.value) }
-              }
-              let on = sub == n && e.kind is Sub(_)
-              let row = c.box(id=if e.disabled { 0 } else { iid }, fn() {
-                item_look(c, {
-                  entry: e,
-                  lit: c.has_focus(iid) || (on && !mine),
-                  open: on,
-                  hot: (c.has_focus(iid) && (c.focus_shown(iid) || r.hovered)) || (on && !mine),
-                  id: iid,
-                })
-              })
-              let actions = pick(e.disabled, [], [@ui.Activate])
-              match e.kind {
-                Check(v) =>
-                  c.semantics(row, MenuItemCheckbox, id=iid, label=e.label, check=pick(v, On, Off), disabled=e.disabled, actions~)
-                Choice(v) =>
-                  if listbox {
-                    c.semantics(row, Option, id=iid, label=e.label, selected=v, disabled=e.disabled, actions~)
-                  } else {
-                    c.semantics(row, MenuItemRadio, id=iid, label=e.label, check=pick(v, On, Off), disabled=e.disabled, actions~)
-                  }
-                Sub(_) =>
-                  c.semantics(row, MenuItem, id=iid, label=e.label, expanded=on, disabled=e.disabled, actions~)
-                _ => c.semantics(row, MenuItem, id=iid, label=e.label, disabled=e.disabled, actions~)
-              }
-              // its submenu, beside it
-              match e.kind {
-                Sub(children) if on => {
-                  let by_key = c.focus_shown(iid)
-                  let sk = key + "/" + n.to_string()
-                  let mut out : PanelOut = { chosen: None, back: false }
-                  let o = c.overlay(sk, anchor=iid, initial_focus=if by_key { first_item(c, sk, children) } else { 0 }, fn() {
-                    out = menu_panel(
-                      c,
-                      sk,
-                      children,
-                      c.rect_of(iid).unwrap_or(anchor),
-                      if c.rtl() { Left } else { Right },
-                      Start,
-                      -4.0,
-                      1.0,
-                      e.label,
-                      depth + 1,
-                      false,
-                      min_w,
-                      look,
-                      item_look,
-                    )
+                let opens = if c.rtl() { @ui.key_code_left } else { @ui.key_code_right }
+                match e.kind {
+                  Sub(_) =>
+                    if r.clicked || (c.has_focus(iid) && c.take_key(opens)) {
+                      sub = n
+                    }
+                  _ => if r.clicked { chosen = Some(e.value) }
+                }
+                let on = sub == n && e.kind is Sub(_)
+                let row = c.box(id=if e.disabled { 0 } else { iid }, fn() {
+                  item_look(c, {
+                    entry: e,
+                    lit: c.has_focus(iid) || (on && !mine),
+                    open: on,
+                    hot: (c.has_focus(iid) && (c.focus_shown(iid) || r.hovered)) || (on && !mine),
+                    id: iid,
                   })
-                  if out.chosen is Some(_) {
-                    chosen = out.chosen
-                  }
-                  if out.back || o.dismissed is Some(_) {
-                    sub = -1
-                    c.focus_on(iid, visible=true)
-                  }
+                })
+                let actions = pick(e.disabled, [], [@ui.Activate])
+                match e.kind {
+                  Check(v) =>
+                    c.semantics(row, MenuItemCheckbox, id=iid, label=e.label, check=pick(v, On, Off), disabled=e.disabled, actions~)
+                  Choice(v) =>
+                    if listbox {
+                      c.semantics(row, Option, id=iid, label=e.label, selected=v, disabled=e.disabled, actions~)
+                    } else {
+                      c.semantics(row, MenuItemRadio, id=iid, label=e.label, check=pick(v, On, Off), disabled=e.disabled, actions~)
+                    }
+                  Sub(_) =>
+                    c.semantics(row, MenuItem, id=iid, label=e.label, expanded=on, disabled=e.disabled, actions~)
+                  _ => c.semantics(row, MenuItem, id=iid, label=e.label, disabled=e.disabled, actions~)
                 }
-                _ => ()
+                // its submenu, beside it
+                match e.kind {
+                  Sub(children) if on => {
+                    let by_key = c.focus_shown(iid)
+                    let sk = key + "/" + n.to_string()
+                    let mut out : PanelOut = { chosen: None, back: false }
+                    let o = c.overlay(sk, anchor=iid, initial_focus=if by_key { first_item(c, sk, children) } else { 0 }, fn() {
+                      out = menu_panel(
+                        c,
+                        sk,
+                        children,
+                        c.rect_of(iid).unwrap_or(anchor),
+                        if c.rtl() { Left } else { Right },
+                        Start,
+                        -4.0,
+                        @ui.still_look,
+                        e.label,
+                        depth + 1,
+                        false,
+                        min_w,
+                        look,
+                        item_look,
+                        heading_look~,
+                        rule_look~,
+                      )
+                    })
+                    if out.chosen is Some(_) {
+                      chosen = out.chosen
+                    }
+                    if out.back || o.dismissed is Some(_) {
+                      sub = -1
+                      c.focus_on(iid, visible=true)
+                    }
+                  }
+                  _ => ()
+                }
               }
             }
           }
-        }
+        })
       })
+      |> ignore
     })
   })
-  // by its trigger, by its size as laid out (its first frame too)
   c.place_by_size(i, fn(pw, ph) {
     let (x, y, _) = c.place(anchor, pw, ph, side~, along~, offset~)
-    (x, y - (1.0 - k) * 4.0)
+    (x, y)
   })
   c.semantics(i, if listbox { Listbox } else { Menu }, id=pid, label~)
-  // the app's own coming and going (a scale, a fade: Motion's), in place of the default's
-  match motion {
-    Some(l) => c.look(i, l)
-    None => ()
-  }
+  c.look(i, grown_from(shows, went, along))
   kit.val.subs[pid] = sub
   { chosen, back }
 }
@@ -366,8 +373,8 @@ fn imax(a : Int, b : Int) -> Int {
 /// `key`'s dropdown menu (Radix's DropdownMenu, see the file's head), `open` or not, of `entries`, by the trigger
 /// `trigger` (its id: the view's button, which opens it; `at`: by this rectangle instead); Down on the trigger opens
 /// it too, and the keyboard's opening focuses its first item. `scrim`: the page under it dimmed so (in and out over 200
-/// ms); `enter` and `exit`: its own coming and going (Motion's transitions: a scale from a corner, a fade) in place of
-/// the default's. Whether it is open now, and what was chosen.
+/// ms); it comes by `enter` and goes by `exit` (still.fail's small panel's by default: popover.mbt pop_in, pop_out).
+/// Whether it is open now, and what was chosen.
 pub fn dropdown_menu(
   c : @ui.Ctx,
   key : String,
@@ -381,10 +388,12 @@ pub fn dropdown_menu(
   min_w? : Double = 180.0,
   look? : (@ui.Ctx, Double, () -> Unit) -> Unit = menu_look,
   item_look? : (@ui.Ctx, MenuItemState) -> Unit = menu_item_look,
+  heading_look? : (@ui.Ctx, String) -> Unit = menu_heading_look,
+  rule_look? : (@ui.Ctx) -> Unit = menu_rule_look,
   at? : (Double, Double, Double, Double),
   scrim? : Int64 = 0L,
-  enter? : @motion.Trans,
-  exit? : @motion.Trans,
+  enter? : @motion.Trans = pop_in,
+  exit? : @motion.Trans = pop_out,
 ) -> Menu {
   install()
   let mut now = open
@@ -393,25 +402,15 @@ pub fn dropdown_menu(
   }
   let by_key = c.focus_shown(trigger)
   let pid = c.id(key + "/panel")
-  let p = presence(c, key, now, enter=@motion.tween(menu_in_ms, ease=Out), exit=@motion.tween(menu_out_ms, ease=LeaveFade))
-  // the app's own motion: Motion's presence (its look on the panel) decides how long it is drawn
-  let moved = match enter {
-    Some(e) => Some(@motion.presence(c, key + "/motion", now, enter=e, exit?=exit))
-    None => None
-  }
-  let shown = match moved {
-    Some(m) => m is Some(_)
-    None => p.built
-  }
+  let moved = @motion.presence(c, "\u{2}pop/" + key, now, initial=true, enter~, exit~)
+  let shown = moved is Some(_)
   // the scrim, if any, in and out over 200 ms: the layer stays until both the panel and it have gone (Android's
   // MenuHost), fading together
   let dim = if scrim != 0L { animate(c, key + "/scrim", if now { 1.0 } else { 0.0 }, transition=@motion.tween(200.0)) } else { 0.0 }
   let mut chosen = None
   if shown || dim > 0.0 {
     let o = c.overlay(key, modal=true, anchor=trigger, scrim=faded(scrim, dim), initial_focus=pick(by_key, first_item(c, key, entries), pid), inert=!now, fn() {
-      if !shown {
-        return
-      }
+      guard moved is Some(shows) else { return }
       let out = menu_panel(
         c,
         key,
@@ -420,17 +419,15 @@ pub fn dropdown_menu(
         side,
         along,
         offset,
-        if moved is Some(_) { 1.0 } else { p.t },
+        shows,
         label,
         0,
         false,
         min_w,
         look,
         item_look,
-        motion?=match moved {
-          Some(m) => m
-          None => None
-        },
+        heading_look~,
+        rule_look~,
       )
       chosen = out.chosen
     })
@@ -472,12 +469,11 @@ pub fn context_menu(
       }
   }
   let (ax, ay) = kit.val.at.get(id).unwrap_or((0.0, 0.0))
-  let p = presence(c, key, now, enter=@motion.tween(menu_in_ms, ease=Out), exit=@motion.tween(menu_out_ms, ease=LeaveFade))
   let mut chosen = None
-  if p.built {
+  if @motion.presence(c, "\u{2}pop/" + key, now, initial=true, enter=pop_in, exit=pop_out) is Some(shows) {
     let pid = c.id(key + "/panel")
-    let o = c.overlay(key, modal=true, initial_focus=pid, inert=p.leaving(), fn() {
-      let out = menu_panel(c, key, entries, (ax, ay, 0.0, 0.0), Bottom, Start, 2.0, p.t, label, 0, false, min_w, look, item_look)
+    let o = c.overlay(key, modal=true, initial_focus=pid, inert=!now, fn() {
+      let out = menu_panel(c, key, entries, (ax, ay, 0.0, 0.0), Bottom, Start, 2.0, shows, label, 0, false, min_w, look, item_look)
       chosen = out.chosen
     })
     if o.dismissed is Some(_) || chosen is Some(_) {
@@ -546,6 +542,7 @@ pub fn menubar(
     let mk = key + "/" + k.to_string()
     let pid = c.id(mk + "/panel")
     let mut out : PanelOut = { chosen: None, back: false }
+    let mut step = 0
     // opened by the keyboard (its trigger's focus shows): at its first item
     let o = c.overlay(mk, anchor=tids[k], trap=true, initial_focus=pick(c.focus_shown(tids[k]), first_item(c, mk, menus[k].1), pid), fn() {
       out = menu_panel(
@@ -556,7 +553,7 @@ pub fn menubar(
         Bottom,
         Start,
         4.0,
-        1.0,
+        @ui.still_look,
         menus[k].0,
         0,
         false,
@@ -564,30 +561,31 @@ pub fn menubar(
         look,
         item_look,
       )
+      // Left and Right not taken by a submenu: the menu beside, at its first item (read in the menu: its keys while
+      // the focus is in it)
+      if out.chosen is None {
+        let (prev, next) = if c.rtl() {
+          (@ui.key_code_right, @ui.key_code_left)
+        } else {
+          (@ui.key_code_left, @ui.key_code_right)
+        }
+        step = if c.take_key(next) {
+          1
+        } else if c.take_key(prev) {
+          -1
+        } else {
+          0
+        }
+      }
     })
     if out.chosen is Some(_) {
       chosen = out.chosen
       open = -1
     } else if o.dismissed is Some(_) {
       open = -1
-    } else {
-      // Left and Right not taken by a submenu: the menu beside, at its first item
-      let (prev, next) = if c.rtl() {
-        (@ui.key_code_right, @ui.key_code_left)
-      } else {
-        (@ui.key_code_left, @ui.key_code_right)
-      }
-      let step = if c.take_key(next) {
-        1
-      } else if c.take_key(prev) {
-        -1
-      } else {
-        0
-      }
-      if step != 0 {
-        open = (k + step + n) % n
-        c.focus_on(tids[open], visible=true)
-      }
+    } else if step != 0 {
+      open = (k + step + n) % n
+      c.focus_on(tids[open], visible=true)
     }
   }
   kit.val.bars[id] = open

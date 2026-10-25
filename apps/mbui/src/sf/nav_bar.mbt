@@ -11,21 +11,21 @@
 /// Back: a chevron and where to, 6 after it and 4 over and under, its corner 8; rippled where it is pressed
 /// (Parts.kt NavBack: clip(Smooth(8)).clickable).
 // kept across runs: a value (no field of it changes)
-let nav_back_box : @ui.Style = @ui.style(row=true, pr=S1_5, pt=S1, pb=S1, radius=Lg, align=ACenter)
+let nav_back_box : @ui.Style = @ui.css("row pr=S1_5 pt=S1 pb=S1 radius=Lg align=ACenter")
 
 ///|
 /// Back's word in a link's ink, its chevron the accent (Parts.kt:491 C.link, 490 C.accent).
 // kept across runs: a value (no field of it changes)
-let nav_back_words : @ui.TextStyle = @ui.text_style(size=Xl2, leading=Font, color=Link, wrap=false)
+let nav_back_words : @ui.TextStyle = @ui.text_style(size=Title, leading=Font, color=Link, wrap=false)
 
 ///|
 /// The bar: 10 in at its start, 16 at its end, 6 over and 10 under (NavBar).
 // kept across runs: a value (no field of it changes)
-let nav_bar_box : @ui.Style = @ui.style(w=Full, pl=S2_5, pr=S4, pt=S1_5, pb=S2_5)
+let nav_bar_box : @ui.Style = @ui.css("w=Full pl=S2_5 pr=S4 pt=S1_5 pb=S2_5")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let nav_bar_inner : @ui.Style = @ui.style(w=Full, align=ACenter)
+let nav_bar_inner : @ui.Style = @ui.css("w=Full align=ACenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -34,11 +34,11 @@ let nav_title_column : @ui.Style = @ui.style(pl=nav_title_clear, pr=nav_title_cl
 ///|
 /// The title's first line and back and what is at the end: one 32 line, each in its middle.
 // kept across runs: a value (no field of it changes)
-let nav_line : @ui.Style = @ui.style(h=S8, justify=JCenter, clip=true)
+let nav_line : @ui.Style = @ui.css("h=S8 justify=JCenter clip")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let nav_title_words : @ui.TextStyle = @ui.text_style(size=Xl, leading=Font, weight=Semibold, color=Fg, wrap=false)
+let nav_title_words : @ui.TextStyle = @ui.text_style(size=Title, leading=Font, weight=Semibold, color=Fg, wrap=false)
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -46,22 +46,28 @@ let nav_sub_row : @ui.Style = @ui.style(row=true, gap=nav_sub_gap, align=ACenter
 
 ///|
 // kept across runs: a value (no field of it changes)
-let nav_ends : @ui.Style = @ui.style(row=true, w=Full, h=S8, align=ACenter)
+let nav_ends : @ui.Style = @ui.css("row w=Full h=S8 align=ACenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let nav_trailing : @ui.Style = @ui.style(row=true, h=S8, align=ACenter)
+let nav_trailing : @ui.Style = @ui.css("row h=S8 align=ACenter")
 
 ///|
-/// Back: a chevron in the accent and where to in a link's ink (Parts.kt NavBack); its word no wider than `max_w` when it is said.
-/// True on the frame after it was tapped.
+/// Back: a chevron in the accent and where to in a link's ink (Parts.kt NavBack). Its word no wider than `max_w`
+/// (when that is said): there whole or not at all (Ctx::box drop), the chevron alone where it has not the room, as
+/// iOS's back button gives way; never cut short past knowing (the user, 2026-10-25). It is still what the button is
+/// called. True on the frame after it was tapped.
 pub fn nav_back(c : @ui.Ctx, key : String, label : String, max_w? : Double = 0.0) -> Bool {
   let t = theme()
   let id = c.id(key)
-  c.box(style=nav_back_box, id~, fn() {
+  c.box(style=nav_back_box, id~, label=label, fn() {
     icon(c, "chevron-left", size=22.0, color=t.p.accent) |> ignore
     if max_w > 0.0 {
-      c.box(style=@ui.style(max_w=Fixed(max_w)), fn() { c.text(label, style=nav_back_words) |> ignore }) |> ignore
+      c.box(style=@ui.style(row=true, max_w=Fixed(max_w)), fn() {
+        c.box(id=c.id(key + "/word"), taps=false, drop=1, fn() { c.text(label, style=nav_back_words) |> ignore })
+        |> ignore
+      })
+      |> ignore
     } else {
       c.text(label, style=nav_back_words) |> ignore
     }

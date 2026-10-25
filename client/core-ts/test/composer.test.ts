@@ -5,11 +5,11 @@ import { test } from "node:test";
 import { Deferred, Effect } from "effect";
 import { Core } from "../src/core.ts";
 import { dbName, SOON_MS } from "../src/data.ts";
-import { apply, call, subscribe, v } from "./helpers.ts";
+import { answers, apply, call, subscribe, v } from "./helpers.ts";
 import { CoreFiles, PageFiles } from "../src/hosts/file-port.ts";
 import { FileSource } from "../src/file-source.ts";
 import { CoreError } from "../src/error.ts";
-import { stationReplies, started } from "./station-fixture.ts";
+import { Raw, stationReplies, started } from "./station-fixture.ts";
 import { HostWire } from "../src/station/wire.ts";
 
 /// A draft as written, without the name the core gives it (its own test: draft-id.test.ts).
@@ -44,6 +44,54 @@ test("desktop_upload_retry_keeps_its_source_after_a_station_failure", async () =
   assert.deepEqual(received, [[1, 2, 3], [1, 2, 3]]);
   assert.deepEqual(released, [1]);
   bridge.close(); t.core.close();
+});
+
+test("an_image_sent_up_from_here_is_shown_and_opened_from_the_device_not_read_back_from_its_station", async () => {
+  const t = await setup();
+  const png = Uint8Array.from({ length: 40 }, (_, i) => i);
+  // The station keeps each under a name of its own, kept as it moves it into the chat's uploads.
+  const stored = (name: string) => `2026-10-24T08-00-00-0a1b2c-${name}`;
+  (t.core.inner.stations.requests as J).uploadPart = (_addr: unknown, q: J, bytes: Uint8Array) =>
+    Effect.succeed({ have: bytes.length, file: { name: q.name, path: `/data/uploads/${stored(q.name)}`, size: bytes.length } });
+  const asked: string[] = [];
+  stationReplies(t.host, (req) => {
+    const u = new URL(req.url);
+    if (!u.pathname.includes("/sessions/k1/")) return undefined;
+    asked.push(`${u.pathname.split("/").at(-1)} ${u.searchParams.get("name")}`);
+    return new Raw({ status: 200, headers: [["content-type", "text/plain"]], body: new Uint8Array([9]) });
+  });
+  await t.watch(1, "ws/st:k");
+  await t.ask("add", { key: "ws/st:k", station: "ws/st", files: [
+    { id: "shot", name: "shot.png", size: png.length, blob: new Blob([png], { type: "image/png" }) },
+    { id: "notes", name: "notes.txt", size: 3, blob: new Blob([new Uint8Array([1, 2, 3])], { type: "text/plain" }) },
+  ] });
+  await t.settle();
+  assert.deepEqual(v(t.values, 1).files.map((f: J) => f.done?.path), [`/data/uploads/${stored("shot.png")}`, `/data/uploads/${stored("notes.txt")}`]);
+  // In whichever chat its message is, as its station names it there.
+  const file = async (id: number, op: string, name: string, params: J = {}) => {
+    call(t.core, t.ui, id, op, { station: "ws/st", key: "k1", name, ...params });
+    await t.host.settle();
+    return answers(t.host.takeEmitted(), id) as { ok: { type: string; total?: number }; bytes: Uint8Array };
+  };
+  const thumb = await file(201, "station.file", stored("shot.png"), { thumb: true });
+  assert.deepEqual([thumb.ok, [...thumb.bytes]], [{ type: "image/png" }, [...png]]);
+  const whole = await file(202, "station.file", stored("shot.png"));
+  assert.deepEqual([...whole.bytes], [...png]);
+  const part = await file(203, "station.file.part", stored("shot.png"), { offset: 10, length: 8 });
+  assert.deepEqual([part.ok, [...part.bytes]], [{ type: "image/png", total: 40 }, [...png.slice(10, 18)]]);
+  assert.deepEqual(asked, [], "its station not asked");
+  // What is not an image is read from its station as before.
+  await file(204, "station.file", stored("notes.txt"));
+  assert.deepEqual(asked, [`files ${stored("notes.txt")}`]);
+  // Counted and let go with the drives' files: then read from its station.
+  call(t.core, t.ui, 205, "cache.usage", {});
+  await t.host.settle();
+  assert.equal((answers(t.host.takeEmitted(), 205)?.ok as { drive: number }).drive, png.length);
+  call(t.core, t.ui, 206, "drive.kept.clear", {});
+  await t.host.settle();
+  await file(207, "station.file", stored("shot.png"), { thumb: true });
+  assert.deepEqual(asked, [`files ${stored("notes.txt")}`, `files ${stored("shot.png")}`]);
+  t.core.close();
 });
 
 test("a_failed_upload_goes_up_again_from_the_composer", async () => {
@@ -692,6 +740,29 @@ test("an_upload_finishing_between_the_click_and_take_still_resolves_the_submitte
   t.core.close();
 });
 
+test("taken_each_file_is_said_once_as_it_is_then_up_or_still_going_up_and_goes_once", async () => {
+  const t = await queuedUpload();
+  const take = async (id: number) => {
+    call(t.core, t.ui, id, "composer.take", { key: "ws/st:k" });
+    await t.host.settle();
+    return answers(t.host.takeEmitted(), id)?.ok as J;
+  };
+  // Still going up: named, for its message to wait for.
+  const going = await take(950);
+  assert.deepEqual([going.attachments, going.uploads], [[], t.uploads]);
+  // Put back and up meanwhile (the page not told yet): taken again, it is the station's file, and only that.
+  await t.ask("restore", { key: "ws/st:k", error: null });
+  t.finish();
+  await t.settle();
+  const up = await take(951);
+  assert.deepEqual([up.attachments, up.uploads], [[t.saved], []]);
+  // Sent as taken, it goes once.
+  t.send(501, { attachments: up.attachments, uploads: up.uploads });
+  await t.settle();
+  assert.deepEqual(t.posted[0].attachments, [t.saved]);
+  t.core.close();
+});
+
 test("a_message_waits_for_every_upload_and_keeps_already_uploaded_attachments", async () => {
   const t = await queuedUpload();
   const second = Deferred.makeUnsafe<J, CoreError>();
@@ -773,6 +844,138 @@ test("a_file_dragged_in_is_named_by_its_path_until_switched_to_a_file_which_then
   await t.ask("mode", { key: "ws/st:k", id: "b", mode: "path" });
   const taken = t.core.inner.composers.take("ws/st:k");
   assert.equal(taken.text, "看看这个\nMini 上的文件：/Users/me/b.mp4\nStudio 上的文件夹：/Users/me/src");
-  assert.deepEqual([taken.attachments.map((f: J) => f.path), taken.files], [["/data/uploads/a.mp4", "/data/uploads/proj.zip"], ["a", "d"]]);
+  assert.deepEqual([taken.attachments.map((f: J) => f.path), taken.uploads], [["/data/uploads/a.mp4", "/data/uploads/proj.zip"], []]);
   t.core.close();
+});
+
+// The app ended while a message's file went up (Android's system ends it in the background): the file's bytes were kept
+// on the device as they went, so the message goes on from them as the app starts again, not failed for a source the
+// new core never had.
+test("a_message_whose_file_was_going_up_as_the_app_ended_is_sent_from_the_bytes_kept_as_it_went", async () => {
+  const t = await queuedUpload();
+  t.send(501);
+  await t.settle();
+  assert.equal(t.tries(), 1);
+  assert.equal(t.posted.length, 0);
+  await t.host.time.pass(SOON_MS + 50);
+  await t.host.settle();
+  await Effect.runPromise(t.core.inner.data.written);
+  t.core.close();
+  t.host.takeEmitted();
+  const again = await Core.create(t.host, { clock: t.host.time.clock, sample: 0, wire: () => new HostWire(t.host) });
+  try {
+    const went: string[] = [];
+    (again.inner.stations.requests as J).uploadPart = (_addr: unknown, q: J, bytes: Uint8Array) => {
+      // (asked by its hash first whether the station has it: not)
+      if (q.sha256 !== undefined) return Effect.succeed({ have: 0 });
+      went.push(new TextDecoder().decode(bytes));
+      return Effect.succeed({ have: bytes.length, file: { name: q.name, size: bytes.length, path: "/u/again.txt" } });
+    };
+    const posted: J[] = [];
+    (again.inner.stations as J).post = (_station: string, thread: number, message: J) => Effect.sync(() => { posted.push({ thread, ...message }); return posted.length; });
+    const ui = again.connect();
+    const entry = again.inner.views.local.outbox("ws/st", 7)[0];
+    assert.equal(entry.text, "with file");
+    call(again, ui, 601, "chat.retry", { station: "ws/st", thread: 7, id: entry.id });
+    await t.host.settle();
+    await t.host.time.pass(60);
+    await t.host.settle();
+    assert.deepEqual(went, ["abc"]);
+    assert.equal(posted.length, 1);
+    assert.deepEqual(posted[0].attachments, [{ name: "slow.txt", size: 3, path: "/u/again.txt" }]);
+    // sent: nothing of it kept any more
+    assert.equal(await Effect.runPromise(again.inner.driveKept.uploadNoted("slow")), null);
+    assert.equal(await Effect.runPromise(again.inner.driveKept.has("outbox\nslow")), false);
+  } finally { again.close(); }
+});
+
+// Its file was up before the app ended, its message not yet sent: what its station said of the file is kept, and the
+// message is sent with it, the file not sent again.
+test("a_message_whose_file_was_up_as_the_app_ended_is_sent_without_sending_the_file_again", async () => {
+  const t = await queuedUpload();
+  (t.core.inner.stations as J).post = () => Effect.fail(new CoreError("mesh", "down"));
+  t.send(501);
+  t.finish();
+  await t.settle();
+  await t.host.time.pass(SOON_MS + 50);
+  await t.host.settle();
+  await Effect.runPromise(t.core.inner.data.written);
+  // (the file's bytes let go once it was up)
+  assert.equal(await Effect.runPromise(t.core.inner.driveKept.has("outbox\nslow")), false);
+  t.core.close();
+  t.host.takeEmitted();
+  const again = await Core.create(t.host, { clock: t.host.time.clock, sample: 0, wire: () => new HostWire(t.host) });
+  try {
+    let tries = 0;
+    (again.inner.stations.requests as J).uploadPart = () => { tries++; return Effect.fail(new CoreError("upload", "not again")); };
+    const posted: J[] = [];
+    (again.inner.stations as J).post = (_station: string, thread: number, message: J) => Effect.sync(() => { posted.push({ thread, ...message }); return posted.length; });
+    const ui = again.connect();
+    const entry = again.inner.views.local.outbox("ws/st", 7)[0];
+    call(again, ui, 601, "chat.retry", { station: "ws/st", thread: 7, id: entry.id });
+    await t.host.settle();
+    await t.host.time.pass(60);
+    await t.host.settle();
+    assert.equal(tries, 0);
+    assert.equal(posted.length, 1);
+    assert.deepEqual(posted[0].attachments, [t.saved]);
+  } finally { again.close(); }
+});
+
+test("discarding_a_message_lets_go_of_its_files_kept_bytes", async () => {
+  const t = await queuedUpload();
+  t.send(501);
+  await t.settle();
+  assert.equal(await Effect.runPromise(t.core.inner.driveKept.has("outbox\nslow")), true);
+  call(t.core, t.ui, 502, "chat.discard", { station: "ws/st", thread: 7, id: t.local.outbox("ws/st", 7)[0].id });
+  await t.settle();
+  assert.equal(await Effect.runPromise(t.core.inner.driveKept.uploadNoted("slow")), null);
+  assert.equal(await Effect.runPromise(t.core.inner.driveKept.has("outbox\nslow")), false);
+  t.core.close();
+});
+
+// Ended part way up (a big file's first part going), it is kept whole all the same: read through beside its going up,
+// not as it goes, so the message goes on from it as the app starts again.
+test("a_file_ended_part_way_up_is_kept_whole_and_its_message_sent_from_it", async () => {
+  const t = await setup();
+  const size = 4 * 1024 * 1024 + 3;
+  const bytes = Uint8Array.from({ length: size }, (_, i) => i % 251);
+  const gate = Deferred.makeUnsafe<J, CoreError>();
+  (t.core.inner.stations.requests as J).uploadPart = () => Deferred.await(gate);
+  (t.core.inner.stations as J).post = () => Effect.fail(new CoreError("mesh", "down"));
+  await t.watch(1, "ws/st:k");
+  await t.ask("add", { key: "ws/st:k", station: "ws/st", files: [{ id: "big", name: "big.bin", size, blob: new Blob([bytes]) }] });
+  call(t.core, t.ui, 501, "chat.send", { station: "ws/st", thread: 7, text: "big one", uploads: [{ id: "big", name: "big.bin", size }] });
+  await t.settle();
+  assert.equal(await Effect.runPromise(t.core.inner.driveKept.whole("outbox\nbig", size)), true);
+  await t.host.time.pass(SOON_MS + 50);
+  await t.host.settle();
+  await Effect.runPromise(t.core.inner.data.written);
+  t.core.close();
+  t.host.takeEmitted();
+  const again = await Core.create(t.host, { clock: t.host.time.clock, sample: 0, wire: () => new HostWire(t.host) });
+  try {
+    const got: number[] = [];
+    let have = 0;
+    (again.inner.stations.requests as J).uploadPart = (_addr: unknown, q: J, part: Uint8Array) => {
+      if (q.sha256 !== undefined) return Effect.succeed({ have: 0 });
+      for (const b of part.subarray(0, 4)) got.push(b);
+      have = q.offset + part.length;
+      return Effect.succeed(have === size ? { have, file: { name: q.name, size, path: "/u/big.bin" } } : { have });
+    };
+    const posted: J[] = [];
+    (again.inner.stations as J).post = (_station: string, thread: number, message: J) => Effect.sync(() => { posted.push({ thread, ...message }); return posted.length; });
+    const ui = again.connect();
+    const entry = again.inner.views.local.outbox("ws/st", 7)[0];
+    call(again, ui, 601, "chat.retry", { station: "ws/st", thread: 7, id: entry.id });
+    for (let i = 0; i < 5; i++) {
+      await t.host.settle();
+      await t.host.time.pass(60);
+    }
+    await t.host.settle();
+    assert.equal(have, size);
+    assert.deepEqual(got.slice(0, 4), [0, 1, 2, 3]);
+    assert.equal(posted.length, 1);
+    assert.deepEqual(posted[0].attachments, [{ name: "big.bin", size, path: "/u/big.bin" }]);
+  } finally { again.close(); }
 });

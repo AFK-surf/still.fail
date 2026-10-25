@@ -60,20 +60,20 @@ test "the bar: hidden under a page pushed, back as it comes back" {
 test "the workspaces' sheet: drawn up to 94%, dragged down past 30% it closes" {
   let t = tester("home")
   t.tap_text("星火工作室")
-  sheet_rested(t, "sheet")
+  sheet_rested(t, "sf-present")
   assert_true((t.get(@ui.Dialog).rect.3 - 844.0 * 0.7).abs() < 1.0)
   let (x, y) = t.find("切换 workspace").unwrap()
   t.drag(x, y, x, y - 200.0)
-  sheet_rested(t, "sheet")
+  sheet_rested(t, "sf-present")
   assert_true((t.get(@ui.Dialog).rect.3 - 844.0 * 0.94).abs() < 1.0)
   // a tap on the grabber: half
   let (x, y) = t.find("切换 workspace").unwrap()
   t.tap(x, y - 30.0)
-  sheet_rested(t, "sheet")
+  sheet_rested(t, "sf-present")
   assert_true((t.get(@ui.Dialog).rect.3 - 844.0 * 0.55).abs() < 1.0)
   let (x, y) = t.find("切换 workspace").unwrap()
   t.drag(x, y, x, y + 300.0)
-  sheet_rested(t, "sheet")
+  sheet_rested(t, "sf-present")
   assert_true(t.find("切换 workspace") is None)
   assert_true(!sheet_open())
 }
@@ -83,10 +83,10 @@ test "a sheet takes the drags on it: the list under it does not scroll" {
   let t = tester("home")
   let before = t.list_offset()
   t.tap_text("星火工作室")
-  sheet_rested(t, "sheet")
+  sheet_rested(t, "sf-present")
   t.drag(195.0, 700.0, 195.0, 400.0)
   assert_eq(t.list_offset(), before)
-  assert_true(sheet_open())
+  assert_true(@sf.presenting())
 }
 
 ///|
@@ -99,7 +99,7 @@ test "a new chat: 令 raises it; the first message makes the chat and the page b
   assert_true(app.nav.risen())
   t.run_for(@ui.nav_rise_ms)
   assert_true(t.find("想让 agent 做什么？") is Some(_))
-  assert_true(t.find("Opus 5.5 · high") is Some(_))
+  assert_true(t.find("Opus 5.5") is Some(_))
   t.tap_text("做任何事")
   t.type_text("把发布说明写一下")
   tap_send(t)
@@ -128,7 +128,7 @@ test "a new chat with the keyboard up: the scene scrolls in what is left, the ch
   t.frame()
   let (_, fy, _, fh) = t.rect_of("做任何事").unwrap()
   assert_true(fy + fh <= over)
-  assert_true(t.find("Opus 5.5 · high") is Some(_))
+  assert_true(t.find("Opus 5.5") is Some(_))
 }
 
 ///|
@@ -139,7 +139,7 @@ let kbd_h : Double = 336.0
 /// On the frames' clock to where the sheet rests, as it says (@kit.sheet_rest: its springs and its scrim's fade):
 /// risen from below, a row is tapped where it is.
 fn run_to_sheet_rest(t : @ui.Tester) -> Unit raise {
-  let end = @kit.sheet_rest("sheet")
+  let end = @kit.sheet_rest("sf-present")
   if end < 0.0 || end > 1.0e300 {
     fail("the sheet does not move (its rest: \{end})")
   }
@@ -147,24 +147,24 @@ fn run_to_sheet_rest(t : @ui.Tester) -> Unit raise {
 }
 
 ///|
-test "a new chat: its station picked in the sheet, its model in the run picker" {
+test "a new chat: its station picked in the sheet, its model in the model's panel" {
   let t = tester("newchat")
   open_mode("newchat")
   // (the page opened drawn at its moment, its rise from there)
   t.draw()
   t.run_for(@ui.nav_rise_ms)
   assert_true(t.find("它会在 Studio 上") is Some(_))
-  // the station's chooser, beside the model's
-  let (_, cy) = t.find("Opus 5.5 · high").unwrap()
+  // the station's control, beside the model's
+  let (_, cy) = t.find("Opus 5.5").unwrap()
   t.tap(50.0, cy)
   assert_true(t.find("选择运行的 station") is Some(_))
   run_to_sheet_rest(t)
   let (mx, my) = t.find_last("MBA").unwrap()
   t.tap(mx, my)
-  assert_true(!sheet_open())
+  assert_true(!@sf.presented_open_of(@sf.last_presented()))
   assert_eq(new_fix.station, "st2")
   assert_true(t.find("它会在 MBA 上") is Some(_))
-  t.tap_text("Opus 5.5 · high")
+  t.tap_text("Opus 5.5")
   assert_true(t.find("思考深度") is Some(_))
   run_to_sheet_rest(t)
   let (gx, gy) = t.find_last("GPT-6").unwrap()
@@ -172,12 +172,8 @@ test "a new chat: its station picked in the sheet, its model in the run picker" 
   assert_true(t.find("确定") is Some(_))
   let (ox, oy) = t.find_last("确定").unwrap()
   t.tap(ox, oy)
-  assert_true(!sheet_open())
-  for l in t.dump().split("\n") {
-    if l.contains("GPT") || l.contains("Opus") || l.contains("high") || l.contains("高") {
-        }
-  }
-  assert_true(t.find("GPT-6 · high") is Some(_))
+  assert_true(!@sf.presented_open_of(@sf.last_presented()))
+  assert_true(t.find("GPT-6") is Some(_))
   // cancelled, it sinks back down
   t.tap_text("取消")
   assert_eq(app.nav.depth(), 1)
@@ -205,6 +201,7 @@ test "the notch's icon swaps with a short scale and fade while it stays open; cl
     fn(c) { p.val = show_icon(c, face.val, out.val) },
     w=390.0,
     h=844.0,
+    platform=2,
   )
   t.draw()
   assert_eq(m_face.val, "ling")

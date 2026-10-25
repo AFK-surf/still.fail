@@ -90,19 +90,47 @@ pub(all) struct Theme {
   lifted : Int64
   /// a quiet wash under what comes onto it (Color's Wash)
   wash : Int64
+  /// a sidebar's ground beside the page (Color's Sidebar)
+  sidebar : Int64
+  /// a list's ground, a step off the page (Color's ListGround)
+  list : Int64
   /// the sizes of words with their lines' heights (style.mbt's TextSize), the lines' heights said on their own
   /// (Leading), and the corners (Radius)
   text : TextScale
   leading : LeadingScale
   radii : RadiusScale
+  /// the corners nested things keep to, outermost first (still.fail's ladder: each a step in from the one before,
+  /// what lies in a container's corner as far in as makes it the next): a rounded container with something in its
+  /// corner, and a smooth one there, each round by one of them; a capsule or a circle round by its shape. None said:
+  /// any (Tester::corner_faults)
+  corner_ladder : Array[Double]
+  /// how round what lies in a container's corner may be, and how far from its edges, to be concentric with it
+  /// (CornerFit); None: any, as concentric asks
+  corner_fit : CornerFit?
+  /// how far apart two things that light up under the hand stand at least (the spacing rules, gaps.mbt: the web's
+  /// sidebar rows 2); 0: not held
+  lit_apart : Double
   /// the height of a line of words that say none, a size of words (1.4: CSS's `line-height: 1.4`, still.fail's
   /// apps'); 0: the host's own (its system's, about 1.42)
   text_line : Double
+  /// the app's own words with their digits all one width (@hostapi.style_tabular: a number keeps its width as it
+  /// changes, CSS's `font-variant-numeric: tabular-nums` on a page's root) where they say nothing of it; what people
+  /// wrote (`words`), a face shown in itself and a book's pages keep the font's own figures. false: the font's own
+  /// everywhere, the system's way (San Francisco's figures are proportional, Roboto's and Segoe UI's tabular)
+  tabular : Bool
 }
 
 ///|
-/// The sizes of words, each with its line's height (size, line).
+/// The sizes of words, each with its line's height (size, line): the roles' (TextSize Caption … Display), then the
+/// scale's.
 pub(all) struct TextScale {
+  caption : (Double, Double)
+  meta : (Double, Double)
+  ui : (Double, Double)
+  body : (Double, Double)
+  title : (Double, Double)
+  heading : (Double, Double)
+  display : (Double, Double)
   xs3 : (Double, Double)
   xs2 : (Double, Double)
   xs : (Double, Double)
@@ -129,6 +157,14 @@ pub fn TextScale::tailwind() -> TextScale {
     xl2: (24.0, 32.0),
     xl3: (30.0, 36.0),
     xl4: (36.0, 40.0),
+    // the roles on Tailwind's: xs, xs, sm, base, xl, 3xl, 4xl
+    caption: (12.0, 16.0),
+    meta: (12.0, 16.0),
+    ui: (14.0, 20.0),
+    body: (16.0, 24.0),
+    title: (20.0, 28.0),
+    heading: (30.0, 36.0),
+    display: (36.0, 40.0),
   }
 }
 
@@ -220,10 +256,17 @@ pub fn Theme::light() -> Theme {
     lifted: 0xFFFFFFFFL,
     // #322D24 at 6.5%
     wash: 0x322D2411L,
+    sidebar: 0xF6F5F1FFL,
+    // oklch(98.5% .002 85)
+    list: 0xFBFAF9FFL,
     text: TextScale::tailwind(),
     leading: LeadingScale::tailwind(),
     text_line: 0.0,
     radii: RadiusScale::tailwind(),
+    corner_ladder: [],
+    corner_fit: None,
+    lit_apart: 0.0,
+    tabular: false,
   }
 }
 
@@ -259,6 +302,8 @@ pub fn Theme::dark() -> Theme {
     danger_bg: 0x442322FFL,
     neutral: 0x2A2B2FFFL,
     selected: 0x323338FFL,
+    sidebar: 0x19191BFFL,
+    list: 0x1C1D20FFL,
     link: 0x81AEFAFFL,
     lifted: 0x3A3B40FFL,
     // white at 5%
@@ -367,10 +412,16 @@ pub fn Theme::ios_light() -> Theme {
     lifted: 0xFFFFFFFFL,
     // #322D24 at 6.5%
     wash: 0x322D2411L,
+    sidebar: 0xF2F2F7FFL,
+    list: 0xFFFFFFFFL,
     text: TextScale::tailwind(),
     leading: LeadingScale::tailwind(),
     text_line: 0.0,
     radii: RadiusScale::tailwind(),
+    corner_ladder: [],
+    corner_fit: None,
+    lit_apart: 0.0,
+    tabular: false,
   }
 }
 
@@ -503,6 +554,9 @@ pub fn Theme::color(self : Theme, c : Color) -> Int64 {
     OnVeil => 0xFFFFFFFFL
     Lifted => self.lifted
     Wash => self.wash
+    Sidebar => self.sidebar
+    ListGround => self.list
+    FieldHover => self.field_hover
     Theater => 0x000000FFL
     A(c, o) => alpha(self.color(c), o.value())
     Over(u, t) => over(self.color(u), self.color(t))
@@ -515,6 +569,13 @@ pub fn Theme::color(self : Theme, c : Color) -> Int64 {
 /// A size of words in this theme: (size, line).
 pub fn Theme::text_size(self : Theme, s : TextSize) -> (Double, Double) {
   match s {
+    Caption => self.text.caption
+    Meta => self.text.meta
+    Ui => self.text.ui
+    Body => self.text.body
+    Title => self.text.title
+    Heading => self.text.heading
+    Display => self.text.display
     Xs3 => self.text.xs3
     Xs2 => self.text.xs2
     Xs => self.text.xs
@@ -548,10 +609,13 @@ pub fn Theme::leading(self : Theme, l : Leading) -> Double? {
 }
 
 ///|
-/// A corner in this theme (`Inner` and `Around` are worked out once laid out: 0 here).
+/// A corner in this theme (`Inner` and `Around` are worked out once laid out: 0 here; `InnerOr` its own here, the
+/// container's once laid out where it lies in a corner of one; `Corners` the roundest of its four, each its own as a box
+/// is drawn: Radius::each).
 pub fn Theme::corner(self : Theme, r : Radius) -> Double {
   match r {
     Sharp | Inner | Around => 0.0
+    InnerOr(own) => self.corner(own)
     Sm => self.radii.sm
     Base => self.radii.base
     Md => self.radii.md
@@ -563,7 +627,54 @@ pub fn Theme::corner(self : Theme, r : Radius) -> Double {
     Xl4 => self.radii.xl4
     Full => 1.0e6
     Exact(v) => exact_ok(v, "Radius")
+    // (each its own: the roundest here, each in Ctx::box's corners)
+    Corners(a, b, c, d) =>
+      dmax(
+        dmax(exact_ok(a, "Radius"), exact_ok(b, "Radius")),
+        dmax(exact_ok(c, "Radius"), exact_ok(d, "Radius")),
+      )
+    // (where it comes from, now: corner_of.mbt)
+    Linked(c) => c.radius()
+    LinkedEach(a, b, c, d) => dmax(dmax(a.radius(), b.radius()), dmax(c.radius(), d.radius()))
   }
+}
+
+///|
+/// The corners of `r` each its own (top left, top right, bottom right, bottom left), where they are not one: `Corners`,
+/// alone or as what `InnerOr` keeps.
+pub fn Radius::each(self : Radius) -> FixedArray[Double]? {
+  match self {
+    Corners(a, b, c, d) => Some(FixedArray::from_array([a, b, c, d]))
+    LinkedEach(a, b, c, d) => Some(FixedArray::from_array([a.radius(), b.radius(), c.radius(), d.radius()]))
+    InnerOr(own) => own.each()
+    _ => None
+  }
+}
+
+///|
+/// Where the corners of `r` come from, each (top left, then round it), where they are linked: `Linked`, `LinkedEach`,
+/// or what `InnerOr` keeps; None where they are not.
+pub fn Radius::links(self : Radius) -> FixedArray[CornerOf]? {
+  match self {
+    Linked(c) => Some(FixedArray::make(4, c))
+    LinkedEach(a, b, c, d) => Some(FixedArray::from_array([a, b, c, d]))
+    InnerOr(own) => own.links()
+    _ => None
+  }
+}
+
+///|
+/// What lies in a rounded container's corner and what the corner rule may make of it to be concentric with it (still.fail's
+/// docs/ui-panels.md 圆角阶梯, 适应范围): its corner `least` at least and `most` at most, standing `near` to `far` from
+/// the container's edges. The outermost container is the window, its corner the system's (@hostapi.window_corner: a
+/// Mac's 16, Windows 11's 8, square full screen): where none of these makes a thing concentric with what it lies in
+/// (the container too square for it, or too round: a window's 8, a phone's screen), it stands as it would alone, its
+/// own corner where it is, and the rule asks nothing more of it there.
+pub(all) struct CornerFit {
+  least : Double
+  most : Double
+  near : Double
+  far : Double
 }
 
 ///|
@@ -571,6 +682,15 @@ pub fn Theme::corner(self : Theme, r : Radius) -> Double {
 pub fn Ctx::with_theme(self : Ctx, t : Theme, body : () -> Unit) -> Unit {
   let saved = self.theme
   self.theme = t
+  if t.corner_ladder.length() > 0 {
+    self.corner_ladder = t.corner_ladder
+  }
+  if t.corner_fit is Some(_) {
+    self.corner_fit = t.corner_fit
+  }
+  if t.lit_apart > 0.0 {
+    self.lit_apart = t.lit_apart
+  }
   body()
   self.theme = saved
 }
@@ -618,9 +738,23 @@ pub fn alpha(c : Int64, a : Double) -> Int64 {
 }
 
 ///|
-/// `top` laid over `under` (both RRGGBBAA; `under` taken as opaque): the colour it shows as.
+/// `top` laid over `under` (both RRGGBBAA): the colour it shows as; over a tint (a ground pointed at laid over a
+/// translucent one: style.mbt Patch::lit_by), the two as one tint, as much of what is under them showing through.
 pub fn over(under : Int64, top : Int64) -> Int64 {
   let a = (top & 0xFFL).to_double() / 255.0
+  let ua = (under & 0xFFL).to_double() / 255.0
+  if ua < 1.0 {
+    let oa = a + ua * (1.0 - a)
+    if oa <= 0.0 {
+      return 0L
+    }
+    let mix = fn(sh : Int) -> Int64 {
+      let u = ((under >> sh) & 0xFFL).to_double()
+      let t = ((top >> sh) & 0xFFL).to_double()
+      ((t * a + u * ua * (1.0 - a)) / oa).round().to_int64() << sh
+    }
+    return mix(24) | mix(16) | mix(8) | (oa * 255.0).round().to_int64()
+  }
   let ch = fn(sh : Int) -> Int64 {
     let u = ((under >> sh) & 0xFFL).to_double()
     let t = ((top >> sh) & 0xFFL).to_double()

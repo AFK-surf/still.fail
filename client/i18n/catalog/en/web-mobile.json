@@ -48,6 +48,9 @@
   "web-mobile.chat.photos": "Photos",
   "web-mobile.chat.pinTop": "Pin to top",
   "web-mobile.chat.placeholder": "Message",
+  "web-mobile.chat.placeholderCc": "Message, CC {place}",
+  "web-mobile.chat.ccStart": "CC to {place}",
+  "web-mobile.chat.ccStop": "Stop CC to {place}",
   "web-mobile.chat.reading": "Loading chat",
   "web-mobile.chat.readingFrom": "Loading chat from {station}",
   "web-mobile.chat.restoreFirst": "Restore to send",
@@ -265,7 +268,6 @@
   "web-mobile.home.archive": "Archive",
   "web-mobile.home.archiveAsk": "Archive \"{title}\"?",
   "web-mobile.home.archiveFailed": "Couldn't archive: {error}",
-  "web-mobile.home.archiveTitle": "Archive \"{title}\"",
   "web-mobile.home.archived": "Archived",
   "web-mobile.home.busy": "Working",
   "web-mobile.home.decisions": {

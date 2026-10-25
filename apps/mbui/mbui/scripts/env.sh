@@ -49,3 +49,12 @@ native_tests() {
 # `moon_test_native ARGS…`: `moon test ARGS…` on native as native_tests sets it up, in the current module's directory
 # (in a subshell: nothing else of the script's environment changed).
 moon_test_native() { ( native_tests "$PWD"; moon test $NATIVE "$@" ); }
+
+# `on_screen COMMAND…`: a command that opens a window (an app run on the host: a shot, a recording, a scripted run)
+# run with the machine's screen. Run as a job of a still.fail station (a task another station sent, an agent's job),
+# it waits while another task has the screen and gives it back once the command ends (`stillfail-job screen`), so the
+# builds and tests around it run beside the other tasks; anywhere else, as it is. What draws offscreen (mbui-render,
+# a film, the Tester) needs no screen.
+on_screen() {
+  if [ -n "${STILLFAIL_JOB_SCREEN:-}" ] && command -v stillfail-job > /dev/null; then stillfail-job screen "$@"; else "$@"; fi
+}

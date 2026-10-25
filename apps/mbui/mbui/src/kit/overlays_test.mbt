@@ -109,6 +109,57 @@ test "popover: beside its trigger, the focus in it; its trigger toggles it, a pr
 }
 
 ///|
+test "popover: it comes from 97% and clear, the first time it opens too; it goes back the same way, a little quicker" {
+  let open = Ref(false)
+  let t = @ui.Tester::new(fn(c) {
+    let tr = button(c, "Filters", key="filters")
+    if tr.clicked {
+      open.val = !open.val
+    }
+    open.val = popover(c, "pop", open.val, tr.id, label="Filters", fn() { c.text("Unread only") |> ignore }).value
+  })
+  t.click(@ui.Button, label="Filters")
+  // half way in (pop_ms on the ease-out): smaller and fainter than it is
+  t.run_for(pop_ms / 2.0)
+  let (sx, sy, alpha) = t.look_of("Unread only").unwrap()
+  assert_true(sx > 0.97 && sx < 1.0 && sy == sx, msg="\{sx} \{sy}")
+  assert_true(alpha > 0.0 && alpha < 1.0, msg="\{alpha}")
+  t.run_for(pop_ms)
+  assert_eq(t.look_of("Unread only"), Some((1.0, 1.0, 1.0)))
+  // closed by its trigger: going (half way out: smaller and fainter, pop_out_ms), then gone
+  t.click(@ui.Button, label="Filters")
+  assert_false(open.val)
+  t.run_for(pop_out_ms / 2.0)
+  let (sx, _, alpha) = t.look_of("Unread only").unwrap()
+  assert_true(sx > 0.97 && sx < 1.0, msg="\{sx}")
+  assert_true(alpha > 0.0 && alpha < 1.0, msg="\{alpha}")
+  t.run_for(pop_out_ms)
+  assert_true(t.find("Unread only") is None)
+}
+
+///|
+test "popover: not taking the focus, it stays where it was (a field typed in keeps it), Escape still closes it" {
+  let open = Ref(false)
+  let t = @ui.Tester::new(fn(c) {
+    let tr = button(c, "Filters", key="filters")
+    if tr.clicked {
+      open.val = true
+    }
+    open.val = popover(c, "pop", open.val, tr.id, label="Filters", focus=false, fn() { button(c, "Apply") |> ignore })
+      .value
+  })
+  t.click(@ui.Button, label="Filters")
+  let before = t.focused().map(fn(s) { s.label })
+  t.draw()
+  assert_true(open.val)
+  assert_true(t.query(@ui.Dialog, label="Filters") is Some(_))
+  assert_eq(t.focused().map(fn(s) { s.label }), before)
+  assert_true(before != Some("Apply"))
+  t.key(@ui.key_escape)
+  assert_false(open.val)
+}
+
+///|
 test "tooltip: shown once the pointer has rested on its trigger; at once by the keyboard; shut by a press" {
   let shown = Ref(false)
   let t = @ui.Tester::new(fn(c) {
@@ -144,6 +195,81 @@ test "tooltip: shown once the pointer has rested on its trigger; at once by the 
   assert_true(shown.val)
   t.press("Escape")
   assert_false(shown.val)
+}
+
+///|
+test "tooltip: to a finger, shown as it is held on the trigger (no tap then), gone a moment after it is lifted" {
+  let shown = Ref(false)
+  let taps = Ref(0)
+  let t = @ui.Tester::new(
+    fn(c) {
+      c.column(gap=40.0, pad=80.0, fn() {
+        let r = button(c, "Bold", key="bold")
+        if r.clicked {
+          taps.val += 1
+        }
+        shown.val = tooltip(c, "tip", r.id, "Bold")
+      })
+      |> ignore
+    },
+    platform=2,
+  )
+  let (x, y, w, h) = t.get(@ui.Button, label="Bold").rect
+  // a tap: a tap, no tip
+  t.tap(x + w / 2.0, y + h / 2.0)
+  assert_eq(taps.val, 1)
+  assert_false(shown.val)
+  // held: the tip, and lifting it taps nothing
+  t.press_at(x + w / 2.0, y + h / 2.0)
+  t.draw()
+  t.run_for(@ui.long_press_ms)
+  assert_true(shown.val)
+  let lifted = t.time()
+  t.release(x + w / 2.0, y + h / 2.0)
+  assert_eq(taps.val, 1)
+  assert_true(shown.val)
+  // (a millisecond before it goes)
+  let due = lifted + tooltip_lifted_ms
+  t.run_for(due - 1.0 - t.time())
+  assert_true(shown.val)
+  t.run_for(due - t.time())
+  assert_false(shown.val)
+}
+
+///|
+test "hover card: to a finger, opened as it holds the trigger, or by a tap with `tap`; a press outside closes it" {
+  let held = Ref(false)
+  let tapped = Ref(false)
+  let t = @ui.Tester::new(
+    fn(c) {
+      c.column(gap=40.0, pad=80.0, fn() {
+        let a = button(c, "Held", key="held")
+        held.val = hover_card(c, "card-a", a.id, fn() { c.text("A's card") |> ignore })
+        let b = button(c, "Tapped", key="tapped")
+        tapped.val = hover_card(c, "card-b", b.id, tap=true, fn() { c.text("B's card") |> ignore })
+      })
+      |> ignore
+    },
+    platform=2,
+  )
+  let (ax, ay, aw, ah) = t.get(@ui.Button, label="Held").rect
+  // a tap on one without `tap`: nothing
+  t.tap(ax + aw / 2.0, ay + ah / 2.0)
+  assert_false(held.val)
+  t.press_at(ax + aw / 2.0, ay + ah / 2.0)
+  t.draw()
+  t.run_for(@ui.long_press_ms)
+  t.release(ax + aw / 2.0, ay + ah / 2.0)
+  assert_true(held.val)
+  // a press outside closes it
+  t.tap(380.0, 800.0)
+  assert_false(held.val)
+  let (bx, by, bw, bh) = t.get(@ui.Button, label="Tapped").rect
+  t.tap(bx + bw / 2.0, by + bh / 2.0)
+  assert_true(tapped.val)
+  // tapped again: closed
+  t.tap(bx + bw / 2.0, by + bh / 2.0)
+  assert_false(tapped.val)
 }
 
 ///|
@@ -368,11 +494,7 @@ test "sheet: closed by the view, it sinks away and is gone" {
 }
 
 ///|
-/// A moment into a sheet's way to another height (its spring's first stretch).
-let growing_ms : Double = 50.0
-
-///|
-test "sheet: closed while still on its way to a new height, it sinks away from where it is and is gone" {
+test "sheet: asked another height while open (what it holds grown), that tall at once; closed, it sinks away from there and is gone" {
   let open = Ref(true)
   let tall = Ref(300.0)
   let shown = Ref(false)
@@ -384,12 +506,13 @@ test "sheet: closed while still on its way to a new height, it sinks away from w
     }
   })
   to_rest(t, "s")
-  // what it holds grew (a fitted sheet measured): on its way up to 600
+  // what it holds grew (a fitted sheet as this frame lays it out): placed by its size, not chased to it
   tall.val = 600.0
   t.draw()
-  t.run_for(growing_ms)
   let (_, _, _, h) = t.get(@ui.Dialog).rect
-  assert_true(h > 300.0 && h < 600.0, msg="\{h}")
+  assert_eq(h, 600.0)
+  // (nothing set off by it: the sheet at rest)
+  assert_true(sheet_rest("s") <= t.time())
   open.val = false
   t.draw()
   t.run_for(sheet_rest("s") - t.time())
@@ -493,4 +616,43 @@ test "toasts: toast_due says when the next goes (its time out), none while pause
   t.run_for(rest - t.time())
   assert_eq(t.all(@ui.Status).length(), 0)
   t.assert_idle()
+}
+
+///|
+test "popover: a wheel turned over it scrolls nothing under it; beside it, what is under scrolls" {
+  let open = Ref(false)
+  let t = @ui.Tester::new(fn(c) {
+    c.column(fn() {
+      let tr = button(c, "Filters", key="filters")
+      if tr.clicked {
+        open.val = !open.val
+      }
+      scroll_area(c, "s", 400.0, label="Log", fn() {
+        c.column(fn() {
+          for i in 0..<80 {
+            c.text("line \{i}") |> ignore
+          }
+        })
+        |> ignore
+      })
+      open.val = popover(c, "pop", open.val, tr.id, label="Filters", focus=false, fn() { c.text("Unread only") |> ignore }).value
+    })
+    |> ignore
+  })
+  t.click(@ui.Button, label="Filters")
+  t.run_for(pop_ms)
+  let (px, py, pw, ph) = t.get(@ui.Dialog, label="Filters").rect
+  let (sx, sy, sw, sh) = t.get(@ui.ScrollArea, label="Log").rect
+  // (the popover lies over the list)
+  assert_true(py < sy + sh && py + ph > sy && px < sx + sw)
+  let (_, y0, _, _) = t.rect_of("line 0").unwrap()
+  t.wheel(px + pw / 2.0, py + ph / 2.0, 120.0)
+  t.run_for(pop_ms)
+  assert_eq(t.rect_of("line 0").map(fn(r) { r.1 }), Some(y0))
+  assert_true(open.val)
+  // beside it, the list takes the wheel
+  t.wheel(sx + sw - 4.0, sy + sh - 4.0, 120.0)
+  t.run_for(pop_ms)
+  let (_, y1, _, _) = t.rect_of("line 0").unwrap_or((0.0, -1000.0, 0.0, 0.0))
+  assert_true(y1 < y0)
 }

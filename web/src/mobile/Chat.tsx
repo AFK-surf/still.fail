@@ -1,3 +1,5 @@
+import { outsideScroll, scrollToEnd } from "../scrollBounds.ts";
+import { pickAttachment } from "../pickAttachment.ts";
 import { StationUpdate } from "../StationUpdate.tsx";
 // An item's page on a narrow screen: its chat's messages (none before its agent has a chat), the composer, and each
 // agent's execution history as a page opened from its mark or name. The messages are the wide screen's own (../Chat.tsx:
@@ -6,7 +8,8 @@ import { StationUpdate } from "../StationUpdate.tsx";
 // copy (pick.tsx); ＋ adds files.
 import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from "react";
 import { useLocation, useNavigate, useParams } from "react-router";
-import { topicNow, useReady, useTopicSelect } from "../core/react.ts";
+import { topicNow, useCall, useReady, useTopicSelect } from "../core/react.ts";
+import { useAct } from "@stillfail/ui/toast.tsx";
 import { stationApi, useApi, useChat, useChatJobs, useLives, useStationCall, useStationLook, useStations, type ChatAgent, type ChatThread, type ChatView, type Quote, type Attachment } from "../api.ts";
 import { draftKeyOf, useHost, type HostComposer } from "./ChatHost.tsx";
 import { DraftKey } from "../draft.ts";
@@ -35,7 +38,7 @@ import { openHistory } from "./History.tsx";
 import { AgentSince, openAgent } from "./AgentSheet.tsx";
 import { HOLD, usePick } from "./pick.tsx";
 import { Button, Gone, GroupLabel, InfoList, InfoRow, LinkButton, ModelMark, NavButton, PickRow, QuotaRings, Seg, SlackMark, stateOf } from "./parts.tsx";
-import { AgentMark } from "../ui.tsx";
+import { AgentMark, ElsewhereLogo } from "../ui.tsx";
 import { OutsideList, outsideOf, shareOutside, type Outside } from "../OutsideShare.tsx";
 import { useAction } from "../action.ts";
 import { PeopleStack } from "../components.tsx";
@@ -44,7 +47,7 @@ import { Letters } from "../Letters.tsx";
 import { TermText } from "../TermText.tsx";
 import { screenLinkClicked, stillfailLinkClicked } from "../stillfailLink.ts";
 import { doingMatches, failed, useDoing, useDoingFailed, useDoingList } from "../doing.ts";
-import type { ChatJobsView, ChatPublish, ChatPublished, ChatShare, Job } from "../core/shapes.ts";
+import type { ChatCcTo, ChatJobsView, ChatPublish, ChatPublished, ChatShare, Job } from "../core/shapes.ts";
 import { PublishMessages, tickedOf, usePublishPreview, useTicking } from "../Publish.tsx";
 import * as publishCss from "../Publish.css.ts";
 import * as chatCss from "./styles/chat.css.ts";
@@ -70,10 +73,15 @@ export function ChatScreen() {
   // A service's link (`?service=<job>`, from Slack): the service, full screen, over the chat.
   const app = useApp();
   const asked = new URLSearchParams(useLocation().search).get("service");
+  const service = asked ? servicePath(station.address, key, asked) : null;
+  // The link is an instruction for this visit, not for every resumption of its hidden page's effects.
+  const openedService = useRef<string | null>(null);
   useEffect(() => {
-    if (asked) app.push(servicePath(station.address, key, asked));
+    if (!service || openedService.current === service) return;
+    openedService.current = service;
+    app.push(service);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [asked]);
+  }, [service]);
   // The page slides in once its chat is read from the device (LOCAL_MS at most), not empty; one that has to come from
   // its station is not waited for: the page slides in, showing it coming.
   useReady({ topic: "chat", station: station.address, session: key }, LOCAL_MS);
@@ -82,10 +90,10 @@ export function ChatScreen() {
   const navigate = useNavigate();
   const stationKey = key.startsWith(PENDING) ? view?.key : undefined;
   useEffect(() => {
-    if (!stationKey) return;
+    if (!stationKey || address === stationKey) return;
     renamed.set(stationKey, key);
     navigate(`${stationBase(station.address)}/chats/${encodeURIComponent(stationKey)}`, { replace: true });
-  }, [stationKey]);
+  }, [stationKey, address]);
   const lives = useLives(station.address, (view?.agents ?? []).map((a) => a.session.key));
   // Until the core has the chat, the page is already a chat's page (its bar, empty): what comes fills it in place.
   if (!view) {
@@ -421,15 +429,9 @@ export type Draft = SharedDraft & { focus: number; bumpFocus(): void };
  * A menu over the composer's capsule (`plus` its ＋), as a long-pressed message's: the phone app's sheet of recent
  * photos needs the gallery, which a page cannot read.
  */
-export function openAttach(app: MobileApp, plus: HTMLElement, onPicked: (files: FileList) => void, onStation?: () => void) {
+export function openAttach(app: MobileApp, plus: HTMLElement, onPicked: (files: FileList) => void, onStation?: () => void, cc?: { to: ChatCcTo[]; toggle(to: ChatCcTo): void }) {
   const pick = (accept: string, capture: boolean) => {
-    const input = document.createElement("input");
-    input.type = "file";
-    input.accept = accept;
-    input.multiple = !capture;
-    if (capture) input.setAttribute("capture", "environment");
-    input.onchange = () => { if (input.files?.length) onPicked(input.files); };
-    input.click();
+    pickAttachment(accept, capture, onPicked);
   };
   // From ＋'s left, over all of the capsule (its files and quotes too), as it is once ＋ has taken the focus.
   requestAnimationFrame(() => {
@@ -440,6 +442,8 @@ export function openAttach(app: MobileApp, plus: HTMLElement, onPicked: (files: 
       { label: t("web-mobile.chat.photos"), icon: <Photo size={18} />, action: () => pick("image/*", false) },
       { label: t("web-mobile.chat.files"), icon: <File size={18} />, action: () => pick("*/*", false) },
       ...(onStation ? [{ label: t("web-pages.chat.files"), icon: <Server size={18} />, action: onStation }] : []),
+      // Copying what is sent to the chat's Slack or Feishu thread, on or off (`chat.cc`).
+      ...(cc ? cc.to.map((o) => ({ label: t(o.on ? "web-mobile.chat.ccStop" : "web-mobile.chat.ccStart", { place: o.place }), icon: <ElsewhereLogo kind={o.via} size={18} />, action: () => cc.toggle(o) })) : []),
     ] });
   });
 }
@@ -486,6 +490,8 @@ export function useComposerBar({ draft, draftKey, sessionKey, placeholder, locke
  */
 function useComposer(view: ChatView, here: Here, use: (spec: HostComposer) => void, list: RefObject<HTMLDivElement | null>) {
   const api = useApi();
+  const call = useCall();
+  const act = useAct();
   const keeper = view.agents[0]?.session.key ?? null;
   const warmed = useRef(0);
   const send = (draft: Draft) => {
@@ -501,8 +507,9 @@ function useComposer(view: ChatView, here: Here, use: (spec: HostComposer) => vo
     void sendDraft(draft, to, undefined);
   };
   useLayoutEffect(() => use({
-    station: here.station, session: keeper, placeholder: view.archived ? t("web-mobile.chat.restoreFirst") : t("web-mobile.chat.placeholder"), offline: view.offline, ...(view.offlineNote ? { offlineNote: view.offlineNote } : {}), archived: !!view.archived, send,
+    station: here.station, session: keeper, placeholder: view.archived ? t("web-mobile.chat.restoreFirst") : view.cc?.some((o) => o.on) ? t("web-mobile.chat.placeholderCc", { place: view.cc.filter((o) => o.on).map((o) => o.place).join("、") }) : t("web-mobile.chat.placeholder"), offline: view.offline, ...(view.offlineNote ? { offlineNote: view.offlineNote } : {}), archived: !!view.archived, send,
     restore: () => api.archive({ thread: view.thread?.id ?? null, session: here.key }, false),
+    ...(view.cc?.length && view.thread ? { cc: { to: view.cc, toggle: (o: ChatCcTo) => act(call("chat.cc", { station: here.station, thread: view.thread!.id, to: o.thread, on: !o.on }), t("web-mobile.chat.ccStart", { place: o.place })) } } : {}),
     // Typing starts the session's runtime, so a cold start overlaps the writing.
     type: () => {
       if (view.offline || view.archived || !keeper || Date.now() - warmed.current < 60_000) return;
@@ -695,11 +702,11 @@ function JobOutput({ station, job }: { station: string; job: Job }) {
   const atEnd = useRef(true);
   useEffect(() => {
     const el = box.current;
-    if (el && atEnd.current) el.scrollTop = el.scrollHeight;
+    if (el && atEnd.current) scrollToEnd(el);
   }, [log?.text]);
   if (log === null) return <WaitLine />;
   return (
-    <pre ref={box} className={css.mJobOutput} onScroll={(e) => { const el = e.currentTarget; atEnd.current = el.scrollHeight - el.scrollTop - el.clientHeight < 24; }}>
+    <pre ref={box} className={css.mJobOutput} onScroll={(e) => { const el = e.currentTarget; if (outsideScroll(el)) return; atEnd.current = el.scrollHeight - el.scrollTop - el.clientHeight < 24; }}>
       {log.text ? <TermText text={log.text} runs={log.runs} /> : t("web-mobile.chat.noOutput")}
     </pre>
   );
@@ -980,19 +987,19 @@ function ShareSheet({ here, thread, share }: { here: Here; thread: ChatThread; s
 export function sendSharing(app: MobileApp, station: string, text: string, go: () => void) {
   void outsideOf(station, text).catch((): Outside[] => []).then((chats) => {
     if (chats.length === 0) go();
-    else openOutside(app, chats, station, go);
+    else openOutside(app, chats, station, text, go);
   });
 }
 
 /** Asks to share the chats of other workspaces a message refers to with this one; shared (or sent anyway), `go` sends it. */
-function openOutside(app: MobileApp, chats: Outside[], station: string, go: () => void) {
-  app.sheet({ height: Math.min(0.9, (25 + 48 + 44 + chats.length * 52 + 12 + 66 + 24) / window.innerHeight), content: () => <OutsideSheet chats={chats} station={station} go={go} /> });
+function openOutside(app: MobileApp, chats: Outside[], station: string, text: string, go: () => void) {
+  app.sheet({ height: Math.min(0.9, (25 + 48 + 44 + chats.length * 52 + 12 + 66 + 24) / window.innerHeight), content: () => <OutsideSheet chats={chats} station={station} text={text} go={go} /> });
 }
 
-function OutsideSheet({ chats, station, go }: { chats: Outside[]; station: string; go: () => void }) {
+function OutsideSheet({ chats, station, text, go }: { chats: Outside[]; station: string; text: string; go: () => void }) {
   const app = useApp();
   const sharable = chats.some((c) => c.may);
-  const operation = useAction(() => (sharable ? shareOutside(chats, station) : Promise.resolve()), () => { app.sheet(null); go(); });
+  const operation = useAction(() => (sharable ? shareOutside(station, text) : Promise.resolve()), () => { app.sheet(null); go(); });
   const error = operation.error ? t("web-main.outside.failed", { error: operation.error.message }) : null;
   return (
     <>

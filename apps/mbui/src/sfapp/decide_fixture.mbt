@@ -1,12 +1,15 @@
 // Made-up decisions, an execution history, an agent's card, jobs, for the app with no core (fixture.mbt; slice 8's
 // screenshots). MBUI_FIXTURE: "decisions" (the 奏 page with an options card in front), "decisions-text" (a text card),
 // "decisions-idle" (none left: the day so far), "history" (an agent's steps, a few opened), "history-details", the chat
-// with a sheet open over it: "chat-info", "chat-publish", "chat-agent", "chat-peek" (its station's card), "chat-jobs",
+// with a sheet open over it: "chat-info", "chat-publish", "chat-agent", "chat-agent-unsaid" (an agent's card that knows
+// no figure of it, as a station from before tells none of an agent at rest), "chat-peek" (its station's card), "chat-jobs",
 // "chat-job"; "chat-letters-info" (the chat's sheet with its row for what its agents and other chats' wrote each
 // other), "chat-letters" (their sheet: the chats written with), "chat-letters-open" (one of them opened); the wide
 // frame's "chat-letters-pop" (the chat's "…" open), "chat-jobs-pop" (its services' popover), "chat-letters-side",
-// "chat-jobs-side", "chat-history-side" (what is opened beside it), "chat-model-pop" (its agent's model control's panel
-// open), "chat-find" (⌘F's bar, a word typed in it); "home-jobs"
+// "chat-jobs-side", "chat-history-side" (what is opened beside it), "chat-tabs-side" (two of them: the history behind
+// 任务), "chat-model-pop" (its agent's model control's panel
+// open), "chat-find" (⌘F's bar, a word typed in it), "chat-agent-card" (the chat, its agent's details and card read:
+// what its card over its picture says); "home-jobs"
 // (Home with the jobs left up a long while at its top); "history-link" (Home, the history there for a link to open at
 // an entry: what apps/android's MbuiCompareTest pictures beside it). Every word here is made up.
 
@@ -15,9 +18,9 @@
 fn decide_mode(mode : String) -> Bool {
   [
     "decisions", "decisions-text", "decisions-idle", "history", "history-details",
-    "chat-info", "chat-publish", "chat-agent", "chat-peek", "chat-jobs", "chat-job", "home-jobs", "history-link",
+    "chat-info", "chat-publish", "chat-agent", "chat-agent-unsaid", "chat-peek", "chat-jobs", "chat-job", "home-jobs", "history-link",
     "chat-letters-info", "chat-letters", "chat-letters-open", "chat-letters-pop", "chat-letters-side", "chat-jobs-pop",
-    "chat-jobs-side", "chat-history-side", "chat-model-pop", "chat-find",
+    "chat-jobs-side", "chat-history-side", "chat-tabs-side", "chat-model-pop", "chat-find", "chat-agent-card",
   ].contains(mode)
 }
 
@@ -113,6 +116,36 @@ fn fix_job(id : String) -> Json {
         "meta": [{ "text": "已结束", "kind": "word" }, { "text": " · 20 分钟前" }],
         "notices": [],
       }
+  }
+}
+
+///|
+/// Its agent, its context compactable and clearable by hand (`chat-agent-unsaid`).
+fn fix_context_actions(chat : Json) -> Json {
+  match chat {
+    Object(m) => {
+      let o = m.copy()
+      o["agents"] = Json::array(
+        items(Some(chat), "agents").map(fn(a) {
+          match a {
+            Object(am) => {
+              let ao = am.copy()
+              let session = match am.get("session") {
+                Some(Object(sm)) => sm.copy()
+                _ => Map::new()
+              }
+              session["canCompact"] = Json::boolean(true)
+              session["canClear"] = Json::boolean(true)
+              ao["session"] = Json::object(session)
+              Json::object(ao)
+            }
+            other => other
+          }
+        }),
+      )
+      Json::object(o)
+    }
+    other => other
   }
 }
 
@@ -366,6 +399,7 @@ fn fix_decisions(mode : String) -> Json {
       ],
     },
     "text": "奏 · 要不要把旧的截图也一起换掉？",
+    "question": "要不要把旧的截图也一起换掉？",
   }
   let text_card : Json = {
     "station": "ws1/st2",
@@ -384,6 +418,7 @@ fn fix_decisions(mode : String) -> Json {
     "options": [],
     "card": { "type": "text", "placeholder": "sk_test_…", "assigneeText": "等 林 回复" },
     "text": "奏 · 测试环境要一个 Stripe 的测试 key",
+    "question": "测试环境要一个 Stripe 的测试 key",
   }
   {
     "items": if mode == "decisions-text" { [text_card, options_card] } else { [options_card, text_card] },
@@ -421,7 +456,9 @@ fn decide_fixture_topic(f : Fixture, name : String, params : Map[String, Json]) 
       }
       let base = fixture_chat_topic(f, name, params)
       let base = if f.mode.has_prefix("chat-letters") { base.map(fix_with_letters) } else { base }
-      if session == "s-c1" {
+      if session == "s-c1" && f.mode == "chat-agent-unsaid" {
+        Some(base.map(fn(b) { fix_context_actions(fix_detailed_chat(b)) }))
+      } else if session == "s-c1" {
         Some(base.map(fix_detailed_chat))
       } else {
         Some(base)
@@ -430,6 +467,18 @@ fn decide_fixture_topic(f : Fixture, name : String, params : Map[String, Json]) 
     "chatLetters" => if f.mode.has_prefix("chat-letters") { Some(Some(fix_letters())) } else { None }
     "decisions" => Some(Some(fix_decisions(f.mode)))
     "history" => Some(Some(fix_history()))
+    "agentCard" if f.mode == "chat-agent-unsaid" =>
+      Some(
+        Some({
+          "work": "8 轮 · 共干了 1 小时 12 分",
+          "latest": [
+            { "key": "k1", "text": "读了 src/ui/list.mbt" },
+            { "key": "k2", "text": "跑了列表的测试" },
+            { "key": "k3", "text": "改了 src/ui/list.mbt" },
+          ],
+          "attention": [],
+        }),
+      )
     "agentCard" =>
       Some(
         Some({
@@ -581,10 +630,7 @@ pub fn open_fixture(mode : String) -> Unit {
       if mode == "history-details" {
         dui.history_tab = 1
       } else {
-        dui.opened["group/h2"] = true
-        dui.opened["step/h2/1"] = true
-        dui.opened["group/h4"] = true
-        dui.opened["step/h4/0"] = true
+        @sfpages.history_open(["h2/group", "h2/group/1", "h4/group", "h4/group/0"])
       }
     }
     "chat-info" | "chat-letters-info" => dui.sheet = Some(Info(r))
@@ -594,24 +640,16 @@ pub fn open_fixture(mode : String) -> Unit {
       dui.sheet = Some(LettersOf(r, 7.0))
     }
     // the wide frame's (wide_panel.mbt): the chat's "…" open, its services' popover, what is opened beside it
-    "chat-letters-pop" => wide.info_open = true
-    "chat-jobs-pop" => wide.jobs_open = true
+    "chat-letters-pop" => @sfdesk.open_info_pop()
+    "chat-jobs-pop" => @sfdesk.open_jobs_pop()
+    // (what is beside it: the made-up core keeps it so, fixture.mbt fixture_chat_tabs)
     "chat-letters-side" => {
       dui.letters_open = ""
       dui.letters_held[r.station + "\u{1}" + r.session] = 7.0
-      side_open(r, "letters")
     }
-    "chat-jobs-side" => side_open(r, "jobs")
-    "chat-history-side" => side_open(r, "history/s-c1")
-    "chat-model-pop" => {
-      side_open(r, "history/s-c1")
-      wide.triple = r.station + "\u{1}session:s-c1"
-    }
+    "chat-model-pop" => @sfpages.open_triple(r.station, "session:s-c1")
     // (what is typed is looked for as the bar is first drawn)
-    "chat-find" => {
-      wide.find_chat = side_key(r)
-      wide.find_field.set("截图")
-    }
+    "chat-find" => @sfpages.find_preset(side_key(r), "截图")
     "chat-letters-open" => {
       dui.letters_open = fix_letters_link
       dui.letters_held[r.station + "\u{1}" + r.session] = 7.0
@@ -619,12 +657,9 @@ pub fn open_fixture(mode : String) -> Unit {
     }
     // the sheet that publishes the chat, what a snapshot would hold read (Publish.kt openPublish)
     "chat-publish" => {
-      publish_reset()
-      publishing.of = publish_key(r.station, 7.0)
-      publishing.preview = Some(fix_preview())
-      dui.sheet = Some(Publish(r.station, 7.0))
+      @sfpages.publish_set(r, 7.0, fix_preview())
     }
-    "chat-agent" => dui.sheet = Some(AgentOf(r, "s-c1"))
+    "chat-agent" | "chat-agent-unsaid" => dui.sheet = Some(AgentOf(r, "s-c1"))
     // its station's card, from the agent's (Stations.kt openStationPeek)
     "chat-peek" => @settings.open_station_peek(r.station)
     "chat-jobs" => dui.sheet = Some(JobsOf(r))

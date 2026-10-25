@@ -23,6 +23,7 @@ import { cloud, errorText, inviteCode, needsInviteCode, useAction, useWorkspaces
 import { Illustration } from "../brand.tsx";
 import { PageViews, track, workspaceShown } from "../telemetry.ts";
 import { useNotices } from "../notify.ts";
+import { useDownloadsSaved } from "../chatDownloadsSaved.ts";
 import { useDoingFailed } from "../doing.ts";
 import { prefs, setPrefs, usePrefs } from "../prefs.ts";
 import { stationApi, useStationCall } from "../api.ts";
@@ -102,9 +103,11 @@ function Home() {
   return <SignInPage lead={inviteCode() ? t("web-pages.cloud.signInWithCode", { name: NAME }) : undefined} />;
 }
 
-/** Signed in: the workspaces, and the notices of their chats (notify.ts). */
+/** Signed in: the workspaces, the notices of their chats (notify.ts), and the chats' files the core downloaded saved
+ * (chatDownloadsSaved.ts). */
 function SignedIn() {
   useNotices();
+  useDownloadsSaved();
   return (
     <>
       <BetaGate />

@@ -211,7 +211,8 @@ export const sideTabClose = style({
   borderRadius: `calc(6px * ${vars.cornerScale})`, background: "none", color: vars.muted, cursor: "pointer",
   cornerShape: vars.cornerShape,
   selectors: {
-    "&:hover": { background: vars.line, color: vars.text },
+    // Over the tab's own light (it is lit with it): a step more, on the tab in front's grey too (docs/ui-panels.md 悬停).
+    "&:hover": { background: vars.hover, color: vars.text },
   },
 });
 /** The side panel's bar: tabs on the left, the panel switch in the top-right corner. */
@@ -242,6 +243,8 @@ globalStyle(`${detailRow} dt`, { color: vars.muted });
 globalStyle(`${detailsList} ${muted}`, { fontSize: vars.textMeta });
 globalStyle(`${sideTabAgent} > :not(${sideTabText})`, { flex: "none" });
 globalStyle(`${sideTabWrap} ${sideTab}`, { background: "none !important", paddingRight: "4px" });
+// Lit with its × (the pointer on it is on the tab too): its words come up with its ground (docs/ui-panels.md 悬停).
+globalStyle(`${sideTabWrap}:hover ${sideTab}`, { color: vars.text });
 /** Without a close button (the history's): its whole padding. */
 globalStyle(`${sideTabWrap} ${sideTab}:only-child`, { paddingRight: "12px" });
 globalStyle(`${sidePanel} ${resizeHandle}`, {
@@ -277,3 +280,5 @@ globalStyle(`${dropMarks} > svg`, {
 });
 // A sheet hides the one under it.
 globalStyle(`${dropMarks} > svg > path:first-of-type`, { fill: `light-dark(${vars.canvas}, ${vars.raised})` });
+/** A station's screen in its tab (screen/ScreenViewer.tsx `panel`): the viewer over the whole of the pane. */
+export const sideScreen = style({ position: "relative", flex: "1", minHeight: "0", overflow: "hidden" });

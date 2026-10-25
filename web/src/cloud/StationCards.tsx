@@ -1,8 +1,8 @@
 // Station overview: only alerts and available updates. Its name opens its own page (StationPage.tsx), where the rest is.
-import { Fragment, useEffect, useState, type ReactNode } from "react";
-import { stamp, type StationView } from "../api.ts";
-import type { Level, NetFigure, NetRelay, StationNet } from "../core/shapes.ts";
-import { Button, StatusDot, Time, Tip } from "../ui.tsx";
+import { Fragment, type ReactNode } from "react";
+import type { StationView } from "../api.ts";
+import type { NetFigure, NetRelay, ResourceStation, ResourceUse, StationNet } from "../core/shapes.ts";
+import { Button, StatusDot, Tip } from "../ui.tsx";
 import { useTopic } from "../core/react.ts";
 import { openLocalNetwork, useLanKept } from "../localNetwork.ts";
 import { UpdateSummary } from "../Versions.tsx";
@@ -22,11 +22,30 @@ import { tx } from "./words.tsx";
 import * as controlsCss from "@stillfail/ui/styles/controls.css.ts";
 
 /** `manager`: may update a station and its runtimes (a workspace owner or admin); `onMark`: may give it an icon or emoji. */
-/** `page`: where its own page is, opened by its name. */
-export function StationList({ stations, menu, page, manager = false, onMark, markBusy }: {
+/** `page`: where its own page is, opened by its name. `resources`: what still.fail uses of each machine (by its station),
+ * a line on its card opening its 进程 (`resourcesPage`). */
+export function StationList({ stations, menu, page, manager = false, onMark, markBusy, resources, resourcesPage }: {
   stations: StationView[]; menu(s: StationView): ReactNode; page(s: StationView): string; manager?: boolean; onMark?: ((s: StationView, mark: Mark) => void) | undefined; markBusy?: ((s: StationView) => boolean) | undefined;
+  resources?: ReadonlyMap<string, ResourceStation> | undefined; resourcesPage?: ((s: StationView) => string) | undefined;
 }) {
-  return <div className={css.cards}>{stations.map((s) => <StationCard key={s.id} s={s} menu={menu(s)} page={page(s)} manager={manager} onMark={onMark} markBusy={markBusy?.(s) ?? false} />)}</div>;
+  return <div className={css.cards}>{stations.map((s) => <StationCard key={s.id} s={s} menu={menu(s)} page={page(s)} manager={manager} onMark={onMark} markBusy={markBusy?.(s) ?? false}
+    uses={s.online ? resources?.get(s.station) : undefined} usesPage={resourcesPage?.(s)} />)}</div>;
+}
+
+/** What still.fail uses of the machine now, in a line opening its 进程. `flush`: at its section's edge (its
+ * own page), not in by a card's dot. */
+export function Uses({ use, net, to, flush = false }: { use: ResourceUse; net: boolean; to: string; flush?: boolean }) {
+  return (
+    <Link className={css.uses} to={to} data-flush={flush || undefined}>
+      <span>{t("web-pages.stations.uses", { name: NAME })}</span>
+      <span className={css.usesFigures}>
+        <span>CPU <b>{use.cpuText}</b></span>
+        <span>{t("web-main.resources.column.memory")} <b>{use.memoryText}</b></span>
+        {net && <span>{t("web-main.resources.column.net")} <b>{use.netText}</b></span>}
+      </span>
+      <ChevronRight size={14} />
+    </Link>
+  );
 }
 
 /**
@@ -97,25 +116,14 @@ export function joinedText(s: StationView): string | null {
   return s.home ? t("web-pages.stations.joinedFrom", { name: s.home }) : t("web-pages.stations.joinedElsewhere");
 }
 
-/** Whether its agents are at work, or when it was last seen. */
+/** How it is in a few words (the core's `stateText`): its agents at work in the accent. */
 export function state(s: StationView): ReactNode {
-  // Down for a security mode: that, not when it was last seen (it is up; it refused).
-  if (!s.online && s.blocked) return s.summary;
-  if (!s.online) return s.lastSeen ? tx("web-pages.stations.lastSeen", { time: <Time stamp={stamp(s, "lastSeen")} /> }) : t("web-pages.stations.neverOnline");
-  if (!s.overview) return t("common.connecting");
-  const running = s.overview.counts.running;
-  return running > 0 ? <span className={css.busy}>{t("web-pages.stations.running", { n: running })}</span> : t("web-pages.stations.idle");
+  return s.stateBusy ? <span className={css.busy}>{s.stateText}</span> : s.stateText;
 }
 
-/** What may be wrong with it, each in words, worst first. */
-export function problems(s: StationView, silent: boolean): { key: string; level: Level; text: string }[] {
-  if (s.online && silent) return [{ key: "silent", level: "amber", text: t("web-pages.stations.silent", { name: NAME }) }];
-  // Down for a security mode: why (the core's `blocked`), not how to bring it back.
-  if (!s.online && s.blocked) return [{ key: "blocked", level: "red", text: s.blocked }];
-  if (!s.online) {
-    return [{ key: "away", level: s.lastSeen ? "red" : "amber", text: s.lastSeen ? t("web-pages.stations.away", { name: NAME }) : t("web-pages.stations.neverConnected", { name: NAME }) }];
-  }
-  return [];
+/** Whether it is silent though up: no host reading for a while (the core's `problems`). */
+export function silentOf(s: StationView): boolean {
+  return s.problems.some((p) => p.key === "silent");
 }
 
 /**
@@ -205,21 +213,11 @@ function Ways({ relays }: { relays: NetRelay[] }) {
   );
 }
 
-/** Whether `waiting` has held for `ms`: a station that says it is online but has not answered for a while. */
-export function useLong(waiting: boolean, ms: number): boolean {
-  const [long, setLong] = useState(false);
-  useEffect(() => {
-    setLong(false);
-    if (!waiting) return;
-    const t = setTimeout(() => setLong(true), ms);
-    return () => clearTimeout(t);
-  }, [waiting, ms]);
-  return waiting && long;
-}
-
-function StationCard({ s, menu, page, manager, onMark, markBusy }: { s: StationView; menu: ReactNode; page: string; manager: boolean; onMark: ((s: StationView, mark: Mark) => void) | undefined; markBusy: boolean }) {
-  const silent = useLong(s.online && !s.host, 15_000);
-  const wrong = problems(s, silent);
+function StationCard({ s, menu, page, manager, onMark, markBusy, uses, usesPage }: {
+  s: StationView; menu: ReactNode; page: string; manager: boolean; onMark: ((s: StationView, mark: Mark) => void) | undefined; markBusy: boolean; uses: ResourceStation | undefined; usesPage: string | undefined;
+}) {
+  const silent = silentOf(s);
+  const wrong = s.problems;
   const foot = [s.host?.identity, joinedText(s)].filter(Boolean).join(" · ");
   const net = useStationNet(s.online ? s.station : null);
   return (
@@ -239,6 +237,7 @@ function StationCard({ s, menu, page, manager, onMark, markBusy }: { s: StationV
       {foot && <div className={css.cardFoot}>{foot}</div>}
       {wrong.length > 0 && <div className={css.warn}>{wrong.map((p) => <span key={p.key} data-level={p.level}>{p.text}</span>)}</div>}
       {net && <Net net={net} />}
+      {uses && usesPage && <Uses use={uses.use} net={uses.net} to={usesPage} />}
       {s.online && <div className={css.cardVersions}><UpdateSummary station={s.station} updates={s.overview?.updates} manager={manager} /></div>}
     </div>
   );

@@ -8,9 +8,8 @@ import { stamp } from "../api.ts";
 import { ShieldCheck } from "@stillfail/ui/icons.tsx";
 import { t } from "../i18n.ts";
 import { StationInWords, StationNamedAt } from "../StationNamed.tsx";
-import { CodeEntry, deviceName, spacedCode, useLock, useLockPrompts, type LockDraft, type LockPairing, type LockRequest, type LockView } from "../cloud/Security.tsx";
+import { CodeEntry, spacedCode, useLock, useLockPrompts, type LockDraft, type LockPairing, type LockRequest, type LockView } from "../cloud/Security.tsx";
 import { marked, WorkspaceMark } from "../WorkspaceMark.tsx";
-import { ROLE_LABEL } from "../cloud/settings.tsx";
 import { useApp } from "./app.tsx";
 import { Button, LargeTitle, ListCard, ListRow, PickRow, SectionHeader, TopBack } from "./parts.tsx";
 import { Spinner, Waiting } from "@stillfail/ui/waiting.tsx";
@@ -18,8 +17,6 @@ import * as pagesCss from "./styles/pages.css.ts";
 import * as partsCss from "./styles/parts.css.ts";
 import * as listsCss from "./styles/lists.css.ts";
 import * as css from "./Security.css.ts";
-
-const role = (r: string) => ROLE_LABEL[r as keyof typeof ROLE_LABEL] ?? r;
 
 /** What a call answers, said by toast when it fails (and `done` when it worked). */
 function useRun() {
@@ -91,8 +88,8 @@ function On({ lock }: { lock: LockView }) {
           {lock.requests.map((r) => (
             <ListRow key={r.device} onClick={lock.signs ? () => check(r) : undefined}>
               <span className={`${partsCss.mGrow} ${listsCss.mRowText}`}>
-                <span className={listsCss.mRowTitle}>{t("web-pages.security.newDeviceOf", { name: r.name || r.email })}</span>
-                <span className={listsCss.mRowNote}>{deviceName(r)} · {stamp(r, "created_at")?.ago ?? ""}</span>
+                <span className={listsCss.mRowTitle}>{t("web-pages.security.newDeviceOf", { name: r.whoText })}</span>
+                <span className={listsCss.mRowNote}>{r.deviceText} · {stamp(r, "created_at")?.ago ?? ""}</span>
               </span>
               <span className={css.mCode}>{r.code}</span>
             </ListRow>
@@ -103,7 +100,7 @@ function On({ lock }: { lock: LockView }) {
       <ListCard>
         {lock.members.map((m) => (
           <div key={m.sub}>
-            <ListRow><span className={`${partsCss.mGrow} ${listsCss.mRowTitle}`}>{m.name || m.email}</span><span className={partsCss.mSubtle}>{role(m.role)}</span></ListRow>
+            <ListRow><span className={`${partsCss.mGrow} ${listsCss.mRowTitle}`}>{m.nameText}</span><span className={partsCss.mSubtle}>{m.roleText}</span></ListRow>
             {m.devices.map((d) => (
               <DeviceRow key={d.id} d={d} renew={lock.signs ? () => void run("lock.renew", { workspace: ws, device: d.id }, t("web-pages.security.renew"), t("web-pages.security.renewed")) : undefined} />
             ))}
@@ -137,18 +134,11 @@ function On({ lock }: { lock: LockView }) {
 function DeviceRow({ d, renew }: { d: LockView["members"][number]["devices"][number]; renew?: (() => void) | undefined }) {
   const app = useApp();
   const renewing = useDoing("lock.renew", { workspace: app.entry.id, device: d.id });
-  const meta = [
-    d.kind === "web" ? t("web-pages.security.web") : t("web-pages.security.app"),
-    d.signs ? t("web-pages.security.signs") : null,
-    d.mine ? t("web-pages.security.thisDevice") : null,
-    d.daysLeft != null ? t("web-pages.security.daysLeft", { n: d.daysLeft }) : null,
-    d.recent ? t("web-pages.security.recent") : null,
-  ].filter(Boolean).join(" · ");
   return (
     <ListRow onClick={d.daysLeft != null && renew && !renewing ? renew : undefined}>
       <span className={`${partsCss.mGrow} ${listsCss.mRowText} ${css.mDevice}`}>
-        <span>{deviceName(d)}</span>
-        <span className={d.renewSoon ? css.mWarn : listsCss.mRowNote}>{meta}</span>
+        <span>{d.nameText}</span>
+        <span className={d.renewSoon ? css.mWarn : listsCss.mRowNote}>{d.metaText}</span>
       </span>
       {renewing ? <Spinner inline /> : d.daysLeft != null && renew && <span className={partsCss.mAccent}>{t("web-pages.security.renew")}</span>}
     </ListRow>
@@ -177,15 +167,16 @@ function JoinSheet({ s }: { s: LockView["stations"][number] }) {
 }
 
 /** A new device met face to face, showing a code of this one's to type there (the core's `lockPrompts`): put up wherever
- * the person is and kept up as pages change. Nothing here approves it, only the code typed on the new device; closed or
- * turned away (`lockPrompt.deny`), the code is worth nothing. */
+ * the person is and kept up as pages change. Nothing here approves it, only the code typed on the new device; turned
+ * away (`lockPrompt.deny`), the code is worth nothing; closed (`lockPrompt.hide`), it is no longer shown and the code
+ * still holds. */
 export function SecurityPrompt() {
   const app = useApp();
   const call = useCall();
   const r = useLockPrompts()?.pairing[0] ?? null;
   useEffect(() => {
     if (!r) return;
-    app.sheet({ height: 0.55, keep: true, onClose: () => void call("lockPrompt.deny", { device: r.device }), content: () => <PairSheet r={r} /> });
+    app.sheet({ height: 0.55, keep: true, onClose: () => void call("lockPrompt.hide", { device: r.device }), content: () => <PairSheet r={r} /> });
   }, [r?.device]); // eslint-disable-line react-hooks/exhaustive-deps
   return null;
 }
@@ -200,7 +191,7 @@ function PairSheet({ r }: { r: LockPairing }) {
   return (
     <div className={css.mSheet}>
       <b className={css.mSheetTitle}>{t("web-pages.security.pairTitle", { name: r.name || r.email })}</b>
-      <span className={partsCss.mSubtle}>{t("web-pages.security.pairBody", { device: deviceName(r) })}</span>
+      <span className={partsCss.mSubtle}>{t("web-pages.security.pairBody", { device: r.deviceText })}</span>
       <div className={css.mPlaces}>
         <span className={partsCss.mSubtle}>{t("web-pages.security.promptFor")}</span>
         {r.workspaces.map((w) => <span key={w.id} className={css.mPlace}>{marked(w) && <WorkspaceMark w={w} size={16} />}{w.name}</span>)}
@@ -226,8 +217,8 @@ function ConfirmSheet({ r, workspace }: { r: LockRequest; workspace: string }) {
   useEffect(() => { if (gone) app.sheet(null); }, [gone]); // eslint-disable-line react-hooks/exhaustive-deps
   return (
     <div className={css.mSheet}>
-      <b className={css.mSheetTitle}>{t("web-pages.security.confirmTitle", { name: r.name || r.email })}</b>
-      <span className={partsCss.mSubtle}>{t("web-pages.security.confirmBody", { device: deviceName(r), name: r.name || r.email })}</span>
+      <b className={css.mSheetTitle}>{t("web-pages.security.confirmTitle", { name: r.whoText })}</b>
+      <span className={partsCss.mSubtle}>{t("web-pages.security.confirmBody", { device: r.deviceText, name: r.whoText })}</span>
       <div className={css.mBigCode}>{r.code}</div>
       <span className={css.mNote}>{r.kind === "web" ? t("web-pages.security.confirmWeb") : t("web-pages.security.confirmApp")}</span>
       <div className={`${css.mPair} ${css.mStack}`}>
@@ -254,10 +245,10 @@ export function SecurityOpenScreen() {
       {!draft || draft.loading ? <Waiting shape="cards" count={3} /> : <>
         <p className={css.mLead}>{t("web-pages.security.openLead")}</p>
         <SectionHeader title={t("web-pages.security.members")} trailing={t("web-pages.security.peopleCount", { n: draft.members.length })} start={24} />
-        <ListCard>{draft.members.map((m) => <ListRow key={m.sub}><span className={`${partsCss.mGrow} ${listsCss.mRowText}`}><span className={listsCss.mRowTitle}>{m.name || m.email}</span><span className={listsCss.mRowNote}>{m.email}</span></span><span className={partsCss.mSubtle}>{role(m.role)}</span></ListRow>)}</ListCard>
+        <ListCard>{draft.members.map((m) => <ListRow key={m.sub}><span className={`${partsCss.mGrow} ${listsCss.mRowText}`}><span className={listsCss.mRowTitle}>{m.nameText}</span><span className={listsCss.mRowNote}>{m.email}</span></span><span className={partsCss.mSubtle}>{m.roleText}</span></ListRow>)}</ListCard>
         <SectionHeader title={t("web-pages.security.devices")} trailing={t("web-pages.security.devicesWhich")} start={24} />
         <ListCard>{draft.devices.map((d) => (
-          <PickRow key={d.id} label={`${d.person} · ${d.current ? t("web-pages.security.thisDevice") : deviceName(d)}`} sub={d.older ? t("web-pages.security.olderHow") : d.kind === "web" ? t("web-pages.security.web") : t("web-pages.security.app")}
+          <PickRow key={d.id} label={d.nameText} sub={d.howText}
             checked={d.on} enabled={!d.fixed} onClick={() => toggle(d.id)} />
         ))}</ListCard>
         <SectionHeader title="Station" start={24} />

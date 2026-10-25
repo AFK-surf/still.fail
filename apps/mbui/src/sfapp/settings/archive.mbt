@@ -107,14 +107,14 @@ fn archive_page(c : @ui.Ctx, core : Core, here : Here) -> Unit {
         Error(e) => {
           let t = @sf.theme()
           c.box(w=Fill(1.0), padx=20.0, pady=8.0, fn() {
-            c.text(e, size=13.0, color=t.p.red, w=Fill(1.0), line=18.0) |> ignore
+            c.text(e, size=t.t.meta, color=t.p.red, w=Fill(1.0), line=18.0) |> ignore
           })
           |> ignore
         }
         Note(n) => {
           let t = @sf.theme()
           c.box(w=Fill(1.0), padx=20.0, pady=12.0, fn() {
-            c.text(n, size=14.0, color=t.p.muted, w=Fill(1.0), line=20.0) |> ignore
+            c.text(n, size=t.t.meta, color=t.p.muted, w=Fill(1.0), line=20.0) |> ignore
           })
           |> ignore
         }
@@ -192,10 +192,10 @@ fn archive_row(c : @ui.Ctx, core : Core, it : Json) -> Unit {
     id~,
     fn() {
       c.box(dir=Row, w=Fill(1.0), h=Px(34.0), gap=10.0, align=ACenter, fn() {
-        c.text(title, size=16.0, color=t.p.text, wrap=false, w=Fill(1.0), line=22.0) |> ignore
+        c.text(title, size=t.t.ui, color=t.p.text, wrap=false, w=Fill(1.0), line=22.0) |> ignore
         // (read as how it was archived: ArchiveRow's contentDescription = item.how)
         c.box(label=text(v, "how"), fn() {
-          c.text(join([text(v, "place"), text(v, "clock")], "  "), size=12.0, color=t.p.subtle, wrap=false)
+          c.text(join([text(v, "place"), text(v, "clock")], "  "), size=t.t.caption, color=t.p.subtle, wrap=false)
           |> ignore
         })
         |> ignore
@@ -252,7 +252,7 @@ fn archive_row(c : @ui.Ctx, core : Core, it : Json) -> Unit {
       })
       |> ignore
       c.box(w=Fill(1.0), pr=10.0, fn() {
-        c.text(text(v, "last"), size=14.0, color=t.p.muted, wrap=false, w=Fill(1.0), line=20.0) |> ignore
+        c.text(text(v, "last"), size=t.t.meta, color=t.p.muted, wrap=false, w=Fill(1.0), line=20.0) |> ignore
       })
       |> ignore
       // Archive.kt Row: clickable over the whole row

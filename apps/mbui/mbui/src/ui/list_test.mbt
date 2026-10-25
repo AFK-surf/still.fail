@@ -79,9 +79,9 @@ test "list: rows far smaller than the estimate fill the first frame" {
   let (first, last) = t.visible()
   assert_true(first == 0 && last >= 133)
   t.check_rows(0.0, 400.0)
-  // the first frame lays them out, and builds the view again in it over the rows in view as they are now told (what
-  // it read of them first was from before they were laid out)
-  assert_eq(frames[0], 2)
+  // the first frame lays them out, built once: the view read nothing of the list (what reads its rows in view is built
+  // again from them in that frame: readback_test)
+  assert_eq(frames[0], 1)
   assert_eq(t.ctx().frame_number(), 1)
 }
 
@@ -252,6 +252,52 @@ test "list: scrolling up into rows never measured moves by exactly the step" {
 }
 
 ///|
+test "list: scrolling up into a row cut once it is measured moves by exactly the step, never back to its end" {
+  // an agent's history read upward from its end (still.fail's): every sixth row holds a card's words, cut to 100 once
+  // it knows how tall they are (a fold): laid out whole the first time it is built, cut as the frame is built again
+  // from what its layout read
+  let t = @ui.Tester::new(
+    fn(c) {
+      c.list(
+        "list",
+        60,
+        40.0,
+        fn(i) {
+          if i % 6 == 0 {
+            let words = c.id("words")
+            let body = fn() {
+              c.box(h=Px(600.0), id=words, fn() { c.text("Row \{i}", wrap=false) |> ignore }) |> ignore
+            }
+            if c.laid_size(words) is Some(_) {
+              c.box(h=Px(100.0), clip=true, body) |> ignore
+            } else {
+              c.box(clip=true, body) |> ignore
+            }
+          } else {
+            c.box(h=Px(30.0), fn() { c.text("Row \{i}", wrap=false) |> ignore }) |> ignore
+          }
+        },
+        stick_end=true,
+      )
+      |> ignore
+    },
+    w=300.0,
+    h=400.0,
+  )
+  t.move(100.0, 100.0)
+  for _ in 0..<40 {
+    let first = t.visible().0
+    let before = y_of(t, first)
+    t.wheel(100.0, 100.0, -50.0)
+    match t.row(first) {
+      Some((_, y, _, _)) => assert_eq(y, before + 50.0)
+      None => fail("row \{first} out of view after a step of 50 toward the start")
+    }
+    t.check_rows(0.0, 400.0)
+  }
+}
+
+///|
 test "list: rows come in above what is in view, which stays where it is" {
   let n = [100]
   let first = [0]
@@ -398,14 +444,16 @@ test "list: a list not built (a page over it) is at rest, its scroll bar too; sh
 }
 
 ///|
-test "list: on Android a list scrolled draws no scroll bar, and is at rest once its scroll is (Compose's LazyColumn)" {
+test "list: a finger's list scrolled draws no scroll bar, and is at rest once its scroll is (scroll_bar.mbt)" {
   let t = @ui.Tester::new(boxes(fn() { 200 }, varied), w=300.0, h=400.0, platform=2)
   t.move(100.0, 100.0)
-  t.wheel(100.0, 100.0, -300.0)
-  t.frame()
-  assert_true(t.drawn_shapes().iter().all(fn(s) { !(s.0 == 300.0 - 8.0 && s.2 == 5.0) }), msg="\{t.drawn_shapes()}")
-  t.run_for(@ui.wheel_ease_ms * 10.0)
-  assert_true(t.ctx().list_rest("list") <= t.time())
+  t.wheel(100.0, 100.0, 300.0)
+  t.run_for(@ui.scrollbar_fade_ms)
+  assert_true(t.drawn_rects().iter().all(fn(r) { r.2 != 3.0 }), msg="\{t.drawn_rects()}")
+  let rest = t.ctx().list_rest("list")
+  if rest > t.time() {
+    t.run_for(rest - t.time())
+  }
   t.assert_idle()
 }
 
@@ -506,3 +554,45 @@ test "a row followed from its top: a glide to the end stops with its top under t
 ///|
 /// How far under the view's top a followed row stops in this test.
 let test_follow_margin : Double = 12.0
+
+///|
+/// Rows 300 high, each with its words at its top and a mark 18 square held 8 under the list's top (Ctx::stick) as the
+/// row scrolls past.
+fn stuck_rows() -> (@ui.Ctx) -> Unit {
+  fn(c) {
+    c.list("list", 20, 300.0, fn(i) {
+      c.box(h=Px(300.0), fn() {
+        c.text("Row \{i}", wrap=false) |> ignore
+        c.layer(fn() {
+          let mark = c.box(w=Px(18.0), h=Px(18.0), fn() { c.text("Mark \{i}", wrap=false) |> ignore })
+          c.stick(mark, 8.0)
+        })
+        |> ignore
+      })
+      |> ignore
+    })
+    |> ignore
+  }
+}
+
+///|
+test "list: what a row holds stuck stays under the list's top as the row scrolls past, and leaves with its foot" {
+  let t = @ui.Tester::new(stuck_rows(), w=300.0, h=400.0)
+  // its row at the list's top: held 8 under it already (as CSS's sticky is), its words at the top
+  let (_, y0, _, _) = t.rect_of("Mark 0").unwrap()
+  assert_eq(y0, 8.0)
+  assert_eq(t.rect_of("Row 0").unwrap().1, 0.0)
+  // the row 100 up: the mark 8 under the list's top, its words gone up with the row
+  t.move(100.0, 100.0)
+  t.wheel(100.0, 100.0, 100.0)
+  let (_, y1, _, _) = t.rect_of("Mark 0").unwrap()
+  assert_eq(y1, 8.0)
+  assert_eq(t.rect_of("Row 0").unwrap().1, -100.0)
+  // the row's foot coming up past it: it goes with the foot, 18 over it
+  t.wheel(100.0, 100.0, 190.0)
+  let (_, y2, _, _) = t.rect_of("Mark 0").unwrap()
+  assert_eq(y2, 300.0 - 290.0 - 18.0)
+  // the next row's own, where it is laid out
+  let (_, y3, _, _) = t.rect_of("Mark 1").unwrap()
+  assert_eq(y3, 10.0)
+}

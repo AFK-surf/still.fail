@@ -27,8 +27,7 @@ typedef struct {
   double size;
   int weight;
   int style;  // 1 italic, 2 the code face
-  int done;
-  double u, v, w, h, ox, oy;
+  double w, h, ox, oy;
   int color;
 } glyph_entry;
 
@@ -47,8 +46,10 @@ static WCHAR *pool;
 static size_t pool_len, pool_cap;
 static int *table;  // open addressing: entry index + 1, 0 is empty
 static size_t table_cap;
-static int pack_x, pack_y, pack_h;
 static int generation;
+// the glyph drawn last (mb_host_glyph), its picture until it is put in the atlas (mb_host_glyph_put)
+static int held_key = -1, held_w, held_h;
+static uint8_t *held_px;
 static struct { double size; int weight; int style; IDWriteTextFormat *f; } formats[32];
 static int n_formats;
 
@@ -95,19 +96,22 @@ static struct {
   int n;
   IDWriteFontCollection1 *fc;
   WCHAR family[128];
+  bool system;  // a family installed here (mb_host_face_add_family): the system's collection, no files of its own
 } faces[MB_FACES];
 // fonts given as bytes: DirectWrite's in-memory loader (it keeps a copy of each)
 static IDWriteInMemoryFontFileLoader *mem_loader;
 
 // The face a style is set in: the one it names; else code's (style & 2), what people wrote's (style & 16), the app's
 // words' (not the serif face's); 0 none given.
+static bool face_has(int f) { return faces[f].fc || faces[f].system; }
+
 static int face_id(int style) {
   int f = (style >> 8) & 15;
-  if (f > 0) return faces[f].fc ? f : 0;
-  if (style & 2) return faces[3].fc ? 3 : 0;
-  if ((style & 16) && faces[2].fc) return 2;
+  if (f > 0) return face_has(f) ? f : 0;
+  if (style & 2) return face_has(3) ? 3 : 0;
+  if ((style & 16) && face_has(2)) return 2;
   if (style & 4) return 0;
-  return faces[1].fc ? 1 : 0;
+  return face_has(1) ? 1 : 0;
 }
 
 // Face `f`'s files as a collection, its family's name from it (false: not fonts DirectWrite reads).
@@ -137,6 +141,7 @@ static bool face_build(int f) {
   if (ok) {
     if (faces[f].fc) faces[f].fc->Release();
     faces[f].fc = fc;
+    faces[f].system = false;
     fc = NULL;
   }
   if (names) names->Release();
@@ -194,15 +199,115 @@ extern "C" int32_t mb_host_face_add_bytes(int32_t f, moonbit_bytes_t data, int32
 }
 
 extern "C" void mb_host_face_clear(int32_t f) {
-  if (f <= 0 || f >= MB_FACES || !faces[f].fc) return;
+  if (f <= 0 || f >= MB_FACES || !face_has(f)) return;
   for (int i = 0; i < faces[f].n; i++) {
     free(faces[f].paths[i]);
     free(faces[f].data[i]);
   }
   faces[f].n = 0;
-  faces[f].fc->Release();
+  if (faces[f].fc) faces[f].fc->Release();
   faces[f].fc = NULL;
+  faces[f].system = false;
   faces_changed();
+}
+
+// The system's font collection's family named `name` (its index), if there is one.
+static bool system_family(const WCHAR *name) {
+  IDWriteFontCollection *fc = NULL;
+  if (FAILED(dw->GetSystemFontCollection(&fc, FALSE))) return false;
+  UINT32 at = 0;
+  BOOL there = FALSE;
+  fc->FindFamilyName(name, &at, &there);
+  fc->Release();
+  return there;
+}
+
+// Face `f` set in the family installed here named `family`: the system's collection, by its name.
+extern "C" int32_t mb_host_face_add_family(int32_t f, moonbit_string_t family) {
+  init();
+  int len = Moonbit_array_length(family);
+  if (f <= 0 || f >= MB_FACES || len <= 0 || len >= 128) return 0;
+  WCHAR name[128];
+  memcpy(name, family, sizeof(WCHAR) * len);
+  name[len] = 0;
+  if (!system_family(name)) return 0;
+  for (int i = 0; i < faces[f].n; i++) {
+    free(faces[f].paths[i]);
+    free(faces[f].data[i]);
+  }
+  faces[f].n = 0;
+  if (faces[f].fc) faces[f].fc->Release();
+  faces[f].fc = NULL;
+  memcpy(faces[f].family, name, sizeof(name));
+  faces[f].system = true;
+  faces_changed();
+  return 1;
+}
+
+// The font families installed here, as a JSON array of their names (each its name in the user's language, else its
+// first), sorted as the collection has them.
+// the user's locale, the families' names are shown and sorted in
+static WCHAR names_locale[LOCALE_NAME_MAX_LENGTH];
+
+static int name_order(const void *a, const void *b) {
+  return CompareStringEx(names_locale[0] ? names_locale : NULL, LINGUISTIC_IGNORECASE, *(const WCHAR *const *)a, -1,
+                         *(const WCHAR *const *)b, -1, NULL, NULL, 0) - CSTR_EQUAL;
+}
+
+extern "C" moonbit_string_t mb_host_local_font_families(void) {
+  init();
+  IDWriteFontCollection *fc = NULL;
+  if (FAILED(dw->GetSystemFontCollection(&fc, FALSE))) return moonbit_make_string_raw(0);
+  if (!GetUserDefaultLocaleName(names_locale, LOCALE_NAME_MAX_LENGTH)) names_locale[0] = 0;
+  UINT32 count = fc->GetFontFamilyCount();
+  WCHAR **all = (WCHAR **)calloc(count ? count : 1, sizeof(WCHAR *));
+  UINT32 had = 0;
+  for (UINT32 i = 0; i < count; i++) {
+    IDWriteFontFamily *fam = NULL;
+    IDWriteLocalizedStrings *names = NULL;
+    WCHAR name[256];
+    name[0] = 0;
+    if (SUCCEEDED(fc->GetFontFamily(i, &fam)) && SUCCEEDED(fam->GetFamilyNames(&names))) {
+      UINT32 at = 0;
+      BOOL there = FALSE;
+      if (names_locale[0]) names->FindLocaleName(names_locale, &at, &there);
+      if (!there) at = 0;
+      UINT32 len = 0;
+      if (SUCCEEDED(names->GetStringLength(at, &len)) && len < 255) names->GetString(at, name, 256);
+    }
+    if (names) names->Release();
+    if (fam) fam->Release();
+    if (name[0]) all[had++] = _wcsdup(name);
+  }
+  fc->Release();
+  // in the order of the user's language, as the web's localeCompare
+  qsort(all, had, sizeof(WCHAR *), name_order);
+  size_t cap = 4096, n = 0;
+  WCHAR *out = (WCHAR *)malloc(sizeof(WCHAR) * cap);
+  out[n++] = L'[';
+  for (UINT32 i = 0; i < had; i++) {
+    const WCHAR *name = all[i];
+    size_t len = wcslen(name);
+    // its name as a JSON string: a quote and a backslash escaped, the rest as it is
+    if (n + 2 * len + 4 >= cap) {
+      cap = (n + 2 * len + 4) * 2;
+      out = (WCHAR *)realloc(out, sizeof(WCHAR) * cap);
+    }
+    if (n > 1) out[n++] = L',';
+    out[n++] = L'"';
+    for (size_t k = 0; k < len; k++) {
+      if (name[k] == L'"' || name[k] == L'\\') out[n++] = L'\\';
+      out[n++] = name[k] < 0x20 ? L' ' : name[k];
+    }
+    out[n++] = L'"';
+    free(all[i]);
+  }
+  free(all);
+  out[n++] = L']';
+  moonbit_string_t s = moonbit_make_string_raw((int32_t)n);
+  memcpy(s, out, sizeof(WCHAR) * n);
+  free(out);
+  return s;
 }
 
 static IDWriteTextFormat *format_for(double size, int weight, int style) {
@@ -211,7 +316,7 @@ static IDWriteTextFormat *format_for(double size, int weight, int style) {
   IDWriteTextFormat *f = NULL;
   int face = face_id(style);
   dw->CreateTextFormat(face ? faces[face].family : (style & 2) ? MONO : (style & 4) ? SERIF : FAMILY,
-                       face ? faces[face].fc : NULL, (DWRITE_FONT_WEIGHT)weight,
+                       face && faces[face].fc ? faces[face].fc : NULL, (DWRITE_FONT_WEIGHT)weight,
                        (style & 1) ? DWRITE_FONT_STYLE_ITALIC : DWRITE_FONT_STYLE_NORMAL,
                        DWRITE_FONT_STRETCH_NORMAL, (FLOAT)size, L"zh-cn", &f);
   f->SetWordWrapping(DWRITE_WORD_WRAPPING_NO_WRAP);
@@ -226,17 +331,24 @@ static IDWriteTextFormat *format_for(double size, int weight, int style) {
   return f;
 }
 
-// style & 8: no ligatures (words with letter spacing, each cluster spaced on its own): liga and clig off
-static IDWriteTypography *no_ligatures;
+// style & 8: no ligatures (words with letter spacing, each cluster spaced on its own): liga and clig off; style & 32:
+// digits all one width (style.mbt style_tabular): tnum. One typography for each of the three ways they go together.
+static IDWriteTypography *typographies[4];
 
 static void set_style_features(IDWriteTextLayout *l, int len, int style) {
-  if (!(style & 8)) return;
-  if (!no_ligatures) {
-    dw->CreateTypography(&no_ligatures);
-    no_ligatures->AddFontFeature({DWRITE_FONT_FEATURE_TAG_STANDARD_LIGATURES, 0});
-    no_ligatures->AddFontFeature({DWRITE_FONT_FEATURE_TAG_CONTEXTUAL_LIGATURES, 0});
+  int k = ((style & 8) ? 1 : 0) | ((style & 32) ? 2 : 0);
+  if (!k) return;
+  if (!typographies[k]) {
+    IDWriteTypography *t = NULL;
+    dw->CreateTypography(&t);
+    if (k & 1) {
+      t->AddFontFeature({DWRITE_FONT_FEATURE_TAG_STANDARD_LIGATURES, 0});
+      t->AddFontFeature({DWRITE_FONT_FEATURE_TAG_CONTEXTUAL_LIGATURES, 0});
+    }
+    if (k & 2) t->AddFontFeature({DWRITE_FONT_FEATURE_TAG_TABULAR_FIGURES, 1});
+    typographies[k] = t;
   }
-  l->SetTypography(no_ligatures, {0, (UINT32)len});
+  l->SetTypography(typographies[k], {0, (UINT32)len});
 }
 
 static IDWriteTextLayout *make_layout(const WCHAR *s, int len, double size, int weight, int style) {
@@ -334,7 +446,7 @@ static int intern(const WCHAR *s, int len, double size, int weight, int style) {
   }
   memcpy(pool + pool_len, s, (size_t)len * sizeof(WCHAR));
   int id = n_entries++;
-  entries[id] = {(int)pool_len, len, size, weight, style, 0, 0, 0, 0, 0, 0, 0, 0};
+  entries[id] = {(int)pool_len, len, size, weight, style, 0, 0, 0, 0, 0};
   pool_len += len;
   if ((size_t)n_entries * 2 > table_cap) {
     free(table);
@@ -394,9 +506,11 @@ extern "C" int32_t mb_host_text_key(moonbit_string_t text, double size, int32_t 
 
 extern "C" int32_t mb_host_atlas_generation(void) { return generation; }
 
+// (one atlas: colour glyphs in it with the others)
+extern "C" int32_t mb_host_atlas_size(int32_t colour) { return colour ? 0 : mb_atlas_size; }
+
+// What was drawn before is drawn again: MoonBit drops its glyphs as the generation moves on.
 static void reset_atlas(void) {
-  for (int i = 0; i < n_entries; i++) entries[i].done = 0;
-  pack_x = pack_y = pack_h = 0;
   generation++;
 }
 
@@ -475,9 +589,14 @@ static void ensure_target(void) {
   rt_scale = text_scale;
 }
 
+// Glyph `key` drawn in white, a pixel round its bounds: its box (in its entry) and its picture, held for
+// mb_host_glyph_put (where it goes in the atlas is MoonBit's: hostapi's atlas.mbt).
 static void rasterize(int key) {
   glyph_entry *e = &entries[key];
-  e->done = 1;
+  free(held_px);
+  held_px = NULL;
+  held_key = -1;
+  e->w = e->h = 0;
   IDWriteTextLayout *l = make_layout(pool + e->off, e->len, e->size, e->weight, e->style);
   double sc = text_scale;
   ColorProbe probe;
@@ -515,16 +634,6 @@ static void rasterize(int key) {
     l->Release();
     return;
   }
-  if (pack_x + pw + 1 > mb_atlas_size) {
-    pack_x = 0;
-    pack_y += pack_h + 1;
-    pack_h = 0;
-  }
-  if (pack_y + ph + 1 > mb_atlas_size) {
-    // full: start over; MoonBit drops its glyph cache when the generation changes
-    reset_atlas();
-    e->done = 1;
-  }
   ensure_target();
   rt->BeginDraw();
   rt->Clear(D2D1::ColorF(0, 0, 0, 0));
@@ -554,19 +663,23 @@ static void rasterize(int key) {
     lock->Release();
     // a color font's glyph drawn in the text's colour (Segoe UI Emoji's flags are letters): a mask after all
     color = color == 2;
-    mb_atlas_upload(pack_x, pack_y, pw, ph, px);
-    free(px);
+    held_key = key;
+    held_w = pw;
+    held_h = ph;
+    held_px = px;
   }
-  e->u = pack_x;
-  e->v = pack_y;
   e->w = pw / sc;
   e->h = ph / sc;
   e->ox = x0;
   e->oy = y0 - (nl ? lm.baseline : 0);
   e->color = color;
-  pack_x += pw + 1;
-  if (ph > pack_h) pack_h = ph;
   l->Release();
+}
+
+// (a glyph drawn as it is first asked for: nothing ahead)
+extern "C" void mb_host_glyphs_ahead(int32_t *keys, int32_t n) {
+  (void)keys;
+  (void)n;
 }
 
 extern "C" void mb_host_glyph(int32_t key, double *out) {
@@ -574,15 +687,24 @@ extern "C" void mb_host_glyph(int32_t key, double *out) {
     for (int i = 0; i < 7; i++) out[i] = 0;
     return;
   }
-  if (!entries[key].done) rasterize(key);
+  rasterize(key);
   glyph_entry *e = &entries[key];
-  out[0] = e->u;
-  out[1] = e->v;
+  out[0] = 0;
+  out[1] = 0;
   out[2] = e->w;
   out[3] = e->h;
   out[4] = e->ox;
   out[5] = e->oy;
   out[6] = e->color;
+}
+
+// The glyph drawn last put in the atlas, its top left at x, y.
+extern "C" void mb_host_glyph_put(int32_t key, int32_t x, int32_t y) {
+  if (key != held_key || !held_px) return;
+  mb_atlas_upload(x, y, held_w, held_h, held_px);
+  free(held_px);
+  held_px = NULL;
+  held_key = -1;
 }
 
 // ---------------------------------------------------------------------------

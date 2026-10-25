@@ -11,15 +11,32 @@
 // song, a PDF, a big file; `station.file`, `station.file.part` with `keep`): `chat`, by the station, the session and
 // the name (a file sent never changes), its size as the message says; none let go by itself, but by the person, a
 // file at a time (`cache.file.clear`), a chat's with it (`cache.clear`), and listed with its chat (`cache.usage`).
+// An image sent up from this device is kept too, as it went (`sent`, composer.ts): by its station and the name the
+// station keeps it under, its chat shows it and opens it from here, not read back from the station it went to; the
+// least lately read go past SENT_MAX, and it is counted and let go with the drives' files.
+// A file going up with a message (`outbox`, composer.ts) is kept too as it goes, with what it is and, once up, what
+// its station said of it (`noteUpload`): a message whose file had not gone, or whose own sending had not come, when the
+// app ended goes on from here as it starts again, not failed for a source the app no longer has. It goes as its message
+// is sent or discarded (`dropUpload`), and one left behind a week (a message gone some other way) as the core starts;
+// never let go by `clear` while its message waits.
+// The downloads asked of this device and not yet saved are written down here too (views/downloads.ts), beside the
+// files they bring: one stopped by the app's end goes on as it starts again. A chat's file saved where the person
+// keeps files, where the app can read it back (Host.savedRead), is that file's copy on the device: what was kept of it
+// goes, and it is read from where it was saved (`saved`) until it is no longer there (moved, deleted, changed), then
+// read and kept as any other again.
 import { Effect } from "effect";
 import type { Host, Sql } from "./host.ts";
 
-export type KeepKind = "file" | "played" | "chat";
+export type KeepKind = "file" | "played" | "chat" | "sent" | "outbox";
 
 /// Files read whole or from their start: the least lately read go past this (DriveCache.kt FILES_MAX).
 export const FILES_MAX = 512 * 1024 * 1024;
 /// Videos and songs, by the ranges played (DriveCache.kt PLAYED_MAX).
 export const PLAYED_MAX = 1536 * 1024 * 1024;
+/// Images sent up from here: the least lately read go past this.
+export const SENT_MAX = 256 * 1024 * 1024;
+/// How long a file going up with a message is kept for it at most: one left behind (its message gone some other way).
+export const OUTBOX_KEPT_MS = 7 * 24 * 3600_000;
 /// How seldom a file's last reading is written down: a video read a part a second is not a write a second.
 const USED_EVERY_MS = 60_000;
 
@@ -38,6 +55,17 @@ export function chatKeptId(station: string, key: string, name: string): string {
   return `chat\n${station}\n${key}\n${name}`;
 }
 
+/// A file sent up from here, among those kept: its station, and the name the station keeps it under (unique there, and
+/// kept as it moves the file into the chat's uploads), whichever chat it is in (`sent` first: no station's is so).
+export function sentKeptId(station: string, name: string): string {
+  return `sent\n${station}\n${name}`;
+}
+
+/// A file going up with a message, among those kept: its upload's id (`outbox` first: no station's is so).
+export function outboxKeptId(id: string): string {
+  return `outbox\n${id}`;
+}
+
 /// A chat's file kept: where it is, its size, the bytes kept of it (fewer: a part of it read), when it was last read.
 export type ChatKept = { station: string; key: string; name: string; size: number; bytes: number; used: number };
 
@@ -50,7 +78,7 @@ export class DriveKept {
   /// Files a part of which is being written, how many: not let go meanwhile.
   readonly #writing = new Map<string, number>();
 
-  constructor(host: Host, most: Record<KeepKind, number> = { file: FILES_MAX, played: PLAYED_MAX, chat: Number.POSITIVE_INFINITY }) {
+  constructor(host: Host, most: Record<KeepKind, number> = { file: FILES_MAX, played: PLAYED_MAX, chat: Number.POSITIVE_INFINITY, sent: SENT_MAX, outbox: Number.POSITIVE_INFINITY }) {
     this.#host = host;
     this.#most = most;
   }
@@ -68,7 +96,9 @@ export class DriveKept {
           used INTEGER NOT NULL
         ); CREATE TABLE IF NOT EXISTS part (
           id TEXT NOT NULL, at INTEGER NOT NULL, length INTEGER NOT NULL, key TEXT NOT NULL, PRIMARY KEY (id, at, length)
-        );`);
+        ); CREATE TABLE IF NOT EXISTS download (id TEXT PRIMARY KEY, json TEXT NOT NULL);
+        CREATE TABLE IF NOT EXISTS saved (id TEXT PRIMARY KEY, at TEXT NOT NULL, size INTEGER NOT NULL, type TEXT NOT NULL);
+        CREATE TABLE IF NOT EXISTS upload (id TEXT PRIMARY KEY, json TEXT NOT NULL, at INTEGER NOT NULL);`);
         return (this.#sql = opened.success);
       } catch {
         return (this.#sql = null);
@@ -79,7 +109,7 @@ export class DriveKept {
   #kept(sql: Sql, id: string): Kept | null {
     const r = sql.all("SELECT kind, mtime, size, type, used FROM kept WHERE id = ?", [id])[0];
     if (r === undefined) return null;
-    return { kind: r[0] === "played" || r[0] === "chat" ? r[0] : "file", mtime: Number(r[1]), size: Number(r[2]), type: String(r[3] ?? ""), used: Number(r[4]) };
+    return { kind: r[0] === "played" || r[0] === "chat" || r[0] === "sent" || r[0] === "outbox" ? r[0] : "file", mtime: Number(r[1]), size: Number(r[2]), type: String(r[3] ?? ""), used: Number(r[4]) };
   }
 
   /// A file and its parts let go: their rows at once, their bytes after.
@@ -97,9 +127,18 @@ export class DriveKept {
   /// Bytes `offset` to `offset + length` of the file `id` as it was (`mtime`, `size`), with its type, if they are kept
   /// (and it is written down as read now); else null. What was kept of it as it was before it changed goes.
   read(id: string, mtime: number, size: number, offset: number, length: number): Effect.Effect<{ type: string; bytes: Uint8Array } | null> {
+    return Effect.map(this.from(id, mtime, size, offset, length), (got) => (got !== null && got.bytes.length === Math.max(0, Math.min(offset + length, size) - offset) ? got : null));
+  }
+
+  /// Bytes from `offset` (`length` at most) of the file `id` as it was (`mtime`, `size`), as far as they are kept on from
+  /// there, with its type: all of them, fewer (those up to the first byte not kept), or null when none from `offset` is.
+  /// What was kept of it as it was before it changed goes.
+  from(id: string, mtime: number, size: number, offset: number, length: number): Effect.Effect<{ type: string; bytes: Uint8Array } | null> {
     return Effect.gen({ self: this }, function* () {
       const sql = yield* this.#db();
       if (sql === null) return null;
+      const saved = yield* this.#savedRead(sql, id, size, offset, length);
+      if (saved !== null) return saved;
       const kept = this.#kept(sql, id);
       if (kept === null) return null;
       if (kept.mtime !== mtime || kept.size !== size) {
@@ -117,20 +156,31 @@ export class DriveKept {
       while (at < end) {
         let best: Part | null = null;
         for (const p of parts) if (p.at <= at && p.at + p.length > at && (best === null || p.at + p.length > best.at + best.length)) best = p;
-        if (best === null) return null;
+        if (best === null) break;
         const bytes = yield* Effect.orElseSucceed(this.#host.storageGet(best.key), () => null);
         if (bytes === null || bytes.length !== best.length) {
           // Gone from under it (the storage cleared by the system, or the part never written whole).
           sql.run("DELETE FROM part WHERE id = ? AND at = ? AND length = ?", [id, best.at, best.length]);
-          return null;
+          break;
         }
         const to = Math.min(end, best.at + best.length);
         out.set(bytes.subarray(at - best.at, to - best.at), at - offset);
         at = to;
       }
+      if (at === offset && end > offset) return null;
       const now = this.#host.nowMs();
       if (now - kept.used >= USED_EVERY_MS) sql.run("UPDATE kept SET used = ? WHERE id = ?", [now, id]);
-      return { type: kept.type, bytes: out };
+      return { type: kept.type, bytes: at === end ? out : out.subarray(0, at - offset) };
+    });
+  }
+
+  /// Bytes `offset` to `offset + length` of the file `id` kept as it was once and for all (a sent one: its size is what
+  /// was kept), with its type and whole size, if they are all kept; else null.
+  held(id: string, offset = 0, length = Number.POSITIVE_INFINITY): Effect.Effect<{ type: string; size: number; bytes: Uint8Array } | null> {
+    return Effect.flatMap(this.#db(), (sql) => {
+      const kept = sql === null ? null : this.#kept(sql, id);
+      if (kept === null) return Effect.succeed(null);
+      return Effect.map(this.read(id, kept.mtime, kept.size, offset, length), (got) => (got === null ? null : { ...got, size: kept.size }));
     });
   }
 
@@ -187,24 +237,143 @@ export class DriveKept {
     return Effect.forEach(drop, (id) => this.#drop(sql, id), { discard: true });
   }
 
+  /// Whether all of the file `id`, `size` long, is kept (its parts from its start to its end, one after another).
+  whole(id: string, size: number): Effect.Effect<boolean> {
+    return Effect.map(this.#db(), (sql) => {
+      const kept = sql === null ? null : this.#kept(sql, id);
+      if (sql === null || kept === null || kept.size !== size) return false;
+      let end = 0;
+      for (const r of sql.all("SELECT at, length FROM part WHERE id = ? ORDER BY at", [id])) {
+        const [at, length] = [Number(r[0]), Number(r[1])];
+        if (at > end) return false;
+        end = Math.max(end, at + length);
+      }
+      return end >= size;
+    });
+  }
+
   /// What is kept of the file `id` let go (found changed on the station), unless a part of it is being written.
   forget(id: string): Effect.Effect<void> {
     return Effect.flatMap(this.#db(), (sql) => (sql === null || this.#writing.has(id) ? Effect.void : this.#drop(sql, id)));
   }
 
-  /// The bytes kept of the drives' files (not the chats').
+  /// Whether anything of the file `id` is kept (or it was saved where it can be read back).
+  has(id: string): Effect.Effect<boolean> {
+    return Effect.map(this.#db(), (sql) => sql !== null && (this.#kept(sql, id) !== null || sql.all("SELECT 1 FROM saved WHERE id = ?", [id]).length > 0));
+  }
+
+  /// Bytes `offset` to `offset + length` of the file `id` read from where it was saved, when it was (at its `size`) and
+  /// they are all still there; else null, and once it is found gone or changed it is no longer taken as saved.
+  #savedRead(sql: Sql, id: string, size: number, offset: number, length: number): Effect.Effect<{ type: string; bytes: Uint8Array } | null> {
+    const r = sql.all("SELECT at, size, type FROM saved WHERE id = ?", [id])[0];
+    const read = this.#host.savedRead;
+    if (r === undefined || read === undefined) return Effect.succeed(null);
+    const [at, was, type] = [String(r[0]), Number(r[1]), String(r[2])];
+    const end = Math.min(offset + length, size);
+    const gone = () => { sql.run("DELETE FROM saved WHERE id = ?", [id]); return null; };
+    if (was !== size) return Effect.sync(gone);
+    return Effect.map(Effect.orElseSucceed(read.call(this.#host, at, offset, end), () => null), (bytes) =>
+      bytes !== null && bytes.length === Math.max(0, end - offset) ? { type, bytes } : gone());
+  }
+
+  /// The chat's file `id` saved where the person keeps files (`at`, as the system named it), its whole `size`: when it
+  /// can be read back there (its last byte read), that is its copy on the device and what was kept of it goes (true);
+  /// else nothing changes (false).
+  saved(id: string, at: string, size: number): Effect.Effect<boolean> {
+    return Effect.gen({ self: this }, function* () {
+      const sql = yield* this.#db();
+      const read = this.#host.savedRead;
+      if (sql === null || read === undefined || at === "" || size <= 0) return false;
+      const last = yield* Effect.orElseSucceed(read.call(this.#host, at, size - 1, size), () => null);
+      if (last === null || last.length !== 1) return false;
+      const type = this.#kept(sql, id)?.type ?? "";
+      sql.run("INSERT OR REPLACE INTO saved (id, at, size, type) VALUES (?, ?, ?, ?)", [id, at, size, type]);
+      if (!this.#writing.has(id)) yield* this.#drop(sql, id);
+      return true;
+    });
+  }
+
+  /// The downloads written down (views/downloads.ts), each as it was written: the oldest first.
+  downloads(): Effect.Effect<unknown[]> {
+    return Effect.map(this.#db(), (sql) => {
+      if (sql === null) return [];
+      const out: unknown[] = [];
+      for (const r of sql.all("SELECT json FROM download ORDER BY rowid")) {
+        try {
+          out.push(JSON.parse(String(r[0])));
+        } catch {
+          // (not one this core can read: left out)
+        }
+      }
+      return out;
+    });
+  }
+
+  /// A download written down (again), by its id.
+  noteDownload(id: string, value: unknown): Effect.Effect<void> {
+    return Effect.map(this.#db(), (sql) => { sql?.run("INSERT OR REPLACE INTO download (id, json) VALUES (?, ?)", [id, JSON.stringify(value)]); });
+  }
+
+  /// A download no longer written down (saved, or called off).
+  dropDownload(id: string): Effect.Effect<void> {
+    return Effect.map(this.#db(), (sql) => { sql?.run("DELETE FROM download WHERE id = ?", [id]); });
+  }
+
+  /// A file going up with a message written down (again) by its upload's id: what it is, and once up what its station
+  /// said of it.
+  noteUpload(id: string, value: unknown): Effect.Effect<void> {
+    return Effect.map(this.#db(), (sql) => { sql?.run("INSERT OR REPLACE INTO upload (id, json, at) VALUES (?, ?, ?)", [id, JSON.stringify(value), this.#host.nowMs()]); });
+  }
+
+  /// What is written down of the file going up as upload `id`, or null.
+  uploadNoted(id: string): Effect.Effect<unknown> {
+    return Effect.map(this.#db(), (sql) => {
+      const r = sql?.all("SELECT json FROM upload WHERE id = ?", [id])[0];
+      if (r === undefined) return null;
+      try {
+        return JSON.parse(String(r[0]));
+      } catch {
+        return null;
+      }
+    });
+  }
+
+  /// The file going up as upload `id` no longer kept: written down or its bytes (its message sent or discarded).
+  dropUpload(id: string): Effect.Effect<void> {
+    return Effect.flatMap(this.#db(), (sql) => {
+      sql?.run("DELETE FROM upload WHERE id = ?", [id]);
+      return this.forget(outboxKeptId(id));
+    });
+  }
+
+  /// The files going up with messages left behind longer than OUTBOX_KEPT_MS let go (as the core starts).
+  dropOldUploads(): Effect.Effect<void> {
+    return Effect.gen({ self: this }, function* () {
+      const sql = yield* this.#db();
+      if (sql === null) return;
+      const old = sql.all("SELECT id FROM upload WHERE at < ?", [this.#host.nowMs() - OUTBOX_KEPT_MS]).map((r) => String(r[0]));
+      for (const id of old) yield* this.dropUpload(id);
+      // (bytes whose note is gone: their writing stopped as the app ended)
+      for (const r of sql.all("SELECT k.id FROM kept k WHERE k.kind = 'outbox' AND NOT EXISTS (SELECT 1 FROM upload u WHERE 'outbox' || char(10) || u.id = k.id)")) {
+        yield* this.forget(String(r[0]));
+      }
+    });
+  }
+
+  /// The bytes kept of the drives' files and of those sent from here (not the chats').
   usage(): Effect.Effect<number> {
     return Effect.map(this.#db(), (sql) =>
       sql === null ? 0 : Number(sql.all("SELECT coalesce(sum(p.length), 0) FROM part p JOIN kept k ON k.id = p.id WHERE k.kind != 'chat'")[0]?.[0] ?? 0),
     );
   }
 
-  /// The drives' files kept let go (read from the stations again when opened), but what is being written.
+  /// The drives' files kept and those sent from here let go (read from the stations again when opened), but what is
+  /// being written.
   clear(): Effect.Effect<void> {
     return Effect.gen({ self: this }, function* () {
       const sql = yield* this.#db();
       if (sql === null) return;
-      for (const r of sql.all("SELECT id FROM kept WHERE kind != 'chat'")) {
+      for (const r of sql.all("SELECT id FROM kept WHERE kind != 'chat' AND kind != 'outbox'")) {
         const id = String(r[0]);
         if (!this.#writing.has(id)) yield* this.#drop(sql, id);
       }

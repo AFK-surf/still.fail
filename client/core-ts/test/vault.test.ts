@@ -8,6 +8,8 @@ import { test } from "node:test";
 import { ed25519 } from "@noble/curves/ed25519.js";
 import { Effect } from "effect";
 import { apply as applyOps } from "../src/delta.ts";
+import { HostError } from "../src/error.ts";
+import { t } from "../src/i18n.ts";
 import type { HttpRequest } from "../src/host.ts";
 import type { StationAddr } from "../src/station/addr.ts";
 import { HostWire, type RequestHead, type StationWire } from "../src/station/wire.ts";
@@ -16,12 +18,12 @@ import { type Entry, Signer, entryHash, next } from "../src/lock.ts";
 import { hex, utf8 } from "../src/util.ts";
 import {
   type BoxCert, type Item, type Request, type Vault, TAG, boxPublic, decrypt, encryptWith, fromWords, grantContext, itemContext, keyContext,
-  openSeal, recoveryPair, sealWith, sign, signedOk, toWords,
+  openSeal, recoveryPair, saveContext, sealWith, sign, signedOk, toWords,
 } from "../src/vault/crypto.ts";
 import { checkLock } from "../src/vault/lock-check.ts";
 import { BOX_KEY, BOX_PUB, UNLOCK_MS } from "../src/views/vault.ts";
 import { subscribe, call } from "./helpers.ts";
-import { started, stationReplies, status } from "./station-fixture.ts";
+import { type Answers, base, entry, started, stationReplies, status } from "./station-fixture.ts";
 
 const V = JSON.parse(readFileSync(new URL("../../../station/test/fixtures/vault-vectors.json", import.meta.url), "utf8"));
 const unhex = (h: string) => Uint8Array.from(h.match(/../g) ?? [], (b) => parseInt(b, 16));
@@ -117,6 +119,9 @@ function fakeStation() {
   // The plain library (no security mode): items as they are, the owner's decisions, the uses said.
   const plain = new Map<string, any>();
   const plainGrants: unknown[] = [];
+  // Secrets agents asked to keep, approved: where they went.
+  const saves: unknown[] = [];
+  const plainSaves: unknown[] = [];
   const uses: unknown[] = [];
   const plainLock = { on: false };
   const plainLasts: { lasts?: string; at?: number } = {};
@@ -144,6 +149,10 @@ function fakeStation() {
       }
       case "POST /vault/plain/grants":
         plainGrants.push(body);
+        for (const q of requests) if (q.id === body.request) q.status = "granted";
+        return { ok: true };
+      case "POST /vault/plain/saves":
+        plainSaves.push(body);
         for (const q of requests) if (q.id === body.request) q.status = "granted";
         return { ok: true };
       case "GET /vault/uses":
@@ -193,15 +202,24 @@ function fakeStation() {
         denials.push(body);
         for (const q of requests) if (q.id === body.request) q.status = "denied";
         return { ok: true };
+      case "POST /vault/saves": {
+        // Kept only once its item is here (its copy brought first).
+        const r = requests.find((q) => q.id === body.request);
+        if (!r || !items.has(r.item) || items.get(r.item)!.vault !== body.vault) return status(409, { error: "not here", code: "vault_refused" });
+        saves.push(body);
+        r.status = "granted";
+        return { ok: true };
+      }
     }
     return status(404, { error: `no route ${key}` });
   };
-  return { vaults, items, boxes, requests, grants, denials, locked, plain, plainGrants, plainLasts, uses, plainLock, reply };
+  return { vaults, items, boxes, requests, grants, denials, locked, plain, plainGrants, plainLasts, uses, plainLock, saves, plainSaves, reply };
 }
 
 /// A core on an app's host (keys kept, secure storage), reaching `ws/st` (the fake station); its lock put in place.
 /// `web`: a web page's host (no secure storage). `two`: a second station, `ws/st2` (`st2`), in the workspace too.
-async function rig(web = false, two = false) {
+/// `more`: what else the station answers (its chats' posts).
+async function rig(web = false, two = false, more: Answers = {}) {
   const st = fakeStation();
   const st2 = fakeStation();
   const me = { signer: null as Signer | null };
@@ -212,7 +230,7 @@ async function rig(web = false, two = false) {
     const inner = new HostWire(host);
     return { request: (station: StationAddr, head: RequestHead, body: Uint8Array) => inner.request(station, { ...head, headers: [...head.headers, [AT, station.station]] }, body) } as StationWire;
   } : undefined;
-  const s = await started(undefined, 0, wire, (x) => {
+  const s = await started({ ...base(), ...more }, 0, wire, (x) => {
     x.host.appKeys = true;
     me.signer = Effect.runSync(Signer.make(x.host));
     if (web) x.host.secureGet = undefined;
@@ -348,6 +366,19 @@ test("vault calls: set up, a vault of one's own, an item written, opened, unlock
   r.core.close();
 });
 
+test("what the system said no with is said in the person's words: no screen lock, no vault here", async () => {
+  const r = await rig();
+  r.putLock();
+  r.host.secureSet = () => Effect.fail(new HostError("no_device_lock"));
+  await assert.rejects(r.ask("vault.setup", {}), (e: Error & { code?: string }) => {
+    assert.equal(e.code, "no_device_lock");
+    assert.equal(e.message, t("core-misc.secure.noDeviceLock"));
+    return true;
+  });
+  assert.equal(r.host.secure.get(BOX_KEY), undefined);
+  r.core.close();
+});
+
 test("vault calls: another device keyed in by the owner, a device keyed back in by the recovery words", async () => {
   const r = await rig();
   r.putLock();
@@ -444,6 +475,98 @@ test("vault calls: an agent's request approved (sealed to its keeper, signed) or
   r.core.close();
 });
 
+/// Chat 7's posts as its station answers them: a person's, then an agent's asking to use `gh` (r_1), then one asking to
+/// keep a login (r_s), their cards as the station writes them (station/src/vault/secrets.ts).
+function cardsInChat(): Answers {
+  const card = (request: string, more: Record<string, unknown> = {}) => ({ type: "options", options: [], vault: { request, name: "gh", mode: "proxy", reason: "list PRs", hosts: ["api.github.com"], command: "gh pr list", ...more } });
+  const asks = (n: number, c: unknown) => ({ ...entry(n, "要用 gh"), authorKind: "agent", author: "k1", card: c });
+  return { "GET /threads/7/entries?limit=50": { last: 3, entries: [entry(1, "存一下"), asks(2, card("r_1")), asks(3, card("r_s", { save: { kind: "login", username: "zzj" } }))] } };
+}
+
+test("a chat's card of an agent's request comes answered with its post, from the vault the core holds; decided here, how it went at once", async () => {
+  const r = await rig(false, false, cardsInChat());
+  r.putLock();
+  const chat = await r.watch(2, { topic: "chat", station: "ws/st", thread: 7 });
+  const asks = () => chat().messages.filter((m: any) => m.card?.vaultAsk).map((m: any) => [m.card.vault, m.card.vaultAsk.answer, m.card.vaultAsk.lasts ?? null, m.card.vaultAsk.status ?? null]);
+  // This device's vault not on: one to keep turns it on first; one to use is approved, for the chat at the longest
+  // while its request is not held here.
+  assert.deepEqual(asks(), [["r_1", "approve", "chat", null], ["r_s", "setUp", null, null]]);
+  // Set up: the chat's cards say so with no one asking.
+  await r.ask("vault.setup", {});
+  assert.deepEqual(asks(), [["r_1", "approve", "chat", null], ["r_s", "approve", null, null]]);
+  // Its request held, its item given an hour at most: the hour.
+  const { id } = await r.ask("vault.create", { name: "Personal" });
+  const put = await r.ask("vault.putItem", { vault: id, plain: { kind: "token", name: "GitHub", fields: { value: "ghp_x" } }, listing: { name: "gh", kind: "token", modes: ["proxy"], hosts: ["api.github.com"], lasts: "hour" } });
+  const request: Request = { id: "r_1", ws: "ws", vault: id, item: put.id, session: "k1", chat: "7", mode: "proxy", reason: "list PRs", hosts: ["api.github.com"], box: boxPublic(fill(5)), at: 1, status: "pending" };
+  r.st.requests.push(request);
+  r.push("vault-request", request);
+  await r.host.time.pass(500);
+  r.take();
+  assert.deepEqual(asks()[0], ["r_1", "approve", "hour", null]);
+  // Approved here: how it went on its card at once, before its station restates it.
+  await r.ask("vault.approve", { request: "r_1", scope: "once" });
+  assert.equal(asks()[0][3], "granted");
+  assert.equal(chat().messages.find((m: any) => m.card?.vault === "r_1").card.vaultAsk.scope, "once");
+  r.core.close();
+  // A web page keeps no keys: approved elsewhere.
+  const w = await rig(true, false, cardsInChat());
+  w.putLock();
+  const there = await w.watch(2, { topic: "chat", station: "ws/st", thread: 7 });
+  assert.deepEqual(there().messages.filter((m: any) => m.card?.vaultAsk).map((m: any) => m.card.vaultAsk.answer), ["elsewhere", "elsewhere"]);
+  w.core.close();
+});
+
+test("vault calls: a secret an agent asks to keep, opened with this device's box key, written into a vault of one's own (made when none), then told", async () => {
+  const r = await rig();
+  r.putLock();
+  await r.ask("vault.setup", {});
+  const here = [...r.st.boxes.values()][0]!;
+  const fields = { username: "zzj", password: "pw-123" };
+  const keeper = fill(9);
+  const save = (rid: string, item: string, to: { device: string; box: string }): Request => ({
+    id: rid, ws: "ws", vault: "", item, session: "k1", chat: "7", mode: "env", reason: "log in to the router", box: boxPublic(keeper), at: 1, status: "pending", owner: "a@x.com",
+    save: { kind: "login", name: "UniFi UX7", modes: ["env"], hosts: [], env: "UX7_PASSWORD", username: "zzj" },
+    sealed: [{ device: to.device, box: to.box, secret: sealWith(to.box, utf8(JSON.stringify(fields)), saveContext("ws", rid), fill(6)) }],
+  });
+  const item = "i_01JAKEEP000000000000000UX7";
+  r.st.requests.push(save("r_s", item, here));
+  r.push("vault-request", save("r_s", item, here));
+  const vaults = await r.watch(1, { topic: "vaults", workspace: "ws" });
+  await r.host.time.pass(500);
+  r.take();
+  assert.deepEqual(vaults().requests.map((q: any) => [q.id, q.itemName, q.save]), [["r_s", "UniFi UX7", { kind: "login", username: "zzj" }]]);
+  assert.deepEqual(vaults().vaults, [], "none of one's own yet");
+
+  const asked = r.host.secureAsked.length;
+  const kept = await r.ask("vault.approve", { request: "r_s", scope: "once" });
+  assert.equal(r.host.secureAsked.length, asked + 1, "the person is asked once");
+  const [made] = [...r.st.vaults.values()];
+  assert.ok(made && kept.vault === made.id && made.owner === "s1");
+  const written = r.st.items.get(item)!;
+  assert.ok(signedOk(written, TAG.item));
+  assert.deepEqual([written.vault, written.version, written.listing], [made.id, 0, { name: "UniFi UX7", kind: "login", modes: ["env"], hosts: [], env: "UX7_PASSWORD" }]);
+  assert.deepEqual((await r.ask("vault.open", { item })).plain.fields, fields);
+  // With the grant that lets the asking chat use it: for the chat, sealed to the request's box.
+  const saved = r.st.saves[0] as any;
+  assert.deepEqual([saved.request, saved.vault, saved.grant.scope, saved.grant.mode, saved.grant.item], ["r_s", made.id, "chat", "env", item]);
+  assert.ok(signedOk(saved.grant, TAG.grant));
+  assert.deepEqual(JSON.parse(new TextDecoder().decode(openSeal(keeper, saved.grant.secret, grantContext("ws", "r_s")))).fields, fields);
+  assert.deepEqual(vaults().requests, []);
+
+  // Into that vault next time; one sealed to another device is not this one's to open.
+  const second = "i_01JAKEEP000000000000000TWO";
+  r.st.requests.push(save("r_t", second, here));
+  r.push("vault-request", save("r_t", second, here));
+  await r.ask("vault.approve", { request: "r_t", scope: "once" });
+  assert.equal(r.st.vaults.size, 1);
+  assert.equal(r.st.items.get(second)!.vault, made.id);
+  const elsewhere = save("r_u", "i_01JAKEEP000000000000000PHN", { device: r.phone.hex, box: boxPublic(fill(8)) });
+  r.st.requests.push(elsewhere);
+  r.push("vault-request", elsewhere);
+  await fails(r.ask("vault.approve", { request: "r_u", scope: "once" }), "vault_no_key");
+  r.core.close();
+});
+
 test("a vault made on one station is copied to the workspace's others, so an agent on any of them may ask for its secrets", async () => {
   const r = await rig(false, true);
   r.putLock();
@@ -517,11 +640,24 @@ test("the plain library: no security mode, items kept on the station as they are
   const shown = await r.watch(2, { topic: "vaultItems", workspace: "ws", vault: "plain" });
   assert.deepEqual(shown().items.map((i: any) => [i.name, i.kind, i.listed, i.env]), [["GitHub", "token", true, "GH_TOKEN"]]);
   assert.equal((await r.ask("vault.open", { item: put.id })).plain.fields.value, "ghp_x");
+  // What the pages say of it, the core's: its kind, how agents may ask for it and get it, its longest grant; opened, its
+  // fields as its page shows them; the library's at the settings' row.
+  assert.deepEqual(shown().items.map((i: any) => [i.kindText, i.agentText, i.lineText, i.howText, i.lastsText]), [
+    ["Token", "允许 agent 申请 · 代理 · api.github.com", "允许 agent 申请 · 代理 · api.github.com", "代理 · 限 api.github.com", "跟随默认 · 直到对话归档"],
+  ]);
+  const opened = await r.ask("vault.open", { item: put.id });
+  assert.deepEqual([opened.kindText, opened.shown], ["Token", [{ key: "value", label: "值", value: "ghp_x", secret: true, mono: true }]]);
+  assert.deepEqual(shown().items[0].shut.map((f: any) => [f.label, f.value.length]), [["值", 20]]);
+  assert.deepEqual([vaults().statusText, vaults().statusBad], ["1 条", false]);
 
   // An agent asks: its owner approves, with nothing signed; the use shown on the item.
   r.st.requests.push({ id: "r_p", ws: "ws", vault: "plain", item: put.id, session: "ember:s", chat: "", mode: "proxy", reason: "ci", hosts: ["api.github.com"], box: "", at: 1000, status: "pending" } as Request);
   await r.ask("vault.approve", { request: "r_p", scope: "once" });
   assert.deepEqual(r.st.plainGrants, [{ request: "r_p", scope: "once" }]);
+  // One it asks to keep: written by the station from what it holds, once its owner says so.
+  r.st.requests.push({ id: "r_k", ws: "ws", vault: "plain", item: "i_01JAKEEP0000000000000PLAIN", session: "ember:s", chat: "", mode: "env", reason: "slack", box: "", at: 1000, status: "pending", owner: "me@x.com", save: { kind: "token", name: "Slack", modes: ["env"], hosts: [] } } as Request);
+  await r.ask("vault.approve", { request: "r_k", scope: "once" });
+  assert.deepEqual(r.st.plainSaves, [{ request: "r_k" }]);
   // The person's longest grant, told to the station keeping the library.
   await r.ask("vault.setLasts", { vault: "plain", lasts: "hour" });
   assert.equal(r.st.plainLasts.lasts, "hour");
@@ -533,6 +669,9 @@ test("the plain library: no security mode, items kept on the station as they are
   r.take();
   assert.deepEqual(used().uses.map((u: any) => [u.chatTitle, u.command, u.station, typeof u.at.ago]), [["修 CI", "gh pr list", "st", "string"]]);
   assert.equal(shown().items[0].lastUse.command, "gh pr list");
+  // used: its line says when, its use how
+  assert.equal(used().uses[0].howText, "gh pr list · 代理");
+  assert.match(shown().items[0].lineText, /使用$/);
 
   // Security mode on: the vault is the library; what was plain is counted, kept from new writes, and moved.
   r.putLock();

@@ -1,7 +1,8 @@
-// A picture or a video with media controls floating over it (the app's VideoViewer, the drive's Player): frosted
+// A picture or a video with media controls floating over it (the one player, Player.tsx): frosted
 // glass that fades, a timeline, the buttons in its corners.
 import { globalStyle, style } from "@vanilla-extract/css";
 import { vars } from "../styles/tokens.css.ts";
+import { litOver } from "../styles/lit.ts";
 import { pictureGlass as glass } from "../styles/glass.ts";
 import { iconBtn } from "../styles/page.css.ts";
 
@@ -61,7 +62,7 @@ export const vvRate = style({
   background: `color-mix(in srgb, ${vars.text} 10%, transparent)`, color: vars.text, fontFamily: vars.fontMono, fontSize: vars.textMeta, fontWeight: "600",
   cursor: "pointer", cornerShape: vars.cornerShape,
   selectors: {
-    "&:hover": { background: `color-mix(in srgb, ${vars.text} 18%, transparent)` },
+    "&:hover": litOver,
   },
 });
 
@@ -80,7 +81,7 @@ export const vvTrack = style({
   },
 });
 export const vvPlayed = style({ position: "absolute", inset: "0", transformOrigin: "left", background: vars.text });
-/** As wide as the timeline, slid along it (VideoViewer.tsx): the head at its start is where the video is. */
+/** As wide as the timeline, slid along it (Player.tsx): the head at its start is where the video is. */
 export const vvHeadRail = style({ position: "absolute", inset: "0", pointerEvents: "none" });
 export const vvHead = style({
   position: "absolute", top: "50%", left: "0", width: "12px", height: "12px", borderRadius: "50%", background: vars.text,

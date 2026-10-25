@@ -8,7 +8,7 @@ import { wall } from "../ops/fibers.ts";
 import { endCommand, startCommand } from "../ops/processes.ts";
 import { type Held, valueOf } from "./keeper.ts";
 import { type Proxy, placeholder } from "./proxy.ts";
-import { Scrubber } from "./scrub.ts";
+import { Scrubber, scrub } from "./scrub.ts";
 import { parseSshKey, serveAgent } from "./ssh-agent.ts";
 
 /// What of a command's output an agent is given: its start and its end, this much of each.
@@ -107,6 +107,47 @@ function spawned(ask: RunAsk, env: Record<string, string>, hidden: string[]): Pr
       kept.add(out.end());
       kept.add(err.end());
       resolve({ code, signal, output: kept.text(), cut: kept.cut, timedOut });
+    });
+  });
+}
+
+/// What a command printed, for a secret an agent asks to keep (secret_save): its standard output, kept here (never
+/// given to the agent), and its standard error with that output hidden in it.
+export type Captured = { code: number | null; signal: string | null; out: string; err: string; timedOut: boolean; tooLong: boolean };
+
+/// The most of a command's standard output taken as a secret.
+const CAPTURE_MAX = 64 * 1024;
+
+/// Runs `command` (by sh -c) in `cwd` and takes what it prints as a secret: none of it is shown, its standard error only
+/// with the output hidden in it.
+export function capture(command: string, cwd: string, env: Record<string, string>, timeoutMs: number): Promise<Captured> {
+  return new Promise((resolve) => {
+    const child = startCommand("sh", ["-c", command], { cwd, env, stdio: ["ignore", "pipe", "pipe"] });
+    const out: Buffer[] = [];
+    let size = 0;
+    let tooLong = false;
+    const err = new Kept();
+    child.stdout!.on("data", (b: Buffer) => {
+      size += b.length;
+      if (size > CAPTURE_MAX) tooLong = true;
+      else out.push(b);
+    });
+    child.stderr!.on("data", (b: Buffer) => err.add(b));
+    let timedOut = false;
+    // The command's time, the machine's: one left going is stopped, its whole process group.
+    const stop = wall.after(timeoutMs, () => {
+      timedOut = true;
+      endCommand(child, "SIGKILL");
+    });
+    child.on("error", (e) => {
+      stop();
+      resolve({ code: null, signal: null, out: "", err: `could not start sh: ${e.message}`, timedOut: false, tooLong: false });
+    });
+    child.on("close", (code, signal) => {
+      stop();
+      const printed = Buffer.concat(out).toString("utf8");
+      const value = printed.replace(/\r?\n$/, "");
+      resolve({ code, signal, out: tooLong ? "" : value, err: value === "" ? err.text() : scrub(err.text(), [value]), timedOut, tooLong });
     });
   });
 }

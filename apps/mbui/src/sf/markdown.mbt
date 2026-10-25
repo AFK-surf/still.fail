@@ -12,14 +12,20 @@
 // another chat is a reference to it (Markdown.kt appendRef): `@` a little
 // lighter, then its words, in the accent. With `files`, a message's files
 // its text names (the core's `placed`) are drawn where it names them: a
-// paragraph of only a link to one, or its images, as the files themselves.
+// paragraph of only a link to one, or its images, as the files themselves;
+// a table's cell of only its images, them side by side.
 // With `screens`, its links to a station's screens (and 共享调试) are their
 // cards alone in a paragraph, their titles bare within a sentence.
 //
-// Spacing is the web's: each block keeps the margins a browser gives it,
-// and two blocks next to each other are as far apart as the larger of the
-// margins between them; the first's top and the last's bottom are the
-// message's own.
+// Spacing is the web's: each block keeps the margins `.markdown` gives it
+// (a paragraph none above and 8 below, ui.css.ts; a heading 14 and 6; a
+// list, a code block, a table, a quote 8 below), and two blocks next to each
+// other are as far apart as the larger of the margins between them; the
+// first's top and the last's bottom are the message's own.
+
+///|
+/// What a paragraph keeps below it (ui.css.ts `.markdown p`: margin 0 0 8px), on every screen.
+let paragraph_after : Double = 8.0
 
 ///|
 /// A block with the margins the web gives it.
@@ -40,11 +46,8 @@ priv struct Md {
   on_link_hold : ((String, (Double, Double, Double, Double)) -> Unit)?
   /// a scope for ids: the n-th paragraph of the message
   mut n : Int
-  /// a placed file's drawing, by the file's name
-  files : (String) -> (() -> Unit)?
-  /// a placed image as a table's cell has it (Markdown.kt CellImageRow), by the file's name: its width over its height,
-  /// and its drawing in a box that wide (as tall as its proportion makes it)
-  cell_files : (String) -> (Double, (Double) -> Unit)?
+  /// a placed file, by the file's name
+  files : (String) -> Placed?
   /// a search's words, bold wherever they are in it (TextMark.kt markWeight)
   found : Array[String]
   /// a fenced block drawn another way than as code, by its language and its code (Markdown.kt: a ```mermaid one as a
@@ -59,6 +62,9 @@ priv struct Md {
   /// a document's headings, as the web's reader has them (Reader.css.ts): levels 1 to 3 larger than the words (1.5,
   /// 1.3, 1.12), as far above as they are high and half that below; a message's are at the words' size
   document : Bool
+  /// how far past its column either side a table of it scrolls (Md::table): the page's margin where it has one, none
+  /// in a list or a quote
+  mut bleed : Double
 }
 
 ///|
@@ -303,6 +309,15 @@ pub(all) struct Screens {
 }
 
 ///|
+/// A file the message places (`files`): `draw` it on a line of its own; an image's width over its height and its
+/// drawing in a box that wide (as tall as its proportion makes it), as a table's cell has it beside others
+/// (Markdown.kt CellImageRow; None for any other file, named in a cell by its words).
+pub(all) struct Placed {
+  draw : () -> Unit
+  image : (Double, (Double) -> Unit)?
+}
+
+///|
 /// A paragraph of only a link with a card (Markdown.kt screenAlone): its
 /// address, and its words unless it is bare.
 fn screen_alone(xs : Array[MdInline]) -> (String, String?)? {
@@ -354,7 +369,8 @@ fn web() -> Palette {
 ///|
 /// `text` as Markdown, in a column as wide as it is given. `size`: the
 /// words' (0: the theme's body); `on_link` is told where a tapped link
-/// leads; `files` and `screens` as the file's head says.
+/// leads; `files` and `screens` as the file's head says; `document`: its headings a document's (Md's `document`);
+/// `bleed`: how far past the column either side the page lets its tables scroll (Md::table: a chat's margin).
 pub fn markdown(
   c : @ui.Ctx,
   text : String,
@@ -364,11 +380,12 @@ pub fn markdown(
   ink? : Int64 = 0L,
   on_link? : (String) -> Unit = fn(_) {  },
   on_link_hold? : ((String, (Double, Double, Double, Double)) -> Unit)? = None,
-  files? : (String) -> (() -> Unit)? = fn(_) { None },
-  cell_files? : (String) -> (Double, (Double) -> Unit)? = fn(_) { None },
+  files? : (String) -> Placed? = fn(_) { None },
   found? : Array[String] = [],
   code? : (String, String) -> (() -> Unit)? = fn(_, _) { None },
   screens? : Screens? = None,
+  document? : Bool = false,
+  bleed? : Double = 0.0,
 ) -> Int {
   let t = theme()
   let md = {
@@ -379,13 +396,13 @@ pub fn markdown(
     on_link_hold,
     n: 0,
     files,
-    cell_files,
     found,
     code,
     screens,
     line: 0.0,
     serif: false,
-    document: false,
+    document,
+    bleed,
   }
   if tree is None && !core_parsed.contains(text) && !markdown_asked.contains(text) {
     if markdown_read.val is Some(read) {
@@ -458,13 +475,13 @@ pub fn markdown_part(
     on_link_hold: None,
     n: 0,
     files: fn(_) { None },
-    cell_files: fn(_) { None },
     found,
     code: fn(_, _) { None },
     screens: None,
     line,
     serif,
     document,
+    bleed: 0.0,
   }
   let blocks = match parts.get(key) {
     Some(b) => b
@@ -478,9 +495,9 @@ pub fn markdown_part(
     }
   }
   let pieces = md.pieces(blocks, false)
-  // after another part: as far below it as after a paragraph (whose bottom margin is its size), the larger of the two
+  // after another part: as far below it as after a paragraph, the larger of the two
   if apart && pieces.length() > 0 {
-    pieces.insert(0, { top: 0.0, bottom: md.size, draw: fn() {  } })
+    pieces.insert(0, { top: 0.0, bottom: paragraph_after, draw: fn() {  } })
   }
   md.column("sf-md-part/" + key, pieces) |> ignore
 }
@@ -528,7 +545,8 @@ fn Md::piece(self : Md, b : MdBlock, tight : Bool, task : Bool?) -> Array[Piece]
   let c = self.c
   match b {
     Paragraph(xs) => {
-      let m = if tight { 0.0 } else { s }
+      // (none in a tight list's item: its words alone)
+      let (top, bottom) = if tight { (0.0, 0.0) } else { (0.0, paragraph_after) }
       let ink = self.ink
       // one that is only a link to a screen is its card (Markdown.kt paragraph)
       match (self.screens, task) {
@@ -539,9 +557,9 @@ fn Md::piece(self : Md, b : MdBlock, tight : Bool, task : Bool?) -> Array[Piece]
           }
         _ => ()
       }
-      match self.placed(xs, m, task) {
+      match self.placed(xs, top, bottom, task) {
         Some(ps) => ps
-        None => [{ top: m, bottom: m, draw: fn() { self.words(xs, s, 0, ink, task) } }]
+        None => [{ top, bottom, draw: fn() { self.words(xs, s, 0, ink, task) } }]
       }
     }
     Heading(level, xs) if self.document && level <= 3 => {
@@ -569,9 +587,12 @@ fn Md::piece(self : Md, b : MdBlock, tight : Bool, task : Bool?) -> Array[Piece]
     List(l) => [self.list(l, 1)]
     Quote(inner) => {
       let saved = self.ink
+      let bleed = self.bleed
       self.ink = web().muted
+      self.bleed = 0.0
       let ps = self.pieces(inner, false)
       self.ink = saved
+      self.bleed = bleed
       let top = if ps.length() > 0 && ps[0].top > 0.0 { ps[0].top } else { 0.0 }
       let bottom = if ps.length() > 0 && ps[ps.length() - 1].bottom > 8.0 {
         ps[ps.length() - 1].bottom
@@ -603,7 +624,10 @@ fn Md::piece(self : Md, b : MdBlock, tight : Bool, task : Bool?) -> Array[Piece]
         self.words([Formula(source, drawing)], s, 0, self.ink, None, wrap=false)
       }) |> ignore
     } }]
-    Table(t) => [{ top: 0.0, bottom: 8.0, draw: fn() { self.table(t) } }]
+    Table(t) => {
+      let bleed = self.bleed
+      [{ top: 0.0, bottom: 8.0, draw: fn() { self.table(t, bleed) } }]
+    }
     Rule => [
       {
         top: s / 2.0,
@@ -646,13 +670,14 @@ fn Md::piece(self : Md, b : MdBlock, tight : Bool, task : Bool?) -> Array[Piece]
 fn Md::placed(
   self : Md,
   xs : Array[MdInline],
-  margin : Double,
+  top : Double,
+  bottom : Double,
   task : Bool?,
 ) -> Array[Piece]? {
   let file_of = fn(x : MdInline) -> (() -> Unit)? {
     match x {
-      Link(href, _) => (self.files)(file_name_of(href))
-      Image(src, _) => (self.files)(file_name_of(src))
+      Link(href, _) => (self.files)(file_name_of(href)).map(fn(p) { p.draw })
+      Image(src, _) => (self.files)(file_name_of(src)).map(fn(p) { p.draw })
       _ => None
     }
   }
@@ -691,7 +716,7 @@ fn Md::placed(
         }
       }) {
       let box = if out.length() == 0 { task } else { None }
-      out.push({ top: margin, bottom: margin, draw: fn() { self.words(nodes, s, 0, ink, box) } })
+      out.push({ top, bottom, draw: fn() { self.words(nodes, s, 0, ink, box) } })
     }
     run = []
   }
@@ -701,8 +726,8 @@ fn Md::placed(
         flush()
         let c = self.c
         out.push({
-          top: margin,
-          bottom: margin,
+          top,
+          bottom,
           draw: fn() { c.box(pady=8.0, fn() { draw() }) |> ignore },
         })
       }
@@ -714,11 +739,20 @@ fn Md::placed(
 }
 
 ///|
-/// Items with their markers in the list's 20 of indent.
+/// Items with their markers in the list's 20 of indent; numbers wider than that (a list past 9, words drawn larger)
+/// as wide as the widest of them needs (in a row: never cut short, whatever it measures), all of them lined up.
 fn Md::list(self : Md, l : MdList, depth : Int) -> Piece {
   let c = self.c
   let s = self.size
   let ink = self.ink
+  let marker_w = if l.ordered {
+    dmax(md_marker_w, @ui.text_advance("\{l.start + l.items.length() - 1}.", size=c.sp(s)) + md_marker_gap)
+  } else {
+    md_marker_w
+  }
+  // (its tables in its indent, not out to the page's margin)
+  let bleed = self.bleed
+  self.bleed = 0.0
   let items = []
   for i, item in l.items {
     // a nested list a level deeper
@@ -742,7 +776,7 @@ fn Md::list(self : Md, l : MdList, depth : Int) -> Piece {
       draw: fn() {
         c.box(dir=Row, align=AStart, fn() {
           if l.ordered {
-            c.box(w=Px(20.0), pr=5.0, align=AEnd, fn() {
+            c.box(dir=Row, min_w=marker_w, pr=md_marker_gap, justify=JEnd, fn() {
               c.text("\{number}.", size=s, line=self.lh(s), color=ink, wrap=false)
               |> ignore
             })
@@ -762,6 +796,7 @@ fn Md::list(self : Md, l : MdList, depth : Int) -> Piece {
       },
     })
   }
+  self.bleed = bleed
   let top = if items.length() > 0 && items[0].top > 0.0 { items[0].top } else { 0.0 }
   let bottom = if items.length() > 0 && items[items.length() - 1].bottom > 8.0 {
     items[items.length() - 1].bottom
@@ -770,6 +805,13 @@ fn Md::list(self : Md, l : MdList, depth : Int) -> Piece {
   }
   { top, bottom, draw: fn() { c.column(fn() { stack(c, items, false) }) |> ignore } }
 }
+
+///|
+/// A list's indent, where its markers are (20), and how far a number's dot stands from the item (5).
+let md_marker_w : Double = 20.0
+
+///|
+let md_marker_gap : Double = 5.0
 
 ///|
 /// A bulleted item's marker as a browser draws it outside the item (disc,
@@ -944,8 +986,8 @@ fn runs_of(
 }
 
 ///|
-/// How long a code block says it was copied, after its copy is pressed.
-let copied_ms : Double = 1500.0
+/// A code block's copy key's height: a capsule.
+let code_key_h : Double = 24.0
 
 ///|
 /// The code blocks saying they were copied, by their id (for copied_ms, on @kit.after's clock).
@@ -975,23 +1017,28 @@ pub fn code_block(c : @ui.Ctx, code : String, lang : String, colours? : String? 
     } else {
       true
     })
-  // the copy key in the block's top right corner: as far from both edges, concentric with it
-  let block_radius = 12.0
-  let key_inset = 4.0
-  c.box(w=Fill(1.0), bg=t.p.code_ground, radius=block_radius, clip=true, fn() {
+  // the copy key in the block's top right corner: a capsule, as far from both edges as makes it concentric with the
+  // block (a block of the ladder's: row_corner); to a mouse over the code, quiet (55%) until the pointer is on the block
+  // (Prose.css.ts codeBar), to a finger on a row of its own over it (it hovers over nothing: `pointer: coarse`),
+  // whatever the layout
+  let block_radius = row_corner
+  let key_inset = capsule_in(block_radius, code_key_h)
+  let over = native_input() is Mouse
+  let block = c.id("sf-code-block/" + code)
+  let bar = fn() {
     c.box(
       dir=Row,
       pl=key_inset,
       pr=key_inset,
       pt=key_inset,
-      h=Px(28.0),
+      h=Px(key_inset + code_key_h),
       align=ACenter,
       justify=JEnd,
       fn() {
         c.box(padx=6.0, fn() {
           c.text(
             if lang == "" { "text" } else { lang },
-            size=10.0,
+            size=if over { code_lang_wide } else { 10.0 },
             color=w.subtle,
             wrap=false,
           )
@@ -1000,11 +1047,11 @@ pub fn code_block(c : @ui.Ctx, code : String, lang : String, colours? : String? 
         |> ignore
         c.box(
           dir=Row,
-          h=Px(24.0),
+          h=Px(code_key_h),
           padx=7.0,
           gap=4.0,
           align=ACenter,
-          radius=@ui.concentric(block_radius, key_inset),
+          radius=code_key_h / 2.0,
           bg=alpha(t.p.canvas, 0.8),
           id~,
           fn() {
@@ -1019,20 +1066,23 @@ pub fn code_block(c : @ui.Ctx, code : String, lang : String, colours? : String? 
               } else {
                 "复制"
               },
-              size=11.0,
+              size=theme().t.caption,
               color=w.muted,
               wrap=false,
             )
             |> ignore
-            // Markdown.kt: clip(Smooth(concentric(12, 4))).clickable
-            @motion.ripple(c, id, @ui.concentric(block_radius, key_inset))
+            @motion.ripple(c, id, code_key_h / 2.0)
           },
         )
         |> ignore
       },
     )
-    |> ignore
-    // in the colours the core said (ink.mbt), scrolled sideways rather than wrapped
+  }
+  c.box(w=Fill(1.0), bg=t.p.code_ground, radius=block_radius, clip=true, id=if over { block } else { 0 }, fn() {
+    if !over {
+      bar() |> ignore
+    }
+    // in the colours the core said (ink.mbt), scrolled sideways rather than wrapped (12 on 1.6 on a desktop's width)
     c.sideways("sf-code/" + code, padx=14.0, pady=12.0, fn() {
       c.rich(
         match colours {
@@ -1040,17 +1090,29 @@ pub fn code_block(c : @ui.Ctx, code : String, lang : String, colours? : String? 
           Some(ink) => core_ink(code, ink, t.dark)
           None => [@ui.span(code, mono=true)]
         },
-        size=12.0,
-        line=18.0,
+        size=t.t.caption,
+        line=if over { code_line_wide } else { 18.0 },
         wrap=false,
         color=t.p.text,
       )
       |> ignore
     })
     |> ignore
+    if over {
+      let b = c.layer(fn() { bar() |> ignore })
+      c.look(b, @ui.look(alpha=if c.lit(block) || c.lit(id) { 1.0 } else { 0.55 }))
+    }
   })
   |> ignore
 }
+
+///|
+/// A code block's lines and its language's size on a desktop's width (Prose.css.ts codePre: the meta size on 1.6;
+/// codeLang: the caption's 11).
+let code_line_wide : Double = 12.0 * 1.6
+
+///|
+let code_lang_wide : Double = 11.0
 
 // ── tables ──────────────────────────────────────────────────────────────
 
@@ -1100,9 +1162,12 @@ fn cell_widths(s : String, size : Double, weight : Int) -> (Double, Double) {
 /// A table as the web draws it (Markdown.kt Table): in a card's frame (20 round, a line round it, a faint ground),
 /// small type (13), the head's row tinted and its words muted (12, medium), rows ruled between them only, each cell
 /// 12 and 7 in, middle-aligned, at least 4em wide. Columns are as wide as their content until the message is full (the
-/// browser's automatic layout), then share what is left by how much more they would take; past what their words
-/// allow, it scrolls sideways within the message.
-fn Md::table(self : Md, t : MdTable) -> Unit {
+/// browser's automatic layout), then share what is left by how much more they would take, none narrower than its
+/// words on one line or 14em of them, whichever is less (its longest word if wider): a wrapped cell still reads as
+/// lines, not a word or two to each. Wider than the message, it scrolls sideways, the frame with it, out to `bleed`
+/// past the message either side (a chat's margin, to the screen's edges): at rest in line with the words, scrolled to
+/// its end its right edge in line with theirs.
+fn Md::table(self : Md, t : MdTable, bleed : Double) -> Unit {
   let c = self.c
   let cols = t.head.length()
   if cols == 0 {
@@ -1114,13 +1179,17 @@ fn Md::table(self : Md, t : MdTable) -> Unit {
   self.n = self.n + 1
   let key = "sf-md/table\{self.n}"
   let id = c.id(key)
-  // as wide as the message lays it out (the frame's line either side taken off): its box, not what of it shows (a
-  // page sliding in shows part of it, which had the columns squeezed)
-  let avail = match c.laid_size(id) {
-    Some((rw, _)) => rw - 2.0
-    None => c.width - 2.0
+  // as wide as the message lays it out: its box less the margin it reaches over either side, not what of it shows (a
+  // page sliding in shows part of it, which had the columns squeezed); the columns get it less the frame's line either
+  // side
+  let room = match c.laid_size(id) {
+    Some((rw, _)) => rw - 2.0 * bleed
+    None => c.width
   }
+  let avail = room - 2.0
   let least = 4.0 * 13.0 + 24.0
+  // (14em of the rows' words, at the system's size of words)
+  let readable = 14.0 * c.sp(13.0)
   let mins = Array::make(cols, least)
   let maxs = Array::make(cols, least)
   for r, row in rows {
@@ -1135,8 +1204,9 @@ fn Md::table(self : Md, t : MdTable) -> Unit {
         // (measured as they are set: at the system's size of words)
         None => cell_widths(md_plain(row[k]), c.sp(size), weight)
       }
-      if lo + 24.0 > mins[k] {
-        mins[k] = lo + 24.0
+      let floor = dmax(lo, dmin(hi, readable))
+      if floor + 24.0 > mins[k] {
+        mins[k] = floor + 24.0
       }
       if hi + 24.0 > maxs[k] {
         maxs[k] = hi + 24.0
@@ -1162,77 +1232,75 @@ fn Md::table(self : Md, t : MdTable) -> Unit {
   for x in widths {
     total = total + x
   }
-  // the row as wide as the message (what is measured: the room the table has), the table as wide as its columns
-  // (named to be measured, not pressed: what holds the message takes the presses on its room)
-  c.box(dir=Row, w=Fill(1.0), id~, taps=false, fn() {
-    c.box(
-      w=Px(dmin(total + 2.0, dmax(avail + 2.0, 0.0))),
-      radius=20.0,
-      border=1.0,
-      border_color=w.line,
-      bg=table_ground(),
-      pad=1.0,
-      clip=true,
-      fn() {
-        // the head's tint behind the rows, not scrolled with them: in the frame's top corners as the web's
-        // overflow-hidden card cuts it (docs/ui-panels.md: concentric with the 20 it sits 1 in; square under it).
-        // A clip is a rectangle, so the tint is a round box taller than the head, cut at the head's foot.
-        match @motion.measured(c, key + "/head") {
-          Some(hh) if hh > 0.0 =>
-            c.layer(pad=1.0, fn() {
-              c.box(w=Fill(1.0), h=Px(hh), clip=true, fn() {
-                c.box(w=Fill(1.0), h=Px(hh + 40.0), radius=table_head_radius, bg=theme().p.code_ground, fn() {  })
+  // what scrolls: the message's width and `bleed` more either side (what is measured: the room the table has; named to
+  // be measured, not pressed: what holds the message takes the presses on its room), the table in it as wide as its
+  // columns, `bleed` in from its ends
+  c.box(mx=-bleed, id~, taps=false, fn() {
+    c.sideways(key, padx=bleed, fn() {
+      c.box(
+        w=Px(total + 2.0),
+        radius=row_corner,
+        border=1.0,
+        border_color=w.line,
+        bg=table_ground(),
+        pad=1.0,
+        clip=true,
+        fn() {
+          // the head's tint behind its row: in the frame's top corners as the web's overflow-hidden card cuts it
+          // (docs/ui-panels.md: concentric with the 20 it sits 1 in; square under it). A clip is a rectangle, so the
+          // tint is a round box taller than the head, cut at the head's foot.
+          match @motion.measured(c, key + "/head") {
+            Some(hh) if hh > 0.0 =>
+              c.layer(pad=1.0, fn() {
+                c.box(w=Fill(1.0), h=Px(hh), clip=true, fn() {
+                  c.box(w=Fill(1.0), h=Px(hh + 40.0), radius=table_head_radius, bg=theme().p.code_ground, fn() {  })
+                  |> ignore
+                })
                 |> ignore
               })
               |> ignore
+            _ => ()
+          }
+          for r, row in rows {
+            let head = r == 0
+            let row_box = c.box(dir=Row, align=AStretch, fn() {
+              for k in 0..<cols {
+                c.box(w=Px(widths[k]), padx=12.0, pady=7.0, justify=JCenter, fn() {
+                  match self.cell_images(row[k]) {
+                    Some(images) => {
+                      // side by side, 6 apart, 4 over and under, each drawn as wide as cell_image_width says
+                      c.box(style=cell_image_row, fn() {
+                        for im in images {
+                          let (r, draw) = im
+                          draw(cell_image_width(r))
+                        }
+                      })
+                      |> ignore
+                      return
+                    }
+                    None => ()
+                  }
+                  if head {
+                    self.words(row[k], 12.0, 500, w.muted, None)
+                  } else {
+                    self.words(row[k], 13.0, 0, self.ink, None)
+                  }
+                })
+                |> ignore
+              }
             })
-            |> ignore
-          _ => ()
-        }
-        c.sideways(key, fn() {
-          c.box(fn() {
-            for r, row in rows {
-              let head = r == 0
-              let row_box = c.box(dir=Row, align=AStretch, fn() {
-                for k in 0..<cols {
-                  c.box(w=Px(widths[k]), padx=12.0, pady=7.0, justify=JCenter, fn() {
-                    match self.cell_images(row[k]) {
-                      Some(images) => {
-                        // side by side, 6 apart, 4 over and under, each drawn as wide as cell_image_width says
-                        c.box(style=cell_image_row, fn() {
-                          for im in images {
-                            let (r, draw) = im
-                            draw(cell_image_width(r))
-                          }
-                        })
-                        |> ignore
-                        return
-                      }
-                      None => ()
-                    }
-                    if head {
-                      self.words(row[k], 12.0, 500, w.muted, None)
-                    } else {
-                      self.words(row[k], 13.0, 0, self.ink, None)
-                    }
-                  })
-                  |> ignore
-                }
-              })
-              if head {
-                @motion.measure(c, row_box, key + "/head")
-              }
-              // a rule under every row but the last
-              if r < rows.length() - 1 {
-                c.box(w=Px(total), h=Px(1.0), bg=w.line, fn() {  }) |> ignore
-              }
+            if head {
+              @motion.measure(c, row_box, key + "/head")
             }
-          })
-          |> ignore
-        })
-        |> ignore
-      },
-    )
+            // a rule under every row but the last
+            if r < rows.length() - 1 {
+              c.box(w=Px(total), h=Px(1.0), bg=w.line, fn() {  }) |> ignore
+            }
+          }
+        },
+      )
+      |> ignore
+    })
     |> ignore
   })
   |> ignore
@@ -1248,9 +1316,9 @@ fn Md::cell_images(self : Md, cell : Array[MdInline]) -> Array[(Double, (Double)
       Text(t) if t.trim(chars=" \n\t").to_string() == "" => ()
       SoftBreak | HardBreak => ()
       Image(src, _) =>
-        match (self.cell_files)(file_name_of(src)) {
-          Some((r, draw)) => out.push((dmax(dmin(r, 4.0), 0.25), draw))
-          None => return None
+        match (self.files)(file_name_of(src)) {
+          Some({ image: Some((r, draw)), .. }) => out.push((dmax(dmin(r, 4.0), 0.25), draw))
+          _ => return None
         }
       _ => return None
     }
@@ -1265,7 +1333,7 @@ fn Md::cell_images(self : Md, cell : Array[MdInline]) -> Array[(Double, (Double)
 ///|
 /// A table cell's images in a row (Markdown.kt CellImageRow: spacedBy(6), 4 over and under).
 // kept across runs: a value (no field of it changes)
-let cell_image_row : @ui.Style = @ui.style(row=true, gap=S1_5, py=S1)
+let cell_image_row : @ui.Style = @ui.css("row gap=S1_5 py=S1")
 
 ///|
 /// An image's width in a table's cell: as wide as 160 for a wide image, as tall as 240 for a tall one (Markdown.kt
@@ -1285,5 +1353,5 @@ fn cell_images_width(images : Array[(Double, (Double) -> Unit)]) -> Double {
 }
 
 ///|
-/// The table head's tint's corner: concentric with the table's frame (20), 1 in from its edge.
-let table_head_radius : Double = @ui.concentric(20.0, 1.0)
+/// The table head's tint's corner: concentric with the table's frame (a block of the ladder's), 1 in from its edge.
+let table_head_radius : Double = inner_corner(row_corner, 1.0)

@@ -27,7 +27,7 @@ const member = viewer("dev@example.com", "member");
 
 type Rig = Awaited<ReturnType<typeof rig>>;
 
-async function rig(o: { approval?: string; data?: string; store?: Store; quota?: { n: number }; resetQuota?: AccountsDeps["resetQuota"]; machine?: MachineLogins; check?: AccountsDeps["check"]; discover?: AccountsDeps["discover"]; clock?: Clock.Clock; workspaces?: string[]; shared?: AccountsDeps["shared"]; urls?: AccountsDeps["urls"] } = {}) {
+async function rig(o: { approval?: string; data?: string; store?: Store; quota?: { n: number }; resetQuota?: AccountsDeps["resetQuota"]; hermes?: AccountsDeps["hermes"]; machine?: MachineLogins; check?: AccountsDeps["check"]; discover?: AccountsDeps["discover"]; clock?: Clock.Clock; workspaces?: string[]; shared?: AccountsDeps["shared"]; urls?: AccountsDeps["urls"] } = {}) {
   const data = o.data ?? temp("routes");
   const path = join(data, "config.json");
   if (!existsSync(path)) {
@@ -63,6 +63,7 @@ async function rig(o: { approval?: string; data?: string; store?: Store; quota?:
         }
       : null,
     resetQuota: o.resetQuota ?? null,
+    hermes: o.hermes,
     discover: o.discover ?? (async (profile) => ({ state: "unsupported", detail: "", model: null, provider: null, models: [], fingerprint: fingerprint(profile) })),
     clock: o.clock,
     workspaces: () => o.workspaces ?? [],
@@ -404,6 +405,28 @@ describe("the accounts routes", { concurrency: true }, () => {
     await s.close();
   });
 
+  test("a profile's home is read on the thread for its first view alone; what changes in it shows once read again off the thread, ten seconds on", async () => {
+    // Its time moves only as the test says.
+    const time = testClock();
+    const data = temp("homes-read");
+    writeFileSync(join(data, "config.json"), JSON.stringify({ profiles: [{ id: "sx", runtime: "codex", home: "homes/sx", access: { kind: "subscription" } }], connects: [] }));
+    const t = await rig({ data, clock: time.clock });
+    assert.deepEqual([t.view("sx")!.homeExists, t.view("sx")!.email], [false, null]);
+    // Signed in from a terminal: nothing told the station.
+    const home = join(data, "homes", "sx");
+    mkdirSync(home, { recursive: true });
+    const claims = Buffer.from(JSON.stringify({ email: "b@x.com" })).toString("base64url");
+    writeFileSync(join(home, "auth.json"), JSON.stringify({ tokens: { id_token: `h.${claims}.s` } }));
+    assert.deepEqual([t.view("sx")!.homeExists, t.view("sx")!.email], [false, null], "as last read: not read on the thread again");
+    await time.adjust(10_000);
+    const seen = await upon((wake) => t.accounts.onChange(wake), () => {
+      const v = t.view("sx")!;
+      return v.email === "b@x.com" && v.homeExists;
+    }, "the home read again");
+    assert.ok(seen);
+    await t.close();
+  });
+
   test("a profile just made has its allowance read at once, without waiting for a round", async () => {
     const quota = { n: 0 };
     // Its time never moves: no round comes.
@@ -591,4 +614,23 @@ describe("the accounts routes", { concurrency: true }, () => {
     assert.equal(after.change.summary, "改了策略，删了「看不出来」");
     await t.close();
   });
+});
+
+test("a Hermes profile offers discovered models and keeps a manual selection when discovery fails", async () => {
+  let fail = false;
+  const r = await rig({ hermes: () => ({ models: async () => { if (fail) throw new Error("provider unavailable"); return ["openrouter:model-a", "custom:model-b"]; } }) });
+  try {
+    const [status, created] = await r.call("POST", "/profiles", {runtime:"hermes",access:{kind:"env"}});
+    assert.equal(status,200);
+    const id = created.id;
+    await r.accounts.check(id);
+    assert.deepEqual(r.view(id).check.models,["openrouter:model-a","custom:model-b"]);
+    await r.accounts.putProfile(id,{addModel:"custom:model-b"},owner);
+    assert.deepEqual(r.profile(id)?.models,["custom:model-b"]);
+    fail = true;
+    const check = await r.accounts.check(id);
+    assert.deepEqual(check.models,["openrouter:model-a","custom:model-b"]);
+    assert.deepEqual(r.profile(id)?.models,["custom:model-b"]);
+    assert.match(check.detail,/provider unavailable/);
+  } finally {await r.close();}
 });

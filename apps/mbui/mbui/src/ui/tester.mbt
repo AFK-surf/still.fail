@@ -34,6 +34,7 @@ pub let frame_period_default : Double = 1000.0 / 60.0
 /// forgotten here fails the next Tester at once rather than a test somewhere else.
 fn reset_globals() -> Unit {
   the_ctx.val = Ctx::new()
+  corners_hold.val = true
   text_runs.on = false
   text_runs.runs.clear()
   desk_reset()
@@ -47,14 +48,18 @@ fn reset_globals() -> Unit {
   clear_shapes()
   text_cache.fonts.clear()
   text_cache.metrics.clear()
-  text_cache.glyphs.clear()
+  glyphs_forget()
   text_cache.generation = -1
+  text_cache.frame = 0
+  text_cache.thinned = -1
+  web_lines.val = false
   faces_reset()
   text_table.val = None
   inputs_since.val = false
   in_frame.val = false
   building.val = false
   messages_reset()
+  drop_reset()
   image_cache.clear()
   views_told_text.clear()
   views_told_info.clear()
@@ -72,6 +77,8 @@ fn reset_globals() -> Unit {
   native_nodes.clear()
   picture_at.clear()
   wheels.clear()
+  wheels_x.clear()
+  wheel_mods.clear()
   captures.clear()
   drags.clear()
   sideways.clear()
@@ -144,7 +151,10 @@ fn leaked_state() -> Array[String] {
 /// it runs (hostread.mbt): the system dark, the window's buttons in its top
 /// row, environment variables, the build's version code.
 /// `platform`: the system it plays, as @hostapi.platform has them (0 macOS,
-/// 1 iOS, 2 Android: how lists scroll). `seed`: the order the runtime's ready
+/// 1 iOS, 2 Android: how lists scroll). `pointing`: what the person points with (@ui.pointing), by default the
+/// system's (a finger on iOS and Android): a run told on one system and replayed as it was (its core told that
+/// system) by the hand it was made with. `native`: what the app was started to be used with (@ui.native_pointing), by
+/// default its system's (the hand of the moment, `pointing`, changes none of it). `seed`: the order the runtime's ready
 /// fibers run in is drawn from it (fx.mbt; without, the order they became ready).
 /// `text`: a real host's text as it kept it (MBUI_TEXT_RECORD's lines, textrec.mbt): its metrics, shaping and glyphs
 /// in place of the fake host's. `scale`: device pixels a point. `time`: the clock before the first frame (drawn 16 ms
@@ -160,6 +170,10 @@ fn leaked_state() -> Array[String] {
 /// `copy_shown`: the system says itself that something was put on the clipboard (Android 13 and later: @ui.copy_shown).
 /// `live`: a real host asked in place of the fake for what is drawn by, its text and its pictures (Live: a film's,
 /// mbui/src/film; never a test's), recorded as a host's are (MBUI_TEXT_RECORD=1 in `env`); `text` is then not read.
+/// `corners_held`: whether every frame it draws with nothing moving is held to the corner rule where the theme says
+/// its ladder (Tester::hold_corners); false for a test that draws a fault on purpose, to find it.
+/// `window_corner`: how round the system draws the window's corners (@hostapi.window_corner: a Mac's 16, Windows 11's
+/// 8; 0 square), the outermost container what lies in them is held concentric with (corners.mbt).
 pub fn Tester::new(
   view : (Ctx) -> Unit,
   w? : Double = 390.0,
@@ -170,6 +184,8 @@ pub fn Tester::new(
   app_version? : Int = 0,
   images? : Array[(String, Int, Int)] = [],
   platform? : Int = 0,
+  pointing? : Pointing,
+  native? : Pointing,
   seed? : Int,
   text? : String,
   scale? : Double = 2.0,
@@ -180,9 +196,14 @@ pub fn Tester::new(
   h264? : Bool = false,
   copy_shown? : Bool = false,
   live? : Live,
+  corners_held? : Bool = true,
+  window_corner? : Double = 0.0,
 ) -> Tester {
   let f = {
     time,
+    late: 0.0,
+    late_after: -1.0,
+    late_frame: -1,
     wall: tester_wall - time,
     scale,
     wants: false,
@@ -193,11 +214,29 @@ pub fn Tester::new(
     ime_sel: (0, 0),
     ime_told: 0,
     text_menu: (false, 0.0, 0.0, 0.0, 0.0, 0),
+    edit_can: -1,
     ime_rect: (0.0, 0.0, 0.0, 0.0),
     clipboard: "",
+    badge: 0,
+    local_station: "",
+    local_acts: [],
+    local_fonts: "",
+    families_given: {},
+    unreadable_fonts: [],
+    dock_on: false,
+    dock_lines: [],
+    dock_stops: 0,
+    dock_kept: "",
+    mods: 0,
     clipboard_secret: -1.0,
+    clipboard_image: -1,
     back_on: false,
     platform,
+    pointing: match pointing {
+      Some(p) => p
+      None => platform_pointing(platform)
+    },
+    native: native.unwrap_or(platform_pointing(platform)),
     reduce_transparency: false,
     reduce_motion: false,
     logs: [],
@@ -205,6 +244,7 @@ pub fn Tester::new(
     image_loads: [],
     images: {},
     bold: 0.0,
+    ui_face: 0.0,
     views: [],
     view_ids: 0,
     view_ready: {},
@@ -216,6 +256,8 @@ pub fn Tester::new(
     opened: [],
     dark,
     inset: window_inset,
+    full: false,
+    window_corner,
     font_scale: 1.0,
     a11y: false,
     a11y_said: "",
@@ -237,6 +279,7 @@ pub fn Tester::new(
     reads: [],
     read_ids: 0,
     read_answers: [],
+    read_from: {},
     players: {},
     share: None,
     share_files: [],
@@ -253,6 +296,7 @@ pub fn Tester::new(
     view_kinds: {},
     view_at: {},
     view_touch: {},
+    view_covers: {},
     touch_view: 0,
     touch_down: (0.0, 0.0),
     touch_at: (0.0, 0.0),
@@ -279,6 +323,7 @@ pub fn Tester::new(
   // (what the app asks of its host directly, the fake's too: fake_host.mbt)
   @hostapi.set_host(f)
   reset_globals()
+  corners_hold.val = corners_held
   // (after the globals are put back: what came from outside before the run's first frame, posted here, would be lost
   // with them, and the first frame drawn without it: the system's bars round an edge-to-edge window)
   if run is Some(r) {
@@ -538,6 +583,7 @@ pub fn Tester::frame_at(self : Tester, at : Double) -> Unit {
   }
   on_frame(self.w, self.h, self.fake.scale, self.fake.time)
   self.frames = self.frames + 1
+  self.hold_corners()
   // what the outside the test stands for has said meanwhile, posted for the next frame (messages.mbt)
   frame_ended_outside()
 }
@@ -702,6 +748,12 @@ pub fn Tester::text_menu(self : Tester) -> (Bool, Double, Double, Double, Double
 }
 
 ///|
+/// What the menu bar's editing items can do as the host was last told it (@hostapi.edit_can: text_menu_*; -1 not told).
+pub fn Tester::edit_can(self : Tester) -> Int {
+  self.fake.edit_can
+}
+
+///|
 /// Where the host was last told the caret is (x, y, w, h).
 pub fn Tester::ime_rect(self : Tester) -> (Double, Double, Double, Double) {
   self.fake.ime_rect
@@ -710,6 +762,66 @@ pub fn Tester::ime_rect(self : Tester) -> (Double, Double, Double, Double) {
 ///|
 pub fn Tester::clipboard(self : Tester) -> String {
   self.fake.clipboard
+}
+
+///|
+/// The number on the app's icon as the app last told it (@ui.set_badge).
+pub fn Tester::badge(self : Tester) -> Int {
+  self.fake.badge
+}
+
+///|
+/// This machine's station as its host says it from now on (@ui.local_station), "" none.
+pub fn Tester::set_local_station(self : Tester, json : String) -> Unit {
+  self.fake.local_station = json
+}
+
+///|
+/// The font families installed here from now on, as a JSON array of their names (@ui.local_font_families); "" none.
+pub fn Tester::set_local_fonts(self : Tester, json : String) -> Unit {
+  self.fake.local_fonts = json
+}
+
+///|
+/// A font file (by where it is) its host cannot read as a font from now on (@ui.face_add says false): one damaged, or
+/// not a font.
+pub fn Tester::set_unreadable_font(self : Tester, path : String) -> Unit {
+  self.fake.unreadable_fonts.push(path)
+}
+
+///|
+/// The family of this machine's given to face `face` last (@ui.face_add_family), "" none.
+pub fn Tester::family_given(self : Tester, face : Int) -> String {
+  self.fake.families_given.get(face).unwrap_or("")
+}
+
+///|
+/// What was done to this machine's station (@ui.local_station_act), oldest first.
+pub fn Tester::local_acts(self : Tester) -> Array[String] {
+  self.fake.local_acts
+}
+
+///|
+/// Whether there is a dock here from now on (@ui.dock_available).
+pub fn Tester::set_dock(self : Tester, on : Bool) -> Unit {
+  self.fake.dock_on = on
+}
+
+///|
+/// The keys held down from now on (@ui.mods_held: @ui.mod_alt, mod_cmd…; 0 none).
+pub fn Tester::hold_mods(self : Tester, mods : Int) -> Unit {
+  self.fake.mods = mods
+}
+
+///|
+/// The lines sent to the dock (@ui.dock_send), oldest first, and how often it was stopped.
+pub fn Tester::dock_lines(self : Tester) -> Array[String] {
+  self.fake.dock_lines
+}
+
+///|
+pub fn Tester::dock_stops(self : Tester) -> Int {
+  self.fake.dock_stops
 }
 
 ///|
@@ -728,6 +840,16 @@ pub fn Tester::hold_words(self : Tester) -> (String, String, String)? {
 /// The packages the app handed to the system's installer (@ui.install_package), oldest first.
 pub fn Tester::installs(self : Tester) -> Array[String] {
   self.fake.installs.copy()
+}
+
+///|
+/// The picture last put on the clipboard (Ctx::copy_image): its bytes' length, None when none was.
+pub fn Tester::clipboard_image(self : Tester) -> Int? {
+  if self.fake.clipboard_image < 0 {
+    None
+  } else {
+    Some(self.fake.clipboard_image)
+  }
 }
 
 ///|
@@ -784,6 +906,31 @@ pub fn Tester::hole_radii(self : Tester) -> Array[Double] {
     let b = i * inst_size
     if g().inst[b + 5] == 9.0 {
       out.push(g().inst[b + 4])
+    }
+  }
+  out
+}
+
+///|
+/// What each hole in the last frame shows of its view (kind 9, in the order of holes): the view's id (its image less
+/// @hostapi.view_tex_base) and the part of its content there (u0, v0, du, dv: shares of the content's rect), as a host
+/// that draws the view's picture draws it.
+pub fn Tester::hole_parts(self : Tester) -> Array[(Int, Double, Double, Double, Double)] {
+  ignore(self)
+  let out = []
+  for i in 0..<g().ninst {
+    let b = i * inst_size
+    let a = g().inst
+    if a[b + 5] == 9.0 {
+      out.push(
+        (
+          a[b + 20].to_int() - @hostapi.view_tex_base,
+          a[b + 12],
+          a[b + 13],
+          a[b + 14],
+          a[b + 15],
+        ),
+      )
     }
   }
   out
@@ -1289,6 +1436,26 @@ pub fn Tester::drawn_rects(self : Tester) -> Array[(Double, Double, Double, Doub
 }
 
 ///|
+/// The same rectangles with their corners, each its own (top left, then round it: an instance's 36-39).
+pub fn Tester::drawn_rect_corners(
+  self : Tester,
+) -> Array[(Double, Double, Double, Double, Int64, (Double, Double, Double, Double))] {
+  let rs = self.drawn_rects()
+  let out = []
+  let c = g()
+  let mut j = 0
+  for k in 0..<c.ninst {
+    let b = k * inst_size
+    if c.inst[b + 5] == 0.0 {
+      let r = rs[j]
+      out.push((r.0, r.1, r.2, r.3, r.4, (c.inst[b + 36], c.inst[b + 37], c.inst[b + 38], c.inst[b + 39])))
+      j += 1
+    }
+  }
+  out
+}
+
+///|
 /// The shadows drawn in the last frame (a blurred shape, kind 2): (x, y, w, h, its corner, its blur, colour
 /// RRGGBBAA with its opacity applied).
 pub fn Tester::drawn_shadows(self : Tester) -> Array[(Double, Double, Double, Double, Double, Double, Int64)] {
@@ -1440,6 +1607,13 @@ pub fn Tester::app_state(self : Tester, visible : Bool, focused : Bool) -> Unit 
 /// host's shapes ignore weight otherwise).
 pub fn Tester::bold_wider(self : Tester, em : Double) -> Unit {
   self.fake.bold = em
+}
+
+///|
+/// What is set in the app's words' face `em` ems wider a character once one is given (face_add @hostapi.face_ui) than
+/// in the system's, from now on (the fake host's shapes ignore faces otherwise).
+pub fn Tester::ui_face_wider(self : Tester, em : Double) -> Unit {
+  self.fake.ui_face = em
 }
 
 ///|
@@ -1602,6 +1776,13 @@ pub fn Tester::wheel_phase(self : Tester, x : Double, y : Double, dy : Double, p
 }
 
 ///|
+/// The wheel turned both ways (`dx`, `dy`) at (x, y) with `mods` held (wheel_mod_*: ⌘ to zoom a picture, a pinch).
+pub fn Tester::wheel_with(self : Tester, x : Double, y : Double, dx : Double, dy : Double, mods : Int) -> Unit {
+  finger_wheel(x, y, dx, dy, mods * 16)
+  self.draw()
+}
+
+///|
 /// The pointer's shape the host was last told (desktop.mbt Cursor).
 pub fn Tester::cursor(self : Tester) -> Cursor {
   match self.fake.cursor {
@@ -1618,6 +1799,13 @@ pub fn Tester::cursor(self : Tester) -> Cursor {
 /// How often a press asked the host to drag the window.
 pub fn Tester::window_drags(self : Tester) -> Int {
   self.fake.window_drags
+}
+
+///|
+/// Whether a press at (x, y) would drag the window (what it lands on is a target of Ctx::window_drag), pressing nothing.
+pub fn Tester::drags_window_at(self : Tester, x : Double, y : Double) -> Bool {
+  let c = self.ctx()
+  desk_drags(hit_in(c.hit_ids, c.hit_rects, x, y))
 }
 
 ///|
@@ -1700,4 +1888,30 @@ pub fn Tester::focused(self : Tester) -> SemNode? {
     }
   }
   None
+}
+
+///|
+/// Whether every frame a test draws at rest is held to the corner rule (Tester::hold_corners): as the Tester was made
+/// (its `corners_held`).
+// kept across runs: set again by each Tester (Tester::new)
+let corners_hold : Ref[Bool] = Ref(true)
+
+///|
+/// The corner rule (corners.mbt), held on the frame just drawn when nothing on it moves (a motion between its ends
+/// stands anywhere): where the theme says its ladder (an app's: Theme::corner_ladder), any fault fails the test at
+/// once, with what and where. So what a test reaches, every state of every screen it walks through, keeps to it, not
+/// only the screens a test of corners looks at.
+fn Tester::hold_corners(self : Tester) -> Unit {
+  let c = g()
+  if !corners_hold.val || c.corner_ladder.is_empty() || c.frame_by is Some(_) || c.motion_left {
+    return
+  }
+  let faults = c.corner_faults()
+  if faults.is_empty() {
+    return
+  }
+  let said = "the corner rule broken on a frame drawn \{self.w}×\{self.h} at \{self.fake.time} (the theme's ladder \{c.corner_ladder}; still.fail's docs/ui-panels.md 圆角阶梯, mbui's docs/style.md):\n" +
+    faults.join("\n")
+  println(said)
+  abort(said)
 }

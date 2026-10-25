@@ -21,7 +21,7 @@ export const activityPulse = style({
   width: "8px", height: "8px", boxSizing: "border-box", borderRadius: "50%", border: `2px solid ${vars.accent}`,
   flex: "none",
 });
-export const markdown = style({ fontFamily: vars.fontText, fontSize: vars.textBody, lineHeight: "1.65", overflowWrap: "anywhere", minWidth: "0" });
+export const markdown = style({ fontFamily: vars.fontText, fontVariantNumeric: "normal", fontSize: vars.textBody, lineHeight: "1.65", overflowWrap: "anywhere", minWidth: "0" });
 globalStyle(`${pageBarTitle} h1`, {
   margin: "0", fontSize: vars.textBody, fontWeight: "600", overflow: "hidden", textOverflow: "ellipsis",
   whiteSpace: "nowrap", maxWidth: "42vw",

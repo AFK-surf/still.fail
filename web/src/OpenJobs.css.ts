@@ -1,6 +1,7 @@
 // The sidebar foot's services and jobs left up a long while (OpenJobs.tsx): quiet rows over the settings, their dots the only colour.
 import { globalStyle, style } from "@vanilla-extract/css";
 import { vars } from "@stillfail/ui/styles/tokens.css.ts";
+import { litOver } from "@stillfail/ui/styles/lit.ts";
 import { centredY } from "@stillfail/ui/styles/align.ts";
 
 const ellipsis = { minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" } as const;
@@ -49,7 +50,7 @@ export const openJobsMore = style({
 export const openJobsChip = style({
   flex: "none", display: "inline-flex", alignItems: "center", gap: "6px", height: "24px", padding: "0 9px", border: "0",
   borderRadius: "12px", background: vars.hover, color: vars.text, font: "inherit", fontSize: vars.textMeta, cursor: "pointer",
-  selectors: { '&[data-state="open"], &:hover': { background: vars.selected } },
+  selectors: { '&[data-state="open"], &:hover': litOver },
 });
 export const openJobsChipDot = style({ width: "7px", height: "7px", borderRadius: "50%", background: vars.green });
 export const openJobsPop = style({ width: "280px", maxWidth: "calc(100vw - 16px)", maxHeight: "min(420px, 60vh)", overflowY: "auto" });

@@ -1,0 +1,20 @@
+# The sidebar's edge (Rail.tsx SidebarEdge: the library's edge, @sf.handle_drag, edge_look, edge_tip):
+# MBUI_FIXTURE=drive MBUI_WIN=1280x800. The pointer onto the edge (its bar, its line, its words by the pointer a moment
+# later, following it down), the edge dragged 60 wider and let go, the pointer away; then pressed alone (the sidebar
+# folded to the rail) and the pointer away.
+timeout 20000
+until 设计稿
+wait 600
+move 296 420
+wait 1000
+move 296 560
+wait 600
+drag 296 560 60 0 600
+wait 900
+move 700 600
+wait 600
+tapxy 356 560
+wait 900
+move 700 600
+wait 600
+exit

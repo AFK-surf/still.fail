@@ -157,13 +157,13 @@ test "context menu: opened at the pointer by a right click, at its press by a lo
   })
   t.right_click(100.0, 120.0)
   // come in (its panel grows in from where it opened)
-  t.run_for(menu_in_ms)
+  t.run_for(pop_ms)
   let (x, y, _, _) = t.get(@ui.Menu, label="Edit").rect
   assert_true(x >= 100.0 && x < 110.0 && y >= 120.0 && y < 130.0)
   t.click(@ui.MenuItem, label="Paste")
   assert_eq(chosen.val, Some("paste"))
-  // drawn while it goes out, gone once it has
-  t.run_for(menu_out_ms)
+  // gone at once
+  t.draw()
   assert_true(t.query(@ui.Menu) is None)
   // a finger held still
   t.touch(0, 50.0, 200.0)
@@ -380,4 +380,43 @@ test "dropdown menu: put by a rectangle, its own motion and a scrim; gone once i
   t.run_for(motion_ms)
   assert_true(t.find("One") is None)
   t.assert_idle()
+}
+
+///|
+/// Where `words` are drawn now (their top and bottom, moved as what holds them scrolls), or a failure.
+fn words_span(t : @ui.Tester, words : String) -> (Double, Double) raise {
+  match t.words().iter().find_first(fn(w) { w.0 == words }) {
+    Some((_, _, y, _, h, _)) => (y, y + h)
+    None => fail("\{words} not drawn")
+  }
+}
+
+///|
+test "dropdown menu: taller than the window, as tall as it lets it, its items scrolled to" {
+  let open = Ref(true)
+  let entries = Array::makei(40, fn(i) { menu_item("i\{i}", label="Item \{i + 1}") })
+  let t = @ui.Tester::new(
+    fn(c) {
+      c.box(w=Fill(1.0), h=Fill(1.0), pad=40.0, justify=JEnd, fn() {
+        let tr = button(c, "More", key="more")
+        if tr.clicked {
+          open.val = !open.val
+        }
+        open.val = dropdown_menu(c, "menu", open.val, tr.id, entries, label="More").open
+      })
+      |> ignore
+    },
+    w=600.0,
+    h=400.0,
+  )
+  t.run_for(presence_in_ms)
+  // its first item in the window, its last past it until scrolled to
+  let (first, _) = words_span(t, "Item 1")
+  assert_true(first > 0.0, msg="its first item out of the window")
+  assert_true(words_span(t, "Item 40").0 > 400.0, msg="its last item not past what it shows")
+  let (x, y) = t.find("Item 1").unwrap()
+  t.wheel(x, y, 5000.0)
+  assert_true(words_span(t, "Item 40").1 < 400.0, msg="its items not scrolled to their end")
+  assert_true(words_span(t, "Item 1").0 < 0.0)
+  assert_true(open.val)
 }

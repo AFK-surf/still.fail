@@ -29,7 +29,7 @@ mkdir -p out/shots
 SHOT_MS=1000
 export SHOT_MS
 PLATFORMS=${*:-kit home chat cards composer drive decide glass newchat preview settings wide web-kit web-home web-chat web-cards web-composer web-drive web-decide web-glass web-newchat web-preview web-settings}
-DRIVE_MODES="files drive drive-sub drive-chosen drive-entry drive-upload drive-download drive-empty reader reader-bars reader-contents reader-layout reader-md chat-station-files chat-station-ref chat-station-file chat-station-sheet"
+DRIVE_MODES="files drive drive-sub drive-upload drive-download drive-empty reader reader-bars reader-contents reader-layout reader-md chat-station-files chat-station-ref chat-station-file chat-station-sheet"
 DECIDE="decisions decisions-text decisions-idle history history-details chat-info chat-agent chat-jobs chat-job home-jobs chat-letters-info chat-letters chat-letters-open"
 PLAYER_MODES="video audio ended opening"
 SERVICE_MODES="service service-sized service-restart service-stopped"
@@ -79,33 +79,33 @@ shoot() {
     kit)
       build_mac sfkit
       rm -rf out/shot-kit; mkdir -p out/shot-kit
-      MBUI_BENCH=-1 MBUI_SCREEN=kit MBUI_WIN=390x844 MBUI_SCRIPT=kit MBUI_SHOT_DIR=$PWD/out/shot-kit ./_build/native/release/build/stillfail/sfkit/sfkit.exe >/dev/null
+      MBUI_BENCH=-1 MBUI_SCREEN=kit MBUI_WIN=390x844 MBUI_SCRIPT=kit MBUI_SHOT_DIR=$PWD/out/shot-kit on_screen ./_build/native/release/build/stillfail/sfkit/sfkit.exe >/dev/null
       cp out/shot-kit/kit-1-root.png out/shots/mac-kit.png
       cp out/shot-kit/kit-3-swipe.png out/shots/mac-kit-swipe.png
       names="mac-kit mac-kit-swipe" ;;
     home)
       build_mac sffix
       rm -rf out/shot-home; mkdir -p out/shot-home
-      MBUI_BENCH=-1 MBUI_WIN=390x844 MBUI_SCRIPT=home MBUI_SHOT_DIR=$PWD/out/shot-home ./_build/native/release/build/stillfail/sffix/sffix.exe >/dev/null
+      MBUI_BENCH=-1 MBUI_WIN=390x844 MBUI_SCRIPT=home MBUI_SHOT_DIR=$PWD/out/shot-home on_screen ./_build/native/release/build/stillfail/sffix/sffix.exe >/dev/null
       cp out/shot-home/home-1.png out/shots/mac-home.png
       cp out/shot-home/home-2-workspaces.png out/shots/mac-home-sheet.png
       cp out/shot-home/home-4-swipe.png out/shots/mac-home-swipe.png
-      MBUI_BENCH=-1 MBUI_WIN=390x844 MBUI_DARK=1 MBUI_SCRIPT=shot MBUI_SHOT_MS=$SHOT_MS MBUI_SHOT_NAME=home-dark MBUI_SHOT_DIR=$PWD/out/shot-home ./_build/native/release/build/stillfail/sffix/sffix.exe >/dev/null
+      MBUI_BENCH=-1 MBUI_WIN=390x844 MBUI_DARK=1 MBUI_SCRIPT=shot MBUI_SHOT_MS=$SHOT_MS MBUI_SHOT_NAME=home-dark MBUI_SHOT_DIR=$PWD/out/shot-home on_screen ./_build/native/release/build/stillfail/sffix/sffix.exe >/dev/null
       cp out/shot-home/home-dark.png out/shots/mac-home-dark.png
       names="mac-home mac-home-sheet mac-home-swipe mac-home-dark" ;;
     chat)
       build_mac sffix
       rm -rf out/shot-chat; mkdir -p out/shot-chat
-      MBUI_BENCH=-1 MBUI_WIN=390x844 MBUI_FIXTURE=chat MBUI_SCRIPT=chat MBUI_SHOT_DIR=$PWD/out/shot-chat ./_build/native/release/build/stillfail/sffix/sffix.exe >/dev/null
-      MBUI_BENCH=-1 MBUI_WIN=390x844 MBUI_FIXTURE=chat-loading MBUI_SCRIPT=shot MBUI_SHOT_MS=$SHOT_MS MBUI_SHOT_NAME=loading MBUI_SHOT_DIR=$PWD/out/shot-chat ./_build/native/release/build/stillfail/sffix/sffix.exe >/dev/null
+      MBUI_BENCH=-1 MBUI_WIN=390x844 MBUI_FIXTURE=chat MBUI_SCRIPT=chat MBUI_SHOT_DIR=$PWD/out/shot-chat on_screen ./_build/native/release/build/stillfail/sffix/sffix.exe >/dev/null
+      MBUI_BENCH=-1 MBUI_WIN=390x844 MBUI_FIXTURE=chat-loading MBUI_SCRIPT=shot MBUI_SHOT_MS=$SHOT_MS MBUI_SHOT_NAME=loading MBUI_SHOT_DIR=$PWD/out/shot-chat on_screen ./_build/native/release/build/stillfail/sffix/sffix.exe >/dev/null
       cp out/shot-chat/chat-1.png out/shots/mac-chat.png
       cp out/shot-chat/chat-2-up.png out/shots/mac-chat-up.png
       cp out/shot-chat/loading.png out/shots/mac-chat-loading.png
-      MBUI_BENCH=-1 MBUI_WIN=390x844 MBUI_FIXTURE=chat MBUI_DARK=1 MBUI_SCRIPT=shot MBUI_SHOT_MS=$SHOT_MS MBUI_SHOT_NAME=dark MBUI_SHOT_DIR=$PWD/out/shot-chat ./_build/native/release/build/stillfail/sffix/sffix.exe >/dev/null
-      MBUI_BENCH=-1 MBUI_WIN=390x844 MBUI_FIXTURE=chat MBUI_GLASS=solid MBUI_SCRIPT=shot MBUI_SHOT_MS=$SHOT_MS MBUI_SHOT_NAME=solid MBUI_SHOT_DIR=$PWD/out/shot-chat ./_build/native/release/build/stillfail/sffix/sffix.exe >/dev/null
+      MBUI_BENCH=-1 MBUI_WIN=390x844 MBUI_FIXTURE=chat MBUI_DARK=1 MBUI_SCRIPT=shot MBUI_SHOT_MS=$SHOT_MS MBUI_SHOT_NAME=dark MBUI_SHOT_DIR=$PWD/out/shot-chat on_screen ./_build/native/release/build/stillfail/sffix/sffix.exe >/dev/null
+      MBUI_BENCH=-1 MBUI_WIN=390x844 MBUI_FIXTURE=chat MBUI_GLASS=solid MBUI_SCRIPT=shot MBUI_SHOT_MS=$SHOT_MS MBUI_SHOT_NAME=solid MBUI_SHOT_DIR=$PWD/out/shot-chat on_screen ./_build/native/release/build/stillfail/sffix/sffix.exe >/dev/null
       # scrolled so a picture is under the bar's glass and messages under the composer's
       rm -rf out/shot-chat-glass; mkdir -p out/shot-chat-glass
-      MBUI_BENCH=-1 MBUI_WIN=390x844 MBUI_FIXTURE=chat MBUI_CHAT_UP=1000 MBUI_SCRIPT=chat MBUI_SHOT_DIR=$PWD/out/shot-chat-glass ./_build/native/release/build/stillfail/sffix/sffix.exe >/dev/null
+      MBUI_BENCH=-1 MBUI_WIN=390x844 MBUI_FIXTURE=chat MBUI_CHAT_UP=1000 MBUI_SCRIPT=chat MBUI_SHOT_DIR=$PWD/out/shot-chat-glass on_screen ./_build/native/release/build/stillfail/sffix/sffix.exe >/dev/null
       cp out/shot-chat-glass/chat-2-up.png out/shots/mac-chat-glass.png
       cp out/shot-chat/dark.png out/shots/mac-chat-dark.png
       cp out/shot-chat/solid.png out/shots/mac-chat-solid.png
@@ -113,8 +113,8 @@ shoot() {
     glass)
       build_mac sfkit
       rm -rf out/shot-glass; mkdir -p out/shot-glass
-      MBUI_BENCH=-1 MBUI_SCREEN=glass MBUI_WIN=390x844 MBUI_SCRIPT=shot MBUI_SHOT_MS=$SHOT_MS MBUI_SHOT_NAME=glass MBUI_SHOT_DIR=$PWD/out/shot-glass ./_build/native/release/build/stillfail/sfkit/sfkit.exe >/dev/null
-      MBUI_BENCH=-1 MBUI_SCREEN=glass MBUI_DARK=1 MBUI_WIN=390x844 MBUI_SCRIPT=shot MBUI_SHOT_MS=$SHOT_MS MBUI_SHOT_NAME=glass-dark MBUI_SHOT_DIR=$PWD/out/shot-glass ./_build/native/release/build/stillfail/sfkit/sfkit.exe >/dev/null
+      MBUI_BENCH=-1 MBUI_SCREEN=glass MBUI_WIN=390x844 MBUI_SCRIPT=shot MBUI_SHOT_MS=$SHOT_MS MBUI_SHOT_NAME=glass MBUI_SHOT_DIR=$PWD/out/shot-glass on_screen ./_build/native/release/build/stillfail/sfkit/sfkit.exe >/dev/null
+      MBUI_BENCH=-1 MBUI_SCREEN=glass MBUI_DARK=1 MBUI_WIN=390x844 MBUI_SCRIPT=shot MBUI_SHOT_MS=$SHOT_MS MBUI_SHOT_NAME=glass-dark MBUI_SHOT_DIR=$PWD/out/shot-glass on_screen ./_build/native/release/build/stillfail/sfkit/sfkit.exe >/dev/null
       cp out/shot-glass/glass.png out/shots/mac-glass.png
       cp out/shot-glass/glass-dark.png out/shots/mac-glass-dark.png
       names="mac-glass mac-glass-dark" ;;
@@ -128,7 +128,7 @@ shoot() {
       rm -rf out/shot-composer; mkdir -p out/shot-composer
       names=
       for m in compose attach quote sending failed; do
-        MBUI_BENCH=-1 MBUI_WIN=390x844 MBUI_FIXTURE=chat-$m MBUI_SCRIPT=shot MBUI_SHOT_MS=$SHOT_MS MBUI_SHOT_NAME=$m MBUI_SHOT_DIR=$PWD/out/shot-composer ./_build/native/release/build/stillfail/sffix/sffix.exe >/dev/null
+        MBUI_BENCH=-1 MBUI_WIN=390x844 MBUI_FIXTURE=chat-$m MBUI_SCRIPT=shot MBUI_SHOT_MS=$SHOT_MS MBUI_SHOT_NAME=$m MBUI_SHOT_DIR=$PWD/out/shot-composer on_screen ./_build/native/release/build/stillfail/sffix/sffix.exe >/dev/null
         cp out/shot-composer/$m.png out/shots/mac-composer-$m.png
         names="$names mac-composer-$m"
       done ;;
@@ -140,7 +140,7 @@ shoot() {
       rm -rf out/shot-cards; mkdir -p out/shot-cards
       names=
       for m in cards answering md pick link-menu; do
-        MBUI_BENCH=-1 MBUI_WIN=390x844 MBUI_FIXTURE=chat-$m MBUI_SCRIPT=shot MBUI_SHOT_MS=$SHOT_MS MBUI_SHOT_NAME=$m MBUI_SHOT_DIR=$PWD/out/shot-cards ./_build/native/release/build/stillfail/sffix/sffix.exe >/dev/null
+        MBUI_BENCH=-1 MBUI_WIN=390x844 MBUI_FIXTURE=chat-$m MBUI_SCRIPT=shot MBUI_SHOT_MS=$SHOT_MS MBUI_SHOT_NAME=$m MBUI_SHOT_DIR=$PWD/out/shot-cards on_screen ./_build/native/release/build/stillfail/sffix/sffix.exe >/dev/null
         cp out/shot-cards/$m.png out/shots/mac-chat-$m.png
         names="$names mac-chat-$m"
       done ;;
@@ -152,7 +152,7 @@ shoot() {
       rm -rf out/shot-drive; mkdir -p out/shot-drive
       names=
       for m in $DRIVE_MODES; do
-        MBUI_BENCH=-1 MBUI_WIN=390x844 MBUI_FIXTURE=$m MBUI_SCRIPT=shot MBUI_SHOT_MS=$SHOT_MS MBUI_SHOT_NAME=$m MBUI_SHOT_DIR=$PWD/out/shot-drive ./_build/native/release/build/stillfail/sffix/sffix.exe >/dev/null
+        MBUI_BENCH=-1 MBUI_WIN=390x844 MBUI_FIXTURE=$m MBUI_SCRIPT=shot MBUI_SHOT_MS=$SHOT_MS MBUI_SHOT_NAME=$m MBUI_SHOT_DIR=$PWD/out/shot-drive on_screen ./_build/native/release/build/stillfail/sffix/sffix.exe >/dev/null
         cp out/shot-drive/$m.png out/shots/mac-$m.png
         names="$names mac-$m"
       done ;;
@@ -168,7 +168,7 @@ shoot() {
       rm -rf out/shot-decide; mkdir -p out/shot-decide
       names=
       for m in $DECIDE; do
-        MBUI_BENCH=-1 MBUI_WIN=390x844 MBUI_FIXTURE=$m MBUI_SCRIPT=shot MBUI_SHOT_MS=$SHOT_MS MBUI_SHOT_NAME=$m MBUI_SHOT_DIR=$PWD/out/shot-decide ./_build/native/release/build/stillfail/sffix/sffix.exe >/dev/null
+        MBUI_BENCH=-1 MBUI_WIN=390x844 MBUI_FIXTURE=$m MBUI_SCRIPT=shot MBUI_SHOT_MS=$SHOT_MS MBUI_SHOT_NAME=$m MBUI_SHOT_DIR=$PWD/out/shot-decide on_screen ./_build/native/release/build/stillfail/sffix/sffix.exe >/dev/null
         cp out/shot-decide/$m.png out/shots/mac-decide-$m.png
         names="$names mac-decide-$m"
       done ;;
@@ -185,7 +185,7 @@ shoot() {
       rm -rf out/shot-newchat; mkdir -p out/shot-newchat
       names=
       for m in newchat newchat-station newchat-model home-bars place; do
-        MBUI_BENCH=-1 MBUI_WIN=390x844 MBUI_FIXTURE=$m MBUI_SCRIPT=shot MBUI_SHOT_MS=$SHOT_MS MBUI_SHOT_NAME=$m MBUI_SHOT_DIR=$PWD/out/shot-newchat ./_build/native/release/build/stillfail/sffix/sffix.exe >/dev/null
+        MBUI_BENCH=-1 MBUI_WIN=390x844 MBUI_FIXTURE=$m MBUI_SCRIPT=shot MBUI_SHOT_MS=$SHOT_MS MBUI_SHOT_NAME=$m MBUI_SHOT_DIR=$PWD/out/shot-newchat on_screen ./_build/native/release/build/stillfail/sffix/sffix.exe >/dev/null
         cp out/shot-newchat/$m.png out/shots/mac-newchat-$m.png
         names="$names mac-newchat-$m"
       done ;;
@@ -204,7 +204,7 @@ shoot() {
       rm -rf out/shot-preview; mkdir -p out/shot-preview
       names=
       for m in image pdf video audio html code md csv none step swipe; do
-        MBUI_BENCH=-1 MBUI_WIN=390x844 MBUI_FIXTURE=chat-preview-$m MBUI_SCRIPT=shot MBUI_SHOT_MS=$SHOT_MS MBUI_SHOT_NAME=$m MBUI_SHOT_DIR=$PWD/out/shot-preview ./_build/native/release/build/stillfail/sffix/sffix.exe >/dev/null
+        MBUI_BENCH=-1 MBUI_WIN=390x844 MBUI_FIXTURE=chat-preview-$m MBUI_SCRIPT=shot MBUI_SHOT_MS=$SHOT_MS MBUI_SHOT_NAME=$m MBUI_SHOT_DIR=$PWD/out/shot-preview on_screen ./_build/native/release/build/stillfail/sffix/sffix.exe >/dev/null
         cp out/shot-preview/$m.png out/shots/mac-preview-$m.png
         names="$names mac-preview-$m"
       done ;;
@@ -222,7 +222,7 @@ shoot() {
       rm -rf out/shot-player; mkdir -p out/shot-player
       names=
       for m in $PLAYER_MODES; do
-        MBUI_BENCH=-1 MBUI_WIN=390x844 MBUI_FIXTURE=player-$m MBUI_SCRIPT=shot MBUI_SHOT_MS=$SHOT_MS MBUI_SHOT_NAME=$m MBUI_SHOT_DIR=$PWD/out/shot-player ./_build/native/release/build/stillfail/sffix/sffix.exe >/dev/null
+        MBUI_BENCH=-1 MBUI_WIN=390x844 MBUI_FIXTURE=player-$m MBUI_SCRIPT=shot MBUI_SHOT_MS=$SHOT_MS MBUI_SHOT_NAME=$m MBUI_SHOT_DIR=$PWD/out/shot-player on_screen ./_build/native/release/build/stillfail/sffix/sffix.exe >/dev/null
         cp out/shot-player/$m.png out/shots/mac-player-$m.png
         names="$names mac-player-$m"
       done ;;
@@ -240,7 +240,7 @@ shoot() {
       rm -rf out/shot-service; mkdir -p out/shot-service
       names=
       for m in $SERVICE_MODES; do
-        MBUI_BENCH=-1 MBUI_WIN=390x844 MBUI_FIXTURE=$m MBUI_SCRIPT=shot MBUI_SHOT_MS=$SHOT_MS MBUI_SHOT_NAME=$m MBUI_SHOT_DIR=$PWD/out/shot-service ./_build/native/release/build/stillfail/sffix/sffix.exe >/dev/null
+        MBUI_BENCH=-1 MBUI_WIN=390x844 MBUI_FIXTURE=$m MBUI_SCRIPT=shot MBUI_SHOT_MS=$SHOT_MS MBUI_SHOT_NAME=$m MBUI_SHOT_DIR=$PWD/out/shot-service on_screen ./_build/native/release/build/stillfail/sffix/sffix.exe >/dev/null
         cp out/shot-service/$m.png out/shots/mac-$m.png
         names="$names mac-$m"
       done ;;
@@ -257,7 +257,7 @@ shoot() {
       rm -rf out/shot-share; mkdir -p out/shot-share
       names=
       for m in $SHARE_MODES; do
-        MBUI_BENCH=-1 MBUI_WIN=390x844 MBUI_FIXTURE=$m MBUI_SCRIPT=shot MBUI_SHOT_MS=$SHOT_MS MBUI_SHOT_NAME=$m MBUI_SHOT_DIR=$PWD/out/shot-share ./_build/native/release/build/stillfail/sffix/sffix.exe >/dev/null
+        MBUI_BENCH=-1 MBUI_WIN=390x844 MBUI_FIXTURE=$m MBUI_SCRIPT=shot MBUI_SHOT_MS=$SHOT_MS MBUI_SHOT_NAME=$m MBUI_SHOT_DIR=$PWD/out/shot-share on_screen ./_build/native/release/build/stillfail/sffix/sffix.exe >/dev/null
         cp out/shot-share/$m.png out/shots/mac-$m.png
         names="$names mac-$m"
       done ;;
@@ -276,7 +276,7 @@ shoot() {
       for m in $WIDE_MODES; do
         for d in 0 1; do
           n=mac-wide-$m$([ $d = 1 ] && echo -dark)
-          MBUI_BENCH=-1 MBUI_WIN=${WIDE_WIN:-1280x800} MBUI_DARK=$d MBUI_FIXTURE=$m MBUI_SCRIPT=shot MBUI_SHOT_MS=$SHOT_MS MBUI_SHOT_NAME=$n MBUI_SHOT_DIR=$PWD/out/shot-wide ./_build/native/release/build/stillfail/sffix/sffix.exe >/dev/null
+          MBUI_BENCH=-1 MBUI_WIN=${WIDE_WIN:-1280x800} MBUI_DARK=$d MBUI_FIXTURE=$m MBUI_SCRIPT=shot MBUI_SHOT_MS=$SHOT_MS MBUI_SHOT_NAME=$n MBUI_SHOT_DIR=$PWD/out/shot-wide on_screen ./_build/native/release/build/stillfail/sffix/sffix.exe >/dev/null
           cp out/shot-wide/$n.png out/shots/$n.png
           names="$names $n"
         done
@@ -286,7 +286,7 @@ shoot() {
       rm -rf out/shot-settings; mkdir -p out/shot-settings
       names=
       for m in $SETTINGS_PAGES; do
-        MBUI_BENCH=-1 MBUI_WIN=390x844 MBUI_FIXTURE=settings-$m MBUI_SCRIPT=shot MBUI_SHOT_MS=$SHOT_MS MBUI_SHOT_NAME=$m MBUI_SHOT_DIR=$PWD/out/shot-settings ./_build/native/release/build/stillfail/sffix/sffix.exe >/dev/null
+        MBUI_BENCH=-1 MBUI_WIN=390x844 MBUI_FIXTURE=settings-$m MBUI_SCRIPT=shot MBUI_SHOT_MS=$SHOT_MS MBUI_SHOT_NAME=$m MBUI_SHOT_DIR=$PWD/out/shot-settings on_screen ./_build/native/release/build/stillfail/sffix/sffix.exe >/dev/null
         cp out/shot-settings/$m.png out/shots/mac-settings-$m.png
         names="$names mac-settings-$m"
       done ;;
@@ -315,7 +315,7 @@ shoot() {
       build_mac sffix
       rm -rf out/shot-notify; mkdir -p out/shot-notify
       for m in chat-flash chat-flash-mine settings-notify-off; do
-        MBUI_BENCH=-1 MBUI_WIN=390x844 MBUI_FIXTURE=$m MBUI_SCRIPT=shot MBUI_SHOT_MS=$SHOT_MS MBUI_SHOT_NAME=$m MBUI_SHOT_DIR=$PWD/out/shot-notify ./_build/native/release/build/stillfail/sffix/sffix.exe >/dev/null
+        MBUI_BENCH=-1 MBUI_WIN=390x844 MBUI_FIXTURE=$m MBUI_SCRIPT=shot MBUI_SHOT_MS=$SHOT_MS MBUI_SHOT_NAME=$m MBUI_SHOT_DIR=$PWD/out/shot-notify on_screen ./_build/native/release/build/stillfail/sffix/sffix.exe >/dev/null
         cp out/shot-notify/$m.png out/shots/mac-notify-${m#chat-}.png
       done
       names="mac-notify-flash mac-notify-flash-mine mac-notify-settings-notify-off" ;;

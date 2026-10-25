@@ -11,7 +11,9 @@ import type { Call } from "../core/calls.ts";
 import { CoreError } from "../error.ts";
 import * as format from "../format.ts";
 import { t } from "../i18n.ts";
+import { markdown } from "../markdown.ts";
 import { encode } from "../ops.ts";
+import { placeFiles } from "../placed.ts";
 import * as present from "../present.ts";
 import { StationAddr, stationId } from "../station/addr.ts";
 import { arr as arrU, base64url, get as getU, isObject } from "../util.ts";
@@ -125,16 +127,23 @@ export function previewShown(answer: J, clock: present.Clock, members: J[] = [])
   });
   const messages = arr(get(answer, "entries")).map((e) => {
     const hidden = hiddenAt.get(num(e.n)) ?? 0;
+    const agent = e.authorKind === "agent";
+    const text = str(e.text) ?? "";
+    const own = arr(e.files).flatMap((k) => files.filter((f) => f.k === k));
+    // An agent's words are Markdown, read here as the chat's are, with the files they place (placed.ts).
+    const placed = agent ? [...placeFiles(text, own).placed.keys()] : [];
     return {
       n: num(e.n),
       author: str(e.author) ?? "",
-      agent: e.authorKind === "agent",
+      agent,
       // Who said it drawn as the chat draws them: an agent's maker's mark, a person's picture.
       ...(present.maker(str(e.model)) ? { maker: present.maker(str(e.model)) } : {}),
       ...(str(e.runtime) !== null ? { runtime: str(e.runtime) } : {}),
       ...(pictureOf(members, str(e.person)) !== null ? { picture: pictureOf(members, str(e.person)) } : {}),
-      text: str(e.text) ?? "",
-      files: arr(e.files).flatMap((k) => files.filter((f) => f.k === k)),
+      text,
+      ...(agent ? { md: markdown(text) } : {}),
+      files: own,
+      ...(placed.length > 0 ? { placed } : {}),
       hidden,
       ...(hidden > 0 ? { hiddenText: t("core-views.publish.hidden", { n: hidden }) } : {}),
       createdAt: num(e.at),

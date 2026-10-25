@@ -118,6 +118,16 @@ export function isLetter(m: { authorKind: string; author: string; text: string; 
 /// addLetterColumn).
 export const LETTER_SQL = "(letter IS NOT NULL)";
 
+/// The Slack and Feishu threads a still.fail chat can copy what people send to when they ask (`cc`, docs/relay.md
+/// "抄送"): every one its agents are in, the one said in last first, at most 20; with a connect that posts there. One
+/// `?`: the chat's thread id.
+export const CC_THREADS_SQL = `SELECT t.*, o.connect FROM thread_sessions m
+  JOIN thread_sessions o ON o.session = m.session JOIN threads t ON t.id = o.thread
+  WHERE m.thread = ? AND t.surface != '${STILLFAIL_SURFACE}'
+  GROUP BY t.id
+  ORDER BY (SELECT MAX(e.at) FROM entries e WHERE e.thread = t.id) DESC, t.created_at DESC, t.id DESC
+  LIMIT 20`;
+
 /// The letter an entry's `letter` column (or an archive file's entry) holds (absent: none, or one not read).
 export function letterOf(v: unknown): Letter | undefined {
   const l = typeof v === "string" ? parsed(v) : v;
@@ -212,8 +222,8 @@ export type StoreChange =
   | { type: "job"; id: string }
   /// A job that was over was taken off its session's record.
   | { type: "jobRemoved"; id: string; session: string }
-  /// Model calls were recorded (store/usage.ts).
-  | { type: "usage" };
+  /// Model calls were recorded (store/usage.ts), of these sessions.
+  | { type: "usage"; sessions: string[] };
 
 // ── words ──
 
@@ -479,3 +489,36 @@ export function takeChars(text: string, n: number): string {
 
 /// Rust's ordering of String keys (a BTreeMap's): by their UTF-8 bytes.
 export const byBytes = (a: string, b: string) => Buffer.compare(Buffer.from(a), Buffer.from(b));
+
+/// The jobs running now, the latest first, by the index on their state (schema.ts jobs_up): the main thread's and the
+/// readers' (who keeps watch).
+export const JOBS_RUNNING = "SELECT * FROM jobs WHERE state = 'running' ORDER BY started_at DESC";
+
+/// A session's jobs, the latest first, by the index on their session (schema.ts jobs_by_session): the main thread's and
+/// the readers'.
+export const SESSION_JOBS = "SELECT * FROM jobs WHERE session_key = ? ORDER BY started_at DESC";
+
+/// The session that went on with a runtime's session (`?1`, `?2`: its current one, or one it ran in before), the latest
+/// active first: by the indexes on them (schema.ts sessions_by_runtime_id, runtime_sessions_by_id), not by asking every
+/// session in turn which it ran in.
+export const SESSION_OF_RUNTIME = `SELECT key FROM (
+    SELECT key, last_active_at FROM sessions WHERE runtime_session_id = ?2 AND runtime = ?1
+    UNION ALL SELECT s.key, s.last_active_at FROM runtime_sessions r JOIN sessions s ON s.key = r.session_key WHERE r.id = ?2 AND s.runtime = ?1
+  ) ORDER BY last_active_at DESC LIMIT 1`;
+
+/// What each list of chats asks of the cards answered lately (answersSince, the main thread's and the readers'): the
+/// latest card, or post with options, before a person's message (schema.ts addClientColumn's entries_cards and
+/// entries_options), and the cards closed since (closed_cards_at).
+export const CARD_BEFORE = "SELECT max(n) AS n FROM entries WHERE thread = ? AND n < ? AND kind = 'message' AND card IS NOT NULL";
+export const OPTIONS_BEFORE = "SELECT max(n) AS n FROM entries WHERE thread = ? AND n < ? AND kind = 'message' AND options IS NOT NULL";
+export const CLOSED_SINCE = "SELECT thread, n, viewer, at FROM closed_cards WHERE at >= ?";
+/// A thread's people's messages since `?2` (the items of a sidebar a change touched), by schema.ts entries_people_since.
+export const SAID_SINCE = "SELECT thread, n FROM entries WHERE thread = ? AND author_kind = 'person' AND kind = 'message' AND at >= ?";
+
+/// A context falling under half of what the call before sent (at least this much), on the same account and model, was
+/// compacted (sessions/pool.ts; what schema.ts USAGE_COMPACTIONS keeps).
+export const COMPACTED_FROM = 50_000;
+
+/// Who wrote in a thread, each with when they first did: as the database keeps them (schema.ts LIST_STATE
+/// thread_people), each's first message's time.
+export const PEOPLE_AT = "SELECT p.author, e.at FROM thread_people p JOIN entries e ON e.thread = p.thread AND e.n = p.first_n WHERE p.thread = ?";

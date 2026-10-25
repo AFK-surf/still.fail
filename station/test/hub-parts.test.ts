@@ -2,10 +2,12 @@
 // links, the live view, the agent home, the account pool, the decision protocol, references to other chats.
 import assert from "node:assert/strict";
 import { appendFileSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, readlinkSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import fs from "node:fs";
+import { syncBuiltinESMExports } from "node:module";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
-import { brief, readTimeline, transcriptPaths } from "../src/read/transcript.ts";
+import { brief, claudeProject, readTimeline, sessionPlaces, transcriptPaths } from "../src/read/transcript.ts";
 import { linkAgentHome, linkTranscripts, writeBuiltinSkills } from "../src/sessions/agent-home.ts";
 import { isSlackMethod, isStopCommand, slackWithFiles, threadCommand } from "../src/sessions/args.ts";
 import { splitForSlack } from "../src/sessions/chat.ts";
@@ -13,8 +15,9 @@ import { hubConfig } from "../src/sessions/config.ts";
 import { completionQuestion, parse, request } from "../src/sessions/decision.ts";
 import { sizeOf } from "../src/sessions/image-size.ts";
 import { nextTsAt } from "../src/sessions/internal.ts";
-import { type Counted, type LiveMessage, LiveHub, TranscriptTail, briefInput, inBrief } from "../src/sessions/live.ts";
-import { prepare } from "../src/sessions/local-links.ts";
+import { type Counted, HELD_AFTER_MS, type History, type LiveMessage, LiveHub, TranscriptTail, briefInput, inBrief } from "../src/sessions/live.ts";
+import { chainOf, entriesOf, lengthOf, stateOf } from "../src/read/transcripts.ts";
+import { prepare, prepareHere } from "../src/sessions/local-links.ts";
 import { formatSteps, linkedSession } from "../src/sessions/others.ts";
 import { availableEfforts, cheapToLeave, commonEfforts, pickProfile, serves, urgency } from "../src/sessions/pool.ts";
 import { spelling } from "../src/sessions/config.ts";
@@ -85,6 +88,28 @@ test("explicit files are reused, and missing or colliding files are refused", ()
   // A reference link to a local file is refused: it must be inline.
   assert.throws(() => prepare(`[report][r]\n\n[r]: ${file}`, [], dir), /must use inline Markdown/);
   rmSync(dir, { recursive: true, force: true });
+});
+
+test("a relative link names a file in the workspace, or one attached by its name; naming none, it is refused", () => {
+  for (const [how, prep] of [["as the station reads it", prepare], ["without the addon", prepareHere]] as const) {
+    const dir = temp();
+    mkdirSync(join(dir, "films"));
+    writeFileSync(join(dir, "films/新建对话-手机.mp4"), "film");
+    writeFileSync(join(dir, "report.pdf"), "report");
+    // A film in the workspace, as an absolute path would be: attached, the link naming it by its name.
+    const paths: string[] = [];
+    const out = prep("[手机](films/新建对话-手机.mp4)\n[网页](https://example.com/a) [节](#a) <a@b.co>", paths, dir);
+    assert.deepEqual(paths, [join(dir, "films/新建对话-手机.mp4")], how);
+    assert.equal(out, `[手机](${encodeURIComponent("新建对话-手机").replace(/-/g, "%2D")}%2Emp4)\n[网页](https://example.com/a) [节](#a) <a@b.co>`, how);
+    // One the message attaches with files, by its name: left as it is, the clients place it so.
+    const attached = [join(dir, "report.pdf")];
+    assert.equal(prep("[报告](report.pdf)", attached, dir), "[报告](report.pdf)", how);
+    assert.deepEqual(attached, [join(dir, "report.pdf")], how);
+    // Naming nothing a reader could open: refused before it is posted.
+    assert.throws(() => prep("[手机](films/missing.mp4)", [], dir), /names no file in the workspace/, how);
+    assert.throws(() => prep("[站点](www.example.com)", [], dir), /names no file in the workspace/, how);
+    rmSync(dir, { recursive: true, force: true });
+  }
 });
 
 test("files an app cannot upload stay in still.fail, and the post links there", () => {
@@ -283,6 +308,133 @@ test("a watcher in brief is told the entries in brief, those it lacks and those 
   rmSync(dir, { recursive: true, force: true });
 });
 
+test("a session at work is followed by the station itself: told from where it ends, its last entries before it is done, kept a while after", async () => {
+  const dir = temp();
+  const path = join(dir, "t.jsonl");
+  writeFileSync(path, line("one", "m1") + line("two", "m2"));
+  const time = testClock();
+  let reads = 0;
+  const hub = new LiveHub(() => (reads++, { runtime: "claude", paths: [path] }), time.clock);
+  const told: LiveMessage[] = [];
+  const lengths: [string, number][] = [];
+  hub.heldTold = (key, m) => void told.push({ ...m, key } as any);
+  hub.lengths = (key, n) => void lengths.push([key, n]);
+  hub.running("s", true);
+  assert.deepEqual(hub.held(), ["s"]);
+  // Where it ends, none of what it said before; the steps in flight.
+  const start = told.find((m) => m.type === "timeline") as any;
+  assert.deepEqual([start.start, start.entries], [2, []]);
+  assert.ok(told.some((m) => m.type === "steps"));
+  assert.deepEqual(lengths, [["s", 2]]);
+  // As a stream that opens finds it.
+  assert.deepEqual(hub.now("s").map((m: any) => [m.type, m.start ?? null]), [["timeline", 2], ["steps", null]]);
+  told.length = 0;
+  // Its last entry, written as its turn ends, is told before it is told to be done (no 40 ms wait).
+  appendFileSync(path, line("three", "m3"));
+  hub.turnEnded("s");
+  const kinds = told.map((m) => m.type);
+  assert.ok(kinds.indexOf("timeline") >= 0 && kinds.indexOf("timeline") < kinds.indexOf("clear"), kinds.join());
+  assert.deepEqual((told.find((m) => m.type === "timeline") as any).entries.map((e: any) => e.text), ["three"]);
+  assert.deepEqual(lengths.at(-1), ["s", 3]);
+  // Done: still followed a while, and at work again within it, not read again from the start.
+  hub.running("s", false);
+  await time.adjust(HELD_AFTER_MS - 1);
+  await settle();
+  assert.deepEqual(hub.held(), ["s"]);
+  hub.running("s", true);
+  await time.adjust(HELD_AFTER_MS * 2);
+  await settle();
+  assert.deepEqual(hub.held(), ["s"]);
+  assert.equal(reads, 1, "located and read once");
+  // Done for longer than the while: let go.
+  hub.running("s", false);
+  await time.adjust(HELD_AFTER_MS);
+  await settle();
+  assert.deepEqual(hub.held(), []);
+  told.length = 0;
+  appendFileSync(path, line("four", "m4"));
+  watched(hub, "s");
+  await time.adjust(40);
+  await settle();
+  assert.equal(told.length, 0, "nothing told of a session let go");
+  hub.close();
+  rmSync(dir, { recursive: true, force: true });
+});
+
+/// Where a LiveHub reads a transcript's past (as the readers do: read/transcripts.ts), counting what it is asked.
+function historyOf(path: string, asked: string[] = [], hold?: Promise<void>): History {
+  return {
+    state: async () => (asked.push("state"), stateOf("claude", [path], null)),
+    page: async (_key, before, limit, briefed) => {
+      asked.push(`page ${before} ${limit} ${briefed}`);
+      await hold;
+      const chain = chainOf("claude", [path], null);
+      const end = lengthOf(chain);
+      const upto = Math.min(before, end);
+      const start = Math.max(0, upto - limit);
+      return { start, entries: entriesOf("claude", chain, start, upto, briefed), end };
+    },
+  };
+}
+
+test("where the readers keep a session's history the live view reads none of its past: it goes on from where they stand, a listener given what it lacks from them, in brief once", async () => {
+  const dir = temp();
+  const path = join(dir, "t.jsonl");
+  const bash = (id: string, n: number) => `${JSON.stringify({ type: "assistant", timestamp: "2026-10-05T00:00:00Z", message: { id, content: [{ type: "tool_use", id, name: "Bash", input: { command: "true && ".repeat(n), description: `Step ${id}` } }] } })}\n`;
+  writeFileSync(path, line("one", "m1") + bash("b", 200) + line("three", "m3"));
+  const time = testClock();
+  const hub = new LiveHub(() => ({ runtime: "claude", paths: [path] }), time.clock);
+  const asked: string[] = [];
+  hub.history = historyOf(path, asked);
+  const got: LiveMessage[] = [];
+  hub.subscribe("s", 1, null, (m) => void got.push(m), true);
+  assert.equal(got.length, 0, "where it stands is read off the main thread first");
+  await settle();
+  const first = got[0] as Extract<LiveMessage, { type: "timeline" }>;
+  assert.deepEqual([first.type, first.start, first.entries.length], ["timeline", 1, 2]);
+  assert.equal(JSON.parse(first.entries[0]!.text).description, "Step b", "in brief, once");
+  assert.equal(got[1]!.type, "steps");
+  assert.deepEqual(asked, ["state", "page 3 2 true"]);
+  // None of it kept here: only where it stands.
+  const watching = (hub as any).watched.get("s");
+  assert.deepEqual([watching.tail.keeps, watching.tail.length, watching.tail.entries.length], [false, 3, 0]);
+  // Written on: read here from where the readers stood, told in brief.
+  got.length = 0;
+  appendFileSync(path, bash("d", 300));
+  watched(hub, "s");
+  await time.adjust(40);
+  await settle();
+  const told = got.find((m): m is Extract<LiveMessage, { type: "timeline" }> => m.type === "timeline")!;
+  assert.deepEqual([told.start, told.entries[0]!.brief, JSON.parse(told.entries[0]!.text).description], [3, true, "Step d"]);
+  // A page of it (session_history): from the readers, whole.
+  const page = await hub.page("s", Number.MAX_SAFE_INTEGER, 2);
+  assert.deepEqual([page!.start, page!.end, page!.entries.map((e) => e.kind)], [2, 4, ["assistant", "tool_call"]]);
+  assert.ok(Array.from(page!.entries[1]!.text).length > 600, "whole");
+  hub.close();
+  rmSync(dir, { recursive: true, force: true });
+});
+
+test("what is said while a listener joins is told it after what it lacks", async () => {
+  const dir = temp();
+  const path = join(dir, "t.jsonl");
+  writeFileSync(path, line("one", "m1") + line("two", "m2"));
+  const time = testClock();
+  const hub = new LiveHub(() => ({ runtime: "claude", paths: [path] }), time.clock);
+  let release = () => {};
+  hub.history = historyOf(path, [], new Promise<void>((r) => (release = r)));
+  const got: LiveMessage[] = [];
+  hub.subscribe("s", 0, null, (m) => void got.push(m));
+  await settle();
+  hub.event("s", { kind: "phase", phase: "working" });
+  assert.equal(got.length, 0);
+  release();
+  await settle();
+  assert.deepEqual(got.map((m) => m.type), ["timeline", "steps", "step"]);
+  assert.deepEqual((got[0] as any).entries.map((e: any) => e.text), ["one", "two"]);
+  hub.close();
+  rmSync(dir, { recursive: true, force: true });
+});
+
 test("a watcher can take only the latest entries, and ask for those before", () => {
   const dir = temp();
   const path = join(dir, "t.jsonl");
@@ -338,16 +490,64 @@ test("a session gone on in a new runtime session: its history reads on from the 
   rmSync(dir, { recursive: true, force: true });
 });
 
-test("a session's transcripts are found in the home of whichever account wrote them, the current one's once written", () => {
+test("a session's transcripts are found in the shared place, else in the home of whichever account wrote them; the current one's once written", () => {
   const dir = temp();
   const [a, b] = [join(dir, "a"), join(dir, "b")];
   mkdirSync(join(a, "projects", "w"), { recursive: true });
   mkdirSync(join(b, "projects", "w"), { recursive: true });
+  mkdirSync(join(dir, "transcripts", "claude", "w"), { recursive: true });
   writeFileSync(join(a, "projects", "w", "one.jsonl"), line("one", "m1"));
   writeFileSync(join(b, "projects", "w", "two.jsonl"), line("two", "m2"));
-  assert.deepEqual(transcriptPaths("claude", [b, a], ["one", "two", "three"]), { paths: [join(a, "projects", "w", "one.jsonl"), join(b, "projects", "w", "two.jsonl")], current: false });
+  // Written in a home no profile has any more: in the shared place, as every home the station keeps writes there.
+  writeFileSync(join(dir, "transcripts", "claude", "w", "zero.jsonl"), line("zero", "m0"));
+  assert.deepEqual(transcriptPaths("claude", dir, [b, a], ["zero", "one", "two", "three"]), {
+    paths: [join(dir, "transcripts", "claude", "w", "zero.jsonl"), join(a, "projects", "w", "one.jsonl"), join(b, "projects", "w", "two.jsonl")],
+    current: false,
+  });
   writeFileSync(join(b, "projects", "w", "three.jsonl"), line("three", "m3"));
-  assert.equal(transcriptPaths("claude", [b, a], ["one", "two", "three"]).current, true);
+  assert.equal(transcriptPaths("claude", dir, [b, a], ["one", "two", "three"]).current, true);
+  rmSync(dir, { recursive: true, force: true });
+});
+
+test("a Claude transcript is looked for in the project of its session's working directory, the projects listed only for one that ran elsewhere", () => {
+  const dir = temp();
+  const shared = join(dir, "transcripts", "claude");
+  const workspace = join(dir, "sessions", "ember", "c-1", "workspace");
+  const moved = join(dir, "repos", "app");
+  const [here, there] = [claudeProject(workspace)!, claudeProject(moved)!];
+  assert.equal(claudeProject("/Users/a/.stillfail/sessions/ember/c-1/workspace"), "-Users-a--stillfail-sessions-ember-c-1-workspace");
+  assert.equal(claudeProject(`/${"x".repeat(200)}`), null, "one Claude Code shortens and hashes");
+  for (const project of [here, there, "-old-place", ...Array.from({ length: 40 }, (_, i) => `-other-${i}`)]) mkdirSync(join(shared, project), { recursive: true });
+  writeFileSync(join(shared, here, "now.jsonl"), line("now", "m1"));
+  writeFileSync(join(shared, there, "since.jsonl"), line("since", "m2"));
+  // Before the data directory moved: in a project no place of the session's names.
+  writeFileSync(join(shared, "-old-place", "before.jsonl"), line("before", "m0"));
+  // Each listing of a directory, counted.
+  const listed: string[] = [];
+  const real = fs.readdirSync;
+  fs.readdirSync = ((path: fs.PathLike, ...rest: unknown[]) => (listed.push(String(path)), (real as (...a: unknown[]) => unknown)(path, ...rest))) as unknown as typeof real;
+  syncBuiltinESMExports();
+  try {
+    const places = sessionPlaces({ cwd: null, workspace });
+    assert.deepEqual(transcriptPaths("claude", dir, [], ["now"], places), { paths: [join(shared, here, "now.jsonl")], current: true });
+    assert.deepEqual(listed, [], "found where it works: nothing listed");
+    // One that ran elsewhere: found by listing the projects, then where it was found.
+    assert.deepEqual(transcriptPaths("claude", dir, [], ["before", "now"], places).paths, [join(shared, "-old-place", "before.jsonl"), join(shared, here, "now.jsonl")]);
+    assert.equal(listed.length, 1);
+    assert.equal(transcriptPaths("claude", dir, [], ["before", "now"], places).paths.length, 2);
+    assert.equal(listed.length, 1, "where it was found");
+    // Moved to another directory: there first, its workspace's still.
+    const both = sessionPlaces({ cwd: moved, workspace });
+    assert.deepEqual(both, [moved, workspace]);
+    assert.deepEqual(transcriptPaths("claude", dir, [], ["now", "since"], both).paths, [join(shared, here, "now.jsonl"), join(shared, there, "since.jsonl")]);
+    assert.equal(listed.length, 1);
+    // No places said: every project's looked in, as before.
+    assert.deepEqual(transcriptPaths("claude", dir, [], ["since"]).paths, [join(shared, there, "since.jsonl")]);
+    assert.equal(listed.length, 2);
+  } finally {
+    fs.readdirSync = real;
+    syncBuiltinESMExports();
+  }
   rmSync(dir, { recursive: true, force: true });
 });
 
@@ -445,16 +645,72 @@ test("profile homes link to the shared memory and skills under their runtimes' n
 
 test("every profile's transcripts are a runtime's one shared place", () => {
   const root = temp();
-  const [both, own] = [join(root, "both"), join(root, "own")];
+  const data = join(root, "data");
+  const [both, own] = [join(data, "homes", "both"), join(root, "own")];
   mkdirSync(join(own, "sessions"), { recursive: true });
-  linkTranscripts(root, [
+  linkTranscripts(data, [
     { id: "both", runtimes: ["claude", "codex"], home: both },
     { id: "own", runtimes: ["codex"], home: own },
   ]);
-  assert.equal(readlinkSync(join(both, "projects")), join(root, "transcripts/claude"));
-  assert.equal(readlinkSync(join(both, "sessions")), join(root, "transcripts/codex"));
+  assert.equal(readlinkSync(join(both, "projects")), join(data, "transcripts/claude"));
+  assert.equal(readlinkSync(join(both, "sessions")), join(data, "transcripts/codex"));
+  // A home outside the data directory whose runtime keeps its transcripts there already: the person's own, left.
   assert.ok(lstatSync(join(own, "sessions")).isDirectory());
   rmSync(root, { recursive: true, force: true });
+});
+
+test("transcripts a home kept itself go to the shared place, a runtime still writing them goes on there, and a home no profile names any more gives its own", () => {
+  const data = temp();
+  const shared = join(data, "transcripts", "claude", "w");
+  const [now, was, gone] = [join(data, "homes", "a-sync"), join(data, "homes", "a"), join(data, "homes", "b")];
+  const put = (home: string, name: string, text: string) => {
+    mkdirSync(join(home, "projects", "w", "s1", "subagents"), { recursive: true });
+    writeFileSync(join(home, "projects", "w", name), text);
+  };
+  // The profile's home was copied (a-sync) while a runtime went on writing in the one it started in (a), which no
+  // profile names now; another (b) is a profile's that was removed.
+  put(was, "s1.jsonl", line("one", "m1") + line("two", "m2"));
+  writeFileSync(join(was, "projects", "w", "s1", "subagents", "agent-x.jsonl"), line("sub", "m9"));
+  put(now, "s1.jsonl", line("one", "m1"));
+  put(now, "s2.jsonl", line("new", "m3"));
+  put(gone, "s0.jsonl", line("old", "m0"));
+  // Claude Code's own sessions/ in a home of its: not Codex's transcripts.
+  mkdirSync(join(gone, "sessions"), { recursive: true });
+  writeFileSync(join(gone, "sessions", "123.json"), "{}");
+  linkTranscripts(data, [{ id: "a", runtimes: ["claude"], home: now }]);
+  for (const home of [now, was, gone]) assert.equal(readlinkSync(join(home, "projects")), join(data, "transcripts", "claude"));
+  assert.ok(lstatSync(join(gone, "sessions")).isDirectory());
+  assert.equal(readFileSync(join(shared, "s1.jsonl"), "utf8"), line("one", "m1") + line("two", "m2"), "the copy from before it grew gives way");
+  assert.equal(readFileSync(join(shared, "s1", "subagents", "agent-x.jsonl"), "utf8"), line("sub", "m9"));
+  assert.equal(readFileSync(join(shared, "s2.jsonl"), "utf8"), line("new", "m3"));
+  assert.equal(readFileSync(join(shared, "s0.jsonl"), "utf8"), line("old", "m0"));
+  for (const home of [now, was, gone]) assert.deepEqual(readdirSync(home).filter((n) => n.startsWith("projects.")), [], "nothing kept aside");
+  // The runtime started in the home it ran in goes on writing there: the same transcript.
+  appendFileSync(join(was, "projects", "w", "s1.jsonl"), line("three", "m4"));
+  assert.deepEqual(transcriptPaths("claude", data, [now], ["s0", "s1", "s2"]).paths.map((p) => readTimeline("claude", p).map((e) => e.text)), [["old"], ["one", "two", "three"], ["new"]]);
+  // Linked again (the config changed): as it is.
+  linkTranscripts(data, [{ id: "a", runtimes: ["claude"], home: now }]);
+  assert.equal(readFileSync(join(shared, "s1.jsonl"), "utf8"), line("one", "m1") + line("two", "m2") + line("three", "m4"));
+  rmSync(data, { recursive: true, force: true });
+});
+
+test("a transcript that went its own way in two homes keeps the shared place's and is left aside, not lost", () => {
+  const data = temp();
+  const [a, b] = [join(data, "homes", "a"), join(data, "homes", "b")];
+  for (const [home, text] of [[a, "mine"], [b, "theirs"]] as const) {
+    mkdirSync(join(home, "projects", "w"), { recursive: true });
+    writeFileSync(join(home, "projects", "w", "s.jsonl"), line(text, "m"));
+  }
+  linkTranscripts(data, [
+    { id: "a", runtimes: ["claude"], home: a },
+    { id: "b", runtimes: ["claude"], home: b },
+  ]);
+  assert.equal(readFileSync(join(data, "transcripts", "claude", "w", "s.jsonl"), "utf8"), line("mine", "m"));
+  assert.equal(readlinkSync(join(b, "projects")), join(data, "transcripts", "claude"));
+  const aside = readdirSync(b).filter((n) => n.startsWith("projects.unshared"));
+  assert.equal(aside.length, 1);
+  assert.equal(readFileSync(join(b, aside[0]!, "w", "s.jsonl"), "utf8"), line("theirs", "m"));
+  rmSync(data, { recursive: true, force: true });
 });
 
 test("the station's own skills are written and kept as the station has them; the feedback skill on the stable channel only", () => {

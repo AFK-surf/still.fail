@@ -1,0 +1,337 @@
+// The viewer's frame, whatever the tier and the input (ember web/src/FilePreview.tsx; drawn by the library's
+// viewer_frame.mbt, what it says and does given from here): over the whole window, on the page's own canvas whatever
+// it shows (a PDF's a step greyer). In any tier but Small (the web's `docked`) the bar every file opened has across
+// the top (back to the chat or the folder by name, the file's name, which of how many, its size and kind; its tools,
+// download); in Small one bar floating at the top as wide as what it holds (its name, tools, download and close). The
+// ways to the image before and after are discs of the canvas at its sides. What it does follows the input: a mouse
+// moving wakes the bars over an image and the ways beside it, which go again once it rests (REST_MS) unless it is on
+// them, a click round the image (not on it) closes it; a finger's tap shows or hides them. Esc closes it, ← and →
+// step. A text and Markdown open in the library's reader, a film and a song in its player, each with its own bar;
+// what it shows otherwise is laid out as the web's, narrower under 640 (viewer.mbt).
+
+///|
+/// The viewer over the window, if one is open: drawn after what is under it.
+pub fn file_viewer(c : @ui.Ctx, src : Source) -> Unit {
+  viewer_layer(c, src)
+}
+
+///|
+/// Where it is among those it steps through and how many they are (an image's: its chat's, as the core tells them,
+/// imageNear's index and count; a folder's); (-1, 0) when it steps through none.
+pub fn viewer_place(vw : Viewer, src : Source) -> (Int, Int) {
+  if vw.shown_kind() != Some(KImage) {
+    return (-1, 0)
+  }
+  match vw.steps {
+    NoSteps => (-1, 0)
+    InChat(thread, session) => {
+      let p : Map[String, Json] = { "station": Json::string(vw.station), "path": Json::string(vw.file.path) }
+      match thread {
+        Some(th) => p["thread"] = Json::number(th)
+        None => p["session"] = Json::string(session)
+      }
+      let told = (src.topic)("imageNear", p).value
+      let at = match field(told, "index") {
+        Some(Number(n, ..)) => n.to_int()
+        _ => -1
+      }
+      (at, number(told, "count").to_int())
+    }
+    InFolder(files) => {
+      let mut at = -1
+      for i, f in files {
+        if Some(f.path) == vw.drive.map(fn(d) { d.path }) {
+          at = i
+        }
+      }
+      (at, files.length())
+    }
+  }
+}
+
+///|
+/// A kind's name, as the bar says it after the size (FilePreview.tsx KIND_LABEL: PDF and Markdown their own names).
+pub fn vf_kind_label(kind : PKind?) -> String {
+  match kind {
+    Some(KImage) => @sf.t("web-main.preview.kind.image")
+    Some(KVideo) => @sf.t("web-main.preview.kind.video")
+    Some(KAudio) => @sf.t("web-main.preview.kind.audio")
+    Some(KPdf) => "PDF"
+    Some(KMarkdown) => "Markdown"
+    Some(KCsv) => @sf.t("web-main.preview.kind.csv")
+    Some(KHtml) => @sf.t("web-main.preview.kind.html")
+    Some(KCode) => @sf.t("web-main.preview.kind.code")
+    Some(KText) => @sf.t("web-main.preview.kind.text")
+    None => ""
+  }
+}
+
+///|
+/// The line under the name (FilePreview.tsx meta): which of how many, its size, its kind; a video's own facts after
+/// them (the web player's bar: its size in pixels, how long, its rate).
+pub fn vf_meta(vw : Viewer, src : Source) -> String {
+  let (at, count) = viewer_place(vw, src)
+  let parts : Array[String] = []
+  let first = if count > 1 && at >= 0 { "\{at + 1} / \{count} · " } else { "" }
+  parts.push(first + @sf.file_size(vw.file.size))
+  let kind = vf_kind_label(vw.shown_kind())
+  if kind != "" {
+    parts.push(kind)
+  }
+  match vw.view() {
+    Some(n) if vw.shown_kind() == Some(KVideo) => {
+      let (w, h) = n.natural()
+      if w > 0.0 && h > 0.0 {
+        parts.push("\{w.to_int()}×\{h.to_int()}")
+        let dur = n.duration()
+        if dur > 0.0 {
+          parts.push(vf_clock(dur))
+        }
+        match n.frames() {
+          Some(list) if list.length() > 1 && dur > 0.0 =>
+            parts.push("\{(list.length().to_double() * 1000.0 / dur).round().to_int()} fps")
+          _ => ()
+        }
+      }
+    }
+    _ => ()
+  }
+  parts.join(" · ")
+}
+
+///|
+/// A time as a video's facts say it (web/ui viewer/playing.ts clockMs): m:ss.mmm.
+pub fn vf_clock(ms : Double) -> String {
+  let total = ms.round().to_int()
+  let m = total / 60000
+  let s = total / 1000 % 60
+  let r = total % 1000
+  let ss = if s < 10 { "0\{s}" } else { "\{s}" }
+  let rr = if r < 10 { "00\{r}" } else if r < 100 { "0\{r}" } else { "\{r}" }
+  "\{m}:\{ss}.\{rr}"
+}
+
+///|
+/// The bar across the window's top, in its place in the preview's layer: gone with the rest of the preview as it
+/// fades (`shown`), and as the pointer rests over an image; its tools by what it shows. The pointer's moves wake it.
+pub fn vf_bar(vw : Viewer, c : @ui.Ctx, src : Source, shown : Double) -> Unit {
+  let v = vw
+  // read in the reader, played in the player: their own bars
+  if vf_reads(v) || v.shown_kind() == Some(KAudio) || v.shown_kind() == Some(KVideo) {
+    return
+  }
+  let ink = @sf.page_viewer_ink()
+  let kind = v.shown_kind()
+  // a mouse moving over it wakes what fades; resting on the bar, it stays
+  let (px, py, _) = c.pointer()
+  if @sf.pointer_rests() && v.mouse_seen && (px != v.mouse_x || py != v.mouse_y) {
+    v.wake(rest_ms)
+  }
+  if @sf.pointer_rests() && !v.awake && py >= 0.0 && py < @sf.viewer_bar_h && v.mouse_seen {
+    v.wake(rest_ms)
+  }
+  v.mouse_x = px
+  v.mouse_y = py
+  v.mouse_seen = true
+  // Esc closes it (marking: leaves the marks first), ← and → step
+  if !v.closing && c.key_pressed(@ui.key_escape) {
+    if marking.on {
+      marks_back(c)
+    } else {
+      v.shut(c)
+    }
+  }
+  if !v.closing && !marking.on && kind == Some(KImage) {
+    if c.key_pressed(@ui.key_code_left) {
+      v.go(c, src, -1, 0.0)
+    } else if c.key_pressed(@ui.key_code_right) {
+      v.go(c, src, 1, 0.0)
+    }
+    @sf.viewer_zoom_keys(c, v.zoom)
+  }
+  // a picture's bar goes as the pointer rests (not while it comes, nor marking); what is read stays
+  let hidden = kind == Some(KImage) && !v.bars_shown()
+  let awake = v.bars_shown() || v.coming() || marking.on
+  let (closed, wide) = @sf.viewer_frame_bar(
+    c,
+    "preview",
+    v.desk_back(src),
+    v.file.name,
+    vf_meta(v, src),
+    hidden,
+    awake,
+    v.head_w,
+    shown,
+    ink,
+    fn() {
+      match v.got {
+        Some(got) if v.coming() && (@sf.layout(c.width) is Small) => file_progress(c, got, v.file.size)
+        _ => ()
+      }
+      vf_tools(v, c, ink, v.download(src))
+    },
+  )
+  // (the floating bar, once open, only grows)
+  if wide > v.head_w {
+    v.head_w = wide
+  }
+  if closed && !v.closing {
+    v.shut(c)
+  }
+}
+
+///|
+/// The bar's tools by what it shows (FilePreview.tsx: its `controls`, then copy and download): an image's zoom and its
+/// marks, a page's or a table's 预览 / 源码, download last.
+pub fn vf_tools(vw : Viewer, c : @ui.Ctx, ink : @sf.ViewerInk, dl : Json?) -> Unit {
+  let v = vw
+  match v.shown_kind() {
+    Some(KImage) if marking.on =>
+      marks_actions(c, v.draft_key() != "", fn(draft) { v.finish_marks(c, draft) }, ink=ink.muted)
+    Some(KImage) if !v.coming() => {
+      @sf.viewer_zoom(c, "preview", v.zoom, ink)
+      // 标注图片: once its whole picture is here (annotate/ImageMarks.tsx)
+      if v.bytes is Some(_) && @sf.viewer_tool(c, "preview/mark", "edit", @sf.t("web-main.annotate.image"), ink) {
+        marks_start()
+      }
+      // 复制: the whole picture on the clipboard, a check a moment after (FilePreview.tsx CopyImage)
+      match v.bytes {
+        Some(b) => {
+          let shown = v.copied > 0 && !@kit.after(c, "preview/copied/\{v.copied}", true, @sf.copied_ms)
+          if @sf.viewer_tool(c, "preview/copy", if shown { "check" } else { "copy" }, @sf.t(if shown { "common.copied" } else { "common.copy" }), ink) {
+            c.copy_image(b)
+            v.copied += 1
+          }
+        }
+        None => ()
+      }
+    }
+    Some(KCsv) | Some(KHtml) | Some(KMarkdown) if v.bytes is Some(_) => {
+      let chosen = @sf.segmented(
+        c,
+        "preview/tabs",
+        [@sf.t("web-main.preview.rendered"), @sf.t("web-main.preview.source")],
+        if v.source { 1 } else { 0 },
+        item_w=vf_tabs_item,
+      )
+      if (chosen == 1) != v.source {
+        v.source = chosen == 1
+        // the page under the canvas goes while its source shows (and comes again)
+        if v.source {
+          match v.page {
+            Some(p) => p.close()
+            None => ()
+          }
+          v.page = None
+        }
+      }
+    }
+    _ => ()
+  }
+  if !v.coming() && !marking.on {
+    // what is here saved at once; one told of, or played as it comes, read whole first
+    let streamed = v.shown_kind() == Some(KVideo) || v.shown_kind() == Some(KAudio)
+    // (while the core downloads it, how far it has come in its place: once it is all here it is kept by itself)
+    let saving = v.bytes is Some(_) || ((v.told_of() || streamed) && !v.asked)
+    let coming = if downloading(dl) { Some(number(dl, "progress")) } else { None }
+    if @sf.viewer_download(c, "preview/download", ink, disabled=!saving, coming?=coming) {
+      v.ask_save(c)
+    }
+  }
+}
+
+///|
+/// The ways to the image before and after (@sf.viewer_steps), while an image steps through others and is not marked.
+pub fn vf_steps(vw : Viewer, c : @ui.Ctx, src : Source, shown : Double) -> Unit {
+  if vw.shown_kind() != Some(KImage) || marking.on {
+    return
+  }
+  let (before, after) = vw.near(src)
+  let went = @sf.viewer_steps(c, "preview", before is Some(_), after is Some(_), vw.bars_shown(), shown)
+  if went != 0 {
+    vw.go(c, src, went, 0.0)
+  }
+}
+
+///|
+/// A file told of, not shown (FilePreview.tsx fpNote, toldOf): its kind's mark, its name, its size and extension,
+/// that it cannot be shown here; 下载 as the page's primary button, or how far it has come once asked for (`dl`: the
+/// core's download of it, downloads.mbt).
+pub fn vf_facts(vw : Viewer, c : @ui.Ctx, src : Source, dl : Json?) -> Unit {
+  let v = vw
+  @sf.viewer_facts(
+    c,
+    v.file.name,
+    v.file.size,
+    if v.shown_kind() is None {
+      @sf.t("web-main.preview.unsupported")
+    } else {
+      pv("android-chat.file.tooBigToShow")
+    },
+  )
+  if v.asked && v.bytes is None && v.error is None {
+    vf_coming(v, c)
+    return
+  }
+  // downloaded by the core: how far it has come (on by itself as this closes; called off here), why it failed
+  if downloading(dl) {
+    file_progress(c, (number(dl, "loaded"), Some(number(dl, "size"))), v.file.size, said=text(dl, "statusText"))
+    if @sf.button(c, @sf.t("web-main.file.cancelDownload"), key="preview/note-cancel", tone=Ghost) {
+      v.cancel_download(c, src, dl)
+    }
+    return
+  }
+  if text(dl, "state") == "failed" {
+    @sf.viewer_failed(c, text(dl, "statusText"))
+  }
+  match v.error {
+    Some(e) => @sf.viewer_failed(c, @sf.t("web-main.preview.loadFailed", args=[("error", e)]))
+    None => ()
+  }
+  // an APK: 安装 first, handed to the system's installer (FilePreview.kt: install, strong); 下载 then the quieter
+  let apk = @sf.lower(v.file.name).has_suffix(".apk")
+  if apk && @sf.button(c, pv("android-chat.file.install"), key="preview/note-install", tone=Primary) {
+    v.ask_install(c)
+  }
+  if @sf.button(c, @sf.t("web-main.preview.download"), key="preview/note-download", tone=if apk { Ghost } else { Primary }, icon="download") {
+    v.ask_save(c)
+  }
+}
+
+///|
+/// What shows while it comes (FilePreview.tsx FileComing, WaitLine): how much has come out of its size once the core
+/// has said, else 正在打开.
+pub fn vf_coming(vw : Viewer, c : @ui.Ctx) -> Unit {
+  match vw.got {
+    Some(got) => file_progress(c, got, vw.file.size)
+    None => @sf.wait_line(c, @sf.t("common.opening"), key="preview")
+  }
+}
+
+///|
+/// 预览 / 源码 in the bar (FilePreview.css.ts: the Segmented 120 wide, less its 2 in).
+let vf_tabs_item : Double = 58.0
+
+///|
+/// A chat's text or Markdown open in its preview, read in the desktop's reader (FilePreview.tsx hands it to the same
+/// Reader): what the preview read of it given to the reader (its place not kept: a chat's file is no drive's).
+pub fn vf_read(vw : Viewer, c : @ui.Ctx, src : Source, b : Bytes) -> Unit {
+  let v = vw
+  let file = @sf.blob_file(b, v.file.name, v.file.size, mime=v.mime, save=fn() { v.ask_save(c) })
+  @sf.reader(
+    c,
+    "chat\n" + v.id(),
+    file,
+    markdown=v.shown_kind() == Some(KMarkdown),
+    back_label=v.desk_back(src),
+    on_back=fn() { v.shut(c) },
+  )
+}
+
+///|
+/// Whether a preview reads as a text on a desktop (FilePreview.tsx: a text and Markdown open in the reader).
+pub fn vf_reads(vw : Viewer) -> Bool {
+  vw.bytes is Some(_) &&
+  (vw.shown_kind() == Some(KMarkdown) || vw.shown_kind() == Some(KText)) &&
+  !vw.told_of()
+}

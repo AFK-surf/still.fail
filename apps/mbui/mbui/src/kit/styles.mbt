@@ -50,7 +50,7 @@ pub fn list_row(density? : Density = Comfy) -> @ui.Style {
     },
     radius=Inner,
     hovered=@ui.patch(bg=Hover),
-    pressed=@ui.patch(bg=A(Fg, O10)),
+    pressed=@ui.patch(bg=Hover),
     selected=@ui.patch(bg=Selected),
     disabled=@ui.patch(opacity=O40),
   )
@@ -112,18 +112,18 @@ pub fn button_style(size? : ButtonSize = Md, tone? : Variant = Solid) -> @ui.Sty
     Soft =>
       @ui.style(
         bg=Faint,
-        hovered=@ui.patch(bg=Over(Faint, Hover)),
-        pressed=@ui.patch(bg=Over(Over(Faint, Hover), Hover)),
+        hovered=@ui.patch(bg=Hover),
+        pressed=@ui.patch(bg=Hover),
       )
     Ghost =>
-      @ui.style(bg=Clear, hovered=@ui.patch(bg=Hover), pressed=@ui.patch(bg=A(Fg, O10)))
+      @ui.style(bg=Clear, hovered=@ui.patch(bg=Hover), pressed=@ui.patch(bg=Hover))
     Outline =>
       @ui.style(
         bg=Clear,
         border=B1,
         border_color=Border,
         hovered=@ui.patch(bg=Hover),
-        pressed=@ui.patch(bg=A(Fg, O10)),
+        pressed=@ui.patch(bg=Hover),
       )
     Danger =>
       @ui.style(

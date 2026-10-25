@@ -2,8 +2,12 @@
 // (ember client/i18n/catalog/zh); `tr` looks here after strings.mbt's.
 
 ///|
+// kept across runs: a table, never written
 let zh_decide : Map[String, String] = {
   "android-chat.agent.account": "账号",
+  "web-main.annotate.mark": "标注",
+  "web-main.annotate.pageTip": "标注页面元素并发送给 agent",
+  "web-main.annotate.stopPicking": "停止点选（Esc）",
   "web-pages.chat.compact": "压缩上下文",
   "web-pages.chat.clear": "清空上下文",
   "web-pages.chat.clearConfirm": "清空此 agent 的上下文？",
@@ -214,6 +218,7 @@ let zh_decide : Map[String, String] = {
   "web-pages.chat.publish.go": "发布",
   "web-pages.chat.publish.verb": "公开分享",
   "web-pages.chat.publish.made": "已发布",
+  "web-pages.chat.publish.copyLink": "复制链接",
   "web-pages.chat.publish.revoke": "撤销",
   "web-pages.chat.publish.revokeAsk": "撤销此链接？",
   "web-pages.chat.publish.revokeNote": "撤销后，持有链接的人将无法打开",

@@ -1,9 +1,9 @@
 // The files' page on a wide screen (docs/drive.md "The files' page"), as Finder's window: a row of tabs, each a folder of
-// a station of the workspace (drive/tabs.ts), the one shown below; a tab split in two shows two folders side by side,
-// of one station or two, to drag from one to the other. The side in front (its bar underlined) is what the page's
+// a station of the workspace (drive/tabs.ts: the core keeps them), the one shown below; a tab split in two shows two
+// folders side by side, of one station or two, to drag from one to the other. The side in front (its bar underlined) is what the page's
 // address says and what the keys work on; a press in the other one puts it in front. Each side is a folder's page as
 // before (Drive.tsx `FolderView`), under its own station.
-import { createContext, Fragment, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
+import { createContext, Fragment, useContext, useEffect, useState, type ReactNode } from "react";
 import { useStations } from "../api.ts";
 import { useGo } from "../go.ts";
 import { StationContext, useStationList, type Station } from "../station.tsx";
@@ -11,8 +11,8 @@ import { IconButton } from "../ui.tsx";
 import { Close, Plus, ViewColumns } from "@stillfail/ui/icons.tsx";
 import { useDrive } from "../drive/useDrive.ts";
 import { nameOf, rootLabel } from "../drive/model.ts";
-import type { StationView } from "../core/shapes.ts";
-import { arrive, besides, closed, frontOf, fronted, opened, paneUrl, shown, split, tabTitle, useFilesTabs, type FilesTabs, type Pane } from "../drive/tabs.ts";
+import type { FilesTabsView, StationView } from "../core/shapes.ts";
+import { paneUrl, useFilesTabs, type Pane, type TabsAct } from "../drive/tabs.ts";
 import { GoTo } from "./FilesGo.tsx";
 import { FolderView } from "./Drive.tsx";
 import { TransferAsk, TransfersButton } from "./Transfers.tsx";
@@ -45,26 +45,23 @@ export const useFilesActions = () => useContext(Actions);
  * The tabs and what the one shown shows, `here` (the page's address) in front. `scope`: the workspace.
  */
 export function FilesShell({ scope, here }: { scope: string; here: Pane }) {
-  const [kept, keep] = useFilesTabs(scope);
+  const [kept, change] = useFilesTabs(scope);
   const go = useGo();
   const views = useStations(scope).value;
   const stations = useStationList(views, scope) ?? [];
   // The address moved (a link, the sidebar, history): the side in front follows it.
-  const tabs = useMemo(() => arrive(kept, here), [kept, here.station, here.root, here.path]); // eslint-disable-line react-hooks/exhaustive-deps
-  useEffect(() => {
-    if (JSON.stringify(tabs) !== JSON.stringify(kept)) keep(tabs);
-  }); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { void change({ act: "arrive", pane: here }); }, [scope, here.station, here.root, here.path]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Until the core has them, the one tab where the address is.
+  const tabs: FilesTabsView = kept ?? { tabs: [{ id: "", panes: [here], front: 0 }], current: "", front: here };
   const name = (p: Pane) => paneName(p, views);
   // Another tab or side brought in front: the address says it.
-  const show = (next: FilesTabs) => {
-    keep(next);
-    const front = frontOf(next);
-    go(paneUrl(front), { replace: true });
-  };
+  const show = (act: TabsAct) => void change(act).then((next) => { if (next) go(paneUrl(next.front), { replace: true }); });
   const tab = tabs.tabs.find((x) => x.id === tabs.current) ?? tabs.tabs[0]!;
+  // The side in front is where the address is: drawn from it, not from what is kept (which follows it).
+  const paneAt = (x: typeof tab, i: number) => (x === tab && i === tab.front ? here : x.panes[i]!);
   const [going, setGoing] = useState(false);
   const [bar, setBar] = useState<HTMLElement | null>(null);
-  const actions: FilesActions = { open: (p, where) => show(where === "tab" ? opened(tabs, p) : besides(tabs, p)), goTo: () => setGoing(true), bar };
+  const actions: FilesActions = { open: (p, where) => show({ act: where === "tab" ? "open" : "besides", pane: p }), goTo: () => setGoing(true), bar };
   const splitAt = tab.panes.length === 2;
   // ⌘T a new tab where the front is (⌘W stays the window's: the desktop app's menu closes it), ⌃Tab / ⌘⇧] and ⌘⇧[ go
   // along them, ⌘⌥D splits.
@@ -74,12 +71,12 @@ export function FilesShell({ scope, here }: { scope: string; here: Pane }) {
       if (field || e.defaultPrevented) return;
       const mod = e.metaKey || e.ctrlKey;
       const at = tabs.tabs.findIndex((x) => x.id === tabs.current);
-      const along = (step: number) => show(shown(tabs, tabs.tabs[(at + step + tabs.tabs.length) % tabs.tabs.length]!.id));
-      if (mod && !e.shiftKey && !e.altKey && e.key.toLowerCase() === "t") { e.preventDefault(); show(opened(tabs, frontOf(tabs))); }
+      const along = (step: number) => show({ act: "show", id: tabs.tabs[(at + step + tabs.tabs.length) % tabs.tabs.length]!.id });
+      if (mod && !e.shiftKey && !e.altKey && e.key.toLowerCase() === "t") { e.preventDefault(); show({ act: "open", pane: here }); }
       else if ((e.ctrlKey && e.key === "Tab") || (mod && e.shiftKey && (e.code === "BracketRight" || e.code === "BracketLeft"))) {
         e.preventDefault();
         along(e.code === "BracketLeft" || (e.key === "Tab" && e.shiftKey) ? -1 : 1);
-      } else if (mod && e.altKey && e.code === "KeyD") { e.preventDefault(); show(split(tabs)); }
+      } else if (mod && e.altKey && e.code === "KeyD") { e.preventDefault(); show({ act: "split" }); }
       // ⌘⇧G: a folder by its path, as Finder's 前往文件夹.
       else if (mod && e.shiftKey && e.code === "KeyG") { e.preventDefault(); setGoing(true); }
     };
@@ -95,10 +92,11 @@ export function FilesShell({ scope, here }: { scope: string; here: Pane }) {
         {tabs.tabs.length > 1 ? (
           <div className={css.tabs} role="tablist" aria-label={t("web-pages.files.tabs")}>
             {tabs.tabs.map((x) => (
-              <div key={x.id} className={css.tab} data-on={x.id === tabs.current || undefined} role="tab" aria-selected={x.id === tabs.current} title={tabTitle(x, name)}>
-                <button type="button" className={css.tabClose} aria-label={t("web-pages.files.closeTab")} onClick={() => show(closed(tabs, x.id))}><Close size={10} strokeWidth={2.4} /></button>
-                <button type="button" className={css.tabName} onClick={() => show(shown(tabs, x.id))}>
-                  {x.panes.map((p, i) => {
+              <div key={x.id} className={css.tab} data-on={x.id === tabs.current || undefined} role="tab" aria-selected={x.id === tabs.current} title={x.panes.map((_, i) => name(paneAt(x, i))).join(" | ")}>
+                <button type="button" className={css.tabClose} aria-label={t("web-pages.files.closeTab")} onClick={() => show({ act: "close", id: x.id })}><Close size={10} strokeWidth={2.4} /></button>
+                <button type="button" className={css.tabName} onClick={() => show({ act: "show", id: x.id })}>
+                  {x.panes.map((_, i) => {
+                    const p = paneAt(x, i);
                     const parts = paneParts(p, views);
                     return (
                       <Fragment key={i}>
@@ -119,18 +117,16 @@ export function FilesShell({ scope, here }: { scope: string; here: Pane }) {
         <div ref={setBar} className={css.barFolder} />
         <div className={css.barEnd}>
           <TransfersButton scope={scope} />
-          <span className={css.toggle} data-on={splitAt || undefined}><IconButton label={t(splitAt ? "web-pages.files.unsplit" : "web-pages.files.split")} icon={ViewColumns} onClick={() => show(split(tabs))} /></span>
-          <IconButton label={t("web-pages.files.newTab")} icon={Plus} onClick={() => show(opened(tabs, frontOf(tabs)))} />
+          <span className={css.toggle} data-on={splitAt || undefined}><IconButton label={t(splitAt ? "web-pages.files.unsplit" : "web-pages.files.split")} icon={ViewColumns} onClick={() => show({ act: "split" })} /></span>
+          <IconButton label={t("web-pages.files.newTab")} icon={Plus} onClick={() => show({ act: "open", pane: here })} />
         </div>
       </div>
       <div className={css.panes} data-split={splitAt || undefined}>
-        {tab.panes.map((p, i) => {
+        {tab.panes.map((_, i) => {
           const front = i === tab.front;
-          // The side in front is where the address is: drawn from it, not from what is kept (which follows it).
-          const pane = front ? here : p;
           return (
-            <PaneFrame key={i} pane={pane} stations={stations} front={front} split={splitAt}
-              onFront={() => { if (!front) show(fronted(tabs, i)); }} />
+            <PaneFrame key={i} pane={paneAt(tab, i)} stations={stations} front={front} split={splitAt}
+              onFront={() => { if (!front) show({ act: "front", side: i }); }} />
           );
         })}
       </div>

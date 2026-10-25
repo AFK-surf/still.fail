@@ -45,6 +45,12 @@ pub fn key_of_char(ch : Char) -> Int {
 pub let key_code_enter : Int = 7
 
 ///|
+pub let key_code_backspace : Int = 1
+
+///|
+pub let key_code_delete : Int = 2
+
+///|
 pub let key_code_up : Int = 5
 
 ///|
@@ -79,6 +85,70 @@ pub let key_code_copy : Int = 13
 pub let key_code_cut : Int = 14
 
 ///|
+/// A field's moves and deletions as a Mac's text system names what a key does (NSResponder's moveWordLeft:,
+/// moveToLeftEndOfLine:, deleteToBeginningOfLine:…, its host's doCommandBySelector), each a key of its own, Shift
+/// (mod_shift_key) widening what is picked; elsewhere they come as the keys themselves with what is held, which a field
+/// reads as that system's fields do (editor.mbt edit_of). By words, back and on:
+pub let key_code_word_back : Int = 20
+
+///|
+pub let key_code_word_on : Int = 21
+
+///|
+/// To the start and the end of the line the caret shows on.
+pub let key_code_line_start : Int = 22
+
+///|
+pub let key_code_line_end : Int = 23
+
+///|
+/// To the start and the end of its paragraph (what lies between line breaks).
+pub let key_code_paragraph_start : Int = 24
+
+///|
+pub let key_code_paragraph_end : Int = 25
+
+///|
+/// To the start and the end of all of it.
+pub let key_code_text_start : Int = 26
+
+///|
+pub let key_code_text_end : Int = 27
+
+///|
+/// To the paragraph's start or end, or the one before's or after's when there already (moveParagraphBackward:).
+pub let key_code_paragraph_back : Int = 28
+
+///|
+pub let key_code_paragraph_on : Int = 29
+
+///|
+/// Deleting a word back and on, to the line's start and end, to the paragraph's start and end.
+pub let key_code_delete_word_back : Int = 30
+
+///|
+pub let key_code_delete_word_on : Int = 31
+
+///|
+pub let key_code_delete_line_back : Int = 32
+
+///|
+pub let key_code_delete_line_on : Int = 33
+
+///|
+pub let key_code_delete_paragraph_back : Int = 34
+
+///|
+pub let key_code_delete_paragraph_on : Int = 35
+
+///|
+/// Whether a focused field takes key `code` as its own (its moves and deletions, Enter, select all, copy, cut), not
+/// Escape, Tab or a character's key.
+fn field_key(code : Int) -> Bool {
+  code < key_escape || (code >= key_code_word_back && code <= key_code_delete_paragraph_on)
+}
+
+///|
 /// Modifiers in a key's `mods`: Shift, Ctrl, Alt (Option), ⌘ (the Windows key, Meta).
 pub let mod_shift_key : Int = 1
 
@@ -97,6 +167,9 @@ priv struct Desk {
   mutable_menus : Array[(Array[Int], Double, Double)]
   /// what this frame reads of them (moved over from `mutable_menus` as a frame starts)
   menus : Array[(Array[Int], Double, Double)]
+  /// what asked for a menu (Ctx::menu_asked) as the frame those targets are of was built, and as this one is
+  askers : Array[Int]
+  next_askers : Array[Int]
   /// keys since the last frame: code, modifiers, whether a field took it
   mutable_keys : Array[(Int, Int, Bool)]
   keys : Array[(Int, Int, Bool)]
@@ -108,6 +181,14 @@ priv struct Desk {
   /// targets that drag the window (Ctx::window_drag), this frame's and the last one's
   next_drags : Array[Int]
   mut drags : Array[Int]
+  /// targets a press on keeps what is picked with the pointer (Ctx::keeps_selection), this frame's and the last one's
+  next_keeps : Array[Int]
+  mut keeps : Array[Int]
+  /// ⌘V (Ctrl+V) with files or a picture on the clipboard, the host's app key: the read under way and the field it is
+  /// for; the files read (the picture as one) for a field that takes files (Ctx::editor `files`), by its id, until the
+  /// app takes them
+  mut pasting : (Int, ClipboardRead)?
+  pasted : Map[Int, Array[(String, Bytes)]]
   /// lists dragged by the mouse as a finger drags them (true unless the app says not), as this frame's build says and
   /// as the last one's said
   mut next_mouse_drags : Bool
@@ -153,6 +234,8 @@ let picked : Picked = { base: 0, a: 0, b: 0, dragging: false, text: "", target: 
 let desk : Desk = {
   mutable_menus: [],
   menus: [],
+  askers: [],
+  next_askers: [],
   mutable_keys: [],
   keys: [],
   next_cursors: {},
@@ -160,6 +243,10 @@ let desk : Desk = {
   shown: 0,
   next_drags: [],
   drags: [],
+  next_keeps: [],
+  keeps: [],
+  pasting: None,
+  pasted: {},
   next_mouse_drags: true,
   mouse_drags: true,
   selecting: false,
@@ -172,6 +259,8 @@ let desk : Desk = {
 fn desk_reset() -> Unit {
   desk.mutable_menus.clear()
   desk.menus.clear()
+  desk.askers.clear()
+  desk.next_askers.clear()
   desk.mutable_keys.clear()
   desk.keys.clear()
   desk.next_cursors.clear()
@@ -179,6 +268,10 @@ fn desk_reset() -> Unit {
   desk.shown = 0
   desk.next_drags.clear()
   desk.drags.clear()
+  desk.next_keeps.clear()
+  desk.keeps.clear()
+  desk.pasting = None
+  desk.pasted.clear()
   desk.next_mouse_drags = true
   desk.mouse_drags = true
   desk.selecting = false
@@ -197,6 +290,12 @@ fn desk_frame_start() -> Unit {
     desk.menus.push(m)
   }
   desk.mutable_menus.clear()
+  // (what asked in the frame before: what was under a right click since was laid out by it)
+  desk.askers.clear()
+  for a in desk.next_askers {
+    desk.askers.push(a)
+  }
+  desk.next_askers.clear()
   desk.keys.clear()
   for k in desk.mutable_keys {
     desk.keys.push(k)
@@ -210,6 +309,7 @@ fn desk_frame_start() -> Unit {
 fn desk_build_start() -> Unit {
   desk.next_cursors.clear()
   desk.next_drags.clear()
+  desk.next_keeps.clear()
   desk.next_mouse_drags = true
   desk.next_sels.clear()
   desk.selecting = false
@@ -223,10 +323,19 @@ fn Ctx::desk_frame_end(self : Ctx) -> Unit {
   desk.cursors = desk.next_cursors.copy()
   cs.clear()
   desk.drags = desk.next_drags.copy()
+  desk.keeps = desk.next_keeps.copy()
   desk.mouse_drags = desk.next_mouse_drags
   desk.sels = desk.next_sels.copy()
   if !self.down && self.px >= 0.0 {
-    self.hover = hit_in(self.hit_ids, self.hit_rects, self.px, self.py)
+    if pointing() is Finger {
+      // a finger lifted is nowhere: what it last touched is not hovered, and the pointer is not over it (this frame,
+      // the one after it was lifted, still read where it was, for what a tap there opens)
+      self.px = -1.0
+      self.py = -1.0
+      self.point_nowhere()
+    } else {
+      self.point_at(self.px, self.py)
+    }
   }
   self.show_cursor()
 }
@@ -277,6 +386,41 @@ pub fn Ctx::right_clicked(self : Ctx, id : Int) -> (Double, Double)? {
 }
 
 ///|
+/// Where a menu of `id` was asked for since the last frame, in the window's terms: by a mouse, its secondary button
+/// clicked on it (Ctx::right_clicked); by a finger, held on it (long_press_ms, still: the press is then no click).
+/// For a menu the web's `contextmenu` opens (a row's, a place's), on either hand. One press, one menu: a right click is
+/// the innermost asker's under it (a row's, not the list's it sits in, though the list is asked first: its rows are
+/// built after it), as a press goes to one target; a hold is already the target's held.
+pub fn Ctx::menu_asked(self : Ctx, id : Int) -> (Double, Double)? {
+  if id != 0 {
+    desk.next_askers.push(id)
+  }
+  let mut at : (Double, Double)? = None
+  for m in desk.menus {
+    if m.0.contains(id) {
+      // (the first under it, topmost first, that asked for a menu as the frame it was laid out in was built: what
+      // asks for the first time this frame goes by itself)
+      let innermost = match m.0.iter().find_first(fn(u) { desk.askers.contains(u) }) {
+        Some(u) => u
+        None => id
+      }
+      if innermost == id {
+        at = Some((m.1, m.2))
+      }
+    }
+  }
+  match at {
+    Some(at) => Some(at)
+    None =>
+      if pointing() is Finger && self.held_long(id) {
+        Some((self.px, self.py))
+      } else {
+        None
+      }
+  }
+}
+
+///|
 /// Whether anything was clicked with the secondary button since the last frame (what closes a menu as another opens).
 pub fn Ctx::any_right_click(self : Ctx) -> Bool {
   ignore(self)
@@ -306,7 +450,10 @@ pub fn Ctx::mouse_drags_lists(self : Ctx, on : Bool) -> Unit {
 /// Whether key `code` came since the last frame with exactly `mods` held (with `in_field`, also one a focused field
 /// took: an Enter it sent, an arrow it moved by).
 pub fn Ctx::key_pressed(self : Ctx, code : Int, mods? : Int = 0, in_field? : Bool = false) -> Bool {
-  ignore(self)
+  // (under an open menu or dialog, none: they are its)
+  if !self.keys_here() {
+    return false
+  }
   for k in desk.keys {
     if k.0 == code && k.1 == mods && (in_field || !k.2) {
       return true
@@ -319,7 +466,9 @@ pub fn Ctx::key_pressed(self : Ctx, code : Int, mods? : Int = 0, in_field? : Boo
 /// Key `code` with exactly `mods` held, if it came since the last frame and nothing took it yet: taken now (what reads
 /// keys after this does not see it). For a widget's own keys while it has the focus (a slider's arrows).
 pub fn Ctx::take_key(self : Ctx, code : Int, mods? : Int = 0) -> Bool {
-  ignore(self)
+  if !self.keys_here() {
+    return false
+  }
   for k in 0..<desk.keys.length() {
     let (kc, km, taken) = desk.keys[k]
     if kc == code && km == mods && !taken {
@@ -339,9 +488,12 @@ pub fn Ctx::shortcut(self : Ctx, ch : Char, shift? : Bool = false) -> Bool {
 }
 
 ///|
-/// The keys since the last frame (code, modifiers, whether a field took it).
+/// The keys since the last frame (code, modifiers, whether a field took it); none under an open menu or dialog (they
+/// are its).
 pub fn Ctx::keys(self : Ctx) -> Array[(Int, Int, Bool)] {
-  ignore(self)
+  if !self.keys_here() {
+    return []
+  }
   desk.keys
 }
 
@@ -389,7 +541,7 @@ fn Ctx::pointer_left(self : Ctx) -> Unit {
   }
   self.px = -1.0
   self.py = -1.0
-  self.hover = 0
+  self.point_nowhere()
   self.show_cursor()
 }
 
@@ -450,6 +602,18 @@ fn selected_words() -> String {
 }
 
 ///|
+/// Whether the focused field has words of its own picked (copied before those picked with the pointer).
+fn field_picks(c : Ctx) -> Bool {
+  match c.editors.get(c.focus) {
+    Some(st) => {
+      let (a, b) = st.sel()
+      a != b
+    }
+    None => false
+  }
+}
+
+///|
 /// A paragraph that can be picked, as painted (rich.mbt paint_rich).
 fn selectable_painted(
   base : Int,
@@ -499,18 +663,29 @@ fn sel_at(x : Double, y : Double) -> SelTarget? {
 }
 
 ///|
-/// A primary press at (x, y): on words that are picked with the pointer, picking starts there; elsewhere what was
-/// picked is let go.
-fn select_press(x : Double, y : Double) -> Unit {
+/// A primary press at (x, y), the `clicks`th in a row (Ctx's `clicks`): on words that are picked with the pointer,
+/// picking starts there (a double click's second picks the word under it, a triple's the paragraph, as a browser's
+/// do); elsewhere what was picked is let go.
+fn select_press(x : Double, y : Double, clicks : Int) -> Unit {
   match sel_at(x, y) {
-    Some(t) => {
-      let off = t.lay.offset_at(x - t.ox, y - t.oy)
-      picked.base = t.base
+    Some(target) => {
+      let off = target.lay.offset_at(x - target.ox, y - target.oy)
+      picked.base = target.base
       picked.a = off
       picked.b = off
       picked.dragging = true
-      picked.text = t.text
-      picked.target = Some(t)
+      picked.text = target.text
+      picked.target = Some(target)
+      if clicks > 1 {
+        let (s, e) = if clicks == 2 {
+          word_at(target.text, off)
+        } else {
+          (paragraph_end(target.text, off, -1), paragraph_end(target.text, off, 1))
+        }
+        picked.a = s
+        picked.b = e
+        picked.dragging = false
+      }
     }
     None => {
       picked.base = 0
@@ -518,6 +693,60 @@ fn select_press(x : Double, y : Double) -> Unit {
       picked.target = None
     }
   }
+}
+
+///|
+/// A press on `id` keeps what is picked with the pointer (a button that does something with it, as a page's control
+/// whose press is not the words' with mousedown's preventDefault: a quote of what is picked). Said each frame it is
+/// drawn.
+pub fn Ctx::keeps_selection(self : Ctx, id : Int) -> Unit {
+  ignore(self)
+  desk.next_keeps.push(id)
+}
+
+///|
+/// Whether a press on `target` keeps what is picked (Ctx::keeps_selection).
+fn keeps_selection_on(target : Int) -> Bool {
+  desk.keeps.contains(target)
+}
+
+///|
+/// Where what is picked with the pointer lies in the window, once the pointer has let it go (the box round its
+/// lines), or None: none picked, or still being dragged.
+pub fn Ctx::selection_box(self : Ctx) -> (Double, Double, Double, Double)? {
+  ignore(self)
+  if picked.base == 0 || picked.a == picked.b || picked.dragging {
+    return None
+  }
+  match picked.target {
+    Some(t) => {
+      let rects = selected_rects(t.base, t.lay)
+      if rects.length() == 0 {
+        return None
+      }
+      let mut x0 = 1.0e9
+      let mut y0 = 1.0e9
+      let mut x1 = -1.0e9
+      let mut y1 = -1.0e9
+      for r in rects {
+        x0 = dmin(x0, r.0)
+        y0 = dmin(y0, r.1)
+        x1 = dmax(x1, r.0 + r.2)
+        y1 = dmax(y1, r.1 + r.3)
+      }
+      Some((x0 + t.ox, y0 + t.oy, x1 - x0, y1 - y0))
+    }
+    None => None
+  }
+}
+
+///|
+/// What is picked with the pointer let go (a quote taken from it).
+pub fn Ctx::selection_clear(self : Ctx) -> Unit {
+  ignore(self)
+  picked.base = 0
+  picked.dragging = false
+  picked.target = None
 }
 
 ///|

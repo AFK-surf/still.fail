@@ -78,6 +78,22 @@ moonbit_bytes_t mb_host_clip_png(int32_t id) {
   return out;
 }
 
+// No files read off the clipboard here (a clip's first item is its words or its picture).
+int32_t mb_host_clip_files(int32_t id) {
+  (void)id;
+  return 0;
+}
+
+moonbit_string_t mb_host_clip_file_name(int32_t id, int32_t i) {
+  (void)id, (void)i;
+  return moonbit_make_string_raw(0);
+}
+
+moonbit_bytes_t mb_host_clip_file(int32_t id, int32_t i) {
+  (void)id, (void)i;
+  return moonbit_make_bytes(0, 0);
+}
+
 void mb_host_clip_end(int32_t id) {
   JNIEnv *env = env_();
   (*env)->CallStaticVoidMethod(env, device_cls, m_dv_end, id);

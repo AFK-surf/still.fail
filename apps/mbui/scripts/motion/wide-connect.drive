@@ -1,0 +1,23 @@
+# A connect's page on the desktop (sfdesk connect.mbt, the web's pages/Connect.tsx): MBUI_WIN=1280x800 over the
+# made-up chat. 连接 from the rail, a connect opened; its ⋯; 更改: all its messages in one session chosen, what that
+# does said; back to the connects.
+timeout 30000
+until 发消息
+wait 600
+tap icon:im
+wait 1500
+tap 星火助手
+wait 1500
+tap icon:more
+wait 1000
+key escape
+wait 600
+tap =更改
+wait 1200
+tap 所有 thread 共用一个会话
+wait 1500
+tap 取消
+wait 900
+tap =连接
+wait 1200
+exit
