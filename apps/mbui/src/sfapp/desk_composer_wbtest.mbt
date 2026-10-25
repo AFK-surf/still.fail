@@ -187,6 +187,9 @@ test "desk composer: the `@` menu offers the workspace's other stations' chats t
   // (then when it was last active)
   assert_true(after_on_its_row(t, "夜里的构建又失败了") == ["MBA", "15 分钟前"], msg=about_its_row(t, "夜里的构建又失败了"))
   assert_true(after_on_its_row(t, "首页的列表改成按天分组") == ["8 分钟前"], msg=about_its_row(t, "首页的列表改成按天分组"))
+  // keyboard and mouse's row: a menu's 34 (a finger's 44: chat_refs_wbtest)
+  let (_, _, _, high) = t.get(Button, label="夜里的构建又失败了").rect
+  assert_true(high >= 34.0 && high < 44.0, msg="\{high}")
 }
 
 ///|

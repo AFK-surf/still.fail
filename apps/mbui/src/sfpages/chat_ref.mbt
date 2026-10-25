@@ -162,7 +162,7 @@ fn ref_menu_body(
     if c.hovered(id) && i != active {
       @sfbase.refs_active(draft, chats.length(), to=i) |> ignore
     }
-    let b = c.box(style=if i == active { ref_item_on } else { ref_item }, id~, fn() {
+    let b = c.box(style=(if i == active { ref_item_on } else { ref_item }).then(@sf.pick_high()), id~, fn() {
       c.box(style=ref_logo, fn() {
         match item.agents.get(0) {
           Some(a) => @sf.maker_mark(c, a.maker, a.runtime, ref_logo_size) |> ignore
@@ -246,13 +246,12 @@ let ref_empty : @ui.Style = @ui.css("w=Full px=S2_5 py=S1_5")
 let ref_empty_words : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, w=Full)
 
 ///|
-/// A chat (refItem): its mark in 16, its title, when; 10 apart, a menu's row (as high, as far in), concentric with the
-/// menu; the one chosen on the hover's ground.
+/// A chat (refItem): its mark in 16, its title, when; 10 apart, a menu's row (as far in; as high, the screen's:
+/// @sf.pick_high), concentric with the menu; the one chosen on the hover's ground.
 // kept across runs: a value (no field of it changes)
 let ref_item : @ui.Style = @ui.style(
   row=true,
   w=Full,
-  min_h=@sf.ref_item_min_h,
   px=S2_5,
   py=@sf.room_of(@sf.menu_row_over),
   gap=S2_5,

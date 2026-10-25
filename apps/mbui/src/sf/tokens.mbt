@@ -1923,9 +1923,31 @@ pub let panel_icon_size : Double = 16.0
 pub let chooser_chevron : Double = 12.0
 
 ///|
-/// A menu's item at least (controls.css.ts menuItem: 34 high), a capsule its panel's padding in from its corner,
-/// concentric with it (capsule_in(r_menu, 34) = panel_pad: what r_menu is made of).
+/// A menu's item at least with keyboard and mouse (controls.css.ts menuItem: 34 high), a capsule its panel's padding in
+/// from its corner, concentric with it (capsule_in(r_menu, 34) = panel_pad: what r_menu is made of). With touch a
+/// finger's 44 (Theme::rows pick), its words in its middle, round as a row taller than the capsule is (panel_in: the
+/// ladder's 18).
 pub let menu_row_min : Double = 34.0
+
+///|
+/// A small panel's row (a menu's item, the `@` menu's chat, a picker's) as high as the screen's at least (Theme::rows
+/// pick: keyboard and mouse's 34, a finger's 44, docs/architecture.md: touch targets 44 at least with touch), for a row
+/// given as a style.
+pub fn pick_high() -> @ui.Style {
+  if theme().narrow {
+    pick_high_narrow
+  } else {
+    pick_high_wide
+  }
+}
+
+///|
+// kept across runs: a value (no field of it changes)
+let pick_high_wide : @ui.Style = @ui.style(min_h=Fixed(wide_rows.pick))
+
+///|
+// kept across runs: a value (no field of it changes)
+let pick_high_narrow : @ui.Style = @ui.style(min_h=Fixed(narrow_rows.pick))
 
 ///|
 /// Over and under a menu's item's line of words (20): as high as menu_row_min (menuItem: 7).
@@ -2160,15 +2182,12 @@ pub let panel_radius : @ui.Radius = rounded(r_menu)
 pub let panel_in : @ui.Radius = rounded(small_panel_inner(r_menu))
 
 ///|
-/// The `@` menu over the desktop's composer (ChatRef.css.ts refMenu: a small panel, padded panel_pad) and its rows'
-/// corner (refItem: concentric with it), its rows at their lowest (a menu's row's: capsules in its corners).
+/// The `@` menu over the composer (ChatRef.css.ts refMenu: a small panel, padded panel_pad) and its rows' corner
+/// (refItem: concentric with it); its rows as high as a menu's (pick_high).
 pub let ref_menu_corner : @ui.Radius = rounded(r_menu)
 
 ///|
 pub let ref_item_corner : @ui.Radius = panel_in
-
-///|
-pub let ref_item_min_h : @ui.Len = Fixed(menu_row_min)
 
 
 ///|
