@@ -3210,7 +3210,7 @@ let sign_in_many : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, wrap=f
 ///|
 /// A newer build offered (Home.kt's update key; one look wherever a frame puts it, the size of the keys beside it:
 /// `side` across, its mark `mark`): the download mark in its middle, an accent dot in its top right; while it is `busy`
-/// (asked again first, downloaded, installed), the mark where it is and how far it has come round the key's edge
+/// (asked again first, downloaded, installed), the mark where it is and how far it has come round it, close to it
 /// (`coming`, 0 to 1, from its top; None while not known: the spinner's quarter turning there), no words; one that
 /// failed, its dot red, `why` its tip. Said to be `label` (下载中 42% while it comes). True on the frame it is
 /// pressed, not while it is busy.
@@ -3235,7 +3235,7 @@ pub fn update_key(
     fn() {
       if busy {
         icon(c, "download", size=mark, color=t.p.text) |> ignore
-        c.layer(fn() { update_key_ring(c, key, side, coming) })
+        c.layer(fn() { update_key_ring(c, key, side, mark, coming) })
         |> ignore
       } else {
         icon(c, "download", size=mark, color=t.p.text) |> ignore
@@ -3273,14 +3273,15 @@ let update_key_box : @ui.Style = @ui.css("radius=Full align=ACenter justify=JCen
 let update_key_hot : @ui.Style = update_key_box.then(@ui.css("bg=Hover"))
 
 ///|
-/// How far an update has come, round the update key's edge (the spinner's ring, its line 2 wide on the key's edge, in
-/// line_strong): the accent from its top as far round as it has come, going to a part told anew as a progress bar's
-/// fill does; while that is not known, the spinner's quarter turning.
-fn update_key_ring(c : @ui.Ctx, key : String, side : Double, coming : Double?) -> Unit {
+/// How far an update has come, round the update key's mark (the spinner's ring, its line 2 wide, in line_strong; its
+/// inside 2 off the mark's box: close round the mark, not out on the key's edge, where the ring looked bigger than the
+/// keys beside it, whose edges are not drawn): the accent from its top as far round as it has come, going to a part
+/// told anew as a progress bar's fill does; while that is not known, the spinner's quarter turning.
+fn update_key_ring(c : @ui.Ctx, key : String, side : Double, mark : Double, coming : Double?) -> Unit {
   let t = theme()
   let pi = 3.141592653589793
   let mid = side / 2.0
-  let r = mid - spin_stroke / 2.0
+  let r = mark / 2.0 + update_ring_clear + spin_stroke / 2.0
   let (from, sweep) = match coming {
     Some(k) => {
       let k = if k < 0.0 { 0.0 } else if k > 1.0 { 1.0 } else { k }
@@ -3295,6 +3296,10 @@ fn update_key_ring(c : @ui.Ctx, key : String, side : Double, coming : Double?) -
   }
   c.lines(lines, w=Px(side), h=Px(side)) |> ignore
 }
+
+///|
+/// How far the ring's inside stands off the mark's box.
+let update_ring_clear : Double = 2.0
 
 ///|
 /// Its dot: 3 in from the key's top right, 9 across on a ring of the page's ground 2 wide (Home.kt).
