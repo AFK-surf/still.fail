@@ -137,14 +137,23 @@ fn open_add_station(
             |> ignore
           },
           fn() {
-            c.box(style=@sf.panel_words_in(), w=Fill(1.0), pb=24.0, fn() {
-              add_station_steps(c, core, here, cancel=true, fn() { close() })
+            c.box(style=@sf.panel_words_in(), w=Fill(1.0), fn() {
+              add_station_steps(c, core, here, buttons=false, fn() { close() })
             })
             |> ignore
           },
         ])
       })
       |> ignore
+    }
+  }, foot=fn(c, close) {
+    // its buttons at the panel's foot (the presenter's: as far from its foot as its corner says), the step's
+    let joinable = (core.topic)("joinable", { "workspace": str(here.workspace) }).value
+    let rows = joinable_rows(joinable)
+    if flag(joinable, "offered") && rows.length() > 0 && adding.existing && adding.made is None {
+      join_buttons(c, core, here, rows)
+    } else {
+      add_station_buttons(c, core, here, cancel=true, fn() { close() })
     }
   })
 }
@@ -181,17 +190,7 @@ fn took_it(s : Json) -> Bool {
 /// so, and the next one open is picked.
 fn join_existing(c : @ui.Ctx, core : Core, here : Here, rows : Array[Json], loading : Bool) -> Unit {
   let t = @sf.theme()
-  let ws = here.workspace
-  // one whose home's security mode keeps it out is shown, not picked
-  let open = rows.filter(fn(s) { !flag(Some(s), "needsLock") && !took_it(s) })
-  let chosen = match open.iter().find_first(fn(s) { text(Some(s), "station") == adding.picked }) {
-    Some(s) => Some(s)
-    None => open.get(0)
-  }
-  let busy = match chosen {
-    Some(s) => is_doing(core, ["station.join"], [("station", text(Some(s), "station")), ("workspace", ws)])
-    None => false
-  }
+  let (chosen, busy) = join_chosen(core, here, rows)
   c.box(w=Fill(1.0), h=Fill(1.0), fn() {
     c.box(w=Fill(1.0), h=Fill(1.0), fn() {
       let blocks : Array[() -> Unit] = [
@@ -256,44 +255,64 @@ fn join_existing(c : @ui.Ctx, core : Core, here : Here, rows : Array[Json], load
       scroll_page(c, "join-station/" + adding.serial.to_string(), blocks.map(fn(b) { fn() { @sf.sheet_column(c, b) } }))
     })
     |> ignore
-    c.box(style=@sf.panel_words_in(), dir=Row, w=Fill(1.0), pt=10.0, pb=24.0, gap=8.0, justify=JEnd, fn() {
-      if @sf.button(c, tr(if adding.took.length() == 0 { "common.cancel" } else { "common.done" }), key="join-close") {
-        @sf.close_presented()
-      }
-      if @sf.button(c, tr("web-pages.settings.stations.joinAction"), key="join-go", tone=Primary, busy=busy, disabled=chosen is None) {
-        match chosen {
-          Some(s) => {
-            adding.error = ""
-            let station = text(Some(s), "station")
-            (core.call)("station.join", obj([("station", str(station)), ("workspace", str(ws))]), fn(r) {
-              match r {
-                Ok(v) => {
-                  // as it is called here, when the station says
-                  let name = match text(field(Some(v), "joined"), "name") {
-                    "" => text(Some(s), "name")
-                    n => n
-                  }
-                  let kept = match s {
-                    Object(m) => {
-                      let m2 = m.copy()
-                      m2["name"] = str(name)
-                      Json::object(m2)
-                    }
-                    other => other
-                  }
-                  adding.took.push(kept)
-                }
-                Err(e) => adding.error = error_text(e)
-              }
-            })
-          }
-          None => ()
-        }
-      }
-    })
-    |> ignore
   })
   |> ignore
+}
+
+///|
+/// Which joinable station is picked (the one picked, else the first open: one whose home's security mode keeps it
+/// out is shown, not picked) and whether it is being joined.
+fn join_chosen(core : Core, here : Here, rows : Array[Json]) -> (Json?, Bool) {
+  let open = rows.filter(fn(s) { !flag(Some(s), "needsLock") && !took_it(s) })
+  let chosen = match open.iter().find_first(fn(s) { text(Some(s), "station") == adding.picked }) {
+    Some(s) => Some(s)
+    None => open.get(0)
+  }
+  let busy = match chosen {
+    Some(s) => is_doing(core, ["station.join"], [("station", text(Some(s), "station")), ("workspace", here.workspace)])
+    None => false
+  }
+  (chosen, busy)
+}
+
+///|
+/// Joining one: its buttons (the panel's foot), 关闭 once one is joined.
+fn join_buttons(c : @ui.Ctx, core : Core, here : Here, rows : Array[Json]) -> Unit {
+  let ws = here.workspace
+  let (chosen, busy) = join_chosen(core, here, rows)
+  if @sf.button(c, tr(if adding.took.length() == 0 { "common.cancel" } else { "common.done" }), key="join-close") {
+    @sf.close_presented()
+  }
+  if @sf.button(c, tr("web-pages.settings.stations.joinAction"), key="join-go", tone=Primary, busy=busy, disabled=chosen is None) {
+    match chosen {
+      Some(s) => {
+        adding.error = ""
+        let station = text(Some(s), "station")
+        (core.call)("station.join", obj([("station", str(station)), ("workspace", str(ws))]), fn(r) {
+          match r {
+            Ok(v) => {
+              // as it is called here, when the station says
+              let name = match text(field(Some(v), "joined"), "name") {
+                "" => text(Some(s), "name")
+                n => n
+              }
+              let kept = match s {
+                Object(m) => {
+                  let m2 = m.copy()
+                  m2["name"] = str(name)
+                  Json::object(m2)
+                }
+                other => other
+              }
+              adding.took.push(kept)
+            }
+            Err(e) => adding.error = error_text(e)
+          }
+        })
+      }
+      None => ()
+    }
+  }
 }
 
 ///|
@@ -306,49 +325,23 @@ fn add_station_steps(
   here : Here,
   done : () -> Unit,
   cancel? : Bool = false,
+  buttons? : Bool = true,
   label? : String = tr("android-settings.station.name"),
   placeholder? : String = tr("android-settings.station.namePlaceholder"),
 ) -> Unit {
   let t = @sf.theme()
-  let busy = is_doing(core, ["workspace.enroll"], [("account", here.sub), ("workspace", here.workspace)])
-  // one not among those there when it opened has joined
-  let joined = match adding.made {
-    Some(_) =>
-      match stations_of(core, here).value {
-        Some(Array(a)) => a.iter().find_first(fn(s) { !adding.known.contains(text(Some(s), "id")) })
-        _ => None
-      }
-    None => None
-  }
   c.box(w=Fill(1.0), gap=10.0, fn() {
-    match (adding.made, joined) {
+    match (adding.made, station_joined(core, here)) {
       (None, _) => {
         c.text(label, size=t.t.meta, weight=600, color=t.p.text, w=Fill(1.0), line=18.0) |> ignore
-        let name = field_box(c, "station-name/" + adding.serial.to_string(), placeholder).trim(chars=" \t\n").to_owned()
+        field_box(c, station_name_key(), placeholder) |> ignore
         if adding.error != "" {
           c.text(adding.error, size=t.t.meta, color=t.p.red, w=Fill(1.0), line=18.0) |> ignore
         }
-        c.box(dir=Row, w=Fill(1.0), pt=6.0, gap=8.0, justify=JEnd, fn() {
-          if cancel && @sf.button(c, tr("common.cancel"), key="add-cancel") {
-            c.blur()
-            @sf.close_presented()
-          }
-          if @sf.button(c, tr("android-settings.station.make"), key="add-make", tone=Primary, busy=busy, disabled=name == "") {
-            c.blur()
-            adding.error = ""
-            (core.call)(
-              "workspace.enroll",
-              obj([("workspace", str(here.workspace)), ("name", str(name)), ("account", str(here.sub))]),
-              fn(r) {
-                match r {
-                  Ok(v) => adding.made = Some((text(Some(v), "install"), text(Some(v), "command")))
-                  Err(e) => adding.error = error_text(e)
-                }
-              },
-            )
-          }
-        })
-        |> ignore
+        if buttons {
+          c.box(dir=Row, w=Fill(1.0), pt=6.0, gap=8.0, justify=JEnd, fn() { add_station_buttons(c, core, here, cancel~, done) })
+          |> ignore
+        }
       }
       (Some(_), Some(s)) => {
         c.box(dir=Row, w=Fill(1.0), padx=12.0, pady=10.0, gap=8.0, radius=12.0, bg=@sf.alpha(t.p.green, 0.12), align=ACenter, fn() {
@@ -357,12 +350,9 @@ fn add_station_steps(
           |> ignore
         })
         |> ignore
-        c.box(dir=Row, w=Fill(1.0), justify=JEnd, fn() {
-          if @sf.button(c, tr("common.done"), key="add-done", tone=Primary) {
-            done()
-          }
-        })
-        |> ignore
+        if buttons {
+          c.box(dir=Row, w=Fill(1.0), justify=JEnd, fn() { add_station_buttons(c, core, here, done) }) |> ignore
+        }
       }
       (Some((install, _)), None) => {
         c.text(tr("android-settings.station.run"), size=t.t.ui, color=t.p.text, w=Fill(1.0), line=20.0) |> ignore
@@ -374,6 +364,64 @@ fn add_station_steps(
     }
   })
   |> ignore
+}
+
+///|
+/// The field a new station's name is typed in, this time 添加 station opened.
+fn station_name_key() -> String {
+  "station-name/" + adding.serial.to_string()
+}
+
+///|
+/// The station joined since 添加 station opened (one not among those there when it opened), once its command is made.
+fn station_joined(core : Core, here : Here) -> Json? {
+  match adding.made {
+    Some(_) =>
+      match stations_of(core, here).value {
+        Some(Array(a)) => a.iter().find_first(fn(s) { !adding.known.contains(text(Some(s), "id")) })
+        _ => None
+      }
+    None => None
+  }
+}
+
+///|
+/// add_station_steps' buttons, its step's (a panel's foot, or under the steps where they are a page's): 取消 (with
+/// `cancel`) and 生成命令 from the name typed; joined, 完成 (`done`); while it waits for the machine, 取消 (with
+/// `cancel`).
+fn add_station_buttons(c : @ui.Ctx, core : Core, here : Here, done : () -> Unit, cancel? : Bool = false) -> Unit {
+  match (adding.made, station_joined(core, here)) {
+    (None, _) => {
+      let busy = is_doing(core, ["workspace.enroll"], [("account", here.sub), ("workspace", here.workspace)])
+      let name = field_of(station_name_key()).text().trim(chars=" \t\n").to_owned()
+      if cancel && @sf.button(c, tr("common.cancel"), key="add-cancel") {
+        c.blur()
+        @sf.close_presented()
+      }
+      if @sf.button(c, tr("android-settings.station.make"), key="add-make", tone=Primary, busy=busy, disabled=name == "") {
+        c.blur()
+        adding.error = ""
+        (core.call)(
+          "workspace.enroll",
+          obj([("workspace", str(here.workspace)), ("name", str(name)), ("account", str(here.sub))]),
+          fn(r) {
+            match r {
+              Ok(v) => adding.made = Some((text(Some(v), "install"), text(Some(v), "command")))
+              Err(e) => adding.error = error_text(e)
+            }
+          },
+        )
+      }
+    }
+    (Some(_), Some(_)) =>
+      if @sf.button(c, tr("common.done"), key="add-done", tone=Primary) {
+        done()
+      }
+    (Some(_), None) =>
+      if cancel && @sf.button(c, tr("common.cancel"), key="add-cancel") {
+        @sf.close_presented()
+      }
+  }
 }
 
 ///|

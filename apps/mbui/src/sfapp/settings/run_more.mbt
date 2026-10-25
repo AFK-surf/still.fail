@@ -553,19 +553,12 @@ pub fn open_add_people(core : Core, here : Here, view : Json?, from? : @sf.Ancho
     let t = @sf.theme()
     let online = online_stations(core, here)
     if done.val != "" {
-      c.box(style=@sf.panel_words_in(), w=Fill(1.0), gap=10.0, fn() {
+      c.box(style=@sf.panel_words_in(), w=Fill(1.0), fn() {
         c.text(done.val, size=t.t.ui, color=t.p.text, w=Fill(1.0), line=20.0) |> ignore
-        c.box(dir=Row, w=Fill(1.0), pb=24.0, justify=JEnd, fn() {
-          if @sf.button(c, tr("common.done"), key="add-people-done", tone=Primary) {
-            close()
-          }
-        })
-        |> ignore
       })
       |> ignore
       return
     }
-    let mut typed = ""
     let blocks : Array[() -> Unit] = [
       fn() {
         c.text(fill("android-settings.add.note", [("name", text(view, "name")), ("app", "still.fail")]), size=t.t.meta, color=t.p.muted, w=Fill(1.0), line=20.0)
@@ -575,7 +568,7 @@ pub fn open_add_people(core : Core, here : Here, view : Json?, from? : @sf.Ancho
         c.text(tr("android-settings.add.emails"), size=t.t.meta, weight=600, color=t.p.text, w=Fill(1.0), line=18.0) |> ignore
         c.box(w=Fill(1.0), pt=6.0, fn() {
           c.box(w=Fill(1.0), padx=12.0, pady=10.0, radius=12.0, bg=t.p.card, border=1.0, border_color=t.p.line, fn() {
-            typed = c.editor(
+            c.editor(
               key,
               field=field_of(key),
               placeholder=tr("android-settings.add.emailsPlaceholder"),
@@ -587,7 +580,8 @@ pub fn open_add_people(core : Core, here : Here, view : Json?, from? : @sf.Ancho
               placeholder_color=t.p.subtle,
               caret_color=t.p.accent,
               enter_sends=false,
-            ).text
+            )
+            |> ignore
           })
           |> ignore
         })
@@ -705,68 +699,71 @@ pub fn open_add_people(core : Core, here : Here, view : Json?, from? : @sf.Ancho
         }
       }
     })
-    let busy = is_doing(core, ["workspace.addMembers"], [("account", here.sub), ("workspace", here.workspace)])
-    blocks.push(fn() {
-      // (from the words typed above, this frame's: this block is drawn after the field's)
-      let emails : Array[String] = []
-      for e in parse_emails(typed) + picked {
-        if !inside.contains(e) && !emails.contains(e) {
-          emails.push(e)
-        }
-      }
-      if error.val != "" {
-        c.text(error.val, size=t.t.meta, color=t.p.red, w=Fill(1.0), line=18.0) |> ignore
-      }
-      c.box(dir=Row, w=Fill(1.0), pt=6.0, pb=24.0, gap=8.0, justify=JEnd, fn() {
-        if @sf.button(c, tr("common.cancel"), key="add-cancel") {
-          c.blur()
-          close()
-        }
-        if @sf.button(c, if emails.length() > 1 {
-              fill("android-settings.add.many", [("n", emails.length().to_string())])
-            } else {
-              tr("android-settings.add.one")
-            }, key="add-go", tone=Primary, busy=busy, disabled=emails.length() == 0) {
-          c.blur()
-          error.val = ""
-          (core.call)(
-            "workspace.addMembers",
-            obj([
-              ("workspace", str(here.workspace)),
-              ("role", str(role.val)),
-              ("emails", Json::array(emails.map(str))),
-              ("account", str(here.sub)),
-            ]),
-            fn(r) {
-              match r {
-                Ok(v) => {
-                  let n = fn(k : String) { items(Some(v), k).length() }
-                  done.val = fill("android-settings.add.done", [
-                    (
-                      "list",
-                      join(
-                        [
-                          if n("joined") > 0 { fill("android-settings.add.joined", [("n", n("joined").to_string())]) } else { "" },
-                          if n("added") > 0 { fill("android-settings.add.added", [("n", n("added").to_string()), ("app", "still.fail")]) } else { "" },
-                          if n("already") > 0 { fill("android-settings.add.already", [("n", n("already").to_string())]) } else { "" },
-                        ],
-                        tr("android-settings.add.sep"),
-                      ),
-                    ),
-                  ])
-                }
-                Err(e) => error.val = error_text(e)
-              }
-            },
-          )
-        }
-      })
-      |> ignore
-    })
+    if error.val != "" {
+      blocks.push(fn() { c.text(error.val, size=t.t.meta, color=t.p.red, w=Fill(1.0), line=18.0) |> ignore })
+    }
     c.box(w=Fill(1.0), h=Fill(1.0), fn() {
       scroll_page(c, key, blocks.map(fn(b) { fn() { @sf.sheet_column(c, fn() { c.box(style=sheet_block, b) |> ignore }) } }))
     })
     |> ignore
+  }, foot=fn(c, close) {
+    // its buttons at the panel's foot (the presenter's: as far from its foot as its corner says), from what is typed
+    // and picked now
+    if done.val != "" {
+      if @sf.button(c, tr("common.done"), key="add-people-done", tone=Primary) {
+        close()
+      }
+      return
+    }
+    let busy = is_doing(core, ["workspace.addMembers"], [("account", here.sub), ("workspace", here.workspace)])
+    let emails : Array[String] = []
+    for e in parse_emails(field_of(key).text()) + picked {
+      if !inside.contains(e) && !emails.contains(e) {
+        emails.push(e)
+      }
+    }
+    if @sf.button(c, tr("common.cancel"), key="add-cancel") {
+      c.blur()
+      close()
+    }
+    if @sf.button(c, if emails.length() > 1 {
+          fill("android-settings.add.many", [("n", emails.length().to_string())])
+        } else {
+          tr("android-settings.add.one")
+        }, key="add-go", tone=Primary, busy=busy, disabled=emails.length() == 0) {
+      c.blur()
+      error.val = ""
+      (core.call)(
+        "workspace.addMembers",
+        obj([
+          ("workspace", str(here.workspace)),
+          ("role", str(role.val)),
+          ("emails", Json::array(emails.map(str))),
+          ("account", str(here.sub)),
+        ]),
+        fn(r) {
+          match r {
+            Ok(v) => {
+              let n = fn(k : String) { items(Some(v), k).length() }
+              done.val = fill("android-settings.add.done", [
+                (
+                  "list",
+                  join(
+                    [
+                      if n("joined") > 0 { fill("android-settings.add.joined", [("n", n("joined").to_string())]) } else { "" },
+                      if n("added") > 0 { fill("android-settings.add.added", [("n", n("added").to_string()), ("app", "still.fail")]) } else { "" },
+                      if n("already") > 0 { fill("android-settings.add.already", [("n", n("already").to_string())]) } else { "" },
+                    ],
+                    tr("android-settings.add.sep"),
+                  ),
+                ),
+              ])
+            }
+            Err(e) => error.val = error_text(e)
+          }
+        },
+      )
+    }
   })
 }
 
