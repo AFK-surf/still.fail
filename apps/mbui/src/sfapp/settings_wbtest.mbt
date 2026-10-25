@@ -163,16 +163,14 @@ test "a station renamed from its page's …: the new name is the station's" {
 }
 
 ///|
-test "a settings sheet goes down on the sheet's spring, only drawn: its 保存 tapped meanwhile renames nothing" {
+test "a sheet asking goes down on the sheet's spring, only drawn: its 保存 tapped meanwhile renames nothing" {
   let t = settings_tester("profile:ws1/st1#cx")
   let name = "ChatGPT 团队"
   assert_true(t.find(name) is Some(_))
-  // its … → 重命名: the name asked in a settings sheet (profile_more.mbt open_profile_menu)
-  let (x, y) = t.locate("icon:more")[0]
+  // its rename (the head's ✎): the name asked in the presenters' sheet (src/sfdesk accounts.mbt profile_head)
+  let (x, y) = t.locate("icon:edit")[0]
   t.tap(x, y)
-  sheet_rested(t, "settings-sheet")
-  t.tap_text("重命名")
-  sheet_rested(t, "settings-sheet")
+  sheet_rested(t, "sf-present")
   for _ in 0..<name.length() {
     t.backspace()
   }
@@ -187,9 +185,10 @@ test "a settings sheet goes down on the sheet's spring, only drawn: its 保存 t
   assert_true(!active)
   t.tap_once(sx, sy)
   // down at once (only drawn as it sinks), the profile's name as it was
-  assert_true(!@settings.sheet_up())
+  sheet_rested(t, "sf-present")
+  t.draw()
+  assert_true(t.find("没改成的名字") is None)
   assert_true(t.find(name) is Some(_))
-  // (not idle yet: the sheet is still sinking on its spring (kit/sheet.mbt), till mbui#25 declares its end)
 }
 
 ///|
@@ -485,16 +484,20 @@ test "an agent's allowance in its sheet filled as far as is left (QuotaChips): 5
 }
 
 ///|
-test "a subscription signing in: what to do said once, its page's step solid, then the code with 完成 in its field (Profiles.kt LoginSteps)" {
+test "a subscription signing in: what to do in the browser, then the code typed and 完成登录 sends it (Accounts.tsx LoginSteps)" {
   let t = settings_tester("profile:ws1/st1#cc", shows="settings-profile-login")
-  assert_true(t.find("在打开的页面用 still.fail 要使用的 Claude 账号登录，并同意授权") is Some(_))
-  assert_true(t.find("打开授权页面") is Some(_))
-  // nothing typed: no 完成 yet
-  assert_true(t.find("完成") is None)
+  let y = fn(words : String) { t.find(words).unwrap().1 }
+  // first on its page, under its head: what is under way, the browser's step, the code's field
+  assert_true(y("正在登录 Claude") > y("订阅有效") && y("额度") > y("正在登录 Claude"))
+  assert_true(t.find("打开授权页面，用 still.fail 要使用的 Claude 账号登录并同意授权") is Some(_))
+  assert_true(y("粘贴授权码") > y("打开授权页面"))
+  // nothing typed: 完成登录 there, but not to be pressed
+  assert_true(t.find("完成登录") is Some(_))
   t.tap_text("粘贴授权码")
   t.type_text("abc-123")
-  assert_true(t.find("完成") is Some(_))
-  // (and the way to sign in by hand, beside the button, once not signing in: 在机器上手动登录)
+  t.tap_text("完成登录")
+  t.draw()
+  assert_true(t.find("abc-123") is None, msg="sent, its field emptied")
 }
 
 ///|
@@ -615,82 +618,65 @@ fn profile_whole(page : String) -> @ui.Tester {
 }
 
 ///|
-test "a profile's page: whether the account works and how much is left first; then who uses it, how it runs, whom it is shared with" {
+test "a profile's page: who it is and whether it works, then its allowance, what it spent, sharing, its models, how it runs, who uses it, its account (Accounts.tsx AccountView)" {
   let t = profile_whole("profile:ws1/st1#cc")
   let y = fn(words : String) { t.find(words).unwrap().1 }
-  // the account: what its check said, under it a dot and its words with when it was checked (no pill)
-  assert_true(y("可用 · 5 分钟前检查") > y("订阅有效"))
-  // its allowance under it with no title over it, when it was read under its windows; read again from the "…"
-  assert_true(y("5 小时") > y("可用 · 5 分钟前检查"))
-  assert_true(y("3 分钟前查询") > y("5 小时"))
-  assert_true(t.find("查询额度") is None)
-  // then who uses it, how it runs (its models a row: 2 of 3 on), whom it is shared with
-  assert_true(y("使用它的连接") > y("3 分钟前查询"))
-  assert_true(y("运行") > y("使用它的连接"))
-  assert_true(y("2 / 3") > y("运行") && y("默认 Fast") > y("2 / 3"))
-  assert_true(y("分享") > y("默认 Fast"))
-  assert_true(y("分享给其他 station") > y("分享"))
-  // the models themselves not on it
-  assert_true(t.find("筛选模型") is None && t.find("Haiku 5") is None)
-  // 2 / 3: their page, how many on under its title
-  t.tap_text("2 / 3")
-  nav_rested(t)
-  assert_true(t.find("已选 2 项") is Some(_))
-  assert_true(t.find("只有勾选的模型可在新对话和连接中选择。") is Some(_))
+  // its head is its title: its name, what it is, its last check and when (no title over it)
+  assert_true(y("订阅账号 · 只在 Studio") > y("Claude 主账号"))
+  assert_true(y("订阅有效") > y("订阅账号 · 只在 Studio"))
+  assert_true(t.find("5 分钟前检查") is Some(_))
+  // then the web's sections in its order
+  assert_true(y("额度") > y("订阅有效"))
+  assert_true(y("5 小时") > y("额度") && t.find("本周") is Some(_))
+  assert_true(y("近 7 天") > y("5 小时"))
+  assert_true(y("分享给其他 station") > y("近 7 天"))
+  assert_true(y("同时用于 个人") > y("分享给其他 station"))
+  assert_true(y("选择模型（2 / 3）") > y("同时用于 个人"))
+  assert_true(y("默认 Fast") > y("选择模型（2 / 3）"))
+  assert_true(y("使用它的连接") > y("默认 Fast"))
+  assert_true(y("Claude 订阅登录") > y("使用它的连接"))
+  // its models chosen in place: the whole list under it, the one off too
+  assert_true(t.find("Haiku 5") is None)
+  t.tap_text("选择模型（2 / 3）")
+  t.draw()
+  assert_true(t.find("收起") is Some(_))
   assert_true(t.find("Haiku 5") is Some(_))
 }
 
 ///|
-test "a profile in trouble: what is wrong the first line of its card, why and its button under it, no section of its own" {
+test "a profile in trouble: what is wrong a pill in its head before what its check said; its key masked on its account's card" {
   let t = profile_whole("profile:ws1/st1#k2")
-  let y = fn(words : String) { t.find(words).unwrap().1 }
-  assert_true(y("服务商拒绝了这个 key") > y("key 已失效"))
-  // (its words under the title, red: 没能使用)
-  assert_true(t.find("没能使用") is Some(_))
-  // a key's allowance none to read: no card for it
-  assert_true(t.find("暂无额度信息") is None)
+  let (px, py) = t.find("没能使用").unwrap()
+  let (cx, cy) = t.find("订阅有效").unwrap()
+  assert_true((py - cy).abs() < 2.0 && cx > px)
+  assert_true(t.find("sk-…a41f").unwrap().1 > t.find("API key").unwrap().1)
 }
 
 ///|
-test "a subscription's page signed in: where it stands alone on its card; 重新登录 and 在机器上手动登录 under its …" {
-  let t = settings_tester("profile:ws1/st1#cc")
-  // one card for the account: its pill, no title over the card, nothing to do on it while it is signed in and well
-  assert_true(t.find("可用") is Some(_))
-  assert_true(t.find("Claude 订阅") is None)
-  assert_true(t.find("重新登录") is None)
-  assert_true(t.find("在机器上手动登录") is None)
-  let more = fn() {
-    let (x, y) = t.locate("icon:more")[0]
-    t.tap(x, y)
-    sheet_rested(t, "settings-sheet")
-  }
-  // its …: the command to run by hand, in a sheet of its own
-  more()
-  t.tap_text("在机器上手动登录")
-  sheet_rested(t, "settings-sheet")
+test "a subscription's page signed in: 重新登录 and the command to run by hand on its account's card (Accounts.tsx SignIn)" {
+  let t = profile_whole("profile:ws1/st1#cc")
+  let (bx, by) = t.find("重新登录").unwrap()
+  let (mx, my) = t.find("也可以在服务器上手动登录").unwrap()
+  assert_true((my - by).abs() < 2.0 && mx > bx)
+  // the command to run by hand, shown once asked
+  assert_true(t.find("claude setup-token") is None)
+  t.tap_text("也可以在服务器上手动登录")
+  t.draw()
   assert_true(t.find("claude setup-token") is Some(_))
-  // (put away by a tap beside it)
-  t.tap(195.0, 60.0)
-  sheet_rested(t, "settings-sheet")
-  // 重新登录: begun on the station, its steps on the card
-  more()
+  // 重新登录: begun on the station, its steps on the page
   t.tap_text("重新登录")
-  sheet_rested(t, "settings-sheet")
+  t.draw()
   t.draw()
   assert_true(t.find("打开授权页面") is Some(_))
 }
 
 ///|
-test "a subscription's sign-in that failed: why, then 重新登录 with 在机器上手动登录 beside it on its card (Profiles.kt SignIn)" {
+test "a subscription's sign-in that failed: why, then 重新登录 with the way by hand beside it (Accounts.tsx SignIn)" {
   let t = settings_tester("profile:ws1/st1#cc", shows="settings-profile-login-failed")
-  let (_, pill_y) = t.find("可用").unwrap()
+  shown_on_page(t, "也可以在服务器上手动登录")
   let (_, why_y) = t.find("上次登录失败：授权码已过期").unwrap()
   let (bx, by) = t.find("重新登录").unwrap()
-  let (mx, my) = t.find("在机器上手动登录").unwrap()
-  assert_true(why_y > pill_y && by > why_y)
+  let (mx, my) = t.find("也可以在服务器上手动登录").unwrap()
+  assert_true(by > why_y)
   assert_true((my - by).abs() < 2.0 && mx > bx)
-  // the command to run by hand, under them once asked
-  t.tap_text("在机器上手动登录")
-  t.draw()
-  assert_true(t.find("claude setup-token") is Some(_))
 }

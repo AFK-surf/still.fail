@@ -1,6 +1,7 @@
-// 83-profile (e2e/traces/settings-profile.trace): the profile → "…" → 重命名 (profile.put), 重新检查 (profile.check), named
-// cc again; ＋: the providers, Anthropic → API key, a made-up key, 验证并添加: refused, nothing added; back to the
-// providers, back again out of the page.
+// 83-profile (e2e/traces/settings-profile.trace): the profile's page (sfdesk accounts.mbt) → its head's ✎, the name asked
+// in the presenters' sheet (profile.put), its head's 重新检查 (profile.check), named cc again; ＋: the providers,
+// Anthropic → API key, a made-up key, 验证并添加: refused, nothing added; back to the providers, back again out of the
+// page.
 
 ///|
 test "83-profile" {
@@ -12,32 +13,28 @@ test "83-profile" {
     f.run_to(@ui.nav_rest())
     f.tap("=cc")
     f.run_to(@ui.nav_rest())
-    f.see("使用它的连接")
-    f.tap("icon:more")
-    f.run_to(@kit.sheet_rest("settings-sheet"))
-    f.tap("=重命名")
-    f.run_to(@kit.sheet_rest("settings-sheet"))
-    f.see("Profile 名称")
+    // its page: its allowance under its head
+    f.see("额度")
+    f.tap("icon:edit")
+    f.run_to(@kit.sheet_rest("sf-present"))
+    f.see("=名称")
     f.clear()
     f.type_text("e2e-080726")
     f.tap("=保存")
     // said as the station answers, the sheet still going down (its toast's time its own: looked at as it shows)
     f.see("已重命名")
-    f.run_to(@kit.sheet_rest("settings-sheet"))
+    f.run_to(@kit.sheet_rest("sf-present"))
     f.see("=e2e-080726")
-    f.tap("icon:more")
-    f.run_to(@kit.sheet_rest("settings-sheet"))
-    f.tap("重新检查")
-    f.tap("icon:more")
-    f.run_to(@kit.sheet_rest("settings-sheet"))
-    f.tap("=重命名")
-    f.run_to(@kit.sheet_rest("settings-sheet"))
+    // (its head's ↻, the highest: 额度's 刷新 is under it)
+    f.tap("icon:refresh", top=true)
+    f.tap("icon:edit")
+    f.run_to(@kit.sheet_rest("sf-present"))
     // (its field there and taking the typing: a scripted run's clear waits for it so)
-    f.see("Profile 名称")
+    f.see("=名称")
     f.clear()
     f.type_text("cc")
     f.tap("=保存")
-    f.run_to(@kit.sheet_rest("settings-sheet"))
+    f.run_to(@kit.sheet_rest("sf-present"))
     f.see("=cc")
     f.back()
     f.run_to(@ui.nav_rest())
@@ -49,6 +46,8 @@ test "83-profile" {
     f.tap("=API key")
     f.tap("验证可用后再添加")
     f.type_text("sk-ant-madeup-080726-0000000000")
+    // (验证并添加 can be pressed once the flow has the key: its third edit, after the provider's and the way's)
+    f.answered("profile.flow.edit", 3)
     f.tap("验证并添加")
     f.see("验证没通过")
     // back: the step before, the providers again (Profiles.kt leave: its BackHandler before the pages')
