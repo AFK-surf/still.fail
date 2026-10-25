@@ -2208,7 +2208,7 @@ fn draft_picture(c : @ui.Ctx, station : String, f : Pending, picture : String, r
     let tile = picture_face(c, f, picture, if f.local is Some(_) { open } else { 0 }, again~)
     @motion.measure(c, tile, "composer/tile/\{f.id}")
     if f.local is Some(_) {
-      note_thumb(c, thumb, open, files_corner())
+      note_thumb(c, thumb, tile, files_corner(), picture~)
     }
     // not drawn while the viewer is its picture (one picture on the screen, never two: preview.mbt)
     if pv_hidden.val == thumb {

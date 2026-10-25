@@ -30,7 +30,7 @@ test "a picture waiting in the composer, tapped, opens in the viewer from the by
   t.run_for(@sfpages.morph_ms)
   let id = text(Some(@sfbase.writing(src, "ws1/st1:s-c1").files[0]), "id")
   let seen = "ws1/st1//draft:" + id
-  let tile = match pv_thumbs.get(seen) {
+  let tile = match thumb_of(t.ctx(), seen) {
     Some(tile) => tile
     None => fail("the tile is not kept for the viewer to fly from")
   }

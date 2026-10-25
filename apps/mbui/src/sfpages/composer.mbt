@@ -805,8 +805,10 @@ fn composer_picture(
   // on a touch system its remove hangs over its corner, out of it (Composer.kt): a fingertip's reach round it (44)
   // takes little of the picture, a tap on which opens it; on a computer it sits in the corner, as the web's
   let finger = @sf.touch_system()
+  // (its picture's box, built in what holds its reach)
+  let tile = Ref(-1)
   c.box(style=if finger { thumb_reach } else { thumb_room }, fn() {
-    c.box(style=if error != "" { thumb_failed } else { thumb_box }, id=thumb, fn() {
+    tile.val = c.box(style=if error != "" { thumb_failed } else { thumb_box }, id=thumb, fn() {
       c.image(picture, w=Px(thumb_side), h=Px(thumb_side), fit=FitCover) |> ignore
       if pending {
         c.layer(fn() { c.box(style=thumb_veil, fn() { @sf.spinner(c, size=@sf.theme().round.glyph) |> ignore }) |> ignore })
@@ -820,7 +822,6 @@ fn composer_picture(
         |> ignore
       }
     })
-    |> ignore
     c.layer(fn() {
       c.box(style=if finger { thumb_x_out } else { thumb_x_at }, fn() {
         c.box(style=thumb_x, id=x, tx=if finger { thumb_x_reach } else { 0.0 }, fn() {
@@ -864,11 +865,9 @@ fn composer_picture(
         @sfbase.keep_read(seen, bytes)
         @sfbase.open_preview(station, "", a)
       }
-      @sfbase.note_thumb(c, seen, thumb, thumb_corner)
+      @sfbase.note_thumb(c, seen, tile.val, thumb_corner, picture~)
       // (not drawn while the viewer is its picture: one picture on the screen, never two)
-      if @sfbase.pv_hidden.val == seen {
-        c.look(thumb, @ui.look(alpha=0.0))
-      }
+      c.look(tile.val, @ui.look(alpha=@sfbase.thumb_shows(seen)))
     }
     None => ()
   }

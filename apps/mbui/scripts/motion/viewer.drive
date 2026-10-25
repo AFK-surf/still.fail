@@ -1,0 +1,14 @@
+# A picture of the made-up chat opened in the viewer and closed (sfbase viewer.mbt): it grows out of its thumbnail in
+# the chat, the canvas and its shadow coming with it, and goes back into the thumbnail where the chat has it.
+timeout 20000
+until 整理发布清单
+wait 600
+tap 整理发布清单
+wait 1000
+wheel -900
+wait 1800
+until img:compare.png
+tap img:compare.png
+wait 1000
+back
+wait 1000
