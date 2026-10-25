@@ -16,6 +16,7 @@
 //   shortly after start and every few hours (console.ts).
 // - a Kimi Code profile signed in to Kimi: its token (minutes) renewed with half its life left, looked at every minute
 //   (kimi.ts).
+import { HERMES_MODEL_LIMIT } from "../agents/hermes.ts";
 import { runtimeKind, runtimeLabel } from "../agents/runtime.ts";
 import type { Clock } from "effect";
 import { randomBytes } from "node:crypto";
@@ -916,7 +917,7 @@ export class Accounts {
       try {
         check.models = await this.deps.hermes()!.models(profile);
         check.state = check.models.length > 0 ? "ok" : "unknown";
-        check.detail = tr(lang, check.models.length > 0 ? "station.profile.works" : "station.profile.hermesModelsEmpty", { n: check.models.length });
+        check.detail = tr(lang, check.models.length >= HERMES_MODEL_LIMIT ? "station.profile.hermesModelsLimited" : check.models.length > 0 ? "station.profile.works" : "station.profile.hermesModelsEmpty", { n: check.models.length, limit: HERMES_MODEL_LIMIT });
       } catch (e) {
         check.models = this.checks.get(id)?.models ?? null;
         check.state = "unknown";

@@ -85,6 +85,25 @@ export function hermesEnv(options: OpenOptions): Record<string, string> {
   return env;
 }
 
+/// Hermes 0.21.7's ACP inventory excludes unconfigured providers and caps each provider at 200. Bound the combined
+/// list too: a configured router can still offer hundreds. Existing manual selections remain in profile.models.
+export const HERMES_MODEL_LIMIT = 50;
+export function hermesCatalog(catalog: Json, profile: Profile): string[] {
+  const valid = (v: unknown): v is string => typeof v === "string" && v.trim() !== "";
+  const found = new Set<string>((Array.isArray(catalog?.availableModels) ? catalog.availableModels : []).map((m: Json) => m?.modelId).filter(valid));
+  const current = catalog?.currentModelId;
+  if (valid(current)) found.add(current);
+  const picked = new Set<string>();
+  const take = (model: unknown) => {
+    if (valid(model) && found.has(model) && picked.size < HERMES_MODEL_LIMIT) picked.add(model);
+  };
+  take(current);
+  take(profile.model);
+  for (const model of Array.isArray(profile.models) ? profile.models : []) take(model);
+  for (const model of found) { take(model); if (picked.size === HERMES_MODEL_LIMIT) break; }
+  return [...picked];
+}
+
 export class HermesDriver implements AgentDriver {
   private readonly data: string;
   private readonly command: string;
@@ -144,11 +163,7 @@ export class HermesDriver implements AgentDriver {
         const id = opened?.result?.sessionId;
         if (typeof id !== "string" || id === "") throw new Error("Hermes named no session");
         session.named(id);
-        const catalog = opened?.result?.models;
-        session.availableModels = [...new Set([
-          ...(Array.isArray(catalog?.availableModels) ? catalog.availableModels.map((m: Json) => m?.modelId) : []),
-          catalog?.currentModelId,
-        ].filter((m): m is string => typeof m === "string" && m.trim() !== ""))];
+        session.availableModels = hermesCatalog(opened?.result?.models, options.profile);
         if (!discovery) session.keep({ type: "session", id, cwd: options.cwd });
       }
       session.opened();

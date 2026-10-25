@@ -501,5 +501,6 @@
   "station.relay.threadIn": "{place} 的一个 thread",
   "station.updates.hermesExternal": "请在该机器上安装 Hermes 0.21.7 或更新版本及 ACP、MCP 组件，并配置模型服务；更新由 Hermes 自行管理。",
   "station.profile.hermesModelsEmpty": "Hermes 未返回模型。请先在此 profile 的 Hermes home 配置模型服务，再重新检查；也可按名称添加模型。",
-  "station.profile.hermesModelsFailed": "无法读取 Hermes 模型：{error}。请在此 profile 的 Hermes home 配置模型服务后重新检查；也可按名称添加模型。"
+  "station.profile.hermesModelsFailed": "无法读取 Hermes 模型：{error}。请在此 profile 的 Hermes home 配置模型服务后重新检查；也可按名称添加模型。",
+  "station.profile.hermesModelsLimited": "已列出已配置服务商的 {n} 个模型（自动列表最多 {limit} 个）；其他模型可按名称添加。"
 }

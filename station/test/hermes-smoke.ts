@@ -92,6 +92,7 @@ async function completed(done: Promise<TurnOutcome>) {
 try {
   const catalog = await driver.models(options.profile);
   const selected = catalog.find(m => m.includes("smoke-model"));
+  assert.ok(catalog.every(m => m.startsWith("openai-api:")), `unconfigured provider leaked into catalog: ${JSON.stringify(catalog)}`);
   assert.ok(selected, `configured model missing from Hermes catalog: ${JSON.stringify(catalog)}`);
   assert.equal(requests, 0, "model discovery must not start a model turn");
   assert.deepEqual(posts, [], "model discovery receives no station MCP tools");

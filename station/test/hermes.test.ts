@@ -4,7 +4,7 @@ import { join, delimiter } from "node:path";
 import { fileURLToPath } from "node:url";
 import { tmpdir } from "node:os";
 import { after, test } from "node:test";
-import { HermesDriver, hermesEnv, outcomeOf } from "../src/agents/hermes.ts";
+import { HermesDriver, hermesEnv, outcomeOf, hermesCatalog, HERMES_MODEL_LIMIT } from "../src/agents/hermes.ts";
 import type { OpenOptions, RuntimeEvent } from "../src/agents/runtime.ts";
 import { transcriptPath, readTimeline, isPosting } from "../src/read/transcript.ts";
 import { CHAT_CREATE } from "../src/tools/chat.ts";
@@ -121,9 +121,20 @@ for (const recovery of ['none', 'handover', 'crash']) test(`station tool names a
 test('model discovery reads ACP inventory without a turn, MCP credentials or transcript', async () => {
   const { options, driver, dump } = setup();
   const models = await driver.models(options.profile);
-  assert.deepEqual(models, ['openrouter:test', 'openrouter:default']);
+  assert.deepEqual(models, ['openrouter:default', 'openrouter:test']);
   const calls = readFileSync(dump + '.rpc', 'utf8').trim().split('\n').map(s=>JSON.parse(s));
   assert.deepEqual(calls.find(c=>c.method==='session/new').params.mcpServers, []);
   assert.equal(calls.some(c=>c.method==='session/prompt' || c.method==='session/set_model'), false);
   assert.equal(readFileSync(dump, 'utf8').includes(options.mcpToken), false);
+});
+
+test('large configured-provider catalogs are bounded without hiding current or enabled models', () => {
+  const { options } = setup();
+  const profile = { ...options.profile, models: ['router:model-9999', 'not-listed:manual'] };
+  const availableModels = Array.from({length:10_000},(_,i)=>({modelId:`router:model-${i}`}));
+  const models = hermesCatalog({currentModelId:'router:model-9998',availableModels},profile);
+  assert.equal(models.length,HERMES_MODEL_LIMIT);
+  assert.deepEqual(models.slice(0,2),['router:model-9998','router:model-9999']);
+  assert.equal(models.includes('not-listed:manual'),false, 'do not invent an unconfigured provider in the discovered catalog');
+  assert.deepEqual(profile.models,['router:model-9999','not-listed:manual'], 'manual selections are not rewritten');
 });
