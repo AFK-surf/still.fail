@@ -72,7 +72,7 @@ test("chats kept out of the archive before pins did that are pinned as the store
     const path = join(data, "stillfail.db");
     const store = Store.open(path, join(data, "archive"));
     for (const key of ["s1", "s2"]) {
-      store.insertSession({ key, connect: "ds", runtime: "claude", profile: "cc", workspace: `/w/${key}`, token: "t", createdAt: 1, lastActiveAt: 1 });
+      store.insertSession({ key, connect: "ds", runtime: "claude", profile: "cc", workspace: `/w/${key}`, token: `t-${key}`, createdAt: 1, lastActiveAt: 1 });
     }
     // One with no session of its own (its first to join is its item), one with none at all (nothing to pin).
     const joined = store.openThread("ember", "EMBER", "1.1", null, "a@x");
