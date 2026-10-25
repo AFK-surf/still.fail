@@ -1328,6 +1328,14 @@ pub fn Ctx::lit(self : Ctx, id : Int) -> Bool {
   if id != 0 {
     self.lit_asked.add(id)
   }
+  self.hand_on(id)
+}
+
+///|
+/// Whether the hand is on `id` as Ctx::lit has it, where what it changes is not `id`'s look but what is chosen (the
+/// pointer over a found line choosing it, as the keys do: the one chosen shown so, one at a time). Not a look that
+/// lights up: the spacing rules hold what asks Ctx::lit (gaps.mbt).
+pub fn Ctx::hand_on(self : Ctx, id : Int) -> Bool {
   match pointing() {
     Mouse => self.hovered(id)
     Finger => self.pressed(id)

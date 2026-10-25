@@ -491,7 +491,7 @@ pub fn finder_list(
         finder_go(line, close)
       }
       // (the pointer over a line chooses it, as the keys do)
-      if f.keys && c.lit(id) {
+      if f.keys && c.hand_on(id) {
         finder.chosen = k
       }
       found_line(c, lk, id, line, f.keys && k == finder.chosen, several, at, stacked)
