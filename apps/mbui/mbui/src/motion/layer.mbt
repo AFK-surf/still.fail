@@ -707,6 +707,15 @@ pub fn list_keys(
   let id = c.id(list)
   let now = c.now()
   let frame = c.frame_number()
+  // the very names of the frame before (a list that keeps them while it is the same): nothing to work out again, as
+  // many as it has rows
+  match mo.lists.get(id) {
+    Some(l) if physical_equal(l.names, keys) => {
+      l.seen = frame
+      return id
+    }
+    _ => ()
+  }
   let ks = keys.map(motion_key)
   let lm = match mo.lists.get(id) {
     Some(l) => l
