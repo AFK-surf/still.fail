@@ -6,6 +6,8 @@
 //    one that does, by the theme's `lit_apart` at least (the web's sidebar rows, `& + &` 2): two lit grounds side by
 //    side read as one block. Measured between their boxes, in the same layer, where they share a column or a row;
 //    what holds others that light up as wide or as tall as it (a list, a rail) is where they are, not one of them.
+//    Not held to it: the parts of one control (in a ground of their own that hugs them: a segmented choice's
+//    options), and rows across the whole window (a list there keeps nothing lit: one lights at a time).
 // 3. Two blocks with grounds of their own beside each other in one box never meet (0 between them) or run over each
 //    other: they stand apart, or are one block. Lines (thinner than `gap_line`) are what parts things, not a block.
 // 4. What a box with a ground or an edge holds (words, a drawing) stands in from its edges, never touching one; and
@@ -24,6 +26,10 @@ let gap_line : Double = 3.0
 /// How small a thing that lights up may be and still be pressed by itself (an icon's button, 20; a handle to drag
 /// between panes, 6, is not).
 let gap_lit_least : Double = 16.0
+
+///|
+/// How far in round the parts of one control its ground may stand (a segmented choice's track, 2 round its options).
+let gap_part_in : Double = 4.0
 
 ///|
 /// How much of what holds it a thing that lights up spans, across or down, for that to be where such things stand (a
@@ -167,10 +173,52 @@ fn Ctx::gap_faults(self : Ctx) -> Array[String] {
       dmin(self.nodes[o].fw, self.nodes[o].fh) >= gap_lit_least &&
       !lit.iter().any(fn(i) { i != o && layer[i] == layer[o] && holds(o, i) })
     })
+    // (the parts of one control: what lights up in a ground that is theirs alone, as large as they are with its few in
+    // round them, a segmented choice's options in its track: one thing, its parts edge to edge on purpose, what is
+    // chosen shown by its thumb)
+    let ground_of : Map[Int, Int] = {}
+    let parts : Map[Int, (Double, Double, Double, Double)] = {}
+    for i in lit {
+      let mut q = self.nodes[i].parent
+      while q >= 0 && layer[q] == layer[i] && !self.nodes[q].grounded() {
+        q = self.nodes[q].parent
+      }
+      if q >= 0 && layer[q] == layer[i] {
+        ground_of[i] = q
+        let b = self.nodes[i]
+        parts[q] = match parts.get(q) {
+          Some((x0, y0, x1, y1)) => (dmin(x0, b.x), dmin(y0, b.y), dmax(x1, b.x + b.fw), dmax(y1, b.y + b.fh))
+          None => (b.x, b.y, b.x + b.fw, b.y + b.fh)
+        }
+      }
+    }
+    let one_control = fn(a : Int, b : Int) {
+      match (ground_of.get(a), ground_of.get(b)) {
+        (Some(ga), Some(gb)) if ga == gb =>
+          match parts.get(ga) {
+            Some((x0, y0, x1, y1)) => {
+              let g = self.nodes[ga]
+              x0 - g.x <= gap_part_in &&
+              y0 - g.y <= gap_part_in &&
+              g.x + g.fw - x1 <= gap_part_in &&
+              g.y + g.fh - y1 <= gap_part_in
+            }
+            None => false
+          }
+        _ => false
+      }
+    }
+    // (rows across the whole window: a list there opens what is pressed over itself, so nothing in it stays lit; one
+    // lights at a time, pressed or pointed at, and never reads as one block with another: the app's lists across the
+    // whole screen, ListAt's Whole)
+    let across = fn(i : Int) {
+      let b = self.nodes[i]
+      b.x <= gap_slack && b.x + b.fw >= self.width - gap_slack
+    }
     for x in 0..<lit.length() {
       for y in (x + 1)..<lit.length() {
         let (a, b) = (lit[x], lit[y])
-        if layer[a] != layer[b] {
+        if layer[a] != layer[b] || one_control(a, b) || (across(a) && across(b)) {
           continue
         }
         match gap_between(rect(a), rect(b)) {
