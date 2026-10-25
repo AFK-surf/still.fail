@@ -520,7 +520,8 @@ fn signed_in(c : @ui.Ctx, src : Source) -> Unit {
       // a new device waiting on this one's code, in any workspace of the person's, over whichever page is open
       // (App.kt LockPrompts): put up when no other sheet is
       @settings.lock_prompts(settings_core(src, w), !sheet_open() && dui.sheet is None)
-      @settings.overlay(c, settings_core(src, w))
+      // (the core what the settings put up over a page draws with, put up by what has none at hand)
+      @settings.panels_frame(settings_core(src, w))
       // ⌘K's panel and ⌘/'s shortcuts, in every tier over the pages, under the presenters (sfdesk's switcher.mbt,
       // shortcuts.mbt)
       @sfdesk.switcher(c, src, w)

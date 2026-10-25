@@ -1,123 +1,18 @@
-// The settings' sheets (Sheet.kt SheetHost, one at a time): over the page from its foot, a share of the screen tall,
-// its top corners round, frosted over the page, the grabber at its top, the page under it darkened; a tap there
-// closes it. It comes up and goes down on the sheet's spring, the scrim in and out over 300 ms, and is only drawn as
-// it goes (a tap meanwhile is what is under it's). A station's actions, a device to confirm into security mode, a
-// member's role are drawn in it. What asks for a line (ask) and whether to go on (confirm) are the library's
-// presenters (@sf.ask, @sf.confirm), put up in its place.
-
-///|
-priv struct SheetHost {
-  /// what it shows, or None when there is none; what it showed, drawn as it goes down
-  mut draw : ((@ui.Ctx, Core) -> Unit)?
-  mut last : ((@ui.Ctx, Core) -> Unit)?
-  /// up last frame (gone down since: what was typed in it lets go of the keyboard)
-  mut was_up : Bool
-  /// how tall, as a share of the screen
-  mut height : Double
-  /// what to run when it closes by hand (the scrim, back)
-  mut on_close : () -> Unit
-  /// a count of sheets put up: each one's fields are its own
-  mut serial : Int
-}
-
-///|
-let sheet : SheetHost = {
-  draw: None,
-  last: None,
-  was_up: false,
-  height: 0.5,
-  on_close: fn() {  },
-  serial: 0,
-}
-
-///|
-/// Puts a sheet up in place of any other (SheetSpec): `height` a share of the screen.
-fn open_sheet(height : Double, draw : (@ui.Ctx, Core) -> Unit, on_close? : () -> Unit = fn() {  }) -> Unit {
-  sheet.draw = Some(draw)
-  sheet.height = height
-  sheet.on_close = on_close
-  sheet.serial += 1
-}
-
-///|
-/// Takes the sheet away.
-fn close_sheet() -> Unit {
-  sheet.draw = None
-}
-
-///|
-/// Whether a sheet of the settings is up (the system's back closes it first).
-pub fn sheet_up() -> Bool {
-  sheet.draw is Some(_)
-}
-
-///|
-/// Closes the sheet that is up, as a tap beside it does (the system's back).
-pub fn close() -> Unit {
-  if sheet.draw is Some(_) {
-    sheet.draw = None
-    (sheet.on_close)()
-  }
-}
+// What the settings' pages put up over them is the library's presenters' (@sf.panel, @sf.pick, @sf.ask, @sf.confirm),
+// shown as the screen and the native input have them. A page with no core at hand when it puts one up (a station's card
+// from a chat) draws with the frame's (panels_core).
 
 ///|
 /// The core the settings' panels put up by what has none at hand draw with (a station's card, a device asking): the
-/// frame's, said by overlay.
-// kept across runs: said again by every frame (overlay)
+/// frame's, said by panels_frame.
+// kept across runs: said again by every frame (panels_frame)
 let panels_core : Ref[Core?] = Ref(None)
 
 ///|
-/// The sheet, over everything the app shows: call after the pages each frame.
-pub fn overlay(c : @ui.Ctx, core : Core) -> Unit {
+/// The settings' core for this frame (what a panel put up by what has none at hand draws with): call each frame, before
+/// the presenters.
+pub fn panels_frame(core : Core) -> Unit {
   panels_core.val = Some(core)
-  let up = sheet.draw is Some(_)
-  if up {
-    sheet.last = sheet.draw
-  } else if sheet.was_up {
-    // let go of: a field in it is no longer typed into as it goes down
-    c.blur()
-  }
-  sheet.was_up = up
-  let draw = match sheet.last {
-    Some(d) => d
-    None => return
-  }
-  // up from below and back down on the sheet's spring, the scrim in and out (300 ms, CSS's ease): mbui's @kit.sheet
-  // (Sheet.kt SheetHost); the page under it, darkened, closes it when tapped
-  let r = @kit.sheet(
-    c,
-    "settings-sheet",
-    up,
-    share=sheet.height,
-    scrim=@sf.sheet_scrim,
-    look=@sf.sheet_look(),
-    fn() {
-      c.scope(sheet.serial, fn() {
-        @sf.sheet_grab(c)
-        @sf.sheet_laid(fn() { c.box(w=Fill(1.0), h=Fill(1.0), fn() { draw(c, core) }) |> ignore })
-      })
-    },
-  )
-  if up && !r.open {
-    close()
-  }
-  if !up && !r.shown {
-    sheet.last = None
-  }
-}
-
-///|
-/// A sheet's title (Sheet.kt SheetHead): 17 bold, 18 in.
-fn sheet_head(c : @ui.Ctx, title : String, lead? : () -> Unit) -> Unit {
-  let t = @sf.theme()
-  c.box(dir=Row, w=Fill(1.0), pl=18.0, pr=18.0, pt=4.0, pb=10.0, gap=8.0, align=ACenter, fn() {
-    match lead {
-      Some(f) => f()
-      None => ()
-    }
-    c.text(title, size=t.t.title, weight=700, color=t.p.text, wrap=false, w=Fill(1.0), line=24.0) |> ignore
-  })
-  |> ignore
 }
 
 ///|
@@ -168,7 +63,6 @@ pub fn ask(
   hint? : String = "",
   secret? : Bool = false,
 ) -> Unit {
-  close_sheet()
   @sf.ask(title, action, run, value~, placeholder~, hint~, secret~)
 }
 
@@ -176,7 +70,6 @@ pub fn ask(
 /// Asks before something that cannot be undone (PageParts.kt confirm: @sf.confirm, in place of the sheet up): its
 /// title, what it does, 取消 and `action` (red when `danger`). Said, it closes and `run` goes on.
 pub fn confirm(title : String, words : String, action : String, run : () -> Unit, danger? : Bool = false) -> Unit {
-  close_sheet()
   @sf.confirm(title, words, action, run, danger~)
 }
 

@@ -79,3 +79,21 @@ test "an agent's account: how it runs, the agent's sheet gone" {
   assert_true(dui.sheet is None)
   assert_true(app.nav.top() == Setting(@settings.Route::RunSettings("ws1/st1", "s-c1")))
 }
+
+///|
+test "a chat with no agent yet, on a desktop: its station's tag in its bar opens the station's card beside it" {
+  let calls : Array[Made] = []
+  let t = decide_core(calls, "chat-station-tag", wide=true)
+  // the tag: its name in the chat's bar (where it is: its middle)
+  let before = t.locate("Studio")
+  let tag = before.filter(fn(p) { p.1 < 40.0 })
+  assert_true(tag.length() > 0, msg="the station's tag in the bar: \{before}")
+  let (x, y) = tag[0]
+  t.tap(x, y)
+  t.frame()
+  assert_true(@sf.presenting(), msg="the station's card")
+  // the card's title (the name there now that was not before): beside the tag (under it), not in the window's middle
+  let card = t.locate("Studio").filter(fn(p) { !before.contains(p) })
+  assert_true(card.length() > 0, msg="its title")
+  assert_true(card.iter().all(fn(p) { p.1 > y && p.1 < 200.0 && (p.0 - x).abs() < 240.0 }), msg="under the tag: \{card}")
+}

@@ -515,7 +515,6 @@ pub fn left(route : Route) -> Unit {
     }
     _ => ()
   }
-  close_sheet()
 }
 
 ///|
@@ -535,12 +534,7 @@ pub fn reset() -> Unit {
   chosen.clear()
   builtin_open.clear()
   doc_picked.clear()
-  close_sheet()
-  sheet.last = None
-  sheet.was_up = false
-  sheet.height = 0.5
-  sheet.on_close = fn() {  }
-  sheet.serial = 0
+  panels_core.val = None
   frame_core.val = None
   at_root.val = false
   root_top.val = 0.0
