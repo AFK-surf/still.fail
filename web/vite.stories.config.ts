@@ -12,4 +12,5 @@ import demo from "./vite.demo.config.ts";
 const here = (path: string) => fileURLToPath(new URL(path, import.meta.url));
 const named = (p: PluginOption): boolean => !!p && typeof p === "object" && "name" in p && p.name.includes("vanilla-extract");
 const plugins = (demo.plugins ?? []).flat(Infinity as 1).filter((p) => !named(p));
-export default mergeConfig({ ...demo, plugins: [...plugins, vanillaExtractPlugin({ identifiers: "debug" })] }, { root: here("stories"), server: { port: 5199 }, build: { rollupOptions: { output: { codeSplitting: false } } } });
+// Its one page, web/stories/index.html: not the site's pages the demo's build takes in (site/, outside this root).
+export default mergeConfig({ ...demo, plugins: [...plugins, vanillaExtractPlugin({ identifiers: "debug" })] }, { root: here("stories"), server: { port: 5199 }, build: { rollupOptions: { input: here("stories/index.html"), output: { codeSplitting: false } } } });
