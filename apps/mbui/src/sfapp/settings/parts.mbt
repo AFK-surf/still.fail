@@ -1683,6 +1683,7 @@ fn head_pill(c : @ui.Ctx, key : String, label : String) -> Bool {
 }
 
 ///|
-/// A block of a sheet laid out here (in its column: @sf.sheet_column), 10 over the next.
+/// A block of a sheet laid out here (in its column: @sf.sheet_column) after the first, 10 under the one before: room
+/// between them, none under the last (its panel's own over its foot).
 // kept across runs: a value (no field of it changes)
-let sheet_block : @ui.Style = @ui.css("w=Full pb=S2_5")
+let sheet_block : @ui.Style = @ui.css("w=Full pt=S2_5")

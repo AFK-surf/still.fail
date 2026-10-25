@@ -1080,7 +1080,9 @@ fn present_sheet(c : @ui.Ctx, key : String, p : Presented) -> (Bool, Bool) {
     Pick(_, choices, _, _) if choices.length() >= pick_search_from => Some(sheet_long_pick)
     Confirm(_, _, _, _, _) => Some(sheet_confirm)
     Ask(_, _, _, _, _, _, _) => Some(sheet_ask)
-    Panel(x) if x.tall > 0.0 => Some(x.tall)
+    // (a form as tall as it is, as its dialog is: its buttons at its foot under what it holds, not at the foot of a
+    // share with room between)
+    Panel(x) if x.tall > 0.0 && !x.form => Some(x.tall)
     Panel(_) if over => Some(sheet_most)
     _ => None
   }
@@ -1230,8 +1232,12 @@ fn sheet_body(c : @ui.Ctx, key : String, p : Presented, scrolls? : Bool = false)
       // unless its buttons are (sheet_foot_at): the sheet's, as a panel's padding beside what opened it is the
       // panel's, not what it holds
       let pressed = p.from != Unanchored
-      let room = if x.tall > 0.0 {
+      // (a form lays out its own sides as one filling a share does, but is as tall as it is: `fills` false)
+      let fills = x.tall > 0.0 && !x.form
+      let room = if fills {
         sheet_grows
+      } else if x.tall > 0.0 {
+        full_width
       } else if pressed {
         if x.foot is None {
           sheet_held
@@ -1253,16 +1259,23 @@ fn sheet_body(c : @ui.Ctx, key : String, p : Presented, scrolls? : Bool = false)
           0.0
         }
         rule_over_now.val = if x.ruled && x.foot is Some(_) { sheet_rule_over } else { 0.0 }
+        // (as tall as what it holds, what would scroll in itself laid out whole, as a dialog's body: panel_whole)
+        if !fills {
+          panel_whole_now.val += 1
+        }
         draw_panel_body(x, c, close)
+        if !fills {
+          panel_whole_now.val -= 1
+        }
         panel_sides_in.val = 0.0
         rows_out.val = 0.0
         words_in_now.val = 0.0
         rule_over_now.val = 0.0
       }
-      if scrolls && x.tall <= 0.0 && x.lists {
+      if scrolls && !fills && x.lists {
         // (its own lists scroll in the room the sheet has: what it holds fills it)
         c.box(style=sheet_grows, fn() { c.box(style=room.then(sheet_fills), body) |> ignore }) |> ignore
-      } else if scrolls && x.tall <= 0.0 {
+      } else if scrolls && !fills {
         c.box(style=sheet_grows, fn() {
           c.capped(key + "/panel", wh_of(c), shrinks=true, fn() {
             panel_held_now.val = true
