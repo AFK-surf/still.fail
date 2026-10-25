@@ -101,13 +101,13 @@ fn open_add_station(
   from? : @sf.Anchor = Unanchored,
 ) -> Unit {
   adding_reset(known, existing)
-  @sf.panel(tr("android-settings.station.add"), from~, tall=0.72, fn(c, close) {
+  @sf.panel(tr("android-settings.station.add"), from~, tall=0.72, form=true, fn(c, close) {
     let joinable = (core.topic)("joinable", { "workspace": str(here.workspace) }).value
     let rows = joinable_rows(joinable)
     let offered = flag(joinable, "offered") && rows.length() > 0
     // the choice stays at the top; only what is under it scrolls
     if offered && adding.made is None {
-      c.box(w=Fill(1.0), pl=20.0, pr=20.0, pb=10.0, fn() {
+      c.box(style=@sf.panel_words_in(), w=Fill(1.0), pb=10.0, fn() {
         let i = @sf.segmented(
           c,
           "add-kind",
@@ -124,7 +124,7 @@ fn open_add_station(
       c.box(w=Fill(1.0), h=Fill(1.0), fn() {
         scroll_page(c, "add-station/" + adding.serial.to_string(), [
           fn() {
-            c.box(w=Fill(1.0), pl=20.0, pr=20.0, pb=10.0, fn() {
+            c.box(style=@sf.panel_words_in(), w=Fill(1.0), pb=10.0, fn() {
               c.text(
                 fill("android-settings.station.addNote", [("app", "still.fail")]),
                 size=@sf.theme().t.meta,
@@ -137,7 +137,7 @@ fn open_add_station(
             |> ignore
           },
           fn() {
-            c.box(w=Fill(1.0), pl=20.0, pr=20.0, pb=24.0, fn() {
+            c.box(style=@sf.panel_words_in(), w=Fill(1.0), pb=24.0, fn() {
               add_station_steps(c, core, here, cancel=true, fn() { close() })
             })
             |> ignore
@@ -256,7 +256,7 @@ fn join_existing(c : @ui.Ctx, core : Core, here : Here, rows : Array[Json], load
       scroll_page(c, "join-station/" + adding.serial.to_string(), blocks.map(fn(b) { fn() { @sf.sheet_column(c, b) } }))
     })
     |> ignore
-    c.box(dir=Row, w=Fill(1.0), padx=20.0, pt=10.0, pb=24.0, gap=8.0, justify=JEnd, fn() {
+    c.box(style=@sf.panel_words_in(), dir=Row, w=Fill(1.0), pt=10.0, pb=24.0, gap=8.0, justify=JEnd, fn() {
       if @sf.button(c, tr(if adding.took.length() == 0 { "common.cancel" } else { "common.done" }), key="join-close") {
         @sf.close_presented()
       }

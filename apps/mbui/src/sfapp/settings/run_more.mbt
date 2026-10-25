@@ -343,7 +343,7 @@ pub fn open_machine_sessions(core : Core, station : String, name : String, from?
   let shown = if name == "" { tr("android-chat.new.machine.here") } else { name }
   @sf.panel(fill("android-chat.new.machine.title", [("station", shown)]), from~, tall=0.7, fn(c, close) {
     let t = @sf.theme()
-    c.box(w=Fill(1.0), pl=20.0, pr=20.0, pb=8.0, fn() {
+    c.box(style=@sf.panel_words_in(), w=Fill(1.0), pb=8.0, fn() {
       c.text(tr("android-chat.new.machine.text"), size=t.t.meta, color=t.p.muted, w=Fill(1.0), line=18.0) |> ignore
     })
     |> ignore
@@ -358,7 +358,7 @@ pub fn open_machine_sessions(core : Core, station : String, name : String, from?
               close()
               look_at_machine_session(core, station, name, s)
             }
-            c.box(dir=Row, w=Fill(1.0), padx=20.0, pady=10.0, gap=12.0, align=ACenter, id~, fn() {
+            c.box(style=@sf.panel_words_in(), dir=Row, w=Fill(1.0), pady=10.0, gap=12.0, align=ACenter, id~, fn() {
               @sf.maker_mark(c, "", text(sv, "runtime"), 18.0) |> ignore
               c.box(w=Fill(1.0), fn() {
                 c.text(first_text(sv, ["title", "first"], ""), size=t.t.ui, color=t.p.text, wrap=false, w=Fill(1.0), line=21.0) |> ignore
@@ -398,11 +398,11 @@ fn look_at_machine_session(core : Core, station : String, name : String, s : Jso
   })
   @sf.panel(first_text(sv, ["title", "first"], ""), from=Unanchored, tall=0.85, fn(c, close) {
     let t = @sf.theme()
-    c.box(w=Fill(1.0), pl=18.0, pr=18.0, pb=8.0, fn() {
+    c.box(style=@sf.panel_words_in(), w=Fill(1.0), pb=8.0, fn() {
       c.text(text(sv, "meta"), size=t.t.caption, color=t.p.muted, wrap=false, w=Fill(1.0), line=17.0) |> ignore
     })
     |> ignore
-    c.box(w=Fill(1.0), h=Fill(1.0), padx=16.0, fn() {
+    c.box(style=@sf.panel_words_in(), w=Fill(1.0), h=Fill(1.0), fn() {
       match said.val {
         None =>
           if error.val == "" {
@@ -456,13 +456,13 @@ fn look_at_machine_session(core : Core, station : String, name : String, s : Jso
     })
     |> ignore
     if error.val != "" {
-      c.box(w=Fill(1.0), padx=20.0, pady=6.0, fn() {
+      c.box(style=@sf.panel_words_in(), w=Fill(1.0), pady=6.0, fn() {
         c.text(error.val, size=t.t.meta, color=t.p.red, w=Fill(1.0), line=18.0) |> ignore
       })
       |> ignore
     }
     let busy = is_doing(core, ["machineSessions.continue"], [("station", station), ("id", text(sv, "id"))])
-    c.box(dir=Row, w=Fill(1.0), pl=20.0, pr=20.0, pt=10.0, pb=24.0, gap=8.0, justify=JEnd, fn() {
+    c.box(style=@sf.panel_words_in(), dir=Row, w=Fill(1.0), pt=10.0, pb=24.0, gap=8.0, justify=JEnd, fn() {
       if @sf.button(c, tr("common.back"), key="machine-back") {
         // (the list in its place)
         close()
@@ -549,11 +549,11 @@ pub fn open_add_people(core : Core, here : Here, view : Json?, from? : @sf.Ancho
   }
   let roles = if text(view, "role") == "owner" { ["member", "admin", "owner"] } else { ["member", "admin"] }
   // the library's panel opened `from` what was pressed, most of the window tall, what it holds at its own sides
-  @sf.panel(tr("android-settings.add.title"), from~, tall=0.8, fn(c, close) {
+  @sf.panel(tr("android-settings.add.title"), from~, tall=0.8, form=true, fn(c, close) {
     let t = @sf.theme()
     let online = online_stations(core, here)
     if done.val != "" {
-      c.box(w=Fill(1.0), padx=20.0, gap=10.0, fn() {
+      c.box(style=@sf.panel_words_in(), w=Fill(1.0), gap=10.0, fn() {
         c.text(done.val, size=t.t.ui, color=t.p.text, w=Fill(1.0), line=20.0) |> ignore
         c.box(dir=Row, w=Fill(1.0), pb=24.0, justify=JEnd, fn() {
           if @sf.button(c, tr("common.done"), key="add-people-done", tone=Primary) {

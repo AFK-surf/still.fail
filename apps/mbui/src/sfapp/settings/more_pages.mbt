@@ -299,7 +299,7 @@ fn policy_page(c : @ui.Ctx, core : Core, here : Here, station : String) -> Unit 
         }
       }
       // the library's panel, as tall as most of the window, what it holds at its own sides
-      @sf.panel(title, from=Unanchored, tall=0.85, fn(c, _) {
+      @sf.panel(title, from=Unanchored, tall=0.85, form=true, fn(c, _) {
         let t = @sf.theme()
         let d = (core.topic)("policyForm", { "station": str(station), "form": str(form) }).value
         guard d is Some(Object(_)) else { return }
@@ -347,7 +347,7 @@ fn policy_page(c : @ui.Ctx, core : Core, here : Here, station : String) -> Unit 
           |> ignore
         }
         if id == "" && key == "" {
-          c.box(w=Fill(1.0), padx=20.0, gap=12.0, fn() {
+          c.box(style=@sf.panel_words_in(), w=Fill(1.0), gap=12.0, fn() {
             c.text(tr("web-pages.archivePolicy.textLead"), size=t.t.meta, color=t.p.muted, w=Fill(1.0), line=18.0) |> ignore
             let words = field_in("policy", text(d, "policy"), tr("web-pages.archivePolicy.title"), 8)
             if words != text(d, "policy") {
@@ -371,7 +371,7 @@ fn policy_page(c : @ui.Ctx, core : Core, here : Here, station : String) -> Unit 
         c.box(w=Fill(1.0), h=Fill(1.0), fn() {
           scroll_page(c, "policy-option/" + serial, [
             fn() {
-              c.box(w=Fill(1.0), padx=20.0, gap=12.0, fn() {
+              c.box(style=@sf.panel_words_in(), w=Fill(1.0), gap=12.0, fn() {
                 let n = field_in("name", text(ov2, "name"), tr("web-pages.archivePolicy.name"), 1)
                 if n != text(ov2, "name") {
                   call("edit", [("option", str(okey)), ("name", str(n))], fn(_) {  })
@@ -415,7 +415,7 @@ fn policy_page(c : @ui.Ctx, core : Core, here : Here, station : String) -> Unit 
               }
             },
             fn() {
-              c.box(w=Fill(1.0), padx=20.0, fn() {
+              c.box(style=@sf.panel_words_in(), w=Fill(1.0), fn() {
                 tools(
                   if key == "" {
                     Some(fn() {

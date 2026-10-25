@@ -76,6 +76,7 @@ priv struct PanelOf {
   focus : Bool
   ruled : Bool
   lists : Bool
+  form : Bool
 }
 
 ///|
@@ -191,7 +192,10 @@ pub fn pick(title : String, choices : Array[Choice], chosen : String, choose : (
 /// picker's: kept, 2026-10-25 用户「这两个的分割线可以保留，第一个分割线边上不要留空」), over the foot where what it holds
 /// scrolls. `lists`: what it holds scrolls in lists of its own (panel_column), what is beside them staying in view: a
 /// sheet of it held to its most gives it the room it has, its lists scrolling in that, not all of it as one (the run
-/// picker's models: what goes with the one picked beside them).
+/// picker's models: what goes with the one picked beside them). `form`: what is filled in and said (its fields, its
+/// own buttons to say it: the web's AddStationDialog, adding people), a dialog in the middle whatever opened it (a sheet
+/// with touch short of Large), as the web's are; what is only chosen from or looked at (a pick, a card) stands beside
+/// what opened it.
 pub fn panel(
   title : String,
   body : (@ui.Ctx, () -> Unit) -> Unit,
@@ -207,8 +211,9 @@ pub fn panel(
   focus? : Bool = true,
   ruled? : Bool = false,
   lists? : Bool = false,
+  form? : Bool = false,
 ) -> Unit {
-  present(Panel({ title, description, body, foot, w, wide, live, tall, grows, focus, ruled, lists }), from, gone~)
+  present(Panel({ title, description, body, foot, w, wide, live, tall, grows, focus, ruled, lists, form }), from, gone~)
 }
 
 ///|
@@ -243,6 +248,44 @@ pub fn in_panel() -> Bool {
 ///|
 // kept across runs: counted up and down round what a panel's body draws (0 between them)
 let panel_body_now : Ref[Int] = Ref(0)
+
+///|
+/// A long list in a panel's body (its rows laid out as they come into view: `Ctx::list`), its rows drawn as the panel
+/// has what it holds (its sides, its words' line, its rows' reach): they are drawn after the panel's body has said it.
+pub fn panel_list(c : @ui.Ctx, key : String, count : Int, est : Double, row : (Int) -> Unit) -> Int {
+  let (sides, out, words, body, small) = (
+    panel_sides_in.val,
+    rows_out.val,
+    words_in_now.val,
+    panel_body_now.val,
+    small_panel_now.val,
+  )
+  c.list(key, count, est, fn(i) {
+    let was = (panel_sides_in.val, rows_out.val, words_in_now.val, panel_body_now.val, small_panel_now.val)
+    panel_sides_in.val = sides
+    rows_out.val = out
+    words_in_now.val = words
+    panel_body_now.val = body
+    small_panel_now.val = small
+    row(i)
+    panel_sides_in.val = was.0
+    rows_out.val = was.1
+    words_in_now.val = was.2
+    panel_body_now.val = was.3
+    small_panel_now.val = was.4
+  })
+}
+
+///|
+/// Whether the panel whose body is drawn now is as tall as what it holds (a dialog: its body scrolls in itself), so
+/// what would scroll in a room of its own (a page's list) lays itself out whole instead.
+pub fn panel_whole() -> Bool {
+  panel_whole_now.val > 0
+}
+
+///|
+// kept across runs: counted up and down round what a dialog's body draws (0 between them)
+let panel_whole_now : Ref[Int] = Ref(0)
 
 ///|
 /// Whether the panel whose body is drawn now is held shorter than what it holds (beside what opened it, to the room on
@@ -289,17 +332,21 @@ pub fn panel_column(c : @ui.Ctx, key : String, most : Double, style : @ui.Style,
 /// it holds as far in from its sides as a sheet's words are (sheet_panel_sides), its rows' grounds reaching out across
 /// that room, their words on the column's line, as in a sheet the presenters lay out.
 pub fn sheet_column(c : @ui.Ctx, body : () -> Unit) -> Unit {
-  let (was, rows_were) = (panel_sides_in.val, rows_out.val)
-  panel_sides_in.val = sheet_panel_sides
-  rows_out.val = sheet_panel_sides
-  c.box(style=sheet_column_box, body) |> ignore
+  let (was, rows_were, words_were) = (panel_sides_in.val, rows_out.val, words_in_now.val)
+  // (in a panel that says its words' line, that far in: a dialog's; else a sheet's; its rows reaching out across it)
+  let sides = if words_in_now.val > 0.0 { words_in_now.val } else { sheet_panel_sides }
+  panel_sides_in.val = sides
+  rows_out.val = sides
+  words_in_now.val = 0.0
+  c.box(style=sheet_column_box.then(@ui.style(px=room(sides))), body) |> ignore
   panel_sides_in.val = was
   rows_out.val = rows_were
+  words_in_now.val = words_were
 }
 
 ///|
 // kept across runs: a value (no field of it changes)
-let sheet_column_box : @ui.Style = @ui.css("w=Full px=S5")
+let sheet_column_box : @ui.Style = @ui.css("w=Full")
 
 ///|
 /// How far a row's ground reaches out of the column it stands in, its words on the column's line: as far as its own
@@ -520,7 +567,7 @@ pub fn presented(c : @ui.Ctx, alone? : Bool = false) -> Unit {
 fn how_of(shows : Shows, from : Anchor, sheet : Bool) -> How {
   match (sheet, shows) {
     (true, _) => AsSheet
-    (false, Panel(_)) if from == Unanchored => AsDialog
+    (false, Panel(x)) if from == Unanchored || x.form => AsDialog
     (false, Menu(_, _, _) | Pick(_, _, _, _) | Panel(_)) => AsPopover
     (false, Confirm(_, _, _, _, _) | Ask(_, _, _, _, _, _, _)) => AsDialog
   }
@@ -544,7 +591,7 @@ fn draw_presented_as(c : @ui.Ctx, p : Presented, sheet : Bool) -> (Bool, Bool) {
   match p.shows {
     Menu(items, title, along) => menu_popover(c, key, p, items, title, along)
     Pick(title, choices, chosen, choose) => pick_popover(c, key, p, title, choices, chosen, choose)
-    Panel(x) if p.from == Unanchored => panel_centred(c, key, p, x)
+    Panel(x) if p.from == Unanchored || x.form => panel_centred(c, key, p, x)
     Panel(x) => panel_popover(c, key, p, x)
     Confirm(title, words, action, danger, run) => confirm_centred(c, key, p, title, words, action, danger, run)
     Ask(title, value, placeholder, action, hint, secret, run) =>
@@ -845,13 +892,11 @@ fn panel_centred(c : @ui.Ctx, key : String, p : Presented, x : PanelOf) -> (Bool
     fn() {
       let was = panel_sides_in.val
       panel_sides_in.val = dialog_pad
-      // a tall one's body fills its share of the window (what it holds lays itself out in the room it is given)
-      if x.tall > 0.0 {
-        let room = x.tall * wh_of(c)
-        c.box(style=@ui.style(w=Full, h=Fixed(room)), fn() { draw_panel_body(x, c, close) }) |> ignore
-      } else {
-        draw_panel_body(x, c, close)
-      }
+      // as tall as what it holds, whatever share a sheet of it would take (the dialog's body scrolls in itself where
+      // it is taller than the window leaves it): what would scroll in itself lays itself out whole (panel_whole)
+      panel_whole_now.val += 1
+      draw_panel_body(x, c, close)
+      panel_whole_now.val -= 1
       panel_sides_in.val = was
     },
     description~,
@@ -1197,10 +1242,16 @@ fn sheet_body(c : @ui.Ctx, key : String, p : Presented, scrolls? : Bool = false)
         sheet_panel
       }
       let body = fn() {
-        // (filling its share, it lays out its own sides)
+        // (filling its share, it lays out its own sides: its words as far in as a sheet's, panel_words_in)
         panel_sides_in.val = if x.tall > 0.0 { 0.0 } else if pressed { sheet_row_sides } else { sheet_panel_sides }
         rows_out.val = panel_sides_in.val
-        words_in_now.val = if x.tall <= 0.0 && pressed { sheet_panel_sides - sheet_row_sides } else { 0.0 }
+        words_in_now.val = if x.tall > 0.0 {
+          sheet_panel_sides
+        } else if pressed {
+          sheet_panel_sides - sheet_row_sides
+        } else {
+          0.0
+        }
         rule_over_now.val = if x.ruled && x.foot is Some(_) { sheet_rule_over } else { 0.0 }
         draw_panel_body(x, c, close)
         panel_sides_in.val = 0.0
