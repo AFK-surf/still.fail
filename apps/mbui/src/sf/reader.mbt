@@ -1315,8 +1315,14 @@ fn desk_layout(c : @ui.Ctx, r : Reading, style : ReaderStyle, p : ReaderPaper, n
       |> ignore
     })
     |> ignore
+    // (the sliders' labels in a column as wide as the wider of them in this language, 48 at least: words of a length
+    // known, whole)
+    let slider_labels = [t("web-pages.drive.reader.lines"), t("web-pages.drive.reader.margin")]
+    let label_w = slider_labels.fold(init=desk_slider_label_w, fn(m, l) {
+      dmax(m, c.words_across(l, desk_layout_label).ceil())
+    })
     let (lines_least, lines_most) = reader_lines
-    let lines = desk_slider_row(c, "reader/lines", t("web-pages.drive.reader.lines"), style.line, lines_least, lines_most, desk_lines_step, p, r, fn(v) {
+    let lines = desk_slider_row(c, "reader/lines", slider_labels[0], style.line, lines_least, lines_most, desk_lines_step, p, r, label_w~, fn(v) {
       "\{(v * 100.0).round().to_int()}%"
     })
     // (kept once the frame's builds are over: as the pointer let it go)
@@ -1325,7 +1331,7 @@ fn desk_layout(c : @ui.Ctx, r : Reading, style : ReaderStyle, p : ReaderPaper, n
       None => ()
     }
     let (margin_least, margin_most) = reader_margins
-    let margins = desk_slider_row(c, "reader/margin", t("web-pages.drive.reader.margin"), style.margin.to_double(), margin_least.to_double(), margin_most.to_double(), desk_margin_step, p, r, fn(v) {
+    let margins = desk_slider_row(c, "reader/margin", slider_labels[1], style.margin.to_double(), margin_least.to_double(), margin_most.to_double(), desk_margin_step, p, r, label_w~, fn(v) {
       "\{v.round().to_int()}"
     })
     match margins {
@@ -1421,13 +1427,14 @@ fn desk_slider_row(
   p : ReaderPaper,
   r : Reading,
   shown : (Double) -> String,
+  label_w? : Double = desk_slider_label_w,
 ) -> Double? {
   let (_, _, down) = c.pointer()
   let draft = r.drafts.get(key)
   let now = draft.unwrap_or(value)
   let mut kept : Double? = None
   c.box(style=desk_slider_box, fn() {
-    c.box(style=desk_slider_label, fn() {
+    c.box(style=@ui.style(w=Fixed(label_w)), fn() {
       c.text(label, style=desk_layout_label.then(@ui.text_style(color=Data(p.muted)))) |> ignore
     })
     |> ignore
@@ -2378,13 +2385,13 @@ let desk_size_key_words : @ui.TextStyle = @ui.text_style(size=Ui, weight=Semibol
 let desk_size_value : @ui.TextStyle = @ui.text_style(size=Ui, weight=Semibold, wrap=false, narrow=@ui.text_patch(size=Lg))
 
 ///|
-/// A slider's row (sliderRow): its name 48, the line, its value 48, 10 apart.
+/// A slider's row (sliderRow): its name 48 (as wide as the widest name where that is more), the line, its value 48,
+/// 10 apart.
 // kept across runs: a value (no field of it changes)
 let desk_slider_box : @ui.Style = @ui.css("row w=Full gap=S2_5 align=ACenter")
 
 ///|
-// kept across runs: a value (no field of it changes)
-let desk_slider_label : @ui.Style = @ui.css("w=S12")
+let desk_slider_label_w : Double = 48.0
 
 ///|
 // kept across runs: a value (no field of it changes)

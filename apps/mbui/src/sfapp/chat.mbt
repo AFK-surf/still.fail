@@ -233,7 +233,8 @@ fn bar_frame(
       // that, what follows leaves the row as it says (chat_bar: its people, then its station's update)
       let least = dmin(@ui.text_advance(title, size=t.t.title, weight=600), bar_title_least)
       c.box(style=@ui.style(min_w=Fixed(least)), fn() {
-        c.text(title, size=t.t.title, weight=600, color=t.p.text, wrap=false, line=chat_title_line)
+        // (a name: cut short where what follows leaves it less)
+        c.text(title, size=t.t.title, weight=600, color=t.p.text, wrap=false, line=chat_title_line, w=Cut)
         |> ignore
       })
       |> ignore

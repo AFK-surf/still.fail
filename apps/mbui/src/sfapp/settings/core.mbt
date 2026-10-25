@@ -164,10 +164,12 @@ pub(all) enum Route {
 } derive(Eq)
 
 ///|
-/// How this build's update stands: what is under way (正在检查, 下载中 40%, 正在安装; "" while nothing is) and the
-/// newer build known, by its name ("" while none is).
+/// How this build's update stands: what is under way (正在检查, 下载中 40%, 正在安装; "" while nothing is), how far
+/// it has come while it downloads and the host says how far (0 to 1, else None), and the newer build known, by its name
+/// ("" while none is).
 pub(all) struct VersionNow {
   doing : String
+  part : Double?
   newer : String
 }
 

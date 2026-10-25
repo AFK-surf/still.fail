@@ -967,12 +967,13 @@ pub fn drive_row(
         }
         @sf.icon(c, dv_kind_icon(if e.dir { "folder" } else { e.kind }), size=if compact { items.mark - compact_less_mark } else { items.mark }, color=t.p.muted)
         |> ignore
-        let name_words = items.name.then(row_name)
+        // (a name: cut short where what follows it leaves it less)
+        let name_words = items.name.then(file_name_cut)
         let size = if e.dir || column { "" } else { e.size_text }
         if row.renaming {
           name_field(c, key + "/name", s.b, e, row)
         } else if compact {
-          c.text(e.name, style=name_words) |> ignore
+          @sf.name_words(c, e.name, items.name) |> ignore
         } else if stacked {
           // its name, what it is under it (a folder's time; a file's size · time)
           c.box(style=name_stack, fn() {
@@ -1181,18 +1182,27 @@ pub fn upload_row(c : @ui.Ctx, src : Source, u : DvUpload) -> Unit {
   }
   c.box(style=entry_room, fn() {
     c.box(style=entry_plain, fn() {
-      c.box(style=row_style.then(@ui.style(min_h=Fixed(items.least))), fn() {
-        @sf.icon(c, "upload", size=items.mark, color=t.p.muted) |> ignore
+      c.box(style=(if stacked { upload_stacked } else { row_style }).then(@ui.style(min_h=Fixed(items.least))), fn() {
         if stacked {
-          // its name, and under it how far, what is asked (its answers in the link's ink) or why it failed
-          c.box(style=name_stack, fn() {
-            c.text(u.name, style=items.name.then(row_name)) |> ignore
+          // its mark, its name and its keys on its first line; under it, as far in as its name and on lines of their
+          // own, how far, what is asked (its answers after it, under it where the line has not the room) or why it
+          // failed
+          c.box(style=upload_first, fn() {
+            @sf.icon(c, "upload", size=items.mark, color=t.p.muted) |> ignore
+            c.box(style=name_stack, fn() { c.text(u.name, style=items.name.then(file_name_cut)) |> ignore }) |> ignore
+            c.box(style=upload_keys, fn() { keys() }) |> ignore
+          })
+          |> ignore
+          c.box(style=upload_under.then(@ui.style(pl=@sf.room_of(upload_under_in + items.mark))), fn() {
             match u.state {
               "taken" =>
-                c.box(style=upload_ask_line, fn() {
-                  c.text(@sf.t("web-pages.drive.taken"), style=items.meta.then(upload_cut)) |> ignore
-                  upload_answer(c, k + "/replace", @sf.t("web-pages.drive.replace"), replace)
-                  upload_answer(c, k + "/both", @sf.t("web-pages.drive.keepBoth"), fn() { dv_keep_both(src, u) })
+                c.box(style=upload_ask_line, flow=true, line_gap=0.0, fn() {
+                  c.text(@sf.t("web-pages.drive.taken"), style=items.meta.then(@sf.one_line)) |> ignore
+                  c.box(style=upload_answers, fn() {
+                    upload_answer(c, k + "/replace", @sf.t("web-pages.drive.replace"), replace)
+                    upload_answer(c, k + "/both", @sf.t("web-pages.drive.keepBoth"), fn() { dv_keep_both(src, u) })
+                  })
+                  |> ignore
                 })
                 |> ignore
               "failed" =>
@@ -1205,12 +1215,12 @@ pub fn upload_row(c : @ui.Ctx, src : Source, u : DvUpload) -> Unit {
             }
           })
           |> ignore
-          c.box(style=upload_keys, fn() { keys() }) |> ignore
         } else {
+          @sf.icon(c, "upload", size=items.mark, color=t.p.muted) |> ignore
           // (its name, and beside it how far, what is asked or why it failed: its name keeps a few words, what is
           // asked its two answers alone)
           c.box(style=upload_words, flow=true, line_gap=0.0, fn() {
-            c.box(style=upload_name, fn() { c.text(u.name, style=items.name.then(row_name)) |> ignore }) |> ignore
+            c.box(style=upload_name, fn() { c.text(u.name, style=items.name.then(file_name_cut)) |> ignore }) |> ignore
             match u.state {
               "taken" =>
                 c.box(style=upload_ask, fn() {
@@ -1271,14 +1281,37 @@ fn upload_answer(c : @ui.Ctx, key : String, words : String, act : () -> Unit) ->
 }
 
 ///|
-/// Under its name (mUploadAsk, mProgress): what is asked cut short, its answers whole, 12 apart; the bar 5 under the
-/// words; why it failed in red, as long as it needs; its keys after it, 4 apart.
+/// Stacked: its first line (its mark, its name cut short, its keys), the lines under it in from the row's start as
+/// far as its name (its mark and the 12 after it), to the row's end (12 in), 8 under the last.
+// kept across runs: a value (no field of it changes)
+let upload_stacked : @ui.Style = @ui.css("w=Full")
+
+///|
+// kept across runs: a value (no field of it changes)
+let upload_first : @ui.Style = @ui.css("row w=Full px=S3 pt=S2 gap=S3 align=ACenter")
+
+///|
+// kept across runs: a value (no field of it changes)
+let upload_under : @ui.Style = @ui.css("w=Full pr=S3 pb=S2")
+
+///|
+/// How far in from a row's start its name is past its mark (row_style's 12 in, 12 after the mark).
+let upload_under_in : Double = 24.0
+
+///|
+/// A file's name on one line, cut short where what follows it on its row leaves it less (a name).
+// kept across runs: a value (no field of it changes)
+let file_name_cut : @ui.TextStyle = @ui.text_style(wrap=false, w=Cut)
+
+///|
+/// Under its name (mUploadAsk, mProgress): what is asked, its answers after it (under it where the line has not the
+/// room), 12 apart; the bar 5 under the words; why it failed in red, as long as it needs.
 // kept across runs: a value (no field of it changes)
 let upload_ask_line : @ui.Style = @ui.css("row w=Full gap=S3 align=ACenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let upload_cut : @ui.TextStyle = @ui.text_style(wrap=false, w=Cut)
+let upload_answers : @ui.Style = @ui.css("row gap=S3 align=ACenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -1504,9 +1537,6 @@ let row_tree_compact : @ui.Style = row_compact.then(@ui.css("gap=S2 pl=S1_5"))
 // kept across runs: a value (no field of it changes)
 let disclosure_box : @ui.Style = @ui.css("w=S3 h=S3 align=ACenter justify=JCenter")
 
-///|
-// kept across runs: a value (no field of it changes)
-let row_name : @ui.TextStyle = @ui.text_style(wrap=false, w=@sf.grow)
 
 ///|
 /// Its name with what it is under it, in what is left of its row.

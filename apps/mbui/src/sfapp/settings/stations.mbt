@@ -181,7 +181,7 @@ fn station_body(c : @ui.Ctx, core : Core, s : Json?) -> Unit {
               @sf.drawable(c, pic, offline_picture_w) |> ignore
             }
             c.text(
-              fill("android-settings.stations.silent", [("app", "still.fail")]),
+              tr("android-settings.stations.silent"),
               size=t.t.meta,
               color=t.p.muted,
               w=Fill(1.0),

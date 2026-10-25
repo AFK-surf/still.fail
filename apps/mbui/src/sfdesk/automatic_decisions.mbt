@@ -138,7 +138,6 @@ fn dc_name(c : @ui.Ctx, s : Json?) -> Unit {
 /// which model; at its end the model (a dropdown), on or off, 保存 once changed, 立即检查 where the station can; what went
 /// wrong under it; its archive policy's row (to its page).
 fn completion_station(c : @ui.Ctx, core : Core, s : Json?, view : Json?) -> Unit {
-  let t = @sf.theme()
   let station = text(s, "station")
   if !flag(view, "canEdit") {
     dc_status(c, s, @sf.t("web-pages.automaticDecisions.adminOnly"))
@@ -172,51 +171,59 @@ fn completion_station(c : @ui.Ctx, core : Core, s : Json?, view : Json?) -> Unit
   }
   let can_review = flag(view, "canReview") && flag(field(field(view, "settings"), "completion"), "enabled") && !flag(d, "dirty")
   c.box(style=desk_list_row, fn() {
-    @sf.status_dot(c, "online")
-    c.box(style=desk_list_text, fn() {
-      dc_name(c, s)
-      c.text(
-        if flag(d, "enabled") {
-          @sf.t("web-pages.automaticDecisions.enabledWith", args=[("model", chosen)])
-        } else {
-          @sf.t("web-pages.automaticDecisions.disabled")
-        },
-        style=desk_note,
-      )
-      |> ignore
-    })
-    |> ignore
-    c.box(style=dc_controls, fn() {
-      match field(d, "pick") {
-        Some(Object(_)) as pick => {
-          let options = items(pick, "options").map(fn(o) { (text(Some(o), "model"), text(Some(o), "name")) })
-          @sf.select(c, "auto-model/" + station, model_id, options, fn(now) {
-            if now != model_id {
-              call("edit", [("model", str(now))])
-            }
-          }, disabled=busy, label=@sf.t("web-pages.automaticDecisions.model"))
-        }
-        _ => c.text(chosen, style=dc_aside) |> ignore
-      }
-      if @sf.switch(c, "auto-enabled/" + station, flag(d, "enabled"), disabled=busy) != flag(d, "enabled") {
-        c.after_build("auto-enabled/" + station, fn() { call("edit", [("enabled", Json::boolean(!flag(d, "enabled")))]) })
-      }
-      if flag(d, "dirty") &&
-        @sf.button(c, @sf.t("web-pages.automaticDecisions.save"), key="auto-save/" + station, tone=Primary, busy=saving, disabled=busy) {
-        c.after_build("auto-save/" + station, fn() { call("save", []) })
-      }
-      if can_review &&
-        @sf.button(c, @sf.t("web-pages.automaticDecisions.review"), key="auto-review/" + station, tone=Ghost, busy=reviewing, disabled=busy || reviewing) {
-        c.after_build("auto-review/" + station, fn() {
-          @settings.act(
-            core,
-            @sf.t("web-pages.automaticDecisions.reviewAction"),
-            "automaticDecisions.review",
-            obj([("station", str(station))]),
-            done=@sf.t("web-pages.automaticDecisions.reviewStarted"),
+    // (its controls after its name and state, at the line's end; under them where the line has not the room: its
+    // words none the narrower, 2026-10-26 they were broken a character a line beside the controls)
+    c.box(style=dc_station_flow, flow=true, line_gap=8.0, fn() {
+      c.box(style=dc_station_words, fn() {
+        @sf.status_dot(c, "online")
+        c.box(style=dc_station_text, fn() {
+          dc_name(c, s)
+          c.text(
+            if flag(d, "enabled") {
+              @sf.t("web-pages.automaticDecisions.enabledWith", args=[("model", chosen)])
+            } else {
+              @sf.t("web-pages.automaticDecisions.disabled")
+            },
+            style=dc_state,
           )
+          |> ignore
         })
-      }
+        |> ignore
+      })
+      |> ignore
+      c.box(style=dc_controls, fn() {
+        match field(d, "pick") {
+          Some(Object(_)) as pick => {
+            let options = items(pick, "options").map(fn(o) { (text(Some(o), "model"), text(Some(o), "name")) })
+            @sf.select(c, "auto-model/" + station, model_id, options, fn(now) {
+              if now != model_id {
+                call("edit", [("model", str(now))])
+              }
+            }, disabled=busy, label=@sf.t("web-pages.automaticDecisions.model"))
+          }
+          _ => c.text(chosen, style=dc_aside) |> ignore
+        }
+        if @sf.switch(c, "auto-enabled/" + station, flag(d, "enabled"), disabled=busy) != flag(d, "enabled") {
+          c.after_build("auto-enabled/" + station, fn() { call("edit", [("enabled", Json::boolean(!flag(d, "enabled")))]) })
+        }
+        if flag(d, "dirty") &&
+          @sf.button(c, @sf.t("web-pages.automaticDecisions.save"), key="auto-save/" + station, tone=Primary, busy=saving, disabled=busy) {
+          c.after_build("auto-save/" + station, fn() { call("save", []) })
+        }
+        if can_review &&
+          @sf.button(c, @sf.t("web-pages.automaticDecisions.review"), key="auto-review/" + station, tone=Ghost, busy=reviewing, disabled=busy || reviewing) {
+          c.after_build("auto-review/" + station, fn() {
+            @settings.act(
+              core,
+              @sf.t("web-pages.automaticDecisions.reviewAction"),
+              "automaticDecisions.review",
+              obj([("station", str(station))]),
+              done=@sf.t("web-pages.automaticDecisions.reviewStarted"),
+            )
+          })
+        }
+      })
+      |> ignore
     })
     |> ignore
   })
@@ -232,23 +239,23 @@ fn completion_station(c : @ui.Ctx, core : Core, s : Json?, view : Json?) -> Unit
   }
   match field(view, "policy") {
     Some(Object(_)) as policy => {
-      let id = c.id("auto-policy/" + station)
-      c.cursor(id, Hand)
-      if hit(c, id) {
+      // (the library's row: its title and its chevron on its first line, what it holds and what it found under them,
+      // a line of its own (beside its title it was cut short, docs/ui-panels.md 放不下的时候); past the station's dot,
+      // lined up with its name)
+      let summary = text(policy, "summaryText")
+      let line = @sf.t("web-pages.archivePolicy.optionCount", args=[("n", items(policy, "options").length().to_string())]) +
+        (if summary == "" { "" } else { " · " + summary })
+      let failed = count(policy, "failed") > 0
+      if @sf.link_row(
+          c,
+          "auto-policy/" + station,
+          @sf.t("web-pages.archivePolicy.title"),
+          note=if failed { "" } else { line },
+          trouble=if failed { line } else { "" },
+          lead=fn() { c.box(style=dc_dot_room, fn() {  }) |> ignore },
+        ) {
         (core.push)(AutoPolicy(station))
       }
-      c.box(style=dc_policy_row, id~, fn() {
-        // past the station's dot, lined up with its name
-        c.box(style=dc_dot_room, fn() {  }) |> ignore
-        c.text(@sf.t("web-pages.archivePolicy.title"), style=desk_list_title) |> ignore
-        let summary = text(policy, "summaryText")
-        let line = @sf.t("web-pages.archivePolicy.optionCount", args=[("n", items(policy, "options").length().to_string())]) +
-          (if summary == "" { "" } else { " · " + summary })
-        c.text(line, style=if count(policy, "failed") > 0 { dc_error_line } else { dc_aside }) |> ignore
-        c.spacer()
-        @sf.icon(c, "chevron-right", size=desk_chevron, color=t.p.muted) |> ignore
-      })
-      |> ignore
     }
     _ => ()
   }
@@ -265,6 +272,24 @@ let dc_aside : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color=Muted
 let dc_controls : @ui.Style = @ui.css("row gap=S4 align=ACenter justify=JEnd")
 
 ///|
+/// A station's rule's row: its dot, name and state, its controls at the line's end, in lines where it is short.
+// kept across runs: a value (no field of it changes)
+let dc_station_flow : @ui.Style = @ui.css("row w=Full gap=S3 align=ACenter justify=JBetween")
+
+///|
+// kept across runs: a value (no field of it changes)
+let dc_station_words : @ui.Style = @ui.css("row gap=S3 align=ACenter")
+
+///|
+// kept across runs: a value (no field of it changes)
+let dc_station_text : @ui.Style = @ui.css("gap=S0_5")
+
+///|
+/// Its state (whether it is on, with which model), on a line.
+// kept across runs: a value (no field of it changes)
+let dc_state : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color=Muted, wrap=false)
+
+///|
 /// (error: red, 12, broken anywhere), under the row it is of, past its dot
 // kept across runs: a value (no field of it changes)
 let dc_error : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color=Danger, w=Full)
@@ -272,11 +297,6 @@ let dc_error : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color=Dange
 ///|
 // kept across runs: a value (no field of it changes)
 let dc_error_line : @ui.TextStyle = dc_aside.then(@ui.text_style(color=Danger))
-
-///|
-/// (policyRow: 40 high at least, its words past the station's dot, lined up with its name)
-// kept across runs: a value (no field of it changes)
-let dc_policy_row : @ui.Style = desk_list_link.then(@ui.css("min_h=S10"))
 
 ///|
 /// Where a station's row has its dot (the dot's width, the row's gap after it).

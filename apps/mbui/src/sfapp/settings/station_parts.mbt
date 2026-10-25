@@ -318,16 +318,17 @@ fn adb_page(c : @ui.Ctx, core : Core, here : Here, address : String) -> Unit {
           list_card(c, fn() {
             // the code read off the dialog by itself, where the person turns that on (AdbCodeReader)
             if list_row(c, key="adb-reader", fn() {
-                row_lines(c, tr("android-misc.adb.reader.title"), tr("android-misc.adb.reader.note"), wrap_sub=true)
-                c.text(
-                  if reads {
-                    tr("android-misc.adb.on")
-                  } else {
-                    tr("android-misc.adb.reader.turnOn")
-                  },
-                  style=if reads { @sf.value } else { adb_go },
-                )
-                |> ignore
+                row_lines(c, tr("android-misc.adb.reader.title"), tr("android-misc.adb.reader.note"), wrap_sub=true, end=fn() {
+                  c.text(
+                    if reads {
+                      tr("android-misc.adb.on")
+                    } else {
+                      tr("android-misc.adb.reader.turnOn")
+                    },
+                    style=if reads { @sf.value } else { adb_go },
+                  )
+                  |> ignore
+                })
               }) {
               adb_ask("adb.open", obj([("what", str("reader"))]))
             }
@@ -344,8 +345,8 @@ fn adb_page(c : @ui.Ctx, core : Core, here : Here, address : String) -> Unit {
                     },
                   ),
                   wrap_sub=true,
+                  end=fn() { c.text(tr("android-misc.adb.pair.go"), style=adb_go) |> ignore },
                 )
-                c.text(tr("android-misc.adb.pair.go"), style=adb_go) |> ignore
               }) {
               adb_ask("adb.open", obj([("what", str("wireless")), ("beside", Json::boolean(true))]))
             }
@@ -357,8 +358,8 @@ fn adb_page(c : @ui.Ctx, core : Core, here : Here, address : String) -> Unit {
                   tr(if open { "android-misc.adb.pair.here.split" } else { "android-misc.adb.pair.here.wait" }),
                   title_color=if open { t.p.text } else { t.p.subtle },
                   wrap_sub=true,
+                  end=fn() { doing_mark(c, busy, failed_of(core, ["adb.pair"], [])) },
                 )
-                doing_mark(c, busy, failed_of(core, ["adb.pair"], []))
               }) {
               ask(
                 tr("android-misc.adb.pair.ask"),
@@ -393,6 +394,7 @@ fn adb_page(c : @ui.Ctx, core : Core, here : Here, address : String) -> Unit {
         blocks.push(fn() {
           list_card(c, fn() {
             if list_row(c, key=if busy { "" } else { "adb-grant" }, fn() {
+                // (its switch across the row's middle: a round control out of the row's corners)
                 row_lines(c, tr("android-misc.adb.grant.title"), tr("android-misc.adb.grant.note"), wrap_sub=true)
                 doing_mark(c, busy, failed_of(core, ["adb.grant"], []))
                 switch(c, "adb-grant", false)

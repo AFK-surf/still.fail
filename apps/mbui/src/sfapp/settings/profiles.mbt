@@ -386,10 +386,11 @@ fn quota_section(c : @ui.Ctx, core : Core, station : String, pv : Json?) -> Arra
         let reset = list_row(
           c,
           fn() {
-            row_lines(c, tr("android-settings.quota.resets"), text(q, "resetText"))
-            doing_mark(c, resetting, failed_of(core, ["profile.resetQuota"], on))
-            c.text(tr("android-settings.quota.reset"), style=if left > 0 { @sf.value.then(@sf.link) } else { @sf.value })
-            |> ignore
+            row_lines(c, tr("android-settings.quota.resets"), text(q, "resetText"), end=fn() {
+              doing_mark(c, resetting, failed_of(core, ["profile.resetQuota"], on))
+              c.text(tr("android-settings.quota.reset"), style=if left > 0 { @sf.value.then(@sf.link) } else { @sf.value })
+              |> ignore
+            })
           },
           key=if left <= 0 || resetting { "" } else { "quota-reset" },
         )

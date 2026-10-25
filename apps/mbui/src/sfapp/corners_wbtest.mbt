@@ -4,7 +4,7 @@
 // app's languages, over the Tester's own text (the faults a screen has its own, the same on every machine). Each keeps
 // to the bar corners_everywhere_known says (the faults it still has): one more fails, and one less until the bar is
 // lowered there. A screen not listed has none. scripts/corners.sh shows the same screens in a Mac's text, as
-// pictures, what breaks the rule outlined. The same frame of each screen in squeeze_windows and squeeze_modes is held to
+// pictures, what breaks the rule outlined. The same frame of each screen in squeeze_windows is held to
 // its squeeze bar too (squeeze_wbtest.mbt): a screen is opened once for both. (The screens' own tests, screens_wbtest.mbt, hold the phone's screens in
 // the Mac's text to corners_known.)
 
@@ -64,7 +64,7 @@ let corner_modes : Array[String] = [
   "settings-workspace-mark", "settings-local-fonts", "settings-policy", "settings-policy-text",
   "settings-policy-option", "settings-security-confirm", "settings-security-join", "settings-security-off",
   "settings-run", "settings-run-models", "settings-run-accounts", "settings-fonts", "settings-fonts-code",
-  "settings-decisions", "settings-completion", "settings-bars", "settings-changelog", "settings-prices",
+  "settings-decisions", "settings-completion", "settings-bars", "settings-about", "settings-changelog", "settings-prices",
   "settings-notify-off", "settings-notify-denied",
 ]
 
@@ -83,7 +83,7 @@ fn corners_check(lang : String) -> Unit raise {
         gaps.push("\{at}: \{f}")
       }
       // (the squeeze's on the screen at rest, before what shows only under the hand is shown)
-      let squeeze = if squeezed && squeeze_modes.contains(mode) { squeeze_wrong(at, t.squeeze_faults()) } else { None }
+      let squeeze = if squeezed { squeeze_wrong(at, t.squeeze_faults()) } else { None }
       // and what it shows only under the hand (Ctx::lit_shown, hand_shown: a row's 归档), all of it at once, each fault
       // once
       for f in t.lit_all_faults() {

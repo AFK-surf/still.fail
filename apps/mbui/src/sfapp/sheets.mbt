@@ -417,7 +417,8 @@ fn chat_info_sheet(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef) -> Uni
           |> ignore
         }
         c.box(w=Fill(1.0), fn() {
-          c.text(facts.join(" · "), size=t.t.meta, color=t.p.muted, wrap=false) |> ignore
+          // (in as many lines as they take: words of no length known, none of them cut)
+          c.text(facts.join(" · "), size=t.t.meta, color=t.p.muted, w=Fill(1.0)) |> ignore
         })
         |> ignore
       })
@@ -438,21 +439,25 @@ fn chat_info_sheet(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef) -> Uni
                   state_of_badge(text(av, "badge")),
                   @sf.over(t.p.bg, @sf.alpha(t.p.card, 0.8)),
                 )
-                c.box(w=Fill(1.0), fn() {
-                  c.text(text(s, "agentText"), size=t.t.ui, weight=600, color=t.p.text, wrap=false) |> ignore
+                // (short of room, its allowance leaves the row, its name whole: in its own sheet)
+                c.box(w=Fill(1.0), keep=true, fn() {
+                  c.text(text(s, "agentText"), style=info_agent_name, keep=true) |> ignore
                   let since = agent_since(c, src, av)
                   let line = if since == "" {
                     text(s, "statusText")
                   } else {
                     text(s, "statusText") + " · " + since
                   }
-                  c.text(line, size=t.t.caption, color=t.p.muted, wrap=false) |> ignore
+                  c.text(line, style=info_agent_line, keep=true) |> ignore
                 })
                 |> ignore
-                @sf.quota_chips(c, match field(field(av, "account"), "quota") {
-                  Some(_) as q => q
-                  None => field(field(av, "profile"), "quota")
+                c.box(drop=1, fn() {
+                  @sf.quota_chips(c, match field(field(av, "account"), "quota") {
+                    Some(_) as q => q
+                    None => field(field(av, "profile"), "quota")
+                  })
                 })
+                |> ignore
                 chevron(c)
               }, tile=true) {
               open_sheet(c, AgentOf(r, key))
@@ -835,14 +840,30 @@ fn agent_row(c : @ui.Ctx, key : String, label : String, value : String, trailing
   let t = @sf.theme()
   info_row(c, key, fn() {
     c.text(label, size=t.t.meta, color=t.p.muted, wrap=false) |> ignore
-    c.box(w=Fill(1.0), fn() {
-      c.text(value, size=t.t.ui, color=t.p.text, wrap=false) |> ignore
+    // (short of room, what follows its value leaves the row, the value whole)
+    c.box(w=Fill(1.0), keep=true, fn() {
+      c.text(value, style=agent_row_value, keep=true) |> ignore
     })
     |> ignore
-    trailing()
+    c.box(drop=1, fn() { trailing() }) |> ignore
     chevron(c)
   })
 }
+
+///|
+/// What an agent's row says (its account, its history): on a line, whole while what follows it may leave the row.
+// kept across runs: a value (no field of it changes)
+let agent_row_value : @ui.TextStyle = @ui.text_style(size=Ui, color=Fg, wrap=false, w=Cut)
+
+///|
+/// An agent's name in the chat's info (600) and how it is under it (the caption's, muted): each on a line, whole while
+/// its allowance may leave the row.
+// kept across runs: a value (no field of it changes)
+let info_agent_name : @ui.TextStyle = @ui.text_style(size=Ui, weight=Semibold, color=Fg, wrap=false, w=Cut)
+
+///|
+// kept across runs: a value (no field of it changes)
+let info_agent_line : @ui.TextStyle = @ui.text_style(size=Caption, color=Muted, wrap=false, w=Cut)
 
 ///|
 /// Stopping its turn, while it works (AgentSheet.kt StopButton): red on its tint, a spinner while it is asked.

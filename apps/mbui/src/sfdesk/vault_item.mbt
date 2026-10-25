@@ -133,9 +133,13 @@ fn vault_item_page(c : @ui.Ctx, core : Core, here : Here, frame : PageFrame, vau
         return
       }
       c.box(style=vi_facts, fn() {
+        // (its terms' column 96 wide, or as wide as the widest of them in this language: words of a length known,
+        // whole)
+        let terms = [@sf.t("web-pages.vault.how"), @sf.t("web-pages.vault.editor.env"), @sf.t("web-pages.vault.editor.lasts")]
+        let term_w = terms.fold(init=vi_term_w, fn(m, w) { dmax(m, c.words_across(w, vi_term).ceil()) })
         let fact = fn(term : String, value : () -> Unit) {
           c.box(style=vi_fact, fn() {
-            c.box(style=vi_term_room, fn() { c.text(term, style=vi_term) |> ignore }) |> ignore
+            c.box(style=@ui.style(w=Fixed(term_w)), fn() { c.text(term, style=vi_term) |> ignore }) |> ignore
             value()
           })
           |> ignore
@@ -309,8 +313,8 @@ let vi_facts : @ui.Style = @ui.css("w=Full gap=S1")
 let vi_fact : @ui.Style = @ui.css("row w=Full gap=S3_5 align=AStart")
 
 ///|
-// kept across runs: a value (no field of it changes)
-let vi_term_room : @ui.Style = @ui.css("w=S24")
+/// Its terms' column at least (the web's 96).
+let vi_term_w : Double = 96.0
 
 ///|
 // kept across runs: a value (no field of it changes)

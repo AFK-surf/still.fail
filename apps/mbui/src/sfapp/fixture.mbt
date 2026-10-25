@@ -1147,6 +1147,13 @@ pub fn open_fixture_mode(mode : String) -> Unit {
   if mode.has_prefix("settings") {
     open_setting(@settings.fixture_page(mode))
   }
+  // 关于 with a newer build offered and still.fail cloud asked again before it downloads, on a device that sends
+  // usage statistics and error reports: its rows at their fullest
+  if mode == "settings-about" {
+    fixture_update("0.1.5283")
+    update.installing = true
+    reporting_host.val = Some({ get: fn() { true }, set: fn(_) {  } })
+  }
   // the search open over Home, words typed (search_fixture.mbt)
   @sfpages.open_search_mode(mode)
   // a device not yet confirmed in the workspace's safe mode: lock-waiting, lock-finding, lock-code, lock-wrong (its
