@@ -285,7 +285,7 @@ core_program() {
   apple $target || return 1
   clang -fobjc-arc -O2 -Wall -Isrc/host core/$1.m mbui/src/host/apple_listen.m $OUT/$target/libmbui_core.a \
     $OUT/$target/libstillfail_shell.a $(libs $target) -F$fw -framework hermes -Wl,-rpath,$fw -lc++ \
-    -framework Foundation -Wl,-dead_strip -o $OUT/$1
+    -framework LocalAuthentication -framework Foundation -Wl,-dead_strip -o $OUT/$1
 }
 
 # core/smoke.m + the engine, for macOS.

@@ -42,6 +42,7 @@
   <key>MBUIGround</key><string>#F5F3EF,#1B1C1F</string>
   <key>NSPhotoLibraryUsageDescription</key><string>在＋里列出最近的照片，选来发进对话。</string>
   <key>NSCameraUsageDescription</key><string>拍照发进对话。</string>
+  <key>NSFaceIDUsageDescription</key><string>查看密钥库里的密钥、批准 agent 使用前确认是你本人。</string>
   <key>PHPhotoLibraryPreventAutomaticLimitedAccessAlert</key><true/>
   <key>ITSAppUsesNonExemptEncryption</key><false/>
   <key>NSAppTransportSecurity</key><dict><key>NSAllowsLocalNetworking</key><true/></dict>

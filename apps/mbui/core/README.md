@@ -101,13 +101,17 @@ stops the core and prints timings and the process's memory footprint.
   `mb_core_start` gives it `mb_core_stop`. A core thread left in a task had locked a destroyed mutex or read freed
   memory, and macOS reported the app as crashed (`scripts/core.sh exit` holds it).
 - `secure.*` and `listen.*` are the app's, not the shell's (on Android too): answered here (the Keychain, below;
-  apple_listen.m, under Login).
+  apple_listen.m, under Login). A `user` value (a vault's box key) and `secure.ask` take the person: LocalAuthentication's
+  device owner prompt (Touch ID, Face ID or the device's password, the core's `reason` in it), on a queue of its own so
+  the core goes on while they answer; the Keychain item is a `user` one's own account, given once they said yes. The
+  prompt is a gate, not the Keychain's access control (the data protection keychain's, which on macOS takes an
+  entitlement a Developer ID app has only with a provisioning profile). A device with no password: `no_device_lock`.
 - An exception that escapes to the engine, or the core's own `fatal`, sends `{"fatal": reason}` once; the host then
   stops this core and starts another (as Android does).
 - `on_message` runs on the core thread. The MoonBit host copies and hops to its UI thread (core_native.c), and must
   not wait on the UI thread for the core while the core waits for it.
-- `MBUI_SECURE_TEST=1` (src/coredemo) round-trips `secure.set`, `get`, `delete` and `get` again through the engine's
-  own Keychain code and logs `SECURE_TEST …`, as Android's CoreHost does.
+- `MBUI_SECURE_TEST=1` (src/coredemo) round-trips `secure.set`, `get` (and `get` as the person's: none, nobody asked),
+  `delete` and `get` again through the engine's own Keychain code and logs `SECURE_TEST …`, as Android's CoreHost does.
 - `MB_CORE_TRACE=1` prints every operation and its answer, `MB_CORE_DEBUG=1` the core's debug log; the start says
   what it took (`[core] Hermes: shell … ms, script … ms (… bytes), start … ms`).
 - Not yet: Hermes's sampling profiler (Android's `HermesNative.profile`), a debugger (the release framework has none;
@@ -171,8 +175,9 @@ Still to do: a macOS app bundle (`Contents/Resources/core.hbc`, `Contents/Framew
   is aarch64-apple-ios), linked with Hermes's xcframework slice, the app's `core_engine.m` (src/sfcore/apple_engine.m)
   and `src/core/core_native.c`. The app carries `core.hbc` and `Frameworks/hermes.framework` (React Native 0.81.4's,
   the simulator's slice; `@executable_path/Frameworks`), signed ad hoc.
-- `secure.*`: the Keychain (`kSecClassGenericPassword`, `AfterFirstUnlockThisDeviceOnly`), as on macOS; no file stand-in
-  (MBUI_KEYS_IN_FILES is a macOS development build's).
+- `secure.*`: the Keychain (`kSecClassGenericPassword`, `AfterFirstUnlockThisDeviceOnly`) and Face ID or the passcode
+  for a `user` one, as on macOS (`NSFaceIDUsageDescription` in ios/Info.plist); no file stand-in (MBUI_KEYS_IN_FILES is a
+  macOS development build's).
 - Sign-in: ASWebAuthenticationSession (`apple_auth.m`) with the `stillfail` scheme, as on macOS: the cloud's callback
   comes back to the session's handler, nothing registered.
 - The core's files: `Library/Application Support/<bundle id>/core` in the app's container (`MBUI_CORE_DATA` elsewhere:
@@ -208,7 +213,8 @@ Built (`APP=coredemo scripts/android.sh build`): the core runs in the app's engi
   Timers are the engine's (CLOCK_BOOTTIME on Android).
 - **`secure.*`**: CoreHost seals each value with AES-GCM under one Android Keystore key (alias
   `dev.mbui.core.secure`), a file per value in `<files>/core/secure`, the value's name as associated data.
-  `secure.ask` and `user: true` (biometrics) answer `"unsupported"`. `MBUI_SECURE_TEST=1` makes coredemo round-trip
+  `user: true` and `secure.ask`: the person asked (BiometricPrompt, biometrics or the screen lock; CoreHost's
+  `secureUser`). `MBUI_SECURE_TEST=1` makes coredemo round-trip
   `secure.set`, `secure.get` (the same bytes back, sealed on disk), `secure.delete` and `secure.get` again (`{none}`)
   through CoreHost's own answers and log `SECURE_TEST …`.
 - **`listen.*`**: `dev.mbui.Loopback` (android/), the twin of apple_listen.m and of ember's Loopback.kt: a
@@ -251,7 +257,8 @@ memory).
   app's Apple stub): `mb_core_start` hands the engine the bytecode, the data directory and the host's calls; what the
   core says goes through core_native.c into mbui's queue (`mb_post`), which asks for the frame that takes it.
 - **`secure.*`**: sealed with DPAPI for the Windows user (CryptProtectData, never a prompt), a file per value in
-  `<data>\secure`. `secure.ask` and `user: true` (Windows Hello) answer `"unsupported"`. `MBUI_SECURE_TEST=1` round-trips
+  `<data>\secure` (a `user` one's with `.user` after it). Nothing asks the person yet (Windows Hello): `secure.ask` says
+  yes at once and a `user` value is as safe as the Windows login, as with the Electron app. `MBUI_SECURE_TEST=1` round-trips
   it once as the core starts (`SECURE_TEST …` on stderr).
 - **`listen.*`** and **sign-in**: on mbui's win_listen.c (Winsock); the app signs in on `@hostapi.browser_login`
   (win_browser_login.c: `$BROWSER`, else the system's browser), the CLI's loopback redirect, as on Android.
@@ -297,7 +304,5 @@ round: this device taking a station's login callback for it (`canRelay`; machine
 login cards). apple_core.mm answers it on the same listener, as Android's Loopback.kt does there; `scripts/core.sh
 listen` tests it with core/listen-test.js in the core's place (`scripts/android.sh listen-test` on Android's).
 
-`secure.*` is the other gap: at start the core asks `secure.get` twice (the lock's signing key `lock-signer`, and the
-vault's) and goes on without them (the smoke run shows it); after login, making a lock signer or opening a vault
-would fail with "unsupported". The Keychain (`kSecClassGenericPassword`, `kSecAttrAccessControl` with user presence
-when `user` is set; `secure.ask` → `LAContext evaluatePolicy`) answered through `complete` closes it.
+`secure.*` is answered here too (the Keychain, and LocalAuthentication's prompt for a `user` value and `secure.ask`:
+above).
