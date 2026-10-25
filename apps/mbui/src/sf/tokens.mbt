@@ -84,6 +84,9 @@ pub(all) struct Type {
   /// what is typed (textInput: the phone's 16, as iOS zooms into less; the computer's 14), on its line
   input : Double
   input_line : Double
+  /// what a person wrote, read in a message (msgPlain, PersonWords): the body's size on its line; a phone's on a
+  /// message's line, as the agent's Markdown beside it (Chat.kt: 15 on 24.75)
+  words : @ui.TextStyle
 }
 
 ///|
@@ -786,6 +789,8 @@ let wide_type : Type = {
   display: 28.0,
   input: 14.0,
   input_line: 21.0,
+  // (the body's line, the web's --leading-body 22: msgPlain's 1.55 is 21.7, off the scale)
+  words: @ui.text_style(size=Base, leading=L7, color=Fg),
 }
 
 ///|
@@ -852,6 +857,7 @@ let narrow_type : Type = {
   body_line: 22.0,
   input: 16.0,
   input_line: 21.0,
+  words: message,
 }
 
 ///|

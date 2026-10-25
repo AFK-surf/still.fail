@@ -379,7 +379,7 @@ pub fn person_words(c : @ui.Ctx, words : String, key : String, found? : Array[St
   c.rich(
     @sf.found_weight(message_runs(words, p.accent), found),
     key="msg-words/" + key,
-    style=msg_plain,
+    style=@sf.theme().t.words,
     link_color=p.blue,
     on_link=fn(h) { open_link(h) },
     on_link_hold=Some(fn(href, _) { link_held(c, href) }),
@@ -928,11 +928,6 @@ let msg_name_hot : @ui.TextStyle = @ui.text_style(size=Sm, weight=Semibold, lead
 /// A time (msgTime): 11, muted.
 // kept across runs: a value (no field of it changes)
 let msg_time : @ui.TextStyle = @ui.text_style(size=Xs2, leading=L5, color=Muted, wrap=false)
-
-///|
-/// A person's words (msgPlain): 14 on 1.55.
-// kept across runs: a value (no field of it changes)
-let msg_plain : @ui.TextStyle = @ui.text_style(size=Sm, leading=L7, color=Fg)
 
 ///|
 /// The viewer's message (msgMine): at the column's end, 4 apart.
