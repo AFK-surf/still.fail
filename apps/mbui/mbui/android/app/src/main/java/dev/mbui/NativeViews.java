@@ -207,14 +207,14 @@ final class NativeViews {
         }
 
         /**
-         * Once placed and done: the canvas's frame with its next picture (a page's drawn again now; a video's the
-         * frame it shows) said once it is on the display (VIEWDRAWN id, Picture.latch), once.
+         * Once placed and done: the canvas's frame with a picture of it from then (a page's drawn again now; a video's
+         * the frame it shows) said once it is on the display (VIEWDRAWN id, Picture.latch), once.
          */
         void drawnWhenBoth() {
             if (!placedOnce || !doneOnce || drawnSaid || clip == null || closed || picture == null) return;
             drawnSaid = true;
             if (kind == 1) {
-                picture.sayAt = Math.max(1, picture.arrived.get());
+                picture.sayAfter = Long.MIN_VALUE;
             } else {
                 clip.sayNext = true;
                 clip.invalidate();
@@ -264,7 +264,6 @@ final class NativeViews {
          */
         void pictureAnew() {
             picture.w = picture.h = 0;
-            picture.sent = 0;
             if (clip != null) clip.invalidate();
         }
 
@@ -430,12 +429,12 @@ final class NativeViews {
             } finally {
                 p.w = w;
                 p.h = h;
-                p.sent++;
+                // (this frame's time, which its buffer's is not before: a frame from then on said, Picture.latch)
+                if (sayNext) {
+                    sayNext = false;
+                    p.sayAfter = System.nanoTime();
+                }
                 s.unlockCanvasAndPost(c);
-            }
-            if (sayNext) {
-                sayNext = false;
-                p.sayAt = p.sent;
             }
         }
 
@@ -774,15 +773,20 @@ final class NativeViews {
         volatile Surface surface;
         // (GL thread) the external texture under the SurfaceTexture; the plain texture drawn, and its size
         private int ext, tex, texW, texH;
-        /** The frames that have come on its SurfaceTexture, and those of them latched (GL thread). */
+        /**
+         * The frames its SurfaceTexture has said have come, and those of them latched (GL thread). A frame sent before
+         * the one before it was latched takes its place unsaid (BufferQueue's onFrameReplaced): latched, the newest.
+         */
         final AtomicInteger arrived = new AtomicInteger();
         private int latched;
         /** The size of the frames its producer sends (pixels): a page's frame's, a video's picture's. */
         volatile int w, h;
-        /** The frames a page's frame has sent (main thread). */
-        int sent;
-        /** Once this many of its frames are latched, the frame showing them said on the display (VIEWDRAWN; 0: not asked). */
-        volatile int sayAt;
+        /**
+         * Once a frame of this time or after (its buffer's, System.nanoTime's clock) is latched, the canvas's frame
+         * showing it said on the display (VIEWDRAWN; Long.MAX_VALUE: not asked); the time it was latched at.
+         */
+        volatile long sayAfter = Long.MAX_VALUE;
+        private long stamp;
 
         Picture(int id) {
             this.id = id;
@@ -827,6 +831,7 @@ final class NativeViews {
                     }
                 }
                 if (got) {
+                    stamp = t.getTimestamp();
                     if (tex == 0 || texW != pw || texH != ph) {
                         tex = Streams.plain(tex, pw, ph);
                         texW = pw;
@@ -836,9 +841,9 @@ final class NativeViews {
                     texture(id, tex);
                 }
             }
-            int say = sayAt;
-            if (say > 0 && latched >= say && tex != 0) {
-                sayAt = 0;
+            long say = sayAfter;
+            if (say != Long.MAX_VALUE && tex != 0 && stamp >= say) {
+                sayAfter = Long.MAX_VALUE;
                 // drawn as this frame, swapped as it ends, taken by the compositor at the next vsync, shown by the one
                 // after (MBView's SHOT)
                 Host.main.post(() -> Choreographer.getInstance().postFrameCallback(f ->
