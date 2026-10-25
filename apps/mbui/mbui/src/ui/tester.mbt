@@ -1884,7 +1884,7 @@ let corners_hold : Ref[Bool] = Ref(true)
 /// only the screens a test of corners looks at.
 fn Tester::hold_corners(self : Tester) -> Unit {
   let c = g()
-  if !corners_hold.val || c.corner_ladder.is_empty() || c.frame_by is Some(_) || c.motion_left {
+  if !corners_hold.val || c.corner_ladder.is_empty() || c.frame_by is Some(_) || c.motion_left || c.page_in_hand {
     return
   }
   let faults = c.corner_faults()

@@ -106,6 +106,12 @@ test "wide: rows pressed one after another, one chat open in place of the other;
       @sfbase.open_page(Chat({ station: "", session: "", title: "", station_name: "" }))
       app.nav.pop() |> ignore
       t.draw()
+      // (on the tape the rows are the sidebar's, pressed with it in use: the page the last one brought over sent back)
+      if @sfdesk.wide.tape && @sfdesk.wide.tape_at != @sfdesk.TapePane::Side {
+        @sfdesk.wide.tape_ask = Some(@sfdesk.TapePane::Side)
+        t.draw()
+        t.run_for(@sfdesk.side_move_ms)
+      }
       t.tap_text(title)
       assert_eq(open_title(), title, msg="\{w}")
       assert_eq(app.nav.depth(), 2, msg="\{w}: \{title}")

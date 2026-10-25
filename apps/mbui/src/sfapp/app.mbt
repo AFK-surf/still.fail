@@ -188,7 +188,8 @@ fn open_where(p : Page) -> Unit {
     NewChat => new_chat_beside()
     // the settings: their list the sidebar's, the page of its first row beside it
     Settings => @sfdesk.open_settings_at(@sfdesk.settings_landing)
-    _ => app.nav.push(p)
+    // (on the tape from the page in use: over it, as a phone's is, back coming to it again)
+    _ => if @sfdesk.goes_over(p) { app.nav.push_over(p) } else { app.nav.push(p) }
   }
   if @sfdesk.shown_in_page(p) {
     @sfdesk.show_page()
@@ -217,8 +218,16 @@ fn new_chat_beside() -> Unit {
 /// Chat `r` opened on the wide frame, from anywhere (a list's row, a search's, ⌘K, a link): the chat in the page pane
 /// already, nothing; else the chats the place in view (from settings or another place), and the chat in the page
 /// pane in place of whatever was there, never over it: the stack then holds the list and the chat alone (laid out
-/// Medium, back from it goes to the list).
+/// Medium, back from it goes to the list). On the tape opened from the page or its side panel in use (a link in a
+/// message, a history's chat, ⌘K there): over the page, as a phone's is, back coming to the page again.
 fn open_chat_beside(r : ChatRef) -> Unit {
+  if @sfdesk.page_goes_on() {
+    match app.nav.top() {
+      Chat(open) if open.station == r.station && open.session == r.session => ()
+      _ => app.nav.push_over(Chat(r))
+    }
+    return
+  }
   // (the chat in the page pane: the stack's last chat, the chats the place in view; what is laid beside it, its
   // detail asked as a page, stays)
   if @sfdesk.lit_place() == "chats" && !app.nav.pages().contains(Archived) {

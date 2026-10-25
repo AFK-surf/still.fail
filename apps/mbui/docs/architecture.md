@@ -192,7 +192,7 @@ One shell. It arranges the same panes in every tier:
   | Tier | Arrangement | Back | Places |
   |---|---|---|---|
   | Small | One stack. The list is the root, a page is pushed onto it, a detail is pushed onto that. | A swipe from the edge (finger); the back key or ⌘[ (mouse) | The bottom bar, on a place's root |
-  | Medium | The tape: list, page and detail are separate panels, one active, as wide as the window leaves past a strip of each beside it (`tape_shows`, 56: 2026-10-26). A press on what shows of another brings it over; dragged across there it comes with the finger (2026-10-25), a drag on the one in use is that one's own; what is chosen to be shown in the page (a list's row, a search's, ⌘K's, a link's) brings the page over (`show_page`); the list never folds by itself. | A full-window layer (a screen, the viewer) first; then detail → page; page → list when the stack holds only the chat, else a pop; another place's list → the chats'. The tape follows the system's back gesture as it goes (`Ctx::follow_back`), as a stack's page does | The rail |
+  | Medium | The tape: list, page and detail are separate panels, one active: the page or the detail as wide as the window leaves past a strip of each beside it (`tape_shows`, 56: 2026-10-26), the list its own width, the page beside it showing the rest. A press on what shows of another brings it over; dragged across there it comes with the finger (2026-10-25), a drag on the one in use is that one's own; what is chosen to be shown in the page (a list's row, a search's, ⌘K's, a link's) brings the page over (`show_page`); the list never folds by itself. | A full-window layer (a screen, the viewer) first; then detail → page; a page opened from the page (pushed over it: `Nav::push_over`) taken off, sliding as a phone's; the page chosen from the list → list; another place's list → the chats'. Both follow the system's back gesture as it goes (the page's stack `Ctx::nav_flat(stacks=)`, the tape `Ctx::follow_back`), as a phone's page does | The rail |
   | Large | Columns: the rail and the list, the page, the detail. | The web's (⌘[, the chat's neighbours) | The rail |
 
 - **One model:** `app.nav` stays the one model of where the person is. One table in the shell says, for each `Page`,
@@ -259,7 +259,9 @@ One shell. It arranges the same panes in every tier:
    - A chat opened on the wide frame (`open_chat_beside`, from a list's row, a search, ⌘K, a link) is the page pane's
      in place of what was there, never over it; from another place the chats come first; the chat open already,
      nothing. On the tape whatever is opened to be shown in the page brings the page over (sfdesk's `show_page`, also
-     the chat open already, chosen again), and so does a row of a sidebar's list that shows its page itself.
+     the chat open already, chosen again), and so does a row of a sidebar's list that shows its page itself; opened
+     from the page or its side panel in use, it goes over the page as on a phone (`page_goes_on`, `Nav::push_over`:
+     the pane's stack slides it in, back takes it off), chosen from the sidebar in its place.
    - A place gone to is sfbase's `go_place`, for the bottom bar and the rail alike.
    - Back is sfbase's `back_step` / `go_back` (`Shell`'s `back`), by the tiers' table: Small (sfapp's `back_where`)
      a page popped, a place's top page back to the chats; Medium and Large sfdesk's `wide_back` (Large: none from the

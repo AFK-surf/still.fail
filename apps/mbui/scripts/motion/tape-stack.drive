@@ -1,0 +1,21 @@
+# Laid out Medium on an opened fold's inner screen upright (MBUI_WIN=690x840 MBUI_FILM_PLATFORM=2), a finger: the page's
+# own stack on the tape (sfdesk frame.mbt: what is opened from the page goes over it). 文件 from the rail, its folder's
+# page brought over, a folder in it opened (over it, sliding in); swiped back and called off (the folder with the
+# finger, then back), swiped back and gone through (the folder it was opened from), swiped back again (the sidebar).
+system {"size_class":{"width":"medium","height":"medium"}}
+timeout 20000
+until 新建对话
+wait 600
+tap icon:folder
+wait 1200
+tapxy -24 420
+wait 900
+tap 设计稿
+wait 1200
+backswipe 240 700 off
+wait 800
+backswipe 300 700
+wait 1000
+backswipe 300 700
+wait 1000
+exit

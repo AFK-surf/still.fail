@@ -228,6 +228,9 @@ pub struct Ctx {
   /// (Ctx::wake_in's): what Tester::assert_idle says of what is left
   mut frame_by : SourceLoc?
   mut wake_by : SourceLoc?
+  /// a stack's page in the hand this frame (Ctx::nav: swiped back, a finger's or the system's gesture), between where it
+  /// rests and where it goes: what is drawn on it stands anywhere, as in a motion (Tester::hold_corners)
+  mut page_in_hand : Bool
   /// what is held near the top of a list as its row scrolls past (Ctx::stick), in the order built this frame
   stuck : Array[Int]
   // hit targets of the last frame, in paint order, and those being collected
@@ -524,6 +527,7 @@ fn Ctx::new() -> Ctx {
     frame_rest: false,
     frame_by: None,
     wake_by: None,
+    page_in_hand: false,
     stuck: [],
     hit_ids: [],
     hit_rects: [],

@@ -106,7 +106,7 @@ fn covered(t : @ui.Tester, label : String) -> (Double, Double)? {
 }
 
 ///|
-test "on the tape the one in use has the window but a strip of each beside it, as wide whichever it is and the window" {
+test "on the tape the page or the side panel in use has the window but a strip of each beside it; the sidebar its own width" {
   let shows = @sfdesk.tape_shows
   let (inside, apart) = (@sfdesk.closed_bar_in, 8.0)
   // an opened fold's inner screen upright, the least and the most of Medium; a computer's window
@@ -115,11 +115,12 @@ test "on the tape the one in use has the window but a strip of each beside it, a
     let at = "platform \{platform} \{w}"
     let room = if platform == 2 { "medium" } else { "" }
     let t = tape_chat(platform, w, 840.0, width=room, height=room)
-    // the sidebar in use: the page a strip at the right, the sidebar to 8 before it
+    // the sidebar in use: its own width (the person's, 240 at first), the page beside it the rest of the window
     assert_eq(@sfdesk.wide.tape_at, @sfdesk.TapePane::Side, msg=at)
-    assert_eq(covered(t, "收起侧边栏").map(fn(e) { e.0 }), Some(w - shows), msg=at)
+    guard covered(t, "收起侧边栏") is Some((px, _)) else { fail("\{at}: no page beside the sidebar") }
+    assert_true(px > @sfdesk.rail_w + 240.0 && px < @sfdesk.rail_w + 240.0 + 4.0 * apart, msg="\{at}: the page from \{px}")
     let (rx, _, rw, _) = t.rect_of("首页的列表改成按天分组").unwrap()
-    assert_true(rx > inside && rx + rw < w - shows - apart, msg="\{at}: the row's words at \{rx}, \{rw}")
+    assert_true(rx > inside && rx + rw < px - apart, msg="\{at}: the row's words at \{rx}, \{rw}")
     // the page in use: the sidebar a strip at the left, the page to 6 from the window's right
     page_over(t, w)
     assert_eq(@sfdesk.wide.tape_at, @sfdesk.TapePane::Page, msg=at)
@@ -271,7 +272,8 @@ test "on the tape the system's back gesture brings the sidebar over as it goes, 
   assert_true(x > page_x + 150.0, msg="gone through at \{x}, the page at rest at \{page_x}")
   assert_eq(@sfdesk.wide.tape_at, @sfdesk.TapePane::Side)
   t.run_for(@sfdesk.side_move_ms)
-  assert_true(t.rect_of(words).unwrap().0 > 690.0 - @sfdesk.tape_shows)
+  // (the page beside the sidebar, past its own width)
+  assert_true(t.rect_of(words).unwrap().0 > @sfdesk.rail_w + 240.0)
   assert_true(on_first_chat())
   // the chats' sidebar in use: back the system's, the app takes none
   assert_false(t.takes_back())
@@ -290,6 +292,51 @@ test "on the tape back from another place's sidebar goes to the chats', as a pho
   assert_eq(@sfdesk.lit_place(), "chats")
   assert_eq(@sfdesk.wide.tape_at, @sfdesk.TapePane::Side)
   assert_false(t.takes_back())
+}
+
+///|
+test "on the tape a chat opened from the page in use goes over it, as on a phone: back takes it off, then brings the sidebar" {
+  let t = tape_chat(2, 690.0, 840.0, width="medium", height="medium")
+  page_over(t, 690.0)
+  // a chat opened from the page in use (a link in a message, ⌘K there): over it, sliding in
+  let other : ChatRef = { station: "ws1/st1", session: "s-c2", title: "首页的列表改成按天分组", station_name: "Studio" }
+  @sfbase.open_page(Chat(other))
+  t.run_for(page_local_ms + @ui.nav_push_ms)
+  assert_eq(app.nav.depth(), 3)
+  assert_true(app.nav.top_over())
+  assert_eq(@sfdesk.wide.tape_at, @sfdesk.TapePane::Page)
+  let (rest_x, _, _, _) = t.rect_of("好的，我来处理。").unwrap()
+  // the system's back gesture called off: it went with the finger, and comes back
+  t.back_gesture(200.0, false)
+  let (x, _, _, _) = t.rect_of("好的，我来处理。").unwrap()
+  assert_true(x > rest_x + 150.0, msg="called off at \{x}, at rest at \{rest_x}")
+  t.run_for(@ui.nav_push_ms)
+  assert_eq(app.nav.depth(), 3)
+  // its side panel in use: back brings the page over first, the chat opened still over the other
+  tap_said(t, "打开侧栏")
+  t.run_for(@sfdesk.side_move_ms)
+  assert_eq(@sfdesk.wide.tape_at, @sfdesk.TapePane::Panel)
+  t.back()
+  t.run_for(@sfdesk.side_move_ms)
+  assert_eq(@sfdesk.wide.tape_at, @sfdesk.TapePane::Page)
+  assert_eq(app.nav.depth(), 3)
+  // back: the chat it was opened from, the page still in use
+  t.back()
+  t.run_for(@ui.nav_push_ms)
+  assert_eq(app.nav.depth(), 2)
+  assert_true(on_first_chat())
+  assert_eq(@sfdesk.wide.tape_at, @sfdesk.TapePane::Page)
+  // back again: the sidebar, the chat chosen there kept
+  t.back()
+  t.run_for(@sfdesk.side_move_ms)
+  assert_eq(@sfdesk.wide.tape_at, @sfdesk.TapePane::Side)
+  assert_true(on_first_chat())
+  // chosen in the sidebar: in its place, nothing over it
+  t.tap_text("首页的列表改成按天分组")
+  t.run_for(@sfdesk.side_move_ms)
+  assert_eq(app.nav.depth(), 2)
+  assert_false(app.nav.top_over())
+  assert_eq(@sfdesk.wide.tape_at, @sfdesk.TapePane::Page)
 }
 
 ///|

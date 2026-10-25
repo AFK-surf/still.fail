@@ -58,6 +58,30 @@ test "文件's page narrow in every frame: what the folder holds in a line, its 
 }
 
 ///|
+test "on the tape a folder opened in the files' page in use goes over it: back comes to the folder it was opened from, then the sidebar" {
+  let t = files_page_tester(690.0, 840.0, 2)
+  files_page_over(t, 690.0, 840.0)
+  let (x, y) = rightmost(t, "设计稿")
+  t.tap(x, y)
+  t.run_for(page_local_ms + @ui.nav_push_ms)
+  match app.nav.top() {
+    Drive(d) => assert_eq(d.path, "设计稿")
+    _ => fail("no folder open")
+  }
+  assert_true(app.nav.top_over())
+  t.back()
+  t.run_for(@ui.nav_push_ms)
+  match app.nav.top() {
+    Drive(d) => assert_eq(d.path, "")
+    _ => fail("not the folder it was opened from")
+  }
+  assert_eq(@sfdesk.wide.tape_at, @sfdesk.TapePane::Page)
+  t.back()
+  t.run_for(@sfdesk.side_move_ms)
+  assert_eq(@sfdesk.wide.tape_at, @sfdesk.TapePane::Side)
+}
+
+///|
 test "文件's page wide with a finger and with a mouse: its ways, its heads; a folder opened in its columns" {
   for platform in [2, 0] {
     let t = files_page_tester(1280.0, 800.0, platform)

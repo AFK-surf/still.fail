@@ -197,6 +197,7 @@ fn frame_body(c : Ctx, w : Double, h : Double, scale : Double, t : Double) -> Do
   c.wake_waited = -1.0
   c.frame_by = None
   c.wake_by = None
+  c.page_in_hand = false
   c.cycling = false
   c.cycles.clear()
   c.periodic.clear()
