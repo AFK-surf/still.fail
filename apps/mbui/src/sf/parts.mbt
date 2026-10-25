@@ -1708,7 +1708,8 @@ let first_actions : @ui.Style = @ui.css("row w=Full gap=S2 align=ACenter justify
 /// window at most; its corner 42 (its padding 24 and a pill's half height, so a pill in its corner and the close
 /// button follow its edge: DIALOG_PAD), a small panel's ground and line, a deep shadow. Its title (22, 600) 25 under
 /// its top beside the close button (round, 32: `close_label`, none when ""), `description` 6 under it (13, muted),
-/// what `body` holds 18 under that (its parts 16 apart), and `footer`'s buttons at its end 24 under it, 8 apart.
+/// what `body` holds 18 under that (its parts 16 apart; none of that room where it holds nothing), and `footer`'s
+/// buttons at its end 24 under it, 8 apart.
 /// Whether it is open now (closed by its close button too).
 pub fn dialog(
   c : @ui.Ctx,
@@ -1775,7 +1776,8 @@ pub fn dialog(
         // on its words' line, and with no buttons down to its foot, 24 under what it holds: what reaches out to its
         // corners on purpose (dialog_rows, dialog_foot_rows) is not cut short of them.
         c.capped(key + "/body", c.height, shrinks=true, mx=-dialog_pad, padx=dialog_pad, fn() {
-          c.box(style=if footer is None { dialog_body_end } else { dialog_body }, fn() {
+          // (holding nothing this time, none of its room: its title and what it says straight over its buttons)
+          c.box(style=if footer is None { dialog_body_end } else { dialog_body }, gone_empty=true, fn() {
             // (its rows told they are in a dialog: dialog_rows)
             let was = in_dialog.val
             in_dialog.val = true

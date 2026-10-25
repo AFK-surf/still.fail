@@ -93,22 +93,23 @@ test "关于, at each width and with either hand: this build, 更新日志, the 
 }
 
 ///|
-test "关于's version rows, at each width and with either hand: this build alone on its row; under it a row doing what it says, 检查更新 or 更新到 the newer build, what is under way under its words, a spinner at its end and the row taking no press meanwhile" {
+test "关于's version rows, at each width and with either hand: this build alone on its row; under it a row doing what it says, 检查更新 or 更新到 the newer build, what is under way under its words and a spinner at its end, pressed still" {
   for case in one_page_cases {
     let (w, platform, regular, _) = case
     let t = one_page_tester(@settings.Route::About, w, platform~, regular~)
+    fixture_updates()
+    t.draw()
     let at = "\{w} platform \{platform}"
     assert_true(t.query(Link, label="检查更新") is Some(_), msg=at)
     update.available = Some({ "versionCode": 2, "versionName": "0.1.1", "file": "android/stillfail-2.apk" })
     t.draw()
     assert_true(t.query(Link, label="更新到 0.1.1") is Some(_), msg=at)
-    // pressed: still.fail cloud asked again before it is downloaded, said under the row's words; the row taking no
-    // press, its words kept
+    // pressed: still.fail cloud asked again before it is downloaded, said under the row's words, its words kept; the
+    // row pressed again opens the dialog saying how it goes
     update.installing = true
     t.draw()
     assert_true(t.find("正在检查最新版本") is Some(_), msg=at)
-    assert_true(t.find("更新到 0.1.1") is Some(_), msg=at)
-    assert_true(t.query(Link, label="更新到 0.1.1") is None, msg=at)
+    assert_true(t.query(Link, label="更新到 0.1.1") is Some(_), msg=at)
     // nothing beside what is under way, nor beside the build's name: each whole on its line
     let (_, ny, _, nh) = t.rect_of("正在检查最新版本").unwrap()
     let (_, uy, _, uh) = t.rect_of("更新到 0.1.1").unwrap()
@@ -120,15 +121,103 @@ test "关于's version rows, at each width and with either hand: this build alon
 }
 
 ///|
-test "关于's 检查更新 pressed asks still.fail cloud now" {
+test "关于 where newer builds are not asked for (no source, as on iOS; no version, run from the sources): this build, no 检查更新" {
   let t = one_page_tester(@settings.Route::About, 390.0, platform=2)
-  let asked : Ref[Int] = Ref(0)
+  assert_true(t.find("still.fail mbui 0.1") is Some(_))
+  assert_true(t.find("检查更新") is None)
+  fixture_updates()
+  update_version.val = 0
+  t.draw()
+  assert_true(t.find("检查更新") is None)
+}
+
+///|
+test "关于's 检查更新 pressed: the update dialog over the page asks still.fail cloud now, then says what it answered in place of a toast; 确定 closes it" {
+  for case in [(390.0, 2), (1280.0, 0)] {
+    let (w, platform) = case
+    let t = one_page_tester(@settings.Route::About, w, platform~)
+    let asked : Array[(Result[Json, String]) -> Unit] = []
+    update_version.val = 2
+    set_update_source(Some({ check: fn(_, now, done) { if now { asked.push(done) } }, url: fn(f) { f } }))
+    t.draw()
+    tap_in_page(t, "检查更新")
+    t.draw()
+    t.run_for(if platform == 2 { @kit.sheet_rest("sf-present") - t.time() } else { @kit.dialog_ms })
+    let at = "\{w} platform \{platform}"
+    assert_eq(asked.length(), 1, msg=at)
+    assert_true(update_dialog_open(), msg=at)
+    assert_true(t.find("正在检查最新版本") is Some(_), msg=at)
+    assert_true(t.find("当前版本 0.1.2") is Some(_), msg=at)
+    (asked[0])(Ok(Json::null()))
+    t.draw()
+    t.draw()
+    assert_true(t.find("已是最新版本") is Some(_), msg=at)
+    assert_eq(app.toast, "", msg=at)
+    assert_true(app.nav.top() == Setting(@settings.Route::About), msg=at)
+    t.click(Button, label="确定")
+    t.draw()
+    assert_true(!update_dialog_open(), msg=at)
+    update_reset()
+  }
+}
+
+///|
+test "the update dialog where still.fail cloud could not be asked: why, 重试 asks again" {
+  let t = one_page_tester(@settings.Route::About, 1280.0)
+  let asked : Array[(Result[Json, String]) -> Unit] = []
   update_version.val = 2
-  set_update_source(Some({ check: fn(_, now, _) { if now { asked.val += 1 } }, url: fn(f) { f } }))
+  set_update_source(Some({ check: fn(_, now, done) { if now { asked.push(done) } }, url: fn(f) { f } }))
+  t.draw()
   tap_in_page(t, "检查更新")
   t.draw()
-  assert_eq(asked.val, 1)
-  assert_true(t.find("正在检查") is Some(_))
+  t.run_for(@kit.dialog_ms)
+  (asked[0])(Err("无法获取最新版本：offline"))
+  t.draw()
+  t.draw()
+  assert_true(t.find("检查更新失败") is Some(_))
+  assert_true(t.find("无法获取最新版本：offline") is Some(_))
+  t.click(Button, label="重试")
+  t.draw()
+  assert_eq(asked.length(), 2)
+  assert_true(t.find("正在检查最新版本") is Some(_))
+  update_reset()
+}
+
+///|
+test "the update dialog with a newer build: what it brings (its first five, 还有 n 项); 更新 asks again before it downloads, turning, 关闭 beside it" {
+  let t = one_page_tester(@settings.Route::About, 1280.0)
+  let asked : Array[(Result[Json, String]) -> Unit] = []
+  update_version.val = 2
+  set_update_source(Some({ check: fn(_, now, done) { if now { asked.push(done) } }, url: fn(f) { f } }))
+  update.available = Some({
+    "versionCode": 3,
+    "versionName": "0.1.3",
+    "file": "mac/stillfail-3.zip",
+    "news": ["修复：一", "修复：二", "修复：三", "改进：四", "改进：五", "新增：六", "新增：七"],
+  })
+  t.draw()
+  t.post(@hostapi.system_channel, "{\"menu\":\"update.check\"}")
+  t.draw()
+  t.run_for(@kit.dialog_ms)
+  // known already: offered, not asked again
+  assert_eq(asked.length(), 0)
+  assert_true(t.find("有新版本 0.1.3") is Some(_))
+  assert_true(t.find("改进：五") is Some(_))
+  assert_true(t.find("新增：六") is None)
+  assert_true(t.find("还有 2 项") is Some(_))
+  assert_true(t.find("稍后") is Some(_))
+  t.click(Button, label="更新")
+  t.draw()
+  assert_eq(asked.length(), 1)
+  assert_true(update.installing)
+  assert_true(t.find("正在检查最新版本") is Some(_))
+  assert_true(t.find("关闭") is Some(_))
+  // none newer by now: said in the dialog, no toast
+  (asked[0])(Ok(Json::null()))
+  t.draw()
+  t.draw()
+  assert_true(t.find("已是最新版本") is Some(_))
+  assert_eq(app.toast, "")
   update_reset()
 }
 

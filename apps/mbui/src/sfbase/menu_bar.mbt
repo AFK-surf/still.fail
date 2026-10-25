@@ -4,8 +4,8 @@
 // chat open or not); `{app}` in them is the app's name, the host's to put in. The system's items are the system's (their
 // keys macOS's); the pages' own (keymap.mbt's actions) show the keys they have here, which the pages take before the
 // menu does (as the desktop app's), and chosen, are those keys pressed (said back as the system's `menu`: app.mbt
-// system_said, @settings.ask_action); those of a chat only while one is open. 检查更新 asks now as the settings' 版本
-// row does (updates.mbt).
+// system_said, @settings.ask_action); those of a chat only while one is open. 检查更新 opens the update dialog over
+// what is open (updates.mbt update_dialog), as 关于's version row does.
 
 ///|
 // kept across runs: a table, never written

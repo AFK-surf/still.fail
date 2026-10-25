@@ -3,7 +3,8 @@
 // scripts/motion's), each frame drawn offscreen and written into MBUI_FILM, an MP4. No window: scripts/film.sh.
 // MBUI_CORE_MS: the made-up core answers each call and gives each topic's first value that many ms late, as a phone's
 // core does a round trip later (what shows meanwhile filmed too); by default at once. MBUI_SAID=1: what people, agents
-// and stations wrote at its longest (sfapp's fixture_said.mbt: scripts/squeeze.sh's MBUI_SAID).
+// and stations wrote at its longest (sfapp's fixture_said.mbt: scripts/squeeze.sh's MBUI_SAID). MBUI_UPDATE=<version>:
+// a newer build offered; MBUI_UPDATES_MS=<ms>: newer builds asked of a made-up source answering that late.
 
 ///|
 fn main {
@@ -22,7 +23,11 @@ fn main {
       Some(s) => s
       None => {
         let s = @sfapp.fixture_app(mode)
+        // MBUI_UPDATES_MS=<ms>: a made-up source of newer builds answering that late (none newer unless offered);
         // MBUI_UPDATE=<version>: a newer build offered
+        if @film.arg("MBUI_UPDATES_MS") != "" {
+          @sfapp.fixture_updates(ms=whole_ms(@film.arg("MBUI_UPDATES_MS")))
+        }
         if @film.arg("MBUI_UPDATE") != "" {
           @sfapp.fixture_update(@film.arg("MBUI_UPDATE"))
         }

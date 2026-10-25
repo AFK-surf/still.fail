@@ -59,15 +59,19 @@ fn about_page(c : @ui.Ctx, core : Core, frame : PageFrame) -> Unit {
 
 ///|
 /// This build and the way to a newer one, a row each on every screen. Its name and version, words of a length known,
-/// the row's alone. Then what can be done, said by the row's own words and done by pressing it: 更新到 <version> where
-/// a newer build is known (installed), else 检查更新 (still.fail cloud asked now); what is under way under them
-/// (正在检查, 下载中 40%, 正在安装: words of no length known, on a line of their own) and how far it has come while it
-/// downloads (Progress), else a spinner at the row's end; the row taking no press meanwhile. (A button at the row's end
-/// took what its words left: the name cut to 「still.fail…」 and 下载中 40% broken in two beside 更新到 0.1.5283 on
-/// a phone, 2026-10-26.)
+/// the row's alone. Then, where newer builds are asked for here (not on iOS, nor run from the sources), what can be
+/// done, said by the row's own words: 更新到 <version> where a newer build is known (installed), else 检查更新 (still.fail
+/// cloud asked now); pressed, the update dialog opens and says how it goes (updates.mbt update_dialog), and pressed
+/// while it goes, opens again. What is under way under its words (正在检查, 下载中 40%, 正在安装: words of no length
+/// known, on a line of their own) and how far it has come while it downloads (Progress), else a spinner at the row's
+/// end. (A button at the row's end took what its words left: the name cut to 「still.fail…」 and 下载中 40% broken in
+/// two beside 更新到 0.1.5283 on a phone, 2026-10-26.)
 fn version_rows(c : @ui.Ctx, core : Core) -> Unit {
   let v = (core.version_now)()
   @sf.link_row(c, "", "still.fail mbui " + build_version(), goes=false) |> ignore
+  if !v.asks {
+    return
+  }
   let busy = v.doing != ""
   let label = if v.newer != "" {
     @sf.t("android-settings.version.update", args=[("version", v.newer)])
@@ -80,7 +84,6 @@ fn version_rows(c : @ui.Ctx, core : Core) -> Unit {
     label,
     note=v.doing,
     chevron=false,
-    goes=!busy,
     below?=match v.part {
       Some(p) if busy => Some(fn() { @sf.progress(c, "about/version/part", Some(p)) })
       _ => None

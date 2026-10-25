@@ -52,12 +52,16 @@ test "none newer: the row offers to check, and asked now says 已是最新" {
 }
 
 ///|
-test "no source: nothing is asked" {
+test "no source: nothing is asked; asked now, it says why" {
   reset()
   update_version.val = 1
   let said = []
-  update_check(fixture("home"), true, done=fn(w) { said.push(w) })
+  update_check(fixture("home"), false, done=fn(w) { said.push(w) })
   assert_eq(said.length(), 0)
+  update_check(fixture("home"), true, done=fn(w) { said.push(w) })
+  assert_eq(said, ["检查更新失败：开发版不检查更新"])
+  assert_eq(update.said, UpdateSaid::CouldNot("开发版不检查更新"))
+  assert_false(update_asks())
 }
 
 ///|

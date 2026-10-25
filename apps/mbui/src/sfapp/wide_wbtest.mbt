@@ -1276,14 +1276,16 @@ test "wide: 快捷键 changed by pressing new ones (keys.set), and the new keys 
   t.key(@ui.key_of_char('j'), mods=@ui.mod_cmd)
   t.frame()
   assert_true(@sfdesk.switcher_open(), msg="⌘J opens it now")
-  // 检查更新 from the menu bar: 关于, where this build's row says how it goes (no page of its own: 版本 was the
-  // desktop's once)
+  // 检查更新 from the menu bar: the update dialog over the page in view, not 关于 (here, where no newer build is asked
+  // for, why it is not)
   t.key(@ui.key_escape)
   t.post(@hostapi.system_channel, "{\"menu\":\"update.check\"}")
   t.frame()
-  t.run_for(@ui.nav_push_ms)
-  assert_true(app.nav.top() == Setting(@settings.Route::About))
-  assert_true(t.find("still.fail mbui 0.1") is Some(_))
+  t.run_for(@kit.dialog_ms)
+  assert_true(app.nav.top() == Setting(@settings.Route::Shortcuts))
+  assert_true(update_dialog_open())
+  assert_true(t.find("检查更新失败") is Some(_))
+  assert_true(t.find("开发版不检查更新") is Some(_))
 }
 
 ///|
