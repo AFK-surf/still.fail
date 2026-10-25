@@ -710,7 +710,7 @@ fn composer_file(c : @ui.Ctx, src : Source, spec : ComposerSpec, w : Writing, f 
     None => {
       // as wide as a card is (236), however little the row has: a card hugging its words in a row that wraps had none
       // left for them (its words squeezed to …); its ✕ hung on its corner, as a picture's (@sf.with_corner_remove)
-      let removed = @sf.with_corner_remove(c, key, remove_label(v, name), dmin(@sf.file_card_w, c.width), @sf.message_file_corner, fn() {
+      let removed = @sf.with_corner_remove(c, key, remove_label(v, name), @sf.message_file_corner, w=dmin(@sf.file_card_w, c.width), fn() {
         let ref_ = field(v, "ref")
         let said = match ref_ {
           // named by its path: its station and that it goes as a path, its card the named one's (RefCard)
@@ -851,7 +851,7 @@ fn composer_picture(
   @sf.tip(c, key + "/tip", thumb, if error != "" { error } else { name })
   // (its picture's box, its ✕ hung on its corner as every waiting file's)
   let tile = Ref(-1)
-  let removed = @sf.with_corner_remove(c, key, @sf.t("web-main.file.remove", args=[("name", name)]), thumb_side, thumb_corner, fn() {
+  let removed = @sf.with_corner_remove(c, key, @sf.t("web-main.file.remove", args=[("name", name)]), thumb_corner, w=thumb_side, fn() {
     tile.val = c.box(style=if error != "" { thumb_failed } else { thumb_box }, id=thumb, fn() {
       c.image(picture, w=Px(thumb_side), h=Px(thumb_side), fit=FitCover) |> ignore
       if pending {

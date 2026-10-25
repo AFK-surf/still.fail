@@ -306,7 +306,8 @@ pub fn file_card(
 }
 
 ///|
-/// What waits to go with a message (a composer's picture, a file's card), `w` wide and rounded `corner`, with its ✕
+/// What waits to go with a message (a composer's picture, a file's card, a quote), `w` wide (none: the width it is
+/// given, less the reach) and rounded `corner`, with its ✕
 /// hung on its top right corner (docs/ui-panels.md: the user, 2026-10-17, on the corner, not in it): 20 round, solid
 /// (the ink's, the page's ✕ on it: part of it is on the ground round it), its centre on the corner's curve where it
 /// turns 45° (on_corner), reaching past the top as far as past the right edge; the room for that kept at its end, so
@@ -316,14 +317,24 @@ pub fn with_corner_remove(
   c : @ui.Ctx,
   key : String,
   label : String,
-  w : Double,
   corner : Double,
   body : () -> Unit,
+  w? : Double,
 ) -> Bool {
   let x = c.id(key + "/remove")
   let reach = corner_remove_reach(corner)
-  c.box(style=@ui.style(w=Fixed(w + reach)), fn() {
-    c.box(style=@ui.style(w=Fixed(w)), body) |> ignore
+  let outer = match w {
+    Some(w) => @ui.style(w=Fixed(w + reach))
+    None => @ui.style(row=true, w=Full)
+  }
+  c.box(style=outer, fn() {
+    match w {
+      Some(w) => c.box(style=@ui.style(w=Fixed(w)), body) |> ignore
+      None => {
+        c.box(style=@ui.style(w=grow), body) |> ignore
+        c.box(style=@ui.style(w=Fixed(reach)), fn() {  }) |> ignore
+      }
+    }
     c.layer(fn() {
       c.box(style=corner_remove_at, fn() {
         let b = c.box(style=corner_remove_box, id=x, ty=-reach, fn() {
@@ -571,11 +582,14 @@ pub fn quote_card(
     tip(c, key + "/pin-tip", source, words)
   }
   let hot = jump && c.lit(source)
-  c.box(style=if composer { quote_box_composer.then(composer_card()) } else { quote_box }, fn() {
+  // (waiting in the composer, its ✕ hung on its corner as everything's there: with_corner_remove)
+  let hung = composer && remove
+  let card = fn() {
+    c.box(style=if composer { quote_box_composer.then(composer_card()) } else { quote_box }, fn() {
     // (a pin in its top corner: there the ladder's inset from both its edges, concentric with it)
     let source_look = match (composer, pin != "") {
-      (true, false) => quote_source_composer
-      (true, true) => quote_source_composer_pin
+      (true, false) => if hung { quote_source_hung } else { quote_source_composer }
+      (true, true) => if hung { quote_source_hung_pin } else { quote_source_composer_pin }
       (false, false) => quote_source
       (false, true) => quote_source_pin
     }
@@ -610,7 +624,7 @@ pub fn quote_card(
           c.box(style=quote_comment, fn() { c.text(comment, style=quote_said) |> ignore }) |> ignore
         }
     }
-    if remove {
+    if remove && !hung {
       c.layer(fn() {
         c.box(style=quote_remove_at, fn() {
           card_button(c, x, "close", t("web-main.quote.remove"))
@@ -621,7 +635,14 @@ pub fn quote_card(
     }
   })
   |> ignore
-  { jumped: jump && c.clicked(source), removed: remove && c.clicked(x) }
+  }
+  let removed = if hung {
+    with_corner_remove(c, key, t("web-main.quote.remove"), composer_inner, card)
+  } else {
+    card()
+    remove && c.clicked(x)
+  }
+  { jumped: jump && c.clicked(source), removed }
 }
 
 ///|
@@ -685,6 +706,16 @@ let quote_source_pin : @ui.Style = quote_source.then(@ui.style(pl=inset_room, pt
 ///|
 // kept across runs: a value (no field of it changes)
 let quote_source_composer_pin : @ui.Style = quote_source_composer.then(@ui.style(pl=inset_room, pt=inset_room))
+
+///|
+/// With its ✕ hung on its corner (with_corner_remove), nothing kept at its end for it: its words as far in at its end
+/// as at its start.
+// kept across runs: a value (no field of it changes)
+let quote_source_hung : @ui.Style = quote_source_composer.then(@ui.css("pr=S4"))
+
+///|
+// kept across runs: a value (no field of it changes)
+let quote_source_hung_pin : @ui.Style = quote_source_hung.then(@ui.style(pl=inset_room, pt=inset_room))
 
 ///|
 // kept across runs: a value (no field of it changes)
