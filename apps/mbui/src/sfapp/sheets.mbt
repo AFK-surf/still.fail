@@ -21,7 +21,8 @@ fn state_of_badge(badge : String) -> String {
 
 ///|
 /// A model's mark as a sheet and the history have it (Parts.kt ModelMark): its maker's mark on a tile with a hairline,
-/// 11 round (6 under 30), and its state's badge over the corner (Badge: solid accent waiting on someone, an accent ring
+/// the ladder's small block's 10 round (Parts.kt's 11: concentric so in a row's corner, 10 in, all four alike; 6 under
+/// 30), and its state's badge over the corner (Badge: solid accent waiting on someone, an accent ring
 /// at work, red failed) ringed in `around`.
 fn model_mark_big(c : @ui.Ctx, maker : String, runtime : String, size : Double, state : String, around : Int64) -> Unit {
   let t = @sf.theme()
@@ -30,7 +31,7 @@ fn model_mark_big(c : @ui.Ctx, maker : String, runtime : String, size : Double, 
     c.box(
       w=Px(size),
       h=Px(size),
-      radius=if xs { 6.0 } else { 11.0 },
+      radius=if xs { 6.0 } else { @sf.small_corner },
       bg=t.p.card,
       border=1.0,
       border_color=t.p.line,

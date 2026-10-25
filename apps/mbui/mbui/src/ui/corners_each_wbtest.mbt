@@ -1,5 +1,6 @@
-// Each corner its own (Radius::Corners, scene.mbt 36-39): drawn so, cut so, and held by the corner rule corner by
-// corner: a box's corner lying in a container's corner follows that corner, its others its own.
+// Each corner its own (Radius::Corners, LinkedEach; scene.mbt 36-39): drawn so, cut so, and held by the corner rule
+// corner by corner. Only said so: what mbui works out keeps a box's corners alike (corners.mbt), unlike only as its
+// container's are where it fills it (the user, 2026-10-26: 每个四边圆角不一致的都应该手动确认是否 by design).
 
 ///|
 /// The first instance of kind `kind` drawn at (`x`, `y`): its corners' radii (36-39), its corner (4).
@@ -56,16 +57,28 @@ test "corners: each its own is drawn so, its shadow and its cut too; the draw li
 }
 
 ///|
-/// A panel at the right of a window 400 by 200, 6 from its top, right and foot (a Mac's tape's page, in use), its corner
-/// the ladder's 34 standing alone, in the ladder's theme; across its foot `d` from its sides and foot a box 60 high,
-/// its own corner `own`.
-fn foot_panel(d : Double, own : Radius) -> (Ctx) -> Unit {
+/// A panel at the right of a window 400 by 200, 6 from its top, right and foot (a Mac's tape's page, in use), its right
+/// corners linked to the window's 6 in, its left ones the ladder's 34 (LinkedEach: said so), in the ladder's theme;
+/// across its foot `d` from its sides and foot a box 60 high, its own corner `own` (`fill`: as tall as it leaves, in
+/// all four of its corners).
+fn foot_panel(d : Double, own : Radius, fill? : Bool = false) -> (Ctx) -> Unit {
   fn(c) {
     c.with_theme({ ..Theme::light(), corner_ladder: [34.0, 26.0, 18.0, 10.0], corner_fit: Some(fit_ranges) }, fn() {
       c.box(w=Fill(1.0), h=Fill(1.0), fn() {
-        c.box(w=Px(300.0), h=Px(188.0), left=94.0, top=6.0, radius=34.0, bg=0x333333FFL, pad=d, justify=JEnd, fn() {
-          c.box(style=style(w=Full, h=Fixed(60.0), radius=own, bg=Faint), fn() {  }) |> ignore
-        })
+        let edge : CornerOf = Follow(Window, 6.0, 34.0)
+        c.box(
+          style=style(radius=LinkedEach(Own(34.0), edge, edge, Own(34.0))),
+          w=Px(300.0),
+          h=Px(188.0),
+          left=94.0,
+          top=6.0,
+          bg=0x333333FFL,
+          pad=d,
+          justify=JEnd,
+          fn() {
+            c.box(style=style(w=Full, h=if fill { Full } else { Fixed(60.0) }, radius=own, bg=Faint), fn() {  }) |> ignore
+          },
+        )
         |> ignore
       })
       |> ignore
@@ -100,31 +113,28 @@ fn corners4(n : Node) -> (Double, Double, Double, Double) {
 }
 
 ///|
-test "corners: a panel's corners in the window's follow it, its others stand alone; a box across its foot follows each foot corner it lies in" {
+test "corners: a box across a panel's foot keeps one corner for all four: concentric where it can be, alone in a corner too square for it, never followed in some corners only" {
   let follow = concentric(16.0, 6.0)
-  // a Mac's window, 16 round: the panel's right corners in its, 6 in, 11.2; its left ones in none, 34. The box 6.5 in:
-  // its right foot corner in the panel's 11.2, 6 round; its left in its 34, 28.8 (off the ladder: the place its right
-  // one has it); its top's, in no corner, the card's 26 it has alone
+  // a Mac's window, 16 round: the panel's right corners in its, 6 in, 11.2 (linked); its left ones 34. The box 10 in:
+  // its left foot corner the card's 26 there (concentric, its own); its right in the 11.2, too square for a 26 (8 at
+  // the nearest it could stand): alone, as it is, nothing said
   for own in [Radius::Exact(26.0), InnerOr(Exact(26.0))] {
-    let t = Tester::new(foot_panel(6.5, own), w=400.0, h=200.0, window_corner=16.0)
+    let t = Tester::new(foot_panel(10.0, own), w=400.0, h=200.0, window_corner=16.0)
     t.draw()
     let (p, b) = foot_nodes()
     assert_eq(corners4(p), (34.0, follow, follow, 34.0))
-    assert_eq(corners4(b), (26.0, 26.0, concentric(follow, 6.5), concentric(34.0, 6.5)))
+    assert_true(b.radii is None && b.radius == 26.0, msg="\{corners4(b)}")
     assert_eq(t.corner_faults(), [])
   }
-  // the ladder's 10 in: its left foot corner the card's 26, its right too far in to follow the 11.2 (3.2, as good as
-  // square): its own kept there, and said where it would fit
-  let t = Tester::new(foot_panel(10.0, Radius::Exact(26.0)), w=400.0, h=200.0, window_corner=16.0, corners_held=false)
+  // 6.5 in: following each foot corner it lies in would make its corners unlike (28.8 at its left, 6 at its right, 26
+  // over): never worked out so; its own kept all round, and said where it is not concentric (its left foot corner)
+  let t = Tester::new(foot_panel(6.5, InnerOr(Exact(26.0))), w=400.0, h=200.0, window_corner=16.0, corners_held=false)
   t.draw()
   let (_, b) = foot_nodes()
   assert_eq(corners4(b), (26.0, 26.0, 26.0, 26.0))
   let faults = t.corner_faults()
-  assert_true(
-    faults.length() == 1 && faults[0].contains("bottom right") && faults[0].contains("too far in to follow it"),
-    msg="\{faults}",
-  )
-  // a square window: the panel 34 all round, the box 10 in the card's 26 all round, one corner as before
+  assert_true(faults.length() == 1 && faults[0].contains("bottom left"), msg="\{faults}")
+  // a square window: the panel 34 all round, the box 10 in the card's 26 all round
   let t = Tester::new(foot_panel(10.0, InnerOr(Exact(26.0))), w=400.0, h=200.0)
   t.draw()
   let (p, b) = foot_nodes()
@@ -134,12 +144,60 @@ test "corners: a panel's corners in the window's follow it, its others stand alo
 }
 
 ///|
-test "corners: radius=Inner follows the container's matching corner at each of its corners" {
+test "corners: radius=Inner follows the container's corners where it fills it; in only some of them, unlike, it is said" {
   let follow = concentric(16.0, 6.0)
+  let inner = concentric(follow, 6.5)
+  let outer = concentric(34.0, 6.5)
+  // filling the panel, in all four of its corners: each the panel's there, as unlike as the panel's are (said so)
+  let t = Tester::new(foot_panel(6.5, Inner, fill=true), w=400.0, h=200.0, window_corner=16.0, corners_held=false)
+  t.draw()
+  let (_, b) = foot_nodes_filled()
+  assert_eq(corners4(b), (outer, inner, inner, outer))
+  // across its foot, in two: they would be unlike there, its top's not in any; as round as the squarest, and said
   let t = Tester::new(foot_panel(6.5, Inner), w=400.0, h=200.0, window_corner=16.0, corners_held=false)
   t.draw()
   let (_, b) = foot_nodes()
-  let inner = concentric(follow, 6.5)
-  let outer = concentric(34.0, 6.5)
-  assert_eq(corners4(b), (outer, inner, inner, outer))
+  assert_eq(corners4(b), (inner, inner, inner, inner))
+  assert_true(t.corner_faults().iter().any(fn(f) { f.contains("would not be alike") }), msg="\{t.corner_faults()}")
+}
+
+///|
+/// The box foot_panel draws filling the panel (`fill`): its node.
+fn foot_nodes_filled() -> (Node, Node) {
+  let c = g()
+  let mut panel : Node? = None
+  let mut box : Node? = None
+  for i in 0..<c.count {
+    let n = c.nodes[i]
+    if n.kind == kind_box && n.bg == 0x333333FFL {
+      panel = Some(n)
+    } else if n.kind == kind_box && panel is Some(_) && n.parent >= 0 && c.nodes[n.parent].bg == 0x333333FFL {
+      box = Some(n)
+    }
+  }
+  match (panel, box) {
+    (Some(p), Some(b)) => (p, b)
+    _ => abort("no panel and box filling it")
+  }
+}
+
+///|
+test "corners: Tester::mixed_corners lists every box drawn with corners not alike, and how it came to have them" {
+  // the panel's right corners linked to a Mac window's, a box across its foot alone (all four alike), a box said each
+  let t = Tester::new(
+    fn(c) {
+      foot_panel(10.0, InnerOr(Exact(26.0)))(c)
+      c.box(style=style(radius=Corners(12.0, 12.0, 0.0, 0.0)), w=Px(40.0), h=Px(40.0), left=10.0, top=10.0, bg=0x555555FFL, fn() {  })
+      |> ignore
+    },
+    w=400.0,
+    h=200.0,
+    window_corner=16.0,
+    corners_held=false,
+  )
+  t.draw()
+  let mixed = t.mixed_corners()
+  assert_eq(mixed.length(), 2, msg=mixed.join("\n"))
+  assert_true(mixed.iter().any(fn(m) { m.has_suffix("linked each") }), msg=mixed.join("\n"))
+  assert_true(mixed.iter().any(fn(m) { m.has_suffix("(12, 12, 0, 0), said each") }), msg=mixed.join("\n"))
 }

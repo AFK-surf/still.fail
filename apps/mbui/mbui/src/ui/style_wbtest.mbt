@@ -436,15 +436,14 @@ test "style: radius=InnerOr: alone its own corner; in a panel's corner the panel
   assert_eq(c.nodes[capsule].corner(), 22.0)
   assert_eq(c.nodes[button].corner(), 16.0)
   assert_eq(t.corner_faults(), [])
-  // a panel less round: the capsule's foot corners, in the panel's, concentric with them, its top's (in none) round as
-  // alone; its button's in the capsule's foot corner concentric with it, the rest round; nothing rounder than what
-  // holds it where it lies in it
+  // a panel less round: concentric in its foot corners alone, the capsule's corners would be unlike (its top's round
+  // as alone): never worked out so; a capsule still, its button round in it (across the panel, as far from both its
+  // sides, a capsule is in the middle of it, in none of its corners: nothing said)
   let t = Tester::new(capsule_in_panel(24.0, 12.0))
   t.draw()
   let c = g()
-  let foot = concentric(24.0, 12.0)
-  assert_eq(drawn4(c.nodes[capsule]), (22.0, 22.0, foot, foot))
-  assert_eq(drawn4(c.nodes[button]), (16.0, 16.0, 16.0, concentric(foot, 6.0)))
+  assert_eq(drawn4(c.nodes[capsule]), (22.0, 22.0, 22.0, 22.0))
+  assert_eq(drawn4(c.nodes[button]), (16.0, 16.0, 16.0, 16.0))
   assert_eq(t.corner_faults(), [])
   // nearer the panel's foot than its sides: its own corner kept, and said
   let t = Tester::new(fn(c) {
@@ -689,10 +688,29 @@ fn corner_card(inset : Double, own : Double, side : Double, ladder? : Array[Doub
 }
 
 ///|
-test "corners: what lies in a container's corner is concentric with it, whatever corner it was given" {
+test "corners: what lies in a container's corner keeps one corner for all four; not concentric there, it is said" {
+  // 4 round, 10 in: concentric it would be 18 at its top left alone, its others 4, corners unlike, which only a
+  // design says: its own kept, and said
   let t = Tester::new(corner_card(10.0, 4.0, 40.0))
   t.draw()
-  assert_eq(g().nodes[3].radius, concentric(26.0, 10.0))
+  assert_true(g().nodes[3].radii is None && g().nodes[3].radius == 4.0)
+  assert_eq(t.corner_faults().length(), 1)
+  // the ladder's next step there: concentric
+  let t = Tester::new(corner_card(10.0, concentric(26.0, 10.0), 40.0))
+  t.draw()
+  assert_eq(t.corner_faults(), [])
+  // filling the card, in all four of its corners: concentric with them, worked out
+  let t = Tester::new(fn(c) {
+    c.box(pad=20.0, align=AStart, fn() {
+      c.box(w=Px(300.0), h=Px(200.0), radius=26.0, bg=0xEEEEEEFFL, pad=10.0, fn() {
+        c.box(w=Fill(1.0), h=Fill(1.0), radius=4.0, bg=0x333333FFL, fn() {  }) |> ignore
+      })
+      |> ignore
+    })
+    |> ignore
+  })
+  t.draw()
+  assert_true(g().nodes[3].radii is None && g().nodes[3].radius == concentric(26.0, 10.0))
   assert_eq(t.corner_faults(), [])
   // out of its corner (further in than the container is round): its own
   let t = Tester::new(corner_card(30.0, 4.0, 40.0))
@@ -724,16 +742,15 @@ test "corners: a capsule in a container's corner keeps its shape, and is concent
 test "corners: with a ladder, a container with something in its corner and what is there are round by its steps" {
   let ladder = [34.0, 26.0, 18.0, 10.0]
   // 10 in: 18, the next step
-  let t = Tester::new(corner_card(10.0, 4.0, 40.0, ladder~))
+  let t = Tester::new(corner_card(10.0, 18.0, 40.0, ladder~))
   t.draw()
   assert_eq(t.corner_faults(), [])
   // 14 in: concentric, but 14.8, no step (drawn so on purpose: not held to it as it is drawn)
-  let t = Tester::new(corner_card(14.0, 4.0, 40.0, ladder~), corners_held=false)
+  let t = Tester::new(corner_card(14.0, concentric(26.0, 14.0), 40.0, ladder~), corners_held=false)
   t.draw()
-  assert_eq(g().nodes[3].radius, concentric(26.0, 14.0))
   assert_eq(t.corner_faults().length(), 1)
   // a control's own part hugging its edge (2 in): concentric is all
-  let t = Tester::new(corner_card(2.0, 4.0, 60.0, ladder~))
+  let t = Tester::new(corner_card(2.0, concentric(26.0, 2.0), 60.0, ladder~))
   t.draw()
   assert_eq(t.corner_faults(), [])
 }
@@ -775,12 +792,13 @@ fn strip_box() -> Node {
 }
 
 ///|
-test "corners: in a strip scrolled sideways with nothing to scroll, a box lies where it is: in the card's corner, concentric" {
-  // as narrow as the strip: still, so the card's corner is its where it lies in it (its foot's left), its others its own
+test "corners: in a strip scrolled sideways with nothing to scroll, a box lies where it is: in the card's corner" {
+  // as narrow as the strip: still, so it lies in the card's corner (its foot's left), its own corner kept all round
+  // (followed there alone, its corners would be unlike), and said
   let t = Tester::new(corner_strip(200.0))
   t.draw()
-  assert_eq(drawn4(strip_box()), (18.0, 18.0, 18.0, concentric(26.0, 20.0)))
-  assert_eq(t.corner_faults(), [])
+  assert_eq(drawn4(strip_box()), (18.0, 18.0, 18.0, 18.0))
+  assert_eq(t.corner_faults().length(), 1)
   // wider: it moves under the strip's edges, so where it is from the corner is not fixed; its own
   let t = Tester::new(corner_strip(400.0))
   t.draw()
@@ -827,9 +845,10 @@ test "corners: the window is the outermost container: a panel 6 in from its corn
 }
 
 ///|
-test "corners: a box concentric only with a corner squarer than the ranges let it have keeps its own, and is said" {
-  // a box said `InnerOr` (a composer) the ladder's inset in from a Mac window's panel (11.2): concentric there it would
-  // be 3.2, as good as square; it keeps its own corner and the rule says where it would fit (6.5 in, 6 round)
+test "corners: a box in a corner too square for the corner it has keeps it, alone, wherever it stands" {
+  // a box said `InnerOr` (a composer, 26) in from a Mac window's panel (11.2): concentric there it would be 8 at the
+  // nearest it may stand, squarer than it by far; it keeps its own corner, all four alike, as it would alone, and
+  // nothing is said, 10 in or 6.5 (the user, 2026-10-25: a composer's corner followed a window's its send could not)
   let inside = fn(pad : Double) {
     fn(c : Ctx) {
       c.box(w=Fill(1.0), h=Fill(1.0), pad~, justify=JEnd, fn() {
@@ -838,14 +857,14 @@ test "corners: a box concentric only with a corner squarer than the ranges let i
       |> ignore
     }
   }
-  let t = Tester::new(window_panel(6.0, inside=inside(10.0)), w=600.0, h=400.0, window_corner=16.0, corners_held=false)
-  t.draw()
-  let faults = t.corner_faults()
-  assert_true(faults.length() > 0 && faults.iter().all(fn(f) { f.contains("too far in to follow it") }), msg="\{faults}")
-  // standing there, it follows the panel
-  let t = Tester::new(window_panel(6.0, inside=inside(6.5)), w=600.0, h=400.0, window_corner=16.0)
-  t.draw()
-  assert_eq(t.corner_faults(), [])
+  for pad in [10.0, 6.5] {
+    let t = Tester::new(window_panel(6.0, inside=inside(pad)), w=600.0, h=400.0, window_corner=16.0)
+    t.draw()
+    let c = g()
+    let b = c.nodes[c.count - 1]
+    assert_true(b.radii is None && b.radius == 26.0, msg="\{drawn4(b)}")
+    assert_eq(t.corner_faults(), [])
+  }
 }
 
 ///|

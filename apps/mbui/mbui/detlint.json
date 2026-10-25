@@ -196,7 +196,8 @@
       "src/kit/time.mbt": 1
     },
     "page-old-part": {},
-    "page-old-sheet": {}
+    "page-old-sheet": {},
+    "corners-each": {}
   },
   "excused": {
     "frame-request": {},
@@ -241,6 +242,7 @@
     "follow-layout": {},
     "motion-read": {},
     "page-old-part": {},
-    "page-old-sheet": {}
+    "page-old-sheet": {},
+    "corners-each": {}
   }
 }

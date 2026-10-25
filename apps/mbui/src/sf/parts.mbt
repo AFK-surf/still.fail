@@ -142,9 +142,10 @@ pub fn button_height() -> Double {
 }
 
 ///|
-/// An icon button (page.css.ts iconBtn, parts.tsx IconButton): `size` square (32), its corner 12 (`round`: a circle,
-/// where it stands in a pane's corner, concentric with it; `linked`: its corner where that comes from, a bar's buttons'
-/// at the window's corner: @sf.bar_keys_link), the icon (16) quiet until pointed at; `on` held down
+/// An icon button (page.css.ts iconBtn, parts.tsx IconButton): `size` square (32), its corner 12 (`corner`: the
+/// ladder's step where it stands, a card's text inset in its corner the small block's 10; `round`: a circle, where it
+/// stands in a pane's corner, concentric with it; `linked`: its corner where that comes from, a bar's buttons' at the
+/// window's corner: @sf.bar_keys_link), the icon (16) quiet until pointed at; `on` held down
 /// (aria-pressed); named for a screen reader and said in its tip with its keys (`shortcut`, an action's).
 /// `ink` and `quiet` for one over a ground of its own (the reader's paper).
 pub fn icon_button(
@@ -155,6 +156,7 @@ pub fn icon_button(
   icon_size? : Double = 16.0,
   on? : Bool = false,
   round? : Bool = false,
+  corner? : Double = r_field,
   linked? : @ui.CornerOf,
   ink? : Int64,
   quiet? : Int64,
@@ -176,7 +178,7 @@ pub fn icon_button(
   }
   let corner : @ui.Radius = match linked {
     Some(link) => Linked(link)
-    None => rounded(if round { size / 2.0 } else { r_field })
+    None => rounded(if round { size / 2.0 } else { corner })
   }
   let b = c.box(
     style=@ui.style(radius=corner),
@@ -1933,7 +1935,8 @@ fn control_height() -> @ui.Style {
 ///|
 /// Lines to type in (controls.css.ts input as a textarea: --r-field round, not a pill; 12 by 7 in, the strong grey's
 /// line, the field's hover grey pointed at or written in, on the canvas; its words 14 on lines 1.6 of them), at least
-/// `rows` lines high and growing to `most`; `field`: what it holds, the view's own. What is in it now.
+/// `rows` lines high and growing to `most`; `field`: what it holds, the view's own; `corner`, the ladder's where it
+/// stands (first in a card, on its words' inset in its corners: the small block's 10). What is in it now.
 pub fn textarea(
   c : @ui.Ctx,
   key : String,
@@ -1941,12 +1944,16 @@ pub fn textarea(
   most? : Int = 16,
   placeholder? : String = "",
   field? : @ui.Field,
+  corner? : Double,
 ) -> String {
   let t = theme()
   let box_id = c.id(key + "/frame")
   let hot = c.lit(box_id) || c.has_focus(c.id(key))
   let mut words = ""
-  let tall = @ui.style(min_h=Fixed(rows.to_double() * textarea_line + textarea_in))
+  let tall = match corner {
+    Some(k) => @ui.style(min_h=Fixed(rows.to_double() * textarea_line + textarea_in), radius=rounded(k))
+    None => @ui.style(min_h=Fixed(rows.to_double() * textarea_line + textarea_in))
+  }
   c.box(id=box_id, style=(if hot { textarea_box_hot } else { textarea_box }).then(tall), fn() {
     words = c.editor(
       key,
@@ -2240,9 +2247,11 @@ pub fn choices(
 }
 
 ///|
+/// A choice: bordered, a block's corner of the ladder's (18: at a card's foot, reaching to its inset, concentric with
+/// its corners; every one alike).
 // kept across runs: a value (no field of it changes)
-let choice_card : @ui.Style = @ui.css(
-  #|w=Full radius=Xl1_5 bg=Surface border=B1 border_color=Border disabled{opacity=O55}
+let choice_card : @ui.Style = @ui.css("w=Full bg=Surface border=B1 border_color=Border disabled{opacity=O55}").then(
+  @ui.style(radius=row_radius),
 )
 
 ///|

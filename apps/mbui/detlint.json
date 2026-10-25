@@ -200,7 +200,7 @@
       "src/sfapp/settings/station_parts.mbt": 22,
       "src/sfapp/settings/stations.mbt": 50,
       "src/sfapp/share.mbt": 75,
-      "src/sfapp/sheets.mbt": 242,
+      "src/sfapp/sheets.mbt": 241,
       "src/sfapp/station_files.mbt": 30,
       "src/sfbase/flight.mbt": 1,
       "src/sfbase/viewer.mbt": 51,
@@ -333,7 +333,8 @@
       "src/sfapp/settings/run_more.mbt": 3,
       "src/sfapp/settings/station_add.mbt": 1,
       "src/sfapp/sheets.mbt": 6
-    }
+    },
+    "corners-each": {}
   },
   "excused": {
     "frame-request": {},
@@ -382,6 +383,10 @@
     "follow-layout": {},
     "motion-read": {},
     "page-old-part": {},
-    "page-old-sheet": {}
+    "page-old-sheet": {},
+    "corners-each": {
+      "src/sf/tokens.mbt": 1,
+      "src/sfdesk/drive_views.mbt": 1
+    }
   }
 }

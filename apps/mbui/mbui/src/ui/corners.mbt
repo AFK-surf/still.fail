@@ -160,6 +160,50 @@ pub fn Tester::lit_all_faults(self : Tester) -> Array[String] {
 }
 
 ///|
+/// Every box in the frame just built drawn with corners not all alike (a ground, a border, a clip; with `lit`, the
+/// frame built with all that shows only while lit shown, Ctx::lit_shown), what it is, its corners as drawn and how it
+/// came to have them: said each (`Corners`), linked each (`LinkedEach`), or worked out once laid out (`Inner`,
+/// `InnerOr`, one in a container's corner).
+pub fn Tester::mixed_corners(self : Tester, lit? : Bool = false) -> Array[String] {
+  let c = g()
+  if lit {
+    c.lit_all = true
+    self.frame()
+  }
+  let out : Array[String] = []
+  for i in 0..<c.count {
+    let b = c.nodes[i]
+    if b.layer || b.opacity <= 0.01 || b.fw <= 0.0 || b.fh <= 0.0 {
+      continue
+    }
+    if !(b.grounded() || b.lit_ground() || b.clip) {
+      continue
+    }
+    let half = dmin(b.fw, b.fh) / 2.0
+    let r = b.radii_now().map(fn(k) { dmin(k, half) })
+    let most = dmax(dmax(r[0], r[1]), dmax(r[2], r[3]))
+    let least = dmin(dmin(r[0], r[1]), dmin(r[2], r[3]))
+    if most - least <= 0.5 {
+      continue
+    }
+    let how = if b.corners_worked {
+      "worked out"
+    } else if b.links is Some(_) {
+      "linked each"
+    } else {
+      "said each"
+    }
+    let said = r.map(fn(k) { (k * 10.0).round() / 10.0 })
+    out.push("\{c.named(i)}: corners (\{said[0]}, \{said[1]}, \{said[2]}, \{said[3]}), \{how}")
+  }
+  if lit {
+    c.lit_all = false
+    self.frame()
+  }
+  out
+}
+
+///|
 /// Where the frame just built breaks the corner rule (Tester::corner_faults; a scripted run's `corners`).
 fn Ctx::corner_faults(self : Ctx) -> Array[String] {
   let c = self
@@ -273,6 +317,13 @@ fn Ctx::corner_faults(self : Ctx) -> Array[String] {
       // none of the theme's ranges makes it concentric there (Theme::corner_fit: the container too square for it, or
       // too round, a window's corner among them): it stands as it would alone, and the rule asks nothing more of it
       if !in_step && !c.fit_there(ra, rb, round) {
+        continue
+      }
+      // nor a smooth one standing in it (not flush with it) whose own corner is rounder than any it could have
+      // concentric there (a card's 26 in a window's 16, 10 in: 8): the corner too square for the shape it has, it stands
+      // as it is, alone. Following it would square all of it, or that one corner alone, its corners then not alike,
+      // which only a design says (the user, 2026-10-26: 每个四边圆角不一致的都应该手动确认是否 by design)
+      if !round && !in_step && dmin(dx, dy) >= c.fit_near() - 0.5 && concentric(ra, c.fit_near()) < rb - 0.5 {
         continue
       }
       // nor one that holds a circle in its own corner there which could not follow it if it followed this one (a
@@ -446,6 +497,15 @@ fn Ctx::fit_there(self : Ctx, ra : Double, rb : Double, round : Bool) -> Bool {
       } else {
         concentric(ra, f.far) <= f.most + 0.5 && concentric(ra, f.near) >= f.least - 0.5
       }
+  }
+}
+
+///|
+/// The nearest a box following a corner stands to its edges (Theme::corner_fit near; 0 with no ranges).
+fn Ctx::fit_near(self : Ctx) -> Double {
+  match self.corner_fit {
+    Some(f) => f.near
+    None => 0.0
   }
 }
 
@@ -925,6 +985,7 @@ fn Ctx::inner_after_layout(self : Ctx, i : Int, grounds : Map[Int, Int], hung : 
   let own = if self.inners_or.contains(i) { Some(n.radii_now()) } else { None }
   n.radius = 0.0
   n.radii = None
+  n.corners_worked = true
   let ct = match self.corner_container(i, grounds) {
     Some(found) => found
     None => {
@@ -993,12 +1054,14 @@ fn Ctx::inner_after_layout(self : Ctx, i : Int, grounds : Map[Int, Int], hung : 
   // that corner, it keeps its shape
   let half = dmin(n.fw, n.fh) / 2.0
   let rs = FixedArray::make(4, 0.0)
+  let mut all_lie = true
   for k in 0..<4 {
     let rk = self.container_r(ct, k)
     let kk = concentric(rk, d)
     let side = sides[if corner_left(k) { 0 } else { 2 }].1
     let end = sides[if k < 2 { 1 } else { 3 }].1
     let lies = (across || (side >= -inner_even && side < rk)) && (up_down || (end >= -inner_even && end < rk))
+    all_lie = all_lie && lies
     rs[k] = match own {
       Some(r) if !lies => r[k]
       Some(r) if r[k] >= half && kk >= half => r[k]
@@ -1008,7 +1071,33 @@ fn Ctx::inner_after_layout(self : Ctx, i : Int, grounds : Map[Int, Int], hung : 
       _ => kk
     }
   }
+  // (its corners not all alike only as its container's are, where it fills it, lying in all four of its corners: never
+  // some followed and the others not, nor followed into corners unlike each other where it lies in only some. Corners
+  // not alike are a design's, each said (Corners, LinkedEach), not made here: where they would be, `InnerOr` keeps its
+  // own, and corner_faults says where that is not concentric; `Inner`, said so, drawn as round as the squarest)
+  if !all_lie && !alike(rs) {
+    match own {
+      Some(r) => n.set_radii(r)
+      None => {
+        let said = rs.map(fn(k) { (k * 10.0).round() / 10.0 })
+        self.inner_faults.push(
+          "\{self.named(i)}: radius=Inner, its corners would not be alike (\{said[0]}, \{said[1]}, \{said[2]}, \{said[3]}) where it lies in only some of the corners of \{self.named(p)}: say each (Corners, LinkedEach) if that is the design",
+        )
+        let least = dmin(dmin(rs[0], rs[1]), dmin(rs[2], rs[3]))
+        n.set_radii(FixedArray::make(4, least))
+      }
+    }
+    return
+  }
   n.set_radii(rs)
+}
+
+///|
+/// Whether four corners are alike (as drawn: within half a pixel).
+fn alike(rs : FixedArray[Double]) -> Bool {
+  let most = dmax(dmax(rs[0], rs[1]), dmax(rs[2], rs[3]))
+  let least = dmin(dmin(rs[0], rs[1]), dmin(rs[2], rs[3]))
+  most - least <= 0.5
 }
 
 ///|
@@ -1061,7 +1150,7 @@ fn Ctx::corners_in_corners(self : Ctx, grounds : Map[Int, Int]) -> Unit {
     // its shape, a capsule's end; nor where it would be rounder or squarer than the theme lets what lies in a corner
     // be, Theme::corner_fit: it stands as it would alone)
     let rs = b.radii_now()
-    let mut moved = false
+    let mut moved = 0
     for k in 0..<4 {
       if rs[k] >= half - 0.5 {
         continue
@@ -1071,14 +1160,18 @@ fn Ctx::corners_in_corners(self : Ctx, grounds : Map[Int, Int]) -> Unit {
           let kk = concentric(self.container_r(ct, k), d)
           if kk < half - 0.5 && self.corner_fits(kk) {
             rs[k] = kk
-            moved = true
+            moved += 1
           }
         }
         None => ()
       }
     }
-    if moved {
+    // (only where its corners stay alike, or it fills the container, all four followed, as unlike as the container's
+    // are: never some followed and the others its own; corners not alike are a design's, said, and where it lies in
+    // only some corners, not concentric, corner_faults says so)
+    if moved > 0 && (moved == 4 || alike(rs)) {
       b.set_radii(rs)
+      b.corners_worked = true
     }
   }
 }

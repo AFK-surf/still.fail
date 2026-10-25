@@ -2366,14 +2366,15 @@ let desk_swatch_glyph : @ui.TextStyle = @ui.text_style(size=Title, wrap=false)
 let desk_swatch_name : @ui.TextStyle = @ui.text_style(size=Caption, wrap=false, narrow=@ui.text_patch(size=Xs))
 
 ///|
-/// The size's row (sizeRow): 40 high, 4 in, the page's corner; its keys 32 high, 44 wide at least, 10 in.
+/// The size's row (sizeRow): 40 high, 4 in, the page's corner; its keys 32 high, 44 wide at least, 10 in, their
+/// corners concentric with the row's across its 4 (Inner: all four alike, 8.8).
 // kept across runs: a value (no field of it changes)
 let desk_size_row : @ui.Style = @ui.css("row w=Full h=S10 px=S1 align=ACenter radius=Xl")
 
 ///|
 // kept across runs: a value (no field of it changes)
 let desk_size_key_box : @ui.Style = @ui.css(
-  #|h=S8 min_w=S11 px=S2_5 radius=Lg align=ACenter justify=JCenter hovered{bg=Tint} disabled{opacity=O35}
+  #|h=S8 min_w=S11 px=S2_5 radius=Inner align=ACenter justify=JCenter hovered{bg=Tint} disabled{opacity=O35}
 )
 
 ///|

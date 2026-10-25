@@ -672,8 +672,8 @@ fn dv_kind_of(name : String) -> String {
 
 ///|
 /// A folder of the sidebar that takes a drop (FilesNav.tsx FolderDrop): its row, ringed while what it takes is over it,
-/// saying what a drop does; its corner the row's (the theme's chats' list's `side_drop`: touch's square, as its
-/// rows are).
+/// saying what a drop does; its corner the row's (the theme's chats' list's `side_drop`: a row's, as the row it rings,
+/// flush in it, is round).
 fn fdrag_side_row(
   c : @ui.Ctx,
   key : String,

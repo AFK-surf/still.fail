@@ -723,7 +723,8 @@ fn station_env_editor(c : @ui.Ctx, core : Core, address : String) -> Unit {
   }
   let saving = is_doing(core, ["agentEnv.form.save"], [("station", address), ("form", form)])
   c.box(style=st_editor, fn() {
-    let typed = @sf.textarea(c, "env/" + address, rows=6, field=field_, placeholder=env_placeholder)
+    // (first in its card, in its corners on the words' inset: the ladder's small block's corner there)
+    let typed = @sf.textarea(c, "env/" + address, rows=6, field=field_, placeholder=env_placeholder, corner=@sf.small_corner)
     if env_seeded.contains(address) && typed != text(d, "text") && typed != env_sent.get(address).unwrap_or("") {
       env_sent[address] = typed
       c.tell("env-edit/" + form, fn() {

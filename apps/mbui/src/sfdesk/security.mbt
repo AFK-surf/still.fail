@@ -845,10 +845,12 @@ let sec_devices : @ui.Style = @ui.css("w=Full pl=S10 gap=S2")
 
 ///|
 /// A short code as the device shows it (code: the code face 14 in 600, 9 in, as tall as a row (so at a card's first or
-/// last row's end, in its corner, as far from its top or foot as from its side), 8 round, the words at 6%); the count of
+/// last row's end, in its corner, as far from its top or foot as from its side), the ladder's small corner (10), the words at 6%); the count of
 /// those waiting (count: the meta's 12 in 500 on the accent's ground, 7 in, round).
 // kept across runs: a value (no field of it changes)
-let sec_code : @ui.Style = @ui.css("px=S2 radius=Lg bg=Tint justify=JCenter").then(@ui.style(h=Fixed(sec_row_least)))
+let sec_code : @ui.Style = @ui.css("px=S2 bg=Tint justify=JCenter").then(
+  @ui.style(h=Fixed(sec_row_least), radius=@sf.small_radius),
+)
 
 ///|
 // kept across runs: a value (no field of it changes)

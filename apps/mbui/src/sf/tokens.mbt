@@ -270,8 +270,10 @@ pub fn tape_corners(left~ : Bool, right~ : Bool) -> FixedArray[@ui.CornerOf] {
 }
 
 ///|
-/// Corners `k` (top left, then round it) as a style's corner, each linked to where it comes from.
+/// A panel of the tape's corners `k` (tape_corners: top left, then round it) as a style's corner, each linked to where
+/// it comes from: the tape's panels' alone (frame.mbt), their corners at the window's edge its, the others the tape's.
 pub fn corners_radius(k : FixedArray[@ui.CornerOf]) -> @ui.Radius {
+  // det-ok(corners-each): the tape's panels: their corners at the window's edge follow the window's, the others the tape's 30 (the user, 2026-10-25)
   LinkedEach(k[0], k[1], k[2], k[3])
 }
 
@@ -322,7 +324,7 @@ pub fn capsule_fit_room(corner : Double, height : Double, alone : Double, less? 
 /// The corners of the panel of its own the view is built in (the tape's, laid out Medium: tape_corners; top left, then
 /// round it), None in a window's whole: what a page stands in that panel's foot or top corners stands where it is
 /// concentric with the corner it is in (`foot_capsule`, `pane_foot_in`, `pane_top_right`), each corner linked to where
-/// it comes from (what follows one follows it: pane_foot_corners).
+/// it comes from.
 // kept across runs: said by the frame round each panel of its own it builds
 pub let pane_round : Ref[FixedArray[@ui.CornerOf]?] = Ref(None)
 
@@ -463,31 +465,6 @@ pub fn holds_least(holds : Double) -> Double {
     holds / 2.0 + corner_fit.near
   } else {
     corner_fit.least
-  }
-}
-
-///|
-/// The foot corners (left, right) of a box `alone` round standing across a panel's foot as far in as pane_foot_in, in
-/// its foot corners: each that corner followed (concentric with it where the theme's ranges let it, else `alone`),
-/// but `alone` where following it would leave the box too square for a circle `holds` across in its own corner there
-/// to follow it in turn (holds_least: a composer's send in a Mac window's corner); None in a window's whole (what lies
-/// in its corners mbui works out: InnerOr).
-pub fn pane_foot_corners(alone : Double, holds? : Double = 0.0) -> (@ui.CornerOf, @ui.CornerOf)? {
-  match pane_round.val {
-    Some(k) => {
-      let d = pane_foot_in(holds~)
-      let least = holds_least(holds)
-      let link = fn(from : @ui.CornerOf) -> @ui.CornerOf {
-        let f : @ui.CornerOf = Follow(from, d, alone)
-        if f.follows() && f.radius() < least - 0.5 {
-          Own(alone)
-        } else {
-          f
-        }
-      }
-      Some((link(k[3]), link(k[2])))
-    }
-    None => None
   }
 }
 
@@ -678,12 +655,13 @@ pub let empty_in : @ui.Space = room(30.0)
 pub let identity_mark : Double = 46.0
 
 ///|
-/// The workspace's mark's square (SettingsHome.kt WorkspaceTile): the account's picture's size beside it, card_pad from
-/// its card's edges, so in its corners: concentric with the card's (22, 20 in: 6, Md), what it holds in its middle.
+/// The workspace's mark's square (SettingsHome.kt WorkspaceTile): the account's picture's size beside it, in its row's
+/// corners the ladder's inset in (a row's 18, 10 in), so concentric with them: the small block's 10, all four alike;
+/// what it holds in its middle.
 pub let workspace_tile : @ui.Style = @ui.style(
   w=Fixed(identity_mark),
   h=Fixed(identity_mark),
-  radius=Md,
+  radius=small_radius,
   align=ACenter,
   justify=JCenter,
   clip=true,

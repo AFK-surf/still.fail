@@ -628,6 +628,7 @@ let columns_strip : @ui.Style = @ui.css("row w=Full h=Full")
 /// past the page's foot, its rows scrolling under it: where it meets a panel's foot corner, the panel's cut is its
 /// corner); lit while a drop goes into it.
 // kept across runs: a value (no field of it changes)
+// det-ok(corners-each): a column runs on to the page's foot, cut there by the panel; only its top is a corner of its own
 let column_box : @ui.Style = @ui.style(h=Full, radius=Corners(column_top, column_top, column_foot, column_foot), clip=true)
 
 ///|

@@ -111,7 +111,7 @@ fn vault_item_page(c : @ui.Ctx, core : Core, here : Here, frame : PageFrame, vau
                   c.rich([@ui.span(text(fv, "value"), mono=true)], style=vi_value) |> ignore
                   if opening {
                     @sf.spinner(c, size=pf_spin) |> ignore
-                  } else if @sf.icon_button(c, "eye", key=key + "/show/" + fk, label=@sf.t("web-pages.vault.show")) {
+                  } else if @sf.icon_button(c, "eye", key=key + "/show/" + fk, corner=vi_key_corner, label=@sf.t("web-pages.vault.show")) {
                     vi_reveal[item] = fk
                     open(fn(_) {  })
                   }
@@ -249,10 +249,10 @@ fn secret_field(c : @ui.Ctx, key : String, label : String, value : String, secre
       let words = if shown { value } else { "•".repeat(@cmp.minimum(@cmp.maximum(value.length(), 8), 20)) }
       c.rich([@ui.span(words, mono~)], style=if shown && value.contains("\n") { vi_value_lines } else { vi_value }) |> ignore
       if secret &&
-        @sf.icon_button(c, "eye", key=key + "/eye", label=if shown { @sf.t("web-pages.vault.hide") } else { @sf.t("web-pages.vault.show") }, on=shown) {
+        @sf.icon_button(c, "eye", key=key + "/eye", corner=vi_key_corner, label=if shown { @sf.t("web-pages.vault.hide") } else { @sf.t("web-pages.vault.show") }, on=shown) {
         vi_shown[key] = !shown
       }
-      if @sf.icon_button(c, "copy", key=key + "/copy", label=@sf.t("common.copy")) {
+      if @sf.icon_button(c, "copy", key=key + "/copy", corner=vi_key_corner, label=@sf.t("common.copy")) {
         if secret {
           c.copy_secret(value, clear_ms=vi_copied_life)
         } else {
@@ -345,3 +345,9 @@ let vi_chat : @ui.TextStyle = @ui.text_style(size=Ui, leading=L6, color=Fg, wrap
 ///|
 // kept across runs: a value (no field of it changes)
 let vi_use_time : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color=Muted, wrap=false)
+
+///|
+/// A field's buttons (show, copy) at its end: in the card's corner on its words' inset, the ladder's small block's
+/// corner there (10), as a block in a card's corner on its 20 is.
+// kept across runs: a value (no field of it changes)
+let vi_key_corner : Double = @sf.small_corner

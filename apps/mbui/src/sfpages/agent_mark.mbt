@@ -6,7 +6,8 @@
 /// `maker`'s mark (of `runtime`) on its tile `side` across: 14 (an agent's line in the chat's info), 16 (a line of a
 /// history's details), 20 (the chat's bar) or 28 (an agent's card); `badge` (run, block, failed, or none) at its
 /// corner, said as `said` to a screen reader, ringed in `ground`, what the mark stands on (the page's; a small
-/// panel's in one).
+/// panel's in one). Its tile's corner .3 of its side, or `corner` where it stands in a corner it is concentric with
+/// (an agent's card's top left, on its words' line: the ladder's small block's 10, all four alike).
 pub fn agent_mark(
   c : @ui.Ctx,
   maker : String,
@@ -15,10 +16,13 @@ pub fn agent_mark(
   side? : Double = 20.0,
   said? : String = "",
   ground? : Int64 = @sf.theme().p.bg,
+  corner? : @ui.Radius,
 ) -> Unit {
-  let tile = agent_tile.then(
-    @ui.style(w=Fixed(side), h=Fixed(side), radius=@sf.agent_mark_corner(side)),
-  )
+  let round = match corner {
+    Some(k) => k
+    None => @sf.agent_mark_corner(side)
+  }
+  let tile = agent_tile.then(@ui.style(w=Fixed(side), h=Fixed(side), radius=round))
   c.box(style=tile, label=said, fn() {
     @sf.maker_mark(c, maker, runtime, (side * agent_logo_of).round()) |> ignore
     agent_badge(c, badge, side, ground)

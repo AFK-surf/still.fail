@@ -127,6 +127,19 @@ fn lint_mbt(
     out.push(finding(rule, f.rel, toks[k].line, what))
   }
 
+  // corners not all alike said, in the app's pages and its library (Radius::Corners, LinkedEach): a design's, each
+  // looked at and kept by a person, never made by the way; counted, so a new one is seen (its tests not counted)
+  if under(f.rel, cfg.pages) || under(f.rel, cfg.library) {
+    for k, tk in toks {
+      if tk.kind == "ident" &&
+        (tk.text == "Corners" || tk.text == "LinkedEach") &&
+        k + 1 < toks.length() &&
+        toks[k + 1].text == "(" &&
+        !f.in_test(k) {
+        add("corners-each", k, f.line_text(k))
+      }
+    }
+  }
   // a page drawing one arrangement's piece itself (not in its tests, nor in the files that frame the pages)
   if under(f.rel, cfg.pages) && !under(f.rel, cfg.page_frames) && cfg.one_look.length() > 0 {
     for k, tk in toks {

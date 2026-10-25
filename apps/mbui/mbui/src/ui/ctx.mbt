@@ -996,6 +996,7 @@ pub fn Ctx::box(
   // of a box's before it in this place kept)
   n.radii = None
   n.links = None
+  n.corners_worked = false
   if radius is None {
     match st.radius {
       Some(r) => {

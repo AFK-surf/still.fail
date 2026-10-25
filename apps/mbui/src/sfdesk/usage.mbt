@@ -870,7 +870,12 @@ fn usage_prices_page(c : @ui.Ctx, core : Core, here : Here, frame : PageFrame, d
                 cells.append(items(Some(r), "rates").map(fn(x) { text(Some(x), "value") }))
                 md.push(line(cells))
               }
-              @sf.markdown(c, md.join("\n"), key="prices/" + text(tv, "station"), size=@sf.text_scale.base.0) |> ignore
+              // (across the card's foot, its ground reaching past the card's words to the ladder's inset, round by
+              // the ladder's next step there: concentric with the card's foot corners)
+              c.box(style=up_table_across, fn() {
+                @sf.markdown(c, md.join("\n"), key="prices/" + text(tv, "station"), size=@sf.text_scale.base.0) |> ignore
+              })
+              |> ignore
             }
           })
         })
@@ -883,6 +888,13 @@ fn usage_prices_page(c : @ui.Ctx, core : Core, here : Here, frame : PageFrame, d
     blocks,
   )
 }
+
+///|
+/// A station's prices' table at its card's foot (@sf.block_across, and as far past the card's words under it).
+// kept across runs: a value (no field of it changes)
+let up_table_across : @ui.Style = @ui.css("w=Full").then(@sf.block_across).then(
+  @ui.style(mb=@sf.room_of(@sf.corner_inset - @sf.card_pad)),
+)
 
 ///|
 /// What a page says in place of what it lists (none: muted; narrow, 24 in as a page's note is).

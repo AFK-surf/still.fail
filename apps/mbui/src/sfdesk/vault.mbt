@@ -396,7 +396,11 @@ fn vault_lasts_row(c : @ui.Ctx, core : Core, look : Look, ws : String, mine : Js
     }
   }
   match look {
-    Wide => vt_card(c, look, @sf.t("web-pages.vault.lasts.title"), @sf.t("web-pages.vault.lasts.note"), then=choose)
+    // (at the card's foot, reaching past its words to the ladder's inset: the last in its corners concentric with them)
+    Wide =>
+      vt_card(c, look, @sf.t("web-pages.vault.lasts.title"), @sf.t("web-pages.vault.lasts.note"), then=fn() {
+        c.box(style=vt_choices_across, choose) |> ignore
+      })
     // (narrow: its title over it, the note, the choices on the page's ground, each its own card)
     Narrow => {
       @sf.heading(c, @sf.t("web-pages.vault.lasts.title"))
@@ -746,3 +750,10 @@ let vt_narrow_link : @ui.TextStyle = @sf.link.then(@sf.one_line)
 /// Narrow: the longest grant's choices in the page's room, 8 under its note, 10 over what follows.
 // kept across runs: a value (no field of it changes)
 let vt_choices_narrow : @ui.Style = @ui.css("w=Full pt=S2 pb=S2_5")
+
+///|
+/// Choices at a card's foot: across it to the ladder's inset (@sf.block_across), and as far past its words under them.
+// kept across runs: a value (no field of it changes)
+let vt_choices_across : @ui.Style = @ui.css("w=Full").then(@sf.block_across).then(
+  @ui.style(mb=@sf.room_of(@sf.corner_inset - @sf.card_pad)),
+)
