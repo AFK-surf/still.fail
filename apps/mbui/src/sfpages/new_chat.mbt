@@ -277,7 +277,7 @@ fn new_scene_narrow_body(
     })
     |> ignore
   }
-  new_offer(c, src, frame, station, state) |> ignore
+  new_offer(c, src, frame, station, state, hung=false) |> ignore
 }
 
 ///|
@@ -484,7 +484,7 @@ fn new_wide(
           "" => ()
           p => new_part(c, c.text(p, style=new_status), state, false)
         }
-        new_part(c, new_offer(c, src, frame, station, state), state, false)
+        new_part(c, new_offer(c, src, frame, station, state, hung=true), state, false)
       }
     }
   })
@@ -625,14 +625,18 @@ fn new_combos(c : @ui.Ctx, src : Source, w : Workspace, v : Json?, leaving : Boo
 
 ///|
 /// The machine's own sessions to go on with, where it kept any (MachineSessions); nothing while its stations are read,
-/// nor read only.
-fn new_offer(c : @ui.Ctx, src : Source, frame : NewChatFrame, station : Json?, state : NewState) -> Int {
+/// nor read only. `hung`: out of the page's flow, hung under what is over it (newChatOffer): it comes once the station
+/// has said what there is, and taking room then it would move what the page centres, the composer with it; else the
+/// scene's last part (narrow, where what is over it stays as it comes).
+fn new_offer(c : @ui.Ctx, src : Source, frame : NewChatFrame, station : Json?, state : NewState, hung~ : Bool) -> Int {
   if state is Held(_) || !(field(station, "overview") is Some(Object(_))) || src.read_only {
     return c.box(fn() {  })
   }
-  c.box(style=new_offer_box, fn() {
-    @settings.machine_sessions_offer(c, frame.core, text(station, "station"), text(station, "name"))
-  })
+  let offer = fn() { @settings.machine_sessions_offer(c, frame.core, text(station, "station"), text(station, "name")) }
+  if !hung {
+    return c.box(style=new_offer_box, offer)
+  }
+  c.box(style=new_offer_hold, fn() { c.box(style=new_offer_hung, left=0.0, top=0.0, right=0.0, offer) |> ignore })
 }
 
 ///|
@@ -1090,9 +1094,19 @@ let new_status : @ui.TextStyle = @ui.text_style(size=Meta, leading=L6, color=Mut
 let new_error : @ui.TextStyle = @ui.text_style(size=Ui, leading=L6, color=Danger, center=true, w=Full)
 
 ///|
-/// Where the offer of the machine's sessions hangs, under the status line (newChatOffer).
+/// The offer of the machine's sessions as the scene's last part narrow: 8 over it.
 // kept across runs: a value (no field of it changes)
-let new_offer_box : @ui.Style = @ui.css("w=Full align=ACenter")
+let new_offer_box : @ui.Style = @ui.css("w=Full pt=S2 align=ACenter")
+
+///|
+/// Where it hangs wide, under the status line (newChatOffer: no room of its own, what it holds from its top, in the
+/// middle).
+// kept across runs: a value (no field of it changes)
+let new_offer_hold : @ui.Style = @ui.css("w=Full h=S0")
+
+///|
+// kept across runs: a value (no field of it changes)
+let new_offer_hung : @ui.Style = @ui.css("align=ACenter")
 
 ///|
 /// spentNotice: the amber's 12% under 13's words, 8 by 12 in, 10 round, 8 under it.

@@ -251,8 +251,9 @@ fn run_settings_page(c : @ui.Ctx, core : Core, station : String, key : String) -
 let machine_sessions : Map[String, Array[Json]] = Map([])
 
 ///|
-/// The offer, where the station's machine kept sessions of its own Claude Code or Codex (MachineSessionsOffer): a
-/// quiet line; its list and a look at one before going on with it are sheets. Drawn by a new chat's page (sfapp).
+/// The offer, where the station's machine kept sessions of its own Claude Code or Codex (MachineSessions.css.ts offer):
+/// quiet as the words around it until pointed at, then its ground and its words the text's; its list and a look at one
+/// before going on with it are sheets. Drawn by a new chat's page (sfpages), which says where it hangs.
 pub fn machine_sessions_offer(c : @ui.Ctx, core : Core, station : String, name : String) -> Unit {
   let t = @sf.theme()
   if !machine_sessions.contains(station) {
@@ -272,25 +273,39 @@ pub fn machine_sessions_offer(c : @ui.Ctx, core : Core, station : String, name :
     return
   }
   let id = c.id("machine-offer/" + station)
+  c.cursor(id, Hand)
   if hit(c, id) {
     open_machine_sessions(core, station, name)
   }
-  c.box(pt=8.0, fn() {
-    c.box(dir=Row, padx=10.0, pady=6.0, gap=6.0, radius=10.0, align=ACenter, id~, fn() {
-      @sf.icon(c, "monitor", size=14.0, color=t.p.muted) |> ignore
-      c.text(
-        fill("android-chat.new.machine.offer", [("station", if name == "" { tr("android-chat.new.machine.here") } else { name })]),
-        size=t.t.meta,
-        color=t.p.muted,
-        wrap=false,
-      )
-      |> ignore
-      @motion.ripple(c, id, 10.0)
-    })
-    |> ignore
+  let lit = c.lit(id)
+  let words = fill("android-chat.new.machine.offer", [
+    ("station", if name == "" { tr("android-chat.new.machine.here") } else { name }),
+  ])
+  let b = c.box(style=machine_offer_box, id~, fn() {
+    @sf.icon(c, "monitor", size=machine_offer_mark, color=if lit { t.p.text } else { t.p.muted }) |> ignore
+    c.text(words, style=if lit { machine_offer_words_lit } else { machine_offer_words }) |> ignore
+    @sf.press_ripple(c, id, @sf.small_corner)
   })
-  |> ignore
+  c.semantics(b, Button, id~, label=words)
 }
+
+///|
+/// The offer (offer: 4 by 10 in, its parts 6 apart, the hover's ground; 13 on 20, muted) and its mark (Monitor 14).
+// kept across runs: a value (no field of it changes)
+let machine_offer_box : @ui.Style = @ui.css("row px=S2_5 py=S1 gap=S1_5 align=ACenter hovered{bg=Hover}").then(
+  @ui.style(radius=@sf.small_radius),
+)
+
+///|
+// kept across runs: a value (no field of it changes)
+let machine_offer_words : @ui.TextStyle = @ui.text_style(size=Ui, leading=L5, color=Muted, wrap=false)
+
+///|
+// kept across runs: a value (no field of it changes)
+let machine_offer_words_lit : @ui.TextStyle = machine_offer_words.then(@ui.text_style(color=Fg))
+
+///|
+let machine_offer_mark : Double = 14.0
 
 ///|
 /// The machine's sessions in a sheet (openMachineSessions), each a look at it before going on with it.

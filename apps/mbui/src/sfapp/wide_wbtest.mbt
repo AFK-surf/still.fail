@@ -305,6 +305,88 @@ test "wide: a new chat as the web's: its scene and the composer in the pane's mi
 }
 
 ///|
+test "wide: the machine's own sessions offered under the composer as its station answers, the composer staying where it is; pointed at, the offer lit" {
+  reset()
+  let base = fixture("home")
+  let held : Array[(Result[Json, Json]) -> Unit] = []
+  // (its station read whole: what it has, its overview, read; what its machine kept asked of it)
+  let read_whole = fn(s : Json?) -> Json {
+    match s {
+      Some(Object(o)) => {
+        let m = o.copy()
+        m["overview"] = Json::object({})
+        Json::object(m)
+      }
+      Some(v) => v
+      None => Json::null()
+    }
+  }
+  let src : Source = {
+    ..base,
+    call: fn(name, params, done) {
+      if name == "machineSessions.list" {
+        held.push(done)
+      } else {
+        (base.call)(name, params, done)
+      }
+    },
+    topic: fn(name, params) {
+      let t = (base.topic)(name, params)
+      match (name, t.value) {
+        ("newChat", Some(Object(v))) => {
+          let m = v.copy()
+          m["station"] = read_whole(v.get("station"))
+          { ..t, value: Some(Json::object(m)) }
+        }
+        _ => t
+      }
+    },
+  }
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=1280.0, h=800.0, platform=0)
+  t.frame()
+  t.frame()
+  assert_true(app.nav.top() == NewChat)
+  let offer = "继续 Studio 终端中的会话"
+  assert_true(t.find(offer) is None)
+  let (bx, by, _, bh) = composer_glass(t)
+  // the station says what its machine kept, a while after the page asked
+  assert_true(held.length() > 0, msg="machineSessions.list asked")
+  let session = Json::object({
+    "id": Json::string("m1"),
+    "runtime": Json::string("claude"),
+    "title": Json::string("整理构建脚本"),
+    "meta": Json::string("Claude Code · 3 小时前"),
+  })
+  for done in held {
+    done(Ok(Json::object({ "sessions": Json::array([session]) })))
+  }
+  t.frame()
+  let (ox, oy) = match t.find(offer) {
+    Some(at) => at
+    None => fail("no offer once the station answered")
+  }
+  // under the composer, which has not moved for it
+  assert_at((bx, by), { let (x, y, _, _) = composer_glass(t); (x, y) })
+  assert_true(oy > by + bh, msg="the offer at \{oy} under the composer \{(by, bh)}")
+  let ground = fn() {
+    t.drawn_rects().iter().any(fn(r) { r.4 == @sf.theme().p.hover && r.2 < 400.0 && ox > r.0 && ox < r.0 + r.2 && oy > r.1 && oy < r.1 + r.3 })
+  }
+  let inks = fn() {
+    t.drawn_glyphs().filter(fn(g) { (g.1 - oy).abs() < 12.0 && (g.0 - ox).abs() < 100.0 }).map(fn(g) { g.2 })
+  }
+  assert_false(ground())
+  assert_true(inks().length() > 0 && inks().iter().all(fn(k) { k == @sf.theme().p.muted }), msg="quiet: \{inks()}")
+  // pointed at: its ground, its words the text's
+  t.move(ox, oy)
+  t.draw()
+  assert_true(ground(), msg="the hover's ground under the offer")
+  assert_true(inks().iter().all(fn(k) { k == @sf.theme().p.text }), msg="lit: \{inks()}")
+  // left: quiet again
+  t.leave()
+  assert_false(ground())
+}
+
+///|
 /// The composer's ground as drawn now (the lowest glass in the pane, right of the sidebar): x, y, w, h.
 fn composer_glass(t : @ui.Tester) -> (Double, Double, Double, Double) raise {
   let mut best : (Double, Double, Double, Double)? = None
@@ -376,6 +458,85 @@ test "wide: a new chat becomes its chat as the web's: its scene up and away, the
   assert_true(send_flight.val is None)
   let landed = seen_once(t, words)
   assert_true(landed.1 < typed.1 - 200.0 && landed.0 > typed.0 + 100.0, msg="landed at \{landed} from \{typed}")
+}
+
+///|
+/// Where the first of the words written in the composer is drawn: the leftmost glyph in the text's ink in the upper
+/// half of its ground (its field's line, over its row of controls).
+fn first_words_glyph(t : @ui.Tester) -> (Double, Double) raise {
+  let (gx, gy, gw, gh) = composer_glass(t)
+  let mut first : (Double, Double)? = None
+  for g in t.drawn_glyphs() {
+    if g.2 == @sf.theme().p.text && g.0 > gx && g.0 < gx + gw && g.1 > gy && g.1 < gy + gh / 2.0 {
+      match first {
+        Some((x, _)) if x <= g.0 => ()
+        _ => first = Some((g.0, g.1))
+      }
+    }
+  }
+  match first {
+    Some(at) => at
+    None => fail("no words drawn in the composer at \{t.time()}")
+  }
+}
+
+///|
+/// Whether the composer's hint is drawn: glyphs in its ground in the hint's ink.
+fn hint_drawn(t : @ui.Tester) -> Bool raise {
+  let (gx, gy, gw, gh) = composer_glass(t)
+  t.drawn_glyphs().iter().any(fn(g) { g.0 > gx && g.0 < gx + gw && g.1 > gy && g.1 < gy + gh && g.2 == @sf.theme().p.subtle })
+}
+
+///|
+test "wide: a new chat's first words stay where they were typed while the chat is made and read, the hint gone under them, then up into their bubble" {
+  let held : Map[String, () -> Unit] = {}
+  let unread = Ref(true)
+  let t = held_core(held, unread, w=1280.0, h=800.0, platform=0)
+  t.frame()
+  assert_true(app.nav.top() == NewChat)
+  t.tap_text("做任何事")
+  let words = "把发布说明写一下"
+  t.type_text(words)
+  t.draw()
+  // where they are drawn in the field (in the window: the pane is beside the sidebar, its corner not the window's)
+  let in_field = first_words_glyph(t)
+  t.enter()
+  t.draw()
+  // sent, the field emptied under them: they stay where they were, its hint not over them
+  assert_at(in_field, first_words_glyph(t))
+  let typed = seen_once(t, words)
+  assert_false(hint_drawn(t), msg="the hint under the words sent")
+  // the chat made, the message sent to it: the page is the chat, its view not read yet
+  match held.get("newChat.create") {
+    Some(give) => give()
+    None => fail("no chat asked for")
+  }
+  t.draw()
+  assert_at(typed, seen_once(t, words))
+  match held.get("chat.send") {
+    Some(give) => give()
+    None => fail("the message not sent")
+  }
+  t.draw()
+  assert_true(app.nav.top() is Chat(_))
+  // the new chat's choices leave as what was by the composer does: fading where they are, on its ground as it goes
+  choices_in_ground(t)
+  t.run_for(new_fade_ms + 1.0)
+  let (gx, _, gw, _) = composer_glass(t)
+  assert_true(seen_words(t, "Studio").iter().all(fn(p) { p.0 < gx || p.0 > gx + gw }), msg="the choices gone")
+  t.run_for(read_late_ms - new_fade_ms - 1.0)
+  assert_at(typed, seen_once(t, words))
+  assert_false(hint_drawn(t), msg="the hint under the words sent, the composer gone to the chat's foot")
+  // read: their row laid out, and they go at once, up with the list, no frame where they are not, nor a jump
+  unread.val = false
+  t.draw()
+  let placed = t.time()
+  let landed = up_till(t, words, placed + flight_carry_ms + 34.0, 120.0)
+  assert_true(send_flight.val is None)
+  assert_true(landed.1 < typed.1 - 200.0, msg="landed at \{landed} from \{typed}")
+  // out of the composer: its hint back
+  t.run_for(@sf.hint_back_ms)
+  assert_true(hint_drawn(t), msg="the hint back once the words are out")
 }
 
 ///|
