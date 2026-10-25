@@ -116,4 +116,4 @@ let toast_words_box : @ui.Style = @ui.style(py=room(toast_py - toast_action_in))
 
 ///|
 // kept across runs: a value (no field of it changes)
-let toast_words : @ui.TextStyle = @ui.text_style(size=Ui, leading=Exact(toast_line), color=OnPrimary)
+let toast_words : @ui.TextStyle = @ui.text_style(size=Ui, leading=L6, color=OnPrimary)

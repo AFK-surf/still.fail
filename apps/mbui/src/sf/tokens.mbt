@@ -2064,7 +2064,8 @@ pub let wait_bubble_share : Double = 0.7
 pub let toast_r : Double = 20.0
 
 ///|
-pub let toast_line : Double = 20.0
+/// (its words' line: L6)
+pub let toast_line : Double = leading_scale.l6
 
 ///|
 pub let toast_py : Double = toast_r - toast_line / 2.0
