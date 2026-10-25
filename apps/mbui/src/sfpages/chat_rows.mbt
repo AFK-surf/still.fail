@@ -536,18 +536,19 @@ let activity_tail : @ui.Style = @ui.css("row gap=S2 align=ACenter")
 let activity_tail_cut : @ui.Style = activity_tail.then(@ui.css("clip"))
 
 ///|
-/// What it does now (activityNowText): 13, muted (the text's under the pointer), one line; how long (activityElapsed),
-/// subtle.
+/// What it does now (activityNowText): 13, muted (the text's under the pointer), one line, cut short with an ellipsis
+/// where the line has less room (its min-width 0, text-overflow): an agent's step is as long as it says it, so the
+/// words give way and nothing else does; how long (activityElapsed, flex none), subtle, whole.
 // kept across runs: a value (no field of it changes)
 let now_room : @ui.Style = @ui.css("row")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let now_words : @ui.TextStyle = @ui.text_style(size=Sm, color=Muted, wrap=false, max_lines=1)
+let now_words : @ui.TextStyle = @ui.text_style(size=Sm, color=Muted, wrap=false, w=Cut)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let now_words_hot : @ui.TextStyle = @ui.text_style(size=Sm, color=Fg, wrap=false, max_lines=1)
+let now_words_hot : @ui.TextStyle = @ui.text_style(size=Sm, color=Fg, wrap=false, w=Cut)
 
 ///|
 // kept across runs: a value (no field of it changes)
