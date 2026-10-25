@@ -149,6 +149,39 @@ test "corners: a circle or a capsule in a corner: as far from both edges, the co
 }
 
 ///|
+test "corners: a mark hung past the corner of a card in a container's corner is the card's, not the container's" {
+  // a composer (26 round, 10 in) with a card's room 200 wide and its remove button's reach (6.5) at its end; the button
+  // (20 round) over the card's top right corner, lifted past its top by its reach, 3.5 from the composer's top and 23
+  // from its right: no fault
+  let card = fn(lift : Double) {
+    @ui.Tester::new(fn(c) {
+      c.column(pad=20.0, fn() {
+        c.box(w=Px(239.5), h=Px(90.0), pad=10.0, bg=0xEEEEEEFFL, radius=26.0, fn() {
+          c.box(w=Px(206.5), fn() {
+            c.box(w=Px(200.0), h=Px(56.0), fn() {  }) |> ignore
+            c.layer(align=AEnd, fn() {
+              c.box(w=Px(20.0), h=Px(20.0), bg=0x222222FFL, radius=10.0, ty=-lift, fn() {  }) |> ignore
+            })
+            |> ignore
+          })
+          |> ignore
+        })
+        |> ignore
+      })
+      |> ignore
+    })
+  }
+  let t = card(6.5)
+  t.draw()
+  assert_eq(t.corner_faults(), [])
+  // the same button not lifted, within what it is laid over: set in the composer's corner, 10 from its top and 23 from
+  // its right, the rule's
+  let t = card(0.0)
+  t.draw()
+  assert_eq(t.corner_faults().length(), 1)
+}
+
+///|
 test "corners: a round thing centred in its container is not set in a corner" {
   // a card's trailing ×, centred up and down in a row: near the top right corner, but not in it
   let t = @ui.Tester::new(fn(c) {

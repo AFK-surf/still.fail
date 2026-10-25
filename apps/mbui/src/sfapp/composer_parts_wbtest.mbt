@@ -55,7 +55,7 @@ test "a picture waiting in the composer, tapped, opens in the viewer from the by
 }
 
 ///|
-test "a waiting picture's ✕ hangs on its tile's corner, its centre on the curve, on a phone and a computer alike, clear of the next; tapped, it takes the picture out" {
+test "what waits to go has its ✕ hung on its corner, its centre on the curve, a picture's and a file's card alike, on a phone and a computer alike, clear of the next; tapped, it takes it out" {
   // (Android, then macOS: one design on every screen, docs/ui-panels.md)
   for platform in [2, 0] {
     let calls : Array[Made] = []
@@ -65,6 +65,7 @@ test "a waiting picture's ✕ hangs on its tile's corner, its centre on the curv
     let w = @sfbase.writing(src, "ws1/st1:s-c1")
     @sfbase.writing_add(src, w, "ws1/st1", "照片.png", png_head())
     @sfbase.writing_add(src, w, "ws1/st1", "第二张.png", png_head())
+    @sfbase.writing_add(src, w, "ws1/st1", "build.log", @utf8.encode("夜里的构建日志"))
     t.draw()
     t.run_for(@sfpages.morph_ms)
     let tiles = @sfbase.writing(src, "ws1/st1:s-c1").files.filter_map(fn(f) {
@@ -73,19 +74,33 @@ test "a waiting picture's ✕ hangs on its tile's corner, its centre on the curv
     assert_eq(tiles.length(), 2)
     let first = tiles[0]
     let next = tiles[1]
-    let (x, y, bw, bh) = match t.query(Button, label=@sf.t("web-main.file.remove", args=[("name", "照片.png")])) {
-      Some(b) => b.rect
-      None => fail("no ✕ on the picture (platform \{platform})")
+    let card = match t.query(Group, label="build.log") {
+      Some(g) => g.rect
+      None => fail("no card for build.log (platform \{platform})")
     }
-    let m = @ui.smooth_middle(first.radius)
     let near = fn(a : Double, b : Double) { (a - b).abs() < 0.01 }
-    assert_true(near(x + bw / 2.0, first.x + first.w - m), msg="its centre across (platform \{platform}): \{x + bw / 2.0}")
-    assert_true(near(y + bh / 2.0, first.y + m), msg="its centre down (platform \{platform}): \{y + bh / 2.0}")
-    // over the corner: as far past the tile's top as past its right edge
-    assert_true(near(first.y - y, x + bw - (first.x + first.w)), msg="its reach (platform \{platform})")
-    // the next picture the row's gap (6) past the ✕, not under it
+    // each ✕'s centre on the curve of the corner it is hung on, as far past the top as past the right edge
+    for one in [
+      ("照片.png", first.x, first.y, first.w, first.radius),
+      ("build.log", card.0, card.1, card.2, @sf.message_file_corner),
+    ] {
+      let (name, ox, oy, ow, corner) = one
+      let (x, y, bw, bh) = match t.query(Button, label=@sf.t("web-main.file.remove", args=[("name", name)])) {
+        Some(b) => b.rect
+        None => fail("no ✕ on \{name} (platform \{platform})")
+      }
+      let m = @ui.smooth_middle(corner)
+      assert_true(near(x + bw / 2.0, ox + ow - m), msg="\{name}'s ✕ across (platform \{platform}): \{x + bw / 2.0}")
+      assert_true(near(y + bh / 2.0, oy + m), msg="\{name}'s ✕ down (platform \{platform}): \{y + bh / 2.0}")
+      assert_true(near(oy - y, x + bw - (ox + ow)), msg="\{name}'s ✕ reach (platform \{platform})")
+    }
+    // the next picture the row's gap (6) past the first one's ✕, not under it
+    let (x, y, bw, bh) = t.query(Button, label=@sf.t("web-main.file.remove", args=[("name", "照片.png")])).unwrap().rect
     assert_true(next.x >= x + bw + 6.0 - 0.01, msg="the next at \{next.x}, the ✕ ends at \{x + bw}")
     t.tap(x + bw / 2.0, y + bh / 2.0)
+    t.draw()
+    let (cx, cy, cw, ch) = t.query(Button, label=@sf.t("web-main.file.remove", args=[("name", "build.log")])).unwrap().rect
+    t.tap(cx + cw / 2.0, cy + ch / 2.0)
     t.draw()
     let left = @sfbase.writing(src, "ws1/st1:s-c1").files
     assert_eq(left.length(), 1)

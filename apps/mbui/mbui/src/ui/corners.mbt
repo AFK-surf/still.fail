@@ -384,7 +384,9 @@ fn ladder_in(ladder : Array[Double], ra : Double) -> String {
 /// edge: a grouped row's square patch over its rounded corners: its shape, not something in its corner); a line (under
 /// corner_line across: a bar's track, a rule), which has no corner to keep; a mark hung on
 /// something small in it (laid over it as a layer, moved off its place by an offset, or placed out of the flow in it: a
-/// badge on an icon, a remove button on a picture, a dot's halo, its place that thing's, not the corner's).
+/// badge on an icon, a remove button on a picture, a dot's halo, its place that thing's, not the corner's), or on the
+/// corner of something larger, moved off its place past the edge of what it is laid over (a file card's remove button
+/// over its top right corner: its place the card's corner, not the container's).
 fn Ctx::corner_exempt(self : Ctx, i : Int, p : Int, ra : Double, ground : Int, pictures : Set[Int]) -> Bool {
   let (up_down, across) = self.scrolls_between(i, p)
   if up_down || across || self.in_picture(p, pictures) {
@@ -418,10 +420,20 @@ fn Ctx::corner_exempt(self : Ctx, i : Int, p : Int, ra : Double, ground : Int, p
       if host.fw < 2.0 * ra && host.fh < 2.0 * ra {
         return true
       }
+      // (the mark itself moved past an edge of what it is laid over, smaller than the corner: hung on that corner)
+      if q == i && b.fw < 2.0 * ra && b.fh < 2.0 * ra && reaches_past(n, host) {
+        return true
+      }
     }
     q = n.parent
   }
   false
+}
+
+///|
+/// Whether node `n` reaches past an edge of `host` (by more than half a pixel).
+fn reaches_past(n : Node, host : Node) -> Bool {
+  n.x < host.x - 0.5 || n.y < host.y - 0.5 || n.x + n.fw > host.x + host.fw + 0.5 || n.y + n.fh > host.y + host.fh + 0.5
 }
 
 ///|

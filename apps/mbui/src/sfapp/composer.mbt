@@ -2147,23 +2147,27 @@ fn draft_file(c : @ui.Ctx, src : Source, r : ChatRef, d : Draft, f : Pending, lo
   if draft_is_picture(f, picture) {
     draft_picture(c, r.station, f, picture, remove, again)
   } else {
-    // (as far down as a picture's tile, under its remove button's room: their tops in line; as wide as it is,
-    // never squeezed by a row too narrow for all of them)
-    c.box(w=Px(if f.pasted is Some(_) { pasted_card_w } else { file_card_w }), pt=picture_remove_out, fn() {
+    // (its remove button over its corner as a picture's, their tops in line; as wide as it is, never squeezed by a
+    // row too narrow for all of them)
+    let label = if f.pasted is Some(_) {
+      tr("web-main.composer.removePaste")
+    } else {
+      tr("web-main.file.remove", args=[("name", f.name)])
+    }
+    with_remove(c, remove, if f.pasted is Some(_) { pasted_card_w } else { file_card_w }, label, fn() {
       let card = match f.pasted {
-        Some((words, info)) => pasted_card(c, src, r, d, f, words, info, remove, locked)
-        None => file_tile(c, f, remove, again~)
+        Some((words, info)) => pasted_card(c, src, r, d, f, words, info, locked)
+        None => file_tile(c, f, again~)
       }
       @motion.measure(c, card, "composer/tile/\{f.id}")
     })
-    |> ignore
   }
 }
 
 ///|
 /// A file's tile as the composer draws it, nothing of it to be tapped (a file sent: drawn where it was until its
-/// message is in the list, flight.mbt); a picture's without its remove button (Composer.kt sendTile: the picture's
-/// box alone), a card's with its ×.
+/// message is in the list, flight.mbt): its box alone, without the remove button over its corner (Composer.kt
+/// sendTile).
 fn draft_face(c : @ui.Ctx, src : Source, r : ChatRef, d : Draft, f : Pending) -> () -> Unit {
   let picture = draft_picture_key(src, r, f)
   fn() {
@@ -2171,8 +2175,8 @@ fn draft_face(c : @ui.Ctx, src : Source, r : ChatRef, d : Draft, f : Pending) ->
       picture_face(c, f, picture, 0) |> ignore
     } else {
       match f.pasted {
-        Some((words, info)) => pasted_card(c, src, r, d, f, words, info, 0, false) |> ignore
-        None => file_tile(c, f, 0) |> ignore
+        Some((words, info)) => pasted_card(c, src, r, d, f, words, info, false) |> ignore
+        None => file_tile(c, f) |> ignore
       }
     }
   }
@@ -2204,7 +2208,7 @@ fn draft_picture(c : @ui.Ctx, station : String, f : Pending, picture : String, r
     }
     _ => ()
   }
-  with_remove(c, remove, picture_tile, fn() {
+  with_remove(c, remove, picture_tile, tr("web-main.file.remove", args=[("name", f.name)]), fn() {
     let tile = picture_face(c, f, picture, if f.local is Some(_) { open } else { 0 }, again~)
     @motion.measure(c, tile, "composer/tile/\{f.id}")
     if f.local is Some(_) {
@@ -2287,19 +2291,20 @@ fn card_close(c : @ui.Ctx, remove : Int, label? : String = "", icon? : String = 
 }
 
 ///|
-/// A picture's tile waiting to go with the message, its remove button over its top right corner,
-/// reaching `picture_remove_out` beyond it (Composer.kt: a picture's; a file's card the same here, so both read alike).
-fn with_remove(c : @ui.Ctx, remove : Int, w : Double, body : () -> Unit) -> Unit {
+/// What waits to go with the message (a picture's tile, a file's card), its remove button over its top right corner,
+/// reaching `picture_remove_out` beyond it, its centre on the corner's curve (Composer.kt: a picture's; a card's the
+/// same, docs/ui-panels.md); `label` what a screen reader calls it.
+fn with_remove(c : @ui.Ctx, remove : Int, w : Double, label : String, body : () -> Unit) -> Unit {
   let t = @sf.theme()
   // (as wide as what it holds and its button's reach: never squeezed by a row too narrow for all of them)
   // (the button reaches past its right edge over the gap after it, as Composer.kt's: it takes no room of its own there)
   c.box(w=Px(w), pt=picture_remove_out, fn() {
     body()
     c.layer(align=AEnd, fn() {
-      c.box(w=Px(20.0), h=Px(20.0), radius=10.0, bg=t.p.text, align=ACenter, justify=JCenter, tx=picture_remove_out, id=remove, fn() {
+      let b = c.box(w=Px(20.0), h=Px(20.0), radius=10.0, bg=t.p.text, align=ACenter, justify=JCenter, tx=picture_remove_out, id=remove, fn() {
         @sf.icon(c, "close", size=12.0, color=t.p.raised) |> ignore
       })
-      |> ignore
+      c.semantics(b, Button, id=remove, label~)
     })
     |> ignore
   })
@@ -2318,7 +2323,6 @@ fn pasted_card(
   f : Pending,
   words : String,
   info : Json,
-  remove : Int,
   locked : Bool,
 ) -> Int {
   let t = @sf.theme()
@@ -2399,7 +2403,6 @@ fn pasted_card(
         }
       })
       |> ignore
-      card_close(c, remove, label=tr("web-main.composer.removePaste"))
     },
   )
 }
@@ -2407,7 +2410,7 @@ fn pasted_card(
 ///|
 /// Any other file in the composer (ChatFiles.kt FileCard, in the composer's shape): its kind's mark, its name, its
 /// size or how it goes.
-fn file_tile(c : @ui.Ctx, f : Pending, remove : Int, again? : Int = 0, closable? : Bool = true) -> Int {
+fn file_tile(c : @ui.Ctx, f : Pending, again? : Int = 0) -> Int {
   let t = @sf.theme()
   let k = ink()
   let busy = f.done is None && f.error is None
@@ -2457,12 +2460,9 @@ fn file_tile(c : @ui.Ctx, f : Pending, remove : Int, again? : Int = 0, closable?
       |> ignore
     })
     |> ignore
-    // failed going up in the core: its retry key before its × (ChatFiles.kt FileCard onRetry)
+    // failed going up in the core: its retry key at its end (ChatFiles.kt FileCard onRetry)
     if f.error is Some(_) && f.retry && again != 0 {
       card_close(c, again, icon="retry", label=tr("web-main.composer.retryUpload"))
-    }
-    if closable {
-      card_close(c, remove)
     }
     },
   )

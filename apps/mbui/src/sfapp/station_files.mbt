@@ -257,8 +257,8 @@ fn ref_card(c : @ui.Ctx, key : String, r : DraftRef) -> Unit {
       None => tr("common.uploading")
     }
   }
-  // (as far down as a picture's tile in the files' row; as wide as it is, never squeezed)
-  c.box(w=Px(file_card_w), pt=picture_remove_out, fn() {
+  // (its remove button over its corner as a picture's, their tops in line; as wide as it is, never squeezed)
+  with_remove(c, remove, file_card_w, tr("web-main.file.remove", args=[("name", name)]), fn() {
     let tile = c.box(
       dir=Row,
       w=Px(file_card_w),
@@ -283,13 +283,11 @@ fn ref_card(c : @ui.Ctx, key : String, r : DraftRef) -> Unit {
           |> ignore
         })
         |> ignore
-        card_close(c, remove)
       },
     )
     // where it is, for it to fly from when sent as a file (flight.mbt)
     @motion.measure(c, tile, "composer/tile/ref/\{r.order}")
   })
-  |> ignore
 }
 
 ///|
