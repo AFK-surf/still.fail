@@ -218,8 +218,11 @@ fn narrow_page(
     }
   }
   if !named && head is None {
+    // (with nothing over it, neither back nor what the frame keeps over it: as far down as a wide page's head stands,
+    // not at the window's top)
+    let alone = back is None && top <= 0.0
     blocks.push(fn() {
-      c.box(style=pg_title_box, fn() {
+      c.box(style=if alone { pg_title_box_alone } else { pg_title_box }, fn() {
         if small != "" {
           c.text(small, style=secondary) |> ignore
         }
@@ -1428,6 +1431,11 @@ let pg_back_line : @ui.Style = @ui.css("row w=Full px=S2_5 pt=S1_5 pb=S1 align=A
 /// The large title (LargeTitle: 16 in, 6 under it), what it does at its end.
 // kept across runs: a value (no field of it changes)
 let pg_title_box : @ui.Style = @ui.css("w=Full px=S4 pb=S1_5")
+
+///|
+/// The large title with nothing over it (no back, no frame's bar): 40 under the top, as a wide page's head (desk_head).
+// kept across runs: a value (no field of it changes)
+let pg_title_box_alone : @ui.Style = @ui.css("w=Full px=S4 pt=S10 pb=S1_5")
 
 ///|
 // kept across runs: a value (no field of it changes)
