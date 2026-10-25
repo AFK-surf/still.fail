@@ -8,7 +8,11 @@
 /// line where it has one (a station's, a profile's), its first line (`head`: its title and what is at its end), the lines
 /// under it (`under`), then `after` over it all (a ripple). `high`: as high as a chat's row always is (the theme's
 /// `row`), else as what it holds (`item`); `faded`: its words faded (a chat settled); `end_room`: room kept at its
-/// first line's end (for what a caller lays over it there: 归档). Its box, the one pressed.
+/// first line's end (for what a caller lays over it there: 归档); `corner`: what stands in its foot's end corner (a
+/// chat's people and agents), `corner_w` wide, placed there by the corner rule: where its ground is rounded (a side
+/// column's), as far in from the row's end and foot as makes it concentric with the row's corner (the theme's
+/// `aside_end`), its room kept at the end of the lines under the first (across the whole screen, square, the caller
+/// says it in its lines). Its box, the one pressed.
 pub fn list_row(
   c : @ui.Ctx,
   id : Int,
@@ -20,6 +24,8 @@ pub fn list_row(
   high? : Bool = false,
   faded? : Bool = false,
   end_room? : Double = 0.0,
+  corner? : () -> Unit,
+  corner_w? : Double = 0.0,
   after? : () -> Unit = fn() {  },
 ) -> Int {
   let l = theme().chat_list
@@ -31,12 +37,36 @@ pub fn list_row(
     }
     c.box(style=if faded { l.text_settled } else { l.text }, fn() {
       c.box(style=if end_room > 0.0 { l.head.then(@ui.style(pr=room(end_room))) } else { l.head }, head) |> ignore
-      under()
+      match (corner, at) {
+        // (the room what stands in the corner keeps at the end of the lines under the first)
+        (Some(_), Side) =>
+          c.box(style=list_row_under_line, fn() {
+            c.box(style=list_row_under, under) |> ignore
+            // (as wide as what stands in the corner: list_row `corner_w`)
+            c.box(style=@ui.style(w=Fixed(corner_w)), fn() {  }) |> ignore
+          })
+          |> ignore
+        _ => under()
+      }
     })
     |> ignore
+    match (corner, at) {
+      (Some(k), Side) => c.box(right=l.aside_end, bottom=l.aside_end, k) |> ignore
+      _ => ()
+    }
     after()
   })
 }
+
+///|
+// kept across runs: a value (no field of it changes)
+let list_row_under : @ui.Style = @ui.style(w=grow)
+
+///|
+// kept across runs: a value (no field of it changes)
+let list_row_under_line : @ui.Style = @ui.css("row w=Full")
+
+
 
 ///|
 /// A line under a row's first line (SidebarList.css.ts line): as high as a chat's second line, its parts beside each

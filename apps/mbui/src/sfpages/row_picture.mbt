@@ -3,6 +3,50 @@
 // once) and its people's faces, those that lead first.
 
 ///|
+/// Whether a row shows who is in it at its end (row_aside: its agents, the people where they are not all the viewer).
+pub fn row_aside_shows(item : ChatItem, lead : String) -> Bool {
+  @sfbase.row_agent_groups(item).length() > 0 || row_with_people(item, lead)
+}
+
+///|
+fn row_with_people(item : ChatItem, lead : String) -> Bool {
+  let people = item.people
+  people.length() > 0 && (lead == "people" || people.iter().any(fn(p) { !p.mine }))
+}
+
+///|
+/// How wide what row_aside shows is, by its parts' sizes (the theme's chats' list): the room a row keeps for it where
+/// it stands in the row's corner, out of the line's flow (list_row `corner`).
+pub fn row_aside_w(c : @ui.Ctx, item : ChatItem, lead : String) -> Double {
+  let l = @sf.theme().chat_list
+  let groups = @sfbase.row_agent_groups(item)
+  let people = item.people
+  let more_w = fn(n : Int) { @ui.text_advance("+\{n}", size=c.sp(c.text_size(Meta).0)) }
+  let parts : Array[Double] = []
+  if groups.length() > 0 {
+    let shown = if groups.length() > aside_most { aside_most } else { groups.length() }
+    let mut w = aside_in + shown.to_double() * aside_agent_w + (shown - 1).to_double() * aside_agent_gap
+    if groups.length() > aside_most {
+      w = w + aside_agent_gap + more_w(groups.length() - aside_most)
+    }
+    parts.push(w)
+  }
+  if row_with_people(item, lead) {
+    let shown = if people.length() > aside_most { aside_most } else { people.length() }
+    // (each after the first over the one before it by face_over)
+    let mut w = aside_in + l.face_d + (shown - 1).to_double() * (l.face_d - face_over)
+    if people.length() > 1 && people[:shown].iter().any(fn(p) { p.id == item.creator }) {
+      w = w + face_gap_w
+    }
+    if people.length() > shown {
+      w = w + more_w(people.length() - shown)
+    }
+    parts.push(w)
+  }
+  parts.fold(init=0.0, fn(a, b) { a + b }) + (parts.length() - 1).to_double() * aside_parts_gap
+}
+
+///|
 /// Who is in a chat at its row's second line's end (RowAside, `size` 16 with a mouse, 18 with a finger: Sidebar.tsx,
 /// mobile/Home.tsx): its agents' marks (a maker's once, `size` less 4 in a column 16 wide, 4 apart; past three, +N)
 /// and its people (round, each 3 over the one before with a pixel of the row's ground round it; who started it, of
@@ -15,11 +59,10 @@ pub fn row_aside(
   item : ChatItem,
   lead : String,
   ground : Int64,
-  lift? : Double = 0.0,
 ) -> Unit {
   let groups = @sfbase.row_agent_groups(item)
   let people = item.people
-  let with_people = people.length() > 0 && (lead == "people" || people.iter().any(fn(p) { !p.mine }))
+  let with_people = row_with_people(item, lead)
   if groups.length() == 0 && !with_people {
     return
   }
@@ -73,7 +116,7 @@ pub fn row_aside(
     })
     |> ignore
   }
-  c.box(style=aside_row, ty=-lift, fn() {
+  c.box(style=aside_row, fn() {
     if lead == "people" {
       if with_people {
         faces()
@@ -97,6 +140,23 @@ pub fn row_aside(
 /// A face at a row's end (its size the theme's chats' list): 3 over the one before it (RowPicture.css.ts aside
 /// overlap(3)); its ground a pixel round it, who started it ringed 2 out; three shown at most.
 let face_over : Double = 3.0
+
+///|
+/// What stands at a row's end, measured as its styles lay it (aside_row, aside_agents, aside_agent, aside_faces,
+/// face_gap): 2 in, an agent 16 and 4 apart, the agents and the people 6 apart, a pixel after who started it.
+let aside_in : Double = 2.0
+
+///|
+let aside_agent_w : Double = 16.0
+
+///|
+let aside_agent_gap : Double = 4.0
+
+///|
+let aside_parts_gap : Double = 6.0
+
+///|
+let face_gap_w : Double = 1.0
 
 ///|
 let face_ring_in : Double = 1.0
