@@ -1149,3 +1149,33 @@ test "a box resized by what holds it, its cause the same, has its ground its new
   assert_eq(@motion.layout_rest("box"), -1.0)
   t.assert_idle()
 }
+
+///|
+test "placed: drawn where what it reads is as this frame lays it out, never a frame behind" {
+  let room = Ref::new(0.0)
+  let t = @ui.Tester::new(fn(c) {
+    c.column(fn() {
+      c.box(w=Px(10.0), h=Px(room.val), fn() {  }) |> ignore
+      let target = c.box(w=Px(10.0), h=Px(10.0), bg=0xFF0000FFL, fn() {  })
+      @motion.measure(c, target, "target")
+      c.layer(fn() {
+        let b = c.box(w=Px(10.0), h=Px(10.0), bg=0x00FF00FFL, fn() {  })
+        // 20 under the target, wherever that is
+        @motion.placed(c, b, fn() {
+          match @motion.measured_rect(c, "target") {
+            Some((x, y, _, _)) => @ui.look(dx=x, dy=y + 20.0)
+            None => @ui.look(alpha=0.0)
+          }
+        })
+      })
+      |> ignore
+    })
+    |> ignore
+  })
+  assert_eq(drawn_box(t, 0x00FF00FFL), (0.0, 20.0, 10.0, 10.0))
+  // the target moved by what is over it: in the same frame, where it now is
+  room.val = 50.0
+  t.frame()
+  assert_eq(drawn_box(t, 0xFF0000FFL).1, 50.0)
+  assert_eq(drawn_box(t, 0x00FF00FFL), (0.0, 70.0, 10.0, 10.0))
+}
