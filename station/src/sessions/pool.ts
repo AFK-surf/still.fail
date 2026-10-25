@@ -144,7 +144,7 @@ export function fallbackEfforts(runtime: string): string[] {
   // Grok Build's models offer these (grok.ts); a model's own list comes with it.
   if (runtime === "grok") return ["low", "medium", "high", "xhigh"];
   // Cursor's models say their effort in the model's own name (id[reasoning=…], agents/cursor.ts): none apart.
-  if (runtime === "cursor") return [];
+  if (runtime === "cursor" || runtime === "hermes") return [];
   // Devin's are its models' thinking levels (agents/devin.ts); a model's own list comes with it.
   if (runtime === "devin") return ["low", "medium", "high", "xhigh", "max"];
   return ["low", "medium", "high", "xhigh", "max"];

@@ -167,6 +167,10 @@ export function linkAgentHome(agentHome: string, profiles: ProfileHome[]) {
     // Each runtime it runs reads the memory under its own name (Codex and DeepSeek Harness both AGENTS.md).
     for (const name of new Set(runtimes.filter((r) => r !== "grok").map((runtime) => (runtime === "claude" ? "CLAUDE.md" : "AGENTS.md")))) link(memory, join(home, name));
     linkSkills(skills, join(home, "skills"));
+    if (runtimes.includes("hermes")) {
+      mkdirSync(join(home, "hermes"), { recursive: true });
+      linkSkills(skills, join(home, "hermes", "skills"));
+    }
     // Grok Build's home is its own directory in the profile's (agents/grok.ts): AGENTS.md and skills/ there.
     if (runtimes.includes("grok")) {
       mkdirSync(join(home, "grok"), { recursive: true });

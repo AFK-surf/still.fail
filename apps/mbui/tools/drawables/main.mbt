@@ -1,5 +1,5 @@
-// still.fail's pictures as its Android app draws them, for mbui: the vector drawables of apps/android's
-// shared/src/main/res/drawable (the model makers' marks, Slack's, still.fail's own mark, the illustrations) and the
+// still.fail's pictures for mbui: this app's vector drawables, with legacy marks and illustrations from
+// apps/android/shared/src/main/res/drawable (the model makers' marks, Slack's, still.fail's own mark) and the
 // station glyphs of its ui/Icons.kt (StationIcons), and this app's own launcher icon (apps/mbui/android: launcher_face
 // on launcher_bg, the middle 72 of its 108 as a launcher shows it), into src/sf/drawable_data.mbt as mbui's
 // @pixels.Vector (path strings), which src/sf/picture.mbt draws.
@@ -15,7 +15,7 @@ let drawables : Array[String] = [
   "maker_anthropic", "maker_openai", "maker_deepseek", "maker_qwen", "maker_zhipu", "maker_gemini", "maker_kimi", "maker_minimax",
   "maker_xai", "maker_mistral", "maker_xiaomi", "maker_ant_ling", "maker_openrouter", "maker_vercel", "maker_cloudflare",
   "maker_azure", "maker_groq", "maker_together", "maker_fireworks", "maker_cerebras", "maker_huggingface", "maker_nvidia",
-  "maker_baseten", "maker_dsh", "maker_cursor", "maker_devin", "slack", "feishu", "stillfail_mark", "stillfail_mark_dark",
+  "maker_baseten", "maker_dsh", "maker_cursor", "maker_devin", "maker_hermes", "slack", "feishu", "stillfail_mark", "stillfail_mark_dark",
   "illus_sign_in", "illus_sign_in_dark", "illus_new_chat", "illus_new_chat_dark", "illus_no_station", "illus_no_station_dark",
   // the stations' pages (src/sfapp/settings/stations.mbt): the buddy's faces, a station asleep
   "buddy_idle", "buddy_idle_dark", "buddy_working", "buddy_working_dark", "buddy_offline", "buddy_offline_dark", "illus_station_offline",
@@ -361,6 +361,7 @@ fn main {
   }
   let repo = argv[1]
   let res = @sys.join(repo, "apps/android/shared/src/main/res/drawable")
+  let own_drawables = @sys.join(repo, "apps/mbui/android/app/src/main/res/drawable")
   let icons = @sys.join(repo, "apps/android/shared/src/main/kotlin/fail/still/android/ui/Icons.kt")
   let out = StringBuilder()
   let line = fn(s : String) {
@@ -372,7 +373,12 @@ fn main {
   line("///|")
   line("let drawables : Map[String, @pixels.Vector] = {")
   for name in drawables {
-    let xml = match @sys.read_text(@sys.join(res, name + ".xml")) {
+    // New marks belong to this app; the frozen Kotlin app supplies the legacy artwork only.
+    let source = match @sys.read_text(@sys.join(own_drawables, name + ".xml")) {
+      Some(x) => Some(x)
+      None => @sys.read_text(@sys.join(res, name + ".xml"))
+    }
+    let xml = match source {
       Some(x) => x
       None => {
         fail("no \{name}.xml")

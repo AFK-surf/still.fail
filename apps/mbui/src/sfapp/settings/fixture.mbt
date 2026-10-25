@@ -266,7 +266,7 @@ pub fn fixture_page(mode : String) -> String {
     "settings-adb" => "adb:ws1/st1"
     "settings-profile-menu" | "settings-profile-lower" | "settings-profile-login" | "settings-profile-login-station" =>
       "profile:ws1/st1#cc"
-    "settings-new-profile" | "settings-new-profile-login" | "settings-new-profile-login-station" => "new-profile:ws1/st1"
+    "settings-new-profile" | "settings-new-profile-hermes" | "settings-new-profile-login" | "settings-new-profile-login-station" => "new-profile:ws1/st1"
     "settings-connect-menu" | "settings-connect-mode" => "connect:ws1/st1#k1"
     "settings-connect-run" | "settings-slack-app" => "connect:ws1/st1#k1"
     "settings-new-connect" | "settings-new-connect-platform" | "settings-new-connect-scan" | "settings-new-connect-app" =>
@@ -1250,7 +1250,7 @@ pub fn fixture_topic(mode : String, name : String, params : Map[String, Json]) -
         ]),
       )
     "profileFlow" if fx.new_login => Some(fx_profile_flow_plan())
-    "profileFlow" => Some(fx_profile_flow())
+    "profileFlow" => Some(fx_profile_flow(hermes=mode == "settings-new-profile-hermes"))
     "pick" if text(Some(Json::object(params)), "of").has_prefix("session:") => Some(fx_session_pick())
     "connectFlow" if fx_connect_step.val != "team" && fx_connect_step.val != "app" =>
       Some(fx_feishu_flow(fx_connect_step.val))
@@ -2009,34 +2009,41 @@ fn fx_profile_flow_plan() -> Json {
 
 ///|
 /// A new profile's draft at its first step (`profileFlow`): the providers by group.
-fn fx_profile_flow() -> Json {
+fn fx_profile_flow(hermes? : Bool = false) -> Json {
   let provider = fn(id : String, name : String, group : String, runtime : String, mark : String) {
     obj([("id", str(id)), ("name", str(name)), ("group", str(group)), ("kind", str("api-provider")), ("runtime", str(runtime)), ("mark", str(mark))])
+  }
+  let groups : Array[Json] = [
+    obj([
+      ("id", str("labs")),
+      ("title", str("模型厂商")),
+      (
+        "providers",
+        [
+          provider("openai", "OpenAI", "labs", "codex", "openai"),
+          provider("anthropic", "Anthropic", "labs", "claude", "anthropic"),
+          provider("deepseek", "DeepSeek", "labs", "", "deepseek"),
+          provider("kimi", "Kimi", "labs", "", "kimi"),
+        ],
+      ),
+    ]),
+    obj([("id", str("gateways")), ("title", str("中转站")), ("providers", [provider("openrouter", "OpenRouter", "gateways", "", "openrouter")])]),
+  ]
+  if hermes {
+    groups.push(obj([
+      ("id", str("local")), ("title", str("自定义变量")),
+      ("providers", [obj([
+        ("id", str("env-hermes")), ("name", str("Hermes Agent")), ("group", str("local")),
+        ("kind", str("env")), ("runtime", str("hermes")),
+      ])]),
+    ]))
   }
   obj([
     ("step", str("pick")),
     ("station", str("ws1/st1")),
     ("title", str("选择服务商")),
     ("hint", str("订阅和 API key 都在这里添加，选择服务商开始")),
-    (
-      "groups",
-      [
-        obj([
-          ("id", str("labs")),
-          ("title", str("模型厂商")),
-          (
-            "providers",
-            [
-              provider("openai", "OpenAI", "labs", "codex", "openai"),
-              provider("anthropic", "Anthropic", "labs", "claude", "anthropic"),
-              provider("deepseek", "DeepSeek", "labs", "", "deepseek"),
-              provider("kimi", "Kimi", "labs", "", "kimi"),
-            ],
-          ),
-        ]),
-        obj([("id", str("gateways")), ("title", str("中转站")), ("providers", [provider("openrouter", "OpenRouter", "gateways", "", "openrouter")])]),
-      ],
-    ),
+    ("groups", Json::array(groups)),
     ("choices", []),
     ("showEndpoint", Json::boolean(false)),
     ("endpoint", str("")),

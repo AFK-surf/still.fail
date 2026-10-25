@@ -287,7 +287,7 @@ export class TranscriptTail {
         usage.contextTokens = input;
         const model = r.data?.message?.source?.model;
         if (typeof model === "string") usage.model = model;
-      } else if (this.runtime === "cursor" || this.runtime === "devin") {
+      } else if (this.runtime === "cursor" || this.runtime === "devin" || this.runtime === "hermes") {
         // A Cursor turn's counts as the station's driver kept them (agents/cursor-bridge.mjs): the whole run's, not each
         // call's, so they say no context. Devin's driver keeps its turns' the same way (agents/devin.ts), with the context
         // the turn ended with and the model's window where Devin said them.

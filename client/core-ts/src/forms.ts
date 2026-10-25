@@ -800,7 +800,7 @@ const usesTextOf = present.usesText;
 const runtimeName = format.runtimeLabel;
 
 /// The runtimes a station runs only where its overview's `updates` lists them.
-const LISTED = ["dsh", "grok", "cursor", "devin"];
+const LISTED = ["dsh", "grok", "cursor", "devin", "hermes"];
 
 /// The runtimes a station can run: Claude Code and Codex on any; DeepSeek Harness, Grok Build, Cursor and Devin each on one
 /// that lists its version (a station from before it does not, and is not offered it).

@@ -122,6 +122,7 @@ export function howToUpdate(kind: Kind, found: Found, env: Env): How | Unable {
   const realPath = found.real.split(platform.paths.separator).join("/");
   const name = kindName(kind);
   if (kind === "station") return new Unable("");
+  if (kind === "hermes") return new Unable("station.updates.hermesExternal");
   // The Devin CLI's installer keeps its versions under its data directory (devin/cli/_versions), the command a link to
   // the current one: the installer again fetches the latest and switches it (`devin update` wants a terminal: without
   // one it ends at once, nothing done).
@@ -202,6 +203,7 @@ CODEX_HOME="$1" CODEX_INSTALL_DIR="$2" CODEX_NON_INTERACTIVE=1 sh -c "$installer
 /// none, `node`'s: installed first), Devin by its own installer (into ~/.local/bin too).
 export function howToInstall(kind: Kind, env: Env, node: OwnNode | null = null): How | Unable {
   if (kind === "station") return new Unable("");
+  if (kind === "hermes") return new Unable("station.updates.hermesExternal");
   if (kind === "claude") return platform.claudeInstall;
   if (kind === "devin") return platform.devinInstall;
   // DeepSeek Harness is an npm package (it runs on the Node npm is of: 22.19 or newer).

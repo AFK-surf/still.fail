@@ -140,7 +140,7 @@ const entriesOf = (dir: string): string[] | null => {
 /// dsh-sessions/ as dsh.ts sets it, Grok Build's grok/sessions/, Cursor's and Devin's cursor/sessions/ and devin/sessions/
 /// as cursor.ts and devin.ts keep them. In a home the station keeps it is a link to the runtime's shared place
 /// (`sharedTranscripts`, sessions/agent-home.ts `linkTranscripts`).
-export const transcriptDir = (runtime: string) => (runtime === "claude" ? "projects" : runtime === "codex" ? "sessions" : runtime === "grok" ? "grok/sessions" : runtime === "cursor" ? "cursor/sessions" : runtime === "devin" ? "devin/sessions" : "dsh-sessions");
+export const transcriptDir = (runtime: string) => (runtime === "claude" ? "projects" : runtime === "codex" ? "sessions" : runtime === "grok" ? "grok/sessions" : runtime === "cursor" ? "cursor/sessions" : runtime === "devin" ? "devin/sessions" : runtime === "hermes" ? "hermes/sessions" : "dsh-sessions");
 
 /// The one place a runtime's transcripts are kept on the station, whichever account's home wrote them.
 export const sharedTranscripts = (dataDir: string, runtime: string) => join(dataDir, "transcripts", runtime);
@@ -181,7 +181,7 @@ const elsewhere = new Map<string, string>();
 function transcriptIn(runtime: RuntimeKind, dir: string, id: string): string | null {
   if (runtime === "dsh") return dshTranscript(dir, id);
   if (runtime === "grok") return grokTranscript(dir, id);
-  if (runtime === "cursor" || runtime === "devin") {
+  if (runtime === "cursor" || runtime === "devin" || runtime === "hermes") {
     const path = join(dir, `${id}.jsonl`);
     return isFile(storage(path)) ? path : null;
   }
@@ -319,7 +319,7 @@ export function timelineOf(runtime: RuntimeKind, record: Json, state: ReadState,
   if (runtime === "claude") claudeTimeline(record, state, out);
   else if (runtime === "dsh") dshTimeline(record, out);
   else if (runtime === "grok") grokTimeline(record, out);
-  else if (runtime === "cursor" || runtime === "devin") cursorTimeline(record, out);
+  else if (runtime === "cursor" || runtime === "devin" || runtime === "hermes") cursorTimeline(record, out);
   else codexTimeline(record, state, out);
 }
 

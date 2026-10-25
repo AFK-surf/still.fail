@@ -3,6 +3,7 @@
 // Names, descriptions and input schemas are the Rust station's, byte for byte (test/hub-tools.test.ts reads them from
 // hub.rs and compares); what they do is src/sessions/.
 import { sandboxed } from "../agents/sandbox.ts";
+import { RUNTIME_KINDS } from "../agents/runtime.ts";
 import { chatHistory, chatPost, chatState, mayStage, fromSandbox, staged, target } from "../sessions/conversations.ts";
 import type { Hub } from "../sessions/hub.ts";
 import { sessionSend } from "../sessions/messages.ts";
@@ -360,15 +361,8 @@ export const CHAT_CREATE = {
       },
       "runtime": {
         "type": "string",
-        "enum": [
-          "claude",
-          "codex",
-          "dsh",
-          "grok",
-          "cursor",
-          "devin"
-        ],
-        "description": "Its agent's runtime (dsh: DeepSeek Harness, grok: Grok Build, cursor: Cursor, devin: Devin). Default: that of its model."
+        "enum": RUNTIME_KINDS,
+        "description": "Its agent's runtime (dsh: DeepSeek Harness, grok: Grok Build, cursor: Cursor, devin: Devin, hermes: Hermes Agent). Default: that of its model."
       },
       "model": {
         "type": "string",

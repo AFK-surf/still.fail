@@ -14,6 +14,7 @@ import { CodexDriver } from "../agents/codex.ts";
 import { DshDriver } from "../agents/dsh.ts";
 import { GrokDriver } from "../agents/grok.ts";
 import { CursorDriver } from "../agents/cursor.ts";
+import { HermesDriver } from "../agents/hermes.ts";
 import { DevinDriver } from "../agents/devin.ts";
 import { Jobs, notifyEndpoint, screenEndpoint } from "../jobs/jobs.ts";
 import { liveMemory } from "../jobs/memory.ts";
@@ -222,6 +223,7 @@ export const AgentsLive = (control: Control) =>
           new GrokDriver({ data }),
           new CursorDriver({ data }),
           new DevinDriver({ data }),
+          new HermesDriver({ data }),
         ],
         mcpUrl: () => door?.url ?? "",
         internal: new InternalChat(),

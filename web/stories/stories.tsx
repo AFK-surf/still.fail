@@ -854,6 +854,7 @@ export const stories: Story[] = [
   { id: "app-profile-pick-models-reading", group: "应用", title: "添加 Profile · 选择模型 · 正在读取", app: true, demo: pickModelsDemo(true), steps: [{ click: '[aria-label="Profile"]' }, { text: "添加 Profile" }, { text: ADD }] },
   { id: "app-profile-pick-models", group: "应用", title: "添加 Profile · 选择模型", app: true, demo: pickModelsDemo(false), steps: [{ click: '[aria-label="Profile"]' }, { text: "添加 Profile" }, { text: ADD }] },
   { id: "app-profile-add-devin", group: "应用", title: "添加 Profile · 选择服务商（Cursor、Devin 只有订阅）", app: true, demo: cursorPickDemo(true), steps: [{ click: '[aria-label="Profile"]' }, { text: "添加 Profile" }] },
+  { id: "app-profile-add-hermes", group: "应用", title: "添加 Profile · Hermes Agent · 环境变量", app: true, demo: cursorPickDemo(true, true), steps: [{ click: '[aria-label="Profile"]' }, { text: "添加 Profile" }] },
   { id: "app-profile-devin", group: "应用", title: "Profile · Devin 订阅", app: true, demo: devinAccount(false), steps: [{ click: '[aria-label="Profile"]' }, { text: "lin@acme.dev" }] },
   { id: "app-profile-devin-signing-in", group: "应用", title: "Profile · Devin 重新登录（贴回代码）", app: true, demo: devinAccount(true), steps: [{ click: '[aria-label="Profile"]' }, { text: "lin@acme.dev" }] },
   { id: "pick-workspace-models", group: "选模型", title: "模型 · 本机、借用的、可借用的", render: () => borrowStory(false), steps: [{ click: "text=Opus 5.5" }] },

@@ -89,6 +89,25 @@ test "wide: adding a profile picks its provider from the core's groups, the mach
 }
 
 ///|
+test "wide: the station's Hermes profile can be selected from its custom variables" {
+  let calls : Array[Made] = []
+  let t = wide_tester(calls, mode="settings-new-profile-hermes")
+  t.draw()
+  app.nav.push(Setting(@settings.Route::NewProfile("ws1/st1")))
+  t.run_for(@ui.nav_push_ms)
+  desk_shown(t, "Hermes Agent")
+  match t.find("Hermes Agent") {
+    Some((x, y)) => t.tap(x, y)
+    None => abort("no Hermes Agent")
+  }
+  t.draw()
+  assert_true(
+    calls.iter().any(fn(m) { m.name == "profile.flow.edit" && text(field(Some(m.params), "input"), "provider") == "env-hermes" }),
+    msg="the selected Hermes profile told to the core",
+  )
+}
+
+///|
 test "wide: a new profile's models chosen on a page of their own, then on to its page" {
   let calls : Array[Made] = []
   let t = wide_tester(calls, mode="settings")

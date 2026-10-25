@@ -144,7 +144,7 @@ export interface AgentEnvDraft {
 }
 
 /** A runtime: Claude Code, Codex, DeepSeek Harness, Grok Build, Cursor or Devin. */
-export type RuntimeKind = "claude" | "codex" | "dsh" | "grok" | "cursor" | "devin";
+export type RuntimeKind = "claude" | "codex" | "dsh" | "grok" | "cursor" | "devin" | "hermes";
 
 export interface AgentProcess {
 	pgid: number;

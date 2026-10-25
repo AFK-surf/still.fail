@@ -69,7 +69,7 @@ export function callsOf(runtime: Runtime, text: string, subagent: boolean, state
       runtime === "claude" ? line.includes('"usage"')
       : runtime === "dsh" ? line.startsWith('{"type":"assistant/message"') && line.includes('"usage"')
       : runtime === "grok" ? line.startsWith('{"type":"stillfail/usage"')
-      : runtime === "cursor" || runtime === "devin" ? line.includes('"type":"usage"')
+      : runtime === "cursor" || runtime === "devin" || runtime === "hermes" ? line.includes('"type":"usage"')
       : line.includes("token_count") || line.includes("turn_context") || line.includes("session_meta");
     if (!wanted) continue;
     let r: unknown;
@@ -91,7 +91,7 @@ export function callsOf(runtime: Runtime, text: string, subagent: boolean, state
         input: n(get(usage, "input")), cacheRead: n(get(usage, "cacheRead")), cacheWrite: n(get(usage, "cacheWrite")), cacheWriteLong: 0,
         output: n(get(usage, "output")),
       });
-    } else if (runtime === "cursor" || runtime === "devin") {
+    } else if (runtime === "cursor" || runtime === "devin" || runtime === "hermes") {
       // What the station's driver kept of each Cursor turn (agents/cursor-bridge.mjs): the SDK's counts, input apart
       // from the cache's; of each Devin turn the same (agents/devin.ts).
       const usage = get(r, "usage");
@@ -647,7 +647,7 @@ export class UsageCounter {
     // station's own (cursor.ts, devin.ts).
     const homes = config.profiles.map((p) => p.home);
     for (const s of sessions) {
-      if ((s.runtime !== "dsh" && s.runtime !== "grok" && s.runtime !== "cursor" && s.runtime !== "devin") || (wanted !== null && !wanted.has(s.key))) continue;
+      if ((s.runtime !== "dsh" && s.runtime !== "grok" && s.runtime !== "cursor" && s.runtime !== "devin" && s.runtime !== "hermes") || (wanted !== null && !wanted.has(s.key))) continue;
       const runtime = s.runtime;
       for (const id of store.runtimeSessions(s.key)) {
         const transcript = transcriptPaths(runtime, config.dataDir, homes, [id]).paths[0];

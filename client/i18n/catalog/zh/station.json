@@ -495,5 +495,6 @@
   "station.relay.relayed": "{who} 把对话接力到了 {place}",
   "station.relay.untitled": "未命名对话",
   "station.relay.pick": "请选择要接力到的连接和频道",
-  "station.relay.threadIn": "{place} 的一个 thread"
+  "station.relay.threadIn": "{place} 的一个 thread",
+  "station.updates.hermesExternal": "请在该机器上安装 Hermes 0.21.7 或更新版本及 ACP、MCP 组件，并配置模型服务；更新由 Hermes 自行管理。"
 }

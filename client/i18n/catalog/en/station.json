@@ -501,5 +501,6 @@
   "station.relay.relayed": "{who} relayed this chat to {place}",
   "station.relay.untitled": "Untitled chat",
   "station.relay.pick": "Pick the connect and channel to relay to",
-  "station.relay.threadIn": "a thread in {place}"
+  "station.relay.threadIn": "a thread in {place}",
+  "station.updates.hermesExternal": "Install Hermes 0.21.7 or newer with its ACP and MCP extras and configure its provider on this machine; manage updates with Hermes."
 }
