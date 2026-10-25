@@ -580,6 +580,8 @@ let en : Map[String, String] = {
   "common.language.en": "English",
   "common.language.system": "System",
   "common.language.zh": "中文",
+  "common.login.backToStation": "Back to {station}'s browser",
+  "common.login.openInStation": "Open in {station}'s browser",
   "common.provider.title": "API provider",
   "common.reading": "Loading",
   "common.reconnecting": "Reconnecting",

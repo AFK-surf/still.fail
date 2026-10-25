@@ -311,7 +311,7 @@ pub fn open_item(
 /// One of a station's screens in the viewer (AppState.openScreen; remote/ScreenActivity.kt): `title`, the row's,
 /// until the core says one (screen_view.mbt).
 pub fn open_screen(station : String, screen : String, title : String?) -> Unit {
-  open_page(Screen({ station, screen, title: title.unwrap_or("") }))
+  open_page(Screen({ station, screen, title: title.unwrap_or(""), until_gone: false }))
 }
 
 ///|

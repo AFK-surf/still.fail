@@ -63,7 +63,8 @@ export const mStepN = style({
   display: "inline-flex", alignItems: "center", justifyContent: "center", flex: "none", width: "20px", height: "20px", marginTop: "0",
   borderRadius: "50%", background: "var(--m-chip)", fontSize: vars.textCaption, fontWeight: "600",
 });
-export const mStepBody = style({ paddingLeft: "30px" });
+/** What a step has: its page's button, and under it the same page in the station's browser where it has one. */
+export const mStepBody = style({ paddingLeft: "30px", display: "flex", flexDirection: "column", alignItems: "flex-start", gap: "8px" });
 /** The code's field and what sends it, on one line. */
 export const mCodeRow = style({ display: "flex", alignItems: "center", gap: "8px" });
 /** A sign-in card with its buttons at its foot (or the code's field and what sends it): they sit in its bottom corners,

@@ -1,7 +1,7 @@
 import type { MachineLogin, RuntimeInstall } from "../core/shapes.ts";
 import { profilesPage, stationBase, useStation, useLink } from "../station.tsx";
 import { Chart, ChevronRight, Edit, External, LogIn, Plus, Refresh, Trash } from "@stillfail/ui/icons.tsx";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Link, useNavigate, useParams } from "react-router";
 import { useAction, useApi, useMemberships, useOverview, useProfiles, type AccessKind, type LoginJob, type Overview, type ProfileInput, type Profile } from "../api.ts";
 import { KEYED, RUNTIME_LABEL } from "../format.ts";
@@ -28,6 +28,7 @@ import * as conversationCss from "../styles/conversation.css.ts";
 import * as chatCss from "../styles/chat.css.ts";
 
 import { NAME } from "../channel.ts";
+import { useInStation } from "../screen/InStation.tsx";
 import { t } from "../i18n.ts";
 import { tx } from "../cloud/words.tsx";
 import * as pageCss from "@stillfail/ui/styles/page.css.ts";
@@ -504,6 +505,8 @@ function SignIn({ profile, needed }: { profile: Profile; needed: boolean }) {
   const start = useAction(() => api.startLogin(profile.id));
   const cancel = useAction(() => api.cancelLogin(profile.id));
   const send = useAction(() => api.loginCode(profile.id, code), () => setCode(""));
+  const station = useStation().address;
+  const inStation = { ask: () => api.loginBrowser(profile.id), busy: useDoing("profile.loginBrowser", { station, id: profile.id }) };
   const active = job && ["starting", "needs_code", "needs_approval", "verifying"].includes(job.state);
   const provider = profile.signInProvider ?? "";
   // Announce a sign-in finishing while the page is open, not one that finished earlier.
@@ -539,7 +542,7 @@ function SignIn({ profile, needed }: { profile: Profile; needed: boolean }) {
   return (
     <div className={`${pagesCss.card} ${css.signIn}`} aria-live="polite">
       <div className={pagesCss.cardRowText}><strong>{t("web-pages.profiles.signingIn", { provider })}</strong><span className={shellCss.muted}>{t("web-pages.profiles.signingInNote")}</span></div>
-      <LoginSteps job={job} provider={provider} code={code} setCode={setCode} send={() => void send.run()} sending={send.busy} sendError={send.error?.message ?? null} />
+      <LoginSteps job={job} provider={provider} code={code} setCode={setCode} send={() => void send.run()} sending={send.busy} sendError={send.error?.message ?? null} inStation={inStation} />
       {cancel.error && <p className={controlsCss.fieldError} role="alert">{t("web-pages.profiles.cancelFailed", { error: cancel.error.message })}</p>}
       {/* Under the steps, words: the steps' own buttons are what to press. */}
       <div className={pagesCss.cardFoot}><Button variant="ghost" busy={cancel.busy} onClick={() => void cancel.run()}>{t("common.cancel")}</Button></div>
@@ -553,7 +556,7 @@ function SignIn({ profile, needed }: { profile: Profile; needed: boolean }) {
  * pasted there with no trip back; the rest finishes by itself. OpenCode's and Kimi's pages have the code in their address: it is only
  * compared there, not copied. Cursor's has none: its page is only opened, and confirmed there.
  */
-function DeviceCode({ url, code, provider }: { url: string; code: string | null; provider: string }) {
+function DeviceCode({ url, code, provider, there, children }: { url: string; code: string | null; provider: string; there: boolean; children?: ReactNode }) {
   const [copied, setCopied] = useState(false);
   const toast = useToast();
   const filled = provider === "OpenCode" || provider === "Kimi" || code === null;
@@ -565,17 +568,32 @@ function DeviceCode({ url, code, provider }: { url: string; code: string | null;
   return (
     <div className={css.deviceCode}>
       {code !== null && <span className={`${css.deviceCodeValue} ${shellCss.mono}`}>{code}</span>}
-      <Button variant="primary" icon={External} onClick={go}>{filled ? t("web-pages.profiles.openAuth") : copied ? t("web-pages.profiles.copiedReopen") : t("web-pages.profiles.copyOpen")}</Button>
+      <div className={css.stepButtons}>
+        <Button variant={there ? "secondary" : "primary"} icon={External} onClick={go}>{filled ? t("web-pages.profiles.openAuth") : copied ? t("web-pages.profiles.copiedReopen") : t("web-pages.profiles.copyOpen")}</Button>
+        {children}
+      </div>
       <p className={shellCss.muted}>{code === null ? t("web-pages.profiles.deviceCodeNoteCursor") : provider === "OpenCode" ? t("web-pages.profiles.deviceCodeNoteOpencode") : provider === "Kimi" ? t("web-pages.profiles.deviceCodeNoteKimi") : provider === "Grok" ? t("web-pages.profiles.deviceCodeNoteGrok") : t("web-pages.profiles.deviceCodeNote", { name: NAME })}</p>
     </div>
   );
 }
 
 /** What the person does in the browser for a sign-in under way: the link and the code to paste (Claude, Devin), the link
- * and the one-time code to enter (Codex), or the link alone, to confirm there (Cursor). */
-export function LoginSteps({ job, provider, code, setCode, send, sending, sendError }: {
+ * and the one-time code to enter (Codex), or the link alone, to confirm there (Cursor). Where its job says the station
+ * has a browser of its own (`browser`), the same page there (`inStation`: what asks the station to open it), under the
+ * page's button: its tab's view opened here (screen/InStation.tsx); Claude's comes back to its command there, with no
+ * code to paste. */
+export function LoginSteps({ job, provider, code, setCode, send, sending, sendError, inStation }: {
   job: LoginJob | null; provider: string; code: string; setCode(code: string): void; send(): void; sending: boolean; sendError: string | null;
+  inStation?: { ask(): Promise<unknown>; busy: boolean } | undefined;
 }) {
+  const station = useStation();
+  const open = useInStation(station.address);
+  // Its page open in the station's browser: that is where it goes on (回到 … 的浏览器, the solid one).
+  const there = job?.screen !== undefined;
+  const label = t(there ? "common.login.backToStation" : "common.login.openInStation", { station: station.name });
+  const stationStep = inStation && job?.browser
+    ? <Button variant={there ? "primary" : "secondary"} busy={inStation.busy} data-login-station="" onClick={() => open(inStation.ask, label)}>{label}</Button>
+    : null;
   if (!job || job.state === "starting") return <p className={shellCss.muted}><span className={`${conversationCss.activityPulse} ${additionsCss.inline}`} aria-hidden="true" />{t("web-pages.profiles.generatingLink", { provider })}</p>;
   return (
     <>
@@ -583,7 +601,10 @@ export function LoginSteps({ job, provider, code, setCode, send, sending, sendEr
         <ol className={controlsCss.steps}>
           <li>
             <span>{provider === "Devin" ? t("web-pages.profiles.step1Devin", { name: NAME }) : t("web-pages.profiles.step1", { name: NAME })}</span>
-            <a className={`${controlsCss.btn} ${controlsCss.btnPrimary}`} href={job.url} target="_blank" rel="noopener"><External {...ICON} />{t("web-pages.profiles.openAuth")}</a>
+            <div className={css.stepButtonsInStep}>
+              <a className={there ? controlsCss.btn : `${controlsCss.btn} ${controlsCss.btnPrimary}`} href={job.url} target="_blank" rel="noopener"><External {...ICON} />{t("web-pages.profiles.openAuth")}</a>
+              {stationStep}
+            </div>
           </li>
           <li>
             <span>{provider === "Devin" ? t("web-pages.profiles.step2Devin") : t("web-pages.profiles.step2")}</span>
@@ -597,7 +618,7 @@ export function LoginSteps({ job, provider, code, setCode, send, sending, sendEr
         </ol>
       )}
       {/* No code where the page only asks to confirm (Cursor's). */}
-      {job.state === "needs_approval" && job.url && <DeviceCode url={job.url} code={job.userCode || null} provider={provider} />}
+      {job.state === "needs_approval" && job.url && <DeviceCode url={job.url} code={job.userCode || null} provider={provider} there={there}>{stationStep}</DeviceCode>}
       {job.state === "verifying" && <p className={shellCss.muted}><span className={`${conversationCss.activityPulse} ${additionsCss.inline}`} aria-hidden="true" />{t("web-pages.profiles.finishing")}</p>}
       {job.state === "done" && <p className={shellCss.muted}><span className={`${conversationCss.activityPulse} ${additionsCss.inline}`} aria-hidden="true" />{t("web-pages.profiles.adding")}</p>}
     </>

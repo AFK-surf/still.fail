@@ -162,6 +162,13 @@ fn add_profile_flow(c : @ui.Ctx, core : Core, s : Json?, online : Array[Json]) -
                   )
                 }
               },
+              in_station=(text(s, "name"), is_doing(core, ["login.browser"], [("station", station), ("id", n.login)]), fn(what) {
+                if n.login != "" {
+                  @settings.act(core, what, "login.browser", obj([("station", str(station)), ("id", str(n.login))]), then=fn(v) {
+                    (core.open_screen)(station, text(Some(v), "screen"))
+                  })
+                }
+              }),
             )
           })
           |> ignore

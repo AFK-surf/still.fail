@@ -15,6 +15,9 @@
 //
 // While driving it, its clipboard goes both ways and files go to its machine (Transfer.tsx): a copy made on it comes
 // onto this device's clipboard, a paste here is pasted there, a file dropped on it (or picked) is put where it says.
+//
+// On a phone a tab of the station's browser is laid out for the stage it is shown on, as the phone's own browser would
+// lay it out (`fit`: docs/remote-screens.md), and a finger taps it where it is.
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { core } from "../core/react.ts";
 import type { ScreenViewState } from "../core/shapes.ts";
@@ -47,7 +50,7 @@ const tell = (name: string, params: Record<string, unknown>) => { core().call(na
 
 const newName = () => (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function" ? crypto.randomUUID() : `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`);
 
-export function ScreenViewer({ station, screen, backLabel, onBack, onWindow, phone = false, panel }: {
+export function ScreenViewer({ station, screen, backLabel, onBack, onWindow, onGone, phone = false, panel }: {
   /** The station's address (`<workspace>/<id>`). */
   station: string;
   /** The screen's id on it (`desktop`, `browser:<target>`). */
@@ -56,6 +59,8 @@ export function ScreenViewer({ station, screen, backLabel, onBack, onWindow, pho
   onBack: () => void;
   /** Opens it in a window of its own (none where it is in one, or cannot be). */
   onWindow?: (() => void) | undefined;
+  /** Its screen gone (a sign-in's tab closed as it ended): what was opened for it is left. */
+  onGone?: (() => void) | undefined;
   /** The phone's way: bars above and below, fingers, the keyboard on asking. */
   phone?: boolean;
   /** Beside a chat, in a tab of its side panel (named there): its page opened instead (`onExpand`). */
@@ -120,8 +125,10 @@ export function ScreenViewer({ station, screen, backLabel, onBack, onWindow, pho
   const [shown, setShown] = useState<Shown | null>(null);
   /** A simulator's screen is touched where it is, as the device's own is (no trackpad to choose). */
   const touchscreen = shown?.kind === "simulator";
+  /** A tab of the station's browser on a phone, laid out for it: tapped where it is, as in the phone's own browser. */
+  const laidOut = phone && shown?.kind === "browser";
   /** A finger drives it as a trackpad (unless this device keeps `direct`), on a phone. */
-  const pad = padKept && phone && !touchscreen;
+  const pad = padKept && phone && !touchscreen && !laidOut;
   const padRef = useRef(pad);
   padRef.current = pad;
   const touchscreenRef = useRef(touchscreen);
@@ -142,6 +149,9 @@ export function ScreenViewer({ station, screen, backLabel, onBack, onWindow, pho
   toastRef.current = toast;
 
   const phase = failure ? "failed" : shown?.phase ?? "connecting";
+  const gone = useRef(onGone);
+  gone.current = onGone;
+  useEffect(() => { if (phase === "gone") gone.current?.(); }, [phase]);
   const live = phase === "live";
   const over = OVER.has(phase);
   const waiting = phase === "connecting" || phase === "reconnecting";
@@ -246,7 +256,10 @@ export function ScreenViewer({ station, screen, backLabel, onBack, onWindow, pho
     };
     void decodable(codec === "h264").then((codecs) => {
       if (!open) return;
-      core().call("screen.view", { station, screen, view: name, codecs, ...viewSize(quality) }, (value, bytes) => {
+      // On a phone, the stage it is shown on: a tab of the station's browser is laid out for it.
+      const s = stage.current;
+      const fit = phone && s && s.clientWidth > 0 && s.clientHeight > 0 ? { fit: { width: s.clientWidth, height: s.clientHeight, scale: window.devicePixelRatio || 1 } } : {};
+      core().call("screen.view", { station, screen, view: name, codecs, ...viewSize(quality), ...fit }, (value, bytes) => {
         if (!open) return;
         const v = value as { state?: ScreenViewState; config?: FrameConfig; frame?: FrameHead; clipboard?: { type?: string; text?: string } };
         if (v.frame) {
@@ -271,7 +284,7 @@ export function ScreenViewer({ station, screen, backLabel, onBack, onWindow, pho
       abort.abort();
       frames.close();
     };
-  }, [station, screen, attempt, quality, codec, place, drawPointer]);
+  }, [station, screen, attempt, quality, codec, place, drawPointer, phone]);
 
   // What is done over the picture, while driving.
   useEffect(() => {
@@ -515,7 +528,7 @@ export function ScreenViewer({ station, screen, backLabel, onBack, onWindow, pho
           {!over && (
             <div className={css.foot}>
               {takeOver ? <>{others}{takeOverButton}</> : modes}
-              {driving && !touchscreen && (
+              {driving && !touchscreen && !laidOut && (
                 <Tip label={t("web-pages.screen.trackpad")}>
                   <button type="button" className={css.keyboard} aria-label={t("web-pages.screen.trackpad")} aria-pressed={pad}
                     onClick={() => { setPrefs({ screenTouch: pad ? "direct" : null }); toast(t(pad ? "web-pages.screen.padOff" : "web-pages.screen.padOn")); }}>
@@ -556,7 +569,7 @@ export function ScreenViewer({ station, screen, backLabel, onBack, onWindow, pho
                     <button type="button" className={css.keyboard} aria-label={control ? t("web-pages.screen.control") : t("web-pages.screen.look")}
                       onClick={() => setControl(!control)}>{control ? <Cursor size={18} /> : <Eye size={18} />}</button>
                   )}
-                  {driving && !touchscreen && (
+                  {driving && !touchscreen && !laidOut && (
                     <button type="button" className={css.keyboard} aria-label={t("web-pages.screen.trackpad")} aria-pressed={pad}
                       onClick={() => { setPrefs({ screenTouch: pad ? "direct" : null }); toast(t(pad ? "web-pages.screen.padOff" : "web-pages.screen.padOn")); }}><Trackpad size={18} /></button>
                   )}

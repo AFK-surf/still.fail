@@ -16,7 +16,7 @@ import { liveClock } from "../ops/fibers.ts";
 import { tr } from "../ops/i18n.ts";
 import { log } from "../ops/log.ts";
 import { type AccessShown, type ScreenHub, ScreenRefused, accessShown } from "../screens/hub.ts";
-import { type Clip, type ClipType, type Codec, type Frame, type FrameConfig, type ScreenInput, type ScreenSource, type ScreenView, CLIP_PNG_MAX, clipFits } from "../screens/source.ts";
+import { type Clip, type ClipType, type Codec, type Frame, type FrameConfig, type ScreenInput, type ScreenSource, type ScreenView, type ViewFit, CLIP_PNG_MAX, clipFits } from "../screens/source.ts";
 import { type Viewer, readOnly } from "./credential.ts";
 import type { Stream } from "./native.ts";
 import { FrameLatency, Pacer, START_RATE, Sizer, ownRate } from "./screen-pace.ts";
@@ -140,13 +140,18 @@ export function parseInput(v: any): ScreenInput | null {
   }
 }
 
-/// What a view's ask says: its bounds (16..8192, 1920×1080 when not said) and the codecs it takes, ours only.
-function asked(screen: any): { maxWidth: number; maxHeight: number; codecs: Codec[]; control: boolean; peek: boolean } {
+/// What a view's ask says: its bounds (16..8192, 1920×1080 when not said), the codecs it takes (ours only), and the
+/// phone it is laid out for (`fit`: 200..2000 CSS pixels a side, scale 1..4; only a view that drives it).
+export function asked(screen: any): { maxWidth: number; maxHeight: number; codecs: Codec[]; control: boolean; peek: boolean; fit?: ViewFit } {
   const bound = (v: unknown, otherwise: number) => (num(v) ? Math.min(8192, Math.max(16, Math.round(v))) : otherwise);
   const codecs = Array.isArray(screen.codecs) ? CODECS.filter((c) => screen.codecs.includes(c)) : [];
   // A preview (`peek`, a link's card in a chat) only looks.
   const peek = screen.peek === true;
-  return { maxWidth: bound(screen.maxWidth, 1920), maxHeight: bound(screen.maxHeight, 1080), codecs, control: screen.control === true && !peek, peek };
+  const control = screen.control === true && !peek;
+  const f = screen.fit;
+  const side = (v: unknown) => num(v) && v >= 200 && v <= 2000;
+  const fit = control && f && side(f.width) && side(f.height) && num(f.scale) && f.scale >= 1 && f.scale <= 4 ? { width: Math.round(f.width), height: Math.round(f.height), scale: f.scale } : undefined;
+  return { maxWidth: bound(screen.maxWidth, 1920), maxHeight: bound(screen.maxHeight, 1080), codecs, control, peek, ...(fit ? { fit } : {}) };
 }
 
 /// A stream whose head says `"screen"` (serve.ts dispatches it): a view of a screen, for as long as both sides keep it.
@@ -180,7 +185,7 @@ export async function answerScreen(hub: ScreenHub, stream: Stream, carry: Buffer
   const control = ask.control && !readOnly(viewer);
   let view: ScreenView;
   try {
-    view = await source.open({ maxWidth: ask.maxWidth, maxHeight: ask.maxHeight, codecs: ask.codecs, bitrate: START_RATE, ...(ask.peek ? { peek: true } : {}) });
+    view = await source.open({ maxWidth: ask.maxWidth, maxHeight: ask.maxHeight, codecs: ask.codecs, bitrate: START_RATE, ...(ask.peek ? { peek: true } : {}), ...(ask.fit && control ? { fit: ask.fit } : {}) });
   } catch (error) {
     if (error instanceof ScreenRefused) {
       // What is missing says it all, and where it is granted.

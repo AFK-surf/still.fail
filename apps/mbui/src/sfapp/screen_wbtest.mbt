@@ -26,7 +26,14 @@ let rig_w : Double = 1280.0
 let rig_h : Double = 720.0
 
 ///|
-fn screen_rig(w? : Double = 390.0, h? : Double = 844.0, dark? : Bool = false, touch? : String = "") -> ScreenRig {
+fn screen_rig(
+  w? : Double = 390.0,
+  h? : Double = 844.0,
+  dark? : Bool = false,
+  touch? : String = "",
+  platform? : Int = 0,
+  until_gone? : Bool = false,
+) -> ScreenRig {
   reset()
   let base = fixture(if dark { "home-dark" } else { "home" })
   let calls : Array[(String, Json, Bytes?)] = []
@@ -84,9 +91,9 @@ fn screen_rig(w? : Double = 390.0, h? : Double = 844.0, dark? : Bool = false, to
     },
     cancel: fn(id) { cancelled.push(id) },
   }
-  let t = @ui.Tester::new(fn(c) { view(c, src) }, w~, h~)
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, w~, h~, platform~)
   t.draw()
-  app.nav.push(Screen({ station: "ws-1/st-1", screen: "browser:tab-1", title: "Chrome" }))
+  app.nav.push(Screen({ station: "ws-1/st-1", screen: "browser:tab-1", title: "Chrome", until_gone }))
   nav_rested(t)
   { t, calls, views, cancelled, answer, touch: touch_ }
 }
@@ -608,6 +615,38 @@ test "over: ended, outdated, gone, denied said in the screen's place; 重新打�
   nav_rested(r.t)
   assert_true(!(app.nav.top() is Screen(_)))
   r.t.draw()
+  screen_done(r.t)
+}
+
+///|
+test "on a phone a page of the station's browser is laid out for the stage it is shown on, and a tap is where it is; one opened for a login goes back by itself once its tab is gone" {
+  let r = screen_rig(platform=2, until_gone=true)
+  let u = r.ui()
+  let fit = field(Some(r.told("screen.view")[0]), "fit")
+  assert_true(u.box_w > 0.0 && u.box_h > 0.0)
+  assert_eq(number(fit, "width"), u.box_w.round())
+  assert_eq(number(fit, "height"), u.box_h.round())
+  assert_true(number(fit, "scale") > 0.0)
+  r.live()
+  assert_true(!r.sess().pad(r.sess().src), msg="driven directly, as the phone's own browser")
+  // its tab closed as the login ended: back to where it was opened from
+  r.state("gone", others=[], message="此屏幕已不存在")
+  r.finish()
+  nav_rested(r.t)
+  assert_true(!(app.nav.top() is Screen(_)))
+  r.t.draw()
+  screen_done(r.t)
+}
+
+///|
+test "a computer lays nothing out for itself; a screen opened from its list stays once it is gone" {
+  let r = screen_rig()
+  assert_true(field(Some(r.told("screen.view")[0]), "fit") is None)
+  r.live()
+  r.state("gone", others=[], message="此屏幕已不存在")
+  r.finish()
+  nav_rested(r.t)
+  assert_true(app.nav.top() is Screen(_))
   screen_done(r.t)
 }
 

@@ -151,6 +151,42 @@ test("a page that gives a code to paste back: the person's on the card (not wait
   core.close();
 });
 
+test("a login the station's own browser can do: its button's words (back to it while its tab is open), its page opened there by the station, the screen to view answered", async () => {
+  const inStation = { ...loopback, browser: true };
+  const { host, core, push } = await started({ ...base(), "GET /machine-logins": { logins: [inStation, device] } });
+  const asked: { method: string; path: string }[] = [];
+  stationReplies(host, (req) => {
+    const path = req.url.replace("https://stillfail.test/admin/api", "");
+    if (!path.startsWith("/machine-logins/")) return undefined;
+    asked.push({ method: req.method, path });
+    return { screen: "browser:T9" };
+  });
+  const ui = core.connect();
+  const values = new Map();
+  subscribe(core, ui, 1, { topic: "machineLogin", station: ST, id: "l2" });
+  subscribe(core, ui, 2, { topic: "machineLogin", station: ST, id: "l1" });
+  await host.settle();
+  drain(host, values);
+  assert.deepEqual([v(values, 1).browser, v(values, 1).screen, v(values, 1).browserText], [true, undefined, "在 studio 的浏览器中打开"]);
+  call(core, ui, 3, "machineLogin.browser", { station: ST, id: "l2" });
+  await host.settle();
+  const emitted = drain(host, values);
+  assert.deepEqual(asked, [{ method: "POST", path: "/machine-logins/l2/browser" }]);
+  assert.deepEqual(answers(emitted, 3)?.ok, { screen: "browser:T9" });
+  push("machine-logins", { login: { ...inStation, screen: "browser:T9" } });
+  await host.settle();
+  drain(host, values);
+  assert.deepEqual([v(values, 1).screen, v(values, 1).browserText], ["browser:T9", "回到 studio 的浏览器"]);
+  // Ended: nothing to open, there or here.
+  push("machine-logins", { login: { ...inStation, state: "done", step: undefined, endedAt: 5 } });
+  await host.settle();
+  drain(host, values);
+  assert.deepEqual([v(values, 1).browser, v(values, 1).browserText], [undefined, undefined]);
+  // A station that cannot (no Chrome, or from before) says nothing of it.
+  assert.equal(v(values, 2).browser, undefined);
+  core.close();
+});
+
 /// Listeners as a desktop app's host has them, here a queue a test hands requests to; what was opened, and what each
 /// request was answered.
 function listeners(refuse: string[] = []) {

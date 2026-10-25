@@ -7,7 +7,8 @@ import { join } from "node:path";
 import { deviceCode, LoginManager, type LoginState, stripAnsi } from "../src/accounts/login.ts";
 import { MachineLogins } from "../src/accounts/machine.ts";
 import { linkCodexAuth } from "../src/agents/machine-logins.ts";
-import { approval, exe, fakeLogin, idToken, machine, sameAs, script, temp, upon } from "./accounts-fakes.ts";
+import { approval, exe, fakeBrowser, fakeLogin, idToken, machine, sameAs, script, temp, upon } from "./accounts-fakes.ts";
+import { WINDOWS } from "../src/platform/index.ts";
 
 test("a subscription sign-in relays the link, the code and the result", async () => {
   const dir = temp("login");
@@ -53,6 +54,49 @@ test("a subscription sign-in relays the link, the code and the result", async ()
     assert.equal(failed.state, "failed");
     assert.ok(failed.error!.startsWith("无法运行登录命令"), failed.error!);
     await none.close();
+  } finally {
+    await logins.close();
+  }
+});
+
+test("a sign-in's page opens in the station's browser: Claude's loopback page (no code to paste), a device code's page; its tab closed as it ends", { skip: WINDOWS && "the stand-in browser writes nothing down on Windows" }, async () => {
+  const dir = temp("login");
+  const fake = join(dir, "fake-login");
+  const approved = approval(dir);
+  // Claude Code opens its loopback page and prints the one to paste a code from.
+  const loopback = "https://claude.com/cai/oauth/authorize?code=true&client_id=x&redirect_uri=http%3A%2F%2Flocalhost%3A54545%2Fcallback&state=y";
+  script(fake, fakeLogin(approved.path).replace('echo "Opening browser to sign in…"', `open '${loopback}'\necho "Opening browser to sign in…"`));
+  const b = fakeBrowser();
+  const logins = new LoginManager(dir, { claude: exe(fake), codex: exe(fake) });
+  logins.attach(b.pages);
+  const until = (profile: string, ok: (j: NonNullable<ReturnType<typeof logins.get>>) => boolean, what: string) =>
+    upon((wake) => logins.changes(wake), () => { const j = logins.get(profile); return j && ok(j) ? j : undefined; }, what);
+  try {
+    const sub = { id: "sub", runtime: "claude" as const, home: join(dir, "homes", "sub") };
+    await logins.start(sub, "zh");
+    const job = await until("sub", (j) => j.state === "needs_code", "needs_code");
+    assert.deepEqual([job.browser, job.screen], [true, undefined]);
+    assert.notEqual(job.url, loopback, "the page to paste a code from is still the one shown");
+    assert.equal(await logins.openPage("sub", "zh"), "browser:T1");
+    assert.deepEqual([...b.tabs.values()], [loopback], "the page it opened, which comes back to it here");
+    await until("sub", (j) => j.screen === "browser:T1", "its tab told");
+    // Started again: the old tab goes with the old sign-in.
+    await logins.start(sub, "zh");
+    assert.equal(b.tabs.size, 0);
+    await until("sub", (j) => j.state === "needs_code", "needs_code again");
+    await logins.openPage("sub", "zh");
+    logins.cancel("sub");
+    assert.deepEqual([b.tabs.size, logins.get("sub")!.screen, logins.get("sub")!.browser], [0, undefined, undefined]);
+    await assert.rejects(logins.openPage("sub", "zh"), /没有需要在浏览器中打开的页面/);
+
+    const cxs = { id: "cxs", runtime: "codex" as const, home: join(dir, "homes", "cxs") };
+    await logins.start(cxs, "zh");
+    await until("cxs", (j) => j.state === "needs_approval", "needs_approval");
+    assert.equal(await logins.openPage("cxs", "zh"), "browser:T3");
+    assert.equal(b.tabs.get("T3"), "https://auth.openai.com/codex/device");
+    await approved.approve();
+    await until("cxs", (j) => j.state === "done", "done");
+    assert.equal(b.tabs.size, 0);
   } finally {
     await logins.close();
   }

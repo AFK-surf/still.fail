@@ -562,6 +562,8 @@ let zh : Map[String, String] = {
   "common.language.en": "English",
   "common.language.system": "跟随系统",
   "common.language.zh": "中文",
+  "common.login.backToStation": "回到 {station} 的浏览器",
+  "common.login.openInStation": "在 {station} 的浏览器中打开",
   "common.provider.title": "API 服务商",
   "common.reading": "正在读取",
   "common.reconnecting": "正在重新连接",

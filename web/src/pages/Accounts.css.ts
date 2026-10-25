@@ -15,6 +15,10 @@ export const envRow = style({
 export const signIn = style({});
 /** Codex's device sign-in: the code, large, then the one button that copies it and opens the page it goes into. */
 export const deviceCode = style({ display: "grid", justifyItems: "start", gap: "10px" });
+/** A sign-in step's page opened here, and beside it the same page in the station's own browser. */
+export const stepButtons = style({ display: "flex", flexWrap: "wrap", alignItems: "center", gap: "8px" });
+/** …under a numbered step's words. */
+export const stepButtonsInStep = style([stepButtons, { marginTop: "6px" }]);
 export const deviceCodeValue = style({
   fontSize: vars.textHeading, fontWeight: "600", letterSpacing: "0.08em", padding: "6px 12px",
   borderRadius: `calc(10px * ${vars.cornerScale})`, cornerShape: vars.cornerShape,

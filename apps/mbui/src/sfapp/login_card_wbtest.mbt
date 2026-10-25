@@ -2,7 +2,12 @@
 
 ///|
 /// The fixture's chat, its login `login` and the station's logins letting the viewer finish it.
-fn login_core(calls : Array[Made], login : Json, answer? : (String) -> Json = fn(_) { Json::object({}) }) -> @ui.Tester {
+fn login_core(
+  calls : Array[Made],
+  login : Json,
+  answer? : (String) -> Json = fn(_) { Json::object({}) },
+  relay? : Bool = true,
+) -> @ui.Tester {
   reset()
   let base = fixture("chat")
   let src : Source = {
@@ -10,7 +15,7 @@ fn login_core(calls : Array[Made], login : Json, answer? : (String) -> Json = fn
     topic: fn(name, params) {
       match name {
         "machineLogin" => { value: Some(login), error: None, version: 1 }
-        "machineLogins" => { value: Some({ "canLogin": true, "canRelay": true }), error: None, version: 1 }
+        "machineLogins" => { value: Some({ "canLogin": true, "canRelay": Json::boolean(relay) }), error: None, version: 1 }
         _ => (base.topic)(name, params)
       }
     },
@@ -94,3 +99,45 @@ test "a device login: its code large, 复制并打开 copies it and opens its pa
   assert_true(t.opened().contains("https://github.com/login/device"))
 }
 
+
+///|
+test "a login the station's own browser can do: 在 Studio 的浏览器中打开 under its step (machineLogin.browser) opens its tab's view, gone back from once the login ends" {
+  let calls : Array[Made] = []
+  let t = with_logins(
+    login_core(
+      calls,
+      login_of([
+        ("step", "loopback"),
+        ("url", "https://accounts.google.com/o/oauth2/auth"),
+        ("browser", true),
+        ("browserText", "在 Studio 的浏览器中打开"),
+      ]),
+      answer=fn(name) { if name == "machineLogin.browser" { { "screen": "browser:T1" } } else { Json::object({}) } },
+    ),
+  )
+  t.tap_text("在 Studio 的浏览器中打开")
+  let asked = named(calls, "machineLogin.browser")
+  assert_eq(asked.length(), 1)
+  assert_eq(text(Some(asked[0].params), "id"), "login-1")
+  match app.nav.top() {
+    Screen(at) => assert_eq((at.station, at.screen, at.until_gone), ("ws1/st1", "browser:T1", true))
+    _ => assert_true(false, msg="its tab's view opened")
+  }
+}
+
+///|
+test "a device that cannot take a loopback's callback: the station's browser is its step; a station with none, said so" {
+  let calls : Array[Made] = []
+  let page = "https://login.microsoftonline.com/x"
+  let t = with_logins(
+    login_core(
+      calls,
+      login_of([("step", "loopback"), ("url", Json::string(page)), ("browser", true), ("browserText", "在 Studio 的浏览器中打开")]),
+      relay=false,
+    ),
+  )
+  assert_true(t.find("在 Studio 的浏览器中打开") is Some(_))
+  assert_true(t.find("这一步要在桌面或安卓 app 里完成") is None)
+  let none = with_logins(login_core(calls, login_of([("step", "loopback"), ("url", Json::string(page))]), relay=false))
+  assert_true(none.find("这一步要在桌面或安卓 app 里完成") is Some(_))
+}

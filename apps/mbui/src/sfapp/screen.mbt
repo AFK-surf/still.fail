@@ -46,6 +46,9 @@ priv struct ScreenSess {
   mut wants_control : Bool?
   /// a finger drives it as a trackpad (true) or directly, as chosen here before the prefs say
   mut pad_set : Bool?
+  /// the stage it is laid out for (its width and height, and this device's pixels to a point), on a phone or a tablet:
+  /// a page of the station's browser is laid out as this device's own browser would; None: as it is
+  mut fit : (Double, Double, Double)?
   /// the open call (the core's id of it); 0 while it is not open
   mut call : Int
   /// the last frame acknowledged
@@ -104,6 +107,7 @@ fn screen_sess(src : Source, station : String, screen : String) -> ScreenSess {
         shown_any: false,
         wants_control: None,
         pad_set: None,
+        fit: None,
         call: 0,
         acked: -1.0,
         stream: None,
@@ -301,10 +305,12 @@ fn ScreenSess::frame_size(self : ScreenSess) -> (Int, Int)? {
 
 ///|
 /// A finger drives it as a trackpad (it moves the pointer, a tap clicks where that points), or directly (a tap clicks
-/// where it is): as chosen here, else as this device keeps it (`prefs.screenTouch`).
+/// where it is): as chosen here, else directly on a page laid out for this device (`fit`: a tap is where it is, as in
+/// the device's own browser), else as this device keeps it (`prefs.screenTouch`).
 fn ScreenSess::pad(self : ScreenSess, src : Source) -> Bool {
   match self.pad_set {
     Some(on) => on
+    None if self.fit is Some(_) && text(self.state, "kind") == "browser" => false
     None => text((src.topic)("prefs", {}).value, "screenTouch") != "direct"
   }
 }
@@ -334,6 +340,15 @@ fn ScreenSess::open(self : ScreenSess, src : Source) -> Unit {
     "codecs": Json::array(codecs),
     "maxWidth": Json::number(screen_max_w.to_double()),
     "maxHeight": Json::number(screen_max_h.to_double()),
+  }
+  match self.fit {
+    Some((w, h, scale)) =>
+      params["fit"] = Json::object({
+        "width": Json::number(w.round()),
+        "height": Json::number(h.round()),
+        "scale": Json::number(scale),
+      })
+    None => ()
   }
   // not said until the person chooses: the core decides (only looking while another drives)
   match self.wants_control {

@@ -33,6 +33,7 @@ import * as chatCss from "./styles/chat.css.ts";
 import { NAME } from "../channel.ts";
 import { t } from "../i18n.ts";
 import { StationMark } from "../StationMark.tsx";
+import { useInStation } from "../screen/InStation.tsx";
 import { StationInWords, StationNamedAt } from "../StationNamed.tsx";
 function useApi() {
   const station = useStation();
@@ -952,6 +953,7 @@ function SignIn({ p, head }: { p: Profile; head: ReactNode }) {
   const provider = p.access.kind === "opencode-go" ? "OpenCode" : p.access.provider === "kimi-code" ? "Kimi" : p.runtime === "claude" ? "Claude" : p.runtime === "grok" ? "Grok" : p.runtime === "cursor" ? "Cursor" : p.runtime === "devin" ? "Devin" : "ChatGPT";
   const busy = useDoing("profile.login", { station: useStation().address, id: p.id });
   const cancelling = useDoing("profile.cancelLogin", { station: useStation().address, id: p.id });
+  const inStationBusy = useDoing("profile.loginBrowser", { station: useStation().address, id: p.id });
   const [manual, setManual] = useState(false);
   const previous = useRef(job?.state);
   useEffect(() => {
@@ -971,7 +973,7 @@ function SignIn({ p, head }: { p: Profile; head: ReactNode }) {
           </button>
         )}
       </div>
-      {active ? <LoginSteps job={job} provider={provider} send={(code) => api.loginCode(p.id, code)} /> : signInAsked(p) ? (
+      {active ? <LoginSteps job={job} provider={provider} send={(code) => api.loginCode(p.id, code)} inStation={{ ask: () => api.loginBrowser(p.id), busy: inStationBusy }} /> : signInAsked(p) ? (
         <>
           {/* What was off, or how it is done, in words. */}
           {job?.state === "failed" ? <p className={`${partsCss.mError} ${partsCss.mSmall}`}>{t("web-mobile.profiles.loginFailed", { error: job.error ?? "" })}</p>
@@ -1007,9 +1009,20 @@ function InstallStep({ install }: { install: RuntimeInstall }) {
   );
 }
 
-/** What the person does in the browser for a sign-in under way: open the page and paste the code back (Claude, Devin), copy the code and open the page (Codex), or only open the page and confirm there (Cursor). */
-function LoginSteps({ job, provider, send }: { job: LoginJob | null | undefined; provider: string; send: (code: string) => Promise<unknown> }) {
+/** What the person does in the browser for a sign-in under way: open the page and paste the code back (Claude, Devin), copy the code and open the page (Codex), or only open the page and confirm there (Cursor). Where its job says the
+ * station has a browser of its own (`browser`), the same page there under the page's button (`inStation`: what asks the
+ * station to open it): its tab's view opened here (screen/InStation.tsx); Claude's comes back to its command there, with
+ * no code to paste. */
+function LoginSteps({ job, provider, send, inStation }: {
+  job: LoginJob | null | undefined; provider: string; send: (code: string) => Promise<unknown>; inStation?: { ask(): Promise<unknown>; busy: boolean } | undefined;
+}) {
   const app = useApp();
+  const station = useStation();
+  const open = useInStation(station.address);
+  // Its page open in the station's browser: that is where it goes on (回到 … 的浏览器, the solid one).
+  const there = job?.screen !== undefined;
+  const label = t(there ? "common.login.backToStation" : "common.login.openInStation", { station: station.name });
+  const stationStep = inStation && job?.browser ? <Button label={label} primary={there} busy={inStation.busy} onClick={() => open(inStation.ask, label)} /> : null;
   const [code, setCode] = useState("");
   const operation = useAction(send, () => setCode(""));
   const busy = operation.busy;
@@ -1024,7 +1037,8 @@ function LoginSteps({ job, provider, send }: { job: LoginJob | null | undefined;
     return (
       <>
         <p className={`${partsCss.mMuted} ${partsCss.mSmall}`}>{t("web-mobile.profiles.cursorNote")}</p>
-        <Button label={t("web-mobile.profiles.openAuth")} primary onClick={() => void window.open(job.url!, "_blank", "noopener")} />
+        <Button label={t("web-mobile.profiles.openAuth")} primary={!there} onClick={() => void window.open(job.url!, "_blank", "noopener")} />
+        {stationStep}
       </>
     );
   }
@@ -1034,8 +1048,9 @@ function LoginSteps({ job, provider, send }: { job: LoginJob | null | undefined;
         <span className={css.mDeviceCode}>{job.userCode}</span>
         <p className={`${partsCss.mMuted} ${partsCss.mSmall}`}>{provider === "OpenCode" ? t("web-mobile.profiles.opencodeNote") : provider === "Kimi" ? t("web-mobile.profiles.kimiNote") : provider === "Grok" ? t("web-mobile.profiles.grokNote") : t("web-mobile.profiles.codexNote", { name: NAME })}</p>
         {/* OpenCode's and Kimi's pages have the code in their address: only compared there, not copied. */}
-        <Button label={filled ? t("web-mobile.profiles.openAuth") : copied ? t("web-mobile.profiles.reopen") : t("web-mobile.profiles.copyOpen")} primary
+        <Button label={filled ? t("web-mobile.profiles.openAuth") : copied ? t("web-mobile.profiles.reopen") : t("web-mobile.profiles.copyOpen")} primary={!there}
           onClick={() => { if (filled) return void window.open(job.url!, "_blank", "noopener"); void navigator.clipboard.writeText(job.userCode!).then(() => setCopied(true), () => app.toast(t("web-mobile.profiles.copyCodeFailed"))).finally(() => window.open(job.url!, "_blank", "noopener")); }} />
+        {stationStep}
       </>
     );
   }
@@ -1045,7 +1060,7 @@ function LoginSteps({ job, provider, send }: { job: LoginJob | null | undefined;
     return (
       <>
         <p className={css.mStep}><span className={css.mStepN}>1</span>{provider === "Devin" ? t("web-mobile.profiles.step1ShortDevin", { name: NAME }) : t("web-mobile.profiles.step1Short", { name: NAME })}</p>
-        <span className={css.mStepBody}><Button label={t("web-mobile.profiles.openAuth")} primary={!code.trim()} onClick={() => void window.open(job.url!, "_blank", "noopener")} /></span>
+        <span className={css.mStepBody}><Button label={t("web-mobile.profiles.openAuth")} primary={!code.trim() && !there} onClick={() => void window.open(job.url!, "_blank", "noopener")} />{stationStep}</span>
         <p className={css.mStep}><span className={css.mStepN}>2</span>{t("web-mobile.profiles.step2Short")}</p>
         {error && <p className={partsCss.mError}>{error}</p>}
         <div className={css.mCodeRow}>
@@ -1125,6 +1140,7 @@ export function NewProfileScreen() {
   }, [d?.tile?.id, d?.step, kind]); // eslint-disable-line react-hooks/exhaustive-deps
   const [login, setLogin] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const inStationBusy = useDoing("login.browser", { station: station.address, id: login ?? "" });
   const pending = login ? overview?.logins.find((l) => l.id === login) : undefined;
   // What the plan signs in to (the core's): a runtime's subscription, or OpenCode's account for OpenCode Go.
   const runtime = d?.signIn?.runtime ?? (d?.tile?.runtime === "codex" || d?.tile?.runtime === "grok" || d?.tile?.runtime === "cursor" || d?.tile?.runtime === "devin" ? d.tile.runtime : "claude");
@@ -1180,7 +1196,8 @@ export function NewProfileScreen() {
               <p className={partsCss.mError}>{error ?? pending?.error ?? job?.error ?? t("web-mobile.profiles.loginIncomplete")}</p>
               <Button label={t("web-mobile.profiles.restart")} primary={false} onClick={() => { if (login) api.dropLogin(login).catch(dropped); setLogin(null); setError(null); void begin(); }} />
             </>
-          ) : <LoginSteps job={job} provider={provider} send={(code) => api.newLoginCode(login!, code)} />
+          ) : <LoginSteps job={job} provider={provider} send={(code) => api.newLoginCode(login!, code)}
+            inStation={login ? { ask: () => api.newLoginBrowser(login), busy: inStationBusy } : undefined} />
         ) : (
           <ConnectForm key={d.tile?.id} d={d} edit={edit} busy={submitting}
             onSubmit={() => { submit().then(({ id }) => go(id, t("web-mobile.profiles.verifiedAdded")), () => undefined); }} />

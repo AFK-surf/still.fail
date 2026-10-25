@@ -573,9 +573,10 @@ fn fixture_chat_topic(f : Fixture, name : String, params : Map[String, Json]) ->
     }
     // chat-login: the login's page to open in the browser, for one who may (its pill opens it in a tab over the app;
     // what apps/android's MbuiCompareTest pictures beside it)
-    "machineLogins" if f.mode == "chat-login" => Some({ "canLogin": true, "canRelay": true })
-    "machineLogin" if f.mode == "chat-login" =>
-      Some({
+    // chat-login-station: the same, where the station's own browser can open it too
+    "machineLogins" if f.mode == "chat-login" || f.mode == "chat-login-station" => Some({ "canLogin": true, "canRelay": true })
+    "machineLogin" if f.mode == "chat-login" || f.mode == "chat-login-station" => {
+      let l : Map[String, Json] = {
         "id": "login-1",
         "title": "在 Studio 上登录 gh",
         "state": "browser",
@@ -584,7 +585,13 @@ fn fixture_chat_topic(f : Fixture, name : String, params : Map[String, Json]) ->
         "domain": "github.com",
         "active": true,
         "statusText": "在浏览器里完成登录",
-      })
+      }
+      if f.mode == "chat-login-station" {
+        l["browser"] = Json::boolean(true)
+        l["browserText"] = Json::string("在 Studio 的浏览器中打开")
+      }
+      Some(Json::object(l))
+    }
     "machineLogin" =>
       Some({
         "id": "login-1",

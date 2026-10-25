@@ -225,6 +225,18 @@ export const LOGINS: Record<string, MachineLoginShown> = {
     url: "https://accounts.google.com/o/oauth2/auth?response_type=code&client_id=32555940559.apps.googleusercontent.com&redirect_uri=http%3A%2F%2Flocalhost%3A8085%2F",
     statusText: "等你打开浏览器",
   }),
+  // The station has a browser of its own: the same step there (docs/remote-login.md, 在 station 的浏览器中登录); its
+  // tab open, back to it.
+  inStation: login("inStation", "gcloud auth login", {
+    step: "loopback", port: 8085, domain: "accounts.google.com", browser: true, browserText: "在 Studio 的浏览器中打开",
+    url: "https://accounts.google.com/o/oauth2/auth?response_type=code&client_id=32555940559.apps.googleusercontent.com&redirect_uri=http%3A%2F%2Flocalhost%3A8085%2F",
+    statusText: "等你打开浏览器",
+  }),
+  inStationOpen: login("inStationOpen", "gcloud auth login", {
+    step: "loopback", port: 8085, domain: "accounts.google.com", browser: true, browserText: "回到 Studio 的浏览器", screen: "browser:T1",
+    url: "https://accounts.google.com/o/oauth2/auth?response_type=code&client_id=32555940559.apps.googleusercontent.com&redirect_uri=http%3A%2F%2Flocalhost%3A8085%2F",
+    statusText: "等你打开浏览器",
+  }),
   open: login("open", "npm login", { step: "open", url: "https://www.npmjs.com/login?next=/login/cli/6f1c2b", domain: "www.npmjs.com", statusText: "在浏览器里完成登录" }),
   paste: login("paste", "devin auth login --force-manual-token-flow", {
     step: "open", domain: "app.devin.ai", waiting: false, paste: true,

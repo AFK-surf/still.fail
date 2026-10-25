@@ -75,12 +75,16 @@ export function parseScreen(name: string, params: unknown, bytes?: Uint8Array): 
       const control = get(params, "control");
       // A preview (a link's card in a chat): only looking, whoever drives it.
       const peek = get(params, "peek") === true;
+      // The stage a phone shows it on: a tab of the station's browser laid out for it (none for a preview).
+      const f = get(params, "fit");
+      const [w, h, scale] = [get(f, "width"), get(f, "height"), get(f, "scale")];
+      const fit = !peek && finite(w) && finite(h) && finite(scale) && w > 0 && h > 0 && scale > 0 ? { width: Math.round(w), height: Math.round(h), scale } : null;
       return {
         kind: "view",
         station,
         screen: text(params, "screen"),
         view: text(params, "view"),
-        ask: { maxWidth: size("maxWidth", MAX_WIDTH), maxHeight: size("maxHeight", MAX_HEIGHT), codecs, control: control !== false && !peek, ...(peek ? { peek: true } : {}) },
+        ask: { maxWidth: size("maxWidth", MAX_WIDTH), maxHeight: size("maxHeight", MAX_HEIGHT), codecs, control: control !== false && !peek, ...(peek ? { peek: true } : {}), ...(fit ? { fit } : {}) },
         auto: !peek && typeof control !== "boolean",
       };
     }
@@ -341,8 +345,9 @@ export function screensChanged(inner: Inner, station: string): void {
   for (const view of openIn(inner).values()) if (view.station === station) view.listed();
 }
 
-/// How a view's stream ended (`dropped`: it went, `seen` whether a frame came on it first), or why it could not open.
-type Outcome = { ended: string | null } | { reopen: true } | { dropped: true; seen: boolean } | { failed: CoreError };
+/// How a view's stream ended (`gone`: its screen went, a tab closed; `dropped`: the stream went, `seen` whether a frame
+/// came on it first), or why it could not open.
+type Outcome = { ended: string | null; gone?: true } | { reopen: true } | { dropped: true; seen: boolean } | { failed: CoreError };
 
 /// What a failure to open a view says the view is now: done for good (a phase), or worth trying again (null). The
 /// station's statuses (docs/remote-screens.md): 404 no such screen, 400/415 no codec in common, 501 not supported here,
@@ -598,7 +603,8 @@ function view(inner: Inner, c: Extract<ScreenCall, { kind: "view" }>, progress: 
                 if (s.ended !== undefined && s.ended !== null && s.ended !== false) {
                   // The station stopping (an update, a restart): opened again once it is back.
                   if (s.ended === "stopping") return { dropped: true, seen } as Outcome;
-                  return { ended: s.ended === "gone" ? t("core-views.screen.gone") : typeof s.ended === "string" && s.ended !== "" && s.ended !== "finished" ? s.ended : null } as Outcome;
+                  if (s.ended === "gone") return { ended: t("core-views.screen.gone"), gone: true } as Outcome;
+                  return { ended: typeof s.ended === "string" && s.ended !== "" && s.ended !== "finished" ? s.ended : null } as Outcome;
                 }
                 tell();
               }
@@ -612,7 +618,8 @@ function view(inner: Inner, c: Extract<ScreenCall, { kind: "view" }>, progress: 
       const outcome = yield* attempt(wanted);
       if ("reopen" in outcome) continue;
       if ("ended" in outcome) {
-        state.phase = "ended";
+        // Its screen gone (a tab closed) is over for good, as one no longer listed: nothing to open again.
+        state.phase = outcome.gone ? "gone" : "ended";
         state.message = outcome.ended ?? t("core-views.screen.ended");
         delete state.cursor;
         tell();

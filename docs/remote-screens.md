@@ -25,7 +25,8 @@
   to Chrome's DevTools as it is, from which the station learns the tabs the session opens (a `Target.createTarget`
   asked on it and the `targetId` its answer gives; a tab one of those opens, by its `openerId`, is the session's too).
   It is kept in `<data>/browser/owners.json` beside the profile, so the next station process taking the browser up
-  still knows, and forgotten as a tab goes. The address stays when Chrome is started again or another station process
+  still knows, and forgotten as a tab goes. The station opens tabs of its own too, nobody's: a login's page for a person
+  to finish there (docs/remote-login.md, 在 station 的浏览器中登录; `StationBrowser.openTab`), closed as the login ends. The address stays when Chrome is started again or another station process
   takes the door (the door's socket is the launcher's), so a client that lost its connection connects to it again;
   connecting starts the browser if it is not running. Only programs on this machine reach it (the door's rule for
   `/peer`). A tab opened at Chrome's own port is nobody's. When a session is archived or deleted, the tabs it opened
@@ -74,6 +75,12 @@ JPEG frames are all key frames and their config has no `description`.
   With `"peek": true` it is a preview (a link's card in a chat, below): it only looks (`control` is false), is not in
   `viewers`, and brings no tab forward (a tab behind another casts nothing then); only of a screen the list says
   `peek` (a tab of the browser: the desktop's view wakes its display), else 501.
+  With `"fit": {width, height, scale}` (a phone's or a tablet's stage, in its CSS pixels, 200..2000 a side, and their
+  scale, 1..4; only with `control`) a tab of the browser is laid out for it while the view is open, as that device's own
+  browser would lay it out: Chrome's device emulation on the view's own CDP session (`Emulation.setDeviceMetricsOverride`
+  with `mobile`, the scale at most 2), cast as large as that; it goes with the view (cleared as it ends). Other sources
+  take no notice of it. Clients send it from a touch device's viewer, and a finger then taps such a tab where it is (no
+  trackpad).
   The station answers `{"status":200,"headers":{"content-type":"application/x-stillfail-screen"}}`, or an error status
   with `{error, access?}` (404 no such screen, 400 no codec it knows, 415 none it sends, 501 not supported here, 503
   not now: no grant, the capture failed), then both directions carry frames: a kind byte, the payload's length
@@ -83,7 +90,7 @@ JPEG frames are all key frames and their config has no `description`.
 |---|---|---|
 | 1 `config` | station → client | JSON `{codec:"h265"\|"h264"\|"jpeg", width, height, description?}`: `description` is the hvcC (H.265) or avcC (H.264), base64. Sent first and whenever size or codec changes; the next video frame after it is a key frame. |
 | 2 `video` | station → client | 1 byte flags (bit 0: key frame), 8 bytes timestamp (µs, big-endian), then the frame: H.265 or H.264 as length-prefixed NALs (parameter sets in the config only), or one JPEG. |
-| 3 `state` | station → client | JSON `{cursor?: {x, y, shape}, title?, control?, access?, viewers?: [names], controlledBy?: [names], scale?: {percent, recommended, steps}, video?: {capture, encoder?, hardware?}, latency?: {frame, before}, ended?: reason}`: first `{title, control, access?, video?}` (`video`: what captures the pictures and whether the encoder is the hardware's, for the statistics) (`control`: whether this view's input is taken), then what changes; `latency` each second while frames come (screen-pace.ts `FrameLatency`: ms from a picture's capture to its drawing on the device, and to its going out of the station); `scale`, to a view that drives a screen whose display scale is changed (Windows' desktop), as it opens and after each change it asked; `cursor`: the screen's pointer (0..1 of the frame, its shape a CSS cursor's name, `none` hidden) as it moves, from a source whose pictures leave it out (the desktop's video); `ended`: `finished` (the client finished), `gone` (the source went), `stopping` (the station stops) |
+| 3 `state` | station → client | JSON `{cursor?: {x, y, shape}, title?, control?, access?, viewers?: [names], controlledBy?: [names], scale?: {percent, recommended, steps}, video?: {capture, encoder?, hardware?}, latency?: {frame, before}, ended?: reason}`: first `{title, control, access?, video?}` (`video`: what captures the pictures and whether the encoder is the hardware's, for the statistics) (`control`: whether this view's input is taken), then what changes; `latency` each second while frames come (screen-pace.ts `FrameLatency`: ms from a picture's capture to its drawing on the device, and to its going out of the station); `scale`, to a view that drives a screen whose display scale is changed (Windows' desktop), as it opens and after each change it asked; `cursor`: the screen's pointer (0..1 of the frame, its shape a CSS cursor's name, `none` hidden) as it moves, from a source whose pictures leave it out (the desktop's video); `ended`: `finished` (the client finished), `gone` (the source went: the core says the view's phase is `gone` then, over for good, as for a screen no longer listed), `stopping` (the station stops) |
 | 4 `clipboard` | station → client | 1 byte type (1 text in UTF-8, 2 PNG), the content: the screen's clipboard each time it changes (a copy made on it), only to a view that drives it; not what it held as the view opened. |
 | 16 `input` | client → station | JSON, coordinates normalised to 0..1 of the frame: `{t:"pointer", x, y, buttons, kind:"down"\|"up"\|"move"}`, `{t:"wheel", x, y, dx, dy}`, `{t:"key", kind:"down"\|"up", key, code, mods}`, `{t:"text", text}` (IME/paste result), `{t:"scale", percent}` (the display's scale, one of the `steps` its `scale` said; from a view that drives it), `{t:"reveal", path}` (the file manager showing a file dropped into the view; a screen whose `drop` says `reveal`) |
 | 17 `ack` | client → station | 8 bytes: the timestamp of the last frame it decoded (drawn). What the station sends next goes by them (Pace, below). |
