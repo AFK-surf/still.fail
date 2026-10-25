@@ -1,0 +1,13 @@
+# A chat and a new chat switched by the sidebar on a computer (MBUI_WIN=1280x800): the composer goes between their
+# places, a new chat left leaves by its own way (up out of view as it fades), what comes in is there at once: no page
+# crossfades (docs/motion.md).
+timeout 20000
+until 新建对话
+wait 600
+tap 整理发布清单
+wait 900
+tap 新建对话
+wait 900
+tap 整理发布清单
+wait 900
+exit

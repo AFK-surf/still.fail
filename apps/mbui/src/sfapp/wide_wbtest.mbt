@@ -355,39 +355,38 @@ test "wide: a new chat becomes its chat as the web's: its scene up and away, the
 }
 
 ///|
-test "wide: a chat and a new chat switched by the sidebar as the web's: the composer goes between their places, the rest crossfades" {
+test "wide: a chat and a new chat switched by the sidebar: the composer goes between their places, a new chat left leaves by its own way, what comes in is there at once" {
   let calls : Array[Made] = []
   let t = wide_tester(calls, mode="chat")
   t.run_for(history_fade_ms)
   let (_, cy, _, ch) = composer_glass(t)
-  // to a new chat: the composer from the chat's foot up to its place in the page, the scene coming in
+  // to a new chat: the composer from the chat's foot up to its place in the page, the scene there at once (no page
+  // crossfades)
   t.tap_text("新建对话")
   t.draw()
   let went = t.time()
   assert_true(app.nav.top() == NewChat)
   let (_, y0, _, h0) = composer_glass(t)
   assert_true((y0 + h0 - (cy + ch)).abs() < 1.0, msg="from the chat's foot: \{(y0, h0)} \{(cy, ch)}")
-  t.run_for(@sfdesk.page_cross_ms / 2.0)
-  match t.look_of("新对话") {
-    Some((_, _, a)) => assert_true(a > 0.05 && a < 0.95, msg="coming in: \{a}")
-    None => fail("no 新对话")
-  }
+  assert_eq(t.look_of("新对话").map(fn(l) { l.2 }), Some(1.0))
   t.run_for(went + composer_page_ms + 1.0 - t.time())
   let (_, y1, _, h1) = composer_glass(t)
   assert_true(y1 + h1 < cy - 100.0, msg="in the page's middle: \{(y1, h1)}")
   assert_eq(t.look_of("新对话").map(fn(l) { l.2 }), Some(1.0))
-  // back to the chat by its row: the composer down to its foot, the scene fading over it
+  // back to the chat by its row: the composer down to its foot, the new chat's scene up out of view as it fades (its
+  // own way, as one become its chat leaves), the chat there at once under it
   t.tap_text("整理发布清单")
   t.draw()
   let back = t.time()
   assert_true(app.nav.top() is Chat(_))
-  t.run_for(@sfdesk.page_cross_ms / 2.0)
+  t.run_for(new_leave_ms / 2.0)
   match t.look_of("新对话") {
-    Some((_, _, a)) => assert_true(a > 0.05 && a < 0.95, msg="fading: \{a}")
+    Some((_, _, a)) => assert_true(a > 0.05 && a < 0.95, msg="leaving: \{a}")
     None => fail("the new chat gone at once")
   }
-  t.run_for(back + composer_page_ms + 1.0 - t.time())
+  t.run_for(back + new_leave_ms + 1.0 - t.time())
   assert_true(t.find("新对话") is None)
+  t.run_for(back + composer_page_ms + 1.0 - t.time())
   let (_, y2, _, h2) = composer_glass(t)
   assert_true((y2 + h2 - (cy + ch)).abs() < 1.0, msg="at the chat's foot again: \{(y2, h2)}")
 }

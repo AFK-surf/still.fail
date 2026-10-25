@@ -522,13 +522,13 @@ fn new_notice(c : @ui.Ctx, words : String) -> Int {
 
 ///|
 /// Node `i` of the page as it leaves (`going`: how far up, how far faded): `up`, out of view above as it fades
-/// (madeChat.ts: translateY(-32px) scale(.96)); else fading where it is. While it stays, fading in as it comes from a
-/// chat (switch.mbt).
+/// (madeChat.ts: translateY(-32px) scale(.96)); else fading where it is. While it stays, as it is (come to from a chat,
+/// there at once: switch.mbt).
 fn new_going(c : @ui.Ctx, i : Int, going : (Double, Double)?, up : Bool) -> Unit {
   match going {
     Some((u, _)) if up => c.look(i, @ui.look(alpha=1.0 - u, dy=-new_leave_rise * u, scale=1.0 - new_leave_shrink * u))
     Some((_, f)) => c.look(i, @ui.look(alpha=1.0 - f))
-    None => switch_appear(c, i)
+    None => ()
   }
 }
 
