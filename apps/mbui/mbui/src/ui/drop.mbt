@@ -50,8 +50,8 @@ fn init {
         let id = num("pick").to_int()
         let p : Pick = match fake.val {
           // (a Tester's: the ask Tester::drop_files made, from 1)
-          Some(_) => { host: None, fake: id - 1 }
-          None => { host: Some(@hostapi.dropped_pick(id)), fake: -1 }
+          Some(_) => { hosts: [], got: [], fake: id - 1 }
+          None => { hosts: [@hostapi.dropped_pick(id)], got: [None], fake: -1 }
         }
         p.wait("files dropped")
         dropping.drops.push((num("x"), num("y"), p))

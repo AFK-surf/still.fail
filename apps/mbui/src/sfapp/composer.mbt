@@ -2552,7 +2552,7 @@ fn attach_sheet(
     } else if i > 0 {
       cui.attach = false
       let pick = match @sfpages.recent_photo(i - 1) {
-        Some(photo) => @ui.pick_photo(photo.src)
+        Some(photo) => @ui.pick_photos([photo.src])
         None => None
       }
       match pick {
@@ -2592,6 +2592,15 @@ fn attach_sheet(
     }
     // the camera, the gallery's recent photos, the tile that asks for them (recent.mbt)
     @sfpages.recent_strip(c, tapped_tile)
+    // photos chosen in the strip: 添加 n 个 where the tiles were
+    let adding = @sfpages.recent_adding(c, fn(p) {
+      cui.attach = false
+      cui.picking = Some(p)
+      cui.picking_for = d.key
+    })
+    if adding {
+      return
+    }
     c.box(dir=Row, w=Fill(1.0), pb=18.0, gap=8.0, fn() {
       for item in [
         (photos, tr("android-chat.attach.photos"), "photo"),
@@ -2604,7 +2613,7 @@ fn attach_sheet(
           h=Px(70.0),
           padx=4.0,
           gap=6.0,
-          radius=14.0,
+          radius=@sf.row_corner,
           bg=t.p.chip,
           align=ACenter,
           justify=JCenter,
@@ -2612,8 +2621,8 @@ fn attach_sheet(
           fn() {
             @sf.icon(c, icon, size=22.0, color=t.p.text) |> ignore
             c.text(label, size=t.t.meta, color=t.p.text, wrap=false, line=18.0) |> ignore
-            // Attach.kt: clip(Smooth(14)).clickable
-            @motion.ripple(c, id, 14.0)
+            // (Attach.kt: clip(Smooth(14)).clickable; the ladder's block corner here, as the strip's tiles)
+            @motion.ripple(c, id, @sf.row_corner)
           },
         )
         |> ignore

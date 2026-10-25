@@ -1,7 +1,10 @@
 // ＋'s recent photos and videos (still.fail's Android app, chat/screens/Attach.kt RecentPhotos, latest): the gallery's
 // latest across the top of the sheet after the camera, a video's tile marked with a play badge in its corner, a tap
-// putting one in the message (most of what goes to an agent
-// is a screenshot just taken); read again as the sheet opens and on each answer of the gallery's (@hostapi.gallery_*).
+// putting one in the message (most of what goes to an agent is a screenshot just taken); read again as the sheet opens
+// and on each answer of the gallery's (@hostapi.gallery_*). Several go together as the system's photo picker and
+// chat apps' strips choose them: each tile's ring in its top corner chooses it (numbered in the order chosen), and
+// while some are chosen a tap anywhere on a tile chooses it or not; the tiles under the strip give way to 添加 n 个
+// (recent_adding), which puts them in the message in that order.
 // Without leave to read the gallery the strip's last tile asks for it (显示最近照片); with only the photos chosen for
 // the app (Android 14 on), it chooses more (选择更多照片). A host with no gallery (macOS, iOS, Windows) keeps the
 // tile, which says so. The strip scrolls sideways under the finger (it is no list: a drag area, its offset gliding on
@@ -25,10 +28,12 @@ priv struct Recent {
   mut access : @hostapi.GalleryAccess
   mut reading : @ui.GalleryRead?
   mut photos : Array[@hostapi.GalleryPhoto]
+  /// the photos chosen to go together (their `src`), in the order chosen; none as the sheet opens
+  chosen : Array[String]
 }
 
 ///|
-let recent : Recent = { open: false, answers: -1, access: NoGallery, reading: None, photos: [] }
+let recent : Recent = { open: false, answers: -1, access: NoGallery, reading: None, photos: [], chosen: [] }
 
 ///|
 fn recent_reset() -> Unit {
@@ -37,6 +42,7 @@ fn recent_reset() -> Unit {
   recent.access = NoGallery
   recent.reading = None
   recent.photos = []
+  recent.chosen.clear()
 }
 
 ///|
@@ -103,6 +109,9 @@ fn latest_photos(photos : Array[@hostapi.GalleryPhoto], now : Int64, n : Int) ->
 /// Each frame ＋'s sheet is drawn: the gallery read again as it opens and on each of the system's answers.
 pub fn recent_frame(src : Source, open : Bool) -> Unit {
   let answers = @hostapi.gallery_answers()
+  if open && !recent.open {
+    recent.chosen.clear()
+  }
   if open && (!recent.open || answers != recent.answers) {
     recent.answers = answers
     recent.access = @hostapi.gallery_access()
@@ -121,6 +130,8 @@ pub fn recent_frame(src : Source, open : Bool) -> Unit {
         Some(all) => {
           recent.reading = None
           recent.photos = latest_photos(all, ((src.now)() / 1000.0).to_int64(), recent_most)
+          // (one chosen and gone from the gallery since: not chosen)
+          recent.chosen.retain(fn(s) { recent.photos.iter().any(fn(p) { p.src == s }) })
           @hostapi.log("recent photos: \{recent.photos.length()} of \{all.length()}")
         }
         // (read on the host's side: its word that it is done brings the frame that takes it)
@@ -131,8 +142,48 @@ pub fn recent_frame(src : Source, open : Bool) -> Unit {
 }
 
 ///|
+/// While photos are chosen in the strip, in the room of the tiles under it (as high, so the sheet stays as it is):
+/// 添加 n 个; pressed, the photos chosen read whole as one pick of them, in the order chosen, given to `add`. Whether
+/// some are chosen (the tiles are not drawn then).
+pub fn recent_adding(c : @ui.Ctx, add : (@ui.Pick) -> Unit) -> Bool {
+  let n = recent.chosen.length()
+  if n == 0 {
+    return false
+  }
+  let id = c.id("attach/add")
+  if c.clicked(id) {
+    match @ui.pick_photos(recent.chosen.copy()) {
+      Some(pick) => add(pick)
+      None => ()
+    }
+    recent.chosen.clear()
+  }
+  let words = @sf.t("web-mobile.files.addCount", args=[("n", n.to_string())])
+  c.box(style=recent_add_row, fn() {
+    let b = c.box(style=recent_add, id~, fn() {
+      c.text(words, style=recent_add_words) |> ignore
+      @motion.ripple(c, id, @sf.row_corner)
+    })
+    c.semantics(b, Button, id~, label=words)
+  })
+  |> ignore
+  true
+}
+
+///|
+/// Photo `src` chosen to go with the others, or not any more.
+fn recent_choose(src : String) -> Unit {
+  if recent.chosen.contains(src) {
+    recent.chosen.retain(fn(s) { s != src })
+  } else {
+    recent.chosen.push(src)
+  }
+}
+
+///|
 /// The strip (Attach.kt RecentPhotos): the camera, the recent photos, the tile that asks; `tapped(i)` with the tile
-/// tapped: 0 the camera, 1… a photo, -1 the asking tile.
+/// tapped: 0 the camera, 1… a photo (none chosen: it alone), -1 the asking tile. A photo's ring (a finger's reach round
+/// it), or any of a photo while some are chosen, chooses it or not.
 pub fn recent_strip(c : @ui.Ctx, tapped : (Int) -> Unit) -> Unit {
   // (across the panel it is in, to its sides: scrolled, the tiles go under them)
   c.box(style=@sf.panel_bleed(), fn() { recent_strip_across(c, tapped) }) |> ignore
@@ -168,13 +219,25 @@ fn recent_strip_across(c : @ui.Ctx, tapped : (Int) -> Unit) -> Unit {
         a.animate(to, @motion.tween(500.0, ease=Decel))
       }
       if d.take_tap() {
-        let x = d.x - (match c.rect_of(id) {
-          Some((x0, _, _, _)) => x0
-          None => 0.0
-        }) - 12.0 - a.get()
+        let (x0, y0) = match c.rect_of(id) {
+          Some((x0, y0, _, _)) => (x0, y0)
+          None => (0.0, 0.0)
+        }
+        // (from the first tile's start and top: the row's 12 and 4 in)
+        let x = d.x - x0 - 12.0 - a.get()
+        let y = d.y - y0 - 4.0
         let i = (x / recent_step).to_int()
-        if x >= 0.0 && x - i.to_double() * recent_step <= 92.0 && i < tiles {
-          tapped(if i < 1 + photos.length() { i } else { -1 })
+        let across = x - i.to_double() * recent_step
+        if x >= 0.0 && across <= recent_tile_w && i < tiles {
+          if i >= 1 && i <= photos.length() {
+            if recent_on_ring(across, y) || recent.chosen.length() > 0 {
+              recent_choose(photos[i - 1].src)
+            } else {
+              tapped(i)
+            }
+          } else {
+            tapped(if i == 0 { 0 } else { -1 })
+          }
         }
       }
     }
@@ -186,21 +249,35 @@ fn recent_strip_across(c : @ui.Ctx, tapped : (Int) -> Unit) -> Unit {
       c.box(style=recent_tiles, tx=off, fn() {
         recent_tile(c, fn() { @sf.icon(c, "camera", size=24.0, color=t.p.text) |> ignore })
         for p in photos {
+          let n = match recent.chosen.search(p.src) {
+            Some(k) => k + 1
+            None => 0
+          }
           recent_tile(c, fn() {
-            c.image(p.src, w=Px(recent_tile_w), h=Px(recent_tile_h), radius=14.0, fit=FitCover, bg=0L) |> ignore
-            // a video's still, its play mark in its corner (Attach.kt Thumbnail: 22 round, black at 45%, 6 in)
-            if p.video {
-              c.layer(fn() {
-                c.box(style=recent_video_room, fn() {
-                  c.box(style=recent_play, fn() {
-                    @sf.icon(c, "play", size=14.0, color=0xFFFFFFFFL) |> ignore
+            c.image(p.src, w=Px(recent_tile_w), h=Px(recent_tile_h), radius=@sf.row_corner, fit=FitCover, bg=0L) |> ignore
+            c.layer(fn() {
+              c.box(style=recent_marks, fn() {
+                // its ring in its top corner, chosen its number on the primary
+                c.box(style=recent_ring_room, fn() {
+                  c.box(style=if n > 0 { recent_ring_on } else { recent_ring }, fn() {
+                    if n > 0 {
+                      c.text(n.to_string(), style=recent_ring_words) |> ignore
+                    }
                   })
                   |> ignore
                 })
                 |> ignore
+                // a video's still, its play mark in its foot corner (Attach.kt Thumbnail: 22 round, black at 45%)
+                if p.video {
+                  c.box(style=recent_play, fn() {
+                    @sf.icon(c, "play", size=14.0, color=0xFFFFFFFFL) |> ignore
+                  })
+                  |> ignore
+                }
               })
               |> ignore
-            }
+            })
+            |> ignore
           })
         }
         match ask {
@@ -229,9 +306,82 @@ fn recent_strip_across(c : @ui.Ctx, tapped : (Int) -> Unit) -> Unit {
 let recent_strip_row : @ui.Style = @ui.css("row w=Full pl=S3 pr=S3 pt=S1 pb=S3 gap=S1_5 clip")
 
 ///|
-/// Where a video's play mark sits on its tile: its lower start, 6 in.
+/// What is marked on a photo's tile: its ring at its top end, a video's play mark at its foot's start, each concentric
+/// with the tile's corner (capsule_in).
 // kept across runs: a value (no field of it changes)
-let recent_video_room : @ui.Style = @ui.css("w=Full h=Full p=S1_5 justify=JEnd align=AStart")
+let recent_marks : @ui.Style = @ui.css("w=Full h=Full justify=JBetween align=AStart").then(
+  @ui.style(p=@sf.room_of(recent_mark_in)),
+)
+
+///|
+/// The marks' side (Attach.kt Thumbnail's play mark: 22).
+let recent_mark_side : Double = 22.0
+
+///|
+/// How far in a mark stands from its tile's sides: concentric with its corner (18 round: 7).
+let recent_mark_in : Double = @sf.capsule_in(@sf.row_corner, recent_mark_side)
+
+///|
+/// Whether a tap at (`across`, `down`) on a photo's tile, from its start and top, is on its ring: reached from round
+/// it, as a finger reaches what is smaller than its tip (mbui's finger_reach: the ring grown to @ui.finger_target round
+/// its middle).
+fn recent_on_ring(across : Double, down : Double) -> Bool {
+  let tip = @ui.finger_target()
+  let reach = (if tip > recent_mark_side { tip } else { recent_mark_side }) / 2.0
+  let x = recent_tile_w - recent_mark_in - recent_mark_side / 2.0
+  let y = recent_mark_in + recent_mark_side / 2.0
+  (across - x).abs() <= reach && (down - y).abs() <= reach
+}
+
+///|
+/// The ring's place: across the top of the tile, at its end.
+// kept across runs: a value (no field of it changes)
+let recent_ring_room : @ui.Style = @ui.css("row w=Full justify=JEnd")
+
+///|
+/// A photo's ring, not chosen: white, over a shade of black so that it shows on a white picture too.
+// kept across runs: a value (no field of it changes)
+let recent_ring : @ui.Style = @ui.style(
+  w=Fixed(recent_mark_side),
+  h=Fixed(recent_mark_side),
+  radius=Full,
+  bg=A(Theater, O20),
+  border=B1_5,
+  border_color=OnVeil,
+)
+
+///|
+/// Chosen: filled with the primary (as a checkbox ticked), its number on it.
+// kept across runs: a value (no field of it changes)
+let recent_ring_on : @ui.Style = recent_ring.then(@ui.css("bg=Primary align=ACenter justify=JCenter"))
+
+///|
+// kept across runs: a value (no field of it changes)
+let recent_ring_words : @ui.TextStyle = @ui.text_style(size=Caption, weight=Semibold, color=OnPrimary, wrap=false)
+
+///|
+/// 添加 n 个's row, where the tiles under the strip were (attach_tiles: 18 under it).
+// kept across runs: a value (no field of it changes)
+let recent_add_row : @ui.Style = @ui.css("row w=Full pb=S4_5")
+
+///|
+/// 添加 n 个: as high and round as the tiles it stands for (attach_tile), on the primary.
+// kept across runs: a value (no field of it changes)
+let recent_add : @ui.Style = @ui.style(
+  w=Full,
+  h=Fixed(recent_add_h),
+  radius=@sf.row_radius,
+  bg=Primary,
+  align=ACenter,
+  justify=JCenter,
+)
+
+///|
+let recent_add_h : Double = 70.0
+
+///|
+// kept across runs: a value (no field of it changes)
+let recent_add_words : @ui.TextStyle = @ui.text_style(size=Ui, weight=Semibold, color=OnPrimary, wrap=false)
 
 ///|
 /// A tile of the strip (92 × 122, the chip's grey under it).
@@ -240,12 +390,13 @@ fn recent_tile(c : @ui.Ctx, body : () -> Unit) -> Unit {
 }
 
 ///|
-/// A tile: 92 × 122, 14 round, a quiet ground under it.
+/// A tile: 92 × 122, a block's corner (the ladder's row_corner: what is marked in its corners concentric with it), a
+/// quiet ground under it.
 // kept across runs: a value (no field of it changes)
 let recent_tile_box : @ui.Style = @ui.style(
   w=Fixed(recent_tile_w),
   h=Fixed(recent_tile_h),
-  radius=Xl1_5,
+  radius=@sf.row_radius,
   bg=Neutral,
   clip=true,
   align=ACenter,
@@ -267,16 +418,13 @@ let recent_tiles : @ui.Style = @ui.css("row gap=S1_5")
 /// A video's play mark (Attach.kt Thumbnail: 22 round, black at 45%).
 // kept across runs: a value (no field of it changes)
 let recent_play : @ui.Style = @ui.style(
-  w=Fixed(recent_play_side),
-  h=Fixed(recent_play_side),
+  w=Fixed(recent_mark_side),
+  h=Fixed(recent_mark_side),
   radius=Full,
   bg=A(Theater, O45),
   align=ACenter,
   justify=JCenter,
 )
-
-///|
-let recent_play_side : Double = 22.0
 
 ///|
 /// The tile that asks for the gallery: its picture over what it asks, 8 in.

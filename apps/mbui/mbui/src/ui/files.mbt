@@ -4,9 +4,12 @@
 // a frame's boundary.
 
 ///|
-/// An ask of the system's pickers under way (@hostapi.Pick).
+/// An ask of the system's pickers under way (@hostapi.Pick): one of the host's, or (photos of the gallery picked
+/// together: pick_photos) one for each, answered as one once all of them are, in their order.
 pub struct Pick {
-  priv host : @hostapi.Pick?
+  priv hosts : Array[@hostapi.Pick]
+  /// what each of `hosts` answered (taken from the host as it does)
+  priv got : Array[Array[@hostapi.Picked]?]
   priv fake : Int
 }
 
@@ -26,14 +29,14 @@ pub fn pick(kind : @hostapi.PickKind, hold? : Bool = false) -> Pick? {
     Some(f) => {
       f.pick_asks.push({ kind, frame: g().frame_no, taken: false })
       f.wants = true
-      let p : Pick = { host: None, fake: f.pick_asks.length() - 1 }
+      let p : Pick = { hosts: [], got: [], fake: f.pick_asks.length() - 1 }
       p.wait("a pick")
       Some(p)
     }
     None =>
       match @hostapi.pick(kind, hold~) {
         Some(h) => {
-          let p : Pick = { host: Some(h), fake: -1 }
+          let p : Pick = { hosts: [h], got: [None], fake: -1 }
           p.wait("a pick")
           Some(p)
         }
@@ -43,67 +46,93 @@ pub fn pick(kind : @hostapi.PickKind, hold? : Bool = false) -> Pick? {
 }
 
 ///|
-/// Its id as the host's event names it (outside_pick), a Tester's its ask's place, from 1.
-fn Pick::outside_id(self : Pick) -> Int {
-  match self.host {
-    Some(h) => h.id()
-    None => self.fake + 1
+/// Waited on until the system answers and the answer is taken (hostcall.mbt's outside): each ask of the host's by its
+/// id as the host's event names it (outside_pick), a Tester's by its ask's place, from 1.
+fn Pick::wait(self : Pick, what : String) -> Unit {
+  if self.hosts.is_empty() {
+    outside_start(outside_pick, self.fake + 1, what + " \{self.fake + 1}")
+  }
+  for h in self.hosts {
+    outside_start(outside_pick, h.id(), what + " \{h.id()}")
   }
 }
 
 ///|
-/// Waited on until the system answers and the answer is taken (hostcall.mbt's outside).
-fn Pick::wait(self : Pick, what : String) -> Unit {
-  outside_start(outside_pick, self.outside_id(), what + " \{self.outside_id()}")
-}
-
-///|
-/// A photo of the gallery read whole, as a pick of it (@hostapi.pick_photo): None where the host has no gallery (a
-/// Tester's has none).
-pub fn pick_photo(src : String) -> Pick? {
+/// Photos of the gallery (`srcs`) read whole, as one pick of them in that order (@hostapi.pick_photo, each): None
+/// where the host has no gallery (a Tester's has none).
+pub fn pick_photos(srcs : Array[String]) -> Pick? {
   match fake.val {
     Some(_) => None
-    None =>
-      match @hostapi.pick_photo(src) {
-        Some(h) => {
-          let p : Pick = { host: Some(h), fake: -1 }
-          p.wait("a gallery photo read")
-          Some(p)
+    None => {
+      let hosts = []
+      for src in srcs {
+        match @hostapi.pick_photo(src) {
+          Some(h) => hosts.push(h)
+          None => ()
         }
-        None => None
       }
+      if hosts.is_empty() {
+        None
+      } else {
+        let p : Pick = { hosts, got: hosts.map(fn(_) { None }), fake: -1 }
+        p.wait("a gallery photo read")
+        Some(p)
+      }
+    }
   }
 }
 
 ///|
 /// What was picked, once the system has answered (empty: called off); None while it asks. Taken once.
 pub fn Pick::files(self : Pick) -> Array[@hostapi.Picked]? {
-  let got = self.answer()
-  if got is Some(_) {
-    outside_end(outside_pick, self.outside_id())
+  if self.hosts.is_empty() {
+    let got = self.faked()
+    if got is Some(_) {
+      outside_end(outside_pick, self.fake + 1)
+    }
+    return got
   }
-  got
+  for i, h in self.hosts {
+    if self.got[i] is None {
+      match h.files() {
+        Some(files) => {
+          self.got[i] = Some(files)
+          outside_end(outside_pick, h.id())
+        }
+        None => ()
+      }
+    }
+  }
+  let out = []
+  for got in self.got {
+    match got {
+      Some(files) => out.push_iter(files.iter())
+      None => return None
+    }
+  }
+  // (taken: asked again, nothing)
+  for i in 0..<self.got.length() {
+    self.got[i] = Some([])
+  }
+  Some(out)
 }
 
 ///|
-fn Pick::answer(self : Pick) -> Array[@hostapi.Picked]? {
-  match self.host {
-    Some(p) => p.files()
-    None =>
-      match fake.val {
-        Some(f) if self.fake >= 0 && self.fake < f.pick_asks.length() => {
-          let a = f.pick_asks[self.fake]
-          if a.taken {
-            Some([])
-          } else if g().frame_no <= a.frame {
-            None
-          } else {
-            a.taken = true
-            Some(f.picks.copy())
-          }
-        }
-        _ => Some([])
+/// A Tester's answer: what the test said the pickers give, from the frame after it was asked.
+fn Pick::faked(self : Pick) -> Array[@hostapi.Picked]? {
+  match fake.val {
+    Some(f) if self.fake >= 0 && self.fake < f.pick_asks.length() => {
+      let a = f.pick_asks[self.fake]
+      if a.taken {
+        Some([])
+      } else if g().frame_no <= a.frame {
+        None
+      } else {
+        a.taken = true
+        Some(f.picks.copy())
       }
+    }
+    _ => Some([])
   }
 }
 
