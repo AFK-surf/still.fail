@@ -3,6 +3,8 @@
     <color name="paper">#1B1C1F</color>
     <style name="Theme.StillFail" parent="android:Theme.Material.NoActionBar">
         <item name="android:windowBackground">@color/paper</item>
+        <item name="android:windowSplashScreenBackground">@color/paper</item>
+        <item name="android:windowSplashScreenAnimatedIcon">@android:color/transparent</item>
     </style>
     <!-- Over the app something is shared from (mbui's OverActivity, as still.fail's ShareActivity): nothing of its own
          until its sheet comes up, which draws its own scrim and motion. -->

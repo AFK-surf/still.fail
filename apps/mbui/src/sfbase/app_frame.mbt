@@ -190,12 +190,16 @@ pub let share_over : Ref[Bool] = Ref(false)
 
 ///|
 /// The workspace in view (the one switched to here, else the one last open, else the first once every account has
-/// answered; None while none is known yet), every workspace, whether every account has answered, whether invitations
-/// wait.
+/// answered; None while none is known yet: the prefs, which say the one last open, not read yet among them), every
+/// workspace, whether every account has answered, whether invitations wait.
 pub fn workspace_in_view(src : Source) -> (Workspace?, Array[Workspace], Bool, Bool) {
   let ws = (src.topic)("workspaces", {})
   let prefs = (src.topic)("prefs", {})
   let (all, answered, invited) = workspaces_of(ws.value)
+  // (the first before the prefs are read, the one last open once they are: a workspace shown, then another)
+  if app.picked == "" && prefs.value is None && prefs.error is None {
+    return (None, all, answered, invited)
+  }
   let kept = if app.picked != "" {
     app.picked
   } else {

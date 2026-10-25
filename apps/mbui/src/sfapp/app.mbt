@@ -74,6 +74,7 @@ fn reset() -> Unit {
   share_in.find.set("")
   share_closing.val = false
   splash_waited.val = false
+  first_shown.val = false
   drafts.clear()
   cui.attach = false
   cui.picking = None
@@ -383,8 +384,8 @@ fn view_in(c : @ui.Ctx, src : Source, t : @sf.Theme) -> Unit {
 
 ///|
 /// Signed in: the workspace in view (the one switched to, else the one last open, else the first once every account
-/// has answered), its Home at the root of the pages; the splash while none is known yet, and a page that says so when
-/// there is none.
+/// has answered), its Home at the root of the pages; the splash while none is known yet and until the first page has
+/// what it shows, and a page that says so when there is none.
 fn signed_in(c : @ui.Ctx, src : Source) -> Unit {
   let t = @sf.theme()
   let ws = (src.topic)("workspaces", {})
@@ -413,6 +414,12 @@ fn signed_in(c : @ui.Ctx, src : Source) -> Unit {
       keeps_frame(c)
       // the app's keys, in every tier (sfdesk's keys.mbt): what is the wide frame's alone does nothing laid out Small
       @sfdesk.keys(c, src, w)
+      // the first page shows once it has what it shows (LOCAL_MS at most), as a page opening does: the splash till
+      // then (its words as while the workspaces are read), not the page's loading look and its list a frame or two later
+      if !first_page_shown(c, src, w) {
+        splash(c, Some(t_reading_workspaces(src)), false)
+        return
+      }
       if @sfdesk.is_wide(c) {
         // a page opened in the pane shows once the core has given what it shows, the one before staying till then
         // (LOCAL_MS at most), as a page pushed on a phone slides in then
@@ -519,7 +526,8 @@ fn signed_in(c : @ui.Ctx, src : Source) -> Unit {
       toast(c)
     }
     None =>
-      if ws.value is Some(_) && answered {
+      // (none in view while the prefs are read too: workspace_in_view)
+      if ws.value is Some(_) && answered && all.is_empty() {
         // the landing inside the bars (Workspaces.kt Landing: windowInsetsPadding(systemBars.union(keyboard)))
         // (sfpages' cloud_app.mbt); an invitation's link pasted (用邀请链接加入): its sheet over the page
         within_bars(c, fn() { @sfpages.no_workspace(c, src, ws.value, open_invite_link) })
@@ -778,13 +786,19 @@ pub let toast_ms : Double = @sf.toast_ms
 pub let toast_action_ms : Double = @sf.toast_action_ms
 
 ///|
-/// The app starting, or waiting for what every page needs (Parts.kt Splash): still.fail's mark floating; what it
-/// waits for said only once it takes a while (a second), or at once when `now` (a failure).
+/// The app starting, or waiting for what every page needs (Parts.kt Splash): the ground alone, as the system's own
+/// splash before the app's first frame is (Android's theme, iOS's launch screen), so an opening quicker than a second
+/// is one picture and then the page; once it takes a while (a second), still.fail's mark floating and what it waits
+/// for under it, from then on; at once when `now` (a failure). (The mark at once, on Android after the launcher's
+/// icon on the system's splash, then the page: three pictures in a second, 2026-10-26 「打开的时候感觉乱闪」.)
 fn splash(c : @ui.Ctx, label : String?, now : Bool) -> Unit {
   let t = @sf.theme()
-  // a second after the app's first splash, what it waits for is said from then on
+  // a second after the app's first splash, it is said that it waits, and for what, from then on
   if !splash_waited.val && @kit.after(c, "splash-label", true, splash_label_ms) {
     splash_waited.val = true
+  }
+  if !now && !splash_waited.val {
+    return
   }
   c.box(
     w=Fill(1.0),
@@ -814,14 +828,9 @@ fn splash(c : @ui.Ctx, label : String?, now : Bool) -> Unit {
       })
       |> ignore
       match label {
-        Some(s) => {
-          let shown = now || splash_waited.val
-          c.box(opacity=if shown { 1.0 } else { 0.0 }, fn() {
-            c.text(s, size=t.t.meta, color=t.p.muted, center=true, line=18.0)
-            |> ignore
-          })
+        Some(s) =>
+          c.text(s, size=t.t.meta, color=t.p.muted, center=true, line=18.0)
           |> ignore
-        }
         None => ()
       }
     },
@@ -830,7 +839,7 @@ fn splash(c : @ui.Ctx, label : String?, now : Bool) -> Unit {
 }
 
 ///|
-/// How long the splash waits before it says what it waits for.
+/// How long the splash shows the ground alone before it says that it waits, and for what.
 let splash_label_ms : Double = 1000.0
 
 ///|
@@ -838,7 +847,8 @@ let splash_label_ms : Double = 1000.0
 let splash_float_ms : Double = 1800.0
 
 ///|
-/// Whether the app's first splash has waited its second (splash_label_ms): what it waits for said from then on.
+/// Whether the app's first splash has waited its second (splash_label_ms): its mark and what it waits for shown from
+/// then on.
 let splash_waited : Ref[Bool] = { val: false }
 
 ///|
@@ -875,6 +885,37 @@ fn page_ready(src : Source, p : Page) -> Bool {
     _ => true
   }
 }
+
+///|
+/// Whether the app's first page shows: once the core has answered for what it shows (first_page_ready), or
+/// `page_local_ms` after the workspace came into view, from then on.
+fn first_page_shown(c : @ui.Ctx, src : Source, w : Workspace) -> Bool {
+  if !first_shown.val &&
+    (first_page_ready(c, src, w) || @kit.after(c, "first-page", true, page_local_ms)) {
+    first_shown.val = true
+  }
+  first_shown.val
+}
+
+///|
+/// Whether the core has answered for what the app's first page shows, as a page opening waits for it (page_ready,
+/// pane_ready): the chats' list as it is filtered (Home's, the wide frame's sidebar's), what the last update brought
+/// over it, and the page on top.
+fn first_page_ready(c : @ui.Ctx, src : Source, w : Workspace) -> Bool {
+  let (list, error) = chats_of(src, w.id, filter_of(src, w.id))
+  let news = (src.topic)("changelog", Map::new())
+  (list is Some(_) || error is Some(_)) &&
+  (news.value is Some(_) || news.error is Some(_)) &&
+  (if @sfdesk.is_wide(c) {
+    pane_ready(src, app.nav.top())
+  } else {
+    page_ready(src, app.nav.top())
+  })
+}
+
+///|
+/// Whether the app's first page has shown (first_page_shown).
+let first_shown : Ref[Bool] = Ref(false)
 
 ///|
 /// Whether the core has answered for what the wide frame's pane shows of page `p`: a chat; an agent's history, a
