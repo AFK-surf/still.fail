@@ -130,9 +130,7 @@ fn barred_page(
       for b in content {
         blocks.push(b)
       }
-      let room = pg_foot + foot
-      blocks.push(fn() { c.box(style=@ui.style(w=Full, h=Fixed(room)), fn() {  }) |> ignore })
-      c.list("settings/" + key, blocks.length(), 80.0, fn(i) { (blocks[i])() }) |> ignore
+      narrow_list(c, key, blocks, foot)
     }
     Wide => {
       for i, b in content {
@@ -219,11 +217,6 @@ fn narrow_page(
       None => ()
     }
   }
-  // (a head of its own says its name in place of the title, in the page's room as its cards)
-  match head {
-    Some(h) if !named => blocks.push(fn() { c.box(style=pg_card_room, h) |> ignore })
-    _ => ()
-  }
   if !named && head is None {
     blocks.push(fn() {
       c.box(style=pg_title_box, fn() {
@@ -242,15 +235,38 @@ fn narrow_page(
       |> ignore
     })
   }
+  // (what follows in the page's room: narrow_list)
+  let chrome = blocks.length()
+  // (a head of its own says its name in place of the title, 10 over what follows as a card is)
+  match head {
+    Some(h) if !named => blocks.push(fn() { c.box(style=pg_card_room, h) |> ignore })
+    _ => ()
+  }
   if lead != "" {
     blocks.push(fn() { c.box(style=pg_lead_box, fn() { c.text(lead, style=pg_lead) |> ignore }) |> ignore })
   }
   for b in content {
     blocks.push(b)
   }
-  let room = pg_foot + foot
-  blocks.push(fn() { c.box(style=@ui.style(w=Full, h=Fixed(room)), fn() {  }) |> ignore })
-  c.list("settings/" + key, blocks.length(), 80.0, fn(i) { (blocks[i])() }) |> ignore
+  narrow_list(c, key, blocks, foot, chrome~)
+}
+
+///|
+/// A narrow page's blocks in its list, those from `chrome` on (what it holds: its own head, what it is for, its
+/// groups, cards, headings, notes) in the page's room 12 from its sides (pg_room), as a panel's are in the room it
+/// leaves; the frame's own over them (back, the large title) from the page's edges; 30 under the last, then `foot`.
+fn narrow_list(c : @ui.Ctx, key : String, blocks : Array[() -> Unit], foot : Double, chrome? : Int = 0) -> Unit {
+  let n = blocks.length()
+  c.list("settings/" + key, n + 1, 80.0, fn(i) {
+    if i == n {
+      c.box(style=@ui.style(w=Full, h=Fixed(pg_foot + foot)), fn() {  }) |> ignore
+    } else if i < chrome {
+      (blocks[i])()
+    } else {
+      c.box(style=pg_room, blocks[i]) |> ignore
+    }
+  })
+  |> ignore
 }
 
 ///|
@@ -452,7 +468,18 @@ pub fn group(c : @ui.Ctx, body : () -> Unit, card? : Bool = false) -> Unit {
 /// the page it is in: they are drawn after the page's frame has said it (group_row reads it).
 pub fn rows_list(c : @ui.Ctx, key : String, count : Int, est : Double, row : (Int) -> Unit) -> Int {
   let l = look()
-  c.list(key, count, est, fn(i) { with_look(l, fn() { row(i) }) })
+  c.list(key, count, est, fn(i) { with_look(l, fn() { rows_room(c, fn() { row(i) }) }) })
+}
+
+///|
+/// What a page's long list holds, in the page's room (narrow: 12 from its sides, as its frame's list gives what it
+/// holds: narrow_list); what stands where its rows will, while they are read (their head), as well.
+pub fn rows_room(c : @ui.Ctx, body : () -> Unit) -> Unit {
+  if look() is Narrow {
+    c.box(style=pg_room, body) |> ignore
+  } else {
+    body()
+  }
 }
 
 ///|
@@ -465,7 +492,7 @@ pub fn rows_head(c : @ui.Ctx, body : () -> Unit) -> Unit {
 
 ///|
 // kept across runs: a value (no field of it changes)
-let rows_head_narrow : @ui.Style = @ui.css("w=Full px=S5 pt=S0_5 pb=S2 gap=S1_5")
+let rows_head_narrow : @ui.Style = @ui.css("w=Full px=S2 pt=S0_5 pb=S2 gap=S1_5")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -548,13 +575,13 @@ pub fn group_row(c : @ui.Ctx, first : Bool, last : Bool, body : () -> Unit, id? 
 let group_wide_row : @ui.Style = @ui.css("w=Full radius=Xl2")
 
 ///|
-/// A card's room in its box (ListCard: 12 from the box's sides, 10 under the last row).
+/// A card's room in the page's (ListCard: 10 under the last row).
 // kept across runs: a value (no field of it changes)
-let group_room : @ui.Style = @ui.css("w=Full px=S3")
+let group_room : @ui.Style = @ui.css("w=Full")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let group_room_last : @ui.Style = @ui.css("w=Full px=S3 pb=S2_5")
+let group_room_last : @ui.Style = @ui.css("w=Full pb=S2_5")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -1221,9 +1248,10 @@ let pg_title_words : @ui.Style = @ui.style(w=grow, min_w=S20)
 let pg_title : @ui.TextStyle = large_title.then(@ui.text_style(w=Cut))
 
 ///|
-/// What the page is for under its title (PageNote: 24 in, 10 under it, the secondary words).
+/// What the page is for under its title (PageNote: 24 from the page's sides, in its room 12; 10 under it, the
+/// secondary words).
 // kept across runs: a value (no field of it changes)
-pub let pg_lead_box : @ui.Style = @ui.css("w=Full px=S6 pb=S2_5")
+pub let pg_lead_box : @ui.Style = @ui.css("w=Full px=S3 pb=S2_5")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -1237,18 +1265,46 @@ let pg_foot : Double = 30.0
 let pg_heading_note : @ui.TextStyle = secondary.then(one_line)
 
 ///|
-/// SectionHeader's line: 24 in, 20 at its end, 14 over, 6 under.
+/// SectionHeader's line: 24 from the page's side, 20 from its end (in its room, 12 and 8), 14 over, 6 under.
 // kept across runs: a value (no field of it changes)
-let pg_heading_line : @ui.Style = @ui.css("row w=Full pl=S6 pr=S5 pt=S3_5 pb=S1_5 gap=S2 align=AEnd")
+let pg_heading_line : @ui.Style = @ui.css("row w=Full pl=S3 pr=S2 pt=S3_5 pb=S1_5 gap=S2 align=AEnd")
 
 ///|
 // kept across runs: a value (no field of it changes)
 let pg_heading : @ui.TextStyle = body.then(strong)
 
 ///|
-/// A page's room for its cards: 12 from its sides, 10 under each.
+/// A narrow page's room: what it holds 12 from its sides (ListCard's), its frame's to give (narrow_list; a frame of
+/// its own, a long list's: rows_list), as a panel gives what it holds the room it leaves. What reaches the page's
+/// sides on purpose goes out across it (page_bleed).
 // kept across runs: a value (no field of it changes)
-pub let pg_card_room : @ui.Style = @ui.css("w=Full px=S3 pb=S2_5")
+pub let pg_room : @ui.Style = @ui.style(w=Full, px=room(pg_room_in))
+
+///|
+let pg_room_in : Double = 12.0
+
+///|
+/// What reaches a narrow page's sides on purpose: out across the room it leaves there (pg_room); nothing on a wide one.
+pub fn page_bleed() -> @ui.Style {
+  if look() is Narrow {
+    pg_bleed
+  } else {
+    pg_no_bleed
+  }
+}
+
+///|
+// kept across runs: a value (no field of it changes)
+let pg_bleed : @ui.Style = @ui.style(mx=room(-pg_room_in))
+
+///|
+// kept across runs: a value (no field of it changes)
+let pg_no_bleed : @ui.Style = @ui.css("")
+
+///|
+/// A card on a narrow page (in its room): 10 under each.
+// kept across runs: a value (no field of it changes)
+pub let pg_card_room : @ui.Style = @ui.css("w=Full pb=S2_5")
 
 ///|
 /// A head of its own under a bar of the frame's (barred_page), narrow: in the page's room as its cards, 8 under the bar.
@@ -1262,14 +1318,14 @@ let pg_card : @ui.Style = @ui.style(w=Full, p=inset_room, radius=list_card_radiu
 
 ///|
 // kept across runs: a value (no field of it changes)
-let pg_choice_box : @ui.Style = @ui.css("w=Full px=S3")
+let pg_choice_box : @ui.Style = @ui.css("w=Full")
 
 ///|
 let pg_choice_h : Double = 34.0
 
 ///|
 // kept across runs: a value (no field of it changes)
-pub let pg_note_box : @ui.Style = @ui.css("w=Full px=S6 pt=S2 pb=S1")
+pub let pg_note_box : @ui.Style = @ui.css("w=Full px=S3 pt=S2 pb=S1")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -1657,14 +1713,15 @@ let pg_card_foot_end : @ui.Style = @ui.css("row w=Full gap=S2 justify=JEnd align
 
 ///|
 /// What a section holds that is neither rows nor a card (its chips, a field with its button): narrow, as far in as the
-/// page's headings' words (24), 10 under it; wide, at the column's edges. What it holds 12 apart.
+/// page's headings' words (24 from its sides, 12 in its room), 10 under it; wide, at the column's edges. What it holds
+/// 12 apart.
 pub fn loose(c : @ui.Ctx, body : () -> Unit) -> Unit {
   c.box(style=if look() == Narrow { pg_loose } else { wide_block }, body) |> ignore
 }
 
 ///|
 // kept across runs: a value (no field of it changes)
-let pg_loose : @ui.Style = @ui.css("w=Full px=S6 pb=S2_5 gap=S3")
+let pg_loose : @ui.Style = @ui.css("w=Full px=S3 pb=S2_5 gap=S3")
 
 ///|
 /// Its mark's box's side (what draws in it is given it): 48 wide, 40 narrow.

@@ -7,7 +7,7 @@
 /// The page (BarSettingsScreen), in the frame it is given.
 fn bars_page(c : @ui.Ctx, core : Core, frame : PageFrame) -> Unit {
   let look = look_of(c)
-  look_page(c, core, frame, "bars", @sf.t("android-misc.bar.title"), @settings.bars_blocks(c, core), small=@sf.t(
+  look_page(c, core, frame, "bars", @sf.t("android-misc.bar.title"), own_sides(c, @settings.bars_blocks(c, core)), small=@sf.t(
     "android-misc.bar.small",
   ))
 }

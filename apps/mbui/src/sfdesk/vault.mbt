@@ -672,10 +672,10 @@ let vt_row_least : Double = 30.0
 let vt_device_text : @ui.Style = @ui.style(row=true, w=@sf.grow, gap=S2_5, align=AEnd)
 
 ///|
-/// Narrow: the requests' cards, 12 from the page's sides, 10 apart; a row's line under its name (the secondary's, on
+/// Narrow: the requests' cards in the page's room, 10 apart; a row's line under its name (the secondary's, on
 /// one line), amber where it is not encrypted.
 // kept across runs: a value (no field of it changes)
-let vt_requests_narrow : @ui.Style = @ui.css("w=Full px=S3 pb=S2_5 gap=S2_5")
+let vt_requests_narrow : @ui.Style = @ui.css("w=Full pb=S2_5 gap=S2_5")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -721,6 +721,6 @@ let vt_word_words : @ui.TextStyle = @ui.text_style(size=Base, color=Fg, wrap=fal
 let vt_narrow_link : @ui.TextStyle = @sf.link.then(@sf.one_line)
 
 ///|
-/// Narrow: the longest grant's choices, 12 from the page's sides, 8 under its note, 10 over what follows.
+/// Narrow: the longest grant's choices in the page's room, 8 under its note, 10 over what follows.
 // kept across runs: a value (no field of it changes)
-let vt_choices_narrow : @ui.Style = @ui.css("w=Full px=S3 pt=S2 pb=S2_5")
+let vt_choices_narrow : @ui.Style = @ui.css("w=Full pt=S2 pb=S2_5")

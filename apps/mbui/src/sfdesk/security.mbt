@@ -894,13 +894,13 @@ let sec_narrow_end_warn : @ui.TextStyle = sec_narrow_end.then(@ui.text_style(col
 
 ///|
 /// 开启安全模式's foot (foot: what signing means for a web page, then cancel and 签名并开启; narrow, 16 from the page's
-/// sides).
+/// sides, 4 in its room).
 // kept across runs: a value (no field of it changes)
 let sec_open_foot : @ui.Style = @ui.css("row w=Full pt=S5 gap=S3 align=ACenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let sec_open_foot_narrow : @ui.Style = @ui.css("row w=Full px=S4 pt=S4 gap=S3 align=ACenter")
+let sec_open_foot_narrow : @ui.Style = @ui.css("row w=Full px=S1 pt=S4 gap=S3 align=ACenter")
 
 ///|
 // kept across runs: a value (no field of it changes)

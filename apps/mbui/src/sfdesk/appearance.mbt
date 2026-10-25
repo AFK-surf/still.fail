@@ -128,7 +128,7 @@ let appearance_fonts_room : @ui.Style = @ui.css("w=Full pt=S3")
 fn fonts_page(c : @ui.Ctx, core : Core, frame : PageFrame) -> Unit {
   let look = look_of(c)
   let blocks = match look {
-    Narrow => @settings.fonts_blocks(c, core)
+    Narrow => own_sides(c, @settings.fonts_blocks(c, core))
     Wide => [fn() { font_setting(c, core) }]
   }
   // (wide, what it is for under its title, as 外观's section says it; narrow, under the faces)

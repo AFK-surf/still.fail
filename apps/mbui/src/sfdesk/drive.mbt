@@ -485,15 +485,16 @@ fn folder_view(c : @ui.Ctx, src : Source, f : FolderOf, head~ : () -> Unit, foot
       } else {
         match (value, error) {
           // (why it was not read: the head's, with its 重试)
-          (None, Some(_)) => head()
+          // (its head where its rows' list stands it: @sf.rows_list)
+          (None, Some(_)) => @sf.rows_room(c, head)
           (None, None) => {
-            head()
+            @sf.rows_room(c, head)
             @sf.waiting(c, count=8)
           }
           (Some(_), _) =>
             match b.arranged(at.path, entries) {
               None => {
-                head()
+                @sf.rows_room(c, head)
                 @sf.waiting(c, count=8)
               }
               Some(list) =>

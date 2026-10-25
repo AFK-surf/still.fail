@@ -328,9 +328,9 @@ let cl_note_new : @ui.TextStyle = @ui.text_style(size=Xs, leading=L5, color=Acce
 // ── the narrow page's (mobile/Changelog.css.ts) ─────────────────────────
 
 ///|
-/// What is said in place of the changes (mNote: 24 by 8 in).
+/// What is said in place of the changes (mNote: 24 from the page's sides, 12 in its room; 8 over and under).
 // kept across runs: a value (no field of it changes)
-let cl_narrow_said : @ui.Style = @ui.css("w=Full px=S6 py=S2")
+let cl_narrow_said : @ui.Style = @ui.css("w=Full px=S3 py=S2")
 
 ///|
 // kept across runs: a value (no field of it changes)
