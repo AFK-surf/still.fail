@@ -903,6 +903,28 @@ fn EditorState::on_handle(self : EditorState, x : Double, y : Double) -> Bool {
 let caret_w : Double = 2.0
 
 ///|
+/// Where the caret at `off` is drawn in the field `n`, laid out as `tl` (x, y, w, h; round, its ends half circles):
+/// about where it stands, kept in the field (where the words start at the field's edge, as a field with no frame of its
+/// own has them, the field's clip would cut half of it at a line's start; Compose's TextFieldCursor.kt coerces it so
+/// too); its line's whole height on Android (Compose's), elsewhere 2 short of each end. Android's handle hangs from its
+/// foot's middle.
+fn EditorState::caret_box(
+  self : EditorState,
+  tl : TextLayout,
+  n : Node,
+  off : Int,
+) -> (Double, Double, Double, Double) {
+  let (cx, cl) = self.place_of(tl, off)
+  let top = self.oy + cl.to_double() * tl.line_h
+  let x = dmax(n.x, dmin(self.ox + cx - caret_w / 2.0, n.x + n.fw - caret_w))
+  if h_feel() == 2 {
+    (x, top, caret_w, tl.line_h)
+  } else {
+    (x, top + 2.0, caret_w, tl.line_h - 4.0)
+  }
+}
+
+///|
 fn Ctx::paint_editor(self : Ctx, n : Node, alpha : Double) -> Unit {
   let st = match self.editors.get(n.id) {
     Some(s) => s
@@ -974,26 +996,8 @@ fn Ctx::paint_editor(self : Ctx, n : Node, alpha : Double) -> Unit {
     self.wake_at_time(st.blink0 + (phase + 1).to_double() * blink, later=true)
     let coff = if ml > 0 { st.caret + st.msel_a } else { st.caret }
     if phase % 2 == 0 {
-      let (cx, cl) = st.place_of(tl, coff)
-      let top = st.oy + cl.to_double() * tl.line_h
-      // Android's as Compose's text field draws it (TextFieldCursor.kt): from the caret rightwards (kept in the
-      // field), its line's whole height, square; elsewhere about the caret, 2 short of each end, round
-      let (x, y, h, r) = if h_feel() == 2 {
-        (dmin(st.ox + cx, n.x + n.fw - caret_w), top, tl.line_h, 0.0)
-      } else {
-        (st.ox + cx - caret_w / 2.0, top + 2.0, tl.line_h - 4.0, 1.0)
-      }
-      self.emit_rect(
-        x,
-        y,
-        caret_w,
-        h,
-        r,
-        st.caret_color,
-        0.0,
-        0L,
-        alpha,
-      )
+      let (x, y, w, h) = st.caret_box(tl, n, coff)
+      self.emit_rect(x, y, w, h, w / 2.0, st.caret_color, 0.0, 0L, alpha)
     }
   }
   match bar {
@@ -1002,11 +1006,12 @@ fn Ctx::paint_editor(self : Ctx, n : Node, alpha : Double) -> Unit {
   }
   pop_clip()
   // Android's handle under the caret (Compose's cursor handle, TextFieldSelectionManager): a drop in the caret's colour
-  // hanging from it, a circle 25 across under a corner turned to point up, over everything (a popup's: no box cuts it)
+  // hanging from the middle of its foot, a circle 25 across under a corner turned to point up, over everything (a
+  // popup's: no box cuts it)
   if focused && st.handle && h_feel() == 2 && a == b && ml == 0 && st.text.length() > 0 {
-    let (cx, cl) = st.place_of(tl, st.caret)
-    let x = st.ox + cx
-    let y = st.oy + (cl + 1).to_double() * tl.line_h
+    let (cx, cy, cw, ch) = st.caret_box(tl, n, st.caret)
+    let x = cx + cw / 2.0
+    let y = cy + ch
     st.handle_on = true
     st.handle_x = x
     st.handle_y = y
