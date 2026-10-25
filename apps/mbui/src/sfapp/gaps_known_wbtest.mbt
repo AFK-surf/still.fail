@@ -7,10 +7,10 @@
 ///|
 /// The faults each rule still has, in each language: they only fall.
 let gaps_known : Map[String, Int] = {
-  "zh rule 1": 712,
+  "zh rule 1": 382,
   "zh rule 3": 0,
   "zh rule 4": 145,
-  "en rule 1": 710,
+  "en rule 1": 379,
   "en rule 3": 0,
   "en rule 4": 145,
 }

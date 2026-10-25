@@ -2,9 +2,9 @@
 // where things stand apart from each other and from the edges of what holds them. Each fault a line saying its rule,
 // the boxes (Ctx::named) and by how much:
 //
-// 1. What lights up under the hand (a box whose look asks Ctx::lit, or is drawn selected) stands apart from the next
-//    one that does, by the theme's `lit_apart` at least (the web's sidebar rows, `& + &` 2): two lit grounds side by
-//    side read as one block. Measured between their boxes, in the same layer, where they share a column or a row;
+// 1. What lights up under the hand (a box whose look asks Ctx::lit, or is drawn selected, a shape a ground shows in)
+//    stands apart from the next one that does, by the theme's `lit_apart` at least (the web's sidebar rows, `& + &`
+//    2): two lit grounds side by side read as one block. Measured between their boxes, in the same layer, where they share a column or a row;
 //    what holds others that light up as wide or as tall as it (a list, a rail) is where they are, not one of them.
 //    Not held to it: the parts of one control (in a ground of their own that hugs them: a segmented choice's
 //    options), and rows across the whole window (a list there keeps nothing lit: one lights at a time).
@@ -48,10 +48,12 @@ pub fn Tester::gap_faults(self : Tester) -> Array[String] {
 }
 
 ///|
-/// What a box laid out `n` says it lights up as: it asked whether the hand is on it (Ctx::lit), or is drawn selected.
+/// Whether box `i` lights up as a ground: it asked whether the hand is on it (Ctx::lit), or is drawn selected, and it is
+/// a shape a ground shows in, a ground now or its corners said while it has none (a row's, a button's). What the hand
+/// changes otherwise (a timeline's track grown under the pointer, an icon's ink) lights no block.
 fn Ctx::gap_lights(self : Ctx, i : Int) -> Bool {
   let b = self.nodes[i]
-  b.kind == kind_box && b.id != 0 && self.lit_asked.contains(b.id)
+  b.kind == kind_box && b.id != 0 && self.lit_asked.contains(b.id) && (b.grounded() || b.radius > 0.0)
 }
 
 ///|
