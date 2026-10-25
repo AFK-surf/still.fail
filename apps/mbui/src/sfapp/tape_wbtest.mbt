@@ -450,3 +450,50 @@ test "on a Mac's tape each panel's corners follow the window's where it stands a
 fn near4(a : (Double, Double, Double, Double), b : (Double, Double, Double, Double)) -> Bool {
   (a.0 - b.0).abs() < 0.01 && (a.1 - b.1).abs() < 0.01 && (a.2 - b.2).abs() < 0.01 && (a.3 - b.3).abs() < 0.01
 }
+
+///|
+/// What shows in the top corners of the page's panel on the tape (the rightmost box as round as a pane, as wide as a
+/// page): its words, grounds and pictures nearer its top than its top corners are round and nearer its side than the
+/// corner on that side (not one across it, a bar's ground: cut by its corners as the panel is).
+fn shown_in_page_corners(t : @ui.Tester) -> Array[String] {
+  let bs = t.boxes()
+  let mut page : @ui.Laid? = None
+  for b in bs {
+    if b.radius >= 11.0 && b.w >= 300.0 && b.h >= 300.0 && (page is None || b.x > page.unwrap().x) {
+      page = Some(b)
+    }
+  }
+  guard page is Some(p) else { return ["no page panel"] }
+  let (tl, tr, _, _) = p.radii
+  let out = []
+  for b in bs {
+    let words = (b.kind == "text" || b.kind == "rich") && b.words_w > 0.0
+    let shows = words || (b.w < p.w - 1.0 && (b.draws || (b.bg & 0xFFL) != 0L))
+    if shows &&
+      b.index != p.index &&
+      b.opacity > 0.0 &&
+      b.x >= p.x &&
+      b.x < p.x + p.w &&
+      b.y >= p.y &&
+      b.y < p.y + dmax(tl, tr) - 0.5 {
+      let left = b.x - p.x
+      let right = p.x + p.w - (b.x + (if words { b.words_w } else { b.w }))
+      if (b.y < p.y + tl - 0.5 && left < tl - 0.5) || (b.y < p.y + tr - 0.5 && right < tr - 0.5) {
+        let what = if words { "「\{b.text}」" } else { "a \{b.kind} \{b.w}×\{b.h}" }
+        out.push("\{what} \{left} from its left, \{right} from its right, \{b.y - p.y} under its top")
+      }
+    }
+  }
+  out
+}
+
+///|
+test "on the tape a page laid out as a phone's starts its rows under its panel's top corners, as a phone's under its status bar" {
+  // a finger's Medium (the panels' corners the ladder's 34) and a Mac's (those at the window's edge its 16's less 6)
+  for win in [("touch", 600.0, 900.0, 2, "medium"), ("desk", 600.0, 760.0, 0, "")] {
+    for mode in ["settings-appearance", "settings-changelog", "settings-station", "settings-profile"] {
+      let wrong = shown_in_page_corners(screen_in(mode, win, "zh"))
+      assert_true(wrong.is_empty(), msg="\{win.0} \{mode}: \{wrong}")
+    }
+  }
+}

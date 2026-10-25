@@ -146,7 +146,8 @@ fn narrow_bar(c : @ui.Ctx, n : NarrowOf, title : String, trailing : () -> Unit) 
       narrow_back_least
     },
     bg=@sf.theme().p.bg,
-    top=n.frame.top,
+    // (in a panel of its own under the panel's top corners)
+    top=dmax(n.frame.top, @sf.pane_head_room()),
   )
 }
 

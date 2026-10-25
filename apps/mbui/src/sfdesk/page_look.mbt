@@ -64,8 +64,10 @@ fn look_page(
       )
     Narrow => {
       let blocks : Array[() -> Unit] = []
-      if frame.top > 0.0 {
-        blocks.push(fn() { c.box(style=@ui.style(w=Full, h=Fixed(frame.top)), fn() {  }) |> ignore })
+      // under what stands over it (a status bar), and in a panel of its own under the panel's top corners
+      let top = dmax(frame.top, @sf.pane_head_room())
+      if top > 0.0 {
+        blocks.push(fn() { c.box(style=@ui.style(w=Full, h=Fixed(top)), fn() {  }) |> ignore })
       }
       // back to where it was opened from (TopBack), then its large title (LargeTitle), what it is for under it
       match frame.back {
