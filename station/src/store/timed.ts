@@ -6,6 +6,7 @@ import { performance } from "node:perf_hooks";
 import type { DatabaseSync, StatementSync } from "node:sqlite";
 import { isMainThread } from "node:worker_threads";
 import { log } from "../ops/log.ts";
+import { askedBy, noWaits, waited, type Waits } from "../ops/waits.ts";
 
 /// A statement on the main thread taking this long is said.
 export const SLOW_MS = 200;
@@ -22,29 +23,33 @@ export type Said = (sql: string, ms: number, rows: number | null, by: string) =>
 const inLog: Said = (sql, ms, rows, by) =>
   log.warn("store", "a slow query on the main thread", { ms: Math.round(ms), ...(rows !== null ? { rows } : {}), by, sql: shortSql(sql) });
 
-/// Who asked, as a stack names them, nearest first: the first functions past these wrappers and the store's own helpers
-/// (`#one`, `#all`, …). Their names alone: in the bundled station a file and line say nothing.
-export function askedBy(stack: string | undefined): string {
-  const names: string[] = [];
-  for (const line of (stack ?? "").split("\n").slice(1)) {
-    const name = /^\s*at (?:async )?([^\s(]+) \(/.exec(line)?.[1];
-    // (`time2`: `time` as the bundle names it.)
-    if (name === undefined || /^time\d*$/.test(name) || name.includes("#") || name.includes("<anonymous>")) continue;
-    names.push(name);
-    if (names.length === 3) break;
-  }
-  return names.join(" < ");
+/// What the main thread's statements took since `takeQueries` was last asked: many of a few milliseconds each, none
+/// slow, hold it as long as one that is (a page read from the disk at each, on a machine short of memory).
+let queried = noWaits();
+
+export function takeQueries(): Waits {
+  const taken = queried;
+  queried = noWaits();
+  return taken;
 }
 
-/// `db` with its statements' runs and execs timed (by `now`, ms), those of SLOW_MS or more told to `said`; as it is off
-/// the main thread (the readers': theirs hold no device), unless `said` is given.
+/// `db` with its statements' runs and execs timed (by `now`, ms), those of SLOW_MS or more told to `said`, and each put
+/// down for `takeQueries`; as it is off the main thread (the readers': theirs hold no device), unless `said` is given.
 export function timed(db: DatabaseSync, said: Said | null = isMainThread ? inLog : null, now: () => number = () => performance.now()): DatabaseSync {
   if (said === null) return db;
   const time = <T>(sql: () => string, run: () => T): T => {
     const at = now();
     const answer = run();
     const ms = now() - at;
-    if (ms >= SLOW_MS) said(sql(), ms, Array.isArray(answer) ? answer.length : null, askedBy(new Error().stack));
+    let by: string | null = null;
+    const who = () => {
+      if (by !== null) return by;
+      const where: { stack?: string } = {};
+      Error.captureStackTrace(where, time);
+      return (by = askedBy(where.stack));
+    };
+    waited(queried, ms, who);
+    if (ms >= SLOW_MS) said(sql(), ms, Array.isArray(answer) ? answer.length : null, who());
     return answer;
   };
   const statement = (s: StatementSync): StatementSync =>
