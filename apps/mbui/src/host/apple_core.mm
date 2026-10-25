@@ -16,6 +16,7 @@
 // can't use it). A JS error that escapes, or a bug the core reports, ends the core as on Android: `{"fatal": …}` to the
 // UI, and the host starts another.
 #import <Foundation/Foundation.h>
+#import <LocalAuthentication/LocalAuthentication.h>
 #import <Security/Security.h>
 #include <pthread.h>
 #include <stdlib.h>
@@ -211,21 +212,30 @@ static void answer_later(double cid, NSData *json, NSString *error, NSData *byte
 
 // ── secure.* (ember hosts/bridge.ts; Android's Keystore) ──
 //   secure.get {key, user, reason} → {} + the bytes, or {none: true}; secure.set {key, user} + the bytes → {};
-//   secure.delete {key} → {}; secure.ask {reason}: unsupported.
+//   secure.delete {key} → {}; secure.ask {reason} → {} once the person said yes.
 // What the core keeps out of the files it syncs (the lock's signing seed, a vault's key): in the Keychain, as a
 // generic password per data directory and key, readable once the device is unlocked after a restart and never with a
-// dialog (none can be answered on a station's locked screen: it fails instead). `user` (asking the person, Touch ID or
-// Face ID) is not offered yet. MBUI_KEYS_IN_FILES=1 keeps them as files of `<data>/secure` instead (0600), for unsigned
-// development builds on macOS, which a Keychain item made by one build would ask about when the next build reads it.
-// (The iOS simulator's Keychain needs no signing beyond the ad hoc one: there it is the Keychain.)
+// Keychain dialog (none can be answered on a station's locked screen: it fails instead). MBUI_KEYS_IN_FILES=1 keeps
+// them as files of `<data>/secure` instead (0600), for unsigned development builds on macOS, which a Keychain item made
+// by one build would ask about when the next build reads it. (The iOS simulator's Keychain needs no signing beyond the
+// ad hoc one: there it is the Keychain.)
+// `user` (a vault's box key): given only once the person said yes to the system's prompt (LocalAuthentication's
+// device owner policy: Touch ID, Face ID or the device's password, the core's `reason` in it), as still.fail's Electron
+// app gave its own after Touch ID. The prompt is a gate before the Keychain, not the Keychain's access control: that is
+// the data protection keychain's, which on macOS takes an entitlement a Developer ID app has only with a provisioning
+// profile. A `user` value is kept under an account (a file) of its own, so it is read only as it was kept. Keeping one
+// asks nobody, but needs the device's password set (else nothing could ask for it later: no_device_lock). The person
+// takes their time: what asks is done off the core's thread, one prompt at a time (person_queue).
 
 static NSString *secure_dir;
 
-static NSString *secure_path(NSString *key) {
+// A key's file under MBUI_KEYS_IN_FILES: its UTF-8 in hex, `.user` after a `user` one's.
+static NSString *secure_path(NSString *key, BOOL user) {
   NSMutableString *hex = [NSMutableString string];
   NSData *k = [key dataUsingEncoding:NSUTF8StringEncoding];
   const uint8_t *b = static_cast<const uint8_t *>(k.bytes);
   for (NSUInteger i = 0; i < k.length; i++) [hex appendFormat:@"%02x", b[i]];
+  if (user) [hex appendString:@".user"];
   return [secure_dir stringByAppendingPathComponent:hex];
 }
 
@@ -238,11 +248,11 @@ static BOOL keys_in_files(void) {
 // keychain from asking whether this build may read an item another build made: kept, as it was with JavaScriptCore)
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wdeprecated-declarations"
-static NSMutableDictionary *keychain_query(NSString *key) {
+static NSMutableDictionary *keychain_query(NSString *key, BOOL user) {
   return [@{
     (id)kSecClass : (id)kSecClassGenericPassword,
     (id)kSecAttrService : @"fail.still.mbui.core",
-    (id)kSecAttrAccount : [NSString stringWithFormat:@"%@\n%@", secure_dir, key],
+    (id)kSecAttrAccount : [NSString stringWithFormat:@"%@\n%@%@", secure_dir, key, user ? @"\nuser" : @""],
     (id)kSecUseAuthenticationUI : (id)kSecUseAuthenticationUIFail,
   } mutableCopy];
 }
@@ -252,10 +262,11 @@ static NSMutableDictionary *keychain_query(NSString *key) {
 // that one did (src/sfcore/apple_engine.m: <that app's userData>/core): its file in userData/sealed, opened with the
 // password Electron's safeStorage keeps in the Keychain ("<app> Safe Storage", the userData's name being the app's),
 // which this app reads unasked as its designated requirement is that app's; asked about otherwise, it is not read
-// (kSecUseAuthenticationUIFail) and the key is none (electron_sealed.h). nil when there is none.
+// (kSecUseAuthenticationUIFail) and the key is none (electron_sealed.h). nil when there is none, or it was kept with
+// the other `user`.
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wdeprecated-declarations"
-static NSData *electron_sealed(NSString *key) {
+static NSData *electron_sealed(NSString *key, BOOL user) {
   NSString *user_data = [[secure_dir stringByDeletingLastPathComponent] stringByDeletingLastPathComponent];
   NSString *file = [[user_data stringByAppendingPathComponent:@"sealed"] stringByAppendingPathComponent:electron_sealed_name(key)];
   NSData *blob = [NSData dataWithContentsOfFile:file];
@@ -270,79 +281,137 @@ static NSData *electron_sealed(NSString *key) {
   CFTypeRef out = NULL;
   if (SecItemCopyMatching((__bridge CFDictionaryRef)q, &out) != errSecSuccess) return nil;
   NSData *password = (__bridge_transfer NSData *)out;
-  return electron_sealed_open(blob, password);
+  return electron_sealed_open(blob, password, user);
 }
 #pragma clang diagnostic pop
+
+// `value` kept under `key` (`user`'s or not): nil once done, else why not.
+static NSString *kept_set(NSString *key, BOOL user, NSData *value) {
+  if (keys_in_files()) {
+    NSString *path = secure_path(key, user);
+    [[NSFileManager defaultManager] createDirectoryAtPath:secure_dir withIntermediateDirectories:YES
+                                               attributes:@{NSFilePosixPermissions : @0700} error:nil];
+    if (![value writeToFile:path options:NSDataWritingAtomic error:nil]) return @"secure.set: not written";
+    [[NSFileManager defaultManager] setAttributes:@{NSFilePosixPermissions : @0600} ofItemAtPath:path error:nil];
+    return nil;
+  }
+  SecItemDelete((__bridge CFDictionaryRef)keychain_query(key, user));
+  NSMutableDictionary *q = keychain_query(key, user);
+  q[(id)kSecValueData] = value;
+  q[(id)kSecAttrAccessible] = (id)kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly;
+  OSStatus st = SecItemAdd((__bridge CFDictionaryRef)q, NULL);
+  return st == errSecSuccess ? nil : [NSString stringWithFormat:@"secure.set: Keychain %d", (int)st];
+}
+
+// The value kept under `key` (`user`'s or not), not asking anyone: nil when none is, or it can't be read (`*error`).
+static NSData *kept_get(NSString *key, BOOL user, NSString **error) {
+  if (keys_in_files()) return [NSData dataWithContentsOfFile:secure_path(key, user)];
+  NSMutableDictionary *q = keychain_query(key, user);
+  q[(id)kSecReturnData] = @YES;
+  q[(id)kSecMatchLimit] = (id)kSecMatchLimitOne;
+  CFTypeRef out = NULL;
+  OSStatus st = SecItemCopyMatching((__bridge CFDictionaryRef)q, &out);
+  if (st == errSecSuccess) return (__bridge_transfer NSData *)out;
+  if (st != errSecItemNotFound) {
+    *error = [NSString stringWithFormat:@"secure.get: Keychain %d", (int)st];
+    return nil;
+  }
+  // none here yet: still.fail's desktop app's, where this app is built in its place, sealed here again
+  NSData *old = electron_sealed(key, user);
+  if (old) kept_set(key, user, old);
+  return old;
+}
+
+// Both values under `key`, whichever there is.
+static void kept_delete(NSString *key) {
+  for (BOOL user : {NO, YES}) {
+    if (keys_in_files()) [[NSFileManager defaultManager] removeItemAtPath:secure_path(key, user) error:nil];
+    else SecItemDelete((__bridge CFDictionaryRef)keychain_query(key, user));
+  }
+}
+
+// What LocalAuthentication said, as the core's hosts say it (host.ts `secureGet`): the person turned it down (or failed
+// it), the device has no password, the app has no screen to ask on; else its code.
+static NSString *person_said(NSError *e) {
+  switch (e.code) {
+    case LAErrorUserCancel:
+    case LAErrorUserFallback:
+    case LAErrorSystemCancel:
+    case LAErrorAppCancel:
+    case LAErrorAuthenticationFailed:
+      return @"user_cancelled";
+    case LAErrorPasscodeNotSet:
+      return @"no_device_lock";
+    case LAErrorNotInteractive:
+      return @"not_in_front";
+    default:
+      return [NSString stringWithFormat:@"LocalAuthentication %ld", (long)e.code];
+  }
+}
+
+// nil when the person can be asked here, else why not.
+static NSString *person_cannot(void) {
+  NSError *e = nil;
+  return [[LAContext new] canEvaluatePolicy:LAPolicyDeviceOwnerAuthentication error:&e] ? nil : person_said(e);
+}
+
+// The person asked, `reason` in the system's prompt (what it is for: "“still.fail” is trying to <reason>"), their
+// answer waited for (so only on person_queue): nil once they said yes, else why not.
+static NSString *person_ask(NSString *reason) {
+  NSString *cannot = person_cannot();
+  if (cannot) return cannot;
+  LAContext *ask = [LAContext new];
+  dispatch_semaphore_t answered = dispatch_semaphore_create(0);
+  __block NSString *no = nil;
+  [ask evaluatePolicy:LAPolicyDeviceOwnerAuthentication localizedReason:reason.length ? reason : @"unlock"
+                reply:^(BOOL yes, NSError *e) {
+                  if (!yes) no = e ? person_said(e) : @"user_cancelled";
+                  dispatch_semaphore_signal(answered);
+                }];
+  dispatch_semaphore_wait(answered, DISPATCH_TIME_FOREVER);
+  return no;
+}
+
+// Where what asks the person is done: one prompt at a time, the core's thread going on meanwhile.
+static dispatch_queue_t person_queue(void) {
+  static dispatch_queue_t q;
+  static dispatch_once_t once;
+  dispatch_once(&once, ^{ q = dispatch_queue_create("fail.still.mbui.core.person", DISPATCH_QUEUE_SERIAL); });
+  return q;
+}
 
 // One secure.* operation, done here and now: its answer's JSON and bytes, or why not (`*error`).
 static void secure_do(NSString *op, NSDictionary *a, NSData *bytes, NSData **json_out, NSData **bytes_out, NSString **error) {
   *json_out = nil;
   *bytes_out = nil;
   *error = nil;
-  NSString *key = [a isKindOfClass:[NSDictionary class]] ? a[@"key"] : nil;
-  if ([op isEqualToString:@"secure.ask"] || ([a isKindOfClass:[NSDictionary class]] && [a[@"user"] boolValue])) {
-    *error = @"unsupported";
+  if (![a isKindOfClass:[NSDictionary class]]) a = @{};
+  NSString *reason = [a[@"reason"] isKindOfClass:[NSString class]] ? a[@"reason"] : @"";
+  if ([op isEqualToString:@"secure.ask"]) {
+    if (!(*error = person_ask(reason))) *json_out = const_json("{}");
     return;
   }
-  if (![key isKindOfClass:[NSString class]] || key.length == 0) {
+  NSString *key = [a[@"key"] isKindOfClass:[NSString class]] ? a[@"key"] : nil;
+  BOOL user = [a[@"user"] isKindOfClass:[NSNumber class]] && [a[@"user"] boolValue];
+  if (key.length == 0) {
     *error = [op stringByAppendingString:@": no key"];
     return;
   }
-  if (keys_in_files()) {
-    NSString *path = secure_path(key);
-    if ([op isEqualToString:@"secure.get"]) {
-      NSData *d = [NSData dataWithContentsOfFile:path];
-      *json_out = const_json(d ? "{}" : "{\"none\":true}");
-      *bytes_out = d;
-    } else if ([op isEqualToString:@"secure.set"]) {
-      [[NSFileManager defaultManager] createDirectoryAtPath:secure_dir withIntermediateDirectories:YES
-                                                 attributes:@{NSFilePosixPermissions : @0700} error:nil];
-      BOOL ok = [bytes ?: [NSData data] writeToFile:path options:NSDataWritingAtomic error:nil];
-      if (ok) [[NSFileManager defaultManager] setAttributes:@{NSFilePosixPermissions : @0600} ofItemAtPath:path error:nil];
-      if (ok) *json_out = const_json("{}");
-      else *error = @"secure.set: not written";
-    } else if ([op isEqualToString:@"secure.delete"]) {
-      [[NSFileManager defaultManager] removeItemAtPath:path error:nil];
-      *json_out = const_json("{}");
-    } else {
-      *error = @"unsupported";
-    }
-    return;
-  }
-  NSMutableDictionary *q = keychain_query(key);
   if ([op isEqualToString:@"secure.get"]) {
-    q[(id)kSecReturnData] = @YES;
-    q[(id)kSecMatchLimit] = (id)kSecMatchLimitOne;
-    CFTypeRef out = NULL;
-    OSStatus st = SecItemCopyMatching((__bridge CFDictionaryRef)q, &out);
-    if (st == errSecSuccess) {
-      *json_out = const_json("{}");
-      *bytes_out = (__bridge_transfer NSData *)out;
-    } else if (st == errSecItemNotFound) {
-      // none here yet: still.fail's desktop app's, where this app is built in its place, sealed here again
-      NSData *old = electron_sealed(key);
-      if (old) {
-        NSMutableDictionary *add = keychain_query(key);
-        add[(id)kSecValueData] = old;
-        add[(id)kSecAttrAccessible] = (id)kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly;
-        SecItemAdd((__bridge CFDictionaryRef)add, NULL);
-        *json_out = const_json("{}");
-        *bytes_out = old;
-      } else {
-        *json_out = const_json("{\"none\":true}");
-      }
-    } else {
-      *error = [NSString stringWithFormat:@"secure.get: Keychain %d", (int)st];
+    NSData *value = kept_get(key, user, error);
+    if (*error) return;
+    if (!value) {
+      *json_out = const_json("{\"none\":true}");
+      return;
     }
+    if (user && (*error = person_ask(reason))) return;
+    *json_out = const_json("{}");
+    *bytes_out = value;
   } else if ([op isEqualToString:@"secure.set"]) {
-    SecItemDelete((__bridge CFDictionaryRef)keychain_query(key));
-    q[(id)kSecValueData] = bytes ?: [NSData data];
-    q[(id)kSecAttrAccessible] = (id)kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly;
-    OSStatus st = SecItemAdd((__bridge CFDictionaryRef)q, NULL);
-    if (st == errSecSuccess) *json_out = const_json("{}");
-    else *error = [NSString stringWithFormat:@"secure.set: Keychain %d", (int)st];
+    if (user && (*error = person_cannot())) return;
+    if (!(*error = kept_set(key, user, bytes ?: [NSData data]))) *json_out = const_json("{}");
   } else if ([op isEqualToString:@"secure.delete"]) {
-    SecItemDelete((__bridge CFDictionaryRef)q);
+    kept_delete(key);
     *json_out = const_json("{}");
   } else {
     *error = @"unsupported";
@@ -351,10 +420,16 @@ static void secure_do(NSString *op, NSDictionary *a, NSData *bytes, NSData **jso
 
 static void core_secure(double cid, NSString *op, NSData *json, const uint8_t *bytes, size_t blen) {
   NSDictionary *a = [NSJSONSerialization JSONObjectWithData:json options:0 error:nil];
-  NSData *j = nil, *b = nil;
-  NSString *error = nil;
-  secure_do(op, a, bytes ? [NSData dataWithBytes:bytes length:blen] : nil, &j, &b, &error);
-  answer_later(cid, j, error, b);
+  NSData *given = bytes ? [NSData dataWithBytes:bytes length:blen] : nil;
+  void (^done)(void) = ^{
+    NSData *j = nil, *b = nil;
+    NSString *error = nil;
+    secure_do(op, a, given, &j, &b, &error);
+    answer_later(cid, j, error, b);
+  };
+  BOOL asks = [op isEqualToString:@"secure.ask"] || ([a isKindOfClass:[NSDictionary class]] && [a[@"user"] isKindOfClass:[NSNumber class]] && [a[@"user"] boolValue]);
+  if (asks) dispatch_async(person_queue(), done);
+  else done();
 }
 
 /// secure.set, secure.get (the same bytes back), secure.delete and secure.get again ({none}) done here as the core's
@@ -378,6 +453,11 @@ extern "C" int mb_core_secure_test(void) {
     BOOL same = [b isEqualToData:value];
     fprintf(stderr, "SECURE_TEST secure.get %s %lu bytes, %s\n", e ? e.UTF8String : std_of(j).c_str(), (unsigned long)b.length, same ? "the same" : "NOT the same");
     ok = ok && !e && same;
+    // read only as it was kept: asked as the person's, it is none (and nobody is asked)
+    secure_do(@"secure.get", @{@"key" : @"secure-test", @"user" : @YES, @"reason" : @"test"}, nil, &j, &b, &e);
+    BOOL apart = !e && std_of(j) == "{\"none\":true}";
+    fprintf(stderr, "SECURE_TEST secure.get as user's %s\n", e ? e.UTF8String : std_of(j).c_str());
+    ok = ok && apart;
     secure_do(@"secure.delete", k, nil, &j, &b, &e);
     fprintf(stderr, "SECURE_TEST secure.delete %s\n", e ? e.UTF8String : std_of(j).c_str());
     ok = ok && !e;

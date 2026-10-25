@@ -1,10 +1,11 @@
 // What still.fail's desktop app (Electron's, apps/desktop/src/secure.ts) kept sealed, opened for the app built in its
 // place (scripts/mac-app.sh's stable and beta: its id, its data). apple_core.mm's secure.get takes a key from it the
 // first time the core asks for one the Keychain does not have, and seals it there again, as Android's CoreHost does
-// the Kotlin app's. A file of that app's userData/sealed: "SFS1", the `user` byte (1: Touch ID's, not opened here),
-// then Electron's safeStorage sealing of "<user>:<the value in base64url>": Chromium's OSCrypt on macOS ("v10", then
-// AES-128-CBC with PKCS #7 under PBKDF2-HMAC-SHA1 of the password safeStorage keeps in the Keychain, salt
-// "saltysalt", 1003 rounds, 16 bytes; an IV of 16 spaces). Included by apple_core.mm and core/sealed_test.m.
+// the Kotlin app's. A file of that app's userData/sealed: "SFS1", the `user` byte (1: Touch ID's, opened only when
+// asked for as the person's, and given once they said yes), then Electron's safeStorage sealing of "<user>:<the value
+// in base64url>": Chromium's OSCrypt on macOS ("v10", then AES-128-CBC with PKCS #7 under PBKDF2-HMAC-SHA1 of the
+// password safeStorage keeps in the Keychain, salt "saltysalt", 1003 rounds, 16 bytes; an IV of 16 spaces). Included
+// by apple_core.mm and core/sealed_test.m.
 #pragma once
 #import <Foundation/Foundation.h>
 #include <CommonCrypto/CommonCrypto.h>
@@ -23,11 +24,11 @@ static NSString *electron_sealed_name(NSString *key) {
   return name;
 }
 
-// A file's value, opened with safeStorage's password: nil when it is no such file, one kept with `user`, or it does not
-// open (another password, a file cut short).
-static NSData *electron_sealed_open(NSData *blob, NSData *password) {
+// A file's value, opened with safeStorage's password: nil when it is no such file, one kept with the other `user`, or it
+// does not open (another password, a file cut short).
+static NSData *electron_sealed_open(NSData *blob, NSData *password, BOOL user) {
   const uint8_t *b = (const uint8_t *)blob.bytes;
-  if (blob.length < 5 + 3 + kCCBlockSizeAES128 || memcmp(b, "SFS1", 4) != 0 || b[4] != 0) return nil;
+  if (blob.length < 5 + 3 + kCCBlockSizeAES128 || memcmp(b, "SFS1", 4) != 0 || b[4] != (user ? 1 : 0)) return nil;
   const uint8_t *sealed = b + 5;
   size_t n = blob.length - 5;
   if (memcmp(sealed, "v10", 3) != 0) return nil;
@@ -44,7 +45,8 @@ static NSData *electron_sealed_open(NSData *blob, NSData *password) {
     return nil;
   plain.length = got;
   NSString *s = [[NSString alloc] initWithData:plain encoding:NSUTF8StringEncoding];
-  if (![s hasPrefix:@"0:"]) return nil;
+  // `user` is in the sealed part too: a file whose outer byte was changed does not open
+  if (![s hasPrefix:user ? @"1:" : @"0:"]) return nil;
   // base64url, unpadded: as base64
   NSMutableString *b64 = [[[s substringFromIndex:2] stringByReplacingOccurrencesOfString:@"-" withString:@"+"]
       mutableCopy];

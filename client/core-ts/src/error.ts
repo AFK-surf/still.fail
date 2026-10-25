@@ -34,6 +34,21 @@ export class CoreError extends Error {
     return new CoreError("host", message);
   }
 
+  /// What the system's secure storage or its prompt said no with (host.ts `secureGet`, `secureAsk`): the host's word
+  /// (`user_cancelled`, `no_device_lock`, `not_in_front`, `key_invalidated`, …) as the code a page goes by, said in the
+  /// person's language; what is not such a word, as `otherwise` with what the host said.
+  static refused(error: HostError, otherwise: string): CoreError {
+    const said = error.message;
+    if (!/^[a-z][a-z_]*$/.test(said)) return new CoreError(otherwise, said);
+    const words: Record<string, string> = {
+      user_cancelled: t("core-misc.call.cancelled"),
+      no_device_lock: t("core-misc.secure.noDeviceLock"),
+      not_in_front: t("core-misc.secure.notInFront"),
+      key_invalidated: t("core-misc.secure.keyInvalidated"),
+    };
+    return new CoreError(said, words[said] ?? said);
+  }
+
   /// As it goes on the wire: `{ code, message, status? }`.
   toJSON(): { code: string; message: string; status?: number } {
     return this.status === undefined ? { code: this.code, message: this.message } : { code: this.code, message: this.message, status: this.status };

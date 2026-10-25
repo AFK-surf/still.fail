@@ -8,6 +8,8 @@ import { test } from "node:test";
 import { ed25519 } from "@noble/curves/ed25519.js";
 import { Effect } from "effect";
 import { apply as applyOps } from "../src/delta.ts";
+import { HostError } from "../src/error.ts";
+import { t } from "../src/i18n.ts";
 import type { HttpRequest } from "../src/host.ts";
 import type { StationAddr } from "../src/station/addr.ts";
 import { HostWire, type RequestHead, type StationWire } from "../src/station/wire.ts";
@@ -360,6 +362,19 @@ test("vault calls: set up, a vault of one's own, an item written, opened, unlock
   r.host.secureRefused = true;
   await r.ask("vault.lock", {});
   await fails(r.ask("vault.open", { item: again.id }), "vault_refused");
+  r.core.close();
+});
+
+test("what the system said no with is said in the person's words: no screen lock, no vault here", async () => {
+  const r = await rig();
+  r.putLock();
+  r.host.secureSet = () => Effect.fail(new HostError("no_device_lock"));
+  await assert.rejects(r.ask("vault.setup", {}), (e: Error & { code?: string }) => {
+    assert.equal(e.code, "no_device_lock");
+    assert.equal(e.message, t("core-misc.secure.noDeviceLock"));
+    return true;
+  });
+  assert.equal(r.host.secure.get(BOX_KEY), undefined);
   r.core.close();
 });
 

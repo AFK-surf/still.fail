@@ -363,7 +363,7 @@ function askPerson(inner: Inner, reason: string): Effect.Effect<void, CoreError>
   const ask = inner.host.secureAsk;
   if (!ask) return Effect.void;
   return Effect.catch(ask.call(inner.host, reason), (e) =>
-    e.message === "no_device_lock" ? Effect.void : Effect.fail(new CoreError(/^[a-z][a-z_]*$/.test(e.message) ? e.message : "lock_refused", e.message)));
+    e.message === "no_device_lock" ? Effect.void : Effect.fail(CoreError.refused(e, "lock_refused")));
 }
 
 /// A device's name as people know it: its label, or what kind of client it is (an older client's, said so).

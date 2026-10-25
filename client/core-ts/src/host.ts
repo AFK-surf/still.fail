@@ -112,18 +112,20 @@ export interface Host {
   /// web: what the browser saved is out of the page's reach) keeps the device's copy of a download in its cache.
   savedRead?(at: string, start: number, end: number): Effect.Effect<Uint8Array | null, HostError>;
 
-  /// Values the system keeps sealed (docs/vault.md, "设备上的钥匙"): an app's only (Android's Keystore; the desktop's
-  /// Electron safeStorage, its key in the macOS keychain or Windows' DPAPI); a web page has none. `user: true`: reading
-  /// it takes the person (biometrics or the device's credential; Touch ID on a Mac that has it), `reason` said in the
-  /// prompt; `user: false`: sealed at rest, read without asking. A value is read as it was kept: asked with the other
-  /// `user`, it fails. The host's errors say `user_cancelled` (the person said no), `no_device_lock` (no screen lock,
-  /// so nothing can need the person) or `not_in_front` (no screen to ask on) as their message.
+  /// Values the system keeps sealed (docs/vault.md, "设备上的钥匙"): an app's only (Android's Keystore; the Apple
+  /// Keychain; Windows' DPAPI; the Electron app's safeStorage); a web page has none. `user: true`: reading it takes the
+  /// person (biometrics or the device's credential: on Apple's systems Touch ID, Face ID or the device's password; the
+  /// Electron app's Touch ID on a Mac that has it), `reason` said in the prompt; `user: false`: sealed at rest, read
+  /// without asking. A value is read as it was kept: asked with the other `user`, it fails or is none. The host's errors
+  /// say `user_cancelled` (the person said no), `no_device_lock` (no screen lock, so nothing can need the person: keeping
+  /// a `user` value fails so too), `not_in_front` (no screen to ask on) or `key_invalidated` (Android: the screen lock
+  /// was taken off since) as their message (CoreError.refused says them in words).
   secureGet?(key: string, opts: { user: boolean; reason?: string }): Effect.Effect<Uint8Array | null, HostError>;
   secureSet?(key: string, value: Uint8Array, opts: { user: boolean }): Effect.Effect<void, HostError>;
   secureDelete?(key: string): Effect.Effect<void, HostError>;
   /// The person asked to say yes, as reading a `user: true` value asks them, `reason` in the prompt: before what they
-  /// should mean (turning the workspace lock off). Succeeds at once where nothing can ask (Windows, Linux, a Mac
-  /// without Touch ID); fails as `secureGet` does (`user_cancelled`, `no_device_lock`, `not_in_front`).
+  /// should mean (turning the workspace lock off). Succeeds at once where nothing can ask (Windows, Linux, the
+  /// Electron app on a Mac without Touch ID); fails as `secureGet` does (`user_cancelled`, `no_device_lock`, `not_in_front`).
   secureAsk?(reason: string): Effect.Effect<void, HostError>;
 
   /// An account's SQLite database by name (`account-<sub>`), made empty if it is not there: one file per signed-in
