@@ -7,6 +7,7 @@
 // to see it is there, is a connection, and the runner keeps one at a time. So it is never looked at but to attach.
 import { spawn } from "node:child_process";
 import { existsSync, readFileSync, readdirSync } from "node:fs";
+import { readFile, readdir } from "node:fs/promises";
 import { createConnection, type Socket } from "node:net";
 import { join } from "node:path";
 import { niced } from "../ops/nice.ts";
@@ -85,15 +86,38 @@ export function existingRunners(data: string): RunnerInfo[] {
   if (!existsSync(dir)) return [];
   return readdirSync(dir)
     .filter((f) => f.endsWith(".json"))
-    .flatMap((f) => {
-      try {
-        const info = JSON.parse(readFileSync(join(dir, f), "utf8")) as RunnerInfo;
-        process.kill(info.runner, 0);
-        return [info];
-      } catch {
-        return [];
-      }
-    });
+    .flatMap((f) => alive(() => readFileSync(join(dir, f), "utf8")));
+}
+
+/// The runners alive now, as `existingRunners` finds them, read without holding the station's thread: what is looked at
+/// every few seconds (jobs/memory.ts, resources/watch.ts). Their files are some 10 kB each (a command's arguments), and
+/// on a machine short of memory the twenty of ccvm took up to 5 s to read on the thread (2026-10-25).
+export async function liveRunners(data: string): Promise<RunnerInfo[]> {
+  const dir = runnersDir(data);
+  let names: string[];
+  try {
+    names = await readdir(dir);
+  } catch {
+    return [];
+  }
+  const read = await Promise.all(names.filter((f) => f.endsWith(".json")).map((f) => readFile(join(dir, f), "utf8").catch(() => null)));
+  return read.flatMap((text) => (text === null ? [] : alive(() => text)));
+}
+
+/// Runner `id`'s, its file alone, if its runner is alive.
+export function runnerOf(data: string, id: string): RunnerInfo | undefined {
+  return alive(() => readFileSync(join(runnersDir(data), `${id}.json`), "utf8"))[0];
+}
+
+/// What an info file says, if its runner is alive.
+function alive(text: () => string): RunnerInfo[] {
+  try {
+    const info = JSON.parse(text()) as RunnerInfo;
+    process.kill(info.runner, 0);
+    return [info];
+  } catch {
+    return [];
+  }
 }
 
 /// Connections being let go: each one closed on this side and read to its end, so its runner has taken every ack sent on

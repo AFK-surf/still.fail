@@ -55,7 +55,8 @@ export type ResourceOptions = {
   usage(pids: number[]): (Usage | null)[];
   /// Each pid's traffic so far (those with none left out); null: not read.
   traffic?(): Promise<Map<number, Traffic> | null>;
-  runners(): Runner[];
+  /// The agents' runners (their files, read off the station's thread).
+  runners(): Promise<Runner[]>;
   jobs(): Job[];
   /// Whether the process of this executable is the desktop app's.
   isApp(command: string): boolean;
@@ -65,7 +66,7 @@ export type ResourceOptions = {
 
 /// Each process's whose: the jobs' groups first, then the runners, the app, the station, each with all under it; then
 /// what is left that names a chat's directory.
-export function whoseOf(table: readonly ProcessInfo[], o: Pick<ResourceOptions, "runners" | "jobs" | "isApp" | "self">, args?: Map<number, string> | null, places: readonly Place[] = []): Map<number, Whose> {
+export function whoseOf(table: readonly ProcessInfo[], o: Pick<ResourceOptions, "jobs" | "isApp" | "self">, runners: readonly Runner[], args?: Map<number, string> | null, places: readonly Place[] = []): Map<number, Whose> {
   const children = new Map<number, number[]>();
   const byPid = new Map<number, ProcessInfo>();
   for (const p of table) {
@@ -83,7 +84,7 @@ export function whoseOf(table: readonly ProcessInfo[], o: Pick<ResourceOptions, 
   };
   const chat = (session: string): Whose => ({ key: `chat:${session}`, kind: "chat", session });
   for (const j of o.jobs()) give(table.filter((p) => p.pgid === j.pgid).map((p) => p.pid), chat(j.session));
-  for (const r of o.runners()) give([r.runner, r.pid], r.session !== null ? chat(r.session) : { key: "agents", kind: "agents", session: null });
+  for (const r of runners) give([r.runner, r.pid], r.session !== null ? chat(r.session) : { key: "agents", kind: "agents", session: null });
   // The app's main process: the first of its bundle's from the top (its helpers are under it).
   const app = table.filter((p) => o.isApp(p.command) && !(byPid.has(p.ppid) && o.isApp(byPid.get(p.ppid)!.command)));
   give(app.map((p) => p.pid), { key: "app", kind: "app", session: null });
@@ -102,7 +103,7 @@ export function whoseOf(table: readonly ProcessInfo[], o: Pick<ResourceOptions, 
 }
 
 /// The agents' own processes: each runner and the runtime it runs (ending one is stopping the agent, not this page's).
-const agentsOwn = (o: Pick<ResourceOptions, "runners">) => new Set(o.runners().flatMap((r) => [r.runner, r.pid]));
+const agentsOwn = (runners: readonly Runner[]) => new Set(runners.flatMap((r) => [r.runner, r.pid]));
 
 /// A program as people know it: its executable's name.
 const programOf = (command: string) => basename(command) || "?";
@@ -187,9 +188,10 @@ export class ResourceWatch {
     if (table === null) return;
     const at = this.#fibers.now();
     const args = this.#o.args ? await this.#o.args().catch(() => null) : null;
-    const whose = whoseOf(table, this.#o, args, this.#o.places?.() ?? []);
+    const runners = await this.#o.runners();
+    const whose = whoseOf(table, this.#o, runners, args, this.#o.places?.() ?? []);
     const mine = table.filter((p) => whose.has(p.pid));
-    const agent = agentsOwn(this.#o);
+    const agent = agentsOwn(runners);
     const used = this.#o.usage(mine.map((p) => p.pid));
     const traffic = this.#o.traffic ? await this.#o.traffic().catch(() => null) : null;
     this.#net = traffic !== null;
@@ -246,8 +248,9 @@ export class ResourceWatch {
     const now = table?.find((p) => p.pid === pid);
     if (!table || !now) throw new NotEndable("gone");
     const args = this.#o.args ? await this.#o.args().catch(() => null) : null;
-    const w = whoseOf(table, this.#o, args, this.#o.places?.() ?? []).get(pid);
-    if (w?.kind !== "chat" || w.session !== session || agentsOwn(this.#o).has(pid)) throw new NotEndable("not a chat's");
+    const runners = await this.#o.runners();
+    const w = whoseOf(table, this.#o, runners, args, this.#o.places?.() ?? []).get(pid);
+    if (w?.kind !== "chat" || w.session !== session || agentsOwn(runners).has(pid)) throw new NotEndable("not a chat's");
     kill(pid, "SIGTERM");
     this.#fibers.after(KILL_AFTER_MS, async () => {
       const still = (await this.#o.table().catch(() => null))?.find((p) => p.pid === pid);

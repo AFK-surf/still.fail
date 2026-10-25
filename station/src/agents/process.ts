@@ -11,7 +11,7 @@ import { createConnection } from "node:net";
 import { join } from "node:path";
 import { keyPart } from "./sandbox.ts";
 import { log } from "../ops/log.ts";
-import { RunnerConnection, existingRunners, leave, listening, runnersDir, startRunner, type Exit, type RunnerInfo } from "./runner.ts";
+import { RunnerConnection, leave, listening, runnerOf, runnersDir, startRunner, type Exit, type RunnerInfo } from "./runner.ts";
 import { wall } from "../ops/fibers.ts";
 import type { RuntimeKind } from "./runtime.ts";
 
@@ -56,7 +56,10 @@ const pidAlive = (pid: number) => {
 };
 
 /// A runner of this id that keeps its process still (its socket there: one on its way out has let it go).
-export const findRunner = (data: string, id: string): RunnerInfo | undefined => existingRunners(data).find((r) => r.id === id && listening(r));
+export const findRunner = (data: string, id: string): RunnerInfo | undefined => {
+  const runner = runnerOf(data, id);
+  return runner !== undefined && runner.id === id && listening(runner) ? runner : undefined;
+};
 export const outFile = (data: string, id: string) => join(runnersDir(data), `${id}.out`);
 
 /// The connection's socket, which runner.ts keeps to itself: its errors would otherwise go unhandled, and its closing

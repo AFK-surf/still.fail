@@ -31,15 +31,16 @@ const table = [
   p(51, 50, 50, HELPER),
   p(60, 1, 60, "Safari"),
 ];
+const runners = [{ runner: 20, pid: 21, session: "s1" }, { runner: 30, pid: 31, session: null }];
 const options = {
-  runners: () => [{ runner: 20, pid: 21, session: "s1" }, { runner: 30, pid: 31, session: null }],
+  runners: async () => runners,
   jobs: () => [{ session: "s2", pgid: 40 }],
   isApp: (command: string) => command.includes("youdid.wtf.app/"),
   self: [10, 9],
 };
 
 test("whose: a chat's runner and job with all under them, the agents', the app's, the station's; the rest no one's", () => {
-  const whose = whoseOf(table, options);
+  const whose = whoseOf(table, options, runners);
   const key = (pid: number) => whose.get(pid)?.key;
   assert.deepEqual([20, 21, 22].map(key), ["chat:s1", "chat:s1", "chat:s1"]);
   assert.deepEqual([30, 31].map(key), ["agents", "agents"]);
@@ -53,7 +54,7 @@ test("whose: a chat's runner and job with all under them, the agents', the app's
 test("whose: what runs on its own naming a chat's directory is that chat's, with all under it", () => {
   const rows = [...table, p(70, 1, 70, "sh"), p(71, 70, 70, "python3"), p(80, 1, 80, "vim")];
   const args = new Map([[70, "sh /data/sessions/c-1/workspace/run.sh"], [71, "python3 render.py"], [80, "vim /elsewhere/notes"]]);
-  const whose = whoseOf(rows, options, args, [{ dir: "/data/sessions/c-1/workspace", session: "s3" }]);
+  const whose = whoseOf(rows, options, runners, args, [{ dir: "/data/sessions/c-1/workspace", session: "s3" }]);
   assert.deepEqual([70, 71].map((pid) => whose.get(pid)?.key), ["chat:s3", "chat:s3"]);
   assert.equal(whose.get(80), undefined);
 });
@@ -144,7 +145,7 @@ test("a process there before but no one's (its chat begun since) counts from the
     table: async () => table,
     usage: (pids) => pids.map((pid) => counts.get(pid) ?? null),
     ...options,
-    runners: () => runners,
+    runners: async () => runners,
   });
   await watch.look();
   now += 5000;

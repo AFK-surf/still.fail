@@ -85,7 +85,7 @@ function rig() {
     cwds: async (pids) => new Map(pids.map((pid) => [pid, `/sessions/s9/workspace/sub`])),
     jobs: () => [{ id: "job_1", session: "remote:x", pgid: 30, label: 'Job "build" (job_1)' }],
     // A runtime of one session's, and one shared by sessions (codex's host).
-    agents: () => [{ pid: 21, session: "s2" }, { pid: 51, session: null }],
+    agents: async () => [{ pid: 21, session: "s2" }, { pid: 51, session: null }],
     sessionAt: (dir) => (dir.startsWith("/sessions/s9/workspace") ? "s9" : null),
     tell: (u: Unit, text) => void told.push([u.job ?? u.session, text]),
     stopJob: async (id) => void stoppedJobs.push(id),
