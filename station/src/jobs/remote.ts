@@ -12,9 +12,10 @@
 // here polls local state.
 import { createHash, randomBytes } from "node:crypto";
 import {
-  appendFileSync, closeSync, constants, existsSync, fstatSync, fsyncSync, ftruncateSync, linkSync, lstatSync, mkdirSync, openSync, readFileSync,
+  appendFileSync, closeSync, constants, existsSync, fstatSync, fsyncSync, ftruncateSync, lstatSync, mkdirSync, openSync, readFileSync,
   readSync, readdirSync, readlinkSync, renameSync, rmSync, statSync, statfsSync, writeFileSync, writeSync,
 } from "node:fs";
+import { link, open, readFile, readdir, rename, rm } from "node:fs/promises";
 import { basename, dirname, isAbsolute, join, resolve } from "node:path";
 import { relativeParts } from "../ops/paths.ts";
 import { PlaceRefused, Places } from "../ops/places.ts";
@@ -116,6 +117,9 @@ export function hash(v: Json): string {
 export function readJson(path: string): Json {
   return JSON.parse(readFileSync(path, "utf8"));
 }
+
+/// readJson off the station's thread (fs/promises): what is read again on a schedule, or all the records at once.
+const readJsonSoon = async (path: string): Promise<Json> => JSON.parse(await readFile(path, "utf8"));
 
 /// Path::with_extension: the file name's extension replaced (or added).
 function withExtension(path: string, ext: string): string {
@@ -250,19 +254,30 @@ export class Remote {
 
   /// Follows the tasks started from here and the sessions closing; sweeps now and hourly.
   private started(): void {
-    for (const name of this.list(join(this.root, "outgoing")).filter((n) => n.endsWith(".json"))) this.watch(join(this.root, "outgoing", name));
-    for (const name of this.list(join(this.root, "used")).filter((n) => n.endsWith(".json"))) {
-      const path = join(this.root, "used", name);
-      try {
-        if (field(readJson(path), "closing") === true) this.closer(path);
-      } catch {}
-    }
+    void this.resume().catch(() => undefined);
     void this.run(
       Effect.promise(() => this.sweep(this.store.now())).pipe(Effect.repeat(Schedule.spaced(SWEEP_EVERY)), Effect.asVoid),
     ).catch(() => undefined);
     void this.run(
       Effect.promise(() => this.relieve(this.store.now())).pipe(Effect.repeat(Schedule.spaced(DISK_EVERY)), Effect.asVoid),
     ).catch(() => undefined);
+  }
+
+  /// The tasks started from here not told yet followed again, and the sessions closing: their records read off the
+  /// station's thread (every task's ever started from here is kept: 13,000 on ccvm, read at each start).
+  private async resume(): Promise<void> {
+    for (const [dir, take] of [
+      ["outgoing", (path: string, v: Json) => v.delivered !== true && this.watch(path)],
+      ["used", (path: string, v: Json) => field(v, "closing") === true && this.closer(path)],
+    ] as const) {
+      const names = await readdir(join(this.root, dir)).catch(() => [] as string[]);
+      for (const name of names.filter((n) => n.endsWith(".json"))) {
+        if (this.stopped) return;
+        const path = join(this.root, dir, name);
+        const v = await readJsonSoon(path).catch(() => null);
+        if (v !== null) take(path, v);
+      }
+    }
   }
 
   /// Its schedules end (the station stops).
@@ -613,18 +628,22 @@ export class Remote {
     } catch {
       return;
     }
-    // Their directories are going away: stop following this session's tasks.
+    // Their directories are going away: stop following this session's tasks. Every record is read to find them, off
+    // the thread; one of theirs read again as it is changed (meanwhile written by its follower).
     const outgoing = join(this.root, "outgoing");
-    for (const name of this.list(outgoing)) {
-      const file = join(outgoing, name);
-      try {
-        const entry = readJson(file);
-        if (text(entry, "session") === session && entry.delivered !== true) {
+    void (async () => {
+      for (const name of await readdir(outgoing).catch(() => [] as string[])) {
+        const file = join(outgoing, name);
+        try {
+          const seen = await readJsonSoon(file);
+          if (text(seen, "session") !== session || seen.delivered === true) continue;
+          const entry = readJson(file);
+          if (entry.delivered === true) continue;
           entry.delivered = true;
           writeJson(file, entry);
-        }
-      } catch {}
-    }
+        } catch {}
+      }
+    })();
     for (const name of this.list(join(this.root, "prepared"))) {
       const file = join(this.root, "prepared", name);
       try {
@@ -641,7 +660,7 @@ export class Remote {
     const round = Effect.promise(async (): Promise<boolean> => {
       let v: Json;
       try {
-        v = readJson(path);
+        v = await readJsonSoon(path);
       } catch {
         return true;
       }
@@ -1138,7 +1157,7 @@ export class Remote {
       for (const path of [...paths]) {
         let entry: Json = null;
         try {
-          entry = readJson(path);
+          entry = await readJsonSoon(path);
         } catch {}
         if (entry === null || entry.delivered === true) done(path);
         else entries.push([path, entry]);
@@ -1269,7 +1288,9 @@ export class Remote {
   private async download(ask: (request: Json) => Promise<Json>, request: Json, path: string, replace: boolean): Promise<number> {
     if (!replace && existsSync(path)) throw new Error("local output already exists; choose another path");
     const temp = withExtension(path, `${randomBytes(8).toString("hex")}.part`);
-    const fd = openSync(temp, constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL, 0o666);
+    // Written off the station's thread: each chunk, and the whole flushed to the disk (a task's files brought back held
+    // it 3 s so on a machine short of memory, 2026-10-25).
+    const file = await open(temp, constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL, 0o666);
     try {
       let size: number;
       try {
@@ -1278,23 +1299,23 @@ export class Remote {
           const answer = await this.bulk.run(() => ask({ ...request, method: "file.get", offset }));
           const data = fromBase64(text(answer, "data"));
           if (data.length > CHUNK || offset + data.length > MAX_FILE) throw new Error("invalid file response");
-          for (let at = 0; at < data.length; ) at += writeSync(fd, data, at, data.length - at);
+          for (let at = 0; at < data.length; ) at += (await file.write(data, at, data.length - at)).bytesWritten;
           offset += data.length;
           if (field(answer, "eof") === true) {
-            fsyncSync(fd);
+            await file.sync();
             size = offset;
             break;
           }
           if (data.length === 0) throw new Error("file transfer made no progress");
         }
       } finally {
-        closeSync(fd);
+        await file.close();
       }
-      if (replace) renameSync(temp, path);
-      else linkSync(temp, path);
+      if (replace) await rename(temp, path);
+      else await link(temp, path);
       return size;
     } finally {
-      rmSync(temp, { force: true });
+      await rm(temp, { force: true });
     }
   }
 
