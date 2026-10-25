@@ -146,6 +146,21 @@ pub fn menu(items : Array[MenuItem?], from~ : Anchor, title? : String = "", alon
 }
 
 ///|
+/// A link's menu (`href`), opened by `from`: open it (a web address's), copy it, each going on with `open` or `copy`.
+/// Its words the screen's: a touch device's the phone's (Links.kt), a computer's its context menu's.
+pub fn link_menu(href : String, from~ : Anchor, open : () -> Unit, copy : () -> Unit) -> Unit {
+  let touch = touch_system()
+  let items : Array[MenuItem?] = []
+  if href.has_prefix("https://") || href.has_prefix("http://") {
+    items.push(
+      Some(menu_item_of(t(if touch { "common.link.open" } else { "desktop.contextMenu.openLink" }), open, icon="external")),
+    )
+  }
+  items.push(Some(menu_item_of(t(if touch { "common.link.copy" } else { "desktop.contextMenu.copyLink" }), copy, icon="copy")))
+  menu(items, from~)
+}
+
+///|
 /// A pick of one of `choices` (`chosen` the one now), titled `title` ("" none), opened by `from`: chosen, it closes and `choose`
 /// goes on with its key. Longer than pick_search_from, a line to search them by is over them.
 pub fn pick(title : String, choices : Array[Choice], chosen : String, choose : (String) -> Unit, from~ : Anchor) -> Unit {
