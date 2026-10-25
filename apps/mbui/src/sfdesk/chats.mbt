@@ -197,7 +197,7 @@ fn filter_button(
   let lit = @kit.animate(c, "side/filter/on", if narrowed { 1.0 } else { 0.0 }, transition=nav_fade)
   let ground = @sf.over(@sf.alpha(t.p.hover, hot * (1.0 - lit)), @sf.alpha(t.p.accent_bg, lit))
   // (in the closed bar's corner, concentric with it as the rail's places are: Sidebar.css.ts navNew, closed)
-  let look = if in_bar { filter_box_bar } else { filter_box }
+  let look = if in_bar { filter_box_bar() } else { filter_box }
   let b = c.box(style=look.then(@ui.style(bg=Data(ground))), id~, fn() {
     @sf.icon(c, "filter", size=side_icon, color=@sf.mix(t.p.accent_text, lit, @sf.mix(t.p.text, hot, t.p.muted))) |> ignore
   })
@@ -222,6 +222,10 @@ fn filter_named(filter : String) -> String {
 let filter_box : @ui.Style = @ui.css("w=S8 h=S8 radius=Full align=ACenter justify=JCenter")
 
 ///|
-// kept across runs: a value (no field of it changes)
-let filter_box_bar : @ui.Style = @ui.css("w=S8 h=S8 radius=Full align=ACenter justify=JCenter")
+/// In the closed bar's top right corner (band_new_bar: 6 from its top and side), its ground one of the bar's places'
+/// grounds, as round as theirs (@sf.rail_ground_radius: concentric with the bar's corner, a Mac's 6.4; a circle where
+/// that is round enough for one), not a circle in a corner too square for it (the user, 2026-10-25).
+fn filter_box_bar() -> @ui.Style {
+  filter_box.then(@ui.style(radius=@sf.rail_ground_radius(@sf.closed_bar_of(rail_closed_ground_in), rail_closed_ground_in)))
+}
 

@@ -91,6 +91,21 @@ test "wide on a Mac: the closed bar, shown a while, one corner all round, the wi
     let files = rail_ground_at(t, t.query(Button, label="文件").unwrap().rect)
     assert_eq(files.radii, (inner, inner, inner, inner))
     assert_eq(t.corner_faults(), [])
+    // shown a while: the filter in the bar's top right corner, its ground under the pointer one of the bar's places'
+    // grounds, as round
+    if peek {
+      let named = @sf.t("web-main.filter.chats.named", args=[("named", @sf.t("web-main.filter.all"))])
+      let (fx, fy, fw, fh) = t.query(Button, label=named).unwrap().rect
+      t.move(fx + fw / 2.0, fy + fh / 2.0)
+      t.run_for(@sfdesk.side_move_ms)
+      let filter = t
+        .boxes()
+        .iter()
+        .find_first(fn(b) { b.kind != "text" && b.w == fw && b.h == fh && b.x == fx && b.y == fy && b.bg != 0L })
+        .unwrap()
+      assert_eq(filter.radii, (inner, inner, inner, inner))
+      assert_eq(t.corner_faults(), [])
+    }
   }
 }
 
