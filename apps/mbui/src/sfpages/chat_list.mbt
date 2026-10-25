@@ -652,7 +652,7 @@ let float_button_hot : @ui.Style = float_button.then(@ui.css("bg=Hover"))
 
 ///|
 // kept across runs: a value (no field of it changes)
-let float_count : @ui.TextStyle = @ui.text_style(size=Xs, weight=Medium, color=Fg, wrap=false)
+let float_count : @ui.TextStyle = @ui.text_style(size=Ui, weight=Medium, color=Fg, wrap=false)
 
 
 ///|

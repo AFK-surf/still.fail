@@ -547,7 +547,7 @@ let no_preview_box : @ui.Style = @ui.css("w=Full h=Full gap=S1_5 align=ACenter j
 
 ///|
 // kept across runs: a value (no field of it changes)
-let no_preview_words : @ui.TextStyle = @ui.text_style(size=Xs, color=Muted, wrap=false)
+let no_preview_words : @ui.TextStyle = @ui.text_style(size=Caption, color=Muted, wrap=false)
 
 ///|
 /// A video's box (msgVideo): black, clipped to its corners; its play mark 40 round in its middle on black at 65%
@@ -573,7 +573,7 @@ let video_name_band : @ui.Style = @ui.style(w=Full, px=S2, py=S1_5, bg=@sf.video
 
 ///|
 // kept across runs: a value (no field of it changes)
-let video_name : @ui.TextStyle = @ui.text_style(size=Xs, color=@sf.white_ink, wrap=false, max_lines=1)
+let video_name : @ui.TextStyle = @ui.text_style(size=Caption, color=@sf.white_ink, wrap=false, max_lines=1)
 
 ///|
 // kept across runs: a value (no field of it changes)

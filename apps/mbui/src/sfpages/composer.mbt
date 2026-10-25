@@ -1081,7 +1081,7 @@ let error_box : @ui.Style = @ui.css("w=Full px=S8 pt=S1 pb=S2_5")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let composer_error_words : @ui.TextStyle = @ui.text_style(size=Xs, color=Danger, leading=L5)
+let composer_error_words : @ui.TextStyle = @ui.text_style(size=Caption, color=Danger, leading=L5)
 
 ///|
 /// The files of a draft that are up, flying as it is sent, each from its tile (ChatHost.kt sending): from where its
@@ -1376,15 +1376,15 @@ let composer_notice_line : @ui.Style = @ui.css("row w=Full gap=S1 align=ACenter"
 
 ///|
 // kept across runs: a value (no field of it changes)
-let composer_notice_words : @ui.TextStyle = @ui.text_style(size=Sm, color=Muted)
+let composer_notice_words : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let composer_notice_button : @ui.TextStyle = @ui.text_style(size=Sm, color=Fg)
+let composer_notice_button : @ui.TextStyle = @ui.text_style(size=Meta, color=Fg)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let composer_notice_failed : @ui.TextStyle = @ui.text_style(size=Sm, color=Danger)
+let composer_notice_failed : @ui.TextStyle = @ui.text_style(size=Meta, color=Danger)
 
 ///|
 /// A chat's composer's place while it is a capsule: its buttons (the theme's round controls) 8 in, 12 over it and 16

@@ -329,7 +329,7 @@ let options_room : @ui.Style = @ui.css("w=Full pt=S0_5 align=AStart")
 ///|
 /// How it was settled, who decides (settledLine): 12 on 18, the subtle ink.
 // kept across runs: a value (no field of it changes)
-let settled_line : @ui.TextStyle = @ui.text_style(size=Xs, leading=L5, color=Subtle)
+let settled_line : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color=Subtle)
 
 ///|
 /// 忽略 (askDismiss): 6 under the options, 12 on 18 in the subtle ink, the text's and underlined under the pointer.
@@ -338,8 +338,8 @@ let dismiss_room : @ui.Style = @ui.css("pt=S0_5")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let dismiss_words : @ui.TextStyle = @ui.text_style(size=Xs, leading=L5, color=Subtle, wrap=false)
+let dismiss_words : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color=Subtle, wrap=false)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let dismiss_words_hot : @ui.TextStyle = @ui.text_style(size=Xs, leading=L5, color=Fg, wrap=false)
+let dismiss_words_hot : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color=Fg, wrap=false)

@@ -24,7 +24,7 @@ pub let card_line : @ui.TextStyle = @ui.text_style(size=Xs2, color=Muted, wrap=f
 
 ///|
 /// A message's words (15/24.75).
-pub let message : @ui.TextStyle = @ui.text_style(size=Lg, leading=message_line, color=Fg)
+pub let message : @ui.TextStyle = @ui.text_style(size=Body, leading=message_line, color=Fg)
 
 ///|
 /// Small words (12/16.8: Android's 12sp with no line).

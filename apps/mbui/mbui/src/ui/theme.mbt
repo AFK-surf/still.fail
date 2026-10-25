@@ -118,8 +118,16 @@ pub(all) struct Theme {
 }
 
 ///|
-/// The sizes of words, each with its line's height (size, line).
+/// The sizes of words, each with its line's height (size, line): the roles' (TextSize Caption … Display), then the
+/// scale's.
 pub(all) struct TextScale {
+  caption : (Double, Double)
+  meta : (Double, Double)
+  ui : (Double, Double)
+  body : (Double, Double)
+  title : (Double, Double)
+  heading : (Double, Double)
+  display : (Double, Double)
   xs3 : (Double, Double)
   xs2 : (Double, Double)
   xs : (Double, Double)
@@ -146,6 +154,14 @@ pub fn TextScale::tailwind() -> TextScale {
     xl2: (24.0, 32.0),
     xl3: (30.0, 36.0),
     xl4: (36.0, 40.0),
+    // the roles on Tailwind's: xs, xs, sm, base, xl, 3xl, 4xl
+    caption: (12.0, 16.0),
+    meta: (12.0, 16.0),
+    ui: (14.0, 20.0),
+    body: (16.0, 24.0),
+    title: (20.0, 28.0),
+    heading: (30.0, 36.0),
+    display: (36.0, 40.0),
   }
 }
 
@@ -548,6 +564,13 @@ pub fn Theme::color(self : Theme, c : Color) -> Int64 {
 /// A size of words in this theme: (size, line).
 pub fn Theme::text_size(self : Theme, s : TextSize) -> (Double, Double) {
   match s {
+    Caption => self.text.caption
+    Meta => self.text.meta
+    Ui => self.text.ui
+    Body => self.text.body
+    Title => self.text.title
+    Heading => self.text.heading
+    Display => self.text.display
     Xs3 => self.text.xs3
     Xs2 => self.text.xs2
     Xs => self.text.xs

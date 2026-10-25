@@ -388,7 +388,7 @@ let state_box : @ui.Style = @ui.css("row w=Full align=ACenter")
 ///|
 /// When, in the aside's place while pointed at or held (navTime, mChatTime: 11 or 12, subtle).
 // kept across runs: a value (no field of it changes)
-let row_time : @ui.TextStyle = @ui.text_style(size=Xs, color=Subtle, wrap=false)
+let row_time : @ui.TextStyle = @ui.text_style(size=Caption, color=Subtle, wrap=false)
 
 ///|
 /// What stands at a row's title's end (Sidebar.css.ts sessionKind): a column 16 wide, its mark (12) in the middle.
@@ -840,7 +840,7 @@ let swipe_over : @ui.Style = @ui.style(w=Full, h=Fixed(touch_row_h), min_h=Fixed
 
 ///|
 // kept across runs: a value (no field of it changes)
-let swipe_words : @ui.TextStyle = @ui.text_style(size=Lg, weight=Semibold, wrap=false)
+let swipe_words : @ui.TextStyle = @ui.text_style(size=Body, weight=Semibold, wrap=false)
 
 ///|
 fn dclamp(v : Double, lo : Double, hi : Double) -> Double {
