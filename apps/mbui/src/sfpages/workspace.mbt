@@ -373,11 +373,11 @@ fn invitations(c : @ui.Ctx, src : Source, close : () -> Unit) -> Unit {
       })
       |> ignore
       let busy = new_ws.responding != ""
-      if @settings.button(c, "invite/join/" + id, @sf.t("android-misc.invite.join"), true, busy=new_ws.responding == "+" + id) &&
+      if @sf.button(c, @sf.t("android-misc.invite.join"), key="invite/join/" + id, tone=Primary, busy=new_ws.responding == "+" + id) &&
         !busy {
         answer_invitation(src, account, id, true, name, close)
       }
-      if @settings.button(c, "invite/ignore/" + id, @sf.t("android-misc.invite.ignore"), false, busy=new_ws.responding == "-" + id) &&
+      if @sf.button(c, @sf.t("android-misc.invite.ignore"), key="invite/ignore/" + id, busy=new_ws.responding == "-" + id) &&
         !busy {
         answer_invitation(src, account, id, false, name, fn() {  })
       }

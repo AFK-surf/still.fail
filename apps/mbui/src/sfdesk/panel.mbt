@@ -488,7 +488,7 @@ fn side_panel(
         |> ignore
       }
       // the panel's switch stays in its top right corner, open or closed
-      if icon_button(c, "side/close", if alone { "close" } else { "panel-close" }, label=@sf.t("web-pages.chat.closePanel"), action="panel.close") {
+      if @sf.icon_button(c, if alone { "close" } else { "panel-close" }, key="side/close", round=true, label=@sf.t("web-pages.chat.closePanel"), shortcut="panel.close") {
         side_change(src, r, "clear", None)
       }
     })
@@ -665,32 +665,7 @@ let side_title_row : @ui.Style = @ui.style(w=@sf.grow).then(@ui.css("row pl=S4 g
 let side_title_words : @ui.TextStyle = @ui.text_style(size=Body, weight=Semibold, color=Fg, leading=L6, wrap=false, w=Cut)
 
 ///|
-/// An icon button of a page's bar (page.css.ts iconBtn): 32 square, the nav's corner, the pointer's ground and ink
-/// on hover; named for a screen reader, and said under it on hover with its keys (`action`'s: the web's IconButton).
-/// True on the frame after a press.
-pub fn icon_button(c : @ui.Ctx, key : String, icon : String, label? : String = "", action? : String = "") -> Bool {
-  let t = @sf.theme()
-  let id = c.id(key)
-  c.cursor(id, Hand)
-  let hot = c.lit(id) || c.pressed(id)
-  let b = c.box(style=bar_icon_button.then(@sf.finger_least()), id~, fn() {
-    @sf.icon(c, icon, size=16.0, color=if hot { t.p.text } else { t.p.muted }) |> ignore
-  })
-  if label != "" {
-    c.semantics(b, Button, id~, label~)
-    @sf.tip(c, key, id, label, shortcut=action)
-  }
-  c.clicked(id)
-}
-
-///|
-// kept across runs: a value (no field of it changes)
-let bar_icon_button : @ui.Style = @ui.css(
-  #|w=S8 h=S8 radius=Full align=ACenter justify=JCenter hovered{bg=Hover} pressed{bg=Hover}
-)
-
-///|
-/// A bar's icon button's side (bar_icon_button: 32, a finger's 44: @sf.finger_side): a circle, so in a panel's corner
+/// A bar's icon button's side (@sf.icon_button, round: 32, a finger's 44: @sf.finger_side): a circle, so in a panel's corner
 /// it stands where it is concentric.
 fn bar_button_side() -> Double {
   @sf.finger_side(32.0)

@@ -41,7 +41,7 @@ pub fn new_chat_page(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
       // its bar (newChatBar): 文件 where a chat's bar has it, over the page, what is in its middle where it is
       c.layer(fn() {
         c.box(style=new_files_bar, fn() {
-          if icon_button(c, "new/files", "folder", label=@sf.t("web-pages.chat.files")) {
+          if @sf.icon_button(c, "folder", key="new/files", round=true, label=@sf.t("web-pages.chat.files")) {
             new_files_set(src, w.id, !files)
           }
           // (its end by the window's while the page is moved aside for the sidebar shown a while)
@@ -161,7 +161,7 @@ fn new_files_panel(c : @ui.Ctx, src : Source, w : Workspace, address : String) -
         |> ignore
       })
       |> ignore
-      if icon_button(c, "new/files-close", "panel-close", label=@sf.t("web-pages.chat.closePanel"), action="panel.close") {
+      if @sf.icon_button(c, "panel-close", key="new/files-close", round=true, label=@sf.t("web-pages.chat.closePanel"), shortcut="panel.close") {
         new_files_set(src, w.id, false)
       }
     })

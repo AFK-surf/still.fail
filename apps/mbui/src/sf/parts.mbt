@@ -136,8 +136,9 @@ pub fn button_height() -> Double {
 }
 
 ///|
-/// An icon button (page.css.ts iconBtn): `size` square (32), its corner 12,
-/// the icon (16) quiet until pointed at; `on` held down (aria-pressed).
+/// An icon button (page.css.ts iconBtn, parts.tsx IconButton): `size` square (32), its corner 12 (`round`: a circle,
+/// where it stands in a pane's corner, concentric with it), the icon (16) quiet until pointed at; `on` held down
+/// (aria-pressed); named for a screen reader and said in its tip with its keys (`shortcut`, an action's).
 /// `ink` and `quiet` for one over a ground of its own (the reader's paper).
 pub fn icon_button(
   c : @ui.Ctx,
@@ -151,6 +152,7 @@ pub fn icon_button(
   quiet? : Int64,
   disabled? : Bool = false,
   label? : String = "",
+  shortcut? : String = "",
 ) -> Bool {
   let t = theme()
   // (a finger's: 44 at least, the icon in its middle)
@@ -181,7 +183,7 @@ pub fn icon_button(
   // named (IconButton's label): what a screen reader calls it, and its tip
   if label != "" {
     c.semantics(b, Button, id~, label~, disabled~)
-    tip(c, "ib/" + key + icon, id, label)
+    tip(c, "ib/" + key + icon, id, label, shortcut~)
   }
   !disabled && c.clicked(id)
 }
