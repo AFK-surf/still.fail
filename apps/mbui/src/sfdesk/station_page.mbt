@@ -945,8 +945,12 @@ let st_count : @ui.TextStyle = @ui.text_style(size=Meta, leading=L7, weight=Medi
 let st_memory : @ui.TextStyle = @ui.text_style(size=Meta, leading=L6, color=Muted, w=Full)
 
 ///|
+/// A profile's maker's mark leading its row: a tile in the row's corner the ladder's inset in, concentric with it (the
+/// small block's 10), not a circle, which no row's corner there could hold concentric (the user, 2026-10-25: 不用圆形就行了).
 // kept across runs: a value (no field of it changes)
-let st_profile_mark : @ui.Style = @ui.css("w=S9 h=S9 radius=Full bg=Neutral align=ACenter justify=JCenter")
+let st_profile_mark : @ui.Style = @ui.css("w=S9 h=S9 bg=Neutral align=ACenter justify=JCenter").then(
+  @ui.style(radius=@sf.small_radius),
+)
 
 ///|
 // kept across runs: a value (no field of it changes)

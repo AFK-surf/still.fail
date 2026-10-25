@@ -467,7 +467,7 @@ fn triple_runs_who(c : @ui.Ctx, src : Source, station : String, of : String, v :
     )
   }
   c.box(style=triple_who_room, keep=true, fn() {
-    c.box(style=triple_who, id=who, fn() {
+    c.box(style=triple_who(), id=who, fn() {
       c.text(@sf.t("web-main.model.account"), style=triple_who_lead) |> ignore
       let level = text(v, "whoLevel")
       c.text(
@@ -824,12 +824,15 @@ let triple_drop_runtime : Int = 3
 let triple_drop_effort : Int = 4
 
 ///|
+/// The triple as a row's value (28 high at its end, in its middle): a capsule, as the round controls beside it are, its
+/// shape its height's wherever the row's corners are (a row's corner with it at its end 10 in would be 10 here, 8.4 in
+/// a finger's taller row, its own 8 in neither).
 // kept across runs: a value (no field of it changes)
-let triple_style : @ui.Style = @ui.css("row h=S7 px=S2_5 gap=S1_5 align=ACenter radius=Lg hovered{bg=Hover}")
+let triple_style : @ui.Style = @ui.css("row h=S7 px=S2_5 gap=S1_5 align=ACenter radius=Full hovered{bg=Hover}")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let triple_on : @ui.Style = @ui.css("row h=S7 px=S2_5 gap=S1_5 align=ACenter radius=Lg bg=Hover")
+let triple_on : @ui.Style = @ui.css("row h=S7 px=S2_5 gap=S1_5 align=ACenter radius=Full bg=Hover")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -986,11 +989,18 @@ let triple_borrow : @ui.Style = @ui.css("w=Full px=S2_5 py=S1_5")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let triple_who_room : @ui.Style = @ui.style(row=true, w=@sf.grow, h=Full)
+let triple_who_room : @ui.Style = @ui.style(row=true, w=@sf.grow, h=Full, align=ACenter)
+
+///|
+/// Who runs it, a capsule at the foot's start as tall as the foot's buttons (@sf.button_height), so standing in the
+/// panel's foot corner where they stand in the other, concentric with it, as far from its foot as from its side.
+fn triple_who() -> @ui.Style {
+  triple_who_look.then(@ui.style(h=Fixed(@sf.button_height())))
+}
 
 ///|
 // kept across runs: a value (no field of it changes)
-let triple_who : @ui.Style = @ui.css("row h=Full px=S2_5 gap=S1 align=ACenter radius=Full hovered{bg=Hover}")
+let triple_who_look : @ui.Style = @ui.css("row px=S2_5 gap=S1 align=ACenter radius=Full hovered{bg=Hover}")
 
 
 ///|
