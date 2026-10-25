@@ -20,7 +20,6 @@ import { checkQuota } from "../src/accounts/quota.ts";
 import { tr } from "../src/ops/i18n.ts";
 import { platform } from "../src/platform/index.ts";
 import { callsOf } from "../src/usage/counter.ts";
-import { TranscriptTail } from "../src/sessions/live.ts";
 import { readTimeline, transcriptPath } from "../src/read/transcript.ts";
 
 const fake = join(dirname(fileURLToPath(import.meta.url)), "fake");
@@ -207,13 +206,8 @@ describe("the Devin driver", { concurrency: true }, () => {
       { id: `devin:${usage[0].run}`, model: "swe-2", input: 2100, cacheRead: 1200, cacheWrite: 0, output: 153 },
       { id: `devin:${usage[1].run}`, model: "swe-2", input: 600, cacheRead: 400, cacheWrite: 0, output: 50 },
     ]);
-    // The history's usage: the turns' counts (their calls, 3 and 1), and the context the last one ended with, of the model's window.
-    const tail = new TranscriptTail("devin", path!);
-    tail.read();
-    assert.deepEqual(
-      [tail.usage.modelCalls, tail.usage.inputTokens, tail.usage.cachedTokens, tail.usage.outputTokens, tail.usage.contextTokens, tail.usage.contextWindow, tail.usage.model],
-      [4, 4300, 1600, 203, 1050, 262000, "swe-2"],
-    );
+    // Each turn's calls (3 and 1), and the context it ended with, of the model's window: what a chat says of them.
+    assert.deepEqual(calls.map(({ calls, context, window }) => [calls, context, window]), [[3, 1252, 262000], [1, 1050, 262000]]);
 
     // Between turns, another model (its family's option) and level are set in the process; one it has not, not.
     assert.equal(session.retune?.({ ...o, model: "claude-opus-5-5", effort: "low" }), true);

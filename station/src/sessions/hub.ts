@@ -193,9 +193,9 @@ export class Hub {
       this.clock,
     );
     // The sessions at work are followed by the station itself (live.ts `running`): as the store says each starts and
-    // stops, and those at work now. Each transcript's length and each session's usage go where its summary reads them.
+    // stops, and those at work now. Each transcript's length goes where its summary reads it (its usage, the usage
+    // part keeps: usage/module.ts).
     this.live.lengths = (key, n) => this.store.setTranscriptLength(key, n);
-    this.live.usages = (key, usage) => this.store.setSessionUsage(key, usage);
     this.unlistenRunning = this.store.subscribe((change) => {
       if (change.type === "session") this.live.running(change.key, this.store.getSession(change.key)?.running === true);
       else if (change.type === "sessionRemoved") this.live.running(change.key, false);

@@ -10,6 +10,7 @@ import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { zstdDecompressSync } from "node:zlib";
 import { wall } from "../ops/fibers.ts";
+import { USAGE_GROUPS } from "../store/usage.ts";
 import { CARD_BEFORE, CC_THREADS_SQL, CLOSED_SINCE, type InWorkspace, JOBS_RUNNING, LETTER_SQL, OPTIONS_BEFORE, SAID_SINCE, SESSION_JOBS, SESSION_OF_RUNTIME, PEOPLE_AT, type Letter, isLetter, liveShare, sees, toChatShare, withLetter } from "../store/rows.ts";
 
 export type Json = any;
@@ -918,17 +919,7 @@ export type UsageGroup = {
 /// usage_groups: the calls from `from` until `to` (ms), added up by day in the asker's time zone (`utcOffsetMin`) and by
 /// thread, person, profile and model. Bounds are i64s (bigint), bound as integers as rusqlite binds them.
 export function usageGroups(s: Store, from: bigint, to: bigint, utcOffsetMin: bigint): UsageGroup[] {
-  return all(
-    s,
-    `SELECT strftime('%Y-%m-%d', (at + ?3 * 60000) / 1000, 'unixepoch') AS day, session, thread, person, profile, runtime, model, fast,
-       COUNT(*) AS calls, SUM(input) AS input, SUM(cache_read) AS cache_read, SUM(cache_write) AS cache_write,
-       SUM(cache_write_long) AS cache_write_long, SUM(output) AS output
-     FROM usage WHERE at >= ?1 AND at < ?2
-     GROUP BY day, session, thread, person, profile, runtime, model, fast`,
-    from,
-    to,
-    utcOffsetMin,
-  ).map((r) => ({
+  return all(s, USAGE_GROUPS, from, to, utcOffsetMin).map((r) => ({
     day: r.day, session: r.session, thread: r.thread, person: r.person, profile: r.profile, runtime: r.runtime, model: r.model,
     fast: r.fast !== 0 && r.fast !== null, calls: r.calls, input: r.input, cacheRead: r.cache_read, cacheWrite: r.cache_write,
     cacheWriteLong: r.cache_write_long, output: r.output,

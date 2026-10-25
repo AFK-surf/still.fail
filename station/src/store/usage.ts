@@ -3,10 +3,12 @@
 import type { DatabaseSync } from "node:sqlite";
 import { type Json, STILLFAIL_SURFACE } from "./rows.ts";
 
-/// A model call read from a transcript. Tokens as the provider bills them.
+/// A model call read from a transcript (or a turn's calls, told at once: `calls` of them). Tokens as the provider bills
+/// them. `context`: of a main-thread call, what its session's context held after it (null: not told); `window`: the
+/// model's context window, where the runtime tells it.
 export type UsageCall = {
   id: string; at: number; model: string | null; subagent: boolean; fast: boolean; input: number; cacheRead: number;
-  cacheWrite: number; cacheWriteLong: number; output: number;
+  cacheWrite: number; cacheWriteLong: number; output: number; calls: number; context: number | null; window: number | null;
 };
 
 /// How far a transcript has been read, and for which session (null: none of the station's).
@@ -40,8 +42,8 @@ export function recordUsage(db: DatabaseSync, path: string, file: UsageFile, run
   let added = 0;
   if (file.session !== null) {
     const insert = db.prepare(
-      `INSERT INTO usage (id, at, session, turn, thread, person, profile, runtime, model, subagent, fast, input, cache_read, cache_write, cache_write_long, output)
-       VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16)
+      `INSERT INTO usage (id, at, session, turn, thread, person, profile, runtime, model, subagent, fast, input, cache_read, cache_write, cache_write_long, output, calls, context, context_window)
+       VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19)
        ON CONFLICT (id) DO UPDATE SET output = MAX(output, excluded.output)`,
     );
     const known = db.prepare("SELECT 1 FROM usage WHERE id = ?");
@@ -49,7 +51,7 @@ export function recordUsage(db: DatabaseSync, path: string, file: UsageFile, run
       const was = known.get(c.id) !== undefined;
       insert.run(
         c.id, c.at, file.session, of.turn, of.thread, of.person, of.profile, runtime, c.model, c.subagent ? 1 : 0, c.fast ? 1 : 0,
-        c.input, c.cacheRead, c.cacheWrite, c.cacheWriteLong, c.output,
+        c.input, c.cacheRead, c.cacheWrite, c.cacheWriteLong, c.output, c.calls, c.context, c.window,
       );
       if (!was) added++;
     }
@@ -122,16 +124,14 @@ export function usageTurns(db: DatabaseSync, session: string, from: number, unti
   return out;
 }
 
-/// What a model call sent, all of it (cached or not): on the main thread, the context its session carries on with.
-const CONTEXT = "input + cache_read + cache_write + cache_write_long";
-
-/// A main-thread call as the pool weighs moving its session (sessions/pool.ts `cheapToLeave`).
-export type ContextCall = { turn: string | null; profile: string | null; model: string | null; context: number };
+/// A main-thread call as the pool weighs moving its session (sessions/pool.ts `cheapToLeave`) and as a session's usage
+/// says where its context stands (usage/module.ts `usageNow`): the context it left (null: not told) and the model's window.
+export type ContextCall = { turn: string | null; profile: string | null; model: string | null; context: number | null; window: number | null };
 
 /// A session's last `limit` main-thread calls, oldest first.
 export function lastContexts(db: DatabaseSync, session: string, limit: number): ContextCall[] {
-  const rows = db.prepare(`SELECT turn, profile, model, ${CONTEXT} AS context FROM usage WHERE session = ?1 AND subagent = 0 ORDER BY at DESC LIMIT ?2`).all(session, limit) as Json[];
-  return rows.reverse().map((r) => ({ turn: r.turn, profile: r.profile, model: r.model, context: r.context }));
+  const rows = db.prepare("SELECT turn, profile, model, context, context_window FROM usage WHERE session = ?1 AND subagent = 0 ORDER BY at DESC LIMIT ?2").all(session, limit) as Json[];
+  return rows.reverse().map((r) => ({ turn: r.turn, profile: r.profile, model: r.model, context: r.context, window: r.context_window }));
 }
 
 /// Where each model's context was compacted on this station since `since`: the most a main-thread call sent before
@@ -142,20 +142,19 @@ export function compactionPoints(db: DatabaseSync, since: number): Map<string, n
   return new Map(rows.map((r) => [r.model, r.point]));
 }
 
+/// The calls from `?1` until `?2` (ms), added up by day in the asker's time zone (`?3`, minutes east of UTC) and by
+/// thread, person, profile and model: as the station adds them up and as its readers do for the usage page
+/// (read/store.ts usageGroups).
+export const USAGE_GROUPS = `SELECT strftime('%Y-%m-%d', (at + ?3 * 60000) / 1000, 'unixepoch') AS day, session, thread, person, profile, runtime, model, fast,
+    SUM(calls) AS calls, SUM(input) AS input, SUM(cache_read) AS cache_read, SUM(cache_write) AS cache_write,
+    SUM(cache_write_long) AS cache_write_long, SUM(output) AS output
+  FROM usage WHERE at >= ?1 AND at < ?2
+  GROUP BY day, session, thread, person, profile, runtime, model, fast`;
+
 /// usage_groups: the calls from `from` until `to` (ms), added up by day in the asker's time zone (`utcOffsetMin`) and
 /// by thread, person, profile and model.
 export function usageGroups(db: DatabaseSync, from: number, to: number, utcOffsetMin: number): UsageGroup[] {
-  return (
-    db
-      .prepare(
-        `SELECT strftime('%Y-%m-%d', (at + ?3 * 60000) / 1000, 'unixepoch') AS day, session, thread, person, profile, runtime, model, fast,
-           COUNT(*) AS calls, SUM(input) AS input, SUM(cache_read) AS cache_read, SUM(cache_write) AS cache_write,
-           SUM(cache_write_long) AS cache_write_long, SUM(output) AS output
-         FROM usage WHERE at >= ?1 AND at < ?2
-         GROUP BY day, session, thread, person, profile, runtime, model, fast`,
-      )
-      .all(from, to, utcOffsetMin) as Json[]
-  ).map((r) => ({
+  return (db.prepare(USAGE_GROUPS).all(from, to, utcOffsetMin) as Json[]).map((r) => ({
     day: r.day, session: r.session, thread: r.thread, person: r.person, profile: r.profile, runtime: r.runtime, model: r.model,
     fast: r.fast !== 0 && r.fast !== null, calls: r.calls, input: r.input, cacheRead: r.cache_read, cacheWrite: r.cache_write,
     cacheWriteLong: r.cache_write_long, output: r.output,

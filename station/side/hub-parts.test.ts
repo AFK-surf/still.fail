@@ -23,7 +23,6 @@ test("a watcher gets what it lacks, the steps in flight, then new entries as the
   const id = hub.subscribe("s", 1, null, (m) => void got.push(m));
   assert.equal(got[0]!.type, "timeline");
   assert.deepEqual((got[0] as any).entries.map((e: any) => e.text), ["two"]);
-  assert.equal((got[0] as any).usage.modelCalls, 2);
   assert.equal(got[1]!.type, "steps");
   assert.equal((got[1] as any).steps[0].step, "text", "what a step is, not what it wrote");
   got.length = 0;
@@ -60,8 +59,6 @@ test("a session gone on in a new runtime session: its history reads on from the 
   const told = () => got.flatMap((m) => (m.type === "timeline" ? m.entries.map((e, i) => `${m.start + i}:${e.text}`) : []));
   for (let i = 0; i < 100 && !told().includes("3:four"); i++) await new Promise((r) => setTimeout(r, 20));
   assert.deepEqual(told(), ["0:one", "1:two", "2:three", "3:four"]);
-  const last = got.filter((m): m is Extract<LiveMessage, { type: "timeline" }> => m.type === "timeline").at(-1)!;
-  assert.equal(last.usage.modelCalls, 4, "the usage of both");
   assert.deepEqual(hub.before("s", 10, 10)![1].map((e) => e.text), ["one", "two", "three", "four"]);
   hub.close();
   rmSync(dir, { recursive: true, force: true });

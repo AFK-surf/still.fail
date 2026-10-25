@@ -9,7 +9,7 @@ import { monitorEventLoopDelay } from "node:perf_hooks";
 import { DatabaseSync } from "node:sqlite";
 import { after, test } from "node:test";
 import { zstdCompressSync, zstdDecompressSync } from "node:zlib";
-import { cost, price, priceTable, sessionUsage } from "../src/read/usage.ts";
+import { cost, price, priceTable, sessionUsage, usageNow } from "../src/read/usage.ts";
 import { iso, parseIso } from "../src/read/transcript.ts";
 import { type StoreChange, type UsageGroup, Store, newMessage } from "../src/store/store.ts";
 import { type CallState, UsageCounter, callsOf, claudeFiles, claudeProject, readFrom } from "../src/usage/counter.ts";
@@ -49,28 +49,32 @@ const usage = (input: number, read: number, short: number, long: number, output:
 
 const fresh = (): CallState => ({ model: null, codexId: null });
 
-test("a Claude response written as several lines counts once, with its cache split by how long", () => {
+test("a Claude response written as several lines counts once, with its cache split by how long and the context it sent", () => {
   const text = [
     claudeLine("m1", 1000, "claude-opus-5-5", usage(2, 100, 0, 50, 10)),
     claudeLine("m1", 1001, "claude-opus-5-5", usage(2, 100, 0, 50, 30)),
     JSON.stringify({ type: "user", message: { content: "usage" } }),
     claudeLine("m2", 2000, "<synthetic>", usage(0, 0, 0, 0, 0)),
     claudeLine("m3", 3000, "claude-sonnet-5-5", { input_tokens: 5, cache_creation_input_tokens: 7, output_tokens: 1, speed: "fast" }),
+    // A subagent's prompt is not the session's context.
+    JSON.stringify({ type: "assistant", timestamp: iso(4000), isSidechain: true, message: { id: "m4", model: "claude-haiku-4-5", usage: usage(9, 0, 0, 0, 1) } }),
   ].join("\n");
   const calls = callsOf("claude", text, false, fresh());
-  assert.equal(calls.length, 2);
+  assert.equal(calls.length, 3);
   assert.deepEqual(calls[0], {
     id: "m1", at: 1000, model: "claude-opus-5-5", subagent: false, fast: false, input: 2, cacheRead: 100, cacheWrite: 0, cacheWriteLong: 50, output: 30,
+    calls: 1, context: 152, window: null,
   });
   // Without the split, what was written to the cache is taken as written for five minutes.
-  assert.deepEqual([calls[1]!.cacheWrite, calls[1]!.cacheWriteLong, calls[1]!.fast], [7, 0, true]);
+  assert.deepEqual([calls[1]!.cacheWrite, calls[1]!.cacheWriteLong, calls[1]!.fast, calls[1]!.context], [7, 0, true, 12]);
+  assert.deepEqual([calls[2]!.subagent, calls[2]!.context], [true, null]);
 });
 
 test("Codex calls are its token counts, told once each, with the model its turn named", () => {
   const count = (total: number, input: number, cached: number, output: number) =>
     JSON.stringify({
       timestamp: iso(5000), type: "event_msg",
-      payload: { type: "token_count", info: { total_token_usage: { total_tokens: total }, last_token_usage: { input_tokens: input, cached_input_tokens: cached, output_tokens: output } } },
+      payload: { type: "token_count", info: { total_token_usage: { total_tokens: total }, last_token_usage: { input_tokens: input, cached_input_tokens: cached, output_tokens: output }, model_context_window: 258000 } },
     });
   const text = [
     JSON.stringify({ timestamp: iso(4000), type: "session_meta", payload: { id: "th1", cwd: "/w" } }),
@@ -85,7 +89,24 @@ test("Codex calls are its token counts, told once each, with the model its turn 
   const calls = callsOf("codex", text, false, state);
   assert.deepEqual(calls.map((c) => c.id), ["codex:th1:120", "codex:th1:120", "codex:th1:200"], "repeats are left to the store, which keeps one");
   assert.deepEqual([calls[0]!.input, calls[0]!.cacheRead, calls[0]!.output, calls[0]!.model], [40, 60, 20, "gpt-6"]);
+  // What it sent (its input has what was cached in it) is the context, of the window it says.
+  assert.deepEqual([calls[2]!.context, calls[2]!.window], [70, 258000]);
   assert.equal(state.model, "gpt-6");
+});
+
+test("a turn told at once is the calls it says, with the context it ended with; dsh's window comes before its calls", () => {
+  const turn = (run: string, calls: number, context: number) =>
+    JSON.stringify({ type: "usage", run, time: 1000, model: "swe-2", calls, context, window: 262000, usage: { inputTokens: 10, cacheReadTokens: 5, cacheWriteTokens: 0, outputTokens: 2 } });
+  assert.deepEqual(callsOf("devin", [turn("r1", 3, 1252), turn("r2", 0, 0)].join("\n"), false, fresh()).map((c) => [c.id, c.calls, c.context, c.window]), [
+    ["devin:r1", 3, 1252, 262000],
+    // One that says none: one call, its context not told.
+    ["devin:r2", 1, null, 262000],
+  ]);
+  const dsh = [
+    JSON.stringify({ type: "request/context", data: { contextWindow: 128000 } }),
+    JSON.stringify({ type: "assistant/message", time: 1000, data: { message: { id: "a1", source: { model: "deepseek-v4" } }, usage: { inputTokens: 10, cacheReadTokens: 90, cacheWriteTokens: 5, outputTokens: 3 } } }),
+  ].join("\n");
+  assert.deepEqual(callsOf("dsh", dsh, false, fresh()).map((c) => [c.calls, c.context, c.window]), [[1, 105, 128000]]);
 });
 
 const group = (g: Partial<UsageGroup>): UsageGroup => ({
@@ -406,14 +427,24 @@ test("asked, a working session is read before its turn ends; its execution detai
   await time.adjust(20);
   await time.begun(3);
   assert.deepEqual(r.store.usageOfSession("k"), [], "a turn starting is not its end");
-  r.usage.soon();
+  // Another at work, not asked of: not read with it.
+  const other = join(r.data, "w2");
+  session(r.store, "j", other, r.store.now() - 1000);
+  r.store.startTurn("t2", "j", "input");
+  append(join(r.data, "transcripts/claude", claudeProject(other), "r.jsonl"), [claudeLine("n", r.store.now() + 1, "claude-opus-5-5", usage(1, 0, 0, 0, 1))]);
   await time.begun(4);
   await time.adjust(20);
   await time.begun(5);
+  r.usage.soon("k");
+  await time.begun(6);
+  await time.adjust(20);
+  await time.begun(7);
   // Opus 5.5: $4 in, $0.2 read, $20 out.
-  assert.deepEqual(sessionUsage(r.store.usageOfSession("k")), {
+  assert.deepEqual(usageNow(r.store, "k"), {
     modelCalls: 1, inputTokens: 1010, cachedTokens: 1000, outputTokens: 100, cost: (10 * 4 + 1000 * 0.2 + 100 * 20) / 1e6, unpricedCalls: 0,
+    model: "claude-opus-5-5", contextTokens: 1010, contextWindow: null,
   });
+  assert.deepEqual(r.store.usageOfSession("j"), [], "only the one asked of");
   await r.usage.stop();
 });
 
@@ -481,23 +512,27 @@ test("on a real station's copy, the calls counted are the Rust's", { skip: !exis
   assert.equal(more, 0);
 });
 
-test("a session's summary says what its calls used: counted over what its live view told, else its last call's", () => {
+test("a session's summary says what its calls used as recorded: added up and priced, and where its last call of its own left its context", () => {
   const store = Store.open(":memory:", null);
   stores.push(store);
   store.insertSession({ key: "k", connect: "ds", runtime: "claude", profile: "cc", workspace: "/w/k", token: "k", createdAt: 1, lastActiveAt: 1 });
   keepUsage(store, "k");
   assert.equal(store.sessionUsage("k"), null, "no call: none");
   const of = { turn: null, person: null, thread: null, profile: "cc" };
-  const call = (id: string, at: number, subagent: boolean, input: number): [UsageCall, UsageFor] =>
-    [{ id, at, model: subagent ? "claude-haiku-4-5" : "claude-opus-5-5", subagent, fast: false, input, cacheRead: 100, cacheWrite: 10, cacheWriteLong: 0, output: 5 }, of];
-  store.recordUsage("/t.jsonl", { session: "k", offset: 1, model: null }, "claude", [call("a", 1000, false, 1), call("b", 2000, false, 2), call("c", 3000, true, 50)]);
+  const call = (id: string, at: number, subagent: boolean, input: number, window: number | null = null): [UsageCall, UsageFor] => [
+    { id, at, model: subagent ? "claude-haiku-4-5" : "claude-opus-5-5", subagent, fast: false, input, cacheRead: 100, cacheWrite: 10, cacheWriteLong: 0, output: 5,
+      calls: 1, context: subagent ? null : input + 110, window },
+    of,
+  ];
+  store.recordUsage("/t.jsonl", { session: "k", offset: 1, model: null }, "claude", [call("a", 1000, false, 1), call("b", 2000, false, 2, 1000), call("c", 3000, true, 50)]);
   keepUsage(store, "k", true);
   const kept = store.sessionUsage("k");
-  // Before its live view told any: the model and the context of its last call of its own (not a subagent's).
-  assert.deepEqual([kept.modelCalls, kept.inputTokens, kept.cachedTokens, kept.outputTokens, kept.model, kept.contextTokens, kept.contextWindow], [3, 383, 300, 15, "claude-opus-5-5", 112, null]);
+  // The model, the context and the window of its last call of its own (not a subagent's).
+  assert.deepEqual([kept.modelCalls, kept.inputTokens, kept.cachedTokens, kept.outputTokens, kept.model, kept.contextTokens, kept.contextWindow], [3, 383, 300, 15, "claude-opus-5-5", 112, 1000]);
   assert.ok(kept.cost > 0);
-  // What its live view told of the rest stays (a window the runtime told), its calls as counted.
-  store.setSessionUsage("k", { ...kept, modelCalls: 2, contextTokens: 90, contextWindow: 1000 }, true);
+  assert.deepEqual(kept, usageNow(store, "k"), "as its chat says it while it works");
+  // A context not told is not said.
+  store.recordUsage("/t.jsonl", { session: "k", offset: 2, model: null }, "claude", [[{ ...call("d", 4000, false, 3)[0], context: null }, of]]);
   keepUsage(store, "k", true);
-  assert.deepEqual([store.sessionUsage("k").modelCalls, store.sessionUsage("k").contextTokens, store.sessionUsage("k").contextWindow], [3, 90, 1000]);
+  assert.deepEqual([store.sessionUsage("k").modelCalls, "contextTokens" in store.sessionUsage("k")], [4, false]);
 });

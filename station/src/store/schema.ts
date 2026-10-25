@@ -280,7 +280,11 @@ CREATE TABLE IF NOT EXISTS closed_cards (
 -- The cards closed lately (store.ts answersSince, at each list of chats).
 CREATE INDEX IF NOT EXISTS closed_cards_at ON closed_cards (at);
 -- What the agents spent (store/usage.rs): one row per model call their runtimes recorded, read from the transcripts,
--- with whom and what it was for as it was then. Kept when its session goes: it was spent all the same.
+-- with whom and what it was for as it was then. Kept when its session goes: it was spent all the same. The one record
+-- of it: a chat's usage and the usage page are both added up from here (usage/module.ts, read/usage.ts). calls: how
+-- many calls the row is (a runtime that tells a turn's counts at once, Devin or Grok Build, says how many it made).
+-- context: of a main-thread row, what its session's context held after it (the prompt a call sent; what the runtime
+-- says of a turn's last call); context_window: the model's window where the runtime tells it. NULL: not told.
 CREATE TABLE IF NOT EXISTS usage (
   id TEXT PRIMARY KEY,
   at INTEGER NOT NULL,
@@ -297,7 +301,10 @@ CREATE TABLE IF NOT EXISTS usage (
   cache_read INTEGER NOT NULL,
   cache_write INTEGER NOT NULL,
   cache_write_long INTEGER NOT NULL,
-  output INTEGER NOT NULL
+  output INTEGER NOT NULL,
+  calls INTEGER NOT NULL DEFAULT 1,
+  context INTEGER,
+  context_window INTEGER
 );
 CREATE INDEX IF NOT EXISTS usage_at ON usage (at);
 -- A session's calls (session_usage, accounts.ts lastContexts) read without the rest.
@@ -377,9 +384,8 @@ CREATE TABLE IF NOT EXISTS transcript_lengths (
   session TEXT PRIMARY KEY,
   n INTEGER NOT NULL
 );
--- What each session's calls used (read/tail.ts TranscriptUsage, as JSON), as its live view last told it or the usage
--- counter counted it since (sessions/live.ts, usage/module.ts): its summary says it, so a device knows what an agent at
--- rest used without following it.
+-- What each session's calls used (read/usage.ts SessionUsage, as JSON), as the usage counter recorded them
+-- (usage/module.ts keepUsage): its summary says it, so a device knows what an agent at rest used without following it.
 CREATE TABLE IF NOT EXISTS session_usage (
   session TEXT PRIMARY KEY,
   usage TEXT NOT NULL
@@ -535,6 +541,19 @@ export function addSizeColumn(db: DatabaseSync): void {
 /// session's usage is a few rows, where adding up its calls read every one of them, scattered over the table: some
 /// 20,000 for a long chat, seconds of reading on a machine short of memory, on the main thread, each time the live view
 /// of a session at work told its usage (ccvm, 2026-10-24: the station stopped answering for up to a minute).
+/// The triggers that add a call to its session's totals and take one away, each by the calls it is (usage.calls).
+const USAGE_TOTALS_KEPT = `
+CREATE TRIGGER usage_totals_add AFTER INSERT ON usage BEGIN
+  INSERT INTO usage_totals VALUES (NEW.session, NEW.runtime, COALESCE(NEW.model, ''), NEW.fast, NEW.calls, NEW.input, NEW.cache_read, NEW.cache_write, NEW.cache_write_long, NEW.output)
+  ON CONFLICT (session, runtime, model, fast) DO UPDATE SET calls = calls + excluded.calls, input = input + excluded.input, cache_read = cache_read + excluded.cache_read,
+    cache_write = cache_write + excluded.cache_write, cache_write_long = cache_write_long + excluded.cache_write_long, output = output + excluded.output;
+END;
+CREATE TRIGGER usage_totals_drop AFTER DELETE ON usage BEGIN
+  UPDATE usage_totals SET calls = calls - OLD.calls, input = input - OLD.input, cache_read = cache_read - OLD.cache_read, cache_write = cache_write - OLD.cache_write,
+    cache_write_long = cache_write_long - OLD.cache_write_long, output = output - OLD.output
+  WHERE session = OLD.session AND runtime = OLD.runtime AND model = COALESCE(OLD.model, '') AND fast = OLD.fast;
+END;
+`;
 const USAGE_TOTALS = `
 CREATE TABLE usage_totals (
   session TEXT NOT NULL,
@@ -550,23 +569,38 @@ CREATE TABLE usage_totals (
   PRIMARY KEY (session, runtime, model, fast)
 ) WITHOUT ROWID;
 INSERT INTO usage_totals
-  SELECT session, runtime, COALESCE(model, ''), fast, COUNT(*), SUM(input), SUM(cache_read), SUM(cache_write), SUM(cache_write_long), SUM(output)
+  SELECT session, runtime, COALESCE(model, ''), fast, SUM(calls), SUM(input), SUM(cache_read), SUM(cache_write), SUM(cache_write_long), SUM(output)
   FROM usage NOT INDEXED GROUP BY session, runtime, COALESCE(model, ''), fast;
-CREATE TRIGGER usage_totals_add AFTER INSERT ON usage BEGIN
-  INSERT INTO usage_totals VALUES (NEW.session, NEW.runtime, COALESCE(NEW.model, ''), NEW.fast, 1, NEW.input, NEW.cache_read, NEW.cache_write, NEW.cache_write_long, NEW.output)
-  ON CONFLICT (session, runtime, model, fast) DO UPDATE SET calls = calls + 1, input = input + excluded.input, cache_read = cache_read + excluded.cache_read,
-    cache_write = cache_write + excluded.cache_write, cache_write_long = cache_write_long + excluded.cache_write_long, output = output + excluded.output;
-END;
+${USAGE_TOTALS_KEPT}
 CREATE TRIGGER usage_totals_grow AFTER UPDATE OF output ON usage WHEN NEW.output <> OLD.output BEGIN
   UPDATE usage_totals SET output = output + NEW.output - OLD.output
   WHERE session = NEW.session AND runtime = NEW.runtime AND model = COALESCE(NEW.model, '') AND fast = NEW.fast;
 END;
-CREATE TRIGGER usage_totals_drop AFTER DELETE ON usage BEGIN
-  UPDATE usage_totals SET calls = calls - 1, input = input - OLD.input, cache_read = cache_read - OLD.cache_read, cache_write = cache_write - OLD.cache_write,
-    cache_write_long = cache_write_long - OLD.cache_write_long, output = output - OLD.output
-  WHERE session = OLD.session AND runtime = OLD.runtime AND model = COALESCE(OLD.model, '') AND fast = OLD.fast;
-END;
 `;
+
+/// The columns usage came with as the one record of what was spent (usage.calls, context, context_window), added to a
+/// table made before them, in one transaction: a row from before is one call, and a main-thread one left the context it
+/// sent (as the context of a call was worked out before), and the triggers made before them (the totals', the
+/// compactions') are made anew to read them. Before the totals and compactions are made, which read them too.
+export function addUsageColumns(db: DatabaseSync): void {
+  if (has(db, "usage", "calls")) return;
+  db.exec("BEGIN IMMEDIATE");
+  try {
+    if (!has(db, "usage", "calls")) {
+      db.exec(`ALTER TABLE usage ADD COLUMN calls INTEGER NOT NULL DEFAULT 1;
+        ALTER TABLE usage ADD COLUMN context INTEGER;
+        ALTER TABLE usage ADD COLUMN context_window INTEGER;
+        UPDATE usage SET context = input + cache_read + cache_write + cache_write_long WHERE subagent = 0;`);
+      const made = (name: string) => db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'trigger' AND name = ?").get(name) !== undefined;
+      if (made("usage_totals_add")) db.exec(`DROP TRIGGER usage_totals_add; DROP TRIGGER usage_totals_drop; ${USAGE_TOTALS_KEPT}`);
+      if (made("usage_compactions_add")) db.exec(`DROP TRIGGER usage_compactions_add; ${USAGE_COMPACTIONS_KEPT}`);
+    }
+    db.exec("COMMIT");
+  } catch (e) {
+    db.exec("ROLLBACK");
+    throw e;
+  }
+}
 
 /// The usage totals (USAGE_TOTALS), made once from the calls recorded before them, in the same transaction as the
 /// triggers that keep them from then on: no call is counted twice or missed. The making reads the table through once, in
@@ -584,14 +618,22 @@ export function addUsageTotals(db: DatabaseSync): void {
   }
 }
 
-/// What a main-thread call sent, all of it (store/usage.ts CONTEXT).
-const SENT = (row: string) => `${row}.input + ${row}.cache_read + ${row}.cache_write + ${row}.cache_write_long`;
+/// The trigger that keeps the compactions (USAGE_COMPACTIONS) as each main-thread call is recorded: the session's call
+/// before it, looked up by its index.
+const USAGE_COMPACTIONS_KEPT = `
+CREATE TRIGGER usage_compactions_add AFTER INSERT ON usage WHEN NEW.subagent = 0 AND NEW.model IS NOT NULL BEGIN
+  INSERT INTO usage_compactions
+    SELECT NEW.at, NEW.model, p.context FROM (
+      SELECT b.context, b.profile, b.model FROM usage b
+      WHERE b.session = NEW.session AND b.subagent = 0 AND b.at < NEW.at ORDER BY b.at DESC LIMIT 1) p
+    WHERE p.context >= ${COMPACTED_FROM} AND NEW.context * 2 < p.context AND p.profile IS NEW.profile AND p.model IS NEW.model;
+END;
+`;
 
 /// Where a model's context was compacted, at each call it was (pool.ts `cheapToLeave` asks the last days' most): the
-/// call's time and model, and what the call before it sent. Made once from the calls recorded before (what
-/// compactionPoints worked out from every call of the last days, by a window over them, each time it was asked: 4 s
-/// on ccvm, 2026-10-25), and kept by a trigger as each main-thread call is recorded: the session's call before it,
-/// looked up by its index.
+/// call's time and model, and the context the call before it left (usage.context). Made once from the calls recorded
+/// before (what compactionPoints worked out from every call of the last days, by a window over them, each time it was
+/// asked: 4 s on ccvm, 2026-10-25), and kept by a trigger from then on (USAGE_COMPACTIONS_KEPT).
 const USAGE_COMPACTIONS = `
 CREATE TABLE usage_compactions (
   at INTEGER NOT NULL,
@@ -601,17 +643,10 @@ CREATE TABLE usage_compactions (
 CREATE INDEX usage_compactions_at ON usage_compactions (at);
 INSERT INTO usage_compactions
   SELECT at, model, before FROM (
-    SELECT at, model, profile, ${SENT("u")} AS context, LAG(${SENT("u")}) OVER w AS before, LAG(profile) OVER w AS was, LAG(model) OVER w AS of
+    SELECT at, model, profile, context, LAG(context) OVER w AS before, LAG(profile) OVER w AS was, LAG(model) OVER w AS of
     FROM usage u WHERE subagent = 0 WINDOW w AS (PARTITION BY session ORDER BY at))
   WHERE before >= ${COMPACTED_FROM} AND context * 2 < before AND profile IS was AND model IS of AND model IS NOT NULL;
-CREATE TRIGGER usage_compactions_add AFTER INSERT ON usage WHEN NEW.subagent = 0 AND NEW.model IS NOT NULL BEGIN
-  INSERT INTO usage_compactions
-    SELECT NEW.at, NEW.model, p.context FROM (
-      SELECT ${SENT("b")} AS context, b.profile, b.model FROM usage b
-      WHERE b.session = NEW.session AND b.subagent = 0 AND b.at < NEW.at ORDER BY b.at DESC LIMIT 1) p
-    WHERE p.context >= ${COMPACTED_FROM} AND (${SENT("NEW")}) * 2 < p.context AND p.profile IS NEW.profile AND p.model IS NEW.model;
-END;
-`;
+${USAGE_COMPACTIONS_KEPT}`;
 
 /// The compactions (USAGE_COMPACTIONS), made once from the calls recorded before, in the same transaction as the
 /// trigger that keeps them from then on (as addUsageTotals).

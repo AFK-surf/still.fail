@@ -26,7 +26,7 @@ import {
   byBytes, cardOf, jsonList, mergeEntries, optionsCard, parsed, quote, takeChars, toEntry, toJob, toMembership,
   CC_THREADS_SQL, LETTER_SQL, isLetter, liveShare, shareLive, toChatShare, toMessage, toOpened, toPublished, toSession, toSessionThread, toThread, toTurnSummary, JOBS_RUNNING, SESSION_JOBS, CARD_BEFORE, OPTIONS_BEFORE, CLOSED_SINCE, SESSION_OF_RUNTIME, PEOPLE_AT,
 } from "./rows.ts";
-import { SCHEMA, SCHEMA_VERSION, addArchiveColumns, addListState, addThreadIndexes, addUsageCompactions, addAutoTitleColumns, addClientColumn, addLetterColumn, addQueueColumns, addSizeColumn, addUsageTotals, addWatchColumn, addWorkspaceColumns, keptIntoPins } from "./schema.ts";
+import { SCHEMA, SCHEMA_VERSION, addArchiveColumns, addListState, addThreadIndexes, addUsageCompactions, addAutoTitleColumns, addClientColumn, addLetterColumn, addQueueColumns, addSizeColumn, addUsageColumns, addUsageTotals, addWatchColumn, addWorkspaceColumns, keptIntoPins } from "./schema.ts";
 import * as usage from "./usage.ts";
 import { timed } from "./timed.ts";
 
@@ -142,6 +142,7 @@ export class Store {
       addQueueColumns(db);
       addSizeColumn(db);
       addWorkspaceColumns(db);
+      addUsageColumns(db);
       addUsageTotals(db);
       addUsageCompactions(db);
       addListState(db);
@@ -355,9 +356,9 @@ export class Store {
     this.#run("INSERT INTO transcript_lengths (session, n) VALUES (?1, ?2) ON CONFLICT (session) DO UPDATE SET n = excluded.n", key, n);
   }
 
-  /// What a session's calls used, as just told or counted (sessions/live.ts, usage/module.ts): its summary says it from
-  /// then on. While it works its stream tells each change and the summary told next carries it; at rest (the count of
-  /// its last turn comes in after it ended) the change is the session's, told as one unless `quiet`.
+  /// What a session's calls used, as just counted (usage/module.ts): its summary says it from then on. While it works
+  /// its stream tells each change and the summary told next carries it; at rest (the count of its last turn comes in
+  /// after it ended) the change is the session's, told as one unless `quiet`.
   setSessionUsage(key: string, usage: Json, quiet = false): void {
     const json = JSON.stringify(usage);
     if (this.#one("SELECT usage FROM session_usage WHERE session = ?", key)?.usage === json) return;
