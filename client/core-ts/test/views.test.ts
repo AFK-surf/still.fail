@@ -447,7 +447,7 @@ test("a_decision_let_go_from_here_is_off_the_page_at_once_and_back_if_its_statio
   assert.deepEqual(order(), ["k2"]);
   assert.equal(local.lettingGo("ws/st", 1, 5), false);
   // A vault request decided here: its card is off.
-  local.vaultDecided("r_1");
+  local.vaultDecided("r_1", { status: "granted", scope: "once" });
   await t.read(u, 1);
   assert.deepEqual(order(), []);
 });

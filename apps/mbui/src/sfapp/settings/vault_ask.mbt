@@ -41,9 +41,73 @@ fn vault_ask_reset() -> Unit {
 }
 
 ///|
-/// Request `request` in workspace `ws` as a card: what is asked (`said`: lines more of it, each its own, where they are
-/// not in its chat beside it: why the agent asks, how it would be given), and its answer at the foot (vault_actions;
-/// `mine`, `who`, `extra` as there).
+/// How a request is answered here (VaultApproval.tsx VaultActions' cases), what its card's foot is.
+pub(all) enum Answer {
+  /// 允许 / 存入 and 拒绝 / 不存: a use given for as long as `lasts` at the longest (unused for a secret to keep)
+  Approve(String)
+  /// a secret to keep while this device's vault is not on: 开启密钥库, to the vault's page, first
+  SetUp
+  /// approved only in an app that keeps keys (a web page keeps none)
+  Elsewhere
+  /// decided already, its card not saying so yet
+  Decided
+  /// another's to answer: whose (the card's 由…决定)
+  Theirs(String)
+} derive(Eq, Show)
+
+///|
+/// How a request is answered here as its card says it (`answer`, `lasts`: its `vaultAsk`'s), the core having answered
+/// that with its message from the vault it holds: nothing more is asked of it. Not the viewer's (`mine`), `who`'s.
+pub fn card_answer(answer : String, lasts : String, mine : Bool, who? : String? = None) -> Answer {
+  if !mine {
+    return match who {
+      Some(w) => Theirs(w)
+      None => Decided
+    }
+  }
+  match answer {
+    "setUp" => SetUp
+    "elsewhere" => Elsewhere
+    _ => Approve(lasts)
+  }
+}
+
+///|
+/// How request `request` in workspace `ws` is answered here, from the vaults topic (the vault page's, which lists the
+/// requests from it; a card from before its station said what it asks): None while the topic has not come.
+fn topic_answer(core : Core, ws : String, request : String, mine : Bool, who : String?) -> (Answer, Bool)? {
+  let view = vaults_of(core, ws)
+  if view is None {
+    return None
+  }
+  // a web page keeps no keys (the plain library's, without security mode, are approved anywhere)
+  if !flag(view, "available") && !flag(view, "plain") {
+    return Some((Elsewhere, false))
+  }
+  let row = items(view, "requests").iter().find_first(fn(r) { text(Some(r), "id") == request })
+  if !mine || (row is None && !vault_pending.contains(request)) {
+    return Some(
+      (
+        match who {
+          Some(w) if !mine => Theirs(w)
+          _ => Decided
+        },
+        false,
+      ),
+    )
+  }
+  let save = field(row, "save") is Some(_)
+  if save && !flag(view, "plain") && !flag(view, "setUp") {
+    Some((SetUp, save))
+  } else {
+    Some((Approve(text(row, "lasts")), save))
+  }
+}
+
+///|
+/// Request `request` in workspace `ws` as a card, from the vaults topic (the vault page's waiting requests): what is
+/// asked (`said`: lines more of it, each its own, where they are not in its chat beside it: why the agent asks, how it
+/// would be given), and its answer at the foot (`mine`, `who`, `extra` as vault_actions').
 pub fn vault_ask(
   c : @ui.Ctx,
   core : Core,
@@ -55,12 +119,7 @@ pub fn vault_ask(
   extra? : (() -> Unit)? = None,
   said? : Array[String] = [],
 ) -> Unit {
-  let view = vaults_of(core, ws)
-  let row = items(view, "requests").iter().find_first(fn(r) { text(Some(r), "id") == request })
-  // (a solid button at its foot where there is an answer to give here: in the card's foot corner, concentric with it)
-  let answers = mine &&
-    (flag(view, "available") || flag(view, "plain")) &&
-    (row is Some(_) || vault_pending.contains(request))
+  let answer = topic_answer(core, ws, request, mine, who)
   @sf.card(c, fn() {
     vault_asked(c, ask)
     for line in said {
@@ -68,7 +127,21 @@ pub fn vault_ask(
         c.text(line, style=ask_note) |> ignore
       }
     }
-    vault_actions(c, core, ws, request, mine, who~, extra~, foot=answers)
+    match answer {
+      Some((a, save)) => vault_foot(c, core, ws, request, a, save, extra~, foot=a is (Approve(_) | SetUp))
+      None => ()
+    }
+  })
+  |> ignore
+}
+
+///|
+/// Request `request` in workspace `ws` as its card where it is asked (a chat's, the 奏 page's): what is asked, and its
+/// answer at the foot as the card says it (`answer`: card_answer), whole with its message.
+pub fn vault_card(c : @ui.Ctx, core : Core, ws : String, request : String, ask : Asked, answer : Answer) -> Unit {
+  @sf.card(c, fn() {
+    vault_asked(c, ask)
+    vault_foot(c, core, ws, request, answer, ask.save_kind != "", foot=answer is (Approve(_) | SetUp))
   })
   |> ignore
 }
@@ -146,42 +219,50 @@ pub fn vault_outcome(c : @ui.Ctx, ask : Asked, status : String, scope : String) 
 }
 
 ///|
-/// The answer to request `request` in workspace `ws` (VaultActions): the buttons while it waits on the viewer (`mine`),
-/// or a line where there is no answer to give here (`who`: whose it is). `extra`: after the buttons (the vault page's
-/// 打开对话). `foot`: last on a page card, its buttons in the card's foot corners.
-pub fn vault_actions(
+/// The answer to request `request` in workspace `ws` (VaultActions), from the vaults topic (a card from before its
+/// station said what it asks, under its post): the buttons while it waits on the viewer (`mine`), or a line where there
+/// is no answer to give here (`who`: whose it is); nothing while the topic has not come.
+pub fn vault_actions(c : @ui.Ctx, core : Core, ws : String, request : String, mine : Bool, who? : String? = None) -> Unit {
+  match topic_answer(core, ws, request, mine, who) {
+    Some((a, save)) => vault_foot(c, core, ws, request, a, save)
+    None => ()
+  }
+}
+
+///|
+/// The answer to request `request` in workspace `ws` as `answer` says (`save`: one to keep a secret): the buttons
+/// (`foot`: last on its card, in the card's foot corners: @sf.foot_reach), or a line where there is none to give here.
+/// `extra`: after the buttons (the vault page's 打开对话). Tapped, the button turns till what it did shows: its card saying how it went
+/// (the core says so at once), or the request gone from the vault page.
+pub fn vault_foot(
   c : @ui.Ctx,
   core : Core,
   ws : String,
   request : String,
-  mine : Bool,
-  who? : String? = None,
+  answer : Answer,
+  save : Bool,
   extra? : (() -> Unit)? = None,
   foot? : Bool = false,
 ) -> Unit {
   let note = fn(words : String) { c.text(words, style=ask_note) |> ignore }
-  let view = vaults_of(core, ws)
-  if view is None {
-    return
+  let lasts = match answer {
+    Elsewhere => {
+      note(tr("android-settings.vault.approve.inApp"))
+      return
+    }
+    Decided => {
+      note(tr("android-settings.vault.approve.decided"))
+      return
+    }
+    Theirs(w) => {
+      note(w)
+      return
+    }
+    SetUp => ""
+    Approve(l) => l
   }
-  // a web page keeps no keys (the plain library's, without security mode, are approved anywhere)
-  if !flag(view, "available") && !flag(view, "plain") {
-    note(tr("android-settings.vault.approve.inApp"))
-    return
-  }
-  let row = items(view, "requests").iter().find_first(fn(r) { text(Some(r), "id") == request })
   let pending = vault_pending.get(request)
-  if !mine || (row is None && pending is None) {
-    note(
-      match who {
-        Some(w) if !mine => w
-        _ => tr("android-settings.vault.approve.decided")
-      },
-    )
-    return
-  }
-  let save = field(row, "save") is Some(_)
-  let scopes = if save { ["once"] } else { vault_scopes_up_to(text(row, "lasts")) }
+  let scopes = if save { ["once"] } else { vault_scopes_up_to(lasts) }
   let scope = match vault_picked.get(request) {
     Some(s) if scopes.contains(s) => s
     _ => scopes[scopes.length() - 1]
@@ -191,23 +272,23 @@ pub fn vault_actions(
     pending == Some(yes) || is_doing(core, [if yes { "vault.approve" } else { "vault.deny" }], on)
   }
   let under = pending is Some(_) || is_doing(core, ["vault.approve", "vault.deny"], on)
-  let answer = fn(yes : Bool, call : String, what : String, params : Json) {
+  let act = fn(yes : Bool, call : String, what : String, params : Json) {
     if core.read_only != "" {
       (core.say)(core.read_only)
       return
     }
     vault_pending[request] = yes
     (core.call)(call, params, fn(r) {
-      vault_pending.remove(request)
+      // (gone through, it stays turning till what it did shows: the core says how it went on the card first)
       if r is Err(e) {
+        vault_pending.remove(request)
         (core.say)(fill("android-misc.act.failed", [("what", what), ("error", error_text(e))]))
       }
     })
   }
-  // (on a second line what has not the room on the first)
-  // (`foot`: last on a page card, its buttons in its foot corners: @sf.foot_reach)
+  // (on a second line what has not the room on the first; last on a page card, its buttons in its foot corners)
   c.box(style=if foot { ask_foot.then(@sf.foot_reach(@sf.button_height())) } else { ask_foot }, flow=true, line_gap=ask_foot_lines, fn() {
-    if save && !flag(view, "plain") && !flag(view, "setUp") {
+    if answer is SetUp {
       // kept only in a vault that is on here: the way to turn it on first
       if @sf.button(c, tr("android-settings.vault.turnOn"), key="vault/" + request + "/on", tone=Primary) {
         (core.push)(Route::Vault)
@@ -216,12 +297,12 @@ pub fn vault_actions(
       let yes = if save { "android-settings.vault.act.save" } else { "android-settings.vault.act.allow" }
       if @sf.button(c, tr(yes), key="vault/" + request + "/yes", tone=Primary, busy=busy(true), disabled=under) {
         let what = tr(if save { "android-settings.vault.act.saveWhat" } else { "android-settings.vault.act.allowWhat" })
-        answer(true, "vault.approve", what, obj([("workspace", str(ws)), ("request", str(request)), ("scope", str(if save { "once" } else { scope }))]))
+        act(true, "vault.approve", what, obj([("workspace", str(ws)), ("request", str(request)), ("scope", str(if save { "once" } else { scope }))]))
       }
     }
     let no = if save { "android-settings.vault.act.dontSave" } else { "android-settings.vault.act.deny" }
     if @sf.button(c, tr(no), key="vault/" + request + "/no", tone=Ghost, busy=busy(false), disabled=under) {
-      answer(false, "vault.deny", tr("android-settings.vault.act.denyWhat"), obj([("workspace", str(ws)), ("request", str(request))]))
+      act(false, "vault.deny", tr("android-settings.vault.act.denyWhat"), obj([("workspace", str(ws)), ("request", str(request))]))
     }
     if !save && scopes.length() > 1 {
       let entries = scopes.map(fn(s) { @kit.menu_radio(s, s == scope, label=tr("android-settings.vault.scope." + s)) })

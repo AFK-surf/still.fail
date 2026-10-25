@@ -65,7 +65,12 @@ export type LocalChange =
   | { kind: "first"; station: string; key: string }
   | { kind: "changing"; station: string }
   | { kind: "archiving" }
-  | { kind: "letGo" };
+  | { kind: "letGo" }
+  /// A vault request decided here (`request`): its card off the 奏 page, how it went on its card in its chat.
+  | { kind: "vault"; request: string };
+
+/// How a vault request decided here went, as its station restates its card (station/src/vault/secrets.ts #settle).
+export type VaultOutcome = { status: "granted" | "denied"; scope?: "once" | "hour" | "chat" };
 
 /// The name a station keeps an upload under: the last part of its path, wherever it is moved.
 const keptName = (path: string) => path.split("/").at(-1)!;
@@ -98,8 +103,8 @@ export class Local {
   /// Cards let go from here (`decision.dismiss`): station, thread, seq, and once the station took it how often its rows
   /// had changed then (data.rowsRev).
   readonly #lettingGo: { station: string; thread: number; seq: number; done?: number }[] = [];
-  /// Vault requests decided here (their cards' `vault`): the latest few.
-  readonly #vaultDecided: string[] = [];
+  /// Vault requests decided here (their cards' `vault`) and how: the latest few.
+  readonly #vaultDecided: { request: string; outcome: VaultOutcome }[] = [];
   onChange: (change: LocalChange) => void = () => {};
   onMade: (station: string, key: string) => void = () => {};
 
@@ -578,16 +583,22 @@ export class Local {
     return this.#lettingGo.some((l) => l.station === station && l.thread === thread && l.seq === seq);
   }
 
-  /// A vault request approved or turned down here: its card is off the 奏 page (its station says so as it tells it).
-  vaultDecided(request: string): void {
-    if (this.#vaultDecided.includes(request)) return;
-    this.#vaultDecided.push(request);
+  /// A vault request approved or turned down here (`outcome`): its card is off the 奏 page, and its card in its chat says
+  /// how it went, at once (its station says so as it tells it).
+  vaultDecided(request: string, outcome: VaultOutcome): void {
+    if (this.decidedVault(request)) return;
+    this.#vaultDecided.push({ request, outcome });
     if (this.#vaultDecided.length > 64) this.#vaultDecided.shift();
-    this.onChange({ kind: "letGo" });
+    this.onChange({ kind: "vault", request });
   }
 
   decidedVault(request: string): boolean {
-    return this.#vaultDecided.includes(request);
+    return this.vaultOutcome(request) !== undefined;
+  }
+
+  /// How a vault request decided here went (none: not decided here).
+  vaultOutcome(request: string): VaultOutcome | undefined {
+    return this.#vaultDecided.find((d) => d.request === request)?.outcome;
   }
 
   // ── archiving and changing ──

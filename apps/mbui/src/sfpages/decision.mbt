@@ -134,11 +134,14 @@ fn message_decision(c : @ui.Ctx, src : Source, here : MessageHere, m : Message, 
 }
 
 ///|
-/// An agent's request about a vault item, in place of its post's words (VaultAsk.tsx VaultAsk): what is asked as a card,
-/// as wide as what it says (320 at least where there is the room, 560 at most: VaultAsk.css.ts card), its answer at its
-/// foot (VaultApproval.tsx VaultCard: the settings' vault_ask, the vault page's too, which fills its page); once
-/// decided, one line saying how it ended. Where nothing is answered (no core: a letter's), the card without its answer.
-fn vault_ask_card(c : @ui.Ctx, here : MessageHere, card : Card, ask : VaultAsk) -> Unit {
+/// An agent's request about a vault item, in place of its post `m`'s words (VaultAsk.tsx VaultAsk): what is asked as a
+/// card, as wide as what it says (320 at least where there is the room, 560 at most: VaultAsk.css.ts card), its answer
+/// at its foot as the core said it with the message (`ask.answer`: the vault it holds; VaultApproval.tsx VaultCard), so
+/// the card is whole as it comes; once decided, one line saying how it ended. In a chat's list, decided, the card goes
+/// in its turn among what changes the list's height, as a post's answered options do (message_decision: fading to 90%,
+/// its room closing on the rows' spring a little late), how it went fading in after it in its place. Where nothing is
+/// answered (no core: a letter's, the 奏 page's, which answers it under the post), the card without its answer.
+fn vault_ask_card(c : @ui.Ctx, here : MessageHere, m : Message, card : Card, ask : VaultAsk) -> Unit {
   let asked : Asked = {
     name: ask.name,
     mode: ask.mode,
@@ -147,26 +150,58 @@ fn vault_ask_card(c : @ui.Ctx, here : MessageHere, card : Card, ask : VaultAsk) 
     username: ask.username,
     station: ask.station,
   }
-  if ask.status != "" {
-    @settings.vault_outcome(c, asked, ask.status, ask.scope)
-    return
+  let decided = ask.status != ""
+  let asking = fn() {
+    c.box(style=@sf.ask_card_room, fn() {
+      match here.core {
+        Some(core) =>
+          @settings.vault_card(
+            c,
+            core,
+            workspace_of(here.station),
+            card.vault,
+            asked,
+            @settings.card_answer(ask.answer, ask.lasts, mine_to(here, card.assignee), who=card.assignee_text),
+          )
+        None => @settings.vault_ask_words(c, asked)
+      }
+    })
+    |> ignore
   }
-  c.box(style=@sf.ask_card_room, fn() {
-    match here.core {
-      Some(core) =>
-        @settings.vault_ask(
-          c,
-          core,
-          workspace_of(here.station),
-          card.vault,
-          asked,
-          mine_to(here, card.assignee),
-          who=card.assignee_text,
-        )
-      None => @settings.vault_ask_words(c, asked)
+  let ended = fn() { @settings.vault_outcome(c, asked, ask.status, ask.scope) }
+  match here.list {
+    Some(l) => {
+      let key = here.station + "/" + m.ts
+      let open = l.turns.in_turn(c, "vault/" + m.ts, !decided, close_turn_ms)
+      let at = l.turns.started_at("vault/" + m.ts)
+      let start_at = if at >= 0.0 { Some(at) } else { None }
+      under_post(
+        c,
+        "vault-card/" + key,
+        open,
+        exit=@motion.trans(fade=0.0, scale=options_scale, spec=@motion.tween(options_out_ms, ease=options_ease)),
+        close=close_gap,
+        start_at?,
+        asking,
+      )
+      under_post(
+        c,
+        "vault-ended/" + key,
+        decided && !open,
+        start_at?,
+        enter=@motion.trans(
+          fade=0.0,
+          spec=@motion.Snap(0.0),
+          fade_spec=@motion.tween(options_out_ms, ease=CssOut, delay=options_out_ms),
+        ),
+        open=close_gap,
+        exit=@motion.trans(spec=@motion.Snap(0.0)),
+        close=@motion.Snap(0.0),
+        ended,
+      )
     }
-  })
-  |> ignore
+    None => if decided { ended() } else { asking() }
+  }
 }
 
 ///|

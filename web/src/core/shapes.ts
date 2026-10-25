@@ -1583,6 +1583,14 @@ export interface VaultAsk {
 	save?: VaultSave;
 	/** Another station of the workspace its commands run on (a secret to keep: the one its command read it on), by name. */
 	station?: string;
+	/**
+	 * How it is answered on this device, from the vault as the core holds it (views/vault.ts askAnswers): approve
+	 * (允许 / 存入), setUp (a secret to keep while this device's vault is not on: 开启密钥库 first), elsewhere (approved only in an
+	 * app that keeps keys). The chat's and the 奏 page's cards; absent on a core from before.
+	 */
+	answer?: string;
+	/** With answer approve, a use: the longest it may be given for (once | hour | chat). */
+	lasts?: string;
 }
 
 /**

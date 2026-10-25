@@ -56,6 +56,7 @@ import {
 import { type Checked, checkLock } from "../vault/lock-check.ts";
 import { ofAddress } from "../workspace.ts";
 import { stamp } from "../present.ts";
+import type { VaultOutcome } from "./local.ts";
 import { howText, itemWords, kindText, modeText, shownFields, statusWords } from "../vault-words.ts";
 
 // deno-lint-ignore no-explicit-any
@@ -141,6 +142,8 @@ function changeItems(inner: Inner, ws: string, vault: string, f: (items: Record<
 
 function invalidate(inner: Inner, ws: string): void {
   inner.store.invalidateAll((t) => (t.topic === "vaults" || t.topic === "vaultItems" || t.topic === "vaultUses") && t.workspace === ws);
+  // (the requests' cards in the chats and on the 奏 page: shown again where how they are answered here changed)
+  inner.views?.vaultChanged(ws);
 }
 
 const view = (inner: Inner, ws: string): J => inner.data.shared({ topic: "workspace", workspace: ws });
@@ -207,6 +210,7 @@ export function install(inner: Inner): void {
       const pub = yield* Effect.orElseSucceed(inner.host.storageGet(BOX_PUB), () => null);
       m.box = pub ? new TextDecoder().decode(pub) : null;
       inner.store.invalidateAll((t) => t.topic === "vaults" || t.topic === "vaultItems");
+      inner.views?.vaultChanged(null);
     }),
   );
 }
@@ -470,6 +474,40 @@ const unlocked = (inner: Inner, v: Vault) => (mem(inner).keys.get(keyOf(v))?.unt
 
 /// Whether this host keeps keys as an app does, in the system's secure storage.
 const able = (inner: Inner) => inner.host.appKeys === true && typeof inner.host.secureGet === "function" && typeof inner.host.secureSet === "function";
+
+/// How an agent's request a card names (`card.vault`; `save`: one to keep a secret) is answered on this device, from the
+/// vault as this core holds it: what a chat's card, and the 奏 page's, show at its foot with the message itself (views.ts),
+/// never asking for more. `elsewhere`: approved only in an app that keeps keys (the plain library's anywhere); `setUp`:
+/// a secret to keep while this device's vault is not on (开启密钥库 first); else `approve`, a use given for `lasts` at the
+/// longest (the item's, else its vault's; a request not held yet, as one with none said).
+export type AskAnswer = { answer: "approve" | "setUp" | "elsewhere"; lasts?: Scope };
+
+export function askAnswers(inner: Inner, ws: string, asks: { request: string; save: boolean }[]): AskAnswer[] {
+  const lock = lockOf(inner, ws);
+  const plain = lock instanceof CoreError;
+  if (!able(inner) && !plain) return asks.map(() => ({ answer: "elsewhere" }));
+  const h = held(inner, ws);
+  // (this device's box certificate the lock vouches for, its key the one kept here: as the `vaults` topic's setUp)
+  let setUp: boolean | undefined;
+  const isSetUp = (): boolean => {
+    if (setUp !== undefined) return setUp;
+    if (lock instanceof CoreError) return (setUp = false);
+    const self = me(lock, signerOf(inner));
+    const cert = self !== null ? h.boxes[self.device] : undefined;
+    return (setUp = cert !== undefined && certOwner(lock, cert) !== null && cert.box === mem(inner).box);
+  };
+  return asks.map(({ request, save }): AskAnswer => {
+    if (save) return { answer: !plain && !isSetUp() ? "setUp" : "approve" };
+    const r = h.requests[request];
+    const lasts =
+      r === undefined
+        ? "chat"
+        : r.vault === PLAIN
+          ? (h.plain[r.item]?.listing?.lasts ?? h.plainLasts?.lasts ?? "chat")
+          : (items(inner, ws, r.vault)[r.item]?.listing?.lasts ?? h.vaults[r.vault]?.lasts ?? "chat");
+    return { answer: "approve", lasts };
+  });
+}
 
 /// The `vaults` topic.
 export function vaultsView(inner: Inner, ws: string): J {
@@ -1070,7 +1108,7 @@ class Vaults {
         const h = held(inner, self.ws);
         if (!allows(h.plain[r.item]?.listing?.lasts ?? h.plainLasts?.lasts, scope)) return yield* fail("vault_scope", t("core-misc.vault.scopeTooLong"));
         yield* self.#station(station, "POST", "/vault/plain/grants", { request: r.id, scope });
-        self.#settled(r.id);
+        self.#settled(r.id, { status: "granted", scope });
         return { request: r.id, scope };
       }
       const { lock, signer, self: who } = yield* self.#ready();
@@ -1091,7 +1129,7 @@ class Vaults {
         signer,
       );
       yield* self.#station(station, "POST", "/vault/grants", grant);
-      self.#settled(r.id);
+      self.#settled(r.id, { status: "granted", scope });
       return { request: r.id, scope, exp: grant.exp };
     });
   }
@@ -1108,7 +1146,7 @@ class Vaults {
       const s = r.save!;
       if (r.vault === PLAIN) {
         yield* self.#station(station, "POST", "/vault/plain/saves", { request: r.id });
-        self.#settled(r.id);
+        self.#settled(r.id, { status: "granted" });
         return { request: r.id, item: r.item };
       }
       const { lock, signer, self: who } = yield* self.#ready();
@@ -1167,7 +1205,7 @@ class Vaults {
       // The station that asked holds its copy before it is told.
       yield* spread(inner, `${self.ws}/${station}`);
       yield* self.#station(station, "POST", "/vault/saves", { request: r.id, vault: vault.id, ...(grant ? { grant } : {}) });
-      self.#settled(r.id);
+      self.#settled(r.id, { status: "granted", ...(grant ? { scope } : {}) });
       return { request: r.id, vault: vault.id, item: r.item, ...(grant ? { scope } : {}) };
     });
   }
@@ -1179,14 +1217,14 @@ class Vaults {
       if (asked.r.vault === PLAIN) {
         const { r, station } = asked;
         yield* self.#station(station, "POST", "/vault/plain/denials", { request: r.id });
-        self.#settled(r.id);
+        self.#settled(r.id, { status: "denied" });
         return { request: r.id };
       }
       const { signer } = yield* self.#ready();
       const { r, station } = yield* self.#request(id);
       const deny: Deny = sign({ v: 1 as const, ws: self.ws, request: r.id, at: nowS(self.#inner) }, TAG.deny, signer);
       yield* self.#station(station, "POST", "/vault/denials", deny);
-      self.#settled(r.id);
+      self.#settled(r.id, { status: "denied" });
       return { request: r.id };
     });
   }
@@ -1302,9 +1340,10 @@ class Vaults {
     });
   }
 
-  /// A request answered here: no longer waiting (the station says so too, as it tells it), its card off the 奏 page.
-  #settled(id: string): void {
-    this.#inner.views?.local.vaultDecided(id);
+  /// A request answered here (how: `outcome`): no longer waiting (the station says so too, as it tells it), its card off
+  /// the 奏 page, how it went on its card in its chat at once.
+  #settled(id: string, outcome: VaultOutcome): void {
+    this.#inner.views?.local.vaultDecided(id, outcome);
     change(this.#inner, this.ws, (h) => {
       delete h.requests[id];
       delete h.asked[id];

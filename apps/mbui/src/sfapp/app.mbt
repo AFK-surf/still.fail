@@ -95,6 +95,7 @@ fn reset() -> Unit {
   fix_xshared.clear()
   fix_decided.clear()
   fix_replied.clear()
+  fix_vault.val = ""
   dv_reset()
   decide_reset()
   @settings.reset()

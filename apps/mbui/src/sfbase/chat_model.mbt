@@ -136,6 +136,11 @@ pub(all) struct VaultAsk {
   scope : String
   /// another station of the workspace its commands run on, by name (empty: the chat's)
   station : String
+  /// how it is answered on this device, the core's from the vault it holds: approve, setUp, elsewhere (MessageCard's
+  /// vaultAsk.answer)
+  answer : String
+  /// answered approve, a use: the longest it may be given for
+  lasts : String
 }
 
 ///|
@@ -339,6 +344,8 @@ pub fn message_of(m : Json) -> Message {
                 status: text(a, "status"),
                 scope: text(a, "scope"),
                 station: text(a, "station"),
+                answer: text(a, "answer"),
+                lasts: text(a, "lasts"),
               })
             _ => None
           },

@@ -270,6 +270,8 @@ export const SHAPES: Record<string, Shape> = {
     ["scope", opt("String"), { doc: "Granted: once | hour | chat." }],
     ["save", opt("VaultSave"), { doc: "A request to keep a secret (secret_save) rather than use one: approved, it is kept (granted)." }],
     ["station", opt("String"), { doc: "Another station of the workspace its commands run on (a secret to keep: the one its command read it on), by name." }],
+    ["answer", opt("String"), { doc: "How it is answered on this device, from the vault as the core holds it (views/vault.ts askAnswers): approve\n(允许 / 存入), setUp (a secret to keep while this device's vault is not on: 开启密钥库 first), elsewhere (approved only in an\napp that keeps keys). The chat's and the 奏 page's cards; absent on a core from before." }],
+    ["lasts", opt("String"), { doc: "With answer approve, a use: the longest it may be given for (once | hour | chat)." }],
   ], { doc: "An agent's request to use a vault item, or to keep one, as its card in the chat says it (station/src/vault/secrets.ts)." }),
   VaultSave: struct([
     ["kind", "String", { doc: "token | login | ssh_key" }],

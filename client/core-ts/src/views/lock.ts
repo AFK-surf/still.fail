@@ -101,6 +101,7 @@ export const baseOf = (inner: Inner): string | null => bases.get(inner) ?? null;
 export function signerKnown(inner: Inner, id: string | null): void {
   signers.set(inner, id);
   inner.store.invalidateAll((t) => t.topic === "lock" || t.topic === "lockPrompts" || t.topic === "vaults" || t.topic === "vaultItems");
+  inner.views?.vaultChanged(null);
 }
 
 /// What each workspace's lock was read at (its head's hash and the waiting count the workspace view said), per core.
@@ -246,6 +247,7 @@ function readOnce(inner: Inner, ws: string): Effect.Effect<void, CoreError> {
     if ((was?.head?.hash ?? null) !== (head?.hash ?? null)) moved(inner, ws);
     // The vault's too: whether it is locked, this device confirmed in it, whose vaults are trusted (views/vault.ts).
     inner.store.invalidateAll((t) => ((t.topic === "lock" || t.topic === "lockDraft" || t.topic === "vaults" || t.topic === "vaultItems") && t.workspace === ws) || t.topic === "lockPrompts");
+    inner.views?.vaultChanged(ws);
     // This device not in the lock: it waits, and asks to be confirmed only by hand (`lock.request`, its waiting page):
     // the person who will compare the codes is the one who asks (2026-10-19).
   });
