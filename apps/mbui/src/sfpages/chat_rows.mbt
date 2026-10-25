@@ -29,9 +29,10 @@ fn chat_empty(c : @ui.Ctx) -> Unit {
 
 ///|
 /// What was sent from here and is not in the chat yet (OutboxRow): as the viewer's message (its quotes, its words, its
-/// files; those still going up as cards saying how far), and under it "正在发送" once it has been on its way a while
-/// (800 ms from when it was sent) until the station takes it, then its time; not sent, said briefly (why in its tip),
-/// with sending it again (or, refused as it is, its words back in the composer: 编辑) and dropping it right beside.
+/// files, its images still going up among them already; any other still going up a card saying how far: the core's),
+/// and under it "正在发送" (or what it waits on) once it has been on its way a while (800 ms from when it was sent)
+/// until the station takes it, then its time; not sent, said briefly (why in its tip), with sending it again (or,
+/// refused as it is, its words back in the composer: 编辑) and dropping it right beside.
 fn outbox_row(c : @ui.Ctx, src : Source, here : MessageHere, o : Outgoing) -> Unit {
   let failed = o.state == "failed"
   c.box(style=mine_column, fn() {
@@ -68,13 +69,7 @@ fn outbox_row(c : @ui.Ctx, src : Source, here : MessageHere, o : Outgoing) -> Un
         _ => ()
       }
     } else {
-      let words = if o.waits != "" {
-        o.waits
-      } else if o.uploads.length() > 0 {
-        @sf.t("common.uploading")
-      } else {
-        @sf.t("web-main.chat.sending")
-      }
+      let words = if o.waits != "" { o.waits } else { @sf.t("web-main.chat.sending") }
       // (shown once it has been on its way a while: from when its row was first drawn)
       let shows = @kit.after(c, "sending/" + o.id, true, sending_shows_ms)
       let w = c.box(style=msg_waiting, fn() {

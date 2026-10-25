@@ -28,7 +28,7 @@ import { presentHistory } from "../history.ts";
 import { archiveHintOf, type ArchiveHint } from "../prefs.ts";
 import { markdown, type MdStore } from "../markdown.ts";
 import { withDrive } from "../drive-browse.ts";
-import { near, placeFiles } from "../placed.ts";
+import { isImage, near, placeFiles } from "../placed.ts";
 import { archive } from "./archive.ts";
 import { Local, PENDING_PREFIX, type LocalChange } from "./local.ts";
 import { askAnswers } from "./vault.ts";
@@ -2180,7 +2180,7 @@ function drawn<V extends Value | undefined>(out: V, uploadOf: (path: unknown) =>
     return out;
   });
   view.messages = messages;
-  if (Array.isArray(view.outbox)) view.outbox = view.outbox.map((o: J) => (isObject(o) ? { ...o, attachments: own(o.attachments) } : o));
+  if (Array.isArray(view.outbox)) view.outbox = view.outbox.map((o: J) => (isObject(o) ? goingUp({ ...o, attachments: own(o.attachments) }) : o));
   const elsewhere = arr(view.elsewhere);
   if (elsewhere.length > 0) {
     const bySeq = new Map(messages.map((m) => [u64(m.seq), m]));
@@ -2215,6 +2215,25 @@ function drawn<V extends Value | undefined>(out: V, uploadOf: (path: unknown) =>
     if (outbox.length > 0) view.outbox = marked.slice(messages.length);
   }
   return { ...out, ok: view } as V;
+}
+
+/// An outgoing message's files still going up (`uploads`) as its row draws them: an image among its files at once, in
+/// its place and shape, drawn from the picture this device has of it (`upload`; on no station yet, its path names the
+/// upload), as its message draws it once up, not a card that turns into it then; any other a card saying how far, as
+/// it is a card once up. While any goes up, 正在上传 under it (`waits`), unless something else holds it.
+function goingUp(o: J): J {
+  const { uploads, ...rest } = o as Record<string, unknown>;
+  const going = arr(uploads).filter((u) => isObject(u));
+  if (going.length === 0) return rest;
+  const images = going.filter((u) => isImage(str(u.name) ?? ""));
+  const shown = images.map((u) => ({ name: u.name, path: `upload:${u.id}`, size: u.size, ...(u.width && u.height ? { width: u.width, height: u.height } : {}), upload: u.id }));
+  const cards = going.filter((u) => !images.includes(u));
+  return {
+    ...rest,
+    attachments: [...arr(o.attachments), ...shown],
+    ...(cards.length > 0 ? { uploads: cards } : {}),
+    ...(o.state === "sending" && typeof o.waits !== "string" ? { waits: t("common.uploading") } : {}),
+  };
 }
 
 /// How far apart the viewer's messages sent one after another still go together, one time under the last.

@@ -199,6 +199,8 @@ fn image_item(c : @ui.Ctx, src : Source, here : MessageHere, a : Attachment, w :
   let sent = sent_picture(here.station, a)
   let key = match sent {
     Some(k) => k
+    // (still going up, its picture not here: no station has it to ask yet)
+    None if a.upload != "" && a.path == @sfbase.upload_path(a.upload) => ""
     None => (src.file)(here.station, owner, stored_name(a.path))
   }
   // could not be had for want of its station (not its station having none): pressed, asked again

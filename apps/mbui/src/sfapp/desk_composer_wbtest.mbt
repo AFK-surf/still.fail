@@ -302,6 +302,48 @@ test "desk composer: a file up after the page last heard of it goes once as Ente
 }
 
 ///|
+test "desk composer: an image sent while it goes up is among its message's files at once, its picture from here, a file of another kind a card saying how far" {
+  let calls : Array[Made] = []
+  // the draft as the page heard of it while its files went up (the fixture's core has them up at once)
+  let heard : Ref[Topic?] = Ref(None)
+  let (t, src) = desk_composer_tester(calls, over=fn(name, now) {
+    match heard.val {
+      Some(before) if name == "composer" => before
+      _ => now
+    }
+  })
+  desk_focus(t)
+  let w = @sfbase.writing(src, "ws1/st1:s-c1")
+  @sfbase.writing_add(src, w, "ws1/st1", "照片.png", png_head())
+  @sfbase.writing_add(src, w, "ws1/st1", "build.log", b"abc")
+  t.frame()
+  let now = (src.topic)("composer", { "key": Json::string("ws1/st1:s-c1") })
+  let going = items(now.value, "files").map(fn(f) {
+    guard f is Object(m) else { f }
+    let g = m.copy()
+    g.remove("done")
+    g["sent"] = Json::number(1.0)
+    Json::object(g)
+  })
+  guard now.value is Some(Object(v)) else { abort("no draft") }
+  let before = v.copy()
+  before["files"] = Json::array(going)
+  before["uploading"] = Json::boolean(true)
+  heard.val = Some({ value: Some(Json::object(before)), error: None, version: now.version + 1 })
+  t.frame()
+  let id = text(Some(@sfbase.writing(src, "ws1/st1:s-c1").files[0]), "id")
+  t.enter()
+  t.frame()
+  // in the list from the frame it is sent (sent_local), as the core's outbox will have it (views.ts goingUp)
+  let sent = sending_of("ws1/st1\u{1}s-c1")
+  assert_eq(sent.length(), 1)
+  let row = sent[0].row
+  assert_eq(row.attachments.map(fn(a) { (a.name, a.path, a.upload) }), [("照片.png", "upload:" + id, id)])
+  assert_true(sent_picture("ws1/st1", row.attachments[0]) is Some(_))
+  assert_eq(row.uploads.map(fn(u) { u.0 }), ["build.log"])
+}
+
+///|
 test "desk composer: a reference to another workspace's chat is asked about first (OutsideShare.tsx), Enter again shares it and it goes" {
   let calls : Array[Made] = []
   let (t, src) = desk_composer_tester(calls)

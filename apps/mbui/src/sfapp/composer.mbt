@@ -1185,15 +1185,21 @@ fn composer_room_with(c : @ui.Ctx, d : Draft, v : ChatView?) -> Double {
 // ── sending ─────────────────────────────────────────────────────────────
 
 ///|
-/// The draft's files that are up, each from its tile in the composer (what flies to the message sent: flight.mbt;
-/// ChatHost.kt sending: those up, each from where its tile is).
+/// The draft's files that are up, and its images still going up, each from its tile in the composer (what flies to the
+/// message sent: flight.mbt; ChatHost.kt sending: those up, each from where its tile is).
 fn draft_flying(c : @ui.Ctx, src : Source, r : ChatRef, d : Draft) -> Array[FlyingFile] {
   let flying : Array[FlyingFile] = []
   for f in d.files {
-    match (f.done, @motion.measured_rect(c, "composer/tile/\{f.id}")) {
-      (Some(a), Some(from)) if text(Some(a), "path") != "" =>
+    // (an image still going up: where its message draws it from its picture here, named by its upload: sent_local)
+    let path = match f.done {
+      Some(a) => text(Some(a), "path")
+      None if f.core_id != "" && f.error is None && kind_of(f.name) == "image" => @sfbase.upload_path(f.core_id)
+      None => ""
+    }
+    match @motion.measured_rect(c, "composer/tile/\{f.id}") {
+      Some(from) if path != "" =>
         flying.push({
-          path: text(Some(a), "path"),
+          path,
           from,
           picture: if draft_is_picture(f, draft_picture_key(src, r, f)) { draft_picture_key(src, r, f) } else { "" },
           face: draft_face(c, src, r, d, f),
@@ -1240,7 +1246,7 @@ fn send_draft(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView, d : Draft) -
   }
   // in the list from now, before the core has it (chat.mbt LocalSent): what is sent is on screen first
   let rk = r.station + "\u{1}" + r.session
-  let row = sent_local(rk, Some(v), words, files)
+  let row = sent_local(rk, Some(v), words, files, going=uploads)
   let room = @motion.measured(c, "composer/content").unwrap_or(0.0)
   let chat = d.key
   flight_start(

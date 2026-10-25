@@ -401,7 +401,8 @@ pub(all) struct Outgoing {
   time : Stamp?
   /// why it has not reached the station yet, in place of 正在发送 ("" none)
   waits : String
-  /// its files still going up before it goes (`uploads`): each one's name, size and how much of it the station has
+  /// its files still going up before it goes but its images, among its `attachments` already (`uploads`): each one's
+  /// name, size and how much of it the station has
   uploads : Array[(String, Int, Int)]
   /// when it was sent (the frames' clock's: "正在发送" shows a while after), and whether it was refused as it is (sent
   /// again it would be again: its words go back to the composer)
