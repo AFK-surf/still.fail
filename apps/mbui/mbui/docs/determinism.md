@@ -57,7 +57,10 @@ of a test (src/ui/motion_data.mbt).
   anchor) is placed as it is laid out, from the size it is laid out at (`Ctx::place_by_size`; the anchor's place this
   frame: `Ctx::laid_out`): there in its first frame, not measured in one frame and placed in the next.
 - What never ends while shown (a spinner, a band of unknown progress, a breath) is a cycle: its phase is a function
-  of the frames' clock (`Ctx::cycle`), drawn a frame each frame while something shown reads it.
+  of the frames' clock at the step it is at (`Ctx::cycle`: one clock for all of them, a step each `cycle_step_ms`,
+  100), drawn a frame each step while something shown reads it, none between; a moving picture a frame as its next
+  frame comes (`Ctx::loop_at`). Nothing endless is drawn on each of the display's frames (it redrew the whole window
+  60 to 120 times a second while it showed); a player playing alone is (a cycle of 0).
 - What changes every so often while shown (a run's time said each second) is periodic: `Ctx::every(period)` gives the
   periods passed and a frame at the next one's start, none between; a test's idle lists it (`Tester::periodic`), as it
   does a cycle, and is not broken by it.
