@@ -287,7 +287,7 @@ fn chats_pane(c : @ui.Ctx, src : Source, w : Workspace, filter : String, frame :
           Part(p) => (p.draw)()
           Wait(note, error) => list_waiting(c, note, error)
           Empty(v) => list_empty(c, v, filter)
-          Heading(label) => list_heading(c, label, frame.at)
+          Heading(label) => @sf.list_heading(c, label, frame.at)
           Row(item) => {
             let name = key + "\u{1}" + key_at(i)
             let on = match open {
@@ -418,17 +418,6 @@ pub fn row_moving(c : @ui.Ctx, lid : Int, list : String, key : String, i : Int) 
 /// Room in a list, `h` high (for the bar over it, at its foot).
 fn list_space(c : @ui.Ctx, h : Double) -> Unit {
   c.box(style=@ui.style(h=Fixed(h)), fn() {  }) |> ignore
-}
-
-///|
-/// A day's heading (SidebarList.tsx NavSection; its look the theme's chats' list's), in from the list's left as its
-/// rows are where the list stands (`at`).
-pub fn list_heading(c : @ui.Ctx, label : String, at : @sf.ListAt) -> Unit {
-  let l = @sf.theme().chat_list
-  c.box(style=l.heading.then(@sf.list_heading_in(at)), fn() {
-    c.text(label, style=l.heading_words) |> ignore
-  })
-  |> ignore
 }
 
 ///|

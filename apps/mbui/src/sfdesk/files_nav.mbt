@@ -133,7 +133,7 @@ pub fn files_places(
         PNone =>
           c.box(style=nav_note, fn() { c.text(@sf.t("web-main.rail.filesNone"), style=nav_meta()) |> ignore }) |> ignore
         PFavorites => places_favorites(c, src, ws, views, go)
-        PHeading(h) => nav_heading(c, h)
+        PHeading(h) => @sf.list_heading(c, h, Side)
         PStation(s) => station_row(c, src, s, s.station == here, dv_rights(src, ws, Some(s)).write, go)
         PShared(s, r) => {
           let t = @sf.theme()
@@ -185,7 +185,7 @@ fn places_favorites(
   let kid = c.id("files/keep")
   let keeping = fdrag_target(c, kid, "keep", None, "", true, true, 0, outside=false) is Some(_)
   c.box(style=if keeping { keep_on } else { keep_off }, id=kid, fn() {
-    nav_heading(c, @sf.t("web-pages.files.favorites"))
+    @sf.list_heading(c, @sf.t("web-pages.files.favorites"), Side)
     if favs.length() == 0 {
       c.box(style=@sf.theme().chat_list.side_hint, fn() {
         @sf.icon(c, "star", size=nav_icon, color=t.p.subtle) |> ignore

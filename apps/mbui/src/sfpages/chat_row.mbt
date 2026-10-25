@@ -227,7 +227,8 @@ pub fn chat_row(
         ground,
         high=true,
         faded=item.settled,
-        head_room=archive_key,
+        // (归档 over its first line's end: Sidebar.css.ts rowArchive, 24)
+        end_room=if archive_key { row_archive_room } else { 0.0 },
         fn() {
             let tone = @sfbase.row_tone(item)
             if tone != "" {
@@ -876,3 +877,7 @@ pub fn rename_escape(c : @ui.Ctx) -> Bool {
   c.blur()
   true
 }
+
+///|
+/// The room 归档 takes at a row's first line's end while a pointer is over it (Sidebar.css.ts head, pointed at: 24).
+let row_archive_room : Double = 24.0
