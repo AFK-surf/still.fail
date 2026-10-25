@@ -132,6 +132,14 @@ function withoutMentions(text: string): string {
 /// What a chat is called, as its station calls it (read/views.ts titleOf): the name people gave it, else the one its
 /// agent gave it; a chat of still.fail's own is a new chat until it has one, the same all along; a Slack or Feishu
 /// thread the first line a person wrote in it, else its channel.
+/// Where a Slack or Feishu thread is, in words: #channel, 私信, the Feishu group; null for a still.fail chat.
+function placeName(surface: string, channel: string, channelName: string): string | null {
+  const feishu = surface.startsWith("feishu:") || format.isFeishuChat(channel);
+  if (feishu) return channelName || t("core-logic.format.thread.feishu");
+  if (surface === "ember" || surface === "stillfail" || surface === "") return null;
+  return channel.startsWith("D") ? t("core-views.direct_message") : `#${channelName || channel}`;
+}
+
 export function chatTitle(thread: J): string {
   const text = (name: string): string | null => {
     const v = get(thread, name);
@@ -474,6 +482,8 @@ export class Views implements Owner {
   /// Per live view, the topics it watches.
   readonly #views = new Map<string, { topic: Topic; watches: Map<string, Watch> }>();
   readonly #updateNoticesOpen = new Set<string>();
+  /// The threads chats copy what is sent from here to (`ccOn`), by `<station> <thread> <to>`.
+  readonly #cc = new Set<string>();
   /// Views whose words count seconds (a chat's jobs): each computed again when they next change.
   readonly #again = new Map<string, Fiber.Fiber<unknown, unknown>>();
   /// The scopes whose stations' rows are being loaded (the list showed its first screen meanwhile).
@@ -1629,7 +1639,7 @@ export class Views implements Owner {
     const channel = strOf(thread, "channel");
     const feishu = surface.startsWith("feishu:") || format.isFeishuChat(channel);
     const slack = !(surface === "ember" || surface === "stillfail") && !feishu;
-    const place = feishu ? strOf(thread, "channelName") || t("core-logic.format.thread.feishu") : slack ? (channel.startsWith("D") ? t("core-views.direct_message") : `#${strOf(thread, "channelName") || channel}`) : null;
+    const place = placeName(surface, channel, strOf(thread, "channelName"));
     // A Feishu chat opens in Feishu (Lark's own app for its connect's).
     const feishuConnect = arr(get(this.ok({ topic: "overview", station }), "connects")).find((c) => `feishu:${strOf(c, "id")}` === surface);
     const feishuUrl = feishu ? format.feishuChatUrl(format.feishuApplink(str(get(get(feishuConnect, "feishu"), "domain"))), channel) : null;
@@ -1698,8 +1708,39 @@ export class Views implements Owner {
     }
     if (row !== undefined && present.archivable(row) && view.archived !== true) view.archivable = true;
     if (letters > 0) view.letters = letters;
+    // Its Slack and Feishu threads, where what is sent can be copied (`chat.cc`), each ticked or not.
+    const ccTo = arr(get(thread, "cc")).flatMap((o) => {
+      const to = u64(get(o, "thread"));
+      const place = placeName(strOf(o, "surface"), strOf(o, "channel"), strOf(o, "channelName"));
+      if (to === null || place === null) return [];
+      const via = strOf(o, "surface").startsWith("feishu:") || format.isFeishuChat(strOf(o, "channel")) ? "feishu" : "slack";
+      return [{ thread: to, place, via, on: this.ccOn(station, id, to) }];
+    });
+    if (ccTo.length > 0) view.cc = ccTo;
     return { ok: view };
   }
+
+  /// Whether what is sent to a chat from here is copied to its Slack or Feishu thread `to` (`chat.cc`): off until ticked,
+  /// for as long as the app runs.
+  ccOn(station: string, thread: number, to: number): boolean {
+    return this.#cc.has(`${station} ${thread} ${to}`);
+  }
+
+  /// The threads what is sent to a chat from here is copied to now.
+  ccTo(station: string, thread: number): number[] {
+    const prefix = `${station} ${thread} `;
+    return [...this.#cc].filter((k) => k.startsWith(prefix)).map((k) => Number(k.slice(prefix.length)));
+  }
+
+  /// Copying to a chat's thread `to` ticked or not: its pages show it.
+  setCc(station: string, thread: number, to: number, on: boolean): void {
+    const key = `${station} ${thread} ${to}`;
+    if (on === this.#cc.has(key)) return;
+    if (on) this.#cc.add(key);
+    else this.#cc.delete(key);
+    for (const view of this.chatViews(station, thread)) this.#core.store.invalidate(view);
+  }
+
 
   /// What a chat's agents and other chats' wrote each other (`chatLetters`), all of it as far as it is on the device
   /// (`whole` once all is): by the other chat, as lettersByChat has them, each named as the chat's page names its

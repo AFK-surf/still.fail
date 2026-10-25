@@ -240,12 +240,19 @@ export class ViewCalls {
     const local = this.#local;
     const views = this.#views;
     const send = (station: string, thread: number, message: J, ctx: SpanContext | null) => {
+      // Copied to the chat's Slack and Feishu threads ticked (`chat.cc`).
+      const ccTo = views.ccTo(station, thread);
+      if (ccTo.length > 0) message.cc = ccTo;
       const id = views.outboxAdd(station, thread, message);
       return this.deliver(station, thread, id, ctx);
     };
     handlers.chatSend = (_inner, call, _p, _at, ctx) => {
       const c = call as Of<"chatSend">;
       return Effect.andThen(parse(c.station), Effect.suspend(() => send(c.station, c.thread, outgoing(inner, c.station, c.text, c.attachments, c.quotes, c.client, c.uploads), ctx)));
+    };
+    handlers.chatCc = (_inner, call) => {
+      const c = call as Of<"chatCc">;
+      return Effect.andThen(parse(c.station), Effect.sync(() => (views.setCc(c.station, c.thread, c.to, c.on), null)));
     };
     handlers.chatCreate = (_inner, call) => {
       const c = call as Of<"chatCreate">;

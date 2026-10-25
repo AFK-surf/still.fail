@@ -8,7 +8,8 @@ import { StationUpdate } from "../StationUpdate.tsx";
 // copy (pick.tsx); ＋ adds files.
 import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from "react";
 import { useLocation, useNavigate, useParams } from "react-router";
-import { topicNow, useReady, useTopicSelect } from "../core/react.ts";
+import { topicNow, useCall, useReady, useTopicSelect } from "../core/react.ts";
+import { useAct } from "@stillfail/ui/toast.tsx";
 import { stationApi, useApi, useChat, useChatJobs, useLives, useStationCall, useStationLook, useStations, type ChatAgent, type ChatThread, type ChatView, type Quote, type Attachment } from "../api.ts";
 import { draftKeyOf, useHost, type HostComposer } from "./ChatHost.tsx";
 import { DraftKey } from "../draft.ts";
@@ -37,7 +38,7 @@ import { openHistory } from "./History.tsx";
 import { AgentSince, openAgent } from "./AgentSheet.tsx";
 import { HOLD, usePick } from "./pick.tsx";
 import { Button, Gone, GroupLabel, InfoList, InfoRow, LinkButton, ModelMark, NavButton, PickRow, QuotaRings, Seg, SlackMark, stateOf } from "./parts.tsx";
-import { AgentMark } from "../ui.tsx";
+import { AgentMark, ElsewhereLogo } from "../ui.tsx";
 import { OutsideList, outsideOf, shareOutside, type Outside } from "../OutsideShare.tsx";
 import { useAction } from "../action.ts";
 import { PeopleStack } from "../components.tsx";
@@ -46,7 +47,7 @@ import { Letters } from "../Letters.tsx";
 import { TermText } from "../TermText.tsx";
 import { screenLinkClicked, stillfailLinkClicked } from "../stillfailLink.ts";
 import { doingMatches, failed, useDoing, useDoingFailed, useDoingList } from "../doing.ts";
-import type { ChatJobsView, ChatPublish, ChatPublished, ChatShare, Job } from "../core/shapes.ts";
+import type { ChatCcTo, ChatJobsView, ChatPublish, ChatPublished, ChatShare, Job } from "../core/shapes.ts";
 import { PublishMessages, tickedOf, usePublishPreview, useTicking } from "../Publish.tsx";
 import * as publishCss from "../Publish.css.ts";
 import * as chatCss from "./styles/chat.css.ts";
@@ -428,7 +429,7 @@ export type Draft = SharedDraft & { focus: number; bumpFocus(): void };
  * A menu over the composer's capsule (`plus` its ＋), as a long-pressed message's: the phone app's sheet of recent
  * photos needs the gallery, which a page cannot read.
  */
-export function openAttach(app: MobileApp, plus: HTMLElement, onPicked: (files: FileList) => void, onStation?: () => void) {
+export function openAttach(app: MobileApp, plus: HTMLElement, onPicked: (files: FileList) => void, onStation?: () => void, cc?: { to: ChatCcTo[]; toggle(to: ChatCcTo): void }) {
   const pick = (accept: string, capture: boolean) => {
     pickAttachment(accept, capture, onPicked);
   };
@@ -441,6 +442,8 @@ export function openAttach(app: MobileApp, plus: HTMLElement, onPicked: (files: 
       { label: t("web-mobile.chat.photos"), icon: <Photo size={18} />, action: () => pick("image/*", false) },
       { label: t("web-mobile.chat.files"), icon: <File size={18} />, action: () => pick("*/*", false) },
       ...(onStation ? [{ label: t("web-pages.chat.files"), icon: <Server size={18} />, action: onStation }] : []),
+      // Copying what is sent to the chat's Slack or Feishu thread, on or off (`chat.cc`).
+      ...(cc ? cc.to.map((o) => ({ label: t(o.on ? "web-mobile.chat.ccStop" : "web-mobile.chat.ccStart", { place: o.place }), icon: <ElsewhereLogo kind={o.via} size={18} />, action: () => cc.toggle(o) })) : []),
     ] });
   });
 }
@@ -487,6 +490,8 @@ export function useComposerBar({ draft, draftKey, sessionKey, placeholder, locke
  */
 function useComposer(view: ChatView, here: Here, use: (spec: HostComposer) => void, list: RefObject<HTMLDivElement | null>) {
   const api = useApi();
+  const call = useCall();
+  const act = useAct();
   const keeper = view.agents[0]?.session.key ?? null;
   const warmed = useRef(0);
   const send = (draft: Draft) => {
@@ -502,8 +507,9 @@ function useComposer(view: ChatView, here: Here, use: (spec: HostComposer) => vo
     void sendDraft(draft, to, undefined);
   };
   useLayoutEffect(() => use({
-    station: here.station, session: keeper, placeholder: view.archived ? t("web-mobile.chat.restoreFirst") : t("web-mobile.chat.placeholder"), offline: view.offline, ...(view.offlineNote ? { offlineNote: view.offlineNote } : {}), archived: !!view.archived, send,
+    station: here.station, session: keeper, placeholder: view.archived ? t("web-mobile.chat.restoreFirst") : view.cc?.some((o) => o.on) ? t("web-mobile.chat.placeholderCc", { place: view.cc.filter((o) => o.on).map((o) => o.place).join("、") }) : t("web-mobile.chat.placeholder"), offline: view.offline, ...(view.offlineNote ? { offlineNote: view.offlineNote } : {}), archived: !!view.archived, send,
     restore: () => api.archive({ thread: view.thread?.id ?? null, session: here.key }, false),
+    ...(view.cc?.length && view.thread ? { cc: { to: view.cc, toggle: (o: ChatCcTo) => act(call("chat.cc", { station: here.station, thread: view.thread!.id, to: o.thread, on: !o.on }), t("web-mobile.chat.ccStart", { place: o.place })) } } : {}),
     // Typing starts the session's runtime, so a cold start overlaps the writing.
     type: () => {
       if (view.offline || view.archived || !keeper || Date.now() - warmed.current < 60_000) return;

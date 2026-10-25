@@ -2715,6 +2715,7 @@ export const SHAPES: Record<string, Shape> = {
     ["place", opt("String"), { doc: "Where a Slack chat is (#channel, 私信), and its link in Slack while its connect is signed in." }],
     ["slackUrl", opt("String")],
     ["feishuUrl", opt("String"), { doc: "A Feishu (Lark) chat's link in Feishu." }],
+    ["cc", vec("ChatCcTo"), { default: true, doc: "Its agents' Slack and Feishu threads, the one said in last first: what is sent from here can be copied to\nthose ticked (`chat.cc`). Empty in a chat whose agents are in none, and from a core before it." }],
     ["people", vec("Person")],
     ["agents", vec("ChatAgent")],
     ["messages", vec("ChatMessage")],
@@ -2746,6 +2747,12 @@ export const SHAPES: Record<string, Shape> = {
     ["publish", opt("ChatPublish"), { doc: "Its public snapshots (docs/public-share.md); absent while it has no chat." }],
     ["tabs", opt("ChatTabs"), { doc: "Its side panel's tabs as this device keeps them for it (prefs `chatTabs`, chat-tabs.ts); absent from a core\nbefore it." }],
   ], { doc: "An item's page: its chat (with the viewer's read position), or its agent before it has one." }),
+  ChatCcTo: struct([
+    ["thread", "i64", { client: "I54", doc: "The thread's id: `chat.cc`'s `to`." }],
+    ["place", "String", { doc: "Where it is: #channel, 私信, the Feishu group." }],
+    ["via", "String", { doc: "Its platform, for its mark: \"slack\" or \"feishu\"." }],
+    ["on", "bool", { doc: "Ticked: what is sent from here is copied there too, the station's bot saying there who wrote it on still.fail,\nand what. Off until ticked, for as long as the app runs." }],
+  ], { doc: "A thread a chat's messages can be copied to (docs/relay.md \"抄送\")." }),
   ChatTabs: struct([
     ["open", vec("String"), { doc: "The tabs open beside it, in their order, of those kept the ones it has (an agent's history by its session's key,\n`service:<job>` one of its agents' services, `jobs`, `files`, `letters`, `file:[…]` a visualization, `screen:[…]` a station's\nscreen); all kept while its\nagents are not known. None kept: none, or where its agent has no chat yet its history (`auto`)." }],
     ["shown", opt("String"), { doc: "The one in front: as kept, else the first; none with none open." }],

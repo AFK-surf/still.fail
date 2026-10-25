@@ -245,3 +245,32 @@ test "files sent fly from their tiles to their places in the message, then are i
   assert_true(send_flight.val is None)
   fix_clock.val = None
 }
+
+///|
+test "a chat linked to one Slack thread: 抄送 while writing opens it to tick, and closes once ticked (chat.cc)" {
+  let calls : Array[Made] = []
+  let t = fake_core(calls, over=fn(name, tp) {
+    if name != "chat" {
+      return tp
+    }
+    match tp.value {
+      Some(Object(o)) => {
+        let o2 = o.copy()
+        o2["cc"] = [{ "thread": 21, "place": "#still-fail", "via": "slack", "on": false }]
+        { ..tp, value: Some(Json::object(o2)) }
+      }
+      _ => tp
+    }
+  })
+  // (the capsule says nothing of it; opened to write, its row under the words has it)
+  t.tap_text("发消息")
+  t.run_for(@sfpages.morph_ms)
+  t.click(Button, label=@sf.t("web-main.composer.ccLabel"))
+  t.click(MenuItemCheckbox, label="#still-fail")
+  let asked = named(calls, "chat.cc")
+  assert_eq(asked.length(), 1)
+  assert_eq(asked[0].params, { "station": "ws1/st1", "thread": 7, "to": 21, "on": true })
+  t.draw()
+  // one: closed once ticked
+  assert_true(t.find("#still-fail") is None, msg=t.words().map(fn(x) { x.0 }).join("|"))
+}

@@ -42,3 +42,19 @@ export function relayDemo(connects: RelayConnect[] = CONNECTS): DemoExtension {
     },
   };
 }
+
+/** A chat whose agent is in #still-fail and a Feishu group (docs/relay.md "抄送"): `on` those ticked to begin with;
+ *  `chat.cc` ticks them. `one`: the Slack thread alone. */
+export function ccDemo(on: number[] = [], one = false): DemoExtension {
+  const ticked = new Set(on);
+  const to = [{ thread: 21, place: "#still-fail", via: "slack" }, { thread: 22, place: "产品讨论", via: "feishu" }].slice(0, one ? 1 : 2);
+  return {
+    then: (topic, value) => (topic.topic === "chat" && value && typeof value === "object" ? { ...value, cc: to.map((o) => ({ ...o, on: ticked.has(o.thread) })) } : undefined),
+    call: (name, params) => {
+      if (name !== "chat.cc") return undefined;
+      if (params.on === true) ticked.add(params.to as number);
+      else ticked.delete(params.to as number);
+      return null;
+    },
+  };
+}

@@ -196,7 +196,7 @@ The archive and hide columns (`archived_by`, `shown_at`, `cwd`, `home`,
 - `POST /threads/:id/messages {text, attachments, quotes, client?}` — a person's
   message in a still.fail chat (Slack threads are written in Slack), answered
   with its `{ n }`; `client` is the app it was sent from ("android 0.1.1123"),
-  kept for the chat's agent (`client="…"` on its message) and not shown; attachments must be uploads of a session in the thread
+  kept for the chat's agent (`client="…"` on its message) and not shown; `cc: [thread id…]` copies it, after the answer, to those of the chat's Slack and Feishu threads ([relay.md](relay.md) "抄送"); attachments must be uploads of a session in the thread
   (`POST /sessions/:key/files`). `POST /threads {session, title?}` opens
   another chat on a session; `POST /threads/:id/sessions {session}` brings
   another session into a still.fail chat. `POST /sessions` (a new chat) makes the

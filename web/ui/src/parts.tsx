@@ -388,10 +388,12 @@ export function Chooser({ label, children, side = "bottom", className = controls
   );
 }
 
-export function ChooserItem({ checked, onSelect, children }: { checked: boolean; onSelect(): void; children: ReactNode }) {
+/** `stays`: the menu stays open as it is chosen (one of several ticked in turn). `checkEnd`: its check at the row's end. */
+export function ChooserItem({ checked, onSelect, stays = false, checkEnd = false, children }: { checked: boolean; onSelect(): void; stays?: boolean; checkEnd?: boolean; children: ReactNode }) {
+  const check = <span className={checkEnd ? `${controlsCss.chooserCheck} ${controlsCss.chooserCheckEnd}` : controlsCss.chooserCheck}>{checked && <Check size={14} />}</span>;
   return (
-    <DropdownMenu.Item className={`${controlsCss.menuItem} ${controlsCss.chooserItem}`} onSelect={onSelect}>
-      <span className={controlsCss.chooserCheck}>{checked && <Check size={14} />}</span>{children}
+    <DropdownMenu.Item className={`${controlsCss.menuItem} ${controlsCss.chooserItem}`} onSelect={(e) => { if (stays) e.preventDefault(); onSelect(); }}>
+      {!checkEnd && check}{children}{checkEnd && check}
     </DropdownMenu.Item>
   );
 }

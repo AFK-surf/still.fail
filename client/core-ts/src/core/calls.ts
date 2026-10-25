@@ -63,6 +63,7 @@ export type Call =
   | { kind: "chatNewer"; station: string; thread: number }
   | { kind: "chatLatest"; station: string; thread: number }
   | { kind: "chatPlace"; station: string; thread: number; seq: number | null; offset: number | null }
+  | { kind: "chatCc"; station: string; thread: number; to: number; on: boolean }
   | { kind: "chatAround"; station: string; thread: number; seq: number }
   | { kind: "chatFind"; station: string; thread: number; query: string; bring: boolean }
   | { kind: "historyOlder"; station: string; key: string }
@@ -558,6 +559,15 @@ export function parseCall(name: string, params: unknown, bytes?: Uint8Array, mod
         ["offset", "f64", "opt"],
       ]);
       return { kind: "chatPlace", station: p.station as string, thread: p.thread as number, seq: p.seq as number | null, offset: p.offset as number | null };
+    }
+    case "chat.cc": {
+      const p = read(params, [
+        ["station", S, "req"],
+        ["thread", "u64", "req"],
+        ["to", "u64", "req"],
+        ["on", "bool", "req"],
+      ]);
+      return { kind: "chatCc", station: p.station as string, thread: p.thread as number, to: p.to as number, on: p.on as boolean };
     }
     case "chat.around": {
       const p = read(params, [
