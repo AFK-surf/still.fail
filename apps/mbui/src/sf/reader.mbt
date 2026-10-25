@@ -2369,7 +2369,7 @@ let desk_size_row : @ui.Style = @ui.css("row w=Full h=S10 px=S1 align=ACenter ra
 ///|
 // kept across runs: a value (no field of it changes)
 let desk_size_key_box : @ui.Style = @ui.css(
-  #|h=S8 min_w=S11 px=S2_5 radius=Lg align=ACenter justify=JCenter hovered{bg=TintStrong} disabled{opacity=O35}
+  #|h=S8 min_w=S11 px=S2_5 radius=Lg align=ACenter justify=JCenter hovered{bg=Tint} disabled{opacity=O35}
 )
 
 ///|

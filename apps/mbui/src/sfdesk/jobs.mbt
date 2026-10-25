@@ -723,7 +723,7 @@ let job_last_line : @ui.TextStyle = @ui.text_style(size=Caption, color=Muted, wr
 
 ///|
 /// Its actions (jobActions): 2 apart, 6 under what is over them, 8 out at their start; each 26 high, 8 in, its mark and
-/// words 5 apart, the picked ground on hover.
+/// words 5 apart, the pointer's ground on hover (over the row's, lit with it: docs/ui-panels.md 悬停).
 // kept across runs: a value (no field of it changes)
 let job_actions : @ui.Style = @ui.css("row pt=S1_5 gap=S0_5").then(@sf.outset_start(8.0))
 
@@ -736,7 +736,7 @@ let job_action_style : @ui.Style = @ui.style(
   gap=S1_25,
   align=ACenter,
   radius=Lg,
-  hovered=@ui.patch(bg=Selected),
+  hovered=@ui.patch(bg=Hover),
 )
 
 ///|

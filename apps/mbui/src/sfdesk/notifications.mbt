@@ -679,7 +679,7 @@ let tile_on : @ui.Style = tile.then(@ui.css("border_color=Accent"))
 
 ///|
 // kept across runs: a value (no field of it changes)
-let tile_action : @ui.Style = tile.then(@ui.css("border_color=A(Danger,O55) hovered{bg=DangerBg}"))
+let tile_action : @ui.Style = tile.then(@ui.css("border_color=A(Danger,O55)"))
 
 ///|
 /// A tile's picture (tilePicture: a screen drawn small, 72 by 46, 4 over its name, 8 round, the canvas on a line):

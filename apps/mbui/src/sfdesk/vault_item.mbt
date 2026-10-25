@@ -173,9 +173,9 @@ fn vault_item_page(c : @ui.Ctx, core : Core, here : Here, frame : PageFrame, vau
                       if c.clicked(id) {
                         (core.open_chat)(ws + "/" + station, text(uv, "session"), chat)
                       }
-                      // (lit under the pointer, or a finger's press)
+                      // (underlined under the pointer, or a finger's press: words in the words' colour, lit)
                       c.box(id~, fn() {
-                        c.text(chat, style=if c.lit(id) { vi_chat_lit } else { vi_chat }) |> ignore
+                        c.rich([@ui.span(chat, underline=c.lit(id))], style=vi_chat) |> ignore
                       })
                       |> ignore
                     } else {
@@ -337,9 +337,6 @@ let vi_use_text : @ui.Style = @ui.style(w=@sf.grow, gap=S0_5)
 // kept across runs: a value (no field of it changes)
 let vi_chat : @ui.TextStyle = @ui.text_style(size=Ui, leading=L6, color=Fg, wrap=false)
 
-///|
-// kept across runs: a value (no field of it changes)
-let vi_chat_lit : @ui.TextStyle = @ui.text_style(size=Ui, leading=L6, color=AccentText, wrap=false)
 
 ///|
 // kept across runs: a value (no field of it changes)

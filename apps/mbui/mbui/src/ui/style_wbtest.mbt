@@ -155,7 +155,8 @@ test "style: the states' blocks laid on in their order, the later winning" {
     disabled=patch(opacity=O50, bg=Line),
   )
   let p = s.resolve(true, true, true, true, true, true, false)
-  assert_eq(p.bg, Some(Faint))
+  // (what answers the hand laid over the ground under it: Patch::lit_by)
+  assert_eq(p.bg, Some(Over(Over(Selected, Hover), Faint)))
   assert_eq(p.radius, Some(Md))
   assert_eq(p.border, Some(B2))
   let p = s.resolve(true, false, true, false, false, false, true)
@@ -174,16 +175,65 @@ test "style: pressed and hovered read the box's id, as Ctx::pressed and hovered 
   assert_eq(g().nodes[1].bg, th.card)
   t.move(10.0, 10.0)
   t.draw()
-  assert_eq(g().nodes[1].bg, th.faint)
+  assert_eq(g().nodes[1].bg, over(th.card, th.faint))
+  // (a finger's press lights it too: pressed over lit)
   t.touch(0, 10.0, 10.0)
   t.draw()
-  assert_eq(g().nodes[1].bg, th.line)
+  assert_eq(g().nodes[1].bg, over(over(th.card, th.faint), th.line))
   // without an id: the blocks do nothing
   let t = Tester::new(fn(c) { c.box(style=s, fn() {  }) |> ignore })
   t.move(10.0, 10.0)
   t.touch(0, 10.0, 10.0)
   t.draw()
   assert_eq(g().nodes[1].bg, th.card)
+}
+
+///|
+test "style: what answers the hand is a tint laid over the ground under it, the box's own or its selected one" {
+  let s = style(bg=Card, selected=patch(bg=Selected), hovered=patch(bg=Hover), pressed=patch(bg=Hover))
+  assert_eq(s.resolve(false, false, false, true, false, false, false).bg, Some(Over(Card, Hover)))
+  assert_eq(s.resolve(false, false, true, true, false, false, false).bg, Some(Over(Selected, Hover)))
+  assert_eq(s.resolve(false, false, false, true, false, true, false).bg, Some(Over(Over(Card, Hover), Hover)))
+  // with no ground of its own: the tint alone
+  let s = style(hovered=patch(bg=Hover))
+  assert_eq(s.resolve(false, false, false, true, false, false, false).bg, Some(Hover))
+  // a tint over a tint is the two as one tint, what is under them showing through
+  let th = Theme::light()
+  let two = over(th.hover, th.hover)
+  assert_true((two & 0xFFL) > (th.hover & 0xFFL) && (two & 0xFFL) < 0xFFL)
+  assert_eq(two & 0xFFFFFF00L, th.hover & 0xFFFFFF00L)
+}
+
+///|
+test "hover: what holds the one pointed at is pointed at too, as drawn; what lies over it is not in it" {
+  let lit = style(bg=Card, hovered=patch(bg=Hover))
+  let view = fn(c : Ctx) {
+    c.box(w=Px(200.0), h=Px(100.0), fn() {
+      // a tab (0 … 100) and its × (60 … 80) in it
+      c.box(style=lit, w=Px(100.0), h=Px(40.0), id=c.id("tab"), fn() {
+        c.box(style=lit, w=Px(20.0), h=Px(20.0), ml=60.0, mt=10.0, id=c.id("x"), fn() {  }) |> ignore
+      })
+      |> ignore
+      // something else over the end of the tab's room, not in it (80 … 120 across, drawn after it)
+      c.box(style=lit, w=Px(40.0), h=Px(40.0), left=80.0, top=0.0, id=c.id("over"), fn() {  }) |> ignore
+    })
+    |> ignore
+  }
+  let t = Tester::new(view, w=200.0, h=100.0)
+  t.draw()
+  let th = Theme::light()
+  assert_eq((g().nodes[2].bg, g().nodes[3].bg, g().nodes[4].bg), (th.card, th.card, th.card))
+  // the tab alone
+  t.move(20.0, 20.0)
+  assert_eq((g().nodes[2].bg, g().nodes[3].bg), (over(th.card, th.hover), th.card))
+  // its ×: both, the × a step more (its tint drawn over the tab's)
+  t.move(70.0, 20.0)
+  assert_eq((g().nodes[2].bg, g().nodes[3].bg), (over(th.card, th.hover), over(th.card, th.hover)))
+  assert_true(g().hover_in.length() == 1 && g().hovered(g().hover_in[0]))
+  // what lies over the tab's room: it alone
+  t.move(90.0, 20.0)
+  assert_eq((g().nodes[2].bg, g().nodes[4].bg), (th.card, over(th.card, th.hover)))
+  assert_eq(g().hover_in.length(), 0)
 }
 
 ///|

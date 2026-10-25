@@ -81,7 +81,7 @@ pub let toast_row : @ui.Style = @ui.css("row gap=S3 align=ACenter")
 ///|
 // kept across runs: a value (no field of it changes)
 let toast_action_box : @ui.Style = @ui.css(
-  "h=S7 px=S3 radius=Full align=ACenter justify=JCenter bg=A(OnPrimary, O15) hovered{bg=A(OnPrimary, O20)} pressed{bg=A(OnPrimary, O25)}",
+  "h=S7 px=S3 radius=Full align=ACenter justify=JCenter bg=A(OnPrimary, O15) hovered{bg=A(OnPrimary, O5)} pressed{bg=A(OnPrimary, O5)}",
 )
 
 ///|

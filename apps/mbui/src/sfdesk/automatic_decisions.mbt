@@ -643,7 +643,7 @@ let pol_out : Double = 10.0
 
 ///|
 // kept across runs: a value (no field of it changes)
-let pol_words_live : @ui.Style = pol_words_box.then(@ui.css("hovered{bg=ListGround}"))
+let pol_words_live : @ui.Style = pol_words_box.then(@ui.css("hovered{bg=Hover}"))
 
 ///|
 /// (its words: the list's size, lines 1.6 of it, as they were written)
@@ -670,7 +670,7 @@ let pol_option : @ui.Style = pol_words_box.then(@ui.css("row gap=S3 align=AStart
 
 ///|
 // kept across runs: a value (no field of it changes)
-let pol_option_live : @ui.Style = pol_option.then(@ui.css("hovered{bg=ListGround}"))
+let pol_option_live : @ui.Style = pol_option.then(@ui.css("hovered{bg=Hover}"))
 
 ///|
 /// (optionName: 120 wide, the list's words)
@@ -709,7 +709,7 @@ let pol_add : @ui.Style = pol_words_box.then(@ui.css("row gap=S1_5 align=ACenter
 
 ///|
 // kept across runs: a value (no field of it changes)
-let pol_add_live : @ui.Style = pol_add.then(@ui.css("hovered{bg=ListGround}"))
+let pol_add_live : @ui.Style = pol_add.then(@ui.css("hovered{bg=Hover}"))
 
 ///|
 let pol_plus : Double = 14.0

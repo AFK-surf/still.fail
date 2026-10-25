@@ -626,9 +626,10 @@ let agent_card_tiles_row : @ui.Style = @ui.css("row w=Full gap=S1_5")
 let agent_card_tile : @ui.Style = @ui.style(w=@sf.grow, py=@sf.files_row_end, px=S2, gap=SPx, radius=Lg, bg=Hover)
 
 ///|
-/// The context's tile when something can be done to it: the selected ground on hover, its name ending in › 2 after.
+/// The context's tile when something can be done to it: the pointer's ground over its own on hover, its name ending
+/// in › 2 after.
 // kept across runs: a value (no field of it changes)
-let agent_card_tile_button : @ui.Style = agent_card_tile.then(@ui.css("hovered{bg=Selected}"))
+let agent_card_tile_button : @ui.Style = agent_card_tile.then(@ui.css("hovered{bg=Hover}"))
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -679,7 +680,7 @@ let agent_card_notes : @ui.Style = @ui.css("w=Full gap=S0_5")
 /// panel's padding and the card's words' (hover_inner's 10) to there.
 // kept across runs: a value (no field of it changes)
 let agent_card_stop_pill : @ui.Style = @ui.css(
-  #|row h=S6 px=S2_5 gap=S1_25 radius=Full align=ACenter bg=DangerBg hovered{bg=A(Danger,O20)}
+  #|row h=S6 px=S2_5 gap=S1_25 radius=Full align=ACenter bg=DangerBg hovered{bg=Hover}
 ).then(@ui.style(mt=@sf.room_of(agent_card_stop_in), mr=@sf.room_of(agent_card_stop_in)))
 
 ///|

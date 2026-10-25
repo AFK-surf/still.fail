@@ -433,7 +433,7 @@ let root_trouble_words : @ui.TextStyle = @ui.text_style(size=Meta, color=Warn, w
 /// pointer, and where the picker is (600).
 // kept across runs: a value (no field of it changes)
 let pick_row : @ui.Style = @ui.css(
-  #|row w=Full min_h=S10 px=S2_5 py=S1_5 gap=S2_5 align=ACenter radius=Lg hovered{bg=ListGround}
+  #|row w=Full min_h=S10 px=S2_5 py=S1_5 gap=S2_5 align=ACenter radius=Lg hovered{bg=Hover}
 )
 
 ///|

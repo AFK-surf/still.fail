@@ -152,7 +152,7 @@ let foot_trouble_red : @ui.TextStyle = @ui.text_style(size=Ui, color=Danger, wra
 
 ///|
 // kept across runs: a value (no field of it changes)
-let foot_chip : @ui.Style = @ui.css("row h=S6 px=S2 gap=S1_5 align=ACenter bg=Hover radius=Full hovered{bg=Selected}")
+let foot_chip : @ui.Style = @ui.css("row h=S6 px=S2 gap=S1_5 align=ACenter bg=Hover radius=Full hovered{bg=Hover}")
 
 ///|
 // kept across runs: a value (no field of it changes)

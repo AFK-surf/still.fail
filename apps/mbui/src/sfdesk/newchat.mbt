@@ -150,11 +150,12 @@ fn new_files_panel(c : @ui.Ctx, src : Source, w : Workspace, address : String) -
         if c.clicked(close) {
           new_files_set(src, w.id, false)
         }
-        c.box(style=side_tab, selected=true, fn() {
+        c.box(style=side_tab_in_front, fn() {
           @sf.icon(c, "folder", size=new_tab_icon, color=@sf.theme().p.text) |> ignore
           c.text(@sf.t("web-pages.chat.files"), style=side_tab_front) |> ignore
           c.box(style=side_tab_close, id=close, fn() {
-            @sf.icon(c, "close", size=new_tab_close, color=@sf.theme().p.muted) |> ignore
+            @sf.icon(c, "close", size=new_tab_close, color=if c.lit(close) { @sf.theme().p.text } else { @sf.theme().p.muted })
+            |> ignore
           })
           |> ignore
         })

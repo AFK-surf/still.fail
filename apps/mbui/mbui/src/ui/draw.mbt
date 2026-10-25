@@ -581,6 +581,7 @@ fn Ctx::drawn_paint(self : Ctx, i : Int, alpha : Double) -> Bool {
   if dr.mode == mode_draw || !look.is_still() || e.z == 2 || e.only || cutting {
     // tapped as laid out, not here (drawn only, not at all)
     self.next_hit_ids.truncate(h0)
+    self.next_hit_ends.truncate(h0)
     self.next_hit_rects.truncate(h0 * 4)
     self.next_hit_clips.truncate(h0 * clip_n)
     self.next_scroll_ids.truncate(s0)

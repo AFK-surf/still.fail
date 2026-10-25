@@ -163,7 +163,7 @@ drawn in it can not drift apart: still.fail's tape panels and closed bar follow 
 the bar or the panel they stand in (src/sf/tokens.mbt `window_follow`, `tape_corners`, `closed_bar_of`,
 `rail_ground_radius`).
 
-## The three rules
+## The four rules
 
 1. In one `style(…)` each property is said once. Padding from the finer to the coarser: `pl` `pr` `pt` `pb` over
    `px` `py` over `p`.
@@ -171,9 +171,14 @@ the bar or the panel they stand in (src/sf/tokens.mbt `window_follow`, `tape_cor
    and `pr`); their state blocks merge the same way. A recipe is base, then its variants, then their compounds; what
    the call says loosely (`pad=`, `bg=`, `size=`) last.
 3. A node's states are laid on in one order, the later winning: `narrow`, `dark`, `selected`, `hovered`, `focused`,
-   `pressed`, `disabled`. `pressed`, `hovered`, `focused` come from the box's `id` (`Ctx::pressed`, `hovered`,
+   `pressed`, `disabled`. `pressed`, `hovered`, `focused` come from the box's `id` (`Ctx::pressed`, `lit`,
    `focus_shown`: the inputs the last frame took); `selected`, `disabled` are said in the call; `dark` is the theme's,
    `narrow` the width's. Words have `dark` and `narrow` alone.
+4. What answers the hand is a tint laid over what is there, never a ground in its place: the ground `hovered` and
+   `pressed` say goes over the ground under it (the box's own, its `selected` one: `Over(under, top)`), as the kit's
+   `tinted` does, so `hovered{bg=Hover}` is a step more on any ground, pressed a step more again. A box pointed at
+   is pointed at while the pointer is on what is drawn in it (`Ctx::hovered`, as CSS's `:hover`): a tab and its ×,
+   the × pointed at, are both lit, the × a step more than the tab (still.fail's docs/ui-panels.md 悬停).
 
 Nothing cascades: no selectors, words do not inherit from the boxes round them. Nothing in a style moves by itself
 (no transition): a state changed is the other value from the frame that sees it. An animation is motion's.

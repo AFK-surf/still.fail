@@ -508,16 +508,16 @@ let lc_code : @ui.TextStyle = @ui.text_style(size=Title, weight=Semibold, color=
 
 ///|
 /// A step's button (cardStep): the card's width, 32 high, 8 under what is above it, 12 in, its corner the card's less
-/// its padding; the ink at 5% (10% under the pointer), solid (the primary's) while it is the next thing to do; its words
-/// 13 medium, a spinner or ↗ 6 beside them.
+/// its padding; the ink at 5% (the pointer's over it, docs/ui-panels.md 悬停), solid (the primary's, a step towards
+/// the page under the pointer) while it is the next thing to do; its words 13 medium, a spinner or ↗ 6 beside them.
 // kept across runs: a value (no field of it changes)
 let lc_step : @ui.Style = @ui.css(
-  "row w=Full h=S8 mt=S2 px=S3 gap=S1_5 radius=Inner bg=A(Fg,O5) align=ACenter justify=JCenter hovered{bg=A(Fg,O10)}",
+  "row w=Full h=S8 mt=S2 px=S3 gap=S1_5 radius=Inner bg=A(Fg,O5) align=ACenter justify=JCenter hovered{bg=Hover}",
 )
 
 ///|
 // kept across runs: a value (no field of it changes)
-let lc_step_solid : @ui.Style = lc_step.then(@ui.css("bg=Primary hovered{bg=A(Primary,O80)}"))
+let lc_step_solid : @ui.Style = lc_step.then(@ui.css("bg=Primary hovered{bg=Over(Primary, A(Bg, O15))}"))
 
 ///|
 /// A step's button with its ⋯ (login_step's `more`): the row 8 under what is over it, the button the rest of it, the ⋯
@@ -535,7 +535,7 @@ let lc_step_solid_in_row : @ui.Style = lc_step_solid.then(@ui.css("mt=S0"))
 
 ///|
 // kept across runs: a value (no field of it changes)
-let lc_more : @ui.Style = @ui.css("w=S8 h=S8 radius=Inner bg=A(Fg,O5) align=ACenter justify=JCenter hovered{bg=A(Fg,O10)}")
+let lc_more : @ui.Style = @ui.css("w=S8 h=S8 radius=Inner bg=A(Fg,O5) align=ACenter justify=JCenter hovered{bg=Hover}")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -558,7 +558,9 @@ let lc_paste_words : @ui.Style = @ui.css("w=Full")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let lc_done : @ui.Style = @ui.css("row h=S6 px=S3 radius=Inner bg=Primary align=ACenter justify=JCenter hovered{bg=A(Primary,O80)}")
+let lc_done : @ui.Style = @ui.css(
+  "row h=S6 px=S3 radius=Inner bg=Primary align=ACenter justify=JCenter hovered{bg=Over(Primary, A(Bg, O15))}",
+)
 
 ///|
 // kept across runs: a value (no field of it changes)
