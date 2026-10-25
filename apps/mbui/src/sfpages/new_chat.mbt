@@ -213,10 +213,8 @@ fn new_narrow(
   })
   |> ignore
   let width = composer_width(c.width)
-  // (in a panel of its own, at its foot: as far from its foot as from its sides, in the panel's corners, as a chat's)
-  let apart = @sf.in_pane() && frame.foot == 0.0
-  // (16 under it, as a chat's composer: chat_foot)
-  let under : @ui.Space = if apart { @sf.room_of(composer_side()) } else { S4 }
+  // (as far from the page's foot as a chat's composer: composer_foot_in)
+  let under : @ui.Space = @sf.room_of(composer_foot_in(c.width))
   c.layer(fn() {
     c.spacer()
     let foot = c.box(style=new_foot, fn() {
