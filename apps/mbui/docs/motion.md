@@ -119,7 +119,9 @@ list's turns, words flying, everything in the hand). Each step below is a PR; a 
    `follow-layout` and `motion-read` only let what is left fall (#1639).
 3. **The composer** (sfpages/composer.mbt, every tier's since #1646). Done: reshaped for what it holds (its words,
    files, quotes, its being opened, its error) and for its page, its ＋, words, send and choices carried from where
-   they showed by the same cause; held for words sent; nothing for the window, the sidebar, a keyboard or the tier.
+   they showed by the same cause; for its page, what it holds there and did not here (a new chat's choices) carried
+   on its ground until that is there (`@motion.reshape` `carry`, morph.ts `morph`); held for words sent; nothing for
+   the window, the sidebar, a keyboard or the tier.
    Laid out as it ends at once, its page's foot and the ↓ button follow what it is laid out as. The page's foot stays
    what its parts take their places from (`@motion.scope`): the page moving, with the composer in it, moves none of
    them.

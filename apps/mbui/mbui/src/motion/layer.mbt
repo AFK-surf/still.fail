@@ -108,6 +108,9 @@ priv struct Moving {
   mut fly : (Double, Double, Double, Double, Double, Double)?
   /// its own ground changes shape for its cause (reshape), by `spec`
   mut reshape : Bool
+  /// reshape: it goes from where it was with what it holds (laid out for another place: the web's morph), what is new
+  /// in it carried on its ground
+  mut carry : Bool
 }
 
 ///|
@@ -177,6 +180,12 @@ priv struct Rec {
   mut was_gp : Double
   /// a build of this frame set its ground off anew
   mut g_now : Bool
+  /// whether its ground set off as last with what it holds (reshape's `carry`)
+  mut g_carry : Bool
+  /// a node new in a shape gone with what it holds, carried on its ground (reshape's `carry`): that shape's key (0:
+  /// none), and the edges of it it keeps to (1: its right, rather than its left; 2: its foot, rather than its top)
+  mut on : Int
+  mut on_edges : Int
 }
 
 ///|
@@ -232,6 +241,9 @@ fn Rec::new() -> Rec {
     was_gr: 0.0,
     was_gp: 1.0,
     g_now: false,
+    g_carry: false,
+    on: 0,
+    on_edges: 0,
   }
 }
 
@@ -395,6 +407,7 @@ fn moving_of(c : @ui.Ctx, i : Int) -> Moving {
     scope: 0,
     fly: None,
     reshape: false,
+    carry: false,
   }
   mo.stamp[i] = build
   mo.at[i] = mo.entries.length()
@@ -482,14 +495,26 @@ pub fn entering(c : @ui.Ctx, i : Int, key : String, enter : Trans) -> Unit {
 /// Node `i` keyed `key` changes shape for its cause (the web's morph.ts `grow`): in the frame `by` (what it changes for:
 /// its words, its files, its being opened) changes, what it holds is laid out as it ends at once, and its own ground
 /// (its colour, glass, shadow, border and corners) goes by `spec` from the shape it showed to the one it is laid out
-/// in, carrying on from wherever it had got to. What in it moves with it says so itself (`layout` with the same `by`).
-/// Moved or resized by nothing it changes for (a window, a keyboard), its ground is where it is laid out at once, a
-/// change of its own going on from there. Only drawn so: tapped where it is laid out.
-pub fn reshape(c : @ui.Ctx, i : Int, key : String, by~ : String, spec~ : Spec) -> Unit {
+/// in, carrying on from wherever it had got to. What in it moves with it says so itself (`layout` with the same `by`);
+/// what is new in it is in its place from the first. With `carry` (laid out for another place: the web's morph.ts
+/// `morph`, a composer gone to another page), it goes from where it was with what it holds: a keyed node in it new to
+/// it while its ground is on its way (not built the frame before: a part the other place has and this did not) is
+/// carried on that ground, as far from its nearer edges as it is laid out, until the ground is there. Moved or resized
+/// by nothing it changes for (a window, a keyboard), its ground is where it is laid out at once, a change of its own
+/// going on from there. Only drawn so: tapped where it is laid out.
+pub fn reshape(
+  c : @ui.Ctx,
+  i : Int,
+  key : String,
+  by~ : String,
+  spec~ : Spec,
+  carry? : Bool = false,
+) -> Unit {
   let e = moving_of(c, i)
   e.name = key
   e.key = motion_key(key)
   e.reshape = true
+  e.carry = carry
   e.spec = spec
   if by != "" {
     e.by = by
@@ -573,6 +598,28 @@ fn scope_above(c : @ui.Ctx, i : Int) -> Moving? {
 }
 
 ///|
+/// The shape node `i` is in that goes from where it was with what it holds (reshape's `carry`), if any: its entry and
+/// what is kept of it.
+fn carrier(c : @ui.Ctx, i : Int) -> (Moving, Rec)? {
+  let mut p = c.node_parent(i)
+  while p >= 0 {
+    if c.node_is_list(p) {
+      return None
+    }
+    match entry_of(c, p) {
+      Some(e) if e.reshape =>
+        return match mo.recs.get(e.key) {
+          Some(r) => Some((e, r))
+          None => None
+        }
+      _ => ()
+    }
+    p = c.node_parent(p)
+  }
+  None
+}
+
+///|
 /// When the node keyed `key` (layout, entering) is at its place and in (whole ms, the frames' clock): the latest of
 /// its move's ends and its entrance's (Anim::ends_at); a row gone from its list, when its copy has left (its fade's
 /// and its move's ends); before now (-1) when it is at rest or the key is not known; +inf when told to move in the
@@ -587,7 +634,14 @@ pub fn layout_rest(key : String) -> Double {
     }
   }
   match mo.recs.get(k) {
-    Some(r) => [r.ox, r.oy, r.ef, r.em, r.gp].each(at)
+    Some(r) => {
+      [r.ox, r.oy, r.ef, r.em, r.gp].each(at)
+      // (carried on a shape's ground: until that is there)
+      match mo.recs.get(r.on) {
+        Some(ar) if r.on != 0 => at(ar.gp)
+        _ => ()
+      }
+    }
     None => ()
   }
   for gh in mo.ghosts {
@@ -899,7 +953,16 @@ fn after_layout(c : @ui.Ctx) -> Unit {
   }
   let still = c.still()
   let scrolled : Map[Int, Double] = {}
-  for e in mo.entries {
+  // (shapes first: what is carried on one's ground is placed by where that is this frame)
+  let order = mo.entries.filter(fn(e) { e.reshape })
+  if !order.is_empty() {
+    for e in mo.entries {
+      if !e.reshape {
+        order.push(e)
+      }
+    }
+  }
+  for e in if order.is_empty() { mo.entries } else { order } {
     let (nx, ny, nw, nh) = c.node_rect(e.node)
     let app_look = c.look_of(e.node)
     let mut look = app_look
@@ -1129,6 +1192,7 @@ fn after_layout(c : @ui.Ctx) -> Unit {
           r.gp.snap(0.0)
           r.gp.animate(1.0, e.spec)
           r.g_now = true
+          r.g_carry = e.carry
         } else {
           // what holds it moved or resized it: where it set out from as far off its new shape as it was off its old,
           // its way going on as it was (a build before this one set it off anew: back as the frame began)
@@ -1176,6 +1240,40 @@ fn after_layout(c : @ui.Ctx) -> Unit {
         Some(_) => ()
         None => r.drawing.insts.clear()
       }
+      // carried on the ground of a shape gone with what it holds, new in it as that set off (reshape's carry): placed
+      // by that ground, as far from its nearer edges as it is laid out, until the ground is there
+      if r.on == 0 && !was_seen && !still && !e.reshape {
+        match carrier(c, e.node) {
+          Some((a, ar)) if ar.g_carry && ar.gp.get() < 1.0 => {
+            let (ax, ay, aw, ah) = c.node_rect(a.node)
+            r.on = a.key
+            r.on_edges = (if nx + nw / 2.0 > ax + aw / 2.0 { 1 } else { 0 }) +
+              (if ny + nh / 2.0 > ay + ah / 2.0 { 2 } else { 0 })
+          }
+          _ => ()
+        }
+      }
+      let (cx, cy) = match mo.recs.get(r.on) {
+        Some(ar) if r.on != 0 && ar.seen == frame && ar.gp.get() < 1.0 => {
+          let p = ar.gp.get()
+          let gx = ar.gx + (ar.x - ar.gx) * p
+          let gy = ar.gy + (ar.y - ar.gy) * p
+          let gw = ar.gw + (ar.w - ar.gw) * p
+          let gh = ar.gh + (ar.h - ar.gh) * p
+          // (its own moves none meanwhile: where it is drawn is the ground's)
+          r.ox.snap(0.0)
+          r.oy.snap(0.0)
+          r.driven = false
+          (
+            if r.on_edges % 2 == 1 { gx + gw - ar.x - ar.w } else { gx - ar.x },
+            if r.on_edges >= 2 { gy + gh - ar.y - ar.h } else { gy - ar.y },
+          )
+        }
+        _ => {
+          r.on = 0
+          (0.0, 0.0)
+        }
+      }
       // its look: on the way to its place, coming in
       let (ox, oy) = if r.driven && e.drive >= 0.0 {
         let p = dclamp(e.drive, 0.0, 1.0)
@@ -1191,6 +1289,8 @@ fn after_layout(c : @ui.Ctx) -> Unit {
       } else {
         (r.ox.get(), r.oy.get())
       }
+      let ox = ox + cx
+      let oy = oy + cy
       if ox != 0.0 || oy != 0.0 {
         look = look.then({ ..@ui.still_look, dx: ox, dy: oy })
         flip_dy = oy

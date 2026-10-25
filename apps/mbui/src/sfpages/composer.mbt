@@ -187,9 +187,10 @@ pub fn composer(
   // capsule ⇄ box in one motion for what it holds (useMorph, morph.ts grow: its words, files, quotes, its being opened,
   // what it says under it): laid out as it ends at once, its ground going from the shape it had to this one, its parts
   // from where they showed to their places; laid out for the other page (a new chat's in the page, a chat's at its
-  // foot: dock.tsx), the same from where it was there, one composer changing. Moved by nothing of these (the window,
-  // the sidebar, a keyboard), or another chat's on the same page (what it holds swapped, not changed), it is where it
-  // is laid out at once (docs/motion.md)
+  // foot: dock.tsx), the same from where it was there, one composer changing, and what it holds there that it did not
+  // here (a new chat's choices) carried on its ground (morph.ts morph). Moved by nothing of these (the window, the
+  // sidebar, a keyboard), or another chat's on the same page (what it holds swapped, not changed), it is where it is
+  // laid out at once (docs/motion.md)
   let moved = match composing.roomy_before {
     Some(was) => was != spec.roomy
     None => false
@@ -201,7 +202,7 @@ pub fn composer(
     "\{spec.roomy}|\{multiline}|\{w.files.length()}|\{w.quotes.length()}|\{w.error != ""}|" + w.field.text()
   }
   let shape = @motion.tween(if moved { page_move_ms } else { morph_ms }, ease=Out)
-  @motion.reshape(c, box, "composer/box", by=holds, spec=shape)
+  @motion.reshape(c, box, "composer/box", by=holds, spec=shape, carry=moved)
   for part in [(plus, "plus"), (words, "words"), (send_i, "send"), (chosen, "choices")] {
     if part.0 >= 0 {
       @motion.layout(c, part.0, "composer/part/" + part.1, spec=shape, by=holds)

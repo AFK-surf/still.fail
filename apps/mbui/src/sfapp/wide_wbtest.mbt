@@ -355,6 +355,17 @@ test "wide: a new chat becomes its chat as the web's: its scene up and away, the
 }
 
 ///|
+/// The new chat's choices (its station's name) drawn within the composer's ground.
+fn choices_in_ground(t : @ui.Tester) -> Unit raise {
+  let (gx, gy, gw, gh) = composer_glass(t)
+  let at = seen_words(t, "Studio").filter(fn(p) { p.0 > gx && p.0 < gx + gw })
+  assert_true(
+    at.length() > 0 && at.iter().all(fn(p) { p.1 >= gy && p.1 <= gy + gh }),
+    msg="the choices at \{at}, the composer's ground \{(gx, gy, gw, gh)} at \{t.time()}",
+  )
+}
+
+///|
 test "wide: a chat and a new chat switched by the sidebar: the composer goes between their places, a new chat left leaves by its own way, what comes in is there at once" {
   let calls : Array[Made] = []
   let t = wide_tester(calls, mode="chat")
@@ -369,6 +380,10 @@ test "wide: a chat and a new chat switched by the sidebar: the composer goes bet
   let (_, y0, _, h0) = composer_glass(t)
   assert_true((y0 + h0 - (cy + ch)).abs() < 1.0, msg="from the chat's foot: \{(y0, h0)} \{(cy, ch)}")
   assert_eq(t.look_of("新对话").map(fn(l) { l.2 }), Some(1.0))
+  // what it holds there and did not at the chat's foot (the new chat's choices) carried on its ground all the way
+  choices_in_ground(t)
+  t.run_for(composer_page_ms / 2.0)
+  choices_in_ground(t)
   t.run_for(went + composer_page_ms + 1.0 - t.time())
   let (_, y1, _, h1) = composer_glass(t)
   assert_true(y1 + h1 < cy - 100.0, msg="in the page's middle: \{(y1, h1)}")
