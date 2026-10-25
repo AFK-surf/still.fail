@@ -1127,7 +1127,7 @@ export class Accounts {
         continue;
       }
       const list = byOption.get(picked) ?? [];
-      list.push({ session, title: title(session), at: row.at, recommended: row.detail?.accepted === true });
+      list.push({ session, at: row.at, recommended: row.detail?.accepted === true });
       byOption.set(picked, list);
     }
     const by = saved?.change.by;
@@ -1135,7 +1135,8 @@ export class Accounts {
       text: policy.policy,
       options: policy.options.map((o) => {
         const chats = byOption.get(o.id) ?? [];
-        return { ...o, count: chats.length, chats: chats.slice(0, POLICY_CHATS) };
+        // Named only as shown: each name is a lookup of the chat's (a week's checks came to 210 chats on ccvm).
+        return { ...o, count: chats.length, chats: chats.slice(0, POLICY_CHATS).map(({ session, ...c }) => ({ session, title: title(session), ...c })) };
       }),
       days: POLICY_DAYS,
       checked: latest.size,
