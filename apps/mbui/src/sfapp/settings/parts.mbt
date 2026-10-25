@@ -26,6 +26,9 @@ fn wide_side(c : @ui.Ctx) -> Double {
 /// A page of the settings: what it shows, a block at a time (each laid out only when it comes into view), scrolling
 /// under what stays at its top. `key` keeps its place while it is on the stack.
 fn scroll_page(c : @ui.Ctx, key : String, blocks : Array[() -> Unit]) -> Unit {
+  // (its blocks drawn as its list lays them out, maybe after this returns: in the page's arrangement, @sf.look)
+  let l = @sf.look()
+  let blocks = blocks.map(fn(b) { fn() { @sf.with_look(l, b) } })
   if wide.val {
     let side = wide_side(c)
     c.list("settings/" + key, blocks.length() + 1, 80.0, fn(i) {
@@ -58,18 +61,6 @@ fn scroll_page(c : @ui.Ctx, key : String, blocks : Array[() -> Unit]) -> Unit {
   })
   |> ignore
   fixture_scroll(c, "settings/" + key)
-}
-
-///|
-/// What a page shows over what scrolls (a field filtering it), standing in its column as its blocks do (scroll_page):
-/// in the wide frame as far in from the pane's sides as they are; elsewhere at its own sides (`style`'s).
-fn over_scroll(c : @ui.Ctx, style : @ui.Style, body : () -> Unit) -> Unit {
-  if wide.val {
-    let side = wide_side(c)
-    c.box(style=style.then(@ui.style(px=@sf.room_of(side))), body) |> ignore
-  } else {
-    c.box(style~, body) |> ignore
-  }
 }
 
 ///|
