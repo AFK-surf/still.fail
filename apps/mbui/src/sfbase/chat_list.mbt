@@ -1026,9 +1026,9 @@ pub fn flash_start(rd : Reading) -> Unit {
       duration=flash_ms,
       times=[0.0, flash_in_ms / flash_ms, flash_held_ms / flash_ms, 1.0],
       eases=[
-        fn(t) { @motion.Ease::Out.at(t) },
+        fn(t) { @ui.Ease::Out.at(t) },
         fn(t) { t },
-        fn(t) { @motion.Ease::Standard.at(t) },
+        fn(t) { @ui.Ease::Standard.at(t) },
       ],
     ),
   )

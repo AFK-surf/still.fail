@@ -1,11 +1,11 @@
-// Curves as CSS has them (cubic-bezier), for motion timed rather than
-// sprung: still.fail's (its Android app's ui/Motion.kt and the web's styles)
-// are named here.
+// Curves as CSS has them (cubic-bezier), played as Compose's CubicBezierEasing plays them, for motion timed rather
+// than sprung: still.fail's (its Android app's ui/Motion.kt and the web's styles) are named here. The one set of
+// them: a page pushed (nav), a state moved (move_state), a scrollbar's fade, and @motion's tweens.
 
 ///|
-/// CSS's cubic-bezier(x1, y1, x2, y2) at `t` (0-1 of the time): how far
-/// along (0-1).
-pub fn bezier(x1 : Double, y1 : Double, x2 : Double, y2 : Double, t : Double) -> Double {
+/// CSS's cubic-bezier(x1, y1, x2, y2) at `t` (0-1 of the time), as Compose's CubicBezierEasing finds it: how far
+/// along (0-1). (Motion's own solver, as an easing: @motion.cubic_bezier.)
+fn bezier_at(x1 : Double, y1 : Double, x2 : Double, y2 : Double, t : Double) -> Double {
   if t <= 0.0 {
     return 0.0
   }
@@ -25,7 +25,7 @@ pub fn bezier(x1 : Double, y1 : Double, x2 : Double, y2 : Double, t : Double) ->
   let mut found = false
   for _ in 0..<8 {
     let e = x_at(s) - t
-    if e.abs() < 1.0e-6 {
+    if e.abs() < 1.0e-7 {
       found = true
       break
     }
@@ -35,13 +35,13 @@ pub fn bezier(x1 : Double, y1 : Double, x2 : Double, y2 : Double, t : Double) ->
     }
     s = s - e / d
   }
-  if !found {
+  if !found || s < 0.0 || s > 1.0 {
     let mut lo = 0.0
     let mut hi = 1.0
     s = t
-    for _ in 0..<40 {
+    for _ in 0..<60 {
       let x = x_at(s)
-      if (x - t).abs() < 1.0e-6 {
+      if (x - t).abs() < 1.0e-9 {
         break
       }
       if x < t {
@@ -56,29 +56,56 @@ pub fn bezier(x1 : Double, y1 : Double, x2 : Double, y2 : Double, t : Double) ->
 }
 
 ///|
-/// A curve by name, for what is timed.
-pub(all) enum Curve {
-  /// (.4, 0, .2, 1), Material's FastOutSlowIn, the web's --m-standard:
-  /// pages pushed and popped
+/// A curve by name, for what is timed (Motion.kt Ease, Compose's own; Motion's `ease`).
+pub(all) enum Ease {
+  /// (.4, 0, .2, 1), Compose's FastOutSlowIn, Ease.Standard, the web's
+  /// --m-standard: pages pushed and popped, the jump button's growing
   Standard
-  /// (.2, .8, .2, 1), --m-ease: sheets, pages rising
+  /// (.2, .8, .2, 1), Ease.Arrive, --m-ease: sheets, pages rising
   Arrive
-  /// (.2, .7, .2, 1), --ease-out
+  /// (.2, .7, .2, 1), Ease.Out, --ease-out: a list's rows coming in, folding
   Out
   /// (.25, .46, .45, .94), easeOutQuad: what goes on from where a finger
   /// let it go (a page swiped back)
   LetGo
   Linear
-} derive(Eq)
+  /// (.6, 0, .2, 1), Ease.Flight: words sent on their way to their row
+  Flight
+  /// (0, 0, .58, 1), CSS's keyword ease-out (Ease.CssOut)
+  CssOut
+  /// (.25, .1, .25, 1), CSS's keyword ease (Ease.Css): a scrim, a toast
+  Css
+  /// (0, 0, .2, 1), Compose's LinearOutSlowIn (Ease.Decel)
+  Decel
+  /// (.3, 0, .5, 1), Ease.LeaveFade: what leaves by fading
+  LeaveFade
+  /// (.42, 0, .58, 1), Compose's EaseInOut, CSS's ease-in-out
+  InOut
+  /// (.16, 1, .3, 1), Chat.kt ArchiveEase: a quick start, a soft landing
+  Soft
+  /// (.4, 0, 1, 1), Compose's FastOutLinearIn
+  Accelerate
+  /// any other cubic-bezier
+  Bezier(Double, Double, Double, Double)
+} derive(Eq, Show)
 
 ///|
 /// The curve at `t` (0-1 of the time).
-pub fn Curve::at(self : Curve, t : Double) -> Double {
+pub fn Ease::at(self : Ease, t : Double) -> Double {
   match self {
-    Standard => bezier(0.4, 0.0, 0.2, 1.0, t)
-    Arrive => bezier(0.2, 0.8, 0.2, 1.0, t)
-    Out => bezier(0.2, 0.7, 0.2, 1.0, t)
-    LetGo => bezier(0.25, 0.46, 0.45, 0.94, t)
+    Standard => bezier_at(0.4, 0.0, 0.2, 1.0, t)
+    Arrive => bezier_at(0.2, 0.8, 0.2, 1.0, t)
+    Out => bezier_at(0.2, 0.7, 0.2, 1.0, t)
+    LetGo => bezier_at(0.25, 0.46, 0.45, 0.94, t)
     Linear => dclamp(t, 0.0, 1.0)
+    Flight => bezier_at(0.6, 0.0, 0.2, 1.0, t)
+    CssOut => bezier_at(0.0, 0.0, 0.58, 1.0, t)
+    Css => bezier_at(0.25, 0.1, 0.25, 1.0, t)
+    Decel => bezier_at(0.0, 0.0, 0.2, 1.0, t)
+    LeaveFade => bezier_at(0.3, 0.0, 0.5, 1.0, t)
+    InOut => bezier_at(0.42, 0.0, 0.58, 1.0, t)
+    Soft => bezier_at(0.16, 1.0, 0.3, 1.0, t)
+    Accelerate => bezier_at(0.4, 0.0, 1.0, 1.0, t)
+    Bezier(a, b, c, d) => bezier_at(a, b, c, d, t)
   }
 }

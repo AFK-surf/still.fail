@@ -356,7 +356,7 @@ pub let lines_ms : Double = 240.0
 
 ///|
 // kept across runs: a value (no field of it changes)
-let lines_ease : @motion.Ease = Bezier(0.2, 0.7, 0.2, 1.0)
+let lines_ease : @ui.Ease = Out
 
 ///|
 /// A line's way from where it was drawn to its place, and how faint it is on it; a gone one's copy's.

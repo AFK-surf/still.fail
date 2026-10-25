@@ -22,7 +22,7 @@ Paths: `chat/` is `apps/android/chat/src/main/kotlin/fail/still/android/screens/
 | Reduced motion | One clock for every window (MotionDurationScale 0): every animation at its end at once; the prefs' `motion` (`reduce` / `full`) or the system's animator duration scale 0 | ui/Motion.kt:43-80 | `@ui.reduced_motion()`: the host's (macOS/iOS Reduce Motion, Android's animator scale 0, Windows' client-area animations off; `@hostapi.reduce_motion`, read once a second) or MBUI_REDUCE_MOTION=1; every Anim, presence, FLIP, flight at its end at once. Screenshots (`Ctx::stable`) likewise. The prefs' own setting: not yet (Settings is another slice) |
 | Loops reduced | A loop holds its rest pose (`still`), a spinner turns slowly (`slowMs`) | ui/Motion.kt:82-97 | spinners and breathing exist (src/sf); not slowed when reduced |
 | Flash reduced | Shown at its peak as long, then gone | ui/Motion.kt:99-112 | — (no quote jumps yet) |
-| Ease.Out | (.2, .7, .2, 1) | ui/Motion.kt:115 | `Curve::Out` |
+| Ease.Out | (.2, .7, .2, 1) | ui/Motion.kt:115 | `@ui.Ease::Out` |
 | Ease.Arrive | (.2, .8, .2, 1) | :117 | `Arrive` |
 | Ease.Flight | (.6, 0, .2, 1) | :119 | `Flight` |
 | Ease.Standard | FastOutSlowIn (.4, 0, .2, 1) | :121 | `Standard` |
@@ -31,9 +31,9 @@ Paths: `chat/` is `apps/android/chat/src/main/kotlin/fail/still/android/screens/
 | Ease.LeaveFade | (.3, 0, .5, 1) | :127 | `LeaveFade` |
 | Ease.Css | (.25, .1, .25, 1) | :129 | `Css` |
 | ArchiveEase | (.16, 1, .3, 1) | chat/Chat.kt:273 | `Soft` |
-| MoveSpring | motionSpring(.28): stiffness 349.7, ratio 1, threshold .5 | ui/Motion.kt:144-145 | `@ui.move_spring` |
-| SheetSpring | motionSpring(.32): stiffness 267.7, ratio 1, threshold .5 | :146-147 | `@ui.sheet_spring` |
-| MenuSpring | motionSpring(.24, bounce .08): stiffness 476.0, ratio .92, threshold .001 | ui/Sheet.kt:249-251 | `@ui.menu_spring` |
+| MoveSpring | motionSpring(.28): stiffness 349.7, ratio 1, threshold .5 | ui/Motion.kt:144-145 | `@motion.move_spring` |
+| SheetSpring | motionSpring(.32): stiffness 267.7, ratio 1, threshold .5 | :146-147 | `@motion.sheet_spring` |
+| MenuSpring | motionSpring(.24, bounce .08): stiffness 476.0, ratio .92, threshold .001 | ui/Sheet.kt:249-251 | `@motion.menu_spring` |
 | Follower | a spring retargeted mid-way goes on from where it is and its speed; the same target changes nothing | ui/Motion.kt:149-169 | `Anim::follow` |
 | A list following its end | each frame 1 − e^(−dt/100 ms) of what is left, at least 1 px; more than 12 rows away most of the way at once; slowed by the motion scale | ui/Follow.kt:125-154 | `Ctx::list_to_end` glide (src/ui/list.mbt, before this work) |
 
@@ -205,7 +205,7 @@ so a tap meanwhile is what is under it's (the field, the rows). The package plug
 laid out; `on_list_underlay`: copies of rows gone drawn under a list's rows, `Drawing`; `on_reset`) and reads a frame
 through ui's accessors (`node_rect`, `list_above`, `list_scrolled`, …): ui does not know it.
 
-- `spec.mbt`: `Ease` (every curve above; `bezier_at`, Compose's CubicBezierEasing), `Spec` (`spring`, `tween`,
+- `spec.mbt`: `Spec` (on one of ui's curves, `@ui.Ease`, played as Compose's CubicBezierEasing; `spring`, `tween`,
   `motion_spring`, `Snap`; `move_spring`, `row_spring`, `sheet_spring`, `menu_spring`; `Motion`: one of Motion's
   transitions), `spring_at` (SpringSimulation), `spring_duration` (SpringEstimation), `Spec::value_at` (as Compose
   plays it: whole milliseconds, at its end at its duration).

@@ -99,12 +99,12 @@ fn Bar::shown(self : Bar, now : Double, scrolled : Double) -> Double {
   }
   let hide = self.hides_at(scrolled)
   let come = fn(t : Double) {
-    self.in_from + (1.0 - self.in_from) * Curve::at(Out, (t - self.in_at) / scrollbar_fade_ms)
+    self.in_from + (1.0 - self.in_from) * Ease::at(Out, (t - self.in_at) / scrollbar_fade_ms)
   }
   if now < hide {
     come(now)
   } else {
-    come(hide) * (1.0 - Curve::at(Out, (now - hide) / scrollbar_fade_ms))
+    come(hide) * (1.0 - Ease::at(Out, (now - hide) / scrollbar_fade_ms))
   }
 }
 

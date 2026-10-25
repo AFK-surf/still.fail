@@ -492,11 +492,11 @@ pub fn emit_out(c : @ui.Ctx, i : Int, e : Emits, seq : Double, from_x : Double) 
   }
   let t = e.current.unwrap()
   let u = emit_clock(c, t)
-  let k = @motion.Ease::Out.at(u)
+  let k = @ui.Ease::Out.at(u)
   match @motion.measured_rect(c, "emit-col/" + seq_s(seq)) {
     Some((_, _, cw, ch)) => {
       let s = 0.35 + 0.65 * k
-      c.look(i, @ui.look(alpha=if u < 0.35 { @motion.Ease::Out.at(u / 0.35) } else { 1.0 }, scale=s, ox=if cw > 0.0 { from_x / cw } else { 0.0 }, oy=if ch > 0.0 { 12.0 / ch } else { 0.0 }))
+      c.look(i, @ui.look(alpha=if u < 0.35 { @ui.Ease::Out.at(u / 0.35) } else { 1.0 }, scale=s, ox=if cw > 0.0 { from_x / cw } else { 0.0 }, oy=if ch > 0.0 { 12.0 / ch } else { 0.0 }))
       c.cut_to_top(i, ch * k)
     }
     None => c.look(i, @ui.look(alpha=0.0))

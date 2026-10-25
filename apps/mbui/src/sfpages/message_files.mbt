@@ -314,7 +314,7 @@ pub fn image_reveal(c : @ui.Ctx, key : String, w : Double, h : Double, fit : @ui
     Some(_) => 0.0
     None => 1.0
   }
-  let e = @motion.Out.at(p)
+  let e = @ui.Out.at(p)
   let img = c.image(key, w=Px(w), h=Px(h), fit~, radius=@sf.message_file_corner, bg=0L, fade=false)
   if p >= 1.0 {
     return

@@ -83,7 +83,7 @@ struct Nav[P] {
   // when the motion started (-1: at its first frame), how long, how
   mut t0 : Double
   mut dur : Double
-  mut curve : Curve
+  mut curve : Ease
   // a finger's: where it started, how fast it went (px per ms), its track
   // (for how fast, scroll.mbt)
   mut x0 : Double
@@ -183,7 +183,7 @@ pub fn[P] Nav::offset(self : Nav[P]) -> Double {
 }
 
 ///|
-fn[P] Nav::go(self : Nav[P], mode : Int, p1 : Double, dur : Double, curve : Curve) -> Unit {
+fn[P] Nav::go(self : Nav[P], mode : Int, p1 : Double, dur : Double, curve : Ease) -> Unit {
   wake()
   self.mode = mode
   self.p0 = self.p

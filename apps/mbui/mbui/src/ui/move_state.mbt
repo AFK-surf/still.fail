@@ -78,7 +78,7 @@ struct MoveRun {
   who : Mover
   start : Double
   dur : Double
-  ease : (Double) -> Double
+  ease : Ease
   names : Map[String, FixedArray[Bool]]
   vars : Array[String]
   from : Map[String, MoveShown]
@@ -100,24 +100,23 @@ fn MoveRun::at(self : MoveRun, now : Double) -> Double {
   } else if t >= self.dur || self.dur <= 0.0 {
     1.0
   } else {
-    (self.ease)(t / self.dur)
+    self.ease.at(t / self.dur)
   }
 }
 
 ///|
 /// The properties of `moves` (each a box's name and the CSS names of what of it moves, as the web's moveState lists
-/// them) move from what they are shown as now to what the view builds from now on, together, over `duration` ms by
-/// `curve` (by default the web's: 380 ms, its ease-out) or `ease` (0-1 of the time to 0-1 of the way). Said as the
-/// state changes: in the handler that changes it, before or after. A value of the view's own goes with them where a
-/// box lists it by its `--` name (Ctx::moved). A box shown for the first time as it sets out is at once what it is
-/// built as; with motion reduced (Ctx::still) every box is.
+/// them) move from what they are shown as now to what the view builds from now on, together, over `duration` ms on
+/// `ease` (by default the web's: 380 ms, its ease-out). Said as the state changes: in the handler that changes it,
+/// before or after. A value of the view's own goes with them where a box lists it by its `--` name (Ctx::moved). A box
+/// shown for the first time as it sets out is at once what it is built as; with motion reduced (Ctx::still) every box
+/// is.
 #callsite(autofill(loc))
 pub fn Ctx::move_state(
   self : Ctx,
   moves : Array[(String, Array[String])],
   duration? : Double = 380.0,
-  curve? : Curve = Out,
-  ease? : (Double) -> Double,
+  ease? : Ease = Out,
   loc~ : SourceLoc,
 ) -> Unit {
   if self.still() {
@@ -147,10 +146,6 @@ pub fn Ctx::move_state(
         None => abort("move_state: \{name}'s \{p} is no property a box moves by")
       }
     }
-  }
-  let ease = match ease {
-    Some(f) => f
-    None => fn(t) { curve.at(t) }
   }
   // what was shown as it sets out: in a frame, the last frame's (what this build has built so far may be the new
   // state already); between frames, the last frame's is what this frame's builds made

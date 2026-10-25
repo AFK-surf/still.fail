@@ -14,7 +14,7 @@ pub let archive_ms : Double = 280.0
 ///|
 /// ArchiveEase (Chat.kt): a quick start, a soft landing.
 // kept across runs: a curve, never written
-pub let archive_ease : @motion.Ease = Soft
+pub let archive_ease : @ui.Ease = Soft
 
 ///|
 /// How small the archive buttons (and 忽略) are as they have come or gone: 85%.
@@ -100,7 +100,7 @@ pub let options_out_ms : Double = 200.0
 ///|
 /// The answered options' curve (CSS's ease-out) and how small they are as they have gone: 90%.
 // kept across runs: a curve, never written
-pub let options_ease : @motion.Ease = CssOut
+pub let options_ease : @ui.Ease = CssOut
 
 ///|
 pub let options_scale : Double = 0.9

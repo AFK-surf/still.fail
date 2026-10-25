@@ -2604,9 +2604,9 @@ pub fn edge_look(
   let hairline = key + "/line"
   match edges_shown.get(key) {
     Some(was) if was != now => {
-      c.move_state([(bar, ["height", "opacity"])], duration=edge_bar_ms, ease=fn(t) { @motion.Ease::Soft.at(t) })
-      c.move_state([(bar, ["background-color"])], duration=edge_ink_ms, curve=Out)
-      c.move_state([(hairline, ["opacity"])], duration=edge_line_ms, curve=Out)
+      c.move_state([(bar, ["height", "opacity"])], duration=edge_bar_ms, ease=Soft)
+      c.move_state([(bar, ["background-color"])], duration=edge_ink_ms, ease=Out)
+      c.move_state([(hairline, ["opacity"])], duration=edge_line_ms, ease=Out)
     }
     _ => ()
   }
