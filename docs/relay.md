@@ -23,10 +23,11 @@
 2. 那里的会话成为这个对话的 agent 的会话（通过那个连接发言），第一条记成站点的话。
 3. 原来的对话里记一条「↗ 某人把对话接力到了 #频道」，带那里的链接（Slack 的消息链接；飞书打开那个群）。
 4. 告诉 agent（站点通知）：新的会话地址，请它用 `chat_post` 发一段摘要（在聊什么、定了什么、还有什么没定），让那里的人不用翻记录就能接上；接到已有 thread 时先读那里之前的消息。
+5. agent 在那里的第一条 `chat_post`（不带文件和卡片）不另发回复，由站点接在第 1 条后面（Slack `chat.update`，飞书改卡片），频道里那条顶层消息就带着摘要，不用点开 thread 也能看到。接上去超出一条消息的长度（Slack 3500 字，飞书一张卡片）、改不成功，或站点在 agent 发之前重启过，就照常作为回复发。之后的都是回复。
 
 ## 接口
 
 - `GET /threads/:id/relay`：`{connects: [{id, kind: slack|feishu|lark, name, team, botImage, preferred, places: [{id, name, kind: channel|topics|group, private?, used?}], error?}]}`，`used` 是最近一次接力到那里的时间（毫秒），每个连接的 places 按上面的顺序排。读不出某个连接的频道时，那一组带 `error`，其余照给。
 - `POST /threads/:id/relay`：`{connect, channel, note?}` 或 `{link, connect?, note?}`，答 `{thread, to, place, link}`。
 - core 的操作：`chat.relayPlaces {thread}`、`chat.relay {thread, connect?, channel?, link?, note?}`；挑选框列什么、怎么排（上面的规则）由 core 的 `chat.relayView` 算（`client/core-ts/src/relay-pick.ts`），网页、手机、桌面都用它。
-- 平台的部分在 `ChatSurface` 上：`places()`、`begin(channel, message)`、`threadOf(link)`、`permalink(thread)`；Slack 和飞书各自实现，再加平台只要实现这几个。
+- 平台的部分在 `ChatSurface` 上：`places()`、`begin(channel, message)`、`edit(thread, ts, message)`、`threadOf(link)`、`permalink(thread)`；Slack 和飞书各自实现，再加平台只要实现这几个。

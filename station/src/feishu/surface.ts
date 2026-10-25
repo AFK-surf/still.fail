@@ -549,6 +549,14 @@ export class FeishuSurface implements ChatSurface {
     return { thread, ts: text(first?.message_id) };
   }
 
+  /// A card changed in place (its message patched: the station's cards are shared, `update_multi`), as `post` writes one.
+  async edit(_thread: ThreadRef, ts: string, message: string): Promise<boolean> {
+    const cards = textCards(message);
+    if (cards.length !== 1) return false;
+    await this.client.api("PATCH", `/open-apis/im/v1/messages/${encodeURIComponent(ts)}`, { content: inline(cards[0]) });
+    return true;
+  }
+
   async download(file: InboundFile): Promise<Uint8Array> {
     const at = file.url === null ? null : resourceOf(file.url);
     if (at === null) throw new Error("Feishu does not give its contents");

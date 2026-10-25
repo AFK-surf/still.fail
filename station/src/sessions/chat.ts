@@ -84,6 +84,9 @@ export interface ChatSurface {
   places?(): Promise<Place[]>;
   /// Starts a conversation in one of its places with `message`, as the station: the thread it is from now on.
   begin?(channel: string, message: string): Promise<{ thread: ThreadRef; ts: string }>;
+  /// Changes a message the bot posted to `message`, when it fits in one message; false, with nothing changed, when it
+  /// does not.
+  edit?(thread: ThreadRef, ts: string, message: string): Promise<boolean>;
   /// The thread a link to one of its messages names (a message's own, or the thread a reply is in); null for a link of
   /// another workspace, or none of its.
   threadOf?(link: string): ThreadRef | null;

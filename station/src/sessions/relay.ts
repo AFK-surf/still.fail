@@ -1,8 +1,8 @@
 // A chat relayed to a channel (docs/relay.md): a person picks a Slack channel or a Feishu/Lark group one of the
 // station's connects' bots is in, and the chat's agent goes on there too. The station starts the conversation there
 // itself (who relayed it, from which chat, their note), or joins a Slack thread a person gave the link of, makes it one of the agent's conversations, says so in the chat
-// it came from, and tells the agent, who writes people there what they need to pick it up. The chat it came from goes
-// on as before.
+// it came from, and tells the agent, who writes people there what they need to pick it up: its first post there is
+// added to the station's first message (`openings`, taken by chat_post). The chat it came from goes on as before.
 import { tr, stationLang } from "../ops/i18n.ts";
 import { log } from "../ops/log.ts";
 import type { ThreadRow } from "../store/rows.ts";
@@ -149,6 +149,9 @@ export async function relay(hub: Hub, thread: ThreadRow, by: string, target: Rel
   hub.store.joinThread(there.id, session, c.id);
   // Kept as the station's words there; the agent hears of it in its notice below, not as a message.
   hub.store.insertMessage({ thread: there.id, ts: begun.ts, authorKind: "ember", author: "ember", text: opening, attachments: [] });
+  // The agent's first post there goes into it, so people see what it is about without opening the thread.
+  const into = c.chat.edit !== undefined;
+  if (into) hub.openings.set(there.id, { session, ts: begun.ts });
   const to = threadAddress(begun.thread.channel, begun.thread.threadTs);
   const link = c.chat.permalink?.(begun.thread) ?? null;
   const name = existing !== null ? tr(lang, "station.relay.threadIn", { place: placeName(place) }) : placeName(place);
@@ -177,7 +180,8 @@ export async function relay(hub: Hub, thread: ThreadRow, by: string, target: Rel
     `${by} relayed the chat ${threadAddress(thread.channel, thread.threadTs)} to ${where}: ${to} is now one of your conversations, and replies there come to you. ` +
       `The station posted its first message (who relayed it, a link to this chat${said === "" ? "" : ", and their note"}). ` +
       (existing !== null ? `Read what was said there before first (slack_api conversations.replies with channel ${begun.thread.channel} and ts ${begun.thread.threadTs}). ` : "") +
-      `Post there now with chat_post to=${to}: what this conversation is about, what is decided and what is open, so the people there can take part without reading it. ` +
+      `Post there now with chat_post to=${to}: what this conversation is about, what is decided and what is open, so the people there can take part without reading it` +
+      (into ? ` (without files or a card, it is added to the station's first message there, which is what people see without opening the thread: write it to read on from it). ` : ". ") +
       `${said === "" ? "" : `Their note: ${JSON.stringify(said)}. `}Keep answering the chat it came from too.`,
   );
   log.info("hub", "chat relayed", { thread: thread.id, session, connect: c.id, to });

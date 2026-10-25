@@ -660,6 +660,22 @@ export class SlackSurface implements ChatSurface {
     return { thread: { channel, threadTs: root }, ts: root };
   }
 
+  /// A message changed in place (chat.update), as `post` writes one.
+  async edit(thread: ThreadRef, ts: string, message: string): Promise<boolean> {
+    if (splitForSlack(message, 3500).length > 1) return false;
+    await this.client.api(
+      "chat.update",
+      [
+        ["channel", thread.channel],
+        ["ts", ts],
+        ["text", message],
+        ["blocks", JSON.stringify([markdown(message)])],
+      ],
+      this.botToken,
+    );
+    return true;
+  }
+
   /// Sends a file's bytes to Slack (not yet shared anywhere): its file id and title.
   private async upload(file: Attachment): Promise<[string, string]> {
     const bytes = await readFile(file.path);
