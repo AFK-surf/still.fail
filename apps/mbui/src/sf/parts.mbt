@@ -843,15 +843,6 @@ pub fn menu_row(
 }
 
 ///|
-/// Where a small panel's button (a 24 pill or circle: panel_pill) stands at the end of a menu's row: in the row's
-/// capsule end, concentric with it, past the row's padding to there, the row no taller for it (a row of words is as
-/// high, its ＋ or × in it or not).
-pub let menu_row_end : @ui.Style = @ui.style(
-  mr=room(capsule_in(menu_row_min / 2.0, panel_pill) - text_in),
-  my=room((menu_row_min - 2.0 * menu_row_over - panel_pill) / 2.0),
-)
-
-///|
 /// Between an item's icon and its words (menuItem), its check's column and its words in a menu of choices alone
 /// (chooserItem).
 let menu_gap : Double = 8.0
@@ -947,9 +938,7 @@ pub fn dropdown(
 /// lighter than the page: its line a groove), 1 high, 6 over and under it, as wide as its rows' grounds (at the
 /// panel's padding), so a row pointed at beside it ends where it does.
 pub fn menu_rule(c : @ui.Ctx) -> Unit {
-  c.box(style=menu_rule_at, fn() {
-    c.box(h=Px(1.0), w=Fill(1.0), bg=@ui.alpha(c.theme().fg, 0.12), fn() {  }) |> ignore
-  })
+  c.box(style=menu_rule_at, fn() { c.box(style=rule_line.then(@ui.style(bg=Data(rule_ink(c)))), fn() {  }) |> ignore })
   |> ignore
 }
 

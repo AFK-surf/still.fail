@@ -797,7 +797,17 @@ let jobs_quiet : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, w=Full)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let jobs_quiet_at : @ui.Style = @ui.style(w=Full, pt=S2, pl=@sf.room_of(@sf.text_in + 8.0 + 12.0))
+let jobs_quiet_at : @ui.Style = @ui.style(w=Full, pt=S2, pl=@sf.room_of(jobs_names_in))
+
+///|
+/// The names' column in the popover: a row's padding, a job's dot (8) and the 12 after it (job_row_inset, job_row_on).
+let jobs_names_in : Double = @sf.text_in + job_dot_w + job_dot_gap
+
+///|
+let job_dot_w : Double = 8.0
+
+///|
+let job_dot_gap : Double = 12.0
 
 ///|
 /// The popover's foot (jobsFoot): 6 under its groups, 4 apart; all of them a row 38 high, its words in the names'
@@ -812,7 +822,7 @@ let jobs_all : @ui.Style = @ui.style(
   row=true,
   w=@sf.grow,
   h=@sf.jobs_row_h,
-  pl=@sf.room_of(@sf.text_in + 8.0 + 12.0),
+  pl=@sf.room_of(jobs_names_in),
   pr=S2_5,
   align=ACenter,
   radius=Inner,

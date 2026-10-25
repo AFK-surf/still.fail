@@ -1839,6 +1839,25 @@ pub let menu_row_min : Double = 32.0
 pub let menu_row_over : Double = 6.0
 
 ///|
+/// Where a small panel's button (a 24 pill or circle: panel_pill) stands at the end of a menu's row: in the row's
+/// capsule end, concentric with it, past the row's padding to there, the row no taller for it (a row of words is as
+/// high, its ＋ or × in it or not).
+pub let menu_row_end : @ui.Style = @ui.style(
+  mr=room(capsule_in(menu_row_min / 2.0, panel_pill) - text_in),
+  my=room((menu_row_min - 2.0 * menu_row_over - panel_pill) / 2.0),
+)
+
+///|
+/// A line between a small panel's parts (@sf.menu_rule): 1 high, as wide as where it is, the words' ink faintly (in
+/// dark the panel is lighter than the page: its line a groove; kit's menu_rule_look).
+pub let rule_line : @ui.Style = @ui.css("w=Full h=SPx")
+
+///|
+pub fn rule_ink(c : @ui.Ctx) -> Int64 {
+  @ui.alpha(c.theme().fg, 0.12)
+}
+
+///|
 /// Nothing under it, no ring round it.
 pub let no_ground : Int64 = 0L
 
