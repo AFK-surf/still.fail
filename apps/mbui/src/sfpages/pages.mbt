@@ -10,6 +10,7 @@ pub fn reset() -> Unit {
   login_cards_reset()
   relay_focus_reset()
   publish_reset()
+  xsharing_reset()
   list_reset()
   menus_reset()
   steps_reset()

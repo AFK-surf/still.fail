@@ -1,4 +1,4 @@
-// Sharing a chat with the viewer's other workspaces (xshare.mbt; ChatInfo.kt ShareRow, openShare) and archiving a
+// Sharing a chat with the viewer's other workspaces on a phone (sfpages' xshare.mbt, its row xshare.mbt) and archiving a
 // chat that keeps watch from its sheet (ChatInfo.kt: asked first), over the fixture's chat.
 
 ///|
@@ -34,7 +34,9 @@ test "分享给其他 workspace: its row says where; the sheet ticks another and
   let t = sheet_core(calls)
   assert_true(t.find("开源 · 只读") is Some(_))
   t.tap_text("分享给其他 workspace")
-  t.run_for(@kit.sheet_rest("decide-sheet") - t.time())
+  // (the chat's sheet put down, the presenters' sheet up: its own end)
+  t.frame()
+  t.run_for(@kit.sheet_rest("sf-present") - t.time())
   assert_true(t.find("所选 workspace 中的 agent 可读取此对话") is Some(_))
   t.tap_text("日常")
   t.tap_text("可发送消息")
@@ -55,7 +57,9 @@ test "分享给其他 workspace: none ticked, their agents cannot be let send" {
   let calls : Array[Made] = []
   let t = sheet_core(calls)
   t.tap_text("分享给其他 workspace")
-  t.run_for(@kit.sheet_rest("decide-sheet") - t.time())
+  // (the chat's sheet put down, the presenters' sheet up: its own end)
+  t.frame()
+  t.run_for(@kit.sheet_rest("sf-present") - t.time())
   // the one it is shared with let go: none left
   t.tap_text("开源")
   t.tap_text("可发送消息")

@@ -540,7 +540,7 @@ fn chat_info_sheet(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef) -> Uni
             _ => ()
           }
           match xshare {
-            Some(Object(_)) => xshare_row(c, r, opt_number(thread, "id"), xshare)
+            Some(Object(_)) => xshare_row(c, src, r, opt_number(thread, "id"), xshare)
             _ => ()
           }
           // where it came from, opened there (the system's app for its link)

@@ -1,4 +1,4 @@
-// The desktop's share dialog (sfdesk share_dialog.mbt, ChatPage.tsx ShareDialog): from the chat's info, the workspaces
+// Sharing a chat on a computer (sfpages xshare.mbt, ChatPage.tsx ShareDialog: the presenters' dialog): from the chat's info, the workspaces
 // it may be shared with, ticked as it is shared; 完成 tells the core (chat.xshare).
 
 ///|
@@ -29,5 +29,7 @@ test "wide: 分享给其他 workspace from the chat's info: a dialog lists the w
   let sent = named(calls, "chat.xshare")
   assert_eq(sent.length(), 1)
   assert_eq(field(Some(sent[0].params), "to"), Some(Json::array([Json::string("ws3")])))
+  // (the dialog goes as a presenter does: gone once its going is over)
+  t.run_for(@kit.presence_out_ms)
   assert_true(t.find("日常") is None, msg="the dialog gone")
 }
