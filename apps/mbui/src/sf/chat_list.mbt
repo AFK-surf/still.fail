@@ -46,6 +46,15 @@ pub(all) struct ChatList {
   /// device)
   top_in : Double
   foot_in : Double
+  /// what stands over a sidebar's list, in a line with its rows (新建对话, 待处理, the search's field): how far in from
+  /// the list's edge its ground is, its words from its ground, its mark, its height, its words: one set, so they stand
+  /// on one line (a computer's the web's navNew row: 8, 10, 16, 32, 13; a touch device's the phone's search field: 16,
+  /// 12, 17, 38, 15)
+  band_in : Double
+  band_pad : Double
+  band_icon : Double
+  band_h : Double
+  band_words : @ui.TextStyle
   /// a sidebar's other lists (the files' places, the settings'): their box, a row (one of a list's items, its words
   /// from the top), a row's words (the title's), where something goes while there is none, a folder that takes a drop
   side_list : @ui.Style
@@ -108,6 +117,11 @@ pub let mouse_chat_list : ChatList = {
   face_ring: @ui.css("w=S5 h=S5 radius=Full border=B1 border_color=Fg"),
   top_in: 4.0,
   foot_in: 12.0,
+  band_in: 8.0,
+  band_pad: 10.0,
+  band_icon: 16.0,
+  band_h: 32.0,
+  band_words: @ui.text_style(size=Sm, color=Fg, leading=L6, wrap=false, w=Full),
   side_list: @ui.css("w=Full h=Full px=S2"),
   side_row: @ui.css("row w=Full min_h=S8 px=S2_5 py=S1_5 gap=S2").then(@ui.style(radius=side_row_radius)),
   side_row_tall: @ui.css("row w=Full min_h=S8 px=S2_5 gap=S2 align=AStart").then(
@@ -159,6 +173,11 @@ pub let touch_chat_list : ChatList = {
   face_ring: @ui.style(w=touch_face_ring, h=touch_face_ring, radius=Full, border=B1, border_color=Fg),
   top_in: 0.0,
   foot_in: 0.0,
+  band_in: 16.0,
+  band_pad: 12.0,
+  band_icon: 17.0,
+  band_h: 38.0,
+  band_words: @ui.text_style(size=Lg, color=Fg, wrap=false, w=Full),
   // (as wide as their box, their rows in by their own, square: SidebarList.css.ts phone)
   side_list: @ui.css("w=Full h=Full"),
   side_row: @ui.css("row w=Full pr=S4 py=S2_5 gap=S2 align=ACenter").then(@ui.style(pl=phone_row_in)),
