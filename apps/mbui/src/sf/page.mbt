@@ -422,8 +422,14 @@ pub fn heading(c : @ui.Ctx, title : String, note? : String = "", actions? : () -
         if note != "" {
           c.text(note, style=pg_heading_note) |> ignore
         }
+        // on the title's line and no taller than it (line_end's way): words that do something on it, their room for
+        // a finger past it into the heading's own over and under it, rather than the line as tall as their room and
+        // the title under their words (2026-10-26: 当前 and 删除 a bar's, not in a line)
         match actions {
-          Some(f) => f()
+          Some(f) => {
+            let line = c.text_size(Body).1
+            c.box(style=pg_heading_ends.then(@ui.style(h=Fixed(c.sp(line)))), f) |> ignore
+          }
           None => ()
         }
       })
@@ -1676,6 +1682,11 @@ let pg_heading_line : @ui.Style = @ui.css("row w=Full pl=S3 pr=S2 pt=S3_5 pb=S1_
 ///|
 // kept across runs: a value (no field of it changes)
 let pg_heading : @ui.TextStyle = body.then(strong)
+
+///|
+/// What a heading does at its end, 8 apart, in the middle of its title's line.
+// kept across runs: a value (no field of it changes)
+let pg_heading_ends : @ui.Style = @ui.css("row gap=S2 align=ACenter")
 
 ///|
 /// A narrow page's room: what it holds 12 from its sides (ListCard's), its frame's to give (narrow_list; a frame of
