@@ -22,7 +22,7 @@ test("the card shared says how many agents are at work, on which machines, with 
     null,
   );
   assert.equal(v.running, 8);
-  assert.equal(v.unit, "个 agent 正在运行");
+  assert.equal(v.unit, "个 agent 正在为我工作");
   assert.equal(v.where, "分布在 2 台设备 · 3 种模型");
   // the busiest first, each with its machine and its agents' makers, the most first
   assert.deepEqual(v.stations.map((s: J) => [s.name, s.running, s.machine, s.makers]), [

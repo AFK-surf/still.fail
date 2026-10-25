@@ -92,6 +92,10 @@
     "one": "1 model",
     "other": "{n} models"
   },
+  "core-logic.fleet.unit": {
+    "one": "agent working for me",
+    "other": "agents working for me"
+  },
   "core-logic.fleet.week": "Last 7 days",
   "core-logic.footprint.actions.not_allowed": "Only workspace owners and admins can clean up",
   "core-logic.footprint.all": "All",

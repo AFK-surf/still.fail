@@ -25,7 +25,7 @@ test "wide: the rail's Station place, the pointer resting on it, says how many a
   // the card to share, opened from it: the picture, 复制图片 under it
   t.click(Button, label="分享卡片")
   t.run_for(@kit.presence_in_ms)
-  assert_true(t.find("个 agent 正在运行") is Some(_), msg="the picture's words under its number")
+  assert_true(t.find("个 agent 正在为我工作") is Some(_), msg="the picture's words beside its number")
   assert_true(t.find("扫码打开 still.fail") is Some(_))
   assert_eq(t.corner_faults(), [])
   t.click(Button, label="复制图片")
@@ -52,17 +52,17 @@ test "the card to share: the number of agents at work large, where, each station
   t.run_for(@kit.presence_in_ms)
   let word = fn(s : String) { t.words().filter(fn(w) { w.0 == s && w.5 > 0.5 }) }
   let number = word("9")
-  assert_true(number.length() == 1 && word("个 agent 正在运行").length() == 1, msg="\{number}")
+  assert_true(number.length() == 1 && word("个 agent 正在为我工作").length() == 1, msg="\{number}")
   // the stations at work, two a line in their order; MBA, at rest, not on it
   let names = ["Studio", "ccvm", "Mini1"].map(fn(n) { word(n) })
   assert_true(names.iter().all(fn(n) { n.length() == 1 }), msg="\{names}")
   assert_true(names[0][0].2 == names[1][0].2 && names[0][0].1 < names[1][0].1 && names[1][0].2 < names[2][0].2)
   assert_eq(word("MBA").length(), 0)
   // how many at the end of each one's line, its machine under it; the models at work; the last 7 days
-  let fives = word("5").filter(fn(w) { (w.2 - names[0][0].2).abs() < 8.0 })
+  let fives = word("×5").filter(fn(w) { (w.2 - names[0][0].2).abs() < 8.0 })
   assert_true(fives.length() == 1 && fives[0].1 > names[0][0].1 + names[0][0].3, msg="\{fives}")
   assert_true(t.find("Apple M2 Max · 64 GB") is Some(_) && t.find("分布在 3 台设备 · 3 种模型") is Some(_))
-  assert_true(t.find("近 7 天") is Some(_) && t.find("48,231 次") is Some(_) && t.find("$1,911") is Some(_))
+  assert_true(t.find("48,231 次") is Some(_) && t.find("$1,911") is Some(_))
   assert_true(t.find("扫码打开 still.fail") is Some(_) && t.find("在任何一台上，用所有设备") is Some(_))
   assert_eq(t.corner_faults(), [])
   assert_eq(t.contrast_faults(), [])

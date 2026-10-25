@@ -3270,6 +3270,9 @@ export interface FleetStat {
 export interface FleetStation {
 	station: string;
 	name: string;
+	/** Its mark, as the workspace gave it one (StationView's). */
+	emoji?: string;
+	icon?: string;
 	/** Its machine in a few words: Apple M2 Max · 64 GB. */
 	machine?: string;
 	running: number;
@@ -3288,8 +3291,10 @@ export interface FleetWeek {
 export interface FleetView {
 	/** The agents at work on the workspace's stations, as each counts its own. */
 	running: number;
-	/** What follows the number of them: 个 agent 正在运行. */
+	/** What follows the number of them: 个 agent 正在为我工作. */
 	unit: string;
+	/** When this is, in words: 10月26日 04:12. */
+	at: string;
 	/** Where they are in a line: 分布在 3 台设备 · 3 种模型. */
 	where: string;
 	/** The stations at work, the most first. */

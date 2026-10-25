@@ -1135,13 +1135,15 @@ export class Views implements Owner {
           return {
             station: s.address,
             name: s.name,
+            emoji: s.emoji,
+            icon: s.icon,
             online: up,
             running: up ? looks.doing("online", undefined, this.ok({ topic: "overview", station: s.address })).running : 0,
             host: this.ok({ topic: "host", station: s.address }),
             rows: rows && "ok" in rows ? arr(rows.ok) : [],
           };
         });
-        return { ok: fleetView(read, usage) };
+        return { ok: fleetView(read, usage, format.dateClock(now, this.#core.host.utcOffsetMin(now))) };
       }
       case "resources": {
         const stations = this.#stationsOr(view.scope as string);

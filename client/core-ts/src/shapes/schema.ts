@@ -2498,7 +2498,8 @@ export const SHAPES: Record<string, Shape> = {
   ], { doc: "What the agents of a workspace spent over its last `days` (the `usage` view, client/core-ts/src/views/usage.ts): a few\ntotals (`tiles`), each day's cost split by the people who spent most (`series`, the rest as 其他), and lists of who,\nwhich chats, which accounts and which models spent the most, at the providers' API prices (`basis` says what that\nmeans). `notes`: what is missing or still being read, in lines; `loading` while a station has not answered.", keepNone: true }),
   FleetView: struct([
     ["running", "i64", { client: "I54", doc: "The agents at work on the workspace's stations, as each counts its own." }],
-    ["unit", "String", { doc: "What follows the number of them: 个 agent 正在运行." }],
+    ["unit", "String", { doc: "What follows the number of them: 个 agent 正在为我工作." }],
+    ["at", "String", { doc: "When this is, in words: 10月26日 04:12." }],
     ["where", "String", { doc: "Where they are in a line: 分布在 3 台设备 · 3 种模型." }],
     ["stations", vec("FleetStation"), { doc: "The stations at work, the most first." }],
     ["models", vec("FleetModel"), { doc: "The models at work, the most first (4 at most)." }],
@@ -2507,6 +2508,8 @@ export const SHAPES: Record<string, Shape> = {
   FleetStation: struct([
     ["station", "String"],
     ["name", "String", { said: true }],
+    ["emoji", opt("String"), { doc: "Its mark, as the workspace gave it one (StationView's)." }],
+    ["icon", opt("String")],
     ["machine", opt("String"), { doc: "Its machine in a few words: Apple M2 Max · 64 GB." }],
     ["running", "i64", { client: "I54" }],
     ["makers", vec("String"), { doc: "Who made the models of its agents at work (their marks' keys), the most first." }],

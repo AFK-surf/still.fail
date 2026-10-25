@@ -86,6 +86,7 @@
   "core-logic.footprint.actions.none": "暂无可清理的内容",
   "core-logic.fleet.machines": "分布在 {n} 台设备",
   "core-logic.fleet.models": "{n} 种模型",
+  "core-logic.fleet.unit": "个 agent 正在为我工作",
   "core-logic.fleet.week": "近 7 天",
   "core-logic.footprint.actions.not_allowed": "只有 workspace 的 owner 和管理员可以清理",
   "core-logic.footprint.all": "全部",

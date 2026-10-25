@@ -1445,31 +1445,28 @@ pub let sign_in_title_size : @ui.TextSize = Exact(28.0, 39.2)
 pub let sign_in_side : @ui.Space = Exact(30.0)
 
 ///|
-/// The card shared of the agents at work (sfpages' stations_now.mbt): the same in either theme, as a poster is: a night's
-/// ground with still.fail's orange and a violet glowing on it, its words white, and white thinned for what is said of
-/// them, for what stands on the ground (a station's tile), for a day's bar.
-pub let share_ground : Int64 = 0x0F0F14FFL
+/// The card shared of the agents at work (sfpages' stations_now.mbt): the same in either theme, as a poster is, in
+/// still.fail's buddies' own colours (design/mobile/assets: drawn in ink on paper, their faces orange): a warm paper
+/// with a peach light on it, ink words and ink thinned for what is said of them, white desks, still.fail's orange.
+pub let share_paper : Int64 = 0xF6F1E9FFL
 
 ///|
-pub let share_ink : Int64 = 0xF6F5F3FFL
+pub let share_ink : Int64 = 0x24272BFFL
 
 ///|
-pub let share_dim : Int64 = 0xF6F5F3A6L
+pub let share_dim : Int64 = 0x24272B99L
 
 ///|
-pub let share_tile : Int64 = 0xFFFFFF14L
-
-///|
-pub let share_bar : Int64 = 0xFFFFFF59L
+pub let share_desk : Int64 = 0xFFFFFFFFL
 
 ///|
 pub let share_orange : Int64 = 0xE5704AFFL
 
 ///|
-pub let share_glow_orange : Int64 = 0xE5704A8CL
+pub let share_glow_peach : Int64 = 0xF6B38E8CL
 
 ///|
-pub let share_glow_violet : Int64 = 0x7C5CFF66L
+pub let share_glow_sun : Int64 = 0xFFE3B36BL
 
 ///|
 /// A picking row's line under its words (Controls.kt PickRow: 12.sp on 17.sp), between L4's 16 and L5's 18.

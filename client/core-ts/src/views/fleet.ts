@@ -13,7 +13,7 @@ const str = (v: unknown): string | null => (typeof v === "string" && v !== "" ? 
 
 /// A station as the card reads it: up or not, how many of its agents are at work as it counts them (its overview's
 /// `counts.running`), what its machine is (its host's reading, raw), its chats' rows as listed.
-export type FleetStation = { station: string; name: string; online: boolean; running: number; host: J; rows: J[] };
+export type FleetStation = { station: string; name: string; emoji?: string | null; icon?: string | null; online: boolean; running: number; host: J; rows: J[] };
 
 /// How many models at most the card names (the rest are left out: the card says how many there are).
 const MODELS_MOST = 4;
@@ -28,8 +28,9 @@ export function machineOf(host: J): string | null {
   return parts.length > 0 ? parts.join(" · ") : (str(get(shown, "identity")) ?? null);
 }
 
-/// The card: `stations` as read, and the usage view of the last 7 days (null while it is not made yet).
-export function fleetView(stations: FleetStation[], usage: J): J {
+/// The card: `stations` as read, the usage view of the last 7 days (null while it is not made yet), and when it is
+/// (`at`, in words: 10月26日 04:12).
+export function fleetView(stations: FleetStation[], usage: J, at = ""): J {
   const models = new Map<string, { name: string; maker: string | null; count: number }>();
   const shown: J[] = [];
   let running = 0;
@@ -52,6 +53,8 @@ export function fleetView(stations: FleetStation[], usage: J): J {
     shown.push({
       station: s.station,
       name: s.name,
+      ...(s.emoji ? { emoji: s.emoji } : {}),
+      ...(s.icon ? { icon: s.icon } : {}),
       machine: machineOf(s.host),
       running: s.running,
       makers: [...makers.entries()].sort((a, b) => b[1] - a[1]).map(([id]) => id),
@@ -64,7 +67,8 @@ export function fleetView(stations: FleetStation[], usage: J): J {
   if (all.length > 0) where.push(t("core-logic.fleet.models", { n: all.length }));
   return {
     running,
-    unit: t("core-logic.looks.running_unit", { n: running }),
+    unit: t("core-logic.fleet.unit", { n: running }),
+    at,
     where: where.join(" · "),
     stations: shown,
     models: all.slice(0, MODELS_MOST).map((m) => ({ name: m.name, ...(m.maker !== null ? { maker: m.maker } : {}), count: m.count, text: `×${m.count}` })),

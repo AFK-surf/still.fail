@@ -100,6 +100,12 @@ export function clock(ms: number, offsetMin: number): string {
   return `${two(h)}:${two(m)}`;
 }
 
+/// 10月26日 04:12, local: a moment said whole, for what is shared of it.
+export function dateClock(ms: number, offsetMin: number): string {
+  const [, month, day] = local(ms, offsetMin);
+  return tr(current(), "core-logic.format.date_time", { date: monthDay(current(), month, day), time: clock(ms, offsetMin) });
+}
+
 /// 14:05 today, 9/27 14:05 before.
 export function dayClock(ms: number, now: number, offsetMin: number): string {
   const [, month, day] = local(ms, offsetMin);

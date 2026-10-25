@@ -1308,7 +1308,8 @@ fn fixture_fleet(f : Fixture) -> Json {
   if !f.mode.has_prefix("share-card") {
     return {
       "running": 1,
-      "unit": "个 agent 正在运行",
+      "unit": "个 agent 正在为我工作",
+      "at": "10月26日 04:12",
       "where": "分布在 1 台设备 · 1 种模型",
       "stations": [{ "station": "ws1/st1", "name": "Studio", "machine": "Apple M2 Max · 64 GB", "running": 1, "makers": ["anthropic"] }],
       "models": [{ "name": "Opus 5.5", "maker": "anthropic", "count": 1, "text": "×1" }],
@@ -1318,7 +1319,8 @@ fn fixture_fleet(f : Fixture) -> Json {
   let labels = ["10/20", "10/21", "10/22", "10/23", "10/24", "10/25", "10/26"]
   {
     "running": 9,
-    "unit": "个 agent 正在运行",
+    "unit": "个 agent 正在为我工作",
+    "at": "10月26日 04:12",
     "where": "分布在 3 台设备 · 3 种模型",
     "stations": [
       { "station": "ws1/st1", "name": "Studio", "machine": "Apple M2 Max · 64 GB", "running": 5, "makers": ["anthropic", "openai"] },
