@@ -3,9 +3,10 @@
 // its avatar, a decision's options closing, what goes from under a post. Each waits its turn here, in the order they
 // came, but words sent: they fly at once, in the list the frame they are sent (flight.mbt), and what is asked after
 // them waits till they have landed (the list does not follow its end while they fly: a row come in then would move it
-// at once; an answer out of its avatar under way as they were sent waits for them too: emit_step). A turn is over once its own motion is and the list is where it moved it to (the
-// list's own motion, its glide after what came, at rest: Ctx::list_info's `rest`). What only fades, turns or changes
-// its words is not in it. A row waiting its turn is not in the list yet: its room comes when its turn does.
+// at once; an answer out of its avatar under way as they were sent waits for them too: emit_step). A turn is over once
+// its own motion is and the list is where it moved it to (its glide after what came over: Ctx::list_info's
+// `glide_rest`; the reader's hand on it, a finger holding it, a fling, holds nothing back). What only fades, turns or
+// changes its words is not in it. A row waiting its turn is not in the list yet: its room comes when its turn does.
 //
 // Motion as data: each turn's start is declared (where the one before was declared to end, or the list's rest, or when
 // it was asked, whichever is last) and what plays in it starts from there (`started`), whichever frame sees it; a turn
@@ -54,7 +55,7 @@ pub(all) struct Turns {
   /// Turns::over; till then the most their way can take: their wait for their row and their flight)
   mut sent_at : Double
   mut sent_until : Double
-  /// the list's own motion, as last seen: at rest from then (inf: under way, its end not known yet)
+  /// the list's glide after what came, as last seen: over from then (inf: under way, its end not known yet)
   mut list_rest : Double
   /// the frame they were last played on in (Turns::step): their chat's page shown then; that frame's time, as handed
   /// to what moves (Moving::sample)
@@ -253,7 +254,8 @@ pub fn Turns::after_sent(self : Turns, a : TurnAsk) -> Double {
 
 ///|
 /// Plays the turns on, before the page is built (chat_tick): each one whose turn has come starts, from when it came.
-/// `list_rest`: when the list's own motion is at rest (Ctx::list_info's `rest`; inf: under way, its end not known).
+/// `list_rest`: when the list's glide after what came is over (Ctx::list_info's `glide_rest`; inf: under way, its end
+/// not known), not the reader's hand on it (listQueue.ts listStill).
 pub fn Turns::step(self : Turns, c : @ui.Ctx, list_rest : Double) -> Unit {
   self.list_rest = list_rest
   self.stepped = c.frame_number()
@@ -279,6 +281,8 @@ pub fn Turns::step(self : Turns, c : @ui.Ctx, list_rest : Double) -> Unit {
       Admit(k) => {
         self.waiting.remove(k) |> ignore
         self.started[k] = at
+        // (the list goes after it as this frame lays it out: where and till when, not known before then)
+        self.list_rest = @double.infinity
       }
       Change(k) => {
         self.shown[k] = self.wants.get(k).unwrap_or(!self.shown.get(k).unwrap_or(false))

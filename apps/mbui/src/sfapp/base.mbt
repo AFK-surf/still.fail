@@ -233,7 +233,6 @@ pub using @sfbase {
   list_after,
   type ListFrame,
   type ListAfter,
-  glide_after_place_ms,
   act_rooms,
   ask_rows_of,
   asks_in_view,

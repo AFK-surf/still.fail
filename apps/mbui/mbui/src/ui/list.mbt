@@ -935,6 +935,9 @@ pub(all) struct ListInfo {
   /// glide over (its scroll bar's fading aside); inf while a finger holds it or a glide's way is not known yet (it
   /// sets out at its next layout); -1 at rest
   rest : Double
+  /// when its glide after what came (to its end, to a row it follows) is over, on the frames' clock: inf while its way
+  /// is not known yet, -1 none. What the reader's hand does (a finger holding it, a fling, a wheel) is not in it
+  glide_rest : Double
 }
 
 ///|
@@ -1016,6 +1019,13 @@ fn Ctx::list_info_of(self : Ctx, id : Int) -> ListInfo? {
         gliding: st.glide,
         following_row: st.follow_item >= 0,
         rest: st.own_rest(),
+        glide_rest: if !st.glide {
+          -1.0
+        } else if st.glide_t0 == @double.infinity {
+          @double.infinity
+        } else {
+          st.glide_rest
+        },
       })
     None => None
   }

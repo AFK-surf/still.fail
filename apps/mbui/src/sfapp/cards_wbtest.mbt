@@ -30,8 +30,10 @@ fn options_gone_ms() -> Double {
 
 ///|
 /// When the first row's card's options start to close, once answered: their turn after the answer's coming in (and
-/// the list after it), declared once the answer is in the list and the list has set out after it (two frames on).
+/// the list after it), declared once the answer is in the list and the list has set out after it: the answer taken
+/// in, its turn come, then the frame after (the list's glide after it laid out in its turn's frame).
 fn close_turn_start(t : @ui.Tester) -> Double raise {
+  t.draw()
   t.draw()
   t.draw()
   let at = turns_of("ws1/st1\u{1}s-c1").start_of("ask/ts8")

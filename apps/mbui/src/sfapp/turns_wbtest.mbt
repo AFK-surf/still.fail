@@ -104,7 +104,9 @@ test "a decision answered: its options close in their turn after the answer has 
   // your answer came in its turn first (the reader at the end), the options still there meanwhile
   assert_true(rd.admitted.contains("m:ts108"))
   assert_eq(tu.shown.get("ask/ts8"), Some(true))
-  // their turn: after your answer's (its rise), the list at rest after it
+  // their turn: after your answer's (its rise), the list at rest after it (known once the list has set out after it,
+  // as the frame your answer came in lays it out)
+  t.draw()
   t.draw()
   let at = tu.start_of("ask/ts8")
   assert_true(at >= tu.started_at("m:ts108") + @sf.enter_ms && at < @double.infinity)
