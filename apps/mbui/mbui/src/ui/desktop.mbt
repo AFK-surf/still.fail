@@ -463,6 +463,14 @@ pub fn Ctx::key_pressed(self : Ctx, code : Int, mods? : Int = 0, in_field? : Boo
 }
 
 ///|
+/// Whether any key came since the last frame: what looks for keys of its own (an app's shortcuts, each a binding to
+/// read) has none to look for when none came, as on every frame of a phone without a keyboard.
+pub fn Ctx::keys_came(self : Ctx) -> Bool {
+  ignore(self)
+  !desk.keys.is_empty()
+}
+
+///|
 /// Key `code` with exactly `mods` held, if it came since the last frame and nothing took it yet: taken now (what reads
 /// keys after this does not see it). For a widget's own keys while it has the focus (a slider's arrows).
 pub fn Ctx::take_key(self : Ctx, code : Int, mods? : Int = 0) -> Bool {

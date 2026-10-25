@@ -154,7 +154,8 @@ pub fn action_pressed(c : @ui.Ctx, prefs : Json?, action : String, in_field? : B
   if action_asked.val == action {
     return true
   }
-  if keys_recording.val != "" {
+  // (no key came: none of its keys did, its bindings not looked up and read)
+  if keys_recording.val != "" || !c.keys_came() {
     return false
   }
   keys_of(prefs, action).iter().any(fn(b) {

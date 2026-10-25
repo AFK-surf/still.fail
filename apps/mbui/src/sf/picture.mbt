@@ -7,20 +7,22 @@
 /// curves cut fine enough for the screen's pixels.
 fn draw_drawable(c : @ui.Ctx, key : String, d : @pixels.Vector, w : Double, tint : Int64?) -> Int {
   let h = w * d.h / d.w
-  let tk = match tint {
-    Some(t) => t.to_string()
-    None => "-"
-  }
-  let k = "pic/\{key}/\{w}/\{c.scale}/\{tk}"
-  let shapes = match shapes_made.get(k) {
-    Some(s) => s
+  let drawn = match pictures_made.get((key, w, c.scale, tint)) {
+    Some(m) => m
     None => {
-      let s = @ui.vector_shapes(d, w, c.scale, tint?=tint)
-      shapes_made[k] = s
-      s
+      let tk = match tint {
+        Some(t) => t.to_string()
+        None => "-"
+      }
+      let m = {
+        shapes: @ui.vector_shapes(d, w, c.scale, tint?=tint),
+        name: "sf/pic/\{key}/\{w}/\{c.scale}/\{tk}",
+      }
+      pictures_made[(key, w, c.scale, tint)] = m
+      m
     }
   }
-  c.shapes(shapes, w=Px(w), h=Px(h), name="sf/" + k)
+  c.shapes(drawn.shapes, w=Px(w), h=Px(h), name=drawn.name)
 }
 
 ///|

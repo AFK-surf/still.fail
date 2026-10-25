@@ -324,26 +324,39 @@ fn Style::resolve(
   pressed : Bool,
   disabled : Bool,
 ) -> Patch {
-  // (whether each answers the hand: its ground laid over the one under it)
-  let blocks = [
-    (self.narrow, narrow, false),
-    (self.dark, dark, false),
-    (self.selected, selected, false),
-    (self.hovered, hovered, true),
-    (self.focused, focused, false),
-    (self.pressed, pressed, true),
-    (self.disabled, disabled, false),
-  ]
+  // (in this order, one after another, nothing made to go through them: a box's look is resolved for each box on
+  // every frame)
   let mut p = self.base
-  for b in blocks {
-    match b {
-      // what answers the hand (pointed at, pressed) is laid over the ground under it, the box's own or its
-      // selected one, not put in its place: a tint over any ground is a step more, a box pointed at in a box
-      // pointed at a step more again (the kit's `tinted`)
-      (Some(b), true, true) => p = p.lit_by(b)
-      (Some(b), true, false) => p = p.then(b)
-      _ => ()
-    }
+  match self.narrow {
+    Some(b) if narrow => p = p.then(b)
+    _ => ()
+  }
+  match self.dark {
+    Some(b) if dark => p = p.then(b)
+    _ => ()
+  }
+  match self.selected {
+    Some(b) if selected => p = p.then(b)
+    _ => ()
+  }
+  // what answers the hand (pointed at, pressed) is laid over the ground under it, the box's own or its selected one,
+  // not put in its place: a tint over any ground is a step more, a box pointed at in a box pointed at a step more again
+  // (the kit's `tinted`)
+  match self.hovered {
+    Some(b) if hovered => p = p.lit_by(b)
+    _ => ()
+  }
+  match self.focused {
+    Some(b) if focused => p = p.then(b)
+    _ => ()
+  }
+  match self.pressed {
+    Some(b) if pressed => p = p.lit_by(b)
+    _ => ()
+  }
+  match self.disabled {
+    Some(b) if disabled => p = p.then(b)
+    _ => ()
   }
   p
 }

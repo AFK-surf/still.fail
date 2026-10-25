@@ -246,49 +246,39 @@ pub fn tr(key : String, args? : Array[(String, String)] = []) -> String {
   if english(key, args~) is Some(s) {
     return s
   }
-  match zh.get(key) {
+  match zh_words().get(key) {
     Some(s) => s
-    None =>
-      match drive_zh.get(key) {
-        Some(s) => s
-        None =>
-          match zh_decide.get(key) {
-            Some(s) => s
-            None =>
-              match zh_wide.get(key) {
-                Some(s) => s
-                None =>
-                  match zh_links.get(key) {
-                    Some(s) => s
-                    None =>
-                      match zh_screen.get(key) {
-                        Some(s) => s
-                        // (the preview's own words: the library's player says some of them)
-                        None =>
-                          match pv_zh.get(key) {
-                            Some(s) => s
-                            None =>
-                              match up_zh.get(key) {
-                                Some(s) => s
-                                // (the settings' own words: the desktop's settings pages say them too)
-                                None => @settings.said(key, args).unwrap_or(key)
-                              }
-                          }
-                      }
-                  }
-              }
-          }
-      }
+    // (the settings' own words: the desktop's settings pages say them too)
+    None => @settings.said(key, args).unwrap_or(key)
   }
 }
 
 ///|
+/// The app's Chinese words in one table: its tables, a key looked for in them in this order (the first that has it
+/// says it), made into one as the first words are asked for. A frame says hundreds of words; looked for table after
+/// table, each was hashed once for every table it was not in (the web's keys are in the fourth, zh_wide).
+fn zh_words() -> Map[String, String] {
+  if zh_all.is_empty() {
+    // (the preview's own words, pv_zh: the library's player says some of them)
+    for table in [zh, drive_zh, zh_decide, zh_wide, zh_links, zh_screen, pv_zh, up_zh] {
+      for k, v in table {
+        if !zh_all.contains(k) {
+          zh_all[k] = v
+        }
+      }
+    }
+  }
+  zh_all
+}
+
+///|
+// kept across runs: made once of the tables, which are never written
+let zh_all : Map[String, String] = {}
+
+///|
 /// The words for `key` with `{name}`s put in.
 pub fn fill(key : String, args : Array[(String, String)]) -> String {
-  let mut s = match english(key, args~) {
-    Some(w) => w
-    None => tr(key, args~)
-  }
+  let mut s = tr(key, args~)
   for a in args {
     s = s.replace_all(old="{" + a.0 + "}", new=a.1)
   }
