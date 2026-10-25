@@ -54,7 +54,8 @@ test "a person's image held: quoted (whose, the file named), its file once in th
   let q = Some(d.quotes[0])
   assert_eq(text(q, "author"), "Ana")
   assert_eq(text(q, "role"), "person")
-  assert_eq(text(q, "file"), "插画参考.png")
+  assert_eq(text(field(q, "own"), "name"), "插画参考.png")
+  assert_eq(d.files.length(), 0)
   // held again: another quote
   hold_quote(t, x, y)
   assert_eq(chat_draft().quotes.length(), 2)
@@ -68,7 +69,7 @@ test "an agent's image held: quoted, not a passage of its words picked; whose it
   let d = chat_draft()
   assert_eq(d.quotes.length(), 1)
   assert_eq(text(Some(d.quotes[0]), "role"), "agent")
-  assert_eq(text(Some(d.quotes[0]), "file"), "compare.png")
+  assert_eq(text(field(Some(d.quotes[0]), "own"), "name"), "compare.png")
 }
 
 ///|

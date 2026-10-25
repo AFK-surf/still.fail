@@ -55,6 +55,24 @@ test "a draft's quotes: added with the focus on its comment line, said about, le
 }
 
 ///|
+test "an image of a message quoted is its quote's own picture, not among the files, and goes with it" {
+  reset()
+  let src = fixture("chat")
+  let image : Json = { "name": "shot.png", "path": "/w/uploads/shot.png", "size": 120, "owner": "s-c1" }
+  let quote : Json = { "author": "Claude", "text": "shot.png", "ts": "ts8" }
+  let w = @sfbase.writing(src, "ws1/st1:s-c1")
+  @sfbase.writing_quote(src, w, quote, file=image)
+  @sfbase.writing_quote(src, w, quote, file=image)
+  let w = @sfbase.writing(src, "ws1/st1:s-c1")
+  assert_eq(w.files.length(), 0)
+  assert_eq(w.quotes.map(fn(q) { text(field(Some(q), "own"), "name") }), ["shot.png", "shot.png"])
+  @sfbase.writing_unquote(src, w, text(Some(w.quotes[0]), "id"))
+  let w = @sfbase.writing(src, "ws1/st1:s-c1")
+  assert_eq([w.quotes.length(), w.files.length()], [1, 0])
+  assert_eq(text(field(Some(w.quotes[0]), "own"), "name"), "shot.png")
+}
+
+///|
 test "what is written in a new chat goes on into the chat it made (composer.carry), the new chat's left empty" {
   reset()
   let src = fixture("chat")

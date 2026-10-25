@@ -8,7 +8,7 @@ import { type PastedInfo } from "./pastedText.ts";
 import { createContext, useEffect, useLayoutEffect, useRef, useState, type MutableRefObject } from "react";
 import { CoreError, useChatSend, type Attachment, type ChatTo, type Quote } from "./api.ts";
 import { core, useTopicSelect } from "./core/react.ts";
-import type { ComposerFile, ComposerLink, ComposerRef, ComposerView } from "./core/shapes.ts";
+import type { ComposerFile, ComposerLink, ComposerQuote, ComposerRef, ComposerView } from "./core/shapes.ts";
 import { track } from "./telemetry.ts";
 import { useStation } from "./station.tsx";
 import { keepSentImage, uploadImageKey } from "./sentImages.ts";
@@ -33,8 +33,12 @@ export const linkWords = (link: ComposerLink) => (link.title ? `${link.title}\n$
 /** Whether a file of the draft goes as words (named by its path, or a link shared in), not as a file. */
 const named = (f: { ref?: ComposerRef | undefined; link?: ComposerLink | undefined }) => f.ref?.mode === "path" || f.link !== undefined;
 
-/** A passage quoted in the message being written, with what is said about it. */
-export interface DraftQuote extends Quote { id: string }
+/** A passage quoted in the message being written, with what is said about it; its picture (`own`: an image of a message
+ *  quoted, a mark's screenshot) is drawn in its card, and goes out of the draft with it. */
+export interface DraftQuote extends Omit<Quote, "file"> { id: string; own?: Pending }
+
+/** A quote put into the draft from elsewhere (a preview's marks): its screenshot (`picture`) goes up as its own. */
+export type OfferedQuote = Omit<DraftQuote, "own"> & { picture?: File };
 
 export interface Draft {
   text: string; setText(text: string): void;
@@ -51,10 +55,11 @@ export interface Draft {
   /** A file that failed to go up, sent up again. */
   retry(id: string): void;
   quotes: DraftQuote[];
-  /** Quotes added (a preview's marks), as they are. */
-  addQuotes(quotes: DraftQuote[]): void;
+  /** Quotes added (a preview's marks), as they are, each with its picture. */
+  addQuotes(quotes: OfferedQuote[]): void;
   /** What is said about a quote. */
   comment(id: string, comment: string): void;
+  /** A quote taken out, its picture with it. */
   unquote(id: string): void;
   /** Quotes a passage, or an image of a message (`file`: it goes again with the message, as the station has it); its
    *  comment line then asks for the focus (`focusQuote`, until `quoteFocused`). */
@@ -67,8 +72,9 @@ export interface Draft {
   /** A new chat being made for the message. */
   starting: boolean;
   error: string | null; setError(error: string | null): void;
-  /** Takes what is written away and hands it back (the text trimmed), for a page that sends it its own way. */
-  take(): { text: string; files: Pending[]; quotes: DraftQuote[] };
+  /** Takes what is written away and hands it back (the text trimmed) as the message has it, for a page that sends it its
+   *  own way: the quotes' pictures among its files (each once), each named in its quote. */
+  take(): { text: string; files: Pending[]; quotes: (Quote & { id: string })[] };
   /** Puts back what `take` took (sending it failed). */
   restore(): void;
   /**
@@ -83,7 +89,7 @@ export interface Draft {
  * words an inline visualization asks to send (Viz.tsx), there for the person to send or not.
  */
 export interface Offer {
-  files: File[]; quotes: DraftQuote[]; text?: string;
+  files: File[]; quotes: OfferedQuote[]; text?: string;
   /** Files and folders of a station's, named by their path (a chat's 文件 tab). */
   dropped?: Dropped[];
   /** A passage selected in the chat (or an image of it held, `quotedFile`), quoted with its comment line taking the focus. */
@@ -130,8 +136,16 @@ const fileStations = new Map<string, string>();
 
 let nextId = 1;
 
+/** Each file shown, the quotes' pictures too, as `change` makes it. */
+const eachFile = (s: Shown, change: (f: ComposerFile) => ComposerFile): Shown => ({
+  ...s, files: s.files.map(change), quotes: s.quotes.map((q) => (q.own ? { ...q, own: change(q.own) } : q)),
+});
+
+/** The quote file `id` is the picture of, if it is one's. */
+const ownerOf = (s: Shown, id: string) => s.quotes.find((q) => q.own?.id === id)?.id;
+
 /** What the composer shows of the core's (`ComposerView`), as the page has it now. */
-interface Shown { quotes: DraftQuote[]; files: ComposerFile[]; focus: string | null; starting: boolean; error: string | null }
+interface Shown { quotes: ComposerQuote[]; files: ComposerFile[]; focus: string | null; starting: boolean; error: string | null }
 const NOTHING: Shown = { quotes: [], files: [], focus: null, starting: false, error: null };
 
 const sameButWords = (a: ComposerView | undefined, b: ComposerView | undefined) => a === b || (!!a && !!b && a.rev === b.rev
@@ -139,7 +153,7 @@ const sameButWords = (a: ComposerView | undefined, b: ComposerView | undefined) 
   && a.error === b.error && a.uploading === b.uploading && a.ready === b.ready);
 
 function shownOf(view: ComposerView): Shown {
-  return { quotes: view.quotes as DraftQuote[], files: view.files, focus: view.focus ?? null, starting: view.starting, error: view.error ?? null };
+  return { quotes: view.quotes, files: view.files, focus: view.focus ?? null, starting: view.starting, error: view.error ?? null };
 }
 
 export function useDraft({ key: given, station, carry }: {
@@ -177,14 +191,16 @@ export function useDraft({ key: given, station, carry }: {
     was.current = { key, here };
     if (before.key === key) {
       // Each file picked here goes up there again from the file itself, with a fresh id: a late answer from the
-      // station before cannot replace it. One kept from before has no file here: known by the station it was on.
-      for (const f of now.current.shown.files) {
+      // station before cannot replace it. One kept from before has no file here: known by the station it was on. A
+      // quote's picture goes up again as its picture.
+      const shownNow = now.current.shown;
+      for (const f of [...shownNow.files, ...shownNow.quotes.flatMap((q) => (q.own ? [q.own] : []))]) {
         if (named(f)) continue;
         if (!fileStations.has(f.id)) fileStations.set(f.id, before.here);
         const source = wentTo.get(f.id);
         if (!source || source.station === here) continue;
         remove(f.id);
-        add([source.file], f.pasted as PastedInfo | undefined);
+        add([source.file], f.pasted as PastedInfo | undefined, ownerOf(shownNow, f.id));
       }
       return;
     }
@@ -248,25 +264,26 @@ export function useDraft({ key: given, station, carry }: {
     void act("text", { text: next });
   };
   const setError = (error: string | null) => { void act("error", { error }, (s) => ({ ...s, error })); };
-  const add = (picked: FileList | File[], pasted?: PastedInfo) => {
+  /** Files picked, pasted or dropped; or the picture of the quote `quote` (a mark's screenshot). */
+  const add = (picked: FileList | File[], pasted?: PastedInfo, quote?: string) => {
     const files = Array.from(picked).map((file) => {
       const id = `f${Date.now()}-${nextId++}`;
       // Images show at once from the local file; the picture lives until the file leaves the draft.
       const preview = file.type.startsWith("image/") || pasted !== undefined ? URL.createObjectURL(file) : undefined;
       local.set(id, { ...(preview ? { preview, ...(pasted === undefined ? { image: file } : {}) } : {}), ...(pasted === undefined ? {} : { pastedFile: file }) });
-      return { id, name: file.name, size: file.size, blob: file, ...(pasted ? { pasted } : {}) };
+      return { id, name: file.name, size: file.size, blob: file, ...(pasted ? { pasted } : {}), ...(quote ? { quote } : {}) };
     });
     const ids = new Set(files.map((f) => f.id));
     for (const f of files) {
       wentTo.set(f.id, { station: here, file: f.blob });
       fileStations.set(f.id, here);
     }
-    void act("add", { station: here, files }, (s) => ({
-      ...s,
-      files: [...s.files, ...files.map((f): ComposerFile => ({ id: f.id, name: f.name, size: f.size, ...(f.size > MAX_FILE ? { error: t("web-main.draft.tooBig") } : {}), ...(pasted ? { pasted } : {}) }))],
-    })).then((answer) => {
+    const added = files.map((f): ComposerFile => ({ id: f.id, name: f.name, size: f.size, ...(f.size > MAX_FILE ? { error: t("web-main.draft.tooBig") } : {}), ...(pasted ? { pasted } : {}) }));
+    void act("add", { station: here, files }, (s) => (quote
+      ? { ...s, quotes: s.quotes.map((q) => (q.id === quote && added[0] ? { ...q, own: added[0] } : q)) }
+      : { ...s, files: [...s.files, ...added] })).then((answer) => {
       // Not taken (no core keeps it, as on the site's demo): they could not go up.
-      if (answer === undefined) setShown((x) => ({ ...x, files: x.files.map((f) => (ids.has(f.id) && !f.done && !f.error ? { ...f, error: t("web-main.draft.uploadFailed") } : f)) }));
+      if (answer === undefined) setShown((x) => eachFile(x, (f) => (ids.has(f.id) && !f.done && !f.error ? { ...f, error: t("web-main.draft.uploadFailed") } : f)));
     });
   };
   // Files dragged in go as files where this chat says so (prefs' `dropFiles`), else as the settings say (`dropAs`);
@@ -283,54 +300,64 @@ export function useDraft({ key: given, station, carry }: {
   const setMode = (id: string, mode: "path" | "file") => {
     void act("mode", { id, mode }, (s) => ({ ...s, files: s.files.map((f) => (f.id === id && f.ref && !(mode === "file" && f.ref.dir) ? { ...f, ref: { ...f.ref, mode } } : f)) }));
   };
-  const remove = (id: string) => {
+  /** What the page holds of a file leaving the draft: its picture let go. */
+  const forget = (id: string) => {
     const l = local.get(id);
     if (l?.preview) URL.revokeObjectURL(l.preview);
     local.delete(id);
     wentTo.delete(id);
     fileStations.delete(id);
-    void act("remove", { id }, (s) => ({ ...s, files: s.files.filter((f) => f.id !== id) }));
   };
-  const retry = (id: string) => {
-    void act("retry", { id }, (s) => ({
-      ...s,
-      files: s.files.map((f) => {
-        if (f.id !== id) return f;
-        const { error: _, sent: __, ...going } = f;
-        return going;
-      }),
+  const remove = (id: string) => {
+    forget(id);
+    void act("remove", { id }, (s) => ({
+      ...s, files: s.files.filter((f) => f.id !== id), quotes: s.quotes.map(({ own, ...q }) => (own && own.id !== id ? { ...q, own } : q)),
     }));
   };
-  const addQuotes = (quotes: DraftQuote[]) => {
-    for (const q of quotes) void act("quote", { id: q.id, quote: q }, (s) => ({ ...s, quotes: [...s.quotes, q] }));
+  const retry = (id: string) => {
+    void act("retry", { id }, (s) => eachFile(s, (f) => {
+      if (f.id !== id) return f;
+      const { error: _, sent: __, ...going } = f;
+      return going;
+    }));
   };
-  const quote = (q: Omit<Quote, "comment">, file?: Attachment) => {
+  const addQuotes = (quotes: OfferedQuote[]) => {
+    for (const { picture, ...q } of quotes) {
+      void act("quote", { id: q.id, quote: q }, (s) => ({ ...s, quotes: [...s.quotes, q] }));
+      // Its screenshot after it: up as its picture.
+      if (picture) add([picture], undefined, q.id);
+    }
+  };
+  const quote = ({ file: _, ...q }: Omit<Quote, "comment">, file?: Attachment) => {
     const id = `${Date.now()}`;
-    // An image of a message: among the files as one up already (the core puts it there too, by the same id).
-    const fileId = `quoted-${id}`;
-    const going = file && q.file ? file : undefined;
-    void act("quote", { id, quote: { ...q, comment: "" }, focus: true, ...(going ? { attachment: going, fileId } : {}) }, (s) => ({
-      ...s, quotes: [...s.quotes, { ...q, comment: "", id }], focus: id,
-      files: going && !s.files.some((f) => f.done?.path === going.path) ? [...s.files, { id: fileId, name: going.name, size: going.size, done: going }] : s.files,
+    // An image of a message: its picture, as one up already (the core keeps it by the same id).
+    const own = file ? { id: `quoted-${id}`, name: file.name, size: file.size, done: file } : undefined;
+    void act("quote", { id, quote: { ...q, comment: "" }, focus: true, ...(own ? { attachment: file, fileId: own.id } : {}) }, (s) => ({
+      ...s, quotes: [...s.quotes, { ...q, comment: "", id, ...(own ? { own } : {}) }], focus: id,
     }));
   };
   const comment = (id: string, words: string) => {
     void act("comment", { id, comment: words }, (s) => ({ ...s, quotes: s.quotes.map((x) => (x.id === id ? { ...x, comment: words } : x)) }));
   };
   const unquote = (id: string) => {
+    const own = now.current.shown.quotes.find((x) => x.id === id)?.own;
+    if (own) forget(own.id);
     void act("unquote", { id }, (s) => ({ ...s, quotes: s.quotes.filter((x) => x.id !== id), focus: s.focus === id ? null : s.focus }));
   };
   const quoteFocused = () => { void act("focused", {}, (s) => ({ ...s, focus: null })); };
 
-  const files: Pending[] = shown.files.map((f) => ({ ...f, done: (f.done ?? null) as Attachment | null, error: f.error ?? null, ...(f.sent != null ? { sent: f.sent } : {}), ...(f.pasted ? { pasted: f.pasted as PastedInfo } : {}), ...local.get(f.id) }));
-  const quotes = shown.quotes;
-  const uploading = files.some((f) => !f.done && !f.error && !named(f));
-  const ready = (Boolean(text.trim()) || files.some((f) => !f.error) || quotes.length > 0) && !shown.starting && !files.some((f) => f.pasted && f.error);
+  const asPending = (f: ComposerFile): Pending => ({ ...f, done: (f.done ?? null) as Attachment | null, error: f.error ?? null, ...(f.sent != null ? { sent: f.sent } : {}), ...(f.pasted ? { pasted: f.pasted as PastedInfo } : {}), ...local.get(f.id) });
+  const files = shown.files.map(asPending);
+  const quotes: DraftQuote[] = shown.quotes.map(({ own, ...q }) => ({ ...q, ...(own ? { own: asPending(own) } : {}) }));
+  // What goes with the message: its files and its quotes' pictures (the same image quoted twice, once).
+  const going = [...files, ...quotes.flatMap((q) => (q.own ? [q.own] : []))].filter((f, i, all) => !f.done || all.findIndex((g) => g.done?.path === f.done!.path) === i);
+  const uploading = going.some((f) => !f.done && !f.error && !named(f));
+  const ready = (Boolean(text.trim()) || going.some((f) => !f.error) || quotes.length > 0) && !shown.starting && !files.some((f) => f.pasted && f.error);
 
   const back = useRef<{ text: string; shown: Shown } | null>(null);
   const take = () => {
     back.current = { text, shown };
-    const taken = { text: text.trim(), files, quotes };
+    const taken = { text: text.trim(), files: going, quotes: quotes.map(({ own, ...q }) => ({ ...q, ...(own ? { file: own.done?.name ?? own.name } : {}) })) };
     setTextState("");
     void act("take", {}, () => ({ ...NOTHING }));
     return taken;
@@ -345,24 +372,25 @@ export function useDraft({ key: given, station, carry }: {
     const from = key;
     // A file that went up to another station than this one (picked before the chat's station was changed): not sent
     // from there, which this one would refuse; it goes up here again and the message waits to be sent once more.
-    const unavailable = files.filter((f) => !named(f) && fileStations.has(f.id) && fileStations.get(f.id) !== here && !wentTo.has(f.id));
+    const unavailable = going.filter((f) => !named(f) && fileStations.has(f.id) && fileStations.get(f.id) !== here && !wentTo.has(f.id));
     if (unavailable.length) {
       setError(t("web-main.draft.selectAgain", { names: unavailable.map((f) => f.name).join(", ") }));
       return null;
     }
-    const astray = files.filter((f) => !named(f) && !f.error && wentTo.has(f.id) && wentTo.get(f.id)!.station !== here);
+    const astray = going.filter((f) => !named(f) && !f.error && wentTo.has(f.id) && wentTo.get(f.id)!.station !== here);
     if (astray.length) {
       for (const f of astray) {
         const { file } = wentTo.get(f.id)!;
+        const of = ownerOf(shown, f.id);
         remove(f.id);
-        add([file], f.pasted);
+        add([file], f.pasted, of);
       }
       setError(t("web-main.draft.otherStation", { names: astray.map((f) => f.name).join(", ") }));
       return null;
     }
     // Its images' pictures stay here until the station's are read: one still going up by its upload's id, as its outbox
     // row and then its message draw it.
-    for (const f of files) {
+    for (const f of going) {
       if (!f.image || f.error) continue;
       if (f.done) keepSentImage(here, f.done.path, f.image);
       else keepSentImage(here, uploadImageKey(f.id), f.image, 10 * 60_000);

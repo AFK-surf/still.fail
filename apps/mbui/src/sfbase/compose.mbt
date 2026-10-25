@@ -111,8 +111,9 @@ fn writing_adopt(w : Writing, v : Json?, version : Int) -> Unit {
   w.adopted = version
   w.quotes = items(v, "quotes")
   w.files = items(v, "files")
-  // a picture picked here, up: its message drawn from it as picked, by the name the station keeps it under (sent.mbt)
-  for f in w.files {
+  // a picture picked here (a quote's too: a mark's screenshot), up: its message drawn from it as picked, by the name
+  // the station keeps it under (sent.mbt)
+  for f in w.files + w.quotes.filter_map(fn(q) { field(Some(q), "own") }) {
     let o = Some(f)
     match (writing_pictures.get(text(o, "id")), writing_stations.get(text(o, "id")), field(o, "done")) {
       (Some(picture), Some(station), Some(done)) if text(Some(done), "path") != "" =>
@@ -182,8 +183,17 @@ pub fn writing_text(src : Source, w : Writing, words : String) -> Unit {
 
 ///|
 /// A file picked or pasted (`pasted`: long words kept as a file, what the core says of them) going up to `station`
-/// (`composer.add`, its bytes beside the call): shown at once, a picture from its bytes.
-pub fn writing_add(src : Source, w : Writing, station : String, name : String, bytes : Bytes, pasted? : Json) -> Unit {
+/// (`composer.add`, its bytes beside the call): shown at once, a picture from its bytes; or the picture of the quote
+/// `quote` (a mark's screenshot), shown in its card.
+pub fn writing_add(
+  src : Source,
+  w : Writing,
+  station : String,
+  name : String,
+  bytes : Bytes,
+  pasted? : Json,
+  quote? : String = "",
+) -> Unit {
   writing_n.val += 1
   let id = "f" + upload_id(w.key + "\u{1}" + file_seed(station, name, bytes), writing_n.val)
   if pasted is None {
@@ -214,6 +224,9 @@ pub fn writing_add(src : Source, w : Writing, station : String, name : String, b
     Some(p) => one["pasted"] = p
     None => ()
   }
+  if quote != "" {
+    one["quote"] = Json::string(quote)
+  }
   let shown : Map[String, Json] = {
     "id": Json::string(id),
     "name": Json::string(name),
@@ -228,7 +241,22 @@ pub fn writing_add(src : Source, w : Writing, station : String, name : String, b
     w,
     "add",
     { "station": Json::string(station), "files": Json::array([Json::object(one)]) },
-    show=fn(w) { w.files = w.files + [Json::object(shown)] },
+    show=fn(w) {
+      if quote == "" {
+        w.files = w.files + [Json::object(shown)]
+      } else {
+        w.quotes = w.quotes.map(fn(q) {
+          match q {
+            Object(m) if text(Some(q), "id") == quote => {
+              let n = m.copy()
+              n["own"] = Json::object(shown)
+              Json::object(n)
+            }
+            _ => q
+          }
+        })
+      }
+    },
     bytes~,
   )
 }
@@ -345,9 +373,10 @@ pub fn writing_retry(src : Source, w : Writing, id : String) -> Unit {
 }
 
 ///|
-/// A passage quoted (its `author`, `text`, its message's `ts` and `role`), its comment line asking for the focus; or an
-/// image of a message (`file`: it goes again with the message as the station has it, among the files by `quoted-<id>`).
-pub fn writing_quote(src : Source, w : Writing, quote : Json, file? : Json) -> Unit {
+/// A passage quoted (its `author`, `text`, its message's `ts` and `role`), its comment line asking for the focus; with
+/// its picture: an image of a message (`file`: it goes again with the message as the station has it, by `quoted-<id>`),
+/// or a mark's screenshot (`picture`: the station it goes up to, its name and bytes).
+pub fn writing_quote(src : Source, w : Writing, quote : Json, file? : Json, picture? : (String, String, Bytes)) -> Unit {
   writing_n.val += 1
   let id = "q" + writing_n.val.to_string()
   let p : Map[String, Json] = { "id": Json::string(id), "quote": quote, "focus": Json::boolean(true) }
@@ -359,6 +388,10 @@ pub fn writing_quote(src : Source, w : Writing, quote : Json, file? : Json) -> U
     None => ()
   }
   writing_act(src, w, "quote", p, show=fn(w) { w.focus = id })
+  match picture {
+    Some((station, name, bytes)) => writing_add(src, w, station, name, bytes, quote=id)
+    None => ()
+  }
 }
 
 ///|
@@ -368,8 +401,16 @@ pub fn writing_comment(src : Source, w : Writing, id : String, words : String) -
 }
 
 ///|
-/// A quote let go (`composer.unquote`).
+/// A quote let go (`composer.unquote`), its picture with it.
 pub fn writing_unquote(src : Source, w : Writing, id : String) -> Unit {
+  match w.quotes.iter().find_first(fn(q) { text(Some(q), "id") == id }) {
+    Some(q) => {
+      let own = text(field(Some(q), "own"), "id")
+      writing_pictures.remove(own)
+      writing_went.remove(own)
+    }
+    None => ()
+  }
   writing_act(src, w, "unquote", { "id": Json::string(id) }, show=fn(w) {
     w.quotes = w.quotes.filter(fn(q) { text(Some(q), "id") != id })
     if w.focus == id {

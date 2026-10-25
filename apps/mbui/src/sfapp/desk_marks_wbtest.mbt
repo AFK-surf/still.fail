@@ -14,6 +14,10 @@ test "desk: a page's marks waiting for the chat go into its composer's draft, ea
   assert_eq(quoted.length(), 1)
   let q = field(Some(quoted[0].params), "quote")
   assert_eq(text(q, "comment"), "颜色太浅")
-  assert_eq(text(q, "file"), "首页-标注1-120000.png")
   assert_eq(text(Some(quoted[0].params), "key"), "ws1/st1:s-c1")
+  // its screenshot the quote's own picture, not among the files
+  t.frame()
+  let w = @sfbase.writings.get("ws1/st1:s-c1").unwrap()
+  assert_eq(text(field(Some(w.quotes[0]), "own"), "name"), "首页-标注1-120000.png")
+  assert_eq(w.files.length(), 0)
 }

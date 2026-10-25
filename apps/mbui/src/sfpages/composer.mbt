@@ -360,7 +360,6 @@ fn take_in(c : @ui.Ctx, src : Source, spec : ComposerSpec, w : Writing, no_files
               "text": Json::string(name),
               "ts": Json::string(q.1),
               "role": Json::string(q.2),
-              "file": Json::string(name),
             },
             file=q.3,
           )
@@ -381,23 +380,30 @@ fn take_in(c : @ui.Ctx, src : Source, spec : ComposerSpec, w : Writing, no_files
     }
     None => ()
   }
-  // pictures marked for this chat (a service's page, an image viewed: sfbase's marked_into), each going up as a file
-  // with a quote per mark (what is said of it its comment); taken once, whichever build takes them
+  // pictures marked for this chat (a service's page, an image viewed: sfbase's marked_into), each going up with a quote
+  // per mark (what is said of it its comment): a page's mark's screenshot as its quote's picture, an image's as a file
+  // beside its marks' quotes; taken once, whichever build takes them
   match marked_into.get(w.key) {
     Some(list) if !no_files => {
       marked_into.remove(w.key)
       c.tell("composer/marked/" + w.key, fn() {
         for x in list {
           let (name, bytes, quotes, kind) = x
-          writing_add(src, w, spec.station, name, bytes)
+          if kind != "page" {
+            writing_add(src, w, spec.station, name, bytes)
+          }
           for q in quotes {
-            writing_quote(src, w, {
+            let quote : Json = {
               "author": Json::string(q.0),
               "text": Json::string(q.1),
               "comment": Json::string(q.2),
               "role": Json::string(kind),
-              "file": Json::string(if kind == "page" { name } else { "" }),
-            })
+            }
+            if kind == "page" {
+              writing_quote(src, w, quote, picture=(spec.station, name, bytes))
+            } else {
+              writing_quote(src, w, quote)
+            }
           }
         }
       })
@@ -686,17 +692,10 @@ fn composer_extras(c : @ui.Ctx, src : Source, spec : ComposerSpec, w : Writing) 
     })
     |> ignore
   }
-  // the files but those shown in their quotes' cards
-  let own = w.quotes.filter_map(fn(q) {
-    match text(Some(q), "file") {
-      "" => None
-      n => Some(n)
-    }
-  })
-  let rest = w.files.filter(fn(f) { !own.contains(text(Some(f), "name")) })
-  if rest.length() > 0 {
+  // (a quote's picture is its own, not among them)
+  if w.files.length() > 0 {
     c.box(style=files_flow, flow=true, line_gap=files_lines, fn() {
-      for f in rest {
+      for f in w.files {
         composer_file(c, src, spec, w, f)
       }
     })
