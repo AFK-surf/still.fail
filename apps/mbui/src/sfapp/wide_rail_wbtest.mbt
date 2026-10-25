@@ -91,8 +91,8 @@ test "wide on a Mac: the closed bar, shown a while, one corner all round, the wi
     let files = rail_ground_at(t, t.query(Button, label="文件").unwrap().rect)
     assert_eq(files.radii, (inner, inner, inner, inner))
     assert_eq(t.corner_faults(), [])
-    // shown a while: the filter in the bar's top right corner, its ground under the pointer one of the bar's places'
-    // grounds, as round
+    // shown a while: the filter in the bar's top right corner, linked to that corner: 6 from its top and side, its
+    // ground under the pointer concentric with it there (the corner rule holds a linked box to its link)
     if peek {
       let named = @sf.t("web-main.filter.chats.named", args=[("named", @sf.t("web-main.filter.all"))])
       let (fx, fy, fw, fh) = t.query(Button, label=named).unwrap().rect
@@ -104,6 +104,7 @@ test "wide on a Mac: the closed bar, shown a while, one corner all round, the wi
         .find_first(fn(b) { b.kind != "text" && b.w == fw && b.h == fh && b.x == fx && b.y == fy && b.bg != 0L })
         .unwrap()
       assert_eq(filter.radii, (inner, inner, inner, inner))
+      assert_eq((bar.x + bar.w - (filter.x + filter.w), filter.y - bar.y), (6.0, 6.0))
       assert_eq(t.corner_faults(), [])
     }
   }
