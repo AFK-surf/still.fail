@@ -206,8 +206,9 @@ test("a login's page in the station's Chrome: a tab of the station's own, laid o
   const dir = mkdtempSync(join(tmpdir(), "side-browser-fit-"));
   const screens = makeScreens();
   const browser = new StationBrowser({ dir, chrome: chromeHost({ dir, headless: true }), screens });
-  // A page laid out by its width, as a sign-in page is: narrow, its column alone.
-  const page = `<title>sign in</title><meta name=viewport content="width=device-width,initial-scale=1"><style>#w{display:none}@media (max-width:500px){#w{display:block}}</style><body><div id=w>narrow</div>`;
+  // A page laid out by its width, as a sign-in page is: narrow, its column alone; a counter keeps it drawing (a frame is
+  // cast only when the page draws).
+  const page = `<title>sign in</title><meta name=viewport content="width=device-width,initial-scale=1"><style>#w{display:none}@media (max-width:500px){#w{display:block}}</style><body><div id=w>narrow</div><div id=n></div><script>let k=0;setInterval(()=>n.textContent=k++,30)</script>`;
   const server = createServer((_, res) => res.writeHead(200, { "content-type": "text/html" }).end(page));
   await new Promise<void>((r) => server.listen(0, "127.0.0.1", r));
   let agent: Cdp | null = null;
@@ -226,11 +227,13 @@ test("a login's page in the station's Chrome: a tab of the station's own, laid o
     assert.ok(wide > 500, `a desktop's window: ${wide}`);
     // A phone drives it: laid out for its stage, cast as large as the phone shows it.
     const view = await tab.open({ maxWidth: 1920, maxHeight: 1080, codecs: ["jpeg"], fit: { width: 390, height: 700, scale: 3 } });
-    const frame = await until(async () => {
+    // Its frames the phone's shape, at most twice its CSS pixels.
+    const size = await until(async () => {
       const f = await view.next();
-      return f && jpegSize(f.data)?.width === 780 ? f : null;
-    }, "a frame of the phone's size");
-    assert.deepEqual(jpegSize(frame.data), { width: 780, height: 1400 });
+      const s = f && jpegSize(f.data);
+      return s && Math.abs(s.width / s.height - 390 / 700) < 0.01 ? s : null;
+    }, "a frame of the phone's shape");
+    assert.ok(size.width >= 390 && size.width <= 780, JSON.stringify(size));
     assert.deepEqual([await evaluate("innerWidth"), await evaluate("getComputedStyle(w).display")], [390, "block"]);
     // A tap lands where the phone shows it.
     await evaluate("window.tapped = null; addEventListener('mousedown', (e) => (window.tapped = [e.clientX, e.clientY])); true");
