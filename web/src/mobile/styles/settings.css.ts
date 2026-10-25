@@ -1,11 +1,14 @@
 import { globalStyle, style } from "@vanilla-extract/css";
 import { vars } from "@stillfail/ui/styles/tokens.css.ts";
-import { mGrow } from "./parts.css.ts";
+import { mGrow, mLink } from "./parts.css.ts";
 import { mForm } from "./sheets.css.ts";
-import { mCard } from "./lists.css.ts";
+import { mCard, mField } from "./lists.css.ts";
 
 export const mStationPage = style({ paddingTop: "12px", paddingBottom: "var(--m-foot)" });
 export const mProfileTools = style({ display: "flex", alignItems: "center", gap: "12px", padding: "0 12px 8px" });
+// The field takes what remains after its action; a full-width input must not squeeze the action into vertical text.
+globalStyle(`${mProfileTools} > ${mField}`, { flex: "1", minWidth: "0" });
+globalStyle(`${mProfileTools} > ${mLink}`, { flexShrink: "0", whiteSpace: "nowrap" });
 /** A row of links alone (no field framed out to 12): its words in line with the rows under it, at 24. */
 export const mProfileLinks = style({ paddingInline: "24px" });
 export const mModelRow = style({

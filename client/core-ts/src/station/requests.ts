@@ -1,5 +1,6 @@
 // Requests to a station's admin API over its wire (station/transport.rs): each a span of the trace it is made in, with
 // what it is waited on as (status.ts), its write key, its language; files, uploads and previews.
+import { RUNTIMES } from "../format.ts";
 import { Effect, Scope } from "effect";
 import { Decompress } from "fzstd";
 import type { Inner } from "../core.ts";
@@ -132,6 +133,7 @@ export class Requests {
     span.set("stillfail.station", station.station);
     if (bodySize > 0) span.set("http.request.body.size", bodySize);
     const h: [string, string][] = [...headers, ["traceparent", span.context.traceparent()], [LANG_HEADER, current()]];
+    if (!path.startsWith("/preview/")) h.push(["stillfail-runtimes", RUNTIMES.join(",")]);
     if (!path.startsWith("/preview/") && !headers.some(([k]) => k.toLowerCase() === "accept-encoding")) h.push(["accept-encoding", ZSTD]);
     // A write carries a key of its own: a station that keeps writes to once does it once however often it arrives.
     const m = method.toUpperCase();

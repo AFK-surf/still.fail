@@ -2,6 +2,7 @@
 // as each row's digest by its id, `{ held }` (src/read/digest.ts), and is answered `{ order, rows }`, the list's ids in
 // order and the rows it does not hold as they are. A client whose events stream could not be resumed reads its lists
 // so: most of each is as it holds it.
+import { clientRuntimes } from "../runtime-compat.ts";
 import { type Answer, type Request, error } from "../request.ts";
 import type { Tools } from "../admin.ts";
 
@@ -14,5 +15,6 @@ export function changed(read: Tools["read"], r: Request, op: string, args: Recor
     held = undefined;
   }
   if (held === null || typeof held !== "object" || Array.isArray(held)) return Promise.resolve(error(400, "held: each held row's digest by its id"));
-  return read(r, "changed", { op, args, id, held });
+  const supported = clientRuntimes(r.headers);
+  return read(r, "changed", { op, args, id, held, runtimes: [...supported] });
 }

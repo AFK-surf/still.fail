@@ -1236,7 +1236,7 @@ export interface Profile {
 	/** The provider of a key from the list of API providers, and the mark of its maker (none: the generic one). */
 	providerName?: string;
 	providerMark?: string;
-	/** A model can be named by hand (a key on a listed provider: not every one lists its models). */
+	/** A model can be named by hand (an environment profile, or a key on a listed provider: not every one lists its models). */
 	canAddModel?: boolean;
 	/** A provider that only answers the automatic decisions (Jev): its models are the ones its decision probe found. */
 	decisionOnly?: boolean;

@@ -499,5 +499,9 @@
   "station.relay.untitled": "未命名对话",
   "station.relay.pick": "请选择要接力到的连接和频道",
   "station.relay.threadIn": "{place} 的一个 thread",
-  "station.updates.hermesExternal": "请在该机器上安装 Hermes 0.21.7 或更新版本及 ACP、MCP 组件，并配置模型服务；更新由 Hermes 自行管理。"
+  "station.updates.hermesExternal": "请在该机器上安装 Hermes 0.21.7 或更新版本及 ACP、MCP 组件，并配置模型服务；更新由 Hermes 自行管理。",
+  "station.profile.hermesModelsEmpty": "Hermes 未返回可用模型。请检查此 Profile 的模型服务配置，或按名称添加模型。",
+  "station.profile.hermesModelsFailed": "无法读取 Hermes 模型：{error}。请检查此 Profile 的模型服务配置后重试，也可按名称添加模型。",
+  "station.profile.hermesModelsLimited": "已列出 {n} 个可用模型，最多显示 {limit} 个；其他模型可按名称添加",
+  "station.admin.updateClientForRuntime": "请更新客户端后查看此 agent 的执行记录"
 }

@@ -470,7 +470,7 @@ function EnvSection({ profile, onSave, busy }: { profile: Profile; onSave(input:
   return (
     <Section title={t("web-pages.profiles.env")} description={t("web-pages.profiles.envLead", { route: "{route}" })}>
       <div className={pagesCss.card}>
-        <div className={css.envTable}>
+        {rows.length > 0 && <div className={css.envTable}>
           {rows.map((r) => {
             const secret = r.masked !== null || /KEY|TOKEN|SECRET|PASSWORD|AUTH/i.test(r.key);
             return (
@@ -482,9 +482,9 @@ function EnvSection({ profile, onSave, busy }: { profile: Profile; onSave(input:
               </div>
             );
           })}
-          <div><Button variant="ghost" icon={Plus} onClick={() => setRows([...rows, { row: nextRow++, key: "", value: "", masked: null, original: null }])}>{t("web-pages.profiles.envAdd")}</Button></div>
-        </div>
+        </div>}
         <div className={pagesCss.cardActions}>
+          <Button variant="ghost" icon={Plus} onClick={() => setRows([...rows, { row: nextRow++, key: "", value: "", masked: null, original: null }])}>{t("web-pages.profiles.envAdd")}</Button>
           <Button variant="primary" busy={busy} onClick={() => onSave({ env: patch() })}>{t("common.save")}</Button>
         </div>
       </div>

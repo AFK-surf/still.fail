@@ -20,6 +20,8 @@ globalStyle(`${card} ${btn}:not(${btnPrimary}, ${btnDangerSolid})`, {
 globalStyle(`${card} ${btn}:not(${btnPrimary}, ${btnDangerSolid}):hover:not(:disabled)`, {
   background: "color-mix(in oklab, currentColor 10%, transparent)",
 });
+// Beside fields, a button's ground lines up with theirs: the text-card bleed would pull it into the card's corner.
+globalStyle(`${card} ${inputRow} ${btn}`, { marginInline: 0 });
 globalStyle(`${inputRow} ${input}`, { flex: "1" });
 // A sign-in's steps: their numbers in their lines, so what is under them (the page's button, the code's field) stands
 // where the card's words do.

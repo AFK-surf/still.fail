@@ -7,13 +7,21 @@ import { log } from "../ops/log.ts";
 import { peerHttpBase } from "../tools/http.ts";
 import { LiveFromAcp, chars, type AcpLiveState } from "./live.ts";
 import { AgentProcess, ackedOffset, debug, findRunner, linesBefore, outFile, runnerId } from "./process.ts";
+import { fileCredentials } from "./no-keychain.ts";
 import { expandRoute, profileEnv, profileModel } from "./profiles.ts";
-import { TOOL_SERVERS, cleanEnv, unreachable, uuid, type AgentDriver, type AgentSession, type FailureReason, type OpenOptions, type RuntimeEvent, type TurnOutcome } from "./runtime.ts";
+import { TOOL_SERVERS, cleanEnv, unreachable, uuid, type AgentDriver, type AgentSession, type FailureReason, type OpenOptions, type Profile, type RuntimeEvent, type TurnOutcome } from "./runtime.ts";
 
 type Json = any;
 
-// Hermes resolves providers from this profile's HERMES_HOME and explicit environment.
-const SCRUBBED = ["HERMES_HOME", "HERMES_CONFIG_FILE", "OPENAI_API_KEY", "OPENAI_BASE_URL", "ANTHROPIC_API_KEY", "OPENROUTER_API_KEY", "GEMINI_API_KEY", "GROQ_API_KEY", "DEEPSEEK_API_KEY"];
+// Hermes can load any provider, including plugins and arbitrary key_env names. Inherit the machine's execution
+// and network settings, not an ever-growing blacklist of provider credentials. Model settings come from the
+// profile's home or explicit variables; those variables can also opt tools into any other environment they need.
+const INHERITED = new Set([
+  "PATH", "PATHEXT", "HOME", "USERPROFILE", "USER", "LOGNAME", "SHELL", "SYSTEMROOT", "WINDIR", "COMSPEC",
+  "TEMP", "TMP", "TMPDIR", "APPDATA", "LOCALAPPDATA", "PROGRAMDATA", "LANG", "LANGUAGE", "TZ", "TERM",
+  "HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY", "NO_PROXY", "SSL_CERT_FILE", "SSL_CERT_DIR", "REQUESTS_CA_BUNDLE",
+  "CURL_CA_BUNDLE", "NODE_EXTRA_CA_CERTS", "SSH_AUTH_SOCK",
+]);
 export const hermesHome = (home: string) => join(home, "hermes");
 export const SESSIONS = "sessions";
 const INIT = "init";
@@ -79,10 +87,35 @@ const rpc = (id: string, method: string, params: Json) => JSON.stringify({ jsonr
 const mcpServers = (url: string, token: string) => [{ type: "http", name: "stillfail", url, headers: [{ name: "Authorization", value: `Bearer ${token}` }] }];
 
 export function hermesEnv(options: OpenOptions): Record<string, string> {
-  const env = { ...cleanEnv(SCRUBBED), ...expandRoute(profileEnv(options.profile, "hermes"), options.route) };
+  const inherited = Object.fromEntries(Object.entries(cleanEnv([])).filter(([key]) => INHERITED.has(key.toUpperCase()) || /^LC_[A-Z_]+$/i.test(key)));
+  const env = { ...inherited, ...expandRoute(profileEnv(options.profile, "hermes"), options.route) };
   env.HERMES_HOME = hermesHome(options.profile.home);
+  // Hermes treats a borrowed Claude/Codex login as a configured provider. Keep those readers inside this profile,
+  // unless the profile explicitly names a credential directory, and never borrow macOS's shared Claude login.
+  env.CLAUDE_CONFIG_DIR ??= join(env.HERMES_HOME, "claude");
+  env.CODEX_HOME ??= join(env.HERMES_HOME, "codex");
+  fileCredentials(env);
   env.STILLFAIL_PEER_HTTP = peerHttpBase(options.mcpUrl);
   return env;
+}
+
+/// Hermes 0.21.7's ACP inventory excludes unconfigured providers and caps each provider at 200. Bound the combined
+/// list too: a configured router can still offer hundreds. Existing manual selections remain in profile.models.
+export const HERMES_MODEL_LIMIT = 50;
+export function hermesCatalog(catalog: Json, profile: Profile): string[] {
+  const valid = (v: unknown): v is string => typeof v === "string" && v.trim() !== "";
+  const found = new Set<string>((Array.isArray(catalog?.availableModels) ? catalog.availableModels : []).map((m: Json) => m?.modelId).filter(valid));
+  const current = catalog?.currentModelId;
+  if (valid(current)) found.add(current);
+  const picked = new Set<string>();
+  const take = (model: unknown) => {
+    if (valid(model) && found.has(model) && picked.size < HERMES_MODEL_LIMIT) picked.add(model);
+  };
+  take(current);
+  take(profile.model);
+  for (const model of Array.isArray(profile.models) ? profile.models : []) take(model);
+  for (const model of found) { take(model); if (picked.size === HERMES_MODEL_LIMIT) break; }
+  return [...picked];
 }
 
 export class HermesDriver implements AgentDriver {
@@ -99,7 +132,19 @@ export class HermesDriver implements AgentDriver {
     return "hermes";
   }
 
-  async open(options: OpenOptions, events: (event: RuntimeEvent) => void): Promise<HermesSession> {
+  async models(profile: Profile): Promise<string[]> {
+    mkdirSync(profile.home, { recursive: true });
+    const session = await this.start({ key: `models-${profile.id}-${uuid()}`, profile, cwd: profile.home,
+      instructions: "", mcpToken: "", mcpUrl: "", route: "model-discovery" }, () => {}, true);
+    try { return session.availableModels; }
+    finally { await session.dispose(); }
+  }
+
+  open(options: OpenOptions, events: (event: RuntimeEvent) => void): Promise<HermesSession> {
+    return this.start(options, events, false);
+  }
+
+  private async start(options: OpenOptions, events: (event: RuntimeEvent) => void, discovery: boolean): Promise<HermesSession> {
     if (options.resume !== undefined && !/^[a-zA-Z0-9_-]+$/.test(options.resume)) throw new Error("invalid Hermes session id");
     const home = options.profile.home;
     const sessions = join(hermesHome(home), SESSIONS);
@@ -108,7 +153,7 @@ export class HermesDriver implements AgentDriver {
       // Not one the station kept: failing here lets the caller start fresh.
       throw new Error(`no Hermes session ${options.resume}`);
     }
-    const model = options.model ?? profileModel(options.profile);
+    const model = discovery ? undefined : options.model ?? profileModel(options.profile);
     const session = new HermesSession(this, "", { busy: false, aborting: false, closed: false }, new LiveFromAcp(), events, sessions, model ?? null);
     session.toolsUrl = options.mcpUrl;
     session.instructions = options.instructions;
@@ -122,7 +167,7 @@ export class HermesDriver implements AgentDriver {
       if (!version || (+version[1] === 0 && (+version[2] < 21 || (+version[2] === 21 && +version[3] < 7)))) {
         throw new Error("Hermes Agent 需要 0.21.7 或更新版本；请先更新 Hermes，再重试。");
       }
-      const servers = mcpServers(options.mcpUrl, options.mcpToken);
+      const servers = discovery ? [] : mcpServers(options.mcpUrl, options.mcpToken);
       const opening = { cwd: options.cwd, mcpServers: servers };
       if (options.resume !== undefined) {
         session.named(options.resume);
@@ -132,7 +177,8 @@ export class HermesDriver implements AgentDriver {
         const id = opened?.result?.sessionId;
         if (typeof id !== "string" || id === "") throw new Error("Hermes named no session");
         session.named(id);
-        session.keep({ type: "session", id, cwd: options.cwd });
+        session.availableModels = hermesCatalog(opened?.result?.models, options.profile);
+        if (!discovery) session.keep({ type: "session", id, cwd: options.cwd });
       }
       session.opened();
       if (model !== undefined) await session.request(`model:${uuid()}`, "session/set_model", { sessionId: session.id(), modelId: model });
@@ -240,6 +286,7 @@ export class HermesSession implements AgentSession {
   private open = new Map<string, { name: string; input: Json }>();
   toolsUrl: string | null = null;
   instructions = "";
+  availableModels: string[] = [];
 
   constructor(driver: HermesDriver, sessionId: string, turn: Turn, live: LiveFromAcp, events: (event: RuntimeEvent) => void, sessions: string, model: string | null) {
     this.driver = driver;

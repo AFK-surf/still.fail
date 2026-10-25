@@ -16,6 +16,7 @@
 //   shortly after start and every few hours (console.ts).
 // - a Kimi Code profile signed in to Kimi: its token (minutes) renewed with half its life left, looked at every minute
 //   (kimi.ts).
+import { HERMES_MODEL_LIMIT } from "../agents/hermes.ts";
 import { runtimeKind, runtimeLabel } from "../agents/runtime.ts";
 import type { Clock } from "effect";
 import { randomBytes } from "node:crypto";
@@ -109,6 +110,8 @@ export type AccountsDeps = {
   };
   /// The codex driver, once there.
   codex?: () => CodexAccess | undefined;
+  /// Hermes reports its configured providers and model IDs in ACP session/new (no model turn).
+  hermes?: () => { models(profile: Profile): Promise<string[]> } | undefined;
   /// Whether someone follows the events or a turn runs (allowances are asked again on a round only then).
   following?: () => boolean;
   /// The station's environment (where the machine's logins are, and the CLIs found); process.env by default.
@@ -550,7 +553,8 @@ export class Accounts {
     this.keepCheck(id, check);
     // What the automatic decisions can use is found once the profile is made: a request to add does not wait on that.
     const profile = this.profile(id);
-    if (profile) {
+    if (profile?.runtime === "hermes") this.afterSignIn(id);
+    else if (profile) {
       this.background.spawn(async () => {
         const decision = await this.discoverFn(profile, check);
         // A profile edited or removed meanwhile does not inherit what was found for the one it was.
@@ -907,6 +911,17 @@ export class Accounts {
         }
         check.detail = tr(lang, "station.profile.modelsStale", { detail: check.detail });
         log.warn("accounts", "could not list codex model capabilities", { profile: id, error: (e as Error).message });
+      }
+    }
+    if (profile.runtime === "hermes" && this.deps.hermes?.()) {
+      try {
+        check.models = await this.deps.hermes()!.models(profile);
+        check.state = check.models.length > 0 ? "ok" : "unknown";
+        check.detail = tr(lang, check.models.length >= HERMES_MODEL_LIMIT ? "station.profile.hermesModelsLimited" : check.models.length > 0 ? "station.profile.works" : "station.profile.hermesModelsEmpty", { n: check.models.length, limit: HERMES_MODEL_LIMIT });
+      } catch (e) {
+        check.models = this.checks.get(id)?.models ?? null;
+        check.state = "unknown";
+        check.detail = tr(lang, "station.profile.hermesModelsFailed", { error: (e as Error).message });
       }
     }
     check.decision = await this.discoverFn(profile, check);
