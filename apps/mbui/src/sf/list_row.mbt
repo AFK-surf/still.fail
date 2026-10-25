@@ -75,3 +75,14 @@ pub fn list_heading(c : @ui.Ctx, label : String, at : ListAt) -> Unit {
   let l = theme().chat_list
   c.box(style=l.heading.then(list_heading_in(at)), fn() { c.text(label, style=l.heading_words) |> ignore }) |> ignore
 }
+
+///|
+/// The room between two groups of a list where no heading stands over the second (the settings' groups in a sidebar):
+/// a heading's room over it (`heading`'s 14), so a group reads apart from the one over it as one under a heading does.
+pub fn list_apart(c : @ui.Ctx) -> Unit {
+  c.box(style=list_apart_room, fn() {  }) |> ignore
+}
+
+///|
+// kept across runs: a value (no field of it changes)
+let list_apart_room : @ui.Style = @ui.css("w=Full h=S3_5")

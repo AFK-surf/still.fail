@@ -142,7 +142,7 @@ test "small with a mouse, ⌘K: the search's page in the lists' box, the keys in
   assert_true(t.find("⌘,") is Some(_), msg=t.words().map(fn(w) { w.0 }).join("|"))
   t.enter()
   t.frame()
-  assert_true(app.nav.top() is Setting(_))
+  assert_true(app.nav.top() == Settings)
   // a chat found: Enter opens it
   let t = small_mouse(calls)
   t.key(@ui.key_of_char('k'), mods=@ui.mod_cmd)
@@ -206,11 +206,11 @@ test "small with a mouse, the app's keys: ⌘N a new chat; ⌘, settings; ⌘/ t
   t.key(@ui.key_of_char('n'), mods=@ui.mod_cmd)
   t.frame()
   assert_true(app.nav.top() == NewChat)
-  // ⌘,: settings
+  // ⌘,: settings, their list's page
   let t = small_mouse(calls)
   t.key(@ui.key_of_char(','), mods=@ui.mod_cmd)
   t.frame()
-  assert_true(app.nav.top() is Setting(_))
+  assert_true(app.nav.top() == Settings)
   // ⌘/: the shortcuts
   let t = small_mouse(calls)
   t.key(@ui.key_of_char('/'), mods=@ui.mod_cmd)
