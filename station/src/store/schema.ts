@@ -709,6 +709,8 @@ export function addListState(db: DatabaseSync): void {
 export function addWorkspaceColumns(db: DatabaseSync): void {
   if (!has(db, "sessions", "ws")) db.exec("ALTER TABLE sessions ADD COLUMN ws TEXT");
   if (!has(db, "archive_policy", "ws")) db.exec("ALTER TABLE archive_policy ADD COLUMN ws TEXT");
+  // Came with private chats (docs/private-chats.md): the emails, as a JSON array, of those a session's chat is private to.
+  if (!has(db, "sessions", "private_to")) db.exec("ALTER TABLE sessions ADD COLUMN private_to TEXT");
   // The sessions counted by connect and workspace (store.ts SESSION_COUNTS, in every overview): from the index alone.
   db.exec("CREATE INDEX IF NOT EXISTS sessions_by_connect ON sessions (connect, ws)");
 }

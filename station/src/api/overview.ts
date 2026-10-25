@@ -13,7 +13,7 @@ import type { Hub } from "../sessions/hub.ts";
 import type { Store } from "../store/store.ts";
 import type { Updates } from "../updates/updates.ts";
 import { type RootView, rootView, rootsOf } from "../drive/drive.ts";
-import { sees } from "../store/rows.ts";
+import { sees, seesChat } from "../store/rows.ts";
 import { titleOf } from "../read/views.ts";
 import { policyView } from "../sessions/archive-policy.ts";
 import { agentEnvView } from "./routes/agent-env.ts";
@@ -106,7 +106,7 @@ export async function overview(d: OverviewDeps, viewer: Viewer, lang: Lang): Pro
   // (Counted by connect from an index, not every session's row; the processes not cold are the hub's few.)
   const counted = d.store.sessionCounts().filter((c) => sees(viewer, c.ws));
   const sessionsOf = (connect: string | null) => counted.reduce((n, c) => (connect === null || c.connect === connect ? n + c.n : n), 0);
-  const states = [...d.hub.processes()].filter(([key]) => sees(viewer, d.store.getSession(key)?.ws ?? null)).map(([, state]) => state);
+  const states = [...d.hub.processes()].filter(([key]) => seesChat(viewer, d.store.getSession(key) ?? { ws: null })).map(([, state]) => state);
   // The agents' runtime processes; background jobs' groups are recorded too (to be reaped), but they are jobs.
   const processes = d.store.listProcesses().filter((p) => p.runtime !== "job");
   const memory = await keptMemory(d, processes.map((p) => p.pgid));
@@ -221,7 +221,7 @@ const decisionsKept = new WeakMap<object, Map<string, { at: number; stamp: strin
 
 function madeDecisionsView(d: OverviewDeps, viewer: Viewer): unknown {
   const view = d.accounts!.automaticDecisionsView(viewer);
-  const mine = (session: unknown) => typeof session === "string" && sees(viewer, d.store.getSession(session)?.ws ?? null);
+  const mine = (session: unknown) => typeof session === "string" && seesChat(viewer, d.store.getSession(session) ?? { ws: null });
   const manages = viewer.role === "owner" || viewer.role === "admin";
   if (Array.isArray(view?.recent)) view.recent = view.recent.filter((row: any) => mine(row?.session));
   if (view?.policy !== undefined || (manages && viewer.home === false)) {

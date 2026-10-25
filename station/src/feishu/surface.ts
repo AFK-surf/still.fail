@@ -426,7 +426,7 @@ export class FeishuSurface implements ChatSurface {
     }
     const event: ChatEvent = {
       type: "message",
-      message: { channel: m.chat, threadTs, ts: m.id, user: m.user, text: m.text, addressed: m.addressed, ...(m.files.length > 0 ? { files: m.files } : {}) },
+      message: { channel: m.chat, threadTs, ts: m.id, user: m.user, text: m.text, addressed: m.addressed, ...(m.files.length > 0 ? { files: m.files } : {}), ...(m.p2p ? { direct: "one" as const } : {}) },
     };
     await handler(event);
   }

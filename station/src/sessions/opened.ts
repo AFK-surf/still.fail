@@ -67,9 +67,10 @@ function starterOf(hub: Hub, key: string): string {
 }
 
 /// A new session in a chat of its own for an opener: its runtime, model and effort as asked; the model and effort it
-/// takes after its opener's (`inherited`) are dropped where no profile here runs them. In workspace `ws` (the opener's).
-function makeChat(hub: Hub, o: { runtime: RuntimeName; model: string | null; effort: string | null; inherited: boolean; title: string | null; createdBy: string; ws: string | null }) {
-  const options = { runtime: o.runtime, model: o.model, effort: o.effort, title: o.title, createdBy: o.createdBy, ws: o.ws };
+/// takes after its opener's (`inherited`) are dropped where no profile here runs them. In workspace `ws` (the opener's),
+/// private to the opener's people (`privateTo`, docs/private-chats.md).
+function makeChat(hub: Hub, o: { runtime: RuntimeName; model: string | null; effort: string | null; inherited: boolean; title: string | null; createdBy: string; ws: string | null; privateTo?: string[] | null }) {
+  const options = { runtime: o.runtime, model: o.model, effort: o.effort, title: o.title, createdBy: o.createdBy, ws: o.ws, privateTo: o.privateTo ?? null };
   try {
     return newSession(hub, options);
   } catch (error) {
@@ -186,7 +187,7 @@ export async function chatCreate(hub: Hub, key: string, args: Args): Promise<str
 
   if (there === null) {
     const chosen = model === null ? chosenHere(hub, createdBy, row.ws ?? null, runtime as RuntimeName | null) : choice;
-    const [child, chat] = makeChat(hub, { ...choice, ...chosen, title, createdBy, ws: row.ws ?? null });
+    const [child, chat] = makeChat(hub, { ...choice, ...chosen, title, createdBy, ws: row.ws ?? null, privateTo: row.privateTo });
     const link = hub.link(child) ?? null;
     hub.store.insertOpened({ childStation: "", child, parentStation: "", parent: key, key: k, title, link });
     const thread: SessionThread = { thread: chat, connect: INTERNAL_CONNECT };
@@ -195,6 +196,8 @@ export async function chatCreate(hub: Hub, key: string, args: Args): Promise<str
     return opened({ session: child, link, thread: addressOf(thread) }, null, false);
   }
 
+  // Another station keeps no chat private (docs/private-chats.md): a direct message's opens its chats here.
+  if (row.privateTo !== null) throw new Error("this chat is a direct message, private to the people in it: the chats it opens are opened on this station only");
   const call = peersOf(hub, key)!;
   // `choose`: the station it is opened on picks the model (`runtimeGiven`: of that runtime); one from before it runs the
   // runtime's default there.

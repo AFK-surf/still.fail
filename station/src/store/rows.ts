@@ -25,17 +25,57 @@ export const feishuSurface = (connect: string): string => `feishu:${connect}`;
 export type SessionScope = "thread" | "all";
 
 /// Who looks, as far as the station's workspaces go (docs/multi-workspace.md): their workspace, and whether it is the
-/// station's home one (absent: it is, as on a station in one workspace).
-export type InWorkspace = { workspace: string; home?: boolean };
+/// station's home one (absent: it is, as on a station in one workspace); `email`: who they are, for the chats private to
+/// some people (docs/private-chats.md; absent: none of those).
+export type InWorkspace = { workspace: string; home?: boolean; email?: string };
 
 /// Whether a session whose chat is in `ws` (null: the station's home workspace) is one `viewer` may see and use: a
 /// member of one workspace sees nothing of another's chats.
 export const sees = (viewer: InWorkspace, ws: string | null): boolean => ws === viewer.workspace || (ws === null && viewer.home !== false);
 
+/// Whether what `reader` may see can show a chat private to `to` (docs/private-chats.md): a chat private to no one
+/// (null) to anyone; else only to a reader all of whose audience is among its people. `reader`: the emails of those who
+/// see what it reads (a person: their own; a private chat's agent: its chat's people); null: everyone, so none of them.
+export function opensTo(reader: readonly string[] | null | undefined, to: readonly string[] | null | undefined): boolean {
+  if (to === null || to === undefined) return true;
+  if (reader === null || reader === undefined || reader.length === 0) return false;
+  const people = new Set(to.map((e) => e.toLowerCase()));
+  return reader.every((e) => people.has(e.toLowerCase()));
+}
+
+/// What of a session decides who sees it.
+export type Audience = { ws: string | null; privateTo?: string[] | null };
+
+/// Whether `viewer` sees a session: of their workspace, and, private to some people (a direct message's), one of them.
+export const seesChat = (viewer: InWorkspace, row: Audience): boolean =>
+  sees(viewer, row.ws) && opensTo(viewer.email === undefined ? null : [viewer.email], row.privateTo);
+
+/// Whom a thread whose sessions are `members` is private to (`seesMembers` as one list): those all of its private
+/// sessions are private to; null when none is.
+export function privateToAll(members: Audience[]): string[] | null {
+  let to: string[] | null = null;
+  for (const m of members) {
+    if (m.privateTo === null || m.privateTo === undefined) continue;
+    const these = new Set(m.privateTo.map((e) => e.toLowerCase()));
+    to = (to ?? [...these]).filter((e) => these.has(e.toLowerCase()));
+  }
+  return to;
+}
+
+/// Whether `viewer` sees a thread whose sessions are `members` (null: one no longer there, the home workspace's): one of
+/// them is of their workspace (a thread with none: the home one's), and none is private to others than them.
+export function seesMembers(viewer: InWorkspace, members: (Audience | null)[]): boolean {
+  if (members.length === 0) return sees(viewer, null);
+  const reader = viewer.email === undefined ? null : [viewer.email];
+  return members.some((m) => sees(viewer, m?.ws ?? null)) && members.every((m) => opensTo(reader, m?.privateTo));
+}
+
 export type SessionRow = {
   key: string; connect: string; scope: SessionScope; title: string | null; createdBy: string | null; runtime: string;
   profile: string; profilePinned: boolean; model: string | null; effort: string | null; fast: boolean | null;
   runtimeSessionId: string | null; workspace: string; cwd: string | null;
+  /// The emails of the people its chat is private to (a direct message's, docs/private-chats.md); null: not private.
+  privateTo: string[] | null;
   /// Which of the station's workspaces its chat is in (docs/multi-workspace.md): null is its home workspace (sessions
   /// from before, and those made outside any workspace's request). Not the `workspace` above, its directory.
   ws: string | null;
@@ -50,7 +90,7 @@ export type NewSession = {
   key: string; connect: string; scope?: SessionScope | null; title?: string | null; createdBy?: string | null;
   runtime: string; profile: string; profilePinned?: boolean; model?: string | null; effort?: string | null;
   fast?: boolean | null; workspace: string; cwd?: string | null; runtimeSessionId?: string | null; token: string;
-  createdAt: number; lastActiveAt: number; ws?: string | null;
+  createdAt: number; lastActiveAt: number; ws?: string | null; privateTo?: string[] | null;
 };
 
 /// A place people talk: a Slack thread, or a chat on the station's page.
@@ -306,12 +346,24 @@ export function authorKind(s: string): AuthorKind {
   return "person";
 }
 
+/// sessions.private_to as kept (a JSON array of emails); null: not private. One unreadable is private to no one: a
+/// damaged row shows to nobody rather than to everyone.
+export function privateToOf(kept: unknown): string[] | null {
+  if (kept === null || kept === undefined) return null;
+  try {
+    const list = JSON.parse(String(kept));
+    return Array.isArray(list) ? list.filter((e): e is string => typeof e === "string") : [];
+  } catch {
+    return [];
+  }
+}
+
 export function toSession(r: Json): SessionRow {
   return {
     key: r.key, connect: r.connect, scope: r.scope === "all" ? "all" : "thread", title: r.title, createdBy: r.created_by,
     runtime: r.runtime, profile: r.profile, profilePinned: r.profile_pinned === 1, model: r.model, effort: r.effort,
     fast: r.fast === null || r.fast === undefined ? null : r.fast !== 0, runtimeSessionId: r.runtime_session_id,
-    workspace: r.workspace, cwd: r.cwd ?? null, ws: r.ws ?? null, token: r.token, running: r.running === 1, createdAt: r.created_at,
+    workspace: r.workspace, cwd: r.cwd ?? null, ws: r.ws ?? null, privateTo: privateToOf(r.private_to), token: r.token, running: r.running === 1, createdAt: r.created_at,
     lastActiveAt: r.last_active_at, archivedAt: r.archived_at, archivedBy: r.archived_by, shownAt: r.shown_at,
   };
 }

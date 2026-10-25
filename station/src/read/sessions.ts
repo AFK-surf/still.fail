@@ -15,7 +15,7 @@ import { basename, dirname, join, isAbsolute } from "node:path";
 import { clean, cleanPosix, fileName, samePath, segments, within } from "../ops/paths.ts";
 import type { Viewer } from "../mesh/credential.ts";
 import type { Lang } from "../ops/i18n.ts";
-import { type InWorkspace, sees } from "../store/rows.ts";
+import { type InWorkspace, seesChat } from "../store/rows.ts";
 import { watching } from "./store.ts";
 import * as store from "./store.ts";
 import type { AuthorKind, Json, SessionRow, Store, ThreadRow, ThreadSummary } from "./store.ts";
@@ -191,7 +191,7 @@ export function sessions(s: Store, connect: string | null, archived: boolean, la
   const l: Lists = { stats: store.sessionStats(s, null), bindings: store.listBindings(s), participants: store.participants(s, null), watches: watching(s), lengths: store.transcriptLengths(s, null), usages: store.sessionUsages(s, null) };
   return store
     .listSessions(s)
-    .filter((x) => (connect === null || x.connect === connect) && (x.archivedAt !== null) === archived && (viewer === null || sees(viewer, x.ws)))
+    .filter((x) => (connect === null || x.connect === connect) && (x.archivedAt !== null) === archived && (viewer === null || seesChat(viewer, x)))
     .map((x) => summaryWith(s, x.key, l));
 }
 
@@ -200,7 +200,7 @@ export function session(s: Store, key: string, viewer: Viewer, lang: Lang): Json
   setLang(lang);
   // One of another workspace is none (docs/multi-workspace.md).
   const row = store.getSession(s, key);
-  if (row !== null && !sees(viewer, row.ws)) throw new HttpError(404, `unknown session ${key}`);
+  if (row !== null && !seesChat(viewer, row)) throw new HttpError(404, `unknown session ${key}`);
   const turns = store.listTurns(s, key);
   const jobs = store.listJobs(s, key).map((j) => shown(s, j));
   return { session: summary(s, key), threads: threadViews(s, viewer, key), turns, jobs };
@@ -253,7 +253,7 @@ function threadViews(s: Store, viewer: Viewer, session: string | null): Json[] {
   const seen = store.seenBy(s, viewer);
   return store
     .listThreads(s, viewer.email, session, null)
-    .filter((t) => t.sessions.some((m) => seen(m.session)))
+    .filter((t) => t.sessions.some((m) => seen(m.session)) && store.seesThread(s, viewer, t.thread.id))
     .map((t) => threadView(s, t, shares, published));
 }
 
