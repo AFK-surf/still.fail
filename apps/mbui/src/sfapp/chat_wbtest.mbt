@@ -425,3 +425,46 @@ test "a table wider than the message on a phone: at rest in line with the words,
   let (shown, _, _, _) = t.shown_of(cell).unwrap()
   assert_eq(shown, 0.0)
 }
+
+///|
+/// How soon after a chat is shown a message is said in it (the test's).
+let said_soon_ms : Double = 100.0
+
+///|
+test "a message said just after the chat opened comes in with the list gliding after it: no half second first" {
+  reset()
+  let clock : Ref[Double] = { val: 0.0 }
+  fix_clock.val = Some(fn() { clock.val })
+  let src = fixture("chat")
+  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0, platform=2)
+  t.run_for(@ui.nav_push_ms)
+  // a moment on (well within the half second the list once waited), someone says something in it (said while it
+  // shows: new to the list)
+  let words = "我也在看这个"
+  fix_later(1.0, fn() {
+    fix_chat("s-c1").sent.push(
+      msg(150, "person", by_person("安娜"), words, "刚刚", { "ts": Json::string("ana150"), "said": true }),
+    )
+  })
+  t.run_for(said_soon_ms)
+  clock.val = clock.val + 1.0
+  t.draw()
+  let mut from : Double? = None
+  let mut n = 0
+  while from is None && n < 60 {
+    t.frame()
+    from = t.drawn_of(words).map(fn(d) { d.1 })
+    n += 1
+  }
+  guard from is Some(y0) else { fail("「\{words}」 never came in") }
+  let rest = t.rest_of("a list")
+  if rest > t.time() && rest < @double.infinity {
+    t.run_for(rest - t.time())
+  }
+  t.run_for(@sf.enter_ms)
+  let (_, y1) = t.drawn_of(words).unwrap()
+  // (more than its rise in: the list went up after it)
+  assert_true(y0 - y1 > 20.0, msg="glided up after it: \{y0} → \{y1}")
+  fix_clock.val = None
+}

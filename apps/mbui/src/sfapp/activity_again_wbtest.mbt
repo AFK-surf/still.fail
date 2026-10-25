@@ -35,3 +35,22 @@ test "an agent's line comes in each turn as in its first: its room opening, carr
   assert_true((mid2 - mid1).abs() < 0.5, msg="\{mid2} \{mid1}")
   assert_true((end2 - end1).abs() < 0.5, msg="\{end2} \{end1}")
 }
+
+///|
+test "a finger holding the list holds nothing back: the agent's line comes in in its turn (the list's glide alone waits)" {
+  let t = linger_core()
+  // the words landed, a finger down on the list, pulled up a little at its end and held there
+  t.run_for(flight_carry_ms)
+  t.touch(0, 195.0, 400.0)
+  t.frame()
+  t.touch(1, 195.0, 388.0)
+  t.frame()
+  t.touch(1, 195.0, 376.0)
+  t.frame()
+  t.run_for(fix_deliver_ms)
+  let at = turns_of("ws1/st1\u{1}s-c1").start_of("act:s-c1")
+  assert_true(at >= 0.0 && at < @double.infinity, msg="held back by the finger: \{at}")
+  t.run_for(dmax(at - t.time(), 0.0) + working_turn_ms)
+  assert_true(t.find(tr("android-chat.chat.working")) is Some(_))
+  t.touch(2, 195.0, 376.0)
+}

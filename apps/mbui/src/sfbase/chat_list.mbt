@@ -85,14 +85,17 @@ pub(all) struct Reading {
   mut played : Int
   mut ticked : Int
   fresh : Map[String, Bool]
+  /// the frame a row new to it last came into it (`fresh`): what comes at its end then is glided after (Follow.kt)
+  mut came_frame : Int
   /// rows asked a turn to come in (turns.mbt: Chat.kt admitted); each row's rise in, by key, while it rises
   admitted : Map[String, Bool]
   rises : Map[String, @motion.Anim]
   /// in the wide frame, the messages that were there as they came into the list (the chat opened, the page before),
   /// fading in, all that came at once together (Chat.tsx useHistoryFade), by key, while they fade
   history : Map[String, @motion.Anim]
-  /// when the list's own motion is at rest, as last laid out (ListInfo's `rest`): a turn waits for it
-  mut list_rest : Double
+  /// its list, read as it was last laid out (its glide after what came set out there): a turn waits for that glide's
+  /// end (ListInfo's `glide_rest`), not for the reader's hand (listQueue.ts listStill: following, and there)
+  mut list_read : @ui.ListReader?
   /// the newest row (not an agent's line) as last built, and whether the list follows one from its top (Follow.kt
   /// anchor: a message arriving while it is followed is read from its start)
   mut newest : String
@@ -172,10 +175,11 @@ pub fn reading_of(key : String) -> Reading {
         played: -10,
         ticked: -10,
         fresh: {},
+        came_frame: -10,
         admitted: {},
         rises: {},
         history: {},
-        list_rest: -1.0,
+        list_read: None,
         newest: "",
         following_row: false,
         follow_key: "",
@@ -358,7 +362,14 @@ pub fn chat_tick(c : @ui.Ctx, rk : String, rd : Reading, v : ChatView, shown~ : 
     rd.played = frame
     // what changes the list's height, one at a time (turns.mbt): each whose turn has come starts
     let turns = turns_of(rk)
-    turns.step(c, rd.list_rest)
+    turns.step(c, match rd.list_read {
+      Some(lr) =>
+        match lr.info() {
+          Some(i) => i.glide_rest
+          None => -1.0
+        }
+      None => -1.0
+    })
     let playing = em.current is Some(_) || em.queue.length() > 0
     em.watched = (rd.at_end || rd.following_row || (playing && !rd.jump)) && !v.newer && in_front
     let showing : Map[String, Bool] = {}
@@ -803,10 +814,7 @@ pub fn row_keys(
     Some(i) => i.following_row
     None => false
   }
-  rd.list_rest = match info {
-    Some(i) => i.rest
-    None => -1.0
-  }
+  rd.list_read = Some(c.list_reader(key))
   if rd.drawn && following {
     for i, e in all {
       let k = all_keys[i]
@@ -859,6 +867,7 @@ pub fn row_keys(
       }
       if !rd.known.contains(keys[i]) && !caught {
         rd.fresh[keys[i]] = true
+        rd.came_frame = c.frame_number()
         // what comes in takes back the room an agent's line left (Chat.kt floor)
         if rd.floor > 0.0 {
           rd.floor_takers[keys[i]] = 0.0
@@ -1087,7 +1096,7 @@ pub let history_fade_ms : Double = 180.0
 /// What a chat's list is made of this frame, as both frames make it, before they draw it (sfapp's messages, sfdesk's
 /// chat_list): its rows and their keys (`read`, its entries; those coming out of an avatar held out of it till their
 /// turn), its turns and its messages out of avatars played on, the list following its newest, words sent flying from
-/// the composer of draft `draft`, whether what comes at its end may glide, and the page before come in above what is
+/// the composer of draft `draft`, whether what comes at its end glides, and the page before come in above what is
 /// in view keeping it where it is. `rise_ms`, `history_fade`, `top`, `in_front`: as row_keys', follow_newest's,
 /// chat_tick's.
 pub fn list_frame(
@@ -1142,9 +1151,9 @@ pub fn list_frame(
     Some(i) => keys[i]
     None => ""
   }
-  // half a second after it was put in place (shown), what comes at its end may glide: asked each frame it is drawn
-  // (later: nothing shown waits for it)
-  let glides = @kit.after(c, "glide/" + key, rd.placed, glide_after_place_ms, later=true)
+  // what comes at its end glides after it when it is new to the list (said while it shows, sent, an agent starting:
+  // row_keys's fresh), not what was there or caught up on (the chat opened, its pages coming in), at once
+  let glides = rd.came_frame == c.frame_number()
   @motion.list_keys(c, key, keys.map(fn(k) { key + "\u{1}" + k })) |> ignore
   // the first message's row: the page before come in above it, it stays where it is (Chat.kt: the list keeps its
   // first item in view by its key, or the first row after the spinner)
@@ -1195,10 +1204,6 @@ pub(all) struct ListFrame {
   older_came : Bool
   carry : Double?
 }
-
-///|
-/// How long after a chat is put in place what comes at its end glides after it (Follow.kt).
-pub let glide_after_place_ms : Double = 500.0
 
 ///|
 /// What a chat's list does once drawn this frame, as both frames do it (sfapp's messages, sfdesk's chat_list): put in
