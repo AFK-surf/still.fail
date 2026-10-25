@@ -407,6 +407,8 @@ fn fixture_chat_topic(f : Fixture, name : String, params : Map[String, Json]) ->
             with_viz_message(rich_chat(f.older))
           } else if f.mode == "chat-file-links" {
             with_file_links(rich_chat(f.older))
+          } else if f.mode == "chat-table-images" {
+            with_table_images(rich_chat(f.older))
           } else if f.mode == "chat-screens" {
             with_message(rich_chat(f.older), screens_answer)
           } else if f.mode == "chat-need" {
@@ -1350,6 +1352,48 @@ let file_links_md : Json = [
       ["a", [[30, 34]], { "href": "%E7%95%8C%E9%9D%A2%E8%8D%89%E5%9B%BE.png" }],
       [77, 78],
     ],
+  ],
+]
+
+///|
+/// MBUI_FIXTURE=chat-table-images: a last message placing two of its pictures in a table's cells, a wide one and a
+/// tall one, escaped as the station sends them, its Markdown tree with it (table_images_md).
+fn with_table_images(v : Json) -> Json {
+  match v {
+    Object(m) => {
+      let o = m.copy()
+      let all = match m.get("messages") {
+        Some(Array(a)) => a.copy()
+        _ => []
+      }
+      all.push(
+        msg(12, "agent", by_agent("anthropic", "claude", "s-c1"), table_images_answer, "1 分钟前", {
+          "attachments": [file("web-folded.png", 1440, 900, 90000), file("phone.png", 780, 1688, 60000)],
+          "placed": ["web-folded.png", "phone.png"],
+          "md": table_images_md,
+          "ending": "all_done",
+        }),
+      )
+      o["messages"] = Json::array(all)
+      Json::object(o)
+    }
+    _ => v
+  }
+}
+
+///|
+let table_images_answer : String = "| 网页 | 手机网页 |\n|---|---|\n| ![](web%2Dfolded.png) | ![](phone.png) |\n"
+
+///|
+/// table_images_answer's tree as the core reads it (src/sfkept): its words by where they are in it.
+let table_images_md : Json = [
+  [
+    "table",
+    [
+      ["tr", [["th", [[2, 4]]], ["th", [[7, 11]]]]],
+      ["tr", [["td", [["img", { "src": "web%2Dfolded.png" }]]], ["td", [["img", { "src": "phone.png" }]]]]],
+    ],
+    { "align": [Json::null(), Json::null()] },
   ],
 ]
 

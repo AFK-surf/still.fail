@@ -470,20 +470,27 @@ fn prose_with_files(c : @ui.Ctx, src : Source, here : MessageHere, m : Message, 
       files=fn(name) {
         match placed.get(name) {
           Some(a) if is_viz(a.name) =>
-            Some(fn() {
-              viz_file_of(
-                c,
-                src,
-                here.station,
-                here.session,
-                owner_of(here, a),
-                m.ts,
-                a,
-                fn() { message_files(c, src, here, [a], false, by=Some(by)) },
-                @sf.theme().p.subtle,
-              )
+            Some({
+              draw: fn() {
+                viz_file_of(
+                  c,
+                  src,
+                  here.station,
+                  here.session,
+                  owner_of(here, a),
+                  m.ts,
+                  a,
+                  fn() { message_files(c, src, here, [a], false, by=Some(by)) },
+                  @sf.theme().p.subtle,
+                )
+              },
+              image: None,
             })
-          Some(a) => Some(fn() { message_files(c, src, here, [a], false, by=Some(by)) })
+          Some(a) =>
+            Some({
+              draw: fn() { message_files(c, src, here, [a], false, by=Some(by)) },
+              image: image_ratio(a).map(fn(r) { (r, fn(w) { file_item(c, src, here, a, w, by=Some(by)) }) }),
+            })
           None => None
         }
       },

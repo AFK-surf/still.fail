@@ -256,7 +256,13 @@ fn publish_message(c : @ui.Ctx, src : Source, here : MessageHere, m : Json?, roo
           size=body_size,
           files=fn(name) {
             if placed.contains(name) {
-              named.get(name).map(fn(f) { fn() { publish_file(c, src, here, f, room) } })
+              named.get(name).map(fn(f) -> @sf.Placed {
+                let a = @sfbase.attachment_of(field(Some(f), "file").unwrap_or(Json::null()))
+                {
+                  draw: fn() { publish_file(c, src, here, f, room) },
+                  image: image_ratio(a).map(fn(r) { (r, fn(w) { publish_file(c, src, here, f, w) }) }),
+                }
+              })
             } else {
               None
             }
