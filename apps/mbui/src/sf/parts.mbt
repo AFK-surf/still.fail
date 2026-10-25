@@ -508,7 +508,7 @@ pub fn menu_item(
   let ink = if danger { t.p.red } else if on { t.p.accent_text } else { t.p.text }
   c.box(
     dir=Row,
-    min_h=menu_row_min,
+    min_h=t.rows.pick,
     padx=text_in,
     pady=menu_row_over,
     gap=if panel { panel_row_gap } else { menu_row_gap },
@@ -780,8 +780,8 @@ pub fn panel_ground() -> Int64 {
 }
 
 ///|
-/// A menu's item (controls.css.ts menuItem), as mbui's menus draw it: 32 high at least, 6 by 10 in, its words (13)
-/// after a column 14 wide (`lead`: the menu's items have one, so all their words are on one line) of its icon (muted)
+/// A menu's item (controls.css.ts menuItem), as mbui's menus draw it: as high as the screen's at least (Theme::rows
+/// pick: 34, a finger's 44), 6 by 10 in, its words (13) after a column 14 wide (`lead`: the menu's items have one, so all their words are on one line) of its icon (muted)
 /// or, one of a choice (parts.tsx ChooserItem), its check where it is the one chosen, `gap` from its words; the
 /// pointer's or the keyboard's ground on it; one not to be chosen now (its entry disabled: never lit) in the subtle
 /// ink (menuItem[data-disabled]).
@@ -803,7 +803,7 @@ pub fn menu_row(
   c.box(
     dir=Row,
     w=Fill(1.0),
-    min_h=menu_row_min,
+    min_h=t.rows.pick,
     padx=text_in,
     pady=menu_row_over,
     gap~,

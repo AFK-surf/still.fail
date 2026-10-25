@@ -232,7 +232,7 @@ fn local_face_row(c : @ui.Ctx, core : Core, place : String, chosen : String) -> 
               @settings.set_font(core, place, Some(local_prefix + f))
               local_open.val = false
             }
-            c.box(style=if f == picked || c.lit(rid) { local_row_hot } else { local_row }, id=rid, fn() {
+            c.box(style=(if f == picked || c.lit(rid) { local_row_hot } else { local_row }).then(@sf.pick_high()), id=rid, fn() {
               c.text(f, style=local_name) |> ignore
               if f == picked {
                 @sf.icon(c, "check", size=font_check, color=t.p.text) |> ignore
@@ -409,11 +409,10 @@ let local_most : Int = 400
 let local_search : @ui.Style = @ui.css("w=Full pb=S1_5")
 
 ///|
-/// (localRow: a menu's item, the chosen on the hover ground, its check at its end)
+/// (localRow: a menu's item, as high as the screen's (@sf.pick_high), the chosen on the hover ground, its check at its
+/// end)
 // kept across runs: a value (no field of it changes)
-let local_row : @ui.Style = @ui.css("row w=Full px=S2_5 gap=S2 radius=Inner align=ACenter").then(
-  @ui.style(min_h=Fixed(@sf.menu_row_min)),
-)
+let local_row : @ui.Style = @ui.css("row w=Full px=S2_5 gap=S2 radius=Inner align=ACenter")
 
 ///|
 // kept across runs: a value (no field of it changes)

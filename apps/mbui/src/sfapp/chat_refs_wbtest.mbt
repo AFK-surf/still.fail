@@ -39,6 +39,9 @@ test "`@` and words: the workspace's other stations' chats too, each with its st
   // (then when it was last active)
   assert_true(after_on_its_row(t, "夜里的构建又失败了") == ["MBA", "15 分钟前"], msg=about_its_row(t, "夜里的构建又失败了"))
   assert_true(after_on_its_row(t, "首页的列表改成按天分组") == ["8 分钟前"], msg=about_its_row(t, "首页的列表改成按天分组"))
+  // a finger's row: 44 high at least (Theme::rows pick)
+  let (_, _, _, high) = t.get(Button, label="夜里的构建又失败了").rect
+  assert_true(high >= 44.0, msg="\{high}")
   t.tap_text("夜里的构建又失败了")
   t.draw()
   let made = named(calls, "chat.ref")
