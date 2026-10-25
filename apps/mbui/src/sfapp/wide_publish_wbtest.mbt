@@ -1,4 +1,4 @@
-// The publishing on a computer (sfpages publish.mbt, Publish.tsx PublishDialog): from the chat's info, over the whole
+// The publishing with keyboard and mouse (sfpages publish.mbt, Publish.tsx PublishDialog): from the chat's info, over the whole
 // window, what a snapshot would hold; 发布 publishes it (chat.publish), the link in the presenters' dialog after.
 
 ///|

@@ -18,11 +18,11 @@ pub fn pointed_or_finger(pointed : Bool) -> Bool {
 }
 
 ///|
-/// Whether what a row's ⋯ would offer is had by holding the row, its ⋯ not drawn (a touch device's: the screen's kind,
+/// Whether what a row's ⋯ would offer is had by holding the row, its ⋯ not drawn (touch's: the native input,
 /// docs/architecture.md, what only a pointer's hover would show), else by its ⋯ under the pointer or a right click.
 /// The same for either hand on one screen: the boxes never follow the hand (hand_layout_wbtest).
 pub fn more_held() -> Bool {
-  touch_system()
+  (native_input() is Finger)
 }
 
 ///|

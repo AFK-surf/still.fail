@@ -1,7 +1,7 @@
 // The one way a model is chosen (ember web/src/ModelTriple.tsx, ModelTriple.css.ts; NewChat.kt's run picker said the
 // same): a control that says the model, the runtime (where it can still change and the model runs on more than one),
-// how hard it thinks and who runs it, in one line; pressed, its panel through the presenters (beside it on a computer,
-// a sheet on a touch device): the models by series (a filter over them when there are many), the runtimes, the
+// how hard it thinks and who runs it, in one line; pressed, its panel through the presenters (beside it with keyboard and mouse,
+// a sheet with touch): the models by series (a filter over them when there are many), the runtimes, the
 // efforts and the speed, side by side as the panel's width lets them; at its foot who runs it (the accounts in a
 // panel of their own, from it), 取消 and 确定. Its rows are the screen's (Theme::rows pick). Picks there are the
 // core's draft (`pick.set`) until 确定 (`pick.save`); a model another station has is borrowed first, asked in a dialog.

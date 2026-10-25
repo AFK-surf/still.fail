@@ -74,7 +74,7 @@ pub fn Flow::start(
   r.pace(if seed == 0 && emit_path() != "" { @core.AtOnce } else { pace_of(seed) }, strict=seed == 0)
   r.attach()
   // (on the screen it was made on: a phone's window's runs a phone's, Android's, pointed at by a finger; a wider one's
-  // the Mac's, by a mouse, and a computer's window made narrow (`platform` 0); the live run recording it again on a Mac
+  // the Mac's, by a mouse, and keyboard and mouse's window made narrow (`platform` 0); the live run recording it again on a Mac
   // plays that system too)
   let platform = match platform {
     Some(p) => p

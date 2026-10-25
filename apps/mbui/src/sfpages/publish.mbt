@@ -4,7 +4,7 @@
 // (`chat.publishPreview`, asked as it opens: nothing is kept until it is published) laid out as the chat lays out
 // messages, each attachment where its message has it, pressed anywhere to tick it or not (all at first: FileToggle's
 // label); a bar floating at the top, under the system's, with how much was hidden, 发布 and close. Published
-// (`chat.publish`), its link to copy in a small panel (the presenters': a sheet on a touch device short of Large); the
+// (`chat.publish`), its link to copy in a small panel (the presenters': a sheet with touch short of Large); the
 // chat's info lists it from then on. Which files an agent's words place, and those words as Markdown, are the core's
 // (the preview's `placed`, `md`). The frames draw it over their pages (publish_layer).
 

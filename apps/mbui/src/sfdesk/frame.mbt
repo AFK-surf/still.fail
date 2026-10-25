@@ -227,7 +227,7 @@ pub fn sidebar_toggle() -> Unit {
 /// opened as a book: @ui.system_fold's division): on the fold, the chats' list on one half and the page on the other
 /// (within the sidebar's least and most). None without one.
 fn side_on_fold() -> Double? {
-  if !@sf.touch_system() {
+  if @sf.native_input() is Mouse {
     return None
   }
   for d in @ui.system_fold().divisions {
@@ -535,7 +535,7 @@ pub fn frame(
   // whatever was chosen)
   wide.crowded = own &&
     !wide.tape &&
-    @sf.touch_system() &&
+    (@sf.native_input() is Finger) &&
     c.width - rail_w - side_on_fold().unwrap_or(wide.side_w) < page_beside_least
   side_crowded()
   // (on a fold standing upright, the sidebar ends on it while it is not folded away, but on the tape)

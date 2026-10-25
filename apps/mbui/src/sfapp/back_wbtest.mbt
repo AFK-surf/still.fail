@@ -1,5 +1,5 @@
 // Back, the shell's one way in every tier (sfbase's shell.mbt back_step, go_back; docs/architecture.md, the tiers'
-// table), on a touch device and on a computer: laid out Small a page popped, a place's top page back to the chats,
+// table), with touch and with keyboard and mouse: laid out Small a page popped, a place's top page back to the chats,
 // none at the chats'; on the tape the sidebar brought over from the chat, none with the sidebar in use; laid out Large
 // the chat popped to the list, a new chat beside it, and back from that none. A page's own back and close (its bar's back,
 // 取消, 关闭) through the shell too (go_back, close_page).

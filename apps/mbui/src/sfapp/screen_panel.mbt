@@ -2,7 +2,7 @@
 // mark and how long it has been seen; pressed, its figures under the round trip, 复制诊断) and 控制中心, what can be done
 // with the view: 画质 (how large a picture is asked for), 缩放 (the screen's own display scale, where its station changes it: Windows), 组合键 (the keys a phone has none of, or its own
 // system would keep: ⌘Tab, Alt+Tab, the Windows key…), sending files, 全屏 and 断开. Each opens through the library's
-// presenters: a sheet from a phone's foot, a small panel beside its button on a computer.
+// presenters: a sheet from a phone's foot, a small panel beside its button with keyboard and mouse.
 
 ///|
 /// A key sent with modifiers (mod_alt, mod_ctrl, mod_meta, mod_shift), as the screen's system names it: its name, its

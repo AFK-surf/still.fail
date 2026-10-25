@@ -28,7 +28,7 @@ pub fn level_color(level : String) -> Int64 {
 /// The chip (FillChip): its ground the neutral one, filled from the left as far as `fill` (0–100), grey while the
 /// level is ok, faintly the level's colour once it is not (the accent for `progress`); its figure in the text's colour
 /// while ok, in the level's once low, its `mark` before it a step quieter (halfway to the muted grey). Its words are
-/// the caption's, a screen's own (11 on a computer, 12 on a touch device), 600, tabular.
+/// the caption's, a screen's own (11 with keyboard and mouse, 12 with touch), 600, tabular.
 pub fn fill_chip(
   c : @ui.Ctx,
   fill : Int,
@@ -74,7 +74,7 @@ pub fn fill_chip(
 let chip_mark_share : Double = 0.5
 
 ///|
-/// Its words: the caption's (11 on a computer, 12 on a touch device: the screen's type), 600, on a line of 16.
+/// Its words: the caption's (11 with keyboard and mouse, 12 with touch: the screen's type), 600, on a line of 16.
 // kept across runs: a value (no field of it changes)
 let chip_text : @ui.TextStyle = @ui.text_style(size=Caption, weight=Semibold, leading=L4, wrap=false, narrow=@ui.text_patch(size=Xs))
 

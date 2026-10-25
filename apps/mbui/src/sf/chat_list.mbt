@@ -1,6 +1,6 @@
 // The chats' lists' sizes on the screen in force (docs/architecture.md: sizes, row heights and density are the
-// theme's, by the screen's kind): a computer's the web's sidebar (Sidebar.css.ts navSession…, RowPicture.css.ts,
-// ChatMark.css.ts), a touch device's the phone's home (mobile/Home.css.ts mChatRow…, Home.kt). The rows, their second
+// theme's, by the native input): keyboard and mouse's the web's sidebar (Sidebar.css.ts navSession…, RowPicture.css.ts,
+// ChatMark.css.ts), touch's the phone's home (mobile/Home.css.ts mChatRow…, Home.kt). The rows, their second
 // line, what stands at its end, the days' headings, the list's waiting and how its rows and panes move. One set of
 // pages draws them (sfpages' sidebar.mbt, chat_row.mbt, chat_mark.mbt, row_picture.mbt), taking them from here.
 
@@ -22,7 +22,7 @@ pub(all) struct ChatList {
   title : @ui.TextStyle
   title_unread : @ui.TextStyle
   last : @ui.TextStyle
-  /// a row with another under it (2 between on a computer, none on a touch device)
+  /// a row with another under it (2 between with keyboard and mouse, none with touch)
   more : @ui.Style
   /// in a side column, where its ground is rounded (list_row_in): how far over its second line's middle what stands at
   /// its end does, and how far in from the row's end it is, so its last face is concentric with the row's foot corner
@@ -48,7 +48,7 @@ pub(all) struct ChatList {
   foot_in : Double
   /// what stands over a sidebar's list, in a line with its rows (新建对话, 待处理, the search's field): how far in from
   /// the list's edge its ground is, its words from its ground, its mark, its height, its words: one set, so they stand
-  /// on one line (a computer's the web's navNew row: 8, 10, 16, 32, 13; a touch device's the phone's search field: 16,
+  /// on one line (keyboard and mouse's the web's navNew row: 8, 10, 16, 32, 13; touch's the phone's search field: 16,
   /// 12, 17, 38, 15)
   band_in : Double
   band_pad : Double
@@ -66,7 +66,7 @@ pub(all) struct ChatList {
   side_drop : @ui.Style
   /// a day's heading, a sidebar list's (navHeading; the phone's section header): over and under it (how far in:
   /// where its list stands, list_heading_in), and in a side column how far in from the line its rows stand on (a
-  /// computer's 8; a touch device's its rows' words')
+  /// computer's 8; touch's its rows' words')
   heading : @ui.Style
   heading_in : Double
   heading_words : @ui.TextStyle
@@ -76,7 +76,7 @@ pub(all) struct ChatList {
   waiting_noted : Int
   waiting_dense : Bool
   /// whether the screen has keys to find and choose with: ⌘K, ↑ ↓ and Enter in what is found, the one chosen shown so (a
-  /// computer's); else the search is at the list's top, scrolled to (a touch device's: Home.kt top)
+  /// computer's); else the search is at the list's top, scrolled to (touch's: Home.kt top)
   keys : Bool
   /// what search finds, a line each (Found)
   found : Found
@@ -87,7 +87,7 @@ pub(all) struct ChatList {
 }
 
 ///|
-/// A computer's (Sidebar.css.ts navRow, navSession: 54 high, 7 by 10 in, its words from the top, its corner a sidebar
+/// Keyboard and mouse's (Sidebar.css.ts navRow, navSession: 54 high, 7 by 10 in, its words from the top, its corner a sidebar
 /// row's; two lines 2 apart, its title 13 on 20, 500 while something in it is unread; its second line 12 on 18; faces
 /// 16, marks 12; navHeading 12 on 18, muted, 14 above and 4 under).
 // kept across runs: a value (no field of it changes)
@@ -144,7 +144,7 @@ pub let mouse_chat_list : ChatList = {
 }
 
 ///|
-/// A touch device's (mobile/Home.css.ts mChatRow: 66 high, 22 in on the left and 16 on the right, two lines in its
+/// Touch's (mobile/Home.css.ts mChatRow: 66 high, 22 in on the left and 16 on the right, two lines in its
 /// middle; its title 16 on 22, 600 while something in it is unread; its second line 14 on 20; faces 18, marks 14; the
 /// phone's section header 15 bold in ink, 20 in, 14 above and 6 under).
 // kept across runs: a value (no field of it changes)
@@ -184,7 +184,7 @@ pub let touch_chat_list : ChatList = {
   band_icon: 17.0,
   band_h: 38.0,
   band_words: @ui.text_style(size=Ui, color=Fg, wrap=false, w=Full),
-  // (in a side column as a computer's are, their grounds in and rounded, a finger's height and words)
+  // (in a side column as keyboard and mouse's are, their grounds in and rounded, a finger's height and words)
   side_list: @ui.style(w=Full, h=Full, px=room(touch_band_in)),
   side_row: @ui.css("row w=Full py=S2_5 gap=S2 align=ACenter").then(@ui.style(px=room(touch_band_pad), radius=side_row_radius)),
   side_hint: @ui.css("row w=Full py=S2_5 gap=S2 align=ACenter").then(@ui.style(px=room(touch_band_pad))),
@@ -215,9 +215,9 @@ let touch_band_in : Double = 16.0
 let touch_band_pad : Double = 12.0
 
 ///|
-/// Where a list stands: in a side column beside a page (the wide frame's sidebar, on the tape or a computer's) or a
+/// Where a list stands: in a side column beside a page (the wide frame's sidebar, on the tape or keyboard and mouse's) or a
 /// panel over it (⌘K's), or across the whole screen (a phone's home, its search). How far in its rows are and whether their grounds are rounded follow it,
-/// not the screen's kind (asked, 2026-10-25: a touch device's square rows, lit, in a tape's sidebar beside 新建对话's
+/// not the native input (asked, 2026-10-25: touch's square rows, lit, in a tape's sidebar beside 新建对话's
 /// round ground).
 pub(all) enum ListAt {
   Side
@@ -322,14 +322,14 @@ pub fn found_head_in(at : ListAt) -> @ui.Style {
 }
 
 ///|
-/// A touch device's chat row's height and its title's line (mobile/Home.css.ts mChatRow, mChatLine1).
+/// Touch's chat row's height and its title's line (mobile/Home.css.ts mChatRow, mChatLine1).
 pub let touch_list_row_h : Double = 66.0
 
 ///|
 let touch_title_h : Double = 22.0
 
 ///|
-/// A touch device's chat row's second line (meta: S5) and a face at its end.
+/// Touch's chat row's second line (meta: S5) and a face at its end.
 let touch_meta_h : Double = 20.0
 
 ///|
@@ -340,7 +340,7 @@ let touch_face_d : Double = 18.0
 pub let list_slide_ms : Double = 240.0
 
 ///|
-/// A computer's face at a row's end, its row's padding over its foot (row_in) and its second line's height (meta: S4_5).
+/// Keyboard and mouse's face at a row's end, its row's padding over its foot (row_in) and its second line's height (meta: S4_5).
 let mouse_face_d : Double = 16.0
 
 ///|
@@ -354,7 +354,7 @@ let mouse_meta_h : Double = 18.0
 /// each, its mark (an icon, an agent's maker, a station's mark), its first line (what it is, or the words found in it)
 /// with who, where and when at its end, and where it is under it (its chat, its line with the words) where it says one;
 /// the kinds under their headings; 全部结果 and 查看更多 in the link's ink; quiet words, the stations still answering.
-/// Its sizes the screen's: a computer's the web's ⌘K (Switcher.css.ts: rows 38, two lines 54, 13 and 12), a touch
+/// Its sizes the screen's: keyboard and mouse's the web's ⌘K (Switcher.css.ts: rows 38, two lines 54, 13 and 12), a touch
 /// device's the phone's search (mobile/Home.css.ts mFound…: rows 50, two lines 66, 15 and 14).
 pub(all) struct Found {
   /// a line's height as the list first takes it: one line, two, a heading, quiet words
@@ -395,7 +395,7 @@ pub(all) struct Found {
 }
 
 ///|
-/// A computer's (Switcher.css.ts: a row 38 high at least, 8 over and under and 12 in, its parts 10 apart, rounded as
+/// Keyboard and mouse's (Switcher.css.ts: a row 38 high at least, 8 over and under and 12 in, its parts 10 apart, rounded as
 /// its panel's corner leaves for it; chosen, on the words' 7%; its mark 20, icons 16, makers 18; 13 and 12; a heading
 /// 12 muted, 12 in, 10 over and 4 under).
 // kept across runs: a value (no field of it changes)
@@ -428,7 +428,7 @@ pub let mouse_found : Found = {
 }
 
 ///|
-/// A touch device's (mobile/Home.css.ts mFound…, Search.kt: a row 50 high, 66 with a line under, 22 in on the left
+/// Touch's (mobile/Home.css.ts mFound…, Search.kt: a row 50 high, 66 with a line under, 22 in on the left
 /// and 16 on the right, its parts 12 apart; its mark 20, icons and makers 18; 15 on 22 and 14 on 20; the phone's
 /// section header for a kind's heading; quiet words 22 in, 16 over and under).
 // kept across runs: a value (no field of it changes)
@@ -461,7 +461,7 @@ pub let touch_found : Found = {
 }
 
 ///|
-/// A line of what is found, as high as it is at least: a computer's 38, a touch device's 50 (66 with a line under).
+/// A line of what is found, as high as it is at least: keyboard and mouse's 38, touch's 50 (66 with a line under).
 let mouse_found_row_h : Double = 38.0
 
 ///|

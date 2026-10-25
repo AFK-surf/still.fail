@@ -207,7 +207,7 @@ pub fn open_mark_pick(
   mark_pick.asking = false
   mark_pick.reading = ""
   let serial = mark_pick.serial
-  // (a sheet of its own on a touch device, a dialog on a computer: the presenters'; its grid scrolls in what is left)
+  // (a sheet of its own with touch, a dialog with keyboard and mouse: the presenters'; its grid scrolls in what is left)
   @sf.panel(fill("android-settings.station.emojiTitle", [("name", name)]), from=Unanchored, tall=mark_tall, fn(c, close) {
     // (filling its share, it lays out its own sides: a page's room)
     c.box(style=mark_body, fn() { mark_pick_body(c, core, emoji, icon, glyph, picture, serial, set, close) }) |> ignore

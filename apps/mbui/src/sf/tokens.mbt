@@ -107,7 +107,7 @@ pub(all) struct Theme {
   t : Type
   /// what a row is on this screen (Rows)
   rows : Rows
-  /// how tall a control is at least (a field, a select): the web's 36 on a computer; on a touch device a finger's 44,
+  /// how tall a control is at least (a field, a select): the web's 36 with keyboard and mouse; with touch a finger's 44,
   /// what a press needs
   control_h : Double
   /// what a page's bar of keys is on this screen (Bars)
@@ -116,7 +116,7 @@ pub(all) struct Theme {
   round : Round
   /// what a list's item is on this screen (Items)
   items : Items
-  /// what a chats' list is on this screen (ChatList: its rows' sizes and density, by the screen's kind alone): not
+  /// what a chats' list is on this screen (ChatList: its rows' sizes and density, by the native input alone): not
   /// `items`, a list's one-line row (files, picks), but the chats' own anatomy (two lines, faces, the state line, the
   /// days' headings, its panes' motion)
   chat_list : ChatList
@@ -134,13 +134,13 @@ pub(all) struct Bars {
 
 ///|
 /// A row's roles on the screen in force (docs/architecture.md, the same on every screen and what differs): how high it
-/// is at least, its title's words and its note's, a tick's box, a short field and a switch in it. A touch device's: a
+/// is at least, its title's words and its note's, a tick's box, a short field and a switch in it. Touch's: a
 /// finger's (48; the phone's mRowTitle, its body's 15, the scale's Lg on 21, its mRowNote 13; a box 22, a field 72 by
-/// 36, a switch 44 by 26, its mSwitch); a computer's: a list row's (40; the web's SwitchRow title, 13 on 20, its note
+/// 36, a switch 44 by 26, its mSwitch); keyboard and mouse's: a list row's (40; the web's SwitchRow title, 13 on 20, its note
 /// 12; a box 18, a field 52 by 28, a switch 36 by 22).
 pub(all) struct Rows {
   least : @ui.Len
-  /// a row of a picker or a menu in a small panel at least: a computer's 32 (a menu's row), a finger's 44
+  /// a row of a picker or a menu in a small panel at least: keyboard and mouse's 32 (a menu's row), a finger's 44
   pick : Double
   title : @ui.TextStyle
   /// what is said under a row's title (its note), muted
@@ -156,8 +156,8 @@ pub(all) struct Rows {
 
 ///|
 /// A list's item on the screen in force (a folder's entries, the folders pinned): how high it is at least, its name's
-/// words and what is said of it (its size, its time: muted), its kind's mark. A touch device's: a finger's (48; the
-/// phone's mRow: its name the body's 15 on 20, mMeta 12 on 16, the mark 22); a computer's: the web's Drive row (44, with
+/// words and what is said of it (its size, its time: muted), its kind's mark. Touch's: a finger's (48; the
+/// phone's mRow: its name the body's 15 on 20, mMeta 12 on 16, the mark 22); keyboard and mouse's: the web's Drive row (44, with
 /// room for its ⋯; its name 13, its meta 12, KindIcon 20).
 pub(all) struct Items {
   least : Double
@@ -816,7 +816,7 @@ let narrow_control_h : Double = 44.0
 
 ///|
 /// What a thing pressed takes at least, by the screen (docs/architecture.md: touch targets 44 at least on a touch
-/// device): there, 44 by 44 at least, what it shows in its middle; on a computer nothing more. For a button.
+/// device): there, 44 by 44 at least, what it shows in its middle; with keyboard and mouse nothing more. For a button.
 pub fn finger_least() -> @ui.Style {
   if theme().narrow {
     finger_square
@@ -837,7 +837,7 @@ pub fn finger_least_h() -> @ui.Style {
 
 ///|
 /// How wide and high a button finger_least gives is (its side: what stands in a corner concentric with it): `web`'s
-/// on a computer, 44 at least on a touch device.
+/// with keyboard and mouse, 44 at least with touch.
 pub fn finger_side(web : Double) -> Double {
   if theme().narrow {
     dmax(web, narrow_control_h)
@@ -965,11 +965,19 @@ pub fn set_dark(dark : Bool?) -> Unit {
 }
 
 ///|
-/// Whether the system is a phone's or a tablet's (iOS, Android): its own theme at any size, its window's layout by the
-/// system's size classes (layout). How things answer the hand is not this: @ui.pointing.
-pub fn touch_system() -> Bool {
+/// The native input (原生操控: docs/architecture.md, the terms): touch (`Finger`) or keyboard and mouse (`Mouse`), as
+/// the app is started, the same the whole run: the theme's sizes (words, rows, what a press reaches), how what shows
+/// only under a pointer is reached, what Enter does, scroll bars, and with the screen's tier how the presenters show
+/// (a sheet or beside what opened it) and how search is opened (a field over the list or ⌘K). Said by the system for
+/// now (iOS, Android: touch; macOS, Windows: keyboard and mouse). How things answer the hand of the moment is not
+/// this: the current input, @ui.pointing.
+pub fn native_input() -> @ui.Pointing {
   let p = @ui.platform()
-  p == 1 || p == 2
+  if p == 1 || p == 2 {
+    Finger
+  } else {
+    Mouse
+  }
 }
 
 ///|
@@ -1016,7 +1024,7 @@ let layout_held : Ref[Layout?] = Ref(None)
 /// The layout by the screen alone (layout).
 fn screen_layout(width : Double) -> Layout {
   // a fold half open, its crease across: a chat over the crease, whatever its width (the one thing other than the width)
-  if touch_system() && @ui.system_tabletop() is Some(_) {
+  if (native_input() is Finger) && @ui.system_tabletop() is Some(_) {
     return Small
   }
   if width < medium_from {
@@ -1030,12 +1038,12 @@ fn screen_layout(width : Double) -> Layout {
 
 ///|
 /// The theme for this frame, by the screen (docs/architecture.md: the layout follows the screen, never the hand): on a
-/// touch device the phone's (its palette, its type a finger's size: Android's app, a tablet's too), on a computer the
-/// web's. Laid out Small the phone's on a computer too, as its pages are the phone's, which carry its palette in places
+/// touch the phone's (its palette, its type a finger's size: Android's app, a tablet's too), with keyboard and mouse the
+/// web's. Laid out Small the phone's with keyboard and mouse too, as its pages are the phone's, which carry its palette in places
 /// (sfapp messages.mbt `ink`) until they and the web's are one (the way there 4): call at the top of a view.
 pub fn begin(c : @ui.Ctx) -> Theme {
   let dark = dark_set.val.unwrap_or(false)
-  let narrow = touch_system() || layout(c.window_size().0) is Small
+  let narrow = (native_input() is Finger) || layout(c.window_size().0) is Small
   let p = match (narrow, dark) {
     (false, false) => wide_light
     (false, true) => wide_dark
@@ -1052,8 +1060,8 @@ pub fn begin(c : @ui.Ctx) -> Theme {
     bars: bars_drawn,
     round: if narrow { narrow_round } else { wide_round },
     items: if narrow { narrow_items } else { wide_items },
-    // (a computer's window made narrow keeps a computer's chats' list: the narrow anatomy at a computer's sizes)
-    chat_list: if touch_system() { touch_chat_list } else { mouse_chat_list },
+    // (keyboard and mouse's window made narrow keeps keyboard and mouse's chats' list: the narrow anatomy at keyboard and mouse's sizes)
+    chat_list: if native_input() is Finger { touch_chat_list } else { mouse_chat_list },
   }
   current.val
 }
@@ -1311,7 +1319,7 @@ pub fn ui_theme() -> @ui.Theme {
     // lighter ones: what a style's Muted and Subtle say there
     muted: if t.narrow { t.p.muted } else { base.muted },
     subtle: if t.narrow { t.p.subtle } else { base.subtle },
-    // the panes' grounds the palette's (a touch device's sidebar a step under its beige page, what is chosen a step
+    // the panes' grounds the palette's (touch's sidebar a step under its beige page, what is chosen a step
     // under that): what a style's Sidebar and Selected say, not mbui's narrow theme's, which has the web's
     sidebar: t.p.sidebar,
     selected: t.p.selected,
@@ -1482,7 +1490,7 @@ pub let custom_field_w : @ui.Len = Fixed(72.0)
 pub let custom_field_r : @ui.Radius = Exact(10.0)
 
 ///|
-/// The same field on a computer (ViewportSize.css.ts field: 52 wide).
+/// The same field with keyboard and mouse (ViewportSize.css.ts field: 52 wide).
 pub let custom_field_dense_w : @ui.Len = Fixed(52.0)
 
 // ---------------------------------------------------------------------------

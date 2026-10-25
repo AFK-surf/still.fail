@@ -154,7 +154,7 @@ test "Pin 文件夹 on a phone: which station, then the picker in a sheet from t
 
 ///|
 test "a wide folder's rows: the ⋯ of a row under the pointer, its menu beside it through the presenters; a right click on a row, its menu alone (Escape closes it); where there is no row, the folder's; a touch device's, no ⋯ (held, their menu)" {
-  // (a touch device: none on a row, whatever the hand)
+  // (touch: none on a row, whatever the hand)
   let touch = files_page_tester(1280.0, 800.0, 2)
   let (_, ty) = rightmost(touch, "季度数据.csv")
   assert_eq(touch.all(Button, label="更多操作").filter(fn(b) { b.rect.1 <= ty && b.rect.1 + b.rect.3 >= ty }).length(), 0)

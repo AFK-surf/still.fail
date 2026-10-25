@@ -131,12 +131,12 @@ let side_icon : Double = 16.0
 
 ///|
 /// A new chat (新建对话, ⌘N): where the shell has it (beside the list on the wide frame, risen on the stack), the cursor in
-/// its composer on any screen (its keyboard up on a touch device: composer_take_focus). On the tape
+/// its composer on any screen (its keyboard up with touch: composer_take_focus). On the tape
 /// its page comes over: a new chat is opened to be written in (pengxiao, 2026-10-25: opened from the sidebar in use,
 /// it showed beside it with the sidebar still in use).
 pub fn new_chat() -> Unit {
   open_page(NewChat)
-  // what it is opened for: the cursor in its words, its keyboard up on a touch device
+  // what it is opened for: the cursor in its words, its keyboard up with touch
   @sfpages.composer_take_focus()
   if wide.tape {
     wide.tape_ask = Some(Page)

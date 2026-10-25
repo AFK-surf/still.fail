@@ -4,6 +4,21 @@ The app is still.fail's Android app, rebuilt in mbui, which is in this repositor
 mbui and to the app is one pull request). mbui's own `mbui/AGENTS.md` applies here as well. In short, and what is
 particular to this app:
 
+## The terms (术语)
+
+Four things decide how the app looks and answers (docs/architecture.md, the terms):
+
+- **屏幕** (the screen): 小屏 / 中屏 / 大屏 (`@sf.layout`: `Small`, `Medium`, `Large`), plus the special screens (a fold
+  half open, crease across: a chat laid out as 小屏's; a phone used upright only). How the panes are arranged.
+- **原生操控** (the native input, `@sf.native_input()`): touch or keyboard and mouse, as the app was started, the same
+  the whole run. The theme's sizes, what shows only under a pointer, Enter, scroll bars; with the tier, sheets or
+  popovers and the search field or ⌘K.
+- **当前操控** (the current input, `@ui.pointing()`): touch or keyboard and mouse at the moment; it may change. How a
+  thing answers the hand alone, never what is shown, where or how big.
+- **页面宽窄** (a page's width, `@sf.look()`): 窄排法 / 宽排法, by the width of the box a page is drawn in.
+
+Write PR descriptions and anything said to people in these words: not 电脑版, 手机版, 桌面端, 移动端 or 触屏设备.
+
 ## The app, and the Kotlin one before it
 
 - Since 2026-10-23 this is the Android app that is developed: the beta channel's (the stable channel keeps the Kotlin
@@ -32,9 +47,9 @@ particular to this app:
 
 - `docs/architecture.md` is how the app is built; read it before changing a page or the frame. In short:
   - It is one app on every device (the user, 2026-10-24); there is no phone app and desktop app.
-  - Its layout follows the screen: its kind (`@sf.touch_system()`: a touch device or a computer) and its tier
-    (`@sf.layout`: Small, Medium, Large). How it answers the hand follows the input (`@ui.pointing()`), and only that:
-    the input never decides what is shown, where or how big (2026-10-25).
+  - Its layout follows the screen's tier (`@sf.layout`: Small, Medium, Large) and the native input
+    (`@sf.native_input()`). How it answers the hand follows the current input (`@ui.pointing()`), and only that: the
+    current input never decides what is shown, where or how big (2026-10-25).
   - Each page exists once, drawn into the box it gets in any tier with either input. It opens things by saying what,
     and shows menus and dialogs through the library's presenters. The shell arranges the panes per tier.
 - **Packages now, while the two page sets are merged:**
@@ -52,7 +67,7 @@ particular to this app:
   - A page opens what it opens with `@sfbase.open_page(page)` and a chat's detail with `@sfbase.open_detail(src, chat,
     tab)`: the shell's (sfbase's `Shell`) decides where it goes per layout. It never pushes onto `app.nav` itself.
   - Don't add a branch on the tier inside a page. A page that needs another arrangement asks its own
-    width. Nor on the screen's kind (`@sf.touch_system()`): what differs by the screen is the theme's, the library
+    width. Nor on the native input (`@sf.native_input()`): what differs by it is the theme's, the library
     parts', the presenters' and the shell's (docs/architecture.md, the same on every screen and what differs); a page
     that needs it asks the library for a part. Nor on `@ui.pointing()`: the hand reaches a page only through the
     library's primitives (`c.lit`, `c.menu_asked`, tips).

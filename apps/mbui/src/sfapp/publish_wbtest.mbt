@@ -1,4 +1,4 @@
-// Making a chat public on a phone (sfpages' publish.mbt, the same as a computer's; publish.mbt the info's links) over
+// Making a chat public on a phone (sfpages' publish.mbt, the same as keyboard and mouse's; publish.mbt the info's links) over
 // the fixture's chat: its sheet's links, the publishing over the screen with what a snapshot would hold, the attachments ticked, and a link revoked once asked.
 
 ///|

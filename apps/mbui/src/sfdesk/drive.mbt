@@ -872,7 +872,7 @@ pub fn drive_row(
   let more = c.id(key + "/menu/more")
   let busy = entry_busy(src, at, e.name)
   let live = !busy && !row.renaming
-  // (a touch device: no ⋯, a hold its menu, a folder's › saying a press goes in; a computer: its ⋯ under the pointer)
+  // (touch: no ⋯, a hold its menu, a folder's › saying a press goes in; a computer: its ⋯ under the pointer)
   let held_more = @sf.more_held()
   if live {
     c.cursor(id, Hand)

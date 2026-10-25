@@ -11,7 +11,7 @@
 // its own (a phone's, a tablet's, a laptop's, a desktop's, one typed) on the grey of a canvas, fitted and centred, with
 // its screen's corners; the ground dragged moves it, two fingers zoom it, a double tap fits it again. Its size is
 // chosen in one place on every screen: the bar's size key, its choices in the presenters' panel (a sheet on a phone,
-// beside the key on a computer), with 移动页面 (a finger then moves the page in place of using it: said on the size key,
+// beside the key with keyboard and mouse), with 移动页面 (a finger then moves the page in place of using it: said on the size key,
 // pressed it stops) and 适应 once moved. Changing its size is now and then, so it keeps none of a phone's room under
 // the page. A service being started again is said over the page, which loads anew once it is back. The size chosen is
 // kept on the device (the core's prefs `previewSizes`).
@@ -191,7 +191,7 @@ fn service_page_bar(
       })
     }
     // its size, on every screen: what it is laid out at (none: as the room is), its choices pressed open (the
-    // presenters' panel: a sheet on a phone, beside it on a computer); while a finger moves the page in place of using
+    // presenters' panel: a sheet on a phone, beside it with keyboard and mouse); while a finger moves the page in place of using
     // it, said here, in the accent with the move icon, and pressed it lets go of moving at once
     let sid = c.id("service/size")
     if c.clicked(sid) {
@@ -557,7 +557,7 @@ fn preset_of(v : Viewport?) -> String? {
 /// All the sizes (ViewportSize.tsx's panel), the same on every screen: as big as the preview, the presets, 自定义; a
 /// page laid out at a size of its own moved by a finger in place of used (移动页面: what the toolbar under the page had)
 /// and fitted again once moved or zoomed. Its rows a row's room, its words the theme's (Rows, its ui and meta: a touch
-/// device's a finger's and a size up), a sheet on a phone and beside the size key on a computer (the presenters').
+/// device's a finger's and a size up), a sheet on a phone and beside the size key with keyboard and mouse (the presenters').
 fn page_sizes(c : @ui.Ctx, key : String, close : () -> Unit) -> Unit {
   let t = @sf.theme()
   let r = t.rows
@@ -922,7 +922,7 @@ let service_restart_room : @ui.Style = @ui.css("w=Full h=Full pb=S5 align=ACente
 
 ///|
 /// How far the page's resources came, each of them (PreviewLoad.tsx's list), beside the ring that opened it: a
-/// sheet on a touch device short of Large.
+/// sheet with touch short of Large.
 fn service_load_panel(src : Source, station : String, port : Int, from : @sf.Anchor) -> Unit {
   let words = fn() {
     load_label((src.topic)("previewLoad", { "station": Json::string(station), "port": Json::number(port.to_double()) }).value)

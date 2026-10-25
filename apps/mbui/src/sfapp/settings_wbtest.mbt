@@ -186,7 +186,7 @@ test "a station renamed from its page's …: the new name is the station's" {
 
 ///|
 test "a sheet asking goes down on the sheet's spring, only drawn: its 保存 tapped meanwhile renames nothing" {
-  // (a touch device's: a computer's asks in a dialog, gone at once as it closes)
+  // (touch's: keyboard and mouse's asks in a dialog, gone at once as it closes)
   let t = settings_tester("profile:ws1/st1#cx", platform=2)
   let name = "ChatGPT 团队"
   assert_true(t.find(name) is Some(_))

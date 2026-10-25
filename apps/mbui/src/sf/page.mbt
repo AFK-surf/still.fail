@@ -5,7 +5,7 @@
 // rows on rounded cards; wider, as the web's desktop pages are (web/src/styles/pages.css.ts page, pageHead, list, card;
 // ui.tsx Section): their head, a column 760 wide at most in the pane's middle, sections with their titles, lists and
 // cards. The parts in it read that arrangement (`look`), never measure their own box: a section in a wide page's
-// 380 column is a wide one still. Their sizes are the theme's (a touch device's, a computer's). How they answer the
+// 380 column is a wide one still. Their sizes are the theme's (touch's, keyboard and mouse's). How they answer the
 // hand is the input's: what lights under a mouse lights under a finger's press, and a finger's press ripples.
 
 ///|
@@ -1087,7 +1087,7 @@ pub fn action(
 /// A button of a mark alone (a page's head's: rename, check again, ⋯), said to be `label`: as wide as the screen's
 /// hand needs (a finger's 44, a pointer's 32). True on the frame it is pressed.
 pub fn icon_action(c : @ui.Ctx, icon : String, key : String, label : String, disabled? : Bool = false) -> Bool {
-  if touch_system() {
+  if native_input() is Finger {
     icon_button(c, icon, key~, size=touch_target, icon_size=touch_glyph, round=true, label~, disabled~)
   } else {
     icon_button(c, icon, key~, label~, disabled~)

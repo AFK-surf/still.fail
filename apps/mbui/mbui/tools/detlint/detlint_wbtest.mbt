@@ -1639,12 +1639,12 @@ test "page-hand" {
 ///|
 test "page-screen" {
   let cfg = Config::new(@rjson.parse("{\"pages\": {\"roots\": [\"src/pages\"]}}"))
-  // a page reading the screen's kind; the library's and a page's test's not counted
+  // a page reading the native input; the library's and a page's test's not counted
   found(
     [
-      ("src/pages/row.mbt", "fn v() -> Unit {\n  let f = @sf.touch_system()\n}\n"),
-      ("src/sf/parts.mbt", "pub fn by_touch() -> Bool {\n  @sf.touch_system()\n}\n"),
-      ("src/pages/row_wbtest.mbt", "test \"t\" {\n  assert_true(@sf.touch_system())\n}\n"),
+      ("src/pages/row.mbt", "fn v() -> Unit {\n  let f = @sf.native_input()\n}\n"),
+      ("src/sf/parts.mbt", "pub fn by_touch() -> Pointing {\n  @sf.native_input()\n}\n"),
+      ("src/pages/row_wbtest.mbt", "test \"t\" {\n  assert_true(@sf.native_input())\n}\n"),
     ],
     "page-screen",
     1,

@@ -79,7 +79,7 @@ priv enum PlaceItem {
 /// The files' places of workspace `ws` (FilesNav's list; the phone's 文件, Files.tsx, is the same list), in the box it
 /// is given, scrolling: the person's own folders kept at hand (个人收藏), every station with a drive (its places under
 /// it, opened), the folders the stations pin for everyone (团队共享). Its rows a sidebar list's on this screen (the
-/// theme's: a touch device's a finger's list's, a size up, the box's width). `top`, `foot`: room kept at its ends for
+/// theme's: touch's a finger's list's, a size up, the box's width). `top`, `foot`: room kept at its ends for
 /// what is over it;
 /// `go`: a folder opened (the side in front, by default).
 pub fn files_places(

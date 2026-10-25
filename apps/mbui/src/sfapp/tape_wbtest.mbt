@@ -359,7 +359,7 @@ test "on the tape the page panel's corner is its own: the composer and its butto
   assert_eq(@sf.tape_edge.radius(), @sf.pane_corner)
   let panel = @sf.pane_corner
   // one line: a capsule (its half: a pill in the panel's corner keeps its own, as round as the panel's less the inset
-  // where its buttons are a computer's 32), its buttons round in its ends; the screen's buttons (a touch screen's
+  // where its buttons are keyboard and mouse's 32), its buttons round in its ends; the screen's buttons (a touch screen's
   // larger), the same shape
   let side = @sf.theme().round.side
   guard composer_corners(t) is Some((k, s, h)) else { fail("no composer") }
@@ -422,7 +422,7 @@ test "on a Mac's tape each panel's corners follow the window's where it stands a
     msg="no sidebar's panel with its left corners the window's",
   )
   assert_eq(t.corner_faults(), [])
-  // the page brought over, its composer taking the cursor (a computer's): a box, where both its foot corners follow
+  // the page brought over, its composer taking the cursor (keyboard and mouse's): a box, where both its foot corners follow
   // the panel's (6.5 in), its foot's concentric with each, its top's its own
   t.tap(650.0, 400.0)
   t.run_for(@sfdesk.side_move_ms * 2.0)

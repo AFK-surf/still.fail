@@ -1,6 +1,6 @@
-// 外观, one page in every frame (src/sfdesk appearance.mbt): at a width of each tier, on a touch device and on a
+// 外观, one page in every frame (src/sfdesk appearance.mbt): at a width of each tier, with touch and on a
 // computer; the faces a row opening 字体 on every screen; laid out wide the rail changed in place; the files dragged
-// into a chat a computer's alone. 字体 and 下方栏 one page each on every screen too.
+// into a chat keyboard and mouse's alone. 字体 and 下方栏 one page each on every screen too.
 
 ///|
 test "外观, at each width on either screen: 主题, 字体, 动画, 语言; 拖入 chat 的文件 on a computer; the rail's laid out wide; 提示归档 is 归档's" {
