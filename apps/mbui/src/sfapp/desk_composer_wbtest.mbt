@@ -346,8 +346,12 @@ test "the room a list keeps for the composer opened with one line is as tall as 
       t.run_for(opened - t.time())
     }
     t.draw()
-    // (12 over the box and 16 under it, as a chat's foot has it)
-    assert_eq(@motion.measured(t.ctx(), "composer/content"), Some(@sfpages.composer_open_room() - 12.0 - 16.0))
+    // (12 over the box and its foot's room under it, as a chat's foot has it)
+    let pane = t.ctx().width
+    assert_eq(
+      @motion.measured(t.ctx(), "composer/content"),
+      Some(@sfpages.composer_open_room(pane) - 12.0 - @sfpages.composer_foot_in(pane)),
+    )
   }
 }
 

@@ -1195,13 +1195,13 @@ fn composer_hold(draft : String, room : Double, ms : Double) -> Unit {
 /// one line, or as it was when words were sent from it until they let go of it (composer_hold).
 pub fn composer_room(c : @ui.Ctx, draft : String) -> Double {
   // (not laid out yet: a capsule's)
-  let foot = @motion.measured(c, "composer/foot").unwrap_or(capsule_room())
+  let foot = @motion.measured(c, "composer/foot").unwrap_or(capsule_room(c.width))
   // never less than it takes opened with one line where it is (its box that tall, what is round it as it is: the web's
   // --composer-room, max(the composer's height, an opened one-line composer's)): opened or let go, a capsule or a box,
   // the list keeps its words where they are; only a line more, a file, a quote, what is said over it move them
   let least = match @motion.measured(c, "composer/content") {
     Some(box) => foot - box + composer_open_box()
-    None => composer_open_room()
+    None => composer_open_room(c.width)
   }
   let now = dmax(foot, least)
   let held = @motion.anim(c, "composer/held/" + draft, 0.0, global=true).get()
@@ -1256,9 +1256,7 @@ pub fn chat_composer(c : @ui.Ctx, src : Source, ws : Workspace, r : ChatRef, v :
   }
   let width = composer_width(c.width)
   let capsule_in = if apart { composer_capsule_in(c.width) } else { (0.0, 0.0, 0.0) }
-  // (apart: the composer as far from its foot as from its sides, so it stands in the panel's corners and follows them:
-  // InnerOr)
-  let foot = c.box(style=if apart { chat_foot_apart() } else { chat_foot }, fn() {
+  let foot = c.box(style=chat_foot_top.then(@ui.style(pb=@sf.room_of(composer_foot_in(c.width)))), fn() {
     match v {
       Some(v) => chat_notices(c, src, r, v)
       None => ()
@@ -1386,19 +1384,36 @@ let composer_notice_button : @ui.TextStyle = @ui.text_style(size=Meta, color=Fg)
 let composer_notice_failed : @ui.TextStyle = @ui.text_style(size=Meta, color=Danger)
 
 ///|
-/// A chat's composer's place while it is a capsule: its buttons (the theme's round controls) 8 in, 12 over it and 16
-/// under it.
-fn capsule_room() -> Double {
-  @sf.theme().round.side + 2.0 * 8.0 + 12.0 + 16.0
+/// A chat's composer's place while it is a capsule at the foot of a pane `pane` wide: its buttons (the theme's round
+/// controls) 8 in, 12 over it and its foot's room under it (composer_foot_in).
+fn capsule_room(pane : Double) -> Double {
+  @sf.theme().round.side + 2.0 * 8.0 + 12.0 + composer_foot_in(pane)
 }
 
 ///|
-/// The room a chat's composer takes opened with one line at its pane's foot (its box, composer_open_box; 12 over and 16
-/// under it): what a list that keeps its words in place as the composer closes keeps clear at least (ChatHost.kt
-/// roomForList).
-pub fn composer_open_room() -> Double {
-  composer_open_box() + 12.0 + 16.0
+/// The room a chat's composer takes opened with one line at the foot of a pane `pane` wide (its box, composer_open_box;
+/// 12 over it and its foot's room under it, composer_foot_in): what a list that keeps its words in place as the
+/// composer closes keeps clear at least (ChatHost.kt roomForList).
+pub fn composer_open_room(pane : Double) -> Double {
+  composer_open_box() + 12.0 + composer_foot_in(pane)
 }
+
+///|
+/// How far a chat's composer stands from the foot of a pane `pane` wide (over the system's navigation bar, which is the
+/// page's): where it reaches across it, as far as from its sides (composer_side), the four sides of what it stands in
+/// alike (a phone's screen, a panel of its own: there in its corners, InnerOr); in a pane wider than it (a wide column,
+/// the composer 804 at most in its middle) the web's 16 (dock.css.ts).
+pub fn composer_foot_in(pane : Double) -> Double {
+  let d = composer_side()
+  if composer_width(pane) >= pane - 2.0 * d - 0.5 {
+    d
+  } else {
+    composer_foot_wide
+  }
+}
+
+///|
+let composer_foot_wide : Double = 16.0
 
 ///|
 /// Its box opened with one line (composer_open_room without what is over and under it): as composer_box_open lays it
@@ -1410,15 +1425,6 @@ fn composer_open_box() -> Double {
 }
 
 ///|
-// kept across runs: a value (no field of it changes)
-let chat_foot : @ui.Style = @ui.css("w=Full pt=S3 pb=S4 align=ACenter")
-
-///|
-/// (apart: as far from the panel's foot as from its sides, composer_side)
-fn chat_foot_apart() -> @ui.Style {
-  chat_foot_top.then(@ui.style(pb=@sf.room_of(composer_side())))
-}
-
-///|
+/// A chat's foot: 12 over the composer, its room under it its pane's (composer_foot_in).
 // kept across runs: a value (no field of it changes)
 let chat_foot_top : @ui.Style = @ui.css("w=Full pt=S3 align=ACenter")
