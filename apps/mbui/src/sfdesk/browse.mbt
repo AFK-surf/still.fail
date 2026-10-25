@@ -197,12 +197,7 @@ pub fn Browse::renaming(self : Browse) -> String? {
 ///|
 /// A folder's entries as its station said them (held), by its path under the root.
 fn Browse::held(self : Browse, src : Source, folder : String) -> Array[DvEntry] {
-  let t = (src.topic)("drive", {
-    "station": Json::string(self.at.station),
-    "root": Json::string(self.root),
-    "path": Json::string(folder),
-  })
-  items(t.value, "entries").map(dv_entry)
+  @sfbase.dv_entries(src, self.at.station, self.root, folder).unwrap_or([])
 }
 
 ///|

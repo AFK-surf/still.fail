@@ -137,27 +137,7 @@ pub fn history_steps(c : @ui.Ctx, src : Source, station : String, key : String) 
     None => ()
   }
   let io = history_only_io()
-  let all = loaded.filter(fn(i) { !io || !flag(Some(i), "work") })
-  let live = if io { [] } else { items(h, "live") }
-  let phase = field(h, "phase")
-  let going = live.length() > 0 || phase is Some(Object(_))
-  let rows : Array[StepsRow] = [Edge]
-  for i, item in all {
-    // the turn's rail runs on from an item to the next unless the next begins a turn of its own; from the last, to what
-    // is in flight
-    let rail = match all.get(i + 1) {
-      Some(next) => !(field(Some(next), "turn") is Some(Object(_)))
-      None => going
-    }
-    rows.push(Item(item, rail))
-  }
-  for i, l in live {
-    rows.push(Live(l, i < live.length() - 1 || phase is Some(Object(_))))
-  }
-  match phase {
-    Some(Object(_)) as p => rows.push(Phase(p.unwrap()))
-    _ => ()
-  }
+  let (all, rows) = steps_rows.get(lkey, "\{topic.version} \{io}", fn() { steps_rows_of(h, loaded, io) })
   let first = match all.get(0) {
     Some(i) => text(Some(i), "key")
     None => ""
@@ -238,6 +218,39 @@ pub fn history_steps(c : @ui.Ctx, src : Source, station : String, key : String) 
   })
   |> ignore
 }
+
+///|
+/// An agent's history's rows (`h`, its items `loaded`), 只看收发 (`io`) or not: the items shown, and the rows (the edge's,
+/// each item's, what is in flight, the phase it is in).
+fn steps_rows_of(h : Json?, loaded : Array[Json], io : Bool) -> (Array[Json], Array[StepsRow]) {
+  let all = loaded.filter(fn(i) { !io || !flag(Some(i), "work") })
+  let live = if io { [] } else { items(h, "live") }
+  let phase = field(h, "phase")
+  let going = live.length() > 0 || phase is Some(Object(_))
+  let rows : Array[StepsRow] = [Edge]
+  for i, item in all {
+    // the turn's rail runs on from an item to the next unless the next begins a turn of its own; from the last, to what
+    // is in flight
+    let rail = match all.get(i + 1) {
+      Some(next) => !(field(Some(next), "turn") is Some(Object(_)))
+      None => going
+    }
+    rows.push(Item(item, rail))
+  }
+  for i, l in live {
+    rows.push(Live(l, i < live.length() - 1 || phase is Some(Object(_))))
+  }
+  match phase {
+    Some(Object(_)) as p => rows.push(Phase(p.unwrap()))
+    _ => ()
+  }
+  (all, rows)
+}
+
+///|
+/// Each history's rows, by its list's key: worked out again as its topic changes or 只看收发 is turned (steps_rows_of).
+// kept across runs: what it keeps is let go of by a run anew and by reset (sfbase derived.mbt)
+let steps_rows : @sfbase.Memo[(Array[Json], Array[StepsRow])] = @sfbase.Memo::new()
 
 ///|
 /// About how tall a row stands before it is laid out.

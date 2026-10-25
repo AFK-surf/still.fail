@@ -44,7 +44,7 @@ test "a letterboxed strip waiting to load: what it waits on is its share of its 
       let here : @sfpages.MessageHere = {
         station: "ws1/st1",
         session: "s-c1",
-        view: chat_view(Json::object({})),
+        view: chat_view_made(Json::object({})),
         go: None,
         inline: true,
         gutter: 0.0,

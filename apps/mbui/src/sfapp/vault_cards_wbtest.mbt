@@ -124,7 +124,7 @@ fn ask_card(
   let here : @sfpages.MessageHere = {
     station: "ws1/st1",
     session: "s-c1",
-    view: chat_view(viewer),
+    view: chat_view_made(viewer),
     go: None,
     inline: false,
     gutter: 0.0,

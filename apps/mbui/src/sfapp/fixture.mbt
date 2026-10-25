@@ -629,7 +629,7 @@ fn fixture_topic(f : Fixture, name : String, params : Map[String, Json]) -> Topi
     }
     _ => value
   }
-  { value, error: None, version: f.version + @settings.fixture_version() }
+  { value, error: None, version: f.version + @settings.fixture_version() + fix_browse.changes }
 }
 
 ///|

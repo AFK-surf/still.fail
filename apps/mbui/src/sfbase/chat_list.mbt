@@ -220,10 +220,6 @@ pub fn reading_of(key : String) -> Reading {
 }
 
 ///|
-/// The views read, by chat: the version they were read at, the view and its list.
-pub let read_chats : Map[String, (Int, ChatView, Array[Entry])] = {}
-
-///|
 /// Where a chat was left this run (AppState.places, Chat.kt leave): the message at the top of what showed (its seq) and
 /// how far its top was below the list's (points); and, left at its end, the newest message then (else -1). It opens
 /// there again before where the core says (`at`): the chat's view can outlive its page (opened again before the core
@@ -280,26 +276,33 @@ pub fn entries_of(v : ChatView) -> Array[Entry] {
 }
 
 ///|
-/// Chat `r`'s view (chat_view), its list's entries and its topic's error: read again only as the core gives a new
-/// version, whoever asks for it in a frame (the page, its side panel, the frame round it).
+/// Chat `r`'s view (chat_view), its list's entries and its topic's error: worked out once for each version of it,
+/// whoever reads it in a frame (the page, its side panel, the frame round it, the chats kept: linger_tick).
 pub fn view_of_chat(src : Source, r : ChatRef) -> (ChatView?, Array[Entry], Json?) {
-  let topic = (src.topic)("chat", chat_params(r))
-  let key = r.station + "\u{1}" + r.session
-  match topic.value {
-    Some(Object(_) as v) =>
-      match read_chats.get(key) {
-        Some((version, view, list)) if version == topic.version =>
-          (Some(view), list, topic.error)
-        _ => {
-          let view = chat_view(v)
-          let list = entries_of(view)
-          read_chats[key] = (topic.version, view, list)
-          (Some(view), list, topic.error)
-        }
-      }
+  let (read, topic) = chat_read.read(src, chat_params(r))
+  match (read, topic.value) {
+    (Some((view, list)), Some(Object(_))) => (Some(view), list, topic.error)
     _ => (None, [], topic.error)
   }
 }
+
+///|
+/// Chat `r`'s view as a frame read it last (view_of_chat), if one did since the last: its topic not asked for (a chat
+/// whose page was never drawn, or is left, asks nothing of the core for it).
+pub fn chat_kept(r : ChatRef) -> ChatView? {
+  match chat_read.kept(chat_params(r)) {
+    Some((view, _)) => Some(view)
+    None => None
+  }
+}
+
+///|
+/// A chat's view and its list's entries, as the core's `chat` topic gives them.
+// kept across runs: what it keeps is let go of by a run anew and by reset (derived.mbt)
+let chat_read : Derived[(ChatView, Array[Entry])] = Derived::new("chat", fn(v) {
+  let view = chat_view(v)
+  (view, entries_of(view))
+})
 
 ///|
 /// An activity whose agent's turn ended stays this long, then fades (`linger_out_ms`), then is gone.
@@ -332,14 +335,16 @@ pub(all) struct Lingering {
 pub fn linger_tick(c : @ui.Ctx, src : Source, in_front~ : Bool) -> Unit {
   for rk, rd in readings {
     // every chat kept whose data the page read: its activities linger on the time that goes by, its page shown or not
-    if !read_chats.contains(rk) {
-      continue
-    }
+    // (not one a message of it drawn elsewhere keeps: its topic never asked for)
     let (station, session) = match rk.find("\u{1}") {
       Some(i) => (rk.view(end_offset=i).to_owned(), rk.view(start_offset=i + 1).to_owned())
       None => continue
     }
-    match view_of_chat(src, { station, session, title: "", station_name: "" }).0 {
+    let r : ChatRef = { station, session, title: "", station_name: "" }
+    if chat_kept(r) is None {
+      continue
+    }
+    match view_of_chat(src, r).0 {
       Some(v) => chat_tick(c, rk, rd, v, shown=rd.shown_frame >= c.frame_number() - 1, in_front~)
       None => ()
     }

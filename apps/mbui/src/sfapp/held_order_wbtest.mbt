@@ -7,7 +7,7 @@ fn held_view(ids : Array[String]) -> @sfbase.ChatsView {
   let items = ids.map(fn(id) {
     Json::object({ "station": Json::string("s"), "id": Json::string(id), "session": Json::string(id), "title": Json::string(id) })
   })
-  @sfbase.chats_view(Json::object({ "days": Json::array([Json::object({ "label": Json::string("今天"), "items": Json::array(items) })]) }))
+  @sfbase.chats_view_made(Json::object({ "days": Json::array([Json::object({ "label": Json::string("今天"), "items": Json::array(items) })]) }))
 }
 
 ///|

@@ -535,25 +535,10 @@ fn job_detail(c : @ui.Ctx, src : Source, station : String, job : Json?) -> Unit 
 /// while it is scrolled there.
 fn job_output(c : @ui.Ctx, src : Source, station : String, id : String) -> Unit {
   let t = @sf.theme()
-  let log = (src.topic)("jobLog", {
-    "station": Json::string(station),
-    "job": Json::string(id),
-    "lines": Json::number(job_output_lines),
-  }).value
   c.box(style=job_output_box, fn() {
-    match log {
-      Some(Object(_)) as v => {
-        let words = text(v, "text")
-        if words == "" {
-          c.text(@sf.t("web-main.jobs.noOutput"), style=job_output_none) |> ignore
-          return
-        }
-        let runs = items(v, "runs")
-        let lines = if runs.length() > 0 {
-          term_lines(runs, t.p.text, t.dark)
-        } else {
-          words.split("\n").map(fn(l) { [@ui.span(l.to_owned(), mono=true)] }).to_array()
-        }
+    match @sfbase.job_output_lines(src, station, id, job_output_lines, t.p.text, t.dark) {
+      Some([]) => c.text(@sf.t("web-main.jobs.noOutput"), style=job_output_none) |> ignore
+      Some(lines) =>
         c.list(
           "jobs-tab/output/" + id,
           lines.length(),
@@ -562,8 +547,7 @@ fn job_output(c : @ui.Ctx, src : Source, station : String, id : String) -> Unit 
           stick_end=true,
         )
         |> ignore
-      }
-      _ => @sf.wait_line(c, "", key="jobs-tab/output/" + id)
+      None => @sf.wait_line(c, "", key="jobs-tab/output/" + id)
     }
   })
   |> ignore
