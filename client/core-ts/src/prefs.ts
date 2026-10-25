@@ -261,6 +261,8 @@ export function device(data: Data, facts: unknown): void {
   // `client`: an app of its own that runs this core, named so (still.fail mbui), told apart from still.fail's own
   // where devices are listed and approved; else the brand's
   const client = said("client").slice(0, 40);
+  if (client !== "") told.client = client;
+  brand.setOwnApp(client === "");
   const name = client !== "" ? client : brand.name();
   let deviceName: string;
   if (app === "android") deviceName = tr(lang, "core-misc.device.android", { brand: name, more: withMore(model) });
@@ -285,6 +287,11 @@ function withLang(prefs: Map_): Lang {
 export function followLang(data: Data): void {
   const lang = kept(data).lang;
   if (typeof lang === "string" && follows()) setCurrent(fromLocale(lang));
+}
+
+/// The brand as the device last said what app it is (at start, till it says so again): still.fail's, or one of its own.
+export function followApp(data: Data): void {
+  brand.setOwnApp(deviceSaid(data, "client") === null);
 }
 
 function deviceSaid(data: Data, field: string): string | null {

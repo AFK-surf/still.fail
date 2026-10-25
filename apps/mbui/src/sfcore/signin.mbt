@@ -56,7 +56,8 @@ pub fn start() -> Bool {
   // a screen is settled only once what it asked of the core is in (mbui's effect.mb outside)
   @core.track(what => @ui.runtime().outside_start(what), t => @ui.runtime().outside_end(t))
   let cloud = @ui.env("MBUI_CLOUD")
-  // (the beta app's core says so: its newer builds from the beta feed, Host::beta; MBUI_BETA=1, its build's env)
+  // (a core on the test channel says so, Host::beta: its build's env MBUI_BETA=1, youdid.wtf's and still.fail mbui's,
+  // each a build of every commit; still.fail cloud gives it the test channel's changelog and what is out there)
   let beta = @ui.env("MBUI_BETA") == "1"
   let started = if cloud != "" {
     @hostapi.log("still.fail cloud at " + cloud)

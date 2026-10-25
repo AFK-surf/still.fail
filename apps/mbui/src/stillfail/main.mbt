@@ -378,8 +378,9 @@ fn main {
   }
   // where newer builds of the app come from (src/sfapp/updates.mbt): still.fail cloud's feed MBUI_UPDATE_FEED (the
   // local cloud's in e2e); none by default, as this build ships apart from still.fail's own (its release elsewhere).
-  // A beta's core (MBUI_BETA=1) asks the feed's beta, <feed>/beta, itself: the beta app's feed is android, not
-  // android/beta (which asked android/beta/beta, a 404)
+  // youdid.wtf's core (MBUI_BETA=1, still.fail's own: MBUI_OWN=1) asks the feed's beta, <feed>/beta, itself: its feed
+  // is android, not android/beta (which asked android/beta/beta, a 404); an app of its own on the test channel
+  // (still.fail mbui's: MBUI_BETA=1 alone) asks its feed as named (android/mbui)
   match @ui.env("MBUI_UPDATE_FEED") {
     "" => ()
     feed => {

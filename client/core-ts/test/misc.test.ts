@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { doing, epochMs, tasksOf, told } from "../src/activity.ts";
 import { activity as present } from "../src/history.ts";
-import { name, setTestChannel, STABLE, TEST } from "../src/brand.ts";
+import { name, setOwnApp, setTestChannel, STABLE, TEST, testApp } from "../src/brand.ts";
 import { Core } from "../src/core.ts";
 import { Doing } from "../src/doing.ts";
 import { conformTy } from "../src/conform.ts";
@@ -125,6 +125,15 @@ test("the_name_is_the_channels", () => {
   assert.equal(name(), "youdid.wtf");
   setTestChannel(false);
   assert.equal(name(), "still.fail");
+});
+
+test("an_app_of_its_own_on_the_test_channel_calls_it_still_fail", () => {
+  setTestChannel(true);
+  setOwnApp(false);
+  assert.deepEqual([name(), testApp()], ["still.fail", false]);
+  setOwnApp(true);
+  assert.deepEqual([name(), testApp()], ["youdid.wtf", true]);
+  setTestChannel(false);
 });
 
 test("a_core_takes_its_channel_from_its_host", async () => {

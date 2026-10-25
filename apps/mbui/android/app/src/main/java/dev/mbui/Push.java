@@ -128,7 +128,7 @@ final class Push {
         return v.isEmpty() ? "https://app.still.fail" : v;
     }
 
-    /** Whether the app's core is a beta's (sfcore start: MBUI_BETA=1, the beta app's build). */
+    /** Whether the app's core is a beta's (sfcore start: MBUI_BETA=1, the beta app's build and still.fail mbui's). */
     private static boolean beta(Context c) {
         return env(c, "MBUI_BETA").equals("1");
     }

@@ -194,6 +194,7 @@ export class Core {
       inner.data.onNote = () => inner.status.setDb(inner.data.notes);
       yield* inner.data.open(inner.accounts.list().map((a) => a.sub));
       prefs.followLang(inner.data);
+      prefs.followApp(inner.data);
       // What goes out is what the clients' types say (client/core-ts/src/shapes/schema.ts).
       store.setShaped();
       store.setHeld((topic) => topic.topic === "draft"
