@@ -1873,7 +1873,8 @@ pub fn Viewer::image_stage(self : Viewer, c : @ui.Ctx, src : Source, stage : Int
     None => ()
   }
   let sx = strip.get()
-  if !strip.moving() {
+  // (let go at the end its way declared as it set out)
+  if strip.over() {
     pv_strip.leaving = None
   }
   let width = c.width + slide_gap

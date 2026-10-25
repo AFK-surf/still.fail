@@ -397,7 +397,8 @@ pub fn flight_frame(c : @ui.Ctx, chat : String) -> Unit {
     Some(f) => {
       let turns = turns_of(f.turns)
       let waited = @kit.after(c, "flight/wait", !f.placed, flight_wait_ms)
-      let landed = f.placed && !f.way.moving()
+      // (landed: their way at the end it declared as it set out)
+      let landed = f.placed && f.way.over()
       if (!f.placed && waited) || landed {
         send_flight.val = None
         // their turn over: where they were declared to land (or now, never having set out)

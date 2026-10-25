@@ -232,10 +232,6 @@
       "src/sfbase/viewer.mbt": 1
     },
     "motion-read": {
-      "src/sfbase/chat_list.mbt": 1,
-      "src/sfbase/emit.mbt": 3,
-      "src/sfbase/flight.mbt": 1,
-      "src/sfbase/viewer.mbt": 1,
       "src/sfreplay/steps.mbt": 1
     }
   },
