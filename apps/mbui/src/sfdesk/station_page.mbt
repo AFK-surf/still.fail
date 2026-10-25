@@ -248,7 +248,7 @@ fn station_menu(c : @ui.Ctx, core : Core, here : Here, s : Json?) -> Unit {
 }
 
 ///|
-/// The parts to pick from (Body's Segmented): as wide as their names, at the column's start, 24 over what they show.
+/// The parts to pick from (Body's Segmented): as wide as their names, at the column's start.
 fn station_parts_choice(c : @ui.Ctx, address : String) -> Unit {
   let at = match @settings.station_parts.get(address) {
     Some(p) => station_part_names.search(p).unwrap_or(0)
@@ -931,9 +931,9 @@ let st_facts_line : Double = 4.0
 let st_fact_busy : @ui.TextStyle = st_fact.then(@ui.text_style(color=AccentText))
 
 ///|
-/// The parts to pick from (parts: 24 over what they show).
+/// The parts to pick from, as far over what they show as the page's blocks are (page_choice's).
 // kept across runs: a value (no field of it changes)
-let st_parts : @ui.Style = @ui.css("row w=Full pb=S6")
+let st_parts : @ui.Style = @ui.css("row w=Full")
 
 ///|
 /// A section's count beside its title (titleCount: 8 after it, 500, subtle).

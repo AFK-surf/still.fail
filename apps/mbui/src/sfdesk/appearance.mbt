@@ -37,17 +37,14 @@ fn appearance_page(c : @ui.Ctx, core : Core, frame : PageFrame) -> Unit {
         )
       })
     },
-    // (12 under the theme's switch, the faces' row on a card of its own: SettingsHome.kt, mobile FontRow; a chat as
-    // they set it and their list are a page's own, on every screen)
+    // (the faces' row on a card of its own: SettingsHome.kt, mobile FontRow; a chat as they set it and their list are
+    // a page's own, on every screen)
     fn() {
-      c.box(style=appearance_fonts_room, fn() {
-        @sf.group(c, fn() {
-          if @sf.link_row(c, "appearance/fonts", @sf.t("web-pages.appearance.fonts.title"), value=fonts_said(prefs)) {
-            (core.push)(Fonts)
-          }
-        })
+      @sf.group(c, fn() {
+        if @sf.link_row(c, "appearance/fonts", @sf.t("web-pages.appearance.fonts.title"), value=fonts_said(prefs)) {
+          (core.push)(Fonts)
+        }
       })
-      |> ignore
     },
     fn() {
       section(@sf.t("web-pages.appearance.motion.title"), @sf.t("web-pages.appearance.motion.description"), true, fn() {
@@ -109,11 +106,6 @@ fn fonts_said(prefs : Json?) -> String {
 /// A choice's line: what it holds as wide as itself, at its start.
 // kept across runs: a value (no field of it changes)
 let appearance_line : @ui.Style = @ui.css("row w=Full align=ACenter")
-
-///|
-/// The faces' row, 12 under the theme's choice.
-// kept across runs: a value (no field of it changes)
-let appearance_fonts_room : @ui.Style = @ui.css("w=Full pt=S3")
 
 ///|
 /// 字体's page, one for every frame (mobile/Fonts.tsx FontScreen, opened from 外观's row narrow): what it is for under
