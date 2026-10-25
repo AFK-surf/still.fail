@@ -648,7 +648,7 @@ fn composer_extras(c : @ui.Ctx, src : Source, spec : ComposerSpec, w : Writing) 
   })
   let rest = w.files.filter(fn(f) { !own.contains(text(Some(f), "name")) })
   if rest.length() > 0 {
-    c.box(style=files_flow, flow=true, fn() {
+    c.box(style=files_flow, flow=true, line_gap=files_lines, fn() {
       for f in rest {
         composer_file(c, src, spec, w, f)
       }
@@ -802,12 +802,9 @@ fn composer_picture(
   let x = c.id(key + "/remove")
   let again = c.id(key + "/retry")
   @sf.tip(c, key + "/tip", thumb, if error != "" { error } else { name })
-  // on a touch system its remove hangs over its corner, out of it (Composer.kt): a fingertip's reach round it (44)
-  // takes little of the picture, a tap on which opens it; on a computer it sits in the corner, as the web's
-  let finger = @sf.touch_system()
-  // (its picture's box, built in what holds its reach)
+  // (its picture's box, built in what keeps room at its end for its remove's reach)
   let tile = Ref(-1)
-  c.box(style=if finger { thumb_reach } else { thumb_room }, fn() {
+  c.box(style=thumb_room, fn() {
     tile.val = c.box(style=if error != "" { thumb_failed } else { thumb_box }, id=thumb, fn() {
       c.image(picture, w=Px(thumb_side), h=Px(thumb_side), fit=FitCover) |> ignore
       if pending {
@@ -822,12 +819,14 @@ fn composer_picture(
         |> ignore
       }
     })
+    // its remove hung over its top right corner, its centre on the corner's curve, solid (part of it is on the box's
+    // ground), on every screen: on the corner, not in it, no corner of its own to keep (docs/ui-panels.md)
     c.layer(fn() {
-      c.box(style=if finger { thumb_x_out } else { thumb_x_at }, fn() {
-        c.box(style=thumb_x, id=x, tx=if finger { thumb_x_reach } else { 0.0 }, fn() {
-          @sf.icon(c, "close", size=thumb_x_icon, color=on_veil) |> ignore
+      c.box(style=thumb_x_at, fn() {
+        let b = c.box(style=thumb_x, id=x, ty=-thumb_x_reach, fn() {
+          @sf.icon(c, "close", size=thumb_x_icon, color=@sf.theme().p.canvas) |> ignore
         })
-        |> ignore
+        c.semantics(b, Button, id=x, label=@sf.t("web-main.file.remove", args=[("name", name)]))
       })
       |> ignore
     })
@@ -1030,9 +1029,13 @@ let round_hot : @ui.Style = @ui.css("bg=Hover")
 let quotes_column : @ui.Style = @ui.css("w=Full gap=S1_5")
 
 ///|
-/// The files waiting (composerFiles: wrapped, 6 apart, flush with the box's padding).
+/// The files waiting (composerFiles: wrapped, 6 apart, flush with the box's padding); its lines further apart by the
+/// reach of a picture's ✕ above its tile, so one on a later line keeps 6 from the line over it.
 // kept across runs: a value (no field of it changes)
 let files_flow : @ui.Style = @ui.css("row w=Full gap=S1_5")
+
+///|
+let files_lines : Double = @ui.Space::px(S1_5) + thumb_x_reach
 
 ///|
 /// A picture waiting: 56 square, the files' corner (MESSAGE_FILE_CORNER), clipped; failed, edged red.
@@ -1049,29 +1052,34 @@ let thumb_failed : @ui.Style = thumb_box.then(@ui.css("border=B2 border_color=Da
 let thumb_veil : @ui.Style = @ui.css("w=Full h=Full bg=Veil align=ACenter justify=JCenter")
 
 ///|
-/// A picture's ✕ (composerThumbRemove): 20 round at its top right corner, 4 in, on the veil.
-// kept across runs: a value (no field of it changes)
-let thumb_x_at : @ui.Style = @ui.css("w=Full pt=S1 pr=S1 align=AEnd")
+/// A picture's ✕: 20 round over its top right corner, its centre on the corner's curve where it turns 45° (the user,
+/// 2026-10-17: on the corner, not in it), reaching as far past its top as past its right edge; solid, the ink's with the
+/// page's ✕ on it, as part of it is on the box's ground.
+let thumb_x_side : Double = 20.0
 
 ///|
-/// With a finger: the picture 6 down, its remove over its top corner, 6 past its edge.
-// kept across runs: a value (no field of it changes)
-let thumb_reach : @ui.Style = @ui.css("pt=S1_5")
+let thumb_x_reach : Double = @sf.on_corner(thumb_corner, thumb_x_side)
 
 ///|
+/// What holds a picture and its ✕: the room for the ✕'s reach at its end, the gap after it the row's (Composer.kt's
+/// `6.dp + PictureRemoveOut`), never over what comes next; the ✕ at its top right, lifted by its reach.
 // kept across runs: a value (no field of it changes)
-let thumb_room : @ui.Style = @ui.css("")
-
-///|
-// kept across runs: a value (no field of it changes)
-let thumb_x_out : @ui.Style = @ui.css("w=Full align=AEnd")
-
-///|
-let thumb_x_reach : Double = 6.0
+let thumb_room : @ui.Style = @ui.style(w=Fixed(thumb_side + thumb_x_reach))
 
 ///|
 // kept across runs: a value (no field of it changes)
-let thumb_x : @ui.Style = @ui.css("w=S5 h=S5 radius=Full bg=Veil align=ACenter justify=JCenter")
+let thumb_x_at : @ui.Style = @ui.css("w=Full align=AEnd")
+
+///|
+// kept across runs: a value (no field of it changes)
+let thumb_x : @ui.Style = @ui.style(
+  w=Fixed(thumb_x_side),
+  h=Fixed(thumb_x_side),
+  radius=Full,
+  bg=Fg,
+  align=ACenter,
+  justify=JCenter,
+)
 
 ///|
 /// What went wrong (chatError: under the box, 32 in, 10 under it; fieldError's red).

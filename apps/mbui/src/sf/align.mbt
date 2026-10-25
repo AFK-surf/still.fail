@@ -13,6 +13,8 @@
 // 5. Centred while placed over another (a layer): `centred`, by its alignment, not a margin.
 // 6. Laid over one another on purpose (faces in a stack): `overlap(x)`.
 // 7. Room above taken back by a negative margin: never; the parent's room is changed instead.
+// 8. A round mark hung on another's corner (a picture's remove button): its centre on that corner's curve, reaching
+//    past both its edges alike (`on_corner`); on the corner, not in it, so no corner of its own to keep concentric.
 //
 // still.fail's corner rule (docs/ui-panels.md, "所有带圆角的东西"): what lies in a rounded container's corner stands as
 // far from its two edges, and its own corner is concentric with the container's. Corners here are mbui's smooth ones
@@ -46,6 +48,14 @@ pub fn inner_corner(outer : Double, pad : Double) -> Double {
 /// container is drawn round it).
 pub fn around(inset : Double, inner : Double) -> Double {
   inset + inner
+}
+
+///|
+/// How far a round mark `size` across reaches past both edges of the box it hangs on, its centre on that box's corner
+/// of `corner` where the curve turns 45° (@ui.smooth_middle; Composer.kt PictureRemoveOut): a picture's remove button
+/// over its top right corner.
+pub fn on_corner(corner : Double, size : Double) -> Double {
+  size / 2.0 - @ui.smooth_middle(corner)
 }
 
 ///|
