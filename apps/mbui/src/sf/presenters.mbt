@@ -205,7 +205,8 @@ pub fn panel_bleed() -> @ui.Style {
 }
 
 ///|
-/// The room a panel leaves at its sides while its body is drawn (the presenters set it): what panel_bleed reaches across.
+/// The room a panel leaves at its sides while its body is drawn (the presenters set it): what panel_bleed reaches across,
+/// and what a row's ground reaches out across, its words on the column's line (choice_row).
 let panel_sides_in : Ref[Double] = { val: 0.0 }
 
 ///|
@@ -219,6 +220,28 @@ pub fn panel_held() -> Bool {
 ///|
 // kept across runs: said by the presenters while a panel's body is drawn
 let panel_held_now : Ref[Bool] = { val: false }
+
+///|
+/// A sheet's column of its own (a sheet a page lays out itself: the settings' adding people, joining a station): what
+/// it holds as far in from its sides as a sheet's words are (sheet_panel_sides), its rows' grounds reaching out across
+/// that room, their words on the column's line, as in a sheet the presenters lay out.
+pub fn sheet_column(c : @ui.Ctx, body : () -> Unit) -> Unit {
+  let was = panel_sides_in.val
+  panel_sides_in.val = sheet_panel_sides
+  c.box(style=sheet_column_box, body) |> ignore
+  panel_sides_in.val = was
+}
+
+///|
+// kept across runs: a value (no field of it changes)
+let sheet_column_box : @ui.Style = @ui.css("w=Full px=S5")
+
+///|
+/// How far a row's ground reaches out of the column it stands in, its words on the column's line: as far as its own
+/// words are in from its ground (`own`), no further than the room the panel leaves at its sides (none outside a panel).
+fn row_reach(own : Double) -> Double {
+  dmin(panel_sides_in.val, own)
+}
 
 ///|
 /// The one presented last (what `close_presented_of` is given to close it).

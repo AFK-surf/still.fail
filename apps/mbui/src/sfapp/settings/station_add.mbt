@@ -194,7 +194,7 @@ fn join_existing(c : @ui.Ctx, core : Core, here : Here, rows : Array[Json], load
     c.box(w=Fill(1.0), h=Fill(1.0), fn() {
       let blocks : Array[() -> Unit] = [
         fn() {
-          c.box(w=Fill(1.0), padx=20.0, pb=10.0, fn() {
+          c.box(w=Fill(1.0), pb=10.0, fn() {
             c.text(tr("web-pages.settings.stations.existingLead"), size=t.t.meta, color=t.p.muted, w=Fill(1.0), line=20.0)
             |> ignore
           })
@@ -203,7 +203,7 @@ fn join_existing(c : @ui.Ctx, core : Core, here : Here, rows : Array[Json], load
       ]
       if rows.length() == 0 {
         blocks.push(fn() {
-          c.box(w=Fill(1.0), padx=20.0, pb=10.0, fn() {
+          c.box(w=Fill(1.0), pb=10.0, fn() {
             if loading {
               wait_line(c, tr("common.reading"))
             } else {
@@ -241,7 +241,7 @@ fn join_existing(c : @ui.Ctx, core : Core, here : Here, rows : Array[Json], load
         })
       }
       blocks.push(fn() {
-        c.box(w=Fill(1.0), padx=20.0, pt=10.0, gap=10.0, fn() {
+        c.box(w=Fill(1.0), pt=10.0, gap=10.0, fn() {
           c.text(tr("web-pages.settings.stations.softIsolation"), size=t.t.caption, color=t.p.muted, w=Fill(1.0), line=17.0)
           |> ignore
           if adding.error != "" {
@@ -250,7 +250,8 @@ fn join_existing(c : @ui.Ctx, core : Core, here : Here, rows : Array[Json], load
         })
         |> ignore
       })
-      scroll_page(c, "join-station/" + adding.serial.to_string(), blocks)
+      // (in the sheet's column, its rows reaching out across its sides: @sf.sheet_column)
+      scroll_page(c, "join-station/" + adding.serial.to_string(), blocks.map(fn(b) { fn() { @sf.sheet_column(c, b) } }))
     })
     |> ignore
     c.box(dir=Row, w=Fill(1.0), padx=20.0, pt=10.0, pb=24.0, gap=8.0, justify=JEnd, fn() {

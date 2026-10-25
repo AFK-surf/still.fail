@@ -717,7 +717,7 @@ pub fn open_add_people(_core : Core, here : Here, view : Json?) -> Unit {
       |> ignore
     })
     c.box(w=Fill(1.0), h=Fill(1.0), fn() {
-      scroll_page(c, key, blocks.map(fn(b) { fn() { c.box(w=Fill(1.0), padx=20.0, pb=10.0, fn() { b() }) |> ignore } }))
+      scroll_page(c, key, blocks.map(fn(b) { fn() { @sf.sheet_column(c, fn() { c.box(style=sheet_block, b) |> ignore }) } }))
     })
     |> ignore
   })

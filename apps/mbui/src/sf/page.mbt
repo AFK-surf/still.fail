@@ -884,8 +884,16 @@ pub fn choice_row(
       icon(c, "check", size~, color=th.p.accent) |> ignore
     }
   }
+  // (in a panel's column, its ground reaching out across the room the panel leaves, its words on the column's line:
+  // row_reach; on a card, the card's own)
+  let reach = if in_card.val > 0 {
+    0.0
+  } else {
+    row_reach(if narrow { card_pad - corner_inset } else { desk_list_out })
+  }
+  let line = if reach > 0.0 { @ui.style(mx=room(-reach), px=room(reach)) } else { no_reach }
   let b = if narrow {
-    c.box(style=narrow_row(goes), id=if goes { id } else { 0 }, fn() {
+    c.box(style=narrow_row(goes).then(line), id=if goes { id } else { 0 }, fn() {
       match body {
         Some(f) => f()
         None => words()
@@ -896,7 +904,7 @@ pub fn choice_row(
       }
     })
   } else {
-    c.box(style=if goes { desk_list_link } else { wide_list_row }, id=if goes { id } else { 0 }, fn() {
+    c.box(style=(if goes { desk_list_link } else { wide_list_row }).then(line), id=if goes { id } else { 0 }, fn() {
       match body {
         Some(f) => f()
         None => words()
@@ -907,6 +915,10 @@ pub fn choice_row(
   c.semantics(b, Button, id~, label~, selected=chosen, disabled~)
   goes && c.clicked(id)
 }
+
+///|
+// kept across runs: a value (no field of it changes)
+let no_reach : @ui.Style = @ui.css("")
 
 ///|
 /// A choice's label and what follows it on its line (a model's maker), 6 apart.
