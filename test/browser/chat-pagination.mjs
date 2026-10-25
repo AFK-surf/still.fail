@@ -26,7 +26,7 @@ function List() {
   const [last, setLast] = useState(older ? 200 : 50);
   const can = older ? last > 50 : last < 200;
   const made = useVirtualModel('pagination-check', 20);
-  const items = [...(mode === 'empty' ? [] : [{ key: 'letters', estimate: 36 }]), ...(can ? [{ key: 'newer', estimate: 30 }] : [{ key: 'reply', estimate: 80 }])];
+  const items = [...(mode === 'empty' ? [] : [{ key: 'letters', estimate: mode === 'folded-long' ? 850 : 36 }]), ...(can ? [{ key: 'newer', estimate: 30 }] : [{ key: 'reply', estimate: 80 }])];
   const list = useVirtualList(pane, made, items, { short: can });
   const paging = useLoadNear(list, older ? 'top' : 'bottom', can, last, async () => {
     window.loads.push(last);
@@ -39,7 +39,7 @@ function List() {
   });
   Object.assign(window, { retry: paging.retry, failed: paging.failed, model: list.model, last, advance: () => setLast(n => n + 50) });
   return <div id="pane" ref={pane} style={{ height: 650, width: 390, overflow: 'auto', overflowAnchor: 'none', display: 'flex', flexDirection: 'column', gap: 20, padding: '24px', boxSizing: 'border-box', background: '#f5f4f0', fontFamily: 'sans-serif' }}>
-    {list.layout.rows.map((row, i) => <React.Fragment key={row.key}>{list.above(row, i === 0)}<div data-vk={row.key} style={{ flex: 'none', minHeight: row.key === 'reply' ? 80 : 36 }}>{row.key === 'letters' ? mode === 'edits' ? '同一条消息（编辑记录未增加消息行）' : last + ' 条其他会话的消息（折叠）' : row.key === 'newer' ? paging.failed ? <button type="button" className={css.msgUnsentBtn} onClick={paging.retry} aria-label="重试"><Retry size={16} />重试</button> : '加载中…' : '最新回复已加载'}</div></React.Fragment>)}{list.after()}
+    {list.layout.rows.map((row, i) => <React.Fragment key={row.key}>{list.above(row, i === 0)}<div data-vk={row.key} style={{ flex: 'none', minHeight: row.key === 'reply' ? 80 : row.key === 'letters' && mode === 'folded-long' ? 850 : 36 }}>{row.key === 'letters' ? mode === 'edits' ? '同一条消息（编辑记录未增加消息行）' : last + ' 条其他会话的消息（折叠）' : row.key === 'newer' ? paging.failed ? <button type="button" className={css.msgUnsentBtn} onClick={paging.retry} aria-label="重试"><Retry size={16} />重试</button> : '加载中…' : '最新回复已加载'}</div></React.Fragment>)}{list.after()}
   </div>;
 }
 function EmptyWindow() {
@@ -110,9 +110,14 @@ createRoot(document.getElementById('root')!).render(mode === 'long' || mode === 
     await page.waitForFunction(() => window.loads.length > 0, null, { polling: 50 });
   };
   const state = () => page.evaluate(() => ({ loads: window.loads, last: window.last }));
-  for (const mode of ['folded', 'older', 'edits', 'empty']) {
+  for (const mode of ['folded', 'older', 'edits', 'empty', 'folded-long']) {
     await open(mode);
-    await page.waitForFunction(target => window.last === target, mode === "older" ? 50 : 200, { polling: 50 });
+    await page.clock.runFor(2000);
+    if (mode === 'folded-long' && process.env.PAGINATION_EVIDENCE) {
+      console.log('long folded history', await state());
+      await page.screenshot({ path: process.env.PAGINATION_EVIDENCE });
+    }
+    await page.waitForFunction(target => window.last === target, mode === "older" ? 50 : 200, { polling: 50, timeout: 5000 });
     assert.deepEqual(await state(), mode === 'older'
       ? { loads: [200, 150, 100], last: 50 }
       : { loads: [50, 100, 150], last: 200 }, mode + ': pages progress without scrolling');

@@ -2,6 +2,7 @@
 // read into records by its sync, and its topics read only those; docs/core-ts.md). The Rust tests drove the station
 // module with a fake wire and sink; these drive a core over the host's fetch (station-fixture.ts).
 import assert from "node:assert/strict";
+import { zstdCompressSync } from "node:zlib";
 import { test } from "node:test";
 import { Effect, Queue } from "effect";
 import { dbName } from "../src/data.ts";
@@ -18,7 +19,7 @@ import { COALESCE_MS, EVICT_AFTER_MS } from "../src/store.ts";
 import { CHANGES_RETRY_MS, EVENTS_COALESCE_MS, LINK_KEY, LONG_MISSES, OFFLINE_RETRY_MS, READ_RETRY_MS, RECONNECT_MAX_MS, RECONNECT_MS, STREAM_IDLE_MS } from "../src/station/sync.ts";
 import { digest } from "../src/digest.ts";
 import { Priority } from "../src/sync/scheduler.ts";
-import { SOCKET_OPEN_MS } from "../src/station/requests.ts";
+import { JSON_IDLE_MS, SOCKET_OPEN_MS } from "../src/station/requests.ts";
 import { HostWire, concat, encodeFrame, takeFrames, type LinkNet } from "../src/station/wire.ts";
 import { NET_EVERY_MS } from "../src/station/topics.ts";
 import { apply as applyOps, type Op } from "../src/delta.ts";
@@ -2424,4 +2425,71 @@ test("a_core_started_again_takes_its_stations_up_from_the_last_event_kept_and_re
     else assert.ok(lists.includes("/overview"), JSON.stringify(asked));
     again.close();
   }
+});
+
+test("invalid_json_and_truncated_compression_fail_instead_of_becoming_empty_pages", async () => {
+  const { core, host } = await started();
+  const path = "/threads/7/entries?from=4&to=5";
+  const call = () => core.inner.stations.requests.call(remote(), "GET", path, null);
+  let response = { status: 200, headers: [] as [string, string][], body: new TextEncoder().encode('{"entries":[') };
+  stationReplies(host, req => req.url.endsWith(path) ? new Raw(response) : undefined);
+  try {
+    assert.equal((await failure(call())).code, "bad_response");
+    const encoded = zstdCompressSync(Buffer.from(JSON.stringify({ entries: entries(4, 5) })));
+    response = { status: 200, headers: [["content-encoding", "zstd"]], body: encoded.subarray(0, encoded.length - 1) };
+    await failure(call());
+    response = { status: 200, headers: [], body: new TextEncoder().encode(JSON.stringify({ entries: entries(4, 5) })) };
+    assert.deepEqual(await run(call()), { entries: entries(4, 5) }, "a fresh retry reads the intact reply");
+    response = { status: 204, headers: [], body: new Uint8Array() };
+    assert.deepEqual(await run(call()), {}, "intentional no-content replies remain valid");
+  } finally { core.close(); }
+});
+
+test("json_requests_time_out_on_silent_heads_or_bodies_and_release_their_scope", async () => {
+  for (const stalled of ["head", "body"]) {
+    let closed = 0;
+    class Silent extends HostWire {
+      override request(...args: Parameters<HostWire["request"]>) {
+        if (!args[1].path.endsWith("/silent-json")) return super.request(...args);
+        return Effect.gen(function* () {
+          yield* Effect.addFinalizer(() => Effect.sync(() => { closed++; }));
+          if (stalled === "head") return yield* Effect.never;
+          return { status: 200, headers: [] as [string, string][], via: null, body: { take: Effect.never } };
+        });
+      }
+    }
+    const { host, core } = await started(base(), 0, h => new Silent(h));
+    try {
+      const reading = core.inner.runner.run(Effect.result(core.inner.stations.requests.call(remote(), "GET", "/silent-json", null)));
+      await host.time.pass(JSON_IDLE_MS + 100, 1000);
+      const result = await reading;
+      assert.equal(result._tag === "Failure" && result.failure.code, "timeout", stalled);
+      assert.equal(closed, 1, stalled + ": the request scope closes on timeout");
+    } finally { core.close(); }
+  }
+});
+
+test("json_idle_timeout_resets_as_bytes_arrive_on_a_slow_link", async () => {
+  class Slow extends HostWire {
+    override request(...args: Parameters<HostWire["request"]>) {
+      if (!args[1].path.endsWith("/slow-json")) return super.request(...args);
+      let next = 0;
+      const chunks = ['{"entries":', '[]', '}'];
+      return Effect.succeed({ status: 200, headers: [] as [string, string][], via: null, body: {
+        take: Effect.gen(function* () {
+          if (next === chunks.length) return null;
+          yield* Effect.sleep(JSON_IDLE_MS * 0.75);
+          return new TextEncoder().encode(chunks[next++]!);
+        }),
+      } });
+    }
+  }
+  const { host, core } = await started(base(), 0, h => new Slow(h));
+  try {
+    const reading = core.inner.runner.run(Effect.result(core.inner.stations.requests.call(remote(), "GET", "/slow-json", null)));
+    await host.time.pass(JSON_IDLE_MS * 3, 1000);
+    const result = await reading;
+    assert.equal(result._tag, "Success");
+    assert.deepEqual(result._tag === "Success" && result.success, { entries: [] });
+  } finally { core.close(); }
 });

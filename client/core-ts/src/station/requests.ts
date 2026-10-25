@@ -35,6 +35,11 @@ export const ZSTD = "zstd";
 export const UPLOAD_WHOLE_MAX = 50 * 1024 * 1024;
 /// How long a preview's WebSocket may take to open.
 export const SOCKET_OPEN_MS = 30_000;
+/// JSON reads may be slow, but cannot own a scheduler slot forever without receiving bytes.
+export const JSON_IDLE_MS = 60_000;
+const within = <A, E, R>(work: Effect.Effect<A, E, R>, ms: number) => ms > 0
+  ? Effect.timeoutOrElse(work, { duration: ms, orElse: () => Effect.fail(new CoreError("timeout", t("core-logic.mesh.timed_out"))) })
+  : work;
 
 /// A station's non-2xx answer as an error.
 /// A station's refusal: its `code` where it says one (the vault's, `vault_needs_lock`…), else `http_<status>`.
@@ -62,7 +67,7 @@ const PART_STEP = 64 * 1024;
 
 /// A reply's body as the station wrote it: decompressed as it comes when it came compressed (fzstd, the same on every
 /// host), each piece as soon as it is whole (an event stream's, event by event).
-function plain(reply: WireReply): Pull<Uint8Array> {
+function plain(reply: WireReply, partial = true): Pull<Uint8Array> {
   if (replyHeader(reply, "content-encoding") !== ZSTD) return reply.body;
   const out: Uint8Array[] = [];
   const decompress = new Decompress((data) => {
@@ -78,8 +83,8 @@ function plain(reply: WireReply): Pull<Uint8Array> {
       try {
         decompress.push(chunk ?? empty, ended);
       } catch (error) {
-        // Cut off short of its end (a stream let go of): what came is all there is.
-        if (ended) continue;
+        // Live streams can end between flushed blocks; a finite JSON reply must end its frame.
+        if (ended && partial) continue;
         return yield* Effect.fail(new HostError(t("core-logic.mesh.read_failed", { error: (error as Error).message })));
       }
     }
@@ -142,8 +147,9 @@ export class Requests {
   /// `heard`: how much of the body has come, now and then as it comes (every PART_STEP); `wrote`: how much of what is
   /// sent has gone, as it goes (a wire that sends it whole says nothing); `sink`: a 2xx answer's body handed over as it
   /// comes, in pieces of PART_STEP (the last smaller), not kept (the body given is empty); `onHead`: the reply's status
-  /// and head as they come, before its body.
-  exchange(station: StationAddr, method: string, path: string, headers: [string, string][], body: Uint8Array, quiet: boolean, ctx: SpanContext | null, heard?: (loaded: number) => void, wrote?: (sent: number) => void, sink?: (piece: Uint8Array) => void, onHead?: (status: number, headers: [string, string][]) => void): Effect.Effect<{ status: number; headers: [string, string][]; body: Uint8Array }, CoreError> {
+  /// and head as they come, before its body. `json`: validate finite compression/JSON and bound each idle wait.
+  exchange(station: StationAddr, method: string, path: string, headers: [string, string][], body: Uint8Array, quiet: boolean, ctx: SpanContext | null, heard?: (loaded: number) => void, wrote?: (sent: number) => void, sink?: (piece: Uint8Array) => void, onHead?: (status: number, headers: [string, string][]) => void, json = false): Effect.Effect<{ status: number; headers: [string, string][]; body: Uint8Array; json?: unknown }, CoreError> {
+    const idleMs = json ? JSON_IDLE_MS : 0;
     return Effect.scoped(
       Effect.gen({ self: this }, function* () {
         const status = this.#status(station);
@@ -151,12 +157,12 @@ export class Requests {
         const [span, head] = this.#head(station, method, path, headers, body.length, ctx);
         const result = yield* Effect.result(
           Effect.gen({ self: this }, function* () {
-            const reply = yield* this.wire.request(station, head, body, wrote);
+            const reply = yield* within(this.wire.request(station, head, body, wrote), idleMs);
             answered(span, reply);
             onHead?.(reply.status, reply.headers);
             // What came over the link is counted (and said in the span); what it says, decompressed.
             let came = 0;
-            const counted = { ...reply, body: { take: Effect.tap(reply.body.take, (chunk) => Effect.sync(() => chunk && ((came += chunk.length), waiting ? waiting.received(chunk.length) : status.received(null, chunk.length)))) } };
+            const counted = { ...reply, body: { take: Effect.tap(within(reply.body.take, idleMs), (chunk) => Effect.sync(() => chunk && ((came += chunk.length), waiting ? waiting.received(chunk.length) : status.received(null, chunk.length)))) } };
             let loaded = 0;
             let told = 0;
             // An error's body is read as any other's: what it says is the error.
@@ -168,7 +174,7 @@ export class Requests {
               held.length = 0;
               heldBytes = 0;
             };
-            const bytes = yield* readAll(plain(counted), (chunk) => {
+            const bytes = yield* readAll(plain(counted, !json), (chunk) => {
               loaded += chunk.length;
               if (heard && loaded - told >= PART_STEP) heard((told = loaded));
               if (give) {
@@ -179,8 +185,12 @@ export class Requests {
             hand();
             span.set("http.response.body.size", came);
             if (came !== loaded) span.set("stillfail.body.decompressed", loaded);
+            const parsed = json ? parseJson(bytes) : undefined;
+            if (json && parsed === undefined && reply.status >= 200 && reply.status < 300 && reply.status !== 204 && reply.status !== 205) {
+              return yield* Effect.fail(new CoreError("bad_response", t("core-logic.mesh.read_failed", { error: "Invalid JSON" })));
+            }
             if (reply.status >= 200 && reply.status < 300) this.onAnswered(station);
-            return { status: reply.status, headers: reply.headers, body: bytes };
+            return { status: reply.status, headers: reply.headers, body: bytes, ...(json ? { json: parsed } : {}) };
           }).pipe(Effect.ensuring(Effect.sync(() => waiting?.end()))),
         );
         if (result._tag === "Failure") {
@@ -199,10 +209,9 @@ export class Requests {
     const bytes = body === undefined || body === null ? empty : toJsonBytes(body);
     const headers: [string, string][] = body === undefined || body === null ? [] : [["content-type", "application/json"]];
     if (options.headers) headers.push(...options.headers);
-    return Effect.flatMap(this.exchange(station, method, path, headers, bytes, options.quiet ?? false, options.ctx ?? null), (r) => {
-      // Like the web's `response.json().catch(() => ({}))`.
-      const parsed = parseJson(r.body);
-      const data = parsed === undefined ? {} : parsed;
+    return Effect.flatMap(this.exchange(station, method, path, headers, bytes, options.quiet ?? false, options.ctx ?? null, undefined, undefined, undefined, undefined, true), (r) => {
+      // Parsed inside the exchange: invalid JSON also fails its request span.
+      const data = r.json === undefined ? {} : r.json;
       return r.status >= 200 && r.status < 300 ? Effect.succeed(data as unknown) : Effect.fail(httpError(r.status, data));
     });
   }

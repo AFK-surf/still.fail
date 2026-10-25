@@ -56,6 +56,7 @@ const UNDER = 12;
 
 export class Virtual {
   private items: Item[] = [];
+  private revision = 0;
   private at = new Map<string, number>();
   /** `tops[i]`: the top of item i from the first item's top; `tops[n]`: the last item's bottom. */
   private tops: number[] = [0];
@@ -124,6 +125,7 @@ export class Virtual {
     });
     this.items = items;
     if (!same) {
+      this.revision++;
       this.at = new Map(items.map((item, i) => [item.key, i]));
       this.retop();
     }
@@ -317,6 +319,8 @@ export class Virtual {
     const total = this.total();
     return { rows, after: total - this.lead - this.trail - end, scrollTop: this.top - this.drift, total: total - this.drift, drift: this.drift };
   }
+  /** Changes when row descriptions change; hidden history records leave it alone. */
+  get itemsVersion(): number { return this.revision; }
   get mode(): Anchor { return this.anchor; }
   /** Start fetching in time to cover a recent request, plus time to commit its rows. Never more than three
    * panes ahead, and only extend the edge the reader approaches (the other edge must not shuttle the window back). */
