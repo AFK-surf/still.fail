@@ -294,18 +294,76 @@ pub struct GalleryRead {
 }
 
 ///|
-/// The gallery's photos read (@hostapi.gallery_read): None where there is no gallery (a Tester's has none).
+/// The gallery's photos read (@hostapi.gallery_read): None where there is no gallery. A Tester's is what the test says
+/// it is (Tester::gallery), read as a host reads it, from the next frame.
 pub fn gallery_read() -> GalleryRead? {
-  match fake.val {
-    Some(_) => None
-    None =>
-      match @hostapi.gallery_read() {
-        Some(h) => {
-          outside_start(outside_gallery, h.id(), "the gallery read \{h.id()}")
-          Some({ host: h })
-        }
-        None => None
+  match @hostapi.gallery_read() {
+    Some(h) => {
+      outside_start(outside_gallery, h.id(), "the gallery read \{h.id()}")
+      Some({ host: h })
+    }
+    None => None
+  }
+}
+
+///|
+/// A read of a Tester's gallery (its fake host's ga_read): its rows as a host writes them, the frame it was asked in
+/// (read from the next on), whether it was let go of.
+priv struct FakeGalleryRead {
+  rows : String
+  frame : Int
+  mut ended : Bool
+}
+
+///|
+/// The device's gallery from now on, as `photos` (Tester::new's has none, the app not let read one): all of it the app
+/// may read, each read of it what it is when asked, from the next frame, as a host reads it off the app's thread.
+pub fn Tester::gallery(self : Tester, photos : Array[@hostapi.GalleryPhoto]) -> Unit {
+  self.fake.gallery = Some(photos.copy())
+}
+
+///|
+/// A read of the fake host's gallery begun (its id, from 1; 0 none: no gallery given).
+fn FakeHost::gallery_read(self : FakeHost) -> Int {
+  match self.gallery {
+    Some(photos) => {
+      // (rows as a host writes them: id, src, added, modified, taken, video, a tab between)
+      let rows = StringBuilder::new()
+      for p in photos {
+        rows.write_string(
+          "\{p.id}\t\{p.src}\t\{p.added}\t\{p.modified}\t\{p.taken}\t\{if p.video { 1 } else { 0 }}\n",
+        )
       }
+      self.gallery_reads.push({ rows: rows.to_string(), frame: g().frame_no, ended: false })
+      self.wants = true
+      self.gallery_reads.length()
+    }
+    None => 0
+  }
+}
+
+///|
+/// How read `id` goes, as a host says it: 0 reading (until the frame after it was asked), 1 read, -1 let go of or none.
+fn FakeHost::gallery_read_state(self : FakeHost, id : Int) -> Int {
+  match self.gallery_reads.get(id - 1) {
+    Some(r) if !r.ended => if g().frame_no <= r.frame { 0 } else { 1 }
+    _ => -1
+  }
+}
+
+///|
+fn FakeHost::gallery_read_rows(self : FakeHost, id : Int) -> String {
+  match self.gallery_reads.get(id - 1) {
+    Some(r) if !r.ended => r.rows
+    _ => ""
+  }
+}
+
+///|
+fn FakeHost::gallery_read_end(self : FakeHost, id : Int) -> Unit {
+  match self.gallery_reads.get(id - 1) {
+    Some(r) => r.ended = true
+    None => ()
   }
 }
 

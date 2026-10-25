@@ -276,6 +276,8 @@ pub fn Tester::new(
     picks: [],
     pick_asks: [],
     keeps: [],
+    gallery: None,
+    gallery_reads: [],
     reads: [],
     read_ids: 0,
     read_answers: [],

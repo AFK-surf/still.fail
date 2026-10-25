@@ -438,6 +438,50 @@ test "a phone's ＋: the sheet of what can go in (Attach.kt); 照片 asks the sy
 }
 
 ///|
+test "a phone's ＋ opened again shows the gallery as it is then: a screenshot taken since it was last up comes first in its strip" {
+  let calls : Array[Made] = []
+  let (t, _) = desk_composer_tester(calls, pointing=Finger, platform=2)
+  let shot = fn(id : Int64, added : Int64) -> @hostapi.GalleryPhoto {
+    { id, src: "content://media/external/images/media/\{id}", added, modified: added, taken: -1L, video: false }
+  }
+  let earlier = shot(1L, 1_792_200_000L)
+  let taken = shot(2L, 1_792_200_060L)
+  for p in [earlier, taken] {
+    t.add_image(p.src, 1080, 2400)
+  }
+  t.gallery([earlier])
+  t.draw()
+  t.click(Button, label=@sf.t("web-main.composer.attach"))
+  // (the gallery read, its photos' pictures decoded and faded in)
+  t.run_for(@ui.image_fade_ms)
+  assert_eq(strip_photos(t), [earlier.src])
+  // put away by one of its tiles (照片, the system's picker called off), as a photo or the camera puts it away too
+  t.picks([])
+  let (x, y) = t.locate("=照片")[0]
+  t.tap(x, y)
+  t.draw()
+  // a screenshot taken meanwhile, ＋ again
+  t.gallery([earlier, taken])
+  t.click(Button, label=@sf.t("web-main.composer.attach"))
+  t.run_for(@ui.image_fade_ms)
+  assert_eq(strip_photos(t), [taken.src, earlier.src])
+}
+
+///|
+/// The gallery's photos ＋'s strip draws, in its order (the draw list's images, as first drawn).
+fn strip_photos(t : @ui.Tester) -> Array[String] {
+  let out = []
+  for line in t.drawlist().split("\n") {
+    // image N PX "SOURCE"
+    let parts = line.split("\"").to_array()
+    if line.has_prefix("image ") && parts.length() >= 2 && parts[1].has_prefix("content://") {
+      out.push(parts[1].to_string())
+    }
+  }
+  out
+}
+
+///|
 test "on a phone, a finger down outside the composer lets go of the keyboard once lifted (Keyboard.kt letsGoOfKeyboard)" {
   let calls : Array[Made] = []
   let (t, _) = desk_composer_tester(calls, pointing=Finger, platform=2)
