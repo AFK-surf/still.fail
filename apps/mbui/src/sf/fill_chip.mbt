@@ -26,7 +26,7 @@ pub fn level_color(level : String) -> Int64 {
 
 ///|
 /// The chip (FillChip): its ground the neutral one, filled from the left as far as `fill` (0–100), grey while the
-/// level is ok, faintly the level's colour once it is not (the accent for `progress`); its figure in the text's colour
+/// level is ok, faintly the level's colour once it is not (the accent's ink for `progress`: chip_fill_share); its figure in the text's colour
 /// while ok, in the level's once low, its `mark` before it a step quieter (halfway to the muted grey). Its words are
 /// the caption's, a screen's own (11 with keyboard and mouse, 12 with touch), 600, tabular.
 pub fn fill_chip(
@@ -42,7 +42,13 @@ pub fn fill_chip(
   let t = theme()
   let tone = level_color(level)
   let low = level == "amber" || level == "red"
-  let ground = if low || level == "progress" { alpha(tone, 0.2) } else { alpha(t.p.muted, 0.22) }
+  let ground = if low {
+    alpha(tone, chip_fill_share)
+  } else if level == "progress" {
+    alpha(t.p.accent_text, chip_fill_share)
+  } else {
+    alpha(t.p.muted, chip_fill_share)
+  }
   let fill = if fill < 0 { 0 } else if fill > 100 { 100 } else { fill }
   let rest = 100 - fill
   let mark_ink = mix(t.p.text, chip_mark_share, t.p.muted)
@@ -70,6 +76,12 @@ pub fn fill_chip(
   })
   |> ignore
 }
+
+///|
+/// How strong its fill is (of the level's colour, the accent's ink, the muted grey): as far off the chip's ground as
+/// what is drawn with nothing in it stands (@ui's contrast.mbt), on whatever the chip lies on (a menu's grey too: at
+/// the web's 20% an amber fill was 1.24 to 1 there, the accent's light orange less on any).
+let chip_fill_share : Double = 0.28
 
 ///|
 /// Its mark's ink: halfway from the text's to the muted grey (quotaChipMark: still about 6:1 over the fill).

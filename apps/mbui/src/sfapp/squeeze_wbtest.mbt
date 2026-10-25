@@ -34,6 +34,7 @@ fn screen_in(
   win : (String, Double, Double, Int, String),
   lang : String,
   said? : Bool = false,
+  dark? : Bool = false,
 ) -> @ui.Tester {
   let (_, w, h, platform, width) = win
   let src : Ref[Source?] = Ref(None)
@@ -60,7 +61,8 @@ fn screen_in(
     // (the device's language: the fixture's prefs say none; motion reduced, as a person may have it: what a screen
     // opens with at its end at once and a spinner held, so no frame is drawn between its first and the one measured,
     // none of which ever changed what fits: 576 screens' ten frames each were most of the sfapp run, 2026-10-25)
-    env=[("MBUI_LOCALE", lang), ("MBUI_REDUCE_MOTION", "1")],
+    // (`dark`: the app's dark theme, the fixture's prefs saying so: the contrast test's, contrast_wbtest.mbt)
+    env=[("MBUI_LOCALE", lang), ("MBUI_REDUCE_MOTION", "1")] + (if dark { [("MBUI_DARK", "1")] } else { [] }),
   )
   if width != "" {
     t.drive("system {\"size_class\":{\"width\":\"\{width}\",\"height\":\"medium\"}}\n") |> ignore

@@ -13,7 +13,8 @@ const seriesVars = (colors: string[]) => Object.fromEntries(colors.map((c, i) =>
 const u = { text: "var(--u-text)", muted: "var(--u-muted)", subtle: "var(--u-subtle)", line: "var(--u-line)", strong: "var(--u-strong)", hover: "var(--u-hover)", tile: "var(--u-tile)" };
 
 // On the page's root: the tooltips that say a day's parts are drawn outside the page.
-globalStyle(":root", { vars: { ...seriesVars(light), "--usage-rest": vars.lineStrong } });
+// (the rest's: a grey that still stands off the card where its day's bar is faded)
+globalStyle(":root", { vars: { ...seriesVars(light), "--usage-rest": vars.subtle } });
 globalStyle(":root[data-theme=\"dark\"]", { vars: seriesVars(dark) });
 globalStyle(":root:not([data-theme=\"light\"])", { "@media": { "(prefers-color-scheme: dark)": { vars: seriesVars(dark) } } });
 
@@ -29,7 +30,7 @@ export const usage = style({
 export const mobile = style({
   vars: {
     "--u-text": "var(--m-ink)", "--u-muted": "var(--m-muted)", "--u-subtle": "var(--m-subtle)", "--u-line": "var(--m-line)",
-    "--u-strong": "var(--m-thumb)", "--u-hover": "var(--m-chip)", "--u-tile": "var(--m-surface)", "--usage-rest": "var(--m-thumb)",
+    "--u-strong": "var(--m-thumb)", "--u-hover": "var(--m-chip)", "--u-tile": "var(--m-surface)", "--usage-rest": "var(--m-subtle)",
   },
   gap: "22px", padding: "0 16px",
 });
@@ -107,7 +108,7 @@ export const dayRow = style({ display: "grid", gridTemplateColumns: "auto minmax
 export const dayDot = style({ width: "8px", height: "8px", borderRadius: "50%" });
 export const dayWho = style({ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" });
 export const dayPart = style({ fontVariantNumeric: "tabular-nums" });
-export const dayShare = style({ gridColumn: "2 / 4", height: "4px", borderRadius: "2px", background: u.hover, overflow: "hidden", display: "flex" });
+export const dayShare = style({ gridColumn: "2 / 4", height: "4px", borderRadius: "2px", background: u.line, overflow: "hidden", display: "flex" });
 globalStyle(`${dayShare} > span`, { height: "100%", borderRadius: "2px" });
 
 // ── the lists ─────────────────────────────────────────────────────────────
@@ -128,8 +129,9 @@ export const rowSub = style({ fontSize: vars.textMeta, color: u.muted, overflow:
 export const rowCost = style({ display: "grid", justifyItems: "end", gap: "1px", fontVariantNumeric: "tabular-nums" });
 export const rowShare = style({ fontSize: vars.textMeta, color: u.muted });
 /** Its share of the whole, under its words. */
-export const share = style({ gridColumn: "2 / 4", height: "4px", borderRadius: "2px", background: u.hover, overflow: "hidden" });
-export const shareFill = style({ height: "100%", borderRadius: "2px", background: u.strong });
+// (its track in the line's grey, what is empty of what fills: docs/ui-panels.md 对比度)
+export const share = style({ gridColumn: "2 / 4", height: "4px", borderRadius: "2px", background: u.line, overflow: "hidden" });
+export const shareFill = style({ height: "100%", borderRadius: "2px", background: u.subtle }); // a step off its track in either theme
 export const more = style({
   justifySelf: "start", marginTop: "4px", padding: "6px 12px", border: "0", borderRadius: vars.rField, background: "none",
   color: u.muted, font: "inherit", fontSize: vars.textUi, cursor: "pointer", cornerShape: vars.cornerShape,

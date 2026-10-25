@@ -25,7 +25,10 @@ pub(all) struct Theme {
   faint : Int64
   /// a control's edge: a field's, a button's, a checkbox's, a switch that is off
   border : Int64
-  /// quiet lines: a panel's edge, a separator
+  /// what is drawn to be seen with nothing in it, at its faintest: a line (a panel's edge, a separator), a gauge's
+  /// empty cell, a placeholder's block, a sheet's grip. The ink at an opacity, so that it stands as far off whatever
+  /// it lies on (the page, a card, a menu): at least contrast_mark_least (contrast.mbt), an opaque grey being that on
+  /// the page alone (a menu's columns' lines not seen in the dark, a station's empty cells on its card, 2026-10-26)
   line : Int64
   /// the one colour: what is on, chosen, filled, moving (a switch on, a slider, progress)
   accent : Int64
@@ -78,7 +81,8 @@ pub(all) struct Theme {
   accent_bg : Int64
   /// the ground of what failed (an error's box)
   danger_bg : Int64
-  /// a quiet pill's ground, a placeholder's grey
+  /// a quiet ground under what is in it (a pill's, a bubble's, a picture's before it comes): the ink at an opacity, a
+  /// step off whatever it lies on as `line` is (fainter: what is in it carries it)
   neutral : Int64
   /// what is chosen in a list
   selected : Int64
@@ -220,7 +224,7 @@ pub fn Theme::light() -> Theme {
     subtle: 0x73787DFFL,
     faint: 0xF1F1F2FFL,
     border: 0xC1C4C9FFL,
-    line: 0xE3E1DEFFL,
+    line: 0x322D2424L,
     accent: 0xEF6A3CFFL,
     on_accent: 0xFFFFFFFFL,
     primary: 0x24272BFFL,
@@ -249,7 +253,7 @@ pub fn Theme::light() -> Theme {
     accent_text: 0xA23203FFL,
     accent_bg: 0xFFEFE6FFL,
     danger_bg: 0xFFF0EFFFL,
-    neutral: 0xEDEFF1FFL,
+    neutral: 0x24272B13L,
     selected: 0xEBE7E1FFL,
     link: 0x1559C4FFL,
     warn: 0xD9962BFFL,
@@ -283,7 +287,7 @@ pub fn Theme::dark() -> Theme {
     subtle: 0x8C8F94FFL,
     faint: 0x313237FFL,
     border: 0x3D3F44FFL,
-    line: 0x2D2E32FFL,
+    line: 0xE9E9EA19L,
     accent: 0xF57E4DFFL,
     primary: 0xECEDEDFFL,
     on_primary: 0x1F2023FFL,
@@ -300,7 +304,7 @@ pub fn Theme::dark() -> Theme {
     accent_text: 0xFC9B6FFFL,
     accent_bg: 0x43251AFFL,
     danger_bg: 0x442322FFL,
-    neutral: 0x2A2B2FFFL,
+    neutral: 0xE9E9EA0EL,
     selected: 0x323338FFL,
     sidebar: 0x19191BFFL,
     list: 0x1C1D20FFL,
@@ -321,7 +325,7 @@ pub fn Theme::narrow_light() -> Theme {
     muted: 0x7A7D83FFL,
     subtle: 0xA6A8ACFFL,
     faint: 0xEFECE6FFL,
-    line: 0xE7E3DCFFL,
+    line: 0x322D2424L,
     accent: 0xE5704AFFL,
     positive: 0x2F8F5BFFL,
     danger: 0xC9412EFFL,
@@ -333,7 +337,7 @@ pub fn Theme::narrow_light() -> Theme {
     card: 0xFFFFFFFFL,
     accent_text: 0xB9471FFFL,
     accent_bg: 0xFBE6DCFFL,
-    neutral: 0xE8E4DCFFL,
+    neutral: 0x322D2413L,
   }
 }
 
@@ -348,7 +352,7 @@ pub fn Theme::narrow_dark() -> Theme {
     muted: 0x9A9DA3FFL,
     subtle: 0x6E7177FFL,
     faint: 0x313237FFL,
-    line: 0x34353AFFL,
+    line: 0xECECED1FL,
     accent: 0xEF7A55FFL,
     positive: 0x5CC08AFFL,
     danger: 0xEB6B58FFL,
@@ -360,7 +364,7 @@ pub fn Theme::narrow_dark() -> Theme {
     card: 0x26272BFFL,
     accent_text: 0xF6A383FFL,
     accent_bg: 0x4A2F25FFL,
-    neutral: 0x313237FFL,
+    neutral: 0xECECED1BL,
   }
 }
 
@@ -547,7 +551,7 @@ pub fn Theme::color(self : Theme, c : Color) -> Int64 {
     ShadowC => self.shadow
     Warn => self.warn
     Tint => alpha(self.fg, 0.06)
-    TintStrong => alpha(self.fg, 0.08)
+    TintStrong => self.line
     Floating => over(self.bg, alpha(self.raised, 0.72))
     Veil => 0x0000009EL
     VeilDeep => 0x000000EBL

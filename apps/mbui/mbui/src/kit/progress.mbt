@@ -45,7 +45,8 @@ pub fn progress(
 pub let progress_ms : Double = 200.0
 
 ///|
-/// A progress bar's look (still.fail's): `h` high on `track` (18% of the fill), filled in `fill` (the theme's accent);
+/// A progress bar's look (still.fail's): `h` high on `track` (the theme's line: what is empty of what fills, seen on any
+/// ground as what is drawn with nothing in it is, @ui's contrast.mbt), filled in `fill` (the theme's accent);
 /// not known, a piece 40% of it sweeps across, eased there and back, once every `period` ms.
 pub fn progress_look_of(
   h? : Double = 3.0,
@@ -56,7 +57,7 @@ pub fn progress_look_of(
   fn(c, s) {
     let th = c.theme()
     let ink = fill.unwrap_or(th.accent)
-    c.box(w=Fill(1.0), h=Px(h), radius=h / 2.0, bg=track.unwrap_or(@ui.alpha(ink, 0.18)), clip=true, dir=Row, fn() {
+    c.box(w=Fill(1.0), h=Px(h), radius=h / 2.0, bg=track.unwrap_or(th.line), clip=true, dir=Row, fn() {
       match s.t {
         Some(k) => {
           // grown in proportion: the filled part `k` of the track, the rest after it

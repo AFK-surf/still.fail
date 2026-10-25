@@ -1650,7 +1650,7 @@ let progress_w : Double = 212.0
 
 ///|
 // kept across runs: a value (no field of it changes)
-let progress_track : @ui.Style = @ui.style(row=true, w=@sf.grow, min_w=S12, h=S0_5, radius=Sm, bg=A(Fg, O10), clip=true)
+let progress_track : @ui.Style = @ui.style(row=true, w=@sf.grow, min_w=S12, h=S0_5, radius=Sm, bg=TintStrong, clip=true)
 
 ///|
 // kept across runs: a value (no field of it changes)

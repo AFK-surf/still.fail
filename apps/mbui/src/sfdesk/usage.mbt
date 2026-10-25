@@ -143,7 +143,8 @@ fn usage_tile_pair(c : @ui.Ctx, core : Core, tiles : Array[Json], from : Int) ->
 /// A series' colour (Usage.tsx seriesClass): the first four people's own, the rest the strong line's grey.
 fn usage_series_ink(series : Array[Json], i : Int) -> Int64 {
   if i < series.length() && text(Some(series[i]), "key") == "" {
-    @sf.theme().p.line_strong
+    // (the rest's: a grey that still stands off the card where its day's bar is faded, ug_bar_off)
+    @sf.theme().p.subtle
   } else {
     @sf.usage_series(i)
   }
@@ -709,7 +710,7 @@ let ug_share_room : @ui.Style = @ui.css("row w=Full pl=S4")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let ug_share : @ui.Style = @ui.css("row w=Full h=S1 radius=Full bg=Hover clip")
+let ug_share : @ui.Style = @ui.css("row w=Full h=S1 radius=Full bg=TintStrong clip")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -783,8 +784,10 @@ let ug_row_share_words : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, c
 let ug_row_share_room : @ui.Style = @ui.css("row w=Full pl=S8")
 
 ///|
+/// Its share, filled in the quieter words' grey: a step off its track (the line's: ug_share) in either theme, where
+/// the edges' grey (Border) was the track's own in the dark.
 // kept across runs: a value (no field of it changes)
-let ug_row_share_fill : @ui.Style = @ui.css("h=Full radius=Full bg=Border")
+let ug_row_share_fill : @ui.Style = @ui.css("h=Full radius=Full bg=Subtle")
 
 ///|
 /// 显示全部 / 收起 (more: 4 under the rows, 6 by 12 in, the field's corner; the hover's ground and the words' ink

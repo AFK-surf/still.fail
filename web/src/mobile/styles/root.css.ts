@@ -12,7 +12,7 @@ const darkVars = {
   "--m-ink": "#ECECED",
   "--m-muted": "#9A9DA3",
   "--m-subtle": "#84888F",
-  "--m-line": "#34353A",
+  "--m-line": "rgb(236 236 237 / .122)",
   "--m-accent": "#EF7A55",
   "--m-accent-bg": "#4A2F25",
   "--m-accent-ink": "#F6A383",
@@ -20,7 +20,7 @@ const darkVars = {
   "--m-red": "#EB6B58",
   "--m-blue": "#81AEFA",
   "--m-chip": "#313237",
-  "--m-bubble": "#313237",
+  "--m-bubble": "rgb(236 236 237 / .106)",
   "--m-thumb": "#3A3B40",
 };
 
@@ -48,7 +48,9 @@ export const m = style({
     "--m-ink": "#24272B",
     "--m-muted": "#626469",
     "--m-subtle": "#7C7E81",
-    "--m-line": "#E7E3DC",
+    // The ink at an opacity, as the wide screen's --line and --neutral-bg (styles/global.css.ts): as far off whatever
+    // they lie on, the page, a card or a sheet.
+    "--m-line": "rgb(50 45 36 / .141)",
     "--m-accent": "#E5704A",
     "--m-accent-bg": "#FBE6DC",
     "--m-accent-ink": "#B9471F",
@@ -58,7 +60,7 @@ export const m = style({
     "--m-blue": "#1559C4",
     "--m-chip": "#E8E4DC",
     // A step darker than the page (the wide screen's grey sat as light as this warm page, and its bubbles barely showed).
-    "--m-bubble": "#E8E4DC",
+    "--m-bubble": "rgb(50 45 36 / .075)",
     "--m-thumb": "#FFFFFF",
     "--m-ease": "cubic-bezier(.2, .8, .2, 1)",
     "--m-standard": "cubic-bezier(.4, 0, .2, 1)",
@@ -123,7 +125,7 @@ globalStyle(`${m} button`, { WebkitTapHighlightColor: "transparent" });
 globalStyle(`${m} p:not(${wide} *)`, { margin: "0" });
 globalStyle(`${m} [data-enter]:not(${wide} *)`, { animation: `${mRiseKeyframes} 320ms var(--m-standard) both` });
 
-// Waiting (@stillfail/ui waiting.tsx) on the phone: its placeholders and pill in the phone's grey (as its message bubbles,
-// its placeholders always were), not the wide screen's; a settings page's cards inset as its cards are (parts.css.ts mListCard).
-globalStyle(`${m} ${waitCss.wait}, ${m} ${waitCss.shapes}, ${m} ${waitCss.pill}`, { vars: { [vars.neutralBg]: "var(--m-bubble)" } });
+// Waiting (@stillfail/ui waiting.tsx) on the phone: its pill in the phone's grey (as its message bubbles), its placeholders
+// in the phone's line, not the wide screen's; a settings page's cards inset as its cards are (parts.css.ts mListCard).
+globalStyle(`${m} ${waitCss.wait}, ${m} ${waitCss.shapes}, ${m} ${waitCss.pill}`, { vars: { [vars.neutralBg]: "var(--m-bubble)", [vars.line]: "var(--m-line)" } });
 globalStyle(`${m} ${waitCss.cards}`, { gap: "10px", padding: "0 12px" });

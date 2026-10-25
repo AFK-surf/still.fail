@@ -1307,14 +1307,14 @@ fn waiting_rows(c : @ui.Ctx, n : Int, error : Json?) -> Unit {
         c.text(error_words(e), size=t.t.meta, color=t.p.red, line=18.0) |> ignore
       None => ()
     }
-    let breath = if error is None { @sf.breath(c) } else { 0.6 }
+    let breath = @sf.breath(c, failed=error is Some(_))
     for i in 0..<n {
       c.box(dir=Row, w=Fill(1.0), gap=12.0, align=ACenter, opacity=breath, fn() {
-        c.box(w=Px(36.0), h=Px(36.0), radius=11.0, bg=t.p.neutral_bg, fn() {  }) |> ignore
+        c.box(w=Px(36.0), h=Px(36.0), radius=11.0, bg=t.p.line, fn() {  }) |> ignore
         c.box(w=Fill(1.0), gap=6.0, fn() {
-          c.box(w=Px(if i % 2 == 0 { 160.0 } else { 120.0 }), h=Px(12.0), radius=6.0, bg=t.p.neutral_bg, fn() {  })
+          c.box(w=Px(if i % 2 == 0 { 160.0 } else { 120.0 }), h=Px(12.0), radius=6.0, bg=t.p.line, fn() {  })
           |> ignore
-          c.box(w=Px(220.0), h=Px(10.0), radius=5.0, bg=t.p.neutral_bg, fn() {  }) |> ignore
+          c.box(w=Px(220.0), h=Px(10.0), radius=5.0, bg=t.p.line, fn() {  }) |> ignore
         })
         |> ignore
       })

@@ -200,6 +200,159 @@ export function panels(mark = false) {
 }
 
 /**
+ * Contrast (docs/ui-panels.md「对比度」): what the page draws stands off what it is drawn on far enough to be seen, as
+ * mbui's Tester::contrast_faults asks of the app (its contrast.mbt). What is drawn with nothing in it, its ground or,
+ * where that does not show, its edge alone saying what it is (a gauge's cell, a track, a line, a placeholder's block, a
+ * grip), at least 1.25:1 (WCAG 2's ratio). A ground under words, a picture or an icon is not asked: what is in it
+ * carries it. Each where it is drawn, against what the browser stacks under it there (each ground as faint as what it
+ * is in has made it); what lies on a picture or a video, or under something drawn over it (a dialog's scrim, a bar's
+ * glass), is not asked, nor what is disabled, nor what dims the whole page, nor a ground cut out of one under it (a ring
+ * round a dot, in the colour of a ground further down), nor a field (its words say it is one), nor a drawing of something
+ * else ([data-depicts]: another system's screen). What loops (a placeholder's breath) is measured at its start, where it
+ * is seen at its strongest. What is on its way, or lies on what is (a scrollbar's thumb fading in, a mark over another
+ * fading out, a transition, an animation that ends), is not asked until all of it there is where it goes: half way it
+ * is neither what it was nor what it comes to, and what it comes to may be gone (the page removes what faded out).
+ */
+export function contrast(mark = false) {
+  const MARK = 1.25;
+  const say = (el, why) => { wrong.push(why); if (mark) el.setAttribute('data-off', why); };
+  const wrong = [];
+  const px = (v) => parseFloat(v) || 0;
+  const name = (el) => (el.className && el.className.toString().split(' ').find((c) => /__/.test(c))?.replace(/__.*/, '')) || el.tagName.toLowerCase();
+  // A colour as the browser computed it, as red, green, blue and opacity (0-1): rgb() and color(srgb) read, the rest
+  // (oklch(), oklab()) drawn on a pixel and read back.
+  const pixel = document.createElement('canvas').getContext('2d', { willReadFrequently: true });
+  pixel.canvas.width = pixel.canvas.height = 1;
+  const colours = new Map();
+  const rgba = (css) => {
+    let v = colours.get(css);
+    if (v) return v;
+    const n = css.match(/^rgba?\(([^)]*)\)$/) ?? css.match(/^color\(srgb ([^)]*)\)$/);
+    if (n) {
+      const parts = n[1].split(/[\s,/]+/).filter(Boolean).map(Number);
+      const scale = css.startsWith('color(') ? 1 : 255;
+      v = [parts[0] / scale, parts[1] / scale, parts[2] / scale, parts.length > 3 ? parts[3] : 1];
+    } else {
+      pixel.clearRect(0, 0, 1, 1);
+      pixel.fillStyle = 'transparent';
+      pixel.fillStyle = css;
+      pixel.fillRect(0, 0, 1, 1);
+      const d = pixel.getImageData(0, 0, 1, 1).data;
+      v = [d[0] / 255, d[1] / 255, d[2] / 255, d[3] / 255];
+    }
+    colours.set(css, v);
+    return v;
+  };
+  const lin = (c) => (c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4);
+  const lum = ([r, g, b]) => 0.2126 * lin(r) + 0.7152 * lin(g) + 0.0722 * lin(b);
+  const ratio = (a, b) => { const x = lum(a), y = lum(b); return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05); };
+  const laid = (under, top, a) => under.map((u, i) => u + (top[i] - u) * a);
+  const same = (a, b) => a.every((v, i) => Math.abs(v - b[i]) < 0.5 / 255);
+  const hex = (c) => '#' + c.map((v) => Math.round(Math.min(Math.max(v, 0), 1) * 255).toString(16).padStart(2, '0')).join('');
+  const faintness = new Map();
+  const faint = (el) => {
+    if (!el || el === document.documentElement) return 1;
+    let f = faintness.get(el);
+    if (f === undefined) { f = Number(getComputedStyle(el).opacity) * faint(el.parentElement); faintness.set(el, f); }
+    return f;
+  };
+  const pictured = (el) => /^(IMG|VIDEO|CANVAS|IFRAME|OBJECT|EMBED|PICTURE)$/i.test(el.tagName)
+    || (getComputedStyle(el).backgroundImage.includes('url('));
+  // What the browser draws at (x, y) under the `at`-th of `stack` (what is there, topmost first): its colour and each it
+  // was on the way up (the last whole one first), null on a picture's.
+  // (under all of it, the canvas: the root's ground, else the body's, which CSS paints there; white with neither)
+  const root = [document.documentElement, document.body].map((u) => rgba(getComputedStyle(u).backgroundColor)).find((v) => v[3] > 0.002);
+  const canvas = root ? laid([1, 1, 1], root.slice(0, 3), root[3]) : [1, 1, 1];
+  const ground = (stack, at) => {
+    let c = canvas;
+    let beneath = [c];
+    for (let i = stack.length - 1; i > at; i--) {
+      const u = stack[i];
+      if (pictured(u)) { c = null; beneath = []; continue; }
+      const [r, g, b, a] = rgba(getComputedStyle(u).backgroundColor);
+      const o = a * faint(u);
+      if (o <= 0.002) continue;
+      if (o >= 0.999) { c = [r, g, b]; beneath = [c]; } else if (c) { c = laid(c, [r, g, b], o); beneath.push(c); }
+    }
+    return c && { c, beneath };
+  };
+  const grounded = (u) => rgba(getComputedStyle(u).backgroundColor)[3] * faint(u) > 0.002;
+  const edged = (u) => { const o = getComputedStyle(u); return px(o.borderTopWidth) > 0 && o.borderTopStyle !== 'none' && rgba(o.borderTopColor)[3] > 0.002; };
+  const field = 'input, textarea, select, [contenteditable]:not([contenteditable="false"])';
+  const shows = (u) => pictured(u) || /^(svg|img)$/i.test(u.tagName) || u.matches(field) || [...u.childNodes].some((n) => n.nodeType === 3 && n.data.trim());
+  // Whether something over `el` at that point (not in it) draws there: a scrim, a bar's glass, a panel.
+  const covered = (stack, at, el) => stack.slice(0, at).some((u) => !el.contains(u) && !u.contains(el)
+    && (pictured(u) || grounded(u) || getComputedStyle(u).backdropFilter !== 'none'));
+  // Whether `el` is a ground for what is drawn over it there: words, an icon or a picture (a choice's thumb under its
+  // words), or a ground of what is in it over its middle (a ring round a dot).
+  const under = (stack, at, el) => stack.slice(0, at).some((u) => (!el.contains(u) && shows(u)) || (u !== el && el.contains(u) && (grounded(u) || edged(u))));
+  const onScreen = (x, y) => x >= 0 && y >= 0 && x < innerWidth && y < innerHeight;
+  // Hit-testing asked for what is drawn: what takes no pointer is drawn too. What loops at its start meanwhile (a
+  // placeholder's breath whole), as it was after.
+  const every = document.createElement('style');
+  every.textContent = '* { pointer-events: auto !important; }';
+  document.head.append(every);
+  const loops = document.getAnimations().filter((a) => a.effect?.getTiming().iterations === Infinity).map((a) => ({ a, at: a.currentTime, running: a.playState === 'running' }));
+  for (const l of loops) { l.a.pause(); l.a.currentTime = 0; }
+  // (what loops paused meanwhile: what still runs ends: on its way)
+  const moving = (el) => { for (let n = el; n; n = n.parentElement) if (n.getAnimations().some((a) => a.playState === 'running')) return true; return false; };
+  let measured = 0;
+  try {
+    for (const el of document.querySelectorAll('body *')) {
+      const cs = getComputedStyle(el);
+      if (cs.visibility !== 'visible' || cs.display === 'none' || el.closest('[data-depicts]')) continue;
+      const b = el.getBoundingClientRect();
+      if (b.width < 1 || b.height < 1) continue;
+      if (el.closest('svg')) continue;
+      // What dims the whole page (a dialog's scrim) is no mark, nor a blot blurred to no edge (a picture's colours drifting
+      // while it comes).
+      if (b.width >= innerWidth * 0.9 && b.height >= innerHeight * 0.9) continue;
+      if (/blur\(/.test(cs.filter)) continue;
+      const empty = !el.textContent.trim() && !el.matches(field) && !el.querySelector(`img, svg, video, canvas, iframe, ${field}`) && !pictured(el);
+      if (!empty) continue;
+      const x = b.left + b.width / 2, y = b.top + b.height / 2;
+      if (!onScreen(x, y) || el.closest(':disabled, [aria-disabled="true"]')) continue;
+      const stack = document.elementsFromPoint(x, y);
+      const at = stack.indexOf(el);
+      if (at < 0 || stack.slice(at).some(moving) || covered(stack, at, el) || under(stack, at, el)) continue;
+      const g = ground(stack, at);
+      if (!g) continue;
+      // Seen by its ground or by its edge (a box to tick, white with a line round it), whichever stands further off what
+      // it lies on; in the colour of a ground under it, cut out of that.
+      let best = null;
+      const look = (what, ink, gx) => {
+        if (!gx) return;
+        const [r, g, bl, a] = rgba(ink);
+        const o = a * faint(el);
+        if (o <= 0.002) return;
+        const shown = laid(gx.c, [r, g, bl], o);
+        if (same(shown, gx.c) || (o >= 0.999 && gx.beneath.some((u) => same(u, [r, g, bl])))) return;
+        const k = ratio(shown, gx.c);
+        if (!best || k > best.k) best = { k, said: `${name(el)}: ${what} ${Math.round(b.width)}x${Math.round(b.height)} ${hex(shown)} on ${hex(gx.c)}: ${k.toFixed(2)}:1, under ${MARK}` };
+      };
+      look('mark', cs.backgroundColor, g);
+      // (each side it draws, at its middle: a spinner's arc is seen though its track is not)
+      for (const side of ['Left', 'Top', 'Right', 'Bottom']) {
+        const w = px(cs[`border${side}Width`]);
+        if (w <= 0 || cs[`border${side}Style`] === 'none') continue;
+        const ex = side === 'Left' ? b.left + w / 2 : side === 'Right' ? b.right - w / 2 : x;
+        const ey = side === 'Top' ? b.top + w / 2 : side === 'Bottom' ? b.bottom - w / 2 : y;
+        const edgeStack = document.elementsFromPoint(ex, ey);
+        const edgeAt = edgeStack.indexOf(el);
+        if (edgeAt >= 0 && !covered(edgeStack, edgeAt, el)) look('edge', cs[`border${side}Color`], ground(edgeStack, edgeAt));
+      }
+      if (!best) continue;
+      measured++;
+      if (best.k < MARK - 0.005) say(el, best.said);
+    }
+  } finally {
+    every.remove();
+    for (const l of loops) { l.a.currentTime = l.at; if (l.running) l.a.play(); }
+  }
+  return { measured, wrong };
+}
+
+/**
  * How the page is drawn, element by element, as far as it shows (on the screen, not cut away by what it is in, not
  * hidden, not faded to nothing): where, how big, how faint, its transform, its colours and outline. What a story is in
  * with motion and with motion reduced, to be the same (motion reduced is the same page, its motion taking no time:

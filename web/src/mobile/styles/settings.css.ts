@@ -16,10 +16,12 @@ export const mModelRow = style({
   padding: "11px 24px",
   border: "0", background: "none", textAlign: "left", cursor: "pointer",
 });
+// (not ticked, in the line's grey: what has nothing in it seen on its ground, docs/ui-panels.md 对比度; the chips' grey
+// was 1.14 to 1 on the page)
 export const mCheck = style({
   display: "grid", placeItems: "center", flex: "none", width: "20px", height: "20px",
   borderRadius: `calc(6px * ${vars.cornerScale})`, cornerShape: vars.cornerShape,
-  background: "var(--m-chip)", color: "var(--m-bg)",
+  background: "var(--m-line)", color: "var(--m-bg)",
   selectors: {
     "&[data-on]": { background: "var(--m-accent)" },
   },

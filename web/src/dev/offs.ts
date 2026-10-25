@@ -1,8 +1,8 @@
-// In the development build, what is off as it shows: each corner and small panel measured as the stories' tests
+// In the development build, what is off as it shows: each corner, small panel and contrast measured as the stories' tests
 // measure them (test/browser/measure.mjs, docs/ui-panels.md), again whenever the page changes, and what is off outlined
 // in red, saying why when pointed at (and in the console, once each). A part written with its own corner or padding is
 // seen wrong the first time it is looked at, not when CI measures a story that may never reach it.
-import { corners, panels } from "../../../test/browser/measure.mjs";
+import { contrast, corners, panels } from "../../../test/browser/measure.mjs";
 
 const said = new Set<string>();
 let queued = 0;
@@ -10,7 +10,7 @@ let queued = 0;
 function measure() {
   queued = 0;
   for (const el of document.querySelectorAll("[data-off]")) el.removeAttribute("data-off");
-  for (const why of [...corners(true).wrong, ...panels(true).wrong]) {
+  for (const why of [...corners(true).wrong, ...panels(true).wrong, ...contrast(true).wrong]) {
     if (said.has(why)) continue;
     said.add(why);
     console.warn(`off (docs/ui-panels.md): ${why}`);

@@ -244,3 +244,14 @@ detlint (docs/detlint.md) counts, file by file, only going down:
 
 `Tester::census()` gives the values the last frame used, by kind (sizes of words, weights, paddings, corners,
 colours): an app counts how many each kind has across its screens, which should go down.
+
+## Seen
+
+What is drawn to be seen with nothing in it (a gauge's empty cell, a track, a line, a placeholder's block, a sheet's
+grip: a box holding no words, picture or icon, nor under any drawn after it) stands at least `contrast_mark_least`
+(1.25, WCAG 2's ratio) off what it lies on, by its ground or by its edge: `Tester::contrast_faults` says where it does
+not, measured on the frame as drawn (the colour under it worked out from what was drawn before it there; loops at their
+start). A ground under words carries none of this: its words carry it. So that one colour is seen on whatever it lies
+on (the page, a card, a menu), the theme's `line` and `neutral` are the ink at an opacity, not an opaque grey: an opaque
+grey stands a step off the one ground it was chosen on and none off another. Words' and icons' contrast (WCAG's AA) are
+not checked yet.

@@ -29,7 +29,7 @@ pub fn qr_code(c : @ui.Ctx, code : Json?, size : Double, label : String) -> Unit
   let n = n0 + qr_quiet * 2
   let cell = (size / n.to_double()).floor()
   let start = (size - cell * n.to_double()) / 2.0 + cell * qr_quiet.to_double()
-  c.box(style=qr_box.then(@ui.style(w=Fixed(size), h=Fixed(size), bg=Data(qr_white))), label~, fn() {
+  let b = c.box(style=qr_box.then(@ui.style(w=Fixed(size), h=Fixed(size), bg=Data(qr_white))), label~, fn() {
     for y, row in rows {
       // each row's dark runs, laid over the white
       let mut x = 0
@@ -51,7 +51,8 @@ pub fn qr_code(c : @ui.Ctx, code : Json?, size : Double, label : String) -> Unit
       }
     }
   })
-  |> ignore
+  // (a picture of the code, its colours its own whatever the theme: a screen reader's image, as no mark of the page)
+  c.semantics(b, Image, label~)
 }
 
 ///|

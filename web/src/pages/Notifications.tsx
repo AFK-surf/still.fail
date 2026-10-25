@@ -240,7 +240,7 @@ function Preview({ s, kind }: { s: Settings; kind: Kind }) {
   if (SYSTEM === "phone") {
     // The device itself, standing up from the preview's foot, its top in view.
     return (
-      <div className={css.stage} aria-label={t("web-pages.notifications.previewLabel")} role="img">
+      <div className={css.stage} aria-label={t("web-pages.notifications.previewLabel")} role="img" data-depicts>
         <div className={css.device} data-tablet={TABLET || undefined}>
           <div className={css.deviceScreen}>
             <div className={css.status}><span>9:41</span><span className={css.battery} /></div>
@@ -253,7 +253,7 @@ function Preview({ s, kind }: { s: Settings; kind: Kind }) {
     );
   }
   return (
-    <div className={css.screen} aria-label={t("web-pages.notifications.previewLabel")} role="img">
+    <div className={css.screen} aria-label={t("web-pages.notifications.previewLabel")} role="img" data-depicts>
       {card}
       <div className={SYSTEM === "windows" ? css.taskbar : css.dockBar}>{icons}</div>
     </div>

@@ -36,6 +36,9 @@ fn reset_globals() -> Unit {
   the_ctx.val = Ctx::new()
   corners_hold.val = true
   text_runs.on = false
+  inst_owners.on = false
+  inst_owners.painting = -1
+  inst_owners.owner.clear()
   text_runs.runs.clear()
   desk_reset()
   tester_size.val = None
@@ -139,6 +142,7 @@ fn leaked_state() -> Array[String] {
   check("timers", helds.length() + marks_at.length())
   check("drawing", dr.entries.length() + dr.overlay.length() + dr.carry.length())
   check("messages", fake_posted.length())
+  check("inst_owners", inst_owners.owner.length())
   out
 }
 

@@ -27,7 +27,8 @@ pub fn done_waiting(c : @ui.Ctx, key : String) -> Unit {
 ///|
 /// What waits breathing (the placeholders, to 0.5: waiting.css.ts breathe; a service restarting, its dot to 0.35:
 /// Jobs.css.ts jobBreathe), how much of it shows now: whole to `low` and back in breath_ms, each way on CSS's
-/// ease-in-out; 0.6 when what it waits on failed. `resident`: a state's for as long as it lasts (a service
+/// ease-in-out; still and whole when what it waits on failed (the red words over them say so: faded, they were drawn
+/// too faint to be seen, docs/ui-panels.md 对比度). `resident`: a state's for as long as it lasts (a service
 /// restarting), on the one clock's steps, not a wait's (Ctx::cycle).
 pub fn breath(
   c : @ui.Ctx,
@@ -36,7 +37,7 @@ pub fn breath(
   resident? : Bool = false,
 ) -> Double {
   if failed {
-    return 0.6
+    return 1.0
   }
   let f = c.cycle(breath_ms, resident~)
   let way = if f < 0.5 { f * 2.0 } else { 2.0 - f * 2.0 }
@@ -44,8 +45,8 @@ pub fn breath(
 }
 
 ///|
-/// A placeholder bar (a title's, a line's, a picture's): the neutral grey,
-/// round; `breathing`, on the placeholders' breath by itself (Stations.kt Bar).
+/// A placeholder bar (a title's, a line's, a picture's): in the line's grey, as what is drawn with nothing in it is
+/// (contrast.mbt), round; `breathing`, on the placeholders' breath by itself (Stations.kt Bar).
 pub fn bar(
   c : @ui.Ctx,
   w : @ui.Size,
@@ -58,7 +59,7 @@ pub fn bar(
   c.box(
     w~,
     h=Px(h),
-    bg=t.p.neutral_bg,
+    bg=t.p.line,
     radius=if radius >= 0.0 { radius } else { h / 2.0 },
     opacity=seen,
     fn() {  },
@@ -115,7 +116,7 @@ pub fn wait_line(c : @ui.Ctx, text : String, key? : String = "", error? : Bool =
 
 ///|
 /// How much of `key` (what has a size: a download, a transfer) has come (Progress): mbui's progress bar (@kit.progress)
-/// in still.fail's look, a 3 high pill on 18% of the accent, going to a part told anew over 200 ms; `part` None when
+/// in still.fail's look, a 3 high pill on the line's grey, going to a part told anew over 200 ms; `part` None when
 /// the whole is not known, a 40% piece sweeping across.
 pub fn progress(c : @ui.Ctx, key : String, part : Double?, w? : @ui.Size = Fill(1.0), color? : Int64) -> Unit {
   let accent = color.unwrap_or(theme().p.accent)
@@ -221,8 +222,8 @@ let wait_cards : Array[Double] = [120.0, 88.0, 152.0, 104.0]
 /// The shapes of what will come (WaitShapes, waiting.css.ts): `Rows` (7 by default) 66 high, 22 in at their start and
 /// 16 at their end, a title 13 and a line 10 high 10 apart, a picture 22 round at the end (`dense`: 40 high, 10 in,
 /// the bars 0.6 as long and lower, no picture); `Messages`: 14 apart, 8 under the top, 16 in, a face 28 before each not
-/// mine, its bubble 18 round, 70% of the width at most; `Cards` (3) 16 apart, a card's corner. Breathing (`still`: at
-/// 0.6, as what they wait on failed).
+/// mine, its bubble 18 round, 70% of the width at most; `Cards` (3) 16 apart, a card's corner. Breathing (`still`: still,
+/// whole, as what they wait on failed).
 pub fn wait_shapes(
   c : @ui.Ctx,
   shape? : WaitShape = Rows,
@@ -240,9 +241,9 @@ pub fn wait_shapes(
           let (mine, w, h) = m
           c.box(style=if mine { wait_message_mine } else { wait_message }, fn() {
             if !mine {
-              c.box(style=wait_face, bg=t.p.neutral_bg, fn() {  }) |> ignore
+              c.box(style=wait_face, bg=t.p.line, fn() {  }) |> ignore
             }
-            c.box(w=Px(dmin(w, most)), h=Px(h), radius=wait_bubble_r, bg=t.p.neutral_bg, fn() {  }) |> ignore
+            c.box(w=Px(dmin(w, most)), h=Px(h), radius=wait_bubble_r, bg=t.p.line, fn() {  }) |> ignore
           })
           |> ignore
         }
@@ -252,7 +253,7 @@ pub fn wait_shapes(
     Cards =>
       c.box(style=wait_cards_box, opacity=seen, fn() {
         for i in 0..<count.unwrap_or(3) {
-          c.box(style=wait_card, h=Px(wait_cards[i % wait_cards.length()]), bg=t.p.neutral_bg, fn() {  }) |> ignore
+          c.box(style=wait_card, h=Px(wait_cards[i % wait_cards.length()]), bg=t.p.line, fn() {  }) |> ignore
         }
       })
       |> ignore

@@ -4,9 +4,10 @@
 // app's languages, over the Tester's own text (the faults a screen has its own, the same on every machine). Each keeps
 // to the bar corners_everywhere_known says (the faults it still has): one more fails, and one less until the bar is
 // lowered there. A screen not listed has none. scripts/corners.sh shows the same screens in a Mac's text, as
-// pictures, what breaks the rule outlined. The same frame of each screen in squeeze_windows is held to
-// its squeeze bar too (squeeze_wbtest.mbt): a screen is opened once for both. (The screens' own tests, screens_wbtest.mbt, hold the phone's screens in
-// the Mac's text to corners_known.)
+// pictures, what breaks the rule outlined. The same frame of each screen in squeeze_windows is held to its squeeze bar
+// too (squeeze_wbtest.mbt), and in Chinese to the contrast rule in the light theme (contrast_wbtest.mbt): a screen is
+// opened once for all. (The screens' own tests, screens_wbtest.mbt, hold the phone's screens in the Mac's text to
+// corners_known.)
 
 ///|
 /// The windows: the narrowest of each layout (squeeze_windows: a phone's, a finger's Medium, a desktop's Medium, a
@@ -82,8 +83,15 @@ fn corners_check(lang : String) -> Unit raise {
       for f in t.gap_faults() {
         gaps.push("\{at}: \{f}")
       }
-      // (the squeeze's on the screen at rest, before what shows only under the hand is shown)
+      // (the squeeze's on the screen at rest, before what shows only under the hand is shown; the contrast's too, in the
+      // light theme, once: contrast_wbtest.mbt)
       let squeeze = if squeezed { squeeze_wrong(at, t.squeeze_faults()) } else { None }
+      if lang == "zh" {
+        match contrast_wrong("\{win.0}-light \{mode}", t.contrast_faults()) {
+          Some(w) => wrong.push(w)
+          None => ()
+        }
+      }
       // and what it shows only under the hand (Ctx::lit_shown, hand_shown: a row's 归档), all of it at once, each fault
       // once
       for f in t.lit_all_faults() {

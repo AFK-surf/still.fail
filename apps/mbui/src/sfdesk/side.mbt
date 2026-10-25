@@ -151,15 +151,15 @@ let breathing_row : @ui.Style = @ui.css("w=Full gap=S1_5")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let breathing_title : @ui.Style = @ui.style(w=Fixed(breath_title_w), h=S3, radius=Full, bg=Neutral)
+let breathing_title : @ui.Style = @ui.style(w=Fixed(breath_title_w), h=S3, radius=Full, bg=Line)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let breathing_title_long : @ui.Style = @ui.style(w=Fixed(breath_title_long_w), h=S3, radius=Full, bg=Neutral)
+let breathing_title_long : @ui.Style = @ui.style(w=Fixed(breath_title_long_w), h=S3, radius=Full, bg=Line)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let breathing_line : @ui.Style = @ui.style(w=Fixed(breath_line_w), h=S2_5, radius=Full, bg=Neutral)
+let breathing_line : @ui.Style = @ui.style(w=Fixed(breath_line_w), h=S2_5, radius=Full, bg=Line)
 
 ///|
 /// The action over a list (SidebarList.tsx NavAction, in its band: Sidebar.css.ts navNew, 6 over it, 8 at its sides, 2

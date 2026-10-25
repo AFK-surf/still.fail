@@ -72,5 +72,6 @@ let station_state_box : @ui.Style = @ui.css("row gap=S1_25 align=ACenter")
 let station_dot_on : @ui.Style = @ui.css("w=S1_5 h=S1_5 radius=Full bg=Positive")
 
 ///|
+/// Down: a ring in the quiet words' grey (parts.css.ts statusDot: inset 1.5 of --muted), seen on any ground.
 // kept across runs: a value (no field of it changes)
-let station_dot_off : @ui.Style = @ui.css("w=S1_5 h=S1_5 radius=Full bg=Faint")
+let station_dot_off : @ui.Style = @ui.css("w=S1_5 h=S1_5 radius=Full border=B1_5 border_color=Muted")

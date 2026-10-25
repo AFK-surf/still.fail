@@ -458,8 +458,9 @@ pub(all) enum Color {
   ShadowC
   /// someone else at the controls, a wait to look at (still.fail's Theme.kt C.warn)
   Warn
-  /// a quiet ground over whatever is under it (a key, a Seg's track, a remove button): the words' colour at 6%; a
-  /// stronger one at 8% (a progress's track)
+  /// a quiet ground over whatever is under it (a key, a Seg's track, a remove button): the words' colour at 6%; and
+  /// what is empty of what fills (a progress's track): the line's colour, as what is drawn with nothing in it is
+  /// (Theme's `line`, contrast.mbt)
   Tint
   TintStrong
   /// what floats still over the page, nothing blurred under it (Glass.kt floatingStill: Raised at 72% over the page)
