@@ -10,6 +10,7 @@
 // runtime has just compacted its context, or is about to (`cheapToLeave`).
 // Also the reasoning levels a model offers (shapes reasoning.rs), which the pool's accounts decide.
 import { type Profile, runs, sameModel } from "./config.ts";
+import { COMPACTED_FROM } from "../store/rows.ts";
 
 type Json = any;
 
@@ -74,8 +75,8 @@ export function urgency(quota: Json | null | undefined, now: number): Urgency {
 }
 
 /// A context falling under half of what the call before sent (at least this much), on the same account and model, was
-/// compacted.
-export const COMPACTED_FROM = 50_000;
+/// compacted (store/rows.ts, where the database keeps where it was: schema.ts USAGE_COMPACTIONS).
+export { COMPACTED_FROM };
 /// How near a session's context is to where its model is compacted (compactionPoints) to be about to be.
 const NEAR_COMPACTION = 0.75;
 

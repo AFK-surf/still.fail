@@ -26,7 +26,7 @@ import {
   byBytes, cardOf, jsonList, mergeEntries, optionsCard, parsed, quote, takeChars, toEntry, toJob, toMembership,
   LETTER_SQL, isLetter, liveShare, shareLive, toChatShare, toMessage, toOpened, toPublished, toSession, toSessionThread, toThread, toTurnSummary, JOBS_RUNNING,
 } from "./rows.ts";
-import { SCHEMA, SCHEMA_VERSION, addArchiveColumns, addAutoTitleColumns, addClientColumn, addLetterColumn, addQueueColumns, addSizeColumn, addUsageTotals, addWatchColumn, addWorkspaceColumns } from "./schema.ts";
+import { SCHEMA, SCHEMA_VERSION, addArchiveColumns, addThreadIndexes, addUsageCompactions, addAutoTitleColumns, addClientColumn, addLetterColumn, addQueueColumns, addSizeColumn, addUsageTotals, addWatchColumn, addWorkspaceColumns } from "./schema.ts";
 import * as usage from "./usage.ts";
 import { timed } from "./timed.ts";
 
@@ -111,6 +111,7 @@ export class Store {
       }
       db.exec(SCHEMA);
       addArchiveColumns(db);
+      addThreadIndexes(db);
       addLetterColumn(db);
       addClientColumn(db);
       addAutoTitleColumns(db);
@@ -119,6 +120,7 @@ export class Store {
       addSizeColumn(db);
       addWorkspaceColumns(db);
       addUsageTotals(db);
+      addUsageCompactions(db);
       db.exec(`PRAGMA user_version = ${SCHEMA_VERSION}`);
     } catch (e) {
       db.close();
@@ -1742,8 +1744,8 @@ export class Store {
   }
 
   /// Where each model's context was compacted on this station since `since` (store/usage.ts).
-  compactionPoints(since: number, least: number): Map<string, number> {
-    return usage.compactionPoints(this.db, since, least);
+  compactionPoints(since: number): Map<string, number> {
+    return usage.compactionPoints(this.db, since);
   }
 
   /// Tells whoever follows the store that calls of `sessions` were recorded.

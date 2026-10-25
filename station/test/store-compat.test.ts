@@ -44,14 +44,14 @@ function shape(path: string): string[] {
 /// Columns the TS station adds to tables the Rust station made (schema.ts), by table: a station's in several workspaces
 /// (docs/multi-workspace.md). A table's latest first: each is taken off the end of its table's SQL in turn.
 const ADDED: [string, string][] = [["sessions", "ws"], ["archive_policy", "ws"], ["entries", "letter"], ["entries", "runtime"], ["jobs", "size"], ["jobs", "screen"], ["jobs", "queued"]];
-/// What those columns bring with them: an index of its own (letters; the sessions counted by connect and workspace), and
-/// the `merged` view saying the column (letters).
-const ADDED_INDEXES = ["entries_letters", "sessions_by_connect"];
+/// What those columns bring with them: an index of its own (letters; the sessions counted by connect and workspace; the
+/// threads' homes), and the `merged` view saying the column (letters).
+const ADDED_INDEXES = ["entries_letters", "sessions_by_connect", "threads_home", "threads_own"];
 const MERGED_ADDS = [", m.letter"];
-/// Tables the TS station makes as it opens (schema.ts `addUsageTotals`): each with its columns and the triggers that keep
-/// it (named after it).
-const MADE = ["usage_totals"];
-const made = (l: string) => MADE.some((t) => l.startsWith(`table ${t}:`) || l.startsWith(`  ${t}.`) || l.startsWith(`trigger ${t}_`));
+/// Tables the TS station makes as it opens (schema.ts `addUsageTotals`, `addUsageCompactions`): each with its columns,
+/// and the indexes and triggers that keep it (named after it).
+const MADE = ["usage_totals", "usage_compactions"];
+const made = (l: string) => MADE.some((t) => l.startsWith(`table ${t}:`) || l.startsWith(`  ${t}.`) || l.startsWith(`trigger ${t}_`) || l.startsWith(`index ${t}_`));
 
 const noToken = <T extends { token: string }>(r: T) => {
   const { token: _, ...rest } = r;

@@ -858,6 +858,30 @@ test("what the station's own periodic work asks is planned by an index, never a 
   assert.deepEqual([stats.get("a")!.turns, stats.get("a")!.pending, stats.get("a")!.firstText, stats.get("a")!.lastTurn?.kind], [1, 0, null, "input"]);
 });
 
+test("usage: where a model's context was compacted is kept as calls are recorded, and made once from those before", () => {
+  const path = join(tempdir(), "stillfail.db");
+  let store = open(path);
+  session(store, "a");
+  const call = (id: string, at: number, sent: number, model = "m", subagent = false) =>
+    [{ id, at, model, subagent, fast: false, input: sent, cacheRead: 0, cacheWrite: 0, cacheWriteLong: 0, output: 1 }, { turn: null, person: null, thread: null, profile: "cc" }] as const;
+  store.recordUsage("/t.jsonl", { session: "a", offset: 1, model: "m" }, "claude", [
+    call("c1", 1000, 120_000),
+    call("s1", 1500, 5_000, "m", true), // a sub-agent's: not the session's context
+    call("c2", 2000, 30_000), // compacted from 120 000
+    call("c3", 3000, 40_000), // not compacted: up
+    call("c4", 4000, 90_000, "other"), // another model: not compared
+    call("c5", 5000, 20_000, "other"), // compacted from 90 000
+    call("c6", 6000, 10_000, "other"), // under COMPACTED_FROM before: not
+  ] as never);
+  assert.deepEqual([...store.compactionPoints(0)].sort(), [["m", 120_000], ["other", 90_000]]);
+  assert.deepEqual([...store.compactionPoints(4500)], [["other", 90_000]], "those since");
+  // A database from before them: made from the calls it has, as it opens.
+  store.db.exec("DROP TRIGGER usage_compactions_add; DROP TABLE usage_compactions;");
+  store.close();
+  store = open(path);
+  assert.deepEqual([...store.compactionPoints(0)].sort(), [["m", 120_000], ["other", 90_000]]);
+});
+
 test("usage: a call is recorded once, its output grown; turns tell whom they were for", () => {
   const store = memory();
   session(store, "a");

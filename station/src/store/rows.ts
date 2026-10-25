@@ -483,3 +483,7 @@ export const byBytes = (a: string, b: string) => Buffer.compare(Buffer.from(a), 
 /// The jobs running now, the latest first, by the index on their state (schema.ts jobs_up): the main thread's and the
 /// readers' (who keeps watch).
 export const JOBS_RUNNING = "SELECT * FROM jobs WHERE state = 'running' ORDER BY started_at DESC";
+
+/// A context falling under half of what the call before sent (at least this much), on the same account and model, was
+/// compacted (sessions/pool.ts; what schema.ts USAGE_COMPACTIONS keeps).
+export const COMPACTED_FROM = 50_000;
