@@ -206,6 +206,41 @@ test("a part read stopped short (let go of, or broken off) keeps what came of it
   assert.deepEqual(kept, [[14, [...bytesOf(5, 14)]]]);
 });
 
+test("a part streamed to a player stops as the player lets go of it, or its page goes: nothing more of it comes", async () => {
+  const t = await started();
+  drive(t.host, new Map<string, File>([["film.mp4", { bytes: bytesOf(64), mtime: 7 }]]));
+  const said = { mtime: 7, size: 64 };
+  const part = (ui: number, id: number) => call(t.core, ui, id, "drive.read", { station: ST, root: ROOT, path: "film.mp4", offset: 0, length: 64, stream: true, keep: "played", ...said });
+  const of = (id: number) => t.host.takeEmitted().map(([, m]) => m as { id: number; error?: { code: string }; bytes?: Uint8Array }).filter((m) => m.id === id);
+  // The station slow to answer it, the player gone elsewhere meanwhile: it says so, and nothing of it comes after.
+  const ui = t.core.connect();
+  const release = t.host.hold("&length=64");
+  part(ui, 1);
+  await t.host.settle();
+  t.core.receive(ui, { kind: "cancel", id: 1, cancel: true });
+  await t.host.settle();
+  release();
+  await t.host.settle();
+  assert.deepEqual(of(1).map((m) => m.error?.code ?? (m.bytes ? "bytes" : "answer")), ["cancelled"]);
+  assert.equal(t.core.inner.calls.size, 0);
+  // Its page gone: the same.
+  const other = t.core.connect();
+  const again = t.host.hold("&length=64");
+  part(other, 2);
+  await t.host.settle();
+  t.core.disconnect(other);
+  await t.host.settle();
+  again();
+  await t.host.settle();
+  assert.deepEqual(of(2).map((m) => m.error?.code ?? (m.bytes ? "bytes" : "answer")), ["cancelled"]);
+  assert.equal(t.core.inner.calls.size, 0);
+  // One not let go of brings all of it.
+  part(ui, 3);
+  await t.host.settle();
+  assert.deepEqual(of(3).flatMap((m) => [...(m.bytes ?? [])]), [...bytesOf(64)]);
+  t.core.close();
+});
+
 test("past their bound the least lately read go, never the one just read nor one being written", async () => {
   const host = new FakeHost();
   const kept = new DriveKept(host, { file: 10, played: 100, chat: Number.POSITIVE_INFINITY, sent: 100 });

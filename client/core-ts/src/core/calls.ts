@@ -159,10 +159,12 @@ export type Call =
   /// An app's module's call (module.ts): `<module>.<name>`, its params as the module checked them.
   | { kind: "module"; name: string; call: HeldCall };
 
-/// Whether a UI can cancel it (`{id, cancel}`), and one gone does: the calls that hold something open for a page.
+/// Whether a UI can cancel it (`{id, cancel}`), and one gone does: the calls that hold something open for a page, and
+/// those that hand it what they read as it comes (`stream`: a player's part of a file, let go of as it seeks elsewhere
+/// or closes), so that nothing no page waits for any more goes on coming over the network.
 export function cancellable(call: Call): boolean {
   if (call.kind === "module") return call.call.def.cancellable === true;
-  return (call.kind === "stationPreview" && call.stream) || call.kind === "previewSocket" || (call.kind === "screen" && call.call.kind === "view");
+  return ((call.kind === "stationPreview" || call.kind === "stationFilePart" || call.kind === "driveRead") && call.stream) || call.kind === "previewSocket" || (call.kind === "screen" && call.call.kind === "view");
 }
 
 function opStation(op: ops.Request): string | null {
