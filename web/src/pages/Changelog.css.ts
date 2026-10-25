@@ -34,7 +34,8 @@ export const news = style({
 export const newsLink = style({
   display: "grid", gap: "2px", padding: "8px 30px 9px 10px", color: vars.text, fontSize: vars.textMeta, lineHeight: "18px",
   borderRadius: "inherit", cornerShape: vars.cornerShape,
-  selectors: { "&:hover": { background: vars.selected } },
+  // (over its card's grey: a step more)
+  selectors: { "&:hover": { background: vars.hover } },
 });
 export const newsHead = style({
   display: "flex", alignItems: "center", gap: "6px", marginBottom: "2px", fontSize: vars.textUi, lineHeight: "20px", fontWeight: 500,

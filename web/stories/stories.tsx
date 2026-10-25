@@ -818,6 +818,9 @@ export const stories: Story[] = [
   { id: "app-chat-history", group: "应用", title: "执行历史", app: true, steps: [{ click: '[aria-label$="的执行历史"]' }] },
   { id: "app-chat-history-turns", group: "应用", title: "执行历史 · 一轮一轮", app: true, steps: [{ click: '[aria-label$="的执行历史"]' }], demo: historyTurns },
   { id: "app-chat-side", group: "应用", title: "对话 · 侧栏打开", app: true, steps: [{ click: '[aria-label="打开侧栏"]' }] },
+  // A tab's × pointed at, behind and in front: the tab stays lit, the × a step more (docs/ui-panels.md 悬停).
+  { id: "app-chat-side-tab-close", group: "应用", title: "对话 · 侧栏标签的 × 悬停", app: true, demo: letters, steps: [{ click: '[aria-label$="的执行历史"]' }, { click: '[aria-label="对话信息"]' }, { click: "text=agent 往来" }, { hover: '[class*="sideTabWrap"]:first-child [class*="sideTabClose"]' }] },
+  { id: "app-chat-side-front-close", group: "应用", title: "对话 · 侧栏当前标签的 × 悬停", app: true, demo: letters, steps: [{ click: '[aria-label$="的执行历史"]' }, { click: '[aria-label="对话信息"]' }, { click: "text=agent 往来" }, { hover: '[class*="sideTabWrap"]:last-child [class*="sideTabClose"]' }] },
   { id: "app-chat-relay", group: "应用", title: "对话 · 接力到频道", app: true, demo: relayDemo(), steps: [{ click: '[aria-label="对话信息"]' }, { click: "text=接力到频道…" }] },
   { id: "app-chat-relay-picked", group: "应用", title: "对话 · 接力到频道 · 选中一个", app: true, demo: relayDemo(), steps: [{ click: '[aria-label="对话信息"]' }, { click: "text=接力到频道…" }, { text: "#cue-dev" }] },
   { id: "app-chat-relay-all", group: "应用", title: "对话 · 接力到频道 · 显示全部", app: true, demo: relayDemo(), steps: [{ click: '[aria-label="对话信息"]' }, { click: "text=接力到频道…" }, { text: "显示全部 10 个" }] },

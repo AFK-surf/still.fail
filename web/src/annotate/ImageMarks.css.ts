@@ -72,7 +72,8 @@ export const done = style({
   border: "0", borderRadius: "15px", background: INK, color: "#fff", font: "inherit", fontSize: vars.textMeta,
   fontWeight: "600", cursor: "pointer",
   selectors: {
-    "&:hover:not(:disabled)": { filter: "brightness(1.08)" },
+    // A solid ground pointed at: a step towards the page (docs/ui-panels.md 悬停).
+    "&:hover:not(:disabled)": { background: `color-mix(in srgb, ${INK} 85%, ${vars.canvas})` },
     "&:disabled": { opacity: ".4", cursor: "default" },
   },
 });

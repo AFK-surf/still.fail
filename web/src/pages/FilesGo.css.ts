@@ -1,11 +1,13 @@
 import { globalStyle, style } from "@vanilla-extract/css";
 import { vars } from "@stillfail/ui/styles/tokens.css.ts";
+import { litOver } from "@stillfail/ui/styles/lit.ts";
 
 /** The station's button at the start of a folder's trail. */
 export const switchButton = style({
   display: "inline-flex", alignItems: "center", gap: "5px", height: "22px", padding: "0 7px", border: `1px solid ${vars.line}`,
   borderRadius: vars.rOption, background: vars.raised, color: vars.text, font: "inherit", fontSize: vars.textMeta, fontWeight: "500", cursor: "pointer",
-  selectors: { "&:hover, &[data-state=open]": { borderColor: vars.lineStrong } },
+  // A button (its menu of stations), not a field: pointed at or open, the ink over its ground, as mbui's (files_go.mbt).
+  selectors: { "&:hover, &[data-state=open]": litOver },
 });
 globalStyle(`${switchButton} svg`, { color: vars.muted });
 export const stations = style({ minWidth: "240px" });

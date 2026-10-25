@@ -4,6 +4,7 @@
 // bars above and below the picture, which stays clear of them.
 import { globalStyle, style } from "@vanilla-extract/css";
 import { vars } from "@stillfail/ui/styles/tokens.css.ts";
+import { litOver } from "@stillfail/ui/styles/lit.ts";
 import { pictureGlass as glass } from "@stillfail/ui/styles/glass.ts";
 import { IN, PANEL_PAD, PANEL_PILL, TEXT_IN, centred, centredX, pillInner } from "@stillfail/ui/styles/align.ts";
 import { panelCard, popover } from "@stillfail/ui/styles/controls.css.ts";
@@ -250,7 +251,7 @@ export const deviceButton = style({
   display: "grid", placeItems: "center", width: "40px", height: "40px", padding: "0", border: "0", borderRadius: "50%",
   background: `color-mix(in srgb, ${vars.text} 6%, transparent)`, color: vars.text, cursor: "pointer",
   selectors: {
-    "&:hover:not(:disabled)": { background: `color-mix(in srgb, ${vars.text} 11%, transparent)` },
+    "&:hover:not(:disabled)": litOver,
     "&:disabled": { opacity: ".4", cursor: "default" },
   },
 });

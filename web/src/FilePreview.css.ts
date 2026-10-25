@@ -1,5 +1,6 @@
 import { globalStyle, style } from "@vanilla-extract/css";
 import { vars } from "@stillfail/ui/styles/tokens.css.ts";
+import { litOver } from "@stillfail/ui/styles/lit.ts";
 import { fadeInKeyframes } from "@stillfail/ui/styles/keyframes.css.ts";
 import { btn } from "@stillfail/ui/styles/controls.css.ts";
 import { enrollWait } from "./cloud/settings.css.ts";
@@ -122,7 +123,7 @@ export const fpStep = style({
     "&[data-side=before]": { justifySelf: "start" },
     "&[data-side=after]": { justifySelf: "end" },
     [`${fp}:not([data-awake]) &:not(:hover):not(:focus-visible)`]: { opacity: "0" },
-    "&:hover:not(:disabled)": { background: vars.canvas },
+    "&:hover:not(:disabled)": litOver,
     "&:disabled": { opacity: "0", pointerEvents: "none" },
   },
   "@media": {

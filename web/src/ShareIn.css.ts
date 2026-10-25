@@ -48,7 +48,7 @@ export const row = style({
   borderRadius: inner, cornerShape: innerShape, background: "none", color: vars.text, font: "inherit", fontSize: vars.textUi, textAlign: "left",
   cursor: "pointer",
   selectors: {
-    "&:hover": { background: `color-mix(in srgb, ${vars.text} 5%, transparent)` },
+    "&:hover": { background: vars.hover },
     "&:focus-visible": { outline: `2px solid ${vars.fieldFocus}`, outlineOffset: "-2px" },
   },
 });

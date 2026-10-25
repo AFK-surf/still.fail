@@ -2,6 +2,7 @@
 // the cloud's and the admin console's settings lists, which are drawn with the same rows.
 import { fallbackVar, globalStyle, style } from "@vanilla-extract/css";
 import { vars } from "@stillfail/ui/styles/tokens.css.ts";
+import { litOver } from "@stillfail/ui/styles/lit.ts";
 import { accountTrigger } from "./cloud/workspace.css.ts";
 import { dock, shell } from "./styles/shell.css.ts";
 import { kindIcon, kindMark } from "./ui.css.ts";
@@ -274,7 +275,7 @@ export const waitingRetry = style({
   flex: "none", height: 22, padding: "0 10px", ...outsetEnd(4), borderRadius: 999, border: 0, cursor: "pointer",
   background: vars.hover, color: vars.text, fontSize: vars.textUi, display: "inline-flex", alignItems: "center", gap: 5,
   selectors: {
-    "&:hover:not(:disabled)": { background: vars.line },
+    "&:hover:not(:disabled)": litOver,
     "&:disabled": { cursor: "progress" },
     [`${stationRow} > &`]: { position: "absolute", right: 6, top: 5, marginRight: 0 },
   },

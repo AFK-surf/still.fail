@@ -15,7 +15,8 @@ export const ownerLine = style({ display: "inline-flex", alignItems: "center", g
 export const inputLink = style({
   display: "flex", alignItems: "center", color: vars.accentText, textDecoration: "none", cursor: "pointer",
   selectors: {
-    "&:hover": { borderColor: vars.fieldHover },
+    // The accent's words already: pointed at, underlined (docs/ui-panels.md 悬停).
+    "&:hover": { textDecoration: "underline" },
   },
 });
 export const slackTeamIcon = style({});
