@@ -6,7 +6,8 @@ import { existsSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
-import { RunnerConnection, existingRunners, startRunner } from "../src/agents/runner.ts";
+import { findRunner } from "../src/agents/process.ts";
+import { RunnerConnection, existingRunners, liveRunners, startRunner } from "../src/agents/runner.ts";
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 /// Looks every 20 ms until `f` holds (no deadline: it happens, whatever the machine's speed, or the test hangs).
@@ -35,6 +36,10 @@ test("lines in order; a station that lets go and comes back reads on where it ac
   writeFileSync(go, "go\n");
   await until(() => existsSync(said));
   assert.equal(existingRunners(data).length, 1, "the runner outlives the connection");
+  // As the watches read them, off the thread; and as a session finds its own, by its file alone.
+  assert.deepEqual(await liveRunners(data), existingRunners(data));
+  assert.equal(findRunner(data, "t1")?.runner, info.runner);
+  assert.equal(findRunner(data, "t2"), undefined);
   const second: string[] = [];
   const b = new RunnerConnection(info, (stream, text) => void second.push(`${stream}:${text}`));
   await until(() => second.includes("out:line6"));
@@ -47,4 +52,5 @@ test("lines in order; a station that lets go and comes back reads on where it ac
   b.done();
   // Done: the runner is gone.
   await until(() => existingRunners(data).length === 0);
+  assert.deepEqual(await liveRunners(data), []);
 });

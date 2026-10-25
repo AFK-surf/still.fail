@@ -17,7 +17,7 @@
 import { totalmem } from "node:os";
 import type { Clock } from "effect";
 import { runnerId } from "../agents/process.ts";
-import { existingRunners, type RunnerInfo } from "../agents/runner.ts";
+import { liveRunners, type RunnerInfo } from "../agents/runner.ts";
 import { RUNTIME_KINDS } from "../agents/runtime.ts";
 import { Fibers } from "../ops/fibers.ts";
 import { log } from "../ops/log.ts";
@@ -103,7 +103,8 @@ export type MemoryOptions = {
   /// The working directories of processes, for a command whose session its runtime does not say.
   cwds(pids: number[]): Promise<Map<number, string>>;
   jobs(): WatchedJob[];
-  agents(): WatchedAgent[];
+  /// The agents' runtimes (their runners' files, read off the station's thread).
+  agents(): Promise<WatchedAgent[]>;
   /// The session whose directory `dir` is in.
   sessionAt(dir: string): string | null;
   /// Tells a unit's agent: a job's through the job (another station's task: its notices), a command's its session's.
@@ -155,7 +156,7 @@ export class MemoryWatch {
     const pressed = pressure === "high" || pressure === "critical";
     const table = await this.#o.table(pressed).catch(() => null);
     if (table === null) return pressure;
-    const units = unitsOf(table, this.#o.jobs(), this.#o.agents(), this.#o.self).sort((a, b) => b.bytes - a.bytes);
+    const units = unitsOf(table, this.#o.jobs(), await this.#o.agents(), this.#o.self).sort((a, b) => b.bytes - a.bytes);
     await this.#whose(units);
     const present = new Set(units.map((u) => u.key));
     for (const key of this.#told.keys()) if (!present.has(key)) this.#told.delete(key);
@@ -275,8 +276,8 @@ export function runnerSessions(store: Store): (ids: string[]) => Map<string, str
 }
 
 /// The runners alive (<data>/run/runners), each with its session (`whose`: runnerSessions).
-export function runnersWithSessions(data: string, whose: (ids: string[]) => Map<string, string>): (RunnerInfo & { session: string | null })[] {
-  const runners = existingRunners(data);
+export async function runnersWithSessions(data: string, whose: (ids: string[]) => Map<string, string>): Promise<(RunnerInfo & { session: string | null })[]> {
+  const runners = await liveRunners(data);
   const named = whose(runners.map((r) => r.id));
   return runners.map((r) => ({ ...r, session: named.get(r.id) ?? null }));
 }
@@ -293,7 +294,7 @@ export function liveMemory(o: { data: string; store: Store; jobs: Jobs; notify: 
     totalBytes: () => totalmem(),
     cwds: (pids) => platform.cwds(pids),
     jobs: () => watchedJobs(store),
-    agents: () => runnersWithSessions(o.data, whose).map((r) => ({ pid: r.pid, session: r.session })),
+    agents: async () => (await runnersWithSessions(o.data, whose)).map((r) => ({ pid: r.pid, session: r.session })),
     // Among the sessions shown first; every session ever only for a directory none of them has (an archived one's).
     sessionAt: (dir) => sessionIn(store.liveSessions(), dir) ?? sessionIn(store.listSessions(), dir),
     tell: (unit, text) => {
