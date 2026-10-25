@@ -78,10 +78,10 @@ otherwise Home at the root of a `@ui.Nav` (src/sfapp, Home.kt and its parts):
   unread, the station's mark, unplugged or Slack; where it stands, with
   要你帮忙 / 做完了 / 在等 / 监控中 as icons and 奏 bold, or the last message;
   the agents' makers' marks and the people's faces, RowPicture.kt); the time
-  (`time.lastActiveAt.ago`) while a row is held; 归档 at a done row's start
-  (`chat.archive`); the search field at its top; while it is read, the rows to
-  come breathing (WaitShapes), what is wrong over them; the empty list's and
-  the first station's illustrations.
+  (`time.lastActiveAt.ago`) while a row is held; a done row swiped left to
+  archive it (`chat.archive`); the search field at its top; while it is read,
+  the rows to come breathing (WaitShapes), what is wrong over them; the empty
+  list's and the first station's illustrations.
 - A row tapped pushes its chat (its bar only: slice 4 fills it), swiped back
   from the left edge.
 - The workspace's name opens the workspaces' sheet: the one in use, the others

@@ -20,7 +20,6 @@ let en : Map[String, String] = {
   "common.reading": "Loading",
   "android-misc.shareIn.signIn": "Sign in to still.fail first, then share",
   "android-misc.shareIn.openApp": "Open still.fail",
-  "android-chat.archive.named": "Archive “{title}”",
   "android-settings.changelog.dismiss": "Got it",
   "web-main.list.separator": ", ",
   "android-chat.composer.noCamera": "This device can't take photos here yet",

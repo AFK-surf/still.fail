@@ -6,7 +6,6 @@
 ///|
 // kept across runs: a table, never written
 let zh : Map[String, String] = {
-  "android-chat.archive.named": "归档「{title}」",
   "android-settings.changelog.dismiss": "知道了",
   "web-main.list.separator": "、",
   // what this version cannot do on a device yet (composer.mbt, drive.mbt, screen_view.mbt, preview.mbt)
