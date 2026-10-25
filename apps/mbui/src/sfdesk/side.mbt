@@ -197,6 +197,20 @@ pub fn side_list() -> @ui.Style {
 let side_list_top : @ui.Style = @ui.css("pt=S1")
 
 ///|
+/// A sidebar's list under its band (side_list): what `rows` builds, scrolling under the band when it is taller than
+/// the room (a list of one: `key` keeps where it is scrolled to).
+pub fn side_scroll(c : @ui.Ctx, key : String, rows : () -> Unit) -> Unit {
+  c.box(style=side_list(), fn() {
+    c.list(key, 1, side_scroll_est, fn(_) { c.box(style=side_full, fn() { rows() }) |> ignore }) |> ignore
+  })
+  |> ignore
+}
+
+///|
+/// A sidebar's list's height guessed before it is laid out (side_scroll).
+let side_scroll_est : Double = 600.0
+
+///|
 /// A row's mark's side (SidebarList.css.ts mark, the action's icon: ICON's 16).
 pub let nav_mark_side : Double = 16.0
 

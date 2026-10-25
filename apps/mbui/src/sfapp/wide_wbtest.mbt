@@ -212,6 +212,28 @@ test "wide: settings from the rail's gear, its list in the sidebar; back to the 
 }
 
 ///|
+test "wide: settings' sidebar taller than a short window scrolls to its last rows (Cloud's), which open their pages" {
+  let calls : Array[Made] = []
+  let h = 480.0
+  let t = wide_tester(calls, h~)
+  t.key(@ui.key_of_char(','), mods=@ui.mod_cmd)
+  t.run_for(@ui.nav_push_ms)
+  let below = match t.rect_of("Workspace · ") {
+    Some((_, y, _, _)) => y
+    None => fail("no Workspace row")
+  }
+  assert_true(below > h, msg="under the window's foot at first: \{below}")
+  let (x, _) = t.find("返回会话").unwrap()
+  t.wheel(x, h / 2.0, 3000.0)
+  t.run_for(@ui.nav_push_ms)
+  let (_, y, _, rh) = t.rect_of("Workspace · ").unwrap()
+  assert_true(y + rh <= h, msg="scrolled into the window: \{y}")
+  t.tap_text("Workspace · ")
+  t.run_for(@ui.nav_push_ms)
+  assert_true(app.nav.top() == Setting(@settings.Route::Workspace))
+}
+
+///|
 test "wide: Enter sends the composer's words, ⇧Enter is a new line" {
   let calls : Array[Made] = []
   let t = wide_tester(calls, mode="chat")

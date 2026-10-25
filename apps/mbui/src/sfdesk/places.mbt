@@ -124,7 +124,7 @@ fn stations_side(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
   c.box(style=place_side, fn() {
     side_top(c)
     nav_action(c, "stations/add", @sf.t("web-pages.settings.stations.add"), @settings.place_action(core, here, "stations"))
-    c.box(style=side_list(), fn() {
+    side_scroll(c, "stations-nav/" + w.id, fn() {
       for s in stations_listed(src, w) {
         let s = Some(s)
         let address = text(s, "station")
@@ -132,7 +132,6 @@ fn stations_side(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
         station_side_row(c, src, s, on, fn() { place_pick["stations"] = Route::Station(address) })
       }
     })
-    |> ignore
   })
   |> ignore
 }
@@ -205,7 +204,7 @@ fn profiles_side(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
   c.box(style=place_side, fn() {
     side_top(c)
     nav_action(c, "profiles/add", @sf.t("web-pages.settings.profiles.add"), @settings.place_action(core, here, "profiles"))
-    c.box(style=side_list(), fn() {
+    side_scroll(c, "profiles-nav/" + w.id, fn() {
       let mut group = ""
       for e in list {
         let e = Some(e)
@@ -281,7 +280,6 @@ fn profiles_side(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
       }
       ignore(t)
     })
-    |> ignore
   })
   |> ignore
 }
