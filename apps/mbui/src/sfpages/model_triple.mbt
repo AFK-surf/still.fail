@@ -122,6 +122,9 @@ pub fn model_triple(
       foot=fn(c, close) { triple_foot(c, src, station, of, saved, close) },
       gone=fn() { triple.open = "" },
       focus=false,
+      // (the line over its foot across the whole panel, out past its padding to its edges, over the foot where what it
+      // holds scrolls: 2026-10-25 用户「分割线边上不要留空」)
+      ruled=true,
     )
   }
   let runtime = text(value, "runtime")
@@ -227,15 +230,16 @@ pub fn model_triple(
 
 ///|
 /// The panel: the filter across its top (more than 8 models), the models by series and what goes with the one picked
-/// (its runtimes, how hard it thinks, how fast) side by side, a line between: three columns where the panel is wide
-/// enough for them, else the models and the rest under one another beside them; what borrowing would do under them.
+/// (its runtimes, how hard it thinks, how fast) beside them, a line between, where the panel has the room for all their
+/// words beside each other (the widest model's, the widest runtime's and effort's), else under them; what borrowing
+/// would do under them. Beside what opened it the models' column scrolls by itself past 360 (the web's); in a sheet all
+/// of it, the sheet as tall as that up to its most (@sf.panel_column).
 fn triple_panel(c : @ui.Ctx, src : Source, station : String, of : String) -> Unit {
   let v = (src.topic)("pick", pick_params(station, of)).value
   if v is None {
     @sf.waiting(c)
     return
   }
-  let t = @sf.theme()
   let options = items(v, "options")
   let draft = field(v, "draft")
   let words = triple.query.trim(chars=" ").to_string().to_lower()
@@ -269,54 +273,28 @@ fn triple_panel(c : @ui.Ctx, src : Source, station : String, of : String) -> Uni
   let runtimes = items(v, "runtimes")
   let efforts = items(v, "efforts")
   let fast = flag(v, "fastAvailable")
-  let row_h = t.rows.pick
-  // (three columns where they fit, as the web's panel beside its control has them; else the models and the rest)
-  let three = c.width >= triple_three_w
-  // (the panel held short of all it holds, scrolling as one: its columns whole in that, none scrolling in itself)
-  let whole = @sf.panel_held()
-  c.box(style=triple_columns, fn() {
-    // the models: only their column scrolls (360 high at most), a row each for a series' name and for a model
-    let rows : Array[() -> Unit] = []
-    // (no head of its own: the panel's title says what they are)
-    for s in series {
-      if series.length() > 1 {
-        let who = s.0
-        rows.push(fn() { triple_column_head(c, who) })
-      }
-      for o in s.1 {
-        let o = Some(o)
-        rows.push(fn() { triple_model_row(c, src, station, of, v, o) })
-      }
-    }
-    if listed.length() == 0 {
-      rows.push(fn() {
-        c.box(style=triple_empty, fn() { c.text(@sf.t("web-main.model.noMatch"), style=triple_muted) |> ignore })
-        |> ignore
-      })
-    }
-    // (the rest under one another beside the models: as tall as the longer of the two, each head a row's height)
-    let rest_rows = if three {
-      0
-    } else {
-      (if runtimes.length() > 0 { 1 + runtimes.length() } else { 0 }) +
-      (if efforts.length() > 0 { 2 + efforts.length() } else { 0 }) +
-      (if fast { 4 } else { 0 })
-    }
-    let shown = if rest_rows > rows.length() { rest_rows } else { rows.length() }
-    let tall = dmin(triple_list_h, shown.to_double() * (row_h + 1.0))
-    if whole {
-      c.box(style=triple_models, fn() {
-        for row in rows {
-          row()
+  let columns = c.id("triple/columns")
+  // (the models and the rest beside them where both have the room for their words, else the rest under the models: a
+  // row that goes on in lines, each as wide as its words need at least, sharing what their line has)
+  c.box(style=triple_columns, flow=true, line_gap=triple_lines, id=columns, taps=false, fn() {
+    c.box(style=triple_models, keep=true, fn() {
+      @sf.panel_column(c, "triple/models", triple_list_h, triple_rows, fn() {
+        // (no head of its own: the panel's title says what they are)
+        for s in series {
+          if series.length() > 1 {
+            triple_column_head(c, s.0)
+          }
+          for o in s.1 {
+            triple_model_row(c, src, station, of, v, Some(o))
+          }
+        }
+        if listed.length() == 0 {
+          c.box(style=triple_empty, fn() { c.text(@sf.t("web-main.model.noMatch"), style=triple_muted) |> ignore })
+          |> ignore
         }
       })
-      |> ignore
-    } else {
-      c.box(style=triple_models.then(@ui.style(h=Fixed(tall))), fn() {
-        c.list("triple/models", rows.length(), row_h + 1.0, fn(i) { (rows[i])() }) |> ignore
-      })
-      |> ignore
-    }
+    })
+    |> ignore
     let runtime_column = fn() {
       triple_column_head(c, @sf.t("web-main.model.runtime"))
       for r in runtimes {
@@ -378,35 +356,33 @@ fn triple_panel(c : @ui.Ctx, src : Source, station : String, of : String) -> Uni
         }
       }
     }
-    let rest = runtimes.length() > 0 || efforts.length() > 0 || fast
-    if three {
-      if runtimes.length() > 0 {
-        c.box(style=triple_rule_v, fn() {  }) |> ignore
-        c.box(style=triple_column, runtime_column) |> ignore
+    let efforts_shown = efforts.length() > 0 || fast
+    if runtimes.length() > 0 || efforts_shown {
+      // the rest, its columns side by side (a line between); a line before it where it is beside the models, none
+      // where it has a line of its own under them (as wide as all of theirs)
+      let rest = c.id("triple/rest")
+      let under = match (c.laid_size(columns), c.laid_size(rest)) {
+        (Some((all, _)), Some((w, _))) => w >= all - 0.5
+        _ => false
       }
-      if efforts.length() > 0 || fast {
-        c.box(style=triple_rule_v, fn() {  }) |> ignore
-        c.box(style=triple_efforts, effort_column) |> ignore
-      }
-    } else if rest {
-      c.box(style=triple_rule_v, fn() {  }) |> ignore
-      let column = fn() {
-        c.box(style=triple_column, fn() {
-          if runtimes.length() > 0 {
-            runtime_column()
-          }
-          effort_column()
-        })
-        |> ignore
-      }
-      if whole {
-        c.box(style=triple_rest, column) |> ignore
-      } else {
-        c.box(style=triple_rest.then(@ui.style(max_h=Fixed(tall))), fn() {
-          c.list("triple/rest", 1, tall, fn(_) { column() }) |> ignore
-        })
-        |> ignore
-      }
+      c.box(style=triple_rest, keep=true, id=rest, taps=false, fn() {
+        if !under {
+          triple_line_before(c)
+        }
+        if runtimes.length() > 0 {
+          c.box(style=triple_column, keep=true, runtime_column) |> ignore
+        }
+        if efforts_shown {
+          c.box(style=triple_column, keep=true, fn() {
+            if runtimes.length() > 0 {
+              triple_line_before(c)
+            }
+            effort_column()
+          })
+          |> ignore
+        }
+      })
+      |> ignore
     }
   })
   |> ignore
@@ -419,9 +395,6 @@ fn triple_panel(c : @ui.Ctx, src : Source, station : String, of : String) -> Uni
     })
     |> ignore
   }
-  // (the line over its foot across the whole panel, out past its padding to its edges: 2026-10-25 用户「分割线边上不要
-  // 留空」)
-  c.box(style=triple_rule_h.then(@sf.panel_bleed()), fn() {  }) |> ignore
 }
 
 ///|
@@ -515,7 +488,9 @@ fn triple_model_row(c : @ui.Ctx, src : Source, station : String, of : String, v 
   if triple_option(c, "triple/model/" + model, text(o, "name"), picked, fn() {
       @sf.maker_mark(c, text(field(o, "maker"), "id"), runs, 14.0) |> ignore
       c.box(style=triple_option_text, fn() {
-        c.text(text(o, "name"), style=if picked { triple_picked } else { triple_words }) |> ignore
+        // (all of its name what its column needs at least, where the panel has the room: cut short only where even
+        // the panel's width has not the room for it)
+        c.text(text(o, "name"), style=if picked { triple_row_picked } else { triple_row_name }, keep=true) |> ignore
         match text(field(o, "spent"), "text") {
           "" => ()
           sp => c.text(sp, style=triple_note) |> ignore
@@ -537,6 +512,13 @@ fn triple_model_row(c : @ui.Ctx, src : Source, station : String, of : String, v 
 }
 
 ///|
+/// The line before a column beside the one before it, in the middle of what is between them, as tall as the column:
+/// out of its flow (none where it is under the other, and no room taken by it).
+fn triple_line_before(c : @ui.Ctx) -> Unit {
+  c.box(style=triple_rule_side, left=-triple_between_rule, top=0.0, bottom=0.0, fn() {  }) |> ignore
+}
+
+///|
 /// A column's head (runPicker h4): 4 over it, 6 under, as far in as the rows' words.
 fn triple_column_head(c : @ui.Ctx, words : String) -> Unit {
   c.box(style=triple_head_box, fn() { c.text(words, style=triple_head) |> ignore }) |> ignore
@@ -544,15 +526,17 @@ fn triple_column_head(c : @ui.Ctx, words : String) -> Unit {
 
 ///|
 /// A row of a column (runPickerOption): as high as the screen's picker rows at least (Theme::rows pick), 4 by 10 in, its ground under the pointer and while picked,
-/// `trail` (a button of its own) at its end, a check after it while picked. True on the frame after a press.
+/// `trail` (a button of its own) at its end, a check after it while picked (its room kept while not, as the web's
+/// hidden check). True on the frame after a press.
 fn triple_option(c : @ui.Ctx, key : String, label : String, on : Bool, body : () -> Unit, trail? : () -> Unit) -> Bool {
   let t = @sf.theme()
   let id = c.id(key)
   c.cursor(id, Hand)
-  let b = c.box(style=(if on { triple_option_on } else { triple_option_style }).then(@ui.style(min_h=Fixed(t.rows.pick))), id~, fn() {
+  // (across its column, as wide as its words need at least: what the column needs, the panel's columns laid out by it)
+  let b = c.box(style=(if on { triple_option_on } else { triple_option_style }).then(@ui.style(min_h=Fixed(t.rows.pick))), id~, keep=true, fn() {
     body()
     // what is at its end, at the end: the room left (no spacer of its own, whose gap took a gap's room from the
-    // words), never less than it needs
+    // words), never less than it needs; the check's room kept while it is not picked
     c.box(style=triple_end, keep=true, fn() {
       match trail {
         Some(f) => f()
@@ -560,6 +544,8 @@ fn triple_option(c : @ui.Ctx, key : String, label : String, on : Bool, body : ()
       }
       if on {
         @sf.icon(c, "check", size=14.0, color=t.p.accent) |> ignore
+      } else {
+        c.box(style=triple_check_room, fn() {  }) |> ignore
       }
     })
     |> ignore
@@ -764,11 +750,11 @@ let triple_drop_effort : Int = 4
 
 ///|
 // kept across runs: a value (no field of it changes)
-let triple_style : @ui.Style = @ui.css("row h=S7 px=S2_5 gap=S1_5 align=ACenter radius=Lg clip hovered{bg=Hover}")
+let triple_style : @ui.Style = @ui.css("row h=S7 px=S2_5 gap=S1_5 align=ACenter radius=Lg hovered{bg=Hover}")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let triple_on : @ui.Style = @ui.css("row h=S7 px=S2_5 gap=S1_5 align=ACenter radius=Lg clip bg=Hover")
+let triple_on : @ui.Style = @ui.css("row h=S7 px=S2_5 gap=S1_5 align=ACenter radius=Lg bg=Hover")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -817,39 +803,53 @@ let triple_head : @ui.TextStyle = @ui.text_style(size=Meta, weight=Medium, color
 let triple_search : @ui.Style = @ui.css("w=Full pb=S2")
 
 ///|
-/// The lines between its columns, and over its foot (a panel of columns, as the web's: kept, 2026-10-25 用户「这两个的
-/// 分割线可以保留」).
+/// A line across (a history's under its figures; the panel's over its foot is the presenters', `ruled`: kept,
+/// 2026-10-25 用户「这两个的分割线可以保留」).
 // kept across runs: a value (no field of it changes)
 pub let triple_rule_h : @ui.Style = @ui.css("w=Full h=SPx bg=Line")
 
 ///|
+/// The line before a column beside another (triple_line_before), as tall as the column.
 // kept across runs: a value (no field of it changes)
-let triple_rule_v : @ui.Style = @ui.css("w=SPx h=Full bg=Line")
+let triple_rule_side : @ui.Style = @ui.css("w=SPx bg=Line")
 
 ///|
-/// Its columns side by side, a line between (4 either side of it).
+/// The models and the rest beside them (a line between, in the middle of the 8 between them), or the rest under them.
 // kept across runs: a value (no field of it changes)
-let triple_columns : @ui.Style = @ui.css("row w=Full gap=S1")
+let triple_columns : @ui.Style = @ui.css("row w=Full gap=S2")
 
 ///|
-/// The models' column: what the others leave of the panel (200 at least, the web's).
-// kept across runs: a value (no field of it changes)
-let triple_models : @ui.Style = @ui.style(w=@sf.models_grow, min_w=Fixed(triple_models_w))
+/// Where the line between two columns side by side starts, from the start of the column after it: in the middle of
+/// the 8 between them (triple_columns', triple_rest's gap), out of their flow.
+let triple_between_rule : Double = 4.5
 
 ///|
-/// What goes with the model under one another beside the models, where three columns do not fit (scrolled as tall
-/// as the models' column).
-// kept across runs: a value (no field of it changes)
-let triple_rest : @ui.Style = @ui.style(w=@sf.grow)
+/// What is between the models and the rest under them: as its rows are apart.
+let triple_lines : Double = 1.0
 
 ///|
+/// The models' column: what the rest leave of the panel, its widest model's words at least (200 at least, the web's),
+/// never wider than the panel (a name longer than that cut short in it).
 // kept across runs: a value (no field of it changes)
-let triple_column : @ui.Style = @ui.css("min_w=S28 gap=SPx")
+let triple_models : @ui.Style = @ui.style(w=@sf.models_grow, min_w=Within(triple_models_w))
 
 ///|
+/// A column's rows, 1 apart.
 // kept across runs: a value (no field of it changes)
+let triple_rows : @ui.Style = @ui.css("w=Full gap=SPx")
+
+///|
+/// What goes with the model, its columns side by side (a line between, in the middle of the 8 between them): beside
+/// the models or under them, sharing what its line has with them, all of its columns' words at least.
 // kept across runs: a value (no field of it changes)
-let triple_efforts : @ui.Style = @ui.css("min_w=S32 gap=SPx")
+let triple_rest : @ui.Style = @ui.style(row=true, w=@sf.grow, gap=S2)
+
+///|
+/// A column of the rest (the runtimes; how hard it thinks and how fast): its share of the rest, its widest words at
+/// least (no least of its own: the web's 120 and 128 would put the rest under the models where their words fit beside
+/// them).
+// kept across runs: a value (no field of it changes)
+let triple_column : @ui.Style = @ui.style(w=@sf.grow, gap=SPx)
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -866,6 +866,20 @@ let triple_option_on : @ui.Style = @ui.css(
 ///|
 // kept across runs: a value (no field of it changes)
 let triple_option_text : @ui.Style = @ui.css("gap=SPx")
+
+///|
+/// A model's name in its row: all of it kept (Ctx::text keep), cut short only past the panel's width.
+// kept across runs: a value (no field of it changes)
+let triple_row_name : @ui.TextStyle = @ui.text_style(size=Ui, color=Fg, wrap=false, w=Cut)
+
+///|
+// kept across runs: a value (no field of it changes)
+let triple_row_picked : @ui.TextStyle = @ui.text_style(size=Ui, weight=Medium, color=Fg, wrap=false, w=Cut)
+
+///|
+/// Where a row's check is while it is not picked: the row as wide picked or not (its column's words then as wide).
+// kept across runs: a value (no field of it changes)
+let triple_check_room : @ui.Style = @ui.css("w=S3_5")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -928,19 +942,15 @@ let confirm_line : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted)
 let confirm_foot : @ui.Style = @ui.css("row w=Full pt=S3 gap=S2 align=ACenter justify=JEnd")
 
 ///|
-/// The models' column: 360 high at most (runPicker), its rows 1 apart, 200 wide at least.
+/// The models' column beside what opened it: 360 high at most (runPicker); 200 wide at least.
 let triple_list_h : Double = 360.0
 
 ///|
 let triple_models_w : Double = 200.0
 
 ///|
-/// The panel's width beside its control (the web's: the models' 200, the runtimes' and the efforts' columns), and the
-/// width it takes for the three columns side by side.
+/// The panel's width beside its control (the web's: the models' 200, the runtimes' and the efforts' columns).
 let triple_panel_w : Double = 520.0
-
-///|
-let triple_three_w : Double = 460.0
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -949,11 +959,11 @@ let triple_head_box : @ui.Style = @ui.css("px=S2_5 pt=S1 pb=S1_5")
 ///|
 /// In a composer's row (newChat's): 28 high, 8 in, its words 12.
 // kept across runs: a value (no field of it changes)
-let triple_small : @ui.Style = @ui.css("row h=S7 px=S2 gap=S1_5 align=ACenter radius=Lg clip hovered{bg=Hover}")
+let triple_small : @ui.Style = @ui.css("row h=S7 px=S2 gap=S1_5 align=ACenter radius=Lg hovered{bg=Hover}")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let triple_small_on : @ui.Style = @ui.css("row h=S7 px=S2 gap=S1_5 align=ACenter radius=Lg clip bg=Hover")
+let triple_small_on : @ui.Style = @ui.css("row h=S7 px=S2 gap=S1_5 align=ACenter radius=Lg bg=Hover")
 
 ///|
 // kept across runs: a value (no field of it changes)

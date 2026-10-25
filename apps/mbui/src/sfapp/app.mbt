@@ -51,6 +51,7 @@ fn reset() -> Unit {
   new_fix.d_profile = ""
   new_fix.made = 0
   new_fix.reading = 0
+  new_fix.crowded = false
   bar_timing.val = None
   bar_timed.val = None
   home_sheet_at_start.val = false

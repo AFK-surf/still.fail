@@ -806,6 +806,12 @@ const STRETCH : Int = 32
 const INSET : Int = 64
 
 ///|
+/// and whether it is a row that leaves out what it has not the room for (Style's `fits`), as wide as what it keeps of
+/// what it holds (its basis its content's): measured again in what the rest of its line leaves it, where that line
+/// has not the room for all of them (layout_flex).
+const FITS : Int = 128
+
+///|
 priv struct Line {
   mut start : Int
   mut end : Int
@@ -1057,6 +1063,7 @@ fn layout_flex(
     // that height is known)
     let mut cross_by_height = false
     let mut any_baseline = false
+    let mut any_fits = false
     for j, c in flow {
       let cs = c.style
       if cs.position == Absolute {
@@ -1209,6 +1216,9 @@ fn layout_flex(
         basis = if row { cw } else { ch }
         if known(declared) {
           basis = fmax(basis, declared)
+        } else if row && cs.fits && is_row(cs.direction) {
+          pool.flags.unsafe_set(k, pool.flags.unsafe_get(k) | FITS)
+          any_fits = true
         }
       }
       let pb_main = if row { cb.pbw() } else { cb.pbh() }
@@ -1274,6 +1284,15 @@ fn layout_flex(
         } else if known(lo) && sum_hyp < lo {
           space = lo
         }
+      }
+      // rows in it that leave out what they have not the room for, each as wide as what it keeps, where the line has
+      // not the room for all it holds: what they leave out chosen across the line (fit_line), not measured each in all
+      // of the line's room and squeezed with the rest (then it would leave out more in the room it is squeezed to and
+      // keep what that frees empty, what is beside it squeezed for nothing)
+      if any_fits && !wrap && known(space) && sum_hyp > space + 0.01 {
+        let was = items_hyp
+        items_hyp = fit_line(pool, flow, ln.start, ln.end, space - gaps, cb_w, cb_h)
+        sum_hyp = sum_hyp + items_hyp - was
       }
       if known(space) {
         resolve_flexible(pool, ln.start, ln.end, items_hyp, space - gaps)
@@ -1671,32 +1690,11 @@ fn layout_flex(
 /// more. What is put where it is said is kept, taking no room.
 fn fit_flow(flow : Array[Node], room : Double, gap : Double, cb_w : Double, cb_h : Double) -> Array[Node] {
   let n = flow.length()
-  let need = Array::make(n, 0.0)
+  let (need, more) = fit_needs(flow, cb_w, cb_h)
   let mut total = 0.0
   let mut count = 0
-  let mut more = -1
   for j, c in flow {
-    if c.style.position == Absolute {
-      continue
-    }
-    let b = box_for(c, cb_w, cb_h)
-    // what may leave is there whole or not at all, and what never gives way (shrink 0: kept as wide as what it holds)
-    // is never narrower: each as wide as what it holds; the rest at least their least, or what the row keeps of them
-    // (fit_need: words cut short keep some of them)
-    let least = if known(b.min_w) { b.min_w } else { 0.0 }
-    let w = if c.style.drop != 0 || (c.style.shrink == 0.0 && !known(b.w)) {
-      size_node(c, undef, undef, undef, undef, cb_w, cb_h, false)
-    } else if known(b.w) {
-      b.w
-    } else if known(c.style.fit_need) {
-      fmax(least, c.style.fit_need)
-    } else {
-      least
-    }
-    need[j] = w + b.mar_l + b.mar_r
-    if c.style.drop == -1 {
-      more = j
-    } else {
+    if c.style.position != Absolute && j != more {
       total = total + need[j]
       count = count + 1
     }
@@ -1741,6 +1739,159 @@ fn fit_flow(flow : Array[Node], room : Double, gap : Double, cb_w : Double, cb_h
     }
   }
   kept
+}
+
+///|
+/// What each of a row's items `flow` takes along it as fit_flow measures it, with its margins (0 for what is put where
+/// it is said): what may leave is there whole or not at all, and what never gives way (shrink 0: kept as wide as what
+/// it holds) is never narrower: each as wide as what it holds; the rest at least their least, or what the row keeps
+/// of them (fit_need: words cut short keep some of them). And which is its ⋯ (Style's `drop` -1; -1 none).
+fn fit_needs(flow : Array[Node], cb_w : Double, cb_h : Double) -> (Array[Double], Int) {
+  let need = Array::make(flow.length(), 0.0)
+  let mut more = -1
+  for j, c in flow {
+    if c.style.position == Absolute {
+      continue
+    }
+    let b = box_for(c, cb_w, cb_h)
+    let least = if known(b.min_w) { b.min_w } else { 0.0 }
+    let w = if c.style.drop != 0 || (c.style.shrink == 0.0 && !known(b.w)) {
+      size_node(c, undef, undef, undef, undef, cb_w, cb_h, false)
+    } else if known(b.w) {
+      b.w
+    } else if known(c.style.fit_need) {
+      fmax(least, c.style.fit_need)
+    } else {
+      least
+    }
+    need[j] = w + b.mar_l + b.mar_r
+    if c.style.drop == -1 {
+      more = j
+    }
+  }
+  (need, more)
+}
+
+///|
+/// A line's items `start`..`end` (pool's) with rows among them that leave out what they have not the room for, each as
+/// wide as what it keeps (FITS), where the line has not the room for all it holds (`room`, its gaps out): what those
+/// rows leave out chosen across the line as though their parts were one row's (fit_flow: the lowest `drop` first, of
+/// the same the last in the line first), until the line takes no more than the room with the rest of it given way as
+/// far as such a row would have them (each down to the least it needs, words cut short to four of their size:
+/// fit_needs). Each of those rows then as wide as what it keeps (its flex basis), and where all of the line is in the
+/// room so, not squeezed further: what is beside it gives way, by no more than said. What the line's items' bases come
+/// to (with their margins).
+fn fit_line(
+  pool : Pool,
+  flow : Array[Node],
+  start : Int,
+  end : Int,
+  room : Double,
+  cb_w : Double,
+  cb_h : Double,
+) -> Double {
+  let f = pool.f
+  // the rest of the line as far as it gives way, and each row's parts: its own measure (fit_needs), its padding and
+  // gap, which of its parts it has left out
+  let mut total = 0.0
+  let rows : Array[(Int, Array[Node], Array[Double], Int, Double, Double, Array[Bool])] = []
+  for k in start..<end {
+    let i = k * ITEM
+    total = total + f.unsafe_get(i + MARGIN_MAIN)
+    if (pool.flags.unsafe_get(k) & FITS) == 0 {
+      let hyp = f.unsafe_get(i + HYP)
+      total = total +
+        (if f.unsafe_get(i + SHRINK) == 0.0 {
+          hyp
+        } else {
+          let least = or_else(f.unsafe_get(i + MIN_MAIN), 0.0)
+          let fit = flow.unsafe_get(pool.at.unsafe_get(k)).style.fit_need
+          fmin(hyp, if known(fit) { fmax(least, fit) } else { least })
+        })
+    } else {
+      let c = flow.unsafe_get(pool.at.unsafe_get(k))
+      let parts = flow_children(c)
+      let (need, more) = fit_needs(parts, undef, undef)
+      let pb = box_for(c, cb_w, cb_h).pbw()
+      let gap = edge_of(c.style.gap_col_k, c.style.gap_col_v, undef)
+      rows.push((k, parts, need, more, pb, gap, Array::make(parts.length(), false)))
+    }
+  }
+  // a row as wide as what it keeps of its parts (its ⋯ with them once one is left out), within its least and most
+  let width = fn(r : (Int, Array[Node], Array[Double], Int, Double, Double, Array[Bool])) -> Double {
+    let (k, parts, need, more, pb, gap, out) = r
+    let mut w = 0.0
+    let mut n = 0
+    let mut left = false
+    for j, c in parts {
+      if c.style.position == Absolute || j == more {
+        continue
+      }
+      if out[j] {
+        left = true
+      } else {
+        w = w + need[j]
+        n = n + 1
+      }
+    }
+    if left && more >= 0 {
+      w = w + need[more]
+      n = n + 1
+    }
+    let i = k * ITEM
+    let at = pb + w + (if n > 1 { gap * (n - 1).to_double() } else { 0.0 })
+    fmin(clamp_size(at, f.unsafe_get(i + MIN_MAIN), f.unsafe_get(i + MAX_MAIN)), f.unsafe_get(i + HYP))
+  }
+  let widths = rows.map(width)
+  for w in widths {
+    total = total + w
+  }
+  // what may leave, across the line in the order it leaves: the lowest drop first, of the same the last first
+  let parts : Array[(Int, Int, Int)] = []
+  for ri, r in rows {
+    let (_, kids, _, _, _, _, _) = r
+    for j, c in kids {
+      if c.style.drop > 0 && c.style.position != Absolute {
+        parts.push((ri, j, c.style.drop))
+      }
+    }
+  }
+  parts.sort_by(fn(a, b) {
+    if a.2 != b.2 {
+      a.2 - b.2
+    } else if a.0 != b.0 {
+      b.0 - a.0
+    } else {
+      b.1 - a.1
+    }
+  })
+  let mut p = 0
+  while total > room + 0.01 && p < parts.length() {
+    let (ri, j, _) = parts[p]
+    p = p + 1
+    let (_, _, _, _, _, _, out) = rows[ri]
+    out[j] = true
+    let now = width(rows[ri])
+    total = total + now - widths[ri]
+    widths[ri] = now
+  }
+  let fits = total <= room + 0.01
+  let mut sum = 0.0
+  for k in start..<end {
+    sum = sum + f.unsafe_get(k * ITEM + HYP) + f.unsafe_get(k * ITEM + MARGIN_MAIN)
+  }
+  for ri, r in rows {
+    let (k, _, _, _, _, _, _) = r
+    let i = k * ITEM
+    let now = widths[ri]
+    sum = sum + now - f.unsafe_get(i + HYP)
+    f.unsafe_set(i + BASIS, now)
+    f.unsafe_set(i + HYP, now)
+    if fits {
+      f.unsafe_set(i + SHRINK, 0.0)
+    }
+  }
+  sum
 }
 
 ///|

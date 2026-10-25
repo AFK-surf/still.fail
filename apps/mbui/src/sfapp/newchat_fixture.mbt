@@ -2,7 +2,8 @@
 // combinations used often) and the model control's (`pick`), in the core's shapes; the picks taken as the core would
 // (`newChat.pick`, `pick.set`, `pick.save`), a chat made at once (`newChat.create`). MBUI_FIXTURE=newchat opens it,
 // newchat-station with its station's sheet, newchat-model with what it runs on, newchat-reading while its stations
-// are read, newchat-profiles while its station's profiles are; home-bars opens the bar's panel of
+// are read, newchat-profiles while its station's profiles are, newchat-crowded with what it runs on as crowded as a
+// person's (newchat-crowded-model its panel open); home-bars opens the bar's panel of
 // the other bars, place the 文件 place (drive.mbt's page at the root).
 
 ///|
@@ -19,6 +20,8 @@ priv struct NewFix {
   mut made : Int
   /// MBUI_FIXTURE=stations-slow: its stations not asked for yet (0), being read (1), read (2)
   mut reading : Int
+  /// MBUI_FIXTURE=newchat-crowded: the models, runtimes and combinations of fix_crowded
+  mut crowded : Bool
 }
 
 ///|
@@ -33,6 +36,7 @@ let new_fix : NewFix = {
   d_profile: "",
   made: 0,
   reading: 0,
+  crowded: false,
 }
 
 ///|
@@ -96,8 +100,38 @@ fn fix_meter(short : String, left : Int, level : String, big : String, unit : St
 }
 
 ///|
+/// The models of newchat-crowded, in the core's order: as many series and names as long as a person's phone showed
+/// them (2026-10-26), the one it starts on running on three runtimes.
+// kept across runs: a table, never written
+let fix_crowded_models : Array[String] = [
+  "claude-opus-5-5", "claude-sonnet-5", "gpt-6-astra", "deepseek-v4-1-flash", "grok-4-7-build-fast", "kimi-for-coding",
+  "swe-2",
+]
+
+///|
+/// A model of newchat-crowded's (the ones not the plain fixture's), as the core's `pick` lists it.
+fn fix_crowded_model(model : String, name : String, family : String, maker : String, runtimes : Array[String]) -> Json {
+  {
+    "model": Json::string(model),
+    "name": Json::string(name),
+    "family": Json::string(family),
+    "maker": { "id": Json::string(maker), "name": Json::string(maker) },
+    "runtimes": Json::array(runtimes.map(Json::string(_))),
+    "ids": [Json::string(model)],
+    "efforts": {},
+    "accounts": {},
+    "availability": "here",
+  }
+}
+
+///|
 fn fix_model(model : String) -> Json {
   match model {
+    "gpt-6-astra" => fix_crowded_model(model, "GPT-6 Astra", "Astra", "openai", ["codex"])
+    "deepseek-v4-1-flash" => fix_crowded_model(model, "DeepSeek V4.1 Flash", "DeepSeek", "deepseek", ["claude", "codex", "dsh"])
+    "grok-4-7-build-fast" => fix_crowded_model(model, "Grok 4.7 Build Fast", "Grok", "xai", ["grok"])
+    "kimi-for-coding" => fix_crowded_model(model, "Kimi For Coding", "Kimi", "kimi", ["claude"])
+    "swe-2" => fix_crowded_model(model, "SWE-2", "SWE", "devin", ["devin"])
     "claude-sonnet-5" =>
       {
         "model": "claude-sonnet-5",
@@ -139,10 +173,9 @@ fn fix_model(model : String) -> Json {
 
 ///|
 fn fix_runtime_of(model : String) -> String {
-  if model == "gpt-6" {
-    "codex"
-  } else {
-    "claude"
+  match items(Some(fix_model(model)), "runtimes").get(0) {
+    Some(String(r)) => r
+    _ => "claude"
   }
 }
 
@@ -164,14 +197,23 @@ fn fix_pick() -> Json {
     Json::object(o)
   }
   {
-    "options": [fix_model("claude-opus-5-5"), fix_model("claude-sonnet-5"), fix_model("gpt-6")],
+    "options": if n.crowded {
+      Json::array(fix_crowded_models.map(fix_model))
+    } else {
+      [fix_model("claude-opus-5-5"), fix_model("claude-sonnet-5"), fix_model("gpt-6")]
+    },
     "runtimeFixed": false,
     "value": picked(n.model, n.runtime, n.effort, ""),
     "valueOption": fix_model(n.model),
     "draft": picked(n.d_model, n.d_runtime, n.d_effort, n.d_profile),
     "option": Json::string(n.d_model),
-    "runtimes": [Json::string(n.d_runtime)],
-    "efforts": ["low", "medium", "high"],
+    // (all the drafted model runs on, crowded; else the one it runs on)
+    "runtimes": if n.crowded {
+      Json::array(items(Some(fix_model(n.d_model)), "runtimes"))
+    } else {
+      [Json::string(n.d_runtime)]
+    },
+    "efforts": if n.crowded { ["low", "medium", "high", "max"] } else { ["low", "medium", "high"] },
     "accounts": [
       {
         "id": "p1",
@@ -303,31 +345,77 @@ fn fix_new_chat(f : Fixture) -> Json {
     "pickAccount": false,
     "waiting": false,
     "pick": fix_pick(),
-    "frequent": [
-      {
-        "model": "claude-opus-5-5",
-        "runtime": "claude",
-        "effort": "high",
-        "label": "Opus 5.5 · 高",
-        "selected": Json::boolean(n.model == "claude-opus-5-5" && n.effort == "high"),
-      },
-      {
-        "model": "gpt-6",
-        "runtime": "codex",
-        "effort": "medium",
-        "label": "GPT-6 · 中",
-        "selected": Json::boolean(n.model == "gpt-6" && n.effort == "medium"),
-      },
-      {
-        "model": "claude-sonnet-5",
-        "runtime": "claude",
-        "effort": "low",
-        "label": "Sonnet 5 · 低",
-        "selected": Json::boolean(n.model == "claude-sonnet-5" && n.effort == "low"),
-      },
-    ],
+    "frequent": if n.crowded { fix_crowded_frequent() } else { fix_frequent() },
     "label": Json::string(effort_word),
   }
+}
+
+///|
+/// The frequent combinations of newchat-crowded: one naming its runtime, as the core names one of a model that runs on
+/// more than one.
+fn fix_crowded_frequent() -> Json {
+  let n = new_fix
+  let combo = fn(model : String, runtime : String, effort : String, name : String, runtime_text : String, effort_text : String) {
+    let o : Map[String, Json] = {
+      "model": Json::string(model),
+      "runtime": Json::string(runtime),
+      "effort": Json::string(effort),
+      "label": Json::string(
+        if runtime_text == "" {
+          name + " · " + effort_text
+        } else {
+          name + " · " + runtime_text + " · " + effort_text
+        },
+      ),
+      "name": Json::string(name),
+      "effortText": Json::string(effort_text),
+      "selected": Json::boolean(n.model == model && n.runtime == runtime && n.effort == effort),
+    }
+    if runtime_text != "" {
+      o["runtimeText"] = Json::string(runtime_text)
+    }
+    Json::object(o)
+  }
+  [
+    combo("gpt-6-astra", "codex", "medium", "GPT-6 Astra", "", "中"),
+    combo("deepseek-v4-1-flash", "dsh", "high", "DeepSeek V4.1 Flash", "DeepSeek Harness", "高"),
+    combo("swe-2", "devin", "high", "SWE-2", "", "高"),
+  ]
+}
+
+///|
+/// The frequent combinations of the plain fixture.
+fn fix_frequent() -> Json {
+  let n = new_fix
+  [
+    {
+      "model": "claude-opus-5-5",
+      "runtime": "claude",
+      "effort": "high",
+      "label": "Opus 5.5 · 高",
+      "name": "Opus 5.5",
+      "effortText": "高",
+      "selected": Json::boolean(n.model == "claude-opus-5-5" && n.effort == "high"),
+    },
+    {
+      "model": "gpt-6",
+      "runtime": "codex",
+      "effort": "medium",
+      "label": "GPT-6 · 中",
+      "name": "GPT-6",
+      "effortText": "中",
+      "selected": Json::boolean(n.model == "gpt-6" && n.effort == "medium"),
+    },
+    {
+      "model": "claude-sonnet-5",
+      "runtime": "claude",
+      "effort": "low",
+      "label": "Sonnet 5 · 低",
+      "name": "Sonnet 5",
+      "effortText": "低",
+      "selected": Json::boolean(n.model == "claude-sonnet-5" && n.effort == "low"),
+    },
+  ]
 }
 
 ///|
@@ -412,9 +500,18 @@ fn fixture_new_call(f : Fixture, name : String, params : Json) -> Result[Json, J
 pub fn open_mode(mode : String) -> Unit {
   if mode.has_prefix("newchat") {
     app.nav.rise(NewChat)
+    if mode.has_prefix("newchat-crowded") {
+      // (it starts on the model that runs on three runtimes, on the one of them its combination names)
+      let n = new_fix
+      n.crowded = true
+      n.model = "deepseek-v4-1-flash"
+      n.runtime = "dsh"
+      n.d_model = n.model
+      n.d_runtime = n.runtime
+    }
     match mode {
       "newchat-station" => @sfpages.new_chat_ask("station")
-      "newchat-model" => @sfpages.new_chat_ask("model")
+      "newchat-model" | "newchat-crowded-model" => @sfpages.new_chat_ask("model")
       _ => ()
     }
   } else if mode == "home-bars" {

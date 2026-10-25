@@ -447,7 +447,8 @@ test "wide: a new chat's composer stays where it is as another station is picked
   assert_true(app.nav.top() == NewChat)
   let offer = "继续 Studio 终端中的会话"
   assert_true(t.find(offer) is Some(_), msg="Studio's machine's session offered")
-  assert_true(t.find("Opus 5.5 · 高") is Some(_), msg="Studio's frequent combinations")
+  // (a combination's words in parts, the model, how hard it thinks: found by what it is called)
+  assert_true(t.query(Button, label="Opus 5.5 · 高") is Some(_), msg="Studio's frequent combinations")
   let (bx, by, _, _) = composer_glass(t)
   let pick = fn(from : String, to : String) raise {
     t.click(Button, label=from)
@@ -459,13 +460,13 @@ test "wide: a new chat's composer stays where it is as another station is picked
   pick("Studio", "MBA")
   assert_true(t.find("MBA 上还没有选好要用的模型") is Some(_))
   assert_true(t.find("Opus 5.5 的额度已用完，发出的消息会等它恢复") is Some(_))
-  assert_true(t.find("Opus 5.5 · 高") is None)
+  assert_true(t.query(Button, label="Opus 5.5 · 高") is None)
   assert_true(t.find(offer) is None)
   assert_at((bx, by), { let (x, y, _, _) = composer_glass(t); (x, y) })
   // Studio again: as it was
   pick("MBA", "Studio")
   assert_true(t.find(offer) is Some(_))
-  assert_true(t.find("Opus 5.5 · 高") is Some(_))
+  assert_true(t.query(Button, label="Opus 5.5 · 高") is Some(_))
   assert_at((bx, by), { let (x, y, _, _) = composer_glass(t); (x, y) })
 }
 

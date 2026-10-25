@@ -110,11 +110,14 @@ export function frequentCombos(history: J[], options: J[], current: Resolved): J
     const key = JSON.stringify([m, runtime, effort]);
     if (seen.has(key)) continue;
     seen.add(key);
-    const depth = effort ?? t("core-logic.choose.default_effort");
+    // (the effort as the picker says it; none, the runtime's own)
+    const effortText = effort === null ? t("core-logic.choose.default_effort") : format.effortLabel(effort);
     const name = typeof entry.name === "string" ? entry.name : m;
-    const label = arr(entry.runtimes).length > 1 ? `${name} · ${format.runtimeLabel(runtime)} · ${depth}` : `${name} · ${depth}`;
+    // the runtime only where the model runs on more than one
+    const runtimeText = arr(entry.runtimes).length > 1 ? format.runtimeLabel(runtime) : null;
+    const label = runtimeText === null ? `${name} · ${effortText}` : `${name} · ${runtimeText} · ${effortText}`;
     const selected = current.entry !== null && current.entry.model === m && current.runtime === runtime && current.effort === effort;
-    out.push({ model: m, runtime, effort, label, selected });
+    out.push({ model: m, runtime, effort, label, name, ...(runtimeText === null ? {} : { runtimeText }), effortText, selected });
   }
   return out;
 }
