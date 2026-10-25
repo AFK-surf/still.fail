@@ -87,8 +87,9 @@ fn plain_tester(field : Field, platform? : Int = 0) -> Tester {
 ///|
 /// The caret drawn last frame (its rect's instance: the rect in its colour as wide as it, not its handle's).
 fn caret_drawn() -> Array[Double] raise {
-  let blue = 0x0A.to_double() / 255.0
-  match insts().filter(fn(a) { a[5] == 0.0 && a[8] == blue && a[2] == caret_w }) {
+  // (the default caret colour 0x0A84FF: its red)
+  let red_of = 10.0 / 255.0
+  match insts().filter(fn(a) { a[5] == 0.0 && a[8] == red_of && a[2] == caret_w }) {
     [.., a] => a
     [] => fail("no caret drawn")
   }
