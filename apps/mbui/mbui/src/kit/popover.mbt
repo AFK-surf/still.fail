@@ -296,6 +296,10 @@ fn beside(
     (x, y)
   })
   c.semantics(i, role, label~)
+  // a wheel over it scrolls what it holds, never the page under it (a tooltip's, which takes no press, it passes)
+  if !(role is Tooltip) {
+    c.stop_wheel(i)
+  }
   c.look(i, grown_from(shows, went, along))
 }
 

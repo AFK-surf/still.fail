@@ -140,7 +140,7 @@ pub(all) struct Bars {
 /// 12; a box 18, a field 52 by 28, a switch 36 by 22).
 pub(all) struct Rows {
   least : @ui.Len
-  /// a row of a picker or a menu in a small panel at least: keyboard and mouse's 32 (a menu's row), a finger's 44
+  /// a row of a picker or a menu in a small panel at least: keyboard and mouse's 34 (a menu's row), a finger's 44
   pick : Double
   title : @ui.TextStyle
   /// what is said under a row's title (its note), muted
@@ -195,7 +195,7 @@ pub let small_corner : Double = @ui.concentric(row_corner, corner_inset)
 
 ///|
 // kept across runs: a value (no field of it changes)
-pub let corner_ladder : Array[Double] = [pane_corner, card_corner, row_corner, small_corner]
+pub let corner_ladder : Array[Double] = [pane_corner, card_corner, r_menu, row_corner, small_corner]
 
 ///|
 /// What the corner rule may make of what lies in a container's corner to be concentric with it (docs/ui-panels.md 圆角
@@ -638,9 +638,11 @@ pub let r_card : Double = 20.0
 pub let r_dialog : Double = 32.0
 
 ///|
-/// (a small panel's: a menu, a popover, a hover's card: a card of the ladder's, its rows its inset in, round by the
-/// next step)
-pub let r_menu : Double = card_corner
+/// (a small panel's: a menu, a popover, a hover's card: its rows, capsules 34 high (menu_row_min), its padding in and
+/// concentric with it, panel_pad + 17 = 23: the ladder's small panels (corner_ladder). What stands further in in it
+/// is round by the ladder's next steps as a card's is: a taller row at its padding 18, what has a ground on its
+/// words' line 10.)
+pub let r_menu : Double = panel_pad + menu_row_min / 2.0
 
 ///|
 pub let r_option : Double = 12.0
@@ -1836,13 +1838,13 @@ pub let panel_icon_size : Double = 16.0
 pub let chooser_chevron : Double = 12.0
 
 ///|
-/// A menu's item at least (controls.css.ts menuItem: 34 high): 32, a capsule its panel's padding in from its corner,
-/// concentric with it (capsule_in(r_menu, 32) = panel_pad).
-pub let menu_row_min : Double = 32.0
+/// A menu's item at least (controls.css.ts menuItem: 34 high), a capsule its panel's padding in from its corner,
+/// concentric with it (capsule_in(r_menu, 34) = panel_pad: what r_menu is made of).
+pub let menu_row_min : Double = 34.0
 
 ///|
-/// Over and under a menu's item's line of words (20): as high as menu_row_min.
-pub let menu_row_over : Double = 6.0
+/// Over and under a menu's item's line of words (20): as high as menu_row_min (menuItem: 7).
+pub let menu_row_over : Double = 7.0
 
 ///|
 /// Where a small panel's button (a 24 pill or circle: panel_pill) stands at the end of a menu's row: in the row's

@@ -137,8 +137,12 @@ pub fn agent_card(c : @ui.Ctx, src : Source, station : String, a : Json) -> Unit
     }
     let quota = field(field(av, "account"), "quota")
     let windows = if text(quota, "state") == "ok" { items(quota, "windows") } else { [] }
+    let quiet = [text(card, "work"), text(card, "tokens")].filter(fn(x) { x != "" })
+    let attention = items(card, "attention")
+    // (the card's last line: what is left of it, capsules, in the card's bottom right corner, concentric with it)
+    let last = quiet.is_empty() && text(card, "jobs") == "" && attention.is_empty()
     if account is Some(_) || windows.length() > 0 {
-      c.box(style=agent_card_account, fn() {
+      c.box(style=if last && windows.length() > 0 { agent_card_account_last } else { agent_card_account }, fn() {
         c.box(style=agent_card_name_room, fn() { c.text(text(account, "name"), style=agent_card_line) |> ignore })
         |> ignore
         // each with what is left of it over it while it is pointed at, 4 apart
@@ -163,11 +167,9 @@ pub fn agent_card(c : @ui.Ctx, src : Source, station : String, a : Json) -> Unit
       |> ignore
     }
     // the rest: a quiet line; its jobs and what is wrong
-    let quiet = [text(card, "work"), text(card, "tokens")].filter(fn(x) { x != "" })
     if quiet.length() > 0 {
       c.text(quiet.join(" · "), style=agent_card_quiet) |> ignore
     }
-    let attention = items(card, "attention")
     if text(card, "jobs") != "" || attention.length() > 0 {
       c.box(style=agent_card_notes, fn() {
         if text(card, "jobs") != "" {
@@ -662,9 +664,20 @@ let agent_card_tile_name : @ui.TextStyle = @ui.text_style(size=Caption, color=Mu
 let agent_card_chips_gap : @ui.Space = S1
 
 ///|
-/// Its account (12), what is left of it to its right, 8 apart.
+/// Its account (12), what is left of it to its right, 8 apart; the card's last line, what is left (capsules) in its
+/// bottom right corner as far from both its edges as makes them concentric with it (@sf.capsule_in), out past the
+/// panel's padding and the card's words' (hover_inner's 10) to there, its words on their foot.
 // kept across runs: a value (no field of it changes)
 let agent_card_account : @ui.Style = @ui.css("row w=Full gap=S2 align=ACenter")
+
+///|
+// kept across runs: a value (no field of it changes)
+let agent_card_account_last : @ui.Style = @ui.css("row w=Full gap=S2 align=AEnd").then(
+  @ui.style(mb=@sf.room_of(agent_card_chips_in), mr=@sf.room_of(agent_card_chips_in)),
+)
+
+///|
+let agent_card_chips_in : Double = @sf.capsule_in(@sf.r_menu, @sf.fill_chip_small_h) - @sf.panel_pad - @sf.text_in
 
 ///|
 // kept across runs: a value (no field of it changes)

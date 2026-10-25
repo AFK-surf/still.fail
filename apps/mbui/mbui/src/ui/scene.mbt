@@ -680,8 +680,9 @@ fn Ctx::paint_node(self : Ctx, i : Int, alpha_in : Double) -> Unit {
   if n.hit && n.id != 0 {
     self.push_hit(n.id, dmax(n.x, cx0), dmax(n.y, cy0), dmin(n.x + n.fw, cx1), dmin(n.y + n.fh, cy1))
   }
-  // a modal's ground: the wheel stops at it too (overlay.mbt)
-  if n.blocks && n.id != 0 {
+  // a modal's ground: the wheel stops at it too (overlay.mbt); and what says it stops it (Ctx::stop_wheel), what
+  // scrolls in it (laid in it, later) still taking it first
+  if (n.blocks || n.stops_wheel) && n.id != 0 {
     self.next_scroll_ids.push(n.id)
     self.next_scroll_rects.push(dmax(n.x, cx0))
     self.next_scroll_rects.push(dmax(n.y, cy0))

@@ -141,6 +141,13 @@ pub fn Ctx::overlay(
 }
 
 ///|
+/// Box `i` (one with an id) stops the wheel: one turned over it scrolls nothing laid under it (the page under a
+/// popover's panel that is not modal), only what scrolls in it. A modal layer's ground does so all over the window.
+pub fn Ctx::stop_wheel(self : Ctx, i : Int) -> Unit {
+  self.nodes[i].stops_wheel = true
+}
+
+///|
 /// The layer `id` dismissed (as though by `why`): a view's own close button for a layer it closes the same way. Told
 /// as the frame is built, it is built again with it.
 pub fn Ctx::dismiss(self : Ctx, id : Int, why? : Dismiss = Escape) -> Unit {

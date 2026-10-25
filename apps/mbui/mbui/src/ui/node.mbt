@@ -176,6 +176,8 @@ struct Node {
   // takes every press and wheel that what lies over it does not (a modal's ground)
   mut portal : Bool
   mut blocks : Bool
+  // the wheel stops at it: what lies under it scrolls by no wheel over it (Ctx::stop_wheel: a popover's panel)
+  mut stops_wheel : Bool
   // what it holds laid out as wide as it is, scrolled sideways inside it (Ctx::sideways); built inside such a box's
   // content, at any depth (none of it shrinks to the box: Ctx::layout_node)
   mut sideways : Bool
@@ -347,6 +349,7 @@ fn Node::new() -> Node {
     aspect: 0.0,
     portal: false,
     blocks: false,
+    stops_wheel: false,
     sideways: false,
     in_sideways: false,
     shrinks: false,
@@ -430,6 +433,7 @@ fn Node::reset_rest(self : Node) -> Unit {
   self.moves = ""
   self.portal = false
   self.blocks = false
+  self.stops_wheel = false
   self.sideways = false
   self.in_sideways = false
   self.shrinks = false
